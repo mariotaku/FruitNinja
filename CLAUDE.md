@@ -23,15 +23,31 @@
 
 ## Conventions
 - Ghidra scripts go in `<project root>/ghidra_scripts/`, NOT in `$HOME/ghidra_scripts/`
+- The project ghidra_scripts/ directory is added to Ghidra's Script Manager — no need to copy elsewhere
 - RE findings go in `docs/` directory (see `docs/README.md` for index)
-- When creating/updating Ghidra scripts via GhidraMCP, also save a copy in `ghidra_scripts/`
+- Temp/scratch files go in `<project root>/tmp/`, NOT in `/tmp`
+- Use `FN_SCREEN_W` / `FN_SCREEN_H` for screen constants (avoid `SCREEN_W`/`SCREEN_H` — MSYS2 conflict)
+
+## Ghidra Scripts
+Run in order: FN01 → FN02 → FN03 → FN04 → FN05
+
+| Script | Purpose |
+|--------|---------|
+| `FN01_ApplyStructs.java` | Core structs: Entity, Fruit, Bomb, SlashEntity, Game, GameTaskState, Camera, Wave, HUD, FRUIT_INFO |
+| `FN02_ApplyStructs2.java` | Particle, effects, PowerUp, GameSound, GlesForm, touch input structs |
+| `FN03_ApplyStructs3.java` | Mesh/model: LegacyPSPVertexDecl, IVertexSource, HBR0Header, texture/audio headers |
+| `FN04_ReplaceTypes.java` | Replace Demangler auto-generated types with /FruitNinja/ typed versions |
+| `FN05_ApplyPrototypes.java` | Apply struct types to 70+ function signatures |
+
+Other scripts:
+- `FindTextFunctions.java` — Lists all 9,624 non-thunk .text functions
+- `ListClasses.java` — Extracts class hierarchy from symbols
+- `StructDefinitions.java` — Raw struct definitions (reference only, not runnable)
 
 ## Key Files
-- `docs/README.md` — Documentation index
-- `docs/classes.md` — Class overview and hierarchy
-- `docs/port-plan.md` — Symbol coverage, gap analysis, porting roadmap
-- `docs/structs/` — Detailed struct layouts (entities, game, camera, wave, data, hud, other)
-- `docs/systems/` — System documentation (state machine, rendering, physics, scoring, wave, menu, save, sound)
-- `ghidra_scripts/` — Ghidra analysis scripts and output
-- `ghidra_scripts/StructDefinitions.java` — Raw struct definitions (reference only, not runnable)
-- `ghidra_scripts/FindTextFunctions_output.txt` — Full function listing (9,624 functions)
+- `docs/README.md` — Documentation index (22 files, 3500+ lines)
+- `docs/structs/` — Struct layouts: entities, game, camera, wave, data, hud, screens, ui-widgets, gameplay-misc, other
+- `docs/systems/` — Systems: state machine, rendering, physics, scoring, wave, menu, save, sound, touch, particles, power-ups, effects, string hash
+- `docs/formats/` — Asset formats: textures (.tex), audio (.wav.pcm), models (.mad/.mmd), fonts (.fnt)
+- `docs/resources.md` — Asset directory structure, XML schemas, loading flow
+- `docs/TODO.md` — Remaining RE gaps and intentionally skipped items

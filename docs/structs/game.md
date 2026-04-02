@@ -26,19 +26,86 @@ MortarGame base zeroes +0x04..+0x1b3 in ctor.
 | +0x70 | Font*[4] | pFontRegion | CJK/Arabic overrides |
 | +0x80 | Font* | pFont6 | |
 | +0x90 | float[3] | worldPos | x/y/z |
+| +0x0c | float | m_TransitionTimer | |
+| +0x2c | float | m_CritTimer | Critical hit visual timer |
+| +0x35 | byte | m_bSlowMotion | Slow-mo flag |
+| +0x38 | float | dt | Current frame delta time |
+| +0x54 | int | m_WaveSpeed | Copied to GameTask state on init |
+| +0x160 | MainScreen* | pMainScreen | 0x120 bytes |
+| +0x164 | GameOverScreen* | pGameOverScreen | 0x13C bytes |
+| +0x168 | TutorialControl* | pTutorialCtrl | 0xA0 bytes |
 | +0x174 | int | fruitTotal | Last AddToTotal result |
+| +0x178 | CoinCounter* | pCoinCounter | 0xD4 bytes |
 | +0x17c | SmartPtr\<Texture\> | pLocalisedTexture | 12 bytes |
+| +0x180 | TimeControl* | pTimeCtrl | 0x108 bytes |
+| +0x184 | int | m_field184 | = 0 |
 | +0x188 | GameSound* | pGameSound | 0x708 bytes |
 | +0x194 | int | m_FrameTimer | = (int)(dt × scale) + prev |
+| +0x1a0 | float | m_MenuReturnTimer | Set by QuitToMenu, counted in GameUpdate |
 | +0x1a8 | char | flag_0x1a8 | |
 | +0x1b1 | char[256×4] | fruitStats1..4 | 4 stat arrays |
 | +0x604 | byte | m_bFrameDirty | Cleared each GameTaskUpdate frame |
 | +0xf4 | bool | field244_0xf4 | MortarGame field |
-| +0xfc | byte | m_bFieldFc | = 0 in Game ctor |
-| +0xfd | byte | m_bFieldFd | = 0 in Game ctor |
-| +0x100 | int | m_field100 | = 0 in Game ctor |
+
+### GameTask State Struct (separate from Game singleton)
+
+This per-task struct is accessed via GOT offset, not the Game singleton pointer.
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x04 | PauseScreen* | pPauseScreen | 0xD8 bytes |
+| +0x0c | byte | m_flag0c | Init=0 |
+| +0x1c | MainScreen* | pMainScreen | Same ptr as Game+0x160 |
+| +0x24 | SlashEntity*[16] | m_SlashEntities | 16 slash entities (0x40 bytes of ptrs) |
+| +0x64 | List\<SliceEffect\>* | pSliceEffectList | |
+| +0xbc | SmartPtr\<Model\> | pSliceFxModel | slice_fx.mad |
+| +0xc0 | SmartPtr\<Model\> | pSliceFxCritModel | slice_fx_crit.mad |
+| +0xc8 | MemoryPool* | pSliceEffectPool | 100 nodes |
+| +0xcc | Vec3 | bombHitPos | Set by HitBomb/HitMenuBomb |
+| +0xdc | float | m_NotifyTimer | Notification countdown |
+| +0xf4 | SmartPtr\<Texture\> | pLoadingTexture | Localised loading image |
+| +0xf8 | byte | m_bMenuBombHit | Set by HitMenuBomb |
+| +0xfc | SmartPtr\<Texture\> | pBackgroundTexture | |
+| +0x100 | HUDControl* | pDeferredControl | Added to HUD next frame |
+| +0x110 | byte | m_flag110 | |
+| +0x111 | byte | m_flag111 | |
+| +0x112 | byte | m_bInitialized | Set=1 at end of GameInit |
+| +0x113 | byte | m_flag113 | |
+| +0x114 | int | m_savedWaveSpeed | From Game+0x54 |
 
 **Game::Update** delegates entirely to `GameTaskUpdate(dt)`, which uses a task state machine: `*Game` (byte at +0x00) = current task index → indexes function pointer table.
+
+### GameInit Flow (0x16c644, 274 lines)
+
+```
+1.  Create HUD (0x24 bytes) → Game+0x3c
+2.  Create 3 MissControl (0x94 each) for combo text → add to HUD
+3.  MissControl::CreatePool(12, hud) — 12 pooled combo sprites
+4.  Create ScoreControl (0x100 bytes) + load 3 number textures → add to HUD
+5.  Create CoinCounter (0xD4 bytes) → Game+0x178 → add to HUD
+6.  Create TimeControl (0x108 bytes) → Game+0x180 → start countdown → add to HUD
+7.  Load background texture → task state +0xfc
+8.  Load slice_fx.mad → task state +0xbc
+9.  Load slice_fx_crit.mad → task state +0xc0
+10. Create SliceEffect list + MemoryPool(100 nodes) → task state +0x64/+0xc8
+11. Create MainScreen (0x120 bytes) → task state +0x1c, Game+0x160
+12. Create PauseScreen (0xD8 bytes) → task state +0x04
+13. Create TutorialControl (0xA0 bytes) → Game+0x168
+14. Add to HUD: MainScreen, PauseScreen, TutorialControl
+15. Entity::HeapCreate(0x20000)
+16. ActorManager::Initialise(5 types, 0x2000 max entities)
+17. Register Fruit factory (type 0), hash converter
+18. Pre-create 30 of each: Fruit(type 0) + Bomb(type 1) + BombBlast(type 4), all disabled
+19. SplatEntity::CreatePool(128)
+20. WaveManager::Init() + Resume()
+21. BombFlash::CreatePool(32)
+22. SoundManager::Initialise + SetSFXVolume(0.5 or first-play volume)
+```
+
+Entity types in ActorManager:
+- Type 0 = Fruit
+- Type 1 = Bomb
+- Type 4 = BombBlast
 
 ---
 

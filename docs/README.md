@@ -7,6 +7,7 @@
 
 ## Overview
 
+- [class-status.md](class-status.md) — **All 118 classes**: analysis status, sizes, descriptions, doc links
 - [classes.md](classes.md) — Class hierarchy and method listing (~70 classes)
 - [port-plan.md](port-plan.md) — Symbol coverage, gap analysis, porting roadmap
 - [resources.md](resources.md) — Asset directory structure, XML schemas, loading flow
@@ -27,9 +28,19 @@ Detailed field-by-field layouts for all recovered structs.
 - [structs/data.md](structs/data.md) — FRUIT_INFO (816 bytes), FruitSaveData
 - [structs/hud.md](structs/hud.md) — HUD, HUDControl, MissControl
 - [structs/other.md](structs/other.md) — ScoreModifier, MAMAudioThread, ItemManager, PowerUpManager, BonusManager
+- [structs/data-classes.md](structs/data-classes.md) — FNHighscore, FNHighscoreList, Bonus, BonusType, BonusAwardHud
 - [structs/gameplay-misc.md](structs/gameplay-misc.md) — Coin, SlashEntityGhost, MenuButton, MenuBackground, EffectImage, QUADCUSTOMVERTEX
 - [structs/ui-widgets.md](structs/ui-widgets.md) — FruitFactControl, ScrollingMenu, ScoreControl, TimeControl, SpeedControl, etc. (10 classes)
-- [structs/screens.md](structs/screens.md) — DojoScreen, ShopScreen, PauseScreen, GameOverScreen, GameModeScreen, AboutScreen (6 classes)
+- [structs/ui-controls2.md](structs/ui-controls2.md) — BonusScreen, ScreenFadeControl, ScreenTint, ComboControl, NotificationControl, ProgressionTimerControl, GenericHUDControl (7 classes)
+- [screens/](screens/) — Screen classes (split per screen):
+  - [main.md](screens/main.md) — MainScreen (dojo menu hub, 675-line Update, 0x120 bytes)
+  - [game-mode.md](screens/game-mode.md) — GameModeScreen (mode selection)
+  - [game-over.md](screens/game-over.md) — GameOverScreen (results, 529-line Update)
+  - [pause.md](screens/pause.md) — PauseScreen (in-game pause, multiplayer support)
+  - [shop.md](screens/shop.md) — ShopScreen (blade shop)
+  - [dojo.md](screens/dojo.md) — DojoScreen
+  - [about.md](screens/about.md) — AboutScreen
+  - [common-patterns.md](screens/common-patterns.md) — BaseScreen, button creation, transitions
 
 ## Systems
 
@@ -48,6 +59,7 @@ Decompiled game systems with pseudocode and flow diagrams.
 - [systems/particles.md](systems/particles.md) — PSPParticleManager/Emitter/Particle architecture
 - [systems/touch-input.md](systems/touch-input.md) — Touch coordinate transform, input pipeline to SlashEntity
 - [systems/effects.md](systems/effects.md) — SplatEntity, BombFlash, BombBlast visual effects
+- [systems/rendering-detail.md](systems/rendering-detail.md) — Model::Draw, TintWhite/Colour, SetupQuad/AddQuad, Font::Load, QUADCUSTOMVERTEX
 
 ## Ghidra Scripts
 
