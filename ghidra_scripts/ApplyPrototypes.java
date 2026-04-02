@@ -87,6 +87,39 @@ public class ApplyPrototypes extends GhidraScript {
         apply("0x00144a90", "HUD", "void", new String[]{"int"}, new String[]{"layerMask"});
         apply("0x00144b28", "HUD", "void", new String[]{"float"}, new String[]{"dt"});
 
+        // PowerUp methods
+        apply("0x001194f0", "PowerUp", "void", new String[]{"void *"}, new String[]{"xmlElement"});
+        apply("0x00119134", "PowerUp", "void", new String[]{"int","int","void *","void *"}, new String[]{"showPopup","isPurchased","pos","extra"});
+        apply("0x00117f90", "PowerUp", "void", new String[]{"float"}, new String[]{"dt"});
+        apply("0x00117f18", "PowerUp", "void", new String[]{"int"}, new String[]{"p1"});
+
+        // PowerUpManager methods
+        apply("0x001197c4", "PowerUpManager", "void *", new String[]{"ulong","void *","void *"}, new String[]{"hash","pos","extra"});
+        apply("0x001189b4", "PowerUpManager", "void", new String[]{"float"}, new String[]{"dt"});
+        apply("0x00118904", "PowerUpManager", "void", new String[]{}, new String[]{});
+        apply("0x00117a80", "PowerUpManager", "void", new String[]{}, new String[]{});
+
+        // PSPParticleManager methods
+        apply("0x001149e0", "PSPParticleManager", "void *", new String[]{"ulong","void *","int"}, new String[]{"hash","ppRef","persistent"});
+        apply("0x00115ed8", "PSPParticleManager", "void", new String[]{"float","int"}, new String[]{"dt","paused"});
+        apply("0x00114c64", "PSPParticleManager", "void", new String[]{"float","int","int"}, new String[]{"dt","paused","layer"});
+
+        // PSPParticleEmitter methods
+        apply("0x00115d9c", "PSPParticleEmitter", "void", new String[]{"float"}, new String[]{"dt"});
+
+        // BombFlash / BombBlast
+        apply("0x00171038", "BombFlash", "void", new String[]{"float"}, new String[]{"dt"});
+        apply("0x00171170", "BombBlast", "void", new String[]{"float"}, new String[]{"dt"});
+
+        // SplatEntity
+        apply("0x0017f774", "SplatEntity", "void", new String[]{"float"}, new String[]{"dt"});
+
+        // GlesForm
+        apply("0x0018327c", "GlesForm", "void *", new String[]{"void *"}, new String[]{"rawPoint"});
+
+        // GameSound
+        apply("0x00129270", "GameSound", "void *", new String[]{"void *","float","float","void *"}, new String[]{"name","volume","pitch","delegate"});
+
         println("Done! Applied struct types to " + count + " function prototypes.");
     }
 

@@ -66,6 +66,46 @@ Full C implementation saved to `docs/systems/string-hash.md`. Jenkins lookup3 wi
 16-bit fixed-point angle lookup. Scale factor: `angle_u16 = degrees * 0xb6`.
 Can be replaced with standard `sin(angle * 2π / 65536)` and `cos()`.
 
+## Intentionally Skipped
+
+### Network / Social Features — NOT PORTING
+
+The following classes are present in the binary but **intentionally excluded** from the port. They depend on defunct online services and Bada-specific APIs.
+
+**Mortar::NetworkManager** (~40 functions):
+- P2P multiplayer session management
+- `SpawnThreadController`, `IsAnyPeerReadyForMultiplayer`
+- `DownloadUserDataFromLeaderboard`
+- `DrawNews`, `CancelNewsDisplay`
+- Handles `FruitSlicedPacket`, `PointsPacket` sync for online multiplayer
+
+**OpenFeint integration** (~20 functions):
+- `Mortar::OpenFeintNewsRenderer` — in-game news overlay
+- Achievement submission, leaderboard upload
+- Service was shut down in 2012
+
+**GameCenter integration**:
+- Achievement and leaderboard submission
+- iOS-specific, not available on other platforms
+
+**LeaderboardManager** (~15 functions):
+- `GetInstance` singleton
+- Interfaces with both OpenFeint and GameCenter
+- Downloads/uploads score data
+
+**LeaderboardScreen / FriendLeaderboardItem** (~30 functions):
+- UI for displaying online leaderboards
+- `FriendLeaderboardItem::CollideWithButton` — touch interaction
+
+**Related network packets**:
+- `FruitSlicedPacket` — fruit slice sync for online multiplayer
+- `PointsPacket` — score sync for online multiplayer
+- `P2PInitializationCompleteHandler`, `P2PConnect`, `GlobalP2PMessageHandler`
+
+**Why skip**: All online services (OpenFeint, Bada GameCenter) are defunct. P2P multiplayer requires Bada OS networking APIs. Same-screen multiplayer (split touch) is handled entirely in SlashEntity and does NOT depend on NetworkManager — it works locally and can be ported.
+
+**What to keep**: Same-screen multiplayer uses `SlashEntity.m_SplitPoint` to divide the screen — this is purely local logic and should be preserved.
+
 ### Bomb::Update — DONE
 
 Fully decompiled (195 lines). Chain-bomb spawning, fuse SFX, rotation, physics all documented in `docs/structs/entities.md`.

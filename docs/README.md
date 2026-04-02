@@ -9,7 +9,12 @@
 
 - [classes.md](classes.md) — Class hierarchy and method listing (~70 classes)
 - [port-plan.md](port-plan.md) — Symbol coverage, gap analysis, porting roadmap
-- [TODO.md](TODO.md) — Unfinished RE work: power-ups, touch input, particles, splats
+- [resources.md](resources.md) — Asset directory structure, XML schemas, loading flow
+- [formats/textures.md](formats/textures.md) — .tex format: 12-byte header, RGBA4444/RGB565 pixel data
+- [formats/audio.md](formats/audio.md) — .wav.pcm format: 20-byte header, 16-bit mono PCM @ 16kHz
+- [formats/models.md](formats/models.md) — .mad/.mmd HBR0 container format (Halfbrick proprietary)
+- [formats/fonts.md](formats/fonts.md) — .fnt BMFont text format (standard)
+- [TODO.md](TODO.md) — Remaining RE gaps (mostly complete)
 
 ## Struct Layouts
 
@@ -22,6 +27,9 @@ Detailed field-by-field layouts for all recovered structs.
 - [structs/data.md](structs/data.md) — FRUIT_INFO (816 bytes), FruitSaveData
 - [structs/hud.md](structs/hud.md) — HUD, HUDControl, MissControl
 - [structs/other.md](structs/other.md) — ScoreModifier, MAMAudioThread, ItemManager, PowerUpManager, BonusManager
+- [structs/gameplay-misc.md](structs/gameplay-misc.md) — Coin, SlashEntityGhost, MenuButton, MenuBackground, EffectImage, QUADCUSTOMVERTEX
+- [structs/ui-widgets.md](structs/ui-widgets.md) — FruitFactControl, ScrollingMenu, ScoreControl, TimeControl, SpeedControl, etc. (10 classes)
+- [structs/screens.md](structs/screens.md) — DojoScreen, ShopScreen, PauseScreen, GameOverScreen, GameModeScreen, AboutScreen (6 classes)
 
 ## Systems
 

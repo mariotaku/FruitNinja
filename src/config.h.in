@@ -1,0 +1,6 @@
+#ifndef FN_CONFIG_H
+#define FN_CONFIG_H
+
+#define FN_DATA_DIR "@FN_DATA_DIR_PATH@"
+
+#endif
