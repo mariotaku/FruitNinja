@@ -28,6 +28,8 @@ add_executable(fruit-ninja
     src/splash_screen.cpp
     src/menu_button.cpp
     src/dojo_screen.cpp
+    src/mesh.cpp
+    src/main_screen.cpp
 )
 
 target_include_directories(fruit-ninja PRIVATE

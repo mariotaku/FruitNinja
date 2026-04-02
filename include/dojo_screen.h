@@ -3,13 +3,13 @@
 
 #include "screen.h"
 #include "menu_button.h"
+#include "mesh.h"
 #include "tex_loader.h"
 
 struct Game;
 
 class DojoScreen : public Screen {
 public:
-    // State machine (matches original DojoScreen states)
     enum State {
         TRANSITION_IN = 0,
         IDLE = 1,
@@ -31,20 +31,27 @@ public:
 private:
     Game& game;
     State state;
-    float alpha; // transition alpha 0..1
+    float alpha;
 
-    // Lazy-created buttons (original pattern: field1_0x94, field2_0x98, field3_0x9c)
+    // Buttons
     MenuButton* play_button;
     MenuButton* shop_button;
     MenuButton* about_button;
-
-    // Button textures
     GLuint play_tex, shop_tex, about_tex;
     TexImage play_img, shop_img, about_img;
     bool buttons_created;
 
+public:
+    static const int NUM_FRUITS = 3;
+private:
+    Mesh fruit_meshes[NUM_FRUITS];
+    GLuint fruit_atlas_tex;
+    float fruit_rotations[NUM_FRUITS];
+    float ring_angle; // overall ring rotation
+
     void create_buttons();
     void destroy_buttons();
+    void load_fruit_meshes();
 
     void on_play();
     void on_shop();

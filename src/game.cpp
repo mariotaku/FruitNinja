@@ -6,6 +6,8 @@
 Game::Game()
     : window(NULL), gl_context(NULL),
       bg_tex(0), hb_logo_tex(0), title_tex(0),
+      blurry_backing_tex(0), fruit_text_tex(0), ninja_text_tex(0),
+      soundEnabled(true), musicEnabled(true),
       current_screen(NULL), next_screen(NULL),
       running(false) {}
 
@@ -60,6 +62,9 @@ void Game::shutdown() {
     if (bg_tex) { glDeleteTextures(1, &bg_tex); bg_tex = 0; }
     if (hb_logo_tex) { glDeleteTextures(1, &hb_logo_tex); hb_logo_tex = 0; }
     if (title_tex) { glDeleteTextures(1, &title_tex); title_tex = 0; }
+    if (blurry_backing_tex) { glDeleteTextures(1, &blurry_backing_tex); blurry_backing_tex = 0; }
+    if (fruit_text_tex) { glDeleteTextures(1, &fruit_text_tex); fruit_text_tex = 0; }
+    if (ninja_text_tex) { glDeleteTextures(1, &ninja_text_tex); ninja_text_tex = 0; }
     renderer.shutdown();
 }
 
@@ -138,7 +143,7 @@ void Game::run() {
         SDL_GL_GetDrawableSize(window, &ww, &wh);
         glViewport(0, 0, ww, wh);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
