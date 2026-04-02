@@ -9,6 +9,7 @@
 
 - [classes.md](classes.md) — Class hierarchy and method listing (~70 classes)
 - [port-plan.md](port-plan.md) — Symbol coverage, gap analysis, porting roadmap
+- [TODO.md](TODO.md) — Unfinished RE work: power-ups, touch input, particles, splats
 
 ## Struct Layouts
 
@@ -34,6 +35,11 @@ Decompiled game systems with pseudocode and flow diagrams.
 - [systems/menu-flow.md](systems/menu-flow.md) — Screen hierarchy, callbacks, mode selection
 - [systems/save-system.md](systems/save-system.md) — FruitSaveData persistence, stat tracking
 - [systems/sound-system.md](systems/sound-system.md) — GameSound pool, BadaSound backend, MAMAudioThread
+- [systems/string-hash.md](systems/string-hash.md) — Jenkins lookup3 hash (C implementation)
+- [systems/power-ups.md](systems/power-ups.md) — PowerUp struct, 4 modifier types, activation flow
+- [systems/particles.md](systems/particles.md) — PSPParticleManager/Emitter/Particle architecture
+- [systems/touch-input.md](systems/touch-input.md) — Touch coordinate transform, input pipeline to SlashEntity
+- [systems/effects.md](systems/effects.md) — SplatEntity, BombFlash, BombBlast visual effects
 
 ## Ghidra Scripts
 

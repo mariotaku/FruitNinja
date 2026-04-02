@@ -98,9 +98,34 @@ Entity base ends at +0x3c. Fruit own fields follow.
 | +0xa4 | float | countdown | Timer; triggers chain spawn |
 | +0xa8 | float | speedMult | |
 
-**Key methods:** Update (0x1729fc), Init (0x172504), Draw (0x171be8), CollisionResponse (0x17280c), Chuck (0x170f68)
+Additional fields from Bomb::Update (195 lines, fully decompiled):
 
-Countdown triggers `WaveManager::SpawnBomb(count-1)` for chain bombs.
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x3c | float | m_SpawnTimer | Counts down; spawns BombBlast (type 4) at 0 |
+| +0x70 | short | m_RotVelX | Rotation velocity X (16-bit angle) |
+| +0x72 | short | m_RotVelY | Rotation velocity Y |
+| +0x74 | short | m_RotX | Current rotation X (accumulated) |
+| +0x76 | short | m_RotY | Current rotation Y |
+| +0x7c | int | m_pParticleEmitter | PSPParticleEmitter* (fuse trail) |
+| +0x88 | byte | m_bBombFlag88 | Hit variant flag |
+
+**Key methods:** Update (0x1729fc, 195 lines), Init (0x172504), Draw (0x171be8), CollisionResponse (0x17280c), Chuck (0x170f68)
+
+### Bomb::Update Flow
+
+**Normal bomb** (`activeFlag == 0`):
+1. Countdown timer decrements by `Game.dt`
+2. At threshold: play fuse SFX
+3. At zero: chain-spawn via `WaveManager::SpawnBomb(spawnLevel - 1)`
+4. Physics: `vel += accelForce * dt`, `pos += vel * dt`
+5. Accel grows when vel and accel align (bomb accelerates in flight direction)
+6. Rotation: `rotX += rotVelX`, `rotY += rotVelY` (16-bit accumulators)
+7. Kill if out of screen bounds
+
+**Hit bomb** (`activeFlag != 0`):
+- `m_bBombFlag88 == 0`: spawn BombBlast entity (type 4) after timer
+- `m_bBombFlag88 != 0`: physics continues with different accel rate, collision offscreen
 
 **Bomb hit behavior:**
 - Classic/Arcade: `HitBomb()` → camera shake, Game+0x10 = countdown timer, game-over delay
