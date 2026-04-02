@@ -54,6 +54,9 @@ private:
     // TexImage for global textures (dimensions needed for drawing)
     TexImage m_ImgFruitText, m_ImgNinjaText, m_ImgBlurryBacking;
 
+    // Shared fruit atlas texture for 3D fruit in buttons
+    GLuint m_FruitAtlasTex;
+
     // Button pointers (+0x9c-0xb0)
     MenuButton* pPlayButton;       // +0x9c
     MenuButton* pDojoButton;       // +0xa0

@@ -26,10 +26,20 @@ MainScreen::MainScreen(Game& g)
       m_State(0),
       m_Timer(0.0f),
       m_Timer2(0.0f),
+      m_FruitAtlasTex(0),
       m_CameraTransition(1.0f),
       m_GlobalAlphaTarget(1.0f),
       m_Time(0.0f)
 {
+    // Load fruit atlas texture (shared by all fruit meshes in buttons)
+    {
+        TexImage atlas_img;
+        std::string atlas_path = game.data_dir + "/models/fruit/textures/fruit_atlas.tex";
+        if (tex_load(atlas_path, atlas_img)) {
+            m_FruitAtlasTex = game.renderer.upload_texture(atlas_img);
+        }
+    }
+
     // Load global textures (on Game struct, if not already loaded)
     if (!game.blurry_backing_tex)
         game.blurry_backing_tex = game.load_texture("blurry_backing.tex", m_ImgBlurryBacking);
@@ -66,6 +76,7 @@ MainScreen::~MainScreen() {
     delete pSoundToggle; pSoundToggle = NULL;
     delete pMusicToggle; pMusicToggle = NULL;
 
+    if (m_FruitAtlasTex) { glDeleteTextures(1, &m_FruitAtlasTex); m_FruitAtlasTex = 0; }
     if (m_TexNewGame) { glDeleteTextures(1, &m_TexNewGame); m_TexNewGame = 0; }
     if (m_TexDojoIcon) { glDeleteTextures(1, &m_TexDojoIcon); m_TexDojoIcon = 0; }
     if (m_TexQuit) { glDeleteTextures(1, &m_TexQuit); m_TexQuit = 0; }
@@ -100,7 +111,7 @@ static inline float orig_to_port_x(float orig_x) { return FN_SCREEN_W / 2.0f + o
 static inline float orig_to_port_y(float orig_y) { return FN_SCREEN_H / 2.0f + orig_y; }
 
 void MainScreen::CreateButtons() {
-    // Sound toggle — doc: (216, 135.5), 32x32, created in state 0
+    // Sound toggle — doc: (216, 135.5), 32x32, fruitType -1 (no fruit)
     if (!pSoundToggle) {
         GLuint tex = game.soundEnabled ? m_TexSoundOn : m_TexSoundOff;
         if (tex) {
@@ -109,10 +120,11 @@ void MainScreen::CreateButtons() {
                                orig_to_port_x(216.0f),
                                orig_to_port_y(135.5f),
                                [this]() { SoundCallback(); });
+            pSoundToggle->rotation_speed = 0.0f;  // toggles don't spin
         }
     }
 
-    // Music toggle — doc: (176, 135.5), 32x32, created in state 0
+    // Music toggle — doc: (176, 135.5), 32x32, fruitType -1 (no fruit)
     if (!pMusicToggle) {
         GLuint tex = game.musicEnabled ? m_TexMusicOn : m_TexMusicOff;
         if (tex) {
@@ -121,10 +133,11 @@ void MainScreen::CreateButtons() {
                                orig_to_port_x(176.0f),
                                orig_to_port_y(135.5f),
                                [this]() { MusicCallback(); });
+            pMusicToggle->rotation_speed = 0.0f;
         }
     }
 
-    // New Game button — doc: (16, -66, -50), created in state 0→1
+    // New Game button — doc: (16, -66, -50), fruitType 3 (watermelon)
     if (!pPlayButton && m_TexNewGame) {
         pPlayButton = new MenuButton();
         pPlayButton->init(m_TexNewGame,
@@ -132,9 +145,11 @@ void MainScreen::CreateButtons() {
                           orig_to_port_x(16.0f),
                           orig_to_port_y(-66.0f),
                           [this]() { GameModeCallback(); });
+        if (m_FruitAtlasTex)
+            pPlayButton->load_fruit(game, "watermelon", m_FruitAtlasTex);
     }
 
-    // Dojo button — doc: (-144, -65), scale 0.9x, created in state 0→1
+    // Dojo button — doc: (-144, -65), scale 0.9x, fruitType "mango"
     if (!pDojoButton && m_TexDojoIcon) {
         pDojoButton = new MenuButton();
         pDojoButton->init(m_TexDojoIcon,
@@ -143,9 +158,11 @@ void MainScreen::CreateButtons() {
                           orig_to_port_x(-144.0f),
                           orig_to_port_y(-65.0f),
                           [this]() { AboutCallback(); });
+        if (m_FruitAtlasTex)
+            pDojoButton->load_fruit(game, "mango", m_FruitAtlasTex);
     }
 
-    // Leaderboard button — doc: openfeint.tex, (182, -106), created in state 1
+    // Leaderboard button — doc: openfeint.tex, (182, -106), fruitType (GOT ref)
     if (!pLeaderboardBtn && m_TexOpenFeint) {
         pLeaderboardBtn = new MenuButton();
         pLeaderboardBtn->init(m_TexOpenFeint,
@@ -155,9 +172,11 @@ void MainScreen::CreateButtons() {
                               [this]() {
                                   printf("MainScreen: LeaderboardsCallback (skipped)\n");
                               });
+        if (m_FruitAtlasTex)
+            pLeaderboardBtn->load_fruit(game, "openfeint", m_FruitAtlasTex);
     }
 
-    // MoreGames button — doc: gc_achievements.tex, (182, -106), created in state 1
+    // MoreGames button — doc: gc_achievements.tex, (182, -106), fruitType "kiwifruit"
     // Note: same position as leaderboard — original may offset; skip for port
 }
 
@@ -305,6 +324,14 @@ void MainScreen::update(float dt) {
     if (pMoreGamesBtn) pMoreGamesBtn->alpha = buttonAlpha;
     if (pSoundToggle) pSoundToggle->alpha = m_Alpha;
     if (pMusicToggle) pMusicToggle->alpha = m_Alpha;
+
+    // Update button animations (ring rotation + fruit spin)
+    if (pPlayButton) pPlayButton->update(dt);
+    if (pDojoButton) pDojoButton->update(dt);
+    if (pLeaderboardBtn) pLeaderboardBtn->update(dt);
+    if (pMoreGamesBtn) pMoreGamesBtn->update(dt);
+    if (pSoundToggle) pSoundToggle->update(dt);
+    if (pMusicToggle) pMusicToggle->update(dt);
 }
 
 void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
