@@ -9,6 +9,49 @@
 | +0x00 | list\<HUDControl*\> | controls | std::list = 8 bytes on this ABI |
 | +0x08 | float[6] | scales | All init = 1.0f |
 
+#### HUD Functions
+
+| Function | Address | Lines | Purpose |
+|----------|---------|-------|---------|
+| HUD::HUD | 0x144bc0 | 8 | Init empty list + 6 scales = 1.0 |
+| HUD::AddControl | 0x105b40 (PLT) | — | `controls.push_back(ctrl)` (or push_front if bool=true) |
+| HUD::RemoveControl | 0x144c40 | 6 | Fire removal callback (+0x38), list.remove(ctrl) |
+| HUD::Update | 0x144d40 | ~40 | Iterate: Update active, erase pendingRemoval (callback + optional dtor) |
+| HUD::Draw | 0x144a90 | ~30 | Iterate: filter active + layerMask, PreDraw then Draw |
+| HUD::BeginDraw | 0x144b28 | ~10 | Iterate: call BeginDraw on active |
+| HUD::Release | 0x144c5c | ~20 | Destroy all controls, clear list |
+| HUD::OnPause | 0x144c00 | ~15 | Iterate: call OnPause, special-case ScrollingMenu |
+| HUD::ResetControls | 0x144ba0 | ~8 | Iterate: call Reset |
+| HUD::Save | 0x144a40 | ~8 | Iterate: call Save |
+| HUD::SetToMultiplayerState | 0x144e00 | ~20 | Remove non-multiplayer controls |
+
+**HUD::Update lifecycle:**
+```
+MissControl::PreUpdate(dt)
+for each control:
+    if active → control->Update(dt)           // vtable +0x28
+    if pendingRemoval:
+        fire m_RemoveCallback(control)         // delegate at +0x38
+        if m_bNoDestructor == 0 → dtor(control)
+        list.erase(it)
+```
+
+**HUD::Draw pipeline:**
+```
+for each control:
+    if active AND (layerMask & control->field_0x34):
+        control->PreDraw(scales)               // vtable +0x20
+        control->Draw(scales, layerMask)       // vtable +0x24
+```
+
+**HUD::AddControl (for porting):**
+```cpp
+void HUD::AddControl(HUDControl* ctrl, bool pushFront) {
+    if (pushFront) controls.push_front(ctrl);
+    else controls.push_back(ctrl);  // always false in observed calls
+}
+```
+
 ### HUDControl (base class)
 
 | Offset | Type | Name | Notes |

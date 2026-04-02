@@ -242,3 +242,142 @@ void Fruit::Slice() {
     }
 }
 ```
+
+---
+
+## Fruit::KillFruit (0x00176abc, 101 lines)
+
+| Address | Signature |
+|---------|-----------|
+| 0x00176abc | `void Fruit::KillFruit(bool removeFromList)` |
+
+Clears particle emitters, handles miss penalty in Zen mode (dropped unsliced fruit → notification + miss SFX), marks entity flags for removal.
+
+## Fruit::IsActive (0x0017a82c, 10 lines)
+
+| Address | Signature |
+|---------|-----------|
+| 0x0017a82c | `bool Fruit::IsActive()` — returns true if entity is alive (stub in decompilation) |
+
+## Fruit::CheckHasGoneOffscreen (0x00175218, 128 lines)
+
+Checks if both fruit halves (or whole fruit) are outside screen bounds. For sliced fruit, checks both `pos.y` and `m_HalfB_pos.y` against screen-relative thresholds scaled by entity scale.
+
+## Fruit::RandomFruit (0x00176564, 113 lines) — FULLY DECOMPILED
+
+Weighted random fruit selection using cumulative weight tables from FRUIT_INFO[].
+
+### Static Data (lazy-initialized once)
+
+```
++0x10: int totalWeight         // sum of all FRUIT_INFO[].chance
++0x14: int totalWeight_avail   // sum for fruits with hitInfluence < 1
++0x18: int totalWeight_onSide  // sum for fruits with onSide == true
++0x1c: int totalWeight_onSide_avail  // sum for onSide && hitInfluence < 1
+```
+
+Per FRUIT_INFO (at 0x330-byte stride):
+```
++0x308: int   chance              // spawn weight
++0x30c: int   cumulativeChance    // running total (all)
++0x310: int   cumulativeOnSide    // running total (onSide only)
++0x318: bool  onSide              // can appear on side spawns
++0x328: int   hitInfluence        // if < 1: fruit is "available" (not recently hit)
+```
+
+### Algorithm
+
+```c
+int Fruit::RandomFruit(bool includeOnSideOnly) {
+    // 1. Build cumulative weight tables (once, lazy init)
+    if (totalWeight < 1) {
+        int cumAll = 0, cumAvail = 0, cumOnSide = 0, cumOnSideAvail = 0;
+        for (int i = 0; i < fruitCount; i++) {
+            FRUIT_INFO* fi = &fruitInfos[i];
+            cumAll += fi->chance;
+            fi->cumulativeChance = cumAll;        // +0x30c
+            
+            if (fi->hitInfluence < 1)             // "available" = not recently sliced
+                cumAvail += fi->chance;
+            
+            if (fi->onSide) {                     // +0x318
+                cumOnSide += fi->chance;
+                if (fi->hitInfluence < 1)
+                    cumOnSideAvail += fi->chance;
+            }
+            fi->cumulativeOnSide = cumOnSide;     // +0x310
+        }
+        totalWeight = cumAll;
+        totalWeight_avail = cumAvail;
+        totalWeight_onSide = cumOnSide;
+        totalWeight_onSide_avail = cumOnSideAvail;
+    }
+    
+    // 2. Select based on critical mode × includeOnSideOnly (4 paths)
+    bool critical = WaveManager::CriticalMode(0);
+    Random* rng = &WaveManager::GetInstance()->random;
+    
+    if (!critical) {
+        if (includeOnSideOnly) {
+            // Path A: Normal + all fruits (includeOnSide)
+            uint roll = Rand32(rng, totalWeight);
+            for (int i = 0; i < fruitCount; i++) {
+                if (roll < fruitInfos[i].cumulativeChance)  // +0x30c
+                    return i;
+            }
+        } else {
+            // Path B: Normal + available only (skip recently-hit)
+            uint roll = Rand32(rng, totalWeight_avail);
+            int cumulative = 0;
+            for (int i = 0; i < fruitCount; i++) {
+                if (fruitInfos[i].hitInfluence < 1) {       // +0x328 < 1
+                    cumulative += fruitInfos[i].chance;      // +0x308
+                    if (roll < cumulative)
+                        return i;
+                }
+            }
+        }
+    } else {
+        if (includeOnSideOnly) {
+            // Path C: Critical + onSide only
+            uint roll = Rand32(rng, totalWeight_onSide);
+            for (int i = 0; i < fruitCount; i++) {
+                if (roll < fruitInfos[i].cumulativeOnSide)  // +0x310
+                    return i;
+            }
+        } else {
+            // Path D: Critical + onSide + available
+            uint roll = Rand32(rng, totalWeight_onSide_avail);
+            int cumulative = 0;
+            for (int i = 0; i < fruitCount; i++) {
+                if (fruitInfos[i].hitInfluence < 1 && fruitInfos[i].onSide) {
+                    cumulative += fruitInfos[i].chance;
+                    if (roll < cumulative)
+                        return i;
+                }
+            }
+        }
+    }
+    
+    // Fallback: random index from [0, fruitCount-1)
+    return Rand32(rng, fruitCount - 1);
+}
+```
+
+### 4 Selection Paths
+
+| Critical | includeOnSideOnly | Weight Pool | Filter |
+|----------|------------------|-------------|--------|
+| No | Yes | totalWeight (all) | All fruits, use cumulativeChance |
+| No | No | totalWeight_avail | Skip fruits with hitInfluence >= 1 |
+| Yes | Yes | totalWeight_onSide | Only onSide fruits, use cumulativeOnSide |
+| Yes | No | totalWeight_onSide_avail | onSide AND hitInfluence < 1 |
+
+### Key Details
+
+- **Lazy init**: Weight tables are built on first call and cached
+- **hitInfluence filter**: `+0x328 < 1` excludes recently-sliced fruits from "available" pools, adding variety
+- **Critical mode**: When active, only `onSide` fruits are eligible (typically larger fruits that look good on screen edges)
+- **Fallback**: If no fruit matches (shouldn't happen), picks uniformly from `[0, fruitCount-1)`
+- **RNG**: Uses `WaveManager`'s embedded `Math::Random` instance
+- **16 fruit types**: apple, banana, orange, watermelon, strawberry, kiwifruit, pineapple, plum, pear, mango, apple_red, lime, dragon, coconut, passionfruit, lemon

@@ -163,7 +163,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 
 | Class | Status | Description | Doc |
 |-------|--------|-------------|-----|
-| ActorManager | 🔶 | Entity pool: Add, Draw, Update, Find | — |
+| ActorManager | ✅ | Entity pool: Add, Update, Draw, Deactivate, Remove. Free pool recycling. | functions/actor-manager.md |
 | ResourceLoader | ✅ | HBR0 container parser | formats/models.md |
 | DataReader / FileDataReader | 🔶 | Binary read helpers | — |
 | InputManager | 🔶 | Input callback registration | — |
@@ -189,7 +189,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | _Matrix33\<float\> | 🔶 | 3×3 matrix |
 | _Matrix43\<float\> | 🔶 | 4×3 matrix |
 | _Matrix44\<float\> | ✅ | 4×4 matrix |
-| Math::Random | 🔶 | Custom RNG (used by WaveManager) |
+| Math::Random | ✅ | 64-bit LCG (Knuth MMIX), 24 bytes. See [rng](systems/rng.md) |
 | Colour | ✅ | BGRA packed 4 bytes |
 
 ## UI Widgets (additional)

@@ -1,5 +1,51 @@
 # Reverse Engineering TODO
 
+## Next Steps (prioritized)
+
+### 1. Wave Selection & Dispatch — DONE
+- [x] `WaveManager::GetNextWave` (0x124f10, 227 lines) — score-based wave selection, ChooseFrom, weighted random
+- [x] `WaveManager::UpdateWave` (0x125390, 298 lines) — spawner processing, SpawnFruit/SpawnBomb dispatch, power-up fruit
+- [x] `WaveManager::SetupWaveQue` (0x124564, 142 lines) — budget-based queue fill (27 time units), randomise, bookend waves
+- See `docs/functions/wave.md`
+
+### 2. Fruit::RandomFruit — DONE
+- [x] `Fruit::RandomFruit` (0x176564, 113 lines) — weighted fruit selection
+- 4 paths: normal/critical × includeOnSide/available-only
+- Cumulative weight tables lazy-initialized from FRUIT_INFO[].chance
+- hitInfluence filter adds variety by excluding recently-sliced fruits
+- See `docs/functions/fruit.md`
+
+### 3. ActorManager — DONE
+- [x] `ActorManager::Add` (0x17068c) — free pool search + factory fallback, entity recycling
+- [x] `ActorManager::Update` (0x1701f4) — tick all entities, deactivation queue
+- [x] `ActorManager::Draw` (0x16fe7c) — render all active entities
+- [x] `ActorManager::Deactivate` (0x170184) — move to free pool
+- [x] `ActorManager::Remove` (0x1702d8) — destroy + erase
+- [x] Struct layout (~0x106C), entity flags, vtable offsets
+- See `docs/functions/actor-manager.md`
+
+### 4. Data Parsing (XML loaders)
+- [ ] `PSPParticleManager::LoadFile` (0x115f60) — particles XML → emitter templates
+- [ ] `PowerUpManager::Load` (0x119cb0) — poweruplist.xml → PowerUp structs
+- [ ] `BonusManager::Init` (0x10e8fc) — bonusawards.xml parsing
+- [ ] `ItemManager` loading — itemlist.xml (blades, shop items)
+- [ ] `AchievementManager` loading — achievementlist.xml
+
+### 5. Sound System (needed for port)
+- [ ] `BadaSound::SFXLoad` (0x18b1f4) — .wav.pcm loading into memory buffers
+- [ ] `Mortar::MortarSound` (15 funcs) — sound handle: SetVolume, IsPlaying, Stop
+- [ ] `BadaSound::MusicPlay/Stop/Pause/Resume` — background music control
+
+### 6. Remaining Gameplay Functions
+- [ ] `Fruit::SetFruitType` (0x17621c) — configure fruit appearance from FRUIT_INFO
+- [ ] `Fruit::EnableCollision` (0x176354) — ColSphere creation
+- [ ] `TimeModifier::Parse/UpdateSpecific` — freeze/speed power-up timing
+- [ ] `SlashModifier::Parse/UpdateSpecific` — blade width power-up
+- [ ] `WaveModifier::Parse/UpdateSpecific` — wave rate override
+- [ ] `SlashEntity::InitPoints` (0x17c340) — blade vertex buffer init
+
+---
+
 ## Unfinished Analysis
 
 ### Power-Up System — MOSTLY DONE
@@ -114,6 +160,13 @@ Only the top 2 layers (GameSound + SoundManager) need porting. The bottom 2 (Bad
 ---
 
 ## Recovered but not fully documented
+
+### Math::Random (RNG) — DONE
+
+64-bit LCG with Knuth MMIX multiplier. Full algorithm, constants, and port-ready C code in `docs/systems/rng.md`.
+- Rand32: 64-bit LCG step, upper-32-bit output, multiply-high range reduction
+- RandF: Rand32(0x7FFFF) / 524287.0 * max
+- Seed: 0xDEADBEEF, Multiplier: 0x5D588B656C078965, Increment: 0x269EC3
 
 ### StringHash Algorithm — DONE
 

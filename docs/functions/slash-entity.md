@@ -140,3 +140,67 @@ int SlashEntity::CollideWithEntity(Entity* entity) {
 
 ---
 
+
+---
+
+## SlashEntity::DrawSlice (0x0017e424, 70 lines)
+
+```c
+void SlashEntity::DrawSlice() {
+    // Handle blade deactivation (ghost + particle burst)
+    if (m_bBladeActive && !(m_bBladeActive & 1)) {
+        CreateGhost();
+        PSPParticleManager::AddEmitter(burstParticleHash, ...);
+    }
+    
+    // Draw blade trail if enough points
+    if (m_PointCount >= 4) {
+        ResetMatrixStack();
+        TranslateMatrix(globalOffset);
+        UploadMatrices();
+        
+        // Select texture (normal or modified blade)
+        Texture* tex = hasModTex ? modTexture : defaultTexture;
+        Texture::Set(tex);
+        
+        // Draw two triangle strips: left and right sides of blade
+        Mesh::DrawTriStrip(m_pLeftBuffer, m_PointCount + 1, false, NULL);
+        Mesh::DrawTriStrip(m_pRightBuffer, m_PointCount + 1, false, NULL);
+        
+        Texture::UnSet(tex);
+    }
+}
+```
+
+The blade is rendered as two symmetric triangle strips (left + right of the swipe line), using QUADCUSTOMVERTEX vertices built by UpdatePoints.
+
+## SlashEntity::PreDraw (0x0017e504, 16 lines)
+
+```c
+// Draws all 8 ghost trails before the main blade
+void SlashEntity::PreDraw() {
+    for (int i = 0; i < 8; i++)
+        SlashEntityGhost::Draw(ghost[i]);
+}
+```
+
+## SlashEntity::PreUpdate (0x0017c584, 35 lines)
+
+```c
+void SlashEntity::PreUpdate(float dt) {
+    // Increment frame counter (for blade cooldown)
+    if (state->frameCount < 5) state->frameCount++;
+    else state->deferFlag = 0;
+    
+    // Update 8 ghost trails
+    for (int i = 0; i < 8; i++)
+        SlashEntityGhost::Update(ghost[i], dt);
+    
+    // Update blade modifier colours if in game state 1
+    if (*gameState == 1) UpdateModColour(NULL, dt);
+    
+    // Set blade swipe volume
+    ItemManager::SetSwipeLoodVol(state->bladeSpeedGauge);
+    state->bladeSpeedGauge = 0;  // reset for next frame
+}
+```

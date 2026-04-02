@@ -20,6 +20,7 @@
   - [game-flow.md](functions/game-flow.md) — HitBomb, QuitToMenu, GameOver, touch input
   - [power-ups.md](functions/power-ups.md) — ActivatePower, Activate, Parse
   - [particles.md](functions/particles.md) — AddEmitter, Emitter::Update, Manager::Update/Draw
+  - [actor-manager.md](functions/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
   - [sound.md](functions/sound.md) — GameSound::SFXPlay
   - [screens-effects.md](functions/screens-effects.md) — Screen callbacks, BombFlash/Blast, Ghost, Coin
 - [classes.md](classes.md) — Class hierarchy and method listing (~70 classes)
@@ -73,6 +74,7 @@ Decompiled game systems with pseudocode and flow diagrams.
 - [systems/particles.md](systems/particles.md) — PSPParticleManager/Emitter/Particle architecture
 - [systems/touch-input.md](systems/touch-input.md) — Touch coordinate transform, input pipeline to SlashEntity
 - [systems/effects.md](systems/effects.md) — SplatEntity, BombFlash, BombBlast visual effects
+- [systems/rng.md](systems/rng.md) — Math::Random: 64-bit LCG (Knuth MMIX), Rand32/RandF, constants, port code
 - [systems/rendering-detail.md](systems/rendering-detail.md) — Model::Draw, TintWhite/Colour, SetupQuad/AddQuad, Font::Load, QUADCUSTOMVERTEX
 
 ## Ghidra Scripts
