@@ -157,3 +157,10 @@ Key fields (approximate from AddParticle access patterns):
 | PSPParticleManager::LoadFile | 0x00115f60 | — | Load template data from file |
 | PSPParticleEmitter::Update | 0x00115d9c | 53 | Spawn particles from sets |
 | PSPParticleEmitter::AddParticle | 0x00115644 | 313 | Initialize single particle |
+
+---
+
+## See Also
+
+- [Particle functions](../functions/particles.md) -- emitter/particle pseudocode
+- [Resources](../resources.md) -- particles XML files

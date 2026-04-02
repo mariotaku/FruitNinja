@@ -82,3 +82,11 @@ Both check `Game.bombHitTimer <= 0` before updating (no input during bomb hit).
 - GlesForm supports 8 simultaneous touches (touchIds[8] at +0x1d4)
 - Each touch gets a unique incrementing ID from `field_0x1f4`
 - In same-screen multiplayer: `SlashEntity.m_SplitPoint` divides the screen
+
+---
+
+## See Also
+
+- [Game flow functions](../functions/game-flow.md) -- touch event dispatch
+- [Game struct](../structs/game.md) -- GlesForm touch fields
+- [Entity structs](../structs/entities.md) -- SlashEntity touch tracking

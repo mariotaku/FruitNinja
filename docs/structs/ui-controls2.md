@@ -293,3 +293,10 @@ Complex animation compositor:
 | NotificationControl | HUDControl3d | ~0x110 | In-game notification with 3 types |
 | ProgressionTimerControl | HUDControl3d | ~0x110 | Game-over countdown timer |
 | GenericHUDControl | HUDControl3d | ~0x1C8 | Animated HUD element with transitions + pulses |
+
+---
+
+## See Also
+
+- [Screens](../screens/) -- screen implementations using these controls
+- [HUD structs](hud.md) -- base classes for UI controls

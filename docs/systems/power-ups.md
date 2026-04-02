@@ -109,3 +109,10 @@ PowerUp::Activate(showPopup, isPurchased, position, extraParam):
 | PowerUpManager::Load | 0x00119cb0 | — | Load all power-up XML data |
 | PowerUpManager::ApplyDtMod | 0x001204dc | — | m_DtMod *= param (time scale) |
 | PowerUpManager::SlowClock | 0x001204cc | — | Slow time effect |
+
+---
+
+## See Also
+
+- [Power-up functions](../functions/power-ups.md) -- PowerUpManager pseudocode
+- [Resources](../resources.md) -- poweruplist.xml format

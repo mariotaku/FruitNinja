@@ -82,3 +82,8 @@ This is the base class for all screens (MainScreen, GameOverScreen, etc.) and mo
 Pool: up to 9 combo text sprites (digit textures 1..9). `GetFree` (0x00150da4) scans pool for inactive instance.
 
 ---
+
+## See Also
+
+- [Rendering functions](../functions/rendering.md) -- HUDControl3d::Draw
+- [SlashEntity functions](../functions/slash-entity.md) -- MissControl combo display

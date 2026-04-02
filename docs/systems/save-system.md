@@ -48,3 +48,8 @@ Achievement tracking uses `map<ulong, AchievementItem>` at +0x158 and +0x170, wi
 Score maps at +0x194 (4 × `map<int,int>`) store per-mode score history.
 
 ---
+
+## See Also
+
+- [Data structs](../structs/data.md) -- FruitSaveData layout
+- [Game flow functions](../functions/game-flow.md) -- SaveCurrentData call sites

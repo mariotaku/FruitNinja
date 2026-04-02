@@ -108,3 +108,9 @@ For each fruit to spawn (count = param_1):
 | +0x5c | float | zOffset | Z position offset |
 
 ---
+
+## See Also
+
+- [Fruit functions](../functions/fruit.md) -- Fruit::Update physics step
+- [Wave functions](../functions/wave.md) -- SpawnFruit initial velocity
+- [Entity structs](../structs/entities.md) -- MortarEntity base fields

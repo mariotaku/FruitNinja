@@ -265,3 +265,10 @@ The fruit meshes are simple (each half is ~100-200 triangles) so the vertex data
 | BadaTextureData::TexFmtToGL | 0x00189f78 | 53 | Format enum → GL constants (fully decompiled) |
 | ResourceLoader::Load | 0x001aa684 | 17 | HBR0 container loading entry point |
 | Texture2DFromFile_Bada ctor | 0x00189c1c | 65 | Loads .tex file (fully decompiled) |
+
+---
+
+## See Also
+
+- [Asset functions](../functions/assets.md) -- LoadVertexStreamPSP pseudocode
+- [Rendering detail system](../systems/rendering-detail.md) -- mesh pipeline

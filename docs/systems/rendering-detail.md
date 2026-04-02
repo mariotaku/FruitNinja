@@ -245,3 +245,12 @@ Key virtual functions used throughout GameDraw:
 - `SetDrawColour(Colour)`
 - `GetWindowSize(out)`
 - `IsRenderingAllowed()`
+
+---
+
+## See Also
+
+- [Rendering functions](../functions/rendering.md) -- draw call pseudocode
+- [Asset functions](../functions/assets.md) -- GPUafyTexture, LoadVertexStreamPSP
+- [Model format](../formats/models.md) -- HBR0 container, vertex streams
+- [Texture format](../formats/textures.md) -- .tex file layout

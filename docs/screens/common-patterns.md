@@ -34,3 +34,11 @@ Screens use two transition styles:
 - **Fade out**: `alpha = alpha * 0.75` (exponential decay)
 
 Both compare against a threshold constant to determine completion.
+
+---
+
+## See Also
+
+- [Menu flow system](../systems/menu-flow.md) -- screen navigation graph
+- [Screens & effects functions](../functions/screens-effects.md) -- screen callbacks
+- [HUD structs](../structs/hud.md) -- base class for screen controls

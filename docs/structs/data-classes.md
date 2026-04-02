@@ -149,3 +149,10 @@ Total = 0x44 bytes of plain data, bulk-copied in 4×16-byte chunks.
   <!-- more bonustype entries... -->
 </bonusInfoFile>
 ```
+
+---
+
+## See Also
+
+- [Game Over screen](../screens/game-over.md) -- FNHighscore display
+- [Resources](../resources.md) -- bonusawards.xml format

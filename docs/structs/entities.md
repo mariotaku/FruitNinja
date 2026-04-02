@@ -200,3 +200,15 @@ Entity base ends at ~0x3c; SlashEntity fields follow.
 | 0x0017b82c | CreateGhost | Spawns SlashEntityGhost for visual echo |
 | 0x0017e424 | DrawSlice | Renders blade geometry |
 
+
+---
+
+## See Also
+
+- [Fruit functions](../functions/fruit.md) -- Fruit::Update, LoadInfo, CollisionResponse
+- [Bomb functions](../functions/bomb.md) -- Bomb::Update, Explode
+- [SlashEntity functions](../functions/slash-entity.md) -- slash collision, combo logic
+- [Physics system](../systems/physics.md) -- gravity, spawn velocity, collision
+- [Scoring system](../systems/scoring.md) -- combo scoring pipeline
+- [FRUIT_INFO data struct](data.md) -- per-fruit-type configuration
+- [FruitModelInfo format](../formats/models.md) -- 3D model data for fruit rendering

@@ -143,3 +143,9 @@ Default (if no sound elements in XML): 1 ImpactSound with auto-generated name fr
 ```
 
 ---
+
+## See Also
+
+- [Fruit functions](../functions/fruit.md) -- LoadInfo, CollisionResponse
+- [Save system](../systems/save-system.md) -- FruitSaveData persistence
+- [Resources](../resources.md) -- fruitlist.xml file format

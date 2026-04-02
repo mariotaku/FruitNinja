@@ -121,3 +121,10 @@ if (field_0x6c > 3.0) {
 | BombBlast::Update | 0x00171170 | 32 | Expansion + lifetime |
 | BombBlast::DrawActiveBlasts | 0x00171aa0 | — | Render blasts |
 | BombBlast::DrawBlast | 0x00171354 | — | Single blast render |
+
+---
+
+## See Also
+
+- [Screens & effects functions](../functions/screens-effects.md) -- effect pseudocode
+- [Entity structs](../structs/entities.md) -- BombFlash, BombBlast structs

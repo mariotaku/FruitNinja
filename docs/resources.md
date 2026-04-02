@@ -227,3 +227,14 @@ GameInitialise()
   → PSPParticleManager::LoadFile() — parses particles_fast/slow.xml
   → WaveManager::Init()         — parses mode-specific wavelist XML (4 modes)
 ```
+
+---
+
+## See Also
+
+- [Texture format](formats/textures.md) -- .tex file layout
+- [Audio format](formats/audio.md) -- .wav.pcm file format
+- [Model format](formats/models.md) -- HBR0 container, vertex streams
+- [Font format](formats/fonts.md) -- BMFont .fnt files
+- [Wave system](systems/wave-system.md) -- wavelist XML parsing
+- [Power-ups system](systems/power-ups.md) -- poweruplist.xml

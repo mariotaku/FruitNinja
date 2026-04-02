@@ -143,3 +143,10 @@ Inherits: Osp::Ui::Controls::Form
 Screen: 320×480 portrait. `TransformTouchPos: y = 319 - scaled_y`
 
 ---
+
+## See Also
+
+- [Game loop functions](../functions/game-loop.md) -- GameUpdate, GameDraw
+- [Game flow functions](../functions/game-flow.md) -- state transitions, SaveCurrentData
+- [State machine system](../systems/state-machine.md) -- GameTaskState transitions
+- [Touch input system](../systems/touch-input.md) -- GlesForm touch handling

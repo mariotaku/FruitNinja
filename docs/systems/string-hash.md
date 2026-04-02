@@ -94,3 +94,9 @@ uint32_t StringHash(const char* str) {
 ## Also: FileStringHash (0x0019c394)
 
 101 lines. Similar Jenkins hash but with different initial values and used for file path hashing. Not needed for gameplay port.
+
+---
+
+## See Also
+
+- [Scoring functions](../functions/scoring.md) -- hash-based stat lookups

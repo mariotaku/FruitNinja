@@ -41,3 +41,8 @@ Wave data loaded from XML (TiXmlDocument). 4 game modes. WAVE_INFO = 0x78 bytes.
 | — | byte | m_CriticalChance | = 0x46 = 70% |
 
 ---
+
+## See Also
+
+- [Wave functions](../functions/wave.md) -- SpawnFruit, GetNextWave
+- [Wave system overview](../systems/wave-system.md) -- wave lifecycle, XML format

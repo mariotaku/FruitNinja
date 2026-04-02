@@ -307,3 +307,10 @@ Touch-driven vertical scroller with up/down arrow buttons. Steps through a value
 | 0xA4 | int | m_TouchId | Touch ID (-1 = none) |
 
 **Update behavior:** Calculates visible/total bounds from position and heights. On touch down, checks three touch regions: top arrow (scroll up = action 2 if wrap enabled, else 1), bottom arrow (scroll down), and middle (select = action 3 if within arrow count). On touch release, applies step: action 1 adds step to current value, action 2 subtracts step. Current value is clamped to [min, max]. Calls UpdateTouchPosition while touch held.
+
+---
+
+## See Also
+
+- [Screens](../screens/) -- screen implementations using these widgets
+- [HUD structs](hud.md) -- base classes for UI controls

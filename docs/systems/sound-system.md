@@ -52,3 +52,11 @@ SFX names are string literals in the binary (e.g. "sfx_apple_hit", "sfx_bomb_fus
 ## Subsystem Singletons
 
 SystemManager, MatrixManager, FileManager, DisplayManager (320×480), TextureManager, MeshManager, AnimationManager, InputManager, PSPParticleManager, PowerUpManager, LeaderboardManager, NetworkManager (P2P + OpenFeint + GameCenter), MAMAudioController → MAMAudioThread (16 voices, 16kHz), WaveManager, ItemManager, AchievementManager, BonusManager, Mortar::Touch, Mortar::SoundManager, FruitCamera
+
+---
+
+## See Also
+
+- [Sound functions](../functions/sound.md) -- SFXLoad, PlaySound pseudocode
+- [Audio format](../formats/audio.md) -- .wav.pcm file format
+- [Other structs](../structs/other.md) -- MAMAudioThread layout

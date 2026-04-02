@@ -161,3 +161,10 @@ Used by SlashEntity blade trail, SlashEntityGhost, and SplatEntity.
 | +0x20 | float | ? |
 
 Confirmed 0x24 stride from SlashEntityGhost::Update loop (`iVar4 += 0x24`).
+
+---
+
+## See Also
+
+- [Screens & effects functions](../functions/screens-effects.md) -- MenuButton callbacks
+- [Scoring functions](../functions/scoring.md) -- Coin::MakeCoins

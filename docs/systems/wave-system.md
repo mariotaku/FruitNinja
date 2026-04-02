@@ -158,3 +158,9 @@ WaveManager::Update(dt):
 ```
 
 ---
+
+## See Also
+
+- [Wave functions](../functions/wave.md) -- SpawnFruit, GetNextWave pseudocode
+- [WaveManager struct](../structs/wave.md) -- field layout
+- [Resources](../resources.md) -- wavelist XML files

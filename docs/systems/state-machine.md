@@ -117,3 +117,8 @@ All managed by Game singleton fields, not by the top-level state machine:
 ```
 
 ---
+
+## See Also
+
+- [Game loop functions](../functions/game-loop.md) -- GameUpdate state dispatch
+- [Game struct](../structs/game.md) -- GameTaskState field layout

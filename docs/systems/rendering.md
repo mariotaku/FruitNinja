@@ -145,3 +145,9 @@ Similar full-screen flash for bomb hits, with red tint and camera shake position
 | HUD::BeginDraw | 0x00144b28 | HUD frame begin |
 
 ---
+
+## See Also
+
+- [Rendering functions](../functions/rendering.md) -- GameDraw, HUD::Draw
+- [Game loop functions](../functions/game-loop.md) -- GameDraw call site
+- [Entity structs](../structs/entities.md) -- Fruit::Draw, Bomb::Draw

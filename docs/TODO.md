@@ -84,8 +84,8 @@ Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram (see
 
 ### High Priority (needed for port)
 
-- [ ] `Mortar::SoundManager` (35 funcs) — engine audio singleton: SFXPlay, SFXLoad, SetSFXVolume, Initialise. This is the layer between GameSound and platform audio.
-- [ ] `Mortar::MortarSound` (15 funcs) — individual sound instance: SetVolume, IsPlaying, Stop. Used as handle returned by SFXPlay.
+- [x] `Mortar::SoundManager` — SFXPlay/SFXPlayInternal/SetVolume decompiled. See `functions/sound.md`
+- [ ] `Mortar::MortarSound` (15 funcs) — individual sound instance: SetVolume, IsPlaying, Stop. MortarSoundMAM = 0x10 bytes.
 - [ ] `BadaSound::SFXLoad` (0x18b1f4) — how .wav.pcm files are loaded. Need to understand for SDL2 audio replacement.
 - [ ] `BadaSound::MusicPlay/Stop/Pause/Resume` — background music control
 

@@ -54,3 +54,9 @@ struct WavHeader {
 | applause-light.wav.pcm | 49,150 | 3.1s |
 | angel-combo-1.wav.pcm | 17,600 | 1.1s |
 | bamboo-impact-1.wav.pcm | 6,093 | 0.4s |
+
+---
+
+## See Also
+
+- [Sound system](../systems/sound-system.md) -- audio playback architecture

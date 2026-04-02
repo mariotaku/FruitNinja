@@ -46,3 +46,7 @@ MortarCamera base = 0x12c bytes.
 **Key methods:** FruitCamera (0x180de0), UpdateCamera (0x180c8c), UpdateShake (0x180ea0), CreateCameraShake (0x180d10), SetupPerspective (0x1810ac), FollowEntity (0x180b2c)
 
 ---
+
+## See Also
+
+- [Rendering functions](../functions/rendering.md) -- GameDraw camera setup

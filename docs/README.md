@@ -7,7 +7,21 @@
 
 ## Overview
 
-- [class-status.md](class-status.md) — **All 118 classes**: analysis status, sizes, descriptions, doc links
+- [class-status.md](class-status.md) — **All 129 classes**: analysis status, sizes, descriptions, doc links
+- [functions/](functions/) — Decompiled function reference with pseudocode:
+  - [game-loop.md](functions/game-loop.md) — GameTaskUpdate, GameInit, GameUpdate, GameDraw
+  - [fruit.md](functions/fruit.md) — Fruit::Update, CollisionResponse, Draw, Init, Chuck, LoadInfo
+  - [bomb.md](functions/bomb.md) — Bomb::Update, CollisionResponse
+  - [slash-entity.md](functions/slash-entity.md) — SlashEntity::Update, CollideWithEntity, UpdatePoints
+  - [wave.md](functions/wave.md) — WaveManager::Init, SpawnFruit, SpawnBomb, CriticalChance
+  - [scoring.md](functions/scoring.md) — AddToCurrentScore, StringHash
+  - [rendering.md](functions/rendering.md) — HUDControl3d::Draw, Model::Draw, Tint, Quad builders
+  - [assets.md](functions/assets.md) — GPUafyTexture, TexFmtToGL, LoadVertexStreamPSP
+  - [game-flow.md](functions/game-flow.md) — HitBomb, QuitToMenu, GameOver, touch input
+  - [power-ups.md](functions/power-ups.md) — ActivatePower, Activate, Parse
+  - [particles.md](functions/particles.md) — AddEmitter, Emitter::Update, Manager::Update/Draw
+  - [sound.md](functions/sound.md) — GameSound::SFXPlay
+  - [screens-effects.md](functions/screens-effects.md) — Screen callbacks, BombFlash/Blast, Ghost, Coin
 - [classes.md](classes.md) — Class hierarchy and method listing (~70 classes)
 - [port-plan.md](port-plan.md) — Symbol coverage, gap analysis, porting roadmap
 - [resources.md](resources.md) — Asset directory structure, XML schemas, loading flow
