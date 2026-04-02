@@ -1,6 +1,6 @@
 #include "splash_screen.h"
 #include "game.h"
-#include "dojo_screen.h"
+#include "main_screen.h"
 #include <cstdio>
 
 static const int SPLASH_FRAMES = 60; // ~1 second at 60fps
@@ -16,7 +16,7 @@ void SplashScreen::update(float dt) {
     (void)dt;
     frame_count++;
     if (frame_count >= SPLASH_FRAMES) {
-        game.set_screen(new DojoScreen(game));
+        game.set_screen(new MainScreen(game));
     }
 }
 

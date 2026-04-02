@@ -16,6 +16,15 @@ struct Game {
     GLuint hb_logo_tex;
     GLuint title_tex;
 
+    // Global textures (per MainScreen docs — not on any struct)
+    GLuint blurry_backing_tex;
+    GLuint fruit_text_tex;
+    GLuint ninja_text_tex;
+
+    // Audio toggle state
+    bool soundEnabled;
+    bool musicEnabled;
+
     // Data directory path
     std::string data_dir;
 

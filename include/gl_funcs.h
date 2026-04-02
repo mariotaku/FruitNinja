@@ -55,6 +55,12 @@ typedef intptr_t GLsizeiptr;
 #define GL_LINK_STATUS           0x8B82
 #define GL_COLOR_BUFFER_BIT      0x4000
 #define GL_DEPTH_BUFFER_BIT      0x0100
+#define GL_DEPTH_TEST            0x0B71
+#define GL_LESS                  0x0201
+#define GL_UNSIGNED_SHORT        0x1403
+#define GL_ARRAY_BUFFER          0x8892
+#define GL_ELEMENT_ARRAY_BUFFER  0x8893
+#define GL_STATIC_DRAW           0x88E4
 
 // Function pointer types and declarations
 #define GL_FUNC(ret, name, ...) typedef ret (*PFN_##name)(__VA_ARGS__); extern PFN_##name name;
@@ -90,7 +96,16 @@ GL_FUNC(void, glUseProgram, GLuint)
 GL_FUNC(GLint, glGetUniformLocation, GLuint, const GLchar*)
 GL_FUNC(void, glUniform1i, GLint, GLint)
 GL_FUNC(void, glUniform1f, GLint, GLfloat)
+GL_FUNC(void, glUniform3f, GLint, GLfloat, GLfloat, GLfloat)
 GL_FUNC(void, glUniform4f, GLint, GLfloat, GLfloat, GLfloat, GLfloat)
+GL_FUNC(void, glUniformMatrix4fv, GLint, GLsizei, GLboolean, const GLfloat*)
+GL_FUNC(void, glGenBuffers, GLsizei, GLuint*)
+GL_FUNC(void, glDeleteBuffers, GLsizei, const GLuint*)
+GL_FUNC(void, glBindBuffer, GLenum, GLuint)
+GL_FUNC(void, glBufferData, GLenum, GLsizeiptr, const void*, GLenum)
+GL_FUNC(void, glDrawElements, GLenum, GLsizei, GLenum, const void*)
+GL_FUNC(void, glDepthFunc, GLenum)
+GL_FUNC(void, glDepthMask, GLboolean)
 GL_FUNC(void, glEnableVertexAttribArray, GLuint)
 GL_FUNC(void, glDisableVertexAttribArray, GLuint)
 GL_FUNC(void, glVertexAttribPointer, GLuint, GLint, GLenum, GLboolean, GLsizei, const void*)

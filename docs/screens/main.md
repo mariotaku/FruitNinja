@@ -167,21 +167,22 @@ Buttons are drawn separately by HUD::Draw (they're added as HUDControls).
 
 ### State Table
 
-| State | Purpose | Transition |
-|-------|---------|------------|
-| **0** | **Camera zoom-in from splash.** Creates sound toggle (+0xac) and music toggle (+0xb0) if null. Lerps camera field at +0xc to -1.0 (rate 0.125). When timer2 > 0.15 AND camera < 0.0 → state 1. Also creates Play button (+0x9c) and Shop button (+0xa0). | → 1 |
-| **1** | **Create remaining buttons.** Creates Leaderboard (+0xa4) and MoreGames buttons if null. Checks `ItemManager::AreNewItems()` for shop "new" badge. Calls `CreateNormalLeaderboardButton()`. Lerps position based on screen size and camera transition. | (stays) |
-| **2** | **Direct game start.** If camera > 0.999: resets WaveManager, sets game flag. Decays camera ×0.75. When abs(camera) < threshold → state 0x11. | → 0x11 |
-| **3, 4, 0x15, 0x16** | **Wait for entities to clear.** Waits for `ActorManager::GetNumEntities() == 0`, decays timer2 ×0.75. Then creates `DojoScreen` (states 3/4). | → (screen change) |
-| **8** | **Slide-in transition.** Lerps timer2 toward 1.0 (rate 0.125), then accumulates dt. After 1.5s → state 0, timer = 0.15, timer2 = -0.85. | → 0 |
-| **9, 10** | **Network/GameCenter** (skip for port). Waits for entities, launches dashboard. | → 0 |
-| **0xb** | **Network news update** (skip for port). Calls `NetworkManager::UpdateNews`. | → 1 |
-| **0xe, 0xf** | **Mode selection slide-out.** Decays timer2 ×0.85. When crossing 0.25 threshold: cancels news, creates `GameModeScreen(false)`, adds to HUD. | → (screen change) |
-| **0x10** | **Matchmaker open** (skip for port). Waits for entities, decays timer, opens matchmaker. | → 0 |
-| **0x11** | **Camera fade after game.** Decays camera ×0.75. When abs < threshold → camera=0, flag cleared. | (stays) |
-| **0x13, 0x14** | **Timer accumulate.** Accumulates field108 += dt×8. When ≥ 8.0 → clamp to 0. Reset to state 0. | → 0 |
-| **0x17** | **Tutorial → bomb transition.** Resets tutorial pos. Waits for entities. Checks field +0x4c: if 2 → HitMenuBomb at (163, -96, 0) → state 0x18; if 3 → state 0. | → 0x18 or 0 |
-| **0x18** | **Bomb flash → quit.** Resets tutorial pos. When `BombFlashFull()` returns true → `SystemManager::QuitGame()`. | → (exit) |
+| State | Enum | Purpose | Transition |
+|-------|------|---------|------------|
+| **0** | `CAMERA_ZOOM` | Camera zoom-in from splash. Creates sound/music toggles, Play + Dojo buttons. Lerps camera to -1.0 (rate 0.125). | → `CREATE_BUTTONS` |
+| **1** | `CREATE_BUTTONS` | Creates Leaderboard/MoreGames buttons. Checks `ItemManager::AreNewItems()` for "new" badge. Active menu. | (stays) |
+| **2** | `GAME_START` | Direct game start. Camera > 0.999: reset WaveManager. Decays camera ×0.75. | → `CAMERA_FADE` |
+| **3, 4** | `DOJO_WAIT_A/B` | Wait for `ActorManager::GetNumEntities() == 0`, decay timer2 ×0.75. Create `DojoScreen`. | → (screen) |
+| **8** | `SLIDE_IN` | Slide-in return. Lerps timer2 → 1.0, then accumulates dt. After 1.5s reset. | → `CAMERA_ZOOM` |
+| **9, 10** | `LEADERBOARD/MORE_GAMES` | Network/GameCenter (skip for port). | → `CAMERA_ZOOM` |
+| **0xb** | `NEWS` | Network news update (skip for port). | → `CREATE_BUTTONS` |
+| **0xe, 0xf** | `MODE_SELECT/_2` | Slide-out: decay timer2 ×0.85. At 0.25 threshold: create `GameModeScreen`. | → (screen) |
+| **0x10** | `MATCHMAKER` | Open matchmaker (skip for port). | → `CAMERA_ZOOM` |
+| **0x11** | `CAMERA_FADE` | Camera fade after game return. Decays camera ×0.75 until settled. | (stays) |
+| **0x13, 0x14** | `LOADING_A/B` | Accumulate field108 += dt×8. When ≥ 8.0 → reset. | → `CAMERA_ZOOM` |
+| **0x15, 0x16** | `DOJO_WAIT_C/D` | Wait for entities variant (same as 3/4 logic). | → (screen) |
+| **0x17** | `QUIT_WAIT` | Reset tutorial. Wait for entities. If field +0x4c == 2: HitMenuBomb. | → `QUIT_BOMB` or `CAMERA_ZOOM` |
+| **0x18** | `QUIT_BOMB` | BombFlash → `SystemManager::QuitGame()`. | → (exit) |
 
 ### Position Update (end of Update, all states)
 
