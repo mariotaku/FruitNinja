@@ -1,0 +1,43 @@
+# Build
+build/
+cmake-build-*/
+out/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cbp
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Compiled
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# Ghidra
+ghidra_scripts/*.backup
+ghidra_scripts/*_output.txt
+
+# Temp/scratch
+tmp/
+
+# Claude Code
+.claude/*.local.json
+
+# OS
+.DS_Store
+Thumbs.db
