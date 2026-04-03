@@ -221,25 +221,32 @@
 ## Architecture Summary
 
 ```
-OspMain
-  └─ FruitNinja (Application)
-       ├─ GlesForm (OpenGL ES surface, touch input)
-       ├─ Game (core game logic)
-       │    ├─ WaveManager / WaveQue (fruit/bomb spawning)
-       │    ├─ SlashEntity / SlashEntityGhost (blade mechanics)
-       │    ├─ Bomb / BombFlash (bomb logic)
-       │    ├─ SplatEntity (splatter effects)
-       │    ├─ PowerUpManager / PowerUp (power-ups)
-       │    ├─ BonusManager / ScoreControl (scoring)
-       │    ├─ PSPParticleManager / PSPParticleEmitter (particles)
-       │    └─ FruitCamera (camera control)
-       ├─ UI Screens
-       │    ├─ DojoScreen (main menu)
-       │    ├─ GameModeScreen (mode selection)
-       │    ├─ GameOverScreen (results)
-       │    └─ AboutScreen (credits)
-       ├─ HUD / ScreenFadeControl (overlay UI)
-       ├─ Audio: BadaSound → MAMAudioController → MortarAudioMixerBada
-       ├─ Networking: Mortar::NetworkManager (multiplayer, leaderboards)
-       └─ Mortar Engine (rendering, resources, threading)
+OspMain (0x000d82a4) — anti-tamper hash check
+  └─ OspMain_AppBootstrap (0x00183474) — argv → Application::Execute
+       └─ FruitNinja (0x48 bytes, 3 bases: Application + IScreenEventListener + ITimerEventListener)
+            ├─ OnAppInitializing (0x00182194) — EGL, GL, GlesForm, Timer, Audio, Game
+            ├─ OnTimerExpired (0x0018269c) → Timer::Start(10) + FruitNinja::Draw (full game tick)
+            ├─ GlesForm (OpenGL ES surface, touch input)
+            ├─ Game (core game logic, 3-state machine: Splash → Game)
+            │    ├─ GameInit (0x0016c644) — HUD, entities, screens, wave, sound
+            │    ├─ GameUpdate (0x0016bed0) — main gameplay loop (359 lines)
+            │    ├─ GameDraw (0x0016b888) — full render frame (211 lines)
+            │    ├─ WaveManager / WaveQue (fruit/bomb spawning)
+            │    ├─ SlashEntity / SlashEntityGhost (blade mechanics)
+            │    ├─ Bomb / BombFlash (bomb logic)
+            │    ├─ SplatEntity (splatter effects)
+            │    ├─ PowerUpManager / PowerUp (power-ups)
+            │    ├─ BonusManager / ScoreControl (scoring)
+            │    ├─ PSPParticleManager / PSPParticleEmitter (particles)
+            │    └─ FruitCamera (camera control)
+            ├─ UI Screens
+            │    ├─ MainScreen / DojoScreen (main menu)
+            │    ├─ GameModeScreen (mode selection)
+            │    ├─ GameOverScreen (results)
+            │    ├─ PauseScreen (pause overlay)
+            │    └─ AboutScreen (credits)
+            ├─ HUD / ScreenFadeControl (overlay UI)
+            ├─ Audio: BadaSound (0x874, 256 sounds, 8 active) → MAMAudioController → MAMAudioThread
+            ├─ Networking: Mortar::NetworkManager (multiplayer, leaderboards — skipped for port)
+            └─ Mortar Engine (rendering, resources, threading)
 ```

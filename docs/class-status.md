@@ -24,7 +24,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 |-------|--------|------|-------------|-----|
 | Game | ✅ | 0x608 | Game singleton: score, timers, pointers to all subsystems | structs/game.md |
 | GameTaskState | ✅ | 0x118 | Per-task state: slash entities, effects, textures, flags | structs/game.md |
-| FruitNinja | ✅ | 0x48 | Bada app: EGL context, 10ms timer loop | structs/game.md |
+| FruitNinja | ✅ | 0x48 | Bada app: 3 bases (Application, IScreenEventListener, ITimerEventListener), EGL, 10ms timer, full game tick | functions/game-loop.md |
 | GlesForm | ✅ | 0x1f8 | Bada GL form: touch input, 8-finger multitouch | structs/game.md |
 | FruitCamera | ✅ | 0x16c | Camera: idle/follow mode, shake system | structs/camera.md |
 | MortarCamera | ✅ | 0x12c | Base camera: 4 matrices, pos/lookAt/up | structs/camera.md |
@@ -127,9 +127,9 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | Class | Status | Size | Description | Doc |
 |-------|--------|------|-------------|-----|
 | GameSound | ✅ | 0x708 | Pool-based SFX manager (32 slots) | systems/sound-system.md |
-| Mortar::SoundManager | ❌ | — | Engine audio singleton (35 funcs) | — |
-| Mortar::MortarSound | ❌ | — | Individual sound handle (15 funcs) | — |
-| BadaSound | ❌ | — | Bada platform audio (22 funcs) | — |
+| Mortar::SoundManager | 🔶 | — | SFXPlay/SFXPlayInternal/SetVolume decompiled | functions/sound.md |
+| Mortar::MortarSound | ❌ | 0x10 | Sound handle API (15 funcs, behind GOT thunks) | — |
+| BadaSound | ✅ | ~0x874 | Full struct + all functions: SFXLoad, SFXPlay(8 slots), Music Play/Stop/Pause/Resume | systems/sound-system.md |
 | MAMAudioController | ❌ | — | Audio subsystem bridge (18 funcs) | — |
 | MAMAudioThread | 🔶 | 0x154 | Mixing thread: 16kHz, 16 voices, NLFQueue | structs/other.md |
 | MortarAudioMixerBada | ❌ | — | Bada PCM mixer (17 funcs) | — |

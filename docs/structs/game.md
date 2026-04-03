@@ -111,19 +111,54 @@ Entity types in ActorManager:
 
 ## FruitNinja (application, size = 0x48)
 
-Inherits: Osp::App::Application, IScreenEventListener, ITimerEventListener
+Inherits: Osp::App::Application (+0x00), IScreenEventListener (+0x0c), ITimerEventListener (+0x10)
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
-| +0x00 | void** | vtable | |
+| +0x00 | void** | vtable_App | Application vtable (iVar1 + 0x08) |
+| +0x0c | void** | vtable_Screen | IScreenEventListener vtable (iVar1 + 0x58) |
+| +0x10 | void** | vtable_Timer | ITimerEventListener vtable (iVar1 + 0x70) |
+| +0x14 | EGLDisplay | m_eglDisplay | |
+| +0x18 | EGLSurface | m_eglSurface | |
+| +0x1c | EGLConfig | m_eglConfig | |
+| +0x20 | EGLContext | m_eglContext | |
 | +0x24 | int | field_0x24 | Init=0 |
-| +0x28 | int | eglSurface | Int handle |
-| +0x38 | int | field_0x38 | this-adj base for ITimerEventListener thunk |
-| +0x40 | Timer* | mTimer | 10ms = 100Hz game tick |
+| +0x28 | EGLSurface | m_eglPbuffer | Optional pbuffer surface |
+| +0x3c | void* | m_pUnk3c | Deleted in Cleanup |
+| +0x40 | Timer* | m_pTimer | 10ms game tick |
+| +0x44 | GlesForm* | m_pGlesForm | GL surface + touch input |
 
-**Game loop:** `OnTimerExpired → Timer::Start(10ms) + Draw()`
+**Non-virtual thunks** (multiple inheritance this-adjustment):
 
-**Draw() order:** MAMAudioThread::ThreadMainLoop, MAMAudioController::Update, sglMakeCurrent, glClear, SystemManager::Update, game→Update(dt), BeginFrame, game→Draw(dt), EndFrame, SwapBuffers, glFlush/glFinish, sglSwapBuffers, Touch::Update, SoundManager::Update. Terminates if frame stall counter > 90.
+| Thunk | Address | Adjusts | For Interface |
+|-------|---------|---------|---------------|
+| OnTimerExpired | 0x00182694 | this - 0x10 | ITimerEventListener |
+| OnScreenOff | 0x00181d90 | this - 0x0c | IScreenEventListener |
+| OnScreenOn | 0x00181d84 | this - 0x0c | IScreenEventListener |
+
+**Methods** (all addresses are real implementations, not GOT thunks):
+
+| Method | Address | Lines |
+|--------|---------|-------|
+| FruitNinja() | 0x00182488 | 34 |
+| CreateInstance | 0x00182470 | 13 |
+| OnAppInitializing | 0x00182194 | 65 |
+| OnAppTerminating | 0x00182160 | 18 |
+| OnForeground | 0x001820b0 | 25 |
+| OnBackground | 0x00182060 | 20 |
+| OnTimerExpired | 0x0018269c | 10 |
+| Draw (GameTick) | 0x001824e0 | 98 |
+| Cleanup | 0x00182114 | 22 |
+| InitEGL | 0x00181f80 | 60 |
+| InitGL | 0x00181e58 | 35 |
+| DestroyGL | 0x00181da0 | 28 |
+
+**Game loop:** `OnTimerExpired (0x0018269c) → Timer::Start(10ms) + FruitNinja::Draw (0x001824e0)`
+
+**FruitNinja::Draw** is the full game tick (misnamed — does update + render + swap):
+Audio → sglMakeCurrent → glClear → SystemManager::Update → Game::Update(dt) → BeginFrame → Game::Draw(dt) → EndFrame → SwapBuffers → glFlush/glFinish → sglSwapBuffers → FPS calc → Touch::Update → SoundManager::Update. Terminates if stall counter > 90.
+
+See [functions/game-loop.md](../functions/game-loop.md) for full call tree.
 
 ---
 

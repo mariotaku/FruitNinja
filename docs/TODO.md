@@ -32,18 +32,22 @@
 - [x] `PSPParticleManager::LoadFile` (0x115f60, 722 lines) — particles XML → 1024-particle pool + templates
 - See `docs/functions/data-parsing.md`
 
-### 5. Sound System (needed for port)
-- [ ] `BadaSound::SFXLoad` (0x18b1f4) — .wav.pcm loading into memory buffers
-- [ ] `Mortar::MortarSound` (15 funcs) — sound handle: SetVolume, IsPlaying, Stop
-- [ ] `BadaSound::MusicPlay/Stop/Pause/Resume` — background music control
+### 5. Sound System (needed for port) — MOSTLY DONE
+- [x] `BadaSound::SFXLoad` (0x18b1f4, 72 lines) — .wav.pcm → hash table + SoundEffectBada (256 max)
+- [x] `BadaSound::SFXPlay` (0x18b130, 20 lines) — 8-slot concurrent playback, find free + prepare
+- [x] `BadaSound::MusicPlay/Stop/Pause/Resume/Mute/SetVolume` — all decompiled, uses Osp::Media::Player
+- [x] `BadaSound struct` — full layout: hash table (256), effects (256), 8 active slots, volume floats
+- [ ] `Mortar::MortarSound` / `MortarSoundMAM` (15 funcs) — sound handle API (behind GOT thunks, hard to resolve)
+- See `docs/systems/sound-system.md`
 
 ### 6. Remaining Gameplay Functions
-- [ ] `Fruit::SetFruitType` (0x17621c) — configure fruit appearance from FRUIT_INFO
-- [ ] `Fruit::EnableCollision` (0x176354) — ColSphere creation
+- [x] `Fruit::SetFruitType` (0x17621c, 46 lines) — set type, scale, collision sphere from FRUIT_INFO
+- [x] `Fruit::EnableCollision` (0x176354, 36 lines) — toggle ColSphere on/off
 - [ ] `TimeModifier::Parse/UpdateSpecific` — freeze/speed power-up timing
 - [ ] `SlashModifier::Parse/UpdateSpecific` — blade width power-up
 - [ ] `WaveModifier::Parse/UpdateSpecific` — wave rate override
 - [ ] `SlashEntity::InitPoints` (0x17c340) — blade vertex buffer init
+- See `docs/functions/fruit.md`
 
 ---
 
@@ -125,16 +129,18 @@ See `docs/systems/effects.md`. Both Update functions fully decompiled:
 - [x] MatrixManager / MatrixStack — known from T.NNN renames: Reset, Translate, Scale, SetCurrent, Upload. Offset +0x1094 in MatrixManager = the active MatrixStack.
 - [x] GeometryBinding — PassBinding::Apply fully decompiled (0x1a39f8, 101 lines). Sets up glVertexPointer/NormalPointer/ColorPointer/TexCoordPointer.
 
-## Sound System — Partially Analyzed (147 funcs, 13 done)
+## Sound System — Mostly Analyzed (147 funcs, 25+ done)
 
-Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram (see `docs/systems/sound-system.md`).
+Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram, BadaSound full struct + all functions (see `docs/systems/sound-system.md`).
 
 ### High Priority (needed for port)
 
 - [x] `Mortar::SoundManager` — SFXPlay/SFXPlayInternal/SetVolume decompiled. See `functions/sound.md`
-- [ ] `Mortar::MortarSound` (15 funcs) — individual sound instance: SetVolume, IsPlaying, Stop. MortarSoundMAM = 0x10 bytes.
-- [ ] `BadaSound::SFXLoad` (0x18b1f4) — how .wav.pcm files are loaded. Need to understand for SDL2 audio replacement.
-- [ ] `BadaSound::MusicPlay/Stop/Pause/Resume` — background music control
+- [x] `BadaSound::SFXLoad` (0x18b1f4, 72 lines) — full .wav.pcm loading pipeline decompiled
+- [x] `BadaSound::SFXPlay` (0x18b130, 20 lines) — 8-slot concurrent playback
+- [x] `BadaSound::MusicPlay/Stop/Pause/Resume/Mute/SetVolume` — all decompiled
+- [x] `BadaSound` struct layout — hash table (256), effects (256), 8 active slots, SFX/music volume
+- [ ] `Mortar::MortarSound` / `MortarSoundMAM` (15 funcs) — sound handle API (all behind GOT thunks)
 
 ### Medium Priority
 

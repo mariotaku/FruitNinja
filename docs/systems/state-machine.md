@@ -18,44 +18,186 @@ State transitions: write new state index to `Game[0]` (the first byte of the Gam
 
 ### State 0: Splash (SplashTask.cpp)
 
-| Handler | Address | Notes |
-|---------|---------|-------|
-| SplashInit | 0x0016f648 | Creates MenuBackground, sets up camera (IdleCamera), registers input callbacks |
-| SplashUpdate | 0x0016f5d8 | Updates InputManager, SoundManager; increments frame counter; calls SplashInputEvent(NULL) |
-| SplashDraw | 0x0016f554 | (stub) |
-| SplashExit | 0x0016f59c | Clears input actions, destroys MenuBackground |
-| SplashInputEvent | 0x0016f558 | When ready flag is clear: sets `Game[0] = 2` → transitions to Game |
+| Handler | Address | Lines | Notes |
+|---------|---------|-------|-------|
+| SplashInit | 0x0016f648 | 67 | Creates MenuBackground, camera setup, input config, register callbacks |
+| SplashUpdate | 0x0016f5d8 | 22 | InputManager + SoundManager + GameSound update; MenuBackground::Update; SplashInputEvent |
+| SplashDraw | 0x0016f554 | 1 | No-op (returns param) |
+| SplashExit | 0x0016f59c | 16 | ClearActions, destroy MenuBackground, reset flags |
+
+**SplashInit call tree:**
+```
+SplashInit(0)
+├─ [if not already initialized]
+│    ├─ MenuBackground::MenuBackground() → MenuBackground::Init(true)
+│    ├─ FruitCamera::SetScale(1.0, 1.0, 1.0)      ← vtable +0x24
+│    ├─ FruitCamera::SetPosition(1.0, ?, 10.0)     ← vtable +0x2c
+│    ├─ FruitCamera::SetRotation(1.0, 1.0, 1.0)    ← vtable +0x34
+│    ├─ FruitCamera::IdleCamera()
+│    ├─ Game+0x02 = 0 (paused)
+│    ├─ InputManager::LoadConfigFile(...)
+│    ├─ InputManager::RegisterInputCallback(StringHash("..."), callback1)
+│    ├─ InputManager::RegisterInputCallback(StringHash("..."), callback2)
+│    └─ Set initialized flag = 1
+```
+
+**SplashUpdate call tree:**
+```
+SplashUpdate(dt, active)
+├─ InputManager::Update(dt)
+├─ SoundManager::Update(dt)
+├─ GameSound::Update()
+├─ frameCounter++
+└─ [if active]
+     ├─ Clear stateChange flag
+     ├─ MenuBackground::Update(dt)
+     └─ SplashInputEvent(NULL)
+          └─ [if ready flag == 0] → Game[0] = 2  (transition to Game)
+```
+
+**SplashInputEvent** (0x0016f558): Checks a flag; when clear, writes 2 to the Game state byte, triggering transition to State 2 (Game). Called every active frame — the flag controls when the splash is "done."
 
 ### State 1: Frontend (FrontendTask.cpp)
 
-| Handler | Address | Notes |
-|---------|---------|-------|
-| FrontendInit | 0x0016ebb4 | Creates MenuBackground, sets camera, waits for DisplayManager light direction |
-| FrontendUpdate | 0x0016eb60 | Updates InputManager, SoundManager; when `state[5] != 0`: sets `Game[0] = 2` |
-| FrontendDraw | 0x0016eb28 | (stub) |
-| FrontendExit | 0x0016eb2c | (stub) |
+| Handler | Address | Lines | Notes |
+|---------|---------|-------|-------|
+| FrontendInit | 0x0016ebb4 | 54 | MenuBackground, camera, busy-wait for DisplayManager ready |
+| FrontendUpdate | 0x0016eb60 | 18 | InputManager + SoundManager + GameSound; flag check → transition |
+| FrontendDraw | 0x0016eb28 | 1 | No-op (returns param) |
+| FrontendExit | 0x0016eb2c | 13 | ClearActions, destroy MenuBackground, reset flags |
+
+**FrontendInit call tree:**
+```
+FrontendInit(0)
+├─ [if not already initialized]
+│    ├─ MenuBackground::MenuBackground() → MenuBackground::Init(false)  ← note: false vs Splash's true
+│    ├─ FruitCamera::SetScale / SetPosition / SetRotation
+│    ├─ while (DisplayManager::SetLightDirection(0, -1, -1) == 0)
+│    │    └─ PowerManager::Update()   ← busy-wait for display ready
+│    ├─ FruitCamera::IdleCamera()
+│    ├─ Game+0x02 = 0 (paused)
+│    └─ Set initialized flag = 1
+```
+
+**FrontendUpdate call tree:**
+```
+FrontendUpdate(dt, active)
+├─ InputManager::Update(dt)
+├─ SoundManager::Update(dt)
+├─ GameSound::Update()
+└─ [if state+5 != 0] → Game[0] = 2  (transition to Game)
+```
+
+Frontend is an alternate entry path. It differs from Splash in:
+- `MenuBackground::Init(false)` vs `Init(true)` — different background mode
+- Busy-waits for `DisplayManager::SetLightDirection` to succeed (display ready)
+- No input callbacks registered
+- Transition triggered by external flag (state+5) instead of SplashInputEvent
 
 ### State 2: Game (GameTask.cpp)
 
 | Handler | Address | Lines | Notes |
 |---------|---------|-------|-------|
-| GameInit | 0x0016c644 | 274 | Creates HUD, MissControl pool, SlashEntities, WaveManager init, registers ActorManager factories, sets up entities, loads sounds |
-| GameUpdate | 0x0016bed0 | 358 | The main gameplay loop (see sub-states below) |
-| GameDraw | 0x0016b888 | 211 | Camera setup, background, ActorManager::Draw, particles, HUD, splats, slices |
-| GameExit | 0x0016cf74 | 98 | Saves data, clears coins, releases HUD, destroys pools |
+| GameInit | 0x0016c644 | 274 | Full game setup — HUD, entities, wave manager, sounds |
+| GameUpdate | 0x0016bed0 | 359 | Main gameplay loop — see [game-update.md](../functions/game-update.md) |
+| GameDraw | 0x0016b888 | 211 | Full render frame — see [game-loop.md](../functions/game-loop.md) |
+| GameExit | 0x0016cf74 | 98 | Save, cleanup all subsystems |
+
+**GameInit call tree:**
+```
+GameInit(0)
+├─ [if not already initialized (task+0x112)]
+│    │
+│    │  HUD Setup
+│    ├─ HUD::HUD() → Game+0x3c
+│    ├─ HUD::Release()
+│    ├─ [loop 3×] MissControl::MissControl() → position, scale, add to HUD
+│    ├─ MissControl::CreatePool(12, hud)
+│    ├─ ScoreControl::ScoreControl() → load 3 localised textures, position, add to HUD
+│    ├─ CoinCounter::CoinCounter() → Game+0x178, Init, add to HUD
+│    ├─ TimeControl::TimeControl() → Game+0x180, Init, CountDown(timer), add to HUD
+│    │
+│    │  Textures + Models
+│    ├─ [if fast HW] Load localised texture → task+0xfc
+│    ├─ MeshManager::Load(model1) → task+0xbc
+│    ├─ MeshManager::Load(model2) → task+0xc0
+│    │
+│    │  Slice Effects
+│    ├─ List<SliceEffect> → task+100
+│    ├─ MemoryPool<SliceEffect::Node>::Create(100) → task+200
+│    │
+│    │  Screens
+│    ├─ MainScreen::MainScreen() → task+0x1c, Init, Game+0x160
+│    ├─ PauseScreen::PauseScreen() → task+0x04, Init
+│    ├─ TutorialControl::TutorialControl() → Game+0x168, Init
+│    ├─ Add MainScreen + PauseScreen + TutorialControl to HUD
+│    │
+│    │  Entity System
+│    ├─ Entity::HeapCreate(0x20000)        ← 128KB entity heap
+│    ├─ ActorManager::Initialise(5, 0x2000) ← 5 types, 8192 pool
+│    ├─ ActorManager::RegisterFactory(createEntityDelegate)
+│    ├─ ActorManager::RegisterHashConverter(hashConverterDelegate)
+│    │
+│    │  Pre-spawn Entities
+│    ├─ [loop 30×]
+│    │    ├─ ActorManager::Add(0, true)  ← type 0 (Fruit), flags |= 0x11
+│    │    ├─ ActorManager::Add(1, true)  ← type 1 (Bomb), flags |= 0x11
+│    │    └─ ActorManager::Add(4, true)  ← type 4 (?), flags |= 0x11
+│    │
+│    │  Pools + Wave + Sound
+│    ├─ SplatEntity::CreatePool(128)
+│    ├─ WaveManager::Init() → WaveManager::Resume()
+│    ├─ BombFlash::CreatePool(32)
+│    ├─ SoundManager::Initialise(soundConfig)
+│    ├─ SoundManager::SetSFXVolume(0.5 or custom if Game+0x44)
+│    │
+│    │  Flags
+│    ├─ task+0x112 = 1 (initialized)
+│    ├─ Game+0x02 = 0, Game+0x05 = 1
+│    └─ Game+0x0c = -1.0 (transition timer)
+```
+
+**GameExit call tree:**
+```
+GameExit()
+├─ Coin::ClearCoins(true)
+├─ [if not saving] HUD::Save() + SaveCurrentData(true)
+├─ Release bomb warning SFX
+├─ Reset task flags (0x113, 0x0c, 0x114, 0x118)
+├─ SmartPtrNull × 3 (release models task+0xbc/0xc0/0xc4)
+├─ Clear 16 slash entity slots (task+0x24..0x64)
+├─ List<SliceEffect>::clear + delete
+├─ MemoryPool<SliceEffect::Node>::delete
+├─ WaveManager::Destroy()
+├─ SmartPtrNull texture (task+0x10c)
+├─ PSPParticleManager::ClearEmitters()
+├─ InputManager::ClearActions(0)
+├─ HUD::Release()
+├─ Delete MainScreen (task+0x1c)
+├─ HUD::~HUD + delete → Game+0x3c = 0
+├─ MissControl::CleanPool()
+├─ ActorManager::Clear + ClearAllListeners + Destroy
+├─ Entity::HeapDestroy()
+├─ Game+0x02 = 0, task+0x112 = 0
+└─ SmartPtrNull × 3 (textures task+0xfc/0x11c/0xf4)
+```
 
 ### Normal Flow
 
 ```
-State 0 (Splash) ──auto──> State 2 (Game)
-                            │
-                            ├─ Menus (DojoScreen, GameModeScreen, ShopScreen)
-                            ├─ Gameplay (WaveManager spawning, slicing, scoring)
-                            ├─ GameOver (GameOverScreen overlay)
-                            └─ Back to menu (CleanupAndReturnToMainMenu)
+State 0 (Splash) ──SplashInputEvent──> State 2 (Game)
+                                        │
+State 1 (Frontend) ──flag+5 set──────> State 2 (Game)
+                                        │
+                                        ├─ GameInit: HUD, entities, screens, wave, sound
+                                        ├─ MainScreen (DojoScreen, GameModeScreen, ShopScreen)
+                                        ├─ Gameplay (WaveManager spawning, slicing, scoring)
+                                        ├─ GameOver (GameOverScreen overlay)
+                                        ├─ Back to menu (CleanupAndReturnToMainMenu)
+                                        └─ GameExit: save, destroy all pools/entities
 ```
 
-State 1 (Frontend) is an alternate entry path — possibly for debug or cold-start scenarios. Normal flow is `Splash → Game` directly.
+Both Splash and Frontend transition directly to State 2 (Game). Splash is the normal boot path; Frontend is an alternate entry (different MenuBackground mode, waits for display ready, no input callbacks). Neither state renders anything — `SplashDraw` and `FrontendDraw` are no-ops; all rendering happens in `FruitNinja::Draw` → `GameTaskDraw`.
 
 ### Game Sub-States (within State 2)
 
