@@ -67,38 +67,36 @@ void MenuButton::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
     r.draw_sprite(m_Texture, dx, dy, w, h, m_Timer, draw_alpha_f);
 
     // Layer 2: 3D fruit inside button
+    // The fruit mesh sits INSIDE the button ring texture, scaled to ~40% of button size.
+    // Original: fruit is a real Entity rendered by ActorManager::Draw.
+    // Port: we render it inline with a small ortho projection.
     if (has_fruit && fruit_mesh.vbo && fruit_atlas_tex) {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LESS);
         glClear(GL_DEPTH_BUFFER_BIT);
 
-        float hw = FN_SCREEN_W / 2.0f;
-        float hh = FN_SCREEN_H / 2.0f;
+        // Ortho matching the game's 0-480 × 0-320 screen coords
         float proj[16];
         memset(proj, 0, sizeof(proj));
-        proj[0]  = 1.0f / hw;
-        proj[5]  = 1.0f / hh;
+        proj[0]  = 2.0f / FN_SCREEN_W;       // maps 0..480 to -1..1
+        proj[5]  = 2.0f / FN_SCREEN_H;       // maps 0..320 to -1..1
         proj[10] = -2.0f / 200.0f;
+        proj[12] = -1.0f;                     // offset for 0-based coords
+        proj[13] = -1.0f;
         proj[15] = 1.0f;
 
-        float view[16];
-        mat4_identity(view);
-        float pv[16];
-        mat4_multiply(pv, proj, view);
-
-        // Convert from game coords (0..480, 0..320) to ortho (-240..240, -160..160)
-        float fx = pos.x - hw;
-        float fy = pos.y - hh;
-
-        float fruit_scale = (size.x < size.y ? size.x : size.y) * 0.006f * draw_scale;
+        // Fruit scale: mesh coords are ~10-25 units, button is ~64-256 px.
+        // Scale fruit to fit ~35% of the smaller button dimension in screen pixels.
+        float buttonPx = (size.x < size.y ? size.x : size.y);
+        float fruit_scale = buttonPx * 0.35f / 25.0f * draw_scale;  // 25.0 = approx mesh radius
 
         float scl[16], rot[16], sr[16], trans[16], model[16], mvp[16];
         mat4_scale(scl, fruit_scale, fruit_scale, fruit_scale);
         mat4_rotate_y(rot, fruit_rotation);
         mat4_multiply(sr, rot, scl);
-        mat4_translate(trans, fx, fy, 0.0f);
+        mat4_translate(trans, pos.x, pos.y, 0.0f);  // center of button in game coords
         mat4_multiply(model, trans, sr);
-        mat4_multiply(mvp, pv, model);
+        mat4_multiply(mvp, proj, model);
 
         r.draw_mesh(fruit_mesh, fruit_atlas_tex, mvp, model, draw_alpha_f);
 
