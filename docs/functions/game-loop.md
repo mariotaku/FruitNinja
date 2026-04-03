@@ -104,7 +104,8 @@ OspMain (0x000d82a4) — anti-tamper hash check
                     │    ├─ Timer::Construct → this+0x40
                     │    ├─ MAMAudioController::Init(audioMixer)
                     │    ├─ Check sound mute → StartAudioSubsystem
-                    │    ├─ ReturnsAnInstanceOfThisMortarGame() → Game singleton
+                    │    ├─ ReturnsAnInstanceOfThisMortarGame()
+                    │    │    └─ GameInitialise(displaySurface, dataPath) — see below
                     │    └─ Game::Init(0, 0) via vtable +0x34
                     │
                     ├─ OnTimerExpired (0x0018269c)     ← game loop driver
@@ -114,6 +115,70 @@ OspMain (0x000d82a4) — anti-tamper hash check
                     ├─ OnForeground (0x001820b0) / OnBackground (0x00182060)
                     └─ OnAppTerminating (0x00182160)
 ```
+
+### GameInitialise (0x0010bdfc, 305 lines) — One-time engine bootstrap
+
+Called once from `FruitNinja::OnAppInitializing` (via `ReturnsAnInstanceOfThisMortarGame`).
+Sets up ALL engine subsystems and loads all shared data. NOT the same as `GameInit` (0x16c644)
+which is the per-session State 2 init handler.
+
+```
+GameInitialise(displaySurface, dataPath):
+  │  Engine singletons
+  ├─ SystemManager::Init
+  ├─ MatrixManager::Init
+  ├─ FileSystem_Direct → FileManager::AddSystem
+  ├─ DisplayManager::SetWindowSize(0, 320, 0, 480) → Init → SetClearColour
+  │    SetLightDirection(0, -10, -5)
+  ├─ InitialiseData()
+  ├─ TextureManager::Initialise (×2)
+  ├─ MeshManager::Initialise
+  ├─ AnimationManager::Initialise
+  ├─ InputManager::Init(0xFFFFFFFE)
+  │
+  │  Game data
+  ├─ PSPParticleManager::LoadFile (particles XML, HD or SD variant)
+  ├─ PowerUpManager::Load (poweruplist.xml)
+  ├─ LeaderboardManager::Init
+  │
+  │  Network (skip for port)
+  ├─ NetworkManager: SetStatusMessageText ×11, SetGameCenterInitializationCallback
+  │   InitializeP2P, SetPreferredNetworkProvider, P2PConnect
+  │
+  │  Camera + Game singleton
+  ├─ FruitCamera(0x16c) → Game+0x48
+  ├─ Zero Game fields: +0x50..+0x80 (save data, scores, modes)
+  │
+  │  Fonts
+  ├─ Font::Load → Game+0x54 (main font, HD/SD variant)
+  ├─ Font::Load → Game+0x58 (secondary font)
+  ├─ Font::Load → Game+0x6c (shared to +0x7c/+0x70/+0x74/+0x78)
+  ├─ Font::Load → Game+0x70..+0x78 (optional, if file exists)
+  ├─ Font::Load → Game+0x80 (fallback font)
+  ├─ Font::Load → Game+0x68 (another fallback)
+  │
+  │  Shared assets
+  ├─ LoadLocalisedTexture → Game+0x17c (fruit atlas)
+  ├─ MenuButton::LoadContent
+  ├─ Fruit::LoadInfo (FRUIT_INFO from XML)
+  ├─ SplatEntity::LoadContent
+  ├─ SlashEntity::LoadContent
+  ├─ Bomb::LoadContent
+  ├─ GameOverScreen::LoadContent
+  ├─ PowerUpShop::LoadContent
+  └─ PreloadSounds
+```
+
+**vs GameInit** (0x16c644, 274 lines): GameInit is the State 2 init handler — creates HUD, entities, screens, pools for each game session. GameInitialise is the one-time boot that creates engine singletons and loads shared data.
+
+| | GameInitialise | GameInit |
+|---|---|---|
+| **When** | Once at app startup | Each game session |
+| **Called by** | OnAppInitializing | GameTaskUpdate state 2 init |
+| **Creates** | Engine singletons, loads shared data | Per-session HUD, entities, screens |
+| **Port maps to** | `Game::init()` | Entering gameplay |
+
+---
 
 ### Full Call Tree (2 levels) — Game Loop Driver
 
