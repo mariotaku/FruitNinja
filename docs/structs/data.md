@@ -58,10 +58,10 @@ Array allocated as `8 + count × 0x330` bytes (8-byte header: stride=0x330, coun
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
-| +0x308 | int | m_IntField308 | Zeroed, then from XML |
+| +0x308 | int | m_Chance | Spawn weight (used by RandomFruit cumulative tables) |
 | +0x314 | int | m_BaseScore | Points awarded on normal slice |
-| +0x324 | int | m_RandBonusBase | Random bonus range start |
-| +0x328 | int | m_RandBonusMax | Random bonus max; initially = m_RandBonusBase, then overridden |
+| +0x324 | int | m_RandBonusBase | Random bonus range start; init = copy of m_RandBonusBase |
+| +0x328 | int | m_RandBonusMax | Random bonus max; overrides m_RandBonusBase copy |
 
 ### Fact Strings
 
@@ -115,13 +115,15 @@ Default (if no sound elements in XML): 1 ImpactSound with auto-generated name fr
 | +0x300 | SmartPtr\<Texture\> | m_FruitTexture | Main fruit texture (localised) |
 | +0x304 | SmartPtr\<Texture\> | m_FruitTexture2 | Variant texture (fact card?) |
 
-### Unmapped Regions
+### Previously Unmapped — Now Resolved
 
-| Range | Size | Notes |
-|-------|------|-------|
-| +0x278..+0x2F7 | 128 bytes | Contains string at +0x278 (from XML attr at DAT_0017a310) |
-| +0x308..+0x313 | 12 bytes | int fields (partially mapped: +0x308, +0x309..0x30b) |
-| +0x30C..+0x313 | 8 bytes | SmartPtr or additional data |
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x278 | char[0x80] | m_ExtraString2 | From XML attribute (128 bytes, unknown purpose — possibly localisation key) |
+| +0x308 | int | m_Chance | Spawn weight — used by RandomFruit for cumulative probability tables |
+| +0x30C..+0x313 | — | (runtime only) | Not set in LoadInfo; possibly cached values or padding |
+
+**Coverage: ~97% mapped** (only +0x30C..+0x313 = 8 bytes unknown, likely runtime cache or padding)
 
 ### XML Structure
 

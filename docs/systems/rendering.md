@@ -127,22 +127,89 @@ Loads a localised texture on first call. Fades based on `Game.crit_timer` with a
 
 Similar full-screen flash for bomb hits, with red tint and camera shake position offset.
 
+### Fruit::DrawShadows (0x00178f28, 33 lines)
+
+Static function. Iterates all type-0 entities (fruit) via `ActorManager::GetEntityFirst/Next`. For each live fruit (scale > 0), calls `AddShadow` to append shadow quad vertices into a stack-allocated `QUADCUSTOMVERTEX[18432]` buffer. After iterating, resets matrix stack, sets shadow texture, draws all accumulated quads as a single triangle strip via `Mesh::DrawTriStrip`, then unsets texture.
+
+```
+DrawShadows():
+  for each fruit in ActorManager(type=0):
+    if fruit.scale > 0 → AddShadow(fruit, &vertexBuf, &count)
+  MatrixStack::Reset → Upload
+  Texture::Set(shadowTex)
+  Mesh::DrawTriStrip(vertexBuf, count*6 - 1)
+  Texture::UnSet(shadowTex)
+```
+
+### DrawStartFade (0x0016ab10, ~45 lines)
+
+Loading/transition fade overlay. Uses the localised texture at task+0xf4. Renders a full-screen quad with animated alpha and brightness based on fade timer (task+0x1c):
+
+- Timer 0.0–0.5: fade in (alpha ramps up, brightness = 0)
+- Timer 0.5–1.0: fade out (alpha = full, brightness ramps, scale grows via `fVar3² + 1.0`)
+- Colour = `Colour(brightness, brightness, brightness, alpha)` clamped to 0–255
+- Uses `FruitCamera::SetupPerspective(cam, 3, true)` for overlay projection
+
+### SlashEntity::InitPoints (0x0017c340, ~40 lines)
+
+Initialises blade trail vertex buffers for a slash entity.
+
+```c
+void SlashEntity::InitPoints(long splitPoint) {
+    this->m_PointCount = 0;
+    this->m_SplitPoint = splitPoint;     // screen divide for multiplayer
+    this->m_BladeDir = globalBladeDir;   // default blade direction vector
+    
+    // Init 3 tail positions to (0,0,0)
+    for (int i = 0; i < 3; i++)
+        this->m_TailPos[i] = Vec3(0, 0, 0);
+    
+    // Allocate 2 vertex buffers (left + right edges of blade trail)
+    Colour bladeColour = globalColour.PlatformColour();
+    for (int side = 0; side < 2; side++) {
+        QUADCUSTOMVERTEX* buf = new QUADCUSTOMVERTEX[(splitPoint + 2) * 9];
+        this->m_pBuffer[side] = buf;
+        for (int j = 0; j < splitPoint; j++) {
+            buf[j] = { pos=(0,0,0,0,0), uv=(1.0,0), colour=bladeColour, extra=0 };
+        }
+    }
+}
+```
+
+Each buffer has `(splitPoint + 2)` vertices × 0x24 bytes (36 bytes = QUADCUSTOMVERTEX stride). Two buffers = left and right edges of the blade trail polygon.
+
+### MainScreen::DrawPostEffects (0x0014ac94)
+
+**No-op stub** — returns `this` immediately (`bx lr`). Post-effects were not implemented or stripped for this Bada build. Safe to skip in port.
+
+### MainScreen::UpdateScreenElements (0x0014ad3c, 55 lines)
+
+Logo bounce animation for the main menu. Updates the "FRUIT NINJA" logo position with physics-based bounce:
+- Bounce velocity (field_0x104) accumulates with gravity (`+= param1 * const`)
+- Position rebounds at floor threshold (pos_y + 3.0) with energy loss (`velocity *= -0.25`)
+- Settles when `|velocity| < 3.0` and time threshold passed
+- Alpha (field_0xe8) lerps toward target at 25% per frame
+- Final logo offset = `(0, -17, 0) * 2.0` from base position
+
 ### Key Rendering Functions
 
-| Function | Address | Purpose |
-|----------|---------|---------|
-| GameDraw | 0x0016b888 | Main render orchestrator (211 lines) |
-| Fruit::Draw | 0x001791f4 | 3D fruit mesh rendering (161 lines) |
-| Fruit::DrawShadows | — | Shadow circles under fruit |
-| SlashEntity::PreDraw | 0x0017e504 | Blade trail vertex setup |
-| SlashEntity::DrawSlice | 0x0017e424 | Blade trail geometry render |
-| SplatEntity::DrawActiveSplats | 0x00180344 | Background juice splats |
-| DrawSlices | 0x00169ac8 | Animated slice line effects |
-| DrawCritHit | 0x0016b5b4 | Critical hit screen flash |
-| DrawBombHit | 0x0016b73c | Bomb hit screen flash |
-| DrawStartFade | 0x0016ab10 | Loading/transition fade |
-| HUD::Draw | 0x00144a90 | Layered HUD rendering (bit-flag filtered) |
-| HUD::BeginDraw | 0x00144b28 | HUD frame begin |
+| Function | Address | Lines | Purpose |
+|----------|---------|-------|---------|
+| GameDraw | 0x0016b888 | 211 | Main render orchestrator |
+| Fruit::Draw | 0x001791f4 | 161 | 3D fruit mesh rendering |
+| Fruit::DrawShadows | 0x00178f28 | 33 | Batched shadow tri-strip under all fruit |
+| SlashEntity::InitPoints | 0x0017c340 | ~40 | Blade trail vertex buffer allocation |
+| SlashEntity::PreDraw | 0x0017e504 | — | Blade trail vertex update |
+| SlashEntity::DrawSlice | 0x0017e424 | — | Blade trail geometry render |
+| SplatEntity::DrawActiveSplats | 0x00180344 | — | Background juice splats |
+| DrawSlices | 0x00169ac8 | 61 | Animated slice line effects |
+| DrawCritHit | 0x0016b5b4 | 72 | Critical hit screen flash |
+| DrawBombHit | 0x0016b73c | — | Bomb hit screen flash |
+| DrawStartFade | 0x0016ab10 | ~45 | Loading/transition fade overlay |
+| MainScreen::DrawPostEffects | 0x0014ac94 | 1 | **No-op stub** (skip for port) |
+| MainScreen::UpdateScreenElements | 0x0014ad3c | 55 | Logo bounce physics |
+| HUD::Draw | 0x00144a90 | — | Layered HUD rendering (bit-flag filtered) |
+| HUD::BeginDraw | 0x00144b28 | — | HUD frame begin |
 
 ---
 

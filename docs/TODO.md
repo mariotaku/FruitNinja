@@ -47,7 +47,11 @@
 - [x] `SlashModifier::ParseSpecific` (0x11f464) — blade colours, width, texture (no UpdateSpecific, apply-only)
 - [x] `WaveModifier::ParseSpecific` (0x12836c) + `UpdateSpecific` (0x1280e4) — fruit/bomb multipliers, overrides
 - [x] `ScoreModifier::ParseSpecific` (0x11ccb0) + `UpdateSpecific` (0x11cc50) — gain/loss add+multiply
-- [ ] `SlashEntity::InitPoints` (0x17c340) — blade vertex buffer init
+- [x] `SlashEntity::InitPoints` (0x17c340, ~40 lines) — 2 vertex buffers × (splitPoint+2) × 0x24 bytes
+- [x] `Fruit::DrawShadows` (0x178f28, 33 lines) — batched shadow tri-strip via ActorManager iteration
+- [x] `DrawStartFade` (0x16ab10, ~45 lines) — loading fade overlay with alpha+brightness ramp
+- [x] `MainScreen::DrawPostEffects` (0x14ac94) — **no-op stub** (bx lr), skip for port
+- [x] `MainScreen::UpdateScreenElements` (0x14ad3c, 55 lines) — logo bounce physics
 - See `docs/functions/fruit.md`
 
 ---
