@@ -45,9 +45,10 @@
 ### GlesForm::TransformTouchPos (0x0018327c, 16 lines)
 
 ```c
+// Axes SWAPPED: portrait device → landscape game (480×320)
 Point TransformTouchPos(Point raw) {
-    result.x = (int)(raw.x * 320.0 / screenWidth);
-    result.y = 319 - (int)(raw.y * 480.0 / 320.0);
+    result.x = (int)(raw.y * DAT_001832d0 / DAT_001832d4);       // phys Y → game X (wide)
+    result.y = 319 - (int)(raw.x * DAT_001832d8 / DAT_001832d0); // phys X → game Y (narrow, flipped)
     return result;
 }
 ```

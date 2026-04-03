@@ -6,8 +6,8 @@
 Bada OS Touch Event
   → GlesForm::OnTouchPressed/Moved/Released (0x18334c / 0x1833c4 / 0x1832e4)
     → GlesForm::TransformTouchPos (0x18327c)
-      → x = (int)(rawX * 320.0 / screenWidth)
-      → y = 319 - (int)(rawY * 480.0 / 320.0)
+      → game.x = (int)(raw.y * const / const)       ← phys Y → game X (wide axis)
+      → game.y = 319 - (int)(raw.x * const / const) ← phys X → game Y (narrow, flipped)
     → Mortar::Touch::__UpdateInternal (0x195690)
       → Pushes TEvnt{id, pressed, x, y, z} to RingBuffer
     → Mortar::Touch::Update (0x195630)
@@ -20,18 +20,19 @@ Bada OS Touch Event
 
 ## GlesForm::TransformTouchPos (0x18327c)
 
-Converts raw Bada touch coordinates to game space (320x480):
+Converts raw Bada portrait touch coordinates to game landscape space (480×320). Swaps axes — physical Y→game X, physical X→game Y (flipped):
 
 ```c
+// Actual decompilation shows axes are SWAPPED (portrait device → landscape game):
 Point TransformTouchPos(Point raw) {
     Point result;
-    result.x = (int)((float)raw.x * 320.0f / screenWidth);
-    result.y = 319 - (int)((float)raw.y * 480.0f / 320.0f);
+    result.x = (int)(raw.y * DAT_001832d0 / DAT_001832d4);       // phys Y → game X
+    result.y = 319 - (int)(raw.x * DAT_001832d8 / DAT_001832d0); // phys X → game Y
     return result;
 }
 ```
 
-Note: Y is flipped — Bada has origin at top-left, game has origin at bottom-left.
+Note: Axes are swapped AND Y is flipped. The Bada device is physically portrait (480×800), but the game coordinate space is landscape (480×320). Physical Y (long axis, held sideways) maps to game X (wide axis). Physical X maps to game Y (narrow axis, inverted — Bada top-left origin → game bottom-left).
 
 ## GlesForm Touch Handlers
 

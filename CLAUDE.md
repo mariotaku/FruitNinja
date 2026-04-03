@@ -12,14 +12,14 @@
 - Build: CMake, cross-platform (MSYS2 / Linux / webOS NDK)
 - Audio: SDL2 raw audio API (no SDL_mixer)
 - Language: C++11
-- Resolution: 320x480 original, scaled to display
+- Resolution: 480x320 landscape original, scaled to display
 - Assets: convert .tex/.mad/.mmd to standard formats (PNG, OBJ/glTF, etc.)
 - Text: keep original .fnt bitmap fonts
 - Rendering: replicate original OpenGL ES 1.x fixed-pipeline approach in ES 2.0 shaders
 
 ## Original Binary
 - ARM32 Little-Endian ELF (Samsung Bada OS), Halfbrick Mortar Engine
-- 320x480 portrait, entry point: OspMain
+- 480x320 landscape (on portrait 480x800 Bada device, touch/camera rotated 90°), entry point: OspMain
 
 ## Conventions
 - Ghidra scripts go in `<project root>/ghidra_scripts/`, NOT in `$HOME/ghidra_scripts/`
