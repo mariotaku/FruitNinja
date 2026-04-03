@@ -5,6 +5,8 @@
 
 #include "MainScreen.h"
 #include "Game.h"
+#include "HUD.h"
+#include "ActorManager.h"
 #include "MenuButton.h"
 #include "DojoScreen.h"
 #include "InputManager.h"
