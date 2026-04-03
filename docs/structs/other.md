@@ -59,16 +59,20 @@ ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 
 ---
 
-## Asset Loading Order (GameInitialise)
+## Asset Loading Order (GameInitialise at 0x10bdfc, 305 lines)
 
-1. MenuButton::LoadContent
-2. Fruit::LoadInfo
-3. SplatEntity::LoadContent
-4. SlashEntity::LoadContent
-5. Bomb::LoadContent
-6. GameOverScreen::LoadContent
-7. PowerUpShop::LoadContent
-8. PreloadSounds
+Full 25-step bootstrap documented in [functions/game-loop.md](../functions/game-loop.md#gameinitialise-0x0010bdfc-305-lines--one-time-engine-bootstrap).
+
+Final asset loading steps (after engine singletons + fonts):
+1. LoadLocalisedTexture → Game+0x17c (fruit atlas)
+2. MenuButton::LoadContent
+3. Fruit::LoadInfo (FRUIT_INFO from XML)
+4. SplatEntity::LoadContent
+5. SlashEntity::LoadContent
+6. Bomb::LoadContent
+7. GameOverScreen::LoadContent
+8. PowerUpShop::LoadContent
+9. PreloadSounds
 
 ## Subsystem Singletons
 
