@@ -70,11 +70,13 @@ MainScreen::MainScreen(Game& g)
 }
 
 MainScreen::~MainScreen() {
-    DeleteMenuButtons();
-    delete pLeaderboardBtn; pLeaderboardBtn = NULL;
-    delete pMoreGamesBtn; pMoreGamesBtn = NULL;
-    delete pSoundToggle; pSoundToggle = NULL;
-    delete pMusicToggle; pMusicToggle = NULL;
+    // Remove buttons from HUD (HUD owns them after AddControl, will delete)
+    if (pPlayButton) { game.hud->RemoveControl(pPlayButton); pPlayButton = NULL; }
+    if (pDojoButton) { game.hud->RemoveControl(pDojoButton); pDojoButton = NULL; }
+    if (pLeaderboardBtn) { game.hud->RemoveControl(pLeaderboardBtn); pLeaderboardBtn = NULL; }
+    if (pMoreGamesBtn) { game.hud->RemoveControl(pMoreGamesBtn); pMoreGamesBtn = NULL; }
+    if (pSoundToggle) { game.hud->RemoveControl(pSoundToggle); pSoundToggle = NULL; }
+    if (pMusicToggle) { game.hud->RemoveControl(pMusicToggle); pMusicToggle = NULL; }
 
     if (m_FruitAtlasTex) { glDeleteTextures(1, &m_FruitAtlasTex); m_FruitAtlasTex = 0; }
     if (m_TexNewGame) { glDeleteTextures(1, &m_TexNewGame); m_TexNewGame = 0; }
@@ -111,7 +113,7 @@ static inline float orig_to_port_x(float orig_x) { return FN_SCREEN_W / 2.0f + o
 static inline float orig_to_port_y(float orig_y) { return FN_SCREEN_H / 2.0f + orig_y; }
 
 void MainScreen::CreateButtons() {
-    // Sound toggle — doc: (216, 135.5), 32x32, fruitType -1 (no fruit)
+    // Sound toggle — verified: (216, 135.5), 32x32, fruitType -1 (no fruit)
     if (!pSoundToggle) {
         GLuint tex = game.soundEnabled ? m_TexSoundOn : m_TexSoundOff;
         if (tex) {
@@ -121,10 +123,12 @@ void MainScreen::CreateButtons() {
                                orig_to_port_y(135.5f),
                                [this]() { SoundCallback(); });
             pSoundToggle->rotation_speed = 0.0f;  // toggles don't spin
+            pSoundToggle->m_LayerMask = 0x08;
+            game.hud->AddControl(pSoundToggle);
         }
     }
 
-    // Music toggle — doc: (176, 135.5), 32x32, fruitType -1 (no fruit)
+    // Music toggle — verified: (176, 135.5), 32x32, fruitType -1 (no fruit)
     if (!pMusicToggle) {
         GLuint tex = game.musicEnabled ? m_TexMusicOn : m_TexMusicOff;
         if (tex) {
@@ -134,10 +138,12 @@ void MainScreen::CreateButtons() {
                                orig_to_port_y(135.5f),
                                [this]() { MusicCallback(); });
             pMusicToggle->rotation_speed = 0.0f;
+            pMusicToggle->m_LayerMask = 0x08;
+            game.hud->AddControl(pMusicToggle);
         }
     }
 
-    // New Game button — doc: (16, -66, -50), fruitType 3 (watermelon)
+    // New Game button — verified: (16, -66), fruitType 3 (watermelon)
     if (!pPlayButton && m_TexNewGame) {
         pPlayButton = new MenuButton();
         pPlayButton->init(m_TexNewGame,
@@ -147,9 +153,11 @@ void MainScreen::CreateButtons() {
                           [this]() { GameModeCallback(); });
         if (m_FruitAtlasTex)
             pPlayButton->load_fruit(game, "watermelon", m_FruitAtlasTex);
+        pPlayButton->m_LayerMask = 0x08;
+        game.hud->AddControl(pPlayButton);
     }
 
-    // Dojo button — doc: (-144, -65), scale 0.9x, fruitType "mango"
+    // Dojo button — verified: (-144, -65), scale 0.9x, fruitType "mango"
     if (!pDojoButton && m_TexDojoIcon) {
         pDojoButton = new MenuButton();
         pDojoButton->init(m_TexDojoIcon,
@@ -160,9 +168,11 @@ void MainScreen::CreateButtons() {
                           [this]() { AboutCallback(); });
         if (m_FruitAtlasTex)
             pDojoButton->load_fruit(game, "mango", m_FruitAtlasTex);
+        pDojoButton->m_LayerMask = 0x08;
+        game.hud->AddControl(pDojoButton);
     }
 
-    // Leaderboard button — doc: openfeint.tex, (182, -106), fruitType (GOT ref)
+    // Leaderboard button — verified: (182, -106), fruitType from GOT (skip for port)
     if (!pLeaderboardBtn && m_TexOpenFeint) {
         pLeaderboardBtn = new MenuButton();
         pLeaderboardBtn->init(m_TexOpenFeint,
@@ -174,17 +184,16 @@ void MainScreen::CreateButtons() {
                               });
         if (m_FruitAtlasTex)
             pLeaderboardBtn->load_fruit(game, "openfeint", m_FruitAtlasTex);
+        pLeaderboardBtn->m_LayerMask = 0x08;
+        game.hud->AddControl(pLeaderboardBtn);
     }
-
-    // MoreGames button — doc: gc_achievements.tex, (182, -106), fruitType "kiwifruit"
-    // Note: same position as leaderboard — original may offset; skip for port
 }
 
 void MainScreen::DeleteMenuButtons() {
     // Doc: removes Play, Dojo, and MoreGames — NOT sound/music toggles or leaderboard
-    delete pPlayButton; pPlayButton = NULL;
-    delete pDojoButton; pDojoButton = NULL;
-    delete pMoreGamesBtn; pMoreGamesBtn = NULL;
+    if (pPlayButton) { game.hud->RemoveControl(pPlayButton); pPlayButton = NULL; }
+    if (pDojoButton) { game.hud->RemoveControl(pDojoButton); pDojoButton = NULL; }
+    if (pMoreGamesBtn) { game.hud->RemoveControl(pMoreGamesBtn); pMoreGamesBtn = NULL; }
 }
 
 void MainScreen::update(float dt) {
@@ -298,40 +307,24 @@ void MainScreen::update(float dt) {
 
     // Update sound/music toggle textures
     if (pSoundToggle) {
-        pSoundToggle->texture = game.soundEnabled ? m_TexSoundOn : m_TexSoundOff;
+        pSoundToggle->m_Texture = game.soundEnabled ? m_TexSoundOn : m_TexSoundOff;
     }
     if (pMusicToggle) {
-        pMusicToggle->texture = game.musicEnabled ? m_TexMusicOn : m_TexMusicOff;
-    }
-
-    // Toggle button positions — doc: y=135.5, x=216/176 (top-right corner)
-    if (pSoundToggle && pMusicToggle) {
-        float toggle_y = orig_to_port_y(135.5f);
-        pSoundToggle->y = toggle_y - pSoundToggle->height / 2.0f;
-        pMusicToggle->y = toggle_y - pMusicToggle->height / 2.0f;
-        pSoundToggle->x = orig_to_port_x(216.0f) - pSoundToggle->width / 2.0f;
-        pMusicToggle->x = orig_to_port_x(176.0f) - pMusicToggle->width / 2.0f;
+        pMusicToggle->m_Texture = game.musicEnabled ? m_TexMusicOn : m_TexMusicOff;
     }
 
     // Update button alpha based on camera transition
-    float buttonAlpha = m_Alpha;
+    // (HUD::Update handles calling Update on each control)
+    uint8_t buttonAlpha = (uint8_t)(m_Alpha * 255.0f);
     if (m_State == 0) {
-        buttonAlpha = (m_Timer2 > 0.15f) ? m_Alpha : 0.0f;
+        buttonAlpha = (m_Timer2 > 0.15f) ? (uint8_t)(m_Alpha * 255.0f) : 0;
     }
-    if (pPlayButton) pPlayButton->alpha = buttonAlpha;
-    if (pDojoButton) pDojoButton->alpha = buttonAlpha;
-    if (pLeaderboardBtn) pLeaderboardBtn->alpha = buttonAlpha;
-    if (pMoreGamesBtn) pMoreGamesBtn->alpha = buttonAlpha;
-    if (pSoundToggle) pSoundToggle->alpha = m_Alpha;
-    if (pMusicToggle) pMusicToggle->alpha = m_Alpha;
-
-    // Update button animations (ring rotation + fruit spin)
-    if (pPlayButton) pPlayButton->update(dt);
-    if (pDojoButton) pDojoButton->update(dt);
-    if (pLeaderboardBtn) pLeaderboardBtn->update(dt);
-    if (pMoreGamesBtn) pMoreGamesBtn->update(dt);
-    if (pSoundToggle) pSoundToggle->update(dt);
-    if (pMusicToggle) pMusicToggle->update(dt);
+    if (pPlayButton) pPlayButton->m_Alpha = buttonAlpha;
+    if (pDojoButton) pDojoButton->m_Alpha = buttonAlpha;
+    if (pLeaderboardBtn) pLeaderboardBtn->m_Alpha = buttonAlpha;
+    if (pMoreGamesBtn && pMoreGamesBtn->m_Alpha) pMoreGamesBtn->m_Alpha = buttonAlpha;
+    if (pSoundToggle) pSoundToggle->m_Alpha = (uint8_t)(m_Alpha * 255.0f);
+    if (pMusicToggle) pMusicToggle->m_Alpha = (uint8_t)(m_Alpha * 255.0f);
 }
 
 void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
@@ -422,13 +415,7 @@ void MainScreen::draw(Renderer& r) {
                       tw, th, 0.0f, m_Alpha);
     }
 
-    // 6. Draw buttons
-    if (pPlayButton) pPlayButton->draw(r);
-    if (pDojoButton) pDojoButton->draw(r);
-    if (pLeaderboardBtn) pLeaderboardBtn->draw(r);
-    if (pMoreGamesBtn) pMoreGamesBtn->draw(r);
-    if (pSoundToggle) pSoundToggle->draw(r);
-    if (pMusicToggle) pMusicToggle->draw(r);
+    // 6. Buttons drawn by HUD::Draw (registered via game.hud->AddControl)
 
     // 7. Logo overlay (comming_soon.tex / "SLICE FRUIT TO BEGIN") — on top
     // Doc: scale (0.5, aspect*0.5, 1), translate to (DAT, 7.0, 0)

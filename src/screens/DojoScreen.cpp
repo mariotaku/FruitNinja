@@ -142,9 +142,9 @@ void DojoScreen::update(float dt) {
         break;
     }
 
-    if (play_button) play_button->alpha = alpha;
-    if (shop_button) shop_button->alpha = alpha;
-    if (about_button) about_button->alpha = alpha;
+    if (play_button) play_button->m_Alpha = alpha;
+    if (shop_button) shop_button->m_Alpha = alpha;
+    if (about_button) about_button->m_Alpha = alpha;
 }
 
 void DojoScreen::draw(Renderer& r) {
@@ -166,9 +166,9 @@ void DojoScreen::draw(Renderer& r) {
     }
 
     // Draw buttons
-    if (play_button) play_button->draw(r);
-    if (shop_button) shop_button->draw(r);
-    if (about_button) about_button->draw(r);
+    if (play_button) play_button->Draw(r, Vec3(1,1,1), 0xFFFF);
+    if (shop_button) shop_button->Draw(r, Vec3(1,1,1), 0xFFFF);
+    if (about_button) about_button->Draw(r, Vec3(1,1,1), 0xFFFF);
 
     // Draw 3D fruit ring — original uses orthographic projection
     if (fruit_atlas_tex) {
