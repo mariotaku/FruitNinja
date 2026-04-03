@@ -1,0 +1,5 @@
+# Game logic (GameTaskState, GameUpdate, GameDraw, WaveManager, FruitCamera)
+# add_library(fn_game STATIC ...)
+# target_include_directories(fn_game PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# target_link_libraries(fn_game PUBLIC fn_entities fn_engine fn_math)
+# target_link_libraries(fruit-ninja PRIVATE fn_game)

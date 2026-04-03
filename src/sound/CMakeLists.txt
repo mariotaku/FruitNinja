@@ -1,0 +1,5 @@
+# Audio system (SoundManager, GameSound, PCMLoader)
+# add_library(fn_sound STATIC ...)
+# target_include_directories(fn_sound PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# target_link_libraries(fn_sound PUBLIC SDL2::SDL2)
+# target_link_libraries(fruit-ninja PRIVATE fn_sound)
