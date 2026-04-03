@@ -5,11 +5,15 @@
 #include <string>
 #include "Renderer.h"
 #include "Screen.h"
+#include "HUD.h"
 
 struct Game {
     SDL_Window* window;
     SDL_GLContext gl_context;
     Renderer renderer;
+
+    // Matches Game+0x3c in original — HUD control manager
+    HUD* hud;
 
     // Shared textures (loaded once, reused across screens)
     GLuint bg_tex;
@@ -45,7 +49,7 @@ struct Game {
     // Load a texture from data_dir/textures/<name>
     GLuint load_texture(const char* name, TexImage& img);
 
-    // Convert SDL pixel coords to game coords (320x480, origin bottom-left)
+    // Convert SDL pixel coords to game coords (480x320 landscape, origin bottom-left)
     void transform_touch(int pixel_x, int pixel_y, float& game_x, float& game_y);
 };
 

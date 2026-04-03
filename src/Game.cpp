@@ -4,7 +4,7 @@
 #include <cstdio>
 
 Game::Game()
-    : window(NULL), gl_context(NULL),
+    : window(NULL), gl_context(NULL), hud(NULL),
       bg_tex(0), hb_logo_tex(0), title_tex(0),
       blurry_backing_tex(0), fruit_text_tex(0), ninja_text_tex(0),
       soundEnabled(true), musicEnabled(true),
@@ -34,6 +34,9 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
         return false;
     }
 
+    // Create HUD (matches GameInit creating HUD at Game+0x3c)
+    hud = new HUD();
+
     // Load shared textures
     TexImage img;
     bg_tex = load_texture("bg_fruit_ninja.tex", img);
@@ -59,6 +62,7 @@ void Game::shutdown() {
         delete next_screen;
         next_screen = NULL;
     }
+    if (hud) { delete hud; hud = NULL; }
     if (bg_tex) { glDeleteTextures(1, &bg_tex); bg_tex = 0; }
     if (hb_logo_tex) { glDeleteTextures(1, &hb_logo_tex); hb_logo_tex = 0; }
     if (title_tex) { glDeleteTextures(1, &title_tex); title_tex = 0; }
@@ -138,6 +142,10 @@ void Game::run() {
         if (current_screen)
             current_screen->update(dt);
 
+        // Update HUD controls (handles pending removal, callbacks)
+        if (hud)
+            hud->Update(dt);
+
         // Draw
         int ww, wh;
         SDL_GL_GetDrawableSize(window, &ww, &wh);
@@ -152,6 +160,14 @@ void Game::run() {
 
         if (current_screen)
             current_screen->draw(renderer);
+
+        // Draw HUD layers (matching GameDraw layer ordering)
+        // Layer flags: 0x01=foreground, 0x08=wave, 0x40=combo, 0x80=mid,
+        //              0x100=post-crit, 0x200=post-bomb, 0x400=topmost
+        if (hud) {
+            hud->BeginDraw(dt);
+            hud->Draw(renderer, 0xFFFF);  // draw all layers for now
+        }
 
         SDL_GL_SwapWindow(window);
     }
