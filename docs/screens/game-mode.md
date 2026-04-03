@@ -61,6 +61,47 @@ All buttons use `QCallee<GameModeScreen>` for their press callbacks.
 
 ---
 
+## Button Positions (verified from read_memory)
+
+Positions vary based on network availability. Offline layout is what we port.
+
+### Offline (no network)
+
+| Button | Position (x, y, z) | Scale | FruitType | Callback |
+|--------|-------------------|-------|-----------|----------|
+| Classic | **(195.0, -110.0, 0.0)** | 0.75 | from GOT (watermelon?) | ClassicModeCallback |
+| Zen | **(-70.0, 71.0, 0.0)** | ~0.9 | FruitType("zen fruit") | ZenModeCallback |
+| Arcade | **(88.0, 48.0, 0.0)** | copies Zen scale | FruitType("arcade fruit") | ArcadeModeCallback |
+| Multiplayer | **(19.0, -76.0, 0.0)** | 0.75 | FruitType, RotateFacingUp | MatchmakerCallback |
+
+### Online (network available — skip for port)
+
+| Button | Position (x, y, z) |
+|--------|-------------------|
+| Classic | (195.0, -110.0, 0.0) — same |
+| Zen | (-95.0, 83.0, 0.0) |
+| Arcade | (50.0, 60.0, 0.0) |
+| Multiplayer | (90.0, -75.0, 0.0) |
+
+### DAT_ Addresses
+
+| Constant | Address | Value | Usage |
+|----------|---------|-------|-------|
+| Classic X | 0x0013ea04 | 195.0 | |
+| Classic Y | 0x0013ea08 | -110.0 | |
+| Zen X (offline) | 0x0013ea18 | -70.0 | |
+| Zen Y (offline) | 0x0013ea1c | 71.0 | |
+| Zen X (online) | 0x0013ea10 | -95.0 | |
+| Zen Y (online) | 0x0013ea14 | 83.0 | |
+| Arcade X (offline) | 0x0013ea58 | 88.0 | |
+| Arcade Y (offline) | 0x0013ea5c | 48.0 | |
+| Arcade X (online) | 0x0013ea2c | 50.0 | |
+| Arcade Y (online) | 0x0013ea30 | 60.0 | |
+| MP X (online) | 0x0013ecb0 | 90.0 | |
+| MP Y (online) | 0x0013ecb4 | -75.0 | |
+| MP Y (offline) | 0x0013ecb8 | -76.0 | |
+
+---
 
 ## See Also
 

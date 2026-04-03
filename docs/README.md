@@ -58,6 +58,7 @@ Detailed field-by-field layouts for all recovered structs.
   - [dojo.md](screens/dojo.md) — DojoScreen
   - [about.md](screens/about.md) — AboutScreen
   - [common-patterns.md](screens/common-patterns.md) — BaseScreen, button creation, transitions
+  - [layout-positions.md](screens/layout-positions.md) — All screen element positions (verified from binary via read_memory)
 
 ## Systems
 
