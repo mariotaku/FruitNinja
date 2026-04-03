@@ -73,19 +73,27 @@ Verified from decompilation of constructors at 0x144104 and 0x1441c0.
 | +0x50 | | (delegate padding) | | |
 | +0x5c | Colour | m_DrawColour | (from global, likely white) | Packed BGRA tint colour |
 
-**Vtable layout** (offsets from vtable base):
-| VTable Offset | Method |
-|---------------|--------|
-| +0x00 | dtor |
-| +0x04 | deleting dtor |
-| +0x08 | Init |
-| +0x0c | OnPause |
-| +0x10 | Reset |
-| +0x14 | Update(float dt) |
-| +0x18 | Save |
-| +0x1c | BeginDraw(float dt) |
-| +0x20 | PreDraw(float* hudScale, int layerMask) |
-| +0x24 | Draw(float* hudScale, int layerMask) |
+**Vtable layout** (verified from MainScreen vtable at 0x1E9A50):
+
+| VTable Offset | Method | Notes |
+|---------------|--------|-------|
+| +0x00 | ~dtor (deleting) | |
+| +0x04 | ~dtor | |
+| +0x08 | Init() | |
+| +0x0c | Release() | cleanup resources |
+| +0x10 | Reset() | |
+| +0x14 | BeginDraw(float dt) | |
+| +0x18 | PreDraw(float* hudScale) | called by PreDrawOrder |
+| +0x1c | **Draw(float* hudScale)** | actual rendering |
+| +0x20 | PreDrawOrder(float*,int) | wrapper → calls vtable+0x18 |
+| +0x24 | DrawOrder(float*,int) | wrapper → calls vtable+0x1c |
+| +0x28 | **Update(float dt)** | tick logic |
+| +0x2c | SetToMultiplayerState() | |
+| +0x30 | GetType() | returns int |
+| +0x34 | Skip() | |
+| +0x38 | Save() | |
+
+**Draw dispatch**: HUD::Draw calls `PreDrawOrder` (+0x20) then `DrawOrder` (+0x24). These are thin wrappers that dispatch to the actual `PreDraw` (+0x18) and `Draw` (+0x1c). HUD::Update calls `Update` (+0x28).
 | +0x28 | Update(float dt) — second update? |
 
 ### HUDControl3d : HUDControl (size = 0x7C)

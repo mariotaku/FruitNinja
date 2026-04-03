@@ -452,17 +452,44 @@ TutorialControl::ResetTutePos(game->tutorial, pPlayButton);
 
 ---
 
+## Vtable (verified from binary at 0x1E9A50, 15 entries)
+
+MainScreen : HUDControl3d. The vtable pointer is set to base+8 in the constructor.
+
+| VTable Offset | Address | Name | Notes |
+|--------------|---------|------|-------|
+| +0x00 | 0x14CF60 | ~MainScreen (deleting) | |
+| +0x04 | 0x14CE10 | ~MainScreen | |
+| +0x08 | 0x14AC80 | Init() | calls Reset via vtable+0x10 |
+| +0x0c | 0x14CD20 | Release() | ~40 lines, cleanup all textures+font |
+| +0x10 | 0x14AC8C | Reset() | no-op |
+| +0x14 | 0x12F92C | BeginDraw(float) | no-op (inherited from HUDControl3d) |
+| +0x18 | 0x14AC90 | PreDraw(float*) | returns param (no-op) |
+| +0x1c | 0x14D4EC | **Draw(float*)** | 171 lines — render background, logo, buttons |
+| +0x20 | 0x12F930 | PreDrawOrder(float*,int) | dispatches to vtable+0x18 (PreDraw) |
+| +0x24 | 0x12F93C | DrawOrder(float*,int) | dispatches to vtable+0x1c (Draw) |
+| +0x28 | 0x14B278 | **Update(float)** | 678 lines — full state machine |
+| +0x2c | 0x12FD54 | SetToMultiplayerState() | inherited |
+| +0x30 | 0x12F948 | GetType() | returns 1 |
+| +0x34 | 0x12F94C | Skip() | no-op |
+| +0x38 | 0x12F950 | Save() | no-op |
+
+**Draw dispatch**: HUD::Draw calls PreDrawOrder (+0x20) then DrawOrder (+0x24). These are wrappers that call the actual PreDraw (+0x18) and Draw (+0x1c) respectively. This indirection allows the HUD layer system to work.
+
 ## Key Functions
 
 | Function | Address | Lines | Status | Purpose |
 |----------|---------|-------|--------|---------|
 | MainScreen ctor | 0x0014c430 | 159 | ✅ | Load 16 textures + font, init state |
-| Update | 0x0014b278 | 677 | ✅ | Full state machine (14 states) |
+| Update | 0x0014b278 | 678 | ✅ | Full state machine (14 states) |
 | Draw | 0x0014d4ec | 171 | ✅ | Render background, logo, loading symbol |
 | Hide | 0x0014ad04 | 7 | ✅ | Set state=0x11, zero position |
 | UpdateScreenElements | 0x0014ad3c | 60 | ✅ | Bouncing logo physics + alpha lerp |
 | DeleteMenuButtons | 0x0014aee8 | 35 | ✅ | Remove Play/Shop/MoreGames from HUD |
 | Release | 0x0014cd20 | 40 | ✅ | SetNull all textures, free font |
+| Init | 0x0014ac80 | 13 | ✅ | Calls Reset |
+| PreDraw | 0x0014ac90 | 1 | ✅ | Returns param (no-op) |
+| Reset | 0x0014ac8c | 1 | ✅ | No-op |
 | GameModeCallback | 0x0014b068 | 10 | ✅ | → state 0xe (mode selection) |
 | NewGameCallback | 0x0014c384 | 15 | ✅ | → state 2 (direct game start) + SFX |
 | AboutCallback | 0x0014afc4 | 8 | ✅ | → state 4 (→ DojoScreen) |
