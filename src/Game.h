@@ -6,6 +6,8 @@
 #include "Renderer.h"
 #include "HUD.h"
 #include "ActorManager.h"
+#include "InputManager.h"
+#include "SDLInputTranslator.h"
 
 struct Game {
     SDL_Window* window;
@@ -17,6 +19,10 @@ struct Game {
 
     // Entity manager (matches ActorManager singleton)
     ActorManager* actorManager;
+
+    // Input system (replaces Mortar::InputManager + InputDeviceBada)
+    InputManager* inputManager;
+    SDLInputTranslator inputTranslator;
 
     // Shared textures (loaded once, reused across screens)
     GLuint bg_tex;
@@ -46,9 +52,6 @@ struct Game {
 
     // Load a texture from data_dir/textures/<name>
     GLuint load_texture(const char* name, TexImage& img);
-
-    // Convert SDL pixel coords to game coords (480x320 landscape, origin bottom-left)
-    void transform_touch(int pixel_x, int pixel_y, float& game_x, float& game_y);
 };
 
 #endif

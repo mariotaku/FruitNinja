@@ -4,7 +4,7 @@
 #include <cstdio>
 
 Game::Game()
-    : window(NULL), gl_context(NULL), hud(NULL), actorManager(NULL),
+    : window(NULL), gl_context(NULL), hud(NULL), actorManager(NULL), inputManager(NULL),
       bg_tex(0), hb_logo_tex(0), title_tex(0),
       blurry_backing_tex(0), fruit_text_tex(0), ninja_text_tex(0),
       soundEnabled(true), musicEnabled(true),
@@ -39,6 +39,28 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     // Create ActorManager (matches GameInit)
     actorManager = new ActorManager();
 
+    // Create InputManager (matches Mortar::InputManager singleton)
+    inputManager = new InputManager();
+    inputTranslator.Init();
+
+    // Register HUD touch forwarding via InputManager
+    // "TouchScreen" fires on any touch down — forward to HUD
+    inputManager->RegisterInputCallback(
+        inputTranslator.hashTouchScreen, INPUT_ACTION_DOWN,
+        [this](InputEvent* ev) -> bool {
+            if (hud) hud->OnTouchDown(ev->x, ev->y);
+            return false;
+        });
+    // Touch up on any channel — forward to HUD
+    for (int i = 0; i < 16; i++) {
+        inputManager->RegisterInputCallback(
+            inputTranslator.hashTouchUp[i], INPUT_ACTION_UP,
+            [this](InputEvent* ev) -> bool {
+                if (hud) hud->OnTouchUp(ev->x, ev->y);
+                return false;
+            });
+    }
+
     // Load shared textures
     TexImage img;
     bg_tex = load_texture("bg_fruit_ninja.tex", img);
@@ -57,6 +79,7 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
 }
 
 void Game::shutdown() {
+    if (inputManager) { delete inputManager; inputManager = NULL; }
     if (actorManager) { delete actorManager; actorManager = NULL; }
     if (hud) { delete hud; hud = NULL; }
     if (bg_tex) { glDeleteTextures(1, &bg_tex); bg_tex = 0; }
@@ -68,40 +91,20 @@ void Game::shutdown() {
     renderer.shutdown();
 }
 
-void Game::transform_touch(int pixel_x, int pixel_y, float& game_x, float& game_y) {
-    int ww, wh;
-    SDL_GetWindowSize(window, &ww, &wh);
-    game_x = (float)pixel_x * FN_SCREEN_W / ww;
-    game_y = FN_SCREEN_H - (float)pixel_y * FN_SCREEN_H / wh;
-}
-
 void Game::run() {
     Uint32 last_ticks = SDL_GetTicks();
 
     while (running) {
-        // Events — route touch through HUD
+        // Events — SDL → InputManager → callbacks
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) {
                 running = false;
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
                 running = false;
-            } else if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) {
-                float gx, gy;
-                transform_touch(ev.button.x, ev.button.y, gx, gy);
-                if (hud) hud->OnTouchDown(gx, gy);
-            } else if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
-                float gx, gy;
-                transform_touch(ev.button.x, ev.button.y, gx, gy);
-                if (hud) hud->OnTouchUp(gx, gy);
-            } else if (ev.type == SDL_FINGERDOWN) {
-                float gx = ev.tfinger.x * FN_SCREEN_W;
-                float gy = FN_SCREEN_H - ev.tfinger.y * FN_SCREEN_H;
-                if (hud) hud->OnTouchDown(gx, gy);
-            } else if (ev.type == SDL_FINGERUP) {
-                float gx = ev.tfinger.x * FN_SCREEN_W;
-                float gy = FN_SCREEN_H - ev.tfinger.y * FN_SCREEN_H;
-                if (hud) hud->OnTouchUp(gx, gy);
+            } else {
+                // All touch/mouse events go through InputManager
+                inputTranslator.ProcessSDLEvent(ev, window);
             }
         }
 
