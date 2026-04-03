@@ -1,4 +1,5 @@
 add_library(fn_hud STATIC
+    HUDControl3d.cpp
     MenuButton.cpp
 )
 target_include_directories(fn_hud PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
