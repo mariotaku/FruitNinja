@@ -164,7 +164,7 @@ void MainScreen::CreateToggles() {
             pSoundToggle->init(tex, 32.0f, 32.0f, sp.x, sp.y,
                                [this]() { SoundCallback(); });
             pSoundToggle->rotation_speed = 0.0f;
-            pSoundToggle->m_LayerMask = 0x08;
+            pSoundToggle->m_LayerFlags = 0x08;
             game.hud->AddControl(pSoundToggle);
         }
     }
@@ -178,7 +178,7 @@ void MainScreen::CreateToggles() {
             pMusicToggle->init(tex, 32.0f, 32.0f, mp.x, mp.y,
                                [this]() { MusicCallback(); });
             pMusicToggle->rotation_speed = 0.0f;
-            pMusicToggle->m_LayerMask = 0x08;
+            pMusicToggle->m_LayerFlags = 0x08;
             game.hud->AddControl(pMusicToggle);
         }
     }
@@ -195,7 +195,7 @@ void MainScreen::CreatePlayDojo() {
                           [this]() { GameModeCallback(); });
         if (m_FruitAtlasTex)
             pPlayButton->load_fruit(game, "watermelon", m_FruitAtlasTex);
-        pPlayButton->m_LayerMask = 0x08;
+        pPlayButton->m_LayerFlags = 0x08;
         game.hud->AddControl(pPlayButton);
     }
 
@@ -210,7 +210,7 @@ void MainScreen::CreatePlayDojo() {
                           [this]() { AboutCallback(); });
         if (m_FruitAtlasTex)
             pDojoButton->load_fruit(game, "mango", m_FruitAtlasTex);
-        pDojoButton->m_LayerMask = 0x08;
+        pDojoButton->m_LayerFlags = 0x08;
         game.hud->AddControl(pDojoButton);
     }
 }
@@ -225,7 +225,7 @@ void MainScreen::CreateLeaderboard() {
                               []() { /* LeaderboardsCallback — skip for port */ });
         if (m_FruitAtlasTex)
             pLeaderboardBtn->load_fruit(game, "kiwifruit", m_FruitAtlasTex);
-        pLeaderboardBtn->m_LayerMask = 0x08;
+        pLeaderboardBtn->m_LayerFlags = 0x08;
         game.hud->AddControl(pLeaderboardBtn);
     }
 }

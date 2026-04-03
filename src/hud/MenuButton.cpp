@@ -9,7 +9,7 @@ MenuButton::MenuButton()
     : pressed(false), rotation_speed(0.5f),
       fruit_atlas_tex(0), fruit_rotation(0.0f), has_fruit(false),
       m_HitScaleX(1.0f), m_HitScaleY(1.0f) {
-    m_LayerMask = 0x40;  // menu button layer
+    m_LayerFlags = 0x40;  // menu button layer
 }
 
 MenuButton::~MenuButton() {
