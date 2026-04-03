@@ -24,12 +24,13 @@
 - [x] Struct layout (~0x106C), entity flags, vtable offsets
 - See `docs/functions/actor-manager.md`
 
-### 4. Data Parsing (XML loaders)
-- [ ] `PSPParticleManager::LoadFile` (0x115f60) — particles XML → emitter templates
-- [ ] `PowerUpManager::Load` (0x119cb0) — poweruplist.xml → PowerUp structs
-- [ ] `BonusManager::Init` (0x10e8fc) — bonusawards.xml parsing
-- [ ] `ItemManager` loading — itemlist.xml (blades, shop items)
-- [ ] `AchievementManager` loading — achievementlist.xml
+### 4. Data Parsing (XML loaders) — DONE
+- [x] `PowerUpManager::Load` (0x119cb0, 80 lines) — poweruplist.xml → map\<hash, PowerUp*\> + effects
+- [x] `BonusManager::Init` (0x10e8fc, 49 lines) — bonusawards.xml → vector\<BonusType\> + display order
+- [x] `ItemManager::LoadItemData` (0x113200, 190 lines) — itemlist.xml → items + per-type maps + save loading
+- [x] `AchievementManager::LoadAchievementInfo` (0x109200, 279 lines) — achievementlist.xml → 11 type categories
+- [x] `PSPParticleManager::LoadFile` (0x115f60, 722 lines) — particles XML → 1024-particle pool + templates
+- See `docs/functions/data-parsing.md`
 
 ### 5. Sound System (needed for port)
 - [ ] `BadaSound::SFXLoad` (0x18b1f4) — .wav.pcm loading into memory buffers

@@ -174,8 +174,8 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | SystemManager | ❌ | Engine bootstrap | — |
 | FileManager | ❌ | File I/O abstraction | — |
 | NetworkManager | ⏭️ | P2P + OpenFeint (defunct) | docs/TODO.md |
-| ItemManager | 🔶 | Item/blade shop data | structs/other.md |
-| AchievementManager | 🔶 | Achievement tracking | — |
+| ItemManager | ✅ | LoadItemData: itemlist.xml → items + per-type maps | functions/data-parsing.md |
+| AchievementManager | ✅ | LoadAchievementInfo: 11 type categories, 0x1A0 per entry | functions/data-parsing.md |
 | BonusManager | ✅ | Bonus award data | structs/other.md |
 | LeaderboardManager | ⏭️ | Online leaderboards (defunct) | docs/TODO.md |
 

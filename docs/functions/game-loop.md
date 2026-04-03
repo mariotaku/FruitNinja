@@ -1,5 +1,177 @@
 # Game Loop & State Machine Functions
 
+## Entry Point Chain
+
+### OspMain (0x000d82a4, 37 instructions)
+
+Anti-tamper wrapper. Hashes 10 bytes from argv (executable name) using ELF hash, compares against stored constant. On match, computes a position-independent address via page-aligned arithmetic and jumps to `OspMain_AppBootstrap`.
+
+### OspMain_AppBootstrap (0x00183474)
+
+Bada OS boilerplate. Wraps `argv` into an `ArrayList<String>`, then calls `Osp::App::Application::Execute(FruitNinja::CreateInstance, args, AAT_MAIN_APP)`. Returns the framework's result code.
+
+```c
+uint OspMain_AppBootstrap(int argc, char** argv) {
+    ArrayList* args = new ArrayList();
+    args->Construct();
+    for (int i = 0; i < argc; i++) {
+        args->Add(new String(argv[i]));
+    }
+    uint ret = Application::Execute(FruitNinja::CreateInstance, args, AAT_MAIN_APP);
+    args->RemoveAll(true);
+    delete args;
+    return (ret != 0) ? (ret & 0xFFFF) : 0;
+}
+```
+
+### FruitNinja::CreateInstance
+
+Factory callback passed to `Application::Execute`. Just allocates and constructs the Application object:
+
+```c
+FruitNinja* FruitNinja::CreateInstance() {
+    return new FruitNinja();
+}
+```
+
+### FruitNinja Lifecycle (logical entry point: OnAppInitializing)
+
+The Bada framework drives `FruitNinja` (inherits `Osp::App::Application`) through lifecycle callbacks:
+
+| Callback | Address | Role |
+|----------|---------|------|
+| `OnAppInitializing` | 0x00182194 | **Logical entry point** — InitEGL, InitGL, GlesForm, Timer(10ms), audio, Game init |
+| `OnTimerExpired` | 0x0018269c | Game loop driver → reschedule timer + `FruitNinja::Draw()` (full tick) |
+| `OnForeground` | 0x001820b0 | Resume: restart timer, restart audio if not muted, Game::OnResume |
+| `OnBackground` | 0x00182060 | Suspend: cancel timer, stop audio, flush audio buffer, Game::OnSuspend |
+| `OnAppTerminating` | 0x00182160 | Game::Shutdown, cleanup, `FruitNinja::Cleanup()` |
+| `Cleanup` | 0x00182114 | Delete Game singleton, cancel/delete timer, delete GlesForm, `DestroyGL()` |
+
+Other FruitNinja methods:
+
+| Method | Address | Role |
+|--------|---------|------|
+| `FruitNinja::FruitNinja` | 0x00182488 | Constructor — init Application, IScreenEventListener, ITimerEventListener, set vtables |
+| `CreateInstance` | 0x00182470 | Factory — `new FruitNinja()` |
+| `Draw` | 0x001824e0 | **Full game tick** (misnamed — does update + render + swap + input + audio) |
+| `InitEGL` | 0x00181f80 | EGL setup: display, config, surface, context, makeCurrent |
+| `InitGL` | 0x00181e58 | GL setup: viewport, culling, depth, projection matrix |
+| `DestroyGL` | 0x00181da0 | Tear down pbuffer, context, surface, display |
+| `OnBatteryLevelChanged` | 0x00181d80 | No-op (returns param) |
+| `OnScreenOn` | 0x00181d8c | No-op |
+| `OnScreenOff` | 0x00181d98 | No-op |
+| `~FruitNinja` | 0x001822d8 | Destructor chain |
+
+Non-virtual thunks (adjust `this` for multiple inheritance):
+
+| Thunk | Address | Adjusts | Target |
+|-------|---------|---------|--------|
+| `OnTimerExpired` thunk | 0x00182694 | `this - 0x10` (ITimerEventListener) | 0x0018269c |
+| `OnScreenOff` thunk | 0x00181d90 | `this - 0x0c` (IScreenEventListener) | 0x00181d98 |
+| `OnScreenOn` thunk | 0x00181d84 | `this - 0x0c` (IScreenEventListener) | 0x00181d8c |
+
+### FruitNinja Class Layout (0x48 bytes)
+
+```
++0x00: Osp::App::Application      (base, vtable ptr → iVar1 + 0x08)
++0x0c: IScreenEventListener       (vtable ptr → iVar1 + 0x58)
++0x10: ITimerEventListener        (vtable ptr → iVar1 + 0x70)
++0x14: EGLDisplay  m_eglDisplay
++0x18: EGLSurface  m_eglSurface
++0x1c: EGLConfig   m_eglConfig
++0x20: EGLContext   m_eglContext
++0x24: (unused)
++0x28: EGLSurface  m_eglPbuffer   (optional pbuffer surface)
++0x3c: (ptr)        m_pUnk3c      (deleted in Cleanup)
++0x40: Timer*       m_pTimer
++0x44: GlesForm*    m_pGlesForm
+```
+
+### Full Call Tree (2 levels) — Entry Point
+
+```
+OspMain (0x000d82a4) — anti-tamper hash check
+  └─► OspMain_AppBootstrap (0x00183474) — argv wrapping, Application::Execute
+        └─► FruitNinja::CreateInstance (0x00182470) — new FruitNinja()
+              └─► Bada framework lifecycle:
+                    ├─ OnAppInitializing (0x00182194)  ← logical entry point
+                    │    ├─ MortarAudioMixerBada()
+                    │    ├─ GlesForm::GlesForm(this)
+                    │    ├─ Form::Construct()
+                    │    ├─ GetAppFrame → AddControl(glesForm)
+                    │    ├─ InitEGL (0x00181f80)
+                    │    ├─ InitGL (0x00181e58)
+                    │    ├─ Timer::Construct → this+0x40
+                    │    ├─ MAMAudioController::Init(audioMixer)
+                    │    ├─ Check sound mute → StartAudioSubsystem
+                    │    ├─ ReturnsAnInstanceOfThisMortarGame() → Game singleton
+                    │    └─ Game::Init(0, 0) via vtable +0x34
+                    │
+                    ├─ OnTimerExpired (0x0018269c)     ← game loop driver
+                    │    ├─ Timer::Start(timer, 10)    ← reschedule 10ms
+                    │    └─ FruitNinja::Draw()         ← full game tick (see below)
+                    │
+                    ├─ OnForeground (0x001820b0) / OnBackground (0x00182060)
+                    └─ OnAppTerminating (0x00182160)
+```
+
+### Full Call Tree (2 levels) — Game Loop Driver
+
+```
+FruitNinja::OnTimerExpired (0x0018269c)
+├─ Timer::Start(timer, 10)              ← reschedule 10ms
+└─ FruitNinja::Draw (0x001824e0)        ← FULL GAME TICK (misnamed, not just render)
+     │
+     │  Audio
+     ├─ MAMAudioController::GetInstance / Update
+     ├─ MAMAudioThread::ThreadMainLoop
+     │
+     │  GL Context
+     ├─ sglMakeCurrent(display, surface, surface, context)
+     ├─ glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+     │
+     │  Update Phase
+     ├─ SystemManager::Update(dt)
+     ├─ Game::Update(dt)                ← vtable +0x2c → GameTaskUpdate(dt)
+     │    ├─ PowerManager::Update()
+     │    ├─ PowerManager::GetState()
+     │    ├─ FruitSaveData::Update(saveData, dt, hud)
+     │    ├─ initFuncs[state](0)        ← on first frame of new state
+     │    ├─ updateFuncs[state](dt, canUpdate)
+     │    │    ├─ State 0: SplashUpdate  (0x0016f5d8)
+     │    │    ├─ State 1: FrontendUpdate (0x0016eb60)
+     │    │    └─ State 2: GameUpdate    (0x0016bed0)
+     │    └─ GameTaskExit()             ← on state change
+     │
+     │  Render Phase
+     ├─ DisplayManager::BeginFrame()
+     ├─ Game::Draw(dt)                  ← vtable +0x30 → GameTaskDraw(dt)
+     │    ├─ drawFuncs[state](1)
+     │    │    ├─ State 0: SplashDraw    (0x0016f554)
+     │    │    ├─ State 1: FrontendDraw  (0x0016eb28)
+     │    │    └─ State 2: GameDraw      (0x0016b888)
+     │    └─ clears dt accumulator
+     ├─ DisplayManager::EndFrame()
+     ├─ DisplayManager::SwapBuffers()
+     │
+     │  Present
+     ├─ glFlush() / glFinish()
+     ├─ sglSwapBuffers(display, surface)
+     │
+     │  Timing
+     ├─ FPS calculation (SystemTime::GetTicks, rolling average)
+     │
+     │  Post-frame
+     ├─ Mortar::Touch::Update(0)
+     └─ Mortar::SoundManager::Update(0)
+```
+
+**Note:** `FruitNinja::Draw` (0x001824e0, 98 lines) is the true game loop body despite its name. It runs update, render, buffer swap, FPS tracking, and input/sound polling — all in a single function. The Bada timer fires `OnTimerExpired` every 10ms, which reschedules immediately and delegates everything to `Draw`.
+
+`GlesForm::OnDraw` (0x00183468) also calls `FruitNinja::Draw` as a fallback path when the form is redrawn by the OS.
+
+---
+
 ## Game Loop & State Machine
 
 ### GameTaskUpdate (0x0010a5d4, 87 lines)
@@ -73,9 +245,9 @@ void GameTaskUpdate(float rawDt) {
 
 See `docs/structs/game.md` for full 22-step initialization order.
 
-### GameUpdate (0x0016bed0, 358 lines)
+### GameUpdate (0x0016bed0, 359 lines)
 
-See `docs/systems/state-machine.md` for full internal flow.
+**Full call tree and analysis in [game-update.md](game-update.md)** — time scaling pipeline, bomb hit logic, wave speed acceleration, pause behavior, retry system.
 
 ### GameDraw (0x0016b888, 211 lines)
 
