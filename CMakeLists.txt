@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.13)
+cmake_policy(SET CMP0079 NEW)
 project(FruitNinja LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 11)
