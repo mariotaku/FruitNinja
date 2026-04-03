@@ -106,6 +106,11 @@ public:
     }
 
     void SetPendingRemoval() { m_bPendingRemoval = true; }
+
+    // Touch input (port extension — original routes through InputManager)
+    virtual void OnTouchDown(float x, float y) { (void)x; (void)y; }
+    virtual void OnTouchUp(float x, float y) { (void)x; (void)y; }
+    virtual void OnTouchMove(float x, float y) { (void)x; (void)y; }
 };
 
 #endif

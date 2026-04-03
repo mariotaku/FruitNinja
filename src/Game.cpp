@@ -1,5 +1,5 @@
 #include "Game.h"
-#include "SplashScreen.h"
+#include "MainScreen.h"
 #include "config.h"
 #include <cstdio>
 
@@ -8,7 +8,6 @@ Game::Game()
       bg_tex(0), hb_logo_tex(0), title_tex(0),
       blurry_backing_tex(0), fruit_text_tex(0), ninja_text_tex(0),
       soundEnabled(true), musicEnabled(true),
-      current_screen(NULL), next_screen(NULL),
       running(false) {}
 
 Game::~Game() {
@@ -49,22 +48,15 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     hb_logo_tex = load_texture("hb_logo.tex", img);
     title_tex = load_texture("title_backing.tex", img);
 
-    // Start with splash screen
-    set_screen(new SplashScreen(*this));
+    // Create MainScreen as HUDControl (matches GameInit adding MainScreen to HUD)
+    MainScreen* mainScreen = new MainScreen(*this);
+    hud->AddControl(mainScreen);
+
     running = true;
     return true;
 }
 
 void Game::shutdown() {
-    if (current_screen) {
-        current_screen->exit();
-        delete current_screen;
-        current_screen = NULL;
-    }
-    if (next_screen) {
-        delete next_screen;
-        next_screen = NULL;
-    }
     if (actorManager) { delete actorManager; actorManager = NULL; }
     if (hud) { delete hud; hud = NULL; }
     if (bg_tex) { glDeleteTextures(1, &bg_tex); bg_tex = 0; }
@@ -74,10 +66,6 @@ void Game::shutdown() {
     if (fruit_text_tex) { glDeleteTextures(1, &fruit_text_tex); fruit_text_tex = 0; }
     if (ninja_text_tex) { glDeleteTextures(1, &ninja_text_tex); ninja_text_tex = 0; }
     renderer.shutdown();
-}
-
-void Game::set_screen(Screen* screen) {
-    next_screen = screen;
 }
 
 void Game::transform_touch(int pixel_x, int pixel_y, float& game_x, float& game_y) {
@@ -91,18 +79,7 @@ void Game::run() {
     Uint32 last_ticks = SDL_GetTicks();
 
     while (running) {
-        // Handle screen transitions
-        if (next_screen) {
-            if (current_screen) {
-                current_screen->exit();
-                delete current_screen;
-            }
-            current_screen = next_screen;
-            next_screen = NULL;
-            current_screen->enter();
-        }
-
-        // Events
+        // Events — route touch through HUD
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) {
@@ -110,29 +87,21 @@ void Game::run() {
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
                 running = false;
             } else if (ev.type == SDL_MOUSEBUTTONDOWN && ev.button.button == SDL_BUTTON_LEFT) {
-                if (current_screen) {
-                    float gx, gy;
-                    transform_touch(ev.button.x, ev.button.y, gx, gy);
-                    current_screen->on_touch_down(gx, gy);
-                }
+                float gx, gy;
+                transform_touch(ev.button.x, ev.button.y, gx, gy);
+                if (hud) hud->OnTouchDown(gx, gy);
             } else if (ev.type == SDL_MOUSEBUTTONUP && ev.button.button == SDL_BUTTON_LEFT) {
-                if (current_screen) {
-                    float gx, gy;
-                    transform_touch(ev.button.x, ev.button.y, gx, gy);
-                    current_screen->on_touch_up(gx, gy);
-                }
+                float gx, gy;
+                transform_touch(ev.button.x, ev.button.y, gx, gy);
+                if (hud) hud->OnTouchUp(gx, gy);
             } else if (ev.type == SDL_FINGERDOWN) {
-                if (current_screen) {
-                    float gx = ev.tfinger.x * FN_SCREEN_W;
-                    float gy = FN_SCREEN_H - ev.tfinger.y * FN_SCREEN_H;
-                    current_screen->on_touch_down(gx, gy);
-                }
+                float gx = ev.tfinger.x * FN_SCREEN_W;
+                float gy = FN_SCREEN_H - ev.tfinger.y * FN_SCREEN_H;
+                if (hud) hud->OnTouchDown(gx, gy);
             } else if (ev.type == SDL_FINGERUP) {
-                if (current_screen) {
-                    float gx = ev.tfinger.x * FN_SCREEN_W;
-                    float gy = FN_SCREEN_H - ev.tfinger.y * FN_SCREEN_H;
-                    current_screen->on_touch_up(gx, gy);
-                }
+                float gx = ev.tfinger.x * FN_SCREEN_W;
+                float gy = FN_SCREEN_H - ev.tfinger.y * FN_SCREEN_H;
+                if (hud) hud->OnTouchUp(gx, gy);
             }
         }
 
@@ -142,15 +111,11 @@ void Game::run() {
         if (dt > 0.033f) dt = 0.033f;
         last_ticks = now;
 
-        // Update
-        if (current_screen)
-            current_screen->update(dt);
-
         // Update entities (Fruit, Bomb, etc.)
         if (actorManager)
             actorManager->Update(dt);
 
-        // Update HUD controls (handles pending removal, callbacks)
+        // Update all HUD controls (MainScreen, buttons, etc.)
         if (hud)
             hud->Update(dt);
 
@@ -163,22 +128,17 @@ void Game::run() {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        // Set up ortho projection for 2D drawing (480x320, bottom-left origin)
+        // Set up ortho projection for 2D drawing
         renderer.SetupGameOrtho();
-
-        if (current_screen)
-            current_screen->draw(renderer);
 
         // Draw 3D entities (fruit, bombs)
         if (actorManager)
             actorManager->Draw(renderer);
 
-        // Draw HUD layers (matching GameDraw layer ordering)
-        // Layer flags: 0x01=foreground, 0x08=wave, 0x40=combo, 0x80=mid,
-        //              0x100=post-crit, 0x200=post-bomb, 0x400=topmost
+        // Draw all HUD controls (MainScreen background+logos, then buttons on top)
         if (hud) {
             hud->BeginDraw(dt);
-            hud->Draw(renderer, 0xFFFF);  // draw all layers for now
+            hud->Draw(renderer, 0xFFFF);
         }
 
         SDL_GL_SwapWindow(window);
