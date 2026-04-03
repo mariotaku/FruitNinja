@@ -44,7 +44,7 @@ public:
     void Draw(Renderer& r, int layerMask) {
         for (auto it = controls.begin(); it != controls.end(); ++it) {
             HUDControl* ctrl = *it;
-            if (ctrl->m_bActive && (layerMask & ctrl->m_LayerMask)) {
+            if (ctrl->m_bActive && (layerMask & ctrl->m_LayerFlags)) {
                 ctrl->PreDraw(r, scale);
                 ctrl->Draw(r, scale, layerMask);
             }
