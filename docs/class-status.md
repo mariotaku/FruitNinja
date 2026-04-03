@@ -83,7 +83,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | NotificationControl | ✅ | 0x110 | 3-type notification with slide animation | structs/ui-controls2.md |
 | ProgressionTimerControl | ✅ | 0x110 | Countdown with fade + delegate | structs/ui-controls2.md |
 | ScoreMultiplyerBoard | ✅ | ~0x9c | Arcade x2 popup via Font::DrawString | systems/rendering-detail.md |
-| MenuButton | ✅ | 0x15c | Interactive button with sub-pieces | structs/gameplay-misc.md |
+| MenuButton | ✅ | 0x15c | 3-layer button: texture quad + star + sparkle ring + real 3D fruit entity | structs/gameplay-misc.md |
 | ScreenButton | ❌ | — | Simplified button variant | — |
 | ScreenEffect | ✅ | 0x50 | Power-up screen effect (images + tint) | systems/power-ups.md |
 | EffectImage | 🔶 | — | Screen effect image (parsed from XML) | structs/gameplay-misc.md |
