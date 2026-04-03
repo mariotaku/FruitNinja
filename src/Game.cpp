@@ -4,7 +4,7 @@
 #include <cstdio>
 
 Game::Game()
-    : window(NULL), gl_context(NULL), hud(NULL),
+    : window(NULL), gl_context(NULL), hud(NULL), actorManager(NULL),
       bg_tex(0), hb_logo_tex(0), title_tex(0),
       blurry_backing_tex(0), fruit_text_tex(0), ninja_text_tex(0),
       soundEnabled(true), musicEnabled(true),
@@ -37,6 +37,9 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     // Create HUD (matches GameInit creating HUD at Game+0x3c)
     hud = new HUD();
 
+    // Create ActorManager (matches GameInit)
+    actorManager = new ActorManager();
+
     // Load shared textures
     TexImage img;
     bg_tex = load_texture("bg_fruit_ninja.tex", img);
@@ -62,6 +65,7 @@ void Game::shutdown() {
         delete next_screen;
         next_screen = NULL;
     }
+    if (actorManager) { delete actorManager; actorManager = NULL; }
     if (hud) { delete hud; hud = NULL; }
     if (bg_tex) { glDeleteTextures(1, &bg_tex); bg_tex = 0; }
     if (hb_logo_tex) { glDeleteTextures(1, &hb_logo_tex); hb_logo_tex = 0; }
@@ -142,6 +146,10 @@ void Game::run() {
         if (current_screen)
             current_screen->update(dt);
 
+        // Update entities (Fruit, Bomb, etc.)
+        if (actorManager)
+            actorManager->Update(dt);
+
         // Update HUD controls (handles pending removal, callbacks)
         if (hud)
             hud->Update(dt);
@@ -160,6 +168,10 @@ void Game::run() {
 
         if (current_screen)
             current_screen->draw(renderer);
+
+        // Draw 3D entities (fruit, bombs)
+        if (actorManager)
+            actorManager->Draw(renderer);
 
         // Draw HUD layers (matching GameDraw layer ordering)
         // Layer flags: 0x01=foreground, 0x08=wave, 0x40=combo, 0x80=mid,

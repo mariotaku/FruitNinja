@@ -6,6 +6,7 @@
 #include "Renderer.h"
 #include "Screen.h"
 #include "HUD.h"
+#include "ActorManager.h"
 
 struct Game {
     SDL_Window* window;
@@ -14,6 +15,9 @@ struct Game {
 
     // Matches Game+0x3c in original — HUD control manager
     HUD* hud;
+
+    // Entity manager (matches ActorManager singleton)
+    ActorManager* actorManager;
 
     // Shared textures (loaded once, reused across screens)
     GLuint bg_tex;
