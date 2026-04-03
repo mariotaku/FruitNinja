@@ -7,6 +7,8 @@
 #include "Game.h"
 #include "MenuButton.h"
 #include "DojoScreen.h"
+#include "InputManager.h"
+#include "SDLInputTranslator.h"
 #include <cstdio>
 #include <cmath>
 
@@ -110,6 +112,26 @@ MainScreen::MainScreen(Game& g)
     m_bActive = true;
     m_LayerFlags = 0x01;  // MainScreen drawn in foreground layer
     m_Alpha = 255;
+
+    // Register touch input via InputManager (matches original SplashInit pattern)
+    InputManager* mgr = InputManager::GetInstance();
+    if (mgr) {
+        // Touch down — route to buttons
+        mgr->RegisterInputCallback(
+            game.inputTranslator.hashTouchScreen, INPUT_ACTION_DOWN,
+            [this](InputEvent* ev) -> bool {
+                return HandleTouchDown(ev->x, ev->y);
+            });
+        // Touch up on all channels — release buttons
+        for (int i = 0; i < 16; i++) {
+            mgr->RegisterInputCallback(
+                game.inputTranslator.hashTouchUp[i], INPUT_ACTION_UP,
+                [this](InputEvent* ev) -> bool {
+                    HandleTouchUp(ev->x, ev->y);
+                    return false;
+                });
+        }
+    }
 }
 
 MainScreen::~MainScreen() {
@@ -498,18 +520,19 @@ void MainScreen::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
     }
 }
 
-// ======================== Touch input ========================
+// ======================== Touch input (via InputManager) ========================
 
-void MainScreen::OnTouchDown(float x, float y) {
-    if (m_State != STATE_CREATE_BUTTONS) return;
-    if (pPlayButton && pPlayButton->hit_test(x, y)) { pPlayButton->touch_down(x, y); return; }
-    if (pDojoButton && pDojoButton->hit_test(x, y)) { pDojoButton->touch_down(x, y); return; }
-    if (pLeaderboardBtn && pLeaderboardBtn->hit_test(x, y)) { pLeaderboardBtn->touch_down(x, y); return; }
-    if (pSoundToggle && pSoundToggle->hit_test(x, y)) { pSoundToggle->touch_down(x, y); return; }
-    if (pMusicToggle && pMusicToggle->hit_test(x, y)) { pMusicToggle->touch_down(x, y); return; }
+bool MainScreen::HandleTouchDown(float x, float y) {
+    if (m_State != STATE_CREATE_BUTTONS) return false;
+    if (pPlayButton && pPlayButton->hit_test(x, y)) { pPlayButton->touch_down(x, y); return true; }
+    if (pDojoButton && pDojoButton->hit_test(x, y)) { pDojoButton->touch_down(x, y); return true; }
+    if (pLeaderboardBtn && pLeaderboardBtn->hit_test(x, y)) { pLeaderboardBtn->touch_down(x, y); return true; }
+    if (pSoundToggle && pSoundToggle->hit_test(x, y)) { pSoundToggle->touch_down(x, y); return true; }
+    if (pMusicToggle && pMusicToggle->hit_test(x, y)) { pMusicToggle->touch_down(x, y); return true; }
+    return false;
 }
 
-void MainScreen::OnTouchUp(float x, float y) {
+void MainScreen::HandleTouchUp(float x, float y) {
     if (pPlayButton) pPlayButton->touch_up(x, y);
     if (pDojoButton) pDojoButton->touch_up(x, y);
     if (pLeaderboardBtn) pLeaderboardBtn->touch_up(x, y);

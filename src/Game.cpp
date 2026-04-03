@@ -43,23 +43,8 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     inputManager = new InputManager();
     inputTranslator.Init();
 
-    // Register HUD touch forwarding via InputManager
-    // "TouchScreen" fires on any touch down — forward to HUD
-    inputManager->RegisterInputCallback(
-        inputTranslator.hashTouchScreen, INPUT_ACTION_DOWN,
-        [this](InputEvent* ev) -> bool {
-            if (hud) hud->OnTouchDown(ev->x, ev->y);
-            return false;
-        });
-    // Touch up on any channel — forward to HUD
-    for (int i = 0; i < 16; i++) {
-        inputManager->RegisterInputCallback(
-            inputTranslator.hashTouchUp[i], INPUT_ACTION_UP,
-            [this](InputEvent* ev) -> bool {
-                if (hud) hud->OnTouchUp(ev->x, ev->y);
-                return false;
-            });
-    }
+    // Touch callbacks are registered by individual HUD controls
+    // (e.g., MainScreen registers for TouchScreen/TouchUp in its constructor)
 
     // Load shared textures
     TexImage img;

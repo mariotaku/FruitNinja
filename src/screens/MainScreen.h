@@ -25,8 +25,6 @@ public:
     // HUDControl overrides
     void Update(float dt) override;
     void Draw(Renderer& r, const Vec3& hudScale, int layerMask) override;
-    void OnTouchDown(float x, float y) override;
-    void OnTouchUp(float x, float y) override;
 
 private:
     Game& game;
@@ -131,6 +129,10 @@ private:
     void QuitGamesCallback();
 
     void RemoveButton(MenuButton*& btn);
+
+    // Touch handling (registered with InputManager, not virtual overrides)
+    bool HandleTouchDown(float x, float y);
+    void HandleTouchUp(float x, float y);
 };
 
 #endif
