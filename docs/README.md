@@ -9,7 +9,8 @@
 
 - [class-status.md](class-status.md) — **All 129 classes**: analysis status, sizes, descriptions, doc links
 - [functions/](functions/) — Decompiled function reference with pseudocode:
-  - [game-loop.md](functions/game-loop.md) — GameTaskUpdate, GameInit, GameUpdate, GameDraw
+  - [game-loop.md](functions/game-loop.md) — Entry point chain, OnTimerExpired, GameTaskUpdate, GameDraw
+  - [game-update.md](functions/game-update.md) — GameUpdate (State 2): full call tree, time scaling, bomb/wave/retry
   - [fruit.md](functions/fruit.md) — Fruit::Update, CollisionResponse, Draw, Init, Chuck, LoadInfo
   - [bomb.md](functions/bomb.md) — Bomb::Update, CollisionResponse
   - [slash-entity.md](functions/slash-entity.md) — SlashEntity::Update, CollideWithEntity, UpdatePoints
@@ -21,6 +22,7 @@
   - [power-ups.md](functions/power-ups.md) — ActivatePower, Activate, Parse
   - [particles.md](functions/particles.md) — AddEmitter, Emitter::Update, Manager::Update/Draw
   - [actor-manager.md](functions/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
+  - [data-parsing.md](functions/data-parsing.md) — XML loaders: powerups, bonus, items, achievements, particles
   - [sound.md](functions/sound.md) — GameSound::SFXPlay
   - [screens-effects.md](functions/screens-effects.md) — Screen callbacks, BombFlash/Blast, Ghost, Coin
 - [classes.md](classes.md) — Class hierarchy and method listing (~70 classes)
