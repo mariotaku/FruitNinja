@@ -392,16 +392,20 @@ void MainScreen::QuitGamesCallback() {
 
 ---
 
-## Button Layout
+## Button Layout (verified from read_memory)
+
+All positions verified from binary constants. Coordinate system: HUDControl3d::Draw applies `offset = HUD_global × Vec3(480, 320, 0) + control.pos` before matrix translate. HUD_global is normally (1.0, 1.0, 1.0).
 
 | Button | Texture | Position (x, y, z) | Scale | FruitType | Callback |
 |--------|---------|-------------------|-------|-----------|----------|
-| Sound toggle | sound.tex / sound_cross.tex | (216, 135.5, ?) | 32×32 | -1 | SoundCallback |
-| Music toggle | music.tex / music_cross.tex | (176, 135.5, ?) | 32×32 | -1 | MusicCallback |
-| New Game | newgame.tex | (16, -66, -50) | auto (tex size) | 3 (watermelon) | GameModeCallback |
-| Dojo | dojo_icon.tex | (-144, -65, ?) | 0.9× / 1.05× | "mango" | AboutCallback (→DojoScreen) |
-| Leaderboard | openfeint.tex | (182, -106, ?) | 1.0× | (GOT ref) | LeaderboardsCallback |
-| MoreGames | gc_achievements.tex | (182, -106, ?) | 1.0× | "kiwifruit" | MoreGamesCallback |
+| Sound toggle | sound.tex / sound_cross.tex | **(216.0, 135.5, 0.0)** | 32×32 | -1 (none) | SoundCallback |
+| Music toggle | music.tex / music_cross.tex | **(176.0, 135.5, 0.0)** | 32×32 | -1 (none) | MusicCallback |
+| New Game | newgame.tex | **(16.0, -66.0, 0.0)** | auto (tex size) | 3 (watermelon) | GameModeCallback |
+| Dojo | dojo_icon.tex | **(-144.0, -65.0, 0.0)** | 0.9× / 1.05× | "mango" (FruitType lookup) | AboutCallback (→DojoScreen) |
+| Leaderboard | openfeint.tex | **(182.0, -106.0, 0.0)** | 1.0× | (GOT ref) | LeaderboardsCallback |
+| MoreGames | gc_achievements.tex | **(182.0, -106.0, 0.0)** | 1.0× | "kiwifruit" | MoreGamesCallback |
+
+**MainScreen itself:** size = (480.0, 138.0, 1.0), pos = (0.0, 91.0, 0.0) where 91 = (320 - 138) / 2
 
 All buttons are 0x15C bytes (`MenuButton`), created via `operator_new(0x15c)` + `MenuButton::MenuButton(texture, position, callback, fruitType, scale, deletedCallback)`.
 
