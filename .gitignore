@@ -44,3 +44,6 @@ Thumbs.db
 
 # Original app
 FruitNinjaBada/
+
+# Bada SDK (proprietary headers, not redistributable)
+bada_SDK/

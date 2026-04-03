@@ -21,6 +21,20 @@
 - ARM32 Little-Endian ELF (Samsung Bada OS), Halfbrick Mortar Engine
 - 480x320 landscape (on portrait 480x800 Bada device, touch/camera rotated 90°), entry point: OspMain
 
+## Bada SDK Headers
+- `bada_SDK/Include/` contains Samsung Bada OS headers (gitignored, not redistributable)
+- Use these to resolve Osp:: struct layouts (Point, String, Timer, Application, Form, etc.)
+- Key: `FGrpPoint.h` (Point: vtable+x+y), `FAppApplication.h` (Application lifecycle), `FBaseRtTimer.h` (Timer API)
+
+## GhidraMCP (MCP Server)
+- Ghidra must be running with GhidraMCP plugin loaded and FruitNinja.exe open
+- Provides 100+ tools: decompile, disassemble, rename, read_memory, run_ghidra_script, create_struct, etc.
+- All GhidraMCP tools are auto-approved via `.claude/settings.local.json` (`mcp__GhidraMCP__*`)
+- Use `read_memory` to resolve GOT pointers and data constants (little-endian ARM32)
+- Use `run_ghidra_script` to execute scripts from `~/ghidra_scripts/` (not project dir — copy if needed)
+- Use `rename_data` to name DAT_ symbols with meaningful names based on context
+- Use `force_decompile` after renaming to see updated decompilation with named symbols
+
 ## Conventions
 - Ghidra scripts go in `<project root>/ghidra_scripts/`, NOT in `$HOME/ghidra_scripts/`
 - The project ghidra_scripts/ directory is added to Ghidra's Script Manager — no need to copy elsewhere
@@ -39,10 +53,13 @@ Run in order: FN01 → FN02 → FN03 → FN04 → FN05
 | `FN04_ReplaceTypes.java` | Replace Demangler auto-generated types with /FruitNinja/ typed versions |
 | `FN05_ApplyPrototypes.java` | Apply struct types to 70+ function signatures |
 
+| `FN08_UpdateStructs.java` | Updated structs: OspPoint, FruitNinjaApp, FRUIT_INFO fixes, BadaSound, 4 modifier types |
+
 Other scripts:
 - `FindTextFunctions.java` — Lists all 9,624 non-thunk .text functions
 - `ListClasses.java` — Extracts class hierarchy from symbols
 - `StructDefinitions.java` — Raw struct definitions (reference only, not runnable)
+- `FN_CountDATs.java` — Count unnamed DAT_ vs named data symbols
 
 ## Key Files
 - `docs/README.md` — Documentation index (22 files, 3500+ lines)
