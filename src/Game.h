@@ -4,7 +4,6 @@
 #include <SDL.h>
 #include <string>
 #include "Renderer.h"
-#include "Screen.h"
 #include "HUD.h"
 #include "ActorManager.h"
 
@@ -36,10 +35,6 @@ struct Game {
     // Data directory path
     std::string data_dir;
 
-    // Screen management
-    Screen* current_screen;
-    Screen* next_screen;
-
     bool running;
 
     Game();
@@ -48,7 +43,6 @@ struct Game {
     bool init(SDL_Window* win, SDL_GLContext gl);
     void shutdown();
     void run();
-    void set_screen(Screen* screen);
 
     // Load a texture from data_dir/textures/<name>
     GLuint load_texture(const char* name, TexImage& img);

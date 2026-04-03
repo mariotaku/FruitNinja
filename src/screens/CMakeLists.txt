@@ -1,5 +1,4 @@
 add_library(fn_screens STATIC
-    SplashScreen.cpp
     MainScreen.cpp
     DojoScreen.cpp
 )

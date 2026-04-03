@@ -77,6 +77,23 @@ public:
         }
         controls.clear();
     }
+
+    // Port extension: route touch to active controls (reverse order = topmost first)
+    void OnTouchDown(float x, float y) {
+        for (auto it = controls.rbegin(); it != controls.rend(); ++it) {
+            if ((*it)->m_bActive) (*it)->OnTouchDown(x, y);
+        }
+    }
+    void OnTouchUp(float x, float y) {
+        for (auto it = controls.rbegin(); it != controls.rend(); ++it) {
+            if ((*it)->m_bActive) (*it)->OnTouchUp(x, y);
+        }
+    }
+    void OnTouchMove(float x, float y) {
+        for (auto it = controls.rbegin(); it != controls.rend(); ++it) {
+            if ((*it)->m_bActive) (*it)->OnTouchMove(x, y);
+        }
+    }
 };
 
 #endif

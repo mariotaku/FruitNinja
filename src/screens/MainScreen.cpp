@@ -42,8 +42,6 @@ static inline Vec3  toScreen(const Vec3& v) { return Vec3(toScreenX(v.x), toScre
 
 MainScreen::MainScreen(Game& g)
     : game(g),
-      m_Size(480.0f, 138.0f, 1.0f),
-      m_Pos(0.0f, (320.0f - 138.0f) * 0.5f, 0.0f),
       m_OrigSize(480.0f, 138.0f, 1.0f),
       m_TexNewGame(0), m_TexDojoIcon(0), m_TexQuit(0),
       m_TexOpenFeint(0), m_TexMoreGames(0),
@@ -105,6 +103,13 @@ MainScreen::MainScreen(Game& g)
 
     // Step 9: Logo overlay
     m_TexCommingSoon = game.load_texture("swipe_fruit_begin.tex", m_ImgCommingSoon);
+
+    // Step 10-13: Set HUDControl3d base fields (matching original ctor)
+    size = Vec3(480.0f, 138.0f, 1.0f);
+    pos = Vec3(toScreenX(0.0f), toScreenY((320.0f - 138.0f) * 0.5f), 0.0f);
+    m_bActive = true;
+    m_LayerFlags = 0x01;  // MainScreen drawn in foreground layer
+    m_Alpha = 255;
 }
 
 MainScreen::~MainScreen() {
@@ -134,22 +139,8 @@ void MainScreen::RemoveButton(MenuButton*& btn) {
     }
 }
 
-// ======================== Screen lifecycle ========================
-
-void MainScreen::enter() {
-    m_State = STATE_CAMERA_ZOOM;
-    m_Timer = 0.0f;
-    m_Timer2 = 0.0f;
-    m_CameraTransition = 1.0f;
-    m_Alpha = 1.0f;
-    m_GlobalAlphaTarget = 1.0f;
-    m_BounceVelocity = 0.0f;
-    m_WindowCenter = 320.0f / 2.0f + 160.0f;
-    m_Time = 0.0f;
-}
-
-void MainScreen::exit() {
-}
+// Note: no enter()/exit() — MainScreen is activated by adding to HUD.
+// State is initialized in the constructor.
 
 // ======================== Button Creation ========================
 // Matches button creation pattern from docs/screens/main.md
@@ -240,13 +231,13 @@ void MainScreen::DeleteMenuButtons() {
 void MainScreen::Hide() {
     // Matches 0x0014ad04
     m_State = STATE_CAMERA_FADE;
-    m_Pos = Vec3(0, 0, 0);
+    pos = Vec3(0, 0, 0);
 }
 
 // ======================== Update ========================
 // Matches 0x0014b278 (677 lines) — state machine
 
-void MainScreen::update(float dt) {
+void MainScreen::Update(float dt) {
     m_Time += dt;
 
     switch (m_State) {
@@ -287,7 +278,7 @@ void MainScreen::update(float dt) {
         m_Timer2 *= GAME_START_DECAY;
         if (m_Timer2 < 0.01f) {
             m_Timer2 = 0.0f;
-            game.set_screen(new DojoScreen(game));
+            // TODO: transition to DojoScreen (Phase 8)
         }
         break;
     }
@@ -349,7 +340,7 @@ void MainScreen::update(float dt) {
         m_Timer2 *= GAME_START_DECAY;
         if (m_Timer2 < 0.01f) {
             m_Timer2 = 0.0f;
-            game.set_screen(new DojoScreen(game));
+            // TODO: transition to DojoScreen (Phase 8)
         }
         break;
     }
@@ -379,7 +370,7 @@ void MainScreen::update(float dt) {
         float pauseAmount = (-m_CameraTransition);
         if (pauseAmount < 0.0f) pauseAmount = 0.0f;
         if (pauseAmount > 1.0f) pauseAmount = 1.0f;
-        float slideOffset = m_Size.y * 2.0f * (1.0f - pauseAmount);
+        float slideOffset = size.y * 2.0f * (1.0f - pauseAmount);
         pSoundToggle->pos.y += slideOffset;
         pMusicToggle->pos.y += slideOffset;
         pSoundToggle->m_bActive = (pauseAmount > 0.01f);
@@ -418,7 +409,7 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     m_WindowCenter += m_BounceVelocity * absCam * 15.0f;
 
     // Floor = pos.y + 18 (in original centered coords)
-    float floorY = m_Pos.y + 18.0f;
+    float floorY = pos.y + 18.0f;
     m_LogoFruitPos.y = floorY;
 
     m_LogoFruitPos2.y = m_WindowCenter;
@@ -445,7 +436,7 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
 // ======================== Draw ========================
 // Matches 0x0014d4ec (171 lines)
 
-void MainScreen::draw(Renderer& r) {
+void MainScreen::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
     // Skip drawing for certain states
     if (m_State == STATE_CAMERA_FADE || m_State == 0x0d) return;
     if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B ||
@@ -509,7 +500,7 @@ void MainScreen::draw(Renderer& r) {
 
 // ======================== Touch input ========================
 
-void MainScreen::on_touch_down(float x, float y) {
+void MainScreen::OnTouchDown(float x, float y) {
     if (m_State != STATE_CREATE_BUTTONS) return;
     if (pPlayButton && pPlayButton->hit_test(x, y)) { pPlayButton->touch_down(x, y); return; }
     if (pDojoButton && pDojoButton->hit_test(x, y)) { pDojoButton->touch_down(x, y); return; }
@@ -518,7 +509,7 @@ void MainScreen::on_touch_down(float x, float y) {
     if (pMusicToggle && pMusicToggle->hit_test(x, y)) { pMusicToggle->touch_down(x, y); return; }
 }
 
-void MainScreen::on_touch_up(float x, float y) {
+void MainScreen::OnTouchUp(float x, float y) {
     if (pPlayButton) pPlayButton->touch_up(x, y);
     if (pDojoButton) pDojoButton->touch_up(x, y);
     if (pLeaderboardBtn) pLeaderboardBtn->touch_up(x, y);
