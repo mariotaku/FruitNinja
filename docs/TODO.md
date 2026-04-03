@@ -43,9 +43,10 @@
 ### 6. Remaining Gameplay Functions
 - [x] `Fruit::SetFruitType` (0x17621c, 46 lines) — set type, scale, collision sphere from FRUIT_INFO
 - [x] `Fruit::EnableCollision` (0x176354, 36 lines) — toggle ColSphere on/off
-- [ ] `TimeModifier::Parse/UpdateSpecific` — freeze/speed power-up timing
-- [ ] `SlashModifier::Parse/UpdateSpecific` — blade width power-up
-- [ ] `WaveModifier::Parse/UpdateSpecific` — wave rate override
+- [x] `TimeModifier::ParseSpecific` (0x120100) + `UpdateSpecific` (0x1200a0) — stop/slow/ramp clock, addTime
+- [x] `SlashModifier::ParseSpecific` (0x11f464) — blade colours, width, texture (no UpdateSpecific, apply-only)
+- [x] `WaveModifier::ParseSpecific` (0x12836c) + `UpdateSpecific` (0x1280e4) — fruit/bomb multipliers, overrides
+- [x] `ScoreModifier::ParseSpecific` (0x11ccb0) + `UpdateSpecific` (0x11cc50) — gain/loss add+multiply
 - [ ] `SlashEntity::InitPoints` (0x17c340) — blade vertex buffer init
 - See `docs/functions/fruit.md`
 
@@ -53,20 +54,19 @@
 
 ## Unfinished Analysis
 
-### Power-Up System — MOSTLY DONE
+### Power-Up System — DONE
 
-See `docs/systems/power-ups.md`. Core architecture recovered:
+See `docs/systems/power-ups.md` and `docs/functions/power-ups.md`. Full system recovered:
 - PowerUp struct (~0xB8 bytes): name, hash, modifiers list, textures, screen effect
-- 4 modifier types: ScoreModifier, TimeModifier, SlashModifier, WaveModifier
+- 4 modifier types fully decompiled: ScoreModifier, TimeModifier, SlashModifier, WaveModifier
 - ActivatePower + Activate flow fully traced
-- PowerUpManager maps and active list documented
+- PowerUpManager::Update (0x118a00, 110 lines) decompiled — ticks active powers, handles expiry
+- PowerUp::Update (0x117f90) + Deactivate (0x117f18) decompiled
+- All Parse/UpdateSpecific/ApplyModifier/RemoveModifier methods mapped
 
-**Still undecompiled** (lower priority):
-- `PowerUpManager::Update` — tick active power timers
-- `PowerUpManager::Load` — load all power-up XML definitions
-- `PowerUp::Deactivate` — cleanup on expiry
-- Individual modifier Parse/UpdateSpecific methods
+**Remaining** (low priority):
 - `ScreenEffect::Activate/Parse` — visual effect details
+- `PROBABILITY_OVERIDE::Parse` — wave override entry parsing
 
 ### Touch → Slash Input Pipeline — DONE
 
