@@ -33,9 +33,9 @@ target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::ti
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaBada/Data" FN_DATA_DIR_PATH)
 configure_file(src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY)
 
-# --- Subsystems ---
-add_subdirectory(src/engine)
+# --- Subsystems (order matters for dependencies) ---
 add_subdirectory(src/math)
+add_subdirectory(src/engine)
 add_subdirectory(src/hud)
 add_subdirectory(src/screens)
 add_subdirectory(src/platform)

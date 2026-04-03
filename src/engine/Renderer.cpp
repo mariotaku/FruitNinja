@@ -3,12 +3,14 @@
 #include <cstdio>
 #include <cmath>
 
+// 2D shader with MVP projection and RGBA tint (matches TintColour pipeline)
 static const char* vert_src =
-    "attribute vec2 a_pos;\n"
+    "attribute vec3 a_pos;\n"
     "attribute vec2 a_uv;\n"
+    "uniform mat4 u_mvp;\n"
     "varying vec2 v_uv;\n"
     "void main() {\n"
-    "    gl_Position = vec4(a_pos, 0.0, 1.0);\n"
+    "    gl_Position = u_mvp * vec4(a_pos, 1.0);\n"
     "    v_uv = a_uv;\n"
     "}\n";
 
@@ -16,10 +18,10 @@ static const char* frag_src =
     "precision mediump float;\n"
     "varying vec2 v_uv;\n"
     "uniform sampler2D u_tex;\n"
-    "uniform float u_alpha;\n"
+    "uniform vec4 u_tint;\n"
     "void main() {\n"
     "    vec4 c = texture2D(u_tex, v_uv);\n"
-    "    gl_FragColor = vec4(c.rgb, c.a * u_alpha);\n"
+    "    gl_FragColor = c * u_tint;\n"
     "}\n";
 
 // 3D mesh shaders
@@ -88,8 +90,9 @@ bool Renderer::init() {
     glDeleteShader(vs);
     glDeleteShader(fs);
 
+    u_mvp = glGetUniformLocation(program, "u_mvp");
     u_tex_loc = glGetUniformLocation(program, "u_tex");
-    u_alpha_loc = glGetUniformLocation(program, "u_alpha");
+    u_tint = glGetUniformLocation(program, "u_tint");
 
     // 3D shader
     GLuint vs3 = compile_shader(GL_VERTEX_SHADER, vert_3d_src);
@@ -140,25 +143,63 @@ GLuint Renderer::upload_texture(const TexImage& img) {
     return tex;
 }
 
+void Renderer::SetupGameOrtho() {
+    // Verified from binary: SetupOrtho(160, -160, -240, 240, 2000, -6000)
+    matrix_mgr.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+    matrix_mgr.view.Identity();
+    matrix_mgr.stack.Reset();
+}
+
 void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
+    // Legacy clip-space fullscreen quad (for compatibility with existing screens)
     static const float verts[] = {
-        // pos        uv
-        -1.0f, -1.0f,  0.0f, 1.0f,
-         1.0f, -1.0f,  1.0f, 1.0f,
-        -1.0f,  1.0f,  0.0f, 0.0f,
-         1.0f,  1.0f,  1.0f, 0.0f,
+        // pos(xyz)       uv
+        -1.0f, -1.0f, 0.0f,  0.0f, 1.0f,
+         1.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+        -1.0f,  1.0f, 0.0f,  0.0f, 0.0f,
+         1.0f,  1.0f, 0.0f,  1.0f, 0.0f,
     };
 
+    Matrix44 identity;
     glUseProgram(program);
+    glUniformMatrix4fv(u_mvp, 1, GL_FALSE, identity.ptr());
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
     glUniform1i(u_tex_loc, 0);
-    glUniform1f(u_alpha_loc, alpha);
+    glUniform4f(u_tint, 1.0f, 1.0f, 1.0f, alpha);
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, verts + 2);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, verts);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, verts + 3);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+}
+
+void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float v1) {
+    // Unit quad (-0.5..0.5) transformed by current matrix stack MVP
+    float verts[] = {
+        // pos(xyz)          uv
+        -0.5f, -0.5f, 0.0f,  u0, v1,
+         0.5f, -0.5f, 0.0f,  u1, v1,
+        -0.5f,  0.5f, 0.0f,  u0, v0,
+         0.5f,  0.5f, 0.0f,  u1, v0,
+    };
+
+    Matrix44 mvp = matrix_mgr.GetMVP();
+    float tintF[4];
+    tint.toFloat(tintF);
+
+    glUseProgram(program);
+    glUniformMatrix4fv(u_mvp, 1, GL_FALSE, mvp.ptr());
+    glUniform1i(u_tex_loc, 0);
+    glUniform4f(u_tint, tintF[0], tintF[1], tintF[2], tintF[3]);
+
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, verts);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, verts + 3);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
@@ -179,40 +220,16 @@ void Renderer::draw_mesh(Mesh& mesh, GLuint tex, const float* mvp, const float* 
 
 void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
                            float angle, float alpha) {
-    float cx = ((x + w * 0.5f) / FN_SCREEN_W) * 2.0f - 1.0f;
-    float cy = ((y + h * 0.5f) / FN_SCREEN_H) * 2.0f - 1.0f;
-    float hw = w / FN_SCREEN_W;
-    float hh = h / FN_SCREEN_H;
-
-    float cosA = cosf(angle);
-    float sinA = sinf(angle);
-
-    float corners[][2] = {
-        {-hw, -hh}, { hw, -hh}, {-hw,  hh}, { hw,  hh}
-    };
-    float uvs[][2] = {{0,1},{1,1},{0,0},{1,0}};
-
-    float verts[16];
-    for (int i = 0; i < 4; i++) {
-        float rx = corners[i][0] * cosA - corners[i][1] * sinA;
-        float ry = corners[i][0] * sinA + corners[i][1] * cosA;
-        verts[i * 4 + 0] = cx + rx;
-        verts[i * 4 + 1] = cy + ry;
-        verts[i * 4 + 2] = uvs[i][0];
-        verts[i * 4 + 3] = uvs[i][1];
+    // Set up matrix: Scale by (w, h) then translate to (x + w/2, y + h/2)
+    matrix_mgr.stack.Reset();
+    Matrix44 mat = Matrix44::Scale44(w, h, 1.0f);
+    if (angle != 0.0f) {
+        mat.RotZ44(sinf(angle), cosf(angle));
     }
+    mat.GlobalTranslate44(Vec3(x + w * 0.5f, y + h * 0.5f, 0.0f));
+    matrix_mgr.stack.SetCurrentMatrix(mat);
 
-    glUseProgram(program);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex);
-    glUniform1i(u_tex_loc, 0);
-    glUniform1f(u_alpha_loc, alpha);
-
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, verts);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, verts + 2);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
+    DrawQuad(Colour(255, 255, 255, (uint8_t)(alpha * 255.0f)));
 }
