@@ -41,8 +41,8 @@ Array allocated as `8 + count × 0x330` bytes (8-byte header: stride=0x330, coun
 
 | Offset | Type | Name | Default | Notes |
 |--------|------|------|---------|-------|
-| +0x244 | float | m_Scale | 25.0f | Fruit display scale |
-| +0x248 | float | m_SpeedMult | 1.0f | Speed multiplier |
+| +0x244 | float | m_CollisionScale | 25.0f | Collision radius scaling factor; also used as display scale. radius = m_CollisionBase + const × m_CollisionScale |
+| +0x248 | float | m_CollisionBase | 1.0f | Base collision radius; radius ≤ 0 means fruit cannot be sliced |
 | +0x24c | float | m_SizeMult | 0.75f | Size multiplier |
 
 ### Bool/Flag Fields

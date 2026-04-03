@@ -76,12 +76,14 @@ GCC-generated thunks for local statics, vtable adjustors, and template helpers. 
 
 ## What's Missing for a Port
 
-### Priority 1: Game State Machine
+### Priority 1: Game State Machine — DONE
 
-The `GameTaskUpdate` dispatches through a function pointer table indexed by `Game[0]` byte. Need to recover:
-- All task states (menu, playing, game-over, pause, etc.)
-- Transition logic between states
-- The function pointer table entries
+All 3 states fully decompiled with Init/Update/Draw/Exit handlers:
+- State 0 (Splash): MenuBackground + auto-transition to Game
+- State 1 (Frontend): Alternate entry, waits for DisplayManager ready
+- State 2 (Game): Full gameplay — GameInit (274 lines), GameUpdate (359 lines), GameDraw (211 lines), GameExit (98 lines)
+- Full entry point chain: OspMain → OspMain_AppBootstrap → FruitNinja lifecycle → OnTimerExpired → GameTick
+- See `docs/systems/state-machine.md`, `docs/functions/game-loop.md`, `docs/functions/game-update.md`
 
 ### Priority 2: T.NNN Helper Identification — DONE
 

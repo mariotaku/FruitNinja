@@ -381,3 +381,69 @@ int Fruit::RandomFruit(bool includeOnSideOnly) {
 - **Fallback**: If no fruit matches (shouldn't happen), picks uniformly from `[0, fruitCount-1)`
 - **RNG**: Uses `WaveManager`'s embedded `Math::Random` instance
 - **16 fruit types**: apple, banana, orange, watermelon, strawberry, kiwifruit, pineapple, plum, pear, mango, apple_red, lime, dragon, coconut, passionfruit, lemon
+
+---
+
+### Fruit::SetFruitType (0x0017621c, 46 lines)
+
+```c
+void Fruit::SetFruitType(uint type, float scale) {
+    this->m_FruitType = (byte)type;
+    
+    // Set entity scale from global fruit scale vector
+    Vec3 entityScale = globalScaleVec * CONST_A * CONST_B;
+    this->entity.scale = entityScale;       // +0x28..+0x30
+    this->entity.baseScale = entityScale;   // +0xa8..+0xb0
+    
+    // Collision sphere setup from FRUIT_INFO
+    FRUIT_INFO* info = &fruitInfoArray[type];  // type × 0x330 stride
+    float radius = info->m_SpeedMult + CONST_C * info->m_Scale;  // +0x248 + factor × +0x244
+    
+    if (radius <= 0.0) {
+        // No collision for this fruit type — delete ColSphere
+        if (this->m_Col) { delete this->m_Col; this->m_Col = NULL; }
+    } else {
+        // Create/update collision sphere
+        if (!this->m_Col) {
+            this->m_Col = new ColSphere();
+        }
+        this->m_Col->pos = Vec3(this->pos_x, this->pos_y, CONST_Z);
+        this->m_Col->radius = radius * scale;
+    }
+}
+```
+
+**FRUIT_INFO fields used:**
+| Offset | Name | Default | Role in SetFruitType |
+|--------|------|---------|----------------------|
+| +0x244 | m_Scale | 25.0 | Collision radius scaling factor |
+| +0x248 | m_SpeedMult | 1.0 | Base collision radius |
+
+**Note:** Collision radius = `base + factor × scale` from FRUIT_INFO, then multiplied by the spawn `scale` parameter. If the computed radius is ≤ 0, the fruit has no collision (cannot be sliced).
+
+### Fruit::EnableCollision (0x00176354, 36 lines)
+
+```c
+void Fruit::EnableCollision(bool enable) {
+    FRUIT_INFO* info = &fruitInfoArray[m_FruitType];
+    float radius = info->m_SpeedMult + CONST_C * info->m_Scale;
+    
+    if (enable && radius > 0.0) {
+        if (!this->m_Col) {
+            this->m_Col = new ColSphere();
+        }
+        this->m_Col->pos = Vec3(this->pos_x, this->pos_y, CONST_Z);
+        this->m_Col->radius = radius;  // note: no extra scale factor
+    } else {
+        // Disable collision
+        if (this->m_Col) { delete this->m_Col; this->m_Col = NULL; }
+    }
+}
+```
+
+Same radius formula as `SetFruitType` but without the spawn `scale` multiplier. Used to toggle collision on/off during gameplay (e.g., after slicing, during bomb freeze).
+
+### See Also
+
+- [Entities struct](../structs/entities.md) — Fruit struct layout, m_FruitType at +0x3c
+- [Data struct](../structs/data.md) — FRUIT_INFO (0x330 bytes per type)
