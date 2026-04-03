@@ -169,14 +169,56 @@ GameInitialise(displaySurface, dataPath):
   └─ PreloadSounds
 ```
 
-**vs GameInit** (0x16c644, 274 lines): GameInit is the State 2 init handler — creates HUD, entities, screens, pools for each game session. GameInitialise is the one-time boot that creates engine singletons and loads shared data.
+### All Game* Functions
 
-| | GameInitialise | GameInit |
-|---|---|---|
-| **When** | Once at app startup | Each game session |
-| **Called by** | OnAppInitializing | GameTaskUpdate state 2 init |
-| **Creates** | Engine singletons, loads shared data | Per-session HUD, entities, screens |
-| **Port maps to** | `Game::init()` | Entering gameplay |
+| Function | Address | Lines | Purpose |
+|----------|---------|-------|---------|
+| **Game::Game** | 0x10dab0 | 20 | Constructor: MortarGame base, zero field_0xfc/0xfd/0x100 |
+| **GamePreInitialise** | 0x10b588 | 10 | Zeros Game singleton (0x608 bytes via CpuFill8) |
+| **GameInitialise** | 0x10bdfc | 305 | One-time engine bootstrap (above) |
+| **GameInit** | 0x16c644 | 274 | Per-session init (State 2 handler) |
+| **GameTaskUpdate** | 0x10a5d4 | 87 | 3-state dispatcher (Splash/Frontend/Game) |
+| **GameUpdate** | 0x16bed0 | 359 | State 2 update — full gameplay loop |
+| **GameDraw** | 0x16b888 | 211 | State 2 draw — full render frame |
+| **GameTaskDraw** | 0x10a2c4 | 23 | Draw dispatcher (calls state draw handler) |
+| **GameTaskExit** | 0x10a320 | 22 | Exit dispatcher (calls state exit handler) |
+| **GameTaskInitInput** | 0x169670 | ~100 | Register 16 touch channels + global callbacks |
+| **GameExit** | 0x16cf74 | 98 | Per-session cleanup (State 2 exit) |
+| **GameOver** | 0x169ed4 | 72 | Create GameOverScreen, set Game+0x05=1 |
+| **GameDestroy** | 0x10b7ec | 174 | Full engine teardown (reverse of GameInitialise) |
+
+**Lifecycle order:**
+
+```
+App startup:
+  Game::Game()          → construct Game singleton
+  GamePreInitialise()   → zero 0x608 bytes
+  GameInitialise()      → boot all engine singletons + load shared data
+
+Per game session:
+  GameInit()            → create HUD, entities, screens, pools
+  GameTaskUpdate()      → dispatch to state update handlers
+  GameUpdate()          → main gameplay loop (359 lines)
+  GameDraw()            → render frame (211 lines)
+  GameExit()            → cleanup per-session objects
+
+App shutdown:
+  GameDestroy()         → tear down everything (174 lines)
+```
+
+**GameDestroy** (0x10b7ec, 174 lines) — reverse of GameInitialise:
+1. LeaderboardManager::Destroy, NetworkManager destroy
+2. UnLoadContent: FruitFact, About, GameOver, GameMode, MenuButton, Coin, Dojo, Shop, PowerUpShop, Leaderboard
+3. AchievementManager::UnLoadAchievementInfo, ItemManager::UnLoadItemData
+4. Delete HUD (Game+0x3c), FruitCamera (Game+0x48)
+5. Delete all fonts (Game+0x54..0x80)
+6. Delete FruitSaveData (Game+0x4c), GameSound (Game+0x188)
+7. Clear fruit atlas texture (Game+0x17c)
+8. FileManager::ClearSystems, PSPParticleManager::Destroy
+9. Cleanup: Bomb, Fruit, Splat, Slash
+10. Destroy: InputManager, TextureManager, AnimationManager, MeshManager, DisplayManager, SoundManager, SystemManager
+
+**GamePreInitialise** (0x10b588, 10 lines) — just `CpuFill8(gameSingleton, 0, 0x608)` — zeros the entire Game struct.
 
 ---
 
