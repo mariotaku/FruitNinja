@@ -115,11 +115,11 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | PowerUp | ✅ | ~0xb8 | Power-up template: name, modifiers, textures | systems/power-ups.md |
 | PowerUpManager | ✅ | ~0x90 | Singleton: maps, active list, DtMod, score mults | systems/power-ups.md |
 | PowerUpShop | ✅ | — | In-game power-up purchase UI | systems/rendering-detail.md |
-| ScoreModifier | ✅ | 0x3c | Score gain/loss multiplier | structs/other.md |
-| TimeModifier | 🔶 | 0x3c | Time scale modifier (Frenzy) | systems/power-ups.md |
-| SlashModifier | 🔶 | 0x40 | Blade behavior modifier | systems/power-ups.md |
-| WaveModifier | 🔶 | 0x44 | Wave spawn modifier | systems/power-ups.md |
-| GameModifier | 🔶 | — | Base class for all modifiers | systems/power-ups.md |
+| ScoreModifier | ✅ | 0x3c | Parse + Update: gain/loss add+multiply, applied flag | functions/power-ups.md |
+| TimeModifier | ✅ | 0x3c | Parse + Update: stop/slow/ramp clock, addTime, ApplyDtMod | functions/power-ups.md |
+| SlashModifier | ✅ | 0x40 | Parse + Apply: colours, width, texture, fxTexture (no Update) | functions/power-ups.md |
+| WaveModifier | ✅ | 0x44 | Parse + Update: fruit/bomb multipliers, bombScale, criticalChance, overrides | functions/power-ups.md |
+| GameModifier | ✅ | — | Base class: vtable, duration, applied flag, owner ptr | functions/power-ups.md |
 | PurchaseInfo | ✅ | 0xc4 | IAP purchase data | — |
 
 ## Sound System
