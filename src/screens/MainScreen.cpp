@@ -1,6 +1,6 @@
-#include "main_screen.h"
-#include "game.h"
-#include "dojo_screen.h"
+#include "MainScreen.h"
+#include "Game.h"
+#include "DojoScreen.h"
 #include <cstdio>
 #include <cmath>
 

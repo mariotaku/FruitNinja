@@ -3,8 +3,8 @@
 
 #include <SDL.h>
 #include <string>
-#include "renderer.h"
-#include "screen.h"
+#include "Renderer.h"
+#include "Screen.h"
 
 struct Game {
     SDL_Window* window;

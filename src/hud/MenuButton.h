@@ -2,7 +2,7 @@
 #define MENU_BUTTON_H
 
 #include "gl_funcs.h"
-#include "mesh.h"
+#include "Mesh.h"
 #include <functional>
 #include <string>
 

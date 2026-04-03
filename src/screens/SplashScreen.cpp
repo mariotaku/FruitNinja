@@ -1,6 +1,6 @@
-#include "splash_screen.h"
-#include "game.h"
-#include "main_screen.h"
+#include "SplashScreen.h"
+#include "Game.h"
+#include "MainScreen.h"
 #include <cstdio>
 
 static const int SPLASH_FRAMES = 60; // ~1 second at 60fps

@@ -1,6 +1,6 @@
-#include "menu_button.h"
-#include "renderer.h"
-#include "game.h"
+#include "MenuButton.h"
+#include "Renderer.h"
+#include "Game.h"
 #include "math3d.h"
 #include <cstdio>
 #include <cmath>

@@ -1,5 +1,5 @@
-#include "game.h"
-#include "splash_screen.h"
+#include "Game.h"
+#include "SplashScreen.h"
 #include "config.h"
 #include <cstdio>
 
