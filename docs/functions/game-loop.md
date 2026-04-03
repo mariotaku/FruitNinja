@@ -4,7 +4,7 @@
 
 ### OspMain (0x000d82a4, 37 instructions)
 
-Anti-tamper wrapper. Hashes 10 bytes from argv (executable name) using ELF hash, compares against stored constant. On match, computes a position-independent address via page-aligned arithmetic and jumps to `OspMain_AppBootstrap`.
+Anti-tamper wrapper. Hashes 10 bytes from argv[0] using ELF hash (offset 0x12 if byte[1]=='O', else 0x2c). Expected hash = 0x0487BAA3. On match, computes jump target via page-aligned arithmetic: `PC(0xd82ac) - 0xc82a4 → align → + 0x173475 → align → + low12 + 4 = 0x183479` (Thumb). Lands at bootstrap+4, skipping push (tail-call reusing OspMain's register save).
 
 ### OspMain_AppBootstrap (0x00183474)
 
@@ -24,13 +24,13 @@ uint OspMain_AppBootstrap(int argc, char** argv) {
 }
 ```
 
-### FruitNinja::CreateInstance
+### FruitNinja::CreateInstance (0x00182464)
 
-Factory callback passed to `Application::Execute`. Just allocates and constructs the Application object:
+Factory callback passed to `Application::Execute`. GOT pointer at 0x1F37CC resolves to this address.
 
 ```c
-FruitNinja* FruitNinja::CreateInstance() {
-    return new FruitNinja();
+FruitNinjaApp* FruitNinja::CreateInstance() {
+    return new(0x48) FruitNinja();
 }
 ```
 

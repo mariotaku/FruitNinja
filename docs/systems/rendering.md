@@ -1,5 +1,30 @@
 # Rendering Pipeline
 
+## Coordinate System
+
+The game renders in landscape on a portrait Bada device (480×800 physical). The ortho projection (from `FruitCamera::SetupPerspective` mode 0, verified via `read_memory`):
+
+```
+SetupOrtho(left=160.0, right=-160.0, bottom=-240.0, top=240.0, near=2000.0, far=-6000.0)
+```
+
+| Axis | Ortho Range | Maps To | Direction |
+|------|-------------|---------|-----------|
+| **X** | +160 (left) to -160 (right) | Screen vertical (320 units) | **Flipped** — positive X = screen top |
+| **Y** | -240 (bottom) to +240 (top) | Screen horizontal (480 units) | Normal — positive Y = screen right |
+
+In landscape orientation (phone held sideways):
+- **Game X** = vertical axis (top=+160, bottom=-160), **flipped**
+- **Game Y** = horizontal axis (left=-240, right=+240), normal
+
+Touch transform (`GlesForm::TransformTouchPos`, 0x18327c) converts portrait device coords to this space:
+```c
+game.x = (int)(phys.y * 480.0 / 800.0);       // phys Y → game X
+game.y = 319 - (int)(phys.x * 320.0 / 480.0); // phys X → game Y (flipped)
+```
+
+Note: Touch coords are in 0-479 (X) / 0-319 (Y) range, NOT in ortho units (±160/±240). UI code uses a mix of both coordinate spaces.
+
 ## Rendering Pipeline (GameDraw — 0x16b888, 211 lines)
 
 ### Frame Structure
