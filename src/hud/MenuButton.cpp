@@ -6,10 +6,11 @@
 #include <cmath>
 
 MenuButton::MenuButton()
-    : texture(0), x(0), y(0), width(0), height(0),
-      alpha(1.0f), pressed(false), visible(true),
-      rotation(0.0f), rotation_speed(0.5f),
-      fruit_atlas_tex(0), fruit_rotation(0.0f), has_fruit(false) {}
+    : pressed(false), rotation_speed(0.5f),
+      fruit_atlas_tex(0), fruit_rotation(0.0f), has_fruit(false),
+      m_HitScaleX(1.0f), m_HitScaleY(1.0f) {
+    m_LayerMask = 0x40;  // menu button layer
+}
 
 MenuButton::~MenuButton() {
     fruit_mesh.destroy();
@@ -18,12 +19,14 @@ MenuButton::~MenuButton() {
 
 void MenuButton::init(GLuint tex, float tex_w, float tex_h, float cx, float cy,
                       std::function<void()> callback) {
-    texture = tex;
-    width = tex_w;
-    height = tex_h;
-    x = cx - width / 2.0f;
-    y = cy - height / 2.0f;
+    m_Texture = tex;
+    // Size = full texture dimensions (HUDControl3d draws unit quad scaled by size)
+    size = Vec3(tex_w, tex_h, 1.0f);
+    // Position = center of button in game coords
+    pos = Vec3(cx, cy, 0.0f);
     on_click = callback;
+    m_Alpha = 255;
+    m_bActive = true;
 }
 
 void MenuButton::load_fruit(Game& game, const char* fruit_name, GLuint atlas_tex) {
@@ -37,38 +40,38 @@ void MenuButton::load_fruit(Game& game, const char* fruit_name, GLuint atlas_tex
     }
 }
 
-void MenuButton::update(float dt) {
-    rotation += rotation_speed * dt;
+void MenuButton::Update(float dt) {
+    m_Timer += rotation_speed * dt;
     if (has_fruit) {
         fruit_rotation += dt * 2.0f;
     }
 }
 
-void MenuButton::draw(Renderer& r) {
-    if (!visible || !texture) return;
+void MenuButton::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
+    (void)layerMask;
+    if (!m_Texture || m_Alpha == 0) return;
 
-    float draw_alpha = alpha;
+    float draw_alpha_f = (float)m_Alpha / 255.0f;
     float draw_scale = 1.0f;
     if (pressed) {
         draw_scale = 0.95f;
-        draw_alpha *= 0.8f;
+        draw_alpha_f *= 0.8f;
     }
 
-    float w = width * draw_scale;
-    float h = height * draw_scale;
-    float dx = x + (width - w) / 2.0f;
-    float dy = y + (height - h) / 2.0f;
+    // Layer 1: Button texture quad using draw_sprite (handles matrix setup)
+    float w = size.x * draw_scale;
+    float h = size.y * draw_scale;
+    // pos is center, draw_sprite expects bottom-left
+    float dx = pos.x - w / 2.0f;
+    float dy = pos.y - h / 2.0f;
+    r.draw_sprite(m_Texture, dx, dy, w, h, m_Timer, draw_alpha_f);
 
-    // Draw ring texture with rotation
-    r.draw_sprite(texture, dx, dy, w, h, rotation, draw_alpha);
-
-    // Draw 3D fruit inside ring
+    // Layer 2: 3D fruit inside button
     if (has_fruit && fruit_mesh.vbo && fruit_atlas_tex) {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LESS);
         glClear(GL_DEPTH_BUFFER_BIT);
 
-        // Ortho projection matching game coords
         float hw = FN_SCREEN_W / 2.0f;
         float hh = FN_SCREEN_H / 2.0f;
         float proj[16];
@@ -80,19 +83,14 @@ void MenuButton::draw(Renderer& r) {
 
         float view[16];
         mat4_identity(view);
-
         float pv[16];
         mat4_multiply(pv, proj, view);
 
-        // Fruit center = button center in game coords
-        float cx = x + width / 2.0f;
-        float cy = y + height / 2.0f;
-        // Convert from game coords (0..480, 0..320) to ortho coords (-240..240, -160..160)
-        float fx = cx - hw;
-        float fy = cy - hh;
+        // Convert from game coords (0..480, 0..320) to ortho (-240..240, -160..160)
+        float fx = pos.x - hw;
+        float fy = pos.y - hh;
 
-        // Scale fruit to fit inside ring (~40% of button size)
-        float fruit_scale = (width < height ? width : height) * 0.006f * draw_scale;
+        float fruit_scale = (size.x < size.y ? size.x : size.y) * 0.006f * draw_scale;
 
         float scl[16], rot[16], sr[16], trans[16], model[16], mvp[16];
         mat4_scale(scl, fruit_scale, fruit_scale, fruit_scale);
@@ -102,14 +100,17 @@ void MenuButton::draw(Renderer& r) {
         mat4_multiply(model, trans, sr);
         mat4_multiply(mvp, pv, model);
 
-        r.draw_mesh(fruit_mesh, fruit_atlas_tex, mvp, model, draw_alpha);
+        r.draw_mesh(fruit_mesh, fruit_atlas_tex, mvp, model, draw_alpha_f);
 
         glDisable(GL_DEPTH_TEST);
     }
 }
 
 bool MenuButton::hit_test(float gx, float gy) {
-    return gx >= x && gx <= x + width && gy >= y && gy <= y + height;
+    float hw = size.x * m_HitScaleX / 2.0f;
+    float hh = size.y * m_HitScaleY / 2.0f;
+    return gx >= pos.x - hw && gx <= pos.x + hw &&
+           gy >= pos.y - hh && gy <= pos.y + hh;
 }
 
 void MenuButton::touch_down(float gx, float gy) {
