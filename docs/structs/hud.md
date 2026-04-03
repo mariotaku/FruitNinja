@@ -52,60 +52,137 @@ void HUD::AddControl(HUDControl* ctrl, bool pushFront) {
 }
 ```
 
-### HUDControl (base class)
+### HUDControl (base class, size = 0x60)
+
+Verified from decompilation of constructors at 0x144104 and 0x1441c0.
+
+| Offset | Type | Name | Default | Notes |
+|--------|------|------|---------|-------|
+| +0x00 | HUDControlFns* | vtable | (set by ctor) | Virtual methods |
+| +0x04 | int | field_0x04 | 0 | |
+| +0x08 | Vec3 | pos | (0,0,0) | From CopyGlobalVec3 |
+| +0x14 | Vec3 | pivot | (0,0,0) | From CopyGlobalVec3 (same call covers +0x08..+0x1f) |
+| +0x20 | Vec3 | size | from global | Half-extents |
+| +0x2c | float | m_Timer | 0.0 | Rotation angle / animation state |
+| +0x30 | byte | m_bActive | 1 | Non-zero = active |
+| +0x31 | byte | field_0x31 | 0 | |
+| +0x32 | byte | m_bNoDestructor | 0 | If set, HUD won't call dtor on removal |
+| +0x33 | byte | m_bPendingRemoval | 0 | Set → remove next HUD::Update |
+| +0x34 | int | m_LayerFlags | 1 | Bit mask for layered drawing |
+| +0x38 | Delegate1\<void,HUDControl*\> | m_RemoveCallback | (delegate) | Called before removal (24 bytes) |
+| +0x50 | | (delegate padding) | | |
+| +0x5c | Colour | m_DrawColour | (from global, likely white) | Packed BGRA tint colour |
+
+**Vtable layout** (offsets from vtable base):
+| VTable Offset | Method |
+|---------------|--------|
+| +0x00 | dtor |
+| +0x04 | deleting dtor |
+| +0x08 | Init |
+| +0x0c | OnPause |
+| +0x10 | Reset |
+| +0x14 | Update(float dt) |
+| +0x18 | Save |
+| +0x1c | BeginDraw(float dt) |
+| +0x20 | PreDraw(float* hudScale, int layerMask) |
+| +0x24 | Draw(float* hudScale, int layerMask) |
+| +0x28 | Update(float dt) — second update? |
+
+### HUDControl3d : HUDControl (size = 0x7C)
+
+Verified from decompilation of constructors at 0x1443f4/0x144434, and Draw at 0x14428c.
+
+| Offset | Type | Name | Default | Notes |
+|--------|------|------|---------|-------|
+| +0x00..+0x5f | HUDControl | super | | Base class (0x60 bytes) |
+| +0x60 | SmartPtr\<Texture\> | m_PauseTitleTex | NULL (zeroed) | Main display texture. NULL = don't draw |
+| +0x64 | float | m_UVLeft | | UV rect left |
+| +0x68 | float | m_UVTop | | UV rect top |
+| +0x6c | float | m_UVRight | | UV rect right |
+| +0x70 | float | m_UVBottom | | UV rect bottom |
+| +0x74 | SmartPtr\<Texture\> | field_0x74 | | Secondary texture (used by screens) |
+| +0x78 | int | field_0x78 | 0 (zeroed) | |
+
+**Constructor** (0x1443f4/0x144434):
+```c
+HUDControl3d() {
+    HUDControl::HUDControl(this);
+    this->vtable = HUDControl3d_vtable + 8;
+    SmartPtr::SetNull(&this->m_PauseTitleTex);   // +0x60 = NULL
+    SmartPtr::SetNull(&this->field_0x78);         // +0x78 = 0
+    this->super.m_Timer = 0.0f;                   // DAT_00144468 = 0.0
+}
+```
+
+#### HUDControl3d::Draw (0x14428c, 57 lines) — fully verified
+
+```c
+void HUDControl3d::Draw(float* hudScaleParam) {
+    if (!SmartPtr::IsValid(m_PauseTitleTex) || m_Alpha == 0) return;
+
+    Texture::Set(m_PauseTitleTex);
+    MatrixStack::Reset(matrixMgr->stack);          // at matrixMgr + 0x1094
+
+    Matrix44 mat = Scale44(this->size);            // from HUDControl +0x20
+
+    if (m_Timer != 0.0) {
+        // Rotation: SinIdx/CosIdx with speed = 182.0 (DAT_001443dc)
+        float sinA = SinIdx((ushort)(int)(m_Timer * 182.0f));
+        float cosA = CosIdx((ushort)(int)(182.0f * m_Timer));
+        RotZ44(&mat, sinA, cosA);
+    }
+
+    // Position offset: Vec3(480, 320, 0) * hudScaleParam + this->pos
+    Vec3 offset(HUD_SCREEN_WIDTH, HUD_SCREEN_HEIGHT, 0.0f);  // (480, 320, 0)
+    Vec3 scaled = hudScaleParam * offset;                      // component multiply
+    Vec3 finalPos = scaled + this->pos;
+    GlobalTranslate44(&mat, finalPos);
+
+    matrixMgr->stack.SetCurrentMatrix(mat);
+    matrixMgr->UploadCurrentMatrices(true);
+
+    Colour tint = TintColour(m_DrawColour);
+    // Alpha applied via tint
+    DrawQuadUnCached(tint, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
+
+    Texture::UnSet(m_PauseTitleTex);
+}
+```
+
+**Key detail**: The `hudScaleParam` is a Vec3 loaded from a global in HUD::Draw. At runtime this is **(1.0, 1.0, 1.0)** (verified via read_memory at 0x1BB9A0). So the offset becomes `(480, 320, 0) * (1,1,1) + pos`. This means **control positions are in a centered coordinate system where (0,0) maps to screen position (480, 320)** — i.e., adding 480 to X and 320 to Y shifts from the original centered coords to the actual draw position.
+
+**HUD::Draw pipeline** (0x144a90, verified):
+```c
+void HUD::Draw(int layerMask) {
+    Vec3 globalPos = *GOT_HUD_POS;  // = (1.0, 1.0, 1.0)
+    for (control in controls) {
+        if (control->m_bActive && (layerMask & control->m_LayerFlags)) {
+            if (control->m_PauseTitleTex == NULL)
+                control->PreDraw(&globalPos, layerMask);   // vtable+0x20
+            else
+                control->PreDraw(&this->scale);             // use HUD's own scale
+            control->Draw(pfVar2, layerMask);               // vtable+0x24
+        }
+    }
+}
+```
+
+### GenericHUDControl : HUDControl3d (BaseScreen)
+
+Discovered at 0x143828. This is the shared base for all game screens (MainScreen, DojoScreen, etc.).
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
-| +0x00 | HUDControlFns* | vtable | |
-| +0x08 | Vec3 | pos | |
-| +0x20 | Vec3 | size | Half-extents, clamped to screen |
-| +0x2c | float | field_0x2c | Timer or alpha |
-| +0x30 | int | m_bActive | Non-zero = active |
-| +0x32 | char | m_bNoDestructor | = 0 → call dtor on removal |
-| +0x33 | char | m_bPendingRemoval | Set → remove next HUD::Update |
-| +0x34 | int | field49_0x34 | = 1 after init |
-| +0x38 | Delegate1 | m_RemoveCallback | Called before removal |
-| +0x5f | byte | m_Alpha | = 0xff = fully opaque |
-
-### HUDControl3d : HUDControl (size ~0x7C)
-
-Extends HUDControl with a texture, rotation, UV rect, and 3D-style Draw.
-
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| +0x00..+0x5f | HUDControl | super | Base class (0x60 bytes) |
-| +0x5c | Colour | m_DrawColour | Packed BGRA at +0x5c..0x5f |
-| +0x60 | SmartPtr\<Texture\> | m_PauseTitleTex | Main display texture (null = don't draw) |
-| +0x64 | float | m_UVLeft | UV rect left |
-| +0x68 | float | m_UVTop | UV rect top |
-| +0x6c | float | m_UVRight | UV rect right |
-| +0x70 | float | m_UVBottom | UV rect bottom |
-| +0x74 | SmartPtr\<Texture\> | field_0x74 | Secondary texture (used by screens) |
-| +0x78 | int | field_0x78 | Initialized to 0 |
-
-Constructor (0x1443f4): Calls `HUDControl::HUDControl()`, sets vtable, zeroes texture SmartPtrs, sets `m_Timer = DAT` (rotation speed constant).
-
-#### HUDControl3d::Draw (0x14428c, 57 lines)
-
-Renders a textured quad with rotation and colour tint:
-
-```
-if texture is valid AND alpha != 0:
-    1. Texture::Set(m_PauseTitleTex)
-    2. ResetMatrixStack
-    3. Scale44 from HUDControl.size
-    4. If m_Timer != 0: RotZ44(sin(timer * speed), cos(timer * speed))
-    5. Translate to HUDControl.pos (with scale offset)
-    6. SetCurrentMatrix + UploadMatrices
-    7. TintColour(m_DrawColour, globalScale)
-    8. DrawQuadUnCached(colour, uvLeft, uvRight, uvTop, uvBottom)
-    9. Texture::UnSet
-```
-
-- **PreDraw**: no-op (returns param)
-- **Update**: delegates to `HUDControl::Update`
-
-This is the base class for all screens (MainScreen, GameOverScreen, etc.) and most HUD widgets (MissControl, ScoreControl, etc.).
+| +0x00..+0x7b | HUDControl3d | super | |
+| +0x7c | float | m_field7c | |
+| +0x80 | TranisitionInfo | m_TransIn | Transition animation in |
+| +0x98 | TranisitionInfo | m_TransOut | Transition animation out |
+| +0xb0 | TranisitionInfo | m_Trans3 | |
+| +0xc8 | TranisitionInfo | m_Trans4 | |
+| +0xe0 | PulseInfo | m_Pulse1 | Pulse animation |
+| +0x108 | PulseInfo | m_Pulse2 | |
+| +0x130 | PulseInfo | m_Pulse3 | |
+| +0x158 | PulseInfo | m_Pulse4 | |
 
 ---
 
