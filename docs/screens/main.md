@@ -444,7 +444,7 @@ TutorialControl::ResetTutePos(game->tutorial, pPlayButton);
 | Pause visibility | 0.01 | Buttons active when pauseAmount > 0.01 |
 | Sound volume on | 0.5 | SFX volume when enabled |
 | HitMenuBomb pos | (163, -96, 0) | State 0x17 bomb effect position |
-| Screen reference | 320×480 | Position calculations |
+| Screen reference | 480×320 landscape | Game coordinate space (X=wide, Y=narrow) |
 
 ---
 

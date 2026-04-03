@@ -175,7 +175,7 @@ Inherits: Osp::Ui::Controls::Form
 | +0x1d4 | uint[8] | touchIds | Bada touch point IDs, max 8 fingers |
 | +0x1f4 | int | isReady | =1 after ctor |
 
-Screen: 320×480 portrait. `TransformTouchPos: y = 319 - scaled_y`
+Screen: 480×320 landscape (game coords). Physical portrait device; `TransformTouchPos` swaps axes: phys.Y→game.X, phys.X→game.Y(319-scaled)
 
 ---
 

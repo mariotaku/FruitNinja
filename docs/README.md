@@ -2,7 +2,7 @@
 
 **Binary:** ARM32 Little-Endian ELF (Samsung Bada OS / webOS homebrew)
 **Engine:** Halfbrick Mortar Engine
-**Screen:** 320x480 portrait
+**Screen:** 480x320 landscape (rendered on portrait Bada device with 90° rotation in touch/camera)
 **Entry:** `OspMain`
 
 ## Overview

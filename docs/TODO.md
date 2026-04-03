@@ -75,7 +75,7 @@ See `docs/systems/power-ups.md` and `docs/functions/power-ups.md`. Full system r
 ### Touch → Slash Input Pipeline — DONE
 
 See `docs/systems/touch-input.md`. Full pipeline recovered:
-- GlesForm::TransformTouchPos: raw → game coords (320×480, Y-flipped)
+- GlesForm::TransformTouchPos: raw portrait → game landscape coords (480×320, axes swapped)
 - Touch::__UpdateInternal: ring buffer with TEvnt structs
 - SlashEntity::TouchDown/MoveX/MoveY: maps input to entity position
 - Multi-touch: 8 simultaneous touches, unique IDs

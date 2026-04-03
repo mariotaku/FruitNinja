@@ -72,4 +72,4 @@ ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 
 ## Subsystem Singletons
 
-SystemManager, MatrixManager, FileManager, DisplayManager (320×480), TextureManager, MeshManager, AnimationManager, InputManager, PSPParticleManager, PowerUpManager, LeaderboardManager, NetworkManager (P2P + OpenFeint + GameCenter), MAMAudioController → MAMAudioThread (16 voices, 16kHz), WaveManager, ItemManager, AchievementManager, BonusManager, Mortar::Touch, Mortar::SoundManager, FruitCamera
+SystemManager, MatrixManager, FileManager, DisplayManager (480×320), TextureManager, MeshManager, AnimationManager, InputManager, PSPParticleManager, PowerUpManager, LeaderboardManager, NetworkManager (P2P + OpenFeint + GameCenter), MAMAudioController → MAMAudioThread (16 voices, 16kHz), WaveManager, ItemManager, AchievementManager, BonusManager, Mortar::Touch, Mortar::SoundManager, FruitCamera
