@@ -1,0 +1,5 @@
+# Platform abstraction (SDL2 replacements for Bada OS)
+# add_library(fn_platform STATIC ...)
+# target_include_directories(fn_platform PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# target_link_libraries(fn_platform PUBLIC SDL2::SDL2)
+# target_link_libraries(fruit-ninja PRIVATE fn_platform)

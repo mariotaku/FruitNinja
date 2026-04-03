@@ -19,38 +19,27 @@ FetchContent_MakeAvailable(tinyxml2)
 
 # --- Executable ---
 
-add_executable(fruit-ninja
-    src/main.cpp
-    src/Game.cpp
-    # engine/
-    src/engine/gl_funcs.cpp
-    src/engine/tex_loader.cpp
-    src/engine/Renderer.cpp
-    src/engine/Mesh.cpp
-    # hud/
-    src/hud/MenuButton.cpp
-    # screens/
-    src/screens/SplashScreen.cpp
-    src/screens/MainScreen.cpp
-    src/screens/DojoScreen.cpp
-)
-
+add_executable(fruit-ninja src/main.cpp src/Game.cpp)
 target_include_directories(fruit-ninja PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/math
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/hud
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/screens
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/entities
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/game
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/effects
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/powerups
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/sound
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
-
 target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2)
+
+# Game.cpp needs headers from subsystems (linked via sub-CMakeLists)
+# Each subsystem does: target_link_libraries(fruit-ninja PRIVATE fn_xxx)
 
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaBada/Data" FN_DATA_DIR_PATH)
 configure_file(src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY)
-target_include_directories(fruit-ninja PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+# --- Subsystems ---
+add_subdirectory(src/engine)
+add_subdirectory(src/math)
+add_subdirectory(src/hud)
+add_subdirectory(src/screens)
+add_subdirectory(src/platform)
+add_subdirectory(src/entities)
+add_subdirectory(src/game)
+add_subdirectory(src/effects)
+add_subdirectory(src/powerups)
+add_subdirectory(src/sound)

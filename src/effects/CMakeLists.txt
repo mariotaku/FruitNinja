@@ -1,0 +1,5 @@
+# Particle and visual effects (PSPParticleManager, BombFlash, ScreenEffect)
+# add_library(fn_effects STATIC ...)
+# target_include_directories(fn_effects PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# target_link_libraries(fn_effects PUBLIC fn_engine fn_math)
+# target_link_libraries(fruit-ninja PRIVATE fn_effects)
