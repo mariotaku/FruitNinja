@@ -60,7 +60,7 @@ MainScreen::MainScreen(Game& g)
     m_TexGCAchievements = game.load_texture("gc_achievements.tex", m_ImgGCAchievements);
 
     // Load logo
-    m_TexCommingSoon = game.load_texture("comming_soon.tex", m_ImgCommingSoon);
+    m_TexCommingSoon = game.load_texture("swipe_fruit_begin.tex", m_ImgCommingSoon);
 
     // Load sound/music toggle textures
     m_TexSoundOn = game.load_texture("sound.tex", m_ImgSoundOn);
