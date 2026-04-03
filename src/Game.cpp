@@ -147,6 +147,9 @@ void Game::run() {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+        // Set up ortho projection for 2D drawing (480x320, bottom-left origin)
+        renderer.SetupGameOrtho();
+
         if (current_screen)
             current_screen->draw(renderer);
 

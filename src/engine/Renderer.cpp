@@ -144,8 +144,10 @@ GLuint Renderer::upload_texture(const TexImage& img) {
 }
 
 void Renderer::SetupGameOrtho() {
-    // Verified from binary: SetupOrtho(160, -160, -240, 240, 2000, -6000)
-    matrix_mgr.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+    // Original binary uses centered ortho: SetupOrtho(160, -160, -240, 240, 2000, -6000)
+    // For the port we use 0-based coords: (0, 480, 0, 320) bottom-left origin
+    // The original centered positions are converted via orig_to_port_x/y (+240, +160)
+    matrix_mgr.SetupOrtho(0.0f, (float)FN_SCREEN_W, 0.0f, (float)FN_SCREEN_H, -1.0f, 1.0f);
     matrix_mgr.view.Identity();
     matrix_mgr.stack.Reset();
 }
