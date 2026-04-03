@@ -1,5 +1,5 @@
-#include "renderer.h"
-#include "mesh.h"
+#include "Renderer.h"
+#include "Mesh.h"
 #include <cstdio>
 #include <cmath>
 

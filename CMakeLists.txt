@@ -21,20 +21,32 @@ FetchContent_MakeAvailable(tinyxml2)
 
 add_executable(fruit-ninja
     src/main.cpp
-    src/gl_funcs.cpp
-    src/tex_loader.cpp
-    src/renderer.cpp
-    src/game.cpp
-    src/splash_screen.cpp
-    src/menu_button.cpp
-    src/dojo_screen.cpp
-    src/mesh.cpp
-    src/main_screen.cpp
+    src/Game.cpp
+    # engine/
+    src/engine/gl_funcs.cpp
+    src/engine/tex_loader.cpp
+    src/engine/Renderer.cpp
+    src/engine/Mesh.cpp
+    # hud/
+    src/hud/MenuButton.cpp
+    # screens/
+    src/screens/SplashScreen.cpp
+    src/screens/MainScreen.cpp
+    src/screens/DojoScreen.cpp
 )
 
 target_include_directories(fruit-ninja PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/math
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/hud
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/screens
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/entities
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/game
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/effects
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/powerups
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sound
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platform
 )
 
 target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2)

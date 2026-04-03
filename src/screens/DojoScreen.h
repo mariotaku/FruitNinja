@@ -1,9 +1,9 @@
 #ifndef DOJO_SCREEN_H
 #define DOJO_SCREEN_H
 
-#include "screen.h"
-#include "menu_button.h"
-#include "mesh.h"
+#include "Screen.h"
+#include "MenuButton.h"
+#include "Mesh.h"
 #include "tex_loader.h"
 
 struct Game;

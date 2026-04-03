@@ -1,8 +1,8 @@
 #ifndef MAIN_SCREEN_H
 #define MAIN_SCREEN_H
 
-#include "screen.h"
-#include "menu_button.h"
+#include "Screen.h"
+#include "MenuButton.h"
 #include "tex_loader.h"
 
 struct Game;

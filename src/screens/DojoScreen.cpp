@@ -1,5 +1,5 @@
-#include "dojo_screen.h"
-#include "game.h"
+#include "DojoScreen.h"
+#include "Game.h"
 #include "math3d.h"
 #include <cstdio>
 #include <cmath>
