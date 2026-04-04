@@ -12,7 +12,7 @@
 //
 
 #include "HUDControl3d.h"
-#include "Renderer.h"
+#include "render/Renderer.h"
 #include <cmath>
 
 // Rotation speed constant (verified: DAT_001443dc = 182.0)

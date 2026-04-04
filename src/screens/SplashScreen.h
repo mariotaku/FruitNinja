@@ -1,7 +1,7 @@
 #ifndef SPLASH_SCREEN_H
 #define SPLASH_SCREEN_H
 
-#include "Screen.h"
+#include "hud/Screen.h"
 
 struct Game;
 

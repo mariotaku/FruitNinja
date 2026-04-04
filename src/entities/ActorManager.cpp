@@ -1,6 +1,6 @@
 #include "ActorManager.h"
 #include "Fruit.h"
-#include "Renderer.h"
+#include "render/Renderer.h"
 #include <cstdio>
 
 ActorManager* ActorManager::s_instance = NULL;

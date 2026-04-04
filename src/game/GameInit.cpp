@@ -9,9 +9,9 @@
 
 #include "GameTaskState.h"
 #include "Game.h"
-#include "MainScreen.h"
-#include "HUD.h"
-#include "ActorManager.h"
+#include "screens/MainScreen.h"
+#include "hud/HUD.h"
+#include "entities/ActorManager.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup

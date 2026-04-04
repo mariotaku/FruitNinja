@@ -30,7 +30,7 @@
 //
 
 #include "HUDControl.h"
-#include "gl_funcs.h"
+#include "render/gl_funcs.h"
 
 class HUDControl3d : public HUDControl {
 public:

@@ -1,5 +1,6 @@
 #include "Fruit.h"
-#include "Renderer.h"
+#include "render/Renderer.h"
+#include "asset/tex_loader.h"
 #include "Game.h"
 #include "math/math3d.h"
 #include <cstdlib>
@@ -188,7 +189,8 @@ void Fruit::Draw(Renderer& r) {
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    r.draw_mesh(m_Mesh, m_MeshTex, mvp, model, m_ScaleAnim);
+    r.setup_3d_shader(m_MeshTex, mvp, model, m_ScaleAnim);
+    m_Mesh.draw();
     glDisable(GL_DEPTH_TEST);
 }
 

@@ -1,7 +1,7 @@
 #include <SDL.h>
-#include "gl_funcs.h"
+#include "render/gl_funcs.h"
 #include "Game.h"
-#include "Renderer.h"
+#include "render/Renderer.h"
 #include <cstdio>
 
 int main(int argc, char* argv[]) {

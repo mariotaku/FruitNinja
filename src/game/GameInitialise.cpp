@@ -7,8 +7,9 @@
 //
 
 #include "Game.h"
-#include "HUD.h"
-#include "ActorManager.h"
+#include "asset/tex_loader.h"
+#include "hud/HUD.h"
+#include "entities/ActorManager.h"
 #include <cstdio>
 
 // Matches GamePreInitialise (0x10b588) — zero the Game singleton
