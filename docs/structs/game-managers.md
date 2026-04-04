@@ -47,14 +47,30 @@ ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 
 ## Game-Specific Singletons
 
+### Analysis Coverage
+
+| Manager | Functions | Struct Size | Named Fields | Coverage | Notes |
+|---------|-----------|-------------|--------------|----------|-------|
+| **WaveManager** | 10 | 728 bytes | 6 | **Good** | XML-driven wave progression |
+| **PowerUpManager** | 8 | 144 bytes | 10 | **Good** | Modifier tracking (dt, score) |
+| **NetworkManager** | 6 | 668 bytes | 10 | **Good** | Skipped for port |
+| **BonusManager** | 6 | 32 bytes | 1 | **Partial** | Post-game bonus awards |
+| **ItemManager** | 7 | 148 bytes | 0 | **Minimal** | Shop items, blade modifiers |
+| **AchievementManager** | 5 | 1 byte stub | 0 | **Stub** | Unlocks |
+| **LeaderboardManager** | 5 | 64 bytes | 0 | **Minimal** | Skipped for port |
+
+All managers have `__thiscall` properly applied.
+
+### Singleton Details
+
 | Singleton | Notes |
 |-----------|-------|
 | ActorManager | Entity pool (5 types: Fruit, Bomb, unused, unused, BombBlast). See [engine/actor-manager.md](../engine/actor-manager.md) |
 | WaveManager | XML-driven wave progression. See [wave.md](wave.md) |
 | PowerUpManager | Modifier tracking (dt, score gain/loss) |
-| ItemManager | Shop items, blade modifiers |
+| ItemManager | Shop items, blade modifiers. 148-byte struct, 0 fields named |
 | BonusManager | Post-game bonus awards |
-| AchievementManager | Unlocks |
+| AchievementManager | Unlocks. 1-byte stub struct |
 | LeaderboardManager | Online services (skipped in port) |
 | NetworkManager | P2P + OpenFeint + GameCenter (skipped in port) |
 | GameSound | 32-slot SFX pool over SoundManager. See [engine/sound-system.md](../engine/sound-system.md) |
