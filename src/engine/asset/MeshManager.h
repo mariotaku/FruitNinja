@@ -1,0 +1,48 @@
+#ifndef MORTAR_MESH_MANAGER_H
+#define MORTAR_MESH_MANAGER_H
+
+#include "asset/Mesh.h"
+#include "asset/ResourceLoader.h"
+#include "util/SmartPtr.h"
+#include "util/List.h"
+#include <string>
+
+namespace Mortar {
+
+// Matches original MeshManager (20 bytes)
+// List-based cache of loaded Models
+// Not a singleton — instantiated as member of parent engine object
+// Ref: docs/engine/texture-mesh-manager.md
+class MeshManager {
+public:
+    MeshManager();
+    ~MeshManager();
+
+    // Load a model from .mmd file
+    // Returns existing if already loaded, otherwise parses HBR0 container
+    SmartPtr<Model> Load(const char* path);
+
+    // Release all cached models
+    void ReleaseAll();
+
+    // Initialize (reserve capacity)
+    void Initialise(int capacity = 32);
+
+private:
+    List<SmartPtr<Model>> m_Models;
+
+    // Internal: parse HBR0 container and build Model
+    SmartPtr<Model> LoadMeshInternal(const char* path);
+
+    // Parse vertex stream from ResourceLoader child
+    // Matches LoadVertexStreamPSP (0x001a7b0c)
+    bool LoadVertexStream(ResourceLoader& loader, MortarMesh& mesh);
+
+    // Parse index stream from ResourceLoader child
+    // Matches LoadIndexStreamPSP (0x001a799c)
+    bool LoadIndexStream(ResourceLoader& loader, MortarMesh& mesh);
+};
+
+} // namespace Mortar
+
+#endif

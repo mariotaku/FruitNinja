@@ -13,14 +13,34 @@ add_library(mortar_engine STATIC
     # Phase 3 — Rendering
     render/Renderer.cpp
     render/MortarCamera.cpp
+    # Phase 4 — Asset Pipeline
+    asset/tex_loader.cpp
+    asset/Texture.cpp
+    asset/TextureManager.cpp
+    asset/ResourceLoader.cpp
+    asset/Mesh.cpp
+    asset/MeshManager.cpp
+    # Phase 5 — Input
+    input/Touch.cpp
+    # Phase 6 — Audio
+    audio/MortarSound.cpp
+    audio/SoundManager.cpp
+    audio/GameSound.cpp
+    # Phase 7 — Entities & Particles
+    entity/Entity.cpp
+    entity/ActorManager.cpp
+    particle/PSPParticleManager.cpp
+    # Phase 8 — Font
+    render/Font.cpp
+    render/BakedString.cpp
 )
 target_include_directories(mortar_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mortar_engine PUBLIC SDL2::SDL2)
 target_compile_features(mortar_engine PUBLIC cxx_std_11)
 
 # Legacy fn_engine kept temporarily for game code that still uses old includes
+# Mesh.cpp here is the GAME-LEVEL mesh loader (different from asset/Mesh.cpp)
 add_library(fn_engine STATIC
-    tex_loader.cpp
     Mesh.cpp
 )
 target_include_directories(fn_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
