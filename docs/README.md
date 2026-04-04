@@ -34,6 +34,7 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/string-hash.md](engine/string-hash.md) — Jenkins lookup3 hash (C implementation)
 - [engine/rng.md](engine/rng.md) — Math::Random: 64-bit LCG (Knuth MMIX), Rand32/RandF, constants
 - [engine/other-structs.md](engine/other-structs.md) — MAMAudioThread, engine subsystem singleton list
+- [engine/utility-types.md](engine/utility-types.md) — ResourceLoader (68B, HBR0 parser), SmartPtr (4B, intrusive refcount), Delegate0-4 (36B, callback system)
 
 ### Engine Rendering
 
