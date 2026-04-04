@@ -1,0 +1,41 @@
+#ifndef MORTAR_SYSTEM_MANAGER_H
+#define MORTAR_SYSTEM_MANAGER_H
+
+#include "core/Singleton.h"
+#include <cstdint>
+
+namespace Mortar {
+
+class SystemManager : public Singleton<SystemManager> {
+    friend class Singleton<SystemManager>;
+
+    uint8_t m_bRunning;          // +0x04
+    int16_t m_LastFrameTime;     // +0x06
+    int16_t m_AvgFPS;            // +0x08
+    int16_t m_MinFPS;            // +0x0A
+    int16_t m_MaxFPS;            // +0x0C
+    uint8_t m_RingMaxIdx;        // +0x0E
+    uint8_t m_RingWriteIdx;      // +0x0F
+    int16_t m_FrameTimeRing[30]; // +0x10
+    uint8_t m_QuitState;         // +0x4C
+
+    SystemManager();
+
+public:
+    // Returns m_bRunning. Outputs dt via pointer.
+    bool Update(float* dt);
+
+    // Sets m_bRunning = false
+    void QuitGame();
+
+    // Sets m_QuitState = 2 (graceful quit)
+    void RequestQuit();
+
+    bool IsRunning() const { return m_bRunning != 0; }
+    int16_t GetAvgFPS() const { return m_AvgFPS; }
+    int16_t GetMinFPS() const { return m_MinFPS; }
+    int16_t GetMaxFPS() const { return m_MaxFPS; }
+};
+
+} // namespace Mortar
+#endif

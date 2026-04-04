@@ -199,7 +199,7 @@ void MainScreen::CreatePlayDojo() {
                           (float)m_ImgNewGame.width, (float)m_ImgNewGame.height,
                           pp.x, pp.y,
                           [this]() { GameModeCallback(); });
-            pPlayButton->CreateFruitEntity(game, 3); // fruitType 3 = watermelon
+            // TODO: pPlayButton->CreateFruitEntity(game, 3); // fruitType 3 = watermelon
         pPlayButton->m_LayerFlags = 0x08;
         game.hud->AddControl(pPlayButton);
     }
@@ -213,7 +213,7 @@ void MainScreen::CreatePlayDojo() {
                           (float)m_ImgDojoIcon.height * 0.9f,
                           dp.x, dp.y,
                           [this]() { AboutCallback(); });
-            pDojoButton->CreateFruitEntity(game, 9); // fruitType 9 = mango
+            // TODO: pDojoButton->CreateFruitEntity(game, 9); // fruitType 9 = mango
         pDojoButton->m_LayerFlags = 0x08;
         game.hud->AddControl(pDojoButton);
     }
@@ -227,7 +227,7 @@ void MainScreen::CreateLeaderboard() {
         pLeaderboardBtn = new MenuButton();
         pLeaderboardBtn->init(m_TexOpenFeint, 64.0f, 64.0f, lp.x, lp.y,
                               []() { /* LeaderboardsCallback — skip for port */ });
-            pLeaderboardBtn->CreateFruitEntity(game, 5); // fruitType 5 = kiwifruit
+            // TODO: pLeaderboardBtn->CreateFruitEntity(game, 5); // fruitType 5 = kiwifruit
         pLeaderboardBtn->m_LayerFlags = 0x08;
         game.hud->AddControl(pLeaderboardBtn);
     }
