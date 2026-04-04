@@ -1,7 +1,10 @@
 #include "asset/TextureManager.h"
 #include <cstdio>
+#include <cstring>
 
 namespace Mortar {
+
+char TextureManager::s_DataDir[256] = "";
 
 TextureManager::TextureManager() {
 }
@@ -63,6 +66,23 @@ void TextureManager::PurgeExpired() {
 
 void TextureManager::Clear() {
     m_Cache.clear();
+}
+
+void TextureManager::SetDataDir(const char* dir) {
+    strncpy(s_DataDir, dir, sizeof(s_DataDir) - 1);
+    s_DataDir[sizeof(s_DataDir) - 1] = '\0';
+}
+
+const char* TextureManager::GetDataDir() {
+    return s_DataDir;
+}
+
+// Matches LoadLocalisedTexture (0x0010a758)
+// Builds full path from data dir + "textures/" + name, loads via TextureManager cache.
+SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/textures/%s", s_DataDir, name);
+    return TextureManager::GetInstance().Load(path);
 }
 
 } // namespace Mortar

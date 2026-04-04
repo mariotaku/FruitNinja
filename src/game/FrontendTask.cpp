@@ -9,7 +9,7 @@
 void FrontendInit(unsigned long) {
     printf("FrontendInit: transitioning to State 2 (Game)\n");
     Game* game = Game::GetInstance();
-    if (game) game->state = 2;
+    if (game) game->taskStateIndex = 2;
 }
 
 void FrontendUpdate(float dt, bool active) { (void)dt; (void)active; }

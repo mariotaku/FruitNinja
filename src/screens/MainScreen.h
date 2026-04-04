@@ -6,131 +6,130 @@
 // Reimplemented from docs/screens/main.md
 // Original: ctor 0x0014c430, Update 0x0014b278 (677 lines), Draw 0x0014d4ec (171 lines)
 //
-// MainScreen is a HUDControl added to the game's HUD. It is NOT a separate
-// "Screen" — the HUD system calls Update/Draw on it like any other control.
-//
 
 #include "hud/HUDControl3d.h"
-#include "asset/tex_loader.h"
+#include "asset/Texture.h"
+#include "asset/TextureManager.h"
 #include "math/Vec3.h"
 
 struct Game;
 class MenuButton;
+
+// State enum (verified from binary)
+enum MainScreenState {
+    STATE_CAMERA_ZOOM      = 0,    // Camera zoom-in, create toggles + play/dojo
+    STATE_CREATE_BUTTONS   = 1,    // Create leaderboard/moregames, active menu
+    STATE_GAME_START       = 2,    // Direct game start, camera fade
+    STATE_DOJO_WAIT_A      = 3,    // Wait for entities -> DojoScreen
+    STATE_DOJO_WAIT_B      = 4,    // Wait for entities -> DojoScreen (about)
+    STATE_SLIDE_IN         = 8,    // Slide-in return transition
+    STATE_LEADERBOARD      = 9,    // Network (skip)
+    STATE_MORE_GAMES       = 10,   // Network (skip)
+    STATE_NEWS             = 0x0b, // Network (skip)
+    STATE_MODE_SELECT      = 0x0e, // Slide-out -> GameModeScreen
+    STATE_MODE_SELECT_2    = 0x0f, // Slide-out continued
+    STATE_MATCHMAKER       = 0x10, // Network (skip)
+    STATE_CAMERA_FADE      = 0x11, // Camera fade after game return
+    STATE_LOADING_A        = 0x13, // Timer accumulate + loading symbol
+    STATE_LOADING_B        = 0x14, // Timer accumulate + loading symbol
+    STATE_DOJO_WAIT_C      = 0x15, // Wait for entities (variant)
+    STATE_DOJO_WAIT_D      = 0x16, // Wait for entities (variant)
+    STATE_QUIT_WAIT        = 0x17, // Tutorial reset -> bomb transition
+    STATE_QUIT_BOMB        = 0x18, // BombFlash -> SystemManager::QuitGame
+};
 
 class MainScreen : public HUDControl3d {
 public:
     MainScreen(Game& g);
     ~MainScreen();
 
-    // HUDControl overrides
+    // HUDControl overrides (vtable order from docs/structs/hud.md)
+    void Init() override;
+    void Release() override;
+    void Reset() override;
     void Update(float dt) override;
-    void Draw(Renderer& r, const Vec3& hudScale, int layerMask) override;
+    void Draw(const Vec3& hudScale, int layerMask) override;
+    int GetType() override { return 1; }
 
 private:
     Game& game;
 
-    // +0x7c: original size copies
+    // +0x7c: copy of original size
     Vec3 m_OrigSize;
 
-    // Button textures (+0x88..+0x98)
-    GLuint m_TexNewGame;
-    GLuint m_TexDojoIcon;
-    GLuint m_TexQuit;
-    GLuint m_TexOpenFeint;
-    GLuint m_TexMoreGames;
-    TexImage m_ImgNewGame, m_ImgDojoIcon;
+    // +0x88..+0x98: button textures (SmartPtr<Texture> matching original)
+    SmartPtr<Mortar::Texture> m_TexNewGame;       // +0x88: newgame.tex
+    SmartPtr<Mortar::Texture> m_TexDojoIcon;      // +0x8c: dojo_icon.tex
+    SmartPtr<Mortar::Texture> m_TexQuit;          // +0x90: quit.tex
+    SmartPtr<Mortar::Texture> m_TexOpenFeint;     // +0x94: openfeint.tex
+    SmartPtr<Mortar::Texture> m_TexMoreGames;     // +0x98: gc_achievements.tex
 
-    // Button pointers (+0x9c..+0xb0) — owned by HUD after AddControl
-    MenuButton* pPlayButton;
-    MenuButton* pDojoButton;
-    MenuButton* pLeaderboardBtn;
-    MenuButton* pMoreGamesBtn;
-    MenuButton* pSoundToggle;
-    MenuButton* pMusicToggle;
+    // +0x9c..+0xb0: button pointers (created lazily)
+    MenuButton* pPlayButton;       // +0x9c
+    MenuButton* pDojoButton;       // +0xa0
+    MenuButton* pLeaderboardBtn;   // +0xa4
+    MenuButton* pMoreGamesBtn;     // +0xa8
+    MenuButton* pSoundToggle;      // +0xac
+    MenuButton* pMusicToggle;      // +0xb0
 
     // +0xb4: logo overlay
-    GLuint m_TexCommingSoon;
-    TexImage m_ImgCommingSoon;
+    SmartPtr<Mortar::Texture> m_TexCommingSoon;       // +0xb4: comming_soon.tex
 
-    // Toggle textures (+0xc4..+0xd0)
-    GLuint m_TexSoundOn, m_TexSoundOff;
-    GLuint m_TexMusicOn, m_TexMusicOff;
+    // +0xc4..+0xd0: toggle textures
+    SmartPtr<Mortar::Texture> m_TexSoundOn;           // +0xc4: sound.tex
+    SmartPtr<Mortar::Texture> m_TexSoundOff;          // +0xc8: sound_cross.tex
+    SmartPtr<Mortar::Texture> m_TexMusicOn;           // +0xcc: music.tex
+    SmartPtr<Mortar::Texture> m_TexMusicOff;          // +0xd0: music_cross.tex
 
-    // +0xd8: dojo decoration
-    GLuint m_TexSliceFruit;
-    TexImage m_ImgSliceFruit;
+    // +0xd8: dojo decoration behind logo
+    SmartPtr<Mortar::Texture> m_TexSliceFruit;        // +0xd8: slice_fruit.tex
 
-    // Global texture dimensions (for drawing)
-    TexImage m_ImgFruitText, m_ImgNinjaText, m_ImgBlurryBacking;
+    // +0xdc: logo positions
+    Vec3 m_LogoFruitPos;           // +0xdc
+    float m_Alpha;                 // +0xe8: lerps toward alpha target (init 1.0)
+    Vec3 m_LogoNinjaPos;           // +0xec
+    float field_0xf4;              // +0xf4
+    Vec3 m_LogoFruitPos2;          // +0xf8: secondary position (for bounce)
+    float m_WindowCenter;          // +0xfc: windowHeight/2 + 160.0
+    float field_0x100;             // +0x100
+    float m_BounceVelocity;        // +0x104: bounce velocity (decays)
+    float m_field108;              // +0x108: accumulator for state 0x13/0x14
+    int m_State;                   // +0x10c: state machine variable
+    float m_StateTimer;            // +0x110: transition countdown
+    SmartPtr<Mortar::Texture> m_TexGCAchievements;    // +0x114: gc_achievements.tex
+    float m_Timer2;                // +0x118: second timer
+    // +0x11c: Font* m_pFont (TODO: implement Font system)
 
-    // +0xdc, +0xec, +0xf8: logo positions
-    Vec3 m_LogoFruitPos;
-    Vec3 m_LogoNinjaPos;
-    Vec3 m_LogoFruitPos2;
+    // Global textures (not on struct, loaded in ctor and assigned to globals via GOT)
+    SmartPtr<Mortar::Texture> m_blurryBackingTex;     // blurry_backing.tex
+    SmartPtr<Mortar::Texture> m_fruitTextTex;         // fruit_text.tex
+    SmartPtr<Mortar::Texture> m_ninjaTextTex;         // ninja_text.tex
 
-    // +0xe8
-    float m_Alpha;
-    // +0xfc
-    float m_WindowCenter;
-    // +0x104
-    float m_BounceVelocity;
-    // +0x108
-    float m_field108;
-    // +0x10c
-    int m_State;
-    // +0x110
-    float m_Timer;
-    // +0x118
-    float m_Timer2;
-    // +0x114
-    GLuint m_TexGCAchievements;
-
-    // Fruit atlas no longer needed here — entities load their own meshes
-
-    // Port-specific
+    // Port: camera transition (controlled by game state)
     float m_CameraTransition;
     float m_GlobalAlphaTarget;
     float m_Time;
 
-    enum State {
-        STATE_CAMERA_ZOOM    = 0,
-        STATE_CREATE_BUTTONS = 1,
-        STATE_GAME_START     = 2,
-        STATE_DOJO_WAIT_A    = 3,
-        STATE_DOJO_WAIT_B    = 4,
-        STATE_SLIDE_IN       = 8,
-        STATE_LEADERBOARD    = 9,
-        STATE_MORE_GAMES     = 10,
-        STATE_NEWS           = 0x0b,
-        STATE_MODE_SELECT    = 0x0e,
-        STATE_MODE_SELECT_2  = 0x0f,
-        STATE_MATCHMAKER     = 0x10,
-        STATE_CAMERA_FADE    = 0x11,
-        STATE_LOADING_A      = 0x13,
-        STATE_LOADING_B      = 0x14,
-        STATE_DOJO_WAIT_C    = 0x15,
-        STATE_DOJO_WAIT_D    = 0x16,
-        STATE_QUIT_WAIT      = 0x17,
-        STATE_QUIT_BOMB      = 0x18,
-    };
-
+    // --- Methods matching docs ---
     void UpdateScreenElements(float cameraTransition, float time);
     void DeleteMenuButtons();
     void Hide();
     void CreateToggles();
     void CreatePlayDojo();
     void CreateLeaderboard();
+    void RemoveButton(MenuButton*& btn);
 
+    // --- Callbacks ---
     void GameModeCallback();
     void NewGameCallback();
     void AboutCallback();
     void SoundCallback();
     void MusicCallback();
+    void LeaderboardsCallback();
+    void MoreGamesCallback();
     void QuitGamesCallback();
 
-    void RemoveButton(MenuButton*& btn);
-
-    // Touch handling (registered with InputManager, not virtual overrides)
+    // Touch handling
     bool HandleTouchDown(float x, float y);
     void HandleTouchUp(float x, float y);
 };

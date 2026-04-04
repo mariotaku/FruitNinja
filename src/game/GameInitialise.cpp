@@ -19,16 +19,16 @@ void GamePreInitialise() {
 
     // Original: CpuFill8(game, 0, 0x608)
     // For port: zero the gameplay fields (not the SDL/port fields)
-    game->state = 0;
-    game->field02 = 0;
+    game->taskStateIndex = 0;
+    game->gameActiveFlag = 0;
     game->gameMode = 0;
-    game->quitFlag = 0;
-    game->transitionTimer = 0;
+    game->pauseFlag = 0;
+    game->m_TransitionTimer = 0;
     game->bombHitTimer = 0;
     game->dt = 0;
     game->hud = NULL;
     game->mainScreen = NULL;
-    game->frameTimer = 0;
+    game->m_FrameTimer = 0;
 }
 
 // Matches GameInitialise (0x10bdfc, 305 lines) — boot all singletons

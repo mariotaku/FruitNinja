@@ -14,7 +14,7 @@ void SplashInit(unsigned long) {
     printf("SplashInit: transitioning to State 2 (Game)\n");
     Game* game = Game::GetInstance();
     if (game) {
-        game->state = 2;  // auto-transition to Game state
+        game->taskStateIndex = 2;  // auto-transition to Game state
     }
 }
 

@@ -70,7 +70,7 @@ void GameDraw(float dt, bool active) {
     // Layer 1: MainScreen background + logos (layer 0x01)
     if (game->hud) {
         game->hud->BeginDraw(dt);
-        game->hud->Draw(game->renderer, 0x01);  // MainScreen only
+        game->hud->Draw(0x01);  // MainScreen only
     }
 
     // Layer 2: 3D entities (fruit meshes on buttons)
@@ -79,7 +79,7 @@ void GameDraw(float dt, bool active) {
 
     // Layer 3: HUD buttons + overlays (layers 0x08, 0x40, etc.)
     if (game->hud) {
-        game->hud->Draw(game->renderer, 0xFFFE);  // everything except 0x01
+        game->hud->Draw(0xFFFE);  // everything except 0x01
     }
 }
 

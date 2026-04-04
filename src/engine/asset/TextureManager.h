@@ -16,9 +16,18 @@ class TextureManager : public Singleton<TextureManager> {
     friend class Singleton<TextureManager>;
 
 public:
-    // Load texture by path, using cache
+    // Load texture by full path, using cache
     // Returns cached version if already loaded, otherwise loads from disk
     SmartPtr<Texture> Load(const char* path);
+
+    // Matches LoadLocalisedTexture (0x0010a758)
+    // Loads texture by name from the data/textures/ directory.
+    // Tries localised path first (e.g. "textures/en/name"), falls back to "textures/name".
+    static SmartPtr<Texture> LoadLocalisedTexture(const char* name);
+
+    // Set the base data directory for texture loading (e.g. "/path/to/Data")
+    static void SetDataDir(const char* dir);
+    static const char* GetDataDir();
 
     // Find cached texture by hash
     SmartPtr<Texture> Find(uint32_t hash) const;
@@ -49,6 +58,8 @@ private:
     };
 
     std::map<uint32_t, CacheEntry> m_Cache;
+
+    static char s_DataDir[256];
 };
 
 } // namespace Mortar
