@@ -45,8 +45,9 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     // Rotation axis offset
     m_RotAxis = Vec3(RandRange(10.0f), 0.0f, 0.0f);
 
-    // Default scale
+    // Default scale (from FRUIT_INFO m_CollisionScale = 25.0)
     scale = Vec3(25.0f, 25.0f, 25.0f);
+    // Note: m_ScaleAnim starts at 0, set to 1 by MenuButton::CreateFruitEntity for menu fruits
 
     // Load mesh for this fruit type
     static const char* fruitNames[] = {
@@ -160,18 +161,23 @@ void Fruit::Draw(Renderer& r) {
 
     mat4_multiply(sr, rotMat, scl);
 
-    // Position in game coords (0-480, 0-320)
+    // Position in original centered coords
+    // HUDControl3d::Draw adds Vec3(480,320,0) offset, so fruit pos matches button pos
     mat4_translate(trans, pos.x, pos.y, m_ZPosition);
     mat4_multiply(model, trans, sr);
 
-    // Ortho matching game's 0-based coordinate system
+    // Original centered ortho: SetupOrtho(160, -160, -240, 240, 2000, -6000)
     float proj[16];
     memset(proj, 0, sizeof(proj));
-    proj[0]  = 2.0f / FN_SCREEN_W;    // 0..480 → -1..1
-    proj[5]  = 2.0f / FN_SCREEN_H;    // 0..320 → -1..1
-    proj[10] = -2.0f / 200.0f;
-    proj[12] = -1.0f;                  // offset for 0-based
-    proj[13] = -1.0f;
+    float left = 160.0f, right = -160.0f;
+    float bottom = -240.0f, top = 240.0f;
+    float nearVal = 2000.0f, farVal = -6000.0f;
+    proj[0]  = 2.0f / (right - left);
+    proj[5]  = 2.0f / (top - bottom);
+    proj[10] = -2.0f / (farVal - nearVal);
+    proj[12] = -(right + left) / (right - left);
+    proj[13] = -(top + bottom) / (top - bottom);
+    proj[14] = -(farVal + nearVal) / (farVal - nearVal);
     proj[15] = 1.0f;
 
     float mvp[16];
