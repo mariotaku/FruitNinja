@@ -26,7 +26,7 @@ All accessed via GOT-relative addressing (ARM32 position-independent code).
 | **ActorManager** | 11 | 4204 bytes | 7 | **Good** | [actor-manager.md](actor-manager.md) |
 | **InputManager** | 11 | 9 bytes | 2 | **Good** | [input-manager.md](input-manager.md) |
 | **PSPParticleManager** | 5 | 48 bytes | 8 | **Good** | [particles.md](particles.md) |
-| **SoundManager** | 13 | 40 bytes | 2 | **Partial** | [sound-system.md](sound-system.md) |
+| **SoundManager** | 15 | 40 bytes | 2+4 statics | **Full** | [sound-system.md](sound-system.md) |
 | **FileManager** | 5 | 8 bytes | 0 | **Partial** | — |
 | **TextureManager** | 10+ | 24 bytes | 1 (full map) | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
 | **MeshManager** | 8+ | 20 bytes | 6 | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
@@ -46,7 +46,7 @@ All managers have `__thiscall` properly applied to every function.
 | MeshManager | 1 byte stub | .mad/.mmd model loading + caching. Needs RE |
 | AnimationManager | 1 byte stub | Skeletal/property animation. Needs RE |
 | InputManager | 9 bytes | Action-hash callbacks, 16-touch. See [input-manager.md](input-manager.md) |
-| Mortar::SoundManager | 40 bytes | Platform audio abstraction. Subclass: SoundManagerMAM (6 functions). See [sound-system.md](sound-system.md) |
+| Mortar::SoundManager | 40 bytes | Platform audio abstraction. Subclass: SoundManagerMAM. Full 4-layer architecture documented (SoundManager → SoundManagerMAM → BadaSound + GameSound). See [sound-system.md](sound-system.md) |
 | MAMAudioController | — | Spawns MAMAudioThread (16 voices, 16kHz). See MAMAudioThread struct above |
 | Mortar::Touch | — | Low-level touch ring buffer (TEvnt) |
 | PSPParticleManager | 48 bytes | Template-based particle emitters (8 named fields). See [particles.md](particles.md) |
