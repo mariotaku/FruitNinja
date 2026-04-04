@@ -12,7 +12,7 @@
 
 #include "HUDControl3d.h"
 #include "tex_loader.h"
-#include "Vec3.h"
+#include "math/Vec3.h"
 
 struct Game;
 class MenuButton;

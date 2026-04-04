@@ -2,7 +2,7 @@
 #define FN_FRUIT_H
 
 #include "Entity.h"
-#include "Quaternion.h"
+#include "math/Quaternion.h"
 #include "Mesh.h"
 
 // Matches original Fruit : Mortar::Entity
