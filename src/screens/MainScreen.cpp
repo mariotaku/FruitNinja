@@ -5,12 +5,12 @@
 
 #include "MainScreen.h"
 #include "Game.h"
-#include "HUD.h"
-#include "ActorManager.h"
-#include "MenuButton.h"
+#include "hud/HUD.h"
+#include "entities/ActorManager.h"
+#include "hud/MenuButton.h"
 #include "DojoScreen.h"
-#include "InputManager.h"
-#include "SDLInputTranslator.h"
+#include "input/InputManager.h"
+#include "platform/SDLInputTranslator.h"
 #include <cstdio>
 #include <cmath>
 

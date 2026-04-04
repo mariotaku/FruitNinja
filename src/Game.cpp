@@ -5,9 +5,10 @@
 //
 
 #include "Game.h"
-#include "GameTaskState.h"
-#include "HUD.h"
-#include "ActorManager.h"
+#include "asset/tex_loader.h"
+#include "game/GameTaskState.h"
+#include "hud/HUD.h"
+#include "entities/ActorManager.h"
 #include "config.h"
 #include <cstdio>
 

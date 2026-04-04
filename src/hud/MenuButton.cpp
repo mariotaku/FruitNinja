@@ -13,10 +13,10 @@
 //
 
 #include "MenuButton.h"
-#include "Renderer.h"
+#include "render/Renderer.h"
 #include "Game.h"
-#include "Fruit.h"
-#include "ActorManager.h"
+#include "entities/Fruit.h"
+#include "entities/ActorManager.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>

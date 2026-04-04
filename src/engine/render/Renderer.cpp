@@ -1,7 +1,6 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
-#include "tex_loader.h"
-#include "Mesh.h"
+#include "asset/tex_loader.h"
 #include <cstdio>
 #include <cmath>
 
@@ -268,8 +267,8 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
     glDisableVertexAttribArray(1);
 }
 
-void Renderer::draw_mesh(Mesh& mesh, GLuint tex, const float* mvp, const float* model,
-                         float alpha) {
+void Renderer::setup_3d_shader(GLuint tex, const float* mvp, const float* model,
+                               float alpha) {
     glUseProgram(program_3d);
     glUniformMatrix4fv(u3d_mvp, 1, GL_FALSE, mvp);
     glUniformMatrix4fv(u3d_model, 1, GL_FALSE, model);
@@ -278,7 +277,6 @@ void Renderer::draw_mesh(Mesh& mesh, GLuint tex, const float* mvp, const float* 
     glBindTexture(GL_TEXTURE_2D, tex);
     glUniform1i(u3d_tex, 0);
     glUniform1f(u3d_alpha, alpha);
-    mesh.draw();
 }
 
 void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,

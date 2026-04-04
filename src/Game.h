@@ -9,9 +9,9 @@
 #include <SDL.h>
 #include <string>
 #include <cstdint>
-#include "Renderer.h"
-#include "InputManager.h"
-#include "SDLInputTranslator.h"
+#include "render/Renderer.h"
+#include "input/InputManager.h"
+#include "platform/SDLInputTranslator.h"
 
 class HUD;
 class ActorManager;

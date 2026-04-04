@@ -11,7 +11,7 @@
 // by direct registration in GameTaskInitInput.
 //
 
-#include "InputEvent.h"
+#include "input/InputEvent.h"
 #include <functional>
 #include <vector>
 #include <cstdint>

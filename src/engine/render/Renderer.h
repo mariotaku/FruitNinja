@@ -8,7 +8,6 @@
 #include "core/MortarTypes.h"
 
 struct TexImage;
-struct Mesh;
 
 struct Renderer {
     // 2D sprite shader (MVP + uniform tint)
@@ -50,9 +49,10 @@ struct Renderer {
     void draw_sprite(GLuint tex, float x, float y, float w, float h,
                      float angle = 0.0f, float alpha = 1.0f);
 
-    // Draw a 3D mesh with MVP and model matrices
-    void draw_mesh(Mesh& mesh, GLuint tex, const float* mvp, const float* model,
-                   float alpha = 1.0f);
+    // Set up 3D shader with MVP, model matrix, lighting, texture, and alpha
+    // Call this before issuing your own draw calls for 3D meshes
+    void setup_3d_shader(GLuint tex, const float* mvp, const float* model,
+                         float alpha = 1.0f);
 
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24)
     // Matches original DrawTriList (0x00193f5c) / DrawTriStrip

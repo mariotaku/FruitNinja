@@ -10,8 +10,8 @@
 // "Screen" — the HUD system calls Update/Draw on it like any other control.
 //
 
-#include "HUDControl3d.h"
-#include "tex_loader.h"
+#include "hud/HUDControl3d.h"
+#include "asset/tex_loader.h"
 #include "math/Vec3.h"
 
 struct Game;

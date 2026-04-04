@@ -211,7 +211,8 @@ void DojoScreen::draw(Renderer& r) {
             mat4_multiply(model, trans, sr);
             mat4_multiply(mvp, pv, model);
 
-            r.draw_mesh(fruit_meshes[i], fruit_atlas_tex, mvp, model, alpha);
+            r.setup_3d_shader(fruit_atlas_tex, mvp, model, alpha);
+            fruit_meshes[i].draw();
         }
 
         glDisable(GL_DEPTH_TEST);
