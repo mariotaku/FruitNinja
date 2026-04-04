@@ -27,7 +27,7 @@ All accessed via GOT-relative addressing (ARM32 position-independent code).
 | **InputManager** | 11 | 9 bytes | 2 | **Good** | [input-manager.md](input-manager.md) |
 | **PSPParticleManager** | 5 | 48 bytes | 8 | **Good** | [particles.md](particles.md) |
 | **SoundManager** | 15 | 40 bytes | 2+4 statics | **Full** | [sound-system.md](sound-system.md) |
-| **FileManager** | 5 | 8 bytes | 0 | **Partial** | — |
+| **FileManager** | 5 | 8 bytes | 1 (list) | **Good** | [other-structs.md](#filemanager-8-bytes) |
 | **TextureManager** | 16 | 24 bytes | 1 (full map) | **Full** | [texture-mesh-manager.md](texture-mesh-manager.md) |
 | **MeshManager** | 12 | 20 bytes | 6 | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
 | **AnimationManager** | 8 | 20 bytes | 6 | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
@@ -38,23 +38,45 @@ All managers have `__thiscall` properly applied to every function.
 
 | Singleton | Struct Size | Notes |
 |-----------|-------------|-------|
-| SystemManager | 212 bytes | Engine lifecycle, QuitGame(). 2 named fields (m_deviceId, vtable) |
-| MatrixManager | 8500 bytes | 4 matrix stacks (Projection/View/World/Texture), dirty-tracking. See [matrix-manager.md](matrix-manager.md) |
-| DisplayManager | 148 bytes | GL state, viewport, BeginFrame/EndFrame/SwapBuffers. Subclass: DisplayManagerBada (7 functions) |
-| FileManager | 8 bytes | VFS abstraction (FileSystem_Direct on Bada) |
-| TextureManager | 24 bytes | .tex loading + caching. 1 named field (m_textures map) |
-| MeshManager | 1 byte stub | .mad/.mmd model loading + caching. Needs RE |
-| AnimationManager | 1 byte stub | Skeletal/property animation. Needs RE |
+| SystemManager | 212 bytes | FPS ring buffer, quit lifecycle. See [system-manager.md](system-manager.md) |
+| MatrixManager | 8500 bytes | 4 matrix stacks, dirty-tracking. See [matrix-manager.md](matrix-manager.md) |
+| DisplayManager | 148 bytes | GL state, viewport, screen rotation. See [display-manager.md](display-manager.md) |
+| FileManager | 8 bytes | VFS: `std::list<IFileSystem*>` with priority sorting. See below |
+| TextureManager | 24 bytes | `std::map<ulong, WeakPtr<Texture>>` cache. See [texture-mesh-manager.md](texture-mesh-manager.md) |
+| MeshManager | 20 bytes | `List<SmartPtr<Model>>`. See [texture-mesh-manager.md](texture-mesh-manager.md) |
+| AnimationManager | 20 bytes | `List<Animation*>` singleton. See [texture-mesh-manager.md](texture-mesh-manager.md) |
 | InputManager | 9 bytes | Action-hash callbacks, 16-touch. See [input-manager.md](input-manager.md) |
-| Mortar::SoundManager | 40 bytes | Platform audio abstraction. Subclass: SoundManagerMAM. Full 4-layer architecture documented (SoundManager → SoundManagerMAM → BadaSound + GameSound). See [sound-system.md](sound-system.md) |
+| SoundManager | 40 bytes | `List<MortarSound*>` + static volume globals. See [sound-system.md](sound-system.md) |
 | MAMAudioController | — | Spawns MAMAudioThread (16 voices, 16kHz). See MAMAudioThread struct above |
 | Mortar::Touch | — | Low-level touch ring buffer (TEvnt) |
-| PSPParticleManager | 48 bytes | Template-based particle emitters (8 named fields). See [particles.md](particles.md) |
-| ActorManager | 4204 bytes | Entity pool manager. Full pseudocode documented but 0 struct fields named in Ghidra. See [actor-manager.md](actor-manager.md) |
+| PSPParticleManager | 48 bytes | Template-based emitters (8 named fields). See [particles.md](particles.md) |
+| ActorManager | 4204 bytes | Entity pool (7 named fields). See [actor-manager.md](actor-manager.md) |
 
-### Biggest Gaps for Porting
+---
 
-1. **ActorManager** — 4204-byte struct with 0 named fields in Ghidra (docs have full pseudocode)
-2. **DisplayManager** — need GL state fields for ES 2.0 port (148 bytes, only 4 named)
-3. **MeshManager / AnimationManager** — 1-byte stubs, need real layouts if mesh caching is ported
-4. **TextureManager** — only 24 bytes / 1 field, but texture loading is critical path
+## FileManager (8 bytes)
+
+Priority-sorted VFS layer. Just a `std::list<IFileSystem*>` (8 bytes on ARM32 Bada ABI).
+
+| Offset | Size | Type | Name |
+|--------|------|------|------|
+| +0x00 | 8 | std::list\<IFileSystem*\> | m_fileSystems |
+
+### Methods
+
+| Function | Address | Notes |
+|----------|---------|-------|
+| FileManager() | 0x0019b0f8 | Constructs list + clear |
+| ~FileManager | 0x0019b09c | ClearSystems + ~list |
+| AddSystem | 0x0019b170 | Insert IFileSystem sorted by priority |
+| RemoveSystem | 0x0019afe4 | Remove + delete from list |
+| ClearSystems | 0x0019b074 | Loop RemoveSystem until empty |
+
+### IFileSystem / FileSystem_Direct
+
+- **IFileSystem** — abstract base with vtable (Open, Exists, etc.)
+- **FileSystem_Direct** (~17 bytes) — direct file I/O on Bada. Fields: vtable, priority (uint), sortOrder (int), flags
+
+`MortarGame::CreateFileSystems()` is an empty stub on Bada. FileSystem_Direct is added during GameInitialise.
+
+**Port relevance:** None — port uses direct SDL file I/O.

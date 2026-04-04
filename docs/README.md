@@ -11,6 +11,7 @@
 - [classes.md](classes.md) — Class hierarchy and method listing (~70 classes)
 - [port-plan.md](port-plan.md) — Symbol coverage, gap analysis, porting roadmap
 - [resources.md](resources.md) — Asset directory structure, XML schemas, loading flow
+- [source-files.md](source-files.md) — **All 142 original .cpp source files** with addresses, categories, and port status
 - [TODO.md](TODO.md) — Remaining RE gaps (mostly complete)
 
 ---
