@@ -1,4 +1,4 @@
-# TextureManager & MeshManager
+# TextureManager, MeshManager & AnimationManager
 
 ## TextureManager (singleton, 24 bytes)
 
@@ -33,17 +33,24 @@ LoadLocalisedTexture(name)
 
 ### Key Functions
 
-| Function | Address | Notes |
-|----------|---------|-------|
-| TextureManager() | 0x00188dbc | Constructor — inits map |
-| ~TextureManager | 0x00188e6c | Destroys map |
-| GetInstance | 0x00188dec | Meyers singleton |
-| Load | 0x00188efc | Load texture by path, returns SmartPtr (ARM struct-return: r0=retval, r1=this, r2=filename) |
-| Find | 0x00188e84 | Lookup by StringHash, returns SmartPtr |
-| Add | 0x00188ee4 | Insert into map via operator[] |
-| Texture::Load | 0x00189dd4 | Static factory: creates Texture2DFromFile_Bada |
-| LoadLocalisedTexture | 0x0010a758 | Loads with locale prefix |
-| LoadTexture | 0x00121378 | Loads with optional locale |
+| Function | Address | Convention | Notes |
+|----------|---------|------------|-------|
+| TextureManager() | 0x00188dbc | __thiscall | Constructor — inits map |
+| TextureManager() | 0x00188dc8 | __thiscall | Constructor variant |
+| ~TextureManager | 0x00188e6c | __thiscall | Destroys map |
+| ~TextureManager | 0x00188e78 | __thiscall | Variant |
+| Destroy | 0x00188db8 | __thiscall | Empty no-op |
+| GetInstance | 0x00188dec | __stdcall (static) | Meyers singleton |
+| Load(char*) | 0x00188efc | __stdcall (ARM hidden ret) | r0=retval, r1=this, r2=filename. Find-or-load pattern |
+| Find(ulong) | 0x00188e84 | __stdcall (ARM hidden ret) | r0=retval, r1=this, r2=hash |
+| Find(char*) | 0x00188ec8 | __stdcall (ARM hidden ret) | Hashes name then calls Find(ulong) |
+| Add(ulong, SmartPtr) | 0x00188ee4 | __thiscall | Insert into map via operator[] |
+| Add(char*, SmartPtr) | 0x00188f60 | __thiscall | Hashes name then calls Add(ulong) |
+| LoadIndependent | 0x00188dd4 | __stdcall | Returns null SmartPtr (stub) |
+| InitialiseInternal | 0x001a73d0 | __thiscall | Empty stub |
+| Texture::Load | 0x00189dd4 | __stdcall (ARM hidden ret) | Static factory: creates Texture2DFromFile_Bada |
+| LoadLocalisedTexture | 0x0010a758 | __stdcall (ARM hidden ret) | Loads with locale prefix |
+| LoadTexture | 0x00121378 | __stdcall | Loads with optional locale |
 
 ### Texture2DFromFile_Bada (32 bytes)
 
@@ -56,9 +63,9 @@ Constructor at 0x00189c1c also checks `DisplayManager::GetTextureOverloadPrefix(
 
 ---
 
-## MeshManager (singleton, 20 bytes — was 1-byte stub)
+## MeshManager (20 bytes)
 
-Mesh/model cache singleton. Inherits from `List<SmartPtr<Model>>`.
+Mesh/model cache. Inherits from `List<SmartPtr<Model>>`. Not a singleton — instantiated as member of a parent engine object.
 
 ### Struct Layout
 
@@ -73,15 +80,20 @@ Mesh/model cache singleton. Inherits from `List<SmartPtr<Model>>`.
 
 ### Key Functions
 
-| Function | Address | Notes |
-|----------|---------|-------|
-| MeshManager() | 0x00192a0c | Constructor — calls List::List() + clear() |
-| ~MeshManager | 0x001929c4 | Calls Destroy + ~List |
-| Destroy | 0x001929bc | Calls ReleaseAll() |
-| MeshManager::Load | 0x001929a0 | Load model by name, returns SmartPtr (struct-return) |
-| LoadMeshInternal | 0x001a8518 | Registers ResourceLoader delegates for vertex/index/model/mesh, calls ResourceLoader::Load\<Model\> |
-| LoadMesh | 0x001a7c90 | Large parser (~1800 bytes): bones, materials, textures, effect properties, geometry bindings |
-| LoadModel | 0x001a8468 | Reads skeleton + mesh nodes |
+| Function | Address | Convention | Notes |
+|----------|---------|------------|-------|
+| MeshManager() | 0x00192a0c | __thiscall | Calls List::List() + clear() |
+| MeshManager() | 0x00192a30 | __thiscall | Variant |
+| ~MeshManager | 0x001929c4 | __thiscall | Calls Destroy + ~List |
+| ~MeshManager | 0x001929e8 | __thiscall | Variant |
+| Destroy | 0x001929bc | __thiscall | Calls ReleaseAll() |
+| Load | 0x001929a0 | __stdcall (ARM hidden ret) | r0=retval, r1=this, r2=name |
+| Initialise | 0x001929ac | __thiscall | Calls InitialiseInternal (empty stub) |
+| ReleaseAll | 0x001929b4 | __thiscall | Calls List::clear |
+| InitialiseInternal | 0x001a74b8 | __thiscall | Empty stub |
+| LoadMeshInternal | 0x001a8518 | __stdcall (ARM hidden ret) | Registers ResourceLoader delegates, calls Load\<Model\> |
+| LoadMesh | 0x001a7c90 | __thiscall | Large parser (~1800 bytes) |
+| LoadModel | 0x001a8468 | __thiscall | Reads skeleton + mesh nodes |
 
 ### LoadMesh Details
 
@@ -91,14 +103,61 @@ Mesh/model cache singleton. Inherits from `List<SmartPtr<Model>>`.
 3. Sets up 9 named effect property definitions
 4. Creates geometry bindings with vertex/index streams
 
-### ARM Struct-Return Convention
+---
 
-Several functions in both managers use ARM's struct-return calling convention where:
+## AnimationManager (singleton, 20 bytes — was 1-byte stub)
+
+Animation cache singleton. Inherits from `List<Animation*>`. Same base layout as MeshManager.
+
+### Struct Layout
+
+| Offset | Size | Type | Name | Notes |
+|--------|------|------|------|-------|
+| +0x00 | 4 | pointer | m_items | Animation* array |
+| +0x04 | 4 | uint | m_count | |
+| +0x08 | 4 | uint | m_capacity | |
+| +0x0C | 4 | uint | field_0xc | |
+| +0x10 | 2 | short | m_flags | |
+| +0x12 | 2 | short | field_0x12 | |
+
+### Singleton
+
+Constructed in `_GLOBAL__I_AnimationManager.cpp` (0x00192590) as a static variable.
+
+### Key Functions
+
+| Function | Address | Convention | Notes |
+|----------|---------|------------|-------|
+| AnimationManager() | 0x0019251c | __thiscall | Calls List\<Animation*\>::List |
+| AnimationManager() | 0x00192528 | __thiscall | Variant |
+| ~AnimationManager | 0x00192548 | __thiscall | Calls Destroy then ~List |
+| ~AnimationManager | 0x0019256c | __thiscall | Variant |
+| Destroy | 0x00192514 | __thiscall | Calls ReleaseAll |
+| ReleaseAll | 0x00192510 | __thiscall | Empty stub (no-op) |
+| Load | 0x00192590 | __thiscall | Calls LoadAnimInternal, creates AnimationState, wraps in SmartPtr |
+| LoadAnimInternal | 0x001ad590 | __stdcall | Registers AnimationList loader, opens ResourceLoader, calls Load\<AnimationList\> |
+
+### Load Flow
+
+```
+AnimationManager::Load(name)
+  → LoadAnimInternal(name)
+    → RegisterLoader<AnimationList>(callback)
+    → ResourceLoader::Load<AnimationList>(name)
+  → creates AnimationState wrapping AnimationList
+  → returns SmartPtr<AnimationState>
+```
+
+---
+
+## ARM Struct-Return Convention
+
+Several functions across all three managers use ARM's struct-return calling convention:
 - `r0` = hidden pointer to return value (SmartPtr)
 - `r1` = `this` pointer
 - `r2+` = regular parameters
 
-This is NOT `__thiscall` — Ghidra shows these as `__stdcall` with the hidden retval pointer. Affects: Load, Find, Texture::Load, LoadLocalisedTexture, LoadMeshInternal.
+Ghidra shows these as `__stdcall` with the hidden retval pointer. This is correct — NOT `__thiscall`. Affects: Load, Find, Texture::Load, LoadLocalisedTexture, LoadMeshInternal, LoadAnimInternal.
 
 ---
 
@@ -107,3 +166,4 @@ This is NOT `__thiscall` — Ghidra shows these as `__stdcall` with the hidden r
 - [Asset formats](formats/) — .tex, .mad/.mmd file format details
 - [Asset functions](assets.md) — GPUafyTexture, LoadVertexStreamPSP
 - [Rendering detail](rendering-detail.md) — Model::Draw pipeline
+- [Utility types](utility-types.md) — ResourceLoader, SmartPtr, Delegate

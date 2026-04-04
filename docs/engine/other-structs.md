@@ -28,9 +28,9 @@ All accessed via GOT-relative addressing (ARM32 position-independent code).
 | **PSPParticleManager** | 5 | 48 bytes | 8 | **Good** | [particles.md](particles.md) |
 | **SoundManager** | 15 | 40 bytes | 2+4 statics | **Full** | [sound-system.md](sound-system.md) |
 | **FileManager** | 5 | 8 bytes | 0 | **Partial** | — |
-| **TextureManager** | 10+ | 24 bytes | 1 (full map) | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
-| **MeshManager** | 8+ | 20 bytes | 6 | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
-| **AnimationManager** | 6 | 1 byte stub | 0 | **Stub** | — |
+| **TextureManager** | 16 | 24 bytes | 1 (full map) | **Full** | [texture-mesh-manager.md](texture-mesh-manager.md) |
+| **MeshManager** | 12 | 20 bytes | 6 | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
+| **AnimationManager** | 8 | 20 bytes | 6 | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
 
 All managers have `__thiscall` properly applied to every function.
 
