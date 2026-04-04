@@ -1,7 +1,7 @@
 #ifndef FN_ENTITY_H
 #define FN_ENTITY_H
 
-#include "Vec3.h"
+#include "math/Vec3.h"
 #include <cstdint>
 
 struct Renderer;
