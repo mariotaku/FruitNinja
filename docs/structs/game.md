@@ -4,6 +4,39 @@
 
 MortarGame base zeroes +0x04..+0x1b3 in ctor.
 
+### MortarGame vtable (at 0x001eae58, 16 entries)
+
+| Index | Address | Method | Notes |
+|-------|---------|--------|-------|
+| 0 | 0x0010d9d0 | GetHardwareString | Returns device string |
+| 1 | 0x0010d9d4 | IsFastHardware | Returns bool |
+| 2 | 0x0018aa14 | RenderAtHalfFrames | Stub |
+| 3 | 0x0018ac80 | GetHighResolutionScale | Returns 1.0f |
+| 4 | 0x0018ac88 | GetOpenFeintProductKey | Online service (defunct) |
+| 5 | 0x0018ac8c | GetOpenFeintSecret | Online service (defunct) |
+| 6 | 0x0018ac90 | GetOpenDisplayName | Online service (defunct) |
+| 7 | 0x0018ac94 | GetPlayhavenToken | Online service (defunct) |
+| 8 | 0x0010d9dc | GetCacheDataArchive | Data path |
+| 9 | 0x0018ac98 | CreateFileSystems | Mounts data archives |
+| 10 | 0x0018aa28 | TellGameToStart | Called after engine init |
+| 11 | 0x0018aa1c | Update(float dt) | Per-frame update |
+| 12 | 0x0018aa18 | Draw(float dt) | Per-frame render |
+| 13 | 0x0018aa20 | Init(int argc, char** argv) | One-time init |
+| 14 | 0x0018aa24 | End | Shutdown |
+| 15 | 0x0018aa2c | Paused | Pause event handler |
+
+Other MortarGame functions:
+
+| Address | Function | Notes |
+|---------|----------|-------|
+| 0x0018ab6c | MortarGame::MortarGame() | Constructor (zeroes fields, sets version) |
+| 0x0018abe8 | MortarGame::MortarGame() | Constructor variant (with operator_delete) |
+| 0x0018ac64 | TellGameToQuit | Calls SystemManager::QuitGame() |
+| 0x000f4200 | ReturnsAnInstanceOfThisMortarGame | Singleton getter (returns Game*) |
+| 0x0010d674 | ReturnsAnInstanceOfThisMortarGame | Singleton getter (variant) |
+
+### Game Struct Layout
+
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
 | +0x00 | void* | vtable | |
@@ -184,4 +217,4 @@ Screen: 480×320 landscape (game coords). Physical portrait device; `TransformTo
 - [Game loop functions](../functions/game-loop.md) -- GameUpdate, GameDraw
 - [Game flow functions](../functions/game-flow.md) -- state transitions, SaveCurrentData
 - [State machine system](../systems/state-machine.md) -- GameTaskState transitions
-- [Touch input system](../systems/touch-input.md) -- GlesForm touch handling
+- [Touch input system](../engine/touch-input.md) -- GlesForm touch handling

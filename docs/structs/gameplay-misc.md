@@ -94,7 +94,7 @@ Used by SplashInit and FrontendInit. Created with `operator_new(8)`.
 
 ---
 
-## MenuButton : HUDControl (size = 0x15C)
+## MenuButton : HUDControl3d : HUDControl (size = 0x15C, leaf class)
 
 Interactive button used in all menus. Renders a 2D texture quad with optional sparkle ring, "new" indicator, and text labels. Each button optionally has a **real 3D Fruit/Bomb entity** spinning on top, drawn by the normal ActorManager render pipeline.
 
@@ -133,9 +133,14 @@ if (fruitType >= 0) {
     int entityType = (fruitType >= bombThreshold) ? 1 : 0;  // 0=Fruit, 1=Bomb
     Entity* entity = ActorManager::Add(entityType, true);
     entity->pos = button.pos;
-    entity->scale = globalScale;
-    entity->Init(0, fruitType, 0);  // configure appearance from FRUIT_INFO
+    entity->vel = globalScale;     // written to +0x1c (velocity fields, NOT scale!)
+    entity->Init(0, fruitType, NULL);  // scale param = NULL → 1.0
+    // Init calls SetFruitType which computes visual scale from globals:
+    //   entity.scale = globalVec × configFloat × 0.01  (NOT 25.0!)
     this->m_pEntity = entity;        // +0x80
+
+    // POST-INIT: shrink fruit for menu display
+    entity->scale *= 0.2;  // DAT_0014f194 = 0.2
 
     this->field_0x34 = 0x40;  // menu draw layer
     this->field_0xf4 = RandFloat(4.0) + 8.0;  // rotation speed 8-12
@@ -192,9 +197,54 @@ if (fruitType >= 0) {
 | Draw | 0x0014f9cc | 359 | Render 3 layers: button quad + star + sparkle ring |
 | SetText | 0x0014ebc0 | — | Set BakedString labels |
 | AddPeice | 0x00150240 | — | Add sub-element (text, icon) |
-| Clicked | 0x001507d8 | — | Fire click delegate |
+| Clicked | 0x001507d8 | — | Fire click delegate (empty virtual stub) |
 | LoadContent | 0x0014f674 | 28 | Load 3 shared textures (star, sparkle, etc.) |
 | Remove | 0x0014ed18 | — | Animate removal |
+
+### Constructor Variants
+
+| Address | Signature | Notes |
+|---------|-----------|-------|
+| 0x0014f24c | `MenuButton(pos, clickCb, fruitType, hitBounds, deletedCb, ...)` | Full constructor |
+| 0x0014f348 | Similar | Variant |
+| 0x0014f444 | Similar | Variant — called via thunk 0x000f36cc |
+| 0x0014f55c | Similar | Variant |
+| 0x000f36cc | Thunk | Dispatches to 0x0014f444 |
+| 0x000f747c | Thunk | Most-used entry point (38 callers) |
+
+All constructors internally call `MenuButton::Init` (0x001073d0 → 0x0014ee40).
+
+### Usage Across Screens (38 call sites via constructor thunk 0x000f747c)
+
+MenuButton is the primary interactive widget used in virtually every screen:
+
+| Caller Function | Address Range | Buttons Created |
+|----------------|---------------|-----------------|
+| **MainScreen_Update** | 0x0014b342–0x0014bca0 | Play, Dojo, Arcade, Zen, Multiplayer, Sensei (6 buttons) |
+| **AboutScreen::Update** | 0x0012f0cc–0x0012f242 | About screen navigation |
+| **UpdateButtons** | 0x00130b58 | Dynamic button creation |
+| **GameOverScreen::CreateControls** | 0x0013e7f8–0x0013ebea | Retry, menu, share buttons |
+| **UpdateOnlineMultiplayerButton** | 0x0013edd8–0x0013eeaa | Online multiplayer toggle |
+| **GameOverScreen::Update** | 0x001384fa–0x00138802 | 3 dynamic buttons |
+| **UpdateLeaderboard** | 0x0013b136 | Leaderboard entry buttons |
+| **CreateRetryButton** | 0x00141208 | Pause/GameOver retry |
+| **CreateQuitButton** | 0x0014136e, 0x00148c06 | Quit buttons (2 screens) |
+| **Leaderboard nav** | 0x00148d50–0x00149508 | Friends, Global, Local, Weekly, PageUp, PageDown |
+| **PauseScreen::Update** | 0x00145d18 | Pause menu buttons |
+| **PowerUpShop::Update** | 0x001547dc–0x00154bb0 | 4 shop item buttons |
+| **TimeControl::Update** | 0x0015e352–0x0015e7ca | 3 buttons |
+| **UpsellScreen::CreateBuyNowRing** | 0x00164da6 | Buy now button |
+| **UpsellScreen::Update** | 0x001651c8 | Upsell buttons |
+| **SpeedControl::Update** | 0x00156684 | Speed control button |
+
+### Helper Functions (static, not methods)
+
+| Function | Address | Purpose |
+|----------|---------|---------|
+| DrawQuad_MenuButton | 0x00149f34 | Static wrapper for Mesh::DrawQuadUnCached |
+| MakeColourFromGlobal_MenuButton | 0x00149ef4 | Static: construct Colour from global pointer |
+| DeleteStackDelegate_MenuButton | 0x0014a170 | Static: StackAllocatedPointer::Delete |
+| MainScreen_DeleteMenuButtons | 0x0014aee8 | Remove all MenuButtons from MainScreen |
 
 ---
 

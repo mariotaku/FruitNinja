@@ -87,5 +87,5 @@ uint8_t a = 255;
 
 ## See Also
 
-- [Asset functions](../functions/assets.md) -- GPUafyTexture decompilation
-- [Rendering detail system](../systems/rendering-detail.md) -- texture pipeline
+- [Asset functions](../assets.md) -- GPUafyTexture decompilation
+- [Rendering detail system](../rendering-detail.md) -- texture pipeline

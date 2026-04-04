@@ -211,4 +211,4 @@ Entity base ends at ~0x3c; SlashEntity fields follow.
 - [Physics system](../systems/physics.md) -- gravity, spawn velocity, collision
 - [Scoring system](../systems/scoring.md) -- combo scoring pipeline
 - [FRUIT_INFO data struct](data.md) -- per-fruit-type configuration
-- [FruitModelInfo format](../formats/models.md) -- 3D model data for fruit rendering
+- [FruitModelInfo format](../engine/formats/models.md) -- 3D model data for fruit rendering

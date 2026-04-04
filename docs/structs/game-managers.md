@@ -1,8 +1,8 @@
-# Other Structs & Singletons
+# Game Manager Structs
 
-## Other Structs
+Game-specific singleton managers created during GameInit/GameInitialise.
 
-### ScoreModifier : GameModifier (size ≥ 0x3c)
+## ScoreModifier : GameModifier (size >= 0x3c)
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
@@ -15,19 +15,7 @@
 | +0x30 | int | applyCount | Increments each ApplyModifier call |
 | +0x34 | bool | applied | If true, UpdateSpecific skips |
 
-### MAMAudioThread (size ≥ 0x154)
-
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| +0x10 | float | masterVolume | -1.0f |
-| +0x18 | int | sampleRate | 16000 = 16 kHz |
-| +0x1c | int | bufferSize | 0xc80 = 3200 |
-| +0x30 | int | voiceCount | = 16 |
-| +0x34 | MAMVoice[16] | voices | Each 0x10 bytes = 0x100 total |
-| +0x134 | NLFQueue | cmdInput | Thread-safe audio command input |
-| +0x144 | NLFQueue | cmdOutput | Thread-safe audio command output |
-
-### ItemManager (singleton)
+## ItemManager (singleton)
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
@@ -38,7 +26,7 @@
 
 ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 
-### PowerUpManager (singleton, partial)
+## PowerUpManager (singleton, partial)
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
@@ -49,7 +37,7 @@ ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 | +0x78 | int | m_ScoreGainMult | Used by GetScoreGainMultiplier |
 | +0x7c | int | m_ScoreGainFactor | Multiplied with above |
 
-### BonusManager (singleton, size ~0x20)
+## BonusManager (singleton, size ~0x20)
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
@@ -57,14 +45,27 @@ ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 | +0x0c | list\<Bonus\> | m_field12_0xc | 12 bytes |
 | +0x14 | vector\<int\> | m_field_0x14 | 12 bytes |
 
----
+## Game-Specific Singletons
+
+| Singleton | Notes |
+|-----------|-------|
+| ActorManager | Entity pool (5 types: Fruit, Bomb, unused, unused, BombBlast). See [engine/actor-manager.md](../engine/actor-manager.md) |
+| WaveManager | XML-driven wave progression. See [wave.md](wave.md) |
+| PowerUpManager | Modifier tracking (dt, score gain/loss) |
+| ItemManager | Shop items, blade modifiers |
+| BonusManager | Post-game bonus awards |
+| AchievementManager | Unlocks |
+| LeaderboardManager | Online services (skipped in port) |
+| NetworkManager | P2P + OpenFeint + GameCenter (skipped in port) |
+| GameSound | 32-slot SFX pool over SoundManager. See [engine/sound-system.md](../engine/sound-system.md) |
+| FruitCamera | Ortho camera. See [engine/camera.md](../engine/camera.md) |
 
 ## Asset Loading Order (GameInitialise at 0x10bdfc, 305 lines)
 
 Full 25-step bootstrap documented in [functions/game-loop.md](../functions/game-loop.md#gameinitialise-0x0010bdfc-305-lines--one-time-engine-bootstrap).
 
 Final asset loading steps (after engine singletons + fonts):
-1. LoadLocalisedTexture → Game+0x17c (fruit atlas)
+1. LoadLocalisedTexture -> Game+0x17c (fruit atlas)
 2. MenuButton::LoadContent
 3. Fruit::LoadInfo (FRUIT_INFO from XML)
 4. SplatEntity::LoadContent
@@ -73,7 +74,3 @@ Final asset loading steps (after engine singletons + fonts):
 7. GameOverScreen::LoadContent
 8. PowerUpShop::LoadContent
 9. PreloadSounds
-
-## Subsystem Singletons
-
-SystemManager, MatrixManager, FileManager, DisplayManager (480×320), TextureManager, MeshManager, AnimationManager, InputManager, PSPParticleManager, PowerUpManager, LeaderboardManager, NetworkManager (P2P + OpenFeint + GameCenter), MAMAudioController → MAMAudioThread (16 voices, 16kHz), WaveManager, ItemManager, AchievementManager, BonusManager, Mortar::Touch, Mortar::SoundManager, FruitCamera

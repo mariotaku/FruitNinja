@@ -96,7 +96,7 @@ void BadaSound::SFXLoad(const char* name, SoundEffectBada** outEffect) {
 }
 ```
 
-**Key for porting:** SFXLoad reads the entire .wav.pcm file into a ByteBuffer, wraps it in a SoundEffectBada. For SDL2, replace with `SDL_LoadWAV` after prepending a WAV header (see [audio format](../formats/audio.md)).
+**Key for porting:** SFXLoad reads the entire .wav.pcm file into a ByteBuffer, wraps it in a SoundEffectBada. For SDL2, replace with `SDL_LoadWAV` after prepending a WAV header (see [audio format](formats/audio.md)).
 
 #### SFXPlay (0x0018b130) — fully decompiled
 
@@ -155,5 +155,5 @@ SystemManager, MatrixManager, FileManager, DisplayManager (480×320), TextureMan
 ## See Also
 
 - [Sound functions](../functions/sound.md) -- SFXLoad, PlaySound pseudocode
-- [Audio format](../formats/audio.md) -- .wav.pcm file format
-- [Other structs](../structs/other.md) -- MAMAudioThread layout
+- [Audio format](formats/audio.md) -- .wav.pcm file format
+- [Other structs](other-structs.md) -- MAMAudioThread layout

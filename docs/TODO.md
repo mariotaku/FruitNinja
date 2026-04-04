@@ -22,7 +22,7 @@
 - [x] `ActorManager::Deactivate` (0x170184) — move to free pool
 - [x] `ActorManager::Remove` (0x1702d8) — destroy + erase
 - [x] Struct layout (~0x106C), entity flags, vtable offsets
-- See `docs/functions/actor-manager.md`
+- See `docs/engine/actor-manager.md`
 
 ### 4. Data Parsing (XML loaders) — DONE
 - [x] `PowerUpManager::Load` (0x119cb0, 80 lines) — poweruplist.xml → map\<hash, PowerUp*\> + effects
@@ -38,7 +38,7 @@
 - [x] `BadaSound::MusicPlay/Stop/Pause/Resume/Mute/SetVolume` — all decompiled, uses Osp::Media::Player
 - [x] `BadaSound struct` — full layout: hash table (256), effects (256), 8 active slots, volume floats
 - [ ] `Mortar::MortarSound` / `MortarSoundMAM` (15 funcs) — sound handle API (behind GOT thunks, hard to resolve)
-- See `docs/systems/sound-system.md`
+- See `docs/engine/sound-system.md`
 
 ### 6. Remaining Gameplay Functions
 - [x] `Fruit::SetFruitType` (0x17621c, 46 lines) — set type, scale, collision sphere from FRUIT_INFO
@@ -74,7 +74,7 @@ See `docs/systems/power-ups.md` and `docs/functions/power-ups.md`. Full system r
 
 ### Touch → Slash Input Pipeline — DONE
 
-See `docs/systems/touch-input.md`. Full pipeline recovered:
+See `docs/engine/touch-input.md`. Full pipeline recovered:
 - GlesForm::TransformTouchPos: raw portrait → game landscape coords (480×320, axes swapped)
 - Touch::__UpdateInternal: ring buffer with TEvnt structs
 - SlashEntity::TouchDown/MoveX/MoveY: maps input to entity position
@@ -82,7 +82,7 @@ See `docs/systems/touch-input.md`. Full pipeline recovered:
 
 ### Particle System — DONE
 
-See `docs/systems/particles.md`. Full architecture recovered:
+See `docs/engine/particles.md`. Full architecture recovered:
 - PSPParticleManager: pool-based emitter management, template search by hash
 - PSPParticleEmitter: 0x4C bytes, linked list, position/velocity/scale/timeScale
 - PSPEmitterTemplate: loaded from data file, contains ParticleSets with spawn timing
@@ -114,7 +114,7 @@ See `docs/systems/effects.md`. Both Update functions fully decompiled:
 
 ### High Priority
 
-- [x] `Mortar::Model::Draw` (0x1930e0) — depth-sorted multi-mesh rendering. See `docs/systems/rendering-detail.md`
+- [x] `Mortar::Model::Draw` (0x1930e0) — depth-sorted multi-mesh rendering. See `docs/engine/rendering-detail.md`
 - [x] `Mortar::Font::Load` (0x199e9c) — BMFont .fnt parser, 270 lines. DrawString = 13 params, ~300 lines
 - [x] `TintWhite` / `TintColour` — float RGB → packed BGRA byte conversion + channel multiply
 - [x] `SetupQuad` / `AddQuad` — quad builders with clipping. QUADCUSTOMVERTEX = 36 bytes confirmed
@@ -135,7 +135,7 @@ See `docs/systems/effects.md`. Both Update functions fully decompiled:
 
 ## Sound System — Mostly Analyzed (147 funcs, 25+ done)
 
-Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram, BadaSound full struct + all functions (see `docs/systems/sound-system.md`).
+Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram, BadaSound full struct + all functions (see `docs/engine/sound-system.md`).
 
 ### High Priority (needed for port)
 
@@ -174,14 +174,14 @@ Only the top 2 layers (GameSound + SoundManager) need porting. The bottom 2 (Bad
 
 ### Math::Random (RNG) — DONE
 
-64-bit LCG with Knuth MMIX multiplier. Full algorithm, constants, and port-ready C code in `docs/systems/rng.md`.
+64-bit LCG with Knuth MMIX multiplier. Full algorithm, constants, and port-ready C code in `docs/engine/rng.md`.
 - Rand32: 64-bit LCG step, upper-32-bit output, multiply-high range reduction
 - RandF: Rand32(0x7FFFF) / 524287.0 * max
 - Seed: 0xDEADBEEF, Multiplier: 0x5D588B656C078965, Increment: 0x269EC3
 
 ### StringHash Algorithm — DONE
 
-Full C implementation saved to `docs/systems/string-hash.md`. Jenkins lookup3 with case-folding, initial `c = 0x805 + len`.
+Full C implementation saved to `docs/engine/string-hash.md`. Jenkins lookup3 with case-folding, initial `c = 0x805 + len`.
 
 ### Math::SinIdx / CosIdx
 
