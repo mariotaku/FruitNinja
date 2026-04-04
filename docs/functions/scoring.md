@@ -34,7 +34,7 @@ void AddToCurrentScore(int points, int playerIdx, bool trackFruit, bool sendNetP
 
 ### StringHash (0x0019c5d4, 90 lines)
 
-See `docs/systems/string-hash.md` for full C implementation.
+See `docs/engine/string-hash.md` for full C implementation.
 
 ---
 

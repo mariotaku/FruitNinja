@@ -49,4 +49,4 @@ MortarCamera base = 0x12c bytes.
 
 ## See Also
 
-- [Rendering functions](../functions/rendering.md) -- GameDraw camera setup
+- [Rendering functions](rendering-functions.md) -- GameDraw camera setup

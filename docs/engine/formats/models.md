@@ -270,5 +270,5 @@ The fruit meshes are simple (each half is ~100-200 triangles) so the vertex data
 
 ## See Also
 
-- [Asset functions](../functions/assets.md) -- LoadVertexStreamPSP pseudocode
-- [Rendering detail system](../systems/rendering-detail.md) -- mesh pipeline
+- [Asset functions](../assets.md) -- LoadVertexStreamPSP pseudocode
+- [Rendering detail system](../rendering-detail.md) -- mesh pipeline

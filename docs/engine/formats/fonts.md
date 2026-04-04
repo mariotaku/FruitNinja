@@ -45,4 +45,4 @@ BMFont is natively supported by many libraries. The .fnt text files can be used 
 
 ## See Also
 
-- [Rendering detail system](../systems/rendering-detail.md) -- Font::Load
+- [Rendering detail system](../rendering-detail.md) -- Font::Load

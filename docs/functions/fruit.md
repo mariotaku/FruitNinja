@@ -390,36 +390,59 @@ int Fruit::RandomFruit(bool includeOnSideOnly) {
 void Fruit::SetFruitType(uint type, float scale) {
     this->m_FruitType = (byte)type;
     
-    // Set entity scale from global fruit scale vector
-    Vec3 entityScale = globalScaleVec * CONST_A * CONST_B;
+    // VISUAL SCALE — computed from globals, NOT from FRUIT_INFO
+    // Chain: globalVec (BSS, likely (1,1,1)) × GOT_config × 0.01 (DAT_0017633c)
+    Vec3 entityScale = globalScaleVec * configFloat * 0.01f;
     this->entity.scale = entityScale;       // +0x28..+0x30
     this->entity.baseScale = entityScale;   // +0xa8..+0xb0
     
-    // Collision sphere setup from FRUIT_INFO
+    // COLLISION SPHERE — uses FRUIT_INFO fields
     FRUIT_INFO* info = &fruitInfoArray[type];  // type × 0x330 stride
-    float radius = info->m_SpeedMult + CONST_C * info->m_Scale;  // +0x248 + factor × +0x244
+    float radius = info->m_CollisionBase + 0.52f * info->m_CollisionScale;
+    //              +0x248 (1.0)          DAT_00176340    +0x244 (25.0)
     
     if (radius <= 0.0) {
-        // No collision for this fruit type — delete ColSphere
         if (this->m_Col) { delete this->m_Col; this->m_Col = NULL; }
     } else {
-        // Create/update collision sphere
-        if (!this->m_Col) {
-            this->m_Col = new ColSphere();
-        }
-        this->m_Col->pos = Vec3(this->pos_x, this->pos_y, CONST_Z);
-        this->m_Col->radius = radius * scale;
+        if (!this->m_Col) this->m_Col = new ColSphere();
+        this->m_Col->pos = Vec3(this->pos_x, this->pos_y, 0);
+        this->m_Col->radius = radius * scale;  // scale param from Fruit::Init
     }
 }
 ```
 
-**FRUIT_INFO fields used:**
-| Offset | Name | Default | Role in SetFruitType |
-|--------|------|---------|----------------------|
-| +0x244 | m_Scale | 25.0 | Collision radius scaling factor |
-| +0x248 | m_SpeedMult | 1.0 | Base collision radius |
+**Scale chain (verified from binary constants via read_memory):**
 
-**Note:** Collision radius = `base + factor × scale` from FRUIT_INFO, then multiplied by the spawn `scale` parameter. If the computed radius is ≤ 0, the fruit has no collision (cannot be sliced).
+| Constant | Address | Value | Purpose |
+|----------|---------|-------|---------|
+| Scale multiplier | DAT_0017633c | **0.01** | Visual scale base multiplier |
+| Collision factor | DAT_00176340 | **0.52** | CollisionBase + 0.52 × CollisionScale |
+| Menu fruit post-multiply | DAT_0014f194 | **0.2** | MenuButton scales entity × 0.2 |
+| Global scale vec | BSS (0x1F4334) | runtime | Likely (1,1,1) from static init |
+
+**Visual scale computation:**
+- `SetFruitType`: `entity.scale = globalVec × configFloat × 0.01` → small value (~0.5-1.0)
+- `MenuButton::Init` additionally: `entity.scale *= 0.2` → very small (~0.1-0.2)
+- FRUIT_INFO `m_CollisionScale` (25.0) is for **collision radius only**, NOT visual scale
+
+**Fruit::Init call from MenuButton:**
+```c
+// MenuButton::Init (0x14ee40):
+entity = ActorManager::Add(fruitType >= bombThreshold ? 1 : 0, true);
+entity->pos = button.pos;
+entity->vel = globalScale;  // written to +0x1c..+0x24 (velocity, not scale!)
+entity->Init(0, fruitType, NULL);  // scale param = NULL → 1.0
+// After Init:
+entity->scale *= 0.2;  // DAT_0014f194 — shrink for menu display
+```
+
+**FRUIT_INFO fields (corrected roles):**
+| Offset | Name | Default | Role |
+|--------|------|---------|------|
+| +0x244 | m_CollisionScale | 25.0 | Collision radius scaling ONLY |
+| +0x248 | m_CollisionBase | 1.0 | Base collision radius |
+
+The visual entity.scale is computed in SetFruitType from globals — it is NOT 25.0.
 
 ### Fruit::EnableCollision (0x00176354, 36 lines)
 

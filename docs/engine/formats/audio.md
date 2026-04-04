@@ -59,4 +59,4 @@ struct WavHeader {
 
 ## See Also
 
-- [Sound system](../systems/sound-system.md) -- audio playback architecture
+- [Sound system](../sound-system.md) -- audio playback architecture

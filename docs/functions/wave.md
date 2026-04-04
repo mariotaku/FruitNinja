@@ -441,6 +441,6 @@ void WaveManager::SetupWaveQue() {
 ## See Also
 
 - [Wave system overview](../systems/wave-system.md) -- WAVE_INFO/SPAWNER_INFO struct layouts, XML parsing
-- [RNG system](../systems/rng.md) -- Math::Random used for wave selection
+- [RNG system](../engine/rng.md) -- Math::Random used for wave selection
 - [Fruit functions](fruit.md) -- RandomFruit, FruitType, FruitInfo
 - [Power-ups system](../systems/power-ups.md) -- PROBABILITY_OVERIDE, power-up fruit spawning

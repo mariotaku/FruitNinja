@@ -12,7 +12,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | SlashEntity | ✅ | 0x184 | Blade/swipe: trail, collision, combo tracking | structs/entities.md |
 | SlashEntityGhost | ✅ | ~0x10 | Fading blade echo (alpha decay on vertex colours) | structs/gameplay-misc.md |
 | SplatEntity | ✅ | 0x78 | Juice splat pool: 6 variants, batched triangle list | systems/effects.md |
-| SplatEffect | ✅ | ~0x1c | Simple textured quad overlay for splats | systems/rendering-detail.md |
+| SplatEffect | ✅ | ~0x1c | Simple textured quad overlay for splats | engine/rendering-detail.md |
 | BombFlash | ✅ | 0x44 | Bomb hit flash: quadratic scale + alpha animation | systems/effects.md |
 | BombBlast | ✅ | 0x70 | Bomb explosion: expanding radius, 3s lifetime | systems/effects.md |
 | Coin | ✅ | ~0x70 | Bouncing reward coin: state machine + ballistics | structs/gameplay-misc.md |
@@ -26,8 +26,8 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | GameTaskState | ✅ | 0x118 | Per-task state: slash entities, effects, textures, flags | structs/game.md |
 | FruitNinja | ✅ | 0x48 | Bada app: 3 bases (Application, IScreenEventListener, ITimerEventListener), EGL, 10ms timer, full game tick | functions/game-loop.md |
 | GlesForm | ✅ | 0x1f8 | Bada GL form: touch input, 8-finger multitouch | structs/game.md |
-| FruitCamera | ✅ | 0x16c | Camera: idle/follow mode, shake system | structs/camera.md |
-| MortarCamera | ✅ | 0x12c | Base camera: 4 matrices, pos/lookAt/up | structs/camera.md |
+| FruitCamera | ✅ | 0x16c | Camera: idle/follow mode, shake system | engine/camera.md |
+| MortarCamera | ✅ | 0x12c | Base camera: 4 matrices, pos/lookAt/up | engine/camera.md |
 
 ## Wave / Spawn System
 
@@ -53,7 +53,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | ImpactSound | ✅ | 0x0c | Sound name + weighted random | structs/data.md |
 | FRUIT_POWER | ✅ | 0x0c | Power-up hash + weighted random | structs/data.md |
 | FRUIT_POWERS | ✅ | 0x08 | Power-up array container | structs/data.md |
-| ItemInfo | 🔶 | 0x40 | Shop item base (key, type, achieveId) | structs/other.md |
+| ItemInfo | 🔶 | 0x40 | Shop item base (key, type, achieveId) | engine/other-structs.md |
 | SlashModInfo | ❌ | 0x110 | Blade modifier item (extends ItemInfo) | — |
 | EntityState | ❌ | — | Entity save state for FruitSaveData | — |
 
@@ -82,7 +82,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | ComboControl | ✅ | 0x8c | Combo counter: 1s lifetime, "x3" text | structs/ui-controls2.md |
 | NotificationControl | ✅ | 0x110 | 3-type notification with slide animation | structs/ui-controls2.md |
 | ProgressionTimerControl | ✅ | 0x110 | Countdown with fade + delegate | structs/ui-controls2.md |
-| ScoreMultiplyerBoard | ✅ | ~0x9c | Arcade x2 popup via Font::DrawString | systems/rendering-detail.md |
+| ScoreMultiplyerBoard | ✅ | ~0x9c | Arcade x2 popup via Font::DrawString | engine/rendering-detail.md |
 | MenuButton | ✅ | 0x15c | 3-layer button: texture quad + star + sparkle ring + real 3D fruit entity | structs/gameplay-misc.md |
 | ScreenButton | ❌ | — | Simplified button variant | — |
 | ScreenEffect | ✅ | 0x50 | Power-up screen effect (images + tint) | systems/power-ups.md |
@@ -114,7 +114,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 |-------|--------|------|-------------|-----|
 | PowerUp | ✅ | ~0xb8 | Power-up template: name, modifiers, textures | systems/power-ups.md |
 | PowerUpManager | ✅ | ~0x90 | Singleton: maps, active list, DtMod, score mults | systems/power-ups.md |
-| PowerUpShop | ✅ | — | In-game power-up purchase UI | systems/rendering-detail.md |
+| PowerUpShop | ✅ | — | In-game power-up purchase UI | engine/rendering-detail.md |
 | ScoreModifier | ✅ | 0x3c | Parse + Update: gain/loss add+multiply, applied flag | functions/power-ups.md |
 | TimeModifier | ✅ | 0x3c | Parse + Update: stop/slow/ramp clock, addTime, ApplyDtMod | functions/power-ups.md |
 | SlashModifier | ✅ | 0x40 | Parse + Apply: colours, width, texture, fxTexture (no Update) | functions/power-ups.md |
@@ -126,12 +126,12 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 
 | Class | Status | Size | Description | Doc |
 |-------|--------|------|-------------|-----|
-| GameSound | ✅ | 0x708 | Pool-based SFX manager (32 slots) | systems/sound-system.md |
+| GameSound | ✅ | 0x708 | Pool-based SFX manager (32 slots) | engine/sound-system.md |
 | Mortar::SoundManager | 🔶 | — | SFXPlay/SFXPlayInternal/SetVolume decompiled | functions/sound.md |
 | Mortar::MortarSound | ❌ | 0x10 | Sound handle API (15 funcs, behind GOT thunks) | — |
-| BadaSound | ✅ | ~0x874 | Full struct + all functions: SFXLoad, SFXPlay(8 slots), Music Play/Stop/Pause/Resume | systems/sound-system.md |
+| BadaSound | ✅ | ~0x874 | Full struct + all functions: SFXLoad, SFXPlay(8 slots), Music Play/Stop/Pause/Resume | engine/sound-system.md |
 | MAMAudioController | ❌ | — | Audio subsystem bridge (18 funcs) | — |
-| MAMAudioThread | 🔶 | 0x154 | Mixing thread: 16kHz, 16 voices, NLFQueue | structs/other.md |
+| MAMAudioThread | 🔶 | 0x154 | Mixing thread: 16kHz, 16 voices, NLFQueue | engine/other-structs.md |
 | MortarAudioMixerBada | ❌ | — | Bada PCM mixer (17 funcs) | — |
 | SoundEffect / SoundEffectBada | ❌ | — | Sound effect wrapper (61 funcs) | — |
 
@@ -148,14 +148,14 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 
 | Class | Status | Size | Description | Doc |
 |-------|--------|------|-------------|-----|
-| DisplayManager | ✅ | ~0x54 | GL state singleton: viewport, colours, light | systems/rendering-detail.md |
+| DisplayManager | ✅ | ~0x54 | GL state singleton: viewport, colours, light | engine/rendering-detail.md |
 | MatrixManager | ✅ | — | Matrix operations (known from T.NNN renames) | — |
 | MatrixStack | ✅ | — | At MatrixManager+0x1094 | — |
-| Model | ✅ | — | Depth-sorted multi-mesh draw | systems/rendering-detail.md |
-| Mesh | 🔶 | — | AddGeometry, Draw, DrawQuadUnCached decompiled | formats/models.md |
-| Font | ✅ | 0x438 | BMFont loader + DrawString | systems/rendering-detail.md |
-| GeometryBinding_Bada | ✅ | — | PassBinding::Apply fully decompiled | formats/models.md |
-| Texture / Texture2D | ✅ | — | .tex loader, GPUafyTexture, TexFmtToGL | formats/textures.md |
+| Model | ✅ | — | Depth-sorted multi-mesh draw | engine/rendering-detail.md |
+| Mesh | 🔶 | — | AddGeometry, Draw, DrawQuadUnCached decompiled | engine/formats/models.md |
+| Font | ✅ | 0x438 | BMFont loader + DrawString | engine/rendering-detail.md |
+| GeometryBinding_Bada | ✅ | — | PassBinding::Apply fully decompiled | engine/formats/models.md |
+| Texture / Texture2D | ✅ | — | .tex loader, GPUafyTexture, TexFmtToGL | engine/formats/textures.md |
 | EffectGroup / EffectProperty | ❌ | — | ES 1.x effect system (186 funcs, skip for port) | — |
 | ReloadableTexture | ❌ | — | Hot-reload texture wrapper | — |
 
@@ -163,20 +163,20 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 
 | Class | Status | Description | Doc |
 |-------|--------|-------------|-----|
-| ActorManager | ✅ | Entity pool: Add, Update, Draw, Deactivate, Remove. Free pool recycling. | functions/actor-manager.md |
-| ResourceLoader | ✅ | HBR0 container parser | formats/models.md |
+| ActorManager | ✅ | Entity pool: Add, Update, Draw, Deactivate, Remove. Free pool recycling. | engine/actor-manager.md |
+| ResourceLoader | ✅ | HBR0 container parser | engine/formats/models.md |
 | DataReader / FileDataReader | 🔶 | Binary read helpers | — |
 | InputManager | 🔶 | Input callback registration | — |
-| Touch | ✅ | Ring buffer for touch events | systems/touch-input.md |
-| PSPParticleManager | ✅ | Particle system singleton | systems/particles.md |
-| PSPParticleEmitter | ✅ | Emitter instance | systems/particles.md |
-| PSPEmitterTemplate | ✅ | Particle template (from XML) | systems/particles.md |
+| Touch | ✅ | Ring buffer for touch events | engine/touch-input.md |
+| PSPParticleManager | ✅ | Particle system singleton | engine/particles.md |
+| PSPParticleEmitter | ✅ | Emitter instance | engine/particles.md |
+| PSPEmitterTemplate | ✅ | Particle template (from XML) | engine/particles.md |
 | SystemManager | ❌ | Engine bootstrap | — |
 | FileManager | ❌ | File I/O abstraction | — |
 | NetworkManager | ⏭️ | P2P + OpenFeint (defunct) | docs/TODO.md |
 | ItemManager | ✅ | LoadItemData: itemlist.xml → items + per-type maps | functions/data-parsing.md |
 | AchievementManager | ✅ | LoadAchievementInfo: 11 type categories, 0x1A0 per entry | functions/data-parsing.md |
-| BonusManager | ✅ | Bonus award data | structs/other.md |
+| BonusManager | ✅ | Bonus award data | engine/other-structs.md |
 | LeaderboardManager | ⏭️ | Online leaderboards (defunct) | docs/TODO.md |
 
 ## Math Types
@@ -189,7 +189,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | _Matrix33\<float\> | 🔶 | 3×3 matrix |
 | _Matrix43\<float\> | 🔶 | 4×3 matrix |
 | _Matrix44\<float\> | ✅ | 4×4 matrix |
-| Math::Random | ✅ | 64-bit LCG (Knuth MMIX), 24 bytes. See [rng](systems/rng.md) |
+| Math::Random | ✅ | 64-bit LCG (Knuth MMIX), 24 bytes. See [rng](engine/rng.md) |
 | Colour | ✅ | BGRA packed 4 bytes |
 
 ## UI Widgets (additional)

@@ -1,5 +1,58 @@
 # HUD & UI Structs
 
+## Class Hierarchy
+
+```
+HUDControl (base, 0x60 bytes, vtable 15 entries)
+ └─ HUDControl3d (0x7C bytes)
+     ├─ MenuButton (0x15C bytes) — interactive button with optional 3D fruit entity
+     │    (leaf class — no subclasses)
+     │    MenuButtonAddOn — plain data struct attached via AddPeice(), NOT a subclass
+     │
+     ├─ CheckBox (0x88+ bytes) — toggle control, layer 0x80
+     │
+     ├─ GenericHUDControl (0x1C8+ bytes) — base for animated screen controls
+     │    └─ Has TranisitionInfo×4 + PulseInfo×4
+     │
+     ├─ MissControl — combo text display (pool of 9)
+     │
+     ├── Screen classes (all extend HUDControl3d directly):
+     │    ├─ MainScreen (0x120 bytes) — main menu, 25-state machine
+     │    ├─ GameOverScreen (0x13C bytes)
+     │    ├─ GameModeScreen
+     │    ├─ PauseScreen (0xD8 bytes)
+     │    ├─ LeaderboardScreen
+     │    ├─ PowerUpShop
+     │    ├─ ShopScreen
+     │    ├─ UpsellScreen
+     │    ├─ AboutScreen
+     │    ├─ DojoScreen
+     │    ├─ BonusScreen
+     │    ├─ FruitFactControl
+     │    ├─ ComboControl
+     │    ├─ CoinCounter (0xD4 bytes)
+     │    ├─ SpeedControl
+     │    └─ BonusAwardHud
+     │
+     └── Entity-related (also HUDControl3d):
+          └─ SlashEntity — blade trail (16 instances)
+
+ScreenButton (standalone struct, NOT HUDControl subclass)
+  — Has Delegate3<bool, MenuButton*, float, ScreenButton&>
+  — Works alongside MenuButton but is a separate type
+
+DialogButton (Mortar::Dialog inner class, NOT related to MenuButton)
+```
+
+### Key relationships
+
+- **MenuButton** is a leaf class with no subclasses. `MenuButtonAddOn` is a plain data struct (texture + pos + size, ~0x20 bytes) added via `AddPeice()`.
+- **ScreenButton** references MenuButton via a delegate but is NOT in the HUDControl hierarchy.
+- All screen classes (MainScreen, GameOverScreen, etc.) are **siblings** of MenuButton — they all extend HUDControl3d directly.
+- The `Delegate1<void, HUDControl*>::Callee<T>` template instantiations confirm which classes participate in the HUD callback system: MenuButton, MainScreen, GameOverScreen, GameModeScreen, LeaderboardScreen, PauseScreen, PowerUpShop, ScreenButton, ShopScreen, SlashEntity, UpsellScreen.
+
+---
+
 ## HUD & UI
 
 ### HUD (size ~0x20)
@@ -213,5 +266,5 @@ Pool: up to 9 combo text sprites (digit textures 1..9). `GetFree` (0x00150da4) s
 
 ## See Also
 
-- [Rendering functions](../functions/rendering.md) -- HUDControl3d::Draw
+- [Rendering functions](../engine/rendering-functions.md) -- HUDControl3d::Draw
 - [SlashEntity functions](../functions/slash-entity.md) -- MissControl combo display

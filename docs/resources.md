@@ -232,9 +232,9 @@ GameInitialise()
 
 ## See Also
 
-- [Texture format](formats/textures.md) -- .tex file layout
-- [Audio format](formats/audio.md) -- .wav.pcm file format
-- [Model format](formats/models.md) -- HBR0 container, vertex streams
-- [Font format](formats/fonts.md) -- BMFont .fnt files
+- [Texture format](engine/formats/textures.md) -- .tex file layout
+- [Audio format](engine/formats/audio.md) -- .wav.pcm file format
+- [Model format](engine/formats/models.md) -- HBR0 container, vertex streams
+- [Font format](engine/formats/fonts.md) -- BMFont .fnt files
 - [Wave system](systems/wave-system.md) -- wavelist XML parsing
 - [Power-ups system](systems/power-ups.md) -- poweruplist.xml

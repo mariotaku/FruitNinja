@@ -317,7 +317,7 @@ Key fields parsed from XML:
 ## See Also
 
 - [Power-ups system](../systems/power-ups.md) — PowerUp struct, modifiers
-- [Particles system](../systems/particles.md) — PSPEmitterTemplate, AddEmitter
+- [Particles system](../engine/particles.md) — PSPEmitterTemplate, AddEmitter
 - [Wave system](../systems/wave-system.md) — WAVE_INFO XML parsing (in WaveManager::Init)
 - [Resources](../resources.md) — XML file schemas and examples
 - [Data structs](../structs/data.md) — FRUIT_INFO (loaded by Fruit::LoadInfo, separate from these)

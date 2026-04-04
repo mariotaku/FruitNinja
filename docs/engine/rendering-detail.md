@@ -250,7 +250,7 @@ Key virtual functions used throughout GameDraw:
 
 ## See Also
 
-- [Rendering functions](../functions/rendering.md) -- draw call pseudocode
-- [Asset functions](../functions/assets.md) -- GPUafyTexture, LoadVertexStreamPSP
-- [Model format](../formats/models.md) -- HBR0 container, vertex streams
-- [Texture format](../formats/textures.md) -- .tex file layout
+- [Rendering functions](rendering-functions.md) -- draw call pseudocode
+- [Asset functions](assets.md) -- GPUafyTexture, LoadVertexStreamPSP
+- [Model format](formats/models.md) -- HBR0 container, vertex streams
+- [Texture format](formats/textures.md) -- .tex file layout

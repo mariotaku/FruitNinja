@@ -44,7 +44,7 @@ void BadaTextureData::GPUafyTexture(TextureHeader* tex, int* texIdOut) {
 |---------|-----------|
 | 0x001a7b0c | `SmartPtr<IVertexStream> LoadVertexStreamPSP(ResourceLoader&)` |
 
-See `docs/formats/models.md` for PSP vertex declaration bitfield.
+See `docs/engine/formats/models.md` for PSP vertex declaration bitfield.
 
 ### LoadIndexStreamPSP (0x001a799c, 91 lines)
 
