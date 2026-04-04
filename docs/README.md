@@ -28,7 +28,9 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/camera.md](engine/camera.md) — MortarCamera, FruitCamera, ortho projection setup
 - [engine/input-manager.md](engine/input-manager.md) — Action-based input system, callback registration, config parsing, 16-touch
 - [engine/touch-input.md](engine/touch-input.md) — Touch coordinate transform (portrait→landscape), input pipeline to SlashEntity
+- [engine/touch-system.md](engine/touch-system.md) — Mortar::Touch internals: double-buffered 8-slot state, TEvnt ring buffer, data flow
 - [engine/sound-system.md](engine/sound-system.md) — GameSound pool (32 slots), BadaSound backend, MAMAudioThread (16 voices, 16kHz)
+- [engine/audio-internals.md](engine/audio-internals.md) — MAMAudioController command protocol, MAMVoice/MAMSound, NLFQueue, threading primitives
 - [engine/particles.md](engine/particles.md) — PSPParticleManager, Emitter, Particle architecture
 - [engine/actor-manager.md](engine/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
 - [engine/texture-mesh-manager.md](engine/texture-mesh-manager.md) — TextureManager (24-byte cache), MeshManager (20 bytes), loading pipelines, ARM struct-return convention
@@ -39,8 +41,10 @@ Reusable engine subsystems — not specific to FruitNinja.
 
 ### Engine Rendering
 
+- [engine/rendering-pipeline.md](engine/rendering-pipeline.md) — Two-path rendering: 3D (Effect/Geometry/PassBinding/glDraw) vs 2D (DrawQuad/DrawTriList), Font::DrawString, BakedString
 - [engine/rendering-detail.md](engine/rendering-detail.md) — Model::Draw, TintWhite/Colour, SetupQuad/AddQuad, Font::Load, QUADCUSTOMVERTEX
 - [engine/rendering-functions.md](engine/rendering-functions.md) — HUDControl3d::Draw, Model::Draw, Tint, Quad builders
+- [engine/vtables.md](engine/vtables.md) — DisplayManager (20 entries), HUDControl (15 entries, confirmed), Entity (7 entries) vtable layouts
 - [engine/assets.md](engine/assets.md) — GPUafyTexture, TexFmtToGL, LoadVertexStreamPSP
 
 ### Asset Formats
