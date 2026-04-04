@@ -1,33 +1,36 @@
 #ifndef FN_MENU_BUTTON_H
 #define FN_MENU_BUTTON_H
 
+//
+// MenuButton : HUDControl3d (0x15C bytes)
+// Reimplemented from docs/structs/gameplay-misc.md
+//
+// 3-layer rendering: button quad + "new" indicator + sparkle ring
+// The spinning 3D fruit is a real Entity from ActorManager, NOT drawn by MenuButton.
+// MenuButton stores a pointer to the entity at +0x80 and positions it each frame.
+//
+
 #include "HUDControl3d.h"
-#include "Mesh.h"
 #include <functional>
-#include <string>
 
 struct Renderer;
 struct Game;
+class Entity;
 
-// Matches original MenuButton : HUDControl (0x15C bytes)
-// 3-layer rendering: button quad + "new" indicator + sparkle ring
-// Plus a real 3D fruit entity drawn separately
 class MenuButton : public HUDControl3d {
 public:
-    // Click callback (replaces original Delegate0<void>)
+    // Click callback (replaces Delegate0<void>)
     std::function<void()> on_click;
 
     // Press state
     bool pressed;
 
-    // Rotation speed (original: +0xf4, 8-12 deg/s random)
+    // +0xf4: rotation speed (8-12 deg/s random in original, 0 for toggles)
     float rotation_speed;
 
-    // 3D fruit mesh rendered on top of button
-    Mesh fruit_mesh;
-    GLuint fruit_atlas_tex;  // shared atlas (not owned)
-    float fruit_rotation;
-    bool has_fruit;
+    // +0x80: real Fruit/Bomb entity created via ActorManager::Add
+    // This entity is drawn by ActorManager::Draw, NOT by MenuButton.
+    Entity* m_pEntity;
 
     // Hit-test scale factors (original: +0x124..+0x12C)
     float m_HitScaleX, m_HitScaleY;
@@ -39,8 +42,9 @@ public:
     void init(GLuint tex, float tex_w, float tex_h, float cx, float cy,
               std::function<void()> callback);
 
-    // Load 3D fruit mesh for this button
-    void load_fruit(Game& game, const char* fruit_name, GLuint atlas_tex);
+    // Create a real Fruit entity via ActorManager and attach to this button
+    // fruitType: 0+ = fruit index, -1 = no fruit (toggles)
+    void CreateFruitEntity(Game& game, int fruitType);
 
     // HUDControl overrides
     void Update(float dt) override;

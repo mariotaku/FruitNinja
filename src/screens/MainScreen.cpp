@@ -61,18 +61,12 @@ MainScreen::MainScreen(Game& g)
       m_field108(0.0f),
       m_State(STATE_CAMERA_ZOOM),
       m_Timer(0.0f), m_Timer2(0.0f),
-      m_TexGCAchievements(0), m_FruitAtlasTex(0),
       m_CameraTransition(1.0f),
       m_GlobalAlphaTarget(1.0f),
       m_Time(0.0f)
 {
-    // Step 1-2: Load fruit atlas (shared by button meshes)
-    {
-        TexImage img;
-        std::string path = game.data_dir + "/models/fruit/textures/fruit_atlas.tex";
-        if (tex_load(path, img))
-            m_FruitAtlasTex = game.renderer.upload_texture(img);
-    }
+    // Fruit entities are created via ActorManager in CreateFruitEntity,
+    // not loaded here. Mesh loading happens in Fruit::Init.
 
     // Step 3: Load global textures
     if (!game.blurry_backing_tex)
@@ -149,7 +143,6 @@ MainScreen::~MainScreen() {
     GLuint textures[] = {
         m_TexNewGame, m_TexDojoIcon, m_TexQuit, m_TexOpenFeint, m_TexMoreGames,
         m_TexGCAchievements, m_TexSliceFruit, m_TexCommingSoon,
-        m_TexSoundOn, m_TexSoundOff, m_TexMusicOn, m_TexMusicOff, m_FruitAtlasTex
     };
     for (int i = 0; i < 13; i++) {
         if (textures[i]) glDeleteTextures(1, &textures[i]);
@@ -208,8 +201,7 @@ void MainScreen::CreatePlayDojo() {
                           (float)m_ImgNewGame.width, (float)m_ImgNewGame.height,
                           pp.x, pp.y,
                           [this]() { GameModeCallback(); });
-        if (m_FruitAtlasTex)
-            pPlayButton->load_fruit(game, "watermelon", m_FruitAtlasTex);
+            pPlayButton->CreateFruitEntity(game, 3); // fruitType 3 = watermelon
         pPlayButton->m_LayerFlags = 0x08;
         game.hud->AddControl(pPlayButton);
     }
@@ -223,8 +215,7 @@ void MainScreen::CreatePlayDojo() {
                           (float)m_ImgDojoIcon.height * 0.9f,
                           dp.x, dp.y,
                           [this]() { AboutCallback(); });
-        if (m_FruitAtlasTex)
-            pDojoButton->load_fruit(game, "mango", m_FruitAtlasTex);
+            pDojoButton->CreateFruitEntity(game, 9); // fruitType 9 = mango
         pDojoButton->m_LayerFlags = 0x08;
         game.hud->AddControl(pDojoButton);
     }
@@ -238,8 +229,7 @@ void MainScreen::CreateLeaderboard() {
         pLeaderboardBtn = new MenuButton();
         pLeaderboardBtn->init(m_TexOpenFeint, 64.0f, 64.0f, lp.x, lp.y,
                               []() { /* LeaderboardsCallback — skip for port */ });
-        if (m_FruitAtlasTex)
-            pLeaderboardBtn->load_fruit(game, "kiwifruit", m_FruitAtlasTex);
+            pLeaderboardBtn->CreateFruitEntity(game, 5); // fruitType 5 = kiwifruit
         pLeaderboardBtn->m_LayerFlags = 0x08;
         game.hud->AddControl(pLeaderboardBtn);
     }

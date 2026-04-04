@@ -85,7 +85,7 @@ private:
     // +0x114
     GLuint m_TexGCAchievements;
 
-    GLuint m_FruitAtlasTex;
+    // Fruit atlas no longer needed here — entities load their own meshes
 
     // Port-specific
     float m_CameraTransition;
