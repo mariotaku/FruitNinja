@@ -81,36 +81,58 @@ Entity base ends at +0x3c. Fruit own fields follow.
 
 ---
 
-## Bomb : Mortar::Entity
+## Bomb : Mortar::Entity (size = 0xac / 172 bytes)
+
+Ghidra struct: `/FruitNinja/Bomb` or `/Demangler/Bomb`
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
-| +0x00 | EntityFns* | vtable | |
-| +0x1c | Vec3 | pos | Position |
-| +0x38 | Col* | m_Col | Collision shape |
-| +0x40 | Delegate0\<void\> | hitCallback | |
-| +0x64 | int | field38_0x64 | |
-| +0x68 | char | activeFlag | Controls update branch |
-| +0x7c | int | field58_0x7c | |
-| +0x80 | char | movementFlag | |
-| +0x84 | int | field63_0x84 | |
-| +0x8c | Vec3 | accelForce | |
-| +0xa4 | float | countdown | Timer; triggers chain spawn |
-| +0xa8 | float | speedMult | |
-
-Additional fields from Bomb::Update (195 lines, fully decompiled):
-
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
+| +0x00 | EntityFns* | vtable | Bomb vtable at 0x1EA478 |
+| +0x04 | int | field_0x04 | (Entity base) |
+| +0x08 | ushort | m_TrackerID | (Entity base) |
+| +0x0c | byte | flags | bit 1 = collision, bit 4 = killed |
+| +0x10 | float | pos_x | Position X |
+| +0x14 | float | pos_y | Position Y |
+| +0x18 | float | pos_z | Position Z |
+| +0x1c | float | vel_x | Velocity X |
+| +0x20 | float | vel_y | Velocity Y |
+| +0x24 | float | vel_z | Velocity Z |
+| +0x28 | Vec3 | m_Scale | Render scale; set in Init, modified by MakeFat |
+| +0x38 | Col* | m_Col | ColSphere pointer (size 0x18) |
 | +0x3c | float | m_SpawnTimer | Counts down; spawns BombBlast (type 4) at 0 |
-| +0x70 | short | m_RotVelX | Rotation velocity X (16-bit angle) |
-| +0x72 | short | m_RotVelY | Rotation velocity Y |
+| +0x40 | Delegate0\<void\> | hitCallback | Callback for menu bomb delegate |
+| +0x64 | int | field38_0x64 | Bomb variant: 0 = normal, 2 = multiplayer |
+| +0x68 | byte | activeFlag | 0 = in-flight, 1 = hit/slashed |
+| +0x6c | float | m_ZPosition | From GetBombZPosition(); layer ordering |
+| +0x70 | short | m_RotVelX | Rotation velocity X; Random 1..8 |
+| +0x72 | short | m_RotVelY | Rotation velocity Y; Random 1..8 |
 | +0x74 | short | m_RotX | Current rotation X (accumulated) |
-| +0x76 | short | m_RotY | Current rotation Y |
-| +0x7c | int | m_pParticleEmitter | PSPParticleEmitter* (fuse trail) |
-| +0x88 | byte | m_bBombFlag88 | Hit variant flag |
+| +0x76 | short | m_RotY | Current rotation Y (accumulated) |
+| +0x78 | byte | field_0x78 | Collision guard (prevents double-hit) |
+| +0x7c | PSPParticleEmitter* | m_pEmitter | Fuse particle trail; NULL until first draw |
+| +0x80 | byte | movementFlag | 1 = physics enabled |
+| +0x84 | int | field_0x84 | Backref to Game/TaskState object |
+| +0x88 | byte | m_bBombFlag88 | 0 = normal hit, 1 = menu/zen hit |
+| +0x8c | float | accelForce_x | Gravity/acceleration X; Init = 0.0 |
+| +0x90 | float | accelForce_y | Gravity/acceleration Y; Init = -12.0 |
+| +0x94 | float | accelForce_z | Gravity/acceleration Z; Init = 0.0 |
+| +0x98 | Vec3 | m_OrigScale | Backup of m_Scale from Init |
+| +0xa4 | float | countdown | Chuck delay timer; 0 = ready to spawn |
+| +0xa8 | float | speedMult | Speed multiplier; 1.0 normal, higher for fat bombs |
 
-**Key methods:** Update (0x1729fc, 195 lines), Init (0x172504), Draw (0x171be8), CollisionResponse (0x17280c), Chuck (0x170f68)
+### Key Methods
+
+| Address | Name | Signature | Notes |
+|---------|------|-----------|-------|
+| 0x172504 | Init | `void Init(void*, long, Vec3*)` | Vtable[2]; setup after spawn |
+| 0x171764 | Release | `void Release()` | Vtable[3]; cleanup emitters |
+| 0x1729fc | Update | `void Update(float dt)` | Vtable[4]; 195 lines |
+| 0x171be8 | Draw | `void Draw()` | Vtable[5]; mesh + rotation |
+| 0x1714e4 | DrawUpdate | `void DrawUpdate(float dt)` | Vtable[6]; fuse particle update |
+| 0x17280c | CollisionResponse | `int CollisionResponse(Entity*, ulong, ulong, Vec3*)` | Vtable[9]; blade hit |
+| 0x170f68 | Chuck | `void Chuck(float delay)` | Set countdown timer |
+| 0x1716e8 | KillBomb | `void KillBomb()` | flags |= 0x10, clear emitter |
+| 0x171d78 | MakeFat | `void MakeFat(bool silent)` | Scale up, speed up |
 
 ### Bomb::Update Flow
 
@@ -128,77 +150,102 @@ Additional fields from Bomb::Update (195 lines, fully decompiled):
 - `m_bBombFlag88 != 0`: physics continues with different accel rate, collision offscreen
 
 **Bomb hit behavior:**
-- Classic/Arcade: `HitBomb()` → camera shake, Game+0x10 = countdown timer, game-over delay
+- Classic/Arcade: `HitBomb()` -> camera shake, Game+0x10 = countdown timer, game-over delay
 - Zen mode: `AddToCurrentScore(-10, 0, false, false)`, `WaveManager::ResetSpeed`, `PowerUpManager::ClearTimedPowers`
+- Menu: delegate callback, `ClearMenuItems()`
 
 ---
 
-## SlashEntity : Mortar::Entity (blade/swipe, size ≥ 0x184)
+## SlashEntity : Mortar::Entity (blade/swipe, size = 0x184 / 388 bytes)
 
-Entity base ends at ~0x3c; SlashEntity fields follow.
+Entity base ends at +0x3c. SlashEntity own fields follow.
+Full analysis in [slash-entity.md](../functions/slash-entity.md).
 
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| +0x3c | PSPParticleEmitter* | m_TrailEmitter | Touch trail particle; null when inactive |
-| +0x40 | float | m_Scale | Init = DAT_0017c760 |
-| +0x44 | Colour | m_BaseColour | RGBA, 4 bytes |
-| +0x48 | Colour | m_HighlightColour | RGBA, 4 bytes |
-| +0x4c | char | m_bFlag4c | Init = 0 |
-| +0x50 | int | m_SplitPoint | Split index for same-screen multiplayer |
-| +0x58 | int | m_PointCount | Blade trail vertex count; 4 = min for collision |
-| +0x5c | void* | m_pLeftBuffer | Ptr to left/top vertex strip |
-| +0x60 | void* | m_pRightBuffer | Ptr to right/bottom vertex strip |
-| +0x64 | Vec3 | m_BladeDir | Blade velocity direction, normalised |
-| +0x70 | Vec3 | m_TailPos | Oldest visible trail point |
-| +0x7c | Vec3 | m_HeadPos | Newest trail point / current tip |
-| +0x94 | float | m_LineLengthSq | = \|head-tail\|²; -1.0 = no active segment |
-| +0x98 | float | m_SpeedScale | Blade speed multiplier |
-| +0x9c | int | m_SliceCount | Incremented +2 per slice |
-| +0xa0 | float | m_SliceTimerA | Zeroed on each slice |
-| +0xa4 | float | m_SliceTimerB | Zeroed on each slice |
-| +0xa8 | Vec3 | m_BladeVelAtSlice | Blade dir snapshot at moment of slice |
-| +0xb4 | Vec3 | m_SlicePos | World position of sliced entity |
-| +0xc0 | int | m_SliceEntityType | Byte from entity; score accumulator |
-| +0xc4 | float | m_ScoreBonus | Score multiplier field |
-| +0xc8 | Vec3[6] | m_GhostPositions | 72 bytes; ends at +0x110 |
-| +0x110 | int | m_GhostCount | Init = 0 |
-| +0x114 | int | m_GhostFlags | Init = 0 |
-| +0x118 | Vec3 | m_GhostDir | Direction snapshot for ghost |
-| +0x124 | float | m_ComboTimer | Time window for combo; reset on slice |
-| +0x128 | int | m_ComboCount | Fruits sliced in current combo |
-| +0x12c | int | m_ComboEntityType | 0=fruit, 1=bomb, 2=special |
-| +0x130 | MissControl* | m_pComboCtrl | Null if no active combo |
-| +0x134 | float | m_GhostTimer | Counts up while m_bGhostActive |
-| +0x138 | char | m_bGhostActive | If true, timer runs → CreateGhost() |
-| +0x13c | int | m_ColEntityA | Collision entity handle; -1 = none |
-| +0x140 | int | m_ColEntityB | Collision entity handle; -1 = none |
-| +0x144 | char | m_bBladeActive | True = blade is a valid collision line |
-| +0x148 | float | m_ComboScoreBase | 6.0f; decremented (combo_n × 0.75) per slice |
-| +0x14c | int | m_ExtraFieldA | Init = -1 |
-| +0x150 | int | m_ExtraFieldB | Init = -1 |
-| +0x154 | int[11] | m_ComboFruitIDs | 0x2c bytes; ends at +0x180 |
-| +0x180 | ushort | m_AngleCopy | Updated each frame; copied to Entity::angle |
+| Offset | Type | Name | Init | Notes |
+|--------|------|------|------|-------|
+| +0x3c | PSPParticleEmitter* | m_TrailEmitter | NULL | Touch trail particle; null when inactive |
+| +0x40 | float | m_Scale | 0.0 | Blade glow scale; lerps up in critical, down when idle |
+| +0x44 | Colour | m_BaseColour | ctor | RGBA, 4 bytes; blended from highlight each frame |
+| +0x48 | Colour | m_HighlightColour | ctor | RGBA, 4 bytes; target colour from mod |
+| +0x4c | byte | m_bFlag4c | 0 | Set to 1 on bomb hit (activeFlag && !bombFlag88) |
+| +0x50 | int | m_SplitPoint | 0xa0 | Split index for same-screen multiplayer vertex buffers |
+| +0x58 | int | m_PointCount | 0 | Blade trail vertex pair count; 4 = min for collision |
+| +0x5c | QUADCUSTOMVERTEX* | m_pLeftBuffer | alloc'd | Left/top vertex strip; (splitPoint+2)*0x24 bytes |
+| +0x60 | QUADCUSTOMVERTEX* | m_pRightBuffer | alloc'd | Right/bottom vertex strip; (splitPoint+2)*0x24 bytes |
+| +0x64 | Vec3 | m_BladeDir | (0,0,0) | Blade velocity direction |
+| +0x70 | Vec3 | m_TailPos | -65535 | Oldest visible trail point |
+| +0x7c | Vec3 | m_HeadPos | -65535 | Newest trail point / current tip |
+| +0x88 | Vec3 | m_PrevHeadPos | -65535 | Previous head position (saved before shift) |
+| +0x94 | float | m_LineLengthSq | -1.0 | |head-tail|^2; -1.0 = no active segment |
+| +0x98 | float | m_SpeedScale | 0.0 | Set to 1.0 in AddPoint; reset to 0.0 when inactive |
+| +0x9c | int | m_SliceCount | -1 | +2 per fruit slice; -1 per splat spawn |
+| +0xa0 | float | m_SliceTimerA | 0.0 | Counts down for splat spawn timing |
+| +0xa4 | float | m_SliceTimerB | 0.0 | Accumulated random delay between splats |
+| +0xa8 | Vec3 | m_BladeVelAtSlice | | Blade dir snapshot at moment of slice |
+| +0xb4 | Vec3 | m_SlicePos | | World position of sliced entity |
+| +0xc0 | int | m_SliceEntityType | | Fruit type of last sliced fruit (+ critical bonus) |
+| +0xc4 | float | m_SwipeSoundTimer | 0.0 | PlaySwipe cooldown; set to 6.0 on swipe |
+| +0xc8 | Vec3[6] | m_GhostPositions | (zeroed) | 72 bytes; circular buffer of recent blade directions |
+| +0x110 | int | m_GhostIndex | 0 | Current index into m_GhostPositions (mod 6) |
+| +0x114 | int | m_GhostCount | 0 | Number of stored ghost positions (max 6) |
+| +0x118 | Vec3 | m_GhostDir | (global) | Averaged direction from ghost buffer |
+| +0x124 | float | m_ComboTimer | 0.1 | Time window for combo; reset to 0.0 on slice; expires at 0.1 |
+| +0x128 | int | m_ComboCount | 0 | Fruits sliced in current combo |
+| +0x12c | int | m_ComboEntityType | 0 | 0=fruit, 1=player2, 2=special |
+| +0x130 | MissControl* | m_pComboCtrl | NULL | Combo HUD control; null if no active combo |
+| +0x134 | float | m_GhostTimer | 0.0 | Counts up while m_bGhostActive; threshold=0.05 |
+| +0x138 | byte | m_bGhostActive | 0 | If true, timer runs -> CreateGhost() |
+| +0x13c | int | m_ColEntityA | -1 | First collision vertex index |
+| +0x140 | int | m_ColEntityB | -1 | Last collision vertex index |
+| +0x144 | byte | m_bBladeActive | 0 | 2-bit state: 01=active, 10=deactivating, 00=off |
+| +0x148 | float | m_ComboScoreBase | 6.0 | Decremented (combo_n * (rand+0.75)) per slice |
+| +0x14c | int | m_ExtraFieldA | -1 | |
+| +0x150 | int | m_ExtraFieldB | -1 | |
+| +0x154 | int[11] | m_ComboFruitIDs | all -1 | 0x2c bytes; fruit type IDs in current combo |
+| +0x180 | ushort | m_AngleCopy | 0 | Updated each frame in AddPoint; copied to Entity::angle |
 
 ### Collision System
 
-**ColLine** (0x20 bytes): `{vtable, a.x, a.y, a.z, b.x, b.y, b.z, pad}`
+**ColLine** (0x20 bytes): `{vtable, center.x, center.y, center.z, tail.x, tail.y, tail.z, pad}`
+- center = midpoint of blade segment (head+tail)/2
+- tail = oldest point of active blade segment
 
 **ColCircle** (fruit): `m_Col[0] = {vtable, cx, cy, cz}`, `m_Col[1] = {radius, ?, ?, ?}`. `vtable->GetType()` returns 1 for circle.
 
-**Collision test**: Blade line segment vs fruit circle = segment-circle intersection. Returns 1 if any point on segment within radius of circle center.
+**Collision test** (0x0017b570): Blade line segment vs fruit circle:
+1. ColLine::Collide broad-phase check
+2. If pass: check midpoint-to-center distance vs radius
+3. If outside: project onto perpendicular, check intersection points against line length
+4. Returns 1 if any intersection within blade segment
 
 ### Key Methods
 
 | Address | Name | Notes |
 |---------|------|-------|
+| 0x0017c82c | SlashEntity() | Constructor |
+| 0x0017c774 | ~SlashEntity() | Destructor |
 | 0x0017c65c | Init | Allocates ColLine, calls InitPoints(0xa0) |
-| 0x0017c340 | InitPoints | Sets up vertex buffers |
-| 0x0017b92c | UpdatePoints | Rebuilds vertex strips from trail, computes angle |
-| 0x0017d2e4 | UpdateTouchDown | Manages trail particle emitter on touch |
-| 0x0017d664 | Update | Iterates entities, calls CollideWithEntity |
-| 0x0017b570 | CollideWithEntity | Line-vs-circle test |
+| 0x0017c60c | Release | Frees buffers, clears trail emitter |
+| 0x0017c340 | InitPoints | Allocs 2 vertex buffers, (split+2)*0x24 bytes each |
+| 0x0017b92c | UpdatePoints | Rebuilds vertex strips, fading, collision segment (474 lines) |
+| 0x0017d2e4 | UpdateTouchDown | Maps touch to blade position, inserts trail points |
+| 0x0017ce0c | AddPoint | Appends vertex pair to trail buffers |
+| 0x0017c584 | PreUpdate | Updates ghosts, mod colour, swipe volume |
+| 0x0017d664 | Update | Main tick: collision, combos, splats (623 lines) |
+| 0x0017b570 | CollideWithEntity | Line-vs-circle intersection test |
 | 0x0017b82c | CreateGhost | Spawns SlashEntityGhost for visual echo |
-| 0x0017e424 | DrawSlice | Renders blade geometry |
+| 0x0017e424 | DrawSlice | Renders blade as two triangle strips |
+| 0x0017e504 | PreDraw | Draws 8 ghost trails |
+| 0x0017b3b8 | Draw | No-op (blade rendered via DrawSlice) |
+| 0x0017b398 | DrawUpdate | Sets frame flags |
+| 0x0017b3bc | CollisionResponse | Returns 0 (slash doesn't receive collision) |
+| 0x0017b87c | GetHeadThicknessScale | Thickness based on head-vs-tail distance |
+| 0x0017ccdc | PlaySwipe | Plays random swipe SFX (1 of 6) |
+| 0x0017b0f4 | UpdateModColour | Animates blade modifier colours through palette |
+| 0x0017d61c | TouchDown | Resets blade, calls UpdateTouchDown |
+| 0x0017c50c | TouchMoveX | Maps input X to pos.x |
+| 0x0017c490 | TouchMoveY | Maps input Y to -pos.y |
+| 0x0017cbec | CleanupSlash | Free fn; nulls textures, releases ghosts |
 
 
 ---

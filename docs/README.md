@@ -75,6 +75,7 @@ Game-specific logic, screens, entities, and systems.
 - [functions/data-parsing.md](functions/data-parsing.md) — XML loaders: powerups, bonus, items, achievements, particles
 - [functions/sound.md](functions/sound.md) — GameSound::SFXPlay
 - [functions/screens-effects.md](functions/screens-effects.md) — Screen callbacks, BombFlash/Blast, Ghost, Coin
+- [functions/entity-factory-combo-timekeeper.md](functions/entity-factory-combo-timekeeper.md) — EntityFactory (5 types), ComboChecker (COMBO_TYPE enum, pattern matching), TimeKeeper/TimeModifier/TimeControl, FruitCamera shake/follow
 
 ### Game Systems
 
