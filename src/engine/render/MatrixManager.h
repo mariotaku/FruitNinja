@@ -20,11 +20,14 @@ public:
     MatrixStack m_World;       // +0x1094, 0x848 bytes
     MatrixStack m_Texture;     // +0x18DC, 0x848 bytes
 
+    // Cached Projection * View (recomputed on upload when dirty)
+    Matrix44 m_CachedProjView;
+
     // Version tracking for dirty upload
-    int m_ViewVersion;              // +0x2124
     int m_ViewVersionUploaded;      // +0x2128
     int m_WorldVersionUploaded;     // +0x212C
     int m_TextureVersionUploaded;   // +0x2130
+    int m_ProjVersionUploaded;
 
     // Matches 0x0019e5a4
     // NOTE: parameter order is (top, bottom, left, right, near, far) — NOT standard GL
@@ -34,12 +37,15 @@ public:
     // Matches 0x0019e724
     void SetupLookAt(const Vec3& eye, const Vec3& target, const Vec3& up);
 
-    // Matches 0x0019e2b4 — for GLES2, computes and caches MVP
-    void UploadCurrentMatrices(bool forceProjection = false);
+    // "Upload all" — called by SetupOrtho, SetupLookAt (skipProjection=false)
+    void UploadAll();
+
+    // "Upload modelview only" — called by HUD draw pipeline (skipProjection=true)
+    void UploadModelViewOnly();
 
     void ResetAllStacks();
 
-    // Get combined Projection * View * World matrix
+    // Get combined Projection * View * World matrix (uses cached ProjView)
     Matrix44 GetMVP() const;
 
     MatrixStack& GetWorldStack() { return m_World; }
@@ -53,6 +59,9 @@ public:
     const MatrixStack& GetTextureStack() const { return m_Texture; }
 
 private:
+    // Matches 0x0019e2b4 — recomputes cached matrices based on dirty versions
+    void _UploadCurrentMatrices(bool skipProjection);
+
     MatrixManager();
 };
 
