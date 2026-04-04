@@ -35,7 +35,18 @@
 - Use `rename_data` to name DAT_ symbols with meaningful names based on context
 - Use `force_decompile` after renaming to see updated decompilation with named symbols
 
+## Coordinate System
+- Use the **original centered ortho** directly: `SetupOrtho(160, -160, -240, 240, 2000, -6000)`
+- X: +160 (top of landscape) to -160 (bottom) — 320 units
+- Y: -240 (left of landscape) to +240 (right) — 480 units
+- **Do NOT convert** original positions — use them as-is from the binary (e.g., Play button at (16, -66))
+- No `toScreen()` or `orig_to_port()` conversions — the ortho projection handles it
+- HUDControl3d::Draw adds Vec3(480, 320, 0) offset internally (matching original)
+- Fruit entities and HUD controls share the same centered coordinate space
+
 ## Conventions
+- **Only commit when explicitly requested** by the user — do not auto-commit after changes
+- When a value in port code **differs from the original binary**, add a comment explaining the discrepancy (e.g. `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`). This makes it easy to find and fix incorrect values later.
 - Ghidra scripts go in `<project root>/ghidra_scripts/`, NOT in `$HOME/ghidra_scripts/`
 - The project ghidra_scripts/ directory is added to Ghidra's Script Manager — no need to copy elsewhere
 - RE findings go in `docs/` directory (see `docs/README.md` for index)

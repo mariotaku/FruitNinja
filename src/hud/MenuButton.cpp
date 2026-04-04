@@ -59,9 +59,16 @@ void MenuButton::CreateFruitEntity(Game& game, int fruitType) {
 
     // Position entity at button center
     fruit->pos = pos;
-    fruit->scale = Vec3(25.0f, 25.0f, 25.0f);
+
+    // Post-init: shrink fruit for menu display
+    // Original: entity.scale *= 0.2 (MENUBUTTON_FRUIT_SCALE at DAT_0014f194)
+    fruit->scale *= 0.2f;
+
     fruit->m_ScaleAnim = 1.0f;  // immediately visible (no launch delay)
     fruit->m_ChuckDelay = 0.0f;
+
+    // MENUBUTTON_FRUIT_ZPOS (DAT_0014f198 = 150.0)
+    fruit->m_ZPosition = 150.0f;
 
     // Set layer to 0x40 (menu layer, matches original: field_0x34 = 0x40)
     fruit->flags &= ~0x10;  // unhide

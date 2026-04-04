@@ -45,9 +45,12 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     // Rotation axis offset
     m_RotAxis = Vec3(RandRange(10.0f), 0.0f, 0.0f);
 
-    // Default scale (from FRUIT_INFO m_CollisionScale = 25.0)
-    scale = Vec3(25.0f, 25.0f, 25.0f);
-    // Note: m_ScaleAnim starts at 0, set to 1 by MenuButton::CreateFruitEntity for menu fruits
+    // DIFFERS: original computes visual scale in SetFruitType as:
+    //   globalVec (BSS, unreadable) × configFloat (GOT_OFF_FRUIT_SCALE_CONFIG) × 0.01 (FRUIT_VISUAL_SCALE_MULT)
+    // The 25.0 from FRUIT_INFO is m_CollisionScale — collision radius only, NOT visual.
+    // Using 1.0 as placeholder until globalVec/configFloat are resolved at runtime.
+    // SetFruitType would set this properly; for now approximate.
+    scale = Vec3(1.0f, 1.0f, 1.0f);
 
     // Load mesh for this fruit type
     static const char* fruitNames[] = {
