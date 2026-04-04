@@ -2,36 +2,105 @@
 
 ## Game : Mortar::MortarGame (singleton, size ≥ 0x604)
 
-MortarGame base zeroes +0x04..+0x1b3 in ctor.
+MortarGame base is 0xFC (252) bytes. Constructor zeroes +0x04..+0xF8.
+
+### MortarGame Struct Layout (0xFC / 252 bytes)
+
+| Offset | Size | Type | Name | Notes |
+|--------|------|------|------|-------|
+| +0x00 | 4 | void* | vtable | 16-entry vtable at 0x001eae58 (Game override) |
+| +0x04 | 64 | char[64] | m_versionString | Raw version string, e.g. "1.5.1" |
+| +0x44 | 64 | char[64] | m_formattedVersion | snprintf'd "%04i.%02i.%02i" version |
+| +0x84 | 32 | char[32] | m_languageString | Set by SetLanguage(strcpy) |
+| +0xA4 | 4 | int | m_versionCombined | major*10000 + minor*100 + patch |
+| +0xA8 | 4 | int | m_versionMajor | Parsed from version string |
+| +0xAC | 4 | int | m_versionMinor | Parsed from version string |
+| +0xB0 | 4 | int | m_versionPatch | Parsed from version string |
+| +0xB4 | 64 | char[64] | m_hardwareString | Set by SetHardware; default "BADA" |
+| +0xF4 | 1 | bool | m_bFastHardware | Set by SetHardware second param |
+| +0xF5 | 3 | | (padding) | |
+| +0xF8 | 4 | int | m_licensedState | 0=unknown, 1=licensed, 2=unlicensed |
 
 ### MortarGame vtable (at 0x001eae58, 16 entries)
 
-| Index | Address | Method | Notes |
-|-------|---------|--------|-------|
-| 0 | 0x0010d9d0 | GetHardwareString | Returns device string |
-| 1 | 0x0010d9d4 | IsFastHardware | Returns bool |
-| 2 | 0x0018aa14 | RenderAtHalfFrames | Stub |
-| 3 | 0x0018ac80 | GetHighResolutionScale | Returns 1.0f |
-| 4 | 0x0018ac88 | GetOpenFeintProductKey | Online service (defunct) |
-| 5 | 0x0018ac8c | GetOpenFeintSecret | Online service (defunct) |
-| 6 | 0x0018ac90 | GetOpenDisplayName | Online service (defunct) |
-| 7 | 0x0018ac94 | GetPlayhavenToken | Online service (defunct) |
-| 8 | 0x0010d9dc | GetCacheDataArchive | Data path |
-| 9 | 0x0018ac98 | CreateFileSystems | Mounts data archives |
-| 10 | 0x0018aa28 | TellGameToStart | Called after engine init |
-| 11 | 0x0018aa1c | Update(float dt) | Per-frame update |
-| 12 | 0x0018aa18 | Draw(float dt) | Per-frame render |
-| 13 | 0x0018aa20 | Init(int argc, char** argv) | One-time init |
-| 14 | 0x0018aa24 | End | Shutdown |
-| 15 | 0x0018aa2c | Paused | Pause event handler |
+All vtable entries shown are the Game-class overrides. The MortarGame base versions
+are all stubs/no-ops (addresses in 0x0018xxxx range). The Game-class override addresses
+are in the 0x0010xxxx range where the game logic lives.
 
-Other MortarGame functions:
+| Idx | Base addr | Override addr | Method | Base behavior | Override behavior |
+|-----|-----------|---------------|--------|---------------|-------------------|
+| 0 | (none) | 0x0010d9d0 | GetHardwareString | — | Returns this+0x04 (m_versionString ptr) |
+| 1 | (none) | 0x0010d9d4 | IsFastHardware | — | Returns this->m_bFastHardware (+0xF4) |
+| 2 | 0x0018aa14 | 0x0018aa14 | RenderAtHalfFrames | No-op stub | Not overridden (base stub) |
+| 3 | 0x0018ac80 | 0x0018ac80 | GetHighResolutionScale | Returns 1.0f | Not overridden (base) |
+| 4 | 0x0018ac88 | 0x0018ac88 | GetOpenFeintProductKey | No-op stub | Not overridden (defunct) |
+| 5 | 0x0018ac8c | 0x0018ac8c | GetOpenFeintSecret | No-op stub | Not overridden (defunct) |
+| 6 | 0x0018ac90 | 0x0018ac90 | GetOpenDisplayName | No-op stub | Not overridden (defunct) |
+| 7 | 0x0018ac94 | 0x0018ac94 | GetPlayhavenToken | No-op stub | Not overridden (defunct) |
+| 8 | (none) | 0x0010d9dc | GetCacheDataArchive | — | Returns 0 (null) |
+| 9 | 0x0018ac98 | 0x0018ac98 | CreateFileSystems | No-op stub | Not overridden (base stub) |
+| 10 | 0x0018aa28 | 0x0018aa28 | TellGameToStart | No-op stub | Not overridden (base stub) |
+| 11 | 0x0018aa1c | 0x0018aa1c | Update(float dt) | No-op stub | Not overridden (base stub) |
+| 12 | 0x0018aa18 | 0x0018aa18 | Draw(float dt) | No-op stub | Not overridden (base stub) |
+| 13 | 0x0018aa20 | 0x0018aa20 | Init(int argc, char**) | No-op stub | Not overridden (base stub) |
+| 14 | 0x0018aa24 | 0x0018aa24 | End | Returns this | Not overridden (base) |
+| 15 | 0x0018aa2c | 0x0018aa2c | Paused | No-op stub | Not overridden (base stub) |
+
+Note: vtable[0] (GetHardwareString) returns `this+4` = m_versionString, NOT m_hardwareString.
+This may be a naming error from original symbols, or the Game override intentionally returns
+the version string here. The m_hardwareString at +0xB4 is set by SetHardware but has no
+vtable getter — accessed directly.
+
+### MortarGame Non-Virtual Methods
+
+| Address | Signature | Behavior |
+|---------|-----------|----------|
+| 0x0018ab6c | `MortarGame()` ctor | Zeros all fields +0x04..+0xF8, sets vtable, calls SelfVersion→SetVersion |
+| 0x0018abe8 | `MortarGame()` ctor variant | Identical logic, different GOT-relative addressing |
+| 0x000f5cdc | `MortarGame()` thunk | GOT thunk → calls 0x0018abe8 |
+| 0x0018ac64 | `void TellGameToQuit()` | Calls SystemManager::QuitGame() |
+| 0x0018aa34 | `void SaveOnExit()` | **No-op stub** |
+| 0x0018aa38 | `char* SelfVersion()` | Returns pointer to string "1.0.0" (default) |
+| 0x0018aa50 | `void SetAppLicensed(bool)` | If true→m_licensedState=1; if false and not already 1→m_licensedState=2 |
+| 0x0018aa68 | `int GetAppLicensedState()` | Returns m_licensedState (+0xF8) |
+| 0x0018aa70 | `void SetLanguage(char*)` | strcpy to m_languageString (+0x84) |
+| 0x0018aa7c | `void SetHardware(char*,bool)` | strcpy to m_hardwareString (+0xB4), sets m_bFastHardware (+0xF4) |
+| 0x0018aa90 | `void SetVersion(char*)` | Parses "M.m.p" string, fills version fields, snprintf formatted, sets m_hardwareString default "BADA" |
+| 0x0018aa30 | `void UnPaused()` | **No-op stub** |
+| 0x0018ac9c | `bool AllowOrientationChange(int)` | Returns false |
+| 0x0010d9e0 | `void OrientationDidChange(int)` | **No-op stub** (in Game address range, __thiscall) |
+
+### MortarGame Default Values
+
+- SelfVersion base returns "1.0.0"; Game::SelfVersion override returns "1.5.1"
+- SetVersion sets default m_hardwareString to "BADA" via snprintf
+- SetVersion format: "%04i.%02i.%02i" → m_formattedVersion
+- m_licensedState: 0=unknown (init), 1=licensed, 2=unlicensed (cannot downgrade from 1)
+
+### Game-Class Override Methods (non-vtable)
+
+These override MortarGame methods with actual game logic:
+
+| Address | Method | Behavior |
+|---------|--------|----------|
+| 0x0010d9ec | `char* SelfVersion()` | Returns "1.5.1" string literal (static, not __thiscall) |
+| 0x0010da64 | `bool AllowOrientationChange(int)` | Returns 0 (false) |
+| 0x0010da68 | `void SetAppLicensed(bool)` | Same as base but accesses Game singleton via GOT (+0x18C) |
+| 0x0010da94 | `int GetAppLicensedState()` | Returns Game singleton +0x18C |
+| 0x0010dae0 | `void SaveOnExit()` | Calls GameTaskSaveOnExit() |
+| 0x0010dae8 | `void UnPaused()` | If LoadingJob::CanBoot: resumes SoundManager, calls GameSound::Unpause, calls UnpauseGame if m_TransitionTimer!=0 |
+| 0x0010b140 | `void SetLanguage(char*)` | Writes 0 to byte at Game singleton +0x03 (stub/flag clear) |
+| 0x001042d4 | `void SetHardware(char*,bool)` | Thunk → calls base MortarGame::SetHardware |
+
+Note: Game::SetAppLicensed/GetAppLicensedState access offset +0x18C from the Game singleton,
+not +0xF8 from MortarGame base. This suggests the Game struct has its own m_licensedState
+field at Game+0x18C (separate from MortarGame+0xF8), or the MortarGame base is embedded at
+a non-zero offset within Game.
+
+### Singleton Getters
 
 | Address | Function | Notes |
 |---------|----------|-------|
-| 0x0018ab6c | MortarGame::MortarGame() | Constructor (zeroes fields, sets version) |
-| 0x0018abe8 | MortarGame::MortarGame() | Constructor variant (with operator_delete) |
-| 0x0018ac64 | TellGameToQuit | Calls SystemManager::QuitGame() |
 | 0x000f4200 | ReturnsAnInstanceOfThisMortarGame | Singleton getter (returns Game*) |
 | 0x0010d674 | ReturnsAnInstanceOfThisMortarGame | Singleton getter (variant) |
 
@@ -73,12 +142,13 @@ Other MortarGame functions:
 | +0x180 | TimeControl* | pTimeCtrl | 0x108 bytes |
 | +0x184 | int | m_field184 | = 0 |
 | +0x188 | GameSound* | pGameSound | 0x708 bytes |
+| +0x18C | int | m_licensedState | 0=unknown,1=licensed,2=unlicensed (Game override of MortarGame+0xF8) |
 | +0x194 | int | m_FrameTimer | = (int)(dt × scale) + prev |
 | +0x1a0 | float | m_MenuReturnTimer | Set by QuitToMenu, counted in GameUpdate |
 | +0x1a8 | char | flag_0x1a8 | |
 | +0x1b1 | char[256×4] | fruitStats1..4 | 4 stat arrays |
 | +0x604 | byte | m_bFrameDirty | Cleared each GameTaskUpdate frame |
-| +0xf4 | bool | field244_0xf4 | MortarGame field |
+| +0xF4 | bool | m_bFastHardware | MortarGame base field (also at MortarGame+0xF4) |
 
 ### GameTask State Struct (separate from Game singleton)
 

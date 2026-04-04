@@ -2,11 +2,76 @@
 
 ## Fruit System
 
+### Vtable: 0x001ea528 (13 slots)
+
+See [entities.md](../structs/entities.md) for full vtable and struct layout.
+
 ### Fruit::Init (0x00176708, 142 lines)
 
 | Address | Signature |
 |---------|-----------|
 | 0x00176708 | `void Fruit::Init(void* p1, long fruitType, Vec3* scale)` |
+
+```c
+void Fruit::Init(void* p1, long fruitType, Vec3* scale) {
+    m_ScaleAnim = INIT_VALUE;     // +0x110
+    field_0x114 = 0;              // m_bDrawWhole
+    m_TrackerID = 0;
+    m_TimeScale = 1.0f;
+    
+    // Fruit type selection
+    if (fruitType < 0 || fruitType >= fruitCount)
+        m_FruitType = RandomFruit(true);
+    else
+        m_FruitType = (byte)fruitType;
+    
+    // Zen mode: skip special fruit if wave < threshold
+    if (gameMode == ZEN && waveProgress < 1.0) {
+        while (m_FruitType == specialFruitIdx)
+            m_FruitType = RandomFruit(true);
+        // Also skip if power-up fruit and conditions not met
+        if (hasPowerUp && (waveTime < 8.0 || anyActivePowers))
+            { flags |= 0x10; return; }  // kill immediately
+    }
+    
+    // Online multiplayer: avoid specific fruit type
+    if (IsOnlineMultiplayer() && m_FruitType == onlineExcludedType)
+        m_FruitType--;
+    
+    // Track special fruit spawn count
+    if (fruitInfo[m_FruitType].hasPowerUp)
+        specialFruitCount++;
+    
+    float scaleVal = (scale == NULL) ? 1.0f : *scale;
+    SetFruitType(m_FruitType, scaleVal);
+    
+    m_ChuckDelay = INIT_VALUE;    // +0x80
+    m_bSliced = 0;
+    flags = (flags & ~0x10) | 0x02;
+    m_bNoPowerUp = 0;
+    m_PlayerIdx = 0;
+    m_SliceTimer = -1.0f;
+    m_RotAxis = globalConfigVec3;
+    
+    // Random rotation velocities (RandF(11.0) - 5.5 per component)
+    for (i = 0; i < 2; i++) {
+        m_RotVel[i] = Vec3(rand-5.5, rand-5.5, rand-5.5);
+        m_pEmitter[i] = NULL;
+        m_Rot[i] = RandomStartAngle(false);
+    }
+    
+    field_0x10c = 0;  // m_bSpecialGravity
+    m_CollisionSize = 0x4b;
+    m_bCriticalEligible = 1;
+    field_0x68 = 4;
+    field_0x60 = 0;   // m_SlicedFrameAccum
+    m_bActive = 1;
+    m_SliceState = 0;
+    field_0x108 = 0;  // m_pSlashEntity
+    m_ZPosition = GetFruitZPosition();
+    m_Gravity = Vec3(DAT, -12.0, DAT);
+}
+```
 
 ### Fruit::Update (0x00177680, 412 lines)
 
@@ -466,7 +531,96 @@ void Fruit::EnableCollision(bool enable) {
 
 Same radius formula as `SetFruitType` but without the spawn `scale` multiplier. Used to toggle collision on/off during gameplay (e.g., after slicing, during bomb freeze).
 
+### Fruit::Release (0x001761d8)
+
+```c
+void Fruit::Release() {
+    if (m_pEmitter1) { PSPParticleManager::ClearEmitter(m_pEmitter1); m_pEmitter1 = NULL; }
+    if (m_pEmitter2) { PSPParticleManager::ClearEmitter(m_pEmitter2); m_pEmitter2 = NULL; }
+    // Clear backref: if m_pSlashEntity points to a SlashEntity whose +0x134 == this
+    if (m_pSlashEntity && *(Fruit**)(m_pSlashEntity + 0x134) == this)
+        *(int*)(m_pSlashEntity + 0x134) = 0;
+    Entity::Release();
+}
+```
+
+### Fruit::DrawUpdate (0x0017501c)
+
+```c
+void Fruit::DrawUpdate(float dt) {
+    m_RotAxis *= DAT_damping;  // dampen rotation axis each frame
+    
+    if (!m_bSliced && m_ChuckDelay <= 0) {
+        if (m_Gravity_x == 0.0) {
+            // Vertical gravity: bounce off left/right screen edges
+            // Zen mode with flag: hard bounce (reflect vel_x)
+            // Normal: soft push (vel_x += dt * 16.0, rotAxis += 20.0)
+        } else if (m_Gravity_y == 0.0) {
+            // Horizontal gravity: bounce off top/bottom edges
+        }
+    }
+}
+```
+
+### Fruit::UpdateBombAvoidance (0x00175988)
+
+```c
+void Fruit::UpdateBombAvoidance(float dt) {
+    if (m_bSliced) return;
+    // Iterate all active bombs
+    for (Bomb* bomb : ActorManager::GetEntities(BOMB_TYPE)) {
+        if (!bomb->IsActive() || !bomb->m_Col) continue;
+        Vec3 delta = pos - bomb->pos;
+        float distSq = delta.MagnitudeSqr();
+        if (distSq < THRESHOLD_DIST_SQ) {
+            float relVelSq = (vel - bomb->vel).MagnitudeSqr();
+            if (relVelSq < THRESHOLD_VEL_SQ) {
+                float dir = (delta.x < 0) ? -1.0 : 1.0;
+                bomb->vel_x += dir * dt * 12.0;  // push bomb away
+            }
+        }
+    }
+}
+```
+
+### Fruit::SetTrailParticles (0x001756dc)
+
+```c
+int Fruit::SetTrailParticles(ulong particleHash) {
+    if (!PSPParticleManager::EmitterExists(particleHash)) return 0;
+    if (m_pEmitter1) PSPParticleManager::ClearEmitter(m_pEmitter1);
+    m_pEmitter1 = PSPParticleManager::AddEmitter(particleHash, NULL, true);
+    return 1;
+}
+```
+
+### Fruit::SetForPlayer (0x00175b78)
+
+```c
+void Fruit::SetForPlayer(int playerIdx) {
+    if (IsOnlineMultiplayer() && playerIdx == 2)
+        m_Col->radius *= ONLINE_RADIUS_SCALE;  // larger hitbox for spectator
+    m_PlayerIdx = playerIdx;
+}
+```
+
+### Fruit_DrawShadows (0x00178f28, static)
+
+Iterates all fruit entities, calls `AddShadow()` for each with scale > 0.
+Renders as a single batched triangle strip using the shadow texture.
+
+### Fruit::ClearUnspawned (0x00176d14, static)
+
+```c
+void ClearUnspawned(bool killAll) {
+    for (Fruit* f : ActorManager::GetEntities(FRUIT_TYPE)) {
+        if (killAll || f->m_ChuckDelay > 0)
+            f->KillFruit(false);
+    }
+}
+```
+
 ### See Also
 
-- [Entities struct](../structs/entities.md) — Fruit struct layout, m_FruitType at +0x3c
+- [Entities struct](../structs/entities.md) — Fruit struct layout, vtable, all methods
 - [Data struct](../structs/data.md) — FRUIT_INFO (0x330 bytes per type)
