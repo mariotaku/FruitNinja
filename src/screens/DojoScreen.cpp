@@ -1,6 +1,6 @@
 #include "DojoScreen.h"
 #include "Game.h"
-#include "math3d.h"
+#include "math/math3d.h"
 #include <cstdio>
 #include <cmath>
 

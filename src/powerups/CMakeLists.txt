@@ -1,5 +1,1 @@
 # Power-up system (PowerUpManager, modifiers, ItemManager)
-# add_library(fn_powerups STATIC ...)
-# target_include_directories(fn_powerups PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-# target_link_libraries(fn_powerups PUBLIC fn_engine fn_math)
-# target_link_libraries(fruit-ninja PRIVATE fn_powerups)

@@ -1,7 +1,7 @@
 #include "Fruit.h"
 #include "Renderer.h"
 #include "Game.h"
-#include "math3d.h"
+#include "math/math3d.h"
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
