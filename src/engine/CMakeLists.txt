@@ -3,6 +3,7 @@
 add_library(mortar_engine STATIC
     # Phase 1 — Foundation
     core/SystemManager.cpp
+    core/MortarGame.cpp
     math/Random.cpp
     util/StringHash.cpp
     # Phase 2 — Core Singletons

@@ -48,7 +48,7 @@ public:
 
     // HUDControl overrides
     void Update(float dt) override;
-    void Draw(Renderer& r, const Vec3& hudScale, int layerMask) override;
+    void Draw(const Vec3& hudScale, int layerMask) override;
 
     // Touch input
     bool hit_test(float gx, float gy);

@@ -6,18 +6,28 @@
 
 #include "Game.h"
 #include "asset/tex_loader.h"
+#include "asset/TextureManager.h"
 #include "game/GameTaskState.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
 #include "config.h"
 #include <cstdio>
 
-Game* Game::s_instance = NULL;
-
+// Matches Game_ctor (0x0010dab0): calls MortarGame ctor, clears 3 fields
 Game::Game()
-    : state(0), field02(0), gameMode(0), quitFlag(0),
-      transitionTimer(0), bombHitTimer(0), dt(0),
-      hud(NULL), mainScreen(NULL), frameTimer(0),
+    : Mortar::MortarGame(),
+      field_0xfc(0), field_0xfd(0), field_0x100(0),
+      taskStateIndex(0), field_0x01(0), gameActiveFlag(0), languageFlag(0),
+      gameMode(0), pauseFlag(0), retryFlag(0), field_0x07(0),
+      retryTimer(0), m_TransitionTimer(0), bombHitTimer(0),
+      missCount(0), currentScore(0), m_bUnsullied(0),
+      m_CritTimer(0), m_ScoreThreshold(0), field_0x34(0), m_bSlowMotion(0),
+      dt(0), hud(NULL),
+      isFirstPlay1(false), isFirstPlay2(false),
+      field_0x88(0),
+      mainScreen(NULL),
+      fruitTotal(0), m_gameDataLicensedState(0),
+      m_FrameTimer(0), m_MenuReturnTimer(0), flag_0x1a8(0), m_bFrameDirty(0),
       window(NULL), gl_context(NULL),
       inputManager(NULL), actorManager(NULL),
       bg_tex(0), hb_logo_tex(0), title_tex(0),
@@ -25,12 +35,41 @@ Game::Game()
       soundEnabled(true), musicEnabled(true),
       running(false)
 {
-    s_instance = this;
+    // s_instance already set by MortarGame ctor
 }
 
 Game::~Game() {
     shutdown();
-    s_instance = NULL;
+}
+
+// Matches 0x0010d9ec
+const char* Game::SelfVersion() {
+    return "1.5.1";
+}
+
+// Matches 0x0010dae0 — calls GameTaskSaveOnExit()
+void Game::SaveOnExit() {
+    GameTaskExit();
+}
+
+// Matches 0x0010b140 — writes 0 to languageFlag (g_GameData+0x03)
+void Game::SetLanguage(const char* lang) {
+    (void)lang;
+    languageFlag = 0;
+}
+
+// Matches 0x0010da68 — reads/writes g_GameData+0x18C
+void Game::SetAppLicensed(bool licensed) {
+    if (licensed) {
+        m_gameDataLicensedState = 1;
+    } else if (m_gameDataLicensedState != 1) {
+        m_gameDataLicensedState = 2;
+    }
+}
+
+// Matches 0x0010da94 — returns g_GameData+0x18C
+int Game::GetAppLicensedState() const {
+    return m_gameDataLicensedState;
 }
 
 GLuint Game::load_texture(const char* name, TexImage& img) {
@@ -47,6 +86,7 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     window = win;
     gl_context = gl;
     data_dir = FN_DATA_DIR;
+    Mortar::TextureManager::SetDataDir(data_dir.c_str());
 
     if (!renderer.init()) {
         fprintf(stderr, "Failed to init renderer\n");
@@ -58,7 +98,7 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     GameInitialise();      // boot all engine singletons + load shared data
 
     // Start in Splash state (will auto-transition to Game)
-    state = 0;
+    taskStateIndex = 0;
     running = true;
     return true;
 }

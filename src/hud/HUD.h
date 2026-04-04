@@ -4,14 +4,15 @@
 #include "HUDControl.h"
 #include <list>
 
-struct Renderer;
-
 // Matches original HUD class (~0x20 bytes)
-// Manages a list of HUDControl* with layered draw
+// See docs/structs/hud.md for layout and function list.
 class HUD {
 public:
+    // +0x00: control list
     std::list<HUDControl*> controls;
-    Vec3 scale;  // 6 floats in original, simplified to Vec3 + 1
+
+    // +0x08: scales (6 floats in original, all init 1.0; port uses Vec3)
+    Vec3 scale;
 
     HUD() : scale(1.0f, 1.0f, 1.0f) {}
     ~HUD() { Release(); }
@@ -40,13 +41,15 @@ public:
     }
 
     // Matches HUD::Draw (0x144a90)
-    // Draws only controls whose layerMask matches
-    void Draw(Renderer& r, int layerMask) {
+    // Original: loads globalPos from GOT = (1.0, 1.0, 1.0)
+    // Calls PreDrawOrder then DrawOrder on each active, layer-matching control
+    void Draw(int layerMask) {
+        Vec3 globalPos(1.0f, 1.0f, 1.0f);
         for (auto it = controls.begin(); it != controls.end(); ++it) {
             HUDControl* ctrl = *it;
             if (ctrl->m_bActive && (layerMask & ctrl->m_LayerFlags)) {
-                ctrl->PreDraw(r, scale);
-                ctrl->Draw(r, scale, layerMask);
+                ctrl->PreDrawOrder(globalPos, layerMask);
+                ctrl->DrawOrder(globalPos, layerMask);
             }
         }
     }
@@ -70,16 +73,22 @@ public:
         }
     }
 
+    // Matches HUD::OnPause (0x144c00)
+    void OnPause() {
+        for (auto it = controls.begin(); it != controls.end(); ++it) {
+            if ((*it)->m_bActive)
+                (*it)->Init(); // OnPause dispatches to Init in some cases
+        }
+    }
+
     // Matches HUD::Release (0x144c5c)
     void Release() {
         for (auto it = controls.begin(); it != controls.end(); ++it) {
+            (*it)->Release();
             delete *it;
         }
         controls.clear();
     }
-
-    // Touch input is handled via InputManager callbacks, not through HUD.
-    // Each control registers its own callbacks in its constructor.
 };
 
 #endif

@@ -43,10 +43,10 @@ void GameTaskUpdate(float rawDt) {
         }
 
         float frameMs = dt * TASK_DT_TO_MS;
-        uint8_t stateIdx = game->state;
+        uint8_t stateIdx = game->taskStateIndex;
 
         game->dt = dt;
-        game->frameTimer += (int)frameMs;
+        game->m_FrameTimer += (int)frameMs;
         s_taskState.totalTime += dt;
 
         if (!s_taskState.initialized) {
@@ -63,7 +63,7 @@ void GameTaskUpdate(float rawDt) {
         if (stateIdx == s_taskState.prevState) {
             // Same state: run update
             // PowerManager::Update() — stub
-            bool canUpdate = (game->field02 == 0) ? true : false;
+            bool canUpdate = (game->gameActiveFlag == 0) ? true : false;
             s_updateFuncs[stateIdx](dt, canUpdate);
         } else {
             // State changed: exit old, loop will init new
@@ -80,7 +80,7 @@ void GameTaskDraw(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    uint8_t stateIdx = game->state;
+    uint8_t stateIdx = game->taskStateIndex;
     if (stateIdx == s_taskState.prevState && s_taskState.initialized) {
         s_drawFuncs[stateIdx](dt, true);
     }

@@ -42,8 +42,8 @@ void MenuButton::init(GLuint tex, float tex_w, float tex_h, float cx, float cy,
     size = Vec3(tex_w, tex_h, 1.0f);
     pos = Vec3(cx, cy, 0.0f);
     on_click = callback;
-    m_Alpha = 255;
-    m_bActive = true;
+    m_DrawColour.a = 255;
+    m_bActive = 1;
 }
 
 // Matches MenuButton::Init (0x14ee40) fruit entity creation
@@ -99,23 +99,9 @@ void MenuButton::Update(float dt) {
 
 // MenuButton::Draw — only 2D layers, NO 3D fruit
 // The fruit entity is drawn by ActorManager::Draw in GameDraw
-void MenuButton::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
-    (void)layerMask;
-    if (!m_Texture || m_Alpha == 0) return;
-
-    float draw_alpha_f = (float)m_Alpha / 255.0f;
-    float draw_scale = 1.0f;
-    if (pressed) {
-        draw_scale = 0.95f;
-        draw_alpha_f *= 0.8f;
-    }
-
-    // Layer 1: Button texture quad (the ring graphic)
-    float w = size.x * draw_scale;
-    float h = size.y * draw_scale;
-    float dx = pos.x - w / 2.0f;
-    float dy = pos.y - h / 2.0f;
-    r.draw_sprite(m_Texture, dx, dy, w, h, m_Timer, draw_alpha_f);
+void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
+    // Use base class Draw for the button quad (matrix stack + centered coords)
+    HUDControl3d::Draw(hudScale, layerMask);
 
     // Layer 2: "New item" star indicator — TODO
     // Layer 3: Sparkle ring (8-segment tri-list) — TODO
