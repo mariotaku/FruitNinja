@@ -53,8 +53,8 @@ struct Matrix44 {
         m[14] += m[2] * tx + m[6] * ty + m[10] * tz;
     }
 
-    // Matches _Matrix44<float>::Scale44 (0x0012f9a0) — column-scale
-    void Scale44(float sx, float sy, float sz) {
+    // Matches _Matrix44<float>::Scale44 (0x0012f9a0) — in-place column-scale
+    void ApplyScale(float sx, float sy, float sz) {
         m[0]  *= sx; m[1]  *= sx; m[2]  *= sx; m[3]  *= sx;
         m[4]  *= sy; m[5]  *= sy; m[6]  *= sy; m[7]  *= sy;
         m[8]  *= sz; m[9]  *= sz; m[10] *= sz; m[11] *= sz;
@@ -71,6 +71,10 @@ struct Matrix44 {
     static Matrix44 MakeScale(float sx, float sy, float sz) {
         return MakeScale(Vec3(sx, sy, sz));
     }
+
+    // Alias matching original _Matrix44<float>::Scale44 static factory
+    static Matrix44 Scale44(const Vec3& s) { return MakeScale(s); }
+    static Matrix44 Scale44(float sx, float sy, float sz) { return MakeScale(sx, sy, sz); }
 
     // Static factory: create a pure translation matrix
     static Matrix44 MakeTranslate(const Vec3& t) {
