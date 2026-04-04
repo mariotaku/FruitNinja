@@ -56,6 +56,10 @@ void GameUpdate(float dt, bool active) {
 }
 
 // Matches GameDraw (0x16b888, 211 lines) — full render frame
+// Original layer order:
+//   1. Background (MainScreen draws bg + blurry overlay + logos)
+//   2. 3D entities (ActorManager::Draw — fruit/bomb meshes)
+//   3. HUD overlays (buttons, score, etc.)
 void GameDraw(float dt, bool active) {
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -63,19 +67,20 @@ void GameDraw(float dt, bool active) {
     // Setup ortho projection
     game->renderer.SetupGameOrtho();
 
-    // Draw 3D entities (fruit, bombs)
+    // Layer 1: MainScreen background + logos (layer 0x01)
+    if (game->hud) {
+        game->hud->BeginDraw(dt);
+        game->hud->Draw(game->renderer, 0x01);  // MainScreen only
+    }
+
+    // Layer 2: 3D entities (fruit meshes on buttons)
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
 
-    // Draw HUD layers (MainScreen background+logos, then buttons)
+    // Layer 3: HUD buttons + overlays (layers 0x08, 0x40, etc.)
     if (game->hud) {
-        game->hud->BeginDraw(dt);
-        game->hud->Draw(game->renderer, 0xFFFF);
+        game->hud->Draw(game->renderer, 0xFFFE);  // everything except 0x01
     }
-
-    // TODO: Full 211-line GameDraw: background quad, FruitCamera::SetupPerspective,
-    //       ActorManager::Draw, layered HUD Draw with proper flags,
-    //       particles, slashes, bomb effects, post-processing
 }
 
 // Matches GameExit (0x16cf74, 98 lines) — per-session cleanup
