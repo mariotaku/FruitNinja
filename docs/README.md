@@ -21,6 +21,8 @@ Reusable engine subsystems — not specific to FruitNinja.
 
 ### Engine Systems & Structs
 
+- [engine/system-manager.md](engine/system-manager.md) — SystemManager: FPS ring buffer, quit lifecycle (212 bytes, 11 fields)
+- [engine/display-manager.md](engine/display-manager.md) — DisplayManager singleton (GL state, frame setup, screen rotation, texture filtering), DisplayManagerBada subclass
 - [engine/matrix-manager.md](engine/matrix-manager.md) — MatrixManager (4 matrix stacks, dirty-tracking), MatrixStack, Matrix44 methods, HUD draw pipeline wrappers
 - [engine/camera.md](engine/camera.md) — MortarCamera, FruitCamera, ortho projection setup
 - [engine/input-manager.md](engine/input-manager.md) — Action-based input system, callback registration, config parsing, 16-touch
@@ -28,6 +30,7 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/sound-system.md](engine/sound-system.md) — GameSound pool (32 slots), BadaSound backend, MAMAudioThread (16 voices, 16kHz)
 - [engine/particles.md](engine/particles.md) — PSPParticleManager, Emitter, Particle architecture
 - [engine/actor-manager.md](engine/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
+- [engine/texture-mesh-manager.md](engine/texture-mesh-manager.md) — TextureManager (24-byte cache), MeshManager (20 bytes), loading pipelines, ARM struct-return convention
 - [engine/string-hash.md](engine/string-hash.md) — Jenkins lookup3 hash (C implementation)
 - [engine/rng.md](engine/rng.md) — Math::Random: 64-bit LCG (Knuth MMIX), Rand32/RandF, constants
 - [engine/other-structs.md](engine/other-structs.md) — MAMAudioThread, engine subsystem singleton list

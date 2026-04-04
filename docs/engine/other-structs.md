@@ -16,17 +16,45 @@
 
 All accessed via GOT-relative addressing (ARM32 position-independent code).
 
-| Singleton | Notes |
-|-----------|-------|
-| SystemManager | Engine lifecycle, QuitGame() |
-| MatrixManager | 4 matrix stacks, dirty-tracking. See [matrix-manager.md](matrix-manager.md) |
-| DisplayManager | GL state, viewport, BeginFrame/EndFrame/SwapBuffers |
-| FileManager | VFS abstraction (FileSystem_Direct on Bada) |
-| TextureManager | .tex loading + caching |
-| MeshManager | .mad/.mmd model loading + caching |
-| AnimationManager | Skeletal/property animation |
-| InputManager | Action-hash callbacks, 16-touch. See [input-manager.md](input-manager.md) |
-| Mortar::SoundManager | Platform audio abstraction. See [sound-system.md](sound-system.md) |
-| MAMAudioController | Spawns MAMAudioThread (16 voices, 16kHz) |
-| Mortar::Touch | Low-level touch ring buffer (TEvnt) |
-| PSPParticleManager | Template-based particle emitters. See [particles.md](particles.md) |
+### Analysis Coverage
+
+| Manager | Functions | Struct Size | Named Fields | Coverage | Doc |
+|---------|-----------|-------------|--------------|----------|-----|
+| **MatrixManager** | 35+ | 8500 bytes | 9 | **Full** | [matrix-manager.md](matrix-manager.md) |
+| **DisplayManager** | 30+ | 148 bytes | 16 | **Full** | [display-manager.md](display-manager.md) |
+| **SystemManager** | 7 | 212 bytes | 11 | **Good** | [system-manager.md](system-manager.md) |
+| **ActorManager** | 11 | 4204 bytes | 7 | **Good** | [actor-manager.md](actor-manager.md) |
+| **InputManager** | 11 | 9 bytes | 2 | **Good** | [input-manager.md](input-manager.md) |
+| **PSPParticleManager** | 5 | 48 bytes | 8 | **Good** | [particles.md](particles.md) |
+| **SoundManager** | 13 | 40 bytes | 2 | **Partial** | [sound-system.md](sound-system.md) |
+| **FileManager** | 5 | 8 bytes | 0 | **Partial** | — |
+| **TextureManager** | 10+ | 24 bytes | 1 (full map) | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
+| **MeshManager** | 8+ | 20 bytes | 6 | **Good** | [texture-mesh-manager.md](texture-mesh-manager.md) |
+| **AnimationManager** | 6 | 1 byte stub | 0 | **Stub** | — |
+
+All managers have `__thiscall` properly applied to every function.
+
+### Singleton Details
+
+| Singleton | Struct Size | Notes |
+|-----------|-------------|-------|
+| SystemManager | 212 bytes | Engine lifecycle, QuitGame(). 2 named fields (m_deviceId, vtable) |
+| MatrixManager | 8500 bytes | 4 matrix stacks (Projection/View/World/Texture), dirty-tracking. See [matrix-manager.md](matrix-manager.md) |
+| DisplayManager | 148 bytes | GL state, viewport, BeginFrame/EndFrame/SwapBuffers. Subclass: DisplayManagerBada (7 functions) |
+| FileManager | 8 bytes | VFS abstraction (FileSystem_Direct on Bada) |
+| TextureManager | 24 bytes | .tex loading + caching. 1 named field (m_textures map) |
+| MeshManager | 1 byte stub | .mad/.mmd model loading + caching. Needs RE |
+| AnimationManager | 1 byte stub | Skeletal/property animation. Needs RE |
+| InputManager | 9 bytes | Action-hash callbacks, 16-touch. See [input-manager.md](input-manager.md) |
+| Mortar::SoundManager | 40 bytes | Platform audio abstraction. Subclass: SoundManagerMAM (6 functions). See [sound-system.md](sound-system.md) |
+| MAMAudioController | — | Spawns MAMAudioThread (16 voices, 16kHz). See MAMAudioThread struct above |
+| Mortar::Touch | — | Low-level touch ring buffer (TEvnt) |
+| PSPParticleManager | 48 bytes | Template-based particle emitters (8 named fields). See [particles.md](particles.md) |
+| ActorManager | 4204 bytes | Entity pool manager. Full pseudocode documented but 0 struct fields named in Ghidra. See [actor-manager.md](actor-manager.md) |
+
+### Biggest Gaps for Porting
+
+1. **ActorManager** — 4204-byte struct with 0 named fields in Ghidra (docs have full pseudocode)
+2. **DisplayManager** — need GL state fields for ES 2.0 port (148 bytes, only 4 named)
+3. **MeshManager / AnimationManager** — 1-byte stubs, need real layouts if mesh caching is ported
+4. **TextureManager** — only 24 bytes / 1 field, but texture loading is critical path
