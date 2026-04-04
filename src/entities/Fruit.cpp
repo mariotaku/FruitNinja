@@ -160,18 +160,18 @@ void Fruit::Draw(Renderer& r) {
 
     mat4_multiply(sr, rotMat, scl);
 
-    // Position in game coords → ortho coords for 3D rendering
-    float hw = FN_SCREEN_W / 2.0f;
-    float hh = FN_SCREEN_H / 2.0f;
-    mat4_translate(trans, pos.x - hw, pos.y - hh, m_ZPosition);
+    // Position in game coords (0-480, 0-320)
+    mat4_translate(trans, pos.x, pos.y, m_ZPosition);
     mat4_multiply(model, trans, sr);
 
-    // MVP: simple ortho for 3D entities
+    // Ortho matching game's 0-based coordinate system
     float proj[16];
     memset(proj, 0, sizeof(proj));
-    proj[0]  = 1.0f / hw;
-    proj[5]  = 1.0f / hh;
+    proj[0]  = 2.0f / FN_SCREEN_W;    // 0..480 → -1..1
+    proj[5]  = 2.0f / FN_SCREEN_H;    // 0..320 → -1..1
     proj[10] = -2.0f / 200.0f;
+    proj[12] = -1.0f;                  // offset for 0-based
+    proj[13] = -1.0f;
     proj[15] = 1.0f;
 
     float mvp[16];
