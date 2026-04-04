@@ -4,10 +4,10 @@
 namespace Mortar {
 
 MatrixManager::MatrixManager()
-    : m_ViewVersion(0)
-    , m_ViewVersionUploaded(0)
+    : m_ViewVersionUploaded(0)
     , m_WorldVersionUploaded(0)
     , m_TextureVersionUploaded(0)
+    , m_ProjVersionUploaded(0)
 {
     ResetAllStacks();
 }
@@ -26,6 +26,7 @@ void MatrixManager::SetupOrtho(float top, float bottom, float left, float right,
     Matrix44 ortho;
     Matrix44::OrthoW(top, bottom, left, right, nearVal, farVal, 1.0f, ortho);
     m_Projection.SetCurrentMatrix(ortho);
+    UploadAll();
 }
 
 // Matches 0x0019e724
@@ -36,18 +37,44 @@ void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& target, const Vec3&
                  target.x, target.y, target.z,
                  up.x, up.y, up.z);
     m_View.SetCurrentMatrix(view);
+    UploadAll();
 }
 
-// For GLES2: no glMatrixMode — just track versions for dirty checking
-void MatrixManager::UploadCurrentMatrices(bool forceProjection) {
-    (void)forceProjection;
-    m_ViewVersionUploaded = m_View.m_Version;
-    m_WorldVersionUploaded = m_World.m_Version;
+void MatrixManager::UploadAll() {
+    _UploadCurrentMatrices(false);
+}
+
+void MatrixManager::UploadModelViewOnly() {
+    _UploadCurrentMatrices(true);
+}
+
+// Matches 0x0019e2b4 — recomputes cached matrices based on dirty versions
+void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
+    // If NOT skipping projection: recompute cached projection * view
+    if (!skipProjection) {
+        if (m_Projection.m_Version != m_ProjVersionUploaded ||
+            m_View.m_Version != m_ViewVersionUploaded) {
+            m_CachedProjView = m_Projection.m_Current * m_View.m_Current;
+            m_ProjVersionUploaded = m_Projection.m_Version;
+        }
+    }
+
+    // ModelView dirty check
+    if (m_View.m_Version != m_ViewVersionUploaded) {
+        // View changed — must recompute ProjView too
+        m_CachedProjView = m_Projection.m_Current * m_View.m_Current;
+        m_ViewVersionUploaded = m_View.m_Version;
+        m_WorldVersionUploaded = m_World.m_Version;
+    } else if (m_World.m_Version != m_WorldVersionUploaded) {
+        // Only world changed
+        m_WorldVersionUploaded = m_World.m_Version;
+    }
+
     m_TextureVersionUploaded = m_Texture.m_Version;
 }
 
 Matrix44 MatrixManager::GetMVP() const {
-    return m_Projection.m_Current * m_View.m_Current * m_World.m_Current;
+    return m_CachedProjView * m_World.m_Current;
 }
 
 } // namespace Mortar
