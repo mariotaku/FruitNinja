@@ -1,0 +1,68 @@
+#include "asset/TextureManager.h"
+#include <cstdio>
+
+namespace Mortar {
+
+TextureManager::TextureManager() {
+}
+
+TextureManager::~TextureManager() {
+    Clear();
+}
+
+SmartPtr<Texture> TextureManager::Load(const char* path) {
+    uint32_t hash = StringHash(path);
+
+    // Check cache first
+    SmartPtr<Texture> existing = Find(hash);
+    if (existing.IsValid()) {
+        return existing;
+    }
+
+    // Cache miss — load from disk
+    SmartPtr<Texture> tex = Texture::Load(path);
+    if (tex.IsValid()) {
+        Add(hash, tex);
+    }
+    return tex;
+}
+
+SmartPtr<Texture> TextureManager::Find(uint32_t hash) const {
+    std::map<uint32_t, CacheEntry>::const_iterator it = m_Cache.find(hash);
+    if (it != m_Cache.end() && it->second.ptr != NULL) {
+        // Check if the texture is still alive (ref count > 0)
+        if (it->second.ptr->GetRefCount() > 0) {
+            return SmartPtr<Texture>(it->second.ptr);
+        }
+    }
+    return SmartPtr<Texture>();
+}
+
+SmartPtr<Texture> TextureManager::Find(const char* name) const {
+    return Find(StringHash(name));
+}
+
+void TextureManager::Add(uint32_t hash, SmartPtr<Texture> tex) {
+    m_Cache[hash].ptr = tex.Get();
+}
+
+void TextureManager::Add(const char* name, SmartPtr<Texture> tex) {
+    Add(StringHash(name), tex);
+}
+
+void TextureManager::PurgeExpired() {
+    std::map<uint32_t, CacheEntry>::iterator it = m_Cache.begin();
+    while (it != m_Cache.end()) {
+        if (it->second.ptr == NULL || it->second.ptr->GetRefCount() <= 0) {
+            it = m_Cache.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void TextureManager::Clear() {
+    m_Cache.clear();
+}
+
+} // namespace Mortar
