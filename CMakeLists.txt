@@ -25,15 +25,11 @@ target_include_directories(fruit-ninja PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}
 )
-target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2)
-
-# Game.cpp needs headers from subsystems (linked via sub-CMakeLists)
-# Each subsystem does: target_link_libraries(fruit-ninja PRIVATE fn_xxx)
 
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaBada/Data" FN_DATA_DIR_PATH)
 configure_file(src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY)
 
-# --- Subsystems (order matters for dependencies) ---
+# --- Subsystems ---
 add_subdirectory(src/math)
 add_subdirectory(src/engine)
 add_subdirectory(src/hud)
@@ -44,3 +40,6 @@ add_subdirectory(src/game)
 add_subdirectory(src/effects)
 add_subdirectory(src/powerups)
 add_subdirectory(src/sound)
+
+# --- Link (after all subdirectories define their targets) ---
+target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine)

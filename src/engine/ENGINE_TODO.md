@@ -128,9 +128,9 @@ Old `src/math/` headers forward to `src/engine/math/` — canonical math types l
 
 When the engine library is complete, update game code:
 
-- [ ] Remove `add_subdirectory(src/math)` and `add_subdirectory(src/platform)` from root CMakeLists.txt
-- [ ] Change all game libs to link `mortar_engine` instead of `fn_engine fn_math fn_platform`
-- [ ] Update game includes: `#include "Vec3.h"` → `#include "math/Vec3.h"`
+- [x] Remove `add_subdirectory(src/math)` and `add_subdirectory(src/platform)` from root CMakeLists.txt
+- [x] Change all game libs to link `mortar_engine` instead of `fn_engine fn_math fn_platform`
+- [x] Update game includes: `#include "Vec3.h"` → `#include "math/Vec3.h"`
 - [ ] Update game includes: `#include "Renderer.h"` → `#include "render/Renderer.h"`
 - [ ] Update game includes: `#include "InputManager.h"` → `#include "input/InputManager.h"`
 - [ ] Move singletons out of Game struct into engine GetInstance() calls

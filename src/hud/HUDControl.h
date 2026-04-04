@@ -22,8 +22,8 @@
 //   +0x5c  Colour m_DrawColour (BGRA, from global = white)
 //
 
-#include "Vec3.h"
-#include "Colour.h"
+#include "math/Vec3.h"
+#include "math/Colour.h"
 #include <functional>
 #include <cstdint>
 
