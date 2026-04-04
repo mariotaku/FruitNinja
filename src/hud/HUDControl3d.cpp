@@ -40,7 +40,7 @@ void HUDControl3d::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
     glBindTexture(GL_TEXTURE_2D, m_Texture);
 
     // Step 3: Reset matrix stack
-    r.matrix_mgr.stack.Reset();
+    Mortar::MatrixManager::GetInstance().GetWorldStack().Reset();
 
     // Step 4: Scale44(size)
     Matrix44 mat = Matrix44::Scale44(size);
@@ -60,7 +60,7 @@ void HUDControl3d::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
     mat.GlobalTranslate44(finalPos);
 
     // Step 8-9: Upload
-    r.matrix_mgr.stack.SetCurrentMatrix(mat);
+    Mortar::MatrixManager::GetInstance().GetWorldStack().SetCurrentMatrix(mat);
 
     // Step 10-11: TintColour → DrawQuad
     Colour tint = m_DrawColour;

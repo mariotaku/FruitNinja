@@ -15,6 +15,7 @@
 #include <functional>
 #include <vector>
 #include <cstdint>
+#include <cstddef>
 
 // Callback type: matches original Delegate1<bool, InputEvent*>
 // Returns true if event was consumed

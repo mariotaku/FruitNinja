@@ -6,7 +6,7 @@ and behavior are documented from RE of the original ARM32 binary.
 
 ## Status
 
-Phase 1 (Foundation) is implemented. Phases 2-8 are TODO.
+Phases 1-3 are implemented. Phases 4-8 are TODO.
 
 ### Phase 1 — Foundation ✅ DONE
 
@@ -34,60 +34,28 @@ Files in `core/`, `math/`, `util/`:
 
 ---
 
-### Phase 2 — Core Singletons (depends on Phase 1)
+### Phase 2 — Core Singletons ✅ DONE
 
 Ref: `docs/engine/matrix-manager.md`, `docs/engine/display-manager.md`
 
-- [ ] `render/gl_funcs.h/.cpp` — Migrate from existing `src/engine/gl_funcs.*`. GL function pointer loading for GLES2.
-- [ ] `render/MatrixStack.h/.cpp` — 32-deep matrix stack (2120 bytes)
-  - `_Matrix44<float> m_Stack[32]` at +0x000
-  - `_Matrix44<float> m_Current` at +0x800
-  - `int m_Depth` at +0x840, `int m_Version` at +0x844
-  - Methods: `Reset()`, `Scale(Vec3)`, `Translate(Vec3)`, `SetCurrentMatrix(Matrix44)`
-  - Every mutation increments `m_Version` (dirty-tracking)
-- [ ] `render/MatrixManager.h/.cpp` — 4 MatrixStacks + dirty upload (8500 bytes)
-  - Stacks: `m_Projection` (+0x04), `m_View` (+0x84C), `m_World` (+0x1094), `m_Texture` (+0x18DC)
-  - Version counters at +0x2124..+0x2130
-  - `SetupOrtho(top, bottom, left, right, near, far)` — NOTE: non-standard param order!
-  - `SetupLookAt(eye, target, up)`
-  - `UploadCurrentMatrices(bool forceProjection)` — computes MVP, uploads as shader uniform
-  - `ResetAllStacks()`, `GetWorldStack()`, `GetProjectionStack()`
-  - For GLES2: the "upload" stores the combined MVP for shader use, not glMatrixMode
-- [ ] `render/DisplayManager.h/.cpp` — GL state singleton (148 bytes)
-  - Fields: vtable, m_ClearColor, m_DrawColor, m_WindowRect, m_lightDirection, m_GlobalAmbience, m_bRenderingActive, m_bSwapPending, m_TextureOverloadPrefix, filter modes, m_ScreenRotationMatrix
-  - `BeginFrame()` — glClear, glEnable blend, set up rotation
-  - `EndFrame()` — clear rendering flag
-  - `SwapBuffers()` — SDL_GL_SwapWindow
-  - `SetDrawColour(Colour)` — shader uniform (replaces glColor4ub)
-  - `SetDepthBuffer(bool)`, `SetDepthBufferWrite(bool)`
-  - `GetWindowSize()` returns MortarRectangle
-  - Vtable: 20 entries (see `docs/engine/vtables.md`)
-- [ ] `asset/FileManager.h` — Stub header-only. `AddSystem()`/`RemoveSystem()` are no-ops. Port uses direct file I/O.
+- [x] `render/gl_funcs.h/.cpp` — Migrated + extended with glScissor, glGetError, glPixelStorei, glCompressedTexImage2D
+- [x] `render/MatrixStack.h` — Full 32-deep stack (2120 bytes), version-tracked, Push/Pop/Scale/Translate
+- [x] `render/MatrixManager.h/.cpp` — 4 MatrixStacks + dirty upload, singleton, SetupOrtho/LookAt/GetMVP
+- [x] `render/DisplayManager.h/.cpp` — GL state singleton, BeginFrame/EndFrame/SwapBuffers/SetDrawColour
+- [x] `asset/FileManager.h` — Stub header-only, no-op AddSystem/RemoveSystem
 
 ---
 
-### Phase 3 — Rendering (depends on Phase 2)
+### Phase 3 — Rendering ✅ DONE
 
 Ref: `docs/engine/rendering-pipeline.md`, `docs/engine/rendering-detail.md`
 
-- [ ] `render/QUADCUSTOMVERTEX.h` — Vertex struct (36 bytes: 3 float pos, 2 float uv, uint32 colour, 3 float normal)
-  - Also define compact QuadVertex (20 bytes: 2 float pos, 2 float uv, uint32 colour) for DrawQuadUnCached
-- [ ] `render/Renderer.h/.cpp` — GLES2 shader programs + draw functions
-  - Two shaders: 2D (MVP + tint uniform) and 3D (MVP + model + light + alpha)
-  - `DrawQuad(Colour, u0, v0, u1, v1)` — builds 4-vertex quad, stride 0x14
-  - `DrawTriList(QUADCUSTOMVERTEX*, count, bool isStrip)` — stride 0x24
-  - `DrawTriStrip(QUADCUSTOMVERTEX*, count)`
-  - Migrate and expand from existing `src/engine/Renderer.*`
-  - MatrixManager is now a separate singleton, not owned by Renderer
-- [ ] `render/MortarCamera.h/.cpp` — Camera with ortho/perspective setup
-  - `SetupOrtho()` — gets window size, calls `MatrixManager::SetupOrtho(height/2, -height/2, -width/2, width/2, -1, far)`
-  - `SetupLookAt()` — calls `MatrixManager::SetupLookAt(eye, target, up)`
-  - Stores view matrix copy at camera offset +0x74 (Matrix43) and projection copy at +0xA4 (Matrix44)
-  - Ref: `docs/engine/camera.md`
-- [ ] `collision/ColAABB.h` — Axis-aligned bounding box
-- [ ] `collision/ColLine.h` — Line segment
-- [ ] `collision/ColSphere.h` — Sphere
-  - All three: struct + intersection tests (ColAABBLine, ColAABBSphere, ColLineLine, ColSphereSphere)
+- [x] `render/QUADCUSTOMVERTEX.h` — QUADCUSTOMVERTEX (36B) + QuadVertex (20B) with static_assert
+- [x] `render/Renderer.h/.cpp` — Migrated + expanded: 3 shaders (2D tint, 3D mesh, 2D vertex-color), DrawTriList/DrawTriStrip, MatrixManager singleton (no longer owned by Renderer)
+- [x] `render/MortarCamera.h/.cpp` — Camera with SetupOrtho/SetupLookAt/SetupPerspective via MatrixManager
+- [x] `collision/ColAABB.h` — AABB with AABB-AABB, AABB-Sphere, AABB-Line tests
+- [x] `collision/ColLine.h` — Line segment with closest-point helpers
+- [x] `collision/ColSphere.h` — Sphere with Sphere-Sphere, Sphere-Line, Contains tests
 
 ---
 
@@ -231,11 +199,12 @@ Ref: `docs/engine/rendering-pipeline.md` (Font System section)
 
 ## CMakeLists.txt
 
-Current `src/engine/CMakeLists.txt` defines `mortar_engine` with Phase 1 sources.
+Current `src/engine/CMakeLists.txt` defines `mortar_engine` with Phase 1-3 sources (8 .cpp files).
 Add sources from each phase as implemented. The full target will include ~25 .cpp files.
 
-Legacy `fn_engine` target is kept temporarily for game code using old includes.
-Remove it once all game code migrates to `#include "render/Renderer.h"` style includes.
+Legacy `fn_engine` target is kept temporarily for `tex_loader.cpp` and `Mesh.cpp` (Phase 4 migration).
+Old headers at `src/engine/` root (`gl_funcs.h`, `MatrixManager.h`, `Renderer.h`) are forwarding headers.
+Old `src/math/` headers forward to `src/engine/math/` — canonical math types live in the engine.
 
 ## Migration Checklist
 
