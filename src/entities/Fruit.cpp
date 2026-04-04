@@ -1,5 +1,6 @@
 #include "Fruit.h"
 #include "Renderer.h"
+#include "Game.h"
 #include "math3d.h"
 #include <cstdlib>
 #include <cstdio>
@@ -13,12 +14,12 @@ static float RandRange(float range) {
 Fruit::Fruit()
     : m_FruitType(0), m_bSliced(false),
       m_ScaleAnim(0.0f), m_ChuckDelay(0.0f), m_ZPosition(0.0f),
-      m_pMesh(NULL), m_MeshTex(0) {
+      m_MeshTex(0) {
     entityType = 0;
 }
 
 Fruit::~Fruit() {
-    // Mesh is shared — not deleted here
+    m_Mesh.destroy();
 }
 
 void Fruit::Init(int param1, int fruitType, int param3) {
@@ -46,6 +47,27 @@ void Fruit::Init(int param1, int fruitType, int param3) {
 
     // Default scale
     scale = Vec3(25.0f, 25.0f, 25.0f);
+
+    // Load mesh for this fruit type
+    static const char* fruitNames[] = {
+        "apple", "banana", "orange", "watermelon", "strawberry",
+        "kiwifruit", "pineapple", "plum", "pear", "mango",
+        "apple_red", "lime", "dragon", "coconut", "passionfruit", "lemon"
+    };
+    Game* game = Game::GetInstance();
+    if (game && fruitType >= 0 && fruitType < 16) {
+        std::string meshPath = game->data_dir + "/models/fruit/" + fruitNames[fruitType] + "_single.mmd";
+        if (m_Mesh.load(meshPath)) {
+            // Load fruit atlas texture (shared — TODO: cache this)
+            if (!m_MeshTex) {
+                TexImage img;
+                std::string texPath = game->data_dir + "/models/fruit/textures/fruit_atlas.tex";
+                if (tex_load(texPath, img)) {
+                    m_MeshTex = game->renderer.upload_texture(img);
+                }
+            }
+        }
+    }
 }
 
 void Fruit::Chuck(const Vec3& velocity, float delay) {
@@ -123,7 +145,7 @@ void Fruit::Update(float dt) {
 
 void Fruit::Draw(Renderer& r) {
     if (!active || m_ChuckDelay > 0.0f) return;
-    if (!m_pMesh || !m_pMesh->vbo || !m_MeshTex) return;
+    if (!m_Mesh.vbo || !m_MeshTex) return;
 
     float s = scale.x * m_ScaleAnim;
     if (s <= 0.0f) return;
@@ -157,7 +179,7 @@ void Fruit::Draw(Renderer& r) {
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    r.draw_mesh(*m_pMesh, m_MeshTex, mvp, model, m_ScaleAnim);
+    r.draw_mesh(m_Mesh, m_MeshTex, mvp, model, m_ScaleAnim);
     glDisable(GL_DEPTH_TEST);
 }
 

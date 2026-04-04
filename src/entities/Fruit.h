@@ -37,8 +37,8 @@ public:
     // Z depth for draw sorting
     float m_ZPosition;                   // +0x98
 
-    // Mesh reference (shared, not owned)
-    Mesh* m_pMesh;
+    // Mesh (owned by this fruit — each fruit loads its own mesh)
+    Mesh m_Mesh;
     GLuint m_MeshTex;
 
     Fruit();

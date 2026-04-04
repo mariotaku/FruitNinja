@@ -1,52 +1,95 @@
+//
+// MenuButton — reimplemented from docs/structs/gameplay-misc.md
+//
+// Key finding: "The spinning 3D fruit is NOT drawn by MenuButton.
+// It's a real Fruit/Bomb entity created via ActorManager::Add()
+// and stored at MenuButton+0x80. The entity gets its position
+// from the button, and ActorManager::Draw() renders it."
+//
+// MenuButton::Draw only renders 2D layers:
+//   Layer 1: Button texture quad (ring graphic)
+//   Layer 2: "New item" star indicator (TODO)
+//   Layer 3: Sparkle ring (TODO)
+//
+
 #include "MenuButton.h"
 #include "Renderer.h"
 #include "Game.h"
-#include "math3d.h"
+#include "Fruit.h"
+#include "ActorManager.h"
 #include <cstdio>
+#include <cstdlib>
 #include <cmath>
 
 MenuButton::MenuButton()
     : pressed(false), rotation_speed(0.5f),
-      fruit_atlas_tex(0), fruit_rotation(0.0f), has_fruit(false),
+      m_pEntity(NULL),
       m_HitScaleX(1.0f), m_HitScaleY(1.0f) {
     m_LayerFlags = 0x40;  // menu button layer
 }
 
 MenuButton::~MenuButton() {
-    fruit_mesh.destroy();
-    // fruit_atlas_tex is shared — NOT deleted here
+    // Entity is owned by ActorManager — deactivate but don't delete
+    if (m_pEntity) {
+        m_pEntity->Deactivate();
+        m_pEntity = NULL;
+    }
 }
 
 void MenuButton::init(GLuint tex, float tex_w, float tex_h, float cx, float cy,
                       std::function<void()> callback) {
     m_Texture = tex;
-    // Size = full texture dimensions (HUDControl3d draws unit quad scaled by size)
     size = Vec3(tex_w, tex_h, 1.0f);
-    // Position = center of button in game coords
     pos = Vec3(cx, cy, 0.0f);
     on_click = callback;
     m_Alpha = 255;
     m_bActive = true;
 }
 
-void MenuButton::load_fruit(Game& game, const char* fruit_name, GLuint atlas_tex) {
-    std::string path = game.data_dir + "/models/fruit/" + fruit_name + "_single.mmd";
-    if (fruit_mesh.load(path)) {
-        fruit_atlas_tex = atlas_tex;
-        has_fruit = true;
-        printf("MenuButton: loaded fruit mesh '%s'\n", fruit_name);
-    } else {
-        fprintf(stderr, "MenuButton: failed to load fruit mesh '%s'\n", fruit_name);
-    }
+// Matches MenuButton::Init (0x14ee40) fruit entity creation
+void MenuButton::CreateFruitEntity(Game& game, int fruitType) {
+    if (fruitType < 0 || !game.actorManager) return;
+
+    // Create real entity via ActorManager (matches original: ActorManager::Add)
+    Entity* e = game.actorManager->Add(0, false);  // type 0 = Fruit
+    if (!e) return;
+
+    Fruit* fruit = static_cast<Fruit*>(e);
+    fruit->Init(0, fruitType, 0);
+
+    // Position entity at button center
+    fruit->pos = pos;
+    fruit->scale = Vec3(25.0f, 25.0f, 25.0f);
+
+    // Set layer to 0x40 (menu layer, matches original: field_0x34 = 0x40)
+    fruit->flags &= ~0x10;  // unhide
+
+    // Random rotation speed (original: 8-12 deg/frame, random direction)
+    float speed = 8.0f + (float)(rand() % 40) / 10.0f;
+    if (rand() % 2) speed = -speed;
+
+    // Clamp rotation magnitude (original: min 0.75 for X, 0.5 for Y)
+    if (fabsf(fruit->m_RotVel1.x) < 0.75f)
+        fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? 0.75f : -0.75f);
+    if (fabsf(fruit->m_RotVel1.y) < 0.5f)
+        fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? 0.5f : -0.5f);
+
+    m_pEntity = e;
+    printf("MenuButton: created fruit entity type %d at (%.0f, %.0f)\n",
+           fruitType, pos.x, pos.y);
 }
 
 void MenuButton::Update(float dt) {
     m_Timer += rotation_speed * dt;
-    if (has_fruit) {
-        fruit_rotation += dt * 2.0f;
+
+    // Keep entity positioned at button center
+    if (m_pEntity && m_pEntity->IsActive()) {
+        m_pEntity->pos = pos;
     }
 }
 
+// MenuButton::Draw — only 2D layers, NO 3D fruit
+// The fruit entity is drawn by ActorManager::Draw in GameDraw
 void MenuButton::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
     (void)layerMask;
     if (!m_Texture || m_Alpha == 0) return;
@@ -58,50 +101,15 @@ void MenuButton::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
         draw_alpha_f *= 0.8f;
     }
 
-    // Layer 1: Button texture quad using draw_sprite (handles matrix setup)
+    // Layer 1: Button texture quad (the ring graphic)
     float w = size.x * draw_scale;
     float h = size.y * draw_scale;
-    // pos is center, draw_sprite expects bottom-left
     float dx = pos.x - w / 2.0f;
     float dy = pos.y - h / 2.0f;
     r.draw_sprite(m_Texture, dx, dy, w, h, m_Timer, draw_alpha_f);
 
-    // Layer 2: 3D fruit inside button
-    // The fruit mesh sits INSIDE the button ring texture, scaled to ~40% of button size.
-    // Original: fruit is a real Entity rendered by ActorManager::Draw.
-    // Port: we render it inline with a small ortho projection.
-    if (has_fruit && fruit_mesh.vbo && fruit_atlas_tex) {
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(GL_LESS);
-        glClear(GL_DEPTH_BUFFER_BIT);
-
-        // Ortho matching the game's 0-480 × 0-320 screen coords
-        float proj[16];
-        memset(proj, 0, sizeof(proj));
-        proj[0]  = 2.0f / FN_SCREEN_W;       // maps 0..480 to -1..1
-        proj[5]  = 2.0f / FN_SCREEN_H;       // maps 0..320 to -1..1
-        proj[10] = -2.0f / 200.0f;
-        proj[12] = -1.0f;                     // offset for 0-based coords
-        proj[13] = -1.0f;
-        proj[15] = 1.0f;
-
-        // Fruit scale: mesh coords are ~10-25 units, button is ~64-256 px.
-        // Scale fruit to fit ~35% of the smaller button dimension in screen pixels.
-        float buttonPx = (size.x < size.y ? size.x : size.y);
-        float fruit_scale = buttonPx * 0.35f / 25.0f * draw_scale;  // 25.0 = approx mesh radius
-
-        float scl[16], rot[16], sr[16], trans[16], model[16], mvp[16];
-        mat4_scale(scl, fruit_scale, fruit_scale, fruit_scale);
-        mat4_rotate_y(rot, fruit_rotation);
-        mat4_multiply(sr, rot, scl);
-        mat4_translate(trans, pos.x, pos.y, 0.0f);  // center of button in game coords
-        mat4_multiply(model, trans, sr);
-        mat4_multiply(mvp, proj, model);
-
-        r.draw_mesh(fruit_mesh, fruit_atlas_tex, mvp, model, draw_alpha_f);
-
-        glDisable(GL_DEPTH_TEST);
-    }
+    // Layer 2: "New item" star indicator — TODO
+    // Layer 3: Sparkle ring (8-segment tri-list) — TODO
 }
 
 bool MenuButton::hit_test(float gx, float gy) {
