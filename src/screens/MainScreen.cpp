@@ -36,10 +36,8 @@ static const Vec3 POS_PLAY_BUTTON   (16.0f, -66.0f, 0.0f);
 static const Vec3 POS_DOJO_BUTTON   (-144.0f, -65.0f, 0.0f);
 static const Vec3 POS_LEADERBOARD   (182.0f, -106.0f, 0.0f);
 
-// Convert original centered coords to port screen coords (0-480, 0-320 bottom-left)
-static inline float toScreenX(float orig) { return FN_SCREEN_W / 2.0f + orig; }
-static inline float toScreenY(float orig) { return FN_SCREEN_H / 2.0f + orig; }
-static inline Vec3  toScreen(const Vec3& v) { return Vec3(toScreenX(v.x), toScreenY(v.y), v.z); }
+// Original centered coordinates used directly — no conversion needed
+// The ortho projection is SetupOrtho(160, -160, -240, 240) matching the binary
 
 // ======================== Constructor ========================
 // Matches 0x0014c430 (159 lines)
@@ -104,7 +102,7 @@ MainScreen::MainScreen(Game& g)
 
     // Step 10-13: Set HUDControl3d base fields (matching original ctor)
     size = Vec3(480.0f, 138.0f, 1.0f);
-    pos = Vec3(toScreenX(0.0f), toScreenY((320.0f - 138.0f) * 0.5f), 0.0f);
+    pos = Vec3(0.0f, (320.0f - 138.0f) * 0.5f, 0.0f);
     m_bActive = true;
     m_LayerFlags = 0x01;  // MainScreen drawn in foreground layer
     m_Alpha = 255;
@@ -167,7 +165,7 @@ void MainScreen::CreateToggles() {
     if (!pSoundToggle) {
         GLuint tex = game.soundEnabled ? m_TexSoundOn : m_TexSoundOff;
         if (tex) {
-            Vec3 sp = toScreen(POS_SOUND_TOGGLE);
+            Vec3 sp = POS_SOUND_TOGGLE;
             pSoundToggle = new MenuButton();
             pSoundToggle->init(tex, 32.0f, 32.0f, sp.x, sp.y,
                                [this]() { SoundCallback(); });
@@ -181,7 +179,7 @@ void MainScreen::CreateToggles() {
     if (!pMusicToggle) {
         GLuint tex = game.musicEnabled ? m_TexMusicOn : m_TexMusicOff;
         if (tex) {
-            Vec3 mp = toScreen(POS_MUSIC_TOGGLE);
+            Vec3 mp = POS_MUSIC_TOGGLE;
             pMusicToggle = new MenuButton();
             pMusicToggle->init(tex, 32.0f, 32.0f, mp.x, mp.y,
                                [this]() { MusicCallback(); });
@@ -195,7 +193,7 @@ void MainScreen::CreateToggles() {
 void MainScreen::CreatePlayDojo() {
     // Play button — verified: (16.0, -66.0), fruitType 3 (watermelon)
     if (!pPlayButton && m_TexNewGame) {
-        Vec3 pp = toScreen(POS_PLAY_BUTTON);
+        Vec3 pp = POS_PLAY_BUTTON;
         pPlayButton = new MenuButton();
         pPlayButton->init(m_TexNewGame,
                           (float)m_ImgNewGame.width, (float)m_ImgNewGame.height,
@@ -208,7 +206,7 @@ void MainScreen::CreatePlayDojo() {
 
     // Dojo button — verified: (-144.0, -65.0), scale 0.9×
     if (!pDojoButton && m_TexDojoIcon) {
-        Vec3 dp = toScreen(POS_DOJO_BUTTON);
+        Vec3 dp = POS_DOJO_BUTTON;
         pDojoButton = new MenuButton();
         pDojoButton->init(m_TexDojoIcon,
                           (float)m_ImgDojoIcon.width * 0.9f,
@@ -225,7 +223,7 @@ void MainScreen::CreateLeaderboard() {
     // Leaderboard — verified: (182.0, -106.0)
     if (!pLeaderboardBtn && m_TexOpenFeint) {
         TexImage tmp;
-        Vec3 lp = toScreen(POS_LEADERBOARD);
+        Vec3 lp = POS_LEADERBOARD;
         pLeaderboardBtn = new MenuButton();
         pLeaderboardBtn->init(m_TexOpenFeint, 64.0f, 64.0f, lp.x, lp.y,
                               []() { /* LeaderboardsCallback — skip for port */ });
@@ -375,8 +373,8 @@ void MainScreen::Update(float dt) {
 
     // Toggle position update (original: pos.y=135.5, pos.x=216/176 when camera<=0)
     if (pSoundToggle && pMusicToggle) {
-        Vec3 sp = toScreen(POS_SOUND_TOGGLE);
-        Vec3 mp = toScreen(POS_MUSIC_TOGGLE);
+        Vec3 sp = POS_SOUND_TOGGLE;
+        Vec3 mp = POS_MUSIC_TOGGLE;
         pSoundToggle->pos = sp;
         pMusicToggle->pos = mp;
 
@@ -474,8 +472,8 @@ void MainScreen::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
         float tw = (float)m_ImgFruitText.width;
         float th = (float)m_ImgFruitText.height;
         r.draw_sprite(game.fruit_text_tex,
-                      toScreenX(m_LogoFruitPos2.x) - tw / 2.0f,
-                      toScreenY(m_LogoFruitPos2.y) - th / 2.0f,
+                      m_LogoFruitPos2.x - tw / 2.0f,
+                      m_LogoFruitPos2.y - th / 2.0f,
                       tw, th, 0.0f, m_Alpha);
     }
 
@@ -484,8 +482,8 @@ void MainScreen::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
         float tw = (float)m_ImgNinjaText.width;
         float th = (float)m_ImgNinjaText.height;
         r.draw_sprite(game.ninja_text_tex,
-                      toScreenX(m_LogoNinjaPos.x) - tw / 2.0f,
-                      toScreenY(m_LogoNinjaPos.y) - th / 2.0f,
+                      m_LogoNinjaPos.x - tw / 2.0f,
+                      m_LogoNinjaPos.y - th / 2.0f,
                       tw, th, 0.0f, m_Alpha);
     }
 
@@ -494,8 +492,8 @@ void MainScreen::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
         float tw = (float)m_ImgSliceFruit.width;
         float th = (float)m_ImgSliceFruit.height;
         r.draw_sprite(m_TexSliceFruit,
-                      toScreenX(m_LogoFruitPos.x) - tw / 2.0f,
-                      toScreenY(m_LogoFruitPos.y) - th / 2.0f,
+                      m_LogoFruitPos.x - tw / 2.0f,
+                      m_LogoFruitPos.y - th / 2.0f,
                       tw, th, 0.0f, m_Alpha);
     }
 
@@ -506,8 +504,8 @@ void MainScreen::Draw(Renderer& r, const Vec3& hudScale, int layerMask) {
         float tw = (float)m_ImgCommingSoon.width * 0.5f;
         float th = (float)m_ImgCommingSoon.height * 0.5f;
         r.draw_sprite(m_TexCommingSoon,
-                      toScreenX(0.0f) - tw / 2.0f,
-                      toScreenY(7.0f) - th / 2.0f,
+                      0.0f - tw / 2.0f,
+                      7.0f - th / 2.0f,
                       tw, th, 0.0f, m_Alpha);
     }
 }
