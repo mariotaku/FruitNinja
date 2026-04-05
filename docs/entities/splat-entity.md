@@ -38,5 +38,5 @@ Each splat = 2 triangles = 6 vertices.
 ## See Also
 
 - [Entity base](entity-base.md) -- Mortar::Entity base class
-- [Visual effects (full)](../systems/effects.md) -- BombFlash, BombBlast, and other effects
-- [Screens & effects functions](../functions/screens-effects.md) -- effect pseudocode
+- [BombFlash](bomb-flash.md) -- Bomb flash effect
+- [BombBlast](bomb-blast.md) -- Bomb explosion effect
