@@ -20,6 +20,7 @@
 class HUD;
 class ActorManager;
 class MainScreen;
+class FruitCamera;
 
 struct Game : public Mortar::MortarGame {
     // === Game-specific fields beyond MortarGame base (original +0xFC..+0x103) ===
@@ -54,7 +55,7 @@ struct Game : public Mortar::MortarGame {
     HUD* hud;                      // +0x3C: pHUD
     bool isFirstPlay1;             // +0x44
     bool isFirstPlay2;             // +0x45
-    // +0x48: FruitCamera* pCamera (TODO)
+    FruitCamera* pCamera;             // +0x48
     // +0x4C: FruitSaveData* pSaveData (TODO)
     // +0x50..+0x80: Font* slots (TODO)
     float field_0x88;              // +0x88
@@ -80,16 +81,6 @@ struct Game : public Mortar::MortarGame {
     InputManager* inputManager;
     SDLInputTranslator inputTranslator;
     ActorManager* actorManager;
-
-    // Shared textures (loaded in GameInitialise)
-    GLuint bg_tex;
-    GLuint hb_logo_tex;
-    GLuint title_tex;
-
-    // Global textures (loaded lazily by MainScreen)
-    GLuint blurry_backing_tex;
-    GLuint fruit_text_tex;
-    GLuint ninja_text_tex;
 
     // Audio toggle state
     bool soundEnabled;
@@ -118,8 +109,6 @@ struct Game : public Mortar::MortarGame {
     bool init(SDL_Window* win, SDL_GLContext gl);
     void shutdown();
     void run();
-
-    GLuint load_texture(const char* name, TexImage& img);
 };
 
 // Forward declarations for lifecycle functions (src/game/)

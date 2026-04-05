@@ -277,7 +277,7 @@ void MainScreen::Update(float dt) {
         pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
     }
 
-    // Toggle button positioning
+    // Toggle button positioning (matches docs: end of Update, all states)
     if (pSoundToggle && pMusicToggle) {
         pSoundToggle->pos.y = 135.5f;
         pMusicToggle->pos.y = 135.5f;
@@ -287,16 +287,18 @@ void MainScreen::Update(float dt) {
             pSoundToggle->pos.x = 216.0f;
             pMusicToggle->pos.x = 176.0f;
         } else {
-            // Camera transitioning — slide to edges
+            // Camera transitioning out — slide to edges
             pSoundToggle->pos.x = 20.0f;
             pMusicToggle->pos.x = -20.0f;
         }
 
-        // Slide offset based on pause amount
-        float pauseAmount = m_CameraTransition;
-        if (pauseAmount < 0.0f) pauseAmount = 0.0f;
+        // Docs: pauseAmount = clamp(cameraTransition + GetPauseAmount(), 0, 1)
+        // m_CameraTransition lerps 0 → -1 during zoom-in. Use abs to get 0→1 range.
+        float pauseAmount = fabsf(m_CameraTransition);
         if (pauseAmount > 1.0f) pauseAmount = 1.0f;
 
+        // slideOffset: when pauseAmount=1 (fully zoomed), offset=0 (on screen)
+        //              when pauseAmount=0 (not zoomed), offset=size.y*2 (off screen)
         float slideOffset = size.y * 2.0f * (1.0f - pauseAmount);
         pSoundToggle->m_bActive = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
         pMusicToggle->m_bActive = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
@@ -379,36 +381,45 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 }
 
 // Matches 0x0014ad3c (~60 lines): bouncing logo physics + alpha lerp
+// Called with (cameraTransition, time) from end of Update
 void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
-    (void)time;
+    // Clamp minimum param1 (docs: "if param1 < threshold: param1 = threshold")
+    if (cameraTransition > -0.01f) cameraTransition = -0.01f;
 
-    // Logo positions
+    // Logo base position: centered horizontally, at pos.y + 18
     float floorY = pos.y + 18.0f;
-    m_LogoFruitPos.y = floorY;
-    m_LogoNinjaPos = m_LogoFruitPos;
 
-    // Bounce physics
-    m_BounceVelocity += cameraTransition * 0.5f;  // decay rate
+    // Bounce physics: logo drops from above and bounces
+    m_BounceVelocity += cameraTransition * 0.5f;
     m_WindowCenter += m_BounceVelocity * cameraTransition * 15.0f;
 
     // Bounce at floor
     if (m_WindowCenter < floorY - 15.0f) {
         m_WindowCenter = floorY - 15.0f;
-        m_BounceVelocity *= BOUNCE_LOSS;  // bounce with energy loss
+        m_BounceVelocity *= BOUNCE_LOSS;  // bounce with energy loss (-0.25)
 
+        // Settle when velocity is small enough
         if (fabsf(m_BounceVelocity) < BOUNCE_SETTLE &&
             time > 0.5f && cameraTransition < 0.0f) {
             m_BounceVelocity = 0.0f;
-            m_GlobalAlphaTarget = 0.0f;
+            // Logo settled — alpha target stays at 1.0 (fully visible)
+            m_GlobalAlphaTarget = 1.0f;
         }
     }
 
-    // Alpha lerp
+    // Alpha lerp toward target
     m_Alpha += (m_GlobalAlphaTarget - m_Alpha) * ALPHA_LERP_RATE;
 
-    // Final logo offset (shift down)
+    // Set logo positions
+    // m_LogoFruitPos: base position for slice_fruit decoration
+    m_LogoFruitPos = Vec3(0.0f, floorY, 0.0f);
+
+    // m_LogoNinjaPos: "NINJA" text position (at bounce height)
+    m_LogoNinjaPos = Vec3(0.0f, m_WindowCenter, 0.0f);
+
+    // m_LogoFruitPos2: "FRUIT" text position (above NINJA by 34 units)
     m_LogoFruitPos2 = m_LogoNinjaPos;
-    m_LogoFruitPos2.y -= 34.0f;  // Vec3(0, -17, 0) * 2.0
+    m_LogoFruitPos2.y += 34.0f;  // FRUIT is above NINJA
 }
 
 // Matches 0x0014aee8 (~35 lines)
@@ -433,6 +444,13 @@ void MainScreen::RemoveButton(MenuButton*& btn) {
     }
 }
 
+// Helper: get texture size as Vec3, fallback to default
+static Vec3 TexSize(const SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
+    if (tex.IsValid() && tex->m_Width > 0)
+        return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
+    return Vec3(defW, defH, 1.0f);
+}
+
 void MainScreen::CreateToggles() {
     if (!game.hud) return;
 
@@ -440,7 +458,7 @@ void MainScreen::CreateToggles() {
     pSoundToggle = new MenuButton();
     pSoundToggle->m_Texture = TexId(game.soundEnabled ? m_TexSoundOn : m_TexSoundOff);
     pSoundToggle->pos = POS_SOUND_TOGGLE;
-    pSoundToggle->size = Vec3(32.0f, 32.0f, 1.0f);
+    pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
     pSoundToggle->on_click = [this]() { SoundCallback(); };
     pSoundToggle->m_LayerFlags = 8;
     game.hud->AddControl(pSoundToggle);
@@ -449,7 +467,7 @@ void MainScreen::CreateToggles() {
     pMusicToggle = new MenuButton();
     pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
     pMusicToggle->pos = POS_MUSIC_TOGGLE;
-    pMusicToggle->size = Vec3(32.0f, 32.0f, 1.0f);
+    pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
     pMusicToggle->on_click = [this]() { MusicCallback(); };
     pMusicToggle->m_LayerFlags = 8;
     game.hud->AddControl(pMusicToggle);
@@ -462,7 +480,7 @@ void MainScreen::CreatePlayDojo() {
     pPlayButton = new MenuButton();
     pPlayButton->m_Texture = TexId(m_TexNewGame);
     pPlayButton->pos = POS_PLAY_BUTTON;
-    pPlayButton->size = Vec3(64.0f, 64.0f, 1.0f);  // auto from texture in original
+    pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
     pPlayButton->on_click = [this]() { GameModeCallback(); };
     pPlayButton->m_LayerFlags = 8;
     game.hud->AddControl(pPlayButton);
@@ -471,7 +489,7 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton = new MenuButton();
     pDojoButton->m_Texture = TexId(m_TexDojoIcon);
     pDojoButton->pos = POS_DOJO_BUTTON;
-    pDojoButton->size = Vec3(64.0f, 64.0f, 1.0f);
+    pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
     pDojoButton->on_click = [this]() { AboutCallback(); };
     pDojoButton->m_LayerFlags = 8;
     game.hud->AddControl(pDojoButton);
@@ -484,7 +502,7 @@ void MainScreen::CreateLeaderboard() {
     pLeaderboardBtn = new MenuButton();
     pLeaderboardBtn->m_Texture = TexId(m_TexOpenFeint);
     pLeaderboardBtn->pos = POS_LEADERBOARD;
-    pLeaderboardBtn->size = Vec3(48.0f, 48.0f, 1.0f);
+    pLeaderboardBtn->size = TexSize(m_TexOpenFeint, 48.0f, 48.0f);
     pLeaderboardBtn->on_click = [this]() { QuitGamesCallback(); };
     pLeaderboardBtn->m_LayerFlags = 8;
     game.hud->AddControl(pLeaderboardBtn);

@@ -7,7 +7,7 @@
 //
 
 #include "Game.h"
-#include "asset/tex_loader.h"
+#include "FruitCamera.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
 #include <cstdio>
@@ -42,19 +42,11 @@ void GameInitialise() {
     game->inputManager = new InputManager();
     game->inputTranslator.Init();
 
-    // 2. ActorManager
+    // 2. FruitCamera (matches original: operator_new(0x16c))
+    game->pCamera = new FruitCamera();
+
+    // 3. ActorManager
     game->actorManager = new ActorManager();
-
-    // 3. Load shared textures (matches original steps 3-6)
-    TexImage img;
-    game->bg_tex = game->load_texture("bg_fruit_ninja.tex", img);
-    if (!game->bg_tex)
-        game->bg_tex = game->load_texture("bg_fruit_ninja_sml.tex", img);
-    game->hb_logo_tex = game->load_texture("hb_logo.tex", img);
-    game->title_tex = game->load_texture("title_backing.tex", img);
-
-    // 4. Load global textures (blurry_backing, fruit_text, ninja_text)
-    // These are loaded lazily by MainScreen in its constructor
 
     // TODO: Font::Load ×8 (multiple fonts)
     // TODO: LoadLocalisedTexture → Game+0x17c (fruit atlas)
@@ -81,17 +73,9 @@ void GameDestroy() {
     game->mainScreen = NULL;
 
     // Destroy singletons
+    if (game->pCamera) { delete game->pCamera; game->pCamera = NULL; }
     if (game->inputManager) { delete game->inputManager; game->inputManager = NULL; }
     if (game->actorManager) { delete game->actorManager; game->actorManager = NULL; }
-
-    // Delete shared textures
-    GLuint* textures[] = {
-        &game->bg_tex, &game->hb_logo_tex, &game->title_tex,
-        &game->blurry_backing_tex, &game->fruit_text_tex, &game->ninja_text_tex
-    };
-    for (int i = 0; i < 6; i++) {
-        if (*textures[i]) { glDeleteTextures(1, textures[i]); *textures[i] = 0; }
-    }
 
     // TODO: UnLoadContent for all screens/entities
     // TODO: Delete fonts, FruitSaveData, GameSound
