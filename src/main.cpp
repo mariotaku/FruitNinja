@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     SDL_Window* window = SDL_CreateWindow(
         "Fruit Ninja",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        480, 320,
+        960, 640,
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
     );
     if (!window) {

@@ -3,9 +3,11 @@
 
 //
 // FruitCamera : MortarCamera (size = 0x16C / 364 bytes)
-// Reimplemented from docs/engine/camera.md
-// Original: ctor 0x00180de0, UpdateCamera 0x00180c8c,
-//           SetupPerspective 0x001810ac, CreateCameraShake 0x00180d10
+// See docs/engine/camera.md for full layout, vtable, and method decompilation.
+//
+// Only slot 3 (UpdateCamera) is overridden from MortarCamera vtable.
+// FruitCamera::SetupPerspective(perspType, forceUpdate) at 0x001810ac is a
+// SEPARATE non-virtual method called directly from GameDraw.
 //
 
 #include "render/MortarCamera.h"
@@ -14,13 +16,13 @@
 
 class FruitCamera : public Mortar::MortarCamera {
 public:
-    // +0x12c: pointer to followed entity (0 = idle)
+    // +0x12c: entity pointer for follow mode (0 = none)
     int m_pFollowEntity;
 
     // +0x130: 0 = idle, 1 = follow
     int m_CameraMode;
 
-    // +0x134, +0x136: angle fields cast to float each frame
+    // +0x134, +0x136: angle ushorts cast to float each frame
     uint16_t m_field134;
     uint16_t m_field136;
 
@@ -31,7 +33,7 @@ public:
     // +0x140: Atan2Idx result from CreateCameraShake
     uint16_t m_ShakeAngle;
 
-    // +0x144, +0x148: camera target (from global config, affected by shake)
+    // +0x144, +0x148: camera target (shake modifies these)
     float m_TargetX;
     float m_TargetY;
 
@@ -45,29 +47,26 @@ public:
     // +0x158: lookAt saved each UpdateCamera
     Vec3 m_LookAtSnapshot;
 
-    // +0x164: shake amplitude (decays over time)
+    // +0x164: shake amplitude (decays linearly by dt)
     float m_ShakeIntensity;
 
-    // +0x168: initial shake intensity (set by CreateCameraShake)
+    // +0x168: initial shake intensity (for ratio calculations)
     float m_ShakeIntensityInit;
 
     FruitCamera();
     ~FruitCamera();
 
-    // Per-frame update — dispatches to UpdateIdle or UpdateFollow
-    void UpdateCamera(float dt);
+    // Vtable slot 3 override (0x00180c8c)
+    void UpdateCamera(float dt) override;
 
-    // Setup the camera projection for rendering.
-    // perspType: 0 = standard (used in GameDraw), 1 = multiplayer P1, 2 = multiplayer P2
-    // In the original binary, this calls SetupLookAt + SetupOrtho with
-    // hardcoded ortho bounds for the rotated Bada display.
-    // Port: uses symmetric ortho centered at (480, 320) to match HUDControl3d offset.
+    // Non-virtual (0x001810ac) — 4-type ortho dispatch
+    // Called from GameDraw as SetupPerspective(0, false)
     void SetupPerspective(int perspType = 0, bool forceUpdate = false);
 
-    // Initiate camera shake from impact point
+    // 0x00180d10
     void CreateCameraShake(const Vec3& impact, float intensity, float dirScale);
 
-    // Per-frame shake update (called from UpdateCamera)
+    // 0x00180ea0
     void UpdateShake(float dt);
 
 private:

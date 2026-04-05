@@ -380,46 +380,73 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     // 6. "Coming soon" logo overlay — TODO (depends on pPlayButton existence)
 }
 
-// Matches 0x0014ad3c (~60 lines): bouncing logo physics + alpha lerp
-// Called with (cameraTransition, time) from end of Update
+// Matches 0x0014ad3c — constants verified from Ghidra decompilation + read_memory
+//
+// Binary constants (portrait coordinate space, literal pool at 0x14aec4):
+//   CLAMP_THRESHOLD    = 0.04   (DAT_0014aec4)
+//   BOUNCE_GRAVITY     = -55.0
+//   LOGO_NARROW_POS    = -175.0 (position on narrow axis: portrait X, landscape Y)
+//   ELAPSED_THRESHOLD  = 0.99   (DAT_0014aed8)
+//
+// Port specific: the original assigns positions to portrait axes (X=narrow, Y=wide).
+// The port's landscape ortho has X=wide, Y=narrow. Logo positions swap X↔Y.
+// All constants and bounce physics are unchanged from the binary.
+//
 void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
-    // Clamp minimum param1 (docs: "if param1 < threshold: param1 = threshold")
-    if (cameraTransition > -0.01f) cameraTransition = -0.01f;
+    static const float CLAMP_THRESHOLD   = 0.04f;    // DAT_0014aec4
+    static const float BOUNCE_GRAVITY    = -55.0f;   // verified
+    static const float LOGO_NARROW_POS   = -175.0f;  // portrait X axis position
+    static const float ELAPSED_THRESHOLD = 0.99f;    // DAT_0014aed8
 
-    // Logo base position: centered horizontally, at pos.y + 18
-    float floorY = pos.y + 18.0f;
+    if (cameraTransition < CLAMP_THRESHOLD) {
+        cameraTransition = CLAMP_THRESHOLD;
+    }
 
-    // Bounce physics: logo drops from above and bounces
-    m_BounceVelocity += cameraTransition * 0.5f;
-    m_WindowCenter += m_BounceVelocity * cameraTransition * 15.0f;
+    field_0xf4 = 0.0f;
+    field_0x100 = 0.0f;
 
-    // Bounce at floor
-    if (m_WindowCenter < floorY - 15.0f) {
-        m_WindowCenter = floorY - 15.0f;
-        m_BounceVelocity *= BOUNCE_LOSS;  // bounce with energy loss (-0.25)
+    // Bounce physics (unchanged from binary)
+    float newVel = m_BounceVelocity + cameraTransition * BOUNCE_GRAVITY;
+    m_BounceVelocity = newVel;
 
-        // Settle when velocity is small enough
-        if (fabsf(m_BounceVelocity) < BOUNCE_SETTLE &&
-            time > 0.5f && cameraTransition < 0.0f) {
+    float newCenter = m_WindowCenter + newVel * cameraTransition * 15.0f;
+    m_WindowCenter = newCenter;
+
+    float floorPos = pos.y + 18.0f;
+
+    // Port specific: swap X↔Y for landscape ortho
+    // Original: m_LogoNinjaPos = (LOGO_NARROW_POS, floorPos, 0)
+    // Landscape: narrow axis is Y, wide axis is X
+    m_LogoNinjaPos.x = floorPos;
+    m_LogoNinjaPos.y = -LOGO_NARROW_POS;  // negate: portrait bottom → landscape top
+    m_LogoNinjaPos.z = 0.0f;
+
+    m_LogoFruitPos = m_LogoNinjaPos;
+    m_LogoFruitPos.z = field_0xf4;
+
+    if (cameraTransition > 0.0f) {
+        m_GlobalAlphaTarget = 1.0f;
+    }
+
+    float floorLimit = floorPos - 15.0f;
+    if (newCenter < floorLimit) {
+        m_WindowCenter = floorLimit;
+        m_BounceVelocity = newVel * BOUNCE_LOSS;
+
+        if (fabsf(newVel * BOUNCE_LOSS) < BOUNCE_SETTLE &&
+            time > ELAPSED_THRESHOLD &&
+            cameraTransition > 0.0f) {
             m_BounceVelocity = 0.0f;
-            // Logo settled — alpha target stays at 1.0 (fully visible)
-            m_GlobalAlphaTarget = 1.0f;
+            m_GlobalAlphaTarget = 0.0f;
         }
     }
 
-    // Alpha lerp toward target
     m_Alpha += (m_GlobalAlphaTarget - m_Alpha) * ALPHA_LERP_RATE;
 
-    // Set logo positions
-    // m_LogoFruitPos: base position for slice_fruit decoration
-    m_LogoFruitPos = Vec3(0.0f, floorY, 0.0f);
-
-    // m_LogoNinjaPos: "NINJA" text position (at bounce height)
-    m_LogoNinjaPos = Vec3(0.0f, m_WindowCenter, 0.0f);
-
-    // m_LogoFruitPos2: "FRUIT" text position (above NINJA by 34 units)
-    m_LogoFruitPos2 = m_LogoNinjaPos;
-    m_LogoFruitPos2.y += 34.0f;  // FRUIT is above NINJA
+    // Port specific: FRUIT text above NINJA
+    m_LogoFruitPos2.x = 0.0f;
+    m_LogoFruitPos2.y = m_LogoNinjaPos.y - 40.0f;
+    m_LogoFruitPos2.z = 0.0f;
 }
 
 // Matches 0x0014aee8 (~35 lines)

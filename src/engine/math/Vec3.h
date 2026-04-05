@@ -20,30 +20,55 @@ struct Vec3 {
     Vec3& operator-=(const Vec3& o) { x -= o.x; y -= o.y; z -= o.z; return *this; }
     Vec3& operator*=(float s) { x *= s; y *= s; z *= s; return *this; }
 
+    // Matches operator/= (0x00138b40)
+    Vec3& operator/=(float s) { x /= s; y /= s; z /= s; return *this; }
+
     // Component-wise multiply (used in HUDControl3d::Draw)
     Vec3 operator*(const Vec3& o) const { return Vec3(x * o.x, y * o.y, z * o.z); }
 
     bool operator!=(const Vec3& o) const { return x != o.x || y != o.y || z != o.z; }
     bool operator==(const Vec3& o) const { return x == o.x && y == o.y && z == o.z; }
 
-    float length() const { return sqrtf(x * x + y * y + z * z); }
-    float lengthSq() const { return x * x + y * y + z * z; }
-    Vec3 normalized() const { float l = length(); return l > 0 ? *this / l : Vec3(); }
+    // Matches Dot (0x00133c4c) — instance method
+    float Dot(const Vec3& o) const { return x * o.x + y * o.y + z * o.z; }
 
-    static float dot(const Vec3& a, const Vec3& b) {
-        return a.x * b.x + a.y * b.y + a.z * b.z;
+    // Matches MagnitudeSqr (0x00133c74)
+    float MagnitudeSqr() const { return Dot(*this); }
+
+    // Matches Magnitude (0x00138cdc)
+    float Magnitude() const { return sqrtf(MagnitudeSqr()); }
+
+    // Matches Normalise (0x00138ce8) — in-place, returns original magnitude
+    // Recursive retry with 1M scale-up for near-zero vectors
+    float Normalise() {
+        if (x == 0.0f && y == 0.0f && z == 0.0f) return 0.0f;
+        float mag = Magnitude();
+        if (mag == 0.0f) {
+            *this *= 1000000.0f;  // DAT_00138d5c
+            Normalise();          // recursive retry
+        } else {
+            *this /= mag;
+        }
+        return mag;
     }
 
-    static Vec3 cross(const Vec3& a, const Vec3& b) {
+    // Matches Cross (0x0017ea04) — static, matches ARM struct-return convention
+    static Vec3 Cross(const Vec3& a, const Vec3& b) {
         return Vec3(
-            a.y * b.z - a.z * b.y,
-            a.z * b.x - a.x * b.z,
-            a.x * b.y - a.y * b.x
+            a.y * b.z - b.y * a.z,
+            b.x * a.z - a.x * b.z,
+            a.x * b.y - b.x * a.y
         );
     }
 
-    float dot(const Vec3& o) const { return dot(*this, o); }
-    Vec3 cross(const Vec3& o) const { return cross(*this, o); }
+    // Convenience aliases (port uses both styles)
+    float length() const { return Magnitude(); }
+    float lengthSq() const { return MagnitudeSqr(); }
+    Vec3 normalized() const { float l = Magnitude(); return l > 0 ? *this / l : Vec3(); }
+    static float dot(const Vec3& a, const Vec3& b) { return a.Dot(b); }
+    static Vec3 cross(const Vec3& a, const Vec3& b) { return Cross(a, b); }
+    float dot(const Vec3& o) const { return Dot(o); }
+    Vec3 cross(const Vec3& o) const { return Cross(*this, o); }
 
     static Vec3 Zero() { return Vec3(0, 0, 0); }
 };

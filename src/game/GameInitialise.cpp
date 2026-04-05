@@ -10,7 +10,9 @@
 #include "FruitCamera.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
+#include "entities/FruitInfo.h"
 #include <cstdio>
+#include <string>
 
 // Matches GamePreInitialise (0x10b588) — zero the Game singleton
 void GamePreInitialise() {
@@ -32,26 +34,42 @@ void GamePreInitialise() {
 }
 
 // Matches GameInitialise (0x10bdfc, 305 lines) — boot all singletons
+// See docs/functions/game-loop.md for full 25-step init order.
 void GameInitialise() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
     printf("GameInitialise: booting engine\n");
 
-    // 1. InputManager
+    // Steps 1-4: SystemManager, MatrixManager, FileSystem, DisplayManager
+    // Port specific: these are Meyers singletons, auto-initialized on first GetInstance()
+
+    // Step 10: InputManager
     game->inputManager = new InputManager();
     game->inputTranslator.Init();
 
-    // 2. FruitCamera (matches original: operator_new(0x16c))
+    // Step 15: FruitCamera (matches original: operator_new(0x16c))
     game->pCamera = new FruitCamera();
+    game->pCamera->Init(1.0f, 10000.0f, 16.95f, 11.3f);  // fovOrNear, farClip, fovX, fovY
 
-    // 3. ActorManager
+    // Zero g_GameData fields (matches step 15 continued)
+    game->worldPos = Vec3(0.0f, 0.0f, 0.0f);
+
+    // Step 24: Fruit::LoadInfo (parses Data/xml/fruitlist.xml)
+    {
+        std::string xmlPath = game->data_dir + "/xml/fruitlist.xml";
+        FruitInfo_Load(xmlPath.c_str());
+    }
+
+    // ActorManager (needed for entity creation)
     game->actorManager = new ActorManager();
 
-    // TODO: Font::Load ×8 (multiple fonts)
-    // TODO: LoadLocalisedTexture → Game+0x17c (fruit atlas)
-    // TODO: MenuButton::LoadContent, Fruit::LoadInfo
-    // TODO: SplatEntity/SlashEntity/Bomb/GameOverScreen/PowerUpShop::LoadContent
+    // TODO: Step 5: InitialiseData()
+    // TODO: Steps 11-13: PSPParticleManager, PowerUpManager, LeaderboardManager
+    // TODO: Steps 16-21: Font::Load ×8
+    // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas)
+    // TODO: Step 23: MenuButton::LoadContent()
+    // TODO: Step 25: SplatEntity/SlashEntity/Bomb/GameOverScreen/PowerUpShop::LoadContent
     // TODO: PreloadSounds
 
     printf("GameInitialise: done\n");

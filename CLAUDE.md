@@ -52,6 +52,12 @@
 - **GL ES 1.x → 2.0 translation only** — the only allowed deviation from original logic is translating fixed-function GL calls (glMatrixMode, glVertexPointer, etc.) to GLES2 shader equivalents. All other logic stays identical.
 - **Prompts for implementation agents** are in `src/engine/prompts/` — use these as task specs.
 
+## Analysis ↔ Implementation Tracking
+- **Docs**: Add an `<!-- Analysed: YYYY-MM-DDTHH:MM -->` comment at the top of each major section (## heading) in docs/ when analysis is performed or updated.
+- **Source**: Add a `// Analysed: YYYY-MM-DDTHH:MM` comment near the top of each implementation file (after includes), matching the docs section it was based on.
+- **Staleness check**: If a doc section's analysis date is **newer** than the corresponding source file's date, the implementation may be outdated and should be reviewed/reimplemented with the new findings.
+- Use ISO-8601 format to the minute, UTC: e.g. `2026-04-05T11:30`
+
 ## Conventions
 - **Only commit when explicitly requested** by the user — do not auto-commit after changes
 - When a value in port code **differs from the original binary**, add a comment explaining the discrepancy (e.g. `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`). This makes it easy to find and fix incorrect values later.

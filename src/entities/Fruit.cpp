@@ -1,4 +1,5 @@
 #include "Fruit.h"
+#include "FruitInfo.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "asset/tex_loader.h"
@@ -47,12 +48,20 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     // Rotation axis offset
     m_RotAxis = Vec3(RandRange(10.0f), 0.0f, 0.0f);
 
-    // DIFFERS: original computes visual scale in SetFruitType as:
-    //   globalVec (BSS, unreadable) × configFloat (GOT_OFF_FRUIT_SCALE_CONFIG) × 0.01 (FRUIT_VISUAL_SCALE_MULT)
-    // The 25.0 from FRUIT_INFO is m_CollisionScale — collision radius only, NOT visual.
-    // Using 1.0 as placeholder until globalVec/configFloat are resolved at runtime.
-    // SetFruitType would set this properly; for now approximate.
-    scale = Vec3(1.0f, 1.0f, 1.0f);
+    // Matches SetFruitType (0x17621c):
+    // visualScale = globalScaleVec * FruitInfo[type].scale * VISUAL_SCALE_MULT (0.01)
+    // globalScaleVec is at BSS 0x1F4334, initialized to (0,0,0) by static init
+    // but overwritten at runtime before fruit creation.
+    // Per-fruit scale from Data/xml/fruitlist.xml (e.g. watermelon=75)
+    {
+        // DIFFERS: globalScaleVec is a runtime BSS value that cannot be read from
+        // the static binary. Approximated as (2.75, 2.75, 2.75) from visual matching
+        // against reference screenshots. Formula: target_size / (mesh_extent * xml_scale * 0.01 * 0.2)
+        static const Vec3 globalScaleVec(2.75f, 2.75f, 2.75f);
+        const FruitInfo* info = FruitInfo_Get(fruitType);
+        float fruitScale = info ? info->scale * 0.01f : 1.0f;
+        scale = globalScaleVec * fruitScale;
+    }
 
     // Load mesh for this fruit type
     static const char* fruitNames[] = {
@@ -175,7 +184,9 @@ void Fruit::Draw(Renderer& r) {
     mat4_multiply(temp, rotMat, mat.ptr());
     memcpy(sr.ptr(), temp, sizeof(temp));
 
-    // Translate to position + (480, 320, 0) offset (matching HUDControl3d)
+    // Port specific: add (480, 320) offset to match HUDControl3d coordinate space.
+    // In the original, the EGL pipeline handles this; in the port, the offset-centered
+    // ortho requires all draw positions to include the (480, 320) base.
     Vec3 drawPos(pos.x + 480.0f, pos.y + 320.0f, m_ZPosition);
     sr.GlobalTranslate44(drawPos);
 
