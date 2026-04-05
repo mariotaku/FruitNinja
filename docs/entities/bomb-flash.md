@@ -217,4 +217,4 @@ Note: Both UpdateActiveFlashes and DrawActiveFlashes are empty stubs. The flash 
 
 - [Bomb entity](bomb.md) -- triggers BombFlash via HitBomb/CleanupBomb
 - [BombBlast entity](bomb-blast.md) -- explosion shockwave ring
-- [Effects overview](../systems/effects.md) -- SplatEntity, BombFlash, BombBlast systems
+- [SplatEntity](splat-entity.md) -- Juice splat effect

@@ -94,13 +94,13 @@ See `docs/engine/particles.md`. Full architecture recovered:
 
 ### SplatEntity System — DONE
 
-See `docs/systems/effects.md`. DrawActiveSplats fully decompiled:
+See `docs/entities/splat-entity.md`. DrawActiveSplats fully decompiled:
 - Batched triangle list rendering with QUADCUSTOMVERTEX
 - 6 splat variants, pool-based
 
 ### BombFlash / BombBlast — DONE
 
-See `docs/systems/effects.md`. Both Update functions fully decompiled:
+See `docs/entities/bomb-flash.md` and `docs/entities/bomb-blast.md`. Both Update functions fully decompiled:
 - BombFlash: quadratic scale + alpha fade animation (61 lines)
 - BombBlast: expanding radius, dual velocity, 3s lifetime (32 lines)
 

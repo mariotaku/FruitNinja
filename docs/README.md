@@ -95,11 +95,8 @@ Game-specific logic, screens, entities, and systems.
 - [systems/menu-flow.md](systems/menu-flow.md) — Screen hierarchy, callbacks, mode selection
 - [systems/save-system.md](systems/save-system.md) — FruitSaveData persistence, stat tracking
 - [systems/power-ups.md](systems/power-ups.md) — PowerUp struct, 4 modifier types, activation flow
-- [systems/effects.md](systems/effects.md) — *(redirect to entities/)* SplatEntity, BombFlash, BombBlast
 
 ### Game Struct Layouts
-
-- [structs/entities.md](structs/entities.md) — *(redirect to entities/)* MortarEntity, Fruit, Bomb, SlashEntity
 - [structs/game.md](structs/game.md) — Game singleton, MortarGame vtable, FruitNinja app, GlesForm
 - [structs/hud.md](structs/hud.md) — HUD, HUDControl, HUDControl3d class hierarchy, MissControl
 - [structs/wave.md](structs/wave.md) — WaveManager, WaveInfo
