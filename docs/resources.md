@@ -215,18 +215,39 @@ Each fruit has multiple model variants:
 
 ## Resource Loading Flow
 
+Full order from GameInitialise (0x0010bdfc). See [game-loop.md](functions/game-loop.md) for detail.
+
 ```
-GameInitialise()
-  → Fruit::LoadInfo()           — parses fruitlist.xml, creates FRUIT_INFO array
-  → Fruit::LoadFruitModels()    — loads .mad/.mmd per fruit type → FruitModelInfo array
-  → SlashEntity::LoadContent()  — loads blade textures/models
-  → Bomb::LoadContent()         — loads bomb model
-  → SplatEntity::LoadContent()  — loads splat textures
-  → PowerUpShop::LoadContent()  — loads shop UI textures
-  → PreloadSounds()             — loads .wav.pcm files via BadaSound::SFXLoad
-  → PSPParticleManager::LoadFile() — parses particles_fast/slow.xml
-  → WaveManager::Init()         — parses mode-specific wavelist XML (4 modes)
+GameInitialise(displaySurface, dataPath):
+  │ Engine init (no asset loading)
+  ├─ SystemManager, MatrixManager, FileManager, DisplayManager, InputManager
+  │
+  │ Asset managers
+  ├─ TextureManager::Initialise()
+  ├─ MeshManager::Initialise(0x26C00)        — 158KB model heap
+  ├─ AnimationManager::Initialise()
+  │
+  │ XML data loading
+  ├─ PSPParticleManager::LoadFile()           — particles_fast.xml or particles_slow.xml
+  ├─ PowerUpManager::Load()                   — poweruplist.xml
+  │
+  │ Camera + Fonts
+  ├─ FruitCamera = new(0x16C)                 — stored at g_GameData+0x48
+  ├─ Font::Load × 8                           — main, secondary, base, CJK/Arabic overrides
+  │
+  │ Game assets (order matters)
+  ├─ LoadLocalisedTexture("...")               — fruit atlas → g_GameData+0x17C
+  ├─ MenuButton::LoadContent()                — shared button textures (star, sparkle)
+  ├─ Fruit::LoadInfo()                        — parses fruitlist.xml → FRUIT_INFO[N] array
+  ├─ SplatEntity::LoadContent()               — splat textures
+  ├─ SlashEntity::LoadContent()               — blade textures/models
+  ├─ Bomb::LoadContent()                      — bomb model + textures
+  ├─ GameOverScreen::LoadContent()            — game-over UI textures
+  ├─ PowerUpShop::LoadContent()               — shop UI textures
+  └─ PreloadSounds()                          — .wav.pcm files via SoundManager
 ```
+
+Note: `WaveManager::Init()` and `Fruit::LoadFruitModels()` are called later in **GameInit** (per-session State 2 init), not in GameInitialise.
 
 ---
 
