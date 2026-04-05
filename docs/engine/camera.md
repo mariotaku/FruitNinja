@@ -256,6 +256,119 @@ void FruitCamera::UpdateShake(float dt) {
 
 ---
 
+## FruitCamera::SetupPerspective (0x001810ac, 183 lines) — FULL DECOMPILATION
+
+`void __thiscall FruitCamera::SetupPerspective(FruitCamera *this, int perspType, int forceUpdate)`
+
+Dispatches by `perspType` (0–3), each setting up a different LookAt + Ortho configuration.
+Called from GameDraw as `FruitCamera::SetupPerspective(camera, 0, 0)`.
+
+### perspType dispatch
+
+| Type | Usage | LookAt eye | LookAt target | Ortho params |
+|------|-------|-----------|---------------|--------------|
+| 0 | Standard (GameDraw) | (targetX, targetY, 0) + (0,0,1) | (0, 1, 0) | Hardcoded constants |
+| 1 | Multiplayer P1 | (-targetY, targetX, 0) + (0,0,1) | (1, 0, 0) | Hardcoded, SWAPPED axes |
+| 2 | Multiplayer P2 | (targetY, -targetX, 0) + (0,0,1) | (1, 0, 0) | Hardcoded, SWAPPED axes |
+| 3 | Alternate | (0, 0, 1) + target | (0, 1, 0) | Same as type 0 |
+
+### Cache path
+
+When `field_0x108 == 0` (not dirty) AND `forceUpdate == 0`:
+```c
+// Reuse cached matrices — skip recomputation
+SetMatrixByIndex(m_viewMatrix, VIEW);    // view from cache
+SetMatrixByIndex(m_projection, PROJECTION); // projection from cache
+```
+
+### perspType == 0 (standard) — verified from disassembly
+
+```c
+// Eye position: camera at (0,0,1) + target offset
+Vec3 eye(0.0, 0.0, 1.0);
+Vec3 targetOffset(m_TargetX, m_TargetY, 0.0);
+eye = targetOffset + eye;  // = (m_TargetX, m_TargetY, 1.0)
+
+Vec3 up(0.0, 1.0, 0.0);
+Vec3 lookDir(m_TargetX, m_TargetY, 0.0);
+
+MatrixManager::SetupLookAt(matrixMgr, eye, up, lookDir);
+m_viewMatrix = matrixMgr.m_View.m_Current;  // cache view
+
+// Hardcoded ortho constants (verified via read_memory at literal pool)
+MatrixManager::SetupOrtho(matrixMgr,
+    240.0f,     // top    (s0 ← 0x1813e4)
+    -240.0f,    // bottom (s1 ← 0x1813e0)
+    -480.0f,    // left   (s2 ← 0x1813e8)
+    160.0f,     // right  (s3 ← 0x1813d8)
+    2000.0f,    // near   (s4 ← 0x1813ec)
+    -6000.0f,   // far    (s5 ← 0x1813f0)
+    NULL);
+
+m_projection = matrixMgr.m_Projection.m_Current;  // cache projection
+```
+
+### Ortho constant analysis
+
+The ortho params `(240, -240, -480, 160)` create:
+- Y range: top − bottom = 240 − (−240) = **480 units** (maps to physical width on portrait device)
+- X range: right − left = 160 − (−480) = **640 units** (maps to physical height on portrait device)
+
+This is an **asymmetric 640×480 ortho** for the Bada portrait device (480×800 physical, landscape game).
+The asymmetry (left=−480, right=160) compensates for the 90° rotation from portrait to landscape.
+
+The OrthoW matrix produces:
+```
+out[0][0] = 2/(right−left) = 2/640 = 0.003125
+out[1][1] = 2/(top−bottom) = 2/480 = 0.004167
+out[3][0] = −(right+left)/(right−left) = −(−320)/640 = 0.5
+out[3][1] = −(top+bottom)/(top−bottom) = 0/480 = 0.0
+```
+
+Combined with HUDControl3d's Vec3(480, 320, 0) offset:
+- x_ndc = 0.003125 × 480 + 0.5 = 2.0 (still needs view matrix shift to be visible)
+
+The SetupLookAt view matrix shifts the scene so the camera target maps to screen center.
+
+### OrthoW (verified from decompilation at 0x00116c4c)
+
+```c
+void OrthoW(float top, float bottom, float left, float right,
+            float near, float far, float w, Matrix44* out) {
+    Identity44(out);
+    out[3][3] = 1.0;
+    float fVar2 = 1.0 / (top - bottom);
+    float fVar1 = 1.0 / (right - left);
+    out[3][2] = near / (near - far);
+    out[2][2] = 1.0 / (far - near);
+    out[3][0] = -((right + left) * fVar1);
+    out[3][1] = -((top + bottom) * fVar2);
+    out[0][0] = fVar1 + fVar1;    // = 2/(right-left)
+    out[1][1] = fVar2 + fVar2;    // = 2/(top-bottom)
+    // NOTE: 'w' parameter is unused
+}
+```
+
+Standard orthographic projection. Parameter `w` is dead code (always 1.0, never used).
+
+### HUDControl3d::Draw constant pool (at 0x001443dc)
+
+| Address | Value | Name |
+|---------|-------|------|
+| 0x1443dc | 182.0 | ROT_SPEED (rotation constant for SinIdx/CosIdx) |
+| 0x1443e0 | **480.0** | HUD_SCREEN_WIDTH |
+| 0x1443e4 | **320.0** | HUD_SCREEN_HEIGHT |
+| 0x1443e8 | 0.0 | Z offset (always zero) |
+
+### Port implications
+
+The Bada binary's asymmetric ortho compensates for portrait→landscape rotation. The SDL port
+runs landscape-native, so the ortho should be symmetric but offset-centered at (480, 320) to
+match HUDControl3d's hardcoded Vec3(480, 320, 0) position offset. Effective ortho for port:
+`SetupOrtho(h + h/2, -h/2, -w/2, w + w/2, 2000, -6000)` where w=480, h=320.
+
+---
+
 ## Key Methods Summary
 
 | Function | Address | Purpose |
@@ -268,8 +381,10 @@ void FruitCamera::UpdateShake(float dt) {
 | IdleCamera | 0x00180a20 | Switch to idle mode |
 | CreateCameraShake | 0x00180d10 | Start shake from impact |
 | UpdateShake | 0x00180ea0 | Apply shake per frame; decays intensity, randomizes angle |
-| SetupOrtho | 0x0019edfc | Setup ortho projection from viewport |
+| SetupPerspective | 0x001810ac | 4-type dispatch: LookAt + ortho setup (183 lines) |
+| SetupOrtho | 0x0019edfc | MortarCamera: ortho from viewport half-extents |
 | ZeroInit_FruitCamera | 0x0017ff64 | `*param = 0` (singleton init) |
+| OrthoW | 0x00116c4c | Static: standard ortho matrix (w param unused) |
 
 ---
 
