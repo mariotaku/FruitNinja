@@ -454,21 +454,21 @@ static Vec3 TexSize(const SmartPtr<Mortar::Texture>& tex, float defW, float defH
 void MainScreen::CreateToggles() {
     if (!game.hud) return;
 
-    // Sound toggle: (216.0, 135.5, 0.0), 32x32, no fruit
+    // Sound toggle: (216.0, 135.5, 0.0), 32x32, fruitType=-1 (no fruit)
     pSoundToggle = new MenuButton();
     pSoundToggle->m_Texture = TexId(game.soundEnabled ? m_TexSoundOn : m_TexSoundOff);
-    pSoundToggle->pos = POS_SOUND_TOGGLE;
     pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
-    pSoundToggle->on_click = [this]() { SoundCallback(); };
+    pSoundToggle->Init(POS_SOUND_TOGGLE,
+        [this]() { SoundCallback(); }, -1, Vec3(0,0,0), nullptr);
     pSoundToggle->m_LayerFlags = 8;
     game.hud->AddControl(pSoundToggle);
 
-    // Music toggle: (176.0, 135.5, 0.0), 32x32, no fruit
+    // Music toggle: (176.0, 135.5, 0.0), 32x32, fruitType=-1 (no fruit)
     pMusicToggle = new MenuButton();
     pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
-    pMusicToggle->pos = POS_MUSIC_TOGGLE;
     pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
-    pMusicToggle->on_click = [this]() { MusicCallback(); };
+    pMusicToggle->Init(POS_MUSIC_TOGGLE,
+        [this]() { MusicCallback(); }, -1, Vec3(0,0,0), nullptr);
     pMusicToggle->m_LayerFlags = 8;
     game.hud->AddControl(pMusicToggle);
 }
@@ -479,18 +479,18 @@ void MainScreen::CreatePlayDojo() {
     // Play button: (16.0, -66.0, -50.0), fruitType=3 (watermelon)
     pPlayButton = new MenuButton();
     pPlayButton->m_Texture = TexId(m_TexNewGame);
-    pPlayButton->pos = POS_PLAY_BUTTON;
     pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
-    pPlayButton->on_click = [this]() { GameModeCallback(); };
+    pPlayButton->Init(POS_PLAY_BUTTON,
+        [this]() { GameModeCallback(); }, 3, Vec3(0,0,0), nullptr);
     pPlayButton->m_LayerFlags = 8;
     game.hud->AddControl(pPlayButton);
 
-    // Dojo button: (-144.0, -65.0, -50.0), fruitType="mango"
+    // Dojo button: (-144.0, -65.0, -50.0), fruitType=9 (mango)
     pDojoButton = new MenuButton();
     pDojoButton->m_Texture = TexId(m_TexDojoIcon);
-    pDojoButton->pos = POS_DOJO_BUTTON;
     pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
-    pDojoButton->on_click = [this]() { AboutCallback(); };
+    pDojoButton->Init(POS_DOJO_BUTTON,
+        [this]() { AboutCallback(); }, 9, Vec3(0,0,0), nullptr);
     pDojoButton->m_LayerFlags = 8;
     game.hud->AddControl(pDojoButton);
 }
@@ -501,9 +501,9 @@ void MainScreen::CreateLeaderboard() {
     // Leaderboard/Quit: (182.0, -106.0, 0.0)
     pLeaderboardBtn = new MenuButton();
     pLeaderboardBtn->m_Texture = TexId(m_TexOpenFeint);
-    pLeaderboardBtn->pos = POS_LEADERBOARD;
     pLeaderboardBtn->size = TexSize(m_TexOpenFeint, 48.0f, 48.0f);
-    pLeaderboardBtn->on_click = [this]() { QuitGamesCallback(); };
+    pLeaderboardBtn->Init(POS_LEADERBOARD,
+        [this]() { QuitGamesCallback(); }, -1, Vec3(0,0,0), nullptr);
     pLeaderboardBtn->m_LayerFlags = 8;
     game.hud->AddControl(pLeaderboardBtn);
 }
@@ -566,8 +566,8 @@ bool MainScreen::HandleTouchDown(float x, float y) {
     MenuButton* buttons[] = { pPlayButton, pDojoButton, pLeaderboardBtn,
                                pMoreGamesBtn, pSoundToggle, pMusicToggle };
     for (int i = 0; i < 6; i++) {
-        if (buttons[i] && buttons[i]->m_bActive && buttons[i]->hit_test(x, y)) {
-            buttons[i]->touch_down(x, y);
+        if (buttons[i] && buttons[i]->m_bActive && buttons[i]->HitTest(x, y)) {
+            buttons[i]->TouchDown(x, y);
             return true;
         }
     }
@@ -579,7 +579,7 @@ void MainScreen::HandleTouchUp(float x, float y) {
                                pMoreGamesBtn, pSoundToggle, pMusicToggle };
     for (int i = 0; i < 6; i++) {
         if (buttons[i]) {
-            buttons[i]->touch_up(x, y);
+            buttons[i]->TouchUp(x, y);
         }
     }
 }

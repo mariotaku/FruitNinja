@@ -2,58 +2,132 @@
 #define FN_MENU_BUTTON_H
 
 //
-// MenuButton : HUDControl3d (0x15C bytes)
+// MenuButton : HUDControl3d (size = 0x15C, leaf class)
 // Reimplemented from docs/structs/gameplay-misc.md
 //
-// 3-layer rendering: button quad + "new" indicator + sparkle ring
-// The spinning 3D fruit is a real Entity from ActorManager, NOT drawn by MenuButton.
-// MenuButton stores a pointer to the entity at +0x80 and positions it each frame.
+// 3-layer rendering + 1 entity:
+//   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton — ActorManager::Draw)
+//   Layer 1 (2D): Button texture quad (+0x74)
+//   Layer 2 (2D): "New item" star indicator (+0xFC)
+//   Layer 3 (2D): Sparkle ring (+0xF8)
 //
 
 #include "HUDControl3d.h"
 #include <functional>
+#include <cstdint>
 
-struct Renderer;
-struct Game;
 class Entity;
+class Fruit;
 
 class MenuButton : public HUDControl3d {
 public:
-    // Click callback (replaces Delegate0<void>)
-    std::function<void()> on_click;
-
-    // Press state
-    bool pressed;
-
-    // +0xf4: rotation speed (8-12 deg/s random in original, 0 for toggles)
-    float rotation_speed;
-
-    // +0x80: real Fruit/Bomb entity created via ActorManager::Add
-    // This entity is drawn by ActorManager::Draw, NOT by MenuButton.
+    // +0x80: real Fruit/Bomb entity spinning on button (NULL for toggles)
     Entity* m_pEntity;
 
-    // Hit-test scale factors (original: +0x124..+0x12C)
-    float m_HitScaleX, m_HitScaleY;
+    // +0x84: -1 = no fruit, 0+ = fruit index, >=bombThreshold = bomb
+    int m_FruitType;
+
+    // +0x88: fired on touch release (original: Delegate0<void>)
+    // Port specific: std::function instead of Delegate0
+    std::function<void()> m_ClickCallback;
+
+    // +0xAC: fired when button removed from HUD (original: Delegate0<void>)
+    // Port specific: std::function instead of Delegate0
+    std::function<void()> m_DeletedCallback;
+
+    // +0xD0: drives alpha fade (× 1000 / 255)
+    int m_FadeCounter;
+
+    // +0xE8: random visual offset (-20 to +20)
+    float m_RandomOffset;
+
+    // +0xF0: random horizontal flip
+    bool m_bFlipped;
+
+    // +0xF4: rotation speed for fruit entity (8-12 deg/frame, random sign)
+    // Note: this does NOT rotate the ring — it drives the entity rotation
+    float m_RotationSpeed;
+
+    // +0xF8: >= 0 = sparkle ring active
+    float m_SparkleTimer;
+
+    // +0xFC: >= 0 = "new" star indicator active
+    float m_NewIndicatorTimer;
+
+    // +0x100: hit-test bounds scale from constructor
+    Vec3 m_HitBoundsScale;
+
+    // +0x114, +0x118: text labels (original: BakedString*)
+    // TODO: implement BakedString
+    void* m_pLabel1;
+    void* m_pLabel2;
+
+    // +0x11C: for multiplayer colour tint
+    int m_PlayerIndex;
+
+    // +0x120
+    uint8_t m_bScoreSubmitted;
+
+    // +0x121: = 1 after Init
+    uint8_t m_bVisible;
+
+    // +0x122: = 1 — accepts touch input
+    uint8_t m_bInteractive;
+
+    // +0x123: = 1
+    uint8_t m_bEnabled;
+
+    // +0x124: hit-test bounds target (lerped toward)
+    Vec3 m_TargetSize;
+
+    // +0x130: true if hitBounds > 0
+    bool m_bHasHitArea;
+
+    // +0x131: affects tint (0.5 vs 1.0 alpha)
+    uint8_t m_bHighlighted;
+
+    // +0x134: direct fruit reference for scale/rotate access
+    Fruit* m_pFruitPiece;
+
+    // +0x138
+    uint8_t m_bRemovalPending;
+
+    // +0x13C: = 1.0
+    float m_AnimScale;
+
+    // +0x140: for "new" indicator bounce
+    Vec3 m_BounceParams;
+
+    // +0x14C: = 5.0
+    float m_AnimSpeed2;
+
+    // +0x150: = 5.0
+    float m_AnimSpeed;
+
+    // +0x154
+    float m_field154;
+
+    // +0x158: > 0 = shaking (random ±3.0 offset)
+    float m_ShakeTimer;
 
     MenuButton();
     ~MenuButton();
 
-    // Initialize button at center position (cx, cy) in game coords
-    void init(GLuint tex, float tex_w, float tex_h, float cx, float cy,
-              std::function<void()> callback);
-
-    // Create a real Fruit entity via ActorManager and attach to this button
-    // fruitType: 0+ = fruit index, -1 = no fruit (toggles)
-    void CreateFruitEntity(Game& game, int fruitType);
+    // Matches MenuButton::Init (0x0014ee40, 222 lines)
+    // Creates entity, sets callbacks, random rotation
+    void Init(const Vec3& buttonPos, std::function<void()> clickCb,
+              int fruitType, const Vec3& hitBounds,
+              std::function<void()> deletedCb);
 
     // HUDControl overrides
     void Update(float dt) override;
     void Draw(const Vec3& hudScale, int layerMask) override;
+    void Release() override;
 
-    // Touch input
-    bool hit_test(float gx, float gy);
-    void touch_down(float gx, float gy);
-    void touch_up(float gx, float gy);
+    // Touch input (original uses m_bInteractive/m_bHighlighted, not pressed bool)
+    bool HitTest(float gx, float gy);
+    void TouchDown(float gx, float gy);
+    void TouchUp(float gx, float gy);
 };
 
 #endif

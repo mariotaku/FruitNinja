@@ -6,6 +6,7 @@
 
 #include "Game.h"
 #include "asset/TextureManager.h"
+#include "render/DisplayManager.h"
 #include "game/GameTaskState.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
@@ -76,6 +77,14 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     gl_context = gl;
     data_dir = FN_DATA_DIR;
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
+
+    // Port specific: set DisplayManager window size from actual SDL window
+    // Original Bada: set from GlesForm surface size (480×320 portrait device)
+    {
+        int ww, wh;
+        SDL_GL_GetDrawableSize(window, &ww, &wh);
+        Mortar::DisplayManager::GetInstance().SetWindowSize(0, 0, ww, wh);
+    }
 
     if (!renderer.init()) {
         fprintf(stderr, "Failed to init renderer\n");
