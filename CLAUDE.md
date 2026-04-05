@@ -44,6 +44,14 @@
 - HUDControl3d::Draw adds Vec3(480, 320, 0) offset internally (matching original)
 - Fruit entities and HUD controls share the same centered coordinate space
 
+## Implementation Rules
+- **Always follow RE analysis** — implementation must match the reverse-engineered behavior from `docs/engine/` and `docs/` exactly. Do not optimize, simplify, or "improve" the logic unless explicitly instructed. The goal is a faithful 1:1 port, not a better engine.
+- **Use documented struct layouts** — field offsets, sizes, and types from Ghidra analysis are authoritative. If a struct has a seemingly redundant field or odd logic, replicate it anyway.
+- **Use documented constants** — all magic numbers, timing values, thresholds, and addresses come from the binary. Do not substitute "cleaner" values.
+- **Match original call patterns** — if the binary calls `Reset → Scale → Translate → Upload → DrawQuad`, the port must call the same sequence in the same order. Do not merge or skip steps.
+- **GL ES 1.x → 2.0 translation only** — the only allowed deviation from original logic is translating fixed-function GL calls (glMatrixMode, glVertexPointer, etc.) to GLES2 shader equivalents. All other logic stays identical.
+- **Prompts for implementation agents** are in `src/engine/prompts/` — use these as task specs.
+
 ## Conventions
 - **Only commit when explicitly requested** by the user — do not auto-commit after changes
 - When a value in port code **differs from the original binary**, add a comment explaining the discrepancy (e.g. `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`). This makes it easy to find and fix incorrect values later.
