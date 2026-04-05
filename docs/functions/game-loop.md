@@ -118,56 +118,88 @@ OspMain (0x000d82a4) — anti-tamper hash check
 
 ### GameInitialise (0x0010bdfc, 305 lines) — One-time engine bootstrap
 
-Called once from `FruitNinja::OnAppInitializing` (via `ReturnsAnInstanceOfThisMortarGame`).
+Called once from `FruitNinja::OnAppInitializing` (via `Game_GetInstance`).
 Sets up ALL engine subsystems and loads all shared data. NOT the same as `GameInit` (0x16c644)
 which is the per-session State 2 init handler.
 
 ```
 GameInitialise(displaySurface, dataPath):
   │  Engine singletons
-  ├─ SystemManager::Init
-  ├─ MatrixManager::Init
-  ├─ FileSystem_Direct → FileManager::AddSystem
-  ├─ DisplayManager::SetWindowSize(0, 320, 0, 480) → Init → SetClearColour
-  │    SetLightDirection(0, -10, -5)
-  ├─ InitialiseData()
-  ├─ TextureManager::Initialise (×2)
-  ├─ MeshManager::Initialise
-  ├─ AnimationManager::Initialise
-  ├─ InputManager::Init(0xFFFFFFFE)
+  ├─ 1. SystemManager::Init()
+  ├─ 2. MatrixManager::Init()
+  ├─ 3. FileSystem_Direct = new(0x14), FileManager::AddSystem(fs, 0, 0)
+  ├─ 4. DisplayManager::GetInstance()
+  │      → ShouldUseHDFonts()
+  │      → SetWindowSize(0, 320, 0, 480)   // portrait Bada: 320×480
+  │      → Init(displaySurface, dataPath, 0)
+  │      → SetClearColour(global)
+  │      → SetLightDirection(DAT, -10.0, -5.0)
+  ├─ 5. InitialiseData()
+  ├─ 6. SetTextureOverloadPrefix("hd/" or "") based on HD/fast hardware
+  ├─ 7. TextureManager::Initialise() (×2, possibly legacy)
+  ├─ 8. MeshManager::Initialise(0x26C00)   // heap = 158720 bytes
+  ├─ 9. AnimationManager::Initialise()
+  ├─ 10. InputManager::Init()
   │
   │  Game data
-  ├─ PSPParticleManager::LoadFile (particles XML, HD or SD variant)
-  ├─ PowerUpManager::Load (poweruplist.xml)
-  ├─ LeaderboardManager::Init
+  ├─ 11. PSPParticleManager::LoadFile(xml, fast/slow variant)
+  ├─ 12. PowerUpManager::Load()
+  ├─ 13. LeaderboardManager::Init()
   │
   │  Network (skip for port)
-  ├─ NetworkManager: SetStatusMessageText ×11, SetGameCenterInitializationCallback
-  │   InitializeP2P, SetPreferredNetworkProvider, P2PConnect
+  ├─ 14. NetworkManager: SetStatusMessageText ×11, GameCenter callback,
+  │      InitializeP2P (3 delegates), SetPreferredNetworkProvider, P2PConnect
   │
-  │  Camera + Game singleton
-  ├─ FruitCamera(0x16c) → Game+0x48
-  ├─ Zero Game fields: +0x50..+0x80 (save data, scores, modes)
+  │  Camera
+  ├─ 15. FruitCamera = new(0x16c)
+  │      → FruitCamera::FruitCamera()
+  │      → g_GameData+0x48 = camera
+  │      → camera->Init(1.0, 10000.0, 16.95, 11.3)  // aspectRatio, farClip, fovX, fovY
+  │      → Zero g_GameData: worldPos(+0x90..+0x98), flags(+0x9C..+0x9E), +0x180
+  │      → Zero font slots(+0x50..+0x80)
   │
-  │  Fonts
-  ├─ Font::Load → Game+0x54 (main font, HD/SD variant)
-  ├─ Font::Load → Game+0x58 (secondary font)
-  ├─ Font::Load → Game+0x6c (shared to +0x7c/+0x70/+0x74/+0x78)
-  ├─ Font::Load → Game+0x70..+0x78 (optional, if file exists)
-  ├─ Font::Load → Game+0x80 (fallback font)
-  ├─ Font::Load → Game+0x68 (another fallback)
+  │  Fonts (g_GameData offsets)
+  ├─ 16. Font[0] = new(0x438), Load(main.fnt)          → +0x54
+  ├─ 17. Font[1] = new(0x438), Load(secondary.fnt)     → +0x58
+  ├─ 18. Font[2] = new(0x438), Load(base.fnt)          → +0x6C
+  │      → Copy to +0x7C, +0x70, +0x74, +0x78 (4 region slots default to base)
+  ├─ 19. Font[3-5] = optional CJK/Arabic (if file exists) → +0x70, +0x74, +0x78
+  ├─ 20. Font[6] = new(0x438), Load(...)               → +0x80
+  ├─ 21. Font[7] = new(0x438), Load(...)               → +0x68
   │
   │  Shared assets
-  ├─ LoadLocalisedTexture → Game+0x17c (fruit atlas)
-  ├─ MenuButton::LoadContent
-  ├─ Fruit::LoadInfo (FRUIT_INFO from XML)
-  ├─ SplatEntity::LoadContent
-  ├─ SlashEntity::LoadContent
-  ├─ Bomb::LoadContent
-  ├─ GameOverScreen::LoadContent
-  ├─ PowerUpShop::LoadContent
-  └─ PreloadSounds
+  ├─ 22. LoadLocalisedTexture("...") → g_GameData+0x17C  (fruit atlas)
+  ├─ 23. MenuButton::LoadContent()
+  ├─ 24. Fruit::LoadInfo()             // FRUIT_INFO from Fruit.xml
+  ├─ 25. SplatEntity::LoadContent()
+  │      SlashEntity::LoadContent()
+  │      Bomb::LoadContent()
+  │      GameOverScreen::LoadContent()
+  │      PowerUpShop::LoadContent()
+  └─     PreloadSounds()
 ```
+
+#### Font Slot Map (g_GameData)
+
+| Offset | Slot | Purpose |
+|--------|------|---------|
+| +0x54 | Font[0] | Primary game font (HD or SD variant) |
+| +0x58 | Font[1] | Secondary font |
+| +0x68 | Font[7] | Additional font |
+| +0x6C | Font[2] | Base/fallback font |
+| +0x70 | Font[3] | CJK override (optional, if file exists) |
+| +0x74 | Font[4] | CJK override 2 (optional) |
+| +0x78 | Font[5] | Arabic override (optional) |
+| +0x7C | (copy) | Defaults to same as Font[2] |
+| +0x80 | Font[6] | Additional font |
+
+#### Key Constants
+
+- MeshManager heap: `0x26C00` = 158,720 bytes
+- DisplayManager window: `SetWindowSize(0, 320, 0, 480)` — portrait Bada (camera rotation handles landscape)
+- Light direction: `(DAT, -10.0, -5.0)`
+- FruitCamera size: `0x16C` (364 bytes)
+- FruitCamera::Init params: `(1.0, 10000.0, 16.95, 11.3)` — aspect=1.0, farClip=10000.0, fovX=16.95°, fovY=11.3°
 
 ### All Game* Functions
 
