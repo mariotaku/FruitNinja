@@ -138,7 +138,68 @@ For 480x320: `SetupOrtho(160, -160, -240, 240, -1.0, far)`.
 
 ---
 
+## _Matrix43\<float\> (48 bytes)
+
+A 4×3 matrix (4 rows, 3 columns) — a Matrix44 without the 4th column (w/perspective). Used for view matrices where column 3 is always `(0, 0, 0, 1)`.
+
+### Layout
+
+```
+float data[4][3];  // 48 bytes
+
+Row 0: [right.x,     right.y,     right.z    ]  // X axis
+Row 1: [up.x,        up.y,        up.z       ]  // Y axis
+Row 2: [forward.x,   forward.y,   forward.z  ]  // Z axis
+Row 3: [translate.x,  translate.y, translate.z]  // position
+```
+
+### LookAt43 (0x0019e82c)
+
+Standard view matrix: `LookAt43(eye, target, up, out)`
+
+```c
+void LookAt43(Vec3& eye, Vec3& target, Vec3& up, Matrix43& out) {
+    Vec3 forward = normalize(target - eye);
+    Vec3 right   = normalize(cross(up, forward));
+    Vec3 realUp  = cross(forward, right);
+
+    out[0] = { right.x,   right.y,   right.z   };
+    out[1] = { realUp.x,  realUp.y,  realUp.z  };
+    out[2] = { forward.x, forward.y, forward.z };
+    out[3] = { -dot(eye, right), -dot(eye, realUp), -dot(eye, forward) };
+}
+```
+
+### Conversion Functions
+
+| Function | Address | Signature | Notes |
+|----------|---------|-----------|-------|
+| Copy44To43 | 0x00181c68 | `void Matrix44::Copy44To43(Matrix43& out)` | Drops column 3 (w) from each row |
+| Copy43To44 | 0x00181cdc | `void Matrix43::Copy43To44(Matrix44& out)` | Adds column 3: `(0, 0, 0, 1)` |
+| operator Matrix43 | 0x00181ccc | `Matrix43 Matrix44::operator Matrix43()` | Calls Copy44To43 |
+| operator Matrix44 | 0x00181d5c | `Matrix44 Matrix43::operator Matrix44()` | Calls Copy43To44 |
+| LookAt43 | 0x0019e82c | `static LookAt43(eye, target, up, out)` | Standard view matrix |
+
+Copy43To44 detail:
+```c
+void Matrix43::Copy43To44(Matrix44& out) {
+    out[0] = { data[0][0], data[0][1], data[0][2], 0.0f };
+    out[1] = { data[1][0], data[1][1], data[1][2], 0.0f };
+    out[2] = { data[2][0], data[2][1], data[2][2], 0.0f };
+    out[3] = { data[3][0], data[3][1], data[3][2], 1.0f };
+}
+```
+
+### Usage in Engine
+
+- MortarCamera stores `m_localToWorld` (+0x04) and `m_viewMatrix` (+0x74) as Matrix43
+- `MatrixManager::SetupLookAt` takes `Matrix43*` output, then converts to Matrix44 via Copy43To44 before uploading to the View stack
+- All cast operators use ARM struct-return convention (r0 = return storage pointer)
+
+---
+
 ## See Also
 
+- [Camera](camera.md) — MortarCamera/FruitCamera use Matrix43 for view matrices
 - [Rendering system](../systems/rendering.md) — How matrices flow through the render pipeline
-- [HUD structs](hud.md) — HUDControl/HUDControl3d use the HUD draw pipeline pattern
+- [HUD structs](../structs/hud.md) — HUDControl/HUDControl3d use the HUD draw pipeline pattern
