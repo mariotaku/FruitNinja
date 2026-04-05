@@ -17,28 +17,11 @@
 
 ---
 
-## Effect Functions
+## Effect Functions — Moved
 
-### BombFlash::Update (0x00171038, 61 lines)
+Entity effect functions have been reorganized into `docs/entities/`:
 
-| Address | Signature |
-|---------|-----------|
-| 0x00171038 | `void BombFlash::Update(float dt)` |
-
-### BombBlast::Update (0x00171170, 32 lines)
-
-| Address | Signature |
-|---------|-----------|
-| 0x00171170 | `void BombBlast::Update(float dt)` |
-
-### SlashEntityGhost::Update (0x0017eb60, 47 lines)
-
-| Address | Signature |
-|---------|-----------|
-| 0x0017eb60 | `void SlashEntityGhost::Update(float dt)` |
-
-### Coin::_Update (0x00173790, 241 lines)
-
-| Address | Signature |
-|---------|-----------|
-| 0x00173790 | `void Coin::_Update(float dt)` |
+- [BombFlash](../entities/bomb-flash.md) — BombFlash::Update
+- [BombBlast](../entities/bomb-blast.md) — BombBlast::Update
+- [SlashEntity](../entities/slash-entity.md) — SlashEntityGhost::Update
+- [Coin](../entities/coin.md) — Coin::_Update

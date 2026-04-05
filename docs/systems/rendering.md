@@ -242,4 +242,5 @@ Logo bounce animation for the main menu. Updates the "FRUIT NINJA" logo position
 
 - [Rendering functions](../engine/rendering-functions.md) -- GameDraw, HUD::Draw
 - [Game loop functions](../functions/game-loop.md) -- GameDraw call site
-- [Entity structs](../structs/entities.md) -- Fruit::Draw, Bomb::Draw
+- [Fruit entity](../entities/fruit.md) -- Fruit::Draw
+- [Bomb entity](../entities/bomb.md) -- Bomb::Draw

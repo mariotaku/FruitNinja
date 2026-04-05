@@ -60,21 +60,29 @@ Reusable engine subsystems — not specific to FruitNinja.
 
 Game-specific logic, screens, entities, and systems.
 
+### Entities
+
+- [entities/entity-base.md](entities/entity-base.md) — Mortar::Entity (0x3C), CreateEntity factory
+- [entities/fruit.md](entities/fruit.md) — Fruit entity (0x118): struct, vtable, Update, CollisionResponse, Draw, Init, Chuck, LoadInfo
+- [entities/bomb.md](entities/bomb.md) — Bomb entity (0xB0): struct, vtable, Update, Explode, CollisionResponse
+- [entities/slash-entity.md](entities/slash-entity.md) — SlashEntity (0x184): blade trail, collision, combo tracking, ghost effect
+- [entities/coin.md](entities/coin.md) — Coin entity (0x94): combo reward coins
+- [entities/bomb-blast.md](entities/bomb-blast.md) — BombBlast (0x70): bomb explosion effect
+- [entities/bomb-flash.md](entities/bomb-flash.md) — BombFlash: bomb flash overlay
+- [entities/splat-entity.md](entities/splat-entity.md) — SplatEntity: juice splat effect
+
 ### Game Functions
 
 - [functions/game-loop.md](functions/game-loop.md) — Entry point chain, OnTimerExpired, GameTaskUpdate, GameDraw
 - [functions/game-update.md](functions/game-update.md) — GameUpdate (State 2): full call tree, time scaling, bomb/wave/retry
 - [functions/game-flow.md](functions/game-flow.md) — HitBomb, QuitToMenu, GameOver, touch input
-- [functions/fruit.md](functions/fruit.md) — Fruit::Update, CollisionResponse, Draw, Init, Chuck, LoadInfo
-- [functions/bomb.md](functions/bomb.md) — Bomb::Update, CollisionResponse
-- [functions/slash-entity.md](functions/slash-entity.md) — SlashEntity::Update, CollideWithEntity, UpdatePoints
 - [functions/wave.md](functions/wave.md) — WaveManager::Init, SpawnFruit, SpawnBomb, CriticalChance
 - [functions/scoring.md](functions/scoring.md) — AddToCurrentScore, StringHash
 - [functions/power-ups.md](functions/power-ups.md) — ActivatePower, Activate, Parse
 - [functions/particles.md](functions/particles.md) — AddEmitter, Emitter::Update, Manager::Update/Draw
 - [functions/data-parsing.md](functions/data-parsing.md) — XML loaders: powerups, bonus, items, achievements, particles
 - [functions/sound.md](functions/sound.md) — GameSound::SFXPlay
-- [functions/screens-effects.md](functions/screens-effects.md) — Screen callbacks, BombFlash/Blast, Ghost, Coin
+- [functions/screens-effects.md](functions/screens-effects.md) — Screen callbacks (effect functions moved to entities/)
 - [functions/entity-factory-combo-timekeeper.md](functions/entity-factory-combo-timekeeper.md) — EntityFactory (5 types), ComboChecker (COMBO_TYPE enum, pattern matching), TimeKeeper/TimeModifier/TimeControl, FruitCamera shake/follow
 
 ### Game Systems
@@ -87,16 +95,16 @@ Game-specific logic, screens, entities, and systems.
 - [systems/menu-flow.md](systems/menu-flow.md) — Screen hierarchy, callbacks, mode selection
 - [systems/save-system.md](systems/save-system.md) — FruitSaveData persistence, stat tracking
 - [systems/power-ups.md](systems/power-ups.md) — PowerUp struct, 4 modifier types, activation flow
-- [systems/effects.md](systems/effects.md) — SplatEntity, BombFlash, BombBlast visual effects
+- [systems/effects.md](systems/effects.md) — *(redirect to entities/)* SplatEntity, BombFlash, BombBlast
 
 ### Game Struct Layouts
 
-- [structs/entities.md](structs/entities.md) — MortarEntity, Fruit, Bomb, SlashEntity
+- [structs/entities.md](structs/entities.md) — *(redirect to entities/)* MortarEntity, Fruit, Bomb, SlashEntity
 - [structs/game.md](structs/game.md) — Game singleton, MortarGame vtable, FruitNinja app, GlesForm
 - [structs/hud.md](structs/hud.md) — HUD, HUDControl, HUDControl3d class hierarchy, MissControl
 - [structs/wave.md](structs/wave.md) — WaveManager, WaveInfo
 - [structs/data.md](structs/data.md) — FRUIT_INFO (816 bytes), FruitSaveData
-- [structs/gameplay-misc.md](structs/gameplay-misc.md) — Coin, SlashEntityGhost, MenuButton (38 callers), MenuBackground, EffectImage, QUADCUSTOMVERTEX
+- [structs/gameplay-misc.md](structs/gameplay-misc.md) — MenuButton (38 callers), MenuBackground, EffectImage, QUADCUSTOMVERTEX
 - [structs/ui-widgets.md](structs/ui-widgets.md) — FruitFactControl, ScrollingMenu, ScoreControl, TimeControl, SpeedControl, etc. (10 classes)
 - [structs/ui-controls2.md](structs/ui-controls2.md) — BonusScreen, ScreenFadeControl, ScreenTint, ComboControl, NotificationControl, GenericHUDControl (7 classes)
 - [structs/data-classes.md](structs/data-classes.md) — FNHighscore, FNHighscoreList, Bonus, BonusType, BonusAwardHud
