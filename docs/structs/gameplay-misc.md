@@ -1,80 +1,5 @@
 # Gameplay-Adjacent Structs
 
-## Coin : MortarEntity
-
-Bouncing coin spawned on combo rewards. Pool-based via ActorManager (entity type unknown).
-
-### Struct Layout (partial)
-
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| +0x00 | EntityFns* | vtable | |
-| +0x0c | byte | flags | |
-| +0x10 | float | pos_x/y/z | Entity position |
-| +0x1c | float | vel_x/y/z | Entity velocity |
-| +0x36 | ushort | angle | Launch angle (from InitCoin param) |
-| +0x3c | void* | field1_0x3c | Player index or target |
-| +0x40 | int | m_State | 0=waiting, 2=flying |
-| +0x44 | float | m_DelayTimer | Negative of param_8; counts up to 0 |
-| +0x48 | byte | m_field48 | Flag |
-| +0x4c | float | m_Speed | Calculated from random + constants |
-| +0x5c | float | m_Gravity_x | Gravity vector |
-| +0x60 | float | m_Gravity_y | |
-| +0x64 | float | m_Gravity_z | |
-| +0x6c | PSPParticleEmitter* | m_pEmitter | Coin sparkle trail |
-
-### Coin::_Update (0x173790, 241 lines)
-
-State machine:
-- **State 0 (waiting)**: countdown delay timer; at 0 → switch to state 2, compute launch velocity from angle + speed
-- **State 2 (flying)**: ballistic physics (`vel += gravity * dt`, `pos += vel * dt`), sparkle particles, plays SFX on collection
-- Collected via `Coin::Arrived` callback
-
-### Key Functions
-
-| Function | Address | Purpose |
-|----------|---------|---------|
-| InitCoin | 0x00173454 | Set position, angle, speed, gravity, delay |
-| MakeCoins | 0x00173568 | Spawn N coins (called from scoring pipeline) |
-| _Update | 0x00173790 | State machine + physics |
-| ClearCoins | 0x001731b8 | Remove all (called on GameExit) |
-| Draw | 0x00173cc4 | Render coin model |
-
----
-
-## SlashEntityGhost
-
-Fading echo of the blade trail. Created by `SlashEntity::CreateGhost`.
-
-### Struct Layout
-
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| +0x00 | float | m_FadeTimer | Starts at 1.0, decreases by `dt * 0.5` |
-| +0x04 | void* | m_pLeftBuffer | Copied vertex strip (left side) |
-| +0x08 | void* | m_pRightBuffer | Copied vertex strip (right side) |
-| +0x0c | int | m_PointCount | Number of vertex pairs |
-
-### SlashEntityGhost::Update (0x17eb60, 47 lines)
-
-```
-if fadeTimer > 0:
-    fadeTimer -= dt * 0.5
-    for each vertex pair (i = 0..pointCount):
-        alpha = (i/2 / pointCount) * fadeTimer * 255
-        clamp alpha to [0, 255]
-        set vertex colour = (255, 255, 255, alpha)  // white with fade
-        write to both left and right buffers
-```
-
-Each vertex is 0x24 (36) bytes with colour at +0x18.
-
-### SlashEntityGhost::StartEffect (0x17ec24, 50 lines)
-
-Copies vertex data from SlashEntity's buffers into ghost's own buffers. Sets `fadeTimer = 1.0`.
-
----
-
 ## MenuBackground
 
 Simple background image drawn behind menu screens.
@@ -135,8 +60,8 @@ if (fruitType >= 0) {
     entity->pos = button.pos;
     entity->vel = globalScale;     // written to +0x1c (velocity fields, NOT scale!)
     entity->Init(0, fruitType, NULL);  // scale param = NULL → 1.0
-    // Init calls SetFruitType which computes visual scale from globals:
-    //   entity.scale = globalVec × configFloat × 0.01  (NOT 25.0!)
+    // Init → SetFruitType computes: entity.scale = FruitInfo[type].scale * 0.01
+    // Per-fruit scale from Data/xml/fruitlist.xml (e.g. watermelon=75 → 0.75)
     this->m_pEntity = entity;        // +0x80
 
     // POST-INIT: shrink fruit for menu display
@@ -289,4 +214,5 @@ Confirmed 0x24 stride from SlashEntityGhost::Update loop (`iVar4 += 0x24`).
 ## See Also
 
 - [Screens & effects functions](../functions/screens-effects.md) -- MenuButton callbacks
-- [Scoring functions](../functions/scoring.md) -- Coin::MakeCoins
+- [Coin entity](../entities/coin.md) -- Coin struct and functions
+- [SlashEntity](../entities/slash-entity.md) -- SlashEntityGhost (blade trail ghost)

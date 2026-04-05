@@ -13,7 +13,7 @@
 - 4 paths: normal/critical × includeOnSide/available-only
 - Cumulative weight tables lazy-initialized from FRUIT_INFO[].chance
 - hitInfluence filter adds variety by excluding recently-sliced fruits
-- See `docs/functions/fruit.md`
+- See `docs/entities/fruit.md`
 
 ### 3. ActorManager — DONE
 - [x] `ActorManager::Add` (0x17068c) — free pool search + factory fallback, entity recycling
@@ -52,7 +52,7 @@
 - [x] `DrawStartFade` (0x16ab10, ~45 lines) — loading fade overlay with alpha+brightness ramp
 - [x] `MainScreen::DrawPostEffects` (0x14ac94) — **no-op stub** (bx lr), skip for port
 - [x] `MainScreen::UpdateScreenElements` (0x14ad3c, 55 lines) — logo bounce physics
-- See `docs/functions/fruit.md`
+- See `docs/entities/fruit.md`
 
 ---
 
@@ -259,4 +259,4 @@ The following classes exist in the binary but are minor, platform-specific stubs
 
 ### Bomb::Update — DONE
 
-Fully decompiled (195 lines). Chain-bomb spawning, fuse SFX, rotation, physics all documented in `docs/structs/entities.md`.
+Fully decompiled (195 lines). Chain-bomb spawning, fuse SFX, rotation, physics all documented in `docs/entities/bomb.md`.

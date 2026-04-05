@@ -293,6 +293,9 @@ int ActorManager::GetNumEntities(int type) {
 
 ## See Also
 
-- [Entity structs](../structs/entities.md) -- Fruit, Bomb, SlashEntity layouts
+- [Entity base](../entities/entity-base.md) -- Mortar::Entity base class
+- [Fruit entity](../entities/fruit.md) -- Fruit struct layout
+- [Bomb entity](../entities/bomb.md) -- Bomb struct layout
+- [SlashEntity](../entities/slash-entity.md) -- SlashEntity struct layout
 - [Game loop](game-loop.md) -- GameUpdate calls ActorManager::Update
 - [Wave functions](wave.md) -- SpawnFruit/SpawnBomb call ActorManager::Add

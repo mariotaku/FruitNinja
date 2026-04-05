@@ -6,16 +6,16 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 
 | Class | Status | Size | Description | Doc |
 |-------|--------|------|-------------|-----|
-| Mortar::Entity (MortarEntity) | ✅ | 0x3c | Base entity class: pos, vel, angle, collision | structs/entities.md |
-| Fruit | ✅ | 0x118 | Fruit entity: slicing, physics, two-body split | structs/entities.md |
-| Bomb | ✅ | 0xac | Bomb entity: fuse timer, chain spawn, rotation | structs/entities.md |
-| SlashEntity | ✅ | 0x184 | Blade/swipe: trail, collision, combo tracking | structs/entities.md |
-| SlashEntityGhost | ✅ | ~0x10 | Fading blade echo (alpha decay on vertex colours) | structs/gameplay-misc.md |
-| SplatEntity | ✅ | 0x78 | Juice splat pool: 6 variants, batched triangle list | systems/effects.md |
+| Mortar::Entity (MortarEntity) | ✅ | 0x3c | Base entity class: pos, vel, angle, collision | entities/entity-base.md |
+| Fruit | ✅ | 0x118 | Fruit entity: slicing, physics, two-body split | entities/fruit.md |
+| Bomb | ✅ | 0xac | Bomb entity: fuse timer, chain spawn, rotation | entities/bomb.md |
+| SlashEntity | ✅ | 0x184 | Blade/swipe: trail, collision, combo tracking | entities/slash-entity.md |
+| SlashEntityGhost | ✅ | ~0x10 | Fading blade echo (alpha decay on vertex colours) | entities/slash-entity.md |
+| SplatEntity | ✅ | 0x78 | Juice splat pool: 6 variants, batched triangle list | entities/splat-entity.md |
 | SplatEffect | ✅ | ~0x1c | Simple textured quad overlay for splats | engine/rendering-detail.md |
-| BombFlash | ✅ | 0x44 | Bomb hit flash: quadratic scale + alpha animation | systems/effects.md |
-| BombBlast | ✅ | 0x70 | Bomb explosion: expanding radius, 3s lifetime | systems/effects.md |
-| Coin | ✅ | ~0x70 | Bouncing reward coin: state machine + ballistics | structs/gameplay-misc.md |
+| BombFlash | ✅ | 0x44 | Bomb hit flash: quadratic scale + alpha animation | entities/bomb-flash.md |
+| BombBlast | ✅ | 0x70 | Bomb explosion: expanding radius, 3s lifetime | entities/bomb-blast.md |
+| Coin | ✅ | ~0x70 | Bouncing reward coin: state machine + ballistics | entities/coin.md |
 | MenuBackground | ✅ | 0x08 | Simple background texture | structs/gameplay-misc.md |
 
 ## Game & Application
@@ -139,8 +139,8 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 
 | Class | Status | Size | Description | Doc |
 |-------|--------|------|-------------|-----|
-| ColLine | ✅ | 0x20 | Line segment (blade collision) | structs/entities.md |
-| ColSphere | ✅ | 0x18 | Sphere (fruit collision) | structs/entities.md |
+| ColLine | ✅ | 0x20 | Line segment (blade collision) | entities/entity-base.md |
+| ColSphere | ✅ | 0x18 | Sphere (fruit collision) | entities/entity-base.md |
 | Col | 🔶 | — | Base collision shape | — |
 | ColAABB | ❌ | — | Axis-aligned bounding box | — |
 

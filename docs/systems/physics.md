@@ -111,6 +111,6 @@ For each fruit to spawn (count = param_1):
 
 ## See Also
 
-- [Fruit functions](../functions/fruit.md) -- Fruit::Update physics step
+- [Fruit entity](../entities/fruit.md) -- Fruit::Update physics step
 - [Wave functions](../functions/wave.md) -- SpawnFruit initial velocity
-- [Entity structs](../structs/entities.md) -- MortarEntity base fields
+- [Entity base](../entities/entity-base.md) -- MortarEntity base fields

@@ -41,4 +41,4 @@
 ## See Also
 
 - [Scoring functions](../functions/scoring.md) -- score calculation pseudocode
-- [SlashEntity functions](../functions/slash-entity.md) -- combo detection
+- [SlashEntity](../entities/slash-entity.md) -- combo detection

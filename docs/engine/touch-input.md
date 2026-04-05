@@ -90,4 +90,4 @@ Both check `Game.bombHitTimer <= 0` before updating (no input during bomb hit).
 
 - [Game flow functions](../functions/game-flow.md) -- touch event dispatch
 - [Game struct](../structs/game.md) -- GlesForm touch fields
-- [Entity structs](../structs/entities.md) -- SlashEntity touch tracking
+- [SlashEntity](../entities/slash-entity.md) -- SlashEntity touch tracking

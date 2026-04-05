@@ -267,4 +267,4 @@ Pool: up to 9 combo text sprites (digit textures 1..9). `GetFree` (0x00150da4) s
 ## See Also
 
 - [Rendering functions](../engine/rendering-functions.md) -- HUDControl3d::Draw
-- [SlashEntity functions](../functions/slash-entity.md) -- MissControl combo display
+- [SlashEntity](../entities/slash-entity.md) -- MissControl combo display

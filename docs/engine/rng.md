@@ -138,4 +138,4 @@ float Random_RandF(Random* r, float max_f) {
 
 - [Wave system](wave-system.md) — WaveManager embeds Random at +0x00
 - [Physics](physics.md) — random rotation on fruit slice
-- [Fruit functions](../functions/fruit.md) — RandomFruit weighted selection
+- [Fruit entity](../entities/fruit.md) — RandomFruit weighted selection
