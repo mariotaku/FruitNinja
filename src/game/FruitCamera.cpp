@@ -9,14 +9,17 @@
 #include <cmath>
 #include <cstdlib>
 
+// Analysed: 2026-04-06T00:45
 // Matches constructor at 0x00180e40 / 0x00180de0
+// m_Target and m_ShakeDir initialized from _Vector2<float>::Zero (BSS, = 0.0, 0.0)
+// Field assignment order matches binary (compiler interleaves reads/writes)
 FruitCamera::FruitCamera()
-    : m_pFollowEntity(0),
+    : m_pFollowEntity(nullptr),
       m_CameraMode(0),
       m_field134(0), m_field136(0),
-      m_ShakeDir_x(0.0f), m_ShakeDir_y(0.0f),
-      m_ShakeAngle(0),
-      m_TargetX(0.0f), m_TargetY(0.0f),
+      m_ShakeDir(Vec2::Zero()),
+      m_ShakeAngle(0), _pad142(0),
+      m_Target(Vec2::Zero()),
       m_field14c(0.0f), m_field150(0.0f),
       m_DistanceMag(0.0f),
       m_ShakeIntensity(0.0f), m_ShakeIntensityInit(0.0f)
@@ -100,8 +103,8 @@ void FruitCamera::SetupPerspective(int perspType, bool forceUpdate) {
     mm.GetViewStack().Reset();
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-    float cx = 480.0f + m_TargetX;
-    float cy = 320.0f + m_TargetY;
+    float cx = 480.0f + m_Target.x;
+    float cy = 320.0f + m_Target.y;
     float hw = w / 2.0f;
     float hh = h / 2.0f;
 
@@ -120,8 +123,8 @@ void FruitCamera::CreateCameraShake(const Vec3& impact, float intensity, float d
     m_ShakeAngle = (uint16_t)(int)(atan2f(impact.y, impact.x) * 65536.0f / 6.2831853f);
 
     float angle_rad = (float)m_ShakeAngle * 6.2831853f / 65536.0f;
-    m_ShakeDir_x = cosf(angle_rad) * 9.0f * dirScale;
-    m_ShakeDir_y = sinf(angle_rad) * 9.0f * dirScale;
+    m_ShakeDir.x = cosf(angle_rad) * 9.0f * dirScale;
+    m_ShakeDir.y = sinf(angle_rad) * 9.0f * dirScale;
 
     m_ShakeIntensityInit = intensity;
     m_ShakeIntensity = intensity;
@@ -135,20 +138,20 @@ void FruitCamera::UpdateShake(float dt) {
     static const float DAMP_FACTOR    = 0.8f;    // DAT_00181074
 
     if (m_ShakeIntensity <= 0.0f) {
-        if (m_TargetX >= SNAP_NEG && m_TargetX <= SNAP_POS)
-            m_TargetX = 0.0f;
+        if (m_Target.x >= SNAP_NEG && m_Target.x <= SNAP_POS)
+            m_Target.x = 0.0f;
         else
-            m_TargetX *= DAMP_FACTOR;
+            m_Target.x *= DAMP_FACTOR;
 
-        if (m_TargetY >= SNAP_NEG && m_TargetY <= SNAP_POS)
-            m_TargetY = 0.0f;
+        if (m_Target.y >= SNAP_NEG && m_Target.y <= SNAP_POS)
+            m_Target.y = 0.0f;
         else
-            m_TargetY *= DAMP_FACTOR;
+            m_Target.y *= DAMP_FACTOR;
     } else {
         m_ShakeIntensity -= dt;
 
-        float dx = m_TargetX - m_ShakeDir_x;
-        float dy = m_TargetY - m_ShakeDir_y;
+        float dx = m_Target.x - m_ShakeDir.x;
+        float dy = m_Target.y - m_ShakeDir.y;
         if (dx * dx + dy * dy < 16.0f) {
             m_ShakeAngle += 0x6388 + (uint16_t)(rand() % 0x38E0);
 
@@ -156,15 +159,15 @@ void FruitCamera::UpdateShake(float dt) {
                 (m_ShakeIntensity / m_ShakeIntensityInit) : 0.0f;
             float scale = ratio * 9.0f;
             float angle_rad = (float)m_ShakeAngle * 6.2831853f / 65536.0f;
-            m_ShakeDir_x = cosf(angle_rad) * scale;
-            m_ShakeDir_y = sinf(angle_rad) * scale;
+            m_ShakeDir.x = cosf(angle_rad) * scale;
+            m_ShakeDir.y = sinf(angle_rad) * scale;
         }
 
         float ratio = (m_ShakeIntensityInit > 0.0f) ?
             (m_ShakeIntensity / m_ShakeIntensityInit) : 0.0f;
         float t = ratio + 1.0f;
-        m_TargetX += (m_ShakeDir_x - m_TargetX) * LERP_FACTOR * t;
-        m_TargetY += (m_ShakeDir_y - m_TargetY) * LERP_FACTOR * t;
+        m_Target.x += (m_ShakeDir.x - m_Target.x) * LERP_FACTOR * t;
+        m_Target.y += (m_ShakeDir.y - m_Target.y) * LERP_FACTOR * t;
 
         m_bDirty = true;
     }
