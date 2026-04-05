@@ -256,6 +256,98 @@ Pre-baked text: renders once via Font::DrawString, caches the vertex data for fa
 
 ---
 
+## GameDraw (0x16b888, 211 lines) — Full Frame Render Order
+
+Decompiled and verified from binary. Called from `GameTaskDraw` when in State 2 (Game).
+
+### Setup
+```c
+DisplayManager::SetDepthBuffer(false);
+DisplayManager::SetDepthBufferWrite(false);
+DisplayManager::SetDrawColour(Colour(64, 64, 64, 255));
+DisplayManager::SetLightDirection(Vec3(g_GameData+0x90, g_GameData+0x94, 100.0));
+FruitCamera::SetupPerspective(g_GameData->pCamera, 0, 0);
+```
+
+### Background Quad (bg_fruit_ninja.tex)
+
+Texture from `g_TaskState+0xfc` (pBackgroundTexture). Two rendering paths:
+
+**Normal (no shake):** `camera+0x144 == 0 && camera+0x148 == 0`
+```
+Texture::Set(pBackgroundTexture)
+ResetMatrix
+Scale(481.0, 321.0, 0.0)              // 1px oversize to prevent edge seams
+Translate(0.0, 0.0, -5599.0)          // far back in Z
+DrawQuad(UV: 0.03125, 0.96875, 0.1875, 0.8125)   // cropped — texture has border padding
+```
+
+**With shake:** `camera target != 0`
+```
+Scale(513.0, 361.0, 0.0)              // larger to cover screen during shake
+Translate(0.0, 0.0, -5599.0)
+DrawQuad(UV: 0.0, 1.0, 0.148, DAT)    // wider UV range
+```
+
+### Constant Pool (at 0x0016ba90)
+
+| Address | Label | Value | Usage |
+|---------|-------|-------|-------|
+| 0x16ba90 | BG_LIGHT_DIR_Z | 100.0 | Light direction Z component |
+| 0x16ba94 | BG_SCALE_X_NORMAL | 481.0 | Background quad width (normal) |
+| 0x16ba98 | BG_SCALE_Y_NORMAL | 321.0 | Background quad height (normal) |
+| 0x16ba9c | BG_ZERO | 0.0 | Zero constant |
+| 0x16baa0 | BG_TRANSLATE_Z | -5599.0 | Background Z depth |
+| 0x16baa4 | BG_UV_LEFT | 0.03125 | UV left edge (normal) |
+| 0x16baa8 | BG_SCALE_X_SHAKE | 513.0 | Background quad width (shake) |
+| 0x16baac | BG_SCALE_Y_SHAKE | 361.0 | Background quad height (shake) |
+
+### Full Draw Order
+
+| Step | Layer | What | Notes |
+|------|-------|------|-------|
+| 1 | — | FruitCamera::SetupPerspective(0, 0) | Ortho + LookAt |
+| 2 | — | Background quad (pBackgroundTexture) | At Z=-5599, cropped UVs |
+| 3 | — | LoadingJob::CanBoot check | If not ready: DrawStartFade + return |
+| 4 | — | DisplayManager: depth on, draw colour | |
+| 5 | — | ActorManager::Draw() | 3D fruit/bomb entities |
+| 6 | — | DisplayManager: depth write on, depth off | |
+| 7 | — | HUD::BeginDraw(dt) | |
+| 8 | 0x40 | HUD::Draw(0x40) | |
+| 9 | — | SplatEntity::DrawActiveSplats() | |
+| 10 | — | Fruit::DrawShadows() | |
+| 11 | — | SlashEntity::PreDraw() | Blade trail setup |
+| 12 | — | BombBlast::DrawActiveBlasts() | |
+| 13 | — | BombFlash::DrawActiveFlashes() | |
+| 14 | 0x80 | HUD::Draw(0x80) | |
+| 15 | — | PSPParticleManager::Draw(dt, active, -1) | All particle layers |
+| 16 | — | SlashEntity::Draw() (×16 slash entities) | Blade trails |
+| 17 | — | PSPParticleManager::Draw(dt, active, 0) | Layer 0 particles |
+| 18 | — | DrawSlices(dt) | Slice effect rendering |
+| 19 | 0x01 | HUD::Draw(0x01) | **MainScreen** (blurry_backing + logos) |
+| 20 | — | PSPParticleManager::Draw(dt, active, 1) | Layer 1 particles |
+| 21 | — | HUD scale reset to (1,1,1) | |
+| 22 | — | WaveManager::Draw(0) | |
+| 23 | 0x08 | HUD::Draw(0x08) | **Buttons** (Play, Dojo, toggles) |
+| 24 | — | MainScreen::DrawPostEffects() | |
+| 25 | — | DrawCritHit() | Fullscreen critical hit overlay |
+| 26 | 0x100 | HUD::Draw(0x100) | |
+| 27 | — | DrawBombHit() | Fullscreen bomb flash overlay |
+| 28 | 0x200 | HUD::Draw(0x200) | |
+| 29 | — | NetworkManager::DrawNews() | If showing modal dialog |
+| 30 | — | DrawStartFade() | If fadeTimer > 0 |
+| 31 | — | InputManager::ClearActions | Conditional on flags |
+| 32 | 0x400 | HUD::Draw(0x400) | Top layer |
+
+### GOT Offsets in GameDraw
+
+| Offset | Label | Points to |
+|--------|-------|-----------|
+| DAT_0016bab8 | GOT_OFF_g_GameData | g_GameData pointer |
+| DAT_0016bac4 | GOT_OFF_g_TaskState | g_TaskState pointer |
+
+---
+
 ## Port Strategy
 
 **Path A (3D):** Replace `Geometry::Render` + `PassBinding::Apply` with a single GLES2 shader that takes MVP matrix + diffuse texture as uniforms. The EffectProperty named lookup ("World", "ViewProjection", "DiffuseTexture") maps directly to shader uniforms.

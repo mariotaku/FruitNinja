@@ -13,14 +13,19 @@
 //
 
 #include <cstdint>
+#include "asset/Texture.h"
+#include "asset/TextureManager.h"
 
-// Per-task state struct (matches original GameTaskState at ~0x118 bytes)
+// Per-task state struct (matches original GameTaskState at ~0x120 bytes)
+// See docs/structs/game.md "GameTask State" section.
 struct GameTaskState {
-    float totalTime;        // accumulated time
+    float totalTime;        // +0x00: accumulated time
     float prevStateDt;      // dt from previous state
     uint8_t prevState;      // last state index
     bool initialized;       // true after Init called
-    // ... remaining fields added as needed
+
+    // +0xfc: background texture (loaded in GameInit)
+    SmartPtr<Mortar::Texture> pBackgroundTexture;
 
     GameTaskState() : totalTime(0), prevStateDt(0), prevState(0), initialized(false) {}
 };

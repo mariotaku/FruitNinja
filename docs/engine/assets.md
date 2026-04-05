@@ -29,14 +29,23 @@ void BadaTextureData::GPUafyTexture(TextureHeader* tex, int* texIdOut) {
 }
 ```
 
-### TexFmtToGL (0x00189f78, 53 lines)
+### TexFmtToGL (0x00189f78, 53 lines) — FULL MAPPING (verified from decompilation)
 
-| Format | GL Internal | GL Type |
-|--------|------------|---------|
-| 0x00 | GL_RGB | GL_UNSIGNED_BYTE |
-| 0x01 | GL_RGBA | GL_UNSIGNED_BYTE |
-| 0x10 | GL_RGBA | GL_UNSIGNED_SHORT_4_4_4_4 |
-| 0x11 | GL_RGB | GL_UNSIGNED_SHORT_5_6_5 |
+| Format | GL Format | GL Type | Bits/pixel | Notes |
+|--------|-----------|---------|------------|-------|
+| 0x00 | GL_RGB (0x1907) | GL_UNSIGNED_BYTE (0x1401) | 24 | RGB888 |
+| 0x01 | GL_RGBA (0x1908) | GL_UNSIGNED_BYTE (0x1401) | 32 | RGBA8888 |
+| 0x0b | GL_RGBA (0x1908) | PVRTC_2BPP_RGBA (0x8C03) | 2 | Compressed (mobile only) |
+| 0x0c | GL_RGBA (0x1908) | PVRTC_4BPP_RGBA (0x8C02) | 4 | Compressed (mobile only) |
+| 0x0d | GL_RGB (0x1907) | PVRTC_2BPP_RGB (0x8C01) | 2 | Compressed (mobile only) |
+| 0x0e | GL_RGB (0x1907) | PVRTC_4BPP_RGB (0x8C00) | 4 | Compressed (mobile only) |
+| 0x0f | GL_RGBA (0x1908) | GL_UNSIGNED_SHORT_5_5_5_1 (0x8034) | 16 | RGBA5551 |
+| 0x10 | GL_RGBA (0x1908) | GL_UNSIGNED_SHORT_4_4_4_4 (0x8033) | 16 | RGBA4444 |
+| 0x11 | GL_RGB (0x1907) | GL_UNSIGNED_SHORT_5_6_5 (0x8363) | 16 | RGB565 |
+
+Formats 0x0b–0x0e use `glCompressedTexImage2D` instead of `glTexImage2D`.
+PVRTC is not available on desktop GL — these textures must be converted.
+Default case (format 2–0x0a): falls through without setting anything (unsupported).
 
 ### LoadVertexStreamPSP (0x001a7b0c, 112 lines)
 

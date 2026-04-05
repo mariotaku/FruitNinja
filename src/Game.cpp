@@ -5,7 +5,6 @@
 //
 
 #include "Game.h"
-#include "asset/tex_loader.h"
 #include "asset/TextureManager.h"
 #include "game/GameTaskState.h"
 #include "hud/HUD.h"
@@ -23,6 +22,7 @@ Game::Game()
       missCount(0), currentScore(0), m_bUnsullied(0),
       m_CritTimer(0), m_ScoreThreshold(0), field_0x34(0), m_bSlowMotion(0),
       dt(0), hud(NULL),
+      pCamera(NULL),
       isFirstPlay1(false), isFirstPlay2(false),
       field_0x88(0),
       mainScreen(NULL),
@@ -30,8 +30,6 @@ Game::Game()
       m_FrameTimer(0), m_MenuReturnTimer(0), flag_0x1a8(0), m_bFrameDirty(0),
       window(NULL), gl_context(NULL),
       inputManager(NULL), actorManager(NULL),
-      bg_tex(0), hb_logo_tex(0), title_tex(0),
-      blurry_backing_tex(0), fruit_text_tex(0), ninja_text_tex(0),
       soundEnabled(true), musicEnabled(true),
       running(false)
 {
@@ -70,15 +68,6 @@ void Game::SetAppLicensed(bool licensed) {
 // Matches 0x0010da94 — returns g_GameData+0x18C
 int Game::GetAppLicensedState() const {
     return m_gameDataLicensedState;
-}
-
-GLuint Game::load_texture(const char* name, TexImage& img) {
-    std::string path = data_dir + "/textures/" + name;
-    if (!tex_load(path, img)) {
-        fprintf(stderr, "Failed to load texture: %s\n", path.c_str());
-        return 0;
-    }
-    return renderer.upload_texture(img);
 }
 
 // Matches: FruitNinja::OnAppInitializing flow

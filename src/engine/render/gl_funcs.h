@@ -69,6 +69,7 @@ typedef intptr_t GLsizeiptr;
 #define GL_UNPACK_ALIGNMENT      0x0CF5
 #define GL_CULL_FACE             0x0B44
 #define GL_UNSIGNED_SHORT_4_4_4_4 0x8033
+#define GL_UNSIGNED_SHORT_5_5_5_1 0x8034
 #define GL_UNSIGNED_SHORT_5_6_5  0x8363
 
 // Function pointer types and declarations

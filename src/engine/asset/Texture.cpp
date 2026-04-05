@@ -115,34 +115,28 @@ SmartPtr<Texture> Texture::Load(const char* path) {
     Texture* tex = new Texture();
     tex->m_Path = path;
 
-    // Matches TexFmtToGL (0x00189f78) — upload in native format when possible
+    // Matches TexFmtToGL (0x00189f78) — verified from Ghidra decompilation
     switch (format) {
+        case 0x00: // RGB888
+            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_BYTE, raw.data());
+            break;
+        case 0x01: // RGBA8888
+            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_BYTE, raw.data());
+            break;
+        case 0x0f: // RGBA5551
+            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, raw.data());
+            break;
         case 0x10: // RGBA4444
             tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4, raw.data());
             break;
         case 0x11: // RGB565
             tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, raw.data());
             break;
-        case 0x01: // RGBA8888
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_BYTE, raw.data());
-            break;
-        case 0x00: // RGB888
-            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_BYTE, raw.data());
-            break;
-        default: {
-            // Fallback: convert RGBA4444 to RGBA8888
-            uint32_t pixelCount = (uint32_t)width * height;
-            std::vector<uint8_t> rgba(pixelCount * 4);
-            for (uint32_t i = 0; i < pixelCount; i++) {
-                uint16_t pixel = (uint16_t)(raw[i * 2] | (raw[i * 2 + 1] << 8));
-                rgba[i * 4 + 0] = ((pixel >> 12) & 0xF) * 17;
-                rgba[i * 4 + 1] = ((pixel >>  8) & 0xF) * 17;
-                rgba[i * 4 + 2] = ((pixel >>  4) & 0xF) * 17;
-                rgba[i * 4 + 3] = ((pixel >>  0) & 0xF) * 17;
-            }
-            tex->UploadRGBA(width, height, rgba.data());
-            break;
-        }
+        // case 0x0b..0x0e: PVRTC compressed (not supported on desktop GL)
+        default:
+            fprintf(stderr, "Texture::Load: unsupported format 0x%02x in '%s'\n", format, path);
+            delete tex;
+            return SmartPtr<Texture>();
     }
 
     return SmartPtr<Texture>(tex);
