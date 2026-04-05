@@ -224,20 +224,99 @@ void Font::DrawString(float scale, float maxWidth, float z,
 }
 ```
 
-### BakedString (~0x1C bytes)
+### BakedString (0x1C / 28 bytes)
 
-Pre-baked text: renders once via Font::DrawString, caches the vertex data for fast repeated draws.
+Pre-baked text: constructor iterates a string's characters, looks up each glyph from a Font, builds per-page QUADCUSTOMVERTEX arrays (6 verts per glyph = 2 triangles), and caches them for fast repeated draws.
 
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| +0x00 | SmartPtr\<Texture\>* | m_pTextures | Array of page textures |
-| +0x04 | int | m_PageCount | Number of atlas pages |
-| +0x08 | QUADCUSTOMVERTEX** | m_pVertexData | Per-page vertex arrays |
-| +0x0C | int* | m_pVertexCounts | Per-page vertex counts |
-| +0x10 | float | m_Width | Baked string width |
-| +0x14 | float | m_Height | Baked string height |
+#### Struct Layout
 
-`BakedString::Draw` (0x0019738c) — iterates pages, binds texture, calls DrawTriList with pre-baked vertices. Very fast for static text like menu labels.
+| Offset | Size | Type | Name | Notes |
+|--------|------|------|------|-------|
+| +0x00 | 4 | int | m_field00 | Unknown (possibly flags or font ref) |
+| +0x04 | 4 | SmartPtr\<Texture\>* | m_pTextures | Array of per-page atlas textures |
+| +0x08 | 4 | int | m_PageCount | Number of texture pages used |
+| +0x0C | 4 | QUADCUSTOMVERTEX** | m_pVertexData | Per-page vertex arrays (0x24 stride, 6 verts/glyph) |
+| +0x10 | 4 | int* | m_pVertexCounts | Per-page glyph count (x6 for vert count) |
+| +0x14 | 4 | float | m_Width | Total string width in pixels |
+| +0x18 | 4 | float | m_Height | Max glyph height in pixels |
+
+#### Constructor `BakedString(Font*, Utf8StringIterator, Colour)` (0x00197d64)
+
+1. **Count pages**: Iterates string, looks up each glyph via `Font::GetCharTemplate(charCode)`. Each glyph has a page index at glyph+0x20. Tracks unique pages and per-page glyph counts.
+2. **Allocate textures**: Creates `SmartPtr<Texture>[pageCount]` array, copies page textures from `Font::GetPage(pageIdx)`.
+3. **Allocate vertex buffers**: For each page, allocates `glyphCount * 0xD8` bytes (= `glyphCount * 6 * 0x24` — 6 QUADCUSTOMVERTEX verts per glyph).
+4. **Bake glyphs**: For each glyph:
+   - Reads metrics from Font glyph template: UV rect (+0x04..+0x10), xoffset (+0x14), yoffset (+0x18), xadvance (+0x1C), page (+0x20)
+   - Computes screen position from running xCursor + font scale (Font+0x424 / Font+0x41C / Font+0x420)
+   - Builds 6 vertices (2 triangles = 1 quad) per glyph with pos, UV, and packed colour
+   - Connects to previous glyph via shared edge vertices (degenerate strip continuation)
+   - Tracks max width (m_Width) and height (m_Height)
+5. **Cleanup**: Frees temporary page-index and count arrays
+
+#### Draw `BakedString_Draw(Vec3, float scale, float rotation, ALIGNMENT_TYPE)` (0x0019738c)
+
+```c
+void BakedString::Draw(Vec3 pos, float scale, float rotation, ALIGNMENT_TYPE align) {
+    // Push world matrix (one of few places that uses Push/Pop)
+    MatrixStack::Push(matrixMgr.m_World);
+    matrixMgr.m_World.SetCurrentMatrix(identity);
+
+    // Apply alignment offset
+    if ((align & 0x3) == 2)       // RIGHT
+        TranslateMatrix(-m_Width, 0, 0);
+    else if ((align & 0x3) == 3)  // CENTER
+        TranslateMatrix(-m_Width * 0.5, 0, 0);
+
+    if ((align & 0xC) == 8)       // BOTTOM
+        TranslateMatrix(0, m_Height, 0);
+    else if ((align & 0xC) == 0xC) // MIDDLE
+        TranslateMatrix(0, m_Height * 0.5, 0);
+
+    // Transform: Scale -> RotZ -> Translate
+    MatrixStack::Scale(m_World, Vec3(scale, scale, 1.0));
+    MatrixStack::RotZ(m_World, rotation);
+    TranslateMatrix(pos);
+    UploadCurrentMatrices(skipProjection=true);
+
+    // Draw each page's cached vertices
+    for (int i = 0; i < m_PageCount; i++) {
+        Texture::Set(m_pTextures[i]);
+        Mesh::DrawTriStrip(m_pVertexData[i], m_pVertexCounts[i], false, NULL);
+        Texture::UnSet(m_pTextures[i]);
+    }
+
+    // Restore world matrix
+    MatrixStack::Pop(matrixMgr.m_World);
+}
+```
+
+#### Alignment Flags (ALIGNMENT_TYPE bitmask)
+
+| Bits | Value | Meaning |
+|------|-------|---------|
+| 0-1 | 0 | LEFT (default) |
+| 0-1 | 2 | RIGHT (offset by -m_Width) |
+| 0-1 | 3 | CENTER (offset by -m_Width/2) |
+| 2-3 | 0 | TOP (default) |
+| 2-3 | 8 | BOTTOM (offset by +m_Height) |
+| 2-3 | 0xC | MIDDLE (offset by +m_Height/2) |
+
+#### All Functions
+
+| Function | Address | Notes |
+|----------|---------|-------|
+| BakedString(Font*, Utf8StringIterator, Colour) | 0x00197d64 | Constructor — bakes glyphs |
+| BakedString(Font*, Utf8StringIterator, Colour) | 0x0019789c | Constructor variant (identical) |
+| BakedString_Draw(Vec3, float, float, ALIGNMENT_TYPE) | 0x0019738c | Draw with Push/Pop, alignment |
+| ~BakedString | 0x00197564 | Destructor — frees all arrays |
+| ~BakedString | 0x001975b8 | Destructor variant |
+
+#### Key Details
+
+- **Push/Pop**: BakedString::Draw is one of the few places that uses MatrixStack::Push/Pop on the world stack. Most other draw calls just Reset.
+- **6 vertices per glyph**: Each glyph quad = 6 QUADCUSTOMVERTEX (0x24 bytes each) for triangle strip with degenerate connections.
+- **Font glyph template**: glyph+0x04=UV.x, +0x08=UV.y, +0x0C=UV.w, +0x10=UV.h, +0x14=xoffset, +0x18=yoffset, +0x1C=xadvance, +0x20=page index.
+- **Font fields used**: Font+0x40C=pageCount, Font+0x41C/0x420=atlas width/height (int), Font+0x424=scale (float).
 
 ---
 
@@ -253,6 +332,51 @@ Pre-baked text: renders once via Font::DrawString, caches the vertex data for fa
 | Font::DrawString | 0x00198e44 | ~500 | B | Full text with color tags, wrapping, alignment |
 | BakedString::Draw | 0x0019738c | ~100 | B | Pre-baked text, fast repeated draw |
 | Font::Load | 0x00199e9c | 270 | — | BMFont .fnt parser |
+
+---
+
+## DrawStartFade / HB Logo Splash (0x0016ab10)
+
+The Halfbrick logo splash displayed at game startup. Loaded and driven by GameUpdate, drawn by DrawStartFade.
+
+**Loading** (in GameUpdate, when `g_TaskState.m_SplashTimer > 0.0`):
+```c
+// g_GameData+0xF4 holds the HB logo SmartPtr<Texture>
+if (!g_GameData.m_HBLogoTex.IsValid())
+    g_GameData.m_HBLogoTex = LoadLocalisedTexture("HB_logo.tex");
+```
+
+**Drawing:**
+```c
+void DrawStartFade() {
+    if (m_SplashTimer <= 0.0) return;
+
+    FruitCamera::SetupPerspective(camera, 3, 1);
+
+    float t = m_SplashTimer;
+    float alpha, brightness, scale;
+    if (t <= 0.5) {
+        alpha = t * 2.0;          // fade in
+        brightness = 0.0;
+        scale = 1.0;
+    } else {
+        float fadeOut = (t - 0.5) * 2.0;
+        brightness = 1.0 - fadeOut; // dims to black
+        alpha = 1.0;
+        scale = brightness * brightness + 1.0;  // slight zoom
+    }
+
+    Texture::Set(g_GameData.m_HBLogoTex);
+    ResetMatrix -> Scale(480, 320, 0) -> Upload
+    DrawQuad(Colour(brightness, brightness, brightness, alpha),
+             UV: 0.97, 0.19, 0.81);
+    Texture::UnSet();
+}
+```
+
+**Fade out** (in GameUpdate): `m_SplashTimer -= dt * 2.0`, clears texture at 0.
+
+**Timeline**: SplashTask sets `m_SplashTimer = 1.0` → 0-0.5s fade in → 0.5-1.0s fade out with zoom → texture released → normal game begins.
 
 ---
 

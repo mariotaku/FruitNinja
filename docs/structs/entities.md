@@ -1,5 +1,21 @@
 # Entity Structs
 
+## CreateEntity Factory (0x0017421c)
+
+Maps entity type ID to class. Sizes verified from `operator_new` in the decompilation:
+
+| Type | Class | Alloc Size | Notes |
+|------|-------|------------|-------|
+| 0 | Fruit | 0x118 (280 bytes) | |
+| 1 | Bomb | 0xB0 (176 bytes) | |
+| 2 | Coin | 0x94 (148 bytes) | |
+| 3 | SlashEntity | 0x184 (388 bytes) | |
+| 4 | BombBlast | 0x70 (112 bytes) | |
+
+Registered with `ActorManager::m_FactoryDelegate` during GameInit. GameInit also pre-allocates 30 each of Fruit, Bomb, and BombBlast (flags |= 0x11 = deactivated).
+
+---
+
 ## Mortar::Entity (base class, size = 0x3c)
 
 | Offset | Type | Name | Notes |
@@ -219,6 +235,581 @@ Entity base (+0x00..+0x3b) — see Mortar::Entity above. Fruit own fields start 
 | 0x17ac68 | CreateFromAxisAngle | __thiscall | Quaternion from axis+angle |
 | 0x17acf4 | Clear | - | SmartPtr clear |
 
+### Non-Vtable Method Pseudocode
+
+#### Instance Methods
+
+**Fruit::Fruit() — 0x1764dc, 0x176520 (two identical constructors, one thunked)**
+```
+Entity::Entity(this)
+this->vtable = &Fruit_vtable + 8
+Quaternion::Identity(&this->m_Rot1)
+Quaternion::Identity(&this->m_Rot2)
+this->m_pEmitter2 = NULL
+this->m_Col = NULL
+this->field_0x108 = 0      // slash entity backref
+this->field_0x10c = 0      // special gravity flag
+this->m_pEmitter1 = NULL
+```
+
+**Fruit::~Fruit() — 0x176424**
+```
+this->vtable = &Fruit_vtable + 8
+Release(this)
+Entity::~Entity(this)
+```
+
+**Fruit::Release() — 0x1761d8**
+```
+if (m_pEmitter1) { PSPParticleManager::ClearEmitter(m_pEmitter1); m_pEmitter1 = NULL }
+if (m_pEmitter2) { PSPParticleManager::ClearEmitter(m_pEmitter2); m_pEmitter2 = NULL }
+if (field_0x108 && *(field_0x108 + 0x134) == this)  // unlink from SlashEntity
+    *(field_0x108 + 0x134) = NULL
+Entity::Release()
+```
+
+**Fruit::IsOffscreen() — 0x175624**
+```
+// Returns true if fruit position is outside screen bounds (with scale margin)
+if (abs(m_Gravity_y) > 0):
+    bound = SCREEN_HALF_H + SCREEN_MARGIN * m_Scale_y
+    if (pos_y < -bound || pos_y > bound) return true
+    check m_HalfB_pos.y against same bounds
+else if (abs(m_Gravity_x) > 0):
+    bound = SCREEN_HALF_W + SCREEN_MARGIN * m_Scale_y
+    if (pos_x < -bound || pos_x > bound) return true
+    check m_HalfB_pos.x against same bounds
+else: return false
+```
+
+**Fruit::CheckHasGoneOffscreen() — 0x175218**
+```
+// Complex offscreen check for sliced fruit halves with bounce-back behavior
+// For each gravity axis (X or Y), checks if both halves have gone past screen edge
+// Sliced halves that pass the far edge get their position clamped and velocity reversed (-1.0)
+// Only calls return (skip kill) if one half is still moving inward
+// Also checks perpendicular axis bounds for sliced halves
+// If both halves are confirmed offscreen, execution falls through (caller KillFruits)
+```
+
+**Fruit::SetTrailParticles(ulong hash) — 0x1756dc**
+```
+if (!PSPParticleManager::EmitterExists(hash)) return 0
+if (m_pEmitter1) PSPParticleManager::ClearEmitter(m_pEmitter1)
+m_pEmitter1 = PSPParticleManager::AddEmitter(hash, NULL, true)
+return 1
+```
+
+**Fruit::RotateFacingUp(bool facingUp, Vec3 axis) — 0x1757f4**
+```
+// Sets initial rotation for both halves (loop x2)
+speed = Random::RandF(2.0)
+sign = (Random::Rand32(2) == 0) ? 1.0 : -1.0
+rotSpeed = sign * (sign + sign + speed)
+for i in [0, 1]:
+    RandomStartAngle(&m_Rot[i], true)    // identity + axis rotation
+    if (facingUp):
+        // Build quaternion from axis, then compose: slice_quat * facing_quat * start_quat
+        CreateFromAxisAngle(axis.x, axis.y, axis.z, 0)
+        compose with facing direction quaternion
+        m_Rot[i] = composed result
+    m_RotVel[i] = axis * rotSpeed
+```
+
+**Fruit::UpdateBombAvoidance(float dt) — 0x175988**
+```
+if (m_bSliced) return
+for each active Bomb in ActorManager(type=1):
+    if (!Bomb::IsActive() || !bomb->m_Col) continue
+    delta = this->pos - bomb->pos
+    distSq = delta.MagnitudeSqr()
+    if (distSq < BOMB_AVOID_DIST_SQ):
+        velDelta = (this->vel - bomb->vel)
+        if (velDeltaSq < BOMB_AVOID_VEL_SQ):
+            sign = (delta.x >= 0) ? 1.0 : -1.0
+            bomb->vel_x += sign * dt * 12.0   // push bomb sideways
+```
+
+**Fruit::Chuck(float delay) — 0x175a64**
+```
+m_HalfB_pos = pos                  // snapshot position for later split
+if (delay < 0) delay = 0.125       // default chuck delay
+m_ChuckDelay = delay
+hash = StringHash(SPECIAL_FRUIT_NAME)
+powers = FruitInfo[m_FruitType].m_pPowers   // at offset +0x32c
+if (powers && (gameTime - delay < 8.0) && powers->hash != hash):
+    g_FruitCount--              // decrement global fruit counter
+    flags |= 0x10               // mark as "skip" (pre-killed)
+```
+
+**Fruit::SetFruitType(uint type, float scale) — 0x17621c**
+```
+m_FruitType = (byte)type
+visualScale = FruitInfo[type].visualScale * g_FruitScaleConfig * VISUAL_SCALE_MULT
+m_Scale = visualScale
+m_BaseScale = visualScale
+collisionSize = COLLISION_FACTOR * FruitInfo[type].collisionBase + FruitInfo[type].collisionExtra
+if (collisionSize <= 0):
+    if (m_Col) { delete m_Col; m_Col = NULL }
+else:
+    if (!m_Col) m_Col = new ColSphere()
+    m_Col->center = Vec3(pos_x, pos_y, 0.0)
+    m_Col->radius = collisionSize * scale
+```
+
+**Fruit::EnableCollision(bool enable) — 0x176354**
+```
+if (enable):
+    collisionSize = COLLISION_FACTOR * FruitInfo[m_FruitType].collisionBase + collisionExtra
+    if (collisionSize > 0):
+        if (!m_Col) m_Col = new ColSphere()
+        m_Col->center = Vec3(pos_x, pos_y, 0.0)
+        m_Col->radius = collisionSize
+        return
+if (m_Col) { m_Col->destructor(); m_Col = NULL }
+```
+
+**Fruit::SetForPlayer(int playerIdx) — 0x175b78**
+```
+if (IsOnlineMultiplayer() && playerIdx == 2):
+    m_Col->radius *= ONLINE_SCALE_FACTOR    // shrink collision for spectator
+m_PlayerIdx = playerIdx
+```
+
+**Fruit::CheckFruitDropped() — 0x176184**
+```
+// Check game-mode-specific drop counters to trigger GameOver
+lives = g_GameState->lives
+if (lives[player1] < 1):
+    if (lives[player2] < 1): return     // both dead already
+    GameOver(-1, -1.0, 2)               // player 2 survives
+elif (lives[player2] < 1):
+    GameOver(-1, -1.0, 1)               // player 1 survives
+else:
+    GameOver(-1, -1.0, 0)               // both alive, normal game over
+```
+
+**Fruit::KillFruit(int doMissPenalty) — 0x176abc**
+```
+// Clear particle emitters
+if (m_pEmitter1) { ClearEmitter(m_pEmitter1); m_pEmitter1 = NULL }
+if (m_pEmitter2) { ClearEmitter(m_pEmitter2); m_pEmitter2 = NULL }
+// Miss penalty logic (only if not sliced, not noPowerUp, and baseScore < 5)
+if (!m_bSliced && !m_bNoPowerUp && FruitInfo[m_FruitType].baseScore < 5):
+    if (gameMode == ZEN):
+        if (doMissPenalty): track "fruit_missed" + per-type miss in FruitSaveData
+    else:
+        if (FailureEnabled() && doMissPenalty):
+            if (!gameState->isFrozen):
+                MissControl::MakeDisappear(pos, playerIdx)
+                GameSound::SFXPlay("fruit_miss")
+                gameState->hadMiss = true
+            gameState->missCount++
+            if (missCount > 2): GameOver(); clear combo
+// Unlink from SlashEntity if backref matches
+if (field_0x108 && *(field_0x108+0x134) == this): *(field_0x108+0x134) = 0
+// Decrement power fruit counter if applicable
+if (!(flags & 0x10) && FruitInfo[m_FruitType].m_pPowers):
+    g_PowerFruitCount = max(0, g_PowerFruitCount - 1)
+if (m_TrackerID) ET_RemoveEntity(0, m_TrackerID)
+flags |= 0x10   // mark killed
+```
+
+**Fruit::Slice() — 0x176d58**
+```
+// Split fruit into two halves with velocity and splats
+m_SliceTimer = 0.0
+// Generate random rotation offsets
+// Build slice direction from quaternion, check if "reverse slice" (bVar7)
+impulse = m_SliceImpulse
+splatCount = Random::Rand32(2) + 2     // 2-3 splats
+if (m_bCriticalEligible && playerIdx < 2):
+    AddSlice(pos, angle + offset, impulse * CRIT_SCALE)
+    AddSlice(pos, angle - offset, impulse * CRIT_SCALE)
+    splatCount = CRITICAL_SPLAT_COUNT
+    impulse *= 1.5
+    MissControl::MakeCritical(pos)
+if (FruitInfo[m_FruitType].baseScore == 50): // special fruit
+    splatCount = CRITICAL_SPLAT_COUNT; impulse *= 1.5
+// Spawn splat entities
+for i in 0..splatCount:
+    SplatEntity::MakeSplat(pos, randomAngle, impulse * (i*DECAY + 5.0))
+// Play splat SFX: "splat_%d" with random 1-3
+// Calculate half velocities from slice angle +/- random offsets
+// For critical/special: use perpendicular slice directions instead
+// Set m_bSliced = true
+// For each half (loop x2): randomize rotation velocity, compose with slice-angle quaternion
+```
+
+**Fruit::DrawUpdate(float dt) — 0x17501c**
+```
+// Dampen rotation axis each frame
+m_RotAxis *= DAMPEN_FACTOR
+if (m_bSliced || m_ChuckDelay > 0) return
+// Edge bounce / steering (unsliced only)
+if (m_Gravity_x == 0):  // normal vertical gravity
+    if (gameMode == ZEN && (flags & 0x20)):
+        // Bounce off screen edges (pos_x reflects)
+    else:
+        // Steer back: add 16*dt velocity toward center, add 20 to rot axis
+elif (m_Gravity_y == 0):  // horizontal gravity
+    // Same steering for Y axis
+```
+
+**Fruit::IsActive() — 0x17a82c**
+```
+return (m_ChuckDelay <= 0.0)   // active once chuck delay has expired
+```
+
+**Fruit::AddShadow(QUADCUSTOMVERTEX** buf, int* count) — 0x175ea0**
+```
+// Determine shadow offset direction for multiplayer
+if (playerIdx >= 1 && IsSameScreenMultiplayer()):
+    offsetX = (pos_x < 0) ? -1.0 : 1.0; offsetY = SHADOW_OFFSET
+else:
+    offsetX = 1.0; offsetY = SHADOW_OFFSET
+// Pre-slice shadow (m_ScaleAnim < 1.0):
+    alpha = (1.0 - m_ScaleAnim) * SHADOW_ALPHA_SCALE
+    size = SHADOW_SIZE_MULT * m_Scale_x
+    AddQuad(buf, pos_x + offsetX*size*X_MULT, pos_y + offsetY*size*X_MULT, size, size, rgba)
+    count++
+// Post-slice shadows (m_ScaleAnim > 0.0): for each half
+    alpha = m_ScaleAnim * POST_ALPHA_SCALE
+    size = m_Scale_x * POST_SIZE_MULT
+    // Transform shadow offset by half's rotation quaternion
+    AddQuad for half A at pos + rotated_offset
+    AddQuad for half B at m_HalfB_pos + rotated_offset
+    count += 2
+```
+
+#### Static / Free Functions
+
+**FruitTypeName(int type) — 0x174f18**
+```
+return &FruitInfoArray[type].name   // offset 0x000 in FRUIT_INFO (0x330 stride)
+```
+
+**FruitTypeHash(int type) — 0x174f38**
+```
+return FruitInfoArray[type].nameHash   // offset 0x250 in FRUIT_INFO
+```
+
+**FruitFactTexture(int type) — 0x174f5c**
+```
+return &FruitInfoArray[type].factTexturePath   // offset 0x278 in FRUIT_INFO
+```
+
+**FruitTypeColour(int type) — 0x174f80**
+```
+if (g_SpecialFruitType == type): return g_SpecialFruitColour
+return FruitInfoArray[type].m_FruitColour       // offset 0x240 in FRUIT_INFO
+```
+
+**FruitFactColour(int type) — 0x174fc8**
+```
+return Colour(FruitInfoArray[type].m_FactColour)  // offset 0x2F8 in FRUIT_INFO
+```
+
+**FruitInfo(int type) — 0x174ff8**
+```
+return &FruitInfoArray[type]   // base + type * 0x330
+```
+
+**SetupLighting(SmartPtr<Model>*) — 0x175018**
+```
+return param   // no-op stub (lighting not used on Bada)
+```
+
+**GetSmallestDelta(float a, float b) — 0x1751bc**
+```
+delta = a - b
+if (abs(delta) > 180.0):   // DAT_00175210
+    if (a <= b): delta = (a + 360.0) - b
+    else: delta = delta - 360.0
+return delta
+```
+
+**AnyActivePowers() — 0x175714**
+```
+for i in 0..this->m_Count:
+    if (PowerUpManager::GetActiveSingle(powers[i].hash) != 0): return true
+return false
+```
+
+**RandomStartAngle(Quaternion* q, bool facing) — 0x175740**
+```
+if (facing):
+    Quaternion::Identity(q)
+    CreateFromAxisAngle(q, -1, 0, 0, 0xCE2C)   // face camera
+else:
+    axis = Vec3(RandF(2)-1, RandF(2)-1, RandF(2)-1).Normalise()
+    angle = Rand32(0xFF3A)
+    Quaternion::Identity(q)
+    CreateFromAxisAngle(q, axis, angle)
+```
+
+**GetNumActiveForPlayer(int player, bool countByPlayer) — 0x175928**
+```
+count = 0
+for each Fruit in ActorManager(type=0):
+    if (countByPlayer):
+        if (fruit->m_PlayerIdx == player): count++
+    else:
+        if (!Fruit::IsActive(fruit)): count++   // count inactive
+return count
+```
+
+**FruitType(char* name, bool randomFallback) — 0x175b10**
+```
+if (name && *name):
+    hash = StringHash(name)
+    for i in 0..numFruitTypes:
+        if (FruitInfo[i].nameHash == hash || FruitInfo[i].altHash == hash): return i
+if (randomFallback):
+    return WaveManager::Random::Rand32(numFruitTypes - 1)
+return -1
+```
+
+**GetFact(int* outType, int* outFactIdx, int fruitType, int factIdx) — 0x175ba4**
+```
+// Returns a fruit fact string for UI display
+if (fruitType < 0): fruitType = Random(numFruitTypes)
+fruitType = clamp(fruitType, 0, numFruitTypes - 2)
+// Lazy-init: resolve "dragonfruit" and alt fruit type indices
+if (fruitType == dragonfruitIdx): fruitType = altFruitIdx
+if (outType) *outType = fruitType
+if (factIdx < 0):
+    if (FruitInfo[fruitType].m_FactCount < 1): return GetFact(outType, outFactIdx, -1, -1)  // retry
+    increment "fruit_facts_seen" counter in FruitSaveData
+    increment per-fruit fact counter
+    factIdx = (counter - 1) % factCount
+factIdx = clamp(factIdx, 0, factCount - 1)
+if (outFactIdx) *outFactIdx = factIdx
+// Skip any facts equal to "UNUSED" string, wrap around
+return FruitInfo[fruitType].m_pFacts[factIdx]  // 0x100-byte strings
+```
+
+**RandomFruit(bool includeSpecial) — 0x176564**
+```
+// Build cumulative weight table if not cached (totalWeight == 0)
+if (totalWeight < 1):
+    for each FruitInfo: accumulate weight, separating:
+        - totalWeight (all), noSpecialWeight (excluding special), 
+        - criticalWeight (critical-eligible), criticalNoSpecialWeight
+// Select based on CriticalMode and includeSpecial:
+if (!CriticalMode):
+    if (includeSpecial): pick from totalWeight using cumulativeWeight[i]
+    else: pick from noSpecialWeight, skipping special fruits
+else:
+    if (includeSpecial): pick from criticalWeight using criticalCumWeight[i]
+    else: pick from criticalNoSpecialWeight, skipping non-critical+special
+// Fallback: return Random(numFruitTypes - 1)
+```
+
+**MakeSFXDelegate_Fruit(void* out) — 0x176a90**
+```
+// Construct a Delegate1<bool, MortarSound*> for SFX callbacks
+BaseDelegate::BaseDelegate(out)
+out->funcPtr = FRUIT_SFX_CALLBACK
+out->vtable = &FruitSFXDelegate_vtable + 8
+```
+
+**ClearUnspawned(bool killAll) — 0x176d14**
+```
+for each Fruit in ActorManager(type=0):
+    if (killAll || fruit->m_ChuckDelay > 0):
+        KillFruit(fruit, false)   // no miss penalty
+```
+
+**Fruit_DrawShadows() — 0x178f28**
+```
+if (!g_ShadowTexture) return
+quadBuf[18432]   // stack buffer for shadow quads
+count = 0; ptr = quadBuf
+for each Fruit in ActorManager(type=0):
+    if (fruit->m_Scale_x > 0): fruit->AddShadow(&ptr, &count)
+MatrixManager::Reset(world); UploadMatrices()
+Texture::Set(g_ShadowTexture)
+Mesh::DrawTriStrip(quadBuf, count*6 - 1)
+Texture::UnSet(g_ShadowTexture)
+```
+
+**CleanupFruit() — 0x179010**
+```
+// Full cleanup: null textures, destroy model array, destroy FRUIT_INFO array
+SetNull(shadowTex_halved, shadowTex_alt, shadowTex_main, shadowTex_extra)
+SetNull(splashTex, splashTex2, bgTex)
+if (modelsLoaded):
+    for slot in [0..2]: for each type: SmartPtr::SetNull(models[type][slot])
+    delete[] FruitModelInfo array
+    delete[] FRUIT_INFO array
+    modelsLoaded = false
+```
+
+**DestroyFruitModels() — 0x17911c**
+```
+if (modelsLoaded):
+    for slot in [0..3]: for each type: SmartPtr::SetNull(models[type][slot])
+    delete[] FruitModelInfo array
+    SetNull(shadowTex_halved, shadowTex_alt)
+    modelsLoaded = false
+```
+
+**LoadFruitModels() — 0x1794e0**
+```
+if (modelsLoaded) return
+// Allocate FruitModelInfo[numFruitTypes]
+for each fruit type:
+    for part in [half_A, half_B]:  // 2 iterations
+        path = sprintf("models/%c%s_%d", name[0], name+1, part+1)
+        model = MeshManager::Load(path)
+        models[type][part+4] = model    // slots 4,5 = halfA,halfB
+        effectProp[part] = Geometry::GetProperty(model, "diffuse")
+        SetupLighting(model)            // no-op
+    // Try load whole model and multiplayer model if file exists
+    sprintf("models/%s_whole", name) -> models[type][6]
+    sprintf("models/%s_mp", name) -> models[type][7]
+// Extract base diffuse texture from first model
+shadowTex = EffectProperty::TryGetValue(models[0].effectPropA, 0)
+shadowTex_alt = shadowTex   // copy
+modelsLoaded = true
+```
+
+**LoadInfo() — 0x17987c**
+```
+if (FruitInfoArray already loaded) return
+// Load shadow texture if fast hardware
+// Parse "Config/Fruit.xml" with TinyXML
+// Read <settings> element: colour, maxFruit, gridSize, combo thresholds, scale factors
+// Read <gravity> element: gravityX, gravityY
+// Count <fruit> elements -> numFruitTypes
+// Allocate FRUIT_INFO[numFruitTypes]
+for each <fruit> element:
+    name = attribute("name") -> copy to info.name[0x00]
+    StringHash(name) -> info.nameHash[0x250], info.altHash[0x254]
+    Build hash keys: "%s_sliced", "%s_missed", "%s_title", etc.
+    Load textures: "ui/fruit_%s", "ui/fruit_%s_small"
+    Read attributes: display_name, shortname, model_name, fact_texture, model_prefix
+    Parse colour attribute -> info.m_FruitColour[0x240] (RGBA from comma-separated ints)
+    Parse factcolour -> info.m_FactColour[0x2F8]
+    Read floats: scale, collision_extra, size_mult
+    Read ints: weight, baseScore, unlock_cost, special_cost
+    Read bools: has_double_juice, is_scorable, is_visible
+    // Parse <fact> child elements -> allocate info.m_pFacts (0x100 bytes each)
+    // Parse <sound> child elements -> allocate ImpactSound array with weights
+    // Parse <power> child elements -> allocate FRUIT_POWERS with weighted FRUIT_POWER entries
+// After parsing: call LoadFruitModels()
+```
+
+**FindMostOfFruit() — 0x141a18 (GameOverScreen method, not Fruit method)**
+```
+// Build candidate list of fruit types (excluding special mode-only types)
+candidates = [i for i in 0..numTypes-1 if gameMode!=ZEN || FruitInfo[i].m_pPowers]
+// Shuffle candidates randomly
+// For each candidate: lookup FruitSaveData::GetTotal(FruitTypeHash(type))
+// Track type with highest total sliced count
+// Store result in GameOverScreen->field_0x118 (type) and field_0x11c (count)
+```
+
+**FruitMultiplyer(float mult) — 0x0012871c (WaveManager method)**
+```
+this->field_0x6c *= mult   // multiply wave fruit speed multiplier
+```
+
+#### Data / Constructor Functions
+
+**FRUIT_INFO::FRUIT_INFO() — 0x17ae20**
+```
+Colour::init(m_FruitColour)
+Colour::init(m_FactColour)
+SmartPtr::init(m_pFruitTexture, m_pFruitTexture2)
+field_0x310 = 0; m_pPowers = NULL; m_BaseScore = 1
+m_SoundCount = 0; m_pSounds = NULL
+m_RandBonusBase = 0; m_RandBonusMax = 0
+field_0x308 = 0; field_0x30c = 0
+m_SizeMult = 0.75
+SmartPtr::SetNull(m_pFruitTexture, m_pFruitTexture2)
+m_bSpecial = 0; m_bScorable = 1; field_0x2fc = 0; field_0x26c = 0
+m_FactCount = 0; m_pFacts = NULL
+```
+
+**FRUIT_INFO::~FRUIT_INFO() — 0x17ad7c**
+```
+SetNull(m_pFruitTexture2, m_pFruitTexture)
+if (m_pFacts) { delete[] m_pFacts; m_pFacts = NULL }
+if (m_pSounds) { foreach ImpactSound: dtor(); delete[] m_pSounds }
+if (m_pPowers) { FRUIT_POWERS::dtor(m_pPowers); delete m_pPowers }
+~SmartPtr(m_pFruitTexture2, m_pFruitTexture)
+```
+
+**FRUIT_POWER::FRUIT_POWER() — 0x17a7cc**
+```
+m_PowerHash = 0; m_Weight = 100; m_CumulativeWeight = 0
+```
+
+**FRUIT_POWERS::FRUIT_POWERS() — 0x17a824**
+```
+m_Count = 0
+```
+
+**FRUIT_POWERS::~FRUIT_POWERS() — 0x17ace0**
+```
+if (m_pArray) { delete[] m_pArray; m_pArray = NULL }
+```
+
+**FRUIT_POWERS::RandomPower() — 0x17a7d8**
+```
+roll = Random::Rand32(powers[count-1].cumulativeWeight)
+for i in 0..count:
+    if (roll < powers[i].cumulativeWeight): return powers[i].powerHash
+```
+
+**ImpactSound::ImpactSound() — 0x17a7c0**
+```
+m_CumulativeWeight = 0; m_Weight = 10; m_SoundName = NULL
+```
+
+**ImpactSound::~ImpactSound() — 0x17accc**
+```
+if (m_SoundName) { delete[] m_SoundName; m_SoundName = NULL }
+```
+
+**FruitModelInfo::FruitModelInfo() — 0x17aeb8**
+```
+SmartPtr::init(m_pHalfModelA, m_pHalfModelB, m_pWholeModel, m_pMultiplayerModel)
+field_0x20 = 0
+SetNull all model ptrs; zero all effect property ptrs
+```
+
+#### Helper Functions (internal to Fruit.cpp)
+
+**AddQuad(QUADCUSTOMVERTEX** buf, float x, float y, float w, float h, Colour c) — 0x175db0**
+```
+// Build 6-vertex tri-strip quad at (x,y) with size (w,h) and colour c
+// Vertices: (x-w,y-h), (x-w,y+h), (x+w,y-h), (x+w,y+h) with UVs and platform colour
+// Advances *buf pointer by 0xD8 bytes (6 * 0x24 per vertex)
+```
+
+**RandFloat_Scaled_Fruit(float scale) — 0x17c8a4**
+```
+return (Rand32(RAND_MAX) / (float)RAND_MAX) * scale
+```
+
+**ZeroInit_Fruit(void* p) — 0x176a7c**
+```
+*(int*)p = 0; return 0
+```
+
+**ZeroInitPassthru_Fruit(void* p) — 0x176a84**
+```
+ZeroInit_Fruit(p); return p
+```
+
+**SmartPtrNull_Tex2D_Fruit(SmartPtr<Texture2D>* p) — 0x178f18**
+```
+SmartPtr::SetPtr(p, NULL)
+```
+
 ### CollisionResponse Pipeline (0x1780b0)
 
 1. Check `m_bSliced` guard
@@ -268,9 +859,9 @@ Entity base (+0x00..+0x3b) — see Mortar::Entity above. Fruit own fields start 
 
 ---
 
-## Bomb : Mortar::Entity (size = 0xac / 172 bytes)
+## Bomb : Mortar::Entity (size = 0xB0 / 176 bytes)
 
-Ghidra struct: `/FruitNinja/Bomb` or `/Demangler/Bomb`
+Verified from `CreateEntity`: `operator_new(0xB0)`. Ghidra struct: `/FruitNinja/Bomb`
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|

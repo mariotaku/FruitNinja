@@ -31,6 +31,25 @@ LoadLocalisedTexture(name)
     → return SmartPtr<Texture>
 ```
 
+### LoadLocalisedTexture (0x0010a758)
+
+Convenience function used by game code to load textures from the `textures/` directory:
+
+```c
+SmartPtr<Texture> LoadLocalisedTexture(const char* name) {
+    // ARM struct-return: r0=retval ptr, r1=name
+    char path[512];
+    snprintf(path, 0x200, "textures/%s", name);
+
+    if (!File::Exists(path))
+        return SmartPtr<Texture>(NULL);
+
+    return TextureManager::GetInstance().Load(path);
+}
+```
+
+Format string at 0x001b9458: `"textures/%s"`. No locale prefix in this build despite the name.
+
 ### Key Functions
 
 | Function | Address | Convention | Notes |
