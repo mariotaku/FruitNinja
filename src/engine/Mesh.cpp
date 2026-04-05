@@ -207,6 +207,21 @@ bool Mesh::load(const std::string& mmd_path) {
 
     index_count = (int)indices.size();
 
+    // Debug: print vertex position range
+    {
+        float minX=1e9, minY=1e9, minZ=1e9, maxX=-1e9, maxY=-1e9, maxZ=-1e9;
+        for (size_t i = 0; i < vertices.size(); i++) {
+            if (vertices[i].px < minX) minX = vertices[i].px;
+            if (vertices[i].py < minY) minY = vertices[i].py;
+            if (vertices[i].pz < minZ) minZ = vertices[i].pz;
+            if (vertices[i].px > maxX) maxX = vertices[i].px;
+            if (vertices[i].py > maxY) maxY = vertices[i].py;
+            if (vertices[i].pz > maxZ) maxZ = vertices[i].pz;
+        }
+        printf("  Vertex bounds: X[%.1f..%.1f] Y[%.1f..%.1f] Z[%.1f..%.1f]\n",
+               minX, maxX, minY, maxY, minZ, maxZ);
+    }
+
     printf("Loaded mesh: %u verts (stride=%d), %u indices, prim=0x%02x\n",
            vert_count, vert_stride, idx_count, prim_bits);
 

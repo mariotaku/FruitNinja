@@ -83,9 +83,9 @@ void GameDraw(float dt, bool active) {
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
-    // 2. Background texture quad (matches original: Texture::Set(taskState+0xfc))
-    // Original: Scale(481, 321, 0) Translate(0, 0, -5599) DrawQuad(UV: 0.03125, 0.96875, 0.1875, 0.8125)
-    // Port: translate to ortho center (480, 320), same cropped UVs
+    // 2. Background texture quad
+    // Original: Scale(481, 321, 0) Translate(0, 0, -5599) DrawQuad(cropped UVs)
+    // Port specific: translate to ortho center (480, 320) to match offset-centered ortho
     if (ts->pBackgroundTexture.IsValid()) {
         ts->pBackgroundTexture->Set();
 

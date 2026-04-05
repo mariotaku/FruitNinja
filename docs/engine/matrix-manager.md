@@ -138,6 +138,99 @@ For 480x320: `SetupOrtho(160, -160, -240, 240, -1.0, far)`.
 
 ---
 
+## _Vector3\<float\> (12 bytes)
+
+Ghidra struct fields: `a`, `b`, `c` (floats). Port uses `x`, `y`, `z`.
+
+### Methods
+
+Most are inlined by the compiler and duplicated per compilation unit (GOT-relative ARM32). Representative addresses shown.
+
+#### Dot (0x00133c4c)
+```c
+float _Vector3::Dot(const _Vector3& other) const {
+    return x * other.x + y * other.y + z * other.z;
+}
+```
+
+#### MagnitudeSqr (0x00133c74)
+```c
+float _Vector3::MagnitudeSqr() const {
+    return Dot(*this);  // x*x + y*y + z*z
+}
+```
+
+#### Magnitude (0x00138cdc)
+```c
+float _Vector3::Magnitude() const {
+    return Math::Sqrt(MagnitudeSqr());
+}
+```
+
+#### Normalise (0x00138ce8)
+```c
+float _Vector3::Normalise() {
+    if (x == 0.0f && y == 0.0f && z == 0.0f)
+        return 0.0f;
+    float mag = Magnitude();
+    if (mag == 0.0f) {
+        *this *= 1000000.0f;   // DAT_00138d5c = 0x49742400, scale-up for near-zero
+        Normalise();           // recursive retry
+    } else {
+        *this /= mag;
+    }
+    return mag;                // returns original magnitude
+}
+```
+
+#### Cross (0x0017ea04)
+```c
+// Static, ARM struct-return (r0 = output ptr)
+void _Vector3::Cross(_Vector3& out, const _Vector3& a, const _Vector3& b) {
+    out.x = a.y * b.z - b.y * a.z;
+    out.y = b.x * a.z - a.x * b.z;
+    out.z = a.x * b.y - b.x * a.y;
+}
+```
+
+#### operator/= (0x00138b40)
+```c
+_Vector3& _Vector3::operator/=(float s) {
+    x /= s; y /= s; z /= s;
+    return *this;
+}
+```
+
+### All Instances
+
+Each method has multiple copies across compilation units. The implementations are identical.
+
+| Method | Representative | Copies | Notes |
+|--------|---------------|--------|-------|
+| Dot | 0x00133c4c | 6 | `this.x*o.x + this.y*o.y + this.z*o.z` |
+| MagnitudeSqr | 0x00133c74 | 4 | Calls `Dot(this)` |
+| Magnitude | 0x00138cdc | 6 | Calls `Sqrt(MagnitudeSqr())` |
+| Normalise | 0x00138ce8 | 6 | In-place normalize, returns mag, 1M retry for near-zero |
+| Cross | 0x0017ea04 | 2 | Static, ARM struct-return |
+| operator/= | 0x00138b40 | 4 | Component-wise divide |
+| SetMagnitude | — | — | NOT a Vec3 method (FruitSlicedPacket field setter) |
+
+### Constants
+
+| Address | Hex | Value | Usage |
+|---------|-----|-------|-------|
+| 0x00138d58 | 0x00000000 | 0.0f | Returned when vector is zero |
+| 0x00138d5c | 0x49742400 | 1000000.0f | Scale-up for zero-length Normalise retry |
+
+### Also applies to _Vector2\<float\> and _Quaternion\<float\>
+
+Same method pattern exists for 2D vectors and quaternions:
+- `_Vector2<float>::Magnitude` (0x00173080), `Normalise` (0x00173098) — 2-component version
+- `_Quaternion<float>::Magnitude` (0x0017abf4) — 4-component: `sqrt(a² + b² + c² + d²)`
+- `_Quaternion<float>::Normalise` (0x0017ac1c) — divides all 4 components, falls back to `Identity()` if w==0
+
+---
+
 ## _Matrix43\<float\> (48 bytes)
 
 A 4×3 matrix (4 rows, 3 columns) — a Matrix44 without the 4th column (w/perspective). Used for view matrices where column 3 is always `(0, 0, 0, 1)`.
