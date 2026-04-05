@@ -1,5 +1,6 @@
 #include "Fruit.h"
 #include "render/Renderer.h"
+#include "render/MatrixManager.h"
 #include "asset/tex_loader.h"
 #include "Game.h"
 #include "math/math3d.h"
@@ -156,40 +157,39 @@ void Fruit::Draw(Renderer& r) {
     if (s <= 0.0f) return;
 
     // Build model matrix: Scale * Rotation * Translation
-    float scl[16], rotMat[16], sr[16], trans[16], model[16];
-    mat4_scale(scl, s, s, s);
+    // Original uses MatrixManager world stack, same as HUD controls.
+    // Position includes the (480, 320) offset from HUDControl3d space
+    // since fruit entities are positioned at button.pos which is in HUD coords.
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
 
-    // Convert quaternion to matrix
+    Matrix44 mat = Matrix44::MakeScale(s, s, s);
+
+    // Quaternion rotation
     Matrix44 qmat = m_Rot1.ToMatrix44();
+    float rotMat[16];
     memcpy(rotMat, qmat.ptr(), sizeof(rotMat));
+    // Multiply: mat = rotMat * mat (rotation applied to scaled)
+    Matrix44 sr;
+    float temp[16];
+    mat4_multiply(temp, rotMat, mat.ptr());
+    memcpy(sr.ptr(), temp, sizeof(temp));
 
-    mat4_multiply(sr, rotMat, scl);
+    // Translate to position + (480, 320, 0) offset (matching HUDControl3d)
+    Vec3 drawPos(pos.x + 480.0f, pos.y + 320.0f, m_ZPosition);
+    sr.GlobalTranslate44(drawPos);
 
-    // Position in original centered coords
-    // HUDControl3d::Draw adds Vec3(480,320,0) offset, so fruit pos matches button pos
-    mat4_translate(trans, pos.x, pos.y, m_ZPosition);
-    mat4_multiply(model, trans, sr);
+    mm.GetWorldStack().SetCurrentMatrix(sr);
+    mm.UploadModelViewOnly();
 
-    // Original centered ortho: SetupOrtho(160, -160, -240, 240, 2000, -6000)
-    float proj[16];
-    memset(proj, 0, sizeof(proj));
-    float left = 160.0f, right = -160.0f;
-    float bottom = -240.0f, top = 240.0f;
-    float nearVal = 2000.0f, farVal = -6000.0f;
-    proj[0]  = 2.0f / (right - left);
-    proj[5]  = 2.0f / (top - bottom);
-    proj[10] = -2.0f / (farVal - nearVal);
-    proj[12] = -(right + left) / (right - left);
-    proj[13] = -(top + bottom) / (top - bottom);
-    proj[14] = -(farVal + nearVal) / (farVal - nearVal);
-    proj[15] = 1.0f;
-
-    float mvp[16];
-    mat4_multiply(mvp, proj, model);
+    // Use MatrixManager's MVP (projection from FruitCamera, view, world)
+    Matrix44 mvp = mm.GetMVP();
+    float model[16];
+    memcpy(model, sr.ptr(), sizeof(model));
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    r.setup_3d_shader(m_MeshTex, mvp, model, m_ScaleAnim);
+    r.setup_3d_shader(m_MeshTex, mvp.ptr(), model, m_ScaleAnim);
     m_Mesh.draw();
     glDisable(GL_DEPTH_TEST);
 }
