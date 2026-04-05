@@ -70,7 +70,9 @@ struct Vec3 {
     float dot(const Vec3& o) const { return Dot(o); }
     Vec3 cross(const Vec3& o) const { return Cross(*this, o); }
 
-    static Vec3 Zero() { return Vec3(0, 0, 0); }
+    // Static constants matching _Vector3<float>::Zero / One from BSS
+    static const Vec3& Zero() { static Vec3 z(0, 0, 0); return z; }
+    static const Vec3& One()  { static Vec3 o(1, 1, 1); return o; }
 };
 
 inline Vec3 operator*(float s, const Vec3& v) { return v * s; }

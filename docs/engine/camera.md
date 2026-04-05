@@ -217,23 +217,26 @@ The game-specific `FruitCamera::SetupPerspective(perspType, forceUpdate)` at 0x0
 
 ### Constructor (0x00180e40, also at 0x00180de0)
 
+<!-- Analysed: 2026-04-06T00:45 -->
+
 ```c
 FruitCamera::FruitCamera() {
-    MortarCamera::MortarCamera();   // init base class
-    base.fns = &FruitCamera_vtable; // override vtable
+    MortarCamera::MortarCamera();              // init base class (300 bytes)
+    base.fns = &MortarCameraFns_001ea620;      // FruitCamera vtable
 
-    float *cfg = g_CameraConfig;    // global Vec2 in BSS (runtime-initialized)
-    m_pFollowEntity = 0;            // +0x12C
-    m_CameraMode = 0;               // +0x130, idle
-    field_0x134 = 0;                // +0x134
-    field_0x136 = 0;                // +0x136
-    m_ShakeIntensity = 0.0f;        // +0x164, no initial shake
-    m_TargetX = cfg[0];             // +0x144
-    m_TargetY = cfg[1];             // +0x148
-    m_ShakeDir_x = cfg[0];          // +0x138
-    m_ShakeDir_y = cfg[1];          // +0x13C
+    field_0x136 = 0;                           // +0x136, angle ushort
+    m_pFollowEntity = NULL;                    // +0x12C
+    m_Target.x = _Vector2<float>::Zero.x;      // +0x144, = 0.0
+    m_Target.y = _Vector2<float>::Zero.y;      // +0x148, = 0.0
+    m_ShakeIntensity = 0.0f;                   // +0x164
+    m_CameraMode = 0;                          // +0x130, idle
+    field_0x134 = 0;                           // +0x134, angle ushort
+    m_ShakeDir.x = _Vector2<float>::Zero.x;    // +0x138, = 0.0
+    m_ShakeDir.y = _Vector2<float>::Zero.y;    // +0x13C, = 0.0
 }
 ```
+
+Note: `_Vector2<float>::Zero` is a static `_Vector2<float>` in BSS initialized to `(0.0, 0.0)` by `_GLOBAL__I_FruitCamera.cpp` (0x00181870). The field assignment order matches the binary exactly — the compiler interleaves reads from the global with writes to struct fields. Both `m_Target` and `m_ShakeDir` start at the origin; the shake system later modifies `m_ShakeDir` while `m_Target` lerps toward it.
 
 ### Destructors
 
