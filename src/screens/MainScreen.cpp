@@ -49,8 +49,8 @@ MainScreen::MainScreen(Game& g)
       pPlayButton(NULL), pDojoButton(NULL),
       pLeaderboardBtn(NULL), pMoreGamesBtn(NULL),
       pSoundToggle(NULL), pMusicToggle(NULL),
-      m_Alpha(1.0f), field_0xf4(0.0f),
-      m_WindowCenter(0.0f), field_0x100(0.0f),
+      m_Alpha(1.0f),
+      m_LogoNinjaTextX(0.0f), m_WindowCenter(0.0f), field_0x100(0.0f),
       m_BounceVelocity(0.0f), m_field108(0.0f),
       m_State(STATE_CAMERA_ZOOM), m_StateTimer(0.0f),
       m_Timer2(0.0f),
@@ -308,7 +308,12 @@ void MainScreen::Update(float dt) {
     }
 
     // Update logo animation
-    UpdateScreenElements(m_CameraTransition, m_Time);
+    // Original asm at 0x14c1e6-0x14c1f2:
+    //   s0 = s17 = dt (saved at 0x14b296 from Update's float param)
+    //   s1 = s16 = -s18 = -(Game+0x0c) (negated at 0x14b52a)
+    // So: UpdateScreenElements(cameraTransition=dt, elapsedTime=-(Game+0x0c))
+    float negCameraTransition = -m_CameraTransition;  // -(Game+0x0c): 0→+1 as camera zooms
+    UpdateScreenElements(dt, negCameraTransition);
 }
 
 // Helper: setup world matrix for a textured quad at given position
@@ -376,9 +381,9 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 
     // 3. "NINJA" text logo (ninja_text.tex) — drawn at +0xF8
     // Original: TranslateMatrix(&this+0xF8) reads 3 consecutive floats:
-    //   +0xF8 = m_LogoNinjaTextPos.x, +0xFC = m_WindowCenter, +0x100 = field_0x100
+    //   +0xF8 = m_LogoNinjaTextX, +0xFC = m_WindowCenter, +0x100 = field_0x100
     if (m_ninjaTextTex.IsValid()) {
-        Vec3 ninjaDrawPos(m_LogoNinjaTextPos.x, m_WindowCenter, field_0x100);
+        Vec3 ninjaDrawPos(m_LogoNinjaTextX, m_WindowCenter, field_0x100);
         m_ninjaTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTextTex->m_Width, (float)m_ninjaTextTex->m_Height,
@@ -425,13 +430,13 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
         cameraTransition = CLAMP_THRESHOLD;
     }
 
-    // Original: field_0xf4 and field_0x100 = DAT_0014aec8 (=0.0)
+    // Original: m_LogoFruitTextPos.z and field_0x100 = DAT_0014aec8 (=0.0)
     // These act as z components for fruit text and ninja text draw positions
-    field_0xf4 = 0.0f;
+    m_LogoFruitTextPos.z = 0.0f;
     field_0x100 = 0.0f;
 
     // Ninja text X = 60.0 (DAT_0014aed0); Y comes from m_WindowCenter in Draw
-    m_LogoNinjaTextPos.x = 60.0f;  // DAT_0014aed0
+    m_LogoNinjaTextX = 60.0f;  // DAT_0014aed0
 
     // Bounce physics (matches binary exactly)
     float newVel = m_BounceVelocity + cameraTransition * BOUNCE_GRAVITY;
@@ -445,12 +450,10 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     // Fruit text position: use original values directly (no X↔Y swap)
     m_LogoFruitTextPos.x = -120.0f;     // DAT_0014aed4 (LOGO_NINJA_OFFSET_Y)
     m_LogoFruitTextPos.y = floorPos;     // pos.y + 18.0
-    // z = field_0xf4 (+0xF4) = 0.0 — used by Draw as fruit text z
+    // m_LogoFruitTextPos.z (+0xF4) = 0.0, set above
 
     // Temporary copy (overwritten at end of function with correct formula)
-    m_LogoFruitPos.x = m_LogoFruitTextPos.x;
-    m_LogoFruitPos.y = m_LogoFruitTextPos.y;
-    m_LogoFruitPos.z = field_0xf4;
+    m_LogoFruitPos = m_LogoFruitTextPos;
 
     if (cameraTransition > 0.0f) {
         m_GlobalAlphaTarget = 1.0f;
@@ -555,10 +558,10 @@ void MainScreen::CreatePlayDojo() {
 void MainScreen::CreateLeaderboard() {
     if (!game.hud) return;
 
-    // Leaderboard/Quit: (182.0, -106.0, 0.0)
+    // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
     pLeaderboardBtn = new MenuButton();
-    pLeaderboardBtn->m_Texture = TexId(m_TexOpenFeint);
-    pLeaderboardBtn->size = TexSize(m_TexOpenFeint, 48.0f, 48.0f);
+    pLeaderboardBtn->m_Texture = TexId(m_TexQuit);
+    pLeaderboardBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
     pLeaderboardBtn->Init(POS_LEADERBOARD,
         [this]() { QuitGamesCallback(); }, -1, Vec3(0,0,0), nullptr);
     pLeaderboardBtn->m_LayerFlags = 8;

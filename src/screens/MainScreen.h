@@ -57,12 +57,12 @@ private:
     // +0x7c: copy of original size
     Vec3 m_OrigSize;
 
-    // +0x88..+0x98: button textures (SmartPtr<Texture> matching original)
+    // +0x88..+0x98: button textures (verified from ctor GOT offsets)
     SmartPtr<Mortar::Texture> m_TexNewGame;       // +0x88: newgame.tex
     SmartPtr<Mortar::Texture> m_TexDojoIcon;      // +0x8c: dojo_icon.tex
-    SmartPtr<Mortar::Texture> m_TexQuit;          // +0x90: quit.tex
-    SmartPtr<Mortar::Texture> m_TexOpenFeint;     // +0x94: openfeint.tex
-    SmartPtr<Mortar::Texture> m_TexMoreGames;     // +0x98: gc_achievements.tex
+    SmartPtr<Mortar::Texture> m_TexOpenFeint;     // +0x90: openfeint.tex (GOT+c790)
+    SmartPtr<Mortar::Texture> m_TexGCAchievements;// +0x94: gc_achievements.tex (GOT+c794)
+    SmartPtr<Mortar::Texture> m_TexQuit;          // +0x98: quit.tex (GOT+c78c)
 
     // +0x9c..+0xb0: button pointers (created lazily)
     MenuButton* pPlayButton;       // +0x9c
@@ -84,19 +84,19 @@ private:
     // +0xd8: dojo decoration behind logo
     SmartPtr<Mortar::Texture> m_TexSliceFruit;        // +0xd8: slice_fruit.tex
 
-    // +0xdc: logo positions
-    Vec3 m_LogoFruitPos;           // +0xdc
-    float m_Alpha;                 // +0xe8: lerps toward alpha target (init 1.0)
-    Vec3 m_LogoFruitTextPos;       // +0xec: fruit_text.tex draw position
-    float field_0xf4;              // +0xf4
-    Vec3 m_LogoNinjaTextPos;       // +0xf8: ninja_text.tex draw position
-    float m_WindowCenter;          // +0xfc: windowHeight/2 + 160.0
-    float field_0x100;             // +0x100
-    float m_BounceVelocity;        // +0x104: bounce velocity (decays)
+    // +0xdc: logo positions and bounce state
+    Vec3 m_LogoFruitPos;           // +0xdc: slice_fruit.tex draw position
+    float m_Alpha;                 // +0xe8: lerps toward global alpha target (init 1.0)
+    Vec3 m_LogoFruitTextPos;       // +0xec: fruit_text.tex draw position (z=0.0 always)
+    // NOTE: +0xF4 is m_LogoFruitTextPos.z, NOT a separate field
+    float m_LogoNinjaTextX;        // +0xf8: ninja_text X position (single float, NOT Vec3!)
+    float m_WindowCenter;          // +0xfc: acts as ninja text Y in Draw (bounces via physics)
+    float field_0x100;             // +0x100: acts as ninja text Z in Draw (=0.0)
+    float m_BounceVelocity;        // +0x104: bounce velocity for logo (decays)
     float m_field108;              // +0x108: accumulator for state 0x13/0x14
     int m_State;                   // +0x10c: state machine variable
-    float m_StateTimer;            // +0x110: transition countdown
-    SmartPtr<Mortar::Texture> m_TexGCAchievements;    // +0x114: gc_achievements.tex
+    float m_StateTimer;            // +0x110: transition countdown (NOT same as HUDControl m_Timer)
+    SmartPtr<Mortar::Texture> m_TexMoreGames;         // +0x114: more_games.tex (GOT+c788)
     float m_Timer2;                // +0x118: second timer
     // +0x11c: Font* m_pFont (TODO: implement Font system)
 
