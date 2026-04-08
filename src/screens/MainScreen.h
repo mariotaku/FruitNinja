@@ -87,9 +87,9 @@ private:
     // +0xdc: logo positions
     Vec3 m_LogoFruitPos;           // +0xdc
     float m_Alpha;                 // +0xe8: lerps toward alpha target (init 1.0)
-    Vec3 m_LogoNinjaPos;           // +0xec
+    Vec3 m_LogoFruitTextPos;       // +0xec: fruit_text.tex draw position
     float field_0xf4;              // +0xf4
-    Vec3 m_LogoFruitPos2;          // +0xf8: secondary position (for bounce)
+    Vec3 m_LogoNinjaTextPos;       // +0xf8: ninja_text.tex draw position
     float m_WindowCenter;          // +0xfc: windowHeight/2 + 160.0
     float field_0x100;             // +0x100
     float m_BounceVelocity;        // +0x104: bounce velocity (decays)
