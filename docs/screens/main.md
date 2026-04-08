@@ -32,9 +32,9 @@ The main menu / dojo screen. Contains all menu buttons, toggle buttons (sound/mu
 | +0xd8 | SmartPtr\<Texture\> | m_TexSliceFruit | `slice_fruit.tex` — dojo decoration behind logo |
 | +0xdc | Vec3 | m_LogoFruitPos | "FRUIT" text position (set in UpdateScreenElements) |
 | +0xe8 | float | m_Alpha | = 1.0 (lerps toward global alpha target) |
-| +0xec | Vec3 | m_LogoNinjaPos | "NINJA" text position |
+| +0xec | Vec3 | m_LogoFruitTextPos | fruit_text.tex draw position (Draw uses +0xec for fruit_text) |
 | +0xf4 | float | field_0xf4 | = 0.0 |
-| +0xf8 | Vec3 | m_LogoFruitPos2 | Secondary position (for bounce) |
+| +0xf8 | Vec3 | m_LogoNinjaTextPos | ninja_text.tex draw position (Draw uses +0xf8 for ninja_text) |
 | +0xfc | float | m_WindowCenter | = windowHeight/2 + 160.0 |
 | +0x100 | float | field_0x100 | = 0.0 |
 | +0x104 | float | m_BounceVelocity | Bounce velocity for logo (decays) |
@@ -122,22 +122,21 @@ ResetMatrix → Scale(size) → Translate(pos) → Upload
 Mesh::DrawTriList(game+0x6cc, 3 triangles, culling=true)
 Texture::UnSet
 
-// 2. "FRUIT" text logo (fruit_text.tex)
-if fruit_text_tex is valid:
+// 2. "FRUIT" text logo (fruit_text.tex) — inside same block as shade
     Texture::Set(fruit_text_tex)
     ResetMatrix
     Scale to texture dimensions (width, height, 0.0)
-    Translate to m_LogoFruitPos2 (+0xf8)
+    Translate to m_LogoFruitTextPos (+0xec)
     Upload → TintColour → DrawQuad → UnSet
 
 // 3. "NINJA" text logo (ninja_text.tex)
 if ninja_text_tex is valid:
-    same pattern, translate to m_LogoNinjaPos (+0xec)
+    same pattern, translate to m_LogoNinjaTextPos (+0xf8)
 
 // 4. Dojo decoration (slice_fruit.tex / m_TexSliceFruit)
 if m_TexSliceFruit is valid:
     Scale to texture dimensions
-    Translate to m_LogoFruitPos2 (+0xdc)
+    Translate to m_LogoFruitPos (+0xdc)
     DrawQuad
 
 // 5. Loading symbol (states 0x13, 0x14 only)
@@ -236,8 +235,8 @@ Called with `(param_1=cameraTransition, param_2=time)`. Handles the bouncing log
 if param1 < threshold: param1 = threshold
 
 // Logo positions (fruit + ninja text)
-m_LogoNinjaPos = (0.0, ?, 0.0)
-m_LogoFruitPos2 = (same as NinjaPos initially)
+m_LogoFruitTextPos = (0.0, ?, 0.0)
+m_LogoNinjaTextPos = (same as NinjaPos initially)
 
 // Bounce physics
 m_BounceVelocity += param1 * decayRate
@@ -246,7 +245,7 @@ m_WindowCenter += m_BounceVelocity * param1 * 15.0
 // Bounce at floor
 floorY = pos.y + 18.0
 m_LogoFruitPos.y = floorY
-m_LogoFruitPos2 = m_LogoNinjaPos  // copy
+m_LogoNinjaTextPos = m_LogoFruitTextPos  // copy
 
 if m_WindowCenter < floorY - 15.0:
     m_WindowCenter = floorY - 15.0
@@ -259,7 +258,7 @@ if m_WindowCenter < floorY - 15.0:
 m_Alpha += (globalAlphaTarget - m_Alpha) * 0.25
 
 // Final logo offset (shift down and left)
-m_LogoFruitPos2 += Vec3(0.0, -17.0, 0.0) * 2.0
+m_LogoNinjaTextPos += Vec3(0.0, -17.0, 0.0) * 2.0
 ```
 
 ---

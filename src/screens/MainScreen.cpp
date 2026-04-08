@@ -9,6 +9,7 @@
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
 #include "render/MatrixManager.h"
+#include "render/QUADCUSTOMVERTEX.h"
 #include "core/SystemManager.h"
 #include <cstdio>
 #include <cmath>
@@ -334,33 +335,50 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
-    // 1. Background (blurry_backing.tex) — semi-transparent black overlay
-    if (m_blurryBackingTex.IsValid()) {
-        m_blurryBackingTex->Set();
-        SetupQuadMatrix(mm, hudScale, size.x, size.y, pos);
-        game.renderer.DrawQuad(Colour(0, 0, 0, 0x80));
-        m_blurryBackingTex->UnSet();
-    }
-
-    // 2. "FRUIT" text logo (fruit_text.tex)
+    // 1+2. Shade triangle + fruit_text — guarded by fruit_text (GOT+0x6FCC, DAT_0014d844)
+    // Original: single if-block for shade + fruit_text draw
     if (m_fruitTextTex.IsValid()) {
+        // 1a. Background shade (blurry_backing.tex) — angled triangle, NOT a quad
+        // Original: 3-vertex triangle (DrawTriList at 0x14d4ec lines 46-80)
+        // Vertex cache at global+0x6cc, drawn with Scale(size)+Translate(pos)
+        if (m_blurryBackingTex.IsValid()) {
+            m_blurryBackingTex->Set();
+            SetupQuadMatrix(mm, hudScale, size.x, size.y, pos);
+
+            // Colour(0,0,0,0x80).PlatformColour() = 0x80000000
+            static const uint32_t kShadeCol = 0x80000000u;
+            // V0: bottom-left (Y=-0.6875 not -1.0 → creates angle)
+            // V1: far-right top (X=3.5 extends past screen → clipped)
+            // V2: top-left
+            // UVs: DAT_0014d854=0.0, DAT_0014d830=0.0078125(=1/128), DAT_0014d834≈0.065694
+            QUADCUSTOMVERTEX shadeVerts[3] = {
+                { -1.0f, -0.6875f, 0.0f,  0,0,1,  kShadeCol,  0.0f,      0.0078125f },  // 0xBF300000
+                {  3.5f,  1.0f,    0.0f,  0,0,1,  kShadeCol,  1.0f,      0.0078125f },  // 0x40600000
+                { -1.0f,  1.0f,    0.0f,  0,0,1,  kShadeCol,  0.065694f, 1.0f       },  // 0x3D868A48
+            };
+            game.renderer.DrawTriList(shadeVerts, 3);
+
+            m_blurryBackingTex->UnSet();
+        }
+
+        // 1b. "FRUIT" text logo (fruit_text.tex) — drawn at +0xEC (m_LogoFruitTextPos)
         m_fruitTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_fruitTextTex->m_Width, (float)m_fruitTextTex->m_Height,
-            m_LogoFruitPos2);
-        Colour tint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
-        game.renderer.DrawQuad(tint);
+            m_LogoFruitTextPos);
+        Colour fruitTint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
+        game.renderer.DrawQuad(fruitTint);
         m_fruitTextTex->UnSet();
     }
 
-    // 3. "NINJA" text logo (ninja_text.tex)
+    // 3. "NINJA" text logo (ninja_text.tex) — drawn at +0xF8 (m_LogoNinjaTextPos)
     if (m_ninjaTextTex.IsValid()) {
         m_ninjaTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTextTex->m_Width, (float)m_ninjaTextTex->m_Height,
-            m_LogoNinjaPos);
-        Colour tint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
-        game.renderer.DrawQuad(tint);
+            m_LogoNinjaTextPos);
+        Colour ninjaTint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
+        game.renderer.DrawQuad(ninjaTint);
         m_ninjaTextTex->UnSet();
     }
 
@@ -415,13 +433,13 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     float floorPos = pos.y + 18.0f;
 
     // Port specific: swap X↔Y for landscape ortho
-    // Original: m_LogoNinjaPos = (LOGO_NARROW_POS, floorPos, 0)
+    // Original: m_LogoFruitTextPos = (LOGO_NARROW_POS, floorPos, 0)
     // Landscape: narrow axis is Y, wide axis is X
-    m_LogoNinjaPos.x = floorPos;
-    m_LogoNinjaPos.y = -LOGO_NARROW_POS;  // negate: portrait bottom → landscape top
-    m_LogoNinjaPos.z = 0.0f;
+    m_LogoFruitTextPos.x = floorPos;
+    m_LogoFruitTextPos.y = -LOGO_NARROW_POS;  // negate: portrait bottom → landscape top
+    m_LogoFruitTextPos.z = 0.0f;
 
-    m_LogoFruitPos = m_LogoNinjaPos;
+    m_LogoFruitPos = m_LogoFruitTextPos;
     m_LogoFruitPos.z = field_0xf4;
 
     if (cameraTransition > 0.0f) {
@@ -444,9 +462,9 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     m_Alpha += (m_GlobalAlphaTarget - m_Alpha) * ALPHA_LERP_RATE;
 
     // Port specific: FRUIT text above NINJA
-    m_LogoFruitPos2.x = 0.0f;
-    m_LogoFruitPos2.y = m_LogoNinjaPos.y - 40.0f;
-    m_LogoFruitPos2.z = 0.0f;
+    m_LogoNinjaTextPos.x = 0.0f;
+    m_LogoNinjaTextPos.y = m_LogoFruitTextPos.y - 40.0f;
+    m_LogoNinjaTextPos.z = 0.0f;
 }
 
 // Matches 0x0014aee8 (~35 lines)
