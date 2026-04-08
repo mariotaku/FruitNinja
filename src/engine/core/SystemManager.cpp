@@ -30,22 +30,16 @@ void SystemManager::Init() {
 }
 
 bool SystemManager::Update(float* dt) {
-    // Compute dt from SDL ticks (port replacement for constant dt in original)
-    static Uint32 lastTicks = 0;
-    Uint32 now = SDL_GetTicks();
-    if (lastTicks == 0) {
-        lastTicks = now;
-    }
-    Uint32 elapsed = now - lastTicks;
-    lastTicks = now;
+    // Original (0x0018ade0): outputs FIXED dt = DAT_0018ae84 = 1/60 ≈ 0.01667
+    // Original hardcodes m_LastFrameTime = 59 (0x3b)
+    // All game logic (lerps, physics) is tuned for this fixed timestep
+    static const float FIXED_DT = 1.0f / 60.0f;  // DAT_0018ae84 = 0x3C888889
 
-    // Output dt in seconds
     if (dt) {
-        *dt = elapsed / 1000.0f;
+        *dt = FIXED_DT;
     }
 
-    // Convert elapsed to FPS for ring buffer (guard against zero)
-    int16_t fps = (elapsed > 0) ? static_cast<int16_t>(1000 / elapsed) : 60;
+    int16_t fps = 59;  // original hardcodes 0x3b
     m_LastFrameTime = fps;
 
     // Write to ring buffer

@@ -305,9 +305,29 @@ FruitNinja::OnTimerExpired (0x0018269c)
      └─ Mortar::SoundManager::Update(0)
 ```
 
+<!-- Analysed: 2026-04-09T11:00 -->
+
 **Note:** `FruitNinja::Draw` (0x001824e0, 98 lines) is the true game loop body despite its name. It runs update, render, buffer swap, FPS tracking, and input/sound polling — all in a single function. The Bada timer fires `OnTimerExpired` every 10ms, which reschedules immediately and delegates everything to `Draw`.
 
 `GlesForm::OnDraw` (0x00183468) also calls `FruitNinja::Draw` as a fallback path when the form is redrawn by the OS.
+
+### Fixed Timestep (critical for port)
+
+The original `FruitNinja::Draw` does:
+```c
+float dt = 0.0f;
+SystemManager::Update(&dt);  // writes FIXED dt = 1/60
+Game::Update(dt);            // passes 1/60 to all game logic
+Game::Draw(dt);              // passes 1/60 to all draw logic
+```
+
+`SystemManager::Update` (0x0018ade0) writes a **hardcoded constant** `DAT_0018ae84 = 0x3C888889 = 1.0/60.0 ≈ 0.01667` — it never measures actual elapsed time. It also hardcodes `m_LastFrameTime = 59` (0x3b) and all ring buffer entries to 59.
+
+Combined with the 10ms timer (100fps tick rate), the game runs at:
+- 100 ticks/sec × 1/60 s/tick = **1.667× game-seconds per real-second**
+- All frame-dependent lerps (camera transition `*= 0.125`, bounce physics, state timers) are tuned for this exact rate
+
+Port must match both: fixed dt = 1/60 AND ~10ms frame interval via `SDL_Delay`.
 
 ---
 

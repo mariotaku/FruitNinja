@@ -7,6 +7,7 @@
 #include "Game.h"
 #include "asset/TextureManager.h"
 #include "render/DisplayManager.h"
+#include "core/SystemManager.h"
 #include "game/GameTaskState.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
@@ -99,10 +100,13 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
 }
 
 // Matches: FruitNinja::Draw (the real game tick) called in a loop
+// Original: OnTimerExpired fires every 10ms (100fps), dt fixed at 1/60
 void Game::run() {
-    Uint32 last_ticks = SDL_GetTicks();
+    static const Uint32 FRAME_MS = 10;  // original Bada timer interval = 10ms
 
     while (running) {
+        Uint32 frameStart = SDL_GetTicks();
+
         // === SDL events → InputManager ===
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
@@ -115,18 +119,15 @@ void Game::run() {
             }
         }
 
-        // === Delta time (matches original clamping from GameTaskUpdate) ===
-        Uint32 now = SDL_GetTicks();
-        float rawDt = (now - last_ticks) / 1000.0f;
-        if (rawDt > 0.033f) rawDt = 0.033f;
-        last_ticks = now;
-
         // === Game tick (matches FruitNinja::Draw at 0x1824e0) ===
 
-        // SystemManager::Update(&dt) — stub for now
+        // Original: dt = 0.0; SystemManager::Update(&dt) writes fixed 1/60;
+        // then passes dt to update + draw functions
+        dt = 0.0f;
+        Mortar::SystemManager::GetInstance().Update(&dt);
 
         // Update: 3-state dispatcher
-        GameTaskUpdate(rawDt);
+        GameTaskUpdate(dt);
 
         // Draw
         int ww, wh;
@@ -142,6 +143,13 @@ void Game::run() {
 
         // Present
         SDL_GL_SwapWindow(window);
+
+        // Frame pacing: original Bada timer fires every 10ms (100fps)
+        // All game logic uses fixed dt=1/60, tuned for this tick rate
+        Uint32 frameTime = SDL_GetTicks() - frameStart;
+        if (frameTime < FRAME_MS) {
+            SDL_Delay(FRAME_MS - frameTime);
+        }
     }
 }
 

@@ -35,7 +35,7 @@ The main menu / dojo screen. Contains all menu buttons, toggle buttons (sound/mu
 | +0xd4 | SmartPtr\<Model\> | m_Model | null in ctor (SmartPtrNull_Model) |
 | +0xd8 | SmartPtr\<Texture\> | m_TexSliceFruit | `slice_fruit.tex` (GOT+c77c) — dojo decoration behind logo |
 | +0xdc | Vec3 | m_LogoFruitPos | slice_fruit draw position (set in UpdateScreenElements) |
-| +0xe8 | float | m_Alpha | = 1.0 (lerps toward global alpha target) |
+| +0xe8 | float | m_Alpha | = 1.0; lerps toward globalAlphaTarget; controls m_LogoFruitPos POSITION only (NOT logo opacity — Draw uses global Colour at GOT+0x73A4) |
 | +0xec | Vec3 | m_LogoFruitTextPos | fruit_text.tex draw position; z (+0xF4) always 0.0 |
 | +0xf8 | **float** | **m_LogoNinjaTextX** | ninja_text X position (single float, NOT Vec3) |
 | +0xfc | float | m_WindowCenter | = windowHeight/2 + 160.0; **acts as ninja text Y** in Draw |
@@ -130,18 +130,22 @@ Texture::UnSet
     ResetMatrix
     Scale to texture dimensions * 0.85 (DAT_0014d838)
     Translate to m_LogoFruitTextPos (+0xec) = (-120.0, floorPos, 0.0)
-    Upload → TintColour → DrawQuad → UnSet
+    Upload
+    Tint = global Colour at GOT+0x73A4 (NOT m_Alpha — logos stay fully opaque)
+    DrawQuad → UnSet
 
 // 3. "NINJA" text logo (ninja_text.tex)
 if ninja_text_tex is valid:
     Scale to raw texture dimensions (1.0x)
     Translate to (+0xf8, +0xfc, +0x100) = (60.0, m_WindowCenter, 0.0)
+    Tint = same global Colour at GOT+0x73A4
     NOTE: Draw reads 3 consecutive floats from +0xF8, so ninja Y = m_WindowCenter (bounces)
 
 // 4. Dojo decoration (slice_fruit.tex / m_TexSliceFruit)
 if m_TexSliceFruit is valid:
     Scale to raw texture dimensions (1.0x)
     Translate to m_LogoFruitPos (+0xdc) = (-175,26,0) + (-120,-17,0)*alpha*2.0
+    Tint = same global Colour at GOT+0x73A4
     DrawQuad
 
 // 5. Loading symbol (states 0x13, 0x14 only)
