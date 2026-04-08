@@ -369,13 +369,14 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         // 1b. "FRUIT" text logo (fruit_text.tex) — drawn at +0xEC (m_LogoFruitTextPos)
         // Original: Scale(texSize * 0.85) — DAT_0014d838 = 0.85
         static const float FRUIT_TEXT_SCALE = 0.85f;  // DAT_0014d838
+        // Original: tint from global Colour at GOT+0x73A4 (NOT m_Alpha)
+        // m_Alpha only controls slice_fruit POSITION, not logo opacity
         m_fruitTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_fruitTextTex->m_Width * FRUIT_TEXT_SCALE,
             (float)m_fruitTextTex->m_Height * FRUIT_TEXT_SCALE,
             m_LogoFruitTextPos);
-        Colour fruitTint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
-        game.renderer.DrawQuad(fruitTint);
+        game.renderer.DrawQuad(m_DrawColour);
         m_fruitTextTex->UnSet();
     }
 
@@ -388,8 +389,7 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTextTex->m_Width, (float)m_ninjaTextTex->m_Height,
             ninjaDrawPos);
-        Colour ninjaTint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
-        game.renderer.DrawQuad(ninjaTint);
+        game.renderer.DrawQuad(m_DrawColour);
         m_ninjaTextTex->UnSet();
     }
 
@@ -399,8 +399,7 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         SetupQuadMatrix(mm, hudScale,
             (float)m_TexSliceFruit->m_Width, (float)m_TexSliceFruit->m_Height,
             m_LogoFruitPos);
-        Colour tint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
-        game.renderer.DrawQuad(tint);
+        game.renderer.DrawQuad(m_DrawColour);
         m_TexSliceFruit->UnSet();
     }
 

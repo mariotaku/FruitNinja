@@ -34,16 +34,20 @@ Engine singleton for frame timing (FPS calculation) and quit lifecycle. Accessed
 | CurrentDate | 0x0018aeb8 | `__thiscall (MortarDate*, bool)` | Returns current date/time |
 | GetInstance (thunk) | 0x000f3a44 | thunk | Dispatches to real GetInstance |
 
-### Update (FPS Ring Buffer Calculator)
+### Update (0x0018ade0) — Fixed Timestep + FPS Ring Buffer
 
-`SystemManager::Update(float* dt)` is called once per frame from the game loop. It:
+<!-- Analysed: 2026-04-09T11:00 -->
 
-1. Writes current frame time (0x3B = ~59fps) to `m_FrameTimeRing[m_RingWriteIdx]`
-2. Advances `m_RingWriteIdx` (wraps at 30)
-3. Scans ring buffer for min → stores in `m_MinFPS`
-4. Scans ring buffer for max → stores in `m_MaxFPS`
-5. Computes average → stores in `m_AvgFPS`
-6. Outputs dt via `*param_1 = DAT_0018ae84` (constant dt value)
+`SystemManager::Update(float* dt)` is called once per frame from `FruitNinja::Draw` (0x1824e0). It:
+
+1. **Outputs fixed dt**: `*param_1 = DAT_0018ae84` = **0x3C888889 = 1.0/60.0 ≈ 0.01667**
+   - This is a **hardcoded constant** — never measures actual elapsed time
+   - ALL game logic (physics, lerps, timers) is tuned for this fixed step
+2. Writes hardcoded frame time `0x3B` (59) to `m_FrameTimeRing[m_RingWriteIdx]` and `m_LastFrameTime`
+3. Advances `m_RingWriteIdx` (wraps at 30 via `idx < 0x1d ? +1 : -0x1d`)
+4. Scans ring buffer for min → `m_MinFPS`
+5. Scans ring buffer for max → `m_MaxFPS`
+6. Computes average → `m_AvgFPS`
 7. Returns `m_bRunning` (false = game should exit)
 
 ### Constructor Init Values
@@ -67,7 +71,8 @@ For the SDL2 port:
 - `QuitGame()` sets `m_bRunning = 0` — the game loop checks this to exit
 - `RequestQuit()` sets `m_QuitState = 2` — triggers graceful shutdown with save
 - The FPS ring buffer (30 frames) is informational only — not used for game logic
-- `Update` outputs a constant dt, not a measured one — the real dt comes from the timer system
+- `Update` outputs **fixed dt = 1/60** matching `DAT_0018ae84` — do NOT compute dt from elapsed time
+- The original Bada timer fires every **10ms** (100fps); combined with dt=1/60, the game runs at 100/60 = **1.667× game-speed**. Port uses `SDL_Delay(10ms)` frame pacing to match
 
 ---
 
