@@ -132,10 +132,16 @@ void MenuButton::Release() {
 
 // Matches MenuButton::Update (0x0014e614)
 void MenuButton::Update(float dt) {
-    // m_Timer stays 0 — ring texture does NOT rotate.
-    // The spinning 3D fruit entity rotates via its own Update (ActorManager tick).
+    // Sparkle timer tick (field_0x2c = m_SparkleTimer — rate × 8.0/s, cap at DAT=8.0)
+    // TODO: full sparkle/new-indicator logic
 
-    // Keep entity positioned at button center
+    // Rotate button quad: m_Timer accumulates at m_RotationSpeed deg/s (DAT_0014e974=360.0 wrap)
+    if (m_FruitType >= 0 && dt > 0.0f) {
+        m_Timer += dt * m_RotationSpeed;
+        if (m_Timer < 0.0f) m_Timer += 360.0f;  // DAT_0014e974 = 360.0
+    }
+
+    // Keep entity positioned at button center (pos.z written to entity pos.z too)
     if (m_pEntity && m_pEntity->IsActive()) {
         m_pEntity->pos = pos;
     }
@@ -145,10 +151,6 @@ void MenuButton::Update(float dt) {
         m_ShakeTimer -= dt;
         if (m_ShakeTimer < 0.0f) m_ShakeTimer = 0.0f;
     }
-
-    // TODO: fade counter animation
-    // TODO: sparkle timer tick
-    // TODO: "new" indicator bounce animation
 }
 
 // Matches MenuButton::Draw (0x0014f9cc, 359 lines)

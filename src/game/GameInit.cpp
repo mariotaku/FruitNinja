@@ -27,9 +27,15 @@ void GameInit(unsigned long) {
         game->hud = new HUD();
     }
 
-    // Load background texture → task state +0xfc (matches original GameInit step 7)
+    // Load background texture → task state +0xfc (matches original GameInit lines 159-170)
+    // Only if not already loaded (original: SmartPtr cast-to-bool guard)
+    // Fast hw: "gb_game.tex" (DAT_0016c9f0 → 0x001BC923)
+    // Slow hw: "gb_game_sml.tex" (DAT_0016c9f4 → 0x001BC92F)
     GameTaskState* ts = GetTaskState();
-    ts->pBackgroundTexture = Mortar::TextureManager::LoadLocalisedTexture("bg_fruit_ninja.tex");
+    if (!ts->pBackgroundTexture.IsValid()) {
+        const char* bgTex = game->IsFastHardware() ? "gb_game.tex" : "gb_game_sml.tex";
+        ts->pBackgroundTexture = Mortar::TextureManager::LoadLocalisedTexture(bgTex);
+    }
 
     // Create MainScreen and add to HUD (matches original GameInit lines 190-200)
     MainScreen* mainScreen = new MainScreen(*game);

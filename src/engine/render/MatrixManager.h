@@ -29,6 +29,10 @@ public:
     int m_TextureVersionUploaded;   // +0x2130
     int m_ProjVersionUploaded;
 
+    // Matches 0x0019e2ac — called by GameInitialise after singleton creation
+    // Just calls ResetAllStacks (constructor already does this, but matches original)
+    void Init() { ResetAllStacks(); }
+
     // Matches 0x0019e5a4
     // NOTE: parameter order is (top, bottom, left, right, near, far) — NOT standard GL
     void SetupOrtho(float top, float bottom, float left, float right,

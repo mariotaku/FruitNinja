@@ -78,6 +78,14 @@ void DisplayManager::SetWindowSize(int l, int t, int r, int b) {
     m_WindowRect.bottom = b;
 }
 
+void DisplayManager::SetClearColour(const Colour& c) {
+    m_ClearColor = c;
+}
+
+void DisplayManager::SetLightDirection(const Vec3& dir) {
+    m_lightDirection = dir;
+}
+
 void DisplayManager::SetTextureOverloadPrefix(const char* prefix) {
     strncpy(m_TextureOverloadPrefix, prefix, sizeof(m_TextureOverloadPrefix) - 1);
     m_TextureOverloadPrefix[sizeof(m_TextureOverloadPrefix) - 1] = '\0';

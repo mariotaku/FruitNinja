@@ -199,8 +199,8 @@ Accessed from GOT-relative pointer in nearly every game function.
 | +0x38 | 4 | float | dt | GameTaskUpdate writes rawDt here; GameTaskDraw reads |
 | +0x3C | 4 | HUD* | pHUD | GameInit: `operator_new(0x24)`; GameDestroy: delete + null |
 | +0x40 | 4 | | (gap) | |
-| +0x44 | 1 | bool | isFirstPlay1 | SaveCurrentData: if false, AddToTotal("first_play1") |
-| +0x45 | 1 | bool | isFirstPlay2 | SaveCurrentData: if false, AddToTotal("first_play2") |
+| +0x44 | 1 | bool | m_bSoundOn | InitialiseData: set from `GetTotal("soundOff")==0` (true=sound enabled); counter then reset to 0 |
+| +0x45 | 1 | bool | m_bMusicOn | InitialiseData: set from `GetTotal("musicOff")==0` (true=music enabled); counter then reset to 0 |
 | +0x46 | 2 | | (padding) | |
 | +0x48 | 4 | FruitCamera* | pCamera | GameInitialise: `operator_new(0x16c)`; GameDestroy: vtable dtor + null |
 | +0x4C | 4 | FruitSaveData* | pSaveData | GameUpdate: `FruitSaveData::Update(*(+0x4c),rawDt,*(+0x3c))`; GameDestroy: dtor + delete + null |
@@ -217,7 +217,9 @@ Accessed from GOT-relative pointer in nearly every game function.
 | +0x78 | 4 | Font* | pFontRegion2 | GameInitialise: optional CJK font |
 | +0x7C | 4 | Font* | pFontRegion3 | |
 | +0x80 | 4 | Font* | pFont6 | GameInitialise/GameDestroy: separate slot |
-| +0x84 | 4 | | (gap) | |
+| +0x84 | 1 | | (gap) | |
+| +0x85 | 1 | byte | field_0x85 | InitialiseData: cleared to 0 |
+| +0x86 | 2 | | (gap) | |
 | +0x88 | 4 | float | field_0x88 | SetupGameWork: set to a float constant |
 | +0x8C | 4 | | (gap) | |
 | +0x90 | 4 | float | worldPos_x | GameDraw: `*(iVar3 + 0x90)` = light direction X |
@@ -257,11 +259,41 @@ Accessed from GOT-relative pointer in nearly every game function.
 | +0x1A9 | 3 | | (gap) | |
 | +0x1AC | 4 | float | field_0x1ac | SetupGameWork: set to float constant (same as bombHitTimer init) |
 | +0x1B0 | 1 | byte | field_0x1b0 | SetupGameWork: cleared |
-| +0x1B1 | 3 | | (gap) | |
-| ... | | | (sparse fields) | |
+| +0x1B1 | 256 | byte[256] | itemStateBlock0 | InitialiseData: memset 0; 4 consecutive 256-byte blocks cleared (total 1024 bytes) |
+| +0x2B1 | 256 | byte[256] | itemStateBlock1 | InitialiseData: memset 0 |
+| +0x3B1 | 256 | byte[256] | itemStateBlock2 | InitialiseData: memset 0 |
+| +0x4B1 | 256 | byte[256] | itemStateBlock3 | InitialiseData: memset 0; populated by ItemManager::LoadItemData, AchievementManager |
+| +0x5B1 | 3 | | (gap) | |
 | +0x5B4 | ~48 | StringTable | m_StringTable | _GLOBAL__I_Game.cpp: `StringTable::StringTable(ptr + 0x5b4)` |
 | +0x604 | 1 | byte | m_bFrameDirty | GameTaskUpdate: cleared to 0 each frame |
 | +0x605 | 3 | | (padding to 0x608) | |
+
+### InitialiseData (0x0010b66c) — One-time engine data init
+
+Called from `GameInitialise` step 5. Sequence:
+
+```
+1. StringTableUtilInit() + StringTableUtilLoadStrings()   — load localized strings
+2. memset(g_GameData+0x1b1, 0, 0x100) × 4                — zero 4×256-byte item state blocks
+3. g_GameData+0x85 = 0; g_GameData+0x04 (gameMode) = 0
+4. operator_new(0x708) + GameSound::GameSound()           — pGameSound (+0x188)
+5. operator_new(0x238) + FruitSaveData::FruitSaveData()   — pSaveData (+0x4c)
+6. LoadGame(saveData)                                     — load persistent data from disk
+7. g_GameData+0x04 = saveData->m_GameMode (+0x6c)        — restore last-used game mode
+8. SetupGameWork()                                        — init game state for first play
+9. m_bSoundOn (+0x44) = (GetTotal(saveData,"soundOff")==0) — true if sound was on last session
+10. m_bMusicOn (+0x45) = (GetTotal(saveData,"musicOff")==0) — true if music was on last session
+11. Reset both "soundOff" and "musicOff" totals to 0     — fresh session counters
+12. SlashEntity::InitModColours()                         — init slash modifier colors
+13. AchievementManager::GetInstance() + LoadAchievementInfo()
+14. ItemManager::GetInstance() + LoadItemData()           — populates itemStateBlock0..3
+15. BonusManager::GetInstance() + Init()
+```
+
+Sound/music preference encoding in FruitSaveData:
+- Key `"soundOff"` (0x001B978A): incremented when sound is muted; 0 = sound was on at session end
+- Key `"musicOff"` (0x001B9793): incremented when music is muted; 0 = music was on at session end
+- Both reset to 0 each startup so they track current-session mute events only
 
 ### Key g_GameData Access Patterns
 
