@@ -362,21 +362,27 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         }
 
         // 1b. "FRUIT" text logo (fruit_text.tex) — drawn at +0xEC (m_LogoFruitTextPos)
+        // Original: Scale(texSize * 0.85) — DAT_0014d838 = 0.85
+        static const float FRUIT_TEXT_SCALE = 0.85f;  // DAT_0014d838
         m_fruitTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
-            (float)m_fruitTextTex->m_Width, (float)m_fruitTextTex->m_Height,
+            (float)m_fruitTextTex->m_Width * FRUIT_TEXT_SCALE,
+            (float)m_fruitTextTex->m_Height * FRUIT_TEXT_SCALE,
             m_LogoFruitTextPos);
         Colour fruitTint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
         game.renderer.DrawQuad(fruitTint);
         m_fruitTextTex->UnSet();
     }
 
-    // 3. "NINJA" text logo (ninja_text.tex) — drawn at +0xF8 (m_LogoNinjaTextPos)
+    // 3. "NINJA" text logo (ninja_text.tex) — drawn at +0xF8
+    // Original: TranslateMatrix(&this+0xF8) reads 3 consecutive floats:
+    //   +0xF8 = m_LogoNinjaTextPos.x, +0xFC = m_WindowCenter, +0x100 = field_0x100
     if (m_ninjaTextTex.IsValid()) {
+        Vec3 ninjaDrawPos(m_LogoNinjaTextPos.x, m_WindowCenter, field_0x100);
         m_ninjaTextTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTextTex->m_Width, (float)m_ninjaTextTex->m_Height,
-            m_LogoNinjaTextPos);
+            ninjaDrawPos);
         Colour ninjaTint(255, 255, 255, (uint8_t)(m_Alpha * 255.0f));
         game.renderer.DrawQuad(ninjaTint);
         m_ninjaTextTex->UnSet();
@@ -412,18 +418,22 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 //
 void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     static const float CLAMP_THRESHOLD   = 0.04f;    // DAT_0014aec4
-    static const float BOUNCE_GRAVITY    = -55.0f;   // verified
-    static const float LOGO_NARROW_POS   = -175.0f;  // portrait X axis position
+    static const float BOUNCE_GRAVITY    = -55.0f;   // DAT_0014aecc
     static const float ELAPSED_THRESHOLD = 0.99f;    // DAT_0014aed8
 
     if (cameraTransition < CLAMP_THRESHOLD) {
         cameraTransition = CLAMP_THRESHOLD;
     }
 
+    // Original: field_0xf4 and field_0x100 = DAT_0014aec8 (=0.0)
+    // These act as z components for fruit text and ninja text draw positions
     field_0xf4 = 0.0f;
     field_0x100 = 0.0f;
 
-    // Bounce physics (unchanged from binary)
+    // Ninja text X = 60.0 (DAT_0014aed0); Y comes from m_WindowCenter in Draw
+    m_LogoNinjaTextPos.x = 60.0f;  // DAT_0014aed0
+
+    // Bounce physics (matches binary exactly)
     float newVel = m_BounceVelocity + cameraTransition * BOUNCE_GRAVITY;
     m_BounceVelocity = newVel;
 
@@ -432,14 +442,14 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
 
     float floorPos = pos.y + 18.0f;
 
-    // Port specific: swap X↔Y for landscape ortho
-    // Original: m_LogoFruitTextPos = (LOGO_NARROW_POS, floorPos, 0)
-    // Landscape: narrow axis is Y, wide axis is X
-    m_LogoFruitTextPos.x = floorPos;
-    m_LogoFruitTextPos.y = -LOGO_NARROW_POS;  // negate: portrait bottom → landscape top
-    m_LogoFruitTextPos.z = 0.0f;
+    // Fruit text position: use original values directly (no X↔Y swap)
+    m_LogoFruitTextPos.x = -120.0f;     // DAT_0014aed4 (LOGO_NINJA_OFFSET_Y)
+    m_LogoFruitTextPos.y = floorPos;     // pos.y + 18.0
+    // z = field_0xf4 (+0xF4) = 0.0 — used by Draw as fruit text z
 
-    m_LogoFruitPos = m_LogoFruitTextPos;
+    // Temporary copy (overwritten at end of function with correct formula)
+    m_LogoFruitPos.x = m_LogoFruitTextPos.x;
+    m_LogoFruitPos.y = m_LogoFruitTextPos.y;
     m_LogoFruitPos.z = field_0xf4;
 
     if (cameraTransition > 0.0f) {
@@ -461,10 +471,12 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
 
     m_Alpha += (m_GlobalAlphaTarget - m_Alpha) * ALPHA_LERP_RATE;
 
-    // Port specific: FRUIT text above NINJA
-    m_LogoNinjaTextPos.x = 0.0f;
-    m_LogoNinjaTextPos.y = m_LogoFruitTextPos.y - 40.0f;
-    m_LogoNinjaTextPos.z = 0.0f;
+    // LogoFruitPos (slice_fruit decoration): matches binary at end of 0x0014ad3c
+    // m_LogoFruitPos = (-175, 26, 0) + (-120, -17, 0) * m_Alpha * 2.0
+    Vec3 base(-175.0f, 26.0f, 0.0f);        // DAT_0014aedc, 26.0, DAT_0014aec8
+    Vec3 offset(-120.0f, -17.0f, 0.0f);     // DAT_0014aed4, -17.0, DAT_0014aec8
+    Vec3 scaled = offset * m_Alpha * 2.0f;
+    m_LogoFruitPos = base + scaled;
 }
 
 // Matches 0x0014aee8 (~35 lines)
