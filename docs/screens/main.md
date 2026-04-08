@@ -125,18 +125,20 @@ Texture::UnSet
 // 2. "FRUIT" text logo (fruit_text.tex) — inside same block as shade
     Texture::Set(fruit_text_tex)
     ResetMatrix
-    Scale to texture dimensions (width, height, 0.0)
-    Translate to m_LogoFruitTextPos (+0xec)
+    Scale to texture dimensions * 0.85 (DAT_0014d838)
+    Translate to m_LogoFruitTextPos (+0xec) = (-120.0, floorPos, 0.0)
     Upload → TintColour → DrawQuad → UnSet
 
 // 3. "NINJA" text logo (ninja_text.tex)
 if ninja_text_tex is valid:
-    same pattern, translate to m_LogoNinjaTextPos (+0xf8)
+    Scale to raw texture dimensions (1.0x)
+    Translate to (+0xf8, +0xfc, +0x100) = (60.0, m_WindowCenter, 0.0)
+    NOTE: Draw reads 3 consecutive floats from +0xF8, so ninja Y = m_WindowCenter (bounces)
 
 // 4. Dojo decoration (slice_fruit.tex / m_TexSliceFruit)
 if m_TexSliceFruit is valid:
-    Scale to texture dimensions
-    Translate to m_LogoFruitPos (+0xdc)
+    Scale to raw texture dimensions (1.0x)
+    Translate to m_LogoFruitPos (+0xdc) = (-175,26,0) + (-120,-17,0)*alpha*2.0
     DrawQuad
 
 // 5. Loading symbol (states 0x13, 0x14 only)
@@ -226,40 +228,55 @@ void MainScreen::Hide() {
 
 ---
 
-## UpdateScreenElements (0x0014ad3c, ~60 lines)
+## UpdateScreenElements (0x0014ad3c, 70 lines)
 
-Called with `(param_1=cameraTransition, param_2=time)`. Handles the bouncing logo animation.
+<!-- Analysed: 2026-04-08T14:00 -->
+
+Called with `(cameraTransition, elapsedTime)`. Handles the bouncing logo animation.
+
+Constants (literal pool at 0x14aec4):
+- CLAMP_THRESHOLD = 0.04 (DAT_0014aec4)
+- BOUNCE_GRAVITY = -55.0 (DAT_0014aecc)
+- ELAPSED_THRESHOLD = 0.99 (DAT_0014aed8)
+- LOGO_NINJA_OFFSET_Y = -120.0 (DAT_0014aed4) — fruit text X position
+- LOGO_NINJA_TEXT_X = 60.0 (DAT_0014aed0) — ninja text X position
 
 ```
-// Clamp minimum param1
-if param1 < threshold: param1 = threshold
+if cameraTransition < 0.04: cameraTransition = 0.04
 
-// Logo positions (fruit + ninja text)
-m_LogoFruitTextPos = (0.0, ?, 0.0)
-m_LogoNinjaTextPos = (same as NinjaPos initially)
+field_0xf4 = 0.0              // +0xF4: fruit text z (DAT_0014aec8)
+field_0x100 = 0.0              // +0x100: ninja text z
+m_LogoNinjaTextPos.x = 60.0   // +0xF8: DAT_0014aed0
 
 // Bounce physics
-m_BounceVelocity += param1 * decayRate
-m_WindowCenter += m_BounceVelocity * param1 * 15.0
+m_BounceVelocity += cameraTransition * -55.0
+m_WindowCenter += m_BounceVelocity * cameraTransition * 15.0
 
-// Bounce at floor
-floorY = pos.y + 18.0
-m_LogoFruitPos.y = floorY
-m_LogoNinjaTextPos = m_LogoFruitTextPos  // copy
+floorPos = pos.y + 18.0
+m_LogoFruitTextPos.x = -120.0  // +0xEC: DAT_0014aed4
+m_LogoFruitTextPos.y = floorPos // +0xF0
 
-if m_WindowCenter < floorY - 15.0:
-    m_WindowCenter = floorY - 15.0
+// Temporary copy (overwritten below)
+m_LogoFruitPos = (m_LogoFruitTextPos.x, m_LogoFruitTextPos.y, field_0xf4)
+
+if cameraTransition > 0.0: globalAlphaTarget = 1.0
+
+if m_WindowCenter < floorPos - 15.0:
+    m_WindowCenter = floorPos - 15.0
     m_BounceVelocity *= -0.25        // bounce with energy loss
-    if abs(velocity) < 3.0 && param2 > threshold && param1 > 0:
+    if abs(velocity) < 3.0 && elapsedTime > 0.99 && cameraTransition > 0.0:
         m_BounceVelocity = 0.0       // settle
         globalAlphaTarget = 0.0
 
-// Alpha lerp
 m_Alpha += (globalAlphaTarget - m_Alpha) * 0.25
 
-// Final logo offset (shift down and left)
-m_LogoNinjaTextPos += Vec3(0.0, -17.0, 0.0) * 2.0
+// LogoFruitPos (slice_fruit decoration):
+m_LogoFruitPos = (-175.0, 26.0, 0.0) + (-120.0, -17.0, 0.0) * m_Alpha * 2.0
 ```
+
+**Key struct layout for Draw**: `TranslateMatrix(&this+0xF8)` reads 3 consecutive floats:
+`+0xF8=m_LogoNinjaTextPos.x(60)`, `+0xFC=m_WindowCenter(bouncing)`, `+0x100=field_0x100(0)`.
+So ninja text Y position is the bouncing m_WindowCenter, not a dedicated field.
 
 ---
 
