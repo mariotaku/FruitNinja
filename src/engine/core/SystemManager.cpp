@@ -13,10 +13,20 @@ SystemManager::SystemManager()
     , m_RingMaxIdx(0)
     , m_RingWriteIdx(0)
     , m_QuitState(3)
+    , m_field50(0)
 {
     for (int i = 0; i < 30; i++) {
         m_FrameTimeRing[i] = 0;
     }
+}
+
+// Matches 0x0018b024: m_field50=DAT_0018b078(=0), m_bRunning=1,
+// then records clock() into a Bada clock-calibration struct (port-skip),
+// then _RetrieveDeviceID (port-skip: Bada device ID).
+void SystemManager::Init() {
+    m_field50 = 0;  // DAT_0018b078 = 0x00000000
+    m_bRunning = 1;
+    // Port specific: Bada clock calibration and _RetrieveDeviceID omitted
 }
 
 bool SystemManager::Update(float* dt) {

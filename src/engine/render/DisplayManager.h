@@ -58,6 +58,12 @@ public:
     // Matches 0x0019dc94
     MortarRectangle GetWindowSize() const;
 
+    // Matches original SetClearColour
+    void SetClearColour(const Colour& c);
+
+    // Matches original SetLightDirection
+    void SetLightDirection(const Vec3& dir);
+
     // Matches 0x0019da3c
     void SetWindowSize(int l, int t, int r, int b);
 

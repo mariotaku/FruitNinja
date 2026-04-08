@@ -11,6 +11,9 @@
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
 #include "entities/FruitInfo.h"
+#include "render/MatrixManager.h"
+#include "render/DisplayManager.h"
+#include "core/SystemManager.h"
 #include <cstdio>
 #include <string>
 
@@ -41,8 +44,24 @@ void GameInitialise() {
 
     printf("GameInitialise: booting engine\n");
 
-    // Steps 1-4: SystemManager, MatrixManager, FileSystem, DisplayManager
-    // Port specific: these are Meyers singletons, auto-initialized on first GetInstance()
+    // Step 1: SystemManager::Init() — 0x0018b024: m_field50=0, m_bRunning=1, clock base (skipped)
+    Mortar::SystemManager::GetInstance().Init();
+
+    // Step 2: MatrixManager::Init() — 0x0019e2ac: just calls ResetAllStacks
+    Mortar::MatrixManager::GetInstance().Init();
+
+    // Step 3: FileSystem — skipped, port uses direct filesystem
+
+    // Step 4: DisplayManager::GetInstance() → SetWindowSize, SetClearColour, SetLightDirection
+    {
+        Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
+        // Port specific: original is SetWindowSize(0, 320, 0, 480) for portrait Bada.
+        // Port uses landscape 960×640; FruitCamera reads these for ortho extent.
+        dm.SetWindowSize(0, 0, FN_SCREEN_W, FN_SCREEN_H);
+        dm.SetClearColour(Colour(0, 0, 0, 255));
+        // DIFFERS: first component unknown (DAT in docs). GameDraw overwrites with worldPos anyway.
+        dm.SetLightDirection(Vec3(0.0f, -10.0f, -5.0f));
+    }
 
     // Step 10: InputManager
     game->inputManager = new InputManager();

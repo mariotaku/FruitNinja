@@ -42,8 +42,8 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_Rot1 = Quaternion::FromAxisAngle(Vec3(1, 0, 0), RandRange(3.14f));
     m_Rot2 = m_Rot1;
 
-    // Default gravity (downward in game coords)
-    m_Gravity = Vec3(0.0f, -400.0f, 0.0f);
+    // Default gravity — confirmed from Fruit::Init 0x00176708: literal -12.0, DAT_00176a18=0.0
+    m_Gravity = Vec3(0.0f, -12.0f, 0.0f);
 
     // Rotation axis offset
     m_RotAxis = Vec3(RandRange(10.0f), 0.0f, 0.0f);

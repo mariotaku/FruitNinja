@@ -44,8 +44,8 @@ public:
     // +0xF0: random horizontal flip
     bool m_bFlipped;
 
-    // +0xF4: rotation speed for fruit entity (8-12 deg/frame, random sign)
-    // Note: this does NOT rotate the ring — it drives the entity rotation
+    // +0xF4: rotates the 2D button quad via m_Timer (8-12 deg/s, random sign)
+    // m_Timer (HUDControl +0x2c) accumulates: m_Timer += dt * m_RotationSpeed
     float m_RotationSpeed;
 
     // +0xF8: >= 0 = sparkle ring active

@@ -382,7 +382,37 @@ void GameTaskUpdate(float rawDt) {
 
 ### GameInit (0x0016c644, 274 lines)
 
-See `docs/structs/game.md` for full 22-step initialization order.
+<!-- Analysed: 2026-04-08T12:00 -->
+
+Per-session setup. Called by the state machine when entering State 2. Full call order:
+
+1. **Guard**: check `g_GameData+0x112` (already-inited flag) — skip everything if set
+2. **HUD**: `new HUD()` → `Game+0x3c`; call `HUD::Release` first (handles re-entry)
+3. **MissControl ×3**: position table at `g_GameData+0x30` (GOT+DAT_0016c9dc+0x30), `playerScale=1.0`. Constructs three `MissControl` at offsets `[0,1,2]`, sets `m_AnimState`, then `MissControl::CreatePool(12, hud)`
+4. **ScoreControl**: `new ScoreControl(0x100)`. Loads 3 textures (GOT+DAT_0016c9e0/e4/e8). Sizes from `DAT_0016c9b8`. Positions from `DisplayManager::GetWindowSize()` scaled by constants. Added to HUD.
+5. **CoinCounter**: `new CoinCounter(0xd4)` → `Game+0x178`. Calls `LoadContent()` via vtable[2].
+6. **TimeControl**: `new TimeControl(0x108)` → `Game+0x180`. Calls `LoadContent()` via vtable[2]. `TimeControl::CountDown(DAT_0016c9cc)`. `Game+0x184 = 0`.
+7. **Background texture** (lines 159-170): Guard on `g_TaskState+0xfc` (SmartPtr bool):
+   - If already loaded: skip
+   - `IsFastHardware()` → fast: `"gb_game.tex"` (DAT_0016c9f0 → 0x001BC923); slow: `"gb_game_sml.tex"` (DAT_0016c9f4 → 0x001BC92F)
+   - GOT base = 0x001EC130 (literal at 0x16c9d0 = 0x0007FADC, added to 0x16c654)
+   - Loads via `TextureManager::LoadLocalisedTexture` → stores at `g_TaskState+0xfc`
+8. **Mesh loads**: `MeshManager::Load(AsciiString(GOT+DAT_0016c9f8))` → `g_TaskState+0xbc`. Second mesh `GOT+DAT_0016cca4` → `g_TaskState+0xc0`.
+9. **SliceEffect list**: `new List<SliceEffect>` → `g_TaskState+0x64`; `clear()`. Pool `new MemoryPool(100)` → `g_TaskState+0xc8`.
+10. **Flags**: `g_TaskState+0x112 = 1` (inited), `g_TaskState+0x114 = g_TaskState2+0x54`, `g_TaskState+0x111 = 0`, `g_TaskState+0xc = 0`.
+11. **MainScreen**: `new MainScreen(0x120)` → `g_TaskState+0x1c`. `LoadContent()`. `g_TaskState+0x1c+0x32 = 1`. `Game+0x160 = mainScreen`.
+12. **PauseScreen**: `new PauseScreen(0xd8)` → `g_TaskState+0x04`. `LoadContent()`.
+13. **TutorialControl**: `new TutorialControl(0xa0)` → `Game+0x168`. `LoadContent()`. `Game+0x05 = 1`. `Game+0x0c = 0xbf800000` (-1.0f).
+14. **HUD::AddControl**: MainScreen, PauseScreen, TutorialControl added to HUD (Game+0x3c).
+15. **Entity heap**: `Entity::HeapCreate(0x20000)`.
+16. **ActorManager**: `GetInstance()`. `Initialise(5, 0x2000)`. RegisterFactory delegate. RegisterHashConverter delegate.
+17. **WaveManager**: `GetInstance()`. `Init()`.
+18. **GameTaskInitInput()**.
+19. **Pre-spawn loop ×30**: For each iteration: `ActorManager::Add(0, true)` flags|=0x11, `Add(1, true)` flags|=0x11, `Add(4, true)` flags|=0x11.
+20. **SplatEntity::CreatePool(0x80)**.
+21. **WaveManager::Resume()**.
+22. **BombFlash::CreatePool(0x20)**.
+23. **SoundManager**: `Initialise(GOT+DAT_0016ccc4)`. `SetSFXVolume(0.5 if soundOn, else DAT_0016cca0)` — reads `Game+0x44` (m_bSoundOn).
 
 ### GameUpdate (0x0016bed0, 359 lines)
 

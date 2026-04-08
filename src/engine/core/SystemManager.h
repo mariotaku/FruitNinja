@@ -18,10 +18,16 @@ class SystemManager : public Singleton<SystemManager> {
     uint8_t m_RingWriteIdx;      // +0x0F
     int16_t m_FrameTimeRing[30]; // +0x10
     uint8_t m_QuitState;         // +0x4C
+    // +0x4D..+0x4F padding
+    int     m_field50;           // +0x50 — Init: set to 0 (DAT_0018b078); purpose TBD
 
     SystemManager();
 
 public:
+    // Matches 0x0018b024: sets m_field50=0, m_bRunning=1, records clock base (Bada),
+    // calls _RetrieveDeviceID (Bada). Port: only the two field writes are meaningful.
+    void Init();
+
     // Returns m_bRunning. Outputs dt via pointer.
     bool Update(float* dt);
 

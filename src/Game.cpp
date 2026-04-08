@@ -78,13 +78,10 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
     data_dir = FN_DATA_DIR;
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
 
-    // Port specific: set DisplayManager window size from actual SDL window
-    // Original Bada: set from GlesForm surface size (480×320 portrait device)
-    {
-        int ww, wh;
-        SDL_GL_GetDrawableSize(window, &ww, &wh);
-        Mortar::DisplayManager::GetInstance().SetWindowSize(0, 0, ww, wh);
-    }
+    // DisplayManager holds game-space dimensions (480×320), not SDL pixel dimensions.
+    // glViewport in run() handles pixel scaling independently.
+    // Constructor already sets this; explicit here to match original Bada GlesForm init.
+    Mortar::DisplayManager::GetInstance().SetWindowSize(0, 0, FN_SCREEN_W, FN_SCREEN_H);
 
     if (!renderer.init()) {
         fprintf(stderr, "Failed to init renderer\n");
