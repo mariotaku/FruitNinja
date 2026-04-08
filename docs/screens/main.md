@@ -6,42 +6,45 @@ The main menu / dojo screen. Contains all menu buttons, toggle buttons (sound/mu
 
 ### Struct Layout
 
+<!-- Analysed: 2026-04-09T10:00 -->
+<!-- Verified: struct size 288 (0x120), Ghidra + ctor string resolution + asm button stores -->
+
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
-| +0x00–0x7b | HUDControl3d | super | Base class (pos, size, rotation, texture, vtable) |
-| +0x7c | float | m_OrigSizeX | Copy of size_x |
-| +0x80 | float | m_OrigSizeY | Copy of size_y |
-| +0x84 | float | m_OrigSizeZ | Copy of size_z |
-| +0x88 | SmartPtr\<Texture\> | m_TexNewGame | `newgame.tex` |
-| +0x8c | SmartPtr\<Texture\> | m_TexDojoIcon | `dojo_icon.tex` |
-| +0x90 | SmartPtr\<Texture\> | m_TexQuit | `quit.tex` |
-| +0x94 | SmartPtr\<Texture\> | m_TexOpenFeint | `openfeint.tex` |
-| +0x98 | SmartPtr\<Texture\> | m_TexMoreGames | `more_games.tex` |
-| +0x9c | MenuButton* | pPlayButton | Created lazily in state 0→1 |
-| +0xa0 | MenuButton* | pDojoButton | Created lazily in state 0→1 |
-| +0xa4 | MenuButton* | pLeaderboardBtn | Created lazily in state 1 |
-| +0xa8 | MenuButton* | pMoreGamesBtn | Created lazily in state 1 |
-| +0xac | MenuButton* | pSoundToggle | Created in state 0 |
-| +0xb0 | MenuButton* | pMusicToggle | Created in state 0 |
+| +0x00–0x7b | HUDControl3d | super | Base class (124 bytes: pos, size, rotation, texture, vtable) |
+| +0x7c | float | m_OrigSizeX | Copy of size.x |
+| +0x80 | float | m_OrigSizeY | Copy of size.y |
+| +0x84 | float | m_OrigSizeZ | Copy of size.z (= 1.0) |
+| +0x88 | SmartPtr\<Texture\> | m_TexNewGame | `newgame.tex` (GOT+c780); used for play button |
+| +0x8c | SmartPtr\<Texture\> | m_TexDojoIcon | `dojo_icon.tex` (GOT+c784); used for dojo button |
+| +0x90 | SmartPtr\<Texture\> | m_TexOpenFeint | `openfeint.tex` (GOT+c790) |
+| +0x94 | SmartPtr\<Texture\> | m_TexGCAchievements | `gc_achievements.tex` (GOT+c794) |
+| +0x98 | SmartPtr\<Texture\> | m_TexQuit | `quit.tex` (GOT+c78c); used for quit button at +0xA4 |
+| +0x9c | MenuButton* | pPlayButton | asm: `str r6,[r4,#0x9c]`, tex from +0x88 |
+| +0xa0 | MenuButton* | pDojoButton | asm: `str r6,[r4,#0xa0]`, tex from +0x8C |
+| +0xa4 | MenuButton* | pLeaderboardBtn | asm: `str r6,[r4,#0xa4]`, shared slot (quit.tex path + more_games.tex alt path) |
+| +0xa8 | MenuButton* | pMoreGamesBtn | No asm store found in Update — may be unused or set elsewhere |
+| +0xac | MenuButton* | pSoundToggle | asm: `str r6,[r4,#0xac]`, first button created in state 0 |
+| +0xb0 | MenuButton* | pMusicToggle | asm: `str r6,[r4,#0xb0]`, second button created in state 0 |
 | +0xb4 | SmartPtr\<Texture\> | m_TexCommingSoon | `comming_soon.tex` |
+| +0xb8–0xc3 | ??? | (gap) | 12 bytes undefined — TODO |
 | +0xc4 | SmartPtr\<Texture\> | m_TexSoundOn | `sound.tex` |
 | +0xc8 | SmartPtr\<Texture\> | m_TexSoundOff | `sound_cross.tex` |
 | +0xcc | SmartPtr\<Texture\> | m_TexMusicOn | `music.tex` |
 | +0xd0 | SmartPtr\<Texture\> | m_TexMusicOff | `music_cross.tex` |
-| +0xd4 | SmartPtr\<Model\> | m_Model | (null — set to null in ctor) |
-| +0xd8 | SmartPtr\<Texture\> | m_TexSliceFruit | `slice_fruit.tex` — dojo decoration behind logo |
-| +0xdc | Vec3 | m_LogoFruitPos | "FRUIT" text position (set in UpdateScreenElements) |
+| +0xd4 | SmartPtr\<Model\> | m_Model | null in ctor (SmartPtrNull_Model) |
+| +0xd8 | SmartPtr\<Texture\> | m_TexSliceFruit | `slice_fruit.tex` (GOT+c77c) — dojo decoration behind logo |
+| +0xdc | Vec3 | m_LogoFruitPos | slice_fruit draw position (set in UpdateScreenElements) |
 | +0xe8 | float | m_Alpha | = 1.0 (lerps toward global alpha target) |
-| +0xec | Vec3 | m_LogoFruitTextPos | fruit_text.tex draw position (Draw uses +0xec for fruit_text) |
-| +0xf4 | float | field_0xf4 | = 0.0 |
-| +0xf8 | Vec3 | m_LogoNinjaTextPos | ninja_text.tex draw position (Draw uses +0xf8 for ninja_text) |
-| +0xfc | float | m_WindowCenter | = windowHeight/2 + 160.0 |
-| +0x100 | float | field_0x100 | = 0.0 |
+| +0xec | Vec3 | m_LogoFruitTextPos | fruit_text.tex draw position; z (+0xF4) always 0.0 |
+| +0xf8 | **float** | **m_LogoNinjaTextX** | ninja_text X position (single float, NOT Vec3) |
+| +0xfc | float | m_WindowCenter | = windowHeight/2 + 160.0; **acts as ninja text Y** in Draw |
+| +0x100 | float | field_0x100 | = 0.0; acts as ninja text Z in Draw |
 | +0x104 | float | m_BounceVelocity | Bounce velocity for logo (decays) |
 | +0x108 | float | m_field108 | = 0.0 (accumulator for state 0x13/0x14) |
 | +0x10c | int | m_State | State machine variable |
-| +0x110 | float | m_Timer | Transition countdown (init 0.0) |
-| +0x114 | SmartPtr\<Texture\> | m_TexGCAchievements | `gc_achievements.tex` |
+| +0x110 | float | m_StateTimer | Transition countdown (NOT same as HUDControl m_Timer at +0x2C) |
+| +0x114 | SmartPtr\<Texture\> | m_TexMoreGames | `more_games.tex` (GOT+c788); alt path for button at +0xA4 |
 | +0x118 | float | m_Timer2 | Second timer (various uses per state) |
 | +0x11c | Font* | m_pFont | `fonts/verdana.fnt` |
 
