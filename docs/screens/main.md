@@ -242,14 +242,14 @@ void MainScreen::Hide() {
 Called with `(cameraTransition, elapsedTime)`. Handles the bouncing logo animation.
 
 Constants (literal pool at 0x14aec4):
-- CLAMP_THRESHOLD = 0.04 (DAT_0014aec4)
+- MAX_CT = 0.04 (DAT_0014aec4) — **MAXIMUM** clamp, not minimum (ARM: `if ct>=0.04: ct=0.04`)
 - BOUNCE_GRAVITY = -55.0 (DAT_0014aecc)
 - ELAPSED_THRESHOLD = 0.99 (DAT_0014aed8)
 - LOGO_NINJA_OFFSET_Y = -120.0 (DAT_0014aed4) — fruit text X position
 - LOGO_NINJA_TEXT_X = 60.0 (DAT_0014aed0) — ninja text X position
 
 ```
-if cameraTransition < 0.04: cameraTransition = 0.04
+if cameraTransition > 0.04: cameraTransition = 0.04   // MAX clamp (ARM idiom inverted)
 
 field_0xf4 = 0.0              // +0xF4: fruit text z (DAT_0014aec8)
 field_0x100 = 0.0              // +0x100: ninja text z
