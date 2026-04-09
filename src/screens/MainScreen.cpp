@@ -421,12 +421,14 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 // All constants and bounce physics are unchanged from the binary.
 //
 void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
-    static const float CLAMP_THRESHOLD   = 0.04f;    // DAT_0014aec4
+    static const float MAX_CT            = 0.04f;    // DAT_0014aec4 — MAXIMUM clamp, not minimum
     static const float BOUNCE_GRAVITY    = -55.0f;   // DAT_0014aecc
     static const float ELAPSED_THRESHOLD = 0.99f;    // DAT_0014aed8
 
-    if (cameraTransition < CLAMP_THRESHOLD) {
-        cameraTransition = CLAMP_THRESHOLD;
+    // Original ARM: if (-1 < (int)((uint)(ct < 0.04) << 31)) ct = 0.04
+    // This fires when ct >= 0.04, clamping DOWN. Small dt passes through unchanged.
+    if (cameraTransition > MAX_CT) {
+        cameraTransition = MAX_CT;
     }
 
     // Original: m_LogoFruitTextPos.z and field_0x100 = DAT_0014aec8 (=0.0)
