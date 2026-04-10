@@ -2,7 +2,8 @@
 #include "FruitInfo.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
-#include "asset/tex_loader.h"
+#include "asset/MeshManager.h"
+#include "asset/TextureManager.h"
 #include "Game.h"
 #include "math/math3d.h"
 #include <cstdlib>
@@ -17,13 +18,12 @@ static float RandRange(float range) {
 
 Fruit::Fruit()
     : m_FruitType(0), m_bSliced(false),
-      m_ScaleAnim(0.0f), m_ChuckDelay(0.0f), m_ZPosition(0.0f),
-      m_MeshTex(0) {
+      m_ScaleAnim(0.0f), m_ChuckDelay(0.0f), m_ZPosition(0.0f) {
     entityType = 0;
 }
 
 Fruit::~Fruit() {
-    m_Mesh.destroy();
+    // Model released by SmartPtr destructor
 }
 
 void Fruit::Init(int param1, int fruitType, int param3) {
@@ -64,22 +64,35 @@ void Fruit::Init(int param1, int fruitType, int param3) {
         scale = globalScaleVec * fruitScale;
     }
 
-    // Load mesh for this fruit type
-    static const char* fruitNames[] = {
-        "apple", "banana", "orange", "watermelon", "strawberry",
-        "kiwifruit", "pineapple", "plum", "pear", "mango",
-        "apple_red", "lime", "dragon", "coconut", "passionfruit", "lemon"
-    };
+    // Load mesh via MeshManager (cached, matches binary pattern)
     Game* game = Game::GetInstance();
-    if (game && fruitType >= 0 && fruitType < 16) {
-        std::string meshPath = game->data_dir + "/models/fruit/" + fruitNames[fruitType] + "_single.mmd";
-        if (m_Mesh.load(meshPath)) {
-            // Load fruit atlas texture (shared — TODO: cache this)
-            if (!m_MeshTex) {
-                TexImage img;
+    Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
+    printf("[Fruit] Init: type=%d game=%p meshMgr=%p\n", fruitType, (void*)game, (void*)meshMgr);
+    if (game && meshMgr) {
+        const FruitInfo* info = FruitInfo_Get(fruitType);
+        const char* modelName = (info && info->m_ModelName[0]) ? info->m_ModelName : "apple";
+        std::string meshPath = game->data_dir + "/models/Fruit/" + modelName + "_single.mmd";
+        printf("[Fruit] Init: loading '%s'\n", meshPath.c_str());
+        m_Model = meshMgr->Load(meshPath.c_str());
+        printf("[Fruit] Init: model valid=%d\n", m_Model.IsValid());
+
+        // Assign fruit atlas texture to the model's mesh
+        // fruit_atlas.tex is in models/fruit/textures/, NOT in textures/
+        // So we can't use TextureManager::LoadLocalisedTexture (which prepends textures/)
+        if (m_Model.IsValid() && !m_Model->m_Meshes.empty()) {
+            static SmartPtr<Mortar::Texture> s_fruitAtlas;
+            if (!s_fruitAtlas.IsValid()) {
                 std::string texPath = game->data_dir + "/models/fruit/textures/fruit_atlas.tex";
-                if (tex_load(texPath, img)) {
-                    m_MeshTex = game->renderer.upload_texture(img);
+                s_fruitAtlas = Mortar::TextureManager::GetInstance().Load(texPath.c_str());
+            }
+            printf("[Fruit] Init: fruit_atlas valid=%d texId=%u\n",
+                   s_fruitAtlas.IsValid(), s_fruitAtlas.IsValid() ? s_fruitAtlas->m_TexId : 0);
+            if (s_fruitAtlas.IsValid()) {
+                for (int i = 0; i < (int)m_Model->m_Meshes.size(); i++) {
+                    if (m_Model->m_Meshes[i].IsValid() && !m_Model->m_Meshes[i]->m_DiffuseTexture.IsValid()) {
+                        m_Model->m_Meshes[i]->m_DiffuseTexture = s_fruitAtlas;
+                        printf("[Fruit] Init: assigned tex to mesh[%d]\n", i);
+                    }
                 }
             }
         }
@@ -160,19 +173,18 @@ void Fruit::Update(float dt) {
 }
 
 void Fruit::Draw(Renderer& r) {
+    (void)r;
     if (!active || m_ChuckDelay > 0.0f) return;
-    if (!m_Mesh.vbo || !m_MeshTex) return;
+    if (!m_Model.IsValid()) {
+        static bool s_logged = false;
+        if (!s_logged) { printf("[Fruit] Draw: model not valid\n"); s_logged = true; }
+        return;
+    }
 
     float s = scale.x * m_ScaleAnim;
     if (s <= 0.0f) return;
 
     // Build model matrix: Scale * Rotation * Translation
-    // Original uses MatrixManager world stack, same as HUD controls.
-    // Position includes the (480, 320) offset from HUDControl3d space
-    // since fruit entities are positioned at button.pos which is in HUD coords.
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-
     Matrix44 mat = Matrix44::MakeScale(s, s, s);
 
     // Quaternion rotation
@@ -180,29 +192,18 @@ void Fruit::Draw(Renderer& r) {
     float rotMat[16];
     memcpy(rotMat, qmat.ptr(), sizeof(rotMat));
     // Multiply: mat = rotMat * mat (rotation applied to scaled)
-    Matrix44 sr;
     float temp[16];
     mat4_multiply(temp, rotMat, mat.ptr());
-    memcpy(sr.ptr(), temp, sizeof(temp));
+    memcpy(mat.ptr(), temp, sizeof(temp));
 
-    // Port specific: add (480, 320) offset to match HUDControl3d coordinate space.
-    // In the original, the EGL pipeline handles this; in the port, the offset-centered
-    // ortho requires all draw positions to include the (480, 320) base.
+    // Position includes (480, 320) HUD offset
     Vec3 drawPos(pos.x + 480.0f, pos.y + 320.0f, m_ZPosition);
-    sr.GlobalTranslate44(drawPos);
+    mat.GlobalTranslate44(drawPos);
 
-    mm.GetWorldStack().SetCurrentMatrix(sr);
-    mm.UploadModelViewOnly();
-
-    // Use MatrixManager's MVP (projection from FruitCamera, view, world)
-    Matrix44 mvp = mm.GetMVP();
-    float model[16];
-    memcpy(model, sr.ptr(), sizeof(model));
-
+    // Use Model::Draw which handles texture, MVP, and mesh rendering
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    r.setup_3d_shader(m_MeshTex, mvp.ptr(), model, m_ScaleAnim);
-    m_Mesh.draw();
+    m_Model->Draw(mat);
     glDisable(GL_DEPTH_TEST);
 }
 

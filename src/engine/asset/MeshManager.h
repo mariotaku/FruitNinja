@@ -10,13 +10,15 @@
 namespace Mortar {
 
 // Matches original MeshManager (20 bytes)
-// List-based cache of loaded Models
-// Not a singleton — instantiated as member of parent engine object
+// List-based cache of loaded Models, accessed via GetInstance()
 // Ref: docs/engine/texture-mesh-manager.md
 class MeshManager {
 public:
     MeshManager();
     ~MeshManager();
+
+    static MeshManager* GetInstance() { return s_instance; }
+    static MeshManager* s_instance;
 
     // Load a model from .mmd file
     // Returns existing if already loaded, otherwise parses HBR0 container
@@ -36,11 +38,11 @@ private:
 
     // Parse vertex stream from ResourceLoader child
     // Matches LoadVertexStreamPSP (0x001a7b0c)
-    bool LoadVertexStream(ResourceLoader& loader, MortarMesh& mesh);
+    bool LoadVertexStream(ResourceLoader& loader, Mesh& mesh);
 
     // Parse index stream from ResourceLoader child
     // Matches LoadIndexStreamPSP (0x001a799c)
-    bool LoadIndexStream(ResourceLoader& loader, MortarMesh& mesh);
+    bool LoadIndexStream(ResourceLoader& loader, Mesh& mesh);
 };
 
 } // namespace Mortar
