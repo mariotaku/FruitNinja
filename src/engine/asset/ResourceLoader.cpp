@@ -8,6 +8,10 @@ ResourceLoader::ResourceLoader()
 {
 }
 
+// Matches original ResourceLoader::Load<T>(AsciiString&) flow:
+// FileDataReader opens file, Initialize reads from sequential stream.
+// The file starts directly with Initialize format (skip_u32, childCount, ...).
+// "HBR0" at offset 0 is just the skip_u32 value, NOT a separate header.
 ResourceLoader::ResourceLoader(const char* filePath)
     : m_ReadPos(0)
 {
@@ -17,34 +21,23 @@ ResourceLoader::ResourceLoader(const char* filePath)
         return;
     }
 
-    // Check for HBR0 magic
-    char magic[4];
-    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "HBR0", 4) != 0) {
-        // Not an HBR0 file — read as raw data
-        fseek(f, 0, SEEK_END);
-        long size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        m_Data.resize(size);
-        fread(m_Data.data(), 1, size, f);
+    // Read the entire file
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (size <= 0) {
         fclose(f);
         return;
     }
 
-    // Read HBR0 header: type(u16) + pad(u16) + dataSize(u32)
-    uint16_t type, pad;
-    uint32_t dataSize;
-    fread(&type, 2, 1, f);
-    fread(&pad, 2, 1, f);
-    fread(&dataSize, 4, 1, f);
-
-    // Read full payload
-    std::vector<uint8_t> payload(dataSize);
-    size_t bytesRead = fread(payload.data(), 1, dataSize, f);
+    std::vector<uint8_t> fileData(size);
+    size_t bytesRead = fread(fileData.data(), 1, size, f);
     fclose(f);
 
-    if (bytesRead < dataSize) {
-        fprintf(stderr, "ResourceLoader: short read for '%s' (%zu/%u)\n",
-                filePath, bytesRead, dataSize);
+    if ((long)bytesRead < size) {
+        fprintf(stderr, "ResourceLoader: short read for '%s' (%zu/%ld)\n",
+                filePath, bytesRead, size);
     }
 
     // Extract base path from file path
@@ -54,17 +47,18 @@ ResourceLoader::ResourceLoader(const char* filePath)
         m_BasePath = AsciiString(pathStr.substr(0, lastSlash + 1));
     }
 
-    Initialize(payload.data(), payload.size());
+    Initialize(fileData.data(), fileData.size());
 }
 
 // Matches ResourceLoader::Initialize (0x001b4708)
-// Recursive HBR0 parsing: reads children, type IDs, and raw data
+// Format: skip_u32, childCount, [childSize + childData]..., typeIdCount, typeIds..., rawSize, rawData
+// Each child is recursively in the same format.
 void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize) {
     if (dataSize < 8) return;
 
     size_t pos = 0;
 
-    // Skip unknown value (u32)
+    // Skip unknown value (u32) — often "HBR0" text
     pos += 4;
 
     // Read child count
@@ -72,29 +66,22 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize) {
     memcpy(&childCount, data + pos, 4);
     pos += 4;
 
+    // Sanity check
+    if (childCount > 1000) return;
+
     // Read children recursively
     m_Children.reserve(childCount);
-    for (uint32_t i = 0; i < childCount && pos < dataSize; i++) {
+    for (uint32_t i = 0; i < childCount && pos + 4 <= dataSize; i++) {
         // Read child data size
         uint32_t childSize = 0;
         memcpy(&childSize, data + pos, 4);
         pos += 4;
 
-        if (pos + childSize > dataSize) break;
+        if (childSize == 0 || pos + childSize > dataSize) break;
 
         ResourceLoader child;
         child.m_BasePath = m_BasePath;
-
-        // Check if child has HBR0 header
-        if (childSize >= 12 && memcmp(data + pos, "HBR0", 4) == 0) {
-            // Skip HBR0 header (magic + type + pad + size = 12 bytes)
-            uint32_t innerSize = 0;
-            memcpy(&innerSize, data + pos + 8, 4);
-            child.Initialize(data + pos + 12, innerSize);
-        } else {
-            // Raw child data
-            child.m_Data.assign(data + pos, data + pos + childSize);
-        }
+        child.Initialize(data + pos, childSize);
 
         m_Children.push_back(child);
         pos += childSize;
@@ -105,7 +92,9 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize) {
         uint32_t typeIdCount = 0;
         memcpy(&typeIdCount, data + pos, 4);
         pos += 4;
-        pos += typeIdCount * 4; // skip type IDs
+        if (typeIdCount <= 1000) {
+            pos += typeIdCount * 4;
+        }
     }
 
     // Read remaining raw data
@@ -113,7 +102,7 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize) {
         uint32_t rawSize = 0;
         memcpy(&rawSize, data + pos, 4);
         pos += 4;
-        if (pos + rawSize <= dataSize) {
+        if (rawSize > 0 && pos + rawSize <= dataSize) {
             m_Data.assign(data + pos, data + pos + rawSize);
         }
     }
