@@ -6,6 +6,7 @@
 
 #include "MainScreen.h"
 #include "Game.h"
+#include "entities/FruitInfo.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
 #include "render/MatrixManager.h"
@@ -563,10 +564,10 @@ void MainScreen::CreateQuitButton() {
     pQuitBtn = new MenuButton();
     pQuitBtn->m_Texture = TexId(m_TexQuit);
     pQuitBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
-    // TODO: Binary passes FruitInfo_GetCount() as fruitType (>= count → Bomb entity)
-    // Bomb entity not yet implemented, using -1 (no entity) for now
+    // Binary: fruitType = *g_pFruitInfo = fruitCount (>= count → Bomb entity via MenuButton)
+    int fruitCount = FruitInfo_GetCount();
     pQuitBtn->Init(POS_QUIT,
-        [this]() { QuitGamesCallback(); }, -1, Vec3(0,0,0), nullptr);
+        [this]() { QuitGamesCallback(); }, fruitCount, Vec3(0,0,0), nullptr);
     pQuitBtn->m_LayerFlags = 8;
     game.hud->AddControl(pQuitBtn);
 }

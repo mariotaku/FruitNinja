@@ -2,44 +2,34 @@
 
 Entity type 1. Vtable base: 0x001EA478 (13 entries).
 
-## Bomb : Mortar::Entity (size = 0xB0 / 176 bytes)
+## Bomb : Entity (size = 0xB0 / 176 bytes)
+
+<!-- Analysed: 2026-04-10T11:00 -->
 
 Verified from `CreateEntity`: `operator_new(0xB0)`. Ghidra struct: `/FruitNinja/Bomb`
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
-| +0x00 | EntityFns* | vtable | Bomb vtable at 0x1EA478 |
-| +0x04 | int | field_0x04 | (Entity base) |
-| +0x08 | ushort | m_TrackerID | (Entity base) |
-| +0x0c | byte | flags | bit 1 = collision, bit 4 = killed |
-| +0x10 | float | pos_x | Position X |
-| +0x14 | float | pos_y | Position Y |
-| +0x18 | float | pos_z | Position Z |
-| +0x1c | float | vel_x | Velocity X |
-| +0x20 | float | vel_y | Velocity Y |
-| +0x24 | float | vel_z | Velocity Z |
-| +0x28 | Vec3 | m_Scale | Render scale; set in Init, modified by MakeFat |
-| +0x38 | Col* | m_Col | ColSphere pointer (size 0x18) |
-| +0x3c | float | m_SpawnTimer | Counts down; spawns BombBlast (type 4) at 0 |
-| +0x40 | Delegate0\<void\> | hitCallback | Callback for menu bomb delegate |
-| +0x64 | int | field38_0x64 | Bomb variant: 0 = normal, 2 = multiplayer |
-| +0x68 | byte | activeFlag | 0 = in-flight, 1 = hit/slashed |
-| +0x6c | float | m_ZPosition | From GetBombZPosition(); layer ordering |
+| +0x00–0x3b | Entity | base | Entity base class (60 bytes): vtable, field_0x04, m_TrackerID, flags, pos, vel, scale, angle, m_Col |
+| +0x3c | float | m_SpawnTimer | Counts down; spawns BombBlast (type 4) at 0; Init = 0.6 (DAT_001726ac) |
+| +0x40 | Delegate0\<void\> | hitCallback | Callback for menu bomb delegate (36 bytes) |
+| +0x64 | int | m_BombVariant | 0 = normal, 2 = multiplayer (selects model variant) |
+| +0x68 | byte | m_bHit | 0 = in-flight, 1 = hit/slashed |
+| +0x6c | float | m_ZPosition | From GetBombZPosition(); Z layer ordering |
 | +0x70 | short | m_RotVelX | Rotation velocity X; Random 1..8 |
 | +0x72 | short | m_RotVelY | Rotation velocity Y; Random 1..8 |
-| +0x74 | short | m_RotX | Current rotation X (accumulated) |
-| +0x76 | short | m_RotY | Current rotation Y (accumulated) |
-| +0x78 | byte | field_0x78 | Collision guard (prevents double-hit) |
+| +0x74 | short | m_RotX | Current rotation X (accumulated per frame) |
+| +0x76 | short | m_RotY | Current rotation Y (accumulated per frame) |
+| +0x78 | byte | m_bCollisionGuard | Prevents double-hit in CollisionResponse |
 | +0x7c | PSPParticleEmitter* | m_pEmitter | Fuse particle trail; NULL until first draw |
-| +0x80 | byte | movementFlag | 1 = physics enabled |
+| +0x80 | byte | m_bMovement | 1 = physics enabled |
 | +0x84 | int | field_0x84 | Backref to Game/TaskState object |
-| +0x88 | byte | m_bBombFlag88 | 0 = normal hit, 1 = menu/zen hit |
-| +0x8c | float | accelForce_x | Gravity/acceleration X; Init = 0.0 |
-| +0x90 | float | accelForce_y | Gravity/acceleration Y; Init = -12.0 |
-| +0x94 | float | accelForce_z | Gravity/acceleration Z; Init = 0.0 |
-| +0x98 | Vec3 | m_OrigScale | Backup of m_Scale from Init |
-| +0xa4 | float | countdown | Chuck delay timer; 0 = ready to spawn |
-| +0xa8 | float | speedMult | Speed multiplier; 1.0 normal, higher for fat bombs |
+| +0x88 | byte | m_bMenuBombHit | 0 = normal hit, 1 = menu/zen hit |
+| +0x8c | Vec3 | m_AccelForce | Gravity/acceleration; Init = (0.0, -12.0, 0.0) |
+| +0x98 | Vec3 | m_OrigScale | Backup of scale from Init |
+| +0xa4 | float | m_Countdown | Chuck delay timer; 0 = ready to spawn |
+| +0xa8 | float | m_SpeedMult | Speed multiplier; 1.0 normal, 0.666 for fat bombs |
+| +0xac | float | field_0xac | Z constant; Init = 0.0 |
 
 ## Bomb Vtable
 
@@ -106,6 +96,61 @@ Same logic as 0x001717b4, different GOT-relative base. Used by different call si
 
 ---
 
+### Bomb::LoadContent (0x001726c8 thunk → 0x001726e8)
+
+<!-- Analysed: 2026-04-10T12:00 -->
+
+`void Bomb::LoadContent(void)` — static, called once from `GameInitialise` (0x10c41a).
+
+Loads bomb models, textures, and particle hashes into a **global struct** at GOT+0x464A0. Guarded by a loaded flag at +0x28. `Bomb::Draw` reads the pre-loaded models from this global.
+
+```c
+void Bomb::LoadContent() {
+    if (g_bombData->loadedFlag) return;  // +0x28 guard
+
+    // Model 0 (normal): "models/Fruit/Bomb.mmd" (0x1BCBDB)
+    g_bombData->model[0] = MeshManager::Load("models/Fruit/Bomb.mmd");        // +0x0C
+
+    // Fuse particle hash (normal): StringHash("bomb_smoke") (substring at 0x1BCC22)
+    g_bombData->fuseHash[0] = StringHash("bomb_smoke");                        // +0x2C
+
+    // Model 1 (purple/multiplayer): "models/Fruit/Bomb_purple.mmd" (0x1BCBF1)
+    g_bombData->model[1] = MeshManager::Load("models/Fruit/Bomb_purple.mmd"); // +0x10
+
+    // Texture: "minus_10.tex" (0x1BCC0E) — zen mode -10 score indicator
+    g_bombData->tex = LoadLocalisedTexture("minus_10.tex");                    // +0x24
+
+    // Fuse particle hash (purple): StringHash("purple_bomb_smoke") (0x1BCC1B)
+    g_bombData->fuseHash[1] = StringHash("purple_bomb_smoke");                 // +0x30
+
+    // Setup lighting on both models
+    for (int i = 0; i < 2; i++) {
+        if (IsValid(g_bombData->model[i]))
+            SetupLighting(g_bombData->model[i]);
+    }
+
+    g_bombData->loadedFlag = 1;  // +0x28
+}
+```
+
+**BombGlobalData** struct (Ghidra: `/FruitNinja/BombGlobalData`, 52 bytes at GOT+0x464A0):
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x00 | int | field_0x00 | unknown |
+| +0x04 | SmartPtr\<Texture\> | tex_02 | (from CleanupBomb) |
+| +0x08 | int | field_0x08 | unknown |
+| +0x0C | SmartPtr\<Model\>[3] | m_bombModel | Draw indexes as `m_bombModel[m_BombVariant]`; [0]=Bomb.mmd, [1]=Bomb_purple.mmd, [2]=unused? |
+| +0x18 | SmartPtr\<Texture\> | tex_01 | (from CleanupBomb) |
+| +0x1C | int | field_0x1c | unknown |
+| +0x20 | int | field_0x20 | unknown |
+| +0x24 | SmartPtr\<Texture\> | tex_minus10 | `minus_10.tex` (zen mode -10 score indicator) |
+| +0x28 | byte | loadedFlag | 0=not loaded, 1=loaded (LoadContent guard) |
+| +0x2C | uint | fuseHash_normal | StringHash("bomb_smoke"); particle emitter hash |
+| +0x30 | uint | fuseHash_purple | StringHash("purple_bomb_smoke") |
+
+---
+
 ### Bomb::Init (0x00172504)
 
 `void __thiscall Bomb::Init(Bomb *this, void *p1, long type, Vec3 *scale)`
@@ -125,7 +170,7 @@ void Bomb::Init(void *p1, long type, Vec3 *scale) {
 
     // Lazy-load bomb texture if not cached
     if (!g_BombTexture)
-        g_BombTexture = TextureManager::LoadLocalisedTexture("bomb_tex");
+        g_BombTexture = TextureManager::LoadLocalisedTexture("bomb_explode.tex");
 
     // Initial state
     field_0xac = 0.0f;          // Z constant

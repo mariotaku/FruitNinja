@@ -10,7 +10,13 @@
 #include "FruitCamera.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
-#include "entities/FruitInfo.h"
+#include "hud/MenuButton.h"
+#include "entities/Fruit.h"
+#include "entities/Bomb.h"
+#include "entities/SplatEntity.h"
+#include "entities/SlashEntity.h"
+#include "screens/GameOverScreen.h"
+#include "screens/PowerUpShop.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
@@ -74,12 +80,6 @@ void GameInitialise() {
     // Zero g_GameData fields (matches step 15 continued)
     game->worldPos = Vec3(0.0f, 0.0f, 0.0f);
 
-    // Step 24: Fruit::LoadInfo (parses Data/xml/fruitlist.xml)
-    {
-        std::string xmlPath = game->data_dir + "/xml/fruitlist.xml";
-        FruitInfo_Load(xmlPath.c_str());
-    }
-
     // ActorManager (needed for entity creation)
     game->actorManager = new ActorManager();
 
@@ -87,8 +87,18 @@ void GameInitialise() {
     // TODO: Steps 11-13: PSPParticleManager, PowerUpManager, LeaderboardManager
     // TODO: Steps 16-21: Font::Load ×8
     // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas)
-    // TODO: Step 23: MenuButton::LoadContent()
-    // TODO: Step 25: SplatEntity/SlashEntity/Bomb/GameOverScreen/PowerUpShop::LoadContent
+    // Step 23: MenuButton::LoadContent()
+    MenuButton::LoadContent();
+
+    // Step 24: Fruit::LoadInfo (0x17987c) — parses Data/xml/fruitlist.xml
+    Fruit::LoadInfo();
+
+    // Step 25: LoadContent calls (binary: 0x10c41a region)
+    SplatEntity::LoadContent();     // TODO: splat textures
+    SlashEntity::LoadContent();     // TODO: blade trail textures
+    Bomb::LoadContent();            // loads bomb models + textures
+    GameOverScreen::LoadContent();  // TODO: game-over UI textures
+    PowerUpShop::LoadContent();     // TODO: power-up shop textures
     // TODO: PreloadSounds
 
     printf("GameInitialise: done\n");

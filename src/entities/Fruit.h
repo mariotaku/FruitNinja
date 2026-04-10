@@ -54,6 +54,10 @@ public:
 
     // Check if fruit has gone off-screen
     bool CheckOffscreen() const;
+
+    // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
+    // Parses Data/xml/fruitlist.xml into FRUIT_INFO array
+    static void LoadInfo();
 };
 
 #endif

@@ -128,6 +128,9 @@ public:
     bool HitTest(float gx, float gy);
     void TouchDown(float gx, float gy);
     void TouchUp(float gx, float gy);
+
+    // Matches MenuButton::LoadContent (0x148030) — called once from GameInitialise step 23
+    static void LoadContent() {} // TODO
 };
 
 #endif
