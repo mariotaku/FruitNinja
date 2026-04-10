@@ -3,9 +3,13 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 
+// Analysed: 2026-04-11T12:00
+
 namespace Mortar {
 
-MortarMesh::MortarMesh()
+// --- Mesh ---
+
+Mesh::Mesh()
     : m_VBO(0)
     , m_IBO(0)
     , m_VertexCount(0)
@@ -16,35 +20,69 @@ MortarMesh::MortarMesh()
     memset(&m_Layout, 0, sizeof(m_Layout));
 }
 
-MortarMesh::~MortarMesh() {
+Mesh::~Mesh() {
     if (m_VBO) { glDeleteBuffers(1, &m_VBO); m_VBO = 0; }
     if (m_IBO) { glDeleteBuffers(1, &m_IBO); m_IBO = 0; }
 }
 
-void MortarMesh::Draw(const Matrix44& worldTransform) {
-    if (!m_VBO || m_VertexCount == 0) return;
+// Matches Mesh::SetBones (0x001b1340)
+// Resizes m_BoneBindings and copies each entry
+void Mesh::SetBones(const BoneBinding* bones, int count) {
+    m_BoneBindings.resize(count);
+    for (int i = 0; i < count; i++) {
+        m_BoneBindings[i] = bones[i];
+    }
+}
 
-    // Bind diffuse texture if available
-    if (m_DiffuseTexture.IsValid()) {
-        m_DiffuseTexture->Set();
+// Matches Mesh::GetBounds (0x001b07f0)
+// Computes AABB from bone bounds. Without a skeleton, returns the raw bounds.
+void Mesh::GetBounds(Vec3& outMin, Vec3& outMax) const {
+    outMin = Vec3(1e30f, 1e30f, 1e30f);
+    outMax = Vec3(-1e30f, -1e30f, -1e30f);
+
+    for (int i = 0; i < (int)m_BoneBindings.size(); i++) {
+        const BoneBinding& bone = m_BoneBindings[i];
+        // Original: transforms bounds by bone world matrix
+        // Port: no skeleton system, use raw bounds directly
+        const Vec3& bmin = bone.m_BoundsMin;
+        const Vec3& bmax = bone.m_BoundsMax;
+
+        if (bmin.x < outMin.x) outMin.x = bmin.x;
+        if (bmin.y < outMin.y) outMin.y = bmin.y;
+        if (bmin.z < outMin.z) outMin.z = bmin.z;
+        if (bmax.x > outMax.x) outMax.x = bmax.x;
+        if (bmax.y > outMax.y) outMax.y = bmax.y;
+        if (bmax.z > outMax.z) outMax.z = bmax.z;
+    }
+}
+
+// Matches Mesh::Draw (0x001b0c3c)
+// Original behavior:
+//   if boneCount == 1: finalWorld = boneVertTransform * worldMatrix
+//   else: finalWorld = worldMatrix
+//   Set World, View, Proj, WVP effect properties
+//   Render all geometries
+// Port: uses Renderer::setup_3d_shader() for GLES2
+void Mesh::Draw(const Matrix44& worldTransform) {
+    if (!m_VBO || m_VertexCount == 0) {
+        return;
     }
 
-    // Set world matrix on the MatrixManager world stack
+    Renderer* renderer = Renderer::GetInstance();
+    if (!renderer) return;
+
+    // Port specific: compute MVP via MatrixManager (replaces Effect property system)
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().SetCurrentMatrix(worldTransform);
-
-    // Get combined MVP
     Matrix44 mvp = mm.GetMVP();
 
-    // Get light direction from DisplayManager
-    DisplayManager& dm = DisplayManager::GetInstance();
-    Vec3 lightDir = dm.m_lightDirection;
+    // Bind diffuse texture
+    GLuint texId = 0;
+    if (m_DiffuseTexture.IsValid()) {
+        texId = m_DiffuseTexture->m_TexId;
+    }
 
-    // Use the 3D shader path
-    // The existing Renderer draw_mesh expects raw buffers, but we need to draw
-    // using our VBO/IBO with the correct vertex layout.
-    // For now, use GL directly matching the 3D shader layout.
-    // TODO: Refactor to use Renderer's 3D shader program directly
+    renderer->setup_3d_shader(texId, mvp.ptr(), worldTransform.ptr(), 1.0f);
 
     glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
     if (m_IBO) {
@@ -93,10 +131,6 @@ void MortarMesh::Draw(const Matrix44& worldTransform) {
     glDisableVertexAttribArray(3);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    if (m_DiffuseTexture.IsValid()) {
-        m_DiffuseTexture->UnSet();
-    }
 }
 
 // --- Model ---
@@ -125,7 +159,7 @@ void Model::Draw(const Matrix44& transform) {
     Matrix44 mvp = viewProj * transform;
 
     struct SortEntry {
-        MortarMesh* mesh;
+        Mesh* mesh;
         float z;
     };
 

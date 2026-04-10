@@ -102,7 +102,10 @@ static GLuint link_program(GLuint vs, GLuint fs) {
     return prog;
 }
 
+Renderer* Renderer::s_instance = NULL;
+
 bool Renderer::init() {
+    s_instance = this;
     // 2D tint shader
     {
         GLuint vs = compile_shader(GL_VERTEX_SHADER, vert_src);

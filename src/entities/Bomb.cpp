@@ -1,12 +1,12 @@
 #include "Bomb.h"
-#include "Mesh.h"
 #include "FruitInfo.h"
 #include "Game.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "asset/TextureManager.h"
+#include "asset/MeshManager.h"
+#include "asset/Mesh.h"
 #include "math/Matrix44.h"
-#include "tex_loader.h"
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
@@ -38,11 +38,11 @@ static const int16_t ANGLE_SCALE      = 0xB6;
 // Global bomb data (matches BombGlobalData at GOT+0x464A0, loaded by LoadContent)
 // See docs/entities/bomb.md for full struct layout
 struct BombGlobalData {
-    Mesh model[3];          // +0x0C: [0]=Bomb.mmd, [1]=Bomb_purple.mmd, [2]=unused
-    GLuint modelTex[3];     // texture IDs per model
+    SmartPtr<Mortar::Model> model[3];  // +0x0C: [0]=bomb.mmd, [1]=bomb_purple.mmd, [2]=unused
     SmartPtr<Mortar::Texture> texMinus10;  // +0x24: minus_10.tex
     bool loaded;            // +0x28: guard flag
     // +0x2C/+0x30: fuseHash[2] — TODO: particle system
+    BombGlobalData() : loaded(false) {}
 };
 static BombGlobalData g_bombData;
 
@@ -68,30 +68,51 @@ void Bomb::LoadContent() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Model[0]: "models/Fruit/Bomb.mmd" (normal, 0x1BCBDB)
+    Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
+    if (!meshMgr) {
+        printf("[Bomb] LoadContent: MeshManager not available!\n");
+        return;
+    }
+
+    // Model[0]: binary string "models/Fruit/Bomb.mmd" (0x1BCBDB)
+    // Bada filesystem was case-insensitive; actual file is lowercase
     {
-        std::string path = game->data_dir + "/models/Fruit/Bomb.mmd";
-        g_bombData.model[0].load(path);
-        // Load bomb texture for this model
-        if (!g_bombData.modelTex[0]) {
-            TexImage img;
-            std::string texPath = game->data_dir + "/bomb_explode.tex";
-            if (tex_load(texPath, img)) {
-                g_bombData.modelTex[0] = game->renderer.upload_texture(img);
+        std::string path = game->data_dir + "/models/Fruit/bomb.mmd";
+        g_bombData.model[0] = meshMgr->Load(path.c_str());
+        printf("[Bomb] LoadContent: model[0] '%s' → valid=%d\n",
+               path.c_str(), g_bombData.model[0].IsValid());
+    }
+
+    // Load bomb texture via TextureManager
+    if (!g_BombTexture.IsValid()) {
+        g_BombTexture = Mortar::TextureManager::LoadLocalisedTexture("bomb_explode.tex");
+    }
+    printf("[Bomb] LoadContent: bombTex valid=%d texId=%u\n",
+           g_BombTexture.IsValid(), g_BombTexture.IsValid() ? g_BombTexture->m_TexId : 0);
+
+    // Model[1]: binary string "models/Fruit/Bomb_purple.mmd" (0x1BCBF1)
+    {
+        std::string path = game->data_dir + "/models/Fruit/bomb_purple.mmd";
+        g_bombData.model[1] = meshMgr->Load(path.c_str());
+        printf("[Bomb] LoadContent: model[1] '%s' → valid=%d\n",
+               path.c_str(), g_bombData.model[1].IsValid());
+    }
+
+    // Assign bomb texture to all loaded models' meshes
+    // .mmd files don't embed texture refs — texture is loaded externally
+    if (g_BombTexture.IsValid()) {
+        for (int m = 0; m < 2; m++) {
+            if (g_bombData.model[m].IsValid()) {
+                for (int i = 0; i < (int)g_bombData.model[m]->m_Meshes.size(); i++) {
+                    if (g_bombData.model[m]->m_Meshes[i].IsValid()) {
+                        g_bombData.model[m]->m_Meshes[i]->m_DiffuseTexture = g_BombTexture;
+                    }
+                }
             }
         }
     }
 
-    // Model[1]: "models/Fruit/Bomb_purple.mmd" (purple, 0x1BCBF1)
-    {
-        std::string path = game->data_dir + "/models/Fruit/Bomb_purple.mmd";
-        g_bombData.model[1].load(path);
-        // Reuse same texture for purple variant
-        g_bombData.modelTex[1] = g_bombData.modelTex[0];
-    }
-
     // Model[2]: not loaded in LoadContent (may be loaded elsewhere for multiplayer)
-    g_bombData.modelTex[2] = 0;
 
     // Texture: "minus_10.tex" (0x1BCC0E) — zen mode -10 score indicator
     g_bombData.texMinus10 = Mortar::TextureManager::LoadLocalisedTexture("minus_10.tex");
@@ -182,6 +203,11 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     // Use pre-loaded model from g_bombData (loaded by LoadContent in GameInitialise)
     // Draw indexes as g_bombData.model[m_BombVariant]
     // No per-instance mesh loading needed
+    printf("[Bomb] Init: active=%d flags=0x%02x variant=%d scale=(%.2f,%.2f,%.2f) "
+           "pos=(%.1f,%.1f,%.1f) countdown=%.2f model_valid=%d tex_valid=%d\n",
+           active, flags, m_BombVariant, scale.x, scale.y, scale.z,
+           pos.x, pos.y, pos.z, m_Countdown,
+           g_bombData.model[m_BombVariant].IsValid(), g_BombTexture.IsValid());
 }
 
 // Matches Bomb::Update (0x1729fc, 195 lines)
@@ -268,17 +294,43 @@ void Bomb::Update(float dt) {
 // Matches Bomb::Draw (0x171be8)
 // Transform: Scale * RotX(fixed tilt) * RotY(m_RotX) * RotZ(m_RotY) * Translate
 void Bomb::Draw(Renderer& r) {
-    if (!active || m_Countdown > 0.0f) return;
+    static bool s_loggedOnce = false;
+    if (!active || m_Countdown > 0.0f) {
+        if (!s_loggedOnce) {
+            printf("[Bomb] Draw: skip (active=%d countdown=%.2f)\n", active, m_Countdown);
+            s_loggedOnce = true;
+        }
+        return;
+    }
 
     // Model from global data, indexed by variant (matches binary: g_bombData->model[m_BombVariant])
     int variant = m_BombVariant;
     if (variant < 0 || variant > 2) variant = 0;
-    Mesh& bombMesh = g_bombData.model[variant];
-    GLuint bombTex = g_bombData.modelTex[variant];
-    if (!bombMesh.vbo || !bombTex) return;
+    SmartPtr<Mortar::Model>& modelPtr = g_bombData.model[variant];
+    if (!modelPtr.IsValid() || !g_BombTexture.IsValid()) {
+        if (!s_loggedOnce) {
+            printf("[Bomb] Draw: skip (variant=%d model_valid=%d tex_valid=%d)\n",
+                   variant, modelPtr.IsValid(), g_BombTexture.IsValid());
+            s_loggedOnce = true;
+        }
+        return;
+    }
+    Mortar::Model* bombModel = modelPtr.Get();
 
     float s = scale.x;
-    if (s <= 0.0f) return;
+    if (s <= 0.0f) {
+        if (!s_loggedOnce) {
+            printf("[Bomb] Draw: skip (scale=%.4f)\n", s);
+            s_loggedOnce = true;
+        }
+        return;
+    }
+
+    if (!s_loggedOnce) {
+        printf("[Bomb] Draw: rendering variant=%d scale=%.2f pos=(%.1f,%.1f,%.1f)\n",
+               variant, s, pos.x, pos.y, pos.z);
+        s_loggedOnce = true;
+    }
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -328,17 +380,11 @@ void Bomb::Draw(Renderer& r) {
     Vec3 drawPos(pos.x + 480.0f, pos.y + 320.0f, m_ZPosition);
     mat.GlobalTranslate44(drawPos);
 
-    mm.GetWorldStack().SetCurrentMatrix(mat);
-    mm.UploadModelViewOnly();
-
-    Matrix44 mvp = mm.GetMVP();
-    float model[16];
-    memcpy(model, mat.ptr(), sizeof(model));
-
+    // Use Model::Draw which handles its own texture, MVP, and mesh rendering
+    // Matches binary: Mortar::Model::Draw(g_bombData->model[variant], combinedMatrix)
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    r.setup_3d_shader(bombTex, mvp.ptr(), model, 1.0f);
-    bombMesh.draw();
+    bombModel->Draw(mat);
     glDisable(GL_DEPTH_TEST);
 }
 

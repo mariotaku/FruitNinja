@@ -84,7 +84,17 @@ Constructor at 0x00189c1c also checks `DisplayManager::GetTextureOverloadPrefix(
 
 ## MeshManager (20 bytes)
 
-Mesh/model cache. Inherits from `List<SmartPtr<Model>>`. Not a singleton — instantiated as member of a parent engine object.
+<!-- Analysed: 2026-04-10T14:00 -->
+
+Mesh/model cache. Inherits from `List<SmartPtr<Model>>`. Accessed via `GetInstance()` in the binary. Port uses a static singleton initialized in GameInitialise step 8.
+
+### Port Notes
+
+- **Singleton**: `Mortar::MeshManager::s_instance` — set in constructor, accessed via `GetInstance()`
+- **Texture loading**: MeshManager loads geometry only (HBR0 vertex/index streams). Textures are NOT embedded in .mmd files — they must be assigned externally after `Load()`.
+  - Fruit: assigns `fruit_atlas.tex` (at `models/fruit/textures/`, NOT `textures/`)
+  - Bomb: assigns `bomb_explode.tex` (via TextureManager)
+- **MortarMesh::Draw**: calls `Renderer::GetInstance()->setup_3d_shader()` for the GL shader program. Without this, nothing renders (no `glUseProgram` active).
 
 ### Struct Layout
 

@@ -87,6 +87,8 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
             // Original: entityType = (FruitInfo_GetCount() <= fruitType) ? 1 : 0
             int bombThreshold = FruitInfo_GetCount();
             int entityType = (bombThreshold <= fruitType) ? 1 : 0;  // 0=Fruit, 1=Bomb
+            printf("[MenuButton] Init: fruitType=%d bombThreshold=%d → entityType=%d\n",
+                   fruitType, bombThreshold, entityType);
             Entity* e = game->actorManager->Add(entityType, true);
             if (e) {
                 e->pos = buttonPos;

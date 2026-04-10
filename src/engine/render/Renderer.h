@@ -10,6 +10,9 @@
 struct TexImage;
 
 struct Renderer {
+    static Renderer* s_instance;
+    static Renderer* GetInstance() { return s_instance; }
+
     // 2D sprite shader (MVP + uniform tint)
     GLuint program;
     GLint u_mvp;

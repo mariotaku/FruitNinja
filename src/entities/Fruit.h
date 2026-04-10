@@ -3,7 +3,8 @@
 
 #include "Entity.h"
 #include "math/Quaternion.h"
-#include "Mesh.h"
+#include "util/SmartPtr.h"
+#include "asset/Mesh.h"
 
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
@@ -37,9 +38,8 @@ public:
     // Z depth for draw sorting
     float m_ZPosition;                   // +0x98
 
-    // Mesh (owned by this fruit — each fruit loads its own mesh)
-    Mesh m_Mesh;
-    GLuint m_MeshTex;
+    // Model loaded via MeshManager (shared/cached)
+    SmartPtr<Mortar::Model> m_Model;
 
     Fruit();
     ~Fruit();

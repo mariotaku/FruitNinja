@@ -2,14 +2,19 @@
 #include "asset/TextureManager.h"
 #include <cstdio>
 #include <cstring>
+#include <functional>
 
 namespace Mortar {
 
+MeshManager* MeshManager::s_instance = NULL;
+
 MeshManager::MeshManager() {
+    s_instance = this;
 }
 
 MeshManager::~MeshManager() {
     ReleaseAll();
+    if (s_instance == this) s_instance = NULL;
 }
 
 void MeshManager::Initialise(int capacity) {
@@ -49,7 +54,7 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     // Parse mesh data from ResourceLoader
     // The HBR0 structure has children for vertex streams, index streams,
     // material info, and texture paths
-    MortarMesh* mesh = new MortarMesh();
+    Mesh* mesh = new Mesh();
 
     // Try to extract texture path from the resource data
     // In the original, the mesh loader reads string properties for texture names
@@ -58,29 +63,42 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
     // Scan children for vertex and index data
     bool hasGeometry = false;
+    bool hasIndices = false;
+
+    printf("[MeshManager] '%s': root children=%d dataSize=%d\n",
+           path, (int)loader.ChildCount(), (int)loader.DataSize());
+
+    // Recursive lambda to search all levels of the HBR0 hierarchy
+    std::function<void(ResourceLoader&, int)> searchNode =
+        [&](ResourceLoader& node, int depth) {
+        printf("[MeshManager]   depth=%d: children=%d dataSize=%d\n",
+               depth, (int)node.ChildCount(), (int)node.DataSize());
+        // Try vertex stream on this node's data
+        if (!hasGeometry && node.DataSize() > 8) {
+            node.ResetReadPos();
+            if (LoadVertexStream(node, *mesh)) {
+                hasGeometry = true;
+                printf("[MeshManager]   depth=%d: FOUND vertex stream (verts=%d stride=%d)\n",
+                       depth, mesh->m_VertexCount, mesh->m_VertexStride);
+            }
+        }
+        // Try index stream on this node's data
+        if (!hasIndices && node.DataSize() > 4) {
+            node.ResetReadPos();
+            if (LoadIndexStream(node, *mesh)) {
+                hasIndices = true;
+                printf("[MeshManager]   depth=%d: FOUND index stream (idx=%d)\n",
+                       depth, mesh->m_IndexCount);
+            }
+        }
+        // Recurse into children
+        for (size_t i = 0; i < node.ChildCount(); i++) {
+            searchNode(node.m_Children[i], depth + 1);
+        }
+    };
 
     for (size_t i = 0; i < loader.ChildCount(); i++) {
-        ResourceLoader& child = loader.m_Children[i];
-
-        // Try loading as vertex stream
-        if (!hasGeometry && child.DataSize() > 8) {
-            child.ResetReadPos();
-
-            // Check if this child contains vertex/index data
-            // The format has: skip_count(u8), skip_data, vert_decl(u32), vert_count(u32)
-            if (LoadVertexStream(child, *mesh)) {
-                hasGeometry = true;
-            }
-        }
-
-        // Check sub-children for index streams
-        for (size_t j = 0; j < child.ChildCount(); j++) {
-            ResourceLoader& subChild = child.m_Children[j];
-            if (subChild.DataSize() > 4) {
-                subChild.ResetReadPos();
-                LoadIndexStream(subChild, *mesh);
-            }
-        }
+        searchNode(loader.m_Children[i], 1);
     }
 
     // If no children parsed, try the raw data directly (flat .mmd structure)
@@ -97,7 +115,7 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         LoadVertexStream(loader, *mesh);
     }
 
-    SmartPtr<MortarMesh> meshPtr(mesh);
+    SmartPtr<Mesh> meshPtr(mesh);
     model->m_Meshes.push_back(meshPtr);
     return SmartPtr<Model>(model);
 }
@@ -113,7 +131,7 @@ static int FmtSize(int fmt) {
 }
 
 // Matches LoadVertexStreamPSP (0x001a7b0c)
-bool MeshManager::LoadVertexStream(ResourceLoader& loader, MortarMesh& mesh) {
+bool MeshManager::LoadVertexStream(ResourceLoader& loader, Mesh& mesh) {
     if (loader.DataSize() < 9) return false;
 
     const uint8_t* data = loader.DataPtr();
@@ -146,7 +164,7 @@ bool MeshManager::LoadVertexStream(ResourceLoader& loader, MortarMesh& mesh) {
 
     // Compute stride and offsets (PSP order: tex, color, normal, position)
     int offset = 0;
-    MortarMesh::VertexLayout layout;
+    VertexLayout layout;
     memset(&layout, 0, sizeof(layout));
 
     // Texcoord
@@ -197,7 +215,7 @@ bool MeshManager::LoadVertexStream(ResourceLoader& loader, MortarMesh& mesh) {
 }
 
 // Matches LoadIndexStreamPSP (0x001a799c)
-bool MeshManager::LoadIndexStream(ResourceLoader& loader, MortarMesh& mesh) {
+bool MeshManager::LoadIndexStream(ResourceLoader& loader, Mesh& mesh) {
     if (loader.DataSize() < 7) return false;
 
     const uint8_t* data = loader.DataPtr();

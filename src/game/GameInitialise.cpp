@@ -19,6 +19,7 @@
 #include "screens/PowerUpShop.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
+#include "asset/MeshManager.h"
 #include "core/SystemManager.h"
 #include <cstdio>
 #include <string>
@@ -67,6 +68,12 @@ void GameInitialise() {
         dm.SetClearColour(Colour(0, 0, 0, 255));
         // DIFFERS: first component unknown (DAT in docs). GameDraw overwrites with worldPos anyway.
         dm.SetLightDirection(Vec3(0.0f, -10.0f, -5.0f));
+    }
+
+    // Step 8: MeshManager::Initialise(0x26C00) — mesh cache
+    {
+        static Mortar::MeshManager meshMgr;
+        meshMgr.Initialise(32);
     }
 
     // Step 10: InputManager
