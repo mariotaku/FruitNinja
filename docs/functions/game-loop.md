@@ -168,15 +168,15 @@ GameInitialise(displaySurface, dataPath):
   ├─ 21. Font[7] = new(0x438), Load(...)               → +0x68
   │
   │  Shared assets
-  ├─ 22. LoadLocalisedTexture("...") → g_GameData+0x17C  (fruit atlas)
-  ├─ 23. MenuButton::LoadContent()
-  ├─ 24. Fruit::LoadInfo()             // FRUIT_INFO from Fruit.xml
-  ├─ 25. SplatEntity::LoadContent()
-  │      SlashEntity::LoadContent()
-  │      Bomb::LoadContent()
-  │      GameOverScreen::LoadContent()
-  │      PowerUpShop::LoadContent()
-  └─     PreloadSounds()
+  ├─ 22. LoadLocalisedTexture("...") → g_GameData+0x17C  (fruit atlas) — TODO
+  ├─ 23. MenuButton::LoadContent()     — STUB (0x148030)
+  ├─ 24. Fruit::LoadInfo()             — PARTIAL (0x17987c, 519 lines; port parses name/scale/collision/chance only)
+  ├─ 25. SplatEntity::LoadContent()    — STUB (0x173114)
+  │      SlashEntity::LoadContent()    — STUB (0x17c948)
+  │      Bomb::LoadContent()           — IMPL (loads Bomb.mmd, Bomb_purple.mmd, bomb_explode.tex, minus_10.tex)
+  │      GameOverScreen::LoadContent() — STUB (0x1305cc)
+  │      PowerUpShop::LoadContent()    — STUB (0x1802f4)
+  └─     PreloadSounds()               — TODO
 ```
 
 #### Font Slot Map (g_GameData)

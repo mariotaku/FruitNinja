@@ -1,5 +1,6 @@
 #include "ActorManager.h"
 #include "Fruit.h"
+#include "Bomb.h"
 #include "render/Renderer.h"
 #include <cstdio>
 
@@ -10,7 +11,7 @@ Entity* ActorManager::Add(int entityType, bool hidden) {
 
     switch (entityType) {
     case 0: e = new Fruit(); break;
-    // case 1: e = new Bomb(); break;  // Phase 4
+    case 1: e = new Bomb(); break;
     default:
         printf("ActorManager::Add: unknown type %d\n", entityType);
         return NULL;

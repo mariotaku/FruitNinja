@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
+#include <string>
 
 // Random float in [-range, +range]
 static float RandRange(float range) {
@@ -216,4 +217,13 @@ bool Fruit::CheckOffscreen() const {
     if (pos.y > 800.0f) return true;    // way above
     if (pos.x < -200.0f || pos.x > 680.0f) return true;  // sides
     return false;
+}
+
+// Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
+void Fruit::LoadInfo() {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    std::string xmlPath = game->data_dir + "/xml/fruitlist.xml";
+    FruitInfo_Load(xmlPath.c_str());
 }

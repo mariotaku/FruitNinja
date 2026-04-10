@@ -12,6 +12,8 @@
 #include "MenuButton.h"
 #include "Game.h"
 #include "entities/Fruit.h"
+#include "entities/Bomb.h"
+#include "entities/FruitInfo.h"
 #include "entities/ActorManager.h"
 #include <cstdio>
 #include <cstdlib>
@@ -82,34 +84,36 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
     if (fruitType >= 0) {
         Game* game = Game::GetInstance();
         if (game && game->actorManager) {
-            // TODO: Original checks bomb threshold: entityType = (FruitInfo_GetCount() <= fruitType) ? 1 : 0
-            // Bomb entity (type 1) not yet implemented — always use Fruit (type 0) for now
-            int entityType = 0;  // 0 = Fruit
+            // Original: entityType = (FruitInfo_GetCount() <= fruitType) ? 1 : 0
+            int bombThreshold = FruitInfo_GetCount();
+            int entityType = (bombThreshold <= fruitType) ? 1 : 0;  // 0=Fruit, 1=Bomb
             Entity* e = game->actorManager->Add(entityType, true);
             if (e) {
-                Fruit* fruit = static_cast<Fruit*>(e);
-                fruit->pos = buttonPos;
-                fruit->Init(0, fruitType, 0);
-
-                // Post-init: shrink fruit for menu display
-                fruit->scale = fruit->scale * FRUIT_SCALE_FOR_MENU;
-                fruit->m_ScaleAnim = 1.0f;
-                fruit->m_ChuckDelay = 0.0f;
-                fruit->m_ZPosition = FRUIT_ZPOS;
-                fruit->flags &= ~0x10;  // unhide
-
+                e->pos = buttonPos;
+                e->Init(0, fruitType, 0);
+                e->flags &= ~0x10;  // unhide
                 m_pEntity = e;
-                m_pFruitPiece = fruit;
+
+                if (entityType == 0) {
+                    // Fruit entity: post-init adjustments
+                    Fruit* fruit = static_cast<Fruit*>(e);
+                    fruit->scale = fruit->scale * FRUIT_SCALE_FOR_MENU;
+                    fruit->m_ScaleAnim = 1.0f;
+                    fruit->m_ChuckDelay = 0.0f;
+                    fruit->m_ZPosition = FRUIT_ZPOS;
+                    m_pFruitPiece = fruit;
+
+                    // Clamp rotation magnitude
+                    if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
+                        fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
+                    if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
+                        fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
+                }
+                // Bomb entity (type 1): Init handles its own setup
 
                 // Random rotation speed (8-12 deg/frame, random direction)
                 m_RotationSpeed = ROT_SPEED_MIN + (float)(rand() % 40) / 10.0f;
                 if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
-
-                // Clamp rotation magnitude
-                if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
-                    fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
-                if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
-                    fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
             }
         }
 

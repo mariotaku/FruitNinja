@@ -34,6 +34,7 @@
 - Use `run_ghidra_script` to execute scripts from `~/ghidra_scripts/` (not project dir — copy if needed)
 - Use `rename_data` to name DAT_ symbols with meaningful names based on context
 - Use `force_decompile` after renaming to see updated decompilation with named symbols
+- **`add_struct_field` INSERTS bytes** (shifts subsequent fields) — do NOT use it to fill undefined gaps. Instead, define missing fields manually in Ghidra's Structure Editor. `remove_struct_field` also removes bytes, not just names.
 
 ## Coordinate System
 - Use the **original centered ortho** directly: `SetupOrtho(160, -160, -240, 240, 2000, -6000)`
@@ -50,6 +51,8 @@
 - **Use documented constants** — all magic numbers, timing values, thresholds, and addresses come from the binary. Do not substitute "cleaner" values.
 - **Match original call patterns** — if the binary calls `Reset → Scale → Translate → Upload → DrawQuad`, the port must call the same sequence in the same order. Do not merge or skip steps.
 - **GL ES 1.x → 2.0 translation only** — the only allowed deviation from original logic is translating fixed-function GL calls (glMatrixMode, glVertexPointer, etc.) to GLES2 shader equivalents. All other logic stays identical.
+- **Fixed timestep** — the original `SystemManager::Update` outputs a hardcoded dt = 1/60 (DAT_0018ae84 = 0x3C888889). The Bada timer fires every 10ms (~100fps). All lerps, physics, and timers are frame-rate-dependent and tuned for this rate. The port uses `SDL_Delay(10ms)` frame pacing. Do NOT compute dt from elapsed time.
+- **ARM comparison idioms** — Ghidra decompiles ARM comparisons as `if (-1 < (int)((uint)(A < B) << 0x1f))`. This fires when A >= B (NOT when A < B). A common pitfall: `if (ct < threshold) ct = threshold` in the decompile is actually a MAX clamp (`if ct >= threshold: ct = threshold`), not a MIN clamp.
 - **Prompts for implementation agents** are in `src/engine/prompts/` — use these as task specs.
 
 ## Analysis ↔ Implementation Tracking
