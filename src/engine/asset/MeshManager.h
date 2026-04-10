@@ -36,13 +36,15 @@ private:
     // Internal: parse HBR0 container and build Model
     SmartPtr<Model> LoadMeshInternal(const char* path);
 
-    // Parse vertex stream from ResourceLoader child
+    // Parse vertex stream from raw data buffer
     // Matches LoadVertexStreamPSP (0x001a7b0c)
-    bool LoadVertexStream(ResourceLoader& loader, Mesh& mesh);
+    bool TryParseVertexStream(const uint8_t* data, size_t dataSize, Mesh& mesh);
 
-    // Parse index stream from ResourceLoader child
+    // Parse index stream from raw data buffer
     // Matches LoadIndexStreamPSP (0x001a799c)
-    bool LoadIndexStream(ResourceLoader& loader, Mesh& mesh);
+    // On success, `consumed` is set to the number of bytes used
+    bool TryParseIndexStream(const uint8_t* data, size_t dataSize,
+                              Mesh& mesh, size_t& consumed);
 };
 
 } // namespace Mortar

@@ -4,6 +4,8 @@
 #include <cstring>
 #include <functional>
 
+// Analysed: 2026-04-11T14:00
+
 namespace Mortar {
 
 MeshManager* MeshManager::s_instance = NULL;
@@ -40,86 +42,6 @@ SmartPtr<Model> MeshManager::Load(const char* path) {
     return model;
 }
 
-// Matches LoadMeshInternal (0x001a8518) + LoadMesh (0x001a7c90)
-SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
-    ResourceLoader loader(path);
-    if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
-        fprintf(stderr, "MeshManager: failed to load '%s'\n", path);
-        return SmartPtr<Model>();
-    }
-
-    Model* model = new Model();
-    model->m_Name = path;
-
-    // Parse mesh data from ResourceLoader
-    // The HBR0 structure has children for vertex streams, index streams,
-    // material info, and texture paths
-    Mesh* mesh = new Mesh();
-
-    // Try to extract texture path from the resource data
-    // In the original, the mesh loader reads string properties for texture names
-    ResourceLoader texPathLoader = loader;
-    texPathLoader.ResetReadPos();
-
-    // Scan children for vertex and index data
-    bool hasGeometry = false;
-    bool hasIndices = false;
-
-    printf("[MeshManager] '%s': root children=%d dataSize=%d\n",
-           path, (int)loader.ChildCount(), (int)loader.DataSize());
-
-    // Recursive lambda to search all levels of the HBR0 hierarchy
-    std::function<void(ResourceLoader&, int)> searchNode =
-        [&](ResourceLoader& node, int depth) {
-        printf("[MeshManager]   depth=%d: children=%d dataSize=%d\n",
-               depth, (int)node.ChildCount(), (int)node.DataSize());
-        // Try vertex stream on this node's data
-        if (!hasGeometry && node.DataSize() > 8) {
-            node.ResetReadPos();
-            if (LoadVertexStream(node, *mesh)) {
-                hasGeometry = true;
-                printf("[MeshManager]   depth=%d: FOUND vertex stream (verts=%d stride=%d)\n",
-                       depth, mesh->m_VertexCount, mesh->m_VertexStride);
-            }
-        }
-        // Try index stream on this node's data
-        if (!hasIndices && node.DataSize() > 4) {
-            node.ResetReadPos();
-            if (LoadIndexStream(node, *mesh)) {
-                hasIndices = true;
-                printf("[MeshManager]   depth=%d: FOUND index stream (idx=%d)\n",
-                       depth, mesh->m_IndexCount);
-            }
-        }
-        // Recurse into children
-        for (size_t i = 0; i < node.ChildCount(); i++) {
-            searchNode(node.m_Children[i], depth + 1);
-        }
-    };
-
-    for (size_t i = 0; i < loader.ChildCount(); i++) {
-        searchNode(loader.m_Children[i], 1);
-    }
-
-    // If no children parsed, try the raw data directly (flat .mmd structure)
-    if (!hasGeometry && loader.DataSize() > 16) {
-        loader.ResetReadPos();
-
-        // Try to find index data first, then vertex data
-        // Index format: flags_byte, pad, pad, index_count(u32), indices...
-        // Vertex format: skip_count(u8), skip_data, vert_decl(u32), vert_count(u32), verts...
-
-        // Simple heuristic: scan for recognizable patterns
-        LoadIndexStream(loader, *mesh);
-        loader.ResetReadPos();
-        LoadVertexStream(loader, *mesh);
-    }
-
-    SmartPtr<Mesh> meshPtr(mesh);
-    model->m_Meshes.push_back(meshPtr);
-    return SmartPtr<Model>(model);
-}
-
 // Helper: compute element size from PSP format code
 static int FmtSize(int fmt) {
     switch (fmt) {
@@ -130,18 +52,89 @@ static int FmtSize(int fmt) {
     }
 }
 
-// Matches LoadVertexStreamPSP (0x001a7b0c)
-bool MeshManager::LoadVertexStream(ResourceLoader& loader, Mesh& mesh) {
-    if (loader.DataSize() < 9) return false;
+// Matches LoadMeshInternal (0x001a8518) + LoadMesh (0x001a7c90)
+// The HBR0 container typically has:
+//   root: children=[material_info, stream_data], rawData=mesh_metadata
+//   stream_data child: rawData=index_data + vertex_data (sequential)
+SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
+    ResourceLoader loader(path);
+    if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
+        fprintf(stderr, "MeshManager: failed to load '%s'\n", path);
+        return SmartPtr<Model>();
+    }
 
-    const uint8_t* data = loader.DataPtr();
+    Model* model = new Model();
+    model->m_Name = path;
+
+    Mesh* mesh = new Mesh();
+
+    // Search all nodes for vertex and index data
+    bool hasGeometry = false;
+    bool hasIndices = false;
+
+    std::function<void(ResourceLoader&)> searchNode =
+        [&](ResourceLoader& node) {
+        // Try to parse combined index+vertex data from this node
+        if ((!hasGeometry || !hasIndices) && node.DataSize() > 12) {
+            const uint8_t* data = node.DataPtr();
+            size_t dataSize = node.DataSize();
+
+            // Try index stream first (common ordering in .mmd files)
+            if (!hasIndices) {
+                size_t consumed = 0;
+                if (TryParseIndexStream(data, dataSize, *mesh, consumed)) {
+                    hasIndices = true;
+                    // Try vertex stream from remaining data
+                    if (!hasGeometry && consumed < dataSize) {
+                        if (TryParseVertexStream(data + consumed, dataSize - consumed, *mesh)) {
+                            hasGeometry = true;
+                        }
+                    }
+                }
+            }
+
+            // Try vertex stream from start if not found yet
+            if (!hasGeometry && node.DataSize() > 8) {
+                if (TryParseVertexStream(data, dataSize, *mesh)) {
+                    hasGeometry = true;
+                }
+            }
+        }
+        // Recurse into children
+        for (size_t i = 0; i < node.ChildCount(); i++) {
+            searchNode(node.m_Children[i]);
+        }
+    };
+
+    // Search root and all children
+    searchNode(loader);
+
+    if (!hasGeometry || !hasIndices) {
+        printf("[MeshManager] '%s': INCOMPLETE — geometry=%d indices=%d\n",
+               path, hasGeometry, hasIndices);
+    } else {
+        printf("[MeshManager] '%s': OK — verts=%d idx=%d stride=%d vbo=%u ibo=%u\n",
+               path, mesh->m_VertexCount, mesh->m_IndexCount,
+               mesh->m_VertexStride, mesh->m_VBO, mesh->m_IBO);
+    }
+
+    SmartPtr<Mesh> meshPtr(mesh);
+    model->m_Meshes.push_back(meshPtr);
+    return SmartPtr<Model>(model);
+}
+
+// Matches LoadVertexStreamPSP (0x001a7b0c)
+bool MeshManager::TryParseVertexStream(const uint8_t* data, size_t dataSize, Mesh& mesh) {
+    if (dataSize < 9) return false;
+
     size_t pos = 0;
 
     // Skip count (u8) + skip data
     uint8_t skipCount = data[pos++];
+    if (skipCount > 16) return false; // sanity check
     pos += skipCount * 4;
 
-    if (pos + 8 > loader.DataSize()) return false;
+    if (pos + 8 > dataSize) return false;
 
     // Vertex declaration bitfield (u32)
     uint32_t vertDecl = 0;
@@ -198,7 +191,7 @@ bool MeshManager::LoadVertexStream(ResourceLoader& loader, Mesh& mesh) {
     if (layout.totalStride == 0) return false;
 
     size_t vertDataSize = (size_t)vertCount * layout.totalStride;
-    if (pos + vertDataSize > loader.DataSize()) return false;
+    if (pos + vertDataSize > dataSize) return false;
 
     // Upload vertex data to GPU
     glGenBuffers(1, &mesh.m_VBO);
@@ -215,10 +208,12 @@ bool MeshManager::LoadVertexStream(ResourceLoader& loader, Mesh& mesh) {
 }
 
 // Matches LoadIndexStreamPSP (0x001a799c)
-bool MeshManager::LoadIndexStream(ResourceLoader& loader, Mesh& mesh) {
-    if (loader.DataSize() < 7) return false;
+// Returns true and sets `consumed` to bytes used if successful
+bool MeshManager::TryParseIndexStream(const uint8_t* data, size_t dataSize,
+                                       Mesh& mesh, size_t& consumed) {
+    consumed = 0;
+    if (dataSize < 7) return false;
 
-    const uint8_t* data = loader.DataPtr();
     size_t pos = 0;
 
     // Skip 2 padding bytes
@@ -229,11 +224,12 @@ bool MeshManager::LoadIndexStream(ResourceLoader& loader, Mesh& mesh) {
     uint8_t primBits = idxFlags & 0xF0;
 
     switch (primBits) {
+        case 0x20: mesh.m_PrimType = GL_TRIANGLE_STRIP; break;
         case 0x40: mesh.m_PrimType = GL_TRIANGLES; break;
         default:   mesh.m_PrimType = GL_TRIANGLE_STRIP; break;
     }
 
-    if (pos + 4 > loader.DataSize()) return false;
+    if (pos + 4 > dataSize) return false;
 
     // Index count (u32)
     uint32_t idxCount = 0;
@@ -243,7 +239,7 @@ bool MeshManager::LoadIndexStream(ResourceLoader& loader, Mesh& mesh) {
     if (idxCount == 0 || idxCount > 100000) return false;
 
     size_t idxDataSize = (size_t)idxCount * 2; // uint16 indices
-    if (pos + idxDataSize > loader.DataSize()) return false;
+    if (pos + idxDataSize > dataSize) return false;
 
     // Upload index data to GPU
     glGenBuffers(1, &mesh.m_IBO);
@@ -253,6 +249,7 @@ bool MeshManager::LoadIndexStream(ResourceLoader& loader, Mesh& mesh) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     mesh.m_IndexCount = (int)idxCount;
+    consumed = pos + idxDataSize;
 
     return true;
 }
