@@ -67,7 +67,7 @@ private:
     // +0x9c..+0xb0: button pointers (created lazily)
     MenuButton* pPlayButton;       // +0x9c
     MenuButton* pDojoButton;       // +0xa0
-    MenuButton* pLeaderboardBtn;   // +0xa4
+    MenuButton* pQuitBtn;          // +0xa4: quit button (uses m_TexQuit, callback=QuitGamesCallback)
     MenuButton* pMoreGamesBtn;     // +0xa8
     MenuButton* pSoundToggle;      // +0xac
     MenuButton* pMusicToggle;      // +0xb0
@@ -116,7 +116,7 @@ private:
     void Hide();
     void CreateToggles();
     void CreatePlayDojo();
-    void CreateLeaderboard();
+    void CreateQuitButton();
     void RemoveButton(MenuButton*& btn);
 
     // --- Callbacks ---
