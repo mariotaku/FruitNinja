@@ -60,7 +60,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
         // against reference screenshots. Formula: target_size / (mesh_extent * xml_scale * 0.01 * 0.2)
         static const Vec3 globalScaleVec(2.75f, 2.75f, 2.75f);
         const FruitInfo* info = FruitInfo_Get(fruitType);
-        float fruitScale = info ? info->scale * 0.01f : 1.0f;
+        float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
         scale = globalScaleVec * fruitScale;
     }
 
