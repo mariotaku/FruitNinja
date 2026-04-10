@@ -38,7 +38,7 @@ static GLuint TexId(const SmartPtr<Mortar::Texture>& tex) {
 // Button positions (verified from read_memory, docs/screens/main.md)
 static const Vec3 POS_PLAY_BUTTON(16.0f, -66.0f, -50.0f);
 static const Vec3 POS_DOJO_BUTTON(-144.0f, -65.0f, -50.0f);
-static const Vec3 POS_LEADERBOARD(182.0f, -106.0f, 0.0f);
+static const Vec3 POS_QUIT(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_MORE_GAMES(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
@@ -47,7 +47,7 @@ static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 MainScreen::MainScreen(Game& g)
     : game(g),
       pPlayButton(NULL), pDojoButton(NULL),
-      pLeaderboardBtn(NULL), pMoreGamesBtn(NULL),
+      pQuitBtn(NULL), pMoreGamesBtn(NULL),
       pSoundToggle(NULL), pMusicToggle(NULL),
       m_Alpha(1.0f),
       m_LogoNinjaTextX(0.0f), m_WindowCenter(0.0f), field_0x100(0.0f),
@@ -120,7 +120,7 @@ void MainScreen::Release() {
     // Zero all button pointers (HUD owns them, don't delete here)
     pPlayButton = NULL;
     pDojoButton = NULL;
-    pLeaderboardBtn = NULL;
+    pQuitBtn = NULL;
     pMoreGamesBtn = NULL;
     pSoundToggle = NULL;
     pMusicToggle = NULL;
@@ -152,7 +152,7 @@ void MainScreen::Update(float dt) {
         // Transition to CREATE_BUTTONS when camera settles
         if (m_CameraTransition < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
             m_State = STATE_CREATE_BUTTONS;
-            CreateLeaderboard();
+            CreateQuitButton();
         }
         break;
     }
@@ -556,17 +556,19 @@ void MainScreen::CreatePlayDojo() {
     game.hud->AddControl(pDojoButton);
 }
 
-void MainScreen::CreateLeaderboard() {
+void MainScreen::CreateQuitButton() {
     if (!game.hud) return;
 
     // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
-    pLeaderboardBtn = new MenuButton();
-    pLeaderboardBtn->m_Texture = TexId(m_TexQuit);
-    pLeaderboardBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
-    pLeaderboardBtn->Init(POS_LEADERBOARD,
+    pQuitBtn = new MenuButton();
+    pQuitBtn->m_Texture = TexId(m_TexQuit);
+    pQuitBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
+    // TODO: Binary passes FruitInfo_GetCount() as fruitType (>= count → Bomb entity)
+    // Bomb entity not yet implemented, using -1 (no entity) for now
+    pQuitBtn->Init(POS_QUIT,
         [this]() { QuitGamesCallback(); }, -1, Vec3(0,0,0), nullptr);
-    pLeaderboardBtn->m_LayerFlags = 8;
-    game.hud->AddControl(pLeaderboardBtn);
+    pQuitBtn->m_LayerFlags = 8;
+    game.hud->AddControl(pQuitBtn);
 }
 
 // --- Callbacks (all fully decompiled in docs/screens/main.md) ---
@@ -575,7 +577,7 @@ void MainScreen::CreateLeaderboard() {
 void MainScreen::GameModeCallback() {
     m_State = STATE_MODE_SELECT;
     m_Timer2 = 1.0f;
-    pLeaderboardBtn = NULL;
+    pQuitBtn = NULL;
 }
 
 // Matches 0x0014c384
@@ -588,7 +590,7 @@ void MainScreen::NewGameCallback() {
 void MainScreen::AboutCallback() {
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
-    pLeaderboardBtn = NULL;
+    pQuitBtn = NULL;
 }
 
 // Matches 0x0014af64
@@ -624,7 +626,7 @@ void MainScreen::QuitGamesCallback() {
 // Touch handling — routed from InputManager
 bool MainScreen::HandleTouchDown(float x, float y) {
     // Route to visible buttons
-    MenuButton* buttons[] = { pPlayButton, pDojoButton, pLeaderboardBtn,
+    MenuButton* buttons[] = { pPlayButton, pDojoButton, pQuitBtn,
                                pMoreGamesBtn, pSoundToggle, pMusicToggle };
     for (int i = 0; i < 6; i++) {
         if (buttons[i] && buttons[i]->m_bActive && buttons[i]->HitTest(x, y)) {
@@ -636,7 +638,7 @@ bool MainScreen::HandleTouchDown(float x, float y) {
 }
 
 void MainScreen::HandleTouchUp(float x, float y) {
-    MenuButton* buttons[] = { pPlayButton, pDojoButton, pLeaderboardBtn,
+    MenuButton* buttons[] = { pPlayButton, pDojoButton, pQuitBtn,
                                pMoreGamesBtn, pSoundToggle, pMusicToggle };
     for (int i = 0; i < 6; i++) {
         if (buttons[i]) {

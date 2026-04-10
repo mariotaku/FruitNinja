@@ -82,7 +82,8 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
     if (fruitType >= 0) {
         Game* game = Game::GetInstance();
         if (game && game->actorManager) {
-            // Original: entityType = (fruitType >= bombThreshold) ? 1 : 0
+            // TODO: Original checks bomb threshold: entityType = (FruitInfo_GetCount() <= fruitType) ? 1 : 0
+            // Bomb entity (type 1) not yet implemented — always use Fruit (type 0) for now
             int entityType = 0;  // 0 = Fruit
             Entity* e = game->actorManager->Add(entityType, true);
             if (e) {

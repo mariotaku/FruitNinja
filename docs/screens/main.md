@@ -22,7 +22,7 @@ The main menu / dojo screen. Contains all menu buttons, toggle buttons (sound/mu
 | +0x98 | SmartPtr\<Texture\> | m_TexQuit | `quit.tex` (GOT+c78c); used for quit button at +0xA4 |
 | +0x9c | MenuButton* | pPlayButton | asm: `str r6,[r4,#0x9c]`, tex from +0x88 |
 | +0xa0 | MenuButton* | pDojoButton | asm: `str r6,[r4,#0xa0]`, tex from +0x8C |
-| +0xa4 | MenuButton* | pLeaderboardBtn | asm: `str r6,[r4,#0xa4]`, shared slot (quit.tex path + more_games.tex alt path) |
+| +0xa4 | MenuButton* | pQuitBtn | asm: `str r6,[r4,#0xa4]`, shared slot (quit.tex path + more_games.tex alt path) |
 | +0xa8 | MenuButton* | pMoreGamesBtn | No asm store found in Update — may be unused or set elsewhere |
 | +0xac | MenuButton* | pSoundToggle | asm: `str r6,[r4,#0xac]`, first button created in state 0 |
 | +0xb0 | MenuButton* | pMusicToggle | asm: `str r6,[r4,#0xb0]`, second button created in state 0 |
@@ -333,7 +333,7 @@ void MainScreen::GameModeCallback() {
     m_Timer2 = 1.0f;
     TutorialControl::ResetTutePos(game->tutorial, NULL);
     FruitSaveData::DownloadTweaks();
-    pLeaderboardBtn = NULL;
+    pQuitBtn = NULL;
     InitVec3(game->field_0x194);    // reset camera target
 }
 ```
@@ -357,7 +357,7 @@ void MainScreen::AboutCallback() {
     m_State = 4;
     m_Timer2 = 1.0f;
     TutorialControl::ResetTutePos(game->tutorial, NULL);
-    pLeaderboardBtn = NULL;
+    pQuitBtn = NULL;
 }
 ```
 
@@ -406,9 +406,9 @@ void MainScreen::MoreGamesCallback() {
 void MainScreen::QuitGamesCallback() {
     SystemManager::RequestQuit();
     // Animate leaderboard button: set flag at piece+0x80, scale piece ×10.0
-    int piece = pLeaderboardBtn->field_0x134;
+    int piece = pQuitBtn->field_0x134;
     piece->field_0x80 = 1;
-    piece->scale = pLeaderboardBtn->scale * 10.0;
+    piece->scale = pQuitBtn->scale * 10.0;
     m_State = 0x17;     // → wait for entities → bomb flash → quit
 }
 ```
