@@ -2,7 +2,6 @@
 #include "asset/TextureManager.h"
 #include <cstdio>
 #include <cstring>
-#include <functional>
 
 // Analysed: 2026-04-11T16:00
 
@@ -59,7 +58,10 @@ static int FmtSize(int fmt) {
     }
 }
 
-static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mesh& mesh) {
+// Matches LoadVertexStreamPSP (0x001a7b0c, 112 lines)
+// Parses PSP vertex declaration bitfield + vertex data into a GeometryEntry VBO.
+// Returns true on success.
+static bool ParseVertexStream(const uint8_t* data, size_t dataSize, GeometryEntry& geom) {
     if (dataSize < 9) return false;
     size_t pos = 0;
     uint8_t skipCount = data[pos++];
@@ -73,6 +75,7 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mesh& mesh) 
     memcpy(&vertCount, data + pos, 4); pos += 4;
     if (vertCount == 0 || vertCount > 100000) return false;
 
+    // PSP vertex declaration bitfield (from LoadVertexStreamPSP / LegacyPSPVertexDecl)
     int texFmt    = (vertDecl >> 0) & 0x3;
     int colorFmt  = (vertDecl >> 5) & 0x3;
     int normalFmt = (vertDecl >> 7) & 0x3;
@@ -83,12 +86,17 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mesh& mesh) 
     VertexLayout layout;
     memset(&layout, 0, sizeof(layout));
 
+    // Layout order (PSP): tex, color, normal, pos
     int texBytes = FmtSize(texFmt) * 2;
     layout.texOffset = offset; layout.texSize = texBytes; offset += texBytes;
+
     int colorBytes = (colorFmt == 1 || colorFmt == 2) ? 2 : (colorFmt == 3 ? 4 : 0);
-    layout.colorOffset = offset; layout.colorSize = colorBytes; offset += colorBytes;
+    layout.colorOffset = offset; layout.colorSize = colorBytes; layout.colorFmt = colorFmt;
+    offset += colorBytes;
+
     int normalBytes = FmtSize(normalFmt) * 3;
     layout.normalOffset = offset; layout.normalSize = normalBytes; offset += normalBytes;
+
     int posBytes = FmtSize(posFmt) * 3;
     layout.posOffset = offset; layout.posSize = posBytes; offset += posBytes;
     layout.totalStride = offset;
@@ -97,26 +105,29 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mesh& mesh) 
     size_t vertDataSize = (size_t)vertCount * layout.totalStride;
     if (pos + vertDataSize > dataSize) return false;
 
-    glGenBuffers(1, &mesh.m_VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.m_VBO);
+    glGenBuffers(1, &geom.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, geom.vbo);
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vertDataSize, data + pos, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    mesh.m_VertexCount = (int)vertCount;
-    mesh.m_VertexStride = layout.totalStride;
-    mesh.m_Layout = layout;
+    geom.vertCount = (int)vertCount;
+    geom.layout = layout;
     return true;
 }
 
-static bool ParseIndexStream(const uint8_t* data, size_t dataSize, Mesh& mesh, size_t& consumed) {
+// Matches LoadIndexStreamPSP (0x001a799c, ~40 lines)
+// Parses index stream header + index data into a GeometryEntry IBO.
+// Returns true on success; sets consumed to bytes read from data.
+static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
+                             GeometryEntry& geom, size_t& consumed) {
     consumed = 0;
     if (dataSize < 7) return false;
-    size_t pos = 2; // skip padding
+    size_t pos = 2; // skip 2-byte padding
     uint8_t idxFlags = data[pos++];
     switch (idxFlags & 0xF0) {
-        case 0x20: mesh.m_PrimType = GL_TRIANGLE_STRIP; break;
-        case 0x40: mesh.m_PrimType = GL_TRIANGLES; break;
-        default:   mesh.m_PrimType = GL_TRIANGLE_STRIP; break;
+        case 0x20: geom.primType = GL_TRIANGLE_STRIP; break;
+        case 0x40: geom.primType = GL_TRIANGLES; break;
+        default:   geom.primType = GL_TRIANGLE_STRIP; break;
     }
     if (pos + 4 > dataSize) return false;
     uint32_t idxCount = 0;
@@ -125,26 +136,29 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize, Mesh& mesh, s
     size_t idxDataSize = (size_t)idxCount * 2;
     if (pos + idxDataSize > dataSize) return false;
 
-    glGenBuffers(1, &mesh.m_IBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.m_IBO);
+    glGenBuffers(1, &geom.ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geom.ibo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)idxDataSize, data + pos, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    mesh.m_IndexCount = (int)idxCount;
+    geom.indexCount = (int)idxCount;
     consumed = pos + idxDataSize;
     return true;
 }
 
 // Matches LoadMeshInternal (0x001a8518) + LoadModel (0x001a8468) + LoadMesh (0x001a7c90)
 //
-// Original flow: LoadMeshInternal registers loaders for IVertexStream, IIndexStream,
-// Model, and Mesh types, then calls ResourceLoader::Load<Model>(). The recursive
-// delegate system creates nested ResourceLoaders for each sub-resource type.
+// The root ResourceLoader maps to both the Model and Mesh scope:
+//   LoadModel reads: model name, Read<Skeleton> (skipped), meshCount
+//   LoadMesh reads (sequentially from same loader): mesh name, boneCount + bones,
+//     materialCount + per-material ReadSubResourceLookup, geometryCount + per-geometry
+//     ReadSubResourceLookup + Read<u16> matIndex
+//   children[0..N]: material and geometry sub-resources referenced by 1-based index
 //
-// Port: We parse the HBR0 container directly, extracting:
-//   - Material data from children (material name, colors, texture refs)
-//   - Geometry data from children (index + vertex streams)
-// The root rawData contains model-level metadata (name, skeleton, mesh count).
+// Material child rawData: matName(ReadString), texIdx(ReadSubResourceLookup),
+//   4×u32 colors, float specular, unused ReadSubResourceLookup
+// Texture grandchild rawData: texMapName(ReadString), texRelPath(ReadString)
+// Geometry child rawData: index stream bytes || vertex stream bytes (sequential)
 SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     ResourceLoader loader(path);
     if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
@@ -154,118 +168,160 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
     Model* model = new Model();
     model->m_Name = path;
-    Mesh* mesh = new Mesh();
 
-    // --- Parse material data from children ---
-    // Material children have rawData starting with a ReadString (material name)
-    // and contain a grandchild with texture path info.
-    // Material child rawData: name, sub-resource-index(u32), 4×u32 colors, float specular
-    for (size_t ci = 0; ci < loader.ChildCount(); ci++) {
-        ResourceLoader& child = loader.m_Children[ci];
-        // Material children have grandchildren (texture info) and rawData > 20 bytes
-        if (child.ChildCount() > 0 && child.DataSize() > 20) {
-            child.ResetReadPos();
+    loader.ResetReadPos();
 
-            // Read material name
-            AsciiString matName = child.ReadString();
-            mesh->m_Material.m_Name = matName.CStr();
+    // --- LoadModel portion ---
+    // ReadString → model name (stored in Model, mesh name read again below)
+    AsciiString modelName = loader.ReadString();
+
+    // Read<Skeleton>: reads boneCount + per-bone data; skeleton not used yet, skip all
+    loader.SkipSkeleton();
+
+    // meshCount: number of Mesh sub-resources that follow
+    if (loader.m_ReadPos + 4 > loader.DataSize()) {
+        fprintf(stderr, "MeshManager: '%s': truncated before meshCount\n", path);
+        delete model;
+        return SmartPtr<Model>();
+    }
+    uint32_t meshCount = loader.Read<uint32_t>();
+    if (meshCount == 0 || meshCount > 64) {
+        fprintf(stderr, "MeshManager: '%s': bad meshCount=%u\n", path, meshCount);
+        delete model;
+        return SmartPtr<Model>();
+    }
+
+    // --- LoadMesh portion (one per mesh, sequential on same loader) ---
+    for (uint32_t mi = 0; mi < meshCount; mi++) {
+        Mesh* mesh = new Mesh();
+
+        // ReadString → mesh name
+        if (loader.m_ReadPos + 2 > loader.DataSize()) break;
+        AsciiString meshName = loader.ReadString();
+        mesh->m_Name = meshName.CStr();
+
+        // Read<ulong> → boneCount + per-bone BoneBinding data
+        if (loader.m_ReadPos + 4 > loader.DataSize()) break;
+        uint32_t boneCount = loader.Read<uint32_t>();
+        if (boneCount > 0 && boneCount < 256) {
+            std::vector<BoneBinding> bones(boneCount);
+            for (uint32_t i = 0; i < boneCount; i++) {
+                if (loader.m_ReadPos + 2 > loader.DataSize()) break;
+                AsciiString boneName = loader.ReadString();
+                bones[i].m_Name = boneName.CStr();
+                if (loader.m_ReadPos + 24 <= loader.DataSize()) {
+                    loader.ReadBytes(&bones[i].m_BoundsMin, sizeof(Vec3));
+                    loader.ReadBytes(&bones[i].m_BoundsMax, sizeof(Vec3));
+                }
+            }
+            mesh->SetBones(bones.data(), (int)boneCount);
+        }
+
+        // Read<ulong> → materialCount + per-material sub-resource
+        if (loader.m_ReadPos + 4 > loader.DataSize()) break;
+        uint32_t matCount = loader.Read<uint32_t>();
+
+        for (uint32_t i = 0; i < matCount; i++) {
+            // ReadSubResourceLookup → material child (1-based index into loader.m_Children)
+            ResourceLoader* matChild = loader.ReadSubResourceLookup();
+            if (!matChild) continue;
+
+            MeshMaterial mat;
+            matChild->ResetReadPos();
+
+            // Read material name (Material_Old = just AsciiString in rawData)
+            AsciiString matName = matChild->ReadString();
+            mat.m_Name = matName.CStr();
 
             // ReadSubResourceLookup → texture grandchild
-            ResourceLoader* texChild = child.ReadSubResourceLookup();
+            ResourceLoader* texChild = matChild->ReadSubResourceLookup();
             if (texChild) {
-                AsciiString texName = texChild->ReadString();
-                AsciiString texRelPath = texChild->ReadString();
+                texChild->ResetReadPos();
+                AsciiString texName = texChild->ReadString();    // e.g. "Map #1" (unused)
+                AsciiString texRelPath = texChild->ReadString();  // e.g. "textures\fruit_atlas.tex"
 
                 std::string texPath = texRelPath.CStr();
                 for (size_t j = 0; j < texPath.size(); j++)
                     if (texPath[j] == '\\') texPath[j] = '/';
+
                 std::string fullPath = std::string(loader.BasePathGet().CStr()) + texPath;
-                mesh->m_Material.m_Texture = TextureManager::GetInstance().Load(fullPath.c_str());
-                mesh->m_DiffuseTexture = mesh->m_Material.m_Texture;
+                mat.m_Texture = TextureManager::GetInstance().Load(fullPath.c_str());
             }
 
-            // Read 4 color u32 + 1 float specular (matches LoadMesh material loop)
-            if (child.m_ReadPos + 20 <= child.DataSize()) {
-                uint32_t color0 = child.Read<uint32_t>();
-                uint32_t color1 = child.Read<uint32_t>();
-                uint32_t color2 = child.Read<uint32_t>(); // unused
-                uint32_t color3 = child.Read<uint32_t>();
-                float specular  = child.Read<float>();
+            // Read 4 color u32 + float specular (matches LoadMesh material loop)
+            if (matChild->m_ReadPos + 20 <= matChild->DataSize()) {
+                uint32_t color0 = matChild->Read<uint32_t>(); // Ambience property
+                uint32_t color1 = matChild->Read<uint32_t>(); // Diffuse property
+                (void)matChild->Read<uint32_t>(); // color2 / uStack_224 — unused in binary
+                uint32_t color3 = matChild->Read<uint32_t>(); // SelfIllum property
+                float specular  = matChild->Read<float>();
 
-                color0 |= 0xFF000000; // force alpha (matches binary)
+                color0 |= 0xFF000000; // force full alpha (matches binary)
 
-                mesh->m_Material.m_Diffuse = GetColourRGB(color0);
-                mesh->m_Material.m_Ambience = GetColourRGB(color1);
-                mesh->m_Material.m_SelfIllum = GetColourRGB(color3);
-                mesh->m_Material.m_SpecularStrength = specular;
-                mesh->m_Material.m_IsLit = false;
+                mat.m_Diffuse = GetColourRGB(color0);
+                mat.m_Ambience = GetColourRGB(color1);
+                mat.m_SelfIllum = GetColourRGB(color3);
+                mat.m_SpecularStrength = specular;
+                mat.m_IsLit = false;
             }
-            break; // use first material
+
+            // ReadSubResourceLookup → additional sub-resource (unused in port)
+            matChild->ReadSubResourceLookup();
+
+            mesh->m_Materials.push_back(mat);
         }
-    }
 
-    // --- Parse geometry data from children ---
-    // Geometry children have no grandchildren and large rawData (index + vertex streams)
-    bool hasGeometry = false;
-    bool hasIndices = false;
-
-    std::function<void(ResourceLoader&)> searchGeometry =
-        [&](ResourceLoader& node) {
-        if (hasGeometry && hasIndices) return;
-        if (node.DataSize() > 12) {
-            const uint8_t* d = node.DataPtr();
-            size_t ds = node.DataSize();
-            size_t consumed = 0;
-            if (!hasIndices && ParseIndexStream(d, ds, *mesh, consumed)) {
-                hasIndices = true;
-                if (!hasGeometry && consumed < ds) {
-                    if (ParseVertexStream(d + consumed, ds - consumed, *mesh))
-                        hasGeometry = true;
-                }
-            }
-            if (!hasGeometry && ParseVertexStream(d, ds, *mesh))
-                hasGeometry = true;
+        // Read<ulong> → geometryCount + per-geometry sub-resource + matIndex
+        if (loader.m_ReadPos + 4 > loader.DataSize()) {
+            model->m_Meshes.push_back(SmartPtr<Mesh>(mesh));
+            continue;
         }
-        for (size_t i = 0; i < node.ChildCount(); i++)
-            searchGeometry(node.m_Children[i]);
-    };
+        uint32_t geomCount = loader.Read<uint32_t>();
 
-    for (size_t ci = 0; ci < loader.ChildCount(); ci++)
-        searchGeometry(loader.m_Children[ci]);
+        for (uint32_t i = 0; i < geomCount; i++) {
+            // ReadSubResourceLookup → geometry child (rawData = index+vertex streams)
+            ResourceLoader* geomChild = loader.ReadSubResourceLookup();
 
-    // --- Parse bone bindings from root rawData ---
-    // Root rawData contains model-level data: name, skeleton (bone count + bone data),
-    // mesh count, and sub-resource indices. We extract bone bindings from the skeleton.
-    if (loader.DataSize() > 10) {
-        loader.ResetReadPos();
-        AsciiString modelName = loader.ReadString();
-        mesh->m_Name = modelName.CStr();
+            // Read<u16> matIndex — from mesh loader (not geomChild), matches LoadMesh binary
+            uint16_t matIndex = 0;
+            if (loader.m_ReadPos + 2 <= loader.DataSize()) {
+                matIndex = loader.Read<uint16_t>();
+            }
 
-        // Read skeleton: bone count + per-bone (name + 2×Vec3 bounds)
-        if (loader.m_ReadPos + 4 <= loader.DataSize()) {
-            uint32_t boneCount = loader.Read<uint32_t>();
-            if (boneCount > 0 && boneCount < 256) {
-                std::vector<BoneBinding> bones(boneCount);
-                for (uint32_t i = 0; i < boneCount && loader.m_ReadPos + 6 <= loader.DataSize(); i++) {
-                    AsciiString boneName = loader.ReadString();
-                    bones[i].m_Name = boneName.CStr();
-                    if (loader.m_ReadPos + 24 <= loader.DataSize()) {
-                        loader.ReadBytes(&bones[i].m_BoundsMin, sizeof(Vec3));
-                        loader.ReadBytes(&bones[i].m_BoundsMax, sizeof(Vec3));
+            GeometryEntry geom;
+            geom.materialIndex = (int)matIndex;
+
+            if (geomChild) {
+                const uint8_t* d = geomChild->DataPtr();
+                size_t ds = geomChild->DataSize();
+                size_t consumed = 0;
+                if (ParseIndexStream(d, ds, geom, consumed)) {
+                    if (consumed < ds) {
+                        ParseVertexStream(d + consumed, ds - consumed, geom);
                     }
                 }
-                mesh->SetBones(bones.data(), (int)boneCount);
+            }
+
+            if (geom.vbo || geom.ibo) {
+                mesh->m_Geometries.push_back(geom);
+            } else {
+                printf("[MeshManager] '%s' mesh[%u] geom[%u]: no GPU data\n", path, mi, i);
             }
         }
+
+        if (mesh->m_Geometries.empty()) {
+            printf("[MeshManager] '%s' mesh[%u]: no geometries loaded\n", path, mi);
+        }
+
+        model->m_Meshes.push_back(SmartPtr<Mesh>(mesh));
     }
 
-    if (!hasGeometry || !hasIndices) {
-        printf("[MeshManager] '%s': INCOMPLETE — geometry=%d indices=%d\n",
-               path, hasGeometry, hasIndices);
+    if (model->m_Meshes.empty()) {
+        fprintf(stderr, "MeshManager: '%s': no meshes loaded\n", path);
+        delete model;
+        return SmartPtr<Model>();
     }
 
-    SmartPtr<Mesh> meshPtr(mesh);
-    model->m_Meshes.push_back(meshPtr);
     return SmartPtr<Model>(model);
 }
 

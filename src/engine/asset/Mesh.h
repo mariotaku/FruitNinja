@@ -31,7 +31,8 @@ struct BoneBinding {
 struct VertexLayout {
     int posOffset;    int posSize;     // 3 floats typically
     int normalOffset; int normalSize;  // 3 floats or 3 shorts
-    int colorOffset;  int colorSize;   // 4 bytes RGBA
+    int colorOffset;  int colorSize;   // 0, 2, or 4 bytes
+    int colorFmt;                      // 0=none, 1=BGR5650, 2=ABGR5551, 3=RGBA8888
     int texOffset;    int texSize;     // 2 floats
     int totalStride;
 };
@@ -52,6 +53,26 @@ struct MeshMaterial {
     MeshMaterial() : m_SpecularStrength(0.0f), m_IsLit(false) {}
 };
 
+// One GPU-resident geometry sub-mesh (VBO + IBO pair with material index)
+// Replaces the original Geometry/GeometryBinding system per entry in m_Geometries
+// Ref: LoadMesh geometry loop (0x001a7c90 lines 320+)
+struct GeometryEntry {
+    GLuint vbo;
+    GLuint ibo;
+    int vertCount;
+    int indexCount;
+    GLenum primType;
+    VertexLayout layout;
+    int materialIndex;  // index into Mesh::m_Materials
+
+    GeometryEntry()
+        : vbo(0), ibo(0), vertCount(0), indexCount(0)
+        , primType(GL_TRIANGLES), materialIndex(0)
+    {
+        memset(&layout, 0, sizeof(layout));
+    }
+};
+
 // Matches original Mortar::Mesh (0x7C = 124 bytes)
 // Inherits: ReferenceCounter → IModelNode → Mesh
 // Port specific: skips Effect/Geometry/SharedEffectProperties system,
@@ -65,22 +86,13 @@ public:
 
     std::vector<BoneBinding> m_BoneBindings;    // +0x34 equiv: Bone binding array
 
-    // Port specific: replaces vector<SmartPtr<Geometry>> at +0x40
-    // and the Effect property system at +0x4C–0x78
-    // Each Mesh has one geometry (VBO/IBO pair) in the port
-    GLuint m_VBO;
-    GLuint m_IBO;
-    int m_VertexCount;
-    int m_IndexCount;
-    int m_VertexStride;
-    GLenum m_PrimType;
-    VertexLayout m_Layout;
+    // +0x40 equiv: Geometry submeshes (original: vector<SmartPtr<Geometry>>)
+    // Port: each entry has its own VBO/IBO pair + material index
+    std::vector<GeometryEntry> m_Geometries;
 
-    // Port specific: replaces SharedEffectProperties DiffuseMap property
-    SmartPtr<Texture> m_DiffuseTexture;
-
-    // Material properties from .mmd (replaces Effect property system)
-    MeshMaterial m_Material;
+    // Material array (original: map<AsciiString, SharedPropsInfo> + SharedEffectProperties)
+    // Port: parallel array indexed by GeometryEntry::materialIndex
+    std::vector<MeshMaterial> m_Materials;
 
     Mesh();
     virtual ~Mesh();
@@ -94,11 +106,18 @@ public:
     // Matches Mesh::GetBounds (0x001b07f0)
     void GetBounds(Vec3& outMin, Vec3& outMax) const;
 
-    // Matches Mesh::GetGeometryCount (0x001b1678) — always 1 in port
-    int GetGeometryCount() const { return (m_VBO != 0) ? 1 : 0; }
+    // Matches Mesh::GetGeometryCount (0x001b1678)
+    int GetGeometryCount() const { return (int)m_Geometries.size(); }
 
     // Matches Mesh::GetName (0x001b15e0)
     const std::string& GetName() const { return m_Name; }
+
+    // Port helper: assign texture to all materials that have none.
+    // Used by Fruit.cpp to assign fruit_atlas when loaded externally.
+    void SetDiffuseTexture(const SmartPtr<Texture>& tex);
+
+    // Port helper: true if any material has a valid texture.
+    bool HasDiffuseTexture() const;
 };
 
 // Matches original Model (0x58 bytes) with vector<SmartPtr<Mesh>>
