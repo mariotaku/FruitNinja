@@ -68,6 +68,25 @@ public:
     size_t ChildCount() const { return m_Children.size(); }
 
     void ResetReadPos() { m_ReadPos = 0; }
+
+    // Skip Skeleton data in rawData stream.
+    // Matches Read<Mortar::Skeleton> which reads:
+    //   boneCount (u32) + per-bone: AsciiString + long(4) + float[16] + float[3] + float[4] + float[9]
+    // Bone data per bone = 4 + 64 + 12 + 16 + 36 = 132 bytes + variable name length.
+    // Used in LoadModel to skip skeleton before reading meshCount.
+    void SkipSkeleton() {
+        if (m_ReadPos + 4 > m_Data.size()) return;
+        uint32_t boneCount = Read<uint32_t>();
+        for (uint32_t i = 0; i < boneCount && m_ReadPos < m_Data.size(); i++) {
+            if (m_ReadPos + 2 > m_Data.size()) return;
+            uint16_t nameLen = Read<uint16_t>();
+            if (m_ReadPos + nameLen > m_Data.size()) return;
+            m_ReadPos += nameLen;
+            // Skip: parent(4) + matrix44(64) + vec3(12) + quat(16) + mat3(36) = 132 bytes
+            if (m_ReadPos + 132 > m_Data.size()) return;
+            m_ReadPos += 132;
+        }
+    }
 };
 
 } // namespace Mortar

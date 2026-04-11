@@ -19,14 +19,13 @@ struct Renderer {
     GLint u_tex_loc;
     GLint u_tint;
 
-    // 3D mesh shader (MVP + model + lighting)
+    // 3D mesh shader (MVP + model + lighting + vertex color)
     GLuint program_3d;
     GLint u3d_mvp;
     GLint u3d_model;
     GLint u3d_light_dir;
     GLint u3d_tex;
     GLint u3d_alpha;
-    GLint u3d_diffuse;
 
     // 2D vertex-color shader (MVP + per-vertex colour from QUADCUSTOMVERTEX)
     GLuint program_vc;
@@ -53,11 +52,9 @@ struct Renderer {
     void draw_sprite(GLuint tex, float x, float y, float w, float h,
                      float angle = 0.0f, float alpha = 1.0f);
 
-    // Set up 3D shader with MVP, model matrix, lighting, texture, and alpha
-    // Call this before issuing your own draw calls for 3D meshes
-    void setup_3d_shader(GLuint tex, const float* mvp, const float* model,
-                         float alpha = 1.0f,
-                         float diffuseR = 1.0f, float diffuseG = 1.0f, float diffuseB = 1.0f);
+    // Set up 3D shader with MVP, model matrix, lighting, texture, and alpha.
+    // Vertex color (GL_MODULATE: texture × vertex_color) is bound per-draw from VBO.
+    void setup_3d_shader(GLuint tex, const float* mvp, const float* model, float alpha = 1.0f);
 
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24)
     // Matches original DrawTriList (0x00193f5c) / DrawTriStrip

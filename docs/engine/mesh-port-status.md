@@ -95,23 +95,25 @@ Ordered by dependency — complete items higher up before those that depend on t
 
 ### Tier 1: No dependencies (can do in any order)
 
-- [ ] **Fix vertex colour integration in 3D shader**
-  - Currently: shader uses `u_diffuse` uniform only, vertex colours ignored
-  - Goal: match original GL_MODULATE (`texture × vertex_color`), modulated by material properties
-  - Needed for: correct fruit tinting, bomb body appearance
-  - Ref: PassBinding::Apply (0x001a39f8), frag shader GL_MODULATE semantics
+- [x] **Fix vertex colour integration in 3D shader** *(2026-04-11)*
+  - Added `a_color` (attribute 2) to 3D vertex/fragment shaders
+  - Fragment: `texture × v_color × v_light` (GL_MODULATE semantics)
+  - For RGBA8888 (colorFmt=3): `GL_UNSIGNED_BYTE` normalized per-vertex
+  - No color data: constant white via `glVertexAttrib4f` so texture is unmodified
+  - Removed `u_diffuse` uniform; attribute layout: pos=0, normal=1, color=2, uv=3
 
-- [ ] **Proper LoadMesh sequential parsing**
-  - Currently: brute-force child search for geometry, material parsed from children heuristically
-  - Goal: sequential Read/ReadSubResourceLookup flow matching 0x001a7c90 exactly
-  - Depends on: understanding root rawData layout (model name + skeleton + meshCount + sub-resource indices)
-  - Ref: LoadMesh (0x001a7c90, 423 lines), LoadModel (0x001a8468)
+- [x] **Proper LoadMesh sequential parsing** *(2026-04-11)*
+  - Sequential read: model name → SkipSkeleton → meshCount → per-mesh (name, bones, matCount, geomCount)
+  - ReadSubResourceLookup correctly references material/geometry children by 1-based index
+  - ResourceLoader::SkipSkeleton() added: reads boneCount + per-bone (name + 132 bytes of transform data)
+  - Root loader serves as both Model and Mesh context (single-pass sequential read)
 
-- [ ] **Multi-geometry per mesh**
-  - Currently: one VBO/IBO per Mesh
-  - Goal: vector of geometry entries (VBO/IBO pairs), each with its own material index
-  - Needed for: models with multiple sub-meshes (e.g. bomb body + fuse as separate geometries)
-  - Ref: LoadMesh geometry loop, `Mesh::AddGeometry` (0x001b0d0c)
+- [x] **Multi-geometry per mesh** *(2026-04-11)*
+  - `GeometryEntry` struct: VBO, IBO, vertCount, indexCount, primType, layout, materialIndex
+  - `Mesh::m_Geometries` (vector<GeometryEntry>) replaces single VBO/IBO fields
+  - `Mesh::m_Materials` (vector<MeshMaterial>) replaces single m_Material
+  - `Mesh::Draw` loops over all geometries, binds per-geometry material
+  - `Mesh::SetDiffuseTexture` / `HasDiffuseTexture` replace direct m_DiffuseTexture access
 
 ### Tier 2: Depends on Tier 1
 

@@ -9,20 +9,13 @@ namespace Mortar {
 
 // --- Mesh ---
 
-Mesh::Mesh()
-    : m_VBO(0)
-    , m_IBO(0)
-    , m_VertexCount(0)
-    , m_IndexCount(0)
-    , m_VertexStride(0)
-    , m_PrimType(GL_TRIANGLES)
-{
-    memset(&m_Layout, 0, sizeof(m_Layout));
-}
+Mesh::Mesh() {}
 
 Mesh::~Mesh() {
-    if (m_VBO) { glDeleteBuffers(1, &m_VBO); m_VBO = 0; }
-    if (m_IBO) { glDeleteBuffers(1, &m_IBO); m_IBO = 0; }
+    for (int i = 0; i < (int)m_Geometries.size(); i++) {
+        if (m_Geometries[i].vbo) { glDeleteBuffers(1, &m_Geometries[i].vbo); }
+        if (m_Geometries[i].ibo) { glDeleteBuffers(1, &m_Geometries[i].ibo); }
+    }
 }
 
 // Matches Mesh::SetBones (0x001b1340)
@@ -56,17 +49,103 @@ void Mesh::GetBounds(Vec3& outMin, Vec3& outMax) const {
     }
 }
 
+void Mesh::SetDiffuseTexture(const SmartPtr<Texture>& tex) {
+    for (int i = 0; i < (int)m_Materials.size(); i++) {
+        if (!m_Materials[i].m_Texture.IsValid()) {
+            m_Materials[i].m_Texture = tex;
+        }
+    }
+}
+
+bool Mesh::HasDiffuseTexture() const {
+    for (int i = 0; i < (int)m_Materials.size(); i++) {
+        if (m_Materials[i].m_Texture.IsValid()) return true;
+    }
+    return false;
+}
+
+// Draw a single geometry entry with its bound material.
+// Factored out of Draw() to avoid repetition in the geometry loop.
+static void DrawGeometry(Renderer* renderer, const GeometryEntry& geom,
+                         const MeshMaterial& mat, const Matrix44& mvp,
+                         const Matrix44& world) {
+    if (!geom.vbo || geom.vertCount == 0) return;
+
+    GLuint texId = mat.m_Texture.IsValid() ? mat.m_Texture->m_TexId : 0;
+    renderer->setup_3d_shader(texId, mvp.ptr(), world.ptr(), 1.0f);
+
+    glBindBuffer(GL_ARRAY_BUFFER, geom.vbo);
+    if (geom.ibo) {
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geom.ibo);
+    }
+
+    const VertexLayout& L = geom.layout;
+
+    // Position (attribute 0)
+    if (L.posSize > 0) {
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                              L.totalStride, (void*)(intptr_t)L.posOffset);
+    }
+
+    // Normal (attribute 1)
+    if (L.normalSize > 0) {
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+                              L.totalStride, (void*)(intptr_t)L.normalOffset);
+    } else {
+        glDisableVertexAttribArray(1);
+        glVertexAttrib3f(1, 0.0f, 0.0f, 1.0f); // default normal
+    }
+
+    // Vertex color (attribute 2) — GL_MODULATE: texture × vertex_color
+    // Matches PassBinding::Apply (0x001a39f8) GL_MODULATE semantics.
+    // If no color data in stream: constant white so texture is unmodified.
+    if (L.colorSize > 0 && L.colorFmt == 3) {
+        // RGBA8888 — 4 bytes per vertex, normalized to [0,1]
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE,
+                              L.totalStride, (void*)(intptr_t)L.colorOffset);
+    } else {
+        // No vertex color data or unsupported 16-bit format: use constant white
+        glDisableVertexAttribArray(2);
+        glVertexAttrib4f(2, 1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    // Texcoord (attribute 3)
+    if (L.texSize > 0) {
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE,
+                              L.totalStride, (void*)(intptr_t)L.texOffset);
+    } else {
+        glDisableVertexAttribArray(3);
+        glVertexAttrib2f(3, 0.0f, 0.0f);
+    }
+
+    // Draw
+    if (geom.ibo && geom.indexCount > 0) {
+        glDrawElements(geom.primType, geom.indexCount, GL_UNSIGNED_SHORT, (void*)0);
+    } else {
+        glDrawArrays(geom.primType, 0, geom.vertCount);
+    }
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
+    glDisableVertexAttribArray(3);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+}
+
 // Matches Mesh::Draw (0x001b0c3c)
 // Original behavior:
 //   if boneCount == 1: finalWorld = boneVertTransform * worldMatrix
 //   else: finalWorld = worldMatrix
 //   Set World, View, Proj, WVP effect properties
-//   Render all geometries
-// Port: uses Renderer::setup_3d_shader() for GLES2
+//   Render all geometries (each with its own material)
+// Port: uses Renderer::setup_3d_shader() for GLES2; no skeleton system yet
 void Mesh::Draw(const Matrix44& worldTransform) {
-    if (!m_VBO || m_VertexCount == 0) {
-        return;
-    }
+    if (m_Geometries.empty()) return;
 
     Renderer* renderer = Renderer::GetInstance();
     if (!renderer) return;
@@ -76,55 +155,18 @@ void Mesh::Draw(const Matrix44& worldTransform) {
     mm.GetWorldStack().SetCurrentMatrix(worldTransform);
     Matrix44 mvp = mm.GetMVP();
 
-    // Bind diffuse texture
-    GLuint texId = 0;
-    if (m_DiffuseTexture.IsValid()) {
-        texId = m_DiffuseTexture->m_TexId;
+    // Render all geometry entries, each with its own material
+    for (int i = 0; i < (int)m_Geometries.size(); i++) {
+        const GeometryEntry& geom = m_Geometries[i];
+        int matIdx = geom.materialIndex;
+
+        // Fallback: use first material if index out of range
+        const MeshMaterial& mat = (matIdx >= 0 && matIdx < (int)m_Materials.size())
+                                  ? m_Materials[matIdx]
+                                  : (m_Materials.empty() ? MeshMaterial() : m_Materials[0]);
+
+        DrawGeometry(renderer, geom, mat, mvp, worldTransform);
     }
-
-    renderer->setup_3d_shader(texId, mvp.ptr(), worldTransform.ptr(), 1.0f,
-                              m_Material.m_Diffuse.x, m_Material.m_Diffuse.y,
-                              m_Material.m_Diffuse.z);
-
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    if (m_IBO) {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_IBO);
-    }
-
-    // Position (attribute 0)
-    if (m_Layout.posSize > 0) {
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
-                              m_Layout.totalStride, (void*)(intptr_t)m_Layout.posOffset);
-    }
-
-    // Normal (attribute 1)
-    if (m_Layout.normalSize > 0) {
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
-                              m_Layout.totalStride, (void*)(intptr_t)m_Layout.normalOffset);
-    }
-
-    // TexCoord (attribute 2 — was 3, renumbered since vertex color attribute removed)
-    if (m_Layout.texSize > 0) {
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE,
-                              m_Layout.totalStride, (void*)(intptr_t)m_Layout.texOffset);
-    }
-
-    // Draw
-    if (m_IBO && m_IndexCount > 0) {
-        glDrawElements(m_PrimType, m_IndexCount, GL_UNSIGNED_SHORT, (void*)0);
-    } else {
-        glDrawArrays(m_PrimType, 0, m_VertexCount);
-    }
-
-    // Cleanup
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(2);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
 // --- Model ---

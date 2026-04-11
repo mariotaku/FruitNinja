@@ -17,6 +17,17 @@
 - Text: keep original .fnt bitmap fonts
 - Rendering: replicate original OpenGL ES 1.x fixed-pipeline approach in ES 2.0 shaders
 
+## Building & Running (Windows / MSYS2)
+- **All build commands must run under MSYS2** — use `C:/msys64/usr/bin/bash.exe` as the shell
+- When invoking from the Bash tool, prefix commands with the MSYS2 shell:
+  ```
+  C:/msys64/usr/bin/bash.exe -lc 'cd /c/Users/Mariotaku/Projects/webosbrew/fruit-ninja && <command>'
+  ```
+- CMake configure: `cmake -G "MSYS Makefiles" -B build`
+- Build: `cmake --build build -j$(nproc)`
+- Run: `./build/fruit-ninja.exe`
+- Required MSYS2 packages: `mingw-w64-x86_64-gcc`, `mingw-w64-x86_64-cmake`, `mingw-w64-x86_64-SDL2`
+
 ## Original Binary
 - ARM32 Little-Endian ELF (Samsung Bada OS), Halfbrick Mortar Engine
 - 480x320 landscape (on portrait 480x800 Bada device, touch/camera rotated 90°), entry point: OspMain

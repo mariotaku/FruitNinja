@@ -89,8 +89,8 @@ void Fruit::Init(int param1, int fruitType, int param3) {
                    s_fruitAtlas.IsValid(), s_fruitAtlas.IsValid() ? s_fruitAtlas->m_TexId : 0);
             if (s_fruitAtlas.IsValid()) {
                 for (int i = 0; i < (int)m_Model->m_Meshes.size(); i++) {
-                    if (m_Model->m_Meshes[i].IsValid() && !m_Model->m_Meshes[i]->m_DiffuseTexture.IsValid()) {
-                        m_Model->m_Meshes[i]->m_DiffuseTexture = s_fruitAtlas;
+                    if (m_Model->m_Meshes[i].IsValid() && !m_Model->m_Meshes[i]->HasDiffuseTexture()) {
+                        m_Model->m_Meshes[i]->SetDiffuseTexture(s_fruitAtlas);
                         printf("[Fruit] Init: assigned tex to mesh[%d]\n", i);
                     }
                 }

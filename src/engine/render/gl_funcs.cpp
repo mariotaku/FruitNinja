@@ -51,6 +51,9 @@ GL_FUNC(void, glDepthMask, GLboolean)
 GL_FUNC(void, glEnableVertexAttribArray, GLuint)
 GL_FUNC(void, glDisableVertexAttribArray, GLuint)
 GL_FUNC(void, glVertexAttribPointer, GLuint, GLint, GLenum, GLboolean, GLsizei, const void*)
+GL_FUNC(void, glVertexAttrib2f, GLuint, GLfloat, GLfloat)
+GL_FUNC(void, glVertexAttrib3f, GLuint, GLfloat, GLfloat, GLfloat)
+GL_FUNC(void, glVertexAttrib4f, GLuint, GLfloat, GLfloat, GLfloat, GLfloat)
 
 #undef GL_FUNC
 
@@ -107,6 +110,9 @@ bool gl_load_functions() {
     LOAD(glEnableVertexAttribArray)
     LOAD(glDisableVertexAttribArray)
     LOAD(glVertexAttribPointer)
+    LOAD(glVertexAttrib2f)
+    LOAD(glVertexAttrib3f)
+    LOAD(glVertexAttrib4f)
 
 #undef LOAD
     return true;
