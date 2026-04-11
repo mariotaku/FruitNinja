@@ -84,17 +84,21 @@ Constructor at 0x00189c1c also checks `DisplayManager::GetTextureOverloadPrefix(
 
 ## MeshManager (20 bytes)
 
-<!-- Analysed: 2026-04-10T14:00 -->
+<!-- Analysed: 2026-04-12T00:00 -->
 
 Mesh/model cache. Inherits from `List<SmartPtr<Model>>`. Accessed via `GetInstance()` in the binary. Port uses a static singleton initialized in GameInitialise step 8.
 
 ### Port Notes
 
 - **Singleton**: `Mortar::MeshManager::s_instance` — set in constructor, accessed via `GetInstance()`
-- **Texture loading**: MeshManager loads geometry only (HBR0 vertex/index streams). Textures are NOT embedded in .mmd files — they must be assigned externally after `Load()`.
-  - Fruit: assigns `fruit_atlas.tex` (at `models/fruit/textures/`, NOT `textures/`)
+- **Multi-geometry/multi-material**: Port fully supports multiple geometries and materials per mesh. Each `GeometryEntry` carries a `materialIndex` read from `Read<u16>` in the geometry loop, selecting from the mesh's `vector<MeshMaterial>`.
+- **Texture loading**: Textures referenced in .mmd material children are loaded via TextureManager. Additionally, callers may assign textures to slots that were not loaded from the file:
+  - Fruit: assigns `fruit_atlas.tex` (at `models/fruit/textures/`, NOT `textures/`) to any material slot that has no texture
   - Bomb: assigns `bomb_explode.tex` (via TextureManager)
-- **MortarMesh::Draw**: calls `Renderer::GetInstance()->setup_3d_shader()` for the GL shader program. Without this, nothing renders (no `glUseProgram` active).
+- **Vertex colours**: Parsed from PSP vertex data (colorFmt=3 = RGBA8888). Passed to 3D shader as attribute 2 (`a_color`). Fragment shader multiplies texture × vertex_color (GL_MODULATE semantics).
+- **Mesh::Draw**: calls `Renderer::GetInstance()->setup_3d_shader()` per geometry entry. Binds per-geometry VBO/IBO, sets attrib pointers for pos(0)/normal(1)/color(2)/uv(3).
+- **Skeleton** *(Tier 3 — complete)*: `ResourceLoader::ReadSkeleton()` parses boneCount + per-bone (name, parentIndex, bindPoseMat, localTRS) and calls `Skeleton::Swap()`, which runs `BuildLocalMatrices` + `BuildFinalMatrices`. After all meshes are loaded, `Model::UpdateBoneLinks()` calls `Mesh::BindSkeleton()` on each mesh to resolve `m_SkeletonIndex` per BoneBinding. `Mesh::Draw` implements the single-bone branch: `finalWorld = GetBoneVertTransform(0) * worldMatrix`. All 122 .mmd files have boneCount=1 with parentIndex=-1 (root), so the vert matrix is `localMat * bindPoseMat ≈ identity` for static bind-pose bones — visually identical to the previous identity fallback, but now faithful.
+- **IModelNode** *(Tier 4 — complete)*: `Mesh` inherits `ReferenceCounter → IModelNode → Mesh`, matching the original chain. `IModelNode` is a pure virtual interface with `GetName`, `Draw`, `GetBounds`, `GenerateBindings` (stub), `BindSkeleton`, `GetGeometryCount`.
 
 ### Struct Layout
 

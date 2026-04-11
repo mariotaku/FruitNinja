@@ -3,6 +3,7 @@
 
 #include "util/AsciiString.h"
 #include "util/SmartPtr.h"
+#include "asset/Skeleton.h"
 #include <vector>
 #include <cstdint>
 #include <cstring>
@@ -69,11 +70,41 @@ public:
 
     void ResetReadPos() { m_ReadPos = 0; }
 
-    // Skip Skeleton data in rawData stream.
-    // Matches Read<Mortar::Skeleton> which reads:
-    //   boneCount (u32) + per-bone: AsciiString + long(4) + float[16] + float[3] + float[4] + float[9]
-    // Bone data per bone = 4 + 64 + 12 + 16 + 36 = 132 bytes + variable name length.
-    // Used in LoadModel to skip skeleton before reading meshCount.
+    // Matches Read<Mortar::Skeleton> (called from LoadModel at 0x001a8468)
+    // Reads skeleton from rawData: boneCount(u32) + per-bone:
+    //   AsciiString(name) + long(4,parentIndex) + float[16](bindPose) +
+    //   float[3](localTranslation) + float[4](localRotation) + float[9](localScale)
+    // Fixed per-bone size: 4 + 64 + 12 + 16 + 36 = 132 bytes + variable name length.
+    void ReadSkeleton(Skeleton& outSkeleton) {
+        if (m_ReadPos + 4 > m_Data.size()) return;
+        uint32_t boneCount = Read<uint32_t>();
+        if (boneCount == 0 || boneCount > 1024) return;
+
+        std::vector<Skeleton::Bone> bones(boneCount);
+        for (uint32_t i = 0; i < boneCount && m_ReadPos < m_Data.size(); i++) {
+            if (m_ReadPos + 2 > m_Data.size()) return;
+            AsciiString boneName = ReadString();
+            bones[i].m_Name = boneName.CStr();
+
+            if (m_ReadPos + 4 > m_Data.size()) return;
+            bones[i].m_ParentIndex = (int)Read<int32_t>();   // long = 4 bytes
+
+            if (m_ReadPos + 64 > m_Data.size()) return;
+            ReadBytes(bones[i].m_BindPoseMat, 64);           // float[16]
+
+            if (m_ReadPos + 12 > m_Data.size()) return;
+            ReadBytes(bones[i].m_LocalTranslation, 12);      // float[3]
+
+            if (m_ReadPos + 16 > m_Data.size()) return;
+            ReadBytes(bones[i].m_LocalRotation, 16);         // float[4]
+
+            if (m_ReadPos + 36 > m_Data.size()) return;
+            ReadBytes(bones[i].m_LocalScale, 36);            // float[9]
+        }
+        outSkeleton.Swap(bones);
+    }
+
+    // Skip Skeleton data without storing (legacy — superseded by ReadSkeleton).
     void SkipSkeleton() {
         if (m_ReadPos + 4 > m_Data.size()) return;
         uint32_t boneCount = Read<uint32_t>();

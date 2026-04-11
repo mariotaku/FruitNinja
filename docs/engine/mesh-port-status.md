@@ -1,6 +1,6 @@
 # Mesh / MeshManager Port Status
 
-<!-- Analysed: 2026-04-11T18:00 -->
+<!-- Analysed: 2026-04-12T00:00 -->
 
 Comparison of the port's Mesh/MeshManager implementation against the original binary.
 
@@ -21,8 +21,8 @@ Comparison of the port's Mesh/MeshManager implementation against the original bi
 | Singleton | GetInstance via Meyers singleton | Static pointer, set in constructor | ✅ Functional match |
 | Load cache | Checks existing before loading | Same | ✅ Match |
 | LoadMeshInternal (0x001a8518) | Registers 4 delegates (IVertexStream, IIndexStream, Model, Mesh), calls Load\<Model\> | Direct parsing without delegate system | ⚠️ Simplified — same data extracted |
-| LoadModel (0x001a8468) | ReadString name, Read\<Skeleton\>, meshCount, Load\<Mesh\> per mesh | Parses root rawData for model name + bone data | ⚠️ Partial — skeleton read is approximate |
-| LoadMesh (0x001a7c90) | Full sequential parse: name, bones, materials (with textures+colors), geometries | Material parsed from children; geometry via brute-force search | ⚠️ Partial — see below |
+| LoadModel (0x001a8468) | ReadString name, Read\<Skeleton\>, meshCount, Load\<Mesh\> per mesh | Same: ReadString name, ReadSkeleton (full parse + Swap), meshCount | ✅ Match |
+| LoadMesh (0x001a7c90) | Full sequential parse: name, bones, materials (with textures+colors), geometries | Same sequential parse: name, bones, matCount+ReadSubResourceLookup, geomCount+ReadSubResourceLookup+Read\<u16\> matIndex | ✅ Match |
 
 ### LoadMesh Detail
 
@@ -30,37 +30,40 @@ Comparison of the port's Mesh/MeshManager implementation against the original bi
 |------|--------|------|--------|
 | Mesh name | ReadString from mesh ResourceLoader | Read from root rawData | ✅ Match |
 | Bone bindings | Read count + per-bone (name, Vec3 min, Vec3 max) + SetBones | Same from root rawData | ✅ Match |
+| Skeleton | Read\<Skeleton\>: boneCount + per-bone (name, parentIdx, bindPoseMat, localTRS) + Skeleton::Swap | ResourceLoader::ReadSkeleton → Skeleton::Swap → BuildAllMatrices | ✅ Match |
 | Material name | ReadSubResourceLookup → child, ReadString | Reads from material child | ✅ Match |
 | Texture loading | ReadSubResourceLookup → grandchild, ReadString path, TextureManager::Load | Same from grandchild | ✅ Match |
 | Material colours | Read 4× u32 + float specular, GetColourRGB, set on Effect properties | Read same fields, stored in MeshMaterial struct | ✅ Match (data extracted but used differently) |
 | IsLit = false | SetValue\<bool\>(false) on "IsLit" EffectProperty | Stored as m_Material.m_IsLit = false | ✅ Match |
-| Geometry parsing | ReadSubResourceLookup per geometry, Read\<u16\> matIndex, Load\<IIndexStream\> + Load\<IVertexStream\> via delegates | Brute-force search children for index+vertex data | ⚠️ Simplified — finds same data, skips per-geometry material index |
-| Per-geometry material | matIndex selects SharedEffectProperties from material array | First material applied to entire mesh | ❌ Missing — multi-material meshes not supported |
+| Geometry parsing | ReadSubResourceLookup per geometry, Read\<u16\> matIndex, Load\<IIndexStream\> + Load\<IVertexStream\> via delegates | ReadSubResourceLookup per geometry, Read\<u16\> matIndex, ParseIndexStream + ParseVertexStream | ✅ Match |
+| Per-geometry material | matIndex selects SharedEffectProperties from material array | geom.materialIndex selects from m_Materials vector (bounds-checked) | ✅ Match |
+| UpdateBoneLinks | Model::SwapSkeleton → UpdateBoneLinks → BindSkeleton per mesh | Same: after mesh loop, UpdateBoneLinks → BindSkeleton per mesh | ✅ Match |
 
 ## Mesh Class
 
 | Aspect | Binary (0x7C bytes) | Port | Status |
 |--------|---------------------|------|--------|
-| Inheritance | ReferenceCounter → IModelNode → Mesh | ReferenceCounter → Mesh | ⚠️ Simplified — no IModelNode |
+| Inheritance | ReferenceCounter → IModelNode → Mesh | ReferenceCounter → IModelNode → Mesh | ✅ Match |
 | m_Name (0x0C) | AsciiString (0x28 bytes) | std::string | ✅ Functional match |
-| m_BoneBindings (0x34) | vector\<BoneBinding\> | Same | ✅ Match |
-| m_Geometries (0x40) | vector\<SmartPtr\<Geometry\>\> | VBO/IBO/Layout (single geometry) | ⚠️ Simplified — one geometry only |
-| m_SharedEffectProps (0x4C) | SmartPtr\<SharedEffectProperties\> | Not implemented | ❌ Missing |
-| m_PropertiesGroups (0x50) | map\<AsciiString, SharedPropsInfo\> | Not implemented | ❌ Missing |
-| m_Skeleton (0x68) | Skeleton* | Not implemented | ❌ Missing |
+| m_BoneBindings (0x34) | vector\<BoneBinding\> | Same; BoneBinding includes m_SkeletonIndex | ✅ Match |
+| m_Geometries (0x40) | vector\<SmartPtr\<Geometry\>\> | vector\<GeometryEntry\> (VBO/IBO/layout/matIndex per entry) | ✅ Functional match — multi-geometry supported |
+| m_SharedEffectProps (0x4C) | SmartPtr\<SharedEffectProperties\> | Not implemented | ❌ Missing (Effect property system deferred) |
+| m_PropertiesGroups (0x50) | map\<AsciiString, SharedPropsInfo\> | Not implemented | ❌ Missing (Effect property system deferred) |
+| m_Skeleton (0x68) | Skeleton* | Skeleton* m_Skeleton | ✅ Match |
 | Effect properties (0x6C–0x78) | 4× EffectProperty* (World, View, Proj, WVP) | MVP computed via MatrixManager | ✅ Replaced — same math, different mechanism |
-| Material data | Via Effect property system | MeshMaterial struct with diffuse uniform | ⚠️ Simplified |
+| Material data | Via Effect property system | MeshMaterial struct (diffuse/ambience/selfIllum colours, specular, isLit) | ⚠️ Simplified — data correct, not routed via Effect system |
 
 ## Mesh::Draw (0x001b0c3c)
 
 | Step | Binary | Port | Status |
 |------|--------|------|--------|
-| Single-bone optimization | If 1 bone: world = boneVertTransform × worldMatrix | Not implemented (no skeleton) | ❌ Missing |
+| Single-bone optimization | If 1 bone: finalWorld = GetBoneVertTransform(0) × worldMatrix | Same: if boneCount==1: finalWorld = vertMat × worldMatrix; fallback to worldMatrix if no skeleton | ✅ Match |
 | Set World matrix | TrySetMatrix(m_WorldProp, matrix) | MatrixManager world stack | ✅ Functional match |
 | Set View/Proj matrices | TrySetMatrix from renderer offsets | MatrixManager view/proj stacks | ✅ Functional match |
 | Set WVP matrix | TrySetMatrix(m_WVPProp, proj × view × world) | Computed as MVP in MatrixManager | ✅ Functional match |
-| Render geometries | Loop m_Geometries, call Geometry::Render per geometry | Single draw call with VBO/IBO | ⚠️ Simplified |
-| Material diffuse | Via Effect property system on shader | u_diffuse uniform (Vec3) | ⚠️ New — replaces vertex color multiply |
+| Render geometries | Loop m_Geometries, call Geometry::Render per geometry | Loop GeometryEntries, DrawGeometry with per-entry VBO/IBO + material | ✅ Match |
+| Vertex colours | glColorPointer GL_MODULATE (texture × vertex_color) | a_color attribute (RGBA8888); fragment: texture × v_color | ✅ Match — GL_MODULATE semantics |
+| Material diffuse | Via SharedEffectProperties + EffectPropertyList | MeshMaterial struct passed as uniforms | ⚠️ Simplified — values correct, system different |
 
 ## Model::Draw (0x001930e0)
 
@@ -71,23 +74,23 @@ Comparison of the port's Mesh/MeshManager implementation against the original bi
 
 ## Remaining Gaps
 
-### 1. Delegate-based loading
-The original uses `RegisterLoader<T>` + `Load<T>` for recursive resource parsing. The port uses direct child searching. Functionally equivalent for current .mmd files but less robust.
+### 1. Delegate-based loading *(deferred)*
+The original uses `RegisterLoader<T>` + `Load<T>` for recursive resource parsing. The port uses direct sequential parsing. Functionally equivalent — same data extracted in same order. No behavioral difference for any known .mmd file.
 
-### 2. Multi-material / multi-geometry
-Original supports multiple materials and geometries per mesh via `ReadSubResourceLookup` per geometry with `Read<u16>` material index. Port uses one material and one VBO/IBO per mesh. Needed if any model has multiple sub-meshes with different materials.
+### 2. ~~Multi-material / multi-geometry~~ *(resolved — 2026-04-11)*
+Port supports `vector<GeometryEntry>` and `vector<MeshMaterial>` with per-geometry `materialIndex` from `Read<u16>`. Full multi-material meshes are supported.
 
-### 3. Skeleton system
-Original has full skeleton binding: `Mesh::BindSkeleton` (0x001b0948) resolves bone indices by name lookup, and `GetBoneVertTransform`/`GetBoneWorldTransform`/`GetBoneLocalTransform` (0x001b0688/0x001b0700/0x001b0778) return transforms from the skeleton. Port stores bone bindings but doesn't use them for transforms.
+### 3. ~~Skeleton system~~ *(resolved — 2026-04-12)*
+`Skeleton` class fully implemented: `BuildLocalMatrices` (TRS → Matrix44 per bone) + `BuildFinalMatrices` (world = parent chain; vert = world × bindPose). `ResourceLoader::ReadSkeleton` replaces `SkipSkeleton`. `Model::UpdateBoneLinks` binds skeleton to all meshes. `Mesh::Draw` implements the single-bone path faithfully.
 
 ### 4. Effect property system
-Original routes all rendering through SharedEffectProperties/EffectPropertyList with 9 named material properties (DiffuseMap, UVWOffset, Alpha, Ambience, Diffuse, SelfIllum, Specular, SpecularStrength, IsLit) and 4 matrix properties (World, View, Proj, WVP). Port uses direct shader uniforms (u_diffuse, u_mvp, u_model).
+Original routes all rendering through SharedEffectProperties/EffectPropertyList with 9 named material properties (DiffuseMap, UVWOffset, Alpha, Ambience, Diffuse, SelfIllum, Specular, SpecularStrength, IsLit) and 4 matrix properties (World, View, Proj, WVP). Port stores material data in `MeshMaterial` struct and passes uniforms directly to the 3D shader.
 
-### 5. Vertex colours
-Original uses vertex colours via `glColorPointer` in the GLES1 pipeline (GL_MODULATE: texture × vertex_color). Port's 3D shader ignores vertex colours, using `u_diffuse` uniform instead. The correct integration of vertex colours with material properties is unknown — may need the full Effect system to determine the proper blend mode per material.
+### 5. ~~Vertex colours~~ *(resolved — 2026-04-11)*
+Port replicates GL_MODULATE via GLES2 attribute `a_color` (attribute 2). RGBA8888 vertex colours are passed normalized; fragment shader multiplies `texture × v_color`. No vertex color data: constant white via `glVertexAttrib4f`.
 
-### 6. IModelNode base class
-Original Mesh inherits from IModelNode which provides virtual methods: GetName, Draw, GetBounds, GenerateBindings, BindSkeleton, GetGeometryCount, GetGeometry. Port inherits directly from ReferenceCounter. Not needed unless other code relies on the IModelNode interface.
+### 6. ~~IModelNode base class~~ *(resolved — 2026-04-12)*
+`Mesh` now inherits `ReferenceCounter → IModelNode → Mesh`. `IModelNode` is a pure virtual interface providing `GetName`, `Draw`, `GetBounds`, `GenerateBindings` (stub), `BindSkeleton`, `GetGeometryCount`. vtable[10] `GetGeometry(SmartPtr<Geometry>)` is replaced by `Mesh::GetGeometryEntry(int)` returning `const GeometryEntry*`.
 
 ## TODO Checklist
 
@@ -103,10 +106,10 @@ Ordered by dependency — complete items higher up before those that depend on t
   - Removed `u_diffuse` uniform; attribute layout: pos=0, normal=1, color=2, uv=3
 
 - [x] **Proper LoadMesh sequential parsing** *(2026-04-11)*
-  - Sequential read: model name → SkipSkeleton → meshCount → per-mesh (name, bones, matCount, geomCount)
+  - Sequential read: model name → ReadSkeleton → meshCount → per-mesh (name, bones, matCount, geomCount)
   - ReadSubResourceLookup correctly references material/geometry children by 1-based index
-  - ResourceLoader::SkipSkeleton() added: reads boneCount + per-bone (name + 132 bytes of transform data)
   - Root loader serves as both Model and Mesh context (single-pass sequential read)
+  - `ResourceLoader::SkipSkeleton()` added initially; superseded by `ReadSkeleton()` in Tier 3
 
 - [x] **Multi-geometry per mesh** *(2026-04-11)*
   - `GeometryEntry` struct: VBO, IBO, vertCount, indexCount, primType, layout, materialIndex
@@ -117,40 +120,46 @@ Ordered by dependency — complete items higher up before those that depend on t
 
 ### Tier 2: Depends on Tier 1
 
-- [ ] **Multi-material support**
-  - Currently: first material applied to entire mesh
-  - Goal: per-geometry material index (`Read<u16>` matIndex in geometry loop)
-  - Depends on: multi-geometry, proper LoadMesh parsing
-  - Ref: LoadMesh geometry loop (materialIndex selects from materials array)
+- [x] **Multi-material support** *(2026-04-11)*
+  - `GeometryEntry.materialIndex` set from `Read<u16>` in geometry loop
+  - `Mesh::m_Materials` is `vector<MeshMaterial>` indexed per-geometry
+  - `Mesh::Draw` selects `m_Materials[geom.materialIndex]` with bounds-checked fallback
+  - Multi-material meshes are fully supported
 
-- [ ] **Delegate-based resource loading**
-  - Currently: direct parsing in LoadMeshInternal
-  - Goal: `RegisterLoader<T>` + `Load<T>` pattern matching original
-  - Depends on: proper LoadMesh sequential parsing
+- [ ] **Delegate-based resource loading** *(deferred — no behavioral impact)*
+  - Currently: direct sequential parsing in LoadMeshInternal
+  - Original: `RegisterLoader<T>` + `Load<T>` dispatch (IVertexStream, IIndexStream, Model, Mesh)
+  - Both produce identical output for all known .mmd files
+  - Deferring: architectural refactor only; adds complexity without functional benefit
   - Ref: LoadMeshInternal (0x001a8518), ResourceLoader::Load (0x001acb2c)
 
 ### Tier 3: Depends on Tier 2
 
-- [ ] **Skeleton system**
-  - Currently: bone bindings stored but no skeleton transforms
-  - Goal: `Read<Skeleton>`, `Mesh::BindSkeleton` (0x001b0948), bone index resolution by name, `GetBoneVertTransform`/`GetBoneWorldTransform`/`GetBoneLocalTransform`
-  - Depends on: proper LoadMesh parsing (skeleton data read in LoadModel)
-  - Needed for: animated models, correct bone transforms in Draw
-  - Ref: Skeleton class, BindSkeleton (0x001b0948), bone transform functions (0x001b0688/0x001b0700/0x001b0778)
+- [x] **Skeleton system** *(2026-04-12)*
+  - `Skeleton` class: `vector<Bone>`, three `vector<Matrix44>` (local/world/vert)
+  - `Skeleton::Bone`: name, parentIndex, bindPoseMat[16], localTranslation[3], localRotation[4], localScale[9]
+  - `Skeleton::Swap(bones)`: builds arrays → swaps bones → BuildLocalMatrices + BuildFinalMatrices
+  - `BuildLocalMatrices`: quaternion → R, transpose → Rt, mat3 → S mat44, `local = (S * Rt) * T`
+  - `BuildFinalMatrices`: world = parent-chain accumulation; vert = world × bindPoseMat
+  - `Skeleton::FindIndex`: linear scan, returns 0xFFFFFFFF if not found
+  - `ResourceLoader::ReadSkeleton(outSkeleton)`: replaces SkipSkeleton, calls `outSkeleton.Swap(bones)`
+  - `Model::m_Skeleton` (Skeleton value member), `SwapSkeleton`, `UpdateBoneLinks`
+  - `Mesh::m_Skeleton` (Skeleton*), `BindSkeleton`, `GetBoneVertTransform`
+  - `MeshManager`: calls `ReadSkeleton` then `UpdateBoneLinks` after mesh load
 
-- [ ] **Single-bone Draw optimization**
-  - Currently: world matrix passed directly
-  - Goal: if boneCount==1, pre-multiply boneVertTransform into world matrix
-  - Depends on: skeleton system (needs GetBoneVertTransform)
-  - Ref: Mesh::Draw (0x001b0c3c) first branch
+- [x] **Single-bone Draw optimization** *(2026-04-12)*
+  - `if (m_BoneBindings.size() == 1)`: `finalWorld = GetBoneVertTransform(0) * worldMatrix`
+  - `GetBoneVertTransform(i)` returns `m_Skeleton->GetVertex(m_BoneBindings[i].m_SkeletonIndex)`
+  - Falls back to `worldMatrix` if no skeleton bound (visually equivalent for static bind-pose bones)
+  - Ref: Mesh::Draw (0x001b0c3c); GetBoneVertTransform (0x001b0688)
 
 ### Tier 4: Full fidelity (optional)
 
-- [ ] **IModelNode base class**
-  - Currently: Mesh inherits from ReferenceCounter directly
-  - Goal: IModelNode virtual interface (GetName, Draw, GetBounds, GenerateBindings, BindSkeleton, GetGeometryCount, GetGeometry)
-  - Depends on: skeleton system
-  - Needed only if: other code relies on IModelNode interface polymorphism
+- [x] **IModelNode base class** *(2026-04-12)*
+  - `IModelNode : public ReferenceCounter` — pure virtual interface (no data fields)
+  - Virtuals: `GetName`, `Draw`, `GetBounds`, `GenerateBindings` (stub), `BindSkeleton`, `GetGeometryCount`
+  - `Mesh : public IModelNode` — all interface methods declared `override`
+  - vtable[10] `GetGeometry(SmartPtr<Geometry>)` — omitted; replaced by `Mesh::GetGeometryEntry(int)` returning `const GeometryEntry*`
   - Ref: IModelNode ctor (0x001b1fd8), vtable (0x001ebde0, 11 entries)
 
 - [ ] **Effect property system**

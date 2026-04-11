@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
-// Analysed: 2026-04-11T16:00
+// Analysed: 2026-04-12T00:00
 
 namespace Mortar {
 
@@ -175,8 +175,8 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     // ReadString → model name (stored in Model, mesh name read again below)
     AsciiString modelName = loader.ReadString();
 
-    // Read<Skeleton>: reads boneCount + per-bone data; skeleton not used yet, skip all
-    loader.SkipSkeleton();
+    // Read<Skeleton> (0x001a8468): parse skeleton and bind to all meshes via UpdateBoneLinks
+    loader.ReadSkeleton(model->m_Skeleton);
 
     // meshCount: number of Mesh sub-resources that follow
     if (loader.m_ReadPos + 4 > loader.DataSize()) {
@@ -320,6 +320,12 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         fprintf(stderr, "MeshManager: '%s': no meshes loaded\n", path);
         delete model;
         return SmartPtr<Model>();
+    }
+
+    // Matches Model::SwapSkeleton → UpdateBoneLinks (0x001aaba8, 0x00193010):
+    // Skeleton was parsed above; now that all meshes are loaded, bind it to each mesh.
+    if (model->m_Skeleton.IsValid()) {
+        model->UpdateBoneLinks();
     }
 
     return SmartPtr<Model>(model);

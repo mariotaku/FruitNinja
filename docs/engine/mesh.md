@@ -1,6 +1,6 @@
 # Mortar::Mesh
 
-<!-- Analysed: 2026-04-11T12:00 -->
+<!-- Analysed: 2026-04-11T18:30 -->
 
 Full reverse-engineering of the `Mortar::Mesh` class, nested types, vtable, and all member functions.
 
@@ -173,7 +173,7 @@ Per-material property group, stored in `m_PropertiesGroups` map keyed by materia
 ## Bone Transform Functions
 
 Three functions for accessing bone transforms — all follow the same pattern:
-1. If `m_Skeleton != NULL` and `m_SkeletonIndex >= 0`: look up transform from Skeleton
+1. If `m_Skeleton != NULL` and `BoneBinding.m_SkeletonIndex >= 0`: look up transform from Skeleton
 2. Otherwise: return identity matrix (from static constant)
 
 | Function | Address | Returns | Skeleton Method |
@@ -183,6 +183,83 @@ Three functions for accessing bone transforms — all follow the same pattern:
 | GetBoneLocalTransform | 0x001b0778 | Matrix44 (0x40) | `Skeleton::GetLocal(index)` |
 
 All three return via ARM struct-return (r0=retval ptr, r1=this, r2=boneIndex).
+
+---
+
+## Skeleton Class (0x18 = 24 bytes)
+
+### Layout
+
+| Offset | Size | Type | Name | Notes |
+|--------|------|------|------|-------|
+| 0x00 | 12 | `vector<Bone>` | m_Bones | Bone array |
+| 0x0C | 4 | `Matrix44*` | m_LocalMatrices | Base of single heap allocation (N × 3 × 64 bytes) |
+| 0x10 | 4 | `Matrix44*` | m_WorldMatrices | `m_LocalMatrices + N × 0x40` |
+| 0x14 | 4 | `Matrix44*` | m_VertMatrices | `m_LocalMatrices + 2N × 0x40` |
+
+Only `m_LocalMatrices` is freed in the destructor (it is the base of the single allocation).
+
+### Key Methods
+
+| Method | Address | Notes |
+|--------|---------|-------|
+| Skeleton() | 0x00193874 | Inits vector, zeroes three matrix pointers |
+| ~Skeleton() | 0x00193ac8 | Frees matrix buffer (if non-null), destroys vector |
+| Swap | 0x001aadf4 | Takes `vector<Bone>&`, calls BuildArrays → swap → BuildAllMatrices |
+| BuildArrays | 0x001aa700 | Allocates N×3×0x40 buffer, sets three matrix pointers |
+| BuildAllMatrices | 0x001aade4 | Calls BuildLocalMatrices + BuildFinalMatrices |
+| BuildLocalMatrices | 0x00193064 | Converts TRS per bone (quat+vec3+mat3) → local Matrix44 |
+| BuildFinalMatrices | 0x00192e0c | Computes world (parent chain) + vert (world × bindPose) matrices |
+| FindIndex | 0x0019323c | Linear scan: name → bone index, returns 0xFFFFFFFF if not found |
+| operator[] | 0x001b1930 | Calls FindIndex |
+| GetVertex | 0x001b15d0 | `return m_VertMatrices + index * 0x40` |
+| GetWorld | 0x001b15c8 | `return m_WorldMatrices + index * 0x40` |
+| GetLocal | 0x001b15c0 | `return m_LocalMatrices + index * 0x40` |
+
+### BuildFinalMatrices Logic
+
+```
+for i in 0..boneCount:
+    accumulated = localMatrices[i]
+    j = i
+    while true:
+        j = bones[j].m_ParentIndex   // +0x28; -1 = root (no parent)
+        if j < 0: break
+        accumulated = localMatrices[j] * accumulated  // walk up hierarchy
+
+    worldMatrices[i] = accumulated
+    vertMatrices[i]  = accumulated * bones[i].m_BindPoseMat  // +0x2C, float[16]
+```
+
+The **vert matrix** (`m_VertMatrices[i]`) is what `GetBoneVertTransform(i)` returns. It equals the bone's accumulated world transform multiplied by the bind-pose matrix stored in the file.
+
+### Integration with Mesh::Draw (single-bone case)
+
+For all 122 .mmd files: `boneCount = 1`, `parentIndex = -1` (root bone).
+
+```
+Mesh::Draw(worldMatrix):
+    vertTransform = skeleton->GetVertex(binding.m_SkeletonIndex)
+                  = worldMat[0] × bone[0].m_BindPoseMat
+    finalWorld = vertTransform × worldMatrix
+```
+
+Currently port falls back to identity (`m_Skeleton == NULL`), giving `finalWorld = worldMatrix`. Correct result requires implementing the full skeleton load + bind flow.
+
+### Skeleton::Bone Layout (0xAC = 172 bytes in memory)
+
+Confirmed from `ReadType<Skeleton::Bone>` (0x001a7600):
+
+| Offset | Size | Type | Name | Notes |
+|--------|------|------|------|-------|
+| 0x00 | 40 | AsciiString | m_Name | Bone name |
+| 0x28 | 4 | long | m_ParentIndex | Parent bone index; -1 = root |
+| 0x2C | 64 | float[16] | m_BindPoseMat | Bind-pose matrix (used for vert transform) |
+| 0x6C | 12 | float[3] | m_LocalTranslation | Local translation |
+| 0x78 | 16 | float[4] | m_LocalRotation | Local rotation quaternion |
+| 0x88 | 36 | float[9] | m_LocalScale | Local scale/rotation (3×3 matrix) |
+
+Serialized in order: ReadString (name) → Read\<long\> → Read\<float,16\> → Read\<float,3\> → Read\<float,4\> → Read\<float,9\>.
 
 ---
 
@@ -488,13 +565,36 @@ u8[]   vertexData (vertCount × stride bytes)
 
 ## Port Implementation Notes
 
-### Mesh class renamed
-`MortarMesh` → `Mesh` to match the original `Mortar::Mesh`. `MeshMaterial` struct added to hold parsed material properties (diffuse, ambience, selfIllum colours, specularStrength, isLit flag, texture).
+### Mesh class
+`Mortar::Mesh` inherits from `IModelNode` (which inherits from `ReferenceCounter`), matching the original `ReferenceCounter → IModelNode → Mesh` chain. `IModelNode` is a pure virtual interface with no data fields; it provides `GetName`, `Draw`, `GetBounds`, `GenerateBindings` (stub), `BindSkeleton`, and `GetGeometryCount`. vtable[10] `GetGeometry(SmartPtr<Geometry>)` is omitted — replaced by `Mesh::GetGeometryEntry(int)` returning `const GeometryEntry*`. `MeshMaterial` struct holds parsed material properties (diffuse, ambience, selfIllum colours, specularStrength, isLit flag, texture).
 
-### 3D Shader
-The port's 3D shader uses a `u_diffuse` uniform (Vec3) from the parsed material instead of per-vertex colours. The original Effect system uses SharedEffectProperties with per-material Ambience/Diffuse/SelfIllum; the port passes the material's diffuse colour directly.
+Multi-geometry and multi-material are fully supported:
+- `m_Geometries`: `vector<GeometryEntry>` — each entry has VBO, IBO, vertCount, indexCount, primType, VertexLayout, and materialIndex
+- `m_Materials`: `vector<MeshMaterial>` — indexed by per-geometry materialIndex
+- `Mesh::Draw` loops all geometries, selects `m_Materials[geom.materialIndex]` per geometry
 
-Attribute layout: `a_pos`(0), `a_normal`(1), `a_uv`(2). Vertex colours from the PSP data are not used in the shader.
+### 3D Shader — vertex colour integration
+The port replicates GL_MODULATE semantics (texture × vertex_color) via GLES2 attributes instead of the original fixed-function pipeline:
+
+- Attribute layout: `a_pos`(0), `a_normal`(1), `a_color`(2), `a_uv`(3)
+- `a_color` is RGBA8888 (colorFmt=3): `glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, ...)`
+- If no vertex color in stream: `glVertexAttrib4f(2, 1,1,1,1)` (constant white — texture passes through unmodified)
+- Fragment shader: `gl_FragColor = texture × v_color × v_light` (matches GL_MODULATE)
+- `u_diffuse` uniform removed; material color effects deferred (Tier 4 / Effect property system)
+
+### Sequential parsing (no delegate system)
+`LoadMeshInternal` uses direct sequential parsing instead of the original `RegisterLoader<T>` + `Load<T>` delegate dispatch. Functionally equivalent for all known .mmd files. See `mesh-port-status.md` Tier 2 note.
+
+### Skeleton (deferred — Tier 3)
+All 122 .mmd files have `skeletonBoneCount=1` and `meshBoneCount=1`. `SkipSkeleton()` correctly skips the one bone's data (reads boneCount=1, skips name + 132 bytes), but the skeleton is discarded rather than stored. `m_Skeleton` stays null; `GetBoneVertTransform(0)` falls back to identity matrix. Since the single-bone optimization in `Mesh::Draw` always fires (`m_BoneBindings.size() == 1`), it computes `identity × worldMatrix = worldMatrix` — visually correct but not faithful to the original. Full implementation requires storing the skeleton and calling `BindSkeleton` after load.
+
+`Skeleton::Bone` in-memory layout (for future reference):
+- `+0x00`: AsciiString name (40 bytes)
+- `+0x28`: long parentIndex
+- `+0x2C`: float[16] — vertex/bind-pose transform matrix
+- `+0x6C`: float[3] — local translation
+- `+0x78`: float[4] — local rotation quaternion
+- `+0x88`: float[9] — local scale/rotation (3×3)
 
 ### ResourceLoader
 The HBR0 "header" is NOT a separate magic — the entire file is parsed by `ResourceLoader::Initialize()` which treats the first 4 bytes as a skip value. The port reads the whole file and passes it to Initialize.
@@ -503,10 +603,10 @@ The HBR0 "header" is NOT a separate magic — the entire file is parsed by `Reso
 
 ## See Also
 
+- [mesh-port-status.md](mesh-port-status.md) — Port vs binary comparison, tier checklist, remaining gaps
 - [texture-mesh-manager.md](texture-mesh-manager.md) — MeshManager (singleton, loading pipeline)
 - [rendering-detail.md](rendering-detail.md) — Model::Draw pipeline
 - [rendering-pipeline.md](rendering-pipeline.md) — Effect/Geometry/PassBinding 3D rendering path
 - [assets.md](assets.md) — LoadVertexStreamPSP, GPUafyTexture
-- [formats/models.md](formats/models.md) — HBR0 container format, vertex declaration bitfield
-- [formats/models.md](formats/models.md) — HBR0 container format (.mad/.mmd)
+- [formats/models.md](formats/models.md) — HBR0 container format (.mad/.mmd), vertex declaration bitfield
 - [utility-types.md](utility-types.md) — ResourceLoader, SmartPtr, Delegate
