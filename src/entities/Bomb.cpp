@@ -83,13 +83,6 @@ void Bomb::LoadContent() {
                path.c_str(), g_bombData.model[0].IsValid());
     }
 
-    // Load bomb texture via TextureManager
-    if (!g_BombTexture.IsValid()) {
-        g_BombTexture = Mortar::TextureManager::LoadLocalisedTexture("bomb_explode.tex");
-    }
-    printf("[Bomb] LoadContent: bombTex valid=%d texId=%u\n",
-           g_BombTexture.IsValid(), g_BombTexture.IsValid() ? g_BombTexture->m_TexId : 0);
-
     // Model[1]: binary string "models/Fruit/Bomb_purple.mmd" (0x1BCBF1)
     {
         std::string path = game->data_dir + "/models/Fruit/bomb_purple.mmd";
@@ -98,19 +91,9 @@ void Bomb::LoadContent() {
                path.c_str(), g_bombData.model[1].IsValid());
     }
 
-    // Assign bomb texture to all loaded models' meshes
-    // .mmd files don't embed texture refs — texture is loaded externally
-    if (g_BombTexture.IsValid()) {
-        for (int m = 0; m < 2; m++) {
-            if (g_bombData.model[m].IsValid()) {
-                for (int i = 0; i < (int)g_bombData.model[m]->m_Meshes.size(); i++) {
-                    if (g_bombData.model[m]->m_Meshes[i].IsValid()) {
-                        g_bombData.model[m]->m_Meshes[i]->m_DiffuseTexture = g_BombTexture;
-                    }
-                }
-            }
-        }
-    }
+    // Original LoadContent (0x001726e8) does NOT assign textures to bomb meshes.
+    // Textures are loaded from the .mmd file's embedded texture reference
+    // (fruit_atlas.tex) by MeshManager::LoadMeshInternal automatically.
 
     // Model[2]: not loaded in LoadContent (may be loaded elsewhere for multiplayer)
 
@@ -186,12 +169,14 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     m_bMenuBombHit = 0;
     // m_pEmitter = NULL;  // TODO: fuse particle
 
-    // Scale: matches binary multiply chain
-    // DIFFERS: globalBombScale is a runtime BSS value. Approximated from visual matching.
-    // Fruit uses globalScaleVec ≈ (2.75, 2.75, 2.75) * fruitScale * 0.01
-    // Bomb uses a similar scale. The bomb model is roughly same size as fruit models.
+    // Scale: matches binary multiply chain at 0x172504
+    // Original: globalScaleVec * bombTypeScale * 0.01 * scaleFactor
+    // globalScaleVec is BSS 0x1F4334 (same as Fruit), set at runtime
+    // DAT_001726b0 = 0.01f confirmed via read_memory
     static const Vec3 globalBombScale(2.75f, 2.75f, 2.75f);
-    Vec3 computedScale = globalBombScale * scaleFactor;
+    static const float BOMB_TYPE_SCALE = 100.0f;  // default bomb type scale
+    static const float VISUAL_SCALE_MULT = 0.01f;  // DAT_001726b0
+    Vec3 computedScale = globalBombScale * (BOMB_TYPE_SCALE * VISUAL_SCALE_MULT * scaleFactor);
     m_Countdown = 0.0f;
     scale = computedScale;
     m_OrigScale = computedScale;

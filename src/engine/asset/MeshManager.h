@@ -20,31 +20,15 @@ public:
     static MeshManager* GetInstance() { return s_instance; }
     static MeshManager* s_instance;
 
-    // Load a model from .mmd file
-    // Returns existing if already loaded, otherwise parses HBR0 container
     SmartPtr<Model> Load(const char* path);
-
-    // Release all cached models
     void ReleaseAll();
-
-    // Initialize (reserve capacity)
     void Initialise(int capacity = 32);
 
 private:
     List<SmartPtr<Model>> m_Models;
 
-    // Internal: parse HBR0 container and build Model
+    // Matches LoadMeshInternal (0x001a8518) + LoadModel (0x001a8468) + LoadMesh (0x001a7c90)
     SmartPtr<Model> LoadMeshInternal(const char* path);
-
-    // Parse vertex stream from raw data buffer
-    // Matches LoadVertexStreamPSP (0x001a7b0c)
-    bool TryParseVertexStream(const uint8_t* data, size_t dataSize, Mesh& mesh);
-
-    // Parse index stream from raw data buffer
-    // Matches LoadIndexStreamPSP (0x001a799c)
-    // On success, `consumed` is set to the number of bytes used
-    bool TryParseIndexStream(const uint8_t* data, size_t dataSize,
-                              Mesh& mesh, size_t& consumed);
 };
 
 } // namespace Mortar

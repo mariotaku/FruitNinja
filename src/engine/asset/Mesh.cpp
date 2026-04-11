@@ -82,7 +82,9 @@ void Mesh::Draw(const Matrix44& worldTransform) {
         texId = m_DiffuseTexture->m_TexId;
     }
 
-    renderer->setup_3d_shader(texId, mvp.ptr(), worldTransform.ptr(), 1.0f);
+    renderer->setup_3d_shader(texId, mvp.ptr(), worldTransform.ptr(), 1.0f,
+                              m_Material.m_Diffuse.x, m_Material.m_Diffuse.y,
+                              m_Material.m_Diffuse.z);
 
     glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
     if (m_IBO) {
@@ -103,17 +105,10 @@ void Mesh::Draw(const Matrix44& worldTransform) {
                               m_Layout.totalStride, (void*)(intptr_t)m_Layout.normalOffset);
     }
 
-    // Color (attribute 2)
-    if (m_Layout.colorSize > 0) {
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE,
-                              m_Layout.totalStride, (void*)(intptr_t)m_Layout.colorOffset);
-    }
-
-    // TexCoord (attribute 3)
+    // TexCoord (attribute 2 — was 3, renumbered since vertex color attribute removed)
     if (m_Layout.texSize > 0) {
-        glEnableVertexAttribArray(3);
-        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE,
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE,
                               m_Layout.totalStride, (void*)(intptr_t)m_Layout.texOffset);
     }
 
@@ -128,7 +123,6 @@ void Mesh::Draw(const Matrix44& worldTransform) {
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
     glDisableVertexAttribArray(2);
-    glDisableVertexAttribArray(3);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }

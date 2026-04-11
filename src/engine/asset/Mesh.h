@@ -36,6 +36,22 @@ struct VertexLayout {
     int totalStride;
 };
 
+// Material properties parsed from .mmd file
+// Extracted from LoadMesh material loop (0x001a7c90)
+// Original stored via EffectPropertyList/SharedEffectProperties;
+// port stores directly for GLES2 shader use
+struct MeshMaterial {
+    std::string m_Name;             // Material name (e.g. "fruit_atlas")
+    SmartPtr<Texture> m_Texture;    // DiffuseMap texture
+    Vec3 m_Diffuse;                 // GetColourRGB(color0) — set as "Ambience" property
+    Vec3 m_Ambience;                // GetColourRGB(color1) — set as "Diffuse" property
+    Vec3 m_SelfIllum;               // GetColourRGB(color3) — set as "SelfIllum" property
+    float m_SpecularStrength;       // Specular strength float
+    bool m_IsLit;                   // IsLit flag (always false in LoadMesh)
+
+    MeshMaterial() : m_SpecularStrength(0.0f), m_IsLit(false) {}
+};
+
 // Matches original Mortar::Mesh (0x7C = 124 bytes)
 // Inherits: ReferenceCounter → IModelNode → Mesh
 // Port specific: skips Effect/Geometry/SharedEffectProperties system,
@@ -63,20 +79,19 @@ public:
     // Port specific: replaces SharedEffectProperties DiffuseMap property
     SmartPtr<Texture> m_DiffuseTexture;
 
+    // Material properties from .mmd (replaces Effect property system)
+    MeshMaterial m_Material;
+
     Mesh();
     virtual ~Mesh();
 
     // Matches Mesh::Draw (0x001b0c3c)
-    // Original: sets World/View/Proj/WVP effect properties, renders geometries
-    // Port: uses Renderer::setup_3d_shader() with MVP and model matrix
-    // Single-bone optimization: if 1 bone, pre-multiplies bone vertex transform
     void Draw(const Matrix44& worldTransform);
 
     // Matches Mesh::SetBones (0x001b1340)
     void SetBones(const BoneBinding* bones, int count);
 
     // Matches Mesh::GetBounds (0x001b07f0)
-    // Returns AABB computed from all bone world transforms
     void GetBounds(Vec3& outMin, Vec3& outMax) const;
 
     // Matches Mesh::GetGeometryCount (0x001b1678) — always 1 in port
@@ -86,7 +101,7 @@ public:
     const std::string& GetName() const { return m_Name; }
 };
 
-// Matches original Model with vector<SmartPtr<Mesh>>
+// Matches original Model (0x58 bytes) with vector<SmartPtr<Mesh>>
 // Ref: docs/engine/rendering-detail.md — Model::Draw (0x001930e0)
 class Model : public ReferenceCounter {
 public:

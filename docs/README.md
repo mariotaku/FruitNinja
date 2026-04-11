@@ -34,6 +34,7 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/particles.md](engine/particles.md) — PSPParticleManager, Emitter, Particle architecture
 - [engine/actor-manager.md](engine/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
 - [engine/mesh.md](engine/mesh.md) — Mesh (0x7C): struct, vtable (11 entries), BoneBinding, SharedPropsInfo, Draw, LoadMesh parser, effect properties
+- [engine/mesh-port-status.md](engine/mesh-port-status.md) — Mesh/MeshManager port vs binary comparison, remaining gaps checklist
 - [engine/texture-mesh-manager.md](engine/texture-mesh-manager.md) — TextureManager (24-byte cache), MeshManager (20 bytes), loading pipelines, ARM struct-return convention
 - [engine/string-hash.md](engine/string-hash.md) — Jenkins lookup3 hash (C implementation)
 - [engine/rng.md](engine/rng.md) — Math::Random: 64-bit LCG (Knuth MMIX), Rand32/RandF, constants

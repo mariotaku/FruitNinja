@@ -126,11 +126,23 @@ Mesh/model cache. Inherits from `List<SmartPtr<Model>>`. Accessed via `GetInstan
 
 ### LoadMesh Details
 
-`LoadMesh` at 0x001a7c90 is a substantial function that:
-1. Parses bone bindings from HBR0 container
-2. Loads materials and textures (via `TextureManager::GetInstance()->Load()`)
-3. Sets up 9 named effect property definitions
-4. Creates geometry bindings with vertex/index streams
+`LoadMesh` at 0x001a7c90 (423 lines decompiled) is the core mesh parser called as a ResourceLoader delegate:
+1. Reads mesh name (`ReadString`)
+2. Reads bone bindings: count + per-bone (name, boundsMin Vec3, boundsMax Vec3)
+3. Calls `Mesh::SetBones`
+4. Reads material count, then per-material:
+   - `ReadSubResourceLookup` → material child → read material name
+   - `ReadSubResourceLookup` → texture grandchild → read texture name + path, load via TextureManager
+   - Read 4× u32 colours (diffuse|=0xFF000000, ambience, unused, selfIllum)
+   - Read float specularStrength
+   - Sets IsLit=false, 9 EffectPropertyDefinitions, material colours via `GetColourRGB` + `SetEffectVec3`
+5. Reads geometry count, then per-geometry:
+   - `ReadSubResourceLookup` → geometry sub-resource
+   - Read u16 material index
+   - `Load<IIndexStream>` + `Load<IVertexStream>` → create GeometryBinding + Geometry
+   - `Mesh::AddGeometry`
+
+See [mesh.md](mesh.md) for full decompilation, material data format, and HBR0 container structure.
 
 ---
 
