@@ -26,6 +26,7 @@ struct Renderer {
     GLint u3d_light_dir;
     GLint u3d_tex;
     GLint u3d_alpha;
+    GLint u3d_diffuse;
 
     // 2D vertex-color shader (MVP + per-vertex colour from QUADCUSTOMVERTEX)
     GLuint program_vc;
@@ -55,7 +56,8 @@ struct Renderer {
     // Set up 3D shader with MVP, model matrix, lighting, texture, and alpha
     // Call this before issuing your own draw calls for 3D meshes
     void setup_3d_shader(GLuint tex, const float* mvp, const float* model,
-                         float alpha = 1.0f);
+                         float alpha = 1.0f,
+                         float diffuseR = 1.0f, float diffuseG = 1.0f, float diffuseB = 1.0f);
 
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24)
     // Matches original DrawTriList (0x00193f5c) / DrawTriStrip

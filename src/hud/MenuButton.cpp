@@ -110,8 +110,11 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                         fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
                     if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
                         fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
+                } else {
+                    // Bomb entity: also needs menu scale reduction
+                    Bomb* bomb = static_cast<Bomb*>(e);
+                    bomb->scale = bomb->scale * FRUIT_SCALE_FOR_MENU;
                 }
-                // Bomb entity (type 1): Init handles its own setup
 
                 // Random rotation speed (8-12 deg/frame, random direction)
                 m_RotationSpeed = ROT_SPEED_MIN + (float)(rand() % 40) / 10.0f;

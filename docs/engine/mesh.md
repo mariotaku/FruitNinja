@@ -377,7 +377,127 @@ From `_GLOBAL__I_*` symbols:
 
 7. **Single-bone optimization** — In `Draw()`, if there's exactly 1 bone, the bone's vertex transform is pre-multiplied into the world matrix before setting the "World" effect property. Multi-bone meshes pass the raw world matrix.
 
-8. **Mesh vs MortarMesh** — The port's `MortarMesh` class is a simplified version that skips the Effect/Geometry/SharedEffectProperties system, using direct GLES2 calls instead. The original Mesh routes everything through the Mortar effect property system.
+---
+
+## GetColourRGB (0x001a74bc)
+
+Extracts RGB float components from a packed uint32 colour:
+
+```c
+Vec3 GetColourRGB(uint32_t color) {
+    float r = (float)(color & 0xFF) / 255.0f;           // byte 0 = R
+    float g = (float)((color >> 8) & 0xFF) / 255.0f;    // byte 1 = G
+    float b = (float)((color >> 16) & 0xFF) / 255.0f;   // byte 2 = B
+    return Vec3(r, g, b);
+}
+```
+
+DAT_001a74fc = 255.0f (divisor).
+
+---
+
+## LoadModel (0x001a8468)
+
+`SmartPtr<Model> LoadModel(ResourceLoader& loader)`
+
+Called as a registered delegate from `ResourceLoader::Load<Model>`. The root ResourceLoader represents the **Model**, not the Mesh.
+
+```
+LoadModel(loader):
+  name = ReadString()
+  model = new Model(name)                // operator_new(0x58)
+  skeleton = Read<Skeleton>(loader)
+  model->SwapSkeleton(skeleton)
+  meshCount = Read<ulong>()
+  for i in 0..meshCount:
+    mesh = Load<Mesh>()                  // triggers LoadMesh callback via delegate
+    model->AddNode(mesh)
+  return model
+```
+
+### HBR0 Container Structure for .mmd Files
+
+The HBR0 format does NOT have a separate magic header. The file starts directly with the `Initialize` format: `skip_u32` (often "HBR0" text), `childCount`, then children, typeIds, and rawData.
+
+For a typical .mmd file (e.g. bomb.mmd, 10839 bytes):
+
+```
+Root ResourceLoader:
+  skip_u32: "HBR0" (0x30524248)
+  childCount: 2
+  child[0]: 115 bytes — material child
+    skip_u32: "HBR0"
+    childCount: 1
+    grandchild[0]: 50 bytes — texture info
+      rawData (34 bytes): u16 mapName + "Map #1" + u16 texPathLen + "textures\fruit_atlas.tex"
+    typeIdCount: 1
+    rawData (41 bytes): material name + sub-resource index + 4×u32 colors + float specular
+  child[1]: 10484 bytes — geometry streams
+    skip_u32: "HBR0"
+    childCount: 0
+    rawData (10468 bytes): index data (pad+flags+count+indices) + vertex data (skipCount+vertDecl+vertCount+verts)
+  typeIdCount: 2
+  rawData (208 bytes): model name + skeleton data + mesh count + sub-resource indices
+```
+
+### Material Child rawData Format
+
+Sequential reads from the material child:
+
+| Read | Type | Field | Notes |
+|------|------|-------|-------|
+| ReadString | AsciiString | materialName | e.g. "fruit_atlas" |
+| ReadSubResourceLookup | u32→child | textureChild | Index into material's children (1-based) |
+| Read\<u32\> | uint32 | color0 (diffuse) | ORed with 0xFF000000 for alpha. Set as "Ambience" property |
+| Read\<u32\> | uint32 | color1 (ambience) | Set as "Diffuse" property |
+| Read\<u32\> | uint32 | color2 | Unused (uStack_224) |
+| Read\<u32\> | uint32 | color3 (selfIllum) | Set as "SelfIllum" property |
+| Read\<float\> | float | specularStrength | Set as "SpecularStrength" property |
+| ReadSubResourceLookup | u32→child | unused | Additional sub-resource (ignored) |
+
+### Texture Grandchild rawData Format
+
+| Read | Type | Field |
+|------|------|-------|
+| ReadString | AsciiString | textureName | e.g. "Map #1" |
+| ReadString | AsciiString | textureRelPath | e.g. "textures\fruit_atlas.tex" |
+
+Path is resolved relative to the .mmd file's directory via `BasePathGet() + PathConcatenate()`.
+
+### Geometry Child rawData Format
+
+Sequential binary data containing index stream followed by vertex stream:
+
+**Index stream** (matches LoadIndexStreamPSP 0x001a799c):
+```
+u8[2]  padding
+u8     flags: bits[7:4]=primType (0x20=STRIP, 0x40=TRIANGLES), bits[3:0]=indexFormat
+u32    indexCount
+u16[]  indices (indexCount × 2 bytes)
+```
+
+**Vertex stream** (matches LoadVertexStreamPSP 0x001a7b0c):
+```
+u8     skipCount → skip skipCount × 4 bytes
+u32    vertDecl (PSP vertex declaration bitfield)
+u32    vertCount
+u8[]   vertexData (vertCount × stride bytes)
+```
+
+---
+
+## Port Implementation Notes
+
+### Mesh class renamed
+`MortarMesh` → `Mesh` to match the original `Mortar::Mesh`. `MeshMaterial` struct added to hold parsed material properties (diffuse, ambience, selfIllum colours, specularStrength, isLit flag, texture).
+
+### 3D Shader
+The port's 3D shader uses a `u_diffuse` uniform (Vec3) from the parsed material instead of per-vertex colours. The original Effect system uses SharedEffectProperties with per-material Ambience/Diffuse/SelfIllum; the port passes the material's diffuse colour directly.
+
+Attribute layout: `a_pos`(0), `a_normal`(1), `a_uv`(2). Vertex colours from the PSP data are not used in the shader.
+
+### ResourceLoader
+The HBR0 "header" is NOT a separate magic — the entire file is parsed by `ResourceLoader::Initialize()` which treats the first 4 bytes as a skip value. The port reads the whole file and passes it to Initialize.
 
 ---
 
@@ -387,5 +507,6 @@ From `_GLOBAL__I_*` symbols:
 - [rendering-detail.md](rendering-detail.md) — Model::Draw pipeline
 - [rendering-pipeline.md](rendering-pipeline.md) — Effect/Geometry/PassBinding 3D rendering path
 - [assets.md](assets.md) — LoadVertexStreamPSP, GPUafyTexture
+- [formats/models.md](formats/models.md) — HBR0 container format, vertex declaration bitfield
 - [formats/models.md](formats/models.md) — HBR0 container format (.mad/.mmd)
 - [utility-types.md](utility-types.md) — ResourceLoader, SmartPtr, Delegate

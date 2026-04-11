@@ -26,35 +26,35 @@ static const char* frag_src =
     "}\n";
 
 // 3D mesh shaders
+// Uses material diffuse color uniform instead of vertex colors.
+// The original Effect system sets per-material properties (IsLit, Ambience, Diffuse,
+// SelfIllum, DiffuseMap). Our port passes the material diffuse as u_diffuse uniform.
 static const char* vert_3d_src =
     "attribute vec3 a_pos;\n"
     "attribute vec3 a_normal;\n"
-    "attribute vec4 a_color;\n"
     "attribute vec2 a_uv;\n"
     "uniform mat4 u_mvp;\n"
     "uniform mat4 u_model;\n"
     "uniform vec3 u_light_dir;\n"
     "varying vec2 v_uv;\n"
-    "varying vec4 v_color;\n"
     "varying float v_light;\n"
     "void main() {\n"
     "    gl_Position = u_mvp * vec4(a_pos, 1.0);\n"
     "    vec3 wn = normalize(mat3(u_model) * a_normal);\n"
     "    v_light = max(dot(wn, u_light_dir), 0.0) * 0.6 + 0.4;\n"
     "    v_uv = a_uv;\n"
-    "    v_color = a_color;\n"
     "}\n";
 
 static const char* frag_3d_src =
     "precision mediump float;\n"
     "varying vec2 v_uv;\n"
-    "varying vec4 v_color;\n"
     "varying float v_light;\n"
     "uniform sampler2D u_tex;\n"
     "uniform float u_alpha;\n"
+    "uniform vec3 u_diffuse;\n"
     "void main() {\n"
-    "    vec4 c = texture2D(u_tex, v_uv) * v_color;\n"
-    "    gl_FragColor = vec4(c.rgb * v_light, c.a * u_alpha);\n"
+    "    vec4 c = texture2D(u_tex, v_uv);\n"
+    "    gl_FragColor = vec4(c.rgb * u_diffuse * v_light, c.a * u_alpha);\n"
     "}\n";
 
 // 2D vertex-color shader for QUADCUSTOMVERTEX (per-vertex RGBA colour)
@@ -137,8 +137,7 @@ bool Renderer::init() {
         program_3d = link_program(vs, fs);
         glBindAttribLocation(program_3d, 0, "a_pos");
         glBindAttribLocation(program_3d, 1, "a_normal");
-        glBindAttribLocation(program_3d, 2, "a_color");
-        glBindAttribLocation(program_3d, 3, "a_uv");
+        glBindAttribLocation(program_3d, 2, "a_uv");
         glLinkProgram(program_3d);
         GLint ok = 0;
         glGetProgramiv(program_3d, GL_LINK_STATUS, &ok);
@@ -156,6 +155,7 @@ bool Renderer::init() {
         u3d_light_dir = glGetUniformLocation(program_3d, "u_light_dir");
         u3d_tex = glGetUniformLocation(program_3d, "u_tex");
         u3d_alpha = glGetUniformLocation(program_3d, "u_alpha");
+        u3d_diffuse = glGetUniformLocation(program_3d, "u_diffuse");
     }
 
     // 2D vertex-color shader (for QUADCUSTOMVERTEX)
@@ -271,7 +271,7 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
 }
 
 void Renderer::setup_3d_shader(GLuint tex, const float* mvp, const float* model,
-                               float alpha) {
+                               float alpha, float diffuseR, float diffuseG, float diffuseB) {
     glUseProgram(program_3d);
     glUniformMatrix4fv(u3d_mvp, 1, GL_FALSE, mvp);
     glUniformMatrix4fv(u3d_model, 1, GL_FALSE, model);
@@ -280,6 +280,7 @@ void Renderer::setup_3d_shader(GLuint tex, const float* mvp, const float* model,
     glBindTexture(GL_TEXTURE_2D, tex);
     glUniform1i(u3d_tex, 0);
     glUniform1f(u3d_alpha, alpha);
+    glUniform3f(u3d_diffuse, diffuseR, diffuseG, diffuseB);
 }
 
 void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
