@@ -3,12 +3,10 @@
 
 // Analysed: 2026-04-11T12:00
 
-#include "util/ReferenceCounter.h"
 #include "util/SmartPtr.h"
+#include "asset/IModelNode.h"
 #include "asset/Texture.h"
 #include "render/gl_funcs.h"
-#include "math/Matrix44.h"
-#include "math/Vec3.h"
 #include <vector>
 #include <cstdint>
 #include <string>
@@ -78,7 +76,7 @@ struct GeometryEntry {
 // Port specific: skips Effect/Geometry/SharedEffectProperties system,
 // uses direct GLES2 calls via Renderer::setup_3d_shader()
 // Ref: docs/engine/mesh.md — struct layout, vtable, Draw behavior
-class Mesh : public ReferenceCounter {
+class Mesh : public IModelNode {
 public:
     // --- Original fields (matching offsets where applicable) ---
 
@@ -94,23 +92,41 @@ public:
     // Port: parallel array indexed by GeometryEntry::materialIndex
     std::vector<MeshMaterial> m_Materials;
 
+    // +0x68: Bound skeleton pointer (NULL if none). Set by BindSkeleton.
+    // Matches Mesh::m_Skeleton (0x001b0c3c offset 0x68)
+    Skeleton* m_Skeleton;
+
     Mesh();
     virtual ~Mesh();
 
-    // Matches Mesh::Draw (0x001b0c3c)
-    void Draw(const Matrix44& worldTransform);
+    // vtable[4]: Matches Mesh::Draw (0x001b0c3c)
+    void Draw(const Matrix44& worldTransform) override;
 
     // Matches Mesh::SetBones (0x001b1340)
     void SetBones(const BoneBinding* bones, int count);
 
-    // Matches Mesh::GetBounds (0x001b07f0)
-    void GetBounds(Vec3& outMin, Vec3& outMax) const;
+    // vtable[5]: Matches Mesh::GetBounds (0x001b07f0)
+    void GetBounds(Vec3& outMin, Vec3& outMax) const override;
 
-    // Matches Mesh::GetGeometryCount (0x001b1678)
-    int GetGeometryCount() const { return (int)m_Geometries.size(); }
+    // vtable[8]: Matches Mesh::BindSkeleton (0x001b0948)
+    // Stores skeleton ptr; resolves m_SkeletonIndex per BoneBinding via FindIndex.
+    void BindSkeleton(Skeleton* skeleton) override;
 
-    // Matches Mesh::GetName (0x001b15e0)
-    const std::string& GetName() const { return m_Name; }
+    // Matches Mesh::GetBoneVertTransform (0x001b0688)
+    // Returns pointer to vert matrix for binding[index], or NULL if no skeleton bound.
+    const Matrix44* GetBoneVertTransform(int index) const;
+
+    // vtable[9]: Matches Mesh::GetGeometryCount (0x001b1678)
+    int GetGeometryCount() const override { return (int)m_Geometries.size(); }
+
+    // vtable[3]: Matches Mesh::GetName (0x001b15e0)
+    const std::string& GetName() const override { return m_Name; }
+
+    // Port specific: access GeometryEntry by index (replaces vtable[10] GetGeometry).
+    const GeometryEntry* GetGeometryEntry(int idx) const {
+        if (idx >= 0 && idx < (int)m_Geometries.size()) return &m_Geometries[idx];
+        return NULL;
+    }
 
     // Port helper: assign texture to all materials that have none.
     // Used by Fruit.cpp to assign fruit_atlas when loaded externally.
@@ -127,12 +143,24 @@ public:
     std::string m_Name;
     std::vector<SmartPtr<Mesh>> m_Meshes;
 
+    // +0x40: stored skeleton (Skeleton struct, not pointer)
+    // Matches model+0x40 from SwapSkeleton (0x001aaba8)
+    Skeleton m_Skeleton;
+
     Model();
     virtual ~Model();
 
     // Draw all meshes with optional depth-sorting for multi-mesh models
     // Matches 0x001930e0
     void Draw(const Matrix44& transform);
+
+    // Matches Model::SwapSkeleton (0x001aaba8)
+    // Stores skeleton, then calls UpdateBoneLinks.
+    void SwapSkeleton(std::vector<Skeleton::Bone>& bones);
+
+    // Matches Model::UpdateBoneLinks (0x00193010)
+    // Calls BindSkeleton on each mesh with the model's skeleton.
+    void UpdateBoneLinks();
 };
 
 } // namespace Mortar

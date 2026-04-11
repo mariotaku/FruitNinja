@@ -3,13 +3,13 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 
-// Analysed: 2026-04-11T12:00
+// Analysed: 2026-04-11T18:30
 
 namespace Mortar {
 
 // --- Mesh ---
 
-Mesh::Mesh() {}
+Mesh::Mesh() : m_Skeleton(NULL) {}
 
 Mesh::~Mesh() {
     for (int i = 0; i < (int)m_Geometries.size(); i++) {
@@ -25,6 +25,28 @@ void Mesh::SetBones(const BoneBinding* bones, int count) {
     for (int i = 0; i < count; i++) {
         m_BoneBindings[i] = bones[i];
     }
+}
+
+// Matches Mesh::BindSkeleton (0x001b0948, vtable[8])
+// Stores skeleton ptr; resolves m_SkeletonIndex per BoneBinding via Skeleton::FindIndex.
+void Mesh::BindSkeleton(Skeleton* skeleton) {
+    m_Skeleton = skeleton;
+    if (!skeleton) return;
+    for (int i = 0; i < (int)m_BoneBindings.size(); i++) {
+        uint32_t idx = skeleton->FindIndex(m_BoneBindings[i].m_Name.c_str());
+        m_BoneBindings[i].m_SkeletonIndex = (idx == 0xFFFFFFFF) ? -1 : (int)idx;
+    }
+}
+
+// Matches Mesh::GetBoneVertTransform (0x001b0688)
+// Returns vert matrix for binding[index] if skeleton is bound, else NULL.
+// Caller falls back to identity when NULL (= worldMatrix unchanged).
+const Matrix44* Mesh::GetBoneVertTransform(int index) const {
+    if (!m_Skeleton) return NULL;
+    if (index < 0 || index >= (int)m_BoneBindings.size()) return NULL;
+    int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
+    if (skelIdx < 0) return NULL;
+    return m_Skeleton->GetVertex(skelIdx);
 }
 
 // Matches Mesh::GetBounds (0x001b07f0)
@@ -139,20 +161,35 @@ static void DrawGeometry(Renderer* renderer, const GeometryEntry& geom,
 
 // Matches Mesh::Draw (0x001b0c3c)
 // Original behavior:
-//   if boneCount == 1: finalWorld = boneVertTransform * worldMatrix
-//   else: finalWorld = worldMatrix
+//   if boneCount == 1: finalWorld = GetBoneVertTransform(0) * worldMatrix
+//   else:              finalWorld = worldMatrix
 //   Set World, View, Proj, WVP effect properties
 //   Render all geometries (each with its own material)
-// Port: uses Renderer::setup_3d_shader() for GLES2; no skeleton system yet
+// Port: uses Renderer::setup_3d_shader() for GLES2; skeleton system implemented.
 void Mesh::Draw(const Matrix44& worldTransform) {
     if (m_Geometries.empty()) return;
 
     Renderer* renderer = Renderer::GetInstance();
     if (!renderer) return;
 
+    // Matches Mesh::Draw single-bone branch (0x001b0c3c, line ~8):
+    //   if (boneCount == 1): finalWorld = vertMat * worldMatrix
+    //   else: finalWorld = worldMatrix
+    Matrix44 finalWorld;
+    if (m_BoneBindings.size() == 1) {
+        const Matrix44* vertMat = GetBoneVertTransform(0);
+        if (vertMat) {
+            finalWorld = (*vertMat) * worldTransform;
+        } else {
+            finalWorld = worldTransform; // fallback: no skeleton bound
+        }
+    } else {
+        finalWorld = worldTransform;
+    }
+
     // Port specific: compute MVP via MatrixManager (replaces Effect property system)
     MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().SetCurrentMatrix(worldTransform);
+    mm.GetWorldStack().SetCurrentMatrix(finalWorld);
     Matrix44 mvp = mm.GetMVP();
 
     // Render all geometry entries, each with its own material
@@ -165,7 +202,7 @@ void Mesh::Draw(const Matrix44& worldTransform) {
                                   ? m_Materials[matIdx]
                                   : (m_Materials.empty() ? MeshMaterial() : m_Materials[0]);
 
-        DrawGeometry(renderer, geom, mat, mvp, worldTransform);
+        DrawGeometry(renderer, geom, mat, mvp, finalWorld);
     }
 }
 
@@ -176,6 +213,23 @@ Model::Model() {
 
 Model::~Model() {
     m_Meshes.clear();
+}
+
+// Matches Model::SwapSkeleton (0x001aaba8)
+// Swaps bones into m_Skeleton (building matrices), then calls UpdateBoneLinks.
+void Model::SwapSkeleton(std::vector<Skeleton::Bone>& bones) {
+    m_Skeleton.Swap(bones);
+    UpdateBoneLinks();
+}
+
+// Matches Model::UpdateBoneLinks (0x00193010)
+// Calls BindSkeleton(vtable[8]) on each mesh with the model's skeleton.
+void Model::UpdateBoneLinks() {
+    for (int i = 0; i < (int)m_Meshes.size(); i++) {
+        if (m_Meshes[i].IsValid()) {
+            m_Meshes[i]->BindSkeleton(&m_Skeleton);
+        }
+    }
 }
 
 // Matches Model::Draw (0x001930e0, 79 lines)
