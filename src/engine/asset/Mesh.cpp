@@ -94,7 +94,14 @@ static void DrawGeometry(Renderer* renderer, const GeometryEntry& geom,
     if (!geom.vbo || geom.vertCount == 0) return;
 
     GLuint texId = mat.m_Texture.IsValid() ? mat.m_Texture->m_TexId : 0;
-    renderer->setup_3d_shader(texId, mvp.ptr(), world.ptr(), 1.0f);
+    // Pass material colours from MeshMaterial (populated in LoadMesh from EffectPropertyList).
+    // Ref: docs/engine/effect-system.md — Ambience/Diffuse/SelfIllum/IsLit property flow.
+    // Note: MeshMaterial naming is inverted relative to the property names in the binary:
+    //   m_Diffuse  = GetColourRGB(color0) stored as "Ambience" EffectProperty
+    //   m_Ambience = GetColourRGB(color1) stored as "Diffuse" EffectProperty
+    renderer->setup_3d_shader(texId, mvp.ptr(), world.ptr(), 1.0f,
+                               &mat.m_Ambience.x, &mat.m_Diffuse.x, &mat.m_SelfIllum.x,
+                               mat.m_IsLit);
 
     glBindBuffer(GL_ARRAY_BUFFER, geom.vbo);
     if (geom.ibo) {

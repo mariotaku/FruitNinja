@@ -35,6 +35,7 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/actor-manager.md](engine/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
 - [engine/mesh.md](engine/mesh.md) — Mesh (0x7C): struct, vtable (11 entries), BoneBinding, SharedPropsInfo, Draw, LoadMesh parser, effect properties
 - [engine/mesh-port-status.md](engine/mesh-port-status.md) — Mesh/MeshManager port vs binary comparison, remaining gaps checklist
+- [engine/effect-system.md](engine/effect-system.md) — EffectProperty/EffectPropertyList/SharedEffectProperties system: struct layouts, GetProperty, SetValue, full LoadMesh→Draw→GL flow
 - [engine/texture-mesh-manager.md](engine/texture-mesh-manager.md) — TextureManager (24-byte cache), MeshManager (20 bytes), loading pipelines, ARM struct-return convention
 - [engine/string-hash.md](engine/string-hash.md) — Jenkins lookup3 hash (C implementation)
 - [engine/rng.md](engine/rng.md) — Math::Random: 64-bit LCG (Knuth MMIX), Rand32/RandF, constants
@@ -68,7 +69,7 @@ Game-specific logic, screens, entities, and systems.
 - [entities/fruit.md](entities/fruit.md) — Fruit entity (0x118): struct, vtable, Update, CollisionResponse, Draw, Init, Chuck, LoadInfo
 - [entities/bomb.md](entities/bomb.md) — Bomb entity (0xB0): struct, vtable, Update, Explode, CollisionResponse
 - [entities/slash-entity.md](entities/slash-entity.md) — SlashEntity (0x184): blade trail, collision, combo tracking, ghost effect
-- [entities/coin.md](entities/coin.md) — Coin entity (0x94): combo reward coins
+- [entities/coin.md](entities/coin.md) — Coin entity (0x94): struct, vtable (10 entries), state machine (5 states), physics, InitCoin, MakeCoins, Update, Draw
 - [entities/bomb-blast.md](entities/bomb-blast.md) — BombBlast (0x70): bomb explosion effect
 - [entities/bomb-flash.md](entities/bomb-flash.md) — BombFlash: bomb flash overlay
 - [entities/splat-entity.md](entities/splat-entity.md) — SplatEntity: juice splat effect

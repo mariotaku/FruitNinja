@@ -49,6 +49,10 @@ static const char* vert_3d_src =
     "    v_color = a_color;\n"
     "}\n";
 
+// Material colour uniforms mirror the Effect property system's Ambience/Diffuse/SelfIllum/IsLit.
+// Ref: docs/engine/effect-system.md — property flow LoadMesh → Mesh::Draw → PassBinding::Apply
+// When IsLit=false (always the case from LoadMesh): light_color = vec3(1.0) — no tinting.
+// When IsLit=true: light_color = ambient + diffuse * NdotL + selfillum (Phong-like).
 static const char* frag_3d_src =
     "precision mediump float;\n"
     "varying vec2 v_uv;\n"
@@ -56,9 +60,19 @@ static const char* frag_3d_src =
     "varying vec4 v_color;\n"
     "uniform sampler2D u_tex;\n"
     "uniform float u_alpha;\n"
+    "uniform vec3 u_ambient;\n"
+    "uniform vec3 u_diffuse;\n"
+    "uniform vec3 u_selfillum;\n"
+    "uniform float u_is_lit;\n"
     "void main() {\n"
     "    vec4 c = texture2D(u_tex, v_uv);\n"
-    "    gl_FragColor = vec4(c.rgb * v_color.rgb * v_light, c.a * v_color.a * u_alpha);\n"
+    "    vec3 light_color;\n"
+    "    if (u_is_lit > 0.5) {\n"
+    "        light_color = u_ambient + u_diffuse * v_light + u_selfillum;\n"
+    "    } else {\n"
+    "        light_color = vec3(1.0, 1.0, 1.0);\n"
+    "    }\n"
+    "    gl_FragColor = vec4(c.rgb * v_color.rgb * light_color, c.a * v_color.a * u_alpha);\n"
     "}\n";
 
 // 2D vertex-color shader for QUADCUSTOMVERTEX (per-vertex RGBA colour)
@@ -156,11 +170,15 @@ bool Renderer::init() {
         glDeleteShader(vs);
         glDeleteShader(fs);
 
-        u3d_mvp = glGetUniformLocation(program_3d, "u_mvp");
-        u3d_model = glGetUniformLocation(program_3d, "u_model");
-        u3d_light_dir = glGetUniformLocation(program_3d, "u_light_dir");
-        u3d_tex = glGetUniformLocation(program_3d, "u_tex");
-        u3d_alpha = glGetUniformLocation(program_3d, "u_alpha");
+        u3d_mvp      = glGetUniformLocation(program_3d, "u_mvp");
+        u3d_model    = glGetUniformLocation(program_3d, "u_model");
+        u3d_light_dir= glGetUniformLocation(program_3d, "u_light_dir");
+        u3d_tex      = glGetUniformLocation(program_3d, "u_tex");
+        u3d_alpha    = glGetUniformLocation(program_3d, "u_alpha");
+        u3d_ambient  = glGetUniformLocation(program_3d, "u_ambient");
+        u3d_diffuse  = glGetUniformLocation(program_3d, "u_diffuse");
+        u3d_selfillum= glGetUniformLocation(program_3d, "u_selfillum");
+        u3d_is_lit   = glGetUniformLocation(program_3d, "u_is_lit");
     }
 
     // 2D vertex-color shader (for QUADCUSTOMVERTEX)
@@ -275,7 +293,9 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
     glDisableVertexAttribArray(1);
 }
 
-void Renderer::setup_3d_shader(GLuint tex, const float* mvp, const float* model, float alpha) {
+void Renderer::setup_3d_shader(GLuint tex, const float* mvp, const float* model, float alpha,
+                                const float* ambient, const float* diffuse, const float* selfillum,
+                                bool isLit) {
     glUseProgram(program_3d);
     glUniformMatrix4fv(u3d_mvp, 1, GL_FALSE, mvp);
     glUniformMatrix4fv(u3d_model, 1, GL_FALSE, model);
@@ -284,6 +304,11 @@ void Renderer::setup_3d_shader(GLuint tex, const float* mvp, const float* model,
     glBindTexture(GL_TEXTURE_2D, tex);
     glUniform1i(u3d_tex, 0);
     glUniform1f(u3d_alpha, alpha);
+    // Material colours — Ref: effect-system.md property flow
+    glUniform3f(u3d_ambient,   ambient[0],   ambient[1],   ambient[2]);
+    glUniform3f(u3d_diffuse,   diffuse[0],   diffuse[1],   diffuse[2]);
+    glUniform3f(u3d_selfillum, selfillum[0], selfillum[1], selfillum[2]);
+    glUniform1f(u3d_is_lit, isLit ? 1.0f : 0.0f);
 }
 
 void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
