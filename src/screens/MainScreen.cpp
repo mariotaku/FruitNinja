@@ -90,8 +90,15 @@ MainScreen::MainScreen(Game& g)
     // Set position = (0.0, (320.0 - size_y) * 0.5, 0.0) = (0.0, 91.0, 0.0)
     pos = Vec3(0.0f, (320.0f - size.y) * 0.5f, 0.0f);
 
-    // m_WindowCenter = windowHeight/2 + 160.0
-    m_WindowCenter = 320.0f / 2.0f + 160.0f;  // = 320.0
+    // m_WindowCenter = ninja_text.tex height / 2 + 160.0
+    // Matches binary ctor (0x0014c430): calls ninja_text_tex->GetHeight()
+    // (vtable +0x18) → shifts right by 1 → adds 160.0.
+    // The logo's bottom edge starts at Y=+160 (top of ortho) and bounces
+    // down to rest at pos.y + 3 = 94.
+    const float ninjaH = m_ninjaTextTex.IsValid()
+                       ? (float)(m_ninjaTextTex->m_Height / 2)
+                       : 0.0f;
+    m_WindowCenter = ninjaH + 160.0f;
 
     // Copy original size
     m_OrigSize = size;
@@ -320,11 +327,12 @@ void MainScreen::Update(float dt) {
 // Helper: setup world matrix for a textured quad at given position
 static void SetupQuadMatrix(Mortar::MatrixManager& mm, const Vec3& hudScale,
                             float w, float h, const Vec3& drawPos) {
+    (void)hudScale;
+    // Positions are already in the binary-centred ortho space
+    // [-240..240, -160..160]. See docs/engine/coordinate-system.md.
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
-    Vec3 offset(480.0f * hudScale.x, 320.0f * hudScale.y, 0.0f);
-    Vec3 finalPos = offset + drawPos;
-    mat.GlobalTranslate44(finalPos);
+    mat.GlobalTranslate44(drawPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 }
@@ -411,15 +419,14 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 
 // Matches 0x0014ad3c — constants verified from Ghidra decompilation + read_memory
 //
-// Binary constants (portrait coordinate space, literal pool at 0x14aec4):
+// Binary constants (literal pool at 0x14aec4):
 //   CLAMP_THRESHOLD    = 0.04   (DAT_0014aec4)
-//   BOUNCE_GRAVITY     = -55.0
-//   LOGO_NARROW_POS    = -175.0 (position on narrow axis: portrait X, landscape Y)
+//   BOUNCE_GRAVITY     = -55.0  (DAT_0014aecc)
+//   LOGO_FRUIT_X_BASE  = -175.0 (DAT_0014aedc)
 //   ELAPSED_THRESHOLD  = 0.99   (DAT_0014aed8)
 //
-// Port specific: the original assigns positions to portrait axes (X=narrow, Y=wide).
-// The port's landscape ortho has X=wide, Y=narrow. Logo positions swap X↔Y.
-// All constants and bounce physics are unchanged from the binary.
+// All positions are in the binary-centred ortho space (X horizontal ±240,
+// Y vertical ±160). No axis swap needed — see docs/engine/coordinate-system.md.
 //
 void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     static const float MAX_CT            = 0.04f;    // DAT_0014aec4 — MAXIMUM clamp, not minimum

@@ -94,14 +94,15 @@ void GameDraw(float dt, bool active) {
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
     // 2. Background texture quad
-    // Original: Scale(481, 321, 0) Translate(0, 0, -5599) DrawQuad(cropped UVs)
-    // Port specific: translate to ortho center (480, 320) to match offset-centered ortho
+    // Matches binary: Scale(481, 321, 1) Translate(0, 0, -5599) DrawQuad(cropped UVs)
+    // The 481×321 scale covers the centred 480×320 ortho viewport with a
+    // one-pixel fudge. Position (0, 0) is the ortho centre.
     if (ts->pBackgroundTexture.IsValid()) {
         ts->pBackgroundTexture->Set();
 
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
-        mat.GlobalTranslate44(Vec3(480.0f, 320.0f, -5599.0f));
+        mat.GlobalTranslate44(Vec3(0.0f, 0.0f, -5599.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
