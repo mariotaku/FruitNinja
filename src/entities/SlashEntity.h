@@ -49,22 +49,25 @@ public:
     void Init();
     void Release();
 
-    // Matches SlashEntity::TouchDown (wraps UpdateTouchDown @ 0x17D2E4).
-    // Called when a finger/mouse begins or continues a touch.
-    void TouchDown(float x, float y);
-
-    // Matches SlashEntity::TouchUp. Marks blade for deactivation; trail fades.
-    void TouchUp();
-
     // Matches SlashEntity::Update (0x17D664). Per-frame geometry rebuild.
+    // Polls Mortar::Touch slot 0 directly — matches binary flow where the
+    // blade self-drives from the touch state (0x17D2E4) rather than being
+    // called by an external callback.
     void Update(float dt);
 
     // Matches SlashEntity::DrawSlice (0x17E424). Two mirrored tri-strips.
     void Draw();
 
 private:
+    // Matches SlashEntity::UpdateTouchDown (0x17D2E4). Ingests the current
+    // touch position, interpolating intermediate points.
+    void OnTouchActive(float x, float y);
+
+    // Matches SlashEntity::TouchReleased. Marks blade for deactivation;
+    // the trail fades out over subsequent Update ticks.
+    void OnTouchReleased();
+
     // Matches SlashEntity::AddPoint (0x17CE0C).
-    // dir is the normalised blade direction (movement vector).
     void AddPoint(const Vec3& pos, const Vec3& dir, float thickness);
 
     // Bulk-shift vertices down by 2 slots when the buffer is full.

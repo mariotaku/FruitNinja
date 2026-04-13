@@ -10,6 +10,7 @@
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "asset/TextureManager.h"
+#include "input/Touch.h"
 #include "Game.h"
 #include <cstring>
 #include <cmath>
@@ -89,7 +90,7 @@ void SlashEntity::Release() {
 // ---------------------------------------------------------------------------
 // Touch ingestion — matches UpdateTouchDown (0x17D2E4) / AddPoint (0x17CE0C)
 // ---------------------------------------------------------------------------
-void SlashEntity::TouchDown(float x, float y) {
+void SlashEntity::OnTouchActive(float x, float y) {
     Vec3 newPos(x, y, 0.0f);
 
     if (!m_bHasHead) {
@@ -130,10 +131,10 @@ void SlashEntity::TouchDown(float x, float y) {
     m_State = 1;
 }
 
-void SlashEntity::TouchUp() {
+void SlashEntity::OnTouchReleased() {
     // Matches binary state-machine bit shift: 1 → 2 (deactivating).
     // Trail fades out via RebuildGeometry's decay, then we reset on the
-    // following TouchDown.
+    // next touch-down.
     if (m_State == 1) m_State = 2;
     m_bHasHead = false;
 }
@@ -214,14 +215,26 @@ void SlashEntity::RebuildGeometry() {
 }
 
 // ---------------------------------------------------------------------------
-// Update — matches SlashEntity::Update (0x17D664)
+// Update — matches SlashEntity::Update (0x17D664) + UpdateTouchDown (0x17D2E4)
 // ---------------------------------------------------------------------------
 void SlashEntity::Update(float dt) {
+    // Poll Mortar::Touch slot 0 (single-player). Binary uses slot 0 for P1
+    // and slot 1 for P2 in same-screen multiplayer — port is single only.
+    const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(0);
+    if (s) {
+        if (s->phase <= 0) {
+            // Active touch (just-pressed or held) — ingest point
+            OnTouchActive((float)s->currX, (float)s->currY);
+        } else if (m_bHasHead) {
+            // Released this frame — begin deactivation
+            OnTouchReleased();
+        }
+    }
+
     // State machine: if bit 0 set, shift-left → deactivating path.
     // Binary: m_bBladeActive = 1 (active) → 2 (deactivating) → 0 (off).
-    // We approximate: when State == 2, decay the trail and clear.
+    // Port simplification: when State == 2, decay the trail each frame.
     if (m_State == 2) {
-        // Drop two oldest vertices each frame until the trail is empty.
         if (m_PointCount > 0) {
             ShiftDown();
         } else {
