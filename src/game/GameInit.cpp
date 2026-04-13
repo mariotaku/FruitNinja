@@ -102,17 +102,33 @@ void GameUpdate(float dt, bool active) {
     //       FruitCamera::UpdateShake
 }
 
-// Matches GameDraw (0x16b888, 211 lines) — full render frame
-// See docs/structs/game.md "GameDraw" and Ghidra decompilation.
-// Original draw order (simplified for current port state):
-//   1. FruitCamera::SetupPerspective
-//   2. Background texture quad (g_TaskState+0xfc)
-//   3. ActorManager::Draw (3D entities)
-//   4. HUD::BeginDraw
-//   5. HUD::Draw(0x40) — layer 0x40
-//   6. HUD::Draw(0x01) — MainScreen (blurry_backing + logos)
-//   7. HUD::Draw(0x08) — buttons
-//   8. HUD::Draw(0x100..0x400) — overlays
+// Matches GameDraw (0x16b888, 211 lines) — full render frame.
+//
+// Binary draw order (verified from decompile, see comments inline):
+//   1.  Camera + background quad
+//   2.  ActorManager::Draw (3D entities — fruit, bomb, SlashEntity)
+//   3.  HUD::BeginDraw
+//   4.  HUD::Draw(0x40)
+//   5.  SplatEntity::DrawActiveSplats / Fruit::DrawShadows /
+//       SlashEntity::PreDraw / BombBlast::DrawActiveBlasts /
+//       BombFlash::DrawActiveFlashes            [not yet ported]
+//   6.  HUD::Draw(0x80)
+//   7.  pm.Draw(-1)   — "background" particles (useDepth=-1, earliest)
+//   8.  (vtable loop over 16 objects)           [not yet ported]
+//   9.  pm.Draw(0)    — "mid" particles
+//   10. DrawSlices    — SlashEntity::DrawSlice blade ribbon
+//   11. HUD::Draw(0x01) — MainScreen (logo + shade). Drawn AFTER slash
+//       so logo appears in front of the blade.
+//   12. pm.Draw(1)    — "foreground" particles (drawn over logo,
+//       under buttons)
+//   13. WaveManager::Draw                       [not yet ported]
+//   14. HUD::Draw(0x08) — buttons
+//   15. HUD::Draw(0x100) + DrawBombHit + HUD::Draw(0x200)
+//   16. HUD::Draw(0x400)
+//
+// Key insight: the particle layer indices map differently from what the
+// layer names imply — pm.Draw(-1) actually draws EARLIEST (background)
+// and pm.Draw(1) draws LATER (foreground, over logo).
 void GameDraw(float dt, bool active) {
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -125,10 +141,8 @@ void GameDraw(float dt, bool active) {
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
-    // 2. Background texture quad
+    // Background texture quad
     // Matches binary: Scale(481, 321, 1) Translate(0, 0, -5599) DrawQuad(cropped UVs)
-    // The 481×321 scale covers the centred 480×320 ortho viewport with a
-    // one-pixel fudge. Position (0, 0) is the ortho centre.
     if (ts->pBackgroundTexture.IsValid()) {
         ts->pBackgroundTexture->Set();
 
@@ -144,43 +158,53 @@ void GameDraw(float dt, bool active) {
         ts->pBackgroundTexture->UnSet();
     }
 
-    // Particles are layered by template `<useDepth>` (three values appear in
-    // particles_fast.xml: 1 = background, 0 = default/mid, -1 = foreground).
-    // Binary's PSPParticleManager::Draw filters each pass by an exact match.
-    // Without RE'ing the original caller order, we approximate: background
-    // behind 3D, default between 3D and HUD, foreground over HUD.
     Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
 
-    // 3a. Background particles (useDepth=1)
-    pm.Draw(1);
-
-    // 3b. 3D entities
+    // 2. 3D entities (ActorManager::Draw — fruit, bomb meshes)
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
 
-    // 4. Mid particles (useDepth=0) — most juice/splat/smoke FX.
-    pm.Draw(0);
-
-    // 5. HUD::BeginDraw
+    // 3. HUD::BeginDraw
     if (game->hud)
         game->hud->BeginDraw(dt);
 
-    // 6. HUD layers (original draws 0x40, splats, slashes, 0x80, particles,
-    //    then 0x01 for MainScreen, then 0x08 for buttons, then overlays)
+    // 4-6. HUD layers drawn before the logo/particles block
     if (game->hud) {
-        game->hud->Draw(0x40);    // layer 0x40
-        game->hud->Draw(0x01);    // MainScreen (blurry_backing + logos)
+        game->hud->Draw(0x40);
+        // [TODO: SplatEntity / Fruit::DrawShadows / SlashEntity::PreDraw (ghost)
+        //  / BombBlast / BombFlash — not yet ported]
+        // [TODO: HUD::Draw(0x80) — layer not in port yet]
+    }
+
+    // 7. Background particles (binary calls pm.Draw(-1) here — earliest
+    //    visible layer, drawn behind the logo and shade)
+    pm.Draw(-1);
+
+    // 8. [vtable loop over 16 objects — not yet ported]
+
+    // 9. Mid particles (pm.Draw(0))
+    pm.Draw(0);
+
+    // 10. SlashEntity blade ribbon — drawn BEFORE MainScreen so the logo
+    //     and shade appear in front of the blade. Matches binary DrawSlices
+    //     call site at GameDraw 0x16b888.
+    if (g_pSlashEntity) g_pSlashEntity->Draw();
+
+    // 11. MainScreen (HUD layer 0x01) — logo + shade on top of the blade
+    if (game->hud) game->hud->Draw(0x01);
+
+    // 12. Foreground particles (pm.Draw(1)) — over logo, under buttons
+    pm.Draw(1);
+
+    // 13. [WaveManager::Draw — not yet ported]
+
+    // 14-16. HUD overlay layers
+    if (game->hud) {
         game->hud->Draw(0x08);    // buttons
         game->hud->Draw(0x100);   // overlays
         game->hud->Draw(0x200);   // bomb hit overlay
         game->hud->Draw(0x400);   // top layer
     }
-
-    // 7. Foreground particles (useDepth=-1) — rim_spark, trails, sparkles.
-    pm.Draw(-1);
-
-    // 8. Blade trail — drawn last so it's always on top.
-    if (g_pSlashEntity) g_pSlashEntity->Draw();
 }
 
 // Matches GameExit (0x16cf74, 98 lines) — per-session cleanup
