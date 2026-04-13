@@ -30,6 +30,7 @@
 #include "render/QUADCUSTOMVERTEX.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
+#include "collision/ColSphere.h"
 #include <cstdint>
 
 namespace Mortar { struct PSPParticleEmitter; }
@@ -59,6 +60,18 @@ public:
 
     // Matches SlashEntity::DrawSlice (0x17E424). Two mirrored tri-strips.
     void Draw();
+
+    // Test whether the current blade trail intersects a collision sphere.
+    // Iterates every segment between consecutive trail points (mirrors the
+    // binary's CollideWithEntity at 0x17B570, simplified to iterate the
+    // full trail instead of just the m_HeadPos/m_TailPos pair — needed
+    // because OnTouchActive may interpolate many points in one frame on
+    // fast swipes). Returns true on the first intersecting segment.
+    bool CollideWithSphere(const Mortar::ColSphere& sphere) const;
+
+    // True while the blade has at least 2 trail points and is not
+    // deactivating — used to gate collision checks.
+    bool IsBladeActive() const { return m_State != 0 && m_NumPoints >= 2; }
 
 private:
     // Stored per-point metadata. The vertex buffers m_Left/m_Right are
@@ -101,6 +114,14 @@ private:
     //   0 = off, 1 = active, 2 = deactivating (fading out)
     uint8_t m_State;
     bool    m_bHasHead;
+
+    // Raw touch position from the most recent OnTouchActive — used as the
+    // trail emitter position so particles spawn at the true finger location,
+    // not the last interpolated trail point (which can lag by up to
+    // POINT_SPACING=64 units on fast swipes). Matches binary UpdateTouchDown
+    // @ 0x17D2E4 which writes `m_TrailEmitter->m_Pos = this->base.pos`,
+    // where base.pos is the raw touch input.
+    Vec3 m_RawTouchPos;
 };
 
 // Global singleton instance — created in GameInit, destroyed in GameDestroy.

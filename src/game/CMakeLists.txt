@@ -5,4 +5,5 @@ target_sources(fruit-ninja PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/SplashTask.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FrontendTask.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitCamera.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/BombHit.cpp
 )

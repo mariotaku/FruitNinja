@@ -10,10 +10,12 @@
 #include "GameTaskState.h"
 #include "Game.h"
 #include "FruitCamera.h"
+#include "BombHit.h"
 #include "screens/MainScreen.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
 #include "entities/SlashEntity.h"
+#include "entities/BombBlast.h"
 #include "particle/PSPParticleManager.h"
 #include "input/InputManager.h"
 #include "input/Touch.h"
@@ -76,6 +78,17 @@ void GameUpdate(float dt, bool active) {
     // fresh state this frame. Matches binary's Mortar::Touch::Update position
     // in the early-frame path.
     Mortar::Touch::GetInstance().Update();
+
+    // Tick + update the post-explosion hit timer BEFORE ActorManager
+    // updates bombs, so bombs spawned this frame see the freshly ticked
+    // value. Matches binary UpdateBombHit (0x16a1a8) call order inside
+    // GameUpdate at 0x16bed0.
+    const float prevBombTimer = game->bombHitTimer;
+    if (game->bombHitTimer > 0.0f) {
+        game->bombHitTimer -= dt;
+        if (game->bombHitTimer < 0.0f) game->bombHitTimer = 0.0f;
+    }
+    FN::UpdateBombHit(prevBombTimer);
 
     // Update entities — ONLY when the gameplay is active. Matches binary
     // GameUpdate's `if (active)` branch: ActorManager::Update is gated on
@@ -202,6 +215,11 @@ void GameDraw(float dt, bool active) {
     if (game->hud) {
         game->hud->Draw(0x08);    // buttons
         game->hud->Draw(0x100);   // overlays
+        // BombBlast shockwave rings + white flash overlay sit inside the
+        // 0x200 "bomb hit" layer in the binary (DrawBombHit @ 0x16b73c
+        // and DrawActiveBlasts @ 0x171aa0 are called here).
+        BombBlast::DrawActiveBlasts();
+        FN::DrawBombHit();
         game->hud->Draw(0x200);   // bomb hit overlay
         game->hud->Draw(0x400);   // top layer
     }

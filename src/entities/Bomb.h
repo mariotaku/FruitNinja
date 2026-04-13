@@ -75,6 +75,11 @@ public:
     void Draw(Renderer& r) override;
     void Deactivate() override;
 
+    // Matches Bomb::CollisionResponse (0x17280c). Blade has sliced the bomb:
+    // set m_bHit, trigger HitBomb (camera shake + bombHitTimer), start the
+    // BombBlast shockwave spawn loop.
+    void OnSliced(const Vec3& bladeVel) override;
+
     // Matches Bomb::Chuck (0x170f68)
     void Chuck(float delay);
 
