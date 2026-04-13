@@ -635,25 +635,14 @@ void MainScreen::QuitGamesCallback() {
     m_State = STATE_QUIT_WAIT;
 }
 
-// Touch handling — routed from InputManager
+// Shims kept for one commit so GameInit's InputManager lambdas compile.
+// Step 6 deletes both the shims and the lambdas. Touch is now polled inside
+// MenuButton::Update directly from Mortar::Touch.
 bool MainScreen::HandleTouchDown(float x, float y) {
-    MenuButton* buttons[] = { pPlayButton, pDojoButton, pQuitBtn,
-                               pMoreGamesBtn, pSoundToggle, pMusicToggle };
-    for (int i = 0; i < 6; i++) {
-        if (buttons[i] && buttons[i]->m_bActive && buttons[i]->HitTest(x, y)) {
-            buttons[i]->TouchDown(x, y);
-            return true;
-        }
-    }
+    (void)x; (void)y;
     return false;
 }
 
 void MainScreen::HandleTouchUp(float x, float y) {
-    MenuButton* buttons[] = { pPlayButton, pDojoButton, pQuitBtn,
-                               pMoreGamesBtn, pSoundToggle, pMusicToggle };
-    for (int i = 0; i < 6; i++) {
-        if (buttons[i]) {
-            buttons[i]->TouchUp(x, y);
-        }
-    }
+    (void)x; (void)y;
 }

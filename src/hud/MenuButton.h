@@ -38,6 +38,19 @@ public:
     // +0xD0: drives alpha fade (× 1000 / 255)
     int m_FadeCounter;
 
+    // +0xD4: padding / reserved (binary has a field here we haven't RE'd yet)
+    int m_fieldD4;
+
+    // +0xD8: slot index currently tracking a touch (-1 = none).
+    // Matches binary MenuButton::Update touch block (0x0014e614).
+    int m_TouchSlot;
+
+    // +0xDC/+0xE0/+0xE4: last-known touch x/y/phase copied by
+    // UpdateTouchPosition from the tracked slot each frame.
+    float m_TouchX;
+    float m_TouchY;
+    float m_TouchPhase;
+
     // +0xE8: random visual offset (-20 to +20)
     float m_RandomOffset;
 
@@ -124,13 +137,13 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override;
     void Release() override;
 
-    // Touch input (original uses m_bInteractive/m_bHighlighted, not pressed bool)
-    bool HitTest(float gx, float gy);
-    void TouchDown(float gx, float gy);
-    void TouchUp(float gx, float gy);
-
     // Matches MenuButton::LoadContent (0x148030) — called once from GameInitialise step 23
     static void LoadContent() {} // TODO
+
+private:
+    // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4). Copies
+    // x/y/phase from the currently tracked Touch slot into m_TouchX/Y/Phase.
+    void UpdateTouchPosition();
 };
 
 #endif
