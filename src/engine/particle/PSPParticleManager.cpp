@@ -177,6 +177,21 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
                                   (float)tmpl->m_SpinEndMax)   * 0.01f;
         p.m_Rotation = RandRange(tmpl->m_AngleMin, tmpl->m_AngleMax);
 
+        // RotCycle — oscillating rotation offset. speedStart/End from
+        // rotateCycle XML (stored in m_FrictionSpeed*). Amplitude lerps
+        // from start to end base.
+        p.m_RotCycleRate  = 0.5f * (tmpl->m_FrictionSpeedStart +
+                                    tmpl->m_FrictionSpeedEnd);
+        p.m_RotCycleAmp   = tmpl->m_FrictionOffsetMin * (3.14159265f / 180.0f);
+        p.m_RotCyclePhase = Rand01() * 6.2831853f;
+
+        // CycleX / CycleY — size modulation rates. m_CycleXStart/End are
+        // int16 "cycles/sec" values parsed from <cycleX startMin endMin>.
+        p.m_CycleXRate  = 0.5f * ((float)tmpl->m_CycleXStart + (float)tmpl->m_CycleXEnd);
+        p.m_CycleYRate  = 0.5f * ((float)tmpl->m_CycleYStart + (float)tmpl->m_CycleYEnd);
+        p.m_CycleXPhase = Rand01() * 6.2831853f;
+        p.m_CycleYPhase = Rand01() * 6.2831853f;
+
         // Shape-type branching (matches AddParticle 0x115644):
         //   0 = Point     — no extra init (pos = emitter.pos, vel = rotated set vel)
         //   1 = Vertex    — start half a velocity step behind the emitter
@@ -247,6 +262,11 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
         const float t = (p.m_Life > 0.0f) ? (p.m_Age / p.m_Life) : 0.0f;
         const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
         p.m_Rotation += spin * dt;
+        // Cycle accumulators (RotCycle + CycleX/Y). Rates are in cycles/s so
+        // convert to radians by ×2π.
+        p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
+        p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
+        p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
         ++i;
     }
 
@@ -405,16 +425,40 @@ void PSPParticleManager::Draw(int layer) {
             float hx = size * 0.5f * aspect;
             float hy = size * 0.5f;
 
-            // Rotation (pre-computed columns from m_Rotation)
-            float ca = cosf(p.m_Rotation);
-            float sa = sinf(p.m_Rotation);
+            // CycleX / CycleY size modulation — cos wave around 1.0 per axis
+            if (p.m_CycleXRate != 0.0f)
+                hx *= cosf(p.m_CycleXPhase);
+            if (p.m_CycleYRate != 0.0f)
+                hy *= cosf(p.m_CycleYPhase);
+
+            // RotCycle oscillation — sin wave adds to base rotation
+            float effectiveRot = p.m_Rotation;
+            if (p.m_RotCycleAmp != 0.0f)
+                effectiveRot += p.m_RotCycleAmp * sinf(p.m_RotCyclePhase);
+
+            // Rotation (pre-computed columns from effectiveRot)
+            float ca = cosf(effectiveRot);
+            float sa = sinf(effectiveRot);
             // Rotated half-extents
             float dxX =  ca * hx, dxY = sa * hx;
             float dyX = -sa * hy, dyY = ca * hy;
 
-            const float px = p.m_Pos.x;
-            const float py = p.m_Pos.y;
+            float px = p.m_Pos.x;
+            float py = p.m_Pos.y;
             const float pz = p.m_Pos.z;
+
+            // Grid-lock: binary snaps pos around the (480, 320) HUD origin
+            // when the template declares non-zero cell sizes. Used by
+            // rim_spark (menu rim flash) to keep particles aligned.
+            // Matches Draw 0x114c64 gridLock block.
+            if (curTmpl) {
+                const float gx = curTmpl->m_GridLockStart;
+                const float gy = curTmpl->m_GridLockEnd;
+                if (gx > 0.0f)
+                    px = floorf((px + 480.0f) / gx + 0.5f) * gx - 480.0f;
+                if (gy > 0.0f)
+                    py = floorf((py + 320.0f) / gy + 0.5f) * gy - 320.0f;
+            }
 
             // 4 corners
             struct C { float x, y, u, v; } corners[4] = {
@@ -550,6 +594,38 @@ void PSPParticleManager::LoadFile(const char* path) {
             if (e->QueryIntAttribute("startMax", &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinStartMax = (int16_t)v;
             if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinEndMin   = (int16_t)v;
             if (e->QueryIntAttribute("endMax",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_SpinEndMax   = (int16_t)v;
+        }
+
+        // <cycleX startMin="a" startMax="b" endMin="c" endMax="d"/>
+        // Rate range: start rate lerp [startMin, startMax], end rate lerp
+        // [endMin, endMax]. Modulates size_x via cos(phase) in Draw.
+        if (auto* e = pt->FirstChildElement("cycleX")) {
+            int v = 0;
+            if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleXStart = (int16_t)v;
+            if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleXEnd   = (int16_t)v;
+        }
+        if (auto* e = pt->FirstChildElement("cycleY")) {
+            int v = 0;
+            if (e->QueryIntAttribute("startMin", &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleYStart = (int16_t)v;
+            if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleYEnd   = (int16_t)v;
+        }
+
+        // <rotateCycle start="base" end="endBase" speedStart="rate1" speedEnd="rate2"/>
+        // Quadratic rotation accumulator modulating m_Rotation with sin.
+        // Port stores the four parameters in the m_Friction* float slots so
+        // we don't need to add new template fields.
+        if (auto* e = pt->FirstChildElement("rotateCycle")) {
+            float fv = 0.0f;
+            if (e->QueryFloatAttribute("speedStart", &fv) == tinyxml2::XML_SUCCESS)
+                tmpl.m_FrictionSpeedStart = fv;
+            if (e->QueryFloatAttribute("speedEnd",   &fv) == tinyxml2::XML_SUCCESS)
+                tmpl.m_FrictionSpeedEnd   = fv;
+            if (e->QueryFloatAttribute("start",      &fv) == tinyxml2::XML_SUCCESS)
+                tmpl.m_FrictionOffsetMin  = fv;   // amplitude base
+            if (e->QueryFloatAttribute("end",        &fv) == tinyxml2::XML_SUCCESS)
+                tmpl.m_FrictionOffsetMax  = fv;
+            else
+                tmpl.m_FrictionOffsetMax  = tmpl.m_FrictionOffsetMin;
         }
 
         // <SourceBlend>, <DestinationBlend>

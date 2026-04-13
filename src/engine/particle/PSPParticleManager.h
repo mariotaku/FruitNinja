@@ -136,6 +136,17 @@ struct PSPParticle {
     // template +0x48..+0x4F. Port does a simple linear lerp start→end.
     float    m_SpinStart;   // rad/s at age=0
     float    m_SpinEnd;     // rad/s at age=life
+    // Cycle modulation — per-particle phase accumulators + constant rates
+    // picked at spawn from template range. Rates are in "cycles/second".
+    // RotCycle adds an oscillating offset to m_Rotation (sine wave).
+    // CycleX / CycleY scale the drawn half-extents via cosine.
+    float    m_RotCycleRate;
+    float    m_RotCyclePhase;
+    float    m_RotCycleAmp;     // amplitude (radians) = lerp(start, end)
+    float    m_CycleXRate;
+    float    m_CycleXPhase;
+    float    m_CycleYRate;
+    float    m_CycleYPhase;
     // Two-segment BGRA colour lerp: start → mid → end, split at age = life/2.
     uint8_t  m_ColourStart[4];
     uint8_t  m_ColourMid[4];
@@ -147,6 +158,9 @@ struct PSPParticle {
         , m_Age(0), m_Life(0)
         , m_SizeStart(0), m_SizeMid(0), m_SizeEnd(0)
         , m_Rotation(0), m_SpinStart(0), m_SpinEnd(0)
+        , m_RotCycleRate(0), m_RotCyclePhase(0), m_RotCycleAmp(0)
+        , m_CycleXRate(0), m_CycleXPhase(0)
+        , m_CycleYRate(0), m_CycleYPhase(0)
         , m_pTemplate(nullptr)
     {
         for (int i = 0; i < 4; ++i)
