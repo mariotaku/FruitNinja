@@ -15,6 +15,7 @@
 #include "entities/Bomb.h"
 #include "entities/FruitInfo.h"
 #include "entities/ActorManager.h"
+#include "input/Touch.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -34,6 +35,9 @@ MenuButton::MenuButton()
     : m_pEntity(NULL),
       m_FruitType(-1),
       m_FadeCounter(0),
+      m_fieldD4(0),
+      m_TouchSlot(-1),
+      m_TouchX(0.0f), m_TouchY(0.0f), m_TouchPhase(0.0f),
       m_RandomOffset(0.0f),
       m_bFlipped(false),
       m_RotationSpeed(0.0f),
@@ -169,6 +173,72 @@ void MenuButton::Update(float dt) {
         m_ShakeTimer -= dt;
         if (m_ShakeTimer < 0.0f) m_ShakeTimer = 0.0f;
     }
+
+    // -----------------------------------------------------------------------
+    // Touch block — matches binary MenuButton::Update (0x0014e614).
+    // Poll-based: iterates Touch slots inside the button rect. If none was
+    // tracked last frame, latch the first slot inside. On release, fire the
+    // callback if the release position is still inside the rect.
+    // -----------------------------------------------------------------------
+    if (!m_bInteractive || !m_bEnabled) return;
+
+    // Compute rect bounds. Binary inflates by m_AnimSpeed/m_AnimSpeed2 which
+    // are 5.0 defaults — small inset/outset that gives the button a touch-up
+    // "grace zone". The port mirrors that.
+    float hw, hh;
+    if (m_bHasHitArea) {
+        hw = m_TargetSize.x * 0.5f;
+        hh = m_TargetSize.y * 0.5f;
+    } else {
+        hw = size.x * 0.5f;
+        hh = size.y * 0.5f;
+    }
+    const float left   = pos.x - hw - m_AnimSpeed2;
+    const float right  = pos.x + hw + m_AnimSpeed2;
+    const float bottom = pos.y - hh - m_AnimSpeed;
+    const float top    = pos.y + hh + m_AnimSpeed;
+
+    Mortar::Touch& touch = Mortar::Touch::GetInstance();
+
+    if (m_TouchSlot == -1) {
+        // Not tracking — scan for a new touch inside the rect.
+        int slot = touch.GetTouchInRegion(left, right, bottom, top, -1);
+        if (slot >= 0) {
+            // Latch the slot. Phase will be -1 (just pressed) on the first
+            // frame of a new touch; the binary fires the callback on the
+            // press edge for toggle buttons (FruitType < 0). Regular button
+            // buttons wait for release.
+            m_TouchSlot = slot;
+            m_bHighlighted = 1;
+            UpdateTouchPosition();
+        }
+    } else {
+        // Tracking — refresh position and check for release.
+        UpdateTouchPosition();
+        // phase >= 1 means released. Fire callback if release was inside rect.
+        if (m_TouchPhase >= 1.0f) {
+            const bool insideOnRelease =
+                m_TouchX >= left && m_TouchX <= right &&
+                m_TouchY >= bottom && m_TouchY <= top;
+            if (insideOnRelease && m_ClickCallback) {
+                m_ClickCallback();
+            }
+            m_TouchSlot = -1;
+            m_bHighlighted = 0;
+        }
+    }
+}
+
+// Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4).
+// Copies x/y/phase from the tracked Touch slot into m_TouchX/Y/Phase.
+void MenuButton::UpdateTouchPosition() {
+    if (m_TouchSlot < 0) return;
+    const Mortar::TouchState* s =
+        Mortar::Touch::GetInstance().GetSlot(m_TouchSlot);
+    if (!s) return;
+    m_TouchX     = (float)s->currX;
+    m_TouchY     = (float)s->currY;
+    m_TouchPhase = (float)s->phase;
 }
 
 // Matches MenuButton::Draw (0x0014f9cc, 359 lines)
@@ -194,32 +264,6 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     // if (m_SparkleTimer >= 0) { ... 8 segments × 6 verts = 48 QUADCUSTOMVERTEX ... }
 }
 
-// Touch input — matches original (uses m_bInteractive, not pressed bool)
-bool MenuButton::HitTest(float gx, float gy) {
-    if (!m_bInteractive || !m_bEnabled) return false;
-
-    float hw, hh;
-    if (m_bHasHitArea) {
-        hw = m_TargetSize.x / 2.0f;
-        hh = m_TargetSize.y / 2.0f;
-    } else {
-        hw = size.x / 2.0f;
-        hh = size.y / 2.0f;
-    }
-
-    return gx >= pos.x - hw && gx <= pos.x + hw &&
-           gy >= pos.y - hh && gy <= pos.y + hh;
-}
-
-void MenuButton::TouchDown(float gx, float gy) {
-    if (HitTest(gx, gy)) {
-        m_bHighlighted = 1;
-    }
-}
-
-void MenuButton::TouchUp(float gx, float gy) {
-    if (m_bHighlighted && HitTest(gx, gy) && m_ClickCallback) {
-        m_ClickCallback();
-    }
-    m_bHighlighted = 0;
-}
+// Removed: HitTest, TouchDown, TouchUp. Touch input is now polled inside
+// MenuButton::Update via Mortar::Touch::GetTouchInRegion — matching the
+// binary's poll-based flow. See touch-rewrite-plan.md.
