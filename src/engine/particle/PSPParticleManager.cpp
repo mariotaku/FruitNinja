@@ -2,12 +2,17 @@
 #include "util/StringHash.h"
 #include "asset/TextureManager.h"
 #include "math/Random.h"
+#include "render/Renderer.h"
+#include "render/QUADCUSTOMVERTEX.h"
+#include "render/gl_funcs.h"
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 // Analysed: 2026-04-13T10:30
 
@@ -69,15 +74,16 @@ const PSPEmitterTemplate* PSPParticleManager::FindTemplate(uint32_t hash) const 
 PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
                                                    PSPParticleEmitter** ppRef,
                                                    bool /*persistent*/) {
-    // Bada uses a MemoryPool with fixed capacity; we just grow the vector.
+    // Bada uses a MemoryPool with fixed capacity; we just grow the vector
+    // (of unique_ptr, so emitter addresses remain stable).
     const PSPEmitterTemplate* tmpl = FindTemplate(hash);
     if (!tmpl) {
         if (ppRef) *ppRef = nullptr;
         return nullptr;
     }
 
-    m_Emitters.emplace_back();
-    PSPParticleEmitter& e = m_Emitters.back();
+    m_Emitters.emplace_back(new PSPParticleEmitter());
+    PSPParticleEmitter& e = *m_Emitters.back();
     // All defaults match the binary's explicit init block:
     e.m_Timer = 0.0f;
     e.m_Pos = Vec3(0, 0, 0);
@@ -96,6 +102,19 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     e.m_bActive = true;
     if (ppRef) *ppRef = &e;
     return &e;
+}
+
+// Matches ClearEmitter (0x00114934). Unlinks the emitter, clears the caller
+// back-pointer, and removes it from the active list.
+void PSPParticleManager::ClearEmitter(PSPParticleEmitter* emitter) {
+    if (!emitter) return;
+    for (size_t i = 0; i < m_Emitters.size(); ++i) {
+        if (m_Emitters[i].get() == emitter) {
+            if (emitter->m_pRefPtr) *emitter->m_pRefPtr = nullptr;
+            m_Emitters.erase(m_Emitters.begin() + i);
+            return;
+        }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -205,7 +224,7 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
 void PSPParticleManager::Update(float dt) {
     const bool paused = false; // port: game pause not routed here yet
     for (size_t i = 0; i < m_Emitters.size(); ) {
-        PSPParticleEmitter& e = m_Emitters[i];
+        PSPParticleEmitter& e = *m_Emitters[i];
         const PSPEmitterTemplate* et = e.m_pTemplate;
 
         // Tick active emitters
@@ -214,28 +233,144 @@ void PSPParticleManager::Update(float dt) {
             UpdateEmitter(e, dt);
         }
 
-        // Removal: timer >= maxLifetime AND NOT (infinite AND still spawning)
+        // Removal: timer >= maxLifetime AND no particles still alive.
+        // Infinite emitters (maxLifetime <= 0) are only removed via ClearEmitter.
         bool keep = true;
         if (et) {
             if (et->m_MaxLifetime > 0.0f) {
                 keep = (e.m_Timer < et->m_MaxLifetime) || !e.m_Particles.empty();
             } else {
-                // Infinite emitter — only removed by explicit ClearEmitter.
                 keep = true;
             }
         }
         if (!keep) {
             if (e.m_pRefPtr) *e.m_pRefPtr = nullptr;
-            m_Emitters[i] = m_Emitters.back();
-            m_Emitters.pop_back();
+            m_Emitters.erase(m_Emitters.begin() + i);
             continue;
         }
         ++i;
     }
 }
 
+// -----------------------------------------------------------------------------
+// Draw — matches PSPParticleManager::Draw (0x00114c64, ~382 lines).
+// Simplified port: for each emitter with particles, build a textured quad per
+// particle into a scratch vertex buffer, then DrawTriList. Blend mode comes
+// from template->m_BlendMode (destination factor; source is GL_SRC_ALPHA).
+// Per-particle state uses the simpler struct from task #8 (not the full
+// 0xA4-byte binary layout — see docs/engine/particles.md).
+// -----------------------------------------------------------------------------
+static inline uint32_t PackBGRA(const uint8_t c[4]) {
+    // QUADCUSTOMVERTEX.colour is read as 4 × GL_UNSIGNED_BYTE in the shader
+    // (normalized). Memory order matches the vertex attrib — so we pack the
+    // bytes in the same BGRA order as the template's colour fields.
+    return (uint32_t)c[0]
+         | ((uint32_t)c[1] << 8)
+         | ((uint32_t)c[2] << 16)
+         | ((uint32_t)c[3] << 24);
+}
+
+// Lerp each component of an 8-bit BGRA tuple. `t` in [0,1], 0=start.
+static inline void LerpColour(const uint8_t a[4], const uint8_t b[4],
+                              float t, uint8_t out[4]) {
+    for (int i = 0; i < 4; ++i) {
+        int v = (int)(a[i] + (b[i] - a[i]) * t);
+        if (v < 0) v = 0; if (v > 255) v = 255;
+        out[i] = (uint8_t)v;
+    }
+}
+
 void PSPParticleManager::Draw() {
-    // Stub — particle rendering not yet implemented (task #9).
+    static std::vector<QUADCUSTOMVERTEX> s_verts;
+
+    // Group particles by their parent template so we can batch one DrawTriList
+    // call per template/texture/blend-mode pair.
+    // We iterate emitters and split by particle template inline to avoid a
+    // full sort — in practice each emitter typically uses one or two
+    // templates, so inner tracking of "current template" is enough.
+    const PSPParticleTemplate* curTmpl = nullptr;
+
+    auto flush = [&]() {
+        if (s_verts.empty() || !curTmpl) { s_verts.clear(); return; }
+        if (curTmpl->m_Texture.IsValid()) {
+            // Blend mode: source = GL_SRC_ALPHA, dest from template (default
+            // GL_ONE_MINUS_SRC_ALPHA if unset).
+            GLenum dstFactor = curTmpl->m_BlendMode ? (GLenum)curTmpl->m_BlendMode
+                                                    : GL_ONE_MINUS_SRC_ALPHA;
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, dstFactor);
+
+            glBindTexture(GL_TEXTURE_2D, curTmpl->m_Texture->m_TexId);
+            if (Renderer* r = Renderer::GetInstance()) {
+                r->DrawTriList(s_verts.data(), (int)s_verts.size());
+            }
+        }
+        s_verts.clear();
+    };
+
+    for (auto& up : m_Emitters) {
+        PSPParticleEmitter& e = *up;
+        if (e.m_Particles.empty()) continue;
+
+        for (PSPParticle& p : e.m_Particles) {
+            // Group flush on template change
+            if (p.m_pTemplate != curTmpl) {
+                flush();
+                curTmpl = p.m_pTemplate;
+            }
+
+            const float life = p.m_Life > 0.0f ? p.m_Life : 1.0f;
+            float t = p.m_Age / life;
+            if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+
+            // Colour lerp (start → end)
+            uint8_t col[4];
+            LerpColour(p.m_ColourStart, p.m_ColourEnd, t, col);
+            uint32_t packed = PackBGRA(col);
+
+            // Size lerp
+            float size = p.m_SizeStart + (p.m_SizeEnd - p.m_SizeStart) * t;
+            float aspect = curTmpl ? curTmpl->m_AspectRatio : 1.0f;
+            if (aspect <= 0.0f) aspect = 1.0f;
+            float hx = size * 0.5f * aspect;
+            float hy = size * 0.5f;
+
+            // Rotation (pre-computed columns from m_Rotation)
+            float ca = cosf(p.m_Rotation);
+            float sa = sinf(p.m_Rotation);
+            // Rotated half-extents
+            float dxX =  ca * hx, dxY = sa * hx;
+            float dyX = -sa * hy, dyY = ca * hy;
+
+            const float px = p.m_Pos.x;
+            const float py = p.m_Pos.y;
+            const float pz = p.m_Pos.z;
+
+            // 4 corners
+            struct C { float x, y, u, v; } corners[4] = {
+                { px - dxX - dyX, py - dxY - dyY, 0.0f, 0.0f }, // TL
+                { px + dxX - dyX, py + dxY - dyY, 1.0f, 0.0f }, // TR
+                { px + dxX + dyX, py + dxY + dyY, 1.0f, 1.0f }, // BR
+                { px - dxX + dyX, py - dxY + dyY, 0.0f, 1.0f }, // BL
+            };
+
+            // Two triangles, 6 verts (TriList)
+            const int tri[6] = { 0, 1, 2, 0, 2, 3 };
+            for (int i = 0; i < 6; ++i) {
+                const C& c = corners[tri[i]];
+                QUADCUSTOMVERTEX v;
+                v.x = c.x; v.y = c.y; v.z = pz;
+                v.nx = 0; v.ny = 0; v.nz = 1.0f;
+                v.colour = packed;
+                v.u = c.u; v.v = c.v;
+                s_verts.push_back(v);
+            }
+        }
+    }
+    flush();
+
+    // Restore default blend state so we don't leak into subsequent draws.
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 // Matches PSPParticleManager::LoadFile (0x00115f60).

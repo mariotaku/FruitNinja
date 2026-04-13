@@ -7,6 +7,8 @@
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
 #include "math/Matrix44.h"
+#include "particle/PSPParticleManager.h"
+#include "util/StringHash.h"
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
@@ -41,8 +43,8 @@ struct BombGlobalData {
     SmartPtr<Mortar::Model> model[3];  // +0x0C: [0]=bomb.mmd, [1]=bomb_purple.mmd, [2]=unused
     SmartPtr<Mortar::Texture> texMinus10;  // +0x24: minus_10.tex
     bool loaded;            // +0x28: guard flag
-    // +0x2C/+0x30: fuseHash[2] — TODO: particle system
-    BombGlobalData() : loaded(false) {}
+    uint32_t fuseHash[2];   // +0x2C/+0x30: bomb_smoke / purple_bomb_smoke hashes
+    BombGlobalData() : loaded(false) { fuseHash[0] = fuseHash[1] = 0; }
 };
 static BombGlobalData g_bombData;
 
@@ -100,8 +102,9 @@ void Bomb::LoadContent() {
     // Texture: "minus_10.tex" (0x1BCC0E) — zen mode -10 score indicator
     g_bombData.texMinus10 = Mortar::TextureManager::LoadLocalisedTexture("minus_10.tex");
 
-    // TODO: fuseHash[0] = StringHash("bomb_smoke")
-    // TODO: fuseHash[1] = StringHash("purple_bomb_smoke")
+    // Precompute fuse particle emitter hashes (matches binary LoadContent)
+    g_bombData.fuseHash[0] = StringHash("bomb_smoke");
+    g_bombData.fuseHash[1] = StringHash("purple_bomb_smoke");
     // TODO: SetupLighting on both models
 
     g_bombData.loaded = true;
@@ -118,6 +121,7 @@ Bomb::Bomb()
       m_RotVelX(0), m_RotVelY(0),
       m_RotX(0), m_RotY(0),
       m_bCollisionGuard(0),
+      m_pEmitter(NULL),
       m_bMovement(0),
       m_bMenuBombHit(0),
       m_Countdown(0.0f),
@@ -127,7 +131,10 @@ Bomb::Bomb()
 }
 
 Bomb::~Bomb() {
-    // TODO: Release particle emitter (PSPParticleManager::ClearEmitter)
+    if (m_pEmitter) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
+        m_pEmitter = NULL;
+    }
     // TODO: Unlink from game state (field_0x84)
 }
 
@@ -167,7 +174,7 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     m_RotY    = (int16_t)(rand() % 360);
 
     m_bMenuBombHit = 0;
-    // m_pEmitter = NULL;  // TODO: fuse particle
+    m_pEmitter = NULL;  // lazy-created in Update
 
     // Scale: matches binary multiply chain at 0x172504
     // Original: Vec3::One * bombTypeScale * 0.01 * scaleFactor
@@ -272,7 +279,21 @@ void Bomb::Update(float dt) {
         pos.x <= BOUNDS_MIN_X || pos.x >= BOUNDS_MAX_X) {
         KillBomb();
     }
-    // TODO: Lazy-create fuse particle emitter
+
+    // Lazy-create fuse particle emitter (matches binary: first Update after
+    // Init creates the emitter, then each tick the emitter pos tracks the bomb).
+    // Only alive, non-menu-hit bombs get the fuse trail.
+    if (!m_pEmitter && m_bHit == 0 && m_Countdown == 0.0f && active) {
+        int variant = (m_BombVariant == 0) ? 0 : 1;
+        uint32_t hash = g_bombData.fuseHash[variant];
+        if (hash != 0) {
+            Mortar::PSPParticleManager::GetInstance().AddEmitter(
+                hash, &m_pEmitter, false);
+        }
+    }
+    if (m_pEmitter) {
+        m_pEmitter->m_Pos = pos;
+    }
 }
 
 // Matches Bomb::Draw (0x171be8)
@@ -375,7 +396,10 @@ void Bomb::Draw(Renderer& r) {
 void Bomb::Deactivate() {
     active = false;
     flags |= 0x10;
-    // TODO: Release particle emitter
+    if (m_pEmitter) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
+        m_pEmitter = NULL;
+    }
 }
 
 // Matches Bomb::Chuck (0x170f68)
@@ -388,6 +412,9 @@ void Bomb::Chuck(float delay) {
 // Matches Bomb::KillBomb (0x1716e8)
 void Bomb::KillBomb() {
     flags |= 0x10;  // mark for removal
+    if (m_pEmitter) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
+        m_pEmitter = NULL;
+    }
     // TODO: Unlink from game state (field_0x84)
-    // TODO: Clear particle emitter
 }

@@ -129,6 +129,10 @@ void GameDraw(float dt, bool active) {
         game->hud->Draw(0x200);   // bomb hit overlay
         game->hud->Draw(0x400);   // top layer
     }
+
+    // 7. Particles — rendered on top of HUD, below overlays in original order.
+    // Port simplification: single pass (no layer filtering yet).
+    Mortar::PSPParticleManager::GetInstance().Draw();
 }
 
 // Matches GameExit (0x16cf74, 98 lines) — per-session cleanup
