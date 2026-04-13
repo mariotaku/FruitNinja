@@ -54,14 +54,18 @@ void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Update entities
-    if (game->actorManager)
+    // Update entities — ONLY when the gameplay is active. Matches binary
+    // GameUpdate's `if (active)` branch: ActorManager::Update is gated on
+    // `active`, so menu entities (e.g. the bomb in the Quit button) don't
+    // accumulate per-frame rotation while the player is on the menu.
+    // See docs/engine/rendering-pipeline.md / GameUpdate RE (0x16bed0).
+    if (active && game->actorManager)
         game->actorManager->Update(dt);
 
-    // Tick particle system (spawn, physics, emitter lifetime)
+    // Tick particle system (spawn, physics, emitter lifetime) — always runs
     Mortar::PSPParticleManager::GetInstance().Update(dt);
 
-    // Update all HUD controls (MainScreen state machine, buttons)
+    // Update all HUD controls (MainScreen state machine, buttons) — always runs
     if (game->hud)
         game->hud->Update(dt);
 
