@@ -11,6 +11,8 @@
 #include "render/gl_funcs.h"
 #include "asset/TextureManager.h"
 #include "input/Touch.h"
+#include "particle/PSPParticleManager.h"
+#include "util/StringHash.h"
 #include "Game.h"
 #include <cstring>
 #include <cmath>
@@ -34,6 +36,29 @@ static const int   HEAD_TAPER_COUNT = 5;
 // 0x17B92C). The port replaces that formula with simple time-based decay
 // for clarity; visual feel is approximately the same.
 static const float TRAIL_LIFETIME = 0.25f;
+
+// ---------------------------------------------------------------------------
+// TODO: proper slash-modifier trail emitter path.
+//
+// The binary's SlashEntity reads the trail emitter hash from a static member
+// `SlashEntity::ModPartilcesHash` (sic: binary typo) that is populated by
+// ItemManager / SlashModInfo::SetEquipped when the player changes slash
+// modifier in the Dojo shop. The default item (`ORIGINAL_SLASH` in
+// itemlist.xml) has no particle trail — you only see smoke/sparkle when a
+// mod like `dark_blade`, `flame_blade`, `ice_blade`, etc. is equipped.
+//
+// Port shortcut: hard-code `dark_blade` as the trail emitter so the visual
+// can be tested without porting the full item / mod-equip pipeline first.
+// Replace with `SlashEntity::ModPartilcesHash` once that is wired up.
+//
+//   Full fix requires:
+//   1. Port ItemManager XML parser for Data/xml/itemlist.xml
+//   2. Port SlashModInfo struct + Parse method
+//   3. Port SetEquipped / currently-equipped state
+//   4. Port Dojo shop UI for changing mods (or preset via save data)
+//   5. Replace the hash lookup below with ModPartilcesHash
+// ---------------------------------------------------------------------------
+static const char* TRAIL_EMITTER_NAME = "dark_blade";
 
 // --- Global content ---
 static SmartPtr<Mortar::Texture> g_BladeTex;
@@ -60,6 +85,7 @@ void SlashEntity::ReleaseContent() {
 // ---------------------------------------------------------------------------
 SlashEntity::SlashEntity()
     : m_NumPoints(0)
+    , m_TrailEmitter(nullptr)
     , m_State(0)
     , m_bHasHead(false)
 {
@@ -75,6 +101,7 @@ void SlashEntity::Init() {
     m_NumPoints = 0;
     m_State = 0;
     m_bHasHead = false;
+    m_TrailEmitter = nullptr;
 
     for (int i = 0; i < MAX_VERTS; ++i) {
         m_Left[i].nx  = 0; m_Left[i].ny  = 0; m_Left[i].nz  = 1.0f;
@@ -86,6 +113,10 @@ void SlashEntity::Init() {
 
 void SlashEntity::Release() {
     m_NumPoints = 0;
+    if (m_TrailEmitter) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
+        m_TrailEmitter = nullptr;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +300,29 @@ void SlashEntity::Update(float dt) {
         } else if (m_bHasHead) {
             OnTouchReleased();
         }
+    }
+
+    // Trail particle emitter — matches binary UpdateTouchDown (0x17D2E4).
+    // Created on first active touch, follows the head each frame, cleared
+    // on release. See TRAIL_EMITTER_NAME TODO above for the full ItemManager
+    // path this should come from eventually.
+    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+    const bool bladeActive = (m_State != 0) && (m_NumPoints > 0);
+    if (bladeActive) {
+        if (!m_TrailEmitter) {
+            const uint32_t hash = StringHash(TRAIL_EMITTER_NAME);
+            m_TrailEmitter = pm.AddEmitter(hash, &m_TrailEmitter, /*persistent=*/true);
+            if (m_TrailEmitter) {
+                m_TrailEmitter->m_bUpdateWhenPaused = true;
+            }
+        }
+        if (m_TrailEmitter) {
+            // Follow the newest point (blade head).
+            m_TrailEmitter->m_Pos = m_Points[m_NumPoints - 1].center;
+        }
+    } else if (m_TrailEmitter) {
+        pm.ClearEmitter(m_TrailEmitter);
+        m_TrailEmitter = nullptr;
     }
 
     // Age every point by dt. This runs unconditionally — even while the
