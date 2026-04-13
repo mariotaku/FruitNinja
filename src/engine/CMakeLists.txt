@@ -36,5 +36,5 @@ add_library(mortar_engine STATIC
     render/BakedString.cpp
 )
 target_include_directories(mortar_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(mortar_engine PUBLIC SDL2::SDL2)
+target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2)
 target_compile_features(mortar_engine PUBLIC cxx_std_11)
