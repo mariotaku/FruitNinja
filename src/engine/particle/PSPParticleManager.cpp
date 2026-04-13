@@ -139,16 +139,20 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
     p.m_Pos = emitter.m_Pos;
     p.m_pTemplate = tmpl;
 
-    // Velocity: set-level min/max (randomized per component), added to emitter vel.
-    p.m_Vel.x = emitter.m_Vel.x + RandRange(set.m_VelocityMin[0], set.m_VelocityMax[0]);
-    p.m_Vel.y = emitter.m_Vel.y + RandRange(set.m_VelocityMin[1], set.m_VelocityMax[1]);
-    p.m_Vel.z = emitter.m_Vel.z + RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]);
+    // Velocity: set-level min/max (randomized per component), halved, then
+    // added to emitter vel. The `* 0.5f` matches the binary AddParticle
+    // @ 0x115644: after picking the random set-level velocity it does an
+    // unconditional `local_78.xyz *= 0.5f` before storing onto the particle.
+    // Applies to all shape modes (not just two-player as originally guessed).
+    p.m_Vel.x = emitter.m_Vel.x + RandRange(set.m_VelocityMin[0], set.m_VelocityMax[0]) * 0.5f;
+    p.m_Vel.y = emitter.m_Vel.y + RandRange(set.m_VelocityMin[1], set.m_VelocityMax[1]) * 0.5f;
+    p.m_Vel.z = emitter.m_Vel.z + RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]) * 0.5f;
 
     if (tmpl) {
-        // Template-level velocity (also randomized, additive to set-level)
-        p.m_Vel.x += RandRange(tmpl->m_VelocityMin[0], tmpl->m_VelocityMax[0]);
-        p.m_Vel.y += RandRange(tmpl->m_VelocityMin[1], tmpl->m_VelocityMax[1]);
-        p.m_Vel.z += RandRange(tmpl->m_VelocityMin[2], tmpl->m_VelocityMax[2]);
+        // NOTE: template m_VelocityMin/Max are NOT an initial-velocity range;
+        // they are a per-component per-frame velocity LERP (damping) factor
+        // applied each tick during UpdateEmitter integration. See binary
+        // Draw @ 0x114c64 and docs/engine/particle-refine-notes.md #4.
 
         p.m_Gravity.x = RandRange(tmpl->m_GravityMin[0], tmpl->m_GravityMax[0]);
         p.m_Gravity.y = RandRange(tmpl->m_GravityMin[1], tmpl->m_GravityMax[1]);
@@ -169,13 +173,21 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         memcpy(p.m_ColourEnd,   tmpl->m_ColourEndMin,   4);
 
         // Spin rate lerp: template has start/end min/max int16 ranges.
-        // Binary stores these as 16-bit "degrees/frame" units — we convert
-        // to radians/second via the same 0.01 scale the port has always
-        // used. Each particle gets its own random start and end rate.
+        // Binary AddParticle @ 0x115644 multiplies the LERP'd int16 by
+        // DAT_00115b64 = 182.0f (degrees → 16-bit angle-index: 65536/360 ≈ 182)
+        // and stores it as an int16 angle-table index that is added to
+        // field_0x28 each 1/60s tick. Convert to rad/sec for the port's
+        // float-radian integration:
+        //   rad_per_sec = int16 * (182/65536) * 2π * 60
+        //              = int16 * 6.28318 * 60 / 360
+        //              = int16 * 1.0472
+        // Each particle gets its own random start/end rate.
+        static constexpr float SPIN_INT16_TO_RAD_PER_SEC =
+            (182.0f / 65536.0f) * 6.2831853f * 60.0f;
         p.m_SpinStart = RandRange((float)tmpl->m_SpinStartMin,
-                                  (float)tmpl->m_SpinStartMax) * 0.01f;
+                                  (float)tmpl->m_SpinStartMax) * SPIN_INT16_TO_RAD_PER_SEC;
         p.m_SpinEnd   = RandRange((float)tmpl->m_SpinEndMin,
-                                  (float)tmpl->m_SpinEndMax)   * 0.01f;
+                                  (float)tmpl->m_SpinEndMax)   * SPIN_INT16_TO_RAD_PER_SEC;
         p.m_Rotation = RandRange(tmpl->m_AngleMin, tmpl->m_AngleMax);
 
         // RotCycle — oscillating rotation offset. speedStart/End from
@@ -257,10 +269,25 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
             e.m_Particles.pop_back();
             continue;
         }
-        p.m_Vel   += p.m_Gravity * dt;
-        p.m_Pos   += p.m_Vel * dt;
-        // Spin rate lerp start→end over life, then integrate.
+        // Binary Draw @ 0x114c64 integration:
+        //   vel = (vel + gravity*dt) * lerp(tmpl.velMin, tmpl.velMax, t)
+        //   pos = pos + vel*dt
+        // The template's velMin/Max fields are a per-component per-frame
+        // LERP (damping) factor — NOT an initial velocity range. See
+        // docs/engine/particle-refine-notes.md #4 for the full analysis.
         const float t = (p.m_Life > 0.0f) ? (p.m_Age / p.m_Life) : 0.0f;
+        p.m_Vel += p.m_Gravity * dt;
+        if (p.m_pTemplate) {
+            const PSPParticleTemplate* pt = p.m_pTemplate;
+            const float dampX = pt->m_VelocityMin[0] + (pt->m_VelocityMax[0] - pt->m_VelocityMin[0]) * t;
+            const float dampY = pt->m_VelocityMin[1] + (pt->m_VelocityMax[1] - pt->m_VelocityMin[1]) * t;
+            const float dampZ = pt->m_VelocityMin[2] + (pt->m_VelocityMax[2] - pt->m_VelocityMin[2]) * t;
+            p.m_Vel.x *= dampX;
+            p.m_Vel.y *= dampY;
+            p.m_Vel.z *= dampZ;
+        }
+        p.m_Pos += p.m_Vel * dt;
+        // Spin rate lerp start→end over life, then integrate.
         const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
         p.m_Rotation += spin * dt;
         // Cycle accumulators (RotCycle + CycleX/Y). Rates are in cycles/s so
@@ -509,6 +536,13 @@ void PSPParticleManager::LoadFile(const char* path) {
          pt = pt->NextSiblingElement("particleTemplate")) {
 
         PSPParticleTemplate tmpl = {};
+        // m_VelocityMin/Max on the TEMPLATE are not initial-velocity — they
+        // are a per-component per-frame velocity LERP (damping/amplification)
+        // factor used by UpdateEmitter integration. Default to identity (1.0)
+        // so templates that omit <velocity> get no damping. See binary Draw
+        // @ 0x114c64 integration and docs/engine/particle-refine-notes.md #4.
+        tmpl.m_VelocityMin[0] = 1.0f; tmpl.m_VelocityMin[1] = 1.0f; tmpl.m_VelocityMin[2] = 1.0f;
+        tmpl.m_VelocityMax[0] = 1.0f; tmpl.m_VelocityMax[1] = 1.0f; tmpl.m_VelocityMax[2] = 1.0f;
 
         const char* name = pt->Attribute("name");
         uint32_t hash = name ? StringHash(name) : 0;
