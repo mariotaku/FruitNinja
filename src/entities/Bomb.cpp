@@ -1,6 +1,9 @@
 #include "Bomb.h"
+#include "ActorManager.h"
+#include "BombBlast.h"
 #include "FruitInfo.h"
 #include "Game.h"
+#include "game/BombHit.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "asset/TextureManager.h"
@@ -143,15 +146,16 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     (void)param1;
     (void)fruitType;
 
-    // TODO: ColSphere creation if NULL
-    // if (m_Col == NULL) m_Col = new ColSphere();
-
     float scaleFactor = 1.0f;
     // Original: if (p3 != NULL) scaleFactor = *(float*)p3;
 
-    // TODO: Collision sphere setup
-    // m_Col->center = Vec3(pos.x, pos.y, 0.0f);
-    // m_Col->radius = FruitInfo_Get(fruitType)->colSize * 0.5f * scaleFactor;
+    // Collision sphere setup. Binary Bomb::Init (0x172504) reads the bomb
+    // entry's `collision` attribute from fruitlist.xml: <bomb collision="X">.
+    // TODO: pass the bomb's FRUIT_INFO entry to Init and use m_CollisionScale.
+    // For now hardcode to 25.0f (same as the default fruit collision radius),
+    // which covers the visible bomb footprint at the port's current scale.
+    m_Col.center = Vec3(pos.x, pos.y, 0.0f);
+    m_Col.radius = 25.0f * 0.5f * scaleFactor;
 
     // Lazy-load bomb texture
     if (!g_BombTexture.IsValid()) {
@@ -250,15 +254,26 @@ void Bomb::Update(float dt) {
             m_RotY += m_RotVelY;
         }
 
-        // TODO: Update collision sphere
-        // m_Col->center = Vec3(pos.x, pos.y, 0.0f);
+        // Update collision sphere to follow the bomb (z clamped to 0).
+        m_Col.center = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
         // === HIT BOMB ===
         if (m_bMenuBombHit == 0) {
-            // Non-menu hit: spawn BombBlast entities
-            // TODO: m_SpawnTimer -= Game.dt; if < 0 → spawn BombBlast
+            // Non-menu hit: spawn BombBlast entities every 0.05s for the
+            // ring shockwave burst. Matches binary Bomb::Update 0x1729fc
+            // hit-branch at m_bBombFlag88 == 0.
             m_SpawnTimer -= dt;
+            if (m_SpawnTimer < 0.0f) {
+                if (ActorManager* am = ActorManager::GetInstance()) {
+                    Entity* e = am->Add(4, true);   // type 4 = BombBlast
+                    if (e) {
+                        e->pos = pos;
+                        e->Init(0, 0, 0);
+                    }
+                }
+                m_SpawnTimer = BOMBBLAST_INTERVAL; // 0.05f
+            }
         } else {
             // Menu-hit: continue physics (bomb falls away)
             if (m_bMovement) {
@@ -270,8 +285,10 @@ void Bomb::Update(float dt) {
                 m_RotY += m_RotVelY;
             }
         }
-        // Move collision offscreen when hit
-        // TODO: m_Col->center = Vec3(1000, 1000, 0); m_Col->radius = 0.01;
+        // Move collision offscreen once hit — blocks double-slicing and
+        // matches binary DAT_00172ca4 = 1000.0 / DAT_00172cac = 0.01.
+        m_Col.center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
+        m_Col.radius = HIT_COL_RADIUS;
     }
 
     // Out of bounds check
@@ -418,4 +435,36 @@ void Bomb::KillBomb() {
         m_pEmitter = NULL;
     }
     // TODO: Unlink from game state (field_0x84)
+}
+
+// Matches Bomb::CollisionResponse (0x17280c). The binary's response for a
+// blade hit on a live game bomb: record "bomb_sliced", trigger HitBomb
+// (camera shake, bombHitTimer = 3.2, explosion SFX). Port does the minimum
+// subset needed to make the quit/game-over path work.
+void Bomb::OnSliced(const Vec3& bladeVel) {
+    (void)bladeVel;
+
+    if (m_bCollisionGuard != 0) return;   // +0x78 processed guard
+    m_bCollisionGuard = 1;
+
+    printf("[Bomb] OnSliced: pos=(%.1f,%.1f) menuHit=%d\n",
+           pos.x, pos.y, m_bMenuBombHit);
+
+    if (m_bMenuBombHit == 0) {
+        // First hit on a live game bomb — fire HitBomb (binary 0x16b0fc).
+        Game* game = Game::GetInstance();
+        if (game) {
+            // Classic/Arcade game-over countdown. Binary DAT_0016b218 = 3.2.
+            // TODO: skip in Zen mode (gameMode == 2) and do -10 penalty instead.
+            game->bombHitTimer = 3.2f;
+            // Record the slash position so DrawBombHit can centre its
+            // expanding white quad on the bomb. Binary stores this on
+            // g_bombHitData->pos at +0xcc.
+            FN::SetBombHitPos(pos);
+            // TODO: FruitCamera::CreateCameraShake(pos, 1.6f, 2.0f)
+            // TODO: GameSound::SFXPlay("bomb_explode")
+        }
+    }
+
+    m_bHit = 1;   // +0x68 -- triggers hit branch in Update next tick
 }

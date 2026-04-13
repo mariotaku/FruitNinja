@@ -6,12 +6,16 @@
 //
 
 #include "SlashEntity.h"
+#include "ActorManager.h"
+#include "Entity.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "asset/TextureManager.h"
 #include "input/Touch.h"
 #include "particle/PSPParticleManager.h"
+#include "collision/ColLine.h"
+#include "collision/ColSphere.h"
 #include "util/StringHash.h"
 #include "Game.h"
 #include <cstring>
@@ -88,6 +92,7 @@ SlashEntity::SlashEntity()
     , m_TrailEmitter(nullptr)
     , m_State(0)
     , m_bHasHead(false)
+    , m_RawTouchPos(0, 0, 0)
 {
     memset(m_Left,  0, sizeof(m_Left));
     memset(m_Right, 0, sizeof(m_Right));
@@ -124,6 +129,11 @@ void SlashEntity::Release() {
 // ---------------------------------------------------------------------------
 void SlashEntity::OnTouchActive(float x, float y) {
     Vec3 newPos(x, y, 0.0f);
+    // Capture the raw touch position every frame. The interpolated trail
+    // points we push below can lag the true finger by up to POINT_SPACING
+    // units on fast swipes — the binary emitter follows base.pos (raw)
+    // not the last trail point, so store the raw value for Update to read.
+    m_RawTouchPos = newPos;
 
     if (!m_bHasHead) {
         // First touch: start a fresh trail.
@@ -317,8 +327,10 @@ void SlashEntity::Update(float dt) {
             }
         }
         if (m_TrailEmitter) {
-            // Follow the newest point (blade head).
-            m_TrailEmitter->m_Pos = m_Points[m_NumPoints - 1].center;
+            // Follow the raw finger position, not the last interpolated
+            // trail point — matches UpdateTouchDown @ 0x17D2E4 which writes
+            // m_TrailEmitter->m_Pos = this->base.pos (the raw touch).
+            m_TrailEmitter->m_Pos = m_RawTouchPos;
         }
     } else if (m_TrailEmitter) {
         pm.ClearEmitter(m_TrailEmitter);
@@ -354,7 +366,51 @@ void SlashEntity::Update(float dt) {
         m_State = 0;
     }
 
+    // Slice-test pass. Matches the FRUIT/BOMB collision loops inside
+    // SlashEntity::Update (0x17D664). Only runs when the blade has at
+    // least 2 points and isn't deactivating. Iterates ActorManager's live
+    // entities, and for each one with a non-zero collision radius tests
+    // the full blade trail against its sphere. On hit, calls OnSliced.
+    //
+    // TODO: skip during the bombHitTimer window (binary gate: game->bombTimer > 0).
+    if (m_NumPoints >= 2 && m_State != 0) {
+        ActorManager* am = ActorManager::GetInstance();
+        if (am) {
+            for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {
+                Entity* e = *it;
+                if (!e || !e->IsActive()) continue;
+                if (e->m_Col.radius <= 0.0f) continue;
+                // Only fruit (0) and bomb (1) participate — matches binary.
+                if (e->entityType != 0 && e->entityType != 1) continue;
+
+                if (CollideWithSphere(e->m_Col)) {
+                    e->OnSliced(Vec3(0, 0, 0));
+                }
+            }
+        }
+    }
+
     RebuildGeometry();
+}
+
+// ---------------------------------------------------------------------------
+// CollideWithSphere — matches CollideWithEntity (0x17B570) simplified.
+// The binary tests a single blade ColLine (head↔tail of this frame's swipe
+// delta) against a fruit/bomb ColSphere. The port instead iterates every
+// segment between consecutive trail points so that a fast swipe — which
+// OnTouchActive interpolates into many POINT_SPACING=64 sub-points within a
+// single frame — still registers the hit.
+// ---------------------------------------------------------------------------
+bool SlashEntity::CollideWithSphere(const Mortar::ColSphere& sphere) const {
+    if (m_State == 0 || m_NumPoints < 2) return false;
+
+    for (int i = 0; i + 1 < m_NumPoints; ++i) {
+        Mortar::ColLine seg(m_Points[i].center, m_Points[i + 1].center);
+        if (sphere.IntersectsLine(seg)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------

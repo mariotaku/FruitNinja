@@ -2,6 +2,7 @@
 #define FN_ENTITY_H
 
 #include "math/Vec3.h"
+#include "collision/ColSphere.h"
 #include <cstdint>
 
 struct Renderer;
@@ -27,6 +28,12 @@ public:
     // Active state
     bool active;
 
+    // Collision sphere. Radius = 0 means "no collision" (default for
+    // entities that don't participate in blade collision, e.g. BombBlast).
+    // Matches the binary's +0x38 m_Col pointer, inlined as a value for
+    // port simplicity.
+    Mortar::ColSphere m_Col;
+
     Entity() : flags(0), entityType(0), active(false) {}
     virtual ~Entity() {}
 
@@ -34,6 +41,11 @@ public:
     virtual void Update(float dt) { (void)dt; }
     virtual void Draw(Renderer& r) { (void)r; }
     virtual void Deactivate() { active = false; }
+
+    // Matches the CollisionResponse vtable slot (0x0017280c for Bomb,
+    // Fruit equivalent for fruit). Called when the blade collides with
+    // this entity's collision sphere. Default: no-op.
+    virtual void OnSliced(const Vec3& bladeVel) { (void)bladeVel; }
 
     bool IsActive() const { return active && !(flags & 0x10); }
 };
