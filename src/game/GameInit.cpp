@@ -110,9 +110,16 @@ void GameUpdate(float dt, bool active) {
     if (game->hud)
         game->hud->Update(dt);
 
+    // Tick the camera — decays the bomb-hit shake intensity and ramps
+    // the m_Target offset used by SetupPerspective each frame. Without
+    // this call, CreateCameraShake just latches state that nothing
+    // ever reads. Matches binary GameUpdate 0x16bed0 where the camera
+    // update is part of the per-frame entity loop.
+    if (game->pCamera)
+        game->pCamera->UpdateCamera(dt);
+
     // TODO: Full 359-line GameUpdate: time scaling, bomb hit, wave speed,
-    //       SlashEntity::PreUpdate, SplatEntity, WaveManager,
-    //       FruitCamera::UpdateShake
+    //       SlashEntity::PreUpdate, SplatEntity, WaveManager
 }
 
 // Matches GameDraw (0x16b888, 211 lines) — full render frame.
