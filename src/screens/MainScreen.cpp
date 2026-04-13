@@ -635,14 +635,3 @@ void MainScreen::QuitGamesCallback() {
     m_State = STATE_QUIT_WAIT;
 }
 
-// Shims kept for one commit so GameInit's InputManager lambdas compile.
-// Step 6 deletes both the shims and the lambdas. Touch is now polled inside
-// MenuButton::Update directly from Mortar::Touch.
-bool MainScreen::HandleTouchDown(float x, float y) {
-    (void)x; (void)y;
-    return false;
-}
-
-void MainScreen::HandleTouchUp(float x, float y) {
-    (void)x; (void)y;
-}
