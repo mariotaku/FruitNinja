@@ -112,12 +112,6 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                     fruit->m_ScaleAnim = 1.0f;
                     fruit->m_ChuckDelay = 0.0f;
                     fruit->m_ZPosition = FRUIT_ZPOS;
-                    // Pin flag: MenuButton owns this fruit's pos/rotation
-                    // until the player slices it. Fruit::Update short-
-                    // circuits while pinned + unsliced; once sliced, it
-                    // falls through to the sliced-body physics and the
-                    // MenuButton stops overriding pos below.
-                    fruit->m_bPinnedByMenu = true;
                     m_pFruitPiece = fruit;
 
                     // Clamp rotation magnitude (after the ×0.2 reduction)
@@ -169,29 +163,18 @@ void MenuButton::Update(float dt) {
         if (m_Timer < 0.0f) m_Timer += 360.0f;  // DAT_0014e974 = 360.0
     }
 
-    // Keep entity positioned at button center (pos.z written to entity pos.z too).
-    // Exception: a sliced fruit piece is released — its two halves fall
-    // away under gravity instead of staying pinned. The sliced fruit is
-    // also manually ticked below because ActorManager::Update is gated
-    // on the gameplay-active flag.
+    // Keep entity positioned at button center each frame and zero its
+    // velocity so accumulated gravity from Fruit::Update doesn't carry
+    // over. Exception: a sliced fruit piece is released — its two
+    // halves fall away under their own halfVel and gravity instead of
+    // staying pinned.
     if (m_pEntity && m_pEntity->IsActive()) {
-        bool sliced = false;
-        if (m_pFruitPiece && m_pFruitPiece->m_bSliced) sliced = true;
-        if (!sliced) m_pEntity->pos = pos;
-    }
-
-    // Manually tick a menu fruit once the blade has touched it, so the
-    // slice-timer countdown → Slice() → two-body physics all run even
-    // though ActorManager::Update is gated off during menu state.
-    // Matches MainScreen::Update's STATE_QUIT_WAIT manual bomb tick pattern.
-    //
-    // Runs on two triggers:
-    //   - m_SliceTimer >= 0 : OnSliced latched a positive countdown
-    //   - m_bSliced         : Slice() has fired, halves need physics
-    if (m_pFruitPiece && m_pFruitPiece->IsActive() &&
-        (m_pFruitPiece->m_bSliced || m_pFruitPiece->m_SliceTimer >= 0.0f))
-    {
-        m_pFruitPiece->Update(dt);
+        const bool sliced =
+            m_pFruitPiece && m_pFruitPiece->m_bSliced;
+        if (!sliced) {
+            m_pEntity->pos = pos;
+            m_pEntity->vel = Vec3(0, 0, 0);
+        }
     }
 
     // Shake timer decay

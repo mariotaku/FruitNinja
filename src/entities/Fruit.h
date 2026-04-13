@@ -35,13 +35,6 @@ public:
     Mortar::PSPParticleEmitter* m_pEmitter1;
     Mortar::PSPParticleEmitter* m_pEmitter2;
 
-    // Port-only: menu buttons (MenuButton) create a fruit to decorate
-    // the play button. Menu fruits normally stay pinned to the button
-    // pos — but once sliced they should animate away like gameplay
-    // fruits. This flag lets Fruit::Update skip unsliced physics and
-    // MenuButton skip the pos override when the fruit has been cut.
-    bool m_bPinnedByMenu;
-
     // +0xb4: sliced state
     bool m_bSliced;
 

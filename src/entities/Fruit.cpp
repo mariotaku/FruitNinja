@@ -40,7 +40,6 @@ Fruit::Fruit()
     , m_SlicePos(0, 0, 0)
     , m_pEmitter1(NULL)
     , m_pEmitter2(NULL)
-    , m_bPinnedByMenu(false)
     , m_bSliced(false)
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
@@ -152,17 +151,6 @@ void Fruit::Chuck(const Vec3& velocity, float delay) {
 
 void Fruit::Update(float dt) {
     if (!active) return;
-
-    // Menu-pinned unsliced fruit skips all physics — MenuButton owns
-    // their pos/rotation directly. Once sliced they fall through to
-    // the sliced-body physics path below (the menu button also stops
-    // writing pos on sliced fruit).
-    if (m_bPinnedByMenu && !m_bSliced) {
-        // Still keep the collision sphere glued to the current pos so
-        // the blade can slice menu fruits.
-        m_Col.center = Vec3(pos.x, pos.y, 0.0f);
-        return;
-    }
 
     // Launch delay
     if (m_ChuckDelay > 0.0f) {
