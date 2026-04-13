@@ -52,8 +52,12 @@ struct BombGlobalData {
 };
 static BombGlobalData g_bombData;
 
-// Global bomb texture (lazy-loaded in Init, matches binary)
-static SmartPtr<Mortar::Texture> g_BombTexture;
+// Global blast / flash texture. Binary stores at `g_bombData->tex_02`
+// (+0x04). Despite the name, this is NOT the bomb mesh texture (that
+// comes from the .mmd embedded `fruit_atlas.tex`) — it's the
+// `bomb_explode.tex` used by BombBlast::DrawBlast for the shockwave
+// quads. BombBlast.cpp references it via `extern`.
+SmartPtr<Mortar::Texture> g_BombTexture;
 
 // Global bomb Z cycling (matches GetBombZPosition at 0x169080)
 static float g_BombZCurrent = -10.0f;
@@ -470,8 +474,11 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
         }
 
         if (isZen) {
-            // Zen penalty path. Binary HitMenuBomb (0x16b234).
-            game->bombHitTimer = 2.0f;      // DAT @ 0x16b234 = 2.0
+            // Zen penalty path. Binary HitMenuBomb (0x16b234) — plays
+            // "menu-bomb" SFX (string at 0x001B96C9), bombHitTimer = 2.0,
+            // sets g_bombHitData->m_bMenuBombHit_flag = 1. No camera shake.
+            game->bombHitTimer = 2.0f;
+            // TODO: GameSound::SFXPlay("menu-bomb", 1.0, 1.0)
             // TODO: AddToCurrentScore(-10, 0, false, false)
             // TODO: PowerUpManager::ClearTimedPowers()
             // TODO: WaveManager::ResetSpeed(0)
@@ -480,11 +487,14 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             // physics instead of the BombBlast shockwave spawn loop.
             m_bMenuBombHit = 1;
         } else {
-            // Classic/Arcade game-over path. Binary HitBomb (0x16b0fc).
-            // TODO: FruitSaveData::AddToTotal("bomb_sliced", 1)
-            // TODO: skip entirely if game->gameOverFlag already set
-            // TODO: GameSound::SFXPlay("bomb_explode")
+            // Classic/Arcade game-over path. Binary HitBomb (0x16b0fc) —
+            // plays "Bomb-explode" SFX (string at 0x001B96FC), records
+            // stat for hash "bomb" (0x001B96CE), sets bombHitTimer = 3.2,
+            // camera shake already fired above.
             game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
+            // TODO: GameSound::SFXPlay("Bomb-explode", 1.0, 1.0)
+            // TODO: FruitSaveData::AddToTotal("bomb", 1)
+            // TODO: skip entirely if game->gameOverFlag already set
         }
     }
 
