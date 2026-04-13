@@ -1,11 +1,13 @@
 #include "Fruit.h"
 #include "FruitInfo.h"
+#include "SplatEntity.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "asset/MeshManager.h"
 #include "asset/TextureManager.h"
 #include "particle/PSPParticleManager.h"
+#include "hud/SliceEffect.h"
 #include "Game.h"
 #include "math/math3d.h"
 #include <cstdlib>
@@ -345,6 +347,11 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
         if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
         if (m_pEmitter2) m_pEmitter2->m_Pos = pos;
     }
+
+    // White slice-line visual — matches AddSlice call in binary
+    // CollisionResponse at 0x17821c. Binary passes a (angle_deg, impulse_scaled)
+    // pair; port keeps the raw 16-bit angle and flat impulse for simplicity.
+    FN::SliceEffect_Add(pos, m_SliceAngle, m_SliceImpulse, /*critical=*/false);
 }
 
 // Matches Fruit::Slice (0x176d58), minimal v1 port. Splits the fruit into
@@ -382,6 +389,19 @@ void Fruit::Slice() {
 
     // Reset gravity so the ramp-up in Update starts fresh.
     m_Gravity = Vec3(0.0f, -12.0f, 0.0f);
+
+    // Spawn 2–3 juice splat entities. Matches the for-loop at the tail
+    // of binary Slice() (0x176d58) — count is `Rand(2) + 2`, each
+    // splat has a random angle, randomly decayed speed, and is tinted
+    // by the fruit colour. Simplified here: fixed 3 splats, angles
+    // evenly spread around the slice direction.
+    for (int i = 0; i < 3; ++i) {
+        const float a = baseRad + ((float)i - 1.0f) * 0.9f;  // ±0.9 rad spread
+        const float speed = m_SliceImpulse * 35.0f + (float)(rand() % 20) * 2.0f;
+        Vec3 sv(sinf(a) * speed, cosf(a) * speed, 0.0f);
+        SplatEntity* s = SplatEntity::GetFree();
+        if (s) s->MakeSplat(pos, sv, m_FruitType);
+    }
 
     printf("[Fruit] Slice: type=%d imp=%.2f vA=(%.1f,%.1f) vB=(%.1f,%.1f)\n",
            m_FruitType, imp, halfVelA.x, halfVelA.y, halfVelB.x, halfVelB.y);

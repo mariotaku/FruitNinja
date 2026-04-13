@@ -15,7 +15,9 @@
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
 #include "entities/SlashEntity.h"
+#include "entities/SplatEntity.h"
 #include "entities/BombBlast.h"
+#include "hud/SliceEffect.h"
 #include "particle/PSPParticleManager.h"
 #include "input/InputManager.h"
 #include "input/Touch.h"
@@ -100,6 +102,10 @@ void GameUpdate(float dt, bool active) {
 
     // Tick particle system (spawn, physics, emitter lifetime) — always runs
     Mortar::PSPParticleManager::GetInstance().Update(dt);
+
+    // Tick splat pool — gated on gameplay active, matches
+    // UpdateActiveSplats call site inside GameUpdate (0x16bed0).
+    if (active) SplatEntity::UpdateActive(dt);
 
     // SlashEntity runs in every state (menu + gameplay) so the blade trail
     // is visible everywhere. The binary gates this on `active` too, but the
@@ -191,8 +197,11 @@ void GameDraw(float dt, bool active) {
     // 4-6. HUD layers drawn before the logo/particles block
     if (game->hud) {
         game->hud->Draw(0x40);
-        // [TODO: SplatEntity / Fruit::DrawShadows / SlashEntity::PreDraw (ghost)
-        //  / BombBlast / BombFlash — not yet ported]
+        // SplatEntity::DrawActiveSplats (0x180344) — juice splats on
+        // the background plane, drawn behind particles and fruit.
+        SplatEntity::DrawActive();
+        // [TODO: Fruit::DrawShadows / SlashEntity::PreDraw (ghost) /
+        //  BombBlast / BombFlash — not yet ported]
         // [TODO: HUD::Draw(0x80) — layer not in port yet]
     }
 
@@ -209,6 +218,12 @@ void GameDraw(float dt, bool active) {
     //     and shade appear in front of the blade. Matches binary DrawSlices
     //     call site at GameDraw 0x16b888.
     if (g_pSlashEntity) g_pSlashEntity->Draw();
+
+    // Slice-line effect pool (DrawSlices @ 0x169ac8). Draws the white
+    // streak lines spawned by Fruit::CollisionResponse + Fruit::Slice.
+    // Ticked + drawn in the same pass — returns expired slices to the
+    // pool automatically.
+    FN::SliceEffect_Draw(dt);
 
     // 11. MainScreen (HUD layer 0x01) — logo + shade on top of the blade
     if (game->hud) game->hud->Draw(0x01);
