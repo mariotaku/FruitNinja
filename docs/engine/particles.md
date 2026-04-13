@@ -278,7 +278,35 @@ while emitter:
   emitter = *walker
 ```
 
-**`PSPEmitterTemplate::Ends()`** (not yet RE'd) presumably checks whether every `PSPParticleSet` has passed its `m_TimeStop` — if so, an infinite-lifetime emitter (`maxLifetime <= 0`) can still be reclaimed. This is how finite sets on an "infinite" emitter self-terminate.
+### PSPEmitterTemplate::Ends (0x00114884, 12 lines)
+<!-- Analysed: 2026-04-13T12:00 -->
+
+```c
+bool Ends(PSPEmitterTemplate* t) {
+    for (i = 0; i < t->m_NumSets; ++i) {
+        set = t->sets[i];
+        if (set->m_TimeStop <= 0 AND set->m_PerSec > 0)
+            return 0;    // found a set that spawns continuously forever
+    }
+    return 1;            // every set is either finite or burst-only
+}
+```
+
+**Key finding:** this is a **static property of the template**, not runtime state — it never looks at elapsed time or live particles. It answers "can this template terminate on its own?"
+
+- Returns `1` (true/terminating) if every set has either `TimeStop > 0` (finite window) or `PerSec <= 0` (burst-only spawning, no continuous rate).
+- Returns `0` (false/infinite) if **any** set has both `TimeStop <= 0` AND `PerSec > 0` — i.e. it spawns continuously with no stop time.
+
+**In Manager::Update's keep-alive formula:**
+```
+keep = (timer < maxLifetime)
+     OR (maxLifetime <= 0 AND Ends() == 0)
+```
+- Finite lifetime (`maxLifetime > 0`): die when `timer >= maxLifetime`.
+- Infinite lifetime (`maxLifetime <= 0`) AND `Ends() == 1`: die immediately — template will never produce new particles.
+- Infinite lifetime AND `Ends() == 0`: stay alive until explicit `ClearEmitter`.
+
+**Example — bomb_smoke:** `<life>0</life>` → infinite; sets have `<time start="0" stop="0"/>` + `<particleNumber perSec="50"/>` → `TimeStop=0, PerSec=50` → `Ends()` loop hits the first set and returns 0 → emitter persists until bomb releases it.
 
 ### PSPParticleEmitter::AddParticle (0x00115644, 313 lines)
 <!-- Analysed: 2026-04-13T16:00 -->
@@ -680,9 +708,10 @@ Layout derived from:
 | AddEmitter | ✅ ported | Signature matches binary `(hash, ppRef, persistent)`; `unique_ptr`-backed vector keeps emitter pointers stable across growth so caller back-pointers remain valid. |
 | ClearEmitter | ✅ ported | Finds by pointer, clears back-ref, erases from list. |
 | Emitter::Update (spawn + physics) | ✅ ported | Rate integral, burst, per-frame `pos += vel` quirk all preserved. |
-| Manager::Update (emitter walk) | ✅ ported | Wired into `GameUpdate`. Infinite emitters (maxLifetime ≤ 0) kept until explicit `ClearEmitter`. `Ends()` branch not yet RE'd. |
+| Manager::Update (emitter walk) | ✅ ported | Wired into `GameUpdate`. Full keep-alive formula including `Ends()` check so infinite emitters whose sets are all finite/burst-only die on their own. |
+| PSPEmitterTemplate::Ends | ✅ ported | Static property check (naturally-terminating template). Matches binary 0x00114884. |
 | Manager::Draw | ✅ ported (simplified) | Layer filtering via `template->m_UseDepth`; three-pass call from `GameDraw` (background=1 → 3D → mid=0 → HUD → foreground=-1). Two-segment start→mid→end colour/size lerp. Blend mode applied via `glBlendFunc(SRC_ALPHA, template->m_BlendMode)`. **Not ported:** RotCycle quadratic rotation, CycleXY cosine size modulation, gridLock snap, friction angle, sub-step integration (irrelevant at fixed dt=1/60). |
-| AddParticle | ✅ ported (simplified) | Shape-type branching: **Point** (0), **Vertex** (1, `pos -= vel`), **Direction** (2, `rotation += atan2(vel.y, vel.x)`). **Not ported:** Angular (3) — needs `m_field38` state; friction init; CycleX/Y phase seeds. |
+| AddParticle | ✅ ported (simplified) | Shape-type branching: **Point** (0), **Vertex** (1, `pos -= vel`), **Direction** (2, `rotation += atan2(vel.y, vel.x)`). Spin rate linearly lerps start→end over lifetime. **Not ported:** Angular (3) — needs `m_field38` state; friction init; CycleX/Y phase seeds; RotCycle quadratic accumulation. |
 
 ## See Also
 

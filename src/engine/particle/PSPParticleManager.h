@@ -132,7 +132,10 @@ struct PSPParticle {
     float    m_SizeMid;
     float    m_SizeEnd;
     float    m_Rotation;    // current angle (radians)
-    float    m_Spin;        // angular velocity (radians/s)
+    // Spin rate lerp over lifetime: binary uses int16 RotCycle pairs at
+    // template +0x48..+0x4F. Port does a simple linear lerp start→end.
+    float    m_SpinStart;   // rad/s at age=0
+    float    m_SpinEnd;     // rad/s at age=life
     // Two-segment BGRA colour lerp: start → mid → end, split at age = life/2.
     uint8_t  m_ColourStart[4];
     uint8_t  m_ColourMid[4];
@@ -143,7 +146,7 @@ struct PSPParticle {
         : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
         , m_Age(0), m_Life(0)
         , m_SizeStart(0), m_SizeMid(0), m_SizeEnd(0)
-        , m_Rotation(0), m_Spin(0)
+        , m_Rotation(0), m_SpinStart(0), m_SpinEnd(0)
         , m_pTemplate(nullptr)
     {
         for (int i = 0; i < 4; ++i)
