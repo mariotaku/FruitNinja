@@ -15,6 +15,7 @@
 #include "entities/Bomb.h"
 #include "entities/SplatEntity.h"
 #include "entities/SlashEntity.h"
+#include "hud/SliceEffect.h"
 #include "screens/GameOverScreen.h"
 #include "screens/PowerUpShop.h"
 #include "render/MatrixManager.h"
@@ -111,7 +112,9 @@ void GameInitialise() {
     Fruit::LoadInfo();
 
     // Step 25: LoadContent calls (binary: 0x10c41a region)
-    SplatEntity::LoadContent();     // TODO: splat textures
+    SplatEntity::LoadContent();
+    SplatEntity::CreatePool(48);     // binary calls CreatePool(30-50)
+    FN::SliceEffect_CreatePool(32);  // binary uses MemoryPool<Node>(32)
     SlashEntity::LoadContent();     // TODO: blade trail textures
     Bomb::LoadContent();            // loads bomb models + textures
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
