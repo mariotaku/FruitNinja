@@ -41,9 +41,10 @@ void DrawBombHit() {
     if (timer <= 0.0f || timer >= FLASH_THRESHOLD) return;
 
     if (!s_FlashTex.IsValid()) {
-        // Binary uses a dedicated flash texture (data+0x10c). We fall back
-        // to a known-present asset until the exact filename is wired up.
-        s_FlashTex = Mortar::TextureManager::LoadLocalisedTexture("bomb_explode.tex");
+        // Binary DrawBombHit (0x16b73c) lazy-loads `flash.tex` into
+        // `g_bombHitData + 0x10c` on first call. String resolved at
+        // 0x001BC7E9 via re-analyst RE pass 2026-04-13.
+        s_FlashTex = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
         if (!s_FlashTex.IsValid()) return;
     }
 
