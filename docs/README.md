@@ -26,6 +26,7 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/display-manager.md](engine/display-manager.md) — DisplayManager singleton (GL state, frame setup, screen rotation, texture filtering), DisplayManagerBada subclass
 - [engine/matrix-manager.md](engine/matrix-manager.md) — MatrixManager (4 matrix stacks, dirty-tracking), MatrixStack, Matrix44 methods, HUD draw pipeline wrappers
 - [engine/camera.md](engine/camera.md) — MortarCamera, FruitCamera, ortho projection setup
+- [engine/coordinate-system.md](engine/coordinate-system.md) — Binary centred ortho, 90° screen rotation, dead HUDControl3d offset, port mixed-convention audit
 - [engine/input-manager.md](engine/input-manager.md) — Action-based input system, callback registration, config parsing, 16-touch
 - [engine/touch-input.md](engine/touch-input.md) — Touch coordinate transform (portrait→landscape), input pipeline to SlashEntity
 - [engine/touch-system.md](engine/touch-system.md) — Mortar::Touch internals: double-buffered 8-slot state, TEvnt ring buffer, data flow
