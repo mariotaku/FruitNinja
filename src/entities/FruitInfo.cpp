@@ -166,24 +166,27 @@ void FruitInfo_Load(const char* xmlPath)
         else
             snprintf(fi.m_Plural, 64, "%ss", fi.m_Name);
 
-        // "factTexture" → +0x0C0 (fallback: m_Name)
+        // "factTexture" → +0x278 (optional; empty if missing)
         const char* factTex = elem->Attribute("factTexture");
-        strncpy(fi.m_FactTexture, (factTex && *factTex) ? factTex : fi.m_Name, 63);
+        if (factTex && *factTex)
+            strncpy(fi.m_FactTexture, factTex, 63);
 
-        // "modelName" → +0x080 (fallback: m_Name)
+        // "modelName" → +0x200 (fallback: m_Name)
         const char* modelName = elem->Attribute("modelName");
         strncpy(fi.m_ModelName, (modelName && *modelName) ? modelName : fi.m_Name, 63);
 
-        // "singular" → +0x040 (fallback: m_Name)
+        // "singular" → +0x0C0 (fallback: m_Name)
         const char* singular = elem->Attribute("singular");
         strncpy(fi.m_Singular, (singular && *singular) ? singular : fi.m_Name, 63);
 
-        // "pluralEnglish" → +0x278
+        // "pluralEnglish" → +0x080 (fallback: sprintf("%ss", m_Name))
         const char* pluralEng = elem->Attribute("pluralEnglish");
         if (pluralEng && *pluralEng)
-            strncpy(fi.m_PluralEnglish, pluralEng, 127);
+            strncpy(fi.m_PluralEnglish, pluralEng, 63);
+        else
+            snprintf(fi.m_PluralEnglish, 64, "%ss", fi.m_Name);
 
-        // "singularEnglish" → +0x200 (fallback: m_Name)
+        // "singularEnglish" → +0x040 (fallback: m_Name)
         const char* singularEng = elem->Attribute("singularEnglish");
         strncpy(fi.m_SingularEnglish, (singularEng && *singularEng) ? singularEng : fi.m_Name, 63);
 

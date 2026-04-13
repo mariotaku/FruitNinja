@@ -19,9 +19,12 @@
 #include <cstdlib>
 #include <cmath>
 
-// Constants from binary (verified via read_memory)
-static const float FRUIT_SCALE_FOR_MENU = 0.2f;     // DAT_0014f194
+// Constants from binary (verified via read_memory / disassembly)
+// IMPORTANT: DAT_0014f194 = 0.2f is applied to Fruit::m_RotVel1 (rotation slowdown),
+// NOT to scale. The scale is left at its gameplay value.
+static const float FRUIT_ROTVEL_MULT = 0.2f;        // DAT_0014f194 — slows fruit spin
 static const float FRUIT_ZPOS = 150.0f;              // DAT_0014f198
+static const float BOMB_MENU_SCALE = 0.85f;          // DAT_0014f1a0 — bomb scale in menu
 static const float ROT_SPEED_MIN = 8.0f;
 static const float ROT_SPEED_RANGE = 4.0f;           // 8-12 range
 static const float ROT_CLAMP_X = 0.75f;
@@ -97,23 +100,28 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                 m_pEntity = e;
 
                 if (entityType == 0) {
-                    // Fruit entity: post-init adjustments
+                    // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40)
+                    // Key finding: the 0.2 multiplier (DAT_0014f194) is applied to
+                    // m_RotVel1 (fruit+0xF0), NOT to scale. Fruit keeps gameplay scale.
                     Fruit* fruit = static_cast<Fruit*>(e);
-                    fruit->scale = fruit->scale * FRUIT_SCALE_FOR_MENU;
+                    fruit->m_RotVel1 = fruit->m_RotVel1 * FRUIT_ROTVEL_MULT;
                     fruit->m_ScaleAnim = 1.0f;
                     fruit->m_ChuckDelay = 0.0f;
                     fruit->m_ZPosition = FRUIT_ZPOS;
                     m_pFruitPiece = fruit;
 
-                    // Clamp rotation magnitude
+                    // Clamp rotation magnitude (after the ×0.2 reduction)
                     if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
                         fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
                     if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
                         fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
                 } else {
-                    // Bomb entity: also needs menu scale reduction
+                    // Bomb entity: disable physics and scale by 0.85 (DAT_0014f1a0)
+                    // MenuButton::Init (0x0014ee40): writes 0 to bomb+0x80 (m_bMovement)
+                    // then bomb->scale *= 0.85
                     Bomb* bomb = static_cast<Bomb*>(e);
-                    bomb->scale = bomb->scale * FRUIT_SCALE_FOR_MENU;
+                    bomb->m_bMovement = 0;
+                    bomb->scale = bomb->scale * BOMB_MENU_SCALE;
                 }
 
                 // Random rotation speed (8-12 deg/frame, random direction)

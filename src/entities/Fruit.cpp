@@ -55,13 +55,12 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     // but overwritten at runtime before fruit creation.
     // Per-fruit scale from Data/xml/fruitlist.xml (e.g. watermelon=75)
     {
-        // DIFFERS: globalScaleVec is a runtime BSS value that cannot be read from
-        // the static binary. Approximated as (2.75, 2.75, 2.75) from visual matching
-        // against reference screenshots. Formula: target_size / (mesh_extent * xml_scale * 0.01 * 0.2)
-        static const Vec3 globalScaleVec(2.75f, 2.75f, 2.75f);
+        // Vec3::One at BSS 0x1F4334 — a constant singleton for (1,1,1), not a
+        // mutable scale variable. Matches binary: _Vector3::operator*(Vec3*, float*)
+        // in SetFruitType (0x17621c) multiplies Vec3::One by m_Scale then 0.01.
         const FruitInfo* info = FruitInfo_Get(fruitType);
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
-        scale = globalScaleVec * fruitScale;
+        scale = Vec3::One() * fruitScale;
     }
 
     // Load mesh via MeshManager (cached, matches binary pattern)
