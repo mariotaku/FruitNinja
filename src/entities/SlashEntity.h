@@ -65,6 +65,7 @@ private:
         Vec3  center;    // position in centred ortho coords
         Vec3  dir;       // normalised incoming direction (from previous point)
         float arcLen;    // cumulative length from oldest point
+        float age;       // seconds since this point was added (drops at lifetime)
     };
 
     // Matches SlashEntity::UpdateTouchDown (0x17D2E4). Ingests one touch
