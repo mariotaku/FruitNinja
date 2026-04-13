@@ -69,19 +69,24 @@ void FruitCamera::IdleCamera() {
 
 // Non-virtual (0x001810ac) — perspType 0 (standard)
 //
-// Port specific: The original binary uses centered ortho (160, -160, -240, 240)
-// with SetupLookAt. HUDControl3d::Draw adds a hardcoded Vec3(480, 320, 0) offset
-// to all positions (binary constant at 0x1443e0). In the original, the Bada EGL
-// surface/viewport pipeline compensates for this offset — verified by testing that
-// (480,320) maps to NDC (2.0, 2.0) with the original ortho, exactly 2× outside
-// clip range. The Bada EGL configuration that handles this is not available to
-// the SDL port.
+// Matches binary FruitCamera::SetupPerspective (0x00181200):
+//   eye    = (m_Target.x, m_Target.y, 1)   ; offset by shake target
+//   target = (m_Target.x, m_Target.y, 0)
+//   up     = (0, 1, 0)
+//   SetupOrtho(160, -160, -240, 240, 2000, -6000)
 //
-// Port solution: center the ortho at (480, 320) instead of (0, 0). This makes
-// HUD pos (0,0) + offset (480,320) map to screen center. All game-code positions
-// work unchanged. Camera shake shifts the ortho center.
+// GL ortho maps top/bottom → Y, left/right → X, giving:
+//   X ∈ [-240, +240]  (horizontal, long axis, 480 units)
+//   Y ∈ [-160, +160]  (vertical,   short axis, 320 units)
+// Positions throughout the game are stored in this centred space directly.
 //
+// Note: the Bada binary multiplies this projection by a 90° CW screen-rotation
+// matrix (DisplayManager::m_ScreenRotationMatrix) to handle its portrait
+// physical framebuffer. The SDL port renders natively to a landscape window
+// and doesn't need that rotation — GL's ortho mapping already puts the axes
+// in the right place. See docs/engine/coordinate-system.md for the full story.
 void FruitCamera::SetupPerspective(int perspType, bool forceUpdate) {
+    (void)perspType;
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
     // Cache path
@@ -95,20 +100,15 @@ void FruitCamera::SetupPerspective(int perspType, bool forceUpdate) {
         return;
     }
 
-    Mortar::MortarRectangle rect = Mortar::DisplayManager::GetInstance().GetWindowSize();
-    float w = (float)rect.Width();
-    float h = (float)rect.Height();
-
-    // Port specific: identity view, ortho centered at (480 + shakeX, 320 + shakeY)
-    mm.GetViewStack().Reset();
+    // View: camera looks straight down +Z with optional shake target offset.
+    Vec3 eye(m_Target.x, m_Target.y, 1.0f);
+    Vec3 at (m_Target.x, m_Target.y, 0.0f);
+    Vec3 up (0.0f, 1.0f, 0.0f);
+    mm.SetupLookAt(eye, at, up);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-    float cx = 480.0f + m_Target.x;
-    float cy = 320.0f + m_Target.y;
-    float hw = w / 2.0f;
-    float hh = h / 2.0f;
-
-    mm.SetupOrtho(cy + hh, cy - hh, cx - hw, cx + hw, 2000.0f, -6000.0f);
+    // Projection: literal binary ortho — centred at origin.
+    mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
     // Cache
     m_projection = mm.GetProjectionStack().m_Current;
