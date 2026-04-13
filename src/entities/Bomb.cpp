@@ -170,13 +170,12 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     // m_pEmitter = NULL;  // TODO: fuse particle
 
     // Scale: matches binary multiply chain at 0x172504
-    // Original: globalScaleVec * bombTypeScale * 0.01 * scaleFactor
-    // globalScaleVec is BSS 0x1F4334 (same as Fruit), set at runtime
-    // DAT_001726b0 = 0.01f confirmed via read_memory
-    static const Vec3 globalBombScale(2.75f, 2.75f, 2.75f);
-    static const float BOMB_TYPE_SCALE = 100.0f;  // default bomb type scale
-    static const float VISUAL_SCALE_MULT = 0.01f;  // DAT_001726b0
-    Vec3 computedScale = globalBombScale * (BOMB_TYPE_SCALE * VISUAL_SCALE_MULT * scaleFactor);
+    // Original: Vec3::One * bombTypeScale * 0.01 * scaleFactor
+    // Vec3::One at BSS 0x1F4334 — constant singleton for (1,1,1).
+    // BOMB_TYPE_SCALE from fruitlist.xml: <bomb size="55"/> (parsed by LoadInfo)
+    static const float BOMB_TYPE_SCALE = 55.0f;   // from fruitlist.xml
+    static const float VISUAL_SCALE_MULT = 0.01f; // DAT_001726b0
+    Vec3 computedScale = Vec3::One() * (BOMB_TYPE_SCALE * VISUAL_SCALE_MULT * scaleFactor);
     m_Countdown = 0.0f;
     scale = computedScale;
     m_OrigScale = computedScale;

@@ -615,52 +615,74 @@ loaded by `Fruit::LoadInfo()` which parses the XML into the FRUIT_INFO array.
 |----------|---------------|-------|---------|
 | Per-fruit scale | `fruitlist.xml` `scale=` attr | 50-75 | Visual scale from XML data |
 | VISUAL_SCALE_MULT | DAT_0017633c | **0.01** | Multiplied with per-fruit scale |
-| COLLISION_FACTOR | DAT_00176340 | **0.52** | collision + 0.52 x collisionScale |
-| Menu post-multiply | DAT_0014f194 | **0.2** | MenuButton shrinks entity x 0.2 |
+| COLLISION_FACTOR | DAT_00176340 | **0.52** | collision + 0.52 × collisionScale |
+| Menu rotation slowdown | DAT_0014f194 | **0.2** | MenuButton multiplies `m_RotVel1` × 0.2 (NOT scale!) |
+| Bomb menu scale | DAT_0014f1a0 | **0.85** | MenuButton multiplies `bomb.scale` × 0.85 |
+
+> **Correction 2026-04-13**: Previous docs incorrectly said DAT_0014f194=0.2f was applied to `entity.scale`. It's actually applied to `m_RotVel1` (fruit+0xF0), which is the rotation velocity. The fruit keeps its gameplay scale on the menu — it just spins slower.
 
 **Visual scale computation:**
 ```
-SetFruitType: entity.scale = Vec3(1,1,1) * FruitInfo[type].scale * 0.01
-MenuButton:   entity.scale *= 0.2   (post-Init for menu display only)
+SetFruitType: entity.scale = Vec3::One × FruitInfo[type].m_Scale × 0.01 × scaleParam
+  → For watermelon (m_Scale=75): scale = (0.75, 0.75, 0.75)
+MenuButton:   NO scale modification. Fruit keeps gameplay scale.
+              Only m_RotVel1 is multiplied × 0.2 (slowdown), then clamped.
 ```
 
 **Per-fruit scale values (from `Data/xml/fruitlist.xml`):**
 
-| Type | Name | XML scale | Visual (x0.01) | Menu (x0.2) |
-|------|------|-----------|----------------|-------------|
-| 0 | apple | 60 | 0.60 | 0.12 |
-| 1 | banana | 60 | 0.60 | 0.12 |
-| 2 | orange | 60 | 0.60 | 0.12 |
-| 3 | watermelon | 75 | 0.75 | 0.15 |
-| 4 | strawberry | 50 | 0.50 | 0.10 |
-| 5 | kiwifruit | 50 | 0.50 | 0.10 |
-| 6 | pineapple | 65 | 0.65 | 0.13 |
-| 7 | plum | 55 | 0.55 | 0.11 |
-| 8 | pear | 60 | 0.60 | 0.12 |
-| 9 | mango | 65 | 0.65 | 0.13 |
-| 10 | apple_red | 60 | 0.60 | 0.12 |
-| 11 | lime | 51 | 0.51 | 0.10 |
-| 12 | dragon | 65 | 0.65 | 0.13 |
-| 13 | coconut | 70 | 0.70 | 0.14 |
+| Type | Name | XML scale | Gameplay scale (×0.01) |
+|------|------|-----------|------------------------|
+| 0 | apple | 60 | 0.60 |
+| 1 | banana | 60 | 0.60 |
+| 2 | orange | 60 | 0.60 |
+| 3 | watermelon | 75 | 0.75 |
+| 4 | strawberry | 50 | 0.50 |
+| 5 | kiwifruit | 50 | 0.50 |
+| 6 | pineapple | 65 | 0.65 |
+| 7 | plum | 55 | 0.55 |
+| 8 | pear | 60 | 0.60 |
+| 9 | mango | 65 | 0.65 |
+| 10 | apple_red | 60 | 0.60 |
+| 11 | lime | 51 | 0.51 |
+| 12 | dragon | 65 | 0.65 |
+| 13 | coconut | 70 | 0.70 |
 
-**FRUIT_INFO XML attributes -> struct fields:**
+**FRUIT_INFO XML attributes → struct fields:**
 
-| XML attr | FRUIT_INFO offset | Role |
-|----------|-------------------|------|
-| `scale` | loaded into scale field | Visual scale (x0.01) |
-| `collision` | +0x244 | Collision radius factor |
-| `chance` | +0x... | Spawn probability |
-| `colour` | +0x... | Juice/splat RGBA |
+| XML attr | FRUIT_INFO offset | Field |
+|----------|-------------------|-------|
+| `scale` | +0x244 | m_Scale |
+| `collision` | +0x248 | m_CollisionScale |
+| `hitInfluence` | +0x24C | m_HitInfluence |
+| `chance` | +0x308 | m_Chance |
+| `colour` | +0x240 | m_FruitColour (BGRA) |
 
-**Fruit::Init call from MenuButton:**
+**Fruit::Init call from MenuButton (fruit branch):**
 ```c
-// MenuButton::Init (0x14ee40):
-entity = ActorManager::Add(fruitType >= bombThreshold ? 1 : 0, true);
+// MenuButton::Init (0x0014ee40) — fruit branch:
+entity = ActorManager::Add(0, true);  // entity type 0 = Fruit
 entity->pos = button.pos;
-entity->vel = globalScale;  // written to +0x1c..+0x24 (velocity, not scale!)
-entity->Init(0, fruitType, NULL);  // scale param = NULL -> 1.0
-// After Init -> SetFruitType computes: scale = FruitInfo[type].scale * 0.01
-entity->scale *= 0.2;  // DAT_0014f194 — shrink for menu display
+entity->Init(0, fruitType, NULL);     // Fruit::Init(..., scale=NULL → 1.0)
+// Fruit::Init → SetFruitType: scale = Vec3::One × m_Scale × 0.01 × 1.0
+
+// Menu-specific adjustments (fruit KEEPS gameplay scale):
+entity->m_RotVel1 *= 0.2;             // DAT_0014f194 — slow rotation
+clamp(abs(m_RotVel1.x), 0.75);        // min abs value for X spin
+clamp(abs(m_RotVel1.y), 0.5);         // min abs value for Y spin
+entity->m_ZPosition = 150.0f;         // DAT_0014f198 — FRUIT_ZPOS
+```
+
+**Bomb::Init call from MenuButton (bomb branch):**
+```c
+// MenuButton::Init (0x0014ee40) — bomb branch:
+entity = ActorManager::Add(1, true);  // entity type 1 = Bomb
+entity->pos = button.pos;
+entity->Init(0, fruitType, NULL);
+
+bomb->m_bMovement = 0;                // disable physics (no gravity fall)
+bomb->m_ZPosition = 150.0f;           // FRUIT_ZPOS
+bomb->scale *= 0.85;                  // DAT_0014f1a0 — BOMB_MENU_SCALE
 ```
 
 ### Fruit::EnableCollision (0x00176354, 36 lines)

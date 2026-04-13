@@ -192,7 +192,10 @@ void Bomb::Init(void *p1, long type, Vec3 *scale) {
     m_bBombFlag88 = 0;          // not menu-hit
     m_pEmitter = NULL;           // no fuse particle yet
 
-    // Scale: globalConfig * DAT * scaleFactor
+    // Scale: globalScaleVec × bombVisualScale × 0.01 × scaleFactor
+    // bombVisualScale (55.0) comes from fruitlist.xml: <bomb size="55" collision="35"/>
+    // Parsed by Fruit::LoadInfo (0x0017987c) into globalBombConfig at BSS 0x001F43B8
+    // Formula: 2.75 × 55 × 0.01 = 1.5125 (pre-menu scale) × scaleFactor
     Vec3 computedScale = globalConfig * scaleFactor;
     countdown = 0.0f;           // no delay by default
     field_0x28 = computedScale; // scale vector (for rendering)
