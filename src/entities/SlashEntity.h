@@ -32,6 +32,8 @@
 #include "asset/Texture.h"
 #include <cstdint>
 
+namespace Mortar { struct PSPParticleEmitter; }
+
 class SlashEntity {
 public:
     static const int MAX_POINTS = 96;        // trail length (was 160 in binary)
@@ -89,6 +91,11 @@ private:
 
     QUADCUSTOMVERTEX m_Left [MAX_VERTS];  // centre → upper edge strip
     QUADCUSTOMVERTEX m_Right[MAX_VERTS];  // centre → lower edge strip
+
+    // Particle emitter that follows the blade for smoke/sparkle trail.
+    // Matches binary +0x3c (m_TrailEmitter). Created on first active touch
+    // via PSPParticleManager::AddEmitter, cleared on release.
+    Mortar::PSPParticleEmitter* m_TrailEmitter;
 
     // 2-bit state machine matching binary m_bBladeActive:
     //   0 = off, 1 = active, 2 = deactivating (fading out)
