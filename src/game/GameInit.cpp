@@ -16,6 +16,7 @@
 #include "entities/SlashEntity.h"
 #include "particle/PSPParticleManager.h"
 #include "input/InputManager.h"
+#include "input/Touch.h"
 #include "util/StringHash.h"
 #include <cstdio>
 
@@ -93,6 +94,12 @@ void GameInit(unsigned long) {
 void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();
     if (!game) return;
+
+    // Advance touch state machine (phase -1 → 0 edge transition). Called
+    // before any polling consumers (MenuButton, SlashEntity) so they see
+    // fresh state this frame. Matches binary's Mortar::Touch::Update position
+    // in the early-frame path.
+    Mortar::Touch::GetInstance().Update();
 
     // Update entities — ONLY when the gameplay is active. Matches binary
     // GameUpdate's `if (active)` branch: ActorManager::Update is gated on
