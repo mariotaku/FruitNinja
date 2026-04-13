@@ -523,20 +523,20 @@ static Vec3 TexSize(const SmartPtr<Mortar::Texture>& tex, float defW, float defH
 void MainScreen::CreateToggles() {
     if (!game.hud) return;
 
-    // Sound toggle: (216.0, 135.5, 0.0), 32x32, fruitType=-1 (no fruit)
-    // Size is the logical button dimensions — texture may be higher-res.
+    // Sound toggle: (216.0, 135.5, 0.0), fruitType=-1 (no fruit).
+    // Size comes from the texture dimensions (TexSize fallback = 32×32).
     pSoundToggle = new MenuButton();
     pSoundToggle->m_Texture = TexId(game.soundEnabled ? m_TexSoundOn : m_TexSoundOff);
-    pSoundToggle->size = Vec3(32.0f, 32.0f, 1.0f);
+    pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
         [this]() { SoundCallback(); }, -1, Vec3(0,0,0), nullptr);
     pSoundToggle->m_LayerFlags = 8;
     game.hud->AddControl(pSoundToggle);
 
-    // Music toggle: (176.0, 135.5, 0.0), 32x32, fruitType=-1 (no fruit)
+    // Music toggle: (176.0, 135.5, 0.0)
     pMusicToggle = new MenuButton();
     pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
-    pMusicToggle->size = Vec3(32.0f, 32.0f, 1.0f);
+    pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
         [this]() { MusicCallback(); }, -1, Vec3(0,0,0), nullptr);
     pMusicToggle->m_LayerFlags = 8;
@@ -547,12 +547,12 @@ void MainScreen::CreatePlayDojo() {
     if (!game.hud) return;
 
     // Play button: (16.0, -66.0, -50.0), fruitType=3 (watermelon)
-    // Size matches binary formula: m_TargetSize = fruit.scale × 200
-    //   (DAT_0014f19c = 200.0 in MenuButton::Init fruit branch)
-    // For watermelon scale=0.75 → 150×150. Used for both visual and hit box.
+    // Ring texture drawn at native texture size — matches the binary's
+    // HUDControl3d Scale44(size) path where size comes from the texture's
+    // reported width/height.
     pPlayButton = new MenuButton();
     pPlayButton->m_Texture = TexId(m_TexNewGame);
-    pPlayButton->size = Vec3(150.0f, 150.0f, 1.0f);
+    pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
     pPlayButton->Init(POS_PLAY_BUTTON,
         [this]() { GameModeCallback(); }, 3, Vec3(0,0,0), nullptr);
     pPlayButton->m_LayerFlags = 8;
@@ -561,7 +561,7 @@ void MainScreen::CreatePlayDojo() {
     // Dojo button: (-144.0, -65.0, -50.0), fruitType=9 (mango)
     pDojoButton = new MenuButton();
     pDojoButton->m_Texture = TexId(m_TexDojoIcon);
-    pDojoButton->size = Vec3(150.0f, 150.0f, 1.0f);
+    pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
     pDojoButton->Init(POS_DOJO_BUTTON,
         [this]() { AboutCallback(); }, 9, Vec3(0,0,0), nullptr);
     pDojoButton->m_LayerFlags = 8;
@@ -572,10 +572,9 @@ void MainScreen::CreateQuitButton() {
     if (!game.hud) return;
 
     // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
-    // Bomb scale = 55 × 0.01 × 0.85 (menu shrink) ≈ 0.47; × 200 ≈ 94.
     pQuitBtn = new MenuButton();
     pQuitBtn->m_Texture = TexId(m_TexQuit);
-    pQuitBtn->size = Vec3(96.0f, 96.0f, 1.0f);
+    pQuitBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
     // Binary: fruitType = *g_pFruitInfo = fruitCount (>= count → Bomb entity via MenuButton)
     int fruitCount = FruitInfo_GetCount();
     pQuitBtn->Init(POS_QUIT,
