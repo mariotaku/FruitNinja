@@ -18,6 +18,11 @@
 static FruitInfo s_FruitInfos[FRUIT_INFO_MAX];
 static int s_FruitInfoCount = 0;
 
+// Parsed from <bomb size="..." collision="..."/>. Binary stores these on
+// g_pFruitInfo+0x88/+0x8C. Port keeps them as module statics.
+static float s_BombSize      = 55.0f;  // default from original fruitlist.xml
+static float s_BombCollision = 25.0f;  // default from original fruitlist.xml
+
 // --- Helpers ---
 
 // Parse comma-separated ints "R,G,B,A" into 4 bytes (up to maxCount)
@@ -89,8 +94,8 @@ void FruitInfo_Load(const char* xmlPath)
     tinyxml2::XMLElement* bombElem = root->FirstChildElement("bomb");
     if (bombElem)
     {
-        // TODO: parse "size" → global bomb collision size (g_pFruitInfo+0x88)
-        // TODO: parse "collision" → global bomb collision radius (g_pFruitInfo+0x8C)
+        bombElem->QueryFloatAttribute("size",      &s_BombSize);
+        bombElem->QueryFloatAttribute("collision", &s_BombCollision);
     }
     // --- Count <FruitInfo> elements ---
     s_FruitInfoCount = 0;
@@ -340,6 +345,16 @@ void FruitInfo_Load(const char* xmlPath)
 
     // Original: calls LoadFruitModels() at the very end (loads 3D mesh per fruit type)
     LoadFruitModels();
+}
+
+float FruitInfo_GetBombSize()
+{
+    return s_BombSize;
+}
+
+float FruitInfo_GetBombCollision()
+{
+    return s_BombCollision;
 }
 
 const FruitInfo* FruitInfo_Get(int type)

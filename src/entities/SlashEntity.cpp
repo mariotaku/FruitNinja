@@ -368,12 +368,14 @@ void SlashEntity::Update(float dt) {
 
     // Slice-test pass. Matches the FRUIT/BOMB collision loops inside
     // SlashEntity::Update (0x17D664). Only runs when the blade has at
-    // least 2 points and isn't deactivating. Iterates ActorManager's live
-    // entities, and for each one with a non-zero collision radius tests
-    // the full blade trail against its sphere. On hit, calls OnSliced.
-    //
-    // TODO: skip during the bombHitTimer window (binary gate: game->bombTimer > 0).
-    if (m_NumPoints >= 2 && m_State != 0) {
+    // least 2 points, isn't deactivating, and the post-explosion game-over
+    // window isn't already ticking (binary gate: `if (game->bombTimer > 0)
+    // return` at 0x17D664 line ~442). This stops the blade from registering
+    // more slices once a bomb has already gone off.
+    Game* game = Game::GetInstance();
+    const bool bombHitActive = game && game->bombHitTimer > 0.0f;
+
+    if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive) {
         ActorManager* am = ActorManager::GetInstance();
         if (am) {
             for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {

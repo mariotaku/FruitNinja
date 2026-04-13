@@ -4,6 +4,7 @@
 #include "FruitInfo.h"
 #include "Game.h"
 #include "game/BombHit.h"
+#include "game/FruitCamera.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "asset/TextureManager.h"
@@ -149,14 +150,6 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     float scaleFactor = 1.0f;
     // Original: if (p3 != NULL) scaleFactor = *(float*)p3;
 
-    // Collision sphere setup. Binary Bomb::Init (0x172504) reads the bomb
-    // entry's `collision` attribute from fruitlist.xml: <bomb collision="X">.
-    // TODO: pass the bomb's FRUIT_INFO entry to Init and use m_CollisionScale.
-    // For now hardcode to 25.0f (same as the default fruit collision radius),
-    // which covers the visible bomb footprint at the port's current scale.
-    m_Col.center = Vec3(pos.x, pos.y, 0.0f);
-    m_Col.radius = 25.0f * 0.5f * scaleFactor;
-
     // Lazy-load bomb texture
     if (!g_BombTexture.IsValid()) {
         g_BombTexture = Mortar::TextureManager::LoadLocalisedTexture("bomb_explode.tex");
@@ -180,13 +173,19 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     m_bMenuBombHit = 0;
     m_pEmitter = NULL;  // lazy-created in Update
 
-    // Scale: matches binary multiply chain at 0x172504
-    // Original: Vec3::One * bombTypeScale * 0.01 * scaleFactor
-    // Vec3::One at BSS 0x1F4334 — constant singleton for (1,1,1).
-    // BOMB_TYPE_SCALE from fruitlist.xml: <bomb size="55"/> (parsed by LoadInfo)
-    static const float BOMB_TYPE_SCALE = 55.0f;   // from fruitlist.xml
+    // Scale + collision sphere: matches binary multiply chain at 0x172504.
+    // Binary reads <bomb size="..." collision="..."/> from fruitlist.xml
+    // into g_pFruitInfo+0x88/+0x8C and uses both here. The port parses
+    // those into FruitInfo_GetBombSize/Collision during FruitInfo_Load.
+    //   scale  = Vec3::One * size * 0.01 * scaleFactor
+    //   radius = collision * 0.5 * scaleFactor
+    const float bombSize = FruitInfo_GetBombSize();
+    const float bombCol  = FruitInfo_GetBombCollision();
     static const float VISUAL_SCALE_MULT = 0.01f; // DAT_001726b0
-    Vec3 computedScale = Vec3::One() * (BOMB_TYPE_SCALE * VISUAL_SCALE_MULT * scaleFactor);
+    Vec3 computedScale = Vec3::One() * (bombSize * VISUAL_SCALE_MULT * scaleFactor);
+
+    m_Col.center = Vec3(pos.x, pos.y, 0.0f);
+    m_Col.radius = bombCol * 0.5f * scaleFactor;
     m_Countdown = 0.0f;
     scale = computedScale;
     m_OrigScale = computedScale;
@@ -437,10 +436,14 @@ void Bomb::KillBomb() {
     // TODO: Unlink from game state (field_0x84)
 }
 
-// Matches Bomb::CollisionResponse (0x17280c). The binary's response for a
-// blade hit on a live game bomb: record "bomb_sliced", trigger HitBomb
-// (camera shake, bombHitTimer = 3.2, explosion SFX). Port does the minimum
-// subset needed to make the quit/game-over path work.
+// Matches Bomb::CollisionResponse (0x17280c). Three branches:
+//   1. m_bMenuBombHit == 0, Classic/Arcade: HitBomb — bombHitTimer = 3.2,
+//      camera shake (1.6, 2.0), explosion SFX. Classic is the game-over path.
+//   2. m_bMenuBombHit == 0, Zen mode (gameMode == 2): HitMenuBomb —
+//      bombHitTimer = 2.0, camera shake (2.0, 3.0), -10 score, clear
+//      timed power-ups, mark as menu-hit so subsequent Update keeps the
+//      physics alive and the bomb falls off-screen instead of exploding.
+//   3. m_bMenuBombHit != 0 (menu bomb re-hit): just fire the hit callback.
 void Bomb::OnSliced(const Vec3& bladeVel) {
     (void)bladeVel;
 
@@ -450,19 +453,38 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
     printf("[Bomb] OnSliced: pos=(%.1f,%.1f) menuHit=%d\n",
            pos.x, pos.y, m_bMenuBombHit);
 
-    if (m_bMenuBombHit == 0) {
-        // First hit on a live game bomb — fire HitBomb (binary 0x16b0fc).
-        Game* game = Game::GetInstance();
-        if (game) {
-            // Classic/Arcade game-over countdown. Binary DAT_0016b218 = 3.2.
-            // TODO: skip in Zen mode (gameMode == 2) and do -10 penalty instead.
-            game->bombHitTimer = 3.2f;
-            // Record the slash position so DrawBombHit can centre its
-            // expanding white quad on the bomb. Binary stores this on
-            // g_bombHitData->pos at +0xcc.
-            FN::SetBombHitPos(pos);
-            // TODO: FruitCamera::CreateCameraShake(pos, 1.6f, 2.0f)
+    Game* game = Game::GetInstance();
+
+    if (m_bMenuBombHit == 0 && game != NULL) {
+        FN::SetBombHitPos(pos);
+
+        const bool isZen = (game->gameMode == 2);
+
+        // Camera shake — FruitCamera::CreateCameraShake at 0x180d10.
+        // Binary intensities: Classic/Arcade = 1.6/2.0, Zen = 2.0/3.0.
+        if (game->pCamera) {
+            if (isZen)
+                game->pCamera->CreateCameraShake(pos, 2.0f, 3.0f);
+            else
+                game->pCamera->CreateCameraShake(pos, 1.6f, 2.0f);
+        }
+
+        if (isZen) {
+            // Zen penalty path. Binary HitMenuBomb (0x16b234).
+            game->bombHitTimer = 2.0f;      // DAT @ 0x16b234 = 2.0
+            // TODO: AddToCurrentScore(-10, 0, false, false)
+            // TODO: PowerUpManager::ClearTimedPowers()
+            // TODO: WaveManager::ResetSpeed(0)
+            // TODO: "X" MissControl indicator
+            // Mark as menu-hit so Update's hit branch runs the falling
+            // physics instead of the BombBlast shockwave spawn loop.
+            m_bMenuBombHit = 1;
+        } else {
+            // Classic/Arcade game-over path. Binary HitBomb (0x16b0fc).
+            // TODO: FruitSaveData::AddToTotal("bomb_sliced", 1)
+            // TODO: skip entirely if game->gameOverFlag already set
             // TODO: GameSound::SFXPlay("bomb_explode")
+            game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
         }
     }
 

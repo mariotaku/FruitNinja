@@ -120,4 +120,9 @@ const FruitInfo* FruitInfo_Get(int type);
 int FruitInfo_GetCount();
 FruitInfo* FruitInfo_GetArray();
 
+// Global bomb settings from the <bomb size="..." collision="..."/> element
+// in fruitlist.xml. Binary stores these on g_pFruitInfo+0x88/+0x8C.
+float FruitInfo_GetBombSize();
+float FruitInfo_GetBombCollision();
+
 #endif
