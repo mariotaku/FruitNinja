@@ -20,17 +20,20 @@ const float SlashEntity::POINT_SPACING         = 64.0f;   // DAT_0017d5fc
 const float SlashEntity::MOVE_THRESH_ACTIVE    = 5.0f;    // sqrt(25)
 const float SlashEntity::MOVE_THRESH_INACTIVE  = 50.0f;   // sqrt(DAT_0017d5f8 = 2500)
 
-// Per-point half-width of the blade. Binary uses 9.0 × thicknessFactor;
-// the port tapers the head-end via a GetHeadThicknessScale() style ramp in
-// RebuildGeometry, so the base is a bit larger for the middle of the trail.
+// Per-point half-width of the blade. Binary uses 9.0 × thicknessFactor.
 static const float BLADE_HALF_WIDTH = 12.0f;
 
 // Number of trailing points to taper for the head tip. The last N points
 // get progressively smaller thickness so the blade has a pinched tip.
 static const int   HEAD_TAPER_COUNT = 5;
 
-// Number of leading points to fade out alpha toward the tail.
-static const int   TAIL_FADE_COUNT = 8;
+// Trail point lifetime in seconds. Each frame, points older than this are
+// dropped from the front of the trail — this creates the "blade fades even
+// while the finger is down" behaviour of the binary (which uses a per-frame
+// perp-length extension with speed-scaled threshold — see UpdatePoints
+// 0x17B92C). The port replaces that formula with simple time-based decay
+// for clarity; visual feel is approximately the same.
+static const float TRAIL_LIFETIME = 0.25f;
 
 // --- Global content ---
 static SmartPtr<Mortar::Texture> g_BladeTex;
@@ -140,7 +143,8 @@ void SlashEntity::OnTouchReleased() {
 // ---------------------------------------------------------------------------
 void SlashEntity::AddPoint(const Vec3& pos, const Vec3& dir) {
     if (m_NumPoints >= MAX_POINTS) {
-        // Shift-drop the oldest point.
+        // Shift-drop the oldest point (overflow guard; time-based decay in
+        // Update normally keeps the trail well below MAX_POINTS).
         for (int i = 1; i < MAX_POINTS; ++i) {
             m_Points[i - 1] = m_Points[i];
         }
@@ -150,6 +154,7 @@ void SlashEntity::AddPoint(const Vec3& pos, const Vec3& dir) {
     TrailPoint& p = m_Points[m_NumPoints];
     p.center = pos;
     p.dir    = dir;
+    p.age    = 0.0f;
 
     // Cumulative arc length from the oldest point.
     if (m_NumPoints == 0) {
@@ -211,11 +216,12 @@ void SlashEntity::RebuildGeometry() {
         // Arc-length U (0 at tail, approaching 1 at head).
         const float u = p.arcLen * invArc * 0.98f;
 
-        // Alpha fade: first TAIL_FADE_COUNT points ramp 0 → 255.
-        uint32_t alpha = 255;
-        if (i < TAIL_FADE_COUNT) {
-            alpha = (uint32_t)((float)i / (float)TAIL_FADE_COUNT * 255.0f);
-        }
+        // Alpha fade by age: full at 0, zero at TRAIL_LIFETIME. Oldest
+        // points (the tail) fade out visually as they approach expiry.
+        float alphaFrac = 1.0f - (p.age / TRAIL_LIFETIME);
+        if (alphaFrac < 0.0f) alphaFrac = 0.0f;
+        if (alphaFrac > 1.0f) alphaFrac = 1.0f;
+        const uint32_t alpha = (uint32_t)(alphaFrac * 255.0f);
         const uint32_t col = (alpha << 24) | 0x00FFFFFF;
 
         // Left strip: outer edge → centre.
@@ -255,8 +261,6 @@ void SlashEntity::RebuildGeometry() {
 // Update — matches SlashEntity::Update (0x17D664) + UpdateTouchDown (0x17D2E4)
 // ---------------------------------------------------------------------------
 void SlashEntity::Update(float dt) {
-    (void)dt;
-
     // Poll Mortar::Touch slot 0 (single-player).
     const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(0);
     if (s) {
@@ -267,18 +271,33 @@ void SlashEntity::Update(float dt) {
         }
     }
 
-    // State machine: 1 (active) → 2 (deactivating) → 0 (off).
-    // When deactivating, drop the oldest point each frame until empty.
-    if (m_State == 2) {
-        if (m_NumPoints > 1) {
-            for (int i = 1; i < m_NumPoints; ++i) {
-                m_Points[i - 1] = m_Points[i];
-            }
-            m_NumPoints--;
-        } else {
-            m_NumPoints = 0;
-            m_State = 0;
+    // Age every point by dt. This runs unconditionally — even while the
+    // finger is still down — so the trail naturally fades from the tail
+    // even during a continuous swipe. Mirrors the binary's per-frame
+    // UpdatePoints pass at 0x17B92C where each pair's perp length is
+    // extended toward a drop threshold.
+    for (int i = 0; i < m_NumPoints; ++i) {
+        m_Points[i].age += dt;
+    }
+
+    // Drop expired points from the front of the trail (oldest = tail).
+    int dropCount = 0;
+    while (dropCount < m_NumPoints &&
+           m_Points[dropCount].age >= TRAIL_LIFETIME) {
+        dropCount++;
+    }
+    if (dropCount > 0) {
+        for (int i = dropCount; i < m_NumPoints; ++i) {
+            m_Points[i - dropCount] = m_Points[i];
         }
+        m_NumPoints -= dropCount;
+    }
+
+    // State machine collapse: if the finger was released and the trail
+    // drained, reset to idle. The binary's m_bBladeActive state machine
+    // (1 → 2 → 0) is simulated by the age-based drop above.
+    if (m_State == 2 && m_NumPoints == 0) {
+        m_State = 0;
     }
 
     RebuildGeometry();
