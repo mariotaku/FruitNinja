@@ -677,12 +677,12 @@ Layout derived from:
 | PSPParticleTemplate struct | ✅ ported | Byte offsets in comments only; host sizeof differs due to 8-byte pointer alignment — the port is a reimplementation, not an ABI copy. |
 | PSPEmitterTemplate + PSPParticleSet | ✅ ported | Inline array replaced by `std::vector<PSPParticleSet>`; pointer-patch step preserved via encoded-index resolve at end of LoadFile. |
 | LoadFile XML parser | ✅ ported | Parses 136 `<particleTemplate>` + 67 `<emitter>` from `particles_fast.xml`. Texture load via TextureManager. Colour BGRA scale 0-31→0-255. |
-| AddEmitter | ✅ ported | Signature matches binary `(hash, ppRef, persistent)`; pool replaced by `std::vector<PSPParticleEmitter>`. |
-| Emitter::Update (spawn + physics) | ✅ ported | Rate integral, burst, per-frame `pos += vel` quirk all preserved. Particles stored per-emitter in `std::vector<PSPParticle>`. |
-| Manager::Update (emitter walk) | ✅ ported | Wired into `GameUpdate`. Infinite emitters (maxLifetime ≤ 0) kept until explicit `ClearEmitter` (pending). Finite-set termination via `Ends()` — not yet RE'd, treated as stay-alive. |
-| Manager::Draw | ⚠ RE complete, port pending | Full render path documented: layer filter via m_UseDepth, two-segment colour/size lerp, RotCycle quadratic + CycleXY cosine modulation, gridLock snap, sub-step integration, 6-vertex tri-list batched per template. |
-| AddParticle | ⚠ RE complete, port pending | All shape types (Point/Vertex/Direction/Angular), grid-lock, colour 3-stop packing, size delta encoding, rotation matrix init, free-list pop/push, friction angle fully documented. |
-| ClearEmitter | ❌ stub | Needed for bomb fuse release. |
+| AddEmitter | ✅ ported | Signature matches binary `(hash, ppRef, persistent)`; `unique_ptr`-backed vector keeps emitter pointers stable across growth so caller back-pointers remain valid. |
+| ClearEmitter | ✅ ported | Finds by pointer, clears back-ref, erases from list. |
+| Emitter::Update (spawn + physics) | ✅ ported | Rate integral, burst, per-frame `pos += vel` quirk all preserved. |
+| Manager::Update (emitter walk) | ✅ ported | Wired into `GameUpdate`. Infinite emitters (maxLifetime ≤ 0) kept until explicit `ClearEmitter`. `Ends()` branch not yet RE'd. |
+| Manager::Draw | ✅ ported (simplified) | Layer filtering via `template->m_UseDepth`; three-pass call from `GameDraw` (background=1 → 3D → mid=0 → HUD → foreground=-1). Two-segment start→mid→end colour/size lerp. Blend mode applied via `glBlendFunc(SRC_ALPHA, template->m_BlendMode)`. **Not ported:** RotCycle quadratic rotation, CycleXY cosine size modulation, gridLock snap, friction angle, sub-step integration (irrelevant at fixed dt=1/60). |
+| AddParticle | ✅ ported (simplified) | Shape-type branching: **Point** (0), **Vertex** (1, `pos -= vel`), **Direction** (2, `rotation += atan2(vel.y, vel.x)`). **Not ported:** Angular (3) — needs `m_field38` state; friction init; CycleX/Y phase seeds. |
 
 ## See Also
 
