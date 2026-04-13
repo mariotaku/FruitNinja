@@ -547,12 +547,12 @@ void MainScreen::CreatePlayDojo() {
     if (!game.hud) return;
 
     // Play button: (16.0, -66.0, -50.0), fruitType=3 (watermelon)
-    // Logical button size 64×64 (the newgame.tex asset is 256×256 but the
-    // binary's display size is the smaller logical one). The hit test uses
-    // `size` directly when no explicit hitBounds is set.
+    // Size matches binary formula: m_TargetSize = fruit.scale × 200
+    //   (DAT_0014f19c = 200.0 in MenuButton::Init fruit branch)
+    // For watermelon scale=0.75 → 150×150. Used for both visual and hit box.
     pPlayButton = new MenuButton();
     pPlayButton->m_Texture = TexId(m_TexNewGame);
-    pPlayButton->size = Vec3(64.0f, 64.0f, 1.0f);
+    pPlayButton->size = Vec3(150.0f, 150.0f, 1.0f);
     pPlayButton->Init(POS_PLAY_BUTTON,
         [this]() { GameModeCallback(); }, 3, Vec3(0,0,0), nullptr);
     pPlayButton->m_LayerFlags = 8;
@@ -561,7 +561,7 @@ void MainScreen::CreatePlayDojo() {
     // Dojo button: (-144.0, -65.0, -50.0), fruitType=9 (mango)
     pDojoButton = new MenuButton();
     pDojoButton->m_Texture = TexId(m_TexDojoIcon);
-    pDojoButton->size = Vec3(64.0f, 64.0f, 1.0f);
+    pDojoButton->size = Vec3(150.0f, 150.0f, 1.0f);
     pDojoButton->Init(POS_DOJO_BUTTON,
         [this]() { AboutCallback(); }, 9, Vec3(0,0,0), nullptr);
     pDojoButton->m_LayerFlags = 8;
@@ -572,9 +572,10 @@ void MainScreen::CreateQuitButton() {
     if (!game.hud) return;
 
     // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
+    // Bomb scale = 55 × 0.01 × 0.85 (menu shrink) ≈ 0.47; × 200 ≈ 94.
     pQuitBtn = new MenuButton();
     pQuitBtn->m_Texture = TexId(m_TexQuit);
-    pQuitBtn->size = Vec3(48.0f, 48.0f, 1.0f);
+    pQuitBtn->size = Vec3(96.0f, 96.0f, 1.0f);
     // Binary: fruitType = *g_pFruitInfo = fruitCount (>= count → Bomb entity via MenuButton)
     int fruitCount = FruitInfo_GetCount();
     pQuitBtn->Init(POS_QUIT,
