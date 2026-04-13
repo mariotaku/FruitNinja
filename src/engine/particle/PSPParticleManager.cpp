@@ -167,7 +167,14 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         memcpy(p.m_ColourMid,   tmpl->m_ColourMidMin,   4);
         memcpy(p.m_ColourEnd,   tmpl->m_ColourEndMin,   4);
 
-        p.m_Spin = RandRange((float)tmpl->m_SpinStartMin, (float)tmpl->m_SpinStartMax) * 0.01f;
+        // Spin rate lerp: template has start/end min/max int16 ranges.
+        // Binary stores these as 16-bit "degrees/frame" units — we convert
+        // to radians/second via the same 0.01 scale the port has always
+        // used. Each particle gets its own random start and end rate.
+        p.m_SpinStart = RandRange((float)tmpl->m_SpinStartMin,
+                                  (float)tmpl->m_SpinStartMax) * 0.01f;
+        p.m_SpinEnd   = RandRange((float)tmpl->m_SpinEndMin,
+                                  (float)tmpl->m_SpinEndMax)   * 0.01f;
         p.m_Rotation = RandRange(tmpl->m_AngleMin, tmpl->m_AngleMax);
 
         // Shape-type branching (matches AddParticle 0x115644):
@@ -236,13 +243,30 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
         }
         p.m_Vel   += p.m_Gravity * dt;
         p.m_Pos   += p.m_Vel * dt;
-        p.m_Rotation += p.m_Spin * dt;
+        // Spin rate lerp start→end over life, then integrate.
+        const float t = (p.m_Life > 0.0f) ? (p.m_Age / p.m_Life) : 0.0f;
+        const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
+        p.m_Rotation += spin * dt;
         ++i;
     }
 
     // Advance emitter state (matches binary)
     e.m_Timer = newTime;
     e.m_Pos += e.m_Vel;
+}
+
+// Matches PSPEmitterTemplate::Ends (0x00114884). Returns true if the
+// template is "naturally terminating" — i.e. every set either has a positive
+// TimeStop (finite window) OR zero continuous spawn rate (burst-only). Used
+// by Manager::Update to reap infinite-lifetime emitters whose sets have all
+// wound down. NOTE: this is a *static* property of the template, not runtime
+// state — it does not look at timer or particle counts.
+static bool EmitterTemplateEnds(const PSPEmitterTemplate* t) {
+    if (!t) return true;
+    for (const PSPParticleSet& s : t->m_Sets) {
+        if (s.m_TimeStop <= 0.0f && s.m_PerSec > 0.0f) return false;
+    }
+    return true;
 }
 
 // Matches PSPParticleManager::Update (0x115ed8).
@@ -258,14 +282,23 @@ void PSPParticleManager::Update(float dt) {
             UpdateEmitter(e, dt);
         }
 
-        // Removal: timer >= maxLifetime AND no particles still alive.
-        // Infinite emitters (maxLifetime <= 0) are only removed via ClearEmitter.
+        // Keep-alive rule from binary Manager::Update:
+        //   keep if timer < maxLifetime
+        //        OR (maxLifetime <= 0 AND !Ends(template))
+        // Meaning: finite-lifetime emitters die at maxLifetime; infinite
+        // emitters (maxLifetime <= 0) only die when the template itself
+        // signals termination (i.e. no set spawns continuously forever).
+        // Bomb_smoke has an infinite set (TimeStop=0, PerSec=50), so
+        // Ends()==false and it stays alive until explicit ClearEmitter.
+        // Port addition: also keep alive while live particles remain, so
+        // dying emitters finish playing out their last spawn.
         bool keep = true;
         if (et) {
+            const bool naturallyInfinite = !EmitterTemplateEnds(et);
             if (et->m_MaxLifetime > 0.0f) {
                 keep = (e.m_Timer < et->m_MaxLifetime) || !e.m_Particles.empty();
             } else {
-                keep = true;
+                keep = naturallyInfinite || !e.m_Particles.empty();
             }
         }
         if (!keep) {
