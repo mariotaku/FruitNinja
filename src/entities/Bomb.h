@@ -12,6 +12,8 @@
 #include "math/Vec3.h"
 #include "render/gl_funcs.h"
 
+namespace Mortar { struct PSPParticleEmitter; }
+
 class Bomb : public Entity {
 public:
     // +0x38: collision sphere (port: not yet implemented, stubbed)
@@ -41,8 +43,8 @@ public:
     // +0x78: collision guard (prevents double-hit)
     uint8_t m_bCollisionGuard;
 
-    // +0x7c: fuse particle emitter (port: stubbed, NULL)
-    // PSPParticleEmitter* m_pEmitter;
+    // +0x7c: fuse particle emitter — lazy-created on first Update tick
+    Mortar::PSPParticleEmitter* m_pEmitter;
 
     // +0x80: 1 = physics enabled
     uint8_t m_bMovement;

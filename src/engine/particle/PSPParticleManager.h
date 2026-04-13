@@ -8,6 +8,7 @@
 #include "asset/Texture.h"
 #include "core/Singleton.h"
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 namespace Mortar {
@@ -194,6 +195,10 @@ public:
                                    PSPParticleEmitter** ppRef = nullptr,
                                    bool persistent = false);
 
+    // Explicitly release an emitter (matches ClearEmitter 0x114934). Clears
+    // the caller back-pointer and marks the emitter for removal on next tick.
+    void ClearEmitter(PSPParticleEmitter* emitter);
+
     void Update(float dt);
     void Draw();
 
@@ -215,7 +220,10 @@ private:
     std::vector<PSPParticleTemplate> m_ParticleTemplates;
     std::vector<PSPEmitterTemplate>  m_EmitterTemplates;
 
-    std::vector<PSPParticleEmitter>  m_Emitters;
+    // unique_ptr keeps PSPParticleEmitter addresses stable across vector
+    // growth so callers can hold raw pointers (matches MemoryPool semantics
+    // of the binary).
+    std::vector<std::unique_ptr<PSPParticleEmitter>> m_Emitters;
 };
 
 } // namespace Mortar
