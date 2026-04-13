@@ -55,18 +55,25 @@ void SDLInputTranslator::Init() {
     hashTouchScreen = StringHash("TouchScreen");
 }
 
+// Transform SDL window pixel coords → binary-centred ortho coords.
+// Ortho: X ∈ [-240, +240] (horizontal), Y ∈ [-160, +160] (vertical, +up).
+// SDL pixel Y is top-down (0 at top), so we flip.
+// See docs/engine/coordinate-system.md.
 void SDLInputTranslator::TransformTouch(SDL_Window* window, int px, int py,
                                          float& gx, float& gy) {
     int ww, wh;
     SDL_GetWindowSize(window, &ww, &wh);
-    gx = (float)px * FN_SCREEN_W / ww;
-    gy = FN_SCREEN_H - (float)py * FN_SCREEN_H / wh;
+    // Normalise to [0, 1] then remap to [-240, 240] × [-160, 160] (Y flipped).
+    const float nx = (float)px / (float)ww;
+    const float ny = (float)py / (float)wh;
+    gx = nx * (float)FN_SCREEN_W - (float)(FN_SCREEN_W / 2);   // [-240, 240]
+    gy = (float)(FN_SCREEN_H / 2) - ny * (float)FN_SCREEN_H;   // [+160, -160]
 }
 
 void SDLInputTranslator::TransformTouchNormalized(float nx, float ny,
                                                    float& gx, float& gy) {
-    gx = nx * FN_SCREEN_W;
-    gy = FN_SCREEN_H - ny * FN_SCREEN_H;
+    gx = nx * (float)FN_SCREEN_W - (float)(FN_SCREEN_W / 2);
+    gy = (float)(FN_SCREEN_H / 2) - ny * (float)FN_SCREEN_H;
 }
 
 int SDLInputTranslator::MapFingerId(SDL_FingerID id) {
