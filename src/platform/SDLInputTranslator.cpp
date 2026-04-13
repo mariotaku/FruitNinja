@@ -1,8 +1,12 @@
 //
-// SDLInputTranslator — converts SDL events to Mortar InputEvents
+// SDLInputTranslator — converts SDL events to Mortar InputEvents AND feeds
+// Mortar::Touch directly (poll-based binary path). The InputManager dispatch
+// is kept for keyboard/gamepad actions only — step 7 of the touch rewrite
+// will drop the TouchDown_N / TouchMove_XN / TouchUp_N bindings.
 //
 
 #include "SDLInputTranslator.h"
+#include "input/Touch.h"
 #include <cstdio>
 #include <cstring>
 
@@ -120,14 +124,16 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             fingerX[0] = mouseX;
             fingerY[0] = mouseY;
 
-            // TouchScreen global
+            // Poll-based path: feed Mortar::Touch directly (slot 0 = mouse).
+            Mortar::Touch::GetInstance().OnPressed(0, mouseX, mouseY);
+
+            // Callback path (keyboard/gamepad style) — kept until step 7.
             ie.actionHash = hashTouchScreen;
             ie.actionFlags = INPUT_ACTION_DOWN;
             ie.fingerId = 0;
             ie.x = mouseX; ie.y = mouseY;
             mgr->DispatchEvent(&ie);
 
-            // TouchDown_0
             ie.actionHash = hashTouchDown[0];
             ie.actionFlags = INPUT_ACTION_DOWN;
             mgr->DispatchEvent(&ie);
@@ -143,7 +149,8 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             mouseX = gx; mouseY = gy;
             fingerX[0] = gx; fingerY[0] = gy;
 
-            // TouchMove_X0
+            Mortar::Touch::GetInstance().OnMoved(0, gx, gy);
+
             ie.actionHash = hashTouchMoveX[0];
             ie.actionFlags = INPUT_ACTION_MOVE;
             ie.fingerId = 0;
@@ -151,7 +158,6 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             ie.deltaX = dx; ie.deltaY = dy;
             mgr->DispatchEvent(&ie);
 
-            // TouchMove_Y0
             ie.actionHash = hashTouchMoveY[0];
             mgr->DispatchEvent(&ie);
         }
@@ -161,6 +167,8 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         if (ev.button.button == SDL_BUTTON_LEFT && mouseDown) {
             mouseDown = false;
             TransformTouch(window, ev.button.x, ev.button.y, mouseX, mouseY);
+
+            Mortar::Touch::GetInstance().OnReleased(0);
 
             ie.actionHash = hashTouchUp[0];
             ie.actionFlags = INPUT_ACTION_UP;
@@ -179,14 +187,17 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         fingerX[ch] = gx; fingerY[ch] = gy;
 
-        // TouchScreen global
+        // Poll-based path. Mortar::Touch has 8 slots; clamp or drop extras.
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnPressed(ch, gx, gy);
+        }
+
         ie.actionHash = hashTouchScreen;
         ie.actionFlags = INPUT_ACTION_DOWN;
         ie.fingerId = ch;
         ie.x = gx; ie.y = gy;
         mgr->DispatchEvent(&ie);
 
-        // TouchDown_N
         ie.actionHash = hashTouchDown[ch];
         mgr->DispatchEvent(&ie);
         break;
@@ -206,6 +217,10 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         float dx = gx - fingerX[ch];
         float dy = gy - fingerY[ch];
         fingerX[ch] = gx; fingerY[ch] = gy;
+
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnMoved(ch, gx, gy);
+        }
 
         ie.actionHash = hashTouchMoveX[ch];
         ie.actionFlags = INPUT_ACTION_MOVE;
@@ -230,6 +245,10 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
+
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnReleased(ch);
+        }
 
         ie.actionHash = hashTouchUp[ch];
         ie.actionFlags = INPUT_ACTION_UP;
