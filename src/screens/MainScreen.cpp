@@ -524,9 +524,10 @@ void MainScreen::CreateToggles() {
     if (!game.hud) return;
 
     // Sound toggle: (216.0, 135.5, 0.0), 32x32, fruitType=-1 (no fruit)
+    // Size is the logical button dimensions — texture may be higher-res.
     pSoundToggle = new MenuButton();
     pSoundToggle->m_Texture = TexId(game.soundEnabled ? m_TexSoundOn : m_TexSoundOff);
-    pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
+    pSoundToggle->size = Vec3(32.0f, 32.0f, 1.0f);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
         [this]() { SoundCallback(); }, -1, Vec3(0,0,0), nullptr);
     pSoundToggle->m_LayerFlags = 8;
@@ -535,7 +536,7 @@ void MainScreen::CreateToggles() {
     // Music toggle: (176.0, 135.5, 0.0), 32x32, fruitType=-1 (no fruit)
     pMusicToggle = new MenuButton();
     pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
-    pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
+    pMusicToggle->size = Vec3(32.0f, 32.0f, 1.0f);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
         [this]() { MusicCallback(); }, -1, Vec3(0,0,0), nullptr);
     pMusicToggle->m_LayerFlags = 8;
@@ -546,9 +547,12 @@ void MainScreen::CreatePlayDojo() {
     if (!game.hud) return;
 
     // Play button: (16.0, -66.0, -50.0), fruitType=3 (watermelon)
+    // Logical button size 64×64 (the newgame.tex asset is 256×256 but the
+    // binary's display size is the smaller logical one). The hit test uses
+    // `size` directly when no explicit hitBounds is set.
     pPlayButton = new MenuButton();
     pPlayButton->m_Texture = TexId(m_TexNewGame);
-    pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
+    pPlayButton->size = Vec3(64.0f, 64.0f, 1.0f);
     pPlayButton->Init(POS_PLAY_BUTTON,
         [this]() { GameModeCallback(); }, 3, Vec3(0,0,0), nullptr);
     pPlayButton->m_LayerFlags = 8;
@@ -557,7 +561,7 @@ void MainScreen::CreatePlayDojo() {
     // Dojo button: (-144.0, -65.0, -50.0), fruitType=9 (mango)
     pDojoButton = new MenuButton();
     pDojoButton->m_Texture = TexId(m_TexDojoIcon);
-    pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
+    pDojoButton->size = Vec3(64.0f, 64.0f, 1.0f);
     pDojoButton->Init(POS_DOJO_BUTTON,
         [this]() { AboutCallback(); }, 9, Vec3(0,0,0), nullptr);
     pDojoButton->m_LayerFlags = 8;
@@ -570,7 +574,7 @@ void MainScreen::CreateQuitButton() {
     // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
     pQuitBtn = new MenuButton();
     pQuitBtn->m_Texture = TexId(m_TexQuit);
-    pQuitBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
+    pQuitBtn->size = Vec3(48.0f, 48.0f, 1.0f);
     // Binary: fruitType = *g_pFruitInfo = fruitCount (>= count → Bomb entity via MenuButton)
     int fruitCount = FruitInfo_GetCount();
     pQuitBtn->Init(POS_QUIT,
@@ -633,7 +637,6 @@ void MainScreen::QuitGamesCallback() {
 
 // Touch handling — routed from InputManager
 bool MainScreen::HandleTouchDown(float x, float y) {
-    // Route to visible buttons
     MenuButton* buttons[] = { pPlayButton, pDojoButton, pQuitBtn,
                                pMoreGamesBtn, pSoundToggle, pMusicToggle };
     for (int i = 0; i < 6; i++) {
