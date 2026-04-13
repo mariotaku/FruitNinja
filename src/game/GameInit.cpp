@@ -13,7 +13,10 @@
 #include "screens/MainScreen.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
+#include "entities/SlashEntity.h"
 #include "particle/PSPParticleManager.h"
+#include "input/InputManager.h"
+#include "util/StringHash.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup
@@ -43,6 +46,43 @@ void GameInit(unsigned long) {
     game->hud->AddControl(mainScreen);
     game->mainScreen = mainScreen;
 
+    // Create the single SlashEntity for touch-trail rendering. The binary
+    // uses a 2-player array; the port keeps one for single-touch.
+    if (!g_pSlashEntity) {
+        g_pSlashEntity = new SlashEntity();
+        g_pSlashEntity->Init();
+    }
+
+    // Wire input callbacks. SDLInputTranslator dispatches StringHash'd
+    // actions to InputManager; we bind TouchDown_0 / TouchMove_X0 / TouchUp_0
+    // to both MainScreen (for button clicks) and SlashEntity (for the trail).
+    // Binary uses Mortar::Touch polling instead; this is the port-equivalent.
+    if (InputManager* im = InputManager::GetInstance()) {
+        const uint32_t hDown = StringHash("TouchDown_0");
+        const uint32_t hMove = StringHash("TouchMove_X0");
+        const uint32_t hUp   = StringHash("TouchUp_0");
+
+        im->RegisterInputCallback(hDown, INPUT_ACTION_DOWN,
+            [](InputEvent* e) -> bool {
+                Game* g = Game::GetInstance();
+                if (g && g->mainScreen) g->mainScreen->HandleTouchDown(e->x, e->y);
+                if (g_pSlashEntity) g_pSlashEntity->TouchDown(e->x, e->y);
+                return false;
+            });
+        im->RegisterInputCallback(hMove, INPUT_ACTION_MOVE,
+            [](InputEvent* e) -> bool {
+                if (g_pSlashEntity) g_pSlashEntity->TouchDown(e->x, e->y);
+                return false;
+            });
+        im->RegisterInputCallback(hUp, INPUT_ACTION_UP,
+            [](InputEvent* e) -> bool {
+                Game* g = Game::GetInstance();
+                if (g && g->mainScreen) g->mainScreen->HandleTouchUp(e->x, e->y);
+                if (g_pSlashEntity) g_pSlashEntity->TouchUp();
+                return false;
+            });
+    }
+
     // TODO: MissControl ×3, ScoreControl, CoinCounter, TimeControl
     // TODO: Entity::HeapCreate, ActorManager::Initialise
     // TODO: Pre-spawn 30× entities, SplatEntity/WaveManager/BombFlash pools
@@ -64,6 +104,11 @@ void GameUpdate(float dt, bool active) {
 
     // Tick particle system (spawn, physics, emitter lifetime) — always runs
     Mortar::PSPParticleManager::GetInstance().Update(dt);
+
+    // SlashEntity runs in every state (menu + gameplay) so the blade trail
+    // is visible everywhere. The binary gates this on `active` too, but the
+    // port keeps it unconditional for testing.
+    if (g_pSlashEntity) g_pSlashEntity->Update(dt);
 
     // Update all HUD controls (MainScreen state machine, buttons) — always runs
     if (game->hud)
@@ -150,6 +195,9 @@ void GameDraw(float dt, bool active) {
 
     // 7. Foreground particles (useDepth=-1) — rim_spark, trails, sparkles.
     pm.Draw(-1);
+
+    // 8. Blade trail — drawn last so it's always on top.
+    if (g_pSlashEntity) g_pSlashEntity->Draw();
 }
 
 // Matches GameExit (0x16cf74, 98 lines) — per-session cleanup
@@ -162,6 +210,15 @@ void GameExit_Handler() {
     // Release background texture
     GameTaskState* ts = GetTaskState();
     ts->pBackgroundTexture.Clear();
+
+    // Release SlashEntity + input callbacks
+    if (g_pSlashEntity) {
+        delete g_pSlashEntity;
+        g_pSlashEntity = nullptr;
+    }
+    if (InputManager* im = InputManager::GetInstance()) {
+        im->ClearActions();
+    }
 
     // Release HUD (destroys all controls including MainScreen)
     if (game->hud) {

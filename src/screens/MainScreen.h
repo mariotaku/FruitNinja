@@ -129,7 +129,8 @@ private:
     void MoreGamesCallback();
     void QuitGamesCallback();
 
-    // Touch handling
+public:
+    // Touch handling — called from InputManager callbacks in GameInit.
     bool HandleTouchDown(float x, float y);
     void HandleTouchUp(float x, float y);
 };
