@@ -21,6 +21,7 @@
 #include "render/DisplayManager.h"
 #include "asset/MeshManager.h"
 #include "core/SystemManager.h"
+#include "particle/PSPParticleManager.h"
 #include <cstdio>
 #include <string>
 
@@ -91,7 +92,16 @@ void GameInitialise() {
     game->actorManager = new ActorManager();
 
     // TODO: Step 5: InitialiseData()
-    // TODO: Steps 11-13: PSPParticleManager, PowerUpManager, LeaderboardManager
+
+    // Step 11: PSPParticleManager — load particle XML templates
+    {
+        Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+        std::string partDir = game->data_dir + "/particles";
+        std::string partXml = partDir + "/particles_fast.xml";
+        pm.LoadFile(partXml.c_str());
+    }
+
+    // TODO: Steps 12-13: PowerUpManager, LeaderboardManager
     // TODO: Steps 16-21: Font::Load ×8
     // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas)
     // Step 23: MenuButton::LoadContent()

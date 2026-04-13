@@ -13,6 +13,7 @@
 #include "screens/MainScreen.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
+#include "particle/PSPParticleManager.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup
@@ -57,13 +58,16 @@ void GameUpdate(float dt, bool active) {
     if (game->actorManager)
         game->actorManager->Update(dt);
 
+    // Tick particle system (spawn, physics, emitter lifetime)
+    Mortar::PSPParticleManager::GetInstance().Update(dt);
+
     // Update all HUD controls (MainScreen state machine, buttons)
     if (game->hud)
         game->hud->Update(dt);
 
     // TODO: Full 359-line GameUpdate: time scaling, bomb hit, wave speed,
-    //       SlashEntity::PreUpdate, SplatEntity, WaveManager, ActorManager,
-    //       PSPParticleManager, FruitCamera::UpdateShake, HUD::Update
+    //       SlashEntity::PreUpdate, SplatEntity, WaveManager,
+    //       FruitCamera::UpdateShake
 }
 
 // Matches GameDraw (0x16b888, 211 lines) — full render frame
