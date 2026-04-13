@@ -54,35 +54,11 @@ void GameInit(unsigned long) {
         g_pSlashEntity->Init();
     }
 
-    // Wire input callbacks. SDLInputTranslator dispatches StringHash'd
-    // actions to InputManager; we bind TouchDown_0 / TouchMove_X0 / TouchUp_0
-    // to both MainScreen (for button clicks) and SlashEntity (for the trail).
-    // Binary uses Mortar::Touch polling instead; this is the port-equivalent.
-    if (InputManager* im = InputManager::GetInstance()) {
-        const uint32_t hDown = StringHash("TouchDown_0");
-        const uint32_t hMove = StringHash("TouchMove_X0");
-        const uint32_t hUp   = StringHash("TouchUp_0");
-
-        im->RegisterInputCallback(hDown, INPUT_ACTION_DOWN,
-            [](InputEvent* e) -> bool {
-                Game* g = Game::GetInstance();
-                if (g && g->mainScreen) g->mainScreen->HandleTouchDown(e->x, e->y);
-                if (g_pSlashEntity) g_pSlashEntity->TouchDown(e->x, e->y);
-                return false;
-            });
-        im->RegisterInputCallback(hMove, INPUT_ACTION_MOVE,
-            [](InputEvent* e) -> bool {
-                if (g_pSlashEntity) g_pSlashEntity->TouchDown(e->x, e->y);
-                return false;
-            });
-        im->RegisterInputCallback(hUp, INPUT_ACTION_UP,
-            [](InputEvent* e) -> bool {
-                Game* g = Game::GetInstance();
-                if (g && g->mainScreen) g->mainScreen->HandleTouchUp(e->x, e->y);
-                if (g_pSlashEntity) g_pSlashEntity->TouchUp();
-                return false;
-            });
-    }
+    // Touch input is now polled from Mortar::Touch inside MenuButton::Update
+    // and SlashEntity::Update — no InputManager callbacks needed. The
+    // TouchDown_0 / TouchMove_X0 / TouchUp_0 action hashes are still fired
+    // from SDLInputTranslator (for hypothetical future keyboard-style
+    // bindings) but have no subscribers.
 
     // TODO: MissControl ×3, ScoreControl, CoinCounter, TimeControl
     // TODO: Entity::HeapCreate, ActorManager::Initialise

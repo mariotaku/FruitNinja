@@ -129,10 +129,8 @@ private:
     void MoreGamesCallback();
     void QuitGamesCallback();
 
-public:
-    // Touch handling — called from InputManager callbacks in GameInit.
-    bool HandleTouchDown(float x, float y);
-    void HandleTouchUp(float x, float y);
+    // Touch handling removed in the touch rewrite. MenuButton::Update now
+    // polls Mortar::Touch directly — MainScreen has no touch routing role.
 };
 
 #endif
