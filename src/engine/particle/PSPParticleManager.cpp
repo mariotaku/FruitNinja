@@ -154,17 +154,42 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         p.m_Gravity.z = RandRange(tmpl->m_GravityMin[2], tmpl->m_GravityMax[2]);
 
         p.m_Life = tmpl->m_StartTime;  // template's "<life>/60" seconds
+
+        // Two-segment size lerp — random per stop so each particle gets its
+        // own variation on start/mid/end.
         p.m_SizeStart = RandRange((float)tmpl->m_SizeStartMin, (float)tmpl->m_SizeStartMax);
+        p.m_SizeMid   = RandRange((float)tmpl->m_SizeMidMin,   (float)tmpl->m_SizeMidMax);
         p.m_SizeEnd   = RandRange((float)tmpl->m_SizeEndMin,   (float)tmpl->m_SizeEndMax);
 
+        // Two-segment BGRA colour lerp (template already has mid = average of
+        // start/end when the XML omits explicit mid attrs — see LoadFile).
         memcpy(p.m_ColourStart, tmpl->m_ColourStartMin, 4);
+        memcpy(p.m_ColourMid,   tmpl->m_ColourMidMin,   4);
         memcpy(p.m_ColourEnd,   tmpl->m_ColourEndMin,   4);
 
         p.m_Spin = RandRange((float)tmpl->m_SpinStartMin, (float)tmpl->m_SpinStartMax) * 0.01f;
         p.m_Rotation = RandRange(tmpl->m_AngleMin, tmpl->m_AngleMax);
+
+        // Shape-type branching (matches AddParticle 0x115644):
+        //   0 = Point     — no extra init (pos = emitter.pos, vel = rotated set vel)
+        //   1 = Vertex    — start half a velocity step behind the emitter
+        //   2 = Direction — rotate particle to face its own velocity
+        //   3 = Angular   — skipped (requires emitter m_field38 state)
+        switch (tmpl->m_Shape) {
+            case 1: // Vertex
+                p.m_Pos.x -= p.m_Vel.x;
+                p.m_Pos.y -= p.m_Vel.y;
+                p.m_Pos.z -= p.m_Vel.z;
+                break;
+            case 2: // Direction
+                p.m_Rotation += atan2f(p.m_Vel.y, p.m_Vel.x);
+                break;
+            default:
+                break;
+        }
     } else {
         p.m_Life = 1.0f;
-        p.m_SizeStart = p.m_SizeEnd = 8.0f;
+        p.m_SizeStart = p.m_SizeMid = p.m_SizeEnd = 8.0f;
     }
 
     emitter.m_Particles.push_back(p);
@@ -280,7 +305,7 @@ static inline void LerpColour(const uint8_t a[4], const uint8_t b[4],
     }
 }
 
-void PSPParticleManager::Draw() {
+void PSPParticleManager::Draw(int layer) {
     static std::vector<QUADCUSTOMVERTEX> s_verts;
 
     // Group particles by their parent template so we can batch one DrawTriList
@@ -313,6 +338,10 @@ void PSPParticleManager::Draw() {
         if (e.m_Particles.empty()) continue;
 
         for (PSPParticle& p : e.m_Particles) {
+            // Layer filter: binary draws only particles whose template's
+            // m_UseDepth matches the requested layer.
+            if (p.m_pTemplate && p.m_pTemplate->m_UseDepth != layer) continue;
+
             // Group flush on template change
             if (p.m_pTemplate != curTmpl) {
                 flush();
@@ -323,13 +352,21 @@ void PSPParticleManager::Draw() {
             float t = p.m_Age / life;
             if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
 
-            // Colour lerp (start → end)
+            // Two-segment colour + size lerp: start→mid for t∈[0,0.5),
+            // mid→end for t∈[0.5,1]. Split matches binary's piecewise-linear
+            // interpolation over age (Draw 0x114c64).
             uint8_t col[4];
-            LerpColour(p.m_ColourStart, p.m_ColourEnd, t, col);
+            float size;
+            if (t < 0.5f) {
+                float u = t * 2.0f;             // 0..1 across first half
+                LerpColour(p.m_ColourStart, p.m_ColourMid, u, col);
+                size = p.m_SizeStart + (p.m_SizeMid - p.m_SizeStart) * u;
+            } else {
+                float u = (t - 0.5f) * 2.0f;    // 0..1 across second half
+                LerpColour(p.m_ColourMid, p.m_ColourEnd, u, col);
+                size = p.m_SizeMid + (p.m_SizeEnd - p.m_SizeMid) * u;
+            }
             uint32_t packed = PackBGRA(col);
-
-            // Size lerp
-            float size = p.m_SizeStart + (p.m_SizeEnd - p.m_SizeStart) * t;
             float aspect = curTmpl ? curTmpl->m_AspectRatio : 1.0f;
             if (aspect <= 0.0f) aspect = 1.0f;
             float hx = size * 0.5f * aspect;

@@ -127,23 +127,27 @@ struct PSPParticle {
     Vec3     m_Gravity;
     float    m_Age;
     float    m_Life;        // total lifetime in seconds
+    // Two-segment size lerp: start → mid → end, split at age = life/2.
     float    m_SizeStart;
+    float    m_SizeMid;
     float    m_SizeEnd;
     float    m_Rotation;    // current angle (radians)
     float    m_Spin;        // angular velocity (radians/s)
-    uint8_t  m_ColourStart[4]; // BGRA
+    // Two-segment BGRA colour lerp: start → mid → end, split at age = life/2.
+    uint8_t  m_ColourStart[4];
+    uint8_t  m_ColourMid[4];
     uint8_t  m_ColourEnd[4];
     const PSPParticleTemplate* m_pTemplate; // for texture + blend mode
 
     PSPParticle()
         : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
         , m_Age(0), m_Life(0)
-        , m_SizeStart(0), m_SizeEnd(0)
+        , m_SizeStart(0), m_SizeMid(0), m_SizeEnd(0)
         , m_Rotation(0), m_Spin(0)
         , m_pTemplate(nullptr)
     {
-        m_ColourStart[0] = m_ColourStart[1] = m_ColourStart[2] = m_ColourStart[3] = 255;
-        m_ColourEnd[0]   = m_ColourEnd[1]   = m_ColourEnd[2]   = m_ColourEnd[3]   = 255;
+        for (int i = 0; i < 4; ++i)
+            m_ColourStart[i] = m_ColourMid[i] = m_ColourEnd[i] = 255;
     }
 };
 
@@ -200,7 +204,12 @@ public:
     void ClearEmitter(PSPParticleEmitter* emitter);
 
     void Update(float dt);
-    void Draw();
+
+    // Draw particles whose template `m_UseDepth` equals `layer`. Matches the
+    // binary filter `(float)layer == template->m_UseDepth`. Typical usage:
+    //   Draw(0)  — mid/default layer (before HUD overlays)
+    //   Draw(1)  — foreground layer   (after HUD overlays)
+    void Draw(int layer = 0);
 
     // Load particle templates from an XML file. Matches PSPParticleManager::LoadFile
     // (0x115f60). Parses `<emitter>` elements into m_EmitterTemplates backed by

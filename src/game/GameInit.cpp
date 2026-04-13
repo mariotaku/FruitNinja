@@ -111,16 +111,29 @@ void GameDraw(float dt, bool active) {
         ts->pBackgroundTexture->UnSet();
     }
 
-    // 3. 3D entities
+    // Particles are layered by template `<useDepth>` (three values appear in
+    // particles_fast.xml: 1 = background, 0 = default/mid, -1 = foreground).
+    // Binary's PSPParticleManager::Draw filters each pass by an exact match.
+    // Without RE'ing the original caller order, we approximate: background
+    // behind 3D, default between 3D and HUD, foreground over HUD.
+    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+
+    // 3a. Background particles (useDepth=1)
+    pm.Draw(1);
+
+    // 3b. 3D entities
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
 
-    // 4. HUD::BeginDraw
+    // 4. Mid particles (useDepth=0) — most juice/splat/smoke FX.
+    pm.Draw(0);
+
+    // 5. HUD::BeginDraw
     if (game->hud)
         game->hud->BeginDraw(dt);
 
-    // 5-6. HUD layers (original draws 0x40, splats, slashes, 0x80, particles,
-    //       then 0x01 for MainScreen, then 0x08 for buttons, then overlays)
+    // 6. HUD layers (original draws 0x40, splats, slashes, 0x80, particles,
+    //    then 0x01 for MainScreen, then 0x08 for buttons, then overlays)
     if (game->hud) {
         game->hud->Draw(0x40);    // layer 0x40
         game->hud->Draw(0x01);    // MainScreen (blurry_backing + logos)
@@ -130,9 +143,8 @@ void GameDraw(float dt, bool active) {
         game->hud->Draw(0x400);   // top layer
     }
 
-    // 7. Particles — rendered on top of HUD, below overlays in original order.
-    // Port simplification: single pass (no layer filtering yet).
-    Mortar::PSPParticleManager::GetInstance().Draw();
+    // 7. Foreground particles (useDepth=-1) — rim_spark, trails, sparkles.
+    pm.Draw(-1);
 }
 
 // Matches GameExit (0x16cf74, 98 lines) — per-session cleanup
