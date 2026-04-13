@@ -1,69 +1,83 @@
 #ifndef MORTAR_TOUCH_H
 #define MORTAR_TOUCH_H
 
+//
+// Mortar::Touch — binary-accurate poll-based touch state.
+// Matches Mortar::Touch ctor at 0x0019591c / GetTouchInReigion at 0x001954b4.
+//
+// Layout: 8 × 28-byte TouchState slots (states1 at +0x00), plus a second
+// states2 buffer (+0xe0) and a ring buffer of pending TEvnt events (+0x1c0).
+// The port drops the states2 swap buffer for simplicity — all writes target
+// states1 directly. The ring buffer is collapsed into Push* methods that
+// update slots immediately.
+//
+// Phase semantics (matching binary states1[i].field12_0x18):
+//   -1 : just-pressed (one frame)
+//    0 : held
+//   >=1: released / inactive
+//
+// SDL event flow: SDLInputTranslator::ProcessSDLEvent → OnPressed / OnMoved /
+// OnReleased → slot writes. Once per frame GameUpdate calls Touch::Update()
+// which advances phase transitions (-1 → 0).
+//
+// Polling consumers: MenuButton::Update, SlashEntity::Update read state via
+// GetTouchInRegion / GetSlot.
+//
+
 #include <cstdint>
 
 namespace Mortar {
 
-// Matches original Touch State (28 bytes)
+// Matches binary Mortar::Touch::State (28 bytes, states1/states2 elements).
+// Field names follow the port's conventions; binary offsets in comments.
 struct TouchState {
-    float startX, startY;     // +0x00: touch-down position
-    float currentX, currentY; // +0x08: current position
-    int pointerId;            // +0x10: OS slot index
-    int touchId;              // +0x14: monotonic Mortar ID
-    int phase;                // +0x18: -1=justPressed, 0=held, 1=released
+    int   startX;    // +0x00  x at press (or prev frame x)
+    int   startY;    // +0x04
+    int   currX;     // +0x08  field8_0x8 — current x
+    int   currY;     // +0x0c  field9_0xc — current y
+    int   field10;   // +0x10  unused flag
+    int   touchId;   // +0x14  field11_0x14 — monotonic id (from pointerId)
+    int   phase;     // +0x18  field12_0x18 — -1, 0, or 1+
+    // total 28 bytes matching binary State::State ctor
 };
 
-// Matches original TEvnt (20 bytes)
-struct TEvnt {
-    uint32_t pointerId;
-    uint32_t isDown;    // 1=pressed, 0=released
-    float x, y;
-    float timestamp;
-};
-
-// Matches original Mortar::Touch (468 bytes)
-// Double-buffered 8-slot multitouch with ring buffer event queue
 class Touch {
 public:
-    static const int MAX_TOUCHES = 8;
-    static const int EVENT_RING_SIZE = 10;
+    static const int MAX_SLOTS = 8;
 
-    TouchState m_FrontBuffer[MAX_TOUCHES];  // +0x000: read by game
-    TouchState m_BackBuffer[MAX_TOUCHES];   // +0x0E0: written by event handler
-    TEvnt m_EventRing[EVENT_RING_SIZE];     // +0x1C0: ring buffer
-    int m_EventReadIdx;
-    int m_EventWriteIdx;
-    int m_EventCount;
-    int m_NextTouchId;                      // +0x1D0: monotonic counter
+    static Touch& GetInstance();
+
+    TouchState states1[MAX_SLOTS];
+    int m_NextTouchId;
 
     Touch();
 
-    // Called from SDL event handler (ISR context / main thread)
-    // Pushes event to ring buffer
-    // Matches __UpdateInternal (0x195690)
-    void PushEvent(uint32_t pointerId, bool isDown, float x, float y, float timestamp);
+    // Per-frame: advances phase transitions (-1 → 0). Call once from
+    // GameUpdate before any polling consumers read the slot state.
+    void Update();
 
-    // Called each frame — drains ring buffer, updates back buffer, swaps to front
-    // Matches Touch::Update (0x195570)
-    void Update(float dt);
+    // SDL-side entry points. `slot` is a stable 0..7 channel index mapped
+    // from SDL_FingerID by SDLInputTranslator (mouse emulates slot 0).
+    // Coordinates are in the binary-centred ortho space [-240..240, -160..160].
+    void OnPressed (int slot, float x, float y);
+    void OnMoved   (int slot, float x, float y);
+    void OnReleased(int slot);
 
-    // Read touch state from front buffer
-    const TouchState& GetTouch(int index) const { return m_FrontBuffer[index]; }
+    // Matches Mortar::Touch::GetTouchInReigion (0x001954b4, note binary typo).
+    // Iterates the 8 slots, returns the index of the first active touch
+    // inside the rect, or -1 if none found.
+    // `preferredSlot` is ignored in the port (binary uses it as a fast-path
+    // hint when a button is already tracking a specific slot).
+    int GetTouchInRegion(float left, float right, float bottom, float top,
+                         int preferredSlot = -1) const;
 
-    // Check if a touch slot is active
-    bool IsTouchActive(int index) const {
-        return m_FrontBuffer[index].phase >= -1 && m_FrontBuffer[index].phase <= 0;
-    }
+    // Direct slot accessor. Returns NULL if slot is out of range.
+    const TouchState* GetSlot(int slot) const;
 
-private:
-    // Find back buffer slot for pointerId, or allocate new
-    int FindOrAllocSlot(uint32_t pointerId);
-
-    // Release slot in back buffer
-    void ReleaseSlot(uint32_t pointerId);
+    // Convenience: true if the slot is pressed or held (phase <= 0).
+    bool IsSlotDown(int slot) const;
 };
 
 } // namespace Mortar
 
-#endif
+#endif // MORTAR_TOUCH_H
