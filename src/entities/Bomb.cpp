@@ -381,8 +381,8 @@ void Bomb::Draw(Renderer& r) {
         mat.RotZ44(sinA, cosA);
     }
 
-    // Position in binary-centred ortho space (see FruitCamera::SetupPerspective).
-    Vec3 drawPos(pos.x, pos.y, m_ZPosition);
+    // Translate: pos + (480, 320) HUD offset
+    Vec3 drawPos(pos.x + 480.0f, pos.y + 320.0f, m_ZPosition);
     mat.GlobalTranslate44(drawPos);
 
     // Use Model::Draw which handles its own texture, MVP, and mesh rendering
