@@ -50,10 +50,14 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
         mat.RotZ44(sinA, cosA);
     }
 
-    // Step 6-7: offset = Vec3(480, 320, 0) * hudScale + pos
-    Vec3 offset(480.0f * hudScale.x, 320.0f * hudScale.y, 0.0f);
-    Vec3 finalPos = offset + pos;
-    mat.GlobalTranslate44(finalPos);
+    // Step 6-7: Binary computes `drawPos = pos + (480, 320, 0) * pivot` but
+    // `pivot` is initialised to (0, 0, 0) by CopyGlobalVec3_PauseScreen so the
+    // offset term is zero for all standard controls — the offset is dead code
+    // for default HUD elements. The port drops the multiplication entirely
+    // and uses pos directly. Positions are already in the binary-centred
+    // ortho space [-240..240, -160..160] (see FruitCamera).
+    (void)hudScale;
+    mat.GlobalTranslate44(pos);
 
     // Step 8-9: Upload matrices
     mm.GetWorldStack().SetCurrentMatrix(mat);
