@@ -195,8 +195,8 @@ void Fruit::Draw(Renderer& r) {
     mat4_multiply(temp, rotMat, mat.ptr());
     memcpy(mat.ptr(), temp, sizeof(temp));
 
-    // Position in binary-centred ortho space (see FruitCamera::SetupPerspective).
-    Vec3 drawPos(pos.x, pos.y, m_ZPosition);
+    // Position includes (480, 320) HUD offset
+    Vec3 drawPos(pos.x + 480.0f, pos.y + 320.0f, m_ZPosition);
     mat.GlobalTranslate44(drawPos);
 
     // Use Model::Draw which handles texture, MVP, and mesh rendering

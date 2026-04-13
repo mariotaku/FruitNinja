@@ -440,14 +440,17 @@ void PSPParticleManager::Draw(int layer) {
             const float dxX =  ca * hx, dxY = sa * hx;
             const float dyX = -sa * hy, dyY = ca * hy;
 
-            // Positions are in binary-centred ortho space.
-            float px = p.m_Pos.x;
-            float py = p.m_Pos.y;
+            // HUD offset: entity positions are in centred coords, the
+            // FruitCamera ortho is centred on (480, 320), so we shift by
+            // that amount to map centred → screen space. Matches the offset
+            // Fruit::Draw and Bomb::Draw add to their own draw positions.
+            float px = p.m_Pos.x + 480.0f;
+            float py = p.m_Pos.y + 320.0f;
             const float pz = p.m_Pos.z;
 
-            // Grid-lock: snap pos to cell centres when the template declares
-            // non-zero cell sizes. Used by rim_spark (menu rim flash).
-            // Matches binary Draw 0x114c64 gridLock block.
+            // Grid-lock: binary snaps pos around the (480, 320) HUD origin
+            // when the template declares non-zero cell sizes. Used by
+            // rim_spark (menu rim flash) to keep particles aligned.
             if (curTmpl) {
                 const float gx = curTmpl->m_GridLockStart;
                 const float gy = curTmpl->m_GridLockEnd;
