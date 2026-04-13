@@ -3,6 +3,7 @@
 #include "asset/TextureManager.h"
 #include "math/Random.h"
 #include "render/Renderer.h"
+#include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
 #include <tinyxml2.h>
@@ -359,25 +360,25 @@ static inline void LerpColour(const uint8_t a[4], const uint8_t b[4],
 }
 
 void PSPParticleManager::Draw(int layer) {
-    static std::vector<QUADCUSTOMVERTEX> s_verts;
+    if (m_Emitters.empty()) return;
 
-    // Group particles by their parent template so we can batch one DrawTriList
-    // call per template/texture/blend-mode pair.
-    // We iterate emitters and split by particle template inline to avoid a
-    // full sort — in practice each emitter typically uses one or two
-    // templates, so inner tracking of "current template" is enough.
+    // Reset world matrix + upload MVP so DrawTriList uses the current ortho.
+    // Matches binary Draw 0x114c64: "MatrixStack::Reset + UploadCurrentMatrices".
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    static std::vector<QUADCUSTOMVERTEX> s_verts;
     const PSPParticleTemplate* curTmpl = nullptr;
 
     auto flush = [&]() {
-        if (s_verts.empty() || !curTmpl) { s_verts.clear(); return; }
-        if (curTmpl->m_Texture.IsValid()) {
+        if (!s_verts.empty() && curTmpl && curTmpl->m_Texture.IsValid()) {
             // Blend mode: source = GL_SRC_ALPHA, dest from template (default
             // GL_ONE_MINUS_SRC_ALPHA if unset).
             GLenum dstFactor = curTmpl->m_BlendMode ? (GLenum)curTmpl->m_BlendMode
                                                     : GL_ONE_MINUS_SRC_ALPHA;
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, dstFactor);
-
             glBindTexture(GL_TEXTURE_2D, curTmpl->m_Texture->m_TexId);
             if (Renderer* r = Renderer::GetInstance()) {
                 r->DrawTriList(s_verts.data(), (int)s_verts.size());
@@ -395,7 +396,7 @@ void PSPParticleManager::Draw(int layer) {
             // m_UseDepth matches the requested layer.
             if (p.m_pTemplate && p.m_pTemplate->m_UseDepth != layer) continue;
 
-            // Group flush on template change
+            // Group flush on template change (batches DrawTriList per texture)
             if (p.m_pTemplate != curTmpl) {
                 flush();
                 curTmpl = p.m_pTemplate;
@@ -406,69 +407,63 @@ void PSPParticleManager::Draw(int layer) {
             if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
 
             // Two-segment colour + size lerp: start→mid for t∈[0,0.5),
-            // mid→end for t∈[0.5,1]. Split matches binary's piecewise-linear
-            // interpolation over age (Draw 0x114c64).
+            // mid→end for t∈[0.5,1]. Matches binary Draw piecewise linear.
             uint8_t col[4];
             float size;
             if (t < 0.5f) {
-                float u = t * 2.0f;             // 0..1 across first half
+                float u = t * 2.0f;
                 LerpColour(p.m_ColourStart, p.m_ColourMid, u, col);
                 size = p.m_SizeStart + (p.m_SizeMid - p.m_SizeStart) * u;
             } else {
-                float u = (t - 0.5f) * 2.0f;    // 0..1 across second half
+                float u = (t - 0.5f) * 2.0f;
                 LerpColour(p.m_ColourMid, p.m_ColourEnd, u, col);
                 size = p.m_SizeMid + (p.m_SizeEnd - p.m_SizeMid) * u;
             }
             uint32_t packed = PackBGRA(col);
+
             float aspect = curTmpl ? curTmpl->m_AspectRatio : 1.0f;
             if (aspect <= 0.0f) aspect = 1.0f;
             float hx = size * 0.5f * aspect;
             float hy = size * 0.5f;
 
-            // CycleX / CycleY size modulation — cos wave around 1.0 per axis
-            if (p.m_CycleXRate != 0.0f)
-                hx *= cosf(p.m_CycleXPhase);
-            if (p.m_CycleYRate != 0.0f)
-                hy *= cosf(p.m_CycleYPhase);
+            // CycleX / CycleY size modulation — cos wave per axis
+            if (p.m_CycleXRate != 0.0f) hx *= cosf(p.m_CycleXPhase);
+            if (p.m_CycleYRate != 0.0f) hy *= cosf(p.m_CycleYPhase);
 
             // RotCycle oscillation — sin wave adds to base rotation
             float effectiveRot = p.m_Rotation;
             if (p.m_RotCycleAmp != 0.0f)
                 effectiveRot += p.m_RotCycleAmp * sinf(p.m_RotCyclePhase);
 
-            // Rotation (pre-computed columns from effectiveRot)
-            float ca = cosf(effectiveRot);
-            float sa = sinf(effectiveRot);
-            // Rotated half-extents
-            float dxX =  ca * hx, dxY = sa * hx;
-            float dyX = -sa * hy, dyY = ca * hy;
+            const float ca = cosf(effectiveRot);
+            const float sa = sinf(effectiveRot);
+            const float dxX =  ca * hx, dxY = sa * hx;
+            const float dyX = -sa * hy, dyY = ca * hy;
 
-            float px = p.m_Pos.x;
-            float py = p.m_Pos.y;
+            // HUD offset: entity positions are in centred coords, the
+            // FruitCamera ortho is centred on (480, 320), so we shift by
+            // that amount to map centred → screen space. Matches the offset
+            // Fruit::Draw and Bomb::Draw add to their own draw positions.
+            float px = p.m_Pos.x + 480.0f;
+            float py = p.m_Pos.y + 320.0f;
             const float pz = p.m_Pos.z;
 
             // Grid-lock: binary snaps pos around the (480, 320) HUD origin
             // when the template declares non-zero cell sizes. Used by
             // rim_spark (menu rim flash) to keep particles aligned.
-            // Matches Draw 0x114c64 gridLock block.
             if (curTmpl) {
                 const float gx = curTmpl->m_GridLockStart;
                 const float gy = curTmpl->m_GridLockEnd;
-                if (gx > 0.0f)
-                    px = floorf((px + 480.0f) / gx + 0.5f) * gx - 480.0f;
-                if (gy > 0.0f)
-                    py = floorf((py + 320.0f) / gy + 0.5f) * gy - 320.0f;
+                if (gx > 0.0f) px = floorf(px / gx + 0.5f) * gx;
+                if (gy > 0.0f) py = floorf(py / gy + 0.5f) * gy;
             }
 
-            // 4 corners
-            struct C { float x, y, u, v; } corners[4] = {
+            const struct C { float x, y, u, v; } corners[4] = {
                 { px - dxX - dyX, py - dxY - dyY, 0.0f, 0.0f }, // TL
                 { px + dxX - dyX, py + dxY - dyY, 1.0f, 0.0f }, // TR
                 { px + dxX + dyX, py + dxY + dyY, 1.0f, 1.0f }, // BR
                 { px - dxX + dyX, py - dxY + dyY, 0.0f, 1.0f }, // BL
             };
-
-            // Two triangles, 6 verts (TriList)
             const int tri[6] = { 0, 1, 2, 0, 2, 3 };
             for (int i = 0; i < 6; ++i) {
                 const C& c = corners[tri[i]];
