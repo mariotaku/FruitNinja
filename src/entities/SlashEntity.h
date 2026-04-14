@@ -67,7 +67,11 @@ public:
     // full trail instead of just the m_HeadPos/m_TailPos pair — needed
     // because OnTouchActive may interpolate many points in one frame on
     // fast swipes). Returns true on the first intersecting segment.
-    bool CollideWithSphere(const Mortar::ColSphere& sphere) const;
+    // Returns true if any trail segment intersects the sphere. On a hit,
+    // writes the segment delta (end - start) into outBladeVel so the caller
+    // can derive both magnitude and direction for OnSliced.
+    bool CollideWithSphere(const Mortar::ColSphere& sphere,
+                           Vec3& outBladeVel) const;
 
     // True while the blade has at least 2 trail points and is not
     // deactivating — used to gate collision checks.

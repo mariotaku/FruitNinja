@@ -209,13 +209,21 @@ void MenuButton::Update(float dt) {
     // velocity so accumulated gravity from Fruit::Update doesn't carry
     // over. Exception: a sliced fruit piece is released — its two
     // halves fall away under their own halfVel and gravity instead of
-    // staying pinned.
+    // staying pinned. When the slice edge fires, also trigger the
+    // click callback so menu-fruit buttons (Play / Dojo) transition
+    // on slash-through, matching the binary's menu button flow.
     if (m_pEntity && m_pEntity->IsActive()) {
         const bool sliced =
             m_pFruitPiece && m_pFruitPiece->m_bSliced;
         if (!sliced) {
             m_pEntity->pos = pos;
             m_pEntity->vel = Vec3(0, 0, 0);
+        } else if (!m_bRemovalPending && m_ClickCallback) {
+            // Rising-edge: fire once, then clear the callback to
+            // prevent re-entry on the next frame.
+            auto cb = m_ClickCallback;
+            m_ClickCallback = nullptr;
+            cb();
         }
     }
 

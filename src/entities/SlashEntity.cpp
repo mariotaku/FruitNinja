@@ -385,8 +385,9 @@ void SlashEntity::Update(float dt) {
                 // Only fruit (0) and bomb (1) participate — matches binary.
                 if (e->entityType != 0 && e->entityType != 1) continue;
 
-                if (CollideWithSphere(e->m_Col)) {
-                    e->OnSliced(Vec3(0, 0, 0));
+                Vec3 bladeVel;
+                if (CollideWithSphere(e->m_Col, bladeVel)) {
+                    e->OnSliced(bladeVel);
                 }
             }
         }
@@ -403,15 +404,26 @@ void SlashEntity::Update(float dt) {
 // OnTouchActive interpolates into many POINT_SPACING=64 sub-points within a
 // single frame — still registers the hit.
 // ---------------------------------------------------------------------------
-bool SlashEntity::CollideWithSphere(const Mortar::ColSphere& sphere) const {
-    if (m_State == 0 || m_NumPoints < 2) return false;
+bool SlashEntity::CollideWithSphere(const Mortar::ColSphere& sphere,
+                                     Vec3& outBladeVel) const {
+    if (m_State == 0 || m_NumPoints < 2) {
+        outBladeVel = Vec3(0, 0, 0);
+        return false;
+    }
 
+    // Scan every segment; return the direction+length of the one that hit so
+    // OnSliced can derive impulse magnitude AND slice angle. Binary path:
+    // CollideWithEntity (0x17B570) uses the per-frame blade delta — one
+    // segment per update. The port has N interpolated sub-segments per frame,
+    // so we pick the segment that actually intersects.
     for (int i = 0; i + 1 < m_NumPoints; ++i) {
         Mortar::ColLine seg(m_Points[i].center, m_Points[i + 1].center);
         if (sphere.IntersectsLine(seg)) {
+            outBladeVel = m_Points[i + 1].center - m_Points[i].center;
             return true;
         }
     }
+    outBladeVel = Vec3(0, 0, 0);
     return false;
 }
 

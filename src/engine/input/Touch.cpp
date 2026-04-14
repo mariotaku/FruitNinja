@@ -10,7 +10,7 @@
 #include <cstdio>
 
 // Touch slot logging — flip to 0 to silence after diagnosing crashes.
-#define TOUCH_SLOT_LOG 1
+#define TOUCH_SLOT_LOG 0
 #if TOUCH_SLOT_LOG
 #  define SLOG(...) do { printf("[TSLOT] " __VA_ARGS__); fflush(stdout); } while (0)
 #else

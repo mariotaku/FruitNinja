@@ -27,6 +27,14 @@
 namespace FN {
 
 struct SliceEffect {
+    // Default-construct to the free sentinel (timer < 0). MemoryPool::Create
+    // uses `new T[N]` which only default-inits PODs — without this ctor the
+    // backing slots would contain garbage and the Draw sweep would treat
+    // them as live, OOB-indexing SLICE_KEYFRAMES.
+    SliceEffect()
+        : timer(-1.0f), _reserved(0.0f), impulse(0.0f),
+          pos(0, 0, 0), critical(0), angleRaw(0) {}
+
     // +0x00: timer — binary advances this by `dt * 60 * (0.75 if crit)`
     //        each frame; entry removed when timer >= 6.0 (6 keyframes).
     //        Port: use seconds, fade over 0.4s.
