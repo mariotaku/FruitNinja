@@ -26,6 +26,13 @@ void DrawBombHit();
 // frame's timer; clears BombBlasts once the timer drops below 1.55s.
 void UpdateBombHit(float prevTimer);
 
+// Matches ResetGameEntities (binary address pending RE). Walks every
+// live entity in ActorManager and deactivates fruit + bombs. Called
+// from UpdateBombHit at the 1.5s threshold to wipe the screen before
+// the game-over UI appears. The bool gates a "killAll vs partial"
+// mode in the binary — port currently treats both modes identically.
+void ResetGameEntities(bool killAll);
+
 } // namespace FN
 
 #endif

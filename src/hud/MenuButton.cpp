@@ -122,10 +122,23 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                 } else {
                     // Bomb entity: disable physics and scale by 0.85 (DAT_0014f1a0)
                     // MenuButton::Init (0x0014ee40): writes 0 to bomb+0x80 (m_bMovement)
-                    // then bomb->scale *= 0.85
+                    // then bomb->scale *= 0.85.
+                    //
+                    // Binary then calls Bomb::SetCallback (0x0017121c) which
+                    // sets m_bMenuBombHit = 1 (marking it as a menu-decoration
+                    // bomb) and installs the click callback into the bomb's
+                    // m_HitCallback delegate. When the player slices this
+                    // bomb, Bomb::CollisionResponse takes the else branch
+                    // and fires the callback — for the Quit button this
+                    // triggers QuitGamesCallback. See
+                    // docs/engine/bomb-collision-response.md.
                     Bomb* bomb = static_cast<Bomb*>(e);
                     bomb->m_bMovement = 0;
                     bomb->scale = bomb->scale * BOMB_MENU_SCALE;
+                    bomb->m_bMenuBombHit = 1;
+                    if (clickCb) {
+                        bomb->m_HitCallback = clickCb;
+                    }
                 }
 
                 // Random rotation speed (8-12 deg/frame, random direction)

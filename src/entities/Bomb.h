@@ -11,6 +11,7 @@
 #include "Entity.h"
 #include "math/Vec3.h"
 #include "render/gl_funcs.h"
+#include <functional>
 
 namespace Mortar { struct PSPParticleEmitter; }
 
@@ -22,8 +23,12 @@ public:
     // +0x3c: BombBlast spawn timer; Init = 0.6 (DAT_001726ac)
     float m_SpawnTimer;
 
-    // +0x40..+0x63: hit callback delegate (port: stubbed)
-    // Delegate0<void> hitCallback;
+    // +0x40..+0x63: hit callback delegate. Binary stores a 0x24-byte
+    // BaseDelegate; port uses std::function for the callable. Fired
+    // when CollisionResponse hits the menu-rehit branch (player slices
+    // a menu-decoration bomb that's already been registered as hit).
+    // Used by Quit button to chain into the QuitGame flow.
+    std::function<void()> m_HitCallback;
 
     // +0x64: bomb variant — 0=normal, 2=multiplayer
     int m_BombVariant;
