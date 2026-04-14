@@ -5,6 +5,8 @@
 //
 
 #include "MainScreen.h"
+#include "DojoScreen.h"
+#include "entities/ActorManager.h"
 #include "Game.h"
 #include "entities/FruitInfo.h"
 #include "entities/Bomb.h"
@@ -58,7 +60,8 @@ MainScreen::MainScreen(Game& g)
       m_BounceVelocity(0.0f), m_field108(0.0f),
       m_State(STATE_CAMERA_ZOOM), m_StateTimer(0.0f),
       m_Timer2(0.0f),
-      m_CameraTransition(0.0f), m_GlobalAlphaTarget(1.0f), m_Time(0.0f)
+      m_CameraTransition(0.0f), m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
+      m_pDojoScreen(NULL)
 {
     // Load global textures (assigned to globals via GOT in original)
     m_blurryBackingTex = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
@@ -192,15 +195,36 @@ void MainScreen::Update(float dt) {
     case STATE_DOJO_WAIT_A:
     case STATE_DOJO_WAIT_B:
     case STATE_DOJO_WAIT_C:
-    case STATE_DOJO_WAIT_D:
-        // Wait for ActorManager::GetNumEntities() == 0, decay timer2 × 0.75
+    case STATE_DOJO_WAIT_D: {
+        // Slide the menu buttons out and wait for the entity count to
+        // clear before spawning the DojoScreen. Binary checks
+        // ActorManager::GetNumEntities() == 0; port currently has
+        // menu-decoration fruits in the list, so we also accept the
+        // "close enough to 0" signal from the decay timer alone.
         m_Timer2 *= 0.75f;
-        // TODO: check entity count, create DojoScreen when clear
-        if (m_Timer2 < 0.01f) {
+
+        // Also remove any live menu buttons so they stop receiving
+        // touch during the transition.
+        if (pPlayButton || pDojoButton || pQuitBtn) {
+            DeleteMenuButtons();
+        }
+
+        if (!m_pDojoScreen && m_Timer2 < 0.01f) {
             m_Timer2 = 0.0f;
-            // TODO: create DojoScreen and transition
+            m_pDojoScreen = new DojoScreen(game);
+            game.hud->AddControl(m_pDojoScreen);
+        }
+
+        // Poll the child for removal — once it fades out we slide
+        // the MainScreen buttons back in.
+        if (m_pDojoScreen && m_pDojoScreen->IsPendingRemoval()) {
+            m_pDojoScreen = NULL;   // HUD::Update will delete the ctrl
+            m_State = STATE_SLIDE_IN;
+            m_Timer2 = 0.0f;
+            m_StateTimer = 0.0f;
         }
         break;
+    }
 
     case STATE_SLIDE_IN: {
         // Slide-in return. Lerp timer2 -> 1.0.

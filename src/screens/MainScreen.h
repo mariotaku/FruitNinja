@@ -14,6 +14,7 @@
 
 struct Game;
 class MenuButton;
+class DojoScreen;
 
 // State enum (verified from binary)
 enum MainScreenState {
@@ -109,6 +110,12 @@ private:
     float m_CameraTransition;
     float m_GlobalAlphaTarget;
     float m_Time;
+
+    // Current DojoScreen child (when state is STATE_DOJO_WAIT_B or
+    // already in Dojo). NULL when no Dojo is open. MainScreen polls
+    // the child for m_bPendingRemoval and transitions to SLIDE_IN
+    // once it has cleared out.
+    DojoScreen* m_pDojoScreen;
 
     // --- Methods matching docs ---
     void UpdateScreenElements(float cameraTransition, float time);

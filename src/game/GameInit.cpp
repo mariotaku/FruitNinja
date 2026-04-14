@@ -202,7 +202,9 @@ void GameDraw(float dt, bool active) {
         SplatEntity::DrawActive();
         // [TODO: Fruit::DrawShadows / SlashEntity::PreDraw (ghost) /
         //  BombBlast / BombFlash — not yet ported]
-        // [TODO: HUD::Draw(0x80) — layer not in port yet]
+        // Layer 0x80 — DojoScreen + AboutScreen draw here. Binary's
+        // LayerFlags for both screens is 0x80 (verified in RE notes).
+        game->hud->Draw(0x80);
     }
 
     // 7. Background particles (binary calls pm.Draw(-1) here — earliest
