@@ -6,6 +6,49 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# --- Sanitizers (opt-in) ---
+#
+# AddressSanitizer + UBSan. Caught a real bug already (HUD::RemoveControl
+# leak in commit 8ea6556). Only works with clang on Windows — the
+# MSYS2 ucrt64 GCC ships sanitizer codegen but not the libasan runtime.
+# MSYS2 clang64 ships libclang_rt.asan_dynamic-x86_64.dll which works.
+#
+# Build:
+#   cmake -G "MSYS Makefiles" -B build-asan -DENABLE_ASAN=ON \
+#         -DCMAKE_C_COMPILER=/clang64/bin/clang.exe \
+#         -DCMAKE_CXX_COMPILER=/clang64/bin/clang++.exe
+#   cmake --build build-asan -j$(nproc)
+#
+# Run (the asan DLL must be on PATH — clang64/bin already has it
+# if you launch from the MSYS2 CLANG64 shell, otherwise prefix:):
+#   PATH="/clang64/bin:$PATH" ./build-asan/fruit-ninja.exe
+#
+# Useful runtime flags:
+#   ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1
+#   LSAN_OPTIONS=verbosity=1
+option(ENABLE_ASAN "Enable AddressSanitizer + UBSan (clang only)" OFF)
+if (ENABLE_ASAN)
+    if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        message(WARNING
+            "ENABLE_ASAN=ON but compiler is ${CMAKE_CXX_COMPILER_ID}. "
+            "MSYS2 ucrt64 GCC does not ship libasan; configure with "
+            "-DCMAKE_CXX_COMPILER=/clang64/bin/clang++.exe instead.")
+    endif()
+    message(STATUS "AddressSanitizer + UBSan enabled")
+    add_compile_options(
+        -fsanitize=address
+        -fsanitize=undefined
+        -fno-omit-frame-pointer
+        -fno-sanitize-recover=all
+        -O1
+        -g
+    )
+    add_link_options(
+        -fsanitize=address
+        -fsanitize=undefined
+    )
+endif()
+
 # --- Dependencies ---
 
 find_package(SDL2 REQUIRED)
