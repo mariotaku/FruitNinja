@@ -578,13 +578,14 @@ void MainScreen::Hide() {
 
 void MainScreen::RemoveButton(MenuButton*& btn) {
     if (btn) {
-        // Mark for HUD::Update to destroy next frame. That path fires
-        // the destructor → MenuButton::Release → entity->Deactivate,
-        // cleaning up both the button itself AND the bomb/fruit entity
-        // attached as m_pEntity. Calling HUD::RemoveControl directly
-        // here leaks both because it just unlinks from the list
-        // without deleting.
-        btn->SetPendingRemoval();
+        // Trigger the fade-out animation. The button decays its own
+        // alpha over ~16 frames in Update, then sets m_bPendingRemoval
+        // when alpha hits zero — at which point HUD::Update fires the
+        // destructor → MenuButton::Release → entity->Deactivate,
+        // cleaning up both the button AND the attached bomb/fruit
+        // entity. Calling HUD::RemoveControl directly would leak
+        // both because it just unlinks from the list without deleting.
+        btn->StartFadeOut();
         btn = NULL;
     }
 }

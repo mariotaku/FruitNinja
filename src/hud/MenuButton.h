@@ -137,6 +137,14 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override;
     void Release() override;
 
+    // Begin the fade-out-then-self-remove animation. Sets
+    // m_bRemovalPending; Update will then decay m_DrawColour.a per
+    // frame and set m_bPendingRemoval once alpha hits near zero,
+    // at which point HUD::Update deletes the control. Also disables
+    // touch input via m_bInteractive so the user can't tap a fading
+    // button mid-transition.
+    void StartFadeOut();
+
     // Matches MenuButton::LoadContent (0x148030) — called once from GameInitialise step 23
     static void LoadContent() {} // TODO
 
