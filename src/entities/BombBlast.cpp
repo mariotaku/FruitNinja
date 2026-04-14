@@ -200,30 +200,27 @@ void BombBlast::DrawActiveBlasts() {
         //   v5 = pos - A * 0.25 (near-centre on -A side)
         // Triangle list: (v0,v1,v2), (v3=v2, v4=v1, v5).
         //
-        // UV mapping: the binary writes a single UV to all 6 verts
-        // (flat-colour sample), but bomb_explode.tex is a 32x128
-        // gold→white vertical gradient with no shape data. The port
-        // maps full texture across the quad so the gradient gives the
-        // blast a soft near-centre and brighter far-end — more visible
-        // than a single-texel flat fill.
+        // UV mapping: binary-accurate single-texel sample. DrawBlast
+        // (0x171354) writes u=1.0, v=0.0 to all 6 verts, making the
+        // quad a flat colour equal to the (1,0) texel of the source
+        // texture. bomb_explode.tex is a 32x128 gold→white gradient,
+        // so (1.0, 0.0) samples the right edge of row 0 which is
+        // the gold start colour. The port reproduces that exactly
+        // so the blast tint matches the binary's starburst look.
         v[0].x = px + ax + bx;  v[0].y = py + ay + by;  v[0].z = pz;
-        v[0].u = 1.0f;  v[0].v = 0.0f;   // far +A → texture top (brightest)
         v[1].x = px - ax + bx;  v[1].y = py - ay + by;  v[1].z = pz;
-        v[1].u = 0.0f;  v[1].v = 0.0f;   // far -A → texture top
         v[2].x = px + ax * 0.25f;  v[2].y = py + ay * 0.25f;  v[2].z = pz;
-        v[2].u = 1.0f;  v[2].v = 1.0f;   // near +A → texture bottom (gold)
         v[3].x = v[2].x;  v[3].y = v[2].y;  v[3].z = v[2].z;
-        v[3].u = v[2].u;  v[3].v = v[2].v;
         v[4].x = v[1].x;  v[4].y = v[1].y;  v[4].z = v[1].z;
-        v[4].u = v[1].u;  v[4].v = v[1].v;
         v[5].x = px - ax * 0.25f;  v[5].y = py - ay * 0.25f;  v[5].z = pz;
-        v[5].u = 0.0f;  v[5].v = 1.0f;   // near -A → texture bottom
 
         for (int i = 0; i < VERTS_PER_BLAST; ++i) {
             v[i].nx = 0.0f;
             v[i].ny = 0.0f;
             v[i].nz = 1.0f;
             v[i].colour = col;
+            v[i].u = 1.0f;   // binary: all verts at (1, 0)
+            v[i].v = 0.0f;
         }
 
         blastCount++;

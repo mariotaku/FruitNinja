@@ -111,6 +111,11 @@ void GameInitialise() {
     // Step 24: Fruit::LoadInfo (0x17987c) — parses Data/xml/fruitlist.xml
     Fruit::LoadInfo();
 
+    // Fruit::LoadFruitModels (0x1794e0) — load per-type half meshes
+    // (<name>_<c>_piece_{1,2}.mmd) so sliced fruit renders with real
+    // half geometry. Must run after LoadInfo so FRUIT_INFO is populated.
+    Fruit::LoadFruitModels();
+
     // Step 25: LoadContent calls (binary: 0x10c41a region)
     SplatEntity::LoadContent();
     SplatEntity::CreatePool(48);     // binary calls CreatePool(30-50)
