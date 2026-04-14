@@ -12,7 +12,7 @@
 
 // Touch event logging — flip to 0 to silence after diagnosing crashes
 // caused by stray mouse/finger events on startup.
-#define TOUCH_LOG 1
+#define TOUCH_LOG 0
 #if TOUCH_LOG
 #  define TLOG(...) do { printf("[TOUCH] " __VA_ARGS__); fflush(stdout); } while (0)
 #else

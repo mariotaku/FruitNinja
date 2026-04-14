@@ -8,6 +8,7 @@
 #include "asset/TextureManager.h"
 #include "particle/PSPParticleManager.h"
 #include "hud/SliceEffect.h"
+#include "game/BombHit.h"
 #include "Game.h"
 #include "math/math3d.h"
 #include <cstdlib>
@@ -99,12 +100,16 @@ void Fruit::Init(int param1, int fruitType, int param3) {
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
         scale = Vec3::One() * fruitScale;
 
-        // Collision sphere (SetFruitType @ 0x17621c):
-        //   radius = (base + COL_RADIUS_FACTOR * collisionScale) * fruitScale
-        // where base = 1.0 and COL_RADIUS_FACTOR = 0.52.
+        // Collision sphere (SetFruitType @ 0x0017621c, verified 2026-04-15):
+        //   radius = (collisionBase + FRUIT_COLLISION_FACTOR * collisionScale)
+        //            * scaleParam
+        // where FRUIT_COLLISION_FACTOR = 0.52 @ 0x00176340. scaleParam is
+        // the `scale` argument to SetFruitType — typically 1.0 at the
+        // common call path, so the port hard-codes it. Do NOT multiply by
+        // fruitScale (m_Scale * 0.01) — that was a port-specific bug that
+        // shrank fruit hitboxes by 25-50% and made slicing feel unresponsive.
         const float colScale = info ? info->m_CollisionScale : 25.0f;
-        const float radius   = (COL_RADIUS_BASE + COL_RADIUS_FACTOR * colScale)
-                             * fruitScale;
+        const float radius   = COL_RADIUS_BASE + COL_RADIUS_FACTOR * colScale;
         m_Col.center = Vec3(pos.x, pos.y, 0.0f);
         m_Col.radius = radius;
     }
@@ -335,25 +340,39 @@ bool Fruit::CheckOffscreen() const {
     return false;
 }
 
-// Matches Fruit::CollisionResponse (0x1780b0), minimal v1 port.
-// Full pipeline in docs/engine/fruit-slice-notes.md. This subset covers:
+// Matches Fruit::CollisionResponse (0x1780b0). Visual-only pipeline:
 //   - guard (already sliced / timer positive → ignore)
+//   - critical / special-fruit branch selection for impulse clamp + timer
 //   - slice angle/impulse/pos capture from bladeVel
-//   - juice emitter spawn from FRUIT_INFO.m_SlicedHash
-//   - timer set to SLICE_TIMER_BASE — Update counts down → Slice()
-// Skipped for v1: critical hit chance, SFX, AddSlice visual, achievement,
-// score, power-up spawn, coin spawn, MissControl, online multiplayer.
+//   - one-shot impact particle emitter rotated by blade angle
+//   - persistent juice emitters from FRUIT_INFO.m_SlicedHash
+//   - AddSlice visual (SliceEffect_Add)
+//   - CriticalFlash full-screen tint for critical + special-fruit paths
+// Skipped: SFX, achievements, score, power-ups, coins, MissControl.
 void Fruit::OnSliced(const Vec3& bladeVel) {
     // Guard: already sliced or slice timer is positive → double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return;
 
-    // Clamp blade impulse to [4, 8] (normal fruit). Binary also uses
-    // [6, 8] for critical + special fruit — not ported here.
-    float bladeSpeed = bladeVel.length() * SLICE_BLADE_SCALE;
-    if (bladeSpeed < SLICE_CLAMP_MIN_NRM) bladeSpeed = SLICE_CLAMP_MIN_NRM;
-    if (bladeSpeed > SLICE_CLAMP_MAX)     bladeSpeed = SLICE_CLAMP_MAX;
+    // Critical RNG is gated on WaveManager::RESET_BONUS which isn't ported
+    // — keep critical off for now. Special-fruit path IS deterministic
+    // (FRUIT_INFO.m_Score == 0x32) and runs the rare-fruit branch.
+    const FruitInfo* info = FruitInfo_Get(m_FruitType);
+    const bool isCritical = false;                 // TODO: WaveManager
+    const bool isSpecial  = (info && info->m_Score == 0x32);
 
-    m_SliceTimer   = SLICE_TIMER_BASE;    // 0.03f countdown to split
+    // Blade speed clamp. Critical / special → [6, 8]; normal → [4, 8].
+    float bladeSpeed = bladeVel.length() * SLICE_BLADE_SCALE;
+    const float clampMin = (isCritical || isSpecial)
+                           ? 6.0f : SLICE_CLAMP_MIN_NRM;
+    if (bladeSpeed < clampMin)          bladeSpeed = clampMin;
+    if (bladeSpeed > SLICE_CLAMP_MAX)   bladeSpeed = SLICE_CLAMP_MAX;
+
+    // Slice timer — base 0.03, critical × 2.5 (slow), special × 0.5 (fast).
+    float sliceTimer = SLICE_TIMER_BASE;
+    if (isCritical)      sliceTimer *= 2.5f;
+    else if (isSpecial)  sliceTimer *= 0.5f;
+
+    m_SliceTimer   = sliceTimer;
     m_SliceImpulse = bladeSpeed;
     m_SlicePos     = pos;
     // Atan2Idx: 16-bit angle index (65536 = 360°). Port uses std atan2
@@ -361,27 +380,50 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
     const float rad = atan2f(bladeVel.x, bladeVel.y);
     m_SliceAngle   = (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
 
-    printf("[Fruit] OnSliced: type=%d pos=(%.1f,%.1f) impulse=%.2f angle=0x%04x\n",
-           m_FruitType, pos.x, pos.y, m_SliceImpulse, m_SliceAngle);
+    printf("[Fruit] OnSliced: type=%d pos=(%.1f,%.1f) impulse=%.2f angle=0x%04x "
+           "crit=%d special=%d\n",
+           m_FruitType, pos.x, pos.y, m_SliceImpulse, m_SliceAngle,
+           isCritical, isSpecial);
 
-    // Spawn the juice particle emitters (one per future half).
-    // FRUIT_INFO.m_SlicedHash is computed by FruitInfo_Load as
-    // StringHash("%s_sliced") — the binary uses this to look up the
-    // per-fruit juice particle template (e.g. "apple_sliced"). If no
-    // matching template exists AddEmitter returns NULL, which is fine.
-    const FruitInfo* info = FruitInfo_Get(m_FruitType);
+    // Impact particle emitter — one-shot, rotated by the blade direction.
+    // Uses FRUIT_INFO.m_NameHash (e.g. "apple") as the template lookup. The
+    // emitter's m_ScaleY / m_field30 pair encodes (cos, sin) of the rotation
+    // applied to each spawned particle's initial velocity — matches binary
+    // AddParticle 0x00115644. Negative-angle sign flip mirrors the binary:
+    //   e->m_CosAngle =  CosIdx(-sliceAngle);
+    //   e->m_SinAngle = -SinIdx(-sliceAngle);  = SinIdx(sliceAngle)
     if (info) {
         Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+        const float sliceRad = (float)(int16_t)m_SliceAngle *
+                               (6.2831853f / 65536.0f);
+        Mortar::PSPParticleEmitter* eHit = pm.AddEmitter(
+            info->m_NameHash, NULL, /*persistent=*/false);
+        if (eHit) {
+            eHit->m_Pos      = pos;
+            eHit->m_ScaleY   =  cosf(sliceRad);   // cos θ
+            eHit->m_field30  =  sinf(sliceRad);   // sin θ
+        }
+
+        // Persistent juice emitters — one per future half. m_SlicedHash
+        // resolves to "<name>_sliced" (e.g. "apple_sliced").
         m_pEmitter1 = pm.AddEmitter(info->m_SlicedHash, NULL, /*persistent=*/true);
         m_pEmitter2 = pm.AddEmitter(info->m_SlicedHash, NULL, /*persistent=*/true);
         if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
         if (m_pEmitter2) m_pEmitter2->m_Pos = pos;
     }
 
+    // Full-screen tint flash. Critical uses the configured crit colour
+    // (gold/yellow); special-fruit uses half-alpha white. Matches
+    // CriticalFlash @ 0x0016a9a4.
+    if (isCritical) {
+        FN::CriticalFlash(pos, Colour(255, 215, 0, 192));
+    } else if (isSpecial) {
+        FN::CriticalFlash(pos, Colour(255, 255, 255, 128));
+    }
+
     // White slice-line visual — matches AddSlice call in binary
-    // CollisionResponse at 0x17821c. Binary passes a (angle_deg, impulse_scaled)
-    // pair; port keeps the raw 16-bit angle and flat impulse for simplicity.
-    FN::SliceEffect_Add(pos, m_SliceAngle, m_SliceImpulse, /*critical=*/false);
+    // CollisionResponse at 0x17821c.
+    FN::SliceEffect_Add(pos, m_SliceAngle, m_SliceImpulse, isCritical);
 }
 
 // Matches Fruit::Slice (0x176d58), now with the binary's flipSide

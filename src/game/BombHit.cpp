@@ -35,8 +35,66 @@ static const float BLAST_RESET_THR = 1.5f;    // ResetGameEntities trigger
 static Vec3 s_BombHitPos(0, 0, 0);
 static SmartPtr<Mortar::Texture> s_FlashTex;
 
+// CriticalFlash state — one global tint drawn full-screen, fades over
+// ~0.3s. Matches binary CriticalFlash (0x0016a9a4) which stamps two
+// Colour fields on the FruitGame singleton and lets a ScreenTint
+// renderer consume them. Port collapses into a timer + colour pair.
+static Colour s_CritFlashColour(0, 0, 0, 0);
+static float  s_CritFlashTimer = 0.0f;
+static const float CRIT_FLASH_DURATION = 0.3f;
+
 void SetBombHitPos(const Vec3& pos) {
     s_BombHitPos = pos;
+}
+
+void CriticalFlash(const Vec3& pos, const Colour& colour) {
+    (void)pos;  // position stored on binary but the overlay is full-screen
+    s_CritFlashColour = colour;
+    s_CritFlashTimer  = CRIT_FLASH_DURATION;
+}
+
+void UpdateCriticalFlash(float dt) {
+    if (s_CritFlashTimer > 0.0f) {
+        s_CritFlashTimer -= dt;
+        if (s_CritFlashTimer < 0.0f) s_CritFlashTimer = 0.0f;
+    }
+}
+
+void DrawCriticalFlash() {
+    if (s_CritFlashTimer <= 0.0f) return;
+
+    // Lazy-share the bomb flash.tex — the binary's ScreenTint uses a
+    // radial texture too. Load on first use.
+    if (!s_FlashTex.IsValid()) {
+        s_FlashTex = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
+        if (!s_FlashTex.IsValid()) return;
+    }
+
+    // Linear alpha fade from initial → 0 over CRIT_FLASH_DURATION.
+    const float t = s_CritFlashTimer / CRIT_FLASH_DURATION;
+    int a = (int)((float)s_CritFlashColour.a * t);
+    if (a < 0)   a = 0;
+    if (a > 255) a = 255;
+
+    Colour tint(s_CritFlashColour.r, s_CritFlashColour.g,
+                s_CritFlashColour.b, (uint8_t)a);
+
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    // Centred tint disc — large enough to cover the whole screen even
+    // at the edges (flash.tex is radial and fades to transparent).
+    Matrix44 mat = Matrix44::MakeScale(800.0f, 800.0f, 1.0f);
+    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, -10.0f));
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    s_FlashTex->Set();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->DrawQuad(tint);
+    }
+    s_FlashTex->UnSet();
 }
 
 void DrawBombHit() {

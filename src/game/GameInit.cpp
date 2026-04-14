@@ -80,60 +80,52 @@ void GameInit(unsigned long) {
 
 // Matches GameUpdate (0x16bed0, 359 lines) — main gameplay loop
 void GameUpdate(float dt, bool active) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    static int s_FrameCount = 0;
+    const bool earlyFrame = s_FrameCount < 3;
+    if (earlyFrame) printf("GameUpdate[f%d]: enter dt=%.4f active=%d\n", s_FrameCount, dt, active ? 1 : 0);
+    s_FrameCount++;
 
-    // Advance touch state machine (phase -1 → 0 edge transition). Called
-    // before any polling consumers (MenuButton, SlashEntity) so they see
-    // fresh state this frame. Matches binary's Mortar::Touch::Update position
-    // in the early-frame path.
+    Game* game = Game::GetInstance();
+    if (!game) { if (earlyFrame) printf("GameUpdate: game NULL, return\n"); return; }
+
+    if (earlyFrame) printf("GameUpdate: -> Touch::Update\n");
     Mortar::Touch::GetInstance().Update();
 
-    // Tick + update the post-explosion hit timer BEFORE ActorManager
-    // updates bombs, so bombs spawned this frame see the freshly ticked
-    // value. Matches binary UpdateBombHit (0x16a1a8) call order inside
-    // GameUpdate at 0x16bed0.
+    if (earlyFrame) printf("GameUpdate: -> bombHitTimer tick\n");
     const float prevBombTimer = game->bombHitTimer;
     if (game->bombHitTimer > 0.0f) {
         game->bombHitTimer -= dt;
         if (game->bombHitTimer < 0.0f) game->bombHitTimer = 0.0f;
     }
+    if (earlyFrame) printf("GameUpdate: -> UpdateBombHit\n");
     FN::UpdateBombHit(prevBombTimer);
 
-    // Update entities — ONLY when the gameplay is active. Matches binary
-    // GameUpdate's `if (active)` branch: ActorManager::Update is gated on
-    // `active`, so menu entities (e.g. the bomb in the Quit button) don't
-    // accumulate per-frame rotation while the player is on the menu.
-    // See docs/engine/rendering-pipeline.md / GameUpdate RE (0x16bed0).
+    if (earlyFrame) printf("GameUpdate: -> ActorManager::Update active=%d am=%p\n",
+                           active ? 1 : 0, (void*)game->actorManager);
     if (active && game->actorManager)
         game->actorManager->Update(dt);
 
-    // Tick particle system (spawn, physics, emitter lifetime) — always runs
+    if (earlyFrame) printf("GameUpdate: -> PSPParticleManager::Update\n");
     Mortar::PSPParticleManager::GetInstance().Update(dt);
 
-    // Tick splat pool — gated on gameplay active, matches
-    // UpdateActiveSplats call site inside GameUpdate (0x16bed0).
+    // CriticalFlash fade-out timer — single static state in BombHit.cpp.
+    FN::UpdateCriticalFlash(dt);
+
+    if (earlyFrame) printf("GameUpdate: -> SplatEntity::UpdateActive (active=%d)\n", active ? 1 : 0);
     if (active) SplatEntity::UpdateActive(dt);
 
-    // SlashEntity runs in every state (menu + gameplay) so the blade trail
-    // is visible everywhere. The binary gates this on `active` too, but the
-    // port keeps it unconditional for testing.
+    if (earlyFrame) printf("GameUpdate: -> SlashEntity::Update slash=%p\n", (void*)g_pSlashEntity);
     if (g_pSlashEntity) g_pSlashEntity->Update(dt);
 
-    // Update all HUD controls (MainScreen state machine, buttons) — always runs
+    if (earlyFrame) printf("GameUpdate: -> HUD::Update hud=%p\n", (void*)game->hud);
     if (game->hud)
         game->hud->Update(dt);
 
-    // Tick the camera — decays the bomb-hit shake intensity and ramps
-    // the m_Target offset used by SetupPerspective each frame. Without
-    // this call, CreateCameraShake just latches state that nothing
-    // ever reads. Matches binary GameUpdate 0x16bed0 where the camera
-    // update is part of the per-frame entity loop.
+    if (earlyFrame) printf("GameUpdate: -> FruitCamera::UpdateCamera cam=%p\n", (void*)game->pCamera);
     if (game->pCamera)
         game->pCamera->UpdateCamera(dt);
 
-    // TODO: Full 359-line GameUpdate: time scaling, bomb hit, wave speed,
-    //       SlashEntity::PreUpdate, SplatEntity, WaveManager
+    if (earlyFrame) printf("GameUpdate[f%d]: exit\n", s_FrameCount - 1);
 }
 
 // Matches GameDraw (0x16b888, 211 lines) — full render frame.
@@ -164,16 +156,25 @@ void GameUpdate(float dt, bool active) {
 // layer names imply — pm.Draw(-1) actually draws EARLIEST (background)
 // and pm.Draw(1) draws LATER (foreground, over logo).
 void GameDraw(float dt, bool active) {
+    static int s_DrawCount = 0;
+    const bool earlyFrame = s_DrawCount < 3;
+    if (earlyFrame) printf("GameDraw[f%d]: enter dt=%.4f active=%d\n", s_DrawCount, dt, active ? 1 : 0);
+    s_DrawCount++;
+
     Game* game = Game::GetInstance();
-    if (!game) return;
+    if (!game) { if (earlyFrame) printf("GameDraw: game NULL, return\n"); return; }
 
     GameTaskState* ts = GetTaskState();
+    if (earlyFrame) printf("GameDraw: -> SetupPerspective cam=%p\n", (void*)game->pCamera);
 
     // 1. Camera projection
     if (game->pCamera)
         game->pCamera->SetupPerspective(0, false);
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+
+    if (earlyFrame) printf("GameDraw: -> background quad bgTex_valid=%d\n",
+                           ts ? ts->pBackgroundTexture.IsValid() : -1);
 
     // Background texture quad
     // Matches binary: Scale(481, 321, 1) Translate(0, 0, -5599) DrawQuad(cropped UVs)
@@ -194,50 +195,62 @@ void GameDraw(float dt, bool active) {
 
     Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
 
+    if (earlyFrame) printf("GameDraw: -> ActorManager::Draw am=%p\n", (void*)game->actorManager);
     // 2. 3D entities (ActorManager::Draw — fruit, bomb meshes)
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
 
+    if (earlyFrame) printf("GameDraw: -> HUD::BeginDraw hud=%p\n", (void*)game->hud);
     // 3. HUD::BeginDraw
     if (game->hud)
         game->hud->BeginDraw(dt);
 
+    if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x40)\n");
     // 4-6. HUD layers drawn before the logo/particles block
     if (game->hud) {
         game->hud->Draw(0x40);
+        if (earlyFrame) printf("GameDraw: -> SplatEntity::DrawActive\n");
         // SplatEntity::DrawActiveSplats (0x180344) — juice splats on
         // the background plane, drawn behind particles and fruit.
         SplatEntity::DrawActive();
-        // [TODO: Fruit::DrawShadows / SlashEntity::PreDraw (ghost) /
-        //  BombBlast / BombFlash — not yet ported]
+        if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x80)\n");
         // Layer 0x80 — DojoScreen + AboutScreen draw here. Binary's
         // LayerFlags for both screens is 0x80 (verified in RE notes).
         game->hud->Draw(0x80);
     }
 
+    if (earlyFrame) printf("GameDraw: -> pm.Draw(-1)\n");
     // 7. Background particles (binary calls pm.Draw(-1) here — earliest
     //    visible layer, drawn behind the logo and shade)
     pm.Draw(-1);
 
     // 8. [vtable loop over 16 objects — not yet ported]
 
+    if (earlyFrame) printf("GameDraw: -> pm.Draw(0)\n");
     // 9. Mid particles (pm.Draw(0))
     pm.Draw(0);
 
+    if (earlyFrame) printf("GameDraw: -> SlashEntity::Draw\n");
     // 10. SlashEntity blade ribbon — drawn BEFORE MainScreen so the logo
     //     and shade appear in front of the blade. Matches binary DrawSlices
     //     call site at GameDraw 0x16b888.
     if (g_pSlashEntity) g_pSlashEntity->Draw();
 
+    if (earlyFrame) printf("GameDraw: -> SliceEffect_Draw\n");
     // Slice-line effect pool (DrawSlices @ 0x169ac8). Draws the white
     // streak lines spawned by Fruit::CollisionResponse + Fruit::Slice.
-    // Ticked + drawn in the same pass — returns expired slices to the
-    // pool automatically.
     FN::SliceEffect_Draw(dt);
 
+    // Critical / rare-fruit full-screen tint — fades over ~0.3s.
+    // Sits between the slice lines and the MainScreen logo so it
+    // reads as a "flash behind the UI".
+    FN::DrawCriticalFlash();
+
+    if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x01)\n");
     // 11. MainScreen (HUD layer 0x01) — logo + shade on top of the blade
     if (game->hud) game->hud->Draw(0x01);
 
+    if (earlyFrame) printf("GameDraw: -> pm.Draw(1)\n");
     // 12. Foreground particles (pm.Draw(1)) — over logo, under buttons
     pm.Draw(1);
 
@@ -255,6 +268,7 @@ void GameDraw(float dt, bool active) {
         game->hud->Draw(0x200);   // bomb hit overlay
         game->hud->Draw(0x400);   // top layer
     }
+    if (earlyFrame) printf("GameDraw[f%d]: exit\n", s_DrawCount - 1);
 }
 
 // Matches GameExit (0x16cf74, 98 lines) — per-session cleanup

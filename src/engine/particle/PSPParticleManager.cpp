@@ -144,9 +144,23 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
     // @ 0x115644: after picking the random set-level velocity it does an
     // unconditional `local_78.xyz *= 0.5f` before storing onto the particle.
     // Applies to all shape modes (not just two-player as originally guessed).
-    p.m_Vel.x = emitter.m_Vel.x + RandRange(set.m_VelocityMin[0], set.m_VelocityMax[0]) * 0.5f;
-    p.m_Vel.y = emitter.m_Vel.y + RandRange(set.m_VelocityMin[1], set.m_VelocityMax[1]) * 0.5f;
-    p.m_Vel.z = emitter.m_Vel.z + RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]) * 0.5f;
+    float vx = RandRange(set.m_VelocityMin[0], set.m_VelocityMax[0]) * 0.5f;
+    float vy = RandRange(set.m_VelocityMin[1], set.m_VelocityMax[1]) * 0.5f;
+    float vz = RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]) * 0.5f;
+
+    // 2D rotation of the XY velocity by the emitter's (cos, sin) pair stored
+    // in m_ScaleY (+0x2c, cos θ) and m_field30 (+0x30, sin θ). Matches the
+    // binary AddParticle @ 0x00115644 — used to rotate fruit-impact particles
+    // so chunks spray along the blade direction. Identity when the caller
+    // leaves the defaults (cos=1, sin=0).
+    const float cosA = emitter.m_ScaleY;
+    const float sinA = emitter.m_field30;
+    const float rvx = vx * cosA + vy * sinA;
+    const float rvy = vy * cosA - sinA * vx;
+
+    p.m_Vel.x = emitter.m_Vel.x + rvx;
+    p.m_Vel.y = emitter.m_Vel.y + rvy;
+    p.m_Vel.z = emitter.m_Vel.z + vz;
 
     if (tmpl) {
         // NOTE: template m_VelocityMin/Max are NOT an initial-velocity range;

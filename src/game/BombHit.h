@@ -11,8 +11,26 @@
 //
 
 #include "math/Vec3.h"
+#include "math/Colour.h"
 
 namespace FN {
+
+// CriticalFlash (binary 0x0016a9a4) — kicks a full-screen colour tint
+// overlay that fades out over ~0.3s. Binary stamps two Colour fields on
+// the FruitGame singleton (+0xe4, +0xf0) and resets a ScreenTint time
+// scale. Port collapses this into a single static state + fade timer
+// rendered by DrawCriticalFlash during GameDraw. Used by Fruit slice
+// for critical-hit and rare (special fruit) feedback.
+void CriticalFlash(const Vec3& pos, const Colour& colour);
+
+// Per-frame advance of the CriticalFlash fade timer. Called from
+// GameUpdate after ActorManager::Update.
+void UpdateCriticalFlash(float dt);
+
+// Draws the current CriticalFlash tint as a full-screen quad. Called
+// from GameDraw after the slice-line pass and before the HUD overlays,
+// so the flash sits under the logo/buttons. No-op when the timer is 0.
+void DrawCriticalFlash();
 
 // Stores the explosion position for DrawBombHit to centre the flash on.
 // Matches binary g_bombHitData->pos (Vec3 at +0xcc). Set by Bomb::OnSliced.
