@@ -47,16 +47,24 @@ void GameInit(unsigned long) {
     }
 
     // Create MainScreen and add to HUD (matches original GameInit lines 190-200)
+    printf("GameInit: about to new MainScreen\n");
     MainScreen* mainScreen = new MainScreen(*game);
+    printf("GameInit: MainScreen ctor returned, ptr=%p\n", (void*)mainScreen);
     game->hud->AddControl(mainScreen);
+    printf("GameInit: AddControl done\n");
     game->mainScreen = mainScreen;
+    printf("GameInit: mainScreen field set\n");
 
     // Create the single SlashEntity for touch-trail rendering. The binary
     // uses a 2-player array; the port keeps one for single-touch.
     if (!g_pSlashEntity) {
+        printf("GameInit: about to new SlashEntity\n");
         g_pSlashEntity = new SlashEntity();
+        printf("GameInit: SlashEntity ctor returned\n");
         g_pSlashEntity->Init();
+        printf("GameInit: SlashEntity Init done\n");
     }
+    printf("GameInit: complete\n");
 
     // Touch input is now polled from Mortar::Touch inside MenuButton::Update
     // and SlashEntity::Update — no InputManager callbacks needed. The

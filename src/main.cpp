@@ -7,6 +7,12 @@
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
 
+    // Disable stdout buffering so log lines flush immediately. Without
+    // this, line-buffered stdout silently drops the last few logs when
+    // the process crashes (SEGV doesn't flush). Critical for debugging.
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;
