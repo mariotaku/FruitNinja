@@ -28,6 +28,47 @@
 - Run: `./build/fruit-ninja.exe`
 - Required MSYS2 packages: `mingw-w64-x86_64-gcc`, `mingw-w64-x86_64-cmake`, `mingw-w64-x86_64-SDL2`
 
+## AddressSanitizer build (clang64)
+
+Use this for catching heap UAF, OOB, double-free, stack-buffer-overflow,
+and UBSan issues. The default UCRT64 GCC ships sanitizer codegen but no
+`libasan` runtime; clang64's `compiler-rt` does ship the ASAN runtime.
+
+Required MSYS2 packages (parallel to UCRT64 — does not conflict):
+```
+pacman -S mingw-w64-clang-x86_64-clang \
+          mingw-w64-clang-x86_64-compiler-rt \
+          mingw-w64-clang-x86_64-cmake \
+          mingw-w64-clang-x86_64-make \
+          mingw-w64-clang-x86_64-SDL2
+```
+
+Configure + build:
+```
+PATH="/clang64/bin:$PATH" /clang64/bin/cmake.exe -G "MSYS Makefiles" \
+    -B build-asan -DENABLE_ASAN=ON \
+    -DCMAKE_C_COMPILER=/clang64/bin/clang.exe \
+    -DCMAKE_CXX_COMPILER=/clang64/bin/clang++.exe \
+    -DCMAKE_MAKE_PROGRAM=/clang64/bin/mingw32-make.exe
+PATH="/clang64/bin:$PATH" /clang64/bin/cmake.exe --build build-asan -j$(nproc)
+```
+
+Run (the ASAN DLL must be on PATH — `/clang64/bin/libclang_rt.asan_dynamic-x86_64.dll`):
+```
+PATH="/clang64/bin:$PATH" \
+ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1" \
+./build-asan/fruit-ninja.exe
+```
+
+**Caveats**:
+- LeakSanitizer is **not supported** on Windows MinGW — the
+  `detect_leaks=1` flag is silently ignored. ASAN catches use-after-free
+  and OOB but not pure leaks. Use Dr. Memory if you need leak detection.
+- Performance is 2-5× slower than the regular build but still playable.
+- Builds into `build-asan/` to keep separate from the regular `build/`.
+- Don't mix object files between the two — they have different ABIs
+  (clang vs gcc) and different stack layouts.
+
 ## Original Binary
 - ARM32 Little-Endian ELF (Samsung Bada OS), Halfbrick Mortar Engine
 - 480x320 landscape (on portrait 480x800 Bada device, touch/camera rotated 90°), entry point: OspMain
