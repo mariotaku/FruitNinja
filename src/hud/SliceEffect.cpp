@@ -10,46 +10,92 @@
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
+#include "asset/Mesh.h"
+#include "asset/MeshManager.h"
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "util/SmartPtr.h"
 #include "util/MemoryPool.h"
+#include "math/Matrix44.h"
+#include "Game.h"
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 namespace FN {
 
-// Binary uses a 6-frame keyframe animation over ~0.1s at 60Hz; port
-// approximates with a simple linear fade over FADE_TIME seconds.
-static const float FADE_TIME   = 0.35f;
-static const float SLICE_LEN   = 80.0f;    // streak length in world units
-static const float SLICE_HALF_H =  6.0f;   // streak half-height
+// Binary DrawSlices (0x169ac8) timing constants, resolved from
+// DAT_00169c38 = 40.0 and DAT_00169c3c = 182.0.
+//
+//   timer += dt * 40.0 * (0.75 if critical else 1.0)
+//   alive while timer < 6.0  (6 keyframes)
+//   frame     = (int)timer   ∈ [0, 5]
+//   frameU    = timer - frame (interpolation fraction)
+//   angle_rad = m_SliceAngle * 182.0 → 16-bit index
+//
+// The 6-frame scale animation lerps between 6 Vec3 keyframes stored
+// in BSS (runtime-initialised — I couldn't locate the init function
+// statically). Port uses the approximation below which models a
+// quick expand → hold → shrink curve reconstructed from the visual
+// shape of slice_fx.mmd: starts near zero, ramps to full at frame 2,
+// holds through frame 4, shrinks by frame 5.
+static const float SLICE_TIME_RATE    = 40.0f;   // DAT_00169c38
+static const float SLICE_TIME_CRIT    = 0.75f;   // crit rate multiplier
+static const float SLICE_MAX_FRAMES   = 6.0f;    // lifetime in keyframes
+static const float SLICE_ANGLE_SCALE  = 182.0f;  // DAT_00169c3c
+
+// Approximated keyframes — replaces the binary's BSS table until I
+// track down its runtime initialiser. Six Vec3 (scale.x, scale.y, scale.z).
+// Sized for the slice_fx.mmd model in centred ortho space.
+static const Vec3 SLICE_KEYFRAMES[6] = {
+    Vec3(0.10f, 0.05f, 1.0f),  // frame 0: barely visible
+    Vec3(0.60f, 0.30f, 1.0f),  // frame 1: quick stretch
+    Vec3(1.00f, 0.50f, 1.0f),  // frame 2: full length
+    Vec3(1.00f, 0.50f, 1.0f),  // frame 3: hold
+    Vec3(0.80f, 0.40f, 1.0f),  // frame 4: begin shrink
+    Vec3(0.30f, 0.15f, 1.0f),  // frame 5: collapse
+};
 
 static Mortar::MemoryPool<SliceEffect> s_Pool;
-static SmartPtr<Mortar::Texture>       s_Tex;
 
-// Scratch vertex buffer for the per-frame batch.
-static const int MAX_SLICES = 32;
-static QUADCUSTOMVERTEX s_Verts[MAX_SLICES * 6];
+// 3D slice-fx models loaded via MeshManager. Matches binary's
+// models[isCritical * 4 + 0xbc] array — port uses two distinct
+// slots. Loaded lazily on first draw if MeshManager is ready.
+static SmartPtr<Mortar::Model> s_SliceFxNormal;
+static SmartPtr<Mortar::Model> s_SliceFxCrit;
 
 // --- Pool / content ----------------------------------------------------
 
 void SliceEffect_CreatePool(int capacity) {
     s_Pool.Create(capacity);
 
-    if (!s_Tex.IsValid()) {
-        // Placeholder: reuse blade.tex so the line looks streak-like.
-        // Once LoadFruitModels is ported we can swap to slice_fx.mmd
-        // for the binary-accurate mesh-based look.
-        s_Tex = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
-        printf("[SliceEffect] CreatePool: capacity=%d tex_valid=%d\n",
-               capacity, s_Tex.IsValid());
+    // Load slice_fx.mmd + slice_fx_crit.mmd via MeshManager. Binary
+    // paths verified from `find FruitNinjaBada/Data/models/effects/`:
+    //   slice_fx.mmd          → normal slash line mesh
+    //   slice_fx_crit.mmd     → critical slash line mesh
+    Game* game = Game::GetInstance();
+    Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
+    if (game && meshMgr) {
+        if (!s_SliceFxNormal.IsValid()) {
+            std::string path = game->data_dir + "/models/effects/slice_fx.mmd";
+            s_SliceFxNormal = meshMgr->Load(path.c_str());
+            printf("[SliceEffect] slice_fx.mmd valid=%d\n",
+                   s_SliceFxNormal.IsValid());
+        }
+        if (!s_SliceFxCrit.IsValid()) {
+            std::string path = game->data_dir + "/models/effects/slice_fx_crit.mmd";
+            s_SliceFxCrit = meshMgr->Load(path.c_str());
+            printf("[SliceEffect] slice_fx_crit.mmd valid=%d\n",
+                   s_SliceFxCrit.IsValid());
+        }
     }
+    printf("[SliceEffect] CreatePool: capacity=%d\n", capacity);
 }
 
 void SliceEffect_DestroyPool() {
     s_Pool.Destroy();
-    s_Tex.Clear();
+    s_SliceFxNormal.Clear();
+    s_SliceFxCrit.Clear();
 }
 
 // --- Spawn -------------------------------------------------------------
@@ -75,100 +121,70 @@ void SliceEffect_Add(const Vec3& pos, uint16_t angle, float impulse, bool critic
 
 // --- Tick + draw -------------------------------------------------------
 
-// Matches DrawSlices (0x169ac8). Port flattened into one pass that
-// advances the timer, builds a fading textured quad per slice, and
-// returns expired slices to the pool.
+// Matches DrawSlices (0x169ac8). Port flattened into one pass that:
+//   - advances each slice timer by dt * 40.0 * (0.75 if crit)
+//   - while timer < 6.0, computes keyframe lerp (frame, u) and draws
+//     slice_fx[_crit].mmd scaled by the lerp + rotated by slice angle
+//   - pushes expired slices back to the pool
 void SliceEffect_Draw(float dt) {
-    if (!s_Tex.IsValid()) return;
-
     const int N = s_Pool.Capacity();
-    int count = 0;
 
-    for (int i = 0; i < N && count < MAX_SLICES; ++i) {
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+
+    for (int i = 0; i < N; ++i) {
         SliceEffect* s = s_Pool.SlotAt(i);
         if (!s) continue;
 
-        // Inactive if timer is negative sentinel. The pool's free list
-        // keeps track of which slots are live, so we identify an
-        // in-use slot by the simple heuristic "timer >= 0 and less than
-        // FADE_TIME". The slotwise check isn't strictly needed with the
-        // stack-based MemoryPool (only popped slots are touched), but
-        // keeping it makes bulk iteration safe even if a caller leaked
-        // a Pop without SliceEffect_Add.
-        if (s->timer < 0.0f || s->timer >= FADE_TIME) continue;
+        // Sentinel sweep: negative timer = free slot.
+        if (s->timer < 0.0f) continue;
 
-        s->timer += dt;
-        if (s->timer >= FADE_TIME) {
+        // Advance timer.
+        const float rate = SLICE_TIME_RATE *
+                           (s->critical ? SLICE_TIME_CRIT : 1.0f);
+        s->timer += dt * rate;
+
+        if (s->timer >= SLICE_MAX_FRAMES) {
+            // Expired — return to pool.
             s->timer = -1.0f;
             s_Pool.Push(s);
             continue;
         }
 
-        // Fade alpha linearly.
-        const float t = s->timer / FADE_TIME;
-        const float alpha = 1.0f - t;
-        uint8_t a = (uint8_t)(alpha * 255.0f);
+        // Pick model variant. Fall back to nothing (no draw) if the
+        // mesh didn't load — SFX-less passthrough.
+        Mortar::Model* model = s->critical ? s_SliceFxCrit.Get()
+                                            : s_SliceFxNormal.Get();
+        if (!model) continue;
 
-        // Tint — red for critical, white otherwise.
-        uint32_t col;
-        if (s->critical) {
-            col = ((uint32_t)a << 24) | 0x000000FF;  // A / B / G / R
-        } else {
-            col = ((uint32_t)a << 24) | 0x00FFFFFF;
-        }
+        // Keyframe lerp from the 6-entry SLICE_KEYFRAMES table.
+        const int   frame0 = (int)s->timer;   // 0..5
+        const int   frame1 = frame0 + 1;
+        const float u      = s->timer - (float)frame0;
+        const Vec3& k0 = SLICE_KEYFRAMES[frame0 < 5 ? frame0 : 5];
+        const Vec3& k1 = SLICE_KEYFRAMES[frame1 < 6 ? frame1 : 5];
+        Vec3 kScale(
+            k0.x + (k1.x - k0.x) * u,
+            k0.y + (k1.y - k0.y) * u,
+            k0.z + (k1.z - k0.z) * u
+        );
 
-        // Rotated quad aligned with slice direction.
+        // Binary writes `RotZ44(Sin(angle*182), Cos(angle*182))` —
+        // multiplying m_SliceAngle (deg-offset) by 182 gives the
+        // 16-bit index. We already store angle as 16-bit raw, so
+        // skip the ×182 and use it directly.
         const float rad = (float)s->angleRaw * (6.2831853f / 65536.0f);
-        const float c   = cosf(rad);
-        const float sn  = sinf(rad);
 
-        const float lx = c * SLICE_LEN * 0.5f;
-        const float ly = sn * SLICE_LEN * 0.5f;
-        const float nx = -sn * SLICE_HALF_H;
-        const float ny =  c  * SLICE_HALF_H;
+        // Build the final transform: scale → rotZ → translate to pos.
+        Matrix44 mat = Matrix44::MakeScale(kScale.x, kScale.y, kScale.z);
+        mat.RotZ44(sinf(rad), cosf(rad));
+        mat.GlobalTranslate44(Vec3(s->pos.x, s->pos.y, s->pos.z));
 
-        const float px = s->pos.x, py = s->pos.y, pz = s->pos.z;
-
-        QUADCUSTOMVERTEX* v = &s_Verts[count * 6];
-        // Two triangles forming a centred strip along (lx, ly) with
-        // perpendicular half-height (nx, ny).
-        v[0].x = px - lx + nx; v[0].y = py - ly + ny; v[0].z = pz;
-        v[0].u = 0.0f;         v[0].v = 0.0f;
-        v[1].x = px + lx + nx; v[1].y = py + ly + ny; v[1].z = pz;
-        v[1].u = 1.0f;         v[1].v = 0.0f;
-        v[2].x = px - lx - nx; v[2].y = py - ly - ny; v[2].z = pz;
-        v[2].u = 0.0f;         v[2].v = 1.0f;
-        v[3] = v[2];
-        v[4] = v[1];
-        v[5].x = px + lx - nx; v[5].y = py + ly - ny; v[5].z = pz;
-        v[5].u = 1.0f;         v[5].v = 1.0f;
-
-        for (int k = 0; k < 6; ++k) {
-            v[k].nx = 0.0f;
-            v[k].ny = 0.0f;
-            v[k].nz = 1.0f;
-            v[k].colour = col;
-        }
-
-        ++count;
+        // Draw through Model::Draw which handles texture + MVP upload.
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_DEPTH_TEST);
+        model->Draw(mat);
     }
-
-    if (count == 0) return;
-
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-    mm.UploadModelViewOnly();
-
-    s_Tex->Set();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_DEPTH_TEST);
-
-    if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawTriList(s_Verts, count * 6);
-    }
-
-    s_Tex->UnSet();
 }
 
 } // namespace FN

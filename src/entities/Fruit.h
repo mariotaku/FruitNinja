@@ -8,6 +8,25 @@
 
 namespace Mortar { struct PSPParticleEmitter; }
 
+// Per-fruit mesh slot layout. Matches the binary's 0x24-byte
+// FruitModelInfo struct allocated by LoadFruitModels (0x1794e0).
+//
+// Binary layout:
+//   +0x00: EffectProperty* prop[2]  (per half piece)
+//   +0x08: EffectProperty* prop[2..3]  (optional outline variants)
+//   +0x10: SmartPtr<Model> m_HalfA   (<name>_<c>_piece_1.mmd)
+//   +0x14: SmartPtr<Model> m_HalfB   (<name>_<c>_piece_2.mmd)
+//   +0x18: SmartPtr<Model> m_OptA    (<name>_<c>_outline.mmd etc)
+//   +0x1c: SmartPtr<Model> m_OptB    (other optional variant)
+//   +0x20: ???
+//
+// Port simplified to just the two pieces actually rendered by the
+// sliced-fruit draw path. Outline/extras deferred.
+struct FruitModelInfo {
+    SmartPtr<Mortar::Model> m_HalfA;   // piece 1
+    SmartPtr<Mortar::Model> m_HalfB;   // piece 2
+};
+
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
 class Fruit : public Entity {
@@ -92,6 +111,16 @@ public:
     // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
     // Parses Data/xml/fruitlist.xml into FRUIT_INFO array
     static void LoadInfo();
+
+    // Matches Fruit::LoadFruitModels (0x1794e0). Allocates the
+    // per-fruit FruitModelInfo array and loads `<name>_<c>_piece_1.mmd`
+    // and `<name>_<c>_piece_2.mmd` for each fruit entry via
+    // MeshManager. Called once from GameInitialise.
+    static void LoadFruitModels();
+
+    // Accessor for a per-fruit pair of half meshes. Returns NULL if
+    // index out of range or LoadFruitModels hasn't run.
+    static const FruitModelInfo* GetFruitModelInfo(int fruitType);
 };
 
 #endif

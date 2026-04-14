@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+#include <vector>
 
 // Binary constants for fruit slicing (docs/engine/fruit-slice-notes.md).
 // Resolved from DATs near CollisionResponse (0x1780b0) and Slice (0x176d58).
@@ -278,17 +279,22 @@ void Fruit::Draw(Renderer& r) {
         Vec3 drawPos(pos.x, pos.y, m_ZPosition);
         DrawOneModel(m_Model.Get(), drawPos, m_Rot1, s);
     } else {
-        // Sliced fruit — draw two halves. In the binary each half has
-        // its own mesh (`_half_a.mmd` / `_half_b.mmd`) loaded via
-        // Fruit::LoadFruitModels (0x1794e0). Those aren't ported yet,
-        // so the port reuses the whole fruit mesh for both halves — the
-        // two copies visibly split apart along m_Rot1/m_Rot2 and drift
-        // with halfVelA/halfVelB, which still reads as "fruit was cut".
-        // TODO: swap in real half meshes once LoadFruitModels is ported.
-        Vec3 drawPosA(pos.x,        pos.y,        m_ZPosition);
+        // Sliced fruit — draw two halves. Matches Fruit::Draw
+        // (0x1791f4) sliced branch which loops over
+        // m_pFruitModels[type]->m_HalfA / m_HalfB.
+        //
+        // If LoadFruitModels hasn't run or a half mesh is missing,
+        // fall back to the whole-fruit mesh so something still shows.
+        const FruitModelInfo* fmi = GetFruitModelInfo(m_FruitType);
+        Mortar::Model* halfA = (fmi && fmi->m_HalfA.IsValid())
+                             ? fmi->m_HalfA.Get() : m_Model.Get();
+        Mortar::Model* halfB = (fmi && fmi->m_HalfB.IsValid())
+                             ? fmi->m_HalfB.Get() : m_Model.Get();
+
+        Vec3 drawPosA(pos.x,         pos.y,         m_ZPosition);
         Vec3 drawPosB(m_SecondPos.x, m_SecondPos.y, m_ZPosition);
-        DrawOneModel(m_Model.Get(), drawPosA, m_Rot1, s);
-        DrawOneModel(m_Model.Get(), drawPosB, m_Rot2, s);
+        DrawOneModel(halfA, drawPosA, m_Rot1, s);
+        DrawOneModel(halfB, drawPosB, m_Rot2, s);
     }
 }
 
@@ -354,33 +360,133 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
     FN::SliceEffect_Add(pos, m_SliceAngle, m_SliceImpulse, /*critical=*/false);
 }
 
-// Matches Fruit::Slice (0x176d58), minimal v1 port. Splits the fruit into
-// two halves moving perpendicular to the blade direction.
-//   halfVelA = sin/cos(sliceAngle + 90°) * impulse * sliceFactor + vel * (1-sliceFactor)
-//   halfVelB = sin/cos(sliceAngle - 90°) * impulse * sliceFactor + vel * (1-sliceFactor)
-// sliceFactor = 1 - fruitInfo[+0x24c]; we don't have that field ported yet,
-// so we use a fixed sliceFactor of 0.7 which gives a clean split visual.
-//
-// Skipped: splat spawning, crit dual-line AddSlice, "special fruit" path,
-// spin boost, quaternion axis-angle composition.
+// Matches Fruit::Slice (0x176d58), now with the binary's flipSide
+// logic, special-fruit ×1.5 impulse, and spin-boost loop on both
+// halves. See docs/engine/fruit-slice-notes.md + raw decompile
+// reference for the exact math.
 void Fruit::Slice() {
+    m_SliceTimer = 0.0f;
+
+    // --- flipSide determination ---
+    // Binary: rotate (0,0,1) by current m_Rot1, compare XY direction
+    // against m_SliceAngle via GetSmallestDelta. If the rotated Z axis
+    // points away from the slice direction, flip the halves' angles.
+    Vec3 slicePlane(0, 0, 1);
+    // Approximate: m_Rot1.ToMatrix44() * (0,0,1) — just extract the
+    // third column of the rotation matrix.
+    Matrix44 rotMat = m_Rot1.ToMatrix44();
+    // Third column of a column-major 4x4 is mat.m[8..10].
+    slicePlane.x = rotMat.m[8];
+    slicePlane.y = rotMat.m[9];
+    slicePlane.z = rotMat.m[10];
+
+    bool flipSide = false;
+    if (fabsf(slicePlane.x) + fabsf(slicePlane.y) > 0.0f) {
+        // 16-bit angle of the rotated-Z XY projection.
+        float rotAngleRad = atan2f(slicePlane.y, slicePlane.x);
+        float sliceAngleRad = (float)(int16_t)m_SliceAngle *
+                              (6.2831853f / 65536.0f);
+        // Wrap both into [-pi, pi] and take signed delta.
+        float delta = rotAngleRad - sliceAngleRad;
+        while (delta >  3.1415926f) delta -= 6.2831853f;
+        while (delta < -3.1415926f) delta += 6.2831853f;
+        if (delta < 0.0f) flipSide = true;
+    }
+
+    // --- Impulse ---
+    float impulse = m_SliceImpulse;
+    int   splatCount = (rand() % 2) + 2;   // Rand(2)+2 → 2 or 3
+
+    // Critical hit gets 1.5× impulse + crit dual-line AddSlice.
+    // Port's critical flag isn't wired yet (always false) — kept for
+    // future when Fruit::OnSliced's critical RNG is implemented.
+    const bool isCritical = false;  // TODO: m_bCriticalEligible
+    if (isCritical) {
+        const float critDegA = (float)m_SliceAngle / -182.0f + 60.0f;
+        const float critDegB = (float)m_SliceAngle / -182.0f - 60.0f;
+        FN::SliceEffect_Add(pos, m_SliceAngle + 0x2a96,
+                            impulse * 0.4f * 0.7f, true);
+        FN::SliceEffect_Add(pos, m_SliceAngle - 0x2a96,
+                            impulse * 0.4f * 0.7f, true);
+        (void)critDegA; (void)critDegB;
+        impulse *= 1.5f;
+        splatCount += 2;
+    }
+
+    // Special-fruit (baseScore == 0x32 = 50) also gets 1.5× impulse.
+    const FruitInfo* info = FruitInfo_Get(m_FruitType);
+    if (info && info->m_Score == 0x32) {
+        impulse *= 1.5f;
+        splatCount += 2;
+    }
+
+    // --- Splat spawn ---
+    // Per-splat speed = (impulse + rand(0.5)*impulse) * (i*0.2 + 5).
+    // Per-splat angle = Rand16(0xFFF0).
+    const float imp_screen = impulse * 50.0f;
+    for (int i = 0; i < splatCount; ++i) {
+        const uint16_t angle16 = (uint16_t)(rand() & 0xFFF0);
+        const float r          = ((float)rand() / (float)RAND_MAX) * 0.5f;
+        const float speed      = (impulse + r * impulse) *
+                                 ((float)i * 0.2f + 5.0f);
+        const float a          = (float)angle16 * (6.2831853f / 65536.0f);
+        Vec3 sv(sinf(a) * speed, cosf(a) * speed, 0.0f);
+
+        SplatEntity* s = SplatEntity::GetFree();
+        if (s) s->MakeSplat(pos, sv, m_FruitType);
+    }
+
+    // --- Half velocities ---
+    // Binary uses sliceFactor = 1 - FRUIT_INFO[+0x24c]. That field
+    // isn't in the port's FruitInfo struct yet — hardcode to 0.7
+    // which maps to a per-fruit slice softness of 0.3.
     const float sliceFactor = 0.7f;
 
-    // Convert 16-bit angle to radians. +0x3ffc = +90°, -0x3ffc = -90°.
-    const float baseRad = (float)(int16_t)m_SliceAngle * (6.2831853f / 65536.0f);
-    const float rad1 = baseRad + 1.5707963f;   // +90°
-    const float rad2 = baseRad - 1.5707963f;   // -90°
+    // Port the biased "rand(0x5550) retry if < 0x2aa8" pattern.
+    auto randBiased = []() -> float {
+        int r = rand() & 0x5550;
+        if (r < 0x2aa8) r = rand() & 0x5550;
+        return (float)r;
+    };
 
-    // Binary uses (SinIdx(angle), CosIdx(angle), 0) — note sin-first, not cos.
-    // Atan2Idx also takes (y, x) order, so this gives a consistent rotation.
-    Vec3 dir1(sinf(rad1), cosf(rad1), 0.0f);
-    Vec3 dir2(sinf(rad2), cosf(rad2), 0.0f);
+    // Angle offsets for the two halves — bound by `(1-softness)*4`.
+    const float randA = randBiased() * (1.0f - 0.3f) * 4.0f;
+    const float randB = randBiased() * (1.0f - 0.3f) * 4.0f;
+    const int16_t offA = (int16_t)randA;
+    const int16_t offB = (int16_t)randB;
 
-    const float imp = m_SliceImpulse * 50.0f;   // scale for screen-space velocities
-    Vec3 halfVelA = dir1 * (imp * sliceFactor) + vel * (1.0f - sliceFactor);
-    Vec3 halfVelB = dir2 * (imp * sliceFactor) + vel * (1.0f - sliceFactor);
+    uint16_t baseAngle = m_SliceAngle;
+    uint16_t angA, angB;
+    if (flipSide) {
+        // Binary: m_SliceAngle += 0x7ff8; shuffles halves to opposite
+        // sides before applying offsets.
+        baseAngle = (uint16_t)(baseAngle + 0x7ff8);
+        angA = (uint16_t)(baseAngle - offB + 0x7ff8);
+        angB = (uint16_t)(baseAngle + offA + 0x7ff8);
+    } else {
+        angA = (uint16_t)(baseAngle - offB);
+        angB = (uint16_t)(baseAngle + offA);
+    }
 
-    // First half = original body; second half = m_Second*.
+    const float radA = (float)(int16_t)angA * (6.2831853f / 65536.0f);
+    const float radB = (float)(int16_t)angB * (6.2831853f / 65536.0f);
+    Vec3 dirA(sinf(radA), cosf(radA), 0.0f);
+    Vec3 dirB(sinf(radB), cosf(radB), 0.0f);
+
+    Vec3 halfVelA = dirA * (imp_screen * sliceFactor) +
+                    vel  * (1.0f - sliceFactor);
+    Vec3 halfVelB = dirB * (imp_screen * sliceFactor) +
+                    vel  * (1.0f - sliceFactor);
+
+    // Critical / special override — binary uses pure ±90° directions
+    // with a 0.5 scale.
+    if (isCritical || (info && info->m_Score == 0x32)) {
+        const float r1 = radA + 1.5707963f;
+        const float r2 = radA - 1.5707963f;
+        halfVelA = Vec3(sinf(r1) * imp_screen, cosf(r1) * imp_screen, 0) * 0.5f;
+        halfVelB = Vec3(sinf(r2) * imp_screen, cosf(r2) * imp_screen, 0) * 0.5f;
+    }
+
     m_SecondPos = pos;
     m_SecondVel = halfVelA;
     vel         = halfVelB;
@@ -390,21 +496,70 @@ void Fruit::Slice() {
     // Reset gravity so the ramp-up in Update starts fresh.
     m_Gravity = Vec3(0.0f, -12.0f, 0.0f);
 
-    // Spawn 2–3 juice splat entities. Matches the for-loop at the tail
-    // of binary Slice() (0x176d58) — count is `Rand(2) + 2`, each
-    // splat has a random angle, randomly decayed speed, and is tinted
-    // by the fruit colour. Simplified here: fixed 3 splats, angles
-    // evenly spread around the slice direction.
-    for (int i = 0; i < 3; ++i) {
-        const float a = baseRad + ((float)i - 1.0f) * 0.9f;  // ±0.9 rad spread
-        const float speed = m_SliceImpulse * 35.0f + (float)(rand() % 20) * 2.0f;
-        Vec3 sv(sinf(a) * speed, cosf(a) * speed, 0.0f);
-        SplatEntity* s = SplatEntity::GetFree();
-        if (s) s->MakeSplat(pos, sv, m_FruitType);
+    // --- Spin boost loop (matches Fruit::Slice 0x176d58 tail) ---
+    //
+    // For each half i in {0, 1}:
+    //   sum = |rv[i].x| + |rv[i].y| + |rv[i].z|
+    //   sum *= isCritical ? 2.0 : 0.5
+    //   compA = sum * (rand(0.5) + 0.75)
+    //   compB = sum * (rand(0.5) + 0.75)
+    //   1/4 chance: oneBig = ±compA * 1.5
+    //   else:       mix    = sum * (rand(0.3) - 0.1)
+    //   sign-flip compA / compB by flipSide + iteration index
+    //   new m_RotVel[i] = (picked x, picked y, -compB)
+    //   m_Rot[i] reset to axis-angle composition aligned with slice angle
+    for (int i = 0; i < 2; ++i) {
+        Vec3* rv    = (i == 0) ? &m_RotVel1 : &m_RotVel2;
+        Quaternion* q = (i == 0) ? &m_Rot1 : &m_Rot2;
+
+        float mag = fabsf(rv->x) + fabsf(rv->y) + fabsf(rv->z);
+        mag *= isCritical ? 2.0f : 0.5f;
+
+        const float r1 = ((float)rand() / (float)RAND_MAX) * 0.5f + 0.75f;
+        const float r2 = ((float)rand() / (float)RAND_MAX) * 0.5f + 0.75f;
+        float compA = mag * r1;
+        float compB = mag * r2;
+
+        // Sign flip — binary uses two different dice rolls per branch.
+        if (flipSide) {
+            if ((rand() % 5) > 1) compA = -compA;
+            if (i == 1)           compA = -compA;
+            if (i == 0)           compB = -compB;
+        } else {
+            if ((rand() % 5) < 2) compA = -compA;
+            if (i != 0)           compB = -compB;
+            if (i == 0)           compA = -compA;
+        }
+
+        Vec3 newRotVel;
+        if ((rand() % 3) == 0) {
+            // 1/4 chance (rand() % 3 == 0 is actually 1/3): oneBig
+            float big = compA * 1.5f;
+            if (big < 0.0f) big = -big;
+            newRotVel = Vec3(big, 0.0f, -compB);
+        } else {
+            const float mix = ((float)rand() / (float)RAND_MAX) * 0.3f - 0.1f;
+            newRotVel = Vec3(mag * mix, compA, -compB);
+        }
+        *rv = newRotVel;
+
+        // Reset m_Rot[i] to a composition:
+        //   Qx(axis=(1,0,0), 90°) * Qy(axis=(0,1,0), 90°) * Qz(axis=(0,0,1), sliceAngle)
+        // (Binary also passes impulse=0 literals; the port uses fixed
+        // 90° for the first two and m_SliceAngle in radians for Z.)
+        const float half = 1.5707963f * 0.5f;
+        const float sliceRad = (float)(int16_t)m_SliceAngle *
+                               (6.2831853f / 65536.0f) * 0.5f;
+        Quaternion qx(sinf(half), 0.0f, 0.0f, cosf(half));
+        Quaternion qy(0.0f, sinf(half), 0.0f, cosf(half));
+        Quaternion qz(0.0f, 0.0f, sinf(sliceRad), cosf(sliceRad));
+        *q = (qx * qy * qz).normalized();
     }
 
-    printf("[Fruit] Slice: type=%d imp=%.2f vA=(%.1f,%.1f) vB=(%.1f,%.1f)\n",
-           m_FruitType, imp, halfVelA.x, halfVelA.y, halfVelB.x, halfVelB.y);
+    printf("[Fruit] Slice: type=%d imp=%.2f flipSide=%d splats=%d "
+           "vA=(%.1f,%.1f) vB=(%.1f,%.1f)\n",
+           m_FruitType, imp_screen, flipSide, splatCount,
+           halfVelA.x, halfVelA.y, halfVelB.x, halfVelB.y);
 }
 
 // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
@@ -414,4 +569,88 @@ void Fruit::LoadInfo() {
 
     std::string xmlPath = game->data_dir + "/xml/fruitlist.xml";
     FruitInfo_Load(xmlPath.c_str());
+}
+
+// --- FruitModelInfo global array ---------------------------------------
+//
+// Binary allocates a flat FruitModelInfo[fruitCount] array at
+// LoadFruitModels time and stores the pointer in the FRUIT_INFO
+// header block at +0xc8. Port keeps it as a module-local vector
+// sized once by LoadFruitModels.
+
+static std::vector<FruitModelInfo> s_FruitModels;
+static bool s_FruitModelsLoaded = false;
+
+// Matches Fruit::LoadFruitModels (0x1794e0). Walks every FRUIT_INFO
+// entry and loads `<name>_<c>_piece_1.mmd` + `_piece_2.mmd` via
+// MeshManager. The format string was resolved from DAT_0017986c at
+// 0x001bcd43: "models/Fruit/%s_%c_piece_%d.mmd" where %c is the first
+// letter of the fruit name.
+void Fruit::LoadFruitModels() {
+    if (s_FruitModelsLoaded) return;
+
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
+    if (!meshMgr) return;
+
+    const int n = FruitInfo_GetCount();
+    s_FruitModels.clear();
+    s_FruitModels.resize((size_t)n);
+
+    int loaded = 0;
+    for (int i = 0; i < n; ++i) {
+        const FruitInfo* info = FruitInfo_Get(i);
+        if (!info || !info->m_ModelName[0]) continue;
+
+        const char* name = info->m_ModelName;
+        const char  c    = name[0];
+        char path[256];
+
+        for (int piece = 1; piece <= 2; ++piece) {
+            snprintf(path, sizeof(path),
+                     "%s/models/Fruit/%s_%c_piece_%d.mmd",
+                     game->data_dir.c_str(), name, c, piece);
+            SmartPtr<Mortar::Model> m = meshMgr->Load(path);
+            if (piece == 1) s_FruitModels[i].m_HalfA = m;
+            else            s_FruitModels[i].m_HalfB = m;
+        }
+
+        if (s_FruitModels[i].m_HalfA.IsValid()) {
+            ++loaded;
+            // Assign fruit_atlas texture to the half meshes — same
+            // pattern as whole-fruit mesh in Fruit::Init.
+            static SmartPtr<Mortar::Texture> s_fruitAtlas;
+            if (!s_fruitAtlas.IsValid()) {
+                std::string texPath = game->data_dir
+                                    + "/models/fruit/textures/fruit_atlas.tex";
+                s_fruitAtlas = Mortar::TextureManager::GetInstance().Load(texPath.c_str());
+            }
+            if (s_fruitAtlas.IsValid()) {
+                for (int h = 0; h < 2; ++h) {
+                    Mortar::Model* mod = (h == 0 ? s_FruitModels[i].m_HalfA.Get()
+                                                  : s_FruitModels[i].m_HalfB.Get());
+                    if (!mod) continue;
+                    for (size_t m = 0; m < mod->m_Meshes.size(); ++m) {
+                        if (mod->m_Meshes[m].IsValid() &&
+                            !mod->m_Meshes[m]->HasDiffuseTexture())
+                        {
+                            mod->m_Meshes[m]->SetDiffuseTexture(s_fruitAtlas);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    s_FruitModelsLoaded = true;
+    printf("[Fruit] LoadFruitModels: loaded half meshes for %d/%d fruit types\n",
+           loaded, n);
+}
+
+const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
+    if (!s_FruitModelsLoaded) return NULL;
+    if (fruitType < 0 || fruitType >= (int)s_FruitModels.size()) return NULL;
+    return &s_FruitModels[fruitType];
 }

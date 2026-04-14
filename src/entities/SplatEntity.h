@@ -46,16 +46,35 @@ public:
     // after pos.z crosses a threshold; port assigns at spawn.
     int    m_SplatType;
 
-    // Packed tint colour (from fruit palette). Binary lerps this
-    // toward white over lifetime; port holds constant.
-    uint8_t m_ColourR;
-    uint8_t m_ColourG;
-    uint8_t m_ColourB;
-    uint8_t m_ColourA;
+    // Fruit palette colour (captured at spawn). Binary lerps the
+    // displayed colour between the splat texture base (a pink/grey
+    // canvas) and this fruit colour over the last 0.5s of the colour
+    // phase timer — see m_ColourPhase below.
+    uint8_t m_FruitR;
+    uint8_t m_FruitG;
+    uint8_t m_FruitB;
+    uint8_t m_FruitA;
+
+    // +0x04 equiv: colour-phase timer. Counts down from 1.5s (binary
+    // DAT_0017f564). While >= 0.5, the splat shows the texture base
+    // colour. Below 0.5, it lerps toward the fruit colour — matches
+    // binary UpdateActiveSplats colour block.
+    float  m_ColourPhase;
 
     // 16-bit angle (Atan2Idx of velocity at spawn). Drives the quad
     // orientation in DrawActive.
     uint16_t m_Angle;
+
+    // +0x19 equiv: "special fruit" flag copied from FruitInfo.m_bSpecial.
+    // Selects the right half of the atlas when set (binary offsets
+    // fVar24/fVar16 by +0.5 in DrawSplat, using U 0.5..1.0 instead of
+    // 0..0.5).
+    uint8_t m_bSpecial;
+
+    // +0x34 equiv: random horizontal-flip flag (~50% at spawn).
+    // Swaps the V coords in DrawActive so the atlas row can render
+    // mirrored.
+    uint8_t m_bFlipV;
 
     SplatEntity();
     ~SplatEntity();
