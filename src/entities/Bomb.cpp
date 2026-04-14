@@ -496,6 +496,24 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             // TODO: FruitSaveData::AddToTotal("bomb", 1)
             // TODO: skip entirely if game->gameOverFlag already set
         }
+    } else if (m_bMenuBombHit != 0) {
+        // Menu-bomb re-hit branch. Binary code:
+        //   if (field_0x84 == 0 || *(field_0x84 + 0x123) != 0)
+        //       ClearMenuItems();
+        //   Delegate0<void>::operator()(&field_0x40);   // hit callback
+        //
+        // field_0x84 is a backref to the owning game-state struct
+        // (a MainScreen-ish container). The +0x123 byte gates whether
+        // the menu items are still locked in. ClearMenuItems removes
+        // every menu button + decoration entity from the HUD.
+        //
+        // Port v1: trigger ClearMenuItems by setting MainScreen state
+        // to STATE_QUIT_WAIT, which already drives the bomb off-screen
+        // animation and exits the game. Same end result without
+        // touching the binary's vtable callback path.
+        if (m_HitCallback) {
+            m_HitCallback();
+        }
     }
 
     m_bHit = 1;   // +0x68 -- triggers hit branch in Update next tick
