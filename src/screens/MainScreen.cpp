@@ -554,11 +554,17 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     m_LogoFruitPos = base + scaled;
 }
 
-// Matches 0x0014aee8 (~35 lines)
+// Matches 0x0014aee8 (~35 lines).
+// Note: Sound/Music toggles persist across screens (they're global UI),
+// so they're NOT removed here. The Quit button IS removed because it's
+// a main-menu-only control. Binary's GameModeCallback/AboutCallback
+// also null pQuitBtn but rely on this helper to do the actual HUD
+// removal — port matches.
 void MainScreen::DeleteMenuButtons() {
     RemoveButton(pPlayButton);
     RemoveButton(pDojoButton);
     RemoveButton(pMoreGamesBtn);
+    RemoveButton(pQuitBtn);
 }
 
 // Matches 0x0014ad04 (7 lines)
@@ -568,10 +574,14 @@ void MainScreen::Hide() {
 }
 
 void MainScreen::RemoveButton(MenuButton*& btn) {
-    if (btn && game.hud) {
-        game.hud->RemoveControl(btn);
-        // HUD::RemoveControl fires callback but doesn't delete
-        // Original: vtable dtor + null
+    if (btn) {
+        // Mark for HUD::Update to destroy next frame. That path fires
+        // the destructor → MenuButton::Release → entity->Deactivate,
+        // cleaning up both the button itself AND the bomb/fruit entity
+        // attached as m_pEntity. Calling HUD::RemoveControl directly
+        // here leaks both because it just unlinks from the list
+        // without deleting.
+        btn->SetPendingRemoval();
         btn = NULL;
     }
 }
@@ -652,7 +662,11 @@ void MainScreen::CreateQuitButton() {
 void MainScreen::GameModeCallback() {
     m_State = STATE_MODE_SELECT;
     m_Timer2 = 1.0f;
-    pQuitBtn = NULL;
+    // Remove the Quit button immediately. Binary just nulls the
+    // pointer here and relies on DeleteMenuButtons / the screen
+    // teardown to release the control; the port can't do that
+    // safely because RemoveButton requires a non-null pointer.
+    RemoveButton(pQuitBtn);
 }
 
 // Matches 0x0014c384
@@ -665,7 +679,9 @@ void MainScreen::NewGameCallback() {
 void MainScreen::AboutCallback() {
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
-    pQuitBtn = NULL;
+    // Same fix as GameModeCallback — remove from HUD instead of
+    // just nulling the pointer.
+    RemoveButton(pQuitBtn);
 }
 
 // Matches 0x0014af64
