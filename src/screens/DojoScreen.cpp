@@ -153,17 +153,11 @@ void DojoScreen::Update(float dt) {
         break;
     }
     case 1:
-        // Idle — buttons handle themselves.
-        // Poll child AboutScreen for pending removal. Binary's flow
-        // uses a reverse vtable call from AboutScreen into this
-        // screen's Resume path; port polls instead, which is
-        // functionally equivalent for this single-child case.
-        if (m_pAboutScreen && m_pAboutScreen->IsPendingRemoval()) {
-            m_pAboutScreen = NULL;  // HUD::Update will delete the ctrl
-            // Re-enter state 0 so the Dojo buttons get re-created and
-            // the panel fades back to full alpha.
-            m_State = 0;
-        }
+        // Idle — buttons handle themselves. The child AboutScreen
+        // notifies us via its m_RemoveCallback (installed when we
+        // create it) so we don't have to poll a possibly-dangling
+        // pointer here. Binary uses a reverse vtable dispatch on
+        // a parent pointer for the same purpose.
         break;
     case 2:
     case 3:
@@ -175,10 +169,17 @@ void DojoScreen::Update(float dt) {
             RemoveButtons();
 
             if (m_State == 3) {
-                // Create AboutScreen as child. Port: stays in state 1
-                // but with null buttons (they get re-created next time
-                // alpha fades back in via the IsPendingRemoval path).
+                // Create AboutScreen as child. Install a remove
+                // callback so HUD::Update nulls our weak ref BEFORE
+                // freeing the child — same dangling-pointer trap as
+                // the MainScreen → DojoScreen relationship.
                 m_pAboutScreen = new AboutScreen(game, this);
+                m_pAboutScreen->m_RemoveCallback = [this](HUDControl*) {
+                    m_pAboutScreen = NULL;
+                    // Re-enter state 0 so the Dojo buttons get
+                    // re-created and the panel fades back in.
+                    m_State = 0;
+                };
                 game.hud->AddControl(m_pAboutScreen);
                 m_State = 1;
             } else if (m_State == 2) {
