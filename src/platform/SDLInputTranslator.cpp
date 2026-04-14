@@ -10,6 +10,15 @@
 #include <cstdio>
 #include <cstring>
 
+// Touch event logging — flip to 0 to silence after diagnosing crashes
+// caused by stray mouse/finger events on startup.
+#define TOUCH_LOG 1
+#if TOUCH_LOG
+#  define TLOG(...) do { printf("[TOUCH] " __VA_ARGS__); fflush(stdout); } while (0)
+#else
+#  define TLOG(...) do {} while (0)
+#endif
+
 // Simple StringHash implementation (matches original Jenkins lookup3)
 // For now, a basic DJB2 hash — replace with exact original when scoring.cpp is implemented
 uint32_t StringHash(const char* str) {
@@ -118,11 +127,15 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
     // === Mouse (emulates finger 0 for desktop) ===
 
     case SDL_MOUSEBUTTONDOWN:
+        TLOG("SDL_MOUSEBUTTONDOWN btn=%d px=(%d,%d) state=0x%x mouseDown_was=%d\n",
+             (int)ev.button.button, ev.button.x, ev.button.y,
+             (unsigned)ev.button.state, mouseDown ? 1 : 0);
         if (ev.button.button == SDL_BUTTON_LEFT) {
             mouseDown = true;
             TransformTouch(window, ev.button.x, ev.button.y, mouseX, mouseY);
             fingerX[0] = mouseX;
             fingerY[0] = mouseY;
+            TLOG("  → game coords (%.1f, %.1f) — pressing slot 0\n", mouseX, mouseY);
 
             // Poll-based path: feed Mortar::Touch directly (slot 0 = mouse).
             Mortar::Touch::GetInstance().OnPressed(0, mouseX, mouseY);
@@ -141,6 +154,12 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         break;
 
     case SDL_MOUSEMOTION:
+        // Log every motion event regardless of mouseDown so we see
+        // the very first SDL_MOUSEMOTION the game receives at startup
+        // (which carries the mouse position from when the window was
+        // created — useful for diagnosing "mouse over X" crashes).
+        TLOG("SDL_MOUSEMOTION px=(%d,%d) state=0x%x mouseDown=%d\n",
+             ev.motion.x, ev.motion.y, (unsigned)ev.motion.state, mouseDown ? 1 : 0);
         if (mouseDown) {
             float gx, gy;
             TransformTouch(window, ev.motion.x, ev.motion.y, gx, gy);
@@ -148,6 +167,8 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             float dy = gy - mouseY;
             mouseX = gx; mouseY = gy;
             fingerX[0] = gx; fingerY[0] = gy;
+            TLOG("  → game coords (%.1f, %.1f) Δ(%.1f, %.1f) — moving slot 0\n",
+                 gx, gy, dx, dy);
 
             Mortar::Touch::GetInstance().OnMoved(0, gx, gy);
 
@@ -164,9 +185,13 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         break;
 
     case SDL_MOUSEBUTTONUP:
+        TLOG("SDL_MOUSEBUTTONUP btn=%d px=(%d,%d) state=0x%x mouseDown_was=%d\n",
+             (int)ev.button.button, ev.button.x, ev.button.y,
+             (unsigned)ev.button.state, mouseDown ? 1 : 0);
         if (ev.button.button == SDL_BUTTON_LEFT && mouseDown) {
             mouseDown = false;
             TransformTouch(window, ev.button.x, ev.button.y, mouseX, mouseY);
+            TLOG("  → game coords (%.1f, %.1f) — releasing slot 0\n", mouseX, mouseY);
 
             Mortar::Touch::GetInstance().OnReleased(0);
 
@@ -181,11 +206,15 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
     // === Touch (multitouch, up to 16 fingers) ===
 
     case SDL_FINGERDOWN: {
+        TLOG("SDL_FINGERDOWN fingerId=%lld nx=%.3f ny=%.3f pressure=%.3f\n",
+             (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
+             ev.tfinger.pressure);
         int ch = MapFingerId(ev.tfinger.fingerId);
-        if (ch < 0) break;
+        if (ch < 0) { TLOG("  → MapFingerId returned -1 (all 16 channels busy)\n"); break; }
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         fingerX[ch] = gx; fingerY[ch] = gy;
+        TLOG("  → ch=%d game (%.1f, %.1f) — pressing slot\n", ch, gx, gy);
 
         // Poll-based path. Mortar::Touch has 8 slots; clamp or drop extras.
         if (ch < Mortar::Touch::MAX_SLOTS) {
@@ -204,13 +233,16 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
     }
 
     case SDL_FINGERMOTION: {
+        TLOG("SDL_FINGERMOTION fingerId=%lld nx=%.3f ny=%.3f Δ(%.3f,%.3f)\n",
+             (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
+             ev.tfinger.dx, ev.tfinger.dy);
         int ch = -1;
         for (int i = 0; i < 16; i++) {
             if (fingerActive[i] && fingerMap[i] == ev.tfinger.fingerId) {
                 ch = i; break;
             }
         }
-        if (ch < 0) break;
+        if (ch < 0) { TLOG("  → no channel mapped for fingerId, skipping\n"); break; }
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
@@ -235,13 +267,15 @@ void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
     }
 
     case SDL_FINGERUP: {
+        TLOG("SDL_FINGERUP fingerId=%lld nx=%.3f ny=%.3f\n",
+             (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y);
         int ch = -1;
         for (int i = 0; i < 16; i++) {
             if (fingerActive[i] && fingerMap[i] == ev.tfinger.fingerId) {
                 ch = i; break;
             }
         }
-        if (ch < 0) break;
+        if (ch < 0) { TLOG("  → no channel mapped for fingerId, skipping\n"); break; }
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
