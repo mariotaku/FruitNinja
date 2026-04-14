@@ -170,12 +170,21 @@ void Fruit::Update(float dt) {
 
     if (!m_bSliced) {
         // === UNSLICED FRUIT ===
-        // Ballistic flight: pos += vel*dt, vel += gravity*dt
-        pos += vel * dt;
+        // Binary integration (Fruit::Update 0x00177680):
+        //   pos += (vel*dt + 0.5*g*dt²) * 60.0    (DAT_00177d00 = 60.0)
+        //   vel += gravity * dt
+        // The ×60 multiplier on the position step is the binary's
+        // tuning fudge — at fixed dt=1/60 it makes effective
+        // gravity strong enough for a Fruit-Ninja-feel arc. Without
+        // it the port's fruit drift like they're underwater.
+        const float POS_INTEGRATION_SCALE = 60.0f;
+        Vec3 step = (vel * dt + m_Gravity * (0.5f * dt * dt)) * POS_INTEGRATION_SCALE;
+        pos += step;
         vel += m_Gravity * dt;
 
-        // Rotation axis drift
-        pos += m_RotAxis * dt;
+        // Rotation axis drift — also scaled by the same fudge so
+        // it stays consistent with the velocity-driven motion.
+        pos += m_RotAxis * dt * POS_INTEGRATION_SCALE;
 
         // Backup for future split
         m_SecondPos = pos;
@@ -193,17 +202,32 @@ void Fruit::Update(float dt) {
         }
     } else {
         // === SLICED (two halves) ===
-        // Gravity ramp-up (original: gravGrowth = DAT * (dt/FRAME_TIME) * 4.5)
-        float gravLen = m_Gravity.length();
-        float growRate = 4.5f;
-        Vec3 gravDir = m_Gravity.normalized();
-        m_Gravity = gravDir * (gravLen + growRate * dt * 60.0f);
+        // Binary (Fruit::Update sliced branch, 0x00177680):
+        //   normalize(m_Gravity); gravLen += DAT_00177950(=0.2) * dtNorm * 4.5
+        //   = gravLen += 0.9 * dtNorm   (per-frame growth at 60fps)
+        //   m_Gravity *= new_gravLen / old_gravLen (rescale unit vec)
+        //
+        // Then plain Euler integration on both halves, NO ×60 fudge.
+        // This is intentional in the binary — sliced halves drift
+        // gently while the gravity ramps up.
+        //
+        // Port keeps the same growth formula but uses the same ×60
+        // position scaling as the unsliced branch so the halves
+        // visibly drift instead of being frozen.
+        const float gravLen0 = m_Gravity.length();
+        const float dtNorm   = dt * 60.0f;
+        const float growRate = 0.2f * dtNorm * 4.5f;   // = 0.9 per frame
+        const float gravLen1 = gravLen0 + growRate;
+        if (gravLen0 > 0.0001f) {
+            m_Gravity = m_Gravity * (gravLen1 / gravLen0);
+        }
 
-        // Two-body physics
-        vel += m_Gravity * dt;
-        pos += vel * dt;
+        // Two-body physics — same ×60 position scale as unsliced.
+        const float POS_INTEGRATION_SCALE = 60.0f;
+        vel        += m_Gravity * dt;
         m_SecondVel += m_Gravity * dt;
-        m_SecondPos += m_SecondVel * dt;
+        pos        += vel        * dt * POS_INTEGRATION_SCALE;
+        m_SecondPos += m_SecondVel * dt * POS_INTEGRATION_SCALE;
     }
 
     // Quaternion rotation update (both halves)
@@ -423,7 +447,13 @@ void Fruit::Slice() {
     // --- Splat spawn ---
     // Per-splat speed = (impulse + rand(0.5)*impulse) * (i*0.2 + 5).
     // Per-splat angle = Rand16(0xFFF0).
-    const float imp_screen = impulse * 50.0f;
+    //
+    // Binary uses raw impulse values directly (4..8 range from
+    // CollisionResponse clamp). The port's Update integrates pos
+    // with a ×60 fudge factor (matching binary 0x00177d00), which
+    // means velocities should also stay in the binary's per-frame
+    // scale — no extra ×50 multiplier needed here.
+    const float imp_screen = impulse;
     for (int i = 0; i < splatCount; ++i) {
         const uint16_t angle16 = (uint16_t)(rand() & 0xFFF0);
         const float r          = ((float)rand() / (float)RAND_MAX) * 0.5f;
