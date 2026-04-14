@@ -212,16 +212,19 @@ void MainScreen::Update(float dt) {
         if (!m_pDojoScreen && m_Timer2 < 0.01f) {
             m_Timer2 = 0.0f;
             m_pDojoScreen = new DojoScreen(game);
+            // Install a remove-callback so HUD::Update nulls our
+            // weak ref BEFORE deleting the child. Without this,
+            // polling m_pDojoScreen->IsPendingRemoval() the frame
+            // after the child sets pending would dereference freed
+            // memory and crash with 0xC0000005 (use-after-free).
+            // HUD::Update fires m_RemoveCallback right before delete.
+            m_pDojoScreen->m_RemoveCallback = [this](HUDControl*) {
+                m_pDojoScreen = NULL;
+                m_State = STATE_SLIDE_IN;
+                m_Timer2 = 0.0f;
+                m_StateTimer = 0.0f;
+            };
             game.hud->AddControl(m_pDojoScreen);
-        }
-
-        // Poll the child for removal — once it fades out we slide
-        // the MainScreen buttons back in.
-        if (m_pDojoScreen && m_pDojoScreen->IsPendingRemoval()) {
-            m_pDojoScreen = NULL;   // HUD::Update will delete the ctrl
-            m_State = STATE_SLIDE_IN;
-            m_Timer2 = 0.0f;
-            m_StateTimer = 0.0f;
         }
         break;
     }
