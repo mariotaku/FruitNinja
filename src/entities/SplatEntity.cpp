@@ -6,6 +6,7 @@
 //
 
 #include "SplatEntity.h"
+#include "ActorManager.h"
 #include "FruitInfo.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
@@ -58,7 +59,12 @@ static const float UP_SCALE_CLAMP_LO  = -50.0f;   // DAT_0017fd48
 static const float UP_SCALE_CLAMP_HI  = 200.0f;   // DAT_0017fd4c
 
 static const float UP_LIFE_SLIDE_THR  = 1.25f;    // slide-phase threshold
-static const float UP_SPRING_DT_MULT  = 1.0f;     // binary reads from GameTaskData
+
+// Per-frame "spring rate" (binary GameTaskData+0x2c). Recomputed in
+// UpdateActive each frame from the active entity counts; UpdateSplat
+// reads it during the slide-decay phase. See UpdateActive() for the
+// full derivation.
+static float s_SpringRate = 1.25f;
 
 // DrawActiveSplats @ 0x00180344 — UV atlas table @ 0x001bd014 (6 × 4 floats)
 // Each entry is {u0, u1, v0, v1} — verified from raw little-endian dump.
@@ -284,9 +290,11 @@ void SplatEntity::UpdateSplat(float dt) {
     // --- Landed phase ---
     // Slide / scale decay — binary runs this only while m_Life <= 1.25
     // (the tail slide phase). Above that threshold the splat sits still
-    // on the plane.
+    // on the plane. Spring rate computed in UpdateActive each frame
+    // from active entity counts (binary GameTaskData+0x2c, see
+    // UpdateActive for the formula).
     if (m_Life <= UP_LIFE_SLIDE_THR) {
-        const float dy = dt * UP_SPRING_DT_MULT;
+        const float dy = dt * s_SpringRate;
         vel.y   = Clampf(vel.y - dy,   UP_VEL_CLAMP_LO,   UP_VEL_CLAMP_HI);
         m_Scale.y = Clampf(m_Scale.y - dy, UP_SCALE_CLAMP_LO, UP_SCALE_CLAMP_HI);
     }
@@ -341,7 +349,38 @@ SplatEntity* SplatEntity::GetFree() {
 }
 
 void SplatEntity::UpdateActive(float dt) {
+    // Per-frame spring rate compute — matches binary's
+    // SplatEntity::UpdateActiveSplats @ 0x0017fd68 (instructions
+    // 0x0017fe46..0x0017feda):
+    //
+    //   N_total  = ActorManager::GetNumEntities()
+    //   N_active = (count of live splats in pool)
+    //   raw      = (N_total + N_active) / 15.0 - 0.15
+    //   if raw <= 0:   spring = 1.25
+    //   elif raw >= 3: spring = 4.25
+    //   else:          spring = raw + 1.25  (linear ramp 1.25..4.25)
+    //
+    // The binary additionally multiplies by 1.5 if !IsFastHardware()
+    // OR (multiplayer && game->field_0x170 == 0). Port skips the slow-
+    // hardware branch (always treats as fast hw) and the multiplayer
+    // gate (no MP support yet).
     const int N = s_Pool.Capacity();
+    int activeCount = 0;
+    for (int i = 0; i < N; ++i) {
+        SplatEntity* s = s_Pool.SlotAt(i);
+        if (s && s->m_bAlive) ++activeCount;
+    }
+    int totalEntities = 0;
+    if (ActorManager* am = ActorManager::GetInstance()) {
+        totalEntities = am->GetNumEntities();
+    }
+    {
+        const float raw = (float)(totalEntities + activeCount) / 15.0f - 0.15f;
+        if (raw <= 0.0f)      s_SpringRate = 1.25f;
+        else if (raw >= 3.0f) s_SpringRate = 4.25f;
+        else                  s_SpringRate = raw + 1.25f;
+    }
+
     for (int i = 0; i < N; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
         if (!s || !s->m_bAlive) continue;
