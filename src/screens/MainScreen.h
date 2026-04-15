@@ -52,6 +52,13 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override;
     int GetType() override { return 1; }
 
+    // Direct state writer used by child screens (DojoScreen,
+    // GameModeScreen, ShopScreen, AboutScreen) when they finish
+    // fading out and want to push MainScreen into the next state.
+    // Mirrors the binary pattern at e.g. 0x001389B0 where DojoScreen
+    // writes mainScreen->m_State = 8 directly.
+    void SetState(MainScreenState s) { m_State = s; }
+
 private:
     Game& game;
 

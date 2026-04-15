@@ -49,6 +49,7 @@ Fruit::Fruit()
     , m_pEmitter1(NULL)
     , m_pEmitter2(NULL)
     , m_bSliced(false)
+    , m_bDrawWhole(false)
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
     , m_ZPosition(0.0f)
@@ -64,6 +65,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     (void)param1; (void)param3;
     m_FruitType = fruitType;
     m_bSliced = false;
+    m_bDrawWhole = false;
     m_ScaleAnim = 0.0f;
     m_ChuckDelay = 0.0f;
     active = true;
@@ -308,7 +310,11 @@ void Fruit::Draw(Renderer& r) {
 
     // Position in binary-centred ortho space.
     // See docs/engine/coordinate-system.md and FruitCamera::SetupPerspective.
-    if (!m_bSliced) {
+    // m_bDrawWhole forces the whole-fruit branch even when m_bSliced is
+    // set — used by ClearMenuItems @ 0x0016ac7c when releasing menu
+    // fruits during the dojo transition (the fruit flies off as a
+    // single object rather than splitting in two).
+    if (!m_bSliced || m_bDrawWhole) {
         // Whole fruit — single draw at pos with m_Rot1.
         Vec3 drawPos(pos.x, pos.y, m_ZPosition);
         DrawOneModel(m_Model.Get(), drawPos, m_Rot1, s);
@@ -338,10 +344,14 @@ void Fruit::Deactivate() {
 }
 
 bool Fruit::CheckOffscreen() const {
-    // Check if fruit has fallen below or gone far beyond screen
-    if (pos.y < -200.0f) return true;   // below screen
-    if (pos.y > 800.0f) return true;    // way above
-    if (pos.x < -200.0f || pos.x > 680.0f) return true;  // sides
+    // Centred ortho bounds: X ∈ [-240, +240], Y ∈ [-160, +160].
+    // A small margin past each edge so the fruit is fully gone before
+    // we deactivate. Old port had pixel-space bounds (-200..+800) that
+    // never fired for the dojo-release flight.
+    if (pos.y < -200.0f) return true;
+    if (pos.y >  200.0f) return true;
+    if (pos.x < -280.0f) return true;
+    if (pos.x >  280.0f) return true;
     return false;
 }
 

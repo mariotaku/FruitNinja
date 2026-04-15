@@ -121,6 +121,7 @@ ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1" 
 - RE findings go in `docs/` directory (see `docs/README.md` for index)
 - Temp/scratch files go in `<project root>/tmp/`, NOT in `/tmp`
 - Use `FN_SCREEN_W` / `FN_SCREEN_H` for screen constants (avoid `SCREEN_W`/`SCREEN_H` — MSYS2 conflict)
+- **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The MSYS2 / Windows console codepage mangles non-ASCII bytes (e.g. `→` shows up as `竊・`), making logs unreadable. Use plain ASCII substitutes: `->` instead of `→`, `--` instead of `—`, `'` instead of `'/'`, etc. Comments inside source files can use Unicode freely; this rule is for runtime output only.
 
 ## Ghidra Scripts
 Run in order: FN01 → FN02 → FN03 → FN04 → FN05

@@ -89,7 +89,7 @@ void Bomb::LoadContent() {
     {
         std::string path = game->data_dir + "/models/Fruit/bomb.mmd";
         g_bombData.model[0] = meshMgr->Load(path.c_str());
-        printf("[Bomb] LoadContent: model[0] '%s' → valid=%d\n",
+        printf("[Bomb] LoadContent: model[0] '%s' -> valid=%d\n",
                path.c_str(), g_bombData.model[0].IsValid());
     }
 
@@ -97,7 +97,7 @@ void Bomb::LoadContent() {
     {
         std::string path = game->data_dir + "/models/Fruit/bomb_purple.mmd";
         g_bombData.model[1] = meshMgr->Load(path.c_str());
-        printf("[Bomb] LoadContent: model[1] '%s' → valid=%d\n",
+        printf("[Bomb] LoadContent: model[1] '%s' -> valid=%d\n",
                path.c_str(), g_bombData.model[1].IsValid());
     }
 

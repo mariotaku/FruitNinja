@@ -27,9 +27,10 @@ static const float TIMER2_THRESHOLD    = 0.15f;
 static const float STATE_0E_DECAY      = 0.85f;
 static const float STATE_0E_THRESHOLD  = 0.25f;
 static const float STATE_2_DECAY       = 0.75f;
-static const float STATE_8_LERP_RATE   = 0.125f;
-static const float STATE_8_DURATION    = 1.5f;
-static const float STATE_8_RESET_TIMER = -0.85f;
+static const float STATE_8_LERP_RATE     = 0.125f;
+static const float STATE_8_LERP_THRESHOLD = 0.9998f;  // DAT_0014bf28
+static const float STATE_8_DURATION      = 1.5f;
+static const float STATE_8_RESET_TIMER   = 0.15f;     // DAT_0014bf2c (was -0.85)
 static const float BOUNCE_LOSS         = -0.25f;
 static const float BOUNCE_SETTLE       = 3.0f;
 static const float ALPHA_LERP_RATE     = 0.25f;
@@ -196,33 +197,43 @@ void MainScreen::Update(float dt) {
     case STATE_DOJO_WAIT_B:
     case STATE_DOJO_WAIT_C:
     case STATE_DOJO_WAIT_D: {
-        // Slide the menu buttons out and wait for the entity count to
-        // clear before spawning the DojoScreen. Binary checks
-        // ActorManager::GetNumEntities() == 0; port currently has
-        // menu-decoration fruits in the list, so we also accept the
-        // "close enough to 0" signal from the decay timer alone.
-        m_Timer2 *= 0.75f;
+        // Binary @ 0x0014be80: cases 3/4/0x15/0x16 share one block:
+        //   if (ActorManager::GetNumEntities(0) == 0) {
+        //       m_Timer2 *= 0.75
+        //       if (m_Timer2 < ~1e-4) {
+        //           m_Timer2 = 0
+        //           new DojoScreen()
+        //           HUD::AddControl(...)
+        //       }
+        //   }
+        // The block does NOT touch pPlayButton/pDojoButton/pQuitBtn —
+        // those persist throughout the dojo trip. The slide-out is
+        // purely the panel pos formula based on m_Timer2 (see Draw).
+        // The entity-count gate is critical: ClearMenuItems (called from
+        // MenuButton::Update on slice) releases all menu fruits so they
+        // fall offscreen and the count drops to 0; only then can the
+        // decay start and the DojoScreen spawn.
+        ActorManager* am = ActorManager::GetInstance();
+        const int fruitCount = am ? am->GetNumEntities(0) : 0;
 
-        // Also remove any live menu buttons so they stop receiving
-        // touch during the transition.
-        if (pPlayButton || pDojoButton || pQuitBtn) {
-            DeleteMenuButtons();
+        if (fruitCount == 0) {
+            m_Timer2 *= 0.75f;
         }
 
-        if (!m_pDojoScreen && m_Timer2 < 0.01f) {
+        if (!m_pDojoScreen && fruitCount == 0 && m_Timer2 < 0.01f) {
             m_Timer2 = 0.0f;
             m_pDojoScreen = new DojoScreen(game);
-            // Install a remove-callback so HUD::Update nulls our
-            // weak ref BEFORE deleting the child. Without this,
-            // polling m_pDojoScreen->IsPendingRemoval() the frame
-            // after the child sets pending would dereference freed
-            // memory and crash with 0xC0000005 (use-after-free).
-            // HUD::Update fires m_RemoveCallback right before delete.
+            // RemoveCallback nulls our weak ref BEFORE HUD::Update
+            // deletes the child — without it, polling
+            // m_pDojoScreen->IsPendingRemoval() the frame after the
+            // child sets pending would deref freed memory (UAF crash).
+            // The binary's DojoScreen state 6 directly writes
+            // mainScreen->m_State = 8 from inside DojoScreen::Update,
+            // so we don't need to set the state transition here — it
+            // happens in DojoScreen.cpp before HUD::Update fires this
+            // callback.
             m_pDojoScreen->m_RemoveCallback = [this](HUDControl*) {
                 m_pDojoScreen = NULL;
-                m_State = STATE_SLIDE_IN;
-                m_Timer2 = 0.0f;
-                m_StateTimer = 0.0f;
             };
             game.hud->AddControl(m_pDojoScreen);
         }
@@ -230,17 +241,29 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_SLIDE_IN: {
-        // Slide-in return. Lerp timer2 -> 1.0.
-        m_Timer2 += (1.0f - m_Timer2) * STATE_8_LERP_RATE;
-        m_StateTimer += dt;
-
-        // After settling + 1.5s: reset to CAMERA_ZOOM
-        if (m_Timer2 > 0.99f && m_StateTimer > STATE_8_DURATION) {
-            m_Timer2 = STATE_8_RESET_TIMER;
-            m_State = STATE_CAMERA_ZOOM;
-            m_StateTimer = 0.0f;
-            m_CameraTransition = 0.0f;
-            DeleteMenuButtons();
+        // Binary @ ~0x0014beec, two-phase:
+        //   if (m_Timer2 <= 0.9998) {
+        //       m_Timer2 += (1.0 - m_Timer2) * 0.125     // lerp toward 1
+        //   } else {
+        //       m_Timer2 += dt                            // hold + tick
+        //       if (m_Timer2 > 1.5) {
+        //           m_Timer2 = 0.15
+        //           m_State = 0  (CAMERA_ZOOM)
+        //           m_StateTimer = 0
+        //       }
+        //   }
+        // Binary does NOT call DeleteMenuButtons here — Play/Dojo
+        // buttons are still alive from before the dojo trip and the
+        // STATE_CAMERA_ZOOM lazy-create will skip them.
+        if (m_Timer2 <= STATE_8_LERP_THRESHOLD) {
+            m_Timer2 += (1.0f - m_Timer2) * STATE_8_LERP_RATE;
+        } else {
+            m_Timer2 += dt;
+            if (m_Timer2 > STATE_8_DURATION) {
+                m_Timer2 = STATE_8_RESET_TIMER;
+                m_State = STATE_CAMERA_ZOOM;
+                m_StateTimer = 0.0f;
+            }
         }
         break;
     }
