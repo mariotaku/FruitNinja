@@ -6,6 +6,7 @@
 
 #include "MainScreen.h"
 #include "DojoScreen.h"
+#include "GameModeScreen.h"
 #include "entities/ActorManager.h"
 #include "Game.h"
 #include "entities/FruitInfo.h"
@@ -17,6 +18,8 @@
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "core/SystemManager.h"
+#include "audio/GameSound.h"
+#include "audio/SoundManager.h"
 #include <cstdio>
 #include <cmath>
 
@@ -62,7 +65,8 @@ MainScreen::MainScreen(Game& g)
       m_State(STATE_CAMERA_ZOOM), m_StateTimer(0.0f),
       m_Timer2(0.0f),
       m_CameraTransition(0.0f), m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
-      m_pDojoScreen(NULL)
+      m_pDojoScreen(NULL),
+      m_pGameModeScreen(NULL)
 {
     // Load global textures (assigned to globals via GOT in original)
     m_blurryBackingTex = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
@@ -286,15 +290,27 @@ void MainScreen::Update(float dt) {
 
     case STATE_MODE_SELECT:
     case STATE_MODE_SELECT_2: {
-        // Slide-out: decay timer2 × 0.85
+        // Binary @ 0x0014bf40 cases 0xe/0xf: decay m_Timer2 continuously
+        // and, the ONE frame m_Timer2 crosses 0.25 downward, spawn a
+        // GameModeScreen as a child control. After spawning, MainScreen
+        // stays in this state — it's the GameModeScreen that later
+        // writes mainScreen->m_State (CAMERA_FADE on mode pick, or
+        // SLIDE_IN on back-out).
+        const float oldTimer2 = m_Timer2;
         m_Timer2 *= STATE_0E_DECAY;
 
-        // At threshold: create GameModeScreen
-        if (m_Timer2 < STATE_0E_THRESHOLD) {
-            // TODO: create GameModeScreen
-            // For now: start game directly
-            m_State = STATE_GAME_START;
-            m_CameraTransition = -1.0f;
+        if (oldTimer2 > STATE_0E_THRESHOLD &&
+            m_Timer2 <= STATE_0E_THRESHOLD &&
+            !m_pGameModeScreen) {
+            m_pGameModeScreen = new GameModeScreen(game, false);
+            // RemoveCallback nulls our weak ref BEFORE HUD::Update
+            // deletes the child — same pattern as the DojoScreen
+            // relationship. Prevents UAF when we'd otherwise poll a
+            // freed pointer next frame.
+            m_pGameModeScreen->m_RemoveCallback = [this](HUDControl*) {
+                m_pGameModeScreen = NULL;
+            };
+            game.hud->AddControl(m_pGameModeScreen);
         }
         break;
     }
@@ -699,7 +715,7 @@ void MainScreen::GameModeCallback() {
 // Matches 0x0014c384
 void MainScreen::NewGameCallback() {
     m_State = STATE_GAME_START;
-    // TODO: GameSound::SFXPlay("swoosh_sound", 1.0, 1.0, NULL)
+    if (game.pGameSound) game.pGameSound->SFXPlay("swoosh_sound", 1.0f, 1.0f);
 }
 
 // Matches 0x0014afc4
@@ -714,7 +730,8 @@ void MainScreen::AboutCallback() {
 // Matches 0x0014af64
 void MainScreen::SoundCallback() {
     game.soundEnabled = !game.soundEnabled;
-    // TODO: SoundManager::SetSFXVolume(game.soundEnabled ? 0.5f : 0.0f)
+    Mortar::SoundManager::GetInstance().SetSFXVolume(
+        game.soundEnabled ? SOUND_VOLUME_ON : 0.0f);
     printf("MainScreen: Sound %s\n", game.soundEnabled ? "ON" : "OFF");
 }
 

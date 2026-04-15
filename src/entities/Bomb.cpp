@@ -3,6 +3,7 @@
 #include "BombBlast.h"
 #include "FruitInfo.h"
 #include "Game.h"
+#include "audio/GameSound.h"
 #include "game/BombHit.h"
 #include "game/FruitCamera.h"
 #include "render/Renderer.h"
@@ -478,7 +479,7 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             // "menu-bomb" SFX (string at 0x001B96C9), bombHitTimer = 2.0,
             // sets g_bombHitData->m_bMenuBombHit_flag = 1. No camera shake.
             game->bombHitTimer = 2.0f;
-            // TODO: GameSound::SFXPlay("menu-bomb", 1.0, 1.0)
+            if (game->pGameSound) game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
             // TODO: AddToCurrentScore(-10, 0, false, false)
             // TODO: PowerUpManager::ClearTimedPowers()
             // TODO: WaveManager::ResetSpeed(0)
@@ -492,7 +493,7 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             // stat for hash "bomb" (0x001B96CE), sets bombHitTimer = 3.2,
             // camera shake already fired above.
             game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
-            // TODO: GameSound::SFXPlay("Bomb-explode", 1.0, 1.0)
+            if (game->pGameSound) game->pGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
             // TODO: FruitSaveData::AddToTotal("bomb", 1)
             // TODO: skip entirely if game->gameOverFlag already set
         }

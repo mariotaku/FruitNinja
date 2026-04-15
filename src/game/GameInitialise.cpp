@@ -15,6 +15,7 @@
 #include "entities/Bomb.h"
 #include "entities/SplatEntity.h"
 #include "entities/SlashEntity.h"
+#include "audio/GameSound.h"
 #include "hud/SliceEffect.h"
 #include "screens/GameOverScreen.h"
 #include "screens/PowerUpShop.h"
@@ -43,6 +44,7 @@ void GamePreInitialise() {
     game->hud = NULL;
     game->mainScreen = NULL;
     game->m_FrameTimer = 0;
+    game->pGameSound = NULL;
 }
 
 // Matches GameInitialise (0x10bdfc, 305 lines) — boot all singletons
@@ -91,6 +93,12 @@ void GameInitialise() {
 
     // ActorManager (needed for entity creation)
     game->actorManager = new ActorManager();
+
+    // GameSound — 32-slot pool. Backend is currently stubbed
+    // (SoundManager is no-op) but the call sites exercise the real
+    // pooling / IsPlaying / Release machinery so wiring a proper
+    // SDL audio backend later is a drop-in change.
+    game->pGameSound = new Mortar::GameSound();
 
     // TODO: Step 5: InitialiseData()
 
@@ -148,8 +156,9 @@ void GameDestroy() {
     if (game->pCamera) { delete game->pCamera; game->pCamera = NULL; }
     if (game->inputManager) { delete game->inputManager; game->inputManager = NULL; }
     if (game->actorManager) { delete game->actorManager; game->actorManager = NULL; }
+    if (game->pGameSound) { delete game->pGameSound; game->pGameSound = NULL; }
 
     // TODO: UnLoadContent for all screens/entities
-    // TODO: Delete fonts, FruitSaveData, GameSound
+    // TODO: Delete fonts, FruitSaveData
     // TODO: Destroy: TextureManager, MeshManager, etc.
 }

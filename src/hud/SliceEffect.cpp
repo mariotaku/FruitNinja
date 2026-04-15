@@ -15,8 +15,10 @@
 #include "util/MemoryPool.h"
 #include "math/Matrix44.h"
 #include "Game.h"
+#include "audio/GameSound.h"
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 namespace FN {
@@ -108,7 +110,7 @@ void SliceEffect_DestroyPool() {
 //   3. Fill angle, impulse, pos, critical flag
 //   4. Append to the global List<SliceEffect>
 //   5. (if impulse > 2.5 AND 1/3 RNG) play Clean-Slice-1/2/3 SFX
-//      — port skips SFX until GameSound is ported
+//      — port now calls through GameSound (no-op backend for now).
 void SliceEffect_Add(const Vec3& pos, float angleDeg, float impulse, bool critical) {
     SliceEffect* s = s_Pool.Pop();
     if (!s) return;  // pool exhausted
@@ -119,7 +121,18 @@ void SliceEffect_Add(const Vec3& pos, float angleDeg, float impulse, bool critic
     s->pos      = pos;         // +0x0c (Vec3*)
     s->critical = critical ? 1 : 0;
 
-    // TODO: whoosh SFX — GameSound::SFXPlay("Clean-Slice-{1,2,3}")
+    // Clean-Slice SFX gate from binary (0x0016b480):
+    //   if (impulse > 2.5f && (rand() % 3) == 0)
+    //       GameSound::SFXPlay("Clean-Slice-<1|2|3>", 1.0, pitch, cb)
+    if (impulse > 2.5f && (rand() % 3) == 0) {
+        Game* g = Game::GetInstance();
+        if (g && g->pGameSound) {
+            static const char* kNames[3] = {
+                "Clean-Slice-1", "Clean-Slice-2", "Clean-Slice-3"
+            };
+            g->pGameSound->SFXPlay(kNames[rand() % 3], 1.0f, 1.0f);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------
