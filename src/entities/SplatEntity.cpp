@@ -45,11 +45,12 @@ static const float MS_DECAY_RAND      = 0.25f;
 
 // Update @ 0x0017f774
 static const float UP_LAND_Z          = -50.0f;   // DAT_0017faa8 (landing)
-static const float UP_GRAVITY         = -600.0f;  // port-picked — binary uses
-                                                  // dt * DAT_ * 10 with a
-                                                  // runtime rate; this gives
-                                                  // ~0.06s airborne window
-                                                  // for a -900 u/s start vel.
+// Verified 2026-04-15 from instruction at 0x0017fa90:
+//   vmov.f32 s13, 0xc1200000   ; -10.0f
+//   vmla.f32 s15, s13, s14     ; vel.y += -10.0 * dt
+// where s14 = *(GameTaskData + 0x38) is the per-frame dt scalar.
+// The port uses the SDL frame dt directly here.
+static const float UP_GRAVITY         = -10.0f;
 
 static const float UP_VEL_CLAMP_LO    = -50.0f;   // DAT_0017fd40
 static const float UP_VEL_CLAMP_HI    =  50.0f;   // DAT_0017fd44
@@ -74,11 +75,14 @@ static const SplatAtlasEntry SPLAT_ATLAS[6] = {
     { 0.0f, 1.0f, 0.75f, 1.0f  },  // type 5: full-width bottom row
 };
 
-// Base colour used as the "pre-fruit" tint during the colour lerp. Binary
-// reads this from a GOT singleton (`pbVar10`); the static value resolves
-// to white with full alpha in practice.
-static const uint8_t BASE_R = 255;
-static const uint8_t BASE_G = 255;
+// Base colour used as the "pre-fruit" tint during the colour lerp.
+// Binary reads `pbVar10` from GOT+0x7A44 (resolved address 0x001F3B74),
+// initialized in _GLOBAL__I_Fruit_cpp @ 0x0017a514 as a copy of the
+// engine's Blue constant from _GLOBAL__I_Colour_cpp @ 0x0018406a:
+//   MakeColour_Engine(ptr, 0, 0, 0xff)  → R=0, G=0, B=255, A=255
+// Verified 2026-04-15. The earlier (255,255,255,255) was a placeholder.
+static const uint8_t BASE_R = 0;
+static const uint8_t BASE_G = 0;
 static const uint8_t BASE_B = 255;
 static const uint8_t BASE_A = 255;
 
@@ -258,13 +262,14 @@ void SplatEntity::UpdateSplat(float dt) {
 
             // Per-type size multiplier — binary at landing branch:
             //   m_Scale *= (perTypeScale[type] * 2.5)
-            // perTypeScale lives at GOT + 0x60 + type*4. Exact values
-            // not yet dumped from the binary; using a constant 2.0
-            // approximation (gives effective 5.0× scale, matching the
-            // "If sc≈10 and perTypeScale≈2 → 50" reference).
-            // TODO: dump the per-type table and replace with exact values.
-            const float perTypeScale = 2.0f;
-            m_Scale = m_Scale * (perTypeScale * 2.5f);
+            // Verified table @ 0x001BD074 (GOT_BASE + DAT_0017fad4 + 0x60):
+            //   types 0..3 → 1.6  (small splats, final *= 4.0)
+            //   types 4..5 → 2.9  (golden splats, final *= 7.25)
+            static const float PER_TYPE_SCALE[6] = {
+                1.6f, 1.6f, 1.6f, 1.6f, 2.9f, 2.9f
+            };
+            const int idx = (type >= 0 && type < 6) ? type : 0;
+            m_Scale = m_Scale * (PER_TYPE_SCALE[idx] * 2.5f);
 
             // Stick to the "background plane" — splat freezes in place.
             // Binary's landed Update doesn't integrate pos, so we zero
@@ -510,11 +515,22 @@ void SplatEntity::DrawActive() {
     s_SplatTex->Set();
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_DEPTH_TEST);
+
+    // Read-only depth test — matches binary's SetDepthBufferWrite(0)
+    // call BEFORE this draw (after ActorManager::Draw). Splats render
+    // on the background plane (z=-50) but should be culled by any 3D
+    // fruit/bomb pixel currently in front. The port's Fruit::Draw
+    // explicitly disables depth test on exit, so we re-enable read-only
+    // here so the cleared/fruit depth values still drive z-rejection.
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_FALSE);
 
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawTriList(s_SplatVerts, count * 6);
     }
 
+    glDepthMask(GL_TRUE);
+    glDisable(GL_DEPTH_TEST);
     s_SplatTex->UnSet();
 }

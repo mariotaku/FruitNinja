@@ -49,8 +49,13 @@ private:
     TextureManager();
     ~TextureManager();
 
-    // WeakPtr-like behavior: store raw pointer, check ref count
-    // Original uses WeakPtr<Texture> but we simplify with raw pointer tracking
+    // WeakPtr-equivalent cache: stores raw Texture* — the Texture
+    // destructor calls OnTextureDestroyed() which removes its entry
+    // before the object is freed, so the cache never holds a dangling
+    // pointer. Matches the binary's `std::map<ulong, WeakPtr<Texture>>`
+    // semantics: Find returns null when the referent has been destroyed,
+    // and the next Load re-creates from disk. Self-cleaning, no manual
+    // PurgeExpired needed.
     struct CacheEntry {
         Texture* ptr;
         CacheEntry() : ptr(NULL) {}
@@ -58,6 +63,13 @@ private:
     };
 
     std::map<uint32_t, CacheEntry> m_Cache;
+
+public:
+    // Called by Texture::~Texture before the GL handle is deleted.
+    // Walks the cache and removes any entry pointing to the destroyed
+    // texture so subsequent Find() calls return null and trigger a
+    // fresh load.
+    void OnTextureDestroyed(Texture* tex);
 
     static char s_DataDir[256];
 };

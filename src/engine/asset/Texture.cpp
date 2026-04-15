@@ -1,4 +1,5 @@
 #include "asset/Texture.h"
+#include "asset/TextureManager.h"
 #include "render/DisplayManager.h"
 #include <cstdio>
 #include <cstring>
@@ -14,6 +15,12 @@ Texture::Texture()
 }
 
 Texture::~Texture() {
+    // Notify the TextureManager so its cache drops the entry pointing
+    // at us BEFORE the GL handle is freed. Mirrors the binary's
+    // WeakPtr cleanup path — without this the next Find() for our
+    // hash would return a dangling pointer.
+    TextureManager::GetInstance().OnTextureDestroyed(this);
+
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
         m_TexId = 0;
