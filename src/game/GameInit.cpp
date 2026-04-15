@@ -196,81 +196,105 @@ void GameDraw(float dt, bool active) {
 
     Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
 
+    // === 1. ActorManager::Draw — 3D fruit/bomb/slash entities ===
+    // Binary @ 0x0016ba10. Depth write ON during this pass (binary
+    // calls SetDepthBufferWrite(1) just before).
     if (earlyFrame) printf("GameDraw: -> ActorManager::Draw am=%p\n", (void*)game->actorManager);
-    // 2. 3D entities (ActorManager::Draw — fruit, bomb meshes)
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
 
-    if (earlyFrame) printf("GameDraw: -> HUD::BeginDraw hud=%p\n", (void*)game->hud);
-    // 3. HUD::BeginDraw
-    if (game->hud)
+    // === 2. HUD::BeginDraw + post-actor block ===
+    // Binary turns depth write OFF (SetDepthBufferWrite(0)) after
+    // ActorManager so subsequent HUD/splat passes don't write depth.
+    if (game->hud) {
+        if (earlyFrame) printf("GameDraw: -> HUD::BeginDraw hud=%p\n", (void*)game->hud);
         game->hud->BeginDraw(dt);
 
-    if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x40)\n");
-    // 4-6. HUD layers drawn before the logo/particles block
-    if (game->hud) {
+        // 2a. HUD::Draw(0x40) — menu button sprites @ 0x0016ba5a
+        if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x40)\n");
         game->hud->Draw(0x40);
+
+        // 2b. SplatEntity::DrawActiveSplats @ 0x0016ba6a
         if (earlyFrame) printf("GameDraw: -> SplatEntity::DrawActive\n");
-        // SplatEntity::DrawActiveSplats (0x180344) — juice splats on
-        // the background plane, drawn behind particles and fruit.
         SplatEntity::DrawActive();
+
+        // 2c. Fruit::DrawShadows @ 0x0016ba6e — TODO: not yet ported
+
+        // 2d. SlashEntity::PreDraw @ 0x0016ba84 — TODO: blade pre-pass
+        //     not yet ported
+
+        // 2e. BombBlast::DrawActiveBlasts @ 0x0016ba88 — drawn HERE in
+        //     the binary, NOT inside the 0x200 layer. Shockwave rings
+        //     belong to this post-actor block.
+        if (earlyFrame) printf("GameDraw: -> BombBlast::DrawActiveBlasts\n");
+        BombBlast::DrawActiveBlasts();
+
+        // 2f. BombFlash::DrawActiveFlashes @ 0x0016baf0 — TODO: not yet ported
+
+        // 2g. HUD::Draw(0x80) — DojoScreen / AboutScreen @ 0x0016baf8
         if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x80)\n");
-        // Layer 0x80 — DojoScreen + AboutScreen draw here. Binary's
-        // LayerFlags for both screens is 0x80 (verified in RE notes).
         game->hud->Draw(0x80);
     }
 
+    // === 3. Background particles ===
+    // Binary pm.Draw(-1) @ 0x0016bb02 — drawn BEHIND the logo/shade.
     if (earlyFrame) printf("GameDraw: -> pm.Draw(-1)\n");
-    // 7. Background particles (binary calls pm.Draw(-1) here — earliest
-    //    visible layer, drawn behind the logo and shade)
     pm.Draw(-1);
 
-    // 8. [vtable loop over 16 objects — not yet ported]
-
-    if (earlyFrame) printf("GameDraw: -> pm.Draw(0)\n");
-    // 9. Mid particles (pm.Draw(0))
-    pm.Draw(0);
-
-    if (earlyFrame) printf("GameDraw: -> SlashEntity::Draw\n");
-    // 10. SlashEntity blade ribbon — drawn BEFORE MainScreen so the logo
-    //     and shade appear in front of the blade. Matches binary DrawSlices
-    //     call site at GameDraw 0x16b888.
+    // SetDepthBuffer(0) toggles depth test off after this — the
+    // SlashEntity loop ×16 then runs. TODO: port the multiplayer
+    // SlashEntity loop (currently just one global slash entity).
     if (g_pSlashEntity) g_pSlashEntity->Draw();
 
+    // === 4. Mid particles + slice lines + main-screen logo ===
+    // Binary pm.Draw(0) @ 0x0016bb4a
+    if (earlyFrame) printf("GameDraw: -> pm.Draw(0)\n");
+    pm.Draw(0);
+
+    // DrawSlices @ 0x0016bb52 — slash-line pool
     if (earlyFrame) printf("GameDraw: -> SliceEffect_Draw\n");
-    // Slice-line effect pool (DrawSlices @ 0x169ac8). Draws the white
-    // streak lines spawned by Fruit::CollisionResponse + Fruit::Slice.
     FN::SliceEffect_Draw(dt);
 
-    // Critical / rare-fruit full-screen tint — fades over ~0.3s.
-    // Sits between the slice lines and the MainScreen logo so it
-    // reads as a "flash behind the UI".
-    FN::DrawCriticalFlash();
-
-    // Debug overlay — fruit/bomb hitboxes (F1 toggle).
-    FN::DebugHitbox_Draw();
-
+    // HUD::Draw(0x01) — MainScreen logo / shade @ 0x0016bb5a
     if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x01)\n");
-    // 11. MainScreen (HUD layer 0x01) — logo + shade on top of the blade
     if (game->hud) game->hud->Draw(0x01);
 
+    // pm.Draw(1) — foreground particles @ 0x0016bb6a
     if (earlyFrame) printf("GameDraw: -> pm.Draw(1)\n");
-    // 12. Foreground particles (pm.Draw(1)) — over logo, under buttons
     pm.Draw(1);
 
-    // 13. [WaveManager::Draw — not yet ported]
+    // WaveManager::Draw(0) @ 0x0016bb98 — TODO: not yet ported
 
-    // 14-16. HUD overlay layers
+    // === 5. HUD overlay layers + flash effects ===
     if (game->hud) {
-        game->hud->Draw(0x08);    // buttons
-        game->hud->Draw(0x100);   // overlays
-        // BombBlast shockwave rings + white flash overlay sit inside the
-        // 0x200 "bomb hit" layer in the binary (DrawBombHit @ 0x16b73c
-        // and DrawActiveBlasts @ 0x171aa0 are called here).
-        BombBlast::DrawActiveBlasts();
+        // HUD::Draw(0x08) — buttons @ 0x0016bba8
+        game->hud->Draw(0x08);
+
+        // MainScreen::DrawPostEffects @ 0x0016bbb0 — TODO
+
+        // DrawCritHit (CriticalFlash) @ 0x0016bbd2 — gated on
+        // critFlash > 0 && IsFastHardware. Port has CriticalFlash
+        // implemented as FN::DrawCriticalFlash.
+        FN::DrawCriticalFlash();
+
+        // HUD::Draw(0x100) — overlays @ 0x0016bbde
+        game->hud->Draw(0x100);
+
+        // DrawBombHit @ 0x0016bbe6 — bomb-hit white flash, gated on
+        // bombFlash > 0
         FN::DrawBombHit();
-        game->hud->Draw(0x200);   // bomb hit overlay
-        game->hud->Draw(0x400);   // top layer
+
+        // HUD::Draw(0x200) — bomb-hit overlay layer @ 0x0016bbec
+        game->hud->Draw(0x200);
+
+        // DrawNews / DrawStartFade @ 0x0016bbf0..0x0016bc12 — TODO
+
+        // Debug overlay — fruit/bomb hitboxes (F1 toggle)
+        FN::DebugHitbox_Draw();
+
+        // HUD::Draw(0x400) — top layer @ 0x0016bd7c, ALWAYS fires
+        // (binary places it OUTSIDE the `active` block).
+        game->hud->Draw(0x400);
     }
     if (earlyFrame) printf("GameDraw[f%d]: exit\n", s_DrawCount - 1);
 }

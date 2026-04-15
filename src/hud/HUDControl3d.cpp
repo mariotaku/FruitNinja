@@ -62,8 +62,23 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
+    // Depth test: read-only. Lets the previously-drawn 3D fruit/bomb
+    // mesh occlude the ring quad pixels where it sits in front. The
+    // ring (quad at button pos.z) and fruit (3D mesh translated to
+    // button pos) share the same nominal z; equal-z under GL_LESS fails,
+    // so any fruit pixels drawn first reject the ring at the same depth.
+    // Outside the fruit's silhouette the depth buffer holds the cleared
+    // far value and the ring passes. Net effect: ring renders only
+    // around the fruit, fruit is visible inside.
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_FALSE);    // do not write — preserve fruit's depth
+
     // Step 10-11: TintColour → DrawQuadUnCached
     game->renderer.DrawQuad(m_DrawColour, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
+
+    glDepthMask(GL_TRUE);
+    glDisable(GL_DEPTH_TEST);
 
     // Step 12: UnSet
     glBindTexture(GL_TEXTURE_2D, 0);
