@@ -60,15 +60,18 @@ static const float UP_LIFE_SLIDE_THR  = 1.25f;    // slide-phase threshold
 static const float UP_SPRING_DT_MULT  = 1.0f;     // binary reads from GameTaskData
 
 // DrawActiveSplats @ 0x00180344 — UV atlas table @ 0x001bd014 (6 × 4 floats)
-// Each entry is {u0, v0, u1, v1} (verified from raw little-endian dump).
-struct SplatAtlasEntry { float u0, v0, u1, v1; };
+// Each entry is {u0, u1, v0, v1} — verified from raw little-endian dump.
+// Parse-order note: the previous comment had this as {u0,v0,u1,v1} which
+// gave zero-width quads for the small-cell entries. The true layout
+// pairs the U bounds first, then the V bounds.
+struct SplatAtlasEntry { float u0, u1, v0, v1; };
 static const SplatAtlasEntry SPLAT_ATLAS[6] = {
-    { 0.0f, 0.5f, 0.0f, 0.25f },
-    { 0.5f, 1.0f, 0.0f, 0.25f },
-    { 0.0f, 0.5f, 0.25f, 0.5f },
-    { 0.5f, 1.0f, 0.25f, 0.5f },
-    { 0.0f, 1.0f, 0.5f, 0.75f },
-    { 0.0f, 1.0f, 0.75f, 1.0f },
+    { 0.0f, 0.5f, 0.0f,  0.25f },  // type 0: upper-left small cell
+    { 0.5f, 1.0f, 0.0f,  0.25f },  // type 1: upper-right small cell
+    { 0.0f, 0.5f, 0.25f, 0.5f  },  // type 2: middle-left small cell
+    { 0.5f, 1.0f, 0.25f, 0.5f  },  // type 3: middle-right small cell
+    { 0.0f, 1.0f, 0.5f,  0.75f },  // type 4: full-width middle row
+    { 0.0f, 1.0f, 0.75f, 1.0f  },  // type 5: full-width bottom row
 };
 
 // Base colour used as the "pre-fruit" tint during the colour lerp. Binary
@@ -196,12 +199,15 @@ void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, bool param3, int fruit
     m_Life      = MS_LIFE_BASE  + RandRange(MS_LIFE_RAND);
     m_DecayRate = MS_DECAY_BASE + RandRange(MS_DECAY_RAND);
 
-    // Axis vectors. Binary builds two perpendicular 2D basis vectors
-    // from (angle, angle+180°) and scales by 0.5.
+    // Axis vectors. Binary (verified at SplatEntity::Update landing branch
+    // ~0x0017f9xx): two perpendicular 2D basis vectors with DIFFERENT
+    // scalars — axisA = (cos, sin) * 0.5 and axisB = perp * 0.25. The
+    // half/quarter pair gives the splat a 2:1 wide-to-tall aspect ratio
+    // before the per-type scale multiply.
     const float angleRad  = m_Angle * (3.1415926f / 180.0f);
-    const float axFlipRad = (m_Angle + MS_ANGLE_FLIP_DEG) * (3.1415926f / 180.0f);
-    m_AxisA = Vec3(cosf(angleRad),  sinf(angleRad),  0.0f) * MS_AXIS_HALF_SCALE;
-    m_AxisB = Vec3(cosf(axFlipRad), sinf(axFlipRad), 0.0f) * MS_AXIS_HALF_SCALE;
+    const float axPerpRad = angleRad + 1.5707963f;  // +90°
+    m_AxisA = Vec3(cosf(angleRad),  sinf(angleRad),  0.0f) * 0.5f;
+    m_AxisB = Vec3(cosf(axPerpRad), sinf(axPerpRad), 0.0f) * 0.25f;
 
     // Start airborne — Update will pick m_SplatType on landing.
     m_SplatType = -1;
@@ -217,13 +223,18 @@ void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, bool param3, int fruit
 void SplatEntity::UpdateSplat(float dt) {
     if (!m_bAlive) return;
 
-    // --- Physics integration (both phases) ---
-    pos = pos + vel * dt;
-    vel.y += UP_GRAVITY * dt;
+    // --- Physics integration (airborne only) ---
+    // Once landed (m_SplatType >= 0) the binary stops integrating pos
+    // and only touches m_Scale.y in the slide-decay phase.
+    if (m_SplatType < 0) {
+        pos = pos + vel * dt;
+        vel.y += UP_GRAVITY * dt;
 
-    // Velocity clamps.
-    vel.x = Clampf(vel.x, UP_VEL_CLAMP_LO, UP_VEL_CLAMP_HI);
-    vel.y = Clampf(vel.y, UP_SCALE_CLAMP_LO, UP_SCALE_CLAMP_HI);
+        // Velocity floor clamp — binary uses max(vel, DAT_0017fd40 = -50)
+        // to prevent downward velocity runaway.
+        if (vel.x < UP_VEL_CLAMP_LO) vel.x = UP_VEL_CLAMP_LO;
+        if (vel.y < UP_VEL_CLAMP_LO) vel.y = UP_VEL_CLAMP_LO;
+    }
 
     if (m_SplatType < 0) {
         // --- Airborne phase ---
@@ -245,9 +256,22 @@ void SplatEntity::UpdateSplat(float dt) {
             }
             m_SplatType = (int8_t)type;
 
-            // Stop Z motion — splat sticks to the "background plane".
+            // Per-type size multiplier — binary at landing branch:
+            //   m_Scale *= (perTypeScale[type] * 2.5)
+            // perTypeScale lives at GOT + 0x60 + type*4. Exact values
+            // not yet dumped from the binary; using a constant 2.0
+            // approximation (gives effective 5.0× scale, matching the
+            // "If sc≈10 and perTypeScale≈2 → 50" reference).
+            // TODO: dump the per-type table and replace with exact values.
+            const float perTypeScale = 2.0f;
+            m_Scale = m_Scale * (perTypeScale * 2.5f);
+
+            // Stick to the "background plane" — splat freezes in place.
+            // Binary's landed Update doesn't integrate pos, so we zero
+            // vel completely. Slide-decay phase (life <= 1.25) only
+            // touches m_Scale.y, not pos.
             pos.z = UP_LAND_Z;
-            vel.z = 0.0f;
+            vel = Vec3(0.0f, 0.0f, 0.0f);
         }
         return;
     }
@@ -293,8 +317,8 @@ void SplatEntity::DestroyPool() {
 
 void SplatEntity::LoadContent() {
     if (!s_SplatTex.IsValid()) {
-        s_SplatTex = Mortar::TextureManager::LoadLocalisedTexture("slice_fruit.tex");
-        printf("[SplatEntity] LoadContent: slice_fruit.tex valid=%d\n",
+        s_SplatTex = Mortar::TextureManager::LoadLocalisedTexture("white_splash.tex");
+        printf("[SplatEntity] LoadContent: white_splash.tex valid=%d\n",
                s_SplatTex.IsValid());
     }
 }
@@ -361,13 +385,34 @@ void SplatEntity::DrawActive() {
         if (!s || !s->m_bAlive)     continue;
         if (s->m_SplatType < 0)     continue;  // still airborne
 
-        // Axis-scaled corner vectors.
-        // Binary's quad basis is axisA * scale.x and axisB * scale.y.
-        const float sx = s->m_Scale.x;
-        const float sy = s->m_Scale.y;
-        const Vec3 right(s->m_AxisA.x * sx, s->m_AxisA.y * sx, 0.0f);
-        const Vec3 up   (s->m_AxisB.x * sy, s->m_AxisB.y * sy, 0.0f);
+        // Axis-scaled corner vectors. Scale triple stored as (sc,-sc,sc)
+        // where sc is the random radius. m_Scale.y is negative on purpose
+        // (it's the value that decays during the slide phase) — use the
+        // magnitude as the quad's uniform half-extent so the quad isn't
+        // back-facing.
+        // Quad corner construction — matches binary DrawSplat (0x0017f008).
+        // The four corners are built from the sum/diff of the two axis
+        // vectors, scaled by m_Scale.x for X and m_Scale.y for Y. Note
+        // that m_Scale.y is the negative `-sc` from the spawn triple,
+        // which the binary keeps negative on purpose (it's the value the
+        // slide-decay phase mutates).
+        //
+        //   v0 (TL): pos + (+ax + bx) * scX, (+ay + by) * scY
+        //   v1 (TR): pos + (-ax + bx) * scX, (-ay + by) * scY
+        //   v2 (BL): pos + (+ax - bx) * scX, (+ay - by) * scY
+        //   v5 (BR): pos + (-ax - bx) * scX, (-ay - by) * scY
+        const float scX = s->m_Scale.x;
+        const float scY = s->m_Scale.y;
+        const float ax = s->m_AxisA.x, ay = s->m_AxisA.y;
+        const float bx = s->m_AxisB.x, by = s->m_AxisB.y;
 
+        // Colour lerp from base RGBA toward the captured fruit colour.
+        // Binary formula: fade = clamp(2.0 * m_ColourPhase, 0, 1).
+        // Since m_ColourPhase ticks toward zero, fade shrinks — meaning
+        // the splat lerps FROM fruit colour TOWARD base as ColourPhase
+        // drains. (FruitTypeColour path starts at phase=0, so fruit
+        // colour is persistent; default path starts at 0.75 so the base
+        // colour fades to fruit over time.)
         // Colour lerp from base RGBA toward the captured fruit colour.
         // Binary formula: fade = clamp(2.0 * m_ColourPhase, 0, 1).
         // Since m_ColourPhase ticks toward zero, fade shrinks — meaning
@@ -392,44 +437,57 @@ void SplatEntity::DrawActive() {
             ((uint32_t)gG <<  8) |
             ((uint32_t)rR);
 
-        // Atlas UV — bSpecial shifts types 0..3 to the right half.
+        // Atlas UV — verified via SplatEntity::DrawSplat @ 0x0017f008.
+        // The binary halves the table-stored U coords (`* 0.5`) before
+        // applying them, then optionally shifts both by +0.5 when
+        // m_bSpecial (binary field_0x19) is set — selecting the right
+        // half of the texture. Without the halving the quad samples
+        // twice as wide as the actual splat sprite cell and ends up
+        // mostly transparent / invisible.
+        //
+        //   u0 = table.u_start * 0.5
+        //   u1 = table.u_end   * 0.5
+        //   if (m_bSpecial)  { u0 += 0.5; u1 += 0.5; }
+        //   if (m_bFlipV)    swap(v0, v1);
         const int type = ClampInt(s->m_SplatType, 0, 5);
         const SplatAtlasEntry& e = SPLAT_ATLAS[type];
-        float u0 = e.u0, u1 = e.u1;
-        if (s->m_bSpecial && type < 4) { u0 += 0.5f; u1 += 0.5f; }
+        float u0 = e.u0 * 0.5f;
+        float u1 = e.u1 * 0.5f;
+        if (s->m_bSpecial) { u0 += 0.5f; u1 += 0.5f; }
         float v0 = e.v0, v1 = e.v1;
         if (s->m_bFlipV) { float t = v0; v0 = v1; v1 = t; }
 
         QUADCUSTOMVERTEX* v = &s_SplatVerts[count * 6];
         const float px = s->pos.x, py = s->pos.y, pz = s->pos.z;
 
-        // Two triangles forming a centred quad:
-        //   v0 = pos - right - up     uv = (u0, v0)
-        //   v1 = pos + right - up     uv = (u1, v0)
-        //   v2 = pos - right + up     uv = (u0, v1)
-        //   v3 = v2
-        //   v4 = v1
-        //   v5 = pos + right + up     uv = (u1, v1)
-        v[0].x = px - right.x - up.x;
-        v[0].y = py - right.y - up.y;
+        // Vertex layout matches binary DrawSplat (vertices 0..5 written in
+        // order, then v3=v2 and v4=v1 via memcpy):
+        //   v[0] = TL
+        //   v[1] = TR
+        //   v[2] = BL
+        //   v[3] = v[2]
+        //   v[4] = v[1]
+        //   v[5] = BR
+        v[0].x = px + ( ax + bx) * scX;
+        v[0].y = py + ( ay + by) * scY;
         v[0].z = pz;
         v[0].u = u0; v[0].v = v0;
 
-        v[1].x = px + right.x - up.x;
-        v[1].y = py + right.y - up.y;
+        v[1].x = px + (-ax + bx) * scX;
+        v[1].y = py + (-ay + by) * scY;
         v[1].z = pz;
         v[1].u = u1; v[1].v = v0;
 
-        v[2].x = px - right.x + up.x;
-        v[2].y = py - right.y + up.y;
+        v[2].x = px + ( ax - bx) * scX;
+        v[2].y = py + ( ay - by) * scY;
         v[2].z = pz;
         v[2].u = u0; v[2].v = v1;
 
         v[3] = v[2];
         v[4] = v[1];
 
-        v[5].x = px + right.x + up.x;
-        v[5].y = py + right.y + up.y;
+        v[5].x = px + (-ax - bx) * scX;
+        v[5].y = py + (-ay - by) * scY;
         v[5].z = pz;
         v[5].u = u1; v[5].v = v1;
 
