@@ -20,7 +20,7 @@
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
-#include "debug/DebugHitbox.h"
+#include "debug/DebugFlags.h"
 #include <cstdio>
 #include <cstdlib>
 

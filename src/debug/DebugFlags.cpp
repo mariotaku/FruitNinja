@@ -1,9 +1,9 @@
 //
-// DebugHitbox — draws fruit/bomb collision spheres as translucent
+// DebugFlags — draws fruit/bomb collision spheres as translucent
 // outlined discs. Toggle with F1 in the SDL event loop (Game::run).
 //
 
-#include "DebugHitbox.h"
+#include "DebugFlags.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
 #include "render/Renderer.h"
@@ -121,10 +121,10 @@ static void BuildCrosshair(QUADCUSTOMVERTEX* out,
 // Per-entity colours (BGRA packed).
 static uint32_t ColourFor(int entityType) {
     switch (entityType) {
-        case 0:  return 0x8000FF00;  // Fruit  → green @ 50% alpha
-        case 1:  return 0x800000FF;  // Bomb   → red   @ 50% alpha
-        case 2:  return 0x80FFFF00;  // Splat  → cyan  @ 50% alpha
-        default: return 0x80FFFFFF;  // other  → white @ 50% alpha
+        case 0:  return 0x8000FF00;  // Fruit  -> green @ 50% alpha
+        case 1:  return 0x800000FF;  // Bomb   -> red   @ 50% alpha
+        case 2:  return 0x80FFFF00;  // Splat  -> cyan  @ 50% alpha
+        default: return 0x80FFFFFF;  // other  -> white @ 50% alpha
     }
 }
 

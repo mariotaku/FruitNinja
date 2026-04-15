@@ -11,7 +11,7 @@
 #include "game/GameTaskState.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
-#include "debug/DebugHitbox.h"
+#include "debug/DebugFlags.h"
 #include "config.h"
 #include <cstdio>
 

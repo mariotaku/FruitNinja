@@ -1,5 +1,5 @@
-#ifndef FN_DEBUG_HITBOX_H
-#define FN_DEBUG_HITBOX_H
+#ifndef FN_DEBUG_FLAGS_H
+#define FN_DEBUG_FLAGS_H
 
 //
 // Debug overlay — draws fruit + bomb collision spheres as translucent

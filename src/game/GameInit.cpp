@@ -22,7 +22,7 @@
 #include "input/InputManager.h"
 #include "input/Touch.h"
 #include "util/StringHash.h"
-#include "debug/DebugHitbox.h"
+#include "debug/DebugFlags.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup
