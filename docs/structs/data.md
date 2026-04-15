@@ -32,12 +32,14 @@ Array allocated as `8 + count × 0x330` bytes (8-byte header: stride=0x330, coun
 
 ### Float Fields (from XML QueryFloatAttribute)
 
-> **These were swapped in the previous docs.** Verified by tracing LoadInfo: `pcVar3` is set to `"scale"` (0x001BA851) before the first `QueryFloatAttribute(elem, pcVar3, fruitInfo + 0x244)` call.
+<!-- Analysed: 2026-04-15T16:00 -->
+
+> **Verified 2026-04-15**: Field offsets and names confirmed by RE analysis of `Fruit::Init` (0x0017630e–0x0017631e). The collision radius formula is `radius = (m_CollisionScale + 0.52 * m_Scale) * scaleParam`, see `docs/engine/fruit-size.md` for details.
 
 | Offset | Type | Name | Default | XML Attr | Notes |
 |--------|------|------|---------|----------|-------|
 | +0x244 | float | **m_Scale** | 1.0f | "scale" | Visual scale × 0.01 in SetFruitType (e.g. watermelon=75 → 0.75) |
-| +0x248 | float | **m_CollisionScale** | 25.0f | "collision" | Collision radius factor (e.g. watermelon=5) |
+| +0x248 | float | **m_CollisionScale** | 25.0f | "collision" | Collision radius base (e.g. watermelon=5); radius = collision + 0.52×scale |
 | +0x24C | float | m_HitInfluence | 0.75f | "hitInfluence" | Hit influence multiplier |
 
 ### Hash Fields (uint32, computed from strings)

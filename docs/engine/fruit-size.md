@@ -1,43 +1,33 @@
-Here's what we know and what's left to investigate for the globalScaleVec:
+## Fruit Collision Radius Formula
 
-## Known Facts
+<!-- Analysed: 2026-04-15T16:00 -->
 
-- **BSS address**: 0x001F4334 (Vec3, 12 bytes)
-- **GOT entry**: 0x001F38FC → 0x001F4334
-- **Static init**: `_GLOBAL__I_Initialise.cpp` sets it to **(1,1,1)** — confirmed from decompile
-- **Used by**: Fruit::Init (SetFruitType), Bomb::Init, SpawnFruit, SpawnBomb, Coin::InitCoin, and ~40 other functions (all as PARAM/read)
-- **No WRITE xrefs** found to 0x001F4334 besides the static init — meaning either it stays (1,1,1) forever, or it's written via an indirect pointer we didn't trace
-- **Current port value**: 3.76 (visual calibration so watermelon fills menu button circle)
-- **At (1,1,1)**: fruits are ~13px at 480×320 — comically small
-- **At (3.76,3.76,3.76)**: watermelon ≈ 48px — looks proportionally correct
+The collision radius is computed in `Fruit::Init @ 0x0017630e..0x0017631e`:
 
-## What Doesn't Add Up
+```
+vldr s14, [r3, #0x244]   ; s14 = m_Scale          (XML "scale" attr)
+vldr s15, [r3, #0x248]   ; s15 = m_CollisionScale (XML "collision" attr)
+vmla s15, s13, s14       ; s15 += 0.52 * s14
+vmul s15, s15, scale     ; s15 *= scaleParam (1.0 typical)
+```
 
-The static init IS (1,1,1), but that produces 13-pixel fruits on a 480×320 screen. The original game clearly has larger fruits. Something must set it to a bigger value at runtime, but no direct WRITE xref to 0x001F4334 was found.
+**Formula: `radius = (m_CollisionScale + 0.52 * m_Scale) * scaleParam`**
 
-## Investigation Steps
+### Field Mappings (from FRUIT_INFO at `0x001F...`)
 
-1. **Check if the value is written indirectly** — The BSS at 0x001F4334 could be written through a base pointer + offset. Search for code that writes to `some_ptr + offset` where the result equals 0x001F4334. The global bomb config pointer (0x001F43B8) is 132 bytes away — maybe there's a struct base at 0x001F4300 or similar.
+| Offset | Field | Default | XML Attr | Notes |
+|--------|-------|---------|----------|-------|
+| +0x244 | m_Scale | 1.0 | "scale" | Visual scale × 0.01 in rendering |
+| +0x248 | m_CollisionScale | 25.0 | "collision" | Collision radius factor |
 
-2. **Check `SetupGameWork` more carefully** (0x0010b542) — It writes to `puVar4 + 0x88` where `puVar4` comes from a GOT pointer. Verify that `puVar4` is NOT 0x001F4334 - 0x88 = 0x001F42AC.
+Every fruit in `FruitNinjaBada/Data/xml/fruitlist.xml` overrides both:
+- **Watermelon**: `scale="75" collision="5"` → radius = 5 + 0.52×75 = **44**
+- **Apple**: `scale="60" collision="5"` → radius = 5 + 0.52×60 = **36.2**
+- **Mango**: `scale="65" collision="5"` → radius = 5 + 0.52×65 = **38.8**
 
-3. **Check GameInitialise steps** — The game init at 0x0010c000+ runs ~25 steps. One of them might call a function that sets globalScaleVec. Decompile the init steps that run BEFORE fruit/bomb loading (steps 1-7) and look for writes to Vec3 values.
+The visual scale chain in `SetFruitType` reads `+0x244` directly and scales by 0.01:
+```c
+entity.scale = Vec3::One * (m_Scale * 0.01) * scaleParam;
+```
 
-4. **Check `DisplayManager` or screen setup** — The scale might be set based on screen resolution/DPI. Look at `DisplayManager::Initialise` or `GlesForm::OnInitializing` for writes to globalScaleVec.
-
-5. **Read BSS at runtime** — If you can attach a debugger or add a memory read hook, dump the float values at 0x001F4334 right before SpawnFruit is called. This would give the exact runtime value.
-
-6. **Try the Bada emulator** — Run the original binary in a Bada SDK emulator and inspect memory at 0x001F4334 after game init.
-
-7. **Check if the Vec3 constructor is inlined** — The (1,1,1) init might be a DEFAULT that gets overwritten by a memcpy or assignment from a config file. Search for `vstr` instructions writing to addresses near 0x001F4334.
-
-## Quick Test Values
-
-If you want to narrow it down visually:
-
-| globalScaleVec | Watermelon menu px | Notes |
-|---------------|-------------------|-------|
-| 1.0 | 13 px | Binary static init (too small) |
-| 2.75 | 35 px | Previous guess (30-50% small) |
-| 3.76 | 48 px | Current calibration |
-| 5.0 | 64 px | Would exactly fill inner circle |
+**Important**: The fruit's collision sphere is updated in `Fruit::Update`, and the radius is NOT post-multiplied by any additional fruit-scale factor (a port-specific bug that incorrectly shrank hitboxes 25–50% has been fixed).

@@ -31,6 +31,23 @@ Verified from `CreateEntity`: `operator_new(0xB0)`. Ghidra struct: `/FruitNinja/
 | +0xa8 | float | m_SpeedMult | Speed multiplier; 1.0 normal, 0.666 for fat bombs |
 | +0xac | float | field_0xac | Z constant; Init = 0.0 |
 
+## Bomb Collision Radius
+
+<!-- Analysed: 2026-04-15T16:00 -->
+
+`Bomb::Init @ 0x00172558`:
+
+**Formula: `radius = bombCollision * 0.5 * scaleFactor`**
+
+Where:
+- `bombCollision = *(g_pFruitInfo + 0x8C)` (from XML `<bomb collision="X"/>` attr, typically 5)
+- `0.5` is the inline VFP literal `0x3F000000`
+- `scaleFactor` is the third parameter to Init (typically 1.0)
+
+Typical bomb radius: 5 × 0.5 × 1.0 = **2.5 units**.
+
+Visual scale in `SetFruitType`: `Vec3::One * bombSize * 0.01 * scaleFactor` where `bombSize = +0x88` from FRUIT_INFO and 0.01 comes from DAT_001726b0.
+
 ## Bomb Vtable
 
 | Index | Address | Method | Notes |

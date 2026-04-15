@@ -33,7 +33,8 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/touch-system.md](engine/touch-system.md) — Mortar::Touch internals: double-buffered 8-slot state, TEvnt ring buffer, data flow
 - [engine/sound-system.md](engine/sound-system.md) — GameSound pool (32 slots), BadaSound backend, MAMAudioThread (16 voices, 16kHz)
 - [engine/audio-internals.md](engine/audio-internals.md) — MAMAudioController command protocol, MAMVoice/MAMSound, NLFQueue, threading primitives
-- [engine/particles.md](engine/particles.md) — PSPParticleManager, Emitter, Particle architecture
+- [engine/particles.md](engine/particles.md) — PSPParticleManager, Emitter, Particle architecture, PSPParticleEmitter rotation pair
+- [engine/particle-refine-notes.md](engine/particle-refine-notes.md) — Detailed particle system internals
 - [engine/actor-manager.md](engine/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
 - [engine/mesh.md](engine/mesh.md) — Mesh (0x7C): struct, vtable (11 entries), BoneBinding, SharedPropsInfo, Draw, LoadMesh parser, effect properties
 - [engine/mesh-port-status.md](engine/mesh-port-status.md) — Mesh/MeshManager port vs binary comparison, remaining gaps checklist
@@ -69,12 +70,19 @@ Game-specific logic, screens, entities, and systems.
 
 - [entities/entity-base.md](entities/entity-base.md) — Mortar::Entity (0x3C), CreateEntity factory
 - [entities/fruit.md](entities/fruit.md) — Fruit entity (0x118): struct, vtable, Update, CollisionResponse, Draw, Init, Chuck, LoadInfo
-- [entities/bomb.md](entities/bomb.md) — Bomb entity (0xB0): struct, vtable, Update, Explode, CollisionResponse
+- [entities/bomb.md](entities/bomb.md) — Bomb entity (0xB0): struct, vtable, collision radius formula verified
 - [entities/slash-entity.md](entities/slash-entity.md) — SlashEntity (0x184): blade trail, collision, combo tracking, ghost effect
 - [entities/coin.md](entities/coin.md) — Coin entity (0x94): struct, vtable (10 entries), state machine (5 states), physics, InitCoin, MakeCoins, Update, Draw
 - [entities/bomb-blast.md](entities/bomb-blast.md) — BombBlast (0x70): bomb explosion effect
 - [entities/bomb-flash.md](entities/bomb-flash.md) — BombFlash: bomb flash overlay
-- [entities/splat-entity.md](entities/splat-entity.md) — SplatEntity: juice splat effect
+- [entities/splat-entity.md](entities/splat-entity.md) — SplatEntity (0x78): full struct layout, velocity transform, type selection, UV atlas
+- [entities/miss-control.md](entities/miss-control.md) — MissControl: critical/rare overlay labels, MakeCritical, MakeRare
+
+### Game-Specific Engine Features
+
+- [engine/fruit-size.md](engine/fruit-size.md) — Collision radius formula: `radius = (m_CollisionScale + 0.52 * m_Scale) * scaleParam`
+- [engine/fruit-slice-notes.md](engine/fruit-slice-notes.md) — Fruit slicing: CollisionResponse, Slice, impulse, critical, splat spawning, emitters, SFX, coins, particles
+- [engine/critical-flash.md](engine/critical-flash.md) — CriticalFlash function: full-screen tint for critical/special slices
 
 ### Game Functions
 
@@ -106,7 +114,7 @@ Game-specific logic, screens, entities, and systems.
 - [structs/hud.md](structs/hud.md) — HUD, HUDControl, HUDControl3d class hierarchy, MissControl
 - [structs/wave.md](structs/wave.md) — WaveManager, WaveInfo
 - [structs/data.md](structs/data.md) — FRUIT_INFO (816 bytes), FruitSaveData
-- [structs/gameplay-misc.md](structs/gameplay-misc.md) — MenuButton (38 callers), MenuBackground, EffectImage, QUADCUSTOMVERTEX
+- [structs/gameplay-misc.md](structs/gameplay-misc.md) — MenuButton (38 callers, TouchReleased gate, MakeCritical/MakeRare), MenuBackground, EffectImage, QUADCUSTOMVERTEX
 - [structs/ui-widgets.md](structs/ui-widgets.md) — FruitFactControl, ScrollingMenu, ScoreControl, TimeControl, SpeedControl, etc. (10 classes)
 - [structs/ui-controls2.md](structs/ui-controls2.md) — BonusScreen, ScreenFadeControl, ScreenTint, ComboControl, NotificationControl, GenericHUDControl (7 classes)
 - [structs/data-classes.md](structs/data-classes.md) — FNHighscore, FNHighscoreList, Bonus, BonusType, BonusAwardHud

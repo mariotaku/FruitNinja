@@ -38,8 +38,8 @@ PSPParticle (0xa4 = 164 bytes per particle)
 | +0x20 | float | m_TimeScale | Speed multiplier (default 1.0) |
 | +0x24 | float | m_field24 | Default 1.0 |
 | +0x28 | float | m_ScaleX | Default 1.0 |
-| +0x2c | float | m_ScaleY | Default 1.0 |
-| +0x30 | float | m_field30 | Default 0.0 |
+| +0x2c | float | m_CosAngle | **Rotation pair** (cos θ) applied to particle velocity direction; default 1.0 |
+| +0x30 | float | m_SinAngle | **Rotation pair** (sin θ) applied to particle velocity direction; default 0.0 |
 | +0x34 | float | m_field34 | Default 1.0 |
 | +0x38 | byte | m_field38 | Default 0 |
 | +0x3c | PSPEmitterTemplate* | m_Template | Pointer to template (searched by hash) |

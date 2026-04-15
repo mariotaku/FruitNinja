@@ -388,6 +388,31 @@ The actual rendering of the slice lines is in a global
 `SlashEntity::DrawSlices` pass (not `DrawSlice` blade renderer); see
 GameDraw 0x16b888 call at layer 0x40.
 
+## DrawSlices Keyframes (fully resolved)
+
+<!-- Analysed: 2026-04-15T16:00 -->
+
+The 7-keyframe scale animation for the slash-line visual is initialized by the static ctor `_GLOBAL__I_GameTask.cpp` at `0x0016d0dc`, written into `g_sliceData + 0x68..+0xb0`. Verified raw constant values from DAT offsets:
+
+| DAT Address | Hex Value | Float |
+|-------------|-----------|-------|
+| 0x0016d3e8 | 0x00000000 | 0.0 |
+| 0x0016d3ec | 0x3fd9999a | 1.700 |
+| 0x0016d3f0 | 0x3e99999a | 0.300 |
+| 0x0016d3f4 | 0x3dcccccd | 0.100 |
+
+| Keyframe | Scale Vec3 | Notes |
+|----------|-----------|-------|
+| 0 | (1.0, 1.0, 1.0) | Initial |
+| 1 | (1.7, 0.3, 1.0) | Early spread |
+| 2 | (8.0, 0.1, 1.0) | Wide elongation |
+| 3 | (20.0, 0.1, 1.0) | Peak width |
+| 4 | (4.0, 0.1, 1.0) | Collapse |
+| 5 | (0.1, 0.1, 0.1) | Fade out |
+| 6 | (0.1, 0.1, 0.1) | Fade out |
+
+DrawSlices @ `0x00169ac8`: timer advance `dt * 40.0 * (0.75 if critical else 1.0)`, lifetime [0, 6.0], linear keyframe lerp. Matrix construction: `Scale44 → RotZ44 → Translate44`. Model paths: `models/fruit/slice_fx.mmd` (normal, `0x001bc93f`), `models/fruit/slice_fx_crit.mmd` (critical, `0x001bc959`).
+
 ## Port `Fruit` struct — what's missing
 
 The port's `Fruit.h` currently has only:
