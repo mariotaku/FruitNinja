@@ -7,8 +7,6 @@
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 
-struct TexImage;
-
 struct Renderer {
     static Renderer* s_instance;
     static Renderer* GetInstance() { return s_instance; }
@@ -40,8 +38,6 @@ struct Renderer {
 
     bool init();
     void shutdown();
-
-    GLuint upload_texture(const TexImage& img);
 
     // Setup ortho projection matching original game
     // Verified constants: top=160, bottom=-160, left=-240, right=240

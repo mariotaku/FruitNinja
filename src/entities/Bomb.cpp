@@ -313,7 +313,71 @@ void Bomb::Update(float dt) {
         }
     }
     if (m_pEmitter) {
-        m_pEmitter->m_Pos = pos;
+        // Port specific: bomb mesh is authored with body at local origin
+        // and fuse extending along local +Z (mesh bone bounds verified at
+        // load time: x/y symmetric ±48.7, z in [-47.4, +78.3] — the +Z
+        // asymmetry is the fuse protrusion). Emitting at bomb.pos alone
+        // would spawn particles at the body center; we offset by the
+        // transformed fuse-tip direction so the spark cluster appears at
+        // the visible fuse. Binary writes emitter->m_Pos = bomb.pos once
+        // at creation @ 0x00172f12 with no offset and no per-frame update;
+        // how it ends up at the fuse visually in the original remains
+        // unresolved (probably a longer particle lifetime interpretation
+        // or a different Y-velocity scale in the binary's spawn path).
+        //
+        // We apply the SAME transform chain as Bomb::Draw to the local +Z
+        // unit vector:
+        //
+        //   Scale -> RotX(-83° fixed tilt) -> RotY(m_RotX) -> RotZ(m_RotY)
+        //
+        // RotZ leaves +Z invariant (rotation around Z preserves Z), so the
+        // animated spin does NOT move the fuse tip — it stays put while the
+        // bomb body rolls around it, matching the visible binary behaviour.
+        static constexpr float FUSE_LOCAL_Z = 78.0f;
+        const float s = scale.x;
+
+        // Start with local (0, 0, 1). Apply RotZ (port draw step 3, uses
+        // m_RotY): rotation around Z preserves (0,0,1) — no-op.
+        float vx = 0.0f, vy = 0.0f, vz = 1.0f;
+
+        // Apply RotY (port draw step 2, uses m_RotX). The port's inline
+        // RotY modifies mat col0/col2 as (c*col0 + s*col2, ..., -s*col0 + c*col2),
+        // which for a vertex mat*v transforms v as:
+        //   new_vx = vx*cos - vz*sin
+        //   new_vz = vx*sin + vz*cos
+        // (Note the opposite-sign convention vs a standard right-handed RotY;
+        // same sign convention used by the binary's _Matrix44::RotY44.)
+        {
+            const int16_t angle16 = m_RotX * ANGLE_SCALE;
+            const float a  = (float)angle16 * 6.2831853f / 65536.0f;
+            const float sA = sinf(a);
+            const float cA = cosf(a);
+            const float nx = vx * cA - vz * sA;
+            const float nz = vx * sA + vz * cA;
+            vx = nx; vz = nz;
+        }
+
+        // Apply RotX fixed tilt 0xBFF4 ≈ -83° (port draw step 1 - the inline
+        // RotX block that matches binary 0x00171be8). Rotation around X
+        // mixes Y and Z: (vx, vy, vz) -> (vx, vy*cos - vz*sin, vy*sin + vz*cos)
+        {
+            const float a  = (float)(int16_t)0xBFF4 * 6.2831853f / 65536.0f;
+            const float sA = sinf(a);
+            const float cA = cosf(a);
+            const float ny = vy * cA - vz * sA;
+            const float nz = vy * sA + vz * cA;
+            vy = ny; vz = nz;
+        }
+
+        // Scale by fuse length * bomb scale (uniform scale, so one factor).
+        // Base Z uses pos.z (matching binary emitter init at 0x00172f12,
+        // which stores raw bomb.pos), NOT m_ZPosition. Depth layering of
+        // particles vs HUD ring sprites is handled by the particle draw
+        // pass order (pm.Draw(-1/0/1)) rather than world-space z.
+        const float L = FUSE_LOCAL_Z * s;
+        m_pEmitter->m_Pos = Vec3(pos.x + vx * L,
+                                 pos.y + vy * L,
+                                 pos.z + vz * L);
     }
 }
 

@@ -223,6 +223,14 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                     bomb->m_RotVelY = 2;
                     bomb->m_RotY    = 0;
                     bomb->m_RotVelX = 0;
+                    // Matches binary MenuButton::Init bomb branch @ 0x0014f144:
+                    //   vstr.32 s15,[r0,#0x6c]   ; *(bomb+0x6c) = 150.0
+                    // (s15 = DAT = FRUIT_ZPOS = 150.0). Overrides the depth
+                    // cycling value that Bomb::Init assigned via
+                    // GetBombZPosition() — so menu bombs share the same
+                    // +150 layer as menu fruits and render in front of the
+                    // ring instead of behind it.
+                    bomb->m_ZPosition = FRUIT_ZPOS;
                 }
 
                 // Random rotation speed (8-12 deg/frame, random direction)
