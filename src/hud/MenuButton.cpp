@@ -20,6 +20,75 @@
 #include <cstdlib>
 #include <cmath>
 
+// Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
+//   Pass 1 (fruits, type 0):
+//     guard:  if entity->m_bSliced != 0 → skip
+//     vx = RandFloat_Scaled(10.0) - 5.0    // [-5, +5)
+//     vy = RandFloat_Scaled(5.0)           // [0, +5)
+//     vel = (vx, vy, 0)
+//     entity->m_bDrawWhole = 1             // +0x114
+//     vel.x = |vel.x| * sign(pos.x)        // fly outward toward nearest edge
+//     m_SecondVel = vel                    // copy to half-B
+//     entity->m_bSliced = 1                // +0xb4 (set BEFORE the vel writes
+//                                          //         in the binary order, but
+//                                          //         the order doesn't matter)
+//   Pass 2 (bombs, type 1):
+//     guard:  if Bomb::Enabled() — also fling
+//             Bomb::Disable()
+//             same vel formula as fruits
+//     unconditional: m_bMovement = 1       // +0x80
+//
+// RandFloat_Scaled(s) @ 0x0016a960 uses the engine's Rand32(0x7FFFF)
+// divided by 524287.875, giving a uniform [0,1) × s. Port substitutes
+// stdlib rand() / RAND_MAX which is functionally equivalent for visuals.
+static float RandScaled(float s) {
+    return ((float)rand() / (float)RAND_MAX) * s;
+}
+
+static void FN_ClearMenuItems() {
+    ActorManager* am = ActorManager::GetInstance();
+    if (!am) return;
+
+    for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {
+        Entity* e = *it;
+        if (!e || !e->IsActive()) continue;
+
+        if (e->entityType == 0) {
+            // --- Fruit pass ---
+            Fruit* f = static_cast<Fruit*>(e);
+            if (f->m_bSliced) continue;     // already released
+            f->m_bSliced = 1;
+
+            float vx = RandScaled(10.0f) - 5.0f;  // [-5, +5)
+            float vy = RandScaled(5.0f);          // [0, +5)
+            f->vel = Vec3(vx, vy, 0.0f);
+
+            f->m_bDrawWhole = true;               // +0x114 — render whole
+
+            // Sign-correct vel.x by sign(pos.x) so each fruit flies
+            // outward toward the nearest screen edge.
+            const float absVx = vx < 0 ? -vx : vx;
+            const float sign  = (f->pos.x < 0.0f) ? -1.0f : 1.0f;
+            f->vel.x = absVx * sign;
+
+            f->m_SecondVel = f->vel;              // m_HalfB_vel = vel
+        } else if (e->entityType == 1) {
+            // --- Bomb pass ---
+            Bomb* b = static_cast<Bomb*>(e);
+            // Binary: if (Bomb::Enabled()) { Disable(); set vel; }
+            // Port equivalent of Enabled() = active && !m_bHit.
+            if (b->active && b->m_bHit == 0) {
+                b->Deactivate();
+                float vx = RandScaled(10.0f) - 5.0f;
+                float vy = RandScaled(5.0f);
+                b->vel = Vec3(vx, vy, 0.0f);
+            }
+            // m_bMovement = 1 fires unconditionally per binary.
+            b->m_bMovement = 1;
+        }
+    }
+}
+
 // Constants from binary (verified via read_memory / disassembly)
 // IMPORTANT: DAT_0014f194 = 0.2f is applied to Fruit::m_RotVel1 (rotation slowdown),
 // NOT to scale. The scale is left at its gameplay value.
@@ -79,7 +148,13 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
     m_FruitType = fruitType;
     m_HitBoundsScale = hitBounds;
     m_bHasHitArea = (hitBounds.x > 0.0f || hitBounds.y > 0.0f);
-    m_TargetSize = hitBounds;
+    // m_TargetSize is the "full size" the FadeCounter shrink curve
+    // multiplies against in MenuButton::Update (binary 0x0014e94?). If
+    // explicit hit bounds were passed use those; otherwise fall back to
+    // the button's own `size` (set by the caller from the texture
+    // dimensions). Without this, dojo sub-buttons whose hitBounds is
+    // (0,0,0) would shrink from zero to zero (invisible).
+    m_TargetSize = m_bHasHitArea ? hitBounds : size;
     m_bVisible = 1;
     m_bInteractive = 1;
     m_bEnabled = 1;
@@ -94,7 +169,7 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
             // Original: entityType = (FruitInfo_GetCount() <= fruitType) ? 1 : 0
             int bombThreshold = FruitInfo_GetCount();
             int entityType = (bombThreshold <= fruitType) ? 1 : 0;  // 0=Fruit, 1=Bomb
-            printf("[MenuButton] Init: fruitType=%d bombThreshold=%d → entityType=%d\n",
+            printf("[MenuButton] Init: fruitType=%d bombThreshold=%d -> entityType=%d\n",
                    fruitType, bombThreshold, entityType);
             Entity* e = game->actorManager->Add(entityType, true);
             if (e) {
@@ -212,32 +287,96 @@ void MenuButton::Update(float dt) {
     // staying pinned. When the slice edge fires, also trigger the
     // click callback so menu-fruit buttons (Play / Dojo) transition
     // on slash-through, matching the binary's menu button flow.
+    // Binary MenuButton::Update entity-tracking + shrink path
+    // (0x0014e7?? .. 0x0014e962). Two branches:
+    //
+    //   if (m_pEntity != NULL):
+    //       if (entity->m_bSliced != 0):              # released by ClearMenuItems
+    //           if (|vel|² > 0.001):                  # actually moving
+    //               fire m_ClickCallback once
+    //               ClearMenuItems()
+    //               m_pEntity = NULL                  # detach
+    //       else:
+    //           pin entity to button center (vel=0)
+    //
+    //   if (m_pEntity == NULL):
+    //       m_FadeCounter -= dt * 108543              # ~9 frames to 0
+    //       if (m_FadeCounter < 1):
+    //           m_FadeCounter = 0
+    //           m_bPendingRemoval = 1                 # HUD deletes button
+    //       size = m_TargetSize * (sin(counter) / sin(0x3ffc))
     if (m_pEntity && m_pEntity->IsActive()) {
-        // "Hit" edge detection — for fruits it's m_bSliced, for bombs
-        // it's m_bHit. Both types keep the entity pinned to the button
-        // until the hit moment, then release it so its physics animation
-        // (fruit halves falling, bomb launching via QuitGamesCallback)
-        // can play out.
-        bool hit = false;
+        bool released = false;
         if (m_pEntity->entityType == 0) {   // Fruit
-            hit = m_pFruitPiece && m_pFruitPiece->m_bSliced;
+            released = m_pFruitPiece && m_pFruitPiece->m_bSliced;
         } else if (m_pEntity->entityType == 1) { // Bomb
             Bomb* bomb = static_cast<Bomb*>(m_pEntity);
-            hit = (bomb->m_bHit != 0);
+            released = (bomb->m_bHit != 0);
         }
 
-        if (!hit) {
+        if (!released) {
+            // Pin entity to button centre.
             m_pEntity->pos = pos;
             m_pEntity->vel = Vec3(0, 0, 0);
-        } else if (!m_bRemovalPending && m_ClickCallback &&
-                   m_pEntity->entityType == 0) {
-            // Rising-edge slice callback for fruit buttons only. Bombs
-            // fire their hit callback directly via Bomb::OnSliced's
-            // m_HitCallback path; firing here too would double-invoke.
-            auto cb = m_ClickCallback;
-            m_ClickCallback = nullptr;
-            cb();
+        } else {
+            // Velocity-magnitude check matches binary
+            // DAT_0014e978 = 0x3a83126f ≈ 0.001f.
+            const Vec3& v = m_pEntity->vel;
+            const float velSq = v.x * v.x + v.y * v.y + v.z * v.z;
+            if (velSq > 0.001f) {
+                // Distinguish "user actually sliced this fruit" from
+                // "ClearMenuItems released this fruit as a sibling
+                // when a different button was sliced". Only the
+                // user-sliced fruit fires its callback — the others
+                // just clear+detach silently. The flag we use:
+                // m_bDrawWhole is set by ClearMenuItems but NOT by
+                // the normal Fruit::Slice path, so:
+                //   m_bDrawWhole == 0 -> user-sliced
+                //   m_bDrawWhole == 1 -> ClearMenuItems-released
+                // Without this gate the cascade fires every menu
+                // button's callback in turn (Dojo -> Play -> Quit),
+                // which thrashes MainScreen's state machine through
+                // STATE_DOJO_WAIT_B -> MODE_SELECT -> GAME_START -> ...
+                bool userSliced = (m_pEntity->entityType == 0) &&
+                                  m_pFruitPiece &&
+                                  !m_pFruitPiece->m_bDrawWhole;
+                if (!m_bRemovalPending && m_ClickCallback && userSliced) {
+                    auto cb = m_ClickCallback;
+                    m_ClickCallback = nullptr;
+                    cb();
+                    // ClearMenuItems @ 0x0016ac7c — releases every
+                    // other menu fruit so the dojo transition can
+                    // proceed. Only fired alongside the user-slice
+                    // callback to avoid recursive re-clearing.
+                    FN_ClearMenuItems();
+                }
+                // Detach the entity → next frame enters the FadeCounter
+                // shrink path below.
+                m_pEntity = NULL;
+                m_pFruitPiece = NULL;
+                // Initialise the shrink counter — binary uses 0x3ffc.
+                m_FadeCounter = 0x3ffc;
+            }
         }
+    }
+
+    if (m_pEntity == NULL && m_FadeCounter > 0) {
+        // Shrink-to-disappearance phase. Binary DAT_0014e97c = 108543.0
+        // is the per-second decrement rate; over a 60Hz tick that's
+        // ~1809 counts/frame → ~9 frames from 0x3ffc to 0.
+        m_FadeCounter -= (int)(dt * 108543.0f);
+        if (m_FadeCounter < 1) {
+            m_FadeCounter = 0;
+            m_bPendingRemoval = 1;
+        }
+        // size = m_TargetSize * (sin(counter * 2π/65536) / sin(0x3ffc * 2π/65536))
+        // The 0x3ffc index is exactly π/2, so sin(0x3ffc) = 1.0 — the
+        // ratio simplifies to just sin(counter). For counter in
+        // [0, 0x3ffc] this traces the first quarter of a sine wave,
+        // giving an ease-out shrink curve.
+        const float counterRad = (float)m_FadeCounter * (6.2831853f / 65536.0f);
+        const float scaleFrac  = sinf(counterRad);
+        size = m_TargetSize * scaleFrac;
     }
 
     // Shake timer decay

@@ -167,6 +167,6 @@ void AboutScreen::Draw(const Vec3& hudScale, int layerMask) {
 }
 
 void AboutScreen::BackCallback() {
-    printf("[AboutScreen] Back → fade out\n");
+    printf("[AboutScreen] Back -> fade out\n");
     m_State = 2;
 }

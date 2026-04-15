@@ -7,6 +7,7 @@
 
 #include "DojoScreen.h"
 #include "AboutScreen.h"
+#include "MainScreen.h"
 #include "Game.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
@@ -248,11 +249,24 @@ void DojoScreen::Update(float dt) {
                 game.hud->AddControl(m_pAboutScreen);
                 m_State = 1;
             } else if (m_State == 2) {
-                // Shop — port stub returns to MainScreen instead.
+                // Shop — port stub returns to MainScreen via the
+                // same path as state 6 until ShopScreen is ported.
                 m_bPendingRemoval = 1;
+                if (game.mainScreen) {
+                    game.mainScreen->SetState(STATE_SLIDE_IN);
+                }
             } else {
-                // State 6: return to MainScreen.
+                // State 6: back to MainScreen. Binary @ 0x001389B0:
+                //   field_0x33 = 1                        (m_bPendingRemoval)
+                //   game->mainScreen->m_State = 8         (STATE_SLIDE_IN)
+                // The state injection happens HERE inside DojoScreen,
+                // not via a remove callback on the parent side. This
+                // ensures the parent transitions in the same frame
+                // the child marks itself for removal.
                 m_bPendingRemoval = 1;
+                if (game.mainScreen) {
+                    game.mainScreen->SetState(STATE_SLIDE_IN);
+                }
             }
         }
         break;
@@ -334,20 +348,20 @@ void DojoScreen::PlayCallback() {
     // Play button on DojoScreen = return to MainScreen (state 6).
     // Binary flow: fades out, sets `GameState = 8` which the outer
     // menu loop interprets as "close DojoScreen, reopen MainScreen".
-    printf("[DojoScreen] Play → return to MainScreen\n");
+    printf("[DojoScreen] Play -> return to MainScreen\n");
     m_State = 6;
 }
 
 void DojoScreen::ShopCallback() {
     // Stub — port doesn't have ShopScreen yet. Return to MainScreen
     // like Play does so the user isn't stuck.
-    printf("[DojoScreen] Shop (stub) → return to MainScreen\n");
+    printf("[DojoScreen] Shop (stub) -> return to MainScreen\n");
     m_State = 2;
 }
 
 void DojoScreen::AboutCallback() {
     // Transition to AboutScreen — state 3 fades out the Dojo buttons
     // then creates AboutScreen inside the transition.
-    printf("[DojoScreen] About → AboutScreen\n");
+    printf("[DojoScreen] About -> AboutScreen\n");
     m_State = 3;
 }

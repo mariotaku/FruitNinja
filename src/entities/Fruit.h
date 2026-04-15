@@ -70,6 +70,14 @@ public:
     // Scale animation (0→1 on spawn)
     float m_ScaleAnim;                   // +0x110
 
+    // +0x114: m_bDrawWhole — when set, Fruit::Draw renders the whole
+    // fruit mesh even if m_bSliced == 1. Set by ClearMenuItems
+    // @ 0x0016ac7c when releasing menu fruits during the dojo
+    // transition: the fruit is marked sliced (so MenuButton::Update
+    // stops pinning it) AND m_bDrawWhole is set so it visually flies
+    // off as a single object instead of splitting in two.
+    bool m_bDrawWhole;
+
     // Launch delay (fruit invisible during countdown)
     float m_ChuckDelay;
 
