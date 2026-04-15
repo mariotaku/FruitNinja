@@ -34,29 +34,48 @@ Resulting bounds after the ortho transform alone:
 
 ## The 90° screen-rotation matrix
 
-The Bada physical device is 480×800 portrait. The game runs in landscape (rotated 90°). To keep the ortho math clean, the binary multiplies the projection by a static rotation matrix set **once** per run by `BeginFrame` at `DisplayManager + 0x54`:
+<!-- Updated: 2026-04-15T18:30 — matches display-manager.md (90° CCW) -->
+
+The Bada physical device is 480×800 portrait. The game runs in landscape (rotated 90°). The binary multiplies the projection by a static rotation matrix set **once** per run by `BeginFrame` at `DisplayManager + 0x54`. Per `display-manager.md`, the matrix is:
 
 ```
-R = [  0  1  0  0 ]      col0 = (0, -1, 0, 0)   // output X basis
-    [ -1  0  0  0 ]      col1 = (1,  0, 0, 0)   // output Y basis
-    [  0  0  1  0 ]
-    [  0  0  0  1 ]
+R = [  0  -1   0   0 ]
+    [  1   0   0   0 ]
+    [  0   0   1   0 ]
+    [  0   0   0   1 ]
 ```
 
-This is a 90° CW rotation. A vertex `(vx, vy)` is transformed to `(vy, -vx)`.
+This is a **90° CCW** rotation around Z. A vertex `(vx, vy)` is transformed to `(-vy, vx)`. (The earlier note in this doc said CW with `(vy, -vx)` — that was wrong.)
 
 `MatrixManager::_UploadCurrentMatrices` at `0x0019e2b4` multiplies `m_projection × R` before `glLoadMatrixf`, so the rotation is baked into the projection matrix the GPU sees.
 
-### What the rotation does to the ortho
+### Important: stored-position convention
 
-After composition, the effective rendered extents map:
+The previous version of this doc claimed game X is the short axis (±160) and game Y is the long axis (±240). **That is wrong** — the empirical port code uses positions like `Quit (182, -106)` where `X=182 > 160`, which is impossible if X were the short axis. The positions stored in MainScreen / DojoScreen / FruitCamera are already in the **post-rotation landscape** convention:
 
-| Stored game axis | After rotation | Ortho range | Maps to NDC | Orientation on landscape device |
-|---|---|---|---|---|
-| `Y` (±240) | becomes screen X | `[-240, 240]` | `[-1, +1]` | horizontal (long edge) |
-| `X` (±160) | becomes screen -Y | `[-160, 160]` | `[-1, +1]` (inverted) | vertical   (short edge) |
+| Game axis | Range | Direction |
+|---|---|---|
+| `X` | `[-240, +240]` | horizontal (long edge) |
+| `Y` | `[-160, +160]` | vertical   (short edge) — `+Y` is up |
 
-So **game X is the short axis, game Y is the long axis**. Play button at `(16, -66)` means X=16 (slightly off vertical centre), Y=-66 (left of horizontal centre). This is consistent with the binary comments like `"Play button at (16, -66)"` in port sources.
+The port renders these directly in a landscape ortho (`SetupOrtho(160, -160, -240, 240, 2000, -6000)`) with no rotation matrix applied, and they land in the right visual location.
+
+Examples (verified from port code that displays correctly):
+
+| Element | Stored pos | Visual location |
+|---|---|---|
+| Play button (`MainScreen`) | `(16, -66)` | slight right of centre, below centre |
+| Dojo button | `(-144, -65)` | left of centre, below centre |
+| Quit button | `(182, -106)` | far right, below centre |
+
+### When you find a binary value that doesn't fit this convention
+
+Some values dumped from the binary by `re-analyst` will be in the **pre-rotation** (portrait-stored) convention, especially for entities drawn through `BaseScreen::DrawBorders` / `UploadMatrices_Menu` paths that never received the post-rotation RE pass. For these, apply the rotation manually:
+
+- pre-rotation `(vx, vy)` → port `(-vy, vx)` (90° CCW), OR
+- empirically tune by negating both axes if the value lands in the opposite corner
+
+The dojo sensei position dumped from `BaseScreen::DrawBorders @ 0x00130230` is one such example — the binary stores `(182, 137)` but the post-rotation visual is bottom-left, requiring the conversion above.
 
 ## `HUDControl3d::Draw` and the dead offset
 

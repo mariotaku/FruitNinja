@@ -10,7 +10,13 @@
 #include "Game.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
+#include "entities/FruitInfo.h"
 #include "asset/TextureManager.h"
+#include "render/Renderer.h"
+#include "render/MatrixManager.h"
+#include "render/gl_funcs.h"
+#include "math/Matrix44.h"
+#include "math/Colour.h"
 #include <cstdio>
 
 // Transition constants — resolved from docs/screens/dojo-re-notes.md.
@@ -23,19 +29,35 @@ static const float ALPHA_BUTTON_CREATE = 0.95f;
 static const float ALPHA_DECAY         = 0.75f;
 static const float ALPHA_OUT_DONE      = 0.001f;
 
-// Button positions — DATs resolved from Ghidra.
-// Play/About positions post-multiplied by 0.825 (DAT_00138694).
-static const float BUTTON_SCALE = 0.825f;
-// Play/Quit button: (185, -106, 0) * 0.825 → (152.625, -87.45, 0)
-static const Vec3 POS_PLAY_BUTTON ( 185.0f * 0.825f, -106.0f * 0.825f, 0.0f);
-// Shop button: (-18, -15, 0) — NOT scaled
-static const Vec3 POS_SHOP_BUTTON ( -18.0f,  -15.0f, 0.0f);
-// About button: (145, 42, 0) * 0.825 → (119.625, 34.65, 0)
-static const Vec3 POS_ABOUT_BUTTON( 145.0f * 0.825f,  42.0f * 0.825f, 0.0f);
+// Button positions — verified from DojoScreen::Update @ 0x00138414:
+//   Back   button @ DAT_00138688/8c/90 = (185, -106, 0)
+//   Shop   button @ vmov immediates    = (-18,  -15, 0)
+//   About  button @ DAT_001389d0/d4/d8 = (145,   42, 0)
+// Positions are RAW — the 0.825 multiplier seen elsewhere is applied
+// to m_TargetSize (hit bounds), NOT pos.
+static const Vec3 POS_BACK_BUTTON  ( 185.0f, -106.0f, 0.0f);
+static const Vec3 POS_SHOP_BUTTON  ( -18.0f,  -15.0f, 0.0f);
+static const Vec3 POS_ABOUT_BUTTON ( 145.0f,   42.0f, 0.0f);
+
+// Helpers (mirror MainScreen.cpp).
+static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
+    return tex.IsValid() ? tex->m_TexId : 0;
+}
+static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
+                      float defW, float defH) {
+    if (tex.IsValid()) {
+        return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
+    }
+    return Vec3(defW, defH, 1.0f);
+}
 
 // Background board position — from Draw function:
 //   Translate to (-180.0, -47.0, 0.0) (DAT_001383c4, DAT_001383c8, DAT_001383c0)
-static const Vec3 POS_DOJO_BG     (-180.0f, -47.0f, 0.0f);
+// Z is bumped to +10 in the port so the dojo background draws in front
+// of the MainScreen's lingering button entities (which sit at z=-50).
+// Binary uses z=0 with the rotation matrix giving an inherent depth
+// offset; port renders without rotation so we lift z manually.
+static const Vec3 POS_DOJO_BG     (-180.0f, -47.0f, 10.0f);
 
 DojoScreen::DojoScreen(Game& g)
     : game(g)
@@ -56,9 +78,13 @@ DojoScreen::DojoScreen(Game& g)
     //   MenuButton already handles button icons separately), dojo_icon.tex.
     m_TexDojo     = Mortar::TextureManager::LoadLocalisedTexture("dojo.tex");
     m_TexSensei   = Mortar::TextureManager::LoadLocalisedTexture("dojo_sensei.tex");
+    m_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+    m_TexShop     = Mortar::TextureManager::LoadLocalisedTexture("senseis_swag.tex");
+    m_TexAbout    = Mortar::TextureManager::LoadLocalisedTexture("about.tex");
 
-    printf("[DojoScreen] ctor: dojo=%d sensei=%d\n",
-           m_TexDojo.IsValid(), m_TexSensei.IsValid());
+    printf("[DojoScreen] ctor: dojo=%d sensei=%d back=%d shop=%d about=%d\n",
+           m_TexDojo.IsValid(), m_TexSensei.IsValid(),
+           m_TexBackIcon.IsValid(), m_TexShop.IsValid(), m_TexAbout.IsValid());
 
     if (m_TexDojo.IsValid()) {
         m_Texture = m_TexDojo->m_TexId;
@@ -87,40 +113,76 @@ void DojoScreen::Release() {
     RemoveButtons();
 }
 
-// Lazy-create the 3 sub-buttons. Matches binary pattern in
-// DojoScreen::Update state 0 — creates Play/Shop/About on first frame.
+// Matches DojoScreen::Update state-0 sub-button creation block at
+// 0x00138470..0x00138878. Each button has a different texture, fruit
+// type, and post-Init field tweak.
+//
+// Fruit types: btn1 (back) reads from a runtime global int via
+//   `**(int **)(GOT + 0x7060)` — port uses watermelon (3) as a reasonable
+//   placeholder until that global is resolved.
+//   btn2 (shop) calls Fruit::FruitType("pineapple", false) → index 6.
+//   btn3 (about) calls Fruit::FruitType("plum", false) → index 7.
 void DojoScreen::CreateButtons() {
     if (m_bButtonsCreated) return;
 
-    // Play button — fruitType = 3 (watermelon)
+    // Indices into fruitlist.xml ordering (apple=0, banana=1, orange=2,
+    // watermelon=3, strawberry=4, kiwifruit=5, pineapple=6, plum=7,
+    // pear=8, mango=9, ...).
+    //
+    // Back button uses the bomb threshold (= FruitInfo_GetCount()), same
+    // pattern as MainScreen's Quit bomb. Binary reads it from a runtime
+    // global at GOT+0x7060 which holds the bomb-row fruit count.
+    const int FT_BOMB      = FruitInfo_GetCount();
+    const int FT_PINEAPPLE = 6;
+    const int FT_PLUM      = 7;
+
+    // ---- Button 1: Back (back_icon.tex) ----
+    // Binary: HUD::AddControl + TutorialControl::ResetTutePos.
+    // m_TargetSize gets *= 0.825 after Init.
     m_pPlayButton = new MenuButton();
-    m_pPlayButton->size = Vec3(64.0f, 64.0f, 1.0f);
-    m_pPlayButton->Init(POS_PLAY_BUTTON,
+    m_pPlayButton->m_Texture = TexIdOf(m_TexBackIcon);
+    m_pPlayButton->size      = TexSizeOf(m_TexBackIcon, 64.0f, 64.0f);
+    m_pPlayButton->Init(POS_BACK_BUTTON,
                         [this]() { PlayCallback(); },
-                        3, Vec3(0, 0, 0), nullptr);
+                        FT_BOMB, Vec3(0, 0, 0), nullptr);
+    m_pPlayButton->m_TargetSize = m_pPlayButton->m_TargetSize * 0.825f;
     m_pPlayButton->m_LayerFlags = 0x40;
     game.hud->AddControl(m_pPlayButton);
 
-    // Shop button — fruitType = 9 (mango)
+    // ---- Button 2: Sensei's Swag / Shop (senseis_swag.tex) ----
+    // Binary post-Init tweaks at 0x001386c8..0x00138750:
+    //   size       = (texW+1, texH+1, 1)
+    //   field+0x13c = 0.5
+    //   m_TargetSize *= 0.575
+    //   m_AnimSpeed = m_AnimSpeed2 = -15
+    // Then HUD::AddControl + TutorialControl::ResetTutePos +
+    //   MenuButton::SetNewSymbol(ItemManager::AreNewItems()).
     m_pShopButton = new MenuButton();
-    m_pShopButton->size = Vec3(64.0f, 64.0f, 1.0f);
+    m_pShopButton->m_Texture = TexIdOf(m_TexShop);
+    m_pShopButton->size      = TexSizeOf(m_TexShop, 64.0f, 64.0f);
     m_pShopButton->Init(POS_SHOP_BUTTON,
                         [this]() { ShopCallback(); },
-                        9, Vec3(0, 0, 0), nullptr);
+                        FT_PINEAPPLE, Vec3(0, 0, 0), nullptr);
+    m_pShopButton->m_TargetSize = m_pShopButton->m_TargetSize * 0.575f;
+    m_pShopButton->m_AnimSpeed  = -15.0f;
+    m_pShopButton->m_AnimSpeed2 = -15.0f;
     m_pShopButton->m_LayerFlags = 0x40;
     game.hud->AddControl(m_pShopButton);
 
-    // About button — fruitType = 4 (pineapple or similar)
+    // ---- Button 3: About (about.tex) ----
+    // Binary just Init + AddControl. No post-Init scaling, no
+    // TutorialControl, no SetNewSymbol.
     m_pAboutButton = new MenuButton();
-    m_pAboutButton->size = Vec3(64.0f, 64.0f, 1.0f);
+    m_pAboutButton->m_Texture = TexIdOf(m_TexAbout);
+    m_pAboutButton->size      = TexSizeOf(m_TexAbout, 64.0f, 64.0f);
     m_pAboutButton->Init(POS_ABOUT_BUTTON,
                          [this]() { AboutCallback(); },
-                         4, Vec3(0, 0, 0), nullptr);
+                         FT_PLUM, Vec3(0, 0, 0), nullptr);
     m_pAboutButton->m_LayerFlags = 0x40;
     game.hud->AddControl(m_pAboutButton);
 
     m_bButtonsCreated = true;
-    printf("[DojoScreen] Created 3 sub-buttons\n");
+    printf("[DojoScreen] Created 3 sub-buttons (back/shop/about)\n");
 }
 
 void DojoScreen::RemoveButtons() {
@@ -211,9 +273,56 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
     m_DrawColour.a = (uint8_t)(m_TransitionAlpha * 255.0f);
     HUDControl3d::Draw(hudScale, layerMask);
 
-    // TODO: BaseScreen::DrawBorders at (-184, -136, 0) — draws corner
-    // decorations around the panel. Skipped for v1.
-    // TODO: sensei 3D mesh at (0, 20, -300). Skipped for v1.
+    // Sensei texture — drawn inside BaseScreen::DrawBorders @ 0x00130230.
+    // Binary base position at alpha=1.0:
+    //   X = 182.0  (DAT_0013059c)
+    //   Y = 137.0  (DAT_001305a0)
+    //   Z =   0.0  (DAT_0013056c)
+    // Slide-in: (1 - alpha) * 48.0 on X (DAT_001305a4).
+    //
+    // Coord-system: the binary draws into the Bada portrait framebuffer
+    // (480×800) which is rotated 90° for landscape display. The net
+    // visual effect is that the binary's positive X/Y values land in
+    // the OPPOSITE corner from the port's centred ortho (which is
+    // already in landscape space). We negate both axes (180° rotation)
+    // to put sensei in the bottom-left where the binary intends.
+    if (m_TexSensei.IsValid()) {
+        // Y nudged up from raw -137 because the binary's
+        // TranslateMatrix_DrawUtil likely anchors the quad at a corner
+        // while the port's DrawQuad is centre-anchored — adding a
+        // half-texture-height offset puts the centre where the binary
+        // wants the corner.
+        const float SENSEI_BASE_X  = -182.0f;
+        const float SENSEI_BASE_Y  =  -55.0f;
+        const float SENSEI_SLIDE_X =  -48.0f;  // negated
+        const float senseiX = SENSEI_BASE_X +
+                              (1.0f - m_TransitionAlpha) * SENSEI_SLIDE_X;
+
+        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        mm.GetWorldStack().Reset();
+        // Quad scale = (texW + 1, texH + 1, 1) — matches binary's
+        // `vtable[+0x14] + 1` width/height query in DrawBorders.
+        Matrix44 mat = Matrix44::MakeScale(
+            (float)m_TexSensei->m_Width  + 1.0f,
+            (float)m_TexSensei->m_Height + 1.0f,
+            1.0f);
+        // z=20 puts sensei in front of the dojo background (z=10).
+        mat.GlobalTranslate44(Vec3(senseiX, SENSEI_BASE_Y, 20.0f));
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        m_TexSensei->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        if (Renderer* r = Renderer::GetInstance()) {
+            // Binary uses a fixed colour from GOT (no alpha modulation —
+            // fade is purely the slide-in offset). Port mirrors that.
+            r->DrawQuad(Colour(255, 255, 255, 255));
+        }
+        m_TexSensei->UnSet();
+    }
+
+    // TODO: BaseScreen::DrawBorders corner decorations at (-184, -136, 0).
 }
 
 // --- Sub-button callbacks ---

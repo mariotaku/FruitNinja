@@ -79,6 +79,8 @@ private:
     SmartPtr<Mortar::Texture> m_TexDojo;        // dojo.tex: background
     SmartPtr<Mortar::Texture> m_TexSensei;      // dojo_sensei.tex: centre decoration
     SmartPtr<Mortar::Texture> m_TexBackIcon;    // back_icon.tex: back button
+    SmartPtr<Mortar::Texture> m_TexShop;        // senseis_swag.tex: shop button
+    SmartPtr<Mortar::Texture> m_TexAbout;       // about.tex: about button
 
     // Track whether we've already created the buttons so we don't
     // spam HUD::AddControl each frame during state 0.
