@@ -199,14 +199,19 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                     // MenuButton::Init (0x0014ee40): writes 0 to bomb+0x80 (m_bMovement)
                     // then bomb->scale *= 0.85.
                     //
-                    // Binary then calls Bomb::SetCallback (0x0017121c) which
-                    // sets m_bMenuBombHit = 1 (marking it as a menu-decoration
-                    // bomb) and installs the click callback into the bomb's
-                    // m_HitCallback delegate. When the player slices this
-                    // bomb, Bomb::CollisionResponse takes the else branch
-                    // and fires the callback — for the Quit button this
-                    // triggers QuitGamesCallback. See
-                    // docs/engine/bomb-collision-response.md.
+                    // Binary then calls Bomb::SetCallback (0x0017121c) which:
+                    //   - sets m_bMenuBombHit = 1 (menu-decoration marker)
+                    //   - installs the click callback into m_HitCallback
+                    //   - OVERWRITES rotation state so the menu bomb barely
+                    //     rotates: one axis slow, the other locked. User-
+                    //     confirmed axis mapping via in-game observation:
+                    //       m_RotX    = 0x2d   (45)
+                    //       m_RotVelY = 2      (slow spin, one axis)
+                    //       m_RotY    = 0
+                    //       m_RotVelX = 0      (other axis locked)
+                    //   The rotation overwrites are why menu bombs look
+                    //   almost static in the original — default 1..7
+                    //   random vels from Bomb::Init get replaced.
                     Bomb* bomb = static_cast<Bomb*>(e);
                     bomb->m_bMovement = 0;
                     bomb->scale = bomb->scale * BOMB_MENU_SCALE;
@@ -214,6 +219,10 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                     if (clickCb) {
                         bomb->m_HitCallback = clickCb;
                     }
+                    bomb->m_RotX    = 0x2d;
+                    bomb->m_RotVelY = 2;
+                    bomb->m_RotY    = 0;
+                    bomb->m_RotVelX = 0;
                 }
 
                 // Random rotation speed (8-12 deg/frame, random direction)
