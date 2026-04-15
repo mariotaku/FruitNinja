@@ -35,66 +35,131 @@ static const float BLAST_RESET_THR = 1.5f;    // ResetGameEntities trigger
 static Vec3 s_BombHitPos(0, 0, 0);
 static SmartPtr<Mortar::Texture> s_FlashTex;
 
-// CriticalFlash state — one global tint drawn full-screen, fades over
-// ~0.3s. Matches binary CriticalFlash (0x0016a9a4) which stamps two
-// Colour fields on the FruitGame singleton and lets a ScreenTint
-// renderer consume them. Port collapses into a timer + colour pair.
-static Colour s_CritFlashColour(0, 0, 0, 0);
-static float  s_CritFlashTimer = 0.0f;
-static const float CRIT_FLASH_DURATION = 0.3f;
+// CriticalFlash state — matches binary CriticalFlash @ 0x0016a9a4 +
+// DrawCritHit @ 0x0016b5b4 (verified 2026-04-15).
+//
+// Storage: the binary keeps the colour in a static block at GOT+0x452d4
+// (BSS @ 0x00231A04), with the active copy at +0xf0. The timer is on the
+// Game singleton at +0x2c (Game::m_CritTimer). On trigger:
+//   m_CritTimer = 0.5         (CRITICAL_FLASH_TIME)
+//   stored_colour = passed colour
+// DrawCritHit reads both, computes a fade scale + alpha, and draws a
+// full-screen UNTEXTURED quad. The visible window is narrow:
+// m_CritTimer drops 0.5 → 0; only (0.3, 0.4) renders a non-zero quad
+// (≈0.1s flash). Outside that window the quad is degenerate (size 0).
+static Colour s_CritFlashColour(255, 255, 255, 255);
+
+static const float CRITICAL_FLASH_TIME       = 0.5f;   // Fruit::CRITICAL_FLASH_TIME @ 0x001f3e3c
+static const float CRITICAL_FLASH_FULL       = 0.4f;   // Fruit::CRITICAL_FLASH_FULL @ 0x001f3e40
+static const float CRITICAL_FLASH_START_FADE = 0.3f;   // Fruit::CRITICAL_FLASH_START_FADE @ 0x001f3e44
+static const float CRITICAL_FLASH_SCALE_MUL  = 15002.0f; // DAT_0016b714
+static const float CRITICAL_FLASH_MAX_X      = 480.0f;   // DAT_0016b718
+static const float CRITICAL_FLASH_MAX_Y      = 320.0f;   // DAT_0016b71c
+
+// Lazy 1×1 white texture for the untextured quad path. The Renderer's
+// quad shader samples u_tex × u_tint; without a bound texture the
+// sample is undefined, so bind a solid-white pixel and let the tint
+// drive the colour.
+static GLuint s_WhitePx = 0;
+static void EnsureWhitePx() {
+    if (s_WhitePx) return;
+    glGenTextures(1, &s_WhitePx);
+    glBindTexture(GL_TEXTURE_2D, s_WhitePx);
+    static const uint8_t white[4] = { 255, 255, 255, 255 };
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, white);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
 
 void SetBombHitPos(const Vec3& pos) {
     s_BombHitPos = pos;
 }
 
+// Matches CriticalFlash @ 0x0016a9a4. Stores the colour and resets
+// Game::m_CritTimer to the full duration. The pos arg exists in the
+// binary signature but isn't used by DrawCritHit — the flash is
+// always full-screen at the origin.
 void CriticalFlash(const Vec3& pos, const Colour& colour) {
-    (void)pos;  // position stored on binary but the overlay is full-screen
+    (void)pos;
     s_CritFlashColour = colour;
-    s_CritFlashTimer  = CRIT_FLASH_DURATION;
+    if (Game* game = Game::GetInstance()) {
+        game->m_CritTimer = CRITICAL_FLASH_TIME;
+    }
 }
 
+// Matches the Game::m_CritTimer decrement in the binary's main update
+// loop — runs every frame, clamps at 0.
 void UpdateCriticalFlash(float dt) {
-    if (s_CritFlashTimer > 0.0f) {
-        s_CritFlashTimer -= dt;
-        if (s_CritFlashTimer < 0.0f) s_CritFlashTimer = 0.0f;
+    Game* game = Game::GetInstance();
+    if (!game) return;
+    if (game->m_CritTimer > 0.0f) {
+        game->m_CritTimer -= dt;
+        if (game->m_CritTimer < 0.0f) game->m_CritTimer = 0.0f;
     }
 }
 
+// Matches DrawCritHit @ 0x0016b5b4. Called from GameDraw between
+// HUD::Draw(0x08) and HUD::Draw(0x100). Draws an untextured full-
+// screen colour quad whose size + alpha track Game::m_CritTimer.
 void DrawCriticalFlash() {
-    if (s_CritFlashTimer <= 0.0f) return;
+    Game* game = Game::GetInstance();
+    if (!game) return;
+    const float t = game->m_CritTimer;
 
-    // Lazy-share the bomb flash.tex — the binary's ScreenTint uses a
-    // radial texture too. Load on first use.
-    if (!s_FlashTex.IsValid()) {
-        s_FlashTex = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
-        if (!s_FlashTex.IsValid()) return;
+    // Binary guard at the head of DrawCritHit: early-exit if the timer
+    // has already exceeded the full duration. The very first frame
+    // after CriticalFlash() this is exactly CRITICAL_FLASH_TIME, so
+    // nothing draws — drawing starts from the next frame as the timer
+    // decrements below the threshold.
+    if (t <= 0.0f || t >= CRITICAL_FLASH_TIME) return;
+
+    // Quad size: a normalized fade `norm` is computed so it ramps up
+    // through the (0.3, 0.4) window then falls off. Outside that
+    // window the size is 0 (degenerate quad → not drawn).
+    //   norm = 1 - (t - START_FADE) / (FULL - START_FADE)
+    // The * 15002 multiplier saturates against the 480/320 caps for
+    // any nonzero norm, so the visible quad is always full-screen.
+    const float denom = CRITICAL_FLASH_FULL - CRITICAL_FLASH_START_FADE;
+    const float norm  = 1.0f - (t - CRITICAL_FLASH_START_FADE) / denom;
+    float scale = 0.0f;
+    if (norm > 0.0f && norm < 1.0f) {
+        scale = norm * CRITICAL_FLASH_SCALE_MUL;
     }
+    if (scale <= 0.0f) return;
 
-    // Linear alpha fade from initial → 0 over CRIT_FLASH_DURATION.
-    const float t = s_CritFlashTimer / CRIT_FLASH_DURATION;
-    int a = (int)((float)s_CritFlashColour.a * t);
-    if (a < 0)   a = 0;
-    if (a > 255) a = 255;
+    float sx = scale; if (sx > CRITICAL_FLASH_MAX_X) sx = CRITICAL_FLASH_MAX_X;
+    float sy = scale; if (sy > CRITICAL_FLASH_MAX_Y) sy = CRITICAL_FLASH_MAX_Y;
 
-    Colour tint(s_CritFlashColour.r, s_CritFlashColour.g,
-                s_CritFlashColour.b, (uint8_t)a);
+    // Alpha = clamp(stored.a * t, 0, stored.a)
+    int alpha = (int)((float)s_CritFlashColour.a * t);
+    if (alpha < 0)                       alpha = 0;
+    if (alpha > s_CritFlashColour.a)     alpha = s_CritFlashColour.a;
+
+    const Colour tint(s_CritFlashColour.r,
+                      s_CritFlashColour.g,
+                      s_CritFlashColour.b,
+                      (uint8_t)alpha);
+
+    EnsureWhitePx();
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s_WhitePx);
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    // Centred tint disc — large enough to cover the whole screen even
-    // at the edges (flash.tex is radial and fades to transparent).
-    Matrix44 mat = Matrix44::MakeScale(800.0f, 800.0f, 1.0f);
-    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, -10.0f));
+    Matrix44 mat = Matrix44::MakeScale(sx, sy, 1.0f);
+    mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    s_FlashTex->Set();
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawQuad(tint);
     }
-    s_FlashTex->UnSet();
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void DrawBombHit() {
