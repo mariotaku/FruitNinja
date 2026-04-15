@@ -115,6 +115,8 @@ if (fruitType >= 0) {
 
 ### Key Functions
 
+<!-- Analysed: 2026-04-15T16:00 -->
+
 | Function | Address | Lines | Purpose |
 |----------|---------|-------|---------|
 | Init | 0x0014ee40 | 222 | Create entity, set callbacks, random rotation |
@@ -122,9 +124,12 @@ if (fruitType >= 0) {
 | Draw | 0x0014f9cc | 359 | Render 3 layers: button quad + star + sparkle ring |
 | SetText | 0x0014ebc0 | — | Set BakedString labels |
 | AddPeice | 0x00150240 | — | Add sub-element (text, icon) |
+| TouchReleased | 0x0014e5cc | — | Tap-release gate: skip click if fruit-typed, fire callback only for toggles |
 | Clicked | 0x001507d8 | — | Fire click delegate (empty virtual stub) |
 | LoadContent | 0x0014f674 | 28 | Load 3 shared textures (star, sparkle, etc.) |
 | Remove | 0x0014ed18 | — | Animate removal |
+| MakeCritical | 0x00151764 | — | Display "critical" overlay at slice point; position, fade, animate |
+| MakeRare | 0x001518d8 | — | Display "rare" (special) overlay; same as critical but alpha=0.5 |
 
 ### Constructor Variants
 
