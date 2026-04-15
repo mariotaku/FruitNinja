@@ -24,7 +24,18 @@
 
 const float SlashEntity::POINT_SPACING         = 64.0f;   // DAT_0017d5fc
 const float SlashEntity::MOVE_THRESH_ACTIVE    = 5.0f;    // sqrt(25)
-const float SlashEntity::MOVE_THRESH_INACTIVE  = 50.0f;   // sqrt(DAT_0017d5f8 = 2500)
+// NOTE: MOVE_THRESH_INACTIVE is vestigial in the binary. The decomp of
+// UpdateTouchDown (0x17D2E4) only reads DAT_0017d5f8 (= 2500 = 50²) when
+// field_0x144 (the "blade active" flag) is clear — but frame 1 always
+// enters the reset branch (LAB_0017d444) via the "tail uninitialised" gate
+// and sets field_0x144 |= 1 at the bottom, so the 2500 threshold is never
+// actually tested against a nonzero distance. Pure taps are filtered
+// _implicitly_ by the 2-point minimum in RebuildGeometry and
+// CollideWithSphere below — frame 1 adds exactly one point at the touch
+// position, and a single point is non-renderable and non-colliding. A
+// no-motion mouse click therefore cannot slice a fruit, matching the
+// mobile behaviour where a tap without drag fires no move events.
+const float SlashEntity::MOVE_THRESH_INACTIVE  = 50.0f;   // sqrt(DAT_0017d5f8 = 2500) — vestigial, see note above
 
 // Per-point half-width of the blade. Binary uses 9.0 × thicknessFactor.
 static const float BLADE_HALF_WIDTH = 12.0f;
@@ -136,7 +147,14 @@ void SlashEntity::OnTouchActive(float x, float y) {
     m_RawTouchPos = newPos;
 
     if (!m_bHasHead) {
-        // First touch: start a fresh trail.
+        // First touch: start a fresh trail. Matches the reset branch in
+        // binary UpdateTouchDown at LAB_0017d444 — seeds tail=head=prevHead
+        // to the current touch pos and adds one point at that position,
+        // then sets the "blade active" flag. A single point is intentional:
+        // RebuildGeometry and CollideWithSphere both early-out at
+        // m_NumPoints < 2, so a zero-motion click produces neither a visible
+        // blade nor a slice. Subsequent motion of >5 units (MOVE_THRESH_ACTIVE)
+        // adds the second point and the trail becomes visible/sliceable.
         m_NumPoints = 0;
         m_bHasHead = true;
         m_State = 1;
