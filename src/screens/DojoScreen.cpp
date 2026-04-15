@@ -18,6 +18,7 @@
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
+#include "debug/DebugHitbox.h"
 #include <cstdio>
 
 // Transition constants — resolved from docs/screens/dojo-re-notes.md.
@@ -202,8 +203,14 @@ void DojoScreen::Update(float dt) {
 
     switch (m_State) {
     case 0: {
-        // Transition in: lerp alpha → 1.0 at step 0.25
-        m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_IN;
+        // Transition in: lerp alpha → 1.0 at step 0.25. Binary-exact
+        // at full speed. Port specific: the rate is additionally
+        // multiplied by FN::g_DebugTimeScale so the F7 slowdown
+        // also slows this per-tick lerp — without it the sensei
+        // slide-in (driven by m_TransitionAlpha) runs at full speed
+        // while fruit physics run 10x slower, which looks broken.
+        m_TransitionAlpha += (1.0f - m_TransitionAlpha) *
+                             ALPHA_LERP_IN * FN::g_DebugTimeScale;
 
         // Binary gates button creation on alpha > 0.95 (DAT_00138684).
         // Before that, the panel is still sliding in and we don't
