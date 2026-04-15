@@ -15,6 +15,7 @@
 struct Game;
 class MenuButton;
 class DojoScreen;
+class GameModeScreen;
 
 // State enum (verified from binary)
 enum MainScreenState {
@@ -58,6 +59,13 @@ public:
     // Mirrors the binary pattern at e.g. 0x001389B0 where DojoScreen
     // writes mainScreen->m_State = 8 directly.
     void SetState(MainScreenState s) { m_State = s; }
+
+    // Camera transition accessors for child screens. Binary stores
+    // this at game.m_TransitionTimer (+0x0c); port owns it on MainScreen.
+    // GameModeScreen state 3-6 decays this toward 0 during mode-picked
+    // fade-out (matches decompile at 0x0013f10c).
+    float GetCameraTransition() const { return m_CameraTransition; }
+    void  SetCameraTransition(float v) { m_CameraTransition = v; }
 
 private:
     Game& game;
@@ -123,6 +131,11 @@ private:
     // the child for m_bPendingRemoval and transitions to SLIDE_IN
     // once it has cleared out.
     DojoScreen* m_pDojoScreen;
+
+    // Current GameModeScreen child (when state is STATE_MODE_SELECT
+    // and the 0.25 threshold has been crossed). NULL until crossed
+    // and again after the child's RemoveCallback fires.
+    GameModeScreen* m_pGameModeScreen;
 
     // --- Methods matching docs ---
     void UpdateScreenElements(float cameraTransition, float time);

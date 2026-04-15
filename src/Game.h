@@ -21,6 +21,7 @@ class HUD;
 class ActorManager;
 class MainScreen;
 class FruitCamera;
+namespace Mortar { class GameSound; }
 
 struct Game : public Mortar::MortarGame {
     // === Game-specific fields beyond MortarGame base (original +0xFC..+0x103) ===
@@ -66,7 +67,11 @@ struct Game : public Mortar::MortarGame {
     int fruitTotal;                // +0x174: last AddToTotal result
     // +0x178: CoinCounter* pCoinCounter (TODO)
     // +0x180: TimeControl* pTimeCtrl (TODO)
-    // +0x188: GameSound* pGameSound (TODO)
+    // +0x188: GameSound* pGameSound. Port backs this with a real
+    // GameSound instance, but the sound backend itself is no-op
+    // (SoundManager is stubbed). Makes the SFXPlay call sites real
+    // so they're easy to light up once audio is wired.
+    Mortar::GameSound* pGameSound;
     int m_gameDataLicensedState;   // +0x18C: game-level licensed state (separate from MortarGame)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
     float m_MenuReturnTimer;       // +0x1A0
