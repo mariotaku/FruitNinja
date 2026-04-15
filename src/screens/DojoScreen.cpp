@@ -129,9 +129,12 @@ void DojoScreen::CreateButtons() {
     // watermelon=3, strawberry=4, kiwifruit=5, pineapple=6, plum=7,
     // pear=8, mango=9, ...).
     //
-    // Back button uses the bomb threshold (= FruitInfo_GetCount()), same
-    // pattern as MainScreen's Quit bomb. Binary reads it from a runtime
-    // global at GOT+0x7060 which holds the bomb-row fruit count.
+    // Back button uses the bomb threshold (= FruitInfo_GetCount()).
+    // Verified 2026-04-15: the binary reads `**(int**)(GOT+0x7060)` →
+    // resolved BSS at 0x0024D754, set in Fruit::LoadInfo @ 0x00179964
+    // to the count of <fruit> elements in fruitlist.xml — exactly what
+    // FruitInfo_GetCount() returns. Passing this as fruitType triggers
+    // MenuButton::Init's bomb branch (`bombThreshold <= fruitType`).
     const int FT_BOMB      = FruitInfo_GetCount();
     const int FT_PINEAPPLE = 6;
     const int FT_PLUM      = 7;

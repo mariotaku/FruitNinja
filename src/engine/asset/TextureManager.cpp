@@ -33,10 +33,12 @@ SmartPtr<Texture> TextureManager::Load(const char* path) {
 SmartPtr<Texture> TextureManager::Find(uint32_t hash) const {
     std::map<uint32_t, CacheEntry>::const_iterator it = m_Cache.find(hash);
     if (it != m_Cache.end() && it->second.ptr != NULL) {
-        // Check if the texture is still alive (ref count > 0)
-        if (it->second.ptr->GetRefCount() > 0) {
-            return SmartPtr<Texture>(it->second.ptr);
-        }
+        // The cache stores raw pointers; Texture::~Texture removes its
+        // entry before the object is freed, so any non-NULL pointer
+        // here is still alive. Wrap in a fresh SmartPtr — its ctor
+        // bumps the strong refcount and keeps the texture alive while
+        // the caller holds it.
+        return SmartPtr<Texture>(it->second.ptr);
     }
     return SmartPtr<Texture>();
 }
@@ -54,9 +56,21 @@ void TextureManager::Add(const char* name, SmartPtr<Texture> tex) {
 }
 
 void TextureManager::PurgeExpired() {
-    std::map<uint32_t, CacheEntry>::iterator it = m_Cache.begin();
-    while (it != m_Cache.end()) {
-        if (it->second.ptr == NULL || it->second.ptr->GetRefCount() <= 0) {
+    // No-op — the binary's TextureManager has no PurgeExpired method
+    // either. Cache entries clean themselves up via OnTextureDestroyed
+    // when the last SmartPtr ref to a Texture is released. Kept as a
+    // stub so existing call sites compile.
+}
+
+void TextureManager::OnTextureDestroyed(Texture* tex) {
+    // Linear scan — cache size is small (a few hundred textures max)
+    // and destroy events are rare, so the O(N) walk isn't worth a
+    // reverse map. Matches the binary's WeakPtr cleanup path which
+    // also walks the map on weak-ref decrement.
+    if (!tex) return;
+    for (std::map<uint32_t, CacheEntry>::iterator it = m_Cache.begin();
+         it != m_Cache.end(); ) {
+        if (it->second.ptr == tex) {
             it = m_Cache.erase(it);
         } else {
             ++it;
