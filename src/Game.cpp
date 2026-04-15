@@ -11,6 +11,7 @@
 #include "game/GameTaskState.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
+#include "debug/DebugHitbox.h"
 #include "config.h"
 #include <cstdio>
 
@@ -114,6 +115,9 @@ void Game::run() {
                 running = false;
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
                 running = false;
+            } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
+                FN::g_DebugHitboxes = !FN::g_DebugHitboxes;
+                printf("[Debug] Hitboxes %s\n", FN::g_DebugHitboxes ? "ON" : "OFF");
             } else {
                 inputTranslator.ProcessSDLEvent(ev, window);
             }

@@ -24,12 +24,16 @@ static const float SLICE_TIMER_BASE    = 0.03f;   // DAT_001784dc
 static const float SLICE_BLADE_SCALE   = 0.1f;    // DAT_001784e0
 static const float SLICE_CLAMP_MIN_NRM = 4.0f;    // normal fruit clamp
 static const float SLICE_CLAMP_MAX     = 8.0f;
-// Fruit::SetFruitType (0x17621c) collision radius formula:
-//   radius = base + 0.52 * collisionScale
-// with `base` read from FRUIT_INFO+0x248 (default 1.0) and collisionScale
-// from +0x244 (parsed as "collision" attr, default 25.0).
-static const float COL_RADIUS_FACTOR   = 0.52f;   // DAT_00176340
-static const float COL_RADIUS_BASE     = 1.0f;    // FRUIT_INFO+0x248 default
+// Fruit::SetFruitType (0x0017621c) collision radius formula — verified
+// 2026-04-15 from binary disassembly at 0x0017630e..0x0017631e:
+//   vldr s14, [r3, #0x244]   ; s14 = m_Scale            (XML "scale")
+//   vldr s15, [r3, #0x248]   ; s15 = m_CollisionScale   (XML "collision")
+//   vmla s15, s13, s14       ; s15 += 0.52 * s14
+//   vmul s15, s15, scale     ; s15 *= scaleParam (1.0 typical)
+// →  radius = (m_CollisionScale + 0.52 * m_Scale) * scaleParam
+// Defaults from LoadInfo: m_Scale = 25.0 @ 0x41c80000,
+//                         m_CollisionScale = 1.0 @ 0x3f800000.
+static const float COL_RADIUS_FACTOR = 0.52f;   // DAT_00176340
 
 // Random float in [-range, +range]
 static float RandRange(float range) {
@@ -100,16 +104,17 @@ void Fruit::Init(int param1, int fruitType, int param3) {
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
         scale = Vec3::One() * fruitScale;
 
-        // Collision sphere (SetFruitType @ 0x0017621c, verified 2026-04-15):
-        //   radius = (collisionBase + FRUIT_COLLISION_FACTOR * collisionScale)
-        //            * scaleParam
-        // where FRUIT_COLLISION_FACTOR = 0.52 @ 0x00176340. scaleParam is
-        // the `scale` argument to SetFruitType — typically 1.0 at the
-        // common call path, so the port hard-codes it. Do NOT multiply by
-        // fruitScale (m_Scale * 0.01) — that was a port-specific bug that
-        // shrank fruit hitboxes by 25-50% and made slicing feel unresponsive.
-        const float colScale = info ? info->m_CollisionScale : 25.0f;
-        const float radius   = COL_RADIUS_BASE + COL_RADIUS_FACTOR * colScale;
+        // Collision sphere (SetFruitType @ 0x0017621c, verified
+        // 2026-04-15 from disassembly).
+        //   radius = (m_CollisionScale + 0.52 * m_Scale) * scaleParam
+        // where scaleParam is the SetFruitType arg (1.0 at the common
+        // call site). m_Scale is the XML "scale" attr (e.g. watermelon
+        // = 75); m_CollisionScale is the XML "collision" attr (5 for
+        // every fruit in fruitlist.xml). Defaults if FRUIT_INFO is
+        // missing: m_Scale = 25.0, m_CollisionScale = 1.0.
+        const float fScale  = info ? info->m_Scale          : 25.0f;
+        const float fColBase = info ? info->m_CollisionScale : 1.0f;
+        const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
         m_Col.center = Vec3(pos.x, pos.y, 0.0f);
         m_Col.radius = radius;
     }
@@ -422,8 +427,12 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
     }
 
     // White slice-line visual — matches AddSlice call in binary
-    // CollisionResponse at 0x17821c.
-    FN::SliceEffect_Add(pos, m_SliceAngle, m_SliceImpulse, isCritical);
+    // CollisionResponse at 0x17821c. Binary builds sliceInfo as:
+    //   x = m_SliceAngle / -182.0 + 90.0   (degrees-offset)
+    //   y = bladeSpeed * 0.4                (impulse length)
+    const float sliceAngleDeg = (float)(int16_t)m_SliceAngle / -182.0f + 90.0f;
+    const float sliceLength   = bladeSpeed * 0.4f;
+    FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
 }
 
 // Matches Fruit::Slice (0x176d58), now with the binary's flipSide
@@ -468,13 +477,14 @@ void Fruit::Slice() {
     // future when Fruit::OnSliced's critical RNG is implemented.
     const bool isCritical = false;  // TODO: m_bCriticalEligible
     if (isCritical) {
-        const float critDegA = (float)m_SliceAngle / -182.0f + 60.0f;
-        const float critDegB = (float)m_SliceAngle / -182.0f - 60.0f;
-        FN::SliceEffect_Add(pos, m_SliceAngle + 0x2a96,
-                            impulse * 0.4f * 0.7f, true);
-        FN::SliceEffect_Add(pos, m_SliceAngle - 0x2a96,
-                            impulse * 0.4f * 0.7f, true);
-        (void)critDegA; (void)critDegB;
+        // Binary: two slice lines at ±60° offset from the base angle.
+        //   infoA.x = m_SliceAngle / -182.0 + 60.0
+        //   infoB.x = m_SliceAngle / -182.0 - 60.0
+        //   infoA/B.y = impulse * 0.4 * 0.7
+        const float critBase = (float)(int16_t)m_SliceAngle / -182.0f;
+        const float critLen  = impulse * 0.4f * 0.7f;
+        FN::SliceEffect_Add(pos, critBase + 60.0f, critLen, true);
+        FN::SliceEffect_Add(pos, critBase - 60.0f, critLen, true);
         impulse *= 1.5f;
         splatCount += 2;
     }
@@ -505,7 +515,10 @@ void Fruit::Slice() {
         Vec3 sv(sinf(a) * speed, cosf(a) * speed, 0.0f);
 
         SplatEntity* s = SplatEntity::GetFree();
-        if (s) s->MakeSplat(pos, sv, m_FruitType);
+        // Binary passes param3 = isCritical for crit splats (biases
+        // MakeSplat's landing-type RNG toward types 4/5, the larger
+        // variants).
+        if (s) s->MakeSplat(pos, sv, isCritical, m_FruitType);
     }
 
     // --- Half velocities ---
