@@ -672,6 +672,15 @@ void MainScreen::CreatePlayDojo() {
     pPlayButton->Init(POS_PLAY_BUTTON,
         [this]() { GameModeCallback(); }, 3, Vec3(0,0,0), nullptr);
     pPlayButton->m_LayerFlags = 8;
+    // RemoveCallback: matches binary MainScreen::ButtonDeleted @ 0x0014acc0.
+    // HUD::Update fires this right before deleting the MenuButton so we
+    // can null our weak ref. Required for the dojo back-slice flow:
+    // FN_ClearMenuItems releases Play/Dojo fruits -> MenuButton shrink
+    // path deletes the button -> without this callback pPlayButton
+    // stays dangling and STATE_CAMERA_ZOOM's `if (!pPlayButton)` guard
+    // skips CreatePlayDojo on return.
+    pPlayButton->m_RemoveCallback =
+        [this](HUDControl* c) { ButtonDeleted(c); };
     game.hud->AddControl(pPlayButton);
 
     // Dojo button: (-144.0, -65.0, -50.0), fruitType=9 (mango)
@@ -681,6 +690,8 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->Init(POS_DOJO_BUTTON,
         [this]() { AboutCallback(); }, 9, Vec3(0,0,0), nullptr);
     pDojoButton->m_LayerFlags = 8;
+    pDojoButton->m_RemoveCallback =
+        [this](HUDControl* c) { ButtonDeleted(c); };
     game.hud->AddControl(pDojoButton);
 }
 
@@ -696,7 +707,18 @@ void MainScreen::CreateQuitButton() {
     pQuitBtn->Init(POS_QUIT,
         [this]() { QuitGamesCallback(); }, fruitCount, Vec3(0,0,0), nullptr);
     pQuitBtn->m_LayerFlags = 8;
+    pQuitBtn->m_RemoveCallback =
+        [this](HUDControl* c) { ButtonDeleted(c); };
     game.hud->AddControl(pQuitBtn);
+}
+
+// Matches MainScreen::ButtonDeleted @ 0x0014acc0. Binary dispatches by
+// identity on all four button pointers — port mirrors 1:1.
+void MainScreen::ButtonDeleted(HUDControl* ctrl) {
+    if (ctrl == pDojoButton)    pDojoButton    = NULL;
+    if (ctrl == pPlayButton)    pPlayButton    = NULL;
+    if (ctrl == pQuitBtn)       pQuitBtn       = NULL;
+    if (ctrl == pMoreGamesBtn)  pMoreGamesBtn  = NULL;
 }
 
 // --- Callbacks (all fully decompiled in docs/screens/main.md) ---
