@@ -120,6 +120,10 @@ void Game::run() {
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
                 FN::g_DebugHitboxes = !FN::g_DebugHitboxes;
                 printf("[Debug] Hitboxes %s\n", FN::g_DebugHitboxes ? "ON" : "OFF");
+            } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
+                // Port specific: debug-only, no binary equivalent
+                FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
+                printf("[debug] timeScale = %.1f\n", FN::g_DebugTimeScale);
             } else {
                 inputTranslator.ProcessSDLEvent(ev, window);
             }
@@ -131,6 +135,16 @@ void Game::run() {
         // then passes dt to update + draw functions
         dt = 0.0f;
         Mortar::SystemManager::GetInstance().Update(&dt);
+
+        // Port specific: debug time-scale. We scale dt so every
+        // dt-integrating update (physics, velocity, acceleration)
+        // slows smoothly. Per-tick lerps (alpha fades, state timer
+        // decays) don't read dt, so they read FN::g_DebugTimeScale
+        // directly at the lerp site — at 1.0× this is a no-op, at
+        // 0.1× the lerp advances 10× less per frame. Result: both
+        // categories slow uniformly AND render every real frame, so
+        // animations stay smooth at slow speed.
+        dt *= FN::g_DebugTimeScale;
 
         // Update: 3-state dispatcher
         GameTaskUpdate(dt);

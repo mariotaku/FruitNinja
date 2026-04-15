@@ -16,7 +16,8 @@
 
 namespace FN {
 
-bool g_DebugHitboxes = false;
+bool  g_DebugHitboxes  = false;
+float g_DebugTimeScale = 1.0f; // Port specific: debug-only, no binary equivalent
 
 // Lazy 1×1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex
