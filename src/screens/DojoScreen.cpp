@@ -12,6 +12,8 @@
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
 #include "entities/FruitInfo.h"
+#include "entities/Fruit.h"
+#include "audio/GameSound.h"
 #include "asset/TextureManager.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
@@ -20,6 +22,7 @@
 #include "math/Colour.h"
 #include "debug/DebugHitbox.h"
 #include <cstdio>
+#include <cstdlib>
 
 // Transition constants — resolved from docs/screens/dojo-re-notes.md.
 // State 0: alpha += (1-alpha)*0.25, done at alpha > 0.9991 (DAT_001389dc)
@@ -351,12 +354,41 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
 
 // --- Sub-button callbacks ---
 
+// Matches DojoScreen::QuitCallback @ 0x001389F4.
+// Binary flow:
+//   1. GameSound::SFXPlay(gameSound, "menu-bomb", 1.0, 1.0, cb)
+//   2. m_State = 6
+//   3. If m_pPlayButton && m_pPlayButton->m_pFruitPiece:
+//        SetVisible_FruitFact(piece)  // detach from MenuButton tracking
+//        piece->vel = (RandFloat5() + 5.0, -RandFloat5(), 0.0)
+//   4. TutorialControl::ResetTutePos(..., NULL)
+//
+// RandFloat5 (@ 0x00147fb0) returns a float in [0, 5) — port uses
+// the standard rand() path since no GameSound / RNG state divergence
+// would be visible from this one call site.
 void DojoScreen::PlayCallback() {
-    // Play button on DojoScreen = return to MainScreen (state 6).
-    // Binary flow: fades out, sets `GameState = 8` which the outer
-    // menu loop interprets as "close DojoScreen, reopen MainScreen".
     printf("[DojoScreen] Play -> return to MainScreen\n");
+
+    if (game.pGameSound) {
+        game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    }
+
     m_State = 6;
+
+    // Fling the back-bomb's fruit piece off-screen rightward. Binary
+    // calls SetVisible_FruitFact which flips a "detached" bit on the
+    // piece so MenuButton::Update stops pinning it to the button
+    // centre — port achieves the same effect by writing vel directly,
+    // because MenuButton's pin-to-centre branch only fires while
+    // m_pEntity == m_pFruitPiece and the entity isn't sliced. Here
+    // the piece will start drifting as soon as this write lands.
+    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
+        const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+    }
+
+    // TODO: TutorialControl::ResetTutePos when tutorial system is ported.
 }
 
 void DojoScreen::ShopCallback() {
