@@ -81,7 +81,6 @@ void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType
 SmartPtr<Texture> Texture::Load(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) {
-        // Try with DisplayManager texture overload prefix
         DisplayManager& dm = DisplayManager::GetInstance();
         if (dm.m_TextureOverloadPrefix[0] != '\0') {
             std::string altPath = std::string(dm.m_TextureOverloadPrefix) + path;
@@ -93,7 +92,6 @@ SmartPtr<Texture> Texture::Load(const char* path) {
         }
     }
 
-    // Read 12-byte .tex header
     uint8_t header[12];
     if (fread(header, 1, 12, f) != 12) {
         fclose(f);
@@ -106,7 +104,6 @@ SmartPtr<Texture> Texture::Load(const char* path) {
     int width  = 1 << widthLog2;
     int height = 1 << heightLog2;
 
-    // Read pixel data
     fseek(f, 0, SEEK_END);
     long fileSize = ftell(f);
     long dataSize = fileSize - 12;

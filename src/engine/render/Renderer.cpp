@@ -1,6 +1,5 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
-#include "asset/tex_loader.h"
 #include <cstdio>
 #include <cmath>
 
@@ -212,19 +211,6 @@ void Renderer::shutdown() {
     if (program) { glDeleteProgram(program); program = 0; }
     if (program_3d) { glDeleteProgram(program_3d); program_3d = 0; }
     if (program_vc) { glDeleteProgram(program_vc); program_vc = 0; }
-}
-
-GLuint Renderer::upload_texture(const TexImage& img) {
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.width, img.height, 0,
-                 GL_RGBA, GL_UNSIGNED_BYTE, img.pixels.data());
-    return tex;
 }
 
 void Renderer::SetupGameOrtho() {
