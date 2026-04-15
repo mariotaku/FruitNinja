@@ -79,6 +79,7 @@ add_subdirectory(src/screens)
 add_subdirectory(src/platform)
 add_subdirectory(src/entities)
 add_subdirectory(src/game)
+add_subdirectory(src/debug)
 
 # --- Link (after all subdirectories define their targets) ---
 target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine)

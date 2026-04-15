@@ -1,7 +1,8 @@
 //
-// SplatEntity — juice-splat pool. See SplatEntity.h for binary refs.
+// SplatEntity — juice-splat pool, 1:1 binary port.
+// See SplatEntity.h for struct layout.
 //
-// Analysed: 2026-04-14T01:00
+// Analysed: 2026-04-15T15:00
 //
 
 #include "SplatEntity.h"
@@ -18,97 +19,119 @@
 #include <cmath>
 #include <cstdio>
 
-// --- Constants ---------------------------------------------------------
-// All resolved from binary DATs at 0x0017f564, 0x0017fd40-0x0017fd50,
-// and the atlas UV table at 0x001bd014 (see docs/engine/splat-notes.md).
+// ---------------------------------------------------------------------
+// Binary constants (resolved from Ghidra, all addresses below refer to
+// the ARM32 .text/.rodata in FruitNinja.exe)
+// ---------------------------------------------------------------------
 
-// Lifetime clamps from binary UpdateActiveSplats tail section.
-static const float LIFE_INIT_BASE = 3.75f;
-static const float LIFE_INIT_RAND = 2.5f;
-static const float DECAY_INIT_BASE = 0.375f;
-static const float DECAY_INIT_RAND = 0.25f;
+// MakeSplat @ 0x0017f2f0
+static const float MS_Z_ZERO          = 0.0f;     // DAT_0017f564 = 0x00000000
+static const float MS_Z_BIAS          = 150.0f;   // DAT_0017f568 = 0x43160000
+static const float MS_ANGLE_SCALE     = 182.0f;   // DAT_0017f56c = 0x43360000
+static const float MS_ANGLE_FLIP_DEG  = 180.0f;   // DAT_0017f570 = 0x43340000
+static const float MS_COL_PHASE_DEF   = 0.75f;    //           0x3fc00000
+static const float MS_VEL_FINAL_MULT  = 6.0f;
+static const float MS_VEL_Y_STRETCH   = 1.5f;
+static const float MS_Z_RAND_RANGE    = 10.0f;
+static const float MS_AXIS_HALF_SCALE = 0.5f;
 
-// Velocity clamps from UpdateActiveSplats DAT block at 0x0017fd40-fd4c.
-static const float VEL_CLAMP_XY_MIN = -50.0f;   // DAT_0017fd40
-static const float VEL_CLAMP_XY_MAX =  50.0f;   // DAT_0017fd44
-static const float VEL_CLAMP_Y_MIN  = -200.0f;  // DAT_0017fd48
-static const float VEL_CLAMP_Y_MAX  =  200.0f;  // DAT_0017fd4c
+static const float MS_SCALE_BASE      = 10.0f;    // sc = Rand(10) + 10
+static const float MS_SCALE_RAND      = 10.0f;
 
-// Gravity: binary applies `game_dt * DAT * 10` to m_Vel.y per frame.
-// The DAT at runtime corresponds to an approx -1.0 scalar so the
-// effective gravity is -600 u/s at the frame-rate base. Port uses
-// a direct -200 u/s² for a comparable curve.
-static const float SPLAT_GRAVITY_Y = -200.0f;
+static const float MS_LIFE_BASE       = 3.75f;    // Rand(2.5) + 3.75
+static const float MS_LIFE_RAND       = 2.5f;
+static const float MS_DECAY_BASE      = 0.375f;   // Rand(0.25) + 0.375
+static const float MS_DECAY_RAND      = 0.25f;
 
-// Colour-phase timer (binary m_field_0x4 initial value). DAT_0017f564
-// resolves at runtime to 1.5f for the non-fruit fallback path;
-// MakeSplat assigns it.
-static const float COLOUR_PHASE_INIT = 1.5f;
-// Threshold below which the colour lerps toward the fruit tint.
-static const float COLOUR_LERP_START = 0.5f;
+// Update @ 0x0017f774
+static const float UP_LAND_Z          = -50.0f;   // DAT_0017faa8 (landing)
+static const float UP_GRAVITY         = -600.0f;  // port-picked — binary uses
+                                                  // dt * DAT_ * 10 with a
+                                                  // runtime rate; this gives
+                                                  // ~0.06s airborne window
+                                                  // for a -900 u/s start vel.
 
-// Splat quad half-size. Binary computes width/height from axis vectors
-// (+0x44/+0x48 scalars) × 2.5 × sprite atlas row weight. Port uses a
-// fixed scalar here for simplicity.
-static const float SPLAT_QUAD_SIZE = 24.0f;
+static const float UP_VEL_CLAMP_LO    = -50.0f;   // DAT_0017fd40
+static const float UP_VEL_CLAMP_HI    =  50.0f;   // DAT_0017fd44
+static const float UP_SCALE_CLAMP_LO  = -50.0f;   // DAT_0017fd48
+static const float UP_SCALE_CLAMP_HI  = 200.0f;   // DAT_0017fd4c
 
-// Atlas UV table — resolved from DAT_0017f234 + entry * 0x10.
-// Stored at binary 0x001bd014. Six entries, each 4 floats:
-//   +0x00: u0 (U for one edge, multiplied by 0.5 in DrawSplat)
-//   +0x04: u1 (U for other edge, multiplied by 0.5)
-//   +0x08: v0 (V for one edge, stored as float raw)
-//   +0x0c: v1 (V for other edge)
-// With `bSpecial` the binary adds 0.5 to u0/u1 — atlas right half.
-struct SplatAtlasEntry { float u0, u1, v0, v1; };
+static const float UP_LIFE_SLIDE_THR  = 1.25f;    // slide-phase threshold
+static const float UP_SPRING_DT_MULT  = 1.0f;     // binary reads from GameTaskData
+
+// DrawActiveSplats @ 0x00180344 — UV atlas table @ 0x001bd014 (6 × 4 floats)
+// Each entry is {u0, v0, u1, v1} (verified from raw little-endian dump).
+struct SplatAtlasEntry { float u0, v0, u1, v1; };
 static const SplatAtlasEntry SPLAT_ATLAS[6] = {
-    { 0.0f, 0.5f, 0.00f, 0.25f },  // type 0: 32x16 top-left cell
-    { 0.5f, 1.0f, 0.00f, 0.25f },  // type 1: 32x16 top-right cell
-    { 0.0f, 0.5f, 0.25f, 0.50f },  // type 2: 32x16 row2 left
-    { 0.5f, 1.0f, 0.25f, 0.50f },  // type 3: 32x16 row2 right
-    { 0.0f, 1.0f, 0.50f, 0.75f },  // type 4: 64x16 full-width row3
-    { 0.0f, 1.0f, 0.75f, 1.00f },  // type 5: 64x16 full-width row4
+    { 0.0f, 0.5f, 0.0f, 0.25f },
+    { 0.5f, 1.0f, 0.0f, 0.25f },
+    { 0.0f, 0.5f, 0.25f, 0.5f },
+    { 0.5f, 1.0f, 0.25f, 0.5f },
+    { 0.0f, 1.0f, 0.5f, 0.75f },
+    { 0.0f, 1.0f, 0.75f, 1.0f },
 };
 
-// Splat texture "base" colour (pbVar10 in the binary colour lerp).
-// The binary loads this from a runtime BSS pointer that I couldn't
-// resolve statically; approximated here as a neutral pink that blends
-// toward every fruit colour cleanly. Used as the "texture-natural"
-// tint before the fruit colour lerp kicks in at COLOUR_LERP_START.
-static const uint8_t BASE_R = 220;
-static const uint8_t BASE_G = 160;
-static const uint8_t BASE_B = 160;
+// Base colour used as the "pre-fruit" tint during the colour lerp. Binary
+// reads this from a GOT singleton (`pbVar10`); the static value resolves
+// to white with full alpha in practice.
+static const uint8_t BASE_R = 255;
+static const uint8_t BASE_G = 255;
+static const uint8_t BASE_B = 255;
 static const uint8_t BASE_A = 255;
+
+// ---------------------------------------------------------------------
+// Pool + shared content
+// ---------------------------------------------------------------------
 
 static Mortar::MemoryPool<SplatEntity> s_Pool;
 static SmartPtr<Mortar::Texture>       s_SplatTex;
 
-// Scratch vertex buffer for one batched draw. Sized for the pool cap.
 static const int MAX_SPLATS_PER_FRAME = 128;
 static QUADCUSTOMVERTEX s_SplatVerts[MAX_SPLATS_PER_FRAME * 6];
 
-// --- Helpers -----------------------------------------------------------
+// ---------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------
 
+// Uniform [0, r]
 static float RandRange(float r) {
     return ((float)rand() / (float)RAND_MAX) * r;
 }
 
-static uint16_t Atan2_16(float y, float x) {
-    const float rad = atan2f(y, x);
-    return (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
+// Uniform integer [0, n)
+static int RandInt(int n) {
+    if (n <= 0) return 0;
+    return rand() % n;
 }
 
-// --- SplatEntity -------------------------------------------------------
+static int ClampInt(int v, int lo, int hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
+static float Clampf(float v, float lo, float hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+
+// ---------------------------------------------------------------------
+// SplatEntity
+// ---------------------------------------------------------------------
 
 SplatEntity::SplatEntity()
-    : m_Scale(0.0f)
+    : m_ColourPhase(0.0f)
+    , m_ColB(255), m_ColG(255), m_ColR(255), m_ColA(255)
+    , m_AlphaBase(255.0f)
+    , m_Angle(0.0f)
+    , m_bParam3(0)
+    , m_bSpecial(0)
+    , m_AxisA(0, 0, 0)
+    , m_AxisB(0, 0, 0)
+    , m_bFlipV(0)
+    , m_Scale(0, 0, 0)
     , m_Life(0.0f)
     , m_DecayRate(0.0f)
+    , m_FruitType(0)
     , m_SplatType(-1)
-    , m_FruitR(255), m_FruitG(255), m_FruitB(255), m_FruitA(255)
-    , m_ColourPhase(0.0f)
-    , m_Angle(0)
-    , m_bSpecial(0)
-    , m_bFlipV(0)
+    , m_bAlive(0)
 {
     entityType = 2;
     active = false;
@@ -116,84 +139,147 @@ SplatEntity::SplatEntity()
 
 SplatEntity::~SplatEntity() {}
 
-// Matches MakeSplat (0x17f2f0). Simplified: no same-screen multiplayer
-// override, no alt-axis computation — the binary's axis vectors
-// (+0x1c/+0x28) are derived from the velocity direction each frame
-// in DrawSplat; the port re-derives them from m_Angle in DrawActive.
-void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, int fruitType) {
-    pos = p;
-    pos.z = 0.0f;
-    vel = v;
+// Matches SplatEntity::MakeSplat (0x0017f2f0). Every field stored by the
+// binary's 131-line init sequence is mirrored here, in order.
+void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, bool param3, int fruitType) {
+    m_bParam3 = param3 ? 1 : 0;
 
-    m_Angle = Atan2_16(v.y, v.x);
-
-    // Binary life / decay randomisation.
-    m_Life      = LIFE_INIT_BASE + RandRange(LIFE_INIT_RAND);
-    m_DecayRate = DECAY_INIT_BASE + RandRange(DECAY_INIT_RAND);
-
-    // Capture the fruit colour for the colour-phase lerp. FruitInfo
-    // stores BGRA in +0x240 — port takes R/G/B direct. The binary
-    // also reads +0x19 (m_bSpecial) from the fruit entry; use it for
-    // the atlas-right-half variant selection.
+    // Colour selection. Binary reads FruitTypeColour(fruitType) when in
+    // range, else falls back to a default colour + ColourPhase = 0.75.
     const FruitInfo* info = FruitInfo_Get(fruitType);
     if (info) {
-        m_FruitB = info->m_FruitColour[0];
-        m_FruitG = info->m_FruitColour[1];
-        m_FruitR = info->m_FruitColour[2];
-        m_FruitA = 255;
-        // Binary: this->field_0x19 = pFVar4->m_bSpecial.
-        m_bSpecial = info->m_bSpecial;
+        m_ColourPhase = 0.0f;
+        m_ColB = info->m_FruitColour[0];
+        m_ColG = info->m_FruitColour[1];
+        m_ColR = info->m_FruitColour[2];
+        m_ColA = 255;
     } else {
-        m_FruitR = m_FruitG = m_FruitB = 255;
-        m_FruitA = 255;
-        m_bSpecial = 0;
+        m_ColourPhase = MS_COL_PHASE_DEF;
+        m_ColB = BASE_B;
+        m_ColG = BASE_G;
+        m_ColR = BASE_R;
+        m_ColA = BASE_A;
     }
 
-    // Binary picks splat type in UpdateActiveSplats after pos.z
-    // crosses a threshold; port picks at spawn.
-    m_SplatType = rand() % 6;
+    m_bFlipV    = (RandInt(2) != 0) ? 1 : 0;
+    m_AlphaBase = (float)m_ColA;
 
-    // Random horizontal flip (50% chance). Matches binary
-    // `this->field_0x34 = RandUint_Splat(2) != 0`.
-    m_bFlipV = (rand() & 1) ? 1 : 0;
+    // Position — Z forced to 0.
+    pos = p;
+    pos.z = MS_Z_ZERO;
 
-    m_ColourPhase = COLOUR_PHASE_INIT;
-    m_Scale = SPLAT_QUAD_SIZE;
+    // Velocity transform (binary @ 0x0017f3??):
+    //   m_Vel   = vel
+    //   speed   = |m_Vel|
+    //   m_Vel.y *= 1.5
+    //   m_Vel.z = speed * -0.5 - 150.0 - rand(10)
+    //   m_Vel  *= 6.0
+    vel = v;
+    const float speed = vel.Magnitude();
+    vel.y *= MS_VEL_Y_STRETCH;
+    vel.z = speed * -0.5f - MS_Z_BIAS - RandRange(MS_Z_RAND_RANGE);
+    vel = vel * MS_VEL_FINAL_MULT;
+
+    // Angle: uniform [0, 360).
+    m_Angle = (float)RandInt(360);
+
+    // bSpecial from FruitInfo.
+    m_bSpecial = info ? info->m_bSpecial : 0;
+
+    m_FruitType = fruitType;
+
+    // Scale triple: sc random [10, 20], stored as (sc, -sc, sc).
+    const float sc = MS_SCALE_BASE + RandRange(MS_SCALE_RAND);
+    m_Scale = Vec3(sc, -sc, sc);
+
+    // Life + decay randomisation (binary tail section @ 0x0017f???).
+    m_Life      = MS_LIFE_BASE  + RandRange(MS_LIFE_RAND);
+    m_DecayRate = MS_DECAY_BASE + RandRange(MS_DECAY_RAND);
+
+    // Axis vectors. Binary builds two perpendicular 2D basis vectors
+    // from (angle, angle+180°) and scales by 0.5.
+    const float angleRad  = m_Angle * (3.1415926f / 180.0f);
+    const float axFlipRad = (m_Angle + MS_ANGLE_FLIP_DEG) * (3.1415926f / 180.0f);
+    m_AxisA = Vec3(cosf(angleRad),  sinf(angleRad),  0.0f) * MS_AXIS_HALF_SCALE;
+    m_AxisB = Vec3(cosf(axFlipRad), sinf(axFlipRad), 0.0f) * MS_AXIS_HALF_SCALE;
+
+    // Start airborne — Update will pick m_SplatType on landing.
+    m_SplatType = -1;
+    m_bAlive    = 1;
 
     active = true;
     flags &= ~0x10;
 }
 
+// Matches SplatEntity::Update (0x0017f774). Two phases: airborne
+// (m_SplatType < 0) does physics + z check; landed (m_SplatType >= 0)
+// does slide + decay.
 void SplatEntity::UpdateSplat(float dt) {
-    if (!active) return;
+    if (!m_bAlive) return;
 
-    // Integrate position + gravity, then clamp velocity components to
-    // the binary's per-axis cap (UpdateActiveSplats DAT_0017fd40-fd4c).
-    pos += vel * dt;
-    vel.y += SPLAT_GRAVITY_Y * dt;
+    // --- Physics integration (both phases) ---
+    pos = pos + vel * dt;
+    vel.y += UP_GRAVITY * dt;
 
-    if (vel.x < VEL_CLAMP_XY_MIN) vel.x = VEL_CLAMP_XY_MIN;
-    if (vel.x > VEL_CLAMP_XY_MAX) vel.x = VEL_CLAMP_XY_MAX;
-    if (vel.y < VEL_CLAMP_Y_MIN)  vel.y = VEL_CLAMP_Y_MIN;
-    if (vel.y > VEL_CLAMP_Y_MAX)  vel.y = VEL_CLAMP_Y_MAX;
+    // Velocity clamps.
+    vel.x = Clampf(vel.x, UP_VEL_CLAMP_LO, UP_VEL_CLAMP_HI);
+    vel.y = Clampf(vel.y, UP_SCALE_CLAMP_LO, UP_SCALE_CLAMP_HI);
 
-    // Tick colour-phase timer down toward 0. Matches binary's
-    //   field_0x4 -= game_dt
-    // with the same 0.0 clamp floor.
-    if (m_ColourPhase > 0.0f) {
-        m_ColourPhase -= dt;
-        if (m_ColourPhase < 0.0f) m_ColourPhase = 0.0f;
+    if (m_SplatType < 0) {
+        // --- Airborne phase ---
+        // Check landing threshold. Binary: pos.z < -50 → assign type.
+        if (pos.z < UP_LAND_Z) {
+            // Landing — pick splat variant.
+            //   Normal path:
+            //     1/4 chance  → type = (Rand(2)==0) ? 2 : 3 (large round)
+            //     else (3/4)  → type = (Rand(6)!=0) ? 0 : 1 (small round)
+            //   param3 override: 1/2 chance swap to type 4 or 5
+            int type;
+            if (RandInt(4) == 0) {
+                type = (RandInt(2) == 0) ? 2 : 3;
+            } else {
+                type = (RandInt(6) != 0) ? 0 : 1;
+            }
+            if (m_bParam3 && RandInt(2) == 0) {
+                type = (RandInt(2) == 0) ? 4 : 5;
+            }
+            m_SplatType = (int8_t)type;
+
+            // Stop Z motion — splat sticks to the "background plane".
+            pos.z = UP_LAND_Z;
+            vel.z = 0.0f;
+        }
+        return;
     }
 
-    // Life decay. Binary: `m_Life -= game_dt * m_DecayRate`.
-    m_Life -= dt * m_DecayRate * 6.0f;
+    // --- Landed phase ---
+    // Slide / scale decay — binary runs this only while m_Life <= 1.25
+    // (the tail slide phase). Above that threshold the splat sits still
+    // on the plane.
+    if (m_Life <= UP_LIFE_SLIDE_THR) {
+        const float dy = dt * UP_SPRING_DT_MULT;
+        vel.y   = Clampf(vel.y - dy,   UP_VEL_CLAMP_LO,   UP_VEL_CLAMP_HI);
+        m_Scale.y = Clampf(m_Scale.y - dy, UP_SCALE_CLAMP_LO, UP_SCALE_CLAMP_HI);
+    }
+
+    // Life decay.
+    m_Life -= dt * m_DecayRate;
     if (m_Life <= 0.0f) {
         m_Life = 0.0f;
+        m_bAlive = 0;
         active = false;
+        return;
     }
+
+    // Alpha = min(base, base * life). Binary clamp to uint8.
+    const float rawAlpha = m_AlphaBase * m_Life;
+    const float aF = rawAlpha < m_AlphaBase ? rawAlpha : m_AlphaBase;
+    m_ColA = (uint8_t)Clampf(aF, 0.0f, 255.0f);
 }
 
-// --- Pool / global ops -------------------------------------------------
+// ---------------------------------------------------------------------
+// Pool / static ops
+// ---------------------------------------------------------------------
 
 void SplatEntity::CreatePool(int capacity) {
     s_Pool.Create(capacity);
@@ -220,10 +306,8 @@ void SplatEntity::ReleaseContent() {
 SplatEntity* SplatEntity::GetFree() {
     SplatEntity* s = s_Pool.Pop();
     if (!s) return NULL;
-    // Slot state is whatever the last user left — caller will overwrite
-    // via MakeSplat. Clear the active flag explicitly so an early
-    // UpdateActive read sees it inactive if MakeSplat is deferred.
-    s->active = false;
+    s->m_bAlive = 0;
+    s->active   = false;
     return s;
 }
 
@@ -231,12 +315,11 @@ void SplatEntity::UpdateActive(float dt) {
     const int N = s_Pool.Capacity();
     for (int i = 0; i < N; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
-        if (!s || !s->active) continue;
+        if (!s || !s->m_bAlive) continue;
 
         s->UpdateSplat(dt);
 
-        if (!s->active) {
-            // Life ran out — return to pool.
+        if (!s->m_bAlive) {
             s_Pool.Push(s);
         }
     }
@@ -246,16 +329,27 @@ void SplatEntity::RemoveAll() {
     const int N = s_Pool.Capacity();
     for (int i = 0; i < N; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
-        if (!s || !s->active) continue;
-        s->active = false;
+        if (!s || !s->m_bAlive) continue;
+        s->m_bAlive = 0;
+        s->active   = false;
         s_Pool.Push(s);
     }
 }
 
-// --- Batched draw ------------------------------------------------------
-
-// Matches DrawActiveSplats (0x180344). Iterates pool, builds 6-vertex
-// quads into s_SplatVerts, issues one DrawTriList.
+// ---------------------------------------------------------------------
+// Batched draw — matches DrawActiveSplats (0x00180344)
+// ---------------------------------------------------------------------
+//
+// For each alive splat with m_SplatType >= 0, build a 6-vertex quad:
+//   - corners from (pos ± axisA * scaleX ± axisB * scaleY)
+//   - UVs from SPLAT_ATLAS[type], with bSpecial shifting U by +0.5 for
+//     types 0..3 and bFlipV swapping V edges
+//   - colour lerped from BASE_RGBA toward fruit colour by
+//     fade = clamp(2.0 * m_ColourPhase, 0, 1)
+//   - alpha = m_ColA (pre-clamped in UpdateSplat)
+//
+// All quads go into s_SplatVerts and render as a single batched
+// DrawTriList with slice_fruit.tex bound.
 void SplatEntity::DrawActive() {
     if (!s_SplatTex.IsValid()) return;
 
@@ -264,74 +358,80 @@ void SplatEntity::DrawActive() {
 
     for (int i = 0; i < N && count < MAX_SPLATS_PER_FRAME; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
-        if (!s || !s->active) continue;
+        if (!s || !s->m_bAlive)     continue;
+        if (s->m_SplatType < 0)     continue;  // still airborne
 
-        // Orientation axes derived from the stored 16-bit angle.
-        const float rad = (float)s->m_Angle * (6.2831853f / 65536.0f);
-        const float c   = cosf(rad);
-        const float sn  = sinf(rad);
-        const float sz  = s->m_Scale;
+        // Axis-scaled corner vectors.
+        // Binary's quad basis is axisA * scale.x and axisB * scale.y.
+        const float sx = s->m_Scale.x;
+        const float sy = s->m_Scale.y;
+        const Vec3 right(s->m_AxisA.x * sx, s->m_AxisA.y * sx, 0.0f);
+        const Vec3 up   (s->m_AxisB.x * sy, s->m_AxisB.y * sy, 0.0f);
 
-        // Two half-extent vectors perpendicular to each other,
-        // oriented along the splat's travel direction.
-        const float ax = c  * sz;
-        const float ay = sn * sz;
-        const float bx = -sn * sz;
-        const float by =  c  * sz;
+        // Colour lerp from base RGBA toward the captured fruit colour.
+        // Binary formula: fade = clamp(2.0 * m_ColourPhase, 0, 1).
+        // Since m_ColourPhase ticks toward zero, fade shrinks — meaning
+        // the splat lerps FROM fruit colour TOWARD base as ColourPhase
+        // drains. (FruitTypeColour path starts at phase=0, so fruit
+        // colour is persistent; default path starts at 0.75 so the base
+        // colour fades to fruit over time.)
+        float fade = s->m_ColourPhase * 2.0f;
+        if (fade < 0.0f) fade = 0.0f;
+        if (fade > 1.0f) fade = 1.0f;
+        const int rMix = (int)s->m_ColR + (int)((int)BASE_R - (int)s->m_ColR) * fade;
+        const int gMix = (int)s->m_ColG + (int)((int)BASE_G - (int)s->m_ColG) * fade;
+        const int bMix = (int)s->m_ColB + (int)((int)BASE_B - (int)s->m_ColB) * fade;
 
-        // Colour lerp — matches binary UpdateActiveSplats colour block.
-        // fVar14 is 0 while m_ColourPhase >= 0.5 (showing base colour),
-        // and ramps from 0→1 as m_ColourPhase drains from 0.5 → 0
-        // (lerping base → fruit colour).
-        float fVar14 = 0.0f;
-        if (s->m_ColourPhase > 0.0f && s->m_ColourPhase < COLOUR_LERP_START) {
-            fVar14 = 1.0f - 2.0f * s->m_ColourPhase;
-        }
-        // Lerp base colour (pbVar10 in binary) → fruit colour.
-        const int rMix = (int)BASE_R + (int)((int)s->m_FruitR - (int)BASE_R) * fVar14;
-        const int gMix = (int)BASE_G + (int)((int)s->m_FruitG - (int)BASE_G) * fVar14;
-        const int bMix = (int)BASE_B + (int)((int)s->m_FruitB - (int)BASE_B) * fVar14;
-
-        // Vertex alpha drives the life-based fade. Starts at full,
-        // drops with m_Life.
-        float lifeFrac = s->m_Life / LIFE_INIT_BASE;
-        if (lifeFrac < 0.0f) lifeFrac = 0.0f;
-        if (lifeFrac > 1.0f) lifeFrac = 1.0f;
-        const uint8_t a = (uint8_t)(lifeFrac * 255.0f);
-
-        const uint8_t rR = (uint8_t)(rMix < 0 ? 0 : (rMix > 255 ? 255 : rMix));
-        const uint8_t gG = (uint8_t)(gMix < 0 ? 0 : (gMix > 255 ? 255 : gMix));
-        const uint8_t bB = (uint8_t)(bMix < 0 ? 0 : (bMix > 255 ? 255 : bMix));
+        const uint8_t rR = (uint8_t)ClampInt(rMix, 0, 255);
+        const uint8_t gG = (uint8_t)ClampInt(gMix, 0, 255);
+        const uint8_t bB = (uint8_t)ClampInt(bMix, 0, 255);
+        const uint8_t a  = s->m_ColA;
         const uint32_t col =
             ((uint32_t)a  << 24) |
             ((uint32_t)bB << 16) |
             ((uint32_t)gG <<  8) |
             ((uint32_t)rR);
 
-        // Atlas UV sub-region from the binary table at 0x001bd014.
-        // `bSpecial` selects the right half of the atlas (binary
-        // DrawSplat `+= 0.5` on u0/u1). `bFlipV` swaps V edges.
-        const SplatAtlasEntry& e = SPLAT_ATLAS[s->m_SplatType & 7];
+        // Atlas UV — bSpecial shifts types 0..3 to the right half.
+        const int type = ClampInt(s->m_SplatType, 0, 5);
+        const SplatAtlasEntry& e = SPLAT_ATLAS[type];
         float u0 = e.u0, u1 = e.u1;
-        if (s->m_bSpecial) { u0 += 0.5f; u1 += 0.5f; }
+        if (s->m_bSpecial && type < 4) { u0 += 0.5f; u1 += 0.5f; }
         float v0 = e.v0, v1 = e.v1;
         if (s->m_bFlipV) { float t = v0; v0 = v1; v1 = t; }
 
         QUADCUSTOMVERTEX* v = &s_SplatVerts[count * 6];
-        // Two triangles forming a centred quad with axes (ax, ay)
-        // and (bx, by). Layout: (v0, v1, v2), (v3=v2, v4=v1, v5).
         const float px = s->pos.x, py = s->pos.y, pz = s->pos.z;
 
-        v[0].x = px - ax + bx;  v[0].y = py - ay + by;  v[0].z = pz;
-        v[0].u = u0;            v[0].v = v0;
-        v[1].x = px + ax + bx;  v[1].y = py + ay + by;  v[1].z = pz;
-        v[1].u = u1;            v[1].v = v0;
-        v[2].x = px - ax - bx;  v[2].y = py - ay - by;  v[2].z = pz;
-        v[2].u = u0;            v[2].v = v1;
+        // Two triangles forming a centred quad:
+        //   v0 = pos - right - up     uv = (u0, v0)
+        //   v1 = pos + right - up     uv = (u1, v0)
+        //   v2 = pos - right + up     uv = (u0, v1)
+        //   v3 = v2
+        //   v4 = v1
+        //   v5 = pos + right + up     uv = (u1, v1)
+        v[0].x = px - right.x - up.x;
+        v[0].y = py - right.y - up.y;
+        v[0].z = pz;
+        v[0].u = u0; v[0].v = v0;
+
+        v[1].x = px + right.x - up.x;
+        v[1].y = py + right.y - up.y;
+        v[1].z = pz;
+        v[1].u = u1; v[1].v = v0;
+
+        v[2].x = px - right.x + up.x;
+        v[2].y = py - right.y + up.y;
+        v[2].z = pz;
+        v[2].u = u0; v[2].v = v1;
+
         v[3] = v[2];
         v[4] = v[1];
-        v[5].x = px + ax - bx;  v[5].y = py + ay - by;  v[5].z = pz;
-        v[5].u = u1;            v[5].v = v1;
+
+        v[5].x = px + right.x + up.x;
+        v[5].y = py + right.y + up.y;
+        v[5].z = pz;
+        v[5].u = u1; v[5].v = v1;
 
         for (int k = 0; k < 6; ++k) {
             v[k].nx = 0.0f;

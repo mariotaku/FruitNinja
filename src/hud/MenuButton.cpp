@@ -213,14 +213,27 @@ void MenuButton::Update(float dt) {
     // click callback so menu-fruit buttons (Play / Dojo) transition
     // on slash-through, matching the binary's menu button flow.
     if (m_pEntity && m_pEntity->IsActive()) {
-        const bool sliced =
-            m_pFruitPiece && m_pFruitPiece->m_bSliced;
-        if (!sliced) {
+        // "Hit" edge detection — for fruits it's m_bSliced, for bombs
+        // it's m_bHit. Both types keep the entity pinned to the button
+        // until the hit moment, then release it so its physics animation
+        // (fruit halves falling, bomb launching via QuitGamesCallback)
+        // can play out.
+        bool hit = false;
+        if (m_pEntity->entityType == 0) {   // Fruit
+            hit = m_pFruitPiece && m_pFruitPiece->m_bSliced;
+        } else if (m_pEntity->entityType == 1) { // Bomb
+            Bomb* bomb = static_cast<Bomb*>(m_pEntity);
+            hit = (bomb->m_bHit != 0);
+        }
+
+        if (!hit) {
             m_pEntity->pos = pos;
             m_pEntity->vel = Vec3(0, 0, 0);
-        } else if (!m_bRemovalPending && m_ClickCallback) {
-            // Rising-edge: fire once, then clear the callback to
-            // prevent re-entry on the next frame.
+        } else if (!m_bRemovalPending && m_ClickCallback &&
+                   m_pEntity->entityType == 0) {
+            // Rising-edge slice callback for fruit buttons only. Bombs
+            // fire their hit callback directly via Bomb::OnSliced's
+            // m_HitCallback path; firing here too would double-invoke.
             auto cb = m_ClickCallback;
             m_ClickCallback = nullptr;
             cb();
@@ -275,11 +288,17 @@ void MenuButton::Update(float dt) {
         // Tracking — refresh position and check for release.
         UpdateTouchPosition();
         // phase >= 1 means released. Fire callback if release was inside rect.
+        // Only toggle buttons (m_FruitType < 0, e.g. sound/music toggles)
+        // trigger on tap-release. Fruit/bomb buttons (Play / Dojo / Quit)
+        // require a slash-through instead — their callback fires via the
+        // rising-edge hit detection above (fruits) or Bomb::m_HitCallback
+        // (bombs), matching the "slice to play" gameplay intent.
         if (m_TouchPhase >= 1.0f) {
             const bool insideOnRelease =
                 m_TouchX >= left && m_TouchX <= right &&
                 m_TouchY >= bottom && m_TouchY <= top;
-            if (insideOnRelease && m_ClickCallback) {
+            const bool isToggle = (m_FruitType < 0);
+            if (insideOnRelease && isToggle && m_ClickCallback) {
                 m_ClickCallback();
             }
             m_TouchSlot = -1;

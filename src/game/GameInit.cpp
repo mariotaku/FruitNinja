@@ -22,6 +22,7 @@
 #include "input/InputManager.h"
 #include "input/Touch.h"
 #include "util/StringHash.h"
+#include "debug/DebugHitbox.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup
@@ -245,6 +246,9 @@ void GameDraw(float dt, bool active) {
     // Sits between the slice lines and the MainScreen logo so it
     // reads as a "flash behind the UI".
     FN::DrawCriticalFlash();
+
+    // Debug overlay — fruit/bomb hitboxes (F1 toggle).
+    FN::DebugHitbox_Draw();
 
     if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x01)\n");
     // 11. MainScreen (HUD layer 0x01) — logo + shade on top of the blade

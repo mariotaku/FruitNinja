@@ -301,9 +301,9 @@ void MainScreen::Update(float dt) {
         // physics here to animate it off-screen before transitioning.
         m_StateTimer += dt;
 
-        Entity* ent = (pQuitBtn && pQuitBtn->m_pFruitPiece)
-                      ? reinterpret_cast<Entity*>(pQuitBtn->m_pFruitPiece)
-                      : nullptr;
+        // m_pFruitPiece is only set for fruit-typed MenuButtons — use
+        // m_pEntity for the Quit bomb.
+        Entity* ent = (pQuitBtn ? pQuitBtn->m_pEntity : nullptr);
         if (ent && ent->entityType == 1) {
             Bomb* bomb = static_cast<Bomb*>(ent);
             // Simple Euler integration with the accel force from QuitGamesCallback.
@@ -729,23 +729,19 @@ void MainScreen::QuitGamesCallback() {
     Mortar::SystemManager::GetInstance().RequestQuit();
 
     // Launch the menu bomb so it flies off-screen before we exit.
-    // m_pFruitPiece is typed as Fruit* in the MenuButton struct for legacy
-    // reasons; for the Quit button it actually points to a Bomb. Cast via
-    // Entity to get the physics fields.
-    if (pQuitBtn && pQuitBtn->m_pFruitPiece) {
-        Entity* ent = reinterpret_cast<Entity*>(pQuitBtn->m_pFruitPiece);
-        if (ent->entityType == 1) {  // Bomb
-            Bomb* bomb = static_cast<Bomb*>(ent);
-            bomb->m_bMovement = 1;
-            // Upward-right launch acceleration. Binary uses a GOT-resolved
-            // vec3 multiplied by 10.0; we pick a reasonable upward kick.
-            bomb->m_AccelForce = Vec3(15.0f, 150.0f, 0.0f);
-            // Prime the velocity so physics starts immediately. Binary
-            // relies on a frame of accel integration, but the port's
-            // ActorManager::Update is gated off in menu state, so we
-            // tick the bomb manually in STATE_QUIT_WAIT below.
-            bomb->vel = Vec3(20.0f, 200.0f, 0.0f);
-        }
+    // m_pFruitPiece is only set for fruit-typed menu buttons — use
+    // m_pEntity to get the Bomb.
+    if (pQuitBtn && pQuitBtn->m_pEntity && pQuitBtn->m_pEntity->entityType == 1) {
+        Bomb* bomb = static_cast<Bomb*>(pQuitBtn->m_pEntity);
+        bomb->m_bMovement = 1;
+        // Upward-right launch acceleration. Binary uses a GOT-resolved
+        // vec3 multiplied by 10.0; we pick a reasonable upward kick.
+        bomb->m_AccelForce = Vec3(15.0f, 150.0f, 0.0f);
+        // Prime the velocity so physics starts immediately. Binary
+        // relies on a frame of accel integration, but the port's
+        // ActorManager::Update is gated off in menu state, so we
+        // tick the bomb manually in STATE_QUIT_WAIT below.
+        bomb->vel = Vec3(20.0f, 200.0f, 0.0f);
     }
 
     m_State = STATE_QUIT_WAIT;
