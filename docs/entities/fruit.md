@@ -785,24 +785,26 @@ Caller (`Fruit::Update`): `if (CheckHasGoneOffscreen()) KillFruit(true);`
 offscreen edge with outward velocity confirmed. A single half going offscreen
 does NOT kill the entity — the other half may still be visible.
 
-**Near-edge bounce**: sliced halves that cross the near edge (opposite to
-gravity) get clamped and their velocity reversed to -1.0 / +1.0, creating a
-visible "bounce off the top" effect. This is per-half, not per-entity.
+**Near-edge warp**: sliced halves that cross the near edge (opposite to
+gravity) get TELEPORTED to the far side of the screen and velocity set to
+±1.0. This is NOT a visual bounce — it warps the half past the kill boundary
+so it counts as "gone" immediately. Purpose: quick disposal of halves that
+drifted the wrong way off-screen.
 
-#### Constants (literal pool 0x175548–0x17556c)
+#### Constants (literal pool 0x175548–0x17556c, resolved via read_memory)
 
-| Address | Role | Port field |
-|---------|------|------------|
-| DAT_00175548 | Base kill-boundary addend (gravity axis) | `OFFSCREEN_BASE` |
-| DAT_0017554c | Near-edge bounce clamp (neg-Y gravity, positive) | `BOUNCE_CLAMP_TOP` |
-| DAT_00175550 | Near-edge bounce trigger (pos-Y gravity, negative) | `BOUNCE_THRESH_BOT` |
-| DAT_00175554 | Near-edge bounce clamp (pos-Y gravity, negative) | `BOUNCE_CLAMP_BOT` |
-| DAT_00175558 | Near-edge bounce clamp (neg-X gravity, positive) | `BOUNCE_CLAMP_RIGHT` |
-| DAT_0017555c | Near-edge bounce clamp (pos-X gravity, negative) | `BOUNCE_CLAMP_LEFT` |
-| DAT_00175560 | Near-edge bounce trigger (neg-Y gravity) + perp addend | `BOUNCE_THRESH_TOP` |
-| DAT_00175564 | Scale-proportional margin multiplier (`* m_Scale_y`) | `SCALE_MARGIN_MULT` |
-| DAT_00175568 | Near-edge bounce trigger (neg-X gravity, positive) | `BOUNCE_THRESH_RIGHT` |
-| DAT_0017556c | Near-edge bounce trigger (pos-X gravity, negative) | `BOUNCE_THRESH_LEFT` |
+| Address | Value | Role | Port field |
+|---------|-------|------|------------|
+| DAT_00175548 | 160.0 | Base kill-boundary addend (= half screen height) | `OFFSCREEN_BASE` |
+| DAT_0017554c | -320.0 | Warp target (neg-Y gravity, teleport below) | `WARP_CLAMP_TOP` |
+| DAT_00175550 | -240.0 | Warp trigger (pos-Y gravity) | `WARP_THRESH_BOT` |
+| DAT_00175554 | 320.0 | Warp target (pos-Y gravity, teleport above) | `WARP_CLAMP_BOT` |
+| DAT_00175558 | -480.0 | Warp target (neg-X gravity, teleport left) | `WARP_CLAMP_RIGHT` |
+| DAT_0017555c | 480.0 | Warp target (pos-X gravity, teleport right) | `WARP_CLAMP_LEFT` |
+| DAT_00175560 | 240.0 | Warp trigger (neg-Y gravity) + perp X addend | `WARP_THRESH_TOP` |
+| DAT_00175564 | 50.0 | Scale-proportional margin multiplier | `SCALE_MARGIN_MULT` |
+| DAT_00175568 | 360.0 | Warp trigger (neg-X gravity) | `WARP_THRESH_RIGHT` |
+| DAT_0017556c | -360.0 | Warp trigger (pos-X gravity) | `WARP_THRESH_LEFT` |
 
 `field_0x2c` = `Entity::scale.y` (uniform for fruit, = `FruitInfo::m_Scale * 0.01`).
 
@@ -810,13 +812,13 @@ visible "bounce off the top" effect. This is per-half, not per-entity.
 
 ```c
 bool CheckHasGoneOffscreen() {
-    // 1. Near-edge bounce: sliced halves above top → clamp + reflect
-    if (m_bSliced && pos_y > BOUNCE_THRESH_TOP) {
-        pos_y = BOUNCE_CLAMP_TOP;
+    // 1. Warp: sliced halves above +240 get teleported to -320
+    if (m_bSliced && pos_y > WARP_THRESH_TOP) {
+        pos_y = WARP_CLAMP_TOP;   // -320 (far below screen)
         vel_y = -1.0f;
     }
-    if (m_bSliced && m_HalfB_pos.y > BOUNCE_THRESH_TOP) {
-        m_HalfB_pos.y = BOUNCE_CLAMP_TOP;
+    if (m_bSliced && m_HalfB_pos.y > WARP_THRESH_TOP) {
+        m_HalfB_pos.y = WARP_CLAMP_TOP;
         m_HalfB_vel.y = -1.0f;
     }
 
