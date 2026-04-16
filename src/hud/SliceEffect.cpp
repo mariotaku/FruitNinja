@@ -96,8 +96,8 @@ void SliceEffect_CreatePool(int capacity) {
 
 void SliceEffect_DestroyPool() {
     s_Pool.Destroy();
-    s_SliceFxNormal.Clear();
-    s_SliceFxCrit.Clear();
+    s_SliceFxNormal.SetNull();
+    s_SliceFxCrit.SetNull();
 }
 
 // ---------------------------------------------------------------------

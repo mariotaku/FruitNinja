@@ -325,7 +325,7 @@ void SplatEntity::CreatePool(int capacity) {
 
 void SplatEntity::DestroyPool() {
     s_Pool.Destroy();
-    s_SplatTex.Clear();
+    s_SplatTex.SetNull();
 }
 
 void SplatEntity::LoadContent() {
@@ -337,7 +337,7 @@ void SplatEntity::LoadContent() {
 }
 
 void SplatEntity::ReleaseContent() {
-    s_SplatTex.Clear();
+    s_SplatTex.SetNull();
 }
 
 SplatEntity* SplatEntity::GetFree() {

@@ -308,7 +308,7 @@ void GameExit_Handler() {
 
     // Release background texture
     GameTaskState* ts = GetTaskState();
-    ts->pBackgroundTexture.Clear();
+    ts->pBackgroundTexture.SetNull();
 
     // Release SlashEntity + input callbacks
     if (g_pSlashEntity) {

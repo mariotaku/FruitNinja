@@ -38,7 +38,8 @@ public:
     bool IsValid() const { return m_ptr != NULL; }
     operator bool() const { return m_ptr != NULL; }
 
-    void Clear() {
+    // Matches Mortar::SmartPtr<T>::SetNull (binary pattern)
+    void SetNull() {
         if (m_ptr) {
             m_ptr->Release();
             m_ptr = NULL;
