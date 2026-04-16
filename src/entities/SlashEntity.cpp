@@ -92,7 +92,7 @@ void SlashEntity::LoadContent() {
 }
 
 void SlashEntity::ReleaseContent() {
-    g_BladeTex.Clear();
+    g_BladeTex.SetNull();
 }
 
 // ---------------------------------------------------------------------------

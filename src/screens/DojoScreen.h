@@ -56,10 +56,6 @@ public:
     // back to STATE_SLIDE_IN.
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
-    // True when the child AboutScreen has finished its fade-out and
-    // been deleted — DojoScreen uses this to return to state 1.
-    void OnAboutScreenClosed() { m_State = 1; m_pAboutScreen = NULL; }
-
 private:
     Game& game;
 
