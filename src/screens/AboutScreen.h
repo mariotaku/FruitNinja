@@ -39,6 +39,9 @@ public:
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
+    static void LoadContent() {}   // TODO: 0x12ec14
+    static void UnLoadContent() {} // TODO
+
 private:
     Game& game;
     DojoScreen* m_pParent;   // parent DojoScreen (back navigation)

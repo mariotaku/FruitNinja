@@ -48,6 +48,9 @@ public:
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
+    static void LoadContent() {}   // TODO: 0x13e330
+    static void UnLoadContent() {} // TODO: 0x13e5a8
+
 private:
     Game& game;
 

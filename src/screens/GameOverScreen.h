@@ -5,7 +5,8 @@
 // Game-over overlay with score display
 // Binary: LoadContent 0x1305cc
 struct GameOverScreen {
-    static void LoadContent() {} // TODO
+    static void LoadContent() {}   // TODO
+    static void UnLoadContent() {} // TODO: 0x12efd8
 };
 
 #endif
