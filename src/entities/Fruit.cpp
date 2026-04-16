@@ -369,21 +369,23 @@ void Fruit::KillFruit(bool doMissPenalty) {
 
 // Matches Fruit::CheckHasGoneOffscreen (0x00175218).
 // Returns true when BOTH halves are confirmed offscreen.
-// Constants marked with DAT addresses — values are estimates pending
-// exact resolution via ghidra_scripts/FN_ReadFloats.java.
+// Exact constants resolved from binary via read_memory.
 //
 // Coordinate system: X ∈ [-240, +240] (horizontal),
 //                    Y ∈ [-160, +160] (vertical, +up).
-static const float OFFSCREEN_BASE     = 200.0f;  // DAT_00175548
-static const float BOUNCE_CLAMP_TOP   = 200.0f;  // DAT_0017554c
-static const float BOUNCE_THRESH_BOT  = -200.0f; // DAT_00175550
-static const float BOUNCE_CLAMP_BOT   = -200.0f; // DAT_00175554
-static const float BOUNCE_CLAMP_RIGHT = 280.0f;  // DAT_00175558
-static const float BOUNCE_CLAMP_LEFT  = -280.0f; // DAT_0017555c
-static const float BOUNCE_THRESH_TOP  = 240.0f;  // DAT_00175560
-static const float SCALE_MARGIN_MULT  = 20.0f;   // DAT_00175564
-static const float BOUNCE_THRESH_RIGHT= 300.0f;  // DAT_00175568
-static const float BOUNCE_THRESH_LEFT = -300.0f;  // DAT_0017556c
+//
+// The "clamp" values are NOT bounces — they TELEPORT the half to the
+// far side of the screen so it counts as "gone" for the kill check.
+static const float OFFSCREEN_BASE      =  160.0f; // DAT_00175548
+static const float WARP_CLAMP_TOP      = -320.0f; // DAT_0017554c
+static const float WARP_THRESH_BOT     = -240.0f; // DAT_00175550
+static const float WARP_CLAMP_BOT      =  320.0f; // DAT_00175554
+static const float WARP_CLAMP_RIGHT    = -480.0f; // DAT_00175558
+static const float WARP_CLAMP_LEFT     =  480.0f; // DAT_0017555c
+static const float WARP_THRESH_TOP     =  240.0f; // DAT_00175560
+static const float SCALE_MARGIN_MULT   =   50.0f; // DAT_00175564
+static const float WARP_THRESH_RIGHT   =  360.0f; // DAT_00175568
+static const float WARP_THRESH_LEFT    = -360.0f; // DAT_0017556c
 
 bool Fruit::CheckHasGoneOffscreen() {
     const float margin = SCALE_MARGIN_MULT * scale.y;
@@ -400,12 +402,14 @@ bool Fruit::CheckHasGoneOffscreen() {
     // === Downward gravity (m_Gravity.y < 0) ===
     bool halfA_gone = false;
     if (m_Gravity.y < 0.0f) {
-        if (m_bSliced && pos.y > BOUNCE_THRESH_TOP) {
-            pos.y = BOUNCE_CLAMP_TOP;
+        // Warp: sliced half that drifts above +240 gets teleported to
+        // -320 (far below screen) so it counts as "gone" immediately.
+        if (m_bSliced && pos.y > WARP_THRESH_TOP) {
+            pos.y = WARP_CLAMP_TOP;
             vel.y = -1.0f;
         }
-        if (m_bSliced && m_SecondPos.y > BOUNCE_THRESH_TOP) {
-            m_SecondPos.y = BOUNCE_CLAMP_TOP;
+        if (m_bSliced && m_SecondPos.y > WARP_THRESH_TOP) {
+            m_SecondPos.y = WARP_CLAMP_TOP;
             m_SecondVel.y = -1.0f;
         }
 
@@ -418,7 +422,7 @@ bool Fruit::CheckHasGoneOffscreen() {
         }
 
         if (m_bSliced) {
-            float xBound = margin + BOUNCE_THRESH_TOP;
+            float xBound = margin + WARP_THRESH_TOP;
             if (pos.x <= -xBound || pos.x >= xBound) {
                 if (m_SecondPos.x <= -xBound || m_SecondPos.x >= xBound)
                     return true;
@@ -428,12 +432,12 @@ bool Fruit::CheckHasGoneOffscreen() {
 
     // === Upward gravity (m_Gravity.y > 0) ===
     if (m_Gravity.y > 0.0f) {
-        if (m_bSliced && pos.y < BOUNCE_THRESH_BOT) {
-            pos.y = BOUNCE_CLAMP_BOT;
+        if (m_bSliced && pos.y < WARP_THRESH_BOT) {
+            pos.y = WARP_CLAMP_BOT;
             vel.y = 1.0f;
         }
-        if (m_bSliced && m_SecondPos.y < BOUNCE_THRESH_BOT) {
-            m_SecondPos.y = BOUNCE_CLAMP_BOT;
+        if (m_bSliced && m_SecondPos.y < WARP_THRESH_BOT) {
+            m_SecondPos.y = WARP_CLAMP_BOT;
             m_SecondVel.y = 1.0f;
         }
 
@@ -445,7 +449,7 @@ bool Fruit::CheckHasGoneOffscreen() {
         }
 
         if (m_bSliced) {
-            float xBound = margin + BOUNCE_THRESH_TOP;
+            float xBound = margin + WARP_THRESH_TOP;
             if (pos.x <= -xBound || pos.x >= xBound) {
                 if (m_SecondPos.x <= -xBound || m_SecondPos.x >= xBound)
                     return true;
@@ -456,16 +460,16 @@ bool Fruit::CheckHasGoneOffscreen() {
     // === Negative horizontal gravity (m_Gravity.x < 0) ===
     if (m_Gravity.x < 0.0f) {
         if (m_bSliced) {
-            if (pos.x > BOUNCE_THRESH_RIGHT) {
-                pos.x = BOUNCE_CLAMP_RIGHT;
+            if (pos.x > WARP_THRESH_RIGHT) {
+                pos.x = WARP_CLAMP_RIGHT;
                 vel.x = -1.0f;
             }
-            if (m_SecondPos.x > BOUNCE_THRESH_RIGHT) {
-                m_SecondPos.x = BOUNCE_CLAMP_RIGHT;
+            if (m_SecondPos.x > WARP_THRESH_RIGHT) {
+                m_SecondPos.x = WARP_CLAMP_RIGHT;
                 m_SecondVel.x = -1.0f;
             }
         }
-        float leftBound = -(BOUNCE_THRESH_TOP + margin);
+        float leftBound = -(WARP_THRESH_TOP + margin);
         if ((pos.x <= leftBound && vel.x < 0.0f) || halfA_gone) {
             if (m_SliceTimer <= 0.0f &&
                 m_SecondPos.x <= leftBound && m_SecondVel.x < 0.0f)
@@ -475,12 +479,12 @@ bool Fruit::CheckHasGoneOffscreen() {
 
     // === Positive horizontal gravity (m_Gravity.x > 0) ===
     if (m_Gravity.x > 0.0f && m_bSliced) {
-        if (pos.x < BOUNCE_THRESH_LEFT) {
-            pos.x = BOUNCE_CLAMP_LEFT;
+        if (pos.x < WARP_THRESH_LEFT) {
+            pos.x = WARP_CLAMP_LEFT;
             vel.x = 1.0f;
         }
-        if (m_SecondPos.x < BOUNCE_THRESH_LEFT) {
-            m_SecondPos.x = BOUNCE_CLAMP_LEFT;
+        if (m_SecondPos.x < WARP_THRESH_LEFT) {
+            m_SecondPos.x = WARP_CLAMP_LEFT;
             m_SecondVel.x = 1.0f;
         }
     }
