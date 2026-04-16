@@ -776,15 +776,79 @@ else: return false
 ```
 
 ### Fruit::CheckHasGoneOffscreen (0x00175218, 128 lines)
+<!-- Analysed: 2026-04-16T14:30 -->
 
+Returns bool in r0 (Ghidra misreads as void — `extraout_r0` in caller).
+Caller (`Fruit::Update`): `if (CheckHasGoneOffscreen()) KillFruit(true);`
+
+**Key invariant**: the entity is killed only when **both halves** are past the
+offscreen edge with outward velocity confirmed. A single half going offscreen
+does NOT kill the entity — the other half may still be visible.
+
+**Near-edge bounce**: sliced halves that cross the near edge (opposite to
+gravity) get clamped and their velocity reversed to -1.0 / +1.0, creating a
+visible "bounce off the top" effect. This is per-half, not per-entity.
+
+#### Constants (literal pool 0x175548–0x17556c)
+
+| Address | Role | Port field |
+|---------|------|------------|
+| DAT_00175548 | Base kill-boundary addend (gravity axis) | `OFFSCREEN_BASE` |
+| DAT_0017554c | Near-edge bounce clamp (neg-Y gravity, positive) | `BOUNCE_CLAMP_TOP` |
+| DAT_00175550 | Near-edge bounce trigger (pos-Y gravity, negative) | `BOUNCE_THRESH_BOT` |
+| DAT_00175554 | Near-edge bounce clamp (pos-Y gravity, negative) | `BOUNCE_CLAMP_BOT` |
+| DAT_00175558 | Near-edge bounce clamp (neg-X gravity, positive) | `BOUNCE_CLAMP_RIGHT` |
+| DAT_0017555c | Near-edge bounce clamp (pos-X gravity, negative) | `BOUNCE_CLAMP_LEFT` |
+| DAT_00175560 | Near-edge bounce trigger (neg-Y gravity) + perp addend | `BOUNCE_THRESH_TOP` |
+| DAT_00175564 | Scale-proportional margin multiplier (`* m_Scale_y`) | `SCALE_MARGIN_MULT` |
+| DAT_00175568 | Near-edge bounce trigger (neg-X gravity, positive) | `BOUNCE_THRESH_RIGHT` |
+| DAT_0017556c | Near-edge bounce trigger (pos-X gravity, negative) | `BOUNCE_THRESH_LEFT` |
+
+`field_0x2c` = `Entity::scale.y` (uniform for fruit, = `FruitInfo::m_Scale * 0.01`).
+
+#### Pseudocode (downward gravity branch only, `m_Gravity_y < 0`)
+
+```c
+bool CheckHasGoneOffscreen() {
+    // 1. Near-edge bounce: sliced halves above top → clamp + reflect
+    if (m_bSliced && pos_y > BOUNCE_THRESH_TOP) {
+        pos_y = BOUNCE_CLAMP_TOP;
+        vel_y = -1.0f;
+    }
+    if (m_bSliced && m_HalfB_pos.y > BOUNCE_THRESH_TOP) {
+        m_HalfB_pos.y = BOUNCE_CLAMP_TOP;
+        m_HalfB_vel.y = -1.0f;
+    }
+
+    // 2. Far-edge kill: both halves below bottom + moving down
+    float margin = SCALE_MARGIN_MULT * scale_y;
+    float bottomBound = -(margin + OFFSCREEN_BASE);
+
+    bool halfA_gone = (pos_y <= bottomBound) && (vel_y < 0.0f);
+    if (halfA_gone) {
+        if (m_SliceTimer <= 0 && m_HalfB_pos.y <= bottomBound
+            && m_HalfB_vel.y < 0.0f)
+            return true;   // BOTH gone → kill
+    }
+
+    // 3. Perpendicular (X) bounds: both halves outside → kill
+    if (m_bSliced) {
+        float xBound = margin + BOUNCE_THRESH_TOP;
+        bool halfA_outX = (pos_x <= -xBound || pos_x >= xBound);
+        if (halfA_outX) {
+            bool halfB_outX = (m_HalfB_pos.x <= -xBound
+                            || m_HalfB_pos.x >= xBound);
+            if (halfB_outX) return true;   // BOTH out of X → kill
+        }
+    }
+
+    return false;  // alive
+}
 ```
-// Complex offscreen check for sliced fruit halves with bounce-back behavior
-// For each gravity axis (X or Y), checks if both halves have gone past screen edge
-// Sliced halves that pass the far edge get their position clamped and velocity reversed (-1.0)
-// Only calls return (skip kill) if one half is still moving inward
-// Also checks perpendicular axis bounds for sliced halves
-// If both halves are confirmed offscreen, execution falls through (caller KillFruits)
-```
+
+Full function also has symmetric branches for upward gravity (`m_Gravity_y > 0`)
+and horizontal gravity (`m_Gravity_x < 0` / `> 0`), with equivalent
+bounce/kill/perp logic on the perpendicular axes.
 
 ### Fruit::IsActive (0x0017a82c, 10 lines)
 

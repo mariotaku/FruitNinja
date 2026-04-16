@@ -11,9 +11,9 @@
 #include "game/BombHit.h"
 #include "Game.h"
 #include "math/math3d.h"
+#include <cmath>
 #include <cstdlib>
 #include <cstdio>
-#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -267,9 +267,8 @@ void Fruit::Update(float dt) {
     if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
     if (m_pEmitter2) m_pEmitter2->m_Pos = m_SecondPos;
 
-    // Kill if off-screen
-    if (CheckOffscreen()) {
-        Deactivate();
+    if (CheckHasGoneOffscreen()) {
+        KillFruit(true);
     }
 }
 
@@ -343,15 +342,149 @@ void Fruit::Deactivate() {
     flags |= 0x10;
 }
 
-bool Fruit::CheckOffscreen() const {
-    // Centred ortho bounds: X ∈ [-240, +240], Y ∈ [-160, +160].
-    // A small margin past each edge so the fruit is fully gone before
-    // we deactivate. Old port had pixel-space bounds (-200..+800) that
-    // never fired for the dojo-release flight.
-    if (pos.y < -200.0f) return true;
-    if (pos.y >  200.0f) return true;
-    if (pos.x < -280.0f) return true;
-    if (pos.x >  280.0f) return true;
+// Matches Fruit::KillFruit (0x00176abc).
+void Fruit::KillFruit(bool doMissPenalty) {
+    if (m_pEmitter1) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
+        m_pEmitter1 = NULL;
+    }
+    if (m_pEmitter2) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
+        m_pEmitter2 = NULL;
+    }
+
+    // TODO: miss penalty (needs MissControl, GameState)
+    // if (!m_bSliced && !m_bNoPowerUp && FruitInfo[type].baseScore < 5):
+    //   non-zen: MissControl::MakeDisappear, SFX "fruit_miss",
+    //            missCount++, GameOver if > 2
+    //   zen:     FruitSaveData tracking
+    (void)doMissPenalty;
+
+    // TODO: unlink from SlashEntity (field_0x108 + 0x134)
+    // TODO: decrement g_PowerFruitCount if FruitInfo has powers
+    // TODO: ET_RemoveEntity(0, m_TrackerID)
+
+    flags |= 0x10;
+}
+
+// Matches Fruit::CheckHasGoneOffscreen (0x00175218).
+// Returns true when BOTH halves are confirmed offscreen.
+// Constants marked with DAT addresses — values are estimates pending
+// exact resolution via ghidra_scripts/FN_ReadFloats.java.
+//
+// Coordinate system: X ∈ [-240, +240] (horizontal),
+//                    Y ∈ [-160, +160] (vertical, +up).
+static const float OFFSCREEN_BASE     = 200.0f;  // DAT_00175548
+static const float BOUNCE_CLAMP_TOP   = 200.0f;  // DAT_0017554c
+static const float BOUNCE_THRESH_BOT  = -200.0f; // DAT_00175550
+static const float BOUNCE_CLAMP_BOT   = -200.0f; // DAT_00175554
+static const float BOUNCE_CLAMP_RIGHT = 280.0f;  // DAT_00175558
+static const float BOUNCE_CLAMP_LEFT  = -280.0f; // DAT_0017555c
+static const float BOUNCE_THRESH_TOP  = 240.0f;  // DAT_00175560
+static const float SCALE_MARGIN_MULT  = 20.0f;   // DAT_00175564
+static const float BOUNCE_THRESH_RIGHT= 300.0f;  // DAT_00175568
+static const float BOUNCE_THRESH_LEFT = -300.0f;  // DAT_0017556c
+
+bool Fruit::CheckHasGoneOffscreen() {
+    const float margin = SCALE_MARGIN_MULT * scale.y;
+
+    // === Horizontal gravity early exit (sliced + |m_Gravity.x| > 0) ===
+    if (m_bSliced && fabsf(m_Gravity.x) > 0.0f) {
+        float yBound = OFFSCREEN_BASE + margin;
+        if (pos.y <= -yBound || pos.y >= yBound) {
+            if (m_SecondPos.y <= -yBound || m_SecondPos.y >= yBound)
+                return true;
+        }
+    }
+
+    // === Downward gravity (m_Gravity.y < 0) ===
+    bool halfA_gone = false;
+    if (m_Gravity.y < 0.0f) {
+        if (m_bSliced && pos.y > BOUNCE_THRESH_TOP) {
+            pos.y = BOUNCE_CLAMP_TOP;
+            vel.y = -1.0f;
+        }
+        if (m_bSliced && m_SecondPos.y > BOUNCE_THRESH_TOP) {
+            m_SecondPos.y = BOUNCE_CLAMP_TOP;
+            m_SecondVel.y = -1.0f;
+        }
+
+        float bottomBound = -(margin + OFFSCREEN_BASE);
+        if (pos.y <= bottomBound && vel.y < 0.0f) {
+            if (m_SliceTimer <= 0.0f &&
+                m_SecondPos.y <= bottomBound && m_SecondVel.y < 0.0f)
+                return true;
+            halfA_gone = true;
+        }
+
+        if (m_bSliced) {
+            float xBound = margin + BOUNCE_THRESH_TOP;
+            if (pos.x <= -xBound || pos.x >= xBound) {
+                if (m_SecondPos.x <= -xBound || m_SecondPos.x >= xBound)
+                    return true;
+            }
+        }
+    }
+
+    // === Upward gravity (m_Gravity.y > 0) ===
+    if (m_Gravity.y > 0.0f) {
+        if (m_bSliced && pos.y < BOUNCE_THRESH_BOT) {
+            pos.y = BOUNCE_CLAMP_BOT;
+            vel.y = 1.0f;
+        }
+        if (m_bSliced && m_SecondPos.y < BOUNCE_THRESH_BOT) {
+            m_SecondPos.y = BOUNCE_CLAMP_BOT;
+            m_SecondVel.y = 1.0f;
+        }
+
+        float topBound = margin + OFFSCREEN_BASE;
+        if ((pos.y >= topBound && vel.y > 0.0f) || halfA_gone) {
+            if (m_SliceTimer <= 0.0f &&
+                m_SecondPos.y >= topBound && m_SecondVel.y > 0.0f)
+                return true;
+        }
+
+        if (m_bSliced) {
+            float xBound = margin + BOUNCE_THRESH_TOP;
+            if (pos.x <= -xBound || pos.x >= xBound) {
+                if (m_SecondPos.x <= -xBound || m_SecondPos.x >= xBound)
+                    return true;
+            }
+        }
+    }
+
+    // === Negative horizontal gravity (m_Gravity.x < 0) ===
+    if (m_Gravity.x < 0.0f) {
+        if (m_bSliced) {
+            if (pos.x > BOUNCE_THRESH_RIGHT) {
+                pos.x = BOUNCE_CLAMP_RIGHT;
+                vel.x = -1.0f;
+            }
+            if (m_SecondPos.x > BOUNCE_THRESH_RIGHT) {
+                m_SecondPos.x = BOUNCE_CLAMP_RIGHT;
+                m_SecondVel.x = -1.0f;
+            }
+        }
+        float leftBound = -(BOUNCE_THRESH_TOP + margin);
+        if ((pos.x <= leftBound && vel.x < 0.0f) || halfA_gone) {
+            if (m_SliceTimer <= 0.0f &&
+                m_SecondPos.x <= leftBound && m_SecondVel.x < 0.0f)
+                return true;
+        }
+    }
+
+    // === Positive horizontal gravity (m_Gravity.x > 0) ===
+    if (m_Gravity.x > 0.0f && m_bSliced) {
+        if (pos.x < BOUNCE_THRESH_LEFT) {
+            pos.x = BOUNCE_CLAMP_LEFT;
+            vel.x = 1.0f;
+        }
+        if (m_SecondPos.x < BOUNCE_THRESH_LEFT) {
+            m_SecondPos.x = BOUNCE_CLAMP_LEFT;
+            m_SecondVel.x = 1.0f;
+        }
+    }
+
     return false;
 }
 

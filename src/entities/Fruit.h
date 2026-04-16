@@ -113,8 +113,14 @@ public:
     // Launch fruit with velocity (matches Fruit::Chuck)
     void Chuck(const Vec3& velocity, float delay = 0.0f);
 
-    // Check if fruit has gone off-screen
-    bool CheckOffscreen() const;
+    // Matches Fruit::CheckHasGoneOffscreen (0x00175218). Returns true
+    // only when BOTH halves are past the offscreen boundary with outward
+    // velocity. Also bounces sliced halves off the near edge.
+    bool CheckHasGoneOffscreen();
+
+    // Matches Fruit::KillFruit (0x00176abc). Clears emitters, applies
+    // miss penalty (TODO), and marks the entity killed (flags |= 0x10).
+    void KillFruit(bool doMissPenalty);
 
     // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
     // Parses Data/xml/fruitlist.xml into FRUIT_INFO array
