@@ -19,6 +19,13 @@
 #include "hud/SliceEffect.h"
 #include "screens/GameOverScreen.h"
 #include "screens/PowerUpShop.h"
+#include "screens/DojoScreen.h"
+#include "screens/AboutScreen.h"
+#include "screens/GameModeScreen.h"
+#include "screens/ShopScreen.h"
+#include "screens/LeaderboardScreen.h"
+#include "hud/FruitFactControl.h"
+#include "entities/Coin.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "asset/MeshManager.h"
@@ -137,28 +144,74 @@ void GameInitialise() {
     printf("GameInitialise: done\n");
 }
 
-// Matches GameDestroy (0x10b7ec, 174 lines) — full engine teardown
+// Matches GameDestroy (0x10b7ec, 174 lines) — full engine teardown.
+// Order follows the binary exactly; unported steps are stubbed with TODO.
 void GameDestroy() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
     printf("GameDestroy: shutting down\n");
 
-    // Cleanup per-session first (in case still active)
+    // --- 1. Online services (defunct — skipped) ---
+    // TODO: LeaderboardManager::Destroy
+    // TODO: NetworkManager::Destroy
+
+    // --- 2. Static texture teardown ---
+    FruitFactControl::UnLoadContent();
+    AboutScreen::UnLoadContent();
+    GameOverScreen::UnLoadContent();
+    GameModeScreen::UnLoadContent();
+    MenuButton::UnLoadContent();
+    Coin::UnLoadContent();
+    DojoScreen::UnLoadContent();
+    ShopScreen::UnLoadContent();
+    PowerUpShop::UnLoadContent();
+    LeaderboardScreen::UnLoadContent();
+
+    // --- 3. Data managers (not ported) ---
+    // TODO: AchievementManager::UnLoadAchievementInfo
+    // TODO: ItemManager::UnLoadItemData
+
+    // --- 4. HUD ---
     if (game->hud) {
-        game->hud->Release();
         delete game->hud;
         game->hud = NULL;
     }
     game->mainScreen = NULL;
 
-    // Destroy singletons
+    // --- 5. FruitCamera ---
     if (game->pCamera) { delete game->pCamera; game->pCamera = NULL; }
-    if (game->inputManager) { delete game->inputManager; game->inputManager = NULL; }
-    if (game->actorManager) { delete game->actorManager; game->actorManager = NULL; }
+
+    // --- 6. Fonts (field_0x50..0x80, ~10 Font* slots) ---
+    // TODO: delete game->pFont* slots (0x50, 0x54, 0x58, 0x5c,
+    //       loop 0x70..0x0c, 0x6c, 0x64, 0x80, 0x68)
+
+    // --- 7. FruitSaveData ---
+    // TODO: delete game->pSaveData
+
+    // --- 8. GameSound ---
     if (game->pGameSound) { delete game->pGameSound; game->pGameSound = NULL; }
 
-    // TODO: UnLoadContent for all screens/entities
-    // TODO: Delete fonts, FruitSaveData
-    // TODO: Destroy: TextureManager, MeshManager, etc.
+    // --- 9. SmartPtr clear (field_0x17c) ---
+    // TODO: SmartPtr::SetNull(&game->field_0x17c)
+
+    // --- 10. Engine subsystem teardown ---
+    // TODO: FileManager::ClearSystems
+    // TODO: PSPParticleManager::Destroy
+    // TODO: StringTableUtilUnload
+    // TODO: CleanupBomb, CleanupFruit, CleanUpSplat, CleanupSlash
+
+    // --- 11. Port-specific cleanup (SDL replacements) ---
+    if (game->inputManager) { delete game->inputManager; game->inputManager = NULL; }
+    if (game->actorManager) { delete game->actorManager; game->actorManager = NULL; }
+
+    // --- 12. Engine singletons ---
+    // TODO: Mortar::InputManager::Destroy
+    // TODO: Mortar::TextureManager::Destroy
+    // TODO: Mortar::AnimationManager::Destroy
+    // TODO: Mortar::MeshManager::Destroy
+    // TODO: Mortar::TextureManager::Destroy (binary calls twice)
+    // TODO: Mortar::DisplayManager::Destroy
+    // TODO: Mortar::SoundManager::Destroy
+    // TODO: SystemManager::Destroy
 }

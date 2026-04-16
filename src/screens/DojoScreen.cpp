@@ -56,52 +56,64 @@ static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
     return Vec3(defW, defH, 1.0f);
 }
 
-// Background board position — from Draw function:
-//   Translate to (-180.0, -47.0, 0.0) (DAT_001383c4, DAT_001383c8, DAT_001383c0)
-// Z is bumped to +10 in the port so the dojo background draws in front
-// of the MainScreen's lingering button entities (which sit at z=-50).
-// Binary uses z=0 with the rotation matrix giving an inherent depth
-// offset; port renders without rotation so we lift z manually.
-static const Vec3 POS_DOJO_BG     (-180.0f, -47.0f, 10.0f);
+// Background panel position — dojo_sensei.tex (256x256).
+// Binary DAT_001383c4/c8/c0 = (-180, -47, 0). DrawQuadUnCached uses
+// the same center-anchored ±0.5 unit quad as the port's DrawQuad, so
+// the binary values are usable directly.
+// Z is 10 so the panel draws in front of MainScreen's lingering
+// button entities (which sit at z=-50).
+static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 10.0f);
 
+// Static texture storage — binary stores these at GOT-relative globals.
+SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
+SmartPtr<Mortar::Texture> DojoScreen::s_TexSensei;
+SmartPtr<Mortar::Texture> DojoScreen::s_TexShop;
+SmartPtr<Mortar::Texture> DojoScreen::s_TexAbout;
+SmartPtr<Mortar::Texture> DojoScreen::s_TexBlurryBacking;
+SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
+
+// Matches DojoScreen::DojoScreen @ 0x00137b90.
 DojoScreen::DojoScreen(Game& g)
     : game(g)
-    , m_TransitionAlpha(0.0f)
-    , m_State(0)
-    , m_pPlayButton(NULL)
-    , m_pShopButton(NULL)
-    , m_pAboutButton(NULL)
-    , m_pAboutScreen(NULL)
-    , m_bButtonsCreated(false)
+    , m_TransitionAlpha(0.0f)  // DAT_00137bf4 = 0.0
+    , m_State(0)               // field_0x90
+    , m_pPlayButton(NULL)      // field_0x94
+    , m_pShopButton(NULL)      // field_0x98
+    , m_pAboutButton(NULL)     // field_0x9c
+    , m_pAboutScreen(NULL)     // field_0xa0
 {
-    // Binary writes 0x80 to HUDControl::m_LayerFlags in the ctor.
+    LoadContent();
     m_LayerFlags = 0x80;
+    m_bNoDestructor = 0;
+}
 
-    // Load screen textures. Binary loads in LoadContent (0x137a20):
-    //   dojo.tex (background), dojo_sensei.tex (decoration — skipped),
-    //   senseis_swag.tex (skipped), newgame.tex (Play button icon — the
-    //   MenuButton already handles button icons separately), dojo_icon.tex.
-    m_TexDojo     = Mortar::TextureManager::LoadLocalisedTexture("dojo.tex");
-    m_TexSensei   = Mortar::TextureManager::LoadLocalisedTexture("dojo_sensei.tex");
-    m_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
-    m_TexShop     = Mortar::TextureManager::LoadLocalisedTexture("senseis_swag.tex");
-    m_TexAbout    = Mortar::TextureManager::LoadLocalisedTexture("about.tex");
+// Matches DojoScreen::LoadContent @ 0x00137a20.
+// Binary loads 5 textures at GOT-relative static storage,
+// calls BaseScreen::LoadContent() in the middle.
+void DojoScreen::LoadContent() {
+    // +0x08: loading.tex (not used in Draw — skipped)
+    s_TexDojo      = Mortar::TextureManager::LoadLocalisedTexture("dojo.tex");         // +0x0c
+    s_TexSensei    = Mortar::TextureManager::LoadLocalisedTexture("dojo_sensei.tex");  // +0x10
+    // BaseScreen::LoadContent() called here in binary
+    s_TexShop      = Mortar::TextureManager::LoadLocalisedTexture("senseis_swag.tex"); // +0x14
+    s_TexAbout     = Mortar::TextureManager::LoadLocalisedTexture("about.tex");        // +0x18
+    // Port specific: binary's DrawBorders loads blurry_backing from a
+    // shared global; port loads it here since we lack that global.
+    s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
+    s_TexBackIcon      = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+}
 
-    printf("[DojoScreen] ctor: dojo=%d sensei=%d back=%d shop=%d about=%d\n",
-           m_TexDojo.IsValid(), m_TexSensei.IsValid(),
-           m_TexBackIcon.IsValid(), m_TexShop.IsValid(), m_TexAbout.IsValid());
-
-    if (m_TexDojo.IsValid()) {
-        m_Texture = m_TexDojo->m_TexId;
-        // Background panel size = texture width+1, height+1 per
-        // Draw function (DAT_001383c0 + 1 pattern).
-        size = Vec3((float)m_TexDojo->m_Width + 1.0f,
-                    (float)m_TexDojo->m_Height + 1.0f,
-                    1.0f);
-    } else {
-        size = Vec3(480.0f, 320.0f, 1.0f);
-    }
-    pos = POS_DOJO_BG;
+// Matches DojoScreen::UnLoadContent @ 0x00137c04.
+// Binary clears the loaded flag, calls BaseScreen::UnloadContent(),
+// then SetNull on all texture SmartPtrs.
+void DojoScreen::UnLoadContent() {
+    // BaseScreen::UnloadContent() — not ported yet
+    s_TexSensei        = (Mortar::Texture*)NULL;
+    s_TexDojo          = (Mortar::Texture*)NULL;
+    s_TexShop          = (Mortar::Texture*)NULL;
+    s_TexAbout         = (Mortar::Texture*)NULL;
+    s_TexBlurryBacking = (Mortar::Texture*)NULL;
+    s_TexBackIcon      = (Mortar::Texture*)NULL;
 }
 
 DojoScreen::~DojoScreen() {
@@ -128,7 +140,8 @@ void DojoScreen::Release() {
 //   btn2 (shop) calls Fruit::FruitType("pineapple", false) → index 6.
 //   btn3 (about) calls Fruit::FruitType("plum", false) → index 7.
 void DojoScreen::CreateButtons() {
-    if (m_bButtonsCreated) return;
+    // Binary checks field_0x94 == NULL (play button pointer).
+    if (m_pPlayButton != NULL) return;
 
     // Indices into fruitlist.xml ordering (apple=0, banana=1, orange=2,
     // watermelon=3, strawberry=4, kiwifruit=5, pineapple=6, plum=7,
@@ -148,13 +161,20 @@ void DojoScreen::CreateButtons() {
     // Binary: HUD::AddControl + TutorialControl::ResetTutePos.
     // m_TargetSize gets *= 0.825 after Init.
     m_pPlayButton = new MenuButton();
-    m_pPlayButton->m_Texture = TexIdOf(m_TexBackIcon);
-    m_pPlayButton->size      = TexSizeOf(m_TexBackIcon, 64.0f, 64.0f);
+    m_pPlayButton->m_Texture = TexIdOf(s_TexBackIcon);
+    m_pPlayButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
     m_pPlayButton->Init(POS_BACK_BUTTON,
                         [this]() { PlayCallback(); },
                         FT_BOMB, Vec3(0, 0, 0), nullptr);
     m_pPlayButton->m_TargetSize = m_pPlayButton->m_TargetSize * 0.825f;
     m_pPlayButton->m_LayerFlags = 0x40;
+    // RemoveCallback nulls our weak ref BEFORE HUD frees the
+    // button — prevents UAF if the button self-removes via its
+    // FadeCounter shrink-disappear path (state 6 sub-button
+    // animation finishes before DojoScreen itself fades out).
+    m_pPlayButton->m_RemoveCallback = [this](HUDControl*) {
+        m_pPlayButton = NULL;
+    };
     game.hud->AddControl(m_pPlayButton);
 
     // ---- Button 2: Sensei's Swag / Shop (senseis_swag.tex) ----
@@ -166,8 +186,8 @@ void DojoScreen::CreateButtons() {
     // Then HUD::AddControl + TutorialControl::ResetTutePos +
     //   MenuButton::SetNewSymbol(ItemManager::AreNewItems()).
     m_pShopButton = new MenuButton();
-    m_pShopButton->m_Texture = TexIdOf(m_TexShop);
-    m_pShopButton->size      = TexSizeOf(m_TexShop, 64.0f, 64.0f);
+    m_pShopButton->m_Texture = TexIdOf(s_TexShop);
+    m_pShopButton->size      = TexSizeOf(s_TexShop, 64.0f, 64.0f);
     m_pShopButton->Init(POS_SHOP_BUTTON,
                         [this]() { ShopCallback(); },
                         FT_PINEAPPLE, Vec3(0, 0, 0), nullptr);
@@ -175,29 +195,32 @@ void DojoScreen::CreateButtons() {
     m_pShopButton->m_AnimSpeed  = -15.0f;
     m_pShopButton->m_AnimSpeed2 = -15.0f;
     m_pShopButton->m_LayerFlags = 0x40;
+    m_pShopButton->m_RemoveCallback = [this](HUDControl*) {
+        m_pShopButton = NULL;
+    };
     game.hud->AddControl(m_pShopButton);
 
     // ---- Button 3: About (about.tex) ----
     // Binary just Init + AddControl. No post-Init scaling, no
     // TutorialControl, no SetNewSymbol.
     m_pAboutButton = new MenuButton();
-    m_pAboutButton->m_Texture = TexIdOf(m_TexAbout);
-    m_pAboutButton->size      = TexSizeOf(m_TexAbout, 64.0f, 64.0f);
+    m_pAboutButton->m_Texture = TexIdOf(s_TexAbout);
+    m_pAboutButton->size      = TexSizeOf(s_TexAbout, 64.0f, 64.0f);
     m_pAboutButton->Init(POS_ABOUT_BUTTON,
                          [this]() { AboutCallback(); },
                          FT_PLUM, Vec3(0, 0, 0), nullptr);
     m_pAboutButton->m_LayerFlags = 0x40;
+    m_pAboutButton->m_RemoveCallback = [this](HUDControl*) {
+        m_pAboutButton = NULL;
+    };
     game.hud->AddControl(m_pAboutButton);
 
-    m_bButtonsCreated = true;
-    printf("[DojoScreen] Created 3 sub-buttons (back/shop/about)\n");
 }
 
 void DojoScreen::RemoveButtons() {
     if (m_pPlayButton)  { m_pPlayButton->SetPendingRemoval();  m_pPlayButton  = NULL; }
     if (m_pShopButton)  { m_pShopButton->SetPendingRemoval();  m_pShopButton  = NULL; }
     if (m_pAboutButton) { m_pAboutButton->SetPendingRemoval(); m_pAboutButton = NULL; }
-    m_bButtonsCreated = false;
 }
 
 // Matches DojoScreen::Update (0x00138414) state machine.
@@ -242,13 +265,21 @@ void DojoScreen::Update(float dt) {
         m_TransitionAlpha *= ALPHA_DECAY;
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
             m_TransitionAlpha = 0.0f;
-            RemoveButtons();
 
             if (m_State == 3) {
                 // Create AboutScreen as child. Install a remove
                 // callback so HUD::Update nulls our weak ref BEFORE
                 // freeing the child — same dangling-pointer trap as
                 // the MainScreen → DojoScreen relationship.
+                //
+                // AboutScreen draws over the DojoScreen panel, so
+                // RemoveButtons() here is required: the idle sub
+                // buttons (back/shop/about) need to actually go away
+                // while About is open, and they need to be re-created
+                // when we return to state 0 via the remove callback
+                // below — RemoveButtons NULLs the pointers so
+                // state 0 re-creates them.
+                RemoveButtons();
                 m_pAboutScreen = new AboutScreen(game, this);
                 m_pAboutScreen->m_RemoveCallback = [this](HUDControl*) {
                     m_pAboutScreen = NULL;
@@ -273,6 +304,21 @@ void DojoScreen::Update(float dt) {
                 // not via a remove callback on the parent side. This
                 // ensures the parent transitions in the same frame
                 // the child marks itself for removal.
+                //
+                // DO NOT call RemoveButtons() here. The sub-buttons
+                // were already released by FN_ClearMenuItems the frame
+                // the user sliced the back-bomb, so their attached
+                // fruit entities are drifting with random fall vels
+                // and the buttons are mid-way through their own
+                // FadeCounter shrink-disappear animation. Calling
+                // SetPendingRemoval on them here would short-circuit
+                // HUD::Update into deleting them immediately, which
+                // runs MenuButton::Release → m_pEntity->Deactivate()
+                // and the fruits vanish instead of falling naturally.
+                // The binary doesn't null the button pointers in
+                // state 6 either — the ~DojoScreen destructor handles
+                // any stragglers when HUD finally frees this control
+                // after m_bPendingRemoval takes effect.
                 m_bPendingRemoval = 1;
                 if (game.mainScreen) {
                     game.mainScreen->SetState(STATE_SLIDE_IN);
@@ -290,66 +336,120 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
     if ((layerMask & m_LayerFlags) == 0) return;
     if (m_TransitionAlpha <= 0.0f) return;
 
-    // Binary Draw applies a horizontal slide offset based on alpha:
-    //   drawX = base_x + (1 - alpha) * DAT_001383e0  (some large offset)
-    // The exact offset DAT wasn't resolved; approximate with -240 so
-    // the panel slides in from off-screen left to POS_DOJO_BG.
-    const float slideOffset = (1.0f - m_TransitionAlpha) * -240.0f;
-    pos = Vec3(POS_DOJO_BG.x + slideOffset, POS_DOJO_BG.y, POS_DOJO_BG.z);
-
-    m_DrawColour.a = (uint8_t)(m_TransitionAlpha * 255.0f);
-    HUDControl3d::Draw(hudScale, layerMask);
-
-    // Sensei texture — drawn inside BaseScreen::DrawBorders @ 0x00130230.
-    // Binary base position at alpha=1.0:
-    //   X = 182.0  (DAT_0013059c)
-    //   Y = 137.0  (DAT_001305a0)
-    //   Z =   0.0  (DAT_0013056c)
-    // Slide-in: (1 - alpha) * 48.0 on X (DAT_001305a4).
+    // Two angled shade triangles. Matches BaseScreen::DrawBorders
+    // @ 0x00130230. Literal pool at 0x13056c resolved via read_memory.
+    // Wedges: 656 wide, ±82 tall, alpha 0x80 black.
     //
-    // Coord-system: the binary draws into the Bada portrait framebuffer
-    // (480×800) which is rotated 90° for landscape display. The net
-    // visual effect is that the binary's positive X/Y values land in
-    // the OPPOSITE corner from the port's centred ortho (which is
-    // already in landscape space). We negate both axes (180° rotation)
-    // to put sensei in the bottom-left where the binary intends.
-    if (m_TexSensei.IsValid()) {
-        // Y nudged up from raw -137 because the binary's
-        // TranslateMatrix_DrawUtil likely anchors the quad at a corner
-        // while the port's DrawQuad is centre-anchored — adding a
-        // half-texture-height offset puts the centre where the binary
-        // wants the corner.
-        const float SENSEI_BASE_X  = -182.0f;
-        const float SENSEI_BASE_Y  =  -55.0f;
-        const float SENSEI_SLIDE_X =  -48.0f;  // negated
-        const float senseiX = SENSEI_BASE_X +
-                              (1.0f - m_TransitionAlpha) * SENSEI_SLIDE_X;
+    //   tri1 (right wedge) @ (240, 160 - 48*alpha, 0)
+    //   tri2 (left wedge)  @ (-240, 160 - 103*alpha, 0)
+    //     (s17 accumulates: tri2_Y = (160-48a) - 55a = 160-103a)
+    //
+    // The wedges use blurry_backing as a tint texture.
+    if (s_TexBlurryBacking.IsValid()) {
+        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        const uint8_t a = (uint8_t)(128.0f * m_TransitionAlpha);
+        const uint32_t kCol =
+            Colour(0, 0, 0, a).PlatformColour();
 
+        s_TexBlurryBacking->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        Renderer* r = Renderer::GetInstance();
+
+        // --- Right wedge (tri1) ---
+        // Anchored at (240, 160 - 48*alpha).
+        {
+            mm.GetWorldStack().Reset();
+            Matrix44 mat;
+            const float yOff = 160.0f - m_TransitionAlpha * 48.0f;
+            mat.GlobalTranslate44(Vec3(240.0f, yOff, 4.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            QUADCUSTOMVERTEX tri1[3] = {
+                {    0.0f,   82.0f, 0.0f,  0,0,1,  kCol,  0.0f, 0.0078125f },
+                { -656.0f,   82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 0.0078125f },
+                { -656.0f,  -82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 1.0f       },
+            };
+            if (r) r->DrawTriList(tri1, 3);
+        }
+
+        // --- Left wedge (tri2) ---
+        // s17 accumulates from tri1: Y = (160-48a) - 55a = 160-103a
+        {
+            mm.GetWorldStack().Reset();
+            Matrix44 mat;
+            const float yOff = 160.0f - m_TransitionAlpha * 103.0f;
+            mat.GlobalTranslate44(Vec3(-240.0f, yOff, 4.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            QUADCUSTOMVERTEX tri2[3] = {
+                {    0.0f,  -82.0f, 0.0f,  0,0,1,  kCol,  0.0f, 0.0078125f },
+                {  656.0f,  -82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 0.0078125f },
+                {  656.0f,   82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 1.0f       },
+            };
+            if (r) r->DrawTriList(tri2, 3);
+        }
+
+        s_TexBlurryBacking->UnSet();
+    }
+
+    // Block A — dojo_sensei.tex (field +0x10): main 256x256 panel.
+    // Binary @ 0x0013822c: Scale(w+1, h+1, 0) → Translate(-180-slide, -47, 0)
+    // → UploadMatrices → Texture::Set → DrawQuadUnCached × 2 → UnSet.
+    // Slide: X -= texWidth * (1-alpha), slides in from the left.
+    if (s_TexSensei.IsValid()) {
         Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
-        // Quad scale = (texW + 1, texH + 1, 1) — matches binary's
-        // `vtable[+0x14] + 1` width/height query in DrawBorders.
         Matrix44 mat = Matrix44::MakeScale(
-            (float)m_TexSensei->m_Width  + 1.0f,
-            (float)m_TexSensei->m_Height + 1.0f,
+            (float)s_TexSensei->m_Width + 1.0f,
+            (float)s_TexSensei->m_Height + 1.0f,
             1.0f);
-        // z=20 puts sensei in front of the dojo background (z=10).
-        mat.GlobalTranslate44(Vec3(senseiX, SENSEI_BASE_Y, 20.0f));
+        const float slideX = -(float)s_TexSensei->m_Width * (1.0f - m_TransitionAlpha);
+        mat.GlobalTranslate44(Vec3(POS_DOJO_BG.x + slideX, POS_DOJO_BG.y, POS_DOJO_BG.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        m_TexSensei->Set();
+        s_TexSensei->Set();
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         if (Renderer* r = Renderer::GetInstance()) {
-            // Binary uses a fixed colour from GOT (no alpha modulation —
-            // fade is purely the slide-in offset). Port mirrors that.
-            r->DrawQuad(Colour(255, 255, 255, 255));
+            const uint8_t a = (uint8_t)(m_TransitionAlpha * 255.0f);
+            r->DrawQuad(Colour(255, 255, 255, a));
         }
-        m_TexSensei->UnSet();
+        s_TexSensei->UnSet();
     }
 
-    // TODO: BaseScreen::DrawBorders corner decorations at (-184, -136, 0).
+    // Sensei decoration — drawn inside BaseScreen::DrawBorders @ 0x00130230.
+    // Exact constants from literal pool at 0x13059c-0x1305a4:
+    //   Base:  (182, 137, 0) — top-right area
+    //   Slide: X += 48 * (1 - alpha) → slides in from the right
+    if (s_TexDojo.IsValid()) {
+        const float senseiX = 182.0f + (1.0f - m_TransitionAlpha) * 48.0f;
+        const float senseiY = 137.0f;
+
+        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(
+            (float)s_TexDojo->m_Width  + 1.0f,
+            (float)s_TexDojo->m_Height + 1.0f,
+            1.0f);
+        // z=20 puts sensei in front of the dojo background (z=10).
+        mat.GlobalTranslate44(Vec3(senseiX, senseiY, 20.0f));
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        s_TexDojo->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        if (Renderer* r = Renderer::GetInstance()) {
+            r->DrawQuad(Colour(255, 255, 255, 255));
+        }
+        s_TexDojo->UnSet();
+    }
+
+    // TODO: dojo.tex (field +0x0c) passed to DrawBorders at (-184, -136, 0).
 }
 
 // --- Sub-button callbacks ---

@@ -146,7 +146,8 @@ public:
     void StartFadeOut();
 
     // Matches MenuButton::LoadContent (0x148030) — called once from GameInitialise step 23
-    static void LoadContent() {} // TODO
+    static void LoadContent() {}   // TODO
+    static void UnLoadContent() {} // TODO: 0x148660
 
 private:
     // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4). Copies

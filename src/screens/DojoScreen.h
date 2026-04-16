@@ -47,6 +47,10 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override;
     int  GetType() override { return 1; }
 
+    // Binary stores textures at GOT-relative static storage.
+    static void LoadContent();    // 0x00137a20
+    static void UnLoadContent();  // 0x00137c04
+
     // True when the screen has completed its fade-out and wants to
     // be removed from the HUD. MainScreen polls this to transition
     // back to STATE_SLIDE_IN.
@@ -75,16 +79,17 @@ private:
     // m_bPendingRemoval and react.
     AboutScreen* m_pAboutScreen;
 
-    // Textures (loaded in ctor)
-    SmartPtr<Mortar::Texture> m_TexDojo;        // dojo.tex: background
-    SmartPtr<Mortar::Texture> m_TexSensei;      // dojo_sensei.tex: centre decoration
-    SmartPtr<Mortar::Texture> m_TexBackIcon;    // back_icon.tex: back button
-    SmartPtr<Mortar::Texture> m_TexShop;        // senseis_swag.tex: shop button
-    SmartPtr<Mortar::Texture> m_TexAbout;       // about.tex: about button
-
-    // Track whether we've already created the buttons so we don't
-    // spam HUD::AddControl each frame during state 0.
-    bool m_bButtonsCreated;
+    // Binary stores textures at GOT-relative globals, not per-instance.
+    // Port mirrors this with static members so LoadContent/UnLoadContent
+    // can be called from GameInitialise/GameDestroy independently of
+    // any DojoScreen instance.
+    static SmartPtr<Mortar::Texture> s_TexDojo;        // +0x0c: dojo.tex
+    static SmartPtr<Mortar::Texture> s_TexSensei;      // +0x10: dojo_sensei.tex
+    static SmartPtr<Mortar::Texture> s_TexShop;        // +0x14: senseis_swag.tex
+    static SmartPtr<Mortar::Texture> s_TexAbout;       // +0x18: about.tex
+    // Port specific: binary's DrawBorders loads blurry_backing from a global.
+    static SmartPtr<Mortar::Texture> s_TexBlurryBacking;
+    static SmartPtr<Mortar::Texture> s_TexBackIcon;
 
     // --- Helpers ---
     void CreateButtons();
