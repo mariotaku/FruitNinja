@@ -25,6 +25,7 @@
 #include "screens/ShopScreen.h"
 #include "screens/LeaderboardScreen.h"
 #include "hud/FruitFactControl.h"
+#include "hud/TutorialControl.h"
 #include "entities/Coin.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
@@ -117,6 +118,11 @@ void GameInitialise() {
         pm.LoadFile(partXml.c_str());
     }
 
+    // Step 13: TutorialControl (matches binary: operator_new(0xa0), Init, AddControl)
+    game->pTutorialCtrl = new TutorialControl();
+    game->pTutorialCtrl->Init();
+    if (game->hud) game->hud->AddControl(game->pTutorialCtrl);
+
     // TODO: Steps 12-13: PowerUpManager, LeaderboardManager
     // TODO: Steps 16-21: Font::Load ×8
     // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas)
@@ -181,6 +187,8 @@ void GameDestroy() {
 
     // --- 5. FruitCamera ---
     if (game->pCamera) { delete game->pCamera; game->pCamera = NULL; }
+    // TutorialControl is a HUDControl — destroyed by HUD teardown above.
+    game->pTutorialCtrl = NULL;
 
     // --- 6. Fonts (field_0x50..0x80, ~10 Font* slots) ---
     // TODO: delete game->pFont* slots (0x50, 0x54, 0x58, 0x5c,

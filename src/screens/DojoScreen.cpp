@@ -10,6 +10,7 @@
 #include "MainScreen.h"
 #include "Game.h"
 #include "hud/HUD.h"
+#include "hud/TutorialControl.h"
 #include "hud/MenuButton.h"
 #include "entities/FruitInfo.h"
 #include "entities/Fruit.h"
@@ -170,7 +171,7 @@ void DojoScreen::Update(float dt) {
                                     FT_BOMB, Vec3(0, 0, 0), nullptr);
                 m_pPlayButton->m_LayerFlags = 0x40;
                 game.hud->AddControl(m_pPlayButton);
-                // TutorialControl::ResetTutePos — not ported (tutorial system)
+                if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pPlayButton);
                 // m_TargetSize *= 0.825 (DAT_00138694)
                 m_pPlayButton->m_TargetSize = m_pPlayButton->m_TargetSize * BACK_SCALE;
             }
@@ -195,7 +196,7 @@ void DojoScreen::Update(float dt) {
                     ButtonDeleted(c);
                 };
                 game.hud->AddControl(m_pShopButton);
-                // TutorialControl::ResetTutePos — not ported
+                if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pShopButton);
                 // ItemManager not ported — always show no badge
                 m_pShopButton->SetNewSymbol(false);
             }
@@ -366,7 +367,7 @@ void DojoScreen::PlayCallback() {
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    // TutorialControl::ResetTutePos — not ported (tutorial system)
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)NULL);
 }
 
 // ===================================================================
@@ -384,7 +385,7 @@ void DojoScreen::ShopCallback() {
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    // TutorialControl::ResetTutePos — not ported
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)NULL);
 }
 
 // ===================================================================
@@ -402,5 +403,5 @@ void DojoScreen::AboutCallback() {
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    // TutorialControl::ResetTutePos — not ported
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)NULL);
 }

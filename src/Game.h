@@ -63,7 +63,7 @@ struct Game : public Mortar::MortarGame {
     Vec3 worldPos;                 // +0x90: light direction in GameDraw
     MainScreen* mainScreen;        // +0x160: pMainScreen
     // +0x164: GameOverScreen* pGameOverScreen (TODO)
-    // +0x168: TutorialControl* pTutorialCtrl (TODO)
+    class TutorialControl* pTutorialCtrl;  // +0x168
     int fruitTotal;                // +0x174: last AddToTotal result
     // +0x178: CoinCounter* pCoinCounter (TODO)
     // +0x180: TimeControl* pTimeCtrl (TODO)
