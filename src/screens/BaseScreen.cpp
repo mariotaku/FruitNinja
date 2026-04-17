@@ -1,0 +1,306 @@
+//
+// BaseScreen — intermediate base for menu/overlay screens.
+// Only DojoScreen and GameModeScreen inherit from this.
+// See BaseScreen.h for binary refs.
+//
+// Analysed: 2026-04-17T04:00
+//
+
+#include "BaseScreen.h"
+#include "hud/MenuButton.h"
+#include "entities/Fruit.h"
+#include "asset/TextureManager.h"
+#include "render/Renderer.h"
+#include "render/MatrixManager.h"
+#include "render/gl_funcs.h"
+#include "math/Matrix44.h"
+#include "math/Colour.h"
+#include <cmath>
+
+// Static texture storage (binary: GOT-relative module-level singletons)
+SmartPtr<Mortar::Texture> BaseScreen::s_TexSmlTitle;
+SmartPtr<Mortar::Texture> BaseScreen::s_TexBlurryBacking;
+
+// DrawBorders constants (literal pool @ 0x0013056c, resolved via read_memory)
+// g_slideVec = Vec3(0, 1, 0) — vertical slide direction
+// (initialized in _GLOBAL__I_BaseScreen.cpp @ 0x00130694)
+static const Vec3 SLIDE_VEC(0.0f, 1.0f, 0.0f);
+
+static const float TRI_HALF_H     =   82.0f;     // 0x00130578
+static const float TRI_WIDTH      =  656.0f;     // 0x00130584
+static const float TRI_BASE_Y     =  160.0f;     // 0x00130588
+static const float TRI1_Y_SLOPE   =  -48.0f;     // 0x0013058c
+static const float TRI1_X         =  240.0f;     // 0x00130590
+static const float TRI2_Y_SLOPE   =   55.0f;     // 0x00130594
+static const float TRI2_X         = -240.0f;     // 0x00130598
+static const float DECO_X         =  182.0f;     // 0x0013059c
+static const float DECO_Y         =  137.0f;     // 0x001305a0
+static const float DECO_SLIDE_Y   =   48.0f;     // 0x001305a4
+static const float SEC_SLIDE_Y    =   55.0f;     // 0x00130594 (reused)
+static const float UV_NEAR        = 0.0078125f;  // 0x00130570 (= 1/128)
+
+// ===================================================================
+// Matches BaseScreen::BaseScreen @ 0x00138dc0
+// ===================================================================
+BaseScreen::BaseScreen()
+    : m_TransitionAlpha(0.0f)  // DAT_00138df8 = 0.0
+    , m_State(0)
+{
+}
+
+// ===================================================================
+// Matches BaseScreen::~BaseScreen @ 0x00138d60
+// Binary: set vtable, Release(), ~list(m_HUDControls),
+//         ~list(m_ScreenButtons), ~HUDControl3d()
+// ===================================================================
+BaseScreen::~BaseScreen() {
+    // Release() called by subclass dtors.
+    // m_HUDControls cleared by vector dtor.
+}
+
+// ===================================================================
+// Matches BaseScreen::LoadContent @ 0x001305cc
+// ===================================================================
+void BaseScreen::LoadContent() {
+    if (!s_TexSmlTitle.IsValid()) {
+        s_TexSmlTitle = Mortar::TextureManager::LoadLocalisedTexture("sml_title.tex");
+    }
+    if (!s_TexBlurryBacking.IsValid()) {
+        s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
+    }
+}
+
+void BaseScreen::UnloadContent() {
+    s_TexSmlTitle.SetNull();
+    s_TexBlurryBacking.SetNull();
+}
+
+// ===================================================================
+// Matches BaseScreen::DrawBorders @ 0x00130230
+//
+// Draws (in order):
+//   1. Two shade triangles (blurry_backing.tex, Colour(0,0,0,128))
+//   2. Decoration quad (sml_title.tex) with vertical slide
+//   3. Optional secondary texture with vertical slide + offset
+// All geometry at Z=0.0.
+// ===================================================================
+void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
+                             float alpha, const Vec3& secondaryTexPos) {
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // --- 1. Shade triangles (blurry_backing.tex at stateObj+4) ---
+    if (s_TexBlurryBacking.IsValid()) {
+        // Binary: colour is Colour(0,0,0,0x80), baked into static verts.
+        const uint32_t kCol = Colour(0, 0, 0, 128).PlatformColour();
+
+        s_TexBlurryBacking->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        // Top triangle (stateObj+0x78)
+        // Translate: (240, 160 + alpha*(-48), 0)
+        {
+            mm.GetWorldStack().Reset();
+            Matrix44 mat;
+            mat.GlobalTranslate44(Vec3(TRI1_X,
+                TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            QUADCUSTOMVERTEX tri1[3] = {
+                {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR },
+                { -TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR },
+                { -TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    },
+            };
+            r->DrawTriList(tri1, 3);
+        }
+
+        // Bottom triangle (stateObj+0x0C)
+        // Translate: (-240, alpha*55 - 160, 0)
+        {
+            mm.GetWorldStack().Reset();
+            Matrix44 mat;
+            mat.GlobalTranslate44(Vec3(TRI2_X,
+                alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            QUADCUSTOMVERTEX tri2[3] = {
+                {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR },
+                { TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR },
+                { TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    },
+            };
+            r->DrawTriList(tri2, 3);
+        }
+
+        s_TexBlurryBacking->UnSet();
+    }
+
+    // --- 2. Decoration quad (sml_title.tex at stateObj+0) ---
+    // pos = (182, 137, 0) + Vec3(0,1,0)*48*(1-alpha) = (182, 137+48*(1-a), 0)
+    if (s_TexSmlTitle.IsValid()) {
+        s_TexSmlTitle->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(
+            (float)s_TexSmlTitle->m_Width + 1.0f,
+            (float)s_TexSmlTitle->m_Height + 1.0f,
+            1.0f);
+        Vec3 decoPos = Vec3(DECO_X, DECO_Y, 0.0f) +
+                       SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
+        mat.GlobalTranslate44(decoPos);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        r->DrawQuad(Colour(255, 255, 255, 255));
+        s_TexSmlTitle->UnSet();
+    }
+
+    // --- 3. Optional secondary texture (e.g. dojo.tex) ---
+    // pos = Vec3(0,1,0)*55*(1-alpha) - secondaryTexPos
+    if (secondaryTex.IsValid()) {
+        secondaryTex->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(
+            (float)secondaryTex->m_Width + 1.0f,
+            (float)secondaryTex->m_Height + 1.0f,
+            1.0f);
+        Vec3 secPos = SLIDE_VEC * (SEC_SLIDE_Y * (1.0f - alpha)) - secondaryTexPos;
+        mat.GlobalTranslate44(secPos);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        r->DrawQuad(Colour(255, 255, 255, 255));
+        secondaryTex->UnSet();
+    }
+}
+
+// ===================================================================
+// Matches BaseScreen::UpdateButtons @ 0x00130ab4
+// Binary iterates std::list<ScreenButton>: if m_pMenuButton is NULL,
+// calls the visibility delegate then lazily creates MenuButton; else
+// calls the update delegate. ScreenButton struct (~0xCC bytes) with
+// delegates for creation condition, update, press, draw.
+// TODO: port ScreenButton struct. Subclasses handle buttons directly.
+// ===================================================================
+void BaseScreen::UpdateButtons(float dt) {
+    for (auto& sb : m_ScreenButtons) {
+        if (sb.m_pButton == NULL) {
+            // Not yet created — check visibility predicate
+            if (!sb.m_visCheck || !sb.m_visCheck(dt)) continue;
+
+            // Lazy-create MenuButton from descriptor
+            MenuButton* btn = new MenuButton();
+            if (sb.m_tex.IsValid()) {
+                btn->m_Texture = sb.m_tex->m_TexId;
+                btn->size = Vec3((float)sb.m_tex->m_Width,
+                                 (float)sb.m_tex->m_Height, 1.0f);
+            }
+            if (sb.m_clickCb) {
+                btn->Init(sb.m_pos, sb.m_clickCb,
+                          sb.m_tutorID, sb.m_fruitPos, nullptr);
+            }
+            sb.m_pButton = btn;
+
+            // Scale: optional m_scaleA (if != 0), then always m_scaleB
+            if (sb.m_scaleA != 0.0f)
+                btn->m_TargetSize = btn->m_TargetSize * sb.m_scaleA;
+            btn->m_TargetSize = btn->m_TargetSize * sb.m_scaleB;
+
+            // Wire ControlDeleted as remove callback
+            btn->m_RemoveCallback = [&sb](HUDControl* c) {
+                sb.ControlDeleted(c);
+            };
+
+            // Apply fruit piece scale + optional rotation
+            if (btn->m_pFruitPiece) {
+                btn->m_pFruitPiece->scale =
+                    btn->m_pFruitPiece->scale * sb.m_scaleB;
+                if (!btn->m_pFruitPiece->m_bSliced &&
+                    (fabsf(sb.m_rotX) + fabsf(sb.m_rotY)) > 0.0f) {
+                    // TODO: Fruit::RotateFacingUp(fruit, true,
+                    //       Vec3(sb.m_rotX, sb.m_rotY, 0.0f));
+                }
+            }
+
+            // TODO: HUD::AddControl(game->hud, btn, false);
+            // TODO: if (sb.m_tutorID >= 0) TutorialControl::ResetTutePos(...)
+
+            // First-frame update call with -1.0f
+            if (sb.m_updateCb) sb.m_updateCb(btn, -1.0f, sb);
+        } else {
+            // Button exists — per-frame update
+            if (!sb.m_updateCb) continue;
+            bool remove = sb.m_updateCb(sb.m_pButton, dt, sb);
+            if (remove) {
+                MenuButton* btn = sb.m_pButton;
+                if (btn->m_pFruitPiece && !btn->m_pFruitPiece->m_bSliced) {
+                    // Fruit alive: disable, wire shrink callback
+                    // TODO: btn->m_bEnabled = false;
+                    // TODO: MenuButton::SetCallback → sb.ShrinkButtonCall
+                } else {
+                    btn->m_bPendingRemoval = 1;
+                }
+            }
+        }
+    }
+}
+
+// ===================================================================
+// Matches the GenericHUDControl* push_back in binary
+// (called when creating child screens like AboutScreen).
+// ===================================================================
+void BaseScreen::AddGenericControl(HUDControl* ctrl) {
+    m_HUDControls.push_back(ctrl);
+}
+
+// ===================================================================
+// Matches BaseScreen::Release @ 0x00130dd8
+// Binary: iterates m_HUDControls → set m_bPendingRemoval, clear list.
+// Then if game loaded: iterates m_ScreenButtons → set *(mbtn+0x32)=0,
+// clear draw delegates on MenuButton+0x38 and ScreenButton+0x80.
+// ===================================================================
+void BaseScreen::Release() {
+    // 1. Mark all registered HUDControls for pending removal
+    for (size_t i = 0; i < m_HUDControls.size(); ++i) {
+        if (m_HUDControls[i]) {
+            m_HUDControls[i]->m_bPendingRemoval = 1;
+        }
+    }
+    m_HUDControls.clear();
+
+    // 2. Disable ScreenButton MenuButtons + clear delegates
+    // Binary: guarded by *(char*)(gameState + 0x34) != 0 (game loaded check).
+    // Port: always runs since we don't have the game-loaded flag.
+    for (auto& sb : m_ScreenButtons) {
+        if (sb.m_pButton) {
+            // Binary: *(byte*)(btn + 0x32) = 0 (clear enabled flag)
+            // Binary: clear draw delegate on btn+0x38 and sb+0x80 to noop
+            // Port: clear the remove callback (equivalent to delegate clear)
+            sb.m_pButton->m_RemoveCallback = nullptr;
+            sb.m_deletedCb = nullptr;
+        }
+    }
+}
+
+// ===================================================================
+// Matches BaseScreen::RemoveButtons @ 0x00130eb8
+// Unconditional — marks each ScreenButton's MenuButton pending-removal
+// and clears delegates. No game-active guard (unlike Release).
+// ===================================================================
+void BaseScreen::RemoveButtons() {
+    for (auto& sb : m_ScreenButtons) {
+        if (sb.m_pButton) {
+            sb.m_pButton->m_bPendingRemoval = 1;
+            sb.m_pButton->m_RemoveCallback = nullptr;
+            sb.m_deletedCb = nullptr;
+        }
+    }
+}

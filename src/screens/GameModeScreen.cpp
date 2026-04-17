@@ -71,8 +71,6 @@ static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
 // Matches GameModeScreen::GameModeScreen(bool) @ 0x0013e524.
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     : game(g)
-    , m_TransitionAlpha(0.0f)   // field17_0x8c
-    , m_State(0)                // field18_0x90
     , m_pClassicButton(NULL)    // field13_0xa0
     , m_pZenButton(NULL)
     , m_pArcadeButton(NULL)

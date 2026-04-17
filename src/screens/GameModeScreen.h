@@ -27,14 +27,14 @@
 //   - States 1, 7, 8, 9 (alternate-entry + matchmaker recovery)
 //
 
-#include "hud/HUDControl3d.h"
+#include "BaseScreen.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
 
 class MenuButton;
 struct Game;
 
-class GameModeScreen : public HUDControl3d {
+class GameModeScreen : public BaseScreen {
 public:
     GameModeScreen(Game& g, bool isFromPause);
     ~GameModeScreen();
@@ -65,8 +65,7 @@ private:
     //   +0xc4  m_LayerFlagsAlt    (0x80)
     //   +0xc8  m_FrameTimer
     //
-    float m_TransitionAlpha;
-    int   m_State;
+    // m_TransitionAlpha (+0x8C) and m_State (+0x90) inherited from BaseScreen
 
     MenuButton* m_pClassicButton;
     MenuButton* m_pZenButton;
