@@ -60,7 +60,6 @@ SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
 SmartPtr<Mortar::Texture> DojoScreen::s_TexSensei;
 SmartPtr<Mortar::Texture> DojoScreen::s_TexShop;
 SmartPtr<Mortar::Texture> DojoScreen::s_TexAbout;
-SmartPtr<Mortar::Texture> DojoScreen::s_TexBlurryBacking;
 SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
 
 // ===================================================================
@@ -68,8 +67,6 @@ SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
 // ===================================================================
 DojoScreen::DojoScreen(Game& g)
     : game(g)
-    , m_TransitionAlpha(0.0f)  // DAT_00137bf4 = 0.0
-    , m_State(0)               // field_0x90
     , m_pPlayButton(NULL)      // field_0x94
     , m_pShopButton(NULL)      // field_0x98
     , m_pAboutButton(NULL)     // field_0x9c
@@ -96,24 +93,21 @@ void DojoScreen::LoadContent() {
     // +0x08: loading.tex — skipped (not used in Draw)
     s_TexDojo   = Mortar::TextureManager::LoadLocalisedTexture("dojo.tex");         // +0x0c
     s_TexSensei = Mortar::TextureManager::LoadLocalisedTexture("dojo_sensei.tex");  // +0x10
-    // TODO: BaseScreen::LoadContent() called here in binary (loads slots +0x00, +0x04)
+    BaseScreen::LoadContent();  // loads sml_title.tex + blurry_backing.tex (slots +0x00, +0x04)
     s_TexShop   = Mortar::TextureManager::LoadLocalisedTexture("senseis_swag.tex"); // +0x14
     s_TexAbout  = Mortar::TextureManager::LoadLocalisedTexture("about.tex");        // +0x18
-    // Port specific: binary loads blurry_backing from a shared global
-    s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
-    s_TexBackIcon      = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 }
 
 // ===================================================================
 // Matches DojoScreen::UnLoadContent @ 0x00137c04
 // ===================================================================
 void DojoScreen::UnLoadContent() {
-    // TODO: BaseScreen::UnloadContent() — releases slots +0x00, +0x04
+    BaseScreen::UnloadContent();  // releases sml_title + blurry_backing
     s_TexSensei.SetNull();
     s_TexDojo.SetNull();
     s_TexShop.SetNull();
     s_TexAbout.SetNull();
-    s_TexBlurryBacking.SetNull();
     s_TexBackIcon.SetNull();
 }
 
@@ -134,6 +128,16 @@ void DojoScreen::Release() {
     if (m_pPlayButton)  { m_pPlayButton->SetPendingRemoval();  m_pPlayButton  = NULL; }
     if (m_pShopButton)  { m_pShopButton->SetPendingRemoval();  m_pShopButton  = NULL; }
     if (m_pAboutButton) { m_pAboutButton->SetPendingRemoval(); m_pAboutButton = NULL; }
+}
+
+// ===================================================================
+// Matches DojoScreen::ButtonDeleted @ 0x00137684
+// Remove callback for the shop button only (field_0x98 / this->button).
+// ===================================================================
+void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
+    if (ctrl == (HUDControl*)m_pShopButton) {
+        m_pShopButton = NULL;
+    }
 }
 
 // ===================================================================
@@ -165,10 +169,6 @@ void DojoScreen::Update(float dt) {
                                     [this]() { PlayCallback(); },
                                     FT_BOMB, Vec3(0, 0, 0), nullptr);
                 m_pPlayButton->m_LayerFlags = 0x40;
-                // Binary: *(byte*)(button+0x7f) = 1
-                m_pPlayButton->m_RemoveCallback = [this](HUDControl*) {
-                    m_pPlayButton = NULL;
-                };
                 game.hud->AddControl(m_pPlayButton);
                 // TODO: TutorialControl::ResetTutePos(game.pTutorial, m_pPlayButton)
                 // m_TargetSize *= 0.825 (DAT_00138694)
@@ -191,8 +191,8 @@ void DojoScreen::Update(float dt) {
                 m_pShopButton->m_AnimSpeed  = -15.0f;
                 m_pShopButton->m_AnimSpeed2 = -15.0f;
                 m_pShopButton->m_LayerFlags = 0x40;
-                m_pShopButton->m_RemoveCallback = [this](HUDControl*) {
-                    m_pShopButton = NULL;
+                m_pShopButton->m_RemoveCallback = [this](HUDControl* c) {
+                    ButtonDeleted(c);
                 };
                 game.hud->AddControl(m_pShopButton);
                 // TODO: TutorialControl::ResetTutePos(game.pTutorial, m_pShopButton)
@@ -209,9 +209,6 @@ void DojoScreen::Update(float dt) {
                                      [this]() { AboutCallback(); },
                                      FT_PLUM, Vec3(0, 0, 0), nullptr);
                 m_pAboutButton->m_LayerFlags = 0x40;
-                m_pAboutButton->m_RemoveCallback = [this](HUDControl*) {
-                    m_pAboutButton = NULL;
-                };
                 game.hud->AddControl(m_pAboutButton);
             }
         }
@@ -312,57 +309,8 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
     if ((layerMask & m_LayerFlags) == 0) return;
     if (m_TransitionAlpha <= 0.0f) return;
 
-    // --- DrawBorders shade triangles (BaseScreen::DrawBorders @ 0x00130230) ---
-    // Literal pool at 0x13056c resolved via read_memory.
-    //   tri1 (right) @ (240, 160 - 48*alpha, 0)
-    //   tri2 (left)  @ (-240, 160 - 103*alpha, 0)
-    if (s_TexBlurryBacking.IsValid()) {
-        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
-        const uint8_t a = (uint8_t)(128.0f * m_TransitionAlpha);
-        const uint32_t kCol = Colour(0, 0, 0, a).PlatformColour();
-
-        s_TexBlurryBacking->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        Renderer* r = Renderer::GetInstance();
-
-        // Right wedge (tri1)
-        {
-            mm.GetWorldStack().Reset();
-            Matrix44 mat;
-            mat.GlobalTranslate44(Vec3(240.0f, 160.0f - m_TransitionAlpha * 48.0f, 4.0f));
-            mm.GetWorldStack().SetCurrentMatrix(mat);
-            mm.UploadModelViewOnly();
-
-            QUADCUSTOMVERTEX tri1[3] = {
-                {    0.0f,   82.0f, 0.0f,  0,0,1,  kCol,  0.0f, 0.0078125f },
-                { -656.0f,   82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 0.0078125f },
-                { -656.0f,  -82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 1.0f       },
-            };
-            if (r) r->DrawTriList(tri1, 3);
-        }
-
-        // Left wedge (tri2) — s17 accumulates: Y = (160-48a) - 55a = 160-103a
-        {
-            mm.GetWorldStack().Reset();
-            Matrix44 mat;
-            mat.GlobalTranslate44(Vec3(-240.0f, 160.0f - m_TransitionAlpha * 103.0f, 4.0f));
-            mm.GetWorldStack().SetCurrentMatrix(mat);
-            mm.UploadModelViewOnly();
-
-            QUADCUSTOMVERTEX tri2[3] = {
-                {    0.0f,  -82.0f, 0.0f,  0,0,1,  kCol,  0.0f, 0.0078125f },
-                {  656.0f,  -82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 0.0078125f },
-                {  656.0f,   82.0f, 0.0f,  0,0,1,  kCol,  1.0f, 1.0f       },
-            };
-            if (r) r->DrawTriList(tri2, 3);
-        }
-
-        s_TexBlurryBacking->UnSet();
-    }
-
     // --- Block A: dojo_sensei.tex (slot +0x10) — main 256x256 panel ---
-    // Scale(w+1, h+1, 0) → Translate(-180-slide, -47, 0) → DrawQuadUnCached
+    // Scale(w+1, h+1, 1) → Translate(-180-slide, -47, z) → DrawQuadUnCached
     if (s_TexSensei.IsValid()) {
         Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
@@ -384,31 +332,11 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
         s_TexSensei->UnSet();
     }
 
-    // --- Block B: dojo.tex (slot +0x0c) passed to DrawBorders at (-184, -136, 0) ---
-    // Binary: SmartPtr copy of +0x0c, then BaseScreen::DrawBorders(this, &tex, alpha, &pos)
-    // DrawBorders draws the dojo.tex decoration at (182+48*(1-a), 137, 0)
-    if (s_TexDojo.IsValid()) {
-        const float decoX = 182.0f + (1.0f - m_TransitionAlpha) * 48.0f;
-        const float decoY = 137.0f;
-
-        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
-        mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(
-            (float)s_TexDojo->m_Width  + 1.0f,
-            (float)s_TexDojo->m_Height + 1.0f,
-            1.0f);
-        mat.GlobalTranslate44(Vec3(decoX, decoY, 20.0f));
-        mm.GetWorldStack().SetCurrentMatrix(mat);
-        mm.UploadModelViewOnly();
-
-        s_TexDojo->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        if (Renderer* r = Renderer::GetInstance()) {
-            r->DrawQuad(Colour(255, 255, 255, 255));
-        }
-        s_TexDojo->UnSet();
-    }
+    // --- Block B: DrawBorders (shade triangles + sml_title + dojo.tex) ---
+    // Binary: copies dojo.tex SmartPtr, builds translate (-184, -136, 0),
+    //         calls BaseScreen::DrawBorders(this, &tex, alpha, &pos)
+    static const Vec3 BORDER_POS(-184.0f, -136.0f, 0.0f);
+    DrawBorders(s_TexDojo, m_TransitionAlpha, BORDER_POS);
 }
 
 // ===================================================================

@@ -27,7 +27,7 @@
 //   - No "new item" badge (needs ItemManager).
 //
 
-#include "hud/HUDControl3d.h"
+#include "BaseScreen.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
 
@@ -35,7 +35,7 @@ class MenuButton;
 class AboutScreen;
 struct Game;
 
-class DojoScreen : public HUDControl3d {
+class DojoScreen : public BaseScreen {
 public:
     DojoScreen(Game& g);
     ~DojoScreen();
@@ -56,14 +56,13 @@ public:
     // back to STATE_SLIDE_IN.
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
+    // Matches DojoScreen::ButtonDeleted @ 0x00137684.
+    // Remove callback for the shop button (field_0x98). Binary only
+    // installs this on the shop button, not play or about.
+    void ButtonDeleted(HUDControl* ctrl);
+
 private:
     Game& game;
-
-    // +0x8C (BaseScreen): lerped 0→1 on entry, ×0.75 on exit
-    float m_TransitionAlpha;
-
-    // +0x90 (BaseScreen): state machine
-    int m_State;
 
     // +0x94..+0x9c: sub-button pointers (lazy-created in Update state 0)
     MenuButton* m_pPlayButton;
@@ -83,13 +82,7 @@ private:
     static SmartPtr<Mortar::Texture> s_TexSensei;      // +0x10: dojo_sensei.tex
     static SmartPtr<Mortar::Texture> s_TexShop;        // +0x14: senseis_swag.tex
     static SmartPtr<Mortar::Texture> s_TexAbout;       // +0x18: about.tex
-    // Port specific: binary's DrawBorders loads blurry_backing from a global.
-    static SmartPtr<Mortar::Texture> s_TexBlurryBacking;
-    static SmartPtr<Mortar::Texture> s_TexBackIcon;
-
-    // --- Helpers ---
-    void CreateButtons();
-    void RemoveButtons();
+    static SmartPtr<Mortar::Texture> s_TexBackIcon;    // back_icon.tex
 
     // --- Callbacks ---
     void PlayCallback();

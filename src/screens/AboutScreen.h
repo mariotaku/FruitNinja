@@ -44,10 +44,12 @@ public:
 
 private:
     Game& game;
-    DojoScreen* m_pParent;   // parent DojoScreen (back navigation)
+    DojoScreen* m_pParent;   // +0x90: parent DojoScreen (back navigation)
 
-    float m_TransitionAlpha; // BaseScreen +0x7c
-    int   m_State;           // BaseScreen +0x9c
+    // AboutScreen has its own alpha/state — it does NOT inherit BaseScreen.
+    // Binary ctor calls HUDControl3d::HUDControl3d directly.
+    int   m_State;             // +0x94
+    float m_TransitionAlpha;   // +0x7C (field106_0x7c in binary)
 
     MenuButton* m_pBackButton;
     MenuButton* m_pCreditsButton;   // optional (binary has this)
