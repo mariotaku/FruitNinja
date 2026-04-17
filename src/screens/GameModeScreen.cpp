@@ -1,8 +1,8 @@
 //
 // GameModeScreen — mode select child screen (Classic / Zen / Arcade).
-// See GameModeScreen.h and docs/screens/game-mode.md for binary refs.
+// See GameModeScreen.h for binary refs.
 //
-// Analysed: 2026-04-15T14:00
+// Analysed: 2026-04-18T01:00
 //
 
 #include "GameModeScreen.h"
@@ -10,83 +10,140 @@
 #include "Game.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
+#include "hud/TutorialControl.h"
 #include "entities/FruitInfo.h"
 #include "entities/Fruit.h"
 #include "asset/TextureManager.h"
 #include "audio/GameSound.h"
+#include "render/Renderer.h"
+#include "render/MatrixManager.h"
+#include "render/gl_funcs.h"
+#include "math/Matrix44.h"
+#include "math/Colour.h"
+#include "debug/DebugFlags.h"
 #include <cmath>
 #include <cstdio>
 
-// Binary constants — resolved from read_memory at 0x0013ea00..0x0013ece0
-// and 0x0013f458..0x0013f490 (see GameModeScreen::CreateControls and
-// GameModeScreen::Update decompiles).
+// --- Binary constants (resolved from read_memory) ---
 
-// Offline positions (online layout skipped — no network in port).
+// Button positions (offline layout only — P2P variants skipped)
 static const Vec3 POS_CLASSIC( 195.0f, -110.0f, 0.0f);  // DAT_0013ea04/08/0c
 static const Vec3 POS_ZEN    ( -70.0f,   71.0f, 0.0f);  // DAT_0013ea18/1c/0c
-static const Vec3 POS_ARCADE (  88.0f,   48.0f, 0.0f);  // DAT_0013ea58/5c/60
+static const Vec3 POS_ARCADE1(  88.0f,   48.0f, 0.0f);  // DAT_0013ea58/5c/60
+static const Vec3 POS_ARCADE2(  19.0f,  -76.0f, 0.0f);  // offline MP button pos
 
-// Scale table used to shrink the fruit-piece entity + hit bounds after
-// MenuButton::Init. Each slot comes from a distinct DAT address.
-static const float CLASSIC_TARGET_SCALE = 0.75f;  // DAT_0013e59c, applied to m_TargetSize
-static const float CLASSIC_FRUIT_SCALE  = 0.75f;  //                 and m_pFruitPiece->size
-static const float ZEN_TARGET_SCALE     = 0.9f;   // DAT_0013ea20
+// Button scale multipliers
+static const float CLASSIC_TARGET_SCALE = 0.75f;  // DAT_0013e59c
+static const float CLASSIC_FRUIT_SCALE  = 0.75f;
+static const float ZEN_TARGET_SCALE     = 0.90f;  // DAT_0013ea20
 static const float ZEN_FRUIT_SCALE      = 0.95f;  // DAT_0013ea24
 static const float ZEN_HITBOUNDS_SCALE  = 0.85f;  // DAT_0013ea28
-static const float ARCADE_FRUIT_SCALE   = 0.9f;   // DAT_0013ecac
+static const float ARCADE_FRUIT_SCALE   = 0.90f;  // DAT_0013ecac
 
-// Update constants.
-static const float ALPHA_LERP_STEP = 0.15f;    // DAT_0013f458 (state 0/1/2 alpha lerp rate)
-static const float ALPHA_IN_DONE   = 0.9989f;  // DAT_0013f45c (state 2 clamp threshold)
-static const float ALPHA_DECAY     = 0.85f;    // DAT_0013f480 (state 3-6 fade-out decay)
-static const float ALPHA_OUT_DONE  = 0.001f;   // DAT_0013f484 (done threshold for state 3-6)
-static const float CAMERA_DECAY    = 0.75f;    //              (state 3-6 m_CameraTransition decay)
-static const float SECONDARY_CLAMP = 0.1f;     // DAT_0013f474 / DAT_0013f488 (clamp for m_SecondaryAlpha step)
-static const float SECONDARY_RATE  = 0.25f;    //              m_SecondaryAlpha target step
+// Update constants
+static const float ALPHA_LERP_STEP  = 0.15f;    // DAT_0013f458
+static const float ALPHA_IN_DONE    = 0.999f;   // DAT_0013f45c
+static const float ALPHA_DECAY_MODE = 0.85f;    // DAT_0013f480 (states 3-7)
+static const float ALPHA_DECAY_BACK = 0.75f;    // state 0xE
+static const float ALPHA_OUT_DONE   = 0.001f;   // DAT_0013f484
+static const float CAMERA_DECAY     = 0.75f;
+static const float CAMERA_THRESH    = -0.9f;    // DAT_0013f460
+static const float SECONDARY_CLAMP  = 0.1f;     // DAT_0013f474
+static const float SECONDARY_RATE   = 0.25f;
+static const float FRAMETIMER_RATE  = 0.15f;    // DAT_0013f48c
 
-// Port fruit indices for Zen/Arcade buttons. Binary resolves these via
-// Fruit::FruitType("<name>", false) reading globals at DAT_0013ea50 /
-// DAT_0013ecc4 / DAT_0013ecd8 — strings we haven't resolved. Port picks
-// arbitrary non-bomb indices that don't clash with the MainScreen
-// buttons (Play=3 watermelon, Dojo=9 mango).
-//
+// Draw constants. Binary stores these as the NEGATED values
+// (DAT_0013fb84=-188, DAT_fb88=-32) and uses operator- so the
+// actual world position is the positive inverse: (188, 32).
+static const Vec3 POS_BG_NEG(-188.0f,  -32.0f, 0.0f);    // DAT_0013fb84/88
+static const Vec3 POS_BORDER(-115.0f, -130.0f, 0.0f);    // DAT_0013fb8c/90
+static const Vec3 POS_CONNECT(-40.0f,  -53.0f, 0.0f);    // DAT_0013fb94/98
+static const Vec3 POS_LOGO_SRC( 314.0f, 14.0f, 10.0f);   // offline
+static const Vec3 POS_LOGO_DST( 314.0f, 29.0f, 10.0f);   // offline
+
+// Vertical slide direction for the mode_sensei panel + logo
+static const Vec3 SLIDE_VEC_Y(0.0f, 1.0f, 0.0f);
+
+// Fruit types (binary: Fruit::FruitType("<name>", false))
 // apple=0 banana=1 orange=2 watermelon=3 strawberry=4 kiwifruit=5
-// pineapple=6 plum=7 pear=8 mango=9 ...
-static const int FT_CLASSIC = 3;   // watermelon (binary also uses this — verified DAT_0013ea40 → g_pFruitInfo[0x80])
-static const int FT_ZEN     = 5;   // kiwifruit (port choice)
-static const int FT_ARCADE  = 8;   // pear      (port choice)
+// pineapple=6 plum=7 pear=8 mango=9
+static const int FT_WATERMELON =  3;  // Zen ("watermelon")
+static const int FT_APPLE      =  0;  // Arcade1 ("apple_red" — fallback to apple)
+static const int FT_BANANA     =  1;  // Arcade2/MP ("banana")
 
-// Helper copied from MainScreen/DojoScreen.
+// SinIdx scale for DrawConnectTexture pulsation
+static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
+
+// --- Static texture storage ---
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSensei;
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSelect;
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexClassic;
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexMode2;
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexArcadeMode;
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexComingSoon;
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexZenSign;
+
 static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
-static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
-                      float defW, float defH) {
-    if (tex.IsValid()) {
+static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
+    if (tex.IsValid())
         return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
-    }
     return Vec3(defW, defH, 1.0f);
 }
 
-// Matches GameModeScreen::GameModeScreen(bool) @ 0x0013e524.
+// ===================================================================
+// Matches GameModeScreen::LoadContent @ 0x13e330
+// Binary loads 7 textures: mode_sensei, mode_select, classic, mode_2,
+// arcade_mode, coming_soon, zen_sign. All module-level singletons.
+// ===================================================================
+void GameModeScreen::LoadContent() {
+    BaseScreen::LoadContent();
+    if (!s_TexModeSensei.IsValid())
+        s_TexModeSensei = Mortar::TextureManager::LoadLocalisedTexture("mode_sensei.tex");
+    if (!s_TexModeSelect.IsValid())
+        s_TexModeSelect = Mortar::TextureManager::LoadLocalisedTexture("mode_select.tex");
+    if (!s_TexClassic.IsValid())
+        s_TexClassic    = Mortar::TextureManager::LoadLocalisedTexture("classic.tex");
+    if (!s_TexMode2.IsValid())
+        s_TexMode2      = Mortar::TextureManager::LoadLocalisedTexture("mode_2.tex");
+    if (!s_TexArcadeMode.IsValid())
+        s_TexArcadeMode = Mortar::TextureManager::LoadLocalisedTexture("arcade_mode.tex");
+    if (!s_TexComingSoon.IsValid())
+        s_TexComingSoon = Mortar::TextureManager::LoadLocalisedTexture("coming_soon.tex");
+    if (!s_TexZenSign.IsValid())
+        s_TexZenSign    = Mortar::TextureManager::LoadLocalisedTexture("zen_sign.tex");
+}
+
+// ===================================================================
+// Matches GameModeScreen::UnLoadContent @ 0x13e5a8
+// ===================================================================
+void GameModeScreen::UnLoadContent() {
+    s_TexModeSensei.SetNull();
+    s_TexModeSelect.SetNull();
+    s_TexClassic.SetNull();
+    s_TexMode2.SetNull();
+    s_TexArcadeMode.SetNull();
+    s_TexComingSoon.SetNull();
+    s_TexZenSign.SetNull();
+}
+
+// ===================================================================
+// Matches GameModeScreen::GameModeScreen(bool) @ 0x0013e524
+// ===================================================================
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     : game(g)
-    , m_pClassicButton(NULL)    // field13_0xa0
+    , m_pClassicButton(NULL)
     , m_pZenButton(NULL)
     , m_pArcadeButton(NULL)
-    , m_ButtonDelay(-1.0f)      // field_0xa4 (-1 = inactive)
-    , m_SecondaryAlpha(-2.5f)   // field24_0xb4 (DAT_0013e5a? = 0xc0200000)
-    , m_FrameTimer(0.0f)        // field38_0xc8
+    , m_ButtonDelay(-1.0f)
+    , m_SecondaryAlpha(-2.5f)   // DAT_0013e5a0
+    , m_FrameTimer(0.0f)         // DAT_0013e59c
     , m_bIsFromPause(isFromPause)
     , m_bButtonsCreated(false)
 {
-    // Binary writes 0x80 to HUDControl::m_LayerFlags (field37_0xc4) in
-    // the ctor — the screen itself draws on layer 0x80.
-    m_LayerFlags = 0x80;
-
-    // BaseScreen's SetNull-on-primary-texture is mirrored by leaving
-    // m_Texture at 0 (HUDControl3d default). The screen has no single
-    // background texture — the button's textures are handled per-button.
+    LoadContent();
+    m_LayerFlags = 1;  // binary sets to 1 in ctor; raised to 0x80 by subclass Draw
 }
 
 GameModeScreen::~GameModeScreen() {
@@ -103,69 +160,57 @@ void GameModeScreen::Release() {
     RemoveButtons();
 }
 
-// Matches GameModeScreen::CreateControls @ 0x0013e764.
-//
-// Binary creates 4 MenuButtons; port creates 3 (skips the multiplayer
-// matchmaker button — no network). Each one:
-//   1. Allocate a MenuButton.
-//   2. Assign texture / size.
-//   3. Init with position, callback, fruitType, zero-hit-bounds.
-//   4. Post-Init tweak target/fruit scales.
-//   5. HUD::AddControl.
-//   6. (Binary only) TutorialControl::ResetTutePos — port has no tutorial.
+// ===================================================================
+// Matches GameModeScreen::CreateControls @ 0x0013e764
+// Binary creates 4 buttons. Port creates 3 (skips MP matchmaker).
+// ===================================================================
 void GameModeScreen::CreateControls() {
     if (m_bButtonsCreated) return;
     if (!game.hud) return;
 
-    // The textures are stored on the FruitNinjaApp at offsets 0x17c /
-    // +c790 / +c794 / +c78c per the decompile (via GOT). These are
-    // intro banner textures — port doesn't have them loaded, so pass
-    // a zeroed SmartPtr and MenuButton will render just the fruit.
-    SmartPtr<Mortar::Texture> nullTex;
-
-    // ---- Button 1: Classic mode ----
-    // Binary: m_TargetSize *= 0.75, m_pFruitPiece->size *= 0.75
+    // --- Button 1: Classic mode ---
+    // Binary uses Game+0x17c texture (not in port) — fall back to mode_sensei
     m_pClassicButton = new MenuButton();
-    m_pClassicButton->m_Texture = TexIdOf(nullTex);
-    m_pClassicButton->size      = TexSizeOf(nullTex, 64.0f, 64.0f);
+    m_pClassicButton->m_Texture = TexIdOf(s_TexModeSensei);
+    m_pClassicButton->size      = TexSizeOf(s_TexModeSensei, 64.0f, 64.0f);
     m_pClassicButton->Init(POS_CLASSIC,
                            [this]() { ClassicModeCallback(); },
-                           FT_CLASSIC, Vec3(0, 0, 0), nullptr);
+                           FT_WATERMELON, Vec3(0, 0, 0), nullptr);
     m_pClassicButton->m_TargetSize = m_pClassicButton->m_TargetSize * CLASSIC_TARGET_SCALE;
     if (m_pClassicButton->m_pFruitPiece) {
-        // Binary: (fruit + 0x28) *= scale → Entity::scale (Vec3 at +0x28).
         m_pClassicButton->m_pFruitPiece->scale =
             m_pClassicButton->m_pFruitPiece->scale * CLASSIC_FRUIT_SCALE;
     }
     m_pClassicButton->m_LayerFlags = 0x80;
     game.hud->AddControl(m_pClassicButton);
 
-    // ---- Button 2: Zen mode ----
+    // --- Button 2: Zen mode (uses classic.tex panel, watermelon fruit) ---
+    // Binary: TutorialControl::ResetTutePos(game.tutorialCtrl, zenBtn)
     m_pZenButton = new MenuButton();
-    m_pZenButton->m_Texture = TexIdOf(nullTex);
-    m_pZenButton->size      = TexSizeOf(nullTex, 64.0f, 64.0f);
+    m_pZenButton->m_Texture = TexIdOf(s_TexClassic);
+    m_pZenButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
     m_pZenButton->Init(POS_ZEN,
                        [this]() { ZenModeCallback(); },
-                       FT_ZEN, Vec3(0, 0, 0), nullptr);
+                       FT_WATERMELON, Vec3(0, 0, 0), nullptr);
+    if (game.pTutorialCtrl) {
+        game.pTutorialCtrl->ResetTutePos(m_pZenButton);
+    }
     m_pZenButton->m_TargetSize = m_pZenButton->m_TargetSize * ZEN_TARGET_SCALE;
     if (m_pZenButton->m_pFruitPiece) {
         m_pZenButton->m_pFruitPiece->scale =
             m_pZenButton->m_pFruitPiece->scale * ZEN_FRUIT_SCALE;
     }
-    // m_HitBoundsScale *= 0.85 — binary writes to (iVar8 + DAT_0013ea48 + 0x20)
     m_pZenButton->m_HitBoundsScale = m_pZenButton->m_HitBoundsScale * ZEN_HITBOUNDS_SCALE;
     m_pZenButton->m_LayerFlags = 0x80;
     game.hud->AddControl(m_pZenButton);
 
-    // ---- Button 3: Arcade mode ----
-    // Binary: fruit scale *= 0.9, m_TargetSize copied from globals
-    // (matches the Zen globals — port uses same scales).
+    // --- Button 3: Arcade mode (uses mode_2.tex panel, apple fruit) ---
     m_pArcadeButton = new MenuButton();
-    m_pArcadeButton->m_Texture = TexIdOf(nullTex);
-    m_pArcadeButton->size      = TexSizeOf(nullTex, 64.0f, 64.0f);
-    m_pArcadeButton->Init(POS_ARCADE,
+    m_pArcadeButton->m_Texture = TexIdOf(s_TexMode2);
+    m_pArcadeButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
+    m_pArcadeButton->Init(POS_ARCADE1,
                           [this]() { ArcadeModeCallback(); },
-                          FT_ARCADE, Vec3(0, 0, 0), nullptr);
+                          FT_APPLE, Vec3(0, 0, 0), nullptr);
     m_pArcadeButton->m_TargetSize = m_pArcadeButton->m_TargetSize * ZEN_TARGET_SCALE;
     if (m_pArcadeButton->m_pFruitPiece) {
         m_pArcadeButton->m_pFruitPiece->scale =
@@ -174,8 +219,11 @@ void GameModeScreen::CreateControls() {
     m_pArcadeButton->m_LayerFlags = 0x80;
     game.hud->AddControl(m_pArcadeButton);
 
+    // --- Button 4: Multiplayer matchmaker (skipped — defunct network) ---
+    // Binary: banana fruit, arcade_mode.tex panel, RotateFacingUp.
+    // Port: no network so this button is not created.
+
     m_bButtonsCreated = true;
-    printf("[GameModeScreen] CreateControls: Classic/Zen/Arcade spawned\n");
 }
 
 void GameModeScreen::RemoveButtons() {
@@ -185,51 +233,60 @@ void GameModeScreen::RemoveButtons() {
     m_bButtonsCreated = false;
 }
 
-// Matches GameModeScreen::Update @ 0x0013f10c.
-//
-// Port implements states 0, 2, 3-6, 0xe. Drops:
-//   - State 1 (alternate entry from pause) — no pause in port.
-//   - State 7/8/9 (network matchmaker recovery) — no network.
+// ===================================================================
+// Matches GameModeScreen::Update @ 0x0013f10c (212 lines)
+// ===================================================================
 void GameModeScreen::Update(float dt) {
     switch (m_State) {
     case 0: {
-        // Transition in: lerp m_TransitionAlpha toward 1.0 at step 0.15
-        // Binary uses BaseScreen::IsTransitionInFinished (vtable +0x3c);
-        // port uses a fixed threshold of 0.15 alpha which is enough for
-        // the main-screen panel to slide far enough that the mode
-        // buttons can appear under it.
-        m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP;
+        // Transition in — lerp alpha, always advance (binary's
+        // IsTransitionInFinished is a no-op stub returning whatever's in r0)
+        m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP * FN::g_DebugTimeScale;
 
+        // In binary, state advances when IsTransitionInFinished() != 0.
+        // Port gates on alpha reaching the threshold.
         if (m_TransitionAlpha > ALPHA_IN_DONE) {
             m_TransitionAlpha = 1.0f;
             m_State = 2;
-            // Binary calls vtable +0x40 → CreateControls here.
             CreateControls();
-            // field_0xa8 = -1.0 (m_Unknown_A8); not needed in port.
+            m_ButtonDelay = -1.0f;
+        }
+        break;
+    }
+
+    case 1: {
+        // Alternate transition in (from state 9 network recovery).
+        // Port: not reachable, but kept for faithful state machine.
+        m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP * FN::g_DebugTimeScale;
+        if (m_TransitionAlpha > ALPHA_IN_DONE) {
+            m_State = 2;
+            CreateControls();
         }
         break;
     }
 
     case 2: {
-        // Idle: keep lerping alpha toward 1.0, tick button-delay timer.
+        // Idle — lerp alpha to 1.0, lerp secondaryAlpha toward 0, tick delay.
         if (m_TransitionAlpha < ALPHA_IN_DONE) {
-            m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP;
+            m_TransitionAlpha += (1.0f - m_TransitionAlpha) * ALPHA_LERP_STEP * FN::g_DebugTimeScale;
         } else {
             m_TransitionAlpha = 1.0f;
         }
 
-        // Lerp m_SecondaryAlpha toward 1.0 at step 0.25, clamped to
-        // +/-0.1 per frame — used by Draw for a secondary fade effect.
+        // Binary lerps m_SecondaryAlpha toward 1.0 (NOT 0.0) at step 0.25,
+        // clamped ±0.1. In Draw, `1 - secondaryAlpha` gives the slide offset,
+        // so sa→1 means offset→0 (panel settles at final position).
         float step = (1.0f - m_SecondaryAlpha) * SECONDARY_RATE;
         if (step >  SECONDARY_CLAMP) step =  SECONDARY_CLAMP;
         if (step < -SECONDARY_CLAMP) step = -SECONDARY_CLAMP;
         m_SecondaryAlpha += step;
 
-        // Tick button delay. Binary: if m_ButtonDelay > 0, subtract dt,
-        // when <= 0 reset to -1.0 (inactive). Port mirrors.
+        // Tick button delay
         if (m_ButtonDelay > 0.0f) {
             m_ButtonDelay -= dt;
             if (m_ButtonDelay <= 0.0f) m_ButtonDelay = -1.0f;
+        } else {
+            m_ButtonDelay = -1.0f;
         }
         break;
     }
@@ -238,54 +295,47 @@ void GameModeScreen::Update(float dt) {
     case 4:
     case 5:
     case 6: {
-        // Mode-picked fade-out.
-        m_TransitionAlpha *= ALPHA_DECAY;
+        // Mode picked — fade out, decay camera, launch game
+        // Decay scaled by debug time-scale (see MainScreen state 0xe).
+        const float modeDecay = 1.0f - (1.0f - ALPHA_DECAY_MODE) * FN::g_DebugTimeScale;
+        m_TransitionAlpha *= modeDecay;
         m_SecondaryAlpha = m_TransitionAlpha;
 
-        // Decay the MainScreen camera transition. Binary reads/writes
-        // game.m_TransitionTimer at +0x0c; port owns the same semantic
-        // state in MainScreen::m_CameraTransition.
         if (game.mainScreen) {
-            // vtable[+0x48] @ -0.9 threshold skipped — that's a camera
-            // zoom-out hook; port's camera follows m_CameraTransition
-            // directly and doesn't need the extra kick.
-
             float camT = game.mainScreen->GetCameraTransition();
             camT *= CAMERA_DECAY;
             game.mainScreen->SetCameraTransition(camT);
 
             if (fabsf(camT) < ALPHA_OUT_DONE) {
-                // Play mode-selected SFX. Binary calls
-                //   GameSound::SFXPlay(&game->pGameSound, "<name>", 1.0, 1.0, cb)
-                // where <name> lives at DAT_0013f470. Port plays via
-                // the game's singleton GameSound.
                 if (game.pGameSound) {
-                    game.pGameSound->SFXPlay("swoosh_sound", 1.0f, 1.0f);
+                    game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
-
                 game.mainScreen->SetCameraTransition(0.0f);
-                game.pauseFlag = 0;  // binary (iVar3 + 5) = 0
+                game.pauseFlag = 0;
                 m_bPendingRemoval = 1;
                 game.mainScreen->SetState(STATE_CAMERA_FADE);
-
-                // Same-screen MP would iterate SlashEntities and call
-                // SlashEntity::ColoursChanged here — port has no MP.
+                // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped
             }
         }
         break;
     }
 
+    case 7:
+    case 8:
+    case 9:
+        // Online multiplayer flow — skipped (defunct network)
+        m_State = 1;  // fall back to idle
+        break;
+
     case 0xe: {
-        // Back-out: quicker fade, push MainScreen into SLIDE_IN once
-        // alpha crosses 0.25 downward. On full fade, mark for removal.
+        // Back-out: quicker fade, cross 0.25 → MainScreen SLIDE_IN
         float oldAlpha = m_TransitionAlpha;
-        m_TransitionAlpha *= CAMERA_DECAY;  // DAT_0013f480 = 0.85? actually 0.75 in case 0xe per binary
+        const float backDecay = 1.0f - (1.0f - ALPHA_DECAY_BACK) * FN::g_DebugTimeScale;
+        m_TransitionAlpha *= backDecay;
         m_SecondaryAlpha  = m_TransitionAlpha;
 
         if (oldAlpha > 0.25f && m_TransitionAlpha <= 0.25f) {
-            if (game.mainScreen) {
-                game.mainScreen->SetState(STATE_SLIDE_IN);
-            }
+            if (game.mainScreen) game.mainScreen->SetState(STATE_SLIDE_IN);
         }
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
             m_bPendingRemoval = 1;
@@ -297,44 +347,118 @@ void GameModeScreen::Update(float dt) {
         break;
     }
 
-    // Binary m_FrameTimer accumulator (field38_0xc8): only ticks when
-    // state > 2. Port uses it only for animation driving if any; keep
-    // the accumulator faithful.
-    if (m_State > 2) {
-        m_FrameTimer += dt / 0.15f;  // DAT_0013f48c = 0.15
+    // FrameTimer accumulator (drives DrawConnectTexture animation).
+    // Only ticks when state > 2.
+    if ((int)m_State > 2) {
+        m_FrameTimer += dt / FRAMETIMER_RATE;
         if (m_FrameTimer < 0.0f) m_FrameTimer = 0.0f;
     }
 }
 
-// No background texture yet — the mode-select screen relies entirely
-// on the sub-button fruits spinning in the main-screen backdrop. Draw
-// is a no-op so the controls show through cleanly.
+// ===================================================================
+// Matches GameModeScreen::DrawConnectTexture @ 0x0013f754
+// Binary: P2P-only animation (matchmaker connection indicator).
+// Guards on isP2PSupported flag — port has no P2P, always no-op.
+// Texture at g_instance+0x34 (primary) / +0x38 (alt) — NOT zen_sign.
+// ===================================================================
+void GameModeScreen::DrawConnectTexture(const Vec3& pos) {
+    (void)pos;
+    // Port: no P2P network support — skip entirely.
+    // Binary: if (m_FrameTimer <= 0 || !isP2PSupported) return;
+}
+
+// ===================================================================
+// Matches GameModeScreen::Draw @ 0x0013f8c8
+// 1. Background panel (mode_sensei.tex) with slide-in from secondaryAlpha
+// 2. Borders via BaseScreen::DrawBorders (mode_select.tex)
+// 3. Connect animation (zen_sign.tex pulsating)
+// 4. Logo panel (mode_sensei.tex repeated at top-right)
+// ===================================================================
 void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     (void)hudScale;
-    (void)layerMask;
+    if ((layerMask & m_LayerFlags) == 0) return;
+    if (m_TransitionAlpha <= 0.0f) return;
+
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // --- 1. Background panel (mode_sensei.tex) ---
+    // Binary math:
+    //   slideVec = (0, 1, 0)  (g_slideVec global)
+    //   scaled   = slideVec * texWidth
+    //   offset   = scaled * (1 - m_SecondaryAlpha)
+    //   translate = offset - POS_BG_NEG
+    //             = (0, texW*(1-sa), 0) - (-188, -32, 0)
+    //             = (188, 32 + texW*(1-sa), 0)
+    // At sa=1: panel at (188, 32). At sa=-2.5: offset is texW*3.5
+    // above, so the panel slides DOWN from above.
+    if (s_TexModeSensei.IsValid()) {
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(
+            (float)s_TexModeSensei->m_Width + 1.0f,
+            (float)s_TexModeSensei->m_Height + 1.0f,
+            1.0f);
+        const float texW = (float)s_TexModeSensei->m_Width;
+        const float oneMinusSA = 1.0f - m_SecondaryAlpha;
+        const Vec3 offset = SLIDE_VEC_Y * (texW * oneMinusSA);
+        const Vec3 translate = offset - POS_BG_NEG;
+        mat.GlobalTranslate44(translate);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        s_TexModeSensei->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        r->DrawQuad(Colour(255, 255, 255, 255));
+        s_TexModeSensei->UnSet();
+    }
+
+    // --- 2. Borders (BaseScreen::DrawBorders with mode_select.tex) ---
+    DrawBorders(s_TexModeSelect, m_TransitionAlpha, POS_BORDER);
+
+    // --- 3. Connect texture animation ---
+    DrawConnectTexture(POS_CONNECT);
+
+    // --- 4. Logo panel (zen_sign.tex — slot 8, NOT mode_sensei) ---
+    // Binary DAT_0013fbc0 = 0x76f8 → BSS slot for zen_sign.tex.
+    // Lerps from SRC to DST by m_TransitionAlpha.
+    if (s_TexZenSign.IsValid()) {
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(
+            (float)s_TexZenSign->m_Width + 1.0f,
+            (float)s_TexZenSign->m_Height + 1.0f,
+            1.0f);
+        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
+        mat.GlobalTranslate44(logoPos);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+
+        s_TexZenSign->Set();
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        r->DrawQuad(Colour(255, 255, 255, 255));
+        s_TexZenSign->UnSet();
+    }
 }
 
 // --- Sub-button callbacks ---
 
-// Matches ClassicModeCallback @ 0x0013dfb4.
+// Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
-    printf("[GameModeScreen] Classic picked -> state 3, gameMode=0\n");
     m_State = 3;
     game.gameMode = 0;
 }
 
-// Matches ZenModeCallback @ 0x0013dffc.
+// Matches ZenModeCallback @ 0x0013dffc
 void GameModeScreen::ZenModeCallback() {
-    printf("[GameModeScreen] Zen picked -> state 6, gameMode=3\n");
     m_State = 6;
     game.gameMode = 3;
 }
 
-// Matches ArcadeModeCallback @ 0x0013e19c.
-// Binary also calls FruitSaveData::AddToTotal for an arcade counter;
-// port has no FruitSaveData so that tally is skipped.
+// Matches ArcadeModeCallback @ 0x0013e19c
+// Binary: FruitSaveData::AddToTotal("coming_soon", ..., 10) — skipped
 void GameModeScreen::ArcadeModeCallback() {
-    printf("[GameModeScreen] Arcade picked -> state 5, gameMode=2\n");
     m_State = 5;
     game.gameMode = 2;
 }

@@ -145,6 +145,7 @@ void GameInitialise() {
     Bomb::LoadContent();            // loads bomb models + textures
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
     PowerUpShop::LoadContent();     // TODO: power-up shop textures
+    GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
     // TODO: PreloadSounds
 
     printf("GameInitialise: done\n");
