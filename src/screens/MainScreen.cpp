@@ -20,6 +20,7 @@
 #include "core/SystemManager.h"
 #include "audio/GameSound.h"
 #include "audio/SoundManager.h"
+#include "debug/DebugFlags.h"
 #include <cstdio>
 #include <cmath>
 
@@ -182,8 +183,8 @@ void MainScreen::Update(float dt) {
         break;
 
     case STATE_GAME_START: {
-        // Direct game start. Decay camera × 0.75.
-        m_CameraTransition *= STATE_2_DECAY;
+        // Direct game start. Decay camera × 0.75 (scaled for debug time).
+        m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
 
         // When camera > 0.999: fully faded, transition to game
         if (m_CameraTransition > 0.999f) {
@@ -221,8 +222,14 @@ void MainScreen::Update(float dt) {
         const int fruitCount = am ? am->GetNumEntities(0) : 0;
 
         if (fruitCount == 0) {
-            m_Timer2 *= 0.75f;
+            m_Timer2 *= 1.0f - (1.0f - 0.75f) * FN::g_DebugTimeScale;
         }
+
+        // Binary LAB_0014c166: apply pos.y slide formula with m_Timer2 as alpha.
+        // As Timer2 decays 1→0, pos.y animates 91→229 (off-screen top).
+        const float sizeY_d = size.y;
+        const float tt_d = sizeY_d * m_Timer2;
+        pos.y = (sizeY_d + 320.0f - 2.0f * tt_d) * 0.5f;
 
         if (!m_pDojoScreen && fruitCount == 0 && m_Timer2 < 0.01f) {
             m_Timer2 = 0.0f;
@@ -245,30 +252,34 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_SLIDE_IN: {
-        // Binary @ ~0x0014beec, two-phase:
+        // Binary @ ~0x0014beec, two-phase lerp + pos.y animation
+        // (shared LAB_0014c166 formula with states 0xe/0xf/3/4/0x15/0x16).
         //   if (m_Timer2 <= 0.9998) {
         //       m_Timer2 += (1.0 - m_Timer2) * 0.125     // lerp toward 1
+        //       posAlpha  = m_Timer2
         //   } else {
         //       m_Timer2 += dt                            // hold + tick
-        //       if (m_Timer2 > 1.5) {
-        //           m_Timer2 = 0.15
-        //           m_State = 0  (CAMERA_ZOOM)
-        //           m_StateTimer = 0
-        //       }
+        //       if (m_Timer2 > 1.5) { reset + CAMERA_ZOOM }
+        //       posAlpha  = 1.0                            // held at final
         //   }
-        // Binary does NOT call DeleteMenuButtons here — Play/Dojo
-        // buttons are still alive from before the dojo trip and the
-        // STATE_CAMERA_ZOOM lazy-create will skip them.
+        //   pos.y = (size.y + 320 - 2*size.y*posAlpha) * 0.5
+        float posAlpha;
         if (m_Timer2 <= STATE_8_LERP_THRESHOLD) {
-            m_Timer2 += (1.0f - m_Timer2) * STATE_8_LERP_RATE;
+            m_Timer2 += (1.0f - m_Timer2) * STATE_8_LERP_RATE * FN::g_DebugTimeScale;
+            posAlpha = m_Timer2;
         } else {
-            m_Timer2 += dt;
+            m_Timer2 += dt;  // dt already scaled by g_DebugTimeScale
             if (m_Timer2 > STATE_8_DURATION) {
                 m_Timer2 = STATE_8_RESET_TIMER;
                 m_State = STATE_CAMERA_ZOOM;
                 m_StateTimer = 0.0f;
             }
+            posAlpha = 1.0f;
         }
+        // Shared LAB_0014c166: slide pos.y back to on-screen as alpha→1
+        const float sizeY_8 = size.y;
+        const float tt_8 = sizeY_8 * posAlpha;
+        pos.y = (sizeY_8 + 320.0f - 2.0f * tt_8) * 0.5f;
         break;
     }
 
@@ -290,23 +301,35 @@ void MainScreen::Update(float dt) {
 
     case STATE_MODE_SELECT:
     case STATE_MODE_SELECT_2: {
-        // Binary @ 0x0014bf40 cases 0xe/0xf: decay m_Timer2 continuously
-        // and, the ONE frame m_Timer2 crosses 0.25 downward, spawn a
-        // GameModeScreen as a child control. After spawning, MainScreen
-        // stays in this state — it's the GameModeScreen that later
-        // writes mainScreen->m_State (CAMERA_FADE on mode pick, or
+        // Binary @ 0x0014bf40 cases 0xe/0xf: decay m_Timer2 (binary uses
+        // m_TexMoreGames.ptr repurposed as float) and slide pos.y upward
+        // off-screen. UpdateScreenElements writes m_LogoFruitTextPos.y =
+        // pos.y + 18, and m_WindowCenter's bounce floor tracks pos.y + 3,
+        // so both logos slide off-screen with pos.y.
+        //
+        // When alpha crosses 0.25 downward, spawn GameModeScreen.
+        // After spawning, MainScreen stays in this state — GameModeScreen
+        // writes mainScreen->m_State later (CAMERA_FADE on mode pick,
         // SLIDE_IN on back-out).
         const float oldTimer2 = m_Timer2;
-        m_Timer2 *= STATE_0E_DECAY;
+        // Port specific: per-frame decay needs to slow with the debug
+        // time-scale. Binary x *= 0.85 each frame → 15% decay. With
+        // scale s, decay = 1 - 0.15*s. At s=1 matches binary, at s=0.1
+        // decay is 1.5% per frame (10x slower, matching dt scaling).
+        const float decay = 1.0f - (1.0f - STATE_0E_DECAY) * FN::g_DebugTimeScale;
+        m_Timer2 *= decay;
+
+        // Binary: pos.y = (size.y + 320 - 2*size.y*alpha) * 0.5
+        // At alpha=1: pos.y=40 (on-screen). At alpha=0.25: pos.y=220.
+        // At alpha=0: pos.y=280 (off top). Logos track pos.y+18.
+        const float sizeY = size.y;
+        const float tt = sizeY * m_Timer2;
+        pos.y = (sizeY + 320.0f - 2.0f * tt) * 0.5f;
 
         if (oldTimer2 > STATE_0E_THRESHOLD &&
             m_Timer2 <= STATE_0E_THRESHOLD &&
             !m_pGameModeScreen) {
             m_pGameModeScreen = new GameModeScreen(game, false);
-            // RemoveCallback nulls our weak ref BEFORE HUD::Update
-            // deletes the child — same pattern as the DojoScreen
-            // relationship. Prevents UAF when we'd otherwise poll a
-            // freed pointer next frame.
             m_pGameModeScreen->m_RemoveCallback = [this](HUDControl*) {
                 m_pGameModeScreen = NULL;
             };
@@ -317,7 +340,7 @@ void MainScreen::Update(float dt) {
 
     case STATE_CAMERA_FADE:
         // Camera fade after game return. Decay × 0.75 until settled.
-        m_CameraTransition *= STATE_2_DECAY;
+        m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
         break;
 
     case STATE_LOADING_A:
@@ -451,6 +474,8 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B ||
          m_State == STATE_DOJO_WAIT_C || m_State == STATE_DOJO_WAIT_D) &&
         m_Timer2 == 0.0f) return;
+    // For STATE_MODE_SELECT: binary keeps drawing but pos.y is animated
+    // off-screen in Update, which pulls the logo positions with it.
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
@@ -586,10 +611,14 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
         }
     }
 
-    m_Alpha += (m_GlobalAlphaTarget - m_Alpha) * ALPHA_LERP_RATE;
+    // Per-frame lerp (no dt) — scale by g_DebugTimeScale so slow-mo slows
+    // the slice_fruit slide-in/out matching other transitions.
+    m_Alpha += (m_GlobalAlphaTarget - m_Alpha) * ALPHA_LERP_RATE * FN::g_DebugTimeScale;
 
     // LogoFruitPos (slice_fruit decoration): matches binary at end of 0x0014ad3c
     // m_LogoFruitPos = (-175, 26, 0) + (-120, -17, 0) * m_Alpha * 2.0
+    // Binary DOES leave slice_fruit visible during state 0xe/3/4 transitions
+    // (verified from Draw decomp — no state gate or pos.y dependency).
     Vec3 base(-175.0f, 26.0f, 0.0f);        // DAT_0014aedc, 26.0, DAT_0014aec8
     Vec3 offset(-120.0f, -17.0f, 0.0f);     // DAT_0014aed4, -17.0, DAT_0014aec8
     Vec3 scaled = offset * m_Alpha * 2.0f;

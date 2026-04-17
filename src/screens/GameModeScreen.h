@@ -48,13 +48,13 @@ public:
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
-    static void LoadContent() {}   // TODO: 0x13e330
-    static void UnLoadContent() {} // TODO: 0x13e5a8
+    static void LoadContent();    // 0x13e330
+    static void UnLoadContent();  // 0x13e5a8
 
 private:
     Game& game;
 
-    // Binary layout (offsets from decompile):
+    // Binary struct layout (0xD0 = 208 bytes total):
     //   +0x8c  m_TransitionAlpha  (inherited BaseScreen)
     //   +0x90  m_State            (inherited BaseScreen)
     //   +0xa0  m_ClassicButton
@@ -63,22 +63,31 @@ private:
     //   +0xb4  m_SecondaryAlpha   (starts -2.5, lerped toward 0 / 1)
     //   +0xb8  m_IsFromPause
     //   +0xc4  m_LayerFlagsAlt    (0x80)
-    //   +0xc8  m_FrameTimer
-    //
-    // m_TransitionAlpha (+0x8C) and m_State (+0x90) inherited from BaseScreen
+    //   +0xc8  m_FrameTimer       (drives DrawConnectTexture animation)
+    //   +0xcc  m_OnlineMPButton   (skipped for port)
 
-    MenuButton* m_pClassicButton;
+    MenuButton* m_pClassicButton;    // +0xa0
     MenuButton* m_pZenButton;
     MenuButton* m_pArcadeButton;
 
-    float m_ButtonDelay;
-    float m_SecondaryAlpha;
-    float m_FrameTimer;
-    bool  m_bIsFromPause;
+    float m_ButtonDelay;             // +0xa4
+    float m_SecondaryAlpha;          // +0xb4 (also drives Draw slide-in)
+    float m_FrameTimer;              // +0xc8
+    bool  m_bIsFromPause;            // +0xb8
     bool  m_bButtonsCreated;
+
+    // Static textures (binary: module-level globals, loaded in LoadContent)
+    static SmartPtr<Mortar::Texture> s_TexModeSensei;   // mode_sensei.tex: panel + logo
+    static SmartPtr<Mortar::Texture> s_TexModeSelect;   // mode_select.tex: borders
+    static SmartPtr<Mortar::Texture> s_TexClassic;      // classic.tex: Zen button panel
+    static SmartPtr<Mortar::Texture> s_TexMode2;        // mode_2.tex: Arcade1 button panel
+    static SmartPtr<Mortar::Texture> s_TexArcadeMode;   // arcade_mode.tex: Arcade2 panel
+    static SmartPtr<Mortar::Texture> s_TexComingSoon;   // coming_soon.tex
+    static SmartPtr<Mortar::Texture> s_TexZenSign;      // zen_sign.tex: connect animation
 
     void CreateControls();
     void RemoveButtons();
+    void DrawConnectTexture(const Vec3& pos);  // 0x0013f754
 
     // Sub-button callbacks (bound via std::function).
     void ClassicModeCallback();
