@@ -29,6 +29,7 @@ Game::Game()
       isFirstPlay1(false), isFirstPlay2(false),
       field_0x88(0),
       mainScreen(NULL),
+      pTutorialCtrl(NULL),
       fruitTotal(0),
       pGameSound(NULL),
       m_gameDataLicensedState(0),
