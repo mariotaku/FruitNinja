@@ -269,6 +269,17 @@ void MenuButton::StartFadeOut() {
     // already valid (255 for normal, 128 for highlighted).
 }
 
+// Matches MenuButton::SetNewSymbol (0x0014e404)
+void MenuButton::SetNewSymbol(bool show) {
+    if (show) {
+        if (m_NewIndicatorTimer < 0.0f)
+            m_NewIndicatorTimer = 0.0f;
+    } else {
+        if (m_NewIndicatorTimer >= 0.0f)
+            m_NewIndicatorTimer = -1.0f;
+    }
+}
+
 // Matches MenuButton::Update (0x0014e614)
 void MenuButton::Update(float dt) {
     // Fade-out animation. Decay alpha each frame; when below the

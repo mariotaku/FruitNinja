@@ -49,6 +49,7 @@ Fruit::Fruit()
     , m_pEmitter1(NULL)
     , m_pEmitter2(NULL)
     , m_bSliced(false)
+    , m_bDetached(false)
     , m_bDrawWhole(false)
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
@@ -65,6 +66,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     (void)param1; (void)param3;
     m_FruitType = fruitType;
     m_bSliced = false;
+    m_bDetached = false;
     m_bDrawWhole = false;
     m_ScaleAnim = 0.0f;
     m_ChuckDelay = 0.0f;
