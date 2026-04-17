@@ -78,6 +78,11 @@ public:
     // off as a single object instead of splitting in two.
     bool m_bDrawWhole;
 
+    // +0x80: detach flag set by SetVisible_FruitFact (0x0013785c).
+    // When set, MenuButton::Update stops pinning this fruit to the
+    // button center — the piece drifts freely with its current vel.
+    bool m_bDetached;
+
     // Launch delay (fruit invisible during countdown)
     float m_ChuckDelay;
 

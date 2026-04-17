@@ -145,6 +145,11 @@ public:
     // button mid-transition.
     void StartFadeOut();
 
+    // Matches MenuButton::SetNewSymbol (0x0014e404).
+    // If show=true and timer<0: sets timer=0.0 (start showing badge).
+    // If show=false and timer>=0: sets timer=-1.0 (hide badge).
+    void SetNewSymbol(bool show);
+
     // Matches MenuButton::LoadContent (0x148030) — called once from GameInitialise step 23
     static void LoadContent() {}   // TODO
     static void UnLoadContent() {} // TODO: 0x148660

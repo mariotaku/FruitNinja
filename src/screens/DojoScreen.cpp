@@ -147,7 +147,7 @@ void DojoScreen::Update(float dt) {
     (void)dt;
 
     // Binary: BaseScreen::UpdateButtons(&this->super, dt);
-    // TODO: BaseScreen::UpdateButtons not ported
+    BaseScreen::UpdateButtons(dt);
 
     switch (m_State) {
 
@@ -170,7 +170,7 @@ void DojoScreen::Update(float dt) {
                                     FT_BOMB, Vec3(0, 0, 0), nullptr);
                 m_pPlayButton->m_LayerFlags = 0x40;
                 game.hud->AddControl(m_pPlayButton);
-                // TODO: TutorialControl::ResetTutePos(game.pTutorial, m_pPlayButton)
+                // TutorialControl::ResetTutePos — not ported (tutorial system)
                 // m_TargetSize *= 0.825 (DAT_00138694)
                 m_pPlayButton->m_TargetSize = m_pPlayButton->m_TargetSize * BACK_SCALE;
             }
@@ -195,8 +195,9 @@ void DojoScreen::Update(float dt) {
                     ButtonDeleted(c);
                 };
                 game.hud->AddControl(m_pShopButton);
-                // TODO: TutorialControl::ResetTutePos(game.pTutorial, m_pShopButton)
-                // TODO: MenuButton::SetNewSymbol(m_pShopButton, ItemManager::AreNewItems())
+                // TutorialControl::ResetTutePos — not ported
+                // ItemManager not ported — always show no badge
+                m_pShopButton->SetNewSymbol(false);
             }
 
             // --- field_0x9c: About button (about.tex) ---
@@ -223,9 +224,11 @@ void DojoScreen::Update(float dt) {
 
     // ---- STATE 1: Idle ----
     case 1:
-        // Binary: poll ItemManager::AreNewItems() for shop badge
-        // TODO: if (m_pShopButton) MenuButton::SetNewSymbol(m_pShopButton,
-        //           ItemManager::AreNewItems());
+        // Binary: poll ItemManager::AreNewItems() each frame for shop badge.
+        // ItemManager not ported — badge always hidden.
+        if (m_pShopButton) {
+            m_pShopButton->SetNewSymbol(false);
+        }
         break;
 
     // ---- STATES 2, 3, 4: Fade out → sub-screen ----
@@ -258,11 +261,10 @@ void DojoScreen::Update(float dt) {
         }
 
         if (prevState == 2) {
-            // State 2: push ShopScreen
-            // TODO: FruitSaveData::CheckDatesHaveChanged(game.pSaveData)
-            // TODO: ShopScreen* shop = new ShopScreen(game, this);
-            //       game.hud->AddControl(shop);
-            // Stub: return to MainScreen since ShopScreen isn't ported
+            // State 2: push ShopScreen.
+            // Binary: FruitSaveData::CheckDatesHaveChanged, then
+            //   ShopScreen* shop = new ShopScreen(0xbc); AddControl.
+            // Port: ShopScreen not ported — return to MainScreen.
             m_bPendingRemoval = 1;
             if (game.mainScreen) {
                 game.mainScreen->SetState(STATE_SLIDE_IN);
@@ -271,9 +273,10 @@ void DojoScreen::Update(float dt) {
         }
 
         if (prevState == 4) {
-            // State 4: network dashboard (defunct)
-            // TODO: wait for ActorManager::GetNumEntities(0) == 0,
-            //       then NetworkManager::LaunchDashboard(), state = 0
+            // State 4: network dashboard (defunct — OpenFeint/GameCenter).
+            // Binary: waits for ActorManager::GetNumEntities(0)==0,
+            //   then NetworkManager::LaunchDashboard(), state=0.
+            // Port: skip — reset to state 0 immediately.
             m_State = 0;
             return;
         }
@@ -356,14 +359,14 @@ void DojoScreen::PlayCallback() {
     //    Binary: if (field_0x94 && field_0x94[5].Init != NULL)
     //      SetVisible_FruitFact(piece); piece->vel = (rand5+5, -rand5, 0)
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        // TODO: SetVisible_FruitFact(m_pPlayButton->m_pFruitPiece)
-        //       (detaches piece from MenuButton tracking)
+        // SetVisible_FruitFact @ 0x0013785c: *(byte*)(fruit+0x80) = 1
+        m_pPlayButton->m_pFruitPiece->m_bDetached = true;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    // 4. TODO: TutorialControl::ResetTutePos(game.pTutorial, NULL)
+    // TutorialControl::ResetTutePos — not ported (tutorial system)
 }
 
 // ===================================================================
@@ -375,13 +378,13 @@ void DojoScreen::ShopCallback() {
 
     // Binary: SetVisible + fling (no null check — assumes field_0x94 exists)
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        // TODO: SetVisible_FruitFact(m_pPlayButton->m_pFruitPiece)
+        m_pPlayButton->m_pFruitPiece->m_bDetached = true;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    // TODO: TutorialControl::ResetTutePos(game.pTutorial, NULL)
+    // TutorialControl::ResetTutePos — not ported
 }
 
 // ===================================================================
@@ -393,11 +396,11 @@ void DojoScreen::AboutCallback() {
 
     // Binary: SetVisible + fling (no null check — assumes field_0x94 exists)
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        // TODO: SetVisible_FruitFact(m_pPlayButton->m_pFruitPiece)
+        m_pPlayButton->m_pFruitPiece->m_bDetached = true;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    // TODO: TutorialControl::ResetTutePos(game.pTutorial, NULL)
+    // TutorialControl::ResetTutePos — not ported
 }

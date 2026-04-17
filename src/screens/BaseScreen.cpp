@@ -7,6 +7,7 @@
 //
 
 #include "BaseScreen.h"
+#include "Game.h"
 #include "hud/MenuButton.h"
 #include "entities/Fruit.h"
 #include "asset/TextureManager.h"
@@ -92,8 +93,26 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
 
     // --- 1. Shade triangles (blurry_backing.tex at stateObj+4) ---
     if (s_TexBlurryBacking.IsValid()) {
-        // Binary: colour is Colour(0,0,0,0x80), baked into static verts.
-        const uint32_t kCol = Colour(0, 0, 0, 128).PlatformColour();
+        // Binary lazy-init: builds static vertex buffers once (stateObj+0x08 flag).
+        // Two triangles × 3 verts, Colour(0,0,0,0x80) baked in.
+        static bool s_trisInitialized = false;
+        static QUADCUSTOMVERTEX s_tri1[3];  // top/right (stateObj+0x78)
+        static QUADCUSTOMVERTEX s_tri2[3];  // bottom/left (stateObj+0x0C)
+
+        if (!s_trisInitialized) {
+            s_trisInitialized = true;
+            const uint32_t kCol = Colour(0, 0, 0, 128).PlatformColour();
+
+            // Top triangle: right side, slopes down-left
+            s_tri1[0] = {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
+            s_tri1[1] = { -TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
+            s_tri1[2] = { -TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+
+            // Bottom triangle: left side, slopes up-right
+            s_tri2[0] = {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
+            s_tri2[1] = { TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
+            s_tri2[2] = { TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+        }
 
         s_TexBlurryBacking->Set();
         glEnable(GL_BLEND);
@@ -108,13 +127,7 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
                 TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-
-            QUADCUSTOMVERTEX tri1[3] = {
-                {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR },
-                { -TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR },
-                { -TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    },
-            };
-            r->DrawTriList(tri1, 3);
+            r->DrawTriList(s_tri1, 3);
         }
 
         // Bottom triangle (stateObj+0x0C)
@@ -126,13 +139,7 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
                 alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-
-            QUADCUSTOMVERTEX tri2[3] = {
-                {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR },
-                { TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR },
-                { TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    },
-            };
-            r->DrawTriList(tri2, 3);
+            r->DrawTriList(s_tri2, 3);
         }
 
         s_TexBlurryBacking->UnSet();
@@ -277,15 +284,16 @@ void BaseScreen::Release() {
     m_HUDControls.clear();
 
     // 2. Disable ScreenButton MenuButtons + clear delegates
-    // Binary: guarded by *(char*)(gameState + 0x34) != 0 (game loaded check).
-    // Port: always runs since we don't have the game-loaded flag.
-    for (auto& sb : m_ScreenButtons) {
-        if (sb.m_pButton) {
-            // Binary: *(byte*)(btn + 0x32) = 0 (clear enabled flag)
-            // Binary: clear draw delegate on btn+0x38 and sb+0x80 to noop
-            // Port: clear the remove callback (equivalent to delegate clear)
-            sb.m_pButton->m_RemoveCallback = nullptr;
-            sb.m_deletedCb = nullptr;
+    // Binary: guarded by *(char*)(gameState + 0x34) != 0
+    Game* game = Game::GetInstance();
+    if (game && game->field_0x34 != 0) {
+        for (auto& sb : m_ScreenButtons) {
+            if (sb.m_pButton) {
+                // Binary: *(byte*)(btn + 0x32) = 0 (clear enabled flag)
+                // Binary: clear draw delegate on btn+0x38 and sb+0x80 to noop
+                sb.m_pButton->m_RemoveCallback = nullptr;
+                sb.m_deletedCb = nullptr;
+            }
         }
     }
 }
