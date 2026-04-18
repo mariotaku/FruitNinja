@@ -472,18 +472,16 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
 
     // --- 4. Logo panel (zen_sign.tex — slot 8, NOT mode_sensei) ---
     // Binary DAT_0013fbc0 = 0x76f8 → BSS slot for zen_sign.tex.
-    // Binary lerp (0x0013f8c8 tail): pos = SRC + (SRC - DST) * alpha.
-    // At alpha=0: pos = SRC (resting position). At alpha=1: pos moves
-    // further away from DST past SRC (the slide-away-on-fade-in curve).
-    // The port was using a standard lerp src→dst which reversed the
-    // slide direction.
+    // Standard slide-in lerp: at alpha=0 the sign sits off-right at
+    // SRC=(314,14,10) (past +240 X edge), as alpha→1 it slides in to
+    // rest at DST=(194,29,10) on-screen.
     if (s_TexZenSign.IsValid()) {
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexZenSign->m_Width + 1.0f,
             (float)s_TexZenSign->m_Height + 1.0f,
             1.0f);
-        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_SRC - POS_LOGO_DST) * m_TransitionAlpha;
+        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
         mat.GlobalTranslate44(logoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
