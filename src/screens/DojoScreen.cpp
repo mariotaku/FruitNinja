@@ -42,7 +42,9 @@ static const Vec3 POS_ABOUT_BUTTON ( 145.0f,   42.0f, 0.0f);
 static const float BACK_SCALE  = 0.825f;  // DAT_00138694
 static const float SHOP_SCALE  = 0.575f;  // DAT_001386b4
 
-// Background panel position (DAT_001383c4/c8/c0)
+// Background panel position — dojo_sensei at bottom-left area.
+// DAT_001383c4/c8/c0 = (-180, -47, 0).
+// Slides in from left: X -= texWidth * (1 - alpha).
 static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 10.0f);
 
 // Helpers
@@ -162,32 +164,49 @@ void DojoScreen::Update(float dt) {
 
             // --- field_0x94: Back/Play button (back_icon.tex) ---
             if (m_pPlayButton == NULL) {
-                const int FT_BOMB = FruitInfo_GetCount();
+                // Binary: fruit type from **(int**)(GOT + 0x7060) — this
+                // is the bomb threshold global, equal to FruitInfo_GetCount().
+                // MenuButton treats fruitType >= count as a BOMB spawn.
+                const int bombFruitType = FruitInfo_GetCount();
                 m_pPlayButton = new MenuButton();
                 m_pPlayButton->m_Texture = TexIdOf(s_TexBackIcon);
                 m_pPlayButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pPlayButton->Init(POS_BACK_BUTTON,
                                     [this]() { PlayCallback(); },
-                                    FT_BOMB, Vec3(0, 0, 0), nullptr);
+                                    bombFruitType, Vec3(0, 0, 0), nullptr);
                 m_pPlayButton->m_LayerFlags = 0x40;
                 game.hud->AddControl(m_pPlayButton);
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pPlayButton);
-                // m_TargetSize *= 0.825 (DAT_00138694)
+                // Binary scales BOTH m_TargetSize AND fruit piece's scale by 0.825
                 m_pPlayButton->m_TargetSize = m_pPlayButton->m_TargetSize * BACK_SCALE;
+                if (m_pPlayButton->m_pFruitPiece) {
+                    m_pPlayButton->m_pFruitPiece->scale =
+                        m_pPlayButton->m_pFruitPiece->scale * BACK_SCALE;
+                }
             }
 
             // --- field_0x98: Shop button (senseis_swag.tex) ---
             if (m_pShopButton == NULL) {
-                const int FT_PINEAPPLE = 6; // Fruit::FruitType("pineapple", false)
+                // Binary: Fruit::FruitType((char*)DAT_001386b0, false)
+                const int shopFruitType = Fruit::FruitType("pineapple", false);
                 m_pShopButton = new MenuButton();
                 m_pShopButton->m_Texture = TexIdOf(s_TexShop);
                 m_pShopButton->size      = TexSizeOf(s_TexShop, 64.0f, 64.0f);
                 m_pShopButton->Init(POS_SHOP_BUTTON,
                                     [this]() { ShopCallback(); },
-                                    FT_PINEAPPLE, Vec3(0, 0, 0), nullptr);
-                // Binary post-Init: size = (texW+1, texH+1, 1),
-                // field+0x13c = 0.5, m_TargetSize *= 0.575,
-                // m_AnimSpeed = m_AnimSpeed2 = -15
+                                    shopFruitType, Vec3(0, 0, 0), nullptr);
+                // Binary post-Init (exact field writes):
+                //   m_TargetSize = (texW+1, texH+1, 1.0)       (absolute, not relative)
+                //   m_AnimScale  = 0.5                          (binary offset +0x13C)
+                //   m_TargetSize *= 0.575                       (then scale)
+                //   m_AnimSpeed  = -15.0, m_AnimSpeed2 = -15.0  (both)
+                if (s_TexShop.IsValid()) {
+                    m_pShopButton->m_TargetSize = Vec3(
+                        (float)s_TexShop->m_Width + 1.0f,
+                        (float)s_TexShop->m_Height + 1.0f,
+                        1.0f);
+                }
+                m_pShopButton->m_AnimScale = 0.5f;
                 m_pShopButton->m_TargetSize = m_pShopButton->m_TargetSize * SHOP_SCALE;
                 m_pShopButton->m_AnimSpeed  = -15.0f;
                 m_pShopButton->m_AnimSpeed2 = -15.0f;
@@ -203,13 +222,14 @@ void DojoScreen::Update(float dt) {
 
             // --- field_0x9c: About button (about.tex) ---
             if (m_pAboutButton == NULL) {
-                const int FT_PLUM = 7; // Fruit::FruitType("plum", false)
+                // Binary: Fruit::FruitType((char*)DAT_001389f0, false)
+                const int aboutFruitType = Fruit::FruitType("plum", false);
                 m_pAboutButton = new MenuButton();
                 m_pAboutButton->m_Texture = TexIdOf(s_TexAbout);
                 m_pAboutButton->size      = TexSizeOf(s_TexAbout, 64.0f, 64.0f);
                 m_pAboutButton->Init(POS_ABOUT_BUTTON,
                                      [this]() { AboutCallback(); },
-                                     FT_PLUM, Vec3(0, 0, 0), nullptr);
+                                     aboutFruitType, Vec3(0, 0, 0), nullptr);
                 m_pAboutButton->m_LayerFlags = 0x40;
                 game.hud->AddControl(m_pAboutButton);
             }
@@ -313,8 +333,8 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
     if ((layerMask & m_LayerFlags) == 0) return;
     if (m_TransitionAlpha <= 0.0f) return;
 
-    // --- Block A: dojo_sensei.tex (slot +0x10) — main 256x256 panel ---
-    // Scale(w+1, h+1, 1) → Translate(-180-slide, -47, z) → DrawQuadUnCached
+    // --- Block A: dojo_sensei.tex (slot +0x10) — main panel (128x256) ---
+    // Slides in from left (horizontal slide): X -= texW * (1 - alpha).
     if (s_TexSensei.IsValid()) {
         Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();

@@ -127,6 +127,13 @@ public:
     // miss penalty (TODO), and marks the entity killed (flags |= 0x10).
     void KillFruit(bool doMissPenalty);
 
+    // Matches Fruit::FruitType (0x00175b10). Resolves a fruit name
+    // string to the index in the FRUIT_INFO array by hashing and
+    // comparing against m_NameHash / m_NameHashUpper. If not found:
+    //   fallbackRandom=true → returns Random::Rand32(count-1)
+    //   fallbackRandom=false → returns -1 (0xFFFFFFFF)
+    static int FruitType(const char* name, bool fallbackRandom);
+
     // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
     // Parses Data/xml/fruitlist.xml into FRUIT_INFO array
     static void LoadInfo();
