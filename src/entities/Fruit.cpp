@@ -796,6 +796,60 @@ void Fruit::Slice() {
            halfVelA.x, halfVelA.y, halfVelB.x, halfVelB.y);
 }
 
+// Matches Fruit::RotateFacingUp (0x001757f4).
+// Sets m_Rot1/m_Rot2 to a fixed starting orientation (facing up) then
+// optionally applies an alignment rotation. Sets m_RotVel1/m_RotVel2
+// to spinVelAxis * random magnitude.
+//
+// RandomStartAngle (0x00175740): sets rot to axis=(-1,0,0),
+//   angle16=0xce2c via CreateFromAxisAngle (0x0017ac68), then resets to
+//   Identity if w==0.
+//
+// Spin magnitude: +(2 + RandF(2.0)) or -(2 + RandF(2.0)). Binary uses
+//   WaveManager's Random instance; port substitutes rand() since this
+//   only affects display orientation, not gameplay.
+void Fruit::RotateFacingUp(bool alignToFacing, const Vec3& spinVelAxis) {
+    // Random spin magnitude: +(2 + rand[0,2)) or -(2 + rand[0,2))
+    // Matches: r = RandF(2.0); sign = (Rand32(2)==0) ? 1 : -1
+    float r    = (float)rand() / (float)RAND_MAX * 2.0f;   // RandF(2.0)
+    float sign = (rand() % 2 == 0) ? 1.0f : -1.0f;         // Rand32(2) == 0
+    float magnitude = sign * (2.0f + r);
+
+    for (int i = 0; i < 2; i++) {
+        Quaternion* rot    = (i == 0) ? &m_Rot1 : &m_Rot2;
+        Vec3*       rotVel = (i == 0) ? &m_RotVel1 : &m_RotVel2;
+
+        // Step 1: RandomStartAngle(rot, fixedAxis=true)
+        // Binary: Identity, then CreateFromAxisAngle(-1, 0, 0, 0xce2c).
+        // halfAngle = (0xce2c >> 1) / 65536.0 * 2pi
+        {
+            float halfAngle = (float)(0xce2c >> 1) / 65536.0f * 6.2831853f;
+            float c = cosf(halfAngle), s = sinf(halfAngle);
+            *rot = Quaternion(-1.0f * s, 0.0f, 0.0f, c);
+            if (rot->w == 0.0f) *rot = Quaternion::Identity();
+        }
+
+        // Step 2: optional facing-up alignment (alignToFacing=false at MP call site)
+        if (alignToFacing) {
+            // qA: axis=spinVelAxis, angle=0 --> Identity (sin(0)=0)
+            Quaternion qA = Quaternion::Identity();
+
+            // qB: axis=(0, 0, zSign), angle = 0x4e34
+            // ARM idiom: zSign = -1 when (spinVelAxis.x + spinVelAxis.y >= 0), else +1
+            float zSign = (spinVelAxis.x + spinVelAxis.y >= 0.0f) ? -1.0f : 1.0f;
+            {
+                float halfAngle = (float)(0x4e34 >> 1) / 65536.0f * 6.2831853f;
+                float c = cosf(halfAngle), s = sinf(halfAngle);
+                Quaternion qB(0.0f, 0.0f, zSign * s, c);
+                *rot = (*rot * qA) * qB;
+            }
+        }
+
+        // Step 3: rotation velocity = spinVelAxis * random magnitude
+        *rotVel = spinVelAxis * magnitude;
+    }
+}
+
 // Matches Fruit::FruitType (0x00175b10).
 // Searches FRUIT_INFO array by hash of name, matching m_NameHash or
 // m_NameHashUpper. Returns index on match. If not found and
@@ -818,6 +872,7 @@ int Fruit::FruitType(const char* name, bool fallbackRandom) {
     }
     return -1;
 }
+
 
 // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
 void Fruit::LoadInfo() {
