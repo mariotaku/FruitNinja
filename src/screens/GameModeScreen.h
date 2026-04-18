@@ -86,6 +86,11 @@ private:
     static SmartPtr<Mortar::Texture> s_TexArcadeMode;   // arcade_mode.tex: Arcade2 panel
     static SmartPtr<Mortar::Texture> s_TexComingSoon;   // coming_soon.tex
     static SmartPtr<Mortar::Texture> s_TexZenSign;      // zen_sign.tex: connect animation
+    // Port specific: binary reads classic-button texture from Game+0x17c
+    // (a global SmartPtr — back_icon.tex, matching DojoScreen's back button
+    // which reads the same slot). Until we mirror that Game field, load it
+    // here so Classic button has the correct back-arrow visual.
+    static SmartPtr<Mortar::Texture> s_TexBackIcon;     // back_icon.tex: classic/back button
 
     void CreateControls();
     void RemoveButtons();
