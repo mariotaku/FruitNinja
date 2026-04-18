@@ -4,6 +4,7 @@
 #include "Vec3.h"
 #include "Matrix44.h"
 #include <cmath>
+#include <cstdint>
 
 // Matches original Quaternion (16 bytes)
 struct Quaternion {
@@ -60,6 +61,20 @@ struct Quaternion {
     }
 
     static Quaternion Identity() { return Quaternion(0, 0, 0, 1); }
+
+    // Sets this quaternion to identity then computes axis-angle with 16-bit
+    // angle encoding (0x10000 = 2pi). Matches Quaternion::CreateFromAxisAngle
+    // @ 0x000f7e90. The axis is NOT normalized by this function (binary
+    // does not normalize — caller is responsible for unit-length axes).
+    void CreateFromAxisAngle(float ax, float ay, float az, uint32_t angle16) {
+        const float rad  = (float)(int32_t)angle16 * (6.2831853f / 65536.0f);
+        const float half = rad * 0.5f;
+        const float s    = sinf(half);
+        x = ax * s;
+        y = ay * s;
+        z = az * s;
+        w = cosf(half);
+    }
 };
 
 #endif

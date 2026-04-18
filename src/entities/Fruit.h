@@ -127,6 +127,12 @@ public:
     // miss penalty (TODO), and marks the entity killed (flags |= 0x10).
     void KillFruit(bool doMissPenalty);
 
+    // Matches Fruit::RotateFacingUp (0x001757f4). Sets m_Rot1/m_Rot2 to a
+    // random starting orientation and m_RotVel1/m_RotVel2 to axisScale * scalar.
+    // When flag=true, additional q_axis * q_up composition is applied to each
+    // rotation slot. See Fruit.cpp for full algorithm.
+    void RotateFacingUp(bool flag, const Vec3& axisScale);
+
     // Matches Fruit::FruitType (0x00175b10). Resolves a fruit name
     // string to the index in the FRUIT_INFO array by hashing and
     // comparing against m_NameHash / m_NameHashUpper. If not found:

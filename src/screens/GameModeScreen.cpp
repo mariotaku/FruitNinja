@@ -240,10 +240,14 @@ void GameModeScreen::CreateControls() {
                                Vec3(0, 0, 0), nullptr);
     m_pMultiplayerButton->m_TargetSize = m_pMultiplayerButton->m_TargetSize * ZEN_TARGET_SCALE;
     if (m_pMultiplayerButton->m_pFruitPiece) {
-        // Binary: fruit scale *= 0.75, then RotateFacingUp(false, (-75, 1, -75))
+        // Binary: fruit scale *= 0.75, then RotateFacingUp(false, Vec3(0,1,0))
         m_pMultiplayerButton->m_pFruitPiece->scale =
             m_pMultiplayerButton->m_pFruitPiece->scale * 0.75f;
-        // TODO: Fruit::RotateFacingUp(fruit, false, Vec3(-75, 1, -75))
+        // Binary: Fruit::RotateFacingUp(false, Vec3(0,1,0)) -- pure Y-axis spin.
+        // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
+        m_pMultiplayerButton->m_pFruitPiece->RotateFacingUp(
+            false,
+            Vec3(0.0f, 1.0f, 0.0f));
     }
     m_pMultiplayerButton->m_LayerFlags = 0x80;
     game.hud->AddControl(m_pMultiplayerButton);
