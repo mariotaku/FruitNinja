@@ -103,15 +103,24 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
             s_trisInitialized = true;
             const uint32_t kCol = Colour(0, 0, 0, 128).PlatformColour();
 
-            // Top triangle: right side, slopes down-left
-            s_tri1[0] = {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
-            s_tri1[1] = { -TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
-            s_tri1[2] = { -TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+            // Binary vertex data (verified from lazy-init fixup asm @ 0x001302ea).
+            // Tri1 (at stateObj+0x78, drawn at (240, 160-48*alpha)): RIGHT apex.
+            //   v0 (0, 0) = apex at anchor (right edge)
+            //   v1 (0, 82) = straight up from apex
+            //   v2 (-656, 82) = far upper-left, off-screen
+            // Forms a thin wedge hanging from the top-right corner.
+            s_tri1[0] = {       0.0f,       0.0f, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
+            s_tri1[1] = {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+            s_tri1[2] = { -TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
 
-            // Bottom triangle: left side, slopes up-right
-            s_tri2[0] = {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
-            s_tri2[1] = { TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
-            s_tri2[2] = { TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+            // Tri0 (at stateObj+0x0C, drawn at (-240, 55*alpha-160)): LEFT apex.
+            //   v0 (0, 0) = apex at anchor (left edge)
+            //   v1 (0, -82) = straight down from apex
+            //   v2 (656, -82) = far lower-right, off-screen
+            // Mirror wedge hanging from the bottom-left corner.
+            s_tri2[0] = {      0.0f,        0.0f, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
+            s_tri2[1] = {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+            s_tri2[2] = { TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
         }
 
         s_TexBlurryBacking->Set();
