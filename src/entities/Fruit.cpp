@@ -796,6 +796,29 @@ void Fruit::Slice() {
            halfVelA.x, halfVelA.y, halfVelB.x, halfVelB.y);
 }
 
+// Matches Fruit::FruitType (0x00175b10).
+// Searches FRUIT_INFO array by hash of name, matching m_NameHash or
+// m_NameHashUpper. Returns index on match. If not found and
+// fallbackRandom=true returns a random valid index, else -1.
+int Fruit::FruitType(const char* name, bool fallbackRandom) {
+    const int count = FruitInfo_GetCount();
+    if (name && *name) {
+        const uint32_t hash = StringHash(name);
+        for (int i = 0; i < count; i++) {
+            const FruitInfo* info = FruitInfo_Get(i);
+            if (info && (info->m_NameHash == hash || info->m_NameHashUpper == hash)) {
+                return i;
+            }
+        }
+    }
+    if (fallbackRandom && count > 0) {
+        // Binary uses WaveManager's RNG; port uses rand() — behaviorally
+        // equivalent since the result is just a fallback fruit index.
+        return rand() % count;
+    }
+    return -1;
+}
+
 // Matches Fruit::LoadInfo (0x17987c, 519 lines) — called once from GameInitialise step 24
 void Fruit::LoadInfo() {
     Game* game = Game::GetInstance();

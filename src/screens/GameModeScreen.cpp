@@ -52,24 +52,20 @@ static const float SECONDARY_CLAMP  = 0.1f;     // DAT_0013f474
 static const float SECONDARY_RATE   = 0.25f;
 static const float FRAMETIMER_RATE  = 0.15f;    // DAT_0013f48c
 
-// Draw constants. Binary stores these as the NEGATED values
-// (DAT_0013fb84=-188, DAT_fb88=-32) and uses operator- so the
-// actual world position is the positive inverse: (188, 32).
-static const Vec3 POS_BG_NEG(-188.0f,  -32.0f, 0.0f);    // DAT_0013fb84/88
+// Draw constants — mode_sensei sits at bottom-left, same pattern as
+// DojoScreen's dojo_sensei. Slides in from left horizontally.
+static const Vec3 POS_BG    (-188.0f,  -32.0f, 0.0f);    // DAT_0013fb84/88
 static const Vec3 POS_BORDER(-115.0f, -130.0f, 0.0f);    // DAT_0013fb8c/90
 static const Vec3 POS_CONNECT(-40.0f,  -53.0f, 0.0f);    // DAT_0013fb94/98
 static const Vec3 POS_LOGO_SRC( 314.0f, 14.0f, 10.0f);   // offline
 static const Vec3 POS_LOGO_DST( 314.0f, 29.0f, 10.0f);   // offline
 
-// Vertical slide direction for the mode_sensei panel + logo
-static const Vec3 SLIDE_VEC_Y(0.0f, 1.0f, 0.0f);
-
-// Fruit types (binary: Fruit::FruitType("<name>", false))
-// apple=0 banana=1 orange=2 watermelon=3 strawberry=4 kiwifruit=5
-// pineapple=6 plum=7 pear=8 mango=9
-static const int FT_WATERMELON =  3;  // Zen ("watermelon")
-static const int FT_APPLE      =  0;  // Arcade1 ("apple_red" — fallback to apple)
-static const int FT_BANANA     =  1;  // Arcade2/MP ("banana")
+// Fruit type name strings (binary: DAT_0013ea50 = "watermelon",
+// DAT_0013ecc4 = "apple_red", DAT_0013ecd8 = "banana").
+// Resolved at runtime via Fruit::FruitType() — matches binary call.
+static const char* FRUIT_ZEN    = "watermelon";
+static const char* FRUIT_ARCADE = "apple_red";
+static const char* FRUIT_MP     = "banana";
 
 // SinIdx scale for DrawConnectTexture pulsation
 static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
@@ -170,12 +166,14 @@ void GameModeScreen::CreateControls() {
 
     // --- Button 1: Classic mode ---
     // Binary uses Game+0x17c texture (not in port) — fall back to mode_sensei
+    // Binary classic fruit type: **(int**)(GOT + 0x7060) — bomb threshold,
+    // same global FruitInfo_GetCount() returns.
     m_pClassicButton = new MenuButton();
     m_pClassicButton->m_Texture = TexIdOf(s_TexModeSensei);
     m_pClassicButton->size      = TexSizeOf(s_TexModeSensei, 64.0f, 64.0f);
     m_pClassicButton->Init(POS_CLASSIC,
                            [this]() { ClassicModeCallback(); },
-                           FT_WATERMELON, Vec3(0, 0, 0), nullptr);
+                           FruitInfo_GetCount(), Vec3(0, 0, 0), nullptr);
     m_pClassicButton->m_TargetSize = m_pClassicButton->m_TargetSize * CLASSIC_TARGET_SCALE;
     if (m_pClassicButton->m_pFruitPiece) {
         m_pClassicButton->m_pFruitPiece->scale =
@@ -191,7 +189,7 @@ void GameModeScreen::CreateControls() {
     m_pZenButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
     m_pZenButton->Init(POS_ZEN,
                        [this]() { ZenModeCallback(); },
-                       FT_WATERMELON, Vec3(0, 0, 0), nullptr);
+                       Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0), nullptr);
     if (game.pTutorialCtrl) {
         game.pTutorialCtrl->ResetTutePos(m_pZenButton);
     }
@@ -210,7 +208,7 @@ void GameModeScreen::CreateControls() {
     m_pArcadeButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
     m_pArcadeButton->Init(POS_ARCADE1,
                           [this]() { ArcadeModeCallback(); },
-                          FT_APPLE, Vec3(0, 0, 0), nullptr);
+                          Fruit::FruitType(FRUIT_ARCADE, false), Vec3(0, 0, 0), nullptr);
     m_pArcadeButton->m_TargetSize = m_pArcadeButton->m_TargetSize * ZEN_TARGET_SCALE;
     if (m_pArcadeButton->m_pFruitPiece) {
         m_pArcadeButton->m_pFruitPiece->scale =
@@ -393,17 +391,16 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     //             = (188, 32 + texW*(1-sa), 0)
     // At sa=1: panel at (188, 32). At sa=-2.5: offset is texW*3.5
     // above, so the panel slides DOWN from above.
+    // Mode_sensei panel — same pattern as DojoScreen's dojo_sensei:
+    // bottom-left position (-188, -32) with horizontal slide from left.
     if (s_TexModeSensei.IsValid()) {
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexModeSensei->m_Width + 1.0f,
             (float)s_TexModeSensei->m_Height + 1.0f,
             1.0f);
-        const float texW = (float)s_TexModeSensei->m_Width;
-        const float oneMinusSA = 1.0f - m_SecondaryAlpha;
-        const Vec3 offset = SLIDE_VEC_Y * (texW * oneMinusSA);
-        const Vec3 translate = offset - POS_BG_NEG;
-        mat.GlobalTranslate44(translate);
+        const float slideX = -(float)s_TexModeSensei->m_Width * (1.0f - m_SecondaryAlpha);
+        mat.GlobalTranslate44(Vec3(POS_BG.x + slideX, POS_BG.y, POS_BG.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
