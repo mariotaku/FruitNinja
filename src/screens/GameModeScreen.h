@@ -69,6 +69,8 @@ private:
     MenuButton* m_pClassicButton;    // +0xa0
     MenuButton* m_pZenButton;
     MenuButton* m_pArcadeButton;
+    MenuButton* m_pMultiplayerButton;  // +0xcc: online MP matchmaker
+                                       // (button exists but callback is stubbed)
 
     float m_ButtonDelay;             // +0xa4
     float m_SecondaryAlpha;          // +0xb4 (also drives Draw slide-in)
@@ -87,6 +89,10 @@ private:
 
     void CreateControls();
     void RemoveButtons();
+
+    // Sub-button callbacks — defunct / skipped but stubbed to keep
+    // binary layout/flow intact. See method bodies for details.
+    void MatchmakerCallback();   // defunct: opens online MP matchmaker (state 7)
     void DrawConnectTexture(const Vec3& pos);  // 0x0013f754
 
     // Sub-button callbacks (bound via std::function).

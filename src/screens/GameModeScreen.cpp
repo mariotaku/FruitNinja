@@ -132,6 +132,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pClassicButton(NULL)
     , m_pZenButton(NULL)
     , m_pArcadeButton(NULL)
+    , m_pMultiplayerButton(NULL)
     , m_ButtonDelay(-1.0f)
     , m_SecondaryAlpha(-2.5f)   // DAT_0013e5a0
     , m_FrameTimer(0.0f)         // DAT_0013e59c
@@ -217,17 +218,37 @@ void GameModeScreen::CreateControls() {
     m_pArcadeButton->m_LayerFlags = 0x80;
     game.hud->AddControl(m_pArcadeButton);
 
-    // --- Button 4: Multiplayer matchmaker (skipped — defunct network) ---
-    // Binary: banana fruit, arcade_mode.tex panel, RotateFacingUp.
-    // Port: no network so this button is not created.
+    // --- Button 4: Multiplayer matchmaker (DEFUNCT — OpenFeint/GameCenter) ---
+    // Binary: arcade_mode.tex panel, banana fruit, RotateFacingUp((-75, 1, -75)).
+    // Callback opens NetworkManager::OpenMatchmaker via state 7/8/9 flow.
+    // Port: button is created to preserve the 4-button layout, but its
+    // callback (MatchmakerCallback) is a no-op stub since online MP is
+    // defunct. User can still see/tap it, just nothing happens.
+    m_pMultiplayerButton = new MenuButton();
+    m_pMultiplayerButton->m_Texture = TexIdOf(s_TexArcadeMode);
+    m_pMultiplayerButton->size      = TexSizeOf(s_TexArcadeMode, 64.0f, 64.0f);
+    m_pMultiplayerButton->Init(POS_ARCADE2,
+                               [this]() { MatchmakerCallback(); },
+                               Fruit::FruitType(FRUIT_MP, false),
+                               Vec3(0, 0, 0), nullptr);
+    m_pMultiplayerButton->m_TargetSize = m_pMultiplayerButton->m_TargetSize * ZEN_TARGET_SCALE;
+    if (m_pMultiplayerButton->m_pFruitPiece) {
+        // Binary: fruit scale *= 0.75, then RotateFacingUp(false, (-75, 1, -75))
+        m_pMultiplayerButton->m_pFruitPiece->scale =
+            m_pMultiplayerButton->m_pFruitPiece->scale * 0.75f;
+        // TODO: Fruit::RotateFacingUp(fruit, false, Vec3(-75, 1, -75))
+    }
+    m_pMultiplayerButton->m_LayerFlags = 0x80;
+    game.hud->AddControl(m_pMultiplayerButton);
 
     m_bButtonsCreated = true;
 }
 
 void GameModeScreen::RemoveButtons() {
-    if (m_pClassicButton) { m_pClassicButton->SetPendingRemoval(); m_pClassicButton = NULL; }
-    if (m_pZenButton)     { m_pZenButton->SetPendingRemoval();     m_pZenButton     = NULL; }
-    if (m_pArcadeButton)  { m_pArcadeButton->SetPendingRemoval();  m_pArcadeButton  = NULL; }
+    if (m_pClassicButton)     { m_pClassicButton->SetPendingRemoval();     m_pClassicButton     = NULL; }
+    if (m_pZenButton)         { m_pZenButton->SetPendingRemoval();         m_pZenButton         = NULL; }
+    if (m_pArcadeButton)      { m_pArcadeButton->SetPendingRemoval();      m_pArcadeButton      = NULL; }
+    if (m_pMultiplayerButton) { m_pMultiplayerButton->SetPendingRemoval(); m_pMultiplayerButton = NULL; }
     m_bButtonsCreated = false;
 }
 
@@ -458,4 +479,15 @@ void GameModeScreen::ZenModeCallback() {
 void GameModeScreen::ArcadeModeCallback() {
     m_State = 5;
     game.gameMode = 2;
+}
+
+// Matches the 4th button callback (multiplayer matchmaker entry).
+// Binary: sets m_State = 7 which begins the OpenFeint matchmaker fade
+// sequence (states 7→8→9), ending with NetworkManager::OpenMatchmaker
+// and NetworkManager::ConnectGameCenter.
+// Port: defunct — no network backend. Stub to a no-op so the button
+// exists in the layout but doesn't transition anywhere.
+void GameModeScreen::MatchmakerCallback() {
+    // TODO: if network is ever restored, set m_State = 7 and implement
+    // states 7/8/9 in Update (currently they fall through to state 1).
 }
