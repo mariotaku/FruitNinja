@@ -47,8 +47,8 @@ static GLuint TexId(const SmartPtr<Mortar::Texture>& tex) {
 }
 
 // Button positions (verified from read_memory, docs/screens/main.md)
-static const Vec3 POS_PLAY_BUTTON(16.0f, -66.0f, -50.0f);
-static const Vec3 POS_DOJO_BUTTON(-144.0f, -65.0f, -50.0f);
+static const Vec3 POS_PLAY_BUTTON(16.0f, -66.0f, 0.0f);
+static const Vec3 POS_DOJO_BUTTON(-144.0f, -65.0f, 0.0f);
 static const Vec3 POS_QUIT(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_MORE_GAMES(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
@@ -712,12 +712,16 @@ void MainScreen::CreatePlayDojo() {
         [this](HUDControl* c) { ButtonDeleted(c); };
     game.hud->AddControl(pPlayButton);
 
-    // Dojo button: (-144.0, -65.0, -50.0), fruitType=9 (mango)
+    // Dojo button: (-144.0, -65.0, 0.0). Binary calls
+    // Fruit::FruitType("mango", false) at runtime — resolves to 9
+    // in the current fruitlist, but use the runtime call per CLAUDE.md
+    // "no shortcuts or abbreviations" rule.
     pDojoButton = new MenuButton();
     pDojoButton->m_Texture = TexId(m_TexDojoIcon);
     pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
     pDojoButton->Init(POS_DOJO_BUTTON,
-        [this]() { AboutCallback(); }, 9, Vec3(0,0,0), nullptr);
+        [this]() { AboutCallback(); },
+        Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
     pDojoButton->m_LayerFlags = 8;
     pDojoButton->m_RemoveCallback =
         [this](HUDControl* c) { ButtonDeleted(c); };
