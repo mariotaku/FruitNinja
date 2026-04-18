@@ -27,18 +27,20 @@
 // --- Binary constants (resolved from read_memory) ---
 
 // Button positions (offline layout only — P2P variants skipped)
-static const Vec3 POS_CLASSIC( 195.0f, -110.0f, 0.0f);  // DAT_0013ea04/08/0c
-static const Vec3 POS_ZEN    ( -70.0f,   71.0f, 0.0f);  // DAT_0013ea18/1c/0c
-static const Vec3 POS_ARCADE1(  88.0f,   48.0f, 0.0f);  // DAT_0013ea58/5c/60
-static const Vec3 POS_ARCADE2(  19.0f,  -76.0f, 0.0f);  // offline MP button pos
+// Binary button order: back(1) / classic(2) / zen(3) / arcade(4)
+static const Vec3 POS_BACK   ( 195.0f, -110.0f, 0.0f);  // DAT_0013ea04/08/0c — button 1
+static const Vec3 POS_CLASSIC( -70.0f,   71.0f, 0.0f);  // DAT_0013ea18/1c/0c — button 2
+static const Vec3 POS_ZEN    (  88.0f,   48.0f, 0.0f);  // DAT_0013ea58/5c/60 — button 3
+static const Vec3 POS_ARCADE (  19.0f,  -76.0f, 0.0f);  // DAT_0013ea__/__   — button 4
 
 // Button scale multipliers
-static const float CLASSIC_TARGET_SCALE = 0.75f;  // DAT_0013e59c
-static const float CLASSIC_FRUIT_SCALE  = 0.75f;
-static const float ZEN_TARGET_SCALE     = 0.90f;  // DAT_0013ea20
-static const float ZEN_FRUIT_SCALE      = 0.95f;  // DAT_0013ea24
-static const float ZEN_HITBOUNDS_SCALE  = 0.85f;  // DAT_0013ea28
-static const float ARCADE_FRUIT_SCALE   = 0.90f;  // DAT_0013ecac
+static const float BACK_TARGET_SCALE    = 0.75f;  // DAT_0013e59c — button 1 m_TargetSize
+static const float BACK_FRUIT_SCALE     = 0.75f;  // button 1 fruit scale
+static const float CLASSIC_TARGET_SCALE = 0.90f;  // DAT_0013ea20 — button 2 m_TargetSize
+static const float CLASSIC_FRUIT_SCALE  = 0.95f;  // DAT_0013ea24 — button 2 fruit scale
+static const float SHARED_TARGET_SCALE  = 0.85f;  // DAT_0013ea28 — classic * 0.85 -> zen/arcade
+static const float ZEN_FRUIT_SCALE      = 0.90f;  // DAT_0013ecac — button 3 fruit scale
+static const float ARCADE_FRUIT_SCALE   = 0.75f;  // button 4 fruit scale
 
 // Update constants
 static const float ALPHA_LERP_STEP  = 0.15f;    // DAT_0013f458
@@ -60,12 +62,13 @@ static const Vec3 POS_CONNECT(-40.0f,  -53.0f, 0.0f);    // DAT_0013fb94/98
 static const Vec3 POS_LOGO_SRC( 314.0f, 14.0f, 10.0f);   // offline
 static const Vec3 POS_LOGO_DST( 314.0f, 29.0f, 10.0f);   // offline
 
-// Fruit type name strings (binary: DAT_0013ea50 = "watermelon",
-// DAT_0013ecc4 = "apple_red", DAT_0013ecd8 = "banana").
-// Resolved at runtime via Fruit::FruitType() — matches binary call.
-static const char* FRUIT_ZEN    = "watermelon";
-static const char* FRUIT_ARCADE = "apple_red";
-static const char* FRUIT_MP     = "banana";
+// Fruit type name strings resolved at runtime via Fruit::FruitType() — matches binary call.
+// Binary: DAT_0013ea50 = "watermelon" (button 2 classic),
+//         DAT_0013ecc4 = "apple_red"  (button 3 zen),
+//         DAT_0013ecd8 = "banana"     (button 4 arcade).
+static const char* FRUIT_CLASSIC = "watermelon";
+static const char* FRUIT_ZEN     = "apple_red";
+static const char* FRUIT_ARCADE  = "banana";
 
 // SinIdx scale for DrawConnectTexture pulsation
 static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
@@ -136,10 +139,10 @@ void GameModeScreen::UnLoadContent() {
 // ===================================================================
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     : game(g)
+    , m_pBackButton(NULL)
     , m_pClassicButton(NULL)
     , m_pZenButton(NULL)
     , m_pArcadeButton(NULL)
-    , m_pMultiplayerButton(NULL)
     , m_ButtonDelay(-1.0f)
     , m_SecondaryAlpha(-2.5f)   // DAT_0013e5a0
     , m_FrameTimer(0.0f)         // DAT_0013e59c
@@ -166,100 +169,113 @@ void GameModeScreen::Release() {
 
 // ===================================================================
 // Matches GameModeScreen::CreateControls @ 0x0013e764
-// Binary creates 4 buttons. Port creates 3 (skips MP matchmaker).
+// Binary creates 4 buttons in this order:
+//   Back(1)    : construct -> Init -> m_bRemovalPending=1 -> AddControl
+//                -> m_TargetSize *= 0.75 -> fruitPiece->scale *= 0.75
+//   Classic(2) : construct -> ResetTutePos -> Init -> AddControl
+//                -> m_TargetSize *= 0.90 -> fruitPiece->scale *= 0.95
+//                -> sharedVec = classicBtn->m_TargetSize * 0.85
+//   Zen(3)     : construct -> Init -> m_TargetSize = sharedVec
+//                -> fruitPiece->scale *= 0.90 -> AddControl
+//   Arcade(4)  : construct -> Init -> m_TargetSize = sharedVec
+//                -> fruitPiece->scale *= 0.75 -> RotateFacingUp(false,(0,1,0))
+//                -> AddControl
 // ===================================================================
 void GameModeScreen::CreateControls() {
+    // Port specific: guards not in binary.
     if (m_bButtonsCreated) return;
     if (!game.hud) return;
 
-    // --- Button 1: Classic mode ---
+    // --- Button 1: BACK (back_icon.tex, bomb fruit, QuitCallback) ---
     // Binary texture: Game+0x17c = back_icon.tex (same global slot used
     // by DojoScreen's back/play button).
-    // Binary fruit type: **(int**)(GOT+0x7060) = bomb threshold = FruitInfo_GetCount().
+    // Binary fruit type: FruitInfo_GetCount() (bomb threshold index).
+    m_pBackButton = new MenuButton();
+    m_pBackButton->m_Texture = TexIdOf(s_TexBackIcon);
+    m_pBackButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
+    m_pBackButton->Init(POS_BACK,
+                        [this]() { QuitCallback(); },
+                        FruitInfo_GetCount(), Vec3(0, 0, 0), nullptr);
+    // Binary (0x0013e86a): writes 1 to MenuButton+0x138 (m_bRemovalPending
+    // in the current port, but binary semantic is "auto-slice on next
+    // m_bFrameDirty frame" — NOT fade-out-then-remove as the port's
+    // MenuButton::Update currently implements). Omitted for now: setting
+    // this flag with the port's current semantics would make the back
+    // button vanish on spawn. Restore once MenuButton::Update is reworked
+    // to match the binary's force-slice semantics.
+    game.hud->AddControl(m_pBackButton);
+    m_pBackButton->m_TargetSize = m_pBackButton->m_TargetSize * BACK_TARGET_SCALE;
+    if (m_pBackButton->m_pFruitPiece) {
+        m_pBackButton->m_pFruitPiece->scale =
+            m_pBackButton->m_pFruitPiece->scale * BACK_FRUIT_SCALE;
+    }
+
+    // --- Button 2: CLASSIC (classic.tex, watermelon, ClassicModeCallback) ---
+    // Binary: ResetTutePos is called on THIS button (not Zen).
     m_pClassicButton = new MenuButton();
-    m_pClassicButton->m_Texture = TexIdOf(s_TexBackIcon);
-    m_pClassicButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
+    m_pClassicButton->m_Texture = TexIdOf(s_TexClassic);
+    m_pClassicButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
     m_pClassicButton->Init(POS_CLASSIC,
                            [this]() { ClassicModeCallback(); },
-                           FruitInfo_GetCount(), Vec3(0, 0, 0), nullptr);
+                           Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0), nullptr);
+    if (game.pTutorialCtrl) {
+        game.pTutorialCtrl->ResetTutePos(m_pClassicButton);
+    }
+    game.hud->AddControl(m_pClassicButton);
     m_pClassicButton->m_TargetSize = m_pClassicButton->m_TargetSize * CLASSIC_TARGET_SCALE;
     if (m_pClassicButton->m_pFruitPiece) {
         m_pClassicButton->m_pFruitPiece->scale =
             m_pClassicButton->m_pFruitPiece->scale * CLASSIC_FRUIT_SCALE;
     }
-    m_pClassicButton->m_LayerFlags = 0x80;
-    game.hud->AddControl(m_pClassicButton);
+    // Binary computes classicBtn->m_TargetSize * 0.85 and stores to a module-level
+    // global. Zen and Arcade buttons receive this as an absolute assignment (NOT
+    // a multiply of their own size).
+    Vec3 sharedTargetSize = m_pClassicButton->m_TargetSize * SHARED_TARGET_SCALE;
 
-    // --- Button 2: Zen mode (uses classic.tex panel, watermelon fruit) ---
-    // Binary: TutorialControl::ResetTutePos(game.tutorialCtrl, zenBtn)
+    // --- Button 3: ZEN (mode_2.tex, apple_red, ZenModeCallback) ---
+    // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
     m_pZenButton = new MenuButton();
-    m_pZenButton->m_Texture = TexIdOf(s_TexClassic);
-    m_pZenButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
+    m_pZenButton->m_Texture = TexIdOf(s_TexMode2);
+    m_pZenButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
     m_pZenButton->Init(POS_ZEN,
                        [this]() { ZenModeCallback(); },
                        Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0), nullptr);
-    if (game.pTutorialCtrl) {
-        game.pTutorialCtrl->ResetTutePos(m_pZenButton);
-    }
-    m_pZenButton->m_TargetSize = m_pZenButton->m_TargetSize * ZEN_TARGET_SCALE;
+    m_pZenButton->m_TargetSize = sharedTargetSize;
     if (m_pZenButton->m_pFruitPiece) {
         m_pZenButton->m_pFruitPiece->scale =
             m_pZenButton->m_pFruitPiece->scale * ZEN_FRUIT_SCALE;
     }
-    m_pZenButton->m_HitBoundsScale = m_pZenButton->m_HitBoundsScale * ZEN_HITBOUNDS_SCALE;
-    m_pZenButton->m_LayerFlags = 0x80;
     game.hud->AddControl(m_pZenButton);
 
-    // --- Button 3: Arcade mode (uses mode_2.tex panel, apple fruit) ---
+    // --- Button 4: ARCADE (arcade_mode.tex, banana, ArcadeModeCallback) ---
+    // Binary: scale -> RotateFacingUp(false, Vec3(0,1,0)) -> AddControl.
+    // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
+    // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
     m_pArcadeButton = new MenuButton();
-    m_pArcadeButton->m_Texture = TexIdOf(s_TexMode2);
-    m_pArcadeButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
-    m_pArcadeButton->Init(POS_ARCADE1,
+    m_pArcadeButton->m_Texture = TexIdOf(s_TexArcadeMode);
+    m_pArcadeButton->size      = TexSizeOf(s_TexArcadeMode, 64.0f, 64.0f);
+    m_pArcadeButton->Init(POS_ARCADE,
                           [this]() { ArcadeModeCallback(); },
-                          Fruit::FruitType(FRUIT_ARCADE, false), Vec3(0, 0, 0), nullptr);
-    m_pArcadeButton->m_TargetSize = m_pArcadeButton->m_TargetSize * ZEN_TARGET_SCALE;
+                          Fruit::FruitType(FRUIT_ARCADE, false),
+                          Vec3(0, 0, 0), nullptr);
+    m_pArcadeButton->m_TargetSize = sharedTargetSize;
     if (m_pArcadeButton->m_pFruitPiece) {
         m_pArcadeButton->m_pFruitPiece->scale =
             m_pArcadeButton->m_pFruitPiece->scale * ARCADE_FRUIT_SCALE;
-    }
-    m_pArcadeButton->m_LayerFlags = 0x80;
-    game.hud->AddControl(m_pArcadeButton);
-
-    // --- Button 4: Multiplayer matchmaker (DEFUNCT — OpenFeint/GameCenter) ---
-    // Binary: arcade_mode.tex panel, banana fruit, RotateFacingUp((-75, 1, -75)).
-    // Callback opens NetworkManager::OpenMatchmaker via state 7/8/9 flow.
-    // Port: button is created to preserve the 4-button layout, but its
-    // callback (MatchmakerCallback) is a no-op stub since online MP is
-    // defunct. User can still see/tap it, just nothing happens.
-    m_pMultiplayerButton = new MenuButton();
-    m_pMultiplayerButton->m_Texture = TexIdOf(s_TexArcadeMode);
-    m_pMultiplayerButton->size      = TexSizeOf(s_TexArcadeMode, 64.0f, 64.0f);
-    m_pMultiplayerButton->Init(POS_ARCADE2,
-                               [this]() { MatchmakerCallback(); },
-                               Fruit::FruitType(FRUIT_MP, false),
-                               Vec3(0, 0, 0), nullptr);
-    m_pMultiplayerButton->m_TargetSize = m_pMultiplayerButton->m_TargetSize * ZEN_TARGET_SCALE;
-    if (m_pMultiplayerButton->m_pFruitPiece) {
-        // Binary: fruit scale *= 0.75, then RotateFacingUp(false, Vec3(0,1,0))
-        m_pMultiplayerButton->m_pFruitPiece->scale =
-            m_pMultiplayerButton->m_pFruitPiece->scale * 0.75f;
-        // Binary: Fruit::RotateFacingUp(false, Vec3(0,1,0)) -- pure Y-axis spin.
-        // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
-        m_pMultiplayerButton->m_pFruitPiece->RotateFacingUp(
+        m_pArcadeButton->m_pFruitPiece->RotateFacingUp(
             false,
             Vec3(0.0f, 1.0f, 0.0f));
     }
-    m_pMultiplayerButton->m_LayerFlags = 0x80;
-    game.hud->AddControl(m_pMultiplayerButton);
+    game.hud->AddControl(m_pArcadeButton);
 
     m_bButtonsCreated = true;
 }
 
 void GameModeScreen::RemoveButtons() {
-    if (m_pClassicButton)     { m_pClassicButton->SetPendingRemoval();     m_pClassicButton     = NULL; }
-    if (m_pZenButton)         { m_pZenButton->SetPendingRemoval();         m_pZenButton         = NULL; }
-    if (m_pArcadeButton)      { m_pArcadeButton->SetPendingRemoval();      m_pArcadeButton      = NULL; }
-    if (m_pMultiplayerButton) { m_pMultiplayerButton->SetPendingRemoval(); m_pMultiplayerButton = NULL; }
+    if (m_pBackButton)    { m_pBackButton->SetPendingRemoval();    m_pBackButton    = NULL; }
+    if (m_pClassicButton) { m_pClassicButton->SetPendingRemoval(); m_pClassicButton = NULL; }
+    if (m_pZenButton)     { m_pZenButton->SetPendingRemoval();     m_pZenButton     = NULL; }
+    if (m_pArcadeButton)  { m_pArcadeButton->SetPendingRemoval();  m_pArcadeButton  = NULL; }
     m_bButtonsCreated = false;
 }
 
@@ -471,7 +487,36 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     }
 }
 
-// --- Sub-button callbacks ---
+// --- Button callbacks ---
+
+// Matches GameModeScreen::QuitCallback @ 0x0013F5E0.
+// Plays "menu-bomb" SFX, sets m_State = 0xE (back-out), detaches back
+// button's fruit piece and flings it up-right, then resets tutorial arrow.
+void GameModeScreen::QuitCallback() {
+    // 1. SFX
+    if (game.pGameSound) {
+        game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    }
+
+    // 2. Enter back-out state
+    m_State = 0xe;
+
+    // 3. Fling back button's fruit piece (binary: detach + random vel).
+    // Binary uses RandFloat5_GameOverScreen2() (a [0,1) helper shared with
+    // DojoScreen::PlayCallback). Port substitutes rand()/RAND_MAX.
+    if (m_pBackButton && m_pBackButton->m_pFruitPiece) {
+        Fruit* fruit = m_pBackButton->m_pFruitPiece;
+        fruit->m_bDetached = 1;
+        float rx = (float)rand() / (float)RAND_MAX;
+        float ry = (float)rand() / (float)RAND_MAX;
+        fruit->vel = Vec3(rx + 5.0f, -ry, 0.0f);
+    }
+
+    // 4. Clear any active tutorial arrow
+    if (game.pTutorialCtrl) {
+        game.pTutorialCtrl->ResetTutePos(nullptr);
+    }
+}
 
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
@@ -490,15 +535,4 @@ void GameModeScreen::ZenModeCallback() {
 void GameModeScreen::ArcadeModeCallback() {
     m_State = 5;
     game.gameMode = 2;
-}
-
-// Matches the 4th button callback (multiplayer matchmaker entry).
-// Binary: sets m_State = 7 which begins the OpenFeint matchmaker fade
-// sequence (states 7→8→9), ending with NetworkManager::OpenMatchmaker
-// and NetworkManager::ConnectGameCenter.
-// Port: defunct — no network backend. Stub to a no-op so the button
-// exists in the layout but doesn't transition anywhere.
-void GameModeScreen::MatchmakerCallback() {
-    // TODO: if network is ever restored, set m_State = 7 and implement
-    // states 7/8/9 in Update (currently they fall through to state 1).
 }
