@@ -414,28 +414,54 @@ void MainScreen::Update(float dt) {
         pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
     }
 
-    // Toggle button positioning (matches docs: end of Update, all states)
+    // Compute the state-dependent "elapsedTime" / pause driver used by
+    // BOTH the toggle positioning block and UpdateScreenElements below.
+    // Binary: at the top of Update, pTVar13 = -m_CameraTransition. The
+    // OUT switch cases (0xe/0xf/3/4) and SLIDE_IN overwrite pTVar13 with
+    // their decayed/growing m_Timer2 before reaching this point. All
+    // other states retain pTVar13 = -m_CameraTransition.
+    float elapsedTime;
+    switch (m_State) {
+    case STATE_DOJO_WAIT_A:
+    case STATE_DOJO_WAIT_B:
+    case STATE_DOJO_WAIT_C:
+    case STATE_DOJO_WAIT_D:
+    case STATE_MODE_SELECT:
+    case STATE_MODE_SELECT_2:
+    case STATE_SLIDE_IN:
+        // OUT (m_Timer2 decays 1->0) or SLIDE_IN (m_Timer2 lerps 0->1).
+        elapsedTime = m_Timer2;
+        break;
+    default:
+        elapsedTime = -m_CameraTransition;  // 0 -> +1 as camera zooms in
+        break;
+    }
+
+    // Toggle button positioning.
+    // Binary: pauseAmount = clamp(pTVar13 + GetPauseAmount(), 0, 1)
+    // The port's earlier version used fabsf(m_CameraTransition) which
+    // flipped -1 -> +1 and forced slideOffset=0 during OUT, so the
+    // toggles stayed on-screen while blurry_backing slid off. Using the
+    // routed elapsedTime (which tracks m_Timer2 during OUT/SLIDE_IN)
+    // lets the toggles slide up with blurry_backing as the screen
+    // leaves. GetPauseAmount() stubbed at 0 (no pause in main menu).
     if (pSoundToggle && pMusicToggle) {
         pSoundToggle->pos.y = 135.5f;
         pMusicToggle->pos.y = 135.5f;
 
-        if (m_CameraTransition <= 0.0f) {
-            // Camera zoomed in — normal positions
-            pSoundToggle->pos.x = 216.0f;
-            pMusicToggle->pos.x = 176.0f;
-        } else {
-            // Camera transitioning out — slide to edges
+        // Binary x-flip: pTVar13 <= 0 -> (20, -20); else -> (216, 176)
+        if (elapsedTime <= 0.0f) {
             pSoundToggle->pos.x = 20.0f;
             pMusicToggle->pos.x = -20.0f;
+        } else {
+            pSoundToggle->pos.x = 216.0f;
+            pMusicToggle->pos.x = 176.0f;
         }
 
-        // Docs: pauseAmount = clamp(cameraTransition + GetPauseAmount(), 0, 1)
-        // m_CameraTransition lerps 0 → -1 during zoom-in. Use abs to get 0→1 range.
-        float pauseAmount = fabsf(m_CameraTransition);
+        float pauseAmount = elapsedTime;                 // + GetPauseAmount() (=0 stub)
+        if (pauseAmount < 0.0f) pauseAmount = 0.0f;
         if (pauseAmount > 1.0f) pauseAmount = 1.0f;
 
-        // slideOffset: when pauseAmount=1 (fully zoomed), offset=0 (on screen)
-        //              when pauseAmount=0 (not zoomed), offset=size.y*2 (off screen)
         float slideOffset = size.y * 2.0f * (1.0f - pauseAmount);
         pSoundToggle->m_bActive = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
         pMusicToggle->m_bActive = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
@@ -443,13 +469,7 @@ void MainScreen::Update(float dt) {
         pMusicToggle->pos.y += slideOffset;
     }
 
-    // Update logo animation
-    // Original asm at 0x14c1e6-0x14c1f2:
-    //   s0 = s17 = dt (saved at 0x14b296 from Update's float param)
-    //   s1 = s16 = -s18 = -(Game+0x0c) (negated at 0x14b52a)
-    // So: UpdateScreenElements(cameraTransition=dt, elapsedTime=-(Game+0x0c))
-    float negCameraTransition = -m_CameraTransition;  // -(Game+0x0c): 0→+1 as camera zooms
-    UpdateScreenElements(dt, negCameraTransition);
+    UpdateScreenElements(dt, elapsedTime);
 }
 
 // Helper: setup world matrix for a textured quad at given position
