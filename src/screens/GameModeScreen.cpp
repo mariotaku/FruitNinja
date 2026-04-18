@@ -78,6 +78,7 @@ SmartPtr<Mortar::Texture> GameModeScreen::s_TexMode2;
 SmartPtr<Mortar::Texture> GameModeScreen::s_TexArcadeMode;
 SmartPtr<Mortar::Texture> GameModeScreen::s_TexComingSoon;
 SmartPtr<Mortar::Texture> GameModeScreen::s_TexZenSign;
+SmartPtr<Mortar::Texture> GameModeScreen::s_TexBackIcon;
 
 static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
@@ -109,6 +110,11 @@ void GameModeScreen::LoadContent() {
         s_TexComingSoon = Mortar::TextureManager::LoadLocalisedTexture("coming_soon.tex");
     if (!s_TexZenSign.IsValid())
         s_TexZenSign    = Mortar::TextureManager::LoadLocalisedTexture("zen_sign.tex");
+    // Port specific: back_icon.tex. Binary reads this from Game+0x17c
+    // (shared slot also used by DojoScreen's play/back button). Load
+    // it locally here until the Game+0x17c field is ported.
+    if (!s_TexBackIcon.IsValid())
+        s_TexBackIcon   = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 }
 
 // ===================================================================
@@ -122,6 +128,7 @@ void GameModeScreen::UnLoadContent() {
     s_TexArcadeMode.SetNull();
     s_TexComingSoon.SetNull();
     s_TexZenSign.SetNull();
+    s_TexBackIcon.SetNull();
 }
 
 // ===================================================================
@@ -166,12 +173,12 @@ void GameModeScreen::CreateControls() {
     if (!game.hud) return;
 
     // --- Button 1: Classic mode ---
-    // Binary uses Game+0x17c texture (not in port) — fall back to mode_sensei
-    // Binary classic fruit type: **(int**)(GOT + 0x7060) — bomb threshold,
-    // same global FruitInfo_GetCount() returns.
+    // Binary texture: Game+0x17c = back_icon.tex (same global slot used
+    // by DojoScreen's back/play button).
+    // Binary fruit type: **(int**)(GOT+0x7060) = bomb threshold = FruitInfo_GetCount().
     m_pClassicButton = new MenuButton();
-    m_pClassicButton->m_Texture = TexIdOf(s_TexModeSensei);
-    m_pClassicButton->size      = TexSizeOf(s_TexModeSensei, 64.0f, 64.0f);
+    m_pClassicButton->m_Texture = TexIdOf(s_TexBackIcon);
+    m_pClassicButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
     m_pClassicButton->Init(POS_CLASSIC,
                            [this]() { ClassicModeCallback(); },
                            FruitInfo_GetCount(), Vec3(0, 0, 0), nullptr);
