@@ -32,7 +32,7 @@ static const float STATE_0E_DECAY      = 0.85f;
 static const float STATE_0E_THRESHOLD  = 0.25f;
 static const float STATE_2_DECAY       = 0.75f;
 static const float STATE_8_LERP_RATE     = 0.125f;
-static const float STATE_8_LERP_THRESHOLD = 0.9998f;  // DAT_0014bf28
+static const float STATE_8_LERP_THRESHOLD = 0.999f;   // DAT_0014bf28 = 0x3f7fbe77
 static const float STATE_8_DURATION      = 1.5f;
 static const float STATE_8_RESET_TIMER   = 0.15f;     // DAT_0014bf2c (was -0.85)
 static const float BOUNCE_LOSS         = -0.25f;
@@ -254,12 +254,14 @@ void MainScreen::Update(float dt) {
     case STATE_SLIDE_IN: {
         // Binary @ ~0x0014beec, two-phase lerp + pos.y animation
         // (shared LAB_0014c166 formula with states 0xe/0xf/3/4/0x15/0x16).
-        //   if (m_Timer2 <= 0.9998) {
+        //   if (m_Timer2 <= 0.999) {
         //       m_Timer2 += (1.0 - m_Timer2) * 0.125     // lerp toward 1
         //       posAlpha  = m_Timer2
         //   } else {
         //       m_Timer2 += dt                            // hold + tick
-        //       if (m_Timer2 > 1.5) { reset + CAMERA_ZOOM }
+        //       if (m_Timer2 > 1.5) {
+        //           m_Timer2 = 0.15; m_State = CAMERA_ZOOM; m_field108 = 0
+        //       }
         //       posAlpha  = 1.0                            // held at final
         //   }
         //   pos.y = (size.y + 320 - 2*size.y*posAlpha) * 0.5
@@ -272,7 +274,7 @@ void MainScreen::Update(float dt) {
             if (m_Timer2 > STATE_8_DURATION) {
                 m_Timer2 = STATE_8_RESET_TIMER;
                 m_State = STATE_CAMERA_ZOOM;
-                m_StateTimer = 0.0f;
+                // Binary does NOT reset m_StateTimer here; removed.
             }
             posAlpha = 1.0f;
         }
