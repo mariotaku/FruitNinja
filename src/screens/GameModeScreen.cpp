@@ -59,8 +59,13 @@ static const float FRAMETIMER_RATE  = 0.15f;    // DAT_0013f48c
 static const Vec3 POS_BG    (-188.0f,  -32.0f, 0.0f);    // DAT_0013fb84/88
 static const Vec3 POS_BORDER(-115.0f, -130.0f, 0.0f);    // DAT_0013fb8c/90
 static const Vec3 POS_CONNECT(-40.0f,  -53.0f, 0.0f);    // DAT_0013fb94/98
-static const Vec3 POS_LOGO_SRC( 314.0f, 14.0f, 10.0f);   // offline
-static const Vec3 POS_LOGO_DST( 314.0f, 29.0f, 10.0f);   // offline
+// Zen sign lerp endpoints (offline branch — network-gated online values
+// at DAT_0013fba0/fba4 skipped).
+//   SRC = resting pos at alpha=1 (DAT_0013fb9c + literals 14.0, 10.0)
+//   DST = start pos at alpha=0  (DAT_0013fba8 + literals 29.0, 10.0)
+// Binary lerp: pos = src + (src - dst) * alpha
+static const Vec3 POS_LOGO_SRC( 314.0f, 14.0f, 10.0f);   // DAT_0013fb9c
+static const Vec3 POS_LOGO_DST( 194.0f, 29.0f, 10.0f);   // DAT_0013fba8
 
 // Fruit type name strings resolved at runtime via Fruit::FruitType() — matches binary call.
 // Binary: DAT_0013ea50 = "watermelon" (button 2 classic),
@@ -467,14 +472,18 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
 
     // --- 4. Logo panel (zen_sign.tex — slot 8, NOT mode_sensei) ---
     // Binary DAT_0013fbc0 = 0x76f8 → BSS slot for zen_sign.tex.
-    // Lerps from SRC to DST by m_TransitionAlpha.
+    // Binary lerp (0x0013f8c8 tail): pos = SRC + (SRC - DST) * alpha.
+    // At alpha=0: pos = SRC (resting position). At alpha=1: pos moves
+    // further away from DST past SRC (the slide-away-on-fade-in curve).
+    // The port was using a standard lerp src→dst which reversed the
+    // slide direction.
     if (s_TexZenSign.IsValid()) {
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexZenSign->m_Width + 1.0f,
             (float)s_TexZenSign->m_Height + 1.0f,
             1.0f);
-        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
+        Vec3 logoPos = POS_LOGO_SRC + (POS_LOGO_SRC - POS_LOGO_DST) * m_TransitionAlpha;
         mat.GlobalTranslate44(logoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
