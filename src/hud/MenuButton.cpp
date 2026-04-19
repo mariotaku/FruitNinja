@@ -45,7 +45,7 @@ static float RandScaled(float s) {
     return ((float)rand() / (float)RAND_MAX) * s;
 }
 
-static void FN_ClearMenuItems() {
+void FN_ClearMenuItems() {
     ActorManager* am = ActorManager::GetInstance();
     if (!am) return;
 
