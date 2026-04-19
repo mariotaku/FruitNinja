@@ -388,6 +388,13 @@ void DojoScreen::PlayCallback() {
     }
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)NULL);
+
+    // Port specific: cascade-release Shop/About fruits so they fly off
+    // and their buttons shrink alongside the back-bomb. Binary doesn't
+    // do this on PlayCallback (ClearMenuItems only fires from fruit-
+    // slice paths, not bomb-hit paths). Matches the same port-specific
+    // deviation applied to GameModeScreen::QuitCallback.
+    FN_ClearMenuItems();
 }
 
 // ===================================================================
