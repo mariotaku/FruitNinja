@@ -177,15 +177,20 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
     }
 
     // --- 3. Optional secondary texture (e.g. dojo.tex) ---
-    // Binary (Ghidra): pos = SLIDE_VEC * 55 * (1-alpha) - secondaryTexPos
-    // with secondaryTexPos = (-184, -136, 0), which computes to
-    // (+184, +136+slide, 0) — top-right in landscape, overlapping
-    // sml_title. But the real game shows dojo.tex bottom-left. The
-    // binary's operator- sign is flipped in the decompile (common
-    // Ghidra artefact with Vec3 out-param operators); treating it as
-    // `secondaryTexPos + SLIDE_VEC*slide*(1-alpha)` matches the
-    // primary texture's additive pattern above AND lands the
-    // decoration at (-184, -136) = bottom-left.
+    // Binary (register trace at 0x00130542, verified via asm disassembly
+    // not Ghidra decompile):
+    //   r0 = out, r1 = secondaryTexPos (this), r2 = SLIDE_VEC*55*(1-alpha)
+    //   -> result = r1 - r2 = secondaryTexPos - SLIDE_VEC*55*(1-alpha)
+    // Ghidra renders this as `operator-(&out, param_4)` which looks like
+    // the slide term minus secondaryTexPos, but that's a struct-return
+    // artefact: in ARM AAPCS the hidden out-ptr is r0, `this` is r1, and
+    // rhs is r2. The primary sml_title.tex block above uses operator+
+    // on the same slide-vec multiplier, so the two blocks have opposite
+    // signs intentionally -- sml_title slides up out of frame, dojo.tex
+    // slides down out of frame.
+    //
+    // At alpha=1 (settled): translate = secondaryTexPos = (-184, -136).
+    // At alpha=0 (slid off): translate = (-184, -191).
     if (secondaryTex.IsValid()) {
         secondaryTex->Set();
         glEnable(GL_BLEND);
@@ -196,7 +201,11 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
             (float)secondaryTex->m_Width + 1.0f,
             (float)secondaryTex->m_Height + 1.0f,
             1.0f);
-        Vec3 secPos = secondaryTexPos +
+        // At alpha=1 (on-screen rest): secPos = secondaryTexPos.
+        // At alpha=0 (slide-out): secPos moves DOWN by SEC_SLIDE_Y
+        // (subtracting a +Y slide vector), matching the visual where
+        // the bottom-left decoration slides further down off-screen.
+        Vec3 secPos = secondaryTexPos -
                       SLIDE_VEC * (SEC_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(secPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
