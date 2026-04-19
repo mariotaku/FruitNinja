@@ -423,6 +423,15 @@ void MenuButton::Update(float dt) {
         }
     }
 
+    // If the entity was deactivated externally (e.g. FN_ClearMenuItems
+    // disables a bomb before MenuButton could detect the slash), force
+    // the detach here so the shrink path below can run.
+    if (m_pEntity && !m_pEntity->IsActive()) {
+        m_pEntity = NULL;
+        m_pFruitPiece = NULL;
+        if (m_FadeCounter == 0) m_FadeCounter = 0x3ffc;
+    }
+
     if (m_pEntity == NULL && m_FadeCounter > 0) {
         // Shrink-to-disappearance phase. Binary DAT_0014e97c = 108543.0
         // is the per-second decrement rate; over a 60Hz tick that's
