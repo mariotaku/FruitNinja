@@ -346,6 +346,41 @@ void MenuButton::Update(float dt) {
             // Pin entity to button centre.
             m_pEntity->pos = pos;
             m_pEntity->vel = Vec3(0, 0, 0);
+
+            // Snapshot the entity's base scale on the first frame once
+            // CreateControls' per-button fruit->scale multiplier has
+            // already been applied. m_HitBoundsScale starts at (0,0,0)
+            // from MenuButton::Init (hitBounds arg is Vec3(0,0,0)); on
+            // the first Update frame we capture m_pEntity->scale into
+            // it, then per-frame scale the entity by the grow-in ratio.
+            // Matches binary MenuButton::Update @ 0x0014e614:
+            //   if (m_HitBoundsScale.x == 0.0) m_HitBoundsScale = entity->scale
+            //   entity->scale = m_HitBoundsScale * (size.x / m_TargetSize.x)
+            if (m_HitBoundsScale.x == 0.0f) {
+                m_HitBoundsScale = m_pEntity->scale;
+            }
+
+            // Grow-in animation (binary MenuButton::Update @ 0x0014e614).
+            // m_FadeCounter starts at 0 from Init, ramps to 0x3ffc at
+            // DAT_0014e97c = 109200.0 counts/sec (~9 frames to full).
+            // size = m_TargetSize * sin(counter * 2pi/65536). The 0x3ffc
+            // index = pi/2 so sin(0x3ffc) = 1.0 -- the ratio simplifies
+            // to just sin(counter), tracing a quarter-sine ease-out.
+            // Entity scale tracks the same ratio so fruit zooms together
+            // with the button ring.
+            if (m_FadeCounter < 0x3ffc) {
+                float next = (float)m_FadeCounter + dt * 109200.0f;
+                if (next > 16380.0f) next = 16380.0f;
+                m_FadeCounter = (int)next;
+                const float counterRad =
+                    (float)m_FadeCounter * (6.2831853f / 65536.0f);
+                const float sizeFrac = sinf(counterRad);
+                size             = m_TargetSize     * sizeFrac;
+                m_pEntity->scale = m_HitBoundsScale * sizeFrac;
+            } else {
+                size             = m_TargetSize;
+                m_pEntity->scale = m_HitBoundsScale;
+            }
         } else {
             // Velocity-magnitude check matches binary
             // DAT_0014e978 = 0x3a83126f ≈ 0.001f.
