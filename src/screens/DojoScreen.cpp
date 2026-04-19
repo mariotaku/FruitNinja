@@ -195,11 +195,16 @@ void DojoScreen::Update(float dt) {
                 m_pShopButton->Init(POS_SHOP_BUTTON,
                                     [this]() { ShopCallback(); },
                                     shopFruitType, Vec3(0, 0, 0), nullptr);
-                // Binary post-Init (exact field writes):
-                //   m_TargetSize = (texW+1, texH+1, 1.0)       (absolute, not relative)
-                //   m_AnimScale  = 0.5                          (binary offset +0x13C)
-                //   m_TargetSize *= 0.575                       (then scale)
-                //   m_AnimSpeed  = -15.0, m_AnimSpeed2 = -15.0  (both)
+                // Binary post-Init writes (order per 0x00138414, RE'd at
+                // asm level not decompile to resolve operator*= target):
+                //   [+0x124] m_TargetSize = (texW+1, texH+1, 1.0)   (absolute)
+                //   [+0x13C] m_AnimScale  = 0.5
+                //   [+0x140] m_BounceParams *= 0.575 (SHOP_SCALE)   (NOT m_TargetSize)
+                //   [+0x150] m_AnimSpeed   = -15.0
+                //   [+0x14C] m_AnimSpeed2  = -15.0
+                // Earlier port had `m_TargetSize *= SHOP_SCALE` which
+                // shrank the ring to ~57.5% of tex size -- wrong. 0.575
+                // is the bounce multiplier, not a size multiplier.
                 if (s_TexShop.IsValid()) {
                     m_pShopButton->m_TargetSize = Vec3(
                         (float)s_TexShop->m_Width + 1.0f,
@@ -207,7 +212,10 @@ void DojoScreen::Update(float dt) {
                         1.0f);
                 }
                 m_pShopButton->m_AnimScale = 0.5f;
-                m_pShopButton->m_TargetSize = m_pShopButton->m_TargetSize * SHOP_SCALE;
+                // TODO: m_BounceParams *= SHOP_SCALE. The port doesn't
+                // read m_BounceParams yet (MenuButton rework reverted),
+                // so this write is currently a no-op. Restore once the
+                // bounce/new-indicator draw path is ported.
                 m_pShopButton->m_AnimSpeed  = -15.0f;
                 m_pShopButton->m_AnimSpeed2 = -15.0f;
                 m_pShopButton->m_LayerFlags = 0x40;
