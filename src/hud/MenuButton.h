@@ -19,6 +19,15 @@
 class Entity;
 class Fruit;
 
+// Matches ClearMenuItems @ 0x0016ac7c. Cascades release on every active
+// menu fruit/bomb: sets m_bSliced + outward random velocity on fruits,
+// disables+flings bombs, sets m_bDrawWhole/m_bMovement. MenuButtons
+// whose entity is released this way detect velSq > 0.001 and start the
+// FadeCounter shrink. Called from MenuButton::Update on user slice of a
+// fruit button, and from GameModeScreen::QuitCallback so the back-out
+// animation mirrors the main -> mode-select cascade.
+void FN_ClearMenuItems();
+
 class MenuButton : public HUDControl3d {
 public:
     // +0x80: real Fruit/Bomb entity spinning on button (NULL for toggles)
