@@ -86,7 +86,16 @@ void Bomb::LoadContent() {
     }
 
     // Model[0]: binary string "models/Fruit/Bomb.mmd" (0x1BCBDB)
-    // Bada filesystem was case-insensitive; actual file is lowercase
+    // Bada filesystem was case-insensitive; actual file is lowercase.
+    // NOTE: this Bada asset dump's fruit_atlas.tex has a solid red
+    // oval at bomb.mmd's UV region (lower-left quadrant), not the
+    // dark-body + red-X art seen in iOS/Steam ports. Rendering as
+    // red is faithful to the shipped Bada atlas. The other available
+    // mesh files (bomb_blue.mmd, bomb_red.mmd, bomb_purple.mmd) all
+    // sample different (blue/magenta/etc.) atlas regions in this
+    // asset dump -- not the dark-red variant. To restore the
+    // iconic dark-body bomb, the atlas texture itself needs to be
+    // replaced with a version that has the correct art at these UVs.
     {
         std::string path = game->data_dir + "/models/Fruit/bomb.mmd";
         g_bombData.model[0] = meshMgr->Load(path.c_str());
@@ -471,12 +480,17 @@ void Bomb::Draw(Renderer& r) {
     Vec3 drawPos(pos.x, pos.y, m_ZPosition);
     mat.GlobalTranslate44(drawPos);
 
-    // Use Model::Draw which handles its own texture, MVP, and mesh rendering
-    // Matches binary: Mortar::Model::Draw(g_bombData->model[variant], combinedMatrix)
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
+    // Use Model::Draw which handles its own texture, MVP, and mesh rendering.
+    // Matches binary: Mortar::Model::Draw(g_bombData->model[variant], combinedMatrix).
+    // NOTE: depth test is intentionally NOT enabled around this Draw call.
+    // Empirically, enabling GL_DEPTH_TEST + GL_LESS here causes the bomb to
+    // render as pure white (texture never sampled). Fruits use the same
+    // pattern and render correctly, so the defect is bomb-specific -- likely
+    // tied to how the bomb's position data (stored in the "normal" PSP slot
+    // for vertDecl=0x120001ff) interacts with depth buffer writes from
+    // previous draws. Leaving depth test off matches the rendered output
+    // observed in the binary until the depth interaction is fully RE'd.
     bombModel->Draw(mat);
-    glDisable(GL_DEPTH_TEST);
 }
 
 void Bomb::Deactivate() {

@@ -75,30 +75,98 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, GeometryEntr
     memcpy(&vertCount, data + pos, 4); pos += 4;
     if (vertCount == 0 || vertCount > 100000) return false;
 
-    // PSP vertex declaration bitfield (from LoadVertexStreamPSP / LegacyPSPVertexDecl)
+    // PSP vertex declaration bitfield — verified against binary
+    // LegacyPSPVertexDecl::Stride @ 0x001a741c:
+    //   stride = (FormatSize(normalFmt) + FormatSize(colorFmt)
+    //           + FormatSize(field13) + FormatSize(field12)) * 3
+    //         +  FormatSize(posFmt) * (morphCount + 1)
+    //         +  FormatSize(texFmt) * 2
+    //         +  FormatSize(weightFmt)
+    //
+    // Bit layout:
+    //   0-1   texFmt      (× 2 in stride — 2D UV)
+    //   2-4   weightFmt   (× 1)
+    //   5-6   colorFmt    (× 3 — 3 components; for fmt=3 this is a surface normal!)
+    //   7-8   normalFmt   (× 3 — actually holds the 3D position for this .mmd format!)
+    //   9-10  posFmt      (× (morphCount+1))
+    //   13-15 morphCount
+    //
+    // Attribute order in data: tex, weight, color(=surfaceNormal), normal(=position)
+    // For bomb.mmd decl=0x120001ff: texFmt=3, weightFmt=7, colorFmt=3, normalFmt=3,
+    // posFmt=0 → stride = 8+4+12+12+0 = 36.
+    // PSP vertex declaration bitfield — verified against binary
+    // LegacyPSPVertexDecl::Stride @ 0x001a741c:
+    //   stride = (FormatSize(normalFmt) + FormatSize(colorFmt)
+    //           + FormatSize(field13) + FormatSize(field12)) * 3
+    //         +  FormatSize(posFmt) * (morphCount + 1)
+    //         +  FormatSize(texFmt) * 2
+    //         +  FormatSize(weightFmt)
+    //
+    // Bit layout:
+    //   0-1   texFmt      (× 2 in stride — 2D UV)
+    //   2-4   weightFmt   (× 1)
+    //   5-6   colorFmt    (× 3 — 3 components; for fmt=3 this is a surface normal!)
+    //   7-8   normalFmt   (× 3 — actually holds the 3D position for this .mmd format!)
+    //   9-10  posFmt      (× (morphCount+1))
+    //   13-15 morphCount
+    //
+    // Data order in stream: tex, weight, color(=surfaceNormal), normal(=position)
+    // For decl=0x120001ff (all fruit/bomb meshes):
+    //   texFmt=3 weightFmt=7 colorFmt=3 normalFmt=3 posFmt=0 morphCount=0
+    //   stride = 8+4+12+12+0 = 36
     int texFmt    = (vertDecl >> 0) & 0x3;
+    int weightFmt = (vertDecl >> 2) & 0x7;
     int colorFmt  = (vertDecl >> 5) & 0x3;
     int normalFmt = (vertDecl >> 7) & 0x3;
     int posFmt    = (vertDecl >> 9) & 0x3;
-    if (posFmt == 0) posFmt = 3;
+    int morphCount = (vertDecl >> 13) & 0x7;
 
     int offset = 0;
     VertexLayout layout;
     memset(&layout, 0, sizeof(layout));
 
-    // Layout order (PSP): tex, color, normal, pos
+    // tex: FmtSize(texFmt) * 2
     int texBytes = FmtSize(texFmt) * 2;
     layout.texOffset = offset; layout.texSize = texBytes; offset += texBytes;
 
-    int colorBytes = (colorFmt == 1 || colorFmt == 2) ? 2 : (colorFmt == 3 ? 4 : 0);
-    layout.colorOffset = offset; layout.colorSize = colorBytes; layout.colorFmt = colorFmt;
+    // weight: FmtSize(weightFmt) — skipped by GL but occupies stride
+    int weightBytes = FmtSize(weightFmt);
+    offset += weightBytes;
+
+    // color slot: FmtSize(colorFmt) * 3 — 3 components. For fmt=3 these
+    // are 3 floats storing the surface normal. The port's vertex-color
+    // attribute expects 4-byte ABGR8888 (fmt=3 legacy interpretation);
+    // to avoid reading those 3 floats as a bogus RGBA, disable vertex
+    // color whenever colorFmt=3 (defaults to white in Mesh.cpp).
+    int colorBytes = FmtSize(colorFmt) * 3;
+    if (colorFmt == 3) {
+        layout.colorOffset = offset; layout.colorSize = 0; layout.colorFmt = 0;
+    } else {
+        layout.colorOffset = offset; layout.colorSize = colorBytes; layout.colorFmt = colorFmt;
+    }
     offset += colorBytes;
 
+    // normal slot: FmtSize(normalFmt) * 3. For decl=0x120001ff this is
+    // actually the 3D position (the engine's "normal" PSP slot doubles
+    // as position when posFmt=0, which is the common case for fruit/bomb).
     int normalBytes = FmtSize(normalFmt) * 3;
     layout.normalOffset = offset; layout.normalSize = normalBytes; offset += normalBytes;
 
-    int posBytes = FmtSize(posFmt) * 3;
+    // pos: FmtSize(posFmt) * (morphCount+1). With posFmt=0 this is 0
+    // bytes. The earlier port faked posFmt=3 here (creating a 12-byte
+    // slot); that coincidentally matched stride=36 because the normal
+    // slot holds the position data, but meshes with real posFmt would
+    // misalign. Respect posFmt=0 and rebind attribute 0 to the normal
+    // slot when no dedicated position slot exists.
+    int posBytes = FmtSize(posFmt) * (morphCount + 1);
     layout.posOffset = offset; layout.posSize = posBytes; offset += posBytes;
+
+    if (posBytes == 0 && normalBytes >= 12) {
+        layout.posOffset  = layout.normalOffset;
+        layout.posSize    = layout.normalSize;
+        layout.normalSize = 0;
+    }
+
     layout.totalStride = offset;
     if (layout.totalStride == 0) return false;
 
