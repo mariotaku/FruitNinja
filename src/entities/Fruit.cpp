@@ -291,10 +291,10 @@ static void DrawOneModel(Mortar::Model* model,
 
     mat.GlobalTranslate44(drawPos);
 
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
+    // Depth-test state is owned by the 3D actor pass in GameDraw
+    // (SetDepthBuffer(1) before ActorManager::Draw, off after) -- binary
+    // @ 0x0016ba10. Fruit::Draw in the binary does NOT touch GL state.
     model->Draw(mat);
-    glDisable(GL_DEPTH_TEST);
 }
 
 void Fruit::Draw(Renderer& r) {

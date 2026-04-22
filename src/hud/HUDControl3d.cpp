@@ -6,21 +6,11 @@
 #include "HUDControl3d.h"
 #include "Game.h"
 #include "render/MatrixManager.h"
+#include "math/MathUtil.h"
 #include <cmath>
 
 // Rotation speed constant (verified: DAT_001443dc = 182.0)
 static const float ROT_SPEED = 182.0f;
-
-// SinIdx/CosIdx: original uses 16-bit angle lookup table
-// angle_rad = (ushort)(timer * 182.0) * 2pi / 65536
-static inline float SinIdx(float timer) {
-    int idx = (int)(timer * ROT_SPEED) & 0xFFFF;
-    return sinf((float)idx * 6.2831853f / 65536.0f);
-}
-static inline float CosIdx(float timer) {
-    int idx = (int)(timer * ROT_SPEED) & 0xFFFF;
-    return cosf((float)idx * 6.2831853f / 65536.0f);
-}
 
 // Matches 0x14428c (57 lines)
 void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
@@ -44,10 +34,10 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     Matrix44 mat = Matrix44::MakeScale(size.x, size.y, size.z);
 
     // Step 5: RotZ44 if m_Timer != 0
+    // Binary: idx = (uint16_t)(int)(timer * 182.0), then SinIdx/CosIdx
     if (m_Timer != 0.0f) {
-        float sinA = SinIdx(m_Timer);
-        float cosA = CosIdx(m_Timer);
-        mat.RotZ44(sinA, cosA);
+        uint16_t idx = (uint16_t)(int)(m_Timer * ROT_SPEED);
+        mat.RotZ44(SinIdx(idx), CosIdx(idx));
     }
 
     // Step 6-7: Binary computes `drawPos = pos + (480, 320, 0) * pivot`

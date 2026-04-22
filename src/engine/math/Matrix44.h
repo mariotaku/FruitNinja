@@ -83,12 +83,35 @@ struct Matrix44 {
         return r;
     }
 
-    // Matches _Matrix44<float>::RotZ44
+    // Matches _Matrix44<float>::RotX44 — post-multiply by rot around X
+    // Mixes col 1 (Y) and col 2 (Z).
+    void RotX44(float sinA, float cosA) {
+        for (int i = 0; i < 4; i++) {
+            float a = m[4 + i];   // col 1
+            float b = m[8 + i];   // col 2
+            m[4 + i] =  a * cosA + b * sinA;
+            m[8 + i] = -a * sinA + b * cosA;
+        }
+    }
+
+    // Matches _Matrix44<float>::RotY44 — post-multiply by rot around Y
+    // Mixes col 0 (X) and col 2 (Z).
+    void RotY44(float sinA, float cosA) {
+        for (int i = 0; i < 4; i++) {
+            float a = m[i];       // col 0
+            float b = m[8 + i];   // col 2
+            m[i]     =  a * cosA + b * sinA;
+            m[8 + i] = -a * sinA + b * cosA;
+        }
+    }
+
+    // Matches _Matrix44<float>::RotZ44 — post-multiply by rot around Z
+    // Mixes col 0 (X) and col 1 (Y).
     void RotZ44(float sinA, float cosA) {
         for (int i = 0; i < 4; i++) {
             float a = m[i];       // col 0
             float b = m[4 + i];   // col 1
-            m[i]     = a * cosA + b * sinA;
+            m[i]     =  a * cosA + b * sinA;
             m[4 + i] = -a * sinA + b * cosA;
         }
     }
