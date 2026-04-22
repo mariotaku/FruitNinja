@@ -12,6 +12,7 @@
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
 #include "math/Matrix44.h"
+#include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"
 #include <cstdlib>
@@ -43,13 +44,37 @@ static const int16_t DRAW_TILT_ANGLE  = (int16_t)0xBFF4;
 static const int16_t ANGLE_SCALE      = 0xB6;
 
 // Global bomb data (matches BombGlobalData at GOT+0x464A0, loaded by LoadContent)
-// See docs/entities/bomb.md for full struct layout
+// See docs/entities/bomb.md for full struct layout.
+// Binary field offsets (kept as comments for reference; port layout may
+// differ since we store SmartPtr<Texture> separately in g_BombTexture):
+//   +0x00  Bomb*            pTrackedBomb
+//   +0x04  SmartPtr<Texture> tex_02   (bomb_explode.tex — in g_BombTexture)
+//   +0x08  uint8_t           bFuseSfxFiredThisFrame
+//   +0x0C  SmartPtr<Model>[3] model
+//   +0x24  SmartPtr<Texture> texMinus10
+//   +0x28  bool              loaded
+//   +0x2C  uint32_t          fuseHash[2]
 struct BombGlobalData {
-    SmartPtr<Mortar::Model> model[3];  // +0x0C: [0]=bomb.mmd, [1]=bomb_purple.mmd, [2]=unused
-    SmartPtr<Mortar::Texture> texMinus10;  // +0x24: minus_10.tex
-    bool loaded;            // +0x28: guard flag
-    uint32_t fuseHash[2];   // +0x2C/+0x30: bomb_smoke / purple_bomb_smoke hashes
-    BombGlobalData() : loaded(false) { fuseHash[0] = fuseHash[1] = 0; }
+    // +0x00: last qualifying bomb drawn this frame. Bomb::Draw sets it
+    // if (this != prev && !menuHit && pos.y > -1000). Write-only in the
+    // shipped binary — no visible reader. Preserved for byte-level fidelity.
+    Bomb* pTrackedBomb;
+
+    // +0x08: per-frame gate for "Bomb-Fuse" SFX. Cleared at top of every
+    // Bomb::Draw; set by Bomb::Update on the frame a bomb's countdown
+    // crosses 0.2s downward. Prevents every chained bomb from spamming the
+    // SFX in one frame.
+    uint8_t bFuseSfxFiredThisFrame;
+
+    SmartPtr<Mortar::Model> model[3];
+    SmartPtr<Mortar::Texture> texMinus10;
+    bool loaded;
+    uint32_t fuseHash[2];
+
+    BombGlobalData()
+        : pTrackedBomb(NULL), bFuseSfxFiredThisFrame(0), loaded(false) {
+        fuseHash[0] = fuseHash[1] = 0;
+    }
 };
 static BombGlobalData g_bombData;
 
@@ -218,65 +243,101 @@ void Bomb::Init(int param1, int fruitType, int param3) {
            g_bombData.model[m_BombVariant].IsValid(), g_BombTexture.IsValid());
 }
 
-// Matches Bomb::Update (0x1729fc, 195 lines)
-void Bomb::Update(float dt) {
+// Helper: accel-growth block shared by alive-branch and menu-hit-branch in
+// binary Bomb::Update. When velocity and accelForce are componentwise
+// aligned, the accel-force magnitude grows by (0.2 * dtNorm * 2) per frame.
+//   DAT_00172f30 = 0.2   (ACCEL_GROWTH_RATE)
+//   DAT_00172ca0 = 0.2   (same value used in menu-hit branch — coincidental)
+static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
+    const bool alignedY = (accel.y < 0.0f && vel.y < 0.0f) ||
+                          (accel.y > 0.0f && vel.y > 0.0f);
+    const bool alignedX = (accel.x < 0.0f && vel.x < 0.0f) ||
+                          (accel.x > 0.0f && vel.x > 0.0f);
+    if (!alignedY && !alignedX) return;
+    float len = sqrtf(accel.x * accel.x + accel.y * accel.y + accel.z * accel.z);
+    if (len <= 0.001f) return;
+    float newLen = len + ACCEL_GROWTH_RATE * dtNorm * 2.0f;
+    accel *= (newLen / len);
+}
+
+// Matches Bomb::Update (0x001729fc, 195 lines).
+void Bomb::Update(float /*dt*/) {
     if (!active) return;
 
-    float scaledDt = dt * m_SpeedMult;
-    float dtNorm = (DT_NORMALIZE > 0.0f) ? scaledDt / DT_NORMALIZE : 1.0f;
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    const float gameDt  = game->dt;
+    const float scaledDt = gameDt * m_SpeedMult;
+    const float dtNorm   = (DT_NORMALIZE > 0.0f) ? scaledDt / DT_NORMALIZE : 1.0f;
 
     if (m_bHit == 0) {
-        // === ALIVE BOMB ===
-
+        // === ALIVE BRANCH ===
         if (m_Countdown > 0.0f) {
-            // Tick countdown (matches binary: uses game dt, not entity dt)
-            // TODO: Check Game.bombTimer > 0 || Game.gameOverFlag → kill immediately
-            // TODO: Check Game.paused → skip countdown
-            m_Countdown -= dt;
+            // Early-kill: if a bomb just exploded (bombHitTimer>0) or game
+            // is transitioning out (pauseFlag!=0), force this bomb off-screen
+            // so it expires on the OOB check below. Binary resets countdown
+            // to 0 (DAT_00172f28) and pos.y to -320 (DAT_00172cb0).
+            if (game->bombHitTimer > 0.0f || game->pauseFlag != 0) {
+                m_Countdown = 0.0f;
+                pos.y = OFFSCREEN_Y;
+                vel = Vec3(HIT_COL_POS, -1.0f, HIT_COL_POS);
+            }
 
-            // TODO: Fuse SFX at 0.2s threshold
-            // if (m_Countdown <= 0.2f && prev > 0.2f) PlayFuseSFX()
+            const float prevCountdown = m_Countdown;
+            // Tick countdown using GAME dt (not entity scaledDt) — but only
+            // when game is active (gameActiveFlag == 0).
+            if (game->gameActiveFlag == 0) {
+                m_Countdown -= gameDt;
+            }
+
+            // Fuse SFX: plays once per frame across all bombs when any bomb's
+            // countdown crosses 0.2s downward. Gated by bFuseSfxFiredThisFrame
+            // (cleared in Bomb::Draw) and pauseFlag==0.
+            static constexpr float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
+            if (m_Countdown <= FUSE_SFX_THRESHOLD &&
+                prevCountdown > FUSE_SFX_THRESHOLD &&
+                !g_bombData.bFuseSfxFiredThisFrame &&
+                game->pauseFlag == 0) {
+                if (game->pGameSound) {
+                    // Binary also calls SoundManager::PreLoadSound first;
+                    // our SFX system plays on demand, no preload needed.
+                    game->pGameSound->SFXPlay("Bomb-Fuse", 1.0f, 1.0f);
+                }
+                g_bombData.bFuseSfxFiredThisFrame = 1;
+            }
 
             if (m_Countdown > 0.0f) return;
 
-            // TODO: Chain bomb spawning via WaveManager::SpawnBomb
+            // Countdown expired — chain-bomb spawning.
+            // Binary: iVar7 = (int)WaveManager::spawnLevel, with a random
+            // ceil based on the fractional part (rand100 < frac*100 → +1).
+            //   if (iVar7 < 1): countdown = 0; pos.y = -320; vel = (0,-1,0);
+            //   else if (iVar7 != 1): WaveManager::SpawnBomb(iVar7 - 1, 0, NULL, ...);
+            // TODO: port when WaveManager::spawnLevel / SpawnBomb land.
         }
 
-        // Physics: velocity += accelForce * scaledDt
+        // Physics — always runs in alive branch after countdown check.
         if (m_bMovement) {
             vel += m_AccelForce * scaledDt;
-
-            // Acceleration growth when vel and accel are aligned
-            float dot = vel.x * m_AccelForce.x + vel.y * m_AccelForce.y + vel.z * m_AccelForce.z;
-            if (dot > 0.0f) {
-                float len = sqrtf(m_AccelForce.x * m_AccelForce.x +
-                                  m_AccelForce.y * m_AccelForce.y +
-                                  m_AccelForce.z * m_AccelForce.z);
-                if (len > 0.001f) {
-                    float newLen = len + ACCEL_GROWTH_RATE * dtNorm * 2.0f;
-                    float ratio = newLen / len;
-                    m_AccelForce *= ratio;
-                }
-            }
+            AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * scaledDt;
-
-        // Rotation animation
         if (scaledDt > 0.0f) {
             m_RotX += m_RotVelX;
             m_RotY += m_RotVelY;
         }
 
-        // Update collision sphere to follow the bomb (z clamped to 0).
+        // Update collision sphere to follow bomb. Binary writes pos.xyz then
+        // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
+        // center = (pos.x, pos.y, 0).
         m_Col.center = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
-        // === HIT BOMB ===
+        // === HIT BRANCH ===
         if (m_bMenuBombHit == 0) {
-            // Non-menu hit: spawn BombBlast entities every 0.05s for the
-            // ring shockwave burst. Matches binary Bomb::Update 0x1729fc
-            // hit-branch at m_bBombFlag88 == 0.
-            m_SpawnTimer -= dt;
+            // Non-menu hit: spawn a BombBlast every 0.05s using GAME dt.
+            m_SpawnTimer -= gameDt;
             if (m_SpawnTimer < 0.0f) {
                 if (ActorManager* am = ActorManager::GetInstance()) {
                     Entity* e = am->Add(4, true);   // type 4 = BombBlast
@@ -285,12 +346,13 @@ void Bomb::Update(float dt) {
                         e->Init(0, 0, 0);
                     }
                 }
-                m_SpawnTimer = BOMBBLAST_INTERVAL; // 0.05f
+                m_SpawnTimer = BOMBBLAST_INTERVAL;  // 0.05f (DAT_00172c9c)
             }
         } else {
-            // Menu-hit: continue physics (bomb falls away)
+            // Menu-hit: same physics as alive branch (including accel growth).
             if (m_bMovement) {
                 vel += m_AccelForce * scaledDt;
+                AccelGrowth(vel, m_AccelForce, dtNorm);
             }
             pos += vel * scaledDt;
             if (scaledDt > 0.0f) {
@@ -298,199 +360,102 @@ void Bomb::Update(float dt) {
                 m_RotY += m_RotVelY;
             }
         }
-        // Move collision offscreen once hit — blocks double-slicing and
-        // matches binary DAT_00172ca4 = 1000.0 / DAT_00172cac = 0.01.
+
+        // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
         m_Col.center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
         m_Col.radius = HIT_COL_RADIUS;
     }
 
-    // Out of bounds check
+    // OOB check — kill if off-playfield, else (and only else) lazy-create
+    // the fuse emitter. Binary uses `else if` so a killed bomb never gets
+    // an emitter attached in the same frame.
     if (pos.y <= BOUNDS_MIN_Y || pos.y >= BOUNDS_MAX_Y ||
         pos.x <= BOUNDS_MIN_X || pos.x >= BOUNDS_MAX_X) {
         KillBomb();
-    }
-
-    // Lazy-create fuse particle emitter (matches binary: first Update after
-    // Init creates the emitter, then each tick the emitter pos tracks the bomb).
-    // Only alive, non-menu-hit bombs get the fuse trail.
-    if (!m_pEmitter && m_bHit == 0 && m_Countdown == 0.0f && active) {
-        int variant = (m_BombVariant == 0) ? 0 : 1;
-        uint32_t hash = g_bombData.fuseHash[variant];
+    } else if (!m_pEmitter) {
+        const int variant = (m_BombVariant == 0) ? 0 : 1;
+        const uint32_t hash = g_bombData.fuseHash[variant];
         if (hash != 0) {
             Mortar::PSPParticleManager::GetInstance().AddEmitter(
-                hash, &m_pEmitter, false);
+                hash, &m_pEmitter,
+                /*paused*/ gameDt == 0.0f);
         }
-    }
-    if (m_pEmitter) {
-        // Port specific: bomb mesh is authored with body at local origin
-        // and fuse extending along local +Z (mesh bone bounds verified at
-        // load time: x/y symmetric ±48.7, z in [-47.4, +78.3] — the +Z
-        // asymmetry is the fuse protrusion). Emitting at bomb.pos alone
-        // would spawn particles at the body center; we offset by the
-        // transformed fuse-tip direction so the spark cluster appears at
-        // the visible fuse. Binary writes emitter->m_Pos = bomb.pos once
-        // at creation @ 0x00172f12 with no offset and no per-frame update;
-        // how it ends up at the fuse visually in the original remains
-        // unresolved (probably a longer particle lifetime interpretation
-        // or a different Y-velocity scale in the binary's spawn path).
-        //
-        // We apply the SAME transform chain as Bomb::Draw to the local +Z
-        // unit vector:
-        //
-        //   Scale -> RotX(-83° fixed tilt) -> RotY(m_RotX) -> RotZ(m_RotY)
-        //
-        // RotZ leaves +Z invariant (rotation around Z preserves Z), so the
-        // animated spin does NOT move the fuse tip — it stays put while the
-        // bomb body rolls around it, matching the visible binary behaviour.
-        static constexpr float FUSE_LOCAL_Z = 78.0f;
-        const float s = scale.x;
-
-        // Start with local (0, 0, 1). Apply RotZ (port draw step 3, uses
-        // m_RotY): rotation around Z preserves (0,0,1) — no-op.
-        float vx = 0.0f, vy = 0.0f, vz = 1.0f;
-
-        // Apply RotY (port draw step 2, uses m_RotX). The port's inline
-        // RotY modifies mat col0/col2 as (c*col0 + s*col2, ..., -s*col0 + c*col2),
-        // which for a vertex mat*v transforms v as:
-        //   new_vx = vx*cos - vz*sin
-        //   new_vz = vx*sin + vz*cos
-        // (Note the opposite-sign convention vs a standard right-handed RotY;
-        // same sign convention used by the binary's _Matrix44::RotY44.)
-        {
-            const int16_t angle16 = m_RotX * ANGLE_SCALE;
-            const float a  = (float)angle16 * 6.2831853f / 65536.0f;
-            const float sA = sinf(a);
-            const float cA = cosf(a);
-            const float nx = vx * cA - vz * sA;
-            const float nz = vx * sA + vz * cA;
-            vx = nx; vz = nz;
+        if (m_pEmitter) {
+            // Binary writes raw bomb.pos to emitter pos once at creation
+            // (0x00172f12) — no per-frame update, no fuse-tip offset.
+            m_pEmitter->m_Pos = pos;
         }
-
-        // Apply RotX fixed tilt 0xBFF4 ≈ -83° (port draw step 1 - the inline
-        // RotX block that matches binary 0x00171be8). Rotation around X
-        // mixes Y and Z: (vx, vy, vz) -> (vx, vy*cos - vz*sin, vy*sin + vz*cos)
-        {
-            const float a  = (float)(int16_t)0xBFF4 * 6.2831853f / 65536.0f;
-            const float sA = sinf(a);
-            const float cA = cosf(a);
-            const float ny = vy * cA - vz * sA;
-            const float nz = vy * sA + vz * cA;
-            vy = ny; vz = nz;
-        }
-
-        // Scale by fuse length * bomb scale (uniform scale, so one factor).
-        // Base Z uses pos.z (matching binary emitter init at 0x00172f12,
-        // which stores raw bomb.pos), NOT m_ZPosition. Depth layering of
-        // particles vs HUD ring sprites is handled by the particle draw
-        // pass order (pm.Draw(-1/0/1)) rather than world-space z.
-        const float L = FUSE_LOCAL_Z * s;
-        m_pEmitter->m_Pos = Vec3(pos.x + vx * L,
-                                 pos.y + vy * L,
-                                 pos.z + vz * L);
     }
 }
 
-// Matches Bomb::Draw (0x171be8)
-// Transform: Scale * RotX(fixed tilt) * RotY(m_RotX) * RotZ(m_RotY) * Translate
+// Matches Bomb::Draw (0x171be8).
+// Binary shape:
+//   if (countdown <= 0) {
+//     // tracking side-effect on highest-bomb pointer (stubbed)
+//     if (model[variant].IsValid()) {
+//       Scale44(scaleMat, s, s, s)
+//       RotX44(rotMat, SinIdx(0xBFF4), CosIdx(0xBFF4))
+//       RotY44(rotMat, SinIdx(m_RotX * 0xB6), CosIdx(m_RotX * 0xB6))
+//       RotZ44(rotMat, SinIdx(m_RotY * 0xB6), CosIdx(m_RotY * 0xB6))
+//       translate = zOffsetVec * zMult + pos
+//       Translate44(rotMat, translate)
+//       combined = scaleMat * rotMat
+//       Model::Draw(model[variant], combined)
+//     }
+//   }
 void Bomb::Draw(Renderer& r) {
-    static bool s_loggedOnce = false;
-    if (!active || m_Countdown > 0.0f) {
-        if (!s_loggedOnce) {
-            printf("[Bomb] Draw: skip (active=%d countdown=%.2f)\n", active, m_Countdown);
-            s_loggedOnce = true;
-        }
-        return;
+    (void)r;
+
+    // Binary @ 0x171be8: clears the per-frame fuse-SFX gate at the top of
+    // EVERY Bomb::Draw (before the countdown check). Set later by
+    // Bomb::Update when a bomb's countdown crosses 0.2s downward.
+    g_bombData.bFuseSfxFiredThisFrame = 0;
+
+    if (m_Countdown > 0.0f) return;
+
+    // Binary @ 0x171be8: update "tracked bomb" pointer. Written iff this
+    // bomb isn't the previously-tracked one, isn't menu-hit, and is on the
+    // playfield (pos.y > -1000). No visible reader in the shipped binary,
+    // but mirrored for fidelity.
+    static constexpr float TRACKED_BOMB_MIN_Y = -1000.0f;  // DAT_00171d30
+    if (this != g_bombData.pTrackedBomb &&
+        m_bMenuBombHit == 0 &&
+        pos.y > TRACKED_BOMB_MIN_Y) {
+        g_bombData.pTrackedBomb = this;
     }
 
-    // Model from global data, indexed by variant (matches binary: g_bombData->model[m_BombVariant])
-    int variant = m_BombVariant;
-    if (variant < 0 || variant > 2) variant = 0;
-    SmartPtr<Mortar::Model>& modelPtr = g_bombData.model[variant];
-    if (!modelPtr.IsValid() || !g_BombTexture.IsValid()) {
-        if (!s_loggedOnce) {
-            printf("[Bomb] Draw: skip (variant=%d model_valid=%d tex_valid=%d)\n",
-                   variant, modelPtr.IsValid(), g_BombTexture.IsValid());
-            s_loggedOnce = true;
-        }
-        return;
-    }
-    Mortar::Model* bombModel = modelPtr.Get();
+    SmartPtr<Mortar::Model>& modelPtr = g_bombData.model[m_BombVariant];
+    if (!modelPtr.IsValid()) return;
 
-    float s = scale.x;
-    if (s <= 0.0f) {
-        if (!s_loggedOnce) {
-            printf("[Bomb] Draw: skip (scale=%.4f)\n", s);
-            s_loggedOnce = true;
-        }
-        return;
-    }
+    // Matrix order must match Fruit::Draw (which renders correctly): build
+    //   final = Translate * Rotate * Scale
+    // so a vertex v becomes final*v = R*S*v + T_col. Mesh origin lands at
+    // T_col (the bomb's world position).
+    //
+    // Binary decomp LOOKS like Stack_88 = S * RotX * RotY * RotZ then
+    // combined = Stack_88 * Translate, which would give mesh-origin =
+    // S*R*(pos + zoff*m_ZPos) — scaled-and-rotated translation, placing
+    // the mesh far from its intended button slot. Our port previously
+    // mirrored that literal order and the bomb rendered near the play
+    // button instead of the quit button. Matching Fruit's proven order
+    // fixes it. The discrepancy with the decomp's apparent chain is
+    // unresolved; leaving the Fruit-style order here since it produces
+    // the visually correct result on both this Bada asset set and the
+    // binary's intended layout.
+    Matrix44 mat = Matrix44::Scale44(scale);     // mat = S
 
-    if (!s_loggedOnce) {
-        printf("[Bomb] Draw: rendering variant=%d scale=%.2f pos=(%.1f,%.1f,%.1f)\n",
-               variant, s, pos.x, pos.y, pos.z);
-        s_loggedOnce = true;
-    }
+    Matrix44 rotMat;
+    rotMat.RotX44(SinIdx((uint16_t)DRAW_TILT_ANGLE),
+                  CosIdx((uint16_t)DRAW_TILT_ANGLE));
+    rotMat.RotY44(SinIdx((uint16_t)(m_RotX * ANGLE_SCALE)),
+                  CosIdx((uint16_t)(m_RotX * ANGLE_SCALE)));
+    rotMat.RotZ44(SinIdx((uint16_t)(m_RotY * ANGLE_SCALE)),
+                  CosIdx((uint16_t)(m_RotY * ANGLE_SCALE)));
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
+    mat = rotMat * mat;                          // mat = R * S
+    mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));  // + T in col3
 
-    // Scale
-    Matrix44 mat = Matrix44::MakeScale(s, s, s);
-
-    // RotX: fixed tilt 0xBFF4 ≈ -83 degrees (makes bomb face camera)
-    // 0xBFF4 in 16-bit angle = 0xBFF4 * 2π / 65536
-    {
-        float angleRad = (float)(int16_t)0xBFF4 * 6.2831853f / 65536.0f;
-        float sinA = sinf(angleRad);
-        float cosA = cosf(angleRad);
-        // RotX: rotate around X axis
-        for (int i = 0; i < 4; i++) {
-            float a = mat.m[4 + i];   // col 1 (Y)
-            float b = mat.m[8 + i];   // col 2 (Z)
-            mat.m[4 + i] = a * cosA + b * sinA;
-            mat.m[8 + i] = -a * sinA + b * cosA;
-        }
-    }
-
-    // RotY: animated by m_RotX * 0xB6 (182 ≈ 1 degree in 16-bit)
-    {
-        int16_t angle16 = m_RotX * ANGLE_SCALE;
-        float angleRad = (float)angle16 * 6.2831853f / 65536.0f;
-        float sinA = sinf(angleRad);
-        float cosA = cosf(angleRad);
-        for (int i = 0; i < 4; i++) {
-            float a = mat.m[i];       // col 0 (X)
-            float b = mat.m[8 + i];   // col 2 (Z)
-            mat.m[i]     = a * cosA + b * sinA;
-            mat.m[8 + i] = -a * sinA + b * cosA;
-        }
-    }
-
-    // RotZ: animated by m_RotY * 0xB6
-    {
-        int16_t angle16 = m_RotY * ANGLE_SCALE;
-        float angleRad = (float)angle16 * 6.2831853f / 65536.0f;
-        float sinA = sinf(angleRad);
-        float cosA = cosf(angleRad);
-        mat.RotZ44(sinA, cosA);
-    }
-
-    // Position in binary-centred ortho space.
-    // See docs/engine/coordinate-system.md and FruitCamera::SetupPerspective.
-    Vec3 drawPos(pos.x, pos.y, m_ZPosition);
-    mat.GlobalTranslate44(drawPos);
-
-    // Use Model::Draw which handles its own texture, MVP, and mesh rendering.
-    // Matches binary: Mortar::Model::Draw(g_bombData->model[variant], combinedMatrix).
-    // NOTE: depth test is intentionally NOT enabled around this Draw call.
-    // Empirically, enabling GL_DEPTH_TEST + GL_LESS here causes the bomb to
-    // render as pure white (texture never sampled). Fruits use the same
-    // pattern and render correctly, so the defect is bomb-specific -- likely
-    // tied to how the bomb's position data (stored in the "normal" PSP slot
-    // for vertDecl=0x120001ff) interacts with depth buffer writes from
-    // previous draws. Leaving depth test off matches the rendered output
-    // observed in the binary until the depth interaction is fully RE'd.
-    bombModel->Draw(mat);
+    modelPtr->Draw(mat);
 }
 
 void Bomb::Deactivate() {

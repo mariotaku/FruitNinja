@@ -16,19 +16,17 @@ inline float Lerp(float a, float b, float t) {
     return a + (b - a) * t;
 }
 
-// 16-bit angle index sine: original uses a lookup table,
-// approximate with sinf(idx * 2*PI / 65536)
-inline uint16_t SinIdx(uint16_t idx) {
-    float rad = (float)idx * (float)(2.0 * M_PI / 65536.0);
-    float val = sinf(rad);
-    // Map [-1, 1] to [0, 65535]
-    return (uint16_t)((val * 0.5f + 0.5f) * 65535.0f);
+// Matches Math::SinIdx / Math::CosIdx (0x00194d50 / 0x00194dcc).
+// Binary reads from a 4096-entry float LUT keyed by (idx >> 4);
+// we use sinf/cosf directly — same output, no LUT needed on modern FPUs.
+// Returns float in [-1, 1]. Takes uint16_t so the angle wraps naturally
+// for signed 16-bit inputs (0x8000..0xFFFF = negative half turn).
+inline float SinIdx(uint16_t idx) {
+    return sinf((float)idx * (float)(2.0 * M_PI / 65536.0));
 }
 
-inline uint16_t CosIdx(uint16_t idx) {
-    float rad = (float)idx * (float)(2.0 * M_PI / 65536.0);
-    float val = cosf(rad);
-    return (uint16_t)((val * 0.5f + 0.5f) * 65535.0f);
+inline float CosIdx(uint16_t idx) {
+    return cosf((float)idx * (float)(2.0 * M_PI / 65536.0));
 }
 
 #endif

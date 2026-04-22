@@ -19,6 +19,7 @@
 #include "entities/BombBlast.h"
 #include "hud/SliceEffect.h"
 #include "particle/PSPParticleManager.h"
+#include "render/DisplayManager.h"
 #include "input/InputManager.h"
 #include "input/Touch.h"
 #include "util/StringHash.h"
@@ -195,17 +196,35 @@ void GameDraw(float dt, bool active) {
     }
 
     Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+    Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
 
     // === 1. ActorManager::Draw — 3D fruit/bomb/slash entities ===
-    // Binary @ 0x0016ba10. Depth write ON during this pass (binary
-    // calls SetDepthBufferWrite(1) just before).
+    // Binary @ 0x0016ba10: SetDepthBufferWrite(1) + SetDepthBuffer(1)
+    // just before ActorManager::Draw.
+    //
+    // Depth func: use GL_LEQUAL, not the ES2 default GL_LESS. The bomb
+    // mesh (and likely fruits too) has overlapping triangles (e.g. a
+    // glow/outline layer on top of the body, drawn LATER in the triangle
+    // strip). Under GL_LESS the later-drawn body would fail the equal-
+    // depth test vs the glow that wrote first, leaving the glow on top
+    // (appears red/white). GL_LEQUAL lets co-planar later-drawn tris win,
+    // matching what the binary produces — the Bada GL driver evidently
+    // defaulted to GL_LEQUAL (no explicit glDepthFunc call exists in the
+    // binary).
+    dm.SetDepthBufferWrite(true);
+    dm.SetDepthBuffer(true);
+    glDepthFunc(GL_LEQUAL);
+
     if (earlyFrame) printf("GameDraw: -> ActorManager::Draw am=%p\n", (void*)game->actorManager);
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
 
     // === 2. HUD::BeginDraw + post-actor block ===
-    // Binary turns depth write OFF (SetDepthBufferWrite(0)) after
-    // ActorManager so subsequent HUD/splat passes don't write depth.
+    // Binary @ 0x0016ba10 right after ActorManager::Draw:
+    //   SetDepthBuffer(1)       — depth test still ON
+    //   SetDepthBufferWrite(0)  — writes OFF for HUD/splats/bomb blasts
+    dm.SetDepthBuffer(true);
+    dm.SetDepthBufferWrite(false);
     if (game->hud) {
         if (earlyFrame) printf("GameDraw: -> HUD::BeginDraw hud=%p\n", (void*)game->hud);
         game->hud->BeginDraw(dt);
@@ -241,9 +260,11 @@ void GameDraw(float dt, bool active) {
     if (earlyFrame) printf("GameDraw: -> pm.Draw(-1)\n");
     pm.Draw(-1);
 
-    // SetDepthBuffer(0) toggles depth test off after this — the
-    // SlashEntity loop ×16 then runs. TODO: port the multiplayer
-    // SlashEntity loop (currently just one global slash entity).
+    // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
+    // depth test off before the SlashEntity loop ×16 and all later
+    // 2D passes. TODO: port the multiplayer SlashEntity loop
+    // (currently just one global slash entity).
+    dm.SetDepthBuffer(false);
     if (g_pSlashEntity) g_pSlashEntity->Draw();
 
     // === 4. Mid particles + slice lines + main-screen logo ===

@@ -62,6 +62,7 @@ typedef intptr_t GLsizeiptr;
 #define GL_DEPTH_BUFFER_BIT      0x0100
 #define GL_DEPTH_TEST            0x0B71
 #define GL_LESS                  0x0201
+#define GL_LEQUAL                0x0203
 #define GL_ARRAY_BUFFER          0x8892
 #define GL_ELEMENT_ARRAY_BUFFER  0x8893
 #define GL_STATIC_DRAW           0x88E4
