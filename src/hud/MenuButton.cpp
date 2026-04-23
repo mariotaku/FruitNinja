@@ -49,7 +49,11 @@ void FN_ClearMenuItems() {
     ActorManager* am = ActorManager::GetInstance();
     if (!am) return;
 
-    for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {
+    // Iterate Fruit (type 0) + Bomb (type 1) type lists. Binary uses
+    // GetEntityFirst/Next per type; port's GetTypeList gives the
+    // std::list directly.
+    for (int t = 0; t <= 1; t++) {
+    for (auto it = am->GetTypeList(t).begin(); it != am->GetTypeList(t).end(); ++it) {
         Entity* e = *it;
         if (!e || !e->IsActive()) continue;
 
@@ -76,8 +80,8 @@ void FN_ClearMenuItems() {
             // --- Bomb pass ---
             Bomb* b = static_cast<Bomb*>(e);
             // Binary: if (Bomb::Enabled()) { Disable(); set vel; }
-            // Port equivalent of Enabled() = active && !m_bHit.
-            if (b->active && b->m_bHit == 0) {
+            // Port equivalent of Enabled() = IsActive() && !m_bHit.
+            if (b->IsActive() && b->m_bHit == 0) {
                 b->Deactivate();
                 float vx = RandScaled(10.0f) - 5.0f;
                 float vy = RandScaled(5.0f);
@@ -87,6 +91,7 @@ void FN_ClearMenuItems() {
             b->m_bMovement = 1;
         }
     }
+    }  // end type loop
 }
 
 // Constants from binary (verified via read_memory / disassembly)

@@ -79,8 +79,10 @@ void BombBlast::ReleaseContent() {}
 void BombBlast::Init(int p1, int p2, int p3) {
     (void)p1; (void)p2; (void)p3;
 
-    active = true;
-    flags &= ~0x11;
+    // Activate: clear ENT_INACTIVE | ENT_KILLED. ActorManager::Add already
+    // cleared these on the recycle path; redundant on the factory path
+    // but harmless and matches the binary's explicit Init sequence.
+    flags &= ~ENT_SKIP_MASK;
 
     pos.z = BLAST_Z;
 
@@ -116,7 +118,7 @@ void BombBlast::Init(int p1, int p2, int p3) {
 
 // Matches BombBlast::Update (0x171170).
 void BombBlast::Update(float dt) {
-    if (!active) return;
+    if (!IsActive()) return;
 
     m_BlastRadius += dt * RADIUS_GROWTH;
     m_Lifetime    += dt;
@@ -164,14 +166,12 @@ void BombBlast::DrawActiveBlasts() {
     // in the binary). Skip the pass if no bomb has spawned yet.
     if (!g_BombTexture.IsValid()) return;
 
-    // Build the per-frame vertex buffer in one pass.
+    // Build the per-frame vertex buffer in one pass. BombBlast is type 4.
     int blastCount = 0;
-    for (auto it = am->entities.begin();
-         it != am->entities.end() && blastCount < MAX_BLASTS;
-         ++it)
-    {
+    const std::list<Entity*>& blastList = am->GetTypeList(4);
+    for (auto it = blastList.begin(); it != blastList.end() && blastCount < MAX_BLASTS; ++it) {
         Entity* e = *it;
-        if (!e || e->entityType != 4 || !e->IsActive()) continue;
+        if (!e || !e->IsActive()) continue;
 
         BombBlast* b = static_cast<BombBlast*>(e);
         if (b->m_BlastRadius <= 0.0f) continue;
@@ -259,10 +259,8 @@ void BombBlast::DrawActiveBlasts() {
 void BombBlast::RemoveAll() {
     ActorManager* am = ActorManager::GetInstance();
     if (!am) return;
-    for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {
-        Entity* e = *it;
-        if (e && e->entityType == 4) {
-            e->flags |= 0x11;   // kill + skip
-        }
-    }
+    // Binary DeactivateAllEntities(type) @ 0x0016fb44 — set ENT_KILLED on
+    // every entity of the given type. Next Update sweep returns them to
+    // the free pool.
+    am->DeactivateAllEntities(4);
 }

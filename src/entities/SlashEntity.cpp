@@ -396,16 +396,19 @@ void SlashEntity::Update(float dt) {
     if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive) {
         ActorManager* am = ActorManager::GetInstance();
         if (am) {
-            for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {
-                Entity* e = *it;
-                if (!e || !e->IsActive()) continue;
-                if (e->m_Col.radius <= 0.0f) continue;
-                // Only fruit (0) and bomb (1) participate — matches binary.
-                if (e->entityType != 0 && e->entityType != 1) continue;
+            // Only fruit (0) and bomb (1) participate in blade collision
+            // — matches binary.
+            for (int t = 0; t <= 1; t++) {
+                const std::list<Entity*>& list = am->GetTypeList(t);
+                for (auto it = list.begin(); it != list.end(); ++it) {
+                    Entity* e = *it;
+                    if (!e || !e->IsActive()) continue;
+                    if (e->m_Col.radius <= 0.0f) continue;
 
-                Vec3 bladeVel;
-                if (CollideWithSphere(e->m_Col, bladeVel)) {
-                    e->OnSliced(bladeVel);
+                    Vec3 bladeVel;
+                    if (CollideWithSphere(e->m_Col, bladeVel)) {
+                        e->OnSliced(bladeVel);
+                    }
                 }
             }
         }

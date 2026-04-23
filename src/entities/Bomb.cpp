@@ -6,6 +6,7 @@
 #include "audio/GameSound.h"
 #include "game/BombHit.h"
 #include "game/FruitCamera.h"
+#include "game/WaveManager.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "asset/TextureManager.h"
@@ -231,14 +232,15 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     m_AccelForce = Vec3(0.0f, GRAVITY_Y, 0.0f);
     m_ZPosition = GetBombZPosition();
 
-    active = true;
+    // Activate — same intent as the binary's flag clear at Init start.
+    flags &= ~ENT_SKIP_MASK;
 
     // Use pre-loaded model from g_bombData (loaded by LoadContent in GameInitialise)
     // Draw indexes as g_bombData.model[m_BombVariant]
     // No per-instance mesh loading needed
-    printf("[Bomb] Init: active=%d flags=0x%02x variant=%d scale=(%.2f,%.2f,%.2f) "
+    printf("[Bomb] Init: flags=0x%02x variant=%d scale=(%.2f,%.2f,%.2f) "
            "pos=(%.1f,%.1f,%.1f) countdown=%.2f model_valid=%d tex_valid=%d\n",
-           active, flags, m_BombVariant, scale.x, scale.y, scale.z,
+           flags, m_BombVariant, scale.x, scale.y, scale.z,
            pos.x, pos.y, pos.z, m_Countdown,
            g_bombData.model[m_BombVariant].IsValid(), g_BombTexture.IsValid());
 }
@@ -262,7 +264,7 @@ static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
 
 // Matches Bomb::Update (0x001729fc, 195 lines).
 void Bomb::Update(float /*dt*/) {
-    if (!active) return;
+    if (!IsActive()) return;
 
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -311,10 +313,27 @@ void Bomb::Update(float /*dt*/) {
 
             // Countdown expired — chain-bomb spawning.
             // Binary: iVar7 = (int)WaveManager::spawnLevel, with a random
-            // ceil based on the fractional part (rand100 < frac*100 → +1).
+            // ceil based on the fractional part (rand100 < frac*100 -> +1).
             //   if (iVar7 < 1): countdown = 0; pos.y = -320; vel = (0,-1,0);
             //   else if (iVar7 != 1): WaveManager::SpawnBomb(iVar7 - 1, 0, NULL, ...);
-            // TODO: port when WaveManager::spawnLevel / SpawnBomb land.
+            // WaveManager::SpawnBomb is currently a stub (no-op), so chain
+            // bombs produce no visible effect yet — the control flow is
+            // wired so it lights up for free once spawning is ported.
+            {
+                WaveManager* wm = WaveManager::GetInstance();
+                const float sl = wm->spawnLevel;
+                int iVar7 = (int)sl;
+                const float frac = sl - (float)iVar7;
+                const int rand100 = rand() % 100;
+                if ((float)rand100 < frac * 100.0f) iVar7++;
+                if (iVar7 < 1) {
+                    m_Countdown = 0.0f;
+                    pos.y = OFFSCREEN_Y;
+                    vel = Vec3(0.0f, -1.0f, 0.0f);
+                } else if (iVar7 != 1) {
+                    wm->SpawnBomb(iVar7 - 1, 0, nullptr, 0);
+                }
+            }
         }
 
         // Physics — always runs in alive branch after countdown check.
@@ -483,12 +502,14 @@ void Bomb::Draw(Renderer& r) {
 }
 
 void Bomb::Deactivate() {
-    active = false;
-    flags |= 0x10;
+    // Port's Deactivate is the OnDeactivate cleanup callback invoked by
+    // ActorManager::Deactivate before the entity returns to the free
+    // pool. Drop the fuse emitter; ActorManager then sets ENT_INACTIVE.
     if (m_pEmitter) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = NULL;
     }
+    Entity::Deactivate();
 }
 
 // Matches Bomb::Chuck (0x170f68)
@@ -549,7 +570,7 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             if (game->pGameSound) game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
             // TODO: AddToCurrentScore(-10, 0, false, false)
             // TODO: PowerUpManager::ClearTimedPowers()
-            // TODO: WaveManager::ResetSpeed(0)
+            WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
             // TODO: "X" MissControl indicator
             // Mark as menu-hit so Update's hit branch runs the falling
             // physics instead of the BombBlast shockwave spawn loop.

@@ -9,6 +9,7 @@
 #include "particle/PSPParticleManager.h"
 #include "hud/SliceEffect.h"
 #include "game/BombHit.h"
+#include "game/WaveManager.h"
 #include "Game.h"
 #include "math/math3d.h"
 #include <cmath>
@@ -90,8 +91,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_bDrawWhole = false;
     m_ScaleAnim = 0.0f;
     m_ChuckDelay = 0.0f;
-    active = true;
-    flags &= ~0x10;  // unhide
+    flags &= ~ENT_SKIP_MASK;  // activate + unhide
 
     // Reset slice state (binary Fruit::Init — m_SliceTimer = -1).
     m_SliceTimer   = -1.0f;
@@ -185,12 +185,11 @@ void Fruit::Chuck(const Vec3& velocity, float delay) {
     vel = velocity;
     m_ChuckDelay = delay;
     m_ScaleAnim = 0.0f;
-    active = true;
-    flags &= ~0x10;
+    flags &= ~ENT_SKIP_MASK;
 }
 
 void Fruit::Update(float dt) {
-    if (!active) return;
+    if (!IsActive()) return;
 
     // Launch delay
     if (m_ChuckDelay > 0.0f) {
@@ -335,7 +334,7 @@ static void DrawOneModel(Mortar::Model* model,
 
 void Fruit::Draw(Renderer& r) {
     (void)r;
-    if (!active || m_ChuckDelay > 0.0f) return;
+    if (!IsActive() || m_ChuckDelay > 0.0f) return;
     if (!m_Model.IsValid()) {
         static bool s_logged = false;
         if (!s_logged) { printf("[Fruit] Draw: model not valid\n"); s_logged = true; }
@@ -376,8 +375,10 @@ void Fruit::Draw(Renderer& r) {
 }
 
 void Fruit::Deactivate() {
-    active = false;
-    flags |= 0x10;
+    // OnDeactivate cleanup — nothing Fruit-specific beyond the base
+    // implementation, but keep the override so the port retains a clear
+    // slot matching the binary's vtable+0x0C position.
+    Entity::Deactivate();
 }
 
 // Matches Fruit::KillFruit (0x00176abc).
@@ -543,11 +544,12 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
     // Guard: already sliced or slice timer is positive → double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return;
 
-    // Critical RNG is gated on WaveManager::RESET_BONUS which isn't ported
-    // — keep critical off for now. Special-fruit path IS deterministic
+    // Critical RNG comes from WaveManager::CriticalMode — stubbed to
+    // `false` until waves load, so critical slicing stays off for now but
+    // the call is wired in place. Special-fruit path is deterministic
     // (FRUIT_INFO.m_Score == 0x32) and runs the rare-fruit branch.
     const FruitInfo* info = FruitInfo_Get(m_FruitType);
-    const bool isCritical = false;                 // TODO: WaveManager
+    const bool isCritical = WaveManager::GetInstance()->CriticalMode(0);
     const bool isSpecial  = (info && info->m_Score == 0x32);
 
     // Blade speed clamp. Critical / special → [6, 8]; normal → [4, 8].
