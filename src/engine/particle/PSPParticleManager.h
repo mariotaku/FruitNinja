@@ -210,7 +210,7 @@ class PSPParticleManager : public Singleton<PSPParticleManager> {
 public:
     // Add emitter by template hash. Matches AddEmitter (0x1149e0).
     // ppRef (optional) is filled with the returned pointer for caller cleanup;
-    // it is cleared to NULL if template lookup fails. `persistent` is
+    // it is cleared to nullptr if template lookup fails. `persistent` is
     // accepted for signature compatibility but currently unused (matches bin).
     PSPParticleEmitter* AddEmitter(uint32_t hash,
                                    PSPParticleEmitter** ppRef = nullptr,

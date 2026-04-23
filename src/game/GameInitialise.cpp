@@ -51,10 +51,10 @@ void GamePreInitialise() {
     game->m_TransitionTimer = 0;
     game->bombHitTimer = 0;
     game->dt = 0;
-    game->hud = NULL;
-    game->mainScreen = NULL;
+    game->hud = nullptr;
+    game->mainScreen = nullptr;
     game->m_FrameTimer = 0;
-    game->pGameSound = NULL;
+    game->pGameSound = nullptr;
 }
 
 // Matches GameInitialise (0x10bdfc, 305 lines) — boot all singletons
@@ -189,14 +189,14 @@ void GameDestroy() {
     // --- 4. HUD ---
     if (game->hud) {
         delete game->hud;
-        game->hud = NULL;
+        game->hud = nullptr;
     }
-    game->mainScreen = NULL;
+    game->mainScreen = nullptr;
 
     // --- 5. FruitCamera ---
-    if (game->pCamera) { delete game->pCamera; game->pCamera = NULL; }
+    if (game->pCamera) { delete game->pCamera; game->pCamera = nullptr; }
     // TutorialControl is a HUDControl — destroyed by HUD teardown above.
-    game->pTutorialCtrl = NULL;
+    game->pTutorialCtrl = nullptr;
 
     // --- 6. Fonts (field_0x50..0x80, ~10 Font* slots) ---
     // TODO: delete game->pFont* slots (0x50, 0x54, 0x58, 0x5c,
@@ -206,7 +206,7 @@ void GameDestroy() {
     // TODO: delete game->pSaveData
 
     // --- 8. GameSound ---
-    if (game->pGameSound) { delete game->pGameSound; game->pGameSound = NULL; }
+    if (game->pGameSound) { delete game->pGameSound; game->pGameSound = nullptr; }
 
     // --- 9. SmartPtr clear (field_0x17c) ---
     // TODO: SmartPtr::SetNull(&game->field_0x17c)
@@ -218,8 +218,8 @@ void GameDestroy() {
     // TODO: CleanupBomb, CleanupFruit, CleanUpSplat, CleanupSlash
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
-    if (game->inputManager) { delete game->inputManager; game->inputManager = NULL; }
-    if (game->actorManager) { delete game->actorManager; game->actorManager = NULL; }
+    if (game->inputManager) { delete game->inputManager; game->inputManager = nullptr; }
+    if (game->actorManager) { delete game->actorManager; game->actorManager = nullptr; }
 
     // --- 12. Engine singletons ---
     // TODO: Mortar::InputManager::Destroy

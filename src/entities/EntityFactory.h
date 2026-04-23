@@ -8,7 +8,7 @@
 //
 // See docs/functions/entity-factory-combo-timekeeper.md for the full
 // decompile. Each type maps to a new-expression; unknown types return
-// NULL (matches the binary's default switch branch).
+// nullptr (matches the binary's default switch branch).
 //
 // Analysed: 2026-04-23T01:30
 

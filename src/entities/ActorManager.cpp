@@ -12,18 +12,18 @@
 //
 // Analysed: 2026-04-23T01:00
 
-ActorManager* ActorManager::s_Instance = NULL;
+ActorManager* ActorManager::s_Instance = nullptr;
 
 // --- Construction / singleton --------------------------------------------
 
 ActorManager::ActorManager()
-    : m_pHeap(NULL)
+    : m_pHeap(nullptr)
     , m_HeapSize(0)
     , m_FreeCount(0)
-    , m_pTypeLists(NULL)
+    , m_pTypeLists(nullptr)
     , m_NumTypes(0)
     , m_DebugDraw(false)
-    , m_FactoryDelegate(NULL)
+    , m_FactoryDelegate(nullptr)
 {
     std::memset(m_FreePool, 0, sizeof(m_FreePool));
     s_Instance = this;
@@ -32,7 +32,7 @@ ActorManager::ActorManager()
 ActorManager::~ActorManager() {
     // Binary dtor calls Destroy() then tears down delegates / listener list.
     Destroy();
-    if (s_Instance == this) s_Instance = NULL;
+    if (s_Instance == this) s_Instance = nullptr;
 }
 
 ActorManager* ActorManager::GetInstance() {
@@ -48,7 +48,7 @@ ActorManager* ActorManager::GetInstance() {
 // Port drops LinkedHeap and uses new[]; sets m_pHeap to a sentinel so the
 // null-guard in Update/Draw stays false.
 void ActorManager::Initialise(int numTypes, int heapSize) {
-    if (m_pHeap != NULL) return;  // already initialised
+    if (m_pHeap != nullptr) return;  // already initialised
     m_HeapSize    = heapSize;
     m_NumTypes    = numTypes;
     m_pTypeLists  = new std::list<Entity*>[numTypes];
@@ -61,9 +61,9 @@ void ActorManager::Destroy() {
     Clear();
     if (m_pTypeLists) {
         delete[] m_pTypeLists;
-        m_pTypeLists = NULL;
+        m_pTypeLists = nullptr;
     }
-    m_pHeap    = NULL;
+    m_pHeap    = nullptr;
     m_HeapSize = 0;
     m_FreeCount = 0;
 }
@@ -97,8 +97,8 @@ void ActorManager::Clear() {
 
 // 0x0017068c. Binary-faithful recycle-first Add.
 Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary*/) {
-    if (m_pHeap == NULL || m_pTypeLists == NULL) return NULL;
-    if (entityType < 0 || entityType >= m_NumTypes) return NULL;
+    if (m_pHeap == nullptr || m_pTypeLists == nullptr) return nullptr;
+    if (entityType < 0 || entityType >= m_NumTypes) return nullptr;
 
     // --- Recycle path: reverse-scan free pool for matching type. ---
     for (int i = m_FreeCount - 1; i >= 0; i--) {
@@ -111,7 +111,7 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
             // Compact pool: shift [i+1..m_FreeCount] one slot left.
             for (int j = i; j < m_FreeCount; j++)
                 m_FreePool[j] = m_FreePool[j + 1];
-            m_FreePool[m_FreeCount] = NULL;
+            m_FreePool[m_FreeCount] = nullptr;
             // Entity::Activate at 0x00170b18: flags &= 0xFE. The port
             // also clears ENT_KILLED so a resurrected entity doesn't
             // immediately trip the deactivation sweep again.
@@ -123,10 +123,10 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
     // --- Factory path: pool empty or no matching type. ---
     if (!m_FactoryDelegate) {
         fprintf(stderr, "ActorManager::Add: no factory registered (type %d)\n", entityType);
-        return NULL;
+        return nullptr;
     }
     Entity* entity = m_FactoryDelegate(entityType);
-    if (entity == NULL) return NULL;
+    if (entity == nullptr) return nullptr;
     m_pTypeLists[entityType].push_back(entity);
     entity->entityType    = entityType;   // binary: store at +0x35
     entity->m_RecycleFlag = 0;            // binary: store at +0x34
@@ -137,8 +137,8 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
 
 // 0x00170654. Push an already-built entity into its type list.
 Entity* ActorManager::Add(Entity* entity, long typeIdx) {
-    if (!entity) return NULL;
-    if (typeIdx < 0 || typeIdx >= (long)m_NumTypes || m_pTypeLists == NULL) return NULL;
+    if (!entity) return nullptr;
+    if (typeIdx < 0 || typeIdx >= (long)m_NumTypes || m_pTypeLists == nullptr) return nullptr;
     m_pTypeLists[typeIdx].push_back(entity);
     entity->entityType    = (int)typeIdx;
     entity->m_RecycleFlag = 0;
@@ -147,7 +147,7 @@ Entity* ActorManager::Add(Entity* entity, long typeIdx) {
 
 // 0x00170184.
 void ActorManager::Deactivate(Entity* entity) {
-    if (!entity || m_pTypeLists == NULL) return;
+    if (!entity || m_pTypeLists == nullptr) return;
     const int type = entity->entityType;
     if (type < 0 || type >= m_NumTypes) return;
     std::list<Entity*>& list = m_pTypeLists[type];
@@ -174,7 +174,7 @@ void ActorManager::Deactivate(Entity* entity) {
 
 // 0x001702d8.
 void ActorManager::Remove(Entity* entity) {
-    if (!entity || m_pTypeLists == NULL) return;
+    if (!entity || m_pTypeLists == nullptr) return;
     const int type = entity->entityType;
     if (type < 0 || type >= m_NumTypes) return;
     std::list<Entity*>& list = m_pTypeLists[type];
@@ -192,7 +192,7 @@ void ActorManager::Remove(Entity* entity) {
 
 // 0x0016fb44.
 void ActorManager::DeactivateAllEntities(int typeIdx) {
-    if (m_pTypeLists == NULL) return;
+    if (m_pTypeLists == nullptr) return;
     if (typeIdx < 0 || typeIdx >= m_NumTypes) return;
     for (std::list<Entity*>::iterator it = m_pTypeLists[typeIdx].begin();
          it != m_pTypeLists[typeIdx].end(); ++it) {
@@ -204,7 +204,7 @@ void ActorManager::DeactivateAllEntities(int typeIdx) {
 
 // 0x001701f4.
 void ActorManager::Update(float dt) {
-    if (m_pHeap == NULL || m_pTypeLists == NULL) return;
+    if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
 
     // Two-pass update: iterate type lists first, collect kill list after.
     // Matches the binary which stages the deactivation queue at +0x80c.
@@ -236,7 +236,7 @@ void ActorManager::Update(float dt) {
 
 // 0x0016fe7c.
 void ActorManager::Draw(Renderer& r) {
-    if (m_pHeap == NULL || m_pTypeLists == NULL) return;
+    if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
     for (int t = 0; t < m_NumTypes; t++) {
         std::list<Entity*>& list = m_pTypeLists[t];
         for (std::list<Entity*>::iterator it = list.begin(); it != list.end(); ++it) {
@@ -304,9 +304,9 @@ int ActorManager::GetNumTypes() const {
 
 // 0x0016fcc4.
 Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
-    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return NULL;
+    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
-    if (slot >= list.size()) return NULL;
+    if (slot >= list.size()) return nullptr;
     std::list<Entity*>::iterator it = list.begin();
     std::advance(it, slot);
     return *it;

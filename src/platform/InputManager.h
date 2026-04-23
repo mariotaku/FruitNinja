@@ -32,7 +32,7 @@ public:
     static InputManager* s_instance;
 
     InputManager() { s_instance = this; }
-    ~InputManager() { s_instance = NULL; }
+    ~InputManager() { s_instance = nullptr; }
 
     static InputManager* GetInstance() { return s_instance; }
 

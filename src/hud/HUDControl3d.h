@@ -12,7 +12,7 @@
 
 class HUDControl3d : public HUDControl {
 public:
-    // +0x60: main display texture (NULL/0 = don't draw)
+    // +0x60: main display texture (nullptr/0 = don't draw)
     // Original: SmartPtr<Texture>; port uses raw GLuint
     GLuint m_Texture;
 

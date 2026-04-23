@@ -21,7 +21,7 @@ struct ImpactSound {
     char* m_SoundName;         // +0x00: heap-allocated SFX name
     int   m_Weight;            // +0x04: probability weight
     int   m_CumulativeWeight;  // +0x08: running total
-    ImpactSound() : m_SoundName(NULL), m_Weight(0), m_CumulativeWeight(0) {}
+    ImpactSound() : m_SoundName(nullptr), m_Weight(0), m_CumulativeWeight(0) {}
 };
 
 // Power-up entry (0xC = 12 bytes)
@@ -36,7 +36,7 @@ struct FruitPower {
 struct FruitPowers {
     FruitPower* m_pArray;  // +0x00
     uint32_t    m_Count;   // +0x04
-    FruitPowers() : m_pArray(NULL), m_Count(0) {}
+    FruitPowers() : m_pArray(nullptr), m_Count(0) {}
 };
 
 // Matches FRUIT_INFO (0x330 = 816 bytes per entry)

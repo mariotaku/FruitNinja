@@ -18,7 +18,7 @@
 // Not modelled (stubbed or omitted):
 //   - LinkedHeap allocator at +0x000 — port uses new[] for the type-list
 //     array and leaves m_pHeap as an opaque non-null sentinel so the
-//     binary's `if (m_pHeap != NULL)` gate in Update/Draw still behaves.
+//     binary's `if (m_pHeap != nullptr)` gate in Update/Draw still behaves.
 //   - Delegate2<long, ulong, bool&> hash converter at +0x1048 — not
 //     called from any live FruitNinja code path.
 //   - MessageListener list at +0x1014 — SendMessage/AddMessageListener
@@ -47,7 +47,7 @@ public:
     // --- Fields mirrored from binary layout (sizes/offsets in comments) -
 
     // +0x000: LinkedHeap*. Port stores a sentinel (self ptr) once
-    // Initialise runs, NULL otherwise. Update/Draw short-circuit on NULL
+    // Initialise runs, nullptr otherwise. Update/Draw short-circuit on nullptr
     // to match the binary's guard.
     void* m_pHeap;
 

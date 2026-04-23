@@ -73,7 +73,7 @@ struct BombGlobalData {
     uint32_t fuseHash[2];
 
     BombGlobalData()
-        : pTrackedBomb(NULL), bFuseSfxFiredThisFrame(0), loaded(false) {
+        : pTrackedBomb(nullptr), bFuseSfxFiredThisFrame(0), loaded(false) {
         fuseHash[0] = fuseHash[1] = 0;
     }
 };
@@ -165,7 +165,7 @@ Bomb::Bomb()
       m_RotVelX(0), m_RotVelY(0),
       m_RotX(0), m_RotY(0),
       m_bCollisionGuard(0),
-      m_pEmitter(NULL),
+      m_pEmitter(nullptr),
       m_bMovement(0),
       m_bMenuBombHit(0),
       m_Countdown(0.0f),
@@ -177,7 +177,7 @@ Bomb::Bomb()
 Bomb::~Bomb() {
     if (m_pEmitter) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
-        m_pEmitter = NULL;
+        m_pEmitter = nullptr;
     }
     // TODO: Unlink from game state (field_0x84)
 }
@@ -188,7 +188,7 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     (void)fruitType;
 
     float scaleFactor = 1.0f;
-    // Original: if (p3 != NULL) scaleFactor = *(float*)p3;
+    // Original: if (p3 != nullptr) scaleFactor = *(float*)p3;
 
     // Lazy-load bomb texture
     if (!g_BombTexture.IsValid()) {
@@ -211,7 +211,7 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     m_RotY    = (int16_t)(rand() % 360);
 
     m_bMenuBombHit = 0;
-    m_pEmitter = NULL;  // lazy-created in Update
+    m_pEmitter = nullptr;  // lazy-created in Update
 
     // Scale + collision sphere: matches binary multiply chain at 0x172504.
     // Binary reads <bomb size="..." collision="..."/> from fruitlist.xml
@@ -315,7 +315,7 @@ void Bomb::Update(float /*dt*/) {
             // Binary: iVar7 = (int)WaveManager::spawnLevel, with a random
             // ceil based on the fractional part (rand100 < frac*100 -> +1).
             //   if (iVar7 < 1): countdown = 0; pos.y = -320; vel = (0,-1,0);
-            //   else if (iVar7 != 1): WaveManager::SpawnBomb(iVar7 - 1, 0, NULL, ...);
+            //   else if (iVar7 != 1): WaveManager::SpawnBomb(iVar7 - 1, 0, nullptr, ...);
             // WaveManager::SpawnBomb is currently a stub (no-op), so chain
             // bombs produce no visible effect yet — the control flow is
             // wired so it lights up for free once spawning is ported.
@@ -507,7 +507,7 @@ void Bomb::Deactivate() {
     // pool. Drop the fuse emitter; ActorManager then sets ENT_INACTIVE.
     if (m_pEmitter) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
-        m_pEmitter = NULL;
+        m_pEmitter = nullptr;
     }
     Entity::Deactivate();
 }
@@ -524,7 +524,7 @@ void Bomb::KillBomb() {
     flags |= 0x10;  // mark for removal
     if (m_pEmitter) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
-        m_pEmitter = NULL;
+        m_pEmitter = nullptr;
     }
     // TODO: Unlink from game state (field_0x84)
 }
@@ -548,7 +548,7 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
 
     Game* game = Game::GetInstance();
 
-    if (m_bMenuBombHit == 0 && game != NULL) {
+    if (m_bMenuBombHit == 0 && game != nullptr) {
         FN::SetBombHitPos(pos);
 
         const bool isZen = (game->gameMode == 2);

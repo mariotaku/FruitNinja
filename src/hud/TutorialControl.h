@@ -47,7 +47,7 @@ public:
 
     // Matches TutorialControl::ResetTutePos @ 0x00162f04.
     // Copies button position, computes arrow width/flip, resets timer.
-    // btn=NULL → just resets timer (hides arrow).
+    // btn=nullptr → just resets timer (hides arrow).
     void ResetTutePos(MenuButton* btn);
 
     // Matches TutorialControl::ResetTutePos @ 0x00162f84.

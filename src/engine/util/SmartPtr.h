@@ -9,7 +9,7 @@ template<typename T>
 class SmartPtr {
     T* m_ptr;
 public:
-    SmartPtr() : m_ptr(NULL) {}
+    SmartPtr() : m_ptr(nullptr) {}
     SmartPtr(T* p) : m_ptr(p) { if (m_ptr) m_ptr->AddRef(); }
     SmartPtr(const SmartPtr& o) : m_ptr(o.m_ptr) { if (m_ptr) m_ptr->AddRef(); }
     ~SmartPtr() { if (m_ptr) m_ptr->Release(); }
@@ -35,14 +35,14 @@ public:
     T* operator->() const { return m_ptr; }
     T& operator*() const { return *m_ptr; }
     T* Get() const { return m_ptr; }
-    bool IsValid() const { return m_ptr != NULL; }
-    operator bool() const { return m_ptr != NULL; }
+    bool IsValid() const { return m_ptr != nullptr; }
+    operator bool() const { return m_ptr != nullptr; }
 
     // Matches Mortar::SmartPtr<T>::SetNull (binary pattern)
     void SetNull() {
         if (m_ptr) {
             m_ptr->Release();
-            m_ptr = NULL;
+            m_ptr = nullptr;
         }
     }
 };

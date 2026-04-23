@@ -24,18 +24,18 @@ Game::Game()
       retryTimer(0), m_TransitionTimer(0), bombHitTimer(0),
       missCount(0), currentScore(0), m_bUnsullied(0),
       m_CritTimer(0), m_ScoreThreshold(0), field_0x34(0), m_bSlowMotion(0),
-      dt(0), hud(NULL),
-      pCamera(NULL),
+      dt(0), hud(nullptr),
+      pCamera(nullptr),
       isFirstPlay1(false), isFirstPlay2(false),
       field_0x88(0),
-      mainScreen(NULL),
-      pTutorialCtrl(NULL),
+      mainScreen(nullptr),
+      pTutorialCtrl(nullptr),
       fruitTotal(0),
-      pGameSound(NULL),
+      pGameSound(nullptr),
       m_gameDataLicensedState(0),
       m_FrameTimer(0), m_MenuReturnTimer(0), flag_0x1a8(0), m_bFrameDirty(0),
-      window(NULL), gl_context(NULL),
-      inputManager(NULL), actorManager(NULL),
+      window(nullptr), gl_context(nullptr),
+      inputManager(nullptr), actorManager(nullptr),
       soundEnabled(true), musicEnabled(true),
       running(false)
 {
@@ -126,6 +126,11 @@ void Game::run() {
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
                 FN::g_DebugHitboxes = !FN::g_DebugHitboxes;
                 printf("[Debug] Hitboxes %s\n", FN::g_DebugHitboxes ? "ON" : "OFF");
+            } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F2) {
+                // Port specific: glPolygonMode(GL_LINE) around the 3D
+                // entity draw pass. Desktop GL only — no-op under GLES.
+                FN::g_DebugWireframe = !FN::g_DebugWireframe;
+                printf("[Debug] Wireframe %s\n", FN::g_DebugWireframe ? "ON" : "OFF");
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
                 // Port specific: debug-only, no binary equivalent
                 FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;

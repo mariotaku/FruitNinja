@@ -218,7 +218,7 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
 
 // ===================================================================
 // Matches BaseScreen::UpdateButtons @ 0x00130ab4
-// Binary iterates std::list<ScreenButton>: if m_pMenuButton is NULL,
+// Binary iterates std::list<ScreenButton>: if m_pMenuButton is nullptr,
 // calls the visibility delegate then lazily creates MenuButton; else
 // calls the update delegate. ScreenButton struct (~0xCC bytes) with
 // delegates for creation condition, update, press, draw.
@@ -226,7 +226,7 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
 // ===================================================================
 void BaseScreen::UpdateButtons(float dt) {
     for (auto& sb : m_ScreenButtons) {
-        if (sb.m_pButton == NULL) {
+        if (sb.m_pButton == nullptr) {
             // Not yet created — check visibility predicate
             if (!sb.m_visCheck || !sb.m_visCheck(dt)) continue;
 

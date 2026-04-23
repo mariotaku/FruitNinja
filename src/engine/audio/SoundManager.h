@@ -25,7 +25,7 @@ public:
     // Sound management
     virtual MortarSound* CreateNewSound();
     virtual void PreLoadSound(const char* name);
-    virtual uint32_t SFXPlay(const char* name, MortarSound* sound = NULL);
+    virtual uint32_t SFXPlay(const char* name, MortarSound* sound = nullptr);
     virtual void SFXStop(uint32_t handle);
     virtual void SFXPauseAll();
     virtual void SFXUnpauseAll();

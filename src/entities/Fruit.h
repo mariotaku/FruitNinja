@@ -150,7 +150,7 @@ public:
     // MeshManager. Called once from GameInitialise.
     static void LoadFruitModels();
 
-    // Accessor for a per-fruit pair of half meshes. Returns NULL if
+    // Accessor for a per-fruit pair of half meshes. Returns nullptr if
     // index out of range or LoadFruitModels hasn't run.
     static const FruitModelInfo* GetFruitModelInfo(int fruitType);
 };

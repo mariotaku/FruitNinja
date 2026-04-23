@@ -126,13 +126,13 @@ std::string ResolveCI(const char* path) {
 } // namespace
 
 FILE* FileManager::OpenCI(const char* path, const char* mode) {
-    if (!path) return NULL;
+    if (!path) return nullptr;
 
     FILE* f = fopen(path, mode);
     if (f) return f;
 
     std::string real = ResolveCI(path);
-    if (real.empty()) return NULL;
+    if (real.empty()) return nullptr;
     return fopen(real.c_str(), mode);
 }
 

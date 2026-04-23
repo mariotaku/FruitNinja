@@ -19,7 +19,7 @@
 
 class FruitCamera : public Mortar::MortarCamera {
 public:
-    // +0x12C: entity pointer for follow mode (NULL = none)
+    // +0x12C: entity pointer for follow mode (nullptr = none)
     void* m_pFollowEntity;         // MortarEntity* in original
 
     // +0x130: 0 = idle, 1 = follow

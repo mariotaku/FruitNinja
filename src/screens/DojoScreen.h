@@ -69,7 +69,7 @@ private:
     MenuButton* m_pShopButton;
     MenuButton* m_pAboutButton;
 
-    // Child AboutScreen when state==3 triggers. NULL when no about
+    // Child AboutScreen when state==3 triggers. nullptr when no about
     // is shown. Port keeps a weak ptr so the parent can poll
     // m_bPendingRemoval and react.
     AboutScreen* m_pAboutScreen;

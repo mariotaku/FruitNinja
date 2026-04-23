@@ -127,13 +127,13 @@ private:
     float m_Time;
 
     // Current DojoScreen child (when state is STATE_DOJO_WAIT_B or
-    // already in Dojo). NULL when no Dojo is open. MainScreen polls
+    // already in Dojo). nullptr when no Dojo is open. MainScreen polls
     // the child for m_bPendingRemoval and transitions to SLIDE_IN
     // once it has cleared out.
     DojoScreen* m_pDojoScreen;
 
     // Current GameModeScreen child (when state is STATE_MODE_SELECT
-    // and the 0.25 threshold has been crossed). NULL until crossed
+    // and the 0.25 threshold has been crossed). nullptr until crossed
     // and again after the child's RemoveCallback fires.
     GameModeScreen* m_pGameModeScreen;
 

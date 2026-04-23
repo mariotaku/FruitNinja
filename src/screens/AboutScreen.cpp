@@ -43,8 +43,8 @@ AboutScreen::AboutScreen(Game& g, DojoScreen* parent)
     , m_pParent(parent)
     , m_State(0)
     , m_TransitionAlpha(0.0f)
-    , m_pBackButton(NULL)
-    , m_pCreditsButton(NULL)
+    , m_pBackButton(nullptr)
+    , m_pCreditsButton(nullptr)
     , m_bButtonsCreated(false)
 {
     // Binary writes 0x80 to m_LayerFlags in ctor.
@@ -109,8 +109,8 @@ void AboutScreen::CreateButtons() {
 }
 
 void AboutScreen::RemoveButtons() {
-    if (m_pBackButton)    { m_pBackButton->SetPendingRemoval();    m_pBackButton    = NULL; }
-    if (m_pCreditsButton) { m_pCreditsButton->SetPendingRemoval(); m_pCreditsButton = NULL; }
+    if (m_pBackButton)    { m_pBackButton->SetPendingRemoval();    m_pBackButton    = nullptr; }
+    if (m_pCreditsButton) { m_pCreditsButton->SetPendingRemoval(); m_pCreditsButton = nullptr; }
     m_bButtonsCreated = false;
 }
 

@@ -58,7 +58,7 @@ private:
     // PurgeExpired needed.
     struct CacheEntry {
         Texture* ptr;
-        CacheEntry() : ptr(NULL) {}
+        CacheEntry() : ptr(nullptr) {}
         CacheEntry(Texture* p) : ptr(p) {}
     };
 

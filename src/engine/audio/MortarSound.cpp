@@ -4,7 +4,7 @@
 namespace Mortar {
 
 MortarSound::MortarSound()
-    : m_Name(NULL)
+    : m_Name(nullptr)
     , m_Handle(0)
     , m_State(0)
 {

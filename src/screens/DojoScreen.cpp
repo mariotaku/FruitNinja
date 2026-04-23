@@ -70,10 +70,10 @@ SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
 // ===================================================================
 DojoScreen::DojoScreen(Game& g)
     : game(g)
-    , m_pPlayButton(NULL)      // field_0x94
-    , m_pShopButton(NULL)      // field_0x98
-    , m_pAboutButton(NULL)     // field_0x9c
-    , m_pAboutScreen(NULL)     // field_0xa0
+    , m_pPlayButton(nullptr)      // field_0x94
+    , m_pShopButton(nullptr)      // field_0x98
+    , m_pAboutButton(nullptr)     // field_0x9c
+    , m_pAboutScreen(nullptr)     // field_0xa0
 {
     LoadContent();
     m_LayerFlags = 0x80;
@@ -128,9 +128,9 @@ void DojoScreen::Init() {
 // Matches the Release() called from ~DojoScreen @ 0x00137cf4
 // ===================================================================
 void DojoScreen::Release() {
-    if (m_pPlayButton)  { m_pPlayButton->SetPendingRemoval();  m_pPlayButton  = NULL; }
-    if (m_pShopButton)  { m_pShopButton->SetPendingRemoval();  m_pShopButton  = NULL; }
-    if (m_pAboutButton) { m_pAboutButton->SetPendingRemoval(); m_pAboutButton = NULL; }
+    if (m_pPlayButton)  { m_pPlayButton->SetPendingRemoval();  m_pPlayButton  = nullptr; }
+    if (m_pShopButton)  { m_pShopButton->SetPendingRemoval();  m_pShopButton  = nullptr; }
+    if (m_pAboutButton) { m_pAboutButton->SetPendingRemoval(); m_pAboutButton = nullptr; }
 }
 
 // ===================================================================
@@ -139,7 +139,7 @@ void DojoScreen::Release() {
 // ===================================================================
 void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
     if (ctrl == (HUDControl*)m_pShopButton) {
-        m_pShopButton = NULL;
+        m_pShopButton = nullptr;
     }
 }
 
@@ -163,7 +163,7 @@ void DojoScreen::Update(float dt) {
         if (m_TransitionAlpha > ALPHA_BUTTON_CREATE) {
 
             // --- field_0x94: Back/Play button (back_icon.tex) ---
-            if (m_pPlayButton == NULL) {
+            if (m_pPlayButton == nullptr) {
                 // Binary: fruit type from **(int**)(GOT + 0x7060) — this
                 // is the bomb threshold global, equal to FruitInfo_GetCount().
                 // MenuButton treats fruitType >= count as a BOMB spawn.
@@ -186,7 +186,7 @@ void DojoScreen::Update(float dt) {
             }
 
             // --- field_0x98: Shop button (senseis_swag.tex) ---
-            if (m_pShopButton == NULL) {
+            if (m_pShopButton == nullptr) {
                 // Binary: Fruit::FruitType((char*)DAT_001386b0, false)
                 const int shopFruitType = Fruit::FruitType("pineapple", false);
                 m_pShopButton = new MenuButton();
@@ -229,7 +229,7 @@ void DojoScreen::Update(float dt) {
             }
 
             // --- field_0x9c: About button (about.tex) ---
-            if (m_pAboutButton == NULL) {
+            if (m_pAboutButton == nullptr) {
                 // Binary: Fruit::FruitType((char*)DAT_001389f0, false)
                 const int aboutFruitType = Fruit::FruitType("plum", false);
                 m_pAboutButton = new MenuButton();
@@ -271,16 +271,16 @@ void DojoScreen::Update(float dt) {
 
         // Fade complete — null all button pointers and reset alpha
         int prevState = m_State;
-        m_pPlayButton  = NULL;  // field_0x94
+        m_pPlayButton  = nullptr;  // field_0x94
         m_TransitionAlpha = 0.0f;
-        m_pShopButton  = NULL;  // button (field_0x98)
-        m_pAboutButton = NULL;  // field_0x9c (stored as int 0 in binary)
+        m_pShopButton  = nullptr;  // button (field_0x98)
+        m_pAboutButton = nullptr;  // field_0x9c (stored as int 0 in binary)
 
         if (prevState == 3) {
             // State 3: push AboutScreen
             m_pAboutScreen = new AboutScreen(game, this);
             m_pAboutScreen->m_RemoveCallback = [this](HUDControl*) {
-                m_pAboutScreen = NULL;
+                m_pAboutScreen = nullptr;
                 m_State = 0;  // re-enter fade-in to recreate buttons
             };
             game.hud->AddControl(m_pAboutScreen);
@@ -385,7 +385,7 @@ void DojoScreen::PlayCallback() {
     m_State = 6;
 
     // 3. Fling the back-bomb's fruit piece with random velocity
-    //    Binary: if (field_0x94 && field_0x94[5].Init != NULL)
+    //    Binary: if (field_0x94 && field_0x94[5].Init != nullptr)
     //      SetVisible_FruitFact(piece); piece->vel = (rand5+5, -rand5, 0)
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
         // SetVisible_FruitFact @ 0x0013785c: *(byte*)(fruit+0x80) = 1
@@ -395,7 +395,7 @@ void DojoScreen::PlayCallback() {
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)NULL);
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
 
     // Port specific: cascade-release Shop/About fruits so they fly off
     // and their buttons shrink alongside the back-bomb. Binary doesn't
@@ -420,7 +420,7 @@ void DojoScreen::ShopCallback() {
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)NULL);
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
 }
 
 // ===================================================================
@@ -438,5 +438,5 @@ void DojoScreen::AboutCallback() {
         m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)NULL);
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
 }
