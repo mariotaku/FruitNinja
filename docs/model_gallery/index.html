@@ -71,7 +71,7 @@ let prog = null;
 let atlasImg = null;
 let atlasTex = null;
 let allModels = [];
-let current = null;            // { model, vbo, ibo, triCount, bounds, stride }
+let current = null;            // { model, vbo, ibo, draws, bounds, stride, indexType, idxBytes, totalIdx }
 let uniforms = null;           // { uMVP, uTex, uTextured }
 const rot = { x: 0, y: 0 };
 let dragging = false, lastX = 0, lastY = 0;
@@ -126,17 +126,6 @@ const M = {
   ]),
 };
 
-// Triangle-strip (with degenerate triangles for chaining) → triangle list.
-function expandStripToTris(indices) {
-  const tris = [];
-  for (let i = 0; i + 2 < indices.length; i++) {
-    const a = indices[i], b = indices[i+1], c = indices[i+2];
-    if (a === b || b === c || a === c) continue;
-    if (i % 2 === 0) tris.push(a, b, c);
-    else             tris.push(b, a, c);
-  }
-  return tris;
-}
 
 function compile(gl, type, src) {
   const sh = gl.createShader(type);
@@ -231,8 +220,12 @@ function loadModel(model) {
   rot.x = 0; rot.y = 0;
 
   const STRIDE = 24;
+  // Preserve each geometry's native primitive type so GL handles strip
+  // chaining / degenerate triangles itself. (Manual expansion of strips
+  // into a triangle list can flip winding on sub-strips that restart at
+  // odd-count offsets, which was producing the vertex artefacts.)
   const parts = [];
-  let totalVerts = 0, totalTriIdx = 0;
+  let totalVerts = 0, totalIdx = 0;
   for (const mesh of model.meshes || []) {
     for (const geom of mesh.geometries || []) {
       const v = geom.vertex, ix = geom.index;
@@ -242,17 +235,17 @@ function loadModel(model) {
       const isStrip = (ix.primType || "TSTRIP") === "TSTRIP";
       parts.push({ v, ix, vc, ic, isStrip });
       totalVerts += vc;
-      if (isStrip) totalTriIdx += Math.max(0, (ic - 2)) * 3;
-      else         totalTriIdx += ic;
+      totalIdx   += ic;
     }
   }
   if (totalVerts === 0) { current = null; return; }
 
-  const vbuf = new ArrayBuffer(totalVerts * STRIDE);
-  const f32 = new Float32Array(vbuf);
-  const u8  = new Uint8Array(vbuf);
-  const triIdx = new Uint32Array(totalTriIdx);
-  let vOff = 0, tiOff = 0;
+  const vbuf   = new ArrayBuffer(totalVerts * STRIDE);
+  const f32    = new Float32Array(vbuf);
+  const u8     = new Uint8Array(vbuf);
+  const idxBuf = new Uint32Array(totalIdx);
+  const draws  = [];   // { prim: 'STRIP'|'TRIS', first: idx-offset, count }
+  let vOff = 0, iOff = 0;
   let mnx = 1e30, mny = 1e30, mnz = 1e30;
   let mxx = -1e30, mxy = -1e30, mxz = -1e30;
 
@@ -273,20 +266,17 @@ function loadModel(model) {
       u8[(vOff + i) * STRIDE + 22] = v.colors[i*4+2] & 0xff;
       u8[(vOff + i) * STRIDE + 23] = v.colors[i*4+3] & 0xff;
     }
-    if (isStrip) {
-      const tris = expandStripToTris(ix.indices);
-      for (let i = 0; i < tris.length; i++) triIdx[tiOff + i] = tris[i] + vOff;
-      tiOff += tris.length;
-    } else {
-      for (let i = 0; i < ic; i++) triIdx[tiOff + i] = ix.indices[i] + vOff;
-      tiOff += ic;
-    }
+    for (let i = 0; i < ic; i++) idxBuf[iOff + i] = ix.indices[i] + vOff;
+    draws.push({ prim: isStrip ? "STRIP" : "TRIS", first: iOff, count: ic });
+    iOff += ic;
     vOff += vc;
   }
 
-  const finalTri = triIdx.slice(0, tiOff);
-  const needU32 = !!finalTri.find(x => x > 65535);
-  const extU32 = needU32 ? gl.getExtension("OES_element_index_uint") : null;
+  const finalIdx = idxBuf.slice(0, iOff);
+  const needU32  = finalIdx.some(x => x > 65535);
+  const extU32   = needU32 ? gl.getExtension("OES_element_index_uint") : null;
+  const indexType = (needU32 && extU32) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+  const idxBytes  = (indexType === gl.UNSIGNED_INT) ? 4 : 2;
 
   const vbo = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -294,19 +284,18 @@ function loadModel(model) {
 
   const ibo = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-  if (needU32 && extU32) {
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, finalTri, gl.STATIC_DRAW);
+  if (indexType === gl.UNSIGNED_INT) {
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, finalIdx, gl.STATIC_DRAW);
   } else {
-    // Cap at 65535 — fine for every Bada mesh (largest is ~500 verts).
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(finalTri), gl.STATIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(finalIdx), gl.STATIC_DRAW);
   }
 
   current = {
-    model, vbo, ibo,
-    triCount: finalTri.length,
+    model, vbo, ibo, draws,
     bounds:   { min: [mnx, mny, mnz], max: [mxx, mxy, mxz] },
     stride:   STRIDE,
-    indexType: (needU32 && extU32) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
+    indexType, idxBytes,
+    totalIdx: finalIdx.length,
   };
 
   // Info panel.
@@ -324,7 +313,7 @@ function loadModel(model) {
     <div><strong>${model.file}</strong>
       <span class="tag">${model.modelName || "?"}</span>
       <span class="tag">${totalVerts} verts</span>
-      <span class="tag">${finalTri.length / 3 | 0} tris</span>
+      <span class="tag">${finalIdx.length} idx</span>
       <span class="tag">${totalGeoms} geoms</span>
       <span class="tag">${[...primTypes].join(",") || "—"}</span>
     </div>
@@ -379,11 +368,14 @@ function render() {
   gl.uniform1i(uniforms.uTex, 0);
   gl.uniform1f(uniforms.uTextured, textured ? 1.0 : 0.0);
 
-  if (wireframe) {
-    // Wireframe via LINE_STRIP on the full index buffer — approximate.
-    gl.drawElements(gl.LINE_STRIP, current.triCount, current.indexType, 0);
-  } else {
-    gl.drawElements(gl.TRIANGLES, current.triCount, current.indexType, 0);
+  for (const d of current.draws) {
+    let mode;
+    if (wireframe) {
+      mode = gl.LINE_STRIP;     // approximate wireframe
+    } else {
+      mode = (d.prim === "STRIP") ? gl.TRIANGLE_STRIP : gl.TRIANGLES;
+    }
+    gl.drawElements(mode, d.count, current.indexType, d.first * current.idxBytes);
   }
 }
 
