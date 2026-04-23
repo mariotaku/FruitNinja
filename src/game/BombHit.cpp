@@ -247,7 +247,10 @@ void ResetGameEntities(bool killAll) {
     Game* game = Game::GetInstance();
     const bool zenMode = game && (game->gameMode == 2);
 
-    for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {
+    // Iterate Fruit (0) + Bomb (1) type lists.
+    for (int t = 0; t <= 1; t++) {
+    const std::list<Entity*>& list = am->GetTypeList(t);
+    for (auto it = list.begin(); it != list.end(); ++it) {
         Entity* e = *it;
         if (!e || !e->IsActive()) continue;
 
@@ -295,6 +298,7 @@ void ResetGameEntities(bool killAll) {
             fruit->m_SecondVel.y = DRIFT_Y;
         }
     }
+    }  // end type loop
 
     // Splats: binary only purges in same-screen multiplayer. Port
     // has no multiplayer so we skip — splats fade naturally.

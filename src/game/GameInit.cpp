@@ -11,6 +11,7 @@
 #include "Game.h"
 #include "FruitCamera.h"
 #include "BombHit.h"
+#include "WaveManager.h"
 #include "screens/MainScreen.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
@@ -74,9 +75,10 @@ void GameInit(unsigned long) {
     // from SDLInputTranslator (for hypothetical future keyboard-style
     // bindings) but have no subscribers.
 
-    // TODO: MissControl ×3, ScoreControl, CoinCounter, TimeControl
+    // TODO: MissControl x3, ScoreControl, CoinCounter, TimeControl
     // TODO: Entity::HeapCreate, ActorManager::Initialise
-    // TODO: Pre-spawn 30× entities, SplatEntity/WaveManager/BombFlash pools
+    // TODO: Pre-spawn 30x entities, SplatEntity/BombFlash pools
+    WaveManager::GetInstance()->Init();  // stub (parses wave XML in binary)
     // TODO: SoundManager::Initialise + SetSFXVolume
 }
 
@@ -106,6 +108,10 @@ void GameUpdate(float dt, bool active) {
                            active ? 1 : 0, (void*)game->actorManager);
     if (active && game->actorManager)
         game->actorManager->Update(dt);
+
+    // WaveManager::Update @ 0x001259d8 — stubbed; binary pumps wave
+    // spawners + blitz combo + PowerUpManager from here.
+    if (active) WaveManager::GetInstance()->Update(dt);
 
     if (earlyFrame) printf("GameUpdate: -> PSPParticleManager::Update\n");
     Mortar::PSPParticleManager::GetInstance().Update(dt);
@@ -274,7 +280,8 @@ void GameDraw(float dt, bool active) {
     if (earlyFrame) printf("GameDraw: -> pm.Draw(1)\n");
     pm.Draw(1);
 
-    // WaveManager::Draw(0) @ 0x0016bb98 — TODO: not yet ported
+    // WaveManager::Draw(0) @ 0x0016bb98 — stubbed (wave-banner overlay).
+    WaveManager::GetInstance()->Draw(0);
 
     // === 5. HUD overlay layers + flash effects ===
     if (game->hud) {
@@ -339,6 +346,7 @@ void GameExit_Handler() {
     game->mainScreen = NULL;
 
     // TODO: Coin::ClearCoins, SaveCurrentData
-    // TODO: WaveManager::Destroy, PSPParticleManager::ClearEmitters
+    WaveManager::GetInstance()->Destroy();  // stub (frees WAVE_INFO/WaveQue)
+    // TODO: PSPParticleManager::ClearEmitters
     // TODO: ActorManager::Clear + Destroy, Entity::HeapDestroy
 }

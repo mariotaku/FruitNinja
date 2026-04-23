@@ -157,12 +157,13 @@ void DebugHitbox_Draw() {
     if (!r) return;
 
     int drawn = 0;
-    for (auto it = am->entities.begin(); it != am->entities.end(); ++it) {
+    // Only fruits (0) and bombs (1) — same set the slash collision
+    // pass tests against. Skip splats and others.
+    for (int t = 0; t <= 1; t++) {
+    const std::list<Entity*>& list = am->GetTypeList(t);
+    for (auto it = list.begin(); it != list.end(); ++it) {
         Entity* e = *it;
         if (!e || !e->IsActive()) continue;
-        // Only fruits (0) and bombs (1) — same set the slash collision
-        // pass tests against. Skip splats and others.
-        if (e->entityType != 0 && e->entityType != 1) continue;
         if (e->m_Col.radius <= 0.0f) continue;
 
         const uint32_t col = ColourFor(e->entityType);
@@ -179,6 +180,7 @@ void DebugHitbox_Draw() {
         r->DrawTriList(s_Verts, RING_SEGMENTS * 6 + 24);
         ++drawn;
     }
+    }  // end type loop
 
     (void)drawn;
 }

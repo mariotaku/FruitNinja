@@ -147,7 +147,9 @@ SplatEntity::SplatEntity()
     , m_bAlive(0)
 {
     entityType = 2;
-    active = false;
+    // SplatEntity runs its own s_Pool lifecycle independent of
+    // ActorManager; m_bAlive is the live/dead flag. No ENT_INACTIVE
+    // bookkeeping needed here.
 }
 
 SplatEntity::~SplatEntity() {}
@@ -222,9 +224,7 @@ void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, bool param3, int fruit
     // Start airborne — Update will pick m_SplatType on landing.
     m_SplatType = -1;
     m_bAlive    = 1;
-
-    active = true;
-    flags &= ~0x10;
+    flags &= ~ENT_KILLED;
 }
 
 // Matches SplatEntity::Update (0x0017f774). Two phases: airborne
@@ -304,7 +304,6 @@ void SplatEntity::UpdateSplat(float dt) {
     if (m_Life <= 0.0f) {
         m_Life = 0.0f;
         m_bAlive = 0;
-        active = false;
         return;
     }
 
@@ -344,7 +343,6 @@ SplatEntity* SplatEntity::GetFree() {
     SplatEntity* s = s_Pool.Pop();
     if (!s) return NULL;
     s->m_bAlive = 0;
-    s->active   = false;
     return s;
 }
 
@@ -399,7 +397,6 @@ void SplatEntity::RemoveAll() {
         SplatEntity* s = s_Pool.SlotAt(i);
         if (!s || !s->m_bAlive) continue;
         s->m_bAlive = 0;
-        s->active   = false;
         s_Pool.Push(s);
     }
 }

@@ -13,6 +13,8 @@
 #include "hud/MenuButton.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
+#include "entities/BombBlast.h"
+#include "entities/EntityFactory.h"
 #include "entities/SplatEntity.h"
 #include "entities/SlashEntity.h"
 #include "audio/GameSound.h"
@@ -99,8 +101,13 @@ void GameInitialise() {
     // Zero g_GameData fields (matches step 15 continued)
     game->worldPos = Vec3(0.0f, 0.0f, 0.0f);
 
-    // ActorManager (needed for entity creation)
+    // ActorManager (needed for entity creation). Binary Initialise is
+    // called with (numTypes=5, heapSize=0x2000) from GameInit — see
+    // docs/engine/actor-manager.md. Factory is the free function
+    // CreateEntity (binary 0x0017421c) — see EntityFactory.h.
     game->actorManager = new ActorManager();
+    game->actorManager->Initialise(5, 0x2000);
+    game->actorManager->RegisterFactory(&CreateEntity);
 
     // GameSound — 32-slot pool. Backend is currently stubbed
     // (SoundManager is no-op) but the call sites exercise the real
