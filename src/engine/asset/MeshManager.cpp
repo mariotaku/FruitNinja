@@ -75,92 +75,84 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, GeometryEntr
     memcpy(&vertCount, data + pos, 4); pos += 4;
     if (vertCount == 0 || vertCount > 100000) return false;
 
-    // PSP vertex declaration bitfield — verified against binary
+    // PSP vertex declaration layout. Stride is computed per binary
     // LegacyPSPVertexDecl::Stride @ 0x001a741c:
-    //   stride = (FormatSize(normalFmt) + FormatSize(colorFmt)
-    //           + FormatSize(field13) + FormatSize(field12)) * 3
-    //         +  FormatSize(posFmt) * (morphCount + 1)
-    //         +  FormatSize(texFmt) * 2
-    //         +  FormatSize(weightFmt)
+    //   stride = (normalFmt + colorFmt + field13 + field12) * 3
+    //          + posFmt * (morphCount + 1)
+    //          + texFmt * 2
+    //          + weightFmt
+    // For bomb/fruit decl=0x120001ff: texFmt=3, weightFmt=7, colorFmt=3,
+    // normalFmt=3, posFmt=0, morphCount=0 → stride = 8+4+12+12+0 = 36.
     //
-    // Bit layout:
-    //   0-1   texFmt      (× 2 in stride — 2D UV)
-    //   2-4   weightFmt   (× 1)
-    //   5-6   colorFmt    (× 3 — 3 components; for fmt=3 this is a surface normal!)
-    //   7-8   normalFmt   (× 3 — actually holds the 3D position for this .mmd format!)
-    //   9-10  posFmt      (× (morphCount+1))
-    //   13-15 morphCount
+    // IMPORTANT — the stride formula's "weight" / "color" naming does
+    // not match what the binary actually samples from each slot. User-
+    // confirmed via side-by-side: the 4 bytes at offset 8 (the "weight"
+    // slot per the formula) are read by glColorPointer as 4-byte RGBA
+    // vertex colour. The 12 bytes at offset 12 (the "color" slot per
+    // the formula) hold the surface normal direction — unused by GL
+    // when IsLit=false (the common case). The 12 bytes at offset 24
+    // (the "normal" slot per the formula) hold the actual 3D position,
+    // which is what glVertexPointer binds when posFmt=0.
     //
-    // Attribute order in data: tex, weight, color(=surfaceNormal), normal(=position)
-    // For bomb.mmd decl=0x120001ff: texFmt=3, weightFmt=7, colorFmt=3, normalFmt=3,
-    // posFmt=0 → stride = 8+4+12+12+0 = 36.
-    // PSP vertex declaration bitfield — verified against binary
-    // LegacyPSPVertexDecl::Stride @ 0x001a741c:
-    //   stride = (FormatSize(normalFmt) + FormatSize(colorFmt)
-    //           + FormatSize(field13) + FormatSize(field12)) * 3
-    //         +  FormatSize(posFmt) * (morphCount + 1)
-    //         +  FormatSize(texFmt) * 2
-    //         +  FormatSize(weightFmt)
+    // So the data-stream semantics are:
+    //   [0..7]   tex UV           (2 floats)
+    //   [8..11]  RGBA vertex colour (4 bytes, read by glColorPointer)
+    //   [12..23] surface normal   (3 floats, consumed by lighting or
+    //                              ignored by unlit rendering)
+    //   [24..35] 3D position      (3 floats, rebound to attribute 0
+    //                              since posFmt=0 has no dedicated slot)
     //
-    // Bit layout:
-    //   0-1   texFmt      (× 2 in stride — 2D UV)
-    //   2-4   weightFmt   (× 1)
-    //   5-6   colorFmt    (× 3 — 3 components; for fmt=3 this is a surface normal!)
-    //   7-8   normalFmt   (× 3 — actually holds the 3D position for this .mmd format!)
-    //   9-10  posFmt      (× (morphCount+1))
-    //   13-15 morphCount
-    //
-    // Data order in stream: tex, weight, color(=surfaceNormal), normal(=position)
-    // For decl=0x120001ff (all fruit/bomb meshes):
-    //   texFmt=3 weightFmt=7 colorFmt=3 normalFmt=3 posFmt=0 morphCount=0
-    //   stride = 8+4+12+12+0 = 36
-    int texFmt    = (vertDecl >> 0) & 0x3;
-    int weightFmt = (vertDecl >> 2) & 0x7;
-    int colorFmt  = (vertDecl >> 5) & 0x3;
-    int normalFmt = (vertDecl >> 7) & 0x3;
-    int posFmt    = (vertDecl >> 9) & 0x3;
+    // The port's earlier d279483 commit mis-concluded that the offset-8
+    // bytes were "weight NaN filler" and disabled the color attribute;
+    // that hid the pale-blue-gray vertex tint the binary applies via
+    // GL_MODULATE and over-brightened every mesh.
+    int texFmt     = (vertDecl >> 0) & 0x3;
+    int weightFmt  = (vertDecl >> 2) & 0x7;
+    int colorFmt   = (vertDecl >> 5) & 0x3;
+    int normalFmt  = (vertDecl >> 7) & 0x3;
+    int posFmt     = (vertDecl >> 9) & 0x3;
     int morphCount = (vertDecl >> 13) & 0x7;
 
     int offset = 0;
     VertexLayout layout;
     memset(&layout, 0, sizeof(layout));
 
-    // tex: FmtSize(texFmt) * 2
+    // tex: FmtSize(texFmt) * 2 — 2-component UV.
     int texBytes = FmtSize(texFmt) * 2;
     layout.texOffset = offset; layout.texSize = texBytes; offset += texBytes;
 
-    // weight: FmtSize(weightFmt) — skipped by GL but occupies stride
+    // "weight" slot per the binary's stride math. In practice the binary
+    // reads these bytes as a 4-byte RGBA vertex colour (fmt=3 → size=4,
+    // type=GL_UNSIGNED_BYTE) modulated with the texture sample. Set up
+    // the color attribute here so DrawGeometry enables GL_COLOR_ARRAY
+    // at this offset.
     int weightBytes = FmtSize(weightFmt);
+    if (weightFmt == 7 && colorFmt == 3) {
+        // Canonical PSP colour-in-weight-slot layout (4-byte RGBA).
+        layout.colorOffset = offset;
+        layout.colorSize   = 4;
+        layout.colorFmt    = 3;   // tells DrawGeometry this is RGBA8888
+    }
     offset += weightBytes;
 
-    // color slot: FmtSize(colorFmt) * 3 — 3 components. For fmt=3 these
-    // are 3 floats storing the surface normal. The port's vertex-color
-    // attribute expects 4-byte ABGR8888 (fmt=3 legacy interpretation);
-    // to avoid reading those 3 floats as a bogus RGBA, disable vertex
-    // color whenever colorFmt=3 (defaults to white in Mesh.cpp).
-    int colorBytes = FmtSize(colorFmt) * 3;
-    if (colorFmt == 3) {
-        layout.colorOffset = offset; layout.colorSize = 0; layout.colorFmt = 0;
-    } else {
-        layout.colorOffset = offset; layout.colorSize = colorBytes; layout.colorFmt = colorFmt;
-    }
-    offset += colorBytes;
+    // "color" slot per the binary's stride math — allocated 12 bytes
+    // for fmt=3. Data-wise this holds the surface normal direction; unused
+    // by GL when lighting is off.
+    int colorSlotBytes = FmtSize(colorFmt) * 3;
+    // Stride reserves these bytes but no client array binds them.
+    offset += colorSlotBytes;
 
-    // normal slot: FmtSize(normalFmt) * 3. For decl=0x120001ff this is
-    // actually the 3D position (the engine's "normal" PSP slot doubles
-    // as position when posFmt=0, which is the common case for fruit/bomb).
+    // "normal" slot per the formula — 12 bytes for fmt=3. Data-wise this
+    // holds the 3D position (since posFmt=0 below has no dedicated slot).
     int normalBytes = FmtSize(normalFmt) * 3;
     layout.normalOffset = offset; layout.normalSize = normalBytes; offset += normalBytes;
 
-    // pos: FmtSize(posFmt) * (morphCount+1). With posFmt=0 this is 0
-    // bytes. The earlier port faked posFmt=3 here (creating a 12-byte
-    // slot); that coincidentally matched stride=36 because the normal
-    // slot holds the position data, but meshes with real posFmt would
-    // misalign. Respect posFmt=0 and rebind attribute 0 to the normal
-    // slot when no dedicated position slot exists.
+    // Dedicated pos slot per the formula — 0 bytes when posFmt=0.
     int posBytes = FmtSize(posFmt) * (morphCount + 1);
     layout.posOffset = offset; layout.posSize = posBytes; offset += posBytes;
 
+    // If no dedicated pos slot, rebind position to the normal slot and
+    // mark normal as unused (it's really the 3D position in the stream).
     if (posBytes == 0 && normalBytes >= 12) {
         layout.posOffset  = layout.normalOffset;
         layout.posSize    = layout.normalSize;

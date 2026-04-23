@@ -404,22 +404,9 @@ void Bomb::Update(float /*dt*/) {
 //     }
 //   }
 //
-// NOTE (port quirk): the bomb mesh renders as a pure-white ball if
-// the GL depth function is strict GL_LESS (which is what the binary
-// explicitly calls in BeginFrame). Bomb meshes contain overlapping
-// /co-planar triangles from the body + outline/glow layer — under
-// GL_LESS the later-submitted triangle fails the equal-depth test
-// and the first-arrival (brighter) triangle wins every pixel, so the
-// dark body + red X never show through.
-//
-// Bada's GL driver must have treated the function as GL_LEQUAL in
-// practice (otherwise the binary would render the same bomb-as-white
-// symptom we initially hit), so the fix lives in
-// Mesh::DrawGeometry — it temporarily swaps to GL_LEQUAL for mesh
-// draws and restores GL_LESS on exit. See comment there for context.
-// Don't reintroduce glDisable(GL_DEPTH_TEST) around bombModel->Draw
-// here; that was the earlier workaround and it breaks occlusion for
-// other bombs in the actor pass.
+// See the PORT QUIRK note inside the function body near the
+// modelPtr->Draw(mat) call for the "bomb is a white ball" z-fight
+// workaround (depth test disabled for the bomb mesh only).
 void Bomb::Draw(Renderer& r) {
     (void)r;
 
@@ -472,7 +459,27 @@ void Bomb::Draw(Renderer& r) {
     mat = rotMat * mat;                          // mat = R * S
     mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));  // + T in col3
 
+    // PORT QUIRK: disable GL_DEPTH_TEST for the bomb mesh draw only.
+    // The bomb mesh contains overlapping / co-planar triangles (body +
+    // outline/glow layer sharing vertex positions). With depth test on
+    // + GL_LESS (the binary's setting), the later-submitted triangle at
+    // equal depth is rejected, so the first-arrival (brighter) triangle
+    // wins every pixel — visible symptom is a pure-white sphere, since
+    // the outline layer samples bright atlas pixels while the body
+    // samples the dark navy + red X that we WANT to see. Turning depth
+    // test off here forces last-wins draw order within the bomb mesh,
+    // which is what we see in the binary.
+    //
+    // Binary does NOT do this (confirmed: Bomb::Draw 0x171be8 has no
+    // GL state calls at all — it just builds the matrix and invokes
+    // Model::Draw). The Bada GL driver presumably treated GL_LESS as
+    // GL_LEQUAL in practice, otherwise the shipped binary would hit the
+    // same symptom. We disable depth test instead of swapping to
+    // GL_LEQUAL because scope-limiting the test off to just bomb draws
+    // is simpler than split-state management across Mesh::DrawGeometry.
+    glDisable(GL_DEPTH_TEST);
     modelPtr->Draw(mat);
+    glEnable(GL_DEPTH_TEST);
 }
 
 void Bomb::Deactivate() {
