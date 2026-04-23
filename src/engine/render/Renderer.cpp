@@ -23,27 +23,48 @@ void Renderer::shutdown() {
     // Nothing owned — FF pipeline has no allocated programs.
 }
 
+// Matches SetPerspective (binary 0x00181e00, anonymous namespace).
+// Binary uses a 91-entry LUT of precomputed tan(fov/2) values keyed by
+// the rounded integer fov (clamped to [0, 90]); we call tanf directly —
+// same result modulo float precision.
+//   fov    — vertical field of view in degrees, clamped to [0, 90]
+//   aspect — width/height
+//   near, far — depth range (frustum planes)
+//
+// halfH = near * tan(fov/2);  halfW = halfH * aspect
+// glFrustumf(-halfW, halfW, -halfH, halfH, near, far)
+static void SetPerspective(float fov, float aspect, float nearPlane, float farPlane) {
+    int ifov = (int)(fov + 0.5f);
+    if (ifov < 0) ifov = 0;
+    if (ifov > 90) ifov = 90;
+    const float halfH = nearPlane * tanf((float)ifov * (3.14159265358979f / 360.0f));
+    const float halfW = halfH * aspect;
+    glFrustumf(-halfW, halfW, -halfH, halfH, nearPlane, farPlane);
+}
+
 // Matches FruitNinja::InitGL (0x00181e54). Runs once at startup after
 // the GL context exists, establishes baseline state. The binary's EGL
 // Pbuffer path is omitted — SDL handles the surface.
 //
-// The enables here (DEPTH_TEST, CULL_FACE) get immediately flipped by
-// BeginFrame's glDisable calls, so they're effectively one-time hints
-// to the driver. We mirror them anyway for strict fidelity.
+// The enables here (DEPTH_TEST, CULL_FACE) and the SetPerspective seed
+// all get flipped/overwritten by BeginFrame's glDisable + glLoadIdentity
+// on the first frame — so they're effectively one-time hints to the
+// driver. Mirrored anyway for strict 1:1 fidelity with the binary.
 void Renderer::InitGL(int width, int height) {
     glShadeModel(GL_SMOOTH);
     glViewport(0, 0, width, height);
     glEnable(GL_CULL_FACE);
-    // glCullFace(GL_BACK) — GL default, binary sets it explicitly. We
-    // don't have glCullFace loaded (binary never changes the mode away
-    // from GL_BACK), so rely on the default.
+    // glCullFace(GL_BACK) — GL default, binary sets it explicitly but we
+    // don't load glCullFace (binary never changes the face away from
+    // GL_BACK anywhere else), so we rely on the default.
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    // Binary calls SetPerspective(fov, aspect, near, far) here to seed
-    // the perspective matrix. Port uses ortho (SetupGameOrtho) which
-    // gets uploaded by the game ortho path — skip the perspective seed.
+    // DAT_00181f40 = 60.0f (fov), DAT_00181f44 = 400.0f (far).
+    // near = 1.0f literal; aspect = width / height.
+    const float aspect = (height > 0) ? (float)width / (float)height : 1.0f;
+    SetPerspective(60.0f, aspect, 1.0f, 400.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 }
 
