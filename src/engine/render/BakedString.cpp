@@ -54,16 +54,21 @@ void BakedString::Draw() {
         QUADCUSTOMVERTEX* verts = page.vertices.data();
         int vertCount = (int)page.vertices.size();
 
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, &verts->x);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, &verts->u);
-        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, &verts->colour);
+        glEnable(GL_TEXTURE_2D);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(3, GL_FLOAT, stride, &verts->x);
+        glClientActiveTexture(GL_TEXTURE0);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, stride, &verts->u);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
+        glDisableClientState(GL_NORMAL_ARRAY);
         glDrawArrays(GL_TRIANGLES, 0, vertCount);
-        glDisableVertexAttribArray(0);
-        glDisableVertexAttribArray(1);
-        glDisableVertexAttribArray(2);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisableClientState(GL_COLOR_ARRAY);
 
         if (page.texture.IsValid()) {
             page.texture->UnSet();

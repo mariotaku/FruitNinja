@@ -87,21 +87,51 @@ bool Mesh::HasDiffuseTexture() const {
 }
 
 // Draw a single geometry entry with its bound material.
-// Factored out of Draw() to avoid repetition in the geometry loop.
-static void DrawGeometry(Renderer* renderer, const GeometryEntry& geom,
+// Near-direct translation of PassBinding::Apply (0x001a39f8) +
+// Geometry::Render (0x001a3e98): bind texture + set GL_MODULATE,
+// upload MVP, set material via glMaterialfv (when lit), bind the
+// client-array attributes, glDrawElements/glDrawArrays.
+static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
                          const MeshMaterial& mat, const Matrix44& mvp,
-                         const Matrix44& world) {
+                         const Matrix44& /*world*/) {
     if (!geom.vbo || geom.vertCount == 0) return;
 
+    // Upload combined MVP as PROJECTION, MODELVIEW=identity. Binary splits
+    // World/View/Proj into separate Effect properties; once we need proper
+    // per-vertex lighting (IsLit=true) this will need unwinding.
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(mvp.ptr());
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
     GLuint texId = mat.m_Texture.IsValid() ? mat.m_Texture->m_TexId : 0;
-    // Pass material colours from MeshMaterial (populated in LoadMesh from EffectPropertyList).
-    // Ref: docs/engine/effect-system.md — Ambience/Diffuse/SelfIllum/IsLit property flow.
-    // Note: MeshMaterial naming is inverted relative to the property names in the binary:
-    //   m_Diffuse  = GetColourRGB(color0) stored as "Ambience" EffectProperty
-    //   m_Ambience = GetColourRGB(color1) stored as "Diffuse" EffectProperty
-    renderer->setup_3d_shader(texId, mvp.ptr(), world.ptr(), 1.0f,
-                               &mat.m_Ambience.x, &mat.m_Diffuse.x, &mat.m_SelfIllum.x,
-                               mat.m_IsLit);
+    glActiveTexture(GL_TEXTURE0);
+    if (texId) {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, texId);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glDisable(GL_TEXTURE_2D);
+    }
+
+    // Material. Field names in MeshMaterial are inverted vs binary:
+    //   m_Diffuse  = GetColourRGB(color0) stored as "Ambience" prop
+    //   m_Ambience = GetColourRGB(color1) stored as "Diffuse"  prop
+    // LoadMesh always sets m_IsLit = false in the current port, so this
+    // path usually short-circuits to glDisable(GL_LIGHTING) + white colour.
+    if (mat.m_IsLit) {
+        glEnable(GL_LIGHTING);
+        const GLfloat amb[4] = { mat.m_Ambience.x, mat.m_Ambience.y, mat.m_Ambience.z, 1.0f };
+        const GLfloat dif[4] = { mat.m_Diffuse.x,  mat.m_Diffuse.y,  mat.m_Diffuse.z,  1.0f };
+        const GLfloat emi[4] = { mat.m_SelfIllum.x,mat.m_SelfIllum.y,mat.m_SelfIllum.z,1.0f };
+        glMaterialfv(GL_AMBIENT,  GL_AMBIENT,  amb);
+        glMaterialfv(GL_DIFFUSE,  GL_DIFFUSE,  dif);
+        glMaterialfv(GL_EMISSION, GL_EMISSION, emi);
+    } else {
+        glDisable(GL_LIGHTING);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    }
 
     glBindBuffer(GL_ARRAY_BUFFER, geom.vbo);
     if (geom.ibo) {
@@ -110,58 +140,42 @@ static void DrawGeometry(Renderer* renderer, const GeometryEntry& geom,
 
     const VertexLayout& L = geom.layout;
 
-    // Position (attribute 0)
-    if (L.posSize > 0) {
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
-                              L.totalStride, (void*)(intptr_t)L.posOffset);
-    }
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glVertexPointer(3, GL_FLOAT, L.totalStride, (void*)(intptr_t)L.posOffset);
 
-    // Normal (attribute 1)
     if (L.normalSize > 0) {
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
-                              L.totalStride, (void*)(intptr_t)L.normalOffset);
+        glEnableClientState(GL_NORMAL_ARRAY);
+        glNormalPointer(GL_FLOAT, L.totalStride, (void*)(intptr_t)L.normalOffset);
     } else {
-        glDisableVertexAttribArray(1);
-        glVertexAttrib3f(1, 0.0f, 0.0f, 1.0f); // default normal
+        glDisableClientState(GL_NORMAL_ARRAY);
     }
 
-    // Vertex color (attribute 2) — GL_MODULATE: texture × vertex_color
-    // Matches PassBinding::Apply (0x001a39f8) GL_MODULATE semantics.
-    // If no color data in stream: constant white so texture is unmodified.
     if (L.colorSize > 0 && L.colorFmt == 3) {
-        // RGBA8888 — 4 bytes per vertex, normalized to [0,1]
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE,
-                              L.totalStride, (void*)(intptr_t)L.colorOffset);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glColorPointer(4, GL_UNSIGNED_BYTE, L.totalStride,
+                       (void*)(intptr_t)L.colorOffset);
     } else {
-        // No vertex color data or unsupported 16-bit format: use constant white
-        glDisableVertexAttribArray(2);
-        glVertexAttrib4f(2, 1.0f, 1.0f, 1.0f, 1.0f);
+        glDisableClientState(GL_COLOR_ARRAY);
     }
 
-    // Texcoord (attribute 3)
+    glClientActiveTexture(GL_TEXTURE0);
     if (L.texSize > 0) {
-        glEnableVertexAttribArray(3);
-        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE,
-                              L.totalStride, (void*)(intptr_t)L.texOffset);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, L.totalStride, (void*)(intptr_t)L.texOffset);
     } else {
-        glDisableVertexAttribArray(3);
-        glVertexAttrib2f(3, 0.0f, 0.0f);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     }
 
-    // Draw
     if (geom.ibo && geom.indexCount > 0) {
         glDrawElements(geom.primType, geom.indexCount, GL_UNSIGNED_SHORT, (void*)0);
     } else {
         glDrawArrays(geom.primType, 0, geom.vertCount);
     }
 
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(2);
-    glDisableVertexAttribArray(3);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
