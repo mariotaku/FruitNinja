@@ -40,6 +40,26 @@ static float RandRange(float range) {
     return ((float)rand() / RAND_MAX * 2.0f - 1.0f) * range;
 }
 
+// Matches RandomStartAngle(Quat&, false) @ 0x00175740 — gives the fruit a
+// uniformly random orientation on the sphere by picking a random axis in
+// the unit cube, normalising, and combining with a random ~16-bit angle.
+// The old port used FromAxisAngle(Vec3(1,0,0), RandRange(pi)) which locked
+// every fruit's initial spin to the X axis — visible as all fruits starting
+// level/upright instead of at varied tilts.
+static Quaternion RandomStartAngle() {
+    float ax = (float)rand() / RAND_MAX * 2.0f - 1.0f;   // [-1, 1]
+    float ay = (float)rand() / RAND_MAX * 2.0f - 1.0f;
+    float az = (float)rand() / RAND_MAX * 2.0f - 1.0f;
+    float len = sqrtf(ax*ax + ay*ay + az*az);
+    if (len < 1e-6f) { ax = 1.0f; ay = 0.0f; az = 0.0f; len = 1.0f; }
+    ax /= len; ay /= len; az /= len;
+    // Binary: Rand32(0xff3a) — ~full turn in 16-bit angle units.
+    uint32_t angle16 = (uint32_t)(((uint32_t)rand()) % 0xff3aU);
+    Quaternion q;
+    q.CreateFromAxisAngle(ax, ay, az, angle16);
+    return q;
+}
+
 Fruit::Fruit()
     : m_FruitType(0)
     , m_SliceTimer(-1.0f)
@@ -81,12 +101,15 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_pEmitter1    = NULL;
     m_pEmitter2    = NULL;
 
-    // Random rotation velocities (matches original: [-5.5, 5.5] per component)
+    // Random rotation velocity (matches binary Fruit::Init @ 0x00176708):
+    // one triple of random values, stored IDENTICALLY into both m_RotVel1
+    // and m_RotVel2 — the two halves tumble in sync.
     m_RotVel1 = Vec3(RandRange(5.5f), RandRange(5.5f), RandRange(5.5f));
-    m_RotVel2 = Vec3(RandRange(5.5f), RandRange(5.5f), RandRange(5.5f));
+    m_RotVel2 = m_RotVel1;
 
-    // Random start rotation
-    m_Rot1 = Quaternion::FromAxisAngle(Vec3(1, 0, 0), RandRange(3.14f));
+    // Random start rotation — random axis + random angle (binary
+    // RandomStartAngle @ 0x00175740, called with false from Fruit::Init).
+    m_Rot1 = RandomStartAngle();
     m_Rot2 = m_Rot1;
 
     // Default gravity — confirmed from Fruit::Init 0x00176708: literal -12.0, DAT_00176a18=0.0
@@ -244,19 +267,32 @@ void Fruit::Update(float dt) {
         m_SecondPos += m_SecondVel * dt * POS_INTEGRATION_SCALE;
     }
 
-    // Quaternion rotation update (both halves)
-    // Original: QuatFromAxisAngle for each component, then multiply
-    float rotScale = dt * 60.0f;  // normalized to ~60fps
+    // Quaternion rotation update (both halves). Matches binary Fruit::Update
+    // @ 0x00177680: each axis is a CreateFromAxisAngle with 16-bit angle
+    //   idx = (ushort)(int)(rotVel * dtNorm * 182.0)   // DAT_00177ff0 = 182
+    // then m_Rot = m_Rot * qx * qy * qz.
+    // In radians that is rotVel * dtNorm * (182 * 2pi / 65536) ≈
+    // rotVel * dtNorm * (pi / 180) — i.e. one degree per unit of rotVel per
+    // 60fps frame. The old port used 0.01 here, rotating fruits ~57% as
+    // fast as the binary.
+    const float ANGLE_PER_UNIT = 182.0f * 6.2831853f / 65536.0f;  // ~pi/180
+    const float rotScale = dt * 60.0f;  // dtNorm (DAT_0017794c = 1/60)
     {
-        Quaternion qx = Quaternion::FromAxisAngle(Vec3(1, 0, 0), m_RotVel1.x * rotScale * 0.01f);
-        Quaternion qy = Quaternion::FromAxisAngle(Vec3(0, 1, 0), m_RotVel1.y * rotScale * 0.01f);
-        Quaternion qz = Quaternion::FromAxisAngle(Vec3(0, 0, 1), m_RotVel1.z * rotScale * 0.01f);
+        Quaternion qx = Quaternion::FromAxisAngle(Vec3(1, 0, 0),
+            m_RotVel1.x * rotScale * ANGLE_PER_UNIT);
+        Quaternion qy = Quaternion::FromAxisAngle(Vec3(0, 1, 0),
+            m_RotVel1.y * rotScale * ANGLE_PER_UNIT);
+        Quaternion qz = Quaternion::FromAxisAngle(Vec3(0, 0, 1),
+            m_RotVel1.z * rotScale * ANGLE_PER_UNIT);
         m_Rot1 = (m_Rot1 * qx * qy * qz).normalized();
     }
     {
-        Quaternion qx = Quaternion::FromAxisAngle(Vec3(1, 0, 0), m_RotVel2.x * rotScale * 0.01f);
-        Quaternion qy = Quaternion::FromAxisAngle(Vec3(0, 1, 0), m_RotVel2.y * rotScale * 0.01f);
-        Quaternion qz = Quaternion::FromAxisAngle(Vec3(0, 0, 1), m_RotVel2.z * rotScale * 0.01f);
+        Quaternion qx = Quaternion::FromAxisAngle(Vec3(1, 0, 0),
+            m_RotVel2.x * rotScale * ANGLE_PER_UNIT);
+        Quaternion qy = Quaternion::FromAxisAngle(Vec3(0, 1, 0),
+            m_RotVel2.y * rotScale * ANGLE_PER_UNIT);
+        Quaternion qz = Quaternion::FromAxisAngle(Vec3(0, 0, 1),
+            m_RotVel2.z * rotScale * ANGLE_PER_UNIT);
         m_Rot2 = (m_Rot2 * qx * qy * qz).normalized();
     }
 
