@@ -45,6 +45,14 @@ public:
     int16_t m_RotX;        // +0x74: accumulated rotation X
     int16_t m_RotY;        // +0x76: accumulated rotation Y
 
+    // Port specific: fractional-frame accumulators so the F7 debug
+    // timescale slows bomb rotation along with physics. At 1.0× timescale
+    // these hold 0 and rotation advances exactly one (m_RotVelX/Y) step
+    // per frame, matching the binary. At 0.1× timescale the integer
+    // part advances ~every 10 frames. No binary offset — off-struct.
+    float m_RotAccumX;
+    float m_RotAccumY;
+
     // +0x78: collision guard (prevents double-hit)
     uint8_t m_bCollisionGuard;
 
