@@ -28,12 +28,20 @@ Texture::~Texture() {
     }
 }
 
+// Matches Bada::Texture2DFromFile_Bada::Set (0x001897c0).
+// Binary gates the enable+bind on a cache flag that toggles when the
+// same texture is re-set; the port always enables and binds since we
+// don't cache "last bound" state. glActiveTexture is a port addition —
+// binary relies on TU0 being preselected by the frame setup.
 void Texture::Set() {
     glActiveTexture(GL_TEXTURE0);
+    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_TexId);
 }
 
+// Matches Bada::Texture2DFromFile_Bada::UnSet (0x00189790).
 void Texture::UnSet() {
+    glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 

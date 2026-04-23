@@ -88,31 +88,47 @@ bool Mesh::HasDiffuseTexture() const {
 
 // Draw a single geometry entry with its bound material.
 // Near-direct translation of PassBinding::Apply (0x001a39f8) +
-// Geometry::Render (0x001a3e98): bind texture + set GL_MODULATE,
-// upload MVP, set material via glMaterialfv (when lit), bind the
-// client-array attributes, glDrawElements/glDrawArrays.
+// Geometry::Render (0x001a3e98):
+//   glMatrixMode(PROJECTION) + glPushMatrix + glLoadMatrixf
+//   glMatrixMode(MODELVIEW)  + glPushMatrix + glLoadMatrixf
+//   one-shot glEnable(GL_CULL_FACE)
+//   Texture::Set() + glTexEnvf(GL_MODULATE)
+//   glEnableClientState + glVertexPointer / glNormalPointer / glColorPointer / glTexCoordPointer
+//   glDrawElements or glDrawArrays
+//   glMatrixMode(PROJECTION) + glPopMatrix
+//   glMatrixMode(MODELVIEW)  + glPopMatrix
+//   glBindBuffer(ARRAY_BUFFER, 0) + glBindBuffer(ELEMENT_ARRAY_BUFFER, 0)
 static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
                          const MeshMaterial& mat, const Matrix44& mvp,
                          const Matrix44& /*world*/) {
     if (!geom.vbo || geom.vertCount == 0) return;
 
-    // Upload combined MVP as PROJECTION, MODELVIEW=identity. Binary splits
-    // World/View/Proj into separate Effect properties; once we need proper
-    // per-vertex lighting (IsLit=true) this will need unwinding.
+    // One-shot CULL_FACE enable, matching Geometry::Render static-guard
+    // at 0x001a3ec8. Binary enables once and never disables — GL_BACK /
+    // GL_CCW defaults align with the mesh winding.
+    static bool s_cullEnabled = false;
+    if (!s_cullEnabled) {
+        s_cullEnabled = true;
+        glEnable(GL_CULL_FACE);
+    }
+
+    // Matrix stacks: push current, load MVP, pop on exit. Binary splits
+    // the upload into PROJECTION = screenRot*World and MODELVIEW = view
+    // composition; our MatrixManager already produced the final MVP, so
+    // we upload it to PROJECTION and leave MODELVIEW as identity.
     glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
     glLoadMatrixf(mvp.ptr());
     glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
     glLoadIdentity();
 
-    GLuint texId = mat.m_Texture.IsValid() ? mat.m_Texture->m_TexId : 0;
-    glActiveTexture(GL_TEXTURE0);
-    if (texId) {
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, texId);
-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    if (mat.m_Texture.IsValid()) {
+        mat.m_Texture->Set();
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
     } else {
-        glBindTexture(GL_TEXTURE_2D, 0);
         glDisable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
     // Material. Field names in MeshMaterial are inverted vs binary:
@@ -130,7 +146,7 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
         glMaterialfv(GL_EMISSION, GL_EMISSION, emi);
     } else {
         glDisable(GL_LIGHTING);
-        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        glColor4ub(255, 255, 255, 255);
     }
 
     glBindBuffer(GL_ARRAY_BUFFER, geom.vbo);
@@ -176,6 +192,13 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
     glDisableClientState(GL_NORMAL_ARRAY);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+
+    // Restore matrix stacks + unbind VBOs, matching the tail of
+    // Geometry::Render.
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }

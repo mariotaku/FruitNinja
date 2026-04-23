@@ -28,6 +28,7 @@ GL_FUNC(void, glBufferData, GLenum, GLsizeiptr, const void*, GLenum)
 GL_FUNC(void, glDrawElements, GLenum, GLsizei, GLenum, const void*)
 GL_FUNC(void, glDepthFunc, GLenum)
 GL_FUNC(void, glDepthMask, GLboolean)
+GL_FUNC(void, glClearDepthf, GLfloat)
 
 GL_FUNC(void, glMatrixMode, GLenum)
 GL_FUNC(void, glPushMatrix, void)
@@ -42,11 +43,11 @@ GL_FUNC(void, glNormalPointer, GLenum, GLsizei, const void*)
 GL_FUNC(void, glColorPointer, GLint, GLenum, GLsizei, const void*)
 GL_FUNC(void, glTexCoordPointer, GLint, GLenum, GLsizei, const void*)
 GL_FUNC(void, glClientActiveTexture, GLenum)
-GL_FUNC(void, glColor4f, GLfloat, GLfloat, GLfloat, GLfloat)
+GL_FUNC(void, glColor4ub, GLubyte, GLubyte, GLubyte, GLubyte)
 GL_FUNC(void, glMaterialfv, GLenum, GLenum, const GLfloat*)
 GL_FUNC(void, glLightfv, GLenum, GLenum, const GLfloat*)
 GL_FUNC(void, glShadeModel, GLenum)
-GL_FUNC(void, glTexEnvi, GLenum, GLenum, GLint)
+GL_FUNC(void, glTexEnvf, GLenum, GLenum, GLfloat)
 
 #undef GL_FUNC
 
@@ -80,6 +81,7 @@ bool gl_load_functions() {
     LOAD(glDrawElements)
     LOAD(glDepthFunc)
     LOAD(glDepthMask)
+    LOAD(glClearDepthf)
 
     LOAD(glMatrixMode)
     LOAD(glPushMatrix)
@@ -94,11 +96,11 @@ bool gl_load_functions() {
     LOAD(glColorPointer)
     LOAD(glTexCoordPointer)
     LOAD(glClientActiveTexture)
-    LOAD(glColor4f)
+    LOAD(glColor4ub)
     LOAD(glMaterialfv)
     LOAD(glLightfv)
     LOAD(glShadeModel)
-    LOAD(glTexEnvi)
+    LOAD(glTexEnvf)
 
 #undef LOAD
     return true;

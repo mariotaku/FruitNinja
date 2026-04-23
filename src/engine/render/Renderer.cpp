@@ -31,11 +31,10 @@ void Renderer::SetupGameOrtho() {
     mm.GetWorldStack().Reset();
 }
 
-// Shared FF setup for a textured 2D draw with a uniform colour tint.
+// Shared FF setup for a textured 2D draw with a uniform byte-colour tint.
 // Uploads MVP, binds texture, sets GL_MODULATE so colour * texel is the
 // final fragment colour. Caller handles client-array setup + draw call.
-static void SetupFF2D(const float* mvp, GLuint tex,
-                      float r, float g, float b, float a) {
+static void SetupFF2D(const float* mvp, GLuint tex, const Colour& tint) {
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixf(mvp);
     glMatrixMode(GL_MODELVIEW);
@@ -45,14 +44,14 @@ static void SetupFF2D(const float* mvp, GLuint tex,
     if (tex) {
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, tex);
-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
     } else {
         glBindTexture(GL_TEXTURE_2D, 0);
         glDisable(GL_TEXTURE_2D);
     }
 
     glDisable(GL_LIGHTING);
-    glColor4f(r, g, b, a);
+    glColor4ub(tint.r, tint.g, tint.b, tint.a);
 }
 
 void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
@@ -66,7 +65,8 @@ void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
     };
     Matrix44 identity;
 
-    SetupFF2D(identity.ptr(), tex, 1.0f, 1.0f, 1.0f, alpha);
+    SetupFF2D(identity.ptr(), tex,
+              Colour(255, 255, 255, (uint8_t)(alpha * 255.0f)));
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -93,12 +93,10 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
          0.5f,  0.5f, 0.0f,  u1, v0,
     };
     Matrix44 mvp = Mortar::MatrixManager::GetInstance().GetMVP();
-    float t[4];
-    tint.toFloat(t);
 
-    // Caller already bound the texture via Texture::Set (which glBindTexture's
-    // to TEXTURE_2D unit 0). Pass 0 here so SetupFF2D doesn't re-bind —
-    // but we still need GL_TEXTURE_2D enabled and the env mode set.
+    // Caller already bound the texture via Texture::Set (which
+    // glBindTexture's to TEXTURE_2D unit 0); re-enable TEXTURE_2D and
+    // set the texenv mode / tint without re-binding.
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixf(mvp.ptr());
     glMatrixMode(GL_MODELVIEW);
@@ -106,9 +104,9 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
     glDisable(GL_LIGHTING);
-    glColor4f(t[0], t[1], t[2], t[3]);
+    glColor4ub(tint.r, tint.g, tint.b, tint.a);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glEnableClientState(GL_VERTEX_ARRAY);
@@ -153,9 +151,9 @@ void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
     glDisable(GL_LIGHTING);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);  // vertex colour wins via COLOR_ARRAY
+    glColor4ub(255, 255, 255, 255);  // vertex colour wins via COLOR_ARRAY
 
     const int stride = sizeof(QUADCUSTOMVERTEX);  // 36
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -185,9 +183,9 @@ void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
-    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
     glDisable(GL_LIGHTING);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    glColor4ub(255, 255, 255, 255);
 
     const int stride = sizeof(QUADCUSTOMVERTEX);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
