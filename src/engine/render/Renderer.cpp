@@ -23,6 +23,30 @@ void Renderer::shutdown() {
     // Nothing owned — FF pipeline has no allocated programs.
 }
 
+// Matches FruitNinja::InitGL (0x00181e54). Runs once at startup after
+// the GL context exists, establishes baseline state. The binary's EGL
+// Pbuffer path is omitted — SDL handles the surface.
+//
+// The enables here (DEPTH_TEST, CULL_FACE) get immediately flipped by
+// BeginFrame's glDisable calls, so they're effectively one-time hints
+// to the driver. We mirror them anyway for strict fidelity.
+void Renderer::InitGL(int width, int height) {
+    glShadeModel(GL_SMOOTH);
+    glViewport(0, 0, width, height);
+    glEnable(GL_CULL_FACE);
+    // glCullFace(GL_BACK) — GL default, binary sets it explicitly. We
+    // don't have glCullFace loaded (binary never changes the mode away
+    // from GL_BACK), so rely on the default.
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    // Binary calls SetPerspective(fov, aspect, near, far) here to seed
+    // the perspective matrix. Port uses ortho (SetupGameOrtho) which
+    // gets uploaded by the game ortho path — skip the perspective seed.
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
 void Renderer::SetupGameOrtho() {
     // Verified from binary: SetupOrtho(160, -160, -240, 240, 2000, -6000)
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();

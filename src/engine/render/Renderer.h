@@ -19,6 +19,11 @@ struct Renderer {
     bool init();
     void shutdown();
 
+    // One-shot GL state initialisation, matches FruitNinja::InitGL
+    // (binary 0x00181e54). Call once after the GL context and
+    // function pointers are available, before the main render loop.
+    void InitGL(int width, int height);
+
     // Setup ortho projection matching original game.
     // Verified constants: top=160, bottom=-160, left=-240, right=240.
     void SetupGameOrtho();
