@@ -47,7 +47,14 @@
   <div class="status" id="status">Loading…</div>
   <label><input type="checkbox" id="autospin" checked> auto-spin</label>
   <label><input type="checkbox" id="applyRot" checked> port -90° X rotation</label>
-  <label><input type="checkbox" id="wireframe"> wireframe</label>
+  <label>draw:
+    <select id="drawMode">
+      <option value="strip">native GL_TRIANGLE_STRIP</option>
+      <option value="tris">as GL_TRIANGLES (treat indices as list)</option>
+      <option value="lines">GL_LINES (edges only)</option>
+      <option value="points">GL_POINTS (vertex positions)</option>
+    </select>
+  </label>
   <label><input type="checkbox" id="textured" checked> textured</label>
 </header>
 
@@ -77,7 +84,7 @@ const rot = { x: 0, y: 0 };
 let dragging = false, lastX = 0, lastY = 0;
 let autoSpinEnabled = true;
 let applyPortRot = true;
-let wireframe = false;
+let drawMode = "strip";          // strip | tris | lines | points
 let textured = true;
 
 const VS_SRC = `
@@ -91,6 +98,7 @@ void main() {
   vUV = aUV;
   vColor = aColor;
   gl_Position = uMVP * vec4(aPos, 1.0);
+  gl_PointSize = 3.0;
 }`;
 const FS_SRC = `
 precision mediump float;
@@ -370,10 +378,12 @@ function render() {
 
   for (const d of current.draws) {
     let mode;
-    if (wireframe) {
-      mode = gl.LINE_STRIP;     // approximate wireframe
-    } else {
-      mode = (d.prim === "STRIP") ? gl.TRIANGLE_STRIP : gl.TRIANGLES;
+    switch (drawMode) {
+      case "tris":   mode = gl.TRIANGLES;      break;
+      case "lines":  mode = gl.LINE_STRIP;     break;
+      case "points": mode = gl.POINTS;         break;
+      case "strip":
+      default:       mode = (d.prim === "STRIP") ? gl.TRIANGLE_STRIP : gl.TRIANGLES;
     }
     gl.drawElements(mode, d.count, current.indexType, d.first * current.idxBytes);
   }
@@ -441,7 +451,7 @@ async function boot() {
   document.getElementById("filter").addEventListener("input", filterList);
   document.getElementById("autospin").addEventListener("change", (e) => autoSpinEnabled = e.target.checked);
   document.getElementById("applyRot").addEventListener("change", (e) => applyPortRot = e.target.checked);
-  document.getElementById("wireframe").addEventListener("change", (e) => wireframe = e.target.checked);
+  document.getElementById("drawMode").addEventListener("change", (e) => drawMode = e.target.value);
   document.getElementById("textured").addEventListener("change", (e) => textured = e.target.checked);
 
   // Initial selection: from URL hash if valid, else first model.
