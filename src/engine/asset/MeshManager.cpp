@@ -189,6 +189,14 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
         case 0x40: geom.primType = GL_TRIANGLES; break;
         default:   geom.primType = GL_TRIANGLE_STRIP; break;
     }
+    // Low nibble = PSP GE_INDEX_TYPE: 0 none / 1 uint16 / 2 uint32.
+    // Binary LoadIndexStreamPSP (0x001a799c) branches on `(nibble - 1)`;
+    // nibble==1 → 2-byte indices, nibble==2 → 4-byte indices. Every mesh
+    // shipped in FruitNinja's Bada asset dump uses nibble=1 (uint16), so
+    // `idxCount * 2` below is correct for this title. glDrawElements in
+    // Geometry::Render @ 0x001a3ec8 also hardcodes GL_UNSIGNED_SHORT —
+    // the uint32 path is never exercised. TODO: wire nibble==2 if a
+    // future asset dump needs it.
     if (pos + 4 > dataSize) return false;
     uint32_t idxCount = 0;
     memcpy(&idxCount, data + pos, 4); pos += 4;
