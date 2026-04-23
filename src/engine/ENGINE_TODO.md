@@ -99,8 +99,8 @@ Ref: `docs/engine/sound-system.md`, `docs/engine/audio-internals.md`
 
 Ref: `docs/engine/actor-manager.md`, `docs/engine/particles.md`
 
-- [x] `entity/Entity.h/.cpp` — Base entity with vtable (OnActivate/OnDeactivate/Update/Draw/PostUpdate), EntityFlags
-- [x] `entity/ActorManager.h/.cpp` — Singleton, 512-entry free pool, per-type lists, Add/Update/Draw/Deactivate/Remove
+- [x] ~~`entity/Entity.h/.cpp`~~ — removed; the game-namespace `::Entity` in `src/entities/Entity.h` is the active port
+- [x] ~~`entity/ActorManager.h/.cpp`~~ — removed; see `src/entities/ActorManager.{h,cpp}` for the binary-faithful port with free pool, per-type lists, factory delegate
 - [x] `particle/PSPParticleManager.h/.cpp` — Singleton with PSPParticleEmitter struct, AddEmitter/Update/Draw/LoadFile stubs
 - [ ] Particle rendering — template loading and particle quad generation not yet implemented
 

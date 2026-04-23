@@ -27,9 +27,10 @@ add_library(mortar_engine STATIC
     audio/MortarSound.cpp
     audio/SoundManager.cpp
     audio/GameSound.cpp
-    # Phase 7 — Entities & Particles
-    entity/Entity.cpp
-    entity/ActorManager.cpp
+    # Phase 7 — Particles
+    # Entity + ActorManager live in src/entities/ (game-namespace port),
+    # not the mortar_engine lib — the engine-namespace stubs that used to
+    # be here were never wired in and have been removed.
     particle/PSPParticleManager.cpp
     # Phase 8 — Font
     render/Font.cpp
