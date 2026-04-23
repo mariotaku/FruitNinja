@@ -17,6 +17,7 @@
 #include "entities/EntityFactory.h"
 #include "entities/SplatEntity.h"
 #include "entities/SlashEntity.h"
+#include "FruitSaveData.h"
 #include "audio/GameSound.h"
 #include "hud/SliceEffect.h"
 #include "screens/GameOverScreen.h"
@@ -108,6 +109,11 @@ void GameInitialise() {
     game->actorManager = new ActorManager();
     game->actorManager->Initialise(5, 0x2000);
     game->actorManager->RegisterFactory(&CreateEntity);
+
+    // Step 5 (binary): operator_new(0x238) + FruitSaveData ctor — see
+    // docs/structs/game.md and docs/systems/save-system.md. Port uses a
+    // stub; once TinyXML save/load is wired this is where LoadGame fires.
+    game->pSaveData = new FruitSaveData();
 
     // GameSound — 32-slot pool. Backend is currently stubbed
     // (SoundManager is no-op) but the call sites exercise the real
@@ -203,7 +209,7 @@ void GameDestroy() {
     //       loop 0x70..0x0c, 0x6c, 0x64, 0x80, 0x68)
 
     // --- 7. FruitSaveData ---
-    // TODO: delete game->pSaveData
+    if (game->pSaveData) { delete game->pSaveData; game->pSaveData = nullptr; }
 
     // --- 8. GameSound ---
     if (game->pGameSound) { delete game->pGameSound; game->pGameSound = nullptr; }

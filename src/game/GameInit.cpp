@@ -12,6 +12,7 @@
 #include "FruitCamera.h"
 #include "BombHit.h"
 #include "WaveManager.h"
+#include "FruitSaveData.h"
 #include "screens/MainScreen.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
@@ -113,6 +114,11 @@ void GameUpdate(float dt, bool active) {
     // WaveManager::Update @ 0x001259d8 — stubbed; binary pumps wave
     // spawners + blitz combo + PowerUpManager from here.
     if (active) WaveManager::GetInstance()->Update(dt);
+
+    // FruitSaveData::Update @ 0x0012b3dc — ticks achievement in-progress
+    // timers so unlock popups fade in/out. Stubbed; wired so the call
+    // site lights up as soon as the stub becomes real.
+    if (game->pSaveData) game->pSaveData->Update(dt, game->hud);
 
     if (earlyFrame) printf("GameUpdate: -> PSPParticleManager::Update\n");
     Mortar::PSPParticleManager::GetInstance().Update(dt);
@@ -352,7 +358,8 @@ void GameExit_Handler() {
     }
     game->mainScreen = nullptr;
 
-    // TODO: Coin::ClearCoins, SaveCurrentData
+    // TODO: Coin::ClearCoins
+    FruitNinja_SaveCurrentData();  // stub (writes FruitSaveData XML in binary)
     WaveManager::GetInstance()->Destroy();  // stub (frees WAVE_INFO/WaveQue)
     // TODO: PSPParticleManager::ClearEmitters
     // TODO: ActorManager::Clear + Destroy, Entity::HeapDestroy
