@@ -200,20 +200,10 @@ void GameDraw(float dt, bool active) {
 
     // === 1. ActorManager::Draw — 3D fruit/bomb/slash entities ===
     // Binary @ 0x0016ba10: SetDepthBufferWrite(1) + SetDepthBuffer(1)
-    // just before ActorManager::Draw.
-    //
-    // Depth func: use GL_LEQUAL, not the ES2 default GL_LESS. The bomb
-    // mesh (and likely fruits too) has overlapping triangles (e.g. a
-    // glow/outline layer on top of the body, drawn LATER in the triangle
-    // strip). Under GL_LESS the later-drawn body would fail the equal-
-    // depth test vs the glow that wrote first, leaving the glow on top
-    // (appears red/white). GL_LEQUAL lets co-planar later-drawn tris win,
-    // matching what the binary produces — the Bada GL driver evidently
-    // defaulted to GL_LEQUAL (no explicit glDepthFunc call exists in the
-    // binary).
+    // just before ActorManager::Draw. Depth func stays at GL_LESS set
+    // by BeginFrame — binary never overrides it.
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
-    glDepthFunc(GL_LEQUAL);
 
     if (earlyFrame) printf("GameDraw: -> ActorManager::Draw am=%p\n", (void*)game->actorManager);
     if (game->actorManager)

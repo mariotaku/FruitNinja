@@ -123,6 +123,7 @@ GL_FUNC(void, glBufferData, GLenum, GLsizeiptr, const void*, GLenum)
 GL_FUNC(void, glDrawElements, GLenum, GLsizei, GLenum, const void*)
 GL_FUNC(void, glDepthFunc, GLenum)
 GL_FUNC(void, glDepthMask, GLboolean)
+GL_FUNC(void, glClearDepthf, GLfloat)
 
 // Fixed-function pipeline (ES 1.x / desktop-GL compat). These are the
 // only draw-path entry points — no shader/attribute symbols exist in
@@ -140,11 +141,11 @@ GL_FUNC(void, glNormalPointer, GLenum, GLsizei, const void*)
 GL_FUNC(void, glColorPointer, GLint, GLenum, GLsizei, const void*)
 GL_FUNC(void, glTexCoordPointer, GLint, GLenum, GLsizei, const void*)
 GL_FUNC(void, glClientActiveTexture, GLenum)
-GL_FUNC(void, glColor4f, GLfloat, GLfloat, GLfloat, GLfloat)
+GL_FUNC(void, glColor4ub, GLubyte, GLubyte, GLubyte, GLubyte)
 GL_FUNC(void, glMaterialfv, GLenum, GLenum, const GLfloat*)
 GL_FUNC(void, glLightfv, GLenum, GLenum, const GLfloat*)
 GL_FUNC(void, glShadeModel, GLenum)
-GL_FUNC(void, glTexEnvi, GLenum, GLenum, GLint)
+GL_FUNC(void, glTexEnvf, GLenum, GLenum, GLfloat)
 
 #undef GL_FUNC
 

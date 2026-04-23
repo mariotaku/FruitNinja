@@ -55,7 +55,7 @@ void BakedString::Draw() {
         int vertCount = (int)page.vertices.size();
 
         glEnable(GL_TEXTURE_2D);
-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glEnableClientState(GL_VERTEX_ARRAY);
         glVertexPointer(3, GL_FLOAT, stride, &verts->x);

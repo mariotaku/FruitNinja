@@ -23,17 +23,26 @@ DisplayManager::DisplayManager()
     m_ScreenRotationMatrix.Identity();
 }
 
-// Matches DisplayManagerBada::BeginFrame (0x0019dfec)
-// GLES2 port: no glMatrixMode/glLoadIdentity (those are ES 1.x)
+// Matches DisplayManagerBada::BeginFrame (0x0019dfec) — GL call order
+// is a strict 1:1 port of the binary, including the redundant second
+// glEnable(GL_BLEND) / glDisable(GL_CULL_FACE) and the dual clearColor.
 void DisplayManager::BeginFrame() {
-    glClearColor(m_ClearColor.r / 255.0f, m_ClearColor.g / 255.0f,
-                 m_ClearColor.b / 255.0f, m_ClearColor.a / 255.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);                                   // 0xb57
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);                 // DAT_0019e124 = 0
+    glDisable(GL_CULL_FACE);                              // 0xb44
+    glDisable(GL_DEPTH_TEST);                             // 0xb71
+    glDepthFunc(GL_LESS);                                 // 0x201
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);                 // DAT_0019e128 = 255 (clamps to 1)
+    glClearDepthf(1.0f);
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);    // 0x302, 0x303
+    glDisable(GL_LIGHTING);                               // 0xb50
+    glDisable(GL_CULL_FACE);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glMatrixMode(GL_PROJECTION);                          // 0x1701
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);                           // 0x1700
+    glLoadIdentity();
 
     m_bRenderingActive = true;
 }

@@ -286,9 +286,9 @@ void Font::DrawString(float scale, float maxWidth, float z,
 
         glActiveTexture(GL_TEXTURE0);
         glEnable(GL_TEXTURE_2D);
-        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
         glDisable(GL_LIGHTING);
-        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        glColor4ub(255, 255, 255, 255);
 
         int stride = sizeof(QUADCUSTOMVERTEX);
         QUADCUSTOMVERTEX* verts = pageVerts[pg].data();
