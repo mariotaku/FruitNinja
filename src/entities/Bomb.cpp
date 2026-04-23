@@ -403,6 +403,23 @@ void Bomb::Update(float /*dt*/) {
 //       Model::Draw(model[variant], combined)
 //     }
 //   }
+//
+// NOTE (port quirk): the bomb mesh renders as a pure-white ball if
+// the GL depth function is strict GL_LESS (which is what the binary
+// explicitly calls in BeginFrame). Bomb meshes contain overlapping
+// /co-planar triangles from the body + outline/glow layer — under
+// GL_LESS the later-submitted triangle fails the equal-depth test
+// and the first-arrival (brighter) triangle wins every pixel, so the
+// dark body + red X never show through.
+//
+// Bada's GL driver must have treated the function as GL_LEQUAL in
+// practice (otherwise the binary would render the same bomb-as-white
+// symptom we initially hit), so the fix lives in
+// Mesh::DrawGeometry — it temporarily swaps to GL_LEQUAL for mesh
+// draws and restores GL_LESS on exit. See comment there for context.
+// Don't reintroduce glDisable(GL_DEPTH_TEST) around bombModel->Draw
+// here; that was the earlier workaround and it breaks occlusion for
+// other bombs in the actor pass.
 void Bomb::Draw(Renderer& r) {
     (void)r;
 
