@@ -93,6 +93,11 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
         return false;
     }
 
+    // One-shot GL state init — matches FruitNinja::InitGL @ 0x00181e54.
+    int initW, initH;
+    SDL_GL_GetDrawableSize(window, &initW, &initH);
+    renderer.InitGL(initW, initH);
+
     // Matches original lifecycle:
     GamePreInitialise();   // zero game fields
     GameInitialise();      // boot all engine singletons + load shared data
@@ -150,14 +155,14 @@ void Game::run() {
         // Update: 3-state dispatcher
         GameTaskUpdate(dt);
 
-        // Draw
+        // Per-frame GL setup. Binary calls DisplayManagerBada::BeginFrame
+        // (0x0019dfec) which handles clears, depth/blend state reset, and
+        // matrix stack reset. glViewport isn't touched by BeginFrame — our
+        // port re-applies it each frame so window resizes are picked up.
         int ww, wh;
         SDL_GL_GetDrawableSize(window, &ww, &wh);
         glViewport(0, 0, ww, wh);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        Mortar::DisplayManager::GetInstance().BeginFrame();
 
         // Draw: state-specific rendering
         GameTaskDraw(dt);
