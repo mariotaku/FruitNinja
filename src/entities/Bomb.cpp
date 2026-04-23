@@ -97,6 +97,18 @@ static float GetBombZPosition() {
     return z;
 }
 
+// SetupLighting @ 0x00175018 — single `bx lr`, a genuine no-op stub in
+// the shipped binary. Both Bomb::LoadContent (0x001727d8) and
+// Fruit::LoadFruitModels (0x00179654/0x00179718/0x001797d6) reach it
+// via PLT trampoline 0x000fb820 → GOT[0x1eecb0] → 0x00175018. No
+// material / mesh / GL state is touched.
+//
+// We keep the call in LoadContent for shape-fidelity — when (if) Mortar
+// lighting is revisited, the implementation lands here for free.
+static SmartPtr<Mortar::Model>& SetupLighting(SmartPtr<Mortar::Model>& model) {
+    return model;
+}
+
 // --- Bomb::LoadContent (0x1726c8) — called once from GameInitialise ---
 
 void Bomb::LoadContent() {
@@ -149,7 +161,16 @@ void Bomb::LoadContent() {
     // Precompute fuse particle emitter hashes (matches binary LoadContent)
     g_bombData.fuseHash[0] = StringHash("bomb_smoke");
     g_bombData.fuseHash[1] = StringHash("purple_bomb_smoke");
-    // TODO: SetupLighting on both models
+
+    // Setup lighting on both models (binary 0x001727c4..0x001727e0). The
+    // loop guards on SmartPtr::operator bool before each call — matches
+    // the disassembly byte-for-byte, and the SetupLighting body is a
+    // `bx lr` so the whole block is effectively a null-safe walk over
+    // the two SmartPtr slots.
+    for (int i = 0; i < 2; i++) {
+        if (g_bombData.model[i].IsValid())
+            SetupLighting(g_bombData.model[i]);
+    }
 
     g_bombData.loaded = true;
     printf("Bomb::LoadContent: loaded bomb models\n");
@@ -164,6 +185,7 @@ Bomb::Bomb()
       m_ZPosition(0.0f),
       m_RotVelX(0), m_RotVelY(0),
       m_RotX(0), m_RotY(0),
+      m_RotAccumX(0.0f), m_RotAccumY(0.0f),
       m_bCollisionGuard(0),
       m_pEmitter(nullptr),
       m_bMovement(0),
@@ -209,6 +231,8 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     m_RotX    = (int16_t)(rand() % 360);     // 0..359
     m_RotVelY = (int16_t)(rand() % 7 + 1);
     m_RotY    = (int16_t)(rand() % 360);
+    m_RotAccumX = 0.0f;
+    m_RotAccumY = 0.0f;
 
     m_bMenuBombHit = 0;
     m_pEmitter = nullptr;  // lazy-created in Update
@@ -243,6 +267,23 @@ void Bomb::Init(int param1, int fruitType, int param3) {
            flags, m_BombVariant, scale.x, scale.y, scale.z,
            pos.x, pos.y, pos.z, m_Countdown,
            g_bombData.model[m_BombVariant].IsValid(), g_BombTexture.IsValid());
+}
+
+// Port specific: advance bomb's integer rotation by a per-frame step that
+// scales with the debug timescale via scaledDt. Binary always does
+// `m_RotX += m_RotVelX` once per 1/60 frame; at normal (1.0x) timescale
+// this helper is identical. At slow timescale (e.g. F7 = 0.1x) scaledDt
+// is 10x smaller so the fractional accumulator only crosses 1 every ~10
+// frames, making rotation visibly slower in sync with physics.
+static inline void StepBombRotation(int16_t& rot, int16_t vel,
+                                    float& accum, float scaledDt) {
+    if (scaledDt <= 0.0f) return;
+    accum += (float)vel * scaledDt * 60.0f;  // 60 = 1/dt at normal speed
+    int whole = (int)accum;
+    if (whole != 0) {
+        rot   = (int16_t)(rot + whole);
+        accum -= (float)whole;
+    }
 }
 
 // Helper: accel-growth block shared by alive-branch and menu-hit-branch in
@@ -342,10 +383,8 @@ void Bomb::Update(float /*dt*/) {
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * scaledDt;
-        if (scaledDt > 0.0f) {
-            m_RotX += m_RotVelX;
-            m_RotY += m_RotVelY;
-        }
+        StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
+        StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
 
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
         // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
@@ -374,10 +413,8 @@ void Bomb::Update(float /*dt*/) {
                 AccelGrowth(vel, m_AccelForce, dtNorm);
             }
             pos += vel * scaledDt;
-            if (scaledDt > 0.0f) {
-                m_RotX += m_RotVelX;
-                m_RotY += m_RotVelY;
-            }
+            StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
+            StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
         }
 
         // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
