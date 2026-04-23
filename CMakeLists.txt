@@ -49,6 +49,30 @@ if (ENABLE_ASAN)
     )
 endif()
 
+# --- GL backend selection ---
+#
+# The port targets the same fixed-function pipeline the binary uses
+# (ES 1.x): glMatrixMode / glVertexPointer / glMaterialfv / ... —
+# a near 1:1 translation of the binary's PassBinding::Apply.
+# ES 2.0 shader translation was removed to keep fidelity and make it
+# easy to rule out shader-side deviations when comparing behaviour.
+#
+# FRUIT_GL_API selects which OS header to include:
+#   GL_COMPAT  - Desktop GL compatibility profile (<GL/gl.h>).
+#                Windows/macOS/Linux dev; Mesa llvmpipe for swrast.
+#   ES1        - OpenGL ES 1.1 (<GLES/gl.h>) for webOS / embedded.
+set(FRUIT_GL_API "GL_COMPAT" CACHE STRING "GL backend: GL_COMPAT or ES1")
+set_property(CACHE FRUIT_GL_API PROPERTY STRINGS GL_COMPAT ES1)
+message(STATUS "FRUIT_GL_API = ${FRUIT_GL_API}")
+
+if (FRUIT_GL_API STREQUAL "GL_COMPAT")
+    add_compile_definitions(FRUIT_GL_API_GL_COMPAT=1)
+elseif (FRUIT_GL_API STREQUAL "ES1")
+    add_compile_definitions(FRUIT_GL_API_ES1=1)
+else()
+    message(FATAL_ERROR "Unknown FRUIT_GL_API '${FRUIT_GL_API}'")
+endif()
+
 # --- Dependencies ---
 
 find_package(SDL2 REQUIRED)

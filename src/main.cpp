@@ -18,9 +18,20 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Fixed-function GL — matches the binary's pipeline. Picked at
+    // CMake configure via FRUIT_GL_API.
+#if defined(FRUIT_GL_API_ES1)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+#else  // FRUIT_GL_API_GL_COMPAT
+    // Desktop compatibility profile — ES 1.x fixed-function superset.
+    // Mesa llvmpipe provides software fallback (LIBGL_ALWAYS_SOFTWARE=1
+    // + GALLIUM_DRIVER=llvmpipe) on systems without an ICD.
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+#endif
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
 

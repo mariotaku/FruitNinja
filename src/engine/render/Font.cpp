@@ -275,28 +275,38 @@ void Font::DrawString(float scale, float maxWidth, float z,
             m_PageTextures[pg]->Set();
         }
 
-        // Direct GL rendering matching Renderer::DrawTriList vertex-color shader
+        // Fixed-function glyph draw: per-vertex RGBA colour modulated
+        // with the page texture. Matches DrawTriList wiring.
         MatrixManager& mm = MatrixManager::GetInstance();
         Matrix44 mvp = mm.GetMVP();
+        glMatrixMode(GL_PROJECTION);
+        glLoadMatrixf(mvp.ptr());
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
 
-        // Note: This uses the vertex-color shader program which must be
-        // initialized by Renderer::init() before Font rendering.
-        // The game code must ensure the correct shader is active.
-        // For now, emit raw GL calls matching the DrawTriList pattern.
+        glActiveTexture(GL_TEXTURE0);
+        glEnable(GL_TEXTURE_2D);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glDisable(GL_LIGHTING);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+
         int stride = sizeof(QUADCUSTOMVERTEX);
         QUADCUSTOMVERTEX* verts = pageVerts[pg].data();
         int vertCount = (int)pageVerts[pg].size();
 
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, &verts->x);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, &verts->u);
-        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, &verts->colour);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(3, GL_FLOAT, stride, &verts->x);
+        glClientActiveTexture(GL_TEXTURE0);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, stride, &verts->u);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
+        glDisableClientState(GL_NORMAL_ARRAY);
         glDrawArrays(GL_TRIANGLES, 0, vertCount);
-        glDisableVertexAttribArray(0);
-        glDisableVertexAttribArray(1);
-        glDisableVertexAttribArray(2);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisableClientState(GL_COLOR_ARRAY);
 
         if (pg < (int)m_PageTextures.size() && m_PageTextures[pg].IsValid()) {
             m_PageTextures[pg]->UnSet();
