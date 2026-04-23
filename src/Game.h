@@ -21,6 +21,7 @@ class HUD;
 class ActorManager;
 class MainScreen;
 class FruitCamera;
+class FruitSaveData;
 namespace Mortar { class GameSound; }
 
 struct Game : public Mortar::MortarGame {
@@ -57,7 +58,7 @@ struct Game : public Mortar::MortarGame {
     bool isFirstPlay1;             // +0x44
     bool isFirstPlay2;             // +0x45
     FruitCamera* pCamera;             // +0x48
-    // +0x4C: FruitSaveData* pSaveData (TODO)
+    FruitSaveData* pSaveData;         // +0x4C: persistent save state (stub)
     // +0x50..+0x80: Font* slots (TODO)
     float field_0x88;              // +0x88
     Vec3 worldPos;                 // +0x90: light direction in GameDraw

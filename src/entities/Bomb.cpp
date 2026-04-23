@@ -6,6 +6,7 @@
 #include "audio/GameSound.h"
 #include "game/BombHit.h"
 #include "game/FruitCamera.h"
+#include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
@@ -619,7 +620,7 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             // camera shake already fired above.
             game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
             if (game->pGameSound) game->pGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
-            // TODO: FruitSaveData::AddToTotal("bomb", 1)
+            if (game->pSaveData) game->pSaveData->AddToTotal("bomb", 1);
             // TODO: skip entirely if game->gameOverFlag already set
         }
     } else if (m_bMenuBombHit != 0) {

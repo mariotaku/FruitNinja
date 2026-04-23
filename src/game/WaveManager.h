@@ -25,7 +25,7 @@ struct DEFAULT_WAVE_INFO;
 struct COIN_CHANCEINATOR;
 struct WaveQue;
 struct WaveQueItem;
-struct FruitSaveData;
+class  FruitSaveData;
 class HUDControl;
 
 class WaveManager {

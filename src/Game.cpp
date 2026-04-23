@@ -26,6 +26,7 @@ Game::Game()
       m_CritTimer(0), m_ScoreThreshold(0), field_0x34(0), m_bSlowMotion(0),
       dt(0), hud(nullptr),
       pCamera(nullptr),
+      pSaveData(nullptr),
       isFirstPlay1(false), isFirstPlay2(false),
       field_0x88(0),
       mainScreen(nullptr),
