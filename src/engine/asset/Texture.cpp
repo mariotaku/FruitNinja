@@ -1,5 +1,6 @@
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
+#include "asset/FileManager.h"
 #include "render/DisplayManager.h"
 #include <cstdio>
 #include <cstring>
@@ -79,12 +80,14 @@ void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType
 
 // Matches GPUafyTexture (0x001898d8) + Texture::Load (0x00189dd4)
 SmartPtr<Texture> Texture::Load(const char* path) {
-    FILE* f = fopen(path, "rb");
+    // Case-insensitive open — Bada shipped mixed-case paths that don't
+    // match the lowercase asset dump on case-sensitive filesystems.
+    FILE* f = FileManager::OpenCI(path, "rb");
     if (!f) {
         DisplayManager& dm = DisplayManager::GetInstance();
         if (dm.m_TextureOverloadPrefix[0] != '\0') {
             std::string altPath = std::string(dm.m_TextureOverloadPrefix) + path;
-            f = fopen(altPath.c_str(), "rb");
+            f = FileManager::OpenCI(altPath.c_str(), "rb");
         }
         if (!f) {
             fprintf(stderr, "Texture::Load: failed to open '%s'\n", path);

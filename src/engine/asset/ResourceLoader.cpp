@@ -1,4 +1,5 @@
 #include "asset/ResourceLoader.h"
+#include "asset/FileManager.h"
 #include <cstdio>
 
 namespace Mortar {
@@ -15,7 +16,9 @@ ResourceLoader::ResourceLoader()
 ResourceLoader::ResourceLoader(const char* filePath)
     : m_ReadPos(0)
 {
-    FILE* f = fopen(filePath, "rb");
+    // Case-insensitive open — binary Bada paths (e.g. "models/Fruit/...")
+    // don't match the on-disk casing ("models/fruit/...") on Linux/webOS.
+    FILE* f = FileManager::OpenCI(filePath, "rb");
     if (!f) {
         fprintf(stderr, "ResourceLoader: failed to open '%s'\n", filePath);
         return;
