@@ -67,8 +67,8 @@ Fruit::Fruit()
     , m_SliceAngle(0)
     , m_SliceImpulse(0.0f)
     , m_SlicePos(0, 0, 0)
-    , m_pEmitter1(NULL)
-    , m_pEmitter2(NULL)
+    , m_pEmitter1(nullptr)
+    , m_pEmitter2(nullptr)
     , m_bSliced(false)
     , m_bDetached(false)
     , m_bDrawWhole(false)
@@ -98,8 +98,8 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_SliceAngle   = 0;
     m_SliceImpulse = 0.0f;
     m_SlicePos     = Vec3(0, 0, 0);
-    m_pEmitter1    = NULL;
-    m_pEmitter2    = NULL;
+    m_pEmitter1    = nullptr;
+    m_pEmitter2    = nullptr;
 
     // Random rotation velocity (matches binary Fruit::Init @ 0x00176708):
     // one triple of random values, stored IDENTICALLY into both m_RotVel1
@@ -385,11 +385,11 @@ void Fruit::Deactivate() {
 void Fruit::KillFruit(bool doMissPenalty) {
     if (m_pEmitter1) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
-        m_pEmitter1 = NULL;
+        m_pEmitter1 = nullptr;
     }
     if (m_pEmitter2) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
-        m_pEmitter2 = NULL;
+        m_pEmitter2 = nullptr;
     }
 
     // TODO: miss penalty (needs MissControl, GameState)
@@ -589,7 +589,7 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
         const float sliceRad = (float)(int16_t)m_SliceAngle *
                                (6.2831853f / 65536.0f);
         Mortar::PSPParticleEmitter* eHit = pm.AddEmitter(
-            info->m_NameHash, NULL, /*persistent=*/false);
+            info->m_NameHash, nullptr, /*persistent=*/false);
         if (eHit) {
             eHit->m_Pos      = pos;
             eHit->m_ScaleY   =  cosf(sliceRad);   // cos θ
@@ -598,8 +598,8 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
 
         // Persistent juice emitters — one per future half. m_SlicedHash
         // resolves to "<name>_sliced" (e.g. "apple_sliced").
-        m_pEmitter1 = pm.AddEmitter(info->m_SlicedHash, NULL, /*persistent=*/true);
-        m_pEmitter2 = pm.AddEmitter(info->m_SlicedHash, NULL, /*persistent=*/true);
+        m_pEmitter1 = pm.AddEmitter(info->m_SlicedHash, nullptr, /*persistent=*/true);
+        m_pEmitter2 = pm.AddEmitter(info->m_SlicedHash, nullptr, /*persistent=*/true);
         if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
         if (m_pEmitter2) m_pEmitter2->m_Pos = pos;
     }
@@ -1000,7 +1000,7 @@ void Fruit::LoadFruitModels() {
 }
 
 const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
-    if (!s_FruitModelsLoaded) return NULL;
-    if (fruitType < 0 || fruitType >= (int)s_FruitModels.size()) return NULL;
+    if (!s_FruitModelsLoaded) return nullptr;
+    if (fruitType < 0 || fruitType >= (int)s_FruitModels.size()) return nullptr;
     return &s_FruitModels[fruitType];
 }

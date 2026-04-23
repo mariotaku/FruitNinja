@@ -92,7 +92,7 @@ public:
     // Port: parallel array indexed by GeometryEntry::materialIndex
     std::vector<MeshMaterial> m_Materials;
 
-    // +0x68: Bound skeleton pointer (NULL if none). Set by BindSkeleton.
+    // +0x68: Bound skeleton pointer (nullptr if none). Set by BindSkeleton.
     // Matches Mesh::m_Skeleton (0x001b0c3c offset 0x68)
     Skeleton* m_Skeleton;
 
@@ -113,7 +113,7 @@ public:
     void BindSkeleton(Skeleton* skeleton) override;
 
     // Matches Mesh::GetBoneVertTransform (0x001b0688)
-    // Returns pointer to vert matrix for binding[index], or NULL if no skeleton bound.
+    // Returns pointer to vert matrix for binding[index], or nullptr if no skeleton bound.
     const Matrix44* GetBoneVertTransform(int index) const;
 
     // vtable[9]: Matches Mesh::GetGeometryCount (0x001b1678)
@@ -125,7 +125,7 @@ public:
     // Port specific: access GeometryEntry by index (replaces vtable[10] GetGeometry).
     const GeometryEntry* GetGeometryEntry(int idx) const {
         if (idx >= 0 && idx < (int)m_Geometries.size()) return &m_Geometries[idx];
-        return NULL;
+        return nullptr;
     }
 
     // Port helper: assign texture to all materials that have none.

@@ -194,7 +194,7 @@ void Font::DrawString(float scale, float maxWidth, float z,
                 char hex[7];
                 memcpy(hex, p + 1, 6);
                 hex[6] = '\0';
-                unsigned int rgb = (unsigned int)strtoul(hex, NULL, 16);
+                unsigned int rgb = (unsigned int)strtoul(hex, nullptr, 16);
                 uint8_t cr = (rgb >> 16) & 0xFF;
                 uint8_t cg = (rgb >> 8) & 0xFF;
                 uint8_t cb = rgb & 0xFF;

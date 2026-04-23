@@ -18,13 +18,13 @@
 //       case 2:  return new Coin();         // 0x94  bytes
 //       case 3:  return new SlashEntity();  // 0x184 bytes
 //       case 4:  return new BombBlast();    // 0x70  bytes
-//       default: return NULL;
+//       default: return nullptr;
 //       }
 //   }
 //
 // Type 3 (SlashEntity) is the single documented divergence: the port
 // owns a single `g_pSlashEntity` constructed from GameInit and does not
-// pool SlashEntity through ActorManager. The factory returns NULL on
+// pool SlashEntity through ActorManager. The factory returns nullptr on
 // type 3 so a stray ActorManager::Add(3, true) fails loudly instead of
 // silently allocating a second unmanaged slash. If/when the port
 // transitions to pool-managed SlashEntity, this branch becomes
@@ -41,11 +41,11 @@ Entity* CreateEntity(int entityType) {
         // Port divergence — see header comment.
         fprintf(stderr,
                 "CreateEntity: type 3 (SlashEntity) is not pooled in the "
-                "port; use g_pSlashEntity. Returning NULL.\n");
-        return NULL;
+                "port; use g_pSlashEntity. Returning nullptr.\n");
+        return nullptr;
     case 4:  return new BombBlast();
     default:
         fprintf(stderr, "CreateEntity: unknown entity type %d\n", entityType);
-        return NULL;
+        return nullptr;
     }
 }

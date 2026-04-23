@@ -30,7 +30,7 @@ int GameSound::FindFree() {
 // Matches 0x00129270
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch) {
     int i = FindFree();
-    if (i == -1) return NULL;
+    if (i == -1) return nullptr;
 
     SoundManager& mgr = SoundManager::GetInstance();
     mgr.SFXPlay(name, m_Slots[i].pSound);

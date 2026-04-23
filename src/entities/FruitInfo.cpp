@@ -360,7 +360,7 @@ float FruitInfo_GetBombCollision()
 const FruitInfo* FruitInfo_Get(int type)
 {
     if (type < 0 || type >= s_FruitInfoCount)
-        return NULL;
+        return nullptr;
     return &s_FruitInfos[type];
 }
 

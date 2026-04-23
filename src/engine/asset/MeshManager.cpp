@@ -7,7 +7,7 @@
 
 namespace Mortar {
 
-MeshManager* MeshManager::s_instance = NULL;
+MeshManager* MeshManager::s_instance = nullptr;
 
 MeshManager::MeshManager() {
     s_instance = this;
@@ -15,7 +15,7 @@ MeshManager::MeshManager() {
 
 MeshManager::~MeshManager() {
     ReleaseAll();
-    if (s_instance == this) s_instance = NULL;
+    if (s_instance == this) s_instance = nullptr;
 }
 
 void MeshManager::Initialise(int capacity) {

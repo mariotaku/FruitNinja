@@ -65,21 +65,21 @@ public:
     const Matrix44* GetVertex(int index) const {
         if (index >= 0 && index < (int)m_VertMatrices.size())
             return &m_VertMatrices[index];
-        return NULL;
+        return nullptr;
     }
 
     // Matches Skeleton::GetWorld (0x001b15c8)
     const Matrix44* GetWorld(int index) const {
         if (index >= 0 && index < (int)m_WorldMatrices.size())
             return &m_WorldMatrices[index];
-        return NULL;
+        return nullptr;
     }
 
     // Matches Skeleton::GetLocal (0x001b15c0)
     const Matrix44* GetLocal(int index) const {
         if (index >= 0 && index < (int)m_LocalMatrices.size())
             return &m_LocalMatrices[index];
-        return NULL;
+        return nullptr;
     }
 
     bool IsValid() const { return !m_Bones.empty(); }

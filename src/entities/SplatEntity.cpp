@@ -341,7 +341,7 @@ void SplatEntity::ReleaseContent() {
 
 SplatEntity* SplatEntity::GetFree() {
     SplatEntity* s = s_Pool.Pop();
-    if (!s) return NULL;
+    if (!s) return nullptr;
     s->m_bAlive = 0;
     return s;
 }

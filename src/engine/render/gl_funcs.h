@@ -95,6 +95,11 @@ typedef intptr_t GLsizeiptr;
 #define GL_POSITION              0x1203
 #define GL_SMOOTH                0x1D01
 
+// Desktop-GL only (used by debug wireframe toggle).
+#define GL_FRONT_AND_BACK        0x0408
+#define GL_LINE                  0x1B01
+#define GL_FILL                  0x1B02
+
 // Function pointer types and declarations
 #define GL_FUNC(ret, name, ...) typedef ret (*PFN_##name)(__VA_ARGS__); extern PFN_##name name;
 
@@ -147,6 +152,10 @@ GL_FUNC(void, glMaterialfv, GLenum, GLenum, const GLfloat*)
 GL_FUNC(void, glLightfv, GLenum, GLenum, const GLfloat*)
 GL_FUNC(void, glShadeModel, GLenum)
 GL_FUNC(void, glTexEnvf, GLenum, GLenum, GLfloat)
+
+// Optional entry point — desktop GL only, stays nullptr under GLES. Used
+// by the F2 wireframe debug toggle; callers must null-check.
+GL_FUNC(void, glPolygonMode, GLenum, GLenum)
 
 #undef GL_FUNC
 

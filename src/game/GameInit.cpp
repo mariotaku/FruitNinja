@@ -21,6 +21,7 @@
 #include "hud/SliceEffect.h"
 #include "particle/PSPParticleManager.h"
 #include "render/DisplayManager.h"
+#include "render/gl_funcs.h"
 #include "input/InputManager.h"
 #include "input/Touch.h"
 #include "util/StringHash.h"
@@ -90,7 +91,7 @@ void GameUpdate(float dt, bool active) {
     s_FrameCount++;
 
     Game* game = Game::GetInstance();
-    if (!game) { if (earlyFrame) printf("GameUpdate: game NULL, return\n"); return; }
+    if (!game) { if (earlyFrame) printf("GameUpdate: game nullptr, return\n"); return; }
 
     if (earlyFrame) printf("GameUpdate: -> Touch::Update\n");
     Mortar::Touch::GetInstance().Update();
@@ -170,7 +171,7 @@ void GameDraw(float dt, bool active) {
     s_DrawCount++;
 
     Game* game = Game::GetInstance();
-    if (!game) { if (earlyFrame) printf("GameDraw: game NULL, return\n"); return; }
+    if (!game) { if (earlyFrame) printf("GameDraw: game nullptr, return\n"); return; }
 
     GameTaskState* ts = GetTaskState();
     if (earlyFrame) printf("GameDraw: -> SetupPerspective cam=%p\n", (void*)game->pCamera);
@@ -212,8 +213,14 @@ void GameDraw(float dt, bool active) {
     dm.SetDepthBuffer(true);
 
     if (earlyFrame) printf("GameDraw: -> ActorManager::Draw am=%p\n", (void*)game->actorManager);
+    // Port specific: wireframe debug mode (F2). glPolygonMode is loaded
+    // optionally by gl_funcs — stays nullptr on GLES, so the toggle is a
+    // silent no-op there.
+    const bool wireframe = FN::g_DebugWireframe && glPolygonMode != nullptr;
+    if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
+    if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     // === 2. HUD::BeginDraw + post-actor block ===
     // Binary @ 0x0016ba10 right after ActorManager::Draw:
@@ -341,9 +348,9 @@ void GameExit_Handler() {
     if (game->hud) {
         game->hud->Release();
         delete game->hud;
-        game->hud = NULL;
+        game->hud = nullptr;
     }
-    game->mainScreen = NULL;
+    game->mainScreen = nullptr;
 
     // TODO: Coin::ClearCoins, SaveCurrentData
     WaveManager::GetInstance()->Destroy();  // stub (frees WAVE_INFO/WaveQue)

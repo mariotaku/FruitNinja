@@ -35,7 +35,7 @@ template <typename T>
 class MemoryPool {
 public:
     MemoryPool()
-        : m_Backing(NULL), m_FreeList(NULL), m_FreeCount(0), m_MaxCount(0) {}
+        : m_Backing(nullptr), m_FreeList(nullptr), m_FreeCount(0), m_MaxCount(0) {}
 
     ~MemoryPool() { Destroy(); }
 
@@ -59,17 +59,17 @@ public:
     // Matches MemoryPool<T>::~MemoryPool / Destroy. Frees both arrays.
     // Calls T destructors via delete[].
     void Destroy() {
-        if (m_Backing)  { delete[] m_Backing;  m_Backing  = NULL; }
-        if (m_FreeList) { std::free(m_FreeList); m_FreeList = NULL; }
+        if (m_Backing)  { delete[] m_Backing;  m_Backing  = nullptr; }
+        if (m_FreeList) { std::free(m_FreeList); m_FreeList = nullptr; }
         m_FreeCount = 0;
         m_MaxCount  = 0;
     }
 
     // Matches MemoryPool<T>::Pop (0x0016d75c). LIFO stack pop of the
-    // free list. Returns NULL when the pool is empty. The popped slot
+    // free list. Returns nullptr when the pool is empty. The popped slot
     // is NOT re-constructed — caller must reset its fields.
     T* Pop() {
-        if (m_FreeCount < 1) return NULL;
+        if (m_FreeCount < 1) return nullptr;
         --m_FreeCount;
         return m_FreeList[m_FreeCount];
     }
@@ -90,8 +90,8 @@ public:
 
     // Direct slot access by raw index [0, Capacity). Lets callers
     // iterate every slot in backing order and check a per-T active flag.
-    T*       SlotAt(int i)       { return (i >= 0 && i < m_MaxCount) ? &m_Backing[i] : NULL; }
-    const T* SlotAt(int i) const { return (i >= 0 && i < m_MaxCount) ? &m_Backing[i] : NULL; }
+    T*       SlotAt(int i)       { return (i >= 0 && i < m_MaxCount) ? &m_Backing[i] : nullptr; }
+    const T* SlotAt(int i) const { return (i >= 0 && i < m_MaxCount) ? &m_Backing[i] : nullptr; }
 
     int FreeCount() const { return m_FreeCount; }
     int Capacity()  const { return m_MaxCount; }

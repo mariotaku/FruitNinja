@@ -9,7 +9,7 @@ namespace Mortar {
 
 // --- Mesh ---
 
-Mesh::Mesh() : m_Skeleton(NULL) {}
+Mesh::Mesh() : m_Skeleton(nullptr) {}
 
 Mesh::~Mesh() {
     for (int i = 0; i < (int)m_Geometries.size(); i++) {
@@ -39,13 +39,13 @@ void Mesh::BindSkeleton(Skeleton* skeleton) {
 }
 
 // Matches Mesh::GetBoneVertTransform (0x001b0688)
-// Returns vert matrix for binding[index] if skeleton is bound, else NULL.
-// Caller falls back to identity when NULL (= worldMatrix unchanged).
+// Returns vert matrix for binding[index] if skeleton is bound, else nullptr.
+// Caller falls back to identity when nullptr (= worldMatrix unchanged).
 const Matrix44* Mesh::GetBoneVertTransform(int index) const {
-    if (!m_Skeleton) return NULL;
-    if (index < 0 || index >= (int)m_BoneBindings.size()) return NULL;
+    if (!m_Skeleton) return nullptr;
+    if (index < 0 || index >= (int)m_BoneBindings.size()) return nullptr;
     int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
-    if (skelIdx < 0) return NULL;
+    if (skelIdx < 0) return nullptr;
     return m_Skeleton->GetVertex(skelIdx);
 }
 

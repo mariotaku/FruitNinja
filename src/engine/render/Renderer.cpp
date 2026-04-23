@@ -12,7 +12,7 @@
 // Sprite/quad helpers use glColor4f for the tint, GL_MODULATE texenv,
 // and client-array vertex/UV streams drawn as GL_TRIANGLE_STRIP.
 
-Renderer* Renderer::s_instance = NULL;
+Renderer* Renderer::s_instance = nullptr;
 
 bool Renderer::init() {
     s_instance = this;

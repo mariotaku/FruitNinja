@@ -106,7 +106,7 @@ static const float ROT_CLAMP_X = 0.75f;
 static const float ROT_CLAMP_Y = 0.5f;
 
 MenuButton::MenuButton()
-    : m_pEntity(NULL),
+    : m_pEntity(nullptr),
       m_FruitType(-1),
       m_FadeCounter(0),
       m_fieldD4(0),
@@ -118,7 +118,7 @@ MenuButton::MenuButton()
       m_SparkleTimer(-1.0f),
       m_NewIndicatorTimer(-1.0f),
       m_HitBoundsScale(0.0f, 0.0f, 0.0f),
-      m_pLabel1(NULL), m_pLabel2(NULL),
+      m_pLabel1(nullptr), m_pLabel2(nullptr),
       m_PlayerIndex(0),
       m_bScoreSubmitted(0),
       m_bVisible(1),
@@ -127,7 +127,7 @@ MenuButton::MenuButton()
       m_TargetSize(0.0f, 0.0f, 0.0f),
       m_bHasHitArea(false),
       m_bHighlighted(0),
-      m_pFruitPiece(NULL),
+      m_pFruitPiece(nullptr),
       m_bRemovalPending(0),
       m_AnimScale(1.0f),
       m_BounceParams(0.0f, 0.0f, 0.0f),
@@ -253,13 +253,13 @@ void MenuButton::Release() {
     // Entity is owned by ActorManager — deactivate but don't delete
     if (m_pEntity) {
         m_pEntity->Deactivate();
-        m_pEntity = NULL;
-        m_pFruitPiece = NULL;
+        m_pEntity = nullptr;
+        m_pFruitPiece = nullptr;
     }
 
     // TODO: delete BakedString labels
-    m_pLabel1 = NULL;
-    m_pLabel2 = NULL;
+    m_pLabel1 = nullptr;
+    m_pLabel2 = nullptr;
 }
 
 // Trigger the fade-out-then-remove animation used by screen
@@ -323,16 +323,16 @@ void MenuButton::Update(float dt) {
     // Binary MenuButton::Update entity-tracking + shrink path
     // (0x0014e7?? .. 0x0014e962). Two branches:
     //
-    //   if (m_pEntity != NULL):
+    //   if (m_pEntity != nullptr):
     //       if (entity->m_bSliced != 0):              # released by ClearMenuItems
     //           if (|vel|² > 0.001):                  # actually moving
     //               fire m_ClickCallback once
     //               ClearMenuItems()
-    //               m_pEntity = NULL                  # detach
+    //               m_pEntity = nullptr                  # detach
     //       else:
     //           pin entity to button center (vel=0)
     //
-    //   if (m_pEntity == NULL):
+    //   if (m_pEntity == nullptr):
     //       m_FadeCounter -= dt * 108543              # ~9 frames to 0
     //       if (m_FadeCounter < 1):
     //           m_FadeCounter = 0
@@ -420,8 +420,8 @@ void MenuButton::Update(float dt) {
                 }
                 // Detach the entity → next frame enters the FadeCounter
                 // shrink path below.
-                m_pEntity = NULL;
-                m_pFruitPiece = NULL;
+                m_pEntity = nullptr;
+                m_pFruitPiece = nullptr;
                 // Initialise the shrink counter — binary uses 0x3ffc.
                 m_FadeCounter = 0x3ffc;
             }
@@ -432,12 +432,12 @@ void MenuButton::Update(float dt) {
     // disables a bomb before MenuButton could detect the slash), force
     // the detach here so the shrink path below can run.
     if (m_pEntity && !m_pEntity->IsActive()) {
-        m_pEntity = NULL;
-        m_pFruitPiece = NULL;
+        m_pEntity = nullptr;
+        m_pFruitPiece = nullptr;
         if (m_FadeCounter == 0) m_FadeCounter = 0x3ffc;
     }
 
-    if (m_pEntity == NULL && m_FadeCounter > 0) {
+    if (m_pEntity == nullptr && m_FadeCounter > 0) {
         // Shrink-to-disappearance phase. Binary DAT_0014e97c = 108543.0
         // is the per-second decrement rate; over a 60Hz tick that's
         // ~1809 counts/frame → ~9 frames from 0x3ffc to 0.

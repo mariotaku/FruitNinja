@@ -121,7 +121,7 @@ int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
 }
 
 const TouchState* Touch::GetSlot(int slot) const {
-    if (slot < 0 || slot >= MAX_SLOTS) return NULL;
+    if (slot < 0 || slot >= MAX_SLOTS) return nullptr;
     return &states1[slot];
 }
 

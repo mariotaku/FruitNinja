@@ -17,6 +17,7 @@
 namespace FN {
 
 bool  g_DebugHitboxes  = false;
+bool  g_DebugWireframe = false; // Port specific: desktop GL only (F2)
 float g_DebugTimeScale = 1.0f; // Port specific: debug-only, no binary equivalent
 
 // Lazy 1×1 white texture for the vertex-colour shader path. The

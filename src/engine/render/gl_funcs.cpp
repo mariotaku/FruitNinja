@@ -50,6 +50,9 @@ GL_FUNC(void, glLightfv, GLenum, GLenum, const GLfloat*)
 GL_FUNC(void, glShadeModel, GLenum)
 GL_FUNC(void, glTexEnvf, GLenum, GLenum, GLfloat)
 
+// Optional — see header.
+GL_FUNC(void, glPolygonMode, GLenum, GLenum)
+
 #undef GL_FUNC
 
 bool gl_load_functions() {
@@ -103,6 +106,9 @@ bool gl_load_functions() {
     LOAD(glLightfv)
     LOAD(glShadeModel)
     LOAD(glTexEnvf)
+
+    // Optional — no hard failure if absent (GLES doesn't ship it).
+    glPolygonMode = (PFN_glPolygonMode)SDL_GL_GetProcAddress("glPolygonMode");
 
 #undef LOAD
     return true;

@@ -144,10 +144,10 @@ void GameModeScreen::UnLoadContent() {
 // ===================================================================
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     : game(g)
-    , m_pBackButton(NULL)
-    , m_pClassicButton(NULL)
-    , m_pZenButton(NULL)
-    , m_pArcadeButton(NULL)
+    , m_pBackButton(nullptr)
+    , m_pClassicButton(nullptr)
+    , m_pZenButton(nullptr)
+    , m_pArcadeButton(nullptr)
     , m_ButtonDelay(-1.0f)
     , m_SecondaryAlpha(-2.5f)   // DAT_0013e5a0
     , m_FrameTimer(0.0f)         // DAT_0013e59c
@@ -277,10 +277,10 @@ void GameModeScreen::CreateControls() {
 }
 
 void GameModeScreen::RemoveButtons() {
-    if (m_pBackButton)    { m_pBackButton->SetPendingRemoval();    m_pBackButton    = NULL; }
-    if (m_pClassicButton) { m_pClassicButton->SetPendingRemoval(); m_pClassicButton = NULL; }
-    if (m_pZenButton)     { m_pZenButton->SetPendingRemoval();     m_pZenButton     = NULL; }
-    if (m_pArcadeButton)  { m_pArcadeButton->SetPendingRemoval();  m_pArcadeButton  = NULL; }
+    if (m_pBackButton)    { m_pBackButton->SetPendingRemoval();    m_pBackButton    = nullptr; }
+    if (m_pClassicButton) { m_pClassicButton->SetPendingRemoval(); m_pClassicButton = nullptr; }
+    if (m_pZenButton)     { m_pZenButton->SetPendingRemoval();     m_pZenButton     = nullptr; }
+    if (m_pArcadeButton)  { m_pArcadeButton->SetPendingRemoval();  m_pArcadeButton  = nullptr; }
     m_bButtonsCreated = false;
 }
 

@@ -57,17 +57,17 @@ static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 // Matches ctor at 0x0014c430 (159 lines)
 MainScreen::MainScreen(Game& g)
     : game(g),
-      pPlayButton(NULL), pDojoButton(NULL),
-      pQuitBtn(NULL), pMoreGamesBtn(NULL),
-      pSoundToggle(NULL), pMusicToggle(NULL),
+      pPlayButton(nullptr), pDojoButton(nullptr),
+      pQuitBtn(nullptr), pMoreGamesBtn(nullptr),
+      pSoundToggle(nullptr), pMusicToggle(nullptr),
       m_Alpha(1.0f),
       m_LogoNinjaTextX(0.0f), m_WindowCenter(0.0f), field_0x100(0.0f),
       m_BounceVelocity(0.0f), m_field108(0.0f),
       m_State(STATE_CAMERA_ZOOM), m_StateTimer(0.0f),
       m_Timer2(0.0f),
       m_CameraTransition(0.0f), m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
-      m_pDojoScreen(NULL),
-      m_pGameModeScreen(NULL)
+      m_pDojoScreen(nullptr),
+      m_pGameModeScreen(nullptr)
 {
     // Load global textures (assigned to globals via GOT in original)
     m_blurryBackingTex = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
@@ -138,12 +138,12 @@ void MainScreen::Reset() {
 // Matches 0x0014cd20 (~40 lines): cleanup all resources
 void MainScreen::Release() {
     // Zero all button pointers (HUD owns them, don't delete here)
-    pPlayButton = NULL;
-    pDojoButton = NULL;
-    pQuitBtn = NULL;
-    pMoreGamesBtn = NULL;
-    pSoundToggle = NULL;
-    pMusicToggle = NULL;
+    pPlayButton = nullptr;
+    pDojoButton = nullptr;
+    pQuitBtn = nullptr;
+    pMoreGamesBtn = nullptr;
+    pSoundToggle = nullptr;
+    pMusicToggle = nullptr;
 
     // TODO: delete textures and font when proper resource management exists
 }
@@ -244,7 +244,7 @@ void MainScreen::Update(float dt) {
             // happens in DojoScreen.cpp before HUD::Update fires this
             // callback.
             m_pDojoScreen->m_RemoveCallback = [this](HUDControl*) {
-                m_pDojoScreen = NULL;
+                m_pDojoScreen = nullptr;
             };
             game.hud->AddControl(m_pDojoScreen);
         }
@@ -333,7 +333,7 @@ void MainScreen::Update(float dt) {
             !m_pGameModeScreen) {
             m_pGameModeScreen = new GameModeScreen(game, false);
             m_pGameModeScreen->m_RemoveCallback = [this](HUDControl*) {
-                m_pGameModeScreen = NULL;
+                m_pGameModeScreen = nullptr;
             };
             game.hud->AddControl(m_pGameModeScreen);
         }
@@ -676,7 +676,7 @@ void MainScreen::RemoveButton(MenuButton*& btn) {
         // entity. Calling HUD::RemoveControl directly would leak
         // both because it just unlinks from the list without deleting.
         btn->StartFadeOut();
-        btn = NULL;
+        btn = nullptr;
     }
 }
 
@@ -770,10 +770,10 @@ void MainScreen::CreateQuitButton() {
 // Matches MainScreen::ButtonDeleted @ 0x0014acc0. Binary dispatches by
 // identity on all four button pointers — port mirrors 1:1.
 void MainScreen::ButtonDeleted(HUDControl* ctrl) {
-    if (ctrl == pDojoButton)    pDojoButton    = NULL;
-    if (ctrl == pPlayButton)    pPlayButton    = NULL;
-    if (ctrl == pQuitBtn)       pQuitBtn       = NULL;
-    if (ctrl == pMoreGamesBtn)  pMoreGamesBtn  = NULL;
+    if (ctrl == pDojoButton)    pDojoButton    = nullptr;
+    if (ctrl == pPlayButton)    pPlayButton    = nullptr;
+    if (ctrl == pQuitBtn)       pQuitBtn       = nullptr;
+    if (ctrl == pMoreGamesBtn)  pMoreGamesBtn  = nullptr;
 }
 
 // --- Callbacks (all fully decompiled in docs/screens/main.md) ---

@@ -79,5 +79,5 @@ void ScreenButton::ControlDeleted(HUDControl* ctrl) {
     if (m_deletedCb) {
         m_deletedCb((HUDControl*)m_pButton);
     }
-    m_pButton = NULL;
+    m_pButton = nullptr;
 }

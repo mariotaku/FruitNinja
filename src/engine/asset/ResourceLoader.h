@@ -58,7 +58,7 @@ public:
         if (index > 0 && index - 1 < (uint32_t)m_Children.size()) {
             return &m_Children[index - 1];
         }
-        return NULL;
+        return nullptr;
     }
 
     const AsciiString& BasePathGet() const { return m_BasePath; }

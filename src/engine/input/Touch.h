@@ -71,7 +71,7 @@ public:
     int GetTouchInRegion(float left, float right, float bottom, float top,
                          int preferredSlot = -1) const;
 
-    // Direct slot accessor. Returns NULL if slot is out of range.
+    // Direct slot accessor. Returns nullptr if slot is out of range.
     const TouchState* GetSlot(int slot) const;
 
     // Convenience: true if the slot is pressed or held (phase <= 0).

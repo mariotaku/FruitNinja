@@ -32,9 +32,9 @@ SmartPtr<Texture> TextureManager::Load(const char* path) {
 
 SmartPtr<Texture> TextureManager::Find(uint32_t hash) const {
     std::map<uint32_t, CacheEntry>::const_iterator it = m_Cache.find(hash);
-    if (it != m_Cache.end() && it->second.ptr != NULL) {
+    if (it != m_Cache.end() && it->second.ptr != nullptr) {
         // The cache stores raw pointers; Texture::~Texture removes its
-        // entry before the object is freed, so any non-NULL pointer
+        // entry before the object is freed, so any non-null pointer
         // here is still alive. Wrap in a fresh SmartPtr — its ctor
         // bumps the strong refcount and keeps the texture alive while
         // the caller holds it.

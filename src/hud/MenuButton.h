@@ -30,7 +30,7 @@ void FN_ClearMenuItems();
 
 class MenuButton : public HUDControl3d {
 public:
-    // +0x80: real Fruit/Bomb entity spinning on button (NULL for toggles)
+    // +0x80: real Fruit/Bomb entity spinning on button (nullptr for toggles)
     Entity* m_pEntity;
 
     // +0x84: -1 = no fruit, 0+ = fruit index, >=bombThreshold = bomb

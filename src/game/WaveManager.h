@@ -113,7 +113,7 @@ public:
 
     // --- Spawning -----------------------------------------------------
 
-    // 0x00121fa8: spawn N bombs from a spawner (or chain-spawn via NULL).
+    // 0x00121fa8: spawn N bombs from a spawner (or chain-spawn via nullptr).
     // Called from Bomb::Update chain-bomb path when spawnLevel >= 2.
     void SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int playerIdx);
 

@@ -7,9 +7,9 @@
 //
 // Stored in BaseScreen::m_ScreenButtons (std::list<ScreenButton>).
 // BaseScreen::UpdateButtons iterates this list each frame:
-//   - If m_pButton == NULL and m_visCheck(dt) returns true,
+//   - If m_pButton == nullptr and m_visCheck(dt) returns true,
 //     a MenuButton is lazily created from the descriptor fields.
-//   - If m_pButton != NULL, m_updateCb is called each frame;
+//   - If m_pButton != nullptr, m_updateCb is called each frame;
 //     returning true triggers button removal/shrink.
 //
 // Binary refs:
@@ -36,14 +36,14 @@ struct ScreenButton {
     // +0x00: tutorial slot ID (-1 = no tutorial)
     int m_tutorID;
 
-    // +0x04: live MenuButton (NULL until UpdateButtons creates it)
+    // +0x04: live MenuButton (nullptr until UpdateButtons creates it)
     MenuButton* m_pButton;
 
     // +0x08: button texture
     SmartPtr<Mortar::Texture> m_tex;
 
     // +0x0C (36 bytes in binary): visibility predicate.
-    // Called with dt each frame when m_pButton is NULL.
+    // Called with dt each frame when m_pButton is nullptr.
     // Return true to create the button this frame.
     // Binary default (0x001300e8): always returns true.
     std::function<bool(float)> m_visCheck;
@@ -85,7 +85,7 @@ struct ScreenButton {
 
     ScreenButton()
         : m_tutorID(-1)
-        , m_pButton(NULL)
+        , m_pButton(nullptr)
         , m_visCheck([](float) { return true; })        // 0x001300e8
         , m_updateCb([](MenuButton*, float, ScreenButton&) { return false; })  // 0x001300ec
         , m_pos(0, 0, 0)

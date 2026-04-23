@@ -11,7 +11,7 @@ class NLFQueue {
     int m_ReadIdx;
     int m_WriteIdx;
 public:
-    NLFQueue() : m_Buffer(NULL), m_Capacity(0), m_ReadIdx(0), m_WriteIdx(0) {}
+    NLFQueue() : m_Buffer(nullptr), m_Capacity(0), m_ReadIdx(0), m_WriteIdx(0) {}
 
     ~NLFQueue() {
         delete[] m_Buffer;
