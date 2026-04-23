@@ -112,28 +112,6 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
         glEnable(GL_CULL_FACE);
     }
 
-    // PORT QUIRK: swap GL_LESS -> GL_LEQUAL for mesh draws.
-    //
-    // Binary BeginFrame sets glDepthFunc(GL_LESS) and never overrides it
-    // (confirmed via Ghidra — glDepthFunc @ 0x00101aa8 has no callers
-    // beyond BeginFrame). Bomb meshes contain overlapping / co-planar
-    // triangles (spherical body + glow-layer / outline triangles that
-    // share vertex positions). Under GL_LESS a later-submitted triangle
-    // at the same depth as an earlier one is REJECTED, so the first
-    // triangle that lands at each pixel wins regardless of submission
-    // order. For the bomb that flips the visible surface to the bright
-    // / near-white outline layer and the dark body + red X never shows —
-    // the classic "bomb is a white ball" symptom.
-    //
-    // The Bada GL driver must have interpreted GL_LESS as GL_LEQUAL in
-    // practice (driver quirk or precision-rounding rescue), because the
-    // binary renders the correct dark body. GL_LEQUAL lets co-planar
-    // triangles written later win, which gets the body+X showing.
-    //
-    // Scope-limited to mesh draws so other GL paths (HUD, particles)
-    // stay at the binary-faithful GL_LESS seen in BeginFrame.
-    glDepthFunc(GL_LEQUAL);
-
     // Matrix stacks: push current, load MVP, pop on exit. Binary splits
     // the upload into PROJECTION = screenRot*World and MODELVIEW = view
     // composition; our MatrixManager already produced the final MVP, so
@@ -216,13 +194,11 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
     // Restore matrix stacks + unbind VBOs, matching the tail of
-    // Geometry::Render. Restore GL_LESS so other draw paths see the
-    // binary-faithful depth func.
+    // Geometry::Render.
     glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
-    glDepthFunc(GL_LESS);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
