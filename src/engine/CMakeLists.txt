@@ -14,6 +14,7 @@ add_library(mortar_engine STATIC
     render/Renderer.cpp
     render/MortarCamera.cpp
     # Phase 4 — Asset Pipeline
+    asset/FileManager.cpp
     asset/Texture.cpp
     asset/TextureManager.cpp
     asset/ResourceLoader.cpp
