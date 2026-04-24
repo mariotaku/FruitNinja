@@ -19,6 +19,7 @@
 #include "util/SmartPtr.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
+#include "audio/GameSound.h"
 #include <cstdio>
 
 namespace FN {
@@ -76,6 +77,35 @@ static void EnsureWhitePx() {
 
 void SetBombHitPos(const Vec3& pos) {
     s_BombHitPos = pos;
+}
+
+// Matches HitMenuBomb (0x0016b234). Binary also writes a task-state
+// flag at +0xf8 and gates on a field_0x10c check -- the port's
+// equivalent state (BombFlash pool / task-state guard) isn't ported,
+// so we drop the guard and just trigger the timer + SFX + pos.
+void HitMenuBomb(const Vec3& pos) {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+    SetBombHitPos(pos);
+    game->bombHitTimer = 2.0f;                       // binary: 0x40000000 = 2.0f
+    if (game->pGameSound) {
+        // Binary pre-loads the SFX via SoundManager::PreLoadSound; the
+        // port's GameSound::SFXPlay loads on demand, so preload is a
+        // no-op deferred.
+        game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    }
+}
+
+// Matches BombFlashFull (0x00168f24). Returns true once the bomb-hit
+// flash has wound below 1.0s of remaining time (i.e. past the main
+// flash peak). The binary also checks a redundant 1.55 upper bound --
+// since 1.0 is tighter, the effective test is just `timer < 1.0`.
+// In the idle state (timer == 0) this returns true, so callers must
+// only poll it AFTER kicking the timer via HitMenuBomb / HitBomb.
+bool BombFlashFull() {
+    const Game* game = Game::GetInstance();
+    if (!game) return true;
+    return game->bombHitTimer < 1.0f;
 }
 
 // Matches CriticalFlash @ 0x0016a9a4. Stores the colour and resets

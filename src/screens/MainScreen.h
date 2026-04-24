@@ -126,6 +126,12 @@ private:
     float m_GlobalAlphaTarget;
     float m_Time;
 
+    // One-shot latch so STATE_GAME_START fires WaveManager::Reset once
+    // per entry instead of every frame (binary's per-frame threshold
+    // check is awkward to reproduce exactly without the same timer
+    // semantics; port emulates with a simple armed-on-entry flag).
+    bool m_bGameStartReset;
+
     // Current DojoScreen child (when state is STATE_DOJO_WAIT_B or
     // already in Dojo). nullptr when no Dojo is open. MainScreen polls
     // the child for m_bPendingRemoval and transitions to SLIDE_IN

@@ -11,10 +11,15 @@
 #include "Game.h"
 #include "entities/FruitInfo.h"
 #include "entities/Bomb.h"
+#include "entities/BombBlast.h"
 #include "entities/Fruit.h"
 #include "entities/Entity.h"
+#include "game/BombHit.h"
+#include "game/FruitCamera.h"
+#include "game/WaveManager.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
+#include "hud/TutorialControl.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "core/SystemManager.h"
@@ -66,6 +71,7 @@ MainScreen::MainScreen(Game& g)
       m_State(STATE_CAMERA_ZOOM), m_StateTimer(0.0f),
       m_Timer2(0.0f),
       m_CameraTransition(0.0f), m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
+      m_bGameStartReset(false),
       m_pDojoScreen(nullptr),
       m_pGameModeScreen(nullptr)
 {
@@ -183,17 +189,31 @@ void MainScreen::Update(float dt) {
         break;
 
     case STATE_GAME_START: {
-        // Direct game start. Decay camera × 0.75 (scaled for debug time).
+        // Binary @ 0x0014bb58 case 2:
+        //   if (cameraTransition > DAT_0014bb70) {
+        //       game->field_0x28 = game->field_0x20;     // copy some state
+        //       WaveManager::Reset(true);                 // full wave reset
+        //       game->pauseFlag = 1;                      // gate updates
+        //   }
+        //   cameraTransition *= 0.75;
+        //   if (|cameraTransition| < DAT_0014bb74) {
+        //       game->pauseFlag = 0;
+        //       cameraTransition = 0;
+        //       m_State = STATE_CAMERA_FADE (0x11);
+        //   }
+        //   pos.y animation (shared LAB_0014c166 formula).
+        if (!m_bGameStartReset) {
+            WaveManager::GetInstance()->Reset(true);
+            m_bGameStartReset = true;
+        }
         m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
-
-        // When camera > 0.999: fully faded, transition to game
         if (m_CameraTransition > 0.999f) {
             m_CameraTransition = 1.0f;
         }
-
-        // At threshold: reset wave, enter game
         if (fabsf(m_CameraTransition) < 0.01f) {
+            m_CameraTransition = 0.0f;
             m_State = STATE_CAMERA_FADE;
+            m_bGameStartReset = false;   // arm for next entry
         }
         break;
     }
@@ -285,10 +305,14 @@ void MainScreen::Update(float dt) {
         break;
     }
 
-    case STATE_LEADERBOARD:
-    case STATE_MORE_GAMES:
-    case STATE_MATCHMAKER:
-        // Network states — skip for port, return to menu
+    case STATE_LEADERBOARD:     // binary case 9
+    case STATE_MORE_GAMES:      // binary case 10
+    case STATE_MATCHMAKER:      // binary case 0x10
+        // Defunct — OpenFeint / GameCenter / matchmaker states. Binary
+        // waits on ActorManager empty then calls LaunchDashboard /
+        // OpenMatchmaker on NetworkManager. All online services are
+        // skipped in the port, so these states immediately bounce back
+        // to the main menu flow with buttons cleared.
         m_State = STATE_CAMERA_ZOOM;
         m_Timer2 = 0.0f;
         m_StateTimer = 0.0f;
@@ -296,8 +320,10 @@ void MainScreen::Update(float dt) {
         DeleteMenuButtons();
         break;
 
-    case STATE_NEWS:
-        // Network news — skip, return to active menu
+    case STATE_NEWS:            // binary case 0xb
+        // Defunct — NetworkManager::UpdateNews polls for remote news
+        // updates. Port skips the network call and returns straight to
+        // the active-menu state.
         m_State = STATE_CREATE_BUTTONS;
         break;
 
@@ -359,47 +385,52 @@ void MainScreen::Update(float dt) {
         break;
 
     case STATE_QUIT_WAIT: {
-        // Binary waits for ActorManager::GetNumEntities(0) == 0 (bomb
-        // killed by out-of-bounds). The port's ActorManager::Update is
-        // gated off in menu state, so we manually tick the bomb's
-        // physics here to animate it off-screen before transitioning.
+        // Binary @ 0x0014c098 case 0x17:
+        //   TutorialControl::ResetTutePos(pTC, nullptr)
+        //   if (ActorManager::GetNumEntities(0) != 0) break;
+        //   pLeaderboardBtn = null;
+        //   gameMode = *(task_state+0x4c);
+        //   if (gameMode == 2) { HitMenuBomb(pos); state = 0x18; }
+        //   else if (gameMode == 3) { state = 0; timer = ... }
+        //
+        // Port: wait for ActorManager to clear (so the BombBlast spawned
+        // by QuitGamesCallback finishes), then fire HitMenuBomb and
+        // advance to STATE_QUIT_BOMB. Port skips the gameMode branch --
+        // on the Main screen the Quit path is deterministic (always the
+        // zen-like exit).
+        if (game.pTutorialCtrl) {
+            game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+        }
         m_StateTimer += dt;
-
-        // m_pFruitPiece is only set for fruit-typed MenuButtons — use
-        // m_pEntity for the Quit bomb.
-        Entity* ent = (pQuitBtn ? pQuitBtn->m_pEntity : nullptr);
-        if (ent && ent->entityType == 1) {
-            Bomb* bomb = static_cast<Bomb*>(ent);
-            // Simple Euler integration with the accel force from QuitGamesCallback.
-            bomb->vel += bomb->m_AccelForce * dt;
-            bomb->pos += bomb->vel * dt;
-        }
-
-        // Wait ~0.8s for the bomb to clearly leave the screen, OR if the
-        // bomb went past the top/sides bounds (whichever is first).
-        const float BOMB_LAUNCH_DURATION = 0.8f;
-        bool bombOffscreen = false;
-        if (ent) {
-            const Vec3& p = ent->pos;
-            bombOffscreen = (p.y > 200.0f) || (p.y < -200.0f) ||
-                            (p.x > 300.0f) || (p.x < -300.0f);
-        }
-        if (m_StateTimer >= BOMB_LAUNCH_DURATION || bombOffscreen) {
+        ActorManager* am = ActorManager::GetInstance();
+        const int liveEntities = am ? am->GetNumEntities(0) : 0;
+        const float QUIT_MAX_WAIT = 1.5f;   // belt-and-braces timeout
+        if (liveEntities == 0 || m_StateTimer >= QUIT_MAX_WAIT) {
+            // Pick the Quit bomb position for HitMenuBomb; fall back to
+            // MainScreen origin if the button/entity is already gone.
+            Vec3 hitPos(0.0f, 0.0f, 0.0f);
+            if (pQuitBtn && pQuitBtn->m_pEntity) {
+                hitPos = pQuitBtn->m_pEntity->pos;
+            }
+            FN::HitMenuBomb(hitPos);   // sets bombHitTimer = 2.0, plays SFX
             m_State = STATE_QUIT_BOMB;
             m_StateTimer = 0.0f;
-            // Binary would call HitMenuBomb(Vec3(...)) here to trigger a
-            // BombFlash effect. Port skips — no BombFlash system yet.
         }
         break;
     }
 
     case STATE_QUIT_BOMB: {
-        // Binary waits for BombFlashFull() to return true (flash animation
-        // complete) before calling SystemManager::QuitGame. Port uses a
-        // simple short delay in place of the flash.
-        m_StateTimer += dt;
-        const float FLASH_DURATION = 0.3f;
-        if (m_StateTimer >= FLASH_DURATION) {
+        // Binary @ 0x0014c0f2 case 0x18:
+        //   TutorialControl::ResetTutePos(pTC, nullptr)
+        //   if (BombFlashFull()) SystemManager::QuitGame();
+        //
+        // BombFlashFull returns true once bombHitTimer < 1.0s (the flash
+        // has peaked and is on its way out). HitMenuBomb in QUIT_WAIT
+        // primed it to 2.0; GameUpdate ticks it down each frame.
+        if (game.pTutorialCtrl) {
+            game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+        }
+        if (FN::BombFlashFull()) {
             Mortar::SystemManager::GetInstance().QuitGame();
             game.running = false;
         }
@@ -830,35 +861,44 @@ void MainScreen::MoreGamesCallback() {
 }
 
 // Matches MainScreen::QuitGamesCallback (0x0014b1a0).
-// Binary flow:
-//   1. RequestQuit() — SystemManager flag, doesn't actually terminate
-//   2. Find the Quit button's bomb entity via m_pFruitPiece
-//   3. Enable physics: bomb->m_bMovement = 1
-//   4. Set bomb->m_AccelForce = (gDirection * 10.0f) where gDirection is
-//      a GOT-resolved vec3 (unresolved in the port; we pick a reasonable
-//      launch direction).
-//   5. State → STATE_QUIT_WAIT (0x17)
-// The bomb then flies off-screen under physics. Once it's gone (ActorManager
-// has no entities), state → STATE_QUIT_BOMB → SystemManager::QuitGame().
-// BombFlash / HitMenuBomb SFX are skipped in the port — they depend on
-// systems not yet ported (BombFlash animation, GameSound).
+// Binary flow (what we can confirm from the ARM disassembly):
+//   1. SystemManager::RequestQuit() — set the quit-pending flag
+//   2. Writes to MainScreen[+0xa4]->field_at_0x134 (some Entity*): sets
+//      one byte at offset +0x80 = 1 and writes a Vec3 * 10.0 at
+//      offset +0x8c..+0x94. Ghidra auto-named +0xa4 as pDojoButton and
+//      +0x134 as m_pFruitPiece, which would point at the mango Fruit,
+//      but that mapping produces a Vec3 write that straddles unrelated
+//      Fruit fields (m_RotAxis.z + m_PlayerIdx + m_TimeScale) — likely
+//      a Ghidra struct-inference mistake, not the real intent. We
+//      intentionally don't port the launch write; its target is unclear.
+//   3. MainScreen::m_State = STATE_QUIT_WAIT (0x17)
+//
+// Note: the binary's menu-rehit branch in Bomb::CollisionResponse
+// (0x0017280c) fires this callback and clears menu items — no camera
+// shake, no BombBlast, no HitMenuBomb SFX in the binary itself. The
+// BombBlast + shake + SFX below are a port-specific deviation to keep
+// the slice gesture visually satisfying (pre-9567eb9 port bug used to
+// trigger them by accident via the Classic/Arcade branch).
 void MainScreen::QuitGamesCallback() {
     Mortar::SystemManager::GetInstance().RequestQuit();
 
-    // Launch the menu bomb so it flies off-screen before we exit.
-    // m_pFruitPiece is only set for fruit-typed menu buttons — use
-    // m_pEntity to get the Bomb.
-    if (pQuitBtn && pQuitBtn->m_pEntity && pQuitBtn->m_pEntity->entityType == 1) {
-        Bomb* bomb = static_cast<Bomb*>(pQuitBtn->m_pEntity);
-        bomb->m_bMovement = 1;
-        // Upward-right launch acceleration. Binary uses a GOT-resolved
-        // vec3 multiplied by 10.0; we pick a reasonable upward kick.
-        bomb->m_AccelForce = Vec3(15.0f, 150.0f, 0.0f);
-        // Prime the velocity so physics starts immediately. Binary
-        // relies on a frame of accel integration, but the port's
-        // ActorManager::Update is gated off in menu state, so we
-        // tick the bomb manually in STATE_QUIT_WAIT below.
-        bomb->vel = Vec3(20.0f, 200.0f, 0.0f);
+    // Port specific: spawn a one-shot BombBlast + camera shake at the
+    // Quit bomb's position so slicing the bomb has visual punch. Binary's
+    // menu-rehit branch does not spawn a BombBlast (those are gameplay-
+    // bomb specific) and does not shake the camera. The "menu-bomb" SFX
+    // and the screen flash are handled later via HitMenuBomb() in
+    // STATE_QUIT_WAIT once ActorManager has cleared.
+    if (pQuitBtn && pQuitBtn->m_pEntity) {
+        const Vec3& bombPos = pQuitBtn->m_pEntity->pos;
+        if (ActorManager* am = ActorManager::GetInstance()) {
+            if (Entity* e = am->Add(4, true)) {   // entity type 4 = BombBlast
+                e->pos = bombPos;
+                e->Init(0, 0, 0);
+            }
+        }
+        if (game.pCamera) {
+            game.pCamera->CreateCameraShake(bombPos, 1.6f, 2.0f);
+        }
     }
 
     m_State = STATE_QUIT_WAIT;

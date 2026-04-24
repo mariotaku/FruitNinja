@@ -36,6 +36,23 @@ void DrawCriticalFlash();
 // Matches binary g_bombHitData->pos (Vec3 at +0xcc). Set by Bomb::OnSliced.
 void SetBombHitPos(const Vec3& pos);
 
+// Matches HitMenuBomb (binary 0x0016b234). Triggers the bomb-hit flash +
+// SFX for the zen / menu-bomb paths. Concretely:
+//   * plays "menu-bomb" SFX
+//   * game->bombHitTimer = 2.0f
+//   * SetBombHitPos(pos)
+// Called from Bomb::CollisionResponse's zen branch (m_bMenuBombHit == 0
+// && gameMode == 2) and from MainScreen::Update case 0x17 (QUIT_WAIT).
+void HitMenuBomb(const Vec3& pos);
+
+// Matches BombFlashFull (binary 0x00168f24). Returns true once the
+// bomb-hit flash timer has wound below 1.0s -- used by state machines to
+// gate transitions that must wait for the flash to finish. Exact binary
+// form: (bombHitTimer < 1.55 && bombHitTimer < 1.0), which reduces to
+// `bombHitTimer < 1.0` since 1.0 is the tighter bound. Idle state
+// (bombHitTimer == 0) returns true.
+bool BombFlashFull();
+
 // Matches DrawBombHit (0x16b73c) — draws expanding white quad scaled
 // with (bombHitTimer - 1.55) / -0.45. Called from GameDraw.
 void DrawBombHit();
