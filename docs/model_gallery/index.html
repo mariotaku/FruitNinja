@@ -58,6 +58,7 @@
   <label><input type="checkbox" id="textured" checked> textured</label>
   <label><input type="checkbox" id="depth" checked> depth test</label>
   <label><input type="checkbox" id="blend" checked> blend</label>
+  <label><input type="checkbox" id="reverseOrder"> reverse draw order</label>
   <label>depth func:
     <select id="depthFunc">
       <option value="LESS">LESS</option>
@@ -98,6 +99,7 @@ let textured = true;
 let depthEnabled = true;
 let blendEnabled = true;
 let depthFuncName = "LESS";      // LESS | LEQUAL | ALWAYS
+let reverseOrder = false;
 
 const VS_SRC = `
 attribute vec3 aPos;
@@ -230,8 +232,9 @@ function initGL() {
 
 function releaseCurrent() {
   if (!current) return;
-  if (current.vbo) gl.deleteBuffer(current.vbo);
-  if (current.ibo) gl.deleteBuffer(current.ibo);
+  if (current.vbo)    gl.deleteBuffer(current.vbo);
+  if (current.ibo)    gl.deleteBuffer(current.ibo);
+  if (current.revIbo) gl.deleteBuffer(current.revIbo);
   current = null;
 }
 
@@ -310,8 +313,26 @@ function loadModel(model) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(finalIdx), gl.STATIC_DRAW);
   }
 
+  // Reversed triangle order: flip groups of 3. Only meaningful for
+  // TRIANGLES primitives (which every shipped .mmd is).
+  const revIbo = gl.createBuffer();
+  const reversed = new Uint32Array(finalIdx.length);
+  const triCount = (finalIdx.length / 3) | 0;
+  for (let t = 0; t < triCount; t++) {
+    const src = (triCount - 1 - t) * 3;
+    reversed[t * 3 + 0] = finalIdx[src + 0];
+    reversed[t * 3 + 1] = finalIdx[src + 1];
+    reversed[t * 3 + 2] = finalIdx[src + 2];
+  }
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, revIbo);
+  if (indexType === gl.UNSIGNED_INT) {
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, reversed, gl.STATIC_DRAW);
+  } else {
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(reversed), gl.STATIC_DRAW);
+  }
+
   current = {
-    model, vbo, ibo, draws,
+    model, vbo, ibo, revIbo, draws,
     bounds:   { min: [mnx, mny, mnz], max: [mxx, mxy, mxz] },
     stride:   STRIDE,
     indexType, idxBytes,
@@ -404,7 +425,7 @@ function render() {
   gl.vertexAttribPointer(1, 2, gl.FLOAT,         false, STRIDE, 12);
   gl.vertexAttribPointer(2, 4, gl.UNSIGNED_BYTE, true,  STRIDE, 20);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, current.ibo);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, reverseOrder ? current.revIbo : current.ibo);
   gl.uniformMatrix4fv(uniforms.uMVP, false, mvp);
   gl.uniform1i(uniforms.uTex, 0);
   gl.uniform1f(uniforms.uTextured, textured ? 1.0 : 0.0);
@@ -488,6 +509,7 @@ async function boot() {
   document.getElementById("depth").addEventListener("change", (e) => depthEnabled = e.target.checked);
   document.getElementById("blend").addEventListener("change", (e) => blendEnabled = e.target.checked);
   document.getElementById("depthFunc").addEventListener("change", (e) => depthFuncName = e.target.value);
+  document.getElementById("reverseOrder").addEventListener("change", (e) => reverseOrder = e.target.checked);
   document.getElementById("textured").addEventListener("change", (e) => textured = e.target.checked);
 
   // Initial selection: from URL hash if valid, else first model.
