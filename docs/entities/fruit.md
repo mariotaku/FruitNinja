@@ -740,7 +740,7 @@ void Fruit::DrawUpdate(float dt) {
 }
 ```
 
-> **Port status:** not yet implemented. When ported, override `Fruit::PostUpdate` — the base `Entity::PostUpdate` is a no-op and ActorManager already wires the dispatch.
+> **Port status:** implemented in `src/entities/Fruit.cpp` as `Fruit::PostUpdate`. The zen-strict-bounce branch (`& 0x20` flag on the GOT_0x7740 global) is currently stubbed to `false` — resolved when the PowerUpManager/blitz state is ported.
 
 ### Fruit::Fruit() (0x1764dc, 0x176520 — two identical constructors, one thunked)
 

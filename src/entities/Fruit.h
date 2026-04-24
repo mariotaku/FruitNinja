@@ -99,6 +99,7 @@ public:
 
     void Init(int param1, int fruitType, int param3) override;
     void Update(float dt) override;
+    void PostUpdate(float dt) override;   // 0x0017501c — screen-edge bounce / push
     void Draw(Renderer& r) override;
     void Deactivate() override;
 
