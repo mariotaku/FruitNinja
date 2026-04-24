@@ -66,6 +66,13 @@
       <option value="outline">outline only (clustered UVs)</option>
     </select>
   </label>
+  <label>cull:
+    <select id="cullFace">
+      <option value="none">off</option>
+      <option value="BACK">BACK (drop CW)</option>
+      <option value="FRONT">FRONT (drop CCW)</option>
+    </select>
+  </label>
   <label>depth func:
     <select id="depthFunc">
       <option value="LESS">LESS</option>
@@ -108,6 +115,7 @@ let blendEnabled = true;
 let depthFuncName = "LESS";      // LESS | LEQUAL | ALWAYS
 let reverseOrder = false;
 let layerFilter = "all";          // all | body | outline
+let cullMode = "none";            // none | BACK | FRONT
 
 const VS_SRC = `
 attribute vec3 aPos;
@@ -414,7 +422,12 @@ function render() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   if (depthEnabled) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
   gl.depthFunc(gl[depthFuncName]);
-  gl.disable(gl.CULL_FACE);
+  if (cullMode === "none") {
+    gl.disable(gl.CULL_FACE);
+  } else {
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl[cullMode]);
+  }
   if (blendEnabled) gl.enable(gl.BLEND); else gl.disable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
@@ -566,6 +579,7 @@ async function boot() {
   document.getElementById("depthFunc").addEventListener("change", (e) => depthFuncName = e.target.value);
   document.getElementById("reverseOrder").addEventListener("change", (e) => reverseOrder = e.target.checked);
   document.getElementById("layerFilter").addEventListener("change", (e) => layerFilter = e.target.value);
+  document.getElementById("cullFace").addEventListener("change", (e) => cullMode = e.target.value);
   document.getElementById("textured").addEventListener("change", (e) => textured = e.target.checked);
 
   // Initial selection: from URL hash if valid, else first model.
