@@ -13,6 +13,7 @@
 #include "asset/TextureManager.h"
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
+#include "hud/MenuButton.h"
 #include "hud/MissControl.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
@@ -690,15 +691,20 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
         //       ClearMenuItems();
         //   Delegate0<void>::operator()(&field_0x40);   // hit callback
         //
-        // field_0x84 is a backref to the owning game-state struct
-        // (a MainScreen-ish container). The +0x123 byte gates whether
-        // the menu items are still locked in. ClearMenuItems removes
-        // every menu button + decoration entity from the HUD.
+        // The ClearMenuItems call is critical: without it, a diagonal
+        // slash that clips both the Quit bomb and the Dojo / Play fruit
+        // in the same frame lets MenuButton::Update fire BOTH callbacks,
+        // and whichever state write lands last wins the race -- user-
+        // visible symptom: slicing the Quit bomb lands on the Dojo
+        // screen. Clearing the sibling menu items flags their fruits
+        // with m_bDrawWhole=1, which makes MenuButton::Update see them
+        // as "ClearMenuItems-released" (not user-sliced) and skip their
+        // click callbacks.
         //
-        // Port v1: trigger ClearMenuItems by setting MainScreen state
-        // to STATE_QUIT_WAIT, which already drives the bomb off-screen
-        // animation and exits the game. Same end result without
-        // touching the binary's vtable callback path.
+        // field_0x84 is the binary's backref to the owning state
+        // struct; the +0x123 gate isn't modelled in the port, so we
+        // always call the clear.
+        FN_ClearMenuItems();
         if (m_HitCallback) {
             m_HitCallback();
         }
