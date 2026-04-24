@@ -11,21 +11,28 @@
   header { grid-column: 1 / -1; padding: 10px 16px; background: #101020;
            border-bottom: 1px solid #222; display: flex; align-items: center; gap: 20px; }
   header .status { color: #888; font-size: 12px; flex: 1; }
-  header label { font-size: 12px; color: #aaa; }
-  header input[type="checkbox"] { vertical-align: middle; }
 
   main { padding: 16px; display: flex; flex-direction: column; align-items: center;
-         justify-content: flex-start; overflow: auto; }
+         justify-content: flex-start; overflow: auto; gap: 12px; }
   #viewer { background: repeating-conic-gradient(#2a2a3a 0% 25%, #20202e 0% 50%) 50%/32px 32px;
             border: 1px solid #333; border-radius: 6px; display: block;
-            width: min(80vh, 80vw, 640px); height: min(80vh, 80vw, 640px);
+            width: min(72vh, 80vw, 640px); height: min(72vh, 80vw, 640px);
             cursor: grab; touch-action: none; }
   #viewer:active { cursor: grabbing; }
-  #viewerInfo { margin-top: 12px; color: #8cf; font-size: 13px; text-align: center;
+  #viewerInfo { color: #8cf; font-size: 13px; text-align: center;
                 max-width: 640px; word-break: break-all; }
   #viewerInfo .tag { font-size: 10px; color: #8fc; background: #2a5a3a;
                      padding: 1px 6px; border-radius: 3px; margin-left: 4px; }
   #viewerInfo .sub { color: #888; font-size: 11px; margin-top: 4px; }
+
+  #controls { background: #101020; border: 1px solid #222; border-radius: 6px;
+              padding: 10px 14px; display: flex; flex-wrap: wrap;
+              gap: 10px 16px; max-width: 640px; width: 100%; box-sizing: border-box; }
+  #controls label { font-size: 12px; color: #aaa;
+                    display: inline-flex; align-items: center; gap: 4px; }
+  #controls input[type="checkbox"] { vertical-align: middle; }
+  #controls select { background: #16213e; color: #eee; border: 1px solid #333;
+                     padding: 2px 6px; font-size: 12px; font-family: monospace; }
 
   aside { background: #16213e; border-left: 1px solid #222; display: flex;
           flex-direction: column; overflow: hidden; }
@@ -45,45 +52,49 @@
 <header>
   <h1>Fruit Ninja Models</h1>
   <div class="status" id="status">Loading…</div>
-  <label><input type="checkbox" id="autospin" checked> auto-spin</label>
-  <label><input type="checkbox" id="applyRot"> port Y↔Z swap</label>
-  <label>draw:
-    <select id="drawMode">
-      <option value="strip">GL prim (native)</option>
-      <option value="tris">force GL_TRIANGLES</option>
-      <option value="lines">GL_LINES</option>
-      <option value="points">GL_POINTS</option>
-    </select>
-  </label>
-  <label><input type="checkbox" id="textured" checked> textured</label>
-  <label><input type="checkbox" id="depth" checked> depth test</label>
-  <label><input type="checkbox" id="blend" checked> blend</label>
-  <label><input type="checkbox" id="reverseOrder"> reverse draw order</label>
-  <label>show:
-    <select id="layerFilter">
-      <option value="all">all triangles</option>
-      <option value="body">body only (varied UVs)</option>
-      <option value="outline">outline only (clustered UVs)</option>
-    </select>
-  </label>
-  <label>cull:
-    <select id="cullFace">
-      <option value="none">off</option>
-      <option value="BACK">BACK (drop CW)</option>
-      <option value="FRONT">FRONT (drop CCW)</option>
-    </select>
-  </label>
-  <label>depth func:
-    <select id="depthFunc">
-      <option value="LESS">LESS</option>
-      <option value="LEQUAL">LEQUAL</option>
-      <option value="ALWAYS">ALWAYS</option>
-    </select>
-  </label>
 </header>
 
 <main>
   <canvas id="viewer" width="720" height="720"></canvas>
+
+  <div id="controls">
+    <label><input type="checkbox" id="autospin" checked> auto-spin</label>
+    <label><input type="checkbox" id="applyRot"> port Y↔Z swap</label>
+    <label><input type="checkbox" id="textured" checked> textured</label>
+    <label><input type="checkbox" id="depth" checked> depth test</label>
+    <label><input type="checkbox" id="blend" checked> blend</label>
+    <label><input type="checkbox" id="reverseOrder"> reverse order</label>
+    <label>draw:
+      <select id="drawMode">
+        <option value="strip">GL prim (native)</option>
+        <option value="tris">force GL_TRIANGLES</option>
+        <option value="lines">GL_LINES</option>
+        <option value="points">GL_POINTS</option>
+      </select>
+    </label>
+    <label>show:
+      <select id="layerFilter">
+        <option value="all">all triangles</option>
+        <option value="body">body only</option>
+        <option value="outline">outline only</option>
+      </select>
+    </label>
+    <label>cull:
+      <select id="cullFace">
+        <option value="none">off</option>
+        <option value="BACK">BACK (drop CW)</option>
+        <option value="FRONT">FRONT (drop CCW)</option>
+      </select>
+    </label>
+    <label>depth func:
+      <select id="depthFunc">
+        <option value="LESS">LESS</option>
+        <option value="LEQUAL">LEQUAL</option>
+        <option value="ALWAYS">ALWAYS</option>
+      </select>
+    </label>
+  </div>
+
   <div id="viewerInfo">—</div>
 </main>
 
