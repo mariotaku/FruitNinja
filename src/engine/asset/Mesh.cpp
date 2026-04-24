@@ -203,6 +203,15 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
+    // Restore cull state to the per-frame default (disabled by
+    // DisplayManagerBada::BeginFrame). Leaving cull enabled leaks to
+    // later-drawing tri-strips (SlashEntity blade, SliceEffect) whose
+    // geometry has mixed winding — the "wrong" side gets back-face
+    // culled and the visual vanishes. Binary's DisplayManagerBada
+    // disables cull every frame and the mesh-path enables it just
+    // around each Geometry::Render; the port mirrors that scoping here.
+    glDisable(GL_CULL_FACE);
+
     // Restore matrix stacks + unbind VBOs, matching the tail of
     // Geometry::Render.
     glMatrixMode(GL_PROJECTION);
