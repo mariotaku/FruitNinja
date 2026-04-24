@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-// Binary constants for fruit slicing (docs/engine/fruit-slice-notes.md).
+// Binary constants for fruit slicing.
 // Resolved from DATs near CollisionResponse (0x1780b0) and Slice (0x176d58).
 static const float SLICE_TIMER_BASE    = 0.03f;   // DAT_001784dc
 static const float SLICE_BLADE_SCALE   = 0.1f;    // DAT_001784e0
@@ -317,6 +317,9 @@ static void DrawOneModel(Mortar::Model* model,
 {
     Matrix44 mat = Matrix44::MakeScale(s, s, s);
 
+    // No pre-quat mesh alignment. Per RE of iOS + Bada Fruit::Draw, neither
+    // binary applies a coordinate fixup between Scale and Quat. The raw
+    // mesh orientation (.mmd: +Z = long-axis / up) is intentional.
     Matrix44 qmat = drawRot.ToMatrix44();
     float rotMat[16];
     memcpy(rotMat, qmat.ptr(), sizeof(rotMat));
@@ -624,8 +627,7 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
 
 // Matches Fruit::Slice (0x176d58), now with the binary's flipSide
 // logic, special-fruit ×1.5 impulse, and spin-boost loop on both
-// halves. See docs/engine/fruit-slice-notes.md + raw decompile
-// reference for the exact math.
+// halves.
 void Fruit::Slice() {
     m_SliceTimer = 0.0f;
 

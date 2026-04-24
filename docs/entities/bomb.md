@@ -422,6 +422,8 @@ Key observations:
 
 `void __thiscall Bomb::DrawUpdate(Bomb *this, float dt)`
 
+Vtable slot 6 (+0x18). Called from `ActorManager::Update` immediately after `Update` under the same `(flags & 0x11) == 0` gate. In `ActorManager` docs this slot is named `PostUpdate`; bomb-local docs (and the port's `Bomb::PostUpdate` override) use `DrawUpdate` as a per-subclass alias.
+
 Updates fuse particle emitter position to follow bomb tip:
 
 ```c
@@ -432,10 +434,10 @@ void Bomb::DrawUpdate(float dt) {
         float scale = field_0x28.x;  // bomb scale X
 
         // Fuse tip offset: rotated by Y rotation, scaled
-        // DAT_0017159c = 0.9 (fuse length), DAT_001715a0 = fuse scale factor
+        // DAT_0017159c = 0.9 (fuse length), DAT_001715a0 = 100.0 (fuse scale factor)
         Vec3 fuseOffset = Vec3(
-            sinY * 0.9f * scale * DAT_fuse_scale,
-            cosY * 0.9f * scale * DAT_fuse_scale,
+            sinY * 0.9f * scale * 100.0f,
+            cosY * 0.9f * scale * 100.0f,
             5.0f
         );
         Vec3 fusePos = pos + fuseOffset;
@@ -443,11 +445,15 @@ void Bomb::DrawUpdate(float dt) {
         m_pEmitter->pos = fusePos;
 
         // Fuse direction vectors for particle orientation
-        m_pEmitter->dirX = Cos(m_RotY * -0xB6);
-        m_pEmitter->dirY = -Sin(m_RotY * -0xB6);
+        m_pEmitter->m_ScaleY = Cos(m_RotY * -0xB6);
+        m_pEmitter->m_field30 = -Sin(m_RotY * -0xB6);
     }
 }
 ```
+
+> **Port deviation.** The binary math is a 2D circle in the XY plane using `m_RotY` only — it ignores `DRAW_TILT_ANGLE` (0xBFF4 ≈ -90° X) and `m_RotX` that `Bomb::Draw` actually applies. Result: the emitter orbits the bomb center instead of tracking the visible fuse tip.
+>
+> The port (`Bomb::PostUpdate` in `src/entities/Bomb.cpp`) replaces the approximation by building the FULL Draw rotation chain and transforming a local `(0, 0, L)` fuse direction vector where `L = scale.x * 0.9 * 100.0`. Fuse-mesh direction is empirically **local +Z**, user-confirmed against bomb.mmd. Spark orientation fields (`m_ScaleY`, `m_field30`) still use the binary's `m_RotY`-only basis since they drive 2D spark rotation, not 3D position. See commit `a317de6`.
 
 ---
 

@@ -173,7 +173,7 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         // NOTE: template m_VelocityMin/Max are NOT an initial-velocity range;
         // they are a per-component per-frame velocity LERP (damping) factor
         // applied each tick during UpdateEmitter integration. See binary
-        // Draw @ 0x114c64 and docs/engine/particle-refine-notes.md #4.
+        // Draw @ 0x114c64.
 
         p.m_Gravity.x = RandRange(tmpl->m_GravityMin[0], tmpl->m_GravityMax[0]);
         p.m_Gravity.y = RandRange(tmpl->m_GravityMin[1], tmpl->m_GravityMax[1]);
@@ -294,8 +294,7 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
         //   vel = (vel + gravity*dt) * lerp(tmpl.velMin, tmpl.velMax, t)
         //   pos = pos + vel*dt
         // The template's velMin/Max fields are a per-component per-frame
-        // LERP (damping) factor — NOT an initial velocity range. See
-        // docs/engine/particle-refine-notes.md #4 for the full analysis.
+        // LERP (damping) factor — NOT an initial velocity range.
         const float t = (p.m_Life > 0.0f) ? (p.m_Age / p.m_Life) : 0.0f;
         p.m_Vel += p.m_Gravity * dt;
         if (p.m_pTemplate) {
@@ -561,7 +560,7 @@ void PSPParticleManager::LoadFile(const char* path) {
         // are a per-component per-frame velocity LERP (damping/amplification)
         // factor used by UpdateEmitter integration. Default to identity (1.0)
         // so templates that omit <velocity> get no damping. See binary Draw
-        // @ 0x114c64 integration and docs/engine/particle-refine-notes.md #4.
+        // @ 0x114c64 integration.
         tmpl.m_VelocityMin[0] = 1.0f; tmpl.m_VelocityMin[1] = 1.0f; tmpl.m_VelocityMin[2] = 1.0f;
         tmpl.m_VelocityMax[0] = 1.0f; tmpl.m_VelocityMax[1] = 1.0f; tmpl.m_VelocityMax[2] = 1.0f;
 

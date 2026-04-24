@@ -62,4 +62,3 @@ Life: Temporary overlay that fades and removes itself (lifetime controlled by fa
 
 See also:
 - `docs/structs/gameplay-misc.md` — HUDControl3d base class
-- `docs/engine/fruit-slice-notes.md` — Slice context where MakeCritical/MakeRare are called

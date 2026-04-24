@@ -722,6 +722,8 @@ void Fruit::Release() {
 
 ### Fruit::DrawUpdate (0x0017501c)
 
+Vtable slot 6 (+0x18) — dispatched from `ActorManager::Update` after `Update` (see [actor-manager.md](../engine/actor-manager.md#entity-vtable-offsets); `PostUpdate` and `DrawUpdate` are two names for the same slot). Dispatch is live in the port as of commit `a317de6`, so a port-side `Fruit::PostUpdate` override will now fire each tick.
+
 ```c
 void Fruit::DrawUpdate(float dt) {
     m_RotAxis *= DAT_damping;  // dampen rotation axis each frame
@@ -737,6 +739,8 @@ void Fruit::DrawUpdate(float dt) {
     }
 }
 ```
+
+> **Port status:** not yet implemented. When ported, override `Fruit::PostUpdate` — the base `Entity::PostUpdate` is a no-op and ActorManager already wires the dispatch.
 
 ### Fruit::Fruit() (0x1764dc, 0x176520 — two identical constructors, one thunked)
 

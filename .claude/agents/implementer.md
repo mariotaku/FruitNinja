@@ -31,4 +31,4 @@ Always build after making changes to verify compilation.
 ## Before writing code
 1. Read the relevant doc in `docs/` for the function/struct spec
 2. Read the existing source file to understand current state
-3. Check `docs/engine/mesh-port-status.md` or similar tracking docs for what's done vs missing
+3. Check `docs/TODO.md` for what's done vs missing
