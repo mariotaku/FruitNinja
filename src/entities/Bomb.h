@@ -85,6 +85,7 @@ public:
 
     void Init(int param1, int fruitType, int param3) override;
     void Update(float dt) override;
+    void PostUpdate(float dt) override;   // 0x001714e4 — sync fuse emitter
     void Draw(Renderer& r) override;
     void Deactivate() override;
 
