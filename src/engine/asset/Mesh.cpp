@@ -103,14 +103,24 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
                          const Matrix44& /*world*/) {
     if (!geom.vbo || geom.vertCount == 0) return;
 
-    // One-shot CULL_FACE enable, matching Geometry::Render static-guard
-    // at 0x001a3ec8. Binary enables once and never disables — GL_BACK /
-    // GL_CCW defaults align with the mesh winding.
-    static bool s_cullEnabled = false;
-    if (!s_cullEnabled) {
-        s_cullEnabled = true;
-        glEnable(GL_CULL_FACE);
-    }
+    // Per-draw CULL_FACE enable with GL defaults (GL_BACK / GL_CCW).
+    // Confirmed via the WebGL model gallery that dropping CW back-faces
+    // is what makes effect-fruit meshes (banana_speed, dragon, plum,
+    // bomb...) render correctly — the outline / decorative shells in
+    // those meshes are modelled as slightly-larger shells fully
+    // enclosing the body with CW winding, so GL_BACK culls their
+    // camera-facing triangles, leaving only the far side visible as a
+    // silhouette border while the body renders normally.
+    //
+    // The old code held CULL_FACE enabled via a static guard, matching
+    // Geometry::Render's latch at 0x001a3ec8. That breaks in practice
+    // because DisplayManagerBada::BeginFrame issues `glDisable(
+    // GL_CULL_FACE)` every frame — so after frame 0 the latch had no
+    // effect and the port rendered with cull permanently off (which is
+    // what produced the long-standing "mirror through bomb fuse hole"
+    // and "solid colour over effect fruit" artefacts). Enabling per
+    // draw overrides the BeginFrame disable.
+    glEnable(GL_CULL_FACE);
 
     // Matrix stacks: push current, load MVP, pop on exit. Binary splits
     // the upload into PROJECTION = screenRot*World and MODELVIEW = view
