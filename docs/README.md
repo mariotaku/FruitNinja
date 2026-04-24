@@ -27,17 +27,14 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/matrix-manager.md](engine/matrix-manager.md) — MatrixManager (4 matrix stacks, dirty-tracking), MatrixStack, Matrix44 methods, HUD draw pipeline wrappers
 - [engine/camera.md](engine/camera.md) — MortarCamera, FruitCamera, ortho projection setup
 - [engine/coordinate-system.md](engine/coordinate-system.md) — Binary centred ortho, 90° screen rotation, dead HUDControl3d offset, port mixed-convention audit
-- [engine/touch-rewrite-plan.md](engine/touch-rewrite-plan.md) — Detailed plan for rewriting the touch input layer to match the binary's poll-based `Mortar::Touch` architecture
 - [engine/input-manager.md](engine/input-manager.md) — Action-based input system, callback registration, config parsing, 16-touch
 - [engine/touch-input.md](engine/touch-input.md) — Touch coordinate transform (portrait→landscape), input pipeline to SlashEntity
 - [engine/touch-system.md](engine/touch-system.md) — Mortar::Touch internals: double-buffered 8-slot state, TEvnt ring buffer, data flow
 - [engine/sound-system.md](engine/sound-system.md) — GameSound pool (32 slots), BadaSound backend, MAMAudioThread (16 voices, 16kHz)
 - [engine/audio-internals.md](engine/audio-internals.md) — MAMAudioController command protocol, MAMVoice/MAMSound, NLFQueue, threading primitives
 - [engine/particles.md](engine/particles.md) — PSPParticleManager, Emitter, Particle architecture, PSPParticleEmitter rotation pair
-- [engine/particle-refine-notes.md](engine/particle-refine-notes.md) — Detailed particle system internals
 - [engine/actor-manager.md](engine/actor-manager.md) — ActorManager: Add, Update, Draw, Deactivate, Remove, entity lifecycle
 - [engine/mesh.md](engine/mesh.md) — Mesh (0x7C): struct, vtable (11 entries), BoneBinding, SharedPropsInfo, Draw, LoadMesh parser, effect properties
-- [engine/mesh-port-status.md](engine/mesh-port-status.md) — Mesh/MeshManager port vs binary comparison, remaining gaps checklist
 - [engine/effect-system.md](engine/effect-system.md) — EffectProperty/EffectPropertyList/SharedEffectProperties system: struct layouts, GetProperty, SetValue, full LoadMesh→Draw→GL flow
 - [engine/texture-mesh-manager.md](engine/texture-mesh-manager.md) — TextureManager (24-byte cache), MeshManager (20 bytes), loading pipelines, ARM struct-return convention
 - [engine/string-hash.md](engine/string-hash.md) — Jenkins lookup3 hash (C implementation)
@@ -81,7 +78,6 @@ Game-specific logic, screens, entities, and systems.
 ### Game-Specific Engine Features
 
 - [engine/fruit-size.md](engine/fruit-size.md) — Collision radius formula: `radius = (m_CollisionScale + 0.52 * m_Scale) * scaleParam`
-- [engine/fruit-slice-notes.md](engine/fruit-slice-notes.md) — Fruit slicing: CollisionResponse, Slice, impulse, critical, splat spawning, emitters, SFX, coins, particles
 - [engine/critical-flash.md](engine/critical-flash.md) — CriticalFlash function: full-screen tint for critical/special slices
 
 ### Game Functions

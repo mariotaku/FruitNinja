@@ -13,7 +13,7 @@
 #include "asset/TextureManager.h"
 #include <cstdio>
 
-// Transition constants — resolved from docs/screens/about-re-notes.md.
+// Transition constants — resolved from binary.
 // State 0: alpha += (1-alpha) * 0.125, done at > 0.9991 (DAT_0012f2fc)
 // State 2: alpha *= 0.75, done at < 0.001 (DAT_0012f328)
 static const float ALPHA_LERP_IN  = 0.125f;

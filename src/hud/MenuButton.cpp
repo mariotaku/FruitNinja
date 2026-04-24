@@ -560,4 +560,4 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
 
 // Removed: HitTest, TouchDown, TouchUp. Touch input is now polled inside
 // MenuButton::Update via Mortar::Touch::GetTouchInRegion — matching the
-// binary's poll-based flow. See touch-rewrite-plan.md.
+// binary's poll-based flow.

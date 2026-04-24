@@ -159,6 +159,8 @@ void ActorManager::Update(float dt, ColAABB* bounds1, ColAABB* bounds2) {
 | +0x14 | Draw() |
 | +0x18 | PostUpdate(float dt) |
 
+> **Port status:** the `PostUpdate` slot (+0x18) is wired in the port as of commit `a317de6`. Note that per-subclass docs call it `DrawUpdate` (see bomb.md / fruit.md slot-6 entries) — same slot, dispatched from `Update`. Prior to `a317de6` the port skipped this call, which hid Bomb's fuse-particle emitter positioning (`Bomb::DrawUpdate` at 0x001714e4).
+
 ---
 
 ## Draw (0x0016fe7c, 132 bytes)

@@ -583,7 +583,7 @@ The port replicates GL_MODULATE semantics (texture × vertex_color) via GLES2 at
 - `u_diffuse` uniform removed; material color effects deferred (Tier 4 / Effect property system)
 
 ### Sequential parsing (no delegate system)
-`LoadMeshInternal` uses direct sequential parsing instead of the original `RegisterLoader<T>` + `Load<T>` delegate dispatch. Functionally equivalent for all known .mmd files. See `mesh-port-status.md` Tier 2 note.
+`LoadMeshInternal` uses direct sequential parsing instead of the original `RegisterLoader<T>` + `Load<T>` delegate dispatch. Functionally equivalent for all known .mmd files.
 
 ### Skeleton (deferred — Tier 3)
 All 122 .mmd files have `skeletonBoneCount=1` and `meshBoneCount=1`. `SkipSkeleton()` correctly skips the one bone's data (reads boneCount=1, skips name + 132 bytes), but the skeleton is discarded rather than stored. `m_Skeleton` stays null; `GetBoneVertTransform(0)` falls back to identity matrix. Since the single-bone optimization in `Mesh::Draw` always fires (`m_BoneBindings.size() == 1`), it computes `identity × worldMatrix = worldMatrix` — visually correct but not faithful to the original. Full implementation requires storing the skeleton and calling `BindSkeleton` after load.
@@ -603,7 +603,6 @@ The HBR0 "header" is NOT a separate magic — the entire file is parsed by `Reso
 
 ## See Also
 
-- [mesh-port-status.md](mesh-port-status.md) — Port vs binary comparison, tier checklist, remaining gaps
 - [texture-mesh-manager.md](texture-mesh-manager.md) — MeshManager (singleton, loading pipeline)
 - [rendering-detail.md](rendering-detail.md) — Model::Draw pipeline
 - [rendering-pipeline.md](rendering-pipeline.md) — Effect/Geometry/PassBinding 3D rendering path

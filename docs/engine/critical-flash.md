@@ -32,5 +32,4 @@ The effect is purely visual state management. No pools or temporal tracking need
 ---
 
 See also:
-- `docs/engine/fruit-slice-notes.md` — Slice context and critical eligibility
 - `docs/entities/fruit.md` — Fruit::CollisionResponse entry point

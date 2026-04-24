@@ -36,7 +36,6 @@ public:
 
     // +0x6c: slice countdown — init -1.0f, set positive by OnSliced,
     // counts down in Update until 0 → calls Slice() to split the fruit.
-    // Ref: docs/engine/fruit-slice-notes.md.
     float m_SliceTimer;
 
     // +0x70: 16-bit angle index (Atan2Idx of bladeVel). Stored on hit,
@@ -106,7 +105,7 @@ public:
     // Matches Fruit::CollisionResponse (0x1780b0). Blade has hit the
     // fruit's collision sphere: record slice angle/impulse/pos, spawn
     // juice particle emitters, set m_SliceTimer to countdown until the
-    // fruit splits. See docs/engine/fruit-slice-notes.md.
+    // fruit splits.
     void OnSliced(const Vec3& bladeVel) override;
 
     // Matches Fruit::Slice (0x176d58, simplified). Flips m_bSliced,
