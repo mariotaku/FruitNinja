@@ -59,38 +59,12 @@
 
   <div id="controls">
     <label><input type="checkbox" id="autospin" checked> auto-spin</label>
-    <label><input type="checkbox" id="applyRot"> port Y↔Z swap</label>
-    <label><input type="checkbox" id="textured" checked> textured</label>
-    <label><input type="checkbox" id="depth" checked> depth test</label>
-    <label><input type="checkbox" id="blend" checked> blend</label>
-    <label><input type="checkbox" id="reverseOrder"> reverse order</label>
     <label>draw:
       <select id="drawMode">
         <option value="strip">GL prim (native)</option>
         <option value="tris">force GL_TRIANGLES</option>
         <option value="lines">GL_LINES</option>
         <option value="points">GL_POINTS</option>
-      </select>
-    </label>
-    <label>show:
-      <select id="layerFilter">
-        <option value="all">all triangles</option>
-        <option value="body">body only</option>
-        <option value="outline">outline only</option>
-      </select>
-    </label>
-    <label>cull:
-      <select id="cullFace">
-        <option value="none">off</option>
-        <option value="BACK">BACK (drop CW)</option>
-        <option value="FRONT">FRONT (drop CCW)</option>
-      </select>
-    </label>
-    <label>depth func:
-      <select id="depthFunc">
-        <option value="LESS">LESS</option>
-        <option value="LEQUAL">LEQUAL</option>
-        <option value="ALWAYS">ALWAYS</option>
       </select>
     </label>
   </div>
@@ -118,15 +92,7 @@ let uniforms = null;           // { uMVP, uTex, uTextured }
 const rot = { x: 0, y: 0 };
 let dragging = false, lastX = 0, lastY = 0;
 let autoSpinEnabled = true;
-let applyPortRot = false;                // default OFF — render raw mesh orientation
 let drawMode = "strip";          // strip | tris | lines | points
-let textured = true;
-let depthEnabled = true;
-let blendEnabled = true;
-let depthFuncName = "LESS";      // LESS | LEQUAL | ALWAYS
-let reverseOrder = false;
-let layerFilter = "all";          // all | body | outline
-let cullMode = "none";            // none | BACK | FRONT
 
 const VS_SRC = `
 attribute vec3 aPos;
@@ -259,11 +225,8 @@ function initGL() {
 
 function releaseCurrent() {
   if (!current) return;
-  if (current.vbo)            gl.deleteBuffer(current.vbo);
-  if (current.ibo)            gl.deleteBuffer(current.ibo);
-  if (current.revIbo)         gl.deleteBuffer(current.revIbo);
-  if (current.bodyOnlyIbo)    gl.deleteBuffer(current.bodyOnlyIbo);
-  if (current.outlineOnlyIbo) gl.deleteBuffer(current.outlineOnlyIbo);
+  if (current.vbo) gl.deleteBuffer(current.vbo);
+  if (current.ibo) gl.deleteBuffer(current.ibo);
   current = null;
 }
 
@@ -342,67 +305,14 @@ function loadModel(model) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(finalIdx), gl.STATIC_DRAW);
   }
 
-  // Reversed triangle order (same vertex data, triangles swapped in
-  // groups of 3).
-  const revIbo = gl.createBuffer();
-  const reversed = new Uint32Array(finalIdx.length);
-  const triCount = (finalIdx.length / 3) | 0;
-  for (let t = 0; t < triCount; t++) {
-    const src = (triCount - 1 - t) * 3;
-    reversed[t * 3 + 0] = finalIdx[src + 0];
-    reversed[t * 3 + 1] = finalIdx[src + 1];
-    reversed[t * 3 + 2] = finalIdx[src + 2];
-  }
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, revIbo);
-  if (indexType === gl.UNSIGNED_INT) {
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, reversed, gl.STATIC_DRAW);
-  } else {
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(reversed), gl.STATIC_DRAW);
-  }
-
-  // Split index buffer into "body" vs "outline" triangles by inspecting
-  // the UV clusters of each tri's vertices. The outline layer samples
-  // a single atlas texel, so three verts of an outline triangle should
-  // all have near-identical UVs; body triangles span wider UVs.
-  const bodyIdx = [], outlineIdx = [];
-  function uv(vi) { return [f32[vi * 6 + 3], f32[vi * 6 + 4]]; }
-  for (let t = 0; t < triCount; t++) {
-    const i0 = finalIdx[t * 3 + 0], i1 = finalIdx[t * 3 + 1], i2 = finalIdx[t * 3 + 2];
-    const [u0, v0] = uv(i0), [u1, v1] = uv(i1), [u2, v2] = uv(i2);
-    const du = Math.max(u0, u1, u2) - Math.min(u0, u1, u2);
-    const dv = Math.max(v0, v1, v2) - Math.min(v0, v1, v2);
-    const outline = (du < 0.02 && dv < 0.02);
-    (outline ? outlineIdx : bodyIdx).push(i0, i1, i2);
-  }
-  function makeIbo(arr) {
-    const b = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b);
-    if (indexType === gl.UNSIGNED_INT) {
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(arr), gl.STATIC_DRAW);
-    } else {
-      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(arr), gl.STATIC_DRAW);
-    }
-    return b;
-  }
-  const bodyOnlyIbo    = bodyIdx.length    ? makeIbo(bodyIdx)    : null;
-  const outlineOnlyIbo = outlineIdx.length ? makeIbo(outlineIdx) : null;
-
   current = {
-    model, vbo, ibo, revIbo, bodyOnlyIbo, outlineOnlyIbo,
-    bodyCount: bodyIdx.length,
-    outlineCount: outlineIdx.length,
+    model, vbo, ibo,
     draws,
     bounds:   { min: [mnx, mny, mnz], max: [mxx, mxy, mxz] },
     stride:   STRIDE,
     indexType, idxBytes,
     totalIdx: finalIdx.length,
   };
-
-  // Report split in info pane.
-  const info2 = document.getElementById("viewerInfo");
-  if (info2) {
-    info2.innerHTML += `<div class="sub">layers: body=${bodyIdx.length/3|0} tris  outline=${outlineIdx.length/3|0} tris</div>`;
-  }
 
   // Info panel.
   let totalGeoms = 0;
@@ -431,15 +341,11 @@ function render() {
   gl.viewport(0, 0, cvs.width, cvs.height);
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  if (depthEnabled) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
-  gl.depthFunc(gl[depthFuncName]);
-  if (cullMode === "none") {
-    gl.disable(gl.CULL_FACE);
-  } else {
-    gl.enable(gl.CULL_FACE);
-    gl.cullFace(gl[cullMode]);
-  }
-  if (blendEnabled) gl.enable(gl.BLEND); else gl.disable(gl.BLEND);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LESS);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   if (!current) return;
@@ -457,28 +363,6 @@ function render() {
   const half = Math.max(b.max[0]-b.min[0], b.max[1]-b.min[1], b.max[2]-b.min[2]) * 0.65;
 
   let world = M.translate(-cx, -cy, -cz);
-  if (applyPortRot) {
-    // Y<->Z axis swap (reflection, det=-1) instead of a pure -90°X rotation.
-    // Keeps "mesh +Z = screen up" AND puts mesh Y on render Z directly,
-    // so depth ordering matches the binary's view — meshes that pack
-    // two parallel shells (body + outline, like banana_speed_*.mmd) get
-    // the outer shell correctly positioned BEHIND the body, letting
-    // GL_LESS overdraw it where they overlap.
-    //
-    // Pure -90°X sends mesh Y -> render -Z, which inverted depth for
-    // the outline shell (whose verts are at more-negative mesh Y than
-    // the body verts, so the shell ended up closer to the camera and
-    // overwrote the textured body).
-    //
-    // Winding flips (det=-1); we render with cull off anyway.
-    const yzSwap = new Float32Array([
-      1, 0, 0, 0,
-      0, 0, 1, 0,
-      0, 1, 0, 0,
-      0, 0, 0, 1,
-    ]);
-    world = M.mul(yzSwap, world);
-  }
   world = M.mul(M.rotX(rot.x), world);
   world = M.mul(M.rotY(rot.y), world);
   const aspect = cvs.width / cvs.height;
@@ -497,19 +381,10 @@ function render() {
 
   gl.uniformMatrix4fv(uniforms.uMVP, false, mvp);
   gl.uniform1i(uniforms.uTex, 0);
-  gl.uniform1f(uniforms.uTextured, textured ? 1.0 : 0.0);
+  gl.uniform1f(uniforms.uTextured, 1.0);
 
-  // Pick which index buffer + count to draw based on layer filter.
-  let ibo, count;
-  if (layerFilter === "body" && current.bodyOnlyIbo) {
-    ibo = current.bodyOnlyIbo; count = current.bodyCount;
-  } else if (layerFilter === "outline" && current.outlineOnlyIbo) {
-    ibo = current.outlineOnlyIbo; count = current.outlineCount;
-  } else {
-    ibo = reverseOrder ? current.revIbo : current.ibo;
-    count = current.totalIdx;
-  }
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, current.ibo);
+  const count = current.totalIdx;
 
   let mode;
   switch (drawMode) {
@@ -583,15 +458,7 @@ async function boot() {
   // UI wiring.
   document.getElementById("filter").addEventListener("input", filterList);
   document.getElementById("autospin").addEventListener("change", (e) => autoSpinEnabled = e.target.checked);
-  document.getElementById("applyRot").addEventListener("change", (e) => applyPortRot = e.target.checked);
   document.getElementById("drawMode").addEventListener("change", (e) => drawMode = e.target.value);
-  document.getElementById("depth").addEventListener("change", (e) => depthEnabled = e.target.checked);
-  document.getElementById("blend").addEventListener("change", (e) => blendEnabled = e.target.checked);
-  document.getElementById("depthFunc").addEventListener("change", (e) => depthFuncName = e.target.value);
-  document.getElementById("reverseOrder").addEventListener("change", (e) => reverseOrder = e.target.checked);
-  document.getElementById("layerFilter").addEventListener("change", (e) => layerFilter = e.target.value);
-  document.getElementById("cullFace").addEventListener("change", (e) => cullMode = e.target.value);
-  document.getElementById("textured").addEventListener("change", (e) => textured = e.target.checked);
 
   // Initial selection: from URL hash if valid, else first model.
   const hashName = decodeURIComponent(location.hash.slice(1));
