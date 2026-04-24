@@ -184,10 +184,25 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     if (dataSize < 7) return false;
     size_t pos = 2; // skip 2-byte padding
     uint8_t idxFlags = data[pos++];
+    // Hi nibble -> Mortar::PrimType -> GL enum (via Geometry::
+    // _NativePrimitiveType at 0x00141ed8). Confirmed empirically against
+    // the WebGL model gallery — a "native TRIANGLE_STRIP" render produces
+    // visible triangle artefacts on every mesh, while "as TRIANGLES"
+    // renders every fruit and bomb correctly. The binary's switch:
+    //   0x20 -> PrimType 3 -> case 3 -> GL value 4 = GL_TRIANGLES
+    //   0x30 -> PrimType 5 -> case 5 -> GL value 6 = GL_TRIANGLE_FAN
+    //   0x40 -> PrimType 2 -> case 2 -> GL value 3 = GL_LINE_STRIP
+    //   0x50 -> PrimType 1 -> case 1 -> GL value 1 = GL_LINES
+    //   0x60 -> PrimType 0 -> GL_POINTS (default fall-through).
+    // Every Bada .mmd ships flag=0x21, so only the TRIANGLES path is
+    // actually exercised; the others are here for completeness. The old
+    // port mapped 0x20 -> GL_TRIANGLE_STRIP which explained all of the
+    // "mirror through fuse hole" / "triangle holes on fruit" artefacts
+    // we chased — strip rendering of a triangle-list index buffer.
     switch (idxFlags & 0xF0) {
-        case 0x20: geom.primType = GL_TRIANGLE_STRIP; break;
-        case 0x40: geom.primType = GL_TRIANGLES; break;
-        default:   geom.primType = GL_TRIANGLE_STRIP; break;
+        case 0x20: geom.primType = GL_TRIANGLES;      break;
+        case 0x40: geom.primType = GL_TRIANGLE_STRIP; break;
+        default:   geom.primType = GL_TRIANGLES;      break;
     }
     // Low nibble = PSP GE_INDEX_TYPE: 0 none / 1 uint16 / 2 uint32.
     // Binary LoadIndexStreamPSP (0x001a799c) branches on `(nibble - 1)`;

@@ -203,8 +203,16 @@ def parse_index_stream(data: bytes, start: int) -> tuple[dict, int]:
     flags = r.u8()
     prim_hi = flags & 0xF0
     idx_nib = flags & 0x0F
-    prim_name = {0x20: "TSTRIP", 0x30: "FAN", 0x40: "TRIS",
-                 0x50: "LINES", 0x60: "POINTS"}.get(prim_hi, "TSTRIP")
+    # Hi nibble → Mortar::PrimType → GL enum (via Geometry::_NativePrimitiveType
+    # at 0x00141ed8). Confirmed empirically against the gallery render:
+    #   0x20 → PrimType 3 → case 3 → GL value 4 = GL_TRIANGLES
+    #   0x30 → PrimType 5 → case 5 → GL value 6 = GL_TRIANGLE_FAN
+    #   0x40 → PrimType 2 → case 2 → GL value 3 = GL_LINE_STRIP
+    #   0x50 → PrimType 1 → case 1 → GL value 1 = GL_LINES
+    #   0x60 → PrimType 0 → default   → GL value 0 = GL_POINTS
+    # Every Bada .mmd ships flag=0x21 and renders as a flat triangle list.
+    prim_name = {0x20: "TRIS",  0x30: "TFAN",  0x40: "LINE_STRIP",
+                 0x50: "LINES", 0x60: "POINTS"}.get(prim_hi, "TRIS")
     idx_count = r.u32()
     if idx_nib == 1:
         indices = list(struct.unpack_from(f"<{idx_count}H", data, r.pos))
