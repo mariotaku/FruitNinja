@@ -27,14 +27,21 @@ static bool ParseVec3(const char* s, float out[3]) {
 
 // Parse "r g b a" ints into a BGRA byte tuple, scaling 0-31 XML values to 0-255.
 // Matches the binary's 255.0f/31.0f multiplier at DAT_001166c4.
+// XML colour attributes are written in R G B A order with 5-bit values
+// (0..31). Memory order must match what glColorPointer(4, GL_UNSIGNED_BYTE)
+// expects downstream — i.e. byte[0]=R, byte[1]=G, byte[2]=B, byte[3]=A.
+// The function was previously named "BGRA" and stored in BGRA order, which
+// made R and B swap in the shader — visible as bombs emitting cyan/blue
+// smoke instead of white fading to warm yellow. Kept the name for the
+// smaller diff; the layout is now RGBA.
 static void ParseColourBGRA(const char* s, uint8_t out[4]) {
     if (!s) { out[0] = out[1] = out[2] = out[3] = 0; return; }
     int r = 0, g = 0, b = 0, a = 0;
     sscanf(s, "%d %d %d %d", &r, &g, &b, &a);
     const float scale = 255.0f / 31.0f;
-    out[0] = (uint8_t)(b * scale); // B
+    out[0] = (uint8_t)(r * scale); // R
     out[1] = (uint8_t)(g * scale); // G
-    out[2] = (uint8_t)(r * scale); // R
+    out[2] = (uint8_t)(b * scale); // B
     out[3] = (uint8_t)(a * scale); // A
 }
 
