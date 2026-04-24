@@ -20,6 +20,7 @@
 #include "FruitSaveData.h"
 #include "audio/GameSound.h"
 #include "hud/SliceEffect.h"
+#include "hud/MissControl.h"
 #include "screens/GameOverScreen.h"
 #include "screens/PowerUpShop.h"
 #include "screens/DojoScreen.h"
@@ -156,6 +157,9 @@ void GameInitialise() {
     FN::SliceEffect_CreatePool(32);  // binary uses MemoryPool<Node>(32)
     SlashEntity::LoadContent();     // TODO: blade trail textures
     Bomb::LoadContent();            // loads bomb models + textures
+    MissControl::LoadContent();     // load critical / rare / cross overlays
+    // Pool allocation + HUD registration happens in GameInit (which
+    // runs AFTER the HUD is created).
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
     PowerUpShop::LoadContent();     // TODO: power-up shop textures
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)

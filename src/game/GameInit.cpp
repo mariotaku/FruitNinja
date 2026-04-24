@@ -20,6 +20,7 @@
 #include "entities/SplatEntity.h"
 #include "entities/BombBlast.h"
 #include "hud/SliceEffect.h"
+#include "hud/MissControl.h"
 #include "particle/PSPParticleManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
@@ -40,6 +41,10 @@ void GameInit(unsigned long) {
     if (!game->hud) {
         game->hud = new HUD();
     }
+
+    // Pool allocation requires the HUD to exist. MissControl was
+    // deferred in GameInitialise because HUD wasn't ready there.
+    MissControl::AllocatePool();
 
     // Load background texture → task state +0xfc (matches original GameInit lines 159-170)
     // Only if not already loaded (original: SmartPtr cast-to-bool guard)
