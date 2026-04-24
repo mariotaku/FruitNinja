@@ -302,6 +302,31 @@ int ActorManager::GetNumTypes() const {
     return n;
 }
 
+// Matches ActorManager::GetEntityFirst (0x0016fbb8). Seeds `it` with the
+// type list's begin() iterator and returns the Entity* it points at, or
+// nullptr if the list is empty. Binary also returns the ActorManager*
+// via an outer CONCAT that callers ignore.
+Entity* ActorManager::GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& it) {
+    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) {
+        it = std::list<Entity*>::iterator();
+        return nullptr;
+    }
+    std::list<Entity*>& list = m_pTypeLists[typeIdx];
+    it = list.begin();
+    if (it == list.end()) return nullptr;
+    return *it;
+}
+
+// Matches ActorManager::GetEntityNext (0x0016fb88). Advances `it` and
+// returns the next Entity*, or nullptr when past end.
+Entity* ActorManager::GetEntityNext(int typeIdx, std::list<Entity*>::iterator& it) {
+    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
+    std::list<Entity*>& list = m_pTypeLists[typeIdx];
+    ++it;
+    if (it == list.end()) return nullptr;
+    return *it;
+}
+
 // 0x0016fcc4.
 Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;

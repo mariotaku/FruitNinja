@@ -45,53 +45,68 @@ static float RandScaled(float s) {
     return ((float)rand() / (float)RAND_MAX) * s;
 }
 
-void FN_ClearMenuItems() {
+void FN::ClearMenuItems() {
     ActorManager* am = ActorManager::GetInstance();
     if (!am) return;
 
-    // Iterate Fruit (type 0) + Bomb (type 1) type lists. Binary uses
-    // GetEntityFirst/Next per type; port's GetTypeList gives the
-    // std::list directly.
-    for (int t = 0; t <= 1; t++) {
-    for (auto it = am->GetTypeList(t).begin(); it != am->GetTypeList(t).end(); ++it) {
-        Entity* e = *it;
-        if (!e || !e->IsActive()) continue;
+    // Binary ClearMenuItems @ 0x0016ac7c is two back-to-back while loops
+    // over the iterator pair -- fruits first (type 0), then bombs
+    // (type 1). Mirror that structure here so the port reads 1:1 with
+    // the disassembly.
 
-        if (e->entityType == 0) {
-            // --- Fruit pass ---
+    // --- Pass 1: fruits (type 0) ---
+    {
+        std::list<Entity*>::iterator it;
+        Entity* e = am->GetEntityFirst(0, it);
+        while (e != nullptr) {
             Fruit* f = static_cast<Fruit*>(e);
-            if (f->m_bSliced) continue;     // already released
-            f->m_bSliced = 1;
+            if (f->m_bSliced == 0) {
+                float vx = RandScaled(10.0f) - 5.0f;   // [-5, +5)
+                float vy = RandScaled(5.0f);           // [0, +5)
+                f->vel = Vec3(vx, vy, 0.0f);
 
-            float vx = RandScaled(10.0f) - 5.0f;  // [-5, +5)
-            float vy = RandScaled(5.0f);          // [0, +5)
-            f->vel = Vec3(vx, vy, 0.0f);
+                f->m_bDrawWhole = true;                // +0x114
 
-            f->m_bDrawWhole = true;               // +0x114 — render whole
+                // Sign-correct vel.x by sign(pos.x) so each fruit flies
+                // outward toward the nearest screen edge.
+                const float absVx = vx < 0 ? -vx : vx;
+                const float sign  = (f->pos.x < 0.0f) ? -1.0f : 1.0f;
+                f->vel.x = absVx * sign;
 
-            // Sign-correct vel.x by sign(pos.x) so each fruit flies
-            // outward toward the nearest screen edge.
-            const float absVx = vx < 0 ? -vx : vx;
-            const float sign  = (f->pos.x < 0.0f) ? -1.0f : 1.0f;
-            f->vel.x = absVx * sign;
+                f->m_SecondVel = f->vel;               // m_HalfB_vel = vel
+                f->m_bSliced = 1;
+            }
+            e = am->GetEntityNext(0, it);
+        }
+    }
 
-            f->m_SecondVel = f->vel;              // m_HalfB_vel = vel
-        } else if (e->entityType == 1) {
-            // --- Bomb pass ---
+    // --- Pass 2: bombs (type 1) ---
+    {
+        std::list<Entity*>::iterator it;
+        Entity* e = am->GetEntityFirst(1, it);
+        while (e != nullptr) {
+            // Binary-exact:
+            //   if (Bomb::Enabled()) {          // !m_bCollisionGuard
+            //       Bomb::Disable();            // m_bCollisionGuard = 1
+            //       vel = (Rand(10)-5, Rand(5), 0);
+            //   }
+            //   m_bMovement = 1;                // unconditional
+            //
+            // Binary never writes m_bHit here -- the bomb stays in
+            // Bomb::Update's ALIVE branch, which also runs gravity
+            // (via m_bMovement gate). Disabling collision alone is
+            // what stops further slices.
             Bomb* b = static_cast<Bomb*>(e);
-            // Binary: if (Bomb::Enabled()) { Disable(); set vel; }
-            // Port equivalent of Enabled() = IsActive() && !m_bHit.
-            if (b->IsActive() && b->m_bHit == 0) {
-                b->Deactivate();
+            if (b->Enabled()) {
+                b->Disable();
                 float vx = RandScaled(10.0f) - 5.0f;
                 float vy = RandScaled(5.0f);
                 b->vel = Vec3(vx, vy, 0.0f);
             }
-            // m_bMovement = 1 fires unconditionally per binary.
             b->m_bMovement = 1;
+            e = am->GetEntityNext(1, it);
         }
     }
-    }  // end type loop
 }
 
 // Constants from binary (verified via read_memory / disassembly)
@@ -416,7 +431,7 @@ void MenuButton::Update(float dt) {
                     // other menu fruit so the dojo transition can
                     // proceed. Only fired alongside the user-slice
                     // callback to avoid recursive re-clearing.
-                    FN_ClearMenuItems();
+                    FN::ClearMenuItems();
                 }
                 // Detach the entity → next frame enters the FadeCounter
                 // shrink path below.
@@ -428,7 +443,7 @@ void MenuButton::Update(float dt) {
         }
     }
 
-    // If the entity was deactivated externally (e.g. FN_ClearMenuItems
+    // If the entity was deactivated externally (e.g. FN::ClearMenuItems
     // disables a bomb before MenuButton could detect the slash), force
     // the detach here so the shrink path below can run.
     if (m_pEntity && !m_pEntity->IsActive()) {
