@@ -49,13 +49,22 @@
   <label><input type="checkbox" id="applyRot" checked> port -90° X rotation</label>
   <label>draw:
     <select id="drawMode">
-      <option value="strip">native GL_TRIANGLE_STRIP</option>
-      <option value="tris">as GL_TRIANGLES (treat indices as list)</option>
-      <option value="lines">GL_LINES (edges only)</option>
-      <option value="points">GL_POINTS (vertex positions)</option>
+      <option value="strip">GL prim (native)</option>
+      <option value="tris">force GL_TRIANGLES</option>
+      <option value="lines">GL_LINES</option>
+      <option value="points">GL_POINTS</option>
     </select>
   </label>
   <label><input type="checkbox" id="textured" checked> textured</label>
+  <label><input type="checkbox" id="depth" checked> depth test</label>
+  <label><input type="checkbox" id="blend" checked> blend</label>
+  <label>depth func:
+    <select id="depthFunc">
+      <option value="LESS">LESS</option>
+      <option value="LEQUAL">LEQUAL</option>
+      <option value="ALWAYS">ALWAYS</option>
+    </select>
+  </label>
 </header>
 
 <main>
@@ -86,6 +95,9 @@ let autoSpinEnabled = true;
 let applyPortRot = true;
 let drawMode = "strip";          // strip | tris | lines | points
 let textured = true;
+let depthEnabled = true;
+let blendEnabled = true;
+let depthFuncName = "LESS";      // LESS | LEQUAL | ALWAYS
 
 const VS_SRC = `
 attribute vec3 aPos;
@@ -333,10 +345,10 @@ function render() {
   gl.viewport(0, 0, cvs.width, cvs.height);
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
-  gl.depthFunc(gl.LESS);
+  if (depthEnabled) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
+  gl.depthFunc(gl[depthFuncName]);
   gl.disable(gl.CULL_FACE);
-  gl.enable(gl.BLEND);
+  if (blendEnabled) gl.enable(gl.BLEND); else gl.disable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   if (!current) return;
@@ -452,6 +464,9 @@ async function boot() {
   document.getElementById("autospin").addEventListener("change", (e) => autoSpinEnabled = e.target.checked);
   document.getElementById("applyRot").addEventListener("change", (e) => applyPortRot = e.target.checked);
   document.getElementById("drawMode").addEventListener("change", (e) => drawMode = e.target.value);
+  document.getElementById("depth").addEventListener("change", (e) => depthEnabled = e.target.checked);
+  document.getElementById("blend").addEventListener("change", (e) => blendEnabled = e.target.checked);
+  document.getElementById("depthFunc").addEventListener("change", (e) => depthFuncName = e.target.value);
   document.getElementById("textured").addEventListener("change", (e) => textured = e.target.checked);
 
   // Initial selection: from URL hash if valid, else first model.
