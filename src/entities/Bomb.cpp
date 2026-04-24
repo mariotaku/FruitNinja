@@ -661,13 +661,15 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             // TODO: AddToCurrentScore(-10, 0, false, false)
             // TODO: PowerUpManager::ClearTimedPowers()
             WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
-            // "X" MissControl indicator. Pool is stubbed (GetFree returns
-            // nullptr) so this is a no-op; the call site is wired so the
-            // overlay lights up for free once the MissControl pool lands.
+            // "X" MissControl indicator for zen bomb hit. Uses the
+            // shared hud_cross overlay; MissControl pre-loads it.
             if (MissControl* mc = MissControl::GetFree()) {
                 // Binary: miss->MakeDisappear(pos, 0, bombTex);
                 //         miss->field_0x34 = 0x200;  // size multiplier
-                mc->MakeDisappear(pos, 0x200, 0 /* bombTex */);
+                // Port: passes SmartPtr<Texture>() so MakeDisappear falls
+                // back to its default (hud_cross) via internal pick.
+                SmartPtr<Mortar::Texture> noTex;
+                mc->MakeDisappear(pos, 0x200, noTex);
             }
             // Mark as menu-hit so Update's hit branch runs the falling
             // physics instead of the BombBlast shockwave spawn loop.
