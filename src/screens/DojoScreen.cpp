@@ -277,15 +277,20 @@ void DojoScreen::Update(float dt) {
         m_pAboutButton = nullptr;  // field_0x9c (stored as int 0 in binary)
 
         if (prevState == 3) {
-            // State 3: push AboutScreen
+            // State 3: push AboutScreen.
+            // Binary: operator_new(0xa0), AboutScreen ctor, call vtable[2]=Init,
+            //         HUD::AddControl. No RemoveCallback installed in binary.
             m_pAboutScreen = new AboutScreen(game, this);
+            m_pAboutScreen->Init();  // matches binary: (*(code*)about->vtable[2])(about)
+            // Port-specific: install RemoveCallback so DojoScreen clears its ptr.
+            // Binary relies on AboutScreen calling parent->Reset() which sets state=0.
+            // Port keeps both: Init() via RemoveCallback (redundant but harmless).
             m_pAboutScreen->m_RemoveCallback = [this](HUDControl*) {
                 m_pAboutScreen = nullptr;
-                m_State = 0;  // re-enter fade-in to recreate buttons
+                // AboutScreen::Update state-2 already calls m_pParent->Init()
+                // which sets m_State=0. This callback is port-specific cleanup.
             };
             game.hud->AddControl(m_pAboutScreen);
-            // Binary just calls Init + AddControl, no state change here.
-            // The port uses m_RemoveCallback to detect when About closes.
             return;
         }
 
