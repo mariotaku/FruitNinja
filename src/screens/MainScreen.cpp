@@ -757,7 +757,7 @@ void MainScreen::CreatePlayDojo() {
     // RemoveCallback: matches binary MainScreen::ButtonDeleted @ 0x0014acc0.
     // HUD::Update fires this right before deleting the MenuButton so we
     // can null our weak ref. Required for the dojo back-slice flow:
-    // FN_ClearMenuItems releases Play/Dojo fruits -> MenuButton shrink
+    // FN::ClearMenuItems releases Play/Dojo fruits -> MenuButton shrink
     // path deletes the button -> without this callback pPlayButton
     // stays dangling and STATE_CAMERA_ZOOM's `if (!pPlayButton)` guard
     // skips CreatePlayDojo on return.

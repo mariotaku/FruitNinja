@@ -161,9 +161,21 @@ public:
     // 0x0016ff00. Count of type lists that contain at least one entity.
     int  GetNumTypes() const;
 
-    // Accessor for per-type iteration. Binary callers use GetEntityFirst /
-    // GetEntityNext; port exposes the std::list directly which is idiomatic
-    // C++ and lets call sites iterate with range-for.
+    // Accessor for per-type iteration. Two APIs:
+    //
+    //   GetEntityFirst / GetEntityNext -- binary-faithful iterator pair
+    //   (0x0016fbb8 / 0x0016fb88). Caller owns the iterator; functions
+    //   return the Entity* at the current node, or nullptr when past
+    //   end. Prefer these for call sites that mirror binary loops so
+    //   the port reads 1:1 with the disassembly.
+    //
+    //   GetTypeList -- port-only convenience returning the underlying
+    //   std::list<Entity*> by const ref so range-for works. Useful for
+    //   read-only counts; don't use where the binary explicitly uses
+    //   the iterator API.
+    Entity* GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& it);
+    Entity* GetEntityNext(int typeIdx, std::list<Entity*>::iterator& it);
+
     const std::list<Entity*>& GetTypeList(int typeIdx) const {
         static const std::list<Entity*> s_empty;
         if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return s_empty;

@@ -100,6 +100,17 @@ public:
     // Matches Bomb::KillBomb (0x1716e8)
     void KillBomb();
 
+    // Matches Bomb::Enabled (0x001507e0) — returns !m_bCollisionGuard.
+    // "Enabled" == "still accepting slice collisions". Called by
+    // ClearMenuItems to decide whether to fling the bomb.
+    bool Enabled() const { return m_bCollisionGuard == 0; }
+
+    // Matches Bomb::Disable (0x0012637c) — sets m_bCollisionGuard = 1.
+    // Collision ignored afterwards, but the entity keeps updating in
+    // Bomb::Update's alive branch so gravity integrates and the bomb
+    // falls off screen. NOT the same as Deactivate/KillBomb.
+    void Disable() { m_bCollisionGuard = 1; }
+
     // Matches Bomb::LoadContent (0x1726c8) — called once from GameInitialise
     // Loads bomb models, textures, particle hashes into g_bombData
     static void LoadContent();

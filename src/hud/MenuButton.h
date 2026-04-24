@@ -26,7 +26,7 @@ class Fruit;
 // FadeCounter shrink. Called from MenuButton::Update on user slice of a
 // fruit button, and from GameModeScreen::QuitCallback so the back-out
 // animation mirrors the main -> mode-select cascade.
-void FN_ClearMenuItems();
+namespace FN { void ClearMenuItems(); }
 
 class MenuButton : public HUDControl3d {
 public:

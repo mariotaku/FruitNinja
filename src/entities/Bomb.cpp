@@ -704,7 +704,7 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
         // field_0x84 is the binary's backref to the owning state
         // struct; the +0x123 gate isn't modelled in the port, so we
         // always call the clear.
-        FN_ClearMenuItems();
+        FN::ClearMenuItems();
         if (m_HitCallback) {
             m_HitCallback();
         }

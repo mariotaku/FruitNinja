@@ -156,7 +156,7 @@ private:
     // m_RemoveCallback delegate on Play / Dojo / Quit / MoreGames buttons
     // at creation time. HUD::Update fires this right before deleting
     // the MenuButton, so we null whichever weak pointer matched. Needed
-    // because FN_ClearMenuItems (triggered when the user slices any menu
+    // because FN::ClearMenuItems (triggered when the user slices any menu
     // item) releases every sibling menu fruit — the siblings then enter
     // the FadeCounter shrink-disappear path and self-delete, leaving
     // dangling weak pointers on MainScreen unless this callback clears
