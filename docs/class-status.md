@@ -117,7 +117,7 @@ Status: ✅ = fully analyzed, 🔶 = partially analyzed, ❌ = not analyzed, ⏭
 | PowerUpShop | ✅ | — | In-game power-up purchase UI | engine/rendering-detail.md |
 | ScoreModifier | ✅ | 0x3c | Parse + Update: gain/loss add+multiply, applied flag | functions/power-ups.md |
 | TimeModifier | ✅ | 0x3c | Parse + Update: stop/slow/ramp clock, addTime, ApplyDtMod | functions/power-ups.md |
-| SlashModifier | ✅ | 0x40 | Parse + Apply: colours, width, texture, fxTexture (no Update) | functions/power-ups.md |
+| SlashModifier | ✅ | 0x40 | Parse + Apply + UpdateSpecific: palette colours, textures, power-mask OR-accumulate into SlashEntity::s_ModPowerMask each frame (bits gate fruit/bomb attract-repel, explosion suppress, zen mirror-bounce) | functions/power-ups.md |
 | WaveModifier | ✅ | 0x44 | Parse + Update: fruit/bomb multipliers, bombScale, criticalChance, overrides | functions/power-ups.md |
 | GameModifier | ✅ | — | Base class: vtable, duration, applied flag, owner ptr | functions/power-ups.md |
 | PurchaseInfo | ✅ | 0xc4 | IAP purchase data | — |

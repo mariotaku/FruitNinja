@@ -43,6 +43,18 @@ public:
     static const float MOVE_THRESH_ACTIVE;   // 5.0  — min move² = 25 to add point
     static const float MOVE_THRESH_INACTIVE; // 50.0 — min move² = 2500 when blade off
 
+    // Global SlashEntity::ModPowerMask (binary BSS 0x0024d8cc). A uint32_t
+    // bitmask that active SlashModifier instances OR their bits into each
+    // frame; cleared at the top of PowerUpManager::Update via SetDefaults.
+    // Callers (Fruit, Bomb, ScrollingMenu) gate behaviours on individual
+    // bits — see SlashModifier.h for the bit table.
+    //
+    // Port: PowerUpManager isn't ported yet, so nothing actually sets any
+    // bits here and the mask stays 0 — existing gameplay sees no change.
+    // The mask + helpers are wired so porting SlashModifier/PowerUpManager
+    // lights the gated behaviours up automatically.
+    static uint32_t s_ModPowerMask;
+
     SlashEntity();
     ~SlashEntity();
 

@@ -1,5 +1,6 @@
 #include "Fruit.h"
 #include "FruitInfo.h"
+#include "SlashEntity.h"
 #include "SplatEntity.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
@@ -310,17 +311,19 @@ void Fruit::Update(float dt) {
     }
 }
 
-// Dependency stub: zen-mode "strict wall bounce" flag. Binary reads
-// bit 0x20 of a uint at global GOT_0x7740 (resolved BSS 0x0024d8cc).
-// xrefs to that global: DestroyList, Reset, SetDefaults,
-// UpdateSpecific, SlashEntity::Update — almost certainly the
-// PowerUpManager / blitz state struct. Until that subsystem is
-// ported, the flag reads false so `Fruit::PostUpdate` always takes
-// the soft-nudge branch on the X axis (the common case).
+// Zen-mode "mirror bounce at X limits" flag. Reads bit 0x20 of
+// SlashEntity::s_ModPowerMask (binary BSS 0x0024d8cc) — a uint bitmask
+// that active SlashModifier instances OR their bits into each frame.
+// Bit 0x20 is set by a SlashModifier whose XML declares
+// <power colour_type="..."/> hashing to the zen-bounce power.
 //
-// Replace the body with the real read once the owning struct lands.
+// Port: mask + SlashModifier::UpdateSpecific are wired, but
+// PowerUpManager isn't ported yet so no modifier runs and the mask
+// stays 0. The flag reads false in practice; the soft-nudge branch
+// always runs. Once PowerUpManager ticks SlashModifier each frame the
+// mirror-bounce lights up automatically.
 static bool IsZenStrictBounceActive() {
-    return false;
+    return (SlashEntity::s_ModPowerMask & 0x20u) != 0;
 }
 
 // Matches Fruit::DrawUpdate (0x0017501c) — called from ActorManager::Update
