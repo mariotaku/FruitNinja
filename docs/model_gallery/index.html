@@ -366,7 +366,28 @@ function render() {
   const half = Math.max(b.max[0]-b.min[0], b.max[1]-b.min[1], b.max[2]-b.min[2]) * 0.65;
 
   let world = M.translate(-cx, -cy, -cz);
-  if (applyPortRot) world = M.mul(M.rotX(-Math.PI / 2), world);
+  if (applyPortRot) {
+    // Y<->Z axis swap (reflection, det=-1) instead of a pure -90°X rotation.
+    // Keeps "mesh +Z = screen up" AND puts mesh Y on render Z directly,
+    // so depth ordering matches the binary's view — meshes that pack
+    // two parallel shells (body + outline, like banana_speed_*.mmd) get
+    // the outer shell correctly positioned BEHIND the body, letting
+    // GL_LESS overdraw it where they overlap.
+    //
+    // Pure -90°X sends mesh Y -> render -Z, which inverted depth for
+    // the outline shell (whose verts are at more-negative mesh Y than
+    // the body verts, so the shell ended up closer to the camera and
+    // overwrote the textured body).
+    //
+    // Winding flips (det=-1); we render with cull off anyway.
+    const yzSwap = new Float32Array([
+      1, 0, 0, 0,
+      0, 0, 1, 0,
+      0, 1, 0, 0,
+      0, 0, 0, 1,
+    ]);
+    world = M.mul(yzSwap, world);
+  }
   world = M.mul(M.rotX(rot.x), world);
   world = M.mul(M.rotY(rot.y), world);
   const aspect = cvs.width / cvs.height;
