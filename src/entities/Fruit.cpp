@@ -8,6 +8,7 @@
 #include "asset/TextureManager.h"
 #include "particle/PSPParticleManager.h"
 #include "hud/SliceEffect.h"
+#include "hud/MissControl.h"
 #include "game/BombHit.h"
 #include "game/WaveManager.h"
 #include "Game.h"
@@ -692,6 +693,19 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
         FN::CriticalFlash(pos, Colour(255, 215, 0, 192));
     } else if (isSpecial) {
         FN::CriticalFlash(pos, Colour(255, 255, 255, 128));
+    }
+
+    // Overlay label on critical / rare slices. Pool is stubbed (GetFree
+    // returns nullptr until the 9-slot MissControl pool lands in
+    // GameInitialise), so this is currently a no-op — the call is wired
+    // so it'll light up for free once the pool exists. See
+    // docs/entities/miss-control.md and src/hud/MissControl.h.
+    if (isCritical) {
+        if (MissControl* mc = MissControl::GetFree())
+            mc->MakeCritical(pos, 0 /* playerIdx */);
+    } else if (isSpecial) {
+        if (MissControl* mc = MissControl::GetFree())
+            mc->MakeRare(pos);
     }
 
     // White slice-line visual — matches AddSlice call in binary

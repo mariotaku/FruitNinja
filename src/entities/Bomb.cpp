@@ -13,6 +13,7 @@
 #include "asset/TextureManager.h"
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
+#include "hud/MissControl.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
@@ -660,7 +661,14 @@ void Bomb::OnSliced(const Vec3& bladeVel) {
             // TODO: AddToCurrentScore(-10, 0, false, false)
             // TODO: PowerUpManager::ClearTimedPowers()
             WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
-            // TODO: "X" MissControl indicator
+            // "X" MissControl indicator. Pool is stubbed (GetFree returns
+            // nullptr) so this is a no-op; the call site is wired so the
+            // overlay lights up for free once the MissControl pool lands.
+            if (MissControl* mc = MissControl::GetFree()) {
+                // Binary: miss->MakeDisappear(pos, 0, bombTex);
+                //         miss->field_0x34 = 0x200;  // size multiplier
+                mc->MakeDisappear(pos, 0x200, 0 /* bombTex */);
+            }
             // Mark as menu-hit so Update's hit branch runs the falling
             // physics instead of the BombBlast shockwave spawn loop.
             m_bMenuBombHit = 1;
