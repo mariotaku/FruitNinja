@@ -309,6 +309,84 @@ void Fruit::Update(float dt) {
     }
 }
 
+// Dependency stub: zen-mode "strict wall bounce" flag. Binary reads
+// bit 0x20 of a uint at global GOT_0x7740 (resolved BSS 0x0024d8cc).
+// xrefs to that global: DestroyList, Reset, SetDefaults,
+// UpdateSpecific, SlashEntity::Update — almost certainly the
+// PowerUpManager / blitz state struct. Until that subsystem is
+// ported, the flag reads false so `Fruit::PostUpdate` always takes
+// the soft-nudge branch on the X axis (the common case).
+//
+// Replace the body with the real read once the owning struct lands.
+static bool IsZenStrictBounceActive() {
+    return false;
+}
+
+// Matches Fruit::DrawUpdate (0x0017501c) — called from ActorManager::Update
+// immediately after Update (vtable slot 6, +0x18). Also known as
+// "DrawUpdate" in per-subclass docs; same slot as Bomb::PostUpdate.
+//
+// Binary behaviour:
+//   m_RotAxis *= 0.9                                    // DAT_0017519c damping
+//   if (!m_bSliced && m_ChuckDelay <= 0) {
+//     if (m_Gravity.x == 0) {                            // vertical-gravity fruit
+//       if (zen && (zenFlag & 0x20)) { hard bounce x on ±192 }
+//       else                         { soft nudge x toward centre }
+//     } else if (m_Gravity.y == 0) {                     // horizontal-gravity fruit
+//       soft nudge y toward centre on ±128
+//     }
+//   }
+//
+// Bounds resolved from binary: X = ±192 (DAT_001751a0 / 751a4),
+// Y = ±128 (DAT_001751a8 / 751ac). Push / rotAxis magnitudes from
+// the disassembly: vel += ±16*dt, rotAxis += ±20.
+void Fruit::PostUpdate(float dt) {
+    static constexpr float ROT_AXIS_DAMPING = 0.9f;    // DAT_0017519c
+    static constexpr float BOUND_X_LO = -192.0f;       // DAT_001751a0
+    static constexpr float BOUND_X_HI =  192.0f;       // DAT_001751a4
+    static constexpr float BOUND_Y_LO = -128.0f;       // DAT_001751a8
+    static constexpr float BOUND_Y_HI =  128.0f;       // DAT_001751ac
+    static constexpr float PUSH_VEL   = 16.0f;
+    static constexpr float PUSH_ROT   = 20.0f;
+
+    m_RotAxis *= ROT_AXIS_DAMPING;
+
+    if (m_bSliced) return;
+    if (m_ChuckDelay > 0.0f) return;
+
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    if (m_Gravity.x == 0.0f) {
+        // Vertical-gravity fruit — nudge or hard-bounce on X bounds.
+        const bool zen = (game->gameMode == 2);
+        const bool zenStrict = zen && IsZenStrictBounceActive();
+        if (zenStrict) {
+            if (pos.x < BOUND_X_LO) { pos.x = BOUND_X_LO; vel.x = -vel.x; }
+            if (pos.x > BOUND_X_HI) { pos.x = BOUND_X_HI; vel.x = -vel.x; }
+        } else {
+            if (pos.x < BOUND_X_LO) {
+                vel.x       += dt * PUSH_VEL;
+                m_RotAxis.x += PUSH_ROT;
+            }
+            if (pos.x > BOUND_X_HI) {
+                vel.x       += dt * -PUSH_VEL;
+                m_RotAxis.x -= PUSH_ROT;
+            }
+        }
+    } else if (m_Gravity.y == 0.0f) {
+        // Horizontal-gravity fruit — soft nudge on Y bounds.
+        if (pos.y < BOUND_Y_LO) {
+            vel.y       += dt * PUSH_VEL;
+            m_RotAxis.y += PUSH_ROT;
+        }
+        if (pos.y > BOUND_Y_HI) {
+            vel.y       += dt * -PUSH_VEL;
+            m_RotAxis.y -= PUSH_ROT;
+        }
+    }
+}
+
 // Internal helper: draw the model once at (drawPos, drawRot, drawScale).
 static void DrawOneModel(Mortar::Model* model,
                          const Vec3& drawPos,
