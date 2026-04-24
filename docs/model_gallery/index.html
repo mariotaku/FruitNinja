@@ -46,7 +46,7 @@
   <h1>Fruit Ninja Models</h1>
   <div class="status" id="status">Loading…</div>
   <label><input type="checkbox" id="autospin" checked> auto-spin</label>
-  <label><input type="checkbox" id="applyRot" checked> port -90° X rotation</label>
+  <label><input type="checkbox" id="applyRot"> port Y↔Z swap</label>
   <label>draw:
     <select id="drawMode">
       <option value="strip">GL prim (native)</option>
@@ -92,7 +92,7 @@ let uniforms = null;           // { uMVP, uTex, uTextured }
 const rot = { x: 0, y: 0 };
 let dragging = false, lastX = 0, lastY = 0;
 let autoSpinEnabled = true;
-let applyPortRot = true;
+let applyPortRot = false;                // default OFF — render raw mesh orientation
 let drawMode = "strip";          // strip | tris | lines | points
 let textured = true;
 let depthEnabled = true;
