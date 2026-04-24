@@ -24,6 +24,10 @@
 
 const float SlashEntity::POINT_SPACING         = 64.0f;   // DAT_0017d5fc
 const float SlashEntity::MOVE_THRESH_ACTIVE    = 5.0f;    // sqrt(25)
+
+// Binary global SlashEntity::ModPowerMask @ BSS 0x0024d8cc. See
+// SlashEntity.h for bit layout + lifecycle notes.
+uint32_t SlashEntity::s_ModPowerMask = 0;
 // NOTE: MOVE_THRESH_INACTIVE is vestigial in the binary. The decomp of
 // UpdateTouchDown (0x17D2E4) only reads DAT_0017d5f8 (= 2500 = 50²) when
 // field_0x144 (the "blade active" flag) is clear — but frame 1 always

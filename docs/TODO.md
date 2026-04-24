@@ -44,7 +44,7 @@
 - [x] `Fruit::SetFruitType` (0x17621c, 46 lines) — set type, scale, collision sphere from FRUIT_INFO
 - [x] `Fruit::EnableCollision` (0x176354, 36 lines) — toggle ColSphere on/off
 - [x] `TimeModifier::ParseSpecific` (0x120100) + `UpdateSpecific` (0x1200a0) — stop/slow/ramp clock, addTime
-- [x] `SlashModifier::ParseSpecific` (0x11f464) — blade colours, width, texture (no UpdateSpecific, apply-only)
+- [x] `SlashModifier::ParseSpecific` (0x11f464) + `UpdateSpecific` (0x11f288) — blade colours, power-mask OR-accumulate into SlashEntity::s_ModPowerMask (bits gate fruit/bomb attract-repel, explosion suppress, zen mirror-bounce)
 - [x] `WaveModifier::ParseSpecific` (0x12836c) + `UpdateSpecific` (0x1280e4) — fruit/bomb multipliers, overrides
 - [x] `ScoreModifier::ParseSpecific` (0x11ccb0) + `UpdateSpecific` (0x11cc50) — gain/loss add+multiply
 - [x] `SlashEntity::InitPoints` (0x17c340, ~40 lines) — 2 vertex buffers × (splitPoint+2) × 0x24 bytes
