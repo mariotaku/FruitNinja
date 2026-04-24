@@ -59,6 +59,13 @@
   <label><input type="checkbox" id="depth" checked> depth test</label>
   <label><input type="checkbox" id="blend" checked> blend</label>
   <label><input type="checkbox" id="reverseOrder"> reverse draw order</label>
+  <label>show:
+    <select id="layerFilter">
+      <option value="all">all triangles</option>
+      <option value="body">body only (varied UVs)</option>
+      <option value="outline">outline only (clustered UVs)</option>
+    </select>
+  </label>
   <label>depth func:
     <select id="depthFunc">
       <option value="LESS">LESS</option>
@@ -100,6 +107,7 @@ let depthEnabled = true;
 let blendEnabled = true;
 let depthFuncName = "LESS";      // LESS | LEQUAL | ALWAYS
 let reverseOrder = false;
+let layerFilter = "all";          // all | body | outline
 
 const VS_SRC = `
 attribute vec3 aPos;
@@ -232,9 +240,11 @@ function initGL() {
 
 function releaseCurrent() {
   if (!current) return;
-  if (current.vbo)    gl.deleteBuffer(current.vbo);
-  if (current.ibo)    gl.deleteBuffer(current.ibo);
-  if (current.revIbo) gl.deleteBuffer(current.revIbo);
+  if (current.vbo)            gl.deleteBuffer(current.vbo);
+  if (current.ibo)            gl.deleteBuffer(current.ibo);
+  if (current.revIbo)         gl.deleteBuffer(current.revIbo);
+  if (current.bodyOnlyIbo)    gl.deleteBuffer(current.bodyOnlyIbo);
+  if (current.outlineOnlyIbo) gl.deleteBuffer(current.outlineOnlyIbo);
   current = null;
 }
 
@@ -313,8 +323,8 @@ function loadModel(model) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(finalIdx), gl.STATIC_DRAW);
   }
 
-  // Reversed triangle order: flip groups of 3. Only meaningful for
-  // TRIANGLES primitives (which every shipped .mmd is).
+  // Reversed triangle order (same vertex data, triangles swapped in
+  // groups of 3).
   const revIbo = gl.createBuffer();
   const reversed = new Uint32Array(finalIdx.length);
   const triCount = (finalIdx.length / 3) | 0;
@@ -331,13 +341,49 @@ function loadModel(model) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(reversed), gl.STATIC_DRAW);
   }
 
+  // Split index buffer into "body" vs "outline" triangles by inspecting
+  // the UV clusters of each tri's vertices. The outline layer samples
+  // a single atlas texel, so three verts of an outline triangle should
+  // all have near-identical UVs; body triangles span wider UVs.
+  const bodyIdx = [], outlineIdx = [];
+  function uv(vi) { return [f32[vi * 6 + 3], f32[vi * 6 + 4]]; }
+  for (let t = 0; t < triCount; t++) {
+    const i0 = finalIdx[t * 3 + 0], i1 = finalIdx[t * 3 + 1], i2 = finalIdx[t * 3 + 2];
+    const [u0, v0] = uv(i0), [u1, v1] = uv(i1), [u2, v2] = uv(i2);
+    const du = Math.max(u0, u1, u2) - Math.min(u0, u1, u2);
+    const dv = Math.max(v0, v1, v2) - Math.min(v0, v1, v2);
+    const outline = (du < 0.02 && dv < 0.02);
+    (outline ? outlineIdx : bodyIdx).push(i0, i1, i2);
+  }
+  function makeIbo(arr) {
+    const b = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, b);
+    if (indexType === gl.UNSIGNED_INT) {
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(arr), gl.STATIC_DRAW);
+    } else {
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(arr), gl.STATIC_DRAW);
+    }
+    return b;
+  }
+  const bodyOnlyIbo    = bodyIdx.length    ? makeIbo(bodyIdx)    : null;
+  const outlineOnlyIbo = outlineIdx.length ? makeIbo(outlineIdx) : null;
+
   current = {
-    model, vbo, ibo, revIbo, draws,
+    model, vbo, ibo, revIbo, bodyOnlyIbo, outlineOnlyIbo,
+    bodyCount: bodyIdx.length,
+    outlineCount: outlineIdx.length,
+    draws,
     bounds:   { min: [mnx, mny, mnz], max: [mxx, mxy, mxz] },
     stride:   STRIDE,
     indexType, idxBytes,
     totalIdx: finalIdx.length,
   };
+
+  // Report split in info pane.
+  const info2 = document.getElementById("viewerInfo");
+  if (info2) {
+    info2.innerHTML += `<div class="sub">layers: body=${bodyIdx.length/3|0} tris  outline=${outlineIdx.length/3|0} tris</div>`;
+  }
 
   // Info panel.
   let totalGeoms = 0;
@@ -425,22 +471,31 @@ function render() {
   gl.vertexAttribPointer(1, 2, gl.FLOAT,         false, STRIDE, 12);
   gl.vertexAttribPointer(2, 4, gl.UNSIGNED_BYTE, true,  STRIDE, 20);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, reverseOrder ? current.revIbo : current.ibo);
   gl.uniformMatrix4fv(uniforms.uMVP, false, mvp);
   gl.uniform1i(uniforms.uTex, 0);
   gl.uniform1f(uniforms.uTextured, textured ? 1.0 : 0.0);
 
-  for (const d of current.draws) {
-    let mode;
-    switch (drawMode) {
-      case "tris":   mode = gl.TRIANGLES;      break;
-      case "lines":  mode = gl.LINE_STRIP;     break;
-      case "points": mode = gl.POINTS;         break;
-      case "strip":
-      default:       mode = (d.prim === "STRIP") ? gl.TRIANGLE_STRIP : gl.TRIANGLES;
-    }
-    gl.drawElements(mode, d.count, current.indexType, d.first * current.idxBytes);
+  // Pick which index buffer + count to draw based on layer filter.
+  let ibo, count;
+  if (layerFilter === "body" && current.bodyOnlyIbo) {
+    ibo = current.bodyOnlyIbo; count = current.bodyCount;
+  } else if (layerFilter === "outline" && current.outlineOnlyIbo) {
+    ibo = current.outlineOnlyIbo; count = current.outlineCount;
+  } else {
+    ibo = reverseOrder ? current.revIbo : current.ibo;
+    count = current.totalIdx;
   }
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+
+  let mode;
+  switch (drawMode) {
+    case "tris":   mode = gl.TRIANGLES;      break;
+    case "lines":  mode = gl.LINE_STRIP;     break;
+    case "points": mode = gl.POINTS;         break;
+    case "strip":
+    default:       mode = gl.TRIANGLES;      break;   // every shipped .mmd is tris
+  }
+  gl.drawElements(mode, count, current.indexType, 0);
 }
 
 function frame() { render(); requestAnimationFrame(frame); }
@@ -510,6 +565,7 @@ async function boot() {
   document.getElementById("blend").addEventListener("change", (e) => blendEnabled = e.target.checked);
   document.getElementById("depthFunc").addEventListener("change", (e) => depthFuncName = e.target.value);
   document.getElementById("reverseOrder").addEventListener("change", (e) => reverseOrder = e.target.checked);
+  document.getElementById("layerFilter").addEventListener("change", (e) => layerFilter = e.target.value);
   document.getElementById("textured").addEventListener("change", (e) => textured = e.target.checked);
 
   // Initial selection: from URL hash if valid, else first model.
