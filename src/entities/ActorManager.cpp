@@ -220,7 +220,7 @@ void ActorManager::Update(float dt) {
                 e->flags |=  ENT_UPDATING;
                 e->Update(dt);
                 e->flags |=  ENT_POST_UPDATING;
-                // PostUpdate vtable slot not present in port — skip.
+                e->PostUpdate(dt);  // vtable +0x18 — Bomb uses this to track fuse emitter
                 e->flags &= ~(ENT_UPDATING | ENT_POST_UPDATING);
             }
             if ((e->flags & ENT_KILLED) && killCount < FREE_POOL_CAP) {

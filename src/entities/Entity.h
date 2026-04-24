@@ -62,6 +62,15 @@ public:
 
     virtual void Init(int, int, int) {}
     virtual void Update(float) {}
+
+    // Vtable slot 6 (+0x18). Binary calls this from ActorManager::Update
+    // right after Update, still under the gate `(flags & 0x11) == 0`.
+    // Named "DrawUpdate" in the per-subclass docs (bomb.md) but semantically
+    // a PostUpdate hook — runs once per tick between Update and the
+    // deactivation sweep. Bomb uses it to sync its fuse-emitter position
+    // with the rotation that Update just advanced.
+    virtual void PostUpdate(float) {}
+
     virtual void Draw(Renderer&) {}
 
     // Port's Deactivate is a cleanup callback, invoked by
