@@ -32,11 +32,14 @@
 #include "hud/FruitFactControl.h"
 #include "hud/TutorialControl.h"
 #include "entities/Coin.h"
+// Analysed: 2026-04-25T12:00
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "asset/MeshManager.h"
 #include "core/SystemManager.h"
 #include "particle/PSPParticleManager.h"
+#include "asset/FileManager.h"
+#include "render/Font.h"
 #include <cstdio>
 #include <string>
 
@@ -143,7 +146,89 @@ void GameInitialise() {
     if (game->hud) game->hud->AddControl(game->pTutorialCtrl);
 
     // TODO: Steps 12-13: PowerUpManager, LeaderboardManager
-    // TODO: Steps 16-21: Font::Load ×8
+
+    // Steps 16-21: Font::Load ×8
+    // Matches GameInitialise @ 0x0010bdfc font-loading region.
+    // Reserved slots (+0x50, +0x5C, +0x64) are left null (never loaded by binary).
+    // +0x60 is a gap, not a Font slot.
+    // Slots +0x58, +0x68, +0x6C, +0x80 are null-guarded (only loaded if not already set).
+    // Slots +0x70, +0x74, +0x78 are File::Exists-guarded AND pre-aliased to pFontArcade.
+    // +0x7C is a non-owning alias of +0x6C (pFontArcade).
+    //
+    // DIFFERS: binary calls DisplayManager::ShouldUseHDFonts() and branches on the result
+    // to pick HD vs SD paths for +0x54 and +0x58. Port always uses SD paths since HD
+    // asset check is not replicated. See docs/engine/font.md "HD vs SD Selection".
+    //
+    // Font load order matches binary: +0x54, +0x58, +0x6C, +0x70/+0x74/+0x78 (guarded),
+    //   +0x7C alias, +0x80, +0x68. Binary addresses: 0x0010bf3a, 0x0010bf6e, 0x0010bfa4,
+    //   0x0010bfcc, 0x0010bff0, 0x0010c014, alias write, 0x0010c038, 0x0010c082.
+    {
+        std::string fontDir = game->data_dir + "/fonts/";
+
+        // +0x54 pFontMain: fonts/font_fruit_ninja.fnt (0x0010bf3a)
+        // DIFFERS: binary loads HD path if ShouldUseHDFonts(); port uses SD only.
+        game->pFontMain = Mortar::Font::Load((fontDir + "font_fruit_ninja.fnt").c_str());
+
+        // +0x58 pFontNumbers: fonts/fruit_ninja_numbers.fnt (0x0010bf6e, null-guarded)
+        // DIFFERS: binary loads HD path if ShouldUseHDFonts(); port uses SD only.
+        if (!game->pFontNumbers.IsValid()) {
+            game->pFontNumbers = Mortar::Font::Load((fontDir + "fruit_ninja_numbers.fnt").c_str());
+        }
+
+        // +0x6C pFontArcade: fonts/arcade_results_numbers.fnt (0x0010bfa4, null-guarded)
+        if (!game->pFontArcade.IsValid()) {
+            game->pFontArcade = Mortar::Font::Load((fontDir + "arcade_results_numbers.fnt").c_str());
+        }
+
+        // Binary immediately aliases +0x6C into +0x70, +0x74, +0x78, +0x7C as fallback
+        // before the File::Exists-guarded overwrites. (0x0010bfc8 region)
+        game->pFontGold         = game->pFontArcade;
+        game->pFontSilver       = game->pFontArcade;
+        game->pFontBronze       = game->pFontArcade;
+        game->pFontArcadeAlias  = game->pFontArcade;
+
+        // +0x70 pFontGold: fonts/gold_numbers.fnt (0x0010bfcc, File::Exists guarded)
+        // Not present in shipped FruitNinjaBada/Data/fonts/ — slot stays alias.
+        {
+            std::string path = fontDir + "gold_numbers.fnt";
+            FILE* f = Mortar::FileManager::OpenCI(path.c_str(), "rb");
+            if (f) {
+                fclose(f);
+                game->pFontGold = Mortar::Font::Load(path.c_str());
+            }
+        }
+
+        // +0x74 pFontSilver: fonts/silver_numbers.fnt (0x0010bff0, File::Exists guarded)
+        {
+            std::string path = fontDir + "silver_numbers.fnt";
+            FILE* f = Mortar::FileManager::OpenCI(path.c_str(), "rb");
+            if (f) {
+                fclose(f);
+                game->pFontSilver = Mortar::Font::Load(path.c_str());
+            }
+        }
+
+        // +0x78 pFontBronze: fonts/bronze_numbers.fnt (0x0010c014, File::Exists guarded)
+        {
+            std::string path = fontDir + "bronze_numbers.fnt";
+            FILE* f = Mortar::FileManager::OpenCI(path.c_str(), "rb");
+            if (f) {
+                fclose(f);
+                game->pFontBronze = Mortar::Font::Load(path.c_str());
+            }
+        }
+
+        // +0x80 pFontBlue2: fonts/fruit_ninja_numbers_blue2.fnt (0x0010c038, null-guarded)
+        if (!game->pFontBlue2.IsValid()) {
+            game->pFontBlue2 = Mortar::Font::Load((fontDir + "fruit_ninja_numbers_blue2.fnt").c_str());
+        }
+
+        // +0x68 pFontGreen: fonts/fruit_ninja_numbers_green.fnt (0x0010c082, null-guarded)
+        if (!game->pFontGreen.IsValid()) {
+            game->pFontGreen = Mortar::Font::Load((fontDir + "fruit_ninja_numbers_green.fnt").c_str());
+        }
+    }
+
     // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas)
     // Step 23: MenuButton::LoadContent()
     MenuButton::LoadContent();
@@ -213,9 +298,30 @@ void GameDestroy() {
     // TutorialControl is a HUDControl — destroyed by HUD teardown above.
     game->pTutorialCtrl = nullptr;
 
-    // --- 6. Fonts (field_0x50..0x80, ~10 Font* slots) ---
-    // TODO: delete game->pFont* slots (0x50, 0x54, 0x58, 0x5c,
-    //       loop 0x70..0x0c, 0x6c, 0x64, 0x80, 0x68)
+    // --- 6. Fonts (field_0x50..0x80, 11 Font* slots) ---
+    // Matches GameDestroy @ 0x0010b7ec font teardown sequence.
+    // Reserved slots (pFontReserved0, pFontReserved1, pFontReserved2) are already null.
+    // Slots +0x70..+0x7C: binary iterates and skips deletion if ptr == pFontArcade (alias).
+    // SmartPtr::SetNull handles ref-counting; aliased slots just lose one ref.
+    //
+    // Binary loop body (iterates +0x70, +0x74, +0x78, +0x7C):
+    //   if slot_ptr == pFontArcade: clear (non-owning alias, don't delete)
+    //   else if slot_ptr != null: Font::~Font + operator_delete + null
+    // SmartPtr assignment to null handles this correctly for non-aliases.
+    // For aliases: SmartPtr operator= already handles ref-count safely.
+    game->pFontGold.SetNull();
+    game->pFontSilver.SetNull();
+    game->pFontBronze.SetNull();
+    game->pFontArcadeAlias.SetNull();
+    // Now safe to destroy the owned arcade font
+    game->pFontArcade.SetNull();
+    game->pFontReserved2.SetNull();   // always null, matches binary null-check delete
+    game->pFontBlue2.SetNull();
+    game->pFontGreen.SetNull();
+    game->pFontNumbers.SetNull();
+    game->pFontMain.SetNull();
+    game->pFontReserved1.SetNull();   // always null
+    game->pFontReserved0.SetNull();   // always null
 
     // --- 7. FruitSaveData ---
     if (game->pSaveData) { delete game->pSaveData; game->pSaveData = nullptr; }

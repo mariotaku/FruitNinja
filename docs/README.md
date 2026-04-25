@@ -37,6 +37,7 @@ Reusable engine subsystems — not specific to FruitNinja.
 - [engine/mesh.md](engine/mesh.md) — Mesh (0x7C): struct, vtable (11 entries), BoneBinding, SharedPropsInfo, Draw, LoadMesh parser, effect properties
 - [engine/effect-system.md](engine/effect-system.md) — EffectProperty/EffectPropertyList/SharedEffectProperties system: struct layouts, GetProperty, SetValue, full LoadMesh→Draw→GL flow
 - [engine/texture-mesh-manager.md](engine/texture-mesh-manager.md) — TextureManager (24-byte cache), MeshManager (20 bytes), loading pipelines, ARM struct-return convention
+- [engine/font.md](engine/font.md) — Font slots in g_GameData (+0x50..+0x80): per-slot filenames, loaders, readers, reserved slots
 - [engine/string-hash.md](engine/string-hash.md) — Jenkins lookup3 hash (C implementation)
 - [engine/rng.md](engine/rng.md) — Math::Random: 64-bit LCG (Knuth MMIX), Rand32/RandF, constants
 - [engine/other-structs.md](engine/other-structs.md) — MAMAudioThread, engine subsystem singleton list
