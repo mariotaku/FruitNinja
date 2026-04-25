@@ -150,8 +150,8 @@ void ScrollingMenu::Update(float /*dt*/) {
         int slot = TouchInRegion(
             pos.x + m_OuterRegion[0],  // x0 = pos.x + xMin
             pos.x + m_OuterRegion[3],  // x1 = pos.x + xMax
-            pos.x + m_OuterRegion[1],  // y0 = pos.x + yMin (note: binary uses pos.x for both axes)
-            pos.x + m_OuterRegion[2],  // y1 = pos.x + yMax
+            pos.y + m_OuterRegion[1],  // y0 = pos.y + yMin
+            pos.y + m_OuterRegion[2],  // y1 = pos.y + yMax
             -1);
         m_TouchId = slot;
 
@@ -190,8 +190,8 @@ void ScrollingMenu::Update(float /*dt*/) {
         int stillIn = TouchInRegion(
             pos.x + m_InnerRegion[0],  // x0 = pos.x + xMin_inner
             pos.x + m_InnerRegion[3],  // x1 = pos.x + xMax_inner
-            pos.x + m_InnerRegion[1],  // y0 = pos.x + yMin_inner
-            pos.x + m_InnerRegion[2],  // y1 = pos.x + yMax_inner
+            pos.y + m_InnerRegion[1],  // y0 = pos.y + yMin_inner
+            pos.y + m_InnerRegion[2],  // y1 = pos.y + yMax_inner
             m_TouchId);
 
         if (stillIn != m_TouchId) {
