@@ -332,7 +332,7 @@ void ResetGameEntities(bool killAll) {
 
     // Splats: binary only purges in same-screen multiplayer. Port
     // has no multiplayer so we skip — splats fade naturally.
-    (void)SplatEntity::RemoveAll;  // intentional unreference
+    (void)SplatEntity::RemoveAllSplats;  // intentional unreference
 }
 
 void UpdateBombHit(float prevTimer) {
