@@ -8,48 +8,29 @@
 //   ctor (5-param) 0x0015f734  (takes ItemInfo* + texture data)
 //   dtor           0x0015cf50 / 0x0015cfb4 / 0x0015d018
 //
-// A single row in the shop's item list. Extends ScrollingMenuItem with
-// shop-specific fields: item info pointer, thumbnail texture, lock state,
-// alpha and colour data.
+// Vtable overrides (from 0x001ea030):
+//   slot  0 (+0x00)  ~ShopListItem dtor1  0x0015cfb4
+//   slot  1 (+0x04)  ~ShopListItem dtor2  0x0015d018
+//   slot  6 (+0x18)  ShopListItem::Move   0x0015d9fc
+//   slot 11 (+0x2C)  ShopListItem::Draw   0x0015eb00
 //
-// Layout (from ctor 0x0015f9e8 — 0-param):
-//   +0x00..+0x57  ScrollingMenuItem base
-//   +0x258        (ScrollingMenuItem size is ~0x58, ShopListItem starts at 0x258??)
+// Additional fields (appended after ScrollingMenuItem base, ~0x58 bytes):
+//   +0x25C  float  m_NewItemAlpha   >0 -> draw new_item_sml badge; fades from init
+//   +0x260  float  m_SelectedAlpha  >0 -> draw selected_sml highlight ring
+//   +0x264  float  (unknown float)  init 0.0
+//   +0x268  (unknown, size 0xC)
+//   +0x274  SmartPtr<Texture>  m_pIconTex  item icon texture; SetNull in ctor
+//   +0x278  ItemInfo*  m_pItemInfo          ptr to item info; 0 in ctor
+//   +0x27C  byte   m_bOnscreenItem  1 in ctor; 0 = off-screen, Draw early-exits
+//   +0x27D  byte   m_bSelected      0 in ctor; 1 = resets static colour cache
+//   +0x27E  byte   m_bIsNew         0 in ctor; non-zero = draw loading.tex badge
+//   +0x27F  (pad)
+//   +0x280  float  m_CostAlpha      (m_CostAlpha * 255.0f) -> byte alpha for cost/desc text
 //
-// Actually from the ctor: offsets accessed are 0x25c, 0x260, 0x264, 0x274,
-// 0x278, 0x27c, 0x27d, 0x27e, 0x280. This means ShopListItem has a large
-// intermediate (likely the 5-param ctor data), OR the offset is from the
-// ScrollingMenuItem base struct (size 0x58) plus the extended fields.
+// Gap from end of ScrollingMenuItem (~+0x58) to +0x25C = 0x204 bytes.
+// Intermediate layout not yet fully RE'd. Filled with zeros until a full RE pass.
 //
-// From binary offsets in ShopScreen::Update using ShopListItem:
-//   base + 0x278   ItemInfo*   m_pItemInfo    (checked for null, queried for type)
-//   base + 0x264   float       m_Alpha        (set to 0.25 = 0x3e800000 on locked click)
-//   base + 0x260   float       m_field260     (init 0)
-//   base + 0x25c   float       m_field25c     (init 0)
-//   base + 0x274   SmartPtr<Texture> m_TexThumb (thumbnail texture)
-//   base + 0x280   float       m_field280     (init from DAT)
-//   base + 0x27c   byte        m_fieldMenu    (init 1)
-//   base + 0x27d   byte        m_field27d     (init 0)
-//   base + 0x27e   byte        m_field27e     (init 0)
-//
-// Wait — those are very large offsets for a struct. Given ScrollingMenuItem
-// size ~0x58 and ShopListItem extending it, the extra fields start at +0x58.
-// Binary offsets seen are 0x25c, 0x260, etc. which are offsets from the
-// ShopListItem THIS pointer, meaning ShopListItem size is at least 0x284 bytes.
-// This implies there's a LOT more intermediate data (possibly a per-item
-// rendering buffer or name storage). Since ScrollingMenuItem is ~0x58 bytes,
-// the gap from +0x58 to +0x25c (= 0x204 bytes) is unaccounted for.
-//
-// Rather than guessing the intermediate layout, we place the known fields
-// at the correct binary offsets (relative to ShopListItem base) by using
-// padding. This keeps the struct binary-faithful for the pointer arithmetic
-// ShopScreen does via field offsets.
-//
-// Port status: STUB — thumbnail rendering and full field layout pending.
-// The key binary-facing fields (m_pItemInfo at +0x278, m_Alpha at +0x264)
-// are properly positioned via padding.
-//
-// Analysed: 2026-04-25T14:00
+// Analysed: 2026-04-25T20:30
 //
 
 #include "ScrollingMenuItem.h"
@@ -57,6 +38,7 @@
 #include "util/SmartPtr.h"
 
 class ItemInfo;
+class ShopScreen;
 
 class ShopListItem : public ScrollingMenuItem {
 public:
@@ -64,44 +46,60 @@ public:
     ShopListItem();
     ~ShopListItem() override;
 
+    // vtable slot 6 (+0x18): Move override
+    // Binary 0x0015d9fc: sets pos.x/y/z from incoming Vec3.
+    void Move(float x, float y, float z) override {
+        pos.x = x; pos.y = y; pos.z = z;
+    }
+
+    // vtable slot 11 (+0x2C): Draw override -- renders the row
+    // Binary 0x0015eb00, ~450 instructions, 5 Font::DrawString calls.
+    void Draw() override;
+
     // --- Extended fields (binary offsets from ShopListItem* this) ---
     // Padding from end of ScrollingMenuItem (+0x58) to +0x25c = 0x204 bytes.
     // Binary analysis shows intermediate data (text buffers, sub-structs)
     // that are not yet fully RE'd. Filled with zeros until a full RE pass.
     char _pad[0x204];                // +0x58..+0x25b  (unknown intermediate)
 
-    // +0x25c: float field (init 0.0)
-    float m_field25c;
+    // +0x25c: new-item badge alpha (>0 => draw new_item_sml badge)
+    float m_NewItemAlpha;
 
-    // +0x260: float field (init 0.0)
-    float m_field260;
+    // +0x260: selected-ring alpha (>0 => draw selected_sml highlight)
+    float m_SelectedAlpha;
 
-    // +0x264: alpha value (set to 0x3e800000 = 0.25 on locked-item tap)
-    float m_Alpha;
+    // +0x264: flash alpha (set to 0.25 = 0x3e800000 on locked-item tap in binary)
+    // Binary offset confirmed from ShopScreen::ClickedOnShopItem.
+    float m_LockFlashAlpha;
 
-    // +0x268..+0x273: padding
+    // +0x268..+0x273: padding (unknown 0xC bytes -- likely a Vec3 for icon translate)
     char _pad2[0x0c];
 
-    // +0x274: thumbnail texture SmartPtr (4 bytes)
-    SmartPtr<Mortar::Texture> m_TexThumb;
+    // +0x274: item icon texture SmartPtr (4 bytes)
+    SmartPtr<Mortar::Texture> m_pIconTex;
 
     // +0x278: pointer to the ItemInfo for this list entry (null = no item)
     ItemInfo* m_pItemInfo;
 
-    // +0x27c: byte field (init 1)
-    uint8_t m_fieldMenu;
+    // +0x27c: onscreen flag (1 = on-screen; 0 = Draw early-exits)
+    uint8_t m_bOnscreenItem;
 
-    // +0x27d: byte field (init 0)
-    uint8_t m_field27d;
+    // +0x27d: selected flag (1 = resets static colour cache)
+    uint8_t m_bSelected;
 
-    // +0x27e: byte field (init 0)
-    uint8_t m_field27e;
+    // +0x27e: new-item flag (non-zero = draw loading.tex badge stripes)
+    uint8_t m_bIsNew;
 
     // +0x27f: pad
     uint8_t _pad3;
 
-    // +0x280: float field (init from DAT — not yet resolved)
-    float m_field280;
+    // +0x280: cost text alpha (m_CostAlpha * 255.0f clamped -> byte alpha)
+    float m_CostAlpha;
+
+    // Port-only: back-pointer to ShopScreen so Draw can call GetDescriptionTextXPos().
+    // Binary accesses m_TransitionAlpha via GOT; port uses explicit pointer.
+    // Set by ShopScreen when adding the item to the list.
+    ShopScreen* m_pShopScreen;
 };
 
 #endif // FN_SHOP_LIST_ITEM_H
