@@ -73,7 +73,7 @@
 //   - ItemManager stubs always return "unlocked/not-equipped".
 //   - FruitSaveData::CheckDatesHaveChanged called in DojoScreen before push.
 //
-// Analysed: 2026-04-25T14:00
+// Analysed: 2026-04-25T16:30
 //
 
 #include "hud/HUDControl3d.h"
