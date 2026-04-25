@@ -30,6 +30,9 @@ FruitSaveData::FruitSaveData()
     , m_ShakeIntensity(0.0f)
     , m_ShakeDecay(1.0f)
     , m_VersionInfo(0)
+    , m_Coins(0)
+    , m_CoinsTotal(0)
+    , m_LevelStartCoins(0)
 {
     for (int i = 0; i < 4; i++) {
         m_ModeHighScores[i] = 0;
@@ -55,6 +58,14 @@ int FruitSaveData::AddToTotal(const char* /*name*/, uint32_t /*hash*/,
 
 int FruitSaveData::AddToTotal(const char* name, int count) {
     return AddToTotal(name, StringHash(name), count, false, false);
+}
+
+// AddCoins @ 0x0010a3bc
+// Adds delta to m_Coins (+0x20); if delta > 0 also adds to m_CoinsTotal (+0x24).
+// m_LevelStartCoins (+0x28) is not touched here.
+void FruitSaveData::AddCoins(int delta) {
+    m_Coins += delta;
+    if (delta > 0) m_CoinsTotal += delta;
 }
 
 int  FruitSaveData::GetTotal(uint32_t /*hash*/) const      { return 0; }

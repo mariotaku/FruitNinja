@@ -56,6 +56,20 @@ public:
 
     int   m_VersionInfo;                   // +0x1f4
 
+    // --- Coin fields (used by ItemManager) ----------------------------
+    // These are accessed by ItemManager::LoadItemData, BuyItem, SaveItemInfo.
+    // Offsets per docs/structs/items.md §FruitSaveData Integration.
+
+    int   m_Coins;                         // +0x20  current coin balance
+    int   m_CoinsTotal;                    // +0x24  all-time earned coins
+    int   m_LevelStartCoins;              // +0x28  coins at level start (for refund)
+
+    // AddCoins @ 0x0010a3bc — free function in binary, method here for clarity.
+    // Adds delta to m_Coins; if delta > 0 also adds to m_CoinsTotal.
+    // m_LevelStartCoins is NOT modified by AddCoins (only by level-start snapshot).
+    // TODO: persist to disk via SaveItemInfo when save flow is wired.
+    void AddCoins(int delta);
+
     // --- Construction / destruction ------------------------------------
 
     // 0x00129e74 — default ctor; zeros fields + sets documented defaults.

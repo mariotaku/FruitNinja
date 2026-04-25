@@ -27,6 +27,7 @@
 #include "screens/AboutScreen.h"
 #include "screens/GameModeScreen.h"
 #include "screens/ShopScreen.h"
+#include "ItemManager.h"
 #include "screens/LeaderboardScreen.h"
 #include "hud/FruitFactControl.h"
 #include "hud/TutorialControl.h"
@@ -122,7 +123,11 @@ void GameInitialise() {
     // SDL audio backend later is a drop-in change.
     game->pGameSound = new Mortar::GameSound();
 
-    // TODO: Step 5: InitialiseData()
+    // TODO: Step 5: InitialiseData() — full InitialiseData call chain.
+    // Step 14 of InitialiseData: ItemManager::GetInstance() + LoadItemData()
+    // Binary: InitialiseData @ 0x0010b7ca, step 14 of 15.
+    // Called after AchievementManager::LoadAchievementInfo (step 13).
+    ItemManager::GetInstance()->LoadItemData();
 
     // Step 11: PSPParticleManager — load particle XML templates
     {
