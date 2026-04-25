@@ -569,27 +569,20 @@ void Bomb::Draw(Renderer& r) {
     mat = rotMat * mat;                          // mat = R * S
     mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));  // + T in col3
 
-    // PORT QUIRK: disable GL_DEPTH_TEST for the bomb mesh draw only.
-    // The bomb mesh contains overlapping / co-planar triangles (body +
-    // outline/glow layer sharing vertex positions). With depth test on
-    // + GL_LESS (the binary's setting), the later-submitted triangle at
-    // equal depth is rejected, so the first-arrival (brighter) triangle
-    // wins every pixel — visible symptom is a pure-white sphere, since
-    // the outline layer samples bright atlas pixels while the body
-    // samples the dark navy + red X that we WANT to see. Turning depth
-    // test off here forces last-wins draw order within the bomb mesh,
-    // which is what we see in the binary.
+    // Enable face culling for the bomb mesh draw. The bomb model has
+    // duplicated/back-face geometry (body + interior shell sharing
+    // vertex positions); without GL_CULL_FACE the back faces blow
+    // through the front, producing the pure-white sphere artifact.
+    // The model_gallery preview enables CULL_FACE alongside depth
+    // test + GL_LESS and renders correctly. Mesh::DrawGeometry leaves
+    // GL_CULL_FACE off at exit (commit ac66e42), so we enable it just
+    // for this draw and restore on exit.
     //
-    // Binary does NOT do this (confirmed: Bomb::Draw 0x171be8 has no
-    // GL state calls at all — it just builds the matrix and invokes
-    // Model::Draw). The Bada GL driver presumably treated GL_LESS as
-    // GL_LEQUAL in practice, otherwise the shipped binary would hit the
-    // same symptom. We disable depth test instead of swapping to
-    // GL_LEQUAL because scope-limiting the test off to just bomb draws
-    // is simpler than split-state management across Mesh::DrawGeometry.
-    glDisable(GL_DEPTH_TEST);
+    // Depth test stays at the default (GL_LESS, enabled) — same as
+    // the binary, which calls Model::Draw with no GL state changes.
+    glEnable(GL_CULL_FACE);
     modelPtr->Draw(mat);
-    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
 }
 
 void Bomb::Deactivate() {
