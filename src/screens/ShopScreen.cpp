@@ -2,7 +2,7 @@
 // Binary: ShopScreen(DojoScreen*) @ 0x0015cdac, Update @ 0x0015e1f4 (387 lines),
 //         Draw @ 0x0015dd50, LoadContent @ 0x0015cb08.
 //
-// Analysed: 2026-04-25T16:30
+// Analysed: 2026-04-25T18:15
 
 #include "ShopScreen.h"
 #include "DojoScreen.h"
@@ -15,6 +15,7 @@
 #include "hud/ShopListItem.h"
 #include "entities/Fruit.h"
 #include "entities/FruitInfo.h"
+#include "entities/SplatEntity.h"
 #include "entities/ActorManager.h"
 #include "game/ItemInfo.h"
 #include "game/ItemManager.h"
@@ -24,6 +25,7 @@
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
 #include "math/Colour.h"
+#include "math/MathUtil.h"
 #include <cstdlib>
 #include <cstdio>
 
@@ -459,9 +461,10 @@ void ShopScreen::EquipCallback() {
 void ShopScreen::Update(float dt) {
     float prevAlpha = m_TransitionAlpha;
 
-    // Binary: SplatEntity::NumActiveSplats() — if 0, set m_LayerFlagsAlt = 0x40
-    // DIFFERS: SplatEntity::NumActiveSplats() not ported — always treat as 0
-    m_LayerFlagsAlt = 0x40;
+    // Binary: SplatEntity::NumActiveSplats @ 0x0015e212 — only set flag when no splats
+    if (SplatEntity::NumActiveSplats() == 0) {
+        m_LayerFlagsAlt = 0x40;
+    }
 
     // Binary: check if list selection has changed
     if (m_pShopList && m_pShopList->GetItemClosestToZeroIdx() != (int)(intptr_t)m_pSelectedItem) {
@@ -493,9 +496,8 @@ void ShopScreen::Update(float dt) {
         m_TransitionAlpha = newAlpha;
 
         if (newAlpha > ALPHA_IN_DONE) {
-            // Binary: SplatEntity::RemoveAllSplats()
-            // TODO: call when SplatEntity ported (SplatEntity exists but
-            // NumActiveSplats/RemoveAllSplats static wrappers not yet exposed)
+            // Binary: SplatEntity::RemoveAllSplats @ 0x0017eea4
+            SplatEntity::RemoveAllSplats();
 
             // Set transition alpha to 1 and buy delay
             m_TransitionAlpha = 1.0f;
@@ -766,26 +768,276 @@ void ShopScreen::Update(float dt) {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::Draw(float*) @ 0x0015dd50
-// Draws the shop background panel and item detail display.
-// Full GL rendering not yet ported — stub.
+//
+// Top-level control flow (binary-faithful):
+//   if (m_LayerFlags == m_LayerFlagsAlt)  -> Block A (one-shot BG + dialog)
+//   elif (m_AnimFrame > 0)                -> Block B (pulsing ring, every frame)
+//   else                                  -> return
+//
+// NOTE: the binary does NOT use the standard (layerMask & m_LayerFlags) == 0
+// early-return. The `layers` parameter is loaded but discarded. The port
+// replicates the actual guard exactly.
 // ---------------------------------------------------------------------------
-void ShopScreen::Draw(const Vec3& /*hudScale*/, int layerMask) {
-    if ((layerMask & m_LayerFlags) == 0) return;
+void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+    // Static dial_alpha lives at static_block+0x84 in the binary (BSS).
+    // Port uses a function-local static — same lifetime (process lifetime).
+    static float s_DialAlpha = 0.0f;  // static_block+0x84
 
-    // TODO: port full Draw @ 0x0015dd50.
-    // Binary draw structure:
-    //   Block A (when m_LayerFlags == m_LayerFlagsAlt):
-    //     if alpha < 1.0:
-    //       Draw BG_store.tex sliding from right (translate by scroll offset)
-    //       Draw select_item.tex (locked/unlocked indicator ring)
-    //     else:
-    //       Draw BG_store.tex at full size
-    //     Draw item detail: scale by (list.GetWidth+1, list.GetHeight+1, 1)
-    //       Translate to (scrollOffset - 4, -3, 0)
-    //       if unlocked: animate grey->white using m_BuyDelay + SFX alpha
-    //       else:        animate white->grey
-    //       Draw s_TexSelected or s_TexLocked accordingly
-    //   Block B (when m_AnimFrame > 0):
-    //     Sin-wave scale animation on buy button fruit
-    //     Draw with s_TexSelected texture
+    // Static one-time cache for ring scale Vec3 (static_block+0x74 / +0x78 in binary).
+    // binary uses __cxa_guard_acquire; port uses a bool + Vec3 static pair.
+    static bool  s_RingVecInited = false;  // static_block+0x74
+    static Vec3  s_RingVec(0.0f, 0.0f, 1.0f);  // static_block+0x78
+
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // All quads use white full-alpha colour (*(Colour**)(GOT+0x73a4) at runtime).
+    // The binary reads a runtime GOT entry assumed to be {0xFF,0xFF,0xFF,0xFF}.
+    const Colour colourWhite(255, 255, 255, 255);  // DAT_0015e08c = 0x000073a4 GOT entry
+
+    // -----------------------------------------------------------------------
+    // Guard: replicate the binary's structural flag check.
+    // -----------------------------------------------------------------------
+    if (m_LayerFlags == (uint32_t)m_LayerFlagsAlt) {
+        // ===================================================================
+        // Block A — one-shot BG + dialog box (0x0015ded8 .. 0x0015e1cd)
+        // First action: mark Block A as done so next frame falls to Block B.
+        // Binary: this->m_LayerFlags = 1  at 0x0015dee6
+        // ===================================================================
+        m_LayerFlags = 1;
+
+        const float alpha = m_TransitionAlpha;
+
+        // slide_X persists from A1 into A3 (or is set to 145.0f by A2).
+        float slide_X;
+
+        if (alpha < 1.0f) {
+            // ---------------------------------------------------------------
+            // Sub-Block A1 — Sliding BG, two quads  (0x0015def6..0x0015dff9)
+            // ---------------------------------------------------------------
+
+            // --- Left quad: anchored to scroll pos, U=[0.03125..0.597656] ---
+            if (s_TexBGStore.IsValid()) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, s_TexBGStore->m_TexId);
+            }
+
+            // Scale Vec3 = (291, 321, 0)  DAT_0015e064, DAT_0015e068, DAT_0015e05c
+            Matrix44 matA1L = Matrix44::Scale44(291.0f, 321.0f, 0.0f);
+
+            // Translate by (scroll_x, 0, 0) where scroll_x = m_pShopList->pos.x
+            // m_pShopList + 0x8 = pos.x (ScrollingMenu inherits HUDControl3d whose
+            // pos is the Vec3 starting at +0x04; +0x04 = x, +0x08 = y, +0x0c = z —
+            // ambiguity resolved by spec note: field_0x8 = pos.x)
+            float scroll_x = m_pShopList ? m_pShopList->pos.x : 0.0f;
+            matA1L.GlobalTranslate44(scroll_x, 0.0f, 0.0f);
+
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(matA1L);
+            mm.UploadModelViewOnly();
+
+            {
+                Colour c = colourWhite;
+                // DrawQuadSized_GameTask(u0=0.03125f, u1=0.597656f, colour)
+                // v0=0.1875f, v1=0.8125f hardcoded inside helper
+                // DAT_0015e06c = 0.03125f, DAT_0015e070 = 0.597656f
+                // Renderer::DrawQuad(tint, u0, v0, u1, v1)
+                r->DrawQuad(c,
+                    0.03125f, 0.1875f,   // u0, v0
+                    0.597656f, 0.8125f); // u1, v1
+            }
+
+            // --- Right quad: slides from right  ---
+            // slide_X = 145.0 + (1 - alpha) * 190.0 * 1.5
+            // DAT_0015e054=145.0f, DAT_0015e058=190.0f, literal 1.5f
+            slide_X = 145.0f + (1.0f - alpha) * 190.0f * 1.5f;  // DAT_0015e054 / DAT_0015e058
+
+            // Scale Vec3 = (191, 321, 0)  DAT_0015e074, DAT_0015e068, DAT_0015e05c
+            Matrix44 matA1R = Matrix44::Scale44(191.0f, 321.0f, 0.0f);
+            matA1R.GlobalTranslate44(slide_X, 0.0f, 0.0f);
+
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(matA1R);
+            mm.UploadModelViewOnly();
+
+            {
+                Colour c = colourWhite;
+                // DrawQuadSized_GameTask(u0=0.597656f, u1=0.96875f, colour)
+                // v0=0.1875f, v1=0.8125f; u1=0.96875f = 31/32 (literal 0x3f780000)
+                // Renderer::DrawQuad(tint, u0, v0, u1, v1)
+                r->DrawQuad(c,
+                    0.597656f, 0.1875f,  // u0, v0
+                    0.96875f, 0.8125f);  // u1, v1
+            }
+
+            if (s_TexBGStore.IsValid()) {
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
+
+        } else {
+            // ---------------------------------------------------------------
+            // Sub-Block A2 — Static full BG, one quad  (0x0015dffe..0x0015e08f)
+            // Pure scale, no translate — quad renders centered at origin.
+            // ---------------------------------------------------------------
+
+            // Scale Vec3 = (481, 321, 0)  DAT_0015e078, DAT_0015e068, DAT_0015e05c
+            Matrix44 matA2 = Matrix44::Scale44(481.0f, 321.0f, 0.0f);
+            // no GlobalTranslate44 — disasm confirms SetMatrix gets pure scale
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(matA2);
+            mm.UploadModelViewOnly();
+
+            if (s_TexBGStore.IsValid()) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, s_TexBGStore->m_TexId);
+            }
+
+            {
+                Colour c = colourWhite;
+                // DrawQuadSized_GameTask(u0=0.03125f, u1=0.96875f, colour)
+                // DAT_0015e06c=0.03125f; u1=0.96875f literal (0x3f780000)
+                // Renderer::DrawQuad(tint, u0, v0, u1, v1)
+                r->DrawQuad(c,
+                    0.03125f, 0.1875f,  // u0, v0
+                    0.96875f, 0.8125f); // u1, v1
+            }
+
+            if (s_TexBGStore.IsValid()) {
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
+
+            // Binary stores DAT_0015e1dc = 145.0f as slide_X for use in A3.
+            // DAT_0015e1dc = 00 00 11 43 = 145.0f (separate read from DAT_0015e054)
+            slide_X = 145.0f;  // DAT_0015e1dc
+        }
+
+        // -------------------------------------------------------------------
+        // Sub-Block A3 — Dialog box  (0x0015e09e..0x0015e1cd)
+        // Runs after BOTH A1 and A2. slide_X holds left-half resting X.
+        // -------------------------------------------------------------------
+        if (s_TexDialogBox.IsValid()) {
+            // Get dialog box dimensions via vtable GetWidth/GetHeight.
+            // Binary: *(int**)(static_block+0x34)->vtable[5]/[6]
+            float texW = (float)(s_TexDialogBox->m_Width);
+            float texH = (float)(s_TexDialogBox->m_Height);
+
+            // Scale Vec3 = (texW+1, texH+1, 0) * 1.0f (identity multiply)
+            // The decompile multiplies by local_44=1.0f via _Vector3::operator* — no-op.
+            // DAT_0015e1e0 = 0.0f for z
+            Matrix44 matA3 = Matrix44::Scale44(texW + 1.0f, texH + 1.0f, 0.0f);
+
+            // Translate by (slide_X - 4.0, -3.0, 0.0)
+            // 4.0f hardcoded (0x40800000), -3.0f hardcoded (0xc0400000)
+            matA3.GlobalTranslate44(slide_X - 4.0f, -3.0f, 0.0f);
+
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(matA3);
+            mm.UploadModelViewOnly();
+
+            // --- Compute dial_alpha ---
+            // dt = game.dt  (Game+0x38, DAT_0015e1f0=0x7990 GOT offset to Game*)
+            const float dt = game.dt;
+
+            bool is_locked = false;
+            if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
+                is_locked = (m_pSelectedItem->m_pItemInfo->IsLocked() != 0);
+            }
+
+            if (is_locked) {
+                // Fade IN: dial_alpha += dt * 5.0f, clamp to 1.0
+                s_DialAlpha += dt * 5.0f;
+                if (s_DialAlpha > 1.0f) s_DialAlpha = 1.0f;  // literal 1.0f = 0x3f800000
+            } else {
+                // Fade OUT: dial_alpha += dt * (-5.0f), clamp to 0.0
+                s_DialAlpha += dt * (-5.0f);
+                if (s_DialAlpha < 0.0f) s_DialAlpha = 0.0f;  // DAT_0015e1e0 = 0.0f
+            }
+
+            // --- Compute grayscale ---
+            // r_float = 255.0f + (-120.0f) * dial_alpha
+            // DAT_0015e1e8 = 255.0f, DAT_0015e1e4 = -120.0f
+            float r_float = 255.0f + (-120.0f) * s_DialAlpha;  // DAT_0015e1e8, DAT_0015e1e4
+            uint8_t rByte = (r_float > 0.0f) ? (uint8_t)(int)r_float : (uint8_t)0;
+            Colour colDialog(rByte, rByte, rByte, 0xFF);
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, s_TexDialogBox->m_TexId);
+
+            // DrawQuad_GameTask(colour) — full quad, no UV crop
+            r->DrawQuad(colDialog);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+
+        return;
+    }
+
+    // -----------------------------------------------------------------------
+    // Block B — Animated selection ring  (0x0015dd78..0x0015ded4)
+    // Trigger: m_LayerFlags != m_LayerFlagsAlt  AND  m_AnimFrame > 0
+    // -----------------------------------------------------------------------
+    if (m_AnimFrame <= 0) return;
+
+    // --- Compute slide_X (same formula as A1 / identical to Update's list pos) ---
+    float slide_X;
+    {
+        const float alpha = m_TransitionAlpha;
+        if (alpha < 1.0f) {
+            // DAT_0015e054=145.0f, DAT_0015e058=190.0f
+            slide_X = 145.0f + (1.0f - alpha) * 190.0f * 1.5f;
+        } else {
+            slide_X = 145.0f;  // DAT_0015e054
+        }
+    }
+
+    // --- One-time cache init for ring scale Vec3 ---
+    // Binary: __cxa_guard_acquire(static_block+0x74), then init Vec3 at +0x78.
+    // Port: plain bool guard (equivalent lifetime).
+    if (!s_RingVecInited && s_TexSelected.IsValid()) {
+        float w = (float)(s_TexSelected->m_Width);
+        float h = (float)(s_TexSelected->m_Height);
+        // z = 1.0f  (local_44 = 0x3f800000 from binary stack)
+        s_RingVec = Vec3(w + 1.0f, h + 1.0f, 1.0f);
+        s_RingVecInited = true;
+    }
+
+    // --- Apply sin pulse scale ---
+    Vec3 scaleVec = s_RingVec;  // copy from cache (static_block+0x78)
+
+    if (m_AnimFrame < 0x3ffc) {
+        // sin_ratio = SinIdx((uint16_t)m_AnimFrame) / SinIdx(0x3ffc)
+        // Math::SinIdx @ 0x000fc858; port uses SinIdx() from MathUtil.h
+        float sinNum   = SinIdx((uint16_t)m_AnimFrame);
+        float sinDenom = SinIdx((uint16_t)0x3ffc);
+        float sin_ratio = (sinDenom != 0.0f) ? (sinNum / sinDenom) : sinNum;
+        // _Vector3::operator*=(Vec3*, float) — scale Vec3 in-place
+        scaleVec = scaleVec * sin_ratio;
+    }
+
+    // Build scale matrix then translate
+    Matrix44 matB = Matrix44::Scale44(scaleVec.x, scaleVec.y, scaleVec.z);
+    // Translate to (slide_X, 104.0, 0.0)  DAT_0015e060=104.0f, DAT_0015e05c=0.0f
+    matB.GlobalTranslate44(slide_X, 104.0f, 0.0f);  // DAT_0015e060=104.0f
+
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().SetCurrentMatrix(matB);
+    mm.UploadModelViewOnly();
+
+    // SmartPtr copy for ref-count safety (binary: SmartPtr ctor copy of +0x38 slot)
+    // +0x38 in static block = s_TexSelected (selected.tex)
+    if (s_TexSelected.IsValid()) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, s_TexSelected->m_TexId);
+    }
+
+    {
+        Colour c = colourWhite;
+        // DrawQuad_GameTask(colour) — full quad, default UVs
+        r->DrawQuad(c);
+    }
+
+    if (s_TexSelected.IsValid()) {
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 }
