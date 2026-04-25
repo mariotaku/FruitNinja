@@ -106,15 +106,15 @@ static const float FLING_VEL_BASE = 5.0f;           // from decompile literal
 // Static texture storage
 // ---------------------------------------------------------------------------
 
-SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectItem;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexNewItemSml;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexDialogBox;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexLocked;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexLockedStroke;
+SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectItem;
+SmartPtr<Mortar::Texture> ShopScreen::s_TexLoading;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexScratch;
+SmartPtr<Mortar::Texture> ShopScreen::s_TexDialogBox;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexSelected;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectedSml;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexUnknown44;
+SmartPtr<Mortar::Texture> ShopScreen::s_TexLockedStroke;
+SmartPtr<Mortar::Texture> ShopScreen::s_TexNewItemSmlBadge;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexBGStore;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexBackIcon;
 bool ShopScreen::s_bContentLoaded = false;
@@ -139,29 +139,29 @@ static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
 void ShopScreen::LoadContent() {
     if (s_bContentLoaded) return;
 
-    // Slot +0x14: select_item.tex
-    s_TexSelectItem   = Mortar::TextureManager::LoadLocalisedTexture("select_item.tex");
-    // Slot +0x18: new_item_sml.tex
-    s_TexNewItemSml   = Mortar::TextureManager::LoadLocalisedTexture("new_item_sml.tex");
-    // Slot +0x2c: dialog_box_shop.tex
-    s_TexDialogBox    = Mortar::TextureManager::LoadLocalisedTexture("dialog_box_shop.tex");
-    // Slot +0x30: locked.tex
-    s_TexLocked       = Mortar::TextureManager::LoadLocalisedTexture("locked.tex");
-    // Slot +0x34: locked_stroke.tex
-    s_TexLockedStroke = Mortar::TextureManager::LoadLocalisedTexture("locked_stroke.tex");
-    // Slot +0x38: scratch_deviders.tex
-    s_TexScratch      = Mortar::TextureManager::LoadLocalisedTexture("scratch_deviders.tex");
-    // Slot +0x3c: selected.tex
-    s_TexSelected     = Mortar::TextureManager::LoadLocalisedTexture("selected.tex");
-    // Slot +0x40: selected_sml.tex
-    s_TexSelectedSml  = Mortar::TextureManager::LoadLocalisedTexture("selected_sml.tex");
-    // Slot +0x44: (9th tex — not yet identified from binary string list)
-    // DIFFERS: name not resolved; slot left null for now
-    // TODO: resolve DAT_0015cccc string to identify this texture
+    // Corrected slot order from LoadContent @ 0x0015cb08 disasm + string reads.
+    // Slot +0x14: locked.tex          DAT_0015ccb8 -> 0x001bc15e
+    s_TexLocked          = Mortar::TextureManager::LoadLocalisedTexture("locked.tex");
+    // Slot +0x18: select_item.tex     DAT_0015ccbc -> 0x001bc169
+    s_TexSelectItem      = Mortar::TextureManager::LoadLocalisedTexture("select_item.tex");
+    // Slot +0x2c: loading.tex         DAT_0015cca8 -> 0x001bb184
+    s_TexLoading         = Mortar::TextureManager::LoadLocalisedTexture("loading.tex");
+    // Slot +0x30: scratch_deviders.tex  DAT_0015ccb0 -> 0x001bc135
+    s_TexScratch         = Mortar::TextureManager::LoadLocalisedTexture("scratch_deviders.tex");
+    // Slot +0x34: dialog_box_shop.tex  DAT_0015ccb4 -> 0x001bc14a
+    s_TexDialogBox       = Mortar::TextureManager::LoadLocalisedTexture("dialog_box_shop.tex");
+    // Slot +0x38: selected.tex         DAT_0015ccc0 -> 0x001bc179
+    s_TexSelected        = Mortar::TextureManager::LoadLocalisedTexture("selected.tex");
+    // Slot +0x3c: selected_sml.tex     DAT_0015ccc4 -> 0x001bc186
+    s_TexSelectedSml     = Mortar::TextureManager::LoadLocalisedTexture("selected_sml.tex");
+    // Slot +0x40: locked_stroke.tex    DAT_0015ccc8 -> 0x001bc197
+    s_TexLockedStroke    = Mortar::TextureManager::LoadLocalisedTexture("locked_stroke.tex");
+    // Slot +0x44: new_item_sml.tex     DAT_0015cccc -> 0x001bc1a9
+    s_TexNewItemSmlBadge = Mortar::TextureManager::LoadLocalisedTexture("new_item_sml.tex");
     // Slot +0x48: BG_store.tex or BG_store_sml.tex (low-res conditional)
     // Binary: if (LowResBackgrounds()) load BG_store_sml.tex else BG_store.tex
-    // LowResBackgrounds() stub — always false in port
-    s_TexBGStore = Mortar::TextureManager::LoadLocalisedTexture("BG_store.tex");
+    // LowResBackgrounds() stub -- always false in port
+    s_TexBGStore         = Mortar::TextureManager::LoadLocalisedTexture("BG_store.tex");
 
     // Port-only: back-icon for the back/quit button. Binary reads this
     // from a per-task slot (*(GameTask + 0x17c)); port loads back_icon.tex
@@ -177,15 +177,15 @@ void ShopScreen::LoadContent() {
 // ---------------------------------------------------------------------------
 void ShopScreen::UnLoadContent() {
     s_bContentLoaded = false;
-    s_TexSelectItem.SetNull();
-    s_TexNewItemSml.SetNull();
-    s_TexDialogBox.SetNull();
     s_TexLocked.SetNull();
-    s_TexLockedStroke.SetNull();
+    s_TexSelectItem.SetNull();
+    s_TexLoading.SetNull();
     s_TexScratch.SetNull();
+    s_TexDialogBox.SetNull();
     s_TexSelected.SetNull();
     s_TexSelectedSml.SetNull();
-    s_TexUnknown44.SetNull();
+    s_TexLockedStroke.SetNull();
+    s_TexNewItemSmlBadge.SetNull();
     s_TexBGStore.SetNull();
     s_TexBackIcon.SetNull();
 }
@@ -331,6 +331,22 @@ void ShopScreen::NewItem() {
 }
 
 // ---------------------------------------------------------------------------
+// ShopScreen::GetDescriptionTextXPos @ 0x0015c520
+// Returns the X anchor for the description text column.
+// Binary: applies same slide formula as the list, offset by -80.0f.
+// At alpha=1.0: 145.0f - 80.0f = 65.0f (text anchored left of dialog box).
+// At alpha=0.0: 430.0f - 80.0f = 350.0f (text off-screen to the right).
+// DIFFERS: exact formula not fully confirmed from binary; approximated from
+//          the list-slide formula (LIST_SLIDE_OFF=95.0 + -80 offset = 65 rest).
+// ---------------------------------------------------------------------------
+float ShopScreen::GetDescriptionTextXPos() const {
+    // Slide formula matches Block A/B: 145.0 + (1 - alpha) * 190.0 * 1.5
+    // then subtract 80.0f for the text indent inside the dialog box.
+    float slide_X = 145.0f + (1.0f - m_TransitionAlpha) * 190.0f * 1.5f;
+    return slide_X - 80.0f;
+}
+
+// ---------------------------------------------------------------------------
 // ShopScreen::ShrinkBuyButton @ 0x0015c4cc
 // Binary: if m_pEquipButton != null && fruit piece != null && !Fruit::Sliced():
 //   set fruit piece b4=1 (sliced flag), copy velocity from a global Vec3,
@@ -400,7 +416,7 @@ void ShopScreen::ClickedOnShopItem(ShopListItem* item) {
         if (game.pGameSound) {
             game.pGameSound->SFXPlay("equip-locked", 1.0f, 1.0f);
         }
-        item->m_Alpha = 0.25f;   // 0x3e800000 in binary
+        item->m_LockFlashAlpha = 0.25f;   // 0x3e800000 in binary; offset +0x264
     } else {
         if (m_pEquipButton) {
             // Matches ShopScreen::ClickedOnShopItem @ 0x0015d4e4
