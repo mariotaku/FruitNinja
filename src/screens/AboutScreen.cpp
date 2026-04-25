@@ -15,6 +15,7 @@
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
+#include "render/Font.h"
 #include "math/Colour.h"
 #include <cstdio>
 
@@ -414,19 +415,20 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         // Binary draws two strings via Font::DrawString:
         //   1. A Utf8String at draw_base + DAT_0012f6cc (= RTTI garbage in this build)
         //   2. GetVersionString() — the game version number
-        // Both at Y = yDrawn + FONT_TEXT_Y_OFFSET(97) - 10, X from FONT_X(-200).
-        // Font comes from game->field_0x54 (Font* slot).
+        // Both at pos = Vec3(FONT_X(-200), yDrawn + FONT_TEXT_Y_OFFSET(97) - 10, 0).
+        // Font comes from game.pFontMain (+0x54). Scale = 1.0f, maxWidth = FONT_MAX_W(200).
         // Colour = RGB(0x74, 0x5D, 0x3C) = warm brown.
         //
         // Port: skip draw #1 (the Utf8String is RTTI garbage in the Bada binary;
         //   the actual haiku text lives in haikus.tex as a pre-rendered image).
-        //   Draw #2 (version string) uses Font::DrawString when the font is available.
-        //
-        // TODO: hook up game->font slot(s) once font loading is ported.
-        // DIFFERS: font draw for version text is a stub until Font slots are wired.
-        (void)FONT_TEXT_Y_OFFSET;
-        (void)FONT_X;
-        (void)FONT_MAX_W;
+        //   Draw #2 (version string) uses Font::DrawString when pFontMain is available.
+        if (game.pFontMain.IsValid()) {
+            const Vec3 fontPos(FONT_X, yDrawn + FONT_TEXT_Y_OFFSET - 10.0f, 0.0f);
+            const Colour fontColour(0x74, 0x5D, 0x3C, 255);
+            game.pFontMain->DrawString(1.0f, FONT_MAX_W, 0.0f,
+                                       GetVersionString(), fontPos,
+                                       fontColour, Mortar::FONT_ALIGN_LEFT);
+        }
 
         // ================================================================
         // Block B: OFN overlay texture (field_0x98) — null in port
