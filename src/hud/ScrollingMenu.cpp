@@ -63,6 +63,25 @@ ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
     return m_Items[(size_t)idx];
 }
 
+// ---------------------------------------------------------------------------
+// ScrollingMenu::Draw @ 0x0015af98
+// Signature: void ScrollingMenu::Draw(float* hudScale)
+// Size: 12 instructions (~50 bytes)
+//
+// Pure iterator -- calls vtable+0x2C (Draw()) on every item in m_Items.
+// No scissor, no clipping, no per-item position update. Positioning is done
+// by ScrollingMenu::Update (not yet ported). Items use the pos.x/y/z set by
+// Update via Move(). With the Update stub, items are at their initial (0,0,0)
+// positions until the full Update is ported.
+// ---------------------------------------------------------------------------
+void ScrollingMenu::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+    // Binary: for (auto it = m_Items.begin(); it != m_Items.end(); ++it)
+    //             (*it)->vtable[+0x2C]();   // Draw()
+    for (ScrollingMenuItem* item : m_Items) {
+        item->Draw();
+    }
+}
+
 void ScrollingMenu::DestroyList() {
     for (ScrollingMenuItem* item : m_Items) {
         delete item;
