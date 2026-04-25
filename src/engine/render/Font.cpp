@@ -182,6 +182,18 @@ void Font::DrawString(float scale, float maxWidth, float z,
         startX -= MeasureWidth(scale, text);
     }
 
+    // Vertical alignment: glyphs are positioned with cursorY as the top of
+    // each line (yoffset is subtracted later). FONT_ALIGN_MIDDLE shifts Y up
+    // by half-line; FONT_ALIGN_BOTTOM shifts up by full line. Without these,
+    // text drawn at a row's basePos sits below the row visually.
+    const float lineH = (float)m_LineHeight * finalScale;
+    if (alignment & FONT_ALIGN_MIDDLE) {
+        startY += lineH * 0.5f;
+    }
+    if (alignment & FONT_ALIGN_BOTTOM) {
+        startY += lineH;
+    }
+
     // Batch vertices per page
     std::vector<std::vector<QUADCUSTOMVERTEX>> pageVerts(m_PageCount);
 
@@ -305,6 +317,18 @@ void Font::DrawString(float scale, float maxWidth, float z,
         glDisable(GL_LIGHTING);
         glColor4ub(255, 255, 255, 255);
 
+        // Glyph atlases are alpha-keyed; without GL_BLEND the entire quad
+        // renders as the atlas's RGB and the glyph mask is ignored. The
+        // HUD pipeline doesn't enable blend by default, so do it here.
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        // Text sits in the same Z plane as HUD elements; depth-test against
+        // anything already there would reject equal-depth fragments under
+        // GL_LESS. Disable depth test for the glyph batch so text always
+        // overlays. (HUD::Draw already has depth-write off.)
+        glDisable(GL_DEPTH_TEST);
+
         int stride = sizeof(QUADCUSTOMVERTEX);
         QUADCUSTOMVERTEX* verts = pageVerts[pg].data();
         int vertCount = (int)pageVerts[pg].size();
@@ -326,6 +350,9 @@ void Font::DrawString(float scale, float maxWidth, float z,
         if (pg < (int)m_PageTextures.size() && m_PageTextures[pg].IsValid()) {
             m_PageTextures[pg]->UnSet();
         }
+
+        // Restore depth test for downstream HUD draws that expect it on.
+        glEnable(GL_DEPTH_TEST);
     }
 }
 
