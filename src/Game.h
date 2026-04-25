@@ -8,6 +8,8 @@
 // (0x608 bytes). For the port, gameplay fields are kept here for convenience.
 //
 
+// Analysed: 2026-04-25T12:00
+
 #include <SDL.h>
 #include <string>
 #include <cstdint>
@@ -16,6 +18,8 @@
 #include "render/Renderer.h"
 #include "input/InputManager.h"
 #include "platform/SDLInputTranslator.h"
+#include "render/Font.h"
+#include "util/SmartPtr.h"
 
 class HUD;
 class ActorManager;
@@ -59,7 +63,28 @@ struct Game : public Mortar::MortarGame {
     bool isFirstPlay2;             // +0x45
     FruitCamera* pCamera;             // +0x48
     FruitSaveData* pSaveData;         // +0x4C: persistent save state (stub)
-    // +0x50..+0x80: Font* slots (TODO)
+
+    // Font slots +0x50..+0x80 (g_GameData layout, 11 slots)
+    // Loaded in GameInitialise; destroyed in GameDestroy.
+    // See docs/engine/font.md for full per-slot spec.
+    SmartPtr<Mortar::Font> pFontReserved0;    // +0x50: unused (always null)
+    // DIFFERS: binary loads HD font at +0x54 when DisplayManager::ShouldUseHDFonts().
+    // Port always loads SD path (font_fruit_ninja.fnt) — HD asset-check not replicated.
+    SmartPtr<Mortar::Font> pFontMain;         // +0x54: fonts/font_fruit_ninja.fnt
+    // DIFFERS: binary loads HD font at +0x58 when HD flag set.
+    // Port always loads SD path (fruit_ninja_numbers.fnt).
+    SmartPtr<Mortar::Font> pFontNumbers;      // +0x58: fonts/fruit_ninja_numbers.fnt
+    SmartPtr<Mortar::Font> pFontReserved1;    // +0x5C: unused (always null; CoinCounter::Draw checks)
+    uint32_t _gap_0x60;                       // +0x60: gap (not a Font slot per GameDestroy)
+    SmartPtr<Mortar::Font> pFontReserved2;    // +0x64: unused (always null)
+    SmartPtr<Mortar::Font> pFontGreen;        // +0x68: fonts/fruit_ninja_numbers_green.fnt
+    SmartPtr<Mortar::Font> pFontArcade;       // +0x6C: fonts/arcade_results_numbers.fnt
+    SmartPtr<Mortar::Font> pFontGold;         // +0x70: fonts/gold_numbers.fnt (File::Exists guarded; absent in shipped assets)
+    SmartPtr<Mortar::Font> pFontSilver;       // +0x74: fonts/silver_numbers.fnt (File::Exists guarded; absent)
+    SmartPtr<Mortar::Font> pFontBronze;       // +0x78: fonts/bronze_numbers.fnt (File::Exists guarded; absent)
+    SmartPtr<Mortar::Font> pFontArcadeAlias;  // +0x7C: non-owning alias of pFontArcade
+    SmartPtr<Mortar::Font> pFontBlue2;        // +0x80: fonts/fruit_ninja_numbers_blue2.fnt
+
     float field_0x88;              // +0x88
     Vec3 worldPos;                 // +0x90: light direction in GameDraw
     MainScreen* mainScreen;        // +0x160: pMainScreen

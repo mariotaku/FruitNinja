@@ -164,6 +164,8 @@ global**, not the Game singleton's own fields:
 
 ## Game Data Global (g_GameData, size = 0x608)
 
+<!-- Analysed: 2026-04-25T12:00 -->
+
 This is a **flat C-style struct** (no vtable, no class), holding all gameplay state.
 Zeroed to 0 by `GamePreInitialise` via `CpuFill8(ptr, 0, 0x608)`.
 Accessed from GOT-relative pointer in nearly every game function.
@@ -204,19 +206,19 @@ Accessed from GOT-relative pointer in nearly every game function.
 | +0x46 | 2 | | (padding) | |
 | +0x48 | 4 | FruitCamera* | pCamera | GameInitialise: `operator_new(0x16c)`; GameDestroy: vtable dtor + null |
 | +0x4C | 4 | FruitSaveData* | pSaveData | GameUpdate: `FruitSaveData::Update(*(+0x4c),rawDt,*(+0x3c))`; GameDestroy: dtor + delete + null |
-| +0x50 | 4 | Font* | pFont0 | GameDestroy: dtor + delete + null |
-| +0x54 | 4 | Font* | pFont1 | GameInitialise: first font loaded; GameDestroy: dtor + delete |
-| +0x58 | 4 | Font* | pFont2 | GameDestroy: dtor + delete + null |
-| +0x5C | 4 | Font* | pFont3 | GameDestroy: dtor + delete + null |
-| +0x60 | 4 | Font* | pFont4 | |
-| +0x64 | 4 | Font* | pFont5 | GameDestroy: dtor + delete (noted as +100 decimal) |
-| +0x68 | 4 | Font* | pFontOptional | GameInitialise/GameDestroy: separate font slot |
-| +0x6C | 4 | Font* | pFontDefault | GameInitialise: loaded as fallback; +0x70..+0x7C set = +0x6C |
-| +0x70 | 4 | Font* | pFontRegion0 | GameInitialise: optional CJK font (File::Exists check) |
-| +0x74 | 4 | Font* | pFontRegion1 | GameInitialise: optional CJK font |
-| +0x78 | 4 | Font* | pFontRegion2 | GameInitialise: optional CJK font |
-| +0x7C | 4 | Font* | pFontRegion3 | |
-| +0x80 | 4 | Font* | pFont6 | GameInitialise/GameDestroy: separate slot |
+| +0x50 | 4 | Font* | pFontReserved0 | Reserved — always null. Zeroed in GameInitialise; null-checked delete in GameDestroy. No Font::Load targets it. |
+| +0x54 | 4 | Font* | pFontMain | GameInitialise: `fonts/font_fruit_ninja.fnt` (SD) / `fonts/font_fruit_ninja_HD.fnt` (HD). Used by most text in AboutScreen, ScoreControl, FruitFactControl, LeaderboardItem, etc. |
+| +0x58 | 4 | Font* | pFontNumbers | GameInitialise: `fonts/fruit_ninja_numbers.fnt` (SD) / `fonts/fruit_ninja_numbers_HD.fnt` (HD). Guarded (only loaded if null). Used by ScoreControl, TimeControl, GameOverScreen. |
+| +0x5C | 4 | Font* | pFontReserved1 | Reserved — always null. Zeroed; null-checked delete in GameDestroy. CoinCounter::Draw reads it but pointer is always null. |
+| +0x60 | 4 | (gap) | — | Not a Font slot. Not in GameDestroy deletion sequence. |
+| +0x64 | 4 | Font* | pFontReserved2 | Reserved — always null. Zeroed; deleted as `*(g_GameData+100)` in GameDestroy. No loader found. |
+| +0x68 | 4 | Font* | pFontGreen | GameInitialise: `fonts/fruit_ninja_numbers_green.fnt`. Guarded (only if null). Used by unknown callers. |
+| +0x6C | 4 | Font* | pFontArcade | GameInitialise: `fonts/arcade_results_numbers.fnt`. Guarded (only if null). Aliased to +0x70..+0x7C as fallback for medal fonts. |
+| +0x70 | 4 | Font* | pFontGold | GameInitialise: `fonts/gold_numbers.fnt` via File::Exists. Not present in shipped assets — always null at runtime; initialized to alias of +0x6C. |
+| +0x74 | 4 | Font* | pFontSilver | GameInitialise: `fonts/silver_numbers.fnt` via File::Exists. Not present — always null at runtime; initialized to alias of +0x6C. |
+| +0x78 | 4 | Font* | pFontBronze | GameInitialise: `fonts/bronze_numbers.fnt` via File::Exists. Not present — always null at runtime; initialized to alias of +0x6C. |
+| +0x7C | 4 | Font* | pFontArcadeAlias | Set equal to +0x6C value (non-owning alias). GameDestroy skips delete if ptr == +0x6C. |
+| +0x80 | 4 | Font* | pFontBlue2 | GameInitialise: `fonts/fruit_ninja_numbers_blue2.fnt`. Guarded (only if null). Used by ScoreControl multiplier, ScoreMultiplyerBoard, BonusScreen. |
 | +0x84 | 1 | | (gap) | |
 | +0x85 | 1 | byte | field_0x85 | InitialiseData: cleared to 0 |
 | +0x86 | 2 | | (gap) | |
