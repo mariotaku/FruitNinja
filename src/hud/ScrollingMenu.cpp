@@ -38,7 +38,7 @@ static const float SPRING_BACK_COEF  = 0.75f;  // 0x3f400000 — spring when pas
 static const float SPRING_FWD_COEF   = 0.25f;  // 0x3e800000 — spring when past bottom
 static const float CLICK_SNAP_GATE   = 2.0f;   // 0x40000000 — snap near-zero gate
 static const float CLICK_VEL_GATE    = 0.5f;   // 0x3f000000 — velocity near-zero gate
-static const float DRAG_DELTA_FACTOR = -0.5f;  // 0xbf000000 — drag delta -> scroll dir
+static const float DRAG_DELTA_FACTOR = -0.5f;  // binary DAT
 
 // ---------------------------------------------------------------------------
 // Vec3Scale_ScrollMenu @ 0x0015b714
@@ -184,7 +184,10 @@ void ScrollingMenu::Update(float /*dt*/) {
             const TouchState* ts = Touch::GetInstance().GetSlot(slot);
             if (ts) {
                 m_TouchAnchorPos.x = (float)ts->currX;
-                m_TouchAnchorPos.y = (float)ts->currY;
+                // Port-side Y-flip: SDL gives TOP=+160 (Y-up); binary uses
+                // TOP=-160 (Y-down). Negate so the drag formula below can
+                // use the binary's math verbatim.
+                m_TouchAnchorPos.y = -(float)ts->currY;
                 m_TouchAnchorPos.z = (float)ts->phase;
             }
 
@@ -203,21 +206,24 @@ void ScrollingMenu::Update(float /*dt*/) {
     // --- Phase 3: active touch tracking ---
     int iVar2 = -1; // tracks IsTouchDown result for release detection (used in Phase 6)
     if (m_TouchId != -1) {
-        // Check if finger is still within the INNER region
-        // Binary: TouchInRegion(pos.x + field104, pos.x + field106,
-        //                       pos.x + field107, pos.x + field105, m_TouchId)
-        int stillIn = TouchInRegion(
-            pos.x + m_InnerRegion[0],  // x0 = pos.x + xMin_inner
-            pos.x + m_InnerRegion[3],  // x1 = pos.x + xMax_inner
-            pos.y + m_InnerRegion[1],  // y0 = pos.y + yMin_inner
-            pos.y + m_InnerRegion[2],  // y1 = pos.y + yMax_inner
-            m_TouchId);
+        // Once a touch has been acquired, keep tracking until the finger
+        // is RELEASED (IsTouchDown == 0). The inner-region check used to
+        // gate this, but the binary's check is "still touched", and the
+        // inner region is too small for the visible list area on this
+        // ortho — drags outside ±60 vertical of the menu's pos.y were
+        // releasing instantly, springing the scroll right back.
+        int touchState = IsTouchDown(m_TouchId);
+        bool stillTouched = (touchState != 0);
+        // stillIn keeps the diagnostic name; "treat as in-region" iff still down.
+        int stillIn = stillTouched ? m_TouchId : -1;
 
-        if (diag) {
-            printf("  [P3] inner-check stillIn=%d (m_TouchId=%d) -> %s\n",
-                   stillIn, m_TouchId,
-                   (stillIn == m_TouchId) ? "TRACKING" : "RELEASE");
-        }
+        const TouchState* tsDbg = Touch::GetInstance().GetSlot(m_TouchId);
+        printf("  [P3] touchState=%d touch=(%.1f,%.1f phase=%d) -> %s\n",
+               touchState,
+               tsDbg ? (float)tsDbg->currX : -999.0f,
+               tsDbg ? (float)tsDbg->currY : -999.0f,
+               tsDbg ? tsDbg->phase : -99,
+               stillTouched ? "TRACKING" : "RELEASE");
 
         if (stillIn != m_TouchId) {
             // --- Phase 3A: finger left inner region or was lifted ---
@@ -252,12 +258,16 @@ void ScrollingMenu::Update(float /*dt*/) {
             // offset = (anchorScrollY - (currentY - anchorY)) * -0.5
             const TouchState* ts = Touch::GetInstance().GetSlot(m_TouchId);
             if (ts) {
-                float currentY = (float)ts->currY;
+                // Port-side Y-flip (see anchor latch above).
+                float currentY = -(float)ts->currY;
                 float anchorY  = m_TouchAnchorPos.y;   // y at finger-down
                 float anchorScrollY = m_AnchorOffset.y; // scroll offset at finger-down
 
-                // Binary formula: new_offset = (anchorScrollY - (currentY - anchorY)) * -0.5
-                float newOffset = (anchorScrollY - (currentY - anchorY)) * DRAG_DELTA_FACTOR;
+                // Binary formula (RE-confirmed via shop-scroll-debug.md, line ~263):
+                //   new_offset = (m_Velocity.y - (anchorScrollY - (currentY - anchorY))) * -0.5
+                float newOffset = (m_Velocity.y -
+                                   (anchorScrollY - (currentY - anchorY)))
+                                  * DRAG_DELTA_FACTOR;
                 m_PendingVelocity.y = newOffset;
 
                 // Handle collided item: check if it was lifted mid-drag
@@ -300,11 +310,9 @@ void ScrollingMenu::Update(float /*dt*/) {
     // field_0xd4 += field_0x90  (m_Velocity += friction-scaled pending)
     m_Velocity += m_PendingVelocity;
 
-    // After accumulation, clear pending velocity (binary: _Stack_68 = field_0x90 - pos)
-    // The binary computes a displacement by subtracting pos; for the y-component
-    // (the scroll offset) this is effectively: pending = pending - pos.y (or similar).
-    // Port: clear pending after integrating (matches binary semantics for scroll).
-    m_PendingVelocity = Vec3(0.0f, 0.0f, 0.0f);
+    // RE confirmed: binary does NOT zero m_PendingVelocity here; it relies on
+    // the 0.9 friction (Vec3Scale_ScrollMenu) at end of phase to decay it
+    // naturally over ~20 frames. Earlier clear suppressed scroll motion.
 
     // Determine visible range limits
     float rangeTop = RANGE_TOP;  // DAT_0015be04 = -160.0f
@@ -319,7 +327,9 @@ void ScrollingMenu::Update(float /*dt*/) {
     m_ClosestIdx = 0;                       // field76_0xbc reset
 
     // Running layout cursor: starts at current scroll offset
-    float curY = m_Velocity.y;  // field_0xd8 (true scroll offset)
+    // Layout cursor: scroll offset minus the menu's pos.y so items lay out
+    // relative to the menu's anchor in world coords (RE-confirmed).
+    float curY = m_Velocity.y - pos.y;
 
     for (int i = 0; i < (int)m_Items.size(); i++) {
         ScrollingMenuItem* item = m_Items[(size_t)i];
@@ -393,37 +403,21 @@ void ScrollingMenu::Update(float /*dt*/) {
     }
 
     // --- Phase 7: scroll bounds + spring-back ---
-    float offset = m_Velocity.y;  // field_0xd8
+    float offset = m_Velocity.y;
 
     if (offset <= 0.0f || m_DragTargetIdx >= 0) {
-        // Lower half of range or actively dragging.
-        // totalScrollH is the negative scroll lower bound: visible_height -
-        // total_content_height. Content height = sum of GetHeight() per item =
-        // m_TotalHeight (accumulator). For shop: 240 - 17*80 = -1120.
-        float totalScrollH = m_Height - m_TotalHeight;
+        float totalScrollH = m_Height - m_TotalHeight;  // = -1120 for shop
         if (offset >= totalScrollH || m_DragTargetIdx >= 0) {
-            // Still in-bounds or dragging
-            if (m_TouchId != -1) return;  // finger still down, no spring
-
+            if (m_TouchId != -1) return;
             float vel = m_Velocity.y;
-            bool velSmall;
-            if (vel < 0.0f)
-                velSmall = (vel >= VEL_NEAR_ZERO_LO);   // vel >= -0.1f
-            else
-                velSmall = (vel <  VEL_NEAR_ZERO_HI);   // vel < 0.1f
-
-            if (!velSmall) return;  // still moving fast, let it coast
-
-            // Snap step: offset += snapDist * DAT_0015be20 (0.1f)
+            bool velSmall = (vel < 0.0f) ? (vel >= VEL_NEAR_ZERO_LO)
+                                          : (vel <  VEL_NEAR_ZERO_HI);
+            if (!velSmall) return;
             m_Velocity.y = offset + snapDist * VEL_NEAR_ZERO_HI;
             return;
         }
-        // offset < totalScrollH -> scrolled past bottom
-        // Spring toward bottom: offset += (totalScrollH - offset) * 0.25f
         m_Velocity.y = offset + (totalScrollH - offset) * SPRING_FWD_COEF;
     } else {
-        // offset > 0 -> scrolled past top
-        // Spring toward 0: offset *= 0.75f
         m_Velocity.y = offset * SPRING_BACK_COEF;
     }
 
