@@ -141,15 +141,14 @@ SmartPtr<Font> Font::Load(const char* path) {
     return SmartPtr<Font>(font);
 }
 
-// MeasureWidth returns the text width in normalized atlas-pixel units
-// (i.e. xadvance / m_ScaleW per glyph). This matches the vertex coordinate
-// space used by DrawString below: glyph positions are stored as
-// (atlas_pixel / scaleW/H) and the MatrixStack scale brings them to world
-// units. Callers that want a world-unit width must multiply by scale themselves.
+// MeasureWidth returns the text width in lineHeight-normalized units
+// (i.e. xadvance / m_LineHeight per glyph). This matches the vertex
+// coordinate space used by DrawString below. Callers that want a world-unit
+// width must multiply by scale themselves.
 float Font::MeasureWidth(float /*scale*/, const char* text) const {
     float width = 0;
     float maxWidth = 0;
-    const float invW = (m_ScaleW > 0) ? (1.0f / (float)m_ScaleW) : 1.0f;
+    const float invLH = (m_LineHeight > 0) ? (1.0f / (float)m_LineHeight) : 1.0f;
     for (const char* p = text; *p; p++) {
         if (*p == '\n') {
             if (width > maxWidth) maxWidth = width;
@@ -164,7 +163,7 @@ float Font::MeasureWidth(float /*scale*/, const char* text) const {
         }
         uint8_t ch = (uint8_t)*p;
         if (ch < 256) {
-            width += (float)m_Glyphs[ch].xadvance * invW;
+            width += (float)m_Glyphs[ch].xadvance * invLH;
         }
     }
     if (width > maxWidth) maxWidth = width;
@@ -202,10 +201,21 @@ void Font::DrawString(float scale, float maxWidth, float z,
                       const Colour& colour, int alignment) {
     if (!text || !*text) return;
 
-    const float invW = (m_ScaleW > 0) ? (1.0f / (float)m_ScaleW) : 1.0f;
-    const float invH = (m_ScaleH > 0) ? (1.0f / (float)m_ScaleH) : 1.0f;
-    // Normalized line height (atlas pixels / scaleH)
-    const float normLineH = (float)m_LineHeight * invH;
+    // Vertex metrics are stored in lineHeight-normalized space:
+    //   stored_metric = atlas_pixels / lineHeight
+    // MatrixStack::Scale(scale, scale, 1) then multiplies by `scale` (em size in
+    // world units), giving:
+    //   world_size = (atlas_px / lineHeight) * scale
+    // Worked example: 16-px glyph, scale=25, lineHeight=28 -> 14.3 world units.
+    //
+    // UVs use scaleW/scaleH (atlas-pixel coords / atlas dimensions).
+    // Earlier port versions divided metrics by scaleW/scaleH too (9x too small) —
+    // that's why text rendered as thin horizontal slivers.
+    const float invW  = (m_ScaleW      > 0) ? (1.0f / (float)m_ScaleW)      : 1.0f;
+    const float invH  = (m_ScaleH      > 0) ? (1.0f / (float)m_ScaleH)      : 1.0f;
+    const float invLH = (m_LineHeight  > 0) ? (1.0f / (float)m_LineHeight)  : 1.0f;
+    // In lineHeight-normalized vertex space, one line = 1.0 unit exactly.
+    const float normLineH = 1.0f;
 
     // --- Horizontal alignment: cursor starts shifted left by text width ---
     // MeasureWidth now returns normalized units.
@@ -272,7 +282,7 @@ void Font::DrawString(float scale, float maxWidth, float z,
             float wordW = 0;
             for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
                 uint8_t wch = (uint8_t)*wp;
-                if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invW;
+                if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
             }
             if (cursorX - startX + wordW > normMax) {
                 cursorX = startX;
@@ -285,29 +295,27 @@ void Font::DrawString(float scale, float maxWidth, float z,
         if (ch >= 256) continue;
         const FontGlyph& g = m_Glyphs[ch];
         if (g.width == 0 && g.height == 0) {
-            cursorX += (float)g.xadvance * invW;
+            cursorX += (float)g.xadvance * invLH;
             continue;
         }
 
         if (g.page < 0 || g.page >= m_PageCount) {
-            cursorX += (float)g.xadvance * invW;
+            cursorX += (float)g.xadvance * invLH;
             continue;
         }
 
-        // Build centered quad in normalized atlas-pixel units.
-        // Binary vertex layout (docs/engine/font.md -- Vertex Geometry section):
-        //   vertex[0] = (cx - hw, cy - hh)  top-left
-        //   vertex[1] = (cx - hw, cy + hh)  bottom-left
-        //   vertex[2] = (cx + hw, cy - hh)  top-right
-        //   vertex[3] = (cx + hw, cy + hh)  bottom-right
-        // The MatrixStack::Scale(scale,scale,1) applied above turns these
-        // normalized units into world-space sizes.
+        // Build centered quad in lineHeight-normalized space.
+        // Binary stores all metric values (width, height, xoffset, yoffset,
+        // xadvance) as atlas_pixels / lineHeight. After MatrixStack::Scale
+        // (scale, scale, 1) world_size = (atlas_px / lineHeight) * scale,
+        // giving glyphs at em pixel sizes.
         //
+        // UVs use scaleW / scaleH (atlas-pixel coords / atlas dimensions).
         // z = DAT_00199a94 = 0.0f for all vertices (binary constant).
-        const float cx = cursorX + ((float)g.xoffset + (float)g.width  * 0.5f) * invW;
-        const float cy = cursorY - ((float)g.yoffset + (float)g.height * 0.5f) * invH;
-        const float hw = (float)g.width  * 0.5f * invW;
-        const float hh = (float)g.height * 0.5f * invH;
+        const float cx = cursorX + ((float)g.xoffset + (float)g.width  * 0.5f) * invLH;
+        const float cy = cursorY - ((float)g.yoffset + (float)g.height * 0.5f) * invLH;
+        const float hw = (float)g.width  * 0.5f * invLH;
+        const float hh = (float)g.height * 0.5f * invLH;
 
         const float u0 = (float)g.x * invW;
         const float v0 = (float)g.y * invH;
@@ -329,7 +337,7 @@ void Font::DrawString(float scale, float maxWidth, float z,
             pageVerts[g.page].push_back(v[vi]);
         }
 
-        cursorX += (float)g.xadvance * invW;
+        cursorX += (float)g.xadvance * invLH;
     }
 
     // --- MatrixStack push / scale / translate / draw / pop ---
