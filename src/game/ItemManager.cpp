@@ -61,10 +61,11 @@ ItemManager* ItemManager::GetInstance() {
 }
 
 // -----------------------------------------------------------------------
-// GetItemSavePath — binary: returns "Data/xml/ItemSave.xml" (GOT str)
+// GetItemSavePath @ 0x00111fd8 — binary: returns "ItemSave.xml" (rodata 0x001b9e40)
+// DIFFERS from original: port had "Data/xml/ItemSave.xml" — fixed to match binary.
 // -----------------------------------------------------------------------
 const char* ItemManager::GetItemSavePath() const {
-    return "Data/xml/ItemSave.xml";
+    return "ItemSave.xml";
 }
 
 // -----------------------------------------------------------------------
@@ -144,9 +145,10 @@ void ItemManager::LoadItemData() {
     }
 
     // Phase 2: Load save state from ItemSave.xml
+    // Binary: GetItemSavePath() returns "ItemSave.xml" (flat, no subdir).
+    // Port: prepend data_dir so the file lands next to FruitySave.xml.
     const char* savePath = GetItemSavePath();
-    // Build full path relative to data_dir
-    std::string saveFullPath = game->data_dir + "/" + (savePath + 5);  // strip "Data/"
+    std::string saveFullPath = game->data_dir + "/" + savePath;
     tinyxml2::XMLDocument save;
     tinyxml2::XMLError saveErr = save.LoadFile(saveFullPath.c_str());
 
@@ -372,12 +374,10 @@ void ItemManager::SaveItemInfo() {
 
     doc.InsertEndChild(root);
 
-    // Build full save path
+    // Build full save path — binary uses flat "ItemSave.xml" (no subdir).
     const char* savePath = GetItemSavePath();
-    std::string saveFullPath = game->data_dir + "/" + (savePath + 5);  // strip "Data/"
-    // TODO: save to disk — persistence is out of scope per spec; in-memory only for now.
-    // doc.SaveFile(saveFullPath.c_str());
-    (void)saveFullPath;
+    std::string saveFullPath = game->data_dir + "/" + savePath;
+    doc.SaveFile(saveFullPath.c_str());  // tinyxml2::XMLDocument::SaveFile uses fopen directly
 }
 
 // -----------------------------------------------------------------------
