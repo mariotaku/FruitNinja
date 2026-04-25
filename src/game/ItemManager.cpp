@@ -14,6 +14,7 @@
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/MenuBackground.h"
+#include "entities/SlashEntity.h"
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstdlib>
@@ -257,10 +258,12 @@ void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
         // if item == NULL: SlashEntity::InitModColours + SetModScales
         // else: virtual call item->SetEquipped()
         if (item == nullptr) {
-            // TODO: SlashEntity::InitModColours(slash)
-            // TODO: SlashEntity::SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f)
+            // Binary: SlashEntity::InitModColours(slash) + SetModScales(defaults)
+            // slash is obtained from (*(*this))->GetSlashEntity() — port uses g_pSlashEntity directly.
+            SlashEntity::InitModColours();
+            SlashEntity::SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f);
         } else {
-            item->SetEquipped();  // virtual call
+            item->SetEquipped();  // virtual call -> SlashModInfo::SetEquipped @ 0x00112430
         }
     }
     // DONE:

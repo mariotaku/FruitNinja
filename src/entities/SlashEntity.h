@@ -27,6 +27,7 @@
 //
 
 #include "math/Vec3.h"
+#include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
@@ -138,9 +139,59 @@ private:
     // @ 0x17D2E4 which writes `m_TrailEmitter->m_Pos = this->base.pos`,
     // where base.pos is the raw touch input.
     Vec3 m_RawTouchPos;
+
+public:
+    // -----------------------------------------------------------------------
+    // Blade modifier (SlashModInfo) apply functions.
+    // Called by SlashModInfo::SetEquipped / ItemManager::SetEquippedItem.
+    // Binary: SetModColours @ 0x0017ca0c (thunk 0x000f870c),
+    //         InitModColours @ 0x0017cc38 (thunk 0x000f77b8),
+    //         SetModScales   @ 0x0017b328 (thunk 0x000fada0).
+    // All operate on the global g_pSlashEntity singleton (double-dereferenced
+    // through GOT in binary). Port: operate on g_pSlashEntity directly.
+    // -----------------------------------------------------------------------
+
+    // SetModColours @ 0x0017ca0c
+    // Copies colour palette, loads blade overlay texture, resolves particle
+    // emitter hashes, and (if game active) notifies type-3 actors via
+    // ColoursChanged(). Full RE in docs/structs/items.md §SetModColours.
+    // TODO: implement when particle manager + actor iterate + blade overlay
+    //       texture loading are all wired.
+    static void SetModColours(
+        const Colour*  colours,          // param_1 -- Colour array (NULL if count==0)
+        int            colourCount,      // param_2 -- number of entries in colours[]
+        int            colourType,       // param_3 -- NONE=0, PER_SLASH=1, etc.
+        float          lifeScale,        // param_4 -- particle life scale factor
+        const char*    particlePath,     // param_5 -- trail emitter name (e.g. "tex_sparkle")
+        const char*    textureName2,     // param_6 -- blade overlay texture name
+        bool           directional,      // param_7 -- directional particles flag
+        const char*    contactParticle,  // param_8 -- contact particle emitter name
+        const char*    particle2         // param_9 -- second particle emitter name
+    );
+
+    // InitModColours @ 0x0017cc38
+    // Resets all mod-colour state to defaults: clears palette, nulls texture
+    // SmartPtr, resets particle hashes and emitter-type flags.
+    // Binary: `this` param is ignored -- accesses global singleton directly.
+    // TODO: implement when blade colour palette / overlay texture wiring lands.
+    static void InitModColours();
+
+    // SetModScales @ 0x0017b328
+    // Writes trail thickness/length/UV scale fields into the global singleton.
+    // Default no-mod call: SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f).
+    // TODO: implement when SlashEntity internal scale fields are modelled.
+    static void SetModScales(
+        float startThick,  // param_1 -- start (head) thickness scale
+        float endThick,    // param_2 -- end (tail) thickness scale
+        float scaleLen,    // param_3 -- trail length scale
+        float uvLen,       // param_4 -- UV length scale
+        bool  flipUD,      // param_5 -- flip for upside-down
+        bool  loop,        // param_6 -- loop texture
+        float loopUVLen    // param_7 -- loop UV length
+    );
 };
 
-// Global singleton instance — created in GameInit, destroyed in GameDestroy.
+// Global singleton instance -- created in GameInit, destroyed in GameDestroy.
 extern SlashEntity* g_pSlashEntity;
 
 #endif

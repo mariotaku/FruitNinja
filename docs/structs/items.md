@@ -1,4 +1,4 @@
-<!-- Analysed: 2026-04-25T10:30 -->
+<!-- Analysed: 2026-04-25T14:45 -->
 
 # ItemInfo + ItemManager Structs
 
@@ -89,16 +89,19 @@ Extends `ItemInfo` for `SLASH_MODIFIER` items. Inherits all fields at +0x00..+0x
 | +0x48  | 4    | int             | m_ColourType       | ParseSlashModColourType result (NONE=0, PER_SLASH=1?) |
 | +0x4c  | 4    | float           | m_LifeScale        | XML `life` attr (float, via QueryFloatAttribute)      |
 | +0x50  | 1    | bool            | m_bDirectionalParticles | `particles_directional` attr CompareWords "true" |
-| +0x54  | 4    | char*           | m_pTextureName2    | `texture` attr in `<slashModInfo>` sub-element        |
-| +0x58  | 4    | char*           | m_pParticlePath    | Heap-alloc `"tex_%s"` snprintf from `particles` attr  |
-| +0x5c  | 4    | char*           | m_pContactParticle | `contact_particles` attr                              |
-| +0x60  | 4    | char*           | m_pParticle2       | Second particle attr (see ParseSlashModInfo)          |
-| +0x68  | 4    | float           | m_ScaleEndThickness| `<scales end_thickness=>`                             |
-| +0x6c  | 4    | float           | m_ScaleLength      | `<scales length=>`                                    |
-| +0x70  | 4    | float           | m_ScaleUVLength    | `<scales UV_length=>` (default 1.0)                   |
-| +0x74  | 1    | bool            | m_bFlipForUpsideDown| `flipForUpsideDown` CompareWords "true"              |
-| +0x75  | 1    | bool            | m_bLoop            | `loop` attr from `<slashModInfo>` CompareWords "true" |
-| +0x78  | 4    | float           | m_ScaleStartThickness | `<scales start_thickness=>` (default DAT_00113dd0 = 1.0f) |
+| +0x51  | 3    | (pad)           | —                  | Alignment                                             |
+| +0x54  | 4    | char*           | m_pParticlePath    | Heap-alloc `"tex_%s"` snprintf from `particles` attr; **SetEquipped passes this as SetModColours param_5 (trail emitter name)** |
+| +0x58  | 4    | char*           | m_pTextureName2    | `texture` attr in `<slashModInfo>` sub-element; **SetEquipped passes this as SetModColours param_6 (blade texture)** |
+| +0x5c  | 4    | char*           | m_pContactParticle | `contact_particles` attr; SetModColours param_8       |
+| +0x60  | 4    | char*           | m_pParticle2       | Second particle attr; SetModColours param_9           |
+| +0x64  | 4    | float           | m_ScaleEndThickness| `<scales end_thickness=>`; SetModScales param_2       |
+| +0x68  | 4    | float           | m_ScaleLength      | `<scales length=>`; SetModScales param_3              |
+| +0x6c  | 4    | float           | m_ScaleStartThickness | `<scales start_thickness=>`; SetModScales param_1 |
+| +0x70  | 4    | float           | m_ScaleUVLength    | `<scales UV_length=>` (default 1.0f); SetModScales param_4 |
+| +0x74  | 1    | bool            | m_bFlipForUpsideDown| `flipForUpsideDown` CompareWords "true"; SetModScales param_5 |
+| +0x75  | 1    | bool            | m_bLoop            | `loop` attr from `<slashModInfo>` CompareWords "true"; SetModScales param_6 |
+| +0x76  | 2    | (pad)           | —                  | Alignment                                             |
+| +0x78  | 4    | float           | m_LoopUVLength     | SetModScales param_7 (from `<slashModInfo loop=>` region); default 1.0f |
 | +0x7c  | 0x2c | SlashSoundMods  | m_SwipeSounds      | Parsed from `<swipeSounds>` child                     |
 | +0xa8  | 0x2c | SlashSoundMods  | m_ImpactSounds     | Parsed from `<impactSounds>` child                    |
 | +0xd4  | 0x2c | SlashSoundMods  | m_ComboSounds      | Parsed from `<comboSounds>` child                     |
@@ -106,7 +109,17 @@ Extends `ItemInfo` for `SLASH_MODIFIER` items. Inherits all fields at +0x00..+0x
 
 **Total: 0x110 bytes.**
 
-SlashModInfo vtable (overrides Parse at slot +0x10) — actual parse function: `ParseSlashModInfo @ 0x001126c0`.
+### SlashModInfo vtable (`0x001e8c38`, at `0x001e8c30` - 8`)
+
+| Vtable slot | Byte offset | Address    | Name                        |
+|-------------|-------------|------------|-----------------------------|
+| [2]         | +0x00       | 0x00113ddc | ~SlashModInfo() in-place    |
+| [3]         | +0x04       | 0x00113f24 | ~SlashModInfo() delete      |
+| [4]         | +0x08       | 0x00112424 | UnEquip() — calls LoopingSound::Reset() |
+| [5]         | +0x0c       | 0x00112430 | SetEquipped() — calls SetModColours + SetModScales + 3x SlashSoundMods::Reset |
+| [6]         | +0x10       | 0x00112b0c | Parse() → ParseSlashModInfo @ 0x001126c0 |
+
+`SetEquippedItem` type==0 with non-NULL item calls `(**(vtable+0x0c))(item)` = `SlashModInfo::SetEquipped @ 0x00112430`.
 
 ---
 
@@ -652,3 +665,231 @@ InitialiseData (0x0010b7ca)
 7. **`CompareWords`** — used in ParseSlashModInfo and ItemInfo::Parse for attribute boolean checks. Returns 0 if strings match (strcmp==0). If not yet ported, stub as `strcmp`.
 
 8. **`CloneString`** — duplicates a string onto the heap. Used throughout Parse. `CloneString(char** dst, char* src)` = `*dst = strdup(src)` effectively. Already exists at 0x001141c0.
+
+---
+
+<!-- Analysed: 2026-04-25T14:45 -->
+
+## ChangeBackground — Gap 1
+
+**Address**: `0x0016ae8c` (real implementation); `0x000f9708` = thunk via GOT.
+
+**Signature**: `void ChangeBackground(const char* texName)`
+
+**GOT base**: `0x001EC130` (confirmed shared by `InitModColours`, `SetModColours`, `SetModScales`, `GetCurrentBackground`).
+
+### Behaviour
+
+```c
+void ChangeBackground(const char* texName) {
+    bool fast = IsFastHardware();
+    if (texName == NULL)
+        texName = "gb_game";           // 0x001bc79d — default background
+    const char* suffix = fast ? "" : "_sml";  // fast: 0x001bda4c (empty); slow: 0x001bc7a5
+    char buf[64];
+    OS_SPrintf(buf, 64, "%s%s.tex", texName, suffix);   // fmt @ 0x001bc7aa
+    SmartPtr<Texture> tmp;
+    TextureManager::LoadLocalisedTexture(&tmp, buf);
+    // Store into global backgroundTexture SmartPtr (file-static _ZL17backgroundTexture)
+    // at BSS 0x231500 = GOT(0x1EC130) + 0x000452d4 + 0xfc
+    g_backgroundTexture = tmp;          // SmartPtr<Texture>::operator=
+    // ~SmartPtr tmp
+}
+```
+
+**Side effects**:
+- Calls `IsFastHardware()` to select texture resolution suffix: fast hardware → no suffix (full-res), slow → `"_sml"` (low-res).
+- Appends `.tex` extension and loads via `TextureManager::LoadLocalisedTexture`.
+- Stores the result into the global `SmartPtr<Texture> backgroundTexture` at BSS `0x231500`.
+- `GetCurrentBackground() @ 0x0016af28` reads back from the same slot (`[GOT + 0x000452d4 + 0xfc]`), confirming it is a file-scope static (symbol `_ZL17backgroundTexture`).
+
+**Related**: `ChangeBackground(SmartPtr<Texture>*) @ 0x0016ae6c` is a thin overload that does `g_backgroundTexture = *param_1` directly (no path building).
+
+**Port-side change required** (`src/game/ItemManager.cpp`, `SetEquippedItem` type==1 branch):
+
+Replace the `// TODO: ChangeBackground(texName)` stub with the real call once `ChangeBackground` is implemented:
+
+```cpp
+// was: (void)texName;
+ChangeBackground(texName);   // defined in MenuBackground.cpp or globals.cpp
+```
+
+`ChangeBackground` itself needs: `IsFastHardware()`, `TextureManager::LoadLocalisedTexture`, `SmartPtr<Texture>`, and a global `backgroundTexture` slot. The port can implement this as a free function in `src/engine/MenuBackground.cpp` (matches the binary source file `MenuBackground.cpp` identified in `_ZN14MenuBackground*` symbols). No `Osp::` API needed — `TextureManager::LoadLocalisedTexture` maps to the existing texture loader.
+
+---
+
+## SlashModInfo::SetEquipped / SlashEntity::SetModColours / InitModColours / SetModScales — Gap 2
+
+<!-- Analysed: 2026-04-25T14:45 -->
+
+### SlashModInfo::SetEquipped (vtable +0x0c @ 0x00112430)
+
+Called by `SetEquippedItem` when `type == ITEM_TYPE_BLADE` and `item != NULL`, via `(**(vtable+0x0c))(item)`.
+
+```c
+void SlashModInfo::SetEquipped(SlashModInfo* this) {
+    // Forwards all SlashModInfo blade-skin fields to SlashEntity state
+    SlashEntity::SetModColours(
+        this->m_pColours,             // +0x40 — Colour array (NULL if none)
+        this->m_ColourCount,          // +0x44
+        this->m_ColourType,           // +0x48
+        this->m_LifeScale,            // +0x4c
+        this->m_pParticlePath,        // +0x54 — trail emitter name (e.g. "tex_sparkle")
+        this->m_pTextureName2,        // +0x58 — blade overlay texture name
+        this->m_bDirectionalParticles,// +0x50
+        this->m_pContactParticle,     // +0x5c
+        this->m_pParticle2            // +0x60
+    );
+    SlashEntity::SetModScales(
+        this->m_ScaleStartThickness,  // +0x6c  param_1
+        this->m_ScaleEndThickness,    // +0x64  param_2
+        this->m_ScaleLength,          // +0x68  param_3
+        this->m_ScaleUVLength,        // +0x70  param_4
+        this->m_bFlipForUpsideDown,   // +0x74  param_5
+        this->m_bLoop,                // +0x75  param_6
+        this->m_LoopUVLength          // +0x78  param_7
+    );
+    this->m_SwipeSounds.Reset();    // +0x7c
+    this->m_ImpactSounds.Reset();   // +0xa8
+    this->m_ComboSounds.Reset();    // +0xd4
+}
+```
+
+**SlashModInfo::UnEquip @ 0x00112424**: calls `LoopingSound::Reset()` on `m_LoopingSound` (+0x100). Called when a blade skin is de-equipped.
+
+### SlashEntity::SetModColours (0x0017ca0c; thunk at 0x000f870c)
+
+**Signature**: `void SetModColours(Colour* colours, int colourCount, int colourType, float lifeScale, const char* particlePath, const char* textureName2, bool directional, const char* contactParticle, const char* particle2)`
+
+**What it mutates** (all via the global `g_slashEntity` singleton, double-dereferenced through GOT slots):
+
+| Parameter    | Field written in SlashEntity | Notes |
+|--------------|------------------------------|-------|
+| colourCount  | *(GOT+0x7980) = ptr to count field | int |
+| colourType   | *(GOT+0x7980-4) = ptr to type field | int; if type==2 → pick random start index |
+| lifeScale    | *(GOT+0x7ab8) | float |
+| colours[]    | 16-entry palette copied from param_1 | loop 0..15, `Colour::operator=` |
+| textureName2 | SmartPtr at GOT+0x7ab8+0xd8 | if non-NULL/non-empty: `LoadLocalisedTexture`; else null |
+| particlePath | StringHash → *(GOT+0x70e8) uint32 | then `PSPParticleManager::EmitterExists`: if exists set emitter-type flag (1 or 2) |
+| directional  | flag byte — 1=normal, 2=directional | |
+| contactParticle | StringHash → *(GOT+0x7330) | zeroed if emitter doesn't exist |
+| particle2    | StringHash → *(GOT+0x70a4) | zeroed if emitter doesn't exist |
+| post-apply   | Iterates ActorManager type-3 entities → `ColoursChanged()` | only if `*(iVar11 + 0x160) != 0` |
+
+After writing, if the game is active (`*(*(GOT+0x7be8)+0x160) != 0`), walks all type-3 `ActorManager` entities and calls `ColoursChanged()` on each — this re-tints already-spawned blade ghosts/trails.
+
+### SlashEntity::InitModColours (0x0017cc38; thunk at 0x000f77b8)
+
+**Signature**: `void InitModColours(SlashEntity* this)` (this is ignored; accesses global singleton).
+
+Resets all mod-colour state to defaults:
+- Sets `colourCount` = 0, `colourType` = 0
+- Nulls the overlay texture SmartPtr
+- Resets particle/contact hashes to 0
+- Resets emitter-type flags
+- Copies default colour palette (16 entries from the base-colour array in GOT)
+- `uVar2` (init value for colour type) = `DAT_0017ccac = 0x00000000` (zero = NONE)
+
+### SlashEntity::SetModScales (0x0017b328; thunk at 0x000fada0)
+
+**Signature**: `void SetModScales(float startThick, float endThick, float scaleLen, float uvLen, bool flipUD, bool loop, float loopUVLen)`
+
+Writes directly to fields of the `g_slashEntity` singleton (via GOT double-indirection):
+
+| Parameter  | BSS field addr | Meaning |
+|------------|----------------|---------|
+| param_5 (flipUD) | 0x1F3A68 | bool flip-for-upside-down |
+| param_6 (loop)   | 0x1F38B8 | bool loop texture |
+| param_1 (startThick) | 0x1F31B8 | float start thickness scale |
+| param_2 (endThick)   | 0x1F36E8 | float end thickness scale |
+| param_3 (scaleLen)   | 0x1F357C | float trail length scale |
+| param_4 (uvLen)      | 0x1F3248 | float UV length scale |
+| param_7 (loopUVLen)  | 0x1F3B18 | float loop UV length |
+
+Default call (no blade skin): `SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f)`.
+
+**Port-side change required** (`src/game/ItemManager.cpp`, `SetEquippedItem` type==0 branch):
+
+```cpp
+// was: // TODO: SlashEntity::InitModColours(slash)
+//      // TODO: SlashEntity::SetModScales(...)
+SlashEntity::InitModColours(slash);
+SlashEntity::SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f);
+```
+
+For `item != NULL`, the `item->SetEquipped()` virtual call is already wired. `SlashModInfo::SetEquipped` must be overriding the `ItemInfo::SetEquipped` no-op — confirmed: the vtable `SetEquipped` slot for `SlashModInfo` is `0x00112430` (distinct from ItemInfo's no-op at `0x00113978`). Port's `ItemInfo::SetEquipped()` virtual + `SlashModInfo::SetEquipped()` override must be implemented.
+
+**Blocker**: `SetModColours` and `SetModScales` need a live `SlashEntity*` pointer (obtained via `(*(*this))->GetSlashEntity()` in `SetEquippedItem`). Port needs `GetSlashEntity()` on whatever singleton holds it (probably `Game` or `ActorManager`). Stub `SetModColours`/`InitModColours`/`SetModScales` as no-ops until SlashEntity's singleton wiring is in place; the `SetEquipped()` virtual call path is already correct.
+
+---
+
+## SaveItemInfo Disk Write Path — Gap 3
+
+<!-- Analysed: 2026-04-25T14:45 -->
+
+**Address**: `SaveItemInfo @ 0x00112210`
+
+**Save path**: `GetItemSavePath() @ 0x00111fd8` returns the literal string `"ItemSave.xml"` (at rodata `0x001b9e40`) — **no `"Data/"` prefix**. The port's current implementation incorrectly returns `"Data/xml/ItemSave.xml"` and then strips `"Data/"`.
+
+**Actual binary path**: `"ItemSave.xml"` relative to the app's working directory (on Bada this is `/Home/` or similar per-app data dir).
+
+**Write mechanism**: `TiXmlDocument::SaveFile(const char*) @ 0x00185ce8`:
+
+```c
+bool TiXmlDocument::SaveFile(const char* path) {
+    Mortar::File file(path, 7, 0);    // mode 7 = write/create
+    if (file.Open()) {
+        SaveFile(&file);               // Print() to file
+        file.Close();
+        return true;
+    }
+    return false;
+}
+```
+
+`Mortar::File` (`_ZN6Mortar4FileC1EPKcim`) wraps the platform file API. On Bada: `Osp::Io::File`. Port: standard `fopen`/`fwrite` via C stdio. The port currently has `Mortar::File` or equivalent porting needed; alternatively `tinyxml2::XMLDocument::SaveFile(const char*)` (the tinyxml2 version) does the right thing using `fopen` directly.
+
+**Port-side change required** (`src/game/ItemManager.cpp`, `SaveItemInfo`):
+
+1. Fix `GetItemSavePath()` to return just `"ItemSave.xml"` (or the port's writable data path directly).
+2. Uncomment the `doc.SaveFile(saveFullPath.c_str())` call — tinyxml2's `SaveFile` uses C `fopen`, which works without any `Osp::` stub.
+3. The `saveFullPath` computation should be simply `game->data_dir + "/ItemSave.xml"` (drop the `xml/` subdirectory since the binary uses a flat path).
+
+No `Osp::Io::File` stub is needed for the port — tinyxml2 handles the write directly.
+
+---
+
+## FruitSaveData Coin Persistence — Gap 4
+
+<!-- Analysed: 2026-04-25T14:45 -->
+
+### Fields
+
+| Field            | Offset | Read from          | Written to         |
+|------------------|--------|--------------------|--------------------|
+| `m_Coins`        | +0x20  | `ItemSave.xml` attr `coins` | `ItemSave.xml` attr `coins` |
+| `m_CoinsTotal`   | +0x24  | `ItemSave.xml` attr `coinsTotal` | `ItemSave.xml` attr `coinsTotal` |
+| `m_LevelStartCoins` | +0x28 | `ItemSave.xml` attr `levelStartCoins` | `ItemSave.xml` attr `levelStartCoins` |
+
+**These three fields are exclusively persisted in `ItemSave.xml`** — not in the main game save file (`ParseSaveFile @ 0x0012b5e8` does not read or write them). The `FruitSaveData` ctor (`0x00129cb4`) and copy-ctor (`0x0016e2fc`) do NOT initialise or copy them, so they start as zero-initialised BSS (value = 0 on first run, set from file on subsequent runs).
+
+**Read path**: `LoadItemData @ 0x00113200` (Phase 2) — `root->QueryIntAttribute("coins", &sd->m_Coins)` etc.
+
+**Write path**: `SaveItemInfo @ 0x00112210` — `root->SetAttribute("coins", sd->m_Coins)` etc.
+
+**`AddCoins(int delta) @ 0x0010a3bc`** (free function via GOT):
+```c
+void AddCoins(int delta) {
+    FruitSaveData* sd = g_FruitSaveData;
+    sd->m_Coins += delta;
+    if (delta > 0) sd->m_CoinsTotal += delta;  // only positive deltas accumulate in total
+}
+```
+`m_LevelStartCoins` is only modified directly (not through `AddCoins`), presumably snapshotted at level start to allow refund on retry.
+
+**Port-side changes required**:
+
+1. Add `int m_Coins`, `int m_CoinsTotal`, `int m_LevelStartCoins` at offsets `+0x20`, `+0x24`, `+0x28` of `FruitSaveData` in `src/game/FruitSaveData.h`.
+2. `LoadItemData` already calls `root->QueryIntAttribute("coins", &sd->m_Coins)` etc. — no change needed once the fields exist.
+3. Once `SaveItemInfo` disk write is unblocked (Gap 3), coin persistence is complete — no additional code needed.
+4. Port's `AddCoins` free function should match: `m_Coins += delta; if (delta > 0) m_CoinsTotal += delta`. `m_LevelStartCoins` is snapshotted separately at game-start (search for callers when porting that flow).

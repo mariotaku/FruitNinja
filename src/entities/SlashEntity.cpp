@@ -477,3 +477,50 @@ void SlashEntity::Draw() {
         r->DrawTriStrip(m_Right, vertCount);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Blade modifier apply functions (called from SlashModInfo::SetEquipped)
+// ---------------------------------------------------------------------------
+
+// SetModColours @ 0x0017ca0c
+// TODO: implement when blade palette + particle manager + actor iterate land.
+// Full RE spec in docs/structs/items.md §SetModColours.
+void SlashEntity::SetModColours(
+    const Colour*  /*colours*/,
+    int            /*colourCount*/,
+    int            /*colourType*/,
+    float          /*lifeScale*/,
+    const char*    /*particlePath*/,
+    const char*    /*textureName2*/,
+    bool           /*directional*/,
+    const char*    /*contactParticle*/,
+    const char*    /*particle2*/)
+{
+    // TODO: copy colour palette; load textureName2 via LoadLocalisedTexture;
+    //       resolve particlePath/contactParticle/particle2 to emitter hashes;
+    //       if game active walk ActorManager type-3 entities, call ColoursChanged().
+}
+
+// InitModColours @ 0x0017cc38
+// TODO: implement when blade colour palette / overlay texture wiring lands.
+// Resets palette to defaults, nulls overlay texture SmartPtr, zeroes emitter hashes.
+void SlashEntity::InitModColours()
+{
+    // TODO: reset colourCount=0, colourType=0, null overlay texture SmartPtr,
+    //       zero particle hashes + emitter-type flags, copy default colour palette.
+}
+
+// SetModScales @ 0x0017b328
+// TODO: implement when SlashEntity internal scale fields are modelled.
+// Default call (no blade mod): SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f).
+void SlashEntity::SetModScales(
+    float  /*startThick*/,
+    float  /*endThick*/,
+    float  /*scaleLen*/,
+    float  /*uvLen*/,
+    bool   /*flipUD*/,
+    bool   /*loop*/,
+    float  /*loopUVLen*/)
+{
+    // TODO: write to g_pSlashEntity singleton scale fields when they are modelled.
+}
