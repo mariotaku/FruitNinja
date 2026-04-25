@@ -35,6 +35,8 @@ add_library(mortar_engine STATIC
     # Phase 8 — Font
     render/Font.cpp
     render/BakedString.cpp
+    # MenuBackground — ChangeBackground + GetCurrentBackground
+    MenuBackground.cpp
 )
 target_include_directories(mortar_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2)

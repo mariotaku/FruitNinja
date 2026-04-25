@@ -13,6 +13,7 @@
 #include "FruitSaveData.h"
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
+#include "engine/MenuBackground.h"
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstdlib>
@@ -245,8 +246,7 @@ void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
             // TODO: implement curBG equality check when ChangeBackground lands.
         }
         const char* texName = (item != nullptr) ? item->m_pTextureName : nullptr;  // +0x30
-        // TODO: ChangeBackground(texName) — stub; ChangeBackground @ 0x0016ae6c not yet ported.
-        (void)texName;
+        ChangeBackground(texName);  // defined in MenuBackground.cpp; binary 0x0016ae8c
     } else if (type == ITEM_TYPE_UPSELL) {
         if (*funcCalls >= 1) {
             (*funcCalls)--;
