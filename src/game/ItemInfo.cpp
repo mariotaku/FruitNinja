@@ -8,6 +8,7 @@
 #include "ItemInfo.h"
 #include "ItemParseUtil.h"
 #include "engine/util/StringHash.h"
+#include "entities/SlashEntity.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -157,23 +158,23 @@ SlashModInfo::SlashModInfo()
     , m_ColourType(0)
     , m_LifeScale(1.0f)
     , m_bDirectionalParticles(false)
-    , m_pTextureName2(nullptr)
-    , m_pParticlePath(nullptr)
+    , m_pParticlePath(nullptr)   // +0x54 -- trail emitter (was m_pTextureName2 -- SWAPPED per spec)
+    , m_pTextureName2(nullptr)   // +0x58 -- blade overlay texture (was m_pParticlePath -- SWAPPED per spec)
     , m_pContactParticle(nullptr)
     , m_pParticle2(nullptr)
-    , m_ScaleEndThickness(0.0f)
-    , m_ScaleLength(0.0f)
-    , m_ScaleUVLength(1.0f)
+    , m_ScaleEndThickness(0.0f)    // +0x64
+    , m_ScaleLength(0.0f)          // +0x68
+    , m_ScaleStartThickness(1.0f)  // +0x6c  DAT_00113dd0 = 1.0f
+    , m_ScaleUVLength(1.0f)        // +0x70  default 1.0f per spec
     , m_bFlipForUpsideDown(false)
     , m_bLoop(false)
-    , m_ScaleStartThickness(1.0f)  // DAT_00113dd0 = 1.0f
+    , m_LoopUVLength(1.0f)   // +0x78  default 1.0f per spec
     , m_SwipeSounds()
     , m_ImpactSounds()
     , m_ComboSounds()
     , m_LoopingSound()
 {
     _pad51[0] = _pad51[1] = _pad51[2] = 0;
-    _pad64[0] = _pad64[1] = _pad64[2] = _pad64[3] = 0;
     _pad76[0] = _pad76[1] = 0;
 }
 
@@ -186,11 +187,50 @@ SlashModInfo::~SlashModInfo() {
     free(m_pParticle2);
 }
 
-// SlashModInfo::UnEquip — inherits base no-op
-void SlashModInfo::UnEquip() {}
+// SlashModInfo::UnEquip @ 0x00112424
+// Binary: calls LoopingSound::Reset() on m_LoopingSound (+0x100).
+// Called when a blade skin is de-equipped.
+void SlashModInfo::UnEquip() {
+    m_LoopingSound.Reset();  // LoopingSound::Reset @ 0x00112424 (via vtable/thunk)
+}
 
-// SlashModInfo::SetEquipped — inherits base no-op
-void SlashModInfo::SetEquipped() {}
+// SlashModInfo::SetEquipped @ 0x00112430 (vtable slot +0x0c)
+// Forwards all blade-skin fields to SlashEntity state.
+// Calls SetModColours + SetModScales + 3x SlashSoundMods::Reset.
+void SlashModInfo::SetEquipped() {
+    // Binary call sequence @ 0x00112430:
+    //   SetModColours(colours, colourCount, colourType, lifeScale,
+    //                 m_pParticlePath@+0x54, m_pTextureName2@+0x58,
+    //                 directional, contactParticle, particle2)
+    //   SetModScales(startThick@+0x6c, endThick@+0x64, scaleLen@+0x68,
+    //                uvLen@+0x70, flipUD@+0x74, loop@+0x75, loopUVLen@+0x78)
+    //   m_SwipeSounds.Reset() @+0x7c
+    //   m_ImpactSounds.Reset() @+0xa8
+    //   m_ComboSounds.Reset() @+0xd4
+    SlashEntity::SetModColours(
+        m_pColours,               // +0x40
+        m_ColourCount,            // +0x44
+        m_ColourType,             // +0x48
+        m_LifeScale,              // +0x4c
+        m_pParticlePath,          // +0x54 -- trail emitter name (SetModColours param_5)
+        m_pTextureName2,          // +0x58 -- blade overlay texture (SetModColours param_6)
+        m_bDirectionalParticles,  // +0x50
+        m_pContactParticle,       // +0x5c
+        m_pParticle2              // +0x60
+    );
+    SlashEntity::SetModScales(
+        m_ScaleStartThickness,   // +0x6c  param_1
+        m_ScaleEndThickness,     // +0x64  param_2
+        m_ScaleLength,           // +0x68  param_3
+        m_ScaleUVLength,         // +0x70  param_4
+        m_bFlipForUpsideDown,    // +0x74  param_5
+        m_bLoop,                 // +0x75  param_6
+        m_LoopUVLength           // +0x78  param_7
+    );
+    m_SwipeSounds.Reset();   // +0x7c
+    m_ImpactSounds.Reset();  // +0xa8
+    m_ComboSounds.Reset();   // +0xd4
+}
 
 // ParseSlashModInfo @ 0x001126c0
 // Calls ItemInfo::Parse first, then parses <slashModInfo> child element.

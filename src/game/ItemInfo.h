@@ -112,6 +112,11 @@ struct SlashSoundMods {
     uint8_t _data[0x2c];
 
     SlashSoundMods() { for (int i = 0; i < 0x2c; i++) _data[i] = 0; }
+
+    // Reset — binary: SlashSoundMods::Reset (called from SlashModInfo::SetEquipped
+    // for m_SwipeSounds +0x7c, m_ImpactSounds +0xa8, m_ComboSounds +0xd4).
+    // TODO: implement when SlashSoundMods layout is fully RE'd.
+    void Reset() {}
 };
 
 // -----------------------------------------------------------------------
@@ -123,6 +128,10 @@ struct LoopingSound {
     uint8_t _data[0x10];
 
     LoopingSound() { for (int i = 0; i < 0x10; i++) _data[i] = 0; }
+
+    // Reset — binary: LoopingSound::Reset (called from SlashModInfo::UnEquip @ 0x00112424).
+    // TODO: implement when LoopingSound layout is fully RE'd.
+    void Reset() {}
 };
 
 // -----------------------------------------------------------------------
@@ -145,30 +154,32 @@ public:
     bool     m_bDirectionalParticles;
     // +0x51  (3 bytes padding)
     uint8_t  _pad51[3];
-    // +0x54  char*      m_pTextureName2      `texture` in <slashModInfo> sub-element
-    char*    m_pTextureName2;
-    // +0x58  char*      m_pParticlePath      heap `"tex_%s"` snprintf from `particles` attr
+    // +0x54  char*      m_pParticlePath      heap `"tex_%s"` snprintf from `particles` attr;
+    //                                        SetEquipped passes as SetModColours param_5 (trail emitter)
     char*    m_pParticlePath;
-    // +0x5c  char*      m_pContactParticle   `contact_particles` attr
+    // +0x58  char*      m_pTextureName2      `texture` in <slashModInfo> sub-element;
+    //                                        SetEquipped passes as SetModColours param_6 (blade texture)
+    char*    m_pTextureName2;
+    // +0x5c  char*      m_pContactParticle   `contact_particles` attr; SetModColours param_8
     char*    m_pContactParticle;
-    // +0x60  char*      m_pParticle2         second particle attr
+    // +0x60  char*      m_pParticle2         second particle attr; SetModColours param_9
     char*    m_pParticle2;
-    // +0x64  (4 bytes padding / alignment gap per spec: 0x64..0x67)
-    uint8_t  _pad64[4];
-    // +0x68  float      m_ScaleEndThickness  <scales end_thickness=>
+    // +0x64  float      m_ScaleEndThickness  <scales end_thickness=>; SetModScales param_2
     float    m_ScaleEndThickness;
-    // +0x6c  float      m_ScaleLength        <scales length=>
+    // +0x68  float      m_ScaleLength        <scales length=>; SetModScales param_3
     float    m_ScaleLength;
-    // +0x70  float      m_ScaleUVLength      <scales UV_length=> (default 1.0)
+    // +0x6c  float      m_ScaleStartThickness <scales start_thickness=>; SetModScales param_1
+    float    m_ScaleStartThickness;
+    // +0x70  float      m_ScaleUVLength      <scales UV_length=> (default 1.0); SetModScales param_4
     float    m_ScaleUVLength;
-    // +0x74  bool       m_bFlipForUpsideDown  `flipForUpsideDown` CompareWords "true"
+    // +0x74  bool       m_bFlipForUpsideDown  `flipForUpsideDown` CompareWords "true"; SetModScales param_5
     bool     m_bFlipForUpsideDown;
-    // +0x75  bool       m_bLoop              `loop` attr from <slashModInfo> CompareWords "true"
+    // +0x75  bool       m_bLoop              `loop` attr from <slashModInfo> CompareWords "true"; SetModScales param_6
     bool     m_bLoop;
     // +0x76  (2 bytes padding)
     uint8_t  _pad76[2];
-    // +0x78  float      m_ScaleStartThickness  <scales start_thickness=> (default 1.0f @ DAT_00113dd0)
-    float    m_ScaleStartThickness;
+    // +0x78  float      m_LoopUVLength       loop UV length; SetModScales param_7 (default 1.0f)
+    float    m_LoopUVLength;
     // +0x7c  SlashSoundMods  m_SwipeSounds    from <swipeSounds>
     SlashSoundMods m_SwipeSounds;
     // +0xa8  SlashSoundMods  m_ImpactSounds   from <impactSounds>
@@ -181,9 +192,9 @@ public:
     SlashModInfo();
     virtual ~SlashModInfo() override;
 
-    // vtable[+0x08] UnEquip override — no-op (binary: inherits base no-op)
+    // vtable[+0x08] UnEquip @ 0x00112424 — calls LoopingSound::Reset() on m_LoopingSound (+0x100)
     virtual void UnEquip() override;
-    // vtable[+0x0c] SetEquipped override — no-op (binary: inherits base no-op)
+    // vtable[+0x0c] SetEquipped @ 0x00112430 — calls SetModColours + SetModScales + 3x SlashSoundMods::Reset
     virtual void SetEquipped() override;
     // vtable[+0x10] Parse override — ParseSlashModInfo @ 0x001126c0
     virtual void Parse(tinyxml2::XMLElement* e) override;
