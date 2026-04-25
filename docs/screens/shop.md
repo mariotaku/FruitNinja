@@ -1038,30 +1038,379 @@ The header file `ShopScreen.h` and port source `ShopScreen.cpp` have **wrong slo
 
 ## ScrollingMenu::Update (Input Handling)
 
-<!-- Analysed: 2026-04-25T20:30 -->
+<!-- Analysed: 2026-04-25T21:45 -->
 
 **Address**: `0x0015b744`
-**Vtable slot 10** of ScrollingMenu.
+**Size**: 376 decompiled lines
+**Signature**: `void __thiscall ScrollingMenu::Update(ScrollingMenu* this, float dt)`
 
-The Update function handles the complete touch-scroll input model for the item list:
+---
 
-1. **Touch acquisition** (when `field22_0x74 == -1`): calls `TouchInRegion(pos.x + field_0xe0, ..., -1)` to detect a new touch in the scroll area. Stores the touch ID in `field22_0x74`.
+### Field Map (Binary vs Port)
 
-2. **Touch tracking**: on each frame with an active touch (`field22_0x74 != -1`), reads the touch position from the touch-state array and updates the scroll velocity `field_0x94`.
+The following table maps binary field names (from the Ghidra decompile) to their port equivalents.
+Fields marked **WRONG** in the port header have the wrong name and must be corrected.
 
-3. **Drag scroll**: if the touch has moved more than a threshold (`DAT_0015be00`), sets `field_0xc8 = 1` (dragging). If moved more than 5.0 units and a `field83_0xcc` item is tracked, cancels the item callback.
+| Binary name | Offset | Type | Port name | Notes |
+|-------------|--------|------|-----------|-------|
+| `field22_0x74` | `+0x74` | int | `m_TouchId` | Touch slot index; -1 = none |
+| `field77_0xc0` | `+0xc0` | int | `m_SelectedIdx` | **WRONG** — this is NOT the selected index. See below. |
+| `field76_0xbc` | `+0xbc` | int | `m_ClosestIdx` | Closest-to-zero item index (what ShopScreen reads) |
+| `field83_0xcc` | `+0xcc` | ptr | `m_pCollidedItem` | **MISSING in port** — collided ScrollingMenuItem* (for click) |
+| `field78_0xc4` | `+0xc4` | float | (unnamed) | Closest-to-snap distance accumulator; init 1.0f |
+| `field_0xc8` | `+0xc8` | bool | `m_bDragging` | 1 while finger has moved past drag threshold |
+| `field_0xc9` | `+0xc9` | bool | `m_bTouchProcessed` | Set to 1 when tap released without drag; cleared each frame at entry |
+| `field_0xca` | `+0xca` | bool | `m_fieldCA` | Enables Collide() walk; init 1 |
+| `field_0xd0` | `+0xd0` | bool | (unnamed) | **MISSING in port** — when 1, constrains visible range to `[pos.y - field60_0xa0, pos.y]` |
+| `field_0xd4..0xdc` | `+0xd4` | Vec3 | (unnamed) | **MISSING in port** — velocity Vec3 (x/y/z); y-component drives scroll |
+| `field_0x7c..0x80` | `+0x7c` | float | (unnamed) | **MISSING in port** — touch anchor Y at finger-down; used to compute drag delta |
+| `field_0x84..0x8c` | `+0x84` | Vec3 | (unnamed) | **MISSING in port** — anchor scroll offset at finger-down |
+| `field_0x88` | `+0x88` | float | `m_ScrollOffset` | **WRONG** — real scroll offset (Y component) is at `field_0xd8` (`+0xd8`). `+0x88` is the anchor Y. |
+| `field_0xd8` | `+0xd8` | float | (none) | **TRUE scroll offset** — Y offset applied to item layout. Port's `m_ScrollOffset` maps here. |
+| `field_0x90..0x98` | `+0x90` | Vec3 | (unnamed) | **MISSING in port** — pending velocity Vec3 (integrated into field_0xd4 each tick) |
+| `field59_0x9c` | `+0x9c` | float | `m_Width`? | **CHECK** — ctor uses `DAT_0015b468 = 320.0f`; this is the total scroll area width |
+| `field60_0xa0` | `+0xa0` | float | `m_Height` | ctor uses `DAT_0015b46c = 240.0f`; this is the visible window height |
+| `field61_0xa4` | `+0xa4` | float | `m_ItemHeight` | ctor uses `DAT_0015b470 = -120.0f`; sets the touch outer-region half-height (negative!) |
+| `field62_0xa8` | `+0xa8` | float | `m_TotalWidth` | **WRONG** — used in scroll bounds; should be total scroll height |
+| `field63_0xac` | `+0xac` | float | `m_TotalHeight` | **CHECK** — also init to 0 |
+| `field100..107` | `+0xe0..0xfc` | 2×Vec4 | (unnamed) | Touch region bounds: outer (+0xe0..0xec) and inner (+0xf0..0xfc); set by ctor |
 
-4. **Velocity integration**: `field_0xd8` (scroll offset) += `field_0x94` (velocity) via `Vec3Scale_ScrollMenu`. Applies spring-back if out of bounds (multiply by 0.75 or spring toward bounds * 0.25).
+**Critical offset corrections for the port**:
 
-5. **Per-item position assignment**: iterates all items; for each item:
-   - Sets `SetOnscreen(bool)` via `vtable[+0x24]` (slot 9) based on whether the item Y is within the visible range
-   - Calls `Move(Vec3)` via `vtable[+0x18]` (slot 6) to assign each item's world position from the running scroll accumulator
+1. `m_ScrollOffset` at `+0x88` is the **touch anchor Y**, not the scroll offset. The real scroll offset is `field_0xd8` at `+0xd8`.
+2. `m_SelectedIdx` at `+0xc0` is actually the `field77_0xc0` used to track the **collided/hovered item index during a drag** — not a persistent selection. The persistent "closest to zero" index is `field76_0xbc` at `+0xbc` (port's `m_ClosestIdx`).
+3. Several fields are entirely missing from the port header: `field83_0xcc` (collided item ptr), `field_0xd4` (velocity Vec3), `field_0xd0` (visibility mode), `field_0x90` (pending velocity Vec3).
 
-6. **Selection firing**: when a touch ends with minimal drag (`field_0xc8 == 0`) and `field_0xc9 == 1`, calls `ScrollingMenuItem::CallClickedMenuItemCallback()` on the nearest item.
+---
 
-7. **`field76_0xbc`** is updated to the index of the item closest to the scroll center — this is what `ShopScreen::Update` reads as `GetItemClosestToZero()` to track selection changes.
+### Touch Input Model
 
-**Input model for port**: the port's `ScrollingMenu::Update` must implement this exact scroll physics. The `m_pSelectedItem` in `ShopScreen` is updated by comparing `GetItemClosestToZero()` result frame-to-frame, not by per-item click callbacks.
+Update uses the **Mortar::Touch** global array (not HUDControl's touch system). Two global accessors:
+
+| Function | Address | Behaviour |
+|----------|---------|-----------|
+| `TouchInRegion(x0,x1,y0,y1, hint_slot)` | `0x001691cc` | Searches the 16-slot touch array for a touch whose position lies in the rect `[x0..x1] x [y0..y1]`. If `hint_slot` is 0..15 AND that slot is already in the rect, returns it immediately; otherwise linear-scans from slot 0. Returns -1 if no match. Position check: `touch[slot].state > 0` (finger down). |
+| `IsTouchDown(slot)` | `0x00169144` | Returns 0 if slot out-of-range or state==0, 1 if `state==1.0` (just pressed), 2 if `state==2.0` (held/moving). |
+
+Each touch slot is a 12-byte struct at index `slot * 0xC` relative to the global touch array base:
+- `+0xA0` : float x position
+- `+0xA4` : float y position
+- `+0xA8` : float state (0=up, 1=just-down, 2=held)
+
+Touch region bounds stored in the ScrollingMenu struct as two 4-component groups:
+- **Outer region** (`field100..103`, `+0xe0..0xec`): `{xMin_rel, yMin_rel, yMax_rel, xMax_rel}` relative to `pos.x`. Set by ctor from `DAT_0015b470/0x474` defaults. Used for initial touch-acquire scan.
+- **Inner region** (`field104..107`, `+0xf0..0xfc`): `{xMin_rel, yMin_rel, yMax_rel, xMax_rel}` relative to `pos.x`. Set from `field61_0xa4 * -0.5 / +0.5`. Used during drag to detect if finger left the scroll area.
+
+**`ScrollingMenu::Collide(touchSlot)`** at `0x0015af4c`: walks `m_Items` calling `vtable[+0x34](item, touchSlot)` on each. The first item that returns non-zero is returned as the collided item pointer. Enabled only when `field_0xca != 0`. Vtable +0x34 is slot 13 (currently named `Slot13` in the port).
+
+---
+
+### Phase 1 — Per-Frame Init
+
+```c
+// Clear "tap fired" flag at top of every frame
+this->field_0xc9 = 0;   // m_bTouchProcessed = false
+```
+
+---
+
+### Phase 2 — Touch Acquire (when field22_0x74 == -1, i.e. no active touch)
+
+```c
+if (m_TouchId == -1) {
+    // Scan for a new finger anywhere in the OUTER region
+    int slot = TouchInRegion(pos.x + field100_0xe0, pos.x + field102_0xe8,
+                             pos.x + field103_0xec, pos.x + field101_0xe4, -1);
+    m_TouchId = slot;
+
+    if (IsTouchDown(slot) == 2) {
+        // Finger is HELD (state 2) — valid acquire
+        void* hitItem = Collide(this, slot);   // find which item was touched
+        m_SelectedIdx = -1;                     // field77_0xc0 = -1 (no drag target yet)
+        // Latch touch-point anchor into field_0x78..0x8c
+        //   field_0x78 = touch[slot].x   (x anchor)
+        //   field_0x7c = touch[slot].y   (y anchor)
+        //   field_0x80 = touch[slot].state
+        //   field_0x84 = field_0xd4 (copy current velocity Vec3 into anchor)
+        //   field_0x88 = field_0xd8 (copy current scroll offset into anchor)
+        //   field_0x8c = field_0xdc
+        field83_0xcc = hitItem;               // remember which item was tapped
+        // Mark touch bitmask (GOT[0x7740] |= 0x40)
+    } else {
+        m_TouchId = -1;   // IsTouchDown != 2 => ignore this finger
+    }
+}
+```
+
+**Note**: `IsTouchDown == 2` means the finger is already held (state 2.0), not just pressed (1.0). The acquire fires when a held finger enters the region, not on first contact.
+
+---
+
+### Phase 3 — Active Touch Tracking (when field22_0x74 != -1)
+
+```c
+if (m_TouchId != -1) {
+    // Check if the finger is still within the INNER region
+    int stillIn = TouchInRegion(pos.x + field104_0xf0, pos.x + field106_0xf8,
+                                pos.x + field107_0xfc, pos.x + field105_0xf4,
+                                m_TouchId);
+
+    if (stillIn != m_TouchId) {
+        // --- Finger left the inner region (or was lifted) ---
+        // Phase 3A: Touch Release path
+        if (field83_0xcc != nullptr) {
+            // Fire vtable[+0x38] (slot 14 / "Slot14") on the collided item
+            (*field83_0xcc->vtable[0x38])();
+        }
+
+        if (!m_bDragging && field83_0xcc == nullptr) {
+            // No drag occurred AND no item was being tracked -> snap to closest
+            m_SelectedIdx = -1;   // field77_0xc0
+
+            // Find the item closest to the center: accumulate
+            // dist = abs((scrollOffset_negated + pos.y + m_Height*-0.5) - touch_anchor_y)
+            // for each item; track minimum. Also gates on:
+            //   (scrollOffset + field62_0xa8 + field_0xd8 >= field60_0xa0)
+            // If gate passes: m_SelectedIdx = item_index, else = -1
+            // (i.e. only snap to an item if it fits within bounds)
+        }
+
+        // If dragging (m_bDragging set), skip the snap — carry velocity through
+    } else {
+        // --- Finger still in inner region ---
+        // Phase 3B: Drag velocity update
+        //
+        // field78_0xc4 = 1.0f  (reset snap-distance accumulator during drag)
+        //
+        // New scroll offset = (field_0xd8 - (field_0x88 -
+        //                      (touch[m_TouchId].y - field_0x7c))) * -0.5
+        // This is: offset = (anchorOffset - (currentY - anchorY)) * -0.5
+        // Factor -0.5 converts finger delta to scroll velocity direction.
+        //
+        // If field83_0xcc != nullptr:
+        //   check IsTouchDown(field83_0xcc) == 0 -> clear field83_0xcc
+        //
+        // Drag threshold: if abs(touch[m_TouchId].y - field_0x7c) > DAT_0015be00 (0.001f):
+        //   m_bDragging = 1  (field_0xc8)
+        //   if (abs(delta) > 5.0 && field83_0xcc != nullptr):
+        //     fire vtable[+0x30] (slot 12) on item to cancel pending tap
+        //     field83_0xcc = nullptr
+    }
+```
+
+---
+
+### Phase 4 — Velocity Integration + Spring-back
+
+```c
+// Apply velocity Vec3 to scroll offset:
+Vec3Scale_ScrollMenu(&field_0x90);    // scale by DAT_0015b740 = 0.9f (friction)
+field_0xd4 += field_0x90;             // velocity += friction-damped pending
+field_0x90 = pos - pos;              // (compute relative displacement _Stack_68 = field_0x90 - pos)
+
+// Determine visible range limits
+float rangeTop = DAT_0015be04;   // -160.0f  (scroll lower bound)
+float rangeBot = DAT_0015be08;   //  160.0f  (scroll upper bound)
+if (field_0xd0) {                // visibility mode flag
+    rangeTop = pos.y - field60_0xa0;   // clamp to [pos.y - height, pos.y]
+    rangeBot = pos.y;
+}
+```
+
+---
+
+### Phase 5 — Per-Item Position + SetOnscreen + Closest-Item Tracking
+
+```c
+ScrollingMenuItem* closestItem = nullptr;
+float closestDist = DAT_0015be10;   // 10000.0f initial max
+this->m_ClosestIdx = 0;             // field76_0xbc
+
+float curY = _Stack_68.y;    // start of item layout = scroll displacement + something
+
+for (int i = 0; i < m_Items.size(); i++) {
+    ScrollingMenuItem* item = m_Items[i];
+    float halfH = item->GetHeight() * 0.5f;   // vtable[+0x08]
+
+    // Closest-item tracking
+    if (m_SelectedIdx < 0) {
+        // No specific drag target — find globally closest to center
+        float distToCenter = abs(_Stack_68.y - pos.y);
+        if (distToCenter < closestDist) {
+            m_ClosestIdx = i;
+            // distToSnap = abs(curY - field_0xd8) / field_0x94
+            this->field78_0xc4 = distToSnap;
+            closestDist = distToCenter;
+        }
+    } else if (m_SelectedIdx == i) {
+        // This is the dragged item
+        m_ClosestIdx = m_SelectedIdx;
+        // distToSnap calc same as above
+        closestItem = item;
+        closestDist = abs(...)
+    }
+
+    // SetOnscreen: item is visible if curY-halfH < rangeTop AND curY+halfH > rangeBot
+    bool onscreen;
+    if (curY - halfH > rangeTop || curY + halfH < rangeBot)
+        onscreen = false;
+    else
+        onscreen = true;
+    item->vtable[+0x24](item, onscreen ? 1 : 0);   // SetOnscreen
+
+    // Move: assign world position from running layout cursor
+    Vec3 movePos(_Stack_74);     // copy of current layout Y
+    item->vtable[+0x18](item, &movePos);             // Move
+
+    // Advance cursor by item height
+    curY -= halfH;   // advance TWICE (before and after each item)
+    curY -= halfH;
+
+    i++;
+}
+```
+
+`_Stack_68.y` decrements by each item's full height as the loop progresses. The first item sits at the top of the viewport and subsequent items stack downward.
+
+---
+
+### Phase 6 — Click Callback (tap release without drag)
+
+```c
+// After item loop:
+float snapDist = fVar18 - field_0xd8;   // remaining snap distance
+
+if (!m_bDragging) {   // field_0xc8 == 0
+    // Check if snap distance is near zero (|snapDist| < 2.0f)
+    if (abs(snapDist) < 2.0f) {
+        // Check if velocity is near zero (|field_0x94| < 0.5f)
+        float vel = field_0x94;
+        if (abs(vel) < 0.5f) {
+            // Set "tap processed" flag
+            m_bTouchProcessed = 1;   // field_0xc9
+            // Fire callback only if touch was fully released (iVar2 == -1 from IsTouchDown)
+            // AND a collided item pointer exists
+            if (iVar2 == -1 && closestItem != nullptr) {
+                ScrollingMenuItem::CallClickedMenuItemCallback(closestItem);
+                // -> fires item->m_Callback(item)
+                // -> for ShopListItem: calls ShopScreen::ClickedOnShopItem
+            }
+        }
+    }
+}
+```
+
+The callback fires on the **item closest to center** at the moment of release, not on whichever item was initially tapped.
+
+---
+
+### Phase 7 — Scroll Bounds + Spring-back
+
+```c
+float offset = field_0xd8;   // current scroll offset
+
+if (offset <= 0.0f || m_SelectedIdx >= 0) {
+    // Lower half of range or actively dragging
+    float totalScrollH = field60_0xa0 - field62_0xa8;   // m_Height - m_TotalWidth (sic)
+    if (offset >= totalScrollH || m_SelectedIdx >= 0) {
+        // Still in-bounds or dragging — apply spring
+        if (m_TouchId != -1) return;   // finger still down, no spring
+
+        float vel = field_0x94;
+        bool velSmall;
+        if (vel < 0.0f) velSmall = (vel >= DAT_0015be14);  // >= -0.1f
+        else            velSmall = (vel <  DAT_0015be20);   // < 0.1f
+
+        if (!velSmall) return;   // still moving fast, let it coast
+
+        // Snap step: offset += snapDist * DAT_0015be20 (0.1f)
+        field_0xd8 = offset + snapDist * 0.1f;
+        return;
+    }
+    // offset < totalScrollH -> scrolled past bottom
+    // Spring toward bottom: offset = offset + (totalScrollH - offset) * 0.25f
+    field_0xd8 = offset + (totalScrollH - offset) * 0.25f;
+} else {
+    // offset > 0 -> scrolled past top
+    // Spring toward 0: offset *= 0.75f
+    field_0xd8 = offset * 0.75f;
+}
+
+Vec3Scale_ScrollMenu(&field_0x90);   // apply friction to velocity again
+```
+
+---
+
+### Resolved DAT Constants
+
+| Address | Bytes (LE) | Float value | Role |
+|---------|------------|-------------|------|
+| `DAT_0015b740` | `66 66 66 3f` | **0.9f** | `Vec3Scale_ScrollMenu` multiplier (velocity friction per tick) |
+| `DAT_0015ba10` | `00 24 74 49` | **~2001100** | Large sentinel initial "min dist" for snap search |
+| `DAT_0015ba14` | `00 00 00 00` | **0.0f** | Initial closest-dist accumulator (reset at touch-release snap) |
+| `DAT_0015ba18` | `66 66 66 3f` | **0.9f** | Velocity friction (same as b740; used in spring-deadzone check) |
+| `DAT_0015ba1c` | `cd cc 4c bd` | **-0.05f** | Spring deadzone lower bound (velocity near-zero low) |
+| `DAT_0015ba20` | `cd cc 4c 3d` | **0.05f** | Spring deadzone upper bound (velocity near-zero high) |
+| `DAT_0015ba24` | `0a d7 23 bc` | **-0.01f** | Scroll lower bound during in-bounds check |
+| `DAT_0015ba28` | `0a d7 23 3c` | **0.01f** | Scroll upper bound / near-zero threshold |
+| `DAT_0015ba2c` | `00 40 1c 46` | **10000.0f** | Initial closest-to-center sentinel distance |
+| `DAT_0015be00` | `6f 12 83 3a` | **0.001f** | Drag detection threshold (abs delta must exceed this) |
+| `DAT_0015be04` | `00 00 20 c3` | **-160.0f** | Scroll lower bound (default visible range top) |
+| `DAT_0015be08` | `00 00 20 43` | **160.0f** | Scroll upper bound (default visible range bottom) |
+| `DAT_0015be10` | `00 40 1c 46` | **10000.0f** | Initial per-item closest-dist sentinel in item loop |
+| `DAT_0015be14` | `cd cc cc bd` | **-0.1f** | Velocity near-zero lower bound (spring hold gate) |
+| `DAT_0015be20` | `cd cc cc 3d` | **0.1f** | Velocity near-zero upper bound AND snap step factor |
+| `5.0f` (literal) | `00 00 a0 40` | **5.0f** | Finger-move threshold to cancel item tap callback |
+| `0.75f` (literal) | `00 00 40 3f` | **0.75f** | Spring-back multiplier when scrolled past top |
+| `0.25f` (literal) | `00 00 80 3e` | **0.25f** | Spring-forward multiplier when scrolled past bottom |
+| `2.0f` (literal) | `00 00 00 40` | **2.0f** | Snap-distance "near-zero" gate for click-fire |
+| `0.5f` (literal) | `00 00 00 3f` | **0.5f** | Velocity "near-zero" gate for click-fire |
+| `-0.5f` (literal) | `00 00 00 bf` | **-0.5f** | Factor converting drag delta to scroll velocity |
+
+---
+
+### Helper Functions Called by Update
+
+| Function | Address | What it does |
+|----------|---------|--------------|
+| `TouchInRegion(x0,x1,y0,y1,hint)` | `0x001691cc` | Find touch slot in rect; returns -1 if none |
+| `IsTouchDown(slot)` | `0x00169144` | Returns 0/1/2 for state (up/just-down/held) |
+| `ScrollingMenu::Collide(this, slot)` | `0x0015af4c` | Hit-test items against touch slot; calls `vtable[+0x34]` on each |
+| `Vec3Scale_ScrollMenu(vec3*)` | `0x0015b714` | Multiplies all 3 components of a Vec3 by `DAT_0015b740 = 0.9f` |
+| `ScrollingMenuItem::CallClickedMenuItemCallback()` | `0x0015c27c` | Fires `item->m_Callback(item)` at `+0x30` via Delegate1 |
+| `item->vtable[+0x08](item)` (slot 2) | per subclass | `GetHeight()` — used for half-height in layout and SetOnscreen |
+| `item->vtable[+0x18](item, Vec3*)` (slot 6) | `0x0015aea8` | `Move(Vec3)` — sets item world position |
+| `item->vtable[+0x24](item, bool)` (slot 9) | `0x0013ce10` | `SetOnscreen(bool)` — marks item as visible or not |
+| `item->vtable[+0x30](item)` (slot 12) | `0x00147970` | Cancel-tap signal (called when drag > 5 units, clears item highlight) |
+| `item->vtable[+0x34](item, slot)` (slot 13) | `0x00147974` | Hit-test query (used by Collide; returns non-zero if touch is on item) |
+| `item->vtable[+0x38](item)` (slot 14) | `0x00147978` | Touch-release signal (called when finger leaves inner region) |
+
+---
+
+### Field Offset Verification — Port vs Binary
+
+The port's `ScrollingMenu.h` has several incorrect field assignments that must be fixed before implementing Update:
+
+| Port field name | Port offset | Binary offset | Correct? | Fix |
+|----------------|-------------|---------------|----------|-----|
+| `m_TouchId` | stated `+0x74` | `+0x74` (field22_0x74) | YES | OK |
+| `m_SelectedIdx` | stated `+0xc0` | `+0xc0` is `field77_0xc0` (drag target) | **WRONG label** | Rename to `m_DragTargetIdx`; actual "selected" = `m_ClosestIdx` at `+0xbc` |
+| `m_ClosestIdx` | stated `+0xbc` | `+0xbc` (field76_0xbc) | YES (label OK) | OK |
+| `m_ScrollOffset` | stated `+0x88` | `+0x88` is touch anchor Y; true scroll offset = `+0xd8` | **WRONG offset** | Move `m_ScrollOffset` to `+0xd8`; add `m_AnchorY` at `+0x88` |
+| `m_bDragging` | stated `+0xc8` | `+0xc8` (field_0xc8) | YES | OK |
+| `m_bTouchProcessed` | stated `+0xc9` | `+0xc9` (field_0xc9) | YES | OK |
+| `m_fieldCA` | stated `+0xca` | `+0xca` (field_0xca) | YES | OK |
+| `m_Width` | stated `+0x9c` | `+0x9c` (field59_0x9c) init 320.0f | YES (value) | OK |
+| `m_Height` | stated `+0xa0` | `+0xa0` (field60_0xa0) init 240.0f | YES (value) | OK |
+| `m_ItemHeight` | stated `+0xa4` | `+0xa4` (field61_0xa4) init -120.0f | **WRONG value** — init is -120.0f not 25.0f | Fix ctor default |
+| `m_TotalWidth` | stated `+0xa8` | `+0xa8` (field62_0xa8) | **WRONG label** — used as total scroll height in bounds check | Rename to `m_TotalScrollHeight` |
+| `m_TotalHeight` | stated `+0xac` | `+0xac` (field63_0xac) | Check usage | Verify |
+| (missing) | — | `+0xcc` (field83_0xcc) | **MISSING** | Add `ScrollingMenuItem* m_pCollidedItem` at `+0xcc` |
+| (missing) | — | `+0xd0` (field_0xd0) | **MISSING** | Add `bool m_bConstrainedView` at `+0xd0` |
+| (missing) | — | `+0xd4` (field_0xd4) Vec3 | **MISSING** | Add `Vec3 m_Velocity` at `+0xd4` (scroll velocity Vec3) |
+| (missing) | — | `+0x90` (field_0x90) Vec3 | **MISSING** | Add `Vec3 m_PendingVelocity` at `+0x90` |
+| (missing) | — | `+0x78` (field_0x78) Vec3 | **MISSING** | Add `Vec3 m_TouchAnchorPos` at `+0x78` (finger-down touch position) |
+| (missing) | — | `+0x84` (field_0x84) Vec3 | **MISSING** | Add `Vec3 m_AnchorOffset` at `+0x84` (scroll offset at finger-down) |
 
 ---
 
