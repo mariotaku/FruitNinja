@@ -232,7 +232,7 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
             for (int s = 0; s < nSamples; ) {
                 if (mv.cursor >= total) {
                     if (mv.buf->loop) {
-                        mv.cursor = 0;
+                        mv.cursor = mv.buf->loopStart;
                     } else {
                         mv.id      = 0;
                         mv.playing = false;
@@ -426,13 +426,47 @@ void SoundManager::EndInterruption() {
 bool SoundManager::IsInterrupted() { return m_Interrupted; }
 
 // Music control
-// DIFFERS: SongPlay is a stub -- original used Osp::Media::Player (mp3 streaming).
-// PCM music would need the same .wav.pcm format, but music tracks are likely mp3.
-// TODO: implement mp3 streaming via a third-party decoder or SDL2_mixer fallback.
+// DIFFERS: original = Osp::Media::Player::OpenFile + Play streaming .caf files.
+// Bada package only ships music-menu.wav.pcm (one PCM track); background.caf
+// source is absent. We route the PCM through the existing voice mixer with
+// loop=true. Loop point comes from musicdesc.xml (Music-menu loopPoint=66162);
+// for now hardcoded for the only known track.
+//
+// Name mapping: original calls SongPlay("Music-menu") (CamelCase, .caf), but
+// the shipped asset is music-menu.wav.pcm (lowercase). Lowercase the name
+// before passing to LoadSound. TODO: parse musicdesc.xml for full schema.
 void SoundManager::SongPlay(const char* name) {
-    (void)name;
-    // TODO: implement music streaming (mp3 decoding not yet implemented)
-    // DIFFERS: original = Osp::Media::Player::OpenFile + Play (streaming)
+    if (!m_AudioDevice || !name) return;
+
+    // Lowercase the name so "Music-menu" -> "music-menu" matches the asset.
+    std::string lower(name);
+    for (size_t i = 0; i < lower.size(); ++i) {
+        if (lower[i] >= 'A' && lower[i] <= 'Z') lower[i] = (char)(lower[i] + ('a' - 'A'));
+    }
+
+    SoundBuffer* buf = LoadSound(lower.c_str());
+    if (!buf) {
+        // background.caf isn't shipped — silent fallthrough so caller-side
+        // music attempts don't crash. TODO: log if this becomes noisy.
+        return;
+    }
+    buf->loop = true;
+    // DIFFERS: loopPoint from musicdesc.xml not parsed yet. The XML says
+    // Music-menu loopPoint=66162 (samples). Hardcode for now.
+    if (lower == "music-menu") {
+        buf->loopStart = 66162;
+        if (buf->loopStart >= buf->sampleCount) buf->loopStart = 0;
+    } else {
+        buf->loopStart = 0;
+    }
+
+    SDL_LockAudioDevice(m_AudioDevice);
+    m_MusicVoice.id      = ++m_NextSoundId;
+    m_MusicVoice.buf     = buf;
+    m_MusicVoice.cursor  = 0;
+    m_MusicVoice.volume  = 1.0f;  // global s_MusicVolume scales in callback
+    m_MusicVoice.playing = true;
+    SDL_UnlockAudioDevice(m_AudioDevice);
 }
 
 void SoundManager::SongStop() {

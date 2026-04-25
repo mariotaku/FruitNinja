@@ -24,7 +24,8 @@ struct SoundBuffer {
     int16_t* samples;     // heap-allocated, after >>4 shift (LoadSound)
     int      sampleCount; // total samples (not bytes)
     bool     loop;
-    SoundBuffer() : samples(nullptr), sampleCount(0), loop(false) {}
+    int      loopStart;   // sample to rewind to when looping (0 = file start)
+    SoundBuffer() : samples(nullptr), sampleCount(0), loop(false), loopStart(0) {}
 };
 
 // 16-voice table (matches MAMAudioThread voice count)
