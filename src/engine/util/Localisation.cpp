@@ -217,8 +217,8 @@ void Localisation::Load(const char* dataDir, int languageFlag) {
 
     // Build file paths
     char hdr_path[512], lang_path[512];
-    snprintf(hdr_path,  sizeof(hdr_path),  "%sstringtables/translations_header.str", dataDir);
-    snprintf(lang_path, sizeof(lang_path), "%sstringtables/translations_%s.str",     dataDir, lang);
+    snprintf(hdr_path,  sizeof(hdr_path),  "%s/stringtables/translations_header.str", dataDir);
+    snprintf(lang_path, sizeof(lang_path), "%s/stringtables/translations_%s.str",     dataDir, lang);
 
     // Load header file (key->index table)
     if (!LoadHeader(hdr_path)) {
@@ -231,7 +231,7 @@ void Localisation::Load(const char* dataDir, int languageFlag) {
     if (!LoadLanguage(lang_path)) {
         printf("Localisation: failed to load language '%s', falling back to english_us\n", lang);
         snprintf(lang_path, sizeof(lang_path),
-                 "%sstringtables/translations_english_us.str", dataDir);
+                 "%s/stringtables/translations_english_us.str", dataDir);
         if (!LoadLanguage(lang_path)) {
             printf("Localisation: fallback english_us also failed\n");
             return;
