@@ -153,7 +153,9 @@ Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram, Bad
 - [x] `BadaSound::SFXPlay` (0x18b130, 20 lines) — 8-slot concurrent playback
 - [x] `BadaSound::MusicPlay/Stop/Pause/Resume/Mute/SetVolume` — all decompiled
 - [x] `BadaSound` struct layout — hash table (256), effects (256), 8 active slots, SFX/music volume
-- [ ] `Mortar::MortarSound` / `MortarSoundMAM` (15 funcs) — sound handle API (all behind GOT thunks)
+- [x] `Mortar::MortarSound` / `MortarSoundMAM` — all 9 concrete methods decompiled; 5 GOT thunks resolved; vtable confirmed (2 slots, dtors only); MAMAudioController backend calls mapped; `Load` inferred. See `docs/engine/sound.md`
+- [x] `GameSound::Update` (0x00129380), `Pause` (0x00129256), `Unpause` (0x00129218) — decompiled; SoundSlot field12 (paused-by-system) and m_field04 (deferred-unpause) confirmed. See `docs/engine/sound.md`
+- [x] `MAMAudioController::PlaySound/StopSound/PauseSound/ResumeSound/SetSoundVolume/LoadSound` — all 6 fully decompiled. See `docs/engine/sound.md`
 
 ### Medium Priority
 
