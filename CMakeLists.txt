@@ -107,3 +107,7 @@ add_subdirectory(src/debug)
 
 # --- Link (after all subdirectories define their targets) ---
 target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine)
+
+# --- ctest ---
+enable_testing()
+add_subdirectory(tests)
