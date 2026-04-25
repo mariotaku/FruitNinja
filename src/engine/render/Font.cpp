@@ -1,7 +1,10 @@
+// Analysed: 2026-04-25T22:15
 #include "render/Font.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
+#include "render/MatrixStack.h"
 #include "asset/TextureManager.h"
+#include "math/Vec3.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -115,7 +118,7 @@ SmartPtr<Font> Font::Load(const char* path) {
     // The .fnt files reference the original BMFont .tga atlas (e.g.
     // "font_fruit_ninja_0.tga"), but the Bada distribution shipped them
     // pre-converted as .tex at the data root (Data/font_fruit_ninja_0.tex)
-    // — NOT alongside the .fnt in fonts/ and NOT in textures/. Swap the
+    // -- NOT alongside the .fnt in fonts/ and NOT in textures/. Swap the
     // extension and try the data root first; fall back to the basePath
     // (alongside the .fnt) so other distributions still work.
     font->m_PageTextures.resize(font->m_PageCount);
@@ -138,9 +141,15 @@ SmartPtr<Font> Font::Load(const char* path) {
     return SmartPtr<Font>(font);
 }
 
-float Font::MeasureWidth(float scale, const char* text) const {
+// MeasureWidth returns the text width in normalized atlas-pixel units
+// (i.e. xadvance / m_ScaleW per glyph). This matches the vertex coordinate
+// space used by DrawString below: glyph positions are stored as
+// (atlas_pixel / scaleW/H) and the MatrixStack scale brings them to world
+// units. Callers that want a world-unit width must multiply by scale themselves.
+float Font::MeasureWidth(float /*scale*/, const char* text) const {
     float width = 0;
     float maxWidth = 0;
+    const float invW = (m_ScaleW > 0) ? (1.0f / (float)m_ScaleW) : 1.0f;
     for (const char* p = text; *p; p++) {
         if (*p == '\n') {
             if (width > maxWidth) maxWidth = width;
@@ -155,43 +164,68 @@ float Font::MeasureWidth(float scale, const char* text) const {
         }
         uint8_t ch = (uint8_t)*p;
         if (ch < 256) {
-            width += m_Glyphs[ch].xadvance * scale * m_Scale;
+            width += (float)m_Glyphs[ch].xadvance * invW;
         }
     }
     if (width > maxWidth) maxWidth = width;
     return maxWidth;
 }
 
-// Matches Font::DrawString (0x00198e44, 13 params simplified)
+// Matches Font_DrawString (0x00198e44).
+//
+// Coordinate space contract
+// --------------------------
+// - `pos` is the world-space anchor, passed unchanged to MatrixStack::Translate.
+// - Glyph vertex positions (cursorX/Y, hw/hh) are in NORMALIZED atlas-pixel
+//   units: each component = atlas_pixels / m_ScaleW (or m_ScaleH). The
+//   MatrixStack::Scale(scale, scale, 1) step converts them to world units.
+// - Alignment offsets (CENTER/RIGHT shift, MIDDLE/BOTTOM shift) are also in
+//   normalized units so they live in the same space as the cursor.
+// - `scale` is the em size in world units, applied directly as the MatrixStack
+//   scale factor. There is NO division by m_LineHeight (binary confirmed).
+//
+// Render pipeline (matches binary steps 1-8)
+// -------------------------------------------
+//  1. MatrixStack::Push  -- save current world matrix
+//  2. MatrixStack::Scale(scale, scale, 1.0)  -- em-size scale
+//  3. MatrixStack::Translate(pos)  -- world anchor
+//  4. Build per-page vertex arrays (glyph quads in normalized units)
+//  5. Per page: Texture::Set + Renderer::DrawTriStrip(verts, count)
+//     (DrawTriStrip calls GetMVP() which picks up the modified world stack)
+//  6. MatrixStack::Pop  -- restore
+//
+// NOTE: No direct GL state calls are made here. The blend/depth state is
+// whatever the surrounding HUD pipeline has established. This matches the
+// binary, which makes zero raw GL calls inside Font_DrawString.
 void Font::DrawString(float scale, float maxWidth, float z,
                       const char* text, const Vec3& pos,
                       const Colour& colour, int alignment) {
     if (!text || !*text) return;
 
-    float finalScale = scale * m_Scale;
-    float invW = 1.0f / (float)m_ScaleW;
-    float invH = 1.0f / (float)m_ScaleH;
+    const float invW = (m_ScaleW > 0) ? (1.0f / (float)m_ScaleW) : 1.0f;
+    const float invH = (m_ScaleH > 0) ? (1.0f / (float)m_ScaleH) : 1.0f;
+    // Normalized line height (atlas pixels / scaleH)
+    const float normLineH = (float)m_LineHeight * invH;
 
-    // Calculate starting position based on alignment
-    float startX = pos.x;
-    float startY = pos.y;
-
+    // --- Horizontal alignment: cursor starts shifted left by text width ---
+    // MeasureWidth now returns normalized units.
+    float startX = 0.0f;
     if (alignment & FONT_ALIGN_CENTER) {
         startX -= MeasureWidth(scale, text) * 0.5f;
     } else if (alignment & FONT_ALIGN_RIGHT) {
         startX -= MeasureWidth(scale, text);
     }
 
-    // Vertical alignment: glyphs are positioned with cursorY as the top of
-    // each line (yoffset is subtracted later). FONT_ALIGN_MIDDLE shifts Y up
-    // by half-line; FONT_ALIGN_BOTTOM shifts up by full line. Without these,
-    // text drawn at a row's basePos sits below the row visually.
-    const float lineH = (float)m_LineHeight * finalScale;
-    if (alignment & FONT_ALIGN_MIDDLE) {
-        startY += lineH * 0.5f;
-    }
-    if (alignment & FONT_ALIGN_BOTTOM) {
-        startY += lineH;
+    // --- Vertical alignment (flags & 0xC): shift startY in normalized units ---
+    // Binary: flags & 0x4 selects 0.5 factor, flags & 0x8 selects 1.0 factor.
+    // 0xC fires both checks; the net result is a 0.5 shift (middle-of-line).
+    float startY = 0.0f;
+    if (alignment & 0xC) {
+        if (alignment & 0x4) {
+            startY -= normLineH * 0.5f;
+        } else {
+            startY -= normLineH;
+        }
     }
 
     // Batch vertices per page
@@ -204,7 +238,7 @@ void Font::DrawString(float scale, float maxWidth, float z,
     for (const char* p = text; *p; p++) {
         if (*p == '\n') {
             cursorX = startX;
-            cursorY -= m_LineHeight * finalScale;
+            cursorY -= normLineH;
             continue;
         }
 
@@ -217,7 +251,6 @@ void Font::DrawString(float scale, float maxWidth, float z,
             }
             const char* end = strchr(p + 1, ']');
             if (end && end - p == 7) {
-                // Parse 6-char hex color
                 char hex[7];
                 memcpy(hex, p + 1, 6);
                 hex[6] = '\0';
@@ -232,17 +265,18 @@ void Font::DrawString(float scale, float maxWidth, float z,
             }
         }
 
-        // Word wrap
+        // Word wrap: maxWidth is in world units; divide by scale to get
+        // normalized threshold so we can compare against cursor (normalized).
         if (maxWidth > 0 && *p == ' ') {
-            // Measure next word
+            float normMax = maxWidth / scale;
             float wordW = 0;
             for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
                 uint8_t wch = (uint8_t)*wp;
-                if (wch < 256) wordW += m_Glyphs[wch].xadvance * finalScale;
+                if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invW;
             }
-            if (cursorX - startX + wordW > maxWidth) {
+            if (cursorX - startX + wordW > normMax) {
                 cursorX = startX;
-                cursorY -= m_LineHeight * finalScale;
+                cursorY -= normLineH;
                 continue;
             }
         }
@@ -251,109 +285,86 @@ void Font::DrawString(float scale, float maxWidth, float z,
         if (ch >= 256) continue;
         const FontGlyph& g = m_Glyphs[ch];
         if (g.width == 0 && g.height == 0) {
-            cursorX += g.xadvance * finalScale;
+            cursorX += (float)g.xadvance * invW;
             continue;
         }
 
         if (g.page < 0 || g.page >= m_PageCount) {
-            cursorX += g.xadvance * finalScale;
+            cursorX += (float)g.xadvance * invW;
             continue;
         }
 
-        // Build quad for this glyph
-        float gx = cursorX + g.xoffset * finalScale;
-        float gy = cursorY - g.yoffset * finalScale;
-        float gw = g.width * finalScale;
-        float gh = g.height * finalScale;
+        // Build centered quad in normalized atlas-pixel units.
+        // Binary vertex layout (docs/engine/font.md -- Vertex Geometry section):
+        //   vertex[0] = (cx - hw, cy - hh)  top-left
+        //   vertex[1] = (cx - hw, cy + hh)  bottom-left
+        //   vertex[2] = (cx + hw, cy - hh)  top-right
+        //   vertex[3] = (cx + hw, cy + hh)  bottom-right
+        // The MatrixStack::Scale(scale,scale,1) applied above turns these
+        // normalized units into world-space sizes.
+        //
+        // z = DAT_00199a94 = 0.0f for all vertices (binary constant).
+        const float cx = cursorX + ((float)g.xoffset + (float)g.width  * 0.5f) * invW;
+        const float cy = cursorY - ((float)g.yoffset + (float)g.height * 0.5f) * invH;
+        const float hw = (float)g.width  * 0.5f * invW;
+        const float hh = (float)g.height * 0.5f * invH;
 
-        float u0 = g.x * invW;
-        float v0 = g.y * invH;
-        float u1 = (g.x + g.width) * invW;
-        float v1 = (g.y + g.height) * invH;
+        const float u0 = (float)g.x * invW;
+        const float v0 = (float)g.y * invH;
+        const float u1 = (float)(g.x + g.width)  * invW;
+        const float v1 = (float)(g.y + g.height) * invH;
 
-        // 6 vertices (2 triangles) for this glyph
+        // 6 vertices (2 triangles, GL_TRIANGLES) — z = 0.0f (binary DAT_00199a94)
         QUADCUSTOMVERTEX v[6];
-
-        // Triangle 1: top-left, top-right, bottom-left
-        v[0] = { gx,      gy,      z, 0,0,1, currentColour, u0, v0 };
-        v[1] = { gx + gw, gy,      z, 0,0,1, currentColour, u1, v0 };
-        v[2] = { gx,      gy - gh, z, 0,0,1, currentColour, u0, v1 };
-
-        // Triangle 2: top-right, bottom-right, bottom-left
-        v[3] = { gx + gw, gy,      z, 0,0,1, currentColour, u1, v0 };
-        v[4] = { gx + gw, gy - gh, z, 0,0,1, currentColour, u1, v1 };
-        v[5] = { gx,      gy - gh, z, 0,0,1, currentColour, u0, v1 };
+        // Triangle 1: TL, TR, BL
+        v[0] = { cx - hw, cy - hh, 0.0f, 0,0,1, currentColour, u0, v0 };
+        v[1] = { cx + hw, cy - hh, 0.0f, 0,0,1, currentColour, u1, v0 };
+        v[2] = { cx - hw, cy + hh, 0.0f, 0,0,1, currentColour, u0, v1 };
+        // Triangle 2: TR, BR, BL
+        v[3] = { cx + hw, cy - hh, 0.0f, 0,0,1, currentColour, u1, v0 };
+        v[4] = { cx + hw, cy + hh, 0.0f, 0,0,1, currentColour, u1, v1 };
+        v[5] = { cx - hw, cy + hh, 0.0f, 0,0,1, currentColour, u0, v1 };
 
         for (int vi = 0; vi < 6; vi++) {
             pageVerts[g.page].push_back(v[vi]);
         }
 
-        cursorX += g.xadvance * finalScale;
+        cursorX += (float)g.xadvance * invW;
     }
 
-    // Flush per-page batches
-    // Font rendering builds vertex arrays that the game-level Renderer
-    // will draw via DrawTriList. Store them for the caller to flush.
-    // For direct rendering, game code should call Renderer::DrawTriList
-    // after Font::DrawString with each page's texture bound.
+    // --- MatrixStack push / scale / translate / draw / pop ---
+    // Matches binary pipeline steps 1-6 (Font_DrawString @ 0x00198e44):
+    //   1. MatrixStack::Push
+    //   2. MatrixStack::Scale(Vec3(scale, scale, 1.0))
+    //   3. MatrixStack::Translate(pos)   [world anchor, applied after scale]
+    //   4-5. per-page: Texture::Set + Mesh::DrawTriStrip
+    //   6. MatrixStack::Pop
+    // rotZ (param_3) is 0.0 for all current call sites; omitted here.
+    MatrixStack& worldStack = MatrixManager::GetInstance().GetWorldStack();
+    worldStack.Push();
+    worldStack.Scale(Vec3(scale, scale, 1.0f));
+    worldStack.Translate(pos);
+
+    Renderer* renderer = Renderer::GetInstance();
     for (int pg = 0; pg < m_PageCount; pg++) {
         if (pageVerts[pg].empty()) continue;
         if (pg < (int)m_PageTextures.size() && m_PageTextures[pg].IsValid()) {
             m_PageTextures[pg]->Set();
         }
 
-        // Fixed-function glyph draw: per-vertex RGBA colour modulated
-        // with the page texture. Matches DrawTriList wiring.
-        MatrixManager& mm = MatrixManager::GetInstance();
-        Matrix44 mvp = mm.GetMVP();
-        glMatrixMode(GL_PROJECTION);
-        glLoadMatrixf(mvp.ptr());
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-
-        glActiveTexture(GL_TEXTURE0);
-        glEnable(GL_TEXTURE_2D);
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
-        glDisable(GL_LIGHTING);
-        glColor4ub(255, 255, 255, 255);
-
-        // Glyph atlases are alpha-keyed; without GL_BLEND the entire quad
-        // renders as the atlas's RGB and the glyph mask is ignored. The
-        // HUD pipeline doesn't enable blend by default, so do it here.
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-        // Text sits in the same Z plane as HUD elements; depth-test against
-        // anything already there would reject equal-depth fragments under
-        // GL_LESS. Disable depth test for the glyph batch so text always
-        // overlays. (HUD::Draw already has depth-write off.)
-        glDisable(GL_DEPTH_TEST);
-
-        int stride = sizeof(QUADCUSTOMVERTEX);
-        QUADCUSTOMVERTEX* verts = pageVerts[pg].data();
-        int vertCount = (int)pageVerts[pg].size();
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glVertexPointer(3, GL_FLOAT, stride, &verts->x);
-        glClientActiveTexture(GL_TEXTURE0);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glTexCoordPointer(2, GL_FLOAT, stride, &verts->u);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
-        glDisableClientState(GL_NORMAL_ARRAY);
-        glDrawArrays(GL_TRIANGLES, 0, vertCount);
-        glDisableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-        glDisableClientState(GL_COLOR_ARRAY);
+        // DrawTriStrip calls MatrixManager::GetMVP() internally, which
+        // picks up the world matrix we just configured above.
+        renderer->DrawTriStrip(pageVerts[pg].data(), (int)pageVerts[pg].size());
 
         if (pg < (int)m_PageTextures.size() && m_PageTextures[pg].IsValid()) {
             m_PageTextures[pg]->UnSet();
         }
-
-        // Restore depth test for downstream HUD draws that expect it on.
-        glEnable(GL_DEPTH_TEST);
     }
+
+    worldStack.Pop();
+
+    (void)z; // z is encoded into pos.z via the world translate; per-vertex z = 0.0f
+    (void)maxWidth; // handled above in the word-wrap path
 }
 
 } // namespace Mortar
