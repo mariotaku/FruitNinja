@@ -76,7 +76,12 @@ void SDLInputTranslator::TransformTouch(SDL_Window* window, int px, int py,
                                          float& gx, float& gy) {
     int ww, wh;
     SDL_GetWindowSize(window, &ww, &wh);
-    // Normalise to [0, 1] then remap to [-240, 240] × [-160, 160] (Y flipped).
+    // Normalise to [0, 1] then remap to [-240, 240] × [-160, 160].
+    // Port convention: TOP = +160, BOTTOM = -160 (Y-up). Note the Bada
+    // binary uses Y-down (TOP=-160) — the discrepancy is handled locally
+    // by ScrollingMenu (its drag formula negates currY before applying the
+    // binary-faithful math). Other touch consumers (MenuButton hit-tests,
+    // SlashEntity blade tracking) work in port's Y-up convention directly.
     const float nx = (float)px / (float)ww;
     const float ny = (float)py / (float)wh;
     gx = nx * (float)FN_SCREEN_W - (float)(FN_SCREEN_W / 2);   // [-240, 240]
