@@ -53,10 +53,22 @@ public:
 
     // Render text string with full formatting support
     // Matches Font::DrawString (0x00198e44)
+    // `scale` here is a per-glyph multiplier (atlas-pixel * scale = world size).
     // Supports: inline color tags [FFFFFF]text[/], word wrapping, alignment
     void DrawString(float scale, float maxWidth, float z,
                     const char* text, const Vec3& pos,
                     const Colour& colour, int alignment = 0);
+
+    // Matches Font::Font_DrawString overload — `targetSize` is the desired
+    // em line-height in world units; internally divides by m_LineHeight to
+    // get the per-glyph multiplier. Used by ShopListItem and other UI
+    // widgets that want "render at N pixels tall" semantics.
+    void DrawStringSized(float targetSize, float maxWidth, float z,
+                         const char* text, const Vec3& pos,
+                         const Colour& colour, int alignment = 0) {
+        float mul = (m_LineHeight > 0) ? (targetSize / (float)m_LineHeight) : targetSize;
+        DrawString(mul, maxWidth, z, text, pos, colour, alignment);
+    }
 
     // Measure text width without rendering
     float MeasureWidth(float scale, const char* text) const;

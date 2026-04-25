@@ -130,13 +130,13 @@ void ShopListItem::Draw() {
     {
         // Shadow draw: offset (+4, -4, 0) from basePos
         Vec3 shadowPos(basePos.x + 4.0f, basePos.y - 4.0f, basePos.z);
-        font->DrawString(titleScale, 0.0f, 0.0f,
+        font->DrawStringSized(titleScale, 0.0f, 0.0f,
                          titleStr, shadowPos,
                          Colour(0, 0, 0, 64),
                          0xE);  // flags 0xE = right+bottom alignment
 
         // Actual draw at basePos
-        font->DrawString(titleScale, 0.0f, 0.0f,
+        font->DrawStringSized(titleScale, 0.0f, 0.0f,
                          titleStr, basePos,
                          itemColour,
                          0xE);
@@ -164,12 +164,12 @@ void ShopListItem::Draw() {
 
     {
         Vec3 cShadowPos(basePos.x + 4.0f, basePos.y - 4.0f, basePos.z);
-        font->DrawString(costScale, 0.0f, 0.0f,
+        font->DrawStringSized(costScale, 0.0f, 0.0f,
                          costBuf, cShadowPos,
                          Colour(0, 0, 0, 64),
                          0xE);
 
-        font->DrawString(costScale, 0.0f, 0.0f,
+        font->DrawStringSized(costScale, 0.0f, 0.0f,
                          costBuf, basePos,
                          itemColour,
                          0xE);
@@ -364,7 +364,7 @@ void ShopListItem::Draw() {
             if (purchaseState == 0 || purchaseState == 3) {
                 // Normal description draw
                 Vec3 descPos(xPos, basePos.y, basePos.z);
-                font->DrawString(descFontSize, 0.0f, 0.0f,
+                font->DrawStringSized(descFontSize, 0.0f, 0.0f,
                                  descStr, descPos,
                                  descColour,
                                  0xF);  // flags 0xF per spec
@@ -374,7 +374,7 @@ void ShopListItem::Draw() {
             // TODO: implement purchaseState==1 and ==2 paths when FruitSaveData is wired.
             else {
                 Vec3 descPos(xPos, basePos.y, basePos.z);
-                font->DrawString(descFontSize, 0.0f, 0.0f,
+                font->DrawStringSized(descFontSize, 0.0f, 0.0f,
                                  descStr, descPos,
                                  descColour,
                                  0xF);
