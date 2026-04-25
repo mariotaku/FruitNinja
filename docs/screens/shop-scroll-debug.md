@@ -1,5 +1,9 @@
 <!-- Analysed: 2026-04-25T18:00 -->
 
+## Open TODO (2026-04-26)
+
+- **Cannot scroll to bottom of list.** Drag works for upper portion but the list refuses to reach `maxOff = m_TotalHeight - m_Height` (= 1120 for shop). Likely the snap-step or a Phase 7 invariant is clamping max-offset early. May relate to closest-item snap pulling offset back toward near-zero. Investigate the relationship between `m_SnapDist` (now signed) and the bottom-of-list edge case.
+
 # ScrollingMenu::Update — Scroll Math Deep Dive
 
 Binary: `ScrollingMenu::Update @ 0x0015b744` (377 lines Ghidra decompile)
