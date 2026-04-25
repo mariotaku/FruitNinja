@@ -2,12 +2,12 @@
 // Binary: ShopScreen(DojoScreen*) @ 0x0015cdac, Update @ 0x0015e1f4 (387 lines),
 //         Draw @ 0x0015dd50, LoadContent @ 0x0015cb08.
 //
-// Analysed: 2026-04-25T14:00
+// Analysed: 2026-04-25T16:30
 
 #include "ShopScreen.h"
 #include "DojoScreen.h"
+#include "MainScreen.h"
 #include "Game.h"
-#include "hud/HUD.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
@@ -19,7 +19,7 @@
 #include "game/ItemInfo.h"
 #include "game/ItemManager.h"
 #include "game/FruitSaveData.h"
-#include "audio/GameSound.h"
+#include "engine/audio/GameSound.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
@@ -32,62 +32,73 @@
 // ---------------------------------------------------------------------------
 
 // Transition alpha rates (from Update state 0 decompile)
-static const float ALPHA_LERP_IN   = 0.125f;     // state 0: += (1-alpha)*0.125
-static const float ALPHA_IN_DONE   = 0.999f;     // DAT_0015e554 (approx)
-static const float ALPHA_DECAY     = 0.75f;      // states 2/3/7: *= 0.75
-static const float ALPHA_OUT_DONE  = 0.001f;     // transition-out threshold
+// DAT_0015e554 = 77 be 7f 3f = 0x3f7fbe77 ~ 0.999f
+static const float ALPHA_LERP_IN       = 0.125f;   // state 0: += (1-alpha)*0.125
+static const float ALPHA_IN_DONE       = 0.999f;   // DAT_0015e554
 
-// Buy delay initial value (set in state 0 completion)
-// DAT_0015e558 — not yet resolved; use a small positive time
-// DIFFERS: original value from DAT_0015e558 not yet read; 0.5s placeholder
-static const float BUY_DELAY_INIT  = 0.5f;       // DIFFERS: DAT_0015e558
+// States 2/7 decay (uses DAT_0015e90c, not literal 0.75):
+// DAT_0015e90c = 9a 99 59 3f = 0x3f59999a = 0.85f
+static const float ALPHA_DECAY_STATE27 = 0.85f;    // DAT_0015e90c
 
-// Animation frame increment per dt — from state 1 decompile:
-//   fVar = (float)m_AnimFrame + param_1 * DAT_0015e904
-//   clamp to [0, 0x3ffc]
-// DAT_0015e904 not resolved; use 60.0 (60 units per second at 60fps = 1/frame)
-// DIFFERS: original = DAT_0015e904
-static const float ANIM_FRAME_RATE = 60.0f;      // DIFFERS: DAT_0015e904
-static const int   ANIM_FRAME_MAX  = 0x3ffc;     // from decompile literal
+// State 3 decay uses literal 0.75 in decompile (not a DAT constant)
+static const float ALPHA_DECAY_STATE3  = 0.75f;
 
-// States 2/7 threshold for triggering parent transition
-// DAT_0015e910 — not resolved
-// DIFFERS: original = DAT_0015e910
-static const float ALPHA_STATE27_DONE = 0.001f;  // DIFFERS: DAT_0015e910
+// States 2/7 trigger threshold:
+// DAT_0015e910 = 0a d7 23 3c = 0x3c23d70a ~ 0.01f
+static const float ALPHA_STATE27_DONE  = 0.01f;    // DAT_0015e910
 
-// State 3 alpha fade-out completion threshold
-// DAT_0015e914 — not resolved
-// DIFFERS: original = DAT_0015e914
-static const float ALPHA_STATE3_DONE  = 0.001f;  // DIFFERS: DAT_0015e914
+// State 3 fade completion threshold:
+// DAT_0015e914 = 6f 12 83 3a = 0x3a83126f ~ 0.001f
+static const float ALPHA_STATE3_DONE   = 0.001f;   // DAT_0015e914
 
-// Buy button position (from Update state 0 ctor call)
-// DAT_0015e55c = pos_x, DAT_0015e560 = pos_y, DAT_0015e558 = pos_z
-// DIFFERS: positions not yet resolved via read_memory
-static const Vec3 POS_BUY_BUTTON(160.0f, 40.0f, 0.0f);  // DIFFERS
+// Buy delay initial value:
+// DAT_0015e558 = 00 00 00 00 = 0.0f  (also used for initial m_TransitionAlpha)
+static const float BUY_DELAY_INIT  = 0.0f;         // DAT_0015e558
 
-// Equip button position (from Update state 1 ctor call)
-// DAT_0015e564 = pos_x, DAT_0015e568 = pos_y, DAT_0015e558 = pos_z
-// DIFFERS: positions not yet resolved
-static const Vec3 POS_EQUIP_BUTTON(160.0f, -40.0f, 0.0f); // DIFFERS
+// Animation frame increment per dt:
+// DAT_0015e904 = ff 47 d5 47 = 0x47d547ff = ~109260.0f
+// DAT_0015e908 = 00 f0 7f 46 = 0x467ff000 = 16380.0f = (float)0x3ffc
+static const float ANIM_FRAME_RATE = 109260.0f;    // DAT_0015e904
+static const int   ANIM_FRAME_MAX  = 0x3ffc;       // from decompile literal
 
-// State 3 new buy-button position (from state 3 ctor call)
-// DAT_0015e918, DAT_0015e91c
-// DIFFERS: positions not yet resolved
-static const Vec3 POS_BUY_BUTTON_NEW(160.0f, 40.0f, 0.0f); // DIFFERS
+// Quit/back button position (field_0x84, created in state 0):
+// DAT_0015e55c = 00 00 39 43 = 185.0f
+// DAT_0015e560 = 00 00 d2 c2 = -105.0f
+// DAT_0015e558 = 0.0f (z)
+static const Vec3 POS_BACK_BUTTON(185.0f, -105.0f, 0.0f);  // DAT_0015e55c/560/558
 
-// Scroll list position animation parameters
-// (1-alpha) * DAT_0015eae4 * -1.5 - DAT_0015eae0
-// DIFFERS: both constants not yet resolved
-static const float LIST_SLIDE_MUL = 60.0f;   // DIFFERS: DAT_0015eae4
-static const float LIST_SLIDE_OFF = 240.0f;  // DIFFERS: DAT_0015eae0
-// List position y/z
-// DAT_0015ead8, DAT_0015eadc
-// DIFFERS: not resolved
-static const float LIST_POS_Y = 0.0f;    // DIFFERS
-static const float LIST_POS_Z = 0.0f;    // DIFFERS
+// Equip button position (field_0x8c, created in state 1):
+// DAT_0015e564 = 00 00 11 43 = 145.0f
+// DAT_0015e568 = 00 00 d0 42 = 104.0f
+// z = DAT_0015e558 = 0.0f
+static const Vec3 POS_EQUIP_BUTTON(145.0f, 104.0f, 0.0f);  // DAT_0015e564/568/558
+
+// State-3 replacement back button position:
+// DAT_0015e918 = 00 00 39 43 = 185.0f (same x)
+// DAT_0015e91c = 00 00 d2 c2 = -105.0f (same y)
+// z = DAT_0015e93c = 00 00 00 00 = 0.0f
+static const Vec3 POS_BACK_BUTTON_NEW(185.0f, -105.0f, 0.0f);  // DAT_0015e918/91c/93c
+
+// Post-creation scale multiplier for both buttons:
+// DAT_0015e920 = 33 33 53 3f = 0x3f533333 = 0.825f
+static const float BUTTON_SCALE = 0.825f;           // DAT_0015e920
+
+// Equip button scale override after creation (hardcoded literal 0.75 in decompile)
+static const float EQUIP_BUTTON_SCALE = 0.75f;
+
+// Scroll list position animation parameters (from 0x0015ead8, 32 bytes):
+// DAT_0015ead8 = 00 00 20 42 = 40.0f   (list pos y)
+// DAT_0015eadc = 00 00 00 00 = 0.0f    (list pos z)
+// DAT_0015eae0 = 00 00 be 42 = 95.0f   (slide offset from right edge)
+// DAT_0015eae4 = 00 00 91 43 = 290.0f  (slide multiplier)
+// Slide formula: pos.x = (1 - alpha) * 290.0 * -1.5 - 95.0
+static const float LIST_POS_Y     = 40.0f;          // DAT_0015ead8
+static const float LIST_POS_Z     = 0.0f;           // DAT_0015eadc
+static const float LIST_SLIDE_OFF  = 95.0f;         // DAT_0015eae0
+static const float LIST_SLIDE_MUL  = 290.0f;        // DAT_0015eae4
 
 // Fling velocity base (state 3 and QuitShopCallback)
-static const float FLING_VEL_BASE = 5.0f;  // from decompile literal
+static const float FLING_VEL_BASE = 5.0f;           // from decompile literal
 
 // ---------------------------------------------------------------------------
 // Static texture storage
@@ -394,9 +405,9 @@ void ShopScreen::QuitShopCallback() {
     // Set state to transition-out (state 2)
     m_State = 2;
 
-    // Fling buy button fruit piece
+    // Fling the back/quit button's fruit piece
     if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-        // Binary: SetVisible_FruitFact (sets m_bDetached = 1 on fruit)
+        // Binary: SetVisible_FruitFact sets m_bDetached = 1 on the fruit
         m_pBuyButton->m_pFruitPiece->m_bDetached = true;
         // Binary: vel = (RandFloat5 + 5.0, -RandFloat5, 0)
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
@@ -404,8 +415,10 @@ void ShopScreen::QuitShopCallback() {
         m_pBuyButton->m_pFruitPiece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
     }
 
-    // Binary: TutorialControl::ResetTutePos(tute, 0)
-    // TODO: needs Game* ref
+    // Binary: TutorialControl::ResetTutePos(tute, 0) — null MenuButton* hides arrow
+    if (game.pTutorialCtrl) {
+        game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -480,34 +493,39 @@ void ShopScreen::Update(float dt) {
         m_TransitionAlpha = newAlpha;
 
         if (newAlpha > ALPHA_IN_DONE) {
-            // Remove all splats
             // Binary: SplatEntity::RemoveAllSplats()
-            // TODO: call when SplatEntity ported
+            // TODO: call when SplatEntity ported (SplatEntity exists but
+            // NumActiveSplats/RemoveAllSplats static wrappers not yet exposed)
 
             // Set transition alpha to 1 and buy delay
             m_TransitionAlpha = 1.0f;
-            m_BuyDelay = BUY_DELAY_INIT;
+            m_BuyDelay = BUY_DELAY_INIT;  // 0.0f from DAT_0015e558
             m_State = 1;
 
-            // Lazily create m_pBuyButton
+            // Create the back/quit button (field_0x84 = m_pBuyButton).
+            // Binary: MenuButton ctor at state 0 completion uses QuitShopCallback
+            // as the press delegate (confirmed via xref DATA at 0x0015e2fc/0x0015e2fe).
+            // Texture comes from *(GameTask + 0x17c) — a per-task SmartPtr<Texture>.
+            // Fruit type: *(GameTask + GOT_DAT_0015e578) — int pre-stored in task.
+            // Port uses bomb fruit type (FruitInfo_GetCount()) matching the
+            // DojoScreen back-button pattern: out-of-range index forces a bomb.
+            // Binary: after AddControl, scales m_TargetSize and fruit piece by
+            // DAT_0015e920 = 0.825f.
             if (!m_pBuyButton) {
-                // Binary: create MenuButton with QCallee<ShopScreen> + buy callback
-                // and a no-op highlight callback.
-                // Texture: GOT + DAT_0015e574 + 0x17c (a SmartPtr<Texture> from GameTask)
-                // Fruit type: not resolved from DAT_0015e578 / DAT_0015e580
-                // DIFFERS: texture and fruit type from GameTaskState not resolved
-                // TODO: resolve texture and fruit type, then uncomment:
-                /*
+                const int backFruitType = FruitInfo_GetCount();  // forces bomb spawn
                 m_pBuyButton = new MenuButton();
-                m_pBuyButton->Init(POS_BUY_BUTTON,
-                    [this]() { EquipCallback(); },
-                    Fruit::FruitType("watermelon", false),
-                    Vec3(0,0,0),
-                    nullptr);
+                m_pBuyButton->Init(POS_BACK_BUTTON,
+                    [this]() { QuitShopCallback(); },
+                    backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                 m_pBuyButton->m_bEnabled = 1;
-                // game->hud->AddControl(m_pBuyButton, false)
-                // TutorialControl::ResetTutePos(tute, m_pBuyButton)
-                */
+                if (game.hud) game.hud->AddControl(m_pBuyButton, false);
+                if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pBuyButton);
+                // Binary: m_TargetSize *= 0.825; fruit piece scale *= 0.825
+                m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
+                if (m_pBuyButton->m_pFruitPiece) {
+                    m_pBuyButton->m_pFruitPiece->scale =
+                        m_pBuyButton->m_pFruitPiece->scale * BUTTON_SCALE;
+                }
             }
         }
         break;
@@ -531,27 +549,51 @@ void ShopScreen::Update(float dt) {
             if (m_pShopList && !m_pShopList->m_bTouchProcessed) {
                 ShrinkBuyButton();
             } else {
-                // Binary: create equip button if selected item is equipped
+                // Binary: also check IsEquipped + IsLocked to decide if equip
+                // button should be removed (if already equipped or locked)
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                     ItemManager* im = ItemManager::GetInstance();
                     if (im) {
                         int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
-                        if (!equipped && !m_pEquipButton) {
-                            // Create equip button
-                            // DIFFERS: texture/fruit type from GameTaskState not resolved
-                            // TODO: create MenuButton at POS_EQUIP_BUTTON
-                            /*
+                        int locked   = m_pSelectedItem->m_pItemInfo->IsLocked();
+                        if (equipped != 0 || locked != 0) {
+                            // Binary: TutorialControl::ResetTutePos(tute, 0) — null
+                            if (game.pTutorialCtrl)
+                                game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+                        }
+                    }
+                }
+                // Binary: create equip button (field_0x8c) if not already present
+                // and selected item is not equipped.
+                // Texture: *(GameTask + s_TexSelectItem offset) — same slot +0x14
+                // Fruit type: Fruit::FruitType(*(GameTask + DAT_0015e58c), false)
+                // — string stored in GameTask at a GOT-relative offset.
+                // Port uses Fruit::FruitType("pineapple", false) as placeholder
+                // (same type DojoScreen uses for its shop button).
+                // DIFFERS: original fruit type string from DAT_0015e58c not resolved.
+                if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
+                    ItemManager* im = ItemManager::GetInstance();
+                    if (im) {
+                        int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
+                        if (equipped == 0 && !m_pEquipButton) {
+                            const int equipFruitType =
+                                Fruit::FruitType("pineapple", false);  // DIFFERS: DAT_0015e58c
                             m_pEquipButton = new MenuButton();
                             m_pEquipButton->Init(POS_EQUIP_BUTTON,
                                 [this]() { EquipCallback(); },
-                                Fruit::FruitType("pineapple", false),
-                                Vec3(0,0,0), nullptr);
+                                equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                             m_pEquipButton->m_bEnabled = 0;
                             SetSelected(m_pSelectedItem);
-                            // game->hud->AddControl(m_pEquipButton, false)
-                            // TutorialControl::ResetTutePos(tute, m_pEquipButton)
-                            // scale button x 0.75
-                            */
+                            if (game.hud) game.hud->AddControl(m_pEquipButton, false);
+                            if (game.pTutorialCtrl)
+                                game.pTutorialCtrl->ResetTutePos(m_pEquipButton);
+                            // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
+                            m_pEquipButton->m_TargetSize =
+                                m_pEquipButton->m_TargetSize * EQUIP_BUTTON_SCALE;
+                            if (m_pEquipButton->m_pFruitPiece) {
+                                m_pEquipButton->m_pFruitPiece->scale =
+                                    m_pEquipButton->m_pFruitPiece->scale * EQUIP_BUTTON_SCALE;
+                            }
                         }
                     }
                 }
@@ -575,51 +617,81 @@ void ShopScreen::Update(float dt) {
     // ---- STATES 2 and 7: Transition out to dojo ----
     case 2:
     case 7: {
-        float newAlpha = ALPHA_DECAY * m_TransitionAlpha;
+        // Binary: uses DAT_0015e90c = 0.85f (not 0.75f — state 3 uses 0.75 literal)
+        float newAlpha = ALPHA_DECAY_STATE27 * m_TransitionAlpha;
         m_TransitionAlpha = newAlpha;
-        if (newAlpha < ALPHA_STATE27_DONE && m_State == 2) {
-            // Binary: mark parent m_bNoDestructor=1, self pending removal,
-            //   GameTaskState->field_0x10c = 8 (returns to dojo / main flow)
-            if (m_pParent) {
-                m_pParent->m_bNoDestructor = 1;
-            }
+
+        // Binary condition: (newAlpha < DAT_0015e910) && (m_State == 2) && (m_pParent != null)
+        // Only state 2 triggers the main-screen transition; state 7 fades but does nothing else.
+        if (newAlpha < ALPHA_STATE27_DONE && m_State == 2 && m_pParent) {
+            // Binary: *(parent + 0x33) = 1  =>  parent->m_bPendingRemoval = 1
+            // (field_0x33 in HUDControl is m_bPendingRemoval, NOT m_bNoDestructor which is +0x32)
+            m_pParent->m_bPendingRemoval = 1;
+            // Binary: this->field_0x33 = 1  =>  self->m_bPendingRemoval = 1
             m_bPendingRemoval = 1;
-            // TODO: set GameTaskState state=8
+            // Binary: *(*(*(GameTask + 0x7990) + 0x160) + 0x10c) = 8
+            //         => mainScreen->m_State = STATE_SLIDE_IN (8)
+            // DAT_0015e924 = 0x7990 (GOT offset to the GameTask/game pointer),
+            // +0x160 = mainScreen ptr in Game, +0x10c = m_State in MainScreen.
+            if (game.mainScreen) {
+                game.mainScreen->SetState(STATE_SLIDE_IN);
+            }
         }
         break;
     }
 
     // ---- STATE 3: Buy animation fade-out ----
     case 3: {
-        float newAlpha = m_TransitionAlpha * ALPHA_DECAY;
+        // Binary: uses literal 0.75f (not the 0.85f from DAT_0015e90c).
+        float newAlpha = m_TransitionAlpha * ALPHA_DECAY_STATE3;
         m_TransitionAlpha = newAlpha;
+
+        // ARM idiom: if (-1 < (int)((uint)(newAlpha < threshold) << 0x1f))
+        //   fires when newAlpha >= threshold, i.e. NOT yet done fading.
         if (newAlpha >= ALPHA_STATE3_DONE) {
-            // Still fading: fling buy button fruit piece if present
+            // Still fading: fling old back-button fruit piece if present.
+            // Binary: SetVisible_GameTask(), then set vel, then null the ptr.
             if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-                // Binary: SetVisible + fling velocity
                 m_pBuyButton->m_pFruitPiece->m_bDetached = true;
                 float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 m_pBuyButton->m_pFruitPiece->vel =
                     Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
                 // Binary: TutorialControl::ResetTutePos(tute, 0)
+                if (game.pTutorialCtrl)
+                    game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
                 m_pBuyButton = nullptr;
             }
             break;
         }
-        // Fade complete: transition to state 4, create new buy button
+
+        // Fade complete: transition to state 4, create replacement back button.
+        // Binary: state = 4, alpha = 0.0f (DAT_0015e93c = 0.0f)
         m_State = 4;
         m_TransitionAlpha = 0.0f;
 
-        // Binary: create new MenuButton with updated fruit type
-        // DIFFERS: texture/fruit type not resolved
-        // TODO: create new m_pBuyButton at POS_BUY_BUTTON_NEW
-        // Binary: scale new button by DAT_0015e920
-
-        // Scale the new button's target size and fruit piece
-        // Binary after label LAB_0015e874:
-        //   m_pBuyButton->m_TargetSize *= DAT_0015e920
-        //   m_pBuyButton->m_pFruitPiece->scale *= DAT_0015e920
+        // Binary: create new MenuButton at POS_BACK_BUTTON_NEW (185, -105, 0)
+        // with same QuitShopCallback. Texture from *(GameTask + 0x17c).
+        // Fruit type: **(GameTask + DAT_0015e938) (another pre-stored int).
+        // Port uses same backFruitType (bomb) as state 0.
+        // After AddControl (LAB_0015e874):
+        //   m_TargetSize *= DAT_0015e920 (0.825f)
+        //   fruit piece scale *= 0.825f
+        {
+            const int backFruitType = FruitInfo_GetCount();
+            m_pBuyButton = new MenuButton();
+            m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
+                [this]() { QuitShopCallback(); },
+                backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+            m_pBuyButton->m_bEnabled = 1;
+            if (game.hud) game.hud->AddControl(m_pBuyButton, false);
+        }
+        // LAB_0015e874: scale new button (reached by both state 0 and state 3 paths)
+        m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
+        if (m_pBuyButton->m_pFruitPiece) {
+            m_pBuyButton->m_pFruitPiece->scale =
+                m_pBuyButton->m_pFruitPiece->scale * BUTTON_SCALE;
+        }
         break;
     }
 
@@ -639,6 +711,8 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->m_pFruitPiece->vel =
                 Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
             // Binary: TutorialControl::ResetTutePos(tute, 0)
+            if (game.pTutorialCtrl)
+                game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
             m_pBuyButton = nullptr;
         }
 
