@@ -131,8 +131,8 @@ void GameUpdate(float dt, bool active) {
     // CriticalFlash fade-out timer — single static state in BombHit.cpp.
     FN::UpdateCriticalFlash(dt);
 
-    if (earlyFrame) printf("GameUpdate: -> SplatEntity::UpdateActive (active=%d)\n", active ? 1 : 0);
-    if (active) SplatEntity::UpdateActive(dt);
+    if (earlyFrame) printf("GameUpdate: -> SplatEntity::UpdateActiveSplats (active=%d)\n", active ? 1 : 0);
+    if (active) SplatEntity::UpdateActiveSplats(dt);
 
     if (earlyFrame) printf("GameUpdate: -> SlashEntity::Update slash=%p\n", (void*)g_pSlashEntity);
     if (g_pSlashEntity) g_pSlashEntity->Update(dt);
@@ -248,8 +248,8 @@ void GameDraw(float dt, bool active) {
         game->hud->Draw(0x40);
 
         // 2b. SplatEntity::DrawActiveSplats @ 0x0016ba6a
-        if (earlyFrame) printf("GameDraw: -> SplatEntity::DrawActive\n");
-        SplatEntity::DrawActive();
+        if (earlyFrame) printf("GameDraw: -> SplatEntity::DrawActiveSplats\n");
+        SplatEntity::DrawActiveSplats();
 
         // 2c. Fruit::DrawShadows @ 0x0016ba6e — TODO: not yet ported
 

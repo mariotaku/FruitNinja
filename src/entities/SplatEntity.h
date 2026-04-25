@@ -17,6 +17,7 @@
 
 #include "Entity.h"
 #include "math/Vec3.h"
+#include "render/QUADCUSTOMVERTEX.h"
 #include <cstdint>
 
 class SplatEntity : public Entity {
@@ -78,7 +79,7 @@ public:
     // pos.z drops below the landing threshold (-50).
     int8_t m_SplatType;
 
-    // +0x75: alive flag — iterated by UpdateActive / DrawActive.
+    // +0x75: alive flag — iterated by UpdateActiveSplats / DrawActiveSplats.
     uint8_t m_bAlive;
 
     SplatEntity();
@@ -96,15 +97,31 @@ public:
     // transition (pos.z < -50), run the slide + decay pass once landed.
     void UpdateSplat(float dt);
 
+    // Virtual per-instance render: writes 6 QUADCUSTOMVERTEX entries for
+    // this splat into the caller-provided buffer.
+    // Binary: SplatEntity::DrawSplat @ 0x0017f008 (virtual vtable slot).
+    virtual void DrawSplat(QUADCUSTOMVERTEX* outVerts);
+
+    // Virtual no-op override of Entity::DrawUpdate(float).
+    // Binary: SplatEntity::DrawUpdate @ 0x0017ee2c (single bx lr).
+    virtual void DrawUpdate(float dt);
+
     // --- Pool API ---
     static void CreatePool(int capacity);
     static void DestroyPool();
     static SplatEntity* GetFree();
-    static void UpdateActive(float dt);
-    static void DrawActive();
-    static void RemoveAll();
+    // Binary: SplatEntity::NumActiveSplats @ 0x0017ee34
+    // Counts all pool slots with m_bAlive != 0.
+    static int NumActiveSplats();
+    // Binary: SplatEntity::UpdateActiveSplats @ 0x0017fd68
+    static void UpdateActiveSplats(float dt);
+    // Binary: SplatEntity::DrawActiveSplats @ 0x00180344
+    static void DrawActiveSplats();
+    // Binary: SplatEntity::RemoveAllSplats @ 0x0017eea4
+    static void RemoveAllSplats();
     static void LoadContent();
-    static void ReleaseContent();
+    // Binary: SplatEntity::CleanUp @ 0x0017eee0
+    static void CleanUp();
 };
 
 #endif

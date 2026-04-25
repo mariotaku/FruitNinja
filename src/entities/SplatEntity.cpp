@@ -335,7 +335,7 @@ void SplatEntity::LoadContent() {
     }
 }
 
-void SplatEntity::ReleaseContent() {
+void SplatEntity::CleanUp() {
     s_SplatTex.SetNull();
 }
 
@@ -346,13 +346,27 @@ SplatEntity* SplatEntity::GetFree() {
     return s;
 }
 
-void SplatEntity::UpdateActive(float dt) {
+// Binary: SplatEntity::NumActiveSplats @ 0x0017ee34
+// Counts pool slots with m_bAlive != 0. Static, reads GOT-relative pool
+// globals; the `this` pointer seen in Ghidra's __thiscall annotation is
+// ignored by the implementation.
+int SplatEntity::NumActiveSplats() {
+    const int N = s_Pool.Capacity();
+    int activeCount = 0;
+    for (int i = 0; i < N; ++i) {
+        SplatEntity* s = s_Pool.SlotAt(i);
+        if (s && s->m_bAlive) ++activeCount;
+    }
+    return activeCount;
+}
+
+void SplatEntity::UpdateActiveSplats(float dt) {
     // Per-frame spring rate compute — matches binary's
     // SplatEntity::UpdateActiveSplats @ 0x0017fd68 (instructions
     // 0x0017fe46..0x0017feda):
     //
     //   N_total  = ActorManager::GetNumEntities()
-    //   N_active = (count of live splats in pool)
+    //   N_active = NumActiveSplats()
     //   raw      = (N_total + N_active) / 15.0 - 0.15
     //   if raw <= 0:   spring = 1.25
     //   elif raw >= 3: spring = 4.25
@@ -362,12 +376,7 @@ void SplatEntity::UpdateActive(float dt) {
     // OR (multiplayer && game->field_0x170 == 0). Port skips the slow-
     // hardware branch (always treats as fast hw) and the multiplayer
     // gate (no MP support yet).
-    const int N = s_Pool.Capacity();
-    int activeCount = 0;
-    for (int i = 0; i < N; ++i) {
-        SplatEntity* s = s_Pool.SlotAt(i);
-        if (s && s->m_bAlive) ++activeCount;
-    }
+    const int activeCount = NumActiveSplats();
     int totalEntities = 0;
     if (ActorManager* am = ActorManager::GetInstance()) {
         totalEntities = am->GetNumEntities();
@@ -379,6 +388,7 @@ void SplatEntity::UpdateActive(float dt) {
         else                  s_SpringRate = raw + 1.25f;
     }
 
+    const int N = s_Pool.Capacity();
     for (int i = 0; i < N; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
         if (!s || !s->m_bAlive) continue;
@@ -391,7 +401,7 @@ void SplatEntity::UpdateActive(float dt) {
     }
 }
 
-void SplatEntity::RemoveAll() {
+void SplatEntity::RemoveAllSplats() {
     const int N = s_Pool.Capacity();
     for (int i = 0; i < N; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
@@ -402,20 +412,124 @@ void SplatEntity::RemoveAll() {
 }
 
 // ---------------------------------------------------------------------
+// SplatEntity::DrawSplat (0x0017f008) — virtual per-instance render
+// ---------------------------------------------------------------------
+// Writes 6 QUADCUSTOMVERTEX entries for this splat into the
+// caller-provided buffer (outVerts must point to at least 6 slots).
+// Called indirectly via vtable from DrawActiveSplats.
+void SplatEntity::DrawSplat(QUADCUSTOMVERTEX* outVerts) {
+    // Quad corner construction — matches binary DrawSplat (0x0017f008).
+    // The four corners are built from the sum/diff of the two axis
+    // vectors, scaled by m_Scale.x for X and m_Scale.y for Y. Note
+    // that m_Scale.y is the negative `-sc` from the spawn triple,
+    // which the binary keeps negative on purpose (it's the value the
+    // slide-decay phase mutates).
+    //
+    //   v0 (TL): pos + (+ax + bx) * scX, (+ay + by) * scY
+    //   v1 (TR): pos + (-ax + bx) * scX, (-ay + by) * scY
+    //   v2 (BL): pos + (+ax - bx) * scX, (+ay - by) * scY
+    //   v5 (BR): pos + (-ax - bx) * scX, (-ay - by) * scY
+    const float scX = m_Scale.x;
+    const float scY = m_Scale.y;
+    const float ax = m_AxisA.x, ay = m_AxisA.y;
+    const float bx = m_AxisB.x, by = m_AxisB.y;
+
+    // Colour lerp from base RGBA toward the captured fruit colour.
+    // Binary formula: fade = clamp(2.0 * m_ColourPhase, 0, 1).
+    // Since m_ColourPhase ticks toward zero, fade shrinks — meaning
+    // the splat lerps FROM fruit colour TOWARD base as ColourPhase
+    // drains. (FruitTypeColour path starts at phase=0, so fruit
+    // colour is persistent; default path starts at 0.75 so the base
+    // colour fades to fruit over time.)
+    float fade = m_ColourPhase * 2.0f;
+    if (fade < 0.0f) fade = 0.0f;
+    if (fade > 1.0f) fade = 1.0f;
+    const int rMix = (int)m_ColR + (int)((int)BASE_R - (int)m_ColR) * fade;
+    const int gMix = (int)m_ColG + (int)((int)BASE_G - (int)m_ColG) * fade;
+    const int bMix = (int)m_ColB + (int)((int)BASE_B - (int)m_ColB) * fade;
+
+    const uint8_t rR = (uint8_t)ClampInt(rMix, 0, 255);
+    const uint8_t gG = (uint8_t)ClampInt(gMix, 0, 255);
+    const uint8_t bB = (uint8_t)ClampInt(bMix, 0, 255);
+    const uint8_t a  = m_ColA;
+    const uint32_t col =
+        ((uint32_t)a  << 24) |
+        ((uint32_t)bB << 16) |
+        ((uint32_t)gG <<  8) |
+        ((uint32_t)rR);
+
+    // Atlas UV — verified via SplatEntity::DrawSplat @ 0x0017f008.
+    // The binary halves the table-stored U coords (`* 0.5`) before
+    // applying them, then optionally shifts both by +0.5 when
+    // m_bSpecial (binary field_0x19) is set — selecting the right
+    // half of the texture. Without the halving the quad samples
+    // twice as wide as the actual splat sprite cell and ends up
+    // mostly transparent / invisible.
+    //
+    //   u0 = table.u_start * 0.5
+    //   u1 = table.u_end   * 0.5
+    //   if (m_bSpecial)  { u0 += 0.5; u1 += 0.5; }
+    //   if (m_bFlipV)    swap(v0, v1);
+    const int type = ClampInt(m_SplatType, 0, 5);
+    const SplatAtlasEntry& e = SPLAT_ATLAS[type];
+    float u0 = e.u0 * 0.5f;
+    float u1 = e.u1 * 0.5f;
+    if (m_bSpecial) { u0 += 0.5f; u1 += 0.5f; }
+    float v0 = e.v0, v1 = e.v1;
+    if (m_bFlipV) { float t = v0; v0 = v1; v1 = t; }
+
+    QUADCUSTOMVERTEX* v = outVerts;
+    const float px = pos.x, py = pos.y, pz = pos.z;
+
+    // Vertex layout matches binary DrawSplat (vertices 0..5 written in
+    // order, then v3=v2 and v4=v1 via memcpy):
+    //   v[0] = TL
+    //   v[1] = TR
+    //   v[2] = BL
+    //   v[3] = v[2]
+    //   v[4] = v[1]
+    //   v[5] = BR
+    v[0].x = px + ( ax + bx) * scX;
+    v[0].y = py + ( ay + by) * scY;
+    v[0].z = pz;
+    v[0].u = u0; v[0].v = v0;
+
+    v[1].x = px + (-ax + bx) * scX;
+    v[1].y = py + (-ay + by) * scY;
+    v[1].z = pz;
+    v[1].u = u1; v[1].v = v0;
+
+    v[2].x = px + ( ax - bx) * scX;
+    v[2].y = py + ( ay - by) * scY;
+    v[2].z = pz;
+    v[2].u = u0; v[2].v = v1;
+
+    v[3] = v[2];
+    v[4] = v[1];
+
+    v[5].x = px + (-ax - bx) * scX;
+    v[5].y = py + (-ay - by) * scY;
+    v[5].z = pz;
+    v[5].u = u1; v[5].v = v1;
+
+    for (int k = 0; k < 6; ++k) {
+        v[k].nx = 0.0f;
+        v[k].ny = 0.0f;
+        v[k].nz = 1.0f;
+        v[k].colour = col;
+    }
+}
+
+// Binary: SplatEntity::DrawUpdate @ 0x0017ee2c (virtual no-op; single bx lr)
+void SplatEntity::DrawUpdate(float /*dt*/) {}
+
+// ---------------------------------------------------------------------
 // Batched draw — matches DrawActiveSplats (0x00180344)
 // ---------------------------------------------------------------------
 //
-// For each alive splat with m_SplatType >= 0, build a 6-vertex quad:
-//   - corners from (pos ± axisA * scaleX ± axisB * scaleY)
-//   - UVs from SPLAT_ATLAS[type], with bSpecial shifting U by +0.5 for
-//     types 0..3 and bFlipV swapping V edges
-//   - colour lerped from BASE_RGBA toward fruit colour by
-//     fade = clamp(2.0 * m_ColourPhase, 0, 1)
-//   - alpha = m_ColA (pre-clamped in UpdateSplat)
-//
-// All quads go into s_SplatVerts and render as a single batched
-// DrawTriList with slice_fruit.tex bound.
-void SplatEntity::DrawActive() {
+// For each alive splat with m_SplatType >= 0, calls DrawSplat() to
+// write 6 vertices, then submits the batch.
+void SplatEntity::DrawActiveSplats() {
     if (!s_SplatTex.IsValid()) return;
 
     const int N = s_Pool.Capacity();
@@ -426,118 +540,7 @@ void SplatEntity::DrawActive() {
         if (!s || !s->m_bAlive)     continue;
         if (s->m_SplatType < 0)     continue;  // still airborne
 
-        // Axis-scaled corner vectors. Scale triple stored as (sc,-sc,sc)
-        // where sc is the random radius. m_Scale.y is negative on purpose
-        // (it's the value that decays during the slide phase) — use the
-        // magnitude as the quad's uniform half-extent so the quad isn't
-        // back-facing.
-        // Quad corner construction — matches binary DrawSplat (0x0017f008).
-        // The four corners are built from the sum/diff of the two axis
-        // vectors, scaled by m_Scale.x for X and m_Scale.y for Y. Note
-        // that m_Scale.y is the negative `-sc` from the spawn triple,
-        // which the binary keeps negative on purpose (it's the value the
-        // slide-decay phase mutates).
-        //
-        //   v0 (TL): pos + (+ax + bx) * scX, (+ay + by) * scY
-        //   v1 (TR): pos + (-ax + bx) * scX, (-ay + by) * scY
-        //   v2 (BL): pos + (+ax - bx) * scX, (+ay - by) * scY
-        //   v5 (BR): pos + (-ax - bx) * scX, (-ay - by) * scY
-        const float scX = s->m_Scale.x;
-        const float scY = s->m_Scale.y;
-        const float ax = s->m_AxisA.x, ay = s->m_AxisA.y;
-        const float bx = s->m_AxisB.x, by = s->m_AxisB.y;
-
-        // Colour lerp from base RGBA toward the captured fruit colour.
-        // Binary formula: fade = clamp(2.0 * m_ColourPhase, 0, 1).
-        // Since m_ColourPhase ticks toward zero, fade shrinks — meaning
-        // the splat lerps FROM fruit colour TOWARD base as ColourPhase
-        // drains. (FruitTypeColour path starts at phase=0, so fruit
-        // colour is persistent; default path starts at 0.75 so the base
-        // colour fades to fruit over time.)
-        // Colour lerp from base RGBA toward the captured fruit colour.
-        // Binary formula: fade = clamp(2.0 * m_ColourPhase, 0, 1).
-        // Since m_ColourPhase ticks toward zero, fade shrinks — meaning
-        // the splat lerps FROM fruit colour TOWARD base as ColourPhase
-        // drains. (FruitTypeColour path starts at phase=0, so fruit
-        // colour is persistent; default path starts at 0.75 so the base
-        // colour fades to fruit over time.)
-        float fade = s->m_ColourPhase * 2.0f;
-        if (fade < 0.0f) fade = 0.0f;
-        if (fade > 1.0f) fade = 1.0f;
-        const int rMix = (int)s->m_ColR + (int)((int)BASE_R - (int)s->m_ColR) * fade;
-        const int gMix = (int)s->m_ColG + (int)((int)BASE_G - (int)s->m_ColG) * fade;
-        const int bMix = (int)s->m_ColB + (int)((int)BASE_B - (int)s->m_ColB) * fade;
-
-        const uint8_t rR = (uint8_t)ClampInt(rMix, 0, 255);
-        const uint8_t gG = (uint8_t)ClampInt(gMix, 0, 255);
-        const uint8_t bB = (uint8_t)ClampInt(bMix, 0, 255);
-        const uint8_t a  = s->m_ColA;
-        const uint32_t col =
-            ((uint32_t)a  << 24) |
-            ((uint32_t)bB << 16) |
-            ((uint32_t)gG <<  8) |
-            ((uint32_t)rR);
-
-        // Atlas UV — verified via SplatEntity::DrawSplat @ 0x0017f008.
-        // The binary halves the table-stored U coords (`* 0.5`) before
-        // applying them, then optionally shifts both by +0.5 when
-        // m_bSpecial (binary field_0x19) is set — selecting the right
-        // half of the texture. Without the halving the quad samples
-        // twice as wide as the actual splat sprite cell and ends up
-        // mostly transparent / invisible.
-        //
-        //   u0 = table.u_start * 0.5
-        //   u1 = table.u_end   * 0.5
-        //   if (m_bSpecial)  { u0 += 0.5; u1 += 0.5; }
-        //   if (m_bFlipV)    swap(v0, v1);
-        const int type = ClampInt(s->m_SplatType, 0, 5);
-        const SplatAtlasEntry& e = SPLAT_ATLAS[type];
-        float u0 = e.u0 * 0.5f;
-        float u1 = e.u1 * 0.5f;
-        if (s->m_bSpecial) { u0 += 0.5f; u1 += 0.5f; }
-        float v0 = e.v0, v1 = e.v1;
-        if (s->m_bFlipV) { float t = v0; v0 = v1; v1 = t; }
-
-        QUADCUSTOMVERTEX* v = &s_SplatVerts[count * 6];
-        const float px = s->pos.x, py = s->pos.y, pz = s->pos.z;
-
-        // Vertex layout matches binary DrawSplat (vertices 0..5 written in
-        // order, then v3=v2 and v4=v1 via memcpy):
-        //   v[0] = TL
-        //   v[1] = TR
-        //   v[2] = BL
-        //   v[3] = v[2]
-        //   v[4] = v[1]
-        //   v[5] = BR
-        v[0].x = px + ( ax + bx) * scX;
-        v[0].y = py + ( ay + by) * scY;
-        v[0].z = pz;
-        v[0].u = u0; v[0].v = v0;
-
-        v[1].x = px + (-ax + bx) * scX;
-        v[1].y = py + (-ay + by) * scY;
-        v[1].z = pz;
-        v[1].u = u1; v[1].v = v0;
-
-        v[2].x = px + ( ax - bx) * scX;
-        v[2].y = py + ( ay - by) * scY;
-        v[2].z = pz;
-        v[2].u = u0; v[2].v = v1;
-
-        v[3] = v[2];
-        v[4] = v[1];
-
-        v[5].x = px + (-ax - bx) * scX;
-        v[5].y = py + (-ay - by) * scY;
-        v[5].z = pz;
-        v[5].u = u1; v[5].v = v1;
-
-        for (int k = 0; k < 6; ++k) {
-            v[k].nx = 0.0f;
-            v[k].ny = 0.0f;
-            v[k].nz = 1.0f;
-            v[k].colour = col;
-        }
+        s->DrawSplat(&s_SplatVerts[count * 6]);
 
         ++count;
     }
