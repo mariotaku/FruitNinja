@@ -79,8 +79,10 @@ void ItemManager::LoadItemData() {
     if (!game) return;
 
     // Phase 1: Parse itemlist.xml
-    // Binary uses path string "xml/itemList.xml" @ 0x1ba064 (relative to Data/).
-    std::string xmlPath = game->data_dir + "/xml/itemList.xml";
+    // Binary uses path string "xml/itemList.xml" @ 0x1ba064 (capital L), but the
+    // shipped Bada asset is "itemlist.xml" (lowercase). Use the lowercase form so
+    // case-sensitive filesystems (Linux + some MSYS2 configs) actually find the file.
+    std::string xmlPath = game->data_dir + "/xml/itemlist.xml";
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError err = doc.LoadFile(xmlPath.c_str());
 

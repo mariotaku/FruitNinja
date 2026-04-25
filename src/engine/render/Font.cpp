@@ -111,12 +111,27 @@ SmartPtr<Font> Font::Load(const char* path) {
     }
     fclose(f);
 
-    // Load page textures
+    // Load page textures.
+    // The .fnt files reference the original BMFont .tga atlas (e.g.
+    // "font_fruit_ninja_0.tga"), but the Bada distribution shipped them
+    // pre-converted as .tex at the data root (Data/font_fruit_ninja_0.tex)
+    // — NOT alongside the .fnt in fonts/ and NOT in textures/. Swap the
+    // extension and try the data root first; fall back to the basePath
+    // (alongside the .fnt) so other distributions still work.
     font->m_PageTextures.resize(font->m_PageCount);
     for (int i = 0; i < font->m_PageCount && i < 16; i++) {
-        if (pagePaths[i][0]) {
-            std::string texPath = basePath + pagePaths[i];
-            font->m_PageTextures[i] = TextureManager::GetInstance().Load(texPath.c_str());
+        if (!pagePaths[i][0]) continue;
+        std::string pageName(pagePaths[i]);
+        size_t dot = pageName.find_last_of('.');
+        if (dot != std::string::npos) {
+            pageName = pageName.substr(0, dot) + ".tex";
+        }
+        const char* dataDir = TextureManager::GetDataDir();
+        std::string rootPath = std::string(dataDir ? dataDir : ".") + "/" + pageName;
+        font->m_PageTextures[i] = TextureManager::GetInstance().Load(rootPath.c_str());
+        if (!font->m_PageTextures[i].IsValid()) {
+            std::string sidePath = basePath + pageName;
+            font->m_PageTextures[i] = TextureManager::GetInstance().Load(sidePath.c_str());
         }
     }
 
