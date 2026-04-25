@@ -363,7 +363,11 @@ void MenuButton::Update(float dt) {
             released = m_pFruitPiece && m_pFruitPiece->m_bSliced;
         } else if (m_pEntity->entityType == 1) { // Bomb
             Bomb* bomb = static_cast<Bomb*>(m_pEntity);
-            released = (bomb->m_bHit != 0);
+            // Menu bombs start with m_bMovement=0 (pinned). ClearMenuItems
+            // flips m_bMovement=1 + disables collision when a sibling
+            // button is sliced — that signals release. m_bHit fires for
+            // user-touched bombs (separate path). Either condition counts.
+            released = (bomb->m_bHit != 0) || (bomb->m_bMovement != 0);
         }
 
         if (!released) {
