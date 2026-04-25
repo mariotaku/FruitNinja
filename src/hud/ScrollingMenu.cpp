@@ -342,11 +342,12 @@ void ScrollingMenu::Update(float /*dt*/) {
             if (distToCenter < 0.0f) distToCenter = -distToCenter;
             if (distToCenter < closestDist) {
                 m_ClosestIdx = i;
-                // distToSnap = abs(curY - m_Velocity.y) / (m_Width hack? using m_Width field)
-                // Binary: field78_0xc4 = abs(curY - field_0xd8) / field_0x94
-                // field_0x94 is undocumented; using 1.0 as denominator placeholder
-                m_SnapDist = (curY != m_Velocity.y) ? (curY - m_Velocity.y) : 0.0f;
-                if (m_SnapDist < 0.0f) m_SnapDist = -m_SnapDist;
+                // Snap-distance: signed delta from current scroll to the
+                // closest item's position. Phase 7's snap step uses this
+                // directly so the post-release drift is TOWARD the closest
+                // item (sign-preserving). Earlier port took fabs which
+                // made the snap always push offset positive (runaway).
+                m_SnapDist = curY - m_Velocity.y;
                 closestDist = distToCenter;
             }
         } else if (m_DragTargetIdx == i) {
@@ -403,11 +404,20 @@ void ScrollingMenu::Update(float /*dt*/) {
     }
 
     // --- Phase 7: scroll bounds + spring-back ---
+    // Port convention (after localized Y-flip in Phase 3B):
+    //   offset = 0       -> top of list (initial)
+    //   offset > 0       -> scrolled toward bottom (lower items visible)
+    //   offset < 0       -> overscroll past top (spring to 0)
+    //   offset > maxOff  -> overscroll past bottom (spring to maxOff)
+    //   maxOff = m_TotalHeight - m_Height (= 17*80 - 240 = 1120 for shop)
+    // Inequalities are flipped from the binary's spec (which has TOP=0,
+    // BOTTOM=negative under Y-down). Math is the mirror image.
     float offset = m_Velocity.y;
+    float maxOff = m_TotalHeight - m_Height;
+    if (maxOff < 0.0f) maxOff = 0.0f;  // content shorter than viewport
 
-    if (offset <= 0.0f || m_DragTargetIdx >= 0) {
-        float totalScrollH = m_Height - m_TotalHeight;  // = -1120 for shop
-        if (offset >= totalScrollH || m_DragTargetIdx >= 0) {
+    if (offset >= 0.0f || m_DragTargetIdx >= 0) {
+        if (offset <= maxOff || m_DragTargetIdx >= 0) {
             if (m_TouchId != -1) return;
             float vel = m_Velocity.y;
             bool velSmall = (vel < 0.0f) ? (vel >= VEL_NEAR_ZERO_LO)
@@ -416,8 +426,10 @@ void ScrollingMenu::Update(float /*dt*/) {
             m_Velocity.y = offset + snapDist * VEL_NEAR_ZERO_HI;
             return;
         }
-        m_Velocity.y = offset + (totalScrollH - offset) * SPRING_FWD_COEF;
+        // offset > maxOff -> past bottom, spring toward maxOff
+        m_Velocity.y = offset + (maxOff - offset) * SPRING_FWD_COEF;
     } else {
+        // offset < 0 -> past top, spring toward 0
         m_Velocity.y = offset * SPRING_BACK_COEF;
     }
 
