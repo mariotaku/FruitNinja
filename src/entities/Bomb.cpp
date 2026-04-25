@@ -569,20 +569,10 @@ void Bomb::Draw(Renderer& r) {
     mat = rotMat * mat;                          // mat = R * S
     mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));  // + T in col3
 
-    // Enable face culling for the bomb mesh draw. The bomb model has
-    // duplicated/back-face geometry (body + interior shell sharing
-    // vertex positions); without GL_CULL_FACE the back faces blow
-    // through the front, producing the pure-white sphere artifact.
-    // The model_gallery preview enables CULL_FACE alongside depth
-    // test + GL_LESS and renders correctly. Mesh::DrawGeometry leaves
-    // GL_CULL_FACE off at exit (commit ac66e42), so we enable it just
-    // for this draw and restore on exit.
-    //
-    // Depth test stays at the default (GL_LESS, enabled) — same as
-    // the binary, which calls Model::Draw with no GL state changes.
-    glEnable(GL_CULL_FACE);
+    // Binary @ 0x171be8: zero GL state calls — just Model::Draw.
+    // GL_CULL_FACE is enabled per-pass inside Mesh::DrawGeometry
+    // (and disabled at end), so no scoping is needed here.
     modelPtr->Draw(mat);
-    glDisable(GL_CULL_FACE);
 }
 
 void Bomb::Deactivate() {
