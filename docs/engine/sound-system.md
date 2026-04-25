@@ -129,6 +129,7 @@ Individual sound instance. MortarSoundMAM is the concrete subclass.
 | 0x0018c830 | Pause() | __thiscall | If playing (state 2): PauseSound, state=1 |
 | 0x0018c850 | Play() | __thiscall | If idle (state 0): SFXPlay via SoundManager, state=2 |
 | 0x0018c7f0 | Stop(float) | __thiscall | StopSound, state=0, handle=0 |
+| 0x0018c810 | Resume() | __thiscall | If paused (state 1): ResumeSound, state=2 |
 | 0x0018c7b4 | SetVolume(float) | __thiscall | Maps 0-1 float to 0-255, calls MAMAudioController::SetSoundVolume |
 
 SetVolume multiplier constant: DAT_0018c7ec = **255.0f** (maps 0.0-1.0 to 0-255 byte range).
