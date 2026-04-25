@@ -4,7 +4,7 @@
 //
 // ScrollingMenuItem -- single row in a ScrollingMenu.
 // Binary refs:
-//   ctor (5-param) 0x0015b194
+//   ctor (5-param) 0x0015b228
 //   ctor (0-param) 0x0015b5dc
 //   dtor           0x0015c3ac / 0x0015c3e8
 //
@@ -25,29 +25,37 @@
 //   slot 13 (+0x34)  ?                         0x00147974
 //   slot 14 (+0x38)  ?                         0x00147978
 //
-// Struct layout (from ctor 0x0015b228):
-//   +0x00  vtable*
-//   +0x04  float    pos.x  (set by Move)
-//   +0x08  float    pos.y  (set by Move)
-//   +0x0C  float    pos.z  (set by Move)
-//   +0x10  ScrollingMenu*  m_pParent
-//   +0x14  Colour   m_Colour  (4 bytes RGBA, from MakeColourFromGlobal_ScrollMenu)
-//   +0x18  float    m_Width   (from GOT-cached Vec3[0])
-//   +0x1C  float    m_Height  (from GOT-cached Vec3[1])
-//   +0x20  float    m_Depth   (from GOT-cached Vec3[2])
-//   +0x24  float    m_ParamWidth   (width ctor param)
-//   +0x28  float    m_ParamHeight  (height ctor param)
-//   +0x2C  Delegate1  m_Callback  (40 bytes, Delegate1<void,ScrollingMenuItem*>)
-//   +0x54  char*    m_pText   (label string ptr; SetText stores here)
-//   +0x58  (unknown)
-//   +0x5C  char[..] m_DescText  (inline description text buffer, ShopListItem::Draw reads in_r0+0x5c)
+// Struct layout (from ctor 0x0015b228, SetParent 0x0015aeb4, SetOnscreen 0x0013ce10):
+//   +0x00  vtable*               (4 bytes on ARM32)
+//   +0x04  float    pos.x        (set by Move)
+//   +0x08  float    pos.y
+//   +0x0C  float    pos.z
+//   +0x10  ScrollingMenu* m_pParent   SetParent 0x0015aeb4: *(this+0x10) = param
+//   +0x14  Colour   m_Colour     (4 bytes RGBA)
+//   +0x18  float    m_Width
+//   +0x1C  float    m_Height
+//   +0x20  float    m_Depth
+//   +0x24  float    m_ParamWidth   (ctor param; binary writes 25.0f = 0x41c80000)
+//   +0x28  float    m_ParamHeight  (ctor param; binary writes DAT_0015b668 = 0.0f)
+//   +0x2C  Delegate1  m_Callback   (40 bytes; Delegate1<void,ScrollingMenuItem*>)
+//          Binary ctor @ 0x0015b228: operator= target = (this+0x30); next field m_pText at +0x54
+//          => Delegate1 spans +0x2C..+0x53 (40 bytes = 0x28)
+//          SetOnscreen 0x0013ce10 writes: this[0x2D] = param_bool
+//          => m_bOnscreen is byte 1 inside the Delegate1 header block
+//   +0x54  char*    m_pText       SetText 0x0015b124: *(this+0x54)
+//   +0x58  void*    m_field58     Draw 0x0015eb00: *(int*)(in_r0+0x58) non-null check
+//                                 dereferences as ptr->field_0xb8 (likely ShopScreen*)
+//   +0x5C  char[]   m_DescText    Draw: pcVar23 = (char*)(in_r0+0x5c) (inline text buffer)
 //
 // Port status: vtable fully matched; Draw() and scrolling physics not yet ported.
 //
-// Analysed: 2026-04-25T20:30
+// Analysed: 2026-04-25T14:30
 //
 
 #include <functional>
+#include <cassert>
+#include <cstdint>
+#include <cstddef>
 
 class ScrollingMenu;
 
@@ -78,10 +86,12 @@ public:
     virtual void Remove() {}
 
     // vtable +0x20 (slot 8): SetParent(ScrollingMenu*)
+    // Binary 0x0015aeb4: *(this+0x10) = param
     virtual void SetParent(ScrollingMenu* parent) { m_pParent = parent; }
 
     // vtable +0x24 (slot 9): SetOnscreen(bool)
-    virtual void SetOnscreen(bool onscreen) { m_bOnscreen = onscreen; }
+    // Binary 0x0013ce10: this[0x2D] = param  (byte 1 of Delegate1 header)
+    virtual void SetOnscreen(bool onscreen) { m_Delegate.m_bOnscreen = (uint8_t)onscreen; }
 
     // vtable +0x28 (slot 10): SetText(char*)
     // Binary: 0x0015b124 stores the pointer at +0x54.
@@ -113,37 +123,65 @@ public:
     void CallClickedMenuItemCallback();
 
     // --- Position (set by Move, read by Draw) ---
-    // +0x04
-    struct { float x, y, z; } pos;
+    // +0x04..+0x0F
+    struct { float x, y, z; } pos;   // +0x04
+
+    // +0x10: parent menu pointer
+    // Binary offset confirmed: SetParent 0x0015aeb4 writes to *(this+0x10).
+    ScrollingMenu* m_pParent;         // +0x10
 
     // +0x14: display colour
-    unsigned int m_Colour;   // Colour RGBA (4 bytes)
+    unsigned int m_Colour;            // +0x14  (Colour RGBA 4 bytes)
 
     // +0x18..+0x20: item bounding dimensions (from GOT-cached Vec3)
-    float m_Width;
-    float m_Height;
-    float m_Depth;
+    float m_Width;                    // +0x18
+    float m_Height;                   // +0x1C
+    float m_Depth;                    // +0x20
 
     // +0x24..+0x28: ctor params
-    float m_ParamWidth;
-    float m_ParamHeight;
+    float m_ParamWidth;               // +0x24  (init 25.0f = DAT_0015b668 0x41c80000)
+    float m_ParamHeight;              // +0x28  (init 0.0f)
 
-    // +0x2C..+0x53: click callback (Delegate1<void,ScrollingMenuItem*> in binary; port: std::function)
-    std::function<void(ScrollingMenuItem*)> m_Callback;
+    // +0x2C..+0x53: Delegate1<void,ScrollingMenuItem*> (40 bytes in binary).
+    //
+    // Binary layout of Delegate1 at +0x2C:
+    //   +0x2C  byte  _cb_hdr0    (Delegate1 header byte 0)
+    //   +0x2D  byte  m_bOnscreen (SetOnscreen 0x0013ce10 writes this[0x2D])
+    //   +0x2E  byte  _cb_hdr1[0]
+    //   +0x2F  byte  _cb_hdr1[1]
+    //   +0x30..+0x4F  std::function<> callable (32 bytes; port uses std::function here)
+    //   +0x50..+0x53  _cb_tail[4] (pad to reach +0x54)
+    //
+    // Port accesses m_bOnscreen via SetOnscreen()/getter; m_Callback via the
+    // std::function stored at _delegate_fn (offset +0x30 within the 40-byte block).
+    // sizeof(std::function<void(ScrollingMenuItem*)>) == 32 on x86_64 (verified).
+    // Total region: 1+1+2+32+4 = 40 bytes. ✓
+    struct {
+        uint8_t _cb_hdr0;                                    // +0x2C  (Delegate1 header byte 0)
+        uint8_t m_bOnscreen;                                 // +0x2D  SetOnscreen writes here
+        uint8_t _cb_hdr1[2];                                 // +0x2E..+0x2F
+        std::function<void(ScrollingMenuItem*)> _delegate_fn; // +0x30..+0x4F (32 bytes)
+        uint8_t _cb_tail[4];                                 // +0x50..+0x53 (pad to 40 bytes)
+    } m_Delegate;   // +0x2C, 40 bytes total
 
     // +0x54: display text pointer
-    const char* m_pText;
+    // Binary: SetText 0x0015b124 stores at *(this+0x54).
+    const char* m_pText;              // +0x54
 
-    // +0x58: unknown field, init 0
-    int m_field58;
+    // +0x58: opaque pointer (set by ShopScreen; checked non-null before desc/cost draw)
+    // Binary Draw 0x0015eb00: if(*(int*)(in_r0+0x58)!=0) then dereference ->field_0xb8
+    // Type is a pointer to an object with field at +0xB8 (likely ShopScreen* or similar).
+    void* m_field58;                  // +0x58
 
     // +0x5C: inline description text buffer (ShopListItem::Draw reads this as in_r0+0x5c)
-    // Size unknown; a 128-byte buffer is safe for the port.
-    char m_DescText[128];
-
-protected:
-    ScrollingMenu* m_pParent;
-    bool m_bOnscreen;
+    // Size unknown; a 128-byte buffer is sufficient for the port.
+    char m_DescText[128];             // +0x5C..+0xDB
 };
+
+// Convenience accessors that match binary SetOnscreen / GetOnscreen semantics.
+// SetOnscreen writes byte at +0x2D (inside Delegate1 header, m_bOnscreen field).
+inline void ScrollingMenuItem_SetOnscreen(ScrollingMenuItem* item, bool v) {
+    item->m_Delegate.m_bOnscreen = (uint8_t)v;
+}
 
 #endif // FN_SCROLLING_MENU_ITEM_H
