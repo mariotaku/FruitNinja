@@ -1,4 +1,4 @@
-<!-- Analysed: 2026-04-25T18:15 -->
+<!-- Analysed: 2026-04-25T20:30 -->
 
 # ShopScreen
 
@@ -612,8 +612,462 @@ Observed after wiring back-icon + select_item textures and confirming the screen
 4. **Empty info dialog box** — `dialog_box_shop.tex` panel renders, but no item name/description because the Font system isn't wired into the game struct (`game->field_0x54` font slots).
 5. **Empty item list** — `ScrollingMenu::Draw` and `ShopListItem::Draw` are stubs; `ItemManager::GetNumItems()` returns 0.
 
+---
+
+## ScrollingMenuItem Class Layout
+
+<!-- Analysed: 2026-04-25T20:30 -->
+
+ScrollingMenuItem does NOT inherit from HUDControl. It has its own independent vtable.
+
+**Vtable** (raw ptr `0x001e9ef8`, object vtable = `0x001e9f00`):
+
+| Slot | Offset | Function | Address |
+|------|--------|----------|---------|
+| 0 | +0x00 | ~ScrollingMenuItem (dtor1) | `0x0015c3ac` |
+| 1 | +0x04 | ~ScrollingMenuItem (dtor2) | `0x0015c3e8` |
+| 2 | +0x08 | GetHeight | `0x0013cdf0` |
+| 3 | +0x0C | GetWidth | `0x0013cdf8` |
+| 4 | +0x10 | SetHeight | `0x0013ce00` |
+| 5 | +0x14 | SetWidth | `0x0013ce08` |
+| 6 | +0x18 | Move(_Vector3) | `0x0015aea8` |
+| 7 | +0x1C | Remove | `0x0013d14c` |
+| 8 | +0x20 | SetParent(ScrollingMenu*) | `0x0015aeb4` |
+| 9 | +0x24 | SetOnscreen(bool) | `0x0013ce10` |
+| 10 | +0x28 | SetText(char*) | `0x0015b124` |
+| 11 | +0x2C | **Draw()** | `0x0015b480` |
+| 12 | +0x30 | ? | `0x00147970` |
+| 13 | +0x34 | ? | `0x00147974` |
+| 14 | +0x38 | ? | `0x00147978` |
+
+**ScrollingMenuItem struct layout** (deduced from ctor `0x0015b228`):
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x00 | vtable* | vtable | |
+| +0x04 | float | pos.x | Set by Move() |
+| +0x08 | float | pos.y | Set by Move() |
+| +0x0C | float | pos.z | Set by Move() |
+| +0x10 | ScrollingMenu* | m_pParent | Set by SetParent() |
+| +0x14 | Colour | m_Colour | 4 bytes RGBA, from MakeColourFromGlobal_ScrollMenu |
+| +0x18 | float | m_Width | From GOT-cached Vec3[0] |
+| +0x1C | float | m_Height | From GOT-cached Vec3[1] |
+| +0x20 | float | m_Depth | From GOT-cached Vec3[2] |
+| +0x24 | float | m_ParamWidth | width ctor param |
+| +0x28 | float | m_ParamHeight | height ctor param |
+| +0x2C | Delegate1 | m_Callback | 40 bytes (Delegate1<void,ScrollingMenuItem*>) |
+| +0x54 | char* | m_pText | Label string ptr; SetNull then SetText called in ctor |
+| +0x58 | (unknown) | | |
+| +0x5C | char[...] | m_DescText | Inline description text buffer (used by ShopListItem::Draw as `in_r0+0x5c`) |
+
+**ShopListItem vtable** (raw ptr `0x001ea028`, object vtable = `0x001ea030`) — overrides:
+
+| Slot | Offset | Function | Address |
+|------|--------|----------|---------|
+| 0 | +0x00 | ~ShopListItem (dtor1) | `0x0015cfb4` |
+| 1 | +0x04 | ~ShopListItem (dtor2) | `0x0015d018` |
+| 6 | +0x18 | ShopListItem::Move (override) | `0x0015d9fc`* |
+| 11 | +0x2C | **ShopListItem::Draw** | `0x0015eb00` |
+
+*Ghidra merged `0x0015d9fc` into `_GLOBAL__I_ShopScreen.cpp`. The address is a valid ARM Thumb-2 entry point for ShopListItem's Move override; the merger is a Ghidra analysis artifact.
+
+**ShopListItem additional fields** (appended after ScrollingMenuItem base):
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x25C | float | m_NewItemAlpha | `>0` → draw new_item_sml badge; fades from ShopListItem init |
+| +0x260 | float | m_SelectedAlpha | `>0` → draw selected_sml highlight ring |
+| +0x264 | float | (unknown float) | Initialised to `DAT_0015f7a0 = 0.0f` |
+| +0x268 | Vec3? | (position) | Added to in_r0+4 (pos) for icon translate |
+| +0x274 | SmartPtr\<Texture\> | m_pIconTex | Item icon texture (loaded externally); SetNull in ctor |
+| +0x278 | ItemInfo* | m_pItemInfo | Pointer to item info; 0 in ctor |
+| +0x27C | byte | m_bOnscreen | 1 in ctor; 0 means item is off-screen (Draw early-exits) |
+| +0x27D | byte | m_bSelected | 0 in ctor; when 1, resets static colour cache |
+| +0x27E | byte | m_bIsNew | 0 in ctor; when non-zero, draws `loading.tex` overlay badge |
+| +0x280 | float | m_CostAlpha | Used by cost text: `(m_CostAlpha * 255.0f)` clamped → byte alpha |
+
+---
+
+## ScrollingMenu::Draw
+
+<!-- Analysed: 2026-04-25T20:30 -->
+
+**Address**: `0x0015af98`
+**Signature**: `void ScrollingMenu::Draw(float* hudScale)`
+**Size**: 12 instructions (~50 bytes)
+
+ScrollingMenu::Draw is a minimal iterator. It has NO scissor/clipping setup, NO scroll-offset application, and NO per-item positioning logic. All of that is in `ScrollingMenu::Update`.
+
+```c
+void ScrollingMenu::Draw(float* hudScale) {
+    for (auto it = m_Items.begin(); it != m_Items.end(); ++it) {
+        (*it)->vtable[+0x2C]();   // calls Draw() on each item
+    }
+}
+```
+
+The vtable dispatch at offset `+0x2C` resolves to:
+- `ScrollingMenuItem::Draw` (`0x0015b480`) for plain items
+- `ShopListItem::Draw` (`0x0015eb00`) for shop items (ShopListItem overrides slot 11)
+
+**Positioning**: each item's world position is set by `ScrollingMenu::Update` via `(*item)->vtable[+0x18](item, vec3)` (the `Move` call). Draw just iterates and renders; no per-frame position is set during Draw.
+
+**Companion function**: `ScrollingMenu::PreDraw` at `0x0015af34` is a no-op (`return param_1`).
+
+**No scissor/clip**: the binary does not call any GL scissor or clip-plane function inside Draw. The ShopScreen's list stays within the dialog_box bounds naturally due to position math, not GL clipping.
+
+---
+
+## ScrollingMenuItem::Draw
+
+<!-- Analysed: 2026-04-25T20:30 -->
+
+**Address**: `0x0015b480`
+**Signature**: `void ScrollingMenuItem::Draw()` (unknown calling convention — `r0 = this`)
+**Size**: ~150 bytes
+**Used by**: all ScrollingMenu items that are NOT ShopListItem (i.e., plain text items)
+
+### Pseudocode
+
+```c
+void ScrollingMenuItem::Draw() {
+    if (this->m_pText == NULL) return;  // +0x54 null check
+
+    // Compute clip region from parent ScrollingMenu bounds
+    float* clipRect = NULL;
+    if (this->m_pParent != NULL) {   // +0x10
+        float parentY = m_pParent->pos.y;   // +0x08 of parent
+        float half_h  = (float)m_pParent->vtable->GetHeight() * 0.5f;
+        // clipRect points to local_5c[4] = { top, bottom, left, right }
+        // top    = parentY + half_h
+        // bottom = parentY - half_h
+        // left   = parentX - half_w   (similar for X)
+        // right  = parentX + half_w
+        clipRect = &local_5c;
+    }
+
+    Font* font = *(Font**)(game->pData + 0x54);  // font_fruit_ninja.fnt
+    Utf8StringIterator iter(this->m_pText);       // +0x54
+    Vec3 drawPos = this->pos;                     // +0x04
+
+    // Shadow pass (black, 50% alpha)
+    // (none in ScrollingMenuItem base; ShopListItem adds shadows)
+
+    // Draw with colour from m_Colour (+0x14)
+    Vec2 globalVec2 = CopyGlobalVec2_GameTask();
+    Font::Font_DrawString(
+        /*scale=*/ 31.0f,        // 0x41f00000
+        /*spacing=*/ 1.0f,       // 0x3f800000
+        /*lineHeight=*/ DAT_0015b5a0,  // 0.0f
+        font,
+        &iter,
+        &drawPos,
+        &m_Colour,
+        &globalVec2,
+        /*flags=*/ 0xF,          // right-aligned + centred?
+        clipRect                 // NULL if no parent
+    );
+}
+```
+
+**Font slot**: `Game + 0x54` = `font_fruit_ninja.fnt` (SD) / `font_fruit_ninja_HD.fnt` (HD).
+**Scale**: hardcoded `31.0f`.
+**Flags**: `0xF`.
+**Clip**: populated from `m_pParent` field `+0x08/+0x0C`(pos) and `+0x44/+0x48` vtable calls (GetHeight/GetWidth on the parent).
+
+---
+
+## ShopListItem::Draw
+
+<!-- Analysed: 2026-04-25T20:30 -->
+
+**Address**: `0x0015eb00`
+**Body**: `0x0015eb00` – `0x0015f717` (~1816 bytes)
+**Signature**: `void ShopListItem::Draw()` (unknown calling convention — `r0 = this`)
+**Instruction count**: ~450 instructions
+**Font::DrawString calls**: 5 (2 title, 2 cost-hint, 1 description)
+**Textures drawn**: 5 distinct slots
+
+All GOT accesses share the same `GOT_base = 0x001ec130` (same static block as ShopScreen::Draw).
+
+### Guard
+
+```c
+if (in_r0 + 0x27D) {  // m_bSelected flag
+    static_block[+0x8C] = 0xFFFFFFFF;  // reset colour cache
+}
+if (in_r0 + 0x2C == 0) return;  // scrollingmenuitem +0x2c = onscreen flag? Actually this is in HUDControl base... 
+```
+
+Actually the guard at `in_r0 + 0x2d` — looking at the decompile again: `if (*(char*)(in_r0 + 0x2d) != '\0')`. This is a different offset. Since `in_r0` is the ShopListItem pointer and `+0x2C` is the start of the Delegate1, `+0x2D` is the second byte of the delegate. This is confusing — it may actually be a custom onscreen flag stored in the delegate region. The effective meaning is: if this byte is non-zero, proceed with drawing; otherwise the whole item body is skipped.
+
+### Part 1: Item Name (Title) Text — always drawn if onscreen
+
+```c
+Font* font = game->pData + 0x54;           // font_fruit_ninja.fnt
+Colour itemColour = *(Colour*)(GOT_base + 0x73a4);  // white
+if (ItemInfo::IsLocked(this->m_pItemInfo)) {
+    itemColour = Colour(200, 200, 200, 255);  // greyed out
+}
+Vec3 basePos = this->pos;  // in_r0 + 0x04
+
+// Check if HD font mode (Game + 0x03 == '\f')
+uint scale = (Game.field_0x03 == '\f') ? 20 : 25;
+
+// Measure title string to check if it needs scale-to-fit
+float measured = Font::MeasureString(font, this->m_pItemInfo->m_pTitle);  // ItemInfo + 0x14
+float textScale = 1.0f;
+if (measured * scale > 175.0f  &&  Game.field_0x03 == '\f') {
+    textScale = 175.0f / (measured * scale);
+    scale = (uint)(0.0f < textScale * 20.0f) * (int)(textScale * 20.0f);
+}
+
+// Shadow draw (offset +4, -4, 0)
+Vec3 shadowPos = basePos + Vec3(4.0f, -4.0f, 0.0f);
+Font::Font_DrawString(scale, 1.0f, 0.0f, font, title_iter, shadowPos, Colour(0,0,0,64), globalVec2, 0xE, 0);
+
+// Actual draw (no offset)
+Vec3 drawPos = basePos;
+Font::Font_DrawString(scale, 1.0f, 0.0f, font, title_iter, drawPos, itemColour, globalVec2, 0xE, 0);
+```
+
+`ItemInfo::m_pTitle` = `*(char**)(ItemInfo + 0x14)`.
+
+### Part 2: Cost Hint Text — drawn when cost-strings cached
+
+The binary caches 4 cost-string widths (in `static_block[+0x8C..+0x9C]`) scaled by `pFVar29` (cost scale). These correspond to 4 possible currency/cost strings stored in `static_block[+0x1C..+0x28]` (4 pointers × 4 bytes). The active one is picked by `*(char*)(ItemInfo + 0x10)` (the cost-type index, values 0–3).
+
+```c
+float costScale = (Game.field_0x03 == '\f') ? textScale * 16.0f : 20.0f;  // 0x41a00000 = 20.0
+
+// Cache cost-string widths if not yet measured
+if (static_block[+0x90] == 0.0f) {
+    for (int i = 0; i < 4; i++) {
+        float w = Font::MeasureString(font, static_block[+0x1C + i*4]);
+        static_block[+0x90 + i*4] = w * costScale;
+    }
+}
+
+char* costStr = static_block[+0x1C + costTypeIndex * 4];
+if (costStr != NULL) {
+    // Shadow
+    Vec3 cShadowPos = basePos + Vec3(4.0f, -4.0f, 0.0f);
+    Font::Font_DrawString(costScale, 1.0f, 0.0f, font, cost_iter, cShadowPos, Colour(0,0,0,64), globalVec2, 0xE, 0);
+    // Actual
+    Vec3 cPos = basePos;
+    Font::Font_DrawString(costScale, 1.0f, 0.0f, font, cost_iter, cPos, itemColour, globalVec2, 0xE, 0);
+}
+```
+
+### Part 3: new_item_sml badge — when `m_NewItemAlpha > 0`
+
+```c
+if (in_r0->m_NewItemAlpha > 0.0f) {   // +0x25C
+    // Scale: Vec3(65.0f, 33.0f, 0.0f) * m_NewItemAlpha * m_NewItemAlpha (two multiplies)
+    // Translate: (basePos.x - title_width*costScale - 4.0f,
+    //              34.0f + basePos.y + static_block[+0x6C],
+    //              0.0f)
+    // Clamp tx: if parent and parent field +0xB8==1 then tx >= scale_x*0.25 - 240.0f
+    Scale44 + GlobalTranslate44; Reset/Set/Upload;
+    Texture::Set(static_block[+0x44]);   // new_item_sml.tex
+    DrawQuad(itemColour);
+    Texture::UnSet(static_block[+0x44]);
+}
+```
+
+### Part 4: selected_sml highlight ring — when `m_SelectedAlpha > 0`
+
+```c
+if (in_r0->m_SelectedAlpha > 0.0f) {   // +0x260
+    // Scale: Vec3(65.0f, 33.0f, 0.0f) * m_SelectedAlpha * m_SelectedAlpha
+    // Translate: (basePos.x - static_block[+0x90 + costTypeIndex*4] - 32.0f,
+    //             basePos.y,
+    //             0.0f)
+    Scale44 + GlobalTranslate44; Reset/Set/Upload;
+    SmartPtr<Texture> tmp = static_block[+0x3C];  // selected_sml.tex
+    Texture::Set(tmp);
+    DrawQuad(itemColour);
+    Texture::UnSet(tmp);
+}
+```
+
+### Part 5: Item icon — when `m_pIconTex` is non-null
+
+```c
+if (SmartPtr::operator_cast_to_bool(&in_r0->m_pIconTex)) {  // +0x274
+    // Scale: Vec3(DAT_0015f188, DAT_0015f188, 0.0f)
+    //      = Vec3(64.0f, 64.0f, 0.0f)
+    // Translate from cached Vec3 at static_block[+GOT_0x73ec] + (in_r0+0x268)
+    Scale44 + GlobalTranslate44; Reset/Set/Upload;
+    if (!ItemInfo::IsLocked(m_pItemInfo)) {
+        Texture::Set(*(in_r0 + 0x274));  // m_pIconTex
+        DrawQuad(itemColour);
+        Texture::UnSet(*(in_r0 + 0x274));
+    } else {
+        Texture::Set(static_block[+0x40]);  // locked_stroke.tex (greyed-out icon overlay)
+        DrawQuad(itemColour);
+        Texture::UnSet(static_block[+0x40]);
+    }
+}
+```
+
+`DAT_0015f188 = 0x42800000 = 64.0f`.
+
+### Part 6: scratch_deviders divider cell
+
+```c
+// Scale: Vec3(DAT_0015f198, 17.0f, 0.0f) * *(float**)(GOT+0x7214) / 2.0f
+// Translate: based on pos, parent scroll
+Scale44 + GlobalTranslate44; Reset/Set/Upload;
+Texture::Set(static_block[+0x30]);  // scratch_deviders.tex
+
+// Colour cache: if static_block[+0x8C] == costTypeIndex -> white (255,255,255,200)
+//               else                                     -> grey  (128,128,128,255)
+//               (and update cache)
+DrawQuad(divider_colour);
+Texture::UnSet(static_block[+0x30]);
+```
+
+A second divider draw follows (`if (m_bIsNew)`):
+```c
+if (in_r0->m_bIsNew) {  // +0x27E
+    // Same Scale, translate RIGHT side (operator- instead of operator+)
+    Texture::Set(static_block[+0x30]);  // scratch_deviders.tex again
+    DrawQuad(Colour(128,128,128,255));
+    Texture::UnSet(static_block[+0x30]);
+}
+```
+
+### Part 7: Description / lock text — when `m_pText` set and alpha > 0
+
+```c
+uint alpha = clamp((uint)(m_CostAlpha * 255.0f), 0, 255);  // +0x280
+if (alpha != 0) {
+    char* descBuf = (char*)(in_r0 + 0x5C);  // inline description buffer
+    Font* descFont = game->pData + 0x54;    // font_fruit_ninja.fnt (same slot)
+    float descFontSize = 18.0f;
+    // Shrink descFontSize until text fits within DAT_0015f524 height
+    while (Font::GetStringHeight(descFont, descBuf, descFontSize, ...) > DAT_0015f524) {
+        descFontSize -= 0.25f;
+    }
+    float xPos = ShopScreen::GetDescriptionTextXPos();
+    
+    if (!IsLocked || purchaseState == 0 || purchaseState == 3) {
+        // Normal description text
+        Colour textColour = IsLocked ? Colour(255,255,255,alpha) : Colour(0x74,0x5D,0x3B,alpha);
+        Font::DrawString(xPos, 0.0f, 0.0f, descFontSize, ..., descFont, descBuf, textColour, 0xF, 0);
+    } else if (purchaseState == 1) {
+        // "Cost per play" mode: show currency label + price
+        // costPriceScale = descFontSize * DAT_0015f538
+        // ... additional Font::DrawString calls
+    } else if (purchaseState == 2) {
+        // FruitSaveData::PlayedModeToday check
+        // ... additional Font::DrawString calls
+    }
+}
+```
+
+`purchaseState = *(char*)(ItemInfo + 0x24)`.
+`DAT_0015f524 = 0x42820000 = 65.0f` (max description text height).
+`ShopScreen::GetDescriptionTextXPos()` returns `145.0f - 80.0f = 65.0f` when fully transitioned.
+
+### Part 8: loading.tex new-badge overlay — when `m_bIsNew`
+
+```c
+if (in_r0->m_bIsNew) {  // +0x27E
+    Texture::Set(static_block[+0x2C]);  // loading.tex
+    // Draw 1: shadow quad
+    // Scale: Vec3(290.0f, 120.0f, 0.0f)
+    // Translate: (*(parent->pos + 0x08) - 2.0f,  105.0f, 0.0f)
+    Scale44 + GlobalTranslate44; Reset/Set/Upload;
+    DrawQuad(Colour(0,0,0,128));
+    // Draw 2: same translate, different Y offset
+    // Translate: (*(parent->pos + 0x08) - 2.0f, -105.0f, 0.0f)
+    Scale44 + GlobalTranslate44; Reset/Set/Upload;
+    DrawQuad(Colour(0,0,0,128));
+    Texture::UnSet(static_block[+0x2C]);
+}
+```
+
+`DAT_0015f718 = 290.0f`, `DAT_0015f71c = 120.0f`, `DAT_0015f724 = 105.0f`, `DAT_0015f728 = -105.0f`.
+
+Note: `loading.tex` is used here as a **banner/badge shape**, not as a loading indicator. The two semi-transparent black quads form a top/bottom stripe on the "new item" badge.
+
+### Static Block Slot Usage Summary (ShopListItem::Draw)
+
+All accesses via `GOT_base + 0x000451b4` (same static block as ShopScreen):
+
+| Slot | Texture | Draw Part | Condition |
+|------|---------|-----------|-----------|
+| `+0x2C` | `loading.tex` | New-badge overlay (Part 8) | `m_bIsNew != 0` |
+| `+0x30` | `scratch_deviders.tex` | Divider cell (Part 6) | Always |
+| `+0x3C` | `selected_sml.tex` | Selected highlight (Part 4) | `m_SelectedAlpha > 0` |
+| `+0x40` | `locked_stroke.tex` | Icon-locked overlay (Part 5) | Icon present AND locked |
+| `+0x44` | `new_item_sml.tex` | New-item badge (Part 3) | `m_NewItemAlpha > 0` |
+
+**Not accessed by ShopListItem::Draw**: `+0x14` (locked.tex), `+0x18` (select_item.tex), `+0x34` (dialog_box_shop.tex), `+0x38` (selected.tex), `+0x48` (BG_store.tex).
+
+### Resolved Slot +0x44 Texture
+
+Confirmed by reading LoadContent `0x0015cb08`:
+- `DAT_0015cccc = 0xfffcf079` (`0x001ec130 - 0x30FB7 ... ` = `0x001bc1a9`)
+- `*(char*)0x001bc1a9` = `"new_item_sml.tex"` ← **slot +0x44 = `new_item_sml.tex`**
+
+This was previously listed in shop.md slot table as `+0x44` but the doc note said "Slot +0x44 (unidentified)". It is now confirmed.
+
+### Corrected Static Block Slot Table
+
+The corrected slot-to-texture mapping (verified from LoadContent disasm + string reads + Draw analysis):
+
+| Slot | Texture | Used by |
+|------|---------|---------|
+| `+0x14` | `locked.tex` | ShopListItem (not in Draw — loaded for potential future use) |
+| `+0x18` | `select_item.tex` | ShopListItem (not in Draw) |
+| `+0x2C` | `loading.tex` | ShopListItem::Draw Part 8 |
+| `+0x30` | `scratch_deviders.tex` | ShopListItem::Draw Part 6 |
+| `+0x34` | `dialog_box_shop.tex` | ShopScreen::Draw Block A3 |
+| `+0x38` | `selected.tex` | ShopScreen::Draw Block B |
+| `+0x3C` | `selected_sml.tex` | ShopListItem::Draw Part 4 |
+| `+0x40` | `locked_stroke.tex` | ShopListItem::Draw Part 5 |
+| `+0x44` | `new_item_sml.tex` | ShopListItem::Draw Part 3 |
+| `+0x48` | `BG_store.tex` / `BG_store_sml.tex` | ShopScreen::Draw Block A |
+
+The header file `ShopScreen.h` and port source `ShopScreen.cpp` have **wrong slot names** for +0x2c and +0x34/+0x38/+0x40 — see existing note in "Static Block Layout" section above. The port maintainer must re-order the static SmartPtr members to match this corrected table.
+
+---
+
+## ScrollingMenu::Update (Input Handling)
+
+<!-- Analysed: 2026-04-25T20:30 -->
+
+**Address**: `0x0015b744`
+**Vtable slot 10** of ScrollingMenu.
+
+The Update function handles the complete touch-scroll input model for the item list:
+
+1. **Touch acquisition** (when `field22_0x74 == -1`): calls `TouchInRegion(pos.x + field_0xe0, ..., -1)` to detect a new touch in the scroll area. Stores the touch ID in `field22_0x74`.
+
+2. **Touch tracking**: on each frame with an active touch (`field22_0x74 != -1`), reads the touch position from the touch-state array and updates the scroll velocity `field_0x94`.
+
+3. **Drag scroll**: if the touch has moved more than a threshold (`DAT_0015be00`), sets `field_0xc8 = 1` (dragging). If moved more than 5.0 units and a `field83_0xcc` item is tracked, cancels the item callback.
+
+4. **Velocity integration**: `field_0xd8` (scroll offset) += `field_0x94` (velocity) via `Vec3Scale_ScrollMenu`. Applies spring-back if out of bounds (multiply by 0.75 or spring toward bounds * 0.25).
+
+5. **Per-item position assignment**: iterates all items; for each item:
+   - Sets `SetOnscreen(bool)` via `vtable[+0x24]` (slot 9) based on whether the item Y is within the visible range
+   - Calls `Move(Vec3)` via `vtable[+0x18]` (slot 6) to assign each item's world position from the running scroll accumulator
+
+6. **Selection firing**: when a touch ends with minimal drag (`field_0xc8 == 0`) and `field_0xc9 == 1`, calls `ScrollingMenuItem::CallClickedMenuItemCallback()` on the nearest item.
+
+7. **`field76_0xbc`** is updated to the index of the item closest to the scroll center — this is what `ShopScreen::Update` reads as `GetItemClosestToZero()` to track selection changes.
+
+**Input model for port**: the port's `ScrollingMenu::Update` must implement this exact scroll physics. The `m_pSelectedItem` in `ShopScreen` is updated by comparing `GetItemClosestToZero()` result frame-to-frame, not by per-item click callbacks.
+
+---
+
 ## See Also
 
 - [Menu flow system](../systems/menu-flow.md) -- screen navigation graph
 - [Screens & effects functions](../functions/screens-effects.md) -- screen callbacks
 - [HUD structs](../structs/hud.md) -- base class for screen controls
+- [Font slots](../engine/font.md) -- Game+0x54 = font_fruit_ninja.fnt

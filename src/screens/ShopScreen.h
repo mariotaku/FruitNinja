@@ -168,22 +168,33 @@ private:
     int m_State;
 
     // --- Static textures (GOT-relative globals in binary) ---
-    // Slot layout matches LoadContent @ 0x0015cb08 store order.
-    static SmartPtr<Mortar::Texture> s_TexSelectItem;      // +0x14: select_item.tex
-    static SmartPtr<Mortar::Texture> s_TexNewItemSml;      // +0x18: new_item_sml.tex
-    static SmartPtr<Mortar::Texture> s_TexDialogBox;       // +0x2c: dialog_box_shop.tex
-    static SmartPtr<Mortar::Texture> s_TexLocked;          // +0x30: locked.tex
-    static SmartPtr<Mortar::Texture> s_TexLockedStroke;    // +0x34: locked_stroke.tex
-    static SmartPtr<Mortar::Texture> s_TexScratch;         // +0x38: scratch_deviders.tex
-    static SmartPtr<Mortar::Texture> s_TexSelected;        // +0x3c: selected.tex
-    static SmartPtr<Mortar::Texture> s_TexSelectedSml;     // +0x40: selected_sml.tex
-    static SmartPtr<Mortar::Texture> s_TexUnknown44;       // +0x44: (not yet identified)
+    // Corrected slot layout verified from LoadContent @ 0x0015cb08 disasm + string reads.
+    // See docs/screens/shop.md "Corrected Static Block Slot Table" for authoritative mapping.
+public:
+    // ShopListItem::Draw accesses these via the same GOT static block.
+    // Making them public so ShopListItem::Draw can reference them without a friend.
+    static SmartPtr<Mortar::Texture> s_TexLocked;          // +0x14: locked.tex
+    static SmartPtr<Mortar::Texture> s_TexSelectItem;      // +0x18: select_item.tex
+    static SmartPtr<Mortar::Texture> s_TexLoading;         // +0x2c: loading.tex
+    static SmartPtr<Mortar::Texture> s_TexScratch;         // +0x30: scratch_deviders.tex
+    static SmartPtr<Mortar::Texture> s_TexDialogBox;       // +0x34: dialog_box_shop.tex
+    static SmartPtr<Mortar::Texture> s_TexSelected;        // +0x38: selected.tex
+    static SmartPtr<Mortar::Texture> s_TexSelectedSml;     // +0x3c: selected_sml.tex
+    static SmartPtr<Mortar::Texture> s_TexLockedStroke;    // +0x40: locked_stroke.tex
+    static SmartPtr<Mortar::Texture> s_TexNewItemSmlBadge; // +0x44: new_item_sml.tex
     static SmartPtr<Mortar::Texture> s_TexBGStore;         // +0x48: BG_store.tex / BG_store_sml.tex
     // Port-only: button textures. Binary reads from per-task slots
     // (*(GameTask + 0x17c) for back, *(GameTask + ...) for equip) which
     // aren't yet ported. Loaded by LoadContent alongside the others.
     static SmartPtr<Mortar::Texture> s_TexBackIcon;        // back_icon.tex (port-only)
     static bool s_bContentLoaded;                           // +0x4c: one-time init guard
+
+    // ShopScreen::GetDescriptionTextXPos @ 0x0015c520
+    // Returns the X anchor for description text, sliding with m_TransitionAlpha.
+    // Binary: uses same slide formula as list + -80.0f local offset.
+    // At alpha=1: returns 145.0f - 80.0f = 65.0f. At alpha=0: returns 430.0f - 80.0f = 350.0f.
+    // DIFFERS: exact binary formula not fully confirmed; uses list slide formula with -80 offset.
+    float GetDescriptionTextXPos() const;
 
     // --- Callbacks ---
 
