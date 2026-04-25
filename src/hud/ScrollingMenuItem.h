@@ -92,9 +92,21 @@ public:
     // ShopListItem overrides at 0x0015eb00.
     virtual void Draw() {}
 
-    // vtable +0x30..+0x38 (slots 12-14): unknown
+    // vtable +0x30 (slot 12): cancel-tap signal
+    // Called when drag exceeds 5 units; clears pending tap highlight on the item.
+    // Binary: 0x00147970 (base no-op)
     virtual void Slot12() {}
-    virtual void Slot13() {}
+
+    // vtable +0x34 (slot 13): hit-test query (Collide)
+    // Binary: 0x00147974. Called by ScrollingMenu::Collide for each item.
+    // Returns non-null (self) if the given touch slot is over this item, null otherwise.
+    // Base ScrollingMenuItem returns nullptr (no hit-test geometry in base class).
+    // ShopListItem may override if hit-test is needed.
+    virtual ScrollingMenuItem* Slot13(int /*touchSlot*/) { return nullptr; }
+
+    // vtable +0x38 (slot 14): touch-release signal
+    // Called when the tracked finger leaves the inner scroll region.
+    // Binary: 0x00147978 (base no-op)
     virtual void Slot14() {}
 
     // CallClickedMenuItemCallback -- fires m_Callback
