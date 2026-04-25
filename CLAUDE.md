@@ -118,6 +118,23 @@ ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1" 
 - **Staleness check**: If a doc section's analysis date is **newer** than the corresponding source file's date, the implementation may be outdated and should be reviewed/reimplemented with the new findings.
 - Use ISO-8601 format to the minute, UTC: e.g. `2026-04-05T11:30`
 
+## Subagents (in `.claude/agents/`)
+
+Three specialised agents handle distinct phases of the RE+port workflow. **Each agent stays in its own lane** — see the "do not do" line in each agent file.
+
+| Agent | When to use | Tools | Outputs |
+|-------|-------------|-------|---------|
+| `re-analyst` | Decompile a binary function, resolve a struct, follow GOT pointers, read DAT constants — any task that pulls information *out of* `FruitNinja.exe`. | GhidraMCP + Read/Grep | RE report (struct table, pseudocode, constants, binary refs); may write to `docs/` |
+| `implementer` | Write or edit C++ from an existing spec in `docs/`. Use after re-analyst has produced the spec, or when the spec already exists. | All tools incl. Bash (MSYS2 build) | Code in `src/`; build verification |
+| `doc-writer` | Format RE findings into `docs/` markdown when neither re-analyst nor implementer is the right fit (e.g. consolidating a conversation into a doc). | All tools | Markdown docs only |
+
+**Coordination rules:**
+- One screen / system at a time. Don't spawn two agents that touch the same files in parallel.
+- For new work: spawn `re-analyst` first (RE+spec), then `implementer` (code from spec). Don't ask one agent to do both phases.
+- `re-analyst` may write to `docs/` but **must not edit `src/`**.
+- `implementer` may read `docs/` but **must not RE new functions** — if the spec is incomplete, return a list of gaps so the user can dispatch `re-analyst` again.
+- `doc-writer` writes docs only — does not RE, does not write code.
+
 ## Conventions
 - **Only commit when explicitly requested** by the user — do not auto-commit after changes
 - When a value in port code **differs from the original binary**, add a comment explaining the discrepancy (e.g. `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`). This makes it easy to find and fix incorrect values later.
