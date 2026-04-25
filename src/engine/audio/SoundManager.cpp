@@ -189,45 +189,50 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
     // Zero output
     SDL_memset(stream, 0, (size_t)len);
 
-    // Mix each SFX voice
+
+    // Mix each SFX voice. Matches MAMAudioThread::FillBuffer (0x0018c020):
+    // samples were attenuated >>4 in LoadSound to leave headroom for 16
+    // simultaneous voices, then mixed RAW (out += src). The binary has no
+    // per-voice volume multiplication -- field_0xc/field_0xd are binary
+    // mute flags only. s_SFXMuted/s_MusicMuted preserve that gating;
+    // s_SFXVolume/s_MusicVolume are kept for the toggle UI but do not
+    // scale samples beyond the mute threshold.
     for (int vi = 0; vi < VOICE_COUNT; vi++) {
         Voice& v = self->m_Voices[vi];
         if (v.id == 0 || !v.playing || !v.buf) continue;
 
         int16_t* src = v.buf->samples;
         int total    = v.buf->sampleCount;
-        float vol    = v.volume * s_SFXVolume;
-        if (s_SFXMuted) vol = 0.0f;
+        bool muted   = s_SFXMuted;
 
         for (int s = 0; s < nSamples; ) {
             if (v.cursor >= total) {
                 if (v.buf->loop) {
                     v.cursor = 0;
                 } else {
-                    // Finished -- mark idle (handle reset lets IsPlaying() go false)
                     v.id      = 0;
                     v.playing = false;
                     break;
                 }
             }
-            // Mix with clamp
-            int32_t mixed = out[s] + (int32_t)(src[v.cursor] * vol);
-            if (mixed >  32767) mixed =  32767;
-            if (mixed < -32768) mixed = -32768;
-            out[s] = (int16_t)mixed;
+            if (!muted) {
+                int32_t mixed = out[s] + src[v.cursor];
+                if (mixed >  32767) mixed =  32767;
+                if (mixed < -32768) mixed = -32768;
+                out[s] = (int16_t)mixed;
+            }
             v.cursor++;
             s++;
         }
     }
 
-    // Mix music voice
+    // Mix music voice (same raw-add policy as SFX)
     {
         Voice& mv = self->m_MusicVoice;
         if (mv.id != 0 && mv.playing && mv.buf) {
             int16_t* src = mv.buf->samples;
             int total    = mv.buf->sampleCount;
-            float vol    = mv.volume * s_MusicVolume;
-            if (s_MusicMuted) vol = 0.0f;
+            bool muted   = s_MusicMuted;
 
             for (int s = 0; s < nSamples; ) {
                 if (mv.cursor >= total) {
@@ -239,15 +244,18 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
                         break;
                     }
                 }
-                int32_t mixed = out[s] + (int32_t)(src[mv.cursor] * vol);
-                if (mixed >  32767) mixed =  32767;
-                if (mixed < -32768) mixed = -32768;
-                out[s] = (int16_t)mixed;
+                if (!muted) {
+                    int32_t mixed = out[s] + src[mv.cursor];
+                    if (mixed >  32767) mixed =  32767;
+                    if (mixed < -32768) mixed = -32768;
+                    out[s] = (int16_t)mixed;
+                }
                 mv.cursor++;
                 s++;
             }
         }
     }
+
 }
 
 // 0x0018cab8 -- allocates MortarSoundMAM (port: plain MortarSound)
