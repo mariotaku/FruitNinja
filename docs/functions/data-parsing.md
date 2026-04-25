@@ -80,59 +80,57 @@ void BonusManager::Init() {
 
 ---
 
+<!-- Analysed: 2026-04-25T10:30 -->
+
 ## ItemManager::LoadItemData (0x00113200, 190 lines)
 
-Parses `itemlist.xml` into ItemInfo/SlashModInfo objects.
+Parses `itemlist.xml` + `ItemSave.xml` into ItemInfo/SlashModInfo objects.
+Full analysis in `docs/structs/items.md`.
 
-```c
-void ItemManager::LoadItemData() {
-    TiXmlDocument* doc = new TiXmlDocument("Data/xml/itemlist.xml");
-    
-    if (doc->LoadFile()) {
-        TiXmlElement* root = doc->FirstChildElement("itemListFile");
-        
-        // Phase 1: Parse <item> elements
-        for (TiXmlElement* e = root->FirstChildElement("item");
-             e != NULL; e = e->NextSiblingElement("item")) {
-            int type = ParseItemType(e->Attribute("type"));
-            
-            ItemInfo* item;
-            if (type == 0)  // blade/slash type
-                item = new SlashModInfo();   // 0x110 bytes
-            else
-                item = new ItemInfo();       // 0x40 bytes
-            
-            item->vtable->Parse(item, e);    // virtual parse
-            
-            // Unlock gating: check achievement requirement
-            if (!FruitSaveData::IsAchievementUnlocked(item->achieveId)) {
-                if (!AchievementManager::AchievementExists(item->achieveId) 
-                    && item->cost > 0) {
-                    item->isFree = true;
-                    ShopScreen::NewItem();
-                }
-            }
-            
-            m_Items.push_back(item);              // vector<ItemInfo*> at +0x10
-            m_ItemsByHash[item->hash] = item;     // map<ulong, ItemInfo*> at +0x1c
-            m_ItemsByType[type][item->hash] = item; // per-type maps at +0x34
-            
-            if (defaultItem[type] == NULL && type != 3)
-                defaultItem[type] = item;
-        }
-        
-        // Phase 2: Load saved item data (coins, equipped state)
-        LoadSavedItems(GetItemSavePath());
-        
-        // Phase 3: Load <defaults> section → set default items per type
-        // Phase 4: SetEquippedItem() for all 4 item types
-    }
-    delete doc;
-}
+```
+XML:  xml/itemList.xml  (root = <itemManagerFile>)
+Save: ItemSave.xml      (root = <item_save_file version coins coinsTotal levelStartCoins>)
 ```
 
-**Item types**: 0 = blade/slash (SlashModInfo, 0x110 bytes), others = generic (ItemInfo, 0x40 bytes).
-**4 item types** total, with per-type maps and default items.
+**Phase 1 — Parse `<item>` elements:**
+- `e->Attribute("type")` → `ParseItemType()` → 0=SLASH_MODIFIER, 1=BACKGROUND, 2=UPSELL, 3=REMOVEADS
+- type==0 → `new SlashModInfo()` (0x110 bytes); else `new ItemInfo()` (0x40 bytes)
+- Virtual dispatch `vtable[+0x10](item, e)` → `ItemInfo::Parse @ 0x0011293c` or `ParseSlashModInfo @ 0x001126c0`
+- Achievement-gate: if `FruitSaveData::IsAchievementUnlocked(hash)==0` and `AchievementManager::AchievementExists()==0` and `item->m_Cost > 0` → `item->m_bSeen=0` (new badge) + `item->m_Cost=-1` (free) + `ShopScreen::NewItem()`
+- If already unlocked: `item->m_Cost = -1` (auto-unlock)
+- Push to `m_Items` (+0x10), insert into `m_ByHash` (+0x1c), and `m_ByHashType[type]` (+0x34+type×0x18)
+- First item of each type (except type==3) → `m_DefaultItems[type]` (+0x00..+0x0f)
+
+**Phase 2 — Load `ItemSave.xml`:**
+- Root attrs: `QueryIntAttribute("coins", &sd->m_Coins)`, `"coinsTotal"`, `"levelStartCoins"` (FruitSaveData +0x20/+0x24/+0x28)
+- `<boughtItems>/<item name=N seen=true|false>` → hash lookup in m_ByHash → `m_Cost=-1`, `m_bSeen=0|1`
+- `<equippedItems>/<item name=N>` → hash lookup → `m_DefaultItems[item->m_Type] = item`
+
+**Phase 3 — Apply equipped items:**
+- Loop `i=0..3`: `SetEquippedItem((ItemType)i, m_DefaultItems[i])`
+
+**Key string constants (all GOT-relative from iVar6=0x1ec130):**
+
+| DAT offset | String       | Use                            |
+|------------|--------------|--------------------------------|
+| 0x1ba064   | `xml/itemList.xml`  | TiXmlDocument path      |
+| 0x1ba075   | `itemManagerFile`   | Root element tag        |
+| 0x1b9e95   | `item`              | Child element tag       |
+| 0x1b9372   | `type`              | Item type attribute     |
+| 0x1c3173   | `name`              | Item name attribute     |
+| 0x1b9e4d   | `item_save_file`    | Save root element       |
+| 0x1b9e68   | `coins`             | Save root attribute     |
+| 0x1b9e6e   | `coinsTotal`        | Save root attribute     |
+| 0x1b9e79   | `levelStartCoins`   | Save root attribute     |
+| 0x1b9e89   | `boughtItems`       | Save child element      |
+| 0x1b9ea5   | `seen`              | Bought item attribute   |
+| 0x1b9ea0   | `true`              | Boolean compare string  |
+| 0x1b9eaa   | `equippedItems`     | Save child element      |
+
+**Item types**: 0=SLASH_MODIFIER (SlashModInfo, 0x110 bytes), 1=BACKGROUND (ItemInfo, 0x40 bytes), 2=UPSELL, 3=REMOVEADS.
+**5 maps** total: 1 global + 4 per-type.
+**Call site**: `InitialiseData @ 0x0010b7ca`, step 14 (after AchievementManager::LoadAchievementInfo, before BonusManager::Init).
+**Full struct + method pseudocode**: see `docs/structs/items.md`.
 
 ---
 

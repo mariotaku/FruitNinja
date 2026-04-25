@@ -1,90 +1,96 @@
 #ifndef FN_ITEM_MANAGER_H
 #define FN_ITEM_MANAGER_H
 
+// Analysed: 2026-04-25T10:30
 //
-// ItemManager — singleton that owns the list of unlockable items and tracks which
-// item is currently equipped per category (blade, background, etc.).
+// ItemManager — singleton that owns all shop items.
+// Binary: ctor 0x001121d0; GetInstance 0x00112c34; LoadItemData 0x00113200.
 //
-// Binary addresses:
-//   ctor         0x001121d0
-//   dtor         0x001120f0 / 0x00112140
-//   GetInstance  (static singleton, GOT-relative pattern)
-//   IsEquipped   0x0015fa6c  returns 1 if param_1 == s_equippedItems[param_1->m_Type]
-//   SetEquippedItem 0x0011307c  sets slot + calls Apply/ChangeBackground
-//   BuyItem      0x00112498  (struct-return via r0; ulong param_1 = ptr)
-//   GetNumNewItems 0x00112048
-//   AreNewItems  0x0011200c
+// Struct layout (0x94 bytes) per docs/structs/items.md:
+//   +0x00..+0x0f  ItemInfo*               m_DefaultItems[4]   equipped per type
+//   +0x10         std::vector<ItemInfo*>  m_Items              all items in XML order
+//   +0x1c         std::map<uint32,ItemInfo*> m_ByHash          all items keyed by hash
+//   +0x34         std::map<uint32,ItemInfo*> m_ByHashType[0]   SLASH_MODIFIER
+//   +0x4c         std::map<uint32,ItemInfo*> m_ByHashType[1]   BACKGROUND
+//   +0x64         std::map<uint32,ItemInfo*> m_ByHashType[2]   UPSELL
+//   +0x7c         std::map<uint32,ItemInfo*> m_ByHashType[3]   REMOVEADS
 //
-// Struct layout (from ctor 0x001121d0):
-//   +0x00..+0x0f  ItemInfo* s_equippedItems[4] — one per ItemType
-//   +0x10         std::vector<ItemInfo*> m_Items      (all items)
-//   +0x1c         std::map<ulong, ItemInfo*> m_ByHash0
-//   +0x34         std::map<ulong, ItemInfo*> m_ByHash1
-//   +0x4c         std::map<ulong, ItemInfo*> m_ByHash2
-//   +0x64         std::map<ulong, ItemInfo*> m_ByHash3
-//   +0x7c         std::map<ulong, ItemInfo*> m_ByHash4
-//   +0x0c         int m_EquippedSlashModCount (decremented by SlashModifier::RemoveModifier)
-//
-// Port status: STUB — singleton returns empty manager. IsEquipped always returns 0.
-// SetEquippedItem and BuyItem are no-ops. Sufficient for ShopScreen to compile and
-// display the UI without crashing. Full impl requires items.xml parsing + FruitSaveData.
-//
-// Analysed: 2026-04-25T00:00
+// NOTE: m_DefaultItems[3] (REMOVEADS) is always NULL (type==3 excluded from
+//       default-item assignment in LoadItemData).
 //
 
 #include "ItemInfo.h"
 #include <cstdint>
+#include <vector>
+#include <map>
 
 class ItemManager {
 public:
-    // Matches singleton pattern in binary. Returns a valid (empty) instance.
+    // GetInstance @ 0x00112c34 — C++ static-local singleton
     static ItemManager* GetInstance();
 
-    // ItemManager::IsEquipped @ 0x0015fa6c
-    // Returns 1 if param_1 == s_equippedItems[param_1->m_Type], else 0.
-    // Stub: returns 0 (nothing is equipped).
+    // LoadItemData @ 0x00113200 — parse itemlist.xml, load ItemSave.xml
+    void LoadItemData();
+
+    // IsEquipped @ 0x0015fa6c — returns 1 if item == m_DefaultItems[item->m_Type]
     int IsEquipped(ItemInfo* item) const;
 
-    // ItemManager::SetEquippedItem @ 0x0011307c
-    // Sets s_equippedItems[type] = item and applies side effects
-    // (ChangeBackground for type==1, SlashEntity apply for type==0).
-    // Stub: no-op.
+    // SetEquippedItem @ 0x0011307c — sets slot + side effects
     void SetEquippedItem(int type, ItemInfo* item);
 
-    // ItemManager::BuyItem @ 0x00112498 (struct-return, ptr passed via r0)
-    // Marks item as purchased in FruitSaveData and plays purchase SFX.
-    // Stub: no-op.
-    void BuyItem(ItemInfo* item);
+    // BuyItem @ 0x00112498 — deducts coins, marks item purchased
+    // Returns 1 on success, 0 if item not found or insufficient coins
+    int BuyItem(uint32_t hash);
 
-    // ItemManager::GetNumNewItems @ 0x00112048
-    // Returns count of items that are newly available (unlocked but not seen).
-    // Stub: 0.
+    // GetNumNewItems @ 0x00112048
     int GetNumNewItems() const;
 
-    // ItemManager::AreNewItems @ 0x0011200c
-    // Returns non-zero if any item is newly available.
-    // Stub: 0.
-    int AreNewItems() const;
+    // AreNewItems @ 0x0011200c
+    bool AreNewItems() const;
 
-    // Access the equipped item slot for a given ItemType.
-    // Binary: *(s_equippedItems + type*4).
+    // GetItem @ 0x00112084 — lookup by hash in m_ByHash
+    ItemInfo* GetItem(uint32_t hash) const;
+
+    // GetItemSavePath — returns "Data/xml/ItemSave.xml"
+    const char* GetItemSavePath() const;
+
+    // SaveItemInfo @ 0x00112210 — write ItemSave.xml
+    void SaveItemInfo();
+
+    // GetFirst / GetNext @ 0x0015fbc8 / 0x0015fbf4 — iteration over m_Items
+    ItemInfo* GetFirst(int& it) const;
+    ItemInfo* GetNext(int& it) const;
+
+    // Access equipped item slot (helper for ShopScreen)
     ItemInfo* GetEquipped(int type) const;
 
-    // --- Not in binary's public interface but needed by ShopScreen ---
-    // Returns total item count. Stub: 0.
-    int GetNumItems() const;
+    // --- Port helpers for ShopScreen (not in binary public API) --------
+    // Returns total item count.
+    int GetNumItems() const { return (int)m_Items.size(); }
+    // Returns item at index (by position in m_Items vector).
+    ItemInfo* GetItemAt(int index) const {
+        if (index < 0 || (size_t)index >= m_Items.size()) return nullptr;
+        return m_Items[index];
+    }
 
-    // Returns item at index. Stub: nullptr.
-    ItemInfo* GetItem(int index) const;
+    // +0x00..+0x0f: default (equipped) item per type (binary: m_DefaultItems[4])
+    ItemInfo* m_DefaultItems[4];
+
+    // +0x10: all items in XML order
+    std::vector<ItemInfo*> m_Items;
+
+    // +0x1c: all items keyed by m_Hash
+    std::map<uint32_t, ItemInfo*> m_ByHash;
+
+    // +0x34..+0x7c: per-type maps (4 types × 0x18 bytes each)
+    std::map<uint32_t, ItemInfo*> m_ByHashType[4];
 
 private:
-    ItemManager() {}
+    // Binary ctor @ 0x001121d0
+    ItemManager();
 
-    // +0x00..+0x0f: 4-slot equipped array (one per ItemType, 0-3)
-    ItemInfo* m_equippedItems[4];
-
-    // Singleton instance
-    static ItemManager s_instance;
+    // Binary dtor @ 0x001120f0 / 0x00112140
+    ~ItemManager();
 };
 
 #endif // FN_ITEM_MANAGER_H

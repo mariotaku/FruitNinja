@@ -15,14 +15,26 @@ Game-specific singleton managers created during GameInit/GameInitialise.
 | +0x30 | int | applyCount | Increments each ApplyModifier call |
 | +0x34 | bool | applied | If true, UpdateSpecific skips |
 
-## ItemManager (singleton)
+<!-- Analysed: 2026-04-25T10:30 -->
 
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| +0x00 | ItemInfo*[4] | defaultItem | First item per type |
-| +0x10 | vector\<ItemInfo*\> | allItems | 12 bytes |
-| +0x1c | map\<ulong,ItemInfo*\> | itemById | 24 bytes |
-| +0x34 | map\<ulong,ItemInfo*\>[4] | itemsByType | Each 24 bytes |
+## ItemManager (singleton, 0x94 bytes)
+
+Full struct, field types, all method pseudocode: **see `docs/structs/items.md`**.
+
+| Offset | Size | Type                    | Name              | Notes                                              |
+|--------|------|-------------------------|-------------------|----------------------------------------------------|
+| +0x00  | 4    | ItemInfo*               | m_DefaultItems[0] | Equipped/default SLASH_MODIFIER item               |
+| +0x04  | 4    | ItemInfo*               | m_DefaultItems[1] | Equipped/default BACKGROUND item                   |
+| +0x08  | 4    | ItemInfo*               | m_DefaultItems[2] | UPSELL default (rarely set)                        |
+| +0x0c  | 4    | ItemInfo*               | m_DefaultItems[3] | REMOVEADS default (always NULL — type==3 excluded) |
+| +0x10  | 12   | vector\<ItemInfo*\>     | m_Items           | All items in XML order                             |
+| +0x1c  | 24   | map\<uint32,ItemInfo*\> | m_ByHash          | All items by m_Hash                                |
+| +0x34  | 24   | map\<uint32,ItemInfo*\> | m_ByHashType[0]   | SLASH_MODIFIER items by hash                       |
+| +0x4c  | 24   | map\<uint32,ItemInfo*\> | m_ByHashType[1]   | BACKGROUND items by hash                           |
+| +0x64  | 24   | map\<uint32,ItemInfo*\> | m_ByHashType[2]   | UPSELL items by hash                               |
+| +0x7c  | 24   | map\<uint32,ItemInfo*\> | m_ByHashType[3]   | REMOVEADS items by hash                            |
+
+**Total: 0x94 bytes.** Singleton at BSS ~0x1f4b3c. GetInstance @ 0x00112c34.
 
 ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 
@@ -55,7 +67,7 @@ ItemInfo = 0x40 bytes. SlashModInfo extends ItemInfo = 0x110 bytes.
 | **PowerUpManager** | 8 | 144 bytes | 10 | **Good** | Modifier tracking (dt, score) |
 | **NetworkManager** | 6 | 668 bytes | 10 | **Good** | Skipped for port |
 | **BonusManager** | 6 | 32 bytes | 1 | **Partial** | Post-game bonus awards |
-| **ItemManager** | 7 | 148 bytes | 0 | **Minimal** | Shop items, blade modifiers |
+| **ItemManager** | 13 | 148 bytes | 11 | **Full** | Shop items, blade modifiers — see items.md |
 | **AchievementManager** | 5 | 1 byte stub | 0 | **Stub** | Unlocks |
 | **LeaderboardManager** | 5 | 64 bytes | 0 | **Minimal** | Skipped for port |
 
@@ -68,7 +80,7 @@ All managers have `__thiscall` properly applied.
 | ActorManager | Entity pool (5 types: Fruit, Bomb, unused, unused, BombBlast). See [engine/actor-manager.md](../engine/actor-manager.md) |
 | WaveManager | XML-driven wave progression. See [wave.md](wave.md) |
 | PowerUpManager | Modifier tracking (dt, score gain/loss) |
-| ItemManager | Shop items, blade modifiers. 148-byte struct, 0 fields named |
+| ItemManager | Shop items, blade modifiers. 148-byte struct. Full RE in docs/structs/items.md |
 | BonusManager | Post-game bonus awards |
 | AchievementManager | Unlocks. 1-byte stub struct |
 | LeaderboardManager | Online services (skipped in port) |
