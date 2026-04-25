@@ -291,7 +291,7 @@ void ShopScreen::CreateShopList() {
     if (im) {
         int n = im->GetNumItems();
         for (int i = 0; i < n; i++) {
-            ItemInfo* info = im->GetItem(i);
+            ItemInfo* info = im->GetItemAt(i);
             if (!info) continue;
             ShopListItem* row = new ShopListItem();
             row->m_pItemInfo = info;
