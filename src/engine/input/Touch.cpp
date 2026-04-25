@@ -130,4 +130,29 @@ bool Touch::IsSlotDown(int slot) const {
     return states1[slot].phase <= 0;
 }
 
+// ---------------------------------------------------------------------------
+// TouchInRegion @ 0x001691cc
+// Scans the touch slots for a finger inside [x0..x1] x [y0..y1].
+// Hint slot is tried first (fast-path for already-tracked fingers).
+// Returns -1 if no active touch is in the region.
+// Binary: 16 slots, 12-byte stride, state>0 = active. Port: 8 slots, phase<=0 = active.
+int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
+    return Touch::GetInstance().GetTouchInRegion(x0, x1, y0, y1, hint_slot);
+}
+
+// IsTouchDown @ 0x00169144
+// Returns touch state for the given slot:
+//   0 = not pressed (up/released)
+//   1 = just pressed this frame (port: phase == -1)
+//   2 = held / moving (port: phase == 0)
+// Binary: float state field (0.0=up, 1.0=just-down, 2.0=held). Port: int phase.
+int IsTouchDown(int slot) {
+    const Touch& t = Touch::GetInstance();
+    if (slot < 0 || slot >= Touch::MAX_SLOTS) return 0;
+    int ph = t.states1[slot].phase;
+    if (ph >= 1)  return 0;  // released / inactive
+    if (ph == -1) return 1;  // just pressed
+    return 2;                // held (phase == 0)
+}
+
 } // namespace Mortar

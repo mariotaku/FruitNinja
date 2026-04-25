@@ -78,6 +78,27 @@ public:
     bool IsSlotDown(int slot) const;
 };
 
+// ---------------------------------------------------------------------------
+// Free functions matching binary helpers used by ScrollingMenu::Update.
+// These wrap Mortar::Touch::GetInstance() to provide the binary-accurate API.
+//
+// TouchInRegion @ 0x001691cc
+//   Scans all slots for a touch inside [x0..x1] x [y0..y1].
+//   If hint_slot is a valid held slot already in the rect, returns it first.
+//   Returns -1 if no match found.
+//   Binary uses float x/y from the 16-slot touch table; port uses Mortar::Touch
+//   with 8 slots (same semantics, fewer slots).
+int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot);
+
+// IsTouchDown @ 0x00169144
+//   Returns the touch state for the given slot:
+//     0  = slot not pressed (up / released)
+//     1  = just pressed this frame (phase == -1 in port)
+//     2  = held / moving (phase == 0 in port)
+//   Returns 0 for invalid slot.
+//   Binary semantics: acquire fires when IsTouchDown == 2 (held).
+int IsTouchDown(int slot);
+
 } // namespace Mortar
 
 #endif // MORTAR_TOUCH_H
