@@ -340,39 +340,52 @@ void Font::DrawString(float scale, float maxWidth, float z,
         cursorX += (float)g.xadvance * invLH;
     }
 
-    // --- MatrixStack push / scale / translate / draw / pop ---
-    // Matches binary pipeline steps 1-6 (Font_DrawString @ 0x00198e44):
-    //   1. MatrixStack::Push
-    //   2. MatrixStack::Scale(Vec3(scale, scale, 1.0))
-    //   3. MatrixStack::Translate(pos)   [world anchor, applied after scale]
-    //   4-5. per-page: Texture::Set + Mesh::DrawTriStrip
-    //   6. MatrixStack::Pop
-    // rotZ (param_3) is 0.0 for all current call sites; omitted here.
-    MatrixStack& worldStack = MatrixManager::GetInstance().GetWorldStack();
-    worldStack.Push();
-    worldStack.Scale(Vec3(scale, scale, 1.0f));
-    worldStack.Translate(pos);
+    // Per-glyph DrawQuad pipeline. The batched DrawTriList path didn't
+    // render correctly (cause not yet root-caused), so we issue one
+    // DrawQuad per glyph using the proven HUD quad pipeline. Slow at high
+    // glyph counts but correct.
+    //
+    // For each glyph in pageVerts, vertices are stored in lineHeight-
+    // normalized space with layout [TL, TR, BL, TR, BR, BL] per glyph.
+    // We extract TL/BR to derive the world-space scale + translate that
+    // SetupQuadMatrix-style code expects, then DrawQuad with the glyph's
+    // UV bounds.
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_DEPTH_TEST);
 
     Renderer* renderer = Renderer::GetInstance();
-    for (int pg = 0; pg < m_PageCount; pg++) {
-        if (pageVerts[pg].empty()) continue;
-        if (pg < (int)m_PageTextures.size() && m_PageTextures[pg].IsValid()) {
-            m_PageTextures[pg]->Set();
-        }
+    if (renderer) {
+        MatrixStack& worldStack = MatrixManager::GetInstance().GetWorldStack();
+        for (int pg = 0; pg < m_PageCount; pg++) {
+            if (pg >= (int)m_PageTextures.size() || !m_PageTextures[pg].IsValid()) continue;
+            Texture* tex = m_PageTextures[pg].Get();
+            tex->Set();
+            const int N = (int)pageVerts[pg].size();
+            for (int gi = 0; gi + 5 < N; gi += 6) {
+                QUADCUSTOMVERTEX& vTL = pageVerts[pg][gi];
+                QUADCUSTOMVERTEX& vBR = pageVerts[pg][gi + 4];
+                float wx = (vTL.x + vBR.x) * 0.5f * scale + pos.x;
+                float wy = (vTL.y + vBR.y) * 0.5f * scale + pos.y;
+                float ww = (vBR.x - vTL.x) * scale;
+                float wh = (vBR.y - vTL.y) * scale;
+                if (ww < 0) ww = -ww;
+                if (wh < 0) wh = -wh;
 
-        // DrawTriStrip calls MatrixManager::GetMVP() internally, which
-        // picks up the world matrix we just configured above.
-        renderer->DrawTriStrip(pageVerts[pg].data(), (int)pageVerts[pg].size());
-
-        if (pg < (int)m_PageTextures.size() && m_PageTextures[pg].IsValid()) {
-            m_PageTextures[pg]->UnSet();
+                worldStack.Reset();
+                Matrix44 mat = Matrix44::MakeScale(ww, wh, 1.0f);
+                mat.GlobalTranslate44(Vec3(wx, wy, pos.z));
+                worldStack.SetCurrentMatrix(mat);
+                MatrixManager::GetInstance().UploadModelViewOnly();
+                renderer->DrawQuad(colour, vTL.u, vTL.v, vBR.u, vBR.v);
+            }
+            tex->UnSet();
         }
     }
 
-    worldStack.Pop();
+    glEnable(GL_DEPTH_TEST);
 
-    (void)z; // z is encoded into pos.z via the world translate; per-vertex z = 0.0f
-    (void)maxWidth; // handled above in the word-wrap path
+    (void)z; (void)maxWidth;
 }
 
 } // namespace Mortar
