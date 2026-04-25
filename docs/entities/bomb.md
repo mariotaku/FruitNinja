@@ -409,6 +409,43 @@ void Bomb::Draw() {
 }
 ```
 
+<!-- Analysed: 2026-04-25T17:00 -->
+
+#### Bomb::Draw early-return guards (disassembly-verified)
+
+Exactly **two** draw-skip paths exist in the binary. Disassembly at 0x00171be8:
+
+```asm
+vldr  s15, [r0, #0xa4]   ; load countdown (float at +0xa4)
+vcmpe s15, #0            ; compare with 0.0
+vmrs  APSR_nzcv, FPSCR
+bgt   0x171d24           ; GUARD 1: countdown > 0 -> skip draw entirely
+```
+
+```c
+; After guard 1 passes (countdown <= 0):
+SmartPtr::operator_cast_to_bool(&g_bombData->model[m_BombVariant])
+beq   0x171d24           ; GUARD 2: model not valid -> skip
+```
+
+**Guard 1** — `countdown (offset +0xa4) > 0.0f`: skips draw while the bomb is in its pre-launch delay. `countdown` is set to 0.0 by `Bomb::Init` and only raised by `Bomb::Chuck()`. Menu bombs are never Chuck()'d, so countdown == 0.0 always passes guard 1.
+
+**Guard 2** — `!SmartPtr::IsValid(g_bombData->model[m_BombVariant])`: skips if the model was never loaded. `Bomb::LoadContent` loads `model[0]` and `model[1]`; a menu bomb uses `m_BombVariant == 0`, which is always loaded if `LoadContent` ran.
+
+**No other guards**: `m_bMenuBombHit` (+0x88 / `m_bBombFlag88`), `activeFlag` (+0x68 / `m_bHit`), and `m_LayerFlags` are **not** consulted inside `Bomb::Draw`. The "highest bomb" tracking block inside Draw checks `m_bBombFlag88` only to decide whether to update `g_bombDrawData->currentBomb`, not as a draw gate.
+
+**Port defect — rotation axis swap** (`src/hud/MenuButton.cpp`, lines ~242-245):
+
+Binary `Bomb::SetCallback @ 0x0017121c` sets:
+```c
+this->m_RotY    = 0x2d;   // 45 degrees initial Y rotation
+this->m_RotVelX = 2;      // X velocity = 2
+this->m_RotX    = 0;
+this->m_RotVelY = 0;
+```
+
+The port has `m_RotX = 0x2d` and `m_RotVelY = 2` — X and Y are swapped. This causes wrong rotation axis (bomb rotates around the wrong axis) but does not cause invisibility.
+
 Key observations:
 - Bomb is NOT drawn while countdown > 0 (still waiting to spawn)
 - Two bomb model variants: `model[0]` (normal) and `model[1]` (alternative/multiplayer)

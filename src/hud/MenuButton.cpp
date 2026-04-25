@@ -181,6 +181,8 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
     m_AnimScale = 1.0f;
     m_AnimSpeed = 5.0f;
     m_AnimSpeed2 = 5.0f;
+    m_Timer = 0.0f;        // DAT_0014ee68
+    m_bHighlighted = 1;    // DAT_0014ee6c
 
     // Create fruit entity if fruitType >= 0 (toggles use -1)
     if (fruitType >= 0) {
@@ -232,6 +234,8 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                     //   The rotation overwrites are why menu bombs look
                     //   almost static in the original — default 1..7
                     //   random vels from Bomb::Init get replaced.
+                    //   Field assignment order matches Bomb::SetCallback
+                    //   @ 0x0017121c exactly.
                     Bomb* bomb = static_cast<Bomb*>(e);
                     bomb->m_bMovement = 0;
                     bomb->scale = bomb->scale * BOMB_MENU_SCALE;
@@ -239,10 +243,10 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                     if (clickCb) {
                         bomb->m_HitCallback = clickCb;
                     }
-                    bomb->m_RotX    = 0x2d;
-                    bomb->m_RotVelY = 2;
-                    bomb->m_RotY    = 0;
-                    bomb->m_RotVelX = 0;
+                    bomb->m_RotY    = 0x2d;   // matches Bomb::SetCallback @ 0x0017121c
+                    bomb->m_RotVelX = 2;
+                    bomb->m_RotX    = 0;
+                    bomb->m_RotVelY = 0;
                     // Matches binary MenuButton::Init bomb branch @ 0x0014f144:
                     //   vstr.32 s15,[r0,#0x6c]   ; *(bomb+0x6c) = 150.0
                     // (s15 = DAT = FRUIT_ZPOS = 150.0). Overrides the depth
