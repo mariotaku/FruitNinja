@@ -1,8 +1,8 @@
 //
-// TutorialControl — "swipe here" arrow for first-play tutorial.
+// TutorialControl -- "swipe here" arrow for first-play tutorial.
 // See TutorialControl.h for binary refs.
 //
-// Analysed: 2026-04-17T08:00
+// Analysed: 2026-04-25T10:30
 //
 
 #include "TutorialControl.h"
@@ -19,7 +19,7 @@
 // Animation phase boundaries (seconds)
 static const float ANIM_INACTIVE   = -10.0f;  // sentinel: timer reset value
 static const float PHASE_FADEIN    =  0.35f;   // 0..0.35: fade in + bounce up
-static const float PHASE_BOUNCE    =  0.60f;   // 0.35..0.6: bounce back down
+static const float PHASE_BOUNCE    =  0.60f;   // 0.35..0.6: bounce back down (DAT_001635ac)
 static const float PHASE_HOLD_END  =  2.25f;   // 0.6..2.25: hold visible + trail
 static const float PHASE_FADEOUT   =  2.75f;   // 2.25..2.75: fade out
 static const float BOUNCE_OFFSET   =  20.0f;   // Y bounce magnitude
@@ -27,11 +27,22 @@ static const float BOUNCE_OFFSET   =  20.0f;   // Y bounce magnitude
 // Arrow draw scale
 static const float ARROW_SCALE     =  96.0f;   // DAT_001635c8
 
-// Half-width cap
-static const float HALFWIDTH_CAP   = 256.0f;   // DAT_00162f80
+// Half-width cap for ButtonPressedAtPos and ResetTutePos
+static const float HALFWIDTH_CAP   = 256.0f;   // DAT_00162efc / DAT_00162f80
+
+// Trail loop constants (all from 0x001635ac block)
+static const float TRAIL_TIMER_SCALE = 2000.0f; // DAT_001635b0
+static const float TRAIL_ALPHA_MAX   =  255.0f; // DAT_001635b4
+static const float TRAIL_MOD_DIV     = 1000.0f; // DAT_001635b8
+static const float TRAIL_ALPHA_SLOPE = -255.0f; // DAT_001635bc
+static const float TRAIL_FADE_IN_END =    0.85f; // DAT_001635c0
+static const float TRAIL_FADE_OUT_START = 2.0f;  // from binary phase logic
 
 // ===================================================================
 // Matches TutorialControl::TutorialControl @ 0x001636f8
+// Texture assignment (verified):
+//   swipe_fruit_begin.tex -> super.m_SecondaryTex (+0x74)  [arrow graphic]
+//   press_indicate.tex    -> m_PressTex (+0x8C)             [trail quads]
 // ===================================================================
 TutorialControl::TutorialControl()
     : m_AnimTimer(ANIM_INACTIVE)
@@ -41,12 +52,15 @@ TutorialControl::TutorialControl()
     , m_HalfWidth(0.0f)
     , m_bFlipX(false)
 {
-    // Load textures
-    SmartPtr<Mortar::Texture> tex;
-    tex = Mortar::TextureManager::LoadLocalisedTexture("swipe_fruit_begin.tex");
-    if (tex.IsValid()) m_SecondaryTex = tex->m_TexId;
+    // swipe_fruit_begin.tex -> m_SecondaryTex (+0x74, the arrow)
+    {
+        SmartPtr<Mortar::Texture> tex =
+            Mortar::TextureManager::LoadLocalisedTexture("swipe_fruit_begin.tex");
+        if (tex.IsValid()) m_SecondaryTex = tex->m_TexId;
+    }
 
-    m_PrimaryTex = Mortar::TextureManager::LoadLocalisedTexture("press_indicate.tex");
+    // press_indicate.tex -> m_PressTex (+0x8C, the trail quads)
+    m_PressTex = Mortar::TextureManager::LoadLocalisedTexture("press_indicate.tex");
 
     m_LayerFlags = 8;
 }
@@ -87,7 +101,7 @@ bool TutorialControl::CanShowTute() const {
     if (fabsf(game->m_TransitionTimer) > 0.0f)
         return true;
 
-    // No game-over screen → don't show
+    // No game-over screen -> don't show
     // (binary checks pGameOverScreen at game+0x164)
     // Port: GameOverScreen not fully ported, skip this check
 
@@ -106,20 +120,15 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         // Copy button position
         pos = btn->pos;
 
-        // Compute arrow half-width from button bounds
-        // Binary: halfWidth = (btn->halfWidth - btn->innerPadding*2) - 10
-        // Port: approximate from button size
-        float halfWidth = btn->size.x * 0.5f - 10.0f;
-        if (halfWidth > HALFWIDTH_CAP) {
-            halfWidth *= 0.5f;
-        }
+        // halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0 - 10.0
+        // Binary fields: field_0x124 = m_TargetSize (Vec3 at +0x124, .x),
+        //                field_0x14c = m_AnimSpeed2 (float at +0x14C)
+        float halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0f - 10.0f;
+        if (halfWidth > HALFWIDTH_CAP) halfWidth = HALFWIDTH_CAP;
         m_HalfWidth = halfWidth;
 
-        // Flip direction: pos.x > 0 → button is right of center → arrow flips
-        m_bFlipX = (pos.x > 0.0f);
-
-        // Binary: XOR with btn->bFlipped (+0x120)
-        // Port: MenuButton doesn't have bFlipped yet, skip
+        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120)
+        m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
     }
     m_AnimTimer = ANIM_INACTIVE;
 }
@@ -134,13 +143,38 @@ void TutorialControl::ResetTutePos(const Vec3& targetPos) {
 }
 
 // ===================================================================
+// Matches TutorialControl::ButtonPressedAtPos @ 0x00162e58
+// Advances timer by 9.5: shifts -10.0 sentinel to -0.5, so animation
+// starts ~0.5 s after the next Update.  Guard: only fires when inactive.
+// ===================================================================
+void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
+    if (m_AnimTimer >= 0.0f) return;   // only fires when inactive
+
+    if (btn != nullptr) {
+        pos = btn->pos;
+
+        // halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0 - 10.0
+        // Binary fields: field_0x124 = m_TargetSize.x, field_0x14c = m_AnimSpeed2
+        float halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0f - 10.0f;
+        if (halfWidth > HALFWIDTH_CAP) halfWidth = HALFWIDTH_CAP;  // DAT_00162efc
+        m_HalfWidth = halfWidth;
+
+        // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120)
+        m_bFlipX = (pos.x > 0.0f) != (bool)btn->m_bScoreSubmitted;
+    }
+
+    m_AnimTimer += 9.5f;   // -10.0 -> -0.5; starts animation in ~0.5 s
+    if (m_AnimTimer > 0.0f) m_AnimTimer = 0.0f;  // DAT_00162f00 = 0.0
+}
+
+// ===================================================================
 // Matches TutorialControl::Update @ 0x00163014
 // Animation lifecycle: -10=inactive, 0..2.75=animating
 // ===================================================================
 void TutorialControl::Update(float dt) {
     m_LayerFlags = 8;
 
-    // Default: hide (far off-screen)
+    // Default: hide (far off-screen); m_bHidden=1 selects UV frame 1
     m_DrawPos = Vec3(-1000.0f, -1000.0f, -1000.0f);
     m_bHidden = 1;
 
@@ -151,7 +185,7 @@ void TutorialControl::Update(float dt) {
     }
 
     if (m_AnimTimer >= PHASE_FADEOUT) {
-        // Animation complete — stay at final position
+        // Animation complete -- stay at final position
         m_DrawPos = m_DrawPos + pos;
         return;
     }
@@ -201,7 +235,7 @@ void TutorialControl::Update(float dt) {
         m_bHidden = 0;
         m_Colour.a = (uint8_t)(f > 0.0f ? f : 0.0f);
     } else {
-        // Past 2.75: done, reset
+        // Past 2.75: done, reset (ARM idiom: fires when timer >= 2.75)
         m_DrawPos.y += BOUNCE_OFFSET;
         m_bHidden = 0;
         m_AnimTimer = ANIM_INACTIVE;
@@ -212,12 +246,17 @@ void TutorialControl::Update(float dt) {
 
 // ===================================================================
 // Matches TutorialControl::Draw @ 0x00163360
-// Draws trail quads (swipe_fruit_begin.tex) + arrow (press_indicate.tex)
+// Draws:
+//   (1) 4-quad trail with press_indicate.tex (m_PressTex at +0x8C)
+//   (2) Arrow with swipe_fruit_begin.tex (m_SecondaryTex at +0x74)
+//
+// m_bHidden is NOT a visibility gate; it selects the UV frame for the
+// arrow: 0 -> u=[0.0,0.5], 1 -> u=[0.5,1.0].
 // ===================================================================
 void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
     if ((layerMask & m_LayerFlags) == 0) return;
     if (m_AnimTimer <= 0.0f) return;
-    if (m_bHidden) return;
+    // NOTE: no early-out on m_bHidden -- it is a UV frame selector, not a guard.
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
     Renderer* r = Renderer::GetInstance();
@@ -225,16 +264,64 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
 
     float flipSign = m_bFlipX ? -1.0f : 1.0f;
 
-    // --- Trail quads (swipe_fruit_begin.tex) during hold phase ---
+    // --- (1) Trail quads (press_indicate.tex, m_PressTex at +0x8C) ---
+    // Active only during hold phase: PHASE_BOUNCE < m_AnimTimer < PHASE_HOLD_END
+    // Binary @ 0x00163488: loop 4 quads with quartic alpha falloff.
     if (m_AnimTimer > PHASE_BOUNCE && m_AnimTimer < PHASE_HOLD_END &&
-        m_SecondaryTex != 0) {
-        // Binary draws 4 trail quads with varying alpha and offset.
-        // Simplified port: draw one trail quad at the draw position.
-        // TODO: full 4-quad trail with time-based offset and quartic falloff
+        m_PressTex.IsValid()) {
+
+        float timer = m_AnimTimer;
+        int rem = (int)(timer * TRAIL_TIMER_SCALE) % (int)TRAIL_MOD_DIV;
+
+        for (int quad_index = 0; quad_index < 4; ++quad_index) {
+            float frac = (float)quad_index + (float)rem / TRAIL_MOD_DIV;
+
+            // Quartic alpha base: 255 + (frac - 3.0) * (-255.0) = 255 * (4 - frac)
+            float alpha_base = TRAIL_ALPHA_MAX + (frac - 3.0f) * TRAIL_ALPHA_SLOPE;
+            if (alpha_base < 0.0f)   alpha_base = 0.0f;
+            if (alpha_base > TRAIL_ALPHA_MAX) alpha_base = TRAIL_ALPHA_MAX;
+
+            float alpha;
+            // ARM idiom ordering: check >= 0.85 first (no ramp), then > 2.0 (fade-out),
+            // else fade-in ramp.
+            if (timer >= TRAIL_FADE_IN_END) {
+                // Hold region: no extra ramp
+                alpha = alpha_base;
+            } else if (timer > TRAIL_FADE_OUT_START) {
+                // Fade-out tail: alpha_base * (1 - 4*(timer-2.0))
+                alpha = alpha_base * (1.0f - 4.0f * (timer - TRAIL_FADE_OUT_START));
+            } else {
+                // Fade-in ramp: alpha_base * (timer - 0.60) * 4.0
+                alpha = alpha_base * (timer - PHASE_BOUNCE) * 4.0f;
+            }
+            if (alpha < 0.0f)   alpha = 0.0f;
+            if (alpha > 255.0f) alpha = 255.0f;
+
+            Colour trailColour(255, 255, 255, (uint8_t)alpha);
+
+            mm.GetWorldStack().Reset();
+            Matrix44 mat = Matrix44::MakeScale(m_HalfWidth, m_HalfWidth, 1.0f);
+            mat.GlobalTranslate44(m_DrawPos);
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            m_PressTex->Set();
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            // UV: full (0.0, 0.0, 1.0, 1.0) per DAT_001635c4=0.0, 0x3f800000=1.0
+            r->DrawQuad(trailColour, 0.0f, 0.0f, 1.0f, 1.0f);
+            m_PressTex->UnSet();
+        }
     }
 
-    // --- Arrow (press_indicate.tex) ---
-    if (m_PrimaryTex.IsValid()) {
+    // --- (2) Arrow (swipe_fruit_begin.tex, m_SecondaryTex at +0x74) ---
+    // m_bHidden selects UV frame:
+    //   0 -> u0 = 0.0 * 0.5 = 0.0, u1 = 0.0 * 0.5 + 0.5 = 0.5
+    //   1 -> u0 = 1.0 * 0.5 = 0.5, u1 = 1.0 * 0.5 + 0.5 = 1.0
+    if (m_SecondaryTex != 0) {
+        float arrow_u0 = m_bHidden * 0.5f;
+        float arrow_u1 = m_bHidden * 0.5f + 0.5f;
+
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             flipSign * ARROW_SCALE,
@@ -249,10 +336,10 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        m_PrimaryTex->Set();
+        glBindTexture(GL_TEXTURE_2D, m_SecondaryTex);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        r->DrawQuad(m_Colour);
-        m_PrimaryTex->UnSet();
+        r->DrawQuad(m_Colour, arrow_u0, 0.0f, arrow_u1, 1.0f);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 }

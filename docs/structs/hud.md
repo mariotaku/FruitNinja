@@ -304,6 +304,172 @@ Pool: up to 9 combo text sprites (digit textures 1..9). `GetFree` (0x00150da4) s
 
 ---
 
+### TutorialControl : HUDControl3d (size = 0xA0 bytes)
+
+<!-- Analysed: 2026-04-25T10:30 -->
+
+Draws a "swipe here" animated arrow during first-play tutorial. Only visible
+when `CanShowTute()` returns true (transition running, or slow-motion active).
+2.75-second animation: fade-in (0..0.35 s), bounce (0.35..0.60 s), hold
+(0.60..2.25 s), fade-out (2.25..2.75 s). Inactive sentinel = -10.0.
+
+#### Binary References
+
+| Function | Address | Notes |
+|----------|---------|-------|
+| TutorialControl::TutorialControl | 0x001636f8 | ctor |
+| TutorialControl::Init | 0x00162e38 | sets LayerFlags=8, calls Reset |
+| TutorialControl::Release | 0x00162e48 | no-op |
+| TutorialControl::Reset | 0x00162e4c | m_AnimTimer = -10.0 |
+| TutorialControl::ResetTutePos(MenuButton*) | 0x00162f04 | copy pos, compute halfWidth/flip |
+| TutorialControl::ResetTutePos(Vec3) | 0x00162f84 | set pos directly, reset timer |
+| TutorialControl::CanShowTute | 0x00162fb8 | returns bool |
+| TutorialControl::Update | 0x00163014 | animation tick |
+| TutorialControl::Draw | 0x00163360 | 4-quad trail + arrow draw |
+| TutorialControl::ButtonPressedAtPos | 0x00162e58 | advance timer on press |
+| ButtonPressedAtPos (PLT thunk) | 0x00105024 | |
+
+#### Struct Layout
+
+Ghidra's declared struct is 148 (0x94) bytes — it is missing the tail fields.
+True size verified from all function accesses is **0xA0** (160 bytes).
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x00..+0x7B | HUDControl3d | super | base (0x7C bytes) |
+| +0x7C | float | m_AnimTimer | -10.0=inactive sentinel, 0..2.75=animating |
+| +0x80 | Vec3 | m_DrawPos | Computed each Update; off-screen = (-1000,-1000,-1000) |
+| +0x8C | SmartPtr\<Texture\> | m_PressTex | press_indicate.tex (ARROW graphic — used for trail quads!) |
+| +0x90 | Colour | m_Colour | RGBA; alpha driven by animation phase |
+| +0x94 | int | m_bHidden | 0=visible(UV frame 0), 1=hidden(UV frame 1) — NOT a draw guard |
+| +0x98 | float | m_HalfWidth | Half-width of target button; set by ResetTutePos |
+| +0x9C | bool | m_bFlipX | true if button is right of center (arrow flips) |
+
+**Texture assignment (constructor @ 0x001636f8):**
+- `swipe_fruit_begin.tex` → `HUDControl3d::field_0x74` (= `super.m_SecondaryTex` at +0x74)
+- `press_indicate.tex` → `TutorialControl::m_PressTex` at +0x8C
+
+**In Draw, the texture usage is the OPPOSITE of the field names:**
+- Trail-quad loop: `Texture::Set(m_PressTex)` (+0x8C) — uses `press_indicate.tex`
+- Arrow block: `Texture::Set(super.m_SecondaryTex)` (+0x74) — uses `swipe_fruit_begin.tex`
+
+The `press_indicate.tex` atlas has the full-width arrow split into two UV halves.
+`m_bHidden` selects the UV frame: 0 → UV[0.0, 0.5]; 1 → UV[0.5, 1.0].
+`m_bHidden` is **not** used as a visibility gate — the port's `if (m_bHidden) return;` is wrong.
+
+#### ButtonPressedAtPos @ 0x00162e58
+
+**Signature:** `void TutorialControl::ButtonPressedAtPos(TutorialControl* this, MenuButton* btn)`
+
+**Behaviour:** Advances an already-running or nearly-complete animation.
+Guard: only acts when `m_AnimTimer < 0.0` (animation is inactive/reset).
+If `btn != nullptr`: copies button pos → `this->pos`, computes `halfWidth` from
+`btn->field_0x124 - btn->field_0x14c * 2.0 - 10.0`, caps at 256.0 (DAT_00162efc),
+then sets `m_bFlipX` from `pos.x > 0.0` (XOR'd with `btn->field_0x120` flag).
+Always (btn or not): `m_AnimTimer += 9.5` — shifts the -10.0 sentinel to -0.5,
+so the next Update sees timer ≈ -0.5 and the animation starts in ~0.5 s.
+If `m_AnimTimer > 0` after the add: clamps to 0.0 (DAT_00162f00 = 0.0).
+
+**Callers (via PLT @ 0x00105024):**
+
+| Caller | Address | Context |
+|--------|---------|---------|
+| ShopScreen::ClickedOnShopItem | 0x0015d4e4 | item unlocked + equip button present |
+| MenuButton::TouchReleased | 0x0014e5fe | button touched but not "highlighted" path |
+| UpsellScreen::Update | 0x001650da | buy ring created — called twice in a row |
+| UpsellScreen::Update | 0x001650e4 | (second call, same ring creation block) |
+
+Note: all callers retrieve TutorialControl via `GameTaskState + 0x168`.
+
+#### Draw Trail Block @ 0x00163488
+
+**Phase gate:** `m_AnimTimer > PHASE_BOUNCE (0.60)` AND `< 2.25` (PHASE_HOLD_END).
+
+**Loop:** 4 iterations (`iVar3 = 0..3`).
+
+**Per-quad algorithm:**
+```c
+float timer  = m_AnimTimer;
+int   rem    = (int)(timer * 2000.0f) % 1000;   // __aeabi_idivmod
+float frac   = (float)quad_index + (float)rem / 1000.0f;   // 0..4 range
+// Quartic alpha base: 255 + (frac - 3.0) * (-255.0)  =  255*(4 - frac)
+float alpha_base = 255.0f + (frac - 3.0f) * (-255.0f);
+alpha_base = clamp(alpha_base, 0.0f, 255.0f);   // [0, 255]
+
+// Fade-in ramp: during 0.60 < timer < 0.85
+if (timer >= 0.85f) {  // ARM idiom: fVar7 < 0.85 → fires when timer >= 0.85
+    // no ramp: alpha = alpha_base
+} else if (timer > 2.0f) {
+    // fade-out tail: alpha = alpha_base + (timer - 2.0) * (-4.0) * alpha_base
+    //              = alpha_base * (1 - 4*(timer-2.0))
+} else {
+    // fade-in: alpha = (float)alpha_base * (timer - 0.60) * 4.0
+}
+alpha = clamp(alpha, 0, 255);
+
+// Scale: trail quad size = m_HalfWidth (via GOT-dereferenced pointer)
+// Translate: m_DrawPos (this + 0x80)
+// Colour: (255, 255, 255, alpha)
+// UV: (0.0, 1.0)  — full width
+DrawQuadSized(0.0f, 1.0f, Colour(255, 255, 255, alpha));
+```
+
+**Key constants (all from 0x001635ac block):**
+
+| Address | Value | Role |
+|---------|-------|------|
+| DAT_001635ac | 0.60 | trail phase start (PHASE_BOUNCE) |
+| DAT_001635b0 | 2000.0 | `timer * 2000` before mod-1000 |
+| DAT_001635b4 | 255.0 | alpha ceiling |
+| DAT_001635b8 | 1000.0 | divisor for fractional part |
+| DAT_001635bc | -255.0 | quartic slope: `255 + (frac-3)*(-255)` |
+| DAT_001635c0 | 0.85 | fade-in/hold threshold |
+| DAT_001635c4 | 0.0 | UV left (trail DrawQuadSized arg1) |
+| DAT_001635c8 | 96.0 | ARROW_SCALE (confirmed) |
+| 0x3f800000 | 1.0 | UV right (trail DrawQuadSized arg2) |
+| DAT_00162efc | 256.0 | HALFWIDTH_CAP (ButtonPressedAtPos) |
+| DAT_00162f80 | 256.0 | HALFWIDTH_CAP (ResetTutePos) |
+| DAT_00162f00 | 0.0 | clamp-to-zero in ButtonPressedAtPos |
+
+**Note on `local_2c`:** The decompiler emits `local_2c = (2*frac)^2 = 4*frac^2`
+in the loop body but this value is never passed to any subsequent call. It is
+dead code in the compiled output, likely an inlining artifact.
+
+#### Update — Phase Logic vs Port
+
+The binary Update (0x00163014) constants verified match the port exactly:
+- Off-screen sentinel: (-1000.0, -1000.0, -1000.0) ✓
+- scaleStart: (-0.5, -0.075, 0.0) ✓
+- scaleEnd: (1.0, 0.15, 0.0) ✓
+- PHASE_FADEIN: 0.35 ✓  PHASE_BOUNCE: 0.60 ✓  PHASE_HOLD_END: 2.25 ✓
+- PHASE_FADEOUT: 2.75 ✓  BOUNCE_OFFSET: 20.0 ✓
+
+**Drift found in Update structure:**
+- Binary `else if (fVar6 >= 2.75)` branch (past fadeout end): sets `m_DrawPos.y += 20.0`
+  and resets timer to -10.0 (0xC1200000). The port sets `m_AnimTimer = ANIM_INACTIVE`
+  which is correct (-10.0 = 0xC1200000 ✓), but the **branch condition is wrong** in the port.
+  Binary ARM idiom: `if (-1 < (int)((uint)(fVar6 < 2.75) << 0x1f))` fires when `timer >= 2.75`.
+  Port code: `else if (m_AnimTimer < PHASE_FADEOUT)` is the fade-out branch, and the
+  `else` (past 2.75) is `if (m_AnimTimer >= 2.75)` — that part is correct.
+
+**Drift found in Draw — m_bHidden semantics:**
+- Port: `if (m_bHidden) return;` — treats as draw skip flag
+- Binary: `m_bHidden` at +0x94 is the UV frame selector for `press_indicate.tex`.
+  UV0 = `m_bHidden * 0.5`, UV1 = `m_bHidden * 0.5 + 0.5`.
+  There is **no early-out** on m_bHidden in the binary Draw. The only guard is
+  `if (m_AnimTimer <= 0.0) return early`.
+  The port silently suppresses the arrow whenever `m_bHidden=1` (which is the
+  default set every Update frame before the phase checks clear it to 0).
+
+**Drift found in Draw — texture assignment:**
+- Port `m_PrimaryTex` (named "press_indicate") draws the arrow; `m_SecondaryTex` (named "swipe_fruit_begin") is used for trail quads.
+- Binary uses them the opposite way (see Struct Layout above). The port labels are correct for the *texture content* but the *field usage* in Draw is inverted: `field_0x74` (swipe_fruit_begin) is the arrow, `field_0x8C` (press_indicate) is the trail.
+
+**Drift found in Draw — trail quads unimplemented:**
+- Port has a TODO comment block; the 4-quad trail loop body is empty.
+
+---
+
 ## See Also
 
 - [Rendering functions](../engine/rendering-functions.md) -- HUDControl3d::Draw

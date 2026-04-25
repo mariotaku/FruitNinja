@@ -403,8 +403,9 @@ void ShopScreen::ClickedOnShopItem(ShopListItem* item) {
         item->m_Alpha = 0.25f;   // 0x3e800000 in binary
     } else {
         if (m_pEquipButton) {
-            // Binary: TutorialControl::ButtonPressedAtPos(tute, no args)
-            // TODO: resolve TutorialControl from GameTaskState
+            // Matches ShopScreen::ClickedOnShopItem @ 0x0015d4e4
+            if (game.pTutorialCtrl)
+                game.pTutorialCtrl->ButtonPressedAtPos(m_pEquipButton);
         }
     }
 }
