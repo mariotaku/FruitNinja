@@ -120,10 +120,11 @@ void GameInitialise() {
     // stub; once TinyXML save/load is wired this is where LoadGame fires.
     game->pSaveData = new FruitSaveData();
 
-    // GameSound — 32-slot pool. Backend is currently stubbed
-    // (SoundManager is no-op) but the call sites exercise the real
-    // pooling / IsPlaying / Release machinery so wiring a proper
-    // SDL audio backend later is a drop-in change.
+    // SDL2 audio backend init. Opens audio device at 16kHz mono S16LE
+    // (matches MAMAudioThread sampleRate=16000). Must be called before GameSound.
+    Mortar::SoundManager::GetInstance().Init();
+
+    // GameSound — 32-slot pool backed by SDL2 audio.
     game->pGameSound = new Mortar::GameSound();
 
     // TODO: Step 5: InitialiseData() — full InitialiseData call chain.
