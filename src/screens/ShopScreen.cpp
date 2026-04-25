@@ -286,7 +286,15 @@ void ShopScreen::CreateShopList() {
     // pre-populated from items.xml at init time. Port creates a local one.
     m_pShopList = new ScrollingMenu();
 
-    // Populate from ItemManager (stub: no items currently)
+    // ScrollingMenu must live in the HUD so HUD::Update ticks its
+    // Update (touch + scroll physics + per-item layout via Move) and
+    // HUD::Draw dispatches its Draw (which iterates and draws items).
+    // Without this, ScrollingMenu sat orphaned and the list was never
+    // positioned or rendered. Layer 0x40 matches the menu/HUD layer
+    // used by MenuButtons on the same screen.
+    m_pShopList->m_LayerFlags = 0x40;
+
+    // Populate from ItemManager
     ItemManager* im = ItemManager::GetInstance();
     if (im) {
         int n = im->GetNumItems();
@@ -297,6 +305,10 @@ void ShopScreen::CreateShopList() {
             row->m_pItemInfo = info;
             m_pShopList->AddItem(row);
         }
+    }
+
+    if (game.hud) {
+        game.hud->AddControl(m_pShopList);
     }
 }
 
