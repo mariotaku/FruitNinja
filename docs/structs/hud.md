@@ -247,6 +247,46 @@ Discovered at 0x143828. This is the shared base for all game screens (MainScreen
 
 ---
 
+### MenuButton : HUDControl3d (size = 0x15C)
+
+<!-- Analysed: 2026-04-25T17:00 -->
+
+#### MenuButton timer behaviour
+
+`m_Timer` is the `HUDControl` field at +0x2c. It drives the rotation of the back-icon ring in `HUDControl3d::Draw` via `RotZ44(SinIdx(m_Timer * 182.0), CosIdx(m_Timer * 182.0))` when `m_Timer != 0.0`.
+
+**Init** (`MenuButton::Init @ 0x0014ee40`):
+
+The binary explicitly writes:
+```c
+this->base.super.m_Timer = 0.0f;   // DAT_0014ee68 = 0.0 (MENUBUTTON_INIT_ZERO)
+this->m_bHighlighted     = 1;      // byte at MenuButton +0x131
+```
+
+Both writes happen unconditionally for every MenuButton::Init call, regardless of fruit type or position.
+
+`m_RotationSpeed` at +0xF4 is set to `RandFloat_PowerUpShop(4.0) + 8.0` (range 8..12, DAT_0014f17c/0x0014f180) if the bomb entity creation succeeds, or left 0.0 if it fails. Sign: 50% chance negative (random direction).
+
+**Update** (`MenuButton::Update @ 0x0014e614`):
+
+```c
+if (m_FruitType >= 0 && dt > 0.0f) {
+    m_Timer += dt * m_RotationSpeed;       // unconditional tick
+    if (m_Timer < 0.0f) m_Timer += 360.0f; // DAT_0014e974 = 360.0
+}
+```
+
+The tick is **unconditional** — no hover gate, no `m_bHighlighted` gate. `m_bHighlighted` gates only a size-pulse animation (touch feedback), not the rotation timer.
+
+**Port defect** (`src/hud/MenuButton.cpp`):
+The port's `MenuButton::Init` is missing both:
+1. `m_Timer = 0.0f;` — without this, m_Timer may start non-zero from uninitialized memory
+2. `m_bHighlighted = 1;` — without this, the highlighted state is wrong from the start
+
+Both screens (DojoScreen, ShopScreen) use `fruitType = FruitInfo_GetCount()` (>= 0, the bomb type) for their back button, so both should tick m_Timer each frame and rotate. Any "no rotation" observation in the port is caused by the missing Init writes, not a per-screen difference.
+
+---
+
 ### MissControl : HUDControl3d : HUDControl (combo text display)
 
 | Offset | Type | Name | Notes |
