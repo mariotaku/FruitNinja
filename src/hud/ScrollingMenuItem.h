@@ -32,11 +32,20 @@
 //   +0x0C  float    pos.z
 //   +0x10  ScrollingMenu* m_pParent   SetParent 0x0015aeb4: *(this+0x10) = param
 //   +0x14  Colour   m_Colour     (4 bytes RGBA)
-//   +0x18  float    m_Width
-//   +0x1C  float    m_Height
-//   +0x20  float    m_Depth
-//   +0x24  float    m_ParamWidth   (ctor param; binary writes 25.0f = 0x41c80000)
-//   +0x28  float    m_ParamHeight  (ctor param; binary writes DAT_0015b668 = 0.0f)
+//   +0x18  float    m_Size.x      (NO binary symbol name; all ctors load this as
+//   +0x1C  float    m_Size.y       Vec3[0..2] from a global default-size pointer.
+//   +0x20  float    m_Size.z       FriendLeaderboardItem ctor @ 0x0013d210 writes
+//                                  these explicitly as a scaled Vec3. ShopListItem::Move
+//                                  @ 0x0015d1fc reads m_Size.x as an X sub-icon offset
+//                                  (adds 35.2f to position a thumbnail). No subclass
+//                                  uses m_Size.y or m_Size.z directly in observed code.)
+//   +0x24  float    m_Height      (BINARY NAME confirmed via demangled symbol.
+//                                  GetHeight()/SetHeight() target this. ROW PITCH for
+//                                  ScrollingMenu::Update layout. Default 25.0f. ShopListItem
+//                                  overrides to 80.0f. FriendLeaderboardItem sets 47.0f.)
+//   +0x28  float    m_Width       (BINARY NAME confirmed via demangled symbol.
+//                                  GetWidth()/SetWidth() target this. Default 0.0f.
+//                                  ShopListItem sets 290.0f = divider span width.)
 //   +0x2C  Delegate1  m_Callback   (40 bytes; Delegate1<void,ScrollingMenuItem*>)
 //          Binary ctor @ 0x0015b228: operator= target = (this+0x30); next field m_pText at +0x54
 //          => Delegate1 spans +0x2C..+0x53 (40 bytes = 0x28)
@@ -49,7 +58,7 @@
 //
 // Port status: vtable fully matched; Draw() and scrolling physics not yet ported.
 //
-// Analysed: 2026-04-25T14:30
+// Analysed: 2026-04-25T23:30
 //
 
 #include <functional>
@@ -65,21 +74,27 @@ public:
     ScrollingMenuItem();
     virtual ~ScrollingMenuItem();
 
-    // vtable +0x08 (slot 2): GetHeight -- returns m_Height
+    // vtable +0x08 (slot 2): GetHeight
+    // Binary 0x0013cdf0: returns *(this + 0x24) = m_Height (binary name, ROW PITCH for
+    // layout). ShopListItem sets 80.0f; FriendLeaderboardItem sets 47.0f; default 25.0f.
     virtual float GetHeight() const { return m_Height; }
 
-    // vtable +0x0C (slot 3): GetWidth -- returns m_Width
+    // vtable +0x0C (slot 3): GetWidth
+    // Binary 0x0013cdf8: returns *(this + 0x28) = m_Width (binary name).
+    // NOT m_Size.x (+0x18) — those are separate display-size fields.
     virtual float GetWidth() const { return m_Width; }
 
     // vtable +0x10 (slot 4): SetHeight
+    // Binary 0x0013ce00: writes to *(this + 0x24) = m_Height.
     virtual void SetHeight(float h) { m_Height = h; }
 
     // vtable +0x14 (slot 5): SetWidth
+    // Binary 0x0013ce08: writes to *(this + 0x28) = m_Width.
     virtual void SetWidth(float w) { m_Width = w; }
 
     // vtable +0x18 (slot 6): Move(_Vector3) -- updates item world position
     // Binary: sets pos.x/y/z from incoming Vec3 argument.
-    // ShopListItem overrides this at 0x0015d9fc.
+    // ShopListItem overrides this at 0x0015d1fc.
     virtual void Move(float x, float y, float z) { pos.x = x; pos.y = y; pos.z = z; }
 
     // vtable +0x1C (slot 7): Remove
@@ -133,14 +148,25 @@ public:
     // +0x14: display colour
     unsigned int m_Colour;            // +0x14  (Colour RGBA 4 bytes)
 
-    // +0x18..+0x20: item bounding dimensions (from GOT-cached Vec3)
-    float m_Width;                    // +0x18
-    float m_Height;                   // +0x1C
-    float m_Depth;                    // +0x20
+    // +0x18..+0x20: display size Vec3 (no binary symbol name).
+    // All ctors load these three floats from a global default-size Vec3 pointer.
+    // FriendLeaderboardItem ctor (0x0013d210) writes them as a scaled Vec3 explicitly.
+    // ShopListItem::Move (0x0015d1fc) reads m_Size.x as an X sub-icon position offset
+    // (adds 35.2f to compute thumbnail position). m_Size.y and m_Size.z are set by
+    // ctors but not observed to be read back in any compiled function.
+    // ShopListItem ctor sets these indirectly via the base ctor (global default = 0,0,0).
+    struct { float x, y, z; } m_Size; // +0x18..+0x23 (12 bytes)
 
-    // +0x24..+0x28: ctor params
-    float m_ParamWidth;               // +0x24  (init 25.0f = DAT_0015b668 0x41c80000)
-    float m_ParamHeight;              // +0x28  (init 0.0f)
+    // +0x24: m_Height — BINARY NAME (demangled symbol confirmed in Ghidra struct).
+    //        GetHeight()/SetHeight() target this field. ROW PITCH for
+    //        ScrollingMenu::Update layout. Default 25.0f (ctor literal).
+    //        ShopListItem sets 80.0f; FriendLeaderboardItem sets 47.0f.
+    float m_Height;                   // +0x24
+
+    // +0x28: m_Width — BINARY NAME (demangled symbol confirmed in Ghidra struct).
+    //        GetWidth()/SetWidth() target this field. Default 0.0f.
+    //        ShopListItem sets 290.0f (divider span width).
+    float m_Width;                    // +0x28
 
     // +0x2C..+0x53: Delegate1<void,ScrollingMenuItem*> (40 bytes in binary).
     //

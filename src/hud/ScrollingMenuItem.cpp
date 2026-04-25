@@ -1,4 +1,4 @@
-// Analysed: 2026-04-25T14:30
+// Analysed: 2026-04-25T23:30
 //
 // ScrollingMenuItem stub implementation.
 // Binary: ctor 0x0015b5dc, dtor 0x0015c3ac.
@@ -9,17 +9,15 @@
 #include <cstring>
 
 // Default item size from binary global DAT values (ctor 0x0015b5dc).
-// DAT_0015b668 = 0x41c80000 = 25.0f (m_Width / m_Height / m_ParamWidth default)
-static const float SCROLL_ITEM_DEFAULT_SIZE = 25.0f;
+// DAT_0015b668 = 0.0f (m_Width default). m_Height default = 25.0f (ctor literal).
+// m_Size is loaded from a global Vec3 ptr (zeroed at load time = all 0.0f).
 
 ScrollingMenuItem::ScrollingMenuItem()
     : m_pParent(nullptr)
     , m_Colour(0xFFFFFFFF)
-    , m_Width(SCROLL_ITEM_DEFAULT_SIZE)
-    , m_Height(SCROLL_ITEM_DEFAULT_SIZE)
-    , m_Depth(0.0f)
-    , m_ParamWidth(SCROLL_ITEM_DEFAULT_SIZE)
-    , m_ParamHeight(0.0f)
+    , m_Size{0.0f, 0.0f, 0.0f}
+    , m_Height(25.0f)
+    , m_Width(0.0f)
     // m_Delegate: struct default-ctor initialises _delegate_fn (std::function); header bytes zeroed below.
     , m_pText(nullptr)
     , m_field58(nullptr)

@@ -1,4 +1,4 @@
-// Analysed: 2026-04-25T20:30
+// Analysed: 2026-04-25T23:00
 //
 // ShopListItem implementation.
 // Binary: ctor (0-param) 0x0015f9e8, ctor (5-param) 0x0015f734.
@@ -9,6 +9,7 @@
 #include "ShopListItem.h"
 #include "ScrollingMenu.h"
 #include "game/ItemInfo.h"
+#include "game/ItemManager.h"
 #include "screens/ShopScreen.h"
 #include "Game.h"
 #include "engine/render/MatrixManager.h"
@@ -17,9 +18,11 @@
 #include "engine/math/Matrix44.h"
 #include "engine/math/Colour.h"
 #include "engine/math/Vec3.h"
+#include "asset/TextureManager.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 // GL symbols come via Renderer.h -> gl_funcs.h
 
 // ---------------------------------------------------------------------------
@@ -48,6 +51,80 @@ ShopListItem::ShopListItem()
 }
 
 ShopListItem::~ShopListItem() {}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::Create @ 0x0015c988
+// Binary signature: void Create(ShopListItem* this, ItemInfo* param_1, ShopScreen* param_2)
+//
+// Binary writes (resolved constants from DAT addresses):
+//   *(this + 0x24) = DAT_0015cae8 = 0x42a00000 = 80.0f  --> m_RowHeight = GetHeight()
+//   *(this + 0x28) = DAT_0015caec = 0x43910000 = 290.0f --> m_RowWidth
+//   *(this + 0x18) = DAT_0015caf0 = 0x42700000 = 60.0f  --> m_BBoxWidth (Vec3.x)
+//   *(this + 0x1c) =               0x41500000 = 13.0f   --> m_BBoxHeight (Vec3.y, literal in decompile)
+//   *(this + 0x20) = DAT_0015cae4 = 0x00000000 = 0.0f   --> m_BBoxDepth (Vec3.z)
+//   *(this + 0x280) = DAT_0015cae4 = 0.0f               --> m_CostAlpha init
+//   *(this + 0x58)  = param_2                            --> ShopScreen* back-ptr at +0x58
+//   *(this + 0x278) = param_1                            --> m_pItemInfo
+//
+// Also: loads item icon texture into m_pIconTex from ItemInfo::m_pType string,
+//       builds cost/description text into m_DescText (+0x5c),
+//       checks ItemManager::IsEquipped -> sets m_SelectedAlpha(+0x260) to 1.0f,
+//       checks ItemInfo::IsNew (field +0x3c) -> sets m_NewItemAlpha(+0x25c) to 1.0f.
+// ---------------------------------------------------------------------------
+void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
+    // --- Row height (critical): 80.0f = DAT_0015cae8 = 0x42a00000 ---
+    // GetHeight() reads m_Height (+0x24); this is the only place it gets set for shop rows.
+    m_Height = 80.0f;   // DAT_0015cae8
+    m_Width  = 290.0f;  // DAT_0015caec
+
+    // --- Display size Vec3 (m_Size at +0x18/+0x1C/+0x20) ---
+    // Binary: Vec3(60.0f, 13.0f, 0.0f) written to +0x18/+0x1C/+0x20
+    m_Size.x = 60.0f;   // DAT_0015caf0
+    m_Size.y = 13.0f;   // literal in decompile
+    m_Size.z = 0.0f;    // DAT_0015cae4
+
+    // --- Back-pointers ---
+    m_pShopScreen = pShopScreen;   // +0x58 in binary (port: m_pShopScreen)
+    m_pItemInfo   = pItemInfo;     // +0x278
+
+    // --- Cost alpha init ---
+    m_CostAlpha = 0.0f;  // DAT_0015cae4
+
+    if (!pItemInfo) return;
+
+    // --- Icon texture ---
+    // Binary: loads item thumbnail by name from ItemInfo::m_pTextureName
+    // (e.g. "item_discoblade") into TextureManager's textures/ subdir.
+    if (pItemInfo->m_pTextureName && pItemInfo->m_pTextureName[0] != '\0') {
+        std::string texFile = std::string(pItemInfo->m_pTextureName) + ".tex";
+        m_pIconTex = Mortar::TextureManager::LoadLocalisedTexture(texFile.c_str());
+    }
+
+    // --- Description text ---
+    // Binary: copies either locked text, cost-text, or description string into +0x5c.
+    // Port: copy m_pDescText if available, else m_pTitle.
+    if (pItemInfo->m_pDescText && pItemInfo->m_pDescText[0] != '\0') {
+        strncpy(m_DescText, pItemInfo->m_pDescText, sizeof(m_DescText) - 1);
+        m_DescText[sizeof(m_DescText) - 1] = '\0';
+    } else if (pItemInfo->m_pTitle && pItemInfo->m_pTitle[0] != '\0') {
+        strncpy(m_DescText, pItemInfo->m_pTitle, sizeof(m_DescText) - 1);
+        m_DescText[sizeof(m_DescText) - 1] = '\0';
+    }
+
+    // --- Selected alpha: 1.0f if item is currently equipped ---
+    // Binary: ItemManager::IsEquipped(pItemInfo) != 0 -> *(+0x260) = 0x3f800000 = 1.0f
+    ItemManager* im = ItemManager::GetInstance();
+    if (im && im->IsEquipped(pItemInfo)) {
+        m_SelectedAlpha = 1.0f;   // DAT = 0x3f800000
+    }
+
+    // --- New-item alpha: 1.0f if item has the "new" flag ---
+    // Binary: if (*(char*)(pItemInfo + 0x3c) == '\0') -> *(+0x25c) = 0x3f800000 = 1.0f
+    // Note: +0x3c of ItemInfo = IsNew flag; binary test is "== '\\0'" meaning NOT new sets it.
+    // Corrected read: if (!pItemInfo->IsNew()) m_NewItemAlpha = 1.0f
+    // TODO: confirm ItemInfo::IsNew field offset when fully RE'd.
+    // DIFFERS: stubbed; not setting m_NewItemAlpha here until ItemInfo::IsNew is confirmed.
+}
 
 // ---------------------------------------------------------------------------
 // ShopListItem::Draw @ 0x0015eb00

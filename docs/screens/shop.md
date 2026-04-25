@@ -616,7 +616,7 @@ Observed after wiring back-icon + select_item textures and confirming the screen
 
 ## ScrollingMenuItem Class Layout
 
-<!-- Analysed: 2026-04-25T20:30 -->
+<!-- Analysed: 2026-04-25T23:00 -->
 
 ScrollingMenuItem does NOT inherit from HUDControl. It has its own independent vtable.
 
@@ -653,8 +653,8 @@ ScrollingMenuItem does NOT inherit from HUDControl. It has its own independent v
 | +0x18 | float | m_Width | From GOT-cached Vec3[0] |
 | +0x1C | float | m_Height | From GOT-cached Vec3[1] |
 | +0x20 | float | m_Depth | From GOT-cached Vec3[2] |
-| +0x24 | float | m_ParamWidth | width ctor param |
-| +0x28 | float | m_ParamHeight | height ctor param |
+| +0x24 | float | m_ParamWidth | **GetHeight() reads this field** (not +0x1C). No-arg ctor sets 25.0f; `ShopListItem::Create` overrides to 80.0f. SetHeight also writes here. |
+| +0x28 | float | m_ParamHeight | ctor param (4-param ctor writes height arg here; no-arg ctor writes 0.0f; `ShopListItem::Create` writes 290.0f). NOT what GetHeight() reads. |
 | +0x2C | Delegate1 | m_Callback | 40 bytes (Delegate1<void,ScrollingMenuItem*>) |
 | +0x54 | char* | m_pText | Label string ptr; SetNull then SetText called in ctor |
 | +0x58 | (unknown) | | |
@@ -1036,6 +1036,116 @@ The header file `ShopScreen.h` and port source `ShopScreen.cpp` have **wrong slo
 
 ---
 
+## ShopListItem Row Height — GetHeight() and Create()
+
+<!-- Analysed: 2026-04-25T23:00 -->
+
+### Binary: GetHeight() returns *(this + 0x24) = m_ParamWidth
+
+`ScrollingMenuItem::GetHeight` at `0x0013cdf0`:
+```c
+undefined4 ScrollingMenuItem::GetHeight(void) {
+    int in_r0;
+    return *(undefined4 *)(in_r0 + 0x24);   // +0x24 = m_ParamWidth field
+}
+```
+
+`ScrollingMenuItem::SetHeight` at `0x0013ce00`:
+```c
+void ScrollingMenuItem::SetHeight(float param_1) {
+    *(float *)(this + 0x24) = param_1;       // also writes +0x24
+}
+```
+
+**Critical**: `GetHeight()` does NOT read `+0x1C` (`m_Height`). It reads `+0x24`, which is the field named `m_ParamWidth` in the port header (`ScrollingMenuItem.h` line 142). This field is what `ScrollingMenu::Update Phase 5` and `AddItem` use for the row pitch.
+
+### No-arg ScrollingMenuItem ctor default
+
+The no-arg ctor (`0x0015b5dc`, called by `ShopListItem::ShopListItem`) sets:
+```c
+*(float *)(this + 0x24) = 0x41c80000;   // = 25.0f  (hardcoded literal in ctor)
+*(undefined4 *)(this + 0x28) = DAT_0015b668;  // = 0x00000000 = 0.0f
+```
+
+So straight after construction `GetHeight()` returns **25.0f**. This is the port's current default and IS correct for the ctor.
+
+### ShopListItem::Create overrides +0x24 to 80.0f
+
+`ShopListItem::Create` at `0x0015c988` (called from `ShopScreen::Init` after each `ShopListItem::ShopListItem()`):
+```c
+void ShopListItem::Create(ShopListItem *this, ItemInfo *param_1, ShopScreen *param_2) {
+    *(undefined4 *)(this + 0x24) = DAT_0015cae8;  // = 0x42a00000 = 80.0f  <-- OVERRIDES GetHeight
+    *(undefined4 *)(this + 0x28) = DAT_0015caec;  // = 0x43910000 = 290.0f
+    // ... (also sets m_Width/m_Height/m_Depth, ShopScreen*, ItemInfo*, text, etc.)
+    // Vec3(60.0f, 13.0f, 0.0f) written to +0x18/+0x1C/+0x20
+}
+```
+
+**Resolved constants from binary:**
+| DAT address | Hex value | Float value | Field written |
+|---|---|---|---|
+| `DAT_0015cae4` | `0x00000000` | 0.0f | `*(this+0x280)` (m_CostAlpha init) + Vec3 z |
+| `DAT_0015cae8` | `0x42a00000` | **80.0f** | `*(this+0x24)` — **GetHeight() return value** |
+| `DAT_0015caec` | `0x43910000` | 290.0f | `*(this+0x28)` — m_ParamHeight |
+| `DAT_0015caf0` | `0x42700000` | 60.0f | Vec3.x for m_Width (+0x18) |
+
+So every `ShopListItem` in the binary has `GetHeight() = 80.0f` after `Create()` runs.
+
+### Row-pitch in ScrollingMenu::Update Phase 5
+
+```c
+float halfH = item->GetHeight() * 0.5f;   // = 80.0f * 0.5f = 40.0f per item
+// ...
+curY -= halfH;   // advance TWICE (before and after each item)
+curY -= halfH;
+```
+
+Row pitch per item = `halfH * 2 = 80.0f`. Each item occupies **80 units** of Y space in the layout.
+
+### ScrollingMenu m_TotalHeight accumulation in AddItem
+
+`ScrollingMenu::AddItem` reads `GetHeight()` and adds to `field63_0xac`:
+```c
+this->field63_0xac += GetHeight(param_1);  // += 80.0f per item
+```
+
+With N items: `m_TotalHeight = N * 80.0f`. The scroll bounds use this for spring-back.
+
+### ShopScreen::Init initialisation sequence
+
+In `ShopScreen::Init` (`0x0015f7ac`):
+1. Creates `ScrollingMenu` (new, 0x100 bytes)
+2. Calls `ScrollingMenu::vtable[+0x04]` with `DAT_0015f9c4 = 290.0f` — sets some ScrollingMenu window size
+3. Calls `vtable[+0x4C]` and `vtable[+0x54]` on the menu with `DAT_0015f9c8 = 80.0f`
+4. Iterates `ItemManager::GetFirst/GetNext`:
+   - `operator_new(0x284)` — alloc ShopListItem (0x284 bytes)
+   - `ShopListItem::ShopListItem(this_00)` — ctor sets `+0x24 = 25.0f`
+   - `ShopListItem::Create(this_00, pItemInfo, shopScreen)` — **overrides `+0x24 = 80.0f`**
+   - `ScrollingMenu::AddItem(...)` — accumulates `+0x24` into `m_TotalHeight`
+5. After loop: sets the ScrollingMenu's pos to `Vec3(DAT_0015f9d0, DAT_0015f9d4, ...)` = `Vec3(-530.0f, 0.0f, ...)`
+6. Writes `*(scrollMenu + 0xd8)` = initial scroll offset from a global
+
+### Visible region (m_ItemHeight = -120.0f)
+
+`ScrollingMenu` ctor sets `field61_0xa4 = DAT_0015b39c = 240.0f`... wait — the no-arg ctor at `0x0015b2e0` (used by `ShopScreen::Init`) sets:
+- `field59_0x9c = 320.0f`
+- `field60_0xa0 = 320.0f` (visible window height for this ctor)
+- `field61_0xa4 = 240.0f` (m_ItemHeight, outer touch half-height)
+
+The outer touch region yMin/yMax = `±field61_0xa4 = ±240.0f`. The visible clip range for SetOnscreen uses the default `RANGE_TOP=-160.0f / RANGE_BOT=160.0f` unless `m_bConstrainedView` is set. **No GL scissor** is used — see ScrollingMenu::Draw section.
+
+### Summary
+
+| Parameter | Binary value | Port current value | Correct? |
+|---|---|---|---|
+| `GetHeight()` reads | `*(this + 0x24)` = `m_ParamWidth` | `m_Height` (`+0x1C`) | **WRONG** |
+| Height after ctor | 25.0f | 25.0f | OK (ctor default) |
+| Height after `Create()` | **80.0f** | never set (Create not ported) | **WRONG** |
+| Row pitch in Update | `GetHeight()` * 2 = **160.0f** | `m_Height` * 2 = 50.0f | **WRONG** |
+| SetHeight writes | `*(this + 0x24)` | `m_Height` (`+0x1C`) | **WRONG** |
+
+---
+
 ## ScrollingMenu::Update (Input Handling)
 
 <!-- Analysed: 2026-04-25T21:45 -->
@@ -1220,6 +1330,12 @@ if (field_0xd0) {                // visibility mode flag
 ---
 
 ### Phase 5 — Per-Item Position + SetOnscreen + Closest-Item Tracking
+
+**Row pitch**: `item->GetHeight()` dispatches through `vtable[+0x08]` = `ScrollingMenuItem::GetHeight`
+which returns `*(this + 0x24)` (`m_ParamWidth` in port naming). For ShopListItems this is **80.0f**
+(set by `ShopListItem::Create`). Row pitch per item = `80.0f * 2 = 160.0f`.
+
+See "ShopListItem Row Height" section above for full analysis.
 
 ```c
 ScrollingMenuItem* closestItem = nullptr;

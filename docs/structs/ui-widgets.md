@@ -100,26 +100,52 @@ Scrollable menu with touch-based scrolling. Tracks touch input for drag/swipe, m
 
 ## 3. ScrollingMenuItem
 
-**Constructors:** 0x0015b194 (5 params), 0x0015b5dc (1 param)  
-**Base class:** None (plain struct with vtable)  
-**Estimated struct size:** ~0x58
+<!-- Analysed: 2026-04-25T23:30 -->
+
+**Constructors:** 0x0015b194 (5 params), 0x0015b228 (5 params alt), 0x0015b5dc (0 params), 0x0015b678 (0 params)
+**Subclasses:** ShopListItem (vtable @ 0x001ea030), LeaderboardItem (vtable @ 0x001e9890), FriendLeaderboardItem (vtable @ 0x001e93e0)
+**Base class:** None (plain struct with vtable)
+**Verified struct size:** 88 bytes (0x58) — Ghidra struct confirmed
 
 Individual menu item with text, colour, position, and a callback delegate.
+Managed by ScrollingMenu (HUDControl subclass with GetType=8).
 
 | Offset | Type | Name | Notes |
 |--------|------|------|-------|
 | 0x00 | void* | vtable | |
-| 0x04 | int | field_0x04 | Unknown |
-| 0x08-0x10 | unknown | | Padding/unknown |
-| 0x14 | Colour | m_Colour | Text colour |
-| 0x18 | float | m_FontScaleX | Font scale from global |
-| 0x1C | float | m_FontScaleY | |
-| 0x20 | float | m_FontScaleZ | |
-| 0x24 | float | m_Width | Item width (param_1) |
-| 0x28 | float | m_Height | Item height (param_2) |
-| 0x2C-0x30 | char* | m_Text | Set via SetText() |
-| 0x30 | Delegate1<void,ScrollingMenuItem*> | m_Callback | Tap callback (size ~0x24) |
-| 0x54 | int | field_0x54 | Init 0 |
+| 0x04 | Vec3 (float[3]) | pos | World position (set by Move vtable slot 6) |
+| 0x10 | ScrollingMenu* | m_Parent | Set by SetParent (slot 8) @ 0x0015aeb4 |
+| 0x14 | Colour (uint32) | m_Colour | Text/display colour |
+| 0x18 | float | m_Size.x | **NO binary symbol name.** All ctors init from global Vec3 ptr. FriendLeaderboardItem ctor @ 0x0013d210 sets explicitly as scaled Vec3. ShopListItem::Move @ 0x0015d1fc reads as X sub-icon offset (adds 35.2f). |
+| 0x1C | float | m_Size.y | See m_Size.x. Not observed read back after ctor in non-FriendLeaderboardItem code. |
+| 0x20 | float | m_Size.z | See m_Size.x. |
+| 0x24 | float | **m_Height** | **BINARY NAME** (Ghidra demangled). GetHeight()/SetHeight() target this. ROW PITCH for ScrollingMenu::Update layout. Default 25.0f. ShopListItem: 80.0f. FriendLeaderboardItem: 47.0f (DAT_0013d2f0 = 0x423c0000). |
+| 0x28 | float | **m_Width** | **BINARY NAME** (Ghidra demangled). GetWidth()/SetWidth() target this. Default 0.0f. ShopListItem: 290.0f (divider span). |
+| 0x2C | Delegate1\<void,ScrollingMenuItem*\> | m_ClickedFocusdCallback | 40-byte delegate block. Byte at +0x2D = m_bOnscreen (SetOnscreen slot 9 writes here). std::function at +0x30. |
+| 0x54 | char* | m_Text | SetText slot 10 @ 0x0015b124 writes here. |
+| 0x58+ | — | (subclass fields) | Base ends at 0x57. ShopListItem, LeaderboardItem, FriendLeaderboardItem each extend beyond 0x58. |
+
+**Vtable layout** (ScrollingMenuItem base vtable @ 0x001e9f00):
+
+| Slot | Offset | Function | Address |
+|------|--------|----------|---------|
+| 0 | +0x00 | ~dtor1 | 0x0015c3ac |
+| 1 | +0x04 | ~dtor2 | 0x0015c3e8 |
+| 2 | +0x08 | GetHeight() | 0x0013cdf0 — returns m_Height (+0x24) |
+| 3 | +0x0C | GetWidth() | 0x0013cdf8 — returns m_Width (+0x28) |
+| 4 | +0x10 | SetHeight(float) | 0x0013ce00 — writes m_Height (+0x24) |
+| 5 | +0x14 | SetWidth(float) | 0x0013ce08 — writes m_Width (+0x28) |
+| 6 | +0x18 | Move(Vec3) | 0x0015aea8 base; ShopListItem override 0x0015d1fc |
+| 7 | +0x1C | Remove() | 0x0013d14c |
+| 8 | +0x20 | SetParent(ScrollingMenu*) | 0x0015aeb4 |
+| 9 | +0x24 | SetOnscreen(bool) | 0x0013ce10 — writes byte at +0x2D |
+| 10 | +0x28 | SetText(char*) | 0x0015b124 |
+| 11 | +0x2C | Draw() | 0x0015b480 base; ShopListItem override 0x0015eb00 |
+| 12 | +0x30 | (cancel-tap signal) | 0x00147970 no-op |
+| 13 | +0x34 | CollideWithButton(int) | 0x00147974 returns nullptr; FriendLeaderboardItem overrides |
+| 14 | +0x38 | (touch-release signal) | 0x00147978 no-op |
+
+**5-param ctor note:** `(float width, float height, ...)` assigns `this->m_Height = width` and `this->m_Width = height` — the parameter names are swapped vs the field names. This is the binary's own naming, not a port bug.
 
 ---
 
