@@ -56,6 +56,22 @@
 
 ---
 
+## Localisation System — ANALYSED, needs port
+
+- [x] `StringTableUtilLoadStrings` (0x0011fb20) — top-level loader, called from `InitialiseData`
+- [x] `StringTableUtilLoadStringsTable` (0x0011f9dc) — language switch, builds paths, calls LoadHeader + LoadLanguage
+- [x] `Mortar::StringTable::GetInfo` (0x0018a2cc) — binary search on sorted HeaderLookup entries
+- [x] `Mortar::StringTable::GetString` (0x0011fec8) — resolves HeaderLookup -> StringEntry -> char*
+- [x] `GETSTRING_STR` (0x0011fb40) — public key→string entrypoint, pass-through on miss
+- [x] `GETSTRING_CAST_0_STR` (0x00109ec0) — wraps GETSTRING_STR(key, 0)
+- [x] `.str` file format fully decoded (see `docs/engine/localisation.md`)
+- [ ] **PORT TASK**: implement `Localisation::Load` / `Localisation::Get` in `src/engine/util/Localisation.{h,cpp}`
+- [ ] Wire `GETSTRING_CAST_0_STR` in `src/game/ItemParseUtil.h` to call `Localisation::Get`
+- [ ] Call `Localisation::Load` from `InitialiseData` using `g_GameData->languageFlag`
+- See `docs/engine/localisation.md`
+
+---
+
 ## Unfinished Analysis
 
 ### Power-Up System — DONE

@@ -9,6 +9,7 @@
 #include "engine/input/Touch.h"
 #include <cstddef>
 #include <cmath>
+#include <cstdio>
 
 // ---------------------------------------------------------------------------
 // DAT constants from binary (via docs/screens/shop.md)
@@ -94,12 +95,12 @@ ScrollingMenu::ScrollingMenu()
     m_OuterRegion[2] = -m_ItemHeight;      // yMax_rel  (120.0f)
     m_OuterRegion[3] =  m_Width  * 0.5f;  // xMax_rel
 
-    // Inner region: smaller bounds (half of outer height)
-    // Binary: field61 * -0.5 and * +0.5
-    m_InnerRegion[0] = -m_Width  * 0.5f;        // xMin_rel
-    m_InnerRegion[1] = m_ItemHeight * -0.5f;     // yMin_rel  (60.0f)
-    m_InnerRegion[2] = m_ItemHeight *  0.5f;     // yMax_rel  (-60.0f) -- NOTE: negative
-    m_InnerRegion[3] =  m_Width  * 0.5f;         // xMax_rel
+    // Inner region: half of outer height (m_ItemHeight is -120 by binary,
+    // so half-height is -60; use absolute value to keep yMin < yMax).
+    m_InnerRegion[0] = -m_Width  * 0.5f;        // xMin_rel  (-160)
+    m_InnerRegion[1] =  m_ItemHeight * 0.5f;     // yMin_rel  (-60)
+    m_InnerRegion[2] = -m_ItemHeight * 0.5f;     // yMax_rel  (+60)
+    m_InnerRegion[3] =  m_Width  * 0.5f;         // xMax_rel  (+160)
 }
 
 ScrollingMenu::~ScrollingMenu() {
@@ -136,6 +137,18 @@ ScrollingMenuItem* ScrollingMenu::Collide(int touchSlot) {
 void ScrollingMenu::Update(float /*dt*/) {
     using namespace Mortar;
 
+    static int s_logCount = 0;
+    s_logCount++;
+    bool diag = (s_logCount % 30 == 0);  // log roughly every 0.5s
+    if (diag) {
+        printf("[SM::Update#%d] menu_pos=(%.1f,%.1f) outer=[%.1f..%.1f, %.1f..%.1f] "
+               "touchId=%d dragging=%d vel.y=%.2f\n",
+               s_logCount, pos.x, pos.y,
+               pos.x + m_OuterRegion[0], pos.x + m_OuterRegion[3],
+               pos.y + m_OuterRegion[1], pos.y + m_OuterRegion[2],
+               m_TouchId, (int)m_bDragging, m_Velocity.y);
+    }
+
     // --- Phase 1: clear tap-fired flag each frame ---
     // Binary: this->field_0xc9 = 0 at top of Update
     m_bTouchProcessed = 0;
@@ -154,8 +167,14 @@ void ScrollingMenu::Update(float /*dt*/) {
             pos.y + m_OuterRegion[2],  // y1 = pos.y + yMax
             -1);
         m_TouchId = slot;
+        int touchState = IsTouchDown(slot);
+        if (slot != -1 || diag) {
+            printf("  [P2 acquire] TouchInRegion -> slot=%d  IsTouchDown=%d\n",
+                   slot, touchState);
+        }
 
-        if (IsTouchDown(slot) == 2) {
+        if (touchState == 2) {
+            printf("  [P2 ACQUIRED] slot=%d\n", slot);
             // Finger is HELD (state==2) — valid acquire.
             // Binary: IsTouchDown(slot) == 2 fires acquire; state==1 (just-pressed) does NOT.
             ScrollingMenuItem* hitItem = Collide(slot);
@@ -194,8 +213,16 @@ void ScrollingMenu::Update(float /*dt*/) {
             pos.y + m_InnerRegion[2],  // y1 = pos.y + yMax_inner
             m_TouchId);
 
+        if (diag) {
+            printf("  [P3] inner-check stillIn=%d (m_TouchId=%d) -> %s\n",
+                   stillIn, m_TouchId,
+                   (stillIn == m_TouchId) ? "TRACKING" : "RELEASE");
+        }
+
         if (stillIn != m_TouchId) {
             // --- Phase 3A: finger left inner region or was lifted ---
+            printf("  [P3A RELEASE] m_bDragging=%d m_Velocity.y=%.2f\n",
+                   (int)m_bDragging, m_Velocity.y);
 
             if (m_pCollidedItem) {
                 // Fire vtable[+0x38] (Slot14 = touch-release signal) on collided item
@@ -247,6 +274,12 @@ void ScrollingMenu::Update(float /*dt*/) {
                 // Drag threshold detection
                 float delta = currentY - anchorY;
                 if (delta < 0.0f) delta = -delta; // fabsf
+                if (diag) {
+                    printf("  [P3B drag] currY=%.1f anchorY=%.1f delta=%.3f thr=%.4f "
+                           "newOffset=%.2f -> dragging=%d\n",
+                           currentY, anchorY, delta, DRAG_THRESHOLD,
+                           newOffset, (int)(delta > DRAG_THRESHOLD));
+                }
                 if (delta > DRAG_THRESHOLD) {
                     m_bDragging = 1;
 
@@ -363,8 +396,11 @@ void ScrollingMenu::Update(float /*dt*/) {
     float offset = m_Velocity.y;  // field_0xd8
 
     if (offset <= 0.0f || m_DragTargetIdx >= 0) {
-        // Lower half of range or actively dragging
-        float totalScrollH = m_Height - m_TotalWidth;  // field60_0xa0 - field62_0xa8
+        // Lower half of range or actively dragging.
+        // totalScrollH is the negative scroll lower bound: visible_height -
+        // total_content_height. Content height = sum of GetHeight() per item =
+        // m_TotalHeight (accumulator). For shop: 240 - 17*80 = -1120.
+        float totalScrollH = m_Height - m_TotalHeight;
         if (offset >= totalScrollH || m_DragTargetIdx >= 0) {
             // Still in-bounds or dragging
             if (m_TouchId != -1) return;  // finger still down, no spring

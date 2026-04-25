@@ -295,6 +295,11 @@ void ShopScreen::CreateShopList() {
     m_pShopList->m_LayerFlags = 0x40;
 
     // Populate from ItemManager
+    // Binary (ShopScreen::Init @ 0x0015f7ac): for each ItemInfo from GetFirst/GetNext:
+    //   operator_new(0x284) -> ShopListItem::ShopListItem() -> ShopListItem::Create(item, screen)
+    //   -> ScrollingMenu::AddItem()
+    // ShopListItem::Create sets m_ParamWidth (+0x24) = 80.0f (DAT_0015cae8),
+    // which is what GetHeight() returns, giving each row a pitch of 80 units.
     ItemManager* im = ItemManager::GetInstance();
     if (im) {
         int n = im->GetNumItems();
@@ -302,7 +307,9 @@ void ShopScreen::CreateShopList() {
             ItemInfo* info = im->GetItemAt(i);
             if (!info) continue;
             ShopListItem* row = new ShopListItem();
-            row->m_pItemInfo = info;
+            // Binary: ShopListItem::Create(row, info, this) called immediately after ctor.
+            // This sets GetHeight() = 80.0f (row pitch = 160 units per item).
+            row->Create(info, this);
             m_pShopList->AddItem(row);
         }
     }

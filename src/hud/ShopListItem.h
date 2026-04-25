@@ -50,6 +50,14 @@ public:
     ShopListItem();
     ~ShopListItem() override;
 
+    // ShopListItem::Create @ 0x0015c988
+    // Called by ShopScreen::Init after each ShopListItem() ctor.
+    // Sets m_RowHeight (GetHeight() field at +0x24) to 80.0f (DAT_0015cae8),
+    // m_BBoxWidth/m_BBoxHeight/m_BBoxDepth from Vec3(60.0f, 13.0f, 0.0f),
+    // stores ItemInfo* and ShopScreen* back-pointer, loads icon texture,
+    // and builds the item's description/cost text buffer at +0x5c.
+    void Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen);
+
     // vtable slot 6 (+0x18): Move override
     // Binary 0x0015d9fc: sets pos.x/y/z from incoming Vec3.
     void Move(float x, float y, float z) override {

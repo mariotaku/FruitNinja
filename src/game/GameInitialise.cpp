@@ -40,6 +40,7 @@
 #include "particle/PSPParticleManager.h"
 #include "asset/FileManager.h"
 #include "render/Font.h"
+#include "util/Localisation.h"
 #include <cstdio>
 #include <string>
 
@@ -131,6 +132,13 @@ void GameInitialise() {
     // Step 14 of InitialiseData: ItemManager::GetInstance() + LoadItemData()
     // Binary: InitialiseData @ 0x0010b7ca, step 14 of 15.
     // Called after AchievementManager::LoadAchievementInfo (step 13).
+
+    // Step 1 of InitialiseData (must run before any XML parser that calls
+    // GETSTRING_CAST_0_STR — i.e. before LoadItemData, LoadAchievementInfo,
+    // etc.): load the localisation tables. Binary:
+    //   StringTableUtilLoadStrings @ 0x0011fb20 -> LoadStringsTable(language)
+    Localisation::Load(game->data_dir.c_str(), (int)game->languageFlag);
+
     ItemManager::GetInstance()->LoadItemData();
 
     // Step 11: PSPParticleManager — load particle XML templates

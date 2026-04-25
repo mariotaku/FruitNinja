@@ -6,6 +6,7 @@ add_library(mortar_engine STATIC
     core/MortarGame.cpp
     math/Random.cpp
     util/StringHash.cpp
+    util/Localisation.cpp
     # Phase 2 — Core Singletons
     render/gl_funcs.cpp
     render/MatrixManager.cpp
