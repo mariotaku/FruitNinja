@@ -156,7 +156,7 @@ string in the binary: `electrofied_medium.fnt`, `fruit_ninja_numbers_blue.fnt`,
 
 ## Font_DrawString Implementation
 
-<!-- Analysed: 2026-04-25T22:15 -->
+<!-- Analysed: 2026-04-25T23:50 -->
 
 Binary: `0x00198e44` (Font_DrawString). 719 decompiled lines.
 
@@ -216,26 +216,148 @@ surrounding HUD/world rendering has already set. Glyph quads are added to
 per-page vertex arrays (one `QUADCUSTOMVERTEX` tristrip per glyph) and
 submitted all at once via `Mesh::DrawTriStrip`.
 
-### Vertex Geometry (unit space, matrix-scaled)
+### CharTemplate Binary Layout (ARM-confirmed, 0x24 bytes each)
 
-Glyphs are built in normalized coordinates (`glyph_pixel / fontScaleWH`), then
-the `scale` matrix scales them to world size. The quad corners are:
+`Font::Load` calls `Parse_Char` to get raw pixel values, then normalizes them
+in-place before storing. The CharTemplate array is at `*(void**)font` (byte
+offset 0 in the Font object), with `count * 0x24` bytes total. Ghidra confirmed
+at `0x0019a128`–`0x0019a180`.
+
+| Byte offset | Type | Content after normalization |
+|-------------|------|-----------------------------|
+| +0x00 | short (2 bytes) | char id (raw, used as lookup key; also in lookup table at `font[id*4+4]`) |
+| +0x02 | short (2 bytes) | padding/unused |
+| +0x04 | float | `x / scaleW` — UV left edge (normalized [0,1]) |
+| +0x08 | float | `y / scaleH` — UV top edge (normalized [0,1]) |
+| +0x0c | float | `width / lineHeight` — glyph width in lineHeight units |
+| +0x10 | float | `height / lineHeight` — glyph height in lineHeight units |
+| +0x14 | float | `xoffset / lineHeight` — x bearing in lineHeight units |
+| +0x18 | float | `yoffset / lineHeight` — y bearing in lineHeight units |
+| +0x1c | float | `xadvance / lineHeight` — cursor advance in lineHeight units |
+| +0x20 | byte  | page index |
+| +0x21–+0x23 | — | padding |
+
+**UV coordinates** (x, y at +0x04/+0x08) are divided by `scaleW/scaleH` so they
+are already in [0,1] atlas space.
+
+**Metric coordinates** (width, height, offsets, advance at +0x0c..+0x1c) are
+divided by **`lineHeight`** (the font's `lineHeight=` value from the `common`
+line, stored as float at `font+0x424`). They are NOT divided by scaleW/H.
+
+Normalization code in `Font::Load` (ARM at `0x0019a128`):
+```c
+// iVar6 = *(int*)(font + 0x41c) = scaleW
+// iVar7 = *(int*)(font + 0x420) = scaleH
+// *(float*)(font + 0x424) = lineHeight (float)
+glyph[+0x08] = raw_y      / (float)scaleH;
+glyph[+0x04] = raw_x      / (float)scaleW;
+glyph[+0x0c] = raw_width  / lineHeight;
+glyph[+0x10] = raw_height / lineHeight;
+glyph[+0x1c] = raw_xadv   / lineHeight;
+glyph[+0x14] = raw_xoff   / lineHeight;
+glyph[+0x18] = raw_yoff   / lineHeight;
 ```
-vertex[0].xy = (cursor_x - w*0.5,  cursor_y - h*0.5)   // top-left in centered coords
-vertex[1].xy = (cursor_x - w*0.5,  cursor_y + h*0.5)   // bottom-left
-vertex[2].xy = (cursor_x + w*0.5,  cursor_y - h*0.5)   // top-right
-vertex[3].xy = (cursor_x + w*0.5,  cursor_y + h*0.5)   // bottom-right
-// vertices 4,5 duplicate vertex 3,1 for tristrip degenerate join
+After parsing all glyphs the final normalization:
+```c
+*(float*)(font + 0x428) /= *(float*)(font + 0x424);  // base_float /= lineHeight
 ```
-All vertices get `local_17c` as colour and `DAT_00199a94 = 0.0f` for z.
+So `font+0x428` stores `base / lineHeight` (normalized ascent fraction).
 
-### Scale Semantic
+### Font Object Field Map (ARM-confirmed from Font::Load)
 
-`scale` is the **target em size in world units** (e.g. 20.0 or 25.0). It is
-passed directly as the MatrixStack scale factor. The glyph vertices are stored
-in pre-normalized pixel coordinates divided by `font->scaleW/H`, so multiplying
-by `scale` brings them to world size. **There is no division by `m_LineHeight`.**
-The ratio `scale / m_LineHeight` is NOT used anywhere in `Font_DrawString`.
+| Font byte offset | C type | Name | Source |
+|-----------------|--------|------|--------|
+| +0x000 | void* | char_template_array | `operator_new(count * 0x24)` |
+| +0x404 | int | char_count | `chars count=N` |
+| +0x408 | Page* | pages | `operator_new((N+1)*8)` |
+| +0x40c | int | page_count | `pages=N` |
+| +0x410 | Kerning* | kernings | `operator_new(N*0xc)` |
+| +0x414 | int | kerning_count | `kernings count=N` |
+| +0x41c | int | scaleW | `common ... scaleW=N` |
+| +0x420 | int | scaleH | `common ... scaleH=N` |
+| +0x424 | float | lineHeight | `common lineHeight=N` (stored as float) |
+| +0x428 | float | base_norm | `base / lineHeight` (after all-glyph normalization) |
+| +0x42c | vector<vector<QUADCUSTOMVERTEX>> | page_verts | per-page glyph vertex buffers |
+
+### Vertex Geometry (ARM-grounded, lineHeight-normalized space)
+
+`Font_DrawString` reads pre-normalized float fields from CharTemplate. The ARM
+at `0x0019919e`–`0x0019924a` confirms:
+```
+s28 = [r4+0x18] = glyph.yoffset_norm   (= yoffset/lineHeight)
+s16 = [r4+0x04] = glyph.u0             (= x/scaleW, UV left)
+s13 = [r7+0x424] = font.lineHeight_f
+s12 = vcvt((int)[r7+0x41c]) = (float)scaleW
+s11 = vcvt((int)[r7+0x420]) = (float)scaleH
+s18 = [r4+0x08] = glyph.v0             (= y/scaleH, UV top)
+s14 = [r4+0x0c] = glyph.w_norm         (= width/lineHeight)
+s15 = [r4+0x10] = glyph.h_norm         (= height/lineHeight)
+s27 = [r4+0x14] = glyph.xoff_norm      (= xoffset/lineHeight)
+
+-- UV right/bottom computed as:
+u1 = u0 + w_norm * (lineHeight / scaleW)   = (x + width)  / scaleW
+v1 = v0 + h_norm * (lineHeight / scaleH)   = (y + height) / scaleH
+
+-- Center position of quad (in lineHeight-normalized space):
+cx = cursor_x + xoff_norm + w_norm * 0.5
+cy = cursor_y - yoff_norm - h_norm * 0.5  (note: Y decreases downward in atlas)
+hw = w_norm * 0.5
+hh = h_norm * 0.5
+
+-- Four quad corners (tristrip order 0,1,2,3 with degenerate join):
+vertex[0] = (cx - hw, cy - hh)  // top-left
+vertex[1] = (cx - hw, cy + hh)  // bottom-left
+vertex[2] = (cx + hw, cy - hh)  // top-right
+vertex[3] = (cx + hw, cy + hh)  // bottom-right
+vertex[4] = copy of vertex[3]   // tristrip degenerate
+vertex[5] = copy of vertex[1]   // tristrip degenerate
+```
+All 6 vertices get `local_17c` as packed colour and `DAT_00199a94 = 0.0f` for z.
+
+Cursor advance (ARM at `0x00199848`–`0x00199876`):
+```c
+cursor_x += xadvance_norm + kerning + spacing * (glyph_id == 0x20 ? 3.0 : 1.0);
+// spacing = local_64[0] (pre-computed from maxWH)
+```
+
+### Scale Semantic (ARM-confirmed)
+
+`scale` (param_1) is the **target em size in world units** (e.g. 20.0 or 25.0).
+It is applied as `MatrixStack::Scale(Vec3(scale, scale, 1.0))` (ARM at
+`0x00199900`–`0x0019990e`). The glyph vertices are stored in **lineHeight-
+normalized units** (glyph_pixel / lineHeight), so after the matrix scale:
+
+```
+world_width  = (glyph_width_px  / lineHeight) * scale
+world_height = (glyph_height_px / lineHeight) * scale
+world_advance= (xadvance_px     / lineHeight) * scale
+```
+
+For `font_fruit_ninja.fnt`: `lineHeight=28`, `scaleW=256`, `scaleH=256`.
+Worked example — glyph `width=16`, `scale=25`, `lineHeight=28`:
+```
+stored_w = 16 / 28 = 0.5714
+world_w  = 0.5714 * 25 = 14.3 world units  (correct)
+
+WRONG (port's invW=1/scaleW formula):
+stored_w_wrong = 16 / 256 = 0.0625
+world_w_wrong  = 0.0625 * 25 = 1.56 world units  (18x too small)
+```
+
+**There is NO division by `m_LineHeight` in `Font_DrawString` itself.** The
+division happens once in `Font::Load` when storing the CharTemplate, not at
+draw time. The ratio `scale / lineHeight` is NOT used anywhere in
+`Font_DrawString`.
+
+The MatrixStack::Scale call (ARM confirmed at `0x00199900`):
+```arm
+add r0, r9, #0x1094+0x14    ; MatrixStack* this
+vldr.32 s0, [pc, #0x180]    ; s0 = 0.0f
+vmov.f32 s1, s22            ; s1 = scale (param_1)
+vmov.f32 s2, s0             ; s2 = 0.0f
+blx MatrixStack::Scale       ; Scale(Vec3(scale, scale, 1.0)) -- s22 was param_1
+```
+The argument is `param_1` (scale) verbatim, no modification.
 
 ### maxWH (_Vector2<float>) Semantics
 
@@ -334,79 +456,99 @@ path goes via a separate GOT indirection (`DAT_0015f534` vs `DAT_0015eeb4`).
 
 ---
 
-## Port Drift — Root Causes for Invisible Text
+## Port Drift — Root Causes for White Stripes / Invisible Text
 
-<!-- Analysed: 2026-04-25T22:15 -->
+<!-- Analysed: 2026-04-25T23:50 -->
 
-### Cause 1 (CRITICAL): Wrong rendering pipeline
+### Cause 1 (RESOLVED in current port): Wrong rendering pipeline
 
 **Binary**: `Font_DrawString` renders via `MatrixManager::UploadCurrentMatrices` +
 `Mesh::DrawTriStrip`. No direct GL state changes.
 
-**Port** (`Font.cpp:DrawString`, lines 307-356): Makes raw GL calls — `glMatrixMode`,
-`glLoadMatrixf`, `glActiveTexture`, `glDrawArrays`, etc. — bypassing the engine's
-MatrixManager/Mesh pipeline entirely.
+**Current port** (`Font.cpp` lines 335–370): Uses `MatrixStack::Push/Scale/Translate`,
+calls `MatrixManager::UploadCurrentMatrices`, then `Renderer::DrawTriStrip`.
+This now matches the binary's pipeline.
 
-**Effect**: The glyph vertex data is built correctly, but the draw call never
-goes through the same shader setup that `Mesh::DrawTriStrip` uses. Depending on
-what pipeline state `ShopListItem::Draw` leaves after the divider quad draws,
-the raw GL calls may use the wrong shader program, wrong attribute bindings, or
-have no valid MVP. This is the most likely reason for invisible text.
+### Cause 2 (CRITICAL — still present): Wrong glyph metric divisor
 
-**Fix**: Replace the raw GL draw block in `Font::DrawString` (lines 299-356 of
-`Font.cpp`) with a call to `Mesh::DrawTriStrip` after `MatrixManager::UploadCurrentMatrices`.
-The font function must push/scale/translate the MatrixStack the same way the
-binary does, then submit via `Mesh::DrawTriStrip`.
+**Binary (ARM-confirmed)**: `Font::Load` normalizes ALL glyph metrics (width,
+height, xoffset, yoffset, xadvance) by dividing by `lineHeight` (the `lineHeight`
+value from the BMFont `common` line, e.g. 28 for `font_fruit_ninja.fnt`). Only
+UV coordinates (x, y) are divided by scaleW/scaleH. The CharTemplate stores:
+```
+glyph.width  = raw_width_px  / lineHeight   (stored float)
+glyph.height = raw_height_px / lineHeight   (stored float)
+glyph.xoff   = raw_xoff_px   / lineHeight   (stored float)
+glyph.yoff   = raw_yoff_px   / lineHeight   (stored float)
+glyph.xadv   = raw_xadv_px   / lineHeight   (stored float)
+glyph.u0     = raw_x_px      / scaleW       (stored float, UV only)
+glyph.v0     = raw_y_px      / scaleH       (stored float, UV only)
+```
+`Font_DrawString` reads these pre-normalized floats directly and uses them as
+vertex positions without any additional division. `MatrixStack::Scale(scale,scale,1)`
+then multiplies them to world size.
 
-### Cause 2 (CRITICAL): Wrong scale semantic
+**Port** (`Font.h` `FontGlyph` struct): Stores raw integer pixel values
+(width, height, etc. are `int`). `Font::DrawString` (`Font.cpp` lines 205–310)
+applies `invW = 1.0f/m_ScaleW` and `invH = 1.0f/m_ScaleH` as the divisor when
+computing vertex positions — dividing by **scaleW/H instead of lineHeight**.
 
-**Binary**: `scale` passed to `Font_DrawString` is the raw em pixel size (20 or
-25). It is applied as `MatrixStack::Scale(scale, scale, 1.0)`. Glyph vertices
-are in normalized atlas-pixel units (divided by `scaleW/H`).
+**Effect — the quantitative failure**:
+For `font_fruit_ninja.fnt`: `lineHeight=28`, `scaleW=256`.
+Glyph `width=16`, called with `scale=25`:
+```
+Binary:  stored_w = 16/28 = 0.5714,  world_w = 0.5714 * 25 = 14.3 units (correct)
+Port:    stored_w = 16/256 = 0.0625, world_w = 0.0625 * 25 = 1.56 units (9x too small)
+```
+At 1.56 world units wide against a 480-unit screen, each glyph is ~0.3% of screen
+width — rendering as horizontal white stripes or invisible pixels at any font size.
 
-**Port** (`Font.h:DrawStringSized`, line 69):
+**Fix** (two-part):
+
+Part A — Store normalized floats in `FontGlyph`, not raw ints. Change `Font::Load`
+to apply the same normalization the binary does:
 ```cpp
-float mul = (m_LineHeight > 0) ? (targetSize / (float)m_LineHeight) : targetSize;
-DrawString(mul, ...);
-```
-Then `Font.cpp:DrawString` uses `finalScale = scale * m_Scale` as a per-vertex
-multiplier building geometry directly in world units.
-
-**Effect**: The port builds geometry at a different size AND in the wrong
-coordinate space. For `font_fruit_ninja.fnt` (lineHeight typically 32-40px),
-`DrawStringSized(25)` produces `mul = 25/36 ≈ 0.69`, then glyph quads are built
-with vertices at `glyph_pixel * 0.69` world units — roughly 1/36th of the
-correct size. The text IS rendered somewhere, but microscopic.
-
-**Fix**: The port's `DrawStringSized` must pass `targetSize` directly (not
-divided by lineHeight) to `DrawString`, since `DrawString` itself applies the
-scale to the MatrixStack (via `MatrixManager`), not to the vertex positions.
-Alternatively: rebuild `DrawString` as the binary does — store normalized glyph
-vertices (atlas pixel / scaleWH) and apply scale via MatrixStack.
-
-### Cause 3 (MODERATE): Glyph vertex layout is centered, not top-left
-
-**Binary** builds quads as centered rectangles:
-```c
-vertex.x = cursor_x +/- glyph_w * 0.5;
-vertex.y = cursor_y +/- glyph_h * 0.5;
+// In Font::Load, after parsing each char:
+float invLH = (m_LineHeight > 0) ? (1.0f / (float)m_LineHeight) : 1.0f;
+float invW  = (m_ScaleW > 0)     ? (1.0f / (float)m_ScaleW)     : 1.0f;
+float invH  = (m_ScaleH > 0)     ? (1.0f / (float)m_ScaleH)     : 1.0f;
+g.xf      = (float)g.x       * invW;   // UV left (normalized by scaleW)
+g.yf      = (float)g.y       * invH;   // UV top  (normalized by scaleH)
+g.wf      = (float)g.width   * invLH;  // width in lineHeight units
+g.hf      = (float)g.height  * invLH;  // height in lineHeight units
+g.xofff   = (float)g.xoffset * invLH;  // xoffset in lineHeight units
+g.yofff   = (float)g.yoffset * invLH;  // yoffset in lineHeight units
+g.xadvf   = (float)g.xadvance* invLH;  // advance in lineHeight units
 ```
 
-**Port** (`Font.cpp` lines 264-285) builds quads with top-left origin:
+Part B — In `Font::DrawString`, use the pre-normalized float fields for vertex
+positions (not `g.width * invW`), and use the pre-normalized UV floats (not
+`g.x * invW`). Remove `invW`/`invH` from the vertex position math entirely.
+
+Alternatively: keep raw-int storage but change the divisor in `DrawString` from
+`invW/invH` to `invLH = 1.0f/m_LineHeight` for vertex positions:
 ```cpp
-float gx = cursorX + g.xoffset * finalScale;
-float gy = cursorY - g.yoffset * finalScale;
-v[0] = { gx, gy, ... };         // top-left
-v[2] = { gx, gy - gh, ... };    // bottom-left
+// WRONG (current port):
+const float cx = cursorX + ((float)g.xoffset + (float)g.width  * 0.5f) * invW;
+// CORRECT (matches binary):
+const float invLH = 1.0f / (float)m_LineHeight;
+const float cx = cursorX + ((float)g.xoffset + (float)g.width  * 0.5f) * invLH;
+// UVs still use invW/invH:
+const float u0 = (float)g.x * invW;
 ```
 
-**Effect**: Text renders at a Y offset of ±half-glyph-height from the expected
-position. The sign of gy also differs from what `MatrixStack::TranslateLocal`
-would apply for vertical alignment. Text may render off-screen or in the wrong
-row.
+### Cause 3 (RESOLVED in current port): Glyph vertex layout
 
-**Fix**: After fixing Cause 1+2, update the vertex construction to match the
-centered layout, or verify the coordinate sign matches the engine's Y axis.
+The current port's vertex layout (`cx ± hw, cy ± hh`) already matches the
+binary's centered-rectangle layout. This was fixed in a prior session.
+
+### Summary of active bugs (as of 2026-04-25)
+
+| # | File | Lines | Bug | Fix |
+|---|------|-------|-----|-----|
+| 1 | `Font.cpp` | 205–310 | Vertex metric divisor is `1/scaleW` instead of `1/lineHeight` | Change divisor to `1.0f/m_LineHeight` for cx/cy/hw/hh/cursor; keep `1/scaleW(H)` for UVs only |
+| 2 | `Font.cpp` | 310 | `cursorX += g.xadvance * invW` uses wrong divisor | Change to `g.xadvance * invLH` |
+| 3 | `Font.cpp` | 208 | `normLineH = m_LineHeight * invH` used for line-height in world space | Change to `1.0f` (binary stores 1 lineHeight unit = 1.0 in lineHeight-norm space) |
 
 ---
 
