@@ -7,7 +7,9 @@
 
 #include "DojoScreen.h"
 #include "AboutScreen.h"
+#include "ShopScreen.h"
 #include "MainScreen.h"
+#include "game/FruitSaveData.h"
 #include "Game.h"
 #include "hud/HUD.h"
 #include "hud/TutorialControl.h"
@@ -296,13 +298,13 @@ void DojoScreen::Update(float dt) {
 
         if (prevState == 2) {
             // State 2: push ShopScreen.
-            // Binary: FruitSaveData::CheckDatesHaveChanged, then
-            //   ShopScreen* shop = new ShopScreen(0xbc); AddControl.
-            // Port: ShopScreen not ported — return to MainScreen.
-            m_bPendingRemoval = 1;
-            if (game.mainScreen) {
-                game.mainScreen->SetState(STATE_SLIDE_IN);
-            }
+            // Binary: FruitSaveData::CheckDatesHaveChanged(game->save), then
+            //   ShopScreen* shop = operator_new(0xbc); ShopScreen::ShopScreen(shop, this);
+            //   HUD::AddControl(hud, shop, false); shop->Init();
+            if (game.pSaveData) game.pSaveData->CheckDatesHaveChanged();
+            ShopScreen* shop = new ShopScreen(game, this);
+            game.hud->AddControl(shop, false);
+            shop->Init();
             return;
         }
 
