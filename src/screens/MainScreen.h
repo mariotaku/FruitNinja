@@ -7,10 +7,12 @@
 // Original: ctor 0x0014c430, Update 0x0014b278 (677 lines), Draw 0x0014d4ec (171 lines)
 //
 
+// Analysed: 2026-04-25T12:00
 #include "hud/HUDControl3d.h"
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
+#include "render/Font.h"
 
 struct Game;
 class MenuButton;
@@ -114,7 +116,7 @@ private:
     float m_StateTimer;            // +0x110: transition countdown (NOT same as HUDControl m_Timer)
     SmartPtr<Mortar::Texture> m_TexMoreGames;         // +0x114: more_games.tex (GOT+c788)
     float m_Timer2;                // +0x118: second timer
-    // +0x11c: Font* m_pFont (TODO: implement Font system)
+    SmartPtr<Mortar::Font> m_pFont; // +0x11c: fonts/verdana.fnt (loaded in ctor, NOT in g_GameData)
 
     // Global textures (not on struct, loaded in ctor and assigned to globals via GOT)
     SmartPtr<Mortar::Texture> m_blurryBackingTex;     // blurry_backing.tex

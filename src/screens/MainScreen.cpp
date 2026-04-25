@@ -23,6 +23,7 @@
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "core/SystemManager.h"
+// Analysed: 2026-04-25T12:00
 #include "audio/GameSound.h"
 #include "audio/SoundManager.h"
 #include "debug/DebugFlags.h"
@@ -100,7 +101,14 @@ MainScreen::MainScreen(Game& g)
     // Load logo overlay
     m_TexCommingSoon = Mortar::TextureManager::LoadLocalisedTexture("comming_soon.tex");
 
-    // Font: fonts/verdana.fnt (TODO: implement Font system)
+    // Load verdana.fnt into MainScreen::m_pFont (+0x11c).
+    // Binary ctor @ 0x0014c430: operator_new(0x438) + Font::Font + Font::Load("fonts/verdana.fnt").
+    // Spec: "verdana.fnt loads into MainScreen::m_pFont, NOT g_GameData."
+    // See docs/engine/font.md "Font Asset Cross-Reference" (string @ 0x001bbcb3).
+    {
+        std::string fontPath = game.data_dir + "/fonts/verdana.fnt";
+        m_pFont = Mortar::Font::Load(fontPath.c_str());
+    }
 
     // Set size = (480.0, 138.0, 1.0)
     size = Vec3(480.0f, 138.0f, 1.0f);
