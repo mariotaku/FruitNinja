@@ -51,30 +51,33 @@ public:
     // Matches Font::Load (0x00199e9c)
     static SmartPtr<Font> Load(const char* path);
 
-    // Render text string with full formatting support
-    // Matches Font::DrawString (0x00198e44)
-    // `scale` here is a per-glyph multiplier (atlas-pixel * scale = world size).
-    // Supports: inline color tags [FFFFFF]text[/], word wrapping, alignment
+    // Render text string with full formatting support.
+    // Matches Font_DrawString (0x00198e44).
+    // `scale` is the em size in world units (e.g. 20.0, 25.0). It is applied
+    // as MatrixStack::Scale(scale, scale, 1.0); glyph vertices are stored in
+    // normalized atlas-pixel units (atlas_px / scaleW/H). NO division by
+    // m_LineHeight is performed (binary confirmed).
+    // Supports: inline color tags [FFFFFF]text[/], word wrapping, alignment.
     void DrawString(float scale, float maxWidth, float z,
                     const char* text, const Vec3& pos,
                     const Colour& colour, int alignment = 0);
 
-    // Matches Font::Font_DrawString overload — `targetSize` is the desired
-    // em line-height in world units; internally divides by m_LineHeight to
-    // get the per-glyph multiplier. Used by ShopListItem and other UI
-    // widgets that want "render at N pixels tall" semantics.
+    // Thin alias -- passes targetSize directly as the scale parameter.
+    // Binary: DrawString (0x00199aa0) wrapper; scale = raw em pixel size,
+    // NO division by m_LineHeight (that division was a port error, now removed).
     void DrawStringSized(float targetSize, float maxWidth, float z,
                          const char* text, const Vec3& pos,
                          const Colour& colour, int alignment = 0) {
-        float mul = (m_LineHeight > 0) ? (targetSize / (float)m_LineHeight) : targetSize;
-        DrawString(mul, maxWidth, z, text, pos, colour, alignment);
+        DrawString(targetSize, maxWidth, z, text, pos, colour, alignment);
     }
 
-    // Measure text width without rendering
+    // Returns normalized text width (atlas-pixel units / m_ScaleW).
+    // Multiply by scale to get world-unit width.
+    // `scale` parameter is unused (kept for API compatibility).
     float MeasureWidth(float scale, const char* text) const;
 
-    // Get line height at given scale
-    float GetLineHeight(float scale) const { return (float)m_LineHeight * scale * m_Scale; }
+    // Get line height in world units at given scale.
+    float GetLineHeight(float scale) const { return (float)m_LineHeight * (1.0f / (float)(m_ScaleH > 0 ? m_ScaleH : 1)) * scale; }
 
 private:
     // Load atlas textures for all pages
