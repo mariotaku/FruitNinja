@@ -116,7 +116,19 @@ SmartPtr<Mortar::Texture> ShopScreen::s_TexSelected;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectedSml;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexUnknown44;
 SmartPtr<Mortar::Texture> ShopScreen::s_TexBGStore;
+SmartPtr<Mortar::Texture> ShopScreen::s_TexBackIcon;
 bool ShopScreen::s_bContentLoaded = false;
+
+// Port-only helpers (mirror DojoScreen pattern).
+static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
+    return tex.IsValid() ? tex->m_TexId : 0;
+}
+static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
+                      float defW, float defH) {
+    if (tex.IsValid())
+        return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
+    return Vec3(defW, defH, 1.0f);
+}
 
 // ---------------------------------------------------------------------------
 // ShopScreen::LoadContent @ 0x0015cb08
@@ -151,6 +163,11 @@ void ShopScreen::LoadContent() {
     // LowResBackgrounds() stub — always false in port
     s_TexBGStore = Mortar::TextureManager::LoadLocalisedTexture("BG_store.tex");
 
+    // Port-only: back-icon for the back/quit button. Binary reads this
+    // from a per-task slot (*(GameTask + 0x17c)); port loads back_icon.tex
+    // directly (matches DojoScreen back-button texture).
+    s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+
     s_bContentLoaded = true;
 }
 
@@ -170,6 +187,7 @@ void ShopScreen::UnLoadContent() {
     s_TexSelectedSml.SetNull();
     s_TexUnknown44.SetNull();
     s_TexBGStore.SetNull();
+    s_TexBackIcon.SetNull();
 }
 
 // ---------------------------------------------------------------------------
@@ -516,6 +534,9 @@ void ShopScreen::Update(float dt) {
             if (!m_pBuyButton) {
                 const int backFruitType = FruitInfo_GetCount();  // forces bomb spawn
                 m_pBuyButton = new MenuButton();
+                // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
+                m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
+                m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pBuyButton->Init(POS_BACK_BUTTON,
                     [this]() { QuitShopCallback(); },
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
@@ -581,6 +602,11 @@ void ShopScreen::Update(float dt) {
                             const int equipFruitType =
                                 Fruit::FruitType("pineapple", false);  // DIFFERS: DAT_0015e58c
                             m_pEquipButton = new MenuButton();
+                            // DIFFERS: binary uses *(GameTask + slot+0x14); port
+                            // uses select_item.tex (same slot the binary later
+                            // assigns in SetSelected for the locked path).
+                            m_pEquipButton->m_Texture = TexIdOf(s_TexSelectItem);
+                            m_pEquipButton->size      = TexSizeOf(s_TexSelectItem, 64.0f, 64.0f);
                             m_pEquipButton->Init(POS_EQUIP_BUTTON,
                                 [this]() { EquipCallback(); },
                                 equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
@@ -682,6 +708,9 @@ void ShopScreen::Update(float dt) {
         {
             const int backFruitType = FruitInfo_GetCount();
             m_pBuyButton = new MenuButton();
+            // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
+            m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
+            m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 [this]() { QuitShopCallback(); },
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);

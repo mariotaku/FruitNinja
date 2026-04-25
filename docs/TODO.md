@@ -98,6 +98,15 @@ See `docs/entities/splat-entity.md`. DrawActiveSplats fully decompiled:
 - Batched triangle list rendering with QUADCUSTOMVERTEX
 - 6 splat variants, pool-based
 
+**Open RE gap:** `SplatEntity::DrawSplat` (vtable, binary `0x0017f008`) — port
+takes the vertex buffer pointer as an argument: `DrawSplat(QUADCUSTOMVERTEX*)`.
+Binary signature may actually be `void DrawSplat()` with the buffer cursor
+held in a static/global. Functionally equivalent today, but if a future
+caller invokes via the vtable with the binary's exact ABI, the port's
+extra argument will mismatch. Confirm via Ghidra disasm of the function
+prologue (does it read `r1`, or only `r0=this`?), then either rename the
+port's helper or add the static-cursor variant.
+
 ### BombFlash / BombBlast — DONE
 
 See `docs/entities/bomb-flash.md` and `docs/entities/bomb-blast.md`. Both Update functions fully decompiled:

@@ -179,6 +179,10 @@ private:
     static SmartPtr<Mortar::Texture> s_TexSelectedSml;     // +0x40: selected_sml.tex
     static SmartPtr<Mortar::Texture> s_TexUnknown44;       // +0x44: (not yet identified)
     static SmartPtr<Mortar::Texture> s_TexBGStore;         // +0x48: BG_store.tex / BG_store_sml.tex
+    // Port-only: button textures. Binary reads from per-task slots
+    // (*(GameTask + 0x17c) for back, *(GameTask + ...) for equip) which
+    // aren't yet ported. Loaded by LoadContent alongside the others.
+    static SmartPtr<Mortar::Texture> s_TexBackIcon;        // back_icon.tex (port-only)
     static bool s_bContentLoaded;                           // +0x4c: one-time init guard
 
     // --- Callbacks ---

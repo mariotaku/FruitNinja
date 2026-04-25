@@ -602,6 +602,16 @@ Execute in this exact order to achieve a binary-faithful Draw:
 
 ---
 
+## Known Runtime Issues (2026-04-25)
+
+Observed after wiring back-icon + select_item textures and confirming the screen renders:
+
+1. **Back-icon spins** — `back_icon.tex` rotates inside the back-button ring. `HUDControl3d::Draw` applies `RotZ44(SinIdx, CosIdx)` when `m_Timer != 0`. DojoScreen's back button doesn't visibly spin; ShopScreen's does. Likely cause: `MenuButton::Update` ticks `m_Timer` for the new instance, and ShopScreen never zeroes it. Fix candidates: (a) zero `m_Timer` post-Init, (b) RE the binary's per-screen suppression of timer ticking.
+2. **Bomb mesh missing inside back ring** — only the fuse particle emits; the 3D bomb itself isn't visible. Indicates a `Bomb::Draw` guard tied to `m_bMenuBombHit`, `m_bMovement`, or a layer mask. Dojo bombs render fine, so the regression is ShopScreen-specific (possibly an interaction with the 0x80→0x40 layer toggle in `ShopScreen::Update`).
+3. **"SELECTED" stamp floats in empty space** — Block B draws the pulsing ring at `(slide_X, 104, 0)` but with no list items it has nothing to overlap. Resolves once `ScrollingMenu::Draw` + `ShopListItem::Draw` populate the list.
+4. **Empty info dialog box** — `dialog_box_shop.tex` panel renders, but no item name/description because the Font system isn't wired into the game struct (`game->field_0x54` font slots).
+5. **Empty item list** — `ScrollingMenu::Draw` and `ShopListItem::Draw` are stubs; `ItemManager::GetNumItems()` returns 0.
+
 ## See Also
 
 - [Menu flow system](../systems/menu-flow.md) -- screen navigation graph
