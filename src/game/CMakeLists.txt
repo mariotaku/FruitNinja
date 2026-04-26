@@ -11,4 +11,5 @@ target_sources(fruit-ninja PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/SlashModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ItemManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ItemInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/UpdateMusic.cpp
 )

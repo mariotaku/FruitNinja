@@ -2,6 +2,10 @@
 
 Four-layer architecture: GameSound (game) -> SoundManager (engine base) -> SoundManagerMAM (engine MAM impl) -> BadaSound (platform)
 
+**Music state machine**: see [systems/music-state.md](../systems/music-state.md) for the
+full `UpdateMusic` spec: volume ramp, crossfade between "Music-menu" / "background" tracks,
+preload-arm logic, and port-side gaps.
+
 ---
 
 ## Layer 1: Mortar::SoundManager (engine base, 40 bytes)

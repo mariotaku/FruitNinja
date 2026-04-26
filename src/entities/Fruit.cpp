@@ -13,6 +13,7 @@
 #include "game/BombHit.h"
 #include "game/WaveManager.h"
 #include "Game.h"
+#include "audio/GameSound.h"
 #include "math/math3d.h"
 #include <cmath>
 #include <cstdlib>
@@ -803,6 +804,19 @@ void Fruit::Slice() {
         // MakeSplat's landing-type RNG toward types 4/5, the larger
         // variants).
         if (s) s->MakeSplat(pos, sv, isCritical, m_FruitType);
+    }
+
+    // Fruit-cut SFX -- matches Fruit::Slice (0x176d58):
+    //   if (0 < splatCount) { OS_SPrintf("Clean-Slice-%d", Rand32(rand,3)+1);
+    //                         GameSound::SFXPlay(name, 1.0, 1.0, cb); }
+    // Picks 1-of-3 randomly. Files on disk: clean-slice-{1,2,3}.wav.pcm.
+    if (splatCount > 0) {
+        Game* g = Game::GetInstance();
+        if (g && g->pGameSound) {
+            char name[16];
+            std::snprintf(name, sizeof(name), "Clean-Slice-%d", (rand() % 3) + 1);
+            g->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+        }
     }
 
     // --- Half velocities ---

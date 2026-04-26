@@ -28,6 +28,9 @@
 #include "input/Touch.h"
 #include "util/StringHash.h"
 #include "debug/DebugFlags.h"
+#include "UpdateMusic.h"
+#include "audio/GameSound.h"
+#include "audio/SoundManager.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup
@@ -124,6 +127,16 @@ void GameUpdate(float dt, bool active) {
     // timers so unlock popups fade in/out. Stubbed; wired so the call
     // site lights up as soon as the stub becomes real.
     if (game->pSaveData) game->pSaveData->Update(dt, game->hud);
+
+    // Binary GameUpdate (0x16bed0) call order inside LoadingJob::IsLoaded() guard:
+    //   SoundManager::Update(sm, scaledDt)
+    //   GameSound::Update()
+    //   UpdateMusic(scaledDt)     <- spec: docs/systems/music-state.md, Callers section
+    //   ItemManager::Update(im, scaledDt)
+    // LoadingJob not yet ported; calls run unconditionally here until it is.
+    // SoundManager::Update is a no-op stub in the port (not yet RE'd).
+    if (game->pGameSound) game->pGameSound->Update(dt);
+    UpdateMusic(dt);
 
     if (earlyFrame) printf("GameUpdate: -> PSPParticleManager::Update\n");
     Mortar::PSPParticleManager::GetInstance().Update(dt);

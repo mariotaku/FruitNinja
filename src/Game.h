@@ -59,8 +59,8 @@ struct Game : public Mortar::MortarGame {
     uint8_t m_bSlowMotion;         // +0x35
     float dt;                      // +0x38
     HUD* hud;                      // +0x3C: pHUD
-    bool isFirstPlay1;             // +0x44
-    bool isFirstPlay2;             // +0x45
+    bool m_bSoundOn;               // +0x44: InitialiseData: GetTotal("soundOff")==0; 1=sound enabled
+    bool m_bMusicOn;               // +0x45: InitialiseData: GetTotal("musicOff")==0; 1=music enabled
     FruitCamera* pCamera;             // +0x48
     FruitSaveData* pSaveData;         // +0x4C: persistent save state (stub)
 
