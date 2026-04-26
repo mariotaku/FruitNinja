@@ -148,6 +148,20 @@ public:
 // mismatch has no runtime impact.
 // ---------------------------------------------------------------------------
 
+// `offsetof` on a non-standard-layout class (ShopListItem inherits from
+// ScrollingMenuItem which has virtual methods) is "conditionally-supported"
+// per the C++ standard. GCC emits -Winvalid-offsetof but its result is
+// correct for our layout-checking purpose. Suppress the warning around
+// the static_asserts -- they're a build-time invariant check, not actual
+// pointer arithmetic.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#elif defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winvalid-offsetof"
+#endif
+
 // Always-active: float fields at +0x25C..+0x264 (size-invariant across pointer widths)
 static_assert(offsetof(ShopListItem, m_NewItemAlpha)  == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
 static_assert(offsetof(ShopListItem, m_SelectedAlpha) == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
@@ -161,5 +175,11 @@ static_assert(offsetof(ShopListItem, m_bSelected)     == 0x27D, "ShopListItem::m
 static_assert(offsetof(ShopListItem, m_bIsNew)        == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");
 static_assert(offsetof(ShopListItem, m_CostAlpha)     == 0x280, "ShopListItem::m_CostAlpha must be at +0x280");
 #endif // __arm__
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#elif defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 #endif // FN_SHOP_LIST_ITEM_H
