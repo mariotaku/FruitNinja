@@ -1,10 +1,11 @@
-// Analysed: 2026-04-25T23:00
+// Analysed: 2026-04-26T00:00
 //
 // ShopListItem implementation.
 // Binary: ctor (0-param) 0x0015f9e8, ctor (5-param) 0x0015f734.
 // Draw @ 0x0015eb00 -- ~450 instructions, 5 Font::DrawString calls.
+// Move @ 0x0015d1fc -- sets pos + _pad2 (iconPos cache).
 //
-// See docs/screens/shop.md "ShopListItem::Draw" for full spec.
+// See docs/screens/shop-list-item-draw.md for full spec.
 
 #include "ShopListItem.h"
 #include "ScrollingMenu.h"
@@ -51,6 +52,32 @@ ShopListItem::ShopListItem()
 }
 
 ShopListItem::~ShopListItem() {}
+
+// ---------------------------------------------------------------------------
+// ShopListItem::Move @ 0x0015d1fc (vtable slot 6, +0x18)
+//
+// Binary sequence:
+//   1. pos.x = x; pos.y = y; pos.z = z
+//   2. *(Vec3*)(this+0x268) = pos     // copy pos into _pad2 (iconPos)
+//   3. if (SmartPtr<Texture>::operator bool(this+0x274)):
+//        *(float*)(this+0x268) += DAT_0015d474(35.2f) + *(this+0x18)(m_Size.x=60.0f)
+//        => _pad2.x = pos.x + 95.2f
+// ---------------------------------------------------------------------------
+void ShopListItem::Move(float x, float y, float z) {
+    pos.x = x;
+    pos.y = y;
+    pos.z = z;
+    // Step 2: copy pos into _pad2 (this+0x268 = Vec3 iconPos)
+    float* iconPos = reinterpret_cast<float*>(_pad2);
+    iconPos[0] = pos.x;
+    iconPos[1] = pos.y;
+    iconPos[2] = pos.z;
+    // Step 3: if icon texture valid, add 35.2f + m_Size.x (=60.0f) to iconPos.x
+    // Binary: DAT_0015d474 = 35.2f; m_Size.x at +0x18 = 60.0f -> sum = 95.2f
+    if (m_pIconTex.IsValid()) {
+        iconPos[0] += 35.2f + m_Size.x;  // DAT_0015d474(35.2f) + m_Size.x(60.0f) = 95.2f
+    }
+}
 
 // ---------------------------------------------------------------------------
 // ShopListItem::Create @ 0x0015c988
@@ -130,373 +157,485 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
 // ShopListItem::Draw @ 0x0015eb00
 //
 // Render order (binary-faithful):
-//   Guard: m_bOnscreenItem == 0 -> return
-//   Part 1: Title text (2 draws: shadow + fill)
-//   Part 2: Cost hint text (2 draws: shadow + fill)
+//   Guard 1: m_bSelected -> reset colour cache (static_block+0x8C)
+//   Guard 2: m_bVisible (+0x2D ScrollingMenuItem field) == 0 -> return
+//   Part 1: Title text (2 draws: shadow + fill); local_d0.y -= 26.0f after
+//   Part 2: Cost hint text (2 draws: shadow + fill); uses local_d0 (y decremented)
 //   Part 3: new_item_sml badge (when m_NewItemAlpha > 0)
 //   Part 4: selected_sml highlight ring (when m_SelectedAlpha > 0)
-//   Part 5: Item icon texture (when m_pIconTex valid)
-//   Part 6: scratch_deviders divider cell (always)
-//   Part 7: Description text (1 draw, when m_CostAlpha > 0)
-//   Part 8: loading.tex new-badge stripes (when m_bIsNew)
+//   Part 5: Item icon texture (when m_pIconTex valid); translate from _pad2 (+0x268)
+//   Part 6: scratch_deviders divider cell (always); width=257, translate = pos+half
+//   Part 7: Description text (when m_CostAlpha > 0); font shrink loop
+//   Part 8: loading.tex new-badge stripes (OUTSIDE the visibility guard; when m_bIsNew)
 // ---------------------------------------------------------------------------
 void ShopListItem::Draw() {
     // --- Static colour cache (static_block+0x8C in binary) ---
-    // Reset when m_bSelected is set (binary: static_block[+0x8C] = 0xFFFFFFFF)
-    static uint32_t s_colourCache = 0xFFFFFFFF;
+    // Stores the last seen costType (ItemInfo->m_Type). Reset to 0xFFFFFFFF when
+    // m_bSelected is set so the cache is re-evaluated (binary: write 0xFFFFFFFF).
+    static int32_t s_costTypeCache = (int32_t)0xFFFFFFFF;
 
-    // --- Guard: m_bSelected resets the colour cache ---
+    // Guard 1: m_bSelected resets the colour cache
+    // Binary: if (*(this+0x27D) != 0) static_block[+0x8C] = 0xFFFFFFFF
     if (m_bSelected) {
-        s_colourCache = 0xFFFFFFFF;
+        s_costTypeCache = (int32_t)0xFFFFFFFF;
     }
 
-    // --- Guard: skip if off-screen ---
-    // Binary: if (*(char*)(in_r0 + 0x27C) == 0) return;
-    if (!m_bOnscreenItem) return;
+    // --- Static cost-width cache (static_block+0x90..+0x9C in binary) ---
+    // Filled lazily: if [+0x90] == 0.0f, all 4 widths are measured once.
+    // Port: mirrors the same lazy fill semantics using a static float[4].
+    static float s_costWidths[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
-    // --- Guard: no item info, nothing to render ---
-    if (!m_pItemInfo) return;
-
-    Game* g = Game::GetInstance();
-    if (!g) return;
-
-    Mortar::Font* font = g->pFontMain.IsValid() ? g->pFontMain.Get() : nullptr;
-    if (!font) return;
-
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
-
-    // White/full-alpha colour from GOT (*(Colour**)(GOT+0x73a4) at runtime)
-    // Assumed {255,255,255,255} per spec.
-    const Colour colourWhite(255, 255, 255, 255);
-
-    // Item colour: white if unlocked, grey if locked.
-    // Binary: if (ItemInfo::IsLocked) itemColour = Colour(200,200,200,255)
-    Colour itemColour = colourWhite;
-    bool isLocked = (m_pItemInfo->IsLocked() != 0);
-    if (isLocked) {
-        itemColour = Colour(200, 200, 200, 255);
-    }
-
-    // basePos from ScrollingMenuItem::pos (set by Move each frame by Update).
-    // Binary: Vec3 basePos = this->pos  (in_r0 + 0x04)
-    Vec3 basePos(pos.x, pos.y, pos.z);
-
-    // HD mode: Game.field_0x03 == '\f' (0x0C).
-    // Binary: if HD -> scale=20 else scale=25
-    bool isHD = (g->languageFlag == 0x0C);  // field_0x03 in binary = languageFlag at +0x03
-    float titleScale = isHD ? 20.0f : 25.0f;  // DAT text scale
-
-    // ---------------------------------------------------------------------------
-    // Part 1: Title text (2 draws: shadow + fill)
-    // Binary: Font::Font_DrawString(scale,1.0,0.0, font, iter, pos, colour, vec2, 0xE, 0)
-    // ---------------------------------------------------------------------------
-    const char* titleStr = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
-
-    // Scale-to-fit check (HD mode only)
-    if (isHD) {
-        float measured = font->MeasureWidth(1.0f, titleStr);
-        if (measured * titleScale > 175.0f) {
-            float textScale = 175.0f / (measured * titleScale);
-            float scaled = textScale * 20.0f;
-            titleScale = (scaled > 0.0f) ? scaled : 0.0f;
-        }
+    // Guard 2: skip if not onscreen.
+    // Binary: if (*(this+0x2D) == 0) return;
+    // +0x2D is m_bOnscreen inside the Delegate1 header (ScrollingMenuItem::m_Delegate.m_bOnscreen).
+    // This is NOT the same as m_bOnscreenItem (+0x27C).
+    if (!m_Delegate.m_bOnscreen) {
+        // Part 8 is OUTSIDE this guard (see binary spec).
+        // Fall through to Part 8 after the guard block.
+        goto draw_part8;
     }
 
     {
-        // Shadow draw: offset (+4, -4, 0) from basePos
-        Vec3 shadowPos(basePos.x + 4.0f, basePos.y - 4.0f, basePos.z);
-        font->DrawStringSized(titleScale, 0.0f, 0.0f,
-                         titleStr, shadowPos,
-                         Colour(0, 0, 0, 64),
-                         0xE);  // flags 0xE = right+bottom alignment
+        // --- Guard: no item info, nothing to render ---
+        if (!m_pItemInfo) goto draw_part8;
 
-        // Actual draw at basePos
-        font->DrawStringSized(titleScale, 0.0f, 0.0f,
-                         titleStr, basePos,
-                         itemColour,
-                         0xE);
-    }
+        Game* g = Game::GetInstance();
+        if (!g) goto draw_part8;
 
-    // ---------------------------------------------------------------------------
-    // Part 2: Cost hint text (2 draws: shadow + fill)
-    // Binary: picks cost string from static_block[+0x1C + costTypeIndex*4].
-    // Cost type index = *(char*)(ItemInfo + 0x10) = m_pItemInfo->m_Type.
-    // Static block stores 4 cost strings; not yet fully ported.
-    //
-    // Port stub: format the cost value directly from m_pItemInfo->m_Cost.
-    // "FREE" when m_Cost <= 0 (matches binary -1=purchased/free behaviour).
-    // DIFFERS: binary uses pre-cached cost strings from static_block[+0x1C..+0x28].
-    // TODO: wire actual cost strings from ItemManager/ItemInfo when available.
-    // ---------------------------------------------------------------------------
-    float costScale = isHD ? (titleScale * 0.8f) : 20.0f;  // 20.0 = 0x41a00000 in binary
+        Mortar::Font* font = g->pFontMain.IsValid() ? g->pFontMain.Get() : nullptr;
+        if (!font) goto draw_part8;
 
-    char costBuf[32];
-    if (m_pItemInfo->m_Cost <= 0) {
-        snprintf(costBuf, sizeof(costBuf), "FREE");
-    } else {
-        snprintf(costBuf, sizeof(costBuf), "%d", (int)m_pItemInfo->m_Cost);
-    }
+        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        Renderer* r = Renderer::GetInstance();
+        if (!r) goto draw_part8;
 
-    {
-        Vec3 cShadowPos(basePos.x + 4.0f, basePos.y - 4.0f, basePos.z);
-        font->DrawStringSized(costScale, 0.0f, 0.0f,
-                         costBuf, cShadowPos,
-                         Colour(0, 0, 0, 64),
-                         0xE);
+        // White colour singleton (*(Colour**)(GOT+0x73a4) in binary = {255,255,255,255})
+        const Colour colourWhite(255, 255, 255, 255);
 
-        font->DrawStringSized(costScale, 0.0f, 0.0f,
-                         costBuf, basePos,
-                         itemColour,
-                         0xE);
-    }
-
-    // ---------------------------------------------------------------------------
-    // Part 3: new_item_sml badge -- when m_NewItemAlpha > 0
-    // Binary: Scale = Vec3(65.0f, 33.0f, 0.0f) * alpha^2
-    //         Translate: (basePos.x - title_width*costScale - 4.0f,
-    //                     34.0f + basePos.y + static_block[+0x6C], 0.0f)
-    // DAT_0015f188 = 64.0f (icon scale), badge scale is 65x33.
-    // DIFFERS: translate X uses stubbed cost width (0) for now.
-    // ---------------------------------------------------------------------------
-    if (m_NewItemAlpha > 0.0f) {
-        float alphaS = m_NewItemAlpha * m_NewItemAlpha;
-        Matrix44 matBadge = Matrix44::Scale44(65.0f * alphaS, 33.0f * alphaS, 0.0f);
-        // DIFFERS: title_width*costScale not measured; using basePos.x - 4.0 as placeholder
-        matBadge.GlobalTranslate44(basePos.x - 4.0f, 34.0f + basePos.y, 0.0f);
-        mm.GetWorldStack().Reset();
-        mm.GetWorldStack().SetCurrentMatrix(matBadge);
-        mm.UploadModelViewOnly();
-
-        if (ShopScreen::s_TexNewItemSmlBadge.IsValid()) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexNewItemSmlBadge->m_TexId);
-            r->DrawQuad(itemColour);
-            glBindTexture(GL_TEXTURE_2D, 0);
+        // Item colour: white if unlocked, grey(200,200,200,255) if locked.
+        // Binary: if (ItemInfo::IsLocked) CStack_40 = Colour(200,200,200,255)
+        Colour itemColour = colourWhite;
+        bool isLocked = (m_pItemInfo->IsLocked() != 0);
+        if (isLocked) {
+            itemColour = Colour(200, 200, 200, 255);
         }
-    }
 
-    // ---------------------------------------------------------------------------
-    // Part 4: selected_sml highlight ring -- when m_SelectedAlpha > 0
-    // Binary: Scale = Vec3(65.0f, 33.0f, 0.0f) * alpha^2
-    //         Translate: (basePos.x - cached_costWidth - 32.0f, basePos.y, 0.0f)
-    // DIFFERS: cached cost width not available; using basePos.x - 32.0f.
-    // ---------------------------------------------------------------------------
-    if (m_SelectedAlpha > 0.0f) {
-        float alphaS = m_SelectedAlpha * m_SelectedAlpha;
-        Matrix44 matSel = Matrix44::Scale44(65.0f * alphaS, 33.0f * alphaS, 0.0f);
-        // DIFFERS: costTypeIndex width cache not ported; using -32.0 placeholder
-        matSel.GlobalTranslate44(basePos.x - 32.0f, basePos.y, 0.0f);
-        mm.GetWorldStack().Reset();
-        mm.GetWorldStack().SetCurrentMatrix(matSel);
-        mm.UploadModelViewOnly();
+        // local_d0: starts as a copy of this->pos; Y is decremented after Part 1.
+        // Binary: local_d0 = Vec3(this->pos) at (in_r0+0x04)
+        Vec3 local_d0(pos.x, pos.y, pos.z);
 
-        if (ShopScreen::s_TexSelectedSml.IsValid()) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexSelectedSml->m_TexId);
-            r->DrawQuad(itemColour);
-            glBindTexture(GL_TEXTURE_2D, 0);
+        // HD mode: Game.field_0x03 == '\f' (0x0C).
+        // Binary: if HD -> scale=20, else scale=25
+        bool isHD = (g->languageFlag == 0x0C);
+        float titleScale = isHD ? 20.0f : 25.0f;
+
+        // fVar26: title fit ratio (1.0 if no shrink), used to derive costScale.
+        float fVar26 = 1.0f;
+
+        // -----------------------------------------------------------------------
+        // Part 1: Title text (shadow + fill)
+        // Binary: Font::DrawString(scale,1.0,0.0, font, titleStr, pos, colour, vec2, 0xE, 0)
+        // -----------------------------------------------------------------------
+        const char* titleStr = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
+
+        // fVar27: measured title width (pixels), used in Part 3 badge X.
+        // Binary: MeasureString called once before the title draw loop, stored in fVar27.
+        float fVar27 = font->MeasureWidth(1.0f, titleStr);
+
+        // Scale-to-fit check (HD mode only)
+        // Binary: if HD { if (fVar27 * scale > 175.0f) shrink; else scale=20, fVar26=1.0 }
+        if (isHD) {
+            if (fVar27 * titleScale > 175.0f) {     // DAT_0015eea8 = 175.0f
+                float textScale = 175.0f / (fVar27 * titleScale);
+                float scaled = textScale * 20.0f;
+                titleScale = (scaled > 0.0f) ? scaled : 0.0f;
+                fVar26 = textScale;  // ratio < 1.0 when shrinking
+            } else {
+                titleScale = 20.0f;
+                fVar26 = 1.0f;  // sentinel: no shrink needed
+            }
         }
-    }
 
-    // ---------------------------------------------------------------------------
-    // Part 5: Item icon texture -- when m_pIconTex is non-null
-    // Binary: Scale = Vec3(64.0f, 64.0f, 0.0f)   DAT_0015f188 = 64.0f
-    //         Translate from cached Vec3 at GOT+0x73ec plus (in_r0+0x268)
-    //         If not locked: draw m_pIconTex.
-    //         If locked: draw locked_stroke.tex (greyed-out overlay).
-    // TODO: translate from _pad2 (+0x268 cache) not yet resolved; using basePos.
-    // ---------------------------------------------------------------------------
-    if (m_pIconTex.IsValid()) {
-        Matrix44 matIcon = Matrix44::Scale44(64.0f, 64.0f, 0.0f);  // DAT_0015f188 = 64.0f
-        // DIFFERS: translate uses basePos; binary adds GOT+0x73ec cached Vec3 + _pad2 Vec3
-        matIcon.GlobalTranslate44(basePos.x, basePos.y, 0.0f);
-        mm.GetWorldStack().Reset();
-        mm.GetWorldStack().SetCurrentMatrix(matIcon);
-        mm.UploadModelViewOnly();
+        {
+            // Shadow: +4, -4, 0 offset
+            Vec3 shadowPos(local_d0.x + 4.0f, local_d0.y - 4.0f, local_d0.z);
+            font->DrawStringSized(titleScale, 0.0f, 0.0f,
+                             titleStr, shadowPos,
+                             Colour(0, 0, 0, 64),
+                             0xE);
+            // Fill at local_d0
+            font->DrawStringSized(titleScale, 0.0f, 0.0f,
+                             titleStr, local_d0,
+                             itemColour,
+                             0xE);
+        }
 
-        if (!isLocked) {
-            // Binary: Texture::Set(*(in_r0 + 0x274))  -- m_pIconTex
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, m_pIconTex->m_TexId);
-            r->DrawQuad(itemColour);
-            glBindTexture(GL_TEXTURE_2D, 0);
-        } else {
-            // Binary: Texture::Set(static_block[+0x40])  -- locked_stroke.tex
-            if (ShopScreen::s_TexLockedStroke.IsValid()) {
+        // Decrement local_d0.y by 26.0f (hardcoded literal in binary).
+        // All subsequent parts use the decremented Y.
+        local_d0.y -= 26.0f;
+
+        // -----------------------------------------------------------------------
+        // Part 2: Cost hint text (shadow + fill)
+        // Binary: picks costStr from static_block[+0x1C + m_Type*4].
+        //   index 0 (m_Type==0): GETSTRING(0xB7)
+        //   index 1 (m_Type==1): GETSTRING(0xB6)
+        //   index 2 (m_Type==2): GETSTRING(0xB8)
+        //   index 3 (m_Type==3): GETSTRING(0x113)
+        // Width cache: if static_block[+0x90] == 0.0f, measure all 4 and cache.
+        // costScale: HD -> fVar26*16.0f; non-HD -> 20.0f (0x41A00000)
+        //
+        // DIFFERS: binary uses integer-keyed GETSTRING_CAST_0_STR (keys 0xB7, 0xB6,
+        //   0xB8, 0x113 cast from int). Port's Localisation::Get() takes string keys
+        //   only. No integer-key lookup API exists. The cost strings are looked up
+        //   from m_pItemInfo fields as a stub until integer-key localisation is wired.
+        //   See docs/screens/shop-list-item-draw.md Part 2 for the binary spec.
+        // -----------------------------------------------------------------------
+        // costScale: HD -> fVar26 * 16.0f; non-HD -> 20.0f literal (0x41A00000)
+        float costScale = isHD ? (fVar26 * 16.0f) : 20.0f;
+
+        // Cost string: binary indexes static_block[+0x1C + m_Type*4] set from
+        // GETSTRING with integer keys. Port falls back to m_pItemInfo text fields.
+        // DIFFERS: integer-key localisation not wired; using m_pLockedText/m_pTitle.
+        const char* costStr = nullptr;
+        if (m_pItemInfo->m_pLockedText && m_pItemInfo->m_pLockedText[0] != '\0') {
+            costStr = m_pItemInfo->m_pLockedText;
+        } else if (m_pItemInfo->m_pTitle) {
+            costStr = m_pItemInfo->m_pTitle;
+        }
+
+        // Width cache (lazy): if s_costWidths[0] == 0.0f, measure all 4 strings.
+        // Binary: measures all 4 static costStr pointers * costScale.
+        // Port: measure the single cost string we have (stub).
+        if (s_costWidths[0] == 0.0f && costStr && font) {
+            float w = font->MeasureWidth(1.0f, costStr);
+            float cw = w * costScale;
+            s_costWidths[0] = cw;
+            s_costWidths[1] = cw;
+            s_costWidths[2] = cw;
+            s_costWidths[3] = cw;
+        }
+
+        if (costStr) {
+            Vec3 cShadowPos(local_d0.x + 4.0f, local_d0.y - 4.0f, local_d0.z);
+            font->DrawStringSized(costScale, 0.0f, 0.0f,
+                             costStr, cShadowPos,
+                             Colour(0, 0, 0, 64),
+                             0xE);
+            font->DrawStringSized(costScale, 0.0f, 0.0f,
+                             costStr, local_d0,
+                             itemColour,
+                             0xE);
+        }
+
+        // -----------------------------------------------------------------------
+        // Part 3: new_item_sml badge -- when m_NewItemAlpha > 0
+        // Binary: Scale = Vec3(65.0f, 33.0f, 0.0f) * alpha^2   (DAT_0015eebc=65, DAT_0015eec0=33)
+        //         X = (local_d0.x - fVar27 * costScale) - 4.0f
+        //             (fVar27 = measured title width; pFVar30 reused as costScale float)
+        //         Y = DAT_0015eec8(34.0f) + local_d0.y + static_block[+0x6C]
+        //           = 34.0f + (pos.y - 26.0f) + 0.0f = pos.y + 8.0f  (cache is 0)
+        //         Z = 0.0f
+        // Colour: white singleton (255,255,255,255) -- NOT itemColour.
+        // -----------------------------------------------------------------------
+        if (m_NewItemAlpha > 0.0f) {
+            float alphaS = m_NewItemAlpha * m_NewItemAlpha;
+            Matrix44 matBadge = Matrix44::Scale44(65.0f * alphaS, 33.0f * alphaS, 0.0f);
+            // Badge X: pos.x - fVar27*costScale - 4.0f
+            // fVar27 = MeasureString(titleStr), measured before title draw.
+            float badgeX = (local_d0.x - fVar27 * costScale) - 4.0f;
+            // Badge Y: 34.0f + local_d0.y + static_block[+0x6C](=0.0f)
+            // local_d0.y is already pos.y - 26.0f, so 34.0 + (pos.y-26.0) = pos.y + 8.0
+            float badgeY = 34.0f + local_d0.y;   // DAT_0015eec8 = 34.0f; cache = 0.0f
+            matBadge.GlobalTranslate44(badgeX, badgeY, 0.0f);
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(matBadge);
+            mm.UploadModelViewOnly();
+
+            if (ShopScreen::s_TexNewItemSmlBadge.IsValid()) {
                 glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexLockedStroke->m_TexId);
-                r->DrawQuad(itemColour);
+                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexNewItemSmlBadge->m_TexId);
+                r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
                 glBindTexture(GL_TEXTURE_2D, 0);
             }
         }
-    }
 
-    // ---------------------------------------------------------------------------
-    // Part 6: scratch_deviders divider cell -- always drawn
-    // Binary: Scale = Vec3(DAT_0015f198, 17.0f, 0.0f) * *(float**)(GOT+0x7214) / 2.0f
-    //         Translate based on pos + parent scroll.
-    // Colour: white (255,255,255,200) if selected type matches, grey (128,128,128,255) otherwise.
-    // DIFFERS: divider size multiplier (GOT+0x7214) not ported; using 1.0f.
-    // DIFFERS: position uses basePos; binary adds parent scroll offset.
-    // ---------------------------------------------------------------------------
-    {
-        // Colour cache: if s_colourCache matches current costTypeIndex -> white, else grey
-        // Binary uses static_block[+0x8C] as the cached "current type" selector.
-        // Port stub: pick colour based on m_bSelected.
-        Colour dividerColour = m_bSelected
-            ? Colour(255, 255, 255, 200)
-            : Colour(128, 128, 128, 255);
+        // -----------------------------------------------------------------------
+        // Part 4: selected_sml highlight ring -- when m_SelectedAlpha > 0
+        // Binary: Scale = Vec3(65.0f, 33.0f, 0.0f) * alpha^2   (DAT_0015f17c=65, DAT_0015f180=33)
+        //         X = (local_d0.x - static_block[+0x90 + m_Type*4]) - DAT_0015f184(32.0f)
+        //             (static_block[+0x90+i*4] = cached cost text pixel width for type i)
+        //         Y = local_d0.y   (= pos.y - 26.0f)
+        //         Z = 0.0f   (DAT_0015f19c)
+        // Colour: white singleton (255,255,255,255) -- NOT itemColour.
+        // -----------------------------------------------------------------------
+        if (m_SelectedAlpha > 0.0f) {
+            float alphaS = m_SelectedAlpha * m_SelectedAlpha;
+            Matrix44 matSel = Matrix44::Scale44(65.0f * alphaS, 33.0f * alphaS, 0.0f);
+            // X: pos.x - cached cost width for this item's m_Type - 32.0f
+            int typeIdx = (int)(uint8_t)m_pItemInfo->m_Type;
+            if (typeIdx < 0 || typeIdx > 3) typeIdx = 0;
+            float cachedCostW = s_costWidths[typeIdx];
+            float selX = (local_d0.x - cachedCostW) - 32.0f;  // DAT_0015f184 = 32.0f
+            float selY = local_d0.y;    // = pos.y - 26.0f (already decremented)
+            matSel.GlobalTranslate44(selX, selY, 0.0f);
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(matSel);
+            mm.UploadModelViewOnly();
 
-        // DAT_0015f198 = ? (width for divider row cell; not resolved yet)
-        // DIFFERS: using 290.0f as placeholder (matches loading.tex width DAT_0015f718)
-        float dividerW = 290.0f;  // DIFFERS: DAT_0015f198 not resolved
-        Matrix44 matDiv = Matrix44::Scale44(dividerW, 17.0f, 0.0f);
-        matDiv.GlobalTranslate44(basePos.x, basePos.y, 0.0f);
-        mm.GetWorldStack().Reset();
-        mm.GetWorldStack().SetCurrentMatrix(matDiv);
-        mm.UploadModelViewOnly();
-
-        if (ShopScreen::s_TexScratch.IsValid()) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexScratch->m_TexId);
-            r->DrawQuad(dividerColour);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            if (ShopScreen::s_TexSelectedSml.IsValid()) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexSelectedSml->m_TexId);
+                r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
         }
 
-        // Second divider draw when m_bIsNew (binary: uses operator- for translate)
-        if (m_bIsNew) {
-            // DIFFERS: translate X uses negative offset (operator-); using basePos.x - dividerW
-            Matrix44 matDiv2 = Matrix44::Scale44(dividerW, 17.0f, 0.0f);
-            matDiv2.GlobalTranslate44(basePos.x - dividerW, basePos.y, 0.0f);
+        // -----------------------------------------------------------------------
+        // Part 5: Item icon texture -- when m_pIconTex valid
+        // Binary: Scale = Vec3(64.0f, 64.0f, 0.0f)   DAT_0015f188 = 64.0f
+        //         Translate: global_icon_vec3(BSS,0,0,0) + _pad2(this+0x268)
+        //           = (0 + _pad2.x, 0 + _pad2.y, 0 + _pad2.z)
+        //           = (_pad2.x, _pad2.y, _pad2.z)
+        //         _pad2.x set by Move = pos.x + 95.2f (when icon valid)
+        //         If not locked: draw m_pIconTex.
+        //         If locked: draw static_block[+0x40] = locked_stroke.tex.
+        // Colour: white singleton (255,255,255,255) -- NOT itemColour.
+        // -----------------------------------------------------------------------
+        if (m_pIconTex.IsValid()) {
+            Matrix44 matIcon = Matrix44::Scale44(64.0f, 64.0f, 0.0f);  // DAT_0015f188 = 64.0f
+            // Translate from _pad2 (iconPos cache, set by Move each frame).
+            // global_icon_vec3 (BSS) is zeroed, so translate = _pad2 directly.
+            const float* iconPos = reinterpret_cast<const float*>(_pad2);
+            matIcon.GlobalTranslate44(iconPos[0], iconPos[1], iconPos[2]);
             mm.GetWorldStack().Reset();
-            mm.GetWorldStack().SetCurrentMatrix(matDiv2);
+            mm.GetWorldStack().SetCurrentMatrix(matIcon);
+            mm.UploadModelViewOnly();
+
+            if (!isLocked) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, m_pIconTex->m_TexId);
+                r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
+                glBindTexture(GL_TEXTURE_2D, 0);
+            } else {
+                // locked: draw locked_stroke.tex (static_block[+0x40])
+                if (ShopScreen::s_TexLockedStroke.IsValid()) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexLockedStroke->m_TexId);
+                    r->DrawQuad(colourWhite);  // always white
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                }
+            }
+        }
+
+        // -----------------------------------------------------------------------
+        // Part 6: scratch_deviders divider cell -- always drawn
+        // Binary: Scale = Vec3(257.0f, 17.0f, 0.0f)   DAT_0015f198 = 257.0f
+        //         divider_scale = *(float**)(GOT+0x7214) (runtime float, ~1.0f)
+        //         scaled = Vec3(257,17,0) * divider_scale
+        //         translate = scaled/2.0f + this->pos   (ORIGINAL pos, not local_d0)
+        //         => (pos.x + 128.5f, pos.y + 8.5f, 0.0f)  when divider_scale=1.0
+        //
+        // Colour cache logic (static_block[+0x8C]):
+        //   costType = (int)(int8_t)(*(ItemInfo+0x10)) = m_Type (sign-extended)
+        //   if (s_costTypeCache == costType): Colour(255,255,255,200)
+        //   else: s_costTypeCache = costType; Colour(128,128,128,255)
+        //
+        // DIFFERS: divider_scale (GOT+0x7214) not wired; using 1.0f (port approximation).
+        // -----------------------------------------------------------------------
+        {
+            int32_t costType = (int32_t)(int8_t)m_pItemInfo->m_Type;
+            Colour dividerColour;
+            if (s_costTypeCache == costType) {
+                dividerColour = Colour(255, 255, 255, 200);
+            } else {
+                s_costTypeCache = costType;   // update cache (static_block[+0x8C])
+                dividerColour = Colour(128, 128, 128, 255);
+            }
+
+            // DAT_0015f198 = 257.0f; divider_scale ~= 1.0f (DIFFERS: not wired)
+            float dividerW = 257.0f;           // DAT_0015f198
+            float dividerH = 17.0f;
+            // translate = (scaled/2) + pos using ORIGINAL this->pos (not local_d0)
+            float halfW = dividerW * 0.5f;     // = 128.5f when scale=1.0
+            float halfH = dividerH * 0.5f;     // = 8.5f
+            Matrix44 matDiv = Matrix44::Scale44(dividerW, dividerH, 0.0f);
+            matDiv.GlobalTranslate44(pos.x + halfW, pos.y + halfH, 0.0f);
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(matDiv);
             mm.UploadModelViewOnly();
 
             if (ShopScreen::s_TexScratch.IsValid()) {
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexScratch->m_TexId);
-                r->DrawQuad(Colour(128, 128, 128, 255));
+                r->DrawQuad(dividerColour);
                 glBindTexture(GL_TEXTURE_2D, 0);
             }
-        }
-    }
 
-    // ---------------------------------------------------------------------------
-    // Part 7: Description / lock text -- when m_CostAlpha > 0
-    // Binary: alpha = clamp((uint)(m_CostAlpha * 255.0f), 0, 255)
-    //         descBuf = (char*)(in_r0 + 0x5c)  -- m_DescText inline buffer
-    //         descFontSize = 18.0f, shrunk to fit DAT_0015f524 = 65.0f height
-    //         xPos = ShopScreen::GetDescriptionTextXPos()
-    //         purchaseState = ItemInfo + 0x24 = m_RequirementType
-    //
-    // purchaseState==0 or ==3: draw description text normally.
-    // purchaseState==1: "cost per play" mode (stub -- use normal description).
-    // purchaseState==2: FruitSaveData::PlayedModeToday check (stub -- normal desc).
-    //
-    // Colour: locked -> (255,255,255,alpha), unlocked -> (0x74,0x5D,0x3B,alpha).
-    // DAT_0015f524 = 65.0f (max description height).
-    // ---------------------------------------------------------------------------
-    {
-        uint32_t alphaU = (uint32_t)(m_CostAlpha * 255.0f);
-        if (alphaU > 255) alphaU = 255;
-        uint8_t descAlpha = (uint8_t)alphaU;
+            // Second divider (gate: m_bIsNew != 0)
+            // Binary: translate = half2 - this->pos = (128.5 - pos.x, 8.5 - pos.y, 0)
+            // Note: operator- subtracts pos from half, BOTH X and Y negated relative to pos.
+            // Scale: DAT_0015f51c = 257.0f (same width)
+            if (m_bIsNew) {
+                float dividerW2 = 257.0f;      // DAT_0015f51c = 257.0f
+                float dividerH2 = 17.0f;
+                float halfW2 = dividerW2 * 0.5f;  // 128.5f
+                float halfH2 = dividerH2 * 0.5f;  // 8.5f
+                Matrix44 matDiv2 = Matrix44::Scale44(dividerW2, dividerH2, 0.0f);
+                // Binary: half2 - this->pos = (128.5 - pos.x, 8.5 - pos.y, 0)
+                matDiv2.GlobalTranslate44(halfW2 - pos.x, halfH2 - pos.y, 0.0f);
+                mm.GetWorldStack().Reset();
+                mm.GetWorldStack().SetCurrentMatrix(matDiv2);
+                mm.UploadModelViewOnly();
 
-        if (descAlpha != 0) {
-            // descBuf: inline text buffer at +0x5c of ScrollingMenuItem base.
-            // Binary reads description from ItemInfo::m_pDescText or the inline
-            // buffer depending on parse state. Use m_DescText if non-empty,
-            // otherwise fall back to m_pItemInfo->m_pDescText.
-            const char* descStr = (m_DescText[0] != '\0')
-                ? m_DescText
-                : (m_pItemInfo->m_pDescText ? m_pItemInfo->m_pDescText : "");
-
-            float descFontSize = 18.0f;
-
-            // Shrink descFontSize until text height fits within 65.0f.
-            // Binary: while (Font::GetStringHeight(font, descBuf, descFontSize, ...) > 65.0f)
-            //             descFontSize -= 0.25f;
-            // Port: approximate -- reduce if text is long.
-            // TODO: port Font::GetStringHeight once available.
-            // DIFFERS: height check stubbed; using fixed 18.0f.
-
-            // xPos from GetDescriptionTextXPos (ShopScreen slide formula - 80.0f offset)
-            float xPos = 65.0f;  // fallback at alpha=1 (145.0f - 80.0f)
-            if (m_pShopScreen) {
-                xPos = m_pShopScreen->GetDescriptionTextXPos();
-            }
-
-            // purchaseState (ItemInfo + 0x24) = m_RequirementType
-            int8_t purchaseState = m_pItemInfo->m_RequirementType;
-
-            // Colour: locked -> white+alpha, unlocked -> 0x74,0x5D,0x3B,alpha
-            Colour descColour;
-            if (isLocked) {
-                descColour = Colour(255, 255, 255, descAlpha);
-            } else {
-                descColour = Colour(0x74, 0x5D, 0x3B, descAlpha);
-            }
-
-            if (purchaseState == 0 || purchaseState == 3) {
-                // Normal description draw
-                Vec3 descPos(xPos, basePos.y, basePos.z);
-                font->DrawStringSized(descFontSize, 0.0f, 0.0f,
-                                 descStr, descPos,
-                                 descColour,
-                                 0xF);  // flags 0xF per spec
-            }
-            // purchaseState==1 and ==2: stubbed -- same as normal for now
-            // DIFFERS: binary has special cost-per-play / playedToday handling.
-            // TODO: implement purchaseState==1 and ==2 paths when FruitSaveData is wired.
-            else {
-                Vec3 descPos(xPos, basePos.y, basePos.z);
-                font->DrawStringSized(descFontSize, 0.0f, 0.0f,
-                                 descStr, descPos,
-                                 descColour,
-                                 0xF);
+                if (ShopScreen::s_TexScratch.IsValid()) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexScratch->m_TexId);
+                    r->DrawQuad(Colour(128, 128, 128, 255));  // always grey
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                }
             }
         }
-    }
 
-    // ---------------------------------------------------------------------------
-    // Part 8: loading.tex new-badge overlay -- when m_bIsNew
-    // Binary: two semi-transparent black quads (top + bottom stripes):
-    //   Scale = Vec3(290.0f, 120.0f, 0.0f)  DAT_0015f718=290, DAT_0015f71c=120
-    //   Translate 1: (parent->pos.x - 2.0f,  105.0f, 0.0f)  DAT_0015f724=105
-    //   Translate 2: (parent->pos.x - 2.0f, -105.0f, 0.0f)  DAT_0015f728=-105
-    //   Colour = Colour(0,0,0,128)
-    //
-    // The binary reads parent->pos.x from the ScrollingMenu parent.
-    // Port: uses m_pParent->pos.x if available, else basePos.x.
-    // ---------------------------------------------------------------------------
+        // -----------------------------------------------------------------------
+        // Part 7: Description / cost text -- when m_CostAlpha > 0 and pointers valid
+        // Binary: gate: *(this+0x58) != 0 && *(this+0x278) != 0
+        //         alphaU = clamp((uint)(m_CostAlpha * 255.0f), 0, 255)
+        //         if alphaU == 0: skip
+        //         descBuf = (char*)(this+0x5c) = m_DescText
+        //         Font shrink loop:
+        //           descFontSize = 18.0f
+        //           while (GetStringHeight(font, descBuf, descFontSize, 160.0f) > 82.5f)
+        //               descFontSize -= 0.25f
+        //         xPos = ShopScreen::GetDescriptionTextXPos()
+        //         purchaseState = m_pItemInfo->m_RequirementType (+0x24)
+        //
+        // Colour: locked -> (255,255,255,alpha), unlocked -> (0x74,0x5D,0x3B,alpha)
+        // DAT_0015f524 = 82.5f; DAT_0015f540 = 160.0f (wrap width)
+        // -----------------------------------------------------------------------
+        if (m_pShopScreen && m_pItemInfo) {
+            uint32_t alphaU = (uint32_t)(m_CostAlpha * 255.0f);  // DAT_0015f520=255.0f
+            if (alphaU > 0xFE) alphaU = 0xFF;
+            alphaU &= ~((int32_t)alphaU >> 31);  // clamp negative to 0
+            uint8_t descAlpha = (uint8_t)alphaU;
+
+            if (descAlpha != 0) {
+                const char* descStr = (m_DescText[0] != '\0')
+                    ? m_DescText
+                    : (m_pItemInfo->m_pDescText ? m_pItemInfo->m_pDescText : "");
+
+                float descFontSize = 18.0f;
+
+                // Font shrink loop: while height > 82.5f (DAT_0015f524), reduce by 0.25f
+                // Binary: Font::GetStringHeight(font, descBuf, descFontSize, 160.0f)
+                // Port: Font::GetStringHeight is available; wire if the method exists.
+                // DIFFERS: Font::GetStringHeight not confirmed on port Font class; stubbed.
+                // TODO: Replace with font->GetStringHeight(descStr, descFontSize, 160.0f) > 82.5f
+                // when the method is verified.
+                (void)descFontSize;  // suppress unused-variable warning until loop is wired
+                descFontSize = 18.0f;
+                // Stub: loop would be:
+                //   float h = font->GetStringHeight(descStr, descFontSize, 160.0f);
+                //   while (h > 82.5f) { descFontSize -= 0.25f; h = font->GetStringHeight(...); }
+
+                float xPos = 65.0f;  // fallback
+                if (m_pShopScreen) {
+                    xPos = m_pShopScreen->GetDescriptionTextXPos();
+                }
+
+                int8_t purchaseState = m_pItemInfo->m_RequirementType;
+
+                Colour descColour;
+                if (isLocked) {
+                    descColour = Colour(255, 255, 255, descAlpha);
+                } else {
+                    descColour = Colour(0x74, 0x5D, 0x3B, descAlpha);
+                }
+
+                if (purchaseState == 0 || purchaseState == 3) {
+                    // Case 0 or 3: normal description draw
+                    Vec3 descPos(xPos, local_d0.y, local_d0.z);
+                    font->DrawStringSized(descFontSize, 0.0f, 0.0f,
+                                     descStr, descPos,
+                                     descColour,
+                                     0xF);
+                } else if (purchaseState == 1) {
+                    // Case 1: cost-per-play
+                    // Binary: draws upsideDown-aware string at y=-20, desc at y=+10
+                    // DIFFERS: FruitSaveData::PlayedModeToday and IsDeviceUpsideDown
+                    //   not wired. Port draws description normally as stub.
+                    // TODO: implement when FruitSaveData is ported.
+                    Vec3 descPos(xPos, local_d0.y, local_d0.z);
+                    font->DrawStringSized(descFontSize * 0.8f, 0.0f, 0.0f,
+                                     descStr, descPos,
+                                     Colour(0xBD, 0, 0, descAlpha),
+                                     3);
+                    Vec3 descPos2(xPos, local_d0.y, local_d0.z);
+                    font->DrawStringSized(descFontSize * 0.9f, 0.0f, 0.0f,
+                                     descStr, descPos2,
+                                     Colour(255, 255, 255, descAlpha),
+                                     0xF);
+                } else if (purchaseState == 2) {
+                    // Case 2: played-mode-today
+                    // Binary: FruitSaveData::PlayedModeToday check -> green or red header
+                    // DIFFERS: FruitSaveData not wired.
+                    // TODO: implement when FruitSaveData is ported.
+                    Vec3 descPos(xPos, local_d0.y, local_d0.z);
+                    font->DrawStringSized(descFontSize * 0.8f, 0.0f, 0.0f,
+                                     descStr, descPos,
+                                     Colour(0xBD, 0, 0, descAlpha),
+                                     3);
+                    Vec3 descPos2(xPos, local_d0.y, local_d0.z);
+                    font->DrawStringSized(descFontSize * 0.9f, 0.0f, 0.0f,
+                                     descStr, descPos2,
+                                     Colour(255, 255, 255, descAlpha),
+                                     0xF);
+                }
+            }
+        }
+    }  // end of onscreen block
+
+    // -----------------------------------------------------------------------
+    // Part 8: loading.tex new-badge stripes -- OUTSIDE the onscreen guard
+    // Binary: gate is *(this+0x27E) != 0 (m_bIsNew), runs regardless of m_bVisible.
+    //   Texture::Set(static_block2[+0x2C])  -- loading.tex
+    //   Stripe 1: Scale(290,120,0), Translate(parent->pos.x - 2.0, 105.0, 0)
+    //   Stripe 2: Scale(290,120,0), Translate(parent->pos.x - 2.0, -105.0, 0)
+    //   Colour = (0,0,0,128)
+    // Parent pos.x = *(float*)(*(this+0x10) + 8)  -- m_pParent->pos.x
+    // -----------------------------------------------------------------------
+    draw_part8:
     if (m_bIsNew) {
-        float parentX = m_pParent ? m_pParent->pos.x : basePos.x;
+        // m_pParent->pos.x (binary: *(*(this+0x10) + 8))
+        float parentX = m_pParent ? m_pParent->pos.x : pos.x;
 
         if (ShopScreen::s_TexLoading.IsValid()) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexLoading->m_TexId);
+            Mortar::MatrixManager& mm2 = Mortar::MatrixManager::GetInstance();
+            Renderer* r2 = Renderer::GetInstance();
+            if (r2) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexLoading->m_TexId);
 
-            // Top stripe
-            {
-                Matrix44 matTop = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
-                matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);    // DAT_0015f724=105.0f
-                mm.GetWorldStack().Reset();
-                mm.GetWorldStack().SetCurrentMatrix(matTop);
-                mm.UploadModelViewOnly();
-                r->DrawQuad(Colour(0, 0, 0, 128));
-            }
-            // Bottom stripe
-            {
-                Matrix44 matBot = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
-                matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);   // DAT_0015f728=-105.0f
-                mm.GetWorldStack().Reset();
-                mm.GetWorldStack().SetCurrentMatrix(matBot);
-                mm.UploadModelViewOnly();
-                r->DrawQuad(Colour(0, 0, 0, 128));
-            }
+                // Stripe 1 (top): Translate(parentX - 2.0, 105.0, 0)
+                {
+                    Matrix44 matTop = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
+                    matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);    // DAT_0015f724=105.0f
+                    mm2.GetWorldStack().Reset();
+                    mm2.GetWorldStack().SetCurrentMatrix(matTop);
+                    mm2.UploadModelViewOnly();
+                    r2->DrawQuad(Colour(0, 0, 0, 128));  // (0,0,0,0x80)
+                }
+                // Stripe 2 (bottom): Translate(parentX - 2.0, -105.0, 0)
+                {
+                    Matrix44 matBot = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
+                    matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);   // DAT_0015f728=-105.0f
+                    mm2.GetWorldStack().Reset();
+                    mm2.GetWorldStack().SetCurrentMatrix(matBot);
+                    mm2.UploadModelViewOnly();
+                    r2->DrawQuad(Colour(0, 0, 0, 128));
+                }
 
-            glBindTexture(GL_TEXTURE_2D, 0);
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
         }
     }
 }

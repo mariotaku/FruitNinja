@@ -184,10 +184,14 @@ void ScrollingMenu::Update(float /*dt*/) {
             const TouchState* ts = Touch::GetInstance().GetSlot(slot);
             if (ts) {
                 m_TouchAnchorPos.x = (float)ts->currX;
-                // Port-side Y-flip: SDL gives TOP=+160 (Y-up); binary uses
-                // TOP=-160 (Y-down). Negate so the drag formula below can
-                // use the binary's math verbatim.
-                m_TouchAnchorPos.y = -(float)ts->currY;
+                // Both binary and port use Y-up touch coords (binary's
+                // GlesForm::TransformTouchPos at 0x0018327c bakes a Y-flip
+                // into its 90 degree rotation so its result matches the
+                // port's SDLInputTranslator output direction). The drag
+                // formula below works on touch deltas, so absolute units
+                // (binary pixel vs port ortho) are irrelevant; only sign
+                // matters and both are Y-up.
+                m_TouchAnchorPos.y = (float)ts->currY;
                 m_TouchAnchorPos.z = (float)ts->phase;
             }
 
@@ -258,8 +262,7 @@ void ScrollingMenu::Update(float /*dt*/) {
             // offset = (anchorScrollY - (currentY - anchorY)) * -0.5
             const TouchState* ts = Touch::GetInstance().GetSlot(m_TouchId);
             if (ts) {
-                // Port-side Y-flip (see anchor latch above).
-                float currentY = -(float)ts->currY;
+                float currentY = (float)ts->currY;
                 float anchorY  = m_TouchAnchorPos.y;   // y at finger-down
                 float anchorScrollY = m_AnchorOffset.y; // scroll offset at finger-down
 
@@ -335,7 +338,7 @@ void ScrollingMenu::Update(float /*dt*/) {
         ScrollingMenuItem* item = m_Items[(size_t)i];
         float halfH = item->GetHeight() * 0.5f;
 
-        // Closest-item tracking
+        // Closest-item tracking (uses curY BEFORE the halfH adjustment).
         if (m_DragTargetIdx < 0) {
             // No specific drag target — find globally closest to scroll origin
             float distToCenter = curY - pos.y;
@@ -357,10 +360,21 @@ void ScrollingMenu::Update(float /*dt*/) {
             if (closestDist < 0.0f) closestDist = -closestDist;
         }
 
-        // SetOnscreen: item is visible if curY-halfH < rangeTop AND curY+halfH > rangeBot
-        // Binary: if (curY - halfH > rangeTop || curY + halfH < rangeBot) onscreen = false
+        // Binary advances cursor by halfH BEFORE the Move call so the item
+        // center sits halfH below the running cursor (item TOP edge aligned
+        // to the cursor). Earlier port did both halfH subtractions AFTER
+        // Move, which placed item centers at the cursor instead of one
+        // half-height below it -- the user-visible 0.5-item-height
+        // downward layout shift.
+        curY -= halfH;
+
+        // SetOnscreen: with rangeTop=-160 (small Y) and rangeBot=160 (large Y)
+        // the menu uses a Y-down convention. Off-screen if item is fully
+        // above the top edge (item-bottom-Y < rangeTop) or fully below the
+        // bottom edge (item-top-Y > rangeBot). Item-bottom-Y = curY+halfH,
+        // item-top-Y = curY-halfH.
         bool onscreen;
-        if (curY - halfH > rangeTop || curY + halfH < rangeBot)
+        if (curY + halfH < rangeTop || curY - halfH > rangeBot)
             onscreen = false;
         else
             onscreen = true;
@@ -369,8 +383,8 @@ void ScrollingMenu::Update(float /*dt*/) {
         // Move: assign world position from layout cursor
         item->Move(pos.x, curY, pos.z);
 
-        // Advance cursor by full item height (binary: curY -= halfH twice)
-        curY -= halfH;
+        // Advance cursor by another halfH for the next iteration (binary
+        // subtracts halfH twice per item: once pre-Move, once post-Move).
         curY -= halfH;
     }
 
