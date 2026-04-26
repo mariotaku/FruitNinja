@@ -14,6 +14,7 @@
 #include "hud/ScrollingMenu.h"
 #include "hud/ShopListItem.h"
 #include "entities/Fruit.h"
+#include "entities/Bomb.h"
 #include "entities/FruitInfo.h"
 #include "entities/SplatEntity.h"
 #include "entities/ActorManager.h"
@@ -461,14 +462,19 @@ void ShopScreen::QuitShopCallback() {
     // Set state to transition-out (state 2)
     m_State = 2;
 
-    // Fling the back/quit button's fruit piece
-    if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-        // Binary: SetVisible_FruitFact sets m_bDetached = 1 on the fruit
-        m_pBuyButton->m_pFruitPiece->m_bDetached = true;
-        // Binary: vel = (RandFloat5 + 5.0, -RandFloat5, 0)
+    // Fling the back/quit button. Binary writes byte at entity+0x80
+    // polymorphically: Fruit::m_bDetached or Bomb::m_bMovement. Falls
+    // back to m_pEntity for bombs whose m_pFruitPiece was left null.
+    if (m_pBuyButton && m_pBuyButton->m_pEntity) {
+        Entity* e = m_pBuyButton->m_pEntity;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        m_pBuyButton->m_pFruitPiece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+        if (e->entityType == 0) {
+            static_cast<Fruit*>(e)->m_bDetached = true;
+        } else if (e->entityType == 1) {
+            static_cast<Bomb*>(e)->m_bMovement = 1;
+        }
+        e->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
     }
 
     // Binary: TutorialControl::ResetTutePos(tute, 0) — null MenuButton* hides arrow
@@ -713,14 +719,17 @@ void ShopScreen::Update(float dt) {
         // ARM idiom: if (-1 < (int)((uint)(newAlpha < threshold) << 0x1f))
         //   fires when newAlpha >= threshold, i.e. NOT yet done fading.
         if (newAlpha >= ALPHA_STATE3_DONE) {
-            // Still fading: fling old back-button fruit piece if present.
-            // Binary: SetVisible_GameTask(), then set vel, then null the ptr.
-            if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-                m_pBuyButton->m_pFruitPiece->m_bDetached = true;
+            // Still fading: fling old back-button if present.
+            if (m_pBuyButton && m_pBuyButton->m_pEntity) {
+                Entity* e = m_pBuyButton->m_pEntity;
                 float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-                m_pBuyButton->m_pFruitPiece->vel =
-                    Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+                if (e->entityType == 0) {
+                    static_cast<Fruit*>(e)->m_bDetached = true;
+                } else if (e->entityType == 1) {
+                    static_cast<Bomb*>(e)->m_bMovement = 1;
+                }
+                e->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
                 // Binary: TutorialControl::ResetTutePos(tute, 0)
                 if (game.pTutorialCtrl)
                     game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -770,13 +779,17 @@ void ShopScreen::Update(float dt) {
     // ---- STATES 5 and 6: Wait for actors empty, then equip item ----
     case 5:
     case 6: {
-        // Fling buy button fruit piece (same as state 3)
-        if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
-            m_pBuyButton->m_pFruitPiece->m_bDetached = true;
+        // Fling buy button (same as state 3)
+        if (m_pBuyButton && m_pBuyButton->m_pEntity) {
+            Entity* e = m_pBuyButton->m_pEntity;
             float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
             float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-            m_pBuyButton->m_pFruitPiece->vel =
-                Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+            if (e->entityType == 0) {
+                static_cast<Fruit*>(e)->m_bDetached = true;
+            } else if (e->entityType == 1) {
+                static_cast<Bomb*>(e)->m_bMovement = 1;
+            }
+            e->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
             // Binary: TutorialControl::ResetTutePos(tute, 0)
             if (game.pTutorialCtrl)
                 game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);

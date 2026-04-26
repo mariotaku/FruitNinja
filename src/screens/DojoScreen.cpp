@@ -16,6 +16,7 @@
 #include "hud/MenuButton.h"
 #include "entities/FruitInfo.h"
 #include "entities/Fruit.h"
+#include "entities/Bomb.h"
 #include "audio/GameSound.h"
 #include "asset/TextureManager.h"
 #include "render/Renderer.h"
@@ -391,15 +392,20 @@ void DojoScreen::PlayCallback() {
     // 2. State 6 (quit fade-out)
     m_State = 6;
 
-    // 3. Fling the back-bomb's fruit piece with random velocity
-    //    Binary: if (field_0x94 && field_0x94[5].Init != nullptr)
-    //      SetVisible_FruitFact(piece); piece->vel = (rand5+5, -rand5, 0)
-    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        // SetVisible_FruitFact @ 0x0013785c: *(byte*)(fruit+0x80) = 1
-        m_pPlayButton->m_pFruitPiece->m_bDetached = true;
+    // 3. Fling the back-bomb with random rightward velocity.
+    //    Binary `*(byte*)(entity+0x80) = 1` is polymorphic: Fruit::m_bDetached
+    //    for fruit back-buttons, Bomb::m_bMovement for bomb back-buttons.
+    //    Falls back to m_pEntity since the back-bomb's m_pFruitPiece is null.
+    if (m_pPlayButton && m_pPlayButton->m_pEntity) {
+        Entity* e = m_pPlayButton->m_pEntity;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        if (e->entityType == 0) {
+            static_cast<Fruit*>(e)->m_bDetached = true;
+        } else if (e->entityType == 1) {
+            static_cast<Bomb*>(e)->m_bMovement = 1;
+        }
+        e->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -420,11 +426,21 @@ void DojoScreen::ShopCallback() {
     m_State = 2;
 
     // Binary: SetVisible + fling (no null check — assumes field_0x94 exists)
-    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        m_pPlayButton->m_pFruitPiece->m_bDetached = true;
+    // Binary `*(byte*)(entity+0x80) = 1` is polymorphic: Fruit::m_bDetached
+    // for fruit back-buttons, Bomb::m_bMovement for bomb back-buttons. The
+    // binary's MenuButton::Init sets m_pFruitPiece = m_pEntity for both
+    // entity types (LAB_0014f1f8); the port falls back to m_pEntity to
+    // catch bombs whose m_pFruitPiece was left null.
+    if (m_pPlayButton && m_pPlayButton->m_pEntity) {
+        Entity* e = m_pPlayButton->m_pEntity;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        if (e->entityType == 0) {
+            static_cast<Fruit*>(e)->m_bDetached = true;
+        } else if (e->entityType == 1) {
+            static_cast<Bomb*>(e)->m_bMovement = 1;
+        }
+        e->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -438,11 +454,21 @@ void DojoScreen::AboutCallback() {
     m_State = 3;
 
     // Binary: SetVisible + fling (no null check — assumes field_0x94 exists)
-    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
-        m_pPlayButton->m_pFruitPiece->m_bDetached = true;
+    // Binary `*(byte*)(entity+0x80) = 1` is polymorphic: Fruit::m_bDetached
+    // for fruit back-buttons, Bomb::m_bMovement for bomb back-buttons. The
+    // binary's MenuButton::Init sets m_pFruitPiece = m_pEntity for both
+    // entity types (LAB_0014f1f8); the port falls back to m_pEntity to
+    // catch bombs whose m_pFruitPiece was left null.
+    if (m_pPlayButton && m_pPlayButton->m_pEntity) {
+        Entity* e = m_pPlayButton->m_pEntity;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        m_pPlayButton->m_pFruitPiece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        if (e->entityType == 0) {
+            static_cast<Fruit*>(e)->m_bDetached = true;
+        } else if (e->entityType == 1) {
+            static_cast<Bomb*>(e)->m_bMovement = 1;
+        }
+        e->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
