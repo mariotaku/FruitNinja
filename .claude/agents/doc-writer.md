@@ -29,3 +29,4 @@ You write reverse-engineering documentation for a Fruit Ninja binary port.
 - Include binary addresses for every function and constant
 - Note ARM calling conventions where relevant (struct-return, thiscall)
 - Mark port-specific deviations clearly
+- **Never document an empirical / "looks-right" fix as a recommendation.** If a port-side bug is discussed, the doc must describe the BINARY's behavior (the correct target) and either (a) identify the port's deviation against that binary baseline so it can be corrected at the root, or (b) flag a gap with the specific binary function that still needs RE. Do not record "add -20 to Y" style fudges in `docs/` — they pollute future research.

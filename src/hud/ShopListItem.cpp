@@ -351,7 +351,8 @@ void ShopListItem::Draw() {
             // Badge Y: 34.0f + local_d0.y + static_block[+0x6C](=0.0f)
             // local_d0.y is already pos.y - 26.0f, so 34.0 + (pos.y-26.0) = pos.y + 8.0
             float badgeY = 34.0f + local_d0.y;   // DAT_0015eec8 = 34.0f; cache = 0.0f
-            matBadge.GlobalTranslate44(badgeX, badgeY, 0.0f);
+            // Binary integer-snaps the translate (vcvt.s32.f32) at 0x0015ef90 area.
+            matBadge.GlobalTranslate44((float)(int)badgeX, (float)(int)badgeY, 0.0f);
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(matBadge);
             mm.UploadModelViewOnly();
@@ -382,7 +383,8 @@ void ShopListItem::Draw() {
             float cachedCostW = s_costWidths[typeIdx];
             float selX = (local_d0.x - cachedCostW) - 32.0f;  // DAT_0015f184 = 32.0f
             float selY = local_d0.y;    // = pos.y - 26.0f (already decremented)
-            matSel.GlobalTranslate44(selX, selY, 0.0f);
+            // Binary integer-snaps only X (vcvt at 0x0015f064); Y stays float.
+            matSel.GlobalTranslate44((float)(int)selX, selY, 0.0f);
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(matSel);
             mm.UploadModelViewOnly();
@@ -588,6 +590,10 @@ void ShopListItem::Draw() {
                 } else if (purchaseState == 2) {
                     // Case 2: played-mode-today
                     // Same Y layout as case 1 (line1 at -20, line2 at +10).
+                    // Binary state-2 path multiplies by 0.9 TWICE (once at
+                    // 0x0015f460 vmul s17,s16,0.9 and again at the shared
+                    // second-line draw 0x0015f56c vmul s3,s17,0.9), giving
+                    // s16 * 0.81. Case 1 only multiplies once (= 0.9).
                     // DIFFERS: FruitSaveData not wired.
                     Vec3 descPos(xPos, -20.0f, 0.0f);
                     font->DrawStringSized(descFontSize * 0.8f, 0.0f, 0.0f,
@@ -595,7 +601,7 @@ void ShopListItem::Draw() {
                                      Colour(0xBD, 0, 0, descAlpha),
                                      3);
                     Vec3 descPos2(xPos, 10.0f, 0.0f);
-                    font->DrawStringSized(descFontSize * 0.9f, 0.0f, 0.0f,
+                    font->DrawStringSized(descFontSize * 0.81f, 0.0f, 0.0f,
                                      descStr, descPos2,
                                      Colour(255, 255, 255, descAlpha),
                                      0xF);
