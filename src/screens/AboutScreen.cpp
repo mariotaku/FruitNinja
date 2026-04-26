@@ -98,6 +98,7 @@ static const float SENSEI2_Y        =  56.0f;   // DAT_0012f8f0
 SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;
 SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;
 SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;
+SmartPtr<Mortar::Texture> AboutScreen::s_TexBackIcon;
 bool AboutScreen::s_bContentLoaded = false;
 
 // -----------------------------------------------------------------------
@@ -126,6 +127,11 @@ void AboutScreen::LoadContent()
     s_TexHaiku   = Mortar::TextureManager::LoadLocalisedTexture("haikus.tex");
     s_TexCredits = Mortar::TextureManager::LoadLocalisedTexture("credits.tex");
     s_TexSensei  = Mortar::TextureManager::LoadLocalisedTexture("sensei.tex");
+    // Port specific: binary reads back_icon from game->field_0x17c (a global
+    // slot loaded once at game init). Port loads it locally so the back-button
+    // ring renders on the AboutScreen back-bomb. Same path as DojoScreen.
+    if (!s_TexBackIcon.IsValid())
+        s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 
     // Binary also loads openfeint_gamecenter.tex into its own SmartPtr slot
     // (offset DAT_0012eca0 area). Port skips — OFN is defunct.
@@ -143,6 +149,7 @@ void AboutScreen::UnLoadContent()
     s_TexHaiku.SetNull();
     s_TexCredits.SetNull();
     s_TexSensei.SetNull();
+    s_TexBackIcon.SetNull();
     s_bContentLoaded = false;
 }
 
@@ -234,9 +241,17 @@ void AboutScreen::CreateBackButton()
     const int bombFruitType = FruitInfo_GetCount();
 
     m_pBackButton = new MenuButton();
-    // Binary sets size from ZeroInit_Draw (null tex), then copies game->field_0x17c.
-    // Port sets size from the texture if available; back_icon is typically 64x64.
-    m_pBackButton->size = Vec3(65.0f, 65.0f, 1.0f);  // width+1, height+1
+    // Wire the back-icon ring texture (binary reads game->field_0x17c).
+    // Without this the menu-button quad renders as an untextured square.
+    if (s_TexBackIcon.IsValid()) {
+        m_pBackButton->m_Texture = s_TexBackIcon->m_TexId;
+        m_pBackButton->size = Vec3(
+            (float)(s_TexBackIcon->m_Width  + 1),
+            (float)(s_TexBackIcon->m_Height + 1),
+            1.0f);
+    } else {
+        m_pBackButton->size = Vec3(65.0f, 65.0f, 1.0f);
+    }
 
     m_pBackButton->Init(POS_BACK_BUTTON,
                         [this]() { BackCallback(); },

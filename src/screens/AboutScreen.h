@@ -100,6 +100,7 @@ private:
     static SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex  (DAT_0012eca0 slot)
     static SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (DAT_0012eca8 slot)
     static SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex  (DAT_0012ecb0 slot)
+    static SmartPtr<Mortar::Texture> s_TexBackIcon; // back_icon.tex (port-only; binary reads game->field_0x17c)
 
     // One-time init guard (binary: DAT_0012ed94 + 0xc in BSS)
     static bool s_bContentLoaded;
