@@ -1,6 +1,8 @@
 # Music State Machine
 
 <!-- Analysed: 2026-04-26T00:00 -->
+<!-- Updated: 2026-04-26T00:00 — Correction: GameInit sets m_TransitionTimer=-1.0 at boot;
+     "Music-menu" plays first, not "background". See "Initial Seed Call" section. -->
 
 This document is the sole spec an implementer needs to port `UpdateMusic` 1:1 from
 `FruitNinja.exe` (ARM32 LE, Halfbrick Mortar Engine). No further Ghidra work is needed.
@@ -540,33 +542,54 @@ Cadence: **once per frame at ~60Hz**, dt ≈ 0.01667.
 
 ## Initial Seed Call
 
+<!-- Analysed: 2026-04-26T00:00 -->
+
 There is **NO separate boot-time SongPlay call** in the binary. UpdateMusic is the
 sole issuer of `SongPlay`. On the first frame after loading completes:
 - `g_currentVolume` starts at 0.0 (BSS zero)
 - `g_trackId` starts at 0 (BSS zero)
-- `m_bMusicOn` depends on save data (1 if music was on)
+- `m_bMusicOn` depends on save data (1 if music was on; 1 on first run with no save)
 
-With music enabled, Block 5 takes the music-enabled path:
-- `m_TransitionTimer` is 0.0 (no transition), so the else-branch runs.
-- `*g_currentVolume = 0.0` is NOT < 0, so the fast-ramp guard fails.
-- slow_ramp: `newV = 0.0 + delta > 0`, cap check, `g_trackId` gets set to 1,
-  SongPlay("background") fires.
+**Critical:** `GameInit` (0x0016c644) writes `-1.0f` (0xbf800000) to `g_GameData+0x0c`
+(`m_TransitionTimer`) in step 13 — immediately after creating TutorialControl, before
+the loading guard for UpdateMusic is ever satisfied. See binary address 0x0016cb2a:
 
-Wait — that would start the gameplay track immediately at boot even when on the main
-menu. However, at boot there are no entities in ActorManager (fruits/bombs spawned
-only when a game is running). The entity check in Block 5 (fast-ramp guard) does NOT
-prevent the slow-ramp from running. The slow-ramp path fires unconditionally when
-vol >= 0 and music is on. So the first track to play at boot is "background" (gameplay).
+```c
+// GameInit step 13 — after TutorialControl is created:
+*(undefined4 *)(iVar7 + 0xc) = 0xbf800000;  // m_TransitionTimer = -1.0f
+```
 
-The menu track "Music-menu" plays when `m_TransitionTimer < 0` forces currentVol down
-to -1.0 and g_trackId flips to -1. This happens when a game ends and the transition
-timer is set negative.
+With music enabled, Block 5 on the **first eligible frame** takes the music-enabled path:
+- `m_TransitionTimer = -1.0f < 0.0f` — the TRANSITION branch fires (0x0016a7b6).
+- `currentVol = 0.0 - delta < 0` (ramping down); v is negative so `v >= 0` is false.
+- `g_trackId != -1` (starts at 0) so the track flip fires: `g_trackId = -1`,
+  `SongPlay("Music-menu")` is called.
+
+So the **first track to play at boot is "Music-menu"**, not "background". The menu
+theme plays as soon as the loading screen exits and UpdateMusic runs.
+
+The transition back to "background" happens when gameplay begins and something sets
+`m_TransitionTimer` back to >= 0.0. The key reset sites are:
+- `EndRetryLevel` (0x0016a270): writes `0.0f` to m_TransitionTimer — gameplay resumes
+- `InstantLevelDestroy` (0x0016a2de): writes `0.0f` to m_TransitionTimer
+- `SkipToGameOver` (0x0016adec): writes `param_3` (caller-supplied value, typically a
+  positive countdown) to m_TransitionTimer — transitions BACK to menu at game-over
+- Various `MainScreen_Update` writes (0x0014ba2e, 0x0014ba4c, 0x0014b5f4, 0x0014b640,
+  0x0014bdee, 0x0014c1c0, 0x0014c1cc) — screen state transitions
+
+The flow is:
+1. Boot → GameInit sets m_TransitionTimer = -1.0 → UpdateMusic plays "Music-menu"
+2. Player starts game → some path sets m_TransitionTimer >= 0 → UpdateMusic ramps
+   currentVol up toward cap → SongPlay("background") when vol crosses 0
+3. Game ends → SkipToGameOver sets m_TransitionTimer negative again → UpdateMusic
+   ramps currentVol down to -1.0 → SongPlay("Music-menu")
 
 **Implication for the port:**
-The port's current `SongPlay("Music-menu")` in `GameInitialise.cpp:136` does NOT match
-binary behavior. The binary starts with "background" (gameplay track) on boot. Only
-after a game-over transition does "Music-menu" play. The boot call in the port must be
-REMOVED once UpdateMusic is ported, to replicate this behavior.
+The port's current `SongPlay("Music-menu")` in `GameInitialise.cpp:136` is approximately
+correct in effect (menu music plays at boot), but it is a manual call rather than going
+through UpdateMusic. Once UpdateMusic is ported with the correct initial state
+(m_TransitionTimer = -1.0f from GameInit), the manual boot call should be REMOVED —
+UpdateMusic will fire SongPlay("Music-menu") automatically on its first eligible frame.
 
 ---
 
@@ -575,8 +598,13 @@ REMOVED once UpdateMusic is ported, to replicate this behavior.
 The implementer needs to:
 
 1. **Remove `SongPlay("Music-menu")` from `src/game/GameInitialise.cpp:136`.**
-   This call has no binary equivalent at boot. Once UpdateMusic runs, it will start
-   "background" on the first eligible frame.
+   This manual call is a placeholder. Once UpdateMusic is running AND `GameInit` sets
+   `m_TransitionTimer = -1.0f`, UpdateMusic will automatically call SongPlay("Music-menu")
+   on its first eligible frame — no manual boot call needed.
+
+   Also ensure `GameInit` in the port writes `-1.0f` to `g_GameData.m_TransitionTimer`
+   (offset +0x0c) at step 13 (after TutorialControl is created). This is the key init
+   that makes UpdateMusic pick "Music-menu" at boot instead of "background".
 
 2. **Add new fields to the port's `g_GameData` (or equivalent) if missing:**
    - `g_GameData+0x45` = `m_bMusicOn` — already documented in `docs/structs/game.md`,
