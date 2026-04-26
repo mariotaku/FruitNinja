@@ -1,4 +1,4 @@
-<!-- Analysed: 2026-04-25T18:00 -->
+<!-- Analysed: 2026-04-26T12:00 -->
 
 ## Open TODO (2026-04-26)
 
@@ -445,3 +445,197 @@ With BOTH the sign fix (SDLInputTranslator.cpp) AND the three ScrollingMenu fixe
 | `DAT_0015be10` | `00 40 1c 46` | ~10000.0f | CLOSEST_SENTINEL for Phase 5 |
 | `DAT_0015be14` | `cd cc cc bd` | -0.1f | VEL_NEAR_ZERO_LO |
 | `DAT_0015be20` | `cd cc cc 3d` | +0.1f | VEL_NEAR_ZERO_HI (also snap step factor) |
+
+---
+
+## Scroll-bottom-limit + snap behavior (2026-04-26T12:00)
+
+### 12.1 Field-offset table corrections (+0x9c .. +0xac)
+
+The existing field-name map in Section 2 had field+0xa0 described as "init 240.0f". This was wrong. Binary
+disassembly of the three setter functions corrects all four offsets:
+
+| Offset | Field tag | Binary setter | Setter address | Binary instruction | Port name | Port constructor default |
+|--------|-----------|---------------|----------------|--------------------|-----------|--------------------------|
+| +0x9c  | field59   | SetItemHeight | 0x001479d4     | `vstr.32 s0,[r0,#0x9c]` | m_ItemHeight | 0.0f |
+| +0xa0  | field60   | SetHeight     | 0x00147998     | `vstr.32 s0,[r0,#0xa0]` | m_Height    | 320.0f (constructor) |
+| +0xa4  | field61   | SetWidth      | 0x001479a0     | writes field+0xa4 etc.  | m_Width     | 0.0f |
+| +0xa8  | field62   | (AddItem acc) | 0x00147b04     | item GetHeight() accumulated into [r4,#0xa8] | m_TotalHeight | 0.0f |
+
+The binary **runtime** value of m_Height for the shop list is **80.0f**, set by ShopScreen::Init, not the
+constructor default.  See Section 12.2 below.
+
+### 12.2 Diagnosis: why last 2 shop items are unreachable in the port
+
+**Root cause: `CreateShopList` never calls `SetHeight(80.0f)`.**
+
+Binary ShopScreen::Init @ 0x0015f7ac performs the following calls on the freshly created ScrollingMenu object:
+
+```
+0x0015f820  ldr  r3,[r3,#0x4c]       ; vtable_ptr[0x4c/4 = 19] = ScrollingMenu::SetHeight
+            blx  r3                   ; SetHeight(80.0f)   -- arg in s0 from DAT_0015f9c8
+```
+
+SetHeight (0x00147998) executes `vstr.32 s0,[r0,#0xa0]`, so field+0xa0 (m_Height) = **80.0f** at runtime.
+
+The shop list has 17 items, each 80.0f tall (SetItemHeight also passes 80.0f).  The Phase 7 spring-back
+boundary is computed as:
+
+```
+totalScrollH = m_Height - m_TotalHeight          ; field+0xa0 - field+0xa8
+             = 80.0f - (17 * 80.0f)
+             = 80.0f - 1360.0f = -1280.0f
+```
+
+Valid scroll range for velocity.y is [totalScrollH, 0] = [-1280, 0].
+
+Snap targets are `velocity.y = -i * itemHeight` for i = 0..16:
+- Item 14: -1120.0f  (inside range)
+- Item 15: -1200.0f  (inside range)
+- Item 16: -1280.0f  = totalScrollH (exactly at boundary -- reachable)
+
+**Port behavior with m_Height = 240.0f (constructor default, never overridden):**
+
+```
+totalScrollH = 240.0f - 1360.0f = -1120.0f
+```
+
+Valid range [-1120, 0].  Snap targets for items 15 and 16 are -1200 and -1280, both < -1120.  Phase 7
+spring-back clamps velocity.y to totalScrollH = -1120 every frame, and the snap never reaches those items.
+Exactly **2 items are perpetually unreachable**, matching the observed symptom.
+
+**Fix (src/screens/ShopScreen.cpp, CreateShopList):**
+
+After `m_pShopList = new ScrollingMenu()` (or equivalent construction), add:
+
+```cpp
+m_pShopList->SetHeight(80.0f);   // binary ShopScreen::Init vtable_ptr[19]=SetHeight(80.0f) @ 0x0015f820
+```
+
+This is the only change needed to restore the correct bottom-limit.
+
+### 12.3 Phase 5 snap-distance formula (binary citations)
+
+Phase 5 iterates items to find the closest snap target.  The critical expression is at ARM 0x0015bcf6:
+
+```
+0x0015bc5a  vsub.f32  s15,s15,s14   ; cursor = pos.y - velocity.y
+            ...
+0x0015bcde  vldr.32   s16,[r4,#0xd8]; s16 = velocity.y  (field+0xd8 = m_Velocity.y)
+0x0015bce2  vldr.32   s15,[r2,#0x0] ; s15 = curY (cursor Y for item i)
+0x0015bcf6  vsub.f32  s16,s15,s14   ; s16 = curY - pos.y
+```
+
+Here s14 = pos.y (loaded earlier), s15 = curY for the current item.
+So **s16 = curY - pos.y**.
+
+With cursor = pos.y - velocity.y, and curY_i = cursor - i * itemHeight:
+
+```
+s16 = curY_i - pos.y
+    = (pos.y - velocity.y - i*itemH) - pos.y
+    = -velocity.y - i*itemH
+```
+
+This is the signed distance from the snap target `-i*itemH` to the current velocity:
+
+```
+snapDist_i = -velocity.y - i*itemH   (negative when scrolled toward item i)
+```
+
+**Port bug at ScrollingMenu.cpp line 359:**
+
+```cpp
+// WRONG (current port):
+m_SnapDist = curY - (pos.y - m_Velocity.y);
+// evaluates to: curY - pos.y + velocity.y
+//             = (pos.y - vel - i*itemH) - pos.y + vel  =  -i*itemH
+// Missing: -velocity.y term -- snap always acts as if velocity=0
+```
+
+```cpp
+// CORRECT (matches binary s16 = curY - pos.y):
+m_SnapDist = curY - pos.y;
+// evaluates to: (pos.y - vel - i*itemH) - pos.y  =  -vel - i*itemH
+```
+
+### 12.4 Phase 7 spring-back and snap-step formulas (binary citations)
+
+**Snap gate: which field is checked for "velocity small enough to snap"?**
+
+Binary at 0x0015bddc:
+
+```
+0x0015bddc  vldr.32   s14,[r4,#0x94]   ; s14 = field+0x94 = m_PendingVelocity.y
+0x0015bde0  vldr.32   s15,[r5,#0x0]    ; s15 = VEL_NEAR_ZERO_HI (+0.1f, DAT_0015be20)
+0x0015bde4  vcmpe.f32 s14,s15           ; compare s14 vs s15
+            ...                          ; branch structure: snap fires when |m_PendingVelocity.y| < 0.1
+```
+
+The gate reads **field+0x94 = m_PendingVelocity.y**, NOT m_Velocity.y (field+0xd8).
+
+**Port bug at ScrollingMenu.cpp line 439:**
+
+```cpp
+// WRONG (current port):
+float vel = m_Velocity.y;               // reads field+0xd8
+// CORRECT (binary 0x0015bddc reads [r4,#0x94]):
+float vel = m_PendingVelocity.y;        // reads field+0x94
+```
+
+Consequence: when the user releases after a long drag, m_Velocity.y may be -80 (one full item height) while
+m_PendingVelocity.y is ~0.05 (the tail of the drag gesture).  The binary fires snap because 0.05 < 0.1.
+The port does not fire snap because 80 >> 0.1.  Snap is never triggered in the port.
+
+**Snap step formula:**
+
+Binary at 0x0015be2c (Phase 7 snap step, after gate passes):
+
+```
+0x0015be2c  vldr.32   s14,[r4,#0x94]   ; s14 = m_PendingVelocity.y
+0x0015be30  vldr.32   s16,[r5,#0x0]    ; s16 = VEL_NEAR_ZERO_HI = +0.1f
+0x0015be34  vmla.f32  s14,s16,s15      ; s14 = s14 + s16*s15  (VMLA: acc + src1*src2)
+                                        ;      = m_PendingVelocity.y + 0.1f * snapDist
+0x0015be38  vstr.32   s14,[r4,#0xd8]   ; store result into m_Velocity.y (field+0xd8)
+```
+
+Where s15 = snapDist = the chosen closest-item snap distance (s16 from Phase 5 stored to stack).
+
+So the snap step is:
+
+```
+m_Velocity.y  =  m_PendingVelocity.y  +  0.1f * snapDist
+```
+
+With snapDist = -pending_vel - i*itemH (the corrected formula):
+
+```
+m_Velocity.y  =  pending_vel  +  0.1f * (-pending_vel - i*itemH)
+             =  pending_vel * 0.9  -  0.1f * i * itemH
+```
+
+Fixed point (pending_vel steady-state): velocity converges to `-i*itemH` over successive frames.  The snap
+step is a single-frame move; it does not loop -- convergence depends on Phase 4 friction decay continuing
+to call this branch each frame until |pending_vel| >= 0.1 no longer holds.
+
+**Port line 443 is structurally correct for the step formula:**
+
+```cpp
+m_Velocity.y = offset + snapDist * VEL_NEAR_ZERO_HI;
+// offset = m_PendingVelocity.y, VEL_NEAR_ZERO_HI = 0.1f
+// structurally matches binary VMLA
+// wrong only because snapDist was computed incorrectly (see 12.3)
+```
+
+### 12.5 Summary: three port edits required
+
+| # | File | Location | Current | Correct | Binary citation |
+|---|------|----------|---------|---------|-----------------|
+| 1 | `src/screens/ShopScreen.cpp` | `CreateShopList()`, after `new ScrollingMenu()` | (call missing) | `m_pShopList->SetHeight(80.0f);` | ShopScreen::Init 0x0015f820, vtable_ptr[19]=SetHeight |
+| 2 | `src/hud/ScrollingMenu.cpp` | Phase 5 snap-distance, ~line 359 | `curY - (pos.y - m_Velocity.y)` | `curY - pos.y` | ARM 0x0015bcf6: `vsub.f32 s16,s15,s14` where s14=pos.y |
+| 3 | `src/hud/ScrollingMenu.cpp` | Phase 7 snap gate, ~line 439 | `float vel = m_Velocity.y` | `float vel = m_PendingVelocity.y` | ARM 0x0015bddc: `vldr.32 s14,[r4,#0x94]` (field+0x94) |
+
+Fix 1 alone restores the correct totalScrollH = -1280 and makes all 17 items reachable.
+Fix 2 alone corrects the snap target computation (snap converges to correct item).
+Fix 3 alone ensures the snap gate fires at the right moment (pending not velocity).
+All three are independent and should be applied together.
