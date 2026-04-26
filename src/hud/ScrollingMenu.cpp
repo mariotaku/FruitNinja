@@ -347,16 +347,13 @@ void ScrollingMenu::Update(float /*dt*/) {
             if (distToCenter < 0.0f) distToCenter = -distToCenter;
             if (distToCenter < closestDist) {
                 m_ClosestIdx = i;
-                // Snap-distance: signed delta from current scroll to the
-                // closest item's position. Phase 7's snap step uses this
-                // directly so the post-release drift is TOWARD the closest
-                // item (sign-preserving). Earlier port took fabs which
-                // made the snap always push offset positive (runaway).
-                // Binary: fVar18 = _Stack_68.y - (pos.y - m_Velocity.y)
-                //       = curY - initial_cursor_y
-                // Earlier port had `curY - m_Velocity.y` (missing pos.y).
-                // See docs/systems/y-axis-convention.md Section 5/Change 5.
-                m_SnapDist = curY - (pos.y - m_Velocity.y);
+                // Binary at 0x0015bcf6: vsub.f32 s16,s15,s14 where
+                //   s15 = curY (_Stack_68.y), s14 = pos.y (m_pParent->pos.y).
+                // Result is curY - pos.y -- the SIGNED delta needed to
+                // bring this item to the focal point. Earlier port had
+                // `curY - (pos.y - m_Velocity.y)` (extra velocity term),
+                // which made the snap step diverge instead of converge.
+                m_SnapDist = curY - pos.y;
                 closestDist = distToCenter;
             }
         } else if (m_DragTargetIdx == i) {
@@ -436,7 +433,14 @@ void ScrollingMenu::Update(float /*dt*/) {
     if (offset <= 0.0f || m_DragTargetIdx >= 0) {
         if (offset >= totalScrollH || m_DragTargetIdx >= 0) {
             if (m_TouchId != -1) return;
-            float vel = m_Velocity.y;
+            // Binary at 0x0015bddc: vldr.32 s14,[r4,#0x94] -- gates the
+            // snap step on m_PendingVelocity.y, NOT m_Velocity.y. After a
+            // drag release, m_PendingVelocity decays to ~0.05 within a few
+            // frames (0.9 friction), while m_Velocity may still be 50+
+            // from accumulated drag input. Using m_Velocity here meant
+            // the snap was almost never gated open. Reading m_PendingVelocity
+            // matches the binary and lets snap fire on release.
+            float vel = m_PendingVelocity.y;
             bool velSmall = (vel < 0.0f) ? (vel >= VEL_NEAR_ZERO_LO)
                                           : (vel <  VEL_NEAR_ZERO_HI);
             if (!velSmall) return;

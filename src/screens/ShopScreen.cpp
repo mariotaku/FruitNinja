@@ -287,6 +287,14 @@ void ShopScreen::CreateShopList() {
     // pre-populated from items.xml at init time. Port creates a local one.
     m_pShopList = new ScrollingMenu();
 
+    // Binary ShopScreen::Init at 0x0015f820 calls vtable[19] = SetHeight(80.0).
+    // Port previously left m_Height at the ctor default (240), making
+    // totalScrollH = 240 - 17*80 = -1120 and clipping the scroll range to
+    // -1120 -- the bottom 2 snap targets (-1200, -1280) became unreachable.
+    // With m_Height = 80 (one row), totalScrollH = 80 - 1360 = -1280, which
+    // covers every item's snap target.
+    m_pShopList->SetHeight(80.0f);
+
     // ScrollingMenu must live in the HUD so HUD::Update ticks its
     // Update (touch + scroll physics + per-item layout via Move) and
     // HUD::Draw dispatches its Draw (which iterates and draws items).
