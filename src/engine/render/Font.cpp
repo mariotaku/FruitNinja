@@ -227,14 +227,18 @@ void Font::DrawString(float scale, float maxWidth, float z,
     }
 
     // --- Vertical alignment (flags & 0xC): shift startY in normalized units ---
-    // Binary: flags & 0x4 selects 0.5 factor, flags & 0x8 selects 1.0 factor.
-    // 0xC fires both checks; the net result is a 0.5 shift (middle-of-line).
+    // Binary at 0x00199920-0x00199964 issues TranslateLocal with a POSITIVE
+    // Y offset (factor 0.5 when flags & 0x4 set, else 1.0). Earlier port
+    // negated the sign, putting glyphs `scale` world-units below the binary
+    // -- which manifested as the shop title rendering ~20 px above its
+    // intended position (titleScale=20 in HD mode, 25 in SD).
+    // See docs/engine/font.md "Font_DrawString Implementation".
     float startY = 0.0f;
     if (alignment & 0xC) {
         if (alignment & 0x4) {
-            startY -= normLineH * 0.5f;
+            startY += normLineH * 0.5f;
         } else {
-            startY -= normLineH;
+            startY += normLineH;
         }
     }
 

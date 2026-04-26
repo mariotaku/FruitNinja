@@ -24,6 +24,7 @@ Write code that faithfully matches the reverse-engineered binary behavior docume
 - **Stub un-ported deps, don't skip the call** — create a header + stub .cpp with the RE'd public API. Singletons' `GetInstance()` must return a valid (possibly empty) object so the call graph compiles.
 - **RE+port the base class first** — vtable slot indices matter. `ActorManager::Update` walks vtable +0x10 / +0x18 unconditionally.
 - **Stub defunct features, don't remove them** — keep the SHAPE: button/struct/call with a no-op callback and a code comment.
+- **No empirical / "looks-right" fixes.** If a port element is visually wrong (off-position, wrong size, wrong colour, mistimed), do NOT add a port-specific offset, multiplier, or hard-coded tweak to compensate. Empirical fixes hide the root cause and accumulate drift. Instead: RE the responsible binary function (font baseline math, matrix-stack convention, alignment-flag semantics, etc.) and port it correctly. If the RE is incomplete, file a TODO and revert to "wrong-but-binary-faithful" rather than commit a fudge. The only allowed deviations are GL ES 1->2 translation and clearly-marked `// Port specific:` workarounds for genuine platform-API differences (SDL audio backend, file I/O paths) — never for game-logic positioning, sizing, timing, or colours. If you can't determine the root cause from existing docs, return a gap list with the specific binary function to RE next; don't fudge.
 
 **ARM idioms:**
 - Fixed timestep: dt = 1/60 (don't compute from elapsed time).
