@@ -220,9 +220,12 @@ void ShopListItem::Draw() {
             itemColour = Colour(200, 200, 200, 255);
         }
 
-        // local_d0: starts as a copy of this->pos; Y is decremented after Part 1.
-        // Binary: local_d0 = Vec3(this->pos) at (in_r0+0x04)
-        Vec3 local_d0(pos.x, pos.y, pos.z);
+        // local_d0: binary actually computes pos + m_Size. The Ghidra
+        // decompile of `_Vector3::operator+(&local_d0, p_Var9)` drops the
+        // hidden r2 register arg = &m_Size (offset +0x18). See spec at
+        // docs/screens/shop-list-item-draw.md "Position re-verification".
+        // m_Size for ShopListItem = (60, 13, 0) per Create.
+        Vec3 local_d0(pos.x + m_Size.x, pos.y + m_Size.y, pos.z);
 
         // HD mode: Game.field_0x03 == '\f' (0x0C).
         // Binary: if HD -> scale=20, else scale=25
@@ -340,9 +343,11 @@ void ShopListItem::Draw() {
         if (m_NewItemAlpha > 0.0f) {
             float alphaS = m_NewItemAlpha * m_NewItemAlpha;
             Matrix44 matBadge = Matrix44::Scale44(65.0f * alphaS, 33.0f * alphaS, 0.0f);
-            // Badge X: pos.x - fVar27*costScale - 4.0f
+            // Badge X: local_d0.x - fVar27*titleScale - 4.0f
             // fVar27 = MeasureString(titleStr), measured before title draw.
-            float badgeX = (local_d0.x - fVar27 * costScale) - 4.0f;
+            // Binary uses titleScale (s18) here, not costScale -- traced
+            // via vmul.f32 s17,s0,s18 at 0x0015ec04 + use at 0x0015ef26.
+            float badgeX = (local_d0.x - fVar27 * titleScale) - 4.0f;
             // Badge Y: 34.0f + local_d0.y + static_block[+0x6C](=0.0f)
             // local_d0.y is already pos.y - 26.0f, so 34.0 + (pos.y-26.0) = pos.y + 8.0
             float badgeY = 34.0f + local_d0.y;   // DAT_0015eec8 = 34.0f; cache = 0.0f
@@ -452,14 +457,17 @@ void ShopListItem::Draw() {
                 dividerColour = Colour(128, 128, 128, 255);
             }
 
-            // DAT_0015f198 = 257.0f; divider_scale ~= 1.0f (DIFFERS: not wired)
+            // Scale: 257 wide x 17 tall (the divider quad's pixel size).
             float dividerW = 257.0f;           // DAT_0015f198
             float dividerH = 17.0f;
-            // translate = (scaled/2) + pos using ORIGINAL this->pos (not local_d0)
-            float halfW = dividerW * 0.5f;     // = 128.5f when scale=1.0
-            float halfH = dividerH * 0.5f;     // = 8.5f
             Matrix44 matDiv = Matrix44::Scale44(dividerW, dividerH, 0.0f);
-            matDiv.GlobalTranslate44(pos.x + halfW, pos.y + halfH, 0.0f);
+            // Translate: pos + (yAxisUnit * m_Height / 2). Binary computes
+            //   tmp = (*GOT[0x52c]) * m_Height        (= (0,1,0) * 80 = (0,80,0))
+            //   tmp = tmp / 2.0                        (= (0,40,0))
+            //   final = pos + tmp                      (= (pos.x, pos.y + 40, pos.z))
+            // i.e. divider 1 sits at the row's TOP edge (Y-up: pos.y + halfRowH).
+            float halfRowH = m_Height * 0.5f;
+            matDiv.GlobalTranslate44(pos.x, pos.y + halfRowH, 0.0f);
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(matDiv);
             mm.UploadModelViewOnly();
@@ -472,17 +480,15 @@ void ShopListItem::Draw() {
             }
 
             // Second divider (gate: m_bIsNew != 0)
-            // Binary: translate = half2 - this->pos = (128.5 - pos.x, 8.5 - pos.y, 0)
-            // Note: operator- subtracts pos from half, BOTH X and Y negated relative to pos.
-            // Scale: DAT_0015f51c = 257.0f (same width)
+            // Same scale as divider 1 but translate uses the SUBTRACT path:
+            // final = pos - (yAxisUnit * m_Height / 2)
+            //       = (pos.x, pos.y - halfRowH, pos.z)
+            // i.e. divider 2 sits at the row's BOTTOM edge (Y-up).
             if (m_bIsNew) {
                 float dividerW2 = 257.0f;      // DAT_0015f51c = 257.0f
                 float dividerH2 = 17.0f;
-                float halfW2 = dividerW2 * 0.5f;  // 128.5f
-                float halfH2 = dividerH2 * 0.5f;  // 8.5f
                 Matrix44 matDiv2 = Matrix44::Scale44(dividerW2, dividerH2, 0.0f);
-                // Binary: half2 - this->pos = (128.5 - pos.x, 8.5 - pos.y, 0)
-                matDiv2.GlobalTranslate44(halfW2 - pos.x, halfH2 - pos.y, 0.0f);
+                matDiv2.GlobalTranslate44(pos.x, pos.y - halfRowH, 0.0f);
                 mm.GetWorldStack().Reset();
                 mm.GetWorldStack().SetCurrentMatrix(matDiv2);
                 mm.UploadModelViewOnly();
@@ -551,40 +557,44 @@ void ShopListItem::Draw() {
                     descColour = Colour(0x74, 0x5D, 0x3B, descAlpha);
                 }
 
+                // Description Y positions are ABSOLUTE world coords (the
+                // description panel is centered on the screen, not anchored
+                // to row pos.y). Binary loads y as a float literal at
+                // 0x0015f5b6 etc. -- not a derived value.
                 if (purchaseState == 0 || purchaseState == 3) {
-                    // Case 0 or 3: normal description draw
-                    Vec3 descPos(xPos, local_d0.y, local_d0.z);
+                    // Case 0 or 3: normal description draw at y=0 (DAT_0015f53c)
+                    Vec3 descPos(xPos, 0.0f, 0.0f);
                     font->DrawStringSized(descFontSize, 0.0f, 0.0f,
                                      descStr, descPos,
                                      descColour,
                                      0xF);
                 } else if (purchaseState == 1) {
                     // Case 1: cost-per-play
-                    // Binary: draws upsideDown-aware string at y=-20, desc at y=+10
-                    // DIFFERS: FruitSaveData::PlayedModeToday and IsDeviceUpsideDown
-                    //   not wired. Port draws description normally as stub.
-                    // TODO: implement when FruitSaveData is ported.
-                    Vec3 descPos(xPos, local_d0.y, local_d0.z);
+                    // Binary: line 1 at y=-20 (DAT_0015f4e6 = 0xC1A00000),
+                    //         line 2 at y=+10 (DAT_0015f57a = 0x41200000).
+                    // DIFFERS: FruitSaveData::PlayedModeToday and
+                    //   IsDeviceUpsideDown not wired -- port draws stub text
+                    //   in both slots. TODO: implement when FruitSaveData lands.
+                    Vec3 descPos(xPos, -20.0f, 0.0f);
                     font->DrawStringSized(descFontSize * 0.8f, 0.0f, 0.0f,
                                      descStr, descPos,
                                      Colour(0xBD, 0, 0, descAlpha),
                                      3);
-                    Vec3 descPos2(xPos, local_d0.y, local_d0.z);
+                    Vec3 descPos2(xPos, 10.0f, 0.0f);
                     font->DrawStringSized(descFontSize * 0.9f, 0.0f, 0.0f,
                                      descStr, descPos2,
                                      Colour(255, 255, 255, descAlpha),
                                      0xF);
                 } else if (purchaseState == 2) {
                     // Case 2: played-mode-today
-                    // Binary: FruitSaveData::PlayedModeToday check -> green or red header
+                    // Same Y layout as case 1 (line1 at -20, line2 at +10).
                     // DIFFERS: FruitSaveData not wired.
-                    // TODO: implement when FruitSaveData is ported.
-                    Vec3 descPos(xPos, local_d0.y, local_d0.z);
+                    Vec3 descPos(xPos, -20.0f, 0.0f);
                     font->DrawStringSized(descFontSize * 0.8f, 0.0f, 0.0f,
                                      descStr, descPos,
                                      Colour(0xBD, 0, 0, descAlpha),
                                      3);
-                    Vec3 descPos2(xPos, local_d0.y, local_d0.z);
+                    Vec3 descPos2(xPos, 10.0f, 0.0f);
                     font->DrawStringSized(descFontSize * 0.9f, 0.0f, 0.0f,
                                      descStr, descPos2,
                                      Colour(255, 255, 255, descAlpha),
