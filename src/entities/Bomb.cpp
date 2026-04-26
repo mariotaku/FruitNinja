@@ -381,11 +381,16 @@ void Bomb::Update(float /*dt*/) {
         }
 
         // Physics — always runs in alive branch after countdown check.
+        // Binary Bomb::Update (0x001729fc): velocity uses scaledDt, but
+        // POSITION uses dtNorm (= scaledDt / DT_NORMALIZE = scaledDt * 60).
+        // The ×60 factor is the binary's pos-integration tuning fudge,
+        // identical to Fruit::Update's DAT_00177d00. Without it bombs
+        // drift roughly 1/60th the expected speed.
         if (m_bMovement) {
             vel += m_AccelForce * scaledDt;
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
-        pos += vel * scaledDt;
+        pos += vel * dtNorm;
         StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
         StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
 
@@ -410,12 +415,13 @@ void Bomb::Update(float /*dt*/) {
                 m_SpawnTimer = BOMBBLAST_INTERVAL;  // 0.05f (DAT_00172c9c)
             }
         } else {
-            // Menu-hit: same physics as alive branch (including accel growth).
+            // Menu-hit: same physics as alive branch (vel uses scaledDt,
+            // pos uses dtNorm). Critical for back-bomb fly-out animation.
             if (m_bMovement) {
                 vel += m_AccelForce * scaledDt;
                 AccelGrowth(vel, m_AccelForce, dtNorm);
             }
-            pos += vel * scaledDt;
+            pos += vel * dtNorm;
             StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
             StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
         }

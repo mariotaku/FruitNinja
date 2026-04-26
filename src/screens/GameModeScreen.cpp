@@ -13,6 +13,7 @@
 #include "hud/TutorialControl.h"
 #include "entities/FruitInfo.h"
 #include "entities/Fruit.h"
+#include "entities/Bomb.h"
 #include "asset/TextureManager.h"
 #include "audio/GameSound.h"
 #include "render/Renderer.h"
@@ -508,15 +509,19 @@ void GameModeScreen::QuitCallback() {
     // 2. Enter back-out state
     m_State = 0xe;
 
-    // 3. Fling back button's fruit piece (binary: detach + random vel).
-    // Binary uses RandFloat5_GameOverScreen2() (a [0,1) helper shared with
-    // DojoScreen::PlayCallback). Port substitutes rand()/RAND_MAX.
-    if (m_pBackButton && m_pBackButton->m_pFruitPiece) {
-        Fruit* fruit = m_pBackButton->m_pFruitPiece;
-        fruit->m_bDetached = 1;
+    // 3. Fling back button (binary: byte at +0x80 = 1, then random vel).
+    // The +0x80 byte is m_bDetached for Fruit / m_bMovement for Bomb.
+    // Falls back to m_pEntity since back-bomb's m_pFruitPiece is null.
+    if (m_pBackButton && m_pBackButton->m_pEntity) {
+        Entity* e = m_pBackButton->m_pEntity;
         float rx = (float)rand() / (float)RAND_MAX;
         float ry = (float)rand() / (float)RAND_MAX;
-        fruit->vel = Vec3(rx + 5.0f, -ry, 0.0f);
+        if (e->entityType == 0) {
+            static_cast<Fruit*>(e)->m_bDetached = true;
+        } else if (e->entityType == 1) {
+            static_cast<Bomb*>(e)->m_bMovement = 1;
+        }
+        e->vel = Vec3(rx + 5.0f, -ry, 0.0f);
     }
 
     // 4. Clear any active tutorial arrow
