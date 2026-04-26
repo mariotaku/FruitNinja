@@ -350,6 +350,13 @@ void Font::DrawString(float scale, float maxWidth, float z,
     // We extract TL/BR to derive the world-space scale + translate that
     // SetupQuadMatrix-style code expects, then DrawQuad with the glyph's
     // UV bounds.
+    // Font draw is always 2D; disable depth test so glyphs don't z-fight
+    // neighbouring HUD quads at the same z. We don't restore depth at the
+    // end -- callers that need depth back on (e.g. 3D scene) must
+    // glEnable(GL_DEPTH_TEST) themselves. Previously this function ended
+    // with an unconditional glEnable, which broke 2D HUD chains that
+    // drew further quads at z=0 after a font draw (they got rejected
+    // against the depth-buffered earlier quad).
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable(GL_DEPTH_TEST);
@@ -382,8 +389,6 @@ void Font::DrawString(float scale, float maxWidth, float z,
             tex->UnSet();
         }
     }
-
-    glEnable(GL_DEPTH_TEST);
 
     (void)z; (void)maxWidth;
 }
