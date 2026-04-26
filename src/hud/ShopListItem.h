@@ -59,10 +59,15 @@ public:
     void Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen);
 
     // vtable slot 6 (+0x18): Move override
-    // Binary 0x0015d9fc: sets pos.x/y/z from incoming Vec3.
-    void Move(float x, float y, float z) override {
-        pos.x = x; pos.y = y; pos.z = z;
-    }
+    // Binary 0x0015d9fc (ShopListItem::Move):
+    //   1. Sets pos.x/y/z from incoming Vec3.
+    //   2. Always copies pos into _pad2 (this+0x268):
+    //        *(Vec3*)(this+0x268) = pos
+    //   3. If m_pIconTex.IsValid():
+    //        *(float*)(this+0x268) += DAT_0015d474(35.2f) + m_Size.x(60.0f)
+    //        => _pad2.x = pos.x + 95.2f
+    // See docs/screens/shop-list-item-draw.md section 8 for full spec.
+    void Move(float x, float y, float z) override;
 
     // vtable slot 11 (+0x2C): Draw override -- renders the row
     // Binary 0x0015eb00, ~450 instructions, 5 Font::DrawString calls.
@@ -89,8 +94,13 @@ public:
     // Binary offset confirmed from ShopScreen::ClickedOnShopItem.
     float m_LockFlashAlpha;           // +0x264
 
-    // +0x268..+0x273: likely Vec3 for icon translate (not yet RE'd)
-    char _pad2[0x0c];                 // +0x268..+0x273
+    // +0x268..+0x273: Vec3 iconPos -- written by Move each frame.
+    // _pad2[0..3] = float x = pos.x + 95.2f (when m_pIconTex valid), else pos.x
+    // _pad2[4..7] = float y = pos.y
+    // _pad2[8..11] = float z = pos.z
+    // Binary: ShopListItem::Move @ 0x0015d1fc writes iconXOff = DAT_0015d474(35.2f) + m_Size.x(60.0f)
+    // Draw Part 5 reads *(float*)(this+0x268) as translate X.
+    char _pad2[0x0c];                 // +0x268..+0x273  (Vec3 iconPos, see Move)
 
     // +0x274: item icon texture SmartPtr (4 bytes on ARM32)
     // On x86_64: SmartPtr = 8 bytes + alignment gap. The ARM32 absolute offsets
