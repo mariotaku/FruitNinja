@@ -159,6 +159,13 @@ void GameInitialise() {
     game->pTutorialCtrl->Init();
     if (game->hud) game->hud->AddControl(game->pTutorialCtrl);
 
+    // Binary GameInit @ 0x0016cb2a: writes -1.0f to g_GameData+0x0c
+    // (m_TransitionTimer) immediately after the TutorialControl block.
+    // This is the seed value that puts UpdateMusic into the transition
+    // branch on its first eligible frame, so SongPlay("Music-menu") fires
+    // first instead of SongPlay("background"). See docs/systems/music-state.md.
+    game->m_TransitionTimer = -1.0f;
+
     // TODO: Steps 12-13: PowerUpManager, LeaderboardManager
 
     // Steps 16-21: Font::Load ×8
