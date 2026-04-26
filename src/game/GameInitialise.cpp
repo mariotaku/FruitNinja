@@ -128,6 +128,11 @@ void GameInitialise() {
     // GameSound — 32-slot pool backed by SDL2 audio.
     game->pGameSound = new Mortar::GameSound();
 
+    // Music: no boot-time SongPlay. The binary has no separate boot call;
+    // UpdateMusic (0x0016a68c) is the sole issuer of SongPlay. On the first
+    // frame after loading completes, UpdateMusic's slow-ramp path fires
+    // SongPlay("background"). See docs/systems/music-state.md -> Initial Seed Call.
+
     // TODO: Step 5: InitialiseData() — full InitialiseData call chain.
     // Step 14 of InitialiseData: ItemManager::GetInstance() + LoadItemData()
     // Binary: InitialiseData @ 0x0010b7ca, step 14 of 15.

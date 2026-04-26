@@ -27,7 +27,7 @@ Game::Game()
       dt(0), hud(nullptr),
       pCamera(nullptr),
       pSaveData(nullptr),
-      isFirstPlay1(false), isFirstPlay2(false),
+      m_bSoundOn(true), m_bMusicOn(true),
       field_0x88(0),
       mainScreen(nullptr),
       pTutorialCtrl(nullptr),

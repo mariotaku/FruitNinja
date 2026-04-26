@@ -106,6 +106,7 @@ Game-specific logic, screens, entities, and systems.
 - [systems/menu-flow.md](systems/menu-flow.md) — Screen hierarchy, callbacks, mode selection
 - [systems/save-system.md](systems/save-system.md) — FruitSaveData persistence, stat tracking
 - [systems/power-ups.md](systems/power-ups.md) — PowerUp struct, 4 modifier types, activation flow
+- [systems/music-state.md](systems/music-state.md) — UpdateMusic state machine: volume ramp, crossfade, preload arm logic, track IDs
 
 ### Game Struct Layouts
 - [structs/game.md](structs/game.md) — Game singleton, MortarGame vtable, FruitNinja app, GlesForm

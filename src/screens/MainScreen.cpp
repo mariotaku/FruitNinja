@@ -449,10 +449,10 @@ void MainScreen::Update(float dt) {
     // Position update (end of Update, all states)
     // Sound/music toggle texture swap
     if (pSoundToggle) {
-        pSoundToggle->m_Texture = TexId(game.soundEnabled ? m_TexSoundOn : m_TexSoundOff);
+        pSoundToggle->m_Texture = TexId(game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     }
     if (pMusicToggle) {
-        pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
+        pMusicToggle->m_Texture = TexId(game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     }
 
     // Compute the state-dependent "elapsedTime" / pause driver used by
@@ -732,7 +732,7 @@ void MainScreen::CreateToggles() {
     // Sound toggle: (216.0, 135.5, 0.0), fruitType=-1 (no fruit).
     // Size comes from the texture dimensions (TexSize fallback = 32×32).
     pSoundToggle = new MenuButton();
-    pSoundToggle->m_Texture = TexId(game.soundEnabled ? m_TexSoundOn : m_TexSoundOff);
+    pSoundToggle->m_Texture = TexId(game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
         [this]() { SoundCallback(); }, -1, Vec3(0,0,0), nullptr);
@@ -741,7 +741,7 @@ void MainScreen::CreateToggles() {
 
     // Music toggle: (176.0, 135.5, 0.0)
     pMusicToggle = new MenuButton();
-    pMusicToggle->m_Texture = TexId(game.musicEnabled ? m_TexMusicOn : m_TexMusicOff);
+    pMusicToggle->m_Texture = TexId(game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
         [this]() { MusicCallback(); }, -1, Vec3(0,0,0), nullptr);
@@ -845,17 +845,20 @@ void MainScreen::AboutCallback() {
 
 // Matches 0x0014af64
 void MainScreen::SoundCallback() {
-    game.soundEnabled = !game.soundEnabled;
+    game.m_bSoundOn = !game.m_bSoundOn;
     Mortar::SoundManager::GetInstance().SetSFXVolume(
-        game.soundEnabled ? SOUND_VOLUME_ON : 0.0f);
-    printf("MainScreen: Sound %s\n", game.soundEnabled ? "ON" : "OFF");
+        game.m_bSoundOn ? SOUND_VOLUME_ON : 0.0f);
+    printf("MainScreen: Sound %s\n", game.m_bSoundOn ? "ON" : "OFF");
 }
 
 // Matches 0x0014ac9c
 void MainScreen::MusicCallback() {
-    game.musicEnabled = !game.musicEnabled;
-    // Note: no direct music play/stop — just flips flag
-    printf("MainScreen: Music %s\n", game.musicEnabled ? "ON" : "OFF");
+    // Binary only flips the m_bMusicOn flag (+0x45); UpdateMusic (0x0016a68c)
+    // consults it and ramps SetMusicVolume up/down via its crossfade state
+    // machine. Do NOT add a SetMusicVolume call here -- the spec confirms the
+    // binary does not.
+    game.m_bMusicOn = !game.m_bMusicOn;
+    printf("MainScreen: Music %s\n", game.m_bMusicOn ? "ON" : "OFF");
 }
 
 // Matches 0x0014b010
