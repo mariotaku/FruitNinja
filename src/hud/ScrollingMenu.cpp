@@ -329,10 +329,12 @@ void ScrollingMenu::Update(float /*dt*/) {
     float closestDist = CLOSEST_SENTINEL;  // DAT_0015be10
     m_ClosestIdx = 0;                       // field76_0xbc reset
 
-    // Running layout cursor: starts at current scroll offset
-    // Layout cursor: scroll offset minus the menu's pos.y so items lay out
-    // relative to the menu's anchor in world coords (RE-confirmed).
-    float curY = m_Velocity.y - pos.y;
+    // Running layout cursor (binary: _Stack_68 = pos - velocity).
+    // Earlier port had `m_Velocity.y - pos.y` (sign flipped); the binary's
+    // `_Vector3<float>::operator-(out, pos)` call carries m_Velocity in
+    // r2 as a hidden third register and computes `out = pos - velocity`.
+    // See docs/systems/y-axis-convention.md Section 1.
+    float curY = pos.y - m_Velocity.y;
 
     for (int i = 0; i < (int)m_Items.size(); i++) {
         ScrollingMenuItem* item = m_Items[(size_t)i];
@@ -350,7 +352,11 @@ void ScrollingMenu::Update(float /*dt*/) {
                 // directly so the post-release drift is TOWARD the closest
                 // item (sign-preserving). Earlier port took fabs which
                 // made the snap always push offset positive (runaway).
-                m_SnapDist = curY - m_Velocity.y;
+                // Binary: fVar18 = _Stack_68.y - (pos.y - m_Velocity.y)
+                //       = curY - initial_cursor_y
+                // Earlier port had `curY - m_Velocity.y` (missing pos.y).
+                // See docs/systems/y-axis-convention.md Section 5/Change 5.
+                m_SnapDist = curY - (pos.y - m_Velocity.y);
                 closestDist = distToCenter;
             }
         } else if (m_DragTargetIdx == i) {
@@ -417,21 +423,18 @@ void ScrollingMenu::Update(float /*dt*/) {
         }
     }
 
-    // --- Phase 7: scroll bounds + spring-back ---
-    // Port convention (after localized Y-flip in Phase 3B):
-    //   offset = 0       -> top of list (initial)
-    //   offset > 0       -> scrolled toward bottom (lower items visible)
-    //   offset < 0       -> overscroll past top (spring to 0)
-    //   offset > maxOff  -> overscroll past bottom (spring to maxOff)
-    //   maxOff = m_TotalHeight - m_Height (= 17*80 - 240 = 1120 for shop)
-    // Inequalities are flipped from the binary's spec (which has TOP=0,
-    // BOTTOM=negative under Y-down). Math is the mirror image.
+    // --- Phase 7: scroll bounds + spring-back (binary-faithful) ---
+    // Binary convention (RE-confirmed via docs/systems/y-axis-convention.md):
+    //   offset > 0                   -> past TOP, spring to 0
+    //   offset in [totalScrollH, 0]  -> valid scroll range
+    //   offset < totalScrollH        -> past BOTTOM, spring to totalScrollH
+    //   totalScrollH = m_Height - m_TotalHeight (NEGATIVE when content > viewport)
     float offset = m_Velocity.y;
-    float maxOff = m_TotalHeight - m_Height;
-    if (maxOff < 0.0f) maxOff = 0.0f;  // content shorter than viewport
+    float totalScrollH = m_Height - m_TotalHeight;
+    if (totalScrollH > 0.0f) totalScrollH = 0.0f;  // content shorter than viewport
 
-    if (offset >= 0.0f || m_DragTargetIdx >= 0) {
-        if (offset <= maxOff || m_DragTargetIdx >= 0) {
+    if (offset <= 0.0f || m_DragTargetIdx >= 0) {
+        if (offset >= totalScrollH || m_DragTargetIdx >= 0) {
             if (m_TouchId != -1) return;
             float vel = m_Velocity.y;
             bool velSmall = (vel < 0.0f) ? (vel >= VEL_NEAR_ZERO_LO)
@@ -440,10 +443,10 @@ void ScrollingMenu::Update(float /*dt*/) {
             m_Velocity.y = offset + snapDist * VEL_NEAR_ZERO_HI;
             return;
         }
-        // offset > maxOff -> past bottom, spring toward maxOff
-        m_Velocity.y = offset + (maxOff - offset) * SPRING_FWD_COEF;
+        // offset < totalScrollH -> past bottom, spring toward totalScrollH
+        m_Velocity.y = offset + (totalScrollH - offset) * SPRING_FWD_COEF;
     } else {
-        // offset < 0 -> past top, spring toward 0
+        // offset > 0 -> past top, spring to 0
         m_Velocity.y = offset * SPRING_BACK_COEF;
     }
 
