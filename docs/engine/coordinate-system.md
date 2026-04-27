@@ -157,6 +157,125 @@ The Bada binary needs the screen-rotation matrix because its framebuffer is port
 
 This is why MenuButton positions in the range `(|X| ≤ 240, |Y| ≤ 160)` work directly in a centred-at-0 ortho without any rotation. The 90° rotation is a Bada-specific portrait→landscape framebuffer transform, orthogonal to the coordinate system of the game logic.
 
+> **Caveat — applies to positions only, NOT rotation axes.** See the [Rotation-axis discrepancy](#rotation-axis-discrepancy-2026-04-27) section below.
+
+<!-- Analysed: 2026-04-27T13:50, REVISED 2026-04-27T19:30 -->
+
+## Rotation-axis discrepancy (2026-04-27, revised)
+
+> **Revision note 2026-04-27T19:30**: an earlier draft of this section claimed the binary's `RotX44` / `RotZ44` post-multiply by `Rot_std(−α)` and that the bomb's "wrong axis" was caused by the missing `m_ScreenRotationMatrix` (Bug 3). Both claims were wrong:
+>
+> 1. **Direct disassembly of `_Matrix44::RotX44/Y44/Z44` shows they all PRE-multiply** the matrix by the standard CCW rotation `Rot_std(+α)`. The earlier re-analyst confused row-iteration with column-iteration in the Ghidra decomp (`data[col][row]` vs `data[row][col]`).
+> 2. **`m_ScreenRotationMatrix` is real but irrelevant for the port.** The binary's full pipeline is `R_screen · P_ortho · V · M` rendered into a portrait framebuffer, then displayed via 90° device rotation; the net world-axis-to-user-screen mapping is **identical** to the port's `P_ortho · V · M` rendered directly to a landscape window. So R_screen does not need to be applied in the port.
+>
+> The remaining real bug is that the port's `RotX44/Y44/Z44` are **post-multiplications**, while the binary's are **pre-multiplications**. For the bomb's `Rx · Ry · Rz` chain this produces a different composed rotation, swapping the visible roles of `m_RotX` and `m_RotY`. Bug 2 (`OrthoW` cell swap) remains valid as documented below; Bug 1 has been re-stated correctly.
+
+### Bug 1 (revised) — `RotX44/Y44/Z44` are pre-multiplications, not post
+
+Binary `_Matrix44::RotX44` @ `0x00172f58` decomp (Ghidra `data[col][row]` indexing):
+```c
+fVar5..fVar8 = data[0..3][2]   // ROW 2 elements (m[2], m[6], m[10], m[14])
+fVar1..fVar4 = data[0..3][1]   // ROW 1 elements
+new data[c][2] = fVar(c+5)*cos + fVar(c+1)*sin   // new row 2 = sin*row1 + cos*row2
+new data[c][1] = fVar(c+1)*cos - fVar(c+5)*sin   // new row 1 = cos*row1 - sin*row2
+```
+
+Iterates over rows (transforming entire rows 1 and 2 across all columns). This is the canonical **pre-multiplication** of the matrix by the standard `RotX_std(+α)`:
+
+```
+[ 1   0    0   0 ]
+[ 0  cos -sin  0 ]
+[ 0  sin  cos  0 ]
+[ 0   0    0   1 ]
+```
+
+Equivalent disassembly + analysis for `RotY44` @ `0x00172fdc` and `RotZ44` @ `0x00144958` confirms identical pre-multiply convention with standard `RotY_std(+α)` and `RotZ_std(+α)`.
+
+The port (before this revision) iterated over **columns** (transforming columns 1, 2 of the matrix), which is the **post-multiplication** by `Rot_std(±α)`. For an isolated single-rotation call, post-mul is just a different convention; for a chain (bomb's `Rx·Ry·Rz` followed by `Scale` and `Translate`), pre-mul vs post-mul produces **different composed rotations**:
+
+| Convention | Bomb's draw chain composes to |
+|---|---|
+| Binary (pre-mul) | `M = Rz · Ry · Rx`. Apply to `v`: rotate by Rx first, then Ry, then Rz. |
+| Old port (post-mul) | `M = Rx · Ry · Rz` (with mixed sign conventions for `Y`). Apply to `v`: rotate by Rz first, then Ry, then Rx. |
+
+For the bomb's mesh `+Z` (long axis with fuse) at `m_RotX = m_RotY = 0`:
+
+- Binary: `Rx(−90°) · v_+Z = (0, +1, 0)` (long axis points UP world). Then Ry(0)/Rz(0) leave it fixed. With α_Z growing, Rz pinwheels the (0, +1, 0) vector in the world XY plane → visible as in-plane pinwheel of the bomb's silhouette.
+- Old port: Rz(α_Z) applied first to mesh +Z is a no-op (Z-rotation fixes Z). Ry(α_Y) sweeps `+Z` to `(sin α_Y, 0, cos α_Y)`. Rx(−90°) on that → `(sin α_Y, cos α_Y, 0)`. So the **long axis sweeps with α_Y (m_RotX) instead of α_Z (m_RotY)** — m_RotX (the slow wobble) drives the pinwheel in the port; m_RotY does nothing visible.
+
+This is the user-reported "rotation around wrong axis": the visible spin is driven by m_RotX in the port (slow wobble) instead of m_RotY (the main spin), so the perceived spin is much slower and tied to a different parameter than the binary intends.
+
+### Fix
+
+Rewrite `RotX44/Y44/Z44` in `src/engine/math/Matrix44.h` to **iterate over columns** (mixing rows 0/1/2 within each column), matching the binary's pre-multiply convention. The signature stays `(sinA, cosA)`. Each function is now equivalent to `M_new = Rot_std(+α) · M_old`.
+
+### Bug 2 — `OrthoW` `m[12]` / `m[13]` formulas are swapped
+
+Binary `_Matrix44::OrthoW` @ `0x0019e7a8` is **standard GL ortho**. Disassembly trace (ARM AAPCS-VFP: s0=top, s1=bottom, s2=left, s3=right):
+
+```
+m[0]  = 2 / (right − left)              X scale, uses R/L
+m[5]  = 2 / (top − bottom)              Y scale, uses T/B
+m[10] = 1 / (far − near)                Z scale
+m[12] = −(right + left) / (right−left)  X centring, uses R/L
+m[13] = −(top + bottom) / (top−bottom)  Y centring, uses T/B
+m[14] = near / (near − far)             Z centring
+```
+
+Port `src/engine/math/Matrix44.h:29-30`:
+```cpp
+out.m[12] = -(top + bottom) * invTB;    // BUG — should pair with R/L using invRL
+out.m[13] = -(right + left) * invRL;    // BUG — should pair with T/B using invTB
+```
+
+The two centring cells are swapped, **and** each pairs with the wrong inverse factor. Latent: with the symmetric ortho `(160, −160, −240, 240)` both numerators are 0, so today the bug is invisible. Will silently corrupt any non-symmetric ortho call.
+
+### Bug 3 (DISMISSED) — `m_ScreenRotationMatrix` is real but does not need to be applied in the port
+
+Binary `MatrixManager::_UploadCurrentMatrices` @ `0x0019e2b4` left-multiplies the projection by `m_ScreenRotationMatrix` (`DisplayManager+0x54`, set in `DisplayManagerBada::BeginFrame` @ `0x0019dfec`). Direct read of the 16 float writes shows the matrix is `RotZ_std(−90°)` (CW 90° on clip-space `(vx, vy) → (vy, −vx)`) — verified by reading the literal float pattern at `this+0x54..+0x90` (`m[0]=0`, `m[1]=−1`, `m[4]=+1`, `m[5]=0`, identity in Z/W).
+
+However: in the binary, this rotation compensates for the **portrait framebuffer + 90° device rotation** that the user views the game through. The user's net world-axis-to-landscape-pixel mapping is:
+
+- World `+X` → landscape `+X` (right)
+- World `+Y` → landscape `+Y` (up)
+- World `+Z` → out of screen
+
+In the port, with no R_screen and no portrait-to-landscape device rotation, but rendering directly to a landscape window with the same `P_ortho`, the world-axis-to-landscape-pixel mapping is **identical**. Verified empirically by tracing `Play button at (16, −66)` → landscape pixel `(256, 226)` in both pipelines (binary via R_screen + portrait fb + CCW device rotation; port via direct landscape ortho).
+
+So **applying R_screen in the port (3a) is incorrect** — it adds an extra 90° rotation that the binary does not have in its user view. Confirmed empirically: a brief test commit (reverted as `79763fe`) added R_screen to the port's `SetupOrtho` and the menu rendered visibly rotated 90°.
+
+### Bomb-specific worked example (revised — pre-mul fix)
+
+`Bomb::Draw` chain in the binary (pre-multiply, applied right-to-left): `M = Rz(m_RotY·0xB6) · Ry(m_RotX·0xB6) · Rx(0xBFF4)`, with `0xBFF4 ≈ −90°` and `m_RotX ANGLE_SCALE = 0xB6 = 182` (1° per `m_RotX` unit).
+
+Mesh long axis = local `+Z` (verified from `docs/model_gallery/models.json`: bbox `Z=[−47.4, +78.3]`, fuse tip at `+Z`).
+
+For mesh `+Z = (0, 0, 1)`:
+
+1. `Rx(−90°)`: rotates `+Z → +Y` world (long axis → UP). Confirmed via right-hand rule: `Rx(−α)` rotates `+Z` toward `+Y`.
+2. `Ry(α_Y)`: rotates around world Y; long axis `(0, +1, 0)` is fixed (Y-axis rotation fixes the Y component).
+3. `Rz(α_Z)`: rotates around world Z; sweeps `(0, +1, 0)` to `(−sin α_Z, cos α_Z, 0)` — pinwheel in world XY plane.
+
+Result: long axis pinwheels with `α_Z = m_RotY·0xB6`. The fuse traces a CCW circle in the screen plane as `m_RotY` accumulates.
+
+**Old port** (post-multiply, before this revision): chain composed as `M = Rx · Ry · Rz` (port's post-mul reverses the effective order). For mesh `+Z`:
+
+1. `Rz(α_Z)`: Z-rotation fixes Z axis → `+Z` stays `+Z`.
+2. `Ry(α_Y)`: rotates `+Z` around world Y → `(sin α_Y, 0, cos α_Y)`.
+3. `Rx(−90°)`: rotates that → `(sin α_Y, cos α_Y, 0)`.
+
+Result: long axis pinwheels with `α_Y = m_RotX·0xB6` instead. **The port's bomb pinwheels via `m_RotX` (the slow wobble) instead of `m_RotY` (the main spin)** — perceived as much slower spin and tied to the wrong parameter.
+
+### Fix plan (revised)
+
+1. **Rewrite `RotX44/Y44/Z44` to pre-multiply** (`src/engine/math/Matrix44.h:88-128`). Each function iterates over columns mixing rows 0/1/2 (vs old code which iterated over rows mixing columns) → equivalent to `M_new = Rot_std(+α) · M_old`. Restores the binary's effective composition order.
+
+2. **Fix OrthoW m[12] / m[13] swap** (`src/engine/math/Matrix44.h:29-30`). Latent — no visible change today, but binary-faithful and avoids future drift if any caller passes an off-centre ortho. (Already applied.)
+
+3. ~~**R_screen application**~~ — DISMISSED. Port's `P_ortho · V · M` net mapping already matches binary's `R_screen · P_ortho · V · M` (landscape pixel-equivalent) due to the framebuffer / device-rotation cancellation in the binary's user view.
+
+After Fix 1 (pre-multiply rewrite), the bomb's draw chain composes the same way as the binary, including the `m_RotY` → world-Z spin axis. The visible spin axis should then match the binary exactly.
+
 ## See Also
 
 - [`camera.md`](camera.md) — `MortarCamera` / `FruitCamera` struct layouts and method addresses
