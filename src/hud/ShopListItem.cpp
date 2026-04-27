@@ -87,53 +87,49 @@ void ShopListItem::Move(float x, float y, float z) {
         iconPos[0] += 35.2f + m_Size.x;  // DAT_0015d474(35.2f) + m_Size.x(60.0f) = 95.2f
     }
 
-    // Step 4: per-frame alpha ramps. Binary uses Game.dt directly (no
-    // clamping for negative dt). Port mirrors the ARM idiom "if (cur +
-    // dt*delta > 0) clamp to [0, 1] else 0".
+    // Step 4: per-frame alpha ramps. Binary's two alphas are at offsets
+    // +0x25C..+0x264 (4 bytes apart in the decomp's `this[N].base.field_0xXX`
+    // syntax). Mapping verified by elimination + visible behaviour:
+    //
+    //   - m_NewItemAlpha  (+0x25C) ramps based on parent ScrollingMenu's
+    //     `field_0x3c` byte (some "list active" gate). Port has no clean
+    //     accessor for that flag; left out of Move so the new-item badge
+    //     keeps its Create-time fade.
+    //   - m_SelectedAlpha (+0x260) ramps based on ItemManager::IsEquipped:
+    //     the equipped row's "selected_sml" ring fades to 1; non-equipped
+    //     rows fade to 0. This is the badge the user sees -- without the
+    //     animation it sticks at the value Create assigned, so changing
+    //     equipment leaves the old ring visible forever.
+    //   - m_CostAlpha (+0x280) is NOT touched by binary Move. Port animates
+    //     it locally based on whether this row is the centered selection
+    //     so the description-text Part 7 fade tracks the user's scroll.
     Game* g = Game::GetInstance();
     if (!g) return;
     const float dt   = g->dt;
     const float kRate = 5.0f;
 
-    // 4a: m_LockFlashAlpha -- ramps up while parent ScrollingMenu is in
-    // its active visibility state (binary: parent->field_0x3c == 0).
-    // Port doesn't have a clean accessor for that flag; use a permissive
-    // "always ramping toward 1 while drawn" stub. Refine later.
-    {
-        float cur = m_LockFlashAlpha;
-        float delta = +kRate;  // always ramping while drawn
+    auto rampAlpha = [&](float cur, bool up) -> float {
+        float delta = up ? +kRate : -kRate;
         float candidate = cur + dt * delta;
-        if (candidate > 0.0f) {
-            m_LockFlashAlpha = (candidate > 1.0f) ? 1.0f : candidate;
-        } else {
-            m_LockFlashAlpha = 0.0f;
-        }
+        if (candidate <= 0.0f) return 0.0f;
+        if (candidate >= 1.0f) return 1.0f;
+        return candidate;
+    };
+
+    // 4a: m_SelectedAlpha -- equipped indicator (binary +0x260, IsEquipped-driven).
+    {
+        ItemManager* im = ItemManager::GetInstance();
+        bool equipped = (im && m_pItemInfo && im->IsEquipped(m_pItemInfo) != 0);
+        m_SelectedAlpha = rampAlpha(m_SelectedAlpha, equipped);
     }
 
-    // 4b: m_CostAlpha -- gates the description-text Draw Part 7.
-    // Visible effect: the SELECTED (centered) row's description fades
-    // in on the right-side dialog box; as the user scrolls and the
-    // selection changes, the previous row fades its description out
-    // and the new row fades in.
-    //
-    // Empirical mapping: the binary's Move animates two alphas; the
-    // one tied to ItemManager::IsEquipped is m_LockFlashAlpha (above),
-    // and the description-text alpha follows whether this row is the
-    // ShopScreen's m_pSelectedItem. Comparing against the back-pointer
-    // is cleanest; fall back to "always ramping up" if back-ptr unset.
+    // 4b: m_CostAlpha -- description-text gate (port-only animation).
     {
         bool isSelected = true;
         if (m_pShopScreen) {
             isSelected = (m_pShopScreen->GetSelectedItem() == this);
         }
-        float cur = m_CostAlpha;
-        float delta = isSelected ? +kRate : -kRate;
-        float candidate = cur + dt * delta;
-        if (candidate > 0.0f) {
-            m_CostAlpha = (candidate > 1.0f) ? 1.0f : candidate;
-        } else {
-            m_CostAlpha = 0.0f;
-        }
+        m_CostAlpha = rampAlpha(m_CostAlpha, isSelected);
     }
 }
 
