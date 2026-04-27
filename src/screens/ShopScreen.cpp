@@ -199,7 +199,18 @@ ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     , game(g)
     , m_TexInst()
     , m_TransitionAlpha(0.0f)
-    , m_LayerFlagsAlt(0)
+    // Binary ShopScreen ctor at 0x0015cdac does NOT initialize +0x80
+    // (m_LayerFlagsAlt). Heap memory there is whatever the allocator
+    // returns. Port previously initialized it to 0, which combined with
+    // Update's `if (splats == 0) m_LayerFlagsAlt = 0x40` gate produced a
+    // deterministic failure: when the user enters Shop with splats still
+    // alive from Dojo's slice (which lasts ~4-6s and overlaps the ~0.5s
+    // state-0 transition), m_LayerFlagsAlt stayed at 0, the Update sync
+    // `m_LayerFlags = m_LayerFlagsAlt` made flags=0, HUD::Draw filtered
+    // ShopScreen out, and the BG slide-in animation never rendered.
+    // Default to the active drawable layer (0x40) so HUD::Draw dispatches
+    // ShopScreen during state-0 even before Update has run.
+    , m_LayerFlagsAlt(0x40)
     , m_pBuyButton(nullptr)
     , m_BuyDelay(0.0f)
     , m_pEquipButton(nullptr)
