@@ -15,6 +15,7 @@
 #include "engine/util/StringHash.h"
 #include "engine/MenuBackground.h"
 #include "entities/SlashEntity.h"
+#include "screens/ShopScreen.h"
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstdlib>
@@ -125,7 +126,7 @@ void ItemManager::LoadItemData() {
                             item->m_bSeen = false;   // "new item" badge
                             item->m_Cost = -1;       // make it free
                             // ShopScreen::NewItem() — sets ShopScreen new-item float flag.
-                            // TODO: call ShopScreen::NewItem() when ShopScreen is wired.
+                            ShopScreen::s_NewItemAlpha = 1.0f;
                         }
                     } else {
                         // Achievement already unlocked → auto-unlock item
