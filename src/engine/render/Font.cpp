@@ -217,68 +217,64 @@ void Font::DrawString(float scale, float maxWidth, float z,
     // In lineHeight-normalized vertex space, one line = 1.0 unit exactly.
     const float normLineH = 1.0f;
 
-    // --- Horizontal alignment: cursor starts shifted left by text width ---
-    // For wrapped text we need to re-measure each rendered line and apply
-    // the alignment offset PER LINE -- otherwise wrapped lines (which can
-    // be much shorter than the full text) all share the offset that was
-    // computed for the whole text and end up visually misaligned (e.g.,
-    // a centered first line with shorter wrapped lines that drift right).
+    // --- Horizontal alignment: per-line offset inside the wrap box ---
     //
-    // Pre-pass: walk the text using the same word-wrap rule as the render
-    // loop and record the starting offset in normalized units for each
-    // line break. We index by `p - text` so the render loop can look up
-    // the line's startX as soon as it begins emitting glyphs from that
-    // pointer.
-    auto measureLine = [&](const char* lineBegin, const char* lineEnd) -> float {
+    // Binary Font_DrawString @ 0x00198e44 anchors the wrap box's LEFT
+    // edge at pos.x with width maxWH.x (= the maxWidth arg). The flag
+    // bits 0..1 select per-line offset rules (verified at
+    // 0x00198eb4..0x00198f7c, halving step at 0x00198f72):
+    //
+    //   alignment & 3 == 0  (LEFT)         lineOffset = 0
+    //   alignment & 3 == 1  (CENTER alone) special wrap-aware mode via
+    //                                       bit 0x10 -- not used by any
+    //                                       caller in the shipped binary
+    //                                       so we fall back to the same
+    //                                       formula as 0x3 here.
+    //   alignment & 3 == 2  (RIGHT-IN-BOX) lineOffset = normWrap - lineLen
+    //   alignment & 3 == 3  (CENTER-IN-BOX) lineOffset = (normWrap - lineLen) * 0.5
+    //
+    // For maxWidth == 0 the formulas degenerate to the port's previous
+    // pos.x-centred / pos.x-right-edged behaviour, so non-wrapping
+    // callers (shop title, cost text, etc.) keep working unchanged.
+    //
+    // The offset is recomputed AT EVERY \n and at every word-wrap point
+    // because each line's lineLen differs (binary calls GetLineLength
+    // inside the line-feed handler at LAB_00199884).
+    const int   horizAlign = alignment & 0x3;
+    const float normWrap   = (maxWidth > 0.0f) ? (maxWidth / scale) : 0.0f;
+
+    auto measureLineNorm = [&](const char* p) -> float {
         float w = 0.0f;
-        for (const char* q = lineBegin; q < lineEnd; q++) {
-            uint8_t ch = (uint8_t)*q;
-            // Skip color tags exactly like the main render loop.
+        for (const char* q = p; *q && *q != '\n'; q++) {
             if (*q == '[') {
-                if (*(q + 1) == '/' && *(q + 2) == ']') {
-                    q += 2; continue;
-                }
-                const char* end = (q + 1 < lineEnd) ? (const char*)memchr(q + 1, ']', lineEnd - q - 1) : nullptr;
+                if (*(q + 1) == '/' && *(q + 2) == ']') { q += 2; continue; }
+                const char* end = strchr(q + 1, ']');
                 if (end && end - q == 7) { q = end; continue; }
             }
+            if (normWrap > 0.0f && *q == ' ') {
+                float wordW = 0.0f;
+                for (const char* wp = q + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
+                    uint8_t wch = (uint8_t)*wp;
+                    if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
+                }
+                if (w + wordW > normWrap) break;
+            }
+            uint8_t ch = (uint8_t)*q;
             if (ch < 256) w += (float)m_Glyphs[ch].xadvance * invLH;
         }
         return w;
     };
 
-    auto computeStartX = [&](float lineWidth) -> float {
-        if (alignment & FONT_ALIGN_CENTER) return -lineWidth * 0.5f;
-        if (alignment & FONT_ALIGN_RIGHT)  return -lineWidth;
-        return 0.0f;
+    auto computeLineOffset = [&](const char* p) -> float {
+        if (horizAlign == 0) return 0.0f;
+        float lineLen = measureLineNorm(p);
+        if (horizAlign == 0x2) return normWrap - lineLen;
+        // 0x1 and 0x3 both centre-in-box (binary 0x1 falls through the
+        // halving step too -- bit 0 is the "halve" flag).
+        return (normWrap - lineLen) * 0.5f;
     };
 
-    // Initial line starts at p=text. If wrap forces a break we'll update
-    // these on the fly when the render loop hits the wrap point.
-    float startX = 0.0f;
-    {
-        const char* lineEnd = text;
-        if (maxWidth > 0) {
-            float normMax = maxWidth / scale;
-            float runX = 0.0f;
-            for (const char* p = text; *p; p++) {
-                if (*p == '\n') { lineEnd = p; break; }
-                if (*p == ' ') {
-                    float wordW = 0;
-                    for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
-                        uint8_t wch = (uint8_t)*wp;
-                        if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
-                    }
-                    if (runX + wordW > normMax) { lineEnd = p; break; }
-                }
-                uint8_t ch = (uint8_t)*p;
-                if (ch < 256) runX += (float)m_Glyphs[ch].xadvance * invLH;
-            }
-            if (*lineEnd == '\0') lineEnd = text + strlen(text);
-            startX = computeStartX(measureLine(text, lineEnd));
-        } else {
-            startX = computeStartX(MeasureWidth(scale, text));
-        }
-    }
+    float lineOffset = computeLineOffset(text);
 
     // --- Vertical alignment (flags & 0xC): shift startY in normalized units ---
     // Binary at 0x00199920-0x00199964 issues TranslateLocal with a POSITIVE
@@ -299,40 +295,18 @@ void Font::DrawString(float scale, float maxWidth, float z,
     // Batch vertices per page
     std::vector<std::vector<QUADCUSTOMVERTEX>> pageVerts(m_PageCount);
 
-    float cursorX = startX;
+    // cursorX advances through the line; lineOffset is the per-line
+    // shift inside the wrap box. Per-glyph X = pos.x + scale * (cursorX
+    // + lineOffset + glyph.xoffset). On line break (\n or wrap), reset
+    // cursorX to 0 and recompute lineOffset for the new line.
+    float cursorX = 0.0f;
     float cursorY = startY;
     uint32_t currentColour = colour.PlatformColour();
 
-    // Helper: re-compute startX for a fresh line beginning at `p` so
-    // CENTER / RIGHT alignment apply per-line.
-    auto recomputeStartXFor = [&](const char* p) -> float {
-        const char* lineEnd = p;
-        if (maxWidth > 0) {
-            float normMax = maxWidth / scale;
-            float runX = 0.0f;
-            for (const char* q = p; *q; q++) {
-                if (*q == '\n') { lineEnd = q; break; }
-                if (*q == ' ') {
-                    float wordW = 0;
-                    for (const char* wp = q + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
-                        uint8_t wch = (uint8_t)*wp;
-                        if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
-                    }
-                    if (runX + wordW > normMax) { lineEnd = q; break; }
-                }
-                uint8_t ch = (uint8_t)*q;
-                if (ch < 256) runX += (float)m_Glyphs[ch].xadvance * invLH;
-            }
-            if (*lineEnd == '\0') lineEnd = p + strlen(p);
-            return computeStartX(measureLine(p, lineEnd));
-        }
-        return computeStartX(MeasureWidth(scale, p));
-    };
-
     for (const char* p = text; *p; p++) {
         if (*p == '\n') {
-            startX = recomputeStartXFor(p + 1);
-            cursorX = startX;
+            lineOffset = computeLineOffset(p + 1);
+            cursorX = 0.0f;
             cursorY -= normLineH;
             continue;
         }
@@ -363,15 +337,14 @@ void Font::DrawString(float scale, float maxWidth, float z,
         // Word wrap: maxWidth is in world units; divide by scale to get
         // normalized threshold so we can compare against cursor (normalized).
         if (maxWidth > 0 && *p == ' ') {
-            float normMax = maxWidth / scale;
             float wordW = 0;
             for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
                 uint8_t wch = (uint8_t)*wp;
                 if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
             }
-            if (cursorX - startX + wordW > normMax) {
-                startX = recomputeStartXFor(p + 1);  // skip the space, start next word
-                cursorX = startX;
+            if (cursorX + wordW > normWrap) {
+                lineOffset = computeLineOffset(p + 1);  // skip the space
+                cursorX = 0.0f;
                 cursorY -= normLineH;
                 continue;
             }
@@ -398,7 +371,7 @@ void Font::DrawString(float scale, float maxWidth, float z,
         //
         // UVs use scaleW / scaleH (atlas-pixel coords / atlas dimensions).
         // z = DAT_00199a94 = 0.0f for all vertices (binary constant).
-        const float cx = cursorX + ((float)g.xoffset + (float)g.width  * 0.5f) * invLH;
+        const float cx = cursorX + lineOffset + ((float)g.xoffset + (float)g.width  * 0.5f) * invLH;
         const float cy = cursorY - ((float)g.yoffset + (float)g.height * 0.5f) * invLH;
         const float hw = (float)g.width  * 0.5f * invLH;
         const float hh = (float)g.height * 0.5f * invLH;
