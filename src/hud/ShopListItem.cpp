@@ -372,16 +372,24 @@ void ShopListItem::Draw() {
             default: costStr = nullptr; break;
         }
 
-        // Width cache (lazy): if s_costWidths[0] == 0.0f, measure all 4 strings.
-        // Binary: measures all 4 static costStr pointers * costScale.
-        // Port: measure the single cost string we have (stub).
-        if (s_costWidths[0] == 0.0f && costStr && font) {
-            float w = font->MeasureWidth(1.0f, costStr);
-            float cw = w * costScale;
-            s_costWidths[0] = cw;
-            s_costWidths[1] = cw;
-            s_costWidths[2] = cw;
-            s_costWidths[3] = cw;
+        // Width cache (lazy): binary loop @ 0x0015ed3a measures EACH of the
+        // 4 per-type category labels into static_block[+0x90 + i*4]. Port
+        // mirrors that so the selected_sml badge in Part 4 is positioned
+        // relative to THIS row's category label width, not whichever
+        // label happened to be rendered first.
+        if (s_costWidths[0] == 0.0f && font) {
+            const char* k[4] = {
+                Localisation::Get("CODE_SHOP_BLADE"),
+                Localisation::Get("CODE_SHOP_BACKGROUND"),
+                Localisation::Get("CODE_SHOP_FULL_VERSION"),
+                "",
+            };
+            for (int i = 0; i < 4; i++) {
+                if (k[i] && k[i][0] != '\0') {
+                    float w = font->MeasureWidth(1.0f, k[i]);
+                    s_costWidths[i] = w * costScale;
+                }
+            }
         }
 
         if (costStr) {
