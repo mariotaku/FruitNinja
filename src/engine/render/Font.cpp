@@ -218,12 +218,66 @@ void Font::DrawString(float scale, float maxWidth, float z,
     const float normLineH = 1.0f;
 
     // --- Horizontal alignment: cursor starts shifted left by text width ---
-    // MeasureWidth now returns normalized units.
+    // For wrapped text we need to re-measure each rendered line and apply
+    // the alignment offset PER LINE -- otherwise wrapped lines (which can
+    // be much shorter than the full text) all share the offset that was
+    // computed for the whole text and end up visually misaligned (e.g.,
+    // a centered first line with shorter wrapped lines that drift right).
+    //
+    // Pre-pass: walk the text using the same word-wrap rule as the render
+    // loop and record the starting offset in normalized units for each
+    // line break. We index by `p - text` so the render loop can look up
+    // the line's startX as soon as it begins emitting glyphs from that
+    // pointer.
+    auto measureLine = [&](const char* lineBegin, const char* lineEnd) -> float {
+        float w = 0.0f;
+        for (const char* q = lineBegin; q < lineEnd; q++) {
+            uint8_t ch = (uint8_t)*q;
+            // Skip color tags exactly like the main render loop.
+            if (*q == '[') {
+                if (*(q + 1) == '/' && *(q + 2) == ']') {
+                    q += 2; continue;
+                }
+                const char* end = (q + 1 < lineEnd) ? (const char*)memchr(q + 1, ']', lineEnd - q - 1) : nullptr;
+                if (end && end - q == 7) { q = end; continue; }
+            }
+            if (ch < 256) w += (float)m_Glyphs[ch].xadvance * invLH;
+        }
+        return w;
+    };
+
+    auto computeStartX = [&](float lineWidth) -> float {
+        if (alignment & FONT_ALIGN_CENTER) return -lineWidth * 0.5f;
+        if (alignment & FONT_ALIGN_RIGHT)  return -lineWidth;
+        return 0.0f;
+    };
+
+    // Initial line starts at p=text. If wrap forces a break we'll update
+    // these on the fly when the render loop hits the wrap point.
     float startX = 0.0f;
-    if (alignment & FONT_ALIGN_CENTER) {
-        startX -= MeasureWidth(scale, text) * 0.5f;
-    } else if (alignment & FONT_ALIGN_RIGHT) {
-        startX -= MeasureWidth(scale, text);
+    {
+        const char* lineEnd = text;
+        if (maxWidth > 0) {
+            float normMax = maxWidth / scale;
+            float runX = 0.0f;
+            for (const char* p = text; *p; p++) {
+                if (*p == '\n') { lineEnd = p; break; }
+                if (*p == ' ') {
+                    float wordW = 0;
+                    for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
+                        uint8_t wch = (uint8_t)*wp;
+                        if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
+                    }
+                    if (runX + wordW > normMax) { lineEnd = p; break; }
+                }
+                uint8_t ch = (uint8_t)*p;
+                if (ch < 256) runX += (float)m_Glyphs[ch].xadvance * invLH;
+            }
+            if (*lineEnd == '\0') lineEnd = text + strlen(text);
+            startX = computeStartX(measureLine(text, lineEnd));
+        } else {
+            startX = computeStartX(MeasureWidth(scale, text));
+        }
     }
 
     // --- Vertical alignment (flags & 0xC): shift startY in normalized units ---
@@ -249,8 +303,35 @@ void Font::DrawString(float scale, float maxWidth, float z,
     float cursorY = startY;
     uint32_t currentColour = colour.PlatformColour();
 
+    // Helper: re-compute startX for a fresh line beginning at `p` so
+    // CENTER / RIGHT alignment apply per-line.
+    auto recomputeStartXFor = [&](const char* p) -> float {
+        const char* lineEnd = p;
+        if (maxWidth > 0) {
+            float normMax = maxWidth / scale;
+            float runX = 0.0f;
+            for (const char* q = p; *q; q++) {
+                if (*q == '\n') { lineEnd = q; break; }
+                if (*q == ' ') {
+                    float wordW = 0;
+                    for (const char* wp = q + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
+                        uint8_t wch = (uint8_t)*wp;
+                        if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
+                    }
+                    if (runX + wordW > normMax) { lineEnd = q; break; }
+                }
+                uint8_t ch = (uint8_t)*q;
+                if (ch < 256) runX += (float)m_Glyphs[ch].xadvance * invLH;
+            }
+            if (*lineEnd == '\0') lineEnd = p + strlen(p);
+            return computeStartX(measureLine(p, lineEnd));
+        }
+        return computeStartX(MeasureWidth(scale, p));
+    };
+
     for (const char* p = text; *p; p++) {
         if (*p == '\n') {
+            startX = recomputeStartXFor(p + 1);
             cursorX = startX;
             cursorY -= normLineH;
             continue;
@@ -289,6 +370,7 @@ void Font::DrawString(float scale, float maxWidth, float z,
                 if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
             }
             if (cursorX - startX + wordW > normMax) {
+                startX = recomputeStartXFor(p + 1);  // skip the space, start next word
                 cursorX = startX;
                 cursorY -= normLineH;
                 continue;
