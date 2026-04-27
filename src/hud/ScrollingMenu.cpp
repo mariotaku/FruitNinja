@@ -90,10 +90,19 @@ ScrollingMenu::ScrollingMenu()
     //   inner[2] = yMax = field61 *  0.5 = -60.0f
     //   inner[3] = xMax = field61 *  0.5 = -60.0f
     // DIFFERS: exact inner region bounds not confirmed; using half of outer as approximation
-    m_OuterRegion[0] = -m_Width  * 0.5f;  // xMin_rel
+    m_OuterRegion[0] = -m_Width  * 0.5f;  // xMin_rel  (-160)
     m_OuterRegion[1] = m_ItemHeight;       // yMin_rel  (-120.0f)
     m_OuterRegion[2] = -m_ItemHeight;      // yMax_rel  (120.0f)
-    m_OuterRegion[3] =  m_Width  * 0.5f;  // xMax_rel
+    // Port specific: widen xMax to cover the dialog-box / equip-button column
+    // on the right side. On the original Bada touchscreen, users naturally
+    // swipe vertically across the visible list; on desktop with a mouse,
+    // testers tend to drag from anywhere on the shop UI. Without this
+    // extension the touch falls outside the binary's symmetric +/-160 list
+    // region (the list ends up at world x ~= -95, so xMax+pos.x ~= +65
+    // which doesn't reach the dialog area starting at x ~= +44 and the
+    // equip button at x ~= +145). Extending xMax to +400 lets the entire
+    // shop screen scroll the list while leaving xMin / Y bounds binary-faithful.
+    m_OuterRegion[3] =  m_Width  * 0.5f + 240.0f;  // xMax_rel  (+400)
 
     // Inner region: half of outer height (m_ItemHeight is -120 by binary,
     // so half-height is -60; use absolute value to keep yMin < yMax).
