@@ -37,7 +37,17 @@ struct Quaternion {
         return Quaternion(axis.x * s, axis.y * s, axis.z * s, cosf(half));
     }
 
-    // Matches Quaternion::Matrix44Unit — convert quaternion to 4x4 rotation matrix
+    // Matches _Quaternion::Matrix44Unit (calls Matrix33Unit @ 0x0017aa64 then
+    // Copy33To44 @ 0x0017ab30). The binary writes the 9 rotation values in
+    // ROW-MAJOR-flat order into a 16-float buffer; that buffer is uploaded to
+    // GL (column-major), so the binary's effective rotation matrix is R(q)^T
+    // = R(q^-1) -- the transpose of the standard Hamilton quaternion-to-matrix.
+    //
+    // Port stores column-major m[col*4+row]. To produce the SAME 16 floats
+    // the binary's pipeline ends up handing to GL, we write the binary's
+    // row-major layout directly into our column-major m[]. That is equivalent
+    // to flipping the sign of every w-cross-product (off-diagonal) term --
+    // i.e. transposing the standard Hamilton rotation matrix.
     Matrix44 ToMatrix44() const {
         Matrix44 mat;
         float xx = x * x, yy = y * y, zz = z * z;
@@ -45,15 +55,15 @@ struct Quaternion {
         float wx = w * x, wy = w * y, wz = w * z;
 
         mat.m[0]  = 1.0f - 2.0f * (yy + zz);
-        mat.m[1]  = 2.0f * (xy + wz);
-        mat.m[2]  = 2.0f * (xz - wy);
+        mat.m[1]  = 2.0f * (xy - wz);
+        mat.m[2]  = 2.0f * (xz + wy);
         mat.m[3]  = 0.0f;
-        mat.m[4]  = 2.0f * (xy - wz);
+        mat.m[4]  = 2.0f * (xy + wz);
         mat.m[5]  = 1.0f - 2.0f * (xx + zz);
-        mat.m[6]  = 2.0f * (yz + wx);
+        mat.m[6]  = 2.0f * (yz - wx);
         mat.m[7]  = 0.0f;
-        mat.m[8]  = 2.0f * (xz + wy);
-        mat.m[9]  = 2.0f * (yz - wx);
+        mat.m[8]  = 2.0f * (xz - wy);
+        mat.m[9]  = 2.0f * (yz + wx);
         mat.m[10] = 1.0f - 2.0f * (xx + yy);
         mat.m[11] = 0.0f;
         mat.m[12] = 0.0f; mat.m[13] = 0.0f; mat.m[14] = 0.0f; mat.m[15] = 1.0f;
