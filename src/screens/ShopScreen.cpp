@@ -676,17 +676,14 @@ void ShopScreen::Update(float dt) {
                 // and selected item is not equipped.
                 // Texture: *(GameTask + s_TexSelectItem offset) — same slot +0x14
                 // Fruit type: Fruit::FruitType(*(GameTask + DAT_0015e58c), false)
-                // — string stored in GameTask at a GOT-relative offset.
-                // Port uses Fruit::FruitType("pineapple", false) as placeholder
-                // (same type DojoScreen uses for its shop button).
-                // DIFFERS: original fruit type string from DAT_0015e58c not resolved.
+                // — string at GOT offset resolves to "watermelon" @ 0x001bb539.
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                     ItemManager* im = ItemManager::GetInstance();
                     if (im) {
                         int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
                         if (equipped == 0 && !m_pEquipButton) {
                             const int equipFruitType =
-                                Fruit::FruitType("pineapple", false);  // DIFFERS: DAT_0015e58c
+                                Fruit::FruitType("watermelon", false);  // DAT_0015e58c -> 0x001bb539
                             m_pEquipButton = new MenuButton();
                             // DIFFERS: binary uses *(GameTask + slot+0x14); port
                             // uses select_item.tex (same slot the binary later
