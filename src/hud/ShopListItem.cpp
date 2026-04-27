@@ -62,6 +62,14 @@ ShopListItem::~ShopListItem() {}
 //   3. if (SmartPtr<Texture>::operator bool(this+0x274)):
 //        *(float*)(this+0x268) += DAT_0015d474(35.2f) + *(this+0x18)(m_Size.x=60.0f)
 //        => _pad2.x = pos.x + 95.2f
+//   4. Animate two alpha fields each frame using game.dt:
+//        - one ramps toward 1 when ScrollingMenu->field_0x3c == 0
+//          (port maps to m_LockFlashAlpha @ +0x264 -- best fit for the
+//           "ramp up while menu is active" semantic).
+//        - one ramps toward 1 when ItemManager::IsEquipped(m_pItemInfo)
+//          (port maps to m_CostAlpha @ +0x280 -- gates description text
+//           draw in Part 7 of Draw).
+//      Both ramp at +/-5.0 per dt and clamp to [0, 1].
 // ---------------------------------------------------------------------------
 void ShopListItem::Move(float x, float y, float z) {
     pos.x = x;
@@ -76,6 +84,47 @@ void ShopListItem::Move(float x, float y, float z) {
     // Binary: DAT_0015d474 = 35.2f; m_Size.x at +0x18 = 60.0f -> sum = 95.2f
     if (m_pIconTex.IsValid()) {
         iconPos[0] += 35.2f + m_Size.x;  // DAT_0015d474(35.2f) + m_Size.x(60.0f) = 95.2f
+    }
+
+    // Step 4: per-frame alpha ramps. Binary uses Game.dt directly (no
+    // clamping for negative dt). Port mirrors the ARM idiom "if (cur +
+    // dt*delta > 0) clamp to [0, 1] else 0".
+    Game* g = Game::GetInstance();
+    if (!g) return;
+    const float dt   = g->dt;
+    const float kRate = 5.0f;
+
+    // 4a: m_LockFlashAlpha -- ramps up while parent ScrollingMenu is in
+    // its active visibility state (binary: parent->field_0x3c == 0).
+    // Port doesn't have a clean accessor for that flag; use a permissive
+    // "always ramping toward 1 while drawn" stub. Refine later.
+    {
+        float cur = m_LockFlashAlpha;
+        float delta = +kRate;  // always ramping while drawn
+        float candidate = cur + dt * delta;
+        if (candidate > 0.0f) {
+            m_LockFlashAlpha = (candidate > 1.0f) ? 1.0f : candidate;
+        } else {
+            m_LockFlashAlpha = 0.0f;
+        }
+    }
+
+    // 4b: m_CostAlpha -- gates the description-text Draw Part 7. Binary
+    // ramps to 1 when ItemManager::IsEquipped(m_pItemInfo) returns true,
+    // back to 0 otherwise. The visible effect is that the equipped row
+    // shows its description (and our injected "EQUIPPED" string) on the
+    // right-side panel; non-equipped rows fade their description out.
+    {
+        ItemManager* im = ItemManager::GetInstance();
+        bool equipped = (im && m_pItemInfo && im->IsEquipped(m_pItemInfo) != 0);
+        float cur = m_CostAlpha;
+        float delta = equipped ? +kRate : -kRate;
+        float candidate = cur + dt * delta;
+        if (candidate > 0.0f) {
+            m_CostAlpha = (candidate > 1.0f) ? 1.0f : candidate;
+        } else {
+            m_CostAlpha = 0.0f;
+        }
     }
 }
 
