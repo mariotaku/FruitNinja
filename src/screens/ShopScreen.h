@@ -155,6 +155,12 @@ private:
     // +0x98: currently selected list item
     ShopListItem* m_pSelectedItem;
 
+public:
+    // Read-only accessor used by ShopListItem::Move to ramp m_CostAlpha
+    // toward 1 only on the centered row (description-text fade-in).
+    ShopListItem* GetSelectedItem() const { return m_pSelectedItem; }
+private:
+
     // +0x9C..+0xA8: per-slot cached selection (3 entries, ItemType 0-2)
     ShopListItem* m_pSlotItems[3];
 
