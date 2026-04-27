@@ -276,20 +276,90 @@ void Font::DrawString(float scale, float maxWidth, float z,
 
     float lineOffset = computeLineOffset(text);
 
-    // --- Vertical alignment (flags & 0xC): shift startY in normalized units ---
-    // Binary at 0x00199920-0x00199964 issues TranslateLocal with a POSITIVE
-    // Y offset (factor 0.5 when flags & 0x4 set, else 1.0). Earlier port
-    // negated the sign, putting glyphs `scale` world-units below the binary
-    // -- which manifested as the shop title rendering ~20 px above its
-    // intended position (titleScale=20 in HD mode, 25 in SD).
-    // See docs/engine/font.md "Font_DrawString Implementation".
+    // --- Vertical alignment (flags & 0xC): block-centred shift in normalized units ---
+    //
+    // Binary Font_DrawString applies a SINGLE TranslateLocal AFTER the
+    // glyph loop (flush path, decompile lines 281-289):
+    //
+    //   if (alignment & 0xC) {
+    //     fVar42 -= maxWidth;                           // cursor_y -= 1.0
+    //     factor = (alignment & 0x4) ? 0.5 : 1.0;
+    //     translateY = (-maxWH.y - cursor_y) * factor;  // maxWH.y == 0 in shop
+    //                = (0 - (-(N-1) - 1)) * factor
+    //                = N * factor
+    //   }
+    //
+    // For N = number of rendered lines (counting wrap breaks + \n + the
+    // final line). Worked example: N=2, factor=0.5 -> startY = +1.0.
+    // Block centre with N lines stacked on -1.0 per line lands at:
+    //   ((N-1)/2 - N/2) negated -> consistent half-line offset above pos.y.
+    //
+    // The port previously set startY = +0.5 (factor) regardless of N --
+    // correct for N=1 but undershot multi-line wrapped paragraphs by
+    // (N-1)/2 lines. With description scale=18 and a 2-line wrap, the
+    // text rendered ~9 world units too low.
+    int lineCount = 1;
+    {
+        // Walk the same wrap rules as the glyph loop without emitting,
+        // counting line breaks so the caller can size the block.
+        const float countNormWrap = normWrap;
+        for (const char* p = text; *p; p++) {
+            if (*p == '\n') { lineCount++; continue; }
+            if (*p == '[') {
+                if (*(p + 1) == '/' && *(p + 2) == ']') { p += 2; continue; }
+                const char* end = strchr(p + 1, ']');
+                if (end && end - p == 7) { p = end; continue; }
+            }
+            if (countNormWrap > 0.0f && *p == ' ') {
+                // Re-measure the current line up to this space (cumulative
+                // since last line break) plus the next word; if it spills,
+                // count a wrap break.
+                // Simpler: track cursor since line start in a parallel var.
+            }
+        }
+        // Approach: dedicated walker that mirrors the render loop's wrap.
+        if (countNormWrap > 0.0f) {
+            lineCount = 0;
+            const char* p = text;
+            while (*p) {
+                lineCount++;
+                float runX = 0.0f;
+                while (*p && *p != '\n') {
+                    if (*p == '[') {
+                        if (*(p + 1) == '/' && *(p + 2) == ']') { p += 3; continue; }
+                        const char* end = strchr(p + 1, ']');
+                        if (end && end - p == 7) { p = end + 1; continue; }
+                    }
+                    if (*p == ' ') {
+                        float wordW = 0.0f;
+                        for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
+                            uint8_t wch = (uint8_t)*wp;
+                            if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
+                        }
+                        if (runX + wordW > countNormWrap) {
+                            // Wrap: skip this space, start new line at next char.
+                            p++;
+                            break;
+                        }
+                    }
+                    uint8_t ch = (uint8_t)*p;
+                    if (ch < 256) runX += (float)m_Glyphs[ch].xadvance * invLH;
+                    p++;
+                }
+                if (*p == '\n') p++;
+            }
+            if (lineCount < 1) lineCount = 1;
+        } else {
+            // No wrap: count just \n.
+            lineCount = 1;
+            for (const char* p = text; *p; p++) if (*p == '\n') lineCount++;
+        }
+    }
+
     float startY = 0.0f;
     if (alignment & 0xC) {
-        if (alignment & 0x4) {
-            startY += normLineH * 0.5f;
-        } else {
-            startY += normLineH;
-        }
+        const float factor = (alignment & 0x4) ? 0.5f : 1.0f;
+        startY = (float)lineCount * factor * normLineH;
     }
 
     // Batch vertices per page
