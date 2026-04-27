@@ -220,9 +220,10 @@ public:
     void ShrinkBuyButton();
 
     // Matches ShopScreen::NewItem @ 0x0015c498
-    // Sets some global scroll-position variable to 1.0.
+    // Sets s_NewItemAlpha = 1.0f (binary: *(GOT + DAT_0015c4b4) = 0x3f800000).
     // Called when a new item is available in the shop.
     void NewItem();
+    static float s_NewItemAlpha;
 
     // Helper — create the scrolling item list and populate from ItemManager.
     // Binary: this happens during Init (or the list is passed externally via

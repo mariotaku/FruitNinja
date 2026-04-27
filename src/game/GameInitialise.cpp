@@ -117,9 +117,11 @@ void GameInitialise() {
     game->actorManager->RegisterFactory(&CreateEntity);
 
     // Step 5 (binary): operator_new(0x238) + FruitSaveData ctor — see
-    // docs/structs/game.md and docs/systems/save-system.md. Port uses a
-    // stub; once TinyXML save/load is wired this is where LoadGame fires.
+    // docs/structs/game.md and docs/systems/save-system.md. Binary
+    // InitialiseData @ 0x0010b66c follows the ctor with a LoadGame call
+    // so persistent state is restored before the rest of init runs.
     game->pSaveData = new FruitSaveData();
+    FruitNinja_LoadGame(game->pSaveData);
 
     // SDL2 audio backend init. Opens audio device at 16kHz mono S16LE
     // (matches MAMAudioThread sampleRate=16000). Must be called before GameSound.

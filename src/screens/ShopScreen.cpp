@@ -362,11 +362,13 @@ void ShopScreen::RemoveEquipButton() {
 // ---------------------------------------------------------------------------
 // ShopScreen::NewItem @ 0x0015c498
 // Binary: **(undefined4**)(GOT+offset) = 0x3f800000 (1.0f)
-// Sets a global float to 1.0 (scroll-position indicator for new items).
+// Sets a static float to 1.0f -- a scroll-position indicator that the
+// shop list reads to highlight rows whose ItemInfo->m_bSeen is false.
 // ---------------------------------------------------------------------------
+float ShopScreen::s_NewItemAlpha = 0.0f;
+
 void ShopScreen::NewItem() {
-    // TODO: set global scroll-position flag to 1.0
-    // Binary: *(GOT + DAT_0015c4b4) = 0x3f800000
+    s_NewItemAlpha = 1.0f;
 }
 
 // ---------------------------------------------------------------------------
@@ -508,6 +510,11 @@ void ShopScreen::QuitShopCallback() {
 //   if !s_LowRes: call ItemManager::SetEquippedItem; play equip SFX.
 //   else:         animate equip button fruit piece (set vel from a global Vec3,
 //                 copy target-size from global).
+//
+// After SetEquippedItem the binary's BuyButtonCallback path also writes
+// a description string into the selected list item's m_DescText so the
+// row visually updates ("EQUIPPED" / "FREE" / "BOUGHT"). String addrs
+// in binary at 0x001bc104..0x001bc110.
 // ---------------------------------------------------------------------------
 void ShopScreen::EquipCallback() {
     if (!m_pEquipButton) return;
@@ -521,6 +528,24 @@ void ShopScreen::EquipCallback() {
         ItemManager* im = ItemManager::GetInstance();
         if (im) {
             im->SetEquippedItem((int)info->m_Type, info);
+
+            // Update the selected row's description text to reflect the
+            // new equipped state. Binary uses three literal strings:
+            //   0x001bc104 = "EQUIPPED"
+            //   0x001bc10b = "FREE"
+            //   0x001bc110 = "BOUGHT"
+            // For a successful equip we always show "EQUIPPED".
+            const char* newDesc = "EQUIPPED";
+            strncpy(m_pSelectedItem->m_DescText, newDesc,
+                    sizeof(m_pSelectedItem->m_DescText) - 1);
+            m_pSelectedItem->m_DescText[sizeof(m_pSelectedItem->m_DescText) - 1] = '\0';
+
+            // Port specific: the binary defers ItemSave.xml write until
+            // GameTaskSaveOnExit / SaveCurrentData. The port's SDL exit
+            // path does the same via GameDestroy, but a hard kill (Ctrl+C
+            // / segfault) would lose the equip. Force-save here so the
+            // equip persists immediately.
+            im->SaveItemInfo();
         }
         // Binary: SFX depends on item type:
         //   type == 0 (blade):      SFXPlay("equip-new-sword")
