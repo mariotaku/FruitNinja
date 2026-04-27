@@ -20,6 +20,7 @@
 #include "engine/math/Colour.h"
 #include "engine/math/Vec3.h"
 #include "asset/TextureManager.h"
+#include "engine/util/Localisation.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -353,14 +354,22 @@ void ShopListItem::Draw() {
         // costScale: HD -> fVar26 * 16.0f; non-HD -> 20.0f literal (0x41A00000)
         float costScale = isHD ? (fVar26 * 16.0f) : 20.0f;
 
-        // Cost string: binary indexes static_block[+0x1C + m_Type*4] set from
-        // GETSTRING with integer keys. Port falls back to m_pItemInfo text fields.
-        // DIFFERS: integer-key localisation not wired; using m_pLockedText/m_pTitle.
+        // Cost string: binary indexes static_block[+0x1C + m_Type*4] which is
+        // populated lazily from GETSTRING_CAST_0_STR with the per-type
+        // CATEGORY label (e.g. "blade", "background"). Per
+        // translations_header.str, the keys are:
+        //   m_Type == 0 (BLADE)      -> CODE_SHOP_BLADE
+        //   m_Type == 1 (BACKGROUND) -> CODE_SHOP_BACKGROUND
+        //   m_Type == 2 (UPSELL)     -> CODE_SHOP_FULL_VERSION
+        //   m_Type == 3 (REMOVEADS)  -> no shop list entry in shipped data
+        // Localisation::Get returns the key itself on miss, which is the
+        // correct fallback semantic.
         const char* costStr = nullptr;
-        if (m_pItemInfo->m_pLockedText && m_pItemInfo->m_pLockedText[0] != '\0') {
-            costStr = m_pItemInfo->m_pLockedText;
-        } else if (m_pItemInfo->m_pTitle) {
-            costStr = m_pItemInfo->m_pTitle;
+        switch ((int)m_pItemInfo->m_Type) {
+            case 0: costStr = Localisation::Get("CODE_SHOP_BLADE");        break;
+            case 1: costStr = Localisation::Get("CODE_SHOP_BACKGROUND");   break;
+            case 2: costStr = Localisation::Get("CODE_SHOP_FULL_VERSION"); break;
+            default: costStr = nullptr; break;
         }
 
         // Width cache (lazy): if s_costWidths[0] == 0.0f, measure all 4 strings.
