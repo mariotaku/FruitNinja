@@ -118,8 +118,10 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     // Default gravity — confirmed from Fruit::Init 0x00176708: literal -12.0, DAT_00176a18=0.0
     m_Gravity = Vec3(0.0f, -12.0f, 0.0f);
 
-    // Rotation axis offset
-    m_RotAxis = Vec3(RandRange(10.0f), 0.0f, 0.0f);
+    // Rotation axis offset.
+    // Binary Fruit::Init @ 0x00176708 reads *globalConfigVec3 (GOT 0x001f4328);
+    // BSS Vec3 initialised by _GLOBAL__I_Fruit.cpp to (0,0,0).
+    m_RotAxis = Vec3(0.0f, 0.0f, 0.0f);
 
     // Matches SetFruitType (0x17621c):
     // visualScale = globalScaleVec * FruitInfo[type].scale * VISUAL_SCALE_MULT (0.01)

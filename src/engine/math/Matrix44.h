@@ -17,7 +17,14 @@ struct Matrix44 {
     }
 
     // Matches _Matrix44<float>::OrthoW (0x0019e7a8)
-    // NOTE: parameter order is (top, bottom, left, right) NOT standard GL
+    // NOTE: parameter order is (top, bottom, left, right) NOT standard GL.
+    // Output is the standard column-major ortho:
+    //   m[0]  = 2 / (right - left)     X scale
+    //   m[5]  = 2 / (top - bottom)     Y scale
+    //   m[10] = 1 / (far - near)       Z scale
+    //   m[12] = -(right+left)/(R-L)    X centring (col 3, row 0)
+    //   m[13] = -(top+bottom)/(T-B)    Y centring (col 3, row 1)
+    //   m[14] = near / (near - far)    Z centring
     static void OrthoW(float top, float bottom, float left, float right,
                        float near, float far, float w, Matrix44& out) {
         out.Identity();
@@ -25,9 +32,9 @@ struct Matrix44 {
         float invTB = 1.0f / (top - bottom);
         float invRL = 1.0f / (right - left);
         out.m[10] = 1.0f / (far - near);
-        out.m[14] = near / (near - far);       // out[3][2]
-        out.m[13] = -(right + left) * invRL;    // out[3][1]
-        out.m[12] = -(top + bottom) * invTB;    // out[3][0]
+        out.m[14] = near / (near - far);
+        out.m[12] = -(right + left) * invRL;    // X centring uses R/L
+        out.m[13] = -(top + bottom) * invTB;    // Y centring uses T/B
         out.m[0]  = 2.0f * invRL;               // 2/(right-left)
         out.m[5]  = 2.0f * invTB;               // 2/(top-bottom)
     }
@@ -83,36 +90,46 @@ struct Matrix44 {
         return r;
     }
 
-    // Matches _Matrix44<float>::RotX44 — post-multiply by rot around X
-    // Mixes col 1 (Y) and col 2 (Z).
+    // Matches _Matrix44<float>::RotX44 @ 0x00172f58 — PRE-multiply by Rot_std_X(+alpha).
+    // Binary iterates rows 1 and 2 across all columns:
+    //   new_row1 = cos*row1 - sin*row2
+    //   new_row2 = sin*row1 + cos*row2
+    // Linear (col-major m[c*4+r]): per col c, mix m[c*4+1] (row 1) with m[c*4+2] (row 2).
+    // (An earlier port version POST-multiplied with sign flips. That was based on
+    //  a misread of the binary's row-vs-col iteration -- the binary genuinely
+    //  pre-multiplies the matrix by standard CCW rotation.)
     void RotX44(float sinA, float cosA) {
-        for (int i = 0; i < 4; i++) {
-            float a = m[4 + i];   // col 1
-            float b = m[8 + i];   // col 2
-            m[4 + i] =  a * cosA + b * sinA;
-            m[8 + i] = -a * sinA + b * cosA;
+        for (int c = 0; c < 4; c++) {
+            float a = m[c * 4 + 1];   // row 1, col c
+            float b = m[c * 4 + 2];   // row 2, col c
+            m[c * 4 + 1] = cosA * a - sinA * b;
+            m[c * 4 + 2] = sinA * a + cosA * b;
         }
     }
 
-    // Matches _Matrix44<float>::RotY44 — post-multiply by rot around Y
-    // Mixes col 0 (X) and col 2 (Z).
+    // Matches _Matrix44<float>::RotY44 @ 0x00172fdc — PRE-multiply by Rot_std_Y(+alpha).
+    // Binary iterates rows 0 and 2:
+    //   new_row0 = cos*row0 + sin*row2
+    //   new_row2 = -sin*row0 + cos*row2
     void RotY44(float sinA, float cosA) {
-        for (int i = 0; i < 4; i++) {
-            float a = m[i];       // col 0
-            float b = m[8 + i];   // col 2
-            m[i]     =  a * cosA + b * sinA;
-            m[8 + i] = -a * sinA + b * cosA;
+        for (int c = 0; c < 4; c++) {
+            float a = m[c * 4 + 0];   // row 0, col c
+            float b = m[c * 4 + 2];   // row 2, col c
+            m[c * 4 + 0] =  cosA * a + sinA * b;
+            m[c * 4 + 2] = -sinA * a + cosA * b;
         }
     }
 
-    // Matches _Matrix44<float>::RotZ44 — post-multiply by rot around Z
-    // Mixes col 0 (X) and col 1 (Y).
+    // Matches _Matrix44<float>::RotZ44 @ 0x00144958 — PRE-multiply by Rot_std_Z(+alpha).
+    // Binary iterates rows 0 and 1:
+    //   new_row0 = cos*row0 - sin*row1
+    //   new_row1 = sin*row0 + cos*row1
     void RotZ44(float sinA, float cosA) {
-        for (int i = 0; i < 4; i++) {
-            float a = m[i];       // col 0
-            float b = m[4 + i];   // col 1
-            m[i]     =  a * cosA + b * sinA;
-            m[4 + i] = -a * sinA + b * cosA;
+        for (int c = 0; c < 4; c++) {
+            float a = m[c * 4 + 0];   // row 0, col c
+            float b = m[c * 4 + 1];   // row 1, col c
+            m[c * 4 + 0] = cosA * a - sinA * b;
+            m[c * 4 + 1] = sinA * a + cosA * b;
         }
     }
 
