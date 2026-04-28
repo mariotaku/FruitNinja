@@ -139,8 +139,7 @@ Three specialised agents handle distinct phases of the RE+port workflow. **Each 
 ## Conventions
 - **Only commit when explicitly requested** by the user — do not auto-commit after changes
 - When a value in port code **differs from the original binary**, add a comment explaining the discrepancy (e.g. `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`). This makes it easy to find and fix incorrect values later.
-- Ghidra scripts go in `<project root>/ghidra_scripts/`, NOT in `$HOME/ghidra_scripts/`
-- The project ghidra_scripts/ directory is added to Ghidra's Script Manager — no need to copy elsewhere
+- Ghidra scripts go in `<project root>/tmp/ghidra_scripts/`, NOT in `$HOME/ghidra_scripts/` and NOT in `<project root>/ghidra_scripts/`. The `tmp/ghidra_scripts/` dir is untracked; scripts there are scratch / one-off (used once to answer a specific RE question, then deleted or swept by routine `tmp/` cleanup). The project does not maintain reusable Ghidra scripts in version control — every analysis run produces fresh ad-hoc helpers.
 - RE findings go in `docs/` directory (see `docs/README.md` for index)
 - Temp/scratch files go in `<project root>/tmp/`, NOT in `/tmp`
 - Use `FN_SCREEN_W` / `FN_SCREEN_H` for screen constants (avoid `SCREEN_W`/`SCREEN_H` — MSYS2 conflict)
