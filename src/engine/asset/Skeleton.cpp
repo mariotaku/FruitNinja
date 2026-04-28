@@ -121,4 +121,14 @@ void Skeleton::Swap(std::vector<Bone>& bones) {
     BuildFinalMatrices();
 }
 
+// Matches Skeleton::Swap (0x001a89c4) — Skeleton& overload.
+// Swaps all four member arrays with the other skeleton. Does NOT rebuild matrices.
+// Binary: m_Bones.swap(other.m_Bones) + std::swap for the three matrix arrays.
+void Skeleton::Swap(Skeleton& other) {
+    m_Bones.swap(other.m_Bones);
+    std::swap(m_LocalMatrices, other.m_LocalMatrices);
+    std::swap(m_WorldMatrices, other.m_WorldMatrices);
+    std::swap(m_VertMatrices,  other.m_VertMatrices);
+}
+
 } // namespace Mortar

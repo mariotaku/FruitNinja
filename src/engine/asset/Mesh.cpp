@@ -279,9 +279,10 @@ Model::~Model() {
 }
 
 // Matches Model::SwapSkeleton (0x001aaba8)
-// Swaps bones into m_Skeleton (building matrices), then calls UpdateBoneLinks.
-void Model::SwapSkeleton(std::vector<Skeleton::Bone>& bones) {
-    m_Skeleton.Swap(bones);
+// Calls Skeleton::Swap(Skeleton&) (0x001a89c4) — swaps all four arrays without
+// rebuilding matrices — then calls UpdateBoneLinks.
+void Model::SwapSkeleton(Skeleton& skel) {
+    m_Skeleton.Swap(skel);
     UpdateBoneLinks();
 }
 
@@ -301,32 +302,60 @@ void Model::Draw(const Matrix44& transform) {
     int meshCount = (int)m_Meshes.size();
     if (meshCount == 0) return;
 
+    // Single-mesh fast path (matches binary at 0x00193210).
     if (meshCount == 1) {
         m_Meshes[0]->Draw(transform);
         return;
     }
 
-    // Multi-mesh: depth sort by view-space Z then draw back-to-front
+    // Multi-mesh path (binary 0x001930e0):
+    //   localProj = transform * projTop    (Mul44: dest = lhs * rhs)
+    //   mvp       = localProj * viewTop    => transform * proj * view
+    // This engine uses row-vector convention, so MVP = T * P * V.
+    // The port previously built (proj * view) * transform — wrong order.
     MatrixManager& mm = MatrixManager::GetInstance();
-    Matrix44 viewProj = mm.GetProjectionStack().m_Current * mm.GetViewStack().m_Current;
-    Matrix44 mvp = viewProj * transform;
+    const Matrix44& projTop = mm.GetProjectionStack().m_Current;
+    const Matrix44& viewTop = mm.GetViewStack().m_Current;
+    Matrix44 localProj = transform * projTop;
+    Matrix44 mvp       = localProj * viewTop;
 
+    // AlphaSortNode struct used by binary qsort (0x001935a0).
     struct SortEntry {
         Mesh* mesh;
-        float z;
+        float key;  // perspective-divided clip-space z: z'/w'
     };
 
     std::vector<SortEntry> sorted(meshCount);
     for (int i = 0; i < meshCount; i++) {
         sorted[i].mesh = m_Meshes[i].Get();
-        // Use a simple Z=0 point transformed by MVP as sort key
-        sorted[i].z = mvp.m[14]; // approximate — real impl uses mesh bounds center
+
+        // Per-mesh sort key from binary (0x001930e0):
+        //   b = mesh->GetBounds()           (vtable +0x14, slot 5)
+        //   c = (b.min + b.max) * 0.5f      (Bounds3D::Center @ 0x001936d0)
+        //   z' = c.x*mvp[col2.row0] + c.y*mvp[col2.row1] + c.z*mvp[col2.row2] + mvp[col2.row3]
+        //   w' = c.x*mvp[col3.row0] + c.y*mvp[col3.row1] + c.z*mvp[col3.row2] + mvp[col3.row3]
+        //   key = z' / w'
+        //
+        // Matrix44 is column-major: m[col*4 + row].
+        // Col 2 (z) = m[8],m[9],m[10],m[11]; col 3 (w) = m[12],m[13],m[14],m[15].
+        Vec3 bmin, bmax;
+        m_Meshes[i]->GetBounds(bmin, bmax);
+        Vec3 c;
+        c.x = (bmin.x + bmax.x) * 0.5f;
+        c.y = (bmin.y + bmax.y) * 0.5f;
+        c.z = (bmin.z + bmax.z) * 0.5f;
+
+        float zp = c.x * mvp.m[8]  + c.y * mvp.m[9]  + c.z * mvp.m[10] + mvp.m[11];
+        float wp = c.x * mvp.m[12] + c.y * mvp.m[13] + c.z * mvp.m[14] + mvp.m[15];
+        // Guard against w'=0 (degenerate: treat as 0-depth)
+        sorted[i].key = (wp != 0.0f) ? (zp / wp) : 0.0f;
     }
 
-    // Sort back-to-front (larger Z = farther away = draw first)
+    // Sort descending by key (largest z'/w' first = back-to-front).
+    // Matches AlphaSortNode::compare @ 0x001935a0: returns sign of (b.key - a.key).
     for (int i = 0; i < meshCount - 1; i++) {
         for (int j = i + 1; j < meshCount; j++) {
-            if (sorted[j].z > sorted[i].z) {
+            if (sorted[j].key > sorted[i].key) {
                 SortEntry tmp = sorted[i];
                 sorted[i] = sorted[j];
                 sorted[j] = tmp;

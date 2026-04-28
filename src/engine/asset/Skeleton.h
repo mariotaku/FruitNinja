@@ -57,6 +57,12 @@ public:
     // Takes the loaded bone list, swaps into m_Bones, then builds matrices.
     void Swap(std::vector<Bone>& bones);
 
+    // Matches Skeleton::Swap (0x001a89c4) — Skeleton& overload.
+    // Swaps all four member arrays (m_Bones, m_LocalMatrices, m_WorldMatrices,
+    // m_VertMatrices) with the other skeleton. Does NOT rebuild matrices.
+    // Binary sequence: m_Bones.swap, swap(local), swap(world), swap(vert).
+    void Swap(Skeleton& other);
+
     // Matches Skeleton::FindIndex (0x0019323c)
     // Linear scan by name. Returns 0xFFFFFFFF if not found.
     uint32_t FindIndex(const char* name) const;
