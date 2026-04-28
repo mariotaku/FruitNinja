@@ -28,6 +28,15 @@ Write code that faithfully matches the reverse-engineered binary behavior docume
 - Use ISO-8601 format to the minute, UTC: e.g. `2026-04-05T11:30`.
 - If a doc's analysis date is **newer** than the corresponding source file's, the implementation may be outdated and should be reviewed/reimplemented with the new findings.
 
+### ASM-verified marker
+- When applying a spec from the `asm-inspector` agent that returned a **Confirmed** verdict, paste the agent's supplied verified-comment line above the function (or the verified sub-block):
+  ```
+  // ASM-verified: 2026-04-28T15:30 binary @ 0x001aaba8 (asm-inspector)
+  ```
+- Greppable inventory: `grep -rn 'ASM-verified:' src/` lists every method that has been binary-truth-checked.
+- Do NOT add the line speculatively. Only after a Confirmed verdict, and only after the function (in the form you've just written) matches the binary that was diffed.
+- For **Diverges** / **Inconclusive** verdicts, no marker — fix the divergence (or document the gap) and re-dispatch asm-inspector to confirm.
+
 ## Rules
 **Fidelity:**
 - Match original call patterns: if binary calls Reset -> Scale -> Translate -> Upload -> DrawQuad, do the same. Don't merge or skip steps.
