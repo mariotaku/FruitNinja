@@ -362,7 +362,22 @@ function render() {
   const cz = (b.min[2] + b.max[2]) / 2;
   const half = Math.max(b.max[0]-b.min[0], b.max[1]-b.min[1], b.max[2]-b.min[2]) * 0.65;
 
+  // Y<->Z axis swap (reflection, det=-1) -- restored from commit 30a0874.
+  // The Mortar mesh files store +Y as their "up" and +Z as our screen-up;
+  // a pure -90 deg X rotation would map mesh Y to render -Z which inverts
+  // the depth ordering between body and outline shells in effect-meshes
+  // like banana_speed_b_piece_2.mmd (outline ends up closer to camera and
+  // overdraws the textured body). The Y<->Z swap (mesh y -> render z,
+  // mesh z -> render y) keeps body in front of outline as the binary
+  // intends. Winding flips (det=-1); cull is off so it doesn't matter.
+  const yzSwap = new Float32Array([
+    1, 0, 0, 0,
+    0, 0, 1, 0,
+    0, 1, 0, 0,
+    0, 0, 0, 1,
+  ]);
   let world = M.translate(-cx, -cy, -cz);
+  world = M.mul(yzSwap, world);
   world = M.mul(M.rotX(rot.x), world);
   world = M.mul(M.rotY(rot.y), world);
   const aspect = cvs.width / cvs.height;
