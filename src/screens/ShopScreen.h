@@ -173,6 +173,20 @@ private:
     // +0xB8: state machine index
     int m_State;
 
+    // Mirrors the static BSS bool at .got + 0x451b4 set by
+    // ShrinkBuyButton @ 0x0015c4cc and read by EquipCallback /
+    // DeletedMenuItem / Move. Tracks "the equip-button fruit piece
+    // is currently flying off-screen". Binary uses a process-wide
+    // static; port models it as a per-screen member since the screen
+    // is a singleton and the lifetime matches.
+    bool m_bShrinking;
+
+    // Mirrors g_ShopStaticBlock->m_SelCounter at GOT_base + 0x451b4 + 0x88.
+    // Rate-limiter for SetSelected calls in Update preamble: counter increments
+    // every frame (mod 10), SetSelected fires only when counter == 0.
+    // Binary: __aeabi_idivmod(counter + 1, 10) every frame unconditionally.
+    int m_SelCounter;
+
     // --- Static textures (GOT-relative globals in binary) ---
     // Corrected slot layout verified from LoadContent @ 0x0015cb08 disasm + string reads.
     // See docs/screens/shop.md "Corrected Static Block Slot Table" for authoritative mapping.
@@ -224,6 +238,12 @@ public:
     // Matches ShopScreen::ShrinkBuyButton @ 0x0015c4cc
     // Triggers the "slice" shrink animation on the buy button fruit if not sliced.
     void ShrinkBuyButton();
+
+    // Matches ShopScreen::DeletedMenuItem(HUDControl*) @ 0x0015d14c
+    // Registered as m_RemoveCallback on both m_pBuyButton and m_pEquipButton.
+    // Fires when HUD removes a button from its control list (after m_bPendingRemoval).
+    // Nulls the relevant button pointer and optionally kicks the fruit off-screen.
+    void DeletedMenuItem(HUDControl* removed);
 
     // Matches ShopScreen::NewItem @ 0x0015c498
     // Sets s_NewItemAlpha = 1.0f (binary: *(GOT + DAT_0015c4b4) = 0x3f800000).

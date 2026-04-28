@@ -9,6 +9,7 @@
 //   Layer 3 (2D): Sparkle ring (TODO)
 //
 
+// Analysed: 2026-04-28T14:00
 #include "MenuButton.h"
 #include "Game.h"
 #include "entities/Fruit.h"
@@ -410,43 +411,66 @@ void MenuButton::Update(float dt) {
                 m_pEntity->scale = m_HitBoundsScale;
             }
         } else {
-            // Velocity-magnitude check matches binary
-            // DAT_0014e978 = 0x3a83126f ≈ 0.001f.
-            const Vec3& v = m_pEntity->vel;
-            const float velSq = v.x * v.x + v.y * v.y + v.z * v.z;
-            if (velSq > 0.001f) {
-                // Distinguish "user actually sliced this fruit" from
-                // "ClearMenuItems released this fruit as a sibling
-                // when a different button was sliced". Only the
-                // user-sliced fruit fires its callback — the others
-                // just clear+detach silently. The flag we use:
-                // m_bDrawWhole is set by ClearMenuItems but NOT by
-                // the normal Fruit::Slice path, so:
-                //   m_bDrawWhole == 0 -> user-sliced
-                //   m_bDrawWhole == 1 -> ClearMenuItems-released
-                // Without this gate the cascade fires every menu
-                // button's callback in turn (Dojo -> Play -> Quit),
-                // which thrashes MainScreen's state machine through
-                // STATE_DOJO_WAIT_B -> MODE_SELECT -> GAME_START -> ...
-                bool userSliced = (m_pEntity->entityType == 0) &&
-                                  m_pFruitPiece &&
-                                  !m_pFruitPiece->m_bDrawWhole;
-                if (!m_bRemovalPending && m_ClickCallback && userSliced) {
-                    auto cb = m_ClickCallback;
-                    m_ClickCallback = nullptr;
-                    cb();
-                    // ClearMenuItems @ 0x0016ac7c — releases every
-                    // other menu fruit so the dojo transition can
-                    // proceed. Only fired alongside the user-slice
-                    // callback to avoid recursive re-clearing.
-                    FN::ClearMenuItems();
+            // Released path is split by entity type — the binary has two
+            // distinct sub-paths gated by m_FruitType < FruitInfo_GetCount().
+            if (m_pEntity->entityType == 0) {
+                // --- Fruit branch (binary 0x0014e74a..0x0014e7ec) ---
+                // relVel = entity->vel - entity->m_SecondVel  (+0x1c - +0xc4)
+                // DAT_0014e978 = 0x3a83126f = 0.001f threshold
+                Vec3 relVel = m_pEntity->vel;
+                if (m_pFruitPiece) {
+                    relVel.x -= m_pFruitPiece->m_SecondVel.x;
+                    relVel.y -= m_pFruitPiece->m_SecondVel.y;
+                    relVel.z -= m_pFruitPiece->m_SecondVel.z;
                 }
-                // Detach the entity → next frame enters the FadeCounter
-                // shrink path below.
-                m_pEntity = nullptr;
-                m_pFruitPiece = nullptr;
-                // Initialise the shrink counter — binary uses 0x3ffc.
-                m_FadeCounter = 0x3ffc;
+                const float relVelSqMag = relVel.x * relVel.x +
+                                          relVel.y * relVel.y +
+                                          relVel.z * relVel.z;
+                if (relVelSqMag > 0.001f) {
+                    // Binary @ 0x0014e76c: Delegate0::operator()(&field7_0x88)
+                    if (!m_bRemovalPending && m_ClickCallback) {
+                        auto cb = m_ClickCallback;
+                        m_ClickCallback = nullptr;
+                        cb();
+                    }
+                    // Binary @ 0x0014e7c0: restore entity scale from m_HitBoundsScale
+                    if (m_pFruitPiece) {
+                        m_pFruitPiece->scale = m_HitBoundsScale;
+                    }
+                    // Binary @ 0x0014e7d0: stationary-fruit-piece edge case
+                    if (m_pFruitPiece && m_pFruitPiece->entityType == 0 &&
+                        m_pFruitPiece->vel.x == 0.0f && m_pFruitPiece->vel.y == 0.0f) {
+                        m_pFruitPiece->m_bDrawWhole = true;
+                    }
+                    // Binary @ 0x0014e7e0: ClearMenuItems gated by m_bEnabled.
+                    // ShrinkBuyButton sets m_bEnabled=0 to skip this for the
+                    // programmatic-shrink path.
+                    if (m_bEnabled != 0) {
+                        FN::ClearMenuItems();
+                        // TODO: MainScreen::OnMenuItemsCleared not yet ported
+                    }
+                    // Binary @ 0x0014e7e8: detach entity. Keep m_pFruitPiece
+                    // valid so the AFTER_CALLBACK shrink path can scale it
+                    // alongside the ring (binary keeps the fruit pointer;
+                    // only the abstract m_pEntity ref is cleared).
+                    m_pEntity = nullptr;
+                    m_FadeCounter = 0x3ffc;
+                }
+            } else {
+                // --- Bomb branch (binary @ 0x0014e740 region) ---
+                // Bombs do NOT fire MenuButton's click callback or call
+                // ClearMenuItems from here. The user-hit click runs through
+                // Bomb::m_HitCallback (set in MenuButton::Init bomb path).
+                // Detach gate is purely Bomb::Enabled() == 0 -- once the bomb
+                // finishes its own hit/explode sequence, restore the original
+                // scale and detach so the ring shrink curve can run.
+                Bomb* bomb = static_cast<Bomb*>(m_pEntity);
+                if (!bomb->Enabled()) {
+                    bomb->scale = m_HitBoundsScale;
+                    m_pEntity = nullptr;
+                    m_pFruitPiece = nullptr;
+                    m_FadeCounter = 0x3ffc;
+                }
             }
         }
     }
@@ -463,20 +487,31 @@ void MenuButton::Update(float dt) {
     if (m_pEntity == nullptr && m_FadeCounter > 0) {
         // Shrink-to-disappearance phase. Binary DAT_0014e97c = 108543.0
         // is the per-second decrement rate; over a 60Hz tick that's
-        // ~1809 counts/frame → ~9 frames from 0x3ffc to 0.
+        // ~1809 counts/frame -> ~9 frames from 0x3ffc to 0.
         m_FadeCounter -= (int)(dt * 108543.0f);
         if (m_FadeCounter < 1) {
             m_FadeCounter = 0;
             m_bPendingRemoval = 1;
         }
-        // size = m_TargetSize * (sin(counter * 2π/65536) / sin(0x3ffc * 2π/65536))
-        // The 0x3ffc index is exactly π/2, so sin(0x3ffc) = 1.0 — the
-        // ratio simplifies to just sin(counter). For counter in
-        // [0, 0x3ffc] this traces the first quarter of a sine wave,
-        // giving an ease-out shrink curve.
         const float counterRad = (float)m_FadeCounter * (6.2831853f / 65536.0f);
         const float scaleFrac  = sinf(counterRad);
         size = m_TargetSize * scaleFrac;
+
+        // Binary MenuButton::Update m_pEntity==null path also scales
+        // m_pFruitPiece IF the fruit is stationary (vel.x==0 && vel.y==0).
+        // This is the ShopScreen equip-button case where EquipCallback's
+        // shrink branch zeros vel/m_Gravity -- the fruit then shrinks
+        // proportionally to the ring.
+        // The binary's else branch (vel != 0) sets scale = m_HitBoundsScale,
+        // but for general menu fruits sliced by the user, that overrides
+        // the fruit's own per-frame scale animation. The port skips the
+        // else branch so user-sliced halves keep their own scale.
+        if (m_pFruitPiece &&
+            m_pFruitPiece->vel.x == 0.0f && m_pFruitPiece->vel.y == 0.0f) {
+            float ratio = (m_TargetSize.x != 0.0f)
+                          ? (size.x / m_TargetSize.x) : 0.0f;
+            m_pFruitPiece->scale = m_HitBoundsScale * ratio;
+        }
     }
 
     // Shake timer decay
