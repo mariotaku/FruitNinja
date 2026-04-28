@@ -2,7 +2,7 @@
 // Binary: ShopScreen(DojoScreen*) @ 0x0015cdac, Update @ 0x0015e1f4 (387 lines),
 //         Draw @ 0x0015dd50, LoadContent @ 0x0015cb08.
 //
-// Analysed: 2026-04-25T18:15
+// Analysed: 2026-04-28T14:00
 
 #include "ShopScreen.h"
 #include "DojoScreen.h"
@@ -99,6 +99,16 @@ static const float LIST_POS_Y     = 40.0f;          // DAT_0015ead8
 static const float LIST_POS_Z     = 0.0f;           // DAT_0015eadc
 static const float LIST_SLIDE_OFF  = 95.0f;         // DAT_0015eae0
 static const float LIST_SLIDE_MUL  = 290.0f;        // DAT_0015eae4
+
+// SHOP_SHRINK_VEC -- Vec3 stored at .got + 0x77cc, initialised to
+// (1,1,1) by _GLOBAL__I_ShopScreen.cpp @ 0x0015d7a0. Copied to the
+// equip-button fruit's m_HalfB_vel by ShrinkBuyButton @ 0x0015c4cc.
+static const Vec3 SHOP_SHRINK_VEC(1.0f, 1.0f, 1.0f);
+
+// Note: the EquipCallback shrink branch uses Vec3::ZERO (not a "fling"
+// vector). The earlier (0,1,0) interpretation came from misreading the
+// initialiser in _GLOBAL__I_ShopScreen.cpp; the actual GOT-resolved
+// pointer at GOT+0x73ec is a zero Vec3, not the (0,1,0) global.
 
 // Fling velocity base (state 3 and QuitShopCallback)
 static const float FLING_VEL_BASE = 5.0f;           // from decompile literal
@@ -219,6 +229,8 @@ ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     , m_pSelectedItem(nullptr)
     , m_AnimFrame(0)
     , m_State(0)
+    , m_bShrinking(false)
+    , m_SelCounter(0)
 {
     // Binary: call LoadContent if guard not set
     LoadContent();
@@ -341,11 +353,16 @@ void ShopScreen::CreateShopList() {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::RemoveBuyButton
+// Binary: Release() calls SetPendingRemoval on each button. HUD's pending-
+// removal mechanism then calls m_RemoveCallback (DeletedMenuItem), which
+// nulls the pointer. We do NOT null the pointer here so DeletedMenuItem's
+// pointer-compare still works.
 // ---------------------------------------------------------------------------
 void ShopScreen::RemoveBuyButton() {
     if (m_pBuyButton) {
         m_pBuyButton->SetPendingRemoval();
-        m_pBuyButton = nullptr;
+        // Do NOT null m_pBuyButton here — DeletedMenuItem will null it
+        // when HUD fires the m_RemoveCallback.
     }
 }
 
@@ -355,7 +372,8 @@ void ShopScreen::RemoveBuyButton() {
 void ShopScreen::RemoveEquipButton() {
     if (m_pEquipButton) {
         m_pEquipButton->SetPendingRemoval();
-        m_pEquipButton = nullptr;
+        // Do NOT null m_pEquipButton here — DeletedMenuItem will null it
+        // when HUD fires the m_RemoveCallback.
     }
 }
 
@@ -389,23 +407,92 @@ float ShopScreen::GetDescriptionTextXPos() const {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::ShrinkBuyButton @ 0x0015c4cc
-// Binary: if m_pEquipButton != null && fruit piece != null && !Fruit::Sliced():
-//   set fruit piece b4=1 (sliced flag), copy velocity from a global Vec3,
-//   set m_bEnabled=0, copy target size.
+//
+// Binary disassembly (re-analysed 2026-04-28):
+//   if (m_pEquipButton == null) return
+//   fruit = m_pEquipButton->m_pFruitPiece
+//   if (fruit == null) return
+//   if (Fruit::Sliced(fruit)) return            // already retracting
+//   fruit->m_bSliced = 1                         // +0xb4
+//   g_bShopButtonShrinking = 1                   // BSS bool
+//   m_pEquipButton->m_bEnabled = 0               // +0x123
+//   fruit->m_HalfB_vel = SHOP_SHRINK_VEC         // +0xc4..+0xcc = (1,1,1)
+//
+// The binary does NOT destroy the equip button. Instead, marking the
+// fruit sliced + giving its second-half velocity a non-zero kick lets
+// MenuButton::Update fade the alpha each frame and self-remove via
+// m_bPendingRemoval once alpha hits zero. DeletedMenuItem then clears
+// m_pEquipButton when HUD destroys the control.
 // ---------------------------------------------------------------------------
 void ShopScreen::ShrinkBuyButton() {
-    // Matches binary: guards on m_pEquipButton, fruit piece, and not-sliced.
     if (!m_pEquipButton) return;
-    if (!m_pEquipButton->m_pFruitPiece) return;
-    // Binary: Fruit::Sliced() — check if fruit is already sliced
-    // DIFFERS: Fruit::Sliced() not yet ported; assume not sliced
-    // TODO: call Fruit::Sliced(m_pEquipButton->m_pFruitPiece) when ported
+    Fruit* fruit = m_pEquipButton->m_pFruitPiece;
+    if (!fruit) return;
+    if (fruit->Sliced()) return;       // already retracting -- noop
 
-    // Binary: mark fruit as sliced (*(byte*)(fruit+0xb4) = 1)
-    // Set equip button disabled
-    m_pEquipButton->m_bEnabled = 0;
-    // TODO: copy velocity/target-size from the global Vec3 constants
-    // (DAT_0015c518 / DAT_0015c51c)
+    fruit->m_bSliced           = true;  // *(fruit+0xb4) = 1
+    m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
+    m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0
+    fruit->m_SecondVel         = SHOP_SHRINK_VEC;  // *(fruit+0xc4..+0xcc) = (1,1,1)
+    // Binary does NOT write m_bDrawWhole here (see docs/screens/shop-buttons.md §Gap4)
+}
+
+// ---------------------------------------------------------------------------
+// ShopScreen::DeletedMenuItem(HUDControl*) @ 0x0015d14c
+//
+// Registered as m_RemoveCallback on BOTH m_pBuyButton and m_pEquipButton
+// immediately after HUD::AddControl. Fires when HUD removes a button
+// from its control list (after m_bPendingRemoval propagates through
+// MenuButton::Update's FadeCounter-to-zero path).
+//
+// Binary pseudocode (re-analysed 2026-04-28):
+//   if (param_1 == m_pEquipButton) {
+//       if (g_bShopButtonShrinking != 0) {
+//           fruit = param_1->m_pFruitPiece
+//           if (fruit) {
+//               fruit->m_HalfB_vel.y = -480.0   // DAT_0015d1e8
+//               fruit->m_HalfB_pos.y = -480.0   // DAT_0015d1e8
+//               // also sets m_HalfB_vel2 = -g_ShopFlingVec but port skips
+//               // the +0x9c write since it overlaps m_SecondVel region
+//               fruit->m_SecondVel.y = -10.0    // DAT = 0xC1200000
+//               fruit->vel.y         = -10.0
+//           }
+//       }
+//       m_pEquipButton = null
+//       m_BuyDelay += 0.05f   // DAT_0015d1ec = 0x3D4CCCCD
+//   }
+//   if (param_1 == m_pBuyButton) {
+//       m_pBuyButton = null
+//   }
+// ---------------------------------------------------------------------------
+void ShopScreen::DeletedMenuItem(HUDControl* removed) {
+    if (removed == m_pEquipButton) {
+        if (m_bShrinking) {
+            // Kick the fruit off-screen when the button was shrunk programmatically
+            Fruit* fruit = m_pEquipButton->m_pFruitPiece;
+            if (fruit) {
+                // Binary writes two -480 kicks and two -10 velocity kicks:
+                //   *(fruit+0xbc) = -480.0  -> m_SecondPos.y (HalfB pos y)
+                //   *(fruit+0x14) = -480.0  -> entity pos.y (main pos)
+                //   *(fruit+0xc8) = -10.0   -> m_SecondVel.y (downward kick)
+                //   *(fruit+0x20) = -10.0   -> vel.y
+                // DAT_0015d1e8 = 0xC3F00000 = -480.0f
+                fruit->m_SecondPos.y = -480.0f;   // fruit+0xbc = m_SecondPos.y
+                fruit->pos.y         = -480.0f;   // fruit+0x14 = entity pos.y
+                // DAT = 0xC1200000 = -10.0f
+                fruit->m_SecondVel.y = -10.0f;    // fruit+0xc8 = m_SecondVel.y
+                fruit->vel.y         = -10.0f;    // fruit+0x20 = vel.y
+            }
+        }
+        // Always null the pointer and add delay (binary: unconditional)
+        m_pEquipButton = nullptr;
+        m_BuyDelay += 0.05f;   // DAT_0015d1ec = 0x3D4CCCCD = 0.05f
+    }
+
+    if (removed == m_pBuyButton) {
+        m_pBuyButton = nullptr;
+        // No delay added for buy button removal (binary confirms)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -506,28 +593,64 @@ void ShopScreen::QuitShopCallback() {
 
 // ---------------------------------------------------------------------------
 // ShopScreen::EquipCallback @ 0x0015d630
-// Binary: if m_pEquipButton exists:
-//   if !s_LowRes: call ItemManager::SetEquippedItem; play equip SFX.
-//   else:         animate equip button fruit piece (set vel from a global Vec3,
-//                 copy target-size from global).
 //
-// After SetEquippedItem the binary's BuyButtonCallback path also writes
-// a description string into the selected list item's m_DescText so the
-// row visually updates ("EQUIPPED" / "FREE" / "BOUGHT"). String addrs
-// in binary at 0x001bc104..0x001bc110.
+// Binary gate at 0x0015d63c: reads g_bShopButtonShrinking (GOT+0x451b4).
+//   if != 0 (programmatic shrink path):
+//     copy equip-button fruit's current pos to m_HalfB_pos (fruit+0xb8)
+//     set vel, m_SecondVel, and m_HalfB_vel all from g_ShopFlingVec (0,1,0)
+//     return WITHOUT equipping
+//   if == 0 (user-sliced path):
+//     m_BuyDelay = 0.25f (0x3e800000)
+//     ItemManager::SetEquippedItem; play equip SFX
 // ---------------------------------------------------------------------------
 void ShopScreen::EquipCallback() {
+    printf("[Shop] EquipCallback fired: m_bShrinking=%d m_pEquipButton=%p m_pSelectedItem=%p info=%p\n",
+           (int)m_bShrinking, (void*)m_pEquipButton, (void*)m_pSelectedItem,
+           m_pSelectedItem ? (void*)m_pSelectedItem->m_pItemInfo : nullptr);
     if (!m_pEquipButton) return;
 
-    // Binary: reads a global "low-res/upsell" flag at (GOT + DAT_0015d778)
-    // DIFFERS: flag not resolved; always take the "non-upsell" path
-    // TODO: resolve DAT_0015d778 flag
+    // Binary: if (g_bShopButtonShrinking != 0): programmatic path
+    if (m_bShrinking) {
+        // Programmatic-shrink path (EquipCallback @ 0x0015d649):
+        // Copy current entity pos to m_HalfB_pos, then set all three
+        // velocity fields from g_ShopFlingVec (SHOP_FLING_VEC = (0,1,0)).
+        Fruit* fruit = m_pEquipButton->m_pFruitPiece;
+        if (fruit) {
+            // Binary EquipCallback shrink branch (0x0015d734..0x0015d76c).
+            // The Vec3 source at GOT+0x73ec is the global zero vector
+            // (BSS-initialised). The four writes are:
+            //   fruit->m_HalfB_pos (+0xb8) = fruit->pos    -- snapshot pos
+            //   fruit->vel         (+0x1c) = (0, 0, 0)
+            //   fruit->m_HalfB_vel (+0xc4) = (0, 0, 0)
+            //   fruit->m_Gravity   (+0x9c) = (0, 0, 0)
+            // After this, the fruit is completely frozen (vel=0, gravity=0).
+            // MenuButton::Update's "if (vel.x==0 && vel.y==0)" gate (in the
+            // m_pEntity==null path) then runs the pin+scale path that
+            // shrinks the fruit alongside the ring rather than letting
+            // physics carry it off-screen.
+            fruit->m_SecondPos = fruit->pos;
+            fruit->vel         = Vec3(0.0f, 0.0f, 0.0f);
+            fruit->m_SecondVel = Vec3(0.0f, 0.0f, 0.0f);
+            fruit->m_Gravity   = Vec3(0.0f, 0.0f, 0.0f);
+        }
+        // Does NOT call ItemManager::SetEquippedItem — equip does not happen
+        return;
+    }
+
+    // User-sliced path (EquipCallback @ 0x0015d63c, else branch):
+    // m_BuyDelay = 0x3e800000 = 0.25f before equip action
+    m_BuyDelay = 0.25f;   // DAT = 0x3e800000
 
     if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
         ItemInfo* info = m_pSelectedItem->m_pItemInfo;
         ItemManager* im = ItemManager::GetInstance();
+        printf("[Shop] EquipCallback user-path: type=%d name='%s' im=%p\n",
+               (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
         if (im) {
             im->SetEquippedItem((int)info->m_Type, info);
+            printf("[Shop] EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)\n",
+                   (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
+                   im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
 
             // Update the selected row's description text to reflect the
             // new equipped state. Binary uses three literal strings:
@@ -546,6 +669,7 @@ void ShopScreen::EquipCallback() {
             // / segfault) would lose the equip. Force-save here so the
             // equip persists immediately.
             im->SaveItemInfo();
+            printf("[Shop] EquipCallback SaveItemInfo done\n");
         }
         // Binary: SFX depends on item type:
         //   type == 0 (blade):      SFXPlay("equip-new-sword")
@@ -570,23 +694,19 @@ void ShopScreen::Update(float dt) {
         m_LayerFlagsAlt = 0x40;
     }
 
-    // Binary: check if list selection has changed
-    if (m_pShopList && m_pShopList->GetItemClosestToZeroIdx() != (int)(intptr_t)m_pSelectedItem) {
-        // More precisely: compare m_pSelectedItem address (cast to int) with
-        // list's GetItemClosestToZeroIdx() return (also an int/ptr).
-        // Binary: if (field_0x94 != null && field_0x98 != list->GetIdx() && !m_bTouchProcessed)
-        if (!m_pShopList->m_bTouchProcessed) {
-            ShopListItem* newSel = static_cast<ShopListItem*>(m_pShopList->GetItemClosestToZero());
-            if (newSel != m_pSelectedItem) {
-                SetSelected(newSel);
-            }
+    // Binary pre-amble (0x0015e212..0x0015e244):
+    // 1. If m_pShopList && GetItemClosestToZero() != m_pSelectedItem (pointer compare)
+    //    && m_SelCounter == 0: call SetSelected (rate-limited every 10 frames).
+    // 2. Increment m_SelCounter unconditionally: (m_SelCounter+1) % 10.
+    // Binary: __aeabi_idivmod(counter+1, 10) unconditionally, gate on counter==0.
+    if (m_pShopList) {
+        ShopListItem* closest = static_cast<ShopListItem*>(m_pShopList->GetItemClosestToZero());
+        if (closest != m_pSelectedItem && m_SelCounter == 0) {
+            SetSelected(closest);
         }
     }
-
-    // Binary: animation counter update (runs in state 1, after initial checks)
-    // Uses __aeabi_idivmod(m_AnimFrame + 1, 10) — wraps counter mod 10
-    // Actually: stored at (GameTaskState + 0x88), not field_0xb4.
-    // field_0xb4 is the sin-wave frame for the buy button animation.
+    // Increment unconditionally (binary: (m_SelCounter+1) % 10 every frame)
+    m_SelCounter = (m_SelCounter + 1) % 10;
 
     // Sync layer flags from alt (binary copies field_0x80 to field_0x34 each frame)
     m_LayerFlags = (uint32_t)m_LayerFlagsAlt;
@@ -628,6 +748,9 @@ void ShopScreen::Update(float dt) {
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                 m_pBuyButton->m_bEnabled = 1;
                 if (game.hud) game.hud->AddControl(m_pBuyButton, false);
+                // Binary (0x0015e3e2..0x0015e3f0): register DeletedMenuItem as m_RemoveCallback
+                m_pBuyButton->m_RemoveCallback =
+                    [this](HUDControl* c) { DeletedMenuItem(c); };
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pBuyButton);
                 // Binary: m_TargetSize *= 0.825; fruit piece scale *= 0.825
                 m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
@@ -642,62 +765,67 @@ void ShopScreen::Update(float dt) {
 
     // ---- STATE 1: Active / idle ----
     case 1: {
-        // Decrement buy delay
-        m_BuyDelay -= dt;
-
-        // Check list selection
-        if (m_pShopList && m_pShopList->m_bTouchProcessed) {
-            ShopListItem* cur = static_cast<ShopListItem*>(m_pShopList->GetItemClosestToZero());
-            if (cur != m_pSelectedItem && m_pShopList->m_bTouchProcessed) {
-                SetSelected(cur);
-            }
-        }
-
-        if (m_BuyDelay <= 0.0f) {
-            // Binary: if list m_bTouchProcessed == 0: ShrinkBuyButton()
-            if (m_pShopList && !m_pShopList->m_bTouchProcessed) {
-                ShrinkBuyButton();
+        // Binary (0x0015e3a0): m_BuyDelay only decremented when > 0;
+        // the else branch (shrink/create) only runs when already <= 0.
+        if (m_BuyDelay > 0.0f) {
+            m_BuyDelay -= dt;   // decrements toward zero
+        } else {
+            // Binary (0x0015e438..0x0015e442): the ONLY gate is m_bTouchProcessed.
+            //   if (m_pShopList->m_bTouchProcessed == 0): ShrinkBuyButton
+            //   else: equip-button creation branch
+            // ShrinkBuyButton's own internal guards handle idempotency.
+            if (!m_pShopList || !m_pShopList->m_bTouchProcessed) {
+                // List is settled (not being tapped): shrink/retract the equip button.
+                // Fires every frame; ShrinkBuyButton's Fruit::Sliced() guard makes it safe.
+                ShrinkBuyButton();  // binary @ 0x0015e442 beq to shrink
             } else {
-                // Binary: also check IsEquipped + IsLocked to decide if equip
-                // button should be removed (if already equipped or locked)
+                // One-frame tap-release event: check equipped/locked, maybe create equip button.
+                // Binary (0x0015e480..0x0015e5be):
+
+                // Check if item is equipped/locked — hide tutorial arrow if so
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                     ItemManager* im = ItemManager::GetInstance();
                     if (im) {
-                        int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
-                        int locked   = m_pSelectedItem->m_pItemInfo->IsLocked();
-                        if (equipped != 0 || locked != 0) {
-                            // Binary: TutorialControl::ResetTutePos(tute, 0) — null
+                        bool equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo) != 0;
+                        bool locked   = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
+                        if (equipped || locked) {
+                            // Binary: TutorialControl::ResetTutePos(tute, null) — hide arrow
                             if (game.pTutorialCtrl)
                                 game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
                         }
                     }
                 }
-                // Binary: create equip button (field_0x8c) if not already present
-                // and selected item is not equipped.
-                // Texture: *(GameTask + s_TexSelectItem offset) — same slot +0x14
-                // Fruit type: Fruit::FruitType(*(GameTask + DAT_0015e58c), false)
-                // — string at GOT offset resolves to "watermelon" @ 0x001bb539.
+
+                // Create equip button if item is not equipped and button doesn't exist.
+                // Binary: guarded by (m_pEquipButton == null) — single-shot creation.
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
                     ItemManager* im = ItemManager::GetInstance();
                     if (im) {
                         int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
                         if (equipped == 0 && !m_pEquipButton) {
+                            // Binary: Fruit::FruitType(DAT_0015e58c, false) -> "watermelon"
                             const int equipFruitType =
                                 Fruit::FruitType("watermelon", false);  // DAT_0015e58c -> 0x001bb539
                             m_pEquipButton = new MenuButton();
                             // DIFFERS: binary uses *(GameTask + slot+0x14); port
-                            // uses select_item.tex (same slot the binary later
-                            // assigns in SetSelected for the locked path).
+                            // uses select_item.tex (same slot the binary assigns in SetSelected).
                             m_pEquipButton->m_Texture = TexIdOf(s_TexSelectItem);
                             m_pEquipButton->size      = TexSizeOf(s_TexSelectItem, 64.0f, 64.0f);
                             m_pEquipButton->Init(POS_EQUIP_BUTTON,
                                 [this]() { EquipCallback(); },
                                 equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
+                            // Binary (0x0015e5f6): m_bEnabled = 0
                             m_pEquipButton->m_bEnabled = 0;
+                            // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
                             SetSelected(m_pSelectedItem);
                             if (game.hud) game.hud->AddControl(m_pEquipButton, false);
+                            // Binary (0x0015e60e): register DeletedMenuItem as m_RemoveCallback
+                            m_pEquipButton->m_RemoveCallback =
+                                [this](HUDControl* c) { DeletedMenuItem(c); };
                             if (game.pTutorialCtrl)
                                 game.pTutorialCtrl->ResetTutePos(m_pEquipButton);
+                            // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
+                            m_bShrinking = false;
                             // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
                             m_pEquipButton->m_TargetSize =
                                 m_pEquipButton->m_TargetSize * EQUIP_BUTTON_SCALE;
@@ -705,10 +833,16 @@ void ShopScreen::Update(float dt) {
                                 m_pEquipButton->m_pFruitPiece->scale =
                                     m_pEquipButton->m_pFruitPiece->scale * EQUIP_BUTTON_SCALE;
                             }
+                            // Binary (0x0015e622): Fruit::RotateFacingUp(fruit, false, (0,1,0))
+                            if (m_pEquipButton->m_pFruitPiece) {
+                                m_pEquipButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
+                            }
                         }
+                        // (if m_pEquipButton already exists: no action — single-shot guard)
                     }
                 }
             }
+            // LAB_0015e68a: update animation frame counter (runs regardless of above)
         }
 
         // Update sin-wave animation frame
@@ -802,6 +936,9 @@ void ShopScreen::Update(float dt) {
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
             m_pBuyButton->m_bEnabled = 1;
             if (game.hud) game.hud->AddControl(m_pBuyButton, false);
+            // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
+            m_pBuyButton->m_RemoveCallback =
+                [this](HUDControl* c) { DeletedMenuItem(c); };
         }
         // LAB_0015e874: scale new button (reached by both state 0 and state 3 paths)
         m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;

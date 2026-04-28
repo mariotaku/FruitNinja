@@ -115,6 +115,15 @@ public:
     // hits zero.
     void Slice();
 
+    // Matches Fruit::Sliced @ 0x001401c8. Pure predicate: returns true
+    // if the fruit is already sliced (m_bSliced) OR if a slice countdown
+    // is active (m_SliceTimer > -1.0f). Used by ShopScreen::ShrinkBuyButton
+    // to skip the shrink trigger when the equip-button fruit is already
+    // retracting.
+    bool Sliced() const {
+        return m_bSliced || (m_SliceTimer > -1.0f);
+    }
+
     // Launch fruit with velocity (matches Fruit::Chuck)
     void Chuck(const Vec3& velocity, float delay = 0.0f);
 

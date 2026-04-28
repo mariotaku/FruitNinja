@@ -257,9 +257,15 @@ void ScrollingMenu::Update(float /*dt*/) {
                 // The actual closest-item tracking happens in Phase 5.
             }
 
-            // Release the touch slot
+            // Release the touch slot.
+            // Binary @ 0x0015baa0..0x0015baae clears in this exact order:
+            //   field_0x74 (m_TouchId)      = -1
+            //   field_0xcc (m_pCollidedItem) = 0
+            //   field_0xc8 (m_bDragging)    = 0
             iVar2 = IsTouchDown(m_TouchId);
-            m_TouchId = -1;
+            m_TouchId       = -1;
+            m_pCollidedItem = nullptr;
+            m_bDragging     = 0;
 
         } else {
             // --- Phase 3B: finger still in inner region -> drag velocity update ---
@@ -410,8 +416,13 @@ void ScrollingMenu::Update(float /*dt*/) {
         // Check if snap distance is near zero (|snapDist| < 2.0f)
         float absSnap = snapDist < 0.0f ? -snapDist : snapDist;
         if (absSnap < CLICK_SNAP_GATE) {
-            // Check if velocity is near zero (|vel.y| < 0.5f)
-            float vel = m_Velocity.y;
+            // Check if pending velocity is near zero (|pending.y| < 0.5f).
+            // Binary @ 0x0015bddc reads field_0x94 = m_PendingVelocity.y (the
+            // per-frame drag delta), NOT field_0xd8 = m_Velocity.y (which is
+            // the snapped scroll offset and can sit at -80 in equilibrium
+            // for any non-top item). Matches Phase 7's snap-step gate which
+            // also reads m_PendingVelocity.y.
+            float vel = m_PendingVelocity.y;
             float absVel = vel < 0.0f ? -vel : vel;
             if (absVel < CLICK_VEL_GATE) {
                 // Set "tap processed" flag
