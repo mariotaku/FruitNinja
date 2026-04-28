@@ -6,6 +6,18 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# --- MSVC-specific compile options ---
+# /utf-8: source + execution charset = UTF-8 (silences C4819 on files that
+#         contain non-ASCII chars like Unicode arrows in comments).
+# _CRT_SECURE_NO_WARNINGS: silence C4996 deprecation noise for
+#         strncpy/fopen etc; the binary uses these idioms intentionally.
+if (MSVC)
+    add_compile_options(/utf-8)
+    # _CRT_SECURE_NO_WARNINGS:  strncpy / fopen "may be unsafe" (C4996)
+    # _CRT_NONSTDC_NO_WARNINGS: strdup / strcasecmp "POSIX name deprecated" (C4996)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS _CRT_NONSTDC_NO_WARNINGS)
+endif()
+
 # --- Sanitizers (opt-in) ---
 #
 # AddressSanitizer + UBSan. Caught a real bug already (HUD::RemoveControl
@@ -75,9 +87,34 @@ endif()
 
 # --- Dependencies ---
 
-find_package(SDL2 REQUIRED)
-
+# Prefer system SDL2 (MSYS2 / Linux package, etc.) but fall back to source
+# fetch for environments without a system install (most commonly MSVC + VS
+# Build Tools). FetchContent compiles SDL2 once into the project tree.
 include(FetchContent)
+find_package(SDL2 QUIET)
+if (NOT SDL2_FOUND)
+    message(STATUS "System SDL2 not found -- fetching SDL2 2.30.11 source")
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    set(SDL_SHARED ON CACHE BOOL "" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        SDL2
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG        release-2.30.11
+    )
+    FetchContent_MakeAvailable(SDL2)
+    # FetchContent uses the SDL2 source's own targets (`SDL2-static`,
+    # `SDL2`, `SDL2main`) which are non-namespaced. Add the
+    # `SDL2::SDL2` / `SDL2::SDL2main` aliases the rest of the build
+    # expects, so the link step is identical regardless of source.
+    if (TARGET SDL2 AND NOT TARGET SDL2::SDL2)
+        add_library(SDL2::SDL2 ALIAS SDL2)
+    endif()
+    if (TARGET SDL2main AND NOT TARGET SDL2::SDL2main)
+        add_library(SDL2::SDL2main ALIAS SDL2main)
+    endif()
+endif()
+
 FetchContent_Declare(
     tinyxml2
     GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
@@ -107,6 +144,22 @@ add_subdirectory(src/debug)
 
 # --- Link (after all subdirectories define their targets) ---
 target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine)
+
+# Copy SDL2.dll next to fruit-ninja.exe so the launcher finds it without
+# having to add the FetchContent build dir to PATH. Only when SDL2 is
+# built as a shared library inside our build (FetchContent path) -- on
+# MSYS2 / Linux the system SDL2 is found via PATH/ldconfig and no copy
+# is needed.
+if (TARGET SDL2 AND WIN32)
+    get_target_property(_sdl2_type SDL2 TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET fruit-ninja POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2>
+                $<TARGET_FILE_DIR:fruit-ninja>
+            COMMENT "Copying SDL2.dll next to fruit-ninja.exe")
+    endif()
+endif()
 
 # --- ctest ---
 enable_testing()
