@@ -207,6 +207,7 @@ Bomb::~Bomb() {
     // TODO: Unlink from game state (field_0x84)
 }
 
+// ASM-verified: 2026-04-28T00:00 binary @ 0x00172504 (asm-inspector)
 // Matches Bomb::Init (0x172504, 99 lines)
 void Bomb::Init(int param1, int fruitType, int param3) {
     (void)param1;
@@ -272,6 +273,20 @@ void Bomb::Init(int param1, int fruitType, int param3) {
            g_bombData.model[m_BombVariant].IsValid(), g_BombTexture.IsValid());
 }
 
+// ASM-verified: 2026-04-28T00:00 binary @ 0x0017121c (asm-inspector)
+// Matches Bomb::SetCallback (0x0017121c) — sets the menu-bomb marker flag,
+// installs the hit callback, and overwrites rotation fields so menu bombs
+// spin slowly (one axis moving, one locked) rather than with the random
+// 1..7 velocities from Bomb::Init.
+void Bomb::SetCallback(std::function<void()> cb) {
+    m_bMenuBombHit = 1;
+    m_HitCallback  = cb;
+    m_RotY    = 0x2d;   // DAT_0017121c: 45 deg initial Y angle
+    m_RotVelX = 2;      // slow spin on X
+    m_RotX    = 0;
+    m_RotVelY = 0;      // Y axis locked
+}
+
 // Port specific: advance bomb's integer rotation by a per-frame step that
 // scales with the debug timescale via scaledDt. Binary always does
 // `m_RotX += m_RotVelX` once per 1/60 frame; at normal (1.0x) timescale
@@ -306,6 +321,7 @@ static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
     accel *= (newLen / len);
 }
 
+// ASM-verified: 2026-04-28T00:00 binary @ 0x001729fc (asm-inspector)
 // Matches Bomb::Update (0x001729fc, 195 lines).
 void Bomb::Update(float /*dt*/) {
     if (!IsActive()) return;

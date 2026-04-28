@@ -86,6 +86,7 @@ Fruit::~Fruit() {
     // Model released by SmartPtr destructor
 }
 
+// ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
 void Fruit::Init(int param1, int fruitType, int param3) {
     (void)param1; (void)param3;
     m_FruitType = fruitType;
@@ -242,6 +243,7 @@ void Fruit::Update(float dt) {
             }
         }
     } else {
+        // ASM-verified: 2026-04-28T00:00 binary @ 0x00177680..0x001777bc (asm-inspector)
         // === SLICED (two halves) ===
         // Binary (Fruit::Update sliced branch, 0x00177680):
         //   normalize(m_Gravity); gravLen += DAT_00177950(=0.2) * dtNorm * 4.5
@@ -514,6 +516,7 @@ static const float SCALE_MARGIN_MULT   =   50.0f; // DAT_00175564
 static const float WARP_THRESH_RIGHT   =  360.0f; // DAT_00175568
 static const float WARP_THRESH_LEFT    = -360.0f; // DAT_0017556c
 
+// ASM-verified: 2026-04-28T00:00 binary @ 0x00175218 (asm-inspector)
 bool Fruit::CheckHasGoneOffscreen() {
     const float margin = SCALE_MARGIN_MULT * scale.y;
 
@@ -840,18 +843,13 @@ void Fruit::Slice() {
     const int16_t offA = (int16_t)randA;
     const int16_t offB = (int16_t)randB;
 
-    uint16_t baseAngle = m_SliceAngle;
-    uint16_t angA, angB;
+    // Binary @ 0x00177236 also writes back into m_SliceAngle when flipSide is set.
     if (flipSide) {
-        // Binary: m_SliceAngle += 0x7ff8; shuffles halves to opposite
-        // sides before applying offsets.
-        baseAngle = (uint16_t)(baseAngle + 0x7ff8);
-        angA = (uint16_t)(baseAngle - offB + 0x7ff8);
-        angB = (uint16_t)(baseAngle + offA + 0x7ff8);
-    } else {
-        angA = (uint16_t)(baseAngle - offB);
-        angB = (uint16_t)(baseAngle + offA);
+        m_SliceAngle = (uint16_t)(m_SliceAngle + 0x7ff8);
     }
+    uint16_t base = m_SliceAngle;
+    uint16_t angA = (uint16_t)(base - offB + 0x7ff8);  // halfA direction always +0x7ff8 from base
+    uint16_t angB = (uint16_t)(base + offA);            // halfB direction == base + offA
 
     const float radA = (float)(int16_t)angA * (6.2831853f / 65536.0f);
     const float radB = (float)(int16_t)angB * (6.2831853f / 65536.0f);
@@ -863,13 +861,16 @@ void Fruit::Slice() {
     Vec3 halfVelB = dirB * (imp_screen * sliceFactor) +
                     vel  * (1.0f - sliceFactor);
 
-    // Critical / special override — binary uses pure ±90° directions
-    // with a 0.5 scale.
+    // Critical / special override — binary @ 0x0017737a..0x00177442 uses raw
+    // m_SliceAngle (NOT the offset-baked radA) with ±0x3ffc, plus int32
+    // truncation on each velocity component.
     if (isCritical || (info && info->m_Score == 0x32)) {
-        const float r1 = radA + 1.5707963f;
-        const float r2 = radA - 1.5707963f;
-        halfVelA = Vec3(sinf(r1) * imp_screen, cosf(r1) * imp_screen, 0) * 0.5f;
-        halfVelB = Vec3(sinf(r2) * imp_screen, cosf(r2) * imp_screen, 0) * 0.5f;
+        const float critRadA = (float)(int16_t)(uint16_t)(m_SliceAngle + 0x3ffc) * (6.2831853f / 65536.0f);
+        const float critRadB = (float)(int16_t)(uint16_t)(m_SliceAngle + 0xc004) * (6.2831853f / 65536.0f);
+        halfVelA = Vec3((float)(int)(sinf(critRadA) * imp_screen),
+                        (float)(int)(cosf(critRadA) * imp_screen), 0.0f) * 0.5f;
+        halfVelB = Vec3((float)(int)(sinf(critRadB) * imp_screen),
+                        (float)(int)(cosf(critRadB) * imp_screen), 0.0f) * 0.5f;
     }
 
     m_SecondPos = pos;

@@ -100,11 +100,17 @@ public:
     // Matches Bomb::KillBomb (0x1716e8)
     void KillBomb();
 
+    // Matches Bomb::SetCallback (0x0017121c) — installs menu-bomb hit callback
+    // and overwrites rotation state for slow menu-bomb spin.
+    void SetCallback(std::function<void()> cb);
+
+    // ASM-verified: 2026-04-28T00:00 binary @ 0x001507e0 (asm-inspector)
     // Matches Bomb::Enabled (0x001507e0) — returns !m_bCollisionGuard.
     // "Enabled" == "still accepting slice collisions". Called by
     // ClearMenuItems to decide whether to fling the bomb.
     bool Enabled() const { return m_bCollisionGuard == 0; }
 
+    // ASM-verified: 2026-04-28T00:00 binary @ 0x0012637c (asm-inspector)
     // Matches Bomb::Disable (0x0012637c) — sets m_bCollisionGuard = 1.
     // Collision ignored afterwards, but the entity keeps updating in
     // Bomb::Update's alive branch so gravity integrates and the bomb

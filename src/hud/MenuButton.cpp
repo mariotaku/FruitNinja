@@ -217,37 +217,18 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
                         fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
                     if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
                         fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
+                    // Binary @ 0x0014f0dc..0x0014f0ea: copy clamped RotVel1 into RotVel2 so
+                    // both halves spin identically. Without this the two halves of a menu
+                    // fruit have slightly different rotational velocities once sliced.
+                    fruit->m_RotVel2 = fruit->m_RotVel1;
                 } else {
                     // Bomb entity: disable physics and scale by 0.85 (DAT_0014f1a0)
                     // MenuButton::Init (0x0014ee40): writes 0 to bomb+0x80 (m_bMovement)
-                    // then bomb->scale *= 0.85.
-                    //
-                    // Binary then calls Bomb::SetCallback (0x0017121c) which:
-                    //   - sets m_bMenuBombHit = 1 (menu-decoration marker)
-                    //   - installs the click callback into m_HitCallback
-                    //   - OVERWRITES rotation state so the menu bomb barely
-                    //     rotates: one axis slow, the other locked. User-
-                    //     confirmed axis mapping via in-game observation:
-                    //       m_RotX    = 0x2d   (45)
-                    //       m_RotVelY = 2      (slow spin, one axis)
-                    //       m_RotY    = 0
-                    //       m_RotVelX = 0      (other axis locked)
-                    //   The rotation overwrites are why menu bombs look
-                    //   almost static in the original — default 1..7
-                    //   random vels from Bomb::Init get replaced.
-                    //   Field assignment order matches Bomb::SetCallback
-                    //   @ 0x0017121c exactly.
+                    // then bomb->scale *= 0.85, then calls Bomb::SetCallback.
                     Bomb* bomb = static_cast<Bomb*>(e);
                     bomb->m_bMovement = 0;
                     bomb->scale = bomb->scale * BOMB_MENU_SCALE;
-                    bomb->m_bMenuBombHit = 1;
-                    if (clickCb) {
-                        bomb->m_HitCallback = clickCb;
-                    }
-                    bomb->m_RotY    = 0x2d;   // matches Bomb::SetCallback @ 0x0017121c
-                    bomb->m_RotVelX = 2;
-                    bomb->m_RotX    = 0;
-                    bomb->m_RotVelY = 0;
+                    bomb->SetCallback(clickCb);
                     // Matches binary MenuButton::Init bomb branch @ 0x0014f144:
                     //   vstr.32 s15,[r0,#0x6c]   ; *(bomb+0x6c) = 150.0
                     // (s15 = DAT = FRUIT_ZPOS = 150.0). Overrides the depth
@@ -268,16 +249,16 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
     }
 }
 
-// Matches MenuButton::Release
+// Matches MenuButton::Release (binary @ 0x0014f7e0)
 void MenuButton::Release() {
-    // Entity is owned by ActorManager — deactivate but don't delete
-    if (m_pEntity) {
-        m_pEntity->Deactivate();
-        m_pEntity = nullptr;
-        m_pFruitPiece = nullptr;
-    }
-
-    // TODO: delete BakedString labels
+    // Binary @ 0x0014f7e0 does NOT touch m_pEntity flags. It only clears
+    // a backref field on the entity (`entity+0x108` for fruit, `entity+0x84`
+    // for bomb) and deletes labels. The port doesn't model those backref
+    // fields yet, so just null our local pointers and let the entity stay
+    // alive in ActorManager -- the fruit's own physics carries it
+    // off-screen, where CheckHasGoneOffscreen kills it normally.
+    m_pEntity = nullptr;
+    m_pFruitPiece = nullptr;
     m_pLabel1 = nullptr;
     m_pLabel2 = nullptr;
 }
@@ -414,6 +395,7 @@ void MenuButton::Update(float dt) {
             // Released path is split by entity type — the binary has two
             // distinct sub-paths gated by m_FruitType < FruitInfo_GetCount().
             if (m_pEntity->entityType == 0) {
+                // ASM-verified: 2026-04-28T00:00 binary @ 0x0014e74a..0x0014e7ec (asm-inspector)
                 // --- Fruit branch (binary 0x0014e74a..0x0014e7ec) ---
                 // relVel = entity->vel - entity->m_SecondVel  (+0x1c - +0xc4)
                 // DAT_0014e978 = 0x3a83126f = 0.001f threshold
