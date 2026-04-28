@@ -162,10 +162,16 @@ public:
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #endif
 
-// Always-active: float fields at +0x25C..+0x264 (size-invariant across pointer widths)
+// Always-active: float fields at +0x25C..+0x264 (size-invariant across
+// pointer widths). Gate on libstdc++ — MSVC's STL has a different
+// std::string SBO size, which shifts these offsets. Binary was built
+// with libstdc++ (CodeSourcery G++ 4.4.1) so the offset invariant only
+// applies when the port is also using libstdc++.
+#if defined(__GLIBCXX__)
 static_assert(offsetof(ShopListItem, m_NewItemAlpha)  == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
 static_assert(offsetof(ShopListItem, m_SelectedAlpha) == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
 static_assert(offsetof(ShopListItem, m_LockFlashAlpha)== 0x264, "ShopListItem::m_LockFlashAlpha must be at +0x264");
+#endif
 
 #if defined(__arm__) || (defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4)
 // ARM32-only: fields after pointer-sized members m_pIconTex + m_pItemInfo.

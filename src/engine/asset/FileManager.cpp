@@ -3,9 +3,16 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <dirent.h>
 #include <sys/stat.h>
-#include <strings.h>
+
+#include <SDL2/SDL_stdinc.h>  // SDL_strcasecmp -- portable
+
+#ifdef _WIN32
+  #define WIN32_LEAN_AND_MEAN
+  #include <windows.h>          // FindFirstFileA / FindNextFileA
+#else
+  #include <dirent.h>
+#endif
 
 namespace Mortar {
 
@@ -52,16 +59,32 @@ SplitPath SplitPathParts(const char* path) {
 // Case-insensitive directory entry lookup. Returns the real on-disk name
 // matching `target` under `dirPath`, or empty string if none.
 std::string FindEntryCI(const std::string& dirPath, const std::string& target) {
-    DIR* d = opendir(dirPath.empty() ? "." : dirPath.c_str());
-    if (!d) return std::string();
+    const std::string dir = dirPath.empty() ? "." : dirPath;
     std::string match;
+#ifdef _WIN32
+    // Win32: FindFirstFile takes a "<dir>\*" glob.
+    std::string pattern = dir + "\\*";
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(pattern.c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return std::string();
+    do {
+        if (SDL_strcasecmp(fd.cFileName, target.c_str()) == 0) {
+            match = fd.cFileName;
+            break;
+        }
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+#else
+    DIR* d = opendir(dir.c_str());
+    if (!d) return std::string();
     while (struct dirent* ent = readdir(d)) {
-        if (strcasecmp(ent->d_name, target.c_str()) == 0) {
+        if (SDL_strcasecmp(ent->d_name, target.c_str()) == 0) {
             match = ent->d_name;
             break;
         }
     }
     closedir(d);
+#endif
     return match;
 }
 
