@@ -103,9 +103,28 @@ tmp/asm-compare/<name>_test.cpp
 
 ## Port-side action (if Diverges)
 - <file:line> currently does X; should do Y per binary @ 0x...
+
+## Verified-comment line (if Confirmed)
+- For `implementer` to paste above the verified function/block:
+  `// ASM-verified: <ISO-8601 to the minute, UTC> binary @ 0x<addr>[..0x<addr>] (asm-inspector)`
 ```
 
 Keep prose under 400 words. The diff itself is the evidence — let it speak.
+
+## Verified-comment rule
+
+When a verdict is **Confirmed**, supply a single-line comment for the implementer to paste above the verified function (or, for sub-block verifications, immediately above the verified block):
+
+```
+// ASM-verified: 2026-04-28T15:30 binary @ 0x001aaba8 (asm-inspector)
+```
+
+Format:
+- ISO-8601 timestamp **to the minute, UTC** -- same format as the existing `// Analysed:` comments.
+- `binary @ 0x<addr>` for a single-function verification, or `0x<start>..0x<end>` for a range.
+- Always include the trailing `(asm-inspector)` so the comments are greppable as an inventory: `grep -rn 'ASM-verified:' src/` lists every binary-truth-checked method.
+
+Do **NOT** emit the line for **Diverges** or **Inconclusive** verdicts. The comment is a guarantee, not a wish list. Speculative or pending verifications stay un-commented; the implementer adds the line only after the spec applies cleanly and the function (in the form they've now written) matches the binary that was diffed.
 
 ## Stay in lane
 
