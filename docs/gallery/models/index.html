@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fruit Ninja Models — WebGL Gallery</title>
+<style>
+  body { background: #1a1a2e; color: #eee; font-family: monospace; margin: 0;
+         display: grid; grid-template-columns: 1fr 340px; grid-template-rows: auto 1fr;
+         height: 100vh; gap: 0; overflow: hidden; }
+  h1   { color: #e94560; margin: 0; font-size: 18px; }
+  header { grid-column: 1 / -1; padding: 10px 16px; background: #101020;
+           border-bottom: 1px solid #222; display: flex; align-items: center; gap: 20px; }
+  header .status { color: #888; font-size: 12px; flex: 1; }
+
+  main { padding: 16px; display: flex; flex-direction: column; align-items: center;
+         justify-content: flex-start; overflow: auto; gap: 12px; }
+  #viewer { background: repeating-conic-gradient(#2a2a3a 0% 25%, #20202e 0% 50%) 50%/32px 32px;
+            border: 1px solid #333; border-radius: 6px; display: block;
+            width: min(72vh, 80vw, 640px); height: min(72vh, 80vw, 640px);
+            cursor: grab; touch-action: none; }
+  #viewer:active { cursor: grabbing; }
+  #viewerInfo { color: #8cf; font-size: 13px; text-align: center;
+                max-width: 640px; word-break: break-all; }
+  #viewerInfo .tag { font-size: 10px; color: #8fc; background: #2a5a3a;
+                     padding: 1px 6px; border-radius: 3px; margin-left: 4px; }
+  #viewerInfo .sub { color: #888; font-size: 11px; margin-top: 4px; }
+
+  #controls { background: #101020; border: 1px solid #222; border-radius: 6px;
+              padding: 10px 14px; display: flex; flex-wrap: wrap;
+              gap: 10px 16px; max-width: 640px; width: 100%; box-sizing: border-box; }
+  #controls label { font-size: 12px; color: #aaa;
+                    display: inline-flex; align-items: center; gap: 4px; }
+  #controls input[type="checkbox"] { vertical-align: middle; }
+  #controls select { background: #16213e; color: #eee; border: 1px solid #333;
+                     padding: 2px 6px; font-size: 12px; font-family: monospace; }
+
+  aside { background: #16213e; border-left: 1px solid #222; display: flex;
+          flex-direction: column; overflow: hidden; }
+  aside input { background: #0f1a2e; color: #eee; border: 1px solid #333;
+                padding: 8px 10px; margin: 10px; font-size: 13px; }
+  aside ul { list-style: none; padding: 0; margin: 0; flex: 1; overflow-y: auto; }
+  aside li { padding: 5px 12px; cursor: pointer; font-size: 12px; color: #bcf;
+             border-bottom: 1px solid #1e2a44; }
+  aside li:hover { background: #1e2a44; color: #fff; }
+  aside li.active { background: #e94560; color: #fff; }
+  aside li .meta { color: #666; font-size: 10px; float: right; }
+  aside li.active .meta { color: #fcd; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Fruit Ninja Models</h1>
+  <div class="status" id="status">Loading…</div>
+</header>
+
+<main>
+  <canvas id="viewer" width="720" height="720"></canvas>
+
+  <div id="controls">
+    <label><input type="checkbox" id="autospin" checked> auto-spin</label>
+    <label>draw:
+      <select id="drawMode">
+        <option value="strip">GL prim (native)</option>
+        <option value="tris">force GL_TRIANGLES</option>
+        <option value="lines">GL_LINES</option>
+        <option value="points">GL_POINTS</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="viewerInfo">—</div>
+</main>
+
+<aside>
+  <input type="text" id="filter" placeholder="Filter model names…" autofocus>
+  <ul id="list"></ul>
+</aside>
+
+<script>
+"use strict";
+
+const ATLAS_URL = "fruit_atlas.png";
+const MODELS_URL = "models.json";
+let gl = null;
+let prog = null;
+let atlasImg = null;
+let atlasTex = null;
+let allModels = [];
+let current = null;            // { model, vbo, ibo, draws, bounds, stride, indexType, idxBytes, totalIdx }
+let uniforms = null;           // { uMVP, uTex, uTextured }
+const rot = { x: 0, y: 0 };
+let dragging = false, lastX = 0, lastY = 0;
+let autoSpinEnabled = true;
+let drawMode = "strip";          // strip | tris | lines | points
+
+const VS_SRC = `
+attribute vec3 aPos;
+attribute vec2 aUV;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+varying vec2 vUV;
+varying vec4 vColor;
+void main() {
+  vUV = aUV;
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPos, 1.0);
+  gl_PointSize = 3.0;
+}`;
+const FS_SRC = `
+precision mediump float;
+varying vec2 vUV;
+varying vec4 vColor;
+uniform sampler2D uTex;
+uniform float uTextured;
+void main() {
+  vec4 t = texture2D(uTex, vUV);
+  gl_FragColor = vColor * mix(vec4(1.0), t, uTextured);
+}`;
+
+// --- mat4 helpers (column-major, GL order) ---
+const M = {
+  identity: () => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]),
+  mul: (a, b) => {
+    const o = new Float32Array(16);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+      o[i*4+j] = a[0*4+j]*b[i*4+0] + a[1*4+j]*b[i*4+1] + a[2*4+j]*b[i*4+2] + a[3*4+j]*b[i*4+3];
+    }
+    return o;
+  },
+  rotX: (rad) => { const c = Math.cos(rad), s = Math.sin(rad);
+    return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); },
+  rotY: (rad) => { const c = Math.cos(rad), s = Math.sin(rad);
+    return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]); },
+  translate: (x, y, z) => new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1]),
+  ortho: (l, r, b, t, n, f) => new Float32Array([
+    2/(r-l), 0, 0, 0,
+    0, 2/(t-b), 0, 0,
+    0, 0, -2/(f-n), 0,
+    -(r+l)/(r-l), -(t+b)/(t-b), -(f+n)/(f-n), 1
+  ]),
+};
+
+
+function compile(gl, type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(sh));
+    return null;
+  }
+  return sh;
+}
+
+function initGL() {
+  const cvs = document.getElementById("viewer");
+  gl = cvs.getContext("webgl", { antialias: true });
+  if (!gl) throw new Error("WebGL unsupported");
+
+  const vs = compile(gl, gl.VERTEX_SHADER, VS_SRC);
+  const fs = compile(gl, gl.FRAGMENT_SHADER, FS_SRC);
+  prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.bindAttribLocation(prog, 0, "aPos");
+  gl.bindAttribLocation(prog, 1, "aUV");
+  gl.bindAttribLocation(prog, 2, "aColor");
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(prog));
+  }
+  uniforms = {
+    uMVP:      gl.getUniformLocation(prog, "uMVP"),
+    uTex:      gl.getUniformLocation(prog, "uTex"),
+    uTextured: gl.getUniformLocation(prog, "uTextured"),
+  };
+
+  // Atlas texture — uploaded once.
+  atlasTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlasImg);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+  // Handle HiDPI resize.
+  function resize() {
+    const r = cvs.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cvs.width  = Math.round(r.width  * dpr);
+    cvs.height = Math.round(r.height * dpr);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  // Input handling.
+  cvs.addEventListener("mousedown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener("mouseup", () => { dragging = false; });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    rot.y += dx * 0.01;
+    rot.x += dy * 0.01;
+  });
+  cvs.addEventListener("touchstart", (e) => {
+    if (!e.touches.length) return;
+    dragging = true;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+    e.preventDefault();
+  }, { passive: false });
+  cvs.addEventListener("touchmove", (e) => {
+    if (!dragging || !e.touches.length) return;
+    const dx = e.touches[0].clientX - lastX, dy = e.touches[0].clientY - lastY;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+    rot.y += dx * 0.01;
+    rot.x += dy * 0.01;
+    e.preventDefault();
+  }, { passive: false });
+  cvs.addEventListener("touchend", () => { dragging = false; });
+}
+
+function releaseCurrent() {
+  if (!current) return;
+  if (current.vbo) gl.deleteBuffer(current.vbo);
+  if (current.ibo) gl.deleteBuffer(current.ibo);
+  current = null;
+}
+
+function loadModel(model) {
+  releaseCurrent();
+  rot.x = 0; rot.y = 0;
+
+  const STRIDE = 24;
+  // Preserve each geometry's native primitive type so GL handles strip
+  // chaining / degenerate triangles itself. (Manual expansion of strips
+  // into a triangle list can flip winding on sub-strips that restart at
+  // odd-count offsets, which was producing the vertex artefacts.)
+  const parts = [];
+  let totalVerts = 0, totalIdx = 0;
+  for (const mesh of model.meshes || []) {
+    for (const geom of mesh.geometries || []) {
+      const v = geom.vertex, ix = geom.index;
+      if (!v || !v.positions || !ix || !ix.indices) continue;
+      const vc = v.vertCount || (v.positions.length / 3);
+      const ic = ix.indices.length;
+      const isStrip = (ix.primType || "TSTRIP") === "TSTRIP";
+      parts.push({ v, ix, vc, ic, isStrip });
+      totalVerts += vc;
+      totalIdx   += ic;
+    }
+  }
+  if (totalVerts === 0) { current = null; return; }
+
+  const vbuf   = new ArrayBuffer(totalVerts * STRIDE);
+  const f32    = new Float32Array(vbuf);
+  const u8     = new Uint8Array(vbuf);
+  const idxBuf = new Uint32Array(totalIdx);
+  const draws  = [];   // { prim: 'STRIP'|'TRIS', first: idx-offset, count }
+  let vOff = 0, iOff = 0;
+  let mnx = 1e30, mny = 1e30, mnz = 1e30;
+  let mxx = -1e30, mxy = -1e30, mxz = -1e30;
+
+  for (const part of parts) {
+    const { v, ix, vc, isStrip, ic } = part;
+    for (let i = 0; i < vc; i++) {
+      const px = v.positions[i*3+0], py = v.positions[i*3+1], pz = v.positions[i*3+2];
+      if (px < mnx) mnx = px; if (px > mxx) mxx = px;
+      if (py < mny) mny = py; if (py > mxy) mxy = py;
+      if (pz < mnz) mnz = pz; if (pz > mxz) mxz = pz;
+      f32[(vOff + i) * 6 + 0] = px;
+      f32[(vOff + i) * 6 + 1] = py;
+      f32[(vOff + i) * 6 + 2] = pz;
+      f32[(vOff + i) * 6 + 3] = v.uvs[i*2+0];
+      f32[(vOff + i) * 6 + 4] = v.uvs[i*2+1];
+      u8[(vOff + i) * STRIDE + 20] = v.colors[i*4+0] & 0xff;
+      u8[(vOff + i) * STRIDE + 21] = v.colors[i*4+1] & 0xff;
+      u8[(vOff + i) * STRIDE + 22] = v.colors[i*4+2] & 0xff;
+      u8[(vOff + i) * STRIDE + 23] = v.colors[i*4+3] & 0xff;
+    }
+    for (let i = 0; i < ic; i++) idxBuf[iOff + i] = ix.indices[i] + vOff;
+    draws.push({ prim: isStrip ? "STRIP" : "TRIS", first: iOff, count: ic });
+    iOff += ic;
+    vOff += vc;
+  }
+
+  const finalIdx = idxBuf.slice(0, iOff);
+  const needU32  = finalIdx.some(x => x > 65535);
+  const extU32   = needU32 ? gl.getExtension("OES_element_index_uint") : null;
+  const indexType = (needU32 && extU32) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+  const idxBytes  = (indexType === gl.UNSIGNED_INT) ? 4 : 2;
+
+  const vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(vbuf), gl.STATIC_DRAW);
+
+  const ibo = gl.createBuffer();
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+  if (indexType === gl.UNSIGNED_INT) {
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, finalIdx, gl.STATIC_DRAW);
+  } else {
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(finalIdx), gl.STATIC_DRAW);
+  }
+
+  current = {
+    model, vbo, ibo,
+    draws,
+    bounds:   { min: [mnx, mny, mnz], max: [mxx, mxy, mxz] },
+    stride:   STRIDE,
+    indexType, idxBytes,
+    totalIdx: finalIdx.length,
+  };
+
+  // Info panel.
+  let totalGeoms = 0;
+  let primTypes = new Set();
+  for (const mesh of model.meshes || []) {
+    for (const g of mesh.geometries || []) {
+      totalGeoms++;
+      if (g.index) primTypes.add(g.index.primType);
+    }
+  }
+  const info = document.getElementById("viewerInfo");
+  const bx = (mxx - mnx).toFixed(1), by = (mxy - mny).toFixed(1), bz = (mxz - mnz).toFixed(1);
+  info.innerHTML = `
+    <div><strong>${model.file}</strong>
+      <span class="tag">${model.modelName || "?"}</span>
+      <span class="tag">${totalVerts} verts</span>
+      <span class="tag">${finalIdx.length} idx</span>
+      <span class="tag">${totalGeoms} geoms</span>
+      <span class="tag">${[...primTypes].join(",") || "—"}</span>
+    </div>
+    <div class="sub">bounds Δx=${bx}  Δy=${by}  Δz=${bz}</div>`;
+}
+
+function render() {
+  const cvs = gl.canvas;
+  gl.viewport(0, 0, cvs.width, cvs.height);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LESS);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  if (!current) return;
+
+  if (autoSpinEnabled && !dragging) rot.y += 0.008;
+
+  gl.useProgram(prog);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+
+  const b = current.bounds;
+  const cx = (b.min[0] + b.max[0]) / 2;
+  const cy = (b.min[1] + b.max[1]) / 2;
+  const cz = (b.min[2] + b.max[2]) / 2;
+  const half = Math.max(b.max[0]-b.min[0], b.max[1]-b.min[1], b.max[2]-b.min[2]) * 0.65;
+
+  // Y<->Z axis swap (reflection, det=-1) -- restored from commit 30a0874.
+  // The Mortar mesh files store +Y as their "up" and +Z as our screen-up;
+  // a pure -90 deg X rotation would map mesh Y to render -Z which inverts
+  // the depth ordering between body and outline shells in effect-meshes
+  // like banana_speed_b_piece_2.mmd (outline ends up closer to camera and
+  // overdraws the textured body). The Y<->Z swap (mesh y -> render z,
+  // mesh z -> render y) keeps body in front of outline as the binary
+  // intends. Winding flips (det=-1); cull is off so it doesn't matter.
+  const yzSwap = new Float32Array([
+    1, 0, 0, 0,
+    0, 0, 1, 0,
+    0, 1, 0, 0,
+    0, 0, 0, 1,
+  ]);
+  let world = M.translate(-cx, -cy, -cz);
+  world = M.mul(yzSwap, world);
+  world = M.mul(M.rotX(rot.x), world);
+  world = M.mul(M.rotY(rot.y), world);
+  const aspect = cvs.width / cvs.height;
+  const hx = half * aspect, hy = half;
+  const proj = M.ortho(-hx, hx, -hy, hy, -half * 10, half * 10);
+  const mvp = M.mul(proj, world);
+
+  const STRIDE = current.stride;
+  gl.bindBuffer(gl.ARRAY_BUFFER, current.vbo);
+  gl.enableVertexAttribArray(0);
+  gl.enableVertexAttribArray(1);
+  gl.enableVertexAttribArray(2);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT,         false, STRIDE, 0);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT,         false, STRIDE, 12);
+  gl.vertexAttribPointer(2, 4, gl.UNSIGNED_BYTE, true,  STRIDE, 20);
+
+  gl.uniformMatrix4fv(uniforms.uMVP, false, mvp);
+  gl.uniform1i(uniforms.uTex, 0);
+  gl.uniform1f(uniforms.uTextured, 1.0);
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, current.ibo);
+  const count = current.totalIdx;
+
+  let mode;
+  switch (drawMode) {
+    case "tris":   mode = gl.TRIANGLES;      break;
+    case "lines":  mode = gl.LINE_STRIP;     break;
+    case "points": mode = gl.POINTS;         break;
+    case "strip":
+    default:       mode = gl.TRIANGLES;      break;   // every shipped .mmd is tris
+  }
+  gl.drawElements(mode, count, current.indexType, 0);
+}
+
+function frame() { render(); requestAnimationFrame(frame); }
+
+// --- Sidebar list ---
+function buildList(models) {
+  const ul = document.getElementById("list");
+  ul.innerHTML = "";
+  for (const m of models) {
+    const li = document.createElement("li");
+    li.dataset.name = m.file;
+    let vc = 0;
+    for (const mesh of m.meshes || []) for (const g of mesh.geometries || []) {
+      if (g.vertex && g.vertex.vertCount) vc += g.vertex.vertCount;
+    }
+    li.innerHTML = `${m.file} <span class="meta">${vc}v</span>`;
+    li.addEventListener("click", () => selectModel(m.file));
+    ul.appendChild(li);
+  }
+}
+
+function selectModel(name) {
+  const model = allModels.find(m => m.file === name);
+  if (!model) return;
+  loadModel(model);
+  for (const li of document.querySelectorAll("#list li")) {
+    li.classList.toggle("active", li.dataset.name === name);
+  }
+  // Scroll the active item into view if off-screen.
+  const active = document.querySelector("#list li.active");
+  if (active) active.scrollIntoView({ block: "nearest" });
+  // Update hash for bookmarking / reload.
+  history.replaceState(null, "", "#" + encodeURIComponent(name));
+}
+
+function filterList() {
+  const q = document.getElementById("filter").value.toLowerCase();
+  for (const li of document.querySelectorAll("#list li")) {
+    li.style.display = (!q || li.dataset.name.toLowerCase().includes(q)) ? "" : "none";
+  }
+}
+
+async function boot() {
+  const status = document.getElementById("status");
+  status.textContent = "Loading atlas…";
+  await new Promise((resolve, reject) => {
+    atlasImg = new Image();
+    atlasImg.onload = resolve;
+    atlasImg.onerror = reject;
+    atlasImg.src = ATLAS_URL;
+  });
+
+  status.textContent = "Loading models.json…";
+  const resp = await fetch(MODELS_URL);
+  const data = await resp.json();
+  allModels = data.models.slice().sort((a, b) => a.file.localeCompare(b.file));
+
+  initGL();
+  buildList(allModels);
+
+  // UI wiring.
+  document.getElementById("filter").addEventListener("input", filterList);
+  document.getElementById("autospin").addEventListener("change", (e) => autoSpinEnabled = e.target.checked);
+  document.getElementById("drawMode").addEventListener("change", (e) => drawMode = e.target.value);
+
+  // Initial selection: from URL hash if valid, else first model.
+  const hashName = decodeURIComponent(location.hash.slice(1));
+  const firstPick = allModels.find(m => m.file === hashName) || allModels[0];
+  if (firstPick) selectModel(firstPick.file);
+
+  status.textContent = `${allModels.length} models ready. Drag to orbit; click a name to switch.`;
+  requestAnimationFrame(frame);
+}
+
+boot().catch(e => {
+  document.getElementById("status").innerHTML =
+    `<span style="color:#f88">Error: ${e.message}</span>`;
+  console.error(e);
+});
+</script>
+</body>
+</html>
