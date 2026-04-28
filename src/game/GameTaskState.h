@@ -11,6 +11,16 @@
 //
 // Each state has: Init, Update, Draw, Exit handlers
 //
+// Port specific: the binary's GameTaskUpdate reads an anonymous
+// per-task struct via the GOT; there is no `GameTaskState` class
+// symbol in the binary. The name `GameTaskState` is an analyst label
+// (the FN01 Ghidra script applies it as `/FruitNinja/GameTaskState`)
+// and is also used here for clarity. The binary's translation unit
+// that owns this state is `GameTask.cpp`. The full struct in the
+// binary is 0x118 (280) bytes / 19 fields per docs/structs/game.md
+// "GameTask State"; the port currently models only the 4 fields it
+// actively uses -- expand as more callers are ported.
+//
 
 #include <cstdint>
 #include "asset/Texture.h"
