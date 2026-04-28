@@ -5,7 +5,7 @@
 #include <vector>
 #include <sys/stat.h>
 
-#include <SDL2/SDL_stdinc.h>  // SDL_strcasecmp -- portable
+#include <SDL_stdinc.h>  // SDL_strcasecmp -- portable
 
 #ifdef _WIN32
   #define WIN32_LEAN_AND_MEAN
