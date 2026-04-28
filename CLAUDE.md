@@ -62,6 +62,11 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 - Run independent items **in parallel** — issue multiple `Agent` tool calls in a single message when no dependencies exist. CC supports this and it's strictly faster than serialising. Common examples: verifying N independent classes, RE'ing N unrelated functions, exploring N areas of the codebase.
 - Use a single combined agent call only when the items genuinely depend on each other (later steps need earlier findings). Don't combine for ergonomic reasons -- the user gets less feedback that way.
 
+**Analyser agents default to background:**
+- `re-analyst` and `asm-inspector` runs are typically multi-minute (decompiling many functions, compiling and diffing ASM). Dispatch them with `run_in_background: true` by default so the user can keep working / steer / interrupt while the analysis runs. The harness notifies on completion.
+- Foreground only when the next step strictly depends on the result and the user is idle waiting (e.g. a quick targeted single-function verification before applying a fix).
+- `implementer` and `doc-writer` typically run foreground since their results immediately drive subsequent code or doc edits.
+
 ## Conventions
 - **Only commit when explicitly requested** by the user — do not auto-commit after changes.
 - When a value in port code **differs from the original binary**, add a comment explaining the discrepancy: `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`.
