@@ -155,8 +155,9 @@ public:
     void Draw(const Matrix44& transform);
 
     // Matches Model::SwapSkeleton (0x001aaba8)
-    // Stores skeleton, then calls UpdateBoneLinks.
-    void SwapSkeleton(std::vector<Skeleton::Bone>& bones);
+    // Calls Skeleton::Swap(Skeleton&) (0x001a89c4) to swap all arrays
+    // from skel into m_Skeleton (no matrix rebuild), then calls UpdateBoneLinks.
+    void SwapSkeleton(Skeleton& skel);
 
     // Matches Model::UpdateBoneLinks (0x00193010)
     // Calls BindSkeleton on each mesh with the model's skeleton.
