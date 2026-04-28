@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.13)
 cmake_policy(SET CMP0079 NEW)
+# CMP0135 (CMake 3.24+): extracted file timestamps are the extract-time,
+# not the archive's archived mtimes. Explicitly opt in so re-downloads
+# (e.g. when the URL_HASH changes) trigger a rebuild reliably.
+if (POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
 project(FruitNinja LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 11)
@@ -87,20 +93,51 @@ endif()
 
 # --- Dependencies ---
 
-# Prefer system SDL2 (MSYS2 / Linux package, etc.) but fall back to source
-# fetch for environments without a system install (most commonly MSVC + VS
-# Build Tools). FetchContent compiles SDL2 once into the project tree.
+# Prefer system SDL2 (MSYS2 / Linux package, etc.); fall back to a fetch
+# only when not installed:
+#   - On MSVC: download libsdl-org's prebuilt VC binary (SDL2-devel-*-VC.zip)
+#     -- ~5 sec download vs ~2 min source build, no extra dependencies.
+#   - Elsewhere (or as a safety net on MSVC if the prebuilt download fails):
+#     fall through to the source-build path.
 include(FetchContent)
+set(_SDL2_VER 2.30.11)
+
 find_package(SDL2 QUIET)
+if (NOT SDL2_FOUND AND MSVC)
+    message(STATUS "System SDL2 not found -- fetching prebuilt MSVC zip ${_SDL2_VER}")
+    FetchContent_Declare(
+        SDL2_prebuilt_msvc
+        URL      https://github.com/libsdl-org/SDL/releases/download/release-${_SDL2_VER}/SDL2-devel-${_SDL2_VER}-VC.zip
+        URL_HASH SHA256=6e524b5f0e3ecd9fe3b439336b5e7c3fe597e8823e8e62c8e3074d335e9ca7d9
+    )
+    FetchContent_MakeAvailable(SDL2_prebuilt_msvc)
+
+    set(_sdl2_root "${sdl2_prebuilt_msvc_SOURCE_DIR}")
+    set(_sdl2_arch "x64")  # FN binary is 64-bit MSVC
+    set(_sdl2_lib_dir "${_sdl2_root}/lib/${_sdl2_arch}")
+
+    add_library(SDL2::SDL2 SHARED IMPORTED)
+    set_target_properties(SDL2::SDL2 PROPERTIES
+        IMPORTED_LOCATION             "${_sdl2_lib_dir}/SDL2.dll"
+        IMPORTED_IMPLIB               "${_sdl2_lib_dir}/SDL2.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${_sdl2_root}/include")
+
+    add_library(SDL2::SDL2main STATIC IMPORTED)
+    set_target_properties(SDL2::SDL2main PROPERTIES
+        IMPORTED_LOCATION "${_sdl2_lib_dir}/SDL2main.lib")
+
+    set(SDL2_FOUND TRUE)
+endif()
+
 if (NOT SDL2_FOUND)
-    message(STATUS "System SDL2 not found -- fetching SDL2 2.30.11 source")
+    message(STATUS "System SDL2 not found -- fetching SDL2 ${_SDL2_VER} source (slow path)")
     set(SDL_TEST OFF CACHE BOOL "" FORCE)
     set(SDL_SHARED ON CACHE BOOL "" FORCE)
     set(SDL_STATIC OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(
         SDL2
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG        release-2.30.11
+        GIT_TAG        release-${_SDL2_VER}
     )
     FetchContent_MakeAvailable(SDL2)
     # FetchContent uses the SDL2 source's own targets (`SDL2-static`,
@@ -145,17 +182,29 @@ add_subdirectory(src/debug)
 # --- Link (after all subdirectories define their targets) ---
 target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine)
 
-# Copy SDL2.dll next to fruit-ninja.exe so the launcher finds it without
-# having to add the FetchContent build dir to PATH. Only when SDL2 is
-# built as a shared library inside our build (FetchContent path) -- on
-# MSYS2 / Linux the system SDL2 is found via PATH/ldconfig and no copy
-# is needed.
-if (TARGET SDL2 AND WIN32)
-    get_target_property(_sdl2_type SDL2 TYPE)
+# Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds
+# it without having to add an external dir to PATH. Covers both fetch
+# paths (prebuilt MSVC zip = IMPORTED SHARED; source build = built
+# SHARED_LIBRARY) -- $<TARGET_FILE:SDL2::SDL2> resolves to the .dll
+# either way. On MSYS2 / Linux the system SDL2 is found via PATH /
+# ldconfig and no copy is needed (the alias points at a system target
+# without an importable file location, so the generator expression
+# would be empty -- skip via SDL2_FOUND only-if-fetched gate).
+if (WIN32 AND TARGET SDL2::SDL2)
+    # Determine whether SDL2::SDL2 has a real DLL we can copy.
+    # IMPORTED SHARED (prebuilt zip) -> TYPE = SHARED_LIBRARY, IMPORTED = TRUE
+    # ALIAS of source target          -> follow alias
+    # System / interface             -> skip
+    set(_sdl2_real_target SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real_target} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real_target ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real_target} TYPE)
     if (_sdl2_type STREQUAL "SHARED_LIBRARY")
         add_custom_command(TARGET fruit-ninja POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2>
+                $<TARGET_FILE:SDL2::SDL2>
                 $<TARGET_FILE_DIR:fruit-ninja>
             COMMENT "Copying SDL2.dll next to fruit-ninja.exe")
     endif()
