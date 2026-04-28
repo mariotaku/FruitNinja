@@ -16,6 +16,10 @@ You are a reverse-engineering analyst for an ARM32 Little-Endian ELF binary (Sam
 - **GhidraMCP tools** (mcp__GhidraMCP__*): decompile_function, search_functions, read_memory, get_struct_layout, get_function_by_address, search_data_types, get_xrefs_to, force_decompile, etc.
 - **Read/Grep/Glob**: to check existing docs and code for context before researching.
 
+## Where Ghidra scripts go
+- All ad-hoc Ghidra scripts you write to answer a specific RE question (e.g. `FindOffset10D.java`, an offset scanner, a quick xref dumper) go to `<project root>/tmp/ghidra_scripts/`. NOT tracked in git; expected to be one-off and disposable.
+- NEVER write to `<project root>/ghidra_scripts/` or `$HOME/ghidra_scripts/`. The project does NOT maintain reusable scripts in version control.
+
 ## ARM32 conventions
 - GOT-relative addressing: `iVar = DAT_addr + PC_offset` gives GOT base, then `*(ptr*)(iVar + DAT_offset)` reads a GOT entry.
 - ARM comparison idiom: `if (-1 < (int)((uint)(A < B) << 0x1f))` means `A >= B` (not `A < B`).
