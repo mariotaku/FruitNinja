@@ -57,6 +57,11 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 - `doc-writer` writes docs only — does not RE, does not write code.
 - `asm-inspector` does not edit `src/`; hands off a precise spec when divergence is found.
 
+**Dispatch granularity:**
+- When a request involves multiple distinct items (e.g. "verify Fruit, Bomb, MenuButton"; "RE these 5 functions"; "fix these 3 bugs"), prefer **subdividing into multiple agent calls** rather than packing everything into one. Smaller scopes return faster and give the user real progress milestones (1-of-N done is visible) instead of an opaque long-running blob.
+- Run independent items **in parallel** — issue multiple `Agent` tool calls in a single message when no dependencies exist. CC supports this and it's strictly faster than serialising. Common examples: verifying N independent classes, RE'ing N unrelated functions, exploring N areas of the codebase.
+- Use a single combined agent call only when the items genuinely depend on each other (later steps need earlier findings). Don't combine for ergonomic reasons -- the user gets less feedback that way.
+
 ## Conventions
 - **Only commit when explicitly requested** by the user — do not auto-commit after changes.
 - When a value in port code **differs from the original binary**, add a comment explaining the discrepancy: `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`.
