@@ -102,12 +102,13 @@ self get `m_bPendingRemoval = 1` — both are removed from the HUD in the next U
 
 Binary in `ShopScreen::Update` at `~0x0015e2dc`:
 ```
-QCallee<ShopScreen>(auStack_104, QuitShopCallback)  // confirmed via xref DATA at 0x0015e2fc
-Delegate0::Delegate0(&DStack_178, auStack_104)       // wraps as press delegate
+QCallee<ShopScreen>(auStack_104, QuitShopCallback)  // QuitShopCallback fn-ptr via GOT[0x78EC]=0x0015D55C (DAT_0015e578)
+Delegate0::Delegate0(&DStack_178, auStack_104)      // wraps as press delegate
 SmartPtr<Texture>::SmartPtr(&SStack_2c, GameTask + 0x17c)  // texture from GameTask
 _Vector3<float>::_Vector3(&Stack_88, 185.0, -105.0, 0.0)   // DAT_0015e55c/560/558
-MenuButton::MenuButton(pMVar7, &SStack_2c, &Stack_88, &DStack_178, fruitType, ...)
-// fruitType = *(GameTask + 0x78EC) — pre-stored int in GameTask
+MenuButton::MenuButton(pMVar7, &SStack_2c, &Stack_88, &DStack_178,
+                       **(int**)(GOT+0x7060),       // fruitType = s_FruitInfoCount (DAT_0015e580)
+                       &Stack_94, &DStack_19c)
 HUD::AddControl(GameTask->hud, pMVar7, false)
 TutorialControl::ResetTutePos(GameTask->tutorialCtrl, pMVar7)
 // LAB_0015e874:
@@ -115,9 +116,25 @@ pMVar7->m_TargetSize *= 0.825  // DAT_0015e920
 pMVar7->m_pFruitPiece->scale *= 0.825
 ```
 
-Port uses `FruitInfo_GetCount()` as the fruit type (forces bomb spawn, matching the
-DojoScreen back-button pattern). The actual fruit type from `*(GameTask + 0x78EC)` is
-not resolved, but the port works because MenuButton treats out-of-range types as bombs.
+**fruitType resolution (verified 2026-04-29)**:
+
+The disassembly at 0x0015e32e shows:
+```
+ldr.w r12, [0x0015e580]   ; r12 = 0x7060 (GOT offset)
+ldr.w r7,  [r5, r12]      ; r7  = *(GOT_BASE + 0x7060) = pointer to int (s_FruitInfoCount)
+ldr   r7,  [r7, #0x0]     ; r7  = *r7 = the fruit count value
+str   r7,  [sp, #0x0]     ; pass as 5th arg to MenuButton ctor
+```
+
+- `DAT_0015e580` = `0x00007060` — GOT offset to the `s_FruitInfoCount` global pointer
+- `*(GOT + 0x7060)` = `0x0024D754` (in `.bss`) — pointer to int holding fruit count
+- `**(int**)(GOT+0x7060)` = current fruit count (incremented per `<fruit>` XML element in `Fruit::LoadInfo` at 0x00179a6e–0x00179a7e). This is exactly what the port's `FruitInfo_GetCount()` returns.
+- `DAT_0015e578` = `0x000078EC` is NOT the fruit type — it's the GOT offset to the `QuitShopCallback` function pointer (`GOT[0x78EC]` = `0x0015D55C` = `ShopScreen::QuitShopCallback`), used by `QCallee<ShopScreen>` to wire the press delegate.
+
+**Port correctness**: `FruitInfo_GetCount()` in `src/entities/FruitInfo.cpp` returns
+`s_FruitInfoCount`, which matches the binary's `**(int**)(GOT+0x7060)` exactly. The
+back/quit button is correctly the bomb-threshold sentinel — same pattern as Dojo and
+About back-buttons. **No fix needed.**
 
 ### Dependency Audit
 

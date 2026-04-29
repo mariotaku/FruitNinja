@@ -570,19 +570,15 @@ void ShopScreen::QuitShopCallback() {
     // Set state to transition-out (state 2)
     m_State = 2;
 
-    // Fling the back/quit button. Binary writes byte at entity+0x80
-    // polymorphically: Fruit::m_bDetached or Bomb::m_bMovement. Falls
-    // back to m_pEntity for bombs whose m_pFruitPiece was left null.
-    if (m_pBuyButton && m_pBuyButton->m_pEntity) {
-        Entity* e = m_pBuyButton->m_pEntity;
+    // Fling the back/quit button. Binary @ 0x0015d55c indirects through
+    // m_pBuyButton->m_pFruitPiece (+0x134) and writes *(byte*)(piece+0x80)=1
+    // unconditionally — same offset for Fruit::m_bDetached and Bomb::m_bMovement.
+    if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
+        Fruit* piece = m_pBuyButton->m_pFruitPiece;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        if (e->entityType == 0) {
-            static_cast<Fruit*>(e)->m_bDetached = true;
-        } else if (e->entityType == 1) {
-            static_cast<Bomb*>(e)->m_bMovement = 1;
-        }
-        e->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+        piece->m_bDetached = true;  // +0x80
+        piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
     }
 
     // Binary: TutorialControl::ResetTutePos(tute, 0) — null MenuButton* hides arrow
@@ -747,6 +743,8 @@ void ShopScreen::Update(float dt) {
                     [this]() { QuitShopCallback(); },
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                 m_pBuyButton->m_bEnabled = 1;
+                // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
+                m_pBuyButton->m_bRespondsToBackKey = 1;
                 if (game.hud) game.hud->AddControl(m_pBuyButton, false);
                 // Binary (0x0015e3e2..0x0015e3f0): register DeletedMenuItem as m_RemoveCallback
                 m_pBuyButton->m_RemoveCallback =
@@ -895,16 +893,13 @@ void ShopScreen::Update(float dt) {
         //   fires when newAlpha >= threshold, i.e. NOT yet done fading.
         if (newAlpha >= ALPHA_STATE3_DONE) {
             // Still fading: fling old back-button if present.
-            if (m_pBuyButton && m_pBuyButton->m_pEntity) {
-                Entity* e = m_pBuyButton->m_pEntity;
+            // Binary: m_pBuyButton->m_pFruitPiece (+0x134); *(byte*)(piece+0x80)=1.
+            if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
+                Fruit* piece = m_pBuyButton->m_pFruitPiece;
                 float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-                if (e->entityType == 0) {
-                    static_cast<Fruit*>(e)->m_bDetached = true;
-                } else if (e->entityType == 1) {
-                    static_cast<Bomb*>(e)->m_bMovement = 1;
-                }
-                e->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+                piece->m_bDetached = true;
+                piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
                 // Binary: TutorialControl::ResetTutePos(tute, 0)
                 if (game.pTutorialCtrl)
                     game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -957,17 +952,13 @@ void ShopScreen::Update(float dt) {
     // ---- STATES 5 and 6: Wait for actors empty, then equip item ----
     case 5:
     case 6: {
-        // Fling buy button (same as state 3)
-        if (m_pBuyButton && m_pBuyButton->m_pEntity) {
-            Entity* e = m_pBuyButton->m_pEntity;
+        // Fling buy button (same as state 3): use m_pFruitPiece per binary.
+        if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
+            Fruit* piece = m_pBuyButton->m_pFruitPiece;
             float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
             float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-            if (e->entityType == 0) {
-                static_cast<Fruit*>(e)->m_bDetached = true;
-            } else if (e->entityType == 1) {
-                static_cast<Bomb*>(e)->m_bMovement = 1;
-            }
-            e->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
+            piece->m_bDetached = true;
+            piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
             // Binary: TutorialControl::ResetTutePos(tute, 0)
             if (game.pTutorialCtrl)
                 game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);

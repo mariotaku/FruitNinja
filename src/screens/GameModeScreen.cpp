@@ -202,13 +202,9 @@ void GameModeScreen::CreateControls() {
     m_pBackButton->Init(POS_BACK,
                         [this]() { QuitCallback(); },
                         FruitInfo_GetCount(), Vec3(0, 0, 0), nullptr);
-    // Binary (0x0013e86a): writes 1 to MenuButton+0x138 (m_bRemovalPending
-    // in the current port, but binary semantic is "auto-slice on next
-    // m_bFrameDirty frame" — NOT fade-out-then-remove as the port's
-    // MenuButton::Update currently implements). Omitted for now: setting
-    // this flag with the port's current semantics would make the back
-    // button vanish on spawn. Restore once MenuButton::Update is reworked
-    // to match the binary's force-slice semantics.
+    // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
+    // Marks this button as the screen's hardware Back-key handler.
+    m_pBackButton->m_bRespondsToBackKey = 1;
     game.hud->AddControl(m_pBackButton);
     m_pBackButton->m_TargetSize = m_pBackButton->m_TargetSize * BACK_TARGET_SCALE;
     if (m_pBackButton->m_pFruitPiece) {

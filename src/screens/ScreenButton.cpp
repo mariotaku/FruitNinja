@@ -55,7 +55,7 @@ void ScreenButton::ShrinkButtonCall() {
 // restores it to a "fling off screen" state:
 //   - pos.y = m_SecondPos.y = -480 (below screen)
 //   - m_Gravity = -g_slideVec = (0, -1, 0)
-//   - m_SecondVel.x = -10, vel.y = -10
+//   - m_SecondVel.y = -10, vel.y = -10
 // Then fires m_deletedCb and nulls m_pButton.
 // ===================================================================
 void ScreenButton::ControlDeleted(HUDControl* ctrl) {
@@ -72,7 +72,8 @@ void ScreenButton::ControlDeleted(HUDControl* ctrl) {
         fruit->m_Gravity = Vec3(-SLIDE_VEC.x, -SLIDE_VEC.y, -SLIDE_VEC.z);
 
         // Fling velocities (0xC1200000 = -10.0)
-        fruit->m_SecondVel.x = FLING_VEL;  // binary: *(fruit + 0xC8)
+        // Binary @ 0x00130fa0: writes -10 to fruit+0xc8 = m_SecondVel.y
+        fruit->m_SecondVel.y = FLING_VEL;  // binary: *(fruit + 0xC8)
         fruit->vel.y         = FLING_VEL;  // binary: *(fruit + 0x20)
     }
 

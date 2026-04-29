@@ -48,7 +48,7 @@ static const float SHOP_SCALE  = 0.575f;  // DAT_001386b4
 // Background panel position — dojo_sensei at bottom-left area.
 // DAT_001383c4/c8/c0 = (-180, -47, 0).
 // Slides in from left: X -= texWidth * (1 - alpha).
-static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 10.0f);
+static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 0.0f);
 
 // Helpers
 static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
@@ -177,6 +177,8 @@ void DojoScreen::Update(float dt) {
                 m_pPlayButton->Init(POS_BACK_BUTTON,
                                     [this]() { PlayCallback(); },
                                     bombFruitType, Vec3(0, 0, 0), nullptr);
+                // Binary @ 0x0013856c: strb 1 at button+0x138 = m_bRespondsToBackKey.
+                m_pPlayButton->m_bRespondsToBackKey = 1;
                 m_pPlayButton->m_LayerFlags = 0x40;
                 game.hud->AddControl(m_pPlayButton);
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pPlayButton);
@@ -391,19 +393,16 @@ void DojoScreen::PlayCallback() {
     m_State = 6;
 
     // 3. Fling the back-bomb with random rightward velocity.
-    //    Binary `*(byte*)(entity+0x80) = 1` is polymorphic: Fruit::m_bDetached
-    //    for fruit back-buttons, Bomb::m_bMovement for bomb back-buttons.
-    //    Falls back to m_pEntity since the back-bomb's m_pFruitPiece is null.
-    if (m_pPlayButton && m_pPlayButton->m_pEntity) {
-        Entity* e = m_pPlayButton->m_pEntity;
+    //    Binary @ 0x001389f4: indirects through m_pPlayButton->m_pFruitPiece
+    //    (+0x134), writes *(byte*)(piece+0x80) = 1 unconditionally (same
+    //    offset for Fruit::m_bDetached and Bomb::m_bMovement), then writes
+    //    Vec3(r1+5, -r2, 0) to piece->vel.
+    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
+        Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        if (e->entityType == 0) {
-            static_cast<Fruit*>(e)->m_bDetached = true;
-        } else if (e->entityType == 1) {
-            static_cast<Bomb*>(e)->m_bMovement = 1;
-        }
-        e->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        piece->m_bDetached = true;  // +0x80 — same byte for Fruit and Bomb back-buttons
+        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -423,22 +422,14 @@ void DojoScreen::PlayCallback() {
 void DojoScreen::ShopCallback() {
     m_State = 2;
 
-    // Binary: SetVisible + fling (no null check — assumes field_0x94 exists)
-    // Binary `*(byte*)(entity+0x80) = 1` is polymorphic: Fruit::m_bDetached
-    // for fruit back-buttons, Bomb::m_bMovement for bomb back-buttons. The
-    // binary's MenuButton::Init sets m_pFruitPiece = m_pEntity for both
-    // entity types (LAB_0014f1f8); the port falls back to m_pEntity to
-    // catch bombs whose m_pFruitPiece was left null.
-    if (m_pPlayButton && m_pPlayButton->m_pEntity) {
-        Entity* e = m_pPlayButton->m_pEntity;
+    // Binary @ 0x00137864: m_pPlayButton->m_pFruitPiece (+0x134), set
+    // *(byte*)(piece+0x80) = 1 unconditionally, write fling vel.
+    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
+        Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        if (e->entityType == 0) {
-            static_cast<Fruit*>(e)->m_bDetached = true;
-        } else if (e->entityType == 1) {
-            static_cast<Bomb*>(e)->m_bMovement = 1;
-        }
-        e->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        piece->m_bDetached = true;
+        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -451,22 +442,14 @@ void DojoScreen::ShopCallback() {
 void DojoScreen::AboutCallback() {
     m_State = 3;
 
-    // Binary: SetVisible + fling (no null check — assumes field_0x94 exists)
-    // Binary `*(byte*)(entity+0x80) = 1` is polymorphic: Fruit::m_bDetached
-    // for fruit back-buttons, Bomb::m_bMovement for bomb back-buttons. The
-    // binary's MenuButton::Init sets m_pFruitPiece = m_pEntity for both
-    // entity types (LAB_0014f1f8); the port falls back to m_pEntity to
-    // catch bombs whose m_pFruitPiece was left null.
-    if (m_pPlayButton && m_pPlayButton->m_pEntity) {
-        Entity* e = m_pPlayButton->m_pEntity;
+    // Binary @ 0x001378e0: m_pPlayButton->m_pFruitPiece (+0x134), set
+    // *(byte*)(piece+0x80) = 1 unconditionally, write fling vel.
+    if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
+        Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        if (e->entityType == 0) {
-            static_cast<Fruit*>(e)->m_bDetached = true;
-        } else if (e->entityType == 1) {
-            static_cast<Bomb*>(e)->m_bMovement = 1;
-        }
-        e->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
+        piece->m_bDetached = true;
+        piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);

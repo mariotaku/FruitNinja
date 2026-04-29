@@ -39,9 +39,9 @@ static const float ALPHA_OUT_DONE = 0.001f;     // DAT_0012f328
 static const Vec3 POS_BACK_BUTTON(185.0f, -106.0f, 0.0f);
 static const float BACK_SCALE = 0.825f;   // DAT_0012e6e8
 
-// OFN button position  (DAT_0012f2f4 = 0.0, DAT_0012f2f8 = 480.0)
-// X = 0, Y = 480  (off screen right, OpenFeint/GameCenter stub)
-static const Vec3 POS_OFN_BUTTON(0.0f, 480.0f, 0.0f);
+// OFN button position. Binary @ 0x0012f04e-0x0012f060 builds Vec3(480, 0, 0)
+// (s0=480, s1=0, s2=0) — off-screen right. Stub in port (defunct OFN).
+static const Vec3 POS_OFN_BUTTON(480.0f, 0.0f, 0.0f);
 
 // ---- Draw constants ----
 
@@ -259,27 +259,24 @@ void AboutScreen::CreateBackButton()
                         Vec3(0.0f, 0.0f, 0.0f),
                         nullptr);
 
-    // Binary: strb 1 at button+0x138 (m_bRemovalPending? no — m_bVisible).
-    // From MenuButton.h: +0x121 = m_bVisible, +0x138 = m_bRemovalPending.
-    // Disasm at 0x0012f2bc: strb.w r6,[r3,#0x138] where r6=1.
-    // +0x138 = m_bRemovalPending — but that would immediately remove the button.
-    // Actually: the strb sets m_bRemovalPending to 0 first? No, r6=1 at 0x0012f29c.
-    // Looking more carefully at context: this is after AddControl, sets a "seen" flag.
-    // DIFFERS: exact semantic of +0x138 write unclear; port skips for now.
+    // Binary @ 0x0012f2a8-0x0012f2ea step order:
+    //   1. virtual Init (already covered by Init() above — vtable[2] is empty)
+    //   2. strb 1 at button+0x138 = m_bRespondsToBackKey
+    //   3. game.hud->AddControl(button)
+    //   4. TutorialControl::ResetTutePos(button)
+    //   5. scale m_TargetSize *= 0.825
+    //   6. scale m_pFruitPiece->scale *= 0.825
+    m_pBackButton->m_bRespondsToBackKey = 1;
+    game.hud->AddControl(m_pBackButton);
 
-    // Binary post-Init scales: Vec3_ScaleConst(field_0x8c + 0x124) and fruit piece scale
+    if (game.pTutorialCtrl) {
+        game.pTutorialCtrl->ResetTutePos(m_pBackButton);
+    }
+
     m_pBackButton->m_TargetSize = m_pBackButton->m_TargetSize * BACK_SCALE;
     if (m_pBackButton->m_pFruitPiece) {
         m_pBackButton->m_pFruitPiece->scale =
             m_pBackButton->m_pFruitPiece->scale * BACK_SCALE;
-    }
-
-    m_pBackButton->m_LayerFlags = 0x40;
-    game.hud->AddControl(m_pBackButton);
-
-    // Binary: TutorialControl::ResetTutePos(game->field_0x168, back_button)
-    if (game.pTutorialCtrl) {
-        game.pTutorialCtrl->ResetTutePos(m_pBackButton);
     }
 }
 
@@ -350,16 +347,15 @@ void AboutScreen::Update(float /*dt*/)
         // Binary ARM idiom: bpl 0x0012f35a fires when NOT (alpha < 0.001),
         // so the block runs when alpha IS < 0.001 i.e. fade complete.
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
-            // Binary: call parent->vtable[Reset]() (vtable offset 0x10).
-            // DojoScreen inherits HUDControl::Reset which is a no-op by
-            // default. But the INTENT is to reset DojoScreen to state 0
-            // (re-start its fade-in). Port calls Init() directly.
+            // Binary @ 0x0012f350: ldr r3, [r3, #0x10] — vtable slot 4 = Reset.
+            // DojoScreen doesn't override Reset; HUDControl::Reset is a no-op
+            // in the binary. The port calls Init() instead — necessary to bring
+            // DojoScreen back to state 0 (binary may rely on a different recovery
+            // path that isn't yet RE'd). DIFFERS: keep until DojoScreen state-3
+            // post-removal flow is RE'd.
             if (m_pParent) {
                 m_pParent->Init();
             }
-
-            // Binary: this->field_0x33 = 1  (m_bPendingRemoval)
-            // HUD::Update will delete us next frame, which fires m_RemoveCallback.
             m_bPendingRemoval = 1;
         }
         break;

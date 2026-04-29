@@ -105,7 +105,7 @@ if (fruitType >= 0) {
 | +0x130 | bool | m_bHasHitArea | true if hitBounds > 0 |
 | +0x131 | byte | m_bHighlighted | Affects tint (0.5 vs 1.0 alpha) |
 | +0x134 | Fruit* | m_pFruitPiece | Direct fruit reference (for scale/rotate access) |
-| +0x138 | byte | m_bRemovalPending | |
+| +0x138 | byte | m_bRespondsToBackKey | Set to 1 by screen create-button code immediately after `Init` to mark this button as the screen's "default action" for the hardware Back / Menu key. `MenuButton::Update` (0x0014e9a8) reads it; if `m_bHighlighted && Game.m_BackKeyPressed && +0x138`, it auto-fires the button — slicing `m_pEntity` (vtable+0x24) for fruit/bomb buttons or calling `TouchReleased()` for toggles. RE'd 2026-04-29. NOT a fade-out / removal flag (Init writes 0; back-key behaviour is opt-in via screen creation code). See `docs/engine/menubutton-138.md`. |
 | +0x13C | float | m_AnimScale | = 1.0 |
 | +0x140..+0x148 | Vec3 | m_BounceParams | For "new" indicator bounce |
 | +0x14C | float | m_AnimSpeed2 | = 5.0 |
