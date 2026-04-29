@@ -66,9 +66,9 @@ static const float UP_LAND_Z          = -50.0f;   // DAT_0017faa8 (landing)
 static const float UP_GRAVITY         = -10.0f;
 
 static const float UP_VEL_CLAMP_LO    = -50.0f;   // DAT_0017fd40
-static const float UP_VEL_CLAMP_HI    =  50.0f;   // DAT_0017fd44
-static const float UP_SCALE_CLAMP_LO  = -50.0f;   // DAT_0017fd48
-static const float UP_SCALE_CLAMP_HI  = 200.0f;   // DAT_0017fd4c
+static const float UP_SCALE_CLAMP_LO  = -200.0f;  // DAT_0017fd48 (ASM-verified
+                                                  // 2026-04-30: was incorrectly
+                                                  // -50; binary value is -200)
 
 static const float UP_LIFE_SLIDE_THR  = 1.25f;    // slide-phase threshold
 
@@ -331,13 +331,21 @@ void SplatEntity::UpdateSplat(float dt) {
     // SSMP horizontal-gravity branch (field_0x74) is omitted — port has no SSMP.
     if (m_Life <= UP_LIFE_SLIDE_THR) {
         const int slideIdx = (m_SplatType >= 0 && m_SplatType < 6) ? (int)m_SplatType : 0;
-        const float dy = dt * kSlideRate[slideIdx];
-        vel.y     = Clampf(vel.y     - dy, UP_VEL_CLAMP_LO,   UP_VEL_CLAMP_HI);
-        m_Scale.y = Clampf(m_Scale.y - dy, UP_SCALE_CLAMP_LO, UP_SCALE_CLAMP_HI);
+        // Binary @ 0x0017fb9e: dy = dt * s_SpringRate * kSlideRate[type].
+        // Binary @ 0x0017fbb6/fbbe: floor-clamp only (subtraction can't
+        // grow the value upward).
+        const float dy = dt * s_SpringRate * kSlideRate[slideIdx];
+        float ny = vel.y - dy;
+        if (ny < UP_VEL_CLAMP_LO) ny = UP_VEL_CLAMP_LO;
+        vel.y = ny;
+        float nsy = m_Scale.y - dy;
+        if (nsy < UP_SCALE_CLAMP_LO) nsy = UP_SCALE_CLAMP_LO;
+        m_Scale.y = nsy;
     }
 
     // Life decay.
-    m_Life -= dt * m_DecayRate;
+    // Binary @ 0x0017fcea: m_Life -= dt * s_SpringRate * m_DecayRate.
+    m_Life -= dt * s_SpringRate * m_DecayRate;
     if (m_Life <= 0.0f) {
         m_Life = 0.0f;
         m_bAlive = 0;
