@@ -152,7 +152,11 @@ MenuButton::MenuButton()
       m_field154(0.0f),
       m_ShakeTimer(0.0f)
 {
-    m_LayerFlags = 0x40;  // menu button layer
+    // Binary HUDControl base ctor sets m_LayerFlags = 1. MenuButton::Init
+    // bumps it to 0x40 only when fruitType >= 0 (i.e. the spinning-fruit
+    // backdrop variant). Text-only buttons (fruitType < 0) stay at the
+    // default 1, drawing in HUD::Draw(0x01) — which is AFTER splats.
+    // Don't unconditionally promote here.
 }
 
 MenuButton::~MenuButton() {
@@ -559,11 +563,37 @@ void MenuButton::UpdateTouchPosition() {
 }
 
 // Matches MenuButton::Draw (0x0014f9cc, 359 lines)
+//
+// Two-phase layer dance (binary @ 0x0014fa24..0x0014fa2c):
+//   Frame 1 at layer 0x40: renders the round fruit-icon backdrop, then
+//     demotes m_LayerFlags to 0x80 so subsequent draws fall in the later
+//     HUD::Draw(0x80) bucket — AFTER SplatEntity::DrawActiveSplats and
+//     BombBlast::DrawActiveBlasts. Without this, the button sprite would
+//     forever render before splats and get covered by them.
+//   Frame N (layer 0x80): renders the actual sprite + new-indicator + sparkle.
+//
+// Port currently stubs the dedicated backdrop pass; the demotion alone
+// is enough to fix the visible "splat covers menu button" glitch since
+// the sprite then renders at 0x80 after splats. The backdrop quad TODO
+// stays for full fidelity.
 void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     if (!m_bVisible || m_DrawColour.a == 0) return;
 
-    // Layer 1: Button texture quad
-    // Original applies shake offset if m_ShakeTimer > 0 (random ±3.0)
+    // First-pass at layer 0x40: render backdrop (TODO), demote, return.
+    // Binary @ 0x0014fa24: cmp r3,#0x40 / bne else_branch / adds r3,#0x40
+    //                     / str r3,[r4,#0x34] / [draw backdrop] / return.
+    if (m_LayerFlags == 0x40) {
+        m_LayerFlags = 0x80;
+        // TODO: render the round fruit-icon backdrop using the secondary
+        // texture (binary 0x0014fa3e..0x0014faf8). Constants:
+        //   DAT_0014fcf8 — backdrop z-offset
+        //   DAT_0014fcfc — backdrop UV / size literal
+        //   DAT_0014fcf0 / DAT_0014fcf4 — alpha denom pair on m_FadeCounter
+        return;
+    }
+
+    // Subsequent passes (layer 0x80 etc.): render the actual button sprite.
+    // Original applies shake offset if m_ShakeTimer > 0 (random ±3.0).
     if (m_ShakeTimer > 0.0f) {
         Vec3 savedPos = pos;
         pos.x += ((float)(rand() % 600) / 100.0f) - 3.0f;
