@@ -337,3 +337,198 @@ Actually the simplest reading is that SetOnscreen's `this[0x2d]` means byte-offs
 | Mortar::Font | Layout differs from binary but self-contained | No impact on positioning |
 
 The text appearing on the left side of the shop screen is most directly caused by **Fix 1** (m_pParent gap → m_DescText at wrong offset) and **Fix 2** (std::function too small → further shift). After Fixes 1 and 2, `m_DescText` and `m_pText` should land at the correct binary offsets (+0x5C and +0x54), and the description text DrawString calls in ShopListItem::Draw will read the correct buffer.
+
+---
+
+## 6. ShopListItem::Move Helpers (RE'd 2026-04-29)
+
+Function: `ShopListItem::Move @ 0x0015d1fc`. Resolves the helpers/constants used by Move that the port currently doesn't implement.
+
+### 6.1 Class-static phase block (process-wide shimmer)
+
+GOT base resolves to `0x001EC130`. Move references three GOT-PC constants:
+
+| DAT | Value | Meaning |
+|---|---|---|
+| `DAT_0015d47c` | `0x0008ef24` | GOT-PC offset (GOT base = 0x001EC130) |
+| `DAT_0015d480` | `0x000451B4` | offset GOT_base -> ShopListItem class-static block at `0x002312E4` (.bss) |
+| `DAT_0015d484` | `0x00007990` | GOT entry offset; `*(GOT+0x7990) = 0x001F43B8` = global GameTask ptr |
+
+`ShopListItem` static block at **`0x002312E4`** (.bss), size at least 0x70:
+
+| Static Offset | Size | Type | Name | Notes |
+|---|---|---|---|---|
+| +0x68 | 2 | uint16_t | `s_ShimmerPhase` | wraps at 65536 (uint16) |
+| +0x6c | 4 | float | `s_ShimmerY` | written by Move, READ by Draw @ 0x0015ef38 |
+
+**Both fields are class-statics, NOT per-instance.** Only `Move` writes them; only `Draw` reads `+0x6c`.
+Other writers of base `0x002312E4` are normal class-static accesses (`s_ShopListItem` instance pointers used by Update, EquipCallback, Draw).
+
+### 6.2 Sin-oscillator (binary 0x0015d214 - 0x0015d278)
+
+Constants from `.rodata`:
+
+| Address | Hex | Float | Use |
+|---|---|---|---|
+| `DAT_0015d470` | `0x477FF000` | **65520.0f** | phase increment scale: `phase += dt * 65520` |
+| (immediate) | `0x40C00000` | **6.0f** | shimmer Y amplitude |
+
+Pseudocode:
+```c
+if (this->m_bSelected != 0) {                              // +0x27D
+    float s = Math::SinIdx(s_ShimmerPhase);                 // [-1, 1]
+    s_ShimmerY = (s < 0) ? s * -6.0f : s * 6.0f;            // = |s| * 6.0
+    s_ShimmerPhase = (uint16_t) max(0,
+        (int)(s_ShimmerPhase + dt * 65520.0f));             // wraps via uint16 cast
+}
+```
+
+`Math::SinIdx(uint16 phase) @ 0x000FC858 -> 0x00194D50`: looks up `sin_table[phase >> 4]`, a 4096-entry sin LUT with full period 65536 (uint16 phase wraparound). Same as engine-wide SinIdx used elsewhere.
+
+**Direction of offset:** Move ONLY stores the magnitude in `s_ShimmerY` (class-static). It is NOT applied to pos here.
+ShopListItem::Draw @ `0x0015ef38` reads `s_ShimmerY` and adds it to **s1 (Y component)** of the Vec3 passed to a DrawString call -- so the shimmer animates the description text's Y position. Per ARM hard-float ABI, s0/s1/s2 = X/Y/Z of a Vec3 struct arg. Confirmed by `vadd.f32 s1, s1, s15` at `0x0015ef44` where s15 was just loaded from `[r3,#0x6c]`.
+
+### 6.3 RandFloat5 = `Math::Random::Rand32` driven helper @ 0x0015c658
+
+Function `RandFloat5_GameTask @ 0x0015c658`:
+```c
+float RandFloat5_GameTask() {
+    Random* rng = *(Random**)(GOT + DAT_0015c690);   // -> global GameTask Random
+    uint32_t r = Math::Random::Rand32(rng, 0x0007FFFF);  // RandMax = 524287
+    return ((float)r / 524286.875f) * 5.0f;          // float divisor = 0x48FFFFE0
+}
+```
+
+**It is the global `GameTask` LCG, not `Math::Random::FloatRange`.** The GOT entry at `(0x001EC130 + 0x7990) = 0x001F43B8` holds the GameTask Random pointer. The function lives in the ShopScreen TU as a free helper (also called by ConfirmCallback, CancelCallback, QuitShopCallback, ShopScreen::Update). Output range: `[0.0, 5.0)`.
+
+### 6.4 m_LockFlashAlpha decay + scatter (binary 0x0015d2a4 - 0x0015d2fa)
+
+```c
+// pos copy: this->_pad2 (icon Vec3 at +0x268..+0x273) = pos
+this->_pad2.x = pos.x;
+this->_pad2.y = pos.y;
+this->_pad2.z = pos.z;
+this->_pad2.x += 35.2f + this->m_Width;   // 0x420CCCCD = 35.2f at DAT_0015d474
+
+if (this->m_LockFlashAlpha > 0.0f) {       // +0x264
+    this->m_LockFlashAlpha -= dt;          // raw dt subtraction (NOT 5*dt)
+    Vec3 jitter(
+        RandFloat5_GameTask() - 2.5f,      // X scatter [-2.5, 2.5)
+        RandFloat5_GameTask() - 2.5f,      // Y scatter [-2.5, 2.5)
+        0.0f                               // Z = DAT_0015d478 = 0.0f
+    );
+    Vec3::operator+=(&this->_pad2, &jitter);   // scatter applied to ICON pos
+}
+```
+
+**Confirmed:** scatter targets `_pad2` (icon Vec3 at +0x268), NOT `pos` at +0x04. Decay rate is `dt`, not `5*dt`. Constant 2.5f comes from immediate `0x40200000` at instruction 0x0015d2e6.
+
+### 6.5 m_NewItemAlpha ramp (binary 0x0015d342 - 0x0015d3a4)
+
+```c
+ItemInfo* info = this->m_pItemInfo;         // +0x278
+uint8_t seen = info->m_bSeen;                // +0x3c
+float rate = (seen == 0) ? +5.0f : -5.0f;
+float next = this->m_NewItemAlpha + dt * rate;
+if (next <= 0.0f)      next = 0.0f;
+else if (next >= 1.0f) next = 1.0f;
+this->m_NewItemAlpha = next;
+```
+
+**Gate confirmed: `info->m_bSeen` at +0x3C.** Rate ±5.0 * dt, clamp [0, 1]. **Not centered-gated** -- runs in BOTH centered and non-centered branches (the join is at 0x0015d336).
+
+### 6.6 m_SelectedAlpha ramp (binary 0x0015d3a8 - 0x0015d43c)
+
+```c
+ItemManager* mgr = ItemManager::GetInstance();
+bool equipped = ItemManager::IsEquipped(mgr, this->m_pItemInfo);
+float rate = equipped ? +5.0f : -5.0f;
+float next = this->m_SelectedAlpha + dt * rate;
+if (next <= 0.0f)      next = 0.0f;
+else if (next >= 1.0f) next = 1.0f;
+this->m_SelectedAlpha = next;
+```
+
+**Gate confirmed: `ItemManager::IsEquipped(m_pItemInfo)`** (callee at `0x00104448`). Rate ±5.0 * dt, clamp [0, 1]. **Not centered-gated** -- runs in BOTH branches.
+
+### 6.7 m_CostAlpha ramp (centered-gated)
+
+This is the ONE alpha that IS centered-gated:
+
+```c
+ScrollingMenu* parent = this->m_field58;    // ShopScreen *, ScrollingMenuItem +0x58
+bool centered = (parent != NULL && *(ShopListItem**)((char*)parent + 0x98) == this);
+
+if (centered) {
+    // m_CostAlpha ramps UP toward 1
+    this->m_CostAlpha = min(1.0f, this->m_CostAlpha + dt * 5.0f);
+} else {
+    // m_CostAlpha decays toward 0
+    this->m_CostAlpha = max(0.0f, this->m_CostAlpha + dt * -5.0f);
+}
+```
+
+`m_field58 + 0x98` is the parent's "centered item" slot (the currently-centered ShopListItem* tracked by the carousel).
+
+### 6.8 Description-text 3-way branch in Create @ 0x0015c988
+
+Resolved verbatim from disassembly (instructions 0x0015ca38 - 0x0015ca84):
+
+```c
+ItemInfo* info = this->m_pItemInfo;
+bool locked = ItemInfo::IsLocked(info);
+
+if (!locked) {
+    // 0x0015ca82: unlocked -> use m_pDescText literally
+    strcpy(this->m_DescText, info->m_pDescText);          // ItemInfo +0x18
+}
+else if (info->m_pTotalStatKey == NULL) {                 // ItemInfo +0x28
+    // 0x0015ca7e: locked, no progress key -> use m_pLockedText literally
+    strcpy(this->m_DescText, info->m_pLockedText);        // ItemInfo +0x1C
+}
+else {
+    // locked WITH progress key -> compute remaining count
+    FruitSaveData* save = *(FruitSaveData**)(GOT + DAT_0015cb00) -> +0x4c;
+    uint32_t hash = StringHash(info->m_pTotalStatKey);
+    uint32_t total = FruitSaveData::GetTotal(save, hash);
+    int countdown = info->m_CountDownFrom;                // ItemInfo +0x2C
+    int remaining = (countdown > 0) ? max(0, countdown - (int)total) : (int)total;
+
+    if (info->m_pProgressFmt != NULL && remaining == 1) {
+        // 0x0015ca84: literal "1 left" string (m_pProgressFmt is the singular form)
+        strcpy(this->m_DescText, info->m_pProgressFmt);   // ItemInfo +0x20
+    } else {
+        // 0x0015ca6e: format with remaining count ("%d kills to unlock")
+        OS_SPrintf(this->m_DescText, 0x200, info->m_pLockedText, remaining);
+    }
+}
+```
+
+**Selection rule summary:**
+- Unlocked          -> `m_pDescText`              (strcpy)
+- Locked, no key    -> `m_pLockedText`            (strcpy)
+- Locked, key, =1   -> `m_pProgressFmt`           (strcpy, singular literal)
+- Locked, key, !=1  -> `m_pLockedText`            (sprintf, "%d" = remaining)
+
+The `%d` arg is passed in r3 per ARM AAPCS varargs convention (varargs use r2/r3 then stack; r0=buf, r1=size, r2=fmt, r3=remaining).
+
+### 6.9 Binary references summary
+
+| Address | Function/Data | Purpose |
+|---|---|---|
+| `0x0015d1fc` | `ShopListItem::Move` | function entry |
+| `0x0015d214 - 0x0015d278` | sin-oscillator block | shimmer phase / Y |
+| `0x0015d2a4 - 0x0015d2fa` | LockFlash decay + scatter | jitters icon Vec3 |
+| `0x0015d342 - 0x0015d3a4` | m_NewItemAlpha ramp | gate = m_bSeen |
+| `0x0015d3a8 - 0x0015d43c` | m_SelectedAlpha ramp | gate = IsEquipped |
+| `0x0015d310 - 0x0015d33a` | m_CostAlpha (centered) | ramp UP |
+| `0x0015d448 - 0x0015d46e` | m_CostAlpha (non-centered) | decay |
+| `0x000FC858 -> 0x00194D50` | `Math::SinIdx` | 4096-entry sin LUT, period 65536 |
+| `0x0015c658` | `RandFloat5_GameTask` | `GameTask` Random 0..5 |
+| `0x00103650` | `Math::Random::Rand32` | LCG core |
+| `0x000F4DC4` | `ItemManager::GetInstance` | singleton |
+| `0x00104448` | `ItemManager::IsEquipped` | gate for m_SelectedAlpha |
+| `0x0015ef38` | `ShopListItem::Draw` shimmer-Y read | `vldr s15,[r3,#0x6c] ; vadd s1,s1,s15` |
+| `0x002312E4` | ShopListItem class-static block | .bss; +0x68 phase, +0x6c shimmerY |
+| `0x001F43B8` | global GameTask Random* | via GOT[0x7990] |
+| `0x0015c988` | `ShopListItem::Create` | description-text 3-way branch |

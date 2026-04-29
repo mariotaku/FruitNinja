@@ -19,12 +19,20 @@
 #include "engine/math/Matrix44.h"
 #include "engine/math/Colour.h"
 #include "engine/math/Vec3.h"
+#include "engine/math/MathUtil.h"
 #include "asset/TextureManager.h"
 #include "engine/util/Localisation.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+
+// Binary: RandFloat5_GameTask @ 0x0015c658. Returns [0, 5) using the
+// process-global GameTask::Random LCG. Port uses rand() since the
+// per-task RNG isn't exposed yet.
+static float RandFloat5() {
+    return ((float)rand() / (float)RAND_MAX) * 5.0f;
+}
 // GL symbols come via Renderer.h -> gl_funcs.h
 
 // ---------------------------------------------------------------------------
@@ -76,42 +84,56 @@ ShopListItem::~ShopListItem() {}
 //           draw in Part 7 of Draw).
 //      Both ramp at +/-5.0 per dt and clamp to [0, 1].
 // ---------------------------------------------------------------------------
+// Process-wide statics. Binary stores these in the GOT-relative shop class
+// static_block (`+0x68` phase counter, `+0x6c` shimmer Y output). They are
+// shared across all ShopListItems — single oscillator drives all rows.
+uint16_t ShopListItem::s_ShimmerPhase = 0;
+float    ShopListItem::s_ShimmerY    = 0.0f;
+
 void ShopListItem::Move(float x, float y, float z) {
+    Game* g = Game::GetInstance();
+    const float dt = g ? g->dt : 0.0f;
+
+    // (1) Sin-jitter — runs only when this item is the current selection.
+    // Binary @ 0x0015d214-0x0015d278: phase += dt * 65520, output =
+    // |SinIdx(phase)| * 6.0. SinIdx period 65536, magnitude only.
+    // Stored at process-wide statics; Draw reads s_ShimmerY into the
+    // description-text Y component (description text only).
+    if (m_bSelected) {
+        const float step = dt * 65520.0f;             // DAT_0015d470 = 0x477FF000
+        float advanced = (float)s_ShimmerPhase + step;
+        if (advanced < 0.0f) advanced = 0.0f;          // clamp to non-negative
+        s_ShimmerPhase = (uint16_t)advanced;           // implicit mod 65536
+        const float sinVal = SinIdx(s_ShimmerPhase);
+        s_ShimmerY = (sinVal < 0.0f ? -sinVal : sinVal) * 6.0f;
+    }
+
+    // (2) Always: copy pos into base.
     pos.x = x;
     pos.y = y;
     pos.z = z;
-    // Step 2: copy pos into _pad2 (this+0x268 = Vec3 iconPos)
-    float* iconPos = reinterpret_cast<float*>(_pad2);
-    iconPos[0] = pos.x;
-    iconPos[1] = pos.y;
-    iconPos[2] = pos.z;
-    // Step 3: if icon texture valid, add 35.2f + m_Size.x (=60.0f) to iconPos.x
-    // Binary: DAT_0015d474 = 35.2f; m_Size.x at +0x18 = 60.0f -> sum = 95.2f
+
+    // (3) Icon position copy + offset, plus optional lock-flash decay/scatter.
+    // Binary writes the icon Vec3 to _pad2 (this+0x268), NOT to pos.
     if (m_pIconTex.IsValid()) {
-        iconPos[0] += 35.2f + m_Size.x;  // DAT_0015d474(35.2f) + m_Size.x(60.0f) = 95.2f
+        float* iconPos = reinterpret_cast<float*>(_pad2);
+        iconPos[0] = pos.x;
+        iconPos[1] = pos.y;
+        iconPos[2] = pos.z;
+        iconPos[0] += 35.2f + m_Size.x;  // DAT_0015d474 + m_Size.x = 35.2 + 60 = 95.2
+
+        // Binary @ 0x0015d2a4-0x0015d2fa: when m_LockFlashAlpha > 0,
+        // subtract raw dt (NOT 5*dt) and scatter icon pos by ±2.5 in X/Y.
+        if (m_LockFlashAlpha > 0.0f) {
+            m_LockFlashAlpha -= dt;     // raw, not scaled
+            iconPos[0] += RandFloat5() - 2.5f;
+            iconPos[1] += RandFloat5() - 2.5f;
+            // Z unchanged (DAT_0015d478 = 0.0)
+        }
     }
 
-    // Step 4: per-frame alpha ramps. Binary's two alphas are at offsets
-    // +0x25C..+0x264 (4 bytes apart in the decomp's `this[N].base.field_0xXX`
-    // syntax). Mapping verified by elimination + visible behaviour:
-    //
-    //   - m_NewItemAlpha  (+0x25C) ramps based on parent ScrollingMenu's
-    //     `field_0x3c` byte (some "list active" gate). Port has no clean
-    //     accessor for that flag; left out of Move so the new-item badge
-    //     keeps its Create-time fade.
-    //   - m_SelectedAlpha (+0x260) ramps based on ItemManager::IsEquipped:
-    //     the equipped row's "selected_sml" ring fades to 1; non-equipped
-    //     rows fade to 0. This is the badge the user sees -- without the
-    //     animation it sticks at the value Create assigned, so changing
-    //     equipment leaves the old ring visible forever.
-    //   - m_CostAlpha (+0x280) is NOT touched by binary Move. Port animates
-    //     it locally based on whether this row is the centered selection
-    //     so the description-text Part 7 fade tracks the user's scroll.
-    Game* g = Game::GetInstance();
-    if (!g) return;
-    const float dt   = g->dt;
+    // (4) Per-frame alpha ramps. Binary @ 0x0015d2fe-0x0015d448.
     const float kRate = 5.0f;
-
     auto rampAlpha = [&](float cur, bool up) -> float {
         float delta = up ? +kRate : -kRate;
         float candidate = cur + dt * delta;
@@ -120,20 +142,27 @@ void ShopListItem::Move(float x, float y, float z) {
         return candidate;
     };
 
-    // 4a: m_SelectedAlpha -- equipped indicator (binary +0x260, IsEquipped-driven).
+    // 4a: m_NewItemAlpha — NOT centered-gated. +5*dt up if NOT seen,
+    // -5*dt if seen, clamp [0, 1]. ItemInfo::m_bSeen at +0x3C.
+    if (m_pItemInfo) {
+        bool isNew = (m_pItemInfo->m_bSeen == 0);
+        m_NewItemAlpha = rampAlpha(m_NewItemAlpha, isNew);
+    }
+
+    // 4b: m_SelectedAlpha — NOT centered-gated. +5*dt up if equipped,
+    // -5*dt otherwise.
     {
         ItemManager* im = ItemManager::GetInstance();
         bool equipped = (im && m_pItemInfo && im->IsEquipped(m_pItemInfo) != 0);
         m_SelectedAlpha = rampAlpha(m_SelectedAlpha, equipped);
     }
 
-    // 4b: m_CostAlpha -- description-text gate (port-only animation).
+    // 4c: m_CostAlpha — IS centered-gated. Centered = m_pShopScreen
+    // && m_pShopScreen->GetSelectedItem() == this.
     {
-        bool isSelected = true;
-        if (m_pShopScreen) {
-            isSelected = (m_pShopScreen->GetSelectedItem() == this);
-        }
-        m_CostAlpha = rampAlpha(m_CostAlpha, isSelected);
+        bool isCentered = m_pShopScreen
+            && (m_pShopScreen->GetSelectedItem() == this);
+        m_CostAlpha = rampAlpha(m_CostAlpha, isCentered);
     }
 }
 
@@ -185,30 +214,60 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
         m_pIconTex = Mortar::TextureManager::LoadLocalisedTexture(texFile.c_str());
     }
 
-    // --- Description text ---
-    // Binary: copies either locked text, cost-text, or description string into +0x5c.
-    // Port: copy m_pDescText if available, else m_pTitle.
-    if (pItemInfo->m_pDescText && pItemInfo->m_pDescText[0] != '\0') {
-        strncpy(m_DescText, pItemInfo->m_pDescText, sizeof(m_DescText) - 1);
-        m_DescText[sizeof(m_DescText) - 1] = '\0';
-    } else if (pItemInfo->m_pTitle && pItemInfo->m_pTitle[0] != '\0') {
-        strncpy(m_DescText, pItemInfo->m_pTitle, sizeof(m_DescText) - 1);
-        m_DescText[sizeof(m_DescText) - 1] = '\0';
+    // --- Description text — 3-way branch (binary @ 0x0015ca6e/c7e/c82) ---
+    //   if (!IsLocked):                       use m_pDescText
+    //   else if (m_pTotalStatKey == NULL):    use m_pLockedText (literal)
+    //   else if (m_pProgressFmt && remaining == 1):
+    //                                          use m_pProgressFmt (singular form)
+    //   else:                                  sprintf(m_pLockedText, remaining)
+    {
+        const char* src = nullptr;
+        char remainingBuf[256] = {0};
+
+        if (!pItemInfo->IsLocked()) {
+            src = pItemInfo->m_pDescText;
+        } else if (pItemInfo->m_pTotalStatKey == nullptr) {
+            src = pItemInfo->m_pLockedText;
+        } else {
+            // Achievement-progress branch. Binary computes:
+            //   remaining = m_CountDownFrom > 0
+            //       ? max(0, m_CountDownFrom - GetTotal(StringHash(key)))
+            //       : GetTotal(StringHash(key))
+            // Port: stat-tracking not fully wired; treat remaining = m_CountDownFrom
+            // as a placeholder so the branch still picks a sensible string.
+            int remaining = pItemInfo->m_CountDownFrom;
+            if (remaining < 0) remaining = 0;
+            if (pItemInfo->m_pProgressFmt && remaining == 1) {
+                src = pItemInfo->m_pProgressFmt;
+            } else if (pItemInfo->m_pLockedText) {
+                snprintf(remainingBuf, sizeof(remainingBuf),
+                         pItemInfo->m_pLockedText, remaining);
+                src = remainingBuf;
+            }
+        }
+
+        if (src && src[0] != '\0') {
+            strncpy(m_DescText, src, sizeof(m_DescText) - 1);
+            m_DescText[sizeof(m_DescText) - 1] = '\0';
+        } else if (pItemInfo->m_pTitle && pItemInfo->m_pTitle[0] != '\0') {
+            strncpy(m_DescText, pItemInfo->m_pTitle, sizeof(m_DescText) - 1);
+            m_DescText[sizeof(m_DescText) - 1] = '\0';
+        }
     }
 
     // --- Selected alpha: 1.0f if item is currently equipped ---
-    // Binary: ItemManager::IsEquipped(pItemInfo) != 0 -> *(+0x260) = 0x3f800000 = 1.0f
+    // Binary: ItemManager::IsEquipped(pItemInfo) != 0 -> *(+0x260) = 0x3f800000
     ItemManager* im = ItemManager::GetInstance();
     if (im && im->IsEquipped(pItemInfo)) {
-        m_SelectedAlpha = 1.0f;   // DAT = 0x3f800000
+        m_SelectedAlpha = 1.0f;
     }
 
-    // --- New-item alpha: 1.0f if item has the "new" flag ---
-    // Binary: if (*(char*)(pItemInfo + 0x3c) == '\0') -> *(+0x25c) = 0x3f800000 = 1.0f
-    // Note: +0x3c of ItemInfo = IsNew flag; binary test is "== '\\0'" meaning NOT new sets it.
-    // Corrected read: if (!pItemInfo->IsNew()) m_NewItemAlpha = 1.0f
-    // TODO: confirm ItemInfo::IsNew field offset when fully RE'd.
-    // DIFFERS: stubbed; not setting m_NewItemAlpha here until ItemInfo::IsNew is confirmed.
+    // --- New-item alpha: 1.0f if item has not been seen ---
+    // Binary @ 0x0015cad0: if (*(char*)(pItemInfo + 0x3c) == 0) m_NewItemAlpha = 1.0f.
+    // ItemInfo::m_bSeen at +0x3C — false (0) means "not yet seen" → show new badge.
+    if (pItemInfo->m_bSeen == 0) {
+        m_NewItemAlpha = 1.0f;
+    }
 }
 
 // ---------------------------------------------------------------------------

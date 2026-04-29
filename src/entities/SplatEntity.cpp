@@ -513,6 +513,15 @@ void SplatEntity::RemoveAllSplats() {
     }
 }
 
+void SplatEntity::ForEachInPool(PoolVisitor fn, void* user) {
+    if (!fn) return;
+    const int N = s_Pool.Capacity();
+    for (int i = 0; i < N; ++i) {
+        SplatEntity* s = s_Pool.SlotAt(i);
+        if (s) fn(s, user);
+    }
+}
+
 // ---------------------------------------------------------------------
 // SplatEntity::DrawSplat (0x0017f008) — virtual per-instance render
 // ---------------------------------------------------------------------

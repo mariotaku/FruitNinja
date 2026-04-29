@@ -7,6 +7,14 @@ target_include_directories(test_localisation PRIVATE
 )
 add_test(NAME localisation COMMAND test_localisation)
 
+# Mortar::Delegate template — size + bind + invoke correctness.
+add_executable(test_delegate test_delegate.cpp)
+target_include_directories(test_delegate PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME delegate COMMAND test_delegate)
+
 # Per-screen smoke test. Each entry boots a hidden SDL+GL context,
 # inits the full game, pushes the named screen, and ticks 30 frames.
 # Catches font / vertex / matrix / divide-by-zero regressions that

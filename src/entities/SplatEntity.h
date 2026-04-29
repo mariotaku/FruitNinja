@@ -129,6 +129,11 @@ public:
     static void LoadContent();
     // Binary: SplatEntity::CleanUp @ 0x0017eee0
     static void CleanUp();
+
+    // Pool walker — calls fn(splat) for each pool slot. ShopScreen uses
+    // this to apply the alpha-decrease X-shift @ 0x0015ea50-0x0015eabe.
+    typedef void (*PoolVisitor)(SplatEntity* splat, void* user);
+    static void ForEachInPool(PoolVisitor fn, void* user);
 };
 
 #endif

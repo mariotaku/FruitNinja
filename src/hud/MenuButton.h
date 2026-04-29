@@ -13,7 +13,7 @@
 //
 
 #include "HUDControl3d.h"
-#include <functional>
+#include "engine/util/Delegate.h"
 #include <cstdint>
 
 class Entity;
@@ -37,13 +37,11 @@ public:
     // +0x84: -1 = no fruit, 0+ = fruit index, >=bombThreshold = bomb
     int m_FruitType;
 
-    // +0x88: fired on touch release (original: Delegate0<void>)
-    // Port specific: std::function instead of Delegate0
-    std::function<void()> m_ClickCallback;
+    // +0x88: fired on touch release. 36 bytes (binary Delegate0).
+    Mortar::Delegate<void()> m_ClickCallback;
 
-    // +0xAC: fired when button removed from HUD (original: Delegate0<void>)
-    // Port specific: std::function instead of Delegate0
-    std::function<void()> m_DeletedCallback;
+    // +0xAC: fired when button removed from HUD. 36 bytes (binary Delegate0).
+    Mortar::Delegate<void()> m_DeletedCallback;
 
     // +0xD0: drives alpha fade (× 1000 / 255)
     int m_FadeCounter;
@@ -141,9 +139,9 @@ public:
 
     // Matches MenuButton::Init (0x0014ee40, 222 lines)
     // Creates entity, sets callbacks, random rotation
-    void Init(const Vec3& buttonPos, std::function<void()> clickCb,
+    void Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
               int fruitType, const Vec3& hitBounds,
-              std::function<void()> deletedCb);
+              Mortar::Delegate<void()> deletedCb);
 
     // HUDControl overrides
     void Update(float dt) override;

@@ -1007,10 +1007,28 @@ void ShopScreen::Update(float dt) {
     }
 
     // --- Animate HUD controls that moved during alpha change ---
-    // Binary: if (alpha < prevAlpha): iterate over HUD control array,
-    //   shift their y-position based on alpha delta.
-    // TODO: port HUD control iteration once GameTaskState layout resolved
-    (void)prevAlpha;
+    // Binary @ 0x0015ea50-0x0015eabe: alpha-decrease X-shift on the
+    // SplatEntity pool (NOT HUD controls). Splats above x=50 drift up,
+    // below drift down, by `delta * (190 or 290) * 1.5`. Constants:
+    //   DAT_0015eae4 = 290.0f   (down multiplier, lower half)
+    //   DAT_0015eae8 = 190.0f   (up multiplier, upper half)
+    //   DAT_0015eaec =  50.0f   (split threshold on x)
+    // Note: the binary "x" axis is the screen-vertical per project coord
+    // convention (X=+160 top, -160 bottom) — semantically a y-shift.
+    if (m_TransitionAlpha < prevAlpha) {
+        const float delta = prevAlpha - m_TransitionAlpha;
+        struct Ctx { float up; float down; } ctx = {
+            delta * 190.0f * 1.5f,
+            delta * 290.0f * 1.5f
+        };
+        SplatEntity::ForEachInPool([](SplatEntity* s, void* user) {
+            if (!s || !s->m_bAlive) return;
+            if ((int8_t)s->m_SplatType < 0) return;
+            Ctx* c = static_cast<Ctx*>(user);
+            if (s->pos.x > 50.0f) s->pos.x += c->up;
+            else                  s->pos.x -= c->down;
+        }, &ctx);
+    }
 }
 
 // ---------------------------------------------------------------------------

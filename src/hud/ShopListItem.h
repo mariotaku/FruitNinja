@@ -77,6 +77,13 @@ public:
     // Binary 0x0015eb00, ~450 instructions, 5 Font::DrawString calls.
     void Draw() override;
 
+    // Process-wide shimmer oscillator. Binary stores these as static_block
+    // +0x68 (uint16_t phase) and +0x6c (float shimmer Y) — single shared
+    // oscillator across all ShopListItems. Move advances when m_bSelected;
+    // Draw reads s_ShimmerY into the description-text Y component.
+    static uint16_t s_ShimmerPhase;
+    static float    s_ShimmerY;
+
     // --- ShopListItem own fields mirroring binary +0x58..+0xDB ---
     //
     // +0x58 (ARM32): ShopScreen* back-pointer.

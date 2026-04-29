@@ -160,9 +160,9 @@ MenuButton::~MenuButton() {
 }
 
 // Matches MenuButton::Init (0x0014ee40, 222 lines)
-void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
+void MenuButton::Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
                       int fruitType, const Vec3& hitBounds,
-                      std::function<void()> deletedCb) {
+                      Mortar::Delegate<void()> deletedCb) {
     pos = buttonPos;
     m_ClickCallback = clickCb;
     m_DeletedCallback = deletedCb;

@@ -11,7 +11,7 @@
 
 #include "math/Vec3.h"
 #include "math/Colour.h"
-#include <functional>
+#include "util/Delegate.h"
 #include <cstdint>
 
 struct Renderer;
@@ -48,8 +48,8 @@ public:
     // +0x34: bit mask for layered drawing (default = 1)
     int m_LayerFlags;
 
-    // +0x38: callback fired before removal (port: std::function, original: Delegate1 24 bytes)
-    std::function<void(HUDControl*)> m_RemoveCallback;
+    // +0x38: callback fired before removal. 36 bytes (binary Delegate1).
+    Mortar::Delegate<void(HUDControl*)> m_RemoveCallback;
 
     // +0x5c: tint colour (BGRA, default white)
     Colour m_DrawColour;
