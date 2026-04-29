@@ -16,13 +16,16 @@
 #include "screens/MainScreen.h"
 #include "hud/HUD.h"
 #include "hud/TimeControl.h"
+#include "hud/ScoreControl.h"
+#include "hud/CoinCounter.h"
+#include "hud/MissControl.h"
 #include "entities/ActorManager.h"
 #include "entities/SlashEntity.h"
+#include "entities/BombFlash.h"
 #include "engine/MenuBackground.h"
 #include "entities/SplatEntity.h"
 #include "entities/BombBlast.h"
 #include "hud/SliceEffect.h"
-#include "hud/MissControl.h"
 #include "particle/PSPParticleManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
@@ -36,44 +39,113 @@
 #include "audio/SoundManager.h"
 #include <cstdio>
 
-// Matches GameInit (0x16c644, 274 lines) — per-session setup
+// Matches GameInit (0x16c644, 274 lines) — per-session setup.
+// Call order matches binary 23-step sequence (see inline step comments).
 void GameInit(unsigned long) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    printf("GameInit: creating HUD + MainScreen\n");
+    printf("GameInit: enter\n");
 
-    // Create HUD (matches original: Game+0x3c)
+    // step 1: HUD allocation (Game+0x3c)
     if (!game->hud) {
         game->hud = new HUD();
     }
 
-    // Pool allocation requires the HUD to exist. MissControl was
-    // deferred in GameInitialise because HUD wasn't ready there.
+    // step 2: HUD::Release post-construction housekeeping
+    // Binary calls HUD::Release(hud) immediately after ctor — no-op in port
+    // (HUD ctor already initialises cleanly).
+
+    // step 3: 3x MissControl instances + AddControl + MissControl::CreatePool(0xc, hud).
+    // Binary allocates 3 MissControl objects (operator new(0x94) x3) then registers
+    // them with the HUD, then calls a pool-creation helper with count=0xc.
+    // Port: AllocatePool() wraps the ctor loop + HUD registration in one call.
+    // TODO: real MissControl positions come from GOT+0x30 table — using Vec3(0,0,0) placeholder.
     MissControl::AllocatePool();
 
-    // Load default background via ChangeBackground (writes to the shared
-    // file-static MenuBackground slot). This is the same slot the
-    // renderer reads via GetCurrentBackground() and the same slot
-    // ItemManager::SetEquippedItem(BACKGROUND, ...) updates -- so the
-    // shop's Equip-background flow now actually swaps the visible bg.
-    // Binary GameInit @ 0x..: same call shape (ChangeBackground(NULL)
-    // -> default "gb_game" + platform suffix).
+    // step 4: ScoreControl (size 0x100) + AddControl
+    ScoreControl* sc = new ScoreControl();
+    game->hud->AddControl(sc);
+
+    // step 5: CoinCounter (size 0xD4) + AddControl -> game.pCoinCounter (Game+0x178)
+    CoinCounter* cc = new CoinCounter();
+    game->hud->AddControl(cc);
+    game->pCoinCounter = cc;
+
+    // step 6: TimeControl (size 0x108) + CountDown(90.9f) + AddControl -> game.pTimeCtrl (Game+0x180)
+    // DAT_0016c9cc = 90.9 (Zen mode initial countdown time)
+    TimeControl* tc = new TimeControl();
+    tc->CountDown(90.9f);
+    game->pTimeCtrl = tc;
+    game->hud->AddControl(tc);
+
+    // step 7: Background load (gb_game.tex / gb_game_sml.tex IsFastHardware branch)
+    // Binary GameInit @ 0x..: same call shape (ChangeBackground(NULL) -> default "gb_game" + suffix).
     if (GetCurrentBackground() == nullptr) {
         ChangeBackground(nullptr);
     }
 
-    // Create MainScreen and add to HUD (matches original GameInit lines 190-200)
+    // step 8: MeshManager loads
+    // TODO: MeshManager::Load calls — not yet ported.
+
+    // step 9: SliceEffect list/pool init
+    // TODO: SliceEffect pool creation — not yet ported.
+
+    // step 10: Flag init at +0x112/+0x114 (Game struct fields)
+    // TODO: game field_0x112 / field_0x114 not yet mapped in port Game struct.
+
+    // step 11: MainScreen allocation
     printf("GameInit: about to new MainScreen\n");
     MainScreen* mainScreen = new MainScreen(*game);
     printf("GameInit: MainScreen ctor returned, ptr=%p\n", (void*)mainScreen);
-    game->hud->AddControl(mainScreen);
-    printf("GameInit: AddControl done\n");
     game->mainScreen = mainScreen;
     printf("GameInit: mainScreen field set\n");
 
-    // Create the single SlashEntity for touch-trail rendering. The binary
-    // uses a 2-player array; the port keeps one for single-touch.
+    // step 12: PauseScreen allocation
+    // TODO: PauseScreen not yet ported — skip.
+
+    // step 13: TutorialControl allocation
+    // (game->pTutorialCtrl already allocated in GameInitialise; binary re-allocs here)
+    // TODO: confirm whether binary re-allocs or reuses from GameInitialise.
+
+    // step 14: AddControl x3 batch (MainScreen + PauseScreen + TutorialControl)
+    game->hud->AddControl(mainScreen);
+    printf("GameInit: AddControl(mainScreen) done\n");
+    // TODO: AddControl(pauseScreen) when PauseScreen is ported.
+    // TODO: AddControl(tutorialControl) — pTutorialCtrl already wired in GameInitialise.
+
+    // step 15: Entity::HeapCreate
+    // TODO: Entity::HeapCreate — not yet ported.
+
+    // step 16: ActorManager::Initialise + RegisterFactory + RegisterHashConverter
+    // TODO: ActorManager full init — not yet ported.
+
+    // step 17: WaveManager::Init()
+    WaveManager::GetInstance()->Init();
+
+    // step 18: GameTaskInitInput()
+    // TODO: GameTaskInitInput — not yet ported.
+
+    // step 19: 30x prespawn loop: do { Add(0); Add(1); Add(4); flags|=0x11 } x30
+    // TODO: prespawn loop — not yet ported.
+
+    // step 20: SplatEntity::CreatePool(0x80)
+    // TODO: SplatEntity::CreatePool(0x80) — not yet ported.
+
+    // step 21: WaveManager::Resume() — MUST come AFTER prespawn + SplatEntity pool
+    // Binary: WaveManager::Resume (0x00124b1c) — restores wave state from save.
+    WaveManager::GetInstance()->Resume();
+
+    // step 22: BombFlash::CreatePool(0x20)
+    BombFlash::CreatePool(0x20);
+
+    // step 23: SoundManager::Initialise + SetSFXVolume
+    // TODO: SoundManager::Initialise + SetSFXVolume — not yet ported.
+
+    printf("GameInit: complete\n");
+
+    // Port specific: SlashEntity for touch-trail rendering.
+    // Binary uses a 2-player array in ActorManager; port keeps one global for single-touch.
     if (!g_pSlashEntity) {
         printf("GameInit: about to new SlashEntity\n");
         g_pSlashEntity = new SlashEntity();
@@ -81,29 +153,6 @@ void GameInit(unsigned long) {
         g_pSlashEntity->Init();
         printf("GameInit: SlashEntity Init done\n");
     }
-    printf("GameInit: complete\n");
-
-    // Touch input is now polled from Mortar::Touch inside MenuButton::Update
-    // and SlashEntity::Update — no InputManager callbacks needed. The
-    // TouchDown_0 / TouchMove_X0 / TouchUp_0 action hashes are still fired
-    // from SDLInputTranslator (for hypothetical future keyboard-style
-    // bindings) but have no subscribers.
-
-    // TODO: MissControl x3, ScoreControl, CoinCounter, TimeControl
-    // TODO: Entity::HeapCreate, ActorManager::Initialise
-    // TODO: Pre-spawn 30x entities, SplatEntity/BombFlash pools
-    WaveManager::GetInstance()->Init();   // stub (parses wave XML in binary)
-    // Binary: WaveManager::Resume (0x00124b1c) — restores wave state from save,
-    // pre-spawns 30 fruit/bomb entities. Stub no-op fine for first pass.
-    WaveManager::GetInstance()->Resume();
-
-    // Create TimeControl for Arcade/Zen countdown display — g_GameData+0x180
-    TimeControl* tc = new TimeControl();
-    tc->CountDown(90.9f);   // DAT_0016c9cc = 90.9 (Zen mode initial time)
-    game->pTimeCtrl = tc;
-    game->hud->AddControl(tc);
-    // TODO: Pre-spawn 30 fruit/bomb entities via WaveManager::Resume (real impl)
-    // TODO: SoundManager::Initialise + SetSFXVolume
 }
 
 // Matches GameUpdate (0x16bed0, 359 lines) — main gameplay loop

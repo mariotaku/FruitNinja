@@ -96,6 +96,10 @@ WaveManager::WaveManager()
     // DIFFERS: actual per-mode speed multipliers unknown from RE; using 1.0 as placeholder.
     m_SpeedMultPerMode[0] = m_SpeedMultPerMode[1] = 1.0f;
     m_SpeedMultPerMode[2] = m_SpeedMultPerMode[3] = 1.0f;
+    // DIFFERS: per-mode speed lower bounds (field_0x8c) -- need RE; using 1.0f.
+    field_0x8c[0] = field_0x8c[1] = field_0x8c[2] = field_0x8c[3] = 1.0f;
+    // DIFFERS: per-mode speed upper bounds (field_0x9c) -- need RE; using 100.0f.
+    field_0x9c[0] = field_0x9c[1] = field_0x9c[2] = field_0x9c[3] = 100.0f;
     for (int i = 0; i < 2; ++i)
         for (int j = 0; j < 32; ++j)
             m_FruitQueue[i][j] = -1;
@@ -448,12 +452,16 @@ void WaveManager::Update(float dt) {
 
     // Skip PowerUpManager::Update — not ported. field_0x78 stays 1.0.
 
-    // Wave speed accumulator.
-    float speed = field_0x74 + dt * m_SpeedMultPerMode[game->gameMode];
-    // Clamp: DIFFERS — exact min/max per mode unknown; using 0..100 as safe range.
-    if (speed < 0.0f) speed = 0.0f;
-    if (speed > 100.0f) speed = 100.0f;
-    field_0x74 = speed;
+    // Wave speed accumulator — binary @ 0x125ba2-0x125aa6.
+    // Binary uses TWO per-mode arrays: field_0x8c[4] (lower bound) and field_0x9c[4] (upper bound).
+    // TODO: per-mode bounds need RE — initialised to {1.0,1.0,1.0,1.0} / {100.0,...} as placeholders.
+    {
+        int mode = game->gameMode;
+        float s = field_0x74 + dt * m_SpeedMultPerMode[mode];
+        float lo = field_0x8c[mode];
+        float hi = field_0x9c[mode];
+        field_0x74 = (s < lo) ? lo : (s < hi) ? s : hi;
+    }
 
     // Time accumulator — game->field_0x1ac not mapped in port Game struct.
     // TODO: skip stat tracking (game->field_0x1ac += dt).
@@ -466,6 +474,10 @@ void WaveManager::Update(float dt) {
         accumDt -= WAVE_STEP;
     }
     field_0x2d4 = accumDt;
+
+    // TODO: game-end gate (binary @ 0x125b64) -- vector::size() unused, semantics unclear.
+    // Binary: if(game[+0x170] && !this[+0x35] && this[+0x37] && this[+0x38] == m_WaveCount[0]+1)
+    //         call vector::size()  -- result discarded (likely sentinel/watchpoint).
 }
 
 // ----------------------------------------------------------------------------
