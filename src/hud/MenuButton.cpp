@@ -29,14 +29,13 @@
 #include <cstdint>
 
 // Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
-// LoadContent loads three shared SmartPtrs in this order:
-//   GOT+0x77E0  scratchs.tex          (Phase-A backdrop — used below)
-//   GOT+0x7894  new_item.tex          (Layer-2 star — used below)
-//   GOT+0x????  hud_cross.tex         (cross icon — TODO)
-// (Spec docs/engine/menubutton-backdrop.md confirms the first two; the
-//  third was originally believed to be blurry_backing.tex by the new-item
-//  star RE but the backdrop RE corrected to hud_cross.tex.)
+// LoadContent loads three shared SmartPtrs in this order, verified by RE
+// pass against literal pool 0x0014f6f0..0x0014f70c:
+//   Slot 1  GOT+0x77E0  scratchs.tex        (Phase-A backdrop — used below)
+//   Slot 2  GOT+0x79DC  blurry_backing.tex  (sparkle ring base — TODO sparkle Draw)
+//   Slot 3  GOT+0x7894  new_item.tex        (Layer-2 NEW star — used below)
 static SmartPtr<Mortar::Texture> s_TexScratchs;
+static SmartPtr<Mortar::Texture> s_TexBlurryBacking;
 static SmartPtr<Mortar::Texture> s_TexNewItem;
 
 // Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
@@ -310,8 +309,9 @@ void MenuButton::Update(float dt) {
     // (Removed the previous fictional alpha-fade-on-m_bRemovalPending
     // block — the binary has no such behaviour. See docs/engine/menubutton-138.md.)
 
-    // Sparkle timer tick (field_0x2c = m_SparkleTimer — rate × 8.0/s, cap at DAT=8.0)
-    // TODO: full sparkle logic
+    // Sparkle timer tick — binary @ 0x0014e644 advances at 8/sec and wraps
+    // at 8.0. SetLoadingSymbol (the only arming function) has zero call
+    // sites so the timer is permanently at -1.0; no need to tick.
 
     // New-item-star timer tick. Binary @ 0x0014e644:
     //   if (timer >= 0): timer += 2*dt; if (m_SparkleTimer >= 1.0) timer = 0.
@@ -721,17 +721,29 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         }
     }
 
-    // Layer 3: Sparkle ring — TODO (RE pass blocked on usage limit)
-    // if (m_SparkleTimer >= 0) { ... 8 segments × 6 verts = 48 QUADCUSTOMVERTEX ... }
+    // Layer 3: Sparkle ring — INTENTIONALLY OMITTED. Per RE pass 2026-04-29,
+    // MenuButton::SetLoadingSymbol(true) (0x0014e45c) is the only writer
+    // that arms m_SparkleTimer to a non-negative value, and it has ZERO
+    // call sites in the shipped binary. The 48-vertex spike-ring at
+    // 0x0014fa3e geometry / colour cycle / DrawTriList is preserved in
+    // the binary but never fires. Port matches by leaving the timer at
+    // -1.0 and skipping the Draw block.
+    //
+    // Layer 4: Text labels — INTENTIONALLY OMITTED. Same situation:
+    // MenuButton::SetText (0x0014ebc0) has zero call sites. m_pLabel1 /
+    // m_pLabel2 are always NULL; label-draw block at 0x0015015e is dead.
+    // (See docs/structs/gameplay-misc.md MenuButton "dead code" notes.)
 }
 
 // Matches MenuButton::LoadContent @ 0x0014f674 — loads three shared textures
-// into class statics in the binary's order: scratchs.tex, new_item.tex,
-// hud_cross.tex (TODO). Port wires the first two; the cross icon waits
-// until its consumer surfaces.
+// into class statics in the binary's order: scratchs.tex (backdrop),
+// blurry_backing.tex (sparkle), new_item.tex (NEW star).
 void MenuButton::LoadContent() {
     if (!s_TexScratchs.IsValid()) {
         s_TexScratchs = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
+    }
+    if (!s_TexBlurryBacking.IsValid()) {
+        s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
     }
     if (!s_TexNewItem.IsValid()) {
         s_TexNewItem = Mortar::TextureManager::LoadLocalisedTexture("new_item.tex");
@@ -740,6 +752,7 @@ void MenuButton::LoadContent() {
 
 void MenuButton::UnLoadContent() {
     s_TexScratchs.SetNull();
+    s_TexBlurryBacking.SetNull();
     s_TexNewItem.SetNull();
 }
 

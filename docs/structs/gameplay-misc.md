@@ -42,10 +42,11 @@ Layer 2 (2D): "New item" star indicator (+0xFC >= 0)
   └─ Hop-up bounce via |SinIdx|*6, tinted grey (dim) or white (highlight)
      Uses shared `new_item.tex` ("NEW" stamp) from LoadContent
 
-Layer 3 (2D): Sparkle ring (+0xF8 >= 0)
-  └─ 8 segments × 6 verts = 48 QUADCUSTOMVERTEX tri-list
-     Pre-baked ring geometry on first call (SinIdx/CosIdx at 45° intervals)
-     Colour cycles through brightness per frame (segment × 32, clamped 64-255)
+Layer 3 (2D): Sparkle ring (+0xF8 >= 0) — DEAD CODE in Bada build
+  └─ 8 spike-quads × 6 verts = 48 QUADCUSTOMVERTEX tri-list
+     Pre-baked geometry on first call; colour cycles through 8 brightness levels
+     Texture: blurry_backing.tex (slot 2 of LoadContent)
+     Trigger: SetLoadingSymbol(true) — but NEVER called anywhere in this binary
 
 Text: BakedString labels drawn at button.pos with Y offsets
 ```
@@ -94,8 +95,8 @@ if (fruitType >= 0) {
 | +0xF8 | float | m_SparkleTimer | ≥0 = sparkle ring active |
 | +0xFC | float | m_NewIndicatorTimer | ≥0 = "new" star active |
 | +0x100..+0x108 | Vec3 | m_HitBoundsScale | From constructor param_5 |
-| +0x114 | BakedString* | m_pLabel1 | Text label (upper) |
-| +0x118 | BakedString* | m_pLabel2 | Text label (lower) |
+| +0x114 | BakedString* | m_pLabel1 | Curved text label (foreground colour). Set ONLY by `MenuButton::SetText` (0x0014ebc0) -- which is **never called** in this binary version. Stays NULL at runtime. See "Label fields are dead code" below. |
+| +0x118 | BakedString* | m_pLabel2 | Curved text label (drop shadow, black @ alpha 0x50). Same lifecycle as `m_pLabel1` -- always NULL in shipped binary. |
 | +0x11C | int | m_PlayerIndex | For multiplayer colour tint |
 | +0x120 | byte | m_bScoreSubmitted | |
 | +0x121 | byte | m_bVisible | = 1 |
@@ -126,7 +127,7 @@ if (fruitType >= 0) {
 | AddPeice | 0x00150240 | — | Add sub-element (text, icon) |
 | TouchReleased | 0x0014e5cc | — | Tap-release gate: skip click if fruit-typed, fire callback only for toggles |
 | Clicked | 0x001507d8 | — | Fire click delegate (empty virtual stub) |
-| LoadContent | 0x0014f674 | 28 | Load 3 shared textures: `scratchs.tex`, `blurry_backing.tex`, `new_item.tex` |
+| LoadContent | 0x0014f674 | 28 | Load 3 shared textures: slot 1 `scratchs.tex` (Phase-A backdrop, GOT 0x77e0), slot 2 `blurry_backing.tex` (sparkle-ring texture, GOT 0x79dc), slot 3 `new_item.tex` (NEW-stamp star, GOT 0x7894). RE-confirmed 2026-04-29 from literal pool at 0x0014f6f0..0x0014f70c and bytes at strings 0x001bbd58 / 0x001baefa / 0x001bbd65. |
 | SetNewSymbol | 0x0014e404 | 16 | `true` -> timer = 0 (only if currently <0); `false` -> timer = -1 |
 | Remove | 0x0014ed18 | — | Animate removal |
 | MakeCritical | 0x00151764 | — | Display "critical" overlay at slice point; position, fade, animate |
@@ -241,6 +242,348 @@ ratio check), the star *texture stays fixed-size at 64x32* — only the position
 and `ratio` link it to the parent button's fade-in animation. No alpha pulse;
 the alpha purely tracks the parent button's fade-in. The "pulse" the user sees
 is the |sin|*6 px Y bounce, not a colour pulse.
+
+### Label fields are dead code in the shipped binary
+
+<!-- RE'd: 2026-04-29 -->
+
+Both `m_pLabel1` (+0x114) and `m_pLabel2` (+0x118) are `BakedString*` fields
+that store curved-arc text labels for a button. They are written ONLY by
+`MenuButton::SetText` (binary @ 0x0014ebc0). A binary-wide cross-reference
+scan finds **zero call sites** to that function (one EXTERNAL entry-point
+reference, no actual `bl` from any code section). All four `MenuButton`
+constructors initialise both fields to NULL, and `MenuButton::Init` does
+not touch them.
+
+**Conclusion**: in the shipped Bada Fruit Ninja binary, `m_pLabel1` and
+`m_pLabel2` are always NULL at draw time. The label-draw block in
+`MenuButton::Draw` (0x0014f9cc) is gated on **both** being non-NULL
+(`m_pLabel1 != NULL && m_pLabel2 != NULL`), so the entire 4-call
+BakedString sequence is dead code at runtime.
+
+The port should:
+1. Keep the fields (typed `BakedString*`) so the layout stays correct.
+2. Initialise them to NULL in MenuButton's constructor.
+3. NOT attempt to ship label rendering for MenuButton — there is nothing
+   to port; the binary never displayed button labels at all. Any
+   "missing menu text" the port appears to lack must be coming from a
+   *different* widget (e.g. a separate Font::DrawString call from the
+   owning Screen, or a different control type), not from MenuButton.
+
+If a future content patch needs to surface labels (e.g. for accessibility
+or localisation), the spec for `MenuButton::SetText` and the
+`BakedString_Draw` layout are documented below for reference. They are
+**not** required for fidelity with the shipped binary.
+
+#### MenuButton::SetText (0x0014ebc0) -- the only setter
+
+```c
+// Allocates two BakedStrings on the heap and stores them at +0x114 / +0x118.
+// param_2 = foreground gradient top colour (used by ApplyGradient)
+// param_3 = foreground gradient bottom colour (NOT used after Colour::Colour copies)
+// param_4 = circle-layout radius (passed to LayoutToCircle)
+// Internally references a global "default tint" Colour at GOT[DAT_0014eccc]
+// and the GameTask static block at GOT[DAT_0014ecd0] (for *(Font**)(gd + 0x54)).
+void MenuButton::SetText(MenuButton *this, const char *text,
+                         Colour param_2, Colour param_3, float radius)
+{
+    Font* font = *(Font**)(g_GameData + 0x54);  // font_fruit_ninja(_HD).fnt
+
+    // ----- m_pLabel1 = main coloured label -----
+    Colour fgInit = *(Colour*)GOT[DAT_0014eccc];     // global default tint
+    Utf8StringIterator it(text);
+    BakedString *fg = new BakedString(font, it, fgInit);  // operator_new(0x1c)
+    fg = fg->ApplyGradient(0xd, 0xe, &param_2, 3);   // top-bottom gradient
+    fg->LayoutToCircle(radius);                       // curve glyphs along arc
+    this->m_pLabel1 = fg;
+
+    // ----- m_pLabel2 = drop shadow (black @ alpha 0x50 = 80/255 = 31%) -----
+    Colour shadowColour(0x00, 0x00, 0x00, 0x50);
+    Utf8StringIterator it2(text);
+    BakedString *sh = new BakedString(font, it2, shadowColour);
+    sh->LayoutToCircle(radius);                       // same curve, no gradient
+    this->m_pLabel2 = sh;
+}
+```
+
+Notes:
+* Both labels share the same text string, font, and arc radius -- they
+  differ ONLY in colour (foreground gradient vs translucent black).
+* `m_pLabel2` is the SHADOW (drawn first), `m_pLabel1` is the FILL
+  (drawn second on top). The naming is misleading; "Label1 = upper /
+  Label2 = lower" in the field-table is an **incorrect** earlier guess.
+* Font slot read is `g_GameData + 0x54` (i.e. `font_fruit_ninja.fnt` /
+  `font_fruit_ninja_HD.fnt`). See `docs/engine/font.md`.
+
+#### Label-draw block in MenuButton::Draw (0x0015015e..0x0015020a)
+
+When both labels are non-NULL, Draw issues **four** BakedString draw calls
+in the order shown. All use scale=20.0, alignment=5 (no offset adjustment),
+and rotate by `m_Timer` -- which the button quad also rotates by (button
+quad uses SinIdx/CosIdx for a small spin animation).
+
+```c
+// pos = (this->base).super.pos          // copied for each call
+// Both label calls draw at the SAME world position; only rotZ varies.
+// Multiplayer same-screen support: the +180 deg pair flips the text for
+// the second player viewing the device upside-down.
+
+if (m_pLabel1 != NULL && m_pLabel2 != NULL) {
+    Vec3 p = base.pos;
+
+    // Pass 1: shadow @ m_Timer
+    BakedString::Draw(m_pLabel2, /*scale*/20.0, /*rotZ*/m_Timer, /*z*/0,
+                      /*align*/5, &p);
+
+    // Pass 2: foreground @ m_Timer  (overlays shadow)
+    BakedString::Draw(m_pLabel1, 20.0, m_Timer, 0, 5, &p);
+
+    // Pass 3: shadow @ m_Timer + 180  (second-player view)
+    BakedString::Draw(m_pLabel2, 20.0, m_Timer + 180.0f, 0, 5, &p);
+
+    // Pass 4: foreground @ m_Timer + 180
+    BakedString::Draw(m_pLabel1, 20.0, m_Timer + 180.0f, 0, 5, &p);
+}
+```
+
+Resolved literal-pool constants (in `MenuButton::Draw`):
+
+| DAT | Address | Hex | Float | Use |
+|-----|---------|-----|-------|-----|
+| `DAT_00150228` | `0x00150228` | `0x4199999a` | **20.0** | Label scale (em size in world units) |
+| `DAT_0015022c` | `0x0015022c` | `0x43340000` | **180.0** | Second-player rotation offset (degrees) |
+| `DAT_00150230` | `0x00150230` | `0x000449e8` | -- | GOT slot for sparkle-ring vert buffer (NOT label related) |
+| `DAT_00150234` | `0x00150234` | `0x000079dc` | -- | GOT slot for `blurry_backing.tex` (sparkle ring) |
+
+Note `MatrixStack::RotZ` (0x00198458) takes degrees and converts via
+`idx = (degrees * 182)` for `SinIdx/CosIdx` (DAT_001984a4 = 182.0;
+65536/360 = 182.04). 180.0 + m_Timer thus rotates 180 deg + spin angle
+-- exactly opposite the first pair. `m_Timer` accumulates from
+`m_Timer += dt * m_AnimSpeed` in Update; for a static label, `m_Timer`
+might be near 0 and the two passes look like "label drawn upright +
+upside-down".
+
+#### Tint / alpha behaviour
+
+* **Foreground colour**: baked into BakedString vertex data at
+  construction via `Colour::PlatformColour(param_3)` of the BakedString
+  ctor + `ApplyGradient` post-process. NOT modified at draw time.
+* **Shadow colour**: hard-coded `(0,0,0,0x50)` = black @ 80/255 alpha
+  (~31%). Baked at construction.
+* **Highlight branch**: `m_bHighlighted` does **not** change label
+  colour. Labels render identically whether highlighted or not.
+* **Fade-in**: labels do **not** track `m_FadeCounter`. They are
+  full-opacity (modulo their baked alpha) the moment they're set.
+* **Tint stack**: `BakedString_Draw` does NOT call `TintColour` -- the
+  per-vertex colour is uploaded directly to the shader. The button's
+  global tint stack is irrelevant to label rendering.
+
+#### Highlight DOES NOT affect labels
+
+To be explicit: the only places `m_bHighlighted` is read in Draw are:
+1. The button-quad shrink ratio decision (`bVar5`).
+2. The "new item" star tint colour (white vs grey).
+
+The label block reads neither. `m_bHighlighted` has zero visible effect
+on label rendering.
+
+### Sparkle ring (m_SparkleTimer @ +0xF8) — Layer 3, DEAD CODE in Bada build
+
+<!-- RE'd: 2026-04-29 -->
+
+8 spike-quads arranged radially around the button centre, each tinted
+with a different brightness, advancing one segment per frame to create
+a "rotating chase" effect. Used in the iOS/Android builds for the
+"loading" state on shop / async buttons. **In the Bada Fruit Ninja
+binary the trigger function `MenuButton::SetLoadingSymbol` exists but
+is not called from anywhere** — confirmed by:
+
+1. Direct ref scan: only ref to `0x0014e45c` is "EXTERNAL" entry-point.
+2. Word-aligned data scan for `0x0014e45c` / `0x0014e45d`: zero hits
+   in any data block (no vtable entry, no function-pointer table).
+3. BL-target scan across all instructions: only the function's own
+   internal `blt` (sign-test branch).
+
+Init writes `m_SparkleTimer = -1.0`, Update only ticks if `>= 0.0`,
+and the only positive write in the binary is gated by SetLoadingSymbol.
+Therefore Layer 3 never renders in normal gameplay on Bada.
+
+The full pipeline is documented below in case the port wants to wire
+it up for fidelity with the iOS/Android visual (e.g. for a future
+"loading" state in shop / network screens).
+
+#### Trigger: MenuButton::SetLoadingSymbol(bool) (0x0014e45c)
+
+```c
+// param_1 == true  -> arm:    m_SparkleTimer = 0.0  (only if currently <0)
+// param_1 == false -> disarm: m_SparkleTimer = -1.0 (only if currently >=0)
+// Identical edge-trigger pattern as SetNewSymbol.
+void MenuButton::SetLoadingSymbol(bool on) {
+    float v = m_SparkleTimer;
+    if (on) {
+        if (v < 0.0f) m_SparkleTimer = 0.0f;       // DAT_0014e480 = 0.0
+    } else {
+        if (v >= 0.0f) m_SparkleTimer = -1.0f;
+    }
+}
+```
+
+#### Update tick (in MenuButton::Update @ 0x0014e644..0x0014e65c)
+
+```c
+if (m_SparkleTimer >= 0.0f) {
+    m_SparkleTimer += dt * 8.0f;                   // rate = 8 segments/sec
+    if (m_SparkleTimer >= 8.0f) m_SparkleTimer = 0.0f;  // wrap (DAT_0014e970)
+}
+// Side effect inside the m_NewIndicatorTimer block:
+if (m_NewIndicatorTimer >= 0.0f && m_SparkleTimer >= 1.0f) {
+    m_NewIndicatorTimer = 0.0f;                    // phase reset on sparkle tick
+}
+```
+
+Period = 1 second per full ring rotation (8 segments × dt of 1/60 ×
+8/sec = 8 segment-units per sec, wraps at 8 → 1 second loop).
+
+#### Draw gate (in MenuButton::Draw @ 0x0014fe98..0x0015015e)
+
+```c
+if (m_SparkleTimer >= 0.0f && blurry_backing.tex.IsValid()) {
+    // ...lazy build + colour cycle + matrix + draw...
+}
+```
+
+#### Geometry — pre-baked once, lazy
+
+A static 48-vertex `QUADCUSTOMVERTEX` buffer at GOT+DAT_00150064 is built
+on the first frame the sparkle activates, gated by a 1-byte init flag at
+the same address (the byte sits before the vertex array; vertex bytes
+start at +4). The geometry is identical every frame; only colours and
+the world matrix change per frame.
+
+```c
+// Static one-time build. uVar18 sweeps 0 -> 0xfff0 in steps of 0x1ffe.
+// 0x1ffe / 0x10000 of full circle = 45° (8 segments).
+// 0x3ffc / 0x10000 of full circle = 90° (sin(a+90°) = cos(a) shift).
+//
+// Per segment at angle a:
+//   outer = (sin(a) * 0.5,         cos(a) * 0.5,         0)   // unit-radius * 0.5
+//   tang  = (sin(a+90°) * 0.075,   cos(a+90°) * 0.075,   0)   // tangent dir, half-width 0.075
+//         = (cos(a) * 0.075,       -sin(a) * 0.075,      0)
+//   inner = (sin(a) * 0.5 * 0.6,   cos(a) * 0.5 * 0.6,   0)   // inner radius = 0.6 * outer = 0.3
+//         = (sin(a) * 0.3,         cos(a) * 0.3,         0)
+//
+// 6 verts per segment (2 triangles per spike-quad):
+//   V0 = outer - tang    (outer-left)
+//   V1 = outer + tang    (outer-right)
+//   V2 = inner - tang    (inner-left)
+//   V3 = inner - tang    (DUPLICATE of V2 — degenerate index)
+//   V4 = outer + tang    (DUPLICATE of V1)
+//   V5 = inner + tang    (inner-right)
+// Triangles via tri-list:  (V0,V1,V2)  and  (V3,V4,V5).
+//
+// Per-vertex fields:
+//   x,y,z  = position above
+//   z      = 0.0
+//   alpha/weight (+0x14) = 1.0
+//   the colour at +0x18 is filled per-frame in the second loop
+//   (other QCV fields zeroed)
+```
+
+Final geometry: 8 disconnected "spike" quads at 45° intervals around the
+button centre, each spanning radius 0.3..0.5 and tangential half-width
+±0.075. Total subtended arc per spike ≈ 17° (out of 45° spacing),
+leaving gaps between spikes — characteristic "8 dots / chase lights"
+visual, not a continuous ring.
+
+Resolved DATs:
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_00150044 | 0.0 | Z component (always zero for 2D); also alpha/weight zeroes |
+| DAT_00150050 | 0x80000007 | mask 7 (negative-aware idiom for `(int)timer & 7`) |
+| DAT_00150054 | 0.075 | Tangential half-width per spike |
+| DAT_00150058 | 0.6 | Inner radius / outer radius ratio |
+| DAT_00150064 | 0x000449e8 | GOT-relative offset to BSS: byte init-flag + 48*0x24 vertex array |
+| DAT_00150224 | 0x80000007 | mask 7 (per-segment colour index) |
+| DAT_00150230 | 0x000449e8 | Same as DAT_00150064 (vertex buffer base) |
+
+#### Colour cycle (every frame)
+
+```c
+// shift = uint16(SparkleTimer & 7), advancing 1 per tick (8 ticks/sec).
+// Walks the segments in reverse so the brightest spike "rotates"
+// clockwise around the ring.
+int shift = ((int)m_SparkleTimer) & 7;     // saturating arithmetic
+shift = 7 - shift;                          // 7..0 reverse
+for (int seg = 0; seg < 8; ++seg) {
+    int idx = (shift + seg) & 7;            // colour-index for this spike
+    int shade = idx * 0x20;                 // 0, 32, 64, ..., 224
+    if (shade > 0xfe) shade = 0xff;         // (only matters for idx=8 case)
+    if (shade < 0x40) shade = 0x40;         // CLAMP LOW: idx 0,1 -> 64
+
+    // Per-segment colour: greyscale, alpha=200 (0xC8 = 78% opaque)
+    Colour c(shade, shade, shade, 200);
+    c = TintColour(c);                       // applied once
+    uint32_t platformColour = c.PlatformColour();   // packed BGRA
+
+    // Write same colour to all 6 verts of this spike-quad
+    QUADCUSTOMVERTEX* v = &vertexBuf[seg * 6];
+    for (int j = 0; j < 6; ++j) v[j].colour = platformColour;
+}
+```
+
+So the 8 effective shades (after clamp) are: **{64, 64, 64, 96, 128,
+160, 192, 224}** rotating around the ring once per second. Two of the
+8 spikes are at the floor luminance (64), giving an asymmetric chase.
+
+#### Matrix + draw call
+
+```c
+Texture::Set(blurry_backing.tex);
+ResetMatrix();
+// scale = g_GlobalScreenScale * 0.75 * 0.75  (g_GlobalScreenScale @ 0x001f4334
+//   = (1, 1, 1) at default render res, init by _GLOBAL__I_Utils.cpp)
+Vec3 scale = g_GlobalScreenScale * 0.5625f;
+MatrixStack* ms = (MatrixStack*)(GameData + 0x1094);   // GOT+0x7348 -> +0x1094
+ms->Scale(scale);
+ms->Translate(button.pos);
+UploadMatrices();
+
+Mortar::Mesh::DrawTriList(vertexBuf, 0x30 /* 48 verts */, false, NULL);
+Texture::UnSet(blurry_backing.tex);
+```
+
+So the world-space outer radius of the ring = `0.5 * 0.5625 ≈ 0.281`
+units at default scale. The button quad's typical size is ~64 units
+wide, so the sparkle is intentionally a small 24x24-ish sparkle around
+the button's centre, not encircling the entire button.
+
+#### Resolved constants
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_0014e480 | 0.0 | SetLoadingSymbol(true) arm value (timer reset to 0) |
+| DAT_0014e970 | 0.0 | Update wrap value (timer >= 8 -> 0) |
+| DAT_00150234 | 0x000079dc | GOT entry pointing to `blurry_backing.tex` SmartPtr |
+| DAT_00150238 | 0x000077cc | GOT entry pointing to `g_GlobalScreenScale` Vec3 |
+| DAT_0015023c | 0x00007348 | GOT entry pointing to `GameData` (for MatrixStack at +0x1094) |
+| GOT+0x77cc | g_GlobalScreenScale @ 0x001f4334 | Default (1,1,1) from _GLOBAL__I_Utils.cpp |
+
+#### Port implementation notes (if/when wiring)
+
+The port should:
+1. Implement `MenuButton::SetLoadingSymbol(bool)` so any future call site
+   (e.g. networking screens) works correctly.
+2. Implement the Update tick (already partial in port; just add the
+   SparkleTimer branch).
+3. Implement the Draw block: lazy 48-vert build + per-frame colour cycle.
+4. Use blurry_backing.tex for the sparkle texture.
+5. **Do NOT spend time wiring trigger sites** — the binary has zero,
+   so this is purely a forward-compatibility / completeness concern.
+   Marking the codepath dead-but-implemented is fine.
+
+The implementer can wire the geometry from this spec without re-RE'ing
+the binary. The clamping/cycling is unusual (8 shades, two clamped to
+floor 64) and should be matched exactly.
 
 ### Constructor Variants
 
