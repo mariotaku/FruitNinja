@@ -15,6 +15,7 @@
 #include "FruitSaveData.h"
 #include "screens/MainScreen.h"
 #include "hud/HUD.h"
+#include "hud/TimeControl.h"
 #include "entities/ActorManager.h"
 #include "entities/SlashEntity.h"
 #include "engine/MenuBackground.h"
@@ -31,6 +32,7 @@
 #include "debug/DebugFlags.h"
 #include "UpdateMusic.h"
 #include "audio/GameSound.h"
+#include "GameOver.h"
 #include "audio/SoundManager.h"
 #include <cstdio>
 
@@ -90,7 +92,17 @@ void GameInit(unsigned long) {
     // TODO: MissControl x3, ScoreControl, CoinCounter, TimeControl
     // TODO: Entity::HeapCreate, ActorManager::Initialise
     // TODO: Pre-spawn 30x entities, SplatEntity/BombFlash pools
-    WaveManager::GetInstance()->Init();  // stub (parses wave XML in binary)
+    WaveManager::GetInstance()->Init();   // stub (parses wave XML in binary)
+    // Binary: WaveManager::Resume (0x00124b1c) — restores wave state from save,
+    // pre-spawns 30 fruit/bomb entities. Stub no-op fine for first pass.
+    WaveManager::GetInstance()->Resume();
+
+    // Create TimeControl for Arcade/Zen countdown display — g_GameData+0x180
+    TimeControl* tc = new TimeControl();
+    tc->CountDown(90.9f);   // DAT_0016c9cc = 90.9 (Zen mode initial time)
+    game->pTimeCtrl = tc;
+    game->hud->AddControl(tc);
+    // TODO: Pre-spawn 30 fruit/bomb entities via WaveManager::Resume (real impl)
     // TODO: SoundManager::Initialise + SetSFXVolume
 }
 
@@ -115,6 +127,12 @@ void GameUpdate(float dt, bool active) {
     }
     if (earlyFrame) printf("GameUpdate: -> UpdateBombHit\n");
     FN::UpdateBombHit(prevBombTimer);
+
+    // Binary 0x0016c284: if bombHitTimer crossed 1.5 downward, trigger GameOver.
+    // TODO: add per-bomb m_bMenuBombHit gate when Bomb state is accessible here.
+    if (prevBombTimer > 1.5f && game->bombHitTimer <= 1.5f && !game->pauseFlag) {
+        FN::GameOver(-1, -1.0f, -1);
+    }
 
     if (earlyFrame) printf("GameUpdate: -> ActorManager::Update active=%d am=%p\n",
                            active ? 1 : 0, (void*)game->actorManager);

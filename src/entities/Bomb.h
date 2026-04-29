@@ -124,6 +124,26 @@ public:
     // Matches Bomb::LoadContent (0x1726c8) — called once from GameInitialise
     // Loads bomb models, textures, particle hashes into g_bombData
     static void LoadContent();
+
+    // Matches Bomb::GetNumActiveForPlayer (0x00122a14). Returns count of
+    // active Bomb entities assigned to `playerIdx` (-1 = all players).
+    // When checkBombs=true counts bombs in pre-spawn state too.
+    // TODO: playerIdx filtering not yet ported.
+    static int GetNumActiveForPlayer(int playerIdx, bool countPrespawn);
+
+    // Matches Bomb::ClearUnspawned (0x00122ab4). Walks ActorManager type-1
+    // list and deactivates any bomb still in chuck-delay (pre-spawn) state.
+    static void ClearUnspawned();
+
+    // Matches Bomb::SetForPlayer (0x00122b5c). Tags bomb for a specific player
+    // (used in split-screen MP to assign physics mirroring).
+    // TODO: not yet ported — no-op stub.
+    static void SetForPlayer(Bomb* b, int playerIdx);
+
+    // Matches Bomb::MakeFat (0x00122bc0). Scales up bomb for the chain-bomb
+    // "big bomb" upgrade. param2=false = keep existing scale factor.
+    // TODO: not yet ported — no-op stub.
+    static void MakeFat(Bomb* b, bool resetScale);
 };
 
 #endif

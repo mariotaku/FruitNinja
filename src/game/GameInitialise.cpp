@@ -60,6 +60,8 @@ void GamePreInitialise() {
     game->dt = 0;
     game->hud = nullptr;
     game->mainScreen = nullptr;
+    game->pGameOverScreen = nullptr;
+    game->pTimeCtrl = nullptr;
     game->m_FrameTimer = 0;
     game->pGameSound = nullptr;
 }
@@ -316,6 +318,8 @@ void GameDestroy() {
         game->hud = nullptr;
     }
     game->mainScreen = nullptr;
+    game->pGameOverScreen = nullptr;  // owned by HUD; nulled here after HUD Release
+    game->pTimeCtrl = nullptr;        // owned by HUD; nulled here after HUD Release
 
     // --- 5. FruitCamera ---
     if (game->pCamera) { delete game->pCamera; game->pCamera = nullptr; }
