@@ -17,6 +17,7 @@
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
 #include "entities/SlashEntity.h"
+#include "engine/MenuBackground.h"
 #include "entities/SplatEntity.h"
 #include "entities/BombBlast.h"
 #include "hud/SliceEffect.h"
@@ -49,14 +50,15 @@ void GameInit(unsigned long) {
     // deferred in GameInitialise because HUD wasn't ready there.
     MissControl::AllocatePool();
 
-    // Load background texture → task state +0xfc (matches original GameInit lines 159-170)
-    // Only if not already loaded (original: SmartPtr cast-to-bool guard)
-    // Fast hw: "gb_game.tex" (DAT_0016c9f0 → 0x001BC923)
-    // Slow hw: "gb_game_sml.tex" (DAT_0016c9f4 → 0x001BC92F)
-    GameTaskState* ts = GetTaskState();
-    if (!ts->pBackgroundTexture.IsValid()) {
-        const char* bgTex = game->IsFastHardware() ? "gb_game.tex" : "gb_game_sml.tex";
-        ts->pBackgroundTexture = Mortar::TextureManager::LoadLocalisedTexture(bgTex);
+    // Load default background via ChangeBackground (writes to the shared
+    // file-static MenuBackground slot). This is the same slot the
+    // renderer reads via GetCurrentBackground() and the same slot
+    // ItemManager::SetEquippedItem(BACKGROUND, ...) updates -- so the
+    // shop's Equip-background flow now actually swaps the visible bg.
+    // Binary GameInit @ 0x..: same call shape (ChangeBackground(NULL)
+    // -> default "gb_game" + platform suffix).
+    if (GetCurrentBackground() == nullptr) {
+        ChangeBackground(nullptr);
     }
 
     // Create MainScreen and add to HUD (matches original GameInit lines 190-200)
@@ -206,13 +208,16 @@ void GameDraw(float dt, bool active) {
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
-    if (earlyFrame) printf("GameDraw: -> background quad bgTex_valid=%d\n",
-                           ts ? ts->pBackgroundTexture.IsValid() : -1);
+    Mortar::Texture* bgTex = GetCurrentBackground();
+    if (earlyFrame) printf("GameDraw: -> background quad bgTex=%p\n", (void*)bgTex);
 
-    // Background texture quad
+    // Background texture quad. Reads from the MenuBackground file-static
+    // (same slot ItemManager::SetEquippedItem(BACKGROUND, ...) updates
+    // via ChangeBackground), so a shop equip swaps the visible bg
+    // immediately on the next frame.
     // Matches binary: Scale(481, 321, 1) Translate(0, 0, -5599) DrawQuad(cropped UVs)
-    if (ts->pBackgroundTexture.IsValid()) {
-        ts->pBackgroundTexture->Set();
+    if (bgTex) {
+        bgTex->Set();
 
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
@@ -223,7 +228,7 @@ void GameDraw(float dt, bool active) {
         Colour white(255, 255, 255, 255);
         game->renderer.DrawQuad(white, 0.03125f, 0.1875f, 0.96875f, 0.8125f);
 
-        ts->pBackgroundTexture->UnSet();
+        bgTex->UnSet();
     }
 
     Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
@@ -355,7 +360,9 @@ void GameExit_Handler() {
 
     printf("GameExit: cleaning up\n");
 
-    // Release background texture
+    // Release background texture (shared MenuBackground slot)
+    UnloadBackground();
+    // Drop any leftover GameTaskState slot too (no-op if never used)
     GameTaskState* ts = GetTaskState();
     ts->pBackgroundTexture.SetNull();
 

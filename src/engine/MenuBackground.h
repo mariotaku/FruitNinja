@@ -34,4 +34,9 @@ void ChangeBackground(const char* texName);
 // Returns NULL if no background has been loaded yet.
 Mortar::Texture* GetCurrentBackground();
 
+// UnloadBackground — port-only cleanup hook. Nulls the file-static
+// g_BackgroundTexture SmartPtr. Called from GameDestroy so the GL
+// resource is released on shutdown.
+void UnloadBackground();
+
 #endif // FN_MENU_BACKGROUND_H
