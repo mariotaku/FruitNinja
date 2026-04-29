@@ -446,24 +446,17 @@ void MainScreen::Update(float dt) {
         break;
 
     case STATE_QUIT_WAIT: {
-        // Binary @ 0x0014c0a0 case 0x17:
+        // ASM-verified: 2026-04-30 binary @ 0x0014c078..0x0014c0ea (asm-inspector)
+        // Case 0x17:
         //   TutorialControl::ResetTutePos(pTC, nullptr)
         //   if (ActorManager::GetNumEntities(0) != 0) break;
-        //   pLeaderboardBtn = null;
-        //   gameMode = *(task_state+0x4c);
-        //   if (gameMode != 2) {
-        //       if (gameMode == 3) { state=0; m_Timer2=0.15; }
-        //       else break;
-        //   }
-        //   HitMenuBomb at literal (163, -96, 0); state = 0x18.
-        //
-        // DIFFERS: an earlier RE pass thought *(task_state+0x4c) was
-        // Game::gameMode, but on a fresh main-menu boot that field is 0
-        // (Classic), not 2 (Zen) -- so the gate would never pass and
-        // the quit flow soft-locked. The actual semantic of +0x4c isn't
-        // resolved yet (likely a quit-confirmed flag set by some path
-        // we don't model). Drop the gate so the quit flow always
-        // progresses to STATE_QUIT_BOMB once entities clear.
+        //   pLeaderboardBtn = nullptr;
+        //   qs = SystemManager::m_QuitState  (NOT Game::gameMode -- earlier
+        //       RE conflated GOT slots; +0x4c is on SystemManager, GOT slot
+        //       0x000074f8, byte field initialised to 3)
+        //   if (qs == 2):  HitMenuBomb (163,-96,0); state = 0x18
+        //   else if (qs == 3): m_State=0; m_Timer2=0.15
+        //   else (0,1):    pending OS dialog; stay in QUIT_WAIT
         if (game.pTutorialCtrl) {
             game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
         }
@@ -471,10 +464,18 @@ void MainScreen::Update(float dt) {
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
         if (liveEntities != 0) break;
 
-        // Binary uses a literal (163, -96, 0) for the HitMenuBomb spawn.
-        FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
-        m_State = STATE_QUIT_BOMB;
-        m_StateTimer = 0.0f;
+        const uint8_t qs = Mortar::SystemManager::GetInstance().GetQuitState();
+        if (qs == 2) {
+            FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+            m_State = STATE_QUIT_BOMB;
+            m_StateTimer = 0.0f;
+        } else if (qs == 3) {
+            // OS-cancelled / idle. Reset to camera-zoom flow.
+            m_State = STATE_CAMERA_ZOOM;
+            m_StateTimer = 0.0f;
+            m_Timer2 = 0.15f;       // DAT_0014c298
+        }
+        // Otherwise (0/1): OS dialog pending -- stay in QUIT_WAIT.
         break;
     }
 
