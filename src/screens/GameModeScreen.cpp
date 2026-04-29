@@ -459,8 +459,6 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexModeSensei->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         r->DrawQuad(Colour(255, 255, 255, 255));
         s_TexModeSensei->UnSet();
     }
@@ -488,8 +486,6 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexZenSign->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         r->DrawQuad(Colour(255, 255, 255, 255));
         s_TexZenSign->UnSet();
     }

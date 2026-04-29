@@ -106,16 +106,14 @@ public:
     // parity but currently only stubbed callers use it.
     Entity* Add(Entity* entity, long typeIdx);
 
-    // 0x00170184. Erase from its type list, append to free pool. Calls
-    // the entity's virtual Deactivate() first so subclasses can clean up
-    // emitters / external references before the slot is reused. (The
-    // binary does NOT call a virtual here — its entity cleanup lives in
-    // the KillX helpers. We invoke the virtual because the port's
-    // Bomb/Fruit Deactivate overrides own that cleanup.)
+    // 0x00170184. Erase from its type list, set ENT_INACTIVE, append to
+    // free pool. Binary-faithful: no virtual call. Subclass emitter
+    // cleanup happens before this in the Kill* helpers (KillBomb,
+    // KillFruit, Coin::Arrived).
     void Deactivate(Entity* entity);
 
-    // 0x001702d8. Erase + (unless ENT_NO_DESTRUCT) call virtual
-    // Deactivate then delete. Does not return the entity to the pool.
+    // 0x001702d8. Erase + (unless ENT_NO_DESTRUCT) delete.
+    // Dtor calls Release() for per-type cleanup.
     void Remove(Entity* entity);
 
     // 0x0016fb44. Set ENT_KILLED on every entity of the given type so

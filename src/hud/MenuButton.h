@@ -28,6 +28,7 @@ class Fruit;
 // animation mirrors the main -> mode-select cascade.
 namespace FN { void ClearMenuItems(); }
 
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x0014ee40 + 0x0014e614 + 0x0014f7e0 (asm-inspector, base-shift unaffected)
 class MenuButton : public HUDControl3d {
 public:
     // +0x80: real Fruit/Bomb entity spinning on button (nullptr for toggles)

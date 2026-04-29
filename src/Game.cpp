@@ -185,8 +185,37 @@ void Game::run() {
     }
 }
 
-// Matches: GameDestroy (0x10b7ec) + FruitNinja::OnAppTerminating
+// Test-only: run a fixed number of game ticks (no SDL_Delay, no input).
+// Used by tests/test_screen.cpp to drive a few frames after pushing a
+// screen so its Update + Draw run against a real GL context.
+void Game::runFrames(int frameCount) {
+    for (int i = 0; i < frameCount && running; i++) {
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev)) {
+            if (ev.type == SDL_QUIT) running = false;
+        }
+
+        dt = 0.0f;
+        Mortar::SystemManager::GetInstance().Update(&dt);
+        dt *= FN::g_DebugTimeScale;
+        GameTaskUpdate(dt);
+
+        int ww, wh;
+        SDL_GL_GetDrawableSize(window, &ww, &wh);
+        glViewport(0, 0, ww, wh);
+        Mortar::DisplayManager::GetInstance().BeginFrame();
+        GameTaskDraw(dt);
+        SDL_GL_SwapWindow(window);
+    }
+}
+
+// Matches: GameDestroy (0x10b7ec) + FruitNinja::OnAppTerminating.
+// Idempotent: main() calls shutdown() explicitly and Game::~Game() chains
+// to it again; without the guard GameDestroy frees its resources twice.
 void Game::shutdown() {
+    static bool s_shutdownDone = false;
+    if (s_shutdownDone) return;
+    s_shutdownDone = true;
     GameDestroy();
     renderer.shutdown();
 }

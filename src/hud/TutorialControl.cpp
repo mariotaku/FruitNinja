@@ -41,8 +41,8 @@ static const float TRAIL_FADE_OUT_START = 2.0f;  // from binary phase logic
 // ===================================================================
 // Matches TutorialControl::TutorialControl @ 0x001636f8
 // Texture assignment (verified):
-//   swipe_fruit_begin.tex -> super.m_SecondaryTex (+0x74)  [arrow graphic]
-//   press_indicate.tex    -> m_PressTex (+0x8C)             [trail quads]
+//   swipe_fruit_begin.tex -> super.m_Texture (+0x74)  [arrow graphic]
+//   press_indicate.tex    -> m_PressTex (+0x8C)       [trail quads]
 // ===================================================================
 TutorialControl::TutorialControl()
     : m_AnimTimer(ANIM_INACTIVE)
@@ -52,11 +52,11 @@ TutorialControl::TutorialControl()
     , m_HalfWidth(0.0f)
     , m_bFlipX(false)
 {
-    // swipe_fruit_begin.tex -> m_SecondaryTex (+0x74, the arrow)
+    // swipe_fruit_begin.tex -> m_Texture (+0x74, the arrow)
     {
         SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("swipe_fruit_begin.tex");
-        if (tex.IsValid()) m_SecondaryTex = tex->m_TexId;
+        if (tex.IsValid()) m_Texture = tex->m_TexId;
     }
 
     // press_indicate.tex -> m_PressTex (+0x8C, the trail quads)
@@ -248,7 +248,7 @@ void TutorialControl::Update(float dt) {
 // Matches TutorialControl::Draw @ 0x00163360
 // Draws:
 //   (1) 4-quad trail with press_indicate.tex (m_PressTex at +0x8C)
-//   (2) Arrow with swipe_fruit_begin.tex (m_SecondaryTex at +0x74)
+//   (2) Arrow with swipe_fruit_begin.tex (m_Texture at +0x74)
 //
 // m_bHidden is NOT a visibility gate; it selects the UV frame for the
 // arrow: 0 -> u=[0.0,0.5], 1 -> u=[0.5,1.0].
@@ -306,19 +306,17 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
             mm.UploadModelViewOnly();
 
             m_PressTex->Set();
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             // UV: full (0.0, 0.0, 1.0, 1.0) per DAT_001635c4=0.0, 0x3f800000=1.0
             r->DrawQuad(trailColour, 0.0f, 0.0f, 1.0f, 1.0f);
             m_PressTex->UnSet();
         }
     }
 
-    // --- (2) Arrow (swipe_fruit_begin.tex, m_SecondaryTex at +0x74) ---
+    // --- (2) Arrow (swipe_fruit_begin.tex, m_Texture at +0x74) ---
     // m_bHidden selects UV frame:
     //   0 -> u0 = 0.0 * 0.5 = 0.0, u1 = 0.0 * 0.5 + 0.5 = 0.5
     //   1 -> u0 = 1.0 * 0.5 = 0.5, u1 = 1.0 * 0.5 + 0.5 = 1.0
-    if (m_SecondaryTex != 0) {
+    if (m_Texture != 0) {
         float arrow_u0 = m_bHidden * 0.5f;
         float arrow_u1 = m_bHidden * 0.5f + 0.5f;
 
@@ -336,9 +334,7 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        glBindTexture(GL_TEXTURE_2D, m_SecondaryTex);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBindTexture(GL_TEXTURE_2D, m_Texture);
         r->DrawQuad(m_Colour, arrow_u0, 0.0f, arrow_u1, 1.0f);
         glBindTexture(GL_TEXTURE_2D, 0);
     }

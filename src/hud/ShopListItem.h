@@ -14,8 +14,11 @@
 //   slot  6 (+0x18)  ShopListItem::Move   0x0015d9fc
 //   slot 11 (+0x2C)  ShopListItem::Draw   0x0015eb00
 //
-// Binary ScrollingMenuItem ends at +0xDC (pos=+0x04, pParent=+0x10, ...,
-//   m_DescText[128] starts at +0x5C, ends at +0xDC).
+// Binary ScrollingMenuItem ends at +0x58 (88 bytes; base ctor 0x0015b5dc).
+// ShopListItem own-fields begin immediately at +0x58 in the binary:
+//   +0x58  ShopScreen*  m_pShopScreen  (binary m_field58: void* set to ShopScreen*)
+//   +0x5C  char[128]    m_DescText     (inline description text buffer)
+//   +0xDC  (end of m_DescText)
 //
 // Extended ShopListItem fields (absolute offsets from ShopListItem* this):
 //   +0x25C  float  m_NewItemAlpha   >0 -> draw new_item_sml badge; fades from init
@@ -44,6 +47,7 @@
 class ItemInfo;
 class ShopScreen;
 
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x0015f9e8 + 0x0015c988 + 0x0015eb00 (asm-inspector)
 class ShopListItem : public ScrollingMenuItem {
 public:
     // Matches ShopListItem::ShopListItem() @ 0x0015f9e8
@@ -73,16 +77,27 @@ public:
     // Binary 0x0015eb00, ~450 instructions, 5 Font::DrawString calls.
     void Draw() override;
 
-    // --- Extended fields (binary absolute offsets from ShopListItem* this) ---
-    // The ARM32 binary ScrollingMenuItem ends at +0xDC; extended fields start at +0x25C.
-    // On x86_64 ScrollingMenuItem is larger (pointer fields widen from 4->8 bytes,
-    // Delegate alignment pads struct further). sizeof(ScrollingMenuItem) on x86_64 = 0xF8.
-    // Pad to reach the equivalent of ARM32 +0x25C:
-    //   _pad size = 0x25C - sizeof(ScrollingMenuItem)_x86_64 = 0x25C - 0xF8 = 0x164 bytes.
-    // Intermediate layout not yet fully RE'd. Filled with zeros until a full RE pass.
-    char _pad[0x163];                 // bridge: sizeof(SMI_x86)..+0x25B  (unknown intermediate)
-                                      // Size formula: 0x25C - sizeof(ScrollingMenuItem_x86) - alignment_adjustments
-                                      // Verified empirically for GCC x86_64 (MinGW): 0x163
+    // --- ShopListItem own fields mirroring binary +0x58..+0xDB ---
+    //
+    // +0x58 (ARM32): ShopScreen* back-pointer.
+    // Binary Create @ 0x0015c988: *(this+0x58) = param_2 (ShopScreen*).
+    // Binary Draw   @ 0x0015eb00: *(int*)(in_r0+0x58) != 0 check, then ->field_0xb8.
+    // field_0xb8 of ShopScreen = m_State (int). Typed void* in binary; port uses ShopScreen*.
+    ShopScreen* m_pShopScreen;        // +0x58 ARM32
+
+    // +0x5C (ARM32): inline description text buffer (128 bytes).
+    // Binary Draw: pcVar23 = (char*)(in_r0+0x5c) passed to Font::DrawString.
+    // Binary Create: snprintf/strncpy fills this buffer from ItemInfo strings.
+    char m_DescText[128];             // +0x5C..+0xDB ARM32
+
+    // --- Padding to bridge from end-of-base (x86_64) to ARM32 +0x25C for m_NewItemAlpha ---
+    // ARM32 ShopListItem layout after m_DescText (+0xDC): gap to +0x25C.
+    // On x86_64, sizeof(ScrollingMenuItem) + sizeof(ShopScreen*) + 128 > ARM32 equivalents,
+    // so the _pad below shrinks to compensate. Size tuned to satisfy the static_assert
+    // for m_NewItemAlpha == 0x25C on GCC/libstdc++ x86_64 (MinGW).
+    // Formula: 0x25C - sizeof(ScrollingMenuItem)_x86 - sizeof(ShopScreen*)_x86 - 128 - align
+    // DIFFERS: exact size determined empirically; update if base struct layout changes.
+    char _pad[0x163];                 // bridge: end-of-m_DescText..+0x25B
 
     // +0x25C: new-item badge alpha (>0 => draw new_item_sml badge)
     float m_NewItemAlpha;             // +0x25C
@@ -126,11 +141,6 @@ public:
 
     // +0x280: cost text alpha (m_CostAlpha * 255.0f clamped -> byte alpha)
     float m_CostAlpha;                // +0x280
-
-    // Port-only: back-pointer to ShopScreen so Draw can call GetDescriptionTextXPos().
-    // Binary accesses m_TransitionAlpha via GOT; port uses explicit pointer.
-    // Set by ShopScreen when adding the item to the list.
-    ShopScreen* m_pShopScreen;
 };
 
 // ---------------------------------------------------------------------------

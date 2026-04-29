@@ -147,9 +147,6 @@ void DebugHitbox_Draw() {
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_DEPTH_TEST);
 
     // Scratch vertex buffer: ring (32×6=192) + crosshair (4×6=24) = 216 verts/entity.
     static QUADCUSTOMVERTEX s_Verts[216];
@@ -165,13 +162,13 @@ void DebugHitbox_Draw() {
     for (auto it = list.begin(); it != list.end(); ++it) {
         Entity* e = *it;
         if (!e || !e->IsActive()) continue;
-        if (e->m_Col.radius <= 0.0f) continue;
+        if (!e->m_Col || e->m_Col->radius <= 0.0f) continue;
 
         const uint32_t col = ColourFor(e->entityType);
-        const float cx = e->m_Col.center.x;
-        const float cy = e->m_Col.center.y;
+        const float cx = e->m_Col->center.x;
+        const float cy = e->m_Col->center.y;
         const float cz = -1.0f;          // slightly in front of the plane
-        const float outerR = e->m_Col.radius;
+        const float outerR = e->m_Col->radius;
         const float innerR = outerR - RING_THICKNESS;
 
         BuildRing(&s_Verts[0], cx, cy, cz,

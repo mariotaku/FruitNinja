@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+// Analysed: 2026-04-29T00:00
+
 // Binary constants for fruit slicing.
 // Resolved from DATs near CollisionResponse (0x1780b0) and Slice (0x176d58).
 static const float SLICE_TIMER_BASE    = 0.03f;   // DAT_001784dc
@@ -75,6 +77,7 @@ Fruit::Fruit()
     , m_bSliced(false)
     , m_bDetached(false)
     , m_bDrawWhole(false)
+    , m_bCriticalEligible(false)
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
     , m_ZPosition(0.0f)
@@ -83,6 +86,8 @@ Fruit::Fruit()
 }
 
 Fruit::~Fruit() {
+    delete m_Col;
+    m_Col = nullptr;
     // Model released by SmartPtr destructor
 }
 
@@ -93,6 +98,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_bSliced = false;
     m_bDetached = false;
     m_bDrawWhole = false;
+    m_bCriticalEligible = false;
     m_ScaleAnim = 0.0f;
     m_ChuckDelay = 0.0f;
     flags &= ~ENT_SKIP_MASK;  // activate + unhide
@@ -148,8 +154,9 @@ void Fruit::Init(int param1, int fruitType, int param3) {
         const float fScale  = info ? info->m_Scale          : 25.0f;
         const float fColBase = info ? info->m_CollisionScale : 1.0f;
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
-        m_Col.center = Vec3(pos.x, pos.y, 0.0f);
-        m_Col.radius = radius;
+        if (!m_Col) m_Col = new Mortar::ColSphere();
+        m_Col->center = Vec3(pos.x, pos.y, 0.0f);
+        m_Col->radius = radius;
     }
 
     // Load mesh via MeshManager (cached, matches binary pattern)
@@ -303,7 +310,7 @@ void Fruit::Update(float dt) {
     }
 
     // Update collision sphere center (z clamped to 0).
-    m_Col.center = Vec3(pos.x, pos.y, 0.0f);
+    if (m_Col) m_Col->center = Vec3(pos.x, pos.y, 0.0f);
 
     // Track juice emitters with the two halves so particles follow the
     // pieces instead of spraying from the original slice point. Matches
@@ -464,11 +471,10 @@ void Fruit::Draw(Renderer& r) {
     }
 }
 
+// Non-virtual cleanup helper called by ActorManager::Deactivate.
 void Fruit::Deactivate() {
-    // OnDeactivate cleanup — nothing Fruit-specific beyond the base
-    // implementation, but keep the override so the port retains a clear
-    // slot matching the binary's vtable+0x0C position.
-    Entity::Deactivate();
+    // No Fruit-specific emitter cleanup needed here; emitters are cleared
+    // by KillFruit before the entity is deactivated.
 }
 
 // Matches Fruit::KillFruit (0x00176abc).
@@ -624,6 +630,7 @@ bool Fruit::CheckHasGoneOffscreen() {
 
 // Matches Fruit::CollisionResponse (0x1780b0). Visual-only pipeline:
 //   - guard (already sliced / timer positive → ignore)
+//   - critical-hit eligibility ladder (binary @ 0x001780f0..0x001781e8)
 //   - critical / special-fruit branch selection for impulse clamp + timer
 //   - slice angle/impulse/pos capture from bladeVel
 //   - one-shot impact particle emitter rotated by blade angle
@@ -631,17 +638,55 @@ bool Fruit::CheckHasGoneOffscreen() {
 //   - AddSlice visual (SliceEffect_Add)
 //   - CriticalFlash full-screen tint for critical + special-fruit paths
 // Skipped: SFX, achievements, score, power-ups, coins, MissControl.
-void Fruit::OnSliced(const Vec3& bladeVel) {
+void Fruit::CollisionResponse(const Vec3& bladeVel) {
     // Guard: already sliced or slice timer is positive → double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return;
 
-    // Critical RNG comes from WaveManager::CriticalMode — stubbed to
-    // `false` until waves load, so critical slicing stays off for now but
-    // the call is wired in place. Special-fruit path is deterministic
-    // (FRUIT_INFO.m_Score == 0x32) and runs the rare-fruit branch.
     const FruitInfo* info = FruitInfo_Get(m_FruitType);
-    const bool isCritical = WaveManager::GetInstance()->CriticalMode(0);
     const bool isSpecial  = (info && info->m_Score == 0x32);
+
+    // ASM-verified: 2026-04-29T00:00Z binary @ 0x001780f0 (asm-inspector)
+    // Critical-hit eligibility ladder (binary @ 0x001780f0..0x001781e8).
+    // All gates must pass; on success roll Rand32(reroll) -- 0 == hit.
+    m_bCriticalEligible = false;
+
+    // DIFFERS: DAT_001784fc (kCritScoreBound) and DAT_00178504 (kCritResetBase)
+    // are GOT globals not yet resolved by re-analyst. Using binary-plausible
+    // defaults until the next re-analyst pass fills them in.
+    static const int kCritScoreBound = 8;  // DIFFERS: DAT_001784fc unresolved
+    static const int kCritResetBase  = 0;  // DIFFERS: DAT_00178504 unresolved
+
+    // FruitInfo +0x318 is m_bNoCritical — inverted: canCrit = !m_bNoCritical.
+    const bool canCritFruit = info && !info->m_bNoCritical;
+
+    // DIFFERS: FruitNinjaApp gating fields (+0x05 frenzy flag, +0x10 frenzy
+    // timer, +0x30 score threshold) not yet ported. m_ScoreThreshold from
+    // Game::currentScore ladder is simulated with a local static counter.
+    const int score = Game::GetInstance()->currentScore;
+
+    // s_CritThreshold simulates FruitNinjaApp::m_ScoreThreshold (+0x30).
+    // DIFFERS: real counter lives in FruitNinjaApp, not here.
+    static int s_CritThreshold = kCritScoreBound;
+
+    if (score >= 2 && canCritFruit /* && !frenzyFlag && frenzyTimer <= 0 */) {
+        s_CritThreshold = (s_CritThreshold < 3) ? 2 : (s_CritThreshold - 1);
+
+        const float chance = WaveManager::GetInstance()->GetCriticalChance(0);
+        if (chance > 0.0f) {
+            const int   bound  = (s_CritThreshold < kCritScoreBound)
+                                 ? s_CritThreshold : kCritScoreBound;
+            const float ratio  = (float)bound / chance;
+            const uint32_t reroll = (ratio <= 1.0f) ? 1u : (uint32_t)ratio;
+
+            const uint32_t roll = WaveManager::GetInstance()->GetRandom().Rand32(reroll);
+            if (roll == 0) {
+                m_bCriticalEligible = true;
+                s_CritThreshold = kCritResetBase + kCritScoreBound;
+            }
+        }
+    }
+
+    const bool isCritical = m_bCriticalEligible;
 
     // Blade speed clamp. Critical / special → [6, 8]; normal → [4, 8].
     float bladeSpeed = bladeVel.length() * SLICE_BLADE_SCALE;
@@ -663,7 +708,7 @@ void Fruit::OnSliced(const Vec3& bladeVel) {
     const float rad = atan2f(bladeVel.x, bladeVel.y);
     m_SliceAngle   = (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
 
-    printf("[Fruit] OnSliced: type=%d pos=(%.1f,%.1f) impulse=%.2f angle=0x%04x "
+    printf("[Fruit] CollisionResponse: type=%d pos=(%.1f,%.1f) impulse=%.2f angle=0x%04x "
            "crit=%d special=%d\n",
            m_FruitType, pos.x, pos.y, m_SliceImpulse, m_SliceAngle,
            isCritical, isSpecial);
@@ -763,9 +808,7 @@ void Fruit::Slice() {
     int   splatCount = (rand() % 2) + 2;   // Rand(2)+2 → 2 or 3
 
     // Critical hit gets 1.5× impulse + crit dual-line AddSlice.
-    // Port's critical flag isn't wired yet (always false) — kept for
-    // future when Fruit::OnSliced's critical RNG is implemented.
-    const bool isCritical = false;  // TODO: m_bCriticalEligible
+    const bool isCritical = m_bCriticalEligible;
     if (isCritical) {
         // Binary: two slice lines at ±60° offset from the base angle.
         //   infoA.x = m_SliceAngle / -182.0 + 60.0
@@ -811,18 +854,8 @@ void Fruit::Slice() {
         if (s) s->MakeSplat(pos, sv, isCritical, m_FruitType);
     }
 
-    // Fruit-cut SFX -- matches Fruit::Slice (0x176d58):
-    //   if (0 < splatCount) { OS_SPrintf("Clean-Slice-%d", Rand32(rand,3)+1);
-    //                         GameSound::SFXPlay(name, 1.0, 1.0, cb); }
-    // Picks 1-of-3 randomly. Files on disk: clean-slice-{1,2,3}.wav.pcm.
-    if (splatCount > 0) {
-        Game* g = Game::GetInstance();
-        if (g && g->pGameSound) {
-            char name[16];
-            std::snprintf(name, sizeof(name), "Clean-Slice-%d", (rand() % 3) + 1);
-            g->pGameSound->SFXPlay(name, 1.0f, 1.0f);
-        }
-    }
+    // Clean-Slice SFX is played by SliceEffect_Add (via AddSlice call below),
+    // not directly here. Binary @ 0x0016b480 gates the SFX inside AddSlice.
 
     // --- Half velocities ---
     // Binary uses sliceFactor = 1 - FRUIT_INFO[+0x24c]. That field

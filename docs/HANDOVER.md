@@ -98,11 +98,11 @@ Marker after fix: `// ASM-verified: <ts> binary @ 0x001e9f00 (asm-inspector)` (v
 
 ## OTHER OPEN GAPS (LOWER PRIORITY)
 
-- **`Bomb::Init +0xa4` literal-pool value** — asm-inspector skipped (PC-relative offset arithmetic ambiguous). Resolve via `read_memory` at the precise pool address; port currently inits to 0.0, may need 1.0.
+- ~~**`Bomb::Init +0xa4` literal-pool value**~~ — RESOLVED 2026-04-28 by re-analyst pass. Pool `DAT_001726A8 = 0.0f`. Port's existing `m_Countdown = 0.0f` already matches the binary. The `may need 1.0` speculation was wrong (1.0 is loaded into s15 elsewhere for the radius default and +0xa8 speedMult, not +0xa4). See `docs/entities/bomb.md:30` (m_Countdown).
 - **`Fruit::Update` sliced ramp special-case** — binary has 6.5x grav ramp instead of 4.5x when `m_bSpecial` field is set (`+0x10c`); port doesn't model the field. Defer until special-fruit category needs it.
 - **`MenuButton::Init` field gaps** — binary writes `+0x10c = 1` (m_bSpecialGravity?), `+0x108 = MenuButton*` (slash-entity backref); port doesn't model these fields.
 - **`Mesh::GetBounds`** — port returns raw bone-binding bounds without transforming through bone world matrices. Pre-existing approximation; correct for unanimated models, may have slightly off sort keys for animated.
-- **`BombHit.cpp:335` C4551 warning** — function call missing argument list. MSVC flags it; GCC compiles silently (takes the function's address and discards). Real bug worth checking.
+- ~~**`BombHit.cpp:335` C4551 warning**~~ — RESOLVED 2026-04-28. The `(void)SplatEntity::RemoveAllSplats;` was an intentional symbol-unreference idiom, not a missing call. Binary calls it only inside `if (IsSameScreenMultiplayer())` (`ResetGameEntities @ 0x0016a058`). Port skips multiplayer so the call is correctly omitted; the symbol-reference replaced with a comment-only doc note.
 - **`SetSelected` fruit-type strings** (`DAT_0015c970/c974`) — still stubbed in ShopScreen.cpp.
 - **`GameTaskState`** — port models only 4 of 19 fields. Expand as more callers are ported (full layout in `docs/structs/game.md`).
 

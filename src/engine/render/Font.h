@@ -1,89 +1,139 @@
-#ifndef MORTAR_FONT_H
-#define MORTAR_FONT_H
+#ifndef FN_ENGINE_RENDER_FONT_H
+#define FN_ENGINE_RENDER_FONT_H
 
 #include "util/ReferenceCounter.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "render/Utf8StringIterator.h"
+#include "math/Vec2.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include <vector>
-#include <string>
 
 namespace Mortar {
 
-// Alignment flags for DrawString (0x0F mask)
+// Binary 0x438 bytes.
+// Alignment flags for DrawString (bits 0-1: horiz, bits 2-3: vert, bit 4: wrap)
 enum FontAlignment {
     FONT_ALIGN_LEFT   = 0x00,
     FONT_ALIGN_CENTER = 0x01,
     FONT_ALIGN_RIGHT  = 0x02,
-    FONT_ALIGN_TOP    = 0x00,
     FONT_ALIGN_MIDDLE = 0x04,
-    FONT_ALIGN_BOTTOM = 0x08
+    FONT_ALIGN_BOTTOM = 0x08,
+    FONT_ALIGN_WRAP   = 0x10
 };
 
-// Glyph entry parsed from BMFont .fnt
-struct FontGlyph {
-    int id;
-    int x, y;           // position in atlas
-    int width, height;   // glyph size
-    int xoffset, yoffset; // rendering offset
-    int xadvance;        // cursor advance
-    int page;            // atlas page index
+// Stub for clip-rect parameter (shipping callers always pass nullptr)
+struct MortarRectangleDec {
+    float left, top, right, bottom;
+    float Width()  const { return right - left; }
+    float Height() const { return bottom - top; }
 };
 
-// Matches original Font (~0x430 bytes)
-// BMFont .fnt text format loader + DrawString renderer
 class Font : public ReferenceCounter {
 public:
-    FontGlyph m_Glyphs[256]; // 256 glyph entries (ASCII)
-    int m_PageCount;
-    int m_LineHeight;
-    int m_Base;
-    int m_ScaleW, m_ScaleH; // atlas dimensions
-    float m_Scale;           // scale factor
-    std::vector<SmartPtr<Texture>> m_PageTextures;
+    // 0x24 bytes per binary (ARM-confirmed at 0x0019a128)
+    struct CharTemplate {
+        uint16_t id;
+        uint16_t _pad;
+        float    u0;    // = atlasX  / scaleW
+        float    v0;    // = atlasY  / scaleH
+        float    w;     // = pxW     / lineHeight
+        float    h;     // = pxH     / lineHeight
+        float    xoff;  // = pxXoff  / lineHeight
+        float    yoff;  // = pxYoff  / lineHeight
+        float    xadv;  // = pxXadv  / lineHeight
+        uint8_t  page;
+        uint8_t  _pad2[3];
+    };
+
+    // 8 bytes per binary
+    struct Page {
+        const char*             filename;  // owned (new char[])
+        SmartPtr<Mortar::Texture> texture;
+
+        Page() : filename(nullptr) {}
+        ~Page() { delete[] filename; }
+    };
+
+    // 12 bytes; parsed but unused at runtime (GetKerning stubs to 0)
+    struct Kerning {
+        uint32_t first;
+        uint32_t second;
+        float    amount;
+    };
+
+    // Binary field layout (0x438 total):
+    CharTemplate*  m_Glyphs;           // +0x000  heap array
+    CharTemplate*  m_GlyphLookup[256]; // +0x004  pointers into m_Glyphs by id
+    int            m_GlyphCount;       // +0x404
+    Page*          m_Pages;            // +0x408
+    int            m_PageCount;        // +0x40c
+    Kerning*       m_Kernings;         // +0x410
+    int            m_KerningCount;     // +0x414
+    int            _pad_0x418;         // +0x418
+    int            m_ScaleW;           // +0x41c
+    int            m_ScaleH;           // +0x420
+    float          m_LineHeight;       // +0x424  stored as float
+    float          m_BaseNorm;         // +0x428  = base / lineHeight
+    std::vector<std::vector<QUADCUSTOMVERTEX>> m_PageVerts; // +0x42c
 
     Font();
     virtual ~Font();
 
-    // Parse BMFont .fnt text format
-    // Matches Font::Load (0x00199e9c)
+    // Instance load (matches binary 0x00199e9c). Returns 1/0.
+    int LoadFromFile(const char* path);
+
+    // Static factory (port API used by all callers): allocates, loads, returns SmartPtr.
     static SmartPtr<Font> Load(const char* path);
 
-    // Render text string with full formatting support.
     // Matches Font_DrawString (0x00198e44).
-    // `scale` is the em size in world units (e.g. 20.0, 25.0). It is applied
-    // as MatrixStack::Scale(scale, scale, 1.0); glyph vertices are stored in
-    // normalized atlas-pixel units (atlas_px / scaleW/H). NO division by
-    // m_LineHeight is performed (binary confirmed).
-    // Supports: inline color tags [FFFFFF]text[/], word wrapping, alignment.
+    void DrawString(float scale, float maxWidth, float rotZ,
+                    Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
+                    Vec2 maxWH, int alignment, float z,
+                    MortarRectangleDec* clipRect = nullptr);
+
+    // Thin wrapper (0x00199aa0): packs x/y/z into Vec3, calls DrawString with maxWidth=1.0.
     void DrawString(float scale, float maxWidth, float z,
                     const char* text, const Vec3& pos,
                     const Colour& colour, int alignment = 0);
 
-    // Thin alias -- passes targetSize directly as the scale parameter.
-    // Binary: DrawString (0x00199aa0) wrapper; scale = raw em pixel size,
-    // NO division by m_LineHeight (that division was a port error, now removed).
+    // For compat with old callers that pass scale directly
     void DrawStringSized(float targetSize, float maxWidth, float z,
                          const char* text, const Vec3& pos,
                          const Colour& colour, int alignment = 0) {
         DrawString(targetSize, maxWidth, z, text, pos, colour, alignment);
     }
 
-    // Returns normalized text width (atlas-pixel units / m_ScaleW).
-    // Multiply by scale to get world-unit width.
-    // `scale` parameter is unused (kept for API compatibility).
-    float MeasureWidth(float scale, const char* text) const;
+    // Wrap-aware variant: forwards to the full DrawString with maxWidth=1.0
+    // (line pitch) and maxWH.x = wrapPx (wrap constraint). Matches the
+    // binary's call shape for the description-text path.
+    void DrawStringWrapped(float scale, float wrapPx, float z,
+                           const char* text, const Vec3& pos,
+                           const Colour& colour, int alignment) {
+        Utf8StringIterator iter(text);
+        Vec2 maxWH(wrapPx, 0.0f);
+        DrawString(scale, 1.0f, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
+    }
 
-    // Get line height in world units at given scale.
-    float GetLineHeight(float scale) const { return (float)m_LineHeight * (1.0f / (float)(m_ScaleH > 0 ? m_ScaleH : 1)) * scale; }
+    // Returns normalized text width in lineHeight units (multiply by scale for world units)
+    float MeasureWidth(float scale, const char* text) const;
+    float MeasureWidth(float scale, Utf8StringIterator iter) const;
+
+    // Line height in world units at given scale
+    float GetLineHeight(float scale) const { return scale; }
+
+    CharTemplate* GetCharTemplate(uint32_t cp) const;
+    float         GetKerning(uint32_t a, uint32_t b) const { return 0.0f; }
+    Page*         GetPage(int idx) const;
 
 private:
-    // Load atlas textures for all pages
-    void LoadPageTextures(const std::string& basePath);
+    float         GetLineLength(Utf8StringIterator iter, float wrapWidth, float* outSlack) const;
+    const char*   FindAdvanceOfNextWord(Utf8StringIterator iter, float curX, float maxX,
+                                        float scale, float spacing) const;
 };
 
 } // namespace Mortar
 
-#endif
+#endif // FN_ENGINE_RENDER_FONT_H

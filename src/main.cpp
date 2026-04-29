@@ -2,6 +2,7 @@
 #include "render/gl_funcs.h"
 #include "Game.h"
 #include "render/Renderer.h"
+#include "debug/CrashHandler.h"
 #include <cstdio>
 
 int main(int argc, char* argv[]) {
@@ -12,6 +13,11 @@ int main(int argc, char* argv[]) {
     // the process crashes (SEGV doesn't flush). Critical for debugging.
     setvbuf(stdout, nullptr, _IONBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
+
+    // Win32 + _DEBUG only: register an unhandled-SEH filter that prints
+    // exception code, faulting address, and a symbolised stack trace
+    // to stderr before the OS terminates the process. No-op elsewhere.
+    FN::InstallCrashHandler();
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());

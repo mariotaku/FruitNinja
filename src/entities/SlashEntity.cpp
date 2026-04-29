@@ -407,11 +407,11 @@ void SlashEntity::Update(float dt) {
                 for (auto it = list.begin(); it != list.end(); ++it) {
                     Entity* e = *it;
                     if (!e || !e->IsActive()) continue;
-                    if (e->m_Col.radius <= 0.0f) continue;
+                    if (!e->m_Col || e->m_Col->radius <= 0.0f) continue;
 
                     Vec3 bladeVel;
-                    if (CollideWithSphere(e->m_Col, bladeVel)) {
-                        e->OnSliced(bladeVel);
+                    if (CollideWithSphere(*e->m_Col, bladeVel)) {
+                        e->CollisionResponse(bladeVel);
                     }
                 }
             }
@@ -463,11 +463,6 @@ void SlashEntity::Draw() {
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
-
-    glEnable(GL_BLEND);
-    // Additive-like blend for a brighter blade trail. Binary inherits blend
-    // state from Mortar::Texture::Set — we pick a reasonable fallback.
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glBindTexture(GL_TEXTURE_2D, g_BladeTex->m_TexId);
 

@@ -37,6 +37,7 @@ int GameSound::FindFree() {
 }
 
 // Matches 0x00129270
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x00129270 (asm-inspector)
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch) {
     int i = FindFree();
     if (i == -1) return nullptr;

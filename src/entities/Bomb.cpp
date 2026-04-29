@@ -25,7 +25,7 @@
 #include <cstring>
 #include <string>
 
-// Analysed: 2026-04-10T10:00
+// Analysed: 2026-04-29T00:00
 
 // --- Constants from binary (docs/entities/bomb.md) ---
 static const float SPAWN_TIMER_INIT  = 0.6f;     // DAT_001726ac
@@ -200,11 +200,18 @@ Bomb::Bomb()
 }
 
 Bomb::~Bomb() {
+    Release();
+    delete m_Col;
+    m_Col = nullptr;
+}
+
+// Matches Bomb::Release (0x171764) — drops fuse emitter; called from dtor.
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x00171764 (asm-inspector)
+void Bomb::Release() {
     if (m_pEmitter) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;
     }
-    // TODO: Unlink from game state (field_0x84)
 }
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00172504 (asm-inspector)
@@ -252,8 +259,11 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     static const float VISUAL_SCALE_MULT = 0.01f; // DAT_001726b0
     Vec3 computedScale = Vec3::One() * (bombSize * VISUAL_SCALE_MULT * scaleFactor);
 
-    m_Col.center = Vec3(pos.x, pos.y, 0.0f);
-    m_Col.radius = bombCol * 0.5f * scaleFactor;
+    // Binary allocates ColSphere at +0x38 in Init if the pointer is null
+    // (verified: "allocated at +0x38 if NULL" in bomb_init_binary.s).
+    if (!m_Col) m_Col = new Mortar::ColSphere();
+    m_Col->center = Vec3(pos.x, pos.y, 0.0f);
+    m_Col->radius = bombCol * 0.5f * scaleFactor;
     m_Countdown = 0.0f;
     scale = computedScale;
     m_OrigScale = computedScale;
@@ -413,7 +423,7 @@ void Bomb::Update(float /*dt*/) {
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
         // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
         // center = (pos.x, pos.y, 0).
-        m_Col.center = Vec3(pos.x, pos.y, 0.0f);
+        if (m_Col) m_Col->center = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
         // === HIT BRANCH ===
@@ -443,8 +453,10 @@ void Bomb::Update(float /*dt*/) {
         }
 
         // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
-        m_Col.center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
-        m_Col.radius = HIT_COL_RADIUS;
+        if (m_Col) {
+            m_Col->center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
+            m_Col->radius = HIT_COL_RADIUS;
+        }
     }
 
     // OOB check — kill if off-playfield, else (and only else) lazy-create
@@ -597,15 +609,10 @@ void Bomb::Draw(Renderer& r) {
     modelPtr->Draw(mat);
 }
 
+// Non-virtual cleanup helper called by ActorManager::Deactivate.
+// Drops the fuse emitter before the entity returns to the free pool.
 void Bomb::Deactivate() {
-    // Port's Deactivate is the OnDeactivate cleanup callback invoked by
-    // ActorManager::Deactivate before the entity returns to the free
-    // pool. Drop the fuse emitter; ActorManager then sets ENT_INACTIVE.
-    if (m_pEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
-        m_pEmitter = nullptr;
-    }
-    Entity::Deactivate();
+    Release();
 }
 
 // Matches Bomb::Chuck (0x170f68)
@@ -633,13 +640,13 @@ void Bomb::KillBomb() {
 //      timed power-ups, mark as menu-hit so subsequent Update keeps the
 //      physics alive and the bomb falls off-screen instead of exploding.
 //   3. m_bMenuBombHit != 0 (menu bomb re-hit): just fire the hit callback.
-void Bomb::OnSliced(const Vec3& bladeVel) {
+void Bomb::CollisionResponse(const Vec3& bladeVel) {
     (void)bladeVel;
 
     if (m_bCollisionGuard != 0) return;   // +0x78 processed guard
     m_bCollisionGuard = 1;
 
-    printf("[Bomb] OnSliced: pos=(%.1f,%.1f) menuHit=%d\n",
+    printf("[Bomb] CollisionResponse: pos=(%.1f,%.1f) menuHit=%d\n",
            pos.x, pos.y, m_bMenuBombHit);
 
     Game* game = Game::GetInstance();

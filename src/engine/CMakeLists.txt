@@ -34,6 +34,7 @@ add_library(mortar_engine STATIC
     # be here were never wired in and have been removed.
     particle/PSPParticleManager.cpp
     # Phase 8 — Font
+    render/Utf8StringIterator.cpp
     render/Font.cpp
     render/BakedString.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground

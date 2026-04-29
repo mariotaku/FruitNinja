@@ -1,6 +1,8 @@
 #ifndef FN_WAVE_MANAGER_H
 #define FN_WAVE_MANAGER_H
 
+#include "math/Random.h"
+
 // WaveManager — stubs for the wave/spawn subsystem.
 //
 // Full class at 0x0022ee80 (singleton). Binary function table and field
@@ -40,6 +42,11 @@ public:
     // +0x70: global critical-chance multiplier (used by CriticalChanceMod,
     // GetCriticalChance). Default 1.0f.
     float m_CritChanceMult;
+
+    // RNG instance initialised by WaveManager ctor (binary @ 0x00123328).
+    // Used by the critical-hit eligibility ladder in Fruit::CollisionResponse
+    // (binary @ 0x001780f0..0x001781e8).
+    Random m_Random;
 
     // --- Construction / singleton --------------------------------------
 
@@ -132,6 +139,10 @@ public:
     void DeleteSpeedControl(HUDControl* control);
 
     // --- Queries -------------------------------------------------------
+
+    // Returns the WaveManager's internal RNG, used by the critical-hit
+    // eligibility ladder in Fruit::CollisionResponse (binary @ 0x001780f0).
+    Random& GetRandom() { return m_Random; }
 
     // 0x00121834: m_Speed[playerIdx].
     float GetSpeed(int playerIdx);

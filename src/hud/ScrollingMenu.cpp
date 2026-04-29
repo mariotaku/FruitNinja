@@ -7,6 +7,8 @@
 #include "ScrollingMenu.h"
 #include "ScrollingMenuItem.h"
 #include "engine/input/Touch.h"
+#include "render/MatrixManager.h"
+#include "render/MatrixStack.h"
 #include <cstddef>
 #include <cmath>
 #include <cstdio>
@@ -508,9 +510,18 @@ ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
 // ScrollingMenu::Draw @ 0x0015af98
 // Pure iterator -- calls Draw() on every item in m_Items.
 // No scissor, no clipping, no per-item position update.
+//
+// Per-item matrix discipline: reset the world matrix between items so
+// each item's Draw inherits a clean identity. Mirrors HUD::Draw's
+// per-control reset; without it, a previous item's dirty matrix
+// (e.g. ShopListItem's Part 5 icon SetCurrentMatrix(Scale44(64,64,0)))
+// bleeds into the next item's first draw call. Binary equivalent
+// behaviour comes from the matrix-stack discipline shared with HUD.
 // ---------------------------------------------------------------------------
 void ScrollingMenu::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+    Mortar::MatrixStack& world = Mortar::MatrixManager::GetInstance().GetWorldStack();
     for (ScrollingMenuItem* item : m_Items) {
+        world.Reset();
         item->Draw();
     }
 }

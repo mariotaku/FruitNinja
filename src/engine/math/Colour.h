@@ -25,15 +25,25 @@ struct Colour {
         return Colour(rc, gc, bc, 255);
     }
 
-    // Multiply RGB channels by scale, clamp to [0, 255]
-    static Colour TintColour(Colour c, float scale) {
-        int ri = (int)(c.r * scale);
-        int gi = (int)(c.g * scale);
-        int bi = (int)(c.b * scale);
-        if (ri > 255) ri = 255; if (ri < 0) ri = 0;
-        if (gi > 255) gi = 255; if (gi < 0) gi = 0;
-        if (bi > 255) bi = 255; if (bi < 0) bi = 0;
-        return Colour((uint8_t)ri, (uint8_t)gi, (uint8_t)bi, c.a);
+    // Mortar::TintColour @ 0x0013540c -- per-channel tint with [0..255] clamp.
+    // tintRGB[0..2] multiplies R/G/B independently; alpha is preserved.
+    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0013540c (asm-inspector)
+    static Colour TintColour(Colour src, const float tintRGB[3]) {
+        auto clamp = [](float v) -> uint8_t {
+            if (v <= 0.0f) return 0;
+            if (v >= 255.0f) return 255;
+            return (uint8_t)v;
+        };
+        return Colour(clamp(src.r * tintRGB[0]),
+                      clamp(src.g * tintRGB[1]),
+                      clamp(src.b * tintRGB[2]),
+                      src.a);
+    }
+
+    // Identity tint (1,1,1): used when HUDControl+0x60 tint flag is 0.
+    static const float* IdentityTint() {
+        static const float kIdentityTint[3] = {1.0f, 1.0f, 1.0f};
+        return kIdentityTint;
     }
 
     // For GL: return as float array (RGBA order for shader)

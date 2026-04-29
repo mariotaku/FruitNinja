@@ -36,17 +36,21 @@
 // ---------------------------------------------------------------------------
 ShopListItem::ShopListItem()
     : ScrollingMenuItem()
+    , m_pShopScreen(nullptr)
+    // m_DescText: zeroed in body below
+    // _pad: zeroed in body below
     , m_NewItemAlpha(0.0f)
     , m_SelectedAlpha(0.0f)
     , m_LockFlashAlpha(0.0f)
+    // _pad2: zeroed in body below
     , m_pItemInfo(nullptr)
     , m_bOnscreenItem(1)
     , m_bSelected(0)
     , m_bIsNew(0)
     , _pad3(0)
     , m_CostAlpha(0.0f)
-    , m_pShopScreen(nullptr)
 {
+    memset(m_DescText, 0, sizeof(m_DescText));
     memset(_pad, 0, sizeof(_pad));
     memset(_pad2, 0, sizeof(_pad2));
     m_pIconTex.SetNull();
@@ -241,9 +245,9 @@ void ShopListItem::Draw() {
 
     // Guard 2: skip if not onscreen.
     // Binary: if (*(this+0x2D) == 0) return;
-    // +0x2D is m_bOnscreen inside the Delegate1 header (ScrollingMenuItem::m_Delegate.m_bOnscreen).
+    // +0x2D is m_bOnscreen in the pre-Delegate1 gap (ScrollingMenuItem::m_bOnscreen).
     // This is NOT the same as m_bOnscreenItem (+0x27C).
-    if (!m_Delegate.m_bOnscreen) {
+    if (!m_bOnscreen) {
         // Part 8 is OUTSIDE this guard (see binary spec).
         // Fall through to Part 8 after the guard block.
         goto draw_part8;
@@ -316,12 +320,12 @@ void ShopListItem::Draw() {
         {
             // Shadow: +4, -4, 0 offset
             Vec3 shadowPos(local_d0.x + 4.0f, local_d0.y - 4.0f, local_d0.z);
-            font->DrawStringSized(titleScale, 0.0f, 0.0f,
+            font->DrawStringSized(titleScale, 1.0f, 0.0f,
                              titleStr, shadowPos,
                              Colour(0, 0, 0, 64),
                              0xE);
             // Fill at local_d0
-            font->DrawStringSized(titleScale, 0.0f, 0.0f,
+            font->DrawStringSized(titleScale, 1.0f, 0.0f,
                              titleStr, local_d0,
                              itemColour,
                              0xE);
@@ -390,11 +394,11 @@ void ShopListItem::Draw() {
 
         if (costStr) {
             Vec3 cShadowPos(local_d0.x + 4.0f, local_d0.y - 4.0f, local_d0.z);
-            font->DrawStringSized(costScale, 0.0f, 0.0f,
+            font->DrawStringSized(costScale, 1.0f, 0.0f,
                              costStr, cShadowPos,
                              Colour(0, 0, 0, 64),
                              0xE);
-            font->DrawStringSized(costScale, 0.0f, 0.0f,
+            font->DrawStringSized(costScale, 1.0f, 0.0f,
                              costStr, local_d0,
                              itemColour,
                              0xE);
@@ -591,6 +595,14 @@ void ShopListItem::Draw() {
         // DAT_0015f524 = 82.5f; DAT_0015f540 = 160.0f (wrap width)
         // -----------------------------------------------------------------------
         if (m_pShopScreen && m_pItemInfo) {
+            // Part 6 (divider) left a Scale+Translate in the world matrix
+            // via SetCurrentMatrix; reset before the description text so
+            // Font::DrawString's Push captures identity, not the divider's
+            // matrix. Matches the binary's per-part discipline (the binary
+            // does an explicit Reset between parts that run text vs parts
+            // that SetCurrentMatrix).
+            mm.GetWorldStack().Reset();
+
             uint32_t alphaU = (uint32_t)(m_CostAlpha * 255.0f);  // DAT_0015f520=255.0f
             if (alphaU > 0xFE) alphaU = 0xFF;
             alphaU &= ~((int32_t)alphaU >> 31);  // clamp negative to 0
@@ -640,12 +652,14 @@ void ShopListItem::Draw() {
                 static constexpr float DESC_WRAP_W = 160.0f;
 
                 if (purchaseState == 0 || purchaseState == 3) {
-                    // Case 0 or 3: normal description draw at y=0 (DAT_0015f53c)
+                    // Case 0 or 3: normal description draw at y=0 (DAT_0015f53c).
+                    // Use DrawStringWrapped: line pitch = 1.0 (binary
+                    // maxWidth), wrap width passed via maxWH.x = DESC_WRAP_W.
                     Vec3 descPos(xPos, 0.0f, 0.0f);
-                    font->DrawStringSized(descFontSize, DESC_WRAP_W, 0.0f,
-                                     descStr, descPos,
-                                     descColour,
-                                     0xF);
+                    font->DrawStringWrapped(descFontSize, DESC_WRAP_W, 0.0f,
+                                            descStr, descPos,
+                                            descColour,
+                                            0xF);
                 } else if (purchaseState == 1) {
                     // Case 1: cost-per-play
                     // Binary: line 1 at y=-20 (DAT_0015f4e6 = 0xC1A00000),
@@ -654,12 +668,12 @@ void ShopListItem::Draw() {
                     //   IsDeviceUpsideDown not wired -- port draws stub text
                     //   in both slots. TODO: implement when FruitSaveData lands.
                     Vec3 descPos(xPos, -20.0f, 0.0f);
-                    font->DrawStringSized(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
+                    font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
                                      descStr, descPos,
                                      Colour(0xBD, 0, 0, descAlpha),
                                      3);
                     Vec3 descPos2(xPos, 10.0f, 0.0f);
-                    font->DrawStringSized(descFontSize * 0.9f, DESC_WRAP_W, 0.0f,
+                    font->DrawStringWrapped(descFontSize * 0.9f, DESC_WRAP_W, 0.0f,
                                      descStr, descPos2,
                                      Colour(255, 255, 255, descAlpha),
                                      0xF);
@@ -672,12 +686,12 @@ void ShopListItem::Draw() {
                     // s16 * 0.81. Case 1 only multiplies once (= 0.9).
                     // DIFFERS: FruitSaveData not wired.
                     Vec3 descPos(xPos, -20.0f, 0.0f);
-                    font->DrawStringSized(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
+                    font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
                                      descStr, descPos,
                                      Colour(0xBD, 0, 0, descAlpha),
                                      3);
                     Vec3 descPos2(xPos, 10.0f, 0.0f);
-                    font->DrawStringSized(descFontSize * 0.81f, DESC_WRAP_W, 0.0f,
+                    font->DrawStringWrapped(descFontSize * 0.81f, DESC_WRAP_W, 0.0f,
                                      descStr, descPos2,
                                      Colour(255, 255, 255, descAlpha),
                                      0xF);

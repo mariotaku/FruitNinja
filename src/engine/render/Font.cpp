@@ -1,525 +1,704 @@
-// Analysed: 2026-04-25T22:15
+// Analysed: 2026-04-29T00:00
 #include "render/Font.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
+#include "render/gl_funcs.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
+#include "math/Matrix44.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <cctype>
+#include <cmath>
+#include <new>
+
+#ifdef _MSC_VER
+#  define FN_STRNICMP _strnicmp
+#else
+#  define FN_STRNICMP strncasecmp
+#endif
 
 namespace Mortar {
 
+// ---------------------------------------------------------------------------
+// Font ctor / dtor
+// ---------------------------------------------------------------------------
+
 Font::Font()
-    : m_PageCount(0)
-    , m_LineHeight(0)
-    , m_Base(0)
+    : m_Glyphs(nullptr)
+    , m_GlyphCount(0)
+    , m_Pages(nullptr)
+    , m_PageCount(0)
+    , m_Kernings(nullptr)
+    , m_KerningCount(0)
+    , _pad_0x418(0)
     , m_ScaleW(256)
     , m_ScaleH(256)
-    , m_Scale(1.0f)
+    , m_LineHeight(1.0f)
+    , m_BaseNorm(0.0f)
 {
-    memset(m_Glyphs, 0, sizeof(m_Glyphs));
+    memset(m_GlyphLookup, 0, sizeof(m_GlyphLookup));
 }
 
 Font::~Font() {
-    m_PageTextures.clear();
-}
+    delete[] m_Glyphs;
+    m_Glyphs = nullptr;
 
-// Parse a key=value pair from BMFont .fnt line
-static bool ParseInt(const char* line, const char* key, int& out) {
-    const char* p = strstr(line, key);
-    if (!p) return false;
-    p += strlen(key);
-    if (*p == '=') p++;
-    out = atoi(p);
-    return true;
-}
-
-static bool ParseString(const char* line, const char* key, char* out, int maxLen) {
-    const char* p = strstr(line, key);
-    if (!p) return false;
-    p += strlen(key);
-    if (*p == '=') p++;
-    if (*p == '"') {
-        p++;
-        int i = 0;
-        while (*p && *p != '"' && i < maxLen - 1) {
-            out[i++] = *p++;
+    if (m_Pages) {
+        for (int i = 0; i < m_PageCount; i++) {
+            m_Pages[i].~Page();
         }
-        out[i] = '\0';
-        return true;
+        // Pages were allocated as raw bytes; free via operator delete[]
+        operator delete[](reinterpret_cast<void*>(m_Pages));
+        m_Pages = nullptr;
     }
-    // Unquoted value
-    int i = 0;
-    while (*p && *p != ' ' && *p != '\t' && *p != '\r' && *p != '\n' && i < maxLen - 1) {
-        out[i++] = *p++;
-    }
-    out[i] = '\0';
+
+    delete[] m_Kernings;
+    m_Kernings = nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: parse an integer value from a key=N token in the .fnt line
+// ---------------------------------------------------------------------------
+
+static bool ParseFntInt(const char* p, const char* key, int* out) {
+    const char* k = strstr(p, key);
+    if (!k) return false;
+    k += strlen(key);
+    if (*k != '=') return false;
+    k++;
+    *out = (int)strtol(k, nullptr, 10);
     return true;
 }
 
-// Matches Font::Load (0x00199e9c, 270 lines)
-SmartPtr<Font> Font::Load(const char* path) {
-    FILE* f = fopen(path, "r");
+static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
+    const char* k = strstr(p, key);
+    if (!k) return false;
+    k += strlen(key);
+    if (*k != '=') return false;
+    k++;
+    bool quoted = (*k == '"');
+    if (quoted) k++;
+    const char* end = k;
+    while (*end && (quoted ? *end != '"' : (*end != ' ' && *end != '\t' && *end != '\r' && *end != '\n'))) {
+        end++;
+    }
+    size_t len = (size_t)(end - k);
+    char* buf = new char[len + 1];
+    memcpy(buf, k, len);
+    buf[len] = '\0';
+    *outAlloc = buf;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Font::Load (matches binary 0x00199e9c)
+// Slurps the entire file, walks byte-by-byte comparing tags.
+// ---------------------------------------------------------------------------
+
+int Font::LoadFromFile(const char* path) {
+    // Port specific: use a .tex-swapped path for page textures (original .tga won't exist)
+
+    FILE* f = fopen(path, "rb");
     if (!f) {
         fprintf(stderr, "Font::Load: failed to open '%s'\n", path);
+        return 0;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (fsize <= 0) {
+        fclose(f);
+        return 0;
+    }
+
+    char* buf = new char[(size_t)fsize + 1];
+    fread(buf, 1, (size_t)fsize, f);
+    fclose(f);
+    buf[fsize] = '\0';
+
+    // Extract base directory from path for fallback texture loads
+    const char* lastSlash = nullptr;
+    for (const char* s = path; *s; s++) {
+        if (*s == '/' || *s == '\\') lastSlash = s;
+    }
+    char baseDir[512] = "";
+    if (lastSlash) {
+        size_t dirLen = (size_t)(lastSlash - path) + 1;
+        if (dirLen < sizeof(baseDir)) {
+            memcpy(baseDir, path, dirLen);
+            baseDir[dirLen] = '\0';
+        }
+    }
+
+    // Temp storage for raw parse values before we know counts
+    int lineHeight = 0, base = 0, scaleW = 256, scaleH = 256;
+    int pageCountParsed = 0;
+    int glyphCountParsed = 0;
+    int kerningCountParsed = 0;
+
+    // --- First pass: gather common/counts ---
+    const char* p = buf;
+    while (*p) {
+        if (strncmp(p, "common ", 7) == 0) {
+            ParseFntInt(p, "lineHeight", &lineHeight);
+            ParseFntInt(p, "base",       &base);
+            ParseFntInt(p, "scaleW",     &scaleW);
+            ParseFntInt(p, "scaleH",     &scaleH);
+            ParseFntInt(p, "pages",      &pageCountParsed);
+        } else if (strncmp(p, "chars ", 6) == 0) {
+            ParseFntInt(p, "count", &glyphCountParsed);
+        } else if (strncmp(p, "kernings ", 9) == 0) {
+            ParseFntInt(p, "count", &kerningCountParsed);
+        }
+        while (*p && *p != '\n') p++;
+        if (*p == '\n') p++;
+    }
+
+    m_ScaleW     = scaleW;
+    m_ScaleH     = scaleH;
+    m_LineHeight = (float)lineHeight;
+    m_BaseNorm   = (float)base;  // will be divided at the end
+    m_GlyphCount = glyphCountParsed;
+    m_PageCount  = pageCountParsed;
+    m_KerningCount = kerningCountParsed;
+
+    // Allocate arrays matching binary alloc pattern
+    if (m_GlyphCount > 0) {
+        m_Glyphs = new CharTemplate[m_GlyphCount]();
+    }
+    if (m_PageCount > 0) {
+        // Binary: operator_new((N+1)*8) — allocates raw bytes, then in-place-constructs each Page
+        void* pagesRaw = operator new[]((size_t)(m_PageCount + 1) * sizeof(Page));
+        m_Pages = reinterpret_cast<Page*>(pagesRaw);
+        for (int i = 0; i < m_PageCount; i++) {
+            new (&m_Pages[i]) Page();
+        }
+    }
+    if (m_KerningCount > 0) {
+        m_Kernings = new Kerning[m_KerningCount]();
+    }
+
+    const float invLH = (lineHeight > 0) ? (1.0f / (float)lineHeight) : 1.0f;
+    const float invW  = (scaleW > 0)     ? (1.0f / (float)scaleW)     : 1.0f;
+    const float invH  = (scaleH > 0)     ? (1.0f / (float)scaleH)     : 1.0f;
+
+    int glyphIdx   = 0;
+    int kerningIdx = 0;
+
+    // --- Second pass: fill arrays ---
+    p = buf;
+    while (*p) {
+        if (strncmp(p, "page ", 5) == 0) {
+            int pageId = -1;
+            ParseFntInt(p, "id", &pageId);
+            if (pageId >= 0 && pageId < m_PageCount) {
+                char* fname = nullptr;
+                if (ParseFntString(p, "file", &fname)) {
+                    m_Pages[pageId].filename = fname;
+                }
+            }
+        } else if (strncmp(p, "char ", 5) == 0 && glyphIdx < m_GlyphCount) {
+            int rawId   = 0, rawX = 0, rawY = 0, rawW = 0, rawH = 0;
+            int rawXoff = 0, rawYoff = 0, rawXadv = 0, rawPage = 0;
+            ParseFntInt(p, "id",       &rawId);
+            ParseFntInt(p, "x",        &rawX);
+            ParseFntInt(p, "y",        &rawY);
+            ParseFntInt(p, "width",    &rawW);
+            ParseFntInt(p, "height",   &rawH);
+            ParseFntInt(p, "xoffset",  &rawXoff);
+            ParseFntInt(p, "yoffset",  &rawYoff);
+            ParseFntInt(p, "xadvance", &rawXadv);
+            ParseFntInt(p, "page",     &rawPage);
+
+            CharTemplate* g = &m_Glyphs[glyphIdx++];
+            g->id   = (uint16_t)rawId;
+            g->_pad = 0;
+            // Normalize in-place (matches binary ARM at 0x0019a128)
+            g->u0   = (float)rawX    * invW;
+            g->v0   = (float)rawY    * invH;
+            g->w    = (float)rawW    * invLH;
+            g->h    = (float)rawH    * invLH;
+            g->xoff = (float)rawXoff * invLH;
+            g->yoff = (float)rawYoff * invLH;
+            g->xadv = (float)rawXadv * invLH;
+            g->page = (uint8_t)rawPage;
+            g->_pad2[0] = g->_pad2[1] = g->_pad2[2] = 0;
+
+            if (rawId >= 0 && rawId < 256) {
+                m_GlyphLookup[rawId] = g;
+            }
+        } else if (strncmp(p, "kerning ", 8) == 0 && kerningIdx < m_KerningCount) {
+            int first = 0, second = 0;
+            float amount = 0.0f;
+            int iamt = 0;
+            ParseFntInt(p, "first",  &first);
+            ParseFntInt(p, "second", &second);
+            ParseFntInt(p, "amount", &iamt);
+            amount = (float)iamt;
+            m_Kernings[kerningIdx].first  = (uint32_t)first;
+            m_Kernings[kerningIdx].second = (uint32_t)second;
+            m_Kernings[kerningIdx].amount = amount;
+            kerningIdx++;
+        }
+
+        while (*p && *p != '\n') p++;
+        if (*p == '\n') p++;
+    }
+
+    delete[] buf;
+
+    // Final fix-up: normalize base
+    if (m_LineHeight > 0.0f) {
+        m_BaseNorm /= m_LineHeight;
+    }
+
+    // Load page textures
+    const char* dataDir = TextureManager::GetDataDir();
+    for (int i = 0; i < m_PageCount; i++) {
+        if (!m_Pages[i].filename) continue;
+
+        // Port specific: swap extension to .tex (original atlas is .tga, not present)
+        const char* origName = m_Pages[i].filename;
+        char texName[512];
+        strncpy(texName, origName, sizeof(texName) - 1);
+        texName[sizeof(texName) - 1] = '\0';
+        char* dot = strrchr(texName, '.');
+        if (dot) strcpy(dot, ".tex");
+
+        // Try data root first, then alongside the .fnt
+        char rootPath[512];
+        snprintf(rootPath, sizeof(rootPath), "%s/%s", dataDir ? dataDir : ".", texName);
+        m_Pages[i].texture = TextureManager::GetInstance().Load(rootPath);
+        if (!m_Pages[i].texture.IsValid()) {
+            char sidePath[512];
+            snprintf(sidePath, sizeof(sidePath), "%s%s", baseDir, texName);
+            m_Pages[i].texture = TextureManager::GetInstance().Load(sidePath);
+        }
+    }
+
+    // Pre-allocate per-page vertex buffers: 0x600 verts = 256-glyph capacity
+    m_PageVerts.clear();
+    for (int i = 0; i < m_PageCount; i++) {
+        m_PageVerts.push_back(std::vector<QUADCUSTOMVERTEX>(0x600));
+    }
+
+    return 1;
+}
+
+SmartPtr<Font> Font::Load(const char* path) {
+    Font* font = new Font();
+    if (!font->LoadFromFile(path)) {
+        delete font;
         return SmartPtr<Font>();
     }
-
-    Font* font = new Font();
-    char line[512];
-    char pagePaths[16][256]; // up to 16 pages
-    memset(pagePaths, 0, sizeof(pagePaths));
-
-    // Extract base directory from path
-    std::string basePath;
-    std::string pathStr(path);
-    size_t lastSlash = pathStr.find_last_of("/\\");
-    if (lastSlash != std::string::npos) {
-        basePath = pathStr.substr(0, lastSlash + 1);
-    }
-
-    while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "common ", 7) == 0) {
-            ParseInt(line, "lineHeight", font->m_LineHeight);
-            ParseInt(line, "base", font->m_Base);
-            ParseInt(line, "scaleW", font->m_ScaleW);
-            ParseInt(line, "scaleH", font->m_ScaleH);
-            ParseInt(line, "pages", font->m_PageCount);
-        }
-        else if (strncmp(line, "page ", 5) == 0) {
-            int id = 0;
-            ParseInt(line, "id", id);
-            if (id >= 0 && id < 16) {
-                ParseString(line, "file", pagePaths[id], 256);
-            }
-        }
-        else if (strncmp(line, "char ", 5) == 0) {
-            FontGlyph g;
-            memset(&g, 0, sizeof(g));
-            ParseInt(line, "id", g.id);
-            ParseInt(line, "x", g.x);
-            ParseInt(line, "y", g.y);
-            ParseInt(line, "width", g.width);
-            ParseInt(line, "height", g.height);
-            ParseInt(line, "xoffset", g.xoffset);
-            ParseInt(line, "yoffset", g.yoffset);
-            ParseInt(line, "xadvance", g.xadvance);
-            ParseInt(line, "page", g.page);
-            if (g.id >= 0 && g.id < 256) {
-                font->m_Glyphs[g.id] = g;
-            }
-        }
-    }
-    fclose(f);
-
-    // Load page textures.
-    // The .fnt files reference the original BMFont .tga atlas (e.g.
-    // "font_fruit_ninja_0.tga"), but the Bada distribution shipped them
-    // pre-converted as .tex at the data root (Data/font_fruit_ninja_0.tex)
-    // -- NOT alongside the .fnt in fonts/ and NOT in textures/. Swap the
-    // extension and try the data root first; fall back to the basePath
-    // (alongside the .fnt) so other distributions still work.
-    font->m_PageTextures.resize(font->m_PageCount);
-    for (int i = 0; i < font->m_PageCount && i < 16; i++) {
-        if (!pagePaths[i][0]) continue;
-        std::string pageName(pagePaths[i]);
-        size_t dot = pageName.find_last_of('.');
-        if (dot != std::string::npos) {
-            pageName = pageName.substr(0, dot) + ".tex";
-        }
-        const char* dataDir = TextureManager::GetDataDir();
-        std::string rootPath = std::string(dataDir ? dataDir : ".") + "/" + pageName;
-        font->m_PageTextures[i] = TextureManager::GetInstance().Load(rootPath.c_str());
-        if (!font->m_PageTextures[i].IsValid()) {
-            std::string sidePath = basePath + pageName;
-            font->m_PageTextures[i] = TextureManager::GetInstance().Load(sidePath.c_str());
-        }
-    }
-
     return SmartPtr<Font>(font);
 }
 
-// MeasureWidth returns the text width in lineHeight-normalized units
-// (i.e. xadvance / m_LineHeight per glyph). This matches the vertex
-// coordinate space used by DrawString below. Callers that want a world-unit
-// width must multiply by scale themselves.
-float Font::MeasureWidth(float /*scale*/, const char* text) const {
-    float width = 0;
-    float maxWidth = 0;
-    const float invLH = (m_LineHeight > 0) ? (1.0f / (float)m_LineHeight) : 1.0f;
-    for (const char* p = text; *p; p++) {
-        if (*p == '\n') {
-            if (width > maxWidth) maxWidth = width;
-            width = 0;
-            continue;
-        }
-        // Skip color tags [FFFFFF] and [/]
-        if (*p == '[') {
-            if (*(p + 1) == '/') { p += 2; continue; }
-            const char* end = strchr(p + 1, ']');
-            if (end && end - p <= 7) { p = end; continue; }
-        }
-        uint8_t ch = (uint8_t)*p;
-        if (ch < 256) {
-            width += (float)m_Glyphs[ch].xadvance * invLH;
-        }
+// ---------------------------------------------------------------------------
+// Accessor helpers
+// ---------------------------------------------------------------------------
+
+Font::CharTemplate* Font::GetCharTemplate(uint32_t cp) const {
+    if (cp < 256) return m_GlyphLookup[cp];
+    // For codepoints >= 256, linear search (rare in this game)
+    for (int i = 0; i < m_GlyphCount; i++) {
+        if (m_Glyphs[i].id == (uint16_t)cp) return &m_Glyphs[i];
     }
-    if (width > maxWidth) maxWidth = width;
-    return maxWidth;
+    return nullptr;
 }
 
-// Matches Font_DrawString (0x00198e44).
-//
-// Coordinate space contract
-// --------------------------
-// - `pos` is the world-space anchor, passed unchanged to MatrixStack::Translate.
-// - Glyph vertex positions (cursorX/Y, hw/hh) are in NORMALIZED atlas-pixel
-//   units: each component = atlas_pixels / m_ScaleW (or m_ScaleH). The
-//   MatrixStack::Scale(scale, scale, 1) step converts them to world units.
-// - Alignment offsets (CENTER/RIGHT shift, MIDDLE/BOTTOM shift) are also in
-//   normalized units so they live in the same space as the cursor.
-// - `scale` is the em size in world units, applied directly as the MatrixStack
-//   scale factor. There is NO division by m_LineHeight (binary confirmed).
-//
-// Render pipeline (matches binary steps 1-8)
-// -------------------------------------------
-//  1. MatrixStack::Push  -- save current world matrix
-//  2. MatrixStack::Scale(scale, scale, 1.0)  -- em-size scale
-//  3. MatrixStack::Translate(pos)  -- world anchor
-//  4. Build per-page vertex arrays (glyph quads in normalized units)
-//  5. Per page: Texture::Set + Renderer::DrawTriStrip(verts, count)
-//     (DrawTriStrip calls GetMVP() which picks up the modified world stack)
-//  6. MatrixStack::Pop  -- restore
-//
-// NOTE: No direct GL state calls are made here. The blend/depth state is
-// whatever the surrounding HUD pipeline has established. This matches the
-// binary, which makes zero raw GL calls inside Font_DrawString.
-void Font::DrawString(float scale, float maxWidth, float z,
-                      const char* text, const Vec3& pos,
-                      const Colour& colour, int alignment) {
-    if (!text || !*text) return;
+Font::Page* Font::GetPage(int idx) const {
+    if (idx >= 0 && idx < m_PageCount) return &m_Pages[idx];
+    return nullptr;
+}
 
-    // Vertex metrics are stored in lineHeight-normalized space:
-    //   stored_metric = atlas_pixels / lineHeight
-    // MatrixStack::Scale(scale, scale, 1) then multiplies by `scale` (em size in
-    // world units), giving:
-    //   world_size = (atlas_px / lineHeight) * scale
-    // Worked example: 16-px glyph, scale=25, lineHeight=28 -> 14.3 world units.
-    //
-    // UVs use scaleW/scaleH (atlas-pixel coords / atlas dimensions).
-    // Earlier port versions divided metrics by scaleW/scaleH too (9x too small) —
-    // that's why text rendered as thin horizontal slivers.
-    const float invW  = (m_ScaleW      > 0) ? (1.0f / (float)m_ScaleW)      : 1.0f;
-    const float invH  = (m_ScaleH      > 0) ? (1.0f / (float)m_ScaleH)      : 1.0f;
-    const float invLH = (m_LineHeight  > 0) ? (1.0f / (float)m_LineHeight)  : 1.0f;
-    // In lineHeight-normalized vertex space, one line = 1.0 unit exactly.
-    const float normLineH = 1.0f;
+// ---------------------------------------------------------------------------
+// GetLineLength — used for horizontal alignment per-line offset
+// Returns the line width in lineHeight-normalized units up to a wrap point.
+// outSlack is unused (binary computes it but callers ignore it).
+// ---------------------------------------------------------------------------
 
-    // --- Horizontal alignment: per-line offset inside the wrap box ---
-    //
-    // Binary Font_DrawString @ 0x00198e44 anchors the wrap box's LEFT
-    // edge at pos.x with width maxWH.x (= the maxWidth arg). The flag
-    // bits 0..1 select per-line offset rules (verified at
-    // 0x00198eb4..0x00198f7c, halving step at 0x00198f72):
-    //
-    //   alignment & 3 == 0  (LEFT)         lineOffset = 0
-    //   alignment & 3 == 1  (CENTER alone) special wrap-aware mode via
-    //                                       bit 0x10 -- not used by any
-    //                                       caller in the shipped binary
-    //                                       so we fall back to the same
-    //                                       formula as 0x3 here.
-    //   alignment & 3 == 2  (RIGHT-IN-BOX) lineOffset = normWrap - lineLen
-    //   alignment & 3 == 3  (CENTER-IN-BOX) lineOffset = (normWrap - lineLen) * 0.5
-    //
-    // For maxWidth == 0 the formulas degenerate to the port's previous
-    // pos.x-centred / pos.x-right-edged behaviour, so non-wrapping
-    // callers (shop title, cost text, etc.) keep working unchanged.
-    //
-    // The offset is recomputed AT EVERY \n and at every word-wrap point
-    // because each line's lineLen differs (binary calls GetLineLength
-    // inside the line-feed handler at LAB_00199884).
-    const int   horizAlign = alignment & 0x3;
-    const float normWrap   = (maxWidth > 0.0f) ? (maxWidth / scale) : 0.0f;
+float Font::GetLineLength(Utf8StringIterator iter, float wrapWidth, float* outSlack) const {
+    float runX = 0.0f;
+    while (!iter.IsEmpty()) {
+        uint32_t cp = iter.m_CurrentCodepoint;
+        if (cp == '\n') break;
 
-    auto measureLineNorm = [&](const char* p) -> float {
-        float w = 0.0f;
-        for (const char* q = p; *q && *q != '\n'; q++) {
-            if (*q == '[') {
-                if (*(q + 1) == '/' && *(q + 2) == ']') { q += 2; continue; }
-                const char* end = strchr(q + 1, ']');
-                if (end && end - q == 7) { q = end; continue; }
-            }
-            if (normWrap > 0.0f && *q == ' ') {
-                float wordW = 0.0f;
-                for (const char* wp = q + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
-                    uint8_t wch = (uint8_t)*wp;
-                    if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
+        // Skip <font color=...> and </font tags
+        if (cp == '<') {
+            Utf8StringIterator tmp = iter + 1;
+            if (!tmp.IsEmpty()) {
+                uint32_t next = tmp.m_CurrentCodepoint;
+                if (next == '/') {
+                    // </font ...> — skip to '>'
+                    iter++;
+                    while (!iter.IsEmpty() && iter.m_CurrentCodepoint != '>') iter++;
+                    if (!iter.IsEmpty()) iter++; // consume '>'
+                    continue;
+                } else if (next == 'f' || next == 'F') {
+                    // <font color=...> — skip to '>'
+                    while (!iter.IsEmpty() && iter.m_CurrentCodepoint != '>') iter++;
+                    if (!iter.IsEmpty()) iter++;
+                    continue;
                 }
-                if (w + wordW > normWrap) break;
             }
-            uint8_t ch = (uint8_t)*q;
-            if (ch < 256) w += (float)m_Glyphs[ch].xadvance * invLH;
         }
-        return w;
-    };
 
-    auto computeLineOffset = [&](const char* p) -> float {
+        CharTemplate* g = GetCharTemplate(cp);
+        if (!g) { iter++; continue; }
+
+        // Word-wrap check at space
+        if (cp == ' ' && wrapWidth > 0.0f) {
+            // Measure the next word
+            float wordW = 0.0f;
+            Utf8StringIterator wi = iter + 1;
+            while (!wi.IsEmpty() && wi.m_CurrentCodepoint != ' ' && wi.m_CurrentCodepoint != '\n') {
+                CharTemplate* wg = GetCharTemplate(wi.m_CurrentCodepoint);
+                if (wg) wordW += wg->xadv;
+                wi++;
+            }
+            if (runX + wordW > wrapWidth) break;
+        }
+
+        runX += g->xadv;
+        iter++;
+    }
+
+    if (outSlack) *outSlack = wrapWidth - runX;
+    return runX;
+}
+
+// ---------------------------------------------------------------------------
+// MeasureWidth (char* overload — compat for existing callers)
+// ---------------------------------------------------------------------------
+
+float Font::MeasureWidth(float /*scale*/, const char* text) const {
+    Utf8StringIterator iter(text);
+    return MeasureWidth(0.0f, iter);
+}
+
+float Font::MeasureWidth(float /*scale*/, Utf8StringIterator iter) const {
+    float width = 0.0f;
+    float maxW  = 0.0f;
+    while (!iter.IsEmpty()) {
+        uint32_t cp = iter.m_CurrentCodepoint;
+        if (cp == '\n') {
+            if (width > maxW) maxW = width;
+            width = 0.0f;
+            iter++;
+            continue;
+        }
+        // Skip color tags
+        if (cp == '<') {
+            while (!iter.IsEmpty() && iter.m_CurrentCodepoint != '>') iter++;
+            if (!iter.IsEmpty()) iter++;
+            continue;
+        }
+        CharTemplate* g = GetCharTemplate(cp);
+        if (g) width += g->xadv;
+        iter++;
+    }
+    if (width > maxW) maxW = width;
+    return maxW;
+}
+
+// ---------------------------------------------------------------------------
+// DrawString (matches Font_DrawString 0x00198e44)
+// ---------------------------------------------------------------------------
+
+void Font::DrawString(float scale, float maxWidth, float rotZ,
+                      Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
+                      Vec2 maxWH, int alignment, float z,
+                      MortarRectangleDec* clipRect)
+{
+    // DIFFERS: clipRect path not implemented -- no shipping caller uses it
+    (void)clipRect;
+    (void)z;
+
+    if (iter.IsEmpty()) return;
+
+    // Binary modifies maxWH in-place on a stack copy:
+    //   maxWH.x /= scale
+    //   maxWH.y /= (maxWidth * scale)
+    // Callers must pass maxWidth >= 1.0 (the binary wrapper @ 0x00189aa0
+    // hardcodes 1.0 for the maxWidth=0-from-caller case; port callers
+    // mirror that at the call site).
+    maxWH.x /= scale;
+    maxWH.y /= (maxWidth * scale);
+
+    // Word-wrap threshold in lineHeight-normalized units (maxWH.x after /= scale).
+    // Wrap is active whenever maxWH.x > 0; the binary's caller signals "no wrap"
+    // by passing maxWH = (0, 0). The 0x10 alignment bit is reserved for other
+    // semantics (still being RE'd) -- using maxWH.x as the wrap gate matches
+    // the description-text path's binary call shape.
+    const float wrapLimit = maxWH.x;
+
+    // Per-page glyph vertex counts
+    int* perPageCount = new int[m_PageCount]();
+
+    // Ensure m_PageVerts has enough entries and capacity
+    while ((int)m_PageVerts.size() < m_PageCount) {
+        m_PageVerts.push_back(std::vector<QUADCUSTOMVERTEX>(0x600));
+    }
+    for (int pg = 0; pg < m_PageCount; pg++) {
+        if (m_PageVerts[pg].size() < 0x600) {
+            m_PageVerts[pg].resize(0x600);
+        }
+        perPageCount[pg] = 0;
+    }
+
+    // Initial colour
+    uint32_t curColour = colour.PlatformColour();
+    uint32_t origColour = curColour;
+
+    // Horizontal alignment: compute offset for first line
+    const int horizAlign = alignment & 0x3;
+    auto computeLineOffset = [&](Utf8StringIterator lineIter) -> float {
         if (horizAlign == 0) return 0.0f;
-        float lineLen = measureLineNorm(p);
-        if (horizAlign == 0x2) return normWrap - lineLen;
-        // 0x1 and 0x3 both centre-in-box (binary 0x1 falls through the
-        // halving step too -- bit 0 is the "halve" flag).
-        return (normWrap - lineLen) * 0.5f;
+        float len = GetLineLength(lineIter, wrapLimit, nullptr);
+        if (horizAlign == 2) return wrapLimit - len;
+        return (wrapLimit - len) * 0.5f;
     };
 
-    float lineOffset = computeLineOffset(text);
-
-    // --- Vertical alignment (flags & 0xC): block-centred shift in normalized units ---
-    //
-    // Binary Font_DrawString applies a SINGLE TranslateLocal AFTER the
-    // glyph loop (flush path, decompile lines 281-289):
-    //
-    //   if (alignment & 0xC) {
-    //     fVar42 -= maxWidth;                           // cursor_y -= 1.0
-    //     factor = (alignment & 0x4) ? 0.5 : 1.0;
-    //     translateY = (-maxWH.y - cursor_y) * factor;  // maxWH.y == 0 in shop
-    //                = (0 - (-(N-1) - 1)) * factor
-    //                = N * factor
-    //   }
-    //
-    // For N = number of rendered lines (counting wrap breaks + \n + the
-    // final line). Worked example: N=2, factor=0.5 -> startY = +1.0.
-    // Block centre with N lines stacked on -1.0 per line lands at:
-    //   ((N-1)/2 - N/2) negated -> consistent half-line offset above pos.y.
-    //
-    // The port previously set startY = +0.5 (factor) regardless of N --
-    // correct for N=1 but undershot multi-line wrapped paragraphs by
-    // (N-1)/2 lines. With description scale=18 and a 2-line wrap, the
-    // text rendered ~9 world units too low.
-    int lineCount = 1;
-    {
-        // Walk the same wrap rules as the glyph loop without emitting,
-        // counting line breaks so the caller can size the block.
-        const float countNormWrap = normWrap;
-        for (const char* p = text; *p; p++) {
-            if (*p == '\n') { lineCount++; continue; }
-            if (*p == '[') {
-                if (*(p + 1) == '/' && *(p + 2) == ']') { p += 2; continue; }
-                const char* end = strchr(p + 1, ']');
-                if (end && end - p == 7) { p = end; continue; }
-            }
-            if (countNormWrap > 0.0f && *p == ' ') {
-                // Re-measure the current line up to this space (cumulative
-                // since last line break) plus the next word; if it spills,
-                // count a wrap break.
-                // Simpler: track cursor since line start in a parallel var.
-            }
-        }
-        // Approach: dedicated walker that mirrors the render loop's wrap.
-        if (countNormWrap > 0.0f) {
-            lineCount = 0;
-            const char* p = text;
-            while (*p) {
-                lineCount++;
-                float runX = 0.0f;
-                while (*p && *p != '\n') {
-                    if (*p == '[') {
-                        if (*(p + 1) == '/' && *(p + 2) == ']') { p += 3; continue; }
-                        const char* end = strchr(p + 1, ']');
-                        if (end && end - p == 7) { p = end + 1; continue; }
-                    }
-                    if (*p == ' ') {
-                        float wordW = 0.0f;
-                        for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
-                            uint8_t wch = (uint8_t)*wp;
-                            if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
-                        }
-                        if (runX + wordW > countNormWrap) {
-                            // Wrap: skip this space, start new line at next char.
-                            p++;
-                            break;
-                        }
-                    }
-                    uint8_t ch = (uint8_t)*p;
-                    if (ch < 256) runX += (float)m_Glyphs[ch].xadvance * invLH;
-                    p++;
-                }
-                if (*p == '\n') p++;
-            }
-            if (lineCount < 1) lineCount = 1;
-        } else {
-            // No wrap: count just \n.
-            lineCount = 1;
-            for (const char* p = text; *p; p++) if (*p == '\n') lineCount++;
-        }
-    }
-
-    float startY = 0.0f;
-    if (alignment & 0xC) {
-        const float factor = (alignment & 0x4) ? 0.5f : 1.0f;
-        startY = (float)lineCount * factor * normLineH;
-    }
-
-    // Batch vertices per page
-    std::vector<std::vector<QUADCUSTOMVERTEX>> pageVerts(m_PageCount);
-
-    // cursorX advances through the line; lineOffset is the per-line
-    // shift inside the wrap box. Per-glyph X = pos.x + scale * (cursorX
-    // + lineOffset + glyph.xoffset). On line break (\n or wrap), reset
-    // cursorX to 0 and recompute lineOffset for the new line.
+    float lineOffset = computeLineOffset(iter);
     float cursorX = 0.0f;
-    float cursorY = startY;
-    uint32_t currentColour = colour.PlatformColour();
+    float cursorY = 0.0f;  // starts at 0; vertical alignment applied via TranslateLocal
 
-    for (const char* p = text; *p; p++) {
-        if (*p == '\n') {
-            lineOffset = computeLineOffset(p + 1);
+    // Spacing from maxWH (binary reads local_64[0] which is a spacing scalar;
+    // in shipping callers maxWH is always (0,0) so spacing = 0)
+    const float spacing = 0.0f;
+
+    // --- Glyph emit loop ---
+    while (!iter.IsEmpty()) {
+        uint32_t cp = iter.m_CurrentCodepoint;
+
+        if (cp == '\n') {
+            iter++;
+            lineOffset = computeLineOffset(iter);
             cursorX = 0.0f;
-            cursorY -= normLineH;
+            cursorY -= 1.0f;  // one lineHeight unit down
             continue;
         }
 
-        // Color tag support: [FFFFFF]text[/]
-        if (*p == '[') {
-            if (*(p + 1) == '/' && *(p + 2) == ']') {
-                currentColour = colour.PlatformColour();
-                p += 2;
-                continue;
+        // Word-wrap at space
+        if (cp == ' ' && wrapLimit > 0.0f) {
+            Utf8StringIterator wi = iter + 1;
+            float wordW = 0.0f;
+            while (!wi.IsEmpty() && wi.m_CurrentCodepoint != ' ' && wi.m_CurrentCodepoint != '\n') {
+                CharTemplate* wg = GetCharTemplate(wi.m_CurrentCodepoint);
+                if (wg) wordW += wg->xadv;
+                wi++;
             }
-            const char* end = strchr(p + 1, ']');
-            if (end && end - p == 7) {
-                char hex[7];
-                memcpy(hex, p + 1, 6);
-                hex[6] = '\0';
-                unsigned int rgb = (unsigned int)strtoul(hex, nullptr, 16);
-                uint8_t cr = (rgb >> 16) & 0xFF;
-                uint8_t cg = (rgb >> 8) & 0xFF;
-                uint8_t cb = rgb & 0xFF;
-                Colour tagCol(cr, cg, cb, colour.a);
-                currentColour = tagCol.PlatformColour();
-                p = end;
-                continue;
-            }
-        }
-
-        // Word wrap: maxWidth is in world units; divide by scale to get
-        // normalized threshold so we can compare against cursor (normalized).
-        if (maxWidth > 0 && *p == ' ') {
-            float wordW = 0;
-            for (const char* wp = p + 1; *wp && *wp != ' ' && *wp != '\n'; wp++) {
-                uint8_t wch = (uint8_t)*wp;
-                if (wch < 256) wordW += (float)m_Glyphs[wch].xadvance * invLH;
-            }
-            if (cursorX + wordW > normWrap) {
-                lineOffset = computeLineOffset(p + 1);  // skip the space
+            if (cursorX + wordW > wrapLimit) {
+                iter++;
+                lineOffset = computeLineOffset(iter);
                 cursorX = 0.0f;
-                cursorY -= normLineH;
+                cursorY -= 1.0f;
                 continue;
             }
         }
 
-        uint8_t ch = (uint8_t)*p;
-        if (ch >= 256) continue;
-        const FontGlyph& g = m_Glyphs[ch];
-        if (g.width == 0 && g.height == 0) {
-            cursorX += (float)g.xadvance * invLH;
+        // Color tags: <font color=RRGGBB[AA]> and </font>
+        if (cp == '<') {
+            Utf8StringIterator tagIter = iter + 1;
+            if (!tagIter.IsEmpty() && (tagIter.m_CurrentCodepoint == '/' ||
+                tagIter.m_CurrentCodepoint == 'f' || tagIter.m_CurrentCodepoint == 'F')) {
+
+                if (tagIter.m_CurrentCodepoint == '/') {
+                    // </font -- reset colour, advance to '>'
+                    curColour = origColour;
+                    iter++;
+                    while (!iter.IsEmpty() && iter.m_CurrentCodepoint != '>') iter++;
+                    if (!iter.IsEmpty()) iter++; // consume '>'
+                    continue;
+                } else {
+                    // <font color=RRGGBB[AA]>
+                    // Skip to 'color=' or 'colour=' tag
+                    // Advance past '<font' to find 'color='
+                    Utf8StringIterator scan = iter + 1;
+                    // Skip "font"
+                    while (!scan.IsEmpty() && scan.m_CurrentCodepoint != '>' &&
+                           scan.m_CurrentCodepoint != '=') scan++;
+                    // Now scan should be at '='
+                    if (!scan.IsEmpty() && scan.m_CurrentCodepoint == '=') {
+                        scan++; // skip '='
+                        // Read up to 8 hex digits
+                        char hexbuf[9];
+                        int hexlen = 0;
+                        while (!scan.IsEmpty() && hexlen < 8) {
+                            uint32_t hc = scan.m_CurrentCodepoint;
+                            if ((hc >= '0' && hc <= '9') || (hc >= 'a' && hc <= 'f') ||
+                                (hc >= 'A' && hc <= 'F')) {
+                                hexbuf[hexlen++] = (char)hc;
+                                scan++;
+                            } else {
+                                break;
+                            }
+                        }
+                        hexbuf[hexlen] = '\0';
+                        if (hexlen >= 6) {
+                            uint32_t rgb = (uint32_t)strtoul(hexbuf, nullptr, 16);
+                            uint8_t cr, cg, cb, ca;
+                            if (hexlen >= 8) {
+                                // RRGGBBAA
+                                cr = (uint8_t)((rgb >> 24) & 0xFF);
+                                cg = (uint8_t)((rgb >> 16) & 0xFF);
+                                cb = (uint8_t)((rgb >>  8) & 0xFF);
+                                ca = (uint8_t)(rgb & 0xFF);
+                            } else {
+                                // RRGGBB — preserve original alpha
+                                cr = (uint8_t)((rgb >> 16) & 0xFF);
+                                cg = (uint8_t)((rgb >>  8) & 0xFF);
+                                cb = (uint8_t)(rgb & 0xFF);
+                                ca = colour.a;
+                            }
+                            Colour tagCol(cr, cg, cb, ca);
+                            curColour = tagCol.PlatformColour();
+                        }
+                    }
+                    // Advance iter to past '>'
+                    while (!iter.IsEmpty() && iter.m_CurrentCodepoint != '>') iter++;
+                    if (!iter.IsEmpty()) iter++;
+                    continue;
+                }
+            }
+        }
+
+        CharTemplate* g = GetCharTemplate(cp);
+        if (!g) {
+            iter++;
             continue;
         }
 
-        if (g.page < 0 || g.page >= m_PageCount) {
-            cursorX += (float)g.xadvance * invLH;
-            continue;
+        int pageIdx = (int)g->page;
+        if (pageIdx >= 0 && pageIdx < m_PageCount) {
+            // Vertex geometry in lineHeight-normalized space (ARM-confirmed at 0x0019919e)
+            // cx = cursor_x + xoff + w*0.5
+            // cy = cursor_y - yoff - h*0.5
+            const float cx = cursorX + lineOffset + g->xoff + g->w * 0.5f;
+            const float cy = cursorY - g->yoff - g->h * 0.5f;
+            const float hw = g->w * 0.5f;
+            const float hh = g->h * 0.5f;
+
+            // UVs already normalized in CharTemplate
+            const float u0 = g->u0;
+            const float v0 = g->v0;
+            // u1/v1 computed from w/h * (lineHeight / scaleW/H) = raw_w/scaleW
+            const float lhDivW = (m_ScaleW > 0) ? m_LineHeight / (float)m_ScaleW : 1.0f;
+            const float lhDivH = (m_ScaleH > 0) ? m_LineHeight / (float)m_ScaleH : 1.0f;
+            const float u1 = u0 + g->w * lhDivW;
+            const float v1 = v0 + g->h * lhDivH;
+
+            // Port specific: 6-vertex GL_TRIANGLES layout (2 explicit
+            // triangles per glyph). The binary uses GL_TRIANGLE_STRIP with
+            // v[4]=v[3]/v[5]=v[1] degenerates; the per-glyph degenerates
+            // collapse the trailing 2 triangles to zero area but the
+            // batched strip still connects consecutive glyphs with
+            // *non-degenerate* triangles (BR_prev->BL_prev->TL_next), which
+            // produces visible streaks. Switch to GL_TRIANGLES so each
+            // glyph is independent.
+            //
+            // V swap (u0/v1 vs u0/v0): port's screen Y is up but the
+            // atlas V grows down. Pair screen-top vertices with atlas v0
+            // (top of glyph) and screen-bottom with v1.
+            const float kZ = 0.0f;  // DAT_00199a94 = 0.0f
+            QUADCUSTOMVERTEX v[6];
+            // Triangle 1: TL_screen, TR_screen, BL_screen
+            v[0] = { cx - hw, cy - hh, kZ, 0,0,1, curColour, u0, v1 };
+            v[1] = { cx + hw, cy - hh, kZ, 0,0,1, curColour, u1, v1 };
+            v[2] = { cx - hw, cy + hh, kZ, 0,0,1, curColour, u0, v0 };
+            // Triangle 2: TR_screen, BR_screen, BL_screen
+            v[3] = { cx + hw, cy - hh, kZ, 0,0,1, curColour, u1, v1 };
+            v[4] = { cx + hw, cy + hh, kZ, 0,0,1, curColour, u1, v0 };
+            v[5] = { cx - hw, cy + hh, kZ, 0,0,1, curColour, u0, v0 };
+
+            int base = perPageCount[pageIdx] * 6;
+            if (base + 6 <= (int)m_PageVerts[pageIdx].size()) {
+                for (int vi = 0; vi < 6; vi++) {
+                    m_PageVerts[pageIdx][base + vi] = v[vi];
+                }
+                perPageCount[pageIdx]++;
+            }
         }
 
-        // Build centered quad in lineHeight-normalized space.
-        // Binary stores all metric values (width, height, xoffset, yoffset,
-        // xadvance) as atlas_pixels / lineHeight. After MatrixStack::Scale
-        // (scale, scale, 1) world_size = (atlas_px / lineHeight) * scale,
-        // giving glyphs at em pixel sizes.
-        //
-        // UVs use scaleW / scaleH (atlas-pixel coords / atlas dimensions).
-        // z = DAT_00199a94 = 0.0f for all vertices (binary constant).
-        const float cx = cursorX + lineOffset + ((float)g.xoffset + (float)g.width  * 0.5f) * invLH;
-        const float cy = cursorY - ((float)g.yoffset + (float)g.height * 0.5f) * invLH;
-        const float hw = (float)g.width  * 0.5f * invLH;
-        const float hh = (float)g.height * 0.5f * invLH;
-
-        const float u0 = (float)g.x * invW;
-        const float v0 = (float)g.y * invH;
-        const float u1 = (float)(g.x + g.width)  * invW;
-        const float v1 = (float)(g.y + g.height) * invH;
-
-        // 6 vertices (2 triangles, GL_TRIANGLES) — z = 0.0f (binary DAT_00199a94)
-        QUADCUSTOMVERTEX v[6];
-        // Triangle 1: TL, TR, BL
-        v[0] = { cx - hw, cy - hh, 0.0f, 0,0,1, currentColour, u0, v0 };
-        v[1] = { cx + hw, cy - hh, 0.0f, 0,0,1, currentColour, u1, v0 };
-        v[2] = { cx - hw, cy + hh, 0.0f, 0,0,1, currentColour, u0, v1 };
-        // Triangle 2: TR, BR, BL
-        v[3] = { cx + hw, cy - hh, 0.0f, 0,0,1, currentColour, u1, v0 };
-        v[4] = { cx + hw, cy + hh, 0.0f, 0,0,1, currentColour, u1, v1 };
-        v[5] = { cx - hw, cy + hh, 0.0f, 0,0,1, currentColour, u0, v1 };
-
-        for (int vi = 0; vi < 6; vi++) {
-            pageVerts[g.page].push_back(v[vi]);
-        }
-
-        cursorX += (float)g.xadvance * invLH;
+        // Advance cursor: xadv + kerning + spacing
+        // spacing * (cp == 0x20 ? 3.0 : 1.0) matches binary (spacing=0 in all shipping callers)
+        float spacingMul = (cp == 0x20) ? 3.0f : 1.0f;
+        cursorX += g->xadv + GetKerning(cp, 0) + spacing * spacingMul;
+        iter++;
     }
 
-    // Per-glyph DrawQuad pipeline. The batched DrawTriList path didn't
-    // render correctly (cause not yet root-caused), so we issue one
-    // DrawQuad per glyph using the proven HUD quad pipeline. Slow at high
-    // glyph counts but correct.
-    //
-    // For each glyph in pageVerts, vertices are stored in lineHeight-
-    // normalized space with layout [TL, TR, BL, TR, BR, BL] per glyph.
-    // We extract TL/BR to derive the world-space scale + translate that
-    // SetupQuadMatrix-style code expects, then DrawQuad with the glyph's
-    // UV bounds.
-    // Font draw is always 2D; disable depth test so glyphs don't z-fight
-    // neighbouring HUD quads at the same z. We don't restore depth at the
-    // end -- callers that need depth back on (e.g. 3D scene) must
-    // glEnable(GL_DEPTH_TEST) themselves. Previously this function ended
-    // with an unconditional glEnable, which broke 2D HUD chains that
-    // drew further quads at z=0 after a font draw (they got rejected
-    // against the depth-buffered earlier quad).
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_DEPTH_TEST);
+    // --- Matrix setup (matches binary 0x00199900-0x00199964) ---
+    // Push captures the current world matrix; balanced Pop at end
+    // restores it. Caller (HUD::Draw) is responsible for handing us a
+    // clean matrix -- HUD::Draw resets between controls, matching the
+    // binary's per-control discipline.
+    MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
+    world.Push();
 
+    world.Scale(Vec3(scale, scale, 1.0f));
+
+    // RotZ (ARM at 0x00199908-0x0019990e)
+    if (rotZ != 0.0f) {
+        world.m_Current.RotZ44(sinf(rotZ), cosf(rotZ));
+        world.m_Version++;
+    }
+
+    // Vertical alignment: TranslateLocal(0, factor, 0) BEFORE world Translate(pos)
+    // Binary ARM 0x00199920-0x00199964 (confirmed upward shift)
+    if (alignment & 0xC) {
+        // cursor_y is the final value after the glyph loop (= -(numLines-1))
+        // Binary: s19 = cursor_y - maxWidth (maxWidth=1.0 in wrapper callers)
+        // For direct Font_DrawString callers with maxWidth != 1.0, use maxWidth
+        float s19 = cursorY - maxWidth;
+        // s14 = -maxWH.y_modified - s19
+        float s14 = -maxWH.y - s19;
+        float factor = (alignment & 0x4) ? 0.5f : 1.0f;
+        float translateY = s14 * factor;
+        world.m_Current.LocalTranslate44(0.0f, translateY, 0.0f);
+        world.m_Version++;
+    }
+
+    world.Translate(pos);
+    MatrixManager::GetInstance().UploadModelViewOnly();
+
+    // --- Per-page flush (binary step 7) ---
+    // Binary makes zero GL calls here; BeginFrame sets the steady state.
     Renderer* renderer = Renderer::GetInstance();
     if (renderer) {
-        MatrixStack& worldStack = MatrixManager::GetInstance().GetWorldStack();
         for (int pg = 0; pg < m_PageCount; pg++) {
-            if (pg >= (int)m_PageTextures.size() || !m_PageTextures[pg].IsValid()) continue;
-            Texture* tex = m_PageTextures[pg].Get();
-            tex->Set();
-            const int N = (int)pageVerts[pg].size();
-            for (int gi = 0; gi + 5 < N; gi += 6) {
-                QUADCUSTOMVERTEX& vTL = pageVerts[pg][gi];
-                QUADCUSTOMVERTEX& vBR = pageVerts[pg][gi + 4];
-                float wx = (vTL.x + vBR.x) * 0.5f * scale + pos.x;
-                float wy = (vTL.y + vBR.y) * 0.5f * scale + pos.y;
-                float ww = (vBR.x - vTL.x) * scale;
-                float wh = (vBR.y - vTL.y) * scale;
-                if (ww < 0) ww = -ww;
-                if (wh < 0) wh = -wh;
-
-                worldStack.Reset();
-                Matrix44 mat = Matrix44::MakeScale(ww, wh, 1.0f);
-                mat.GlobalTranslate44(Vec3(wx, wy, pos.z));
-                worldStack.SetCurrentMatrix(mat);
-                MatrixManager::GetInstance().UploadModelViewOnly();
-                renderer->DrawQuad(colour, vTL.u, vTL.v, vBR.u, vBR.v);
-            }
-            tex->UnSet();
+            if (perPageCount[pg] == 0) continue;
+            Page* page = GetPage(pg);
+            if (!page || !page->texture.IsValid()) continue;
+            page->texture->Set();
+            // GL_TRIANGLES (not strip) — see vertex layout above.
+            renderer->DrawTriList(m_PageVerts[pg].data(), perPageCount[pg] * 6);
+            page->texture->UnSet();
         }
     }
 
-    (void)z; (void)maxWidth;
+    world.Pop();
+
+    delete[] perPageCount;
+}
+
+// ---------------------------------------------------------------------------
+// DrawString — thin char* wrapper (matches 0x00199aa0)
+// Packs x/y/z into Vec3, calls the full overload with maxWidth=1.0.
+// ---------------------------------------------------------------------------
+
+void Font::DrawString(float scale, float maxWidth, float z,
+                      const char* text, const Vec3& pos,
+                      const Colour& colour, int alignment)
+{
+    if (!text || !*text) return;
+    Utf8StringIterator iter(text);
+    Vec2 maxWH(0.0f, 0.0f);
+    DrawString(scale, maxWidth, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
 }
 
 } // namespace Mortar

@@ -522,10 +522,14 @@ void SoundManager::SetSFXVolume(float vol) {
     SyncMutes();
 }
 
-// 0x0018c9d4 -- set music/sfx mute based on volume==0 or muted flag
+// 0x0018c9d4 -- compares per-channel volume against 0.1 threshold
+// (DAT_0018ca48). Binary also OR's a master-mute byte at MortarSoundState+0x4
+// (DAT_0018ca54) but that byte has NO writer in FruitNinja (MuteSound has
+// no callers); omitted. If MuteSound() is ever ported, OR its result here.
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x0018c9d4 (asm-inspector)
 void SoundManager::SyncMutes() {
-    s_SFXMuted   = (s_SFXVolume   <= 0.0f);
-    s_MusicMuted = (s_MusicVolume <= 0.0f);
+    s_SFXMuted   = ((double)s_SFXVolume   < 0.1);
+    s_MusicMuted = ((double)s_MusicVolume < 0.1);
 }
 
 } // namespace Mortar

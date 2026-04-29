@@ -97,10 +97,17 @@ public:
     // transition (pos.z < -50), run the slide + decay pass once landed.
     void UpdateSplat(float dt);
 
+    // Binary: PlaySplat @ 0x0017f5ec — plays one of 6 splat impact SFX.
+    // Self-arming: s_SplatSfxGate += 0.5 on fire; gate blocks re-fire
+    // while positive so consecutive landings within 0.5 s are suppressed.
+    static void PlaySplat();
+
     // Virtual per-instance render: writes 6 QUADCUSTOMVERTEX entries for
     // this splat into the caller-provided buffer.
+    // tintRGB[0..2]: per-channel multipliers from &pHUD->scales[3].
     // Binary: SplatEntity::DrawSplat @ 0x0017f008 (virtual vtable slot).
-    virtual void DrawSplat(QUADCUSTOMVERTEX* outVerts);
+    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
+    virtual void DrawSplat(QUADCUSTOMVERTEX* outVerts, const float tintRGB[3]);
 
     // Virtual no-op override of Entity::DrawUpdate(float).
     // Binary: SplatEntity::DrawUpdate @ 0x0017ee2c (single bx lr).

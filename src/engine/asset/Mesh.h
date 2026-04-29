@@ -116,6 +116,11 @@ public:
     // Returns pointer to vert matrix for binding[index], or nullptr if no skeleton bound.
     const Matrix44* GetBoneVertTransform(int index) const;
 
+    // Matches Mesh::GetBoneWorldTransform (0x001b0700)
+    // Returns world matrix for binding[index] through skeleton. Identity fallback when
+    // no skeleton bound or bone unbound.
+    Matrix44 GetBoneWorldTransform(int index) const;
+
     // vtable[9]: Matches Mesh::GetGeometryCount (0x001b1678)
     int GetGeometryCount() const override { return (int)m_Geometries.size(); }
 

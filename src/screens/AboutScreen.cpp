@@ -421,8 +421,6 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_TexHaiku->m_TexId);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         r->DrawQuad(Colour(255, 255, 255, 255));
         glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -489,8 +487,6 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, s_TexCredits->m_TexId);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         r->DrawQuad(Colour(255, 255, 255, 255));
         glBindTexture(GL_TEXTURE_2D, 0);
     }
@@ -517,8 +513,6 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, s_TexSensei->m_TexId);
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         r->DrawQuad(Colour(255, 255, 255, 255));
         glBindTexture(GL_TEXTURE_2D, 0);
     }

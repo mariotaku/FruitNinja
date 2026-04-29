@@ -140,6 +140,7 @@ struct Game : public Mortar::MortarGame {
     bool init(SDL_Window* win, SDL_GLContext gl);
     void shutdown();
     void run();
+    void runFrames(int frameCount);
 };
 
 // Forward declarations for lifecycle functions (src/game/)

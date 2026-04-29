@@ -184,8 +184,6 @@ void DrawCriticalFlash() {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawQuad(tint);
     }
@@ -230,8 +228,6 @@ void DrawBombHit() {
     mm.UploadModelViewOnly();
 
     s_FlashTex->Set();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawQuad(tint);
     }
@@ -317,7 +313,7 @@ void ResetGameEntities(bool killAll) {
                         impulse = dir * (IMPULSE_LEN / len);
                     }
                 }
-                fruit->OnSliced(impulse);
+                fruit->CollisionResponse(impulse);
             }
 
             // Fling both halves off-screen — binary writes both
@@ -330,9 +326,9 @@ void ResetGameEntities(bool killAll) {
     }
     }  // end type loop
 
-    // Splats: binary only purges in same-screen multiplayer. Port
-    // has no multiplayer so we skip — splats fade naturally.
-    (void)SplatEntity::RemoveAllSplats;  // intentional unreference
+    // Splats: binary only purges in same-screen multiplayer
+    // (SplatEntity::RemoveAllSplats @ 0x0017eea4). Port has no
+    // multiplayer so we skip — splats fade naturally.
 }
 
 void UpdateBombHit(float prevTimer) {
