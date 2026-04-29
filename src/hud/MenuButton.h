@@ -112,8 +112,11 @@ public:
     // +0x134: direct fruit reference for scale/rotate access
     Fruit* m_pFruitPiece;
 
-    // +0x138
-    uint8_t m_bRemovalPending;
+    // +0x138: when 1, this button auto-fires its click delegate when the
+    // hardware Back/Menu key (Game::m_BackKeyPressed at +0x604) is set.
+    // Default 0 (set by Init); screen creation code opts a single button
+    // per screen into this role. See docs/engine/menubutton-138.md.
+    uint8_t m_bRespondsToBackKey;
 
     // +0x13C: = 1.0
     float m_AnimScale;
@@ -146,14 +149,6 @@ public:
     void Update(float dt) override;
     void Draw(const Vec3& hudScale, int layerMask) override;
     void Release() override;
-
-    // Begin the fade-out-then-self-remove animation. Sets
-    // m_bRemovalPending; Update will then decay m_DrawColour.a per
-    // frame and set m_bPendingRemoval once alpha hits near zero,
-    // at which point HUD::Update deletes the control. Also disables
-    // touch input via m_bInteractive so the user can't tap a fading
-    // button mid-transition.
-    void StartFadeOut();
 
     // Matches MenuButton::SetNewSymbol (0x0014e404).
     // If show=true and timer<0: sets timer=0.0 (start showing badge).

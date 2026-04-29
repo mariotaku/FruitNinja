@@ -27,8 +27,10 @@ static const float BOUNCE_OFFSET   =  20.0f;   // Y bounce magnitude
 // Arrow draw scale
 static const float ARROW_SCALE     =  96.0f;   // DAT_001635c8
 
-// Half-width cap for ButtonPressedAtPos and ResetTutePos
-static const float HALFWIDTH_CAP   = 256.0f;   // DAT_00162efc / DAT_00162f80
+// Half-width threshold for ButtonPressedAtPos and ResetTutePos
+// Binary halves (* 0.5) when halfWidth > 256, NOT clamps.
+static const float HALFWIDTH_THRESH = 256.0f;  // DAT_00162efc / DAT_00162f80
+static const float HALFWIDTH_HALVE  = 0.5f;
 
 // Trail loop constants (all from 0x001635ac block)
 static const float TRAIL_TIMER_SCALE = 2000.0f; // DAT_001635b0
@@ -97,8 +99,9 @@ bool TutorialControl::CanShowTute() const {
     Game* game = Game::GetInstance();
     if (!game) return false;
 
-    // If a transition is running, show the tutorial
-    if (fabsf(game->m_TransitionTimer) > 0.0f)
+    // Binary @ 0x00162fce: compare against 0.99 (DAT = 0x3F7D70A4), not 0.0.
+    // If transition is "deep enough", show the tutorial.
+    if (fabsf(game->m_TransitionTimer) > 0.99f)
         return true;
 
     // No game-over screen -> don't show
@@ -124,7 +127,8 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         // Binary fields: field_0x124 = m_TargetSize (Vec3 at +0x124, .x),
         //                field_0x14c = m_AnimSpeed2 (float at +0x14C)
         float halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0f - 10.0f;
-        if (halfWidth > HALFWIDTH_CAP) halfWidth = HALFWIDTH_CAP;
+        // Binary @ 0x00162f44: halve, don't clamp
+        if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
         // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120)
@@ -156,7 +160,8 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
         // halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0 - 10.0
         // Binary fields: field_0x124 = m_TargetSize.x, field_0x14c = m_AnimSpeed2
         float halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0f - 10.0f;
-        if (halfWidth > HALFWIDTH_CAP) halfWidth = HALFWIDTH_CAP;  // DAT_00162efc
+        // Binary @ 0x00162ea6: halve, don't clamp
+        if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
 
         // m_bFlipX = (pos.x > 0.0f) XOR btn->m_bScoreSubmitted (+0x120)
@@ -225,9 +230,9 @@ void TutorialControl::Update(float dt) {
         m_bHidden = 0;
         m_Colour.a = 255;
     } else if (m_AnimTimer < PHASE_HOLD_END) {
-        // Phase 3: hold visible (0.6..2.25)
-        m_bHidden = 0;
-        m_Colour.a = 255;
+        // Phase 3: hold (0.6..2.25). Binary @ 0x001631d0-0x001631f8 has three
+        // early-exits (1.0, 1.5, 2.25) leaving m_bHidden=1 and alpha unchanged.
+        // Net behavior: arrow draws UV frame 1 with prior alpha during hold.
     } else if (m_AnimTimer < PHASE_FADEOUT) {
         // Phase 4: fade out (2.25..2.75)
         float f = ((m_AnimTimer - PHASE_HOLD_END) * 2.0f) * (-254.0f) + 255.0f;
@@ -273,6 +278,9 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
         float timer = m_AnimTimer;
         int rem = (int)(timer * TRAIL_TIMER_SCALE) % (int)TRAIL_MOD_DIV;
 
+        // Global ones-Vec3 used for the trail quad scale (binary @ 0x001638f4-0x00163902).
+        const Vec3 ONES_VEC3(1.0f, 1.0f, 1.0f);
+
         for (int quad_index = 0; quad_index < 4; ++quad_index) {
             float frac = (float)quad_index + (float)rem / TRAIL_MOD_DIV;
 
@@ -299,8 +307,13 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
 
             Colour trailColour(255, 255, 255, (uint8_t)alpha);
 
+            // Binary @ 0x001634a2-0x001634ba: scale = (2*frac)^2 uniform via
+            // global Vec3(1,1,1) multiplied by quad-frac squared, NOT m_HalfWidth.
+            float quadScale = (2.0f * frac) * (2.0f * frac);
+            Vec3 scaleVec = ONES_VEC3 * quadScale;
+
             mm.GetWorldStack().Reset();
-            Matrix44 mat = Matrix44::MakeScale(m_HalfWidth, m_HalfWidth, 1.0f);
+            Matrix44 mat = Matrix44::MakeScale(scaleVec.x, scaleVec.y, scaleVec.z);
             mat.GlobalTranslate44(m_DrawPos);
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
@@ -325,11 +338,12 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
             flipSign * ARROW_SCALE,
             ARROW_SCALE,
             1.0f);
-        // Offset: (-0.125, -0.40625, 0) * m_HalfWidth, then add m_DrawPos
-        Vec3 offset(flipSign * -0.125f * m_HalfWidth,
-                    -0.40625f * m_HalfWidth,
+        // Binary @ 0x00163554-0x00163562: offset Vec3 multiplied by ARROW_SCALE
+        // (96.0), and result computed as drawAt = m_DrawPos - offset.
+        Vec3 offset(flipSign * -0.125f * ARROW_SCALE,
+                    -0.40625f * ARROW_SCALE,
                     0.0f);
-        Vec3 drawAt = offset + m_DrawPos;
+        Vec3 drawAt = m_DrawPos - offset;
         mat.GlobalTranslate44(drawAt);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();

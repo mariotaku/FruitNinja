@@ -39,6 +39,7 @@ static const float DECO_Y         =  137.0f;     // 0x001305a0
 static const float DECO_SLIDE_Y   =   48.0f;     // 0x001305a4
 static const float SEC_SLIDE_Y    =   55.0f;     // 0x00130594 (reused)
 static const float UV_NEAR        = 0.0078125f;  // 0x00130570 (= 1/128)
+static const float UV_FAR         = 0.0153961f;  // DAT_00130574 = 0x3c7c0fc0
 
 // ===================================================================
 // Matches BaseScreen::BaseScreen @ 0x00138dc0
@@ -55,7 +56,9 @@ BaseScreen::BaseScreen()
 //         ~list(m_ScreenButtons), ~HUDControl3d()
 // ===================================================================
 BaseScreen::~BaseScreen() {
-    // Release() called by subclass dtors.
+    // Binary @ 0x00138d94 explicitly invokes Release() in the dtor.
+    // C++ static-dispatches the call here to BaseScreen::Release.
+    BaseScreen::Release();
     // m_HUDControls cleared by vector dtor.
 }
 
@@ -109,8 +112,10 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
             //   v1 (0, 82) = straight up from apex
             //   v2 (-656, 82) = far upper-left, off-screen
             // Forms a thin wedge hanging from the top-right corner.
+            // Binary @ 0x001302ea uses UV_FAR (DAT_00130574 = 0.0153961) at the
+            // centre vertex's u, NOT 1.0.
             s_tri1[0] = {       0.0f,       0.0f, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
-            s_tri1[1] = {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+            s_tri1[1] = {       0.0f,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  UV_FAR,  1.0f    };
             s_tri1[2] = { -TRI_WIDTH,  TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
 
             // Tri0 (at stateObj+0x0C, drawn at (-240, 55*alpha-160)): LEFT apex.
@@ -119,7 +124,7 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
             //   v2 (656, -82) = far lower-right, off-screen
             // Mirror wedge hanging from the bottom-left corner.
             s_tri2[0] = {      0.0f,        0.0f, 0.0f,  0,0,1,  kCol,  0.0f,    UV_NEAR };
-            s_tri2[1] = {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    1.0f    };
+            s_tri2[1] = {      0.0f, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  UV_FAR,  1.0f    };
             s_tri2[2] = { TRI_WIDTH, -TRI_HALF_H, 0.0f,  0,0,1,  kCol,  1.0f,    UV_NEAR };
         }
 
@@ -310,8 +315,9 @@ void BaseScreen::Release() {
     if (game && game->field_0x34 != 0) {
         for (auto& sb : m_ScreenButtons) {
             if (sb.m_pButton) {
-                // Binary: *(byte*)(btn + 0x32) = 0 (clear enabled flag)
-                // Binary: clear draw delegate on btn+0x38 and sb+0x80 to noop
+                // Binary @ 0x00130e5e: *(byte*)(btn + 0x32) = 0 — clears
+                // HUDControl::m_bNoDestructor (NOT m_bEnabled, which is +0x123).
+                sb.m_pButton->m_bNoDestructor = 0;
                 sb.m_pButton->m_RemoveCallback = nullptr;
                 sb.m_deletedCb = nullptr;
             }

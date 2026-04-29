@@ -166,17 +166,18 @@ void MainScreen::Release() {
 void MainScreen::Update(float dt) {
     m_Time += dt;
 
+    // Binary @ 0x0014b2a4: toggle null-check + create runs at the top of Update,
+    // before the state switch, so destroyed toggles are recreated in any state.
+    if (!pSoundToggle || !pMusicToggle) {
+        CreateToggles();
+    }
+
     switch (m_State) {
     case STATE_CAMERA_ZOOM: {
-        // Camera zoom-in from splash. Create toggles + play/dojo buttons.
+        // Camera zoom-in from splash. Create play/dojo buttons.
         // Lerp camera transition toward -1.0
         m_CameraTransition += (-1.0f - m_CameraTransition) * CAMERA_LERP_RATE;
         m_Timer2 += dt;
-
-        // Create toggles if they don't exist
-        if (!pSoundToggle) {
-            CreateToggles();
-        }
 
         // Create play/dojo buttons if they don't exist
         if (!pPlayButton && m_Timer2 > TIMER2_THRESHOLD) {
@@ -198,31 +199,37 @@ void MainScreen::Update(float dt) {
 
     case STATE_GAME_START: {
         // Binary @ 0x0014bb58 case 2:
-        //   if (cameraTransition > DAT_0014bb70) {
-        //       game->field_0x28 = game->field_0x20;     // copy some state
-        //       WaveManager::Reset(true);                 // full wave reset
-        //       game->pauseFlag = 1;                      // gate updates
+        //   if (-cameraTransition > 0.999) {                 // gate fully zoomed in
+        //       game->field_0x28 = game->field_0x20;
+        //       WaveManager::Reset(true);
+        //       game->pauseFlag = 1;
         //   }
         //   cameraTransition *= 0.75;
-        //   if (|cameraTransition| < DAT_0014bb74) {
+        //   if (|cameraTransition| < 0.001) {                // DAT_0014bb74
         //       game->pauseFlag = 0;
         //       cameraTransition = 0;
         //       m_State = STATE_CAMERA_FADE (0x11);
         //   }
-        //   pos.y animation (shared LAB_0014c166 formula).
-        if (!m_bGameStartReset) {
+        if (-m_CameraTransition > 0.999f && !m_bGameStartReset) {
             WaveManager::GetInstance()->Reset(true);
             m_bGameStartReset = true;
+            // TODO (port-level): mirror game->field_0x28 = field_0x20
+            // and game->pauseFlag = 1; both fields not yet ported.
         }
         m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
-        if (m_CameraTransition > 0.999f) {
-            m_CameraTransition = 1.0f;
-        }
-        if (fabsf(m_CameraTransition) < 0.01f) {
+        if (fabsf(m_CameraTransition) < 0.001f) {
             m_CameraTransition = 0.0f;
             m_State = STATE_CAMERA_FADE;
-            m_bGameStartReset = false;   // arm for next entry
+            m_bGameStartReset = false;
+            // TODO: game->pauseFlag = 0;
         }
+
+        // Shared LAB_0014c166 pos.y animation (binary uses cameraTransition
+        // as alpha; here we use its absolute magnitude). Logos track pos.y.
+        const float sizeY_2 = size.y;
+        const float alpha_2 = fabsf(m_CameraTransition);
+        const float tt_2 = sizeY_2 * alpha_2;
+        pos.y = (sizeY_2 + 320.0f - 2.0f * tt_2) * 0.5f;
         break;
     }
 
@@ -259,7 +266,8 @@ void MainScreen::Update(float dt) {
         const float tt_d = sizeY_d * m_Timer2;
         pos.y = (sizeY_d + 320.0f - 2.0f * tt_d) * 0.5f;
 
-        if (!m_pDojoScreen && fruitCount == 0 && m_Timer2 < 0.01f) {
+        // Binary DAT_0014bf10 = 0.001f (NOT 0.01f).
+        if (!m_pDojoScreen && fruitCount == 0 && m_Timer2 < 0.001f) {
             m_Timer2 = 0.0f;
             m_pDojoScreen = new DojoScreen(game);
             // RemoveCallback nulls our weak ref BEFORE HUD::Update
@@ -317,22 +325,22 @@ void MainScreen::Update(float dt) {
     case STATE_MORE_GAMES:      // binary case 10
     case STATE_MATCHMAKER:      // binary case 0x10
         // Defunct — OpenFeint / GameCenter / matchmaker states. Binary
-        // waits on ActorManager empty then calls LaunchDashboard /
-        // OpenMatchmaker on NetworkManager. All online services are
-        // skipped in the port, so these states immediately bounce back
-        // to the main menu flow with buttons cleared.
+        // resets m_StateTimer = 0 and m_Timer2 = -0.85 (DAT_0014c28c),
+        // bouncing back to STATE_CAMERA_ZOOM with the slide-in animation
+        // already armed for the next frame.
         m_State = STATE_CAMERA_ZOOM;
-        m_Timer2 = 0.0f;
         m_StateTimer = 0.0f;
+        m_Timer2 = -0.85f;
         m_CameraTransition = 0.0f;
         DeleteMenuButtons();
         break;
 
     case STATE_NEWS:            // binary case 0xb
-        // Defunct — NetworkManager::UpdateNews polls for remote news
-        // updates. Port skips the network call and returns straight to
-        // the active-menu state.
+        // Defunct — NetworkManager::UpdateNews polls for remote news.
+        // Binary @ 0x0014c0..: m_StateTimer=0, m_State=1, m_Timer2=-0.85.
         m_State = STATE_CREATE_BUTTONS;
+        m_StateTimer = 0.0f;
+        m_Timer2 = -0.85f;
         break;
 
     case STATE_MODE_SELECT:
@@ -375,55 +383,65 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CAMERA_FADE:
-        // Camera fade after game return. Decay × 0.75 until settled.
-        m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
+        // Binary @ 0x0014c19a: only decay when camera < 0; clamp to 0 once
+        // camera > -0.001 (DAT_0014c2a8) and clear pauseFlag. Without the
+        // clamp the value keeps decaying forever and pauseFlag stays set.
+        if (m_CameraTransition < 0.0f) {
+            m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
+            if (m_CameraTransition > -0.001f) {
+                m_CameraTransition = 0.0f;
+                // TODO: game->pauseFlag = 0;  (field not yet ported)
+            }
+        }
         break;
 
     case STATE_LOADING_A:
     case STATE_LOADING_B:
-        // Accumulate field108 += dt × 8. When >= 8.0 → reset.
+        // Binary @ 0x0014c010: state always resets to 0 + clears menu buttons.
+        // The `field108 >= 8.0` check only resets m_field108 = 0; the broader
+        // reset is unconditional. Port previously gated everything on >= 8.0,
+        // making the loading state run for ~8s before bouncing.
         m_field108 += dt * 8.0f;
         if (m_field108 >= 8.0f) {
             m_field108 = 0.0f;
-            m_State = STATE_CAMERA_ZOOM;
-            m_StateTimer = 0.0f;
-            m_CameraTransition = 0.0f;
-            DeleteMenuButtons();
         }
+        m_State = STATE_CAMERA_ZOOM;
+        m_StateTimer = 0.0f;
+        m_CameraTransition = 0.0f;
+        DeleteMenuButtons();
         break;
 
     case STATE_QUIT_WAIT: {
-        // Binary @ 0x0014c098 case 0x17:
+        // Binary @ 0x0014c0a0 case 0x17:
         //   TutorialControl::ResetTutePos(pTC, nullptr)
         //   if (ActorManager::GetNumEntities(0) != 0) break;
         //   pLeaderboardBtn = null;
         //   gameMode = *(task_state+0x4c);
-        //   if (gameMode == 2) { HitMenuBomb(pos); state = 0x18; }
-        //   else if (gameMode == 3) { state = 0; timer = ... }
-        //
-        // Port: wait for ActorManager to clear (so the BombBlast spawned
-        // by QuitGamesCallback finishes), then fire HitMenuBomb and
-        // advance to STATE_QUIT_BOMB. Port skips the gameMode branch --
-        // on the Main screen the Quit path is deterministic (always the
-        // zen-like exit).
+        //   if (gameMode != 2) {
+        //       if (gameMode == 3) { state=0; m_Timer2=0.15; }
+        //       else break;
+        //   }
+        //   HitMenuBomb at literal (163, -96, 0); state = 0x18.
         if (game.pTutorialCtrl) {
             game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
         }
-        m_StateTimer += dt;
         ActorManager* am = ActorManager::GetInstance();
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
-        const float QUIT_MAX_WAIT = 1.5f;   // belt-and-braces timeout
-        if (liveEntities == 0 || m_StateTimer >= QUIT_MAX_WAIT) {
-            // Pick the Quit bomb position for HitMenuBomb; fall back to
-            // MainScreen origin if the button/entity is already gone.
-            Vec3 hitPos(0.0f, 0.0f, 0.0f);
-            if (pQuitBtn && pQuitBtn->m_pEntity) {
-                hitPos = pQuitBtn->m_pEntity->pos;
+        if (liveEntities != 0) break;
+
+        const int gameMode = game.gameMode;
+        if (gameMode != 2) {
+            if (gameMode == 3) {
+                m_State = STATE_CAMERA_ZOOM;
+                m_Timer2 = 0.15f;
             }
-            FN::HitMenuBomb(hitPos);   // sets bombHitTimer = 2.0, plays SFX
-            m_State = STATE_QUIT_BOMB;
-            m_StateTimer = 0.0f;
+            // Otherwise stay in QUIT_WAIT.
+            break;
         }
+        // Binary uses a literal (163, -96, 0) for the HitMenuBomb spawn.
+        FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+        m_State = STATE_QUIT_BOMB;
+        m_StateTimer = 0.0f;
         break;
     }
 
@@ -707,14 +725,12 @@ void MainScreen::Hide() {
 
 void MainScreen::RemoveButton(MenuButton*& btn) {
     if (btn) {
-        // Trigger the fade-out animation. The button decays its own
-        // alpha over ~16 frames in Update, then sets m_bPendingRemoval
-        // when alpha hits zero — at which point HUD::Update fires the
+        // Mark the button for HUD removal. HUD::Update fires the
         // destructor → MenuButton::Release → entity->Deactivate,
         // cleaning up both the button AND the attached bomb/fruit
         // entity. Calling HUD::RemoveControl directly would leak
         // both because it just unlinks from the list without deleting.
-        btn->StartFadeOut();
+        btn->m_bPendingRemoval = 1;
         btn = nullptr;
     }
 }

@@ -144,7 +144,7 @@ MenuButton::MenuButton()
       m_bHasHitArea(false),
       m_bHighlighted(0),
       m_pFruitPiece(nullptr),
-      m_bRemovalPending(0),
+      m_bRespondsToBackKey(0),
       m_AnimScale(1.0f),
       m_BounceParams(0.0f, 0.0f, 0.0f),
       m_AnimSpeed2(5.0f),
@@ -264,18 +264,6 @@ void MenuButton::Release() {
     m_pLabel2 = nullptr;
 }
 
-// Trigger the fade-out-then-remove animation used by screen
-// transitions. After this is called, the button stops accepting
-// touches, fades its alpha each frame, and self-removes via
-// m_bPendingRemoval once alpha hits near zero.
-void MenuButton::StartFadeOut() {
-    m_bRemovalPending = 1;
-    m_bInteractive = 0;
-    // Pre-load the fade counter so the lerp starts from the
-    // current alpha rather than full opaque. m_DrawColour.a is
-    // already valid (255 for normal, 128 for highlighted).
-}
-
 // Matches MenuButton::SetNewSymbol (0x0014e404)
 void MenuButton::SetNewSymbol(bool show) {
     if (show) {
@@ -289,22 +277,14 @@ void MenuButton::SetNewSymbol(bool show) {
 
 // Matches MenuButton::Update (0x0014e614)
 void MenuButton::Update(float dt) {
-    // Fade-out animation. Decay alpha each frame; when below the
-    // threshold, mark the control for HUD::Update to delete next
-    // frame. ~16 frames at 0.85 decay = ~0.27s fade. Tuned to roughly
-    // match the screen-transition timer decay (m_Timer2 *= 0.75 in
-    // MainScreen DOJO_WAIT_*) so the button alpha hits zero around
-    // the same time the screen state is ready to spawn DojoScreen.
-    if (m_bRemovalPending) {
-        const float FADE_DECAY  = 0.85f;
-        const int   ALPHA_FLOOR = 6;
-        int newAlpha = (int)((float)m_DrawColour.a * FADE_DECAY);
-        m_DrawColour.a = (uint8_t)newAlpha;
-        if (newAlpha <= ALPHA_FLOOR) {
-            m_DrawColour.a = 0;
-            m_bPendingRemoval = 1;
-        }
-    }
+    // Hardware Back/Menu key auto-fire. Binary @ 0x0014e9a8: when
+    // m_bHighlighted && Game::m_BackKeyPressed && m_bRespondsToBackKey,
+    // simulate slice (Fruit) or fire click delegate (Bomb). The port
+    // doesn't track Game::m_BackKeyPressed yet (TODO), so the gate is
+    // currently dead; the field still records the per-screen "this is
+    // the default Back action" wiring set by screen creation code.
+    // (Removed the previous fictional alpha-fade-on-m_bRemovalPending
+    // block — the binary has no such behaviour. See docs/engine/menubutton-138.md.)
 
     // Sparkle timer tick (field_0x2c = m_SparkleTimer — rate × 8.0/s, cap at DAT=8.0)
     // TODO: full sparkle/new-indicator logic
@@ -410,8 +390,10 @@ void MenuButton::Update(float dt) {
                                           relVel.y * relVel.y +
                                           relVel.z * relVel.z;
                 if (relVelSqMag > 0.001f) {
-                    // Binary @ 0x0014e76c: Delegate0::operator()(&field7_0x88)
-                    if (!m_bRemovalPending && m_ClickCallback) {
+                    // Binary @ 0x0014e76c: Delegate0::operator()(&field7_0x88).
+                    // Binary has no m_bRemovalPending gate — the click delegate
+                    // fires unconditionally if non-null.
+                    if (m_ClickCallback) {
                         auto cb = m_ClickCallback;
                         m_ClickCallback = nullptr;
                         cb();
