@@ -287,6 +287,165 @@ Both screens (DojoScreen, ShopScreen) use `fruitType = FruitInfo_GetCount()` (>=
 
 ---
 
+### TimeControl : HUDControl3d (size = 0x108 = 264 bytes)
+
+<!-- Analysed: 2026-04-30T12:00 -->
+
+Timer display for Arcade and Zen modes. Counts down from initial value, triggers GameOver when time runs out (m_TimeRemaining < 0.5). Source file: `TimeControl.cpp`. Mangled: `_ZTV11TimeControl` (vtable), `_ZTI11TimeControl` (typeinfo).
+
+#### Constructor
+**Address:** 0x001622e8 (PLT thunk at 0x000f765c)
+
+Signature: `TimeControl::TimeControl(TimeControl* this)` — **no parameters**
+
+**Behavior:**
+```c
+TimeControl* TimeControl::TimeControl(TimeControl* this) {
+    HUDControl3d::HUDControl3d(&this->base);
+    this->base.super.vtable = TimeControl_vtable + 8;           // GOT[0x7ad0] -> 0x001ea158
+    SmartPtr<Texture>::SetNull(&this->base.m_SecondaryTex);     // +0x74
+    this->m_CountdownStart = -1.0f;                             // +0xC0  (sentinel "uninitialized")
+    Vec3 size(0.0f, 18.0f, 0.0f);
+    this->base.super.size = size;
+    Vec3 pos((480.0 - size.x)*0.5f - 5.0f, (320.0 + size.y)*0.5f - 5.0f, 0.0f);  // (235.0, 169.0, 0.0)
+    this->m_TextBuffer[0] = '\0';                               // +0xC8 (guards Draw)
+    this->base.super.m_bNoDestructor = 0;
+    this->base.super.pos = pos;
+    Reset();
+    return this;
+}
+```
+
+DAT pool (ctor constants):
+- DAT_001622d8 = 320.0 (screen height)
+- DAT_001622dc = 480.0 (screen width)
+
+#### Struct Layout
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x00..+0x7B | HUDControl3d | super | base 0x7C bytes |
+| +0x7C | float | m_TimeRemaining | live countdown value (seconds) |
+| +0x80 | char[64] | m_TextBuffer | OS_SPrintf("%i:%02i", min, sec) output buffer |
+| +0xC0 | float | m_CountdownStart | initial seconds; -1.0 sentinel = "no countdown configured" |
+| +0xC4 | float | m_TickFrame | timer for 0..5.5 animation phase |
+| +0xC8 | char[64] | m_PowerupOverlay | "+%i" overlay text; [0]==0 means hide |
+
+**Size:** 0x108 = 264 bytes. Storage: `g_GameData + 0x180`.
+
+#### Vtable (15 entries)
+
+| Idx | Offset | Address | Method | Notes |
+|-----|--------|---------|--------|-------|
+| 0 | +0x00 | 0x00162400 | ~TimeControl (deleting) | |
+| 1 | +0x04 | 0x001623c0 | ~TimeControl | |
+| 2 | +0x08 | 0x001620e4 | Init | calls vtable[0x10] = Reset |
+| 3 | +0x0c | 0x001623b4 | Release | SmartPtr<Texture>::SetNull(+0x74) |
+| 4 | +0x10 | 0x00162168 | Reset | see below |
+| 5 | +0x14 | 0x0012f92c | BeginDraw | inherited HUDControl3d (no-op) |
+| 6 | +0x18 | 0x001620f8 | PreDraw | returns param |
+| 7 | +0x1c | 0x001628d8 | **Draw** | text + optional UI tick mark |
+| 8 | +0x20 | 0x0012f930 | PreDrawOrder | inherited (dispatches to PreDraw) |
+| 9 | +0x24 | 0x0012f93c | DrawOrder | inherited (dispatches to Draw) |
+| 10 | +0x28 | 0x001624a4 | **Update** | timer tick; GameOver trigger |
+| 11 | +0x2c | 0x00162128 | SetToMultiplayerState | calls Reset |
+| 12 | +0x30 | 0x00162e34 | GetType | returns 4 |
+| 13 | +0x34 | 0x001620fc | Skip | restore from save: `+0x7c = FruitSaveData[0x10C]`, `+0xc4 = 0` |
+| 14 | +0x38 | 0x0012f950 | Save | inherited (no-op) |
+
+#### Methods
+
+**CountDown** (0x001620f0)
+```c
+void TimeControl::CountDown(float startSeconds) {
+    this->m_CountdownStart = startSeconds;
+}
+```
+
+**GetCountDown** (0x00162134)
+```c
+float TimeControl::GetCountDown() const {
+    if (g_GameData.gameMode != 2 /*Arcade*/ && !IsMultiplayer())
+        return 60.9f;
+    return this->m_CountdownStart;
+}
+```
+
+**AddTime** (0x001204f0)
+```c
+void TimeControl::AddTime(float delta) {
+    this->m_TimeRemaining += delta;
+}
+```
+
+**Reset** (0x00162168)
+```c
+void TimeControl::Reset() {
+    this->m_PowerupOverlay[0] = '\0';
+    float startSecs = this->m_CountdownStart;
+    if (startSecs < 0.0f) startSecs = 0.0f;
+    this->m_TimeRemaining = startSecs;
+    if (g_GameData.gameMode == 2 /*Arcade*/ || IsMultiplayer()) {
+        this->m_TimeRemaining = 60.9f;
+        FruitSaveData* sd = g_GameData.pSaveData;
+        if (sd[0x10C] == 0.0 && g_GameData.cameraTransition < 0.0f)
+            sd[0x10C] = 60.9f;
+    }
+    this->m_TickFrame = 0.0f;
+    this->base.m_DrawColour = white;
+}
+```
+
+**Update** (0x001624a4) — **GameOver trigger**
+
+When `m_TimeRemaining < 0.5f`, calls `GameOver(-1, -1.0f, -1)`.
+
+**Behavior:**
+- Ticks `m_TickFrame` (cycles 0..5.5, resets on wrap)
+- Visual flash at 8/4/2 Hz as time runs low (red tint when m_TimeRemaining in ranges: 0..10s, 0..5s, 0..2s)
+- Plays Tick/Tock SFX for time in range 0..11s (calls once per phase)
+- Writes `m_TimeRemaining` to `FruitSaveData[0x10C]` for save persistence
+- **GameOver trigger:** if `m_TimeRemaining < 0.5f` and `pauseFlag == 0`, calls `GameOver(-1, -1.0f, -1)`
+
+**Draw** (0x001628d8)
+
+Uses `g_GameData.pFontNumbers` (at g_GameData+0x58, loaded from `fonts/fruit_ninja_numbers.fnt`).
+Formats text via `OS_SPrintf("%i:%02i", min, sec)` into `m_TextBuffer`.
+Tick-tock visual indicator (`m_SecondaryTex`) is dead code — never assigned a texture.
+
+#### Countdown Values
+
+- **GameInit** calls `CountDown(90.9)` — initial value for Zen mode
+- **Arcade mode:** forced via `Reset()` override to 60.9s
+- **Zen mode:** 90.9s (from GameInit call)
+- **Other modes:** hidden via `m_LayerFlags=0`
+
+#### DAT Pool (Constants)
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_001621e8 | 0.0 | reset sentinel |
+| DAT_001621ec | 60.9 | Arcade/MP starting time |
+| DAT_001622d4 | 0.0 | ctor pos.z |
+| DAT_001622d8 | 320.0 | ctor screen height |
+| DAT_001622dc | 480.0 | ctor screen width |
+| DAT_0016215c | 60.9 | GetCountDown fallback |
+| DAT_0016c9cc | 90.9 | GameInit-supplied countdown (Zen) |
+| DAT_001627a0 | 0.0 | timer reset on game over |
+| DAT_00162b04 | -0.6 | text x-multiplier of size.x |
+| DAT_00162b08 | 0.0 | DrawString z arg |
+| DAT_00162b0c | 32.0 | powerup overlay y-offset |
+| DAT_001628c4 | 60.0 | seconds-per-minute divisor |
+| DAT_001628c8 | 64.0 | MP X anchor multiplier |
+| DAT_001628cc | 320.0 | layout screen-height |
+| GOT-rel "+%i" | 0x001BC298 | powerup overlay format |
+| GOT-rel "time-up" | 0x001B972B | time expired SFX name |
+| GOT-rel "Time-tock" | 0x001BC29C | SFX ID (lo phase) |
+| GOT-rel "Time-tick" | 0x001BC2A6 | SFX ID (hi phase) |
+| GOT-rel "%i:%02i" | 0x001BC2B0 | printf format string |
+
+---
+
 ### MissControl : HUDControl3d : HUDControl (combo text display)
 
 | Offset | Type | Name | Notes |

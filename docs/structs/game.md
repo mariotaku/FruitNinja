@@ -243,6 +243,7 @@ Accessed from GOT-relative pointer in nearly every game function.
 | +0x174 | 4 | int | fruitTotal | AddToCurrentScore: last AddToTotal result |
 | +0x178 | 4 | CoinCounter* | pCoinCounter | GameInit: `operator_new(0xd4)` |
 | +0x17C | 12 | SmartPtr\<Texture\> | pLocalisedTexture | _GLOBAL__I_Game.cpp: SmartPtr ctor; GameInitialise: LoadLocalisedTexture; GameDestroy: SetPtr(null) |
+| +0x180 | 4 | TimeControl* | pTimeCtrl | GameInit: `operator_new(0x108)`, displays countdown timer for Arcade/Zen modes |
 | +0x188 | 4 | GameSound* | pGameSound | GameDestroy: `*(+0x188)` dtor + delete; AddToCurrentScore: SFXPlay via this; HitBomb: SFXPlay |
 | +0x18C | 4 | int | m_licensedState | Game::SetAppLicensed / Game::GetAppLicensedState access this; SetupGameWork: cleared to 0 |
 | +0x190 | 4 | | (gap) | |
