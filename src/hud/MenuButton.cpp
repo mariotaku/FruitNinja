@@ -410,10 +410,28 @@ void MenuButton::Update(float dt) {
             // Released path is split by entity type — the binary has two
             // distinct sub-paths gated by m_FruitType < FruitInfo_GetCount().
             if (m_pEntity->entityType == 0) {
-                // ASM-verified: 2026-04-28T00:00 binary @ 0x0014e74a..0x0014e7ec (asm-inspector)
+                // ASM-verified: 2026-04-30 binary @ 0x0014e74a..0x0014e7ec (asm-inspector)
                 // --- Fruit branch (binary 0x0014e74a..0x0014e7ec) ---
-                // relVel = entity->vel - entity->m_SecondVel  (+0x1c - +0xc4)
-                // DAT_0014e978 = 0x3a83126f = 0.001f threshold
+                //
+                // Structure (per ARM trace; Ghidra's nested-if obscures it):
+                //   entity->m_HalfB_pos = pos          // unconditional
+                //   if (entity->m_bSliced != 0) {
+                //       Vec3 diff = entity->vel - entity->m_HalfB_vel
+                //       if (|diff|^2 > 0.001f) {
+                //           click callback; ResetTutePos; restore scale;
+                //           if (vel.x==0 && vel.y==0) m_bDrawWhole = 1
+                //           if (m_bEnabled) ClearMenuItems + OnMenuItemsCleared
+                //       }
+                //       m_pEntity = nullptr;            // UNCONDITIONAL after gate
+                //   }
+                //
+                // The gate-fail path (sibling fruit released by ClearMenuItems
+                // — its vel == m_HalfB_vel after the cascade write, so diff = 0)
+                // SKIPS the click + ClearMenuItems but still detaches the
+                // entity, so the m_pEntity == null branch above starts the
+                // FadeCounter shrink next frame. Previously port wrapped the
+                // detach inside the gate, leaving siblings pinned to their
+                // entity forever.
                 Vec3 relVel = m_pEntity->vel;
                 if (m_pFruitPiece) {
                     relVel.x -= m_pFruitPiece->m_SecondVel.x;
@@ -423,10 +441,10 @@ void MenuButton::Update(float dt) {
                 const float relVelSqMag = relVel.x * relVel.x +
                                           relVel.y * relVel.y +
                                           relVel.z * relVel.z;
+
+                // DAT_0014e978 = 0x3a83126f = 0.001f
                 if (relVelSqMag > 0.001f) {
                     // Binary @ 0x0014e76c: Delegate0::operator()(&field7_0x88).
-                    // Binary has no m_bRemovalPending gate — the click delegate
-                    // fires unconditionally if non-null.
                     if (m_ClickCallback) {
                         auto cb = m_ClickCallback;
                         m_ClickCallback = nullptr;
@@ -448,13 +466,12 @@ void MenuButton::Update(float dt) {
                         FN::ClearMenuItems();
                         // TODO: MainScreen::OnMenuItemsCleared not yet ported
                     }
-                    // Binary @ 0x0014e7e8: detach entity. Keep m_pFruitPiece
-                    // valid so the AFTER_CALLBACK shrink path can scale it
-                    // alongside the ring (binary keeps the fruit pointer;
-                    // only the abstract m_pEntity ref is cleared).
-                    m_pEntity = nullptr;
-                    m_FadeCounter = 0x3ffc;
                 }
+                // Binary @ 0x0014e7ec: detach unconditionally inside the
+                // m_bSliced branch. m_pFruitPiece stays valid so the
+                // m_pEntity==null shrink branch can keep scaling the fruit
+                // alongside the ring.
+                m_pEntity = nullptr;
             } else {
                 // --- Bomb branch (binary @ 0x0014e740 region) ---
                 // Bombs do NOT fire MenuButton's click callback or call
@@ -484,10 +501,10 @@ void MenuButton::Update(float dt) {
     }
 
     if (m_pEntity == nullptr && m_FadeCounter > 0) {
-        // Shrink-to-disappearance phase. Binary DAT_0014e97c = 108543.0
-        // is the per-second decrement rate; over a 60Hz tick that's
-        // ~1809 counts/frame -> ~9 frames from 0x3ffc to 0.
-        m_FadeCounter -= (int)(dt * 108543.0f);
+        // Shrink-to-disappearance phase. Binary DAT_0014e97c = 109200.0
+        // (0x47d547ff). Per-second decrement rate; over a 60Hz tick that's
+        // ~1820 counts/frame -> ~9 frames from 0x3ffc (16380) to 0.
+        m_FadeCounter -= (int)(dt * 109200.0f);
         if (m_FadeCounter < 1) {
             m_FadeCounter = 0;
             m_bPendingRemoval = 1;

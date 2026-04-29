@@ -133,6 +133,125 @@ if (fruitType >= 0) {
 | MakeCritical | 0x00151764 | — | Display "critical" overlay at slice point; position, fade, animate |
 | MakeRare | 0x001518d8 | — | Display "rare" (special) overlay; same as critical but alpha=0.5 |
 
+### Released-branch / cascade detach (in `MenuButton::Update` @ 0x0014e74a..0x0014e7f2)
+
+<!-- RE'd: 2026-04-29 (binary @ 0x0014e74a..0x0014e7f2) -->
+
+This is the path the m_pEntity-non-null fruit branch takes when the
+fruit's `m_bSliced` flag has been set -- either by the user slicing it
+directly (CutManager) or programmatically by `FN::ClearMenuItems`
+(0x0016ac7c) when a sibling button is sliced.
+
+ARM disassembly (offsets relative to MenuButton::Update entry 0x0014e614):
+
+```
+0014e74a: ldrb.w  r6,  [r3, #0xb4]   ; r6 = entity->m_bSliced
+0014e74e: add.w   r12, r3, #0xb8     ; r12 = &entity->m_HalfB_pos
+0014e752: stm     r12, {r0,r1,r2}    ; entity->m_HalfB_pos = button->pos (always)
+0014e756: cmp     r6, #0x0
+0014e758: beq     0x0014e822         ; not sliced -> entity-pin path
+0014e75a: add     r6,  sp, #0x5c     ; r6 = &diff (Vec3 result)
+0014e75c: add.w   r2,  r3, #0xc4     ; r2 = &entity->m_HalfB_vel
+0014e760: add.w   r1,  r3, #0x1c     ; r1 = &entity->vel
+0014e764: mov     r0,  r6
+0014e766: blx     Vec3::operator-    ; diff = vel - m_HalfB_vel
+0014e76a: mov     r0,  r6
+0014e76c: blx     Vec3::MagnitudeSqr
+0014e770: vldr.32 s15, [pc, ...]     ; s15 = DAT_0014e978 = 0.001f
+0014e774: vcmpe.f32 s0, s15
+0014e77c: ble     0x0014e7ec         ; |diff|^2 <= 0.001 -> SKIP click block
+0014e77e: ...                        ; click delegate, ResetTutePos, restore scale,
+0014e7d4: ldrb.w  r3,  [r4, #0x123]  ; r3 = m_bEnabled
+0014e7d8: cbz     r3,  0x0014e7ec
+0014e7da: blx     ClearMenuItems
+0014e7de: ...                        ; MainScreen::OnMenuItemsCleared (gated)
+0014e7ec: movs    r3,  #0x0
+0014e7ee: str.w   r3,  [r4, #0x80]   ; this->m_pEntity = nullptr   <-- ALWAYS!
+0014e7f2: b       0x0014e822         ; jump into FadeCounter ramp
+```
+
+**Critical structural finding**: the `m_pEntity = nullptr` write at
+0x0014e7ec is the common landing site for both the gate-pass branch
+and the gate-fail branch. Once `m_bSliced != 0`, the detach happens
+unconditionally; the velocity-magnitude gate only governs whether the
+click delegate / `ClearMenuItems` runs.
+
+C-equivalent:
+
+```c
+// always (m_pEntity != nullptr branch, fruit type)
+entity->m_HalfB_pos = button->pos;
+
+if (entity->m_bSliced) {
+    Vec3 diff = entity->vel - entity->m_HalfB_vel;     // +0x1c minus +0xc4
+    if (diff.x*diff.x + diff.y*diff.y + diff.z*diff.z > 0.001f) {
+        m_ClickCallback();                              // user-slice only
+        TutorialControl::ResetTutePos(...);
+        m_pEntity->scale = m_HitBoundsScale;            // restore
+        if (m_pFruitPiece && m_pFruitPiece->type == 0
+            && m_pFruitPiece->vel.x == 0 && m_pFruitPiece->vel.y == 0)
+            m_pFruitPiece->m_bDrawWhole = 1;
+        if (m_bEnabled) {
+            ClearMenuItems();
+            if (g_MainScreen->m_OnClearedCallback)
+                MainScreen::OnMenuItemsCleared();
+        }
+    }
+    m_pEntity = nullptr;                                // unconditional detach
+    // falls through to FadeCounter ramp at LAB_0014e822 (continues
+    // *increasing* m_FadeCounter toward 0x3ffc; the *shrink* phase
+    // runs the next frame from the m_pEntity == nullptr path).
+}
+```
+
+### Cascade flow (sibling release)
+
+When the user slices a single menu fruit (button A):
+
+1. **Frame N (user slash)**: Fruit A's `m_bSliced` is set by CutManager,
+   and Fruit::Update splits velocities so `vel != m_HalfB_vel`. In
+   button A's `MenuButton::Update`, the gate `|vel - m_HalfB_vel|^2 >
+   0.001` passes -- click fires, `ClearMenuItems` runs, button A's
+   `m_pEntity = nullptr`.
+
+2. **Inside `ClearMenuItems`**: every other active fruit gets
+   `m_bSliced = 1`, an outward velocity, and **the same vector copied
+   into `m_HalfB_vel`** (so `vel == m_HalfB_vel`).
+
+3. **Frame N+1**: each sibling button's `MenuButton::Update` enters the
+   released branch (`m_bSliced != 0`). The gate **fails** because
+   `vel - m_HalfB_vel = 0`. That is intentional: the gate-pass block
+   (click + ClearMenuItems) is for user-slice only and would re-enter
+   `ClearMenuItems` recursively if it ran. The unconditional
+   `m_pEntity = nullptr` at 0x0014e7ec still fires, detaching the
+   entity. The sibling fruits then fly off under their own (Fruit::Update)
+   physics + the outward velocity ClearMenuItems wrote.
+
+4. **Frame N+2..N+M**: m_pEntity is null -> the shrink path
+   (`m_FadeCounter -= dt * 109200.0f`) runs, scaling `size` and
+   (for stationary fruit pieces) `m_pFruitPiece->scale` toward 0
+   over ~9 frames. When `m_FadeCounter < 1`, `m_bPendingRemoval = 1`
+   so HUD::CullDeleted removes the button.
+
+DAT constants:
+
+| Address | Value | Use |
+|---------|-------|-----|
+| `DAT_0014e978` | `0x3a83126f` = `0.001f` | Released-branch gate threshold (|relVel|² > this) |
+| `DAT_0014e97c` | `0x47d547ff` = `109200.0f` | FadeCounter ramp rate (counts/sec) |
+| `DAT_0014e980` | `0x467ff000` = `16380.0f` | FadeCounter saturation cap (= 0x3ffc) |
+| `DAT_0014e970` | `0.0f` | Generic 0.0 reset literal |
+| `DAT_0016ad9c` | `0.0f` | vel.z constant in `ClearMenuItems` Vec3 ctor |
+
+Bomb branch (when `m_FruitType >= bombThreshold`) is structurally
+different and lives at 0x0014e7f4..0x0014e81e. It does NOT call
+`ClearMenuItems`; the detach gate is purely `Bomb::Enabled() == 0`
+(once the user-touch click handler / Bomb::Hit clears the
+collision-guard byte, the menu button detaches).
+
+See `docs/engine/clear-menu-items.md` for the full `ClearMenuItems`
+spec.
+
 ### "New item" star indicator (m_NewIndicatorTimer @ +0xFC)
 
 <!-- RE'd: 2026-04-29 -->
