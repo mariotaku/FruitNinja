@@ -58,7 +58,7 @@ Loading is guarded by a one-time flag at BSS offset `draw_base + DAT_0012ed94 + 
 
 ```
 if (s_TexSensei.IsValid() AND m_pOFNButton == nullptr):
-    create MenuButton at (0, 480, 0) with AskUserToChoosePreferredNetwork callback
+    create MenuButton at (480, 0, 0) with AskUserToChoosePreferredNetwork callback
     store in m_pOFNButton (field121_0x94)
     texture from openfeint_gamecenter.tex
     sound callback: MenuCallbackClicked
@@ -185,7 +185,7 @@ like blocks A-C). Port uses `Renderer::DrawQuad` for all blocks.
 | `ALPHA_OUT_DONE` | 0.001 | DAT_0012f328 = 0x3A83126F |
 | `POS_BACK_BUTTON` | (185, -106, 0) | DAT_0012f300/f304 |
 | `BACK_SCALE` | 0.825 | DAT_0012e6e8 = 0x3F533333 |
-| `POS_OFN_BUTTON` | (0, 480, 0) | DAT_0012f2f4/f2f8 |
+| `POS_OFN_BUTTON` | (480, 0, 0) | DAT_0012f2f8/f2f4 |
 | `BG_X` | -50 | DAT_0012f698 |
 | `BG_Y_CACHE` | 160 | DAT_0012f690 |
 | `BG_Y_REST` | 63 | DAT_0012f694 |

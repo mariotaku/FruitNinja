@@ -293,12 +293,14 @@ void AboutScreen::RemoveBackButton()
 
 // -----------------------------------------------------------------------
 // AboutScreen::Update  @ 0x0012f020
+// ASM-verified: 2026-04-29 binary @ 0x0012f020..0x0012f360 (asm-inspector)
+// State machine + transitions + animation formulas all match.
 // -----------------------------------------------------------------------
 void AboutScreen::Update(float /*dt*/)
 {
     // ---- OFN button creation (defunct — OpenFeint/GameCenter) ----
     // Binary: if (s_TexSensei valid AND m_pOFNButton == nullptr):
-    //   create OFN button at (0, 480, 0) with AskUserToChoosePreferredNetwork
+    //   create OFN button at (480, 0, 0) with AskUserToChoosePreferredNetwork
     //   callback and openfeint_gamecenter.tex texture.
     // Port: s_TexSensei is the sensei animation tex, not the OFN tex.
     //       OFN is defunct so we never create this button.
@@ -347,14 +349,12 @@ void AboutScreen::Update(float /*dt*/)
         // Binary ARM idiom: bpl 0x0012f35a fires when NOT (alpha < 0.001),
         // so the block runs when alpha IS < 0.001 i.e. fade complete.
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
-            // Binary @ 0x0012f350: ldr r3, [r3, #0x10] — vtable slot 4 = Reset.
-            // DojoScreen doesn't override Reset; HUDControl::Reset is a no-op
-            // in the binary. The port calls Init() instead — necessary to bring
-            // DojoScreen back to state 0 (binary may rely on a different recovery
-            // path that isn't yet RE'd). DIFFERS: keep until DojoScreen state-3
-            // post-removal flow is RE'd.
+            // Binary @ 0x0012f350: parent->vtable[+0x10] = Reset().
+            // DojoScreen::Reset @ 0x0013767c writes only the BaseScreen
+            // m_State field to 0, bringing DojoScreen back to its state 0
+            // (re-fade-in). ASM-verified 2026-04-29.
             if (m_pParent) {
-                m_pParent->Init();
+                m_pParent->Reset();
             }
             m_bPendingRemoval = 1;
         }
@@ -374,6 +374,9 @@ void AboutScreen::Update(float /*dt*/)
 //   C) credits tex              (s_TexCredits) — slides up from bottom
 //   D) sensei tex               (s_TexSensei)  — slides in from right
 // -----------------------------------------------------------------------
+// ASM-verified: 2026-04-29 binary @ 0x0012f394..0x0012f8d2 (asm-inspector)
+// All 4 draw blocks (haiku panel / OFN overlay / credits slide / sensei
+// slide) and their Y/X interpolation formulas match the binary.
 void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
 {
     // Layer check and alpha guard

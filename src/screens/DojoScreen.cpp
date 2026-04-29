@@ -126,6 +126,16 @@ void DojoScreen::Init() {
     m_bActive = 1;
 }
 
+// Matches DojoScreen::Reset @ 0x0013767c (vtable slot +0x10).
+// Binary writes only the BaseScreen::m_State (+0x90) field to 0 — used
+// when AboutScreen completes its fade-out and wants DojoScreen to
+// re-fade-in. Init() is more eager (also zeros alpha + sets active);
+// at the AboutScreen-state-2 callsite the alpha is already <0.001 and
+// m_bActive was never cleared, so Init's extras are no-ops there.
+void DojoScreen::Reset() {
+    m_State = 0;
+}
+
 // ===================================================================
 // HUDControl::Release override
 // Matches the Release() called from ~DojoScreen @ 0x00137cf4
