@@ -64,9 +64,13 @@ field on `HUDControl3d`.
 | Loaded asset path | `"scratchs.tex"` | String at `0x001bbd58` (LoadContent's first `LoadLocalisedTexture` call) |
 
 LoadContent's three textures (in order) are: `scratchs.tex`,
-`new_item.tex`, `hud_cross.tex`. **scratchs.tex is the menu-button
-scratch backdrop**; the other two are the "new" star and a cross icon
-already known to Phase B.
+`blurry_backing.tex`, `new_item.tex`. **scratchs.tex is the menu-button
+scratch backdrop**; `blurry_backing.tex` is the Layer-3 sparkle-ring
+texture (dead code in Bada build — see gameplay-misc.md); `new_item.tex`
+is the "NEW" stamp star. RE-confirmed 2026-04-29 from literal pool
+0x0014f6f4..0x0014f704 -> string addresses 0x001bbd58 / 0x001baefa /
+0x001bbd65. (The earlier note mentioning `hud_cross.tex` here was
+incorrect — that texture is loaded elsewhere.)
 
 `Texture::Set(*scratchs)` is called at the start of the block;
 `Texture::UnSet(*scratchs)` is called via 0x00103848 at the end.

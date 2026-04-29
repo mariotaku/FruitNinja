@@ -78,10 +78,16 @@ public:
     // +0x100: hit-test bounds scale from constructor
     Vec3 m_HitBoundsScale;
 
-    // +0x114, +0x118: text labels (original: BakedString*)
-    // TODO: implement BakedString
-    void* m_pLabel1;
-    void* m_pLabel2;
+    // +0x114, +0x118: text labels (original: BakedString* fg / shadow).
+    // RE'd 2026-04-29: MenuButton::SetText (0x0014ebc0) is the only
+    // writer, and the binary contains ZERO call sites for it. Both
+    // pointers are always NULL at runtime; the label-render block in
+    // MenuButton::Draw (0x0015015e..0x0015020a) is dead code in the
+    // shipped Bada build. The port intentionally does not render labels.
+    // See docs/engine/baked-string.md for the BakedString spec if a
+    // reused-elsewhere consumer surfaces.
+    void* m_pLabel1;   // dead in shipped binary
+    void* m_pLabel2;   // dead in shipped binary
 
     // +0x11C: for multiplayer colour tint
     int m_PlayerIndex;
