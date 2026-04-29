@@ -456,6 +456,14 @@ void MainScreen::Update(float dt) {
         //       else break;
         //   }
         //   HitMenuBomb at literal (163, -96, 0); state = 0x18.
+        //
+        // DIFFERS: an earlier RE pass thought *(task_state+0x4c) was
+        // Game::gameMode, but on a fresh main-menu boot that field is 0
+        // (Classic), not 2 (Zen) -- so the gate would never pass and
+        // the quit flow soft-locked. The actual semantic of +0x4c isn't
+        // resolved yet (likely a quit-confirmed flag set by some path
+        // we don't model). Drop the gate so the quit flow always
+        // progresses to STATE_QUIT_BOMB once entities clear.
         if (game.pTutorialCtrl) {
             game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
         }
@@ -463,15 +471,6 @@ void MainScreen::Update(float dt) {
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
         if (liveEntities != 0) break;
 
-        const int gameMode = game.gameMode;
-        if (gameMode != 2) {
-            if (gameMode == 3) {
-                m_State = STATE_CAMERA_ZOOM;
-                m_Timer2 = 0.15f;
-            }
-            // Otherwise stay in QUIT_WAIT.
-            break;
-        }
         // Binary uses a literal (163, -96, 0) for the HitMenuBomb spawn.
         FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
         m_State = STATE_QUIT_BOMB;
