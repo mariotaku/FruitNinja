@@ -178,7 +178,7 @@ Buttons are drawn separately by HUD::Draw (they're added as HUDControls).
 | State | Enum | Purpose | Transition |
 |-------|------|---------|------------|
 | **0** | `CAMERA_ZOOM` | Camera zoom-in from splash. Creates sound/music toggles, Play + Dojo buttons. Lerps camera to -1.0 (rate 0.125). | → `CREATE_BUTTONS` |
-| **1** | `CREATE_BUTTONS` | Creates Leaderboard/MoreGames buttons. Checks `ItemManager::AreNewItems()` for "new" badge. Active menu. | (stays) |
+| **1** | `CREATE_BUTTONS` | Creates Bomb-Quit button (only). Refreshes Dojo "new" badge each frame. Lerps camera→-1.0 @ 0.125. Animates `pos.y` from `HUD->m_CameraTransition`. | (stays — exits via button callbacks only) |
 | **2** | `GAME_START` | Direct game start. Camera > 0.999: reset WaveManager. Decays camera ×0.75. | → `CAMERA_FADE` |
 | **3, 4** | `DOJO_WAIT_A/B` | Wait for `ActorManager::GetNumEntities() == 0`, decay timer2 ×0.75. Create `DojoScreen`. | → (screen) |
 | **8** | `SLIDE_IN` | Slide-in return. Lerps timer2 → 1.0, then accumulates dt. After 1.5s reset. | → `CAMERA_ZOOM` |
@@ -191,6 +191,72 @@ Buttons are drawn separately by HUD::Draw (they're added as HUDControls).
 | **0x15, 0x16** | `DOJO_WAIT_C/D` | Wait for entities variant (same as 3/4 logic). | → (screen) |
 | **0x17** | `QUIT_WAIT` | Reset tutorial. Wait for entities. If field +0x4c == 2: HitMenuBomb. | → `QUIT_BOMB` or `CAMERA_ZOOM` |
 | **0x18** | `QUIT_BOMB` | BombFlash → `SystemManager::QuitGame()`. | → (exit) |
+
+### State 1 (`CREATE_BUTTONS`) detail — 0x0014bbe2..0x0014bdf2
+
+**Per-frame:**
+```
+if (m_pDojoButton)
+    m_pDojoButton->SetNewSymbol(ItemManager::GetInstance()->AreNewItems());
+```
+
+**Lazy creation (gated `m_pLeaderboardBtn == NULL`):** only the **Bomb-Quit** button is created.
+
+| Param | Value |
+|---|---|
+| Texture | `m_TexQuit` |
+| Position | `(182.0, -106.0, 0.0)` |
+| Click delegate | `MainScreen::QuitGamesCallback` (0x0014b1a0, GOT[0x75e8]) |
+| Fruit type | `**(int**)(GOT+0x7060)` = `FruitInfo_GetCount()` (bomb sentinel = `*g_pFruitInfo`) |
+| Initial size | `Vec3::Zero()` |
+| Miss callback | shared `MakeDelegate_MissControl()` |
+
+Post-ctor field-write order:
+1. `m_bRespondsToBackKey = 1` (offset +0x138, **before** Init)
+2. `vtable->Init(this)`
+3. `m_TargetSize *= 1.0f` (no-op)
+4. `m_pFruitPiece->scale *= 1.0f` (no-op)
+5. Build `Delegate1<HUDControl*>` release-handler at `base+0x38` (fn ptr GOT[0x76b4])
+6. `HUD::AddControl(Game->m_pHUD, btn, false)` (Game ptr at GOT[0x7990])
+
+`SetNewSymbol(false)` is **NOT** called on the Quit button.
+
+**More-Games button = dead code.** The decompiler shows a second `if (pLeaderboardBtn==NULL)` block with `m_TexMoreGames`, position `(182.0, -106.0, 0.0)` (same coords), `Fruit::FruitType("kiwifruit", false)`, and click cb `MoreGamesCallback` (0x0014b000, GOT[0x77dc]). Disassembly at 0x0014bc1c–0x0014bc22 shows both blocks store to the same field offset +0xA4, so the second block's gate is always false after the first creates the Quit button. Implementer should NOT port a second button — this is shipped dead code.
+
+**Camera lerp (every frame):**
+```
+hud = GOT[0x7990];   // Game->m_pHUD
+if (hud->m_CameraTransition >= -0.99902344)
+    hud->m_CameraTransition += (-1.0 - hud->m_CameraTransition) * 0.125;
+else
+    hud->m_CameraTransition = -1.0;
+```
+
+**`pos.y` animation (every frame):** inline, NOT shared with `LAB_0014c166`. Alpha source = HUD `m_CameraTransition` (NOT `m_Timer2`).
+```
+h = base.size.y;
+t = -hud->m_CameraTransition;       // transitionTimer
+base.pos = Vec3(0.0, (h + 320.0 + h*t*-2.0) * 0.5, 0.0);
+```
+
+**State exit:** none automatic — only via button-click callbacks (Play→8, Dojo→3, Quit→0x17, Leaderboard→9/10).
+
+**Resolved DATs:**
+
+| Symbol | Addr | Value | Use |
+|---|---|---|---|
+| LEADERBOARD_BTN_POS_X | 0x0014be?? | 182.0 | Quit button X |
+| LEADERBOARD_BTN_POS_Y | 0x0014be?? | -106.0 | Quit button Y |
+| DAT_0014bb64 | 0x0014bb64 | 0.0 | shared Z |
+| DAT_0014bb90 | 0x0014bb90 | GOT[0x75e8] | -> QuitGamesCallback |
+| DAT_0014bb94 | 0x0014bb94 | GOT[0x7060] | -> &g_pFruitInfo |
+| DAT_0014befc..bf04 | 0x0014befc | (182, -106, 0) | dead-code MoreGames pos |
+| DAT_0014bf08 | 0x0014bf08 | 320.0 | screen-height pos.y offset |
+| DAT_0014bf0c | 0x0014bf0c | -0.99902344 | camera lerp threshold |
+| DAT_0014bf18 | 0x0014bf18 | GOT[0x76b4] | HUDControl release fn ptr |
+| DAT_0014bf1c | 0x0014bf1c | GOT[0x7990] | -> Game (deref +0x3c -> HUD) |
+| DAT_0014bf20 | 0x0014bf20 | GOT[0x77dc] | dead -> MoreGamesCallback |
+| DAT_0014bf24 | 0x0014bf24 | GOT-rel | dead -> "kiwifruit" |
 
 ### Position Update (end of Update, all states)
 

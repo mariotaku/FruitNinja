@@ -80,6 +80,162 @@ State 3 fade uses literal `0.75f` in the decompile (not a DAT constant).
 | 6 | Same as 5. |
 | 7 | Transition out (alternate): `alpha *= 0.85`. Does NOT trigger mainScreen transition. |
 
+### Splat-Pool X-Shift on Alpha-Decrease (0x0015ea50 .. 0x0015eabe)
+
+After the state switch and the `m_pListMenu` slide block, `Update` runs a tail loop
+that nudges every active **SplatEntity** along its X axis whenever
+`m_TransitionAlpha` decreased between this frame and last. **This is NOT a
+`HUD::m_Controls` walk** -- the verification report hypothesis was wrong.
+The list iterated is the global SplatEntity pool, the same one populated by
+`SplatEntity::CreatePool` / `GetFree` / `RemoveAllSplats`.
+
+#### Loop bounds (resolved DAT pool)
+
+The loop pseudo-disasm at 0x0015ea54-0x0015ea60:
+
+```
+ldr r3, [0x0015eaf8]   ; r3 = 0x000079e0  (GOT offset to splat-pool ptr-of-ptr)
+ldr r1, [0x0015eafc]   ; r1 = 0x000078a0  (GOT offset to splat-pool count ptr-of-ptr)
+ldr r3, [r5, r3]       ; r3 = *(GOT+0x79e0) = 0x0026891C
+ldr r1, [r5, r1]       ; r1 = *(GOT+0x78a0) = 0x00268920
+ldr r3, [r3, #0x0]     ; r3 = *(0x0026891C) = base of SplatEntity[] array
+ldr r1, [r1, #0x0]     ; r1 = *(0x00268920) = pool count
+```
+
+`0x0026891C` and `0x00268920` are exactly the `.bss` pair updated by
+`SplatEntity::CreatePool` (xrefs include `RemoveAllSplats`, `DrawActiveSplats`,
+`UpdateActiveSplats`, `GetFree`, `CleanUp`). Stride is **0x78 (120 bytes)** =
+`sizeof(SplatEntity)`, matching `adds r3,#0x78` in the loop.
+
+#### Per-entity filter
+
+```
+if (entity->m_bActive [+0x75] != 0  &&
+    entity->m_SplatType [+0x70] >= 0)        // signed >= 0
+    apply shift;
+```
+
+Both fields are part of the `SplatEntity` struct (already documented at offsets
+117 and 112 in Ghidra's `SplatEntity` layout).
+
+#### Alpha delta (NOT stored on the screen)
+
+`prevAlpha` is **not** a struct field. It is the value of `this->field_0x7c`
+captured into `s18` at function entry (`vldr.32 s18,[r0,#0x7c]` at 0x0015e1fe)
+and saved by the `vpush {d8,d9}` prologue. The loop is gated by:
+
+```
+if (m_TransitionAlpha [+0x7c] < prevAlpha_at_entry)   // s18
+```
+
+i.e. the loop only fires when alpha **decreased** between the value at function
+entry and the value after the state-machine ran. That happens in:
+
+- **State 2 / State 7**: `alpha *= 0.85` (always decreases while alpha > 0).
+- **State 3**: `alpha *= 0.75` (always decreases). However, state 3 also
+  re-creates the back button via `LAB_0015e874` and resets alpha to
+  `DAT_0015e93c = 1.0` on the same frame -- in that frame, alpha increases,
+  so the loop does not fire. Other state-3 frames do fire it.
+- **State 0**: `alpha += (1-alpha)*0.125` -- monotonic increase, never fires.
+- **States 1/4/5/6**: alpha unchanged -- never fires.
+
+Net effect: the loop is the **fade-out splat-shift** for transitions 2/7 (and
+the non-spawning frames of 3).
+
+The delta used is computed in *complement-of-alpha* space:
+
+```
+fade_delta = (1 - m_TransitionAlpha_now) - (1 - prevAlpha_at_entry)
+           = prevAlpha_at_entry - m_TransitionAlpha_now    // strictly positive when loop fires
+```
+
+(Confirmed by 0015ea62 `vsub s15, s14, s15` (1 - now), 0015ea66
+`vsub s18, s14, s18` (1 - prev), 0015ea6a `vsub s18, s15, s18`
+((1-now) - (1-prev)) = prev - now.)
+
+#### X threshold + multipliers (resolved DAT pool 0x0015eae0..0x0015eaec)
+
+Read of memory at those addresses (little-endian floats):
+
+| Address | Bytes | Value | Used as |
+|---|---|---|---|
+| `DAT_0015eae0` | `00 00 be 42` | **95.0f** | Slide-block constant for `m_pListMenu` (x-base offset, see below) |
+| `DAT_0015eae4` | `00 00 91 43` | **290.0f** | Slide-block + splat shift (down-mult) |
+| `DAT_0015eae8` | `00 00 3e 43` | **190.0f** | Splat shift (up-mult) |
+| `DAT_0015eaec` | `00 00 48 42` | **50.0f** | Splat-X threshold |
+| `DAT_0015eaf0` | `90 79 00 00` | GOT off `0x7990` | Game-singleton (states 5/6) -- unrelated |
+| `DAT_0015eaf4` | `b0 79 00 00` | GOT off `0x79b0` | Slide-block target ptr -- unrelated |
+| `DAT_0015eaf8` | `e0 79 00 00` | GOT off `0x79e0` | **Splat-pool array base** ptr-of-ptr |
+| `DAT_0015eafc` | `a0 78 00 00` | GOT off `0x78a0` | **Splat-pool count** ptr-of-ptr |
+
+Note that 290 and 190 are the same constants used in the Block-A1 and
+`m_pListMenu` slide formulas elsewhere in the file (DAT_0015e058, DAT_0015e054
+pair). 290 is also `DAT_0015eae4` reused for both the m_pListMenu slide
+(`(1-alpha)*290*-1.5 - 95` written into m_pListMenu->pos.x at 0x0015ea0e) and
+the splat down-multiplier in this loop.
+
+#### Sign / direction (axis is **m_Pos_x**, which is screen-vertical)
+
+The loop reads/writes `*(float*)(splat + 0x38)`, which per the Ghidra
+`SplatEntity` layout is **`m_Pos_x`** (offset 56 = 0x38). Recall the engine's
+ortho frame: **X = +160 (top of screen) .. -160 (bottom)** (CLAUDE.md). So
+shifting `m_Pos_x` is the on-screen vertical motion of the splat.
+
+```
+fade_delta = prevAlpha - alpha     // > 0 in this branch
+mul_down   = fade_delta * 290.0f * 1.5f
+mul_up     = fade_delta * 190.0f * 1.5f
+
+if (splat.m_Pos_x > 50.0f)         // upper half of screen
+    splat.m_Pos_x += mul_up        // move further toward +X (further up)
+else
+    splat.m_Pos_x -= mul_down      // move further toward -X (further down)
+```
+
+i.e. as the shop fades out, splats above x=50 drift up and splats at/below x=50
+drift down -- the entire splat layer parts away from the centerline so the
+underlying screen behind the shop becomes visible cleanly.
+
+#### Exact pseudocode
+
+```c
+float prevAlpha = this->m_TransitionAlpha;   // captured at function entry
+/* ... state machine runs and may mutate this->m_TransitionAlpha ... */
+/* ... m_pListMenu slide block ... */
+
+if (this->m_TransitionAlpha < prevAlpha) {
+    SplatEntity* splat = SplatEntity::s_Pool;     // **(int*)(GOT+0x79e0)
+    int          count = SplatEntity::s_PoolSize; // **(int*)(GOT+0x78a0)
+
+    float delta = prevAlpha - this->m_TransitionAlpha; // > 0
+    float down  = delta * 290.0f * 1.5f;
+    float up    = delta * 190.0f * 1.5f;
+
+    for (int i = 0; i < count; i++, splat = (SplatEntity*)((char*)splat + 0x78)) {
+        if (!splat->m_bActive)        continue;   // +0x75
+        if ( splat->m_SplatType < 0)  continue;   // +0x70  (signed)
+
+        if (splat->m_Pos_x > 50.0f)
+            splat->m_Pos_x += up;     // +0x38
+        else
+            splat->m_Pos_x -= down;
+    }
+}
+```
+
+#### Port implications
+
+- The current port stub `(void)prevAlpha;` is fine *only* if the port has no
+  splats remaining when the shop transitions out. State 0 calls
+  `SplatEntity::RemoveAllSplats` on entry, so under normal flow the splat pool
+  is empty during 2/7 and the visible effect is nil. **However** if the port
+  ever enters Shop with leftover splats (e.g. quick re-entry, debug paths),
+  this loop is what scatters them off-screen during fade-out. Implement against
+  the SplatEntity pool, not against `game.hud->m_Controls`.
+- Replicating this requires (a) a way to iterate the SplatEntity pool, (b)
+  fields `m_Pos_x`, `m_bActive`, `m_SplatType` (all already exposed in the
+  Ghidra struct).
+
 ### State=8 Write (GameTaskState Transition)
 
 Binary at `0x0015e28c` (in state 2 branch):

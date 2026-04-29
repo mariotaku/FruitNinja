@@ -26,7 +26,7 @@
 #include "math/Vec3.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
-#include <functional>
+#include "util/Delegate.h"
 #include <cstdint>
 
 class MenuButton;
@@ -46,21 +46,21 @@ struct ScreenButton {
     // Called with dt each frame when m_pButton is nullptr.
     // Return true to create the button this frame.
     // Binary default (0x001300e8): always returns true.
-    std::function<bool(float)> m_visCheck;
+    Mortar::Delegate<bool(float)> m_visCheck;
 
     // +0x30 (36 bytes): per-frame update delegate.
     // Called each frame when m_pButton exists.
     // Return true to trigger button removal/shrink.
     // Binary default (0x001300ec): always returns false.
-    std::function<bool(MenuButton*, float, ScreenButton&)> m_updateCb;
+    Mortar::Delegate<bool(MenuButton*, float, ScreenButton&)> m_updateCb;
 
     // +0x54 (36 bytes): on-click callback.
     // Wired as the MenuButton's tap callback.
-    std::function<void()> m_clickCb;
+    Mortar::Delegate<void()> m_clickCb;
 
     // +0x78 (36 bytes): "button deleted" callback.
     // Fired by ControlDeleted when the MenuButton is removed.
-    std::function<void(HUDControl*)> m_deletedCb;
+    Mortar::Delegate<void(HUDControl*)> m_deletedCb;
 
     // +0x9C: button world position
     Vec3 m_pos;

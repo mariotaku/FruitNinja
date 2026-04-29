@@ -184,18 +184,52 @@ void MainScreen::Update(float dt) {
             CreatePlayDojo();
         }
 
-        // Transition to CREATE_BUTTONS when camera settles
+        // Transition to CREATE_BUTTONS when camera settles. Binary checks
+        // `camera < 0` (sign), but the lerp converges to -1 either way.
+        // The Quit button is lazy-created in state 1 itself, not on the
+        // transition (matches binary's "only on first frame of state 1").
         if (m_CameraTransition < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
             m_State = STATE_CREATE_BUTTONS;
-            CreateQuitButton();
         }
         break;
     }
 
-    case STATE_CREATE_BUTTONS:
-        // Active menu state — nothing to do, buttons handle themselves
-        // TODO: check ItemManager::AreNewItems() for "new" badge
+    case STATE_CREATE_BUTTONS: {
+        // Binary @ 0x0014bbe2..0x0014bdf2.
+        //
+        // Per-frame:
+        //   - SetNewSymbol on the dojo button with ItemManager::AreNewItems().
+        //   - Continue camera lerp toward -1.0 at rate 0.125.
+        //   - pos.y animation (inline formula, alpha = m_CameraTransition).
+        //
+        // Lazy creation: only the bomb-Quit button. The decompiler shows a
+        // second "MoreGames" creation block at the same field +0xA4, but
+        // disassembly proves it's unreachable dead code in this build.
+
+        // SetNewSymbol every frame (port stub: ItemManager::AreNewItems
+        // unported — pass false to keep the badge hidden).
+        if (pDojoButton) {
+            pDojoButton->SetNewSymbol(false);
+        }
+
+        // Lazy-create the Quit button on first state-1 frame.
+        if (!pQuitBtn) {
+            CreateQuitButton();
+        }
+
+        // Continue camera lerp toward -1.0 (binary continues state 0's lerp).
+        m_CameraTransition += (-1.0f - m_CameraTransition) * CAMERA_LERP_RATE;
+
+        // pos.y animation: alpha = m_CameraTransition (negative). Binary
+        // formula: pos.y = (size.y + 320 + size.y * (-cameraTransition) * -2) * 0.5
+        //                 = (size.y + 320 - 2*size.y*(-cameraTransition)) * 0.5.
+        // At cameraTransition = -1: pos.y = (size.y + 320 - 2*size.y) * 0.5
+        //                                 = (320 - size.y) * 0.5.
+        const float sizeY_1 = size.y;
+        const float alpha_1 = -m_CameraTransition;     // 0..1 as zoom completes
+        pos.y = (sizeY_1 + 320.0f - 2.0f * sizeY_1 * alpha_1) * 0.5f;
         break;
+    }
 
     case STATE_GAME_START: {
         // Binary @ 0x0014bb58 case 2:
@@ -812,6 +846,8 @@ void MainScreen::CreateQuitButton() {
     pQuitBtn = new MenuButton();
     pQuitBtn->m_Texture = TexId(m_TexQuit);
     pQuitBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
+    // Binary: m_bRespondsToBackKey set to 1 BEFORE Init.
+    pQuitBtn->m_bRespondsToBackKey = 1;
     // Binary: fruitType = *g_pFruitInfo = fruitCount (>= count → Bomb entity via MenuButton)
     int fruitCount = FruitInfo_GetCount();
     pQuitBtn->Init(POS_QUIT,
