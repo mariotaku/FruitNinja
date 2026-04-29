@@ -441,9 +441,17 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
             mm.GetWorldStack().Reset();
             mm.UploadModelViewOnly();
 
+            // Scale: glyphs are normalised by lineHeight (= 24 px for
+            // font_fruit_ninja), so 1.0 = 1 unit (= 1 pixel post-projection)
+            // and is invisibly small. The binary's actual scale value at
+            // this site isn't yet RE'd; use 16.0 as a sensible default
+            // matching this font's "small label" use elsewhere
+            // (ShopListItem cost/desc range 16-18). DIFFERS: replace once
+            // the binary value is verified.
+            const float versionScale = 16.0f;
             const Vec3 fontPos(FONT_X, yDrawn + FONT_TEXT_Y_OFFSET - 10.0f, 0.0f);
             const Colour fontColour(0x74, 0x5D, 0x3C, 255);
-            game.pFontMain->DrawString(1.0f, FONT_MAX_W, 0.0f,
+            game.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
                                        GetVersionString(), fontPos,
                                        fontColour, Mortar::FONT_ALIGN_LEFT);
         }
