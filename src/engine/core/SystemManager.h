@@ -41,6 +41,13 @@ public:
     int16_t GetAvgFPS() const { return m_AvgFPS; }
     int16_t GetMinFPS() const { return m_MinFPS; }
     int16_t GetMaxFPS() const { return m_MaxFPS; }
+
+    // m_QuitState polled by MainScreen STATE_QUIT_WAIT (binary @ 0x0014c09e).
+    // 0/1 = OS quit dialog pending; 2 = OS confirmed quit -> proceed; 3 =
+    // OS dismissed/cancelled -> reset MainScreen to state 0. On platforms
+    // without an OS quit dialog (SDL desktop / webOS) RequestQuit jumps
+    // straight to 2.
+    uint8_t GetQuitState() const { return m_QuitState; }
 };
 
 } // namespace Mortar
