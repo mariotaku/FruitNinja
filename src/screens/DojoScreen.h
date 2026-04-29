@@ -43,6 +43,7 @@ public:
     // HUDControl overrides
     void Init() override;
     void Release() override;
+    void Reset() override;
     void Update(float dt) override;
     void Draw(const Vec3& hudScale, int layerMask) override;
     int  GetType() override { return 1; }
