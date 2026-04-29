@@ -17,9 +17,24 @@
 #include "entities/FruitInfo.h"
 #include "entities/ActorManager.h"
 #include "input/Touch.h"
+#include "asset/TextureManager.h"
+#include "render/Renderer.h"
+#include "render/MatrixManager.h"
+#include "render/gl_funcs.h"
+#include "math/Matrix44.h"
+#include "math/MathUtil.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <cstdint>
+
+// Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
+// Three shared slots in the binary; port has only the new_item one wired
+// because backdrop + sparkle ring renderers aren't implemented yet.
+//   GOT+0x77E0  scratchs.tex          (sparkle ring base — TODO)
+//   GOT+0x79DC  blurry_backing.tex    (sparkle backing — TODO)
+//   GOT+0x7894  new_item.tex          (gold "NEW" stamp — used below)
+static SmartPtr<Mortar::Texture> s_TexNewItem;
 
 // Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
 //   Pass 1 (fruits, type 0):
@@ -146,7 +161,9 @@ MenuButton::MenuButton()
       m_pFruitPiece(nullptr),
       m_bRespondsToBackKey(0),
       m_AnimScale(1.0f),
-      m_BounceParams(0.0f, 0.0f, 0.0f),
+      // m_BounceParams = (0.85, 0.85, 0.0) per binary @ 0x0014f240/0x0014f244.
+      // Drives the new-item star anchor offset (0.425*W, 0.425*H from button centre).
+      m_BounceParams(0.85f, 0.85f, 0.0f),
       m_AnimSpeed2(5.0f),
       m_AnimSpeed(5.0f),
       m_field154(0.0f),
@@ -291,7 +308,17 @@ void MenuButton::Update(float dt) {
     // block — the binary has no such behaviour. See docs/engine/menubutton-138.md.)
 
     // Sparkle timer tick (field_0x2c = m_SparkleTimer — rate × 8.0/s, cap at DAT=8.0)
-    // TODO: full sparkle/new-indicator logic
+    // TODO: full sparkle logic
+
+    // New-item-star timer tick. Binary @ 0x0014e644:
+    //   if (timer >= 0): timer += 2*dt; if (m_SparkleTimer >= 1.0) timer = 0.
+    // The sparkle phase-reset keeps the star and sparkle visually in sync.
+    if (m_NewIndicatorTimer >= 0.0f) {
+        m_NewIndicatorTimer += dt + dt;          // += 2*dt
+        if (m_SparkleTimer >= 1.0f) {
+            m_NewIndicatorTimer = 0.0f;
+        }
+    }
 
     // Rotate button quad: m_Timer accumulates at m_RotationSpeed deg/s (DAT_0014e974=360.0 wrap)
     if (m_FruitType >= 0 && dt > 0.0f) {
@@ -604,11 +631,66 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         HUDControl3d::Draw(hudScale, layerMask);
     }
 
-    // Layer 2: "New item" star indicator — TODO
-    // if (m_NewIndicatorTimer >= 0) { ... SinIdx bounce, dimmed/highlighted ... }
+    // Layer 2: "New item" star indicator. Binary @ 0x0014fd18..0x0014fe98.
+    // Constants verified by re-analyst pass — see docs/structs/gameplay-misc.md.
+    //   Quad: 64 x 32 px, scaled by ratio = size.x / m_TargetSize.x (parent fade-in).
+    //   Anchor: pos + ratio * (m_BounceParams.x * size.x * 0.5,
+    //                          |sin(timer * 32760)| * 6 + m_BounceParams.y * size.y * 0.5,
+    //                          0)
+    //   Tint:  m_bHighlighted ? white : grey(128); alpha = m_DrawColour.a (parent fade).
+    if (m_NewIndicatorTimer >= 0.0f && s_TexNewItem.IsValid()
+        && m_TargetSize.x != 0.0f)
+    {
+        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        Renderer* r = Renderer::GetInstance();
+        if (r) {
+            const float ratio = size.x / m_TargetSize.x;
+            const uint16_t phase =
+                (uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f);
+            const float s = SinIdx(phase);
+            const float by = (s < 0.0f ? -s : s) * 6.0f;
 
-    // Layer 3: Sparkle ring — TODO
+            Vec3 off(m_BounceParams.x * size.x * 0.5f,
+                     by + m_BounceParams.y * size.y * 0.5f,
+                     0.0f);
+            off = off * ratio;
+            Vec3 drawAt = pos + off;
+
+            mm.GetWorldStack().Reset();
+            Matrix44 mat = Matrix44::MakeScale(ratio * 64.0f,
+                                               ratio * 32.0f,
+                                               1.0f);
+            mat.GlobalTranslate44(drawAt);
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            const uint8_t a = m_DrawColour.a;
+            Colour tint = m_bHighlighted
+                ? Colour(255, 255, 255, a)
+                : Colour(128, 128, 128, a);
+
+            glBindTexture(GL_TEXTURE_2D, s_TexNewItem->m_TexId);
+            r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+    }
+
+    // Layer 3: Sparkle ring — TODO (RE pass blocked on usage limit)
     // if (m_SparkleTimer >= 0) { ... 8 segments × 6 verts = 48 QUADCUSTOMVERTEX ... }
+}
+
+// Matches MenuButton::LoadContent @ 0x0014f674 — loads three shared textures
+// into class statics. Port wires only new_item.tex; the other two slots
+// (scratchs.tex / blurry_backing.tex) stay null until sparkle/backdrop
+// REs land.
+void MenuButton::LoadContent() {
+    if (!s_TexNewItem.IsValid()) {
+        s_TexNewItem = Mortar::TextureManager::LoadLocalisedTexture("new_item.tex");
+    }
+}
+
+void MenuButton::UnLoadContent() {
+    s_TexNewItem.SetNull();
 }
 
 // Removed: HitTest, TouchDown, TouchUp. Touch input is now polled inside

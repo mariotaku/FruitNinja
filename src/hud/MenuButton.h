@@ -153,9 +153,10 @@ public:
     // If show=false and timer>=0: sets timer=-1.0 (hide badge).
     void SetNewSymbol(bool show);
 
-    // Matches MenuButton::LoadContent (0x148030) — called once from GameInitialise step 23
-    static void LoadContent() {}   // TODO
-    static void UnLoadContent() {} // TODO: 0x148660
+    // Matches MenuButton::LoadContent (0x0014f674) — loads 3 shared textures
+    // into class statics. Called once from GameInitialise step 23.
+    static void LoadContent();
+    static void UnLoadContent();
 
 private:
     // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4). Copies
