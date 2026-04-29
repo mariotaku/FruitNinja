@@ -244,6 +244,17 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
 
     const char* trueStr = "true";  // 0x1b9ea0
 
+    // `type` attr -> m_ColourType. Binary maps:
+    //   "NONE"      -> 0 (static palette)
+    //   "PER_SLASH" -> 1 (per-frame anim — UpdateModColour ticks each frame)
+    //   "PER_SWIPE" -> 2 (random pick on each swipe; not used in shipped XML)
+    const char* typeStr = smi->Attribute("type");
+    if (typeStr) {
+        if (CompareWords(typeStr, "PER_SLASH") != 0)      m_ColourType = 1;
+        else if (CompareWords(typeStr, "PER_SWIPE") != 0) m_ColourType = 2;
+        else                                               m_ColourType = 0;
+    }
+
     // `texture` attr in <slashModInfo>
     const char* tex2 = smi->Attribute("texture");
     CloneString(&m_pTextureName2, tex2);

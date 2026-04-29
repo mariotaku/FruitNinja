@@ -580,8 +580,11 @@ void SlashEntity::SetModColours(
     }
 
     // Overlay texture: load from name (or null when name is empty).
+    // XML stores names without extension (e.g. "disco_blade"); append .tex.
     if (textureName2 && textureName2[0] != '\0') {
-        g_ModTexture = Mortar::TextureManager::LoadLocalisedTexture(textureName2);
+        char texPath[256];
+        snprintf(texPath, sizeof(texPath), "%s.tex", textureName2);
+        g_ModTexture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
     } else {
         g_ModTexture.SetNull();
     }
