@@ -468,16 +468,45 @@ void MainScreen::MoreGamesCallback() {
 
 ### QuitGamesCallback (0x0014b1a0)
 
+ASM-confirmed (0x0014b1a0..0x0014b1ed). The Quit button is a **bomb-typed
+MenuButton**, so its `m_pFruitPiece` (MenuButton+0x134) points to a `Bomb`
+(not a Fruit/Entity scale target). The callback flags the bomb as
+self-propelling and gives it an upward kick:
+
+- `Bomb +0x80` = `movementFlag` (set to 1 → Bomb::Update applies accelForce each frame)
+- `Bomb +0x8c..+0x97` = `accelForce` Vec3 (per-frame velocity impulse)
+
+The kick direction comes from GOT slot `0x00007214`, a runtime-init Vec3
+constructed by `_GLOBAL__I_MainScreen.cpp` as `Vec3(0.0f, 1.0f, 0.0f)`
+(the **up vector**). It is multiplied by 10.0 → bomb gets `accelForce = (0, 10, 0)`.
+
 ```cpp
 void MainScreen::QuitGamesCallback() {
-    SystemManager::RequestQuit();
-    // Animate leaderboard button: set flag at piece+0x80, scale piece ×10.0
-    int piece = pQuitBtn->field_0x134;
-    piece->field_0x80 = 1;
-    piece->scale = pQuitBtn->scale * 10.0;
-    m_State = 0x17;     // → wait for entities → bomb flash → quit
+    SystemManager::RequestQuit();        // sets m_QuitState = 2
+    Bomb* bomb = (Bomb*)pQuitBtn->m_pFruitPiece;   // MenuButton+0x134
+    bomb->movementFlag = 1;                        // Bomb+0x80
+    bomb->accelForce  = Vec3(0,1,0) * 10.0f;       // Bomb+0x8c (Y-up kick)
+    m_State = 0x17;                       // → QUIT_WAIT
 }
 ```
+
+**Visual feedback chain (no QuitGamesCallback-side BombBlast/shake):**
+1. QuitGamesCallback kicks the bomb upward with accelForce (0,10,0).
+2. `Bomb::Update` (0x001729fc) consumes `accelForce`: `vel += accelForce*dt`,
+   then position. The bomb flies off-screen.
+3. When `Bomb::Update` detects pos out of bounds it calls `KillBomb`,
+   which sets `entity.flags |= 0x10` (removes from ActorManager).
+4. State 0x17 in `MainScreen::Update` polls `ActorManager::GetNumEntities() == 0`.
+   Once the bomb is gone AND `SystemManager.m_QuitState == 2`, it calls
+   `HitMenuBomb(Vec3(163, -96, 0))` and advances to state 0x18.
+5. `HitMenuBomb` (0x0016b234): plays SFX, sets `FruitCamera.m_ShakeIntensity = 2.0f`,
+   sets `GameTaskState.m_bMenuBombHit = 1` (drives BombFlash render),
+   stores hit-pos at task+0xcc.
+6. State 0x18 polls `BombFlashFull()` → `SystemManager::QuitGame()`.
+
+**Port note:** do NOT add port-specific BombBlast spawn or shake inside
+`QuitGamesCallback`. The flash + shake are produced by `HitMenuBomb` in
+state-0x17, faithful to the binary.
 
 ---
 

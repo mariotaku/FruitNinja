@@ -923,45 +923,35 @@ void MainScreen::MoreGamesCallback() {
     m_State = STATE_MORE_GAMES;  // network — skip for port
 }
 
-// Matches MainScreen::QuitGamesCallback (0x0014b1a0).
-// Binary flow (what we can confirm from the ARM disassembly):
-//   1. SystemManager::RequestQuit() — set the quit-pending flag
-//   2. Writes to MainScreen[+0xa4]->field_at_0x134 (some Entity*): sets
-//      one byte at offset +0x80 = 1 and writes a Vec3 * 10.0 at
-//      offset +0x8c..+0x94. Ghidra auto-named +0xa4 as pDojoButton and
-//      +0x134 as m_pFruitPiece, which would point at the mango Fruit,
-//      but that mapping produces a Vec3 write that straddles unrelated
-//      Fruit fields (m_RotAxis.z + m_PlayerIdx + m_TimeScale) — likely
-//      a Ghidra struct-inference mistake, not the real intent. We
-//      intentionally don't port the launch write; its target is unclear.
-//   3. MainScreen::m_State = STATE_QUIT_WAIT (0x17)
+// ASM-verified: 2026-04-30 binary @ 0x0014b1a0..0x0014b1ed (asm-inspector + re-analyst).
+// Sequence (4 logical operations only):
+//   1. SystemManager::RequestQuit()                        // sets m_QuitState = 2
+//   2. bomb = pQuitBtn->m_pFruitPiece (bomb-typed MenuButton)
+//      bomb->m_bMovement = 1                                // +0x80
+//      bomb->m_AccelForce = Vec3(0,1,0) * 10.0f             // +0x8c, kick upward
+//   3. m_State = STATE_QUIT_WAIT (0x17)
 //
-// Note: the binary's menu-rehit branch in Bomb::CollisionResponse
-// (0x0017280c) fires this callback and clears menu items — no camera
-// shake, no BombBlast, no HitMenuBomb SFX in the binary itself. The
-// BombBlast + shake + SFX below are a port-specific deviation to keep
-// the slice gesture visually satisfying (pre-9567eb9 port bug used to
-// trigger them by accident via the Classic/Arcade branch).
+// Bomb::Update consumes m_bMovement + m_AccelForce: each frame adds
+// accelForce*dt to vel, then grows accelForce when direction-aligned —
+// the bomb self-amplifies upward off-screen.
+//
+// No BombBlast / camera shake here in the binary — both come later via
+// HitMenuBomb (called from STATE_QUIT_WAIT once ActorManager clears).
+// Earlier port-specific BombBlast spawn + camera shake removed.
+//
+// Vec3 const at GOT slot 0x00007214: runtime-init by _GLOBAL__I_MainScreen_cpp
+// to (0,1,0) per binary @ 0x0014dab2. Port hardcodes the resolved value.
 void MainScreen::QuitGamesCallback() {
     Mortar::SystemManager::GetInstance().RequestQuit();
 
-    // Port specific: spawn a one-shot BombBlast + camera shake at the
-    // Quit bomb's position so slicing the bomb has visual punch. Binary's
-    // menu-rehit branch does not spawn a BombBlast (those are gameplay-
-    // bomb specific) and does not shake the camera. The "menu-bomb" SFX
-    // and the screen flash are handled later via HitMenuBomb() in
-    // STATE_QUIT_WAIT once ActorManager has cleared.
-    if (pQuitBtn && pQuitBtn->m_pEntity) {
-        const Vec3& bombPos = pQuitBtn->m_pEntity->pos;
-        if (ActorManager* am = ActorManager::GetInstance()) {
-            if (Entity* e = am->Add(4, true)) {   // entity type 4 = BombBlast
-                e->pos = bombPos;
-                e->Init(0, 0, 0);
-            }
-        }
-        if (game.pCamera) {
-            game.pCamera->CreateCameraShake(bombPos, 1.6f, 2.0f);
-        }
+    // Bomb-typed Quit button: m_pFruitPiece IS the Bomb pointer (binary
+    // @ 0x0014b1c2 reads MenuButton+0x134; bomb stores back-ref at
+    // Bomb+0x84 used by KillBomb to null this slot).
+    if (pQuitBtn && pQuitBtn->m_pFruitPiece) {
+        Bomb* bomb = static_cast<Bomb*>(
+            static_cast<Entity*>(pQuitBtn->m_pFruitPiece));
+        bomb->m_bMovement = 1;
+        bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);  // (0,1,0) * 10
     }
 
     m_State = STATE_QUIT_WAIT;
