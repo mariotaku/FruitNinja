@@ -98,9 +98,14 @@ public:
     void UpdateSplat(float dt);
 
     // Binary: PlaySplat @ 0x0017f5ec — plays one of 6 splat impact SFX.
-    // Self-arming: s_SplatSfxGate += 0.5 on fire; gate blocks re-fire
-    // while positive so consecutive landings within 0.5 s are suppressed.
-    static void PlaySplat();
+    // Three per-size cooldowns; size arg is clamped to [0,2]:
+    //   size 0  -> Pulp-drip-{1,2}        (small splat)
+    //   size 1  -> Splatter-Small-{1,2}   (medium)
+    //   size 2  -> Splatter-Medium-{1,2}  (large; "splatter-large-*.wav.pcm"
+    //                                      ships on disk but is unused
+    //                                      by PlaySplat per RE 2026-04-29)
+    // Per-size gate ticks down by 0.05/frame; when <= 0, fires + resets to 0.5.
+    static void PlaySplat(int splatSize);
 
     // Virtual per-instance render: writes 6 QUADCUSTOMVERTEX entries for
     // this splat into the caller-provided buffer.

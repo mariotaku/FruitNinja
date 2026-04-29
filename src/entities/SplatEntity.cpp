@@ -78,10 +78,11 @@ static const float UP_LIFE_SLIDE_THR  = 1.25f;    // slide-phase threshold
 // full derivation.
 static float s_SpringRate = 1.25f;
 
-// Binary: PlaySplat @ 0x0017f5ec — per-impact splat SFX self-arming gate.
-// Starts at 0 (BSS). Incremented by 0.5 each time PlaySplat fires;
-// ticked down each frame. While positive, PlaySplat is suppressed.
-static float s_SplatSfxGate = 0.0f;
+// Binary: PlaySplat @ 0x0017f5ec — per-size SFX cooldown gates.
+// Three independent gates indexed by splat size (0..2). Each starts at 0,
+// is set to 0.5 on fire, and ticks down by 0.05/frame in UpdateActive.
+// While > 0, PlaySplat suppresses re-fire for that size.
+static float s_SplatSfxGate[3] = { 0.0f, 0.0f, 0.0f };
 
 // Binary: SplatEntity::Update @ 0x0017fa56 + UpdateActiveSplats @ 0x0017fd68
 // Pulp-drip ambient SFX gate.
@@ -305,9 +306,12 @@ void SplatEntity::UpdateSplat(float dt) {
             pos.z = UP_LAND_Z;
             vel = Vec3(0.0f, 0.0f, 0.0f);
 
-            // Per-impact splat SFX.
-            // ASM-verified: 2026-04-29T03:25Z binary @ 0x0017f5ec (asm-inspector)
-            PlaySplat();
+            // Per-impact splat SFX. Map m_SplatType (0..5) to the binary's
+            // 3-way size bucket (0..2). Pairs of variants share a size.
+            // ASM-verified: 2026-04-29 binary @ 0x0017f5ec (asm-inspector)
+            int splatSize = type / 2;
+            if (splatSize > 2) splatSize = 2;
+            PlaySplat(splatSize);
 
             // Per-splat ambient pulp-drip arm: 1-in-10 chance, only if the
             // gate isn't currently in its post-fire cooldown soak (>= -0.5).
@@ -367,31 +371,37 @@ void SplatEntity::UpdateSplat(float dt) {
 
 // ---------------------------------------------------------------------
 // Binary: PlaySplat @ 0x0017f5ec
-// Plays one of 6 splat impact sound variants (chosen via RandInt(6)).
-// Self-arming gate: s_SplatSfxGate is incremented by 0.5 on each fire;
-// while it is positive the function returns immediately so consecutive
-// landings within the gate window don't double-trigger.
-// ASM-verified: 2026-04-29T03:25Z binary @ 0x0017f5ec (asm-inspector)
-// Sound names: matched to the 6 splatter-{size}-{n} files shipped in
-// FruitNinjaBada/Data/sfx (the placeholder "Splat-N" names from the
-// initial port pass don't exist as assets).
+// Plays one of 6 splat-impact SFX. Caller passes a size index (0..2);
+// PlaySplat clamps to [0,2] then picks one of two pair entries via
+// RandInt(2). Strings (binary capitalisation, no extension):
+//   size 0: "Pulp-drip-2",        "Pulp-drip-1"        (pair 0/1)
+//   size 1: "Splatter-Small-2",   "Splatter-Small-1"
+//   size 2: "Splatter-Medium-2",  "Splatter-Medium-1"
+// Note pair order: RandInt(2)==0 selects suffix -2, ==1 selects -1.
+// Per-size cooldown: gate ticks down by 0.05/frame in Update; when
+// <= 0 here, fires + resets to 0.5. Three independent gates by size.
+// ASM-verified: 2026-04-29 binary @ 0x0017f5ec..0x0017f74b (asm-inspector)
 // ---------------------------------------------------------------------
-void SplatEntity::PlaySplat() {
-    if (s_SplatSfxGate > 0.0f) return;
+void SplatEntity::PlaySplat(int splatSize) {
+    int sz = splatSize;
+    if (sz > 2) sz = 2;
+    if (sz < 0) sz = 0;
 
-    static const char* kSplatSfx[6] = {
-        "splatter-large-1",  "splatter-large-2",
-        "splatter-medium-1", "splatter-medium-2",
-        "splatter-small-1",  "splatter-small-2",
+    if (s_SplatSfxGate[sz] > 0.0f) return;
+
+    static const char* kPairs[3][2] = {
+        { "Pulp-drip-2",        "Pulp-drip-1"        },  // size 0
+        { "Splatter-Small-2",   "Splatter-Small-1"   },  // size 1
+        { "Splatter-Medium-2",  "Splatter-Medium-1"  },  // size 2
     };
-    const int idx = RandInt(6);
+    const char* name = kPairs[sz][RandInt(2)];
 
     Game* game = Game::GetInstance();
     if (game && game->pGameSound) {
-        game->pGameSound->SFXPlay(kSplatSfx[idx], 1.0f, 1.0f);
+        game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
     }
 
-    s_SplatSfxGate += 0.5f;
+    s_SplatSfxGate[sz] = 0.5f;
 }
 
 // ---------------------------------------------------------------------
@@ -481,11 +491,16 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         }
     }
 
-    // Per-impact splat SFX gate tick — allows PlaySplat to fire again
-    // once the 0.5 s suppression window drains to zero.
-    if (s_SplatSfxGate > 0.0f) {
-        s_SplatSfxGate -= dt;
-        if (s_SplatSfxGate < 0.0f) s_SplatSfxGate = 0.0f;
+    // Per-impact splat SFX gates — three independent cooldowns by size
+    // (0=small / 1=medium / 2=large). Binary @ 0x0017f5ec subtracts 0.05f
+    // per frame; the previous port used dt for a smoother decay. Keep dt
+    // for frame-rate independence; semantics are equivalent (gate just
+    // needs to drain to <=0 within the half-second window).
+    for (int i = 0; i < 3; ++i) {
+        if (s_SplatSfxGate[i] > 0.0f) {
+            s_SplatSfxGate[i] -= dt;
+            if (s_SplatSfxGate[i] < 0.0f) s_SplatSfxGate[i] = 0.0f;
+        }
     }
 
     // Pulp-drip ambient SFX gate tick + fire on positive->non-positive edge.
