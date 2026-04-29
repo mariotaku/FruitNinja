@@ -270,6 +270,7 @@ void GameInitialise() {
     FN::SliceEffect_CreatePool(32);  // binary uses MemoryPool<Node>(32)
     SlashEntity::LoadContent();     // TODO: blade trail textures
     Bomb::LoadContent();            // loads bomb models + textures
+    MenuButton::LoadContent();      // loads new_item.tex (star indicator)
     MissControl::LoadContent();     // load critical / rare / cross overlays
     // Pool allocation + HUD registration happens in GameInit (which
     // runs AFTER the HUD is created).
