@@ -432,6 +432,15 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         //   the actual haiku text lives in haikus.tex as a pre-rendered image).
         //   Draw #2 (version string) uses Font::DrawString when pFontMain is available.
         if (game.pFontMain.IsValid()) {
+            // Reset the world matrix before Font::DrawString. The haiku
+            // quad draw above left a Scale(texW+1, texH+1, 1) on the
+            // stack; Font::DrawString does Push+Scale(scale,scale,1) and
+            // would multiply into that existing scale, blowing up the
+            // glyphs by ~256-512x. Binary: each Draw block resets the
+            // matrix before its own draw.
+            mm.GetWorldStack().Reset();
+            mm.UploadModelViewOnly();
+
             const Vec3 fontPos(FONT_X, yDrawn + FONT_TEXT_Y_OFFSET - 10.0f, 0.0f);
             const Colour fontColour(0x74, 0x5D, 0x3C, 255);
             game.pFontMain->DrawString(1.0f, FONT_MAX_W, 0.0f,
