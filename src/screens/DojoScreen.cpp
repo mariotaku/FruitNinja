@@ -364,8 +364,6 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexSensei->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         if (Renderer* r = Renderer::GetInstance()) {
             r->DrawQuad(Colour(255, 255, 255, 255));
         }

@@ -6,11 +6,22 @@ namespace Mortar {
 
 char TextureManager::s_DataDir[256] = "";
 
+// Process-exit guard: file-static SmartPtr<Texture> globals are destroyed
+// AFTER this Meyers-static singleton because they were constructed at TU
+// init time (before main()) while TextureManager is constructed lazily on
+// first GetInstance(). When the SmartPtr drops the last ref, Texture::~Texture
+// calls OnTextureDestroyed which would otherwise iterate a destructed
+// std::map -> AV. The flag tells OnTextureDestroyed to skip the cache walk
+// once the manager itself is being torn down. Set in the dtor and never
+// cleared.
+static bool s_TextureManagerDestroyed = false;
+
 TextureManager::TextureManager() {
 }
 
 TextureManager::~TextureManager() {
     Clear();
+    s_TextureManagerDestroyed = true;
 }
 
 SmartPtr<Texture> TextureManager::Load(const char* path) {
@@ -68,6 +79,10 @@ void TextureManager::OnTextureDestroyed(Texture* tex) {
     // reverse map. Matches the binary's WeakPtr cleanup path which
     // also walks the map on weak-ref decrement.
     if (!tex) return;
+    // Process-exit safety: file-static SmartPtr<Texture> globals destroy
+    // after our singleton (see s_TextureManagerDestroyed comment). Bail
+    // before touching m_Cache.
+    if (s_TextureManagerDestroyed) return;
     for (std::map<uint32_t, CacheEntry>::iterator it = m_Cache.begin();
          it != m_Cache.end(); ) {
         if (it->second.ptr == tex) {

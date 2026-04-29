@@ -114,7 +114,7 @@ void Coin::Init(int, int, int) {}
 void Coin::PostUpdate(float /*dt*/) {}
 
 // ---------------------------------------------------------------------------
-// Deactivate — port cleanup: clear both emitters, mark inactive
+// Non-virtual cleanup helper called by ActorManager::Deactivate.
 // ---------------------------------------------------------------------------
 void Coin::Deactivate() {
     if (m_pFlyEmitter) {
@@ -125,7 +125,6 @@ void Coin::Deactivate() {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
         m_pCollectEmitter = nullptr;
     }
-    Entity::Deactivate();
 }
 
 // ---------------------------------------------------------------------------

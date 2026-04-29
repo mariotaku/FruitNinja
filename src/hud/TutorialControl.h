@@ -20,8 +20,8 @@
 // Tutorial arrow that appears over menu buttons during first-play.
 // Only visible during slow-motion (timeScale < 1.0) or transitions.
 // Texture assignment:
-//   swipe_fruit_begin.tex -> super.m_SecondaryTex (+0x74) -- used to draw ARROW
-//   press_indicate.tex    -> m_PressTex (+0x8C)           -- used for TRAIL quads
+//   swipe_fruit_begin.tex -> super.m_Texture (+0x74) -- used to draw ARROW
+//   press_indicate.tex    -> m_PressTex (+0x8C)      -- used for TRAIL quads
 // 2.75-second animation: fade-in, bounce, hold, fade-out.
 //
 // Purely cosmetic -- no other system reads from TutorialControl.
@@ -78,8 +78,8 @@ private:
     Vec3 m_DrawPos;                           // +0x80
 
     // +0x8C: trail texture (press_indicate.tex) -- used for the 4-quad trail loop.
-    // NOTE: despite the name, Draw uses super.m_SecondaryTex (+0x74,
-    // swipe_fruit_begin.tex) for the ARROW quad, and this field for the TRAIL quads.
+    // Draw uses super.m_Texture (+0x74, swipe_fruit_begin.tex) for the ARROW quad,
+    // and this field for the TRAIL quads.
     // This matches the binary's texture assignment (verified @ 0x001636f8).
     SmartPtr<Mortar::Texture> m_PressTex;     // +0x8C
 

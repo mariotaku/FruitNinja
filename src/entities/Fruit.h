@@ -29,6 +29,7 @@ struct FruitModelInfo {
 
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
 class Fruit : public Entity {
 public:
     // +0x3c: fruit type index into FRUIT_INFO array
@@ -69,6 +70,12 @@ public:
     // Scale animation (0→1 on spawn)
     float m_ScaleAnim;                   // +0x110
 
+    // +0x10D: critical-hit eligibility, set by CollisionResponse via the
+    // WaveManager critical-chance RNG ladder (binary @ 0x001780f0..0x001781e8).
+    // Read by Fruit::Slice + CollisionResponse for crit visual/score bonuses.
+    // Default false (cleared by Init).
+    bool m_bCriticalEligible;
+
     // +0x114: m_bDrawWhole — when set, Fruit::Draw renders the whole
     // fruit mesh even if m_bSliced == 1. Set by ClearMenuItems
     // @ 0x0016ac7c when releasing menu fruits during the dojo
@@ -99,15 +106,17 @@ public:
 
     void Init(int param1, int fruitType, int param3) override;
     void Update(float dt) override;
-    void PostUpdate(float dt) override;   // 0x0017501c — screen-edge bounce / push
     void Draw(Renderer& r) override;
-    void Deactivate() override;
+    void PostUpdate(float dt) override;   // 0x0017501c — screen-edge bounce / push
 
     // Matches Fruit::CollisionResponse (0x1780b0). Blade has hit the
     // fruit's collision sphere: record slice angle/impulse/pos, spawn
     // juice particle emitters, set m_SliceTimer to countdown until the
     // fruit splits.
-    void OnSliced(const Vec3& bladeVel) override;
+    void CollisionResponse(const Vec3& bladeVel) override;
+
+    // Non-virtual cleanup helper called by ActorManager::Deactivate.
+    void Deactivate();
 
     // Matches Fruit::Slice (0x176d58, simplified). Flips m_bSliced,
     // computes halfVel/halfVelB from m_SliceAngle, blends with old vel,

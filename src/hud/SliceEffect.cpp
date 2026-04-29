@@ -122,15 +122,16 @@ void SliceEffect_Add(const Vec3& pos, float angleDeg, float impulse, bool critic
     s->critical = critical ? 1 : 0;
 
     // Clean-Slice SFX gate from binary (0x0016b480):
-    //   if (impulse > 2.5f && (rand() % 3) == 0)
-    //       GameSound::SFXPlay("Clean-Slice-<1|2|3>", 1.0, pitch, cb)
-    if (impulse > 2.5f && (rand() % 3) == 0) {
+    //   if (impulse > 2.5f && Rand32(3)==0 && Rand32(3)==0)
+    //       name = (Rand32(2)==0) ? "Clean-Slice-1" : "Clean-Slice-3"
+    //       GameSound::SFXPlay(name, 1.0, pitch, cb)
+    // Compound gate gives ~1/9 actual rate. "Clean-Slice-2" is the binary's
+    // fall-through path when one gate fails and is never played here.
+    if (impulse > 2.5f && (rand() % 3) == 0 && (rand() % 3) == 0) {
         Game* g = Game::GetInstance();
         if (g && g->pGameSound) {
-            static const char* kNames[3] = {
-                "Clean-Slice-1", "Clean-Slice-2", "Clean-Slice-3"
-            };
-            g->pGameSound->SFXPlay(kNames[rand() % 3], 1.0f, 1.0f);
+            const char* name = (rand() % 2 == 0) ? "Clean-Slice-1" : "Clean-Slice-3";
+            g->pGameSound->SFXPlay(name, 1.0f, 1.0f);
         }
     }
 }
@@ -199,9 +200,6 @@ void SliceEffect_Draw(float dt) {
         mat.RotZ44(sinA, cosA);
         mat.GlobalTranslate44(s->pos);
 
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDisable(GL_DEPTH_TEST);
         model->Draw(mat);
     }
 }

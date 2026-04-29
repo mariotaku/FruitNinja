@@ -15,10 +15,10 @@
 
 namespace Mortar { struct PSPParticleEmitter; }
 
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x001ea478 + 0x00172504 + 0x00171764 (asm-inspector, vtable slots verified)
 class Bomb : public Entity {
 public:
-    // +0x38: collision sphere (port: not yet implemented, stubbed)
-    // ColSphere* m_Col;
+    // +0x38: m_Col inherited from Entity (ColSphere*, allocated in Init)
 
     // +0x3c: BombBlast spawn timer; Init = 0.6 (DAT_001726ac)
     float m_SpawnTimer;
@@ -84,15 +84,19 @@ public:
     ~Bomb();
 
     void Init(int param1, int fruitType, int param3) override;
+    void Release() override;                // 0x00171764 — fuse emitter cleanup
     void Update(float dt) override;
-    void PostUpdate(float dt) override;   // 0x001714e4 — sync fuse emitter
     void Draw(Renderer& r) override;
-    void Deactivate() override;
+    void PostUpdate(float dt) override;     // 0x001714e4 — sync fuse emitter
 
     // Matches Bomb::CollisionResponse (0x17280c). Blade has sliced the bomb:
     // set m_bHit, trigger HitBomb (camera shake + bombHitTimer), start the
     // BombBlast shockwave spawn loop.
-    void OnSliced(const Vec3& bladeVel) override;
+    void CollisionResponse(const Vec3& bladeVel) override;
+
+    // Non-virtual cleanup helper: drops fuse emitter and sets ENT_INACTIVE.
+    // Called by ActorManager::Deactivate (direct, not via vtable).
+    void Deactivate();
 
     // Matches Bomb::Chuck (0x170f68)
     void Chuck(float delay);

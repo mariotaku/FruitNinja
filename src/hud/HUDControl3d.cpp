@@ -13,11 +13,15 @@
 static const float ROT_SPEED = 182.0f;
 
 // Matches 0x14428c (57 lines)
+// ASM-verified: 2026-04-28T16:35Z binary @ 0x0014428c (asm-inspector)
 void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
 
-    // Step 1: if (!texture || alpha == 0) return
-    if (!m_Texture || m_DrawColour.a == 0) return;
+    // Step 1: two gates matching binary order (0x1442a0..0x1442b4):
+    //   gate 1 — no texture: SmartPtr::operator bool on this+0x74
+    //   gate 2 — byte at this+0x5f == 0 (m_DrawColour.a in port layout)
+    if (!m_Texture) return;
+    if (m_DrawColour.a == 0) return;
 
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -45,7 +49,6 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     // standard controls — the offset is dead code. See
     // docs/engine/coordinate-system.md. Positions are already in the
     // centred ortho space [-240..240, -160..160].
-    (void)hudScale;
     mat.GlobalTranslate44(pos);
 
     // Step 8-9: Upload matrices
@@ -65,7 +68,10 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     glDepthMask(GL_FALSE);    // do not write — preserve fruit's depth
 
     // Step 10-11: TintColour → DrawQuadUnCached
-    game->renderer.DrawQuad(m_DrawColour, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
+    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0013540c (asm-inspector)
+    const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
+    Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
+    game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
 
     glDepthMask(GL_TRUE);
     glDisable(GL_DEPTH_TEST);

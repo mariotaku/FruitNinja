@@ -250,6 +250,7 @@ void MenuButton::Init(const Vec3& buttonPos, std::function<void()> clickCb,
 }
 
 // Matches MenuButton::Release (binary @ 0x0014f7e0)
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x0014f7e0 (asm-inspector)
 void MenuButton::Release() {
     // Binary @ 0x0014f7e0 does NOT touch m_pEntity flags. It only clears
     // a backref field on the entity (`entity+0x108` for fruit, `entity+0x84`

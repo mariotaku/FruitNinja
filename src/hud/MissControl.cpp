@@ -199,8 +199,6 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBindTexture(GL_TEXTURE_2D, m_Texture);
 
     const uint8_t a = (uint8_t)(fade * 255.0f);

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.20)
 cmake_policy(SET CMP0079 NEW)
 # CMP0135 (CMake 3.24+): extracted file timestamps are the extract-time,
 # not the archive's archived mtimes. Explicitly opt in so re-downloads
@@ -159,10 +159,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinyxml2)
 
-# --- Executable ---
+# --- Game library (everything except main.cpp) ---
+# Collected as a STATIC lib so both the fruit-ninja executable and the
+# tests/test_screen smoke test can link against the same compiled units.
+# Subsystem CMakeLists.txt files contribute their sources via
+# target_sources(fruit-ninja-game PRIVATE ...).
 
-add_executable(fruit-ninja src/main.cpp src/Game.cpp)
-target_include_directories(fruit-ninja PRIVATE
+add_library(fruit-ninja-game STATIC src/Game.cpp)
+target_include_directories(fruit-ninja-game PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}
 )
@@ -179,8 +183,13 @@ add_subdirectory(src/entities)
 add_subdirectory(src/game)
 add_subdirectory(src/debug)
 
-# --- Link (after all subdirectories define their targets) ---
-target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine)
+target_link_libraries(fruit-ninja-game PUBLIC
+    SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine
+)
+
+# --- Executable (just main.cpp; everything else lives in fruit-ninja-game) ---
+add_executable(fruit-ninja src/main.cpp)
+target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
 
 # Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds
 # it without having to add an external dir to PATH. Covers both fetch
@@ -202,11 +211,28 @@ if (WIN32 AND TARGET SDL2::SDL2)
     endif()
     get_target_property(_sdl2_type ${_sdl2_real_target} TYPE)
     if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET fruit-ninja POST_BUILD
+        # OUTPUT-form (vs POST_BUILD) so the copy + COMMENT only fire when
+        # the source DLL is newer than the destination. copy_if_different
+        # is silent on no-change, but POST_BUILD itself prints the COMMENT
+        # every build -- noise that hides real activity.
+        #
+        # Stamp file in $<CONFIG>/ so multi-config (VS) builds don't share
+        # state across Debug/Release. Target-file gen-exprs aren't allowed
+        # in OUTPUT, so a literal path + stamp is the portable form.
+        set(_sdl2_stamp "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/sdl2_dll.stamp")
+        add_custom_command(
+            OUTPUT ${_sdl2_stamp}
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 $<TARGET_FILE:SDL2::SDL2>
                 $<TARGET_FILE_DIR:fruit-ninja>
-            COMMENT "Copying SDL2.dll next to fruit-ninja.exe")
+            COMMAND ${CMAKE_COMMAND} -E touch ${_sdl2_stamp}
+            DEPENDS $<TARGET_FILE:SDL2::SDL2>
+            COMMENT "Copying SDL2.dll next to fruit-ninja.exe"
+            VERBATIM
+        )
+        add_custom_target(copy_sdl2_dll ALL DEPENDS ${_sdl2_stamp})
+        # Ensure $<TARGET_FILE_DIR:fruit-ninja> exists before the copy.
+        add_dependencies(copy_sdl2_dll fruit-ninja)
     endif()
 endif()
 

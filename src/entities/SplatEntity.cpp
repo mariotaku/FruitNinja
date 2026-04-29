@@ -2,12 +2,16 @@
 // SplatEntity — juice-splat pool, 1:1 binary port.
 // See SplatEntity.h for struct layout.
 //
-// Analysed: 2026-04-15T15:00
+// Analysed: 2026-04-29T03:09
 //
 
 #include "SplatEntity.h"
 #include "ActorManager.h"
 #include "FruitInfo.h"
+#include "Game.h"
+#include "hud/HUD.h"
+#include "math/Colour.h"
+#include "audio/GameSound.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -24,6 +28,14 @@
 // Binary constants (resolved from Ghidra, all addresses below refer to
 // the ARM32 .text/.rodata in FruitNinja.exe)
 // ---------------------------------------------------------------------
+
+// ASM-verified: 2026-04-29T03:09Z binary @ 0x001bd08c (asm-inspector)
+// Per-splat-type slide-rate table. Indexed by m_SplatType (0..5).
+static const float kSlideRate[6] = { 2.5f, 2.5f, 2.5f, 2.9f, 0.0f, 0.0f };
+
+// ASM-verified: 2026-04-29T03:09Z binary @ 0x001bd074 (asm-inspector)
+// Per-type post-landing scale multiplier. Applied as: m_Scale *= kLandScale[type] * 2.5f.
+static const float kLandScale[6] = { 1.6f, 1.6f, 1.6f, 1.6f, 2.9f, 2.9f };
 
 // MakeSplat @ 0x0017f2f0
 static const float MS_Z_ZERO          = 0.0f;     // DAT_0017f564 = 0x00000000
@@ -65,6 +77,22 @@ static const float UP_LIFE_SLIDE_THR  = 1.25f;    // slide-phase threshold
 // reads it during the slide-decay phase. See UpdateActive() for the
 // full derivation.
 static float s_SpringRate = 1.25f;
+
+// Binary: PlaySplat @ 0x0017f5ec — per-impact splat SFX self-arming gate.
+// Starts at 0 (BSS). Incremented by 0.5 each time PlaySplat fires;
+// ticked down each frame. While positive, PlaySplat is suppressed.
+static float s_SplatSfxGate = 0.0f;
+
+// Binary: SplatEntity::Update @ 0x0017fa56 + UpdateActiveSplats @ 0x0017fd68
+// Pulp-drip ambient SFX gate.
+//   > 0   : armed, counting down to fire edge
+//   0..-0.5: cooldown soak (no re-arm allowed)
+//   < -0.5 : inert (re-arm allowed)
+// BSS-zero-initialised; starts inert (0 is within cooldown soak, but the
+// arm condition requires s_PulpDripGate >= -0.5 AND positive arm hasn't
+// fired yet — at init 0 the timer block sees it as <= 0 → soak path,
+// decays to -0.5 without firing, then becomes inert).
+static float s_PulpDripGate = 0.0f;
 
 // DrawActiveSplats @ 0x00180344 — UV atlas table @ 0x001bd014 (6 × 4 floats)
 // Each entry is {u0, u1, v0, v1} — verified from raw little-endian dump.
@@ -211,15 +239,13 @@ void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, bool param3, int fruit
     m_Life      = MS_LIFE_BASE  + RandRange(MS_LIFE_RAND);
     m_DecayRate = MS_DECAY_BASE + RandRange(MS_DECAY_RAND);
 
-    // Axis vectors. Binary (verified at SplatEntity::Update landing branch
-    // ~0x0017f9xx): two perpendicular 2D basis vectors with DIFFERENT
-    // scalars — axisA = (cos, sin) * 0.5 and axisB = perp * 0.25. The
-    // half/quarter pair gives the splat a 2:1 wide-to-tall aspect ratio
-    // before the per-type scale multiply.
+    // Axis vectors. Binary @ 0x0017f1cc: axisA = (cos, sin) * 0.5 and
+    // axisB = perp * 0.5 (local_44 = 0x3f000000 = 0.5f).
+    // ASM-verified: 2026-04-29T03:09Z binary @ 0x0017f1cc (asm-inspector)
     const float angleRad  = m_Angle * (3.1415926f / 180.0f);
-    const float axPerpRad = angleRad + 1.5707963f;  // +90°
+    const float axPerpRad = angleRad + 1.5707963f;  // +90 deg
     m_AxisA = Vec3(cosf(angleRad),  sinf(angleRad),  0.0f) * 0.5f;
-    m_AxisB = Vec3(cosf(axPerpRad), sinf(axPerpRad), 0.0f) * 0.25f;
+    m_AxisB = Vec3(cosf(axPerpRad), sinf(axPerpRad), 0.0f) * 0.5f;
 
     // Start airborne — Update will pick m_SplatType on landing.
     m_SplatType = -1;
@@ -267,15 +293,10 @@ void SplatEntity::UpdateSplat(float dt) {
             m_SplatType = (int8_t)type;
 
             // Per-type size multiplier — binary at landing branch:
-            //   m_Scale *= (perTypeScale[type] * 2.5)
-            // Verified table @ 0x001BD074 (GOT_BASE + DAT_0017fad4 + 0x60):
-            //   types 0..3 → 1.6  (small splats, final *= 4.0)
-            //   types 4..5 → 2.9  (golden splats, final *= 7.25)
-            static const float PER_TYPE_SCALE[6] = {
-                1.6f, 1.6f, 1.6f, 1.6f, 2.9f, 2.9f
-            };
+            //   m_Scale *= (kLandScale[type] * 2.5)
+            // Table @ 0x001bd074. See kLandScale[] above.
             const int idx = (type >= 0 && type < 6) ? type : 0;
-            m_Scale = m_Scale * (PER_TYPE_SCALE[idx] * 2.5f);
+            m_Scale = m_Scale * (kLandScale[idx] * 2.5f);
 
             // Stick to the "background plane" — splat freezes in place.
             // Binary's landed Update doesn't integrate pos, so we zero
@@ -283,6 +304,18 @@ void SplatEntity::UpdateSplat(float dt) {
             // touches m_Scale.y, not pos.
             pos.z = UP_LAND_Z;
             vel = Vec3(0.0f, 0.0f, 0.0f);
+
+            // Per-impact splat SFX.
+            // ASM-verified: 2026-04-29T03:25Z binary @ 0x0017f5ec (asm-inspector)
+            PlaySplat();
+
+            // Per-splat ambient pulp-drip arm: 1-in-10 chance, only if the
+            // gate isn't currently in its post-fire cooldown soak (>= -0.5).
+            // Bin: SplatEntity::Update @ 0x0017f774, arm site @ 0x0017fa56.
+            // ASM-verified: 2026-04-29T03:25Z binary @ 0x0017fa56 (asm-inspector)
+            if (RandInt(10) == 0 && s_PulpDripGate >= -0.5f) {
+                s_PulpDripGate = 0.25f;
+            }
         }
         return;
     }
@@ -290,12 +323,12 @@ void SplatEntity::UpdateSplat(float dt) {
     // --- Landed phase ---
     // Slide / scale decay — binary runs this only while m_Life <= 1.25
     // (the tail slide phase). Above that threshold the splat sits still
-    // on the plane. Spring rate computed in UpdateActive each frame
-    // from active entity counts (binary GameTaskData+0x2c, see
-    // UpdateActive for the formula).
+    // on the plane. Rate is per-splat-type from kSlideRate[] @ 0x001bd08c.
+    // SSMP horizontal-gravity branch (field_0x74) is omitted — port has no SSMP.
     if (m_Life <= UP_LIFE_SLIDE_THR) {
-        const float dy = dt * s_SpringRate;
-        vel.y   = Clampf(vel.y - dy,   UP_VEL_CLAMP_LO,   UP_VEL_CLAMP_HI);
+        const int slideIdx = (m_SplatType >= 0 && m_SplatType < 6) ? (int)m_SplatType : 0;
+        const float dy = dt * kSlideRate[slideIdx];
+        vel.y     = Clampf(vel.y     - dy, UP_VEL_CLAMP_LO,   UP_VEL_CLAMP_HI);
         m_Scale.y = Clampf(m_Scale.y - dy, UP_SCALE_CLAMP_LO, UP_SCALE_CLAMP_HI);
     }
 
@@ -311,6 +344,52 @@ void SplatEntity::UpdateSplat(float dt) {
     const float rawAlpha = m_AlphaBase * m_Life;
     const float aF = rawAlpha < m_AlphaBase ? rawAlpha : m_AlphaBase;
     m_ColA = (uint8_t)Clampf(aF, 0.0f, 255.0f);
+
+    // Colour lerp — binary @ 0x0017f774 ticks m_ColourPhase down each
+    // Update and writes the resulting RGBA back into m_ColR/G/B/A.
+    // DrawSplat reads the stored fields directly (no re-computation).
+    if (m_ColourPhase > 0.0f) {
+        m_ColourPhase -= dt;
+        if (m_ColourPhase < 0.0f) m_ColourPhase = 0.0f;
+    }
+    {
+        float fade = m_ColourPhase * 2.0f;
+        if (fade < 0.0f) fade = 0.0f;
+        if (fade > 1.0f) fade = 1.0f;
+        const int rMix = (int)m_ColR + (int)(((int)BASE_R - (int)m_ColR) * fade);
+        const int gMix = (int)m_ColG + (int)(((int)BASE_G - (int)m_ColG) * fade);
+        const int bMix = (int)m_ColB + (int)(((int)BASE_B - (int)m_ColB) * fade);
+        m_ColR = (uint8_t)ClampInt(rMix, 0, 255);
+        m_ColG = (uint8_t)ClampInt(gMix, 0, 255);
+        m_ColB = (uint8_t)ClampInt(bMix, 0, 255);
+    }
+}
+
+// ---------------------------------------------------------------------
+// Binary: PlaySplat @ 0x0017f5ec
+// Plays one of 6 splat impact sound variants (chosen via RandInt(6)).
+// Self-arming gate: s_SplatSfxGate is incremented by 0.5 on each fire;
+// while it is positive the function returns immediately so consecutive
+// landings within the gate window don't double-trigger.
+// ASM-verified: 2026-04-29T03:25Z binary @ 0x0017f5ec (asm-inspector)
+// DIFFERS: exact sound names not documented by re-analyst. Using
+// "Splat-1".."Splat-6" as placeholders. Update when names are resolved.
+// ---------------------------------------------------------------------
+void SplatEntity::PlaySplat() {
+    if (s_SplatSfxGate > 0.0f) return;
+
+    static const char* kSplatSfx[6] = {
+        "Splat-1", "Splat-2", "Splat-3",
+        "Splat-4", "Splat-5", "Splat-6",
+    };
+    const int idx = RandInt(6);
+
+    Game* game = Game::GetInstance();
+    if (game && game->pGameSound) {
+        game->pGameSound->SFXPlay(kSplatSfx[idx], 1.0f, 1.0f);
+    }
+
+    s_SplatSfxGate += 0.5f;
 }
 
 // ---------------------------------------------------------------------
@@ -399,6 +478,29 @@ void SplatEntity::UpdateActiveSplats(float dt) {
             s_Pool.Push(s);
         }
     }
+
+    // Per-impact splat SFX gate tick — allows PlaySplat to fire again
+    // once the 0.5 s suppression window drains to zero.
+    if (s_SplatSfxGate > 0.0f) {
+        s_SplatSfxGate -= dt;
+        if (s_SplatSfxGate < 0.0f) s_SplatSfxGate = 0.0f;
+    }
+
+    // Pulp-drip ambient SFX gate tick + fire on positive->non-positive edge.
+    // Bin: 0x0017fd68 timer block.
+    // ASM-verified: 2026-04-29T03:25Z binary @ 0x0017fd68 (asm-inspector)
+    if (s_PulpDripGate <= 0.0f) {
+        if (s_PulpDripGate >= -0.5f) s_PulpDripGate -= dt;
+    } else {
+        s_PulpDripGate -= dt;
+        if (s_PulpDripGate <= 0.0f) {
+            const char* name = (RandInt(2) == 0) ? "Pulp-drip-2" : "Pulp-drip-1";
+            Game* game = Game::GetInstance();
+            if (game && game->pGameSound) {
+                game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+            }
+        }
+    }
 }
 
 void SplatEntity::RemoveAllSplats() {
@@ -417,7 +519,7 @@ void SplatEntity::RemoveAllSplats() {
 // Writes 6 QUADCUSTOMVERTEX entries for this splat into the
 // caller-provided buffer (outVerts must point to at least 6 slots).
 // Called indirectly via vtable from DrawActiveSplats.
-void SplatEntity::DrawSplat(QUADCUSTOMVERTEX* outVerts) {
+void SplatEntity::DrawSplat(QUADCUSTOMVERTEX* outVerts, const float tintRGB[3]) {
     // Quad corner construction — matches binary DrawSplat (0x0017f008).
     // The four corners are built from the sum/diff of the two axis
     // vectors, scaled by m_Scale.x for X and m_Scale.y for Y. Note
@@ -434,29 +536,16 @@ void SplatEntity::DrawSplat(QUADCUSTOMVERTEX* outVerts) {
     const float ax = m_AxisA.x, ay = m_AxisA.y;
     const float bx = m_AxisB.x, by = m_AxisB.y;
 
-    // Colour lerp from base RGBA toward the captured fruit colour.
-    // Binary formula: fade = clamp(2.0 * m_ColourPhase, 0, 1).
-    // Since m_ColourPhase ticks toward zero, fade shrinks — meaning
-    // the splat lerps FROM fruit colour TOWARD base as ColourPhase
-    // drains. (FruitTypeColour path starts at phase=0, so fruit
-    // colour is persistent; default path starts at 0.75 so the base
-    // colour fades to fruit over time.)
-    float fade = m_ColourPhase * 2.0f;
-    if (fade < 0.0f) fade = 0.0f;
-    if (fade > 1.0f) fade = 1.0f;
-    const int rMix = (int)m_ColR + (int)((int)BASE_R - (int)m_ColR) * fade;
-    const int gMix = (int)m_ColG + (int)((int)BASE_G - (int)m_ColG) * fade;
-    const int bMix = (int)m_ColB + (int)((int)BASE_B - (int)m_ColB) * fade;
-
-    const uint8_t rR = (uint8_t)ClampInt(rMix, 0, 255);
-    const uint8_t gG = (uint8_t)ClampInt(gMix, 0, 255);
-    const uint8_t bB = (uint8_t)ClampInt(bMix, 0, 255);
-    const uint8_t a  = m_ColA;
+    // Colour pre-computed in UpdateSplat each frame (binary @ 0x0017f774).
+    // Apply per-channel tint from &pHUD->scales[3] — world tint window.
+    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
+    Colour splatColour(m_ColR, m_ColG, m_ColB, m_ColA);
+    Colour tinted = Colour::TintColour(splatColour, tintRGB);
     const uint32_t col =
-        ((uint32_t)a  << 24) |
-        ((uint32_t)bB << 16) |
-        ((uint32_t)gG <<  8) |
-        ((uint32_t)rR);
+        ((uint32_t)tinted.a << 24) |
+        ((uint32_t)tinted.b << 16) |
+        ((uint32_t)tinted.g <<  8) |
+        ((uint32_t)tinted.r);
 
     // Atlas UV — verified via SplatEntity::DrawSplat @ 0x0017f008.
     // The binary halves the table-stored U coords (`* 0.5`) before
@@ -532,6 +621,16 @@ void SplatEntity::DrawUpdate(float /*dt*/) {}
 void SplatEntity::DrawActiveSplats() {
     if (!s_SplatTex.IsValid()) return;
 
+    // Fetch world tint from HUD::scales[3..5].
+    // Binary @ 0x0017f1ec passes &pHUD->scales[3] to DrawSplat.
+    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
+    const float* worldTint = Colour::IdentityTint();
+    if (Game* game = Game::GetInstance()) {
+        if (game->hud) {
+            worldTint = &game->hud->scales[3];
+        }
+    }
+
     const int N = s_Pool.Capacity();
     int count = 0;
 
@@ -540,7 +639,7 @@ void SplatEntity::DrawActiveSplats() {
         if (!s || !s->m_bAlive)     continue;
         if (s->m_SplatType < 0)     continue;  // still airborne
 
-        s->DrawSplat(&s_SplatVerts[count * 6]);
+        s->DrawSplat(&s_SplatVerts[count * 6], worldTint);
 
         ++count;
     }
@@ -552,8 +651,6 @@ void SplatEntity::DrawActiveSplats() {
     mm.UploadModelViewOnly();
 
     s_SplatTex->Set();
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Read-only depth test — matches binary's SetDepthBufferWrite(0)
     // call BEFORE this draw (after ActorManager::Draw). Splats render

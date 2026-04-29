@@ -113,7 +113,7 @@ void BombBlast::Init(int p1, int p2, int p3) {
     m_Scale = 50.0f;
     m_Lifetime = 0.0f;
 
-    m_Col.radius = 0.0f; // doesn't collide
+    // m_Col stays null (inherited from Entity ctor) — BombBlast doesn't collide.
 }
 
 // Matches BombBlast::Update (0x171170).
@@ -234,18 +234,6 @@ void BombBlast::DrawActiveBlasts() {
     mm.UploadModelViewOnly();
 
     g_BombTexture->Set();
-    glEnable(GL_BLEND);
-    // Standard alpha blending. Binary inherits blend state from
-    // Texture::Set — since bomb_explode.tex is RGB565 (no alpha
-    // channel), the vertex alpha is the sole fade source, so
-    // SRC_ALPHA / ONE_MINUS_SRC_ALPHA gives a clean fade to the
-    // background. Additive (GL_ONE) saturates to white and reads
-    // as "opaque blast" instead of "fading explosion".
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // Explicitly disable depth test so the blasts never get occluded
-    // by the bomb mesh they're spawning from — both share the same
-    // cycling Z from GetBombZPosition().
-    glDisable(GL_DEPTH_TEST);
 
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawTriList(s_BlastVerts, blastCount * VERTS_PER_BLAST);

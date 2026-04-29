@@ -72,7 +72,7 @@ public:
     void Init(int, int, int) override;
 
     // 0x001731F4 — clear fly emitter; called from dtor
-    void Release();
+    void Release() override;
 
     // 0x0017312C — fixed-timestep wrapper; subdivides dt by 1/60
     void Update(float dt) override;
@@ -83,8 +83,8 @@ public:
     // 0x00173CC4 — scale × RotY(spin) × RotZ(heading) × Translate
     void Draw(Renderer& r) override;
 
-    // Port Deactivate — clears emitters, marks inactive
-    void Deactivate() override;
+    // Non-virtual cleanup helper called by ActorManager::Deactivate.
+    void Deactivate();
 
     // --- Public API ------------------------------------------------------
 

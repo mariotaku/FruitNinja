@@ -59,7 +59,21 @@ If the asm comes out tiny / wrong, try `-O3` or `-Os` — the binary's exact `-O
 
 ### 5. Compare instruction-by-instruction
 
-Open both `*_binary.s` and `*_test.s` side-by-side. Look for:
+Use the Bada SDK's objdump for the binary side, `g++ -S` for the test side, then diff manually.
+
+Workflow:
+1. Find the original ELF at `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB ELF32 ARM, not stripped).
+2. Dump the binary range:
+   ```
+   bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-objdump.exe \
+     -d --start-address=0x<begin> --stop-address=0x<end> \
+     FruitNinjaBada/Bin/FruitNinja.exe \
+     > tmp/asm-compare/<name>_binary.s
+   ```
+3. Compile the test with `-S` to get `tmp/asm-compare/<name>_test.s` (see step 4).
+4. Side-by-side diff: open both in your editor, or `diff -y --suppress-common-lines`.
+
+Look for:
 - **Same VFP constant immediates** (`fconsts s15, #N` where N encodes the float). 0.5f → #96; 1.5f → #120; 1.0f → #112; -1.5f → #248. Verify the compiler picks the same encoding the binary uses.
 - **Same int-truncation pattern** (`vcvt.s32.f32` then `vmov` to/from int register, or `ftosizs` + `fsitos` round-trip).
 - **Same multiply-add fusion** (`vmla.f32` vs separate mul+add).
@@ -136,6 +150,8 @@ Do **NOT** emit the line for **Diverges** or **Inconclusive** verdicts. The comm
 ## Tooling reference
 
 - Bada SDK toolchain: `bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-g++.exe` (gcc 4.5.3; the binary itself was built with Samsung Sourcery G++ 4.4.1, very similar codegen).
+- **Bada SDK objdump**: `bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-objdump.exe` — use this for binary disassembly (it understands the ARM ELF and matches the toolchain's instruction printing style for cleaner side-by-side diffs).
+- **Original ARM ELF**: `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB, ELF32 ARM, not stripped — symbols are C++-mangled).
 - Compile-unit workdir: `tmp/asm-compare/`
 - One-off Ghidra scripts (e.g. a quick `FindOffset.java` to scan a struct): save to `tmp/ghidra_scripts/`, NOT to the project's `ghidra_scripts/` (that's reserved for persistent / reusable scripts).
 - VFP immediate encoding cheat-sheet: 0.5=#96, 1.0=#112, 1.5=#120, 2.0=#0, 3.0=#16, -1.5=#248. Single-precision: `fconsts s_n, #N`. Full table in ARM ARM A8.6.339.

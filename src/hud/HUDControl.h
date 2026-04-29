@@ -3,8 +3,10 @@
 
 //
 // HUDControl — base class for all HUD elements
-// Verified from Ghidra: ctor at 0x144104, size = 0x60
+// Verified from Ghidra: ctor at 0x144104, size = 0x74
 // See docs/structs/hud.md for full layout and vtable.
+//
+// ASM-verified: 2026-04-28T16:35Z binary @ 0x00144104 (asm-inspector)
 //
 
 #include "math/Vec3.h"
@@ -52,6 +54,18 @@ public:
     // +0x5c: tint colour (BGRA, default white)
     Colour m_DrawColour;
 
+    // +0x60: uint8_t initialised to 1 by HUDControl ctor (binary @ 0x00144162:
+    // strb.w r8,[r4,#0x60] with r8=1). Likely a visibility / dirty flag — only
+    // one byte is written; bytes +0x61..+0x63 are padding. Semantics still TBD;
+    // no port code reads it yet.
+    uint8_t field_0x60;
+
+    // +0x64..+0x70: UV rectangle (belong in HUDControl base per binary layout)
+    // HUDControl3d::Draw reads these at binary +0x64/+0x68/+0x6c/+0x70.
+    // Binary ctor copies two 8-byte Vec2 globals (GOT 0x000078c0 / 0x00007170)
+    // for the (0,0)/(1,1) defaults.
+    float m_UVLeft, m_UVTop, m_UVRight, m_UVBottom;
+
     HUDControl()
         : field_0x04(0),
           m_Timer(0.0f),
@@ -60,7 +74,9 @@ public:
           m_bNoDestructor(0),
           m_bPendingRemoval(0),
           m_LayerFlags(1),
-          m_DrawColour(255, 255, 255, 255) {}
+          m_DrawColour(255, 255, 255, 255),
+          field_0x60(1),
+          m_UVLeft(0.0f), m_UVTop(0.0f), m_UVRight(1.0f), m_UVBottom(1.0f) {}
 
     virtual ~HUDControl() {}
 

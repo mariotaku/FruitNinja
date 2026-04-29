@@ -23,11 +23,12 @@ void BakedString::Bake(Font* font, float scale, float maxWidth, float z,
     m_Width = font->MeasureWidth(scale, text);
     m_Height = font->GetLineHeight(scale);
 
-    // Use Font's page textures
+    // Use Font's page textures via GetPage accessor
     m_Pages.resize(font->m_PageCount);
     for (int i = 0; i < font->m_PageCount; i++) {
-        if (i < (int)font->m_PageTextures.size()) {
-            m_Pages[i].texture = font->m_PageTextures[i];
+        Font::Page* page = font->GetPage(i);
+        if (page) {
+            m_Pages[i].texture = page->texture;
         }
     }
 

@@ -124,8 +124,6 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
         }
 
         s_TexBlurryBacking->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         // Top triangle (stateObj+0x78)
         // Translate: (240, 160 + alpha*(-48), 0)
@@ -158,8 +156,6 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
     // pos = (182, 137, 0) + Vec3(0,1,0)*48*(1-alpha) = (182, 137+48*(1-a), 0)
     if (s_TexSmlTitle.IsValid()) {
         s_TexSmlTitle->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
@@ -193,8 +189,6 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
     // At alpha=0 (slid off): translate = (-184, -191).
     if (secondaryTex.IsValid()) {
         secondaryTex->Set();
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(

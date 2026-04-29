@@ -49,25 +49,61 @@ const Matrix44* Mesh::GetBoneVertTransform(int index) const {
     return m_Skeleton->GetVertex(skelIdx);
 }
 
+// Matches Mesh::GetBoneWorldTransform (0x001b0700)
+// Returns world matrix for binding[index] through skeleton. Identity when
+// no skeleton bound or bone unbound.
+Matrix44 Mesh::GetBoneWorldTransform(int index) const {
+    Matrix44 identity;
+    if (!m_Skeleton) return identity;
+    if (index < 0 || index >= (int)m_BoneBindings.size()) return identity;
+    int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
+    if (skelIdx < 0) return identity;
+    const Matrix44* w = m_Skeleton->GetWorld(skelIdx);
+    if (!w) return identity;
+    return *w;
+}
+
 // Matches Mesh::GetBounds (0x001b07f0)
-// Computes AABB from bone bounds. Without a skeleton, returns the raw bounds.
+// Computes AABB by transforming each bone's local bounds through its world
+// matrix (0x001b0840-0x001b08c0), then min/max-reducing across all bones.
+// ASM-verified: 2026-04-29T00:00Z binary @ 0x001b07f0 (asm-inspector)
 void Mesh::GetBounds(Vec3& outMin, Vec3& outMax) const {
     outMin = Vec3(1e30f, 1e30f, 1e30f);
     outMax = Vec3(-1e30f, -1e30f, -1e30f);
 
     for (int i = 0; i < (int)m_BoneBindings.size(); i++) {
         const BoneBinding& bone = m_BoneBindings[i];
-        // Original: transforms bounds by bone world matrix
-        // Port: no skeleton system, use raw bounds directly
+        Matrix44 W = GetBoneWorldTransform(i);
+        const float* M = W.m;  // column-major: col c, row r = M[c*4+r]
+
+        // Transform bmin and bmax as homogeneous points (w=1).
         const Vec3& bmin = bone.m_BoundsMin;
         const Vec3& bmax = bone.m_BoundsMax;
+        Vec3 wMin(
+            M[0]*bmin.x + M[4]*bmin.y + M[8]*bmin.z  + M[12],
+            M[1]*bmin.x + M[5]*bmin.y + M[9]*bmin.z  + M[13],
+            M[2]*bmin.x + M[6]*bmin.y + M[10]*bmin.z + M[14]
+        );
+        Vec3 wMax(
+            M[0]*bmax.x + M[4]*bmax.y + M[8]*bmax.z  + M[12],
+            M[1]*bmax.x + M[5]*bmax.y + M[9]*bmax.z  + M[13],
+            M[2]*bmax.x + M[6]*bmax.y + M[10]*bmax.z + M[14]
+        );
 
-        if (bmin.x < outMin.x) outMin.x = bmin.x;
-        if (bmin.y < outMin.y) outMin.y = bmin.y;
-        if (bmin.z < outMin.z) outMin.z = bmin.z;
-        if (bmax.x > outMax.x) outMax.x = bmax.x;
-        if (bmax.y > outMax.y) outMax.y = bmax.y;
-        if (bmax.z > outMax.z) outMax.z = bmax.z;
+        // Reduce both transformed corners into the running AABB.
+        if (wMin.x < outMin.x) outMin.x = wMin.x;
+        if (wMin.y < outMin.y) outMin.y = wMin.y;
+        if (wMin.z < outMin.z) outMin.z = wMin.z;
+        if (wMax.x < outMin.x) outMin.x = wMax.x;
+        if (wMax.y < outMin.y) outMin.y = wMax.y;
+        if (wMax.z < outMin.z) outMin.z = wMax.z;
+
+        if (wMin.x > outMax.x) outMax.x = wMin.x;
+        if (wMin.y > outMax.y) outMax.y = wMin.y;
+        if (wMin.z > outMax.z) outMax.z = wMin.z;
+        if (wMax.x > outMax.x) outMax.x = wMax.x;
+        if (wMax.y > outMax.y) outMax.y = wMax.y;
+        if (wMax.z > outMax.z) outMax.z = wMax.z;
     }
 }
 
