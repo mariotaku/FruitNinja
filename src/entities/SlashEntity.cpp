@@ -562,7 +562,6 @@ void SlashEntity::SetModColours(
     // Scalar globals
     g_LifeScale  = lifeScale;
     g_ColourType = colourType;
-    g_PaletteProgress = 0.0f;
 
     // Palette copy (count clamped to 16 for safety; binary trusts the caller).
     if (colourCount < 0) colourCount = 0;
@@ -572,6 +571,14 @@ void SlashEntity::SetModColours(
         g_Palette[i] = colours ? colours[i] : Colour(255, 255, 255, 255);
     }
 
+    // Palette progress init. Binary @ 0x17ca7c-0x17caa2:
+    //   default progress = 1.0
+    //   if (colourType == 2): progress = (float)(Rand32() % colourCount)
+    g_PaletteProgress = 1.0f;
+    if (g_ColourType == 2 && g_ColourCount > 0) {
+        g_PaletteProgress = (float)((unsigned)rand() % (unsigned)g_ColourCount);
+    }
+
     // Overlay texture: load from name (or null when name is empty).
     if (textureName2 && textureName2[0] != '\0') {
         g_ModTexture = Mortar::TextureManager::LoadLocalisedTexture(textureName2);
@@ -579,19 +586,21 @@ void SlashEntity::SetModColours(
         g_ModTexture.SetNull();
     }
 
-    // Resolve the 3 particle paths. Trail emitter sets g_DirectionalFlag.
-    g_TrailHash   = ResolveEmitterHash(particlePath);
+    // Trail particle hash. Binary @ 0x17cb02-0x17cb1a: keeps the StringHash
+    // even when the emitter doesn't exist; only g_DirectionalFlag is gated
+    // on existence (so consumers must check the flag first, not the hash).
+    g_TrailHash = (particlePath && particlePath[0] != '\0')
+                ? StringHash(particlePath) : 0;
+    bool trailExists = g_TrailHash != 0 &&
+        Mortar::PSPParticleManager::GetInstance().FindTemplate(g_TrailHash) != nullptr;
+
+    // Contact + second hashes: zero on miss (binary's `EmitterExists` gate).
     g_ContactHash = ResolveEmitterHash(contactParticle);
     g_SecondHash  = ResolveEmitterHash(particle2);
 
     // g_DirectionalFlag: 0 = no trail, 1 = trail, 2 = trail rotates with swipe.
-    // Binary sets to non-zero only when trail emitter exists; uses
-    // `directional` to pick 1 vs 2.
-    if (g_TrailHash != 0) {
-        g_DirectionalFlag = directional ? 2 : 1;
-    } else {
-        g_DirectionalFlag = 0;
-    }
+    // Set to non-zero only when trail emitter exists.
+    g_DirectionalFlag = trailExists ? (directional ? 2 : 1) : 0;
 
     // Live-update walker. Binary @ 0x0017ca0c walks
     // ActorManager::GetEntityFirst(type=3) and direct-calls
@@ -673,9 +682,14 @@ void SlashEntity::ColoursChanged() {
         m_NumPoints = 0;
 
         // Re-create trail emitter from new hash if directional flag set.
+        // Binary @ 0x17c466-0x17c47a calls AddEmitter(hash, NULL, true) and
+        // sets m_bUpdateWhenPaused = 1 on the result.
         if (g_DirectionalFlag != 0 && g_TrailHash != 0) {
             m_TrailEmitter = Mortar::PSPParticleManager::GetInstance()
-                .AddEmitter(g_TrailHash, &m_TrailEmitter);
+                .AddEmitter(g_TrailHash, /*ppRef=*/nullptr, /*persistent=*/true);
+            if (m_TrailEmitter) {
+                m_TrailEmitter->m_bUpdateWhenPaused = true;
+            }
         }
     }
 }
