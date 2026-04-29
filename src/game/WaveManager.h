@@ -1,25 +1,19 @@
 #ifndef FN_WAVE_MANAGER_H
 #define FN_WAVE_MANAGER_H
 
-#include "math/Random.h"
-
-// WaveManager — stubs for the wave/spawn subsystem.
+// WaveManager — wave spawning subsystem.
 //
 // Full class at 0x0022ee80 (singleton). Binary function table and field
 // offsets are documented in docs/functions/wave.md, docs/systems/wave-system.md,
-// docs/structs/wave.md.
+// docs/structs/wave.md, docs/systems/wave-system-impl.md.
 //
-// All members below are signature-only stubs so the rest of the port (Bomb
-// chain spawn, Fruit critical RNG, GameInit draw/destroy hooks, etc.) can
-// call into WaveManager without ifdefs. Every body is a no-op or returns a
-// safe default; every method comment cites the original binary address so
-// real logic can be filled in later.
-//
-// Analysed: 2026-04-23T00:00
+// Analysed: 2026-04-30T00:00
 
-// Forward-declare binary structs so the header stays lean. Real layouts
-// live in docs/structs/wave.md (WAVE_INFO 0x78, SPAWNER_INFO 0x64,
-// DEFAULT_WAVE_INFO 0x40, COIN_CHANCEINATOR 0x08, PROBABILITY_OVERIDE).
+#include "math/Random.h"
+#include "game/WaveStructs.h"
+#include <vector>
+#include <cstdint>
+
 struct WAVE_INFO;
 struct SPAWNER_INFO;
 struct PROBABILITY_OVERIDE;
@@ -32,49 +26,133 @@ class HUDControl;
 
 class WaveManager {
 public:
-    // --- Fields accessed cross-module. Keep public for now; mirror the
-    // binary layout where needed. ---
-
-    // +0x68: bomb chain-spawn level. Read by Bomb::Update when a bomb's
-    // fuse runs out (see Bomb.cpp chain-bomb path).
-    float spawnLevel;        // default 0.0f
-
-    // +0x70: global critical-chance multiplier (used by CriticalChanceMod,
-    // GetCriticalChance). Default 1.0f.
-    float m_CritChanceMult;
-
-    // RNG instance initialised by WaveManager ctor (binary @ 0x00123328).
-    // Used by the critical-hit eligibility ladder in Fruit::CollisionResponse
-    // (binary @ 0x001780f0..0x001781e8).
+    // +0x000: RNG instance. Used for wave selection, spawn angle/count RNG.
+    // Binary: Math::Random at +0x00 (24 bytes).
     Random m_Random;
+
+    // +0x035: wave-active flag
+    uint8_t field_0x35;
+    // +0x036: reset flag
+    uint8_t field_0x36;
+    // +0x037: misc flag
+    uint8_t field_0x37;
+    // +0x038: last selected wave index (int, -1 = none)
+    int field_0x38;
+    // +0x040: play-time accumulators
+    float field_0x40;
+    float field_0x44;
+    // +0x048
+    int field_0x48;
+    // +0x04c: combo timer (per-player stride 4)
+    float field_0x4c;
+    float field_0x4c_p1;
+    // +0x054: wave speed per player [2]
+    float m_Speed[2];            // +0x54, +0x58
+    // +0x058: boosted speed slot (overlaps m_Speed[1], per AddSpeed note)
+    // field_0x58 == &m_Speed[1]  -- used by AddSpeed for player 0
+    // +0x05c
+    int field_0x5c;
+    // +0x060: combo timer 2 per player
+    float field_0x60;
+    float field_0x60_p1;
+    // +0x064: fruit-multiplier (BombScale power-up)
+    float field_0x64;
+    // +0x068: bomb chain spawn level (BombMultiplyer power-up)
+    float spawnLevel;
+    // +0x06c: fruit spawn multiplier (FruitMultiplyer power-up)
+    float field_0x6c;
+    // +0x070: critical chance multiplier
+    float m_CritChanceMult;
+    // +0x074: speed accumulator (Reset loads m_SpeedMultPerMode[gameMode])
+    float field_0x74;
+    // +0x078: dtMod from PowerUpManager (default 1.0)
+    float field_0x78;
+
+    // +0x0ac: waveInfos — 4 vectors of WAVE_INFO* (one per game mode).
+    // Binary: base at +0xac, stride 0xc per mode (std::vector layout).
+    // Port: flat array of 4 vectors.
+    std::vector<WAVE_INFO*> waveInfos[4];
+
+    // +0x0dc: DEFAULT_WAVE_INFO[4] (each 0x40 bytes = 64 bytes)
+    DEFAULT_WAVE_INFO defaultWaveInfo[4];
+
+    // +0x1dc: COIN_CHANCEINATOR[4] (each 0x08 bytes)
+    COIN_CHANCEINATOR coinChance[4];
+
+    // +0x1fc: PROBABILITY_OVERIDE lists per game mode
+    std::vector<PROBABILITY_OVERIDE> probOverrides[4];
+
+    // +0x22c: current wave pointer per player [2]
+    WAVE_INFO* m_pCurrentWave[2];
+
+    // +0x230 (alias): wave count per player. GetNextWave increments.
+    // Binary uses the same storage as m_pCurrentWave_P1 for count in SP.
+    int m_WaveCount[2];
+
+    // +0x234: per-player wave delay accumulator
+    float field_0x234;
+    float field_0x238;
+
+    // +0x23c: per-player "wave-was-spawned" flag (IsWaveProcessing reads this)
+    uint8_t field_0x23c;
+    uint8_t field_0x23d;    // PROBABILITY_OVERIDE flags
+    uint8_t field_0x23e;
+    uint8_t _pad23f;
+
+    // +0x240: random delay
+    float field_0x240;
+
+    // +0x244..+0x2c3: m_FruitQueue[2][32] — fruit type queue per player
+    int m_FruitQueue[2][32];
+
+    // +0x2c4: fruit queue sizes
+    int m_FruitQueueSize[2];
+
+    // +0x2cc: misc counters
+    int field_0x2cc;
+    int field_0x2d0;
+
+    // +0x2d4: wave-step accumulator (fixed timestep)
+    float field_0x2d4;
+
+    // Wave queue (survival/combo modes — null in normal play)
+    WaveQue*     m_pWaveQue;
+    WaveQueItem* m_pWaveQueItem;
+
+    // Score threshold per player (for ChooseFrom logic)
+    int m_ScoreThreshold[2];
+
+    // Per-player next-wave delay
+    float m_NextWaveDelay[2];
+
+    // Per-player wave timer countdown
+    float m_WaveTimer[2];
+
+    // Speed multiplier per mode (loaded from binary constants, placeholder 1.0)
+    // Binary: array at +0x8c offset (stride 4 per mode).
+    // DIFFERS: actual per-mode values unknown from RE; using 1.0 as placeholder.
+    float m_SpeedMultPerMode[4];
 
     // --- Construction / singleton --------------------------------------
 
-    // 0x0012328c / 0x00123398 / 0x000f3660 (thunk): constructs RNG, zero-
-    // initialises wave vectors and default-wave-info table.
     WaveManager();
-
-    // 0x00121c78 / 0x00121d1c: calls Destroy() then destroys sub-objects.
     ~WaveManager();
 
-    // 0x00123328: Meyer's singleton at 0x0022ee80.
     static WaveManager* GetInstance();
 
     // --- Lifecycle -----------------------------------------------------
 
-    // 0x0012393c (470 lines): loads xml/originalWaveList.xml per game mode,
-    // builds WAVE_INFO/SPAWNER_INFO/COIN_CHANCEINATOR/PROBABILITY_OVERIDE.
+    // 0x0012393c: loads xml/<mode>WaveList.xml for each mode,
+    // builds WAVE_INFO/SPAWNER_INFO arrays.
     void Init();
 
     // 0x00121bf0: frees WAVE_INFO list, WaveQue, WaveQueItem.
     void Destroy();
 
-    // 0x00125be4: full state reset between games. fullReset re-randomises
-    // wave chances and clears fruit/bomb queues.
+    // 0x00125be4: full state reset between games.
     void Reset(bool fullReset);
 
-    // 0x00124b1c: restore state from FruitSaveData (re-spawns saved
-    // entities, calls SkipToPause/SkipToGameOver).
+    // 0x00124b1c: restore state from FruitSaveData.
     void Resume();
 
     // 0x001247f0: serialise current wave state into FruitSaveData.
@@ -92,27 +170,21 @@ public:
 
     // --- Per-frame update ---------------------------------------------
 
-    // 0x001259d8 (89 lines): per-frame update — resets multipliers,
-    // calls PowerUpManager::Update, advances wave timer, pumps UpdateWave
-    // on fixed timestep, checks completion conditions.
+    // 0x001259d8 (89 lines): fixed-timestep pump + multiplier resets.
     void Update(float dt);
 
-    // 0x00125390 (298 lines): one tick of wave processing — iterates
-    // spawners, decrements timers, calls SpawnFruit/SpawnBomb, rolls
-    // probability overrides, transitions to GetNextWave when drained.
+    // 0x00125390 (298 lines): one tick of wave spawning.
     void UpdateWave(float dt, int playerIdx, int unk);
 
-    // 0x00122f50: blitz-combo speed update (includes AddControl for the
-    // speed-control HUD meter).
+    // 0x00122f50: blitz-combo speed update.
     void UpdateComboSpeed(float dt);
 
     // --- Wave progression ---------------------------------------------
 
-    // 0x00124f10 (227 lines): advance to next WAVE_INFO using score-based
-    // selection or the pre-built WaveQue (survival/combo modes).
+    // 0x00124f10 (227 lines): advance to next WAVE_INFO.
     void GetNextWave(int playerIdx);
 
-    // 0x00125340: seek to a specific wave number; used by Resume.
+    // 0x00125340: seek to a specific wave number.
     void SetCurrentWave(int waveNo, float delay, int playerIdx);
 
     // 0x00124564 (142 lines): build the wave queue for survival/combo.
@@ -120,11 +192,10 @@ public:
 
     // --- Spawning -----------------------------------------------------
 
-    // 0x00121fa8: spawn N bombs from a spawner (or chain-spawn via nullptr).
-    // Called from Bomb::Update chain-bomb path when spawnLevel >= 2.
+    // 0x00121fa8: spawn N bombs.
     void SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int playerIdx);
 
-    // 0x001225a0 (248 lines): spawn N fruits from a spawner.
+    // 0x001225a0 (248 lines): spawn N fruits.
     void SpawnFruit(long count, long fruitType, SPAWNER_INFO* spawner, int playerIdx);
 
     // 0x00122ad8: clear all unspawned spawner entries.
@@ -132,7 +203,7 @@ public:
 
     // --- Rendering / HUD glue -----------------------------------------
 
-    // 0x00122ae8: wave overlay draw (wave name banner, etc.).
+    // 0x00122ae8: wave overlay draw.
     void Draw(int playerIdx);
 
     // 0x001217d4: clears cached speed-control HUDControl* if it matches.
@@ -140,18 +211,15 @@ public:
 
     // --- Queries -------------------------------------------------------
 
-    // Returns the WaveManager's internal RNG, used by the critical-hit
-    // eligibility ladder in Fruit::CollisionResponse (binary @ 0x001780f0).
     Random& GetRandom() { return m_Random; }
 
     // 0x00121834: m_Speed[playerIdx].
     float GetSpeed(int playerIdx);
 
-    // 0x001218dc: effective wave dt (clamped using speed + WAVE_INFO fields).
+    // 0x001218dc: effective wave dt (clamped).
     float GetWavedt(int playerIdx);
 
-    // 0x001219c4: returns waveCritChance * m_CritChanceMult, or 1.0f if no
-    // current wave.
+    // 0x001219c4: returns waveCritChance * m_CritChanceMult.
     float GetCriticalChance(int playerIdx);
 
     // 0x001219e4: returns true if a slice should be "critical" this tick.
@@ -163,16 +231,15 @@ public:
     // 0x0012180c: override list slice for current wave + player.
     PROBABILITY_OVERIDE* GetCurrentOverideList(int playerIdx);
 
-    // 0x00122a40: true while fruit/bombs still active for player (used by
-    // UpdateWave to defer GetNextWave until the wave drains).
+    // 0x00122a40: true while fruit/bombs still active for player.
     bool  IsWaveProcessing(int playerIdx);
 
     // --- Mutators -----------------------------------------------------
 
-    // 0x001218ac: increments speed-loss timer (clamped to 1.0).
+    // 0x001218ac: increments speed-loss timer.
     void AddToSpeedLossTime(float amount, int playerIdx);
 
-    // 0x00122e94: resets m_Speed + combo fields; clears blitz_bonus total.
+    // 0x00122e94: resets m_Speed + combo fields.
     void ResetSpeed(int playerIdx);
 
     // 0x00123510: add to combo speed; triggers blitz SFX/score.
@@ -183,31 +250,38 @@ public:
 
     // --- Power-up modifiers (PowerUpManager::Update calls these) ------
 
-    // 0x001286fc: `field_0x64 *= mult` — scales bomb spawn rate.
+    // 0x001286fc: field_0x64 *= mult
     void BombScale(float mult);
 
-    // 0x0012870c: `spawnLevel *= mult` — scales bomb chain level.
+    // 0x0012870c: spawnLevel *= mult
     void BombMultiplyer(float mult);
 
-    // 0x0012871c: `field_0x6c *= mult` — scales fruit spawn rate.
+    // 0x0012871c: field_0x6c *= mult
     void FruitMultiplyer(float mult);
 
-    // 0x0012872c: `m_CritChanceMult *= mult`.
+    // 0x0012872c: m_CritChanceMult *= mult
     void CriticalChanceMod(float mult);
 
     // --- Networking stubs (defunct online MP) ------------------------
 
-    // 0x001217e0: UpdateNetworking always returns 0 — online MP is defunct.
+    // 0x001217e0: always returns 0.
     static int  UpdateNetworking(float dt, int playerIdx);
 
-    // 0x0012197c: SendWaveSyncPacket — empty.
+    // 0x0012197c: empty.
     static void SendWaveSyncPacket();
 
-    // 0x00121980: ShouldDisplayNetworkWaitIndicator — always false.
+    // 0x00121980: always false.
     static bool ShouldDisplayNetworkWaitIndicator();
 
-    // 0x00121a1c: RequestCoins — calls COIN_CHANCEINATOR::GetCoins().
+    // 0x00121a1c: calls COIN_CHANCEINATOR::GetCoins().
     static void RequestCoins();
+
+private:
+    // Parse placement string to SpawnPlacement enum.
+    static SpawnPlacement ParsePlacement(const char* side);
+
+    // Split comma-separated string into tokens, trimming whitespace.
+    static void SplitWords(const char* str, std::vector<std::string>& out);
 };
 
 #endif  // FN_WAVE_MANAGER_H

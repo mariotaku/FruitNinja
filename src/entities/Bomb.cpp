@@ -692,10 +692,10 @@ void Bomb::CollisionResponse(const Vec3& bladeVel) {
             // plays "Bomb-explode" SFX (string at 0x001B96FC), records
             // stat for hash "bomb" (0x001B96CE), sets bombHitTimer = 3.2,
             // camera shake already fired above.
+            // GameOver is triggered by GameUpdate when bombHitTimer crosses 1.5 downward.
             game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
             if (game->pGameSound) game->pGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
             if (game->pSaveData) game->pSaveData->AddToTotal("bomb", 1);
-            // TODO: skip entirely if game->gameOverFlag already set
         }
     } else if (m_bMenuBombHit != 0) {
         // Menu-bomb re-hit branch. Binary code:
@@ -724,3 +724,34 @@ void Bomb::CollisionResponse(const Vec3& bladeVel) {
 
     m_bHit = 1;   // +0x68 -- triggers hit branch in Update next tick
 }
+
+// Matches Bomb::GetNumActiveForPlayer (0x00122a14).
+// TODO: playerIdx filtering not ported; counts all active bombs.
+int Bomb::GetNumActiveForPlayer(int /*playerIdx*/, bool /*countPrespawn*/) {
+    ActorManager* am = ActorManager::GetInstance();
+    if (!am) return 0;
+    return am->GetNumEntities(1);
+}
+
+// Matches Bomb::ClearUnspawned (0x00122ab4).
+void Bomb::ClearUnspawned() {
+    ActorManager* am = ActorManager::GetInstance();
+    if (!am) return;
+    std::list<Entity*>::iterator it;
+    Entity* e = am->GetEntityFirst(1, it);
+    while (e) {
+        Bomb* b = static_cast<Bomb*>(e);
+        Entity* next_e = am->GetEntityNext(1, it);
+        if (b->m_Countdown > 0.0f)
+            am->Deactivate(b);
+        e = next_e;
+    }
+}
+
+// Matches Bomb::SetForPlayer (0x00122b5c).
+// TODO: split-screen MP player assignment not ported.
+void Bomb::SetForPlayer(Bomb* /*b*/, int /*playerIdx*/) {}
+
+// Matches Bomb::MakeFat (0x00122bc0).
+// TODO: big-bomb upgrade not ported.
+void Bomb::MakeFat(Bomb* /*b*/, bool /*resetScale*/) {}

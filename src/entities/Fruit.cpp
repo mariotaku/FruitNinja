@@ -1,4 +1,5 @@
 #include "Fruit.h"
+#include "ActorManager.h"
 #include "FruitInfo.h"
 #include "SlashEntity.h"
 #include "SplatEntity.h"
@@ -12,6 +13,7 @@
 #include "hud/MissControl.h"
 #include "game/BombHit.h"
 #include "game/WaveManager.h"
+#include "game/GameOver.h"
 #include "Game.h"
 #include "audio/GameSound.h"
 #include "math/math3d.h"
@@ -488,12 +490,31 @@ void Fruit::KillFruit(bool doMissPenalty) {
         m_pEmitter2 = nullptr;
     }
 
-    // TODO: miss penalty (needs MissControl, GameState)
-    // if (!m_bSliced && !m_bNoPowerUp && FruitInfo[type].baseScore < 5):
-    //   non-zen: MissControl::MakeDisappear, SFX "fruit_miss",
-    //            missCount++, GameOver if > 2
-    //   zen:     FruitSaveData tracking
-    (void)doMissPenalty;
+    if (doMissPenalty) {
+        const FruitInfo* info = FruitInfo_Get(m_FruitType);
+        // DIFFERS: m_bNoPowerUp field not yet ported to Fruit.h; treating as false
+        // (safe — bombs use Bomb class, not Fruit, so only real fruits reach here)
+        if (!m_bSliced && info && info->m_Score < 5) {
+            Game* g = Game::GetInstance();
+            if (g) {
+                if (g->gameMode == 2) {
+                    // Zen mode: tracking only, no life loss.
+                    // TODO: FruitSaveData::AddToTotal("zen_miss", 1) when save system is ported
+                } else {
+                    // Classic / Arcade miss penalty.
+                    if (MissControl* mc = MissControl::GetFree()) {
+                        SmartPtr<Mortar::Texture> defTex;
+                        mc->MakeDisappear(pos, 0, defTex);
+                    }
+                    if (g->pGameSound) g->pGameSound->SFXPlay("fruit_miss", 1.0f, 1.0f);
+                    g->missCount++;
+                    if (g->missCount > 2) {
+                        FN::GameOver(-1, -1.0f, -1);
+                    }
+                }
+            }
+        }
+    }
 
     // TODO: unlink from SlashEntity (field_0x108 + 0x134)
     // TODO: decrement g_PowerFruitCount if FruitInfo has powers
@@ -769,6 +790,19 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
     const float sliceAngleDeg = (float)(int16_t)m_SliceAngle / -182.0f + 90.0f;
     const float sliceLength   = bladeSpeed * 0.4f;
     FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
+
+    // Score increment — matches AddToCurrentScore (0x0010a7ac).
+    // Multiplier: critical-eligible fruit scores double.
+    // Binary also calls scoreDelegate.Call(points * multiplier) and tier
+    // SFX — both skipped (not yet ported).
+    // TODO: AddToCurrentScore tier-SFX and FruitSaveData::AddToTotal
+    if (info) {
+        Game* g = Game::GetInstance();
+        if (g) {
+            const int multiplier = m_bCriticalEligible ? 2 : 1;
+            g->currentScore += info->m_Score * multiplier;
+        }
+    }
 }
 
 // Matches Fruit::Slice (0x176d58), now with the binary's flipSide
@@ -1150,4 +1184,41 @@ const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
     if (!s_FruitModelsLoaded) return nullptr;
     if (fruitType < 0 || fruitType >= (int)s_FruitModels.size()) return nullptr;
     return &s_FruitModels[fruitType];
+}
+
+// Matches Fruit::RandomFruit (0x001762cc).
+// TODO: binary RE needed for exact weighting; uniform random stub.
+int Fruit::RandomFruit(bool /*allowSpecial*/) {
+    int count = FruitInfo_GetCount();
+    if (count <= 0) return 0;
+    // TODO: use WaveManager RNG; using stdlib for now
+    return rand() % count;
+}
+
+// Matches Fruit::GetNumActiveForPlayer (0x00122a00).
+// TODO: playerIdx filtering not ported; counts all active fruits.
+int Fruit::GetNumActiveForPlayer(int /*playerIdx*/, bool /*checkBombs*/) {
+    ActorManager* am = ActorManager::GetInstance();
+    if (!am) return 0;
+    return am->GetNumEntities(0);
+}
+
+// Matches Fruit::ClearUnspawned (0x001762a0).
+void Fruit::ClearUnspawned(bool deactivateVisible) {
+    ActorManager* am = ActorManager::GetInstance();
+    if (!am) return;
+    std::list<Entity*>::iterator it;
+    Entity* e = am->GetEntityFirst(0, it);
+    while (e) {
+        Fruit* f = static_cast<Fruit*>(e);
+        Entity* next_e = am->GetEntityNext(0, it);
+        if (f->m_ChuckDelay > 0.0f || deactivateVisible)
+            am->Deactivate(f);
+        e = next_e;
+    }
+}
+
+// Matches Fruit::Disable (0x00126370).
+void Fruit::Disable(Fruit* f) {
+    if (f) f->m_bCriticalEligible = false; // TODO: set collision guard once field is added
 }

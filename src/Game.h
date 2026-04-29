@@ -26,6 +26,8 @@ class ActorManager;
 class MainScreen;
 class FruitCamera;
 class FruitSaveData;
+class GameOverScreen;
+class TimeControl;
 namespace Mortar { class GameSound; }
 
 struct Game : public Mortar::MortarGame {
@@ -88,11 +90,11 @@ struct Game : public Mortar::MortarGame {
     float field_0x88;              // +0x88
     Vec3 worldPos;                 // +0x90: light direction in GameDraw
     MainScreen* mainScreen;        // +0x160: pMainScreen
-    // +0x164: GameOverScreen* pGameOverScreen (TODO)
+    GameOverScreen* pGameOverScreen;  // +0x164
     class TutorialControl* pTutorialCtrl;  // +0x168
     int fruitTotal;                // +0x174: last AddToTotal result
     // +0x178: CoinCounter* pCoinCounter (TODO)
-    // +0x180: TimeControl* pTimeCtrl (TODO)
+    TimeControl* pTimeCtrl;        // +0x180
     // +0x188: GameSound* pGameSound. Port backs this with a real
     // GameSound instance, but the sound backend itself is no-op
     // (SoundManager is stubbed). Makes the SFXPlay call sites real

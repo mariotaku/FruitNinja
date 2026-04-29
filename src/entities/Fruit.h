@@ -171,6 +171,27 @@ public:
     // Accessor for a per-fruit pair of half meshes. Returns nullptr if
     // index out of range or LoadFruitModels hasn't run.
     static const FruitModelInfo* GetFruitModelInfo(int fruitType);
+
+    // Matches Fruit::RandomFruit (0x001762cc). Returns a random valid fruit
+    // type index. When allowSpecial=false, skips special/power-up fruits.
+    // TODO: binary RE needed for exact weighting. Stub: uniform random over
+    // non-special fruit types.
+    static int RandomFruit(bool allowSpecial);
+
+    // Matches Fruit::GetNumActiveForPlayer (0x00122a00). Returns count of
+    // active Fruit entities assigned to `playerIdx` (-1 = all players).
+    // When checkBombs=true the caller also wants bomb counts (not used here).
+    // TODO: playerIdx filtering not yet ported (entity has no player field stub).
+    static int GetNumActiveForPlayer(int playerIdx, bool checkBombs);
+
+    // Matches Fruit::ClearUnspawned (0x001762a0). Walks ActorManager type-0
+    // list and deactivates any fruit still in pre-spawn (chuck-delay) state.
+    // Binary param: false = don't deactivate already-visible fruits.
+    static void ClearUnspawned(bool deactivateVisible);
+
+    // Matches Fruit::Disable (0x00126370). Sets collision guard so the fruit
+    // can no longer be sliced; does NOT deactivate/kill it.
+    static void Disable(Fruit* f);
 };
 
 #endif
