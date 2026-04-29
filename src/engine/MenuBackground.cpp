@@ -47,3 +47,7 @@ void ChangeBackground(const char* texName) {
 Mortar::Texture* GetCurrentBackground() {
     return g_BackgroundTexture.Get();
 }
+
+void UnloadBackground() {
+    g_BackgroundTexture.SetNull();
+}
