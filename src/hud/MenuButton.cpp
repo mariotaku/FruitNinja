@@ -413,6 +413,13 @@ void MenuButton::Update(float dt) {
                 // ASM-verified: 2026-04-30 binary @ 0x0014e74a..0x0014e7ec (asm-inspector)
                 // --- Fruit branch (binary 0x0014e74a..0x0014e7ec) ---
                 //
+                // Binary @ 0x0014e752: m_HalfB_pos = button.pos every frame.
+                // Anchor for slice-physics references; harmless to overwrite
+                // when fruit is mid-slice (Fruit::Update overwrites it again).
+                if (m_pFruitPiece) {
+                    m_pFruitPiece->m_SecondPos = pos;
+                }
+
                 // Structure (per ARM trace; Ghidra's nested-if obscures it):
                 //   entity->m_HalfB_pos = pos          // unconditional
                 //   if (entity->m_bSliced != 0) {
@@ -473,19 +480,28 @@ void MenuButton::Update(float dt) {
                 // alongside the ring.
                 m_pEntity = nullptr;
             } else {
-                // --- Bomb branch (binary @ 0x0014e740 region) ---
+                // --- Bomb branch (binary @ 0x0014e7f4..0x0014e81e) ---
                 // Bombs do NOT fire MenuButton's click callback or call
                 // ClearMenuItems from here. The user-hit click runs through
                 // Bomb::m_HitCallback (set in MenuButton::Init bomb path).
                 // Detach gate is purely Bomb::Enabled() == 0 -- once the bomb
                 // finishes its own hit/explode sequence, restore the original
                 // scale and detach so the ring shrink curve can run.
+                //
+                // Binary writes pos.z and entity Z-pos every frame in this
+                // path (not just on detach). The values keep the bomb on
+                // the menu Z-plane.
                 Bomb* bomb = static_cast<Bomb*>(m_pEntity);
+                pos.z = -5.0f;
+                bomb->pos.z = 150.0f;
                 if (!bomb->Enabled()) {
                     bomb->scale = m_HitBoundsScale;
+                    // Binary does NOT write m_FadeCounter on detach -- it
+                    // falls through to the grow-clamp at 0x3ffc and lets
+                    // the next-frame m_pEntity==null shrink handle the
+                    // ramp-down naturally. Don't force-write FadeCounter.
                     m_pEntity = nullptr;
                     m_pFruitPiece = nullptr;
-                    m_FadeCounter = 0x3ffc;
                 }
             }
         }
