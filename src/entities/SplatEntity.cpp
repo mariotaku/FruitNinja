@@ -372,15 +372,17 @@ void SplatEntity::UpdateSplat(float dt) {
 // while it is positive the function returns immediately so consecutive
 // landings within the gate window don't double-trigger.
 // ASM-verified: 2026-04-29T03:25Z binary @ 0x0017f5ec (asm-inspector)
-// DIFFERS: exact sound names not documented by re-analyst. Using
-// "Splat-1".."Splat-6" as placeholders. Update when names are resolved.
+// Sound names: matched to the 6 splatter-{size}-{n} files shipped in
+// FruitNinjaBada/Data/sfx (the placeholder "Splat-N" names from the
+// initial port pass don't exist as assets).
 // ---------------------------------------------------------------------
 void SplatEntity::PlaySplat() {
     if (s_SplatSfxGate > 0.0f) return;
 
     static const char* kSplatSfx[6] = {
-        "Splat-1", "Splat-2", "Splat-3",
-        "Splat-4", "Splat-5", "Splat-6",
+        "splatter-large-1",  "splatter-large-2",
+        "splatter-medium-1", "splatter-medium-2",
+        "splatter-small-1",  "splatter-small-2",
     };
     const int idx = RandInt(6);
 
