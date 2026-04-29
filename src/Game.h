@@ -93,7 +93,7 @@ struct Game : public Mortar::MortarGame {
     GameOverScreen* pGameOverScreen;  // +0x164
     class TutorialControl* pTutorialCtrl;  // +0x168
     int fruitTotal;                // +0x174: last AddToTotal result
-    // +0x178: CoinCounter* pCoinCounter (TODO)
+    class CoinCounter* pCoinCounter; // +0x178: step 5 in GameInit
     TimeControl* pTimeCtrl;        // +0x180
     // +0x188: GameSound* pGameSound. Port backs this with a real
     // GameSound instance, but the sound backend itself is no-op

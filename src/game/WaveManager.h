@@ -133,6 +133,16 @@ public:
     // DIFFERS: actual per-mode values unknown from RE; using 1.0 as placeholder.
     float m_SpeedMultPerMode[4];
 
+    // Per-mode speed lower bound (binary field_0x8c[4], 0x125ba2-0x125aa6).
+    // TODO: per-mode bounds need RE -- using 1.0 as placeholder.
+    // DIFFERS: original values unknown from DAT; using 1.0f per mode.
+    float field_0x8c[4];
+
+    // Per-mode speed upper bound (binary field_0x9c[4], 0x125ba2-0x125aa6).
+    // TODO: per-mode bounds need RE -- using 100.0 as placeholder.
+    // DIFFERS: original values unknown from DAT; using 100.0f per mode.
+    float field_0x9c[4];
+
     // --- Construction / singleton --------------------------------------
 
     WaveManager();
