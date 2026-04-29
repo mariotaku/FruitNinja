@@ -86,6 +86,53 @@ static SmartPtr<Mortar::Texture> g_BladeTex;
 SlashEntity* g_pSlashEntity = nullptr;
 
 // ---------------------------------------------------------------------------
+// Blade-modifier global state. Per docs/entities/slash-mod-pipeline.md.
+// All file-scope so the three setters operate on globals (no `this`).
+//
+// Defaults match the binary's _GLOBAL__I_Slash static-init: 16-entry white
+// palette, count=1, type=0 (static), lifeScale=1, scales 1/1/0/1/0, flag2=1.
+// ---------------------------------------------------------------------------
+static float    g_LifeScale         = 1.0f;   // 0x001F3E54
+static int      g_ColourCount       = 1;      // 0x001F3E58
+static float    g_PaletteProgress   = 0.0f;   // 0x0024D874
+static Colour   g_Palette[16] = {
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+};                                            // 0x0024D878
+static int      g_ColourType        = 0;      // 0x0024D8B8 (0=static, 1=per-frame, 2=per-swipe)
+static uint8_t  g_DirectionalFlag   = 0;      // 0x0024D8BC (0=no trail, 1=trail, 2=trail-rotates)
+static uint32_t g_TrailHash         = 0;      // 0x0024D8C0
+static uint32_t g_ContactHash       = 0;      // 0x0024D8C4
+static uint32_t g_SecondHash        = 0;      // 0x0024D8C8
+static SmartPtr<Mortar::Texture> g_ModTexture; // g_SlashState.modTexture (+0xd8)
+
+static float    g_Scale1            = 1.0f;   // 0x001F3E5C (lifetime divisor)
+static float    g_Scale2            = 1.0f;   // 0x001F3E60 (max thickness coeff; max width = g_Scale2 * 9.0)
+static float    g_Scale3            = 0.0f;   // 0x0024D8D0 (min thickness floor)
+static float    g_Scale4            = 1.0f;   // 0x001F3E64
+static float    g_Scale5            = 0.0f;   // 0x0024D8D4
+static uint8_t  g_ScaleFlag1        = 0;      // 0x0024D8D8 (gates CreateGhost())
+static uint8_t  g_ScaleFlag2        = 1;      // 0x001F3E69 (gates UV-mirror branch)
+
+// Resolve a particle-emitter name to its template hash, validating that the
+// emitter actually exists in PSPParticleManager. Binary calls
+// `PSPParticleManager::EmitterExists(hash)` after StringHash; if not, the
+// hash is zeroed so render consumers skip the emitter cleanly.
+static uint32_t ResolveEmitterHash(const char* path) {
+    if (!path || path[0] == '\0') return 0;
+    uint32_t h = StringHash(path);
+    const Mortar::PSPEmitterTemplate* t =
+        Mortar::PSPParticleManager::GetInstance().FindTemplate(h);
+    return t ? h : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Content load — matches LoadContent (0x17C948)
 // ---------------------------------------------------------------------------
 void SlashEntity::LoadContent() {
@@ -340,10 +387,16 @@ void SlashEntity::Update(float dt) {
     // path this should come from eventually.
     Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
     const bool bladeActive = (m_State != 0) && (m_NumPoints > 0);
-    if (bladeActive) {
+    // Trail emitter only spawns when blade-mod has set g_DirectionalFlag and
+    // a valid g_TrailHash (resolved by SetModColours). The default blade
+    // ("ORIGINAL_SLASH" in itemlist.xml) leaves both at 0 so no trail.
+    // Hardcoded TRAIL_EMITTER_NAME is dead code -- kept as a fallback while
+    // the blade equip pipeline ramps up. Once shop equip is verified
+    // end-to-end, drop the fallback.
+    const bool wantTrail = bladeActive && g_DirectionalFlag != 0 && g_TrailHash != 0;
+    if (wantTrail) {
         if (!m_TrailEmitter) {
-            const uint32_t hash = StringHash(TRAIL_EMITTER_NAME);
-            m_TrailEmitter = pm.AddEmitter(hash, &m_TrailEmitter, /*persistent=*/true);
+            m_TrailEmitter = pm.AddEmitter(g_TrailHash, &m_TrailEmitter, /*persistent=*/true);
             if (m_TrailEmitter) {
                 m_TrailEmitter->m_bUpdateWhenPaused = true;
             }
@@ -354,7 +407,7 @@ void SlashEntity::Update(float dt) {
             // m_TrailEmitter->m_Pos = this->base.pos (the raw touch).
             m_TrailEmitter->m_Pos = m_RawTouchPos;
         }
-    } else if (m_TrailEmitter) {
+    } else if (!bladeActive && m_TrailEmitter) {
         pm.ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
@@ -457,14 +510,21 @@ bool SlashEntity::CollideWithSphere(const Mortar::ColSphere& sphere,
 // ---------------------------------------------------------------------------
 void SlashEntity::Draw() {
     if (m_NumPoints < 2) return;
-    if (!g_BladeTex.IsValid()) return;
+
+    // Texture select: blade-mod overlay (g_ModTexture) replaces the default
+    // blade.tex when set. Binary @ 0x0017E424:
+    //   if (SmartPtr::IsValid(g_SlashState.modTexture)) bind modTexture
+    //   else bind defaultTexture
+    SmartPtr<Mortar::Texture>& bladeTex =
+        g_ModTexture.IsValid() ? g_ModTexture : g_BladeTex;
+    if (!bladeTex.IsValid()) return;
 
     // Matrix reset + MVP upload. Matches binary Draw 0x17E424 prelude.
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
-    glBindTexture(GL_TEXTURE_2D, g_BladeTex->m_TexId);
+    glBindTexture(GL_TEXTURE_2D, bladeTex->m_TexId);
 
     if (Renderer* r = Renderer::GetInstance()) {
         const int vertCount = m_NumPoints * 2;
@@ -477,45 +537,156 @@ void SlashEntity::Draw() {
 // Blade modifier apply functions (called from SlashModInfo::SetEquipped)
 // ---------------------------------------------------------------------------
 
-// SetModColours @ 0x0017ca0c
-// TODO: implement when blade palette + particle manager + actor iterate land.
-// Full RE spec in docs/structs/items.md §SetModColours.
+// SetModColours @ 0x0017ca0c. Full spec: docs/entities/slash-mod-pipeline.md.
+//
+// Writes the colour palette + particle hashes + overlay texture into the
+// file-scope globals, then walks ActorManager type-3 (SlashEntity) actors
+// and direct-calls ColoursChanged on each so live blade entities pick up
+// the change.
+//
+// Note: g_DirectionalFlag is only set when the trail particle path resolves
+// to an existing emitter — otherwise stays at 0 (no trail). The other two
+// hashes (contactParticle, particle2) zero on miss but don't toggle the
+// directional flag.
 void SlashEntity::SetModColours(
-    const Colour*  /*colours*/,
-    int            /*colourCount*/,
-    int            /*colourType*/,
-    float          /*lifeScale*/,
-    const char*    /*particlePath*/,
-    const char*    /*textureName2*/,
-    bool           /*directional*/,
-    const char*    /*contactParticle*/,
-    const char*    /*particle2*/)
+    const Colour*  colours,
+    int            colourCount,
+    int            colourType,
+    float          lifeScale,
+    const char*    particlePath,
+    const char*    textureName2,
+    bool           directional,
+    const char*    contactParticle,
+    const char*    particle2)
 {
-    // TODO: copy colour palette; load textureName2 via LoadLocalisedTexture;
-    //       resolve particlePath/contactParticle/particle2 to emitter hashes;
-    //       if game active walk ActorManager type-3 entities, call ColoursChanged().
+    // Scalar globals
+    g_LifeScale  = lifeScale;
+    g_ColourType = colourType;
+    g_PaletteProgress = 0.0f;
+
+    // Palette copy (count clamped to 16 for safety; binary trusts the caller).
+    if (colourCount < 0) colourCount = 0;
+    if (colourCount > 16) colourCount = 16;
+    g_ColourCount = colourCount;
+    for (int i = 0; i < colourCount; ++i) {
+        g_Palette[i] = colours ? colours[i] : Colour(255, 255, 255, 255);
+    }
+
+    // Overlay texture: load from name (or null when name is empty).
+    if (textureName2 && textureName2[0] != '\0') {
+        g_ModTexture = Mortar::TextureManager::LoadLocalisedTexture(textureName2);
+    } else {
+        g_ModTexture.SetNull();
+    }
+
+    // Resolve the 3 particle paths. Trail emitter sets g_DirectionalFlag.
+    g_TrailHash   = ResolveEmitterHash(particlePath);
+    g_ContactHash = ResolveEmitterHash(contactParticle);
+    g_SecondHash  = ResolveEmitterHash(particle2);
+
+    // g_DirectionalFlag: 0 = no trail, 1 = trail, 2 = trail rotates with swipe.
+    // Binary sets to non-zero only when trail emitter exists; uses
+    // `directional` to pick 1 vs 2.
+    if (g_TrailHash != 0) {
+        g_DirectionalFlag = directional ? 2 : 1;
+    } else {
+        g_DirectionalFlag = 0;
+    }
+
+    // Live-update walker. Binary @ 0x0017ca0c walks
+    // ActorManager::GetEntityFirst(type=3) and direct-calls
+    // SlashEntity::ColoursChanged on each instance (NOT through vtable).
+    // Port: SlashEntity isn't an Entity-derived actor here — it's a
+    // singleton (g_pSlashEntity), so direct-call once. Multiplayer
+    // (currently unported) would need a real walker.
+    if (g_pSlashEntity) {
+        g_pSlashEntity->ColoursChanged();
+    }
 }
 
-// InitModColours @ 0x0017cc38
-// TODO: implement when blade colour palette / overlay texture wiring lands.
-// Resets palette to defaults, nulls overlay texture SmartPtr, zeroes emitter hashes.
+// InitModColours @ 0x0017cc38. Resets blade-mod state to defaults
+// (16-entry white palette, count=1, type=0 static, lifeScale unchanged
+// per binary -- the function does NOT touch lifeScale or scales).
+// Does NOT walk active entities.
 void SlashEntity::InitModColours()
 {
-    // TODO: reset colourCount=0, colourType=0, null overlay texture SmartPtr,
-    //       zero particle hashes + emitter-type flags, copy default colour palette.
+    for (int i = 0; i < 16; ++i) {
+        g_Palette[i] = Colour(255, 255, 255, 255);
+    }
+    g_ColourCount     = 1;
+    g_ColourType      = 0;
+    g_PaletteProgress = 0.0f;
+    g_TrailHash       = 0;
+    g_ContactHash     = 0;
+    g_SecondHash      = 0;
+    g_DirectionalFlag = 0;
+    g_ModTexture.SetNull();
 }
 
-// SetModScales @ 0x0017b328
-// TODO: implement when SlashEntity internal scale fields are modelled.
-// Default call (no blade mod): SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f).
+// SetModScales @ 0x0017b328. Pure global-write, no validation, no walker.
+// Default no-mod call: SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f).
 void SlashEntity::SetModScales(
-    float  /*startThick*/,
-    float  /*endThick*/,
-    float  /*scaleLen*/,
-    float  /*uvLen*/,
-    bool   /*flipUD*/,
-    bool   /*loop*/,
-    float  /*loopUVLen*/)
+    float startThick,
+    float endThick,
+    float scaleLen,
+    float uvLen,
+    bool  flipUD,
+    bool  loop,
+    float loopUVLen)
 {
-    // TODO: write to g_pSlashEntity singleton scale fields when they are modelled.
+    // Param mapping per RE doc:
+    //   param_1 startThick -> g_Scale1 (lifetime divisor)
+    //   param_2 endThick   -> g_Scale2 (max thickness coeff)
+    //   param_3 scaleLen   -> g_Scale3 (min thickness floor)
+    //   param_4 uvLen      -> g_Scale4
+    //   param_5 flipUD     -> g_ScaleFlag1
+    //   param_6 loop       -> g_ScaleFlag2
+    //   param_7 loopUVLen  -> g_Scale5
+    g_Scale1     = startThick;
+    g_Scale2     = endThick;
+    g_Scale3     = scaleLen;
+    g_Scale4     = uvLen;
+    g_Scale5     = loopUVLen;
+    g_ScaleFlag1 = flipUD ? 1 : 0;
+    g_ScaleFlag2 = loop   ? 1 : 0;
 }
+
+// ColoursChanged @ 0x0017c41c. Per-instance live-update fired by the
+// SetModColours walker. NOT virtual (binary direct-calls).
+//
+// - Clears existing trail emitter (so it gets re-created from new hash).
+// - If blade is currently active (m_State != 0), truncates trail geometry
+//   and re-creates the trail emitter from g_TrailHash if directional flag set.
+//
+// Port note: m_HighlightColour and UpdateModColour are not yet ported; the
+// binary also re-snaps the per-swipe highlight colour here when
+// g_ColourType == 2. We skip that until the highlight system lands —
+// currently visible only for type-2 mods which aren't shipped.
+void SlashEntity::ColoursChanged() {
+    if (m_TrailEmitter) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
+        m_TrailEmitter = nullptr;
+    }
+    if (m_State != 0) {
+        // Truncate trail so the new colour palette / overlay tex doesn't
+        // get applied retroactively to mid-swipe geometry.
+        m_NumPoints = 0;
+
+        // Re-create trail emitter from new hash if directional flag set.
+        if (g_DirectionalFlag != 0 && g_TrailHash != 0) {
+            m_TrailEmitter = Mortar::PSPParticleManager::GetInstance()
+                .AddEmitter(g_TrailHash, &m_TrailEmitter);
+        }
+    }
+}
+
+// Accessors used by render consumers in this file. Hot inlines kept in
+// the .cpp so the globals stay file-scope.
+const SmartPtr<Mortar::Texture>& SlashEntity::GetModTexture()    { return g_ModTexture; }
+uint32_t SlashEntity::GetTrailEmitterHash()                       { return g_TrailHash; }
+uint32_t SlashEntity::GetContactEmitterHash()                     { return g_ContactHash; }
+uint32_t SlashEntity::GetSecondEmitterHash()                      { return g_SecondHash; }
+uint8_t  SlashEntity::GetDirectionalFlag()                        { return g_DirectionalFlag; }
+int      SlashEntity::GetColourCount()                            { return g_ColourCount; }
+int      SlashEntity::GetColourType()                             { return g_ColourType; }
+const Colour* SlashEntity::GetPalette()                           { return g_Palette; }
