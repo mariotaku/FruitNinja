@@ -29,11 +29,14 @@
 #include <cstdint>
 
 // Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
-// Three shared slots in the binary; port has only the new_item one wired
-// because backdrop + sparkle ring renderers aren't implemented yet.
-//   GOT+0x77E0  scratchs.tex          (sparkle ring base — TODO)
-//   GOT+0x79DC  blurry_backing.tex    (sparkle backing — TODO)
-//   GOT+0x7894  new_item.tex          (gold "NEW" stamp — used below)
+// LoadContent loads three shared SmartPtrs in this order:
+//   GOT+0x77E0  scratchs.tex          (Phase-A backdrop — used below)
+//   GOT+0x7894  new_item.tex          (Layer-2 star — used below)
+//   GOT+0x????  hud_cross.tex         (cross icon — TODO)
+// (Spec docs/engine/menubutton-backdrop.md confirms the first two; the
+//  third was originally believed to be blurry_backing.tex by the new-item
+//  star RE but the backdrop RE corrected to hud_cross.tex.)
+static SmartPtr<Mortar::Texture> s_TexScratchs;
 static SmartPtr<Mortar::Texture> s_TexNewItem;
 
 // Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
@@ -606,16 +609,59 @@ void MenuButton::UpdateTouchPosition() {
 void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     if (!m_bVisible || m_DrawColour.a == 0) return;
 
-    // First-pass at layer 0x40: render backdrop (TODO), demote, return.
-    // Binary @ 0x0014fa24: cmp r3,#0x40 / bne else_branch / adds r3,#0x40
-    //                     / str r3,[r4,#0x34] / [draw backdrop] / return.
+    // Compute fade-derived alpha once. Used by Phase A AND Phase B.
+    // Binary @ entry of Draw, before the layer test.
+    //   alpha = m_FruitType < 0 ? 0xFF
+    //                          : clamp(m_FadeCounter * 256 / 16380, 0, 255)
+    uint8_t alpha;
+    if (m_FruitType < 0) {
+        alpha = 0xFF;
+    } else {
+        float n = (float)m_FadeCounter * 256.0f / 16380.0f;
+        int   a = (int)n;
+        if (a > 254) a = 0xFF;
+        if (a < 0)   a = 0;
+        alpha = (uint8_t)a;
+    }
+
+    // First-pass at layer 0x40 (Phase A): scratch fruit/bomb backdrop quad,
+    // then demote to 0x80 and return. Binary @ 0x0014fa24..0x0014faf8.
+    // Spec: docs/engine/menubutton-backdrop.md.
     if (m_LayerFlags == 0x40) {
         m_LayerFlags = 0x80;
-        // TODO: render the round fruit-icon backdrop using the secondary
-        // texture (binary 0x0014fa3e..0x0014faf8). Constants:
-        //   DAT_0014fcf8 — backdrop z-offset
-        //   DAT_0014fcfc — backdrop UV / size literal
-        //   DAT_0014fcf0 / DAT_0014fcf4 — alpha denom pair on m_FadeCounter
+        if (s_TexScratchs.IsValid()) {
+            Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+            Renderer* r = Renderer::GetInstance();
+            if (r) {
+                // Mirror flip via X scale (m_bFlipped chosen randomly in Init).
+                const float sx = m_bFlipped ? -1.0f : 1.0f;
+
+                mm.GetWorldStack().Reset();
+                Matrix44 mat = Matrix44::MakeScale(sx, 1.0f, 1.0f);
+                // Z = -5500 puts the backdrop deep in the ortho frustum so it
+                // sorts behind the spinning fruit/bomb mesh. Constants:
+                //   DAT_0014fcf8 = -5500.0
+                Vec3 t(pos.x, pos.y, -5500.0f);
+                mat.GlobalTranslate44(t);
+                mm.GetWorldStack().SetCurrentMatrix(mat);
+                mm.UploadModelViewOnly();
+
+                Colour tint(255, 255, 255, alpha);
+                glBindTexture(GL_TEXTURE_2D, s_TexScratchs->m_TexId);
+                // Fixed 364x364 quad (halfW = halfH = 182, full UV).
+                // Renderer::DrawQuad scales via the matrix above; we pass
+                // (uMin, vMin, uMax, vMax) = (0,0,1,1) and rely on the
+                // matrix to size. Since DrawQuad uses unit-quad geometry,
+                // bake the half-size into the scale matrix.
+                mat = Matrix44::MakeScale(sx * 182.0f, 182.0f, 1.0f);
+                mat.GlobalTranslate44(t);
+                mm.GetWorldStack().Reset();
+                mm.GetWorldStack().SetCurrentMatrix(mat);
+                mm.UploadModelViewOnly();
+                r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
+                glBindTexture(GL_TEXTURE_2D, 0);
+            }
+        }
         return;
     }
 
@@ -680,16 +726,20 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
 }
 
 // Matches MenuButton::LoadContent @ 0x0014f674 — loads three shared textures
-// into class statics. Port wires only new_item.tex; the other two slots
-// (scratchs.tex / blurry_backing.tex) stay null until sparkle/backdrop
-// REs land.
+// into class statics in the binary's order: scratchs.tex, new_item.tex,
+// hud_cross.tex (TODO). Port wires the first two; the cross icon waits
+// until its consumer surfaces.
 void MenuButton::LoadContent() {
+    if (!s_TexScratchs.IsValid()) {
+        s_TexScratchs = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
+    }
     if (!s_TexNewItem.IsValid()) {
         s_TexNewItem = Mortar::TextureManager::LoadLocalisedTexture("new_item.tex");
     }
 }
 
 void MenuButton::UnLoadContent() {
+    s_TexScratchs.SetNull();
     s_TexNewItem.SetNull();
 }
 
