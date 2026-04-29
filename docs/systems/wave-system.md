@@ -6,6 +6,15 @@
 
 One XML file loaded per game mode (4 total), via `TiXmlDocument::LoadFile`. Outer loop: `mode = 0..3`.
 
+| Mode | XML file                  | Game mode |
+|------|---------------------------|-----------|
+| 0    | `xml/originalWaveList.xml` | Classic   |
+| 1    | `xml/comboWaveList.xml`    | Combo     |
+| 2    | `xml/arcadeWaveList.xml`   | Arcade    |
+| 3    | `xml/zenWaveList.xml`      | Zen       |
+
+Path table at binary `0x001f3d34` (4 × `char*`). See `wave-system-impl.md` §7.
+
 ### XML Structure
 
 ```xml
@@ -162,5 +171,6 @@ WaveManager::Update(dt):
 ## See Also
 
 - [Wave functions](../functions/wave.md) -- SpawnFruit, GetNextWave pseudocode
+- [Wave system implementation notes](wave-system-impl.md) -- Reset, SpawnBomb, IsWaveProcessing, mode→XML map, WAVE_STEP, AddSpeed
 - [WaveManager struct](../structs/wave.md) -- field layout
 - [Resources](../resources.md) -- wavelist XML files

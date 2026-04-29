@@ -103,18 +103,19 @@ Game-specific logic, screens, entities, and systems.
 - [systems/physics.md](systems/physics.md) — Ballistic flight, two-body slicing, gravity ramp, spawn pipeline
 - [systems/wave-system.md](systems/wave-system.md) — Wave XML format, WAVE_INFO/SPAWNER_INFO parsing, wave progression
 - [systems/scoring.md](systems/scoring.md) — Score pipeline from slice to AddToCurrentScore, combo system
+- [systems/game-over-flow.md](systems/game-over-flow.md) — GameOver trigger (6 callers), pauseFlag double-duty, mode-pick wave continuity, dead code paths
 - [systems/menu-flow.md](systems/menu-flow.md) — Screen hierarchy, callbacks, mode selection
 - [systems/save-system.md](systems/save-system.md) — FruitSaveData persistence, stat tracking
 - [systems/power-ups.md](systems/power-ups.md) — PowerUp struct, 4 modifier types, activation flow
 - [systems/music-state.md](systems/music-state.md) — UpdateMusic state machine: volume ramp, crossfade, preload arm logic, track IDs
 
 ### Game Struct Layouts
-- [structs/game.md](structs/game.md) — Game singleton, MortarGame vtable, FruitNinja app, GlesForm
-- [structs/hud.md](structs/hud.md) — HUD, HUDControl, HUDControl3d class hierarchy, MissControl
+- [structs/game.md](structs/game.md) — Game singleton, MortarGame vtable, FruitNinja app, GlesForm, **g_GameData field index**
+- [structs/hud.md](structs/hud.md) — HUD, HUDControl, HUDControl3d class hierarchy, **TimeControl** (countdown timer), MissControl
 - [structs/wave.md](structs/wave.md) — WaveManager, WaveInfo
 - [structs/data.md](structs/data.md) — FRUIT_INFO (816 bytes), FruitSaveData
 - [structs/gameplay-misc.md](structs/gameplay-misc.md) — MenuButton (38 callers, TouchReleased gate, MakeCritical/MakeRare), MenuBackground, EffectImage, QUADCUSTOMVERTEX
-- [structs/ui-widgets.md](structs/ui-widgets.md) — FruitFactControl, ScrollingMenu, ScoreControl, TimeControl, SpeedControl, etc. (10 classes)
+- [structs/ui-widgets.md](structs/ui-widgets.md) — FruitFactControl, ScrollingMenu, ScoreControl, SpeedControl, etc. (10 classes)
 - [structs/ui-controls2.md](structs/ui-controls2.md) — BonusScreen, ScreenFadeControl, ScreenTint, ComboControl, NotificationControl, GenericHUDControl (7 classes)
 - [structs/data-classes.md](structs/data-classes.md) — FNHighscore, FNHighscoreList, Bonus, BonusType, BonusAwardHud
 - [structs/game-managers.md](structs/game-managers.md) — ScoreModifier, ItemManager, PowerUpManager, BonusManager, asset loading order
