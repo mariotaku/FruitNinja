@@ -110,7 +110,7 @@ bool AboutScreen::s_bContentLoaded = false;
 // -----------------------------------------------------------------------
 static const char* GetVersionString()
 {
-    return "1.0.0";
+    return "1.5.4";
 }
 
 // -----------------------------------------------------------------------
@@ -441,14 +441,13 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
             mm.GetWorldStack().Reset();
             mm.UploadModelViewOnly();
 
-            // Scale: glyphs are normalised by lineHeight (= 24 px for
-            // font_fruit_ninja), so 1.0 = 1 unit (= 1 pixel post-projection)
-            // and is invisibly small. The binary's actual scale value at
-            // this site isn't yet RE'd; use 16.0 as a sensible default
-            // matching this font's "small label" use elsewhere
-            // (ShopListItem cost/desc range 16-18). DIFFERS: replace once
-            // the binary value is verified.
-            const float versionScale = 16.0f;
+            // ASM-verified: 2026-04-30 binary @ 0x0012f5ae (asm-inspector).
+            // Scale = 14.0f (inline VFP immediate vmov.f32 s3,#0x41600000).
+            // Both the haiku and version DrawString calls share this scale.
+            // The binary draws version immediately after the haiku string
+            // on the same line; port skips the haiku (RTTI garbage in
+            // shipped binary) so we just place the version at FONT_X.
+            const float versionScale = 14.0f;
             const Vec3 fontPos(FONT_X, yDrawn + FONT_TEXT_Y_OFFSET - 10.0f, 0.0f);
             const Colour fontColour(0x74, 0x5D, 0x3C, 255);
             game.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
