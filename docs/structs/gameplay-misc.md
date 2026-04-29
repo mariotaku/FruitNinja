@@ -39,8 +39,8 @@ Layer 1 (2D): Button texture quad (+0x74)
      TintColour with button colour + alpha → DrawQuadUnCached
 
 Layer 2 (2D): "New item" star indicator (+0xFC >= 0)
-  └─ Oscillating bounce via SinIdx, dimmed or highlighted
-     Uses shared star texture from LoadContent
+  └─ Hop-up bounce via |SinIdx|*6, tinted grey (dim) or white (highlight)
+     Uses shared `new_item.tex` ("NEW" stamp) from LoadContent
 
 Layer 3 (2D): Sparkle ring (+0xF8 >= 0)
   └─ 8 segments × 6 verts = 48 QUADCUSTOMVERTEX tri-list
@@ -126,10 +126,121 @@ if (fruitType >= 0) {
 | AddPeice | 0x00150240 | — | Add sub-element (text, icon) |
 | TouchReleased | 0x0014e5cc | — | Tap-release gate: skip click if fruit-typed, fire callback only for toggles |
 | Clicked | 0x001507d8 | — | Fire click delegate (empty virtual stub) |
-| LoadContent | 0x0014f674 | 28 | Load 3 shared textures (star, sparkle, etc.) |
+| LoadContent | 0x0014f674 | 28 | Load 3 shared textures: `scratchs.tex`, `blurry_backing.tex`, `new_item.tex` |
+| SetNewSymbol | 0x0014e404 | 16 | `true` -> timer = 0 (only if currently <0); `false` -> timer = -1 |
 | Remove | 0x0014ed18 | — | Animate removal |
 | MakeCritical | 0x00151764 | — | Display "critical" overlay at slice point; position, fade, animate |
 | MakeRare | 0x001518d8 | — | Display "rare" (special) overlay; same as critical but alpha=0.5 |
+
+### "New item" star indicator (m_NewIndicatorTimer @ +0xFC)
+
+<!-- RE'd: 2026-04-29 -->
+
+Animated "NEW" stamp drawn over a button when ItemManager has unseen
+shop items. Trigger lives in `MainScreen_Update` via `SetNewSymbol`
+(0x0014e404): `true` sets timer = 0.0 (only if currently <0, i.e. edge-trigger);
+`false` sets timer = -1.0. Gate is `>= 0` = visible.
+
+#### Update tick (in `MenuButton::Update` @ 0x0014e644)
+
+```c
+if (0.0 <= this->m_NewIndicatorTimer) {
+    this->m_NewIndicatorTimer += param_1 + param_1;     // += 2 * dt
+    if (1.0 <= this->m_SparkleTimer) {
+        this->m_NewIndicatorTimer = 0.0;                 // phase reset on sparkle
+    }
+}
+```
+
+- Rate: `+= 2 * dt` per frame. At dt=1/60 -> +1/30 per frame.
+- No wrap; timer grows unbounded. (SinIdx in Draw wraps via uint16 cast.)
+- Phase resets to 0 only when `m_SparkleTimer >= 1.0` (sparkle ring just fired).
+- DAT_0014e970 = 0.0 is the reset literal.
+
+#### Draw block (in `MenuButton::Draw` @ 0x0014fd18..0x0014fe98)
+
+```c
+if (0.0 <= this->m_NewIndicatorTimer) {
+    float ratio = base.size.x / m_TargetSize.x;          // fade-in scale (0..1)
+    Texture::Set(GOT[+0x7894 -> "new_item.tex"]);
+
+    ResetMatrix();
+    Scale44(M, ratio * 64.0, ratio * 32.0, 0.0);          // 64x32 quad
+
+    // Bounce angle = uint16(timer * 180 * 182)
+    //   period = 65536 / (2*dt * 180 * 182) ~= 60 frames = 1s @ 60fps
+    float s = SinIdx((uint16_t)(timer * 180.0f * 182.0f));
+    float bounce_y = fabsf(s) * 6.0f;                     // hop-up only
+
+    Vec3 offset = {
+        m_BounceParams.x * m_TargetSize.x * 0.5f,         // boX*W/2
+        bounce_y + m_BounceParams.y * m_TargetSize.y * 0.5f, // hop + boY*H/2
+        0.0f
+    };
+    offset *= ratio;                                      // shrinks with button
+    GlobalTranslate44(M, button.pos + offset);
+    SetMatrix(M); UploadMatrices();
+
+    Colour tint = m_bHighlighted
+        ? Colour(0xFF, 0xFF, 0xFF, alpha)                 // full white
+        : Colour(0x80, 0x80, 0x80, alpha);                // dimmed grey
+    tint = TintColour(tint);                              // applied once
+    DrawQuadSized(0.0, 1.0, 0.0, 1.0, tint);
+    Texture::UnSet(...);
+}
+```
+
+`alpha` here is the same `local_2b0` byte computed once at Draw entry:
+```c
+if (m_FruitType < 0) alpha = 0xFF;                           // toggles
+else alpha = clamp((m_FadeCounter * 256.0) / 16383.0, 0, 0xFF);  // fade-in
+```
+
+#### Resolved constants
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_0014e970 | 0.0 | NewIndicatorTimer reset literal (sparkle phase-reset) |
+| DAT_0014f240 | 0.85 | `m_BounceParams.x` and `.y` initial value |
+| DAT_0014f244 | 0.0 | `m_BounceParams.z` initial value |
+| DAT_0014fcf0 | 256.0 | Alpha numerator (FadeCounter * 256 / 16383) |
+| DAT_0014fcf4 | 16383.0 | Alpha denominator |
+| DAT_0015003c | 180.0 | First sin-frequency multiplier |
+| DAT_00150040 | 182.0 | Second sin-frequency multiplier (180*182=32760, ~=uint16/2) |
+| DAT_00150044 | 0.0 | Z component (always zero for 2D) |
+| DAT_00150048 | 32.0 | Star quad scale Y (height) |
+| DAT_0015004c | 64.0 | Star quad scale X (width) |
+| GOT+0x7894 | SmartPtr\<Texture\>* | `new_item.tex` slot (DAT_0015005c) |
+
+`new_item.tex` is the gold "NEW" stamp at `Data/textures/new_item.tex`.
+Loaded by `MenuButton::LoadContent` (0x0014f674) into the second of three
+shared static SmartPtr slots (1st: `scratchs.tex`, 2nd: `blurry_backing.tex`,
+3rd: `new_item.tex`). Confirmed by reading the GOT pointers and the C-strings
+at 0x001bbd58 / 0x001baefa / 0x001bbd65.
+
+#### Animation summary (timer -> visual)
+
+| Output | Formula |
+|--------|---------|
+| Visibility | timer >= 0 (else hidden) |
+| Quad size | (64 * ratio, 32 * ratio) where ratio = size.x / TargetSize.x |
+| Position offset | ratio * (0.425 * W, |sin(angle)|*6 + 0.425 * H, 0) |
+| Bounce angle | uint16(timer * 32760), period ~= 1 sec at 60 fps |
+| Tint colour | (0xFF,0xFF,0xFF) highlighted else (0x80,0x80,0x80) |
+| Alpha | follows button fade-in (FadeCounter * 256 / 16383, clamped) |
+
+#### Behaviour matrix (highlight vs dim)
+
+| Condition | Tint | Notes |
+|-----------|------|-------|
+| `m_bHighlighted == 1` (default) | white (255,255,255,a) | Active / focused button |
+| `m_bHighlighted == 0` | grey (128,128,128,a) | Dimmed when another button is highlighted in nav |
+
+Unlike the main button quad (which has its own `bVar5` "shrink-when-not-highlighted"
+ratio check), the star *texture stays fixed-size at 64x32* — only the position-offset
+and `ratio` link it to the parent button's fade-in animation. No alpha pulse;
+the alpha purely tracks the parent button's fade-in. The "pulse" the user sees
+is the |sin|*6 px Y bounce, not a colour pulse.
 
 ### Constructor Variants
 

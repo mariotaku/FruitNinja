@@ -179,7 +179,6 @@ public:
     // SetModScales @ 0x0017b328
     // Writes trail thickness/length/UV scale fields into the global singleton.
     // Default no-mod call: SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f).
-    // TODO: implement when SlashEntity internal scale fields are modelled.
     static void SetModScales(
         float startThick,  // param_1 -- start (head) thickness scale
         float endThick,    // param_2 -- end (tail) thickness scale
@@ -189,6 +188,22 @@ public:
         bool  loop,        // param_6 -- loop texture
         float loopUVLen    // param_7 -- loop UV length
     );
+
+    // ColoursChanged @ 0x0017c41c. Per-instance live-update — fired by
+    // SetModColours's actor walker on every active SlashEntity. NOT virtual.
+    void ColoursChanged();
+
+    // Accessors for the file-scope blade-mod globals. Render consumers in
+    // SlashEntity.cpp use these instead of direct global access so they can
+    // be tested in isolation. Defined inline in the .cpp.
+    static const SmartPtr<Mortar::Texture>& GetModTexture();
+    static uint32_t GetTrailEmitterHash();
+    static uint32_t GetContactEmitterHash();
+    static uint32_t GetSecondEmitterHash();
+    static uint8_t  GetDirectionalFlag();
+    static int      GetColourCount();
+    static int      GetColourType();
+    static const Colour* GetPalette();
 };
 
 // Global singleton instance -- created in GameInit, destroyed in GameDestroy.
