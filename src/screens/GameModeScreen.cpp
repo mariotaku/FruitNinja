@@ -355,9 +355,21 @@ void GameModeScreen::Update(float dt) {
             camT *= CAMERA_DECAY;
             game.mainScreen->SetCameraTransition(camT);
 
+            static int s_CaseLog = 0;
+            if (s_CaseLog++ < 10) {
+                printf("[GameModeScreen] case %d: camT=%.4f alpha=%.4f fired=%d\n",
+                       m_State, camT, m_TransitionAlpha,
+                       m_bSetupLevelFired ? 1 : 0);
+            }
+
             // Binary @ 0x0013f2e2: vtable[18] (SetupLevel) dispatched once
-            // camera transition crosses -0.9 (DAT_0013f460).
-            if (!m_bSetupLevelFired && camT < -0.9f) {
+            // camera transition crosses -0.9 (DAT_0013f460). camT decays
+            // toward 0 from -1 (main menu zoom-in), so the actual gate is
+            // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
+            // Latch keeps it one-shot per mode-pick.
+            if (!m_bSetupLevelFired && camT > -0.9f) {
+                printf("[GameModeScreen] case %d: camT=%.4f -> SetupLevel()\n",
+                       m_State, camT);
                 SetupLevel();
                 m_bSetupLevelFired = true;
             }
@@ -540,11 +552,13 @@ void GameModeScreen::QuitCallback() {
 
 // vtable[18] @ 0x0013e21c
 void GameModeScreen::SetupLevel() {
+    printf("[GameModeScreen::SetupLevel] firing\n");
     FN::PrepareForLevelStart();
 }
 
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
+    printf("[GameModeScreen::ClassicModeCallback] gameMode=0, m_State=3\n");
     m_bSetupLevelFired = false;
     m_State = 3;
     game.gameMode = 0;

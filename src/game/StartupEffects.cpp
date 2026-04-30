@@ -82,6 +82,7 @@ void DrawStartFade() {
 
 // @ 0x00169a9c
 void PrepareForLevelStart() {
+    printf("[FN::PrepareForLevelStart] firing -> WaveManager::Reset(false)\n");
     WaveManager::GetInstance()->Reset(false);
     Game* game = Game::GetInstance();
     if (game) game->pauseFlag = 1;

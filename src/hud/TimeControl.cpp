@@ -113,23 +113,32 @@ void TimeControl::Update(float dt) {
 
     if (game->pauseFlag) return;
 
+    // count-up mode when m_CountdownStart <= 0. binary @ 0x001624a4 count-up branch.
+    // DIVERGES: was unconditionally subtracting dt.
+    if (m_CountdownStart <= 0.0f) {
+        m_TimeRemaining += dt;
+        return;
+    }
+
     m_TimeRemaining -= dt;
 
-    // Visual flash: tick animation
-    m_TickFrame += dt;
-    if (m_TickFrame > 5.5f) m_TickFrame = 0.0f;
-
-    // Colour tint bands as time runs low
+    // Colour tint bands as time runs low.
+    // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
+    // DIVERGES: was sinf() smooth pulse.
+    // Thresholds: 3/6/11. DIVERGES: was 2/5/10.
+    // binary @ 0x001624a4 flash section.
     float t = m_TimeRemaining;
     Colour tint(255, 255, 255, 255);
-    // TODO: exact binary flash frequency computation (8/4/2 Hz at 0..10/5/2s)
-    // Approximation: pulse red when time < 10s
-    if (t < 10.0f) {
-        float phase = m_TickFrame * (t < 2.0f ? 8.0f : (t < 5.0f ? 4.0f : 2.0f));
-        float s = sinf(phase * 3.14159f);
-        if (s > 0.0f) {
-            tint = Colour(255, (uint8_t)(255 - (int)(s * 200)), (uint8_t)(255 - (int)(s * 200)), 255);
-        }
+    static const Colour RED_TINT(255, 100, 100, 255);
+    if (t < 3.0f) {
+        // 8 Hz: ((int)(t*8.0)) & 1
+        tint = (((int)(t * 8.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+    } else if (t < 6.0f) {
+        // 4 Hz: ((int)(t*4.0)) & 1
+        tint = (((int)(t * 4.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+    } else if (t < 11.0f) {
+        // 2 Hz: ((int)(t+t)) & 1 = ((int)(t*2.0)) & 1
+        tint = (((int)(t * 2.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
     }
     m_DrawColour = tint;
 
@@ -179,7 +188,8 @@ void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
     float drawY = pos.y;
     Vec3 drawPos(drawX, drawY, 0.0f);
 
-    font->DrawString(1.0f, 1.0f, 0.0f,
+    // DAT_00162b0c = 32.0 -- font size for countdown text. binary @ 0x00162982
+    font->DrawString(32.0f, 1.0f, 0.0f,
                      m_TextBuffer, drawPos,
                      m_DrawColour, 0xe);
 
@@ -189,7 +199,8 @@ void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
         Vec3 overlayPos(drawX, drawY - POWERUP_Y_OFFSET, 0.0f);
         // TODO: real GOT-relative colour (GOT+DAT_00162b1c); placeholder white
         Colour overlayTint(255, 255, 255, 255);
-        font->DrawString(1.0f, 1.0f, 0.0f,
+        // DAT_00162b0c = 24.0 -- powerup overlay font size. binary @ 0x00162a..
+        font->DrawString(24.0f, 1.0f, 0.0f,
                          m_PowerupOverlay, overlayPos,
                          overlayTint, 0);
     }

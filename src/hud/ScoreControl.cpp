@@ -259,10 +259,19 @@ void ScoreControl::Update(float dt) {
 
     if (waveTimer > 0.0f) {
         m_LayerFlags = 8 << m_PlayerIdx;
-        // wave-mode: center text by measured width
-        // TODO: full centering calc using Font::MeasureWidth when Font is accessible here
-        m_DrawPosX = posX + 24.0f;
-        m_DrawPosY = posY;
+        // wave-mode: recentre score banner. binary @ 0x00158b00..0x00158b70
+        // Measure current score string, shift pos by (-160 - w*0.5, +80, 0).
+        // DIVERGES: was missing this centring; score banner position was off-centre.
+        if (game->pFontNumbers.IsValid()) {
+            char scoreBuf[32];
+            snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
+            float measW = game->pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
+            m_DrawPosX = -160.0f - measW * 0.5f;
+            m_DrawPosY = posY + 80.0f;
+        } else {
+            m_DrawPosX = posX + 24.0f;
+            m_DrawPosY = posY;
+        }
     } else {
         m_LayerFlags = 1 << m_PlayerIdx;
     }
@@ -327,13 +336,14 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             char buf[32];
             snprintf(buf, sizeof(buf), "%d", m_DisplayedScore);
 
-            // Adaptive width clamp: if score >= 1000, compare against "000" baseline width
-            // DAT_00159090 = 0.75, DAT_00159094 = 48.0, DAT_00159098 = 1.0
+            // Adaptive width clamp: if score >= 1000, compare against "000" baseline width.
+            // DAT_00159090 = 96.0 (NOT 0.75 as old comment said). DIFFERS: was *0.75f.
+            // binary @ 0x00158e1c section A. DAT_00159094 = 48.0, DAT_00159098 = 0.0.
             float scaleX = 1.0f;
             float offsetX = 0.0f;
             if (m_DisplayedScore >= 1000) {
-                // TODO: cache "000" width (cxa-guard) — compute each time for now
-                float baseline = game->pFontNumbers->MeasureWidth(48.0f, "000") * 0.75f;
+                // TODO: cache "000" width (cxa-guard) -- compute each time for now
+                float baseline = game->pFontNumbers->MeasureWidth(48.0f, "000") * 96.0f;
                 float printed  = game->pFontNumbers->MeasureWidth(48.0f, buf);
                 if (printed > baseline) {
                     scaleX  = baseline / printed;
@@ -345,8 +355,10 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             float drawX = m_DrawPosX + offsetX;
             float drawY = m_DrawPosY;
             float scale = 48.0f * m_ScalePulse * scaleX;
+            // binary alignment = 0x0d (CENTER|MIDDLE|BOTTOM). DIFFERS: was FONT_ALIGN_CENTER (0x01).
+            // binary @ 0x00158e1c section A FontDrawString alignment.
             game->pFontNumbers->DrawString(scale, 1.0f, 0.0f,
-                buf, Vec3(drawX, drawY, 0.0f), col, Mortar::FONT_ALIGN_CENTER);
+                buf, Vec3(drawX, drawY, 0.0f), col, 0x0d);
         }
 
         // Section B: per-digit combo overlay.
@@ -400,7 +412,9 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                     game->pFontNumbers->DrawString(scale, 1.0f, 0.0f,
                         label, Vec3(drawX, drawY, 0.0f), tint, Mortar::FONT_ALIGN_CENTER);
 
-                    cursorX += game->pFontNumbers->MeasureWidth(scale, label) + 5.0f;
+                    // binary @ 0x001591b4: cursorX += MeasureString(label) * scale + 5.0
+                    // DIFFERS: was missing the * scale factor -> digits overlapped.
+                    cursorX += game->pFontNumbers->MeasureWidth(scale, label) * scale + 5.0f;
                 }
             }
         }
