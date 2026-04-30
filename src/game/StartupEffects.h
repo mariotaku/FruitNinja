@@ -13,6 +13,12 @@ void DrawNews();
 // @ ~0x0016bc12 — draw start-up fade-in overlay.
 void DrawStartFade();
 
+// @ 0x00169a9c — prime the first wave when the player picks a game mode.
+// Called by GameModeScreen::SetupLevel (vtable[18]) once the camera fade
+// crosses -0.9. Resets WaveManager and sets game.pauseFlag = 1 so the
+// gameplay loop doesn't tick until STATE_CAMERA_FADE clears the flag.
+void PrepareForLevelStart();
+
 } // namespace FN
 
 #endif // FN_GAME_STARTUP_EFFECTS_H

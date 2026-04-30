@@ -95,11 +95,19 @@ private:
 
     void DrawConnectTexture(const Vec3& pos);  // 0x0013f754
 
+    // vtable[18] @ 0x0013e21c — prime the first wave once the camera fade
+    // crosses -0.9. Calls PrepareForLevelStart().
+    void SetupLevel();
+
     // Button callbacks (bound via std::function).
     void QuitCallback();          // 0x0013F5E0 — back button, m_State = 0xE
     void ClassicModeCallback();   // 0x0013dfb4 — m_State = 3
     void ZenModeCallback();       // 0x0013dffc — m_State = 6
     void ArcadeModeCallback();    // 0x0013e19c — m_State = 5
+
+    // Port-only one-shot latch: binary vtable[18] is idempotent but
+    // WaveManager::Reset(false) is destructive — guard against per-frame calls.
+    bool m_bSetupLevelFired = false;
 };
 
 #endif
