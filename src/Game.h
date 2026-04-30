@@ -20,6 +20,7 @@
 #include "platform/SDLInputTranslator.h"
 #include "render/Font.h"
 #include "util/SmartPtr.h"
+#include "asset/Texture.h"
 
 class HUD;
 class ActorManager;
@@ -105,6 +106,10 @@ struct Game : public Mortar::MortarGame {
     float m_MenuReturnTimer;       // +0x1A0
     uint8_t flag_0x1a8;            // +0x1A8
     uint8_t m_bFrameDirty;         // +0x604
+
+    // +0xF4: splash logo texture (HB_logo.tex), loaded on demand in GameUpdate.
+    // Released when splashFadeTimer reaches 0. Distinct from +0xFC background.
+    SmartPtr<Mortar::Texture> pSplashTex;
 
     // === Port-specific fields (SDL replacements for Bada OS) ===
 

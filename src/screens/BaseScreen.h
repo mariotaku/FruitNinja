@@ -41,8 +41,6 @@ public:
                      float alpha, const Vec3& secondaryTexPos);
 
     // UpdateButtons @ 0x00130ab4 — lazy ScreenButton creation + update.
-    // TODO: implement ScreenButton struct for full port. Currently a
-    // no-op since DojoScreen/GameModeScreen manage buttons directly.
     void UpdateButtons(float dt);
 
     // AddGenericControl — registers a HUDControl in m_HUDControls

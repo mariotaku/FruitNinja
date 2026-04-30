@@ -258,8 +258,30 @@ void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();
     if (!game) { if (earlyFrame) printf("GameUpdate: game nullptr, return\n"); return; }
 
-    if (earlyFrame) printf("GameUpdate: -> Touch::Update\n");
-    Mortar::Touch::GetInstance().Update();
+    // === Splash phase (g_TaskState +0x1C, init = 1.5f) ===
+    // Binary @ 0x0016BED0: gated on splashFadeTimer > 0.
+    // Loads HB_logo.tex on demand, freezes game->dt, drains timer at dt*2.
+    // Port: LoadingJob::CanBoot() omitted (static init has CanBoot=1 => no-op gate).
+    GameTaskState* splashTs = GetTaskState();
+    if (splashTs->splashFadeTimer > 0.0f) {
+        if (!game->pSplashTex) {
+            game->pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
+        }
+        game->dt = 0.0f;
+        splashTs->splashFadeTimer -= dt * 2.0f;
+        if (splashTs->splashFadeTimer <= 0.0f) {
+            splashTs->splashFadeTimer = 0.0f;
+            game->pSplashTex.SetNull();
+        }
+        // Falls through to InputManager/sound updates (binary matches).
+    } else {
+        // Normal path: InputManager::Update in the binary.
+        // Port uses Touch::Update + the rest below.
+        if (earlyFrame) printf("GameUpdate: -> Touch::Update\n");
+        Mortar::Touch::GetInstance().Update();
+    }
+    // Splash path skips Touch::Update (binary does not call it during splash).
+    // The checks below still run unconditionally per binary call order.
 
     if (earlyFrame) printf("GameUpdate: -> bombHitTimer tick\n");
     const float prevBombTimer = game->bombHitTimer;

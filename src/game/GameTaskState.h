@@ -77,11 +77,17 @@ struct GameTaskState {
     // +0xfc: background texture (loaded in GameInit)
     SmartPtr<Mortar::Texture> pBackgroundTexture;
 
+    // +0x1C: splash fade timer, statically initialised to 1.5f in .data
+    // (g_TaskState + 0x1C = 0x001F3DA0, bytes 00 00 c0 3f).
+    // Drains at dt * 2.0f; reaches 0 at ~0.75 s wall time.
+    float splashFadeTimer;
+
     GameTaskState()
         : totalTime(0), prevStateDt(0), prevState(0), initialized(false),
           pPauseScreen(nullptr), firstFrame(false), field_0x111(false),
           initComplete(false), pAppState_x54(nullptr),
-          pSliceEffectList(nullptr), pSliceEffectPool(nullptr) {}
+          pSliceEffectList(nullptr), pSliceEffectPool(nullptr),
+          splashFadeTimer(1.5f) {}
 };
 
 // State handler function types (match original function pointer table)

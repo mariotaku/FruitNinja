@@ -2,8 +2,12 @@
 // SplashTask — State 0 handlers
 // Original: SplashInit 0x16f648, SplashUpdate 0x16f5d8, SplashDraw 0x16f554, SplashExit 0x16f59c
 //
-// In the port: Splash auto-transitions to State 2 (Game) on the first frame.
-// The original waits for MenuBackground + input, but we skip that for now.
+// DIFFERS: per docs/systems/splash-flow.md, these four functions are DEAD CODE in the
+// shipped binary. The dispatch table at 0x001E8A28 only registers GameDraw/GameUpdate/
+// GameInit/GameExit — Splash and Frontend addresses never appear. The actual splash is
+// implemented as an in-frame overlay inside GameUpdate/GameDraw (see GameInit.cpp +
+// StartupEffects.cpp). This file is kept for source-archaeology value only; SplashInit/
+// SplashUpdate/SplashDraw/SplashExit are unreachable at runtime.
 //
 
 #include "GameTaskState.h"
