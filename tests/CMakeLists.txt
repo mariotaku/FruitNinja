@@ -23,6 +23,13 @@ add_executable(test_screen test_screen.cpp)
 target_link_libraries(test_screen PRIVATE fruit-ninja-game SDL2::SDL2main)
 if (WIN32)
     target_link_libraries(test_screen PRIVATE opengl32)
+else()
+    # Linux/macOS: link the system GL so test_screen.cpp's direct
+    # glReadPixels call resolves. The rest of the engine loads GL via
+    # SDL_GL_GetProcAddress, but the test takes a screenshot via the
+    # static symbol.
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_screen PRIVATE OpenGL::GL)
 endif()
 
 # SDL2.dll must sit next to test_screen.exe on Windows (same as the
@@ -53,6 +60,9 @@ add_executable(test_gameplay test_gameplay.cpp)
 target_link_libraries(test_gameplay PRIVATE fruit-ninja-game SDL2::SDL2main)
 if (WIN32)
     target_link_libraries(test_gameplay PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_gameplay PRIVATE OpenGL::GL)
 endif()
 if (WIN32 AND TARGET SDL2::SDL2)
     set(_sdl2_real SDL2::SDL2)
