@@ -1,5 +1,6 @@
 #include "WaveManager.h"
 #include "Game.h"
+#include "FruitSaveData.h"
 #include "entities/ActorManager.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
@@ -402,8 +403,119 @@ void WaveManager::Reset(bool fullReset) {
 // Resume / SaveWaveInfo
 // ----------------------------------------------------------------------------
 
+// 0x001255b8 — not yet ported; stub so Resume can call.
+static void SkipToPause(bool /*flag*/) {
+    // TODO: 0x001255b8 — re-enter paused game state.
+    // See docs/engine/splat-pool-and-wave-resume.md A7 "SkipToPause wave-state restore".
+}
+
+// 0x00125450 — not yet ported; stub so Resume can call.
+static void SkipToGameOver(int /*goState*/, float /*goTimer*/,
+                           float /*nextComboBonus*/, float /*bombHitTimer*/,
+                           int /*field5*/) {
+    // TODO: 0x00125450 — fast-forward into game-over screen state.
+    // See docs/engine/splat-pool-and-wave-resume.md A7 branch selection.
+}
+
+// ASM-verified: not yet — implementation from spec A7 @ 0x00124b1c.
+// Analysed: 2026-04-30T00:00
 void WaveManager::Resume() {
-    // TODO: 0x00124b1c — restore from FruitSaveData (Resume path).
+    // Resume is only called on restore-from-save, never on cold boot.
+    // Cold boot uses WaveManager::NewGame() -> Reset(true) -> GetNextWave(0).
+
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    FruitSaveData* sd = game->pSaveData;
+    if (!sd) return;
+
+    // Sentinel: if no active game was saved, nothing to restore.
+    if (!sd->m_bHasActiveGame) return;
+
+    // 1. Restore score + miss count to GameTaskState.
+    // TODO: GameTaskState::SetScore / SetMissCount not yet ported.
+    // See docs/engine/splat-pool-and-wave-resume.md A7 step 1.
+
+    // 2. Restore per-player base speed from save.
+    // field_0x4c <- +0x100 (m_Speed_P0), field_0x60 <- +0x108 (m_Speed_P1).
+    field_0x4c    = sd->m_Speed_P0;
+    field_0x60    = sd->m_Speed_P1;
+
+    // 3. Restore was-game-over flag.
+    // game->field_0x1c = sd->m_bWasGameOver;
+    // TODO: game->field_0x1c not yet mapped in Game struct.
+
+    // 4. Re-roll all PROBABILITY_OVERIDE entries.
+    // TODO: PROBABILITY_OVERIDE::SelectType() not yet ported.
+    // for each po in probOverrides[game->gameMode]: po.SelectType();
+
+    // 5. Reset transient queue fields.
+    m_FruitQueueSize[0] = 0;
+    m_FruitQueueSize[1] = 1;
+    for (int p = 0; p < 2; ++p)
+        for (int i = 0; i < 32; ++i)
+            m_FruitQueue[p][i] = -1;
+
+    // 6. Re-spawn saved entities from sd->m_EntityStates.
+    bool respawned = false;
+    // TODO: ActorManager::Add / entity Init vtable / Fruit::Chuck /
+    //       Bomb::{Chuck,SetHit,SetForPlayer} not yet fully ported.
+    // See docs/engine/splat-pool-and-wave-resume.md A7 entity respawn loop.
+    if (!sd->m_EntityStates.empty()) {
+        respawned = true;  // conservative: assume any saved entities count.
+    }
+
+    // 7. ActorManager::Update(dt=0) to settle respawned entities.
+    // TODO: ActorManager::Update(0) — no-op until entity respawn is ported.
+
+    // 8. Zen mode (m_GameMode == 2): PowerUpManager::LoadTextures().
+    // TODO: PowerUpManager::LoadTextures not yet ported.
+
+    // 9. Branch selection: SkipToGameOver vs SkipToPause.
+    bool gameOver = (sd->m_BombHitTimer > 0.0f && sd->m_GameMode != 2)
+                    || (sd->m_GameOverScreenState >= 0);
+
+    if (gameOver) {
+        SkipToGameOver(sd->m_GameOverScreenState,
+                       sd->m_GameOverTimer,
+                       sd->m_field134,
+                       sd->m_BombHitTimer,
+                       /*field5=*/-1);
+    } else if ((respawned || !sd->m_WaveStates.empty())
+               && sd->m_CurrentMissCount < 3) {
+        SkipToPause(true);
+
+        // Wave-state restore after SkipToPause.
+        m_FruitQueueSize[1]  = sd->m_FruitQueueCount;
+        memcpy(&m_FruitQueue[0][0], &sd->m_FruitQueue[0], 0x80);
+        field_0x23d          = (uint8_t)sd->m_blitzSpawnedThisGame;
+        field_0x23e          = (uint8_t)sd->m_blitzForceSpawnedCounter;
+        field_0x240          = sd->m_blitzSpawnTime;
+        field_0x234          = sd->m_WaveDelay;
+        field_0x238          = sd->m_WaveWait;
+        field_0x74           = sd->m_ProbabilityOverideFlag;
+        // m_pCurrentWave_P1: stored as raw int in save (binary pointer).
+        // Port: index is not directly restorable as a pointer; leave as-is.
+        // TODO: resolve m_pCurrentWave[1] restore from sd->m_pCurrentWave_P1.
+        field_0x4c           = sd->m_Speed_P0;
+        field_0x60           = sd->m_Speed_P1;
+        field_0x23c = 1; field_0x35 = 1;
+        field_0x36 = 0; field_0x37 = 0;
+        m_Speed[0]           = sd->m_Speed_P0_alias;
+        m_Speed[1]           = sd->m_Speed_P0_alias;
+        // field_0x5c = sd->GetTotal(StringHash("blitz_bonus")):
+        // TODO: StringHash not yet ported for this call site.
+
+        ResetWaveChances();
+
+        // Restore each WaveState back into m_WaveTable[0] (playerIdx=0).
+        // TODO: SPAWNER_INFO field access + SpawnState restore loop
+        //       not yet ported — see A7 SkipToPause wave-state restore.
+    }
+
+    // 10. Copy ShakeIntensity/ShakeDecay to fade screen; clear m_EntityStates.
+    // TODO: fade-screen shake fields not yet mapped.
+    sd->m_EntityStates.clear();
 }
 
 int WaveManager::SaveWaveInfo(FruitSaveData* /*save*/) {
