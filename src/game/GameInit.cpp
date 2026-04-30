@@ -53,6 +53,11 @@
 void GameInit(unsigned long) {
     Game* game = Game::GetInstance();
     if (!game) return;
+    // Guard matches binary 0x0016c660: g_TaskState->initComplete (+0x112) tested at entry.
+    // Without this, re-entering State 2 (GameTaskUpdate state-change path) re-runs
+    // the entire 274-line setup, leaking heap + duplicating MainScreen/PauseScreen.
+    GameTaskState* ts = GetTaskState();
+    if (ts->initComplete) return;
     // step 1: HUD allocation (Game+0x3c)
     if (!game->hud) {
         game->hud = new HUD();
