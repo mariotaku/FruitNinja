@@ -159,6 +159,12 @@ public:
     // If show=false and timer>=0: sets timer=-1.0 (hide badge).
     void SetNewSymbol(bool show);
 
+    // Replaces m_ClickCallback. Used by ScreenButton::ShrinkButtonCall
+    // (binary @ 0x001300f0) to swap a button's tap handler from the
+    // normal action to the shrink-and-disappear handler. Stub for now;
+    // delegate copy is straightforward.
+    void SetCallback(const Mortar::Delegate<void()>& cb) { m_ClickCallback = cb; }
+
     // Matches MenuButton::LoadContent (0x0014f674) — loads 3 shared textures
     // into class statics. Called once from GameInitialise step 23.
     static void LoadContent();

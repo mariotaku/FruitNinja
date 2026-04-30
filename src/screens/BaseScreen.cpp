@@ -8,7 +8,9 @@
 
 #include "BaseScreen.h"
 #include "Game.h"
+#include "hud/HUD.h"
 #include "hud/MenuButton.h"
+#include "hud/TutorialControl.h"
 #include "entities/Fruit.h"
 #include "asset/TextureManager.h"
 #include "render/Renderer.h"
@@ -221,7 +223,6 @@ void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
 // calls the visibility delegate then lazily creates MenuButton; else
 // calls the update delegate. ScreenButton struct (~0xCC bytes) with
 // delegates for creation condition, update, press, draw.
-// TODO: port ScreenButton struct. Subclasses handle buttons directly.
 // ===================================================================
 void BaseScreen::UpdateButtons(float dt) {
     for (auto& sb : m_ScreenButtons) {
@@ -258,13 +259,15 @@ void BaseScreen::UpdateButtons(float dt) {
                     btn->m_pFruitPiece->scale * sb.m_scaleB;
                 if (!btn->m_pFruitPiece->m_bSliced &&
                     (fabsf(sb.m_rotX) + fabsf(sb.m_rotY)) > 0.0f) {
-                    // TODO: Fruit::RotateFacingUp(fruit, true,
-                    //       Vec3(sb.m_rotX, sb.m_rotY, 0.0f));
+                    btn->m_pFruitPiece->RotateFacingUp(
+                        true, Vec3(sb.m_rotX, sb.m_rotY, 0.0f));
                 }
             }
 
-            // TODO: HUD::AddControl(game->hud, btn, false);
-            // TODO: if (sb.m_tutorID >= 0) TutorialControl::ResetTutePos(...)
+            Game* game = Game::GetInstance();
+            if (game && game->hud) game->hud->AddControl(btn);
+            if (sb.m_tutorID >= 0 && game && game->pTutorialCtrl)
+                game->pTutorialCtrl->ResetTutePos(btn);
 
             // First-frame update call with -1.0f
             if (sb.m_updateCb) sb.m_updateCb(btn, -1.0f, sb);
@@ -275,9 +278,10 @@ void BaseScreen::UpdateButtons(float dt) {
             if (remove) {
                 MenuButton* btn = sb.m_pButton;
                 if (btn->m_pFruitPiece && !btn->m_pFruitPiece->m_bSliced) {
-                    // Fruit alive: disable, wire shrink callback
-                    // TODO: btn->m_bEnabled = false;
-                    // TODO: MenuButton::SetCallback → sb.ShrinkButtonCall
+                    // Fruit alive: disable taps + redirect tap to shrink-call
+                    btn->m_bEnabled = 0;
+                    btn->SetCallback(
+                        Mortar::Delegate<void()>([&sb]() { sb.ShrinkButtonCall(); }));
                 } else {
                     btn->m_bPendingRemoval = 1;
                 }
