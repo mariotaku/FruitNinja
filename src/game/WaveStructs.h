@@ -286,4 +286,16 @@ struct PROBABILITY_OVERIDE {
     void SelectType() { /* TODO: Fruit::FruitType random select */ }
 };
 
+// Forward-declared in WaveManager.h, but `delete m_pWaveQue` in
+// Destroy/Reset needs a complete type for gcc/clang; MSVC tolerates
+// the forward decl. Minimal stub bodies so the deletes compile cleanly
+// on every toolchain. Real layouts (binary @ 0x00124564 SetupWaveQue)
+// not yet ported.
+struct WaveQue {
+    int dummy;  // TODO: real layout per binary §SetupWaveQue.
+};
+struct WaveQueItem {
+    int dummy;  // TODO: real layout.
+};
+
 #endif // FN_WAVE_STRUCTS_H
