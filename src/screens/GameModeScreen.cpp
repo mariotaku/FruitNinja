@@ -8,6 +8,7 @@
 #include "GameModeScreen.h"
 #include "MainScreen.h"
 #include "Game.h"
+#include "game/StartupEffects.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
@@ -354,6 +355,13 @@ void GameModeScreen::Update(float dt) {
             camT *= CAMERA_DECAY;
             game.mainScreen->SetCameraTransition(camT);
 
+            // Binary @ 0x0013f2e2: vtable[18] (SetupLevel) dispatched once
+            // camera transition crosses -0.9 (DAT_0013f460).
+            if (!m_bSetupLevelFired && camT < -0.9f) {
+                SetupLevel();
+                m_bSetupLevelFired = true;
+            }
+
             if (fabsf(camT) < ALPHA_OUT_DONE) {
                 if (game.pGameSound) {
                     game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
@@ -530,14 +538,21 @@ void GameModeScreen::QuitCallback() {
     FN::ClearMenuItems();
 }
 
+// vtable[18] @ 0x0013e21c
+void GameModeScreen::SetupLevel() {
+    FN::PrepareForLevelStart();
+}
+
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
+    m_bSetupLevelFired = false;
     m_State = 3;
     game.gameMode = 0;
 }
 
 // Matches ZenModeCallback @ 0x0013dffc
 void GameModeScreen::ZenModeCallback() {
+    m_bSetupLevelFired = false;
     m_State = 6;
     game.gameMode = 3;
 }
@@ -545,6 +560,7 @@ void GameModeScreen::ZenModeCallback() {
 // Matches ArcadeModeCallback @ 0x0013e19c
 // Binary: FruitSaveData::AddToTotal("coming_soon", ..., 10) — skipped
 void GameModeScreen::ArcadeModeCallback() {
+    m_bSetupLevelFired = false;
     m_State = 5;
     game.gameMode = 2;
 }

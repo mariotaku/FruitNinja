@@ -179,13 +179,19 @@ Mode pick **just changes `gameMode`** and transitions to MainScreen state 0x11 (
 
 ### 2. GameModeScreen::SetupLevel (vtable[18])
 
-**Address:** 0x0013f274 (SetupLevel entry), calls PrepareForLevelStart (0x00169ab4)
+**Address:** 0x0013e21c (SetupLevel entry), calls PrepareForLevelStart (0x00169a9c)
 
-**Status:** vtable slot exists but is **never dispatched** from anywhere.
+**Status:** LIVE — dispatched from `GameModeScreen::Update` case 3-6 at binary
+`0x0013f2e2..0x0013f2e6` when `cameraTransition < -0.9` (DAT_0013f460).
 
-**Calls:** `PrepareForLevelStart()` → `WaveManager::Reset(false)` (0x00125be4)
+**Calls:** `PrepareForLevelStart()` → `WaveManager::Reset(false)` (0x00125be4) +
+sets `game.pauseFlag = 1`. This is the path that seeds wave 0 so fruit spawns
+when the player drops into the game world.
 
-**Port note:** Do NOT re-implement this. It is dead code. All level setup happens via `GameInit` and mode-pick transitions.
+**Port note:** Implemented. `GameModeScreen::Update` dispatches `SetupLevel()`
+once per mode-pick via a one-shot latch (`m_bSetupLevelFired`) since
+`WaveManager::Reset(false)` is destructive. `PrepareForLevelStart` lives in
+`src/game/StartupEffects.cpp`.
 
 ## Wave Architecture
 

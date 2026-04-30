@@ -4,6 +4,7 @@
 #include "GameTaskState.h"
 #include "FruitCamera.h"
 #include "Game.h"
+#include "WaveManager.h"
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"
 #include "math/Vec3.h"
@@ -77,6 +78,13 @@ void DrawStartFade() {
     }
 
     game->pSplashTex->UnSet();
+}
+
+// @ 0x00169a9c
+void PrepareForLevelStart() {
+    WaveManager::GetInstance()->Reset(false);
+    Game* game = Game::GetInstance();
+    if (game) game->pauseFlag = 1;
 }
 
 } // namespace FN

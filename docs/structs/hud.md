@@ -1,5 +1,10 @@
 # HUD & UI Structs
 
+> See also `docs/structs/hud-class.md` for the authoritative spec of the
+> `HUD` container itself (RE'd 2026-04-30) — full pseudocode of every method,
+> the corrected `Release` / `OnPause` semantics, and the `field_0x60` tint
+> branch that closes the SPEC GAP previously commented in `src/hud/HUD.h`.
+
 ## Class Hierarchy
 
 ```
@@ -105,128 +110,289 @@ void HUD::AddControl(HUDControl* ctrl, bool pushFront) {
 }
 ```
 
-### HUDControl (base class, size = 0x60)
+### HUDControl (base class, size = 0x74)
 
-Verified from decompilation of constructors at 0x144104 and 0x1441c0.
+<!-- Re-verified: 2026-04-30 from ctor disassembly @ 0x00144104, HUD::Draw @ 0x00144a90, SpeedControl ctor @ 0x0016133c -->
+
+Verified from decompilation + disassembly of constructors at `0x00144104` and `0x001441c0` (two identical copies). **Size is 0x74** (not 0x60 as previously claimed) — UV rectangle and tint flag live in the base, not in HUDControl3d.
 
 | Offset | Type | Name | Default | Notes |
 |--------|------|------|---------|-------|
-| +0x00 | HUDControlFns* | vtable | (set by ctor) | Virtual methods |
-| +0x04 | int | field_0x04 | 0 | |
-| +0x08 | Vec3 | pos | (0,0,0) | From CopyGlobalVec3 |
-| +0x14 | Vec3 | pivot | (0,0,0) | From CopyGlobalVec3 (same call covers +0x08..+0x1f) |
-| +0x20 | Vec3 | size | from global | Half-extents |
-| +0x2c | float | m_Timer | 0.0 | Rotation angle / animation state |
-| +0x30 | byte | m_bActive | 1 | Non-zero = active |
-| +0x31 | byte | field_0x31 | 0 | |
-| +0x32 | byte | m_bNoDestructor | 0 | If set, HUD won't call dtor on removal |
-| +0x33 | byte | m_bPendingRemoval | 0 | Set → remove next HUD::Update |
-| +0x34 | int | m_LayerFlags | 1 | Bit mask for layered drawing |
-| +0x38 | Delegate1\<void,HUDControl*\> | m_RemoveCallback | (delegate) | Called before removal (24 bytes) |
-| +0x50 | | (delegate padding) | | |
-| +0x5c | Colour | m_DrawColour | (from global, likely white) | Packed BGRA tint colour |
+| +0x00 | HUDControlFns* | vtable | ctor sets | Virtual methods (15 slots) |
+| +0x04 | uint8_t | m_bPreserveOnMP | 0 | **`strb` byte, not int.** True = survive `SetToMultiplayerState`. See vtable +0x2c default below. |
+| +0x05..+0x07 | — | (padding) | — | Trailing pad to 4-byte align |
+| +0x08 | Vec3 | pos | **uninit** | Ctor does NOT touch `pos`. Subclass / caller must set. (Disassembly: only +0x14 receives `CopyGlobalVec3`.) |
+| +0x14 | Vec3 | pivot | (0,0,0) | `CopyGlobalVec3_PauseScreen(this+0x14)` copies global `Zero` @ 0x001f4328 |
+| +0x20 | Vec3 | size | **uninit** | Ctor does NOT touch `size`. Subclass sets. |
+| +0x2c | float | m_Timer | 0.0 | Used by `HUDControl3d::Draw` for Z-rotation when `!= 0` |
+| +0x30 | uint8_t | m_bActive | **1** | Non-zero = receives `Update` and `Draw` |
+| +0x31 | uint8_t | field_0x31 | 0 | Unknown semantic; ctor zeroes |
+| +0x32 | uint8_t | m_bNoDestructor | 0 | If set, `HUD::Update` skips dtor call on removal |
+| +0x33 | uint8_t | m_bPendingRemoval | 0 | Set → removed by next `HUD::Update` |
+| +0x34 | int32_t | m_LayerFlags | **1** | Bit mask; HUD::Draw gates on `(layerMask & m_LayerFlags) != 0` |
+| +0x38 | Delegate1\<void,HUDControl*\> | m_RemoveCallback | default delegate | 36 bytes (`Mortar::Delegate1`); fired by `HUD::Update` before removal |
+| +0x5c | Colour | m_DrawColour | (255,255,255,255) | Packed BGRA. `+0x5c=B, +0x5d=G, +0x5e=R, +0x5f=A` |
+| +0x60 | uint8_t | **m_bUseHUDScales** | **1** | **Tint flag** — see semantics below. Ctor writes 1 (`strb.w r8,[r4,#0x60]` with r8=1) |
+| +0x61..+0x63 | — | (padding) | — | Trailing pad to 4-byte align |
+| +0x64 | float | m_UVLeft | 0.0 | UV rect left. Ctor copies from GOT vec2 global @ 0x001f4340 |
+| +0x68 | float | m_UVTop | 0.0 | UV rect top |
+| +0x6c | float | m_UVRight | 1.0 | UV rect right. Ctor copies from GOT vec2 global @ 0x00230364 |
+| +0x70 | float | m_UVBottom | 1.0 | UV rect bottom |
 
-**Vtable layout** (verified from MainScreen vtable at 0x1E9A50):
+**Total size: 0x74 bytes.**
 
-| VTable Offset | Method | Notes |
-|---------------|--------|-------|
-| +0x00 | ~dtor (deleting) | |
-| +0x04 | ~dtor | |
-| +0x08 | Init() | |
-| +0x0c | Release() | cleanup resources |
-| +0x10 | Reset() | |
-| +0x14 | BeginDraw(float dt) | |
-| +0x18 | PreDraw(float* hudScale) | called by PreDrawOrder |
-| +0x1c | **Draw(float* hudScale)** | actual rendering |
-| +0x20 | PreDrawOrder(float*,int) | wrapper → calls vtable+0x18 |
-| +0x24 | DrawOrder(float*,int) | wrapper → calls vtable+0x1c |
-| +0x28 | **Update(float dt)** | tick logic |
-| +0x2c | SetToMultiplayerState() | |
-| +0x30 | GetType() | returns int |
-| +0x34 | Skip() | |
-| +0x38 | Save() | |
+#### `m_bUseHUDScales` (+0x60) — tint / pulse-modulation flag
 
-**Draw dispatch**: HUD::Draw calls `PreDrawOrder` (+0x20) then `DrawOrder` (+0x24). These are thin wrappers that dispatch to the actual `PreDraw` (+0x18) and `Draw` (+0x1c). HUD::Update calls `Update` (+0x28).
-| +0x28 | Update(float dt) — second update? |
+This byte controls whether the HUD's per-frame "scales" array (6 floats at HUD+0x08..+0x1f) is passed to this control's `PreDraw`/`Draw`, or whether identity (1,1,1) is passed instead.
+
+`HUD::Draw @ 0x00144a90` (verified disassembly 0x144aca..0x144aee):
+```
+ldrb.w lr,[r3,#0x60]       ; load m_bUseHUDScales
+cmp.w  lr,#0x0
+beq    use_identity
+  ; m_bUseHUDScales != 0 (default)
+  r1 = &this->scale1         ; HUD's own scales array
+  branch to call PreDraw(r1)
+use_identity:
+  r1 = &local_scale          ; sp+4, populated from GOT global @ 0x1bb9a0 = (1,1,1)
+  call PreDraw(r1)
+```
+
+**Semantic:**
+- **`+0x60 == 1`** (default for every HUDControl): Draw receives `&hud->scale1` — the per-HUD scales array, which the game can pulse-modulate for shake/punch FX. Tint multiplied by these scales.
+- **`+0x60 == 0`**: Draw receives identity `(1,1,1)` — control draws with un-modulated tint, immune to HUD-wide pulse FX.
+
+**Writers (full binary scan, 2026-04-30):**
+
+| Address | Function | Value | Effect |
+|---|---|---|---|
+| 0x00144162 | `HUDControl::HUDControl` (ctor #1) | 1 | Default = use HUD scales |
+| 0x0014421e | `HUDControl::HUDControl` (ctor #2) | 1 | (Identical duplicate ctor) |
+| 0x00161414 | `SpeedControl::SpeedControl` | **0** | SpeedControl opts OUT — fixed tint, no pulse |
+| 0x0016151c | `SpeedControl::SpeedControl` (sibling) | **0** | (Identical second SpeedControl ctor) |
+
+No subclass other than SpeedControl writes `+0x60`. (Other `strb #0x60` matches are on unrelated structs: WaveManager+0x60, FriendLeaderboardItem+0x60. They are not HUDControl-derived.)
+
+**Port mapping**: Currently `HUDControl::field_0x60` initialized to 1. **Semantically correct**, but the field is unused by port code — `SpeedControl` ctor in port should explicitly write 0 to match.
+
+#### Vtable layout — 15 slots, 0x3C bytes total
+
+Verified from HUDControl vtable @ `0x001e96f8` (data dump 60 bytes):
+
+| Offset | Method | Address (HUDControl base) | Notes |
+|---|---|---|---|
+| +0x00 | ~dtor (deleting) | 0x00143fd4 | |
+| +0x04 | ~dtor | 0x0014405c | |
+| +0x08 | Init() | 0x00143f98 | Returns this; no-op |
+| +0x0c | Release() | 0x00143f9c | No-op |
+| +0x10 | Reset() | 0x00143fa0 | No-op |
+| +0x14 | BeginDraw(float) | 0x0014492c | Real impl |
+| +0x18 | PreDraw(float*) | 0x00144930 | Real impl |
+| +0x1c | **Draw(float\*)** | 0x00143fa4 | Base = no-op; subclasses override |
+| +0x20 | PreDrawOrder(float\*, int) | 0x00144934 | Wrapper → vtable[+0x18] |
+| +0x24 | DrawOrder(float\*, int) | 0x00144940 | Wrapper → vtable[+0x1c] |
+| +0x28 | Update(float) | 0x00143fa8 | No-op (returns this) |
+| +0x2c | SetToMultiplayerState() | 0x00143fac | **NOT a no-op** — see below |
+| +0x30 | GetType() | 0x0014494c | Base returns 0 |
+| +0x34 | Skip() | 0x00144950 | |
+| +0x38 | Save() | 0x00144954 | |
+
+**`HUDControl::SetToMultiplayerState` (0x00143fac) is NOT a stub:**
+```c
+bool HUDControl::SetToMultiplayerState() {
+    if (m_bPreserveOnMP == 0) {        // +0x04
+        m_bNoDestructor   = 0;          // +0x32
+        m_bPendingRemoval = 1;          // +0x33
+        return true;                    // "I will be removed"
+    }
+    return false;                       // preserved
+}
+```
+This is invoked from `HUD::SetToMultiplayerState @ 0x00144e00` to bulk-mark non-MP controls for removal during multiplayer transition.
+
+**Port defect**: `src/hud/HUDControl.h::SetToMultiplayerState` is currently `{}` (empty). It must implement the above branch on `m_bPreserveOnMP` (a.k.a. `field_0x04`). Otherwise multiplayer transitions will leak controls.
+
+**Wrapper dispatch (PreDrawOrder / DrawOrder):** Disassembly shows the wrappers `push {r3,lr}; ldr r3,[r0]; ldr r3,[r3,#0x18]; blx r3` — they call vtable+0x18 (or +0x1c) **without explicitly forwarding r1/r2**, but because the wrapper saves only r3+lr, the original `r1=hudScale` and `r2=layerMask` are still live in the registers when the inner call happens. So the args ARE forwarded by ARM convention even though the decompiler shows them dropped.
 
 ### HUDControl3d : HUDControl (size = 0x7C)
 
-Verified from decompilation of constructors at 0x1443f4/0x144434, and Draw at 0x14428c.
+<!-- Re-verified: 2026-04-30 from ctor disassembly @ 0x001443f4 / 0x00144434, Draw @ 0x0014428c, vtable @ 0x001e96b0 -->
+
+Adds two `SmartPtr<Texture>` slots after the 0x74-byte HUDControl base. **Total size 0x7C.**
 
 | Offset | Type | Name | Default | Notes |
 |--------|------|------|---------|-------|
-| +0x00..+0x5f | HUDControl | super | | Base class (0x60 bytes) |
-| +0x60 | SmartPtr\<Texture\> | m_PauseTitleTex | NULL (zeroed) | Main display texture. NULL = don't draw |
-| +0x64 | float | m_UVLeft | | UV rect left |
-| +0x68 | float | m_UVTop | | UV rect top |
-| +0x6c | float | m_UVRight | | UV rect right |
-| +0x70 | float | m_UVBottom | | UV rect bottom |
-| +0x74 | SmartPtr\<Texture\> | field_0x74 | | Secondary texture (used by screens) |
-| +0x78 | int | field_0x78 | 0 (zeroed) | |
+| +0x00..+0x73 | HUDControl | super | (see above) | Base class — UV floats and tint flag live HERE |
+| +0x74 | SmartPtr\<Texture\> | m_Texture | NULL | **Primary display texture.** Read by `Draw` at offset +0x74. NULL = skip draw. |
+| +0x78 | SmartPtr\<Texture\> | m_SecondaryTex | NULL | Secondary slot. NOT used by `HUDControl3d::Draw`. Subclasses (FruitFactControl, MenuButton, etc.) hold a second texture here. |
 
-**Constructor** (0x1443f4/0x144434):
-```c
-HUDControl3d() {
-    HUDControl::HUDControl(this);
-    this->vtable = HUDControl3d_vtable + 8;
-    SmartPtr::SetNull(&this->m_PauseTitleTex);   // +0x60 = NULL
-    SmartPtr::SetNull(&this->field_0x78);         // +0x78 = 0
-    this->super.m_Timer = 0.0f;                   // DAT_00144468 = 0.0
-}
+(Note: Ghidra's auto-naming labels +0x74 as `m_SecondaryTex` and +0x78 as `field_0x78` — that is **backwards**. The texture used by `HUDControl3d::Draw` is at +0x74. Existing port already has it correctly; do not rename.)
+
+**Constructor disassembly** (`0x001443f4`, 13 instructions):
+```
+push {r3,r4,r5,lr}
+HUDControl::HUDControl(this)        ; 0x1443fe blx 0x000fbbf8
+this->vtable = vtableHUDControl3d + 8 ; via GOT @ 0x001f333c -> 0x001e96a8 + 8
+ZeroInit_PauseScreen (&this+0x74)   ; SmartPtr SetNull
+ZeroInit_PauseScreen2(&this+0x78)   ; SmartPtr SetNull
+this->m_Timer = 0.0f                ; DAT_00144468 (also 0.0); redundant w/ ctor's prior write
+pop {r3,r4,r5,pc}
 ```
 
-#### HUDControl3d::Draw (0x14428c, 57 lines) — fully verified
+The `this->m_Timer = 0.0f` re-write at the end of HUDControl3d ctor is redundant — the base ctor doesn't write m_Timer, and HUDControl3d explicitly initialises it to 0.0. **m_Timer's actual init point is the HUDControl3d ctor**, not the base. Port already does this.
+
+#### HUDControl3d vtable (overrides)
+
+Vtable @ `0x001e96b0` (read_memory dump, 60 bytes). Slots that DIFFER from HUDControl base are bolded:
+
+| Slot | Method | HUDControl3d Address | Behaviour |
+|---|---|---|---|
+| +0x00 | ~dtor | 0x001444e0 | (subclass dtor) |
+| +0x04 | ~dtor | 0x00144474 | |
+| +0x08 | Init | 0x00143f98 | Same as base — no-op |
+| +0x0c | Release | 0x00143fc4 | **HUDControl3d::Release** — empty stub at different addr |
+| +0x10 | Reset | 0x00143fa0 | Same as base — no-op |
+| +0x14 | BeginDraw | **0x0012f92c** | Empty stub; **NOT** the base 0x0014492c |
+| +0x18 | PreDraw | **0x00143fc8** | Returns the param. Trivial. |
+| +0x1c | **Draw** | **0x0014428c** | The 57-line real Draw — see below |
+| +0x20 | PreDrawOrder | **0x0012f930** | Wrapper → vtable[+0x18] (`push {r3,lr}; ldr r3,[r0]; ldr r3,[r3,#0x18]; blx r3`) |
+| +0x24 | DrawOrder | **0x0012f93c** | Wrapper → vtable[+0x1c] |
+| +0x28 | Update | **0x00143fcc** | `push {r3,lr}; blx HUDControl::Update; pop` — calls base no-op. Effectively no-op. |
+| +0x2c | SetToMultiplayerState | **0x0012fd54** | `push {r3,lr}; blx HUDControl::SetToMultiplayerState; pop` — chains to base implementation (the real branching one). |
+| +0x30 | GetType | **0x0012f948** | **Returns 1** (base returns 0) |
+| +0x34 | Skip | **0x0012f94c** | Empty stub |
+| +0x38 | Save | **0x0012f950** | Empty stub |
+
+#### HUDControl3d::Draw (`0x0014428c`, 84 instructions) — fully verified
 
 ```c
-void HUDControl3d::Draw(float* hudScaleParam) {
-    if (!SmartPtr::IsValid(m_PauseTitleTex) || m_Alpha == 0) return;
+void HUDControl3d::Draw(HUDControl3d* this, float* hudScale /* r1 */) {
+    // Gate 1: SmartPtr::operator bool on this+0x74 (m_Texture)
+    if (!SmartPtr::operator_cast_to_bool(&this->m_Texture)) return;
+    // Gate 2: alpha byte (Colour at +0x5C, alpha is +0x5F) — NOT +0x60
+    if (this->super.m_DrawColour.a == 0) return;        // ldrb [r4,#0x5f]; cmp #0; beq end
 
-    Texture::Set(m_PauseTitleTex);
-    MatrixStack::Reset(matrixMgr->stack);          // at matrixMgr + 0x1094
+    Mortar::Texture::Set(this->m_Texture.ptr);          // [r4,#0x74]
+    MatrixStack::Reset(matrixMgr.world);                // matrixMgr+0x1080+0x14
 
-    Matrix44 mat = Scale44(this->size);            // from HUDControl +0x20
+    Matrix44 mat = Scale44(this->super.size);           // r4+0x20
 
-    if (m_Timer != 0.0) {
-        // Rotation: SinIdx/CosIdx with speed = 182.0 (DAT_001443dc)
-        float sinA = SinIdx((ushort)(int)(m_Timer * 182.0f));
-        float cosA = CosIdx((ushort)(int)(182.0f * m_Timer));
-        RotZ44(&mat, sinA, cosA);
+    float t = this->super.m_Timer;                      // [r4,#0x2c]
+    if (t != 0.0f) {
+        // Constant 182.0f at DAT_001443dc = 0x43360000
+        float s = SinIdx((uint16_t)(int)(t * 182.0f));
+        float c = CosIdx((uint16_t)(int)(182.0f * t));
+        mat.RotZ44(s, c);
     }
 
-    // Position offset: Vec3(480, 320, 0) * hudScaleParam + this->pos
-    Vec3 offset(HUD_SCREEN_WIDTH, HUD_SCREEN_HEIGHT, 0.0f);  // (480, 320, 0)
-    Vec3 scaled = hudScaleParam * offset;                      // component multiply
-    Vec3 finalPos = scaled + this->pos;
-    GlobalTranslate44(&mat, finalPos);
+    // Three constants from instruction-pool: 480.0, 320.0, 0.0 (DAT @ 0x1443e0..0x1443e8)
+    Vec3 screenSize(480.0f, 320.0f, 0.0f);
+    Vec3 scaled = screenSize * (*hudScale);             // component-wise *
+    Vec3 finalPos = scaled + this->super.pos;           // r4+0x08
+    mat.GlobalTranslate44(finalPos);
 
-    matrixMgr->stack.SetCurrentMatrix(mat);
-    matrixMgr->UploadCurrentMatrices(true);
+    matrixMgr.world.SetCurrentMatrix(mat);
+    matrixMgr.UploadCurrentMatrices(/*world*/ true);
 
-    Colour tint = TintColour(m_DrawColour);
-    // Alpha applied via tint
-    DrawQuadUnCached(tint, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
+    Colour tint = TintColour(this->super.m_DrawColour); // see Colour docs
+    Mesh::DrawQuadUnCached(tint,
+                           this->super.m_UVLeft,        // [r4,#0x64] -> s16
+                           this->super.m_UVRight,       // [r4,#0x6c] -> s17
+                           this->super.m_UVTop,         // [r4,#0x68] -> s18
+                           this->super.m_UVBottom,      // [r4,#0x70] -> s19
+                           /*effect*/ NULL);
 
-    Texture::UnSet(m_PauseTitleTex);
+    Mortar::Texture::UnSet(this->m_Texture.ptr);
 }
 ```
 
-**Key detail**: The `hudScaleParam` is a Vec3 loaded from a global in HUD::Draw. At runtime this is **(1.0, 1.0, 1.0)** (verified via read_memory at 0x1BB9A0). So the offset becomes `(480, 320, 0) * (1,1,1) + pos`. This means **control positions are in a centered coordinate system where (0,0) maps to screen position (480, 320)** — i.e., adding 480 to X and 320 to Y shifts from the original centered coords to the actual draw position.
+**Constants in this function:**
+- Rotation speed: `DAT_001443dc = 0x43360000` = **182.0f** (degrees-per-unit-time, units of m_Timer)
+- HUD_SCREEN_WIDTH:  `DAT_001443e0 = 0x43f00000` = **480.0f**
+- HUD_SCREEN_HEIGHT: `DAT_001443e4 = 0x43a00000` = **320.0f**
+- HUD_SCREEN_Z:      `DAT_001443e8 = 0x00000000` = **0.0f**
 
-**HUD::Draw pipeline** (0x144a90, verified):
+**`hudScale` argument origin**: see `HUD::Draw @ 0x00144a90`. With `m_bUseHUDScales != 0` (default), `hudScale = &hud->scale1` (Vec3 of HUD's pulse scales, normally (1,1,1) but pulse-modulated during shake/punch FX). With `== 0`, `hudScale = &(1,1,1)` from GOT global @ `0x001bb9a0`.
+
+**Position semantics**: `finalPos = (480,320,0) * hudScale + pos`. With identity hudScale and a `pos` in centered coords (e.g. (0,0,0) for screen center), the world matrix translates by (480,320,0) — placing the control at screen-center under whatever ortho projection is active. The +480/+320 offset is therefore part of the original render pipeline's coordinate transform, not a fudge-factor.
+
+#### Port `HUDControl3d::Draw` divergence audit (vs. binary 0x0014428c)
+
+The current `src/hud/HUDControl3d.cpp` body is **mostly correct** but diverges in two structural ways that the asm-inspector flagged historically:
+
+1. **Skips the (480,320,0) + hudScale offset** — the port comment says "pivot is zero so the offset is dead code" but that conflates `pivot` with `hudScale`. The binary applies `screenSize * hudScale + pos` unconditionally. Currently the port does `mat.GlobalTranslate44(pos)` only — it's relying on its own ortho projection being centered such that `pos` directly addresses screen pixels. That's fine for a port that already centers ortho, but it means the port and binary are computing different world-space coordinates and the comment in the port file is slightly wrong (the term being skipped is `screenSize * hudScale`, not the pivot).
+
+2. **GL state**: port enables `GL_DEPTH_TEST` with `glDepthFunc(GL_LESS)` and `glDepthMask(GL_FALSE)` around the draw. This is **port-only**; the binary's `Mesh::DrawQuadUnCached` does its own state setup. Keep the port's behaviour (it's the documented MenuButton-ring-vs-fruit fix) but tag with `// Port specific:` rather than implying it's binary-faithful.
+
+Otherwise the port matches: gate on m_Texture & alpha, MatrixStack::Reset, Scale44, conditional RotZ44 with 182.0f speed, GlobalTranslate, Upload, TintColour + DrawQuad, UnSet. The current `// ASM-verified: 2026-04-28T16:35Z` annotation is sound.
+
+#### HUDControl3d default vtable bodies (0x12f92c..0x12f950)
+
+All trivial — no port-side concerns:
 ```c
-void HUD::Draw(int layerMask) {
-    Vec3 globalPos = *GOT_HUD_POS;  // = (1.0, 1.0, 1.0)
-    for (control in controls) {
-        if (control->m_bActive && (layerMask & control->m_LayerFlags)) {
-            if (control->m_PauseTitleTex == NULL)
-                control->PreDraw(&globalPos, layerMask);   // vtable+0x20
-            else
-                control->PreDraw(&this->scale);             // use HUD's own scale
-            control->Draw(pfVar2, layerMask);               // vtable+0x24
+void HUDControl3d::BeginDraw(void* this, float dt)  { return; }                          // 0x12f92c
+float* HUDControl3d::PreDraw(float* p)              { return p; }                         // 0x143fc8 (returns arg)
+void HUDControl3d::PreDrawOrder(this, hudScale, layerMask) {                              // 0x12f930
+    (vtable[+0x18])(this);   // forwards r0; r1,r2 still live in regs
+}
+void HUDControl3d::DrawOrder(this, hudScale, layerMask) {                                 // 0x12f93c
+    (vtable[+0x1c])(this);
+}
+void HUDControl3d::Update(float dt) { HUDControl::Update(/*=no-op*/); }                   // 0x143fcc
+void HUDControl3d::SetToMultiplayerState(this) { HUDControl::SetToMultiplayerState(this); } // 0x12fd54 — chains to base!
+int  HUDControl3d::GetType()                       { return 1; }                          // 0x12f948
+void HUDControl3d::Skip()                          { return; }                            // 0x12f94c
+void HUDControl3d::Save()                          { return; }                            // 0x12f950
+```
+
+**HUD::Draw pipeline** (`0x00144a90`, full re-decode):
+```c
+void HUD::Draw(HUD* this, int layerMask) {
+    Vec3 identityScale = *GOT_GLOBAL_VEC3_ONES;        // GOT @ 0x001bb9a0 = (1,1,1)
+    for (auto it = controls.begin(); it != controls.end(); ++it) {
+        HUDControl* c = *it;
+        if (!c->m_bActive) continue;
+        if ((layerMask & c->m_LayerFlags) == 0) continue;
+
+        Vec3* hudScale;
+        if (c->m_bUseHUDScales == 0) {                  // ldrb [r3,#0x60]
+            hudScale = &identityScale;                   // pass (1,1,1)
+            c->vtable->PreDrawOrder(c, hudScale, layerMask);  // +0x20
+        } else {
+            c->vtable->PreDrawOrder(c, &this->scale1, layerMask); // +0x20 — &HUD+0x08
+            hudScale = &this->scale1;
         }
+        c->vtable->DrawOrder(c, hudScale, layerMask);    // +0x24
     }
 }
 ```
+
+### Port discrepancy checklist (HUDControl + HUDControl3d)
+
+<!-- Re-verified: 2026-04-30. Compare these against src/hud/HUDControl.h and src/hud/HUDControl3d.{h,cpp}. -->
+
+| Port file / line | Issue | Binary truth | Severity |
+|---|---|---|---|
+| `HUDControl.h` line 22: `int field_0x04` | Type width wrong | Binary uses **`strb` byte** (1 byte). Should be `uint8_t`. Pad to 4 with `field_0x05..0x07`. | LOW (no observed bug; layout-correct because of trailing pad) |
+| `HUDControl.h` line 22: `field_0x04` | Field is unnamed | Binary semantic: **`m_bPreserveOnMP`** — gates `SetToMultiplayerState` removal. Rename. | DOC |
+| `HUDControl.h` lines 56–61: `field_0x60` is "TBD, no port code reads it" | Semantic IS now fully RE'd. | **Tint flag**: 0 = identity (1,1,1) pass-through, non-zero = pass HUD's `scale1..scale6` array. Rename to `m_bUseHUDScales`. | MEDIUM |
+| `HUDControl.h` line 108: `virtual void SetToMultiplayerState() {}` | **Bug** — should NOT be empty | Binary: `if (!m_bPreserveOnMP) { m_bNoDestructor=0; m_bPendingRemoval=1; }`. Currently controls survive MP transition that should be removed. | HIGH (multiplayer flow) |
+| `HUDControl.h` ctor line 70: `field_0x04(0)` | Init is correct value but field name should change | Init = 0 ✓ | DOC |
+| `HUDControl.h` ctor — pos & size init implicit (Vec3 default ctor) | Binary leaves `pos` and `size` UNINITIALISED | The base ctor only writes `pivot` (via `CopyGlobalVec3` of the global Zero vec). Subclasses *must* set pos and size before draw. Port's Vec3 default-init to (0,0,0) is "more defensive than binary" — same outcome in practice. | NONE (port stricter than binary) |
+| `HUDControl3d.h`/`.cpp` — uses `GLuint m_Texture` raw | Binary has `SmartPtr<Texture>` (8 bytes per field). | Port: `GLuint m_Texture; GLuint m_SecondaryTex;` = 4 + 4 = 8 bytes total. Binary: 8 + 8 = 16 bytes total. **Subclass offsets past the texture pair diverge by 8 bytes between port and binary.** Currently no subclass relies on binary-faithful offsets beyond +0x7C, so no live bug. Watch when porting future subclass fields. | LOW (size differs) |
+| `HUDControl3d.cpp` — comment "pivot is zero, offset is dead code" | Misleading | The skipped term is `(480,320,0) * hudScale`, not the pivot. The pivot really is zero. Effect on output: port skips the +480/+320 translation because its ortho projection is already centered. Same on-screen result, but comment should explain that. | DOC |
+| `HUDControl3d.cpp` — depth test enable around DrawQuad | Port-specific addition | Binary's `Mesh::DrawQuadUnCached` doesn't manage GL depth state itself; the depth gating is a port-side fix for the MenuButton ring-vs-fruit z-fight. Tag with `// Port specific:` per project convention. | DOC |
+| `HUDControl3d::GetType()` returns 1 | ✓ matches binary | | none |
+| `HUDControl3d::Update` defaults | Port has empty default which matches `HUDControl3d::Update @ 0x143fcc` (calls base no-op) | | none |
+| Vtable order in `HUDControl.h` (lines 89-106) | Matches binary 1:1 | All 15 slots correct order | none |
+
+#### Open / not-yet-RE'd
+
+- `field_0x31` semantic — base ctor zeroes; no other writers found in the +0x60-style scan. Likely a small flag (multiplayer? screen-locked?). Leave as `field_0x31` until a writer is identified.
+- `pos`/`size` init: confirm whether call-site of `new Subclass()` ever bypasses subclass ctor; if not, the uninitialised behaviour is benign.
+- `m_RemoveCallback` (Delegate1) layout — 36 bytes per `Mortar::Delegate1`. The port has 24 bytes. Check `src/util/Delegate.h` against binary.
+
+---
 
 ### GenericHUDControl : HUDControl3d (BaseScreen)
 
