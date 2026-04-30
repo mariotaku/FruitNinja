@@ -86,7 +86,8 @@ struct SPAWNER_INFO {
         , m_VelXScale(1.0f), m_VelYScale(1.0f)
         , m_HorizMin(-1.0f), m_HorizMax(1.0f)
         , m_SpawnType(PLACEMENT_BOTTOM)
-        , m_SpawnMin(1.0f), m_SpawnMax_unused(0.0f), m_SpawnMax(1.0f)
+        // ASM-verified: binary SPAWNER_INFO ctor @ 0x001270ac sets m_SpawnMin=0.0, m_SpawnMax=0.0
+        , m_SpawnMin(0.0f), m_SpawnMax_unused(0.0f), m_SpawnMax(0.0f)
         , m_GrowthInc(0.0f)
         , m_Delay(0.0f), m_DelayInc(0.0f)
         , m_RemainingCount(0), m_SpawnCountF(0.0f), m_field58(0)
@@ -153,12 +154,16 @@ struct WAVE_INFO {
     uint8_t                  _pad3a[2];
     // +0x3c: "chance" attr (selection weight)
     int                      m_Chance;           // +0x3c
-    // +0x40: (gap)
-    int                      m_field40;          // +0x40
+    // +0x40: running copy of m_Chance; ResetWaveChances writes +0x40 = +0x3c
+    // ASM-verified: binary WAVE_INFO @ 0x00126748 (ctor) / 0x001249d0 (ResetWaveChances)
+    // Replaces former port-tail field m_CurrentMax (which was off-struct).
+    int                      m_CurrentChance;    // +0x40
     // +0x44: "chanceRegrowth" attr
     float                    m_ChanceRegrowth;   // +0x44
-    // +0x48: (gap)
-    int                      m_field48;          // +0x48
+    // +0x48: running copy of m_ChanceRegrowth; ResetWaveChances writes +0x48 = +0x44
+    // ASM-verified: binary @ 0x001249d0 (ResetWaveChances); type is float (0x3e800000 = 0.25)
+    // Replaces former port-tail field m_CurrentRegrowth (which was off-struct).
+    float                    m_CurrentRegrowth;  // +0x48
     // +0x4c: "games"/"gamesMin" attr
     int                      m_GamesMin;         // +0x4c
     // +0x50: "gamesMax" attr
@@ -182,27 +187,26 @@ struct WAVE_INFO {
     // Not a binary struct field — used only for wave range selection logic.
     int                      m_WaveNumber;
 
-    // Port-internal: grows toward m_Chance via chanceRegrowth each GetNextWave call.
-    int                      m_CurrentMax;
-
     WAVE_INFO()
-        : m_ScoreThreshold(0), m_EndScore(-2)
+        : m_ScoreThreshold(0), m_EndScore(-1)
         , m_pSpawners(nullptr), m_SpawnerCount(0)
-        , m_WaveDt(0.9f), m_WaveDtInc(0.0f), m_WaveDtSpInc(0.0f)
+        , m_WaveDt(1.0f), m_WaveDtInc(0.0f), m_WaveDtSpInc(0.0f)
         , m_NextWaveSpeedLoss(0.0f)
-        , m_NextWaveDelay(0.0f), m_NextWaveDelayInc(0.0f)
+        , m_NextWaveDelay(2.0f), m_NextWaveDelayInc(0.0f)
         , m_NextWaveWait(0.0f), m_field2c(0.0f)
         , m_NextWaveWaitSpInc(0.0f)
-        , field_0x34(0.0f)
+        // ASM-verified: binary WAVE_INFO ctor @ 0x00126748; revisit counter starts at 1.
+        , field_0x34(1.0f)
         // ASM-verified: binary WAVE_INFO ctor @ 0x00126748 sets BOTH to 1.
         , m_bWaitForEntities(1), m_bWaitForProcessing(1)
-        , m_Chance(90), m_field40(0)
-        , m_ChanceRegrowth(0.33f), m_field48(0)
-        , m_GamesMin(0), m_GamesMax(0)
+        // ASM-verified: binary WAVE_INFO ctor @ 0x00126748; m_Chance=10, m_ChanceRegrowth=0.25
+        , m_Chance(10), m_CurrentChance(10)
+        , m_ChanceRegrowth(0.25f), m_CurrentRegrowth(0.25f)
+        , m_GamesMin(-1), m_GamesMax(-1)
         , m_field60(0), m_CriticalChance(1.0f)
         , m_WaveIndex(0), m_pCoinChance(nullptr)
-        , m_OverideProbabilityPool(0), m_TotalWeight(0)
-        , m_WaveNumber(0), m_CurrentMax(0)
+        , m_OverideProbabilityPool(100), m_TotalWeight(0)
+        , m_WaveNumber(0)
     {
         memset(_pad3a, 0, sizeof(_pad3a));
     }
@@ -267,22 +271,36 @@ struct COIN_CHANCEINATOR {
     COIN_CHANCEINATOR() : m_Chance(0.0f), m_field04(0) {}
 };
 
-// PROBABILITY_OVERIDE — used by UpdateWave for power-up fruit overrides.
+// PROBABILITY_OVERIDE — size 0x78. Binary ctor @ 0x00126870.
+// Field order matches binary layout exactly.
 struct PROBABILITY_OVERIDE {
-    std::vector<std::string> m_Types;
-    float                    m_PercentChance;
-    int                      m_PerWave;
-    int                      m_WaveCount;
-    float                    m_DisableWhenPowered;
-    int                      m_Counter;
-    int                      m_SelectedType;
-    int                      field_0x08;
+    // +0x00: selection weight (XML "percentageChance"). Binary stores as int.
+    int                      m_PercentChance;    // +0x00
+    // +0x04: max spawns per wave (XML "perWave"). Binary default 0.
+    int                      m_PerWave;          // +0x04
+    // +0x08: running per-wave counter (UpdateWave bumps; ResetWaveChances resets).
+    int                      m_Counter;          // +0x08
+    // +0x0c: fruit type names (XML "types"), 12 bytes (vector<string>).
+    std::vector<std::string> m_Types;            // +0x0c
+    // +0x18..+0x67: per-type spawn-tracking queue (20 ints, init -1).
+    // Used by UpdateWave blitz-spawn loop to track which types were already spawned.
+    int                      m_TypeQueue[20];    // +0x18
+    // +0x68: reserved int (init 0).
+    int                      m_field68;          // +0x68
+    // +0x6c: power-up disable threshold (XML "disableWhenPowered"). Binary default 0.0.
+    float                    m_DisableWhenPowered; // +0x6c
+    // +0x70: minimum game count gate (XML "waveCount"). Binary default 0.
+    int                      m_PerWaveCount;     // +0x70
+    // +0x74: last selected type index (-1 = unset). SelectType picks randomly.
+    int                      m_SelectedType;     // +0x74
 
     PROBABILITY_OVERIDE()
-        : m_PercentChance(0.0f), m_PerWave(1), m_WaveCount(0)
-        , m_DisableWhenPowered(0.0f), m_Counter(0), m_SelectedType(-1)
-        , field_0x08(0)
-    {}
+        : m_PercentChance(0), m_PerWave(0), m_Counter(0)
+        , m_field68(0), m_DisableWhenPowered(0.0f)
+        , m_PerWaveCount(0), m_SelectedType(-1)
+    {
+        for (int i = 0; i < 20; ++i) m_TypeQueue[i] = -1;
+    }
 
     void SelectType() { /* TODO: Fruit::FruitType random select */ }
 };

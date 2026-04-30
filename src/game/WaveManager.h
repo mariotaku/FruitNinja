@@ -28,6 +28,10 @@ class WaveManager {
 public:
     // +0x000: RNG instance. Used for wave selection, spawn angle/count RNG.
     // Binary: Math::Random at +0x00 (24 bytes).
+    // DIFFERS: binary's +0x00 slot holds SpeedControl* m_pSpeedControl (HUD widget cache).
+    // The Random referenced by SpawnFruit/GetNextWave is fetched via a global pointer
+    // (*(Random**)(GOT + DAT_xxx)), NOT a WaveManager member. See docs §1 layout note.
+    // Do NOT change this layout until WaveManager::WaveManager() ctor is disassembled to confirm.
     Random m_Random;
 
     // +0x035: wave-active flag
