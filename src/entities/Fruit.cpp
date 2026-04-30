@@ -164,31 +164,23 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     // Load mesh via MeshManager (cached, matches binary pattern)
     Game* game = Game::GetInstance();
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
-    printf("[Fruit] Init: type=%d game=%p meshMgr=%p\n", fruitType, (void*)game, (void*)meshMgr);
     if (game && meshMgr) {
         const FruitInfo* info = FruitInfo_Get(fruitType);
         const char* modelName = (info && info->m_ModelName[0]) ? info->m_ModelName : "apple";
         std::string meshPath = game->data_dir + "/models/Fruit/" + modelName + "_single.mmd";
-        printf("[Fruit] Init: loading '%s'\n", meshPath.c_str());
         m_Model = meshMgr->Load(meshPath.c_str());
-        printf("[Fruit] Init: model valid=%d\n", m_Model.IsValid());
 
         // Assign fruit atlas texture to the model's mesh
-        // fruit_atlas.tex is in models/fruit/textures/, NOT in textures/
-        // So we can't use TextureManager::LoadLocalisedTexture (which prepends textures/)
         if (m_Model.IsValid() && !m_Model->m_Meshes.empty()) {
             static SmartPtr<Mortar::Texture> s_fruitAtlas;
             if (!s_fruitAtlas.IsValid()) {
                 std::string texPath = game->data_dir + "/models/fruit/textures/fruit_atlas.tex";
                 s_fruitAtlas = Mortar::TextureManager::GetInstance().Load(texPath.c_str());
             }
-            printf("[Fruit] Init: fruit_atlas valid=%d texId=%u\n",
-                   s_fruitAtlas.IsValid(), s_fruitAtlas.IsValid() ? s_fruitAtlas->m_TexId : 0);
             if (s_fruitAtlas.IsValid()) {
                 for (int i = 0; i < (int)m_Model->m_Meshes.size(); i++) {
                     if (m_Model->m_Meshes[i].IsValid() && !m_Model->m_Meshes[i]->HasDiffuseTexture()) {
                         m_Model->m_Meshes[i]->SetDiffuseTexture(s_fruitAtlas);
-                        printf("[Fruit] Init: assigned tex to mesh[%d]\n", i);
                     }
                 }
             }
@@ -434,11 +426,7 @@ static void DrawOneModel(Mortar::Model* model,
 void Fruit::Draw(Renderer& r) {
     (void)r;
     if (!IsActive() || m_ChuckDelay > 0.0f) return;
-    if (!m_Model.IsValid()) {
-        static bool s_logged = false;
-        if (!s_logged) { printf("[Fruit] Draw: model not valid\n"); s_logged = true; }
-        return;
-    }
+    if (!m_Model.IsValid()) return;
 
     float s = scale.x * m_ScaleAnim;
     if (s <= 0.0f) return;
@@ -729,11 +717,6 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
     const float rad = atan2f(bladeVel.x, bladeVel.y);
     m_SliceAngle   = (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
 
-    printf("[Fruit] CollisionResponse: type=%d pos=(%.1f,%.1f) impulse=%.2f angle=0x%04x "
-           "crit=%d special=%d\n",
-           m_FruitType, pos.x, pos.y, m_SliceImpulse, m_SliceAngle,
-           isCritical, isSpecial);
-
     // Impact particle emitter — one-shot, rotated by the blade direction.
     // Uses FRUIT_INFO.m_NameHash (e.g. "apple") as the template lookup. The
     // emitter's m_ScaleY / m_field30 pair encodes (cos, sin) of the rotation
@@ -1009,10 +992,6 @@ void Fruit::Slice() {
         *q = (qx * qy * qz).normalized();
     }
 
-    printf("[Fruit] Slice: type=%d imp=%.2f flipSide=%d splats=%d "
-           "vA=(%.1f,%.1f) vB=(%.1f,%.1f)\n",
-           m_FruitType, imp_screen, flipSide, splatCount,
-           halfVelA.x, halfVelA.y, halfVelB.x, halfVelB.y);
 }
 
 // Matches Fruit::RotateFacingUp (0x001757f4).
@@ -1176,7 +1155,8 @@ void Fruit::LoadFruitModels() {
     }
 
     s_FruitModelsLoaded = true;
-    printf("[Fruit] LoadFruitModels: loaded half meshes for %d/%d fruit types\n",
+    (void)0; // (verbose load log removed)
+    if (false) printf("[Fruit] LoadFruitModels: loaded half meshes for %d/%d fruit types\n",
            loaded, n);
 }
 

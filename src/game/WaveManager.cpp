@@ -647,12 +647,7 @@ void WaveManager::Update(float dt) {
         accumDt -= WAVE_STEP;
     }
     field_0x2d4 = accumDt;
-    static int s_UpdateCalls = 0;
-    if (++s_UpdateCalls <= 5 || (s_UpdateCalls % 60) == 0) {
-        printf("[WaveManager] Update[%d]: dt=%.4f wavePumps=%d wave=%p mode=%d\n",
-               s_UpdateCalls, dt, wavePumps, (void*)m_pCurrentWave[0],
-               (int)game->gameMode);
-    }
+    // Removed per-frame Update spam; spawn events themselves print via [Spawn].
 
     // TODO: game-end gate (binary @ 0x125b64) -- vector::size() unused, semantics unclear.
     // Binary: if(game[+0x170] && !this[+0x35] && this[+0x37] && this[+0x38] == m_WaveCount[0]+1)
@@ -674,12 +669,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     if (UpdateNetworking(dt, playerIdx)) return;
 
     WAVE_INFO* wave = m_pCurrentWave[playerIdx];
-    static int s_NoWaveLog = 0;
-    if (!wave) {
-        if (s_NoWaveLog++ < 3)
-            printf("[WaveManager] UpdateWave: m_pCurrentWave[%d]=null, skip\n", playerIdx);
-        return;
-    }
+    if (!wave) return;
 
     // Wave timer countdown.
     float waveTimer = m_WaveTimer[playerIdx];
@@ -692,12 +682,6 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // Process each spawner.
     for (int s = 0; s < wave->m_SpawnerCount; ++s) {
         SPAWNER_INFO& spawner = wave->m_pSpawners[s];
-        static int s_SpawnerTickLog = 0;
-        if (s_SpawnerTickLog++ < 5) {
-            printf("[WaveManager] UpdateWave wave=%p spawner[%d]: timer=%.3f remain=%d types=%d\n",
-                   (void*)wave, s, spawner.m_SpawnTimer,
-                   spawner.m_RemainingCount, spawner.m_FruitTypeCount);
-        }
 
         float dtMod = field_0x78;
         if (dtMod < 1.0f) dtMod = 1.0f;
@@ -1048,15 +1032,16 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
 
         Entity* e = am->Add(0, true);
         if (!e) {
-            printf("[SpawnFruit] ActorManager::Add returned null!\n");
+            fprintf(stderr, "[SpawnFruit] ActorManager::Add returned null\n");
             continue;
         }
         Fruit* f = static_cast<Fruit*>(e);
-        // Z stride: (i+1)*32. binary iVar8 starts at 1. DIFFERS: was i*32. binary @ 0x001229..
+        // Z stride: (i+1)*32. binary iVar8 starts at 1. binary @ 0x001229..
         f->pos  = Vec3(posX, posY, (float)((i + 1) * 32));
         f->vel  = Vec3(velX, velY, 0.0f);
         f->Init(0, (int)fruitType, 0);
-        printf("[SpawnFruit] type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) chuckDelay=%.2f placement=%d\n",
+        // Diagnostic: spawn parameters (low-rate, only fires per spawn-event)
+        printf("[Spawn] fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) cd=%.2f place=%d\n",
                fruitType, posX, posY, velX, velY, chuckDelay, (int)spawnType);
 
         // Post-Init gravity from spawner Vec3. binary @ 0x00122954..0x0012299e

@@ -138,7 +138,6 @@ static uint32_t ResolveEmitterHash(const char* path) {
 void SlashEntity::LoadContent() {
     if (!g_BladeTex.IsValid()) {
         g_BladeTex = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
-        printf("[SlashEntity] LoadContent: blade.tex valid=%d\n", g_BladeTex.IsValid());
     }
 }
 

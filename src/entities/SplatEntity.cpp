@@ -418,7 +418,6 @@ void SplatEntity::PlaySplat(int splatSize) {
 
 void SplatEntity::CreatePool(int capacity) {
     s_Pool.Create(capacity);
-    printf("[SplatEntity] CreatePool: capacity=%d\n", capacity);
 }
 
 void SplatEntity::DestroyPool() {
@@ -429,8 +428,6 @@ void SplatEntity::DestroyPool() {
 void SplatEntity::LoadContent() {
     if (!s_SplatTex.IsValid()) {
         s_SplatTex = Mortar::TextureManager::LoadLocalisedTexture("white_splash.tex");
-        printf("[SplatEntity] LoadContent: white_splash.tex valid=%d\n",
-               s_SplatTex.IsValid());
     }
 }
 

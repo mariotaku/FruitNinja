@@ -46,3 +46,29 @@ foreach(screen main dojo about shop gamemode)
     add_test(NAME screen_${screen} COMMAND test_screen ${screen})
     set_tests_properties(screen_${screen} PROPERTIES TIMEOUT 60)
 endforeach()
+
+# Per-mode gameplay smoke test. Boots GameInit, fires SetupLevel for the
+# named mode, ticks ~3s, asserts wave count + at least one spawn.
+add_executable(test_gameplay test_gameplay.cpp)
+target_link_libraries(test_gameplay PRIVATE fruit-ninja-game SDL2::SDL2main)
+if (WIN32)
+    target_link_libraries(test_gameplay PRIVATE opengl32)
+endif()
+if (WIN32 AND TARGET SDL2::SDL2)
+    set(_sdl2_real SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET test_gameplay POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2::SDL2>
+                $<TARGET_FILE_DIR:test_gameplay>)
+    endif()
+endif()
+foreach(mode classic combo arcade zen)
+    add_test(NAME gameplay_${mode} COMMAND test_gameplay ${mode})
+    set_tests_properties(gameplay_${mode} PROPERTIES TIMEOUT 60)
+endforeach()
