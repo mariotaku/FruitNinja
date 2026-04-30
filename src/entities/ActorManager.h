@@ -99,7 +99,8 @@ public:
     // Binary: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
     // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
     // RE-gap: exact function body behind GOT slots [0x0016ccbc..0x0016ccc0].
-    typedef void (*HashFn)(long entityType, unsigned long& outHash, bool& outOk);
+    // Binary signature: entityType is the return value; takes (StringHash key, bool& outFound).
+    typedef long (*HashFn)(unsigned long key, bool& outFound);
 
     // Stores the hash-converter function into m_HashDelegate.
     // Binary: m_HashDelegate at +0x1048 (one slot past m_FactoryDelegate +0x1024).

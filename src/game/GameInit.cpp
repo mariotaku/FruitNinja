@@ -24,6 +24,7 @@
 #include "hud/SliceEffect.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
+#include "entities/EntityFactory.h"
 #include "entities/Fruit.h"
 #include "entities/SlashEntity.h"
 #include "entities/BombFlash.h"
@@ -179,10 +180,12 @@ void GameInit(unsigned long) {
         // 16a: Mortar::ActorManager::Initialise @ 0x000f7d04 (PLT thunk)
         am->Initialise(5, 0x2000);
         // 16b: Mortar::ActorManager::RegisterFactory @ 0x00107c34 (PLT thunk)
-        // TODO: pass real factory from EntityFactory once GOT slots resolved (RE gap step 16).
-        am->RegisterFactory(nullptr);
+        // CreateEntity @ 0x0017421c — maps entityType int -> new Fruit/Bomb/etc.
+        am->RegisterFactory(&CreateEntity);
         // 16c: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk)
-        // TODO: pass real hash converter once GOT slots resolved (RE gap step 16).
+        // HashTypeConvert @ 0x0017414c maps "fruit"/"bomb"/etc StringHash -> entityType.
+        // Only consumer is LoadEntity (unported level deserialisation; dead in live port).
+        // Keep nullptr until LoadEntity is ported.
         am->RegisterHashConverter(nullptr);
     }
 
