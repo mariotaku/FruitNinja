@@ -86,10 +86,18 @@ void ScoreControl::Release() {
 
 // Reset @ 0x001582e4
 void ScoreControl::Reset() {
-    // Copy m_FruitDigitTex -> super.m_Texture (+0x74) so HUDControl3d::Draw renders it
-    if (m_FruitDigitTex.IsValid()) {
-        m_Texture = m_FruitDigitTex->m_TexId;
-    }
+    // DIFFERS: binary copies m_FruitDigitTex (hud_fruit.tex) into m_Texture
+    // (+0x74) so HUDControl3d::Draw renders it. hud_fruit.tex is a digit
+    // spritesheet (16 frames horizontally); the binary's HUDControl3d::Draw
+    // path applies per-digit UV crop via m_DigitAlpha[i] in PreDraw section B
+    // and does NOT actually render the +0x74 quad whole. The port's
+    // HUDControl3d::Draw lacks that UV-crop hook, so copying the GLuint here
+    // would render the whole spritesheet as a 40x40 quad in the score corner
+    // -- looks like a strip of fruit icons / tutorial graphic.
+    // Until Section B (Classic per-digit overlay) is wired in PreDraw, leave
+    // m_Texture at 0 so HUDControl3d::Draw skips it cleanly.
+    // TODO: wire Classic per-digit fruit-icon overlay (PreDraw section B).
+    m_Texture = 0;
 
     m_PulseAngle = 0;
     m_bDirty     = 1;
