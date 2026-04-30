@@ -65,11 +65,30 @@ void GameInit(unsigned long) {
     // Binary calls HUD::Release(hud) immediately after ctor — no-op in port
     // (HUD ctor already initialises cleanly).
 
-    // step 3: 3x MissControl instances + AddControl + MissControl::CreatePool(0xc, hud).
-    // Binary allocates 3 MissControl objects (operator new(0x94) x3) then registers
-    // them with the HUD, then calls a pool-creation helper with count=0xc.
-    // Port: AllocatePool() wraps the ctor loop + HUD registration in one call.
-    // TODO: real MissControl positions come from GOT+0x30 table — using Vec3(0,0,0) placeholder.
+    // step 3: 3x visible MissControl widgets + 12-entry pool.
+    // Source: docs/structs/miss-control-init.md §2. Binary do-loop at 0x0016c694..0x0016c742
+    // reads from GOT+0x30 table at 0x001F3DAC (3 rows x 16 bytes, stride=4 floats).
+    // field_0x2c = m_Timer (rotation), field_0x30 = m_bActive, field_0x34 = m_LayerFlags.
+    {
+        static const struct { float x, y, rot; } kMC[3] = {
+            { -79.0f, -10.0f,  +5.0f },   // iter 0, m_AnimState=0
+            { -52.0f, -13.0f,  -5.0f },   // iter 1, m_AnimState=1
+            { -20.0f, -18.0f, -10.0f },   // iter 2, m_AnimState=2
+        };
+        // Binary calls HUD::Release(hud) here before the loop.
+        game->hud->Release();
+        for (int i = 0; i < 3; ++i) {
+            MissControl* mc = new MissControl();
+            mc->m_bActive   = 1;                                // field_0x30 = 1
+            mc->pos         = Vec3(kMC[i].x, kMC[i].y, 50.0f); // DAT_0016c9ac = 50.0
+            mc->pivot       = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0
+            mc->m_Timer     = kMC[i].rot;                       // field_0x2c = -rot (pre-negated in table above)
+            mc->m_AnimState = i;                                // stored before tmp++ in binary
+            mc->m_LayerFlags = 1;                               // field_0x34 = 1 (configured flag)
+            game->hud->AddControl(mc);
+        }
+    }
+    // step 3b: 12-entry pool (MissControl::CreatePool(0xc, hud)).
     MissControl::AllocatePool();
 
     // step 4: ScoreControl (size 0x100) + AddControl

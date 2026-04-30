@@ -2,6 +2,7 @@
 
 #include "ScoreControl.h"
 #include "Game.h"
+#include "entities/FruitInfo.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
@@ -140,12 +141,16 @@ void ScoreControl::Update(float dt) {
     if (!game) return;
 
     // Stage 1: per-digit alpha cascade
-    // Classic (gameMode==0): if digitsActive == m_LastDigitCount, ramp up at +6/sec
-    //   else fade m_DigitAlpha[0..15] down at -16/sec; once index 0 hits 0, commit m_LastDigitCount
-    // Non-Classic: static-timer driven (0.25s gate) same rates
-    int digitsActive = m_DigitCount;  // TODO: clamp(comboCount, 0, 15) from g_GameData; stub = 0
+    // ASM-verified gate at 0x001585A8: gameMode == 1.
+    // Non-gameMode-1: static-timer driven (0.25s gate) same rates.
+    // TODO: wire digitsActive to real combo counter (GOT[0x7478]).
+    static int s_ComboCount = 0;  // TODO: wire to real combo source from WaveManager / Score path
+    int digitsActive = s_ComboCount;
+    if (digitsActive < 0) digitsActive = 0;
+    if (digitsActive > 15) digitsActive = 15;
+    m_DigitCount = digitsActive;
 
-    if (game->gameMode == 0 /* Classic */) {
+    if (game->gameMode == 1 /* ASM-verified: == 1 at 0x001585A8 */) {
         if (digitsActive == m_LastDigitCount) {
             for (int i = 0; i < digitsActive; i++) {
                 m_DigitAlpha[i] += 6.0f * dt;
@@ -344,9 +349,62 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 buf, Vec3(drawX, drawY, 0.0f), col, Mortar::FONT_ALIGN_CENTER);
         }
 
-        // Section B: Per-mode multiplier overlay
-        // Classic (mode==0): per-digit fruit-icon overlays via m_DigitAlpha[i]
-        // TODO: full Classic digit-overlay — needs FRUIT_INFO texture rebind and per-digit draw
+        // Section B: per-digit combo overlay.
+        // ASM-verified gate at 0x00158FEC: gameMode == 1.
+        // (See docs/structs/hud.md ScoreControl PreDraw Section B detail.)
+        if (game->gameMode == 1) {
+            // Texture rebind: pick FRUIT_INFO icon by clamped combo count.
+            // Executed once before the per-digit loop.
+            int comboCount = m_LastDigitCount;
+            if (comboCount < 0) comboCount = 0;
+            int fruitInfoCount = FruitInfo_GetCount();
+            int idx = (comboCount < 1) ? 0 : (comboCount < fruitInfoCount ? comboCount : fruitInfoCount - 1);
+            const FruitInfo* fi = FruitInfo_Get(idx);
+            Colour tint(255, 255, 255, alpha);
+            if (fi) {
+                // Rebind +0x74 (m_Texture) to per-fruit HUD icon for this frame.
+                // HUDControl3d::Draw will render it after PreDraw returns.
+                // m_HudTexture corresponds to fi->m_pFruitTexture in the binary doc.
+                Mortar::Texture* hudTex = fi->m_HudTexture.Get();
+                if (hudTex) m_Texture = hudTex->m_TexId;
+
+                // Tint from FRUIT_INFO->m_FactColour (+0x2F8), alpha overridden.
+                tint.r = fi->m_FactColour[0];
+                tint.g = fi->m_FactColour[1];
+                tint.b = fi->m_FactColour[2];
+                tint.a = alpha;
+            }
+
+            // Cursor init: MeasureWidth(scoreBuf) * m_ScalePulse * 48 + 5
+            // (binary @ 0x00159062..0x00159086)
+            if (game->pFontNumbers.IsValid()) {
+                char scoreBuf[32];
+                snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
+                float cursorX = game->pFontNumbers->MeasureWidth(48.0f, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
+
+                // Per-digit loop (binary @ 0x001590B8..0x001591BC)
+                for (int i = 0; i < 16; i++) {
+                    if (m_DigitAlpha[i] <= 0.0f) continue;
+
+                    // Sin-eased scale: angle 0..135 deg mapped via alpha 0..1
+                    // binary @ 0x001590DC..0x001590FA
+                    uint16_t angle = (uint16_t)(int32_t)(135.0f * m_DigitAlpha[i] * 182.0f);
+                    float s = SinIdx(angle);
+                    float scale = s * (45.0f + (float)i * 6.0f);
+
+                    char label[16];
+                    snprintf(label, sizeof(label), "%d", 1 << (i + 1));  // "2","4","8","16",...
+
+                    float drawX = m_DrawPosX + cursorX;
+                    float drawY = 155.0f;  // hard-coded per binary @ 0x0015914C
+                    game->pFontNumbers->DrawString(scale, 1.0f, 0.0f,
+                        label, Vec3(drawX, drawY, 0.0f), tint, Mortar::FONT_ALIGN_CENTER);
+
+                    cursorX += game->pFontNumbers->MeasureWidth(scale, label) + 5.0f;
+                }
+            }
+        }
+
         // Arcade (mode==2): "x%d" when PowerUpManager::GetScoreGainMultiplier() > 1
         // PowerUpManager stub returns 1.0, so this branch never fires; left as TODO.
 

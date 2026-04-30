@@ -1044,6 +1044,107 @@ Texture / format strings (all GOT-rel):
 8. **Skip()** restores `m_DisplayedScore = GetCurrentScore(m_PlayerIdx)`; if game-over flag set, also force `m_BannerScaleTime = 1.0f`.
 9. **Static cache state** (sfx cooldown, banner sin idx, "000" cached width) lives in `.bss` at GOT-base+0x45180 (cxa-guard-protected). Use C++11 function-local statics or per-instance members in the port.
 
+#### PreDraw Section B detail (combo-multiplier per-digit overlay)
+
+<!-- Verified against ASM: 2026-04-30 -->
+
+**Visibility gates** (in order, all must pass to enter the loop):
+1. `m_PlayerIdx == 0 && IsMultiplayer()` → early return at top of PreDraw.
+2. `g_GameData.m_TransitionTimer >= -1.0f` (the `<= -1.0` branch jumps past A+B+C straight to D).
+3. **`g_GameData.gameMode == 1`** (binary `cVar1 == 0x01` at 0x00158FEC). The existing
+   text "mode == 1 (Classic)" in this doc and the corresponding port comment
+   `if (game->gameMode == 0 /* Classic */)` are both **inconsistent with each other**;
+   `Update`'s digit-cascade gate (0x001585A8) also tests `== 1`. Both Update and
+   PreDraw key off the same value, so the per-digit cascade and per-digit overlay
+   stay in lock-step regardless of which mode label is correct. **Port bug to
+   verify**: `src/hud/ScoreControl.cpp:148` checks `gameMode == 0`; the binary
+   checks `== 1`. Same mismatch in PreDraw stub (currently a TODO).
+4. Per-digit gate inside the loop: `m_DigitAlpha[i] > 0.0f`.
+
+**Texture rebind** (executed ONCE before the loop, not per-digit):
+```c
+int comboCount   = *((int*)GOT[0x7478]);                 // game digit/combo count
+int fruitInfoMax = *((int*)GOT[0x7060]);                 // FRUIT_INFO array length
+int idx = (comboCount < 1) ? 0 : min(comboCount, fruitInfoMax - 1);
+FRUIT_INFO* fi = Fruit::FruitInfo(idx);                  // 0x000F4DB8
+this->base.m_SecondaryTex = fi->m_pFruitTexture;         // +0x74 swap (was hud_fruit.tex)
+Colour tint = fi->m_FactColour;                          // FRUIT_INFO+760
+```
+The **icon itself is NOT drawn in PreDraw** — it is rendered by `Draw()` after
+PreDraw via `HUDControl3d::Draw` using the rebound +0x74 texture. Section B
+draws only the multiplier *number labels* on top.
+
+**Per-digit loop** (running cursor on X axis, fixed Y=155 in font space):
+```c
+// Initial cursor X = end of score text + 5px gap
+char scoreBuf[64]; OS_SPrintf(scoreBuf, "%d", m_DisplayedScore);
+float cursorX = MeasureWidth(font, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
+
+for (int i = 0; i < 16; i++) {
+    if (m_DigitAlpha[i] <= 0.0f) continue;
+    char buf[64];
+    OS_SPrintf(buf, "%d", 1 << (i + 1));         // "2","4","8","16",...,"65536"
+
+    // Sin-eased scale: angle 0..135 deg as alpha 0..1, peaks ~alpha=0.66
+    uint16_t angle = (uint16_t)(int32_t)(135.0f * m_DigitAlpha[i] * 182.0f);
+    float    s     = SinIdx(angle);              // ~0..1, peak at angle=0x4000
+    float    scale = s * (45.0f + i * 6.0f);     // larger for later combo digits
+
+    Colour c = tint;                              // FRUIT_INFO->m_FactColour
+    c.a = alpha;                                  // overall ScoreControl alpha
+
+    // Hard-float ABI ordering (Ghidra's __stdcall_softfp prototype is wrong):
+    //   s0 = m_DrawPosX + cursorX     (font-space X)
+    //   s1 = 155.0f                   (font-space Y, DAT_001593D0 — NOT m_DrawPosY)
+    //   s2 = 0.0f                     (Z)
+    //   s3 = scale                    (font size = SinIdx * (45 + i*6))
+    //   s4 = s5 = s6 = 0.0f
+    //   r0 = font, r1 = &iter, r2 = &c, r3 = flag = 1
+    Font::DrawString(/*scale*/scale, /*maxW*/0.0f, /*z*/0.0f,
+                     buf, Vec3(m_DrawPosX + cursorX, 155.0f, 0.0f), c, /*flag*/1);
+
+    cursorX += MeasureWidth(font, buf) * scale + 5.0f;
+}
+```
+
+**Spritesheet UV note (FRUIT_INFO rebind, NOT hud_fruit.tex digits):**
+
+`hud_fruit.tex` is the *default* +0x74 texture set in the ctor and Reset, but
+Section B *replaces* it with a per-fruit-type icon for the duration of this
+frame. There is **no per-digit UV slicing** of `hud_fruit.tex` — the file is
+treated as a single full-quad icon by `HUDControl3d::Draw`. The "spritesheet
+hypothesis" in the existing TODO is incorrect; ignore it. Whether `hud_fruit.tex`
+on disk happens to be a single fruit icon or a full sheet is irrelevant — at
+draw time the binary always binds one full FRUIT_INFO texture and lets
+`DrawQuad` use full UV (0..1).
+
+**Constants (DAT pool):**
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_001593C0 | 135.0f | per-digit Sin angle pre-mul (degrees range) |
+| DAT_001593C4 | 182.0f | degrees → SinIdx(0..0xFFFF) scale (≈ 65536/360) |
+| DAT_001593C8 | 45.0f  | per-digit base scale offset |
+| DAT_001593CC | 0.0f   | Z, vec2.x, vec2.y, vec2.z fillers |
+| DAT_001593D0 | **155.0f** | **font-space Y for ALL digit overlays** (constant, not m_DrawPosY) |
+| DAT_001593DC | offset → "%d" string | OS_SPrintf format |
+| DAT_001593E0 | offset → GOT[0x7990] (g_GameData) | gameMode/font lookup |
+
+**Binary references:**
+
+| Item | Address |
+|------|---------|
+| Section B body (gameMode==1 branch) | 0x00158FF6..0x001591BC |
+| Texture rebind (Fruit::FruitInfo + SmartPtr=) | 0x00159012..0x0015901E |
+| FactColour copy | 0x0015903E..0x00159048 |
+| Cursor init `MeasureWidth*scalePulse*48 + 5` | 0x00159062..0x00159086 |
+| Per-digit loop head (gate `m_DigitAlpha[i] > 0`) | 0x001590B8..0x001590C4 |
+| Sin-scale compute | 0x001590DC..0x001590FA |
+| `(45 + i*6)` compute | 0x001590FE..0x00159122 |
+| DrawString call | 0x0015916E |
+| Cursor advance `+= width*scale + 5` | 0x00159198..0x001591A2 |
+| Loop counter / branch | 0x001591B2..0x001591BC |
+
 ---
 
 ### MissControl : HUDControl3d : HUDControl (combo text display)
