@@ -59,6 +59,11 @@ public:
     MissControl();
     ~MissControl() override;
 
+    // Called by HUD::Update at the start of every frame tick (0x00144d20),
+    // before iterating controls. Drives global combo-decay / combo-text logic.
+    // TODO: implement combo decay when MissControl combo system is fully ported.
+    static void PreUpdate(float dt) { (void)dt; }
+
     // One-time shared texture load. Must be called once at startup
     // before the pool is used. Loads critical.tex, ultra_rare_plus_50.tex,
     // hud_cross.tex.
