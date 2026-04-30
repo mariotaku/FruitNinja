@@ -75,8 +75,15 @@ void GameInit(unsigned long) {
             { -52.0f, -13.0f,  -5.0f },   // iter 1, m_AnimState=1
             { -20.0f, -18.0f, -10.0f },   // iter 2, m_AnimState=2
         };
-        // Binary calls HUD::Release(hud) here before the loop.
-        game->hud->Release();
+        // DIFFERS: binary calls HUD::Release(hud) before this loop. In the
+        // port, HUD::Release iterates the control list and `delete`s every
+        // entry -- nuking any HUDControl already added by GameInitialise
+        // (TutorialControl, etc.) and leaving dangling pointers in Game.
+        // The binary's HUD::Release does something different (likely a
+        // per-control state-reset hook). Skipping the call until the
+        // binary's real semantics are RE'd.
+        // TODO: RE binary HUD::Release real body, then re-add a port-safe
+        // version.
         for (int i = 0; i < 3; ++i) {
             MissControl* mc = new MissControl();
             mc->m_bActive   = 1;                                // field_0x30 = 1
