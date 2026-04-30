@@ -9,33 +9,70 @@
 // pulse on score change, scale pulse driven by combo timer, new-highscore banner.
 //
 // Binary addresses:
-//   ctor (real)    0x00158c7c
-//   ctor (alias)   0x00158d4c
-//   ctor thunk     0x000f6bdc
-//   dtor (regular) 0x00158394
-//   dtor (inplace) 0x00158418
-//   dtor (deleting)0x00158494
-//   Update         0x0015853c
-//   Draw           ~0x00158600+
-// LoadContent called via vtable slot Init (vtable[2]) from GameInit.
+//   ctor (real)     0x00158c7c
+//   ctor (alias)    0x00158d4c
+//   ctor thunk      0x000f6bdc
+//   dtor (in-place) 0x00158418
+//   dtor (deleting) 0x00158394
+//   Reset           0x001582e4
+//   Update          0x0015853c
+//   PreDraw         0x00158e1c
+//   Draw            0x001581d4
+//   GetType         0x00159d18  returns 3
 
 #include "HUDControl3d.h"
+#include "asset/Texture.h"
+#include "util/SmartPtr.h"
 #include <cstdint>
 
 class ScoreControl : public HUDControl3d {
 public:
-    // Subclass fields occupy 0x100 - 0x7C = 0x84 bytes (layout not yet fully RE'd).
-    uint8_t m_fields[0x84];
+    // +0x7C
+    uint8_t  m_bDirty;             // 1 = snap m_ScoreSmoothed to currentScore next Update
+    uint8_t  _pad7D;
+    uint16_t m_PulseAngle;         // sin-table angle; set 0x8000 on score increase, decays to 0
+
+    // +0x80
+    float    m_ScoreSmoothed;      // eased toward GetCurrentScore
+    int      m_DisplayedScore;     // (int)m_ScoreSmoothed — drives formatted text
+    int      m_HighscoreToShow;    // highscore value in banner (0 = no banner)
+    float    m_BannerStartTimer;   // banner activation timer; init -1.0f
+
+    // +0x90
+    float    m_ScalePulse;         // 1.0..2.0 during wave-active scale pulse
+    float    m_DrawPosX;           // cached draw X
+    float    m_DrawPosY;           // cached draw Y
+    float    m_DrawPosZ;           // cached draw Z (always 0)
+
+    // +0xA0
+    SmartPtr<Mortar::Texture> m_ScoreIconTex;       // score.tex
+    SmartPtr<Mortar::Texture> m_HighscoreBannerTex; // new_best_score.tex
+    float    m_BannerScaleTime;    // banner scale anim timer; -2.0 = inactive sentinel
+    uint16_t m_BannerSinIdx;       // sin-table angle for banner wobble
+    uint8_t  _padAE[2];
+
+    // +0xB0
+    int      m_DigitCount;         // active digit count (0..16)
+    int      m_LastDigitCount;     // previous digit count (change detection)
+    float    m_DigitAlpha[16];     // per-digit alpha 0..1; index 0 = ones place
+
+    // +0xF8
+    SmartPtr<Mortar::Texture> m_FruitDigitTex;  // hud_fruit.tex (loaded by ctor; Reset copies to +0x74)
+
+    // +0xFC
+    int      m_PlayerIdx;          // 0 = P1, 1 = P2
 
     ScoreControl();
     ~ScoreControl() override;
 
-    void Init() override {}      // vtable[2]: loads localised digit textures (0x00158c7c body)
-    void Reset() override {}
-    void Update(float dt) override { (void)dt; }
-    void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
-
-    int GetType() override { return 1; }
+    void Init() override;
+    void Release() override;
+    void Reset() override;
+    void Update(float dt) override;
+    void PreDraw(const Vec3& hudScale) override;
+    void Draw(const Vec3& hudScale, int layerMask) override;
+    int  GetType() override { return 3; }
+    void Skip() override;
 };
 
 #endif // FN_HUD_SCORE_CONTROL_H
