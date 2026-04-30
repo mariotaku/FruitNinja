@@ -6,6 +6,7 @@
 // ctor @ 0x0016133c
 // Stub: zero-fills subclass fields; real ctor loads localised speed gauge texture.
 SpeedControl::SpeedControl() {
+    m_bUseHUDScales = 0;
     std::memset(m_fields, 0, sizeof(m_fields));
 }
 

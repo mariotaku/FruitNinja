@@ -44,25 +44,16 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
         mat.RotZ44(SinIdx(idx), CosIdx(idx));
     }
 
-    // Step 6-7: Binary computes `drawPos = pos + (480, 320, 0) * pivot`
-    // but `pivot` is zero-initialised by CopyGlobalVec3_PauseScreen for all
-    // standard controls — the offset is dead code. See
-    // docs/engine/coordinate-system.md. Positions are already in the
-    // centred ortho space [-240..240, -160..160].
+    // Step 6-7: Skipping (480,320,0) * hudScale + pos; port ortho already centers on (0,0).
     mat.GlobalTranslate44(pos);
 
     // Step 8-9: Upload matrices
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    // Depth test: read-only. Lets the previously-drawn 3D fruit/bomb
-    // mesh occlude the ring quad pixels where it sits in front. The
-    // ring (quad at button pos.z) and fruit (3D mesh translated to
-    // button pos) share the same nominal z; equal-z under GL_LESS fails,
-    // so any fruit pixels drawn first reject the ring at the same depth.
-    // Outside the fruit's silhouette the depth buffer holds the cleared
-    // far value and the ring passes. Net effect: ring renders only
-    // around the fruit, fruit is visible inside.
+    // Port specific: binary's Mesh::DrawQuadUnCached does its own state setup and does
+    // not enable depth test. Port adds read-only depth test to fix menu-button ring
+    // vs 3D fruit z-fight.
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glDepthMask(GL_FALSE);    // do not write — preserve fruit's depth
