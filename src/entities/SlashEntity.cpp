@@ -95,15 +95,19 @@ SlashEntity* g_pSlashEntity = nullptr;
 static float    g_LifeScale         = 1.0f;   // 0x001F3E54
 static int      g_ColourCount       = 1;      // 0x001F3E58
 static float    g_PaletteProgress   = 0.0f;   // 0x0024D874
+// _GLOBAL__I_Slash.cpp @ 0x0017e52c: allocates 16 entries via do/while
+// Colour::Colour() default ctor (= black (0,0,0,255)), then copy-ctors entry[0]
+// from DAT_0017e828 source. DAT_0017e828 value not yet RE'd -- TODO.
 static Colour   g_Palette[16] = {
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
-    Colour(255, 255, 255, 255), Colour(255, 255, 255, 255),
+    // TODO: entry[0] should be copy-ctor from DAT_0017e828 (binary value unknown)
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
 };                                            // 0x0024D878
 static int      g_ColourType        = 0;      // 0x0024D8B8 (0=static, 1=per-frame, 2=per-swipe)
 static uint8_t  g_DirectionalFlag   = 0;      // 0x0024D8BC (0=no trail, 1=trail, 2=trail-rotates)

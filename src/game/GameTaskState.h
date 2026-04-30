@@ -27,6 +27,7 @@
 #include "asset/TextureManager.h"
 #include "asset/Mesh.h"
 #include "util/SmartPtr.h"
+#include "math/Vec3.h"
 
 class PauseScreen;
 
@@ -82,12 +83,34 @@ struct GameTaskState {
     // Drains at dt * 2.0f; reaches 0 at ~0.75 s wall time.
     float splashFadeTimer;
 
+    // +0x68..+0xb0: 7 fruit-spawn-parameter defaults.
+    // Set by _GLOBAL__I_GameTask.cpp @ 0x0016d0dc.
+    // Constants resolved from read_memory(0x0016d3e8, 16):
+    //   DAT_0016d3ec = 0x3FD9999A = 1.7f
+    //   DAT_0016d3f0 = 0x3E99999A = 0.3f
+    //   DAT_0016d3f4 = 0x3DCCCCCD = 0.1f
+    // Semantic mapping (spawn-rate / variance params) not yet RE'd — TODO.
+    Vec3 spawnParam0;   // +0x68: (1.0, 1.0, 1.0)  — likely "global scale" default
+    Vec3 spawnParam1;   // +0x74: (1.7, 0.3, 1.0)  — TODO: identify
+    Vec3 spawnParam2;   // +0x80: (8.0, 0.1, 1.0)  — TODO: identify
+    Vec3 spawnParam3;   // +0x8c: (20.0, 0.1, 1.0) — TODO: identify
+    Vec3 spawnParam4;   // +0x98: (4.0, 0.1, 1.0)  — TODO: identify
+    Vec3 spawnParam5;   // +0xa4: (0.1, 0.1, 0.1)  — TODO: identify
+    Vec3 spawnParam6;   // +0xb0: (0.1, 0.1, 0.1)  — TODO: identify
+
     GameTaskState()
         : totalTime(0), prevStateDt(0), prevState(0), initialized(false),
           pPauseScreen(nullptr), firstFrame(false), field_0x111(false),
           initComplete(false), pAppState_x54(nullptr),
           pSliceEffectList(nullptr), pSliceEffectPool(nullptr),
-          splashFadeTimer(1.5f) {}
+          splashFadeTimer(1.5f),
+          spawnParam0(1.0f,  1.0f, 1.0f),
+          spawnParam1(1.7f,  0.3f, 1.0f),
+          spawnParam2(8.0f,  0.1f, 1.0f),
+          spawnParam3(20.0f, 0.1f, 1.0f),
+          spawnParam4(4.0f,  0.1f, 1.0f),
+          spawnParam5(0.1f,  0.1f, 0.1f),
+          spawnParam6(0.1f,  0.1f, 0.1f) {}
 };
 
 // State handler function types (match original function pointer table)
