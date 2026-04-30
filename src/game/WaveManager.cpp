@@ -659,7 +659,8 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
             sd->m_WaveStates.push_back(state);
         }
 
-        sd->m_pCurrentWave_P1 = m_WaveCount[1];
+        // DIVERGES fix: binary @ 0x00124986 sources +0x230 slot = m_WaveCount[0], not [1].
+        sd->m_pCurrentWave_P1 = m_WaveCount[0];
         sd->m_FruitQueueCount = m_FruitQueueSize[0];
         sd->m_WaveDelay       = field_0x234[0];
         sd->m_WaveWait        = field_0x238[0];
@@ -667,6 +668,9 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         sd->m_Speed_P1        = field_0x60;       // m_ComboTimer[0]
         sd->m_Speed_P0_alias  = m_Speed[1];
         memcpy(&sd->m_FruitQueue[0], &m_FruitQueue[0][0], 0x80);
+        // Binary @ 0x00124986: sd->field82_0x7c = this->field_0x2c8 = m_FruitQueueSize[1]
+        // TODO: semantic of field82_0x7c (FruitSaveData +0x7c) not yet determined.
+        sd->field82_0x7c = m_FruitQueueSize[1];
         return 1;
     }
     return 0;
@@ -694,12 +698,14 @@ void WaveManager::NewGame() {
 
 void WaveManager::ResetGlobalDt(float dt) {
     // Binary @ 0x00121ed8. Walks probOverrides[gameMode], erasing entries
-    // with m_PerWaveCount >= 0; advances past those with m_PerWaveCount < 0.
+    // with m_SelectedType >= 0; advances past those with m_SelectedType < 0.
+    // DIVERGES fix: binary checks *(it+0x74) = m_SelectedType, not m_PerWaveCount (+0x70).
+    // Binary @ 0x00121ee8 confirms ldr from offset +0x74 of PROBABILITY_OVERIDE.
     Game* game = Game::GetInstance();
     if (game) {
         auto& vec = probOverrides[game->gameMode];
         for (auto it = vec.begin(); it != vec.end(); ) {
-            if (it->m_PerWaveCount < 0) {
+            if (it->m_SelectedType < 0) {
                 ++it;
             } else {
                 it = vec.erase(it);
