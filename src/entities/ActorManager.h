@@ -94,6 +94,21 @@ public:
     // 0x0016d870.
     void RegisterFactory(FactoryFn factory) { m_FactoryDelegate = factory; }
 
+    // Hash converter delegate signature --
+    //   Delegate2<long entityType, unsigned long& outHash, bool& outOk>.
+    // Binary: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
+    // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
+    // RE-gap: exact function body behind GOT slots [0x0016ccbc..0x0016ccc0].
+    typedef void (*HashFn)(long entityType, unsigned long& outHash, bool& outOk);
+
+    // Stores the hash-converter function into m_HashDelegate.
+    // Binary: m_HashDelegate at +0x1048 (one slot past m_FactoryDelegate +0x1024).
+    // TODO: implement -- see docs/systems/gameinit-todos.md step 16.
+    void RegisterHashConverter(HashFn fn);
+
+    // +0x1048: hash converter (Delegate2 slot, see HashFn typedef above).
+    HashFn m_HashDelegate;
+
     // --- Entity API -----------------------------------------------------
 
     // 0x0017068c. Second bool param is declared but the binary body never

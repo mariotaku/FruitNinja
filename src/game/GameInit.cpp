@@ -14,18 +14,22 @@
 #include "WaveManager.h"
 #include "FruitSaveData.h"
 #include "screens/MainScreen.h"
+#include "screens/PauseScreen.h"
 #include "hud/HUD.h"
+#include "hud/TutorialControl.h"
 #include "hud/TimeControl.h"
 #include "hud/ScoreControl.h"
 #include "hud/CoinCounter.h"
 #include "hud/MissControl.h"
+#include "hud/SliceEffect.h"
 #include "entities/ActorManager.h"
+#include "entities/Entity.h"
 #include "entities/SlashEntity.h"
 #include "entities/BombFlash.h"
-#include "engine/MenuBackground.h"
 #include "entities/SplatEntity.h"
 #include "entities/BombBlast.h"
-#include "hud/SliceEffect.h"
+#include "engine/MenuBackground.h"
+#include "asset/MeshManager.h"
 #include "particle/PSPParticleManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
@@ -35,8 +39,9 @@
 #include "debug/DebugFlags.h"
 #include "UpdateMusic.h"
 #include "audio/GameSound.h"
-#include "GameOver.h"
 #include "audio/SoundManager.h"
+#include "GameOver.h"
+#include "GameTaskInput.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup.
@@ -85,14 +90,32 @@ void GameInit(unsigned long) {
         ChangeBackground(nullptr);
     }
 
-    // step 8: MeshManager loads
-    // TODO: MeshManager::Load calls — not yet ported.
+    // step 8: MeshManager loads (0x0016c97c..0x0016c9a8)
+    // Binary: MeshManager::Load x2, results -> g_TaskState +0xbc / +0xc0.
+    {
+        GameTaskState* ts = GetTaskState();
+        Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
+        if (mm) {
+            ts->sliceFxMesh     = mm->Load("models/fruit/slice_fx.mmd");
+            ts->sliceFxCritMesh = mm->Load("models/fruit/slice_fx_crit.mmd");
+        }
+    }
 
-    // step 9: SliceEffect list/pool init
-    // TODO: SliceEffect pool creation — not yet ported.
+    // step 9: SliceEffect list/pool init (0x0016c9a8..0x0016ca90)
+    // Binary: List<SliceEffect> ctor + MemoryPool::Create(100).
+    // Results -> g_TaskState +0x64 / +0xc8.
+    FN::SliceEffect_CreateList(100);
 
-    // step 10: Flag init at +0x112/+0x114 (Game struct fields)
-    // TODO: game field_0x112 / field_0x114 not yet mapped in port Game struct.
+    // step 10: Flag init (0x0016ca8e..0x0016caa8)
+    // Binary stores: g_TaskState+0x114 = g_GameData+0x54 (copy),
+    //   +0x112 = 1 (re-entry guard), +0x111 = 0, +0x0c = 0 (first frame).
+    {
+        GameTaskState* ts = GetTaskState();
+        ts->pAppState_x54 = nullptr;  // g_GameData+0x54 -- TODO: map this field (RE gap, step 10)
+        ts->initComplete  = true;     // +0x112: prevents re-running GameInit
+        ts->field_0x111   = false;    // +0x111: semantics TBD (RE gap, step 10)
+        ts->firstFrame    = false;    // +0x0c: "first frame after init" flag
+    }
 
     // step 11: MainScreen allocation
     printf("GameInit: about to new MainScreen\n");
@@ -101,36 +124,91 @@ void GameInit(unsigned long) {
     game->mainScreen = mainScreen;
     printf("GameInit: mainScreen field set\n");
 
-    // step 12: PauseScreen allocation
-    // TODO: PauseScreen not yet ported — skip.
+    // step 12: PauseScreen allocation (0x0016cad8..0x0016caf8)
+    // Binary: operator new(0xd8), PauseScreen::PauseScreen, vtable[2] (Init).
+    // Stored at g_TaskState +0x04.
+    {
+        PauseScreen* pauseScreen = new PauseScreen();
+        pauseScreen->Init();
+        GetTaskState()->pPauseScreen = pauseScreen;
+    }
 
-    // step 13: TutorialControl allocation
-    // (game->pTutorialCtrl already allocated in GameInitialise; binary re-allocs here)
-    // TODO: confirm whether binary re-allocs or reuses from GameInitialise.
+    // step 13: TutorialControl allocation (0x0016caf8..0x0016cb1e)
+    // Binary: operator new(0xa0), TutorialControl::TutorialControl, vtable[2] (Init).
+    // Also sets g_GameData+0x05 = 1 and g_GameData+0x0c = -1.0f.
+    // Binary unconditionally re-allocs g_GameData+0x168, leaking the previous ptr.
+    // Port matches fidelity: delete existing and re-alloc here.
+    // DIFFERS: port deletes the previous ptr; binary leaks it (no free before re-alloc).
+    if (game->pTutorialCtrl) {
+        delete game->pTutorialCtrl;
+        game->pTutorialCtrl = nullptr;
+    }
+    {
+        TutorialControl* tc = new TutorialControl();
+        tc->Init();
+        game->pTutorialCtrl = tc;
+        game->pauseFlag      = 1;      // g_GameData+0x05 = 1
+        game->m_TransitionTimer = -1.0f; // g_GameData+0x0c = -1.0f
+    }
 
     // step 14: AddControl x3 batch (MainScreen + PauseScreen + TutorialControl)
+    // Binary: HUD::AddControl x3 in order: MainScreen, PauseScreen, TutorialControl.
     game->hud->AddControl(mainScreen);
     printf("GameInit: AddControl(mainScreen) done\n");
-    // TODO: AddControl(pauseScreen) when PauseScreen is ported.
-    // TODO: AddControl(tutorialControl) — pTutorialCtrl already wired in GameInitialise.
+    game->hud->AddControl(GetTaskState()->pPauseScreen);
+    game->hud->AddControl(game->pTutorialCtrl);
 
-    // step 15: Entity::HeapCreate
-    // TODO: Entity::HeapCreate — not yet ported.
+    // step 15: Entity::HeapCreate (0x0016cb48..0x0016cb4e)
+    // Binary: Mortar::Entity::HeapCreate(0x20000) @ 0x000fd500 (PLT thunk).
+    // 0x20000 = 128 KB Entity LinkedHeap arena; must run before step 16.
+    // DIFFERS: port stub is a no-op (std new, no fixed arena). See Entity.h.
+    Entity::HeapCreate(0x20000);
 
-    // step 16: ActorManager::Initialise + RegisterFactory + RegisterHashConverter
-    // TODO: ActorManager full init — not yet ported.
+    // step 16: ActorManager full init (0x0016cb50..0x0016cc06)
+    // Binary: 16a Initialise(5, 0x2000), 16b RegisterFactory(delegate),
+    //         16c RegisterHashConverter(delegate).
+    // Factory + hash delegates reference GOT slots [0x0016ccb4..0x0016ccc0] --
+    // RE-gap: addresses not yet resolved. Pass nullptr stubs for now.
+    // NOTE: ActorManager::Initialise already called in GameInitialise; binary
+    // calls it again here (per-session reset). Matching binary call order.
+    {
+        ActorManager* am = ActorManager::GetInstance();
+        // 16a: Mortar::ActorManager::Initialise @ 0x000f7d04 (PLT thunk)
+        am->Initialise(5, 0x2000);
+        // 16b: Mortar::ActorManager::RegisterFactory @ 0x00107c34 (PLT thunk)
+        // TODO: pass real factory from EntityFactory once GOT slots resolved (RE gap step 16).
+        am->RegisterFactory(nullptr);
+        // 16c: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk)
+        // TODO: pass real hash converter once GOT slots resolved (RE gap step 16).
+        am->RegisterHashConverter(nullptr);
+    }
 
     // step 17: WaveManager::Init()
     WaveManager::GetInstance()->Init();
 
-    // step 18: GameTaskInitInput()
-    // TODO: GameTaskInitInput — not yet ported.
+    // step 18: GameTaskInitInput() (0x0016cc0a..0x0016cc0e)
+    // Binary: single call to GameTaskInitInput() @ 0x00169670 (357 lines).
+    // Sets up 16 rotated touch regions and global input callbacks.
+    GameTaskInitInput();
 
-    // step 19: 30x prespawn loop: do { Add(0); Add(1); Add(4); flags|=0x11 } x30
-    // TODO: prespawn loop — not yet ported.
+    // step 19: 30x prespawn loop (0x0016cc0e..0x0016cc4e)
+    // Binary: do/while x30 — three ActorManager::Add calls per iteration
+    //   (entityType 0=Fruit, 1=Bomb, 4=Splat), then flags |= 0x11.
+    // flags |= 0x11 = ENT_INACTIVE(0x01) | ENT_KILLED(0x10) = pre-spawned pool slot.
+    {
+        ActorManager* am = ActorManager::GetInstance();
+        for (int i = 0; i < 30; ++i) {
+            // Mortar::ActorManager::Add @ 0x00108084 (PLT thunk -> PTR_Add_001f2f7c)
+            if (Entity* e0 = am->Add(0, true)) e0->flags |= 0x11;
+            if (Entity* e1 = am->Add(1, true)) e1->flags |= 0x11;
+            if (Entity* e4 = am->Add(4, true)) e4->flags |= 0x11;
+        }
+    }
 
-    // step 20: SplatEntity::CreatePool(0x80)
-    // TODO: SplatEntity::CreatePool(0x80) — not yet ported.
+    // step 20: SplatEntity::CreatePool(0x80) (0x0016cc52..0x0016cc56)
+    // Binary: SplatEntity::CreatePool(128) @ 0x001042a4 (PLT thunk -> 0x0017ef34).
+    // Allocates 128 SplatEntity slots (0xf drops per splat).
+    SplatEntity::CreatePool(0x80);
 
     // step 21: WaveManager::Resume() — MUST come AFTER prespawn + SplatEntity pool
     // Binary: WaveManager::Resume (0x00124b1c) — restores wave state from save.
@@ -139,8 +217,17 @@ void GameInit(unsigned long) {
     // step 22: BombFlash::CreatePool(0x20)
     BombFlash::CreatePool(0x20);
 
-    // step 23: SoundManager::Initialise + SetSFXVolume
-    // TODO: SoundManager::Initialise + SetSFXVolume — not yet ported.
+    // step 23: SoundManager::Initialise + SetSFXVolume (0x0016cc64..0x0016cc94)
+    // Binary: SoundManager::Initialise(basePath) then SetSFXVolume based on Game+0x44.
+    //   if (m_bSoundOn == 0) volume = 0.0f  else volume = 0.5f
+    // basePath in binary = "Sound/Win32Project/Win/FruitNinja" (0x001BC978).
+    // DIFFERS: Bada path replaced with port assets path. See SoundManager::Initialise stub.
+    {
+        Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
+        sm.Initialise("assets/sound");  // DIFFERS: original = "Sound/Win32Project/Win/FruitNinja"
+        const float sfxVol = game->m_bSoundOn ? 0.5f : 0.0f;
+        sm.SetSFXVolume(sfxVol);
+    }
 
     printf("GameInit: complete\n");
 
