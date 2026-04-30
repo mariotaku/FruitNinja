@@ -145,12 +145,21 @@ void WaveManager::Init() {
         if (defEl) {
             DEFAULT_WAVE_INFO& def = defaultWaveInfo[mode];
             defEl->QueryFloatAttribute("criticalChance", &def.m_CritChance);
-            defEl->QueryIntAttribute("waveChance", &def.m_WaveChance);
+            defEl->QueryIntAttribute("waveChance",       &def.m_WaveChance);
+            // DIFFERS: binary reads "waveChanceRegrowth" but XML has "waveChanceGrowth"; port matches XML (binary bug).
             defEl->QueryFloatAttribute("waveChanceGrowth", &def.m_WaveChanceGrowth);
-            // DIFFERS: attributes "count","critchance","wavedelay","spawntimescale",
-            // "bombscale","bombgravity","bombspeed","bombspeedmax","bombmin","bombmax",
-            // "critchancemod","allowbombs","allowbombsfrenzy" from older spec NOT
-            // present in actual XML files — skipping.
+            // globalDtStart/globalDtMax -> per-mode WaveManager speed clamp bounds.
+            defEl->QueryFloatAttribute("globalDtStart", &field_0x8c[mode]);
+            defEl->QueryFloatAttribute("globalDtMax",   &field_0x9c[mode]);
+            // Additional <defaults> attrs read by binary.
+            defEl->QueryFloatAttribute("dtInc",          &def.m_DtInc);
+            defEl->QueryFloatAttribute("dtSpInc",        &def.m_DtSpInc);
+            defEl->QueryFloatAttribute("nextDelay",      &def.m_NextDelay);
+            defEl->QueryFloatAttribute("nextDelayInc",   &def.m_NextDelayInc);
+            defEl->QueryFloatAttribute("nextDelaySpInc", &def.m_NextDelaySpInc);
+            defEl->QueryFloatAttribute("beforeDelay",    &def.m_BeforeDelay);
+            defEl->QueryFloatAttribute("beforeDelayInc", &def.m_BeforeDelayInc);
+            defEl->QueryFloatAttribute("speedLoss",      &def.m_DefSpeedLoss);
         }
 
         // Parse <OverideProbability> elements (Arcade mode).
@@ -208,6 +217,9 @@ void WaveManager::Init() {
             wiEl->QueryIntAttribute("gamesMin", &wi->m_GamesMin);
             wiEl->QueryIntAttribute("gamesMax", &wi->m_GamesMax);
 
+            // overideProbabiltyPool — typo is intentional (matches binary literal).
+            wiEl->QueryIntAttribute("overideProbabiltyPool", &wi->m_OverideProbabilityPool);
+
             // <ChooseFrom> child.
             tinyxml2::XMLElement* cfEl = wiEl->FirstChildElement("ChooseFrom");
             if (cfEl) {
@@ -218,8 +230,9 @@ void WaveManager::Init() {
             // <Wave_dt> child.
             tinyxml2::XMLElement* dtEl = wiEl->FirstChildElement("Wave_dt");
             if (dtEl) {
-                dtEl->QueryFloatAttribute("dt", &wi->m_BombScale1);
-                dtEl->QueryFloatAttribute("inc", &wi->wave_dt_inc);
+                dtEl->QueryFloatAttribute("dt",    &wi->m_BombScale1);
+                dtEl->QueryFloatAttribute("inc",   &wi->wave_dt_inc);
+                dtEl->QueryFloatAttribute("spinc", &wi->m_WaveDtSpInc);
             }
 
             // <NextWaveDelay> child.
@@ -227,7 +240,14 @@ void WaveManager::Init() {
             if (ndEl) {
                 ndEl->QueryFloatAttribute("delay", &wi->m_WaveDelay);
                 // DIFFERS: "wait" attr used in arcadewavelist.xml instead of "delay".
-                ndEl->QueryFloatAttribute("wait", &wi->m_WaveDelay);
+                ndEl->QueryFloatAttribute("wait",            &wi->m_WaveDelay);
+                ndEl->QueryFloatAttribute("waitSpinc",       &wi->m_WaitSpinc);
+                ndEl->QueryFloatAttribute("speedLoss",       &wi->m_SpeedLoss);
+                // waitForEntities / waitForProcessing: bool — true unless attr is "false".
+                if (const char* wfe = ndEl->Attribute("waitForEntities"))
+                    wi->m_bWaitForEntities = (strcmp(wfe, "false") != 0);
+                if (const char* wfp = ndEl->Attribute("waitForProcessing"))
+                    wi->m_bWaitForProcessing = (strcmp(wfp, "false") != 0);
             }
 
             // <Spawn> children — collect spawners.
@@ -273,11 +293,28 @@ void WaveManager::Init() {
                     if (sp->QueryFloatAttribute("delay", &delay) == tinyxml2::XML_SUCCESS)
                         s.m_ZOffset = delay;
                     sp->QueryFloatAttribute("delayinc", &s.m_DelayInc);
-                    sp->QueryFloatAttribute("gravity", &s.m_Gravity);
-                    sp->QueryFloatAttribute("timescale", &s.m_TimeScale);
+                    // gravity is a Vec3 in binary (ParseVector call).
+                    // Port parses comma-separated "x,y,z" and takes y as the scalar gravity
+                    // until the full Vec3 gravity field is ported. TODO: store full Vec3.
+                    {
+                        const char* grav = sp->Attribute("gravity");
+                        if (grav) {
+                            float gx = 0.0f, gy = 0.0f, gz = 0.0f;
+                            sscanf(grav, "%f,%f,%f", &gx, &gy, &gz);
+                            s.m_Gravity = gy;  // TODO: store Vec3 when field layout confirmed
+                        }
+                    }
+                    // binary does NOT read "timescale" on Spawn; XML doesn't have it.
                     sp->QueryFloatAttribute("horizmin", &s.m_MinAngle);
                     sp->QueryFloatAttribute("horizmax", &s.m_MaxAngle);
-                    sp->QueryFloatAttribute("velYscale", &s.m_MinVel);
+                    // velscale -> sets both X+Y, then velXscale overrides X, velYscale overrides Y.
+                    sp->QueryFloatAttribute("velscale",  &s.m_MinVel);
+                    s.m_MaxVel = s.m_MinVel;
+                    sp->QueryFloatAttribute("velXscale", &s.m_MinVel);
+                    sp->QueryFloatAttribute("velYscale", &s.m_MaxVel);
+                    // mirror attr.
+                    if (const char* mir = sp->Attribute("mirror"))
+                        s.m_bMirror = (strcmp(mir, "false") != 0);
 
                     const char* placement = sp->Attribute("placement");
                     if (placement) s.m_SpawnType = ParsePlacement(placement);

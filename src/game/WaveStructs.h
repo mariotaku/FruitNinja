@@ -66,6 +66,9 @@ struct SPAWNER_INFO {
     float                m_MaxInc;           // ditto
     float                m_DelayInc;         // ditto
 
+    // Binary reads "mirror" attr on <Spawn>. Sets m_bMirror to (attr != "false").
+    bool                 m_bMirror;          // TODO: confirm offset
+
     SPAWNER_INFO()
         : m_pFruitTypeHashes(nullptr)
         , m_FruitTypeCount(0)
@@ -79,6 +82,7 @@ struct SPAWNER_INFO {
         , m_SpawnTimer(0.0f), m_RemainingCount(0), m_SpawnCountF(0.0f)
         , m_ZOffset(0.0f), m_bForceOnce(0)
         , m_MinInc(0.0f), m_MaxInc(0.0f), m_DelayInc(0.0f)
+        , m_bMirror(false)
     {
         memset(_pad35, 0, sizeof(_pad35));
         memset(_pad61, 0, sizeof(_pad61));
@@ -168,6 +172,18 @@ struct WAVE_INFO {
     int                  m_GamesMin;         // gamesMin attr
     int                  m_GamesMax;         // gamesMax attr
 
+    // "overideProbabiltyPool" attr on <WaveInfo>. Typo is intentional — matches binary literal.
+    int                  m_OverideProbabilityPool; // TODO: confirm offset
+
+    // <Wave_dt> "spinc" attr.
+    float                m_WaveDtSpInc;      // TODO: confirm offset
+
+    // <NextWaveDelay> extra attrs.
+    float                m_WaitSpinc;        // "waitSpinc" TODO: confirm offset
+    float                m_SpeedLoss;        // "speedLoss" TODO: confirm offset
+    bool                 m_bWaitForEntities;    // "waitForEntities" (!"false") TODO: confirm offset
+    bool                 m_bWaitForProcessing;  // "waitForProcessing" (!"false") TODO: confirm offset
+
     // ChooseFrom list (parsed from <ChooseFrom> child element)
     std::vector<std::string> m_ChooseFrom;
 
@@ -186,6 +202,10 @@ struct WAVE_INFO {
         , m_WaveNumber(0), m_TotalWeight(0)
         , m_Chance(90), m_ChanceRegrowth(0.33f), m_CurrentMax(0)
         , m_GamesMin(0), m_GamesMax(0)
+        , m_OverideProbabilityPool(0)
+        , m_WaveDtSpInc(0.0f)
+        , m_WaitSpinc(0.0f), m_SpeedLoss(0.0f)
+        , m_bWaitForEntities(false), m_bWaitForProcessing(false)
     {
         memset(_pad3a, 0, sizeof(_pad3a));
     }
@@ -222,6 +242,18 @@ struct DEFAULT_WAVE_INFO {
     int   m_WaveChance;         // "waveChance" attr
     float m_WaveChanceGrowth;   // "waveChanceGrowth" attr
 
+    // <defaults> attrs read by binary but not yet in port.
+    // globalDtStart/globalDtMax: per-mode speed clamp bounds (field_0x8c[mode]/field_0x9c[mode]).
+    // These are stored directly on WaveManager, not DEFAULT_WAVE_INFO — parsed in Init().
+    float m_DtInc;              // "dtInc" TODO: confirm offset
+    float m_DtSpInc;            // "dtSpInc" TODO: confirm offset
+    float m_NextDelay;          // "nextDelay" TODO: confirm offset
+    float m_NextDelayInc;       // "nextDelayInc" TODO: confirm offset
+    float m_NextDelaySpInc;     // "nextDelaySpInc" TODO: confirm offset
+    float m_BeforeDelay;        // "beforeDelay" TODO: confirm offset
+    float m_BeforeDelayInc;     // "beforeDelayInc" TODO: confirm offset
+    float m_DefSpeedLoss;       // "speedLoss" TODO: confirm offset
+
     DEFAULT_WAVE_INFO()
         : m_DefaultCount(0)
         , m_CritChance(1.0f)
@@ -240,6 +272,10 @@ struct DEFAULT_WAVE_INFO {
         , m_bAllowBombsFrenzy(true)
         , m_WaveChance(90)
         , m_WaveChanceGrowth(0.33f)
+        , m_DtInc(0.0f), m_DtSpInc(0.0f)
+        , m_NextDelay(0.0f), m_NextDelayInc(0.0f), m_NextDelaySpInc(0.0f)
+        , m_BeforeDelay(0.0f), m_BeforeDelayInc(0.0f)
+        , m_DefSpeedLoss(0.0f)
     {}
 };
 
