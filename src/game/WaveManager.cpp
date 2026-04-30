@@ -82,7 +82,6 @@ WaveManager::WaveManager()
     , field_0x6c(1.0f)
     , field_0x74(1.0f)
     , field_0x78(1.0f)
-    , field_0x234(0.0f), field_0x238(0.0f)
     , field_0x23c(0), field_0x23d(0), field_0x23e(0), _pad23f(0)
     , field_0x240(0.0f)
     , field_0x2cc(0), field_0x2d0(0)
@@ -94,8 +93,8 @@ WaveManager::WaveManager()
     m_pCurrentWave[0] = m_pCurrentWave[1] = nullptr;
     m_WaveCount[0] = m_WaveCount[1] = -1;
     m_ScoreThreshold[0] = m_ScoreThreshold[1] = 0;
-    m_NextWaveDelay[0] = m_NextWaveDelay[1] = 0.0f;
-    m_WaveTimer[0] = m_WaveTimer[1] = 0.0f;
+    field_0x234[0] = field_0x234[1] = 0.0f;
+    field_0x238[0] = field_0x238[1] = 0.0f;
     // m_DtIncPerMode (+0x7c): parsed from <defaults> "dtInc" attr per mode.
     // DIFFERS: placeholder 0.0 (no speed accumulation until XML parsed). binary @ 0x00125ac4
     m_DtIncPerMode[0] = m_DtIncPerMode[1] = 0.0f;
@@ -404,7 +403,8 @@ void WaveManager::Reset(bool fullReset) {
     field_0x2d4 = 0.0f;
     field_0x40 = 0.0f; field_0x44 = 0.0f;
     field_0x48 = 0;
-    field_0x238 = 0.0f;
+    field_0x238[0] = field_0x238[1] = 0.0f;
+    field_0x234[0] = field_0x234[1] = 0.0f;
     field_0x4c = 0.0f; field_0x60 = 0.0f;
     m_Speed[0] = 0.0f; m_Speed[1] = 0.0f;
 
@@ -570,8 +570,8 @@ void WaveManager::Resume() {
         field_0x23d          = (uint8_t)sd->m_blitzSpawnedThisGame;
         field_0x23e          = (uint8_t)sd->m_blitzForceSpawnedCounter;
         field_0x240          = sd->m_blitzSpawnTime;
-        field_0x234          = sd->m_WaveDelay;
-        field_0x238          = sd->m_WaveWait;
+        field_0x234[0]       = sd->m_WaveDelay;
+        field_0x238[0]       = sd->m_WaveWait;
         field_0x74           = sd->m_ProbabilityOverideFlag;
         // m_pCurrentWave_P1: stored as raw int in save (binary pointer).
         // Port: index is not directly restorable as a pointer; leave as-is.
@@ -692,17 +692,23 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     if (UpdateNetworking(dt, playerIdx)) return;
 
     WAVE_INFO* wave = m_pCurrentWave[playerIdx];
-    if (!wave) return;
-
-    // Wave timer countdown.
-    float waveTimer = m_WaveTimer[playerIdx];
+    // Fix 3 (binary @ 0x001253fc): binary does NOT early-return on null wave.
+    // It falls through to the wave-end block where IsWaveProcessing returns false
+    // and GetNextWave is called to recover. Wrap spawn loop in if(wave) only.
+    if (wave) {
+    // Fix 4 (binary @ 0x00125930): after WaveTimer decrement, binary falls through
+    // to the wave-end block. Port's 'return' skipped wave-end check entirely.
+    // Binary reads field_0x234+p*4 (delay slot) @ 0x0012598c.
+    float waveTimer = field_0x234[playerIdx];  // Fix 1: delay slot @ +0x234+p*4
     if (waveTimer > 0.0f) {
-        m_WaveTimer[playerIdx] = waveTimer - dt;
-        return;
+        field_0x234[playerIdx] = waveTimer - dt;  // Fix 1: write back to delay slot
+        // No 'return' here -- binary @ 0x00125930 falls through to wave-end block.
+    } else {
+        field_0x234[playerIdx] = 0.0f;
     }
-    m_WaveTimer[playerIdx] = 0.0f;
 
-    // Process each spawner.
+    // Process each spawner (only when wave != null and timer <= 0).
+    if (field_0x234[playerIdx] <= 0.0f)
     for (int s = 0; s < wave->m_SpawnerCount; ++s) {
         SPAWNER_INFO& spawner = wave->m_pSpawners[s];
 
@@ -751,13 +757,16 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
             spawner.m_SpawnTimer += spawnDt;
         }
     }
+    } // end if (wave) -- timer + spawner loop
 
-    // When all spawners done and wave is draining, transition to next wave.
+    // Wave-end block: runs regardless of whether wave is null (binary @ 0x001253fc falls through).
+    // Fix 1 (binary @ 0x00125956): reads wait slot field_0x238+p*4, NOT delay slot.
+    // Fix 2 (binary @ 0x00125224): no writeback to port-owned m_NextWaveDelay[] -- removed.
     if (!IsWaveProcessing(playerIdx)) {
-        float nextDelay = m_NextWaveDelay[playerIdx];
+        float nextDelay = field_0x238[playerIdx];  // Fix 1: wait slot @ +0x238+p*4
         if (nextDelay > 0.0f) {
             nextDelay -= dt;
-            m_NextWaveDelay[playerIdx] = nextDelay;
+            field_0x238[playerIdx] = nextDelay;    // Fix 1: write back to wait slot
             if (nextDelay > 0.0f) return;
         }
         GetNextWave(playerIdx);
@@ -861,15 +870,15 @@ void WaveManager::GetNextWave(int playerIdx) {
     // Set wave timing (m_WaveDt at +0x10, m_WaveDtInc at +0x14, m_WaveDtSpInc at +0x18).
     (void)(wave->m_WaveDt + wave->m_WaveDtInc * wave->field_0x34);  // consumed by GetWavedt
 
-    // Next wave delay: m_NextWaveDelay (+0x20) + m_NextWaveDelayInc (+0x24) * revisit.
+    // Next-wave delay: binary @ 0x001251ee writes to +0x234+p*4 (delay slot).
     if (wave->m_NextWaveDelay > 0.0f) {
         float delay = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
         if (delay < 0.05f) delay = 0.05f;
-        field_0x234 = delay;
+        field_0x234[playerIdx] = delay;  // Fix 1: per-player delay slot @ +0x234+p*4
     } else {
-        field_0x234 = 0.0f;
+        field_0x234[playerIdx] = 0.0f;
     }
-    // m_NextWaveWait (+0x28) + m_NextWaveWaitSpInc (+0x30) * speed.
+    // Next-wave wait: binary @ 0x00125224 writes to +0x238+p*4 (wait slot).
     {
         float wait  = wave->m_NextWaveWait;
         float spinc = wave->m_NextWaveWaitSpInc;
@@ -878,9 +887,10 @@ void WaveManager::GetNextWave(int playerIdx) {
             if (w2 <= 0.05f) w2 = 0.05f;
             wait = w2;
         }
-        field_0x238 = wait;
+        field_0x238[playerIdx] = wait;   // Fix 1: per-player wait slot @ +0x238+p*4
     }
-    m_NextWaveDelay[playerIdx] = field_0x234;
+    // Fix 2 (binary @ 0x001251cc): binary has NO writeback to a port-owned m_NextWaveDelay[].
+    // The port's extra 'm_NextWaveDelay[playerIdx] = field_0x234' is removed here.
 
     // Reset all spawners in this wave.
     for (int i = 0; i < wave->m_SpawnerCount; ++i)
@@ -903,10 +913,9 @@ void WaveManager::SetCurrentWave(int waveNo, float delay, int playerIdx) {
     m_WaveCount[playerIdx] = waveNo - 1;
     GetNextWave(0);
 
-    float& delayField = (playerIdx == 0) ? field_0x234 : field_0x238;
-    float v = delayField + delay;
+    float v = field_0x234[playerIdx] + delay;
     if (v < 0.0f) v = 0.0f;
-    delayField = v;
+    field_0x234[playerIdx] = v;
 }
 
 void WaveManager::SetupWaveQue() {
@@ -941,7 +950,8 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
                 checkedShortPath = true;
             } else if (w->m_bWaitForEntities == 0) {
                 if (Fruit::GetNumActiveForPlayer(-1, false) >= 1) return true;
-                if (Bomb::GetNumActiveForPlayer(-1, true) >= 1) return true;
+                // Fix 5 (binary @ 0x00122a76): arg2=false, NOT true. Port was over-counting bombs.
+                if (Bomb::GetNumActiveForPlayer(-1, false) >= 1) return true;
                 checkedShortPath = true;
             }
         }
