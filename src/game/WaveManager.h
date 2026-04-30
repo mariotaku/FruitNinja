@@ -128,9 +128,13 @@ public:
     // Per-player wave timer countdown
     float m_WaveTimer[2];
 
-    // Speed multiplier per mode (loaded from binary constants, placeholder 1.0)
-    // Binary: array at +0x8c offset (stride 4 per mode).
-    // DIFFERS: actual per-mode values unknown from RE; using 1.0 as placeholder.
+    // Per-mode dtInc (speed accumulator multiplier). binary field_0x7c[4].
+    // Parsed from <defaults> "dtInc" attr per mode. DIFFERS: was m_SpeedMultPerMode at +0x8c (wrong field).
+    // binary @ 0x00125ac4: speed = field_0x74 + dt * +0x7c[mode]
+    float m_DtIncPerMode[4];
+
+    // Per-mode globalDtStart lower bound. binary field_0x8c[4]. placeholder.
+    // DIFFERS: was named m_SpeedMultPerMode (mis-mapped to dtInc slot above).
     float m_SpeedMultPerMode[4];
 
     // Per-mode speed lower bound (binary field_0x8c[4], 0x125ba2-0x125aa6).

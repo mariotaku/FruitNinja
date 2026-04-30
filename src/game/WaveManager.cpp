@@ -94,7 +94,11 @@ WaveManager::WaveManager()
     m_ScoreThreshold[0] = m_ScoreThreshold[1] = 0;
     m_NextWaveDelay[0] = m_NextWaveDelay[1] = 0.0f;
     m_WaveTimer[0] = m_WaveTimer[1] = 0.0f;
-    // DIFFERS: actual per-mode speed multipliers unknown from RE; using 1.0 as placeholder.
+    // m_DtIncPerMode (+0x7c): parsed from <defaults> "dtInc" attr per mode.
+    // DIFFERS: placeholder 0.0 (no speed accumulation until XML parsed). binary @ 0x00125ac4
+    m_DtIncPerMode[0] = m_DtIncPerMode[1] = 0.0f;
+    m_DtIncPerMode[2] = m_DtIncPerMode[3] = 0.0f;
+    // DIFFERS: actual per-mode globalDtStart unknown from RE; using 1.0 as placeholder.
     m_SpeedMultPerMode[0] = m_SpeedMultPerMode[1] = 1.0f;
     m_SpeedMultPerMode[2] = m_SpeedMultPerMode[3] = 1.0f;
     // DIFFERS: per-mode speed lower bounds (field_0x8c) -- need RE; using 1.0f.
@@ -123,6 +127,8 @@ WaveManager* WaveManager::GetInstance() {
 void WaveManager::Init() {
     Game* game = Game::GetInstance();
     if (!game) return;
+
+    printf("[WaveManager] Init: data_dir=%s\n", game->data_dir.c_str());
 
     for (int mode = 0; mode < 4; ++mode) {
         // Free any previously-loaded wave infos for this mode.
@@ -301,7 +307,10 @@ void WaveManager::Init() {
                         if (grav) {
                             float gx = 0.0f, gy = 0.0f, gz = 0.0f;
                             sscanf(grav, "%f,%f,%f", &gx, &gy, &gz);
-                            s.m_Gravity = gy;  // TODO: store Vec3 when field layout confirmed
+                            // binary @ 0x001241f8: piVar15[6..8] = gx, gy, gz (Vec3 at +0x18..+0x20)
+                            s.m_Gravity_x = gx;
+                            s.m_Gravity_y = gy;
+                            s.m_Gravity_z = gz;
                         }
                     }
                     // binary does NOT read "timescale" on Spawn; XML doesn't have it.
@@ -353,6 +362,10 @@ void WaveManager::Destroy() {
 void WaveManager::Reset(bool fullReset) {
     Game* game = Game::GetInstance();
     if (!game) return;
+
+    printf("[WaveManager] Reset(full=%d) gameMode=%d waveInfos[%d].size=%zu\n",
+           fullReset ? 1 : 0, (int)game->gameMode, (int)game->gameMode,
+           waveInfos[game->gameMode].size());
 
     // 1. Drop wave queue.
     delete m_pWaveQue;     m_pWaveQue = nullptr;
@@ -423,8 +436,14 @@ void WaveManager::Reset(bool fullReset) {
 
     // 7. Kick first wave if waves loaded.
     if (!waveInfos[game->gameMode].empty()) {
+        printf("[WaveManager] Reset: calling GetNextWave(0)\n");
         GetNextWave(0);
+        printf("[WaveManager] Reset: m_pCurrentWave[0]=%p\n",
+               (void*)m_pCurrentWave[0]);
         // IsSameScreenMultiplayer() not ported — skip MP delay bump.
+    } else {
+        printf("[WaveManager] Reset: NO WAVES for mode %d! GetNextWave skipped.\n",
+               (int)game->gameMode);
     }
 
     // 8. Final per-mode speed-multiplier defaults.
@@ -606,7 +625,9 @@ void WaveManager::Update(float dt) {
     // TODO: per-mode bounds need RE — initialised to {1.0,1.0,1.0,1.0} / {100.0,...} as placeholders.
     {
         int mode = game->gameMode;
-        float s = field_0x74 + dt * m_SpeedMultPerMode[mode];
+        // Use m_DtIncPerMode (+0x7c[mode]). DIFFERS: was m_SpeedMultPerMode (+0x8c, wrong field).
+        // binary @ 0x00125ac4: speed = field_0x74 + dt * *(float*)(&this->field_0x7c + gameMode*4)
+        float s = field_0x74 + dt * m_DtIncPerMode[mode];
         float lo = field_0x8c[mode];
         float hi = field_0x9c[mode];
         field_0x74 = (s < lo) ? lo : (s < hi) ? s : hi;
@@ -617,12 +638,21 @@ void WaveManager::Update(float dt) {
 
     // Fixed-timestep accumulator.
     float accumDt = field_0x2d4 + dt;
+    int wavePumps = 0;
     while (accumDt > WAVE_STEP) {
-        if (!waveInfos[game->gameMode].empty())
+        if (!waveInfos[game->gameMode].empty()) {
             UpdateWave(WAVE_STEP, 0, 0);
+            wavePumps++;
+        }
         accumDt -= WAVE_STEP;
     }
     field_0x2d4 = accumDt;
+    static int s_UpdateCalls = 0;
+    if (++s_UpdateCalls <= 5 || (s_UpdateCalls % 60) == 0) {
+        printf("[WaveManager] Update[%d]: dt=%.4f wavePumps=%d wave=%p mode=%d\n",
+               s_UpdateCalls, dt, wavePumps, (void*)m_pCurrentWave[0],
+               (int)game->gameMode);
+    }
 
     // TODO: game-end gate (binary @ 0x125b64) -- vector::size() unused, semantics unclear.
     // Binary: if(game[+0x170] && !this[+0x35] && this[+0x37] && this[+0x38] == m_WaveCount[0]+1)
@@ -644,7 +674,12 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     if (UpdateNetworking(dt, playerIdx)) return;
 
     WAVE_INFO* wave = m_pCurrentWave[playerIdx];
-    if (!wave) return;
+    static int s_NoWaveLog = 0;
+    if (!wave) {
+        if (s_NoWaveLog++ < 3)
+            printf("[WaveManager] UpdateWave: m_pCurrentWave[%d]=null, skip\n", playerIdx);
+        return;
+    }
 
     // Wave timer countdown.
     float waveTimer = m_WaveTimer[playerIdx];
@@ -657,6 +692,12 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // Process each spawner.
     for (int s = 0; s < wave->m_SpawnerCount; ++s) {
         SPAWNER_INFO& spawner = wave->m_pSpawners[s];
+        static int s_SpawnerTickLog = 0;
+        if (s_SpawnerTickLog++ < 5) {
+            printf("[WaveManager] UpdateWave wave=%p spawner[%d]: timer=%.3f remain=%d types=%d\n",
+                   (void*)wave, s, spawner.m_SpawnTimer,
+                   spawner.m_RemainingCount, spawner.m_FruitTypeCount);
+        }
 
         float dtMod = field_0x78;
         if (dtMod < 1.0f) dtMod = 1.0f;
@@ -729,6 +770,9 @@ void WaveManager::GetNextWave(int playerIdx) {
     if (!game) return;
 
     m_WaveCount[playerIdx]++;
+    printf("[WaveManager] GetNextWave(p=%d) waveCount=%d mode=%d waveInfos=%zu\n",
+           playerIdx, m_WaveCount[playerIdx], (int)game->gameMode,
+           waveInfos[game->gameMode].size());
 
     // Speed ramp: increment revisit counter on previously-visited wave.
     if (m_WaveCount[playerIdx] > 1 && m_pCurrentWave[playerIdx])
@@ -781,6 +825,10 @@ void WaveManager::GetNextWave(int playerIdx) {
     }
 
     WAVE_INFO* wave = m_pCurrentWave[playerIdx];
+    printf("[WaveManager] GetNextWave: matchCount=%d totalWeight=%d picked=%p (waveNo=%d, spawners=%d)\n",
+           matchCount, totalWeight, (void*)wave,
+           wave ? wave->m_WaveNumber : -999,
+           wave ? wave->m_SpawnerCount : -1);
     if (!wave) return;
 
     // Decrement selected wave's chance (depletes until regrowth restores it).
@@ -810,8 +858,29 @@ void WaveManager::GetNextWave(int playerIdx) {
         // m_WaveDt not a separate field in port — stored via m_BombScale1 already.
     }
 
-    // Next wave delay.
-    m_NextWaveDelay[playerIdx] = wave->m_WaveDelay;
+    // Next wave delay. binary @ 0x00125294: reads WAVE_INFO+0x20 (delay base) and +0x28 (wait base).
+    // DIFFERS: was wave->m_WaveDelay (+0x44). Binary uses +0x20 = NextWaveDelay delay base.
+    // In current WAVE_INFO struct, +0x20 is m_BombSpeedMax (WRONG name -- see wavemanager-asm-verify §7.2).
+    // The field at +0x20 actually holds the "NextWaveDelay delay" XML attr.
+    if (wave->m_BombSpeedMax > 0.0f) {
+        float delay = wave->m_BombSpeedMax + wave->m_BombMinAngle * wave->field_0x34;  // +0x20 + +0x24*revisit
+        if (delay < 0.05f) delay = 0.05f;
+        field_0x234 = delay;
+    } else {
+        field_0x234 = 0.0f;
+    }
+    // +0x28 (m_BombMaxAngle in port = wait base) + +0x30 (m_BombField30 = wait speedInc) * speed
+    {
+        float wait = wave->m_BombMaxAngle;  // +0x28 = "wait" base
+        float spinc = wave->m_BombField30;  // +0x30 = "waitSpInc"
+        if (spinc != 0.0f) {
+            float w2 = wait + spinc * m_Speed[playerIdx];
+            if (w2 <= 0.05f) w2 = 0.05f;
+            wait = w2;
+        }
+        field_0x238 = wait;
+    }
+    m_NextWaveDelay[playerIdx] = field_0x234;
 
     // Reset all spawners in this wave.
     for (int i = 0; i < wave->m_SpawnerCount; ++i)
@@ -895,14 +964,29 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
     ActorManager* am = ActorManager::GetInstance();
     if (!am) return;
 
+    // Z-stride loop counter starts at 1 (binary iVar8 = 1, increments each iteration).
+    // binary @ 0x001225a0
     for (long i = 0; i < count; ++i) {
         float minAngle = info ? info->m_MinAngle : -1.0f;
         float maxAngle = info ? info->m_MaxAngle :  1.0f;
 
-        // Angle math: range in 182-unit (deg * 182) space.
-        float range = minAngle * (-182.0f) + maxAngle * 182.0f;  // sum of components
-        uint32_t r1 = (range > 0.0f) ? m_Random.Rand32((uint32_t)range) : 0;
-        uint16_t angle = (uint16_t)(((int)r1 + (int)(minAngle * 182.0f)) * 0xb6);
+        // Stage 1: degree baseline. DAT_00122844=-150.0, DAT_00122848=+150.0.
+        // binary @ 0x001225e2..0x00122610
+        float baseRange = -150.0f * minAngle + 150.0f * maxAngle;
+        uint32_t roll1 = (baseRange > 0.0f) ? m_Random.Rand32((uint32_t)baseRange) : 0;
+        int iBase = (int)((float)roll1 + minAngle * 150.0f);
+
+        // Stage 2: parabolic spread. binary @ 0x00122614..0x0012267e
+        // spread = 20 for BOTTOM/BOTTOM_SLOW (spawner==0 or type<2), 12 for LEFT/RIGHT.
+        float spread = (info && (uint8_t)info->m_SpawnType >= 2) ? 12.0f : 20.0f;
+        float r      = m_Random.RandF(1.0f);
+        // halfR = (r < 0.5) ? (r + 0.5) : (0.5 - r)   binary: vsub then ite mi/pl
+        float halfR  = (r < 0.5f) ? (r + 0.5f) : (0.5f - r);
+        float sign   = (r < 0.5f) ? -1.0f : 1.0f;
+        int center   = (int)(((float)iBase / -150.0f) * spread * 0.5f);
+        int off      = (int)(spread * (halfR * halfR * -2.0f + 0.5f) * sign);
+        // Final multiplier 0xb6=182 applied after spread. binary @ 0x0012267c
+        uint16_t angle = (uint16_t)(((short)(center + off)) * 0xb6);
 
         float speed = m_Random.RandF(1.5f) + 9.5f;   // 9.5..11.0
         float sin_a = SinIdx(angle);
@@ -921,12 +1005,14 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         switch (spawnType) {
         case PLACEMENT_BOTTOM:
         default:
-            posX = (float)((int)(r1 % 320) - 160);
-            posY = -240.0f;
+            // spawnX = iBase (degree-baseline after spread), spawnY = -160.
+            // binary @ 0x001228be: iVar21 -> s20, iVar7=-0xa0 -> s16
+            posX = (float)iBase;
+            posY = -160.0f;  // DAT = -0xa0 = -160. DIFFERS: was -240. binary @ 0x001228da
             break;
         case PLACEMENT_BOTTOM_SLOW:
-            posX = (float)((int)(r1 % 320) - 160);
-            posY = -240.0f;
+            posX = (float)iBase;
+            posY = -160.0f;
             velY *= 0.5f;
             break;
         case PLACEMENT_RANDOM_SIDE: {
@@ -934,30 +1020,58 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
             spawnType = goLeft ? PLACEMENT_LEFT : PLACEMENT_RIGHT;
         }   /* fall through */
         case PLACEMENT_LEFT:
-            posX = -240.0f;
-            posY = (float)((int)(m_Random.Rand32(320)) - 160);
-            { float tmp = velX; velX = velY; velY = tmp; }
-            velX = fabsf(velX);   // always launch rightward
+        case PLACEMENT_RIGHT: {
+            // Side: spawnX = baseDeg * 320/480. binary @ 0x00122802: DAT_00122850/4=320/480
+            float spawnXf = (float)((long)((float)iBase * 320.0f / 480.0f));
+            // spawnY = velY * -0.75 * 320/480. binary @ 0x00122802
+            float spawnYf = (float)((long)(velY * -0.75f * (320.0f / 480.0f)));
+            // velY uses spawner gravity.y: velX + speed * gravity_y * -0.65
+            // binary @ 0x00122818: spawner+0x1c = gravity.y
+            float gravY = info ? info->m_Gravity_y : 0.0f;
+            float newVelX = velY;
+            float newVelY = (float)((long)(velX + speed * gravY * (-0.65f)));
+            if (spawnType == PLACEMENT_LEFT) {
+                posX = -spawnXf;
+                velX = -newVelX;
+            } else {
+                posX = spawnXf;
+                velX = newVelX;
+            }
+            posY = spawnYf;
+            velY = newVelY;
             break;
-        case PLACEMENT_RIGHT:
-            posX = 240.0f;
-            posY = (float)((int)(m_Random.Rand32(320)) - 160);
-            { float tmp = velX; velX = velY; velY = tmp; }
-            velX = -fabsf(velX);  // always launch leftward
-            break;
+        }
         }
 
         float zOffset = info ? info->m_ZOffset : 0.0f;
         float chuckDelay = (zOffset > 0.0f) ? zOffset + 0.21f : 0.21f;
 
         Entity* e = am->Add(0, true);
-        if (!e) continue;
+        if (!e) {
+            printf("[SpawnFruit] ActorManager::Add returned null!\n");
+            continue;
+        }
         Fruit* f = static_cast<Fruit*>(e);
-        f->pos  = Vec3(posX, posY, (float)(i * 32));
+        // Z stride: (i+1)*32. binary iVar8 starts at 1. DIFFERS: was i*32. binary @ 0x001229..
+        f->pos  = Vec3(posX, posY, (float)((i + 1) * 32));
         f->vel  = Vec3(velX, velY, 0.0f);
         f->Init(0, (int)fruitType, 0);
-        // gravity / timescale modifiers from spawner.
-        // TODO: info->m_Gravity / m_TimeScale application matches binary call pattern.
+        printf("[SpawnFruit] type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) chuckDelay=%.2f placement=%d\n",
+               fruitType, posX, posY, velX, velY, chuckDelay, (int)spawnType);
+
+        // Post-Init gravity from spawner Vec3. binary @ 0x00122954..0x0012299e
+        // f->m_Gravity = spawner.gravityVec3 * (-f->m_Gravity.y)
+        if (info) {
+            float negGravY = -f->m_Gravity.y;
+            f->m_Gravity = Vec3(info->m_Gravity_x * negGravY,
+                                info->m_Gravity_y * negGravY,
+                                info->m_Gravity_z * negGravY);
+            // ±0.01 nudge for side-spawned fruit. binary @ 0x00122a2c/0x00122a30
+            if (spawnType == PLACEMENT_LEFT)  f->m_Gravity.x += 0.01f;
+            else if (spawnType == PLACEMENT_RIGHT) f->m_Gravity.x -= 0.01f;
+        }
+        // TODO: f->m_TimeScale = info->m_TimeScale (spawner+0x14) -- Fruit lacks m_TimeScale field.
+
         f->Chuck(f->vel, chuckDelay);
     }
 }
@@ -1016,7 +1130,10 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
                 break;
             case PLACEMENT_RIGHT:
             case PLACEMENT_LEFT: {
-                long newVelY = (long)(velX + speed * spawner->m_Gravity * (-0.65f));  // DAT_00122224
+                // spawnX = baseDeg * 320/480. DIFFERS: was raw baseDeg. binary @ 0x00122810
+                spawnX = (float)((long)((float)baseDeg * 320.0f / 480.0f));
+                // gravity.y at spawner+0x1c. DIFFERS: was spawner->m_Gravity (port +0x48 float). binary @ 0x00122818
+                long newVelY = (long)(velX + speed * spawner->m_Gravity_y * (-0.65f));  // DAT_00122224
                 spawnY = (long)(velY * -0.75f);
                 spawnY = (long)((float)spawnY * (320.0f / 480.0f));   // DAT_0012221c/20
                 velX = (float)(long)velY;

@@ -1,66 +1,134 @@
+// Analysed: 2026-04-30T04:20
 #include "MissControl.h"
 #include "HUD.h"
 #include "asset/TextureManager.h"
 #include "Game.h"
 #include "math/Matrix44.h"
+#include "math/MathUtil.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
+#include <cmath>
 
-// --- Shared pool + texture state -----------------------------------------
-//
-// Mirrors the binary's static ref-counted singleton state accessed by all
-// MissControl instances. The pool is 9 slots laid out as a flat array;
-// GetFree round-robins over it.
+// Pool size: binary CreatePool(0xC, hud) = 12 slots. DIFFERS: was 9.
+// binary @ 0x001512d8
+static constexpr int MISS_POOL_SIZE = 12;
 
-static constexpr int MISS_POOL_SIZE = 9;
-
-// Round-robin index used by GetFree. Wraps at MISS_POOL_SIZE.
+// Round-robin cursor. Binary: leaves cursor at the FOUND slot index.
+// DIFFERS: was advancing past found slot (+1). binary @ 0x00150da4
 static int s_NextSlot = 0;
 
-// Pool instances. Static storage so destruction order doesn't matter —
-// matches the binary's global-cache pattern. Access through GetFree.
 static MissControl* s_Pool[MISS_POOL_SIZE] = { nullptr };
 static bool s_PoolAllocated = false;
 
-// Shared textures (load-once across all pool instances). SmartPtr keeps
-// them alive for the lifetime of the pool.
-static SmartPtr<Mortar::Texture> s_TexCritical;     // critical.tex
-static SmartPtr<Mortar::Texture> s_TexRare;         // ultra_rare_plus_50.tex
-static SmartPtr<Mortar::Texture> s_TexCross;        // hud_cross.tex
+static SmartPtr<Mortar::Texture> s_TexCritical;
+static SmartPtr<Mortar::Texture> s_TexRare;
+static SmartPtr<Mortar::Texture> s_TexCross;
 static bool s_TexturesLoaded = false;
 
-// MakeCritical / MakeRare fade magnitude. Binary DAT_001518b8 = 0.808.
-static constexpr float MISS_FADE_INIT = 0.808f;
+// MakeCritical / MakeRare fade init. DAT_001518b8 = 1.81f.
+// DIFFERS: was 0.808f (port comment incorrectly cited 0.808).
+// binary @ 0x00151764 (MakeCritical), 0x001518d8 (MakeRare)
+static constexpr float MISS_FADE_INIT = 1.81f;
 
-// Screen clamp rectangle for label position (centred ortho).
-static constexpr float CLAMP_X_HI =  240.0f;   // DAT_001518c0
-static constexpr float CLAMP_X_LO = -240.0f;   // DAT_001518c8
-static constexpr float CLAMP_Y_HI =  160.0f;   // DAT_001518c4
-static constexpr float CLAMP_Y_LO = -160.0f;   // DAT_001518cc
+// Screen clamp rectangle (centred ortho). binary @ 0x001518c0..0x001518cc
+static constexpr float CLAMP_X_HI =  240.0f;
+static constexpr float CLAMP_X_LO = -240.0f;
+static constexpr float CLAMP_Y_HI =  160.0f;
+static constexpr float CLAMP_Y_LO = -160.0f;
 
-// Fade rate — binary runs an anim-state machine (m_AnimState == 3) with
-// its own curve. Port approximates via a simple per-frame exponential
-// decay. Tuned to give a ~1.2s fade at 60fps (0.808 * 0.95^72 ~= 0.02).
-static constexpr float FADE_DECAY = 0.95f;
-static constexpr float FADE_CLEAR = 0.02f;
+// Combo separation distance (sqrt = 70 px). DAT_00151d58 = 4900.0
+static constexpr float SEP_DIST_SQR = 4900.0f;
+static constexpr float SEP_TARGET   = 70.0f;   // DAT_00151d5c
 
-// --- ctor / dtor ---------------------------------------------------------
+// Sound threshold crossing. DAT_00151d64 = 1.66f
+static constexpr float SOUND_THRESH = 1.66f;
+
+// --- Static members -------------------------------------------------------
+
+int   MissControl::s_NumCriticals = 0;
+float MissControl::s_DtMod        = 0.5f;  // (float)0 + 0.5 initial
+
+// --- ctor / dtor -----------------------------------------------------------
 
 MissControl::MissControl()
-    : m_bBusy(0), m_bComboActive(0),
-      m_FadeAlpha(0.0f), m_AnimState(0), m_AlphaScale(1.0f) {
-    m_bActive = 1;         // HUD-level active flag
-    m_bNoDestructor = 1;   // pool owns us; HUD shouldn't free on removal
-    m_LayerFlags = 0x200;  // draw alongside bomb-hit overlay layer
+    : m_bBusy(0)
+    , m_AnimState(0)
+    , m_bVisible(0)
+    , m_JitterTimer(0)
+    , m_FadeAlpha(0.0f)
+    , m_bComboActive(0)
+    , m_bUseSound(0)
+    , m_ComboCount(0)
+    , m_AlphaScale(1.0f)
+{
+    m_bActive       = 1;
+    m_bNoDestructor = 1;
+    // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
+    // DIFFERS: was m_LayerFlags = 0x200. binary @ 0x001511a0 / 0x00150fa4
+    m_LayerFlags    = 1;
 }
 
 MissControl::~MissControl() = default;
 
-// --- Shared texture load -------------------------------------------------
+// --- vtable overrides -------------------------------------------------------
+
+// vtable[4] @ 0x00150fa4
+void MissControl::Init() {
+    m_bComboActive = 0;
+    m_bBusy        = 1;
+    m_Timer        = 0.0f;  // rotation (+0x2c)
+    m_AnimState    = 0;
+    m_LayerFlags   = 1;     // "configured" flag; DIFFERS: was 0x200
+    m_FadeAlpha    = 0.0f;
+    m_bBusy        = 1;     // binary writes twice (first overwritten by ctor)
+    m_ComboCount   = 0;
+    m_bUseSound    = 0;
+    m_AlphaScale   = 1.0f;
+    m_DrawColour   = Colour(255, 255, 255, 255);  // default colour from DAT_00150f7c
+    size           = Vec3(0.0f, 0.0f, 0.0f);
+    // base init for transform -- binary calls vtable[2] base (HUDControl3d base)
+    HUDControl3d::Init();
+}
+
+// vtable[6] @ 0x00150f14
+void MissControl::Reset() {
+    m_DrawColour   = Colour(255, 255, 255, 255);  // restore RGBA tint from DAT_00150f7c
+    m_DrawColour.a = 0xff;
+    m_JitterTimer  = 0;
+    m_bVisible     = 0;
+    if (m_FadeAlpha > 0.0f) {
+        m_bBusy        = 0;
+        m_DrawColour.a = 0;
+    }
+}
+
+// vtable[15] @ 0x00150e3c
+void MissControl::Skip() {
+    // Fast-forward spawn animation when critical/rare label needs to appear immediately.
+    // binary: if (m_AnimState < player_count) { jitter=0; alpha=0xff; bVisible=1 }
+    // Port has no player_count from binary; guard on m_AnimState < 1 (single-player).
+    if (m_AnimState < 1) {
+        m_JitterTimer  = 0;
+        m_DrawColour.a = 0xff;
+        m_bVisible     = 1;
+    }
+}
+
+// --- Static: PreUpdate -----------------------------------------------------
+
+// binary @ 0x00150e04: saves old s_NumCriticals, resets to 0, writes s_DtMod = (float)old + 0.5
+void MissControl::PreUpdate(float /*dt*/) {
+    int n = s_NumCriticals;
+    s_NumCriticals = 0;
+    s_DtMod = (float)n + 0.5f;
+}
+
+// --- Shared texture load ---------------------------------------------------
 
 void MissControl::LoadContent() {
     if (s_TexturesLoaded) return;
@@ -68,19 +136,19 @@ void MissControl::LoadContent() {
     s_TexRare     = Mortar::TextureManager::LoadLocalisedTexture("ultra_rare_plus_50.tex");
     s_TexCross    = Mortar::TextureManager::LoadLocalisedTexture("hud_cross.tex");
     s_TexturesLoaded = true;
+    // TODO: load combo_3.tex .. combo_10.tex into static SmartPtr array.
+    // binary ctor (0x00151068) loop iVar3=1..10: combo_%d.tex for iVar3>=3.
     printf("[MissControl] LoadContent: critical=%d rare=%d cross=%d\n",
            s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
-    // Combo textures (combo_%d.tex for indices 3..10) are not loaded
-    // yet — combo indicator overlay is deferred.
 }
 
-// --- Pool allocation -----------------------------------------------------
+// --- Pool allocation -------------------------------------------------------
 
 void MissControl::AllocatePool() {
     if (s_PoolAllocated) return;
     Game* game = Game::GetInstance();
     if (!game || !game->hud) {
-        printf("[MissControl] AllocatePool: HUD not ready; skipping\n");
+        printf("[MissControl] AllocatePool: HUD not ready\n");
         return;
     }
     for (int i = 0; i < MISS_POOL_SIZE; ++i) {
@@ -88,17 +156,13 @@ void MissControl::AllocatePool() {
         game->hud->AddControl(s_Pool[i]);
     }
     s_PoolAllocated = true;
-    printf("[MissControl] AllocatePool: %d slots registered with HUD\n",
-           MISS_POOL_SIZE);
+    printf("[MissControl] AllocatePool: %d slots\n", MISS_POOL_SIZE);
 }
 
-// --- GetFree -------------------------------------------------------------
+// --- GetFree ---------------------------------------------------------------
 
-// Matches MissControl::GetFree (0x00150da4). Round-robin search from
-// s_NextSlot; return the first non-busy slot. If all slots are busy,
-// the loop bails after MISS_POOL_SIZE iterations and returns the
-// current s_NextSlot entry (caller will overwrite — binary does the
-// same: the oldest label gets pre-empted).
+// binary @ 0x00150da4: cursor left at FOUND slot index, not idx+1.
+// DIFFERS: was s_NextSlot = (idx+1) % MISS_POOL_SIZE (skipped one per call).
 MissControl* MissControl::GetFree() {
     if (!s_PoolAllocated) return nullptr;
     int idx = s_NextSlot;
@@ -106,40 +170,43 @@ MissControl* MissControl::GetFree() {
         if (s_Pool[idx] && s_Pool[idx]->m_bBusy == 0) break;
         idx = (idx + 1) % MISS_POOL_SIZE;
     }
-    s_NextSlot = (idx + 1) % MISS_POOL_SIZE;
+    s_NextSlot = idx;  // binary leaves cursor at found slot, not +1
     return s_Pool[idx];
 }
 
-// --- Make* ---------------------------------------------------------------
+// --- Make* -----------------------------------------------------------------
 
-// Shared core of MakeCritical / MakeRare / MakeDisappear. Sets position,
-// size (from the supplied texture's dimensions), fade alpha + anim state,
-// and screen-clamps pos.
+// Shared core of MakeCritical / MakeRare. binary @ 0x00151764 / 0x001518d8
 static void PopulateOverlay(MissControl* mc, const Vec3& pos,
                             const SmartPtr<Mortar::Texture>& tex,
                             float alphaScale) {
+    // m_FadeAlpha init = 1.81 (DAT_001518b8). DIFFERS: was 0.808.
     mc->m_FadeAlpha  = MISS_FADE_INIT;
     mc->m_AnimState  = 3;
     mc->m_AlphaScale = alphaScale;
     mc->m_bActive    = 1;
     mc->m_bComboActive = 1;
-    mc->m_bBusy = 1;
+    mc->m_bBusy      = 1;
+    mc->m_JitterTimer = 0;   // field_0x7e = 0. binary @ 0x001518b8
+    mc->m_DrawColour.a = 0xff;  // field_0x5f = 0xff. binary @ 0x001518b4
     mc->pos = pos;
 
     if (tex.IsValid()) {
         mc->m_Texture = tex->m_TexId;
-        // Size from texture dimensions — MakeCritical reads width/height
-        // via Texture vtable+0x14 / +0x18 (GetWidth / GetHeight); port
-        // uses the same convention via m_Width / m_Height on Texture.
+        // binary MakeCritical: size = (w+1, h+1, 0) then halved, then doubled.
+        // Net result: size = (w+1, h+1, 0) (the halve+double cancel).
+        // DIFFERS: was keeping half-extents -> quad was half-size.
+        // binary @ 0x00151764 (MakeCritical size formula)
         const float w = (float)(tex->m_Width  + 1);
         const float h = (float)(tex->m_Height + 1);
-        mc->size.x = w * 0.5f;
-        mc->size.y = h * 0.5f;
-        mc->size.z = 1.0f;
+        // binary: size.xy = (w+1)/2+1 ... doubled back. Net = (w, h) roughly.
+        // Reproducing: full extent stored (the halve/clamp/double yields back to w+1, h+1).
+        mc->size.x = w;
+        mc->size.y = h;
+        mc->size.z = 0.0f;  // DAT_001518bc = 0.0. DIFFERS: was 1.0
     }
 
-    // Screen-clamp so the label fully fits on-screen. Matches binary's
-    // four-way clamp on the centred ortho ±240 / ±160 bounds.
+    // Screen-clamp. binary @ 0x001518c0..0x001518cc
     if (mc->pos.x + mc->size.x >  CLAMP_X_HI) mc->pos.x =  CLAMP_X_HI - mc->size.x;
     if (mc->pos.y + mc->size.y >  CLAMP_Y_HI) mc->pos.y =  CLAMP_Y_HI - mc->size.y;
     if (mc->pos.x - mc->size.x <  CLAMP_X_LO) mc->pos.x =  CLAMP_X_LO + mc->size.x;
@@ -154,68 +221,196 @@ void MissControl::MakeRare(const Vec3& pos) {
     PopulateOverlay(this, pos, s_TexRare, /*alphaScale*/ 0.5f);
 }
 
-void MissControl::MakeDisappear(const Vec3& pos, int /*sizeMult*/,
+// binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
+void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
                                 const SmartPtr<Mortar::Texture>& tex) {
-    // Bomb zen-hit passes an invalid SmartPtr to mean "use the default
-    // hud_cross overlay"; fruit miss-penalty passes the fruit's own
-    // texture so the label shows which fruit was missed.
-    const SmartPtr<Mortar::Texture>& pick =
-        tex.IsValid() ? tex : s_TexCross;
-    PopulateOverlay(this, pos, pick, /*alphaScale*/ 1.0f);
-    // TODO: sizeMult (binary field_0x34 = 0x200 from Bomb::OnSliced)
-    // scales the final quad width — currently baseline size only.
-}
-
-// --- Update --------------------------------------------------------------
-
-void MissControl::Update(float /*dt*/) {
-    if (m_bBusy == 0) return;
-    m_FadeAlpha *= FADE_DECAY;
-    if (m_FadeAlpha < FADE_CLEAR) {
-        m_FadeAlpha = 0.0f;
-        m_bBusy = 0;
-        m_AnimState = 0;
-        // Leave m_bActive at 1 so HUD keeps iterating; Draw no-ops on
-        // !m_bBusy so the slot is effectively invisible until reused.
+    pos        = inPos;
+    m_DrawColour.a = 0xff;  // field_0x5f = 0xff
+    if (tex.IsValid()) {
+        // Path 1: zen-bomb X overlay (valid SmartPtr supplied).
+        // binary @ 0x00151d94 path 1
+        m_bUseSound    = 0;     // field_0x8c = 0 (suppress sound)
+        m_Texture      = tex->m_TexId;
+        m_bVisible     = 1;
+        m_AnimState    = 3;
+        // TODO: m_FadeAlpha = DAT_00151f40 (separate constant -- RE needed).
+        // Using MISS_FADE_INIT as placeholder until resolved.
+        m_FadeAlpha    = MISS_FADE_INIT;
+        m_JitterTimer  = 0;
+        m_bComboActive = 1;
+        size = Vec3((float)(tex->m_Width + 1), (float)(tex->m_Height + 1), 0.0f);
+        m_bBusy        = 1;
+        // No screen clamp on path 1. binary @ 0x00151d94
+    } else {
+        // Path 2: fruit miss-penalty (invalid SmartPtr = use existing texture).
+        // binary @ 0x00151d94 else branch
+        m_JitterTimer  = (sizeMult >= 1) ? 0x1e : 0;
+        // TODO: m_FadeAlpha = DAT_00151f48 (third fade init constant -- RE needed).
+        m_FadeAlpha    = MISS_FADE_INIT;
+        m_AnimState    = 3;
+        m_bVisible     = 1;
+        // TODO: size = (*DAT_00151f5c) * size_in; second multiply after SetPlayer.
+        // TODO: screen-clamp pos against +/-(DAT_00151f50 - size.x*0.5).
+        m_bBusy        = 1;
+        if (s_TexCross.IsValid()) m_Texture = s_TexCross->m_TexId;
     }
 }
 
-// --- Draw ----------------------------------------------------------------
+// --- Update ----------------------------------------------------------------
 
+// binary @ 0x00151a60
+void MissControl::Update(float dt) {
+    if (!m_bBusy) return;
+
+    // Visibility lazy-on: if not yet visible and anim starting (animState < 1 = single-player)
+    // binary @ 0x00151a60 lines 1-10
+    if (!m_bVisible && m_AnimState < 1) {
+        m_JitterTimer  = 0x1e;
+        m_DrawColour.a = 0xff;
+        m_bVisible     = 1;
+    }
+
+    // Combo separation force: if m_bComboActive, repel busy neighbours within 70px.
+    // binary @ 0x00151a60 combo block (~50 instructions)
+    if (m_bComboActive) {
+        float accX = 0.0f, accY = 0.0f;
+        for (int k = 0; k < MISS_POOL_SIZE; ++k) {
+            MissControl* other = s_Pool[k];
+            if (!other || other == this || !other->m_bBusy) continue;
+            float dx = other->pos.x - pos.x;
+            float dy = other->pos.y - pos.y;
+            float distSq = dx*dx + dy*dy;
+            if (distSq >= SEP_DIST_SQR) continue;
+            float dist = sqrtf(distSq);
+            float nx, ny;
+            if (dist == 0.0f) {
+                // random direction when coincident
+                nx = (float)(rand() % 3 - 1);
+                ny = (float)(rand() % 3 - 1);
+                if (nx == 0.0f && ny == 0.0f) nx = 1.0f;
+            } else {
+                nx = dx / dist;
+                ny = dy / dist;
+            }
+            float force = (SEP_TARGET - dist) * 15.0f;
+            accX += nx * force;
+            accY += ny * force;
+        }
+        s_NumCriticals++;
+        pos.x += accX;
+        pos.y += accY;
+        // Scale dt by combo modifier
+        dt = dt * s_DtMod * m_AlphaScale;
+    }
+
+    if (m_FadeAlpha <= 0.0f) return;
+
+    // Pause guard: if game paused, skip fade. binary @ 0x00151a60 pause guard
+    Game* game = Game::GetInstance();
+    if (game && game->pauseFlag) return;
+
+    pos.z = 0.0f;
+
+    bool wasAboveThresh = (m_FadeAlpha >= SOUND_THRESH);
+    m_FadeAlpha -= dt;
+
+    // Sound trigger on 1.66 crossing. binary @ 0x00151a60 sound block
+    if (wasAboveThresh && m_FadeAlpha < SOUND_THRESH && m_bComboActive) {
+        // TODO: full SFX logic (field_0x85, ItemManager::PlayAlternateComboSound, etc.)
+        // binary @ 0x00151a60 SFX path; requires GameSound::SFXPlay wiring.
+    }
+
+    // Slot release when fully faded. binary @ 0x00151a60 release block
+    if (m_FadeAlpha <= 0.0f) {
+        m_FadeAlpha = 0.0f;
+        if (m_RemoveCallback) m_RemoveCallback(this);
+        m_bBusy = 0;
+    }
+}
+
+// --- Draw ------------------------------------------------------------------
+
+// binary @ 0x00151f60
 void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
-    if (m_bBusy == 0 || m_Texture == 0) return;
+    if (m_Texture == 0) return;
 
-    // Pick up effective alpha from fade × scale × control tint.
-    float fade = m_FadeAlpha * m_AlphaScale;
+    // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block
+    Vec3 drawPos = pos;
+    if (m_JitterTimer > 0) {
+        drawPos.x += (float)(rand() % 8 - 4);
+        drawPos.y += (float)(rand() % 8 - 4);
+        m_JitterTimer--;
+    }
+
+    // Two paths based on m_FadeAlpha. binary @ 0x00151f60 alpha gate
+    float drawAlpha;
+    if (m_FadeAlpha <= 0.0f) {
+        // Fall-out animation after fading. binary uses pos.y * -3.0 offset.
+        // TODO: full fall-off formula (depends on FailureEnabled / camera.field_0xc).
+        return;  // not yet visible if already zeroed
+    } else {
+        if (m_FadeAlpha > SOUND_THRESH) return;  // early-return: spawning phase, no draw yet
+        // Pulse: sin((alpha/1.66)*360*6*182) clamped to >= 0.65 in some phases.
+        // TODO: exact pulse formula. Using flat 1.0 for now.
+        drawAlpha = m_FadeAlpha;
+    }
+
+    // Effective alpha: fade * AlphaScale, then clamp [0..1].
+    float fade = drawAlpha * m_AlphaScale;
     if (fade <= 0.0f) return;
     if (fade > 1.0f) fade = 1.0f;
+
+    // UV crop based on m_bComboActive / m_bVisible. binary @ 0x00151f60 UV block
+    float u0, v0, du, dv;
+    if (m_bComboActive) {
+        // Full UV quad. binary combo-active path.
+        u0 = 0.0f; v0 = 0.0f; du = 1.0f; dv = 1.0f;
+    } else if (!m_bVisible) {
+        // 25%-wide vertical crop left. binary: (u0=0, v0=0.5, du=0.25, dv=0.75)
+        u0 = 0.0f; v0 = 0.5f; du = 0.25f; dv = 0.75f;
+    } else {
+        // 25%-wide vertical crop right. binary: (u0=0.5, v0=0, du=0.25, dv=0.75)
+        u0 = 0.5f; v0 = 0.0f; du = 0.25f; dv = 0.75f;
+    }
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
     Matrix44 mat;
     mat.ApplyScale(size.x, size.y, 1.0f);
-    mat.GlobalTranslate44(pos);
+
+    // Rotation: if m_Timer != 0, apply rotZ using SinIdx/CosIdx(m_Timer * 182).
+    // binary @ 0x00151f60: SinIdx(rot * 182) used to build rotation matrix.
+    // m_Timer maps to +0x2c rotation (GameInit step 3 sets ±5 / ±10 deg).
+    // TODO: apply rotation matrix before scale (binary order: scale, rot, translate).
+
+    mat.GlobalTranslate44(drawPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
     glBindTexture(GL_TEXTURE_2D, m_Texture);
 
-    const uint8_t a = (uint8_t)(fade * 255.0f);
-    const uint32_t col = (uint32_t)a << 24 | 0x00FFFFFF;
+    // Tint: m_DrawColour multiplied by per-frame HUD tint (MatrixManager.field_0x3c.field_0x20).
+    // TODO: fetch HUD tint multiplier from MatrixManager for exact binary match.
+    const uint8_t a = (uint8_t)(fade * (float)m_DrawColour.a);
+    const uint32_t col = (uint32_t)a << 24 | (uint32_t)m_DrawColour.b << 16
+                        | (uint32_t)m_DrawColour.g << 8 | (uint32_t)m_DrawColour.r;
 
     QUADCUSTOMVERTEX v[6];
     std::memset(v, 0, sizeof(v));
-    // Centred unit quad — matrix applies pos + size scale.
-    const float x0 = -1.0f, x1 = 1.0f, y0 = -1.0f, y1 = 1.0f;
-    v[0].x = x0; v[0].y = y0; v[0].u = 0.0f; v[0].v = 1.0f; v[0].colour = col;
-    v[1].x = x1; v[1].y = y0; v[1].u = 1.0f; v[1].v = 1.0f; v[1].colour = col;
-    v[2].x = x0; v[2].y = y1; v[2].u = 0.0f; v[2].v = 0.0f; v[2].colour = col;
-    v[3].x = x1; v[3].y = y0; v[3].u = 1.0f; v[3].v = 1.0f; v[3].colour = col;
-    v[4].x = x1; v[4].y = y1; v[4].u = 1.0f; v[4].v = 0.0f; v[4].colour = col;
-    v[5].x = x0; v[5].y = y1; v[5].u = 0.0f; v[5].v = 0.0f; v[5].colour = col;
+    // Centred quad in [-1..+1]. Matrix applies size scale + translate.
+    const float u1 = u0 + du;
+    const float v1 = v0 + dv;
+    v[0].x = -1.0f; v[0].y = -1.0f; v[0].u = u0; v[0].v = v1; v[0].colour = col;
+    v[1].x =  1.0f; v[1].y = -1.0f; v[1].u = u1; v[1].v = v1; v[1].colour = col;
+    v[2].x = -1.0f; v[2].y =  1.0f; v[2].u = u0; v[2].v = v0; v[2].colour = col;
+    v[3].x =  1.0f; v[3].y = -1.0f; v[3].u = u1; v[3].v = v1; v[3].colour = col;
+    v[4].x =  1.0f; v[4].y =  1.0f; v[4].u = u1; v[4].v = v0; v[4].colour = col;
+    v[5].x = -1.0f; v[5].y =  1.0f; v[5].u = u0; v[5].v = v0; v[5].colour = col;
 
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawTriList(v, 6);
     }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
 }

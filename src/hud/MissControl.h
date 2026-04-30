@@ -4,29 +4,40 @@
 //
 // MissControl : HUDControl3d (size = 0x94)
 // Overlay label that displays "critical" / "rare" / "X" text at a slice
-// point. Binary keeps a 9-slot pool shared across all MissControl
+// point. Binary keeps a 12-slot pool shared across all MissControl
 // triggers. Same pool services Fruit critical/rare slices, Bomb zen-hit
 // "X", and combo indicators (combo_3.tex .. combo_10.tex).
 //
 // Binary addresses:
 //   ctor                     0x001511a0
 //   dtor                     0x001513d8 / 0x00151468 / 0x001514f0
+//   vtable                   0x001e9b28
 //   GetFree                  0x00150da4
 //   MakeCritical             0x00151764
 //   MakeRare                 0x001518d8
-//   MakeDisappear            (part of GetFree family)
-//   DrawQuadUnCached         0x0014b170
+//   MakeDisappear            0x00151d94
+//   Update                   0x00151a60
+//   Draw                     0x00151f60
+//   PreUpdate                0x00150e04
+//   GetType                  0x00152660
+//   Skip                     0x00150e3c
+//   Init (vtable[4])         0x00150fa4
+//   Reset (vtable[6])        0x00150f14
 //
 // Lifecycle:
-//   1. GameInitialise constructs the 9-slot pool, which on first ctor
+//   1. GameInitialise constructs the 12-slot pool, which on first ctor
 //      lazy-loads the 4 shared textures (critical.tex,
 //      ultra_rare_plus_50.tex, hud_cross.tex, and combo_%d.tex for 3..10).
 //   2. Make* picks a pool slot via GetFree, populates pos/texture/anim
 //      state, sets m_bBusy = 1.
-//   3. Update fades m_FadeAlpha to 0 over ~0.8s, then clears m_bBusy so
-//      GetFree can re-use the slot.
-//   4. HUD::Draw(0x200) renders each busy slot via HUDControl3d::Draw.
+//   3. Update fades m_FadeAlpha to 0 via linear dt*s_DtMod*m_AlphaScale,
+//      then clears m_bBusy so GetFree can re-use the slot.
+//   4. HUD::Draw renders each busy slot via HUDControl3d::Draw.
 //
+// Struct layout verified by asm-inspector 2026-04-30. Field offsets are
+// from the binary's Init/MakeCritical/Update/Draw writes.
+//
+// Analysed: 2026-04-30T04:20
 
 #include "HUDControl3d.h"
 #include "util/SmartPtr.h"
@@ -35,85 +46,108 @@
 
 class MissControl : public HUDControl3d {
 public:
-    // +0x30 (same offset as binary field_0x30): pool busy flag. 0 = slot
-    // free and available to GetFree. 1 = slot active (fading). GetFree
-    // round-robins over the pool looking for the first free slot.
+    // NOTE: HUDControl3d base ends at some offset; these fields follow.
+    // The binary's struct layout (size=0x94, audited 2026-04-30):
+    //
+    // +0x2c: float   rotation (degrees; used as SinIdx(rot*182) in Draw)
+    // +0x30: uint8   m_bBusy  -- pool slot busy flag (0=free, 1=active)
+    // +0x32: uint8   pool-owned flag (set by CreatePool)  [not modelled in port]
+    // +0x34: uint32  "configured" flag (Init writes 1); DIFFERS: was m_LayerFlags=0x200
+    // +0x5c: uint8   RGBA tint b,g,r,a (Init copies from DAT default colour)
+    // +0x74: SmartPtr<Texture> bound texture
+    // +0x7c: uint8   m_AnimState  (0=idle, 3=active fade)
+    //         DIFFERS: header previously had m_AnimState at +0x84 (SWAPPED)
+    // +0x7d: uint8   m_bVisible (visibility-on-screen, gates jitter)
+    // +0x7e: uint16  jitter shake counter (decremented in Draw)
+    // +0x80: float   m_FadeAlpha (init 1.81, NOT 0.808 as old port had)
+    // +0x84: uint8   m_bComboActive
+    //         DIFFERS: header previously had m_bComboActive at +0x7c (SWAPPED)
+    // +0x85: uint8   "use sound" flag
+    // +0x88: int32   m_ComboCount
+    // +0x8c: uint8   unknown flag (Init writes 1)
+    // +0x90: float   m_AlphaScale (1.0 critical, 0.5 rare)
+    //         DIFFERS: was m_AlphaScale at +0x88 in old comments
+
+    // +0x30: pool busy flag
     uint8_t m_bBusy;
 
-    // +0x7c (inferred from MakeCritical decomp): combo indicator active
-    // flag. 1 = render the combo counter overlay on top of the main
-    // label. Currently set but not consumed by the port's Draw.
-    uint8_t m_bComboActive;
+    // +0x7c: animation state (0=idle, 3=active fade)
+    // DIFFERS: old header comment said this was at +0x84 (swapped with m_bComboActive)
+    uint8_t m_AnimState;
 
-    // +0x80: fade alpha (0..1). 0.808 (DAT_001518b8) set by
-    // MakeCritical / MakeRare; fades to 0 over the Update loop.
+    // +0x7d: visible on screen (set when anim starts, gates jitter)
+    uint8_t m_bVisible;
+
+    // +0x7e: jitter shake counter (decremented each Draw; adds rand offset)
+    uint16_t m_JitterTimer;
+
+    // +0x80: fade alpha. Init = 1.81 (DAT_001518b8). DIFFERS: was 0.808.
     float m_FadeAlpha;
 
-    // +0x84: animation state index. 3 = standard fade-in / hold /
-    // fade-out. Port currently drives a simple linear fade.
-    int m_AnimState;
+    // +0x84: combo indicator active flag
+    // DIFFERS: old header comment said this was at +0x7c (swapped with m_AnimState)
+    uint8_t m_bComboActive;
 
-    // +0x88: alpha scale multiplier. 1.0 for critical, 0.5 for rare.
+    // +0x85: "use sound" flag (gates SFXPlay in Update)
+    uint8_t m_bUseSound;
+
+    // +0x88: combo count (determines which combo_N.tex to use)
+    int m_ComboCount;
+
+    // +0x90: alpha scale multiplier (1.0 critical, 0.5 rare)
+    // DIFFERS: old comment said m_AlphaScale was at +0x88
     float m_AlphaScale;
 
     MissControl();
     ~MissControl() override;
 
-    // Called by HUD::Update at the start of every frame tick (0x00144d20),
-    // before iterating controls. Drives global combo-decay / combo-text logic.
-    // TODO: implement combo decay when MissControl combo system is fully ported.
-    static void PreUpdate(float dt) { (void)dt; }
+    // vtable[4] @ 0x00150fa4 -- Init override
+    void Init() override;
 
-    // One-time shared texture load. Must be called once at startup
-    // before the pool is used. Loads critical.tex, ultra_rare_plus_50.tex,
-    // hud_cross.tex.
-    //
-    // Binary does this lazily inside the first MissControl ctor (guarded
-    // by a static ref count). Port calls it explicitly from
-    // GameInitialise for clarity.
+    // vtable[6] @ 0x00150f14 -- Reset override
+    void Reset() override;
+
+    // vtable[14] @ 0x00152660 -- returns 2 (class-type tag)
+    int GetType() override { return 2; }
+
+    // vtable[15] @ 0x00150e3c -- fast-forward spawn animation
+    void Skip() override;
+
+    // Called by HUD::Update at the start of every frame tick.
+    // Maintains s_NumCriticals and s_DtMod for combo separation scaling.
+    // binary @ 0x00150e04
+    static void PreUpdate(float dt);
+
+    // One-time shared texture load. Must be called once at startup.
     static void LoadContent();
 
-    // Allocate the static 9-slot pool (construction + HUD registration).
-    // Call once from GameInitialise after LoadContent and after Game::hud
-    // exists. Matches the binary's pool-ctor loop.
+    // Allocate the static 12-slot pool (binary: CreatePool(0xC, hud)).
+    // binary @ 0x001512d8
     static void AllocatePool();
 
-    // 0x00150da4 — round-robin through the 9-slot pool returning the
-    // next non-busy slot. If all slots are busy, returns the oldest
-    // (the round-robin head) and the caller overwrites it.
-    // Returns nullptr only if the pool hasn't been allocated yet.
+    // 0x00150da4 -- round-robin through pool returning first non-busy slot.
+    // binary leaves cursor at the FOUND slot (not +1). Port DIFFERS was advancing past.
     static MissControl* GetFree();
 
-    // 0x00151764 — activate critical-hit label at a slice point.
-    //   texture    = critical.tex
-    //   m_FadeAlpha = 0.808
-    //   m_AnimState = 3
-    //   pos         = slicePos (screen-clamped to ±240 / ±160)
-    //   m_bComboActive = 1
-    //   m_bBusy = 1
+    // 0x00151764 -- activate critical-hit label at a slice point.
     void MakeCritical(const Vec3& pos, int playerIdx);
 
-    // 0x001518d8 — activate rare/special-fruit label. Same as MakeCritical
-    // but texture = ultra_rare_plus_50.tex and m_AlphaScale = 0.5.
+    // 0x001518d8 -- activate rare/special-fruit label.
     void MakeRare(const Vec3& pos);
 
-    // Zen-bomb "X" overlay and miss-penalty indicator. Caller supplies
-    // the texture (hud_cross.tex for bomb hits, fruit portrait for miss)
-    // and a size multiplier baked into field_0x34 (bit 0x200 in binary).
-    // Matches the binary's MakeDisappear symbol (see
-    // `_ZN11MissControl13MakeDisappearE...` at .rodata).
+    // 0x00151d94 -- zen-bomb X overlay and miss-penalty indicator.
     void MakeDisappear(const Vec3& pos, int sizeMult,
                        const SmartPtr<Mortar::Texture>& tex);
 
-    // HUDControl::Update override — advances the fade state machine and
-    // clears m_bBusy when the fade completes so the slot returns to the
-    // pool.
+    // vtable[12] @ 0x00151a60 -- fade state machine
     void Update(float dt) override;
 
-    // HUDControl::Draw override — renders the textured quad with
-    // m_DrawColour.a scaled by m_FadeAlpha * m_AlphaScale when m_bBusy.
-    // No-op while idle.
+    // vtable[9] @ 0x00151f60 -- render textured quad with UV crop + rotation
     void Draw(const Vec3& hudScale, int layerMask) override;
+
+    // --- Statics (file-scope in binary, exposed here for PreUpdate) ---
+    static int   s_NumCriticals;  // 0x0023123c -- incremented per busy slot in Update
+    static float s_DtMod;         // 0x001f3d6c -- (float)s_NumCriticals + 0.5, set by PreUpdate
 };
 
 #endif

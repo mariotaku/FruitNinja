@@ -37,9 +37,13 @@ struct SPAWNER_INFO {
     int                  m_FruitTypeCount;   // +0x10
 
     float                m_TimeScale;        // +0x14: "timescale" attr
-    float                m_Offset_x;         // +0x18: "offset" vec3 x
-    float                m_Offset_y;         // +0x1c
-    float                m_Offset_z;         // +0x20
+    // +0x18..+0x20: gravity Vec3 (binary Init @ 0x001241f8: piVar15[6..8]).
+    // The XML <Spawn> "gravity" attr is parsed as a 3-component Vec3 stored here.
+    // DIFFERS: was named m_Offset_x/y/z (old "offset" attr interpretation).
+    // Binary reuses this slot for either gravity XOR offset (same memory, different XML attrs).
+    float                m_Gravity_x;        // +0x18
+    float                m_Gravity_y;        // +0x1c: used as gravity.y for speed*gravity formula
+    float                m_Gravity_z;        // +0x20
     float                m_MinAngle;         // +0x24: "minangle" / "horizmin"
     float                m_MaxAngle;         // +0x28: "maxangle" / "horizmax"
     float                m_MinVel;           // +0x2c: "minvel" / velYscale
@@ -51,7 +55,9 @@ struct SPAWNER_INFO {
     float                m_SpawnMax_unused;  // +0x3c (unused per docs)
     float                m_SpawnMax;         // +0x40: "max" attr
     float                m_Speed;            // +0x44: "speed" attr
-    float                m_Gravity;          // +0x48: "gravity" attr
+    // +0x48: NOT a binary gravity field -- the binary stores gravity at +0x18..+0x20.
+    // Keeping this slot for port internal use only; treat as unknown.
+    float                m_field48;          // +0x48: (binary semantics TBD; was m_Gravity float -- WRONG)
     float                m_field4c;          // +0x4c: secondary timescale
     // +0x50..+0x5b: wave-revisit counter / spawn accumulators
     float                m_SpawnTimer;       // +0x50: countdown timer
@@ -73,12 +79,12 @@ struct SPAWNER_INFO {
         : m_pFruitTypeHashes(nullptr)
         , m_FruitTypeCount(0)
         , m_TimeScale(1.0f)
-        , m_Offset_x(0.0f), m_Offset_y(0.0f), m_Offset_z(0.0f)
+        , m_Gravity_x(0.0f), m_Gravity_y(0.0f), m_Gravity_z(0.0f)
         , m_MinAngle(-1.0f), m_MaxAngle(1.0f)
         , m_MinVel(1.0f), m_MaxVel(1.0f)
         , m_SpawnType(PLACEMENT_BOTTOM)
         , m_SpawnMin(1.0f), m_SpawnMax_unused(0.0f), m_SpawnMax(1.0f)
-        , m_Speed(1.0f), m_Gravity(1.0f), m_field4c(0.0f)
+        , m_Speed(1.0f), m_field48(0.0f), m_field4c(0.0f)
         , m_SpawnTimer(0.0f), m_RemainingCount(0), m_SpawnCountF(0.0f)
         , m_ZOffset(0.0f), m_bForceOnce(0)
         , m_MinInc(0.0f), m_MaxInc(0.0f), m_DelayInc(0.0f)
