@@ -32,6 +32,11 @@
 #include "hud/FruitFactControl.h"
 #include "hud/TutorialControl.h"
 #include "entities/Coin.h"
+#include "entities/SlashEntity.h"
+#include "BonusManager.h"
+#include "SetupGameWork.h"
+#include "PreloadSounds.h"
+#include "PowerUpManager.h"
 // Analysed: 2026-04-25T12:00
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
@@ -41,6 +46,7 @@
 #include "asset/FileManager.h"
 #include "render/Font.h"
 #include "util/Localisation.h"
+#include "util/StringHash.h"
 #include <cstdio>
 #include <string>
 
@@ -96,7 +102,8 @@ void GameInitialise() {
     // Step 8: MeshManager::Initialise(0x26C00) — mesh cache
     {
         static Mortar::MeshManager meshMgr;
-        meshMgr.Initialise(32);
+        // DIFFERS: port cache is std::map; size advisory only (binary literal = 0x26C00 = 158720 bytes)
+        meshMgr.Initialise(0x26C00);
     }
 
     // Step 10: InputManager
@@ -125,6 +132,32 @@ void GameInitialise() {
     game->pSaveData = new FruitSaveData();
     FruitNinja_LoadGame(game->pSaveData);
 
+    // InitialiseData step 7: restore last-used game mode from save
+    game->gameMode = (uint8_t)game->pSaveData->m_GameMode;
+
+    // InitialiseData step 8: SetupGameWork (0x0010b4e8)
+    SetupGameWork();
+
+    // InitialiseData steps 9-11: sound/music on/off from save totals, then reset flags
+    {
+        const unsigned int hSoundOff = StringHash("sound_off");
+        const unsigned int hMusicOff = StringHash("music_off");
+        game->m_bSoundOn = (game->pSaveData->GetTotal(hSoundOff) == 0);
+        game->m_bMusicOn = (game->pSaveData->GetTotal(hMusicOff) == 0);
+        const int soundOffCount = game->pSaveData->GetTotal(hSoundOff);
+        const int musicOffCount = game->pSaveData->GetTotal(hMusicOff);
+        if (soundOffCount != 0)
+            game->pSaveData->AddToTotal("sound_off", hSoundOff, -soundOffCount, false, true);
+        if (musicOffCount != 0)
+            game->pSaveData->AddToTotal("music_off", hMusicOff, -musicOffCount, false, true);
+    }
+
+    // InitialiseData step 12: per-power-up slash colour table
+    SlashEntity::InitModColours();
+
+    // InitialiseData step 15: BonusManager (combo/streak tracker)
+    BonusManager::GetInstance()->Init();
+
     // SDL2 audio backend init. Opens audio device at 16kHz mono S16LE
     // (matches MAMAudioThread sampleRate=16000). Must be called before GameSound.
     Mortar::SoundManager::GetInstance().Init();
@@ -150,7 +183,10 @@ void GameInitialise() {
 
     ItemManager::GetInstance()->LoadItemData();
 
-    // Step 11: PSPParticleManager — load particle XML templates
+    // Step 11 (call #22): PowerUpManager::Load — parse poweruplist.xml
+    PowerUpManager::GetInstance()->Load();
+
+    // Step 12: PSPParticleManager — load particle XML templates
     {
         Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
         std::string partDir = game->data_dir + "/particles";
@@ -279,7 +315,8 @@ void GameInitialise() {
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
     PowerUpShop::LoadContent();     // TODO: power-up shop textures
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
-    // TODO: PreloadSounds
+    // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
+    PreloadSounds();   // STUB until ported
 
     printf("GameInitialise: done\n");
 }

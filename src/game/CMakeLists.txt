@@ -15,4 +15,7 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/UpdateMusic.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameOver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/StartupEffects.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SetupGameWork.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/BonusManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PreloadSounds.cpp
 )
