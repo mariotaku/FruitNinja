@@ -1003,16 +1003,19 @@ void WaveManager::GetNextWave(int playerIdx) {
     // Set wave timing (m_WaveDt at +0x10, m_WaveDtInc at +0x14, m_WaveDtSpInc at +0x18).
     (void)(wave->m_WaveDt + wave->m_WaveDtInc * wave->field_0x34);  // consumed by GetWavedt
 
-    // Next-wave delay: binary @ 0x001251ee writes to +0x234+p*4 (delay slot).
-    if (wave->m_NextWaveDelay > 0.0f) {
-        float delay = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
-        if (delay < 0.05f) delay = 0.05f;
-        field_0x234[playerIdx] = delay;  // Fix 1: per-player delay slot @ +0x234+p*4
-    } else {
-        field_0x234[playerIdx] = 0.0f;
-    }
-    // Next-wave wait: binary @ 0x00125224 writes to +0x238+p*4 (wait slot).
+    // SLOT SWAP CORRECTION: prior audit's Fix 1 had the slot directions
+    // backwards. Walk-through: UpdateWave's wave-end block reads
+    // field_0x238 (lines ~870-879); when 0 it fires GetNextWave. With XML
+    // "delay" mapped to field_0x234, field_0x238 was always 0 (XML "wait"
+    // is absent in classic XML), so GetNextWave fired every frame and the
+    // before-delay timer (field_0x234) kept getting reset before it could
+    // tick down to spawn fruit. Swapping fixes both: after GetNextWave,
+    // field_0x234 = 0 (no in-wave before-delay), spawn fires immediately;
+    // field_0x238 = 0.6 (between-wave pause), gates GetNextWave for ~36
+    // frames after fruit clears.
     {
+        // m_NextWaveWait (XML "wait" attr; 0 in classic) -> in-wave pre-spawn
+        // timer. With wait=0, no wait, spawn happens this frame.
         float wait  = wave->m_NextWaveWait;
         float spinc = wave->m_NextWaveWaitSpInc;
         if (spinc != 0.0f) {
@@ -1020,7 +1023,17 @@ void WaveManager::GetNextWave(int playerIdx) {
             if (w2 <= 0.05f) w2 = 0.05f;
             wait = w2;
         }
-        field_0x238[playerIdx] = wait;   // Fix 1: per-player wait slot @ +0x238+p*4
+        field_0x234[playerIdx] = wait;
+    }
+    // m_NextWaveDelay (XML "delay" attr; 0.6 in classic wave 0) -> between-
+    // wave wait. After wave drains, field_0x238 ticks 0.6 -> 0 then
+    // GetNextWave fires.
+    if (wave->m_NextWaveDelay > 0.0f) {
+        float delay = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
+        if (delay < 0.05f) delay = 0.05f;
+        field_0x238[playerIdx] = delay;
+    } else {
+        field_0x238[playerIdx] = 0.0f;
     }
     // Fix 2 (binary @ 0x001251cc): binary has NO writeback to a port-owned m_NextWaveDelay[].
     // The port's extra 'm_NextWaveDelay[playerIdx] = field_0x234' is removed here.
