@@ -4,6 +4,8 @@
 #include "Game.h"
 #include "game/GameOver.h"
 #include "audio/GameSound.h"
+#include "screens/MainScreen.h"
+#include "render/Font.h"
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -149,26 +151,48 @@ void TimeControl::Update(float dt) {
 
 void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
     // 0x001628d8
+    (void)layerMask;
+
     Game* game = Game::GetInstance();
     if (!game) return;
-    if (!game->pFontNumbers) return;
-    if (m_TextBuffer[0] == '\0' && m_TimeRemaining <= 0.0f) return;
 
-    // Format: "%i:%02i"
+    // Guard: camera fully transitioned to menu -> skip
+    if (game->mainScreen) {
+        float ct = game->mainScreen->GetCameraTransition();
+        if (fabsf(ct) >= 1.0f) return;
+    }
+
+    // Guard: non-timed mode (m_LayerFlags=0 set by Update, but also gate here)
+    if (!IsTimedGame()) return;
+
+    Mortar::Font* font = game->pFontNumbers.Get();
+    if (!font) return;
+
+    // Format countdown: OS_SPrintf("%i:%02i", min, sec) — DAT_00162bc4 = "%i:%02i"
     int totalSecs = (int)m_TimeRemaining;
     int mins = totalSecs / (int)SECS_PER_MIN;
     int secs = totalSecs % (int)SECS_PER_MIN;
     snprintf(m_TextBuffer, sizeof(m_TextBuffer), "%i:%02i", mins, secs);
 
-    // Draw position: pos + hudScale*(480,320,0) + size.x*TEXT_X_MULT along x
-    // (binary uses Mortar::Font::DrawString with pos offset)
-    // TODO: full binary-faithful DrawString call with proper matrix setup
-    // when Font::DrawString port is ready. For now: no-op draw stub.
-    (void)hudScale;
-    (void)layerMask;
+    // DAT_00162b04 = -0.6, DAT_00162b08 = 0.0
+    float drawX = pos.x + TEXT_X_MULT * size.x;
+    float drawY = pos.y;
+    Vec3 drawPos(drawX, drawY, 0.0f);
 
-    // Powerup overlay
+    font->DrawString(1.0f, 1.0f, 0.0f,
+                     m_TextBuffer, drawPos,
+                     m_DrawColour, 0xe);
+
+    // Optional powerup overlay ("+N" time bonus text)
     if (m_PowerupOverlay[0] != '\0') {
-        // TODO: DrawString m_PowerupOverlay at pos.y + POWERUP_Y_OFFSET
+        // DAT_00162b0c = 32.0 y-offset
+        Vec3 overlayPos(drawX, drawY - POWERUP_Y_OFFSET, 0.0f);
+        // TODO: real GOT-relative colour (GOT+DAT_00162b1c); placeholder white
+        Colour overlayTint(255, 255, 255, 255);
+        font->DrawString(1.0f, 1.0f, 0.0f,
+                         m_PowerupOverlay, overlayPos,
+                         overlayTint, 0);
     }
+
+    // Binary @ 0x00162a..: tick-tock UV quad branch. Dead code in shipped binary; m_SecondaryTex never assigned. Skipped.
 }

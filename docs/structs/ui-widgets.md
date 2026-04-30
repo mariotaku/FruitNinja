@@ -283,26 +283,16 @@ Main score display HUD. Handles score counting animation, multiplier display, ne
 
 ## 9. CoinCounter
 
-**Constructors:** 0x00135600, 0x00135644  
-**Update:** 0x00135580 (empty -- returns immediately)  
-**Draw:** 0x0013569c  
-**Base class:** HUDControl3d  
-**Estimated struct size:** ~0x94 (highest field: 0x90)
+**SUPERSEDED — see `docs/structs/hud.md` ## CoinCounter (2026-04-30 RE).**
 
-Displays coin count. Update is a no-op; all visual logic is in Draw. Renders coin texture and text with a font string.
+Old summary preserved below for the size estimate / call-site context only. Ground-truth
+struct size is **0xD4** (from `operator_new(0xd4)` in GameInit), not the 0x94 lower bound.
+The text buffer at +0x94 is a 64-byte char array (filling 0x94..0xD3).
 
-| Offset | Type | Name | Notes |
-|--------|------|------|-------|
-| 0x00-0x74 | HUDControl3d | super | Base class |
-| 0x7C | ushort | m_CoinCount | Coin count (init 0) |
-| 0x80 | float | m_Alpha | Display alpha |
-| 0x84 | int | field_0x84 | Init 0 |
-| 0x88 | float | m_Scale | Display scale |
-| 0x8C | byte | field_0x8C | Unknown |
-| 0x90 | float | field_0x90 | Init to same constant as 0x80 |
-| 0x94 | char[64] | m_CoinText | Text buffer (accessed in Draw at 0x25*4=0x94) |
-
-**Draw behavior:** Checks alpha > 0 before drawing. Sets up matrix from scale/position, draws coin texture quad, then draws text string with font at offset (-15, 0) from position.
+The class is **vestigial in the shipped binary** — Init is a no-op, no texture is ever
+loaded into +0x74, the text buffer at +0x94 is never written, and `m_CoinCount` (+0x7C)
+is never modified after the ctor zero. Draw renders nothing visible at runtime even
+though the function is fully wired. See the new section in `hud.md` for full details.
 
 ---
 

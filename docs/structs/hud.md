@@ -446,6 +446,606 @@ Tick-tock visual indicator (`m_SecondaryTex`) is dead code — never assigned a 
 
 ---
 
+### CoinCounter : HUDControl3d (size = 0xD4 = 212 bytes)
+
+<!-- Analysed: 2026-04-30T16:00 -->
+
+Coin-count display HUD. **Vestigial / dead code in the shipped binary** — Init is a true
+no-op, no texture is ever loaded into the icon slot, the text buffer is never written,
+and `m_CoinCount` is never modified after the ctor zero. The Draw function is fully
+wired but renders nothing visible at runtime because every input it relies on is
+either null or zero. Storage: `Game+0x178`. Source file: `CoinCounter.cpp`.
+
+Mangled symbols: `_ZTV11CoinCounter` (vtable), `_ZTI11CoinCounter` (typeinfo),
+`_ZTS11CoinCounter` (typeinfo name).
+
+Supersedes the older 0x94-bound estimate in `docs/structs/ui-widgets.md ## 9 CoinCounter`.
+
+#### Constructor
+
+**Address:** `CoinCounter::CoinCounter()` @ 0x00135600 (real), 0x00135644 (alias),
+thunk wrapper 0x000f43d4. Signature: `CoinCounter::CoinCounter(CoinCounter* this)` —
+no parameters.
+
+```c
+CoinCounter* CoinCounter::CoinCounter(CoinCounter* this) {
+    HUDControl3d::HUDControl3d(&this->base);
+    this->base.super.vtable     = CoinCounter_vtable + 8;   // GOT[0x71dc] -> 0x001E91B0+8
+    this->m_CoinCount           = 0;          // +0x7C  (uint16_t)
+    this->m_field_0x80          = 0.0f;       // DAT_00135638 = 0.0
+    this->m_field_0x84          = 0;          // int
+    this->m_field_0x88          = 0.0f;
+    this->m_Alpha               = 0.0f;       // +0x90  (Reset will overwrite to 1.0)
+    this->base.super.field_0x31 = 1;          // [4] cast = 1 (HUDControl flag)
+    return this;
+}
+```
+
+DAT pool (ctor):
+- DAT_0013563c = 0x000B6B28 (PC→GOT base offset; GOT_base = 0x001EC130)
+- DAT_00135638 = 0.0f (zero-init constant)
+- DAT_00135640 = 0x000071DC (GOT offset to vtable ptr → vtable @ 0x001E91B0)
+
+#### Struct Layout
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x00..+0x7B | HUDControl3d | super | base 0x7C bytes (icon would go in `super.field_0x74`) |
+| +0x7C | uint16_t | m_CoinCount | "displayed" coin count — **never written** after ctor zero |
+| +0x7E | uint16_t | (pad) | structure alignment |
+| +0x80 | float | m_field_0x80 | ctor 0.0; not read by Draw / Reset / Update |
+| +0x84 | int32_t | m_field_0x84 | ctor 0; not read |
+| +0x88 | float | m_field_0x88 | ctor 0.0; not read |
+| +0x8C | float | m_DrawAlpha | ctor 0.0; **Draw gate** (`> 0.0` else early-return); Reset clamps to [0,1] |
+| +0x90 | float | m_Alpha | ctor 0.0; Reset writes 1.0 (declared but not consumed by Draw) |
+| +0x94..+0xD3 | char[64] | m_TextBuffer | OS_SPrintf-shaped buffer iterated by Draw — **never written** |
+
+**Size:** 0xD4 = 212 bytes (verified by `operator_new(0xd4)` in GameInit). Storage:
+`*(CoinCounter**)(Game+0x178) = coinCtrl;` (set in GameInit step 5 of 0x0016c644).
+
+#### Vtable (15 entries) — symbol `_ZTV11CoinCounter` @ 0x001E91B0
+
+Layout (Itanium ABI): `[+0x00 = offset_to_top=0]`, `[+0x04 = typeinfo @ 0x001E91F4]`,
+then 15 method slots starting at +0x08. The `vtable+8` value (set by ctor) is what
+goes into `*this`.
+
+| Idx | Vt-Off | Address | Method | Notes |
+|-----|--------|---------|--------|-------|
+| 0 | +0x08 | 0x001355B8 | ~CoinCounter (D1, in-place) | super dtor + restore vptr |
+| 1 | +0x0C | 0x0013558C | ~CoinCounter (D0, deleting) | dtor + `operator_delete(this)` |
+| 2 | +0x10 | 0x00135544 | **Init** | empty body — `return` (no LoadContent path) |
+| 3 | +0x14 | 0x0013557C | Release | empty body — `return` |
+| 4 | +0x18 | 0x00135548 | Reset | clamps `m_DrawAlpha` to [0,1]; `m_Alpha = 1.0f` |
+| 5 | +0x1C | 0x0012F92C | BeginDraw(float) | inherited HUDControl3d (no-op) |
+| 6 | +0x20 | 0x00135584 | PreDraw(float*) | `return param` — passthrough |
+| 7 | +0x24 | 0x0013569C | **Draw(float*)** | full coin-quad + text path (see below) |
+| 8 | +0x28 | 0x0012F930 | PreDrawOrder(float*,int) | inherited (dispatches to PreDraw) |
+| 9 | +0x2C | 0x0012F93C | DrawOrder(float*,int) | inherited (dispatches to Draw) |
+| 10 | +0x30 | 0x00135580 | **Update(float)** | empty body — confirmed no-op |
+| 11 | +0x34 | 0x0012FD54 | SetToMultiplayerState | inherited HUDControl3d default |
+| 12 | +0x38 | 0x00135AF4 | GetType | returns **3** (NOTE: src stub had 1 — fix to 3) |
+| 13 | +0x3C | 0x00135588 | Skip | empty body — `return` |
+| 14 | +0x40 | 0x0012F950 | Save | inherited (no-op) |
+
+The deleting/in-place dtor ordering above (D1 first, D0 second) follows the Itanium
+ABI convention used elsewhere in this binary; verified from each dtor's body.
+
+Mangled per-slot symbols also exported: `_ZN11CoinCounter4InitEv`, `_ZN11CoinCounter5ResetEv`,
+`_ZN11CoinCounter7ReleaseEv`, `_ZN11CoinCounter6UpdateEf`, `_ZN11CoinCounter7PreDrawEPf`,
+`_ZN11CoinCounter4DrawEPf`, `_ZN11CoinCounter4SkipEv`, `_ZN11CoinCounter7GetTypeEv`,
+`_ZN11CoinCounterC1Ev`, `_ZN11CoinCounterC2Ev`, `_ZN11CoinCounterD0Ev`,
+`_ZN11CoinCounterD1Ev`, `_ZN11CoinCounterD2Ev`.
+
+#### Reset (0x00135548) — full body
+
+```c
+void CoinCounter::Reset() {
+    float a = this->m_DrawAlpha;        // +0x8C
+    this->m_Alpha = 1.0f;               // +0x90
+    float clamped = 0.0f;               // DAT_00135578 = 0.0
+    if (a > 0.0f) {
+        clamped = (a >= 1.0f) ? 1.0f : a;
+    }
+    this->m_DrawAlpha = clamped;        // +0x8C clamped to [0, 1]
+}
+```
+
+#### Draw (0x0013569C) — full pseudocode
+
+```c
+void CoinCounter::Draw(CoinCounter* this, float* hudScale) {
+    /* GOT_base    = 0x001EC130 (lit 0x000B6A80 + PC 0x001356B0)
+       MatrixManager = *(GOT_base + 0x7348) = MatrixManager*  @ 0x002748D4
+       g_GameData  = *(GOT_base + 0x7990) = GameData*         @ 0x001F43B8
+       Colour ptr  = *(GOT_base + 0x73A4)                     @ 0x001F34D4
+       UV ptr      = *(GOT_base + 0x78C0) = float[2] {u, v}   @ 0x001F4340 */
+
+    if (!(this->m_DrawAlpha > 0.0f)) return;            // +0x8C gate
+
+    /* --- 1. Build world matrix from base.size and base.pos --- */
+    Matrix44 m;
+    Matrix44_Scale44(&this->base.super.size, &m);       // size @ +0x20
+    Matrix44_GlobalTranslate44(&m, &this->base.super.pos); // pos @ +0x08
+
+    MatrixManager* mm = MatrixManager_singleton;
+    MatrixStack::Reset(&mm->m_World);                   // m_World @ mm + 0x1080+0x14
+    MatrixStack::SetCurrentMatrix(&mm->m_World, &m);
+    MatrixManager::UploadCurrentMatrices(mm, true);
+
+    /* --- 2. Draw coin icon quad using +0x74 texture --- */
+    Mortar::Texture::Set(this->base.m_SecondaryTex);    // +0x74 — NEVER LOADED in ctor/Init
+    Colour tint;
+    TintWhite(&tint);                                   // (1,1,1,1)
+    Mortar::Mesh::DrawQuadUnCached(tint, /*u0,u1,v0,v1=defaulted*/ 0);
+    Mortar::Texture::UnSet(this->base.m_SecondaryTex);
+
+    /* --- 3. Render number text at pos.x - 15, pos.y --- */
+    Vec3 textPos = this->base.super.pos;                // +0x08 .. +0x14
+    Font* font   = ((GameData*)g_GameData)->pFontReserved1;  // GameData +0x5C — ALWAYS NULL
+    textPos.x   -= 15.0f;                               // shift left of icon
+
+    Utf8StringIterator iter;
+    Utf8StringIterator::ctor(&iter, &this->m_TextBuffer); // +0x94 — empty (never written)
+
+    Vec3   posCopy = textPos;
+    Colour col;
+    Colour::Colour(&col, *(Colour**)(GOT + 0x73A4));    // default Colour for HUD
+    /* uv pair [u, v] from GOT entry (DAT_001357E0) — copied to two ints on stack */
+    int uv0 = ((int*)(GOT + 0x78C0))[0];
+    int uv1 = ((int*)(GOT + 0x78C0))[1];
+
+    /* Mortar::Font::DrawString — VFP arg pack (hard-float ABI):
+         s0 = 30.0          (lineHeight / size)
+         s1 = 1.0           (scale)
+         s2 = -0.503...     (DAT_001357C8 = 0xBF008FF0; horizontal nudge?)
+         s3 = 0.0           (DAT_001357CC; z arg)
+         r0 = font          (Font* — null for CoinCounter)
+         r1 = &posCopy      (Vec3*)
+         r2 = &iter         (Utf8StringIterator*)
+         r3 = &col          (Colour*)
+         [sp+0]  = &uv      (UV pair pointer)
+         [sp+4]  = 0xE      (alignment flag = 14, same as TimeControl)
+         [sp+8]  = 0        (style flag) */
+    Mortar::Font::Font_DrawString(font, &posCopy, &iter, &col,
+                                  /*uv*/ &uv0,
+                                  /*align*/ 0xE,
+                                  /*style*/ 0,
+                                  30.0f, 1.0f, -0.5036f, 0.0f);
+    Utf8StringIterator::~Utf8StringIterator(&iter);
+}
+```
+
+#### DAT Pool (Constants) — Draw
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_001357CC | 0.0f | DrawString z arg (s3) |
+| DAT_001357D0 | 0x000B6A80 | PC→GOT_base offset (GOT_base = 0x001EC130) |
+| DAT_001357D4 | 0x00007348 | GOT offset → MatrixManager singleton ptr |
+| DAT_001357D8 | 0x00007990 | GOT offset → g_GameData ptr |
+| DAT_001357DC | 0x000073A4 | GOT offset → Colour template ptr |
+| DAT_001357E0 | 0x000078C0 | GOT offset → default UV pair (Vec2) ptr |
+| DAT_001357C8 | 0xBF008FF0 (-0.5036) | DrawString s2 arg |
+| inline 0x41F00000 | 30.0f | DrawString s0 arg (line height/scale) |
+| inline 0x3F800000 | 1.0f | DrawString s1 arg (scale) |
+| inline -15.0f (`vmov 0x41700000` then sub) | 15.0 | text X-offset from icon |
+
+Float literal note: `vmov.f32 s15,0x41700000` loads **15.0** (not 0x41700000 as integer).
+The subsequent `vsub.f32 s15, s14, s15` gives `pos.x - 15.0f`.
+
+#### Who writes m_CoinCount? (answer: nobody)
+
+Searched both for direct writes to `(CoinCounter*) + 0x7C` and for any
+`SetCoins`/`AddCoins` member of CoinCounter:
+
+- `AddCoins(int)` @ 0x0010A3BC — exists, but writes to `pSaveData+0x20` and
+  `pSaveData+0x24` (lifetime + total earned), NOT to any CoinCounter field.
+  Callers: `PowerUp::Activate` @ 0x001191A4 (debit), `ItemManager::BuyItem` @
+  0x001124DE (debit), `CoinArrived(Coin*)` @ 0x0017320C (credit).
+- `Coin::ClearCoins(bool)` @ 0x001731B8 — entity static; flags every Coin entity
+  with the `+0x11` removal bits (or routes through `Arrived`). Touches no CoinCounter
+  field.
+- `COIN_CHANCEINATOR::GetCoins` @ 0x00121778 — random per-fruit roll, returns int.
+- `WaveManager::RequestCoins` @ 0x00121A1C — gates COIN_CHANCEINATOR rolls.
+
+Xrefs to `m_CoinCount` (+0x7C of CoinCounter*): only the ctor (`strh.w r2,[r4,#0x7c]`
+at 0x00135632). The runtime balance lives in `g_SaveData` (FruitSaveData / MainSaveData),
+not in this widget. The text buffer at +0x94 is never targeted by any
+`OS_SPrintf`/`memcpy` chain that resolves to a CoinCounter.
+
+#### Why the widget is invisible at runtime
+
+Three independent conditions each suffice to render nothing — none rely on the
+others. (1) `vtable[2]=Init` is a no-op, so `super.m_SecondaryTex` (+0x74) stays
+null and `Texture::Set(NULL)` binds nothing. (2) `m_DrawAlpha` (+0x8C) is 0.0
+after ctor and Reset only clamps it back to 0; the `if (m_DrawAlpha > 0.0f)` gate
+in Draw fails every frame. (3) Even if (1) and (2) flipped, the text branch reads
+`g_GameData.pFontReserved1` at +0x5C, which `docs/structs/game.md` confirms is
+"always null. … CoinCounter::Draw reads it but pointer is always null." The
++0x94 text buffer is also never written, so the iterator would walk a zero-length
+string anyway.
+
+**Implication for the port:** the existing src stub at `src/hud/CoinCounter.{h,cpp}`
+is functionally correct already (Update no-op, Draw no-op, Reset clamps). RE-driven
+fixes for the implementer: (a) `GetType()` returns **3**, not 1; (b) split
+`m_fields_7e[0x56]` into named fields `m_field_0x80, m_field_0x84, m_field_0x88,
+m_DrawAlpha (+0x8C), m_Alpha (+0x90), char m_TextBuffer[64] (+0x94..+0xD3)` so
+sizeof matches the binary's 0xD4. No behavior change required — the original
+ships with this HUD widget invisible.
+
+#### Per-player MP positioning
+
+None. CoinCounter has no `IsSameScreenMultiplayer` branch in any of its functions.
+GameInit creates one global instance at `Game+0x178`; SetToMultiplayerState is the
+inherited HUDControl3d default (no override). Position is left at the HUDControl
+default `(0, 0, 0)` — GameInit does NOT call `pos = …` or `size = …` for it.
+
+#### Binary References (summary)
+
+All vtable slots above (0x00135544..0x00135AF4) plus: ctor 0x00135600 / 0x00135644
+(alias) + thunk 0x000F43D4; three dtors at 0x0013558C / 0x001355B8 / 0x001355DC
+(D0 deleting / D1 in-place / D2 subobject); TU init `_GLOBAL__I_CoinCounter.cpp`
+@ 0x001357E4 (constructs identity matrix + two Vec3 globals + a Colour, registered
+via `__aeabi_atexit`).
+
+---
+
+### ScoreControl : HUDControl3d (size = 0x100 = 256 bytes)
+
+<!-- Analysed: 2026-04-30 (Phase B1) -->
+
+Main score HUD: numeric score readout with per-digit alpha fade-in animation,
+sin-wobble per-digit pulse on score change, scale pulse driven by wave/combo,
+multiplier overlay (`x2`, `x4`, `x8`...), and "new best score" banner with
+animated colour interpolation. Source file: `ScoreControl.cpp`. Mangled:
+`_ZTV12ScoreControl` at vtable address **0x001E9D48**, typeinfo at 0x001E9D8C.
+
+#### Constructor
+**Address:** 0x00158C7C (real), 0x00158D4C (alias), thunk wrapper 0x000F6BDC.
+
+Signature: `ScoreControl::ScoreControl(ScoreControl* this)` — **no parameters**.
+
+```c
+ScoreControl* ScoreControl::ScoreControl(ScoreControl* this) {
+    HUDControl3d::HUDControl3d(&this->base);
+    this->base.super.vtable = ScoreControl_vtable + 8;        // GOT[0x72D4] -> 0x001E9D48 + 8
+    SmartPtr<Texture>::SmartPtr(&this->m_ScoreIconTex);       // +0xA0 zero-init
+    SmartPtr<Texture>::SmartPtr(&this->m_HighscoreBannerTex); // +0xA4 zero-init
+    SmartPtr<Texture>::SmartPtr(&this->m_FruitDigitTex);      // +0xF8 zero-init
+    this->m_ScoreSmoothed   = 0.0f;          // +0x80 (DAT_00158d3c = 0.0)
+    this->base.super.m_Timer = 0.0f;         // +0x2c
+    this->m_PlayerIdx       = 0;             // +0xFC
+    this->m_bDirty          = 1;             // +0x7C (offset matches scoreCtrl[4]=0x1 in decompile)
+    this->m_PulseAngle      = 0;             // +0x7E (ushort)
+    this->m_DisplayedScore  = 0;             // +0x88
+    this->m_BannerStartTimer = -1.0f;        // +0x8C  (-1.0f initial, then ramps to 1.0)
+    this->m_ScalePulse      = 1.0f;          // +0x90
+    this->m_BannerScaleTime = -2.0f;         // +0xA8 (-2.0f sentinel = inactive banner)
+    LoadLocalisedTexture(&tmp, "hud_fruit.tex"); // DAT_00158D48 -> 0x001BBF58
+    SmartPtr<Texture>::operator=(&this->m_FruitDigitTex, &tmp);
+    SmartPtr<Texture>::~SmartPtr(&tmp);
+    Reset();   // initializes m_DigitAlpha[16] to 0, copies +0xF8 -> +0x74
+    return this;
+}
+```
+
+DAT pool (ctor):
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_00158D3C | 0.0 | m_ScoreSmoothed init, m_Timer init |
+| DAT_00158D40 | 0x000934A8 | GOT base offset (anchor 0x158C88, GOT=0x001EC130) |
+| DAT_00158D44 | 0x000072D4 | GOT entry → vtable @ 0x001E9D48 |
+| DAT_00158D48 | -0x301D8 | "hud_fruit.tex" string @ 0x001BBF58 |
+
+#### Storage
+
+Heap-owned by `HUD::AddControl(...)` (called in `GameInit` step 4 around 0x16C7A4).
+There is **no `Game+0xNN` slot** — HUD is the sole owner. After ctor, GameInit
+loads three additional textures into the instance (NOT done by ctor):
+
+| Field | Address | Texture |
+|-------|---------|---------|
+| +0x74 (super.m_SecondaryTex) | DAT_0016C9E0 → 0x1BBF58 | `hud_fruit.tex` (multiplier fruit icon) |
+| +0xA0 (m_ScoreIconTex) | DAT_0016C9E4 → 0x1BC919 | `score.tex` (note: tail-shared with "new_best_score.tex"; both literals point into the same string-pool block) |
+| +0xA4 (m_HighscoreBannerTex) | DAT_0016C9E8 → 0x1BC910 | `new_best_score.tex` |
+
+GameInit also sets `size = DAT_0016C9B8 * globalScale` and computes `pos`
+from `DisplayManager::GetWindowSize()`. (Caller-side, not part of ctor body.)
+
+#### Struct Layout (size = 0x100 = 256 bytes)
+
+| Offset | Type | Name | Notes |
+|--------|------|------|-------|
+| +0x00..+0x7B | HUDControl3d | super | Base 0x7C bytes; uses super.m_SecondaryTex (+0x74) for fruit-multiplier icon |
+| +0x7C | byte | m_bDirty | 1 = re-snap m_ScoreSmoothed to `GetCurrentScore()` next Update. Cleared after read. |
+| +0x7D | byte | _pad | |
+| +0x7E | uint16 | m_PulseAngle | sin-table angle (ushort). Set to 0x8000 on score increase, decays toward 0; drives digit wobble |
+| +0x80 | float | m_ScoreSmoothed | Easing-target score (float, smoothed toward `GetCurrentScore`) |
+| +0x84 | int | m_DisplayedScore | Truncated `(int)m_ScoreSmoothed` — drives the formatted text |
+| +0x88 | int | m_HighscoreToShow | Highscore value displayed in banner (0 = no banner) |
+| +0x8C | float | m_BannerStartTimer | Banner activation timer; ctor inits to -1.0f |
+| +0x90 | float | m_ScalePulse | Multiplier scale factor (1.0..2.0 during wave-active scale pulse) |
+| +0x94 | float | m_DrawPosX | Cached draw X (computed in Update) |
+| +0x98 | float | m_DrawPosY | Cached draw Y |
+| +0x9C | float | m_DrawPosZ | Cached draw Z (always 0.0) |
+| +0xA0 | SmartPtr\<Texture\> | m_ScoreIconTex | `score.tex` — score icon next to digits |
+| +0xA4 | SmartPtr\<Texture\> | m_HighscoreBannerTex | `new_best_score.tex` |
+| +0xA8 | float | m_BannerScaleTime | Banner scale animation timer; -1.5..1.0; -2.0 = inactive sentinel |
+| +0xAC | uint16 | m_BannerSinIdx | sin-table angle for banner wobble |
+| +0xAE | byte[2] | _pad | |
+| +0xB0 | int | m_DigitCount | Active digit count (0..16). Mirrors width of `m_DisplayedScore` |
+| +0xB4 | int | m_LastDigitCount | Previous digit count (for change detection — triggers fade-out cascade) |
+| +0xB8 | float[16] | m_DigitAlpha | Per-digit alpha 0..1; index 0 = ones place |
+| +0xF8 | SmartPtr\<Texture\> | m_FruitDigitTex | `hud_fruit.tex` (loaded by ctor; copied to +0x74 by Reset) |
+| +0xFC | int | m_PlayerIdx | 0 (player 1) or 1 (player 2). Drives `IsMultiplayer` gating + `m_LayerFlags = 1<<idx` |
+
+#### Vtable (15 entries) — at 0x001E9D48
+
+| Idx | Offset | Address | Method | Notes |
+|-----|--------|---------|--------|-------|
+| 0   | +0x08  | 0x00158418 | ~ScoreControl (in-place) | resets vtable, calls Release, dtors 3 SmartPtrs (+0xF8,+0xA4,+0xA0), HUDControl3d dtor |
+| 1   | +0x0C  | 0x00158394 | ~ScoreControl (deleting) | same + `operator delete(this)` |
+| 2   | +0x10  | 0x00158190 | Init | dispatches to vtable[+0x10] = Reset |
+| 3   | +0x14  | 0x00158370 | Release | SmartPtrNull on +0xF8, +0x74, +0xA0, +0xA4 |
+| 4   | +0x18  | 0x001582E4 | **Reset** | see below |
+| 5   | +0x1C  | 0x0012F92C | BeginDraw | inherited HUDControl3d (no-op) |
+| 6   | +0x20  | 0x00158E1C | **PreDraw** | text + multiplier + highscore banner rendering |
+| 7   | +0x24  | 0x001581D4 | **Draw** | alpha gate, then HUDControl3d::Draw for super.m_SecondaryTex quad |
+| 8   | +0x28  | 0x0012F930 | PreDrawOrder | inherited (dispatches to PreDraw) |
+| 9   | +0x2C  | 0x0012F93C | DrawOrder | inherited (dispatches to Draw) |
+| 10  | +0x30  | 0x0015853C | **Update** | score smoothing + digit anim + banner anim + SFX |
+| 11  | +0x34  | 0x0012FD54 | SetToMultiplayerState | inherited no-op (`bx lr`) |
+| 12  | +0x38  | 0x00159D18 | GetType | returns 3 |
+| 13  | +0x3C  | 0x001581A0 | Skip | restore from save: `m_DisplayedScore = GetCurrentScore(m_PlayerIdx)`; if game-over flag, force banner active (`m_BannerScaleTime = 1.0f`) |
+| 14  | +0x40  | 0x0012F950 | Save | inherited (no-op) |
+
+#### Reset (0x001582E4)
+
+```c
+void ScoreControl::Reset(ScoreControl* this) {
+    SmartPtr<Texture>::operator=(&this->base.m_SecondaryTex, &this->m_FruitDigitTex);
+    this->m_PulseAngle = 0;                       // +0x7E
+    this->m_bDirty     = 1;                       // +0x7C
+    Vec3 globalHudScale = *(Vec3*)0x001F38FC;     // global Vec3 (HUD/window scale)
+    Vec3 sized = (input pos vec) * globalHudScale;
+    this->base.super.size = sized;                // +0x20..+0x28
+    for (int i = 0; i < 16; i++) m_DigitAlpha[i] = 0.0f;
+    this->m_DigitCount     = 0;                   // +0xB0
+    this->m_LastDigitCount = 0;                   // +0xB4
+    this->base.super.m_LayerFlags = 1 << this->m_PlayerIdx;  // +0x34
+    // local_14 = 40.0 (DAT_00158354) — dead store
+}
+```
+
+#### Update (0x0015853C, ~335 lines)
+
+Player-mode gate first; then 8 stages. Compressed pseudocode:
+
+```c
+void ScoreControl::Update(ScoreControl* this, float dt) {
+    int currentScore = GetCurrentScore(this->m_PlayerIdx);
+    if (this->m_PlayerIdx >= 1 && !IsMultiplayer()) {
+        this->base.super.m_bPendingRemoval = 1;
+        return;
+    }
+    // Stage 1: Per-digit alpha cascade. mode==1 (Classic)
+    //   if digitsActive == m_LastDigitCount: ramp m_DigitAlpha[0..N-1] up at +6/sec
+    //   else: fade m_DigitAlpha[0..15] down at -16/sec; once index 0 hits 0, commit m_LastDigitCount
+    // non-Classic: static-timer driven (0.25s gate) ramp up/fade down at same rates
+    int digitsActive = clamp(*comboCountPtr, 0, 15);  // GOT 0x7478
+    m_DigitCount = digitsActive;
+    UpdateDigitAlphaCascade(this, dt);  // see logic above
+
+    // Stage 2: Score easing toward currentScore
+    if (m_bDirty) { m_bDirty=0; m_ScoreSmoothed=(float)currentScore; m_DisplayedScore=currentScore; }
+    int  mult     = GetScoreMultiplyer(0);
+    float baseRate = (g_GameData.gameMode == 2) ? 10.0f : 1.0f;
+    float catchup  = (currentScore + (currentScore<0 ? -0.6f : 0.6f) - m_ScoreSmoothed) * 0.1f;
+    float maxStep  = (float)mult * 0.3f * baseRate;
+    m_ScoreSmoothed += min(catchup, maxStep);
+    int prevDisplay = m_DisplayedScore;
+    m_DisplayedScore = (int)m_ScoreSmoothed;
+    if (sfxCooldown > 0) sfxCooldown -= dt;
+
+    // Stage 3: Score-increase pulse + Arcade-bonus SFX
+    if (m_DisplayedScore > prevDisplay) {
+        if (sfxCooldown <= 0 && g_GameData.gameMode == 2
+            && g_GameData.pCurrentWave && g_GameData.pCurrentWave[0x80] > 0
+            && g_GameData.pCurrentWave[0x84] > 0.0f) {
+            sfxCooldown = 0.05f;
+            GameSound::SFXPlay(g_GameData.pSound, "Bonus-count-up", 1, 1, &delegate);
+        }
+        m_PulseAngle = 0x8000;   // peak of sin
+    }
+
+    // Stage 4: Pulse decay (rate -327680/sec); also m_ScalePulse from waveTimer
+    float pulseSin  = SinIdx(m_PulseAngle);
+    float waveTimer = g_GameData.field_0xC;
+    m_ScalePulse    = (waveTimer > 0) ? ((waveTimer >= 1) ? 2.0f : 1.0f + waveTimer) : 1.0f;
+
+    // Stage 5: Highscore tracking
+    if (g_GameData.field_0x05 == 0 || currentScore == 0)
+        m_HighscoreToShow = (GetCurrentModeHighscore() != 0)
+                          ? max(m_DisplayedScore, GetCurrentModeHighscore()) : 0;
+
+    // Stage 6: Position + layer flags + (wave-mode) text-width centering
+    Vec3 base(-218, 138, 0);
+    this->pos = base - Vec3(200,0,0) * playerScale;
+    if (waveTimer > 0) {
+        m_LayerFlags = 8 << m_PlayerIdx;
+        m_DrawPos    = pos + Vec3(24, 0, 0);
+        float w      = Font::MeasureString(font, "%d"%currentScore) * m_ScalePulse * 48.0f;
+        m_DrawPos   += (Vec3(-160 - w*0.5f, 80, 0) - pos) * playerScale;
+    } else {
+        m_LayerFlags = 1 << m_PlayerIdx;
+        m_DrawPos    = pos + Vec3(24, 0, 0);
+    }
+
+    // Stage 7: Highscore banner anim (rises to 1.0 over 0.2s, falls -20/sec to -1.5)
+    bool wantBanner = (waveTimer > 0.99f) && g_GameData.pSaveData[300];
+    if (wantBanner) {
+        float prev = m_BannerScaleTime;
+        m_BannerScaleTime = min(1, m_BannerScaleTime + dt*5);
+        m_BannerSinIdx = (m_BannerScaleTime == 1) ? max(0, m_BannerSinIdx + dt*49140) : 0;
+        if (m_BannerScaleTime > 0 && prev <= 0)
+            GameSound::SFXPlay(g_GameData.pSound, "New-best-score", 1, 1, &delegate);
+    } else {
+        m_BannerScaleTime = max(-1.5f, m_BannerScaleTime - dt*20);
+    }
+
+    // Stage 8: Size pulse — base.size.x = base.size.y = 40.0 + pulseSin * 10.0
+    float sizeVal = 40.0f + pulseSin * 10.0f;
+    this->base.super.size.x = this->base.super.size.y = sizeVal;
+}
+```
+
+**Key behaviours:**
+- `m_PulseAngle` (uint16) is a 16-bit sin-table index. 0x8000 = peak; decays by ~5460/frame at 60fps.
+- `g_GameData.pCurrentWave[0x80] > 0` AND `pCurrentWave[0x84] > 0.0f` is the wave-active gate that triggers `Bonus-count-up` in Arcade.
+- `New-best-score` SFX fires once when the highscore banner first activates (m_BannerScaleTime crosses 0).
+- `m_LayerFlags` toggles between `1<<m_PlayerIdx` (default) and `8<<m_PlayerIdx` (wave-active).
+- Score easing: per-frame delta step = min(catchupRate*0.1, multiplier*0.3*(gameMode==2 ? 10 : 1)).
+
+#### Draw (0x001581D4) — alpha gate, ~22 lines
+
+```c
+void ScoreControl::Draw(ScoreControl* this, float* hudScale) {
+    if (!(this->m_PlayerIdx == 0 && IsMultiplayer())  // skip P1 in MP
+        && g_GameData.someTimer >= -1.0f) {
+        float alphaF = 255.0f * g_GameData.cameraIntensity;
+        byte alpha   = clamp_u8(alphaF);
+        this->base.super.m_DrawColour.a = alpha;        // +0x5F (super)
+        HUDControl3d::Draw(&this->base, hudScale);      // base draws +0x74 fruit-icon quad
+    }
+}
+```
+
+#### PreDraw (0x00158E1C) — main rendering (~290 lines)
+
+PreDraw is where text + multiplier + highscore banner all render. HUD::Draw
+calls PreDraw before Draw, so the score text appears underneath the +0x74
+fruit-icon quad that Draw delegates to HUDControl3d::Draw.
+
+Five sections (A-E):
+
+```c
+void ScoreControl::PreDraw(ScoreControl* this, float* hudScale) {
+    byte alpha = clamp_u8(255.0f * g_GameData.cameraIntensity);
+    if (m_PlayerIdx == 0 && IsMultiplayer()) return;
+    if (g_GameData.someTimer < -1.0f) goto draw_quads;
+
+    // A. Score digits with adaptive width clamp.
+    //   if score >= 1000: cache MeasureString("000")*0.75 (cxa-guard once),
+    //   if printed-width > cached: scaleX = cached/printed; offsetX = (printed-cached)*0.5
+    //   Font::DrawString(font, drawX+offsetX, drawY, 0, 48*scalePulse*scaleX,..., flags=0xD)
+
+    // B. Per-mode multiplier overlay
+    //   mode == 1 (Classic): per-digit fruit-icon overlay. For each i in 0..15 with
+    //     m_DigitAlpha[i] > 0, OS_SPrintf("%d", 1<<(i+1)) => "2","4","8"... draw at
+    //     scale = SinIdx(135 * m_DigitAlpha[i] * 182) * (45 + i*6). Tint = FRUIT_INFO->m_FactColour.
+    //     Font texture rebinds to FRUIT_INFO->m_pFruitTexture for these draws.
+    //   mode == 2 (Arcade): if PowerUpManager::GetScoreGainMultiplier() > 1 AND !flag_0x05:
+    //     OS_SPrintf("x%d", mult); draw at (pos.x-18, pos.y-52) scale=48*scalePulse*0.75
+
+    // C. Highscore banner text (active when |cameraTimer| < 1.0 AND m_HighscoreToShow > 0)
+    //   Base colour = Colour(0xB4, 0x80, 0x05, 200) — orange-ish.
+    //   If m_HighscoreToShow == m_DisplayedScore: pulse between base and (0x64,0x96,0x19,200)
+    //     via CosIdx(staticBannerSinIdx * 0xB6) * -0.5 + 0.5 (lerp t in 0..1).
+    //   staticBannerSinIdx ticks +6 per frame (or +0 if g_GameData.flag_0x02), capped 0xB3.
+    //   Draws localised "NEW BEST SCORE" label (GETSTRING(0xB5,0)) and the score number.
+
+draw_quads:
+    // D. Score-icon texture quad (+0xA0 = score.tex)  — guarded by cameraTimer > 0
+    //    Texture::Set, MatrixStack::Reset, scale by tex(W,H), translate to
+    //    Vec3(IsMultiplayer ? 64*cameraTimer-mpAnchor : spAnchor, drawY+5.5, 0),
+    //    DrawQuad(Colour(255,255,255,alpha)), Texture::UnSet.
+    // E. Highscore banner texture (+0xA4 = new_best_score.tex) — guarded by m_BannerScaleTime > 0
+    //    Scale44 with (texW+1, texH+1) * bannerScale * wobbleScale,
+    //    RotZ44 by SinIdx(0xE38)/CosIdx(0xE38) (~5 degrees),
+    //    GlobalTranslate44 to (iconW*0.5 - 64, drawY+0.5, 0), DrawQuad.
+    //    bannerScale = SinIdx(m_BannerScaleTime * RATE);
+    //    wobbleScale = SinIdx(m_BannerSinIdx) * 0.15 + 1.0
+}
+```
+
+#### DAT Pool (Constants)
+
+Score-easing (Update):
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_001588A4 | -0.6 | catchup correction, negative score |
+| DAT_001588A8 | 0.6 | catchup correction, positive score |
+| DAT_001588AC | 0.3 | maxStep multiplier base |
+| DAT_001588B0 | 0.1 | catchup rate |
+| DAT_001588B4 | 0.05 | bonus SFX cooldown |
+| DAT_001588B8 | 16384.0 | pulse angle midpoint (0x4000) |
+| DAT_001588D0 | -327680.0 | pulse angle decay rate |
+| DAT_001588D4 | 32768.0 | pulse angle wrap (0x8000) |
+
+Position / layer (Update Stage 6):
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_00158C44 / 48 / 4C | -218, 138, 0 | base pos (X, Y, Z) |
+| DAT_00158C50 | 200.0 | MP X delta |
+| DAT_00158C54 / 58 / 5C | 48, 80, -160 | wave-mode text scale, Y centre, X centre |
+| DAT_00158C60 | 0.99... | banner activation threshold |
+| DAT_00158C64 | 49140.0 | banner sin-idx delta |
+| DAT_00158C68 | 40.0 | size base |
+
+PreDraw rendering:
+
+| Address | Value | Use |
+|---------|-------|-----|
+| DAT_00159090 | 0.75 | "000" baseline-width scale |
+| DAT_00159094 | 48.0 | text scale (PreDraw) |
+| DAT_00159098 | 1.0 | text scale-x identity |
+| DAT_001593C0 | 135.0 | per-digit Sin pre-mul |
+| DAT_001593C4 | 182.0 | Sin angle scale (= 65536/360) |
+| DAT_001593C8 | 45.0 | per-digit base scale |
+| DAT_001593D0 | 155.0 | digit overlay scale |
+| DAT_001593D4 | 52.0 | "x%d" overlay y-offset |
+| DAT_001593D8 | 48.0 | "x%d" overlay scale |
+| DAT_001597BC | 0.15 | banner wobble amplitude |
+
+GOT references (resolved via GOT base 0x001EC130):
+
+| GOT offset | Target | Role |
+|------------|--------|------|
+| 0x72D4 | 0x001E9D48 | ScoreControl vtable |
+| 0x7478 | (g_GameData global ptr) | combo/digit count |
+| 0x7060 | (FRUIT_INFO count ptr) | fruit-info clamp |
+| 0x7990 | (g_GameData global ptr) | game state |
+| 0x45180 | (.bss block) | static caches (sfx cooldown, banner idx, "000" width) |
+
+Texture / format strings (all GOT-rel):
+
+| Address | String | Use |
+|---------|--------|-----|
+| 0x001BBF58 | `hud_fruit.tex` | super.m_SecondaryTex (+0x74) and m_FruitDigitTex (+0xF8) |
+| 0x001BC910 | `new_best_score.tex` | m_HighscoreBannerTex (+0xA4) |
+| 0x001BC919 | `score.tex` | m_ScoreIconTex (+0xA0) — tail-shared with new_best_score.tex |
+| 0x001BBF66 | `000` | width-measurement key string |
+| 0x001BBF6A | `x%d` | multiplier overlay format |
+| 0x001BCCCC | `%d` | digit format string |
+| 0x001B96BA | `New-best-score` | highscore SFX name |
+| 0x001B9716 | `Bonus-count-up` | bonus-counter SFX name |
+
+#### Notes for Implementer
+
+1. **GameInit loads 3 textures** into +0x74, +0xA0, +0xA4 *after* the ctor returns. The ctor only loads `hud_fruit.tex` into +0xF8 (and Reset copies it to +0x74). Mirror this split when porting — don't fold all texture loads into the ctor.
+2. **GetType() returns 3** (TimeControl is 4).
+3. **m_LayerFlags is dynamic**: `1<<m_PlayerIdx` default, `8<<m_PlayerIdx` when wave/intensity timer is active.
+4. **PreDraw is the rendering function**, NOT Draw. Draw is a thin alpha-gate that delegates to HUDControl3d::Draw for the +0x74 fruit-icon quad.
+5. **The "x%d" multiplier overlay** only appears in Arcade (gameMode==2) when `PowerUpManager::GetScoreGainMultiplier() > 1 && !flag_0x05`.
+6. **Per-digit fruit-icon overlay** only appears in mode==1 (Classic) — each `m_DigitAlpha[i] > 0` slot draws "2","4","8"... (powers of 2) at a Sin-curved scale.
+7. **m_ScoreSmoothed** snaps to currentScore only on `m_bDirty` (Reset, Skip). Otherwise it eases at `min(catchup*0.1, mult*0.3*(gameMode==2?10:1))` per frame.
+8. **Skip()** restores `m_DisplayedScore = GetCurrentScore(m_PlayerIdx)`; if game-over flag set, also force `m_BannerScaleTime = 1.0f`.
+9. **Static cache state** (sfx cooldown, banner sin idx, "000" cached width) lives in `.bss` at GOT-base+0x45180 (cxa-guard-protected). Use C++11 function-local statics or per-instance members in the port.
+
+---
+
 ### MissControl : HUDControl3d : HUDControl (combo text display)
 
 | Offset | Type | Name | Notes |
