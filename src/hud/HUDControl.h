@@ -18,8 +18,9 @@ struct Renderer;
 
 class HUDControl {
 public:
-    // +0x04
-    int field_0x04;
+    // +0x04: if 0, SetToMultiplayerState marks for removal; if 1, preserved.
+    // Binary uses strb (byte store) @ 0x00143fac.
+    uint8_t m_bPreserveOnMP;
 
     // +0x08: position in centered coords
     Vec3 pos;
@@ -54,11 +55,10 @@ public:
     // +0x5c: tint colour (BGRA, default white)
     Colour m_DrawColour;
 
-    // +0x60: uint8_t initialised to 1 by HUDControl ctor (binary @ 0x00144162:
-    // strb.w r8,[r4,#0x60] with r8=1). Likely a visibility / dirty flag — only
-    // one byte is written; bytes +0x61..+0x63 are padding. Semantics still TBD;
-    // no port code reads it yet.
-    uint8_t field_0x60;
+    // +0x60: set to 1 by HUDControl ctor (binary @ 0x00144162: strb.w r8,[r4,#0x60]
+    // with r8=1). Set to 0 by SpeedControl ctor only — opts out of HUD
+    // pulse-modulation, gets identity tint vec3(1,1,1).
+    uint8_t m_bUseHUDScales;
 
     // +0x64..+0x70: UV rectangle (belong in HUDControl base per binary layout)
     // HUDControl3d::Draw reads these at binary +0x64/+0x68/+0x6c/+0x70.
@@ -67,7 +67,7 @@ public:
     float m_UVLeft, m_UVTop, m_UVRight, m_UVBottom;
 
     HUDControl()
-        : field_0x04(0),
+        : m_bPreserveOnMP(0),
           m_Timer(0.0f),
           m_bActive(1),
           field_0x31(0),
@@ -75,7 +75,7 @@ public:
           m_bPendingRemoval(0),
           m_LayerFlags(1),
           m_DrawColour(255, 255, 255, 255),
-          field_0x60(1),
+          m_bUseHUDScales(1),
           m_UVLeft(0.0f), m_UVTop(0.0f), m_UVRight(1.0f), m_UVBottom(1.0f) {}
 
     virtual ~HUDControl() {}
@@ -105,7 +105,14 @@ public:
     virtual void PreDrawOrder(const Vec3& hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
     virtual void DrawOrder(const Vec3& hudScale, int layerMask) { Draw(hudScale, layerMask); }
     virtual void Update(float dt) { (void)dt; }
-    virtual void SetToMultiplayerState() {}
+    // Binary @ 0x00143fac returns bool; port vtable uses void — side-effects preserved.
+    // DIFFERS: return value dropped (vtable ABI uses void in port).
+    virtual void SetToMultiplayerState() {
+        if (m_bPreserveOnMP == 0) {
+            m_bNoDestructor = 0;
+            m_bPendingRemoval = 1;
+        }
+    }
     virtual int GetType() { return 0; }
     virtual void Skip() {}
     virtual void Save() {}

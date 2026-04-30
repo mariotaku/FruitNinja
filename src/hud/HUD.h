@@ -71,9 +71,9 @@ public:
         for (auto it = controls.begin(); it != controls.end(); ++it) {
             HUDControl* ctrl = *it;
             if (ctrl->m_bActive && (layerMask & ctrl->m_LayerFlags)) {
-                // field_0x60 != 0 (default): receives gameplay-mutable tint window.
-                // field_0x60 == 0: receives identity (1,1,1) — opted out of tint.
-                const Vec3& scaleVec = ctrl->field_0x60 ? hudScale : identityScale;
+                // m_bUseHUDScales != 0 (default): receives gameplay-mutable tint window.
+                // m_bUseHUDScales == 0: receives identity (1,1,1) — opted out of tint.
+                const Vec3& scaleVec = ctrl->m_bUseHUDScales ? hudScale : identityScale;
                 world.Reset();
                 ctrl->PreDrawOrder(scaleVec, layerMask);
                 world.Reset();
