@@ -243,6 +243,9 @@ public:
     // 0x0012a110. Map lookup by hash; 0 if missing.
     int GetTotal(uint32_t hash) const;
 
+    // Clears a single entry in m_Totals by hash (binary addr TBD; called by ResetSpeed/AddSpeed).
+    void ClearTotal(uint32_t hash);
+
     // 0x00129b94. Clears m_SessionTotals.
     void ClearCombo();
 

@@ -126,6 +126,12 @@ int FruitSaveData::GetTotal(uint32_t hash) const {
     return (it != m_Totals.end()) ? it->second.count : 0;
 }
 
+// ClearTotal -- erases one entry from m_Totals by hash.
+// Called by WaveManager::ResetSpeed and AddSpeed to clear "blitz_bonus" count.
+void FruitSaveData::ClearTotal(uint32_t hash) {
+    m_Totals.erase(hash);
+}
+
 // ClearCombo @ 0x00129b94 -- clears the in-session map.
 void FruitSaveData::ClearCombo() {
     m_SessionTotals.clear();
