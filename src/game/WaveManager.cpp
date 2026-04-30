@@ -1,4 +1,5 @@
 #include "WaveManager.h"
+#include "WaveStructs.h"
 #include "Game.h"
 #include "FruitSaveData.h"
 #include "entities/ActorManager.h"
@@ -933,18 +934,21 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
 
     if (playerIdx == 0) {
+        ActorManager* am = ActorManager::GetInstance();
+        bool checkedShortPath = false;
         if (w) {
-            if (w->m_bWaitForProcessing == 0) goto done0;
-            if (w->m_bWaitForEntities == 0) {
+            if (w->m_bWaitForProcessing == 0) {
+                checkedShortPath = true;
+            } else if (w->m_bWaitForEntities == 0) {
                 if (Fruit::GetNumActiveForPlayer(-1, false) >= 1) return true;
                 if (Bomb::GetNumActiveForPlayer(-1, true) >= 1) return true;
-                goto done0;
+                checkedShortPath = true;
             }
         }
-        ActorManager* am = ActorManager::GetInstance();
-        if (am && am->GetNumEntities(0) != 0) return true;
-        if (am && am->GetNumEntities(1) != 0) return true;
-done0:
+        if (!checkedShortPath) {
+            if (am && am->GetNumEntities(0) != 0) return true;
+            if (am && am->GetNumEntities(1) != 0) return true;
+        }
         (&field_0x23c)[0] = 0;
         return false;
     } else {
