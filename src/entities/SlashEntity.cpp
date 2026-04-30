@@ -707,3 +707,8 @@ uint8_t  SlashEntity::GetDirectionalFlag()                        { return g_Dir
 int      SlashEntity::GetColourCount()                            { return g_ColourCount; }
 int      SlashEntity::GetColourType()                             { return g_ColourType; }
 const Colour* SlashEntity::GetPalette()                           { return g_Palette; }
+
+// @ 0x0016ba84
+void SlashEntity::PreDraw() {
+    // TODO: implement -- blade pre-pass blend/texture state setup
+}

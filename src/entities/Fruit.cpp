@@ -1222,3 +1222,8 @@ void Fruit::ClearUnspawned(bool deactivateVisible) {
 void Fruit::Disable(Fruit* f) {
     if (f) f->m_bCriticalEligible = false; // TODO: set collision guard once field is added
 }
+
+// @ 0x0016ba6e
+void Fruit::DrawShadows() {
+    // TODO: implement -- iterate active fruits, draw shadow quads
+}

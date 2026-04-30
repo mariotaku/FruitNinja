@@ -193,6 +193,9 @@ public:
     // SetModColours's actor walker on every active SlashEntity. NOT virtual.
     void ColoursChanged();
 
+    // @ 0x0016ba84 — blade pre-pass (sets up blend state before actor draw).
+    void PreDraw();
+
     // Accessors for the file-scope blade-mod globals. Render consumers in
     // SlashEntity.cpp use these instead of direct global access so they can
     // be tested in isolation. Defined inline in the .cpp.

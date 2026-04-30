@@ -192,6 +192,9 @@ public:
     // Matches Fruit::Disable (0x00126370). Sets collision guard so the fruit
     // can no longer be sliced; does NOT deactivate/kill it.
     static void Disable(Fruit* f);
+
+    // @ 0x0016ba6e — draw drop-shadows for all active fruits.
+    static void DrawShadows();
 };
 
 #endif

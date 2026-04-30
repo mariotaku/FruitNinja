@@ -5,6 +5,7 @@
 #include "Game.h"
 #include "audio/GameSound.h"
 #include "game/BombHit.h"
+#include "game/GameOver.h"
 #include "game/FruitCamera.h"
 #include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
@@ -671,7 +672,7 @@ void Bomb::CollisionResponse(const Vec3& bladeVel) {
             // sets g_bombHitData->m_bMenuBombHit_flag = 1. No camera shake.
             game->bombHitTimer = 2.0f;
             if (game->pGameSound) game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
-            // TODO: AddToCurrentScore(-10, 0, false, false)
+            FN::AddToCurrentScore(-10, 0, false, false);
             // TODO: PowerUpManager::ClearTimedPowers()
             WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
             // "X" MissControl indicator for zen bomb hit. Uses the

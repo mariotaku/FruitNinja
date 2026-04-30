@@ -958,3 +958,8 @@ void MainScreen::QuitGamesCallback() {
     m_StateTimer = 0.0f;
 }
 
+
+// @ 0x0016bbb0
+void MainScreen::DrawPostEffects() {
+    // TODO: implement -- post-effect overlays (score flash, bonus anim, etc.)
+}

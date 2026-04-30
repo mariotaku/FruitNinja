@@ -236,6 +236,9 @@ public:
 
     void Clear();
 
+    // @ 0x0016cf74 area — deactivate all live emitters (called from GameExit).
+    void ClearEmitters();
+
     // Template lookup — used by AddEmitter and unit tests.
     const PSPEmitterTemplate* FindTemplate(uint32_t hash) const;
 

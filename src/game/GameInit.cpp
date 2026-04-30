@@ -24,6 +24,7 @@
 #include "hud/SliceEffect.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
+#include "entities/Fruit.h"
 #include "entities/SlashEntity.h"
 #include "entities/BombFlash.h"
 #include "entities/SplatEntity.h"
@@ -42,6 +43,8 @@
 #include "audio/SoundManager.h"
 #include "GameOver.h"
 #include "GameTaskInput.h"
+#include "StartupEffects.h"
+#include "entities/Coin.h"
 #include <cstdio>
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup.
@@ -423,10 +426,11 @@ void GameDraw(float dt, bool active) {
         if (earlyFrame) printf("GameDraw: -> SplatEntity::DrawActiveSplats\n");
         SplatEntity::DrawActiveSplats();
 
-        // 2c. Fruit::DrawShadows @ 0x0016ba6e — TODO: not yet ported
+        // 2c. Fruit::DrawShadows @ 0x0016ba6e
+        Fruit::DrawShadows();
 
-        // 2d. SlashEntity::PreDraw @ 0x0016ba84 — TODO: blade pre-pass
-        //     not yet ported
+        // 2d. SlashEntity::PreDraw @ 0x0016ba84 — blade pre-pass
+        if (g_pSlashEntity) g_pSlashEntity->PreDraw();
 
         // 2e. BombBlast::DrawActiveBlasts @ 0x0016ba88 — drawn HERE in
         //     the binary, NOT inside the 0x200 layer. Shockwave rings
@@ -434,7 +438,8 @@ void GameDraw(float dt, bool active) {
         if (earlyFrame) printf("GameDraw: -> BombBlast::DrawActiveBlasts\n");
         BombBlast::DrawActiveBlasts();
 
-        // 2f. BombFlash::DrawActiveFlashes @ 0x0016baf0 — TODO: not yet ported
+        // 2f. BombFlash::DrawActiveFlashes @ 0x0016baf0
+        BombFlash::DrawActiveFlashes();
 
         // 2g. HUD::Draw(0x80) — DojoScreen / AboutScreen @ 0x0016baf8
         if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x80)\n");
@@ -478,7 +483,8 @@ void GameDraw(float dt, bool active) {
         // HUD::Draw(0x08) — buttons @ 0x0016bba8
         game->hud->Draw(0x08);
 
-        // MainScreen::DrawPostEffects @ 0x0016bbb0 — TODO
+        // MainScreen::DrawPostEffects @ 0x0016bbb0
+        if (game->mainScreen) game->mainScreen->DrawPostEffects();
 
         // DrawCritHit (CriticalFlash) @ 0x0016bbd2 — gated on
         // critFlash > 0 && IsFastHardware. Port has CriticalFlash
@@ -495,7 +501,9 @@ void GameDraw(float dt, bool active) {
         // HUD::Draw(0x200) — bomb-hit overlay layer @ 0x0016bbec
         game->hud->Draw(0x200);
 
-        // DrawNews / DrawStartFade @ 0x0016bbf0..0x0016bc12 — TODO
+        // DrawNews / DrawStartFade @ 0x0016bbf0..0x0016bc12
+        FN::DrawNews();
+        FN::DrawStartFade();
 
         // Debug overlay — fruit/bomb hitboxes (F1 toggle)
         FN::DebugHitbox_Draw();
@@ -537,9 +545,13 @@ void GameExit_Handler() {
     }
     game->mainScreen = nullptr;
 
-    // TODO: Coin::ClearCoins
+    Coin::ClearCoins(false);
     FruitNinja_SaveCurrentData();  // stub (writes FruitSaveData XML in binary)
     WaveManager::GetInstance()->Destroy();  // stub (frees WAVE_INFO/WaveQue)
-    // TODO: PSPParticleManager::ClearEmitters
-    // TODO: ActorManager::Clear + Destroy, Entity::HeapDestroy
+    Mortar::PSPParticleManager::GetInstance().ClearEmitters();
+    if (ActorManager* am = ActorManager::GetInstance()) {
+        am->Clear();
+        am->Destroy();
+    }
+    Entity::HeapDestroy();
 }
