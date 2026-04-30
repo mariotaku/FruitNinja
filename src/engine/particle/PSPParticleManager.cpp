@@ -779,4 +779,10 @@ void PSPParticleManager::Clear() {
     m_Emitters.clear();
 }
 
+// @ GameExit area
+void PSPParticleManager::ClearEmitters() {
+    // TODO: implement -- deactivate all live emitters on session end
+    m_Emitters.clear();
+}
+
 } // namespace Mortar

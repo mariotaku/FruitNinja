@@ -62,6 +62,9 @@ public:
     // writes mainScreen->m_State = 8 directly.
     void SetState(MainScreenState s) { m_State = s; }
 
+    // @ 0x0016bbb0 — post-effect overlays drawn after HUD layer 0x08.
+    void DrawPostEffects();
+
     // Camera transition accessors for child screens. Binary stores
     // this at game.m_TransitionTimer (+0x0c); port owns it on MainScreen.
     // GameModeScreen state 3-6 decays this toward 0 during mode-picked

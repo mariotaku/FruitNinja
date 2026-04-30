@@ -46,4 +46,12 @@ void GameOver(int endReason, float endScore, int endParam) {
     game->hud->AddControl(gos);
 }
 
+// 0x0010a7ac
+// TODO: implement scoreDelegate.Call + tier SFX when delegate is ported.
+void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param3*/) {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+    game->currentScore += points;
+}
+
 } // namespace FN
