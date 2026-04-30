@@ -89,9 +89,15 @@ public:
     // Binary uses the same storage as m_pCurrentWave_P1 for count in SP.
     int m_WaveCount[2];
 
-    // +0x234: per-player wave delay accumulator
-    float field_0x234;
-    float field_0x238;
+    // +0x234: per-player pre-spawn delay timer (binary field_0x234+p*4, "delay" XML attr).
+    // Binary @ 0x0012598c reads [+0x234+p*4]; GetNextWave @ 0x001251ee writes [+0x234+p*4].
+    float field_0x234[2];
+
+    // +0x23c: per-player wave-end wait timer (binary field_0x238+p*4, "wait" XML attr).
+    // Binary @ 0x00125956 reads [+0x238+p*4]; GetNextWave @ 0x00125224 writes [+0x238+p*4].
+    // NOTE: for p=0 +0x238 aliases field_0x234[1]; for p=1 it aliases field_0x23c (byte).
+    // Port uses a separate float[2] to avoid the byte aliasing at +0x23c.
+    float field_0x238[2];
 
     // +0x23c: per-player "wave-was-spawned" flag (IsWaveProcessing reads this)
     uint8_t field_0x23c;
@@ -121,12 +127,6 @@ public:
 
     // Score threshold per player (for ChooseFrom logic)
     int m_ScoreThreshold[2];
-
-    // Per-player next-wave delay
-    float m_NextWaveDelay[2];
-
-    // Per-player wave timer countdown
-    float m_WaveTimer[2];
 
     // +0x108: global waitForEntities flag (from <defaults>; NOT per-mode).
     uint8_t field_0x108;

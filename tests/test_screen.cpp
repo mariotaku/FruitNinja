@@ -14,15 +14,15 @@
 #include <cstdlib>
 
 // Test-only: glReadPixels isn't in the project's thin gl_funcs.h
-// wrapper, so declare it locally for the screenshot path.
-extern "C" {
-    typedef int     GLint_t;
-    typedef unsigned int GLsizei_t;
-    typedef unsigned int GLenum_t;
-    typedef void    GLvoid_t;
-    void glReadPixels(GLint_t x, GLint_t y, GLsizei_t w, GLsizei_t h,
-                      GLenum_t fmt, GLenum_t type, GLvoid_t* data);
-}
+// wrapper. Load it dynamically via SDL_GL_GetProcAddress so the test
+// doesn't need a static link to opengl32 / libGL.
+typedef int     GLint_t;
+typedef unsigned int GLsizei_t;
+typedef unsigned int GLenum_t;
+typedef void    GLvoid_t;
+typedef void (*PFN_glReadPixels)(GLint_t, GLint_t, GLsizei_t, GLsizei_t,
+                                 GLenum_t, GLenum_t, GLvoid_t*);
+static PFN_glReadPixels g_glReadPixels = nullptr;
 #include "Game.h"
 #include "render/Renderer.h"
 #include "screens/DojoScreen.h"
@@ -173,8 +173,10 @@ int main(int argc, char* argv[]) {
             int ww = 0, wh = 0;
             SDL_GL_GetDrawableSize(window, &ww, &wh);
             unsigned char* px = (unsigned char*)malloc((size_t)ww * wh * 3);
-            if (px) {
-                glReadPixels(0, 0, ww, wh, GL_RGB, GL_UNSIGNED_BYTE, px);
+            if (!g_glReadPixels)
+                g_glReadPixels = (PFN_glReadPixels)SDL_GL_GetProcAddress("glReadPixels");
+            if (px && g_glReadPixels) {
+                g_glReadPixels(0, 0, ww, wh, GL_RGB, GL_UNSIGNED_BYTE, px);
                 char path[256];
                 snprintf(path, sizeof(path), "screen_%s.ppm", screenName);
                 FILE* f = fopen(path, "wb");
