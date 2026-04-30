@@ -137,8 +137,14 @@ public:
     int      m_HighScoreRef1;      // +0x74 (default -1)
     int      m_HighScoreRef2;      // +0x78
 
-    // +0x7c..+0xfc: fruit queue for resume.
-    int      m_FruitQueueCount;    // +0x7c
+    // +0x7c: binary @ 0x00124986 writes WaveManager::m_FruitQueueSize[1] here.
+    // TODO: semantic unknown (Ghidra auto-name "field82_0x7c"); not serialised in any
+    // known XML attr. Paired with m_FruitQueueCount (+0x7c slot in binary) — may be
+    // a P2 fruit queue count.
+    int      field82_0x7c;         // +0x7c
+
+    // +0x80..+0xfc: fruit queue for resume.
+    int      m_FruitQueueCount;    // +0x80 (WaveManager::m_FruitQueueSize[0])
     int      m_FruitQueue[32];     // +0x80 (all -1 by default)
 
     // +0x100..+0x108: per-player base speed snapshot.

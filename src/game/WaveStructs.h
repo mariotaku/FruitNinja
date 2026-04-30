@@ -297,6 +297,11 @@ struct PROBABILITY_OVERIDE {
     PROBABILITY_OVERIDE()
         : m_PercentChance(0), m_PerWave(0), m_Counter(0)
         , m_field68(0), m_DisableWhenPowered(0.0f)
+        // DIFFERS: binary ctor @ 0x00126884 writes literal pool word 0xfff0bdc0 to +0x70
+        // (m_PerWaveCount). This is likely a pointer slot or pre-relocation GOT offset baked
+        // into the literal pool; treating as int default 0 is safe because
+        // WaveManager::Init always overwrites via QueryIntAttribute("waveCount") when the
+        // XML attr is present. Gameplay is unaffected.
         , m_PerWaveCount(0), m_SelectedType(-1)
     {
         for (int i = 0; i < 20; ++i) m_TypeQueue[i] = -1;
