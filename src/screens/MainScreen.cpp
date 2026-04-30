@@ -131,9 +131,6 @@ MainScreen::MainScreen(Game& g)
 
     // Zero all button pointers (already done in init list)
     // state=0, timers=0 (already done in init list)
-
-    printf("MainScreen: ctor (size=%.0f,%.0f pos=%.0f,%.0f)\n",
-           size.x, size.y, pos.x, pos.y);
 }
 
 MainScreen::~MainScreen() {
@@ -900,7 +897,6 @@ void MainScreen::SoundCallback() {
     game.m_bSoundOn = !game.m_bSoundOn;
     Mortar::SoundManager::GetInstance().SetSFXVolume(
         game.m_bSoundOn ? SOUND_VOLUME_ON : 0.0f);
-    printf("MainScreen: Sound %s\n", game.m_bSoundOn ? "ON" : "OFF");
 }
 
 // Matches 0x0014ac9c
@@ -910,7 +906,6 @@ void MainScreen::MusicCallback() {
     // machine. Do NOT add a SetMusicVolume call here -- the spec confirms the
     // binary does not.
     game.m_bMusicOn = !game.m_bMusicOn;
-    printf("MainScreen: Music %s\n", game.m_bMusicOn ? "ON" : "OFF");
 }
 
 // Matches 0x0014b010

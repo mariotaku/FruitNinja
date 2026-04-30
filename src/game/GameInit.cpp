@@ -53,9 +53,6 @@
 void GameInit(unsigned long) {
     Game* game = Game::GetInstance();
     if (!game) return;
-
-    printf("GameInit: enter\n");
-
     // step 1: HUD allocation (Game+0x3c)
     if (!game->hud) {
         game->hud = new HUD();
@@ -148,12 +145,8 @@ void GameInit(unsigned long) {
     }
 
     // step 11: MainScreen allocation
-    printf("GameInit: about to new MainScreen\n");
     MainScreen* mainScreen = new MainScreen(*game);
-    printf("GameInit: MainScreen ctor returned, ptr=%p\n", (void*)mainScreen);
     game->mainScreen = mainScreen;
-    printf("GameInit: mainScreen field set\n");
-
     // step 12: PauseScreen allocation (0x0016cad8..0x0016caf8)
     // Binary: operator new(0xd8), PauseScreen::PauseScreen, vtable[2] (Init).
     // Stored at g_TaskState +0x04.
@@ -184,7 +177,6 @@ void GameInit(unsigned long) {
     // step 14: AddControl x3 batch (MainScreen + PauseScreen + TutorialControl)
     // Binary: HUD::AddControl x3 in order: MainScreen, PauseScreen, TutorialControl.
     game->hud->AddControl(mainScreen);
-    printf("GameInit: AddControl(mainScreen) done\n");
     game->hud->AddControl(GetTaskState()->pPauseScreen);
     game->hud->AddControl(game->pTutorialCtrl);
 
@@ -260,34 +252,21 @@ void GameInit(unsigned long) {
         const float sfxVol = game->m_bSoundOn ? 0.5f : 0.0f;
         sm.SetSFXVolume(sfxVol);
     }
-
-    printf("GameInit: complete\n");
-
     // Port specific: SlashEntity for touch-trail rendering.
     // Binary uses a 2-player array in ActorManager; port keeps one global for single-touch.
     if (!g_pSlashEntity) {
-        printf("GameInit: about to new SlashEntity\n");
         g_pSlashEntity = new SlashEntity();
-        printf("GameInit: SlashEntity ctor returned\n");
         g_pSlashEntity->Init();
-        printf("GameInit: SlashEntity Init done\n");
     }
 }
 
 // Matches GameUpdate (0x16bed0, 359 lines) — main gameplay loop
 void GameUpdate(float dt, bool active) {
-    static int s_FrameCount = 0;
-    const bool earlyFrame = s_FrameCount < 3;
-    if (earlyFrame) printf("GameUpdate[f%d]: enter dt=%.4f active=%d\n", s_FrameCount, dt, active ? 1 : 0);
-    s_FrameCount++;
-
     Game* game = Game::GetInstance();
-    if (!game) { if (earlyFrame) printf("GameUpdate: game nullptr, return\n"); return; }
+    if (!game) return;
 
     // === Splash phase (g_TaskState +0x1C, init = 1.5f) ===
     // Binary @ 0x0016BED0: gated on splashFadeTimer > 0.
-    // Loads HB_logo.tex on demand, freezes game->dt, drains timer at dt*2.
-    // Port: LoadingJob::CanBoot() omitted (static init has CanBoot=1 => no-op gate).
     GameTaskState* splashTs = GetTaskState();
     if (splashTs->splashFadeTimer > 0.0f) {
         if (!game->pSplashTex) {
@@ -299,76 +278,40 @@ void GameUpdate(float dt, bool active) {
             splashTs->splashFadeTimer = 0.0f;
             game->pSplashTex.SetNull();
         }
-        // Falls through to InputManager/sound updates (binary matches).
     } else {
-        // Normal path: InputManager::Update in the binary.
-        // Port uses Touch::Update + the rest below.
-        if (earlyFrame) printf("GameUpdate: -> Touch::Update\n");
         Mortar::Touch::GetInstance().Update();
     }
-    // Splash path skips Touch::Update (binary does not call it during splash).
-    // The checks below still run unconditionally per binary call order.
 
-    if (earlyFrame) printf("GameUpdate: -> bombHitTimer tick\n");
     const float prevBombTimer = game->bombHitTimer;
     if (game->bombHitTimer > 0.0f) {
         game->bombHitTimer -= dt;
         if (game->bombHitTimer < 0.0f) game->bombHitTimer = 0.0f;
     }
-    if (earlyFrame) printf("GameUpdate: -> UpdateBombHit\n");
     FN::UpdateBombHit(prevBombTimer);
 
-    // Binary 0x0016c284: if bombHitTimer crossed 1.5 downward, trigger GameOver.
-    // TODO: add per-bomb m_bMenuBombHit gate when Bomb state is accessible here.
+    // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
     if (prevBombTimer > 1.5f && game->bombHitTimer <= 1.5f && !game->pauseFlag) {
         FN::GameOver(-1, -1.0f, -1);
     }
 
-    if (earlyFrame) printf("GameUpdate: -> ActorManager::Update active=%d am=%p\n",
-                           active ? 1 : 0, (void*)game->actorManager);
     if (active && game->actorManager)
         game->actorManager->Update(dt);
 
-    // WaveManager::Update @ 0x001259d8 — stubbed; binary pumps wave
-    // spawners + blitz combo + PowerUpManager from here.
     if (active) WaveManager::GetInstance()->Update(dt);
 
-    // FruitSaveData::Update @ 0x0012b3dc — ticks achievement in-progress
-    // timers so unlock popups fade in/out. Stubbed; wired so the call
-    // site lights up as soon as the stub becomes real.
     if (game->pSaveData) game->pSaveData->Update(dt, game->hud);
 
-    // Binary GameUpdate (0x16bed0) call order inside LoadingJob::IsLoaded() guard:
-    //   SoundManager::Update(sm, scaledDt)
-    //   GameSound::Update()
-    //   UpdateMusic(scaledDt)     <- spec: docs/systems/music-state.md, Callers section
-    //   ItemManager::Update(im, scaledDt)
-    // LoadingJob not yet ported; calls run unconditionally here until it is.
-    // SoundManager::Update is a no-op stub in the port (not yet RE'd).
     if (game->pGameSound) game->pGameSound->Update(dt);
     UpdateMusic(dt);
 
-    if (earlyFrame) printf("GameUpdate: -> PSPParticleManager::Update\n");
     Mortar::PSPParticleManager::GetInstance().Update(dt);
 
-    // CriticalFlash fade-out timer — single static state in BombHit.cpp.
     FN::UpdateCriticalFlash(dt);
 
-    if (earlyFrame) printf("GameUpdate: -> SplatEntity::UpdateActiveSplats (active=%d)\n", active ? 1 : 0);
     if (active) SplatEntity::UpdateActiveSplats(dt);
-
-    if (earlyFrame) printf("GameUpdate: -> SlashEntity::Update slash=%p\n", (void*)g_pSlashEntity);
     if (g_pSlashEntity) g_pSlashEntity->Update(dt);
-
-    if (earlyFrame) printf("GameUpdate: -> HUD::Update hud=%p\n", (void*)game->hud);
-    if (game->hud)
-        game->hud->Update(dt);
-
-    if (earlyFrame) printf("GameUpdate: -> FruitCamera::UpdateCamera cam=%p\n", (void*)game->pCamera);
-    if (game->pCamera)
-        game->pCamera->UpdateCamera(dt);
-
-    if (earlyFrame) printf("GameUpdate[f%d]: exit\n", s_FrameCount - 1);
+    if (game->hud) game->hud->Update(dt);
+    if (game->pCamera) game->pCamera->UpdateCamera(dt);
 }
 
 // Matches GameDraw (0x16b888, 211 lines) — full render frame.
@@ -399,17 +342,10 @@ void GameUpdate(float dt, bool active) {
 // layer names imply — pm.Draw(-1) actually draws EARLIEST (background)
 // and pm.Draw(1) draws LATER (foreground, over logo).
 void GameDraw(float dt, bool active) {
-    static int s_DrawCount = 0;
-    const bool earlyFrame = s_DrawCount < 3;
-    if (earlyFrame) printf("GameDraw[f%d]: enter dt=%.4f active=%d\n", s_DrawCount, dt, active ? 1 : 0);
-    s_DrawCount++;
-
     Game* game = Game::GetInstance();
-    if (!game) { if (earlyFrame) printf("GameDraw: game nullptr, return\n"); return; }
+    if (!game) return;
 
     GameTaskState* ts = GetTaskState();
-    if (earlyFrame) printf("GameDraw: -> SetupPerspective cam=%p\n", (void*)game->pCamera);
-
     // 1. Camera projection
     if (game->pCamera)
         game->pCamera->SetupPerspective(0, false);
@@ -417,8 +353,6 @@ void GameDraw(float dt, bool active) {
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
     Mortar::Texture* bgTex = GetCurrentBackground();
-    if (earlyFrame) printf("GameDraw: -> background quad bgTex=%p\n", (void*)bgTex);
-
     // Background texture quad. Reads from the MenuBackground file-static
     // (same slot ItemManager::SetEquippedItem(BACKGROUND, ...) updates
     // via ChangeBackground), so a shop equip swaps the visible bg
@@ -448,8 +382,6 @@ void GameDraw(float dt, bool active) {
     // by BeginFrame — binary never overrides it.
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
-
-    if (earlyFrame) printf("GameDraw: -> ActorManager::Draw am=%p\n", (void*)game->actorManager);
     // Port specific: wireframe debug mode (F2). glPolygonMode is loaded
     // optionally by gl_funcs — stays nullptr on GLES, so the toggle is a
     // silent no-op there.
@@ -466,15 +398,12 @@ void GameDraw(float dt, bool active) {
     dm.SetDepthBuffer(true);
     dm.SetDepthBufferWrite(false);
     if (game->hud) {
-        if (earlyFrame) printf("GameDraw: -> HUD::BeginDraw hud=%p\n", (void*)game->hud);
         game->hud->BeginDraw(dt);
 
         // 2a. HUD::Draw(0x40) — menu button sprites @ 0x0016ba5a
-        if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x40)\n");
         game->hud->Draw(0x40);
 
         // 2b. SplatEntity::DrawActiveSplats @ 0x0016ba6a
-        if (earlyFrame) printf("GameDraw: -> SplatEntity::DrawActiveSplats\n");
         SplatEntity::DrawActiveSplats();
 
         // 2c. Fruit::DrawShadows @ 0x0016ba6e
@@ -486,20 +415,17 @@ void GameDraw(float dt, bool active) {
         // 2e. BombBlast::DrawActiveBlasts @ 0x0016ba88 — drawn HERE in
         //     the binary, NOT inside the 0x200 layer. Shockwave rings
         //     belong to this post-actor block.
-        if (earlyFrame) printf("GameDraw: -> BombBlast::DrawActiveBlasts\n");
         BombBlast::DrawActiveBlasts();
 
         // 2f. BombFlash::DrawActiveFlashes @ 0x0016baf0
         BombFlash::DrawActiveFlashes();
 
         // 2g. HUD::Draw(0x80) — DojoScreen / AboutScreen @ 0x0016baf8
-        if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x80)\n");
         game->hud->Draw(0x80);
     }
 
     // === 3. Background particles ===
     // Binary pm.Draw(-1) @ 0x0016bb02 — drawn BEHIND the logo/shade.
-    if (earlyFrame) printf("GameDraw: -> pm.Draw(-1)\n");
     pm.Draw(-1);
 
     // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
@@ -511,19 +437,15 @@ void GameDraw(float dt, bool active) {
 
     // === 4. Mid particles + slice lines + main-screen logo ===
     // Binary pm.Draw(0) @ 0x0016bb4a
-    if (earlyFrame) printf("GameDraw: -> pm.Draw(0)\n");
     pm.Draw(0);
 
     // DrawSlices @ 0x0016bb52 — slash-line pool
-    if (earlyFrame) printf("GameDraw: -> SliceEffect_Draw\n");
     FN::SliceEffect_Draw(dt);
 
     // HUD::Draw(0x01) — MainScreen logo / shade @ 0x0016bb5a
-    if (earlyFrame) printf("GameDraw: -> HUD::Draw(0x01)\n");
     if (game->hud) game->hud->Draw(0x01);
 
     // pm.Draw(1) — foreground particles @ 0x0016bb6a
-    if (earlyFrame) printf("GameDraw: -> pm.Draw(1)\n");
     pm.Draw(1);
 
     // WaveManager::Draw(0) @ 0x0016bb98 — stubbed (wave-banner overlay).
@@ -563,7 +485,6 @@ void GameDraw(float dt, bool active) {
         // (binary places it OUTSIDE the `active` block).
         game->hud->Draw(0x400);
     }
-    if (earlyFrame) printf("GameDraw[f%d]: exit\n", s_DrawCount - 1);
 }
 
 // Matches GameExit (0x16cf74, 98 lines) — per-session cleanup

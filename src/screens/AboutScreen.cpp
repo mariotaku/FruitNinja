@@ -183,10 +183,6 @@ AboutScreen::AboutScreen(Game& g, DojoScreen* parent)
 
     // field_0x98 SmartPtr initialized to null (SmartPtr::SmartPtr default)
     // m_TexOFNOverlay stays null — OFN defunct.
-
-    printf("[AboutScreen] ctor: haiku=%d credits=%d sensei=%d parent=%p\n",
-           s_TexHaiku.IsValid(), s_TexCredits.IsValid(), s_TexSensei.IsValid(),
-           (void*)parent);
 }
 
 // -----------------------------------------------------------------------
@@ -539,6 +535,5 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
 // -----------------------------------------------------------------------
 void AboutScreen::BackCallback()
 {
-    printf("[AboutScreen] BackCallback -> state 2 (fade out)\n");
     m_State = 2;
 }

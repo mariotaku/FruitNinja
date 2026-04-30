@@ -122,10 +122,7 @@ void Bomb::LoadContent() {
     if (!game) return;
 
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
-    if (!meshMgr) {
-        printf("[Bomb] LoadContent: MeshManager not available!\n");
-        return;
-    }
+    if (!meshMgr) return;
 
     // Model[0]: binary string "models/Fruit/Bomb.mmd" (0x1BCBDB)
     // Bada filesystem was case-insensitive; actual file is lowercase.
@@ -141,16 +138,12 @@ void Bomb::LoadContent() {
     {
         std::string path = game->data_dir + "/models/Fruit/bomb.mmd";
         g_bombData.model[0] = meshMgr->Load(path.c_str());
-        printf("[Bomb] LoadContent: model[0] '%s' -> valid=%d\n",
-               path.c_str(), g_bombData.model[0].IsValid());
     }
 
     // Model[1]: binary string "models/Fruit/Bomb_purple.mmd" (0x1BCBF1)
     {
         std::string path = game->data_dir + "/models/Fruit/bomb_purple.mmd";
         g_bombData.model[1] = meshMgr->Load(path.c_str());
-        printf("[Bomb] LoadContent: model[1] '%s' -> valid=%d\n",
-               path.c_str(), g_bombData.model[1].IsValid());
     }
 
     // Original LoadContent (0x001726e8) does NOT assign textures to bomb meshes.
@@ -177,7 +170,6 @@ void Bomb::LoadContent() {
     }
 
     g_bombData.loaded = true;
-    printf("Bomb::LoadContent: loaded bomb models\n");
 }
 
 // --- Bomb implementation ---
@@ -275,13 +267,7 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     flags &= ~ENT_SKIP_MASK;
 
     // Use pre-loaded model from g_bombData (loaded by LoadContent in GameInitialise)
-    // Draw indexes as g_bombData.model[m_BombVariant]
-    // No per-instance mesh loading needed
-    printf("[Bomb] Init: flags=0x%02x variant=%d scale=(%.2f,%.2f,%.2f) "
-           "pos=(%.1f,%.1f,%.1f) countdown=%.2f model_valid=%d tex_valid=%d\n",
-           flags, m_BombVariant, scale.x, scale.y, scale.z,
-           pos.x, pos.y, pos.z, m_Countdown,
-           g_bombData.model[m_BombVariant].IsValid(), g_BombTexture.IsValid());
+    // Draw indexes as g_bombData.model[m_BombVariant]; no per-instance mesh load.
 }
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x0017121c (asm-inspector)
@@ -646,9 +632,6 @@ void Bomb::CollisionResponse(const Vec3& bladeVel) {
 
     if (m_bCollisionGuard != 0) return;   // +0x78 processed guard
     m_bCollisionGuard = 1;
-
-    printf("[Bomb] CollisionResponse: pos=(%.1f,%.1f) menuHit=%d\n",
-           pos.x, pos.y, m_bMenuBombHit);
 
     Game* game = Game::GetInstance();
 
