@@ -86,6 +86,7 @@ WaveManager::WaveManager()
     , field_0x240(0.0f)
     , field_0x2cc(0), field_0x2d0(0)
     , field_0x2d4(0.0f)
+    , field_0x108(1), field_0x109(0)
     , m_pWaveQue(nullptr), m_pWaveQueItem(nullptr)
 {
     m_Speed[0] = m_Speed[1] = 0.0f;
@@ -152,12 +153,16 @@ void WaveManager::Init() {
             DEFAULT_WAVE_INFO& def = defaultWaveInfo[mode];
             defEl->QueryFloatAttribute("criticalChance", &def.m_CritChance);
             defEl->QueryIntAttribute("waveChance",       &def.m_WaveChance);
-            // DIFFERS: binary reads "waveChanceRegrowth" but XML has "waveChanceGrowth"; port matches XML (binary bug).
-            defEl->QueryFloatAttribute("waveChanceGrowth", &def.m_WaveChanceGrowth);
-            // globalDtStart/globalDtMax -> per-mode WaveManager speed clamp bounds.
+            // DIFFERS: binary reads "waveChanceRegrowth"; shipping XML uses "waveChanceGrowth".
+            // Neither key matches the other; binary default 0.33 covers both. Parse both for safety.
+            defEl->QueryFloatAttribute("waveChanceRegrowth", &def.m_WaveChanceRegrowth);
+            defEl->QueryFloatAttribute("waveChanceGrowth",   &def.m_WaveChanceRegrowth);
+            // globalDtInc -> per-mode WaveManager speed accumulator (binary key is "globalDtInc", not "dtInc").
+            defEl->QueryFloatAttribute("globalDtInc",   &m_DtIncPerMode[mode]);
+            // globalDtStart/globalDtMax -> per-mode speed clamp bounds.
             defEl->QueryFloatAttribute("globalDtStart", &field_0x8c[mode]);
             defEl->QueryFloatAttribute("globalDtMax",   &field_0x9c[mode]);
-            // Additional <defaults> attrs read by binary.
+            // Additional <defaults> attrs written to DEFAULT_WAVE_INFO per binary audit.
             defEl->QueryFloatAttribute("dtInc",          &def.m_DtInc);
             defEl->QueryFloatAttribute("dtSpInc",        &def.m_DtSpInc);
             defEl->QueryFloatAttribute("nextDelay",      &def.m_NextDelay);
@@ -166,6 +171,12 @@ void WaveManager::Init() {
             defEl->QueryFloatAttribute("beforeDelay",    &def.m_BeforeDelay);
             defEl->QueryFloatAttribute("beforeDelayInc", &def.m_BeforeDelayInc);
             defEl->QueryFloatAttribute("speedLoss",      &def.m_DefSpeedLoss);
+            defEl->QueryIntAttribute("overideProbabiltyPool", &def.m_OverideProbabilityPool);
+            // "waitForEntities" / "waitForProcessing" per binary write to WaveManager+0x108/0x109.
+            if (const char* wfe = defEl->Attribute("waitForEntities"))
+                field_0x108 = (strcmp(wfe, "false") != 0) ? 1 : 0;
+            if (const char* wfp = defEl->Attribute("waitForProcessing"))
+                field_0x109 = (strcmp(wfp, "false") != 0) ? 1 : 0;
         }
 
         // Parse <OverideProbability> elements (Arcade mode).
@@ -190,7 +201,8 @@ void WaveManager::Init() {
             WAVE_INFO* wi = new WAVE_INFO();
             wi->m_WaveIndex = waveIndex++;
 
-            // waveNo attr — if "forever", treat as -2 (always eligible).
+            // waveNo attr -> binary stores to local then +0x0 (m_ScoreThreshold) via conditional.
+            // m_OverideProbabilityPool also written to +0x70 (second read wins in binary).
             const char* waveNoStr = wiEl->Attribute("waveNo");
             if (waveNoStr) {
                 if (strcmp(waveNoStr, "forever") == 0)
@@ -200,7 +212,10 @@ void WaveManager::Init() {
             }
             wi->m_ScoreThreshold = wi->m_WaveNumber;
 
-            // until attr.
+            // overideProbabiltyPool at +0x70 — typo matches binary literal. Writes same slot as waveNo in binary.
+            wiEl->QueryIntAttribute("overideProbabiltyPool", &wi->m_OverideProbabilityPool);
+
+            // until attr -> m_EndScore (+0x04).
             const char* untilStr = wiEl->Attribute("until");
             if (untilStr) {
                 if (strcmp(untilStr, "forever") == 0)
@@ -208,52 +223,62 @@ void WaveManager::Init() {
                 else
                     wi->m_EndScore = atoi(untilStr);
             } else {
-                wi->m_EndScore = -2;   // no until = eligible forever
+                wi->m_EndScore = -2;
             }
 
-            // chance / chanceRegrowth.
-            wiEl->QueryIntAttribute("chance", &wi->m_Chance);
+            // "chance" -> m_Chance (+0x3c). "chanceRegrowth" -> m_ChanceRegrowth (+0x44).
+            wiEl->QueryIntAttribute("chance",           &wi->m_Chance);
             wiEl->QueryFloatAttribute("chanceRegrowth", &wi->m_ChanceRegrowth);
             wi->m_CurrentMax = wi->m_Chance;
 
-            // criticalChance (per-wave override).
+            // criticalChance -> m_CriticalChance (+0x64).
             wiEl->QueryFloatAttribute("criticalChance", &wi->m_CriticalChance);
 
-            // gamesMin / gamesMax (for dragon-wave / rare-wave gating).
+            // "games" / "gamesMin" -> m_GamesMin (+0x4c); "gamesMax" -> m_GamesMax (+0x50).
+            // Binary reads "games" first (overwrites +0x4c), then "gamesMin" overwrites same slot.
+            wiEl->QueryIntAttribute("games",    &wi->m_GamesMin);
             wiEl->QueryIntAttribute("gamesMin", &wi->m_GamesMin);
             wiEl->QueryIntAttribute("gamesMax", &wi->m_GamesMax);
+            // Binary post-process: if GamesMin < 0: GamesMin = GamesMax; if GamesMax < 0: GamesMax = GamesMin.
+            if (wi->m_GamesMin < 0) wi->m_GamesMin = wi->m_GamesMax;
+            if (wi->m_GamesMax < 0) wi->m_GamesMax = wi->m_GamesMin;
 
-            // overideProbabiltyPool — typo is intentional (matches binary literal).
-            wiEl->QueryIntAttribute("overideProbabiltyPool", &wi->m_OverideProbabilityPool);
-
-            // <ChooseFrom> child.
+            // <ChooseFrom> child -> m_SpecialFruits (+0x54); m_field60 always cleared to 0.
             tinyxml2::XMLElement* cfEl = wiEl->FirstChildElement("ChooseFrom");
             if (cfEl) {
+                wi->m_SpecialFruits.clear();
+                wi->m_field60 = 0;
                 const char* types = cfEl->Attribute("types");
-                if (types) SplitWords(types, wi->m_ChooseFrom);
+                if (types) SplitWords(types, wi->m_SpecialFruits);
             }
 
             // <Wave_dt> child.
             tinyxml2::XMLElement* dtEl = wiEl->FirstChildElement("Wave_dt");
             if (dtEl) {
-                dtEl->QueryFloatAttribute("dt",    &wi->m_BombScale1);
-                dtEl->QueryFloatAttribute("inc",   &wi->wave_dt_inc);
+                dtEl->QueryFloatAttribute("dt",    &wi->m_WaveDt);
+                dtEl->QueryFloatAttribute("inc",   &wi->m_WaveDtInc);
                 dtEl->QueryFloatAttribute("spinc", &wi->m_WaveDtSpInc);
             }
 
             // <NextWaveDelay> child.
             tinyxml2::XMLElement* ndEl = wiEl->FirstChildElement("NextWaveDelay");
             if (ndEl) {
-                ndEl->QueryFloatAttribute("delay", &wi->m_WaveDelay);
-                // DIFFERS: "wait" attr used in arcadewavelist.xml instead of "delay".
-                ndEl->QueryFloatAttribute("wait",            &wi->m_WaveDelay);
-                ndEl->QueryFloatAttribute("waitSpinc",       &wi->m_WaitSpinc);
-                ndEl->QueryFloatAttribute("speedLoss",       &wi->m_SpeedLoss);
-                // waitForEntities / waitForProcessing: bool — true unless attr is "false".
+                ndEl->QueryFloatAttribute("wait",      &wi->m_NextWaveWait);
+                ndEl->QueryFloatAttribute("waitSpinc", &wi->m_NextWaveWaitSpInc);
+                ndEl->QueryFloatAttribute("speedLoss", &wi->m_NextWaveSpeedLoss);
+                // Binary: if (wait > 0) { delay = 0; inc = 0; } then read delay/inc.
+                if (wi->m_NextWaveWait > 0.0f) {
+                    wi->m_NextWaveDelay    = 0.0f;
+                    wi->m_NextWaveDelayInc = 0.0f;
+                }
+                ndEl->QueryFloatAttribute("delay", &wi->m_NextWaveDelay);
+                ndEl->QueryFloatAttribute("inc",   &wi->m_NextWaveDelayInc);
+                // waitForEntities: 1 if attr absent OR != "false"; 0 if "false".
                 if (const char* wfe = ndEl->Attribute("waitForEntities"))
-                    wi->m_bWaitForEntities = (strcmp(wfe, "false") != 0);
+                    wi->m_bWaitForEntities = (strcmp(wfe, "false") != 0) ? 1 : 0;
+                // waitForProcessing: stored as (CompareWords == 0 => 1; else 0).
                 if (const char* wfp = ndEl->Attribute("waitForProcessing"))
-                    wi->m_bWaitForProcessing = (strcmp(wfp, "false") != 0);
+                    wi->m_bWaitForProcessing = (strcmp(wfp, "false") != 0) ? 1 : 0;
             }
 
             // <Spawn> children — collect spawners.
@@ -292,38 +317,35 @@ void WaveManager::Init() {
 
                     sp->QueryFloatAttribute("min", &s.m_SpawnMin);
                     sp->QueryFloatAttribute("max", &s.m_SpawnMax);
-                    sp->QueryFloatAttribute("mininc", &s.m_MinInc);
-                    sp->QueryFloatAttribute("maxinc", &s.m_MaxInc);
-                    // "delay" in XML maps to m_ZOffset (spawn delay / chuck offset).
-                    float delay = 0.0f;
-                    if (sp->QueryFloatAttribute("delay", &delay) == tinyxml2::XML_SUCCESS)
-                        s.m_ZOffset = delay;
+                    // mininc and maxinc both write to +0x44 (single slot); maxinc wins.
+                    sp->QueryFloatAttribute("mininc", &s.m_GrowthInc);
+                    sp->QueryFloatAttribute("maxinc", &s.m_GrowthInc);
+                    // "delay" -> m_Delay (+0x48, chuck delay base).
+                    sp->QueryFloatAttribute("delay",    &s.m_Delay);
                     sp->QueryFloatAttribute("delayinc", &s.m_DelayInc);
-                    // gravity is a Vec3 in binary (ParseVector call).
-                    // Port parses comma-separated "x,y,z" and takes y as the scalar gravity
-                    // until the full Vec3 gravity field is ported. TODO: store full Vec3.
+                    // "gravity" attr -> Vec3 at +0x18..+0x20 (binary ParseVector).
                     {
                         const char* grav = sp->Attribute("gravity");
                         if (grav) {
                             float gx = 0.0f, gy = 0.0f, gz = 0.0f;
                             sscanf(grav, "%f,%f,%f", &gx, &gy, &gz);
-                            // binary @ 0x001241f8: piVar15[6..8] = gx, gy, gz (Vec3 at +0x18..+0x20)
                             s.m_Gravity_x = gx;
                             s.m_Gravity_y = gy;
                             s.m_Gravity_z = gz;
                         }
                     }
-                    // binary does NOT read "timescale" on Spawn; XML doesn't have it.
-                    sp->QueryFloatAttribute("horizmin", &s.m_MinAngle);
-                    sp->QueryFloatAttribute("horizmax", &s.m_MaxAngle);
-                    // velscale -> sets both X+Y, then velXscale overrides X, velYscale overrides Y.
-                    sp->QueryFloatAttribute("velscale",  &s.m_MinVel);
-                    s.m_MaxVel = s.m_MinVel;
-                    sp->QueryFloatAttribute("velXscale", &s.m_MinVel);
-                    sp->QueryFloatAttribute("velYscale", &s.m_MaxVel);
-                    // mirror attr.
+                    // velscale -> copies to both +0x24 and +0x28; then velXscale/velYscale override.
+                    sp->QueryFloatAttribute("velscale",  &s.m_VelXScale);
+                    s.m_VelYScale = s.m_VelXScale;
+                    sp->QueryFloatAttribute("velXscale", &s.m_VelXScale);
+                    sp->QueryFloatAttribute("velYscale", &s.m_VelYScale);
+                    // horizmin -> +0x2c; horizmax -> +0x30.
+                    sp->QueryFloatAttribute("horizmin", &s.m_HorizMin);
+                    sp->QueryFloatAttribute("horizmax", &s.m_HorizMax);
+                    // mirror at +0x60: cleared to 0 when attr absent (movs r3,#0 path in binary).
+                    s.m_bMirror = 0;
                     if (const char* mir = sp->Attribute("mirror"))
-                        s.m_bMirror = (strcmp(mir, "false") != 0);
+                        s.m_bMirror = (strcmp(mir, "false") != 0) ? 1 : 0;
 
                     const char* placement = sp->Attribute("placement");
                     if (placement) s.m_SpawnType = ParsePlacement(placement);
@@ -600,7 +622,7 @@ void WaveManager::ResetWaveChances() {
     Game* game = Game::GetInstance();
     if (!game) return;
     for (WAVE_INFO* wi : waveInfos[game->gameMode])
-        wi->m_CurrentMax = wi->m_Chance;
+        wi->m_CurrentMax = wi->m_Chance;  // m_Chance at +0x3c
 }
 
 // ----------------------------------------------------------------------------
@@ -722,8 +744,8 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
             field_0x23c = 1;
             spawner.m_RemainingCount--;
 
-            // Refill spawner timer.
-            float spawnDt = spawner.m_ZOffset - spawner.m_DelayInc * wave->field_0x34;
+            // Refill spawner timer: delay base - delayinc * wave revisit counter.
+            float spawnDt = spawner.m_Delay - spawner.m_DelayInc * wave->field_0x34;
             if (spawnDt < 0.0f) spawnDt = 0.0f;
             spawner.m_SpawnTimer += spawnDt;
         }
@@ -783,8 +805,8 @@ void WaveManager::GetNextWave(int playerIdx) {
             wi->m_CurrentMax = std::min(wi->m_Chance, (int)(wi->m_CurrentMax + growth));
         }
 
-        // Check wave range.
-        bool inRange = (wi->m_WaveNumber <= m_WaveCount[playerIdx]) &&
+        // Check wave range using m_ScoreThreshold (waveNo) and m_EndScore (until).
+        bool inRange = (wi->m_ScoreThreshold <= m_WaveCount[playerIdx]) &&
                        (m_WaveCount[playerIdx] <= wi->m_EndScore || wi->m_EndScore == -2);
         if (!inRange) continue;
 
@@ -818,14 +840,14 @@ void WaveManager::GetNextWave(int playerIdx) {
     // Decrement selected wave's chance (depletes until regrowth restores it).
     if (wave->m_CurrentMax > 0) wave->m_CurrentMax--;
 
-    // Build ChooseFrom fruit queue if wave has one.
-    if (!wave->m_ChooseFrom.empty()) {
-        int queueSize = (int)wave->m_ChooseFrom.size();
+    // Build ChooseFrom fruit queue if wave has one (m_SpecialFruits at +0x54).
+    if (!wave->m_SpecialFruits.empty()) {
+        int queueSize = (int)wave->m_SpecialFruits.size();
         if (queueSize > 32) queueSize = 32;
-        m_ScoreThreshold[playerIdx] = wave->m_WaveNumber;
+        m_ScoreThreshold[playerIdx] = wave->m_ScoreThreshold;
         m_FruitQueueSize[playerIdx] = queueSize;
         for (int i = 0; i < queueSize; ++i) {
-            const std::string& tn = wave->m_ChooseFrom[i];
+            const std::string& tn = wave->m_SpecialFruits[i];
             int ft;
             if (tn == "random")
                 ft = Fruit::RandomFruit(false);
@@ -835,28 +857,21 @@ void WaveManager::GetNextWave(int playerIdx) {
         }
     }
 
-    // Set wave timing.
-    if (wave->m_BombScale1 > 0.0f) {
-        float wdt = wave->m_BombScale1 + wave->wave_dt_inc * wave->field_0x34;
-        if (wdt < 0.01f) wdt = 0.01f;   // MIN_WAVE_DT
-        // m_WaveDt not a separate field in port — stored via m_BombScale1 already.
-    }
+    // Set wave timing (m_WaveDt at +0x10, m_WaveDtInc at +0x14, m_WaveDtSpInc at +0x18).
+    (void)(wave->m_WaveDt + wave->m_WaveDtInc * wave->field_0x34);  // consumed by GetWavedt
 
-    // Next wave delay. binary @ 0x00125294: reads WAVE_INFO+0x20 (delay base) and +0x28 (wait base).
-    // DIFFERS: was wave->m_WaveDelay (+0x44). Binary uses +0x20 = NextWaveDelay delay base.
-    // In current WAVE_INFO struct, +0x20 is m_BombSpeedMax (WRONG name -- see wavemanager-asm-verify §7.2).
-    // The field at +0x20 actually holds the "NextWaveDelay delay" XML attr.
-    if (wave->m_BombSpeedMax > 0.0f) {
-        float delay = wave->m_BombSpeedMax + wave->m_BombMinAngle * wave->field_0x34;  // +0x20 + +0x24*revisit
+    // Next wave delay: m_NextWaveDelay (+0x20) + m_NextWaveDelayInc (+0x24) * revisit.
+    if (wave->m_NextWaveDelay > 0.0f) {
+        float delay = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
         if (delay < 0.05f) delay = 0.05f;
         field_0x234 = delay;
     } else {
         field_0x234 = 0.0f;
     }
-    // +0x28 (m_BombMaxAngle in port = wait base) + +0x30 (m_BombField30 = wait speedInc) * speed
+    // m_NextWaveWait (+0x28) + m_NextWaveWaitSpInc (+0x30) * speed.
     {
-        float wait = wave->m_BombMaxAngle;  // +0x28 = "wait" base
-        float spinc = wave->m_BombField30;  // +0x30 = "waitSpInc"
+        float wait  = wave->m_NextWaveWait;
+        float spinc = wave->m_NextWaveWaitSpInc;
         if (spinc != 0.0f) {
             float w2 = wait + spinc * m_Speed[playerIdx];
             if (w2 <= 0.05f) w2 = 0.05f;
@@ -919,8 +934,8 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
 
     if (playerIdx == 0) {
         if (w) {
-            if (w->m_bAllowBombsFrenzy == 0) goto done0;
-            if (w->m_bAllowBombs == 0) {
+            if (w->m_bWaitForProcessing == 0) goto done0;
+            if (w->m_bWaitForEntities == 0) {
                 if (Fruit::GetNumActiveForPlayer(-1, false) >= 1) return true;
                 if (Bomb::GetNumActiveForPlayer(-1, true) >= 1) return true;
                 goto done0;
@@ -951,8 +966,8 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
     // Z-stride loop counter starts at 1 (binary iVar8 = 1, increments each iteration).
     // binary @ 0x001225a0
     for (long i = 0; i < count; ++i) {
-        float minAngle = info ? info->m_MinAngle : -1.0f;
-        float maxAngle = info ? info->m_MaxAngle :  1.0f;
+        float minAngle = info ? info->m_HorizMin : -1.0f;
+        float maxAngle = info ? info->m_HorizMax :  1.0f;
 
         // Stage 1: degree baseline. DAT_00122844=-150.0, DAT_00122848=+150.0.
         // binary @ 0x001225e2..0x00122610
@@ -976,8 +991,8 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         float sin_a = SinIdx(angle);
         float cos_a = CosIdx(angle);
 
-        float velMultX = info ? info->m_MinVel : 1.0f;
-        float velMultY = info ? info->m_MaxVel : 1.0f;
+        float velMultX = info ? info->m_VelXScale : 1.0f;
+        float velMultY = info ? info->m_VelYScale : 1.0f;
         float velX = sin_a * speed * velMultX;
         float velY = cos_a * speed * velMultY;
 
@@ -1027,7 +1042,9 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         }
         }
 
-        float zOffset = info ? info->m_ZOffset : 0.0f;
+        // chuckDelay: binary always uses m_SpawnTimer (+0x5c) at fire moment.
+        // At fire, m_SpawnTimer is ~0 or slightly negative, so chuckDelay = 0.21 always in normal play.
+        float zOffset = info ? info->m_SpawnTimer : 0.0f;
         float chuckDelay = (zOffset > 0.0f) ? zOffset + 0.21f : 0.21f;
 
         Entity* e = am->Add(0, true);
@@ -1073,7 +1090,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
     for (long i = 1; i <= count; ++i) {
         float minAngle, maxAngle;
         if (type == 0) { minAngle = -1.0f; maxAngle = 1.0f; }
-        else           { minAngle = spawner->m_MinAngle; maxAngle = spawner->m_MaxAngle; }
+        else           { minAngle = spawner->m_HorizMin; maxAngle = spawner->m_HorizMax; }
 
         float range = minAngle * (-150.0f) + maxAngle * 150.0f;  // DAT_00122208/0c
         uint32_t r1 = (range > 0.0f) ? m_Random.Rand32((uint32_t)range) : 0;
@@ -1089,9 +1106,9 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float speed = m_Random.RandF(1.5f) + 9.5f;
         float sin_a = SinIdx(angle);
         float cos_a = CosIdx(angle);
-        float velMultX = (type == 0) ? 1.0f : spawner->m_MinVel;
-        float velMultY = (type == 0) ? 1.0f : spawner->m_MaxVel;
-        float zOffset  = (type == 0) ? 0.0f : spawner->m_ZOffset;
+        float velMultX = (type == 0) ? 1.0f : spawner->m_VelXScale;
+        float velMultY = (type == 0) ? 1.0f : spawner->m_VelYScale;
+        float zOffset  = (type == 0) ? 0.0f : spawner->m_SpawnTimer;
 
         float velX = sin_a * speed * velMultX;
         float velY = cos_a * speed * velMultY * 1.075f;  // DAT_00122218
@@ -1172,9 +1189,9 @@ float WaveManager::GetWavedt(int playerIdx) {
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
     float waveDt = (w == nullptr)
         ? 1.0f
-        : w->m_BombScale1
-          + w->wave_dt_inc * w->field_0x34
-          + w->delaySpeedScale * m_Speed[playerIdx];
+        : w->m_WaveDt
+          + w->m_WaveDtInc * w->field_0x34
+          + w->m_WaveDtSpInc * m_Speed[playerIdx];
 
     float dtMod = (playerIdx == 0) ? field_0x74 * field_0x78 : 1.0f;
     float result = waveDt * dtMod;
