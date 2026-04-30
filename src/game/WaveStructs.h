@@ -194,7 +194,8 @@ struct WAVE_INFO {
         , m_NextWaveWait(0.0f), m_field2c(0.0f)
         , m_NextWaveWaitSpInc(0.0f)
         , field_0x34(0.0f)
-        , m_bWaitForEntities(1), m_bWaitForProcessing(0)
+        // ASM-verified: binary WAVE_INFO ctor @ 0x00126748 sets BOTH to 1.
+        , m_bWaitForEntities(1), m_bWaitForProcessing(1)
         , m_Chance(90), m_field40(0)
         , m_ChanceRegrowth(0.33f), m_field48(0)
         , m_GamesMin(0), m_GamesMax(0)
