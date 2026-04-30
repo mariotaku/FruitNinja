@@ -65,6 +65,18 @@ public:
     Entity() : flags(0), m_RecycleFlag(0), entityType(0), m_Col(nullptr) {}
     virtual ~Entity() {}
 
+    // Binary: Mortar::Entity::HeapCreate(size_t) @ 0x0019d708 (40 bytes).
+    // Called from GameInit step 15 with 0x20000 (128 KB) to allocate the
+    // process-global LinkedHeap Entity arena before ActorManager::Initialise.
+    // DIFFERS: original = LinkedHeap arena 0x20000, port uses std new (no fixed cap).
+    // TODO: implement -- see docs/systems/gameinit-todos.md step 15.
+    static void HeapCreate(unsigned int bytes);
+
+    // Counterpart to HeapCreate; called from GameExit.
+    // Binary: Mortar::Entity::HeapDestroy @ GameExit region.
+    // TODO: implement -- see docs/systems/gameinit-todos.md step 15.
+    static void HeapDestroy();
+
     // Vtable slot 2 (+0x08): Init
     virtual void Init(int, int, int) {}
 
