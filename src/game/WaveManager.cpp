@@ -937,10 +937,12 @@ void WaveManager::ClearUnspawned() {
 
 // ASM-verified: 2026-04-30T07:15 binary @ 0x00122a40..0x00122ad6 (asm-inspector)
 bool WaveManager::IsWaveProcessing(int playerIdx) {
-    // Per-player flag: if 0, wave already resolved.
-    uint8_t flag = (&field_0x23c)[playerIdx];
-    if (!flag) return false;
-
+    // Binary @ 0x00122a48 loads flag = (&field_0x23c)[p] but does NOT
+    // branch on it at entry. The flag is referenced only at the exit
+    // (LAB_ac4 stores 0). The earlier port-side `if (!flag) return false`
+    // short-circuit was an invented gate -- once any frame cleared the
+    // flag, every subsequent frame returned false and GetNextWave fired
+    // in a tight loop. Removed.
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
 
     if (playerIdx == 0) {
