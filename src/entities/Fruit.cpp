@@ -26,6 +26,13 @@
 
 // Analysed: 2026-04-29T00:00
 
+// Static Colour constants from _GLOBAL__I_Fruit.cpp @ 0x0017a354.
+// *DAT_0017a678: Colour(0x80, 0x80, 0xff, 0x80) = RGBA(128, 128, 255, 128)
+// Likely g_FruitOutlineTint or g_FruitGlowTint. Exact consumer not yet RE'd -- TODO.
+static Colour g_FruitTint1(128, 128, 255, 128);  // DAT_0017a678
+// *DAT_0017a670: copy-ctor from DAT_0017a674. Source value not yet RE'd -- TODO.
+static Colour g_FruitTint2(0, 0, 0, 255);        // DAT_0017a670 (placeholder, copy from DAT_0017a674)
+
 // Binary constants for fruit slicing.
 // Resolved from DATs near CollisionResponse (0x1780b0) and Slice (0x176d58).
 static const float SLICE_TIMER_BASE    = 0.03f;   // DAT_001784dc

@@ -48,6 +48,8 @@
 #include "util/Localisation.h"
 #include "util/StringHash.h"
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <string>
 
 // Matches GamePreInitialise (0x10b588) — zero the Game singleton
@@ -79,6 +81,12 @@ void GameInitialise() {
     if (!game) return;
 
     printf("GameInitialise: booting engine\n");
+
+    // _GLOBAL__I_EngineMathBada.cpp @ 0x001952bc: Math::Random ctor calls
+    // time(NULL)-equivalent seed before OspMain. Port seeds here (first call
+    // in GameInitialise) to ensure srand runs before any rand() consumer
+    // (WaveManager, Fruit::Init, MenuButton random angles etc.).
+    srand((unsigned int)time(nullptr));
 
     // Step 1: SystemManager::Init() — 0x0018b024: m_field50=0, m_bRunning=1, clock base (skipped)
     Mortar::SystemManager::GetInstance().Init();
