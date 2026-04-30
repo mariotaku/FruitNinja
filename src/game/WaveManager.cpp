@@ -935,6 +935,7 @@ void WaveManager::ClearUnspawned() {
 // IsWaveProcessing — per wave-system-impl.md §4
 // ----------------------------------------------------------------------------
 
+// ASM-verified: 2026-04-30T07:15 binary @ 0x00122a40..0x00122ad6 (asm-inspector)
 bool WaveManager::IsWaveProcessing(int playerIdx) {
     // Per-player flag: if 0, wave already resolved.
     uint8_t flag = (&field_0x23c)[playerIdx];
