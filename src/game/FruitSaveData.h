@@ -141,10 +141,14 @@ public:
     int      m_FruitQueueCount;    // +0x7c
     int      m_FruitQueue[32];     // +0x80 (all -1 by default)
 
-    // +0x100..+0x108: camera shake position snapshot.
-    float    m_CameraShakeX;       // +0x100
-    float    m_CameraShakeY;       // +0x104
-    float    m_CameraShakeZ;       // +0x108
+    // +0x100..+0x108: per-player base speed snapshot.
+    // CORRECTED: previously named m_CameraShakeX/Y/Z. Verified by Resume
+    // (writes WaveManager::field_0x4c from +0x100, m_Speed_P0 from +0x104,
+    // field_0x60 from +0x108) and SaveWaveInfo (inverse direction).
+    // There is no camera-shake snapshot in FruitSaveData.
+    float    m_Speed_P0;           // +0x100  (WaveManager::field_0x4c)
+    float    m_Speed_P0_alias;     // +0x104  (WaveManager::m_Speed_P0)
+    float    m_Speed_P1;           // +0x108  (WaveManager::field_0x60)
 
     // +0x10c: game timer at save (-1 default).
     float    m_GameTimer1;
@@ -169,10 +173,17 @@ public:
     float    m_ShakeDecay;         // +0x13c (default 1.0)
 
     // +0x140..+0x14c: WaveManager state.
-    int      m_WaveCount;          // +0x140
+    // CORRECTED: +0x140 was int m_WaveCount. Verified by Resume
+    // (this->m_pCurrentWave_P1 = sd->+0x140) and SaveWaveInfo
+    // (sd->+0x140 = (int)this->m_pCurrentWave_P1). Stored as raw word (int).
+    int      m_pCurrentWave_P1;    // +0x140  raw WAVE_INFO* from binary save
     float    m_WaveDelay;          // +0x144
     float    m_WaveWait;           // +0x148
-    float    m_field14c;           // +0x14c (default 1.0; XML "globalWaveDt")
+    // CORRECTED: +0x14c was m_field14c ("globalWaveDt"). Verified by Resume
+    // (this->field_0x74 = sd->+0x14c) and SaveWaveInfo (inverse). The XML
+    // attr name is "globalWaveDt" but in-code semantic is PROBABILITY_OVERIDE
+    // flag word (WaveManager::field_0x74). Resume and SaveWaveInfo both confirm.
+    float    m_ProbabilityOverideFlag; // +0x14c  WaveManager::field_0x74
 
     // +0x150: queued wave states for resume.
     std::list<WaveState> m_WaveStates;

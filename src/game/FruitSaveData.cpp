@@ -37,9 +37,9 @@ FruitSaveData::FruitSaveData()
     , m_HighScoreRef1(-1)
     , m_HighScoreRef2(0)
     , m_FruitQueueCount(0)
-    , m_CameraShakeX(0.0f)
-    , m_CameraShakeY(0.0f)
-    , m_CameraShakeZ(0.0f)
+    , m_Speed_P0(0.0f)
+    , m_Speed_P0_alias(0.0f)
+    , m_Speed_P1(0.0f)
     , m_GameTimer1(-1.0f)
     , m_CriticalChance(70)              // 0x46
     , m_GameOverScreenState(-1)
@@ -54,10 +54,10 @@ FruitSaveData::FruitSaveData()
     , m_field134(-1.0f)
     , m_ShakeIntensity(0.0f)
     , m_ShakeDecay(1.0f)                // 0x3F800000
-    , m_WaveCount(0)
+    , m_pCurrentWave_P1(0)
     , m_WaveDelay(0.0f)
     , m_WaveWait(0.0f)
-    , m_field14c(1.0f)
+    , m_ProbabilityOverideFlag(1.0f)
     , m_blitzSpawnedThisGame(0)
     , m_blitzForceSpawnedCounter(0)
     , m_blitzSpawnTime(0.0f)
@@ -315,7 +315,7 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         que->SetAttribute("count",           save->m_CurrentScore);
         que->SetAttribute("misses",          save->m_CurrentMissCount);
         que->SetAttribute("timer",           save->m_GameTimer1);
-        que->SetAttribute("globalWaveDt",    save->m_field14c);
+        que->SetAttribute("globalWaveDt",    save->m_ProbabilityOverideFlag);
         que->SetAttribute("go_state",        save->m_GameOverScreenState);
         que->SetAttribute("go_time",         save->m_GameOverTimer);
         que->SetAttribute("go_bombHitTime",  save->m_BombHitTimer);
@@ -330,7 +330,7 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         que->SetAttribute("shake_max_time",  save->m_ShakeDecay);
 
         tinyxml2::XMLElement* wi = doc.NewElement("wave_info");
-        wi->SetAttribute("waveCount",                save->m_WaveCount);
+        wi->SetAttribute("waveCount",                save->m_pCurrentWave_P1);
         wi->SetAttribute("waveDelay",                save->m_WaveDelay);
         wi->SetAttribute("waveWait",                 save->m_WaveWait);
         wi->SetAttribute("blitzSpawnedThisGame",     save->m_blitzSpawnedThisGame);
@@ -458,7 +458,7 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         que->QueryIntAttribute("count",   &save->m_CurrentScore);
         que->QueryIntAttribute("misses",  &save->m_CurrentMissCount);
         que->QueryFloatAttribute("timer",          &save->m_GameTimer1);
-        que->QueryFloatAttribute("globalWaveDt",   &save->m_field14c);
+        que->QueryFloatAttribute("globalWaveDt",   &save->m_ProbabilityOverideFlag);
         que->QueryIntAttribute("go_state",         &save->m_GameOverScreenState);
         que->QueryFloatAttribute("go_time",        &save->m_GameOverTimer);
         que->QueryFloatAttribute("go_bombHitTime", &save->m_BombHitTimer);
@@ -475,7 +475,7 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         que->QueryFloatAttribute("shake_max_time", &save->m_ShakeDecay);
 
         if (tinyxml2::XMLElement* wi = que->FirstChildElement("wave_info")) {
-            wi->QueryIntAttribute("waveCount",   &save->m_WaveCount);
+            wi->QueryIntAttribute("waveCount",   &save->m_pCurrentWave_P1);
             wi->QueryFloatAttribute("waveDelay", &save->m_WaveDelay);
             wi->QueryFloatAttribute("waveWait",  &save->m_WaveWait);
             wi->QueryIntAttribute("blitzSpawnedThisGame",     &save->m_blitzSpawnedThisGame);
