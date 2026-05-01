@@ -2,60 +2,193 @@
 #define FN_GAME_OVER_SCREEN_H
 
 // GameOverScreen : HUDControl3d (size = 0x13C)
-// Binary: ctor 0x00141218, Update 0x00141960, Draw 0x00141da4
-// State machine: 0 -> 6 (main display) -> 7/8 (retry/quit cleanup) -> done
+// Binary: ctor 0x00142900, Update 0x00141b34, Initialise 0x00142674
+// No per-class Draw — inherits HUDControl3d::Draw (0x0014428c).
+// Class-specific: PreDrawOrder (0x0014171c), DrawOrder (0x00141448).
 //
-// Analysed: 2026-04-30T12:00
+// Analysed: 2026-05-02T00:00
 
 #include "hud/HUDControl3d.h"
-#include <cstring>
+#include "util/SmartPtr.h"
+#include "asset/Texture.h"
+#include <cstdint>
 
 class MenuButton;
+class HUDControl;
+// BonusScreen not yet ported; stubbed below
+class BonusScreen;
+// FruitFactControl: HUDControl3d (size 0x204), forward-declared
+class FruitFactControl;
 
 class GameOverScreen : public HUDControl3d {
 public:
-    // +0x7C: state machine index
-    int  m_State;
-    // +0x80: transition/entry timer
-    float m_Timer;
-    // +0x84: endReason passed to ctor (-1 = time/miss, other = bomb reason code)
-    int  m_EndReason;
-    // +0x88: score at game-over
-    float m_EndScore;
-    // +0x8C: expressionIdx (facial expression on result screen)
-    int  m_ExpressionIdx;
-    // +0x90: bgPatternIdx (background pattern index)
-    int  m_BgPatternIdx;
-    // +0x94: pomCount (pom-pom decoration count)
-    int  m_PomCount;
-    // +0x98: starCount (star decoration count)
-    int  m_StarCount;
-    // +0x9C: mode name (e.g. "GameOver")
-    char m_ModeName[32];   // +0x9C..+0xBB
-    // +0xBC: retry button pointer (created in state 6)
-    MenuButton* m_pRetryBtn;
-    // +0xC0: quit button pointer
-    MenuButton* m_pQuitBtn;
+    // +0x7C: dummy zero slot written =0 in Initialise. Legacy m_PrevState.
+    float    field_0x7c;
 
-    // Binary: LoadContent 0x1305cc
+    // +0x080: state machine index (0,1,6,7,8,9,10,11,14)
+    int      m_State;                // +0x080
+
+    // +0x084: state-0 entry timer; reused as state-1 progression timer
+    float    m_Timer;                // +0x084
+
+    // +0x088..+0x090: title-tex size (width, height, 0)
+    float    m_TitleSizeX;          // +0x088
+    float    m_TitleSizeY;          // +0x08C
+    float    m_TitleSizeZ;          // +0x090
+
+    // +0x094: always 0 (Initialise sets it; never read elsewhere)
+    int      field_0x94;            // +0x094
+
+    // +0x098: m_RetryButton (created by CreateRetryButton @ 0x141188)
+    MenuButton* m_pRetryBtn;        // +0x098
+
+    // +0x09C: secondary control slot (auxiliary; never created in stock build)
+    HUDControl* m_pSlot9c;         // +0x09C
+
+    // +0x0A0: dead slot (OpenFeint achievements button remnant)
+    int         field_0xa0;         // +0x0A0
+
+    // +0x0A4: m_QuitButton (created by CreateQuitButton @ 0x1412e4)
+    MenuButton* m_pQuitBtn;         // +0x0A4
+
+    // +0x0A8: tertiary auxiliary control slot
+    HUDControl* m_pSlotA8;         // +0x0A8
+
+    // +0x0AC: millisecond-resolution circular animation counter
+    int         m_AnimCounter;      // +0x0AC
+
+    // +0x0B0..+0x0B8: content-block centre position after layout
+    float       m_OffsetPosX;      // +0x0B0
+    float       m_OffsetPosY;      // +0x0B4
+    float       m_OffsetPosZ;      // +0x0B8
+
+    // +0x0BC: FruitFactControl* — created in state 6
+    FruitFactControl* m_pFruitFact; // +0x0BC
+
+    // +0x0C0: unnamed extra button slot
+    MenuButton* m_pSlotC0;         // +0x0C0
+
+    // +0x0C4: BonusScreen* — created in state 1 (Arcade only)
+    BonusScreen* m_pBonusScreen;   // +0x0C4
+
+    // +0x0C8: notice/popup control (sign-in prompt, etc.)
+    HUDControl* m_pNoticeCtrl;     // +0x0C8
+
+    // +0x0CC: Twitter share completion flag (PostCallback(0) sets =1)
+    uint8_t     m_PostOk;          // +0x0CC
+
+    // +0x0CD: Twitter share in-progress flag (PostCallback clears)
+    uint8_t     m_PostInProgress;  // +0x0CD
+
+    // +0x0CE: "X days left" label formatted in Initialise (64 bytes)
+    char        m_DaysLeftLabel[64]; // +0x0CE..+0x10D
+
+    // +0x110: progress counter (0->11 in state 6; ==10 triggers score commit)
+    int         m_ProgressCounter; // +0x110
+
+    // +0x114: game-over.tex (loaded in state 6 tail)
+    GLuint      m_GameOverTex;     // +0x114
+
+    // +0x118: always 0; never set elsewhere after Initialise
+    int         field_0x118;       // +0x118
+
+    // +0x11C: most-fruit count (-1 = none found). FindMostOfFruit writes here.
+    int         m_MostFruitCount;  // +0x11C
+
+    // +0x120: score-submitted guard (single-shot; set =1 on first state-6 frame 10)
+    uint8_t     m_bScoreSubmitted; // +0x120
+
+    // +0x124: expression index (1..3; randomised when ctor param < 1)
+    int         m_ExpressionIdx;   // +0x124
+
+    // +0x128: background pattern index (1..3; randomised when ctor param < 1)
+    int         m_BgPatternIdx;    // +0x128
+
+    // +0x12C: pom-pom decoration count (passed to FruitFactControl +0xE5)
+    int         m_PomCount;        // +0x12C
+
+    // +0x130: star decoration count (passed to FruitFactControl +0xE9)
+    int         m_StarCount;       // +0x130
+
+    // +0x134: 1 when game.gameMode == 0 (Classic); gates expression/pattern overlay
+    uint8_t     m_bIsClassic;      // +0x134
+
+    // +0x138: pop-in alpha interpolator (0->1, ramps at 0.125/frame)
+    float       m_FruitFactAlpha;  // +0x138
+
+    // Binary: LoadContent / UnLoadContent (gated by static guard)
     static void LoadContent() {}
-    // Binary: UnLoadContent 0x12efd8
     static void UnLoadContent() {}
 
-    // ctor: 0x00141218 — size 0x13C
-    GameOverScreen(const char* modeName, int startState, float startTimer,
+    // Parameterised ctor @ 0x00142900:
+    //   param2/param3 are state/timer overrides for fast-skip path, NOT endReason/endScore.
+    //   Score is read via GetCurrentScore(0) in state 6.
+    GameOverScreen(const char* modeName, int param2, float param3,
                    int expressionIdx, int bgPatternIdx, int pomCount, int starCount);
-    ~GameOverScreen() override {}
+    ~GameOverScreen() override;
 
-    // HUDControl vtable overrides
+    // vtable slot 2: Init — trivial pass-through (0x00140548)
     void Init() override;
+
+    // vtable slot 4: Reset — empty (0x00140554, single bx lr)
+    void Reset() override {}
+
+    // vtable slot 5: BeginDraw — sets m_LayerFlags (0x00140590)
+    void BeginDraw(float dt) override;
+
+    // vtable slot 10: Update — full state machine (0x00141b34)
     void Update(float dt) override;
-    void Draw(const Vec3& hudScale, int layerMask) override;
-    void Reset() override;
-    int  GetType() override { return 5; }
+
+    // vtable slot 8: PreDrawOrder (0x0014171c)
+    void PreDrawOrder(const Vec3& hudScale, int layerMask) override;
+
+    // vtable slot 9: DrawOrder (0x00141448)
+    void DrawOrder(const Vec3& hudScale, int layerMask) override;
+
+    // vtable slot 3: Release — cleanup (0x00140d98)
+    void Release() override;
+
+    // vtable slot 12: GetType — returns 5 (0x0014305c)
+    int GetType() override { return 5; }
+
+    // vtable slot 7: inherited HUDControl3d::Draw — NO override needed
+    // (omitted: compiler uses HUDControl3d::Draw at 0x0014428c)
+
+    // IsAllowedToExit — always 1 in binary (0x0014061c)
+    bool IsAllowedToExit() { return true; }
 
 private:
-    void CreateButtons();
+    // 0x00142674
+    void Initialise(const char* modeName, int param2, float param3,
+                    int expressionIdx, int bgPatternIdx, int pomCount, int starCount);
+
+    // 0x00141188
+    void CreateRetryButton();
+
+    // 0x001412e4
+    void CreateQuitButton();
+
+    // 0x00141a18 — populates field_0x118/m_MostFruitCount
+    void FindMostOfFruit();
+
+    // 0x00140688 — goes to state 6 (or leaderboard dialog if needed)
+    void SetStateWait();
+
+    // 0x00140604 — sets game[+0x33]=1
+    void SetTerminate();
 };
 
-#endif
+// BonusScreen stub — full port deferred (binary ctor 0x132048)
+// TODO: port BonusScreen as a separate task
+class BonusScreen : public HUDControl3d {
+public:
+    float m_BonusTimer; // +0xB8 in binary
+    float m_Height;     // +0xC0 in binary (bottom edge offset)
+
+    BonusScreen() : m_BonusTimer(0.0f), m_Height(0.0f) {}
+    void Update(float /*dt*/) override {}
+    void Draw(const Vec3& /*hudScale*/, int /*layerMask*/) override {}
+    int  GetType() override { return 99; }
+};
+
+#endif // FN_GAME_OVER_SCREEN_H
