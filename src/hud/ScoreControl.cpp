@@ -2,6 +2,7 @@
 
 #include "ScoreControl.h"
 #include "Game.h"
+#include "game/ScoreState.h"
 #include "game/PowerUpManager.h"
 #include "entities/FruitInfo.h"
 #include "asset/TextureManager.h"
@@ -146,10 +147,10 @@ void ScoreControl::Update(float dt) {
     // Stage 1: per-digit alpha cascade
     // ASM-verified gate at 0x001585A8: gameMode == 1.
     // Non-gameMode-1: static-timer driven (0.25s gate) same rates.
-    // TODO: wire digitsActive to real combo counter (GOT[0x7478]).
-    static int s_ComboCount = 0;  // TODO: wire to real combo source from WaveManager / Score path
-    int digitsActive = s_ComboCount;
-    if (digitsActive < 0) digitsActive = 0;
+    // Binary @ 0x00158580: digitsActive = comboCount - 1, then clamp [0, 15].
+    // g_ComboCount is from GOT[0x78f8] -> BSS @ 0x0024d764.
+    int digitsActive = g_ComboCount - 1;
+    if (digitsActive < 0)  digitsActive = 0;
     if (digitsActive > 15) digitsActive = 15;
     m_DigitCount = digitsActive;
 

@@ -1,4 +1,5 @@
 #include "WaveManager.h"
+#include "ScoreState.h"
 #include "WaveStructs.h"
 #include "Game.h"
 #include "FruitSaveData.h"
@@ -385,6 +386,13 @@ void WaveManager::Destroy() {
 // ----------------------------------------------------------------------------
 
 void WaveManager::Reset(bool fullReset) {
+    // Reset combo state — binary @ 0x00125cdc (g_ComboCount = 0) and
+    // adjacent last-slasher write. Binary writes 1 to last-slasher at reset;
+    // port uses -1 (cold-boot sentinel) to keep consistent with TimeControl
+    // game-over path and avoid a spurious same-player guard on first slice.
+    g_ComboCount  = 0;
+    g_LastSlasher = -1;
+
     Game* game = Game::GetInstance();
     if (!game) return;
 

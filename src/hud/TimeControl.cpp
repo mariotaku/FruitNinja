@@ -3,6 +3,7 @@
 #include "TimeControl.h"
 #include "Game.h"
 #include "game/GameOver.h"
+#include "game/ScoreState.h"
 #include "audio/GameSound.h"
 #include "screens/MainScreen.h"
 #include "render/Font.h"
@@ -154,6 +155,10 @@ void TimeControl::Update(float dt) {
     if (m_TimeRemaining < 0.5f) {
         FN::GameOver(-1, -1.0f, -1);
         m_TimeRemaining = 0.0f;    // DAT_001627a0
+        // Reset combo on Arcade timeout — binary @ 0x001625dc (g_ComboCount = 0)
+        // and adjacent last-slasher write (0xFFFFFFFF = -1 sentinel).
+        g_ComboCount  = 0;
+        g_LastSlasher = -1;
         if (game->pGameSound) game->pGameSound->SFXPlay("time-up", 1.0f, 1.0f);
     }
 }
