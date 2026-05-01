@@ -10,6 +10,7 @@
 #include "math/MathUtil.h"
 #include "util/StringHash.h"
 #include "GameOver.h"
+#include "PowerUpManager.h"
 #include <tinyxml2.h>
 #include <cstring>
 #include <cstdio>
@@ -683,7 +684,7 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 void WaveManager::GameOver() {
     // Binary @ 0x00121f74. Static entry — calls through singleton.
     // Calls PowerUpManager::Reset(false) + ResetGlobalDt(1.0f).
-    // TODO: 0x00121f74 PowerUpManager::Reset(false) not ported.
+    PowerUpManager::GetInstance()->Reset(false);
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
 }
@@ -691,7 +692,7 @@ void WaveManager::GameOver() {
 void WaveManager::NewGame() {
     // Binary @ 0x00121f90. Static entry — calls through singleton.
     // Calls PowerUpManager::Reset(true) + ResetGlobalDt(1.0f).
-    // TODO: 0x00121f90 PowerUpManager::Reset(true) not ported.
+    PowerUpManager::GetInstance()->Reset(true);
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
 }
@@ -1335,7 +1336,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
 void WaveManager::Draw(int playerIdx) {
     // Binary @ 0x00122ae8. Delegates to PowerUpManager::Draw for player 0 only.
     if (playerIdx == 0) {
-        // TODO: 0x00122ae8 PowerUpManager::GetInstance()->Draw() not ported.
+        PowerUpManager::GetInstance()->Draw();
     }
 }
 
@@ -1465,7 +1466,9 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 (&field_0x5c)[playerIdx] = newCount;  // m_BlitzBonus[p]
                 FN::AddToCurrentScore(5, playerIdx, false, false);
-                // TODO: 0x00123510 PowerUpManager::ActivateScreenEffect("blitz_count" hash) not ported.
+                static uint32_t s_blitzCountHash = 0;
+                if (!s_blitzCountHash) s_blitzCountHash = StringHash("blitz_count");
+                PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitzCountHash);
                 // TODO: 0x00123510 GameSound::SFXPlay("blitz", ...) not ported.
             }
         }
@@ -1478,7 +1481,11 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 int level = (newCount < 6) ? newCount : 6;
                 (&field_0x5c)[playerIdx] = newCount;  // m_BlitzBonus[p]
 
-                // TODO: 0x00123510 PowerUpManager::ActivateScreenEffect("blitz_<level>_count" hash) not ported.
+                {
+                    char buf[40];
+                    std::snprintf(buf, sizeof(buf), "blitz_%d_count", level);
+                    PowerUpManager::GetInstance()->ActivateScreenEffect(StringHash(buf));
+                }
                 // TODO: 0x00123510 GameSound::SFXPlay(blitz_<level>, ...) not ported.
 
                 int clamped = ((&field_0x5c)[playerIdx] > 5) ? 6 : (&field_0x5c)[playerIdx];
