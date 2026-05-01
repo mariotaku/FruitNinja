@@ -1,141 +1,787 @@
-// Analysed: 2026-04-30T12:00
-// GameOverScreen — binary ctor 0x00141218, Update 0x00141960, Draw 0x00141da4
-// First-iteration port: state 0->6->buttons->7/8->cleanup.
-// Full 529-line state machine deferred; see TODOs below.
+// Analysed: 2026-05-02T00:00
+// GameOverScreen -- binary ctor 0x00142900, Initialise 0x00142674, Update 0x00141b34
+// PreDrawOrder 0x0014171c, DrawOrder 0x00141448.
+// No per-class Draw -- inherits HUDControl3d::Draw (0x0014428c).
 
 #include "GameOverScreen.h"
 #include "Game.h"
 #include "game/WaveManager.h"
+#include "game/FruitSaveData.h"
+#include "entities/ActorManager.h"
+#include "entities/FruitInfo.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
+#include "hud/FruitFactControl.h"
+#include "asset/TextureManager.h"
+#include "math/MathUtil.h"
+#include "math/Vec3.h"
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
+#include <cstdlib>
 
-// Size 0x13C — verified from spec.
-// Signature maps: startState->endReason, startTimer->endScore per spec.
-GameOverScreen::GameOverScreen(const char* modeName, int startState, float startTimer,
-                                int expressionIdx, int bgPatternIdx, int pomCount, int starCount)
-    : m_State(startState < 0 ? 0 : startState),
-      m_Timer(startTimer < 0.0f ? 0.0f : startTimer),
-      m_EndReason(startState),
-      m_EndScore(startTimer),
+using Mortar::TextureManager;
+
+// ---------------------------------------------------------------------------
+// Helpers — local to this TU (match binary static helpers)
+// ---------------------------------------------------------------------------
+
+static int GetCurrentScore(int playerIdx) {
+    if (playerIdx != 0) return 0;
+    Game* g = Game::GetInstance();
+    return g ? g->currentScore : 0;
+}
+
+static int GetCurrentModeHighscore() {
+    Game* g = Game::GetInstance();
+    if (!g || !g->pSaveData) return 0;
+    int mode = g->gameMode & 0x03;
+    return g->pSaveData->m_ModeHighScores[mode];
+}
+
+// SetTerminate: game[+0x33] = 1. Reuses this->SetTerminate().
+// The free function wrapper is used from within Update.
+static void DoSetTerminate() {
+    // game[+0x33] is m_bPendingRemoval in the port's Game struct.
+    // Binary: *(uint8_t*)(game + 0x33) = 1; CancelHUDProgressionTimer (no-op stub).
+    // Port: mark the HUD screen for removal via game.pGameOverScreen->m_bPendingRemoval.
+    Game* g = Game::GetInstance();
+    if (g && g->pGameOverScreen) {
+        g->pGameOverScreen->m_bPendingRemoval = 1;
+    }
+}
+
+static void DoQuitToMenu() {
+    // Binary 0x00169e50 -- full flow not yet ported.
+    // Port: thaw wave timer, set pauseFlag.
+    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
+    Game* g = Game::GetInstance();
+    if (g) g->pauseFlag = 1;
+}
+
+// ---------------------------------------------------------------------------
+// GameOverScreen constructor (0x00142900) -- thin wrapper over Initialise
+// ---------------------------------------------------------------------------
+
+GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
+                               int expressionIdx, int bgPatternIdx,
+                               int pomCount, int starCount)
+    : HUDControl3d(),
+      field_0x7c(0.0f),
+      m_State(0),
+      m_Timer(0.0f),
+      m_TitleSizeX(0.0f),
+      m_TitleSizeY(0.0f),
+      m_TitleSizeZ(0.0f),
+      field_0x94(0),
+      m_pRetryBtn(nullptr),
+      m_pSlot9c(nullptr),
+      field_0xa0(0),
+      m_pQuitBtn(nullptr),
+      m_pSlotA8(nullptr),
+      m_AnimCounter(0),
+      m_OffsetPosX(0.0f),
+      m_OffsetPosY(0.0f),
+      m_OffsetPosZ(0.0f),
+      m_pFruitFact(nullptr),
+      m_pSlotC0(nullptr),
+      m_pBonusScreen(nullptr),
+      m_pNoticeCtrl(nullptr),
+      m_PostOk(0),
+      m_PostInProgress(0),
+      m_ProgressCounter(0),
+      m_GameOverTex(0),
+      field_0x118(0),
+      m_MostFruitCount(-1),
+      m_bScoreSubmitted(0),
       m_ExpressionIdx(expressionIdx),
       m_BgPatternIdx(bgPatternIdx),
       m_PomCount(pomCount),
       m_StarCount(starCount),
-      m_pRetryBtn(nullptr),
-      m_pQuitBtn(nullptr) {
-    strncpy(m_ModeName, modeName ? modeName : "", sizeof(m_ModeName) - 1);
-    m_ModeName[sizeof(m_ModeName) - 1] = '\0';
-    m_LayerFlags = 0x100;
-    m_bActive    = 1;
+      m_bIsClassic(0),
+      m_FruitFactAlpha(0.0f)
+{
+    memset(m_DaysLeftLabel, 0, sizeof(m_DaysLeftLabel));
+    Initialise(modeName, param2, param3, expressionIdx, bgPatternIdx, pomCount, starCount);
 }
+
+GameOverScreen::~GameOverScreen() {
+    // Release called by HUD via vtable
+}
+
+// ---------------------------------------------------------------------------
+// Initialise (0x00142674)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
+                                int expressionIdx, int bgPatternIdx,
+                                int pomCount, int starCount)
+{
+    // One-shot LoadContent (gated in binary by static guard; stub no-ops)
+    LoadContent();
+
+    // Defunct online: NetworkManager::GetInstance()->InvalidatePublishTextCallback();
+    // (no-op: NetworkManager not ported)
+
+    m_pNoticeCtrl    = nullptr; // +0xC8
+    m_PomCount       = pomCount;
+    m_Timer          = 0.0f;
+    m_MostFruitCount = -1;
+    field_0x118      = 0;
+    m_StarCount      = starCount;
+
+    Game* game = Game::GetInstance();
+    uint8_t gameMode = game ? game->gameMode : 0;
+
+    // Load mode-specific game-over background texture into m_SecondaryTex
+    // gameMode 2 = Arcade, 3 = Zen, else Classic
+    {
+        SmartPtr<Mortar::Texture> bgTex;
+        if (gameMode == 2)
+            bgTex = TextureManager::LoadLocalisedTexture("textures/arcade-game-over-bg.tex");
+        else if (gameMode == 3)
+            bgTex = TextureManager::LoadLocalisedTexture("textures/zen-game-over-bg.tex");
+        else
+            bgTex = TextureManager::LoadLocalisedTexture("textures/classic-game-over-bg.tex");
+        // Store handle in m_SecondaryTex (GLuint port field)
+        m_SecondaryTex = bgTex ? bgTex->m_TexId : 0;
+        // Record title size from texture dimensions
+        if (bgTex) {
+            m_TitleSizeX = (float)bgTex->m_Width;
+            m_TitleSizeY = (float)bgTex->m_Height;
+        } else {
+            m_TitleSizeX = 256.0f; // DIFFERS: placeholder if tex unavailable
+            m_TitleSizeY = 128.0f;
+        }
+        m_TitleSizeZ = 0.0f;
+    }
+
+    m_State          = 0;
+    m_LayerFlags     = 0; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
+    m_GameOverTex    = 0; // field_0x114.SetNull()
+    m_AnimCounter    = 0;
+    m_bScoreSubmitted = 0;
+    m_BgPatternIdx   = bgPatternIdx;
+    field_0x94       = 0;
+    m_pBonusScreen   = nullptr;
+    m_FruitFactAlpha = game ? game->m_TransitionTimer : 0.0f; // game[+0xC] = game.alpha (m_TransitionTimer)
+    m_ExpressionIdx  = expressionIdx;
+    field_0xa0       = 0;
+    m_pSlot9c        = nullptr;
+    m_bIsClassic     = (gameMode == 0) ? 1 : 0;
+    m_pQuitBtn       = nullptr;
+    m_pSlotA8        = nullptr;
+    m_pRetryBtn      = nullptr;
+    field_0x7c       = 0.0f;
+
+    // Randomise expression when caller passed -1
+    if (expressionIdx < 1) {
+        m_ExpressionIdx = 1;
+        FindMostOfFruit();
+        int score = GetCurrentScore(0);
+        int hi    = GetCurrentModeHighscore();
+        if (score > hi / 2) {
+            // 2 or 3 (better expressions)
+            m_ExpressionIdx = (rand() % 2) + 2;
+        }
+    }
+    if (bgPatternIdx < 1) {
+        m_BgPatternIdx = (rand() % 3) + 1;  // 1..3
+    }
+
+    pos.x = 0.0f; pos.y = 0.0f; pos.z = 0.0f;
+    // Initial off-screen offset (DAT_001428d0=184.0, DAT_001428d4=75.0)
+    m_OffsetPosX = 184.0f;
+    m_OffsetPosY = 75.0f;
+    m_OffsetPosZ = 0.0f;
+
+    m_ProgressCounter  = 0;
+    m_pFruitFact       = nullptr;
+    m_pSlotC0          = nullptr;
+    m_PostOk           = 0;
+    m_PostInProgress   = 0;
+
+    // Format "X days left" label
+    // wave.totalQuota - wave.consumedCount
+    // TODO: resolve exact wave fields (docs: wave[+0x20] - wave[+0x28])
+    // For now format "0 days left" as a placeholder
+    snprintf(m_DaysLeftLabel, sizeof(m_DaysLeftLabel), "%d days left", 0);
+
+    // FAST-PATH: caller passed valid score/state and we're past wave 5 with running progress
+    if (param3 >= 0.0f && param2 >= 0) {
+        FindMostOfFruit();
+        // DAT_001428d8 = 0.999 — binary checks wave.alpha (= game.alpha in port)
+        float waveAlpha = game ? game->m_TransitionTimer : 0.0f;
+        if (param2 > 5 && waveAlpha > 0.999f) {
+            // wave.alpha = 1.0  (DAT_001428dc)
+            // Port: game.m_TransitionTimer is the port's "wave.alpha"
+            if (game) game->m_TransitionTimer = 1.0f;
+            m_State           = 6;
+            m_bScoreSubmitted = 1;
+            m_FruitFactAlpha  = 1.0f;
+            // Immediate state-6 invocation
+            Update(0.0f);
+        }
+        m_State = param2;
+        m_Timer = param3;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Init (vtable slot 2, 0x00140548) — trivial pass-through
+// ---------------------------------------------------------------------------
 
 void GameOverScreen::Init() {
-    // TODO: load "game-over" textures, set up result screen visuals
+    // Binary: (*vtable[10])(this) — calls Update once. Port: no-op (Update
+    // is not safe to call from Init without state being ready).
 }
 
-void GameOverScreen::Reset() {
-    m_State     = 0;
-    m_Timer     = 0.0f;
-    m_pRetryBtn = nullptr;
-    m_pQuitBtn  = nullptr;
+// ---------------------------------------------------------------------------
+// BeginDraw (vtable slot 5, 0x00140590)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::BeginDraw(float /*dt*/) {
+    // Binary: m_LayerFlags = (m_State != 0) ? 0x81 : 1
+    // Layer 1 = base Draw; layer 0x80 = PreDrawOrder/DrawOrder overlays.
+    m_LayerFlags = (m_State != 0) ? 0x81 : 1;
 }
 
-void GameOverScreen::CreateButtons() {
-    if (m_pRetryBtn || m_pQuitBtn) return;
+// ---------------------------------------------------------------------------
+// Release (vtable slot 3, 0x00140d98)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::Release() {
+    m_GameOverTex = 0; // field_0x114.SetNull()
+
+    Game* game = Game::GetInstance();
+    if (game && game->pGameOverScreen == this) {
+        game->pGameOverScreen = nullptr;
+        // Clear save-data cache slots (+0x120, +0x11C, +0x124, +0x128, +300)
+        if (game->pSaveData) {
+            game->pSaveData->m_ModeHighScores[0] = 0; // +300 (approx — TODO: verify exact offset)
+            // TODO: clear exact slots when FruitSaveData layout confirmed for offsets +0x11C..+0x128
+        }
+    }
+
+    // Remove and free 4 aux HUDControls (FruitFact, slotC0, slot9c, slotA8)
+    // Binary order for RemoveControl: {0xBC, 0xC0, 0x9C, 0xA8}
+    if (game && game->hud) {
+        HUDControl* slots[4] = {
+            (HUDControl*)m_pFruitFact,
+            (HUDControl*)m_pSlotC0,
+            m_pSlot9c,
+            m_pSlotA8
+        };
+        for (int i = 0; i < 4; ++i) {
+            if (slots[i]) game->hud->RemoveControl(slots[i]);
+        }
+        for (int i = 0; i < 4; ++i) {
+            if (slots[i]) {
+                slots[i]->m_bNoDestructor = 0;
+                delete slots[i];
+            }
+        }
+    }
+    m_pFruitFact = nullptr;
+    m_pSlotC0    = nullptr;
+    m_pSlot9c    = nullptr;
+    m_pSlotA8    = nullptr;
+
+    // TODO: BonusManager::ClearBestBonuses() -- stub until BonusManager is ported
+    // BonusManager::GetInstance()->ClearBestBonuses();
+}
+
+// ---------------------------------------------------------------------------
+// SetTerminate (0x00140604)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::SetTerminate() {
+    // Binary: *(uint8_t*)(game + 0x33) = 1; CancelHUDProgressionTimer (no-op stub)
+    m_bPendingRemoval = 1;
+}
+
+// ---------------------------------------------------------------------------
+// SetStateWait (0x00140688)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::SetStateWait() {
+    // Binary: checks if leaderboard sign-in dialog needed; if not, state = 6.
+    // Port: always go to state 6 (online services defunct).
+    m_State = 6;
+}
+
+// ---------------------------------------------------------------------------
+// FindMostOfFruit (0x00141a18)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::FindMostOfFruit() {
+    Game* game = Game::GetInstance();
+    FruitSaveData* save = game ? game->pSaveData : nullptr;
+    if (!save) return;
+
+    int count = FruitInfo_GetCount();
+    if (count <= 0) return;
+
+    uint8_t gameMode = game->gameMode;
+
+    // Step 1: build candidate index list, filtering power-fruits in Arcade mode
+    int candidates[FRUIT_INFO_MAX];
+    int numCandidates = 0;
+    for (int i = 0; i < count && i < FRUIT_INFO_MAX; ++i) {
+        const FruitInfo* fi = FruitInfo_Get(i);
+        if (!fi) continue;
+        // In Arcade (gameMode==2), skip fruits with power-ups (special fruits)
+        if (gameMode == 2 && fi->m_bSpecial) continue;
+        candidates[numCandidates++] = i;
+    }
+
+    if (numCandidates == 0) return;
+
+    // Step 2: shuffle candidates (random fruit order eliminates ties bias)
+    for (int i = numCandidates - 1; i > 0; --i) {
+        int j = rand() % (i + 1);
+        int tmp = candidates[i];
+        candidates[i] = candidates[j];
+        candidates[j] = tmp;
+    }
+
+    // Step 3+4: fetch GetTotal for each candidate, track max
+    int bestCount = 0;
+    int bestIdx   = -1;
+    for (int k = 0; k < numCandidates; ++k) {
+        int i = candidates[k];
+        const FruitInfo* fi = FruitInfo_Get(i);
+        if (!fi) continue;
+        int c = save->GetTotal(fi->m_TotalStatHash);
+        if (c > bestCount) {
+            bestCount = c;
+            bestIdx   = i;
+        }
+    }
+
+    // Step 5: write result
+    if (bestCount > 0) {
+        field_0x118      = bestIdx;   // most-eaten fruit type index
+        m_MostFruitCount = bestCount;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CreateRetryButton (0x00141188)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::CreateRetryButton() {
+    if (m_pRetryBtn != nullptr) return;
 
     Game* game = Game::GetInstance();
     if (!game || !game->hud) return;
 
-    // TODO: use real binary positions/sizes from docs/screens/game-over.md when ported.
+    // Position: (-80, -96, 0) per binary DAT_001412c4/c8
+    Vec3 btnPos(-80.0f, -96.0f, 0.0f);
+
+    // Texture: binary reads from GOT + DAT_001412d4 ("retry-button.tex")
+    // Port fallback: load directly
+    SmartPtr<Mortar::Texture> tex =
+        TextureManager::LoadLocalisedTexture("textures/retry-button.tex");
+    GLuint texHandle = tex ? tex->m_TexId : 0;
+
     m_pRetryBtn = new MenuButton();
-    m_pRetryBtn->pos         = Vec3(0.0f, -30.0f, 0.0f);
+    m_pRetryBtn->pos    = btnPos;
     m_pRetryBtn->m_LayerFlags = 0x08;
     m_pRetryBtn->m_FruitType  = -1;
-    {
-        GameOverScreen* self = this;
-        m_pRetryBtn->m_ClickCallback = [self]() {
-            if (Game* g = Game::GetInstance())
-                g->retryFlag = 1;
-            self->m_State = 7;
-        };
-    }
-    game->hud->AddControl(m_pRetryBtn);
+    m_pRetryBtn->m_Texture    = texHandle;
+
+    GameOverScreen* self = this;
+    m_pRetryBtn->m_ClickCallback = [self]() {
+        Game* g = Game::GetInstance();
+        if (g) g->retryFlag = 1;
+        self->m_State = 7;
+    };
+
+    game->hud->AddControl(m_pRetryBtn, false);
+}
+
+// ---------------------------------------------------------------------------
+// CreateQuitButton (0x001412e4)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::CreateQuitButton() {
+    Game* game = Game::GetInstance();
+    if (!game || !game->hud) return;
+
+    // Position: (80, -96, 0) per binary DAT_00141428/2c
+    Vec3 btnPos(80.0f, -96.0f, 0.0f);
+
+    SmartPtr<Mortar::Texture> tex =
+        TextureManager::LoadLocalisedTexture("textures/quit-button.tex");
+    GLuint texHandle = tex ? tex->m_TexId : 0;
 
     m_pQuitBtn = new MenuButton();
-    m_pQuitBtn->pos          = Vec3(0.0f, 30.0f, 0.0f);
+    m_pQuitBtn->pos    = btnPos;
     m_pQuitBtn->m_LayerFlags = 0x08;
     m_pQuitBtn->m_FruitType  = -1;
-    {
-        GameOverScreen* self = this;
-        m_pQuitBtn->m_ClickCallback = [self]() {
-            self->m_State = 9;
-        };
-    }
-    game->hud->AddControl(m_pQuitBtn);
+    m_pQuitBtn->m_Texture    = texHandle;
+
+    // Mirror tutorial-text slots from retry button (binary: memcpy +0x124,+0x128,+0x12C)
+    // Not applicable until TutorialControl text slots are wired.
+
+    GameOverScreen* self = this;
+    m_pQuitBtn->m_ClickCallback = [self]() {
+        self->m_State = 9;
+    };
+
+    game->hud->AddControl(m_pQuitBtn, false);
 }
+
+// ---------------------------------------------------------------------------
+// Update (vtable slot 10, 0x00141b34) — main state machine (529 lines)
+// ---------------------------------------------------------------------------
 
 void GameOverScreen::Update(float dt) {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    // Advance animation counter (millisecond-resolution circular)
+    // Binary: field_0xac = (float)(int)(field_0xac) + dt*1000.0, then mod 1000
+    m_AnimCounter = (int)(((float)m_AnimCounter + dt * 1000.0f));
+    if (m_AnimCounter >= 1000) m_AnimCounter -= 1000;
+
     switch (m_State) {
-    case 0:
-        // Entry: brief delay then transition to main display
+
+    // -----------------------------------------------------------------------
+    // State 0: entry animation — sin-eased scale-in over 1.9s
+    // -----------------------------------------------------------------------
+    case 0: {
+        // First frame: force game.processing=1 based on game mode + entity count
+        if (m_bScoreSubmitted == 0) {
+            uint8_t gm = game->gameMode;
+            ActorManager* am = game->actorManager;
+            if ((uint8_t)(gm - 2) < 2) { // Arcade (2) or Zen (3)
+                if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0)
+                    game->m_bSlowMotion = 1; // game[+0x35] = m_bProcessing
+            } else {
+                game->m_bSlowMotion = 1;
+            }
+        }
+
+        m_LayerFlags = 1; // single-layer during entry
+
         m_Timer += dt;
-        if (m_Timer > 0.5f) {
-            m_Timer = 0.0f;
+        const float ENTRY_DURATION = 1.9f;   // DAT_00141dac
+        const float SIN_FULL       = 20000.0f; // DAT_00141da8
+
+        if (m_Timer < ENTRY_DURATION) {
+            float t = (m_Timer / ENTRY_DURATION) * SIN_FULL;
+            uint16_t idx;
+            if (t > SIN_FULL) idx = 0x4E34;
+            else              idx = (uint16_t)(int)t;
+            float curr = SinIdx(idx);
+            float full = SinIdx(0x4E34);
+            float scaleF = (full != 0.0f) ? (curr / full) : 0.0f;
+            size.x = m_TitleSizeX * scaleF * 2.0f;
+            size.y = m_TitleSizeY * scaleF * 2.0f;
+            size.z = m_TitleSizeZ * scaleF * 2.0f;
+        } else {
+            size.x = m_TitleSizeX * 2.0f;
+            size.y = m_TitleSizeY * 2.0f;
+            size.z = m_TitleSizeZ * 2.0f;
+        }
+
+        if (m_Timer > ENTRY_DURATION) {
+            if (game->gameMode == 2) { // Arcade
+                m_State = 1;
+                m_Timer = -0.333f; // DAT_00141db0
+            } else {
+                SetStateWait(); // goes to state 6 or pops sign-in dialog
+            }
+        }
+        pos.x = 0.0f; pos.y = 0.0f; pos.z = 0.0f;
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // State 1: bonus phase (Arcade only) — BonusScreen creation + slide
+    // -----------------------------------------------------------------------
+    case 1: {
+        // BonusScreen not yet ported — stub: immediate transition to state 6
+        // TODO: port BonusScreen and wire state 1 properly (see docs §7)
+        SetStateWait();
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // State 6: main display + score submission
+    // -----------------------------------------------------------------------
+    case 6: {
+        // 1) Create FruitFactControl on first entry
+        if (m_pFruitFact == nullptr) {
+            m_pFruitFact = new FruitFactControl();
+            // Position: DAT_00142120=183.0, y=12.0, z=DAT_00142118=0.0
+            m_pFruitFact->pos.x = 183.0f + m_OffsetPosX;
+            m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
+            m_pFruitFact->pos.z = 0.0f;
+            m_pFruitFact->m_PomCount  = (uint8_t)m_PomCount;
+            m_pFruitFact->m_StarCount = (uint8_t)m_StarCount;
+            if (game->hud) game->hud->AddControl(m_pFruitFact, false);
+            m_pFruitFact->Init();
+        }
+
+        // 2) Pop-in animation: game.alpha (m_TransitionTimer) ramps toward 1.0
+        float& alpha = game->m_TransitionTimer; // game[+0xC] = alpha
+        const float ALPHA_THRESH = 0.999f; // DAT_00142124
+        if (alpha < ALPHA_THRESH) {
+            m_ProgressCounter = 0;
+            alpha += (1.0f - alpha) * 0.125f;
+            if (alpha < 0.75f) game->m_bSlowMotion = 1; // suppress entity processing
+            if (alpha >= ALPHA_THRESH) alpha = 1.0f;
+            m_FruitFactAlpha = alpha;
+        } else {
+            if (m_FruitFactAlpha < 1.0f)
+                m_FruitFactAlpha += (1.0f - m_FruitFactAlpha) * 0.125f;
+            if (m_ProgressCounter < 11) m_ProgressCounter++;
+        }
+
+        // 3) On frame 10 (single-shot via m_bScoreSubmitted): commit scores
+        if (m_ProgressCounter == 10) {
+            m_ProgressCounter = 11; // latch
+            if (m_bScoreSubmitted == 0) {
+                int score = GetCurrentScore(0);
+                m_bScoreSubmitted = 1;
+
+                // Score submission tail (§8): most calls are no-ops until subsystems are ported
+                FruitSaveData* save = game->pSaveData;
+                if (save) {
+                    // TODO: FruitSaveData[+0x12D] = 0 (post-state clear)
+
+                    // Lifetime totals
+                    save->AddToTotal("FruitsCollected", 1);
+                    save->AddToTotal("TotalScore", score);
+                    // TODO: save->UnlockTotals();  -- not yet in FruitSaveData API
+
+                    // TODO: AchievementManager::GetInstance()->UnlockScoreAchievement(score);
+                    // TODO: AchievementManager::GetInstance()->UnlockTotalFruitAchievement(...);
+                    // TODO: AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, hi);
+
+                    // TODO: LeaderboardManager::RefreshLeaderboard(gameMode, 3) -- defunct
+                    // TODO: FNHighscoreList::AddPlayerScore(board) -- defunct
+
+                    // TODO: AchievementManager::GetInstance()->UnlockComboStarAchievement(...);
+
+                    int hi = GetCurrentModeHighscore();
+                    if (hi / 2 < score) {
+                        save->SetCurrentModeHighscore(score);
+                    }
+
+                    // TODO: NetworkManager::SetLeaderboardScore(...) -- defunct
+
+                    // Arcade-only post-game achievement
+                    if (game->gameMode == 2) {
+                        // TODO: BonusManager::UnlockPostGameAchievements();
+                    }
+
+                    save->FinishedGame();
+                    // TODO: save->ClearTotals() -- not yet in FruitSaveData API
+                    FruitNinja_SaveCurrentData(false);
+                }
+
+                // Load localised "Game Over" text texture
+                SmartPtr<Mortar::Texture> govTex =
+                    TextureManager::LoadLocalisedTexture("textures/game-over.tex");
+                m_GameOverTex = govTex ? govTex->m_TexId : 0;
+            }
+
+            game->m_TransitionTimer = 1.0f;
+
+            // Spawn retry/quit buttons only once and only when allowed
+            if (IsAllowedToExit()) {
+                CreateRetryButton();
+                if (m_pQuitBtn == nullptr) CreateQuitButton();
+            }
+        }
+
+        // 6) Vertical "settle" — slide content based on alpha
+        if (pos.y < 0.0f) {
+            float a = game->m_TransitionTimer;
+            // size = TitleSize * lerp(2.0, 1.0, alpha)
+            float sf = 2.0f + (1.0f - 2.0f) * a; // lerp(2,1,a)
+            size.x = m_TitleSizeX * sf;
+            size.y = m_TitleSizeY * sf;
+            // pos.y = lerp(-85.0, 0.0, alpha) per DAT_00142618/0014261c
+            pos.x = 0.0f;
+            pos.y = -85.0f + (-85.0f * -1.0f) * a; // = -85*(1-a) → 0 as a→1
+            pos.z = 0.0f;
+        }
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // State 7: retry — guard entities & reset wave & flag pause
+    // -----------------------------------------------------------------------
+    case 7: {
+        ActorManager* am = game->actorManager;
+        if (am && am->GetNumEntities(0) != 0 && m_pSlot9c == nullptr) {
+            // Entities still on screen — snap alpha and stay in state 6
+            game->m_TransitionTimer = 1.0f;
             m_State = 6;
+            break;
         }
-        break;
-
-    case 6:
-        // Main display: create retry/quit buttons
-        // TODO: proper layout + animations per binary state 6
-        CreateButtons();
-        m_State = 60;
-        break;
-
-    case 60:
-        // Waiting for button press — handled via callbacks
-        break;
-
-    case 7:
-        // Retry: reset wave without respawn
+        // Binary: game[+0x28] = game[+0x20] (fruitConsumed = fruitTotal)
+        // Port: no direct equivalent yet; TODO: wire when wave fields confirmed
         WaveManager::GetInstance()->Reset(false);
-        // TODO: EndRetryLevel (0x0016a25c) full flow
-        if (Game* game = Game::GetInstance()) {
-            game->retryFlag = 0;
-            game->pauseFlag = 0;
-        }
-        m_bPendingRemoval = 1;
-        break;
-
-    case 8:
-        // Quit to menu: reset wave without respawn
-        WaveManager::GetInstance()->Reset(false);
-        // TODO: QuitToMenu (0x00169e50) full flow
-        m_bPendingRemoval = 1;
-        break;
-
-    case 9:
-        // Quit path transition
+        game->pauseFlag = 1; // will be cleared in state 8
         m_State = 8;
         break;
+    }
 
-    case 11:
-        // Final
-        m_bPendingRemoval = 1;
+    // -----------------------------------------------------------------------
+    // State 8: camera fade-out for retry
+    // -----------------------------------------------------------------------
+    case 8: {
+        float& alpha = game->m_TransitionTimer;
+        alpha *= 0.75f;
+        m_FruitFactAlpha = alpha;
+
+        const float ALPHA_LOW = 0.001f; // DAT_00142114
+        if (alpha < ALPHA_LOW) {
+            WaveManager::GetInstance()->Reset(false);
+            alpha = 0.0f;
+            game->pauseFlag = 0;
+            m_FruitFactAlpha = 0.0f;
+            WaveManager::NewGame();
+            SetTerminate();
+        }
+
+        // Slide up off-screen as alpha decays
+        if (pos.y < 0.0f) {
+            // pos.y = 0.0 + (1-m_FruitFactAlpha) * 224.0
+            pos.x = 0.0f;
+            pos.y = (1.0f - m_FruitFactAlpha) * 224.0f; // DAT_0014211c = 224.0
+            pos.z = 0.0f;
+        }
         break;
+    }
+
+    // -----------------------------------------------------------------------
+    // State 9: quit path — wait for entities, then QuitToMenu
+    // -----------------------------------------------------------------------
+    case 9: {
+        ActorManager* am = game->actorManager;
+        if (am && am->GetNumEntities(0) != 0) break; // wait
+        DoQuitToMenu();
+        m_State = 11;
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // State 10: online leaderboard launch (defunct) — no-op, back to state 6
+    // -----------------------------------------------------------------------
+    case 10: {
+        // TODO: Tier-2 — NetworkManager::LaunchDashboard() (defunct)
+        m_ProgressCounter = 0;
+        m_pQuitBtn        = nullptr;
+        m_pRetryBtn       = nullptr;
+        field_0xa0        = 0;
+        m_State           = 6;
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // State 11: final fade-out
+    // -----------------------------------------------------------------------
+    case 11: {
+        // Binary: if (game.alpha < 0.0f) SetTerminate()
+        if (game->m_TransitionTimer < 0.0f) SetTerminate();
+        break;
+    }
+
+    // -----------------------------------------------------------------------
+    // State 14: quick-restart hot path (no observable caller in stock build)
+    // -----------------------------------------------------------------------
+    case 14: {
+        m_State = 6;
+        m_Timer = 2.0f;
+        break;
+    }
 
     default:
-        // TODO: states 1..5, 10: animations, score tally, star count
-        m_State = 6;
+        // Unhandled states (2..5, 12, 13, 15+): do nothing (matches binary)
         break;
+    }
+
+    // -----------------------------------------------------------------------
+    // Common layout block (runs every frame after switch)
+    // -----------------------------------------------------------------------
+    uint8_t gm = game->gameMode;
+    if ((uint8_t)(gm - 2) < 2 && m_pBonusScreen != nullptr) {
+        // Arcade or Zen with BonusScreen
+        // bonusPos.x = DAT_00142624 + (1-m_FruitFactAlpha) * DAT_00142628
+        //            = -204.0 + (1-alpha) * -193.0
+        float bx = -204.0f + (1.0f - m_FruitFactAlpha) * (-193.0f);
+        float by = 75.0f; // DAT_00142620
+        m_pBonusScreen->pos.x = bx;
+        m_pBonusScreen->pos.y = by;
+        m_pBonusScreen->pos.z = 0.0f;
+        if (m_pFruitFact) {
+            m_pFruitFact->pos.x = bx + 184.0f; // DAT_0014262c
+            m_pFruitFact->pos.y = by + 4.0f;
+            m_pFruitFact->pos.z = 0.0f;
+        }
+    } else {
+        // Classic / single-player layout
+        // m_OffsetPos.x = DAT_00142634 + DAT_00142630 * m_FruitFactAlpha
+        //              = 130.0 + (-50.0) * alpha
+        m_OffsetPosX = 130.0f + (-50.0f) * m_FruitFactAlpha;
+        m_OffsetPosY = 75.0f;  // DAT_00142638
+        m_OffsetPosZ = 0.0f;
+        if (m_pFruitFact) {
+            m_pFruitFact->pos.x = m_OffsetPosX + 60.0f; // DAT_0014263c
+            m_pFruitFact->pos.y = m_OffsetPosY + 12.0f;
+            m_pFruitFact->pos.z = 0.0f;
+        }
+        // Retry/quit button shake (jitter decays to 0 as m_FruitFactAlpha -> 1.0)
+        // Binary: spread = (extraVec[0] * (1-m_FruitFactAlpha)) * 0.6
+        // Port: simple position set only (extraVec not yet resolved)
+        if (m_pSlot9c) {
+            // DAT_00142644=-56.0, DAT_00142648=240.0
+            m_pSlot9c->pos.x = 0.0f;
+            m_pSlot9c->pos.y = -56.0f + (1.0f - m_FruitFactAlpha) * 240.0f;
+            m_pSlot9c->pos.z = 0.0f;
+        }
     }
 }
 
-void GameOverScreen::Draw(const Vec3& hudScale, int layerMask) {
+// ---------------------------------------------------------------------------
+// PreDrawOrder (vtable slot 8, 0x0014171c)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
+    if (layerMask & 0x80) {
+        // Layer 0x80: draw "days remaining" text + extra texture
+        // TODO: wire Font::DrawString once font rendering is confirmed for this screen
+        // Binary reads m_DaysLeftLabel and draws via pFont at a fixed screen position.
+        // For now this is a no-op placeholder.
+        (void)hudScale;
+    }
+
+    if (layerMask & 1) {
+        // Layer 1: expression + pattern overlays, then HUDControl3d::Draw
+        // TODO: expression/pattern overlay quads (m_ExpressionIdx, m_BgPatternIdx)
+        // Gated by m_bIsClassic per binary.
+        HUDControl3d::Draw(hudScale, layerMask);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DrawOrder (vtable slot 9, 0x00141448)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
+    if (!(layerMask & 1)) return; // cached check
+
+    // Rotating starburst halo: 48-vertex triangle list, time-pulsed colour.
+    // Binary: 48 verts, rotation driven by m_AnimCounter, colour pulses RGBA.
+    // TODO: implement GL vertex buffer / immediate-mode equivalent when
+    //       render pipeline is confirmed for this screen.
+    // For now this is a no-op placeholder.
     (void)hudScale;
-    (void)layerMask;
-    // TODO: draw black overlay + "GAME OVER" + score text
-    // Deferred until Font::DrawString and full asset loading is ported.
 }
