@@ -3,15 +3,9 @@
 
 // Analysed: 2026-04-30T00:00
 //
-// PowerUpManager — tracks active power-ups: hash->PowerUp* maps, active list,
-// screen-effect map, dt multiplier (slow-time), score gain/loss multipliers.
-// Drives blitz/chrono/double-points/etc. modifiers.
-// Size: ~0x90 (144 bytes). Ctor inits m_field70/m_field74 at 0x70-0x74;
-//       last accessed offset 0x84. Per docs/structs/game-managers.md.
-//
-// IMPORTANT: A no-op stub will compile but silently disables blitz mode,
-// freeze, double points, etc. Mark all stubs with TODO.
-// See docs/systems/power-ups.md for full method index.
+// PowerUpManager — singleton tracking all power-ups (templates + active clones),
+// screen effects, and per-frame composite modifier output slots.
+// Binary size 0x90 (144 bytes). No vtable (concrete singleton).
 //
 // Binary addresses:
 //   ctor (real)             0x00117d20
@@ -20,18 +14,49 @@
 //   dtor (regular)          0x001187fc
 //   dtor (deleting)         0x00118880
 //   GetInstance             0x00118134
+//   SetDefaults             0x00117a80
+//   ClearScoreMultipliers   0x0011a218
 //   Update                  0x001189b4  (wrapper: 0x000f3ccc)
 //   Reset                   0x00119b08
 //   ClearTimedPowers        0x00118904
 //   ActivatePower           0x001197c4
+//   ActivateScreenEffect    0x00119760
+//   ClearScreenEffects      0x00117ed8
 //   Load                    0x00119cb0
+//   LoadTextures            0x0011840c
+//   Draw                    0x00119384
 //   ApplyDtMod              0x001204dc
 //   SlowClock               0x001204cc
-//   ClearScreenEffects      0x00117ed8
+//   StopClock               0x00117a70
+//   PowerupDtModMultiply    0x001286ec
+//   AddToScoreGainAdd       0x0011d10c
+//   AddToScoreLossAdd       0x0011d114
+//   AddToScoreGainMultiply  0x0011d120
+//   AddToScoreLossMultiply  0x0011d128
 //   GetScoreGainMultiplier  0x0010ad34
 //   GetScoreLossMultiplier  0x0010ad40
+//   GetActiveProgression    0x00117b38
+//   GetActiveSingle         0x00117cac
+//   GetNumActiveTimedPowers 0x00117bb8
 
 #include <cstdint>
+#include <map>
+#include <list>
+
+class PowerUp;
+
+// ScreenEffect — opaque stub (0x50-byte struct in binary).
+// Stubs enough to compile the maps/lists; full port is Tier-2.
+class ScreenEffect {
+public:
+    uint32_t m_NameHash = 0;
+    float    m_Lifetime = 0.0f;
+    void Activate() {}
+    void Deactivate() {}
+    void Update(float /*dt*/, float /*unused1*/, float /*unused2*/) { m_Lifetime -= 1.0f/60.0f; }
+    void LoadTextures() {}
+    void Parse(void* /*xml*/) {}
+};
 
 class PowerUpManager {
 public:
@@ -40,56 +65,139 @@ public:
         return &s_instance;
     }
 
-    // @ 0x001189b4 — tick all active powers, handle expiry
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    void Update(float dt) { (void)dt; }
+    // @ 0x001189b4
+    void Update(float dt);
 
-    // @ 0x00119b08 — clears all active powers + state
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    void Reset(bool fullReset) { (void)fullReset; }
+    // @ 0x00117a80
+    void SetDefaults();
 
-    // @ 0x00118904 — remove timed-only powers (called on bomb hit)
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    void ClearTimedPowers() {}
+    // @ 0x0011a218
+    void ClearScoreMultipliers();
 
-    // @ 0x001197c4 — clone PowerUp by hash and activate
-    // TODO: real impl pending -- see docs/systems/power-ups.md
+    // @ 0x00119b08
+    void Reset(bool fullReset);
+
+    // @ 0x00118904
+    void ClearTimedPowers();
+
+    // @ 0x001197c4
+    // TODO: full ActivatePower impl (Tier-2)
     void ActivatePower(uint32_t hash) { (void)hash; }
 
-    // @ 0x00119cb0 — load poweruplist.xml into hash maps
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    void Load() {}
+    // @ 0x00119760
+    // TODO: ActivateScreenEffect full impl (Tier-2)
+    bool ActivateScreenEffect(uint32_t hash);
 
-    // @ 0x001204dc — m_DtMod *= param (slow-time hook)
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    void ApplyDtMod(float f) { (void)f; }
+    // @ 0x00117ed8
+    void ClearScreenEffects();
 
-    // @ 0x001204cc — slow-time activation
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    void SlowClock() {}
+    // @ 0x00119cb0
+    void Load();
 
-    // @ 0x00117ed8 — clear all screen-effect entries
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    void ClearScreenEffects() {}
+    // @ 0x0011840c
+    void LoadTextures();
+
+    // @ 0x00119384
+    // TODO: Draw (Tier-2)
+    void Draw();
+
+    // @ 0x001204dc — m_DtMod *= scale
+    void ApplyDtMod(float scale) { m_DtMod *= scale; }
+
+    // @ 0x001204cc — m_field6c *= scale
+    void SlowClock(float scale) { m_field6c *= scale; }
+
+    // @ 0x00117a70 — m_field68 += duration
+    void StopClock(float duration) { m_field68 += duration; }
+
+    // @ 0x001286ec — m_field70 *= scale
+    void PowerupDtModMultiply(float scale) { m_field70 *= scale; }
+
+    // @ 0x0011d10c
+    void AddToScoreGainAdd(int n)      { m_ScoreGainFactor   += n; }
+    // @ 0x0011d114
+    void AddToScoreLossAdd(int n)      { m_ScoreLossFactor   += n; }
+    // @ 0x0011d120
+    void AddToScoreGainMultiply(int n) { m_ScoreGainMult     *= n; }
+    // @ 0x0011d128
+    void AddToScoreLossMultiply(int n) { m_ScoreLossMult     *= n; }
 
     // @ 0x0010ad34 — returns m_ScoreGainMult * m_ScoreGainFactor
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    float GetScoreGainMultiplier() const { return 1.0f; }
+    int GetScoreGainMultiplier() const { return m_ScoreGainMult * m_ScoreGainFactor; }
 
-    // @ 0x0010ad40 — returns +0x80 * +0x84
-    // TODO: real impl pending -- see docs/systems/power-ups.md
-    float GetScoreLossMultiplier() const { return 1.0f; }
+    // @ 0x0010ad40 — returns m_ScoreLossMult * m_ScoreLossFactor
+    int GetScoreLossMultiplier() const { return m_ScoreLossMult * m_ScoreLossFactor; }
 
-    // Fields read by WaveManager/TimeControl:
-    float m_DtMod;      // dt multiplier (slow-time). Init = 1.0f.
-    float m_field68;    // @ +0x68
-    float m_field6c;    // @ +0x6c
+    // @ 0x00117b38
+    // TODO: GetActiveProgression full impl (Tier-2 / GetActiveProgression)
+    float GetActiveProgression(float t) const;
+
+    // @ 0x00117cac
+    PowerUp* GetActiveSingle(uint32_t hash);
+
+    // @ 0x00117bb8
+    int GetNumActiveTimedPowers() const;
+
+    // --- Struct fields (binary layout) ---
+
+    // +0x00  m_AllPowerUps — every <powerup> parsed from XML, indexed by StringHash(name)
+    std::map<uint32_t, PowerUp*> m_AllPowerUps;
+
+    // +0x18  m_ActivePowerUps — currently-active clones
+    std::list<PowerUp*> m_ActivePowerUps;
+
+    // +0x20  m_ActiveByHash — quick lookup of active by name-hash
+    std::map<uint32_t, PowerUp*> m_ActiveByHash;
+
+    // +0x38  m_ScreenEffectPool — template ScreenEffects by hash (stored by value)
+    std::map<uint32_t, ScreenEffect> m_ScreenEffectPool;
+
+    // +0x50  m_ActiveScreenEffects — instances ticked each frame
+    std::list<ScreenEffect> m_ActiveScreenEffects;
+
+    // +0x58  m_PurchasablePowers — alias list of purchaseable templates (not owning)
+    std::list<PowerUp*> m_PurchasablePowers;
+
+    // +0x60  m_field60 — pointer cache to active special PowerUp (for HUD spotlighting)
+    int m_field60;
+
+    // +0x64  m_DtMod — composite time-scale multiplier (SetDefaults resets to 1.0)
+    float m_DtMod;
+
+    // +0x68  m_field68 — "stop clock" accumulator (SetDefaults resets to 0.0)
+    float m_field68;
+
+    // +0x6c  m_field6c — "slow clock" multiplier (SetDefaults resets to 1.0)
+    float m_field6c;
+
+    // +0x70  m_field70 — composite WaveModifier dt-mod (reset to 1.0 each frame)
+    float m_field70;
+
+    // +0x74  m_field74 — previous frame's m_field70 (carried forward in Update)
+    float m_field74;
+
+    // +0x78  m_ScoreGainMult — multiplicative score-gain (default 1)
+    int m_ScoreGainMult;
+
+    // +0x7c  m_ScoreGainFactor — additive score-gain (default 1)
+    int m_ScoreGainFactor;
+
+    // +0x80  m_ScoreLossMult — multiplicative score-loss (default 1)
+    int m_ScoreLossMult;
+
+    // +0x84  m_ScoreLossFactor — additive score-loss (default 1)
+    int m_ScoreLossFactor;
+
+    // +0x88  m_field88 — highest current-time-progress across non-purchaseable specials
+    float m_field88;
+
+    // +0x8c  (pad — unused)
+    uint32_t _pad8c;
 
 private:
-    // ctor @ 0x00117d20: 3 std::map ctors, 2 std::list ctors, init m_DtMod/m_field70 = 1.0f
-    PowerUpManager()
-        : m_DtMod(1.0f), m_field68(1.0f), m_field6c(1.0f) {}
-    ~PowerUpManager() {}
+    // @ 0x00117d20
+    PowerUpManager();
+    ~PowerUpManager();
 };
 
 #endif // FN_GAME_POWER_UP_MANAGER_H

@@ -74,20 +74,22 @@ public:
     // tick. PowerUpManager::SetDefaults clears the mask at the top of
     // PowerUpManager::Update, so this function running each frame is
     // what keeps the bits set while the modifier is active.
-    void UpdateSpecific(float dt) override;
+    int UpdateSpecific(float dt) override;
 
     // 0x0011f31c — one-shot on activation. Binary calls
     // SlashEntity::SetModColours(...) + increments
     // ItemManager::EquippedSlashModCount. Port: stubbed until the
     // SlashEntity blade-palette + ItemManager lands.
-    void ApplyModifier() override;
+    void ApplyModifier(bool isPurchased, float* extra) override;
 
     // 0x0011f2e0 — decrement equipped-mod counter; if it reaches 0,
     // restore the default blade palette via SetEquippedItem.
     void RemoveModifier() override;
 
+    int GetType() override { return 3; }
+
     // 0x0011f464 — parse XML <slash ...> element.
-    void ParseSpecific(void* xml) override;
+    void ParseSpecific(TiXmlElement* xml) override;
 };
 
 #endif

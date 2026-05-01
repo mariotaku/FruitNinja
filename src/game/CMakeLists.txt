@@ -10,6 +10,11 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitSaveData.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SlashModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ScoreModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TimeModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/WaveModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PowerUp.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PowerUpManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ItemManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ItemInfo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/UpdateMusic.cpp
