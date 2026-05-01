@@ -737,19 +737,6 @@ void WaveManager::Update(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Port-specific gate: only progress waves when an active game session
-    // is in flight. PrepareForLevelStart (called from GameModeScreen on
-    // mode-pick) sets pauseFlag = 1 to mark the gameplay phase. Without
-    // this gate, UpdateWave's wave-end block would call GetNextWave on
-    // the first frame post-boot (no current wave + field_0x238 = 0) and
-    // prime + spawn fruit before the user even reaches the title screen.
-    // Binary architecturally relies on different state machinery here
-    // that the port hasn't fully reproduced; pauseFlag is the closest
-    // available signal.
-    // TODO: replace with binary-faithful gate once cold-boot wave priming
-    // path is RE'd.
-    if (!game->pauseFlag) return;
-
     // Reset per-frame multipliers.
     m_CritChanceMult = 1.0f;
     field_0x78 = 1.0f;
