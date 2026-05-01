@@ -133,18 +133,22 @@ public:
     // +0x70: was-game-over flag at save time.
     uint8_t  m_bWasGameOver;
 
-    // +0x74..+0x78: global high score reference shadows.
-    int      m_HighScoreRef1;      // +0x74 (default -1)
-    int      m_HighScoreRef2;      // +0x78
+    // +0x74: last-slasher player index snapshot (default -1, sentinel = no slash yet).
+    // XML attr "count2". Confirmed: WaveManager::Resume @ 0x00124b54 writes
+    // g_LastSlasher = save[+0x74]; SaveCurrentData @ 0x0016cd08 writes save[+0x74] = g_LastSlasher.
+    int      m_LastSlasher;        // +0x74
 
-    // +0x7c: binary @ 0x00124986 writes WaveManager::m_FruitQueueSize[1] here.
-    // TODO: semantic unknown (Ghidra auto-name "field82_0x7c"); not serialised in any
-    // known XML attr. Paired with m_FruitQueueCount (+0x7c slot in binary) — may be
-    // a P2 fruit queue count.
-    int      field82_0x7c;         // +0x7c
+    // +0x78: combo count snapshot (default 0).
+    // XML attr "count1". Confirmed: WaveManager::Resume @ 0x00124b68 writes
+    // g_ComboCount = save[+0x78]; SaveCurrentData @ 0x0016cd34 writes save[+0x78] = g_ComboCount.
+    int      m_ComboCount;         // +0x78
+
+    // +0x7c: fruit queue entry count for resume snapshot.
+    // XML attr "fruitQueue" (N,a,b,...). Resume @ 0x00124cf4 writes this to
+    // WaveManager::field_0x2c8.
+    int      m_FruitQueueCount;    // +0x7c
 
     // +0x80..+0xfc: fruit queue for resume.
-    int      m_FruitQueueCount;    // +0x80 (WaveManager::m_FruitQueueSize[0])
     int      m_FruitQueue[32];     // +0x80 (all -1 by default)
 
     // +0x100..+0x108: per-player base speed snapshot.
@@ -211,8 +215,12 @@ public:
     // +0x1f4: save format version (must match GetVersionTotal()).
     int      m_VersionInfo;
 
-    // +0x1f8: per-mode play counts (XML attr "%s_dolg").
-    int      m_ModePlayCounts[4];
+    // +0x1f8: date stamp of most-recent GameOver per mode (XML attr "%s_dolg").
+    // Value is GetDaysSince1900() at the time of GameOver. NOT a play count.
+    // Used by PlayedModeToday / CheckDatesHaveChanged to gate per-day-cap
+    // stat counters (e.g. <MODE>_today totals). The XML attr "_dolg" is a
+    // Russian transliteration; semantically "last day this mode was played".
+    int      m_LastPlayedDay[4];    // +0x1f8
 
     // +0x208..+0x238: bomb queue for resume.
     int      m_BombQueueCount;     // +0x208
@@ -257,6 +265,19 @@ public:
 
     // 0x0012a034. Decrements modifier counters at end of round.
     void FinishedGame();
+
+    // Copy g_LastSlasher / g_ComboCount globals into m_LastSlasher / m_ComboCount.
+    // Called by SaveCurrentData before writing to disk.
+    void SnapshotComboState();
+
+    // Copy m_LastSlasher / m_ComboCount back into g_LastSlasher / g_ComboCount.
+    // Called by WaveManager::Resume when restoring an interrupted game.
+    void RestoreComboState();
+
+    // SetCurrentModeHighscore @ 0x0010a388. Updates m_ModeHighScores[currentMode]
+    // when the new score beats the stored value (strict greater-than at write site,
+    // but caller in GameOverScreen::Update gates on currentHigh/2 < currentScore).
+    void SetCurrentModeHighscore(int score);
 
     // ------------------------------------------------------------------
     // Achievements
