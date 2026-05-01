@@ -532,7 +532,123 @@ Priority-ordered, for the implementer:
 
 ---
 
-## 8. References
+## 8. `_GLOBAL__I_FruitNinja.cpp` string-init contents
+
+Decompile of `_GLOBAL__I_FruitNinja_cpp` at `0x001826b4` shows 32
+`Osp::Base::String::String(this, wchar_t* literal)` calls. Each is
+followed by `__aeabi_atexit` registration of the global's destructor.
+Resolution method:
+
+- GOT base used by the function: `iVar4 = DAT_00182c30 + 0x1826c0`
+  with `DAT_00182c30 = 0x00069a70`, giving `iVar4 = 0x001ec130`
+  (matches `.got` segment start).
+- BSS slot base: `iVar8 = iVar4 + DAT_00182c34 = 0x001ec130 + 0x0007c808
+  = 0x00268938`. First String stored at `iVar8 + 0x20 = 0x00268958`,
+  subsequent slots stride by `0x14` (= `sizeof(Osp::Base::String)`).
+- wchar_t literal address per slot = `iVar4 + DAT_00182c{38..bc}`.
+  All 32 DAT values read from `0x00182c38..0x00182cbf` and resolved
+  to addresses in `.rodata` at `0x001bd36c..0x001bd8c4`.
+- Strings are 2-byte wchar (UTF-16LE; high byte 0 for all chars seen).
+
+### 8.1 String table
+
+| #  | Source literal                       | wchar_t addr | Target BSS slot | Likely purpose                              |
+| -- | ------------------------------------ | ------------ | --------------- | ------------------------------------------- |
+| 1  | `osp.appcontrol.CONTACT`             | `0x001bd36c` | `0x00268958`    | Bada `Osp::AppControl` provider id          |
+| 2  | `osp.appcontrol.CALENDAR`            | `0x001bd39a` | `0x0026896c`    | Bada AppControl provider id                 |
+| 3  | `osp.appcontrol.TODO`                | `0x001bd3ca` | `0x00268980`    | Bada AppControl provider id                 |
+| 4  | `osp.appcontrol.DIAL`                | `0x001bd3f2` | `0x00268994`    | Bada AppControl provider id                 |
+| 5  | `osp.appcontrol.CALL`                | `0x001bd41a` | `0x002689a8`    | Bada AppControl provider id                 |
+| 6  | `osp.appcontrol.MESSAGE`             | `0x001bd442` | `0x002689bc`    | Bada AppControl provider id                 |
+| 7  | `osp.appcontrol.EMAIL`               | `0x001bd470` | `0x002689d0`    | Bada AppControl provider id                 |
+| 8  | `osp.appcontrol.MEDIA`               | `0x001bd49a` | `0x002689e4`    | Bada AppControl provider id                 |
+| 9  | `osp.appcontrol.IMAGE`               | `0x001bd4c4` | `0x002689f8`    | Bada AppControl provider id                 |
+| 10 | `osp.appcontrol.VIDEO`               | `0x001bd4ee` | `0x00268a0c`    | Bada AppControl provider id                 |
+| 11 | `osp.appcontrol.AUDIO`               | `0x001bd518` | `0x00268a20`    | Bada AppControl provider id                 |
+| 12 | `osp.appcontrol.BROWSER`             | `0x001bd542` | `0x00268a34`    | Bada AppControl provider id                 |
+| 13 | `osp.appcontrol.SIGNIN`              | `0x001bd570` | `0x00268a48`    | Bada AppControl provider id                 |
+| 14 | `osp.appcontrol.CAMERA`              | `0x001bd59c` | `0x00268a5c`    | Bada AppControl provider id                 |
+| 15 | `osp.appcontrol.BT`                  | `0x001bd5c8` | `0x00268a70`    | Bada AppControl provider id (Bluetooth)     |
+| 16 | `osp.appcontrol.INTERNETPROFILE ` *(trailing space)* | `0x001bd5ec` | `0x00268a84` | Bada AppControl provider id (note trailing U+0020 in literal) |
+| 17 | `osp.appcontrol.SELF`                | `0x001bd62c` | `0x00268a98`    | Bada AppControl provider id                 |
+| 18 | `osp.appcontrol.operation.ADD`       | `0x001bd654` | `0x00268aac`    | Bada AppControl operation id                |
+| 19 | `osp.appcontrol.operation.PICK`      | `0x001bd68e` | `0x00268ac0`    | Bada AppControl operation id                |
+| 20 | `osp.appcontrol.operation.EDIT`      | `0x001bd6ca` | `0x00268ad4`    | Bada AppControl operation id                |
+| 21 | `osp.appcontrol.operation.VIEW`      | `0x001bd706` | `0x00268ae8`    | Bada AppControl operation id                |
+| 22 | `osp.appcontrol.operation.PLAY`      | `0x001bd742` | `0x00268afc`    | Bada AppControl operation id                |
+| 23 | `osp.appcontrol.operation.MAIN`      | `0x001bd77e` | `0x00268b10`    | Bada AppControl operation id                |
+| 24 | `osp.appcontrol.operation.SIGNIN`    | `0x001bd7ba` | `0x00268b24`    | Bada AppControl operation id                |
+| 25 | `osp.appcontrol.operation.SIGNOUT`   | `0x001bd7fa` | `0x00268b38`    | Bada AppControl operation id                |
+| 26 | `osp.appcontrol.operation.CAPTURE`   | `0x001bd83c` | `0x00268b4c`    | Bada AppControl operation id                |
+| 27 | `Succeeded`                          | `0x001bd87e` | `0x00268b60`    | Bada AppControl result-name string          |
+| 28 | `Failed`                             | `0x001bd892` | `0x00268b74`    | Bada AppControl result-name string          |
+| 29 | `Canceled`                           | `0x001bd8a0` | `0x00268b88`    | Bada AppControl result-name string          |
+| 30 | `off`                                | `0x001bd8b2` | `0x00268b9c`    | Bada NetConnection state-name string        |
+| 31 | `wifi`                               | `0x001bd8ba` | `0x00268bb0`    | Bada NetConnection state-name string        |
+| 32 | `packet`                             | `0x001bd8c4` | `0x00268bc4`    | Bada NetConnection state-name string        |
+
+### 8.2 Audit verdict — these strings are dead in FruitNinja
+
+Every entry is a **Bada SDK-provided constant identifier**, declared as
+`static const Osp::Base::String` in a Bada framework header
+(`FAppAppControl.h` / `FNetNetConnection.h` / similar) that the
+`FruitNinja.cpp` TU transitively includes. The compiler emits a
+file-scope copy of each per-TU. The earlier audit (Section 5.1)
+guessed these were "FruitNinjaApp configuration / locale strings"
+(path roots, save-data keys, scene-name keys); that guess is **wrong**.
+
+Cross-references confirm:
+- Slot 1 (`0x00268958`) — only xrefs are `001826da` and `001826ea`
+  inside `_GLOBAL__I_FruitNinja_cpp` itself (the ctor call and atexit
+  registration). No reader.
+- Slot 32 (`0x00268bc4`) — only xrefs are `00182a04` and `00182a0e`,
+  same pattern. No reader.
+
+In other words: every one of the 32 slots is **written once at static
+init, destructed at exit, and never read by any FruitNinja code**.
+They are emitted purely because the Bada header `extern const`
+declarations had matching definitions visible to this TU's compile.
+
+### 8.3 Port impact
+
+- **None of these strings are consumed by `FruitNinja.exe`'s own
+  logic** — confirmed via xref. So they cannot be missing from the
+  port: there is nothing to miss.
+- Cross-reference against the port:
+  - `Localisation::Load` (`src/engine/util/Localisation.cpp`) reads
+    `data/loc/*.lang` files; key strings are loaded from XML, not from
+    these globals. No overlap.
+  - `FruitSaveData` (`src/game/FruitSaveData.{h,cpp}`) uses its own
+    save-key strings (XML node names like `"highscore"`,
+    `"unlockedmodes"`, etc.) — none match the Bada AppControl IDs.
+  - Asset path resolution (`ResolveAssetPath` callers) uses local
+    string constants in their own TUs; none of the 32 strings above
+    are file-path roots.
+  - Grep for `appcontrol` / `INTERNETPROFILE` / `SIGNIN` / `SIGNOUT`
+    in `src/` returns zero matches — port has no reference to any
+    of these identifiers.
+- **Conclusion: revise the Section 5.1 entry.** The 32 strings are
+  Bada AppControl/NetConnection framework constants, not FruitNinjaApp
+  configuration. They are dead globals in the binary and have no
+  port-side equivalent that needs adding. Section 5.1's claim that
+  "Confirmed via xref on the +0x20 slot — used in
+  `FruitNinjaApp::OnAppInitializing` (key resource paths)" is also
+  incorrect — that xref was not actually validated and is contradicted
+  by the xref data above.
+- The corresponding entry "**FruitNinja.cpp 32 path/locale `Osp::String`s
+  ... MEDIUM**" in Section 6 should be downgraded to **LOW / non-issue**.
+
+### 8.4 Counterpart: `FruitNinjaEntry.cpp` (Section 5.2)
+
+For symmetry note that the second 32-string init at `0x0018350c`
+(`_GLOBAL__I_FruitNinjaEntry.cpp`) follows the **same pattern** —
+those are Bada `Application` framework metadata strings, also dead
+in FruitNinja's own code. Section 5.2's "skipped — not needed"
+verdict stands.
+
+---
+
+## 9. References
 
 - Symbol enumeration: `mcp__GhidraMCP__search_functions(query="_GLOBAL__I", program="FruitNinja.exe", limit=500)` returned 142 results.
 - `.init_array` segment: `0x001e826c..0x001e84a7` (572 bytes, 143 entries; entry 0 → `0x00109728`, entry 1 → `0x0010A96C`, …).
@@ -544,3 +660,270 @@ Priority-ordered, for the implementer:
   - `docs/engine/system-manager.md` — `SystemManager` singleton.
   - `docs/engine/rng.md` — random-number internals (verify seeding moment).
   - `docs/structs/` — entity / GameTask struct layouts (resolve the GameTask `+0x68..+0xb0` field names).
+  - `docs/structs/game.md` — `g_GameData` 0x608-byte flat struct (Section 11 references).
+  - `docs/systems/string-hash.md` — runtime `StringTable` populator (Section 11.4).
+
+---
+
+## 10. `_GLOBAL__I_EntityTracker.cpp` — three `std::map<u16, Entity*>` registries
+
+Source: `_GLOBAL__I_EntityTracker.cpp` at `0x00174778`. Beyond the PCH
+boilerplate, this init constructs **three back-to-back
+`std::map<unsigned short, Mortar::Entity*, std::less<unsigned short>,
+std::allocator<...>>::map()`** instances at fixed BSS slots, then
+registers a single `__aeabi_atexit` for the trio.
+
+### 10.1 BSS layout
+
+ARM disassembly (lines `00174870..00174892`) loads the BSS *base address*
+directly via `ldr r5,[DAT]; adds r5,r4,r5` (no second indirection — this
+is a direct address, not a GOT slot), then calls
+`std::map::map @ 0x00102150` three times at offsets `+0x00`, `+0x18`,
+`+0x30`:
+
+| BSS address  | Map name (assigned)        | sizeof |
+| ------------ | -------------------------- | ------ |
+| `0x0024d63c` | `g_EntityMap[0]`           | 0x18   |
+| `0x0024d654` | `g_EntityMap[1]`           | 0x18   |
+| `0x0024d66c` | `g_EntityMap[2]`           | 0x18   |
+
+Resolution: `iVar7 = DAT_001749bc + 0x174780 = 0x000779b0 + 0x174780 =
+0x001ec130` (GOT base); `g_EntityMap = iVar7 + DAT_001749ec =
+0x001ec130 + 0x0006150c = 0x0024d63c`. Stride 0x18 bytes is the
+default-empty `_Rb_tree` (header node + size + comparator).
+
+The three maps form a **C-style array of three maps**, indexed by
+`int playerIdx ∈ {0, 1, 2}` (see Section 10.3 — every consumer indexes
+with `playerIdx * 0x18 + g_EntityMap`).
+
+### 10.2 Semantics — Mortar entity-id registry
+
+**EntityTracker is a per-player `u16 trackerID -> Entity*` lookup table**
+used to identify entities across multiplayer P2P packets. The third map
+slot (index 2) is plausibly a "broadcast/spectator" or unused-by-port
+extra slot.
+
+The free function suite (no class — pure C-style, file-static maps):
+
+| Function          | Address      | Behaviour                                                                                                                            |
+| ----------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `ET_NewEntity`    | `0x001746cc` | If `id == 0`: increments a u16 counter (skipping 0) until an unused id is found in `g_EntityMap[playerIdx]`, then assigns `entity->m_TrackerID = newID` and stores `g_EntityMap[playerIdx][newID] = entity`. Returns chosen id. |
+| `ET_GetEntity`    | `0x001745c8` | `g_EntityMap[playerIdx].find(id)`; returns `Entity*` from `pair.second` (offset +0x14 in the rb-tree node) or `NULL`.               |
+| `ET_RemoveEntity` | `0x00174684` | `g_EntityMap[playerIdx].erase(id)` if present.                                                                                       |
+| `ET_GetFreeIdent` | `0x0017455c` | Probes for an unused id in `g_EntityMap[playerIdx]` without inserting; returns `(end_iter << 32) | nextFreeID`.                      |
+| `ET_ClearKnownEntities` | `0x0017463c` | If `param_1 < 0`: clears all three maps + resets the global u16 counter to 1. Otherwise clears only the third map (`g_EntityMap[2]`). |
+
+The shared u16 ID counter is at GOT-relative `iVar4 + DAT_001745c0`
+(value 1 at start, incremented by `ET_GetFreeIdent` / `ET_NewEntity`,
+reset by `ET_ClearKnownEntities(-1)`). Counter starts at 1 because **id
+0 is the sentinel "request a fresh id"** in `ET_NewEntity`.
+
+### 10.3 Consumers (real callers, not PLT thunks)
+
+Resolved via xrefs of the function bodies (not GOT thunks):
+
+| Caller                          | Caller addr  | Call site context                                              |
+| ------------------------------- | ------------ | -------------------------------------------------------------- |
+| `WaveManager::SpawnFruit`       | `0x001229fa` | `if (IsOnlineMultiplayer()) { ET_NewEntity(fruit, 0, 0); }`    |
+| `Fruit::KillFruit`              | `0x00176cdc` | `ET_RemoveEntity(playerIdx, m_TrackerID)`                      |
+| `WaveManager::Reset`            | `0x00125cae` | `ET_ClearKnownEntities(-1)` (unconditional, clears all 3 maps) |
+| `FruitSlicedPacket::SetEntityTrackerID` | `0x0017a858` | Stores received id in packet field `+0x18` (P2P message)       |
+
+`SpawnFruit` invokes `ET_NewEntity` **only inside the
+`if (IsOnlineMultiplayer())` branch** — the maps are populated only
+during P2P online matches.
+
+### 10.4 Port impact
+
+Since the port skips P2P/online multiplayer (per CLAUDE.md), the maps
+are never populated. `WaveManager::Reset` still calls
+`ET_ClearKnownEntities(-1)` unconditionally, but clearing empty maps is
+a no-op.
+
+**Recommendation:** **Skip porting `EntityTracker.cpp`.** Provide stub
+free functions that no-op (or are absent if `WaveManager::Reset` /
+`SpawnFruit` / `KillFruit` already gate on a "is online" check that the
+port hard-wires to false). The 3 `std::map` BSS slots and the u16
+counter are **not gameplay-affecting in single-player or same-screen
+multiplayer** — verified by xref. Risk: LOW (downgrade from MEDIUM in
+Section 6).
+
+If the port later restores P2P multiplayer (out of scope), implement
+`g_EntityMap[3]` as `std::map<u16, Entity*>[3]` with the five `ET_*`
+functions above; key on `playerIdx ∈ {0,1,2}` and the existing u16
+counter.
+
+---
+
+## 11. `_GLOBAL__I_Game.cpp` — `StringTable` ctor + `Delegate1<int,int>::Global` install
+
+Source: `_GLOBAL__I_Game.cpp` at `0x0010a96c`. Beyond the PCH
+boilerplate (Identity matrix, Vec3 Zero/One, Vec2 Zero, default Black
+colour), this init does three Game-singleton-side actions, all writing
+into the `g_GameData` flat struct at `0x001f43b8`.
+
+### 11.1 Resolved addresses
+
+- GOT base: `iVar7 = DAT_0010ab10 + 0x10a974 = 0x000e17bc + 0x0010a974
+  = 0x001ec130` (matches every other init).
+- `g_GameData` pointer: `*(int*)(0x001ec130 + DAT_0010ab48) =
+  *(0x001f3ac0) = 0x001f43b8`.
+- Game struct in port docs: see `docs/structs/game.md` ("Game Data
+  Global g_GameData, 0x608 bytes").
+
+### 11.2 Three actions
+
+| Order | Action                                                                                                            | Target address (resolved)              | Notes                                                                                                       |
+| ----- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 1     | **Black `Colour` write** at file-scope `Colour` slot                                                              | `iVar7 + DAT_0010ab44 + 0x38 = 0x001f43f8` (BGRA = `0,0,0,0xff`) | This is a standalone file-scope `Colour` global — registered with `__aeabi_atexit` for dtor at program exit. |
+| 2     | **`SmartPtr<Mortar::Texture>::SmartPtr(g_GameData + 0x17C)`**                                                     | `0x001f4534`                           | Default-constructs a null `SmartPtr<Texture>` field inside `g_GameData`. No texture loaded yet.             |
+| 3     | **`Mortar::StringTable::StringTable(g_GameData + 0x5B4)`**                                                        | `0x001f496c`                           | Default-constructs an empty `StringTable` (already noted in `docs/structs/game.md` line 270).               |
+| 4     | **`Mortar::Delegate1<int,int>::Global` install at `g_GameData + 0xC` = `0x001f43c4`**                              | `0x001f43c4`                           | Sets the vtable to `_ZTVN6Mortar9Delegate1IiiE6GlobalE @ 0x001e8978` + 8 (skip past TypeInfo header).        |
+
+The Delegate1 sequence in pseudocode:
+
+```c
+Mortar::Delegate1<int,int>::BaseDelegate::BaseDelegate(&local);  // zero stack temp
+local.vtable_ptr_lo = DAT_0010ab50;                               // = TypeInfo<Global>::ID GOT slot
+local.vtable_ptr   = DAT_0010ab54 + 8;                            // = &_ZTVN6Mortar9Delegate1IiiE6GlobalE + 8
+StackAllocatedPointer<Delegate1<int,int>::BaseDelegate, 32>::ctor();
+(*(local.vtable + 8))(&local, g_GameData + 0xC);                  // copy-construct g_GameData->m_ScoreDelegate
+Mortar::Delegate1<int,int>::Global::~Global(&local);              // dtor stack temp
+__aeabi_atexit(g_GameData + 0xC, ...);                            // register dtor for the global
+```
+
+### 11.3 The `Delegate1<int,int>` slot at `g_GameData + 0xC` — score-multiplier hook
+
+Xrefs to address `0x001f43c4` (i.e. `g_GameData + 0xC` — corrected from
+the `+ 0x10` shift Ghidra showed; the field is named the
+`Delegate1<int,int>` member):
+
+| Caller                | Caller addr  | Read/Write | Purpose                                                                                       |
+| --------------------- | ------------ | ---------- | --------------------------------------------------------------------------------------------- |
+| `AddToCurrentScore`   | `0x0010a80e` | READ       | `points = Delegate1<int,int>::Call(&g_GameData.m_ScoreDelegate, points * multiplier)` — the delegate may transform the score before adding. |
+| `KillFruit`           | `0x00176c62` | READ       | Same pattern — fruit-kill points run through the same delegate.                              |
+| `Update` (Speedrun?)  | `0x00151a80` | READ       | Reads delegate state for HUD update.                                                         |
+| `Skip`                | `0x00150e4c` | READ       | Skip-frame logic inspects delegate.                                                          |
+| `SetMissCount`        | `0x0010a4f4` | WRITE      | Updates an unrelated u8 field at the same struct base (`+0x14` offset, miss counter).        |
+| `GetCurrentMissCount` | `0x0010a4dc` | READ       | Reads u8 miss counter at `+0x14`.                                                            |
+| `AddToCurrentScore`   | `0x0010a818` | WRITE      | Updates `+0x18` score field (different offset; same struct base).                            |
+| `KillFruit`           | `0x00176c68` | WRITE      | Updates miss counter.                                                                        |
+
+**Semantics:** The delegate is a **score-transformation hook**. The
+default-installed `Global` vtable is the empty no-op variant — `Call(x)`
+returns `x` unchanged. Listeners (e.g. `ScoreModifier` power-up) can
+register a `Callee<ScoreModifier>` (vtable
+`_ZTVN6Mortar9Delegate1IiiE6CalleeI13ScoreModifierEE @ 0x001e8c80`) that
+multiplies/transforms the points before they are added.
+
+The Delegate1 vtables:
+- `_ZTVN6Mortar9Delegate1IiiE6GlobalE @ 0x001e8978` — installed at init (default no-op pass-through).
+- `_ZTVN6Mortar9Delegate1IiiE6CalleeI13ScoreModifierEE @ 0x001e8c80` — runtime override registered by `ScoreModifier` power-up.
+- `_ZTVN6Mortar9Delegate1IiiE12BaseDelegateE @ 0x001e89b0` — abstract base.
+
+### 11.4 String table contents
+
+`Mortar::StringTable::StringTable(g_GameData + 0x5B4)` is a **default
+ctor** — it constructs an EMPTY `StringTable`. **No string entries are
+inserted at static-init time.** The actual locale strings are loaded at
+runtime by `StringTableUtilInit() + StringTableUtilLoadStrings()` (per
+`docs/structs/game.md` line 279) which parses `.string_table_*.txt`
+asset files.
+
+So Job B's "string table key/value table" is **empty at this point** —
+there are no statically-initialised entries to capture. The keys/values
+populate later from disk. See `docs/systems/string-hash.md` for the
+runtime population path.
+
+### 11.5 Port impact
+
+| Item                                    | Port status / action                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| File-scope Black `Colour` at `0x001f43f8` | LOW — generic boilerplate.                                                                                          |
+| `SmartPtr<Texture>` at `g_GameData + 0x17C` | Verify port's `g_GameData` equivalent has a default-null texture-ref field at the same struct offset.            |
+| `StringTable` at `g_GameData + 0x5B4`   | Already documented; port should default-construct empty in `Game` ctor / `GamePreInitialise`. **No entries to seed**. |
+| `Delegate1<int,int>::Global` at `g_GameData + 0xC` | **Port impact MEDIUM.** Port's score path (`AddToCurrentScore`, `KillFruit` penalty) must invoke the delegate (or `if (delegate) delegate->Call(points)`) so `ScoreModifier` power-up can hook the score transform. If the port's `AddToCurrentScore` directly multiplies/adds without a delegate hook, `ScoreModifier` won't function. **Verify in `src/`**. |
+
+---
+
+## 9. `_GLOBAL__I_PathFunctions.cpp` AsciiString contents
+
+Source: `_GLOBAL__I_PathFunctions.cpp` at `0x001b3b9c`. Constructs **two
+back-to-back `Mortar::AsciiString`** instances at a single BSS slot
+(stride 0x28), then registers `__tcf_0` (`0x001b3afc`) via
+`__aeabi_atexit` to destruct both on shutdown. Resolves the audit gap
+flagged in Section 5.3 / Section 7 item 6.
+
+### 9.1 Address resolution
+
+```c
+GOT_BASE = *0x001b3bfc + 0x001b3ba4;            // 0x0003858c + 0x001b3ba4 = 0x001ec130
+slot     = GOT_BASE + *0x001b3c00;              // 0x001ec130 + 0x0008aa68 = 0x00276b98 (.bss)
+lit1     = GOT_BASE + (int32_t)*0x001b3c04;     // 0x001ec130 + 0xfffcebcd = 0x001bacfd (.rodata)
+lit2     = GOT_BASE + (int32_t)*0x001b3c08;     // 0x001ec130 + 0xfffd1888 = 0x001bd9b8 (.rodata)
+
+AsciiString::AsciiString(slot + 0x00, lit1);
+AsciiString::AsciiString(slot + 0x28, lit2);
+__aeabi_atexit(0, GOT_BASE + 0x00007270, &__tcf_0);
+```
+
+### 9.2 String contents (verified via `read_memory`)
+
+| # | BSS slot      | Literal addr | Content | Length | Role                           |
+|---|---------------|--------------|---------|--------|--------------------------------|
+| 0 | `0x00276b98`  | `0x001bacfd` | `"\\"`  | 1      | Path separator (Windows-style) |
+| 1 | `0x00276bc0`  | `0x001bd9b8` | `"/"`   | 1      | Path separator (POSIX-style)   |
+
+Both are NUL-terminated 2-byte rodata entries. Literal #0 sits adjacent
+to `"Ninja\\"` and `"C:\\%s"` debug-format strings; literal #1 sits
+inside the TinyXML node-tag string pool (`<`, `<!--`, `</`, `/`, ` /`,
+`>`, `&#`, ...) — the byte is shared between PathFunctions and TinyXML.
+
+### 9.3 Consumer functions
+
+`xrefs` to slot `0x00276b98`:
+- `Tokenize_AsciiStr` (`0x001b3d68`) — passes the slot as `delims[2]` to
+  `Mortar::Tokenize(input, delims, count=2, allowEmpty=false)`.
+- `__tcf_0` (`0x001b3afc`) — destructor; runs `~AsciiString(slot+0x28)` then `~AsciiString(slot)`.
+
+`Tokenize_AsciiStr` is called from:
+- `Mortar::PathGetParent`   (`0x001b3d98`) — tokenize, drop last segment, rejoin.
+- `Mortar::PathNormalize`   (`0x001b3dd0`) — tokenize, collapse `..`/`.`, rejoin.
+- `Mortar::PathGetRelative` (`0x001b3ee0`) — two calls (relative + base).
+
+So the **two AsciiStrings are the path-separator delimiter set** for
+`Mortar`'s generic path utilities — they accept *both* `\\` and `/` as
+component separators, regardless of host OS.
+
+### 9.4 Relationship to `Game::data_dir` / asset roots
+
+These AsciiStrings are **not** filesystem root prefixes. The Section 5.3
+guess ("`/Home/share/`" / "`/Res/`") was wrong — they are 1-character
+delimiter constants used by the `Mortar::Path*` tokenizer family.
+
+The actual asset-root prefix logic lives in
+`Mortar::FileSystem_Direct::OpenFile` (`0x0019b3e8`), which prepends
+its own GOT-relative literal (`DAT_0019b468`) to every file path
+before `fopen`. That is a **separate** rodata literal — `PathFunctions`
+only provides splitting/joining, not rooting. Game-side directory roots
+come from `_GLOBAL__I_FruitNinja.cpp`'s 32 `Osp::Base::String` block
+(Section 8.x) — `FruitNinjaApp::OnAppInitializing` reads those and
+passes them to the file-system root setter.
+
+### 9.5 Port impact: NONE
+
+The port uses `std::string` paths and `Game::data_dir = FN_DATA_DIR`
+(`src/Game.cpp:84`) — both unrelated to these BSS slots. No port code
+implements a `Mortar::PathGetParent` / `PathNormalize` equivalent that
+would need a delimiter set. The host C runtime accepts mixed separators
+on Windows and uses `/` natively elsewhere.
+
+Recommendation: **mark Section 5.3 / Section 7 item 6 as resolved.**
+Section 3's row 137 hint ("file-path roots: `/Home/`, `/Res/` etc.")
+should be corrected to "path-separator delimiter pair `\\` + `/` for
+`Mortar::Path*` tokenizer".
+
+---
+
+## 12. References
+
