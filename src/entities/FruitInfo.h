@@ -125,4 +125,9 @@ FruitInfo* FruitInfo_GetArray();
 float FruitInfo_GetBombSize();
 float FruitInfo_GetBombCollision();
 
+// Shadow texture (FRUIT_INFO_HEADER->shadowTex equivalent, binary +0xC0).
+// Loaded by FruitInfo_Load step 0 from "fruit_shadow.tex".
+// Returns nullptr if not loaded yet.
+Mortar::Texture* FruitInfo_GetShadowTex();
+
 #endif
