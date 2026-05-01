@@ -24,8 +24,9 @@ SlashModifier::~SlashModifier() {
 // cached mask bits into the global every frame — PowerUpManager's
 // SetDefaults wiped the global to 0 at the top of the update pass, so
 // this is what keeps the bits live while the modifier is active.
-void SlashModifier::UpdateSpecific(float /*dt*/) {
+int SlashModifier::UpdateSpecific(float /*dt*/) {
     SlashEntity::s_ModPowerMask |= m_PowerMask;
+    return 0;
 }
 
 // Matches SlashModifier::ApplyModifier (0x0011f31c). Binary calls base
@@ -37,8 +38,8 @@ void SlashModifier::UpdateSpecific(float /*dt*/) {
 // Port stub: applies the base duration reset. SetModColours +
 // ItemManager aren't ported; logging disabled. When the blade palette
 // system lands, wire the call here.
-void SlashModifier::ApplyModifier() {
-    GameModifier::ApplyModifier();
+void SlashModifier::ApplyModifier(bool isPurchased, float* extra) {
+    GameModifier::ApplyModifier(isPurchased, extra);
     if (!m_Applied) {
         m_Applied = true;
         // TODO: SlashEntity::SetModColours(m_pColours, m_NumColours,
@@ -71,6 +72,6 @@ void SlashModifier::RemoveModifier() {
 // Port stub: not yet wired to the port's XML loader (TinyXML2 via
 // PowerUp::Parse). The shape is here so the method is callable once
 // PowerUp::Parse is ported.
-void SlashModifier::ParseSpecific(void* /*xml*/) {
+void SlashModifier::ParseSpecific(TiXmlElement* /*xml*/) {
     // TODO: TinyXML2 port — mirror binary Parse (see header comment).
 }

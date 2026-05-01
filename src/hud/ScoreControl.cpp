@@ -2,6 +2,7 @@
 
 #include "ScoreControl.h"
 #include "Game.h"
+#include "game/PowerUpManager.h"
 #include "entities/FruitInfo.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
@@ -31,9 +32,11 @@ static int GetCurrentScore(int playerIdx) {
     return game ? game->currentScore : 0;
 }
 
-// GetScoreMultiplyer: calls PowerUpManager in binary. Stub returns 1.
-// TODO: wire to PowerUpManager::GetScoreGainMultiplier when ported.
-static int GetScoreMultiplyer(int /*playerIdx*/) { return 1; }
+// GetScoreMultiplyer: returns PowerUpManager::GetScoreGainMultiplier().
+// Arcade-only in binary (DefaultScoreDelegate, DefaultScoreDelegate §5.1).
+static int GetScoreMultiplyer(int /*playerIdx*/) {
+    return PowerUpManager::GetInstance()->GetScoreGainMultiplier();
+}
 
 // GetCurrentModeHighscore: reads pSaveData for the current mode's high score.
 // TODO: wire to FruitSaveData once save layout is fully ported.
@@ -420,7 +423,17 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         }
 
         // Arcade (mode==2): "x%d" when PowerUpManager::GetScoreGainMultiplier() > 1
-        // PowerUpManager stub returns 1.0, so this branch never fires; left as TODO.
+        if (game->gameMode == 2) {
+            int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
+            if (mult > 1 && game->pFontNumbers.IsValid()) {
+                char multBuf[16];
+                snprintf(multBuf, sizeof(multBuf), "x%d", mult);
+                Colour col(255, 255, 255, alpha);
+                game->pFontNumbers->DrawString(48.0f, 1.0f, 0.0f,
+                    multBuf, Vec3(m_DrawPosX, m_DrawPosY + 30.0f, 0.0f),
+                    col, Mortar::FONT_ALIGN_CENTER);
+            }
+        }
 
         // Section C: Highscore banner text
         // Active when |transTimer| < 1.0 AND m_HighscoreToShow > 0
