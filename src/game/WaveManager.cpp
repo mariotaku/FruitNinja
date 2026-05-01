@@ -677,9 +677,9 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         sd->m_Speed_P1        = field_0x60;       // m_ComboTimer[0]
         sd->m_Speed_P0_alias  = m_Speed[1];
         memcpy(&sd->m_FruitQueue[0], &m_FruitQueue[0][0], 0x80);
-        // Binary @ 0x00124986: sd->field82_0x7c = this->field_0x2c8 = m_FruitQueueSize[1]
-        // TODO: semantic of field82_0x7c (FruitSaveData +0x7c) not yet determined.
-        sd->field82_0x7c = m_FruitQueueSize[1];
+        // Binary @ 0x00124986: sd->m_FruitQueueCount = this->field_0x2c8 = m_FruitQueueSize[1]
+        // (renamed from field82_0x7c; RE confirmed this is the fruit queue count for resume)
+        sd->m_FruitQueueCount = m_FruitQueueSize[1];
         return 1;
     }
     return 0;

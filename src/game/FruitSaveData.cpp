@@ -4,9 +4,10 @@
 // FruitNinja_LoadGame @ 0x0012be74. Coin balance is owned by ItemSave.xml
 // via ItemManager and is only mirrored here for in-memory access.
 //
-// Analysed: 2026-04-23T02:00, REVISED 2026-04-27T22:00
+// Analysed: 2026-04-23T02:00, REVISED 2026-05-02T00:00
 
 #include "FruitSaveData.h"
+#include "ScoreState.h"
 #include "Game.h"
 #include "ItemManager.h"
 #include "engine/util/StringHash.h"
@@ -15,6 +16,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
 
 // ----------------------------------------------------------------------
 // Construction / destruction
@@ -34,9 +36,8 @@ FruitSaveData::FruitSaveData()
     , m_CurrentMissCount(0)
     , m_GameMode(0)
     , m_bWasGameOver(0)
-    , m_HighScoreRef1(-1)
-    , m_HighScoreRef2(0)
-    , field82_0x7c(0)
+    , m_LastSlasher(-1)
+    , m_ComboCount(0)
     , m_FruitQueueCount(0)
     , m_Speed_P0(0.0f)
     , m_Speed_P0_alias(0.0f)
@@ -68,7 +69,7 @@ FruitSaveData::FruitSaveData()
     for (int i = 0; i < 4; i++) {
         m_ModeHighScores[i] = 0;
         m_ModeBestCombos[i] = 0;
-        m_ModePlayCounts[i] = 0;
+        m_LastPlayedDay[i] = 0;
     }
     for (int i = 0; i < 32; i++) m_FruitQueue[i] = -1;
     for (int i = 0; i < 11; i++) m_BombQueue[i] = -1;
@@ -138,10 +139,44 @@ void FruitSaveData::ClearCombo() {
     m_SessionTotals.clear();
 }
 
-// FinishedGame @ 0x0012a034 -- session post-round bookkeeping. Stub.
+// FinishedGame @ 0x0012a034. Decays all m_ModeScoreHistory survivor values by 1.
+// Binary: for each mode, for each entry in the map, if val >= 0, val--.
 void FruitSaveData::FinishedGame() {
-    // Binary: decrements modifier counters in m_Totals. Port no-ops
-    // until modifier system is fully wired.
+    for (int mode = 0; mode < 4; mode++) {
+        for (auto& kv : m_ModeScoreHistory[mode]) {
+            if (kv.second >= 0) kv.second--;
+        }
+    }
+}
+
+// SnapshotComboState -- copy g_LastSlasher / g_ComboCount into save fields.
+// Binary: SaveCurrentData @ 0x0016cd08 writes save[+0x74] = *GOT[lastSlasher]
+//         and @ 0x0016cd34 writes save[+0x78] = *GOT[comboCount].
+void FruitSaveData::SnapshotComboState() {
+    m_LastSlasher = g_LastSlasher;
+    m_ComboCount  = g_ComboCount;
+}
+
+// RestoreComboState -- copy save fields back into g_LastSlasher / g_ComboCount.
+// Binary: WaveManager::Resume @ 0x00124b54 writes *GOT[lastSlasher] = save[+0x74]
+//         and @ 0x00124b68 writes *GOT[comboCount] = save[+0x78].
+void FruitSaveData::RestoreComboState() {
+    g_LastSlasher = m_LastSlasher;
+    g_ComboCount  = m_ComboCount;
+}
+
+// SetCurrentModeHighscore @ 0x0010a388.
+// Writes m_ModeHighScores[currentMode] when newScore strictly beats stored value.
+// The tiered improvement gate (currentHigh/2 < score) lives in the caller
+// (GameOverScreen::Update case 6) -- that is a separate task (#50).
+void FruitSaveData::SetCurrentModeHighscore(int newScore) {
+    Game* g = Game::GetInstance();
+    if (!g) return;
+    int mode = (int)g->gameMode;
+    if (mode < 0 || mode >= 4) return;
+    if (m_ModeHighScores[mode] < newScore) {
+        m_ModeHighScores[mode] = newScore;
+    }
 }
 
 // ----------------------------------------------------------------------
@@ -155,8 +190,8 @@ bool FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
 }
 
 void FruitSaveData::UnlockTotals() {
-    // 0x00124f10 -- "total-X" thresholds. Stubbed; depends on
-    // AchievementManager's full table being ported.
+    // TODO: AchievementManager not ported (#52 audit confirmed safe)
+    // 0x00124f10 -- "total-X" thresholds; depends on AchievementManager full table.
 }
 
 // ----------------------------------------------------------------------
@@ -201,6 +236,14 @@ const char* k_ModeNames[4] = {
     "ARCADE",
     "ZEN",
 };
+
+// GetDaysSince1900 -- days elapsed since 1900-01-01.
+// Binary: used by GameOver @ 0x00169fec to write m_LastPlayedDay[mode].
+// 25569 = number of days from 1900-01-01 to 1970-01-01 (Unix epoch).
+static int GetDaysSince1900() {
+    static const int DAYS_FROM_1900_TO_EPOCH = 25569;
+    return (int)(time(nullptr) / 86400) + DAYS_FROM_1900_TO_EPOCH;
+}
 
 // Build "<modeName><suffix>" into out (small stack buffer).
 void MakeModeAttr(char* out, size_t outsz, int mode, const char* suffix) {
@@ -251,7 +294,7 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         }
 
         MakeModeAttr(attrName, sizeof(attrName), m, "_dolg");
-        root->SetAttribute(attrName, save->m_ModePlayCounts[m]);
+        root->SetAttribute(attrName, save->m_LastPlayedDay[m]);
     }
 
     root->SetAttribute("critical_chance", save->m_CriticalChance);
@@ -321,6 +364,8 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         que->SetAttribute("hasDropped",      save->m_bWasGameOver ? "true" : "false");
         que->SetAttribute("count",           save->m_CurrentScore);
         que->SetAttribute("misses",          save->m_CurrentMissCount);
+        que->SetAttribute("count1",          save->m_ComboCount);
+        que->SetAttribute("count2",          save->m_LastSlasher);
         que->SetAttribute("timer",           save->m_GameTimer1);
         que->SetAttribute("globalWaveDt",    save->m_ProbabilityOverideFlag);
         que->SetAttribute("go_state",        save->m_GameOverScreenState);
@@ -382,7 +427,7 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         root->QueryIntAttribute(attrName, &save->m_ModeBestCombos[m]);
 
         snprintf(attrName, sizeof(attrName), "%s_dolg", k_ModeNames[m]);
-        root->QueryIntAttribute(attrName, &save->m_ModePlayCounts[m]);
+        root->QueryIntAttribute(attrName, &save->m_LastPlayedDay[m]);
     }
 
     root->QueryIntAttribute("critical_chance", &save->m_CriticalChance);
@@ -464,6 +509,8 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         if (hasDropped) save->m_bWasGameOver = (strcmp(hasDropped, "true") == 0) ? 1 : 0;
         que->QueryIntAttribute("count",   &save->m_CurrentScore);
         que->QueryIntAttribute("misses",  &save->m_CurrentMissCount);
+        que->QueryIntAttribute("count1",  &save->m_ComboCount);
+        que->QueryIntAttribute("count2",  &save->m_LastSlasher);
         que->QueryFloatAttribute("timer",          &save->m_GameTimer1);
         que->QueryFloatAttribute("globalWaveDt",   &save->m_ProbabilityOverideFlag);
         que->QueryIntAttribute("go_state",         &save->m_GameOverScreenState);
@@ -525,16 +572,13 @@ void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
     snapshot.m_GameMode         = (uint32_t)g->gameMode;
     snapshot.m_CriticalChance   = g->m_ScoreThreshold;
 
-    // Update high score for the current mode if the run beat it.
-    int mode = (int)g->gameMode;
-    if (mode >= 0 && mode < 4) {
-        if (g->currentScore > snapshot.m_ModeHighScores[mode]) {
-            snapshot.m_ModeHighScores[mode] = g->currentScore;
-        }
-    }
-    if (g->currentScore > snapshot.m_highscore) {
-        snapshot.m_highscore = g->currentScore;
-    }
+    // Snapshot combo globals into save fields before writing.
+    // Binary: SaveCurrentData @ 0x0016cd08/0x0016cd34.
+    snapshot.SnapshotComboState();
+
+    // DIFFERS: port previously mutated snapshot.m_highscore from currentScore here.
+    // Binary does NOT update +0x40 in SaveCurrentData; it is rebuilt as the
+    // CLASSIC-mode alias by ParseSaveFile on next load. Deviation removed.
 
     // Bomb-hit timer: binary saves only when timer is meaningfully
     // active (zen-mode special case). Port saves unconditionally for

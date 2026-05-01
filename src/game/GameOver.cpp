@@ -1,11 +1,15 @@
-// Analysed: 2026-04-30T12:00
+// Analysed: 2026-04-30T12:00, REVISED 2026-05-02T00:00
 // GameOver — 0x00169ed4
 
 #include "GameOver.h"
 #include "Game.h"
 #include "WaveManager.h"
+#include "FruitSaveData.h"
 #include "screens/GameOverScreen.h"
 #include "hud/HUD.h"
+#include "engine/util/StringHash.h"
+
+#include <ctime>
 
 namespace FN {
 
@@ -44,6 +48,26 @@ void GameOver(int endReason, float endScore, int endParam) {
 
     gos->Init();
     game->hud->AddControl(gos);
+
+    // Binary @ 0x00169f94: bump <MODE>_today and write m_LastPlayedDay[mode].
+    // 0x00169fec: sd->m_LastPlayedDay[mode] = GetDaysSince1900().
+    if (game->pSaveData) {
+        static const char* k_ModeNames[4] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
+        int mode = (int)game->gameMode;
+        if (mode >= 0 && mode < 4) {
+            // Compute days-since-1900 inline (same helper as FruitSaveData.cpp).
+            static const int DAYS_FROM_1900_TO_EPOCH = 25569;
+            int today = (int)(time(nullptr) / 86400) + DAYS_FROM_1900_TO_EPOCH;
+
+            // Build "<MODE>_today" key and hash it.
+            char todayKey[32];
+            snprintf(todayKey, sizeof(todayKey), "%s_today", k_ModeNames[mode]);
+            uint32_t todayHash = StringHash(todayKey);
+
+            game->pSaveData->AddToTotal(todayKey, todayHash, 1, false, false);
+            game->pSaveData->m_LastPlayedDay[mode] = today;
+        }
+    }
 }
 
 // 0x0010a7ac
