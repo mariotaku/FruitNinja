@@ -22,12 +22,13 @@ public:
     // ASM-verified: 2026-04-29T03:29Z binary @ 0x00144a90 (HUD::Draw)
     float scales[6];
 
-    // +0x20: written 1.0f by HUD::Update start (vstr.32 s15,[r4,#0x20]).
-    // Semantics TBD — not initialised by ctor, only written by Update.
-    // TODO: identify readers; may be a per-frame tint accumulator.
-    float field_0x20;
+    // +0x20: slow-motion multiplier. 1.0 = normal speed, <1.0 = slow-mo.
+    // Read by TutorialControl::CanShowTute (binary @ 0x00162fb8).
+    // HUD::Update resets it to 1.0f at the start of each tick; the wave
+    // system writes values < 1.0 during last-fruit slow-motion.
+    float m_globalTimeScale;
 
-    HUD() : field_0x20(0.0f) {
+    HUD() : m_globalTimeScale(1.0f) {
         for (int i = 0; i < 6; ++i) scales[i] = 1.0f;
     }
     ~HUD() { Release(); }
@@ -85,7 +86,7 @@ public:
     // Matches HUD::Update (0x00144d20)
     void Update(float dt) {
         MissControl::PreUpdate(dt);  // global combo-decay pre-tick
-        field_0x20 = 1.0f;          // reset per-frame field (vstr.32 s15,[r4,#0x20])
+        m_globalTimeScale = 1.0f;   // reset to normal speed each tick (vstr.32 s15,[r4,#0x20])
 
         for (auto it = controls.begin(); it != controls.end(); ) {
             HUDControl* ctrl = *it;

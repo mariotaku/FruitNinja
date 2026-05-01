@@ -2,7 +2,7 @@
 // TutorialControl -- "swipe here" arrow for first-play tutorial.
 // See TutorialControl.h for binary refs.
 //
-// Analysed: 2026-04-25T10:30
+// Analysed: 2026-05-02T00:00
 //
 
 #include "TutorialControl.h"
@@ -95,24 +95,22 @@ void TutorialControl::Reset() {
 // Matches TutorialControl::CanShowTute @ 0x00162fb8
 // Returns true during slow-motion or screen transitions.
 // ===================================================================
+// Matches TutorialControl::CanShowTute @ 0x00162fb8.
+// pGameOverScreen guard is binary-faithful: slow-mo branch cannot trigger
+// until the player has died at least once (GameOverScreen allocated).
 bool TutorialControl::CanShowTute() const {
     Game* game = Game::GetInstance();
     if (!game) return false;
 
-    // Binary @ 0x00162fce: compare against 0.99 (DAT = 0x3F7D70A4), not 0.0.
-    // If transition is "deep enough", show the tutorial.
+    // Binary @ 0x00162fce: DAT = 0x3F7D70A4 (0.99f).
     if (fabsf(game->m_TransitionTimer) > 0.99f)
         return true;
 
-    // No game-over screen -> don't show
-    // (binary checks pGameOverScreen at game+0x164)
-    // Port: GameOverScreen not fully ported, skip this check
+    // Binary checks pGameOverScreen (+0x164): null -> return false.
+    if (!game->pGameOverScreen) return false;
 
-    // Only show during slow-motion (HUD timeScale < 1.0)
     if (!game->hud) return false;
-    // Port: HUD doesn't have m_globalTimeScale yet.
-    // For now, return false (tutorial never shows until timeScale is ported).
-    return false;
+    return game->hud->m_globalTimeScale < 1.0f;
 }
 
 // ===================================================================
