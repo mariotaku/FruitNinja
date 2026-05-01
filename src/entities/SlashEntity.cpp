@@ -249,6 +249,27 @@ void SlashEntity::OnTouchReleased() {
     // Matches binary state-machine bit shift: 1 → 2 (deactivating).
     if (m_State == 1) m_State = 2;
     m_bHasHead = false;
+
+    // Lay a graded "minimum age" gradient across the trail so the entire
+    // ribbon drains within TRAIL_LIFETIME of release. Without this, the
+    // head (newest point) was added this frame with age≈0 and lingers at
+    // full alpha for the full 0.25 s — visible as a stuck bright tip
+    // after the finger lifts. The binary's UpdatePoints @ 0x17B92C
+    // collapses all pairs together via the m_Scale drop threshold
+    // (decays at -2*dt per frame after release, see 0x16e3a4); replicated
+    // here as a per-point age push. Existing ages are only pushed
+    // forward, never reset younger — so an already-fading mid-swipe
+    // release still drains as fast as before, never slower.
+    // See docs/engine/slash-entity-asm-audit.md.
+    if (m_NumPoints > 1) {
+        const float invN = 1.0f / (float)(m_NumPoints - 1);
+        for (int i = 0; i < m_NumPoints; ++i) {
+            // t = 1 at tail (oldest), 0 at head (newest)
+            const float t = (float)((m_NumPoints - 1) - i) * invN;
+            const float minAge = TRAIL_LIFETIME * t;
+            if (m_Points[i].age < minAge) m_Points[i].age = minAge;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
