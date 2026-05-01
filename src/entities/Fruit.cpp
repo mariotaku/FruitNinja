@@ -6,6 +6,7 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
+#include "render/QUADCUSTOMVERTEX.h"
 #include "asset/MeshManager.h"
 #include "asset/TextureManager.h"
 #include "particle/PSPParticleManager.h"
@@ -1210,7 +1211,124 @@ void Fruit::Disable(Fruit* f) {
     if (f) f->m_bCriticalEligible = false; // TODO: set collision guard once field is added
 }
 
-// @ 0x0016ba6e
+// Matches Fruit::DrawShadows (0x00178f28) + AddShadow (0x00175ea0).
+// Texture: fruit_shadow.tex (loaded by FruitInfo_Load step 0).
+// Geometry: 1 fade-out quad while spawning, 2 half-quads when active.
+// Buffer: 64 fruits * 3 quads max * 6 verts = 1152 verts (binary uses 18432 stack).
+static const int SHADOW_MAX_FRUITS = 64;
+static QUADCUSTOMVERTEX s_ShadowVerts[SHADOW_MAX_FRUITS * 3 * 6];
+
 void Fruit::DrawShadows() {
-    // TODO: implement -- iterate active fruits, draw shadow quads
+    Mortar::Texture* shadowTex = FruitInfo_GetShadowTex();
+    if (!shadowTex) return;
+
+    QUADCUSTOMVERTEX* w = s_ShadowVerts;
+    int count = 0;
+
+    ActorManager* am = ActorManager::GetInstance();
+    if (!am) return;
+    std::list<Entity*>::iterator it;
+    Entity* e = am->GetEntityFirst(0, it);
+    while (e && count + 3 <= SHADOW_MAX_FRUITS * 3) {
+        Fruit* f = static_cast<Fruit*>(e);
+        if (f->scale.x > 0.0f) f->AddShadow(&w, &count);
+        e = am->GetEntityNext(0, it);
+    }
+    if (count == 0) return;
+
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    shadowTex->Set();
+    if (Renderer* r = Renderer::GetInstance())
+        r->DrawTriList(s_ShadowVerts, count * 6);
+    shadowTex->UnSet();
+}
+
+// Writes up to 3 quads (shadow geometry) for one fruit into the shared buffer.
+// Matches Fruit::AddShadow @ 0x00175ea0.
+//
+// Binary DAT constants:
+//   DAT_00176164 = 230.0f  (spawn-fade alpha mult)
+//   DAT_00176168 = 82.0f   (whole-fruit shadow half-size base)
+//   DAT_0017616c = -0.65f  (whole-shadow offset mult)
+//   DAT_00176170 = 100.0f  (post-spawn alpha mult)
+//   DAT_00176174 = 50.0f   (sliced-half shadow half-size base)
+//   DAT_00176178 = -0.45f  (sliced-half offset mult)
+//   DAT_00176180 = Vec3(0,0,1)  (slice-plane axis BSS singleton, never reassigned)
+//   DAT_00175e9c = -5000.0f    (shadow Z, written by AddQuad)
+static void AddQuad(QUADCUSTOMVERTEX** out, float cx, float cy, float w, float h, Colour col) {
+    // Corner layout:
+    //   v0: (cx-w, cy-h)    v3: (cx+w, cy-h)
+    //   v1: (cx-w, cy+h)    v4: (cx-w, cy+h)
+    //   v2: (cx+w, cy-h)    v5: (cx+w, cy+h)
+    // All verts: z = -5000 (DAT_00175e9c), normal (0,0,1), u in {0,1}, v in {0,1}.
+    const float z    = -5000.0f;   // DAT_00175e9c
+    const uint32_t c = ((uint32_t)col.a << 24)
+                     | ((uint32_t)col.b << 16)
+                     | ((uint32_t)col.g <<  8)
+                     | ((uint32_t)col.r);
+
+    QUADCUSTOMVERTEX* v = *out;
+
+    v[0] = { cx - w, cy - h, z,   0.0f, 0.0f, 1.0f,   c,   0.0f, 0.0f };
+    v[1] = { cx - w, cy + h, z,   0.0f, 0.0f, 1.0f,   c,   0.0f, 1.0f };
+    v[2] = { cx + w, cy - h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 0.0f };
+    v[3] = { cx + w, cy - h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 0.0f };
+    v[4] = { cx - w, cy + h, z,   0.0f, 0.0f, 1.0f,   c,   0.0f, 1.0f };
+    v[5] = { cx + w, cy + h, z,   0.0f, 0.0f, 1.0f,   c,   1.0f, 1.0f };
+
+    *out += 6;
+}
+
+void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
+    // DIFFERS: m_PlayerIdx not ported; same-screen MP shadow mirror skipped.
+    const float mirrorX = 1.0f;
+    const float mirrorY = 0.0f;   // DAT_00176160
+
+    // Quad 1: spawn-fade whole-fruit shadow (active while m_ScaleAnim < 1).
+    if (m_ScaleAnim < 1.0f) {
+        int a = (int)((1.0f - m_ScaleAnim) * 230.0f);   // DAT_00176164
+        uint8_t al = (a < 1) ? 0 : (a > 254 ? 255 : (uint8_t)a);
+        float hs = 82.0f * scale.x;                      // DAT_00176168
+        float ox = mirrorY * hs * -0.65f;                // DAT_0017616c
+        float oy = mirrorX * hs * -0.65f;
+        AddQuad(out, pos.x + ox, pos.y + oy, hs, hs, Colour(255, 255, 255, al));
+        ++(*outCount);
+    }
+
+    // Quads 2+3: per-half shadows (active while m_ScaleAnim > 0).
+    if (m_ScaleAnim > 0.0f) {
+        int a = (int)(m_ScaleAnim * 100.0f);             // DAT_00176170
+        uint8_t al = (a < 1) ? 0 : (a > 254 ? 255 : (uint8_t)a);
+        float hs = scale.x * 50.0f;                      // DAT_00176174
+        Vec3 axis(0.0f, 0.0f, 1.0f);                    // DAT_00176180 BSS singleton (0,0,1)
+
+        float ox = mirrorY * hs * -0.45f;                // DAT_00176178
+        float oy = mirrorX * hs * -0.45f;
+
+        // Binary calls Quaternion::Matrix33Unit on each rot, then multiplies axis.
+        // Port uses ToMatrix44() and extracts the 3x3 rotation applied to axis.
+        // For axis=(0,0,1): rotated = col2 of the rotation matrix = (m[8], m[9], m[10]).
+        {
+            Matrix44 mat1 = m_Rot1.ToMatrix44();
+            Vec3 anchorA = pos + Vec3(
+                mat1.m[0]*axis.x + mat1.m[4]*axis.y + mat1.m[8]*axis.z,
+                mat1.m[1]*axis.x + mat1.m[5]*axis.y + mat1.m[9]*axis.z,
+                mat1.m[2]*axis.x + mat1.m[6]*axis.y + mat1.m[10]*axis.z
+            ) * 0.5f;
+            AddQuad(out, anchorA.x + ox, anchorA.y + oy, hs, hs, Colour(255, 255, 255, al));
+            ++(*outCount);
+
+            Matrix44 mat2 = m_Rot2.ToMatrix44();
+            Vec3 anchorB = m_SecondPos + Vec3(
+                mat2.m[0]*axis.x + mat2.m[4]*axis.y + mat2.m[8]*axis.z,
+                mat2.m[1]*axis.x + mat2.m[5]*axis.y + mat2.m[9]*axis.z,
+                mat2.m[2]*axis.x + mat2.m[6]*axis.y + mat2.m[10]*axis.z
+            ) * 0.5f;
+            AddQuad(out, anchorB.x + ox, anchorB.y + oy, hs, hs, Colour(255, 255, 255, al));
+            ++(*outCount);
+        }
+    }
 }

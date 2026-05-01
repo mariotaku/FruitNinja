@@ -373,3 +373,8 @@ FruitInfo* FruitInfo_GetArray()
 {
     return s_FruitInfos;
 }
+
+Mortar::Texture* FruitInfo_GetShadowTex()
+{
+    return g_FruitShadowTex.IsValid() ? g_FruitShadowTex.Get() : nullptr;
+}

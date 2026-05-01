@@ -195,6 +195,10 @@ public:
 
     // @ 0x0016ba6e — draw drop-shadows for all active fruits.
     static void DrawShadows();
+
+    // @ 0x00175ea0 — per-fruit shadow emitter called by DrawShadows.
+    // Writes 1 spawn-fade quad and up to 2 per-half quads into *out.
+    void AddShadow(struct QUADCUSTOMVERTEX** out, int* outCount);
 };
 
 #endif
