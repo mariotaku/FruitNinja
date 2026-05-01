@@ -13,6 +13,7 @@
 #include "hud/SliceEffect.h"
 #include "hud/MissControl.h"
 #include "game/BombHit.h"
+#include "game/ScoreState.h"
 #include "game/WaveManager.h"
 #include "game/GameOver.h"
 #include "Game.h"
@@ -486,6 +487,10 @@ void Fruit::KillFruit(bool doMissPenalty) {
         m_pEmitter2 = nullptr;
     }
 
+    // Reset combo on miss / lifecycle expiry — binary @ 0x00176c84.
+    // g_LastSlasher is NOT reset here (binary doesn't at this site).
+    g_ComboCount = 0;
+
     if (doMissPenalty) {
         const FruitInfo* info = FruitInfo_Get(m_FruitType);
         // DIFFERS: m_bNoPowerUp field not yet ported to Fruit.h; treating as false
@@ -794,6 +799,17 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
             g->currentScore += info->m_Score * multiplier;
         }
     }
+
+    // Combo counter increment — binary @ 0x001787a8..0x001787b0.
+    // MP guard: if a different player slashed, reset count before incrementing.
+    // m_PlayerIdx not yet in Fruit; defaulting to 0 for single-player.
+    // TODO (MP): add m_PlayerIdx field to Fruit and pass through from touch dispatch.
+    const int slasher = 0;  // DIFFERS: binary uses this->m_PlayerIdx
+    if (g_LastSlasher != slasher) {
+        g_ComboCount  = 0;   // binary @ 0x0017873a: different-player branch
+        g_LastSlasher = slasher;
+    }
+    g_ComboCount += 1;       // binary @ 0x001787b0
 }
 
 // Matches Fruit::Slice (0x176d58), now with the binary's flipSide
