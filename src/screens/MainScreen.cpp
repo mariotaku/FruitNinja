@@ -820,6 +820,11 @@ void MainScreen::CreatePlayDojo() {
         [this](HUDControl* c) { ButtonDeleted(c); };
     game.hud->AddControl(pPlayButton);
 
+    // Binary @ 0x0014b6f8: ResetTutePos called immediately after play button
+    // is created and wired, so the tutorial arrow targets the Play button.
+    if (game.pTutorialCtrl)
+        game.pTutorialCtrl->ResetTutePos(pPlayButton);
+
     // Dojo button: (-144.0, -65.0, 0.0). Binary calls
     // Fruit::FruitType("mango", false) at runtime — resolves to 9
     // in the current fruitlist, but use the runtime call per CLAUDE.md
