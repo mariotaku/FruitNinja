@@ -42,7 +42,8 @@ int TimeModifier::UpdateSpecific(float dt) {
     if (m_TransitionRate <= 0.0f) {
         m_CurrentDtMod = m_DtScale;
     } else {
-        if (m_TransitionRate >= m_Duration_remaining || m_Duration <= 0.0f) {
+        if (m_TransitionRate < m_Duration_remaining || m_Duration <= 0.0f) {
+            // ASM-verified: 2026-05-02 binary @ 0x12003a -- STEADY-STATE: lots of time remaining
             float target = m_DtScale;
             if (target >= m_CurrentDtMod) {
                 m_CurrentDtMod += dt / m_TransitionRate;
@@ -52,8 +53,14 @@ int TimeModifier::UpdateSpecific(float dt) {
                 if (m_CurrentDtMod < target) m_CurrentDtMod = target;
             }
         } else {
+            // FADE-OUT: about to expire
             float t = m_Duration_remaining / m_TransitionRate;
             float v = (m_DtScale - 1.0f) * t + 1.0f;
+            if (m_DtScale > 1.0f) {
+                if (m_CurrentDtMod < v) v = m_CurrentDtMod;  // clamp from above
+            } else {
+                if (v < m_CurrentDtMod) v = m_CurrentDtMod;  // clamp from below
+            }
             m_CurrentDtMod = v;
         }
     }

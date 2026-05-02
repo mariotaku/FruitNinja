@@ -36,7 +36,14 @@ class TiXmlElement;
 
 // Forward declarations for unported types — stubs only.
 class ScreenEffect;
-class PurchaseInfo;
+
+// Minimal PurchaseInfo layout (0xc4-byte struct in binary).
+// Only field_0xc0 is required; remainder is unported.
+class PurchaseInfo {
+public:
+    uint8_t _pad[0xc0];
+    int field_0xc0;  // remaining-uses count; ASM-verified @ 0x00119bb0
+};
 
 // Colour as stored in binary (BGRA8 packed in 4 bytes).
 struct PUColour {

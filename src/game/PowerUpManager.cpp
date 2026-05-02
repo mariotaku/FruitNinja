@@ -140,8 +140,8 @@ void PowerUpManager::Reset(bool fullReset) {
             pwr->Deactivate(true);
             if (fullReset) {
                 // TODO: ActivatePurchase(pwr) -- re-apply purchase-active modifier
-            } else if (pwr->m_pPurchaseInfo == nullptr) {
-                // No purchases remaining path -- fall through to deactivate+free
+            } else if (!pwr->m_pPurchaseInfo || pwr->m_pPurchaseInfo->field_0xc0 <= 0) {
+                // ASM-verified: 2026-05-02 binary @ 0x00119bb0..0x00119bba -- check remaining-uses count
                 goto deactivate_and_free;
             }
             ++it;

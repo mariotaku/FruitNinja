@@ -690,19 +690,26 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::GameOver() {
-    // Binary @ 0x00121f74. Static entry — calls through singleton.
-    // Calls PowerUpManager::Reset(false) + ResetGlobalDt(1.0f).
-    PowerUpManager::GetInstance()->Reset(false);
+    // ASM-verified: 2026-05-02 binary @ 0x00121f74 -- ResetGlobalDt first, then PowerUpManager::Reset.
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
+    if (PowersEnabled()) {
+        PowerUpManager::GetInstance()->Reset(false);
+    }
 }
 
 void WaveManager::NewGame() {
-    // Binary @ 0x00121f90. Static entry — calls through singleton.
-    // Calls PowerUpManager::Reset(true) + ResetGlobalDt(1.0f).
-    PowerUpManager::GetInstance()->Reset(true);
+    // ASM-verified: 2026-05-02 binary @ 0x00121f90 -- ResetGlobalDt first, then PowerUpManager::Reset.
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
+    if (PowersEnabled()) {
+        PowerUpManager::GetInstance()->Reset(true);
+    }
+}
+
+// TODO: RE exact binary address; stubbed true (matches binary default).
+bool WaveManager::PowersEnabled() {
+    return true;
 }
 
 void WaveManager::ResetGlobalDt(float dt) {

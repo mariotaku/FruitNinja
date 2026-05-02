@@ -95,6 +95,10 @@ public:
     // Rotation axis from config
     Vec3 m_RotAxis;                      // +0x84
 
+    // +0x90: fruit's owning player index (single-player always 0; MP 0 or 1)
+    // ASM-verified: 2026-05-02 binary @ 0x00178708 reads [r4,#0x3c] = m_PlayerIdx
+    uint32_t m_PlayerIdx;               // +0x90 (int; 0=P1, 1=P2, 2=spectator, 3=special)
+
     // Z depth for draw sorting
     float m_ZPosition;                   // +0x98
 

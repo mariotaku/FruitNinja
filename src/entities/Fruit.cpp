@@ -91,6 +91,7 @@ Fruit::Fruit()
     , m_bCriticalEligible(false)
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
+    , m_PlayerIdx(0)
     , m_ZPosition(0.0f)
 {
     entityType = 0;
@@ -112,6 +113,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_bCriticalEligible = false;
     m_ScaleAnim = 0.0f;
     m_ChuckDelay = 0.0f;
+    m_PlayerIdx = 0;
     flags &= ~ENT_SKIP_MASK;  // activate + unhide
 
     // Reset slice state (binary Fruit::Init — m_SliceTimer = -1).
@@ -487,10 +489,6 @@ void Fruit::KillFruit(bool doMissPenalty) {
         m_pEmitter2 = nullptr;
     }
 
-    // Reset combo on miss / lifecycle expiry — binary @ 0x00176c84.
-    // g_LastSlasher is NOT reset here (binary doesn't at this site).
-    g_ComboCount = 0;
-
     if (doMissPenalty) {
         const FruitInfo* info = FruitInfo_Get(m_FruitType);
         // DIFFERS: m_bNoPowerUp field not yet ported to Fruit.h; treating as false
@@ -510,6 +508,9 @@ void Fruit::KillFruit(bool doMissPenalty) {
                     if (g->pGameSound) g->pGameSound->SFXPlay("fruit_miss", 1.0f, 1.0f);
                     g->missCount++;
                     if (g->missCount > 2) {
+                        // ASM-verified: 2026-05-02 binary @ 0x00176c84 -- combo reset only inside game-over branch
+                        g_ComboCount  = 0;
+                        g_LastSlasher = -1;  // binary writes 0xFFFFFFFF @ 0x00176c8c
                         FN::GameOver(-1, -1.0f, -1);
                     }
                 }
@@ -801,10 +802,8 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
     }
 
     // Combo counter increment — binary @ 0x001787a8..0x001787b0.
-    // MP guard: if a different player slashed, reset count before incrementing.
-    // m_PlayerIdx not yet in Fruit; defaulting to 0 for single-player.
-    // TODO (MP): add m_PlayerIdx field to Fruit and pass through from touch dispatch.
-    const int slasher = 0;  // DIFFERS: binary uses this->m_PlayerIdx
+    // ASM-verified: 2026-05-02 binary @ 0x00178708 reads m_PlayerIdx (+0x90).
+    int slasher = (int)m_PlayerIdx;
     if (g_LastSlasher != slasher) {
         g_ComboCount  = 0;   // binary @ 0x0017873a: different-player branch
         g_LastSlasher = slasher;

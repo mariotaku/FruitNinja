@@ -256,20 +256,24 @@ void GameOverScreen::Release() {
     Game* game = Game::GetInstance();
     if (game && game->pGameOverScreen == this) {
         game->pGameOverScreen = nullptr;
-        // Clear save-data cache slots (+0x120, +0x11C, +0x124, +0x128, +300)
-        if (game->pSaveData) {
-            game->pSaveData->m_ModeHighScores[0] = 0; // +300 (approx — TODO: verify exact offset)
-            // TODO: clear exact slots when FruitSaveData layout confirmed for offsets +0x11C..+0x128
+        // ASM-verified: 2026-05-02 binary @ 0x00140d98 -- clear 5 cached slots
+        if (FruitSaveData* sd = game->pSaveData) {
+            int* base = reinterpret_cast<int*>(sd);
+            base[0x11C / 4] = -1;
+            base[0x120 / 4] = 0;
+            base[0x124 / 4] = -1;
+            base[0x128 / 4] = -1;
+            base[0x12C / 4] = -1;
         }
     }
 
-    // Remove and free 4 aux HUDControls (FruitFact, slotC0, slot9c, slotA8)
-    // Binary order for RemoveControl: {0xBC, 0xC0, 0x9C, 0xA8}
+    // Remove and free 4 aux HUDControls.
+    // ASM-verified: 2026-05-02 binary @ 0x00140e14..0x00140e58 -- order: +0x9C, +0xBC, +0xC0, +0xA8
     if (game && game->hud) {
         HUDControl* slots[4] = {
+            m_pSlot9c,
             (HUDControl*)m_pFruitFact,
             (HUDControl*)m_pSlotC0,
-            m_pSlot9c,
             m_pSlotA8
         };
         for (int i = 0; i < 4; ++i) {
