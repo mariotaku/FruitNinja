@@ -17,4 +17,11 @@
 #  define final
 #endif
 
+// `nullptr` literal: introduced in GCC 4.6. Map to GCC's `__null` builtin
+// (typed null-pointer constant; better than plain `0` because it has correct
+// pointer arithmetic / overload-resolution semantics).
+#if defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__) < 406
+#  define nullptr __null
+#endif
+
 #endif

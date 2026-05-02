@@ -15,6 +15,8 @@ typedef int32_t Sint32;
 typedef int64_t Sint64;
 typedef uint64_t Uint64;
 typedef Uint8 SDL_bool;
+typedef Sint64 SDL_FingerID;
+typedef Sint64 SDL_TouchID;
 
 struct SDL_Window;
 struct SDL_Renderer;

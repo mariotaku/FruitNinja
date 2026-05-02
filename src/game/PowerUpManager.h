@@ -49,8 +49,12 @@ class PowerUp;
 // Stubs enough to compile the maps/lists; full port is Tier-2.
 class ScreenEffect {
 public:
-    uint32_t m_NameHash = 0;
-    float    m_Lifetime = 0.0f;
+    // GCC 4.4/4.5 doesn't support in-class non-static member initialisers;
+    // initialise via the ctor to keep the cross-build (asm-verify) toolchain
+    // happy without changing observable behaviour.
+    uint32_t m_NameHash;
+    float    m_Lifetime;
+    ScreenEffect() : m_NameHash(0), m_Lifetime(0.0f) {}
     void Activate() {}
     void Deactivate() {}
     void Update(float /*dt*/, float /*unused1*/, float /*unused2*/) { m_Lifetime -= 1.0f/60.0f; }

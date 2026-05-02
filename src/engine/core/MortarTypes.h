@@ -19,11 +19,13 @@ struct MortarRectangle {
 
 } // namespace Mortar
 
-// Convenient type aliases
-using uint8 = uint8_t;
-using uint16 = uint16_t;
-using uint32 = uint32_t;
-using uint64 = uint64_t;
-using int32 = int32_t;
+// Convenient type aliases. typedef rather than `using` so the cross-build
+// (GCC 4.4/4.5 for asm-verify) parses without -std=c++11 (alias-decls came
+// in 4.7).
+typedef uint8_t  uint8;
+typedef uint16_t uint16;
+typedef uint32_t uint32;
+typedef uint64_t uint64;
+typedef int32_t  int32;
 
 #endif
