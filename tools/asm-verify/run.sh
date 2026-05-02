@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Host-side launcher: bind-mounts the project into the asm-verify container
+# and invokes the in-container verify driver.
+#
+#   bash tools/asm-verify/run.sh
+#
+# Pre-requisite: bash tools/asm-verify/setup.sh (one-time image build).
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+IMAGE="${ASM_VERIFY_IMAGE:-fnverify}"
+
+# Normalise project root to a docker-friendly path. On Git Bash / MSYS the
+# CWD looks like /c/Users/..., but docker (Rancher Desktop / Docker Desktop
+# on Windows) wants C:/Users/... or //c/Users/... for bind-mounts.
+to_docker_path() {
+    local p="$1"
+    if [[ "$p" =~ ^/([A-Za-z])/(.*)$ ]]; then
+        local d="${BASH_REMATCH[1]^^}"
+        printf '%s:/%s' "$d" "${BASH_REMATCH[2]}"
+        return
+    fi
+    printf '%s' "$p"
+}
+PROJECT_ROOT_DOCKER="$(to_docker_path "$PROJECT_ROOT")"
+
+if ! command -v docker > /dev/null; then
+    echo "ERROR: docker not on PATH." >&2
+    exit 1
+fi
+
+if ! docker image inspect "$IMAGE" > /dev/null 2>&1; then
+    echo "Image '$IMAGE' missing. Run tools/asm-verify/setup.sh first." >&2
+    exit 1
+fi
+
+# Disable MSYS / Git Bash path translation so /work/... isn't rewritten
+# to C:/Program Files/Git/work/... when handed to docker.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL='*'
+
+# Bind-mount project + named volumes for ext4-backed cmake/cache.
+# Bind-mounts on Docker-Desktop / WSL2 still go through 9p drvfs, so we
+# stage the source into an internal volume from inside the container.
+docker run --rm \
+    -v "$PROJECT_ROOT_DOCKER:/work:ro" \
+    -v fnverify-src:/staging \
+    -v fnverify-build:/build \
+    -v fnverify-cache:/cache \
+    "$IMAGE" -c 'bash /work/tools/asm-verify/verify.sh'
+
+# verify.sh writes the report into /staging/tmp; lift it back out via a
+# scratch container.
+docker run --rm \
+    -v "$PROJECT_ROOT_DOCKER:/work" \
+    -v fnverify-src:/staging:ro \
+    "$IMAGE" -c '
+        mkdir -p /work/tmp/asm-verify
+        cp /staging/tmp/asm-verify/report.md /work/tmp/asm-verify/report.md
+    '
+
+echo
+echo "Report: tmp/asm-verify/report.md"
