@@ -61,9 +61,10 @@ PowerUp* PowerUp::Clone() {
     PowerUp* c = new PowerUp();
     *c = *this;
     c->m_ModList.clear();
-    for (GameModifier* m : m_ModList) {
-        // TODO: GameModifier::Clone() virtual -- for now shallow-copy
-        (void)m;
+    // Range-for replaced with iterator form for GCC 4.4 cross-build.
+    for (std::list<GameModifier*>::iterator it = m_ModList.begin();
+         it != m_ModList.end(); ++it) {
+        (void)*it;  // TODO: GameModifier::Clone() virtual -- for now shallow-copy
     }
     return c;
 }
@@ -75,9 +76,10 @@ void PowerUp::DrawBar() {
 
 float PowerUp::GetLongestMod() const {
     float longest = 0.0f;
-    for (GameModifier* m : m_ModList) {
-        if (m->m_Duration_remaining > longest)
-            longest = m->m_Duration_remaining;
+    for (std::list<GameModifier*>::const_iterator it = m_ModList.begin();
+         it != m_ModList.end(); ++it) {
+        if ((*it)->m_Duration_remaining > longest)
+            longest = (*it)->m_Duration_remaining;
     }
     return longest;
 }
@@ -93,8 +95,9 @@ void PowerUp::LoadTextures() {
 }
 
 void PowerUp::Release() {
-    for (GameModifier* m : m_ModList) {
-        delete m;
+    for (std::list<GameModifier*>::iterator it = m_ModList.begin();
+         it != m_ModList.end(); ++it) {
+        delete *it;
     }
     m_ModList.clear();
 }

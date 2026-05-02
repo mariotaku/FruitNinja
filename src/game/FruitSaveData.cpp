@@ -143,8 +143,9 @@ void FruitSaveData::ClearCombo() {
 // Binary: for each mode, for each entry in the map, if val >= 0, val--.
 void FruitSaveData::FinishedGame() {
     for (int mode = 0; mode < 4; mode++) {
-        for (auto& kv : m_ModeScoreHistory[mode]) {
-            if (kv.second >= 0) kv.second--;
+        for (std::map<int, int>::iterator it = m_ModeScoreHistory[mode].begin();
+             it != m_ModeScoreHistory[mode].end(); ++it) {
+            if (it->second >= 0) it->second--;
         }
     }
 }
@@ -262,7 +263,8 @@ std::string GetSavePath() {
 // Save format version. Binary uses GetVersionTotal() which encodes
 // build info; port pins to a single byte for now and bumps when the
 // schema changes.
-constexpr int k_SaveVersion = 1;
+// const not constexpr (4.4 doesn't accept constexpr).
+static const int k_SaveVersion = 1;
 
 } // namespace
 
@@ -302,27 +304,32 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
     root->SetAttribute("p2pCancelled",  save->field_0x3c        ? "true" : "false");
 
     // SliceTotal elements: cumulative totals first, then session-only.
-    for (auto& kv : save->m_Totals) {
+    // Range-for replaced with iterator form for GCC 4.4 (asm-verify cross
+    // toolchain) parser compatibility; same semantics in both compilers.
+    for (std::map<uint32_t, SliceTotal>::iterator it = save->m_Totals.begin();
+         it != save->m_Totals.end(); ++it) {
         tinyxml2::XMLElement* e = doc.NewElement("SliceTotal");
-        e->SetAttribute("name",  kv.second.name.c_str());
-        e->SetAttribute("count", kv.second.count);
+        e->SetAttribute("name",  it->second.name.c_str());
+        e->SetAttribute("count", it->second.count);
         root->InsertEndChild(e);
     }
-    for (auto& kv : save->m_SessionTotals) {
+    for (std::map<uint32_t, SliceTotal>::iterator it = save->m_SessionTotals.begin();
+         it != save->m_SessionTotals.end(); ++it) {
         tinyxml2::XMLElement* e = doc.NewElement("SliceTotal");
         e->SetAttribute("u", "true");
-        e->SetAttribute("name",  kv.second.name.c_str());
-        e->SetAttribute("count", kv.second.count);
+        e->SetAttribute("name",  it->second.name.c_str());
+        e->SetAttribute("count", it->second.count);
         root->InsertEndChild(e);
     }
 
     // Achievement progress map ("achievement" container).
     if (!save->m_AchievementProgress.empty()) {
         tinyxml2::XMLElement* ach = doc.NewElement("achievement");
-        for (auto& kv : save->m_AchievementProgress) {
+        for (std::map<uint32_t, AchievementItem>::iterator it = save->m_AchievementProgress.begin();
+             it != save->m_AchievementProgress.end(); ++it) {
             tinyxml2::XMLElement* e = doc.NewElement("achievement");
-            e->SetAttribute("name", kv.second.name.c_str());
-            e->SetAttribute("progress", kv.second.progress);
+            e->SetAttribute("name", it->second.name.c_str());
+            e->SetAttribute("progress", it->second.progress);
             ach->InsertEndChild(e);
         }
         root->InsertEndChild(ach);
@@ -331,9 +338,10 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
     // Unlocked achievements ("unlocked" container).
     if (!save->m_Achievements.empty()) {
         tinyxml2::XMLElement* unl = doc.NewElement("unlocked");
-        for (auto& kv : save->m_Achievements) {
+        for (std::map<uint32_t, AchievementItem>::iterator it = save->m_Achievements.begin();
+             it != save->m_Achievements.end(); ++it) {
             tinyxml2::XMLElement* e = doc.NewElement("achievement");
-            e->SetAttribute("name", kv.second.name.c_str());
+            e->SetAttribute("name", it->second.name.c_str());
             unl->InsertEndChild(e);
         }
         root->InsertEndChild(unl);
@@ -345,10 +353,11 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         char tag[48];
         snprintf(tag, sizeof(tag), "wave_counts_%s", k_ModeNames[m]);
         tinyxml2::XMLElement* container = doc.NewElement(tag);
-        for (auto& kv : save->m_ModeScoreHistory[m]) {
+        for (std::map<int, int>::iterator it = save->m_ModeScoreHistory[m].begin();
+             it != save->m_ModeScoreHistory[m].end(); ++it) {
             tinyxml2::XMLElement* e = doc.NewElement("game_count");
-            e->SetAttribute("score",   kv.first);
-            e->SetAttribute("waveIdx", kv.second);
+            e->SetAttribute("score",   it->first);
+            e->SetAttribute("waveIdx", it->second);
             container->InsertEndChild(e);
         }
         root->InsertEndChild(container);
