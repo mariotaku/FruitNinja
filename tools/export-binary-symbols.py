@@ -12,6 +12,7 @@ Usage:
     python tools/export-binary-symbols.py [manifest.toml]
 """
 import argparse
+import hashlib
 import pathlib
 import subprocess
 import sys
@@ -25,6 +26,22 @@ PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
 BINARY = PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"
 OBJDUMP = PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-objdump.exe"
 OUT_DIR = PROJECT_ROOT / "bada-binary" / "symbols"
+CACHE_KEY = PROJECT_ROOT / "bada-binary" / ".cache-key"
+
+
+def compute_cache_key(manifest_text: str) -> str:
+    """Hash the inputs that could change exported symbols.
+
+    If any of these change we must re-export. If all match a previous run,
+    we can skip the (slow) per-symbol objdump pass entirely.
+    """
+    h = hashlib.sha256()
+    h.update(BINARY.read_bytes())
+    h.update(b"\x00")
+    h.update(OBJDUMP.read_bytes()[:1024])  # first 1KB is enough to fingerprint
+    h.update(b"\x00")
+    h.update(manifest_text.encode("utf-8"))
+    return h.hexdigest()
 
 
 def export_one(name: str, addr_hex: str, size_bytes: int) -> pathlib.Path:
@@ -75,8 +92,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "manifest",
-        nargs="?",
-        default=str(PROJECT_ROOT / "tools" / "asm-verify-manifest.toml"),
+        nargs="*",
+        default=[
+            str(PROJECT_ROOT / "tools" / "asm-verify-manifest.toml"),
+            str(PROJECT_ROOT / "tools" / "asm-verify-manifest.generated.toml"),
+        ],
+        help="One or more manifest files. Default: hand-written + generated.",
+    )
+    ap.add_argument(
+        "--force", action="store_true",
+        help="Re-export even if the cache key matches.",
     )
     args = ap.parse_args()
 
@@ -85,22 +110,42 @@ def main():
     if not OBJDUMP.exists():
         sys.exit(f"objdump missing: {OBJDUMP}")
 
-    manifest_path = pathlib.Path(args.manifest)
-    if not manifest_path.exists():
-        sys.exit(f"manifest missing: {manifest_path}")
-
-    data = tomllib.loads(manifest_path.read_text())
-    syms = data.get("symbol", [])
+    syms: list[dict] = []
+    seen_names: set[str] = set()
+    manifest_concat = ""
+    for mp in args.manifest:
+        path = pathlib.Path(mp)
+        if not path.exists():
+            continue
+        text = path.read_text()
+        manifest_concat += text + "\n"
+        for s in tomllib.loads(text).get("symbol", []):
+            if s["mangled"] in seen_names:
+                continue
+            seen_names.add(s["mangled"])
+            syms.append(s)
     if not syms:
-        sys.exit("manifest has no [[symbol]] entries")
+        sys.exit("No [[symbol]] entries in any manifest.")
 
+    # Cache check.
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    new_key = compute_cache_key(manifest_concat)
+    if not args.force and CACHE_KEY.exists() and CACHE_KEY.read_text().strip() == new_key:
+        print(f"  cache hit: skipping {len(syms)} symbols (already exported).")
+        print(f"  pass --force to re-export anyway.")
+        return
+
+    n_ok = 0
+    n_fail = 0
     for s in syms:
         try:
-            out = export_one(s["mangled"], s["addr"], s["size"])
-            print(f"  exported {s['mangled']:50} -> {out.relative_to(PROJECT_ROOT)}")
+            export_one(s["mangled"], s["addr"], s["size"])
+            n_ok += 1
         except Exception as e:
             print(f"  FAILED  {s['mangled']:50}: {e}", file=sys.stderr)
+            n_fail += 1
+    print(f"  exported {n_ok} symbols ({n_fail} failed) to {OUT_DIR.relative_to(PROJECT_ROOT)}")
+    CACHE_KEY.write_text(new_key + "\n")
 
 
 if __name__ == "__main__":
