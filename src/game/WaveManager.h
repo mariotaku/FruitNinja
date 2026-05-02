@@ -185,6 +185,10 @@ public:
     static void GameOver();
     static void NewGame();
 
+    // Gate for PowerUpManager calls in GameOver/NewGame.
+    // TODO: RE exact binary address and condition; stubbed true (binary default).
+    static bool PowersEnabled();
+
     // 0x00121ed8: clears per-entity speed-control list.
     void ResetGlobalDt(float dt);
 

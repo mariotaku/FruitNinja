@@ -311,19 +311,14 @@ void PauseScreen::PauseGameCallback() {
     }
 }
 
-// PauseGameCallback2 (binary 0x00154400)
-// Retry button press-action:
-//   Wraps PauseGameCallback, then sets m_PressIndex = 1 and m_State = 5.
-// NOTE: doc section 10 flags an asm-inspector gap on whether this sets
-// state 4 or 5. Port sets state 5 directly (retry path) based on the
-// state-machine branch at state 4/5 exit. If asm-inspector confirms 4,
-// revert to calling PauseGameCallback + setting m_PressIndex = 1 only.
-// DIFFERS: may need correction after asm-inspector verifies 0x00154400.
+// ASM-verified: 2026-05-02 binary @ 0x00154400 (asm-inspector)
 void PauseScreen::PauseGameCallback2() {
-    if (m_State == 3) {
-        m_State = 5;
+    bool wasIdle = (m_ButtonFadeAlpha == 0.0f) && (m_State == 0);
+    PauseGameCallback();   // drives state 0->2 or 3->4
+    if (wasIdle) {
         m_PressIndex = 1;
     }
+    // state 5 is unreachable from this callback in single-player
 }
 
 // QuitGameCallback (binary 0x00153ebc)
