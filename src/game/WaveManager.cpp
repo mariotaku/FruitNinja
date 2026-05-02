@@ -136,8 +136,10 @@ void WaveManager::Init() {
 
     for (int mode = 0; mode < 4; ++mode) {
         // Free any previously-loaded wave infos for this mode.
-        for (WAVE_INFO* wi : waveInfos[mode])
-            delete wi;
+        // Range-for replaced with iterator form for GCC 4.4 cross-build.
+        for (std::vector<WAVE_INFO*>::iterator it = waveInfos[mode].begin();
+             it != waveInfos[mode].end(); ++it)
+            delete *it;
         waveInfos[mode].clear();
 
         std::string path = game->data_dir + "/" + s_WaveXML[mode];
@@ -183,6 +185,19 @@ void WaveManager::Init() {
         }
 
         // Parse <OverideProbability> elements (Arcade mode).
+        // Pre-count + reserve() so vector::push_back never reallocates --
+        // libstdc++ 4.4 in -std=gnu++0x mode trips a known bug instantiating
+        // vector<PROBABILITY_OVERIDE>::_M_insert_aux (move_iterator + non-
+        // nothrow-movable element). Reserving up-front skips the realloc
+        // path entirely, dodging the bug while keeping host-build behaviour
+        // identical (no functional change; just a hint to the allocator).
+        int probCount = 0;
+        for (tinyxml2::XMLElement* el = root->FirstChildElement("OverideProbability");
+             el; el = el->NextSiblingElement("OverideProbability"))
+        {
+            ++probCount;
+        }
+        if (probCount > 0) probOverrides[mode].reserve(probCount);
         for (tinyxml2::XMLElement* el = root->FirstChildElement("OverideProbability");
              el; el = el->NextSiblingElement("OverideProbability"))
         {
@@ -373,8 +388,9 @@ void WaveManager::Init() {
 
 void WaveManager::Destroy() {
     for (int mode = 0; mode < 4; ++mode) {
-        for (WAVE_INFO* wi : waveInfos[mode])
-            delete wi;
+        for (std::vector<WAVE_INFO*>::iterator it = waveInfos[mode].begin();
+             it != waveInfos[mode].end(); ++it)
+            delete *it;
         waveInfos[mode].clear();
     }
     delete m_pWaveQue;     m_pWaveQue = nullptr;
@@ -458,8 +474,9 @@ void WaveManager::Reset(bool fullReset) {
     // 6. Reset per-wave chance counters + PROBABILITY_OVERIDE state.
     ResetWaveChances();
     field_0x5c = 0;
-    for (PROBABILITY_OVERIDE& po : probOverrides[game->gameMode])
-        po.SelectType();
+    for (std::vector<PROBABILITY_OVERIDE>::iterator pit = probOverrides[game->gameMode].begin();
+         pit != probOverrides[game->gameMode].end(); ++pit)
+        pit->SelectType();
 
     // field_0x2c4 / field_0x2c8 not in port struct (binary resets them here).
     // Clear m_FruitQueue[2][32]: fill with -1.
@@ -638,7 +655,9 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         int candidateIdx[MAX_CAND];
         int numCandidates = 0;
         int waveIdx = 0;
-        for (WAVE_INFO* wi : waveInfos[game->gameMode]) {
+        for (std::vector<WAVE_INFO*>::iterator wit = waveInfos[game->gameMode].begin();
+             wit != waveInfos[game->gameMode].end(); ++wit) {
+            WAVE_INFO* wi = *wit;
             if (wi->m_ScoreThreshold <= m_WaveCount[0]
                 && (m_WaveCount[0] <= wi->m_EndScore || wi->m_EndScore == -2))
             {
@@ -738,7 +757,9 @@ void WaveManager::ResetWaveChances() {
     // and field_0x34 (revisit counter) = 1.0.
     Game* game = Game::GetInstance();
     if (!game) return;
-    for (WAVE_INFO* wi : waveInfos[game->gameMode]) {
+    for (std::vector<WAVE_INFO*>::iterator it = waveInfos[game->gameMode].begin();
+         it != waveInfos[game->gameMode].end(); ++it) {
+        WAVE_INFO* wi = *it;
         wi->m_CurrentChance   = wi->m_Chance;
         wi->m_CurrentRegrowth = wi->m_ChanceRegrowth;
         wi->field_0x34        = 1.0f;
@@ -956,7 +977,9 @@ void WaveManager::GetNextWave(int playerIdx) {
     static const int MAX_CANDIDATES = 20;
     WAVE_INFO* candidates[MAX_CANDIDATES];
 
-    for (WAVE_INFO* wi : waveInfos[gm]) {
+    for (std::vector<WAVE_INFO*>::iterator wit = waveInfos[gm].begin();
+         wit != waveInfos[gm].end(); ++wit) {
+        WAVE_INFO* wi = *wit;
         // Regrowth: grow m_CurrentChance toward m_Chance.
         if (wi->m_ChanceRegrowth > 0.0f && wi->m_CurrentChance < wi->m_Chance) {
             float growth = (float)wi->m_Chance * wi->m_ChanceRegrowth;
