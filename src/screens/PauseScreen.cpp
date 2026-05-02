@@ -351,10 +351,11 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton->m_Texture = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = 0x100;
         m_ResumeButton->m_FruitType = -1;
-        {
-            PauseScreen* self = this;
-            m_ResumeButton->m_ClickCallback = [self]() { self->PauseGameCallback(); };
-        }
+        // Member-function factory rather than lambda, so the cross-build
+        // toolchain (GCC 4.4) can parse this -- lambdas weren't added until
+        // GCC 4.5. Same observable binding in both compilers.
+        m_ResumeButton->m_ClickCallback =
+            Mortar::Delegate<void()>::Make(this, &PauseScreen::PauseGameCallback);
         m_ResumeButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_ResumeButton);
@@ -369,10 +370,8 @@ void PauseScreen::Update(float dt) {
         m_QuitButton->m_Texture = m_QuitTitleTex;
         m_QuitButton->m_LayerFlags = 0x100;
         m_QuitButton->m_FruitType = -1;
-        {
-            PauseScreen* self = this;
-            m_QuitButton->m_ClickCallback = [self]() { self->QuitGameCallback(); };
-        }
+        m_QuitButton->m_ClickCallback =
+            Mortar::Delegate<void()>::Make(this, &PauseScreen::QuitGameCallback);
         m_QuitButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_QuitButton);
@@ -387,10 +386,8 @@ void PauseScreen::Update(float dt) {
         m_RetryButton->m_Texture = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = 0x100;
         m_RetryButton->m_FruitType = -1;
-        {
-            PauseScreen* self = this;
-            m_RetryButton->m_ClickCallback = [self]() { self->PauseGameCallback2(); };
-        }
+        m_RetryButton->m_ClickCallback =
+            Mortar::Delegate<void()>::Make(this, &PauseScreen::PauseGameCallback2);
         m_RetryButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_RetryButton);
