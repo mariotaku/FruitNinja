@@ -59,10 +59,11 @@ def export_one(name: str, addr_hex: str, size_bytes: int) -> pathlib.Path:
     end = addr + size_bytes
     out = OUT_DIR / f"{_safe(name)}.s"
     out.parent.mkdir(parents=True, exist_ok=True)
+    # Keep raw hex bytes; asm-differ's post-processor needs them to detect
+    # data pools and immediates correctly.
     cmd = [
         str(OBJDUMP),
         "-d",
-        "--no-show-raw-insn",
         "--start-address=0x{:x}".format(addr),
         "--stop-address=0x{:x}".format(end),
         str(BINARY),

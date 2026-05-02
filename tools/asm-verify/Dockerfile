@@ -42,7 +42,7 @@ RUN git clone https://github.com/simonlindholm/asm-differ /opt/asm-differ \
  && cd /opt/asm-differ \
  && git checkout "$ASM_DIFFER_REV" \
  && rm -rf .git \
- && pip3 install --break-system-packages --no-cache-dir colorama dataclasses watchdog
+ && pip3 install --break-system-packages --no-cache-dir colorama watchdog levenshtein cxxfilt
 ENV PATH=/opt/asm-differ:$PATH
 ENV PYTHONPATH=/opt/asm-differ:${PYTHONPATH:-}
 

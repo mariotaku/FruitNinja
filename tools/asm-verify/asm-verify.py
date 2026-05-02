@@ -38,6 +38,10 @@ OUT_DIR = pathlib.Path(os.environ.get(
 BINARY_SYMBOL_DIR = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BIN_SYMBOL_DIR",
     PROJECT_ROOT / "bada-binary" / "symbols"))
+ASM_DIFFER = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_ASM_DIFFER",
+    "/opt/asm-differ/diff.py"))
+USE_ASM_DIFFER = ASM_DIFFER.exists()
 
 # Lines removed entirely before diffing.
 DROP_RE = re.compile(
@@ -150,6 +154,91 @@ def disasm_port_symbol(obj_path: pathlib.Path, mangled: str) -> str:
     return res.stdout
 
 
+def run_asm_differ(obj_path: pathlib.Path, bin_asm_path: pathlib.Path,
+                   mangled: str) -> dict:
+    """Invoke asm-differ in JSON mode for one symbol.
+
+    Returns the parsed JSON dict on success, or {} on failure (lets the
+    fall-back toy differ take over).
+    """
+    if not USE_ASM_DIFFER or not ASM_DIFFER.exists():
+        return {}
+    settings_src = ASM_VERIFY_DIR / "diff_settings.py"
+    work = pathlib.Path("/tmp") / "asm-differ-work"
+    work.mkdir(parents=True, exist_ok=True)
+    # asm-differ reads diff_settings.py from cwd at startup.
+    if not (work / "diff_settings.py").exists():
+        try:
+            (work / "diff_settings.py").write_text(settings_src.read_text())
+        except Exception:
+            return {}
+    try:
+        res = subprocess.run(
+            [
+                "python3", str(ASM_DIFFER),
+                "-o",                                # diff .o files (recommended)
+                "--no-pager",
+                "--format=json",
+                "-B",                                # don't visualise branches in output
+                "-R",                                # don't show .rodata refs
+                "-I",                                # ignore address differences
+                "-i",                                # ignore large immediates
+                "-j", f".text.{mangled}",            # restrict to per-fn section
+                "--base-asm", str(bin_asm_path),     # pre-extracted binary asm
+                "--file", str(obj_path),             # cross-build .o
+                mangled,
+            ],
+            capture_output=True, text=True, cwd=str(work), timeout=30,
+        )
+    except Exception:
+        return {}
+    if res.returncode != 0 or not res.stdout.strip():
+        return {}
+    try:
+        import json
+        return json.loads(res.stdout)
+    except Exception:
+        return {}
+
+
+def classify_asm_differ(d: dict) -> tuple[str, str]:
+    """Convert asm-differ JSON result into our verdict + reason.
+
+    Score is roughly proportional to Levenshtein edit cost on the asm token
+    sequence -- ~50 score per single-line edit. Use absolute thresholds, not
+    percent-of-max: max_score scales with function length, but a function
+    with 5 missed lines is "small diff" regardless of total length.
+    """
+    score = d.get("current_score")
+    max_score = d.get("max_score") or 0
+    if score is None or max_score == 0:
+        return "UNPAIRED", "asm-differ produced no score"
+    pct = (score * 100) // max_score if max_score else 0
+    if score == 0:
+        return "MATCH", f"asm-differ {score}/{max_score} (identical)"
+    if score < 50:
+        return "COSMETIC", f"asm-differ {score}/{max_score} ({pct}% diff)"
+    if score < 1500:
+        return "SUSPICIOUS", f"asm-differ {score}/{max_score} ({pct}% diff)"
+    return "DIVERGE", f"asm-differ {score}/{max_score} ({pct}% diff)"
+
+
+def render_asm_differ_text(d: dict) -> list[str]:
+    """Render an asm-differ JSON row list as plain-text diff lines."""
+    out = []
+    for row in d.get("rows", []):
+        base = (row.get("base") or {}).get("text") or []
+        cur  = (row.get("current") or {}).get("text") or []
+        # Each text segment is {"text": "...", "format": "..."}.
+        base_text = "".join(s.get("text", "") for s in base).rstrip()
+        cur_text  = "".join(s.get("text", "") for s in cur).rstrip()
+        # Skip pure-source-display rows (no asm).
+        if not base_text and not cur_text:
+            continue
+        out.append(f"{base_text:<50} | {cur_text}")
+    return out
+
+
 def classify(diff_lines: list[str]) -> tuple[str, str]:
     """Classify a unified diff hunk into a verdict + 1-line reason."""
     if not diff_lines:
@@ -167,9 +256,24 @@ def classify(diff_lines: list[str]) -> tuple[str, str]:
 def verify_one(s: dict) -> dict:
     name = s["mangled"]
     bin_asm_path = BINARY_SYMBOL_DIR / f"{name}.s"
-    port_obj_path = PROJECT_ROOT / s["port"]
+    # `port` may be project-relative or absolute (Linux container path).
+    port_obj_path = pathlib.Path(s["port"])
+    if not port_obj_path.is_absolute():
+        port_obj_path = PROJECT_ROOT / port_obj_path
     if not bin_asm_path.exists():
         return {**s, "verdict": "UNPAIRED", "reason": f"binary asm missing: {bin_asm_path.name}", "diff": []}
+
+    # Preferred path: asm-differ. Better register-rename + reloc handling.
+    if USE_ASM_DIFFER and port_obj_path.exists():
+        ad = run_asm_differ(port_obj_path, bin_asm_path, name)
+        if ad:
+            verdict, reason = classify_asm_differ(ad)
+            diff = render_asm_differ_text(ad)
+            return {**s, "verdict": verdict, "reason": reason, "diff": diff,
+                    "score": ad.get("current_score"),
+                    "max_score": ad.get("max_score")}
+
+    # Fallback: toy normalizer + difflib.
     try:
         port_text = disasm_port_symbol(port_obj_path, name)
     except Exception as e:
