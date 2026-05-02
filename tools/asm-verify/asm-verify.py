@@ -27,10 +27,11 @@ try:
 except ImportError:
     import tomli as tomllib  # type: ignore
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
+ASM_VERIFY_DIR = pathlib.Path(__file__).resolve().parent
+PROJECT_ROOT   = ASM_VERIFY_DIR.parent.parent
 OBJDUMP = pathlib.Path(os.environ.get(
     "ASM_VERIFY_OBJDUMP",
-    PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-objdump.exe"))
+    PROJECT_ROOT / "tools" / "toolchain" / "sourcery-2010q1" / "bin" / "arm-none-eabi-objdump"))
 OUT_DIR = pathlib.Path(os.environ.get(
     "ASM_VERIFY_REPORT_DIR",
     PROJECT_ROOT / "tmp" / "asm-verify"))
@@ -268,8 +269,8 @@ def main():
         manifests = [pathlib.Path(args.manifest)]
     else:
         manifests = [
-            PROJECT_ROOT / "tools" / "asm-verify-manifest.toml",
-            PROJECT_ROOT / "tools" / "asm-verify-manifest.generated.toml",
+            ASM_VERIFY_DIR / "manifest.toml",
+            ASM_VERIFY_DIR / "manifest.generated.toml",
         ]
 
     syms = load_symbols(manifests)

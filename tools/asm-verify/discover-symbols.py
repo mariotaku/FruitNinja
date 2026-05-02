@@ -17,19 +17,21 @@ import sys
 
 import os
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
+# tools/asm-verify/discover-symbols.py -> project root is two parents up.
+ASM_VERIFY_DIR = pathlib.Path(__file__).resolve().parent
+PROJECT_ROOT   = ASM_VERIFY_DIR.parent.parent
 BINARY = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BINARY",
     PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"))
 NM     = pathlib.Path(os.environ.get(
     "ASM_VERIFY_NM",
-    PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-nm.exe"))
+    PROJECT_ROOT / "tools" / "toolchain" / "sourcery-2010q1" / "bin" / "arm-none-eabi-nm"))
 CROSS  = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BUILD_DIR",
     PROJECT_ROOT / "build-bada-cross"))
 OUT    = pathlib.Path(os.environ.get(
     "ASM_VERIFY_MANIFEST_OUT",
-    PROJECT_ROOT / "tools" / "asm-verify-manifest.generated.toml"))
+    ASM_VERIFY_DIR / "manifest.generated.toml"))
 
 
 # Skip symbols we don't care about diffing:

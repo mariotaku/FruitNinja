@@ -53,3 +53,4 @@ bada_SDK
 # asm-verify pipeline outputs
 bada-binary/symbols/
 build-bada-cross/
+tools/asm-verify/manifest.generated.toml

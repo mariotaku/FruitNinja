@@ -1,6 +1,6 @@
 ---
 name: asm-inspector
-description: ASM-level verification agent. Use when port behavior diverges from the binary and you need to confirm what the binary actually does at the instruction level. Compiles a small C++ test unit with the Bada SDK toolchain (gcc 4.5.3) to produce ARM Thumb-2 ASM, retrieves the corresponding disassembly from Ghidra, and reports discrepancies line-by-line. Returns concrete evidence (specific instructions, addresses, register values) rather than inference.
+description: ASM-level verification agent. Use when port behavior diverges from the binary and you need to confirm what the binary actually does at the instruction level. Compiles a small C++ test unit with the Sourcery 2010q1 (GCC 4.4.1) toolchain to produce ARM Thumb-2 ASM -- this is the upstream of Samsung's "Sourcery G++ 4.4-157" that built FruitNinja.exe, so codegen matches closely. Diffs against Ghidra disassembly. Returns concrete evidence (specific instructions, addresses, register values) rather than inference.
 model: opus
 ---
 
@@ -38,24 +38,41 @@ In `tmp/asm-compare/<name>_test.cpp`, write the smallest C++ that exercises the 
 - Keep functions small: one branch / formula per function.
 - File header comment cites the binary address range under test.
 
-### 4. Compile with the Bada toolchain
+### 4. Compile with the era-correct toolchain
 
-The toolchain lives at `bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-g++.exe` (already on disk, no install needed).
+The cross toolchain is **Sourcery G++ Lite 2010q1-188 (GCC 4.4.1)** -- the
+upstream of Samsung's `Sourcery G++ 4.4-157` that built the binary (per its
+`.comment` section). It's baked into the `fnverify` Docker image at
+`/opt/sourcery-2010q1/` (= `$FN_TOOLCHAIN_DIR` inside the container).
+If the image isn't built, run `bash tools/asm-verify/setup.sh` once.
 
 **Authoritative flags** (extracted from the binary's ARM build attributes via `readelf -A`):
-- Compiler: **Samsung Sourcery G++ 4.4-157 (gcc 4.4.1)** -- the SDK ships 4.5.3, not 4.4.1, so expect minor codegen differences (peephole, register allocation). The structure should still match.
 - `Tag_CPU_name: CORTEX-A8` -> `-mcpu=cortex-a8`
 - `Tag_CPU_arch: v7 / Application` -> covered by `-mcpu=cortex-a8`
 - `Tag_THUMB_ISA_use: Thumb-2` -> `-mthumb`
 - `Tag_FP_arch: VFPv3` -> `-mfpu=vfpv3`
 - **`Tag_ABI_VFP_args: VFP registers` -> `-mfloat-abi=hard`** (NOT softfp -- floats are passed/returned in `s0`/`s1` etc., not `r0`/`r1`).
 
-Default invocation:
-```
-arm-bada-eabi-g++.exe -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 -mfloat-abi=hard -std=c++0x -fno-exceptions -fno-rtti -S -o tmp/asm-compare/<name>_test.s tmp/asm-compare/<name>_test.cpp
+Default invocation, single TU, ad-hoc:
+```sh
+docker run --rm -v "$(pwd):/work" fnverify -c "
+  cp /work/tmp/asm-compare/<name>_test.cpp /tmp/t.cpp
+  arm-none-eabi-g++ -O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 \
+    -mfloat-abi=hard -std=gnu++0x -fno-exceptions -fno-rtti -S \
+    -o /tmp/t.s /tmp/t.cpp
+  cat /tmp/t.s > /work/tmp/asm-compare/<name>_test.s
+"
 ```
 
-If the asm comes out tiny / wrong, try `-O3` or `-Os` — the binary's exact `-O` level isn't recorded in the file (gcc 4.4 didn't embed it), but `-O2` is the strongest signal from the compiled code style (no aggressive inlining, no `-Os` size pressure).
+The `cp` to `/tmp/` is required because the toolchain's i386 cc1plus can't
+stat() the bind-mounted `/work` (drvfs / 9p inode overflow). The bulk
+verifier (`tools/asm-verify/run.sh`) handles staging automatically; for
+ad-hoc one-off TUs you stage manually as above.
+
+If the asm comes out tiny / wrong, try `-O3` or `-Os` — the binary's exact
+`-O` level isn't recorded in the file (gcc 4.4 didn't embed it), but `-O2`
+is the strongest signal from the compiled code style (no aggressive
+inlining, no `-Os` size pressure).
 
 ### 5. Compare instruction-by-instruction
 
@@ -149,14 +166,15 @@ Do **NOT** emit the line for **Diverges** or **Inconclusive** verdicts. The comm
 
 ## Tooling reference
 
-- Bada SDK toolchain: `bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-g++.exe` (gcc 4.5.3; the binary itself was built with Samsung Sourcery G++ 4.4.1, very similar codegen).
-- **Bada SDK objdump**: `bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-objdump.exe` — use this for binary disassembly (it understands the ARM ELF and matches the toolchain's instruction printing style for cleaner side-by-side diffs).
+- **`fnverify` Docker image** (era-correct toolchain): contains Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/`, plus cmake / python3 / rsync / i386 multilib. Build with `bash tools/asm-verify/setup.sh`. See `tools/asm-verify/Dockerfile`.
+- **In-image binutils**: `arm-none-eabi-{g++,gcc,objdump,nm,readelf,as,ar}` on `$PATH`. Use these for binary disassembly so output matches the cross-build's printing style for cleaner side-by-side diffs.
+- **Bada SDK toolchain** (legacy fallback, GCC 4.5.3 on Win): `bada_SDK/Tools/Toolchains/ARM/bin/arm-bada-eabi-g++.exe` — only use if Docker is unavailable. Codegen drifts ~5% (notably tail-call elision).
 - **Original ARM ELF**: `FruitNinjaBada/Bin/FruitNinja.exe` (3 MB, ELF32 ARM, not stripped — symbols are C++-mangled).
-- Compile-unit workdir: `tmp/asm-compare/`
+- **Project-wide verifier**: `tools/asm-verify/run.sh` (bulk loop, see `tools/asm-verify/README.md`). For ad-hoc single-symbol questions compile your own minimal TU as in §4; for "did my last commit drift any of the verified symbols?" use the bulk verifier.
+- Compile-unit workdir: `tmp/asm-compare/` (Win-side OK for source; stage into `/tmp/` inside the container before invoking i386 cc1plus).
 - One-off Ghidra scripts (e.g. a quick `FindOffset.java` to scan a struct): save to `tmp/ghidra_scripts/`, NOT to the project's `ghidra_scripts/` (that's reserved for persistent / reusable scripts).
 - VFP immediate encoding cheat-sheet: 0.5=#96, 1.0=#112, 1.5=#120, 2.0=#0, 3.0=#16, -1.5=#248. Single-precision: `fconsts s_n, #N`. Full table in ARM ARM A8.6.339.
 - GhidraMCP: `disassemble_function`, `decompile_function`, `get_xrefs_to`, `read_memory`.
-- Existing comparisons: `tmp/asm-compare/fruit_slice_test.{cpp,s}` is a worked example.
 
 ## Worked example: spin-loop "oneBig" branch
 

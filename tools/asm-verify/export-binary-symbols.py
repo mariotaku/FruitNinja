@@ -24,13 +24,14 @@ except ImportError:
 
 import os
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
+ASM_VERIFY_DIR = pathlib.Path(__file__).resolve().parent
+PROJECT_ROOT   = ASM_VERIFY_DIR.parent.parent
 BINARY  = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BINARY",
     PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"))
 OBJDUMP = pathlib.Path(os.environ.get(
     "ASM_VERIFY_OBJDUMP",
-    PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-objdump.exe"))
+    PROJECT_ROOT / "tools" / "toolchain" / "sourcery-2010q1" / "bin" / "arm-none-eabi-objdump"))
 OUT_DIR = pathlib.Path(os.environ.get(
     "ASM_VERIFY_BIN_SYMBOL_DIR",
     PROJECT_ROOT / "bada-binary" / "symbols"))
@@ -102,8 +103,8 @@ def main():
         "manifest",
         nargs="*",
         default=[
-            str(PROJECT_ROOT / "tools" / "asm-verify-manifest.toml"),
-            str(PROJECT_ROOT / "tools" / "asm-verify-manifest.generated.toml"),
+            str(ASM_VERIFY_DIR / "manifest.toml"),
+            str(ASM_VERIFY_DIR / "manifest.generated.toml"),
         ],
         help="One or more manifest files. Default: hand-written + generated.",
     )
@@ -152,7 +153,11 @@ def main():
         except Exception as e:
             print(f"  FAILED  {s['mangled']:50}: {e}", file=sys.stderr)
             n_fail += 1
-    print(f"  exported {n_ok} symbols ({n_fail} failed) to {OUT_DIR.relative_to(PROJECT_ROOT)}")
+    try:
+        out_disp = OUT_DIR.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        out_disp = OUT_DIR.as_posix()
+    print(f"  exported {n_ok} symbols ({n_fail} failed) to {out_disp}")
     CACHE_KEY.write_text(new_key + "\n")
 
 
