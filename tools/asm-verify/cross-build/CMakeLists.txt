@@ -35,8 +35,10 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/PowerUpManager.cpp"
     "${_PROJECT_ROOT}/src/game/PowerUp.cpp"
     "${_PROJECT_ROOT}/src/game/FruitSaveData.cpp"
-    # Pending Step 2 follow-up (still has range-for / lambda / strdup):
-    #   src/game/WaveManager.cpp
+    # WaveManager: was blocked by libstdc++ 4.4 vector<PROBABILITY_OVERIDE>
+    # bug; the .reserve() patch in InitFromXML side-steps it.
+    "${_PROJECT_ROOT}/src/game/WaveManager.cpp"
+    # Pending Step 2 follow-up (still has lambdas + range-for in screens):
     #   src/screens/GameOverScreen.cpp
     #   src/screens/PauseScreen.cpp
 )
