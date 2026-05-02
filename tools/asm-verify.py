@@ -15,6 +15,7 @@ Phase B will swap the toy normalizer + line differ here for asm-differ proper.
 """
 import argparse
 import difflib
+import os
 import pathlib
 import re
 import subprocess
@@ -220,29 +221,82 @@ def write_report(results: list[dict]) -> pathlib.Path:
     return out
 
 
+def load_symbols(manifest_paths: list[pathlib.Path]) -> list[dict]:
+    """Merge multiple manifests. Earlier paths take precedence on duplicates."""
+    seen: dict[str, dict] = {}
+    for path in manifest_paths:
+        if not path.exists():
+            continue
+        for s in tomllib.loads(path.read_text()).get("symbol", []):
+            seen.setdefault(s["mangled"], s)
+    return list(seen.values())
+
+
 def main():
+    import fnmatch
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "manifest",
         nargs="?",
-        default=str(PROJECT_ROOT / "tools" / "asm-verify-manifest.toml"),
+        default=None,
+        help="Optional explicit manifest path. Default: load both "
+             "tools/asm-verify-manifest.toml (hand-written, takes precedence) "
+             "and tools/asm-verify-manifest.generated.toml.",
+    )
+    ap.add_argument(
+        "--filter", default=None,
+        help="Glob applied to mangled symbol names (e.g. '_ZN11WaveManager*'). "
+             "Useful for verifying only the touched subsystem.",
+    )
+    ap.add_argument(
+        "--jobs", "-j", type=int, default=0,
+        help="Parallel workers. 0 = os.cpu_count(). 1 = serial.",
+    )
+    ap.add_argument(
+        "--report-only", action="store_true",
+        help="Always exit 0; report unconditionally. Useful in CI fail-soft mode.",
     )
     args = ap.parse_args()
 
-    manifest = pathlib.Path(args.manifest)
-    if not manifest.exists():
-        sys.exit(f"manifest missing: {manifest}")
+    if args.manifest:
+        manifests = [pathlib.Path(args.manifest)]
+    else:
+        manifests = [
+            PROJECT_ROOT / "tools" / "asm-verify-manifest.toml",
+            PROJECT_ROOT / "tools" / "asm-verify-manifest.generated.toml",
+        ]
 
-    syms = tomllib.loads(manifest.read_text()).get("symbol", [])
+    syms = load_symbols(manifests)
     if not syms:
-        sys.exit("manifest has no [[symbol]] entries")
+        sys.exit("No [[symbol]] entries in any manifest.")
 
-    results = [verify_one(s) for s in syms]
+    if args.filter:
+        before = len(syms)
+        syms = [s for s in syms if fnmatch.fnmatch(s["mangled"], args.filter)]
+        print(f"  filtered {before} -> {len(syms)} symbols matching {args.filter!r}")
+        if not syms:
+            sys.exit(0)
+
+    # Parallel batch verify.
+    jobs = args.jobs or os.cpu_count() or 1
+    if jobs == 1:
+        results = [verify_one(s) for s in syms]
+    else:
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(max_workers=jobs) as ex:
+            results = list(ex.map(verify_one, syms))
+
     out = write_report(results)
     print(f"\nReport: {out.relative_to(PROJECT_ROOT)}\n")
+    counts: dict[str, int] = {}
     for r in results:
-        print(f"  {r['verdict']:11} {r['mangled']:50} -- {r['reason']}")
+        counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
+    for v in ("MATCH", "COSMETIC", "SUSPICIOUS", "DIVERGE", "UNPAIRED"):
+        if v in counts:
+            print(f"  {v:11} {counts[v]}")
     bad = [r for r in results if r["verdict"] in ("SUSPICIOUS", "DIVERGE", "UNPAIRED")]
+    if args.report_only:
+        sys.exit(0)
     sys.exit(1 if bad else 0)
 
 
