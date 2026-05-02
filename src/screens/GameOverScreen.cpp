@@ -395,14 +395,16 @@ void GameOverScreen::CreateRetryButton() {
     m_pRetryBtn->m_FruitType  = -1;
     m_pRetryBtn->m_Texture    = texHandle;
 
-    GameOverScreen* self = this;
-    m_pRetryBtn->m_ClickCallback = [self]() {
-        Game* g = Game::GetInstance();
-        if (g) g->retryFlag = 1;
-        self->m_State = 7;
-    };
+    m_pRetryBtn->m_ClickCallback =
+        Mortar::Delegate<void()>::Make(this, &GameOverScreen::OnRetryClicked);
 
     game->hud->AddControl(m_pRetryBtn, false);
+}
+
+void GameOverScreen::OnRetryClicked() {
+    Game* g = Game::GetInstance();
+    if (g) g->retryFlag = 1;
+    m_State = 7;
 }
 
 // ---------------------------------------------------------------------------
@@ -429,12 +431,14 @@ void GameOverScreen::CreateQuitButton() {
     // Mirror tutorial-text slots from retry button (binary: memcpy +0x124,+0x128,+0x12C)
     // Not applicable until TutorialControl text slots are wired.
 
-    GameOverScreen* self = this;
-    m_pQuitBtn->m_ClickCallback = [self]() {
-        self->m_State = 9;
-    };
+    m_pQuitBtn->m_ClickCallback =
+        Mortar::Delegate<void()>::Make(this, &GameOverScreen::OnQuitClicked);
 
     game->hud->AddControl(m_pQuitBtn, false);
+}
+
+void GameOverScreen::OnQuitClicked() {
+    m_State = 9;
 }
 
 // ---------------------------------------------------------------------------

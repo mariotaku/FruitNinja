@@ -176,6 +176,12 @@ private:
 
     // 0x00140604 — sets game[+0x33]=1
     void SetTerminate();
+
+    // Click thunks for the Retry / Quit MenuButtons. Plain methods rather
+    // than lambdas so the cross-build (GCC 4.4) parses; bound via
+    // Mortar::Delegate<void()>::Make in CreateRetryButton/CreateQuitButton.
+    void OnRetryClicked();
+    void OnQuitClicked();
 };
 
 // BonusScreen stub — full port deferred (binary ctor 0x132048)

@@ -38,9 +38,9 @@ set(VERIFY_SOURCES
     # WaveManager: was blocked by libstdc++ 4.4 vector<PROBABILITY_OVERIDE>
     # bug; the .reserve() patch in InitFromXML side-steps it.
     "${_PROJECT_ROOT}/src/game/WaveManager.cpp"
-    # Pending Step 2 follow-up (still has lambdas + range-for in screens):
-    #   src/screens/GameOverScreen.cpp
-    #   src/screens/PauseScreen.cpp
+    # Screens: lambdas extracted to named methods for GCC 4.4 parser.
+    "${_PROJECT_ROOT}/src/screens/GameOverScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/PauseScreen.cpp"
 )
 
 add_library(fnverify OBJECT ${VERIFY_SOURCES})
