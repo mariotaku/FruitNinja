@@ -24,4 +24,18 @@
 #  define nullptr __null
 #endif
 
+// Sourcery 4.4 newlib's <cstdio> doesn't expose snprintf via `std::snprintf`
+// (newlib's stdio.h guards under __STRICT_ANSI__). Forward-declare both
+// global and std-namespaced forms so cross-build code can use either.
+#ifdef __cplusplus
+#include <stdarg.h>
+#include <stddef.h>
+extern "C" int snprintf(char* __restrict, size_t, const char* __restrict, ...);
+extern "C" int vsnprintf(char* __restrict, size_t, const char* __restrict, va_list);
+namespace std {
+    using ::snprintf;
+    using ::vsnprintf;
+}
+#endif
+
 #endif

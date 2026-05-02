@@ -10,6 +10,7 @@
 #include "engine/util/StringHash.h"
 
 #include <ctime>
+#include <cstdio>     // snprintf -- explicit for Sourcery 4.4 newlib
 
 namespace FN {
 
@@ -61,7 +62,7 @@ void GameOver(int endReason, float endScore, int endParam) {
 
             // Build "<MODE>_today" key and hash it.
             char todayKey[32];
-            snprintf(todayKey, sizeof(todayKey), "%s_today", k_ModeNames[mode]);
+            std::snprintf(todayKey, sizeof(todayKey), "%s_today", k_ModeNames[mode]);
             uint32_t todayHash = StringHash(todayKey);
 
             game->pSaveData->AddToTotal(todayKey, todayHash, 1, false, false);

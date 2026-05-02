@@ -25,18 +25,21 @@ struct Colour {
         return Colour(rc, gc, bc, 255);
     }
 
+    // Helper for TintColour. Static method (rather than a C++11 lambda) so
+    // GCC 4.4 / 4.5 (the cross-build asm-verify toolchain) can parse this.
+    static uint8_t Clamp255(float v) {
+        if (v <= 0.0f) return 0;
+        if (v >= 255.0f) return 255;
+        return (uint8_t)v;
+    }
+
     // Mortar::TintColour @ 0x0013540c -- per-channel tint with [0..255] clamp.
     // tintRGB[0..2] multiplies R/G/B independently; alpha is preserved.
     // ASM-verified: 2026-04-29T03:29Z binary @ 0x0013540c (asm-inspector)
     static Colour TintColour(Colour src, const float tintRGB[3]) {
-        auto clamp = [](float v) -> uint8_t {
-            if (v <= 0.0f) return 0;
-            if (v >= 255.0f) return 255;
-            return (uint8_t)v;
-        };
-        return Colour(clamp(src.r * tintRGB[0]),
-                      clamp(src.g * tintRGB[1]),
-                      clamp(src.b * tintRGB[2]),
+        return Colour(Clamp255(src.r * tintRGB[0]),
+                      Clamp255(src.g * tintRGB[1]),
+                      Clamp255(src.b * tintRGB[2]),
                       src.a);
     }
 
