@@ -1,33 +1,9 @@
-# asm-verify symbol manifest: Phase A.
+# Hand-written asm-verify manifest. Takes precedence over the auto-generated
+# tools/asm-verify-manifest.generated.toml when symbols overlap.
 #
-# One [[symbol]] per binary function we want to diff against the cross-build.
-# - mangled : Itanium mangled name. Match the symbol that the cross build
-#             produces, NOT the binary's local mangling (the demo TU uses a
-#             trivial WaveManager class so the mangled names match).
-# - addr    : binary virtual address (hex) of the function start.
-# - size    : function byte size (objdump --start/--stop range).
-# - port    : path to the cross-build .o that should contain the matching
-#             symbol; relative to the project root.
-# - notes   : free-form context for the report.
-
-# Binary addresses come from `arm-bada-eabi-nm FruitNinja.exe`. Earlier
-# Ghidra-based reports show 0x121f74; that's image-base+0x10000 because the
-# Ghidra project was loaded at a non-zero base. Use raw ELF VAs here.
-
-# WaveManager::GameOver -- the Fix #5 case study from commit 9afd5c3.
-# Binary symbol: _ZN11WaveManager8GameOverEv @ 0x111f74
-[[symbol]]
-mangled = "_ZN11WaveManager14GameOver_AfterEv"
-addr    = "0x00111f74"
-size    = 28
-port    = "build-bada-cross/CMakeFiles/fnverify.dir/C_/Users/Mariotaku/Projects/webosbrew/fruit-ninja/tmp/asm-compare/gameover_demo.cpp.obj"
-notes   = "Smoke test: tail-call elision differs between 4.4.1 and 4.5.3; gate sequence should match."
-
-# WaveManager::NewGame -- adjacent function. Used as the GameOver_Before
-# diff so we can show the differ flagging the missing PowersEnabled gate.
-[[symbol]]
-mangled = "_ZN11WaveManager15GameOver_BeforeEv"
-addr    = "0x00111f90"
-size    = 28
-port    = "build-bada-cross/CMakeFiles/fnverify.dir/C_/Users/Mariotaku/Projects/webosbrew/fruit-ninja/tmp/asm-compare/gameover_demo.cpp.obj"
-notes   = "Pre-fix shape; demonstrates the differ flagging the missing PowersEnabled gate."
+# Each [[symbol]] adds or overrides one entry. Use this file for:
+#   - hand-tuned `notes` describing port intent vs binary
+#   - non-mangled-name overlaps (e.g. demo wrappers with synthetic names)
+#   - explicit port-side .obj path overrides
+#
+# Empty by default; the auto-discovery output covers the regular case.

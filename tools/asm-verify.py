@@ -28,9 +28,15 @@ except ImportError:
     import tomli as tomllib  # type: ignore
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
-OBJDUMP = PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-objdump.exe"
-OUT_DIR = PROJECT_ROOT / "tmp" / "asm-verify"
-BINARY_SYMBOL_DIR = PROJECT_ROOT / "bada-binary" / "symbols"
+OBJDUMP = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_OBJDUMP",
+    PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-objdump.exe"))
+OUT_DIR = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_REPORT_DIR",
+    PROJECT_ROOT / "tmp" / "asm-verify"))
+BINARY_SYMBOL_DIR = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_BIN_SYMBOL_DIR",
+    PROJECT_ROOT / "bada-binary" / "symbols"))
 
 # Lines removed entirely before diffing.
 DROP_RE = re.compile(

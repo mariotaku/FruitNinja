@@ -22,11 +22,19 @@ try:
 except ImportError:
     import tomli as tomllib  # type: ignore
 
+import os
+
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
-BINARY = PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"
-OBJDUMP = PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-objdump.exe"
-OUT_DIR = PROJECT_ROOT / "bada-binary" / "symbols"
-CACHE_KEY = PROJECT_ROOT / "bada-binary" / ".cache-key"
+BINARY  = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_BINARY",
+    PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"))
+OBJDUMP = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_OBJDUMP",
+    PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-objdump.exe"))
+OUT_DIR = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_BIN_SYMBOL_DIR",
+    PROJECT_ROOT / "bada-binary" / "symbols"))
+CACHE_KEY = OUT_DIR.parent / ".cache-key"
 
 
 def compute_cache_key(manifest_text: str) -> str:

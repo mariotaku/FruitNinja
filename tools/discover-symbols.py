@@ -15,11 +15,21 @@ import pathlib
 import subprocess
 import sys
 
+import os
+
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent
-BINARY  = PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"
-NM      = PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-nm.exe"
-CROSS   = PROJECT_ROOT / "build-bada-cross"
-OUT     = PROJECT_ROOT / "tools" / "asm-verify-manifest.generated.toml"
+BINARY = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_BINARY",
+    PROJECT_ROOT / "FruitNinjaBada" / "Bin" / "FruitNinja.exe"))
+NM     = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_NM",
+    PROJECT_ROOT / "bada_SDK" / "Tools" / "Toolchains" / "ARM" / "bin" / "arm-bada-eabi-nm.exe"))
+CROSS  = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_BUILD_DIR",
+    PROJECT_ROOT / "build-bada-cross"))
+OUT    = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_MANIFEST_OUT",
+    PROJECT_ROOT / "tools" / "asm-verify-manifest.generated.toml"))
 
 
 # Skip symbols we don't care about diffing:
@@ -95,12 +105,17 @@ def write_manifest(intersect: list[dict]) -> None:
         "",
     ]
     for s in intersect:
-        rel = s["port"].relative_to(PROJECT_ROOT).as_posix()
+        # Emit relative-to-PROJECT_ROOT when possible (host build), absolute
+        # otherwise (Linux verify run where build dir lives in ~/fn-build).
+        try:
+            port_rel = s["port"].relative_to(PROJECT_ROOT).as_posix()
+        except ValueError:
+            port_rel = s["port"].as_posix()
         lines.append("[[symbol]]")
         lines.append(f'mangled = "{s["mangled"]}"')
         lines.append(f'addr    = "0x{s["addr"]:08x}"')
         lines.append(f'size    = {s["size"]}')
-        lines.append(f'port    = "{rel}"')
+        lines.append(f'port    = "{port_rel}"')
         lines.append("")
     OUT.write_text("\n".join(lines))
 

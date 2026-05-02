@@ -35,7 +35,7 @@ set(_PROJECT_ROOT "${CMAKE_SOURCE_DIR}/..")
 # shim or 4.4.1 toolchain via WSL with file staging).
 set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/ScoreState.cpp"
-    "${_PROJECT_ROOT}/tmp/asm-compare/gameover_demo.cpp"
+    "${CMAKE_SOURCE_DIR}/demos/gameover_demo.cpp"
     "${_PROJECT_ROOT}/src/game/TimeModifier.cpp"
     "${_PROJECT_ROOT}/src/game/ScoreModifier.cpp"
     "${_PROJECT_ROOT}/src/game/WaveModifier.cpp"
