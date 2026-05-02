@@ -34,6 +34,18 @@ RUN git clone --depth 1 "$TC_REPO" /opt/sourcery-2010q1 \
 ENV FN_TOOLCHAIN_DIR=/opt/sourcery-2010q1
 ENV PATH=/opt/sourcery-2010q1/bin:$PATH
 
+# asm-differ: Simon Lindholm's tool for normalised asm comparison with
+# register-rename heuristics. Python-only, no native deps. Pin to a
+# specific commit for reproducibility.
+ARG ASM_DIFFER_REV=dd7f9f0c021063eadfbdff7f31097f7039c3a5a7
+RUN git clone https://github.com/simonlindholm/asm-differ /opt/asm-differ \
+ && cd /opt/asm-differ \
+ && git checkout "$ASM_DIFFER_REV" \
+ && rm -rf .git \
+ && pip3 install --break-system-packages --no-cache-dir colorama dataclasses watchdog
+ENV PATH=/opt/asm-differ:$PATH
+ENV PYTHONPATH=/opt/asm-differ:${PYTHONPATH:-}
+
 # Sanity-check at build time so a broken image fails fast.
 RUN /opt/sourcery-2010q1/bin/arm-none-eabi-g++ --version | head -1
 

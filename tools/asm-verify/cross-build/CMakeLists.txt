@@ -30,6 +30,15 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/WaveModifier.cpp"
     "${_PROJECT_ROOT}/src/game/SlashModifier.cpp"
     "${_PROJECT_ROOT}/src/game/GameOver.cpp"
+    # Heavier TUs added in Step 2 once their C++11 features (range-for,
+    # lambdas) were backported to GCC 4.4-compatible iterator/named-fn forms.
+    "${_PROJECT_ROOT}/src/game/PowerUpManager.cpp"
+    "${_PROJECT_ROOT}/src/game/PowerUp.cpp"
+    "${_PROJECT_ROOT}/src/game/FruitSaveData.cpp"
+    # Pending Step 2 follow-up (still has range-for / lambda / strdup):
+    #   src/game/WaveManager.cpp
+    #   src/screens/GameOverScreen.cpp
+    #   src/screens/PauseScreen.cpp
 )
 
 add_library(fnverify OBJECT ${VERIFY_SOURCES})

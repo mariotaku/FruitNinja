@@ -32,9 +32,11 @@
 #include <stddef.h>
 extern "C" int snprintf(char* __restrict, size_t, const char* __restrict, ...);
 extern "C" int vsnprintf(char* __restrict, size_t, const char* __restrict, va_list);
+extern "C" char* strdup(const char*);
 namespace std {
     using ::snprintf;
     using ::vsnprintf;
+    using ::strdup;
 }
 #endif
 

@@ -26,11 +26,17 @@ PowerUpManager::PowerUpManager()
 }
 
 PowerUpManager::~PowerUpManager() {
-    // Free all templates in m_AllPowerUps.
-    for (auto& kv : m_AllPowerUps) delete kv.second;
+    // Range-for replaced with iterator form so GCC 4.4 (asm-verify cross
+    // toolchain) can parse. Same semantics in both compilers.
+    for (std::map<uint32_t, PowerUp*>::iterator it = m_AllPowerUps.begin();
+         it != m_AllPowerUps.end(); ++it) {
+        delete it->second;
+    }
     m_AllPowerUps.clear();
-    // Active clones should have been freed by Reset/ClearTimedPowers already.
-    for (PowerUp* p : m_ActivePowerUps) delete p;
+    for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
+         it != m_ActivePowerUps.end(); ++it) {
+        delete *it;
+    }
     m_ActivePowerUps.clear();
 }
 
@@ -199,7 +205,8 @@ bool PowerUpManager::ActivateScreenEffect(uint32_t hash) {
 
 // @ 0x00117ed8
 void PowerUpManager::ClearScreenEffects() {
-    for (auto& se : m_ActiveScreenEffects) se.Deactivate();
+    for (std::list<ScreenEffect>::iterator it = m_ActiveScreenEffects.begin();
+         it != m_ActiveScreenEffects.end(); ++it) it->Deactivate();
     m_ActiveScreenEffects.clear();
 }
 
@@ -220,8 +227,10 @@ void PowerUpManager::Load() {
 
 // @ 0x0011840c
 void PowerUpManager::LoadTextures() {
-    for (auto& kv : m_AllPowerUps)      kv.second->LoadTextures();
-    for (auto& kv : m_ScreenEffectPool) kv.second.LoadTextures();
+    for (std::map<uint32_t, PowerUp*>::iterator it = m_AllPowerUps.begin();
+         it != m_AllPowerUps.end(); ++it) it->second->LoadTextures();
+    for (std::map<uint32_t, ScreenEffect>::iterator it = m_ScreenEffectPool.begin();
+         it != m_ScreenEffectPool.end(); ++it) it->second.LoadTextures();
 }
 
 // @ 0x00119384
@@ -232,8 +241,9 @@ void PowerUpManager::Draw() {
 // @ 0x00117b38
 float PowerUpManager::GetActiveProgression(float t) const {
     PowerUp* active = nullptr;
-    for (PowerUp* p : m_ActivePowerUps) {
-        if (p->IsSpecial()) active = p;
+    for (std::list<PowerUp*>::const_iterator it = m_ActivePowerUps.begin();
+         it != m_ActivePowerUps.end(); ++it) {
+        if ((*it)->IsSpecial()) active = *it;
     }
     if (!active) return 2.0f;
     if (t > 0.0f && active->m_TotalTime > 0.0f) {
@@ -251,8 +261,9 @@ PowerUp* PowerUpManager::GetActiveSingle(uint32_t hash) {
 // @ 0x00117bb8
 int PowerUpManager::GetNumActiveTimedPowers() const {
     int n = 0;
-    for (PowerUp* p : m_ActivePowerUps) {
-        if (p->IsSpecial()) ++n;
+    for (std::list<PowerUp*>::const_iterator it = m_ActivePowerUps.begin();
+         it != m_ActivePowerUps.end(); ++it) {
+        if ((*it)->IsSpecial()) ++n;
     }
     return n;
 }

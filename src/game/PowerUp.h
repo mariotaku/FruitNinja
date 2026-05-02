@@ -51,11 +51,15 @@ struct PUColour {
 };
 
 // SmartPtr stand-in: stores raw pointer; Load/Release lifecycle owned externally.
+// Default-initialised in the ctor; in-class non-static member initialisers
+// are a C++11 feature that GCC 4.4 (the cross-build asm-verify toolchain)
+// can't parse.
 template<typename T> struct PURawPtr {
-    T* ptr = nullptr;
-    bool IsValid() const { return ptr != nullptr; }
+    T* ptr;
+    PURawPtr() : ptr(0) {}
+    bool IsValid() const { return ptr != 0; }
     T* Get() const { return ptr; }
-    void SetNull() { ptr = nullptr; }
+    void SetNull() { ptr = 0; }
 };
 
 class PowerUp {
