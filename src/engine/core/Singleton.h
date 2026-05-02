@@ -16,8 +16,10 @@ public:
     Singleton& operator=(const Singleton&) = delete;
 
 protected:
-    Singleton() = default;
-    ~Singleton() = default;
+    // GCC 4.4 / 4.5 (the cross-build asm-verify toolchain) reject `= default`
+    // on protected/private members; written out explicitly for portability.
+    Singleton() {}
+    ~Singleton() {}
 };
 
 } // namespace Mortar

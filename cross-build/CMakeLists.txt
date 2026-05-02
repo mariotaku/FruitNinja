@@ -36,6 +36,11 @@ set(_PROJECT_ROOT "${CMAKE_SOURCE_DIR}/..")
 set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/game/ScoreState.cpp"
     "${_PROJECT_ROOT}/tmp/asm-compare/gameover_demo.cpp"
+    "${_PROJECT_ROOT}/src/game/TimeModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/ScoreModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/WaveModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/SlashModifier.cpp"
+    "${_PROJECT_ROOT}/src/game/GameOver.cpp"
 )
 
 add_library(fnverify OBJECT ${VERIFY_SOURCES})
