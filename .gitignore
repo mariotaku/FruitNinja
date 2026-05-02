@@ -49,3 +49,7 @@ FruitNinjaBada
 
 # Bada SDK (proprietary headers, not redistributable)
 bada_SDK
+
+# asm-verify pipeline outputs
+bada-binary/symbols/
+build-bada-cross/
