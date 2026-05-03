@@ -34,6 +34,9 @@ static FruitSaveData* GetSaveData() {
 // g_SetEquippedItemFuncCalls @ 0x1f3cec — static call-guard for SetEquippedItem.
 static int g_SetEquippedItemFuncCalls = 0;
 
+// ItemManager::EquippedSlashModCount @ .bss 0x0022ece4
+int ItemManager::EquippedSlashModCount = 0;
+
 // -----------------------------------------------------------------------
 // ItemManager ctor @ 0x001121d0
 // -----------------------------------------------------------------------
@@ -47,8 +50,8 @@ ItemManager::ItemManager() {
 }
 
 ItemManager::~ItemManager() {
-    for (ItemInfo* item : m_Items) {
-        delete item;
+    for (std::vector<ItemInfo*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
+        delete *it;
     }
     m_Items.clear();
     m_ByHash.clear();
@@ -119,7 +122,7 @@ void ItemManager::LoadItemData() {
                     int unlocked = sd->IsAchievementUnlocked(item->m_Hash);
                     if (unlocked == 0) {
                         AchievementManager* am = AchievementManager::GetInstance();
-                        int exists = am->AchievementExists();
+                        int exists = am->AchievementExists(item->m_Hash);
                         if (exists == 0 && item->m_Cost > 0) {
                             // Not found in achievement system + positive cost
                             // → mark as new/free
@@ -303,8 +306,8 @@ int ItemManager::BuyItem(uint32_t hash) {
 // -----------------------------------------------------------------------
 int ItemManager::GetNumNewItems() const {
     int count = 0;
-    for (ItemInfo* item : m_Items) {
-        if (!item->m_bSeen) count++;
+    for (std::vector<ItemInfo*>::const_iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
+        if (!(*it)->m_bSeen) count++;
     }
     return count;
 }
@@ -313,8 +316,8 @@ int ItemManager::GetNumNewItems() const {
 // AreNewItems @ 0x0011200c
 // -----------------------------------------------------------------------
 bool ItemManager::AreNewItems() const {
-    for (ItemInfo* item : m_Items) {
-        if (!item->m_bSeen) return true;
+    for (std::vector<ItemInfo*>::const_iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
+        if (!(*it)->m_bSeen) return true;
     }
     return false;
 }
@@ -354,7 +357,8 @@ void ItemManager::SaveItemInfo() {
 
     // <boughtItems> section: all items with m_Cost < 0 (purchased)
     tinyxml2::XMLElement* bought = doc.NewElement("boughtItems");  // 0x1b9e89
-    for (ItemInfo* item : m_Items) {
+    for (std::vector<ItemInfo*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
+        ItemInfo* item = *it;
         if (item->m_Cost < 0) {  // cost == -1 → purchased
             tinyxml2::XMLElement* e = doc.NewElement("item");  // 0x1b9e95
             e->SetAttribute("name", item->m_pName);            // 0x1c3173 / +0x04

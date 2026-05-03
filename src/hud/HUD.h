@@ -109,6 +109,13 @@ public:
         }
     }
 
+    // Binary @ 0x00144b78. Calls HUDControl::Reset() (vtable slot 4) on each control.
+    void ResetControls() {
+        for (auto it = controls.begin(); it != controls.end(); ++it) {
+            if (*it) (*it)->Reset();
+        }
+    }
+
     // Matches HUD::OnPause (0x00144c00)
     // Binary dispatches GetType() on every control (regardless of m_bActive)
     // and only calls ScrollingMenu::ClearTouch when GetType() == 8.

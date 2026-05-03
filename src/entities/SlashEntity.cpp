@@ -475,6 +475,15 @@ void SlashEntity::Update(float dt) {
         }
     }
 
+    // TODO: BonusManager::AddCombo(comboLen) hook (binary @ 0x0017de40).
+    // The Arcade-mode combo bonus AddToCurrentScore for blitz combos lives in
+    // WaveManager::BlitzBonus (coordination-locked; see WaveManager.cpp).
+    // Once WaveManager lock is lifted, wire:
+    //   if (game && game->gameMode == 2) {
+    //       BonusManager::GetInstance()->AddCombo(g_ComboCount);
+    //   }
+    // after each successful fruit slice (g_ComboCount >= 3 threshold).
+
     RebuildGeometry();
 }
 

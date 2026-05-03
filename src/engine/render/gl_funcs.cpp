@@ -158,17 +158,17 @@ bool gl_check_runtime() {
     if (!glGetString) return true;
     const char* version = (const char*)glGetString(0x1F02 /*GL_VERSION*/);
     const char* vendor  = (const char*)glGetString(0x1F00 /*GL_VENDOR */);
+    bool _ms_vendor = false;
+    if (vendor) {
+        for (const char* p = vendor; *p; ++p)
+            if (p[0]=='M' && p[1]=='i' && p[2]=='c' && p[3]=='r' &&
+                p[4]=='o' && p[5]=='s' && p[6]=='o' && p[7]=='f' && p[8]=='t')
+            { _ms_vendor = true; break; }
+    }
     const bool is_ms_software_icd =
         version && vendor &&
         version[0] == '1' && version[1] == '.' && version[2] == '1' &&
-        // strstr-free contains check
-        [&]() -> bool {
-            for (const char* p = vendor; *p; ++p)
-                if (p[0]=='M' && p[1]=='i' && p[2]=='c' && p[3]=='r' &&
-                    p[4]=='o' && p[5]=='s' && p[6]=='o' && p[7]=='f' && p[8]=='t')
-                    return true;
-            return false;
-        }();
+        _ms_vendor;
 
     if (is_ms_software_icd) {
         fprintf(stderr,

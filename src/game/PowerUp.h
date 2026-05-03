@@ -106,19 +106,28 @@ public:
     // +0xa8 m_BarRamp — [0..1] ramp fraction for DrawBar fade-in/out
     float m_BarRamp;
 
-    // +0xac m_Texture1 — icon texture (SmartPtr<Texture>, 4 bytes)
+    // +0xac..+0xb3 — unported binary fields (8 bytes).
+    // Prior RE pass placed m_Texture1 here at +0xac; binary confirmed at +0xb4.
+    // These 8 bytes correspond to an unknown field pair (possibly a two-pointer
+    // iterator slot on libstdc++ 4.4, or two separate 4-byte fields). Kept as
+    // opaque padding until a follow-up RE pass resolves them.
+    uint8_t _padac[8];
+
+    // +0xb4 m_Texture1 — icon texture (SmartPtr<Texture>, 4 bytes)
+    // Binary @ 0x001183f0 LoadTextures: ldr from [r0,#0xb4].
     SmartPtr<Mortar::Texture> m_Texture1;
 
-    // +0xb0 m_Texture2 — popup texture (SmartPtr<Texture>, 4 bytes)
+    // +0xb8 m_Texture2 — popup texture (SmartPtr<Texture>, 4 bytes)
     SmartPtr<Mortar::Texture> m_Texture2;
 
-    // +0xb4 m_pScreenEffect — owned screen effect (nullptr if none)
+    // +0xbc m_pScreenEffect — owned screen effect (nullptr if none)
     ScreenEffect* m_pScreenEffect;
 
-    // +0xb8..+0xc3 — unported binary fields (12 bytes)
-    uint8_t _padb8[12];
+    // +0xc0..+0xc3 — 4 bytes gap to reach +0xc4
+    uint8_t _padc0[4];
 
     // +0xc4 m_DeferredPoints — -1 = "no deferred points pending"; >=0 accumulated
+    // Binary @ 0x00117a50 AddDeferedPoints: str to [r0,#0xc4].
     int m_DeferredPoints;
 
     // +0xc8 m_BarXPos — HUD x-position, interpolated each frame

@@ -407,9 +407,39 @@ float Font::MeasureWidth(float /*scale*/, Utf8StringIterator iter) const {
 }
 
 // ---------------------------------------------------------------------------
+// MeasureString (binary @ 0x001988a8)
+// Single-line only: stops at newline or end of string.
+// Returns total advance in lineHeight-normalized units.
+// ---------------------------------------------------------------------------
+
+// ASM-verified-via-RE: 2026-05-03 binary @ 0x001988a8 (re-analyst)
+float Font::MeasureString(const Utf8StringIterator& iterIn) const {
+    Utf8StringIterator iter = iterIn;
+    float total = 0.0f;
+    while (!iter.IsEmpty()) {
+        uint32_t cp = iter.m_CurrentCodepoint;
+        if (cp == '\n' || cp == '\r') break;
+        const CharTemplate* g = GetCharTemplate(cp);
+        iter++;
+        if (!g) continue;
+        // g->xadv is in lineHeight-norm units (normalized in Font::Load).
+        // GetKerning uses the NEXT char (iter already advanced).
+        uint32_t nextCp = iter.IsEmpty() ? 0 : iter.m_CurrentCodepoint;
+        total += g->xadv + GetKerning(cp, nextCp);
+    }
+    return total;
+}
+
+float Font::MeasureString(const char* str) const {
+    Utf8StringIterator iter(str);
+    return MeasureString(iter);
+}
+
+// ---------------------------------------------------------------------------
 // DrawString (matches Font_DrawString 0x00198e44)
 // ---------------------------------------------------------------------------
 
+// ASM-verified-via-RE: 2026-05-03 binary @ 0x00198e44 (re-analyst)
 void Font::DrawString(float scale, float maxWidth, float rotZ,
                       Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                       Vec2 maxWH, int alignment, float z,
@@ -457,14 +487,13 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
 
     // Horizontal alignment: compute offset for first line
     const int horizAlign = alignment & 0x3;
-    auto computeLineOffset = [&](Utf8StringIterator lineIter) -> float {
-        if (horizAlign == 0) return 0.0f;
-        float len = GetLineLength(lineIter, wrapLimit, nullptr);
-        if (horizAlign == 2) return wrapLimit - len;
-        return (wrapLimit - len) * 0.5f;
-    };
-
-    float lineOffset = computeLineOffset(iter);
+    float lineOffset;
+    {
+        float len = (horizAlign == 0) ? 0.0f : GetLineLength(iter, wrapLimit, nullptr);
+        if      (horizAlign == 0) lineOffset = 0.0f;
+        else if (horizAlign == 2) lineOffset = wrapLimit - len;
+        else                      lineOffset = (wrapLimit - len) * 0.5f;
+    }
     float cursorX = 0.0f;
     float cursorY = 0.0f;  // starts at 0; vertical alignment applied via TranslateLocal
 
@@ -478,7 +507,8 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
 
         if (cp == '\n') {
             iter++;
-            lineOffset = computeLineOffset(iter);
+            { float _len = (horizAlign==0)?0.0f:GetLineLength(iter,wrapLimit,nullptr);
+              if(horizAlign==0) lineOffset=0.0f; else if(horizAlign==2) lineOffset=wrapLimit-_len; else lineOffset=(wrapLimit-_len)*0.5f; }
             cursorX = 0.0f;
             cursorY -= 1.0f;  // one lineHeight unit down
             continue;
@@ -495,7 +525,8 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
             }
             if (cursorX + wordW > wrapLimit) {
                 iter++;
-                lineOffset = computeLineOffset(iter);
+                { float _len = (horizAlign==0)?0.0f:GetLineLength(iter,wrapLimit,nullptr);
+                  if(horizAlign==0) lineOffset=0.0f; else if(horizAlign==2) lineOffset=wrapLimit-_len; else lineOffset=(wrapLimit-_len)*0.5f; }
                 cursorX = 0.0f;
                 cursorY -= 1.0f;
                 continue;

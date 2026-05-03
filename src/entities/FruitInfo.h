@@ -136,50 +136,50 @@ struct FruitInfo {
 // Fields at 0x300+ depend on SmartPtr<T> being 4 bytes (ARM32), which is only
 // true on the cross-compile (32-bit) path. On the 64-bit port build SmartPtr
 // is 8 bytes, so the asserts from m_HudTexture onward are guarded to 32-bit.
-static_assert(offsetof(FruitInfo, m_Name)            == 0x000, "");
-static_assert(offsetof(FruitInfo, m_SingularEnglish) == 0x040, "");
-static_assert(offsetof(FruitInfo, m_Singular)        == 0x080, "");
-static_assert(offsetof(FruitInfo, m_PluralEnglish)   == 0x0C0, "");
-static_assert(offsetof(FruitInfo, m_Plural)          == 0x100, "");
-static_assert(offsetof(FruitInfo, m_TotalStatKey)    == 0x140, "");
-static_assert(offsetof(FruitInfo, m_PointTotalKey)   == 0x180, "");
-static_assert(offsetof(FruitInfo, m_DropsKey)        == 0x1C0, "");
-static_assert(offsetof(FruitInfo, m_ModelName)       == 0x200, "");
-static_assert(offsetof(FruitInfo, m_FruitColour)     == 0x240, "");
-static_assert(offsetof(FruitInfo, m_Scale)           == 0x244, "");
-static_assert(offsetof(FruitInfo, m_CollisionScale)  == 0x248, "");
-static_assert(offsetof(FruitInfo, m_HitInfluence)    == 0x24C, "");
-static_assert(offsetof(FruitInfo, m_NameHash)        == 0x250, "");
-static_assert(offsetof(FruitInfo, m_NameHashUpper)   == 0x254, "");
-static_assert(offsetof(FruitInfo, m_TrailHash)       == 0x258, "");
-static_assert(offsetof(FruitInfo, m_SlicedHash)      == 0x25C, "");
-static_assert(offsetof(FruitInfo, m_TotalStatHash)   == 0x260, "");
-static_assert(offsetof(FruitInfo, m_PointTotalHash)  == 0x264, "");
-static_assert(offsetof(FruitInfo, m_DropsHash)       == 0x268, "");
-static_assert(offsetof(FruitInfo, m_bHasSplatSeeds)  == 0x26C, "");
-static_assert(offsetof(FruitInfo, m_FactCount)       == 0x270, "");
+static_assert(__builtin_offsetof(FruitInfo, m_Name)            == 0x000, "");
+static_assert(__builtin_offsetof(FruitInfo, m_SingularEnglish) == 0x040, "");
+static_assert(__builtin_offsetof(FruitInfo, m_Singular)        == 0x080, "");
+static_assert(__builtin_offsetof(FruitInfo, m_PluralEnglish)   == 0x0C0, "");
+static_assert(__builtin_offsetof(FruitInfo, m_Plural)          == 0x100, "");
+static_assert(__builtin_offsetof(FruitInfo, m_TotalStatKey)    == 0x140, "");
+static_assert(__builtin_offsetof(FruitInfo, m_PointTotalKey)   == 0x180, "");
+static_assert(__builtin_offsetof(FruitInfo, m_DropsKey)        == 0x1C0, "");
+static_assert(__builtin_offsetof(FruitInfo, m_ModelName)       == 0x200, "");
+static_assert(__builtin_offsetof(FruitInfo, m_FruitColour)     == 0x240, "");
+static_assert(__builtin_offsetof(FruitInfo, m_Scale)           == 0x244, "");
+static_assert(__builtin_offsetof(FruitInfo, m_CollisionScale)  == 0x248, "");
+static_assert(__builtin_offsetof(FruitInfo, m_HitInfluence)    == 0x24C, "");
+static_assert(__builtin_offsetof(FruitInfo, m_NameHash)        == 0x250, "");
+static_assert(__builtin_offsetof(FruitInfo, m_NameHashUpper)   == 0x254, "");
+static_assert(__builtin_offsetof(FruitInfo, m_TrailHash)       == 0x258, "");
+static_assert(__builtin_offsetof(FruitInfo, m_SlicedHash)      == 0x25C, "");
+static_assert(__builtin_offsetof(FruitInfo, m_TotalStatHash)   == 0x260, "");
+static_assert(__builtin_offsetof(FruitInfo, m_PointTotalHash)  == 0x264, "");
+static_assert(__builtin_offsetof(FruitInfo, m_DropsHash)       == 0x268, "");
+static_assert(__builtin_offsetof(FruitInfo, m_bHasSplatSeeds)  == 0x26C, "");
+static_assert(__builtin_offsetof(FruitInfo, m_FactCount)       == 0x270, "");
 // All asserts from m_pFacts onward are pointer-size-dependent (char**, SmartPtr,
 // pointers to arrays). Valid only on 32-bit (ARM cross-compile target).
 // On 64-bit port builds pointer fields are 8 bytes; the binary layout uses 4-byte pointers.
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 static_assert(sizeof(FruitInfo) == 0x330, "FruitInfo size mismatch");
-static_assert(offsetof(FruitInfo, m_pFacts)          == 0x274, "");
-static_assert(offsetof(FruitInfo, m_FactTexture)     == 0x278, "");
-static_assert(offsetof(FruitInfo, m_FactColour)      == 0x2F8, "");
-static_assert(offsetof(FruitInfo, m_bOnSide)         == 0x2FC, "");
-static_assert(offsetof(FruitInfo, m_HudTexture)      == 0x300, "");  // binary: m_pFruitTexture
-static_assert(offsetof(FruitInfo, m_ZenTexture)      == 0x304, "");  // binary: m_pFruitTexture2
-static_assert(offsetof(FruitInfo, m_Chance)          == 0x308, "");
-static_assert(offsetof(FruitInfo, m_CumWeight)       == 0x30C, "");
-static_assert(offsetof(FruitInfo, m_CumCritWeight)   == 0x310, "");
-static_assert(offsetof(FruitInfo, m_Score)           == 0x314, "");
-static_assert(offsetof(FruitInfo, m_bScorable)       == 0x318, "");
-static_assert(offsetof(FruitInfo, m_bSpecial)        == 0x319, "");
-static_assert(offsetof(FruitInfo, m_pSounds)         == 0x31C, "");
-static_assert(offsetof(FruitInfo, m_SoundCount)      == 0x320, "");
-static_assert(offsetof(FruitInfo, m_CoinsMin)        == 0x324, "");
-static_assert(offsetof(FruitInfo, m_CoinsMax)        == 0x328, "");
-static_assert(offsetof(FruitInfo, m_pPowers)         == 0x32C, "");
+static_assert(__builtin_offsetof(FruitInfo, m_pFacts)          == 0x274, "");
+static_assert(__builtin_offsetof(FruitInfo, m_FactTexture)     == 0x278, "");
+static_assert(__builtin_offsetof(FruitInfo, m_FactColour)      == 0x2F8, "");
+static_assert(__builtin_offsetof(FruitInfo, m_bOnSide)         == 0x2FC, "");
+static_assert(__builtin_offsetof(FruitInfo, m_HudTexture)      == 0x300, "");  // binary: m_pFruitTexture
+static_assert(__builtin_offsetof(FruitInfo, m_ZenTexture)      == 0x304, "");  // binary: m_pFruitTexture2
+static_assert(__builtin_offsetof(FruitInfo, m_Chance)          == 0x308, "");
+static_assert(__builtin_offsetof(FruitInfo, m_CumWeight)       == 0x30C, "");
+static_assert(__builtin_offsetof(FruitInfo, m_CumCritWeight)   == 0x310, "");
+static_assert(__builtin_offsetof(FruitInfo, m_Score)           == 0x314, "");
+static_assert(__builtin_offsetof(FruitInfo, m_bScorable)       == 0x318, "");
+static_assert(__builtin_offsetof(FruitInfo, m_bSpecial)        == 0x319, "");
+static_assert(__builtin_offsetof(FruitInfo, m_pSounds)         == 0x31C, "");
+static_assert(__builtin_offsetof(FruitInfo, m_SoundCount)      == 0x320, "");
+static_assert(__builtin_offsetof(FruitInfo, m_CoinsMin)        == 0x324, "");
+static_assert(__builtin_offsetof(FruitInfo, m_CoinsMax)        == 0x328, "");
+static_assert(__builtin_offsetof(FruitInfo, m_pPowers)         == 0x32C, "");
 #endif
 
 // Maximum fruit types

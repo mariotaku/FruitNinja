@@ -4,10 +4,12 @@
 // No per-class Draw -- inherits HUDControl3d::Draw (0x0014428c).
 
 #include "GameOverScreen.h"
+#include "BonusScreen.h"
 #include "Game.h"
 #include "game/WaveManager.h"
 #include "game/FruitSaveData.h"
 #include "game/AchievementManager.h"
+#include "game/BonusManager.h"
 #include "entities/ActorManager.h"
 #include "entities/FruitInfo.h"
 #include "hud/MenuButton.h"
@@ -292,8 +294,7 @@ void GameOverScreen::Release() {
     m_pSlot9c    = nullptr;
     m_pSlotA8    = nullptr;
 
-    // TODO: BonusManager::ClearBestBonuses() -- stub until BonusManager is ported
-    // BonusManager::GetInstance()->ClearBestBonuses();
+    BonusManager::GetInstance()->ClearBestBonuses();
 }
 
 // ---------------------------------------------------------------------------
@@ -512,9 +513,31 @@ void GameOverScreen::Update(float dt) {
     // State 1: bonus phase (Arcade only) — BonusScreen creation + slide
     // -----------------------------------------------------------------------
     case 1: {
-        // BonusScreen not yet ported — stub: immediate transition to state 6
-        // TODO: port BonusScreen and wire state 1 properly (see docs §7)
-        SetStateWait();
+        ActorManager* am = game->actorManager;
+        if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0) {
+            if (!m_pBonusScreen) {
+                FindMostOfFruit();
+                m_pBonusScreen = new BonusScreen();
+                m_pBonusScreen->pos = Vec3(0.0f, -20.0f, 0.0f);
+                // TODO: install m_RemoveCallback delegate to GameOverScreen::OnBonusRemoved
+                if (game->hud) game->hud->AddControl(m_pBonusScreen, false);
+                BonusManager::GetInstance()->SetUpBonusScreen(m_pBonusScreen);
+            } else {
+                // GO screen tracks bonus position for layout alignment.
+                // TODO: resolve DAT_00141DC8 (Y offset constant) from binary
+                float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PhaseTimer + 0.0f;
+                m_OffsetPosY = std::max(m_OffsetPosY, ny);
+
+                // Advance bonus phase timer from our own timer.
+                m_Timer += dt;
+                m_pBonusScreen->m_PhaseTimer = m_Timer;
+
+                // When BonusScreen sets m_bPendingRemoval, transition to main display.
+                if (m_pBonusScreen->m_bPendingRemoval) {
+                    SetStateWait();
+                }
+            }
+        }
         break;
     }
 
@@ -574,7 +597,8 @@ void GameOverScreen::Update(float dt) {
                     // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
                     // Note: FNHighscoreList::AddPlayerScore -- defunct (online-services-audit).
 
-                    AchievementManager::GetInstance()->UnlockComboStarAchievement(0);
+                    // TODO: pass actual combo length and star type hash from session stats
+                    AchievementManager::GetInstance()->UnlockComboStarAchievement(0, 0);
 
                     int hi = GetCurrentModeHighscore();
                     if (hi / 2 < score) {
@@ -585,8 +609,10 @@ void GameOverScreen::Update(float dt) {
 
                     // Arcade-only post-game achievement
                     if (game->gameMode == 2) {
-                        // TODO: BonusManager::UnlockPostGameAchievements() -- blocked on BonusManager port.
-                        AchievementManager::GetInstance()->UnlockPostGameAchievements();
+                        // Binary @ 0x0014230c -- calls BonusManager::UnlockPostGameAchievements.
+                        // Port previously called AchievementManager::UnlockPostGameAchievements
+                        // in error; corrected to match binary.
+                        BonusManager::GetInstance()->UnlockPostGameAchievements();
                     }
 
                     save->FinishedGame();

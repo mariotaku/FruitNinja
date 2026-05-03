@@ -42,7 +42,7 @@ FruitSaveData::FruitSaveData()
     , m_Speed_P0(0.0f)
     , m_Speed_P0_alias(0.0f)
     , m_Speed_P1(0.0f)
-    , m_GameTimer1(-1.0f)
+    , m_TimeRemainingSave(-1.0f)
     , m_CriticalChance(70)              // 0x46
     , m_GameOverScreenState(-1)
     , m_GameOverTimer(-1.0f)
@@ -193,6 +193,12 @@ bool FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
 void FruitSaveData::UnlockTotals() {
     // Note: AchievementManager is a no-op stub (#52 audit confirmed safe to skip).
     // 0x00124f10 -- "total-X" thresholds; full impl blocked on AchievementManager port.
+}
+
+// Binary @ (unknown) -- stub: always allow queuing.
+// Full impl: inserts name+hash into queued-unlock list, deduplicates.
+int FruitSaveData::AddToQue(const char* /*name*/, uint32_t /*hash*/) {
+    return 1;
 }
 
 // ----------------------------------------------------------------------
@@ -375,7 +381,7 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         que->SetAttribute("misses",          save->m_CurrentMissCount);
         que->SetAttribute("count1",          save->m_ComboCount);
         que->SetAttribute("count2",          save->m_LastSlasher);
-        que->SetAttribute("timer",           save->m_GameTimer1);
+        que->SetAttribute("timer",           save->m_TimeRemainingSave);
         que->SetAttribute("globalWaveDt",    save->m_ProbabilityOverideFlag);
         que->SetAttribute("go_state",        save->m_GameOverScreenState);
         que->SetAttribute("go_time",         save->m_GameOverTimer);
@@ -520,7 +526,7 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         que->QueryIntAttribute("misses",  &save->m_CurrentMissCount);
         que->QueryIntAttribute("count1",  &save->m_ComboCount);
         que->QueryIntAttribute("count2",  &save->m_LastSlasher);
-        que->QueryFloatAttribute("timer",          &save->m_GameTimer1);
+        que->QueryFloatAttribute("timer",          &save->m_TimeRemainingSave);
         que->QueryFloatAttribute("globalWaveDt",   &save->m_ProbabilityOverideFlag);
         que->QueryIntAttribute("go_state",         &save->m_GameOverScreenState);
         que->QueryFloatAttribute("go_time",        &save->m_GameOverTimer);

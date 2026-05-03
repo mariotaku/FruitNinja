@@ -63,10 +63,10 @@ SoundManager::~SoundManager() {
         m_AudioDevice = 0;
     }
     // Free sound cache
-    for (auto& kv : m_SoundCache) {
-        if (kv.second) {
-            delete[] kv.second->samples;
-            delete kv.second;
+    for (std::map<uint32_t, SoundBuffer*>::iterator it = m_SoundCache.begin(); it != m_SoundCache.end(); ++it) {
+        if (it->second) {
+            delete[] it->second->samples;
+            delete it->second;
         }
     }
     m_SoundCache.clear();
@@ -290,7 +290,7 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     uint32_t hash = StringHash(name);
     SoundBuffer* buf = nullptr;
     {
-        auto it = m_SoundCache.find(hash);
+        std::map<uint32_t, SoundBuffer*>::iterator it = m_SoundCache.find(hash);
         if (it != m_SoundCache.end()) {
             buf = it->second;
         } else {

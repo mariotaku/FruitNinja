@@ -160,8 +160,10 @@ public:
     float    m_Speed_P0_alias;     // +0x104  (WaveManager::m_Speed_P0)
     float    m_Speed_P1;           // +0x108  (WaveManager::field_0x60)
 
-    // +0x10c: game timer at save (-1 default).
-    float    m_GameTimer1;
+    // +0x10C: persists TimeControl::m_TimeRemaining for resume.
+    //         -1.0f sentinel = "non-timed mode, no saved time".
+    //         Confirmed via FruitSaveData copy-ctor @ 0x0016e2fc.
+    float    m_TimeRemainingSave;
 
     // +0x110: critical hit chance (default 70 / 0x46).
     int      m_CriticalChance;
@@ -290,6 +292,11 @@ public:
 
     // 0x00124f10. Unlocks "total-X" achievements when thresholds hit.
     void UnlockTotals();
+
+    // Binary @ (unknown — called from AchievementManager::QueAchievement).
+    // Queues an achievement unlock by name+hash; returns 1 on success, 0 if
+    // already queued or unlocked. Stub returns 1 (allow unlock flow to proceed).
+    int AddToQue(const char* name, uint32_t hash);
 
     // ------------------------------------------------------------------
     // Save / Load

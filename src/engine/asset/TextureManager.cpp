@@ -86,7 +86,8 @@ void TextureManager::OnTextureDestroyed(Texture* tex) {
     for (std::map<uint32_t, CacheEntry>::iterator it = m_Cache.begin();
          it != m_Cache.end(); ) {
         if (it->second.ptr == tex) {
-            it = m_Cache.erase(it);
+            // C++03 map::erase(iterator) returns void; use post-increment idiom.
+            m_Cache.erase(it++);
         } else {
             ++it;
         }

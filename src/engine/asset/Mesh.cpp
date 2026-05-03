@@ -332,6 +332,13 @@ void Model::UpdateBoneLinks() {
     }
 }
 
+// AlphaSortNode struct used by binary qsort (0x001935a0).
+// Must be at file scope: GCC 4.4 rejects local structs as template arguments.
+struct ModelSortEntry {
+    Mesh* mesh;
+    float key;  // perspective-divided clip-space z: z'/w'
+};
+
 // Matches Model::Draw (0x001930e0, 79 lines)
 // Single mesh: draw directly. Multi-mesh: depth-sort back-to-front.
 void Model::Draw(const Matrix44& transform) {
@@ -355,13 +362,7 @@ void Model::Draw(const Matrix44& transform) {
     Matrix44 localProj = transform * projTop;
     Matrix44 mvp       = localProj * viewTop;
 
-    // AlphaSortNode struct used by binary qsort (0x001935a0).
-    struct SortEntry {
-        Mesh* mesh;
-        float key;  // perspective-divided clip-space z: z'/w'
-    };
-
-    std::vector<SortEntry> sorted(meshCount);
+    std::vector<ModelSortEntry> sorted(meshCount);
     for (int i = 0; i < meshCount; i++) {
         sorted[i].mesh = m_Meshes[i].Get();
 

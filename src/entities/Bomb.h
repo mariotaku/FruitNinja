@@ -14,6 +14,7 @@
 #include <functional>
 
 namespace Mortar { struct PSPParticleEmitter; }
+class MenuButton;
 
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001ea478 + 0x00172504 + 0x00171764 (asm-inspector, vtable slots verified)
 class Bomb : public Entity {
@@ -62,8 +63,10 @@ public:
     // +0x80: 1 = physics enabled
     uint8_t m_bMovement;
 
-    // +0x84: backref to game state (port: not used)
-    // int m_GameStateRef;
+    // +0x84: backref to the MenuButton that owns this bomb (Quit/back/special bombs).
+    // Same +0x134 slot Fruit menu items use; cleared in KillBomb if still ours.
+    // Set by screen state code (ShopScreen back-button, MainScreen Quit-bomb, etc.).
+    MenuButton* m_pOwnerButton;   // +0x84
 
     // +0x88: 0=normal hit, 1=menu/zen hit
     uint8_t m_bMenuBombHit;
@@ -135,15 +138,17 @@ public:
     // list and deactivates any bomb still in chuck-delay (pre-spawn) state.
     static void ClearUnspawned();
 
-    // Matches Bomb::SetForPlayer (0x00122b5c). Tags bomb for a specific player
-    // (used in split-screen MP to assign physics mirroring).
-    // TODO: not yet ported — no-op stub.
+    // Matches Bomb::SetForPlayer (0x00126390). Tags bomb for a specific player
+    // (used in split-screen MP to assign variant / physics mirroring).
     static void SetForPlayer(Bomb* b, int playerIdx);
 
-    // Matches Bomb::MakeFat (0x00122bc0). Scales up bomb for the chain-bomb
-    // "big bomb" upgrade. param2=false = keep existing scale factor.
-    // TODO: not yet ported — no-op stub.
-    static void MakeFat(Bomb* b, bool resetScale);
+    // Binary @ 0x00126384. Restores a bomb already in HIT state (different from Chuck).
+    // Sets m_SpawnTimer (blast interval) and activates the entity.
+    static void SetHit(Bomb* b, float speed);
+
+    // Matches Bomb::MakeFat (0x00171d78). Bomb-multiplier-powerup upgrade:
+    // scales up bomb and reduces speed. skipSpawnFx=false plays the spawn FX.
+    static void MakeFat(Bomb* b, bool skipSpawnFx);
 };
 
 #endif

@@ -184,20 +184,25 @@ public:
 // std::string SBO size, which shifts these offsets. Binary was built
 // with libstdc++ (CodeSourcery G++ 4.4.1) so the offset invariant only
 // applies when the port is also using libstdc++.
-#if defined(__GLIBCXX__)
+// Exclude old Sourcery 2010q1 ARM toolchain (__GLIBCXX__ == 20090722)
+// where std::string has a different SBO layout than modern libstdc++.
+#if defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
 static_assert(offsetof(ShopListItem, m_NewItemAlpha)  == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
 static_assert(offsetof(ShopListItem, m_SelectedAlpha) == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
 static_assert(offsetof(ShopListItem, m_LockFlashAlpha)== 0x264, "ShopListItem::m_LockFlashAlpha must be at +0x264");
 #endif
 
-#if defined(__arm__) || (defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4)
 // ARM32-only: fields after pointer-sized members m_pIconTex + m_pItemInfo.
 // On x86_64 these land 12 bytes higher due to pointer widths; that is expected.
+// Exclude cross-build arm-none-eabi toolchain: its bare-metal std::string SBO
+// layout differs from the original arm-linux-gnueabi Bada binary.
+#if (defined(__arm__) || (defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4)) \
+    && defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
 static_assert(offsetof(ShopListItem, m_bOnscreenItem) == 0x27C, "ShopListItem::m_bOnscreenItem must be at +0x27C");
 static_assert(offsetof(ShopListItem, m_bSelected)     == 0x27D, "ShopListItem::m_bSelected must be at +0x27D");
 static_assert(offsetof(ShopListItem, m_bIsNew)        == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");
 static_assert(offsetof(ShopListItem, m_CostAlpha)     == 0x280, "ShopListItem::m_CostAlpha must be at +0x280");
-#endif // __arm__
+#endif
 
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic pop

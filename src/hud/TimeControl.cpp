@@ -7,6 +7,7 @@
 #include "audio/GameSound.h"
 #include "screens/MainScreen.h"
 #include "render/Font.h"
+#include "game/FruitSaveData.h"
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -22,6 +23,9 @@ static const float TEXT_X_MULT = -0.6f;
 static const float POWERUP_Y_OFFSET = 32.0f;
 // DAT_001628c4 = 60.0 (seconds-per-minute)
 static const float SECS_PER_MIN = 60.0f;
+
+// TODO: full IsMultiplayer (binary @ 0x000f6e04 thunk) when split-screen MP is ported.
+static inline bool IsMultiplayer() { return false; }
 
 TimeControl::TimeControl() {
     // ctor 0x001622e8
@@ -49,7 +53,7 @@ void TimeControl::Init() {
 }
 
 void TimeControl::Release() {
-    // vtable[3]: SmartPtr<Texture>::SetNull(+0x74) — port has no texture
+    // vtable[3]: SmartPtr<Texture>::SetNull(+0x74) -- port has no texture
 }
 
 void TimeControl::Reset() {
@@ -60,14 +64,34 @@ void TimeControl::Reset() {
     m_TimeRemaining = startSecs;
 
     Game* game = Game::GetInstance();
-    bool arcadeOrMP = game && (game->gameMode == 2);
-    // TODO: IsMultiplayer() check (same-screen MP not yet ported)
+    bool arcadeOrMP = game && (game->gameMode == 2 || IsMultiplayer());
     if (arcadeOrMP) {
         m_TimeRemaining = ARCADE_START_TIME;
-        // TODO: FruitSaveData[0x10C] save-resume logic when save fields ported
+
+        // Binary @ 0x001621ac: first-boot save-slot seed.
+        if (game->pSaveData &&
+            game->pSaveData->m_TimeRemainingSave == 0.0f &&
+            game->mainScreen && game->mainScreen->GetCameraTransition() < 0.0f) {
+            game->pSaveData->m_TimeRemainingSave = 60.9f;   // DAT_001621ec
+        }
+    } else {
+        // Binary @ 0x001624ec: sentinel write for non-timed modes.
+        if (game && game->pSaveData) {
+            game->pSaveData->m_TimeRemainingSave = -1.0f;
+        }
     }
     m_TickFrame = 0.0f;
     m_DrawColour = Colour(255, 255, 255, 255);
+}
+
+// ASM-verified: 2026-05-03 binary @ 0x001629xx (re-analyst)
+void TimeControl::Skip() {
+    // Binary @ 0x001629xx: restore from save.
+    Game* game = Game::GetInstance();
+    if (game && game->pSaveData) {
+        m_TimeRemaining = game->pSaveData->m_TimeRemainingSave;
+    }
+    m_TickFrame = 0.0f;
 }
 
 void TimeControl::CountDown(float startSeconds) {
@@ -79,7 +103,7 @@ float TimeControl::GetCountDown() const {
     // 0x00162134
     Game* game = Game::GetInstance();
     if (!game) return m_CountdownStart;
-    if (game->gameMode != 2 /* Arcade */ /* && !IsMultiplayer() */)
+    if (game->gameMode != 2 /* Arcade */ && !IsMultiplayer())
         return ARCADE_START_TIME;    // DAT_0016215c fallback
     return m_CountdownStart;
 }
@@ -92,12 +116,6 @@ void TimeControl::AddTime(float delta) {
 void TimeControl::SetToMultiplayerState() {
     // vtable[11]: calls Reset
     Reset();
-}
-
-void TimeControl::Skip() {
-    // vtable[13]: restore from save: m_TimeRemaining = FruitSaveData[0x10C], m_TickFrame = 0
-    // TODO: FruitSaveData[0x10C] lookup when save fields ported
-    m_TickFrame = 0.0f;
 }
 
 void TimeControl::Update(float dt) {
@@ -115,7 +133,6 @@ void TimeControl::Update(float dt) {
     if (game->pauseFlag) return;
 
     // count-up mode when m_CountdownStart <= 0. binary @ 0x001624a4 count-up branch.
-    // DIVERGES: was unconditionally subtracting dt.
     if (m_CountdownStart <= 0.0f) {
         m_TimeRemaining += dt;
         return;
@@ -123,10 +140,12 @@ void TimeControl::Update(float dt) {
 
     m_TimeRemaining -= dt;
 
+    // Capture colour before flash mutation for tick-tock gate.
+    uint8_t entryColourR = m_DrawColour.r;
+
     // Colour tint bands as time runs low.
     // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
-    // DIVERGES: was sinf() smooth pulse.
-    // Thresholds: 3/6/11. DIVERGES: was 2/5/10.
+    // Thresholds: 3/6/11.
     // binary @ 0x001624a4 flash section.
     float t = m_TimeRemaining;
     Colour tint(255, 255, 255, 255);
@@ -143,19 +162,28 @@ void TimeControl::Update(float dt) {
     }
     m_DrawColour = tint;
 
-    // Tick/Tock SFX for 0..11s (once per phase)
-    // TODO: proper once-per-phase gate (binary tracks per-second via integer cast)
-    if (t < 11.0f && t > 0.5f) {
-        // TODO: SFXPlay("Time-tick" / "Time-tock") with proper one-shot gate
+    // Binary @ 0x00162732: tick-tock when colour band flipped this frame.
+    if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
+        m_DrawColour.r != entryColourR) {
+        static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80; first call -> "Time-tick"
+        s_TickTockToggle ^= 1;
+        const char* name = s_TickTockToggle ? "Time-tick" : "Time-tock";
+        if (game->pGameSound) {
+            // TODO: pass SFXDelegate when delegate API is ported
+            game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+        }
     }
 
-    // TODO: write m_TimeRemaining to FruitSaveData[0x10C] for save persistence
+    // Binary @ 0x00162818: persist for resume after suspend.
+    if (game->pSaveData) {
+        game->pSaveData->m_TimeRemainingSave = m_TimeRemaining;
+    }
 
     // GameOver trigger: 0x001625be
     if (m_TimeRemaining < 0.5f) {
         FN::GameOver(-1, -1.0f, -1);
         m_TimeRemaining = 0.0f;    // DAT_001627a0
-        // Reset combo on Arcade timeout — binary @ 0x001625dc (g_ComboCount = 0)
+        // Reset combo on Arcade timeout -- binary @ 0x001625dc (g_ComboCount = 0)
         // and adjacent last-slasher write (0xFFFFFFFF = -1 sentinel).
         g_ComboCount  = 0;
         g_LastSlasher = -1;
@@ -182,7 +210,7 @@ void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
     Mortar::Font* font = game->pFontNumbers.Get();
     if (!font) return;
 
-    // Format countdown: OS_SPrintf("%i:%02i", min, sec) — DAT_00162bc4 = "%i:%02i"
+    // Format countdown: OS_SPrintf("%i:%02i", min, sec) -- DAT_00162bc4 = "%i:%02i"
     int totalSecs = (int)m_TimeRemaining;
     int mins = totalSecs / (int)SECS_PER_MIN;
     int secs = totalSecs % (int)SECS_PER_MIN;
@@ -202,8 +230,9 @@ void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
     if (m_PowerupOverlay[0] != '\0') {
         // DAT_00162b0c = 32.0 y-offset
         Vec3 overlayPos(drawX, drawY - POWERUP_Y_OFFSET, 0.0f);
-        // TODO: real GOT-relative colour (GOT+DAT_00162b1c); placeholder white
-        Colour overlayTint(255, 255, 255, 255);
+        // Binary @ 0x001629d0: green powerup-overlay tint.
+        // DAT_00162b1c -> GOT chain -> 0x00268f6c (Colour::Green singleton).
+        Colour overlayTint(0, 255, 0, 255);
         // DAT_00162b0c = 24.0 -- powerup overlay font size. binary @ 0x00162a..
         font->DrawString(24.0f, 1.0f, 0.0f,
                          m_PowerupOverlay, overlayPos,

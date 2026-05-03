@@ -25,6 +25,7 @@
 #include "debug/DebugFlags.h"
 #include <cmath>
 #include <cstdio>
+#include <functional>
 
 // --- Binary constants (resolved from read_memory) ---
 
@@ -155,6 +156,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_FrameTimer(0.0f)         // DAT_0013e59c
     , m_bIsFromPause(isFromPause)
     , m_bButtonsCreated(false)
+    , m_bSetupLevelFired(false)
 {
     LoadContent();
     m_LayerFlags = 1;  // binary sets to 1 in ctor; raised to 0x80 by subclass Draw
@@ -201,7 +203,7 @@ void GameModeScreen::CreateControls() {
     m_pBackButton->m_Texture = TexIdOf(s_TexBackIcon);
     m_pBackButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
     m_pBackButton->Init(POS_BACK,
-                        [this]() { QuitCallback(); },
+                        std::bind(&GameModeScreen::QuitCallback, this),
                         FruitInfo_GetCount(), Vec3(0, 0, 0), nullptr);
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
     // Marks this button as the screen's hardware Back-key handler.
@@ -219,7 +221,7 @@ void GameModeScreen::CreateControls() {
     m_pClassicButton->m_Texture = TexIdOf(s_TexClassic);
     m_pClassicButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
     m_pClassicButton->Init(POS_CLASSIC,
-                           [this]() { ClassicModeCallback(); },
+                           std::bind(&GameModeScreen::ClassicModeCallback, this),
                            Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0), nullptr);
     if (game.pTutorialCtrl) {
         game.pTutorialCtrl->ResetTutePos(m_pClassicButton);
@@ -241,7 +243,7 @@ void GameModeScreen::CreateControls() {
     m_pZenButton->m_Texture = TexIdOf(s_TexMode2);
     m_pZenButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
     m_pZenButton->Init(POS_ZEN,
-                       [this]() { ZenModeCallback(); },
+                       std::bind(&GameModeScreen::ZenModeCallback, this),
                        Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0), nullptr);
     m_pZenButton->m_TargetSize = sharedTargetSize;
     if (m_pZenButton->m_pFruitPiece) {
@@ -258,7 +260,7 @@ void GameModeScreen::CreateControls() {
     m_pArcadeButton->m_Texture = TexIdOf(s_TexArcadeMode);
     m_pArcadeButton->size      = TexSizeOf(s_TexArcadeMode, 64.0f, 64.0f);
     m_pArcadeButton->Init(POS_ARCADE,
-                          [this]() { ArcadeModeCallback(); },
+                          std::bind(&GameModeScreen::ArcadeModeCallback, this),
                           Fruit::FruitType(FRUIT_ARCADE, false),
                           Vec3(0, 0, 0), nullptr);
     m_pArcadeButton->m_TargetSize = sharedTargetSize;

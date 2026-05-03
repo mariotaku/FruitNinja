@@ -29,6 +29,11 @@ public:
     // GetInstance @ 0x00112c34 — C++ static-local singleton
     static ItemManager* GetInstance();
 
+    // EquippedSlashModCount @ .bss 0x0022ece4 — count of active SlashModifiers
+    // that have called ApplyModifier. Decremented by RemoveModifier; when it
+    // hits 0 the default blade is restored via SetEquippedItem(0, default).
+    static int EquippedSlashModCount;
+
     // LoadItemData @ 0x00113200 — parse itemlist.xml, load ItemSave.xml
     void LoadItemData();
 

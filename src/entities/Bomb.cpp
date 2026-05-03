@@ -186,6 +186,7 @@ Bomb::Bomb()
       m_bCollisionGuard(0),
       m_pEmitter(nullptr),
       m_bMovement(0),
+      m_pOwnerButton(nullptr),
       m_bMenuBombHit(0),
       m_Countdown(0.0f),
       m_SpeedMult(1.0f)
@@ -240,6 +241,7 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     m_RotAccumY = 0.0f;
 
     m_bMenuBombHit = 0;
+    m_pOwnerButton = nullptr;
     m_pEmitter = nullptr;  // lazy-created in Update
 
     // Scale + collision sphere: matches binary multiply chain at 0x172504.
@@ -354,7 +356,7 @@ void Bomb::Update(float /*dt*/) {
             // Fuse SFX: plays once per frame across all bombs when any bomb's
             // countdown crosses 0.2s downward. Gated by bFuseSfxFiredThisFrame
             // (cleared in Bomb::Draw) and pauseFlag==0.
-            static constexpr float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
+            static const float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
             if (m_Countdown <= FUSE_SFX_THRESHOLD &&
                 prevCountdown > FUSE_SFX_THRESHOLD &&
                 !g_bombData.bFuseSfxFiredThisFrame &&
@@ -490,8 +492,8 @@ void Bomb::Update(float /*dt*/) {
 void Bomb::PostUpdate(float /*dt*/) {
     if (!m_pEmitter) return;
 
-    static constexpr float FUSE_OFFSET_LEN   = 0.9f;    // DAT_0017159c
-    static constexpr float FUSE_SCALE_FACTOR = 100.0f;  // DAT_001715a0
+    static const float FUSE_OFFSET_LEN   = 0.9f;    // DAT_0017159c
+    static const float FUSE_SCALE_FACTOR = 100.0f;  // DAT_001715a0
 
     // Build the same rotation that Bomb::Draw uses (Draw does
     // RotX * RotY * RotZ on the identity then post-multiplies scale).
@@ -553,7 +555,7 @@ void Bomb::Draw(Renderer& r) {
     // bomb isn't the previously-tracked one, isn't menu-hit, and is on the
     // playfield (pos.y > -1000). No visible reader in the shipped binary,
     // but mirrored for fidelity.
-    static constexpr float TRACKED_BOMB_MIN_Y = -1000.0f;  // DAT_00171d30
+    static const float TRACKED_BOMB_MIN_Y = -1000.0f;  // DAT_00171d30
     if (this != g_bombData.pTrackedBomb &&
         m_bMenuBombHit == 0 &&
         pos.y > TRACKED_BOMB_MIN_Y) {
@@ -610,6 +612,7 @@ void Bomb::Chuck(float delay) {
     m_Countdown = delay;
 }
 
+// ASM-verified: 2026-05-03 binary @ 0x001716e8..0x0017171a (asm-inspector)
 // Matches Bomb::KillBomb (0x1716e8)
 void Bomb::KillBomb() {
     flags |= 0x10;  // mark for removal
@@ -617,7 +620,14 @@ void Bomb::KillBomb() {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;
     }
-    // TODO: Unlink from game state (field_0x84)
+    // MenuButton owns either a Fruit or a Bomb at +0x134; clear if ours.
+    // No ET_RemoveEntity here (Bomb::Update's hit branch handles tracker removal).
+    // No active-bomb counter analog to Fruit's g_PowerFruitCount.
+    // m_pFruitPiece is Fruit* but the binary stores either a Fruit or a Bomb
+    // at this slot; compare by raw address (the stored Bomb pointer IS this).
+    if (m_pOwnerButton && reinterpret_cast<void*>(m_pOwnerButton->m_pFruitPiece) == static_cast<void*>(this)) {
+        m_pOwnerButton->m_pFruitPiece = nullptr;
+    }
 }
 
 // Matches Bomb::CollisionResponse (0x17280c). Three branches:
@@ -710,12 +720,42 @@ void Bomb::CollisionResponse(const Vec3& bladeVel) {
     m_bHit = 1;   // +0x68 -- triggers hit branch in Update next tick
 }
 
-// Matches Bomb::GetNumActiveForPlayer (0x00122a14).
-// TODO: playerIdx filtering not ported; counts all active bombs.
-int Bomb::GetNumActiveForPlayer(int /*playerIdx*/, bool /*countPrespawn*/) {
+// Matches Bomb::GetNumActiveForPlayer (0x00171250).
+// Binary @ 0x00171250: counts bombs by m_BombVariant, not playerIdx.
+// playerIdx==-1 matches "regular bombs" (variant <= 0); playerIdx 1/2 matches MP-zone-tagged bombs.
+// countPrespawn=false: count prespawn bombs (countdown > 0 and not yet hit) of any variant.
+// countPrespawn=true:  count bombs filtered by variant (no countdown filter).
+// ASM-verified: 2026-05-03 binary @ 0x00171250 (asm-inspector)
+int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
     ActorManager* am = ActorManager::GetInstance();
     if (!am) return 0;
-    return am->GetNumEntities(1);
+    int count = 0;
+    std::list<Entity*>::iterator it;
+    Entity* e = am->GetEntityFirst(1, it);
+    if (!countPrespawn) {
+        // Active pre-spawn bombs (countdown still ticking, not yet hit).
+        // Binary GetWait() returns m_Countdown when !m_bHit, else m_SpawnTimer;
+        // combined with the m_bHit==0 guard the test reduces to:
+        while (e) {
+            Bomb* b = static_cast<Bomb*>(e);
+            if (b->m_Countdown > 0.0f && b->m_bHit == 0)
+                count++;
+            e = am->GetEntityNext(1, it);
+        }
+    } else {
+        // Variant-filtered count (no countdown filter):
+        //   playerIdx == -1: any bomb with m_BombVariant <= 0
+        //   else:            m_BombVariant == playerIdx
+        while (e) {
+            Bomb* b = static_cast<Bomb*>(e);
+            if ((playerIdx == -1 && b->m_BombVariant <= 0) ||
+                playerIdx == b->m_BombVariant) {
+                count++;
+            }
+            e = am->GetEntityNext(1, it);
+        }
+    }
+    return count;
 }
 
 // Matches Bomb::ClearUnspawned (0x00122ab4).
@@ -733,10 +773,41 @@ void Bomb::ClearUnspawned() {
     }
 }
 
-// Matches Bomb::SetForPlayer (0x00122b5c).
-// TODO: split-screen MP player assignment not ported.
-void Bomb::SetForPlayer(Bomb* /*b*/, int /*playerIdx*/) {}
+// ASM-verified-via-RE: 2026-05-03 binary @ 0x00126384
+void Bomb::SetHit(Bomb* b, float speed) {
+    if (!b) return;
+    b->m_SpawnTimer = speed;   // Bomb+0xC8 (blast interval, sets the hit-branch timer)
+    b->m_bHit       = 1;       // Bomb+0x68 (triggers hit branch in Update)
+}
 
-// Matches Bomb::MakeFat (0x00122bc0).
-// TODO: big-bomb upgrade not ported.
-void Bomb::MakeFat(Bomb* /*b*/, bool /*resetScale*/) {}
+// ASM-verified: 2026-05-03 binary @ 0x00126390 (asm-inspector)
+// Binary @ 0x00126390: single store, no other state.
+// Spawn-time assignment from WaveManager::SpawnBomb @ 0x00121fa8:
+//   - Singleplayer split-screen co-op (gameMode == 2): SetForPlayer(b, 1) only.
+//   - Multiplayer: bomb spawns twice (left+right zones); first gets variant 1,
+//     second mirrored gets variant 2 (X-position negated, velocity flipped).
+void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
+    b->m_BombVariant = playerIdx;
+}
+
+// ASM-verified: 2026-05-03 binary @ 0x00171d78..0x00171ee8 (asm-inspector, field stores only; FX/SFX block remains TODO)
+// Binary @ 0x00171d78: bomb-multiplier-powerup upgrade. Fires when default-spawner
+// bomb is created with bomb-multiplier active (playerIdx>0 from SpawnBomb).
+// Trigger condition in WaveManager::SpawnBomb post-spawn branch:
+//   if (type == 0 && pBomb != nullptr && playerIdx > 0)
+//       Bomb::MakeFat(pBomb, false);
+// TODO: call Bomb::MakeFat(b, false) when type==0 && powerupBombMult>0 (binary @ 0x00121fa8 tail)
+void Bomb::MakeFat(Bomb* b, bool skipSpawnFx) {
+    if (!b) return;
+    b->m_SpeedMult = 0.66597f;                    // DAT_00171eec
+    b->scale      *= 1.33002f;                    // DAT_00171ef0
+    b->m_OrigScale = b->scale;                    // binary writes field_0x98/9c/a0 (m_OrigScale)
+    if (b->m_Col) b->m_Col->radius *= 1.33002f;   // DAT_00171ef0
+    if (!skipSpawnFx) {
+        // Spawn particle emitter at +/-240.0 X anchor based on pos.x sign.
+        // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.
+        // SFX: name string at DAT_00171f0c, MakeSFXDelegate_Coin callback.
+        // TODO: PSPParticleManager::AddEmitter and SFXPlay wiring when those callbacks land.
+        b->Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
+    }
+}

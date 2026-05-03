@@ -29,6 +29,7 @@
 #include "math/MathUtil.h"
 #include <cstdlib>
 #include <cstdio>
+#include <functional>
 
 // ---------------------------------------------------------------------------
 // Constants (resolved from binary DAT addresses via read_memory)
@@ -112,6 +113,15 @@ static const Vec3 SHOP_SHRINK_VEC(1.0f, 1.0f, 1.0f);
 
 // Fling velocity base (state 3 and QuitShopCallback)
 static const float FLING_VEL_BASE = 5.0f;           // from decompile literal
+
+struct SplatShiftCtx { float up; float down; };
+static void SplatShiftVisitor(SplatEntity* s, void* user) {
+    if (!s || !s->m_bAlive) return;
+    if ((int8_t)s->m_SplatType < 0) return;
+    SplatShiftCtx* c = static_cast<SplatShiftCtx*>(user);
+    if (s->pos.x > 50.0f) s->pos.x += c->up;
+    else                  s->pos.x -= c->down;
+}
 
 // ---------------------------------------------------------------------------
 // Static texture storage
@@ -740,7 +750,7 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
                 m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pBuyButton->Init(POS_BACK_BUTTON,
-                    [this]() { QuitShopCallback(); },
+                    std::bind(&ShopScreen::QuitShopCallback, this),
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                 m_pBuyButton->m_bEnabled = 1;
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
@@ -748,7 +758,7 @@ void ShopScreen::Update(float dt) {
                 if (game.hud) game.hud->AddControl(m_pBuyButton, false);
                 // Binary (0x0015e3e2..0x0015e3f0): register DeletedMenuItem as m_RemoveCallback
                 m_pBuyButton->m_RemoveCallback =
-                    [this](HUDControl* c) { DeletedMenuItem(c); };
+                    std::bind(&ShopScreen::DeletedMenuItem, this, std::placeholders::_1);
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pBuyButton);
                 // Binary: m_TargetSize *= 0.825; fruit piece scale *= 0.825
                 m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
@@ -810,7 +820,7 @@ void ShopScreen::Update(float dt) {
                             m_pEquipButton->m_Texture = TexIdOf(s_TexSelectItem);
                             m_pEquipButton->size      = TexSizeOf(s_TexSelectItem, 64.0f, 64.0f);
                             m_pEquipButton->Init(POS_EQUIP_BUTTON,
-                                [this]() { EquipCallback(); },
+                                std::bind(&ShopScreen::EquipCallback, this),
                                 equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                             // Binary (0x0015e5f6): m_bEnabled = 0
                             m_pEquipButton->m_bEnabled = 0;
@@ -819,7 +829,7 @@ void ShopScreen::Update(float dt) {
                             if (game.hud) game.hud->AddControl(m_pEquipButton, false);
                             // Binary (0x0015e60e): register DeletedMenuItem as m_RemoveCallback
                             m_pEquipButton->m_RemoveCallback =
-                                [this](HUDControl* c) { DeletedMenuItem(c); };
+                                std::bind(&ShopScreen::DeletedMenuItem, this, std::placeholders::_1);
                             if (game.pTutorialCtrl)
                                 game.pTutorialCtrl->ResetTutePos(m_pEquipButton);
                             // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
@@ -927,13 +937,13 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
             m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
-                [this]() { QuitShopCallback(); },
+                std::bind(&ShopScreen::QuitShopCallback, this),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
             m_pBuyButton->m_bEnabled = 1;
             if (game.hud) game.hud->AddControl(m_pBuyButton, false);
             // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =
-                [this](HUDControl* c) { DeletedMenuItem(c); };
+                std::bind(&ShopScreen::DeletedMenuItem, this, std::placeholders::_1);
         }
         // LAB_0015e874: scale new button (reached by both state 0 and state 3 paths)
         m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
@@ -1017,17 +1027,11 @@ void ShopScreen::Update(float dt) {
     // convention (X=+160 top, -160 bottom) — semantically a y-shift.
     if (m_TransitionAlpha < prevAlpha) {
         const float delta = prevAlpha - m_TransitionAlpha;
-        struct Ctx { float up; float down; } ctx = {
+        SplatShiftCtx ctx = {
             delta * 190.0f * 1.5f,
             delta * 290.0f * 1.5f
         };
-        SplatEntity::ForEachInPool([](SplatEntity* s, void* user) {
-            if (!s || !s->m_bAlive) return;
-            if ((int8_t)s->m_SplatType < 0) return;
-            Ctx* c = static_cast<Ctx*>(user);
-            if (s->pos.x > 50.0f) s->pos.x += c->up;
-            else                  s->pos.x -= c->down;
-        }, &ctx);
+        SplatEntity::ForEachInPool(SplatShiftVisitor, &ctx);
     }
 }
 

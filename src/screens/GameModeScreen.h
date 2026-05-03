@@ -107,7 +107,7 @@ private:
 
     // Port-only one-shot latch: binary vtable[18] is idempotent but
     // WaveManager::Reset(false) is destructive — guard against per-frame calls.
-    bool m_bSetupLevelFired = false;
+    bool m_bSetupLevelFired;
 };
 
 #endif

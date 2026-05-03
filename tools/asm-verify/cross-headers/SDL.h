@@ -104,4 +104,41 @@ inline char* SDL_GetBasePath(void) { return 0; }
 inline void SDL_free(void*) {}
 inline char* SDL_strdup(const char*) { return 0; }
 
+// SDL_stdinc.h string helpers
+#include <cctype>
+#include <cstdio>
+inline int SDL_strcasecmp(const char* a, const char* b) {
+    while (*a && *b) {
+        int d = tolower((unsigned char)*a) - tolower((unsigned char)*b);
+        if (d) return d;
+        ++a; ++b;
+    }
+    return tolower((unsigned char)*a) - tolower((unsigned char)*b);
+}
+inline void* SDL_memset(void* dst, int c, size_t n) {
+    return __builtin_memset(dst, c, n);
+}
+
+// SDL_RWops (minimal — object-only compile)
+struct SDL_RWops { int dummy; };
+inline SDL_RWops* SDL_RWFromFile(const char*, const char*) { return 0; }
+inline size_t SDL_RWread(SDL_RWops*, void*, size_t, size_t) { return 0; }
+inline int SDL_RWclose(SDL_RWops*) { return 0; }
+
+// SDL_GetWindowSize — missing from original stub
+inline void SDL_GetWindowSize(SDL_Window*, int* w, int* h) { if (w) *w = 960; if (h) *h = 640; }
+
+// SDL_GL_SetSwapInterval
+inline int SDL_GL_SetSwapInterval(int) { return 0; }
+
+// Extra window position constants
+#define SDL_WINDOWPOS_CENTERED_MASK 0x2FFF0000u
+#define SDL_WINDOWPOS_CENTERED (SDL_WINDOWPOS_CENTERED_MASK | 0)
+
+// GL context profile constants
+#define SDL_GL_CONTEXT_PROFILE_COMPATIBILITY 0x0002
+
+// Audio format constants
+#define AUDIO_S16LSB 0x8010
+
 #endif
