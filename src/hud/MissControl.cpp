@@ -64,6 +64,9 @@ static constexpr float MISS_PULSE_NARROW_HI   = 360360.0f; // DAT_001522b0. DIFF
 int   MissControl::s_NumCriticals = 0;
 float MissControl::s_DtMod        = 0.5f;  // (float)0 + 0.5 initial
 
+// Binary @ 0x001515a4 — combo overlay textures [0..9] = combo_2..combo_11.
+SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
+
 // --- ctor / dtor -----------------------------------------------------------
 
 MissControl::MissControl()
@@ -87,6 +90,12 @@ MissControl::MissControl()
 MissControl::~MissControl() = default;
 
 // --- vtable overrides -------------------------------------------------------
+
+// Binary @ 0x001513cc — vtable[5]. Drops m_Texture SmartPtr ref.
+// Port stores raw GLuint; ownership lives in TextureManager, so clearing to 0 is sufficient.
+void MissControl::Release() {
+    m_Texture = 0;
+}
 
 // vtable[4] @ 0x00150fa4
 void MissControl::Init() {
@@ -146,15 +155,25 @@ void MissControl::LoadContent() {
     s_TexCritical = Mortar::TextureManager::LoadLocalisedTexture("critical.tex");
     s_TexRare     = Mortar::TextureManager::LoadLocalisedTexture("ultra_rare_plus_50.tex");
     s_TexCross    = Mortar::TextureManager::LoadLocalisedTexture("hud_cross.tex");
+    // Binary @ 0x001515a4 — combo textures. Binary ctor loop iVar3=1..10, loads
+    // combo_%d.tex for iVar3>=3 -> names combo_3..combo_12 (10 entries). The MakeCombo
+    // index mapping uses (comboCount-1) clamped [1..9] -> array indices [0..9].
+    // TODO: 0x001515a4 — verify exact texture naming scheme against binary strings.
+    for (int i = 0; i < 10; ++i) {
+        char name[32];
+        snprintf(name, sizeof(name), "combo_%d.tex", i + 2);
+        s_ComboTextures[i] = Mortar::TextureManager::LoadLocalisedTexture(name);
+    }
     s_TexturesLoaded = true;
-    // TODO: load combo_3.tex .. combo_10.tex into static SmartPtr array.
-    // binary ctor (0x00151068) loop iVar3=1..10: combo_%d.tex for iVar3>=3.
     printf("[MissControl] LoadContent: critical=%d rare=%d cross=%d\n",
            s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
 }
 
 // --- Pool allocation -------------------------------------------------------
 
+// Binary @ 0x001512d8 — port uses static array s_Pool[N] instead of binary's
+//   operator new[] + manual [size][count] header. Equivalent behaviour for trivially-
+//   destructible MissControl; HUD::AddControl(.,.,false) registers each as non-owned.
 void MissControl::AllocatePool() {
     if (s_PoolAllocated) return;
     Game* game = Game::GetInstance();
@@ -230,6 +249,41 @@ void MissControl::MakeCritical(const Vec3& pos, int /*playerIdx*/) {
 
 void MissControl::MakeRare(const Vec3& pos) {
     PopulateOverlay(this, pos, s_TexRare, /*alphaScale*/ 0.5f);
+}
+
+// binary @ 0x001515a4
+// Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
+// Sets m_bComboActive=1, m_ComboCount=combo, m_FadeAlpha=1.811, anim=3, visible=1.
+// TODO: 0x001515a4 — gameMode==2 override: m_ComboCount = (int)(WaveManager::GetSpeed(0)+0.65f)
+//   requires GameTaskState gameMode to be plumbed.
+void MissControl::MakeCombo(const Vec3& pos, int comboCount, int /*entityType*/) {
+    Init();
+    int idx = comboCount - 2;
+    if (idx < 0)  idx = 0;
+    if (idx > 9)  idx = 9;
+    if (s_ComboTextures[idx].IsValid()) {
+        m_Texture = s_ComboTextures[idx]->m_TexId;
+        const float w = (float)(s_ComboTextures[idx]->m_Width  + 1);
+        const float h = (float)(s_ComboTextures[idx]->m_Height + 1);
+        size.x = w;
+        size.y = h;
+        size.z = 0.0f;
+    }
+    m_bComboActive = 1;
+    m_ComboCount   = comboCount;
+    m_FadeAlpha    = MISS_FADE_INIT;
+    m_AnimState    = 3;
+    m_bVisible     = 1;
+    m_JitterTimer  = 0;
+    // Screen-clamp: centre-clamp within +-240/+-160 minus half-extent.
+    Vec3 clamped = pos;
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    if (clamped.x + hx >  CLAMP_X_HI) clamped.x =  CLAMP_X_HI - hx;
+    if (clamped.y + hy >  CLAMP_Y_HI) clamped.y =  CLAMP_Y_HI - hy;
+    if (clamped.x - hx <  CLAMP_X_LO) clamped.x =  CLAMP_X_LO + hx;
+    if (clamped.y - hy <  CLAMP_Y_LO) clamped.y =  CLAMP_Y_LO + hy;
+    this->pos = clamped;
 }
 
 // binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.

@@ -139,15 +139,37 @@ public:
     void MakeDisappear(const Vec3& pos, int sizeMult,
                        const SmartPtr<Mortar::Texture>& tex);
 
+    // 0x001515a4 -- activate combo indicator (combo_N.tex for N=clamp(combo,2,10)).
+    void MakeCombo(const Vec3& pos, int comboCount, int entityType);
+
     // vtable[12] @ 0x00151a60 -- fade state machine
     void Update(float dt) override;
 
     // vtable[9] @ 0x00151f60 -- render textured quad with UV crop + rotation
     void Draw(const Vec3& hudScale, int layerMask) override;
 
+    // Binary @ 0x001513cc — vtable[5]. Drops m_Texture ref (single-line helper).
+    void Release() override;
+
+    // Binary @ 0x00150e00 — vtable[8]. Empty override (single bx lr); returns layerWeights
+    // pointer unchanged. Signature float*(float*) does not match base PreDraw(const Vec3&);
+    // cannot override. No-op body; binary slot exists purely to shadow the base.
+    // NOTE: do not add as override — would insert new vtable entry breaking layout.
+
+    // Binary @ 0x00150dfc — vtable[16]. Defunct: same-screen MP player-index hook, never wired.
+    // Not in HUDControl base vtable; adding as override would shift MissControl vtable layout.
+    // Kept as comment only per stub-don't-skip policy.
+    // Defunct: MP player-index hook — no-op stub; binary @ 0x00150dfc
+
     // --- Statics (file-scope in binary, exposed here for PreUpdate) ---
     static int   s_NumCriticals;  // 0x0023123c -- incremented per busy slot in Update
     static float s_DtMod;         // 0x001f3d6c -- (float)s_NumCriticals + 0.5, set by PreUpdate
+
+    // Binary @ 0x001515a4 — combo overlay textures: slots [0..9] = combo_2..combo_11.
+    // Binary ctor loop iVar3=1..10: loads combo_%d.tex for iVar3>=3 -> names combo_3..combo_11.
+    // TODO: 0x001515a4 — verify exact naming scheme (combo_2..combo_10 vs combo_3..combo_11)
+    //   with re-analyst before finalising index mapping.
+    static SmartPtr<Mortar::Texture> s_ComboTextures[10];
 };
 
 #endif

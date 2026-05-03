@@ -8,6 +8,7 @@
 #include "SlashEntity.h"
 #include "ActorManager.h"
 #include "Entity.h"
+#include "hud/HUDControl.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
@@ -142,6 +143,8 @@ SlashEntity::SlashEntity()
     memset(m_Right, 0, sizeof(m_Right));
 }
 
+// Binary @ 0x17C774 — restore vtable, call Release, chain to Entity::~Entity.
+// (vtable-restore is implicit in C++.)
 SlashEntity::~SlashEntity() {
     Release();
 }
@@ -167,6 +170,116 @@ void SlashEntity::Release() {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Reset — binary @ 0x17B71C
+// Wipe touch/trail state, sentinel-mark positions (-65504), white-fill both
+// vertex strips, clear 11-entry combo-slice array.
+// Port note: binary fields m_pLeftBuffer/m_pRightBuffer/m_SplitPoint/
+//   m_SliceFruitTypes/m_BladeDir/m_HeadPos/m_TailPos/m_PrevHeadPos/
+//   m_GhostIndex/m_GhostCount/m_GhostDirs don't exist in port; port resets
+//   its equivalent state (m_NumPoints, m_State, m_bHasHead).
+// TODO: 0x17B71C — binary also clears m_bFlag4c and fills m_pLeftBuffer/
+//   m_pRightBuffer entries with white (u=v=0.5) up to m_SplitPoint.
+// ---------------------------------------------------------------------------
+void SlashEntity::Reset() {
+    m_NumPoints = 0;
+    m_State     = 0;
+    m_bHasHead  = false;
+    m_RawTouchPos = Vec3(0, 0, 0);
+    if (m_TrailEmitter) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
+        m_TrailEmitter = nullptr;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Chunk A stubs — trivial binary stubs
+// ---------------------------------------------------------------------------
+
+// Binary @ 0x17B3B8 — Draw is a 1-instruction BX lr stub; rendering is in DrawSlice.
+// Port: Draw() maps to DrawSlice; see Draw() below.
+
+// Binary @ 0x17B3BC — empty stub, returns 0.
+// SlashEntity is pure aggressor (blade), never collides into.
+// Port note: port doesn't derive from Entity; provided for call-graph completeness.
+int SlashEntity::CollisionResponse() {
+    return 0;
+}
+
+// Binary @ 0x17B3C0 — 4-byte stub, returns 0.
+int SlashEntity::UpdateCollisionLine(long /*dt*/) {
+    return 0;
+}
+
+// Binary @ 0x17B398 — clears g_state.bombSkipFlag=0, sets g_state.needsDrawFlag=1.
+// TODO: 0x17B398 — g_state singleton (bombSkipFlag / needsDrawFlag) not yet modelled in port.
+void SlashEntity::DrawUpdate(float /*dt*/) {
+}
+
+// Binary @ 0x17B388 — clear back-pointer to combo MissControl when it gets deleted.
+// TODO: 0x17B388 — m_pComboMissControl field doesn't exist in port struct.
+void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
+}
+
+// ---------------------------------------------------------------------------
+// Chunk E stubs — PreUpdate, PlaySwipe, GetHeadThicknessScale
+// ---------------------------------------------------------------------------
+
+// Binary @ 0x17C584 — bump ghost frame counter, tick 8 ghost slots, advance
+// per-frame palette cycle, push swipe-loop volume to ItemManager and reset
+// accumulator.
+// TODO: 0x17C584 — ghost ring (8 slots), per-frame palette advance
+//   (g_PaletteProgress), ItemManager::PushSwipeLoopVolume not yet ported.
+void SlashEntity::PreUpdate(float dt) {
+    // TODO: 0x17C584 — tick 8 SlashEntityGhost slots (not yet ported)
+    // TODO: 0x17C584 — advance g_PaletteProgress when g_ColourType == 1
+    //   (per-frame palette cycling)
+    (void)dt;
+}
+
+// Binary @ 0x17CCDC — mod-override swipe SFX, else pick "bigslice%d" (1..6)
+// via Math::Random::Rand32(g_GlobalRng, 6)+1, reset combo-bonus accumulator.
+// TODO: 0x17CCDC — ItemManager::PlayAlternateSwipeSound not yet ported;
+//   GameSound::SFXPlay not yet wired; Math::Random::Rand32 + g_GlobalRng not
+//   yet ported.
+void SlashEntity::PlaySwipe() {
+    // TODO: 0x17CCDC — if (ItemManager::GetInstance()->PlayAlternateSwipeSound()) return;
+    // TODO: 0x17CCDC — char name[32]; snprintf(name, sizeof(name), "bigslice%d",
+    //   Math::Random::Rand32(g_GlobalRng, 6) + 1);
+    // TODO: 0x17CCDC — GameSound::SFXPlay(name);
+    // TODO: 0x17CCDC — field_0x148 = 6.0f; (reset combo-bonus accumulator)
+}
+
+// Binary @ 0x17B87C — derive head taper scale =
+//   lastPairHalfWidth / (g_Scale2 * 9.0), clamped to >= 1.0.
+// TODO: 0x17B87C — lastPairHalfWidth comes from binary's m_pLeftBuffer vertex
+//   pair, not modelled in port. Return 1.0 (no taper override).
+float SlashEntity::GetHeadThicknessScale() const {
+    return 1.0f;
+}
+
+// Binary @ 0x17B82C — push next ghost slot in 8-entry ring, snapshot
+// blade vertex strips for fade-out replay.
+// TODO: 0x17B82C — SlashEntityGhost ring (s_Ghosts[8], s_GhostHead) not yet ported.
+void SlashEntity::CreateGhost() {
+    // TODO: 0x17B82C — s_GhostHead = (s_GhostHead + 1) & 7;
+    // TODO: 0x17B82C — SlashEntityGhost::StartEffect(&s_Ghosts[s_GhostHead],
+    //   &m_pLeftBuffer, m_PointCount);
+}
+
+// ---------------------------------------------------------------------------
+// Chunk G — UpdateModColour
+// ---------------------------------------------------------------------------
+
+// Binary @ 0x17B0F4 — advance palette progress by dt*lifeScale, lerp between
+// consecutive palette entries (or snap inside per-entry deadzone).
+// NULL outColour = global advance only.
+// TODO: 0x17B0F4 — full cycling palette (s_ColourType, s_Palette, s_Progress,
+//   s_LifeScale lerp logic) not yet ported.
+void SlashEntity::UpdateModColour(Colour* outColour, float /*dt*/) {
+    if (outColour && g_ColourType == 1) *outColour = g_Palette[0];
 }
 
 // ---------------------------------------------------------------------------

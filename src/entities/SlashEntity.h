@@ -3,27 +3,39 @@
 
 //
 // SlashEntity — blade trail visual (entity type 3)
-// Matches binary 0x17C82C..0x17E504 (see docs/engine/slash-entity.md — TODO)
+// Matches binary 0x17C82C..0x17E504
 //
-// Visual-only port. Skips: collision, slice/combo, ghost trail, particle
-// emitter, blade colour palette. Renders two mirrored triangle strips from
-// a per-point trail buffer. Each frame RebuildGeometry regenerates the
-// vertex arrays from the TrailPoint list applying:
-//   - miter-join perpendicular at each point (average of incoming + outgoing)
-//   - arc-length U coordinate along the trail
-//   - per-vertex alpha fade toward the tail
-//   - head taper (last few points get narrower thickness)
+// Port note: the binary's SlashEntity is an Entity subclass with vtable slots
+// for Draw/Update/CollisionResponse/DrawUpdate/TouchDown/TouchMoveX/TouchMoveY.
+// This port implements SlashEntity as a standalone class (not Entity-derived)
+// with equivalent behaviour via a different internal representation
+// (TrailPoint[] instead of binary's m_pLeftBuffer/m_pRightBuffer vertex arrays).
+// Fields that exist in the binary but not in this port are documented as TODO.
 //
 // Binary addresses (ARM32):
-//   LoadContent       0x17C948
-//   Init              0x17C65C
-//   Release           0x17C60C
-//   AddPoint          0x17CE0C
-//   UpdateTouchDown   0x17D2E4
-//   UpdatePoints      0x17B92C
-//   Update            0x17D664
-//   PreUpdate         0x17C584
-//   DrawSlice         0x17E424
+//   LoadContent          0x17C948
+//   Init                 0x17C65C
+//   InitPoints           0x17C340
+//   Release              0x17C60C
+//   Reset                0x17B71C
+//   AddPoint             0x17CE0C
+//   UpdateTouchDown      0x17D2E4
+//   UpdatePoints         0x17B92C
+//   Update               0x17D664
+//   PreUpdate            0x17C584
+//   DrawSlice            0x17E424
+//   Draw                 0x17B3B8  (1-instruction BX lr stub — rendering is in DrawSlice)
+//   CollisionResponse    0x17B3BC  (1-instruction stub, returns 0)
+//   UpdateCollisionLine  0x17B3C0  (4-byte stub, returns 0)
+//   DrawUpdate           0x17B398  (sets g_state.bombSkipFlag=0, g_state.needsDrawFlag=1)
+//   MissControlDeleted   0x17B388
+//   TouchDown            0x17D61C
+//   TouchMoveX           0x17C50C
+//   TouchMoveY           0x17C490
+//   CreateGhost          0x17B82C
+//   PlaySwipe            0x17CCDC
+//   GetHeadThicknessScale 0x17B87C
+//   ~SlashEntity         0x17C774
 //
 
 #include "math/Vec3.h"
@@ -37,6 +49,7 @@
 namespace Mortar { struct PSPParticleEmitter; }
 
 class Fruit;
+class HUDControl;
 
 class SlashEntity {
 public:
@@ -69,12 +82,72 @@ public:
     void Init();
     void Release();
 
+    // Binary @ 0x17B71C — wipe touch/trail state, sentinel-mark positions,
+    // clear vertex strips, clear 11-entry combo-slice array.
+    // Port note: binary fields m_pLeftBuffer/m_pRightBuffer/m_SplitPoint/
+    //   m_SliceFruitTypes don't exist in port; only the port-equivalent state
+    //   (m_NumPoints, m_State, m_bHasHead) is cleared.
+    void Reset();
+
     // Matches SlashEntity::Update (0x17D664). Polls Mortar::Touch slot 0 +
     // per-frame geometry rebuild.
     void Update(float dt);
 
+    // Matches SlashEntity::PreUpdate (0x17C584). Ticks ghost frame counters,
+    // advances palette cycle, pushes swipe-loop volume to ItemManager.
+    void PreUpdate(float dt);
+
     // Matches SlashEntity::DrawSlice (0x17E424). Two mirrored tri-strips.
     void Draw();
+
+    // Binary @ 0x17B3B8 — Draw is a 1-instruction BX lr stub; rendering is
+    // in DrawSlice. Port's Draw() maps to DrawSlice behaviour.
+    // No separate entry point needed.
+
+    // Binary @ 0x17CCDC — mod-override swipe SFX, else "bigslice1..6" via Rand32.
+    void PlaySwipe();
+
+    // Binary @ 0x17B87C — derive head taper scale = lastPairHalfWidth /
+    // (modScale.startThick * 9), clamped to >= 1.
+    float GetHeadThicknessScale() const;
+
+    // Binary @ 0x17B82C — push next ghost slot in 8-entry ring, snapshot
+    // blade vertex strips for fade-out replay.
+    // TODO: 0x17B82C — SlashEntityGhost ring not yet ported; no-op stub.
+    void CreateGhost();
+
+    // Binary @ 0x17B388 — clear back-pointer to combo MissControl when deleted.
+    // Port note: m_pComboMissControl doesn't exist in port struct; no-op.
+    void MissControlDeleted(HUDControl* ctrl);
+
+    // Binary @ 0x17B3BC — entity vtable slot; SlashEntity is pure aggressor,
+    // never collides into. Returns 0.
+    // Port note: port doesn't derive from Entity; method kept for call-graph
+    // completeness.
+    int CollisionResponse();
+
+    // Binary @ 0x17B3C0 — 4-byte stub, returns 0.
+    int UpdateCollisionLine(long dt);
+
+    // Binary @ 0x17B398 — clears g_state.bombSkipFlag=0, sets needsDrawFlag=1.
+    // Port note: g_state singleton not yet modelled; no-op stub.
+    void DrawUpdate(float dt);
+
+    // Binary @ 0x17D61C — Entity::TouchDown vtable override: if idle, Reset()
+    // and (PER_SWIPE mode) re-pick palette colour, then UpdateTouchDown.
+    // Port: maps to OnTouchActive / OnTouchReleased input model.
+    // Returns true (consumed).
+    // TODO: 0x17D61C — wire when Entity vtable input dispatch is ported.
+
+    // Binary @ 0x17C50C — Entity::TouchMoveX vtable override: write pos.x.
+    // TODO: 0x17C50C — wire when Entity vtable input dispatch is ported.
+
+    // Binary @ 0x17C490 — Entity::TouchMoveY vtable override: write pos.y.
+    // TODO: 0x17C490 — wire when Entity vtable input dispatch is ported.
+
+    // Binary @ 0x17B0F4 — advance palette progress by dt*lifeScale,
+    // lerp between consecutive palette entries. NULL outColour = advance only.
+    void UpdateModColour(Colour* outColour, float dt);
 
     // Test whether the current blade trail intersects a collision sphere.
     // Iterates every segment between consecutive trail points (mirrors the

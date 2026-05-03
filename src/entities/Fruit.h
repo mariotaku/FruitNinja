@@ -3,8 +3,10 @@
 
 #include "Entity.h"
 #include "math/Quaternion.h"
+#include "math/Colour.h"
 #include "util/SmartPtr.h"
 #include "asset/Mesh.h"
+#include "FruitInfo.h"
 
 namespace Mortar { struct PSPParticleEmitter; }
 class SlashEntity;
@@ -224,6 +226,46 @@ public:
     // @ 0x00175ea0 — per-fruit shadow emitter called by DrawShadows.
     // Writes 1 spawn-fade quad and up to 2 per-half quads into *out.
     void AddShadow(struct QUADCUSTOMVERTEX** out, int* outCount);
+
+    // Binary @ 0x00174f18 — return ptr to FRUIT_INFO[type].m_Name
+    static const char* FruitTypeName(long type);
+    // Binary @ 0x00174f38 — return FRUIT_INFO[type].m_NameHash
+    static unsigned long FruitTypeHash(long type);
+    // Binary @ 0x00174f5c — return ptr to FRUIT_INFO[type].m_FactTexture
+    static const char* FruitFactTexture(long type);
+    // Binary @ 0x00174f80 — FRUIT_INFO[type].m_FruitColour; one-fruit override via g_SpecialFruitIdx/g_SpecialFruitColour (unresolved DATs)
+    static Colour FruitTypeColour(long type);
+    // Binary @ 0x00174fc8 — return FRUIT_INFO[type].m_FactColour
+    static Colour FruitFactColour(long type);
+    // Binary @ 0x00174ff8 — equivalent of FruitInfo_Get(); preserved for binary call-shape parity
+    static const FruitInfo* FruitInfo(long type);
+
+    // Binary @ 0x00176184 — local-MP "did a player drop their last life" check; defers to FN::GameOver
+    static void CheckFruitDropped();
+
+    // Binary @ 0x00175624 — "is either half outside the play field" predicate
+    bool IsOffscreen() const;
+
+    // Binary @ 0x00176354 — toggle collision sphere; radius = m_CollisionScale + 0.52 * m_Scale
+    void EnableCollision(bool enable);
+
+    // Binary @ 0x00175b78 — sets m_PlayerIdx; online-MP side-effect: P2 collision radius *= 0.66 (Defunct)
+    void SetForPlayer(int playerIdx);
+
+    // Binary @ 0x001761d8 — virtual Entity::Release override
+    void Release() override;
+
+    // Binary @ 0x00175ba4 — fact-of-the-day picker with save-data round-robin
+    static const char* GetFact(int* outType, int* outFactIdx, int fruitType, int factIdx);
+
+    // Binary @ 0x001756dc — replace m_pEmitter1 with a custom trail emitter
+    bool SetTrailParticles(unsigned long emitterHash);
+
+    // Binary @ 0x00175988 — push bombs away from this fruit (X axis) when within 70px and matching velocity
+    void UpdateBombAvoidance(float dt);
+
+    // Binary @ 0x0017911c — releases the FruitModelInfo[] array + per-MP-player SmartPtr slots; called on shutdown
+    static void DestroyFruitModels();
 };
 
 #endif

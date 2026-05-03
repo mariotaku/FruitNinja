@@ -1,6 +1,7 @@
 #include "Fruit.h"
 #include "ActorManager.h"
 #include "FruitInfo.h"
+#include "Bomb.h"
 #include "SlashEntity.h"
 #include "SplatEntity.h"
 #include "render/Renderer.h"
@@ -16,6 +17,7 @@
 #include "game/ScoreState.h"
 #include "game/WaveManager.h"
 #include "game/GameOver.h"
+#include "engine/network/NetworkManager.h"
 #include "game/FruitSaveData.h"
 #include "util/StringHash.h"
 #include "Game.h"
@@ -29,6 +31,11 @@
 #include <vector>
 
 // Analysed: 2026-04-29T00:00
+
+// Fruit.cpp uses FruitInfo as both a struct name (global) and a static
+// method name (Fruit::FruitInfo). Alias the struct at file scope so all
+// local declarations can use the unambiguous name FruitInfoData.
+typedef ::FruitInfo FruitInfoData;
 
 // Count of active power-fruits (FruitInfo::m_pPowers != nullptr) on screen.
 // Decremented by KillFruit on natural-expiry path (flag 0x10 not yet set).
@@ -167,7 +174,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
         // Vec3::One at BSS 0x1F4334 — a constant singleton for (1,1,1), not a
         // mutable scale variable. Matches binary: _Vector3::operator*(Vec3*, float*)
         // in SetFruitType (0x17621c) multiplies Vec3::One by m_Scale then 0.01.
-        const FruitInfo* info = FruitInfo_Get(fruitType);
+        const FruitInfoData* info = FruitInfo_Get(fruitType);
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
         scale = Vec3::One() * fruitScale;
 
@@ -191,7 +198,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     Game* game = Game::GetInstance();
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
     if (game && meshMgr) {
-        const FruitInfo* info = FruitInfo_Get(fruitType);
+        const FruitInfoData* info = FruitInfo_Get(fruitType);
         const char* modelName = (info && info->m_ModelName[0]) ? info->m_ModelName : "apple";
         std::string meshPath = game->data_dir + "/models/Fruit/" + modelName + "_single.mmd";
         m_Model = meshMgr->Load(meshPath.c_str());
@@ -505,7 +512,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
     }
 
     if (doMissPenalty) {
-        const FruitInfo* info = FruitInfo_Get(m_FruitType);
+        const FruitInfoData* info = FruitInfo_Get(m_FruitType);
         if (!m_bNoPowerUp && !m_bSliced && info && info->m_Score < 5) {
             Game* g = Game::GetInstance();
             if (g) {
@@ -543,7 +550,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
     //    else (count-1). Port previously used conditional decrement which pinned
     //    the counter at 1 across multiple natural expirations.
     if (!(flags & 0x10)) {
-        const FruitInfo* killInfo = FruitInfo_Get(m_FruitType);
+        const FruitInfoData* killInfo = FruitInfo_Get(m_FruitType);
         if (killInfo && killInfo->m_pPowers) {
             int v = g_PowerFruitCount;
             int newv = 0;
@@ -699,7 +706,7 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
     // Guard: already sliced or slice timer is positive → double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return;
 
-    const FruitInfo* info = FruitInfo_Get(m_FruitType);
+    const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     const bool isSpecial  = (info && info->m_Score == 0x32);
 
     // ASM-verified: 2026-04-29T00:00Z binary @ 0x001780f0 (asm-inspector)
@@ -916,7 +923,7 @@ void Fruit::Slice() {
     }
 
     // Special-fruit (baseScore == 0x32 = 50) also gets 1.5× impulse.
-    const FruitInfo* info = FruitInfo_Get(m_FruitType);
+    const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     if (info && info->m_Score == 0x32) {
         impulse *= 1.5f;
         splatCount += 2;
@@ -1130,7 +1137,7 @@ int Fruit::FruitType(const char* name, bool fallbackRandom) {
     if (name && *name) {
         const uint32_t hash = StringHash(name);
         for (int i = 0; i < count; i++) {
-            const FruitInfo* info = FruitInfo_Get(i);
+            const FruitInfoData* info = FruitInfo_Get(i);
             if (info && (info->m_NameHash == hash || info->m_NameHashUpper == hash)) {
                 return i;
             }
@@ -1184,7 +1191,7 @@ void Fruit::LoadFruitModels() {
 
     int loaded = 0;
     for (int i = 0; i < n; ++i) {
-        const FruitInfo* info = FruitInfo_Get(i);
+        const FruitInfoData* info = FruitInfo_Get(i);
         if (!info || !info->m_ModelName[0]) continue;
 
         const char* name = info->m_ModelName;
@@ -1256,9 +1263,9 @@ int Fruit::RandomFruit(bool includeOnSide) {
     if (s_TotalWeight < 1) {
         int wT = 0, wA = 0, wC = 0, wCA = 0;
         const int count = FruitInfo_GetCount();
-        FruitInfo* arr = FruitInfo_GetArray();
+        FruitInfoData* arr = FruitInfo_GetArray();
         for (int i = 0; i < count; ++i) {
-            FruitInfo* fi = &arr[i];
+            FruitInfoData* fi = &arr[i];
             wT += fi->m_Chance;
             fi->m_CumWeight = wT;
             if (fi->m_CoinsMax < 1) wA += fi->m_Chance;       // binary +0x328
@@ -1287,7 +1294,7 @@ int Fruit::RandomFruit(bool includeOnSide) {
             uint32_t r = rng->Rand32((uint32_t)s_TotalAvail);
             int acc = 0;
             for (int i = 0; i < count; ++i) {
-                const FruitInfo* fi = FruitInfo_Get(i);
+                const FruitInfoData* fi = FruitInfo_Get(i);
                 if (fi->m_CoinsMax < 1) {                      // binary +0x328
                     acc += fi->m_Chance;
                     if (r < (uint32_t)acc) return i;
@@ -1303,7 +1310,7 @@ int Fruit::RandomFruit(bool includeOnSide) {
             uint32_t r = rng->Rand32((uint32_t)s_TotalCritAvail);
             int acc = 0;
             for (int i = 0; i < count; ++i) {
-                const FruitInfo* fi = FruitInfo_Get(i);
+                const FruitInfoData* fi = FruitInfo_Get(i);
                 if (fi->m_CoinsMax < 1 && fi->m_bScorable) {   // binary +0x328, +0x318
                     acc += fi->m_Chance;
                     if (r < (uint32_t)acc) return i;
@@ -1413,6 +1420,225 @@ static void AddQuad(QUADCUSTOMVERTEX** out, float cx, float cy, float w, float h
 
     *out += 6;
 }
+
+// ============================================================
+// Chunk A: pure-data accessors
+// ============================================================
+
+// Binary @ 0x00174f18
+const char* Fruit::FruitTypeName(long type) {
+    const FruitInfoData* info = FruitInfo_Get((int)type);
+    return info ? info->m_Name : nullptr;
+}
+
+// Binary @ 0x00174f38
+unsigned long Fruit::FruitTypeHash(long type) {
+    const FruitInfoData* info = FruitInfo_Get((int)type);
+    return info ? (unsigned long)info->m_NameHash : 0UL;
+}
+
+// Binary @ 0x00174f5c
+const char* Fruit::FruitFactTexture(long type) {
+    const FruitInfoData* info = FruitInfo_Get((int)type);
+    return info ? info->m_FactTexture : nullptr;
+}
+
+// Binary @ 0x00174f80
+Colour Fruit::FruitTypeColour(long type) {
+    // TODO: 0x00174fbc/0x00174fc0 — special-fruit colour override (StarFruit etc.); default specialIdx=-1 means no override
+    const FruitInfoData* info = FruitInfo_Get((int)type);
+    if (!info) return Colour(255, 255, 255, 255);
+    return Colour(info->m_FruitColour[0], info->m_FruitColour[1],
+                  info->m_FruitColour[2], info->m_FruitColour[3]);
+}
+
+// Binary @ 0x00174fc8
+Colour Fruit::FruitFactColour(long type) {
+    const FruitInfoData* info = FruitInfo_Get((int)type);
+    if (!info) return Colour(255, 255, 255, 255);
+    return Colour(info->m_FactColour[0], info->m_FactColour[1],
+                  info->m_FactColour[2], info->m_FactColour[3]);
+}
+
+// Binary @ 0x00174ff8
+const ::FruitInfo* Fruit::FruitInfo(long type) {
+    return FruitInfo_Get((int)type);
+}
+
+// ============================================================
+// Chunk B: small helpers
+// ============================================================
+
+// Binary @ 0x00176184 — local-MP "did a player drop their last life" check.
+// Port: FN::GameOver is wired; the multi-player player-count gate is not yet
+// ported (GetNumActiveForPlayer doesn't filter by player yet). Stub the
+// per-player gating and call GameOver when count hits zero for player 0.
+void Fruit::CheckFruitDropped() {
+    // TODO: 0x00176184 — per-player live-count gate (local-MP); needs
+    // GetNumActiveForPlayer player filtering + per-player life tracking.
+    // For now: single-player path only.
+    if (GetNumActiveForPlayer(0, false) == 0) {
+        FN::GameOver(-1, -1.0f, -1);
+    }
+}
+
+// Binary @ 0x00175624 — "is either half outside the play field" predicate.
+// Play-field bounds match PostUpdate (±192 X, ±128 Y) plus 50*scale margin.
+bool Fruit::IsOffscreen() const {
+    const float margin = 50.0f * scale.y;
+    const float xBound = 192.0f + margin;
+    const float yBound = 128.0f + margin;
+
+    if (pos.x < -xBound || pos.x > xBound) return true;
+    if (pos.y < -yBound || pos.y > yBound) return true;
+    if (m_bSliced) {
+        if (m_SecondPos.x < -xBound || m_SecondPos.x > xBound) return true;
+        if (m_SecondPos.y < -yBound || m_SecondPos.y > yBound) return true;
+    }
+    return false;
+}
+
+// Binary @ 0x00176354
+void Fruit::EnableCollision(bool enable) {
+    if (enable) {
+        const FruitInfoData* info = FruitInfo_Get(m_FruitType);
+        const float fScale   = info ? info->m_Scale          : 25.0f;
+        const float fColBase = info ? info->m_CollisionScale : 1.0f;
+        const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
+        if (!m_Col) m_Col = new Mortar::ColSphere();
+        m_Col->center = Vec3(pos.x, pos.y, 0.0f);
+        m_Col->radius = radius;
+    } else {
+        delete m_Col;
+        m_Col = nullptr;
+    }
+}
+
+// Binary @ 0x00175b78
+void Fruit::SetForPlayer(int playerIdx) {
+    m_PlayerIdx = (uint32_t)playerIdx;
+    // Defunct: online-mp — P2 collision radius *= 0.66; binary @ 0x00175b78
+    // Mortar::NetworkManager::GetInstance().IsOnlineMultiplayer() is always false in port.
+    if (Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer()) {
+        if (playerIdx == 1 && m_Col) {
+            m_Col->radius *= 0.66f;
+        }
+    }
+}
+
+// Binary @ 0x001761d8 — virtual Entity::Release override.
+// Called by ActorManager teardown before the destructor.
+void Fruit::Release() {
+    if (m_pEmitter1) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
+        m_pEmitter1 = nullptr;
+    }
+    if (m_pEmitter2) {
+        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
+        m_pEmitter2 = nullptr;
+    }
+    if (m_pSlasher && m_pSlasher->m_pCurrentTarget == this) {
+        m_pSlasher->m_pCurrentTarget = nullptr;
+    }
+    m_pSlasher = nullptr;
+    Entity::Release();
+}
+
+// ============================================================
+// Chunk C: GetFact + SetTrailParticles
+// ============================================================
+
+// Binary @ 0x00175ba4 — fact-of-the-day picker with save-data round-robin
+// and exclude-special-fruits remap.
+const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int factIdx) {
+    const int count = FruitInfo_GetCount();
+    if (count <= 0) return nullptr;
+
+    // Remap fruitType: skip special-fruit entries (m_bSpecial != 0).
+    // Binary walks the array and builds a non-special subset for indexing.
+    int ft = fruitType;
+    if (ft < 0 || ft >= count) ft = 0;
+
+    // Advance to a fruit that has facts.
+    int attempts = 0;
+    while (attempts < count) {
+        const FruitInfoData* info = FruitInfo_Get(ft);
+        if (info && !info->m_bSpecial && info->m_FactCount > 0) break;
+        ft = (ft + 1) % count;
+        ++attempts;
+    }
+
+    const FruitInfoData* chosen = FruitInfo_Get(ft);
+    if (!chosen || chosen->m_FactCount <= 0) return nullptr;
+
+    int fi = factIdx % chosen->m_FactCount;
+
+    if (outType)    *outType    = ft;
+    if (outFactIdx) *outFactIdx = fi;
+
+    // TODO: FruitSaveData::AddToTotal — defer save-tracking; pick fact via raw modulo.
+    // Binary calls FruitSaveData::AddToTotal("facts", 1) and
+    // FruitSaveData::AddToTotal("<fruit>_fact", 1) here.
+
+    return chosen->m_pFacts ? chosen->m_pFacts[fi] : nullptr;
+}
+
+// Binary @ 0x001756dc — replace m_pEmitter1 with a custom trail emitter.
+bool Fruit::SetTrailParticles(unsigned long emitterHash) {
+    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+
+    // Binary: EmitterExists check before replace. Port uses FindTemplate
+    // as the equivalent gate (AddEmitter returns nullptr for unknown hashes).
+    if (!pm.FindTemplate((uint32_t)emitterHash)) return false;
+
+    if (m_pEmitter1) {
+        pm.ClearEmitter(m_pEmitter1);
+        m_pEmitter1 = nullptr;
+    }
+    m_pEmitter1 = pm.AddEmitter((uint32_t)emitterHash, nullptr, /*persistent=*/true);
+    if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
+    return m_pEmitter1 != nullptr;
+}
+
+// ============================================================
+// Chunk D: UpdateBombAvoidance + DestroyFruitModels
+// ============================================================
+
+// Binary @ 0x00175988 — push bombs away from this fruit on the X axis
+// when they are within 70px and have matching velocity direction.
+void Fruit::UpdateBombAvoidance(float dt) {
+    static const float AVOIDANCE_RADIUS = 70.0f;   // from binary @ 0x00175988
+
+    ActorManager* am = ActorManager::GetInstance();
+    if (!am) return;
+
+    std::list<Entity*>::iterator it;
+    Entity* e = am->GetEntityFirst(1, it);   // entity type 1 = bomb
+    while (e) {
+        if (e->IsActive()) {
+            Vec3 diff = e->pos - pos;
+            float dist = fabsf(diff.x);
+            if (dist < AVOIDANCE_RADIUS) {
+                // Push bomb away on X axis when velocities agree in direction.
+                float pushDir = (diff.x >= 0.0f) ? 1.0f : -1.0f;
+                if ((e->vel.x * pushDir) >= 0.0f) {
+                    e->vel.x += pushDir * dt * 16.0f;
+                }
+            }
+        }
+        e = am->GetEntityNext(1, it);
+    }
+}
+
+// Binary @ 0x0017911c — releases the FruitModelInfo[] array.
+void Fruit::DestroyFruitModels() {
+    s_FruitModels.clear();
+    s_FruitModelsLoaded = false;
+    // TODO: 0x0017911c — per-MP-player SmartPtr cleanup pending FruitModelInfo struct expansion
+    // (m.slot[p+4] for p=0..3; requires FruitModelInfo extended to 0x24 bytes)
+}
+
+// ============================================================
 
 void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
     // DIFFERS: m_PlayerIdx not ported; same-screen MP shadow mirror skipped.

@@ -553,7 +553,7 @@ void GameOverScreen::Update(float dt) {
             m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
             m_pFruitFact->pos.z = 0.0f;
             m_pFruitFact->m_PomCount  = (uint8_t)m_PomCount;
-            m_pFruitFact->m_StarCount = (uint8_t)m_StarCount;
+            m_pFruitFact->m_StarType  = (uint8_t)m_StarCount;
             if (game->hud) game->hud->AddControl(m_pFruitFact, false);
             m_pFruitFact->Init();
         }
