@@ -13,11 +13,26 @@
 //
 
 #include "HUDControl3d.h"
+#include "engine/asset/Texture.h"
+#include "engine/math/Vec2.h"
 #include "engine/util/Delegate.h"
+#include "engine/util/SmartPtr.h"
 #include <cstdint>
+#include <list>
 
 class Entity;
 class Fruit;
+
+// MenuButtonAddOn — child sprite metadata for AddPeice/UpdatePeices.
+// 24 bytes; copy-constructible POD. Stored in std::list<MenuButtonAddOn> m_AddOns at MenuButton +0x10C.
+// Binary @ 0x00150240 (AddPeice)
+struct MenuButtonAddOn {
+    HUDControl3d* control;   // +0x00
+    Vec2*         texCoord;  // +0x04 (param_5 from AddPeice; usually NULL)
+    Vec3          offset;    // +0x08 local position relative to parent
+    Vec3          sizeScale; // +0x14 local size multiplier
+    // NOTE: offset.y is reused as per-frame angular velocity by UpdatePeices
+};
 
 // Matches ClearMenuItems @ 0x0016ac7c. Cascades release on every active
 // menu fruit/bomb: sets m_bSliced + outward random velocity on fruits,
@@ -78,7 +93,12 @@ public:
     // +0x100: hit-test bounds scale from constructor
     Vec3 m_HitBoundsScale;
 
-    // +0x114, +0x118: text labels (original: BakedString* fg / shadow).
+    // +0x10C: child sprite list for AddPeice/UpdatePeices/DeletePeices.
+    // Binary: std::list<MenuButtonAddOn> = 12 bytes on Bada libstdc++.
+    // Port: sizeof may differ on host ABI (documented limitation per CLAUDE.md).
+    std::list<MenuButtonAddOn> m_AddOns;   // +0x10C
+
+    // +0x118, +0x11C: text labels (original: BakedString* fg / shadow).
     // RE'd 2026-04-29: MenuButton::SetText (0x0014ebc0) is the only
     // writer, and the binary contains ZERO call sites for it. Both
     // pointers are always NULL at runtime; the label-render block in
@@ -143,26 +163,65 @@ public:
     MenuButton();
     ~MenuButton();
 
+    // HUDControl overrides
+    void Init() override;
+    void Reset() override;
+    void BeginDraw(float dt) override;
+    void PreDraw(const Vec3& hudScale) override;
+    void Update(float dt) override;
+    void Draw(const Vec3& hudScale, int layerMask) override;
+    void Release() override;
+    void Skip() override;
+    void SetToMultiplayerState() override;
+
     // Matches MenuButton::Init (0x0014ee40, 222 lines)
     // Creates entity, sets callbacks, random rotation
     void Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
               int fruitType, const Vec3& hitBounds,
               Mortar::Delegate<void()> deletedCb);
 
-    // HUDControl overrides
-    void Update(float dt) override;
-    void Draw(const Vec3& hudScale, int layerMask) override;
-    void Release() override;
-
     // Matches MenuButton::SetNewSymbol (0x0014e404).
-    // If show=true and timer<0: sets timer=0.0 (start showing badge).
-    // If show=false and timer>=0: sets timer=-1.0 (hide badge).
     void SetNewSymbol(bool show);
+
+    // Binary @ 0x0014e3bc — sets m_ShakeTimer (zero call sites in binary)
+    void Shake(float t);
+
+    // Binary @ 0x0014e434 — returns (m_NewIndicatorTimer >= 0)
+    bool HasNewSymbol() const;
+
+    // Binary @ 0x0014e484 — returns (m_SparkleTimer >= 0); dead in shipped binary
+    bool IsLoadingSymbol() const;
+
+    // Binary @ 0x0014e45c — arms sparkle timer; dead in shipped binary
+    void SetLoadingSymbol(bool show);
+
+    // Binary @ 0x0014ebc0 — builds curved-text BakedString pair; zero call sites in shipped binary
+    void SetText(const char* text, Colour fg, Colour shadow, float radius);
+
+    // Binary @ 0x0014ed18 — release fruit piece with upward fling; dead in shipped binary
+    void Remove();
+
+    // Binary @ 0x0014e5cc — fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
+    bool TouchReleased();
+
+    // Binary @ 0x00150240 — spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
+    void AddPeice(SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
+                  float rotSpeed, float initialTimer,
+                  Vec3 offset, Vec3 sizeScale,
+                  Colour tint, int layerFlags);
+
+    // Binary @ 0x0014e49c — per-addon position/size update
+    void UpdatePeices(float dt);
+
+    // Binary @ 0x0014f74c — detach and mark addons for HUD removal
+    void DeletePeices();
+
+    // Binary @ 0x0014e54c — addon's HUD-side removal callback
+    void DeletedPeice(HUDControl* hudControl);
 
     // Replaces m_ClickCallback. Used by ScreenButton::ShrinkButtonCall
     // (binary @ 0x001300f0) to swap a button's tap handler from the
-    // normal action to the shrink-and-disappear handler. Stub for now;
-    // delegate copy is straightforward.
+    // normal action to the shrink-and-disappear handler.
     void SetCallback(const Mortar::Delegate<void()>& cb) { m_ClickCallback = cb; }
 
     // Matches MenuButton::LoadContent (0x0014f674) — loads 3 shared textures

@@ -11,6 +11,7 @@
 
 // Analysed: 2026-04-28T14:00
 #include "MenuButton.h"
+#include "HUD.h"
 #include "Game.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
@@ -272,19 +273,108 @@ void MenuButton::Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
     }
 }
 
-// Matches MenuButton::Release (binary @ 0x0014f7e0)
+// Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0014f7e0 (asm-inspector)
 void MenuButton::Release() {
-    // Binary @ 0x0014f7e0 does NOT touch m_pEntity flags. It only clears
-    // a backref field on the entity (`entity+0x108` for fruit, `entity+0x84`
-    // for bomb) and deletes labels. The port doesn't model those backref
-    // fields yet, so just null our local pointers and let the entity stay
-    // alive in ActorManager -- the fruit's own physics carries it
-    // off-screen, where CheckHasGoneOffscreen kills it normally.
+    Entity* e = m_pFruitPiece;
+    if (e) {
+        int bombThreshold = FruitInfo_GetCount();
+        if (m_FruitType < bombThreshold) {
+            // TODO: 0x0014f7e0 -- Fruit::m_pMenuButton backref at +0x108 not yet modeled
+        } else if (m_FruitType == bombThreshold) {
+            static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
+        }
+    }
+    delete m_pLabel1; m_pLabel1 = nullptr;
+    delete m_pLabel2; m_pLabel2 = nullptr;
+    DeletePeices();
+    // TODO: 0x0014f7e0 -- m_SecondaryTex SmartPtr<Texture> drop not applicable;
+    //   HUDControl3d::m_SecondaryTex is GLuint in port (no ref-counting needed)
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
-    m_pLabel1 = nullptr;
-    m_pLabel2 = nullptr;
+}
+
+// Binary @ 0x0014e3ac — vtable Init slot, calls vtable Reset (no-op for MenuButton)
+void MenuButton::Init() { Reset(); }
+
+// Binary @ 0x0014e3b8 — Reset is a no-op (vtable slot +0x10)
+void MenuButton::Reset() {}
+
+// Binary @ 0x0014e3f8 — vtable Skip slot, snaps grow-in to full (m_FadeCounter=0x3ffc)
+void MenuButton::Skip() { m_FadeCounter = 0x3ffc; }
+
+// Binary @ 0x0014e3bc — sets m_ShakeTimer (zero call sites in binary)
+void MenuButton::Shake(float t) { m_ShakeTimer = t; }
+
+// Binary @ 0x0014e434 — returns (m_NewIndicatorTimer >= 0)
+bool MenuButton::HasNewSymbol() const { return m_NewIndicatorTimer >= 0.0f; }
+
+// Binary @ 0x0014e484 — returns (m_SparkleTimer >= 0); dead in shipped binary
+bool MenuButton::IsLoadingSymbol() const { return m_SparkleTimer >= 0.0f; }
+
+// Binary @ 0x0014e45c — arms sparkle timer; dead in shipped binary
+void MenuButton::SetLoadingSymbol(bool show) {
+    if (m_SparkleTimer < 0.0f) {
+        if (show) m_SparkleTimer = 0.0f;
+    } else {
+        if (!show) m_SparkleTimer = -1.0f;
+    }
+}
+
+// Binary @ 0x0014ebc0 — builds curved-text BakedString pair; zero call sites in shipped binary
+void MenuButton::SetText(const char* text, Colour fg, Colour shadow, float radius) {
+    (void)text; (void)fg; (void)shadow; (void)radius;
+    // TODO: 0x0014ebc0 -- curved-text BakedString pair; zero call sites in shipped binary
+}
+
+// Binary @ 0x0014ed18 — release fruit piece with upward fling; dead in shipped binary
+void MenuButton::Remove() {
+    if (!m_pFruitPiece) return;
+    if (m_pFruitPiece->m_bSliced) return;
+    m_pFruitPiece->m_bDrawWhole = true;
+    float vx = RandScaled(10.0f) - 5.0f;
+    float vy = -(RandScaled(5.0f));
+    m_pFruitPiece->vel = Vec3(vx, vy, 0.0f);
+    m_pFruitPiece->m_SecondVel = m_pFruitPiece->vel;
+    m_pEntity = nullptr;
+    m_pFruitPiece = nullptr;
+}
+
+// Binary @ 0x0014e5cc — fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
+bool MenuButton::TouchReleased() {
+    if (m_FruitType < 0 && m_bVisible) {
+        m_ClickCallback();
+    } else if (m_pEntity != nullptr) {
+        // TODO: 0x0014e5cc -- TutorialControl::ButtonPressedAtPos not yet ported
+    }
+    m_DeletedCallback();
+    return true;
+}
+
+// Binary @ 0x0014e44c — vtable BeginDraw slot; re-arms m_LayerFlags=0x40 each frame for fruit-type buttons
+void MenuButton::BeginDraw(float dt) {
+    (void)dt;
+    if (m_FruitType >= 0) {
+        m_LayerFlags = 0x40;
+    }
+}
+
+// Binary @ 0x0014e448 — vtable PreDraw slot, no-op
+void MenuButton::PreDraw(const Vec3& hudScale) { (void)hudScale; }
+
+// Binary @ 0x0014e590 — kills owned fruit/bomb then defers to base SetToMultiplayerState
+void MenuButton::SetToMultiplayerState() {
+    Entity* e = m_pFruitPiece ? static_cast<Entity*>(m_pFruitPiece) : m_pEntity;
+    if (e) {
+        if (e->entityType == 0) {
+            // TODO: 0x0014e590 -- Fruit::KillFruit not yet ported
+        } else if (e->entityType == 1) {
+            // TODO: 0x0014e590 -- Bomb::KillBomb not yet ported
+        }
+    }
+    m_pEntity = nullptr;
+    m_pFruitPiece = nullptr;
+    HUDControl::SetToMultiplayerState();
 }
 
 // Matches MenuButton::SetNewSymbol (0x0014e404)
@@ -300,6 +390,8 @@ void MenuButton::SetNewSymbol(bool show) {
 
 // Matches MenuButton::Update (0x0014e614)
 void MenuButton::Update(float dt) {
+    UpdatePeices(dt);
+
     // Hardware Back/Menu key auto-fire. Binary @ 0x0014e9a8: when
     // m_bHighlighted && Game::m_BackKeyPressed && m_bRespondsToBackKey,
     // simulate slice (Fruit) or fire click delegate (Bomb). The port
@@ -787,6 +879,91 @@ void MenuButton::UnLoadContent() {
     s_TexScratchs.SetNull();
     s_TexBlurryBacking.SetNull();
     s_TexNewItem.SetNull();
+}
+
+// Binary @ 0x00150240 — spawn child HUDControl3d sprite, attach to HUD + m_AddOns list,
+// callback DeletedPeice on removal.
+void MenuButton::AddPeice(SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
+                          float rotSpeed, float initialTimer,
+                          Vec3 offset, Vec3 sizeScale,
+                          Colour tint, int layerFlags) {
+    HUDControl3d* c = new HUDControl3d();
+    c->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>::Make(
+        this, &MenuButton::DeletedPeice);
+    c->m_LayerFlags  = layerFlags;
+    c->m_DrawColour  = tint;
+    if (uvOverride) {
+        c->m_UVLeft   = uvOverride->x;
+        c->m_UVTop    = uvOverride->y;
+        // UV rect override: assume (u0,v0) from Vec2; span defaults to 1
+        c->m_UVRight  = uvOverride->x + 1.0f;
+        c->m_UVBottom = uvOverride->y + 1.0f;
+    }
+    if (sizeScale.x == 0.0f && sizeScale.y == 0.0f) {
+        if (sizeScale.z == 0.0f) sizeScale.z = 1.0f;
+        // TODO: 0x00150240 -- pre-scale by tex dims * UV span needs tex->GetWidth/Height
+        // For now use sizeScale.z as uniform scale multiplier
+        sizeScale = Vec3(sizeScale.z, sizeScale.z, 0.0f);
+    }
+    // TODO: 0x00150240 -- HUDControl3d::m_SecondaryTex is GLuint not SmartPtr<Texture>;
+    //   tex SmartPtr stored in MenuButtonAddOn instead for now
+    c->pos   = pos;
+    c->m_Timer = initialTimer;
+    c->size  = size;
+
+    Game* game = Game::GetInstance();
+    if (game && game->hud) {
+        game->hud->AddControl(c, false);
+    }
+
+    MenuButtonAddOn addOn;
+    addOn.control   = c;
+    addOn.texCoord  = uvOverride;
+    addOn.offset    = offset;
+    addOn.sizeScale = sizeScale;
+    // NOTE: rotSpeed consumed via offset.y as per-frame angular velocity by UpdatePeices
+    (void)rotSpeed;
+    (void)tex;
+    m_AddOns.push_back(addOn);
+}
+
+// Binary @ 0x0014e49c — per-addon: m_Timer += dt * offset.y; pos = parent.pos+offset*ratio;
+// size = sizeScale * ratio
+void MenuButton::UpdatePeices(float dt) {
+    float ratio = (m_TargetSize.x > 0.0f) ? (size.x / m_TargetSize.x) : 1.0f;
+    for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
+         it != m_AddOns.end(); ++it) {
+        HUDControl3d* c = it->control;
+        if (!c) continue;
+        c->m_Timer += dt * it->offset.y;
+        c->pos = pos + it->offset * ratio;
+        c->size = it->sizeScale * ratio;
+    }
+}
+
+// Binary @ 0x0014f74c — detach addons' remove callbacks, mark each for HUD removal,
+// clear m_AddOns
+void MenuButton::DeletePeices() {
+    for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
+         it != m_AddOns.end(); ++it) {
+        HUDControl3d* c = it->control;
+        if (c) {
+            c->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>();
+            c->m_bPendingRemoval = 1;
+        }
+    }
+    m_AddOns.clear();
+}
+
+// Binary @ 0x0014e54c — addon's HUD-side removal callback; erase matching entry from m_AddOns
+void MenuButton::DeletedPeice(HUDControl* hudControl) {
+    for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
+         it != m_AddOns.end(); ++it) {
+        if (it->control == hudControl) {
+            m_AddOns.erase(it);
+            return;
+        }
+    }
 }
 
 // Removed: HitTest, TouchDown, TouchUp. Touch input is now polled inside
