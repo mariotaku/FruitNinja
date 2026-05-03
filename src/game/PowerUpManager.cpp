@@ -122,7 +122,7 @@ void PowerUpManager::Update(float dt) {
     auto eit = m_ActiveScreenEffects.begin();
     while (eit != m_ActiveScreenEffects.end()) {
         eit->Update(dt, 0.0f, 0.0f);   // DAT_00118b9c = 0.0f
-        if (eit->m_Lifetime <= 0.0f) {
+        if (eit->m_RemainingTime <= 0.0f) {
             eit->Deactivate();
             eit = m_ActiveScreenEffects.erase(eit);
         } else {

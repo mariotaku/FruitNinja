@@ -1,13 +1,98 @@
-// Analysed: 2026-04-30T00:00
-// SetupGameWork -- stub for binary 0x0010b4e8.
-// TODO: implement -- 16 field stores + AddToTotal("plays_total", +1) +
-//   copy saveData+0x110 into Game+0x30.
-//   See docs/engine/initialisation-asm-audit.md Section 4.
+// Analysed: 2026-05-03T00:00
+// SetupGameWork -- binary @ 0x0010b4e8.
 
-#include "SetupGameWork.h"
+#include "game/SetupGameWork.h"
+#include "Game.h"
+#include "game/FruitSaveData.h"
+#include "util/StringHash.h"
 
+// ASM-verified: 2026-05-03 binary @ 0x0010b4e8 (re-analyst)
+
+// Binary @ 0x0010b4e8: 23 field stores + plays_total bump.
 void SetupGameWork() {
-    // TODO: implement SetupGameWork (0x0010b4e8)
-    //   Sets gameMode=2 (Classic default), 15 other field stores,
-    //   increments "plays_total" save counter, copies saveData[+0x110] -> Game[+0x30].
+    Game* app = Game::GetInstance();
+    FruitSaveData* save = app->pSaveData;
+
+    // Bump cumulative play count.
+    save->AddToTotal("plays_total", StringHash("plays_total"), 1, true, true);
+
+    // 23 field stores (binary @ 0x0010b4e8 disasm-confirmed):
+
+    // +0x000: set task state to 2 (Game state; binary field is "m_GameMode" in spec,
+    //         maps to taskStateIndex in port which is 0=Splash/1=Frontend/2=Game).
+    app->taskStateIndex = 2;
+
+    // +0x006: retryFlag = 0.
+    app->retryFlag = 0;
+
+    // +0x010: bombHitTimer = 0.0f.
+    app->bombHitTimer = 0.0f;
+
+    // +0x18C: m_gameDataLicensedState = 0.
+    app->m_gameDataLicensedState = 0;
+
+    // +0x1AC: field_0x1AC = 0.0f.
+    // TODO: add field at +0x1AC to Game.h; stub store omitted until field exists.
+    // Binary: *(float*)(g_GameData + 0x1AC) = 0.0f;
+
+    // +0x01C: m_bUnsullied = 0.
+    app->m_bUnsullied = 0;
+
+    // +0x020..+0x028: retryPos = (0, 0, 0).
+    // Binary stores three separate zero words at +0x20, +0x24, +0x28 (Vec3).
+    app->retryPos.x = 0.0f;
+    app->retryPos.y = 0.0f;
+    app->retryPos.z = 0.0f;
+
+    // +0x02C: m_CritTimer = 0.0f.
+    app->m_CritTimer = 0.0f;
+
+    // +0x030: m_ScoreThreshold = save->m_CriticalChance.
+    // Binary spec label: "m_CritChanceCounter"; port field at +0x30 is m_ScoreThreshold.
+    // DIFFERS: binary stores FruitSaveData[+0x110] (m_CriticalChance) here; port
+    //          field name m_ScoreThreshold is provisional -- rename when RE confirms.
+    app->m_ScoreThreshold = save->m_CriticalChance;
+
+    // +0x034: field_0x34 = 0.
+    app->field_0x34 = 0;
+
+    // +0x088: field_0x88 = 50.0f.
+    // DAT_0010b578 confirmed = 0x42480000 = 50.0f.
+    app->field_0x88 = 50.0f;
+
+    // +0x160: mainScreen = 0 (clear pointer).
+    app->mainScreen = nullptr;
+
+    // +0x164: pGameOverScreen = 0 (clear pointer).
+    app->pGameOverScreen = nullptr;
+
+    // +0x16C: field_0x16C = 0.
+    // TODO: add field at +0x16C to Game.h; stub store omitted until field exists.
+    // Binary: *(int*)(g_GameData + 0x16C) = 0;
+
+    // +0x170: field_0x170 = 0.
+    // TODO: add field at +0x170 to Game.h; stub store omitted until field exists.
+    // Binary: *(int*)(g_GameData + 0x170) = 0;
+
+    // +0x198: field_0x198 = 0.
+    // TODO: add field at +0x198 to Game.h; stub store omitted until field exists.
+    // Binary: *(byte*)(g_GameData + 0x198) = 0;
+
+    // +0x199: field_0x199 = 0.
+    // TODO: add field at +0x199 to Game.h; stub store omitted until field exists.
+    // Binary: *(byte*)(g_GameData + 0x199) = 0;
+
+    // +0x19E: field_0x19E = 0.
+    // TODO: add field at +0x19E to Game.h; stub store omitted until field exists.
+    // Binary: *(byte*)(g_GameData + 0x19E) = 0;
+
+    // +0x1A0: m_MenuReturnTimer = 0.0f.
+    app->m_MenuReturnTimer = 0.0f;
+
+    // +0x1A8: flag_0x1a8 = 0.
+    app->flag_0x1a8 = 0;
+
+    // +0x1B0: field_0x1B0 = 0.
+    // TODO: add field at +0x1B0 to Game.h; stub store omitted until field exists.
+    // Binary: *(int*)(g_GameData + 0x1B0) = 0;
 }

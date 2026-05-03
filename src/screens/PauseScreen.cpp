@@ -5,8 +5,14 @@
 // See docs/engine/pausescreen-deep-re.md for full spec.
 //
 // Tier-1 scope: SP-only path, states 0/2/3/4/5/6, three P1 buttons.
-// Tier-2 deferred: P2 buttons (+0x9c/+0xa4/+0xb0), state 1 (bomb-flash),
-//   HitMenuBomb in state 6, SetSingular, reveal-timer grace, retry slide-in.
+//
+// Tier-2 items pending split-screen MP and BombFlashFull port:
+// - L154/L168 P2 buttons (binary +0x9c/+0xa4/+0xb0): P2-side resume/retry/quit slots.
+// - State 1 bomb-flash (binary @ 0x00168f24 BombFlashFull): full-screen white-flash on
+//   menu-bomb hit; gates state 6 dismissal.
+// - HitMenuBomb in state 6 (binary @ 0x0016b234): when game state != 1, plays "MenuBomb"
+//   SFX, sets g_GameData[0xf8]=1, writes hit position to g_GameData[0xcc/d0/d4].
+// All three depend on subsystems not yet ported. Specs are RE-complete.
 
 #include "screens/PauseScreen.h"
 #include "hud/MenuButton.h"
@@ -91,16 +97,29 @@ void PauseScreen::PauseGame() {
     reinterpret_cast<uint8_t*>(game)[0x0c] = 0;
 }
 
+// ASM-verified: 2026-05-03 binary @ 0x00168fb0 (re-analyst)
 // Matches UnpauseGame (0x00168fb0):
 //   *(undefined4*)(game+0x10) = DAT_00168fcc;  -- restore timer
 //   *(byte*)(game+0x0c) = 1;
 void PauseScreen::UnpauseGame() {
     Game* game = Game::GetInstance();
     if (!game) return;
-    // game+0x10 = bombHitTimer (float); binary restores it from a DAT constant.
-    // DIFFERS: DAT_00168fcc value not fully resolved. Port writes 0.0f (timer cleared).
-    game->bombHitTimer = 0.0f;
+    // game+0x10 = bombHitTimer (float); binary @ DAT_00168fcc = 0.4f.
+    game->bombHitTimer = 0.4f;   // DAT_00168fcc -- post-unpause grace window
     reinterpret_cast<uint8_t*>(game)[0x0c] = 1;
+}
+
+// -------------------------------------------------------------------------
+// IsEnabled (binary @ 0x00153e4c)
+// -------------------------------------------------------------------------
+
+// ASM-verified: 2026-05-03 binary @ 0x00153e4c (re-analyst)
+bool PauseScreen::IsEnabled() const {
+    Game* g = Game::GetInstance();
+    if (!g) return false;
+    if (fabsf(g->m_TransitionTimer) < 0.001f) return false;  // [+0xc] epsilon
+    if (g->bombHitTimer > 0.0f)               return false;  // [+0x10]
+    return (g->pauseFlag ^ 1) != 0;                          // [+0x05] XOR 1
 }
 
 // -------------------------------------------------------------------------
@@ -278,11 +297,15 @@ void PauseScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
 
 // -------------------------------------------------------------------------
 // vtable[11]: SetToMultiplayerState -- Tier-2 stub
-// Binary: 0x00154060 swaps Resume button tex to retry tex
+// Binary: 0x00154060
 // -------------------------------------------------------------------------
 void PauseScreen::SetToMultiplayerState() {
-    // Tier-2: swap Resume button texture to m_RetryButtonTex (MP fallback)
-    // TODO: implement when P2 buttons are ported (Tier-2 item 11).
+    // Tier-2 deferred (binary @ 0x00154060): vtable[11], called from PauseScreen::Reset on MP entry.
+    // Body (3 stores):
+    //   1. m_RetryButton->m_SecondaryTex = SmartPtr::Null;     // retry+0x74
+    //   2. m_RetryButton->m_bHighlighted = 0;                  // retry+0x131 -- disable interactability
+    //   3. m_ResumeButton->m_SecondaryTex = m_RetryButtonTex;  // resume+0x74 -- show retry icon on resume btn
+    // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
 }
 
 // -------------------------------------------------------------------------
@@ -323,13 +346,22 @@ void PauseScreen::PauseGameCallback2() {
 
 // QuitGameCallback (binary 0x00153ebc)
 // Quit button press-action:
-//   State 3 -> 6; m_LastHitButton = 0; clear save totals
+//   State 3 -> 6; m_LastHitButton = 0; SaveCurrentData + quit-SFX call chain.
 void PauseScreen::QuitGameCallback() {
     if (m_State == 3) {
+        // Apply one-shot 0.5 multiplier on state-3->6 transition
+        // (binary @ 0x00154468 case 3 exit). Only on entry, not per-frame.
+        m_Alpha *= 0.5f;
         m_State = 6;
         m_LastHitButton = 0;
-        // Binary: clear save totals / combo here (SaveCurrentData path)
-        // Tier-1: just transition state.
+        // Binary @ 0x00153ebc: blx f25ac (SaveCurrentData/ClearTotals) +
+        //   blx f1b74 (SFX play call) sequence before setting state=6.
+        FruitNinja_SaveCurrentData(false);
+        // TODO: resolve SFX literal at binary @ 0xf1b74 thunk -- name unknown.
+        Game* game = Game::GetInstance();
+        if (game && game->pGameSound) {
+            game->pGameSound->SFXPlay("MenuQuit", 1.0f);
+        }
     }
 }
 
@@ -359,6 +391,7 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_ResumeButton);
+            m_ResumeButton->SetSingular();   // binary calls this -- pins button instead of cycling layers
         }
     }
 
@@ -375,6 +408,7 @@ void PauseScreen::Update(float dt) {
         m_QuitButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_QuitButton);
+            m_QuitButton->SetSingular();   // binary calls this -- pins button instead of cycling layers
         }
     }
 
@@ -391,6 +425,7 @@ void PauseScreen::Update(float dt) {
         m_RetryButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_RetryButton);
+            m_RetryButton->SetSingular();   // binary calls this -- pins button instead of cycling layers
         }
     }
 
@@ -464,11 +499,8 @@ void PauseScreen::Update(float dt) {
         break;
 
     case 6: // Quit confirm exit
-        // Extra half-step decay on entry (doc: "extra m_Alpha *= 0.5 once entering")
-        // Binary applies this once; since we're in the switch each frame we
-        // apply it continuously here -- binary does it pre-switch. Port
-        // mirrors by applying the extra decay then the standard decay.
-        m_Alpha *= 0.5f;
+        // 0.5 multiplier was applied once on state-3->6 transition in QuitGameCallback.
+        // Per-frame: standard 0.75 decay only (binary @ 0x00154468 case 6).
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             QuitToMenu();
@@ -491,10 +523,8 @@ void PauseScreen::Update(float dt) {
     // --- Post-switch unconditional math (doc section 4 items 1-7) ---
 
     // 1. m_ButtonFadeAlpha decay / restore
-    // IsEnabled() (binary 0x00153e4c) reads MainScreen state.
-    // Tier-1: treat as always-enabled (m_ButtonFadeAlpha decays toward 0).
-    // TODO: wire real IsEnabled() when MainScreen state machine is complete.
-    const bool isEnabled = true;
+    // IsEnabled() reads g_GameData fields (binary @ 0x00153e4c).
+    const bool isEnabled = IsEnabled();
     if (isEnabled) {
         m_ButtonFadeAlpha *= FADE_DECAY;
         if (m_ButtonFadeAlpha < 0.0f) m_ButtonFadeAlpha = 0.0f;

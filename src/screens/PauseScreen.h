@@ -124,6 +124,10 @@ public:
     void PauseGameCallback2();
     void QuitGameCallback();
 
+    // vtable[?]: IsEnabled -- binary @ 0x00153e4c
+    // Returns false while transition is in-flight or bomb hit timer running.
+    bool IsEnabled() const;
+
     // Engine pause helpers matching binary 0x00168f80 / 0x00168fb0
     static void PauseGame();
     static void UnpauseGame();

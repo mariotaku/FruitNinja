@@ -168,6 +168,10 @@ private:
     // them.
     void ButtonDeleted(HUDControl* ctrl);
 
+    // Port-specific: remove-callback helpers that null child screen pointers.
+    void DojoScreenRemoved(HUDControl*)    { m_pDojoScreen     = nullptr; }
+    void GameModeScreenRemoved(HUDControl*){ m_pGameModeScreen = nullptr; }
+
     // --- Callbacks ---
     void GameModeCallback();
     void NewGameCallback();

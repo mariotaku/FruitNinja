@@ -3,8 +3,30 @@
 #include "WaveModifier.h"
 #include "PowerUpManager.h"
 #include "WaveManager.h"
+#include "WaveStructs.h"
 #include "ItemParseUtil.h"
+#include "entities/Fruit.h"
+#include "util/StringHash.h"
 #include <tinyxml2.h>
+
+// Binary @ 0x00122c64. Re-rolls fruit-type indices from string-name vector.
+// m_FruitTypeNames holds one name per fruit slot (from XML "type" attr, split by SplitWords).
+// BOMB / BOMB_PINEAPPLE -> -2 (bomb sentinel); RANDOM -> RandomFruit(false); else FruitType lookup.
+void SPAWNER_INFO::SelectTypes() {
+    static const uint32_t kHashBomb        = StringHash("BOMB");
+    static const uint32_t kHashBombPineapp = StringHash("BOMB_PINEAPPLE");
+    static const uint32_t kHashRandom      = StringHash("RANDOM");
+    for (int i = 0; i < m_FruitTypeCount; ++i) {
+        m_pFruitTypeHashes[i] = -1;
+        uint32_t h = StringHash(m_FruitTypeNames[i].c_str());
+        if (h == kHashBomb || h == kHashBombPineapp)
+            m_pFruitTypeHashes[i] = -2;
+        else if (h == kHashRandom)
+            m_pFruitTypeHashes[i] = Fruit::RandomFruit(false);
+        else
+            m_pFruitTypeHashes[i] = Fruit::FruitType(m_FruitTypeNames[i].c_str(), false);
+    }
+}
 
 // PROBABILITY_OVERIDE::Parse — binary @ 0x001231d8
 void PROBABILITY_OVERIDE::Parse(tinyxml2::XMLElement* xml) {

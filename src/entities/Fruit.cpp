@@ -102,6 +102,7 @@ Fruit::Fruit()
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
     , m_PlayerIdx(0)
+    , m_TimeScale(1.0f)
     , m_ZPosition(0.0f)
 {
     entityType = 0;
@@ -127,6 +128,7 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_ScaleAnim = 0.0f;
     m_ChuckDelay = 0.0f;
     m_PlayerIdx = 0;
+    m_TimeScale = 1.0f;
     flags &= ~ENT_SKIP_MASK;  // activate + unhide
 
     // Reset slice state (binary Fruit::Init — m_SliceTimer = -1).
@@ -375,13 +377,13 @@ static bool IsZenStrictBounceActive() {
 // Y = ±128 (DAT_001751a8 / 751ac). Push / rotAxis magnitudes from
 // the disassembly: vel += ±16*dt, rotAxis += ±20.
 void Fruit::PostUpdate(float dt) {
-    static constexpr float ROT_AXIS_DAMPING = 0.9f;    // DAT_0017519c
-    static constexpr float BOUND_X_LO = -192.0f;       // DAT_001751a0
-    static constexpr float BOUND_X_HI =  192.0f;       // DAT_001751a4
-    static constexpr float BOUND_Y_LO = -128.0f;       // DAT_001751a8
-    static constexpr float BOUND_Y_HI =  128.0f;       // DAT_001751ac
-    static constexpr float PUSH_VEL   = 16.0f;
-    static constexpr float PUSH_ROT   = 20.0f;
+    static const float ROT_AXIS_DAMPING = 0.9f;    // DAT_0017519c
+    static const float BOUND_X_LO = -192.0f;       // DAT_001751a0
+    static const float BOUND_X_HI =  192.0f;       // DAT_001751a4
+    static const float BOUND_Y_LO = -128.0f;       // DAT_001751a8
+    static const float BOUND_Y_HI =  128.0f;       // DAT_001751ac
+    static const float PUSH_VEL   = 16.0f;
+    static const float PUSH_ROT   = 20.0f;
 
     m_RotAxis *= ROT_AXIS_DAMPING;
 
@@ -955,15 +957,12 @@ void Fruit::Slice() {
     const float sliceFactor = 0.7f;
 
     // Port the biased "rand(0x5550) retry if < 0x2aa8" pattern.
-    auto randBiased = []() -> float {
-        int r = rand() & 0x5550;
-        if (r < 0x2aa8) r = rand() & 0x5550;
-        return (float)r;
-    };
+    int _ra = rand() & 0x5550; if (_ra < 0x2aa8) _ra = rand() & 0x5550;
+    int _rb = rand() & 0x5550; if (_rb < 0x2aa8) _rb = rand() & 0x5550;
 
     // Angle offsets for the two halves — bound by `(1-softness)*4`.
-    const float randA = randBiased() * (1.0f - 0.3f) * 4.0f;
-    const float randB = randBiased() * (1.0f - 0.3f) * 4.0f;
+    const float randA = (float)_ra * (1.0f - 0.3f) * 4.0f;
+    const float randB = (float)_rb * (1.0f - 0.3f) * 4.0f;
     const int16_t offA = (int16_t)randA;
     const int16_t offB = (int16_t)randB;
 
@@ -1240,22 +1239,79 @@ const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
     return &s_FruitModels[fruitType];
 }
 
-// Matches Fruit::RandomFruit (binary @ 0x00176564, 113 instructions).
-// Binary: 4-path weighted selector using per-fruit m_Chance / m_bSpecial fields
-// and WaveManager::m_Random, gated by WaveManager::CriticalMode(0).
-//   includeOnSide=true  -> all fruits (uses cumulative m_Chance weights).
-//   includeOnSide=false -> only fruits with m_RandBonusMax < 1 (avail subset).
-//   Critical mode restricts to m_bSpecial fruits.
-// TODO: extend FRUIT_INFO with weight fields when LoadFruitInfo is fully ported
-//   (binary: m_RandBonusBase at +0x308, m_bSpecial at +0x318, m_RandBonusMax at +0x328
-//    do NOT match the current FruitInfo struct layout — needs RE reconciliation first).
-// Fallback until then: uniform random over non-special fruit types via WaveManager RNG.
-int Fruit::RandomFruit(bool /*includeOnSide*/) {
-    int count = FruitInfo_GetCount();
-    if (count <= 0) return 0;
-    WaveManager* wm = WaveManager::GetInstance();
-    if (wm) return (int)wm->m_Random.Rand32((uint32_t)count);
-    return rand() % count;
+// Binary @ 0x00176564
+// 4-path weighted selector: {crit,normal} x {includeOnSide,avail-only}.
+// Lazy-init cumulative tables on first call via m_CumWeight / m_CumCritWeight cache fields.
+// Field usage (asm-inspector verified offsets):
+//   "available" gate  -> m_CoinsMax < 1  (+0x328, int)
+//   "critical"  gate  -> m_bScorable     (+0x318, byte)
+//   m_bSpecial (+0x319) is NOT read by this function.
+static int s_TotalWeight     = 0;
+static int s_TotalAvail      = 0;
+static int s_TotalCrit       = 0;
+static int s_TotalCritAvail  = 0;
+
+// ASM-verified: 2026-05-03T09:42 binary @ 0x00176564..0x001766f4 (asm-inspector)
+int Fruit::RandomFruit(bool includeOnSide) {
+    if (s_TotalWeight < 1) {
+        int wT = 0, wA = 0, wC = 0, wCA = 0;
+        const int count = FruitInfo_GetCount();
+        FruitInfo* arr = FruitInfo_GetArray();
+        for (int i = 0; i < count; ++i) {
+            FruitInfo* fi = &arr[i];
+            wT += fi->m_Chance;
+            fi->m_CumWeight = wT;
+            if (fi->m_CoinsMax < 1) wA += fi->m_Chance;       // binary +0x328
+            if (fi->m_bScorable) {                             // binary +0x318
+                wC += fi->m_Chance;
+                if (fi->m_CoinsMax < 1) wCA += fi->m_Chance;  // binary +0x328
+            }
+            fi->m_CumCritWeight = wC;
+        }
+        s_TotalWeight    = wT;
+        s_TotalAvail     = wA;
+        s_TotalCrit      = wC;
+        s_TotalCritAvail = wCA;
+    }
+
+    bool isCrit = WaveManager::GetInstance()->CriticalMode(0);
+    Random* rng = &WaveManager::GetInstance()->m_Random;
+    const int count = FruitInfo_GetCount();
+
+    if (!isCrit) {
+        if (includeOnSide) {
+            uint32_t r = rng->Rand32((uint32_t)s_TotalWeight);
+            for (int i = 0; i < count; ++i)
+                if (r < (uint32_t)FruitInfo_Get(i)->m_CumWeight) return i;
+        } else {
+            uint32_t r = rng->Rand32((uint32_t)s_TotalAvail);
+            int acc = 0;
+            for (int i = 0; i < count; ++i) {
+                const FruitInfo* fi = FruitInfo_Get(i);
+                if (fi->m_CoinsMax < 1) {                      // binary +0x328
+                    acc += fi->m_Chance;
+                    if (r < (uint32_t)acc) return i;
+                }
+            }
+        }
+    } else {
+        if (includeOnSide) {
+            uint32_t r = rng->Rand32((uint32_t)s_TotalCrit);
+            for (int i = 0; i < count; ++i)
+                if (r < (uint32_t)FruitInfo_Get(i)->m_CumCritWeight) return i;
+        } else {
+            uint32_t r = rng->Rand32((uint32_t)s_TotalCritAvail);
+            int acc = 0;
+            for (int i = 0; i < count; ++i) {
+                const FruitInfo* fi = FruitInfo_Get(i);
+                if (fi->m_CoinsMax < 1 && fi->m_bScorable) {   // binary +0x328, +0x318
+                    acc += fi->m_Chance;
+                    if (r < (uint32_t)acc) return i;
+                }
+            }
+        }
+    }
+    return (int)rng->Rand32((uint32_t)(count - 1));
 }
 
 // Matches Fruit::GetNumActiveForPlayer (0x00122a00).

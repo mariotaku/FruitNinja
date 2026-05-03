@@ -105,6 +105,11 @@ struct SPAWNER_INFO {
         m_pFruitTypeHashes = nullptr;
     }
 
+    // Binary @ 0x00122c64. Re-rolls fruit-type indices from string-name vector.
+    // Resolves each name in m_FruitTypeNames to a hash-based type index.
+    // BOMB / BOMB_PINEAPPLE -> -2; RANDOM -> Fruit::RandomFruit(false); else Fruit::FruitType.
+    void SelectTypes();
+
     // Reset spawner for a new wave. waveRevisitCounter = wave->field_0x34.
     void Reset(float waveRevisitCounter) {
         float spawnCount = m_SpawnMin + m_GrowthInc * waveRevisitCounter;
@@ -315,6 +320,13 @@ struct PROBABILITY_OVERIDE {
     // TODO: implement SelectType (binary @ 0x00122b44) — needs Fruit::FruitType(str,false)
     // and Fruit::RandomFruit(false) plus bomb-hash guarded statics.
     void SelectType() {}
+
+    // Returns m_SelectedType index after calling SelectType (binary calls SelectType then reads +0x74).
+    // Returns -1 (no valid type) when SelectType is not yet implemented.
+    int GetType() {
+        SelectType();
+        return m_SelectedType;
+    }
 };
 
 // Forward-declared in WaveManager.h, but `delete m_pWaveQue` in

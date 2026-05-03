@@ -26,6 +26,7 @@
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 
 // --- Constants (resolved from binary via read_memory) ---
 
@@ -185,7 +186,7 @@ void DojoScreen::Update(float dt) {
                 m_pPlayButton->m_Texture = TexIdOf(s_TexBackIcon);
                 m_pPlayButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pPlayButton->Init(POS_BACK_BUTTON,
-                                    [this]() { PlayCallback(); },
+                                    std::bind(&DojoScreen::PlayCallback, this),
                                     bombFruitType, Vec3(0, 0, 0), nullptr);
                 // Binary @ 0x0013856c: strb 1 at button+0x138 = m_bRespondsToBackKey.
                 m_pPlayButton->m_bRespondsToBackKey = 1;
@@ -208,7 +209,7 @@ void DojoScreen::Update(float dt) {
                 m_pShopButton->m_Texture = TexIdOf(s_TexShop);
                 m_pShopButton->size      = TexSizeOf(s_TexShop, 64.0f, 64.0f);
                 m_pShopButton->Init(POS_SHOP_BUTTON,
-                                    [this]() { ShopCallback(); },
+                                    std::bind(&DojoScreen::ShopCallback, this),
                                     shopFruitType, Vec3(0, 0, 0), nullptr);
                 // Binary post-Init writes (order per 0x00138414, RE'd at
                 // asm level not decompile to resolve operator*= target):
@@ -234,9 +235,8 @@ void DojoScreen::Update(float dt) {
                 m_pShopButton->m_AnimSpeed  = -15.0f;
                 m_pShopButton->m_AnimSpeed2 = -15.0f;
                 m_pShopButton->m_LayerFlags = 0x40;
-                m_pShopButton->m_RemoveCallback = [this](HUDControl* c) {
-                    ButtonDeleted(c);
-                };
+                m_pShopButton->m_RemoveCallback = std::bind(&DojoScreen::ButtonDeleted, this,
+                                                              std::placeholders::_1);
                 game.hud->AddControl(m_pShopButton);
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pShopButton);
                 // ItemManager not ported — always show no badge
@@ -251,7 +251,7 @@ void DojoScreen::Update(float dt) {
                 m_pAboutButton->m_Texture = TexIdOf(s_TexAbout);
                 m_pAboutButton->size      = TexSizeOf(s_TexAbout, 64.0f, 64.0f);
                 m_pAboutButton->Init(POS_ABOUT_BUTTON,
-                                     [this]() { AboutCallback(); },
+                                     std::bind(&DojoScreen::AboutCallback, this),
                                      aboutFruitType, Vec3(0, 0, 0), nullptr);
                 m_pAboutButton->m_LayerFlags = 0x40;
                 game.hud->AddControl(m_pAboutButton);
@@ -300,11 +300,8 @@ void DojoScreen::Update(float dt) {
             // Port-specific: install RemoveCallback so DojoScreen clears its ptr.
             // Binary relies on AboutScreen calling parent->Reset() which sets state=0.
             // Port keeps both: Init() via RemoveCallback (redundant but harmless).
-            m_pAboutScreen->m_RemoveCallback = [this](HUDControl*) {
-                m_pAboutScreen = nullptr;
-                // AboutScreen::Update state-2 already calls m_pParent->Init()
-                // which sets m_State=0. This callback is port-specific cleanup.
-            };
+            m_pAboutScreen->m_RemoveCallback = std::bind(&DojoScreen::AboutScreenRemoved, this,
+                                                          std::placeholders::_1);
             game.hud->AddControl(m_pAboutScreen);
             return;
         }

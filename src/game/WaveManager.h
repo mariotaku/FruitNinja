@@ -23,21 +23,32 @@ struct WaveQue;
 struct WaveQueItem;
 class  FruitSaveData;
 class HUDControl;
+class HUDControl3d;
+class SpeedControl;
 
 class WaveManager {
 public:
-    // +0x000: RNG instance. Used for wave selection, spawn angle/count RNG.
-    // Binary: Math::Random at +0x00 (24 bytes).
-    // DIFFERS: binary's +0x00 slot holds SpeedControl* m_pSpeedControl (HUD widget cache).
-    // The Random referenced by SpawnFruit/GetNextWave is fetched via a global pointer
-    // (*(Random**)(GOT + DAT_xxx)), NOT a WaveManager member. See docs §1 layout note.
-    // Do NOT change this layout until WaveManager::WaveManager() ctor is disassembled to confirm.
-    Random m_Random;
+    // +0x000: cached SpeedControl HUD widget pointers, one per player.
+    // Binary @ 0x001217d4 (DeleteSpeedControl): ldr from [r0, #0x00].
+    // Binary @ 0x00122f50 (UpdateComboSpeed): slot 0 allocated lazily.
+    // Slot 1 is never populated (binary @ 0x001217d4 checks only slot 0).
+    HUDControl3d* m_SpeedControl[2];   // +0x00, +0x04
 
-    // +0x018..+0x034: gap (29 bytes). Binary Random at +0x00 is 0x35 bytes; port
-    // Random is 0x18 bytes (24 b). Padding bridges the difference so all
-    // field_0xNN comments below match the binary offsets exactly.
-    uint8_t _pad_0x18[0x1D];  // 29 bytes of gap to reach +0x35
+    // +0x008: RNG instance. Used for wave selection, spawn angle/count RNG.
+    // Port specific: binary fetches Random via a global pointer (GOT-relative);
+    // the port embeds it as a member for convenience. Lives at +0x08 so that
+    // m_SpeedControl occupies the binary's +0x00/+0x04 slots correctly.
+    // All downstream offsets (+0x035 onward) are shifted +0x08 vs prior port layout.
+    // DIFFERS: binary does not have Random as a WaveManager member; port-specific field.
+    Random m_Random;   // Port specific: +0x08
+
+    // +0x020..+0x034: gap (21 bytes).
+    // m_SpeedControl[2] occupies +0x00..+0x07 (matches binary +0x00/+0x04).
+    // Port-specific m_Random occupies +0x08..+0x1f (24 bytes).
+    // This padding bridges from +0x20 to +0x35 so all field_0xNN comments
+    // below match the binary offsets exactly (binary has no Random member;
+    // +0x08..+0x34 is other binary state not yet RE'd as named fields).
+    uint8_t _pad_0x20[0x15];  // 21 bytes to reach +0x35
 
     // +0x035: wave-active flag
     uint8_t field_0x35;
@@ -162,6 +173,11 @@ public:
     // TODO: per-mode bounds need RE -- using 100.0 as placeholder.
     // DIFFERS: original values unknown from DAT; using 100.0f per mode.
     float field_0x9c[4];
+
+    // +0x008: m_Random above takes 24 bytes; the comment header on padding below remains
+    // offset-correct for the original binary's fields past the SpeedControl slots.
+    // Note: binary field offsets documented here (e.g. +0x035, +0x038) correspond to
+    // binary offsets, not port offsets (port is +0x08 higher for fields after m_Random).
 
     // --- Construction / singleton --------------------------------------
 

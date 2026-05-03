@@ -121,6 +121,11 @@ public:
     float MeasureWidth(float scale, const char* text) const;
     float MeasureWidth(float scale, Utf8StringIterator iter) const;
 
+    // Binary @ 0x001988a8. Single-line measure: stops at newline or end.
+    // Returns total xadvance in lineHeight-normalized units.
+    float MeasureString(const Utf8StringIterator& iterIn) const;
+    float MeasureString(const char* str) const;
+
     // Line height in world units at given scale
     float GetLineHeight(float scale) const { return scale; }
 

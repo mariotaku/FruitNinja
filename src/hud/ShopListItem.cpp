@@ -134,19 +134,13 @@ void ShopListItem::Move(float x, float y, float z) {
 
     // (4) Per-frame alpha ramps. Binary @ 0x0015d2fe-0x0015d448.
     const float kRate = 5.0f;
-    auto rampAlpha = [&](float cur, bool up) -> float {
-        float delta = up ? +kRate : -kRate;
-        float candidate = cur + dt * delta;
-        if (candidate <= 0.0f) return 0.0f;
-        if (candidate >= 1.0f) return 1.0f;
-        return candidate;
-    };
-
     // 4a: m_NewItemAlpha — NOT centered-gated. +5*dt up if NOT seen,
     // -5*dt if seen, clamp [0, 1]. ItemInfo::m_bSeen at +0x3C.
     if (m_pItemInfo) {
         bool isNew = (m_pItemInfo->m_bSeen == 0);
-        m_NewItemAlpha = rampAlpha(m_NewItemAlpha, isNew);
+        float c = m_NewItemAlpha + dt * (isNew ? +kRate : -kRate);
+        if (c < 0.0f) c = 0.0f; else if (c > 1.0f) c = 1.0f;
+        m_NewItemAlpha = c;
     }
 
     // 4b: m_SelectedAlpha — NOT centered-gated. +5*dt up if equipped,
@@ -154,7 +148,9 @@ void ShopListItem::Move(float x, float y, float z) {
     {
         ItemManager* im = ItemManager::GetInstance();
         bool equipped = (im && m_pItemInfo && im->IsEquipped(m_pItemInfo) != 0);
-        m_SelectedAlpha = rampAlpha(m_SelectedAlpha, equipped);
+        float c = m_SelectedAlpha + dt * (equipped ? +kRate : -kRate);
+        if (c < 0.0f) c = 0.0f; else if (c > 1.0f) c = 1.0f;
+        m_SelectedAlpha = c;
     }
 
     // 4c: m_CostAlpha — IS centered-gated. Centered = m_pShopScreen
@@ -162,7 +158,9 @@ void ShopListItem::Move(float x, float y, float z) {
     {
         bool isCentered = m_pShopScreen
             && (m_pShopScreen->GetSelectedItem() == this);
-        m_CostAlpha = rampAlpha(m_CostAlpha, isCentered);
+        float c = m_CostAlpha + dt * (isCentered ? +kRate : -kRate);
+        if (c < 0.0f) c = 0.0f; else if (c > 1.0f) c = 1.0f;
+        m_CostAlpha = c;
     }
 }
 

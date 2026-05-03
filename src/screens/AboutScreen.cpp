@@ -18,6 +18,7 @@
 #include "render/Font.h"
 #include "math/Colour.h"
 #include <cstdio>
+#include <functional>
 
 // -----------------------------------------------------------------------
 // Constants  (resolved from binary via read_memory)
@@ -250,7 +251,7 @@ void AboutScreen::CreateBackButton()
     }
 
     m_pBackButton->Init(POS_BACK_BUTTON,
-                        [this]() { BackCallback(); },
+                        std::bind(&AboutScreen::BackCallback, this),
                         bombFruitType,
                         Vec3(0.0f, 0.0f, 0.0f),
                         nullptr);

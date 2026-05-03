@@ -111,7 +111,8 @@ ScrollingMenu::~ScrollingMenu() {
 // ---------------------------------------------------------------------------
 ScrollingMenuItem* ScrollingMenu::Collide(int touchSlot) {
     if (!m_fieldCA) return nullptr;
-    for (ScrollingMenuItem* item : m_Items) {
+    for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
+        ScrollingMenuItem* item = *it;
         ScrollingMenuItem* hit = item->Slot13(touchSlot);
         if (hit) return hit;
     }
@@ -505,15 +506,15 @@ ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
 // ---------------------------------------------------------------------------
 void ScrollingMenu::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     Mortar::MatrixStack& world = Mortar::MatrixManager::GetInstance().GetWorldStack();
-    for (ScrollingMenuItem* item : m_Items) {
+    for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         world.Reset();
-        item->Draw();
+        (*it)->Draw();
     }
 }
 
 void ScrollingMenu::DestroyList() {
-    for (ScrollingMenuItem* item : m_Items) {
-        delete item;
+    for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
+        delete *it;
     }
     m_Items.clear();
     m_TotalHeight = 0.0f;

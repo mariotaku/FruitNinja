@@ -118,6 +118,11 @@ public:
     virtual void Save() {}
 
     void SetPendingRemoval() { m_bPendingRemoval = 1; }
+
+    // Binary: called after HUD::AddControl to pin the control to a single
+    // layer slot instead of cycling. Tier-1 stub — full RE pending.
+    // Binary addr not yet resolved (referenced from PauseScreen::Update lazy-create block).
+    void SetSingular() {}
 };
 
 #endif

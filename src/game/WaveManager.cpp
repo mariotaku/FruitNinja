@@ -3,6 +3,7 @@
 #include "WaveStructs.h"
 #include "Game.h"
 #include "FruitSaveData.h"
+#include "audio/GameSound.h"
 #include "entities/ActorManager.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
@@ -12,6 +13,9 @@
 #include "util/StringHash.h"
 #include "GameOver.h"
 #include "PowerUpManager.h"
+#include "hud/TimeControl.h"
+#include "hud/SpeedControl.h"
+#include "engine/network/NetworkManager.h"
 #include <tinyxml2.h>
 #include <cstring>
 #include <cstdio>
@@ -38,6 +42,13 @@ static const char* const s_WaveXML[4] = {
 // ----------------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------------
+
+// Port specific: binary reads a game-mode byte at g_Game+0x4 to determine if
+// same-screen multiplayer is active. Port re-derives from gameMode field.
+// TODO: implement full IsSameScreenMultiplayer when gameMode bitmask is further RE'd.
+static bool IsSameScreenMultiplayer() {
+    return false;
+}
 
 void WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
     out.clear();
@@ -113,6 +124,7 @@ WaveManager::WaveManager()
         for (int j = 0; j < 32; ++j)
             m_FruitQueue[i][j] = -1;
     m_FruitQueueSize[0] = m_FruitQueueSize[1] = 0;
+    m_SpeedControl[0] = m_SpeedControl[1] = nullptr;
 }
 
 WaveManager::~WaveManager() {
@@ -436,12 +448,13 @@ void WaveManager::Reset(bool fullReset) {
     m_Speed[0] = 0.0f; m_Speed[1] = 0.0f;
 
     // 3. Game-side flags / score.
-    // game->field_0x1c = 0;  -- TODO: not mapped in port Game struct yet
+    game->m_bUnsullied = 0;
     field_0x23d = 0;
     field_0x23e = 0;
     field_0x240 = m_Random.RandF(10.0f) + 10.0f;
-    // SetScore(0, -1) / SetMissCount(0, -1) -- TODO: game score API not ported yet
-    // ET_ClearKnownEntities(-1)             -- TODO: not ported
+    FN::SetScore(0, -1);       // Binary @ 0x0010a4b8; playerIdx -1 = all (defunct MP sig)
+    FN::SetMissCount(0, -1);   // Binary @ 0x0010a4e8
+    // ET_ClearKnownEntities(-1) -- TODO: not ported
 
     // 4. Per-player wave state.
     field_0x23c = 1;          // wave-was-spawned flag (player 0)
@@ -449,10 +462,10 @@ void WaveManager::Reset(bool fullReset) {
     m_WaveCount[1] = -1;
     // Camera reset not ported (FruitCamera stubs).
 
-    // HUD reset.
-    // TODO: HUD::ResetControls (binary address unknown) — not yet ported.
-    // Binary calls this when game->display->field_0x3c (HUD) exists.
-    (void)game->hud;
+    // HUD reset — binary @ 0x00144b78 called when game->display->field_0x3c (HUD) exists.
+    if (game->hud) {
+        game->hud->ResetControls();
+    }
 
     // 5. Clear unspawned fruits + bombs, disable active ones.
     Fruit::ClearUnspawned(false);
@@ -491,7 +504,7 @@ void WaveManager::Reset(bool fullReset) {
         GetNextWave(0);
         printf("[WaveManager] Reset: m_pCurrentWave[0]=%p\n",
                (void*)m_pCurrentWave[0]);
-        // IsSameScreenMultiplayer() not ported — skip MP delay bump.
+        // IsSameScreenMultiplayer() returns false (single-player) — skip MP delay bump.
     } else {
         printf("[WaveManager] Reset: NO WAVES for mode %d! GetNextWave skipped.\n",
                (int)game->gameMode);
@@ -539,9 +552,11 @@ void WaveManager::Resume() {
     // Sentinel: if no active game was saved, nothing to restore.
     if (!sd->m_bHasActiveGame) return;
 
-    // 1. Restore score + miss count to GameTaskState.
-    // TODO: GameTaskState::SetScore / SetMissCount not yet ported.
-    // See docs/engine/splat-pool-and-wave-resume.md A7 step 1.
+    // 1. Restore score + miss count.
+    // Binary @ 0x00124b7c-0x00124b8c: calls SetScore(sd->m_CurrentScore, -1) +
+    // SetMissCount(sd->m_CurrentMissCount, -1).
+    FN::SetScore(sd->m_CurrentScore, -1);
+    FN::SetMissCount((int)sd->m_CurrentMissCount, -1);
 
     // 2. Restore per-player base speed from save.
     // field_0x4c <- +0x100 (m_Speed_P0), field_0x60 <- +0x108 (m_Speed_P1).
@@ -549,8 +564,7 @@ void WaveManager::Resume() {
     field_0x60    = sd->m_Speed_P1;
 
     // 3. Restore was-game-over flag.
-    // game->field_0x1c = sd->m_bWasGameOver;
-    // TODO: game->field_0x1c not yet mapped in Game struct.
+    game->m_bUnsullied = sd->m_bWasGameOver;
 
     // 4. Re-roll all PROBABILITY_OVERIDE entries.
     // TODO: PROBABILITY_OVERIDE::SelectType() not yet ported.
@@ -564,19 +578,55 @@ void WaveManager::Resume() {
             m_FruitQueue[p][i] = -1;
 
     // 6. Re-spawn saved entities from sd->m_EntityStates.
+    // Binary @ 0x00124b9c-0x00124cd8: per-EntityState dispatch
     bool respawned = false;
-    // TODO: ActorManager::Add / entity Init vtable / Fruit::Chuck /
-    //       Bomb::{Chuck,SetHit,SetForPlayer} not yet fully ported.
-    // See docs/engine/splat-pool-and-wave-resume.md A7 entity respawn loop.
-    if (!sd->m_EntityStates.empty()) {
-        respawned = true;  // conservative: assume any saved entities count.
+    for (std::list<EntityState>::iterator eit = sd->m_EntityStates.begin();
+         eit != sd->m_EntityStates.end(); ++eit)
+    {
+        EntityState& es = *eit;
+        int kind = es.layer;   // 0=Fruit, 1=Bomb, 4=PowerUp (binary: ent.layer)
+        Entity* e = ActorManager::GetInstance()->Add(kind, true);
+        if (!e) continue;
+        // vtable+0x8 == Init(int unused0, int fruitType, int param3)
+        // Port Fruit::Init / Entity::Init use (int, int, int); pass 0 for param3.
+        e->Init(0, es.type, 0);
+        e->pos = Vec3(es.pos[0], es.pos[1], es.pos[2]);
+        e->vel = Vec3(es.vel[0], es.vel[1], es.vel[2]);
+        if (e->entityType == 1) {
+            // Bomb
+            Bomb* b = static_cast<Bomb*>(e);
+            // m_AccelForce maps to the gravity overlay for Bomb (binary +0x20..+0x28).
+            b->m_AccelForce = Vec3(es.grav[0], es.grav[1], es.grav[2]);
+            // m_BombVariant maps to playerIdx overlay (binary +0x28).
+            b->m_BombVariant = (int)es.grav[2];
+            if (game->gameMode == 2) Bomb::SetForPlayer(b, 1);
+            if (es.wait > 0.0f) {
+                if (!es.hit) {
+                    b->Chuck(es.wait);
+                } else {
+                    Bomb::SetHit(b, es.wait);
+                }
+            }
+        } else if (e->entityType == 0) {
+            // Fruit
+            Fruit* f = static_cast<Fruit*>(e);
+            f->m_Gravity = Vec3(es.grav[0], es.grav[1], es.grav[2]);
+            if (es.wait > 0.0f) {
+                f->Chuck(f->vel, es.wait);
+            }
+        }
+        // type 4 (PowerUp): TODO if power-ups are ported.
+        respawned = true;
     }
 
     // 7. ActorManager::Update(dt=0) to settle respawned entities.
-    // TODO: ActorManager::Update(0) — no-op until entity respawn is ported.
+    ActorManager::GetInstance()->Update(0.0f);
 
     // 8. Zen mode (m_GameMode == 2): PowerUpManager::LoadTextures().
-    // TODO: PowerUpManager::LoadTextures not yet ported.
+    // Binary @ 0x0011840c — iterates m_AllPowerUps and m_ScreenEffectPool.
+    if (game->gameMode == 2) {
+        PowerUpManager::GetInstance()->LoadTextures();
+    }
 
     // 9. Branch selection: SkipToGameOver vs SkipToPause.
     bool gameOver = (sd->m_BombHitTimer > 0.0f && sd->m_GameMode != 2)
@@ -601,23 +651,48 @@ void WaveManager::Resume() {
         field_0x234[0]       = sd->m_WaveDelay;
         field_0x238[0]       = sd->m_WaveWait;
         field_0x74           = sd->m_ProbabilityOverideFlag;
-        // m_pCurrentWave_P1: stored as raw int in save (binary pointer).
-        // Port: index is not directly restorable as a pointer; leave as-is.
-        // TODO: resolve m_pCurrentWave[1] restore from sd->m_pCurrentWave_P1.
+        // sd->m_pCurrentWave_P1 (FruitSaveData+0x140) stores the SAVED WAVE INDEX
+        // (uint), used to look up via the WaveState restore loop. The field name
+        // inherited from earlier RE was misleading.
+        field_0x38           = sd->m_pCurrentWave_P1;   // saved wave index
         field_0x4c           = sd->m_Speed_P0;
         field_0x60           = sd->m_Speed_P1;
         field_0x23c = 1; field_0x35 = 1;
         field_0x36 = 0; field_0x37 = 0;
         m_Speed[0]           = sd->m_Speed_P0_alias;
         m_Speed[1]           = sd->m_Speed_P0_alias;
-        // field_0x5c = sd->GetTotal(StringHash("blitz_bonus")):
-        // TODO: StringHash not yet ported for this call site.
+        // Binary: hash of "blitz_bonus" — same key AddSpeed increments.
+        field_0x5c = sd->GetTotal(StringHash("blitz_bonus"));
 
         ResetWaveChances();
 
-        // Restore each WaveState back into m_WaveTable[0] (playerIdx=0).
-        // TODO: SPAWNER_INFO field access + SpawnState restore loop
-        //       not yet ported — see A7 SkipToPause wave-state restore.
+        // Binary @ 0x00124d20-0x00124df8: WaveState/SpawnState restore.
+        int mode = game->gameMode;
+        for (std::list<WaveState>::iterator wit = sd->m_WaveStates.begin();
+             wit != sd->m_WaveStates.end(); ++wit)
+        {
+            WaveState& ws = *wit;
+            // ws.index = sequential index into waveInfos[mode] (SaveWaveInfo stores candidateIdx).
+            // ws.waveIdx = revisit counter (field_0x34).
+            if (ws.index < 0 || ws.index >= (int)waveInfos[mode].size()) continue;
+            WAVE_INFO* w = waveInfos[mode][ws.index];
+            w->field_0x34 = (float)ws.waveIdx;
+            if (!ws.spawners.empty()) {
+                m_pCurrentWave[0] = w;
+                int s = 0;
+                for (std::list<SpawnState>::iterator sit = ws.spawners.begin();
+                     sit != ws.spawners.end(); ++sit, ++s)
+                {
+                    if (s >= w->m_SpawnerCount) break;
+                    SPAWNER_INFO& sp = w->m_pSpawners[s];
+                    sp.m_SpawnTimer     = sit->delay;
+                    sp.m_RemainingCount = sit->toSpawn;
+                    sp.m_field58        = 0;
+                    sp.m_SpawnCountF    = (float)sit->toSpawn;
+                    sp.SelectTypes();
+                }
+            }
+        }
     }
 
     // 10. Copy ShakeIntensity/ShakeDecay to fade screen; clear m_EntityStates.
@@ -644,7 +719,9 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 
     // Sentinel: only save if single-player (m_bSplitPlayerWaves == 0 or waveCount < 0)
     // and waves are loaded for this mode.
-    bool splitPlayer = false; // TODO: m_bSplitPlayerWaves not yet in WaveManager port (+0x114)
+    // Port specific: binary uses game-mode byte at g_Game+0x4 — port re-derives via IsSameScreenMultiplayer().
+    // TODO: implement IsSameScreenMultiplayer (binary needs further RE for full gameMode bitmask).
+    bool splitPlayer = IsSameScreenMultiplayer();
     if ((!splitPlayer || m_WaveCount[1] < 0)
         && !waveInfos[game->gameMode].empty())
     {
@@ -812,9 +889,8 @@ void WaveManager::Update(float dt) {
     field_0x2d4 = accumDt;
     // Removed per-frame Update spam; spawn events themselves print via [Spawn].
 
-    // TODO: game-end gate (binary @ 0x125b64) -- vector::size() unused, semantics unclear.
-    // Binary: if(game[+0x170] && !this[+0x35] && this[+0x37] && this[+0x38] == m_WaveCount[0]+1)
-    //         call vector::size()  -- result discarded (likely sentinel/watchpoint).
+    // Binary @ 0x00125b64 dispatches a vector::size() whose result is unused.
+    // Likely a debug/profiling watchpoint left in. Elided in port.
 }
 
 // ----------------------------------------------------------------------------
@@ -879,13 +955,108 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 // DIFFERS: using intptr_t cast to avoid MSVC C4311 truncation warning.
                 SpawnBomb(1, (long)(intptr_t)(&spawner), &spawner, playerIdx);
             } else if (fruitType == -1) {
-                // Random — full PROBABILITY_OVERIDE selection per docs §5 @ 0x001254f2..0x001256f2.
-                // Requires: PROBABILITY_OVERIDE::GetType(), PowerUpManager::GetActiveProgression(),
-                //           FRUIT_INFO::m_pPowers->AnyActivePowers(), TimeControl::GetCountDown().
-                // TODO: 0x001254f2 PROBABILITY_OVERIDE blitz state machine not ported.
-                //       Power-up fruits and blitz mode never spawn until this is implemented.
-                int rft = Fruit::RandomFruit(false);
-                SpawnFruit(1, rft, &spawner, playerIdx);
+                // Binary @ 0x001254f2-0x001256f2: PROBABILITY_OVERIDE blitz selection.
+                int chosenType = -1;
+
+                // Step A: Arcade/Zen blitz state machine (gameMode == 2 only).
+                // Uses TimeControl::field_0x7c (GetCountDown) and blitz timers.
+                // DAT_0012558c = 30.0f (blitz refresh base), DAT_001255a0 = 0.20979f (timer compensation).
+                int blitzAdvance = 0;
+                if (game->gameMode == 2) {
+                    float countdown = 0.0f;
+                    if (game->pTimeCtrl) countdown = game->pTimeCtrl->GetCountDown();
+
+                    if (field_0x23d == 0) {
+                        // First blitz spawn not yet triggered this game.
+                        if (field_0x240 < countdown) {
+                            field_0x23d = 1;
+                            blitzAdvance = 1;
+                        }
+                    } else {
+                        // Blitz already triggered; check for forced re-spawn.
+                        // DAT_0012558c=30.0f: blitz repeats every ~30s.
+                        float blitzBase = 30.0f;  // DAT_0012558c
+                        float blitzComp = 0.20979f; // DAT_001255a0 (spawner timer compensation)
+                        float threshold = field_0x240 - blitzBase + blitzComp * (float)field_0x5c;
+                        if (threshold < countdown) {
+                            field_0x23d = 1;
+                            blitzAdvance = 1;
+                        }
+                    }
+                }
+
+                // Step B: weighted roll over probOverrides[mode].
+                // Gate predicates: m_PerWave, m_PerWaveCount, m_DisableWhenPowered, m_BombHitTimer.
+                // Binary: 3 static blitz-spawner overrides selected by Rand32(3).
+                // All share m_TimeScale=0.75, m_Offset=(0,-1.1,0), m_MinAngle=0.6660.
+                // Differ in:
+                //   [0]: m_MaxAngle=0.0,  m_MinVel=-0.5, m_MaxVel= 0.5, m_SpawnType=1
+                //   [1]: m_MaxAngle=0.0,  m_MinVel=-1.0, m_MaxVel=-0.5, m_SpawnType=3
+                //   [2]: m_MaxAngle=0.75, m_MinVel=-1.0, m_MaxVel=-0.5, m_SpawnType=2
+                // TODO: k_BlitzSpawners field init requires designated initializer support
+                // (C++20) or constructor overloads. Currently initialised as defaults.
+                // Wire blitz-spawner selection when SPAWNER_INFO gains an init-from-constants ctor.
+                // Binary selects one of 3 static blitz-spawner templates (non-const pointer in binary).
+                static SPAWNER_INFO k_BlitzSpawners[3] = {
+                    SPAWNER_INFO(), SPAWNER_INFO(), SPAWNER_INFO()
+                };
+                SPAWNER_INFO* blitzSpawner = (blitzAdvance && game->gameMode == 2)
+                    ? &k_BlitzSpawners[m_Random.Rand32(3)]
+                    : nullptr;
+                int mode = game->gameMode;
+                std::vector<PROBABILITY_OVERIDE>& overrides = probOverrides[mode];
+
+                if (!overrides.empty() && blitzAdvance) {
+                    int totalChance = 0;
+                    for (std::vector<PROBABILITY_OVERIDE>::iterator oit = overrides.begin();
+                         oit != overrides.end(); ++oit)
+                    {
+                        PROBABILITY_OVERIDE& po = *oit;
+                        // Gate: perWave cap
+                        if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
+                        // Gate: waveCount minimum (field_0x5c = blitz score total)
+                        if (po.m_PerWaveCount > 0 && field_0x5c < po.m_PerWaveCount) continue;
+                        // Gate: disableWhenPowered — binary @ 0x00117b38
+                        if (po.m_DisableWhenPowered > 0.0f) {
+                            float prog = PowerUpManager::GetInstance()
+                                             ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f)
+                                             : 0.0f;
+                            if (prog >= po.m_DisableWhenPowered) continue;
+                        }
+                        totalChance += po.m_PercentChance;
+                    }
+
+                    if (totalChance > 0) {
+                        int roll = (int)m_Random.Rand32((uint32_t)totalChance);
+                        int cumulative = 0;
+                        for (std::vector<PROBABILITY_OVERIDE>::iterator oit = overrides.begin();
+                             oit != overrides.end(); ++oit)
+                        {
+                            PROBABILITY_OVERIDE& po = *oit;
+                            if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
+                            if (po.m_PerWaveCount > 0 && field_0x5c < po.m_PerWaveCount) continue;
+                            if (po.m_DisableWhenPowered > 0.0f) {
+                                float prog = PowerUpManager::GetInstance()
+                                                 ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f)
+                                                 : 0.0f;
+                                if (prog >= po.m_DisableWhenPowered) continue;
+                            }
+                            cumulative += po.m_PercentChance;
+                            if (roll < cumulative) {
+                                chosenType = po.GetType();
+                                if (chosenType >= 0) po.m_Counter++;
+                                break;
+                            }
+                        }
+                    }
+                    field_0x23e++;
+                }
+
+                if (chosenType < 0) {
+                    chosenType = Fruit::RandomFruit(false);
+                }
+                SpawnFruit(1, chosenType,
+                    blitzSpawner ? blitzSpawner : &spawner, playerIdx);
             } else {
                 // Specific fruit type.
                 SpawnFruit(1, fruitType, &spawner, playerIdx);
@@ -932,8 +1103,18 @@ void WaveManager::UpdateComboSpeed(float dt) {
     else                              delta = std::min(targetP1 - curSpeed, dt *  5.0f);
     m_Speed[0] = curSpeed + delta;
 
-    // SpeedControl HUD widget allocation — not ported; skip that branch.
-    // TODO: 0x00122f50 SpeedControl widget alloc + HUD::AddControl when SpeedControl is ported.
+    // Binary @ 0x00122f50: lazy SpeedControl alloc + push to HUD.
+    float cur = m_Speed[0];
+    HUDControl3d* sc = m_SpeedControl[0];
+    if (!sc) {
+        sc = new SpeedControl();
+        m_SpeedControl[0] = sc;
+        // TODO: install OnDestroy delegate calling WaveManager::DeleteSpeedControl.
+        if (game->hud) game->hud->AddControl(sc, false);
+    }
+    SpeedControl* spc = static_cast<SpeedControl*>(sc);
+    spc->m_DisplayedSpeed = cur;
+    spc->m_Speed          = field_0x4c;
 
     // Decay the speed-loss timer (field_0x4c) via GetWavedt/m_NextWaveSpeedLoss.
     if (field_0x4c > 0.0f && m_pCurrentWave[0] != nullptr
@@ -1082,7 +1263,8 @@ void WaveManager::GetNextWave(int playerIdx) {
         wave->m_pSpawners[i].Reset(wave->field_0x34);
 
     // Decrement PROBABILITY_OVERIDE counters.
-    // TODO: full override list management not ported.
+    // No separate per-tick iteration — override selection is in UpdateWave
+    // (PROBABILITY_OVERIDE block) and per-game reset in ResetGlobalDt.
 
     // Multiplayer sync (not ported).
     // if (IsMultiplayer()) SendWaveSyncPacket();
@@ -1104,7 +1286,10 @@ void WaveManager::SetCurrentWave(int waveNo, float delay, int playerIdx) {
 }
 
 void WaveManager::SetupWaveQue() {
-    // TODO: 0x00124564 — survival/combo wave queue. Not used in Classic/Arcade/Zen.
+    // Deferred: WaveManager::SetupWaveQue (binary @ 0x00124564) is only called
+    // in survival/combo modes. m_pWaveQue stays null in Classic/Arcade/Zen
+    // (the modes shipped); GetNextWave's early-out handles this. Re-open if
+    // Combo mode is ported.
 }
 
 // ----------------------------------------------------------------------------
@@ -1274,7 +1459,7 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
             if (spawnType == PLACEMENT_LEFT)  f->m_Gravity.x += 0.01f;
             else if (spawnType == PLACEMENT_RIGHT) f->m_Gravity.x -= 0.01f;
         }
-        // TODO: f->m_TimeScale = info->m_TimeScale (spawner+0x14) -- Fruit lacks m_TimeScale field.
+        if (info) f->m_TimeScale = info->m_TimeScale;  // spawner+0x14
 
         f->Chuck(f->vel, chuckDelay);
     }
@@ -1378,12 +1563,10 @@ void WaveManager::Draw(int playerIdx) {
     }
 }
 
+// ASM-verified: 2026-05-03 binary @ 0x001217d4 (re-analyst)
 void WaveManager::DeleteSpeedControl(HUDControl* c) {
-    // Binary @ 0x001217d4. Clears cached SpeedControl* if it matches.
-    // Port keeps m_pSpeedControl as a void* placeholder at a non-conflicting member
-    // (field_0x00 binary layout TBD — see docs §1 layout note); currently always null.
-    // TODO: 0x001217d4 implement when SpeedControl/m_pSpeedControl member is resolved.
-    (void)c;
+    // Binary @ 0x001217d4: only checks slot 0 (slot 1 never populated).
+    if (m_SpeedControl[0] == c) m_SpeedControl[0] = nullptr;
 }
 
 // ----------------------------------------------------------------------------
@@ -1474,9 +1657,21 @@ void WaveManager::ResetSpeed(int playerIdx) {
     (&field_0x60)[playerIdx] = 0.0f;   // m_ComboTimer[p] at +0x60 + p*4
     (&field_0x5c)[playerIdx] = 0;      // m_BlitzBonus[p] at +0x5c + p*4
 
-    // SpeedControl HUD widget not ported; skip reset of m_pSpeedControl fields.
-    // TODO: 0x00122e94 reset m_pSpeedControl->m_RawSpeed/m_DisplayedSpeed when SpeedControl is ported.
+    // ASM-verified: 2026-05-03 binary @ 0x00122e94 (re-analyst)
+    // Binary @ 0x00122e94: if SpeedControl exists, zero its display state.
+    HUDControl3d* sc = m_SpeedControl[playerIdx];
+    if (sc) {
+        SpeedControl* spc = static_cast<SpeedControl*>(sc);
+        spc->m_Speed          = 0.0f;
+        spc->m_DisplayedSpeed = 0.0f;
+    }
 }
+
+// Binary g_BlitzSfxTable @ 0x001e87d8. 6 entries indexed by clamp(level, 1, 6) - 1.
+static const char* const k_BlitzSfx[6] = {
+    "combo-blitz-1", "combo-blitz-2", "combo-blitz-3",
+    "combo-blitz-4", "combo-blitz-5", "combo-blitz-6",
+};
 
 void WaveManager::AddSpeed(float amount, int playerIdx) {
     // Binary @ 0x00123510.
@@ -1507,7 +1702,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 static uint32_t s_blitzCountHash = 0;
                 if (!s_blitzCountHash) s_blitzCountHash = StringHash("blitz_count");
                 PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitzCountHash);
-                // TODO: 0x00123510 GameSound::SFXPlay("blitz", ...) not ported.
+                if (game->pGameSound) game->pGameSound->SFXPlay("combo-blitz-1", 1.0f, 1.0f);
             }
         }
     } else {
@@ -1524,7 +1719,12 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                     std::snprintf(buf, sizeof(buf), "blitz_%d_count", level);
                     PowerUpManager::GetInstance()->ActivateScreenEffect(StringHash(buf));
                 }
-                // TODO: 0x00123510 GameSound::SFXPlay(blitz_<level>, ...) not ported.
+                {
+                    int sfxLevel = newCount;
+                    if (sfxLevel < 1) sfxLevel = 1;
+                    if (sfxLevel > 6) sfxLevel = 6;
+                    if (game->pGameSound) game->pGameSound->SFXPlay(k_BlitzSfx[sfxLevel - 1], 1.0f, 1.0f);
+                }
 
                 int clamped = ((&field_0x5c)[playerIdx] > 5) ? 6 : (&field_0x5c)[playerIdx];
                 FN::AddToCurrentScore(clamped * 5, playerIdx, false, false);
@@ -1545,7 +1745,9 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
 }
 
 void WaveManager::RecievedSync(int /*waveIdx*/, float /*score*/) {
-    // TODO: 0x00122af8 — network sync.
+    // Binary @ 0x00122af8: per-frame wave-state network sync.
+    // Defunct (P2P MP): NetworkManager::SyncWaveState is a no-op stub.
+    Mortar::NetworkManager::GetInstance()->SyncWaveState();
 }
 
 // ----------------------------------------------------------------------------

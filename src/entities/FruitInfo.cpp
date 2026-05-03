@@ -41,8 +41,15 @@ static int ParseCSV(const char* str, int* out, int maxCount)
 // Stub: LoadFruitModels — called at end of LoadInfo
 // Original loads 3D mesh for each fruit type using MeshManager
 static void LoadFruitModels() {
-    // TODO: for each fruit, load models/Fruit/<name>_single.mmd via MeshManager
-    // Currently Fruit::Init loads meshes per-instance instead
+    // TODO: implement Fruit::LoadFruitModels (binary @ 0x001794e0).
+    //   - Operates on a parallel FruitModelInfo[] array (size 0x24 per entry,
+    //     allocated by g_FruitInfoCount), NOT on FRUIT_INFO itself.
+    //   - Per fruit: 4 mesh loads via Mortar::MeshManager::GetInstance()->Load:
+    //     "models/Fruit/%s_%c_piece_%d.mmd"  (piece 1, 2 -- required)
+    //     "models/Fruit/%s_single.mmd"       (optional)
+    //     "models/Fruit/%s_outline.mmd"      (optional)
+    //   - Followed per-mesh by GetNode + GetProperty("DiffuseMap") + SetupLighting.
+    //   - Blocked on Mortar::MeshManager port (3D model pipeline).
 }
 
 // --- Fruit::LoadInfo implementation (matches 0x17987c, 509 lines) ---
@@ -82,11 +89,15 @@ void FruitInfo_Load(const char* xmlPath)
     tinyxml2::XMLElement* critElem = root->FirstChildElement("critical");
     if (critElem)
     {
-        // TODO: parse "colour" CSV → global border colour bytes
-        // TODO: QueryIntAttribute: "chance", "chance_inc", "score", "splats", "spread"
-        //   → these go to g_GameData globals (not yet defined in port)
-        // TODO: QueryFloatAttribute: "collision", "scale", "disappear_speed"
-        //   → these go to g_GameData globals
+        // Binary 0x179914-0x179a10 (<critical> element):
+        //   5 QueryIntAttribute (game globals, NOT per-FruitInfo):
+        //     "new_life_at", "score", "chance", "chance_inc", "splats"
+        //   3 QueryFloatAttribute (game globals): "scale", "spread", "disappear_speed"
+        //   "colour" CSV -> BGRA bytes at *(byte**)(GOT+DAT_0017a280) (global border colour).
+        // TODO: implement once g_GameData has the corresponding global slots:
+        //   g_NewLifeAt, g_CritScoreThreshold, g_CritChance, g_CritChanceInc,
+        //   g_CritSplats, g_CritScale, g_CritSpread, g_CritDisappearSpeed,
+        //   g_CritBorderColour.
     }
 
     // --- Parse <bomb> element (global bomb settings) ---
@@ -219,6 +230,7 @@ void FruitInfo_Load(const char* xmlPath)
             fi.m_FactColour[3] = 0xFF; // A = 0xFF always
         }
 
+        // ASM-verified: 2026-05-03 binary @ 0x00179f44..0x00179fc0 (asm-inspector / re-analyst)
         // --- Float attrs with defaults ---
         fi.m_CollisionScale = 25.0f; // default 0x41C80000
         fi.m_Scale = 1.0f; // default 0x3F800000

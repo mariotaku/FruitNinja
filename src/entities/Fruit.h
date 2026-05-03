@@ -116,6 +116,10 @@ public:
     // ASM-verified: 2026-05-02 binary @ 0x00178708 reads [r4,#0x3c] = m_PlayerIdx
     uint32_t m_PlayerIdx;               // +0x90 (int; 0=P1, 1=P2, 2=spectator, 3=special)
 
+    // +0x94: time-scale multiplier for slo-mo. Binary uses for slo-mo bombs;
+    // restored by WaveManager::Resume. Init sets to 1.0f.
+    float m_TimeScale;                   // +0x94 (between m_PlayerIdx and m_ZPosition)
+
     // Z depth for draw sorting
     float m_ZPosition;                   // +0x98
 
@@ -193,11 +197,9 @@ public:
     // index out of range or LoadFruitModels hasn't run.
     static const FruitModelInfo* GetFruitModelInfo(int fruitType);
 
-    // Matches Fruit::RandomFruit (binary @ 0x00176564, 113 instructions).
-    // includeOnSide=true: all fruits; false: subset without on-side-only fruits.
-    // Binary uses 4-path weighted selector with WaveManager::m_Random.
-    // Port stub: uniform random via WaveManager::m_Random until FRUIT_INFO
-    // weight fields (m_RandBonusBase/Max) are RE'd and added to FruitInfo.
+    // Binary @ 0x00176564: 4-path weighted selector.
+    // includeOnSide=true: all fruits; false: m_bScorable-only subset.
+    // Critical mode (WaveManager::CriticalMode) restricts to m_bSpecial fruits.
     static int RandomFruit(bool includeOnSide);
 
     // Matches Fruit::GetNumActiveForPlayer (0x00122a00). Returns count of

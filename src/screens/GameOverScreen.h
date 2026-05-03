@@ -15,7 +15,7 @@
 
 class MenuButton;
 class HUDControl;
-// BonusScreen not yet ported; stubbed below
+// BonusScreen: full port in BonusScreen.h / BonusScreen.cpp
 class BonusScreen;
 // FruitFactControl: HUDControl3d (size 0x204), forward-declared
 class FruitFactControl;
@@ -182,19 +182,6 @@ private:
     // Mortar::Delegate<void()>::Make in CreateRetryButton/CreateQuitButton.
     void OnRetryClicked();
     void OnQuitClicked();
-};
-
-// BonusScreen stub — full port deferred (binary ctor 0x132048)
-// TODO: port BonusScreen as a separate task
-class BonusScreen : public HUDControl3d {
-public:
-    float m_BonusTimer; // +0xB8 in binary
-    float m_Height;     // +0xC0 in binary (bottom edge offset)
-
-    BonusScreen() : m_BonusTimer(0.0f), m_Height(0.0f) {}
-    void Update(float /*dt*/) override {}
-    void Draw(const Vec3& /*hudScale*/, int /*layerMask*/) override {}
-    int  GetType() override { return 99; }
 };
 
 #endif // FN_GAME_OVER_SCREEN_H

@@ -79,4 +79,18 @@ void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param
     game->currentScore += points;
 }
 
+// Binary free functions @ 0x0010a4b8 / 0x0010a4e8.
+// Defunct sig: playerIdx ignored (online MP scrubbed) — binary @ 0x0010a4b8 / 0x0010a4e8.
+void SetScore(int score, int /*playerIdx*/) {
+    Game* game = Game::GetInstance();
+    if (game && game->pSaveData)
+        game->pSaveData->m_CurrentScore = score;   // FruitSaveData+0x64
+}
+
+void SetMissCount(int n, int /*playerIdx*/) {
+    Game* game = Game::GetInstance();
+    if (game && game->pSaveData)
+        game->pSaveData->m_CurrentMissCount = n;   // FruitSaveData+0x68
+}
+
 } // namespace FN

@@ -62,6 +62,9 @@ public:
     // installs this on the shop button, not play or about.
     void ButtonDeleted(HUDControl* ctrl);
 
+    // Port-specific: remove callback helper for AboutScreen child pointer.
+    void AboutScreenRemoved(HUDControl*) { m_pAboutScreen = nullptr; }
+
 private:
     Game& game;
 

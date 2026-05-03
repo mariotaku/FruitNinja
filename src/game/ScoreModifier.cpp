@@ -20,12 +20,15 @@ ScoreModifier::ScoreModifier()
 {}
 
 // @ 0x0011cb44
+// Binary writes: [r0,#0x28]=0 (m_LossAdd), [r0,#0x2c]=1 (m_LossMultiply),
+//                [r0,#0x20]=0 (m_GainAdd),  [r0,#0x24]=1 (m_GainMultiply).
+// m_bDeferPoints (+0x34) is NOT reset here — binary @ 0x0011cb44 has no strb.
 void ScoreModifier::ResetSpecific() {
     m_LossAdd      = 0;
     m_LossMultiply = 1;
     m_GainAdd      = 0;
     m_GainMultiply = 1;
-    m_bDeferPoints = false;
+    // Binary @ 0x0011cb44 -- m_bDeferPoints NOT reset here.
 }
 
 // @ 0x0011cb70 — per-frame multiply into PowerUpManager score slots
