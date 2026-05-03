@@ -393,7 +393,7 @@ void Model::Draw(const Matrix44& transform) {
     for (int i = 0; i < meshCount - 1; i++) {
         for (int j = i + 1; j < meshCount; j++) {
             if (sorted[j].key > sorted[i].key) {
-                SortEntry tmp = sorted[i];
+                ModelSortEntry tmp = sorted[i];
                 sorted[i] = sorted[j];
                 sorted[j] = tmp;
             }
