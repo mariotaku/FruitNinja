@@ -156,7 +156,7 @@ void MainScreen::Release() {
     pSoundToggle = nullptr;
     pMusicToggle = nullptr;
 
-    // TODO: delete textures and font when proper resource management exists
+    // Note: SmartPtr members self-destruct in dtor; no explicit texture cleanup needed.
 }
 
 // Matches Update at 0x0014b278 (677 lines) — state machine

@@ -310,12 +310,12 @@ public:
     // 0x00121a1c: calls COIN_CHANCEINATOR::GetCoins().
     static void RequestCoins();
 
+    // Split whitespace-separated string into tokens.
+    static void SplitWords(const char* str, std::vector<std::string>& out);
+
 private:
     // Parse placement string to SpawnPlacement enum.
     static SpawnPlacement ParsePlacement(const char* side);
-
-    // Split comma-separated string into tokens, trimming whitespace.
-    static void SplitWords(const char* str, std::vector<std::string>& out);
 };
 
 #endif  // FN_WAVE_MANAGER_H

@@ -1,6 +1,8 @@
 #ifndef FN_WAVE_STRUCTS_H
 #define FN_WAVE_STRUCTS_H
 
+namespace tinyxml2 { class XMLElement; }
+
 // Wave data structs — binary layouts from docs/structs/wave.md and
 // docs/systems/wave-system.md.
 //
@@ -307,7 +309,12 @@ struct PROBABILITY_OVERIDE {
         for (int i = 0; i < 20; ++i) m_TypeQueue[i] = -1;
     }
 
-    void SelectType() { /* TODO: Fruit::FruitType random select */ }
+    // Parse XML attributes into this struct. binary @ 0x001231d8
+    void Parse(tinyxml2::XMLElement* xml);
+
+    // TODO: implement SelectType (binary @ 0x00122b44) — needs Fruit::FruitType(str,false)
+    // and Fruit::RandomFruit(false) plus bomb-hash guarded statics.
+    void SelectType() {}
 };
 
 // Forward-declared in WaveManager.h, but `delete m_pWaveQue` in

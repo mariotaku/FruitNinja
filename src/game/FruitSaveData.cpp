@@ -50,8 +50,8 @@ FruitSaveData::FruitSaveData()
     , m_GameOverField2(-1)
     , m_GameOverField3(-1)
     , m_GameOverField4(-1)
-    , m_bResumeFlag1(0)
-    , m_bResumeFlag2(0)
+    , newBestThisGame(0)
+    , secondaryFlag(0)
     , m_BombHitTimer(0.0f)
     , m_field134(-1.0f)
     , m_ShakeIntensity(0.0f)
@@ -191,8 +191,8 @@ bool FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
 }
 
 void FruitSaveData::UnlockTotals() {
-    // TODO: AchievementManager not ported (#52 audit confirmed safe)
-    // 0x00124f10 -- "total-X" thresholds; depends on AchievementManager full table.
+    // Note: AchievementManager is a no-op stub (#52 audit confirmed safe to skip).
+    // 0x00124f10 -- "total-X" thresholds; full impl blocked on AchievementManager port.
 }
 
 // ----------------------------------------------------------------------
@@ -384,8 +384,8 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         que->SetAttribute("go_head",         save->m_GameOverField2);
         que->SetAttribute("go_fruit",        save->m_GameOverField3);
         que->SetAttribute("go_fact",         save->m_GameOverField4);
-        que->SetAttribute("go_showHighScore", save->m_bResumeFlag1 ? "true" : "false");
-        que->SetAttribute("go_setScore",     save->m_bResumeFlag2 ? "true" : "false");
+        que->SetAttribute("go_showHighScore", save->newBestThisGame ? "true" : "false");
+        que->SetAttribute("go_setScore",     save->secondaryFlag ? "true" : "false");
         que->SetAttribute("nextComboBonus",  save->m_field134);
         que->SetAttribute("shake_time",      save->m_ShakeIntensity);
         que->SetAttribute("shake_max_time",  save->m_ShakeDecay);
@@ -530,9 +530,9 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         que->QueryIntAttribute("go_fruit",         &save->m_GameOverField3);
         que->QueryIntAttribute("go_fact",          &save->m_GameOverField4);
         const char* showHs = que->Attribute("go_showHighScore");
-        if (showHs) save->m_bResumeFlag1 = (strcmp(showHs, "true") == 0) ? 1 : 0;
+        if (showHs) save->newBestThisGame = (strcmp(showHs, "true") == 0) ? 1 : 0;
         const char* setScore = que->Attribute("go_setScore");
-        if (setScore) save->m_bResumeFlag2 = (strcmp(setScore, "true") == 0) ? 1 : 0;
+        if (setScore) save->secondaryFlag = (strcmp(setScore, "true") == 0) ? 1 : 0;
         que->QueryFloatAttribute("nextComboBonus", &save->m_field134);
         que->QueryFloatAttribute("shake_time",     &save->m_ShakeIntensity);
         que->QueryFloatAttribute("shake_max_time", &save->m_ShakeDecay);

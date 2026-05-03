@@ -8,15 +8,19 @@
 // See docs/structs/data.md for full layout
 //
 // Analysed: 2026-04-13T14:00
-// Correction 2026-04-13: field offsets for m_Scale/m_CollisionScale and the
-// string fields at +0x40/+0x80/+0xC0/+0x200/+0x278 were previously wrong;
-// fixed to match LoadInfo decompile sequence.
+// Layout correction 2026-05-03: field offsets for m_Singular/m_PluralEnglish
+// were swapped (binary has m_Singular at +0x080, m_PluralEnglish at +0x0C0);
+// m_HudTexture/m_ZenTexture renamed to m_pFruitTexture/m_pFruitTexture2;
+// pad_30c[8] replaced with m_CumWeight+m_CumCritWeight;
+// m_bNoCritical renamed to m_bScorable (semantics: positive = can score a critical).
 
 #include <cstdint>
+#include <cstddef>
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 
 // Impact sound entry (0xC = 12 bytes)
+// Binary: ImpactSound struct, sizeof confirmed = 12
 struct ImpactSound {
     char* m_SoundName;         // +0x00: heap-allocated SFX name
     int   m_Weight;            // +0x04: probability weight
@@ -25,27 +29,36 @@ struct ImpactSound {
 };
 
 // Power-up entry (0xC = 12 bytes)
-struct FruitPower {
+// Binary: FRUIT_POWER struct
+struct FRUIT_POWER {
     uint32_t m_PowerHash;        // +0x00: StringHash of power name
     int      m_Weight;           // +0x04: probability weight
     uint32_t m_CumulativeWeight; // +0x08: running total
-    FruitPower() : m_PowerHash(0), m_Weight(0), m_CumulativeWeight(0) {}
+    FRUIT_POWER() : m_PowerHash(0), m_Weight(0), m_CumulativeWeight(0) {}
 };
+
+// Port alias so existing code using FruitPower still compiles
+typedef FRUIT_POWER FruitPower;
 
 // Power-up container (8 bytes)
-struct FruitPowers {
-    FruitPower* m_pArray;  // +0x00
-    uint32_t    m_Count;   // +0x04
-    FruitPowers() : m_pArray(nullptr), m_Count(0) {}
+// Binary: FRUIT_POWERS struct
+struct FRUIT_POWERS {
+    FRUIT_POWER* m_pArray;  // +0x00
+    uint32_t     m_Count;   // +0x04
+    FRUIT_POWERS() : m_pArray(nullptr), m_Count(0) {}
 };
 
+// Port alias so existing code using FruitPowers still compiles
+typedef FRUIT_POWERS FruitPowers;
+
 // Matches FRUIT_INFO (0x330 = 816 bytes per entry)
+// LoadInfo @ 0x0017987c
 struct FruitInfo {
     // String fields (char[0x40] = 64 bytes each)
     char m_Name[64];              // +0x000: "name" attr
     char m_SingularEnglish[64];   // +0x040: "singularEnglish" attr (fallback: m_Name)
-    char m_PluralEnglish[64];     // +0x080: "pluralEnglish" attr (fallback: sprintf("%ss", m_Name))
-    char m_Singular[64];          // +0x0C0: "singular" attr (localisation key; fallback: m_Name)
+    char m_Singular[64];          // +0x080: "singular" attr (localisation key; fallback: m_Name)
+    char m_PluralEnglish[64];     // +0x0C0: "pluralEnglish" attr (fallback: sprintf("%ss", m_Name))
     char m_Plural[64];            // +0x100: "plural" attr (localisation key; fallback: sprintf("%ss", m_Name))
     char m_TotalStatKey[64];      // +0x140: sprintf("%s_total", m_Name)
     char m_PointTotalKey[64];     // +0x180: sprintf("%s_point_total", m_Name)
@@ -71,7 +84,7 @@ struct FruitInfo {
 
     // Flags
     uint8_t m_bHasSplatSeeds;     // +0x26C: "hasSplatSeeds"/"splats" attr
-    uint8_t pad_26d[3];
+    uint8_t _pad_26D[3];
 
     // Fact strings
     int    m_FactCount;           // +0x270: count of <fact> children
@@ -79,35 +92,95 @@ struct FruitInfo {
 
     // factTexture + padding (char[64] + 64 unused bytes)
     char    m_FactTexture[64];    // +0x278: "factTexture" attr
-    uint8_t pad_2b8[64];          // +0x2B8..+0x2F7: unknown/padding
+    uint8_t _pad_2B8[64];         // +0x2B8..+0x2F7: unknown/padding
 
     // Colours + flags
-    uint8_t m_FactColour[4];      // +0x2F8: "factColour" attr (R,G,B → B,G,R,0xFF)
+    uint8_t m_FactColour[4];      // +0x2F8: "factColour" attr (R,G,B -> B,G,R,0xFF)
     uint8_t m_bOnSide;            // +0x2FC: "onside"/"onSide" attr
-    uint8_t pad_2fd[3];
+    uint8_t _pad_2FD[3];
 
-    // Textures
-    SmartPtr<Mortar::Texture> m_HudTexture;  // +0x300: "hud_%s.tex"
-    SmartPtr<Mortar::Texture> m_ZenTexture;  // +0x304: "zen_%s.tex"
+    // Textures (+0x300, +0x304)
+    // Binary names: m_pFruitTexture (HUD), m_pFruitTexture2 (Zen).
+    // Port keeps m_HudTexture/m_ZenTexture for backward compatibility with locked consumers.
+    SmartPtr<Mortar::Texture> m_HudTexture;    // +0x300: "hud_%s.tex" (HUD thumbnail) — binary: m_pFruitTexture
+    SmartPtr<Mortar::Texture> m_ZenTexture;    // +0x304: "zen_%s.tex" (Zen mode)      — binary: m_pFruitTexture2
 
-    // Int fields
-    int     m_Chance;             // +0x308: "chance" attr
-    uint8_t pad_30c[8];           // +0x30C..+0x313: runtime cache
-    int     m_Score;              // +0x314: "score" attr
-    uint8_t m_bNoCritical;        // +0x318: "noCritical" attr
-    uint8_t m_bSpecial;           // +0x319: flag (QueryIntAttribute == 1)
-    uint8_t pad_31a[2];
+    // Spawn weight + runtime caches
+    int m_Chance;                 // +0x308: "chance" attr
+    int m_CumWeight;              // +0x30C: runtime cache for RandomFruit cumulative weight
+    int m_CumCritWeight;          // +0x310: runtime cache for RandomFruit critical cumulative weight
+    int m_Score;                  // +0x314: "score" attr
+
+    // Scoring flags
+    // m_bScorable: cleared if score >= global threshold (semantics: 1 = can score a critical hit)
+    // Binary field name was "m_bNoCritical" in Ghidra but polarity is inverted relative to
+    // the "noCritical" XML attr. See LoadInfo @ 0x0017987c for the store sequence.
+    uint8_t m_bScorable;          // +0x318
+    uint8_t m_bSpecial;           // +0x319: from "noCritical" attr (QueryIntAttribute == 1)
+    uint8_t _pad_31A[2];
 
     // Impact sounds
     ImpactSound* m_pSounds;       // +0x31C
     int          m_SoundCount;    // +0x320
 
     int m_CoinsMin;               // +0x324: "coinsMin" attr
-    int m_CoinsMax;               // +0x328: "coinsMax" attr
+    int m_CoinsMax;               // +0x328: "coinsMax" attr  // Ghidra's "m_RandBonusMax" is wrong
 
     // Power-ups
-    FruitPowers* m_pPowers;       // +0x32C
+    FRUIT_POWERS* m_pPowers;      // +0x32C
 };
+
+// Layout asserts.
+// Fields before the SmartPtr members (offsets 0x000..0x2FC) are pointer-size-
+// independent and pass on both 32-bit and 64-bit builds.
+// Fields at 0x300+ depend on SmartPtr<T> being 4 bytes (ARM32), which is only
+// true on the cross-compile (32-bit) path. On the 64-bit port build SmartPtr
+// is 8 bytes, so the asserts from m_HudTexture onward are guarded to 32-bit.
+static_assert(offsetof(FruitInfo, m_Name)            == 0x000, "");
+static_assert(offsetof(FruitInfo, m_SingularEnglish) == 0x040, "");
+static_assert(offsetof(FruitInfo, m_Singular)        == 0x080, "");
+static_assert(offsetof(FruitInfo, m_PluralEnglish)   == 0x0C0, "");
+static_assert(offsetof(FruitInfo, m_Plural)          == 0x100, "");
+static_assert(offsetof(FruitInfo, m_TotalStatKey)    == 0x140, "");
+static_assert(offsetof(FruitInfo, m_PointTotalKey)   == 0x180, "");
+static_assert(offsetof(FruitInfo, m_DropsKey)        == 0x1C0, "");
+static_assert(offsetof(FruitInfo, m_ModelName)       == 0x200, "");
+static_assert(offsetof(FruitInfo, m_FruitColour)     == 0x240, "");
+static_assert(offsetof(FruitInfo, m_Scale)           == 0x244, "");
+static_assert(offsetof(FruitInfo, m_CollisionScale)  == 0x248, "");
+static_assert(offsetof(FruitInfo, m_HitInfluence)    == 0x24C, "");
+static_assert(offsetof(FruitInfo, m_NameHash)        == 0x250, "");
+static_assert(offsetof(FruitInfo, m_NameHashUpper)   == 0x254, "");
+static_assert(offsetof(FruitInfo, m_TrailHash)       == 0x258, "");
+static_assert(offsetof(FruitInfo, m_SlicedHash)      == 0x25C, "");
+static_assert(offsetof(FruitInfo, m_TotalStatHash)   == 0x260, "");
+static_assert(offsetof(FruitInfo, m_PointTotalHash)  == 0x264, "");
+static_assert(offsetof(FruitInfo, m_DropsHash)       == 0x268, "");
+static_assert(offsetof(FruitInfo, m_bHasSplatSeeds)  == 0x26C, "");
+static_assert(offsetof(FruitInfo, m_FactCount)       == 0x270, "");
+// All asserts from m_pFacts onward are pointer-size-dependent (char**, SmartPtr,
+// pointers to arrays). Valid only on 32-bit (ARM cross-compile target).
+// On 64-bit port builds pointer fields are 8 bytes; the binary layout uses 4-byte pointers.
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+static_assert(sizeof(FruitInfo) == 0x330, "FruitInfo size mismatch");
+static_assert(offsetof(FruitInfo, m_pFacts)          == 0x274, "");
+static_assert(offsetof(FruitInfo, m_FactTexture)     == 0x278, "");
+static_assert(offsetof(FruitInfo, m_FactColour)      == 0x2F8, "");
+static_assert(offsetof(FruitInfo, m_bOnSide)         == 0x2FC, "");
+static_assert(offsetof(FruitInfo, m_HudTexture)      == 0x300, "");  // binary: m_pFruitTexture
+static_assert(offsetof(FruitInfo, m_ZenTexture)      == 0x304, "");  // binary: m_pFruitTexture2
+static_assert(offsetof(FruitInfo, m_Chance)          == 0x308, "");
+static_assert(offsetof(FruitInfo, m_CumWeight)       == 0x30C, "");
+static_assert(offsetof(FruitInfo, m_CumCritWeight)   == 0x310, "");
+static_assert(offsetof(FruitInfo, m_Score)           == 0x314, "");
+static_assert(offsetof(FruitInfo, m_bScorable)       == 0x318, "");
+static_assert(offsetof(FruitInfo, m_bSpecial)        == 0x319, "");
+static_assert(offsetof(FruitInfo, m_pSounds)         == 0x31C, "");
+static_assert(offsetof(FruitInfo, m_SoundCount)      == 0x320, "");
+static_assert(offsetof(FruitInfo, m_CoinsMin)        == 0x324, "");
+static_assert(offsetof(FruitInfo, m_CoinsMax)        == 0x328, "");
+static_assert(offsetof(FruitInfo, m_pPowers)         == 0x32C, "");
+#endif
 
 // Maximum fruit types
 static const int FRUIT_INFO_MAX = 32;  // 22 in Bada XML, room for extras

@@ -38,24 +38,36 @@ Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implem
 - 480x320 landscape (on portrait 480x800 Bada device, touch/camera rotated 90°), entry point: `OspMain`
 - Built with Samsung Sourcery G++ 4.4.1, hard-float ABI (`Tag_ABI_VFP_args: VFP registers`).
 
+## RE record lives in source code, not docs
+
+The port treats **source code as the canonical RE record**:
+- Struct layouts live in headers (`src/**/*.h`).
+- Function logic lives in `.cpp`.
+- Each unimplemented sub-block carries a `// TODO: <binary addr> — <what's missing>` comment that **is the spec** for that gap.
+- `// ASM-verified: <ISO-time> binary @ 0x<addr> (asm-inspector)` markers list functions ASM-checked against the binary.
+- `// DIFFERS: original = X from DAT_addr, using Y because <reason>` flags deliberate deviations.
+
+This replaces the prior practice of authoring large `docs/*-deep-re.md` / `docs/structs/*.md` / per-class narratives. Those have been removed; only a small reference set survives — file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance.
+
 ## Subagents (in `.claude/agents/`)
 
 Specialised agents handle distinct phases of the RE+port workflow. **Each agent stays in its own lane** — see the "do not do" line in each agent file. Detailed RE rules / GhidraMCP usage live in `re-analyst.md`; detailed implementation rules / coordinate system / fidelity policy live in `implementer.md`.
 
 | Agent | When to use | Outputs |
 |-------|-------------|---------|
-| `re-analyst`   | Decompile a binary function, resolve a struct, follow GOT pointers, read DAT constants — any task pulling info *out of* `FruitNinja.exe`. | RE reports (struct tables, pseudocode, constants, binary refs); may write to `docs/` |
-| `implementer`  | Write or edit C++ from an existing spec in `docs/`. Use after `re-analyst` has produced the spec, or when the spec already exists. | Code in `src/`; build verification |
-| `doc-writer`   | Format RE findings into `docs/` markdown when neither re-analyst nor implementer is the right fit (consolidating a conversation into a doc). | Markdown docs only |
-| `asm-inspector`| Settle "does the binary really do X?" questions by compiling a minimal C++ test unit with the Bada toolchain and diffing against Ghidra's `disassemble_function` output. Used when the decompiler output is suspicious. | ASM-level verdict + spec for `implementer` to apply |
+| `re-analyst`   | Decompile a binary function, resolve a struct, follow GOT pointers, read DAT constants — any task pulling info *out of* `FruitNinja.exe`. | A structured report handed back to the caller. The `implementer` pastes the relevant pieces as source-side comments. Does NOT author standalone narrative docs. |
+| `implementer`  | Write or edit C++ against existing source-side specs (`// TODO`, `// ASM-verified`, `// DIFFERS`) and the small load-bearing reference docs. | Code in `src/`; build verification |
+| `doc-writer`   | Update one of the load-bearing reference docs (formats, init order, skip-lists, etc.) — see whitelist in `doc-writer.md`. NOT for per-class / per-screen RE narratives. | Markdown docs (whitelist only) |
+| `asm-inspector`| Settle "does the binary really do X?" questions by compiling a minimal C++ test unit with the Bada toolchain and diffing against Ghidra's `disassemble_function` output. Used when the decompiler output is suspicious. | ASM-level verdict + a `// ASM-verified:` marker line for `implementer` to paste |
+| `asm-triager`  | Read the `tools/asm-verify/run.sh` report and classify SUSPICIOUS / DIVERGE rows as ACCEPT-cosmetic / ACCEPT-deferred / FIX-NEEDED. | Updated `tools/asm-verify/triage.json` |
 
 **Coordination rules:**
 - One screen / system at a time. Don't spawn two agents that touch the same files in parallel.
 - For new work: spawn `re-analyst` first (RE+spec), then `implementer` (code from spec). Don't ask one agent to do both phases.
-- `re-analyst` may write to `docs/` but **must not edit `src/`**.
-- `implementer` may read `docs/` but **must not RE new functions** — if the spec is incomplete, return a list of gaps so the user can dispatch `re-analyst` again.
-- `doc-writer` writes docs only — does not RE, does not write code.
-- `asm-inspector` does not edit `src/`; hands off a precise spec when divergence is found.
+- `re-analyst` returns a report; it does NOT edit `src/` and does NOT author narrative docs.
+- `implementer` reads source-side specs (`// TODO` / `// ASM-verified` / `// DIFFERS`) plus the small load-bearing reference doc set; **must not RE new functions** — if the source-side spec is incomplete, return a list of gaps so the user can dispatch `re-analyst` again.
+- `doc-writer` updates only the load-bearing reference doc whitelist (see `doc-writer.md`). Does not RE, does not write code.
+- `asm-inspector` does not edit `src/`; hands off a precise spec + `// ASM-verified:` marker line when verdict is Confirmed.
 
 **Dispatch granularity:**
 - When a request involves multiple distinct items (e.g. "verify Fruit, Bomb, MenuButton"; "RE these 5 functions"; "fix these 3 bugs"), prefer **subdividing into multiple agent calls** rather than packing everything into one. Smaller scopes return faster and give the user real progress milestones (1-of-N done is visible) instead of an opaque long-running blob.
@@ -69,14 +81,29 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 
 ## Conventions
 - **Only commit when explicitly requested** by the user — do not auto-commit after changes.
-- When a value in port code **differs from the original binary**, add a comment explaining the discrepancy: `// DIFFERS: original = 0.01 from DAT_0017633c, using 25.0 as placeholder`.
+- **Source-side comment grammar** (greppable, load-bearing):
+  - `// TODO: <binary addr or descriptor> — <gap>` — unimplemented sub-block; the comment is the canonical spec for that gap. Delete the line when you close the gap.
+  - `// ASM-verified: <ISO-time UTC> binary @ 0x<addr> (asm-inspector)` — confirmed by ASM diff. Inventory: `grep -rn 'ASM-verified:' src/`.
+  - `// DIFFERS: original = X from DAT_addr, using Y because <reason>` — deliberate deviation.
 - Temp/scratch files go in `<project root>/tmp/`, NOT `/tmp` or system temp.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use plain ASCII substitutes (`->`, `--`, `'`, etc.). Comments inside source files can use Unicode freely; this is a runtime-output rule.
 
 ## Key Files
-- `docs/README.md` — documentation index
-- `docs/structs/`  — struct layouts (entities, game, camera, wave, data, hud, screens, ui-widgets)
-- `docs/systems/` — systems (state machine, rendering, physics, scoring, wave, menu, save, sound, touch, particles, power-ups, effects, string hash)
-- `docs/formats/` — asset formats (.tex, .wav.pcm, .mad/.mmd, .fnt)
-- `docs/resources.md` — asset directory structure, XML schemas, loading flow
-- `docs/TODO.md` — remaining RE gaps and intentionally skipped items
+
+The canonical RE record is in `src/`. The surviving `docs/` set is small and load-bearing only — things you cannot derive from code:
+
+- `docs/TODO.md` — project-wide RE backlog and intentional-skip lists.
+- `docs/HANDOVER.md`, `docs/HANDOVER-gameplay.md` — onboarding context.
+- `docs/port-plan.md` — high-level port intent.
+- `docs/resources.md` — asset directory layout, XML schemas, loading flow (data, not derivable from code).
+- `docs/source-files.md` — port file → binary symbol cross-reference index.
+- `docs/engine/coordinate-system.md` — cross-cutting coordinate convention.
+- `docs/engine/binary-static-init.md` — pre-`OspMain` static-init order.
+- `docs/engine/binary-build-evidence.md` — toolchain / ABI provenance.
+- `docs/engine/online-services-audit.md` — what we intentionally skip and why.
+- `docs/engine/string-hash.md`, `docs/engine/font.md`, `docs/engine/particles.md`, `docs/engine/mesh.md`, `docs/engine/baked-string.md`, `docs/engine/localisation.md`, `docs/engine/formats/` — file/data formats.
+- `docs/gallery/` — extracted models / textures.
+- `docs/README.md` — index for the above.
+- `tools/asm-verify/triage.json` — sticky verdicts for asm-verify divergences.
+
+Per-class struct layouts, per-function pseudocode, per-screen RE notes, and `*-deep-re.md` / `*-asm-audit.md` / `*-asm-verify.md` session artifacts have been removed; their content lives in source comments (or has been folded into the surviving format/init docs).

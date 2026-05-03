@@ -214,7 +214,7 @@ void GameInitialise() {
     // first instead of SongPlay("background"). See docs/systems/music-state.md.
     game->m_TransitionTimer = -1.0f;
 
-    // TODO: Steps 12-13: PowerUpManager, LeaderboardManager
+    // Note: PowerUpManager::Load is called above (step 11). LeaderboardManager is defunct.
 
     // Steps 16-21: Font::Load ×8
     // Matches GameInitialise @ 0x0010bdfc font-loading region.
@@ -298,7 +298,7 @@ void GameInitialise() {
         }
     }
 
-    // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas)
+    // TODO: Step 22: LoadLocalisedTexture → g_GameData+0x17c (fruit atlas SmartPtr slot).
     // Step 23: MenuButton::LoadContent()
     MenuButton::LoadContent();
 
@@ -337,9 +337,9 @@ void GameDestroy() {
 
     printf("GameDestroy: shutting down\n");
 
-    // --- 1. Online services (defunct — skipped) ---
-    // TODO: LeaderboardManager::Destroy
-    // TODO: NetworkManager::Destroy
+    // --- 1. Online services (defunct — skipped per online-services-audit) ---
+    // Note: LeaderboardManager::Destroy -- skipped (online-services-audit)
+    // Note: NetworkManager::Destroy -- skipped (online-services-audit)
 
     // --- 2. Static texture teardown ---
     FruitFactControl::UnLoadContent();
@@ -354,8 +354,8 @@ void GameDestroy() {
     LeaderboardScreen::UnLoadContent();
 
     // --- 3. Data managers (not ported) ---
-    // TODO: AchievementManager::UnLoadAchievementInfo
-    // TODO: ItemManager::UnLoadItemData
+    // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
+    // TODO: ItemManager::UnLoadItemData -- blocked on ItemManager UnLoadItemData RE.
 
     // --- 4. HUD ---
     if (game->hud) {
@@ -416,12 +416,12 @@ void GameDestroy() {
     if (game->actorManager) { delete game->actorManager; game->actorManager = nullptr; }
 
     // --- 12. Engine singletons ---
-    // TODO: Mortar::InputManager::Destroy
-    // TODO: Mortar::TextureManager::Destroy
-    // TODO: Mortar::AnimationManager::Destroy
-    // TODO: Mortar::MeshManager::Destroy
-    // TODO: Mortar::TextureManager::Destroy (binary calls twice)
-    // TODO: Mortar::DisplayManager::Destroy
-    // TODO: Mortar::SoundManager::Destroy
-    // TODO: SystemManager::Destroy
+    // Note: Mortar::InputManager::Destroy -- SDL2 replacement cleaned up above.
+    // Note: Mortar::TextureManager::Destroy -- port uses SDL/GL teardown at process exit.
+    // Note: Mortar::AnimationManager::Destroy -- not yet ported; no-op acceptable at shutdown.
+    // Note: Mortar::MeshManager::Destroy -- not yet ported; no-op acceptable at shutdown.
+    // Note: Mortar::TextureManager::Destroy (binary calls twice) -- same as above.
+    // Note: Mortar::DisplayManager::Destroy -- SDL2 window/GL teardown handles this.
+    // Note: Mortar::SoundManager::Destroy -- SoundManager teardown on process exit.
+    // Note: SystemManager::Destroy -- no SystemManager class in port; Bada OS only.
 }

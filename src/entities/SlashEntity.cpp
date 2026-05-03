@@ -56,28 +56,9 @@ static const int   HEAD_TAPER_COUNT = 5;
 // for clarity; visual feel is approximately the same.
 static const float TRAIL_LIFETIME = 0.25f;
 
-// ---------------------------------------------------------------------------
-// TODO: proper slash-modifier trail emitter path.
-//
-// The binary's SlashEntity reads the trail emitter hash from a static member
-// `SlashEntity::ModPartilcesHash` (sic: binary typo) that is populated by
-// ItemManager / SlashModInfo::SetEquipped when the player changes slash
-// modifier in the Dojo shop. The default item (`ORIGINAL_SLASH` in
-// itemlist.xml) has no particle trail — you only see smoke/sparkle when a
-// mod like `dark_blade`, `flame_blade`, `ice_blade`, etc. is equipped.
-//
-// Port shortcut: hard-code `dark_blade` as the trail emitter so the visual
-// can be tested without porting the full item / mod-equip pipeline first.
-// Replace with `SlashEntity::ModPartilcesHash` once that is wired up.
-//
-//   Full fix requires:
-//   1. Port ItemManager XML parser for Data/xml/itemlist.xml
-//   2. Port SlashModInfo struct + Parse method
-//   3. Port SetEquipped / currently-equipped state
-//   4. Port Dojo shop UI for changing mods (or preset via save data)
-//   5. Replace the hash lookup below with ModPartilcesHash
-// ---------------------------------------------------------------------------
-static const char* TRAIL_EMITTER_NAME = "dark_blade";
+// TODO: drive g_TrailHash + g_DirectionalFlag from ItemManager equip state.
+// Upstream blockers: ItemManager XML parser, SlashModInfo::SetEquipped,
+// Dojo shop UI. Until then both stay 0 (no trail for default ORIGINAL_SLASH).
 
 // --- Global content ---
 static SmartPtr<Mortar::Texture> g_BladeTex;
@@ -95,19 +76,16 @@ SlashEntity* g_pSlashEntity = nullptr;
 static float    g_LifeScale         = 1.0f;   // 0x001F3E54
 static int      g_ColourCount       = 1;      // 0x001F3E58
 static float    g_PaletteProgress   = 0.0f;   // 0x0024D874
-// _GLOBAL__I_Slash.cpp @ 0x0017e52c: allocates 16 entries via do/while
-// Colour::Colour() default ctor (= black (0,0,0,255)), then copy-ctors entry[0]
-// from DAT_0017e828 source. DAT_0017e828 value not yet RE'd -- TODO.
+// @ 0x0017e6cc-0x0017e6d0: 16-entry default-ctor (Black 0,0,0,255), then
+// entry[0] copy-ctor from Colour::White @ 0x00268f64 (resolved via GOT
+// offset 0x73a4 -> 0x001f34d4 -> 0x00268f64).
 static Colour   g_Palette[16] = {
-    // TODO: entry[0] should be copy-ctor from DAT_0017e828 (binary value unknown)
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
-    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(255, 255, 255, 255),                                            // entry[0] = Colour::White
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
+    Colour(0, 0, 0, 255), Colour(0, 0, 0, 255), Colour(0, 0, 0, 255),
 };                                            // 0x0024D878
 static int      g_ColourType        = 0;      // 0x0024D8B8 (0=static, 1=per-frame, 2=per-swipe)
 static uint8_t  g_DirectionalFlag   = 0;      // 0x0024D8BC (0=no trail, 1=trail, 2=trail-rotates)
@@ -155,6 +133,7 @@ void SlashEntity::ReleaseContent() {
 SlashEntity::SlashEntity()
     : m_NumPoints(0)
     , m_TrailEmitter(nullptr)
+    , m_pCurrentTarget(nullptr)
     , m_State(0)
     , m_bHasHead(false)
     , m_RawTouchPos(0, 0, 0)
@@ -172,6 +151,7 @@ void SlashEntity::Init() {
     m_State = 0;
     m_bHasHead = false;
     m_TrailEmitter = nullptr;
+    m_pCurrentTarget = nullptr;
 
     for (int i = 0; i < MAX_VERTS; ++i) {
         m_Left[i].nx  = 0; m_Left[i].ny  = 0; m_Left[i].nz  = 1.0f;
@@ -732,7 +712,11 @@ int      SlashEntity::GetColourCount()                            { return g_Col
 int      SlashEntity::GetColourType()                             { return g_ColourType; }
 const Colour* SlashEntity::GetPalette()                           { return g_Palette; }
 
-// @ 0x0016ba84
+// @ 0x0017e504. Iterates 8 SlashEntityGhost slots (base+0x3c, stride 0x10).
+// Render state inherited from GameDraw (alpha-blend SRC_ALPHA/ONE_MINUS_SRC_ALPHA,
+// depth-test on, depth-write off -- set at 0x0016ba88-0x0016bb52).
+// Tier-2: ghost array not yet ported (only spawned by type-2 slash mods that
+// aren't in the default game). No-op until SlashEntityGhost lands.
+// for (int i = 0; i < 8; ++i) m_Ghosts[i].Draw();
 void SlashEntity::PreDraw() {
-    // TODO: implement -- blade pre-pass blend/texture state setup
 }

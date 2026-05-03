@@ -246,10 +246,13 @@ void FruitInfo_Load(const char* xmlPath)
         if (!onSide) onSide = elem->Attribute("onside");
         fi.m_bOnSide = (onSide && strcmp(onSide, "true") == 0) ? 1 : 0;
 
+        // m_bScorable: 1 = fruit can receive a critical hit, 0 = cannot.
+        // XML "noCritical"="true" means NO critical, so m_bScorable=0 when attr is "true".
+        // LoadInfo @ 0x0017987c: store sequence sets field to 1 unless "noCritical"=="true",
+        // then clears it if colour alpha == 0.
         const char* noCrit = elem->Attribute("noCritical");
-        fi.m_bNoCritical = (noCrit && strcmp(noCrit, "true") != 0) ? 1 : 0; // inverted: "true" = has critical
-        // Also cleared if colour alpha == 0 or score >= some threshold
-        if (fi.m_FruitColour[3] == 0) fi.m_bNoCritical = 0;
+        fi.m_bScorable = (noCrit && strcmp(noCrit, "true") == 0) ? 0 : 1;
+        if (fi.m_FruitColour[3] == 0) fi.m_bScorable = 0;
 
         // "onlySprinkle" → +0x319 (QueryIntAttribute == 1)
         int sprinkle = 0;

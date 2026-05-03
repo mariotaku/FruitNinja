@@ -1,7 +1,7 @@
 #ifndef FN_GAME_POWER_UP_H
 #define FN_GAME_POWER_UP_H
 
-// Analysed: 2026-04-30T00:00
+// Analysed: 2026-05-03T00:00
 //
 // PowerUp — XML-parsed template + active-instance object.
 // Binary size 0xCC (204 bytes). Both the template (m_AllPowerUps) and
@@ -25,129 +25,128 @@
 //   SetCurrentTime  0x0011a210
 //   SetTotalTime    0x001180d4
 //   SetOnScreenAmt  0x0011a1c4
-//   AddDeferedPoints 0x000f81f0
+//   AddDeferedPoints 0x00117a50
 //   LoadTextures    0x001183f0
 
 #include <cstdint>
 #include <list>
 #include "GameModifier.h"
-
-class TiXmlElement;
-
-// Forward declarations for unported types — stubs only.
-class ScreenEffect;
+#include "ScreenEffect.h"
+#include "util/SmartPtr.h"
+#include "asset/Texture.h"
+#include "math/Vec3.h"
+#include <tinyxml2.h>
 
 // Minimal PurchaseInfo layout (0xc4-byte struct in binary).
-// Only field_0xc0 is required; remainder is unported.
+// Fields verified from binary (re-analyst PowerUp lifecycle pass).
 class PurchaseInfo {
 public:
-    uint8_t _pad[0xc0];
-    int field_0xc0;  // remaining-uses count; ASM-verified @ 0x00119bb0
+    // +0x00: vptr (implicit)
+    // +0x04: m_Cost — coin cost of the purchasable power-up
+    int m_Cost;
+    // +0x08..+0xbf: unported fields (binary layout 0xc4 bytes)
+    uint8_t _pad08[0xb8];
+    // +0xc0: m_RemainingUses — remaining use count; 0 = exhausted
+    // ASM-verified @ 0x00119bb0
+    int m_RemainingUses;
+
+    PurchaseInfo() : m_Cost(0), m_RemainingUses(0) {
+        for (int i = 0; i < (int)sizeof(_pad08); ++i) _pad08[i] = 0;
+    }
+
+    // TODO: implement Parse (binary @ 0x? -- re-analyst pass needed)
+    void Parse(tinyxml2::XMLElement* /*xml*/) {}
+
+    // TODO: implement LoadTextures (binary @ 0x? -- re-analyst pass needed)
+    void LoadTextures() {}
 };
 
-// Colour as stored in binary (BGRA8 packed in 4 bytes).
+// Colour as stored in binary (RGBA8 packed in 4 bytes).
 struct PUColour {
     uint8_t r, g, b, a;
 };
 
-// SmartPtr stand-in: stores raw pointer; Load/Release lifecycle owned externally.
-// Default-initialised in the ctor; in-class non-static member initialisers
-// are a C++11 feature that GCC 4.4 (the cross-build asm-verify toolchain)
-// can't parse.
-template<typename T> struct PURawPtr {
-    T* ptr;
-    PURawPtr() : ptr(0) {}
-    bool IsValid() const { return ptr != 0; }
-    T* Get() const { return ptr; }
-    void SetNull() { ptr = 0; }
-};
-
 class PowerUp {
 public:
-    // +0x00 (pad / list sentinel)
-    uint32_t field_0x00;
+    // +0x00 vptr (implicit)
 
-    // +0x04 std::list<GameModifier*> m_ModList (12 bytes: prev,next,size)
+    // +0x04 m_ModList — std::list<GameModifier*> (12 bytes on 32-bit ARM)
     std::list<GameModifier*> m_ModList;
 
-    // +0x10  m_NameHash
-    uint32_t m_NameHash;
+    // +0x10 m_Name[0x40]
+    char m_Name[0x40];
 
-    // +0x10..+0x4F  m_Name[64]
-    char m_Name[64];
+    // +0x50 m_DisplayName[0x40] — m_Name with first char uppercased
+    char m_DisplayName[0x40];
 
-    // +0x50..+0x8F  m_DisplayName[64]
-    char m_DisplayName[64];
-
-    // +0x90  m_bIsPurchasable
+    // +0x90 m_bIsPurchasable
     bool m_bIsPurchasable;
-    // +0x91 (pad)
-    uint8_t _pad91[3];
 
-    // +0x94  m_pPurchaseInfo (0xc4-byte struct; non-null only for purchaseable powers)
+    // +0x91 m_bIsSpecial
+    bool m_bIsSpecial;
+
+    // +0x92 pad
+    uint8_t _pad92[2];
+
+    // +0x94 m_pPurchaseInfo — owned; non-null only for purchaseable powers
     PurchaseInfo* m_pPurchaseInfo;
 
-    // +0x98..+0x9b  (pad)
-    uint32_t field_0x98;
+    // +0x98 m_bCloned — 1 if this is a clone (from copy-ctor), 0 if primary
+    uint32_t m_bCloned;
 
-    // +0x9c  CurrentTimeProgress — max of all GameModifier m_Duration across active mods
-    float field_0x9c;
+    // +0x9c m_LongestRemaining — "currentTime" / max active modifier remaining
+    float m_LongestRemaining;
 
-    // +0xa0  MaxTotalTime — max duration the bar showed for
+    // +0xa0 m_TotalTime — max original duration over all mods
     float m_TotalTime;
 
-    // +0xa4  m_Colour (BGRA8)
+    // +0xa4 m_Colour (RGBA8)
     PUColour m_Colour;
 
-    // +0xa8  OnScreenAmt — bar reveal/hide animation [0..1]
-    float field_0xa8;
+    // +0xa8 m_BarRamp — [0..1] ramp fraction for DrawBar fade-in/out
+    float m_BarRamp;
 
-    // +0xac  m_Texture1 (icon tex)
-    PURawPtr<void> m_Texture1;
+    // +0xac m_Texture1 — icon texture (SmartPtr<Texture>, 4 bytes)
+    SmartPtr<Mortar::Texture> m_Texture1;
 
-    // +0xb0  m_Texture2 (popup tex)
-    PURawPtr<void> m_Texture2;
+    // +0xb0 m_Texture2 — popup texture (SmartPtr<Texture>, 4 bytes)
+    SmartPtr<Mortar::Texture> m_Texture2;
 
-    // +0xb4  m_pScreenEffect
+    // +0xb4 m_pScreenEffect — owned screen effect (nullptr if none)
     ScreenEffect* m_pScreenEffect;
 
-    // +0xb8..+0xc3  (pad / spawned-flags)
+    // +0xb8..+0xc3 — unported binary fields (12 bytes)
     uint8_t _padb8[12];
 
-    // +0xc4  DeferedPoints — negative = "no deferred points pending"
-    int field_0xc4;
+    // +0xc4 m_DeferredPoints — -1 = "no deferred points pending"; >=0 accumulated
+    int m_DeferredPoints;
 
-    // +0xc8  HUD X-position — interpolated each frame
-    float field_0xc8;
+    // +0xc8 m_BarXPos — HUD x-position, interpolated each frame
+    float m_BarXPos;
 
-    // +0x91  m_bIsSpecial
-    bool m_bIsSpecial;
+    // --- Port-specific (not in 0xCC binary layout) ---
+    // Name hash for map lookup (computed from m_Name during Parse).
+    uint32_t m_NameHash;
 
     PowerUp();
     ~PowerUp();
 
     // @ 0x001194f0 — parse <powerup> XML element
-    // TODO: implement via TiXmlElement -- power-up XML loading
-    void Parse(TiXmlElement* elem);
+    void Parse(tinyxml2::XMLElement* elem);
 
     // @ 0x00119134 — activate this power-up clone
-    // TODO: calls modifier Activate, sets OnScreenAmt increment
-    void Activate(bool showPopup, bool isPurchase, float posX, float posY, float posZ, float* extra);
+    void Activate(bool isPurchase, const Vec3& pos, float extra);
 
-    // @ 0x00117f18 — deactivate, call RemoveModifier on all mods
-    // TODO: real deactivation impl
-    void Deactivate(bool removeAll);
+    // @ 0x00117f18 — deactivate, call RemoveModifier on all mods; returns 0
+    int Deactivate(bool removeAll);
 
-    // @ 0x00117f90 — update all modifiers, returns 1 when all expired
-    // TODO: real update impl
+    // @ 0x00117f90 — update all modifiers; returns 1 when all expired, 0 otherwise
     int Update(float dt);
 
-    // Clone — heap-alloc new instance, copy state
-    // TODO: real clone impl
-    PowerUp* Clone();
+    // Clone — heap-alloc new instance, copy state, deep-copy modifier list
+    PowerUp* Clone() const;
 
     // @ 0x001191f8 — draw power-up HUD bar
-    // TODO: Tier-2 -- DrawBar renders icon row at top of screen
     void DrawBar();
 
     // @ 0x00117a44
@@ -159,27 +158,24 @@ public:
     bool IsSpecial() const { return m_bIsSpecial; }
 
     // @ 0x0011a1f0
-    float GetCurrentTimeProgress() const { return field_0x9c; }
+    float GetCurrentTimeProgress() const { return m_LongestRemaining; }
 
     // @ 0x00117aec — max m_Duration_remaining across all modifiers
-    // TODO: iterate m_ModList
     float GetLongestMod() const;
 
     // @ 0x0011a210
-    void SetCurrentTime(float t) { field_0x9c = t; }
+    void SetCurrentTime(float t) { m_LongestRemaining = t; }
 
     // @ 0x001180d4
     void SetTotalTime(float t) { m_TotalTime = t; }
 
     // @ 0x0011a1c4
-    void SetOnScreenAmt(float a) { field_0xa8 = a; }
+    void SetOnScreenAmt(float a) { m_BarRamp = a; }
 
-    // @ 0x000f81f0 — hold back deferred points
-    // TODO: real impl -- sets field_0xc4 and interacts with score delegate
-    void AddDeferedPoints(int n);
+    // @ 0x00117a50 — accumulate deferred points; returns 0
+    int AddDeferedPoints(int n);
 
-    // @ 0x001183f0 — load icon/popup textures
-    // TODO: real impl -- calls TextureManager::Load for m_Texture1/2 etc.
+    // @ 0x001183f0 — propagate LoadTextures to screen effect and purchase info
     void LoadTextures();
 
     // Release — free modifier list (called before delete in expiry path)

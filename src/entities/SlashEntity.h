@@ -36,6 +36,8 @@
 
 namespace Mortar { struct PSPParticleEmitter; }
 
+class Fruit;
+
 class SlashEntity {
 public:
     static const int MAX_POINTS = 96;        // trail length (was 160 in binary)
@@ -89,6 +91,11 @@ public:
     // True while the blade has at least 2 trail points and is not
     // deactivating — used to gate collision checks.
     bool IsBladeActive() const { return m_State != 0 && m_NumPoints >= 2; }
+
+    // +0x134: the fruit this slasher is currently aimed at (back-channel for
+    // the KillFruit unlink at Fruit::KillFruit @ 0x00176c8e..0x00176cea).
+    // Self-clears when the target calls KillFruit and finds this still set.
+    Fruit* m_pCurrentTarget;
 
 private:
     // Stored per-point metadata. The vertex buffers m_Left/m_Right are

@@ -134,8 +134,7 @@ void AboutScreen::LoadContent()
         s_TexBackIcon = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 
     // Binary also loads openfeint_gamecenter.tex into its own SmartPtr slot
-    // (offset DAT_0012eca0 area). Port skips — OFN is defunct.
-    // TODO: if openfeint_gamecenter.tex is re-enabled, load it here.
+    // (offset DAT_0012eca0 area). Port skips — OFN is defunct (online-services-audit).
 
     s_bContentLoaded = true;
 }
@@ -230,7 +229,8 @@ void AboutScreen::CreateBackButton()
     // Port: use DojoScreen's static s_TexBackIcon if accessible, else skip.
     // DIFFERS: binary gets texture from game->field_0x17c; port accesses
     //          DojoScreen::s_TexBackIcon (same texture, different path).
-    // TODO: expose DojoScreen::s_TexBackIcon or use a shared back-icon slot.
+    // Note: AboutScreen has its own s_TexBackIcon copy loaded in LoadContent;
+    //       field_0x17c is a shared global slot not yet in Game struct.
 
     // Fruit type: binary reads *(int**)(update_base + DAT_0012f324) which is
     // the bomb-threshold (FruitInfo_GetCount()). Matches DojoScreen pattern.
@@ -303,15 +303,9 @@ void AboutScreen::Update(float /*dt*/)
     //       The check still gates on s_TexSensei validity in binary.
     // DIFFERS: port stubs this block. No OFN button is created.
     if (s_TexSensei.IsValid() && m_pOFNButton == nullptr) {
-        // TODO: if OpenFeint/GameCenter is re-enabled, create button here
-        // at POS_OFN_BUTTON = (0, 480, 0) with AskUserToChoosePreferredNetwork callback.
-        // Binary also copies sound callback (MenuCallbackClicked) as delete callback.
-        // For now: mark the slot with a sentinel so we don't re-enter.
-        // Binary sets field121_0x94 = new MenuButton (we store in m_pOFNButton).
-        // The port intentionally omits the actual button allocation here.
-        // We still guard against re-entry by noting we've seen the sensei texture.
-        // Real implementation note: m_pOFNButton would be created at POS_OFN_BUTTON
-        // and follow the background panel in Draw using OFN_OFFSET_X/Y.
+        // Note: OpenFeint/GameCenter button is omitted (defunct per online-services-audit).
+        // Binary creates MenuButton at POS_OFN_BUTTON with AskUserToChoosePreferredNetwork
+        // callback; port intentionally skips. Guard re-entry via m_pOFNButton sentinel below.
         (void)POS_OFN_BUTTON;
     }
 

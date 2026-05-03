@@ -173,8 +173,9 @@ public:
     int      m_GameOverField2;       // +0x120 (default -1)
     int      m_GameOverField3;       // +0x124 (default -1)
     int      m_GameOverField4;       // +0x128 (default -1)
-    uint8_t  m_bResumeFlag1;         // +0x12c
-    uint8_t  m_bResumeFlag2;         // +0x12d
+    uint8_t  newBestThisGame;        // +0x12c: set when score beat previous high this game
+    uint8_t  secondaryFlag;          // +0x12d: cleared on commit; full semantics TBD
+    // TODO: determine exact semantics of secondaryFlag (+0x12d)
 
     // +0x130..+0x13c: in-progress timers + camera shake.
     float    m_BombHitTimer;       // +0x130

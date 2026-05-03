@@ -1,7 +1,11 @@
-// Analysed: 2026-04-30T00:00
+// Analysed: 2026-05-03T00:00
 
 #include "TimeModifier.h"
 #include "PowerUpManager.h"
+#include "Game.h"
+#include "hud/TimeControl.h"
+#include "ItemParseUtil.h"
+#include <tinyxml2.h>
 
 TimeModifier::TimeModifier()
     : GameModifier()
@@ -25,7 +29,10 @@ int TimeModifier::UpdateSpecific(float dt) {
     // (1) Frame-delayed AddTime fires once when counter hits 0.
     if (m_AddTimeDelay > 0) {
         if (--m_AddTimeDelay == 0) {
-            // TODO: TimeControl::AddTime(m_AddTime);
+            Game* game = Game::GetInstance();
+            // TODO: route through HUD::GetTimeControl() once exposed
+            if (game && game->pTimeCtrl)
+                game->pTimeCtrl->AddTime(m_AddTime);   // binary @ 0x001204f0
             return 1;
         }
     }
@@ -70,9 +77,27 @@ int TimeModifier::UpdateSpecific(float dt) {
     return 0;
 }
 
+// ASM-verified: 2026-05-03 binary @ 0x001200fc..0x00120188 (asm-inspector)
 // @ 0x001200fc
-void TimeModifier::ParseSpecific(TiXmlElement* /*xml*/) {
-    // TODO: parse duration/stop/slow/addTime/<scale rate="" amount=""/> from XML
+void TimeModifier::ParseSpecific(TiXmlElement* xml) {
+    const char* stopAttr = xml->Attribute("stopClock");
+    m_bStopClock = (stopAttr && CompareWords(stopAttr, "true"));
+
+    xml->QueryFloatAttribute("slowClock", &m_TimeSlow);
+    xml->QueryFloatAttribute("addClock",  &m_AddTime);
+    m_AddTimeDelay = 0;
+    if (m_AddTime != 0.0f) m_AddTimeDelay = 1;
+
+    // Defaults written AFTER queries (binary order):
+    m_TransitionRate = 0.0f;   // binary @ 0x0012015a, vstr +0x24
+    m_DtScale        = 1.0f;   // binary @ 0x0012015e, vstr +0x20
+    m_CurrentDtMod   = 1.0f;   // binary @ 0x00120162, vstr +0x28  -- previously missing
+
+    TiXmlElement* dt = xml->FirstChildElement("dt_speed");
+    if (dt) {
+        dt->QueryFloatAttribute("transitionTime", &m_TransitionRate);
+        dt->QueryFloatAttribute("dt",             &m_DtScale);
+    }
 }
 
 GameModifier* TimeModifier::Clone() {

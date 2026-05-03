@@ -7,6 +7,7 @@
 #include "asset/Mesh.h"
 
 namespace Mortar { struct PSPParticleEmitter; }
+class SlashEntity;
 
 // Per-fruit mesh slot layout. Matches the binary's 0x24-byte
 // FruitModelInfo struct allocated by LoadFruitModels (0x1794e0).
@@ -75,6 +76,22 @@ public:
     // Read by Fruit::Slice + CollisionResponse for crit visual/score bonuses.
     // Default false (cleared by Init).
     bool m_bCriticalEligible;
+
+    // +0x108: back-pointer to the SlashEntity that last targeted this fruit.
+    // Cleared by KillFruit if the slasher's m_pCurrentTarget still points here
+    // (Fruit::KillFruit cleanup tail @ 0x00176c8e..0x00176cea).
+    SlashEntity* m_pSlasher;
+
+    // +0x3D: set by Fruit::Disable (binary @ 0x00126374) to suppress
+    // (a) miss penalty when the fruit drops uncut [KillFruit],
+    // (b) power-up activation when the fruit is sliced [CollisionResponse].
+    // Used by ClearMenuItems on dojo-transition retract path so menu fruits
+    // flying off don't penalise the player or trigger power-ups mid-transition.
+    uint8_t m_bNoPowerUp;
+
+    // 16-bit tracker ID used by ET_RemoveEntity to unregister this fruit from
+    // EntityTracker tree 0 when it dies. Assigned on spawn; 0 = not registered.
+    uint16_t m_TrackerID;
 
     // +0x114: m_bDrawWhole — when set, Fruit::Draw renders the whole
     // fruit mesh even if m_bSliced == 1. Set by ClearMenuItems
@@ -176,11 +193,12 @@ public:
     // index out of range or LoadFruitModels hasn't run.
     static const FruitModelInfo* GetFruitModelInfo(int fruitType);
 
-    // Matches Fruit::RandomFruit (0x001762cc). Returns a random valid fruit
-    // type index. When allowSpecial=false, skips special/power-up fruits.
-    // TODO: binary RE needed for exact weighting. Stub: uniform random over
-    // non-special fruit types.
-    static int RandomFruit(bool allowSpecial);
+    // Matches Fruit::RandomFruit (binary @ 0x00176564, 113 instructions).
+    // includeOnSide=true: all fruits; false: subset without on-side-only fruits.
+    // Binary uses 4-path weighted selector with WaveManager::m_Random.
+    // Port stub: uniform random via WaveManager::m_Random until FRUIT_INFO
+    // weight fields (m_RandBonusBase/Max) are RE'd and added to FruitInfo.
+    static int RandomFruit(bool includeOnSide);
 
     // Matches Fruit::GetNumActiveForPlayer (0x00122a00). Returns count of
     // active Fruit entities assigned to `playerIdx` (-1 = all players).
@@ -193,8 +211,9 @@ public:
     // Binary param: false = don't deactivate already-visible fruits.
     static void ClearUnspawned(bool deactivateVisible);
 
-    // Matches Fruit::Disable (0x00126370). Sets collision guard so the fruit
-    // can no longer be sliced; does NOT deactivate/kill it.
+    // Matches Fruit::Disable (binary @ 0x00126374). Sets m_bNoPowerUp = 1,
+    // suppressing miss penalty and power-up activation for this fruit.
+    // Used by ClearMenuItems on dojo-transition retract path.
     static void Disable(Fruit* f);
 
     // @ 0x0016ba6e — draw drop-shadows for all active fruits.

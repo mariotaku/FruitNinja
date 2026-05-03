@@ -1,7 +1,7 @@
 #ifndef FN_GAME_TIME_MODIFIER_H
 #define FN_GAME_TIME_MODIFIER_H
 
-// Analysed: 2026-04-30T00:00
+// Analysed: 2026-05-03T00:00
 //
 // TimeModifier — GameModifier subclass controlling dt-scale / stop-clock / slow-clock.
 // Binary size 0x3c. GetType() == 0.
@@ -16,27 +16,25 @@
 
 #include "GameModifier.h"
 
-class TiXmlElement;
-
 class TimeModifier : public GameModifier {
 public:
-    // +0x20: XML <scale amount="..."/> — target dtMod when active (default 1.0)
+    // +0x20: XML <dt_speed dt="..."/> — target dtMod when active (default 1.0)
     float m_DtScale;
 
-    // +0x24: XML <scale rate="..."/> — dt-per-second to ramp m_CurrentDtMod toward m_DtScale
+    // +0x24: XML <dt_speed transitionTime="..."/> — seconds to ramp m_CurrentDtMod toward m_DtScale
     float m_TransitionRate;
 
     // +0x28: current applied dt-mod, lerped toward m_DtScale; reset to 0 in ResetSpecific
     float m_CurrentDtMod;
 
-    // +0x2c: XML stop="true" — pause clock by adding m_Duration_remaining to m_field68
+    // +0x2c: XML stopClock="true" — pause clock by adding m_Duration_remaining to field
     bool m_bStopClock;
     uint8_t _pad2d[3];
 
-    // +0x30: XML slow="..." (default 1.0) — multiplied into m_field6c each frame
+    // +0x30: XML slowClock="..." (default 1.0) — multiplied into clock each frame
     float m_TimeSlow;
 
-    // +0x34: XML addTime="..." (default 0) — added to TimeControl after m_AddTimeDelay
+    // +0x34: XML addClock="..." (default 0.0) — added to TimeControl after m_AddTimeDelay
     float m_AddTime;
 
     // +0x38: frames to delay AddTime; 1 if m_AddTime != 0; decrements to 0 then fires
