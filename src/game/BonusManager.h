@@ -1,26 +1,46 @@
 #ifndef FN_GAME_BONUS_MANAGER_H
 #define FN_GAME_BONUS_MANAGER_H
 
-// BonusManager -- combo/streak bonus tracker (binary address TBD).
-// Tracks consecutive-slice bonuses and streak multipliers.
-//
-// TODO: RE class -- see docs/engine/initialisation-asm-audit.md Section 4,
-//   InitialiseData step 15.
+// Analysed: 2026-05-03T00:00
+// BonusManager -- post-game bonus award tracker.
+// sizeof 0x20 = 32 bytes.
+// Singleton ctor @ binary BSS, Init @ 0x0010e8fc, ClearBestBonuses @ 0x000feb20.
+
+#include "Bonus.h"
+#include <vector>
+#include <list>
+#include <cstdint>
+
+class BonusScreen;
 
 class BonusManager {
 public:
-    static BonusManager* GetInstance() {
-        static BonusManager s_instance;
-        return &s_instance;
-    }
+    std::vector<BonusType> m_AllBonuses;        // +0x00  sizeof 12
+    std::list<Bonus>       m_BestBonuses;       // +0x0C  sizeof 8
+    std::vector<int>       m_ComboTotalsByLevel; // +0x14  sizeof 12
 
-    // @ InitialiseData step 15 -- init internal state
-    // TODO: implement
-    void Init() {}
+    static BonusManager* GetInstance();
+
+    void Init();                                // Binary @ 0x0010e8fc
+    void ClearBestBonuses();                    // Binary @ 0x000feb20
+    void SetUpBonusScreen(BonusScreen* screen); // Binary @ 0x0010e404
+    void AddCombo(int comboLen);                // Binary @ 0x0010de24
+    bool UnlockPostGameAchievements();          // Binary @ 0x0010e1cc
+
+    Bonus* GetFirstBestBonus(std::list<Bonus>::iterator& it);
+    Bonus* GetNextBestBonus(std::list<Bonus>::iterator& it);
 
 private:
-    BonusManager() {}
-    ~BonusManager() {}
+    BonusManager();
+    ~BonusManager();
 };
+
+// Layout asserts: ARM32 sizes only. GCC 4.4.1 excluded (std::vector/list sizes differ).
+#if (defined(__arm__) || defined(__aarch64__)) && (__cplusplus >= 201103L)
+static_assert(sizeof(BonusManager) == 0x20, "BonusManager size mismatch");
+static_assert(__builtin_offsetof(BonusManager, m_AllBonuses)        == 0x00, "BonusManager::m_AllBonuses offset");
+static_assert(__builtin_offsetof(BonusManager, m_BestBonuses)       == 0x0C, "BonusManager::m_BestBonuses offset");
+static_assert(__builtin_offsetof(BonusManager, m_ComboTotalsByLevel) == 0x14, "BonusManager::m_ComboTotalsByLevel offset");
+#endif
 
 #endif // FN_GAME_BONUS_MANAGER_H

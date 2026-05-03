@@ -4,48 +4,165 @@
 // Analysed: 2026-05-03T00:00
 //
 // ScreenEffect — per-powerup full-screen visual overlay (0x50 bytes in binary).
-// Stubs all methods; full port is Tier-2.
 //
-// Binary addresses (from re-analyst PowerUp lifecycle pass):
-//   Parse         (binary @ 0x? -- re-analyst pass needed)
-//   Activate      (binary @ 0x? -- re-analyst pass needed)
-//   Update        (binary @ 0x? -- re-analyst pass needed)
-//   Deactivate    (binary @ 0x? -- re-analyst pass needed)
-//   LoadTextures  (binary @ 0x? -- re-analyst pass needed)
+// Binary addresses:
+//   ctor          0x0011d568
+//   copy ctor     0x0011bc78
+//   dtor          0x0011d5a0
+//   Parse         0x0011e150
+//   Activate      0x0011dbb8
+//   Update        0x0011d664
+//   Deactivate    0x0011d43c
+//   LoadTextures  0x0011d1ec
 
 #include <cstdint>
+#include <vector>
+#include <cstring>
+#include "math/Vec3.h"
+#include "math/Colour.h"
+#include "hud/HUDControl.h"
 #include <tinyxml2.h>
 
-class PowerUp;
+namespace Mortar {
+    class MortarSound;
+    class PSPParticleEmitter;
+}
 
+class PowerUp;
+class HUDControl3d;
+
+// Binary @ 0x0011e150 children: "emmiter" (sic — original spelling preserved)
+// 24 bytes in binary (ARM32 layout).
+struct Emmiter {
+    uint32_t                          m_NameHash;      // +0x00
+    Mortar::PSPParticleEmitter*       m_pHandle;       // +0x04
+    Vec3                              m_Offset;        // +0x08
+    Vec3                              m_VelocityScale; // +0x14
+
+    Emmiter() : m_NameHash(0), m_pHandle(nullptr), m_Offset(0,0,0), m_VelocityScale(1,1,1) {}
+    void Parse(tinyxml2::XMLElement* xml);
+};
+
+// ~124 bytes; derives from ReloadableTexture (texture path + GLuint handle).
+// Only fields accessed in Activate/Update/Deactivate are listed here.
+// ReloadableTexture base is stubbed as a texture name + handle pair.
+struct EffectImage {
+    // ReloadableTexture base (stub: name[64] + GLuint)
+    char     m_TexName[64];          // +0x00 (base)
+    uint32_t m_TexHandle;            // +0x40 (stub, GLuint)
+
+    HUDControl*  m_pHudCtrl;         // +0x08 (port offset; original +0x08 in derived)
+    bool         m_bAddedToHUD;      // +0x0C
+    bool         m_bIsMultiplyerBoard; // +0x0D
+    Vec3         m_Pos;              // +0x10
+    Vec3         m_Vel;              // +0x1C
+    uint32_t     m_GroupMask;        // +0x28
+    uint16_t     m_SinIdx;           // +0x2C
+    float        m_Freq;             // +0x30
+    float        m_Amp1;             // +0x34
+    float        m_Amp2;             // +0x38
+    float        m_CurrentVis;       // +0x3C
+    float        m_FadeRate;         // +0x40
+    Vec3         m_SizeIn;           // +0x44
+    Vec3         m_SizeOut;          // +0x50
+    float        m_StartT;           // +0x5C
+    float        m_EndT;             // +0x60
+    Vec3         m_ColourScale;      // +0x64
+    Colour       m_Tint;             // +0x70
+    uint32_t     m_FlagBits;         // +0x74
+    bool         m_bLowEndOnly;      // +0x78
+
+    EffectImage()
+        : m_TexHandle(0)
+        , m_pHudCtrl(nullptr)
+        , m_bAddedToHUD(false)
+        , m_bIsMultiplyerBoard(false)
+        , m_Pos(0,0,0), m_Vel(0,0,0)
+        , m_GroupMask(0)
+        , m_SinIdx(0)
+        , m_Freq(0.0f), m_Amp1(0.0f), m_Amp2(0.0f)
+        , m_CurrentVis(0.0f), m_FadeRate(0.0f)
+        , m_SizeIn(1,1,1), m_SizeOut(1,1,1)
+        , m_StartT(0.0f), m_EndT(0.0f)
+        , m_ColourScale(1,1,1)
+        , m_Tint(255,255,255,255)
+        , m_FlagBits(0), m_bLowEndOnly(false)
+    {
+        memset(m_TexName, 0, sizeof(m_TexName));
+    }
+
+    void Parse(tinyxml2::XMLElement* xml);
+    void LoadTextures();
+};
+
+// ~40 bytes
+struct ScreenTint {
+    float m_CurrentT;   // +0x00
+    float m_Length;     // +0x04
+    float m_StartT;     // +0x08
+    float m_FadeIn;     // +0x0C
+    Vec3  m_ColourTo;   // +0x10
+    Vec3  m_ColourFrom; // +0x1C
+
+    ScreenTint()
+        : m_CurrentT(0.0f), m_Length(0.0f), m_StartT(0.0f), m_FadeIn(0.0f)
+        , m_ColourTo(1,1,1), m_ColourFrom(1,1,1)
+    {}
+
+    void Parse(tinyxml2::XMLElement* xml);
+};
+
+// 44 bytes
+struct SoundEffect {
+    char  m_SoundName[32]; // +0x00
+    float m_StartT;        // +0x20
+    float m_EndT;          // +0x24
+    Mortar::MortarSound* m_VoiceHandle; // +0x28
+
+    SoundEffect() : m_StartT(0.0f), m_EndT(0.0f), m_VoiceHandle(nullptr) {
+        memset(m_SoundName, 0, sizeof(m_SoundName));
+    }
+
+    void Parse(tinyxml2::XMLElement* xml);
+};
+
+// sizeof = 0x50 = 80 bytes; NO virtual methods.
 class ScreenEffect {
 public:
-    // Back-pointer to owning PowerUp (m_pOwner in binary).
-    PowerUp* m_pOwner;
+    // +0x00
+    std::vector<Emmiter>     m_Emmiters;
+    // +0x0C
+    std::vector<EffectImage> m_Images;
+    // +0x18
+    std::vector<ScreenTint>  m_Tints;
+    // +0x24
+    std::vector<SoundEffect> m_Sounds;
+    // +0x30 — 16 bytes (NOT 64)
+    char                     m_Name[16];
+    // +0x40
+    uint32_t                 m_NameHash;
+    // +0x44
+    PowerUp*                 m_pOwnerPowerUp;
+    // +0x48
+    float                    m_RemainingTime;
+    // +0x4C
+    float                    m_TotalDuration;
 
-    // Unique name hash for pool lookup.
-    uint32_t m_NameHash;
+    ScreenEffect();
+    ScreenEffect(const ScreenEffect& rhs);
+    ~ScreenEffect();
+    ScreenEffect& operator=(const ScreenEffect& rhs);
 
-    // Remaining lifetime — decremented by Update; expiry when <= 0.
-    // TODO: binary uses a different expiry mechanism (re-analyst pass needed)
-    float m_Lifetime;
-
-    ScreenEffect() : m_pOwner(nullptr), m_NameHash(0), m_Lifetime(0.0f) {}
-
-    // TODO: implement (binary @ 0x? -- re-analyst pass needed)
-    void Parse(tinyxml2::XMLElement* /*xml*/) {}
-
-    // TODO: implement (binary @ 0x? -- re-analyst pass needed)
-    void Activate() {}
-
-    // TODO: implement (binary @ 0x? -- re-analyst pass needed)
-    void Update(float dt, float /*longest*/, float /*total*/) { m_Lifetime -= dt; }
-
-    // TODO: implement (binary @ 0x? -- re-analyst pass needed)
-    void Deactivate() {}
-
-    // TODO: implement (binary @ 0x? -- re-analyst pass needed)
-    void LoadTextures() {}
+    // Binary @ 0x0011e150
+    void Parse(tinyxml2::XMLElement* xml);
+    // Binary @ 0x0011dbb8
+    void Activate();
+    // Binary @ 0x0011d664
+    void Update(float dt, float currentLongest, float maxTotal);
+    // Binary @ 0x0011d43c
+    void Deactivate();
+    // Binary @ 0x0011d1ec
+    void LoadTextures();
 };
 
 #endif // FN_GAME_SCREEN_EFFECT_H

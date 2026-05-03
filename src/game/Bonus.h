@@ -1,0 +1,92 @@
+#ifndef FN_GAME_BONUS_H
+#define FN_GAME_BONUS_H
+
+// Analysed: 2026-05-03T00:00
+// Bonus / BonusType -- per-round award structs.
+// Bonus  sizeof 0xD8 binary ctor @ 0x0010005c, dtor @ 0x0010fa40.
+// BonusType sizeof 0x28 binary ctor @ 0x0010df00.
+
+#include <vector>
+#include <map>
+#include <cstdint>
+#include "engine/util/SmartPtr.h"
+#include "engine/asset/Texture.h"
+
+namespace tinyxml2 { class XMLElement; }
+
+// ---------------------------------------------------------------------------
+// Bonus
+// sizeof 0xD8 = 216 bytes
+// ---------------------------------------------------------------------------
+class Bonus {
+public:
+    int                             m_MinSliced;        // +0x00
+    int                             m_MaxSliced;        // +0x04
+    std::map<uint64_t, int>         m_MinFruit;         // +0x08  sizeof 24
+    std::map<uint64_t, int>         m_MaxFruit;         // +0x20  sizeof 24
+    int                             m_DivisibleBy;      // +0x38
+    int                             m_Tier;             // +0x3C  (-1 = invalid)
+    char                            m_NameTemplate[64]; // +0x40
+    char                            m_DisplayName[64];  // +0x80
+    std::vector<uint64_t>           m_PatternHashes;    // +0xC0  sizeof 12
+    uint32_t                        m_AchievementHash;  // +0xCC
+    SmartPtr<Mortar::Texture>       m_StarTexture;      // +0xD0  sizeof 4
+
+    Bonus();                                            // Binary @ 0x0010005c
+    Bonus(const Bonus& rhs);                            // Binary @ 0x00110090
+    ~Bonus();                                           // Binary @ 0x0010fa40
+    Bonus& operator=(const Bonus& rhs);
+
+    void Parse(tinyxml2::XMLElement* e);                // Binary @ 0x0010e61c
+    int  IsAchieved(int score, std::map<uint64_t, int>& fruitCounts); // Binary @ 0x0010df38
+
+    bool operator<(const Bonus& rhs) const { return m_Tier > rhs.m_Tier; } // descending sort
+};
+
+// Layout asserts: ARM32 sizes only (binary target). Not checked on MSVC x64 host.
+// GCC 4.4.1 (-std=gnu++0x) has different std::map sizes than C++11 libstdc++ --
+// exclude cross-build via __cplusplus check.
+#if (defined(__arm__) || defined(__aarch64__)) && (__cplusplus >= 201103L)
+static_assert(sizeof(Bonus) == 0xD8, "Bonus size mismatch");
+static_assert(__builtin_offsetof(Bonus, m_MinSliced)      == 0x00, "Bonus::m_MinSliced offset");
+static_assert(__builtin_offsetof(Bonus, m_MaxSliced)      == 0x04, "Bonus::m_MaxSliced offset");
+static_assert(__builtin_offsetof(Bonus, m_MinFruit)       == 0x08, "Bonus::m_MinFruit offset");
+static_assert(__builtin_offsetof(Bonus, m_MaxFruit)       == 0x20, "Bonus::m_MaxFruit offset");
+static_assert(__builtin_offsetof(Bonus, m_DivisibleBy)    == 0x38, "Bonus::m_DivisibleBy offset");
+static_assert(__builtin_offsetof(Bonus, m_Tier)           == 0x3C, "Bonus::m_Tier offset");
+static_assert(__builtin_offsetof(Bonus, m_NameTemplate)   == 0x40, "Bonus::m_NameTemplate offset");
+static_assert(__builtin_offsetof(Bonus, m_DisplayName)    == 0x80, "Bonus::m_DisplayName offset");
+static_assert(__builtin_offsetof(Bonus, m_PatternHashes)  == 0xC0, "Bonus::m_PatternHashes offset");
+static_assert(__builtin_offsetof(Bonus, m_AchievementHash)== 0xCC, "Bonus::m_AchievementHash offset");
+static_assert(__builtin_offsetof(Bonus, m_StarTexture)    == 0xD0, "Bonus::m_StarTexture offset");
+#endif
+
+// ---------------------------------------------------------------------------
+// BonusType
+// sizeof 0x28 = 40 bytes
+// ---------------------------------------------------------------------------
+class BonusType {
+public:
+    std::map<uint64_t, int>   m_RequiredHashes; // +0x00  sizeof 24
+    std::vector<Bonus>        m_Bonuses;         // +0x18  sizeof 12
+    bool                      m_HasAchievement;  // +0x24
+
+    BonusType();                                 // Binary @ 0x0010df00
+    BonusType(const BonusType& rhs);             // Binary @ 0x0010df1c
+    ~BonusType();
+    BonusType& operator=(const BonusType& rhs);
+
+    void   Parse(tinyxml2::XMLElement* e);       // Binary @ 0x0010e7ec
+    Bonus* GetBest();                            // Binary @ 0x0010e094
+    bool   UnlockAchievements();                 // Binary @ 0x0010e12c
+};
+
+// Layout asserts: ARM32 sizes only. GCC 4.4.1 excluded (see Bonus asserts above).
+#if (defined(__arm__) || defined(__aarch64__)) && (__cplusplus >= 201103L)
+static_assert(sizeof(BonusType) == 0x28, "BonusType size mismatch");
+static_assert(__builtin_offsetof(BonusType, m_RequiredHashes) == 0x00, "BonusType::m_RequiredHashes offset");
+static_assert(__builtin_offsetof(BonusType, m_Bonuses)        == 0x18, "BonusType::m_Bonuses offset");
+static_assert(__builtin_offsetof(BonusType, m_HasAchievement) == 0x24, "BonusType::m_HasAchievement offset");
+#endif
+
+#endif // FN_GAME_BONUS_H
