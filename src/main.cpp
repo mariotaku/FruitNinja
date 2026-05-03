@@ -63,13 +63,21 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetSwapInterval(1);
 
     if (!gl_load_functions()) {
-        fprintf(stderr, "Failed to load GL functions\n");
+        fprintf(stderr, "Failed to load required GL functions\n");
         return 1;
     }
 
     printf("GL Vendor: %s\n", (const char*)glGetString(GL_VENDOR));
     printf("GL Renderer: %s\n", (const char*)glGetString(GL_RENDERER));
     printf("GL Version: %s\n", (const char*)glGetString(GL_VERSION));
+
+    // Surface the "Microsoft 1.1 software ICD" fallback to the user --
+    // rendering will be broken in that case, but the game would otherwise
+    // silently start with a black screen.
+    if (!gl_check_runtime()) {
+        fprintf(stderr, "Aborting: rendering pipeline cannot proceed without a real GL driver.\n");
+        return 1;
+    }
 
     Game game;
     if (!game.init(window, gl)) {
