@@ -31,7 +31,7 @@ Update or maintain only docs in this whitelist:
 | `docs/engine/coordinate-system.md` | Cross-cutting convention; not in any single source file |
 | `docs/engine/binary-static-init.md` | Pre-`OspMain` static init order (cross-cutting) |
 | `docs/engine/binary-build-evidence.md` | Toolchain / ABI provenance |
-| `docs/engine/online-services-audit.md` | What we intentionally skip and why |
+| `docs/engine/online-services-audit.md` | Defunct-subsystem inventory: which classes get the stub-don't-skip treatment, why each is dead, the full set of `// Defunct:` markers and their binary addresses. Updated when a new defunct stub is added or when scope changes. |
 | `docs/engine/string-hash.md` | Jenkins lookup3 variant constants |
 | `docs/engine/font.md` | `.fnt` bitmap-font format |
 | `docs/engine/particles.md` | particle-system XML / pool layout |

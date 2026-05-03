@@ -255,34 +255,28 @@ The following classes are present in the binary but **intentionally excluded** f
 
 **What to keep**: Same-screen multiplayer uses `SlashEntity.m_SplitPoint` to divide the screen — this is purely local logic and should be preserved.
 
-### Non-Critical UI Classes — NOT ANALYZED
+### Non-Critical UI Classes — TRIAGED
 
-The following classes exist in the binary but are minor, platform-specific stubs, or variants of already-analyzed classes. They can be ported later or skipped.
+RE confirmed 13 of 15 candidates are **phantoms** (only `_GLOBAL__I_*.cpp` TU-init exists in binary; class instance methods were dead-code-stripped). Two have real instance code and are stubbed.
 
-**Screens:**
-- `UpsellScreen` / `UpsellScreenElement` — purchase/upgrade prompt (irrelevant without IAP)
-- `AttractScreen` — attract/demo mode (may be unused in this build, only _GLOBAL__I_ exists)
-- `BladeScreen` — blade preview in shop (minor, could reuse ShopScreen logic)
-- `LocalScoreEntryScreen` — local score entry (Bada-specific UI)
-- `VSGameOverScreen` — versus mode game-over variant
-- `OptionsScreen` — settings screen (only _GLOBAL__I_ exists, possibly stub)
+**Stubbed (defunct, no-op port):**
+- `UpsellScreen` / `UpsellScreenElement` — `src/screens/UpsellScreen.h`; binary ctor @ 0x00164814, sizeof 0x1EC. Immediately-dismissed stub; IAP irrelevant on port.
+- `KeyboardControl` — `src/hud/KeyboardControl.h`; binary ctor @ 0x0014649c, sizeof 0xD4. Port specific: Bada native keyboard bypassed; SDL_StartTextInput() if ever needed.
 
-**Challenge mode (may not be active in this build):**
-- `ChallengeScreenSL` — challenge mode screen
-- `ChallengeHistoryScreenSL` — challenge history
-- `CreateChallengeScreenSL` — create challenge
-- `BuyStarfruitScreen` — starfruit purchase (IAP)
-
-**Controls:**
-- `KeyboardControl` — text input widget (Bada OS native keyboard)
-- `ScreenButton` — likely a MenuButton alias or simplified variant
-- `OperatorAlertControl` — carrier/operator notification (Bada-specific)
-- `CreditCounterControl` — credit display (only _GLOBAL__I_ exists)
-- `MultiplayerTutorialControl` — multiplayer-specific tutorial overlay
-- `ZenVersusControl` — zen versus mode HUD widget
-
-**MainScreen variants:**
-- `MainScreenArcade` — arcade-specific main screen variant (only _GLOBAL__I_ exists, logic likely merged into MainScreen)
+**Phantoms — omitted from port** (class has TU init but no instance methods; dead-code-stripped):
+- `AttractScreen` — phantom
+- `BladeScreen` — phantom
+- `LocalScoreEntryScreen` — phantom
+- `VSGameOverScreen` — phantom
+- `OptionsScreen` — phantom
+- `ChallengeScreenSL` — phantom
+- `ChallengeHistoryScreenSL` — phantom
+- `CreateChallengeScreenSL` — phantom
+- `BuyStarfruitScreen` — phantom
+- `OperatorAlertControl` — phantom
+- `CreditCounterControl` — phantom
+- `MultiplayerTutorialControl` — phantom
+- `ZenVersusControl` — phantom
 
 ### Bomb::Update — DONE
 

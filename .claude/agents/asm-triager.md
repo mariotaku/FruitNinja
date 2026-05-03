@@ -17,6 +17,14 @@ diff hunks in `tmp/asm-verify/report.json` (and the human-readable
   TODO would close. Example: `PowerUpManager::SetDefaults` is missing the
   6 trailing `vstr s16, [r3, #...]` block because the SlashEntityState
   reset is a documented Tier-2 stub. Cite the file:line of the TODO.
+- **ACCEPT-defunct** — the port-side function body is a documented no-op
+  stub for a permanently-dead subsystem (OpenFeint, GameCenter, P2P MP,
+  online leaderboards, NetworkManager, online news). Marked in source
+  with `// Defunct: <subsystem> — no-op stub`. Class layout, vtable
+  slot count, and public-API method signatures still match (call graph
+  preserved); only the body semantics differ. Cite the file:line of the
+  `// Defunct:` marker. These are accepted indefinitely, NOT scheduled
+  for porting.
 - **FIX-NEEDED** — the diff represents a real semantic divergence the
   port should match. Example: a missing `bl PowersEnabled / cbz` gate, a
   reordered struct-field store, an inverted comparison.
@@ -72,10 +80,21 @@ Classify:
 - Find the corresponding port source (search `src/` for the mangled name
   via `c++filt` / direct symbol scan).
 - Look for `// TODO`, `// Tier-2`, `// Tier-3`, `// not yet ported`,
-  `// stub` comments inside the function or in an adjacent doc.
+  `// stub`, `// Defunct:` comments inside the function or in an adjacent doc.
 - The missing instructions in the diff line up with what the TODO
   describes.
 - Cite the file:line of the TODO in the triage entry's reason.
+
+#### ACCEPT-defunct indicators (`// Defunct:` marker)
+- The port-side function body is a documented no-op stub for a
+  permanently-dead subsystem (OpenFeint, GameCenter, P2P MP, online
+  leaderboards, NetworkManager, online news).
+- The diff shows the binary doing real work that the port elides — by
+  policy. The class layout, vtable slot count, and public-API method
+  signatures still match (the call graph is preserved); only the body
+  semantics differ.
+- Cite the file:line of the `// Defunct:` marker in the triage entry's
+  reason. These are accepted indefinitely, NOT scheduled for porting.
 
 #### FIX-NEEDED indicators
 - Missing or extra `bl <function>` calls (real call-graph differences).
