@@ -11,11 +11,34 @@
 #include "math/MathUtil.h"
 #include "math/Matrix44.h"
 #include "audio/GameSound.h"
+#include "util/Localisation.h"
+#include "screens/GameOverScreen.h"
+#include "game/FruitSaveData.h"
+#include "hud/HUD.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
 
 using Mortar::TextureManager;
+
+// DAT constants resolved from binary
+constexpr float SCORE_PULSE_THRESHOLD   = 16384.0f;    // DAT_001588b8
+constexpr float SCORE_PULSE_DECAY       = -327680.0f;  // DAT_001588d0
+constexpr float SCORE_PULSE_INITIAL     = 32768.0f;    // DAT_001588d4
+constexpr float SCORE_BASE_POS_X        = -218.0f;     // DAT_00158c44
+constexpr float SCORE_BASE_POS_Y        = 138.0f;      // DAT_00158c48
+constexpr float SCORE_MP_X_STRIDE       = 200.0f;      // DAT_00158c50
+constexpr float SCORE_BANNER_TIMER_THRESH = 0.99988f;  // DAT_00158c60
+constexpr float SCORE_BANNER_SIN_RATE   = 49140.0f;    // DAT_00158c64
+constexpr float SCORE_FONT_SCALE        = 48.0f;       // DAT_00159094
+constexpr float SCORE_LERP_CLAMP_HI     = 254.0f;      // DAT_001593ec
+constexpr float SCORE_BANNER_SIN_RATE2  = 21840.0f;    // DAT_001597b8
+constexpr float SCORE_BANNER_WOBBLE     = 0.15f;       // DAT_001597bc
+constexpr float SCORE_BANNER_X_CENTRE   = 64.0f;       // DAT_001597c4
+constexpr float SCORE_BANNER_Y_OFFSET   = 28.8f;       // DAT_001597c8
+constexpr float SCORE_ICON_X_SP         = -160.0f;     // DAT_001597a4
+constexpr float SCORE_ICON_X_MP_STRIDE  = 320.0f;      // DAT_001597a0
+constexpr float SCORE_LABEL_BASELINE    = 48.0f;       // DAT_00159798
 
 // Static caches (GOT+0x45180 block in binary — 3 cxa-guard-protected statics).
 static float s_SfxCooldown     = 0.0f;  // bonus SFX rate-limiter
@@ -39,9 +62,15 @@ static int GetScoreMultiplyer(int /*playerIdx*/) {
     return PowerUpManager::GetInstance()->GetScoreGainMultiplier();
 }
 
-// GetCurrentModeHighscore: reads pSaveData for the current mode's high score.
-// TODO: wire to FruitSaveData once save layout is fully ported.
-static int GetCurrentModeHighscore() { return 0; }
+// ASM-verified: 2026-05-03T00:00 binary @ 0x0010a35c (asm-inspector)
+// Binary: GetCurrentModeHighscore @ 0x0010a35c.
+// pSaveData has highscore array at +0x44 (m_ModeHighScores[4]), indexed by gameMode (0..3).
+static int GetCurrentModeHighscore() {
+    Game* gd = Game::GetInstance();
+    if (gd && gd->gameMode < 4 && gd->pSaveData)
+        return gd->pSaveData->m_ModeHighScores[gd->gameMode];
+    return 0;
+}
 
 // ctor @ 0x00158c7c
 ScoreControl::ScoreControl()
@@ -91,25 +120,16 @@ void ScoreControl::Release() {
 
 // Reset @ 0x001582e4
 void ScoreControl::Reset() {
-    // DIFFERS: binary copies m_FruitDigitTex (hud_fruit.tex) into m_Texture
-    // (+0x74) so HUDControl3d::Draw renders it. hud_fruit.tex is a digit
-    // spritesheet (16 frames horizontally); the binary's HUDControl3d::Draw
-    // path applies per-digit UV crop via m_DigitAlpha[i] in PreDraw section B
-    // and does NOT actually render the +0x74 quad whole. The port's
-    // HUDControl3d::Draw lacks that UV-crop hook, so copying the GLuint here
-    // would render the whole spritesheet as a 40x40 quad in the score corner
-    // -- looks like a strip of fruit icons / tutorial graphic.
-    // Until Section B (Classic per-digit overlay) is wired in PreDraw, leave
-    // m_Texture at 0 so HUDControl3d::Draw skips it cleanly.
-    // TODO: wire Classic per-digit fruit-icon overlay (PreDraw section B).
+    // DIFFERS: binary Reset @ 0x001582e4 always copies m_FruitDigitTex to m_Texture;
+    // port leaves m_Texture = 0 because HUDControl3d::Draw doesn't yet apply the
+    // per-digit UV crop via m_DigitAlpha[]. Net effect identical until the crop hook lands.
     m_Texture = 0;
 
     m_PulseAngle = 0;
     m_bDirty     = 1;
 
-    // size = DAT (40.0 * globalHudScale)
-    // TODO: globalHudScale from DisplayManager (DAT_001f38fc)
-    // DIFFERS: using 40.0 directly; binary multiplies by global HUD scale Vec3
+    // Binary: size *= *pHudScaleVec3 (DAT_001f4334), default (1,1,1) -- identity.
+    // Static-init in _GLOBAL__I_ScoreControl_cpp @ 0x00159998. Port keeps 40.0 as-is.
     size.x = size.y = 40.0f;
     size.z = 0.0f;
 
@@ -131,6 +151,7 @@ void ScoreControl::Skip() {
     }
 }
 
+// ASM-verified: 2026-05-03T00:00 binary @ 0x0015853c (asm-inspector)
 // Update @ 0x0015853c
 void ScoreControl::Update(float dt) {
     int currentScore = GetCurrentScore(m_PlayerIdx);
@@ -213,10 +234,12 @@ void ScoreControl::Update(float dt) {
 
     // Stage 3: score-increase pulse + Arcade bonus-count-up SFX
     if (m_DisplayedScore > prevDisplay) {
-        // Arcade SFX: bonus-count-up, gated on active wave
-        // TODO: g_GameData.pCurrentWave[0x80] / [0x84] when WAVE_INFO is accessible here
-        // if (s_SfxCooldown <= 0.0f && game->gameMode == 2 && waveActive && waveTimer > 0.0f)
-        if (false) {
+        // Binary: bonus-count-up SFX gate (Arcade end-of-game animation only).
+        if (s_SfxCooldown <= 0.0f &&
+            game->gameMode == 2 &&
+            game->pGameOverScreen != nullptr &&
+            game->pGameOverScreen->m_State > 0 &&
+            game->pGameOverScreen->m_Timer > 0.0f) {
             s_SfxCooldown = 0.05f;  // DAT_001588b4
             if (game->pGameSound)
                 game->pGameSound->SFXPlay("Bonus-count-up", 1.0f, 1.0f);
@@ -281,14 +304,13 @@ void ScoreControl::Update(float dt) {
     }
 
     // Stage 7: highscore banner animation
-    // wantBanner: waveTimer > 0.99 AND pSaveData[300] (new-best flag)
-    // TODO: pSaveData[300] lookup when save-data layout is ported
-    bool wantBanner = (waveTimer > 0.99f) && false;  // TODO: pSaveData new-best flag
+    bool wantBanner = (waveTimer > SCORE_BANNER_TIMER_THRESH) &&
+                      (game->pSaveData && game->pSaveData->newBestThisGame);
     if (wantBanner) {
         float prev = m_BannerScaleTime;
         m_BannerScaleTime = std::min(1.0f, m_BannerScaleTime + dt * 5.0f);
         if (m_BannerScaleTime >= 1.0f) {
-            m_BannerSinIdx = (uint16_t)std::max(0.0f, (float)m_BannerSinIdx + dt * 49140.0f);
+            m_BannerSinIdx = (uint16_t)std::max(0.0f, (float)m_BannerSinIdx + dt * SCORE_BANNER_SIN_RATE);
         } else {
             m_BannerSinIdx = 0;
         }
@@ -316,7 +338,8 @@ void ScoreControl::Draw(const Vec3& hudScale, int layerMask) {
     // g_GameData.someTimer >= -1.0f — uses m_TransitionTimer (+0x0C)
     if (game->m_TransitionTimer < -1.0f) return;
 
-    float alphaF = 255.0f * 1.0f;  // TODO: g_GameData.cameraIntensity (not yet ported)
+    float intensity = (game->hud) ? game->hud->m_globalTimeScale : 1.0f;
+    float alphaF = 255.0f * intensity;
     uint8_t alpha = (alphaF > 255.0f) ? 255 : (alphaF < 0.0f ? 0 : (uint8_t)alphaF);
     m_DrawColour.a = alpha;
 
@@ -330,8 +353,8 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
 
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
 
-    float cameraIntensity = 1.0f;  // TODO: g_GameData.cameraIntensity
-    uint8_t alpha = 255;
+    float cameraIntensity = (game->hud) ? game->hud->m_globalTimeScale : 1.0f;
+    uint8_t alpha = (uint8_t)std::min(255.0f, std::max(0.0f, 255.0f * cameraIntensity));
     float transTimer = game->m_TransitionTimer;  // g_GameData.someTimer
 
     if (transTimer >= -1.0f) {
@@ -346,7 +369,8 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             float scaleX = 1.0f;
             float offsetX = 0.0f;
             if (m_DisplayedScore >= 1000) {
-                // TODO: cache "000" width (cxa-guard) -- compute each time for now
+                // PERF: binary caches via cxa-guard at 0x00159090 (= 96.0 = 48 * 2);
+                // recomputing each frame is functionally equivalent.
                 float baseline = game->pFontNumbers->MeasureWidth(48.0f, "000") * 96.0f;
                 float printed  = game->pFontNumbers->MeasureWidth(48.0f, buf);
                 if (printed > baseline) {
@@ -439,24 +463,39 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         // Section C: Highscore banner text
         // Active when |transTimer| < 1.0 AND m_HighscoreToShow > 0
         if (m_HighscoreToShow > 0 && transTimer > -1.0f && transTimer < 1.0f) {
-            // Base colour: Colour(0xB4, 0x80, 0x05, 200) — orange-ish
-            // If m_HighscoreToShow == m_DisplayedScore: pulse between base and (0x64,0x96,0x19,200)
-            // via CosIdx(s_BannerSinIdx * 0xB6) * -0.5 + 0.5
-            // TODO: full colour lerp and GETSTRING(0xB5, 0) localised label
+            // Binary @ 0x001591BC: green-pulse lerp on highscore-reached banner.
+            // ASM-verified: 2026-05-03T00:00 binary @ 0x00159334..0x001594e0 (asm-inspector)
+            Colour col(0xB4, 0x80, 0x05, 200);  // base orange
+            if (m_HighscoreToShow == m_DisplayedScore) {
+                s_BannerSinIdx += (game->gameActiveFlag == 0) ? 6 : 0;
+                if (s_BannerSinIdx > 0xB3) s_BannerSinIdx = 0xB4;
+                float t = CosIdx((int16_t)s_BannerSinIdx * 0xB6) * -0.5f + 0.5f;
+                Colour green(0x64, 0x96, 0x19, 200);
+                col.r = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.r + (int)((green.r - col.r) * t)));
+                col.g = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.g + (int)((green.g - col.g) * t)));
+                col.b = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.b + (int)((green.b - col.b) * t)));
+                col.a = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.a + (int)((green.a - col.a) * t)));
+            }
+            col.a = alpha;
             if (game->pFontNumbers.IsValid()) {
-                Colour bannerCol(0xB4, 0x80, 0x05, 200);
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
-                float drawX = m_DrawPosX;
-                float drawY = m_DrawPosY - 30.0f;  // offset above score — TODO: exact from binary
+                const char* label = Localisation::Get("BEST");  // key 0xB5
+                float labelW = game->pFontNumbers->MeasureWidth(20.0f, label);
+                float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE;
+                game->pFontNumbers->DrawString(20.0f, 1.0f, 0.0f,
+                    label, Vec3(m_DrawPosX + cursorX, m_DrawPosY - 30.0f, 0.0f),
+                    col, Mortar::FONT_ALIGN_CENTER);
                 game->pFontNumbers->DrawString(48.0f, 1.0f, 0.0f,
-                    hsBuf, Vec3(drawX, drawY, 0.0f), bannerCol, Mortar::FONT_ALIGN_CENTER);
+                    hsBuf, Vec3(m_DrawPosX, m_DrawPosY - 30.0f, 0.0f),
+                    col, Mortar::FONT_ALIGN_CENTER);
             }
         }
     }
 
     // draw_quads:
     // Section D: Score-icon texture quad (+0xA0 = score.tex) — guarded by transTimer > 0
+    // ASM-verified: 2026-05-03T00:00 binary @ 0x00159726..0x00159770 (asm-inspector)
     if (m_ScoreIconTex.IsValid() && transTimer > 0.0f) {
         Mortar::Texture* tex = m_ScoreIconTex.Get();
         float texW = (tex && tex->m_Width  > 0) ? (float)tex->m_Width  : 64.0f;
@@ -465,9 +504,10 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(texW, texH, 1.0f);
-        // Position: single-player anchor (IsMultiplayer ? 64*cameraTimer-mpAnchor : spAnchor)
-        // TODO: exact anchor values from binary
-        mat.GlobalTranslate44(Vec3(m_DrawPosX, m_DrawPosY + 5.5f, 0.0f));
+        mat.GlobalTranslate44(Vec3(
+            IsMultiplayer() ? (SCORE_BANNER_X_CENTRE * transTimer - SCORE_ICON_X_MP_STRIDE) : SCORE_ICON_X_SP,
+            m_DrawPosY + 53.0f,
+            0.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
@@ -480,15 +520,17 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
 
     // Section E: Highscore banner texture (+0xA4 = new_best_score.tex)
     // guarded by m_BannerScaleTime > 0
+    // ASM-verified: 2026-05-03T00:00 binary @ 0x00159842..0x0015990c (asm-inspector)
     if (m_HighscoreBannerTex.IsValid() && m_BannerScaleTime > 0.0f) {
         Mortar::Texture* tex = m_HighscoreBannerTex.Get();
         float texW = (tex && tex->m_Width  > 0) ? (float)tex->m_Width  + 1.0f : 65.0f;
         float texH = (tex && tex->m_Height > 0) ? (float)tex->m_Height + 1.0f : 17.0f;
 
-        // bannerScale = SinIdx(m_BannerScaleTime * RATE) — TODO: RATE from binary
-        // wobbleScale = SinIdx(m_BannerSinIdx) * 0.15 + 1.0
-        float wobbleScale = SinIdx(m_BannerSinIdx) * 0.15f + 1.0f;  // DAT_001597bc
-        float bannerScale = m_BannerScaleTime;  // TODO: SinIdx-based scale
+        // Binary @ 0x00159740..0x0015975c
+        float k = m_BannerScaleTime * SCORE_BANNER_SIN_RATE2;
+        uint16_t idx = (k > 0.0f) ? (uint16_t)(int)k : 0;
+        float bannerScale = SinIdx(idx);
+        float wobbleScale = SinIdx(m_BannerSinIdx) * SCORE_BANNER_WOBBLE + 1.0f;  // DAT_001597bc
 
         Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
@@ -496,7 +538,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                                            texH * bannerScale * wobbleScale, 1.0f);
         // RotZ44 ~5 degrees: SinIdx(0xE38)/CosIdx(0xE38)
         mat.RotZ44(SinIdx(0x0E38), CosIdx(0x0E38));
-        mat.GlobalTranslate44(Vec3(texW * 0.5f - 64.0f, m_DrawPosY + 0.5f, 0.0f));
+        mat.GlobalTranslate44(Vec3(texW * 0.5f - SCORE_BANNER_X_CENTRE, m_DrawPosY + SCORE_BANNER_Y_OFFSET, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 

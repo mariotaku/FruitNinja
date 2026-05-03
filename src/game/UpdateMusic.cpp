@@ -63,11 +63,10 @@ static void PreloadInGameSounds() {
 
     Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
 
-    // Binary: four PreLoadSound calls in order at 0x001695e8
-    // TODO: SoundManager::PreLoadSound is a no-op stub in the port (virtual nop
-    //   in SoundManagerFns vtable); these calls preserve the binary call shape
-    //   so the call sites light up when PreLoadSound is wired to actual preload
-    //   logic. Do NOT skip or remove them.
+    // Binary: four PreLoadSound calls in order at 0x001695e8.
+    // PreLoadSound is intentionally a no-op stub in the port (virtual nop in
+    // SoundManagerFns); call sites are kept to preserve binary shape so they
+    // light up when actual preload is wired. Do NOT skip or remove them.
 
     // 1. "Time-tock" (0x001bc29c)
     sm.PreLoadSound("Time-tock");
@@ -103,8 +102,8 @@ static void PreloadArcadeModeSounds() {
 
     Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
 
-    // Binary: 12 PreLoadSound calls at 0x00169504
-    // TODO: PreLoadSound is a no-op stub; calls kept for binary shape fidelity.
+    // Binary: 12 PreLoadSound calls at 0x00169504.
+    // PreLoadSound is intentionally a no-op stub; calls kept for binary shape.
 
     // 1. "Combo-Blitz-Backing-Light" (0x001bc258)
     sm.PreLoadSound("Combo-Blitz-Backing-Light");

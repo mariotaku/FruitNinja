@@ -1,4 +1,4 @@
-// Analysed: 2026-04-30T04:20
+// Analysed: 2026-05-03T00:00
 #include "MissControl.h"
 #include "HUD.h"
 #include "asset/TextureManager.h"
@@ -47,6 +47,17 @@ static constexpr float SEP_TARGET   = 70.0f;   // DAT_00151d5c
 
 // Sound threshold crossing. DAT_00151d64 = 1.66f
 static constexpr float SOUND_THRESH = 1.66f;
+
+// Screen-clamp half-extents (centred ortho). DAT_00151f50, DAT_00151f54
+static constexpr float MISS_CLAMP_HALF_X = 240.0f;
+static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
+
+// Pulse banding thresholds. DAT_001522a4..DAT_001522b4
+static constexpr float MISS_PULSE_FLOOR       = 0.65f;    // DAT_001522b4 (OK)
+static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f; // DAT_001522a4 (OK)
+static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // DAT_001522a8. DIFFERS: was 376354.0
+static constexpr float MISS_PULSE_NARROW_LO   = 32760.0f;  // DAT_001522ac. DIFFERS: was 32764.0
+static constexpr float MISS_PULSE_NARROW_HI   = 360360.0f; // DAT_001522b0. DIFFERS: was 360104.0
 
 // --- Static members -------------------------------------------------------
 
@@ -233,8 +244,7 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         m_Texture      = tex->m_TexId;
         m_bVisible     = 1;
         m_AnimState    = 3;
-        // TODO: m_FadeAlpha = DAT_00151f40 (separate constant -- RE needed).
-        // Using MISS_FADE_INIT as placeholder until resolved.
+        // path 1: zen-bomb X overlay (DAT_00151f40 = 1.811f, same as MISS_FADE_INIT).
         m_FadeAlpha    = MISS_FADE_INIT;
         m_JitterTimer  = 0;
         m_bComboActive = 1;
@@ -245,12 +255,17 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         // Path 2: fruit miss-penalty (invalid SmartPtr = use existing texture).
         // binary @ 0x00151d94 else branch
         m_JitterTimer  = (sizeMult >= 1) ? 0x1e : 0;
-        // TODO: m_FadeAlpha = DAT_00151f48 (third fade init constant -- RE needed).
-        m_FadeAlpha    = MISS_FADE_INIT;
+        // path 2: fruit-miss penalty (DAT_00151f48 = 1.66f, same as SOUND_THRESH).
+        // Skips the spawn-phase gate; goes straight to fade-down.
+        m_FadeAlpha    = SOUND_THRESH;
         m_AnimState    = 3;
         m_bVisible     = 1;
-        // TODO: size = (*DAT_00151f5c) * size_in; second multiply after SetPlayer.
-        // TODO: screen-clamp pos against +/-(DAT_00151f50 - size.x*0.5).
+        // g_HudScale (DAT_00151f5c -> module-static Vec3) defaults to (1,1,1); the
+        // binary's double-multiply is a no-op until Bada DPI code mutates it. Skipped.
+        size.x = size.x; size.y = size.y; size.z = size.z;
+        // DAT_00151f50 = 240.0, DAT_00151f54 = 160.0 (centred-ortho half-extents).
+        pos.x = std::max(size.x * 0.5f - MISS_CLAMP_HALF_X, std::min(pos.x, MISS_CLAMP_HALF_X - size.x * 0.5f));
+        pos.y = std::max(size.y * 0.5f - MISS_CLAMP_HALF_Y, std::min(pos.y, MISS_CLAMP_HALF_Y - size.y * 0.5f));
         m_bBusy        = 1;
         if (s_TexCross.IsValid()) m_Texture = s_TexCross->m_TexId;
     }
@@ -330,6 +345,7 @@ void MissControl::Update(float dt) {
 
 // --- Draw ------------------------------------------------------------------
 
+// ASM-verified-partial: 2026-05-03 binary @ 0x00151f60..0x00152190 (pulse formula + fall-off only; transform field_0x14/0x20 pre-mult still a gap)
 // binary @ 0x00151f60
 void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     if (m_Texture == 0) return;
@@ -345,14 +361,38 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     // Two paths based on m_FadeAlpha. binary @ 0x00151f60 alpha gate
     float drawAlpha;
     if (m_FadeAlpha <= 0.0f) {
-        // Fall-out animation after fading. binary uses pos.y * -3.0 offset.
-        // TODO: full fall-off formula (depends on FailureEnabled / camera.field_0xc).
-        return;  // not yet visible if already zeroed
+        // binary @ 0x00152272..0x00152286: fall-off uses this->pos.y (unjittered entity field).
+        // IsMultiplayer: stub false (same-screen MP not yet ported). binary @ WaveManager.
+        // FailureEnabled: stub false (game-mode flag not yet ported). binary @ Game.
+        if (false /* FailureEnabled() */ && !false /* IsMultiplayer() */) {
+            // binary @ 0x001520a2: drawPos.y -= 3.0 * pos.y * abs(game->field_0xc)
+            // TODO: Game::field_0xc semantics undocumented; stub to 1.0 until ported
+            drawPos.y -= 3.0f * pos.y * fabsf(/*game->field_0xc*/ 1.0f);
+        } else {
+            // binary @ 0x00152272: single VMLA — no +1.0 constant; uses pos.y not drawPos.y
+            drawPos.y += -3.0f * pos.y;
+        }
+        drawAlpha = 0.0f;
     } else {
         if (m_FadeAlpha > SOUND_THRESH) return;  // early-return: spawning phase, no draw yet
-        // Pulse: sin((alpha/1.66)*360*6*182) clamped to >= 0.65 in some phases.
-        // TODO: exact pulse formula. Using flat 1.0 for now.
-        drawAlpha = m_FadeAlpha;
+        // binary @ 0x00151ff2..0x0015201a: four-op VFP chain preserving float32 rounding.
+        //   vdiv s14, fade, 1.66    s14 = fade / 1.66
+        //   vmul s14, s14, 360       s14 *= 360
+        //   vmul s14, s14, 6         s14 *= 6
+        //   vmul s14, s14, 182       s14 *= 182
+        // Net: phase = (fade / 1.66) * 360 * 6 * 182  ~= fade * 236819.28
+        // pulse = |SinIdx((uint16_t)(uint32_t)max(phase,0))| with banded 0.65 floor.
+        float phase = (m_FadeAlpha / 1.66f) * 360.0f * 6.0f * 182.0f;
+        uint16_t idx = (uint16_t)(uint32_t)std::max(phase, 0.0f);
+        float pulse = fabsf(SinIdx(idx));
+        if (phase > MISS_PULSE_PHASE_LO && phase < MISS_PULSE_PHASE_HI) {
+            if (phase < MISS_PULSE_NARROW_LO || phase > MISS_PULSE_NARROW_HI) {
+                if (pulse < MISS_PULSE_FLOOR) pulse = MISS_PULSE_FLOOR;
+            } else {
+                pulse = MISS_PULSE_FLOOR;
+            }
+        }
+        drawAlpha = m_FadeAlpha * pulse;
     }
 
     // Effective alpha: fade * AlphaScale, then clamp [0..1].
@@ -376,14 +416,15 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
-    Matrix44 mat;
-    mat.ApplyScale(size.x, size.y, 1.0f);
-
-    // Rotation: if m_Timer != 0, apply rotZ using SinIdx/CosIdx(m_Timer * 182).
-    // binary @ 0x00151f60: SinIdx(rot * 182) used to build rotation matrix.
-    // m_Timer maps to +0x2c rotation (GameInit step 3 sets ±5 / ±10 deg).
-    // TODO: apply rotation matrix before scale (binary order: scale, rot, translate).
-
+    // binary @ 0x001520ec / 0x000fc720 / 0x000f7a4c. Order: Scale -> RotZ -> Translate.
+    // TODO: HUDControl3d field_0x14 / field_0x20 pre-multiplications (anchor + local-scale)
+    // are missing here. Requires RE confirmation of base-class field port-side names.
+    Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
+    if (m_Timer != 0.0f) {
+        uint16_t a = (uint16_t)(int)(m_Timer * 182.0f);
+        mat.RotZ44(SinIdx(a), CosIdx(a));
+    }
+    // Port ortho already centers on (0,0); no +480/+320 offset needed here.
     mat.GlobalTranslate44(drawPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();

@@ -1,7 +1,11 @@
-// Analysed: 2026-04-30T00:00
+// Analysed: 2026-05-03T00:00
 
 #include "ScoreModifier.h"
+#include "PowerUp.h"
 #include "PowerUpManager.h"
+#include "ScoreDelegate.h"
+#include "ItemParseUtil.h"
+#include <tinyxml2.h>
 
 ScoreModifier::ScoreModifier()
     : GameModifier()
@@ -21,6 +25,7 @@ void ScoreModifier::ResetSpecific() {
     m_LossMultiply = 1;
     m_GainAdd      = 0;
     m_GainMultiply = 1;
+    m_bDeferPoints = false;
 }
 
 // @ 0x0011cb70 — per-frame multiply into PowerUpManager score slots
@@ -41,8 +46,8 @@ int ScoreModifier::UpdateSpecific(float /*dt*/) {
 void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
     if (m_bDeferPoints) {
-        // TODO: m_pOwner->AddDeferedPoints(0);
-        // TODO: SetScoreDelegate(Delegate1<int,int>::Callee<ScoreModifier>(this, &ScoreModifier::operator()));
+        m_pOwner->AddDeferedPoints(0);   // clears -1 sentinel (binary L11790c)
+        SetScoreDelegate(this);           // Callee<ScoreModifier> trampoline (binary L11cc1c)
     }
     ++m_ApplyCount;
 }
@@ -50,13 +55,28 @@ void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
 // @ 0x0011cd44
 void ScoreModifier::RemoveModifier() {
     if (m_bDeferPoints) {
-        // TODO: SetScoreDelegate(DefaultScoreDelegate global delegate);
+        SetDefaultScoreDelegate();       // Global<int,int>(&DefaultScoreDelegate) (binary L11cda4)
     }
 }
 
 // @ 0x0011ccb0
-void ScoreModifier::ParseSpecific(TiXmlElement* /*xml*/) {
-    // TODO: parse gainAdd/gainMultiply/lossAdd/lossMultiply/deferPoints from XML
+// ASM-verified: 2026-05-03T00:00 binary @ 0x0011ccb0..0x0011cd20 (asm-inspector)
+void ScoreModifier::ParseSpecific(TiXmlElement* xml) {
+    TiXmlElement* mult = xml->FirstChildElement("multiplier");
+    ResetSpecific();
+    if (mult) {
+        mult->QueryIntAttribute("gainAdd",      &m_GainAdd);
+        mult->QueryIntAttribute("gainMultiply", &m_GainMultiply);
+        mult->QueryIntAttribute("lossAdd",      &m_LossAdd);
+        mult->QueryIntAttribute("lossMultiply", &m_LossMultiply);
+        const char* defer = mult->Attribute("deferPoints");
+        m_bDeferPoints = (defer && CompareWords(defer, "true"));
+    }
+}
+
+int ScoreModifier::operator()(int n) {
+    // TODO: implement operator() body (binary addr TBD — RE needed)
+    return n;
 }
 
 // @ 0x0011cc6c

@@ -113,10 +113,10 @@
   },
   "_ZN11WaveManager11GetNextWaveEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Wave selection differs from binary due to RNG; functional equivalent. See src/game/WaveManager.cpp GetNextWave.",
-    "score": 88841,
+    "reason": "Wave selection uses score-based std::vector vs binary probability-linked-list; port adds printf instrumentation. TODO queue path at src/game/WaveManager.cpp:969. Diff reflects un-ported WaveQue path and container divergence; semantics preserved.",
+    "score": 89156,
     "max_score": 37300,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager12CriticalModeEi": {
     "verdict": "ACCEPT-deferred",
@@ -141,10 +141,10 @@
   },
   "_ZN11WaveManager12SaveWaveInfoEP13FruitSaveData": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port save format differs from binary serialised layout. See src/game/WaveManager.cpp:628-705 (DIVERGES fix comments).",
-    "score": 38954,
+    "reason": "Port uses std::vector<WaveState> heap allocation vs binary direct array walk; extra bl _ZdlPv lines are vector node cleanup. TODO at src/game/WaveManager.cpp:647 (m_bSplitPlayerWaves not in port struct). Core field stores match.",
+    "score": 38709,
     "max_score": 16300,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager12SetupWaveQueEv": {
     "verdict": "ACCEPT-deferred",
@@ -183,17 +183,17 @@
   },
   "_ZN11WaveManager16ResetWaveChancesEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Iteration over std::vector vs binary linked-list. See src/game/WaveManager.cpp ResetWaveChances.",
-    "score": 15810,
+    "reason": "Port iterates std::vector<WAVE_INFO*> vs binary two-pointer linked-list walk. Resets m_CurrentChance, m_CurrentRegrowth, field_0x34 per element -- semantics identical. See src/game/WaveManager.cpp:754-767.",
+    "score": 16090,
     "max_score": 13000,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager16UpdateComboSpeedEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Combo speed math; minor structural variance. See src/game/WaveManager.cpp UpdateComboSpeed.",
-    "score": 15820,
+    "reason": "SpeedControl HUD alloc branch not ported (TODO src/game/WaveManager.cpp:936). Port calls GetWavedt via bl rather than inlining; clamp logic structurally identical. Binary has extra game->field_0x0c pause gate that port skips.",
+    "score": 15530,
     "max_score": 13400,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager16UpdateNetworkingEfi": {
     "verdict": "ACCEPT-deferred",
@@ -260,38 +260,38 @@
   },
   "_ZN11WaveManager4InitEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses TinyXML2 vs binary bespoke DOM parser; numerous DIFFERS comments. See src/game/WaveManager.cpp:131-383 (extensive XML parsing notes).",
-    "score": 166196,
+    "reason": "Port uses TinyXML2 vs binary bespoke DOM parser; numerous DIFFERS comments. See src/game/WaveManager.cpp:131-383 (extensive XML parsing notes). Score drift is from added printf instrumentation.",
+    "score": 166541,
     "max_score": 91400,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager5ResetEb": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Multiple TODO blocks (HUD::ResetControls, ET_ClearKnownEntities, FruitCamera, MP delay). See src/game/WaveManager.cpp:444-498.",
-    "score": 37247,
+    "reason": "Multiple TODO blocks: SetScore/SetMissCount (src/game/WaveManager.cpp:443), ET_ClearKnownEntities (line 444), HUD::ResetControls (line 453), MP sync flag (line 501). Binary has gameMode==2 networking branches port intentionally omits.",
+    "score": 36450,
     "max_score": 27600,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager6ResumeEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Tier-2 with many TODOs (ActorManager::Add, entity Init, SkipToPause restore loop). See src/game/WaveManager.cpp:529-626.",
-    "score": 41245,
+    "reason": "Tier-2 with many TODOs: GameTaskState::SetScore (src/game/WaveManager.cpp:543), PROBABILITY_OVERIDE::SelectType (line 556), m_pCurrentWave[1] restore (line 606), StringHash (line 614), SpawnState restore loop (lines 619-620), fade-screen shake (line 624).",
+    "score": 41585,
     "max_score": 35500,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Tier-1 path; numerous TODO blocks for not-yet-ported deps. See src/game/WaveManager.cpp:Update path.",
-    "score": 50860,
+    "reason": "Port adds printf instrumentation and calls into GetWavedt/UpdateComboSpeed via bl. TODO blocks: per-mode bounds RE (src/game/WaveManager.cpp:788), stat tracking (line 800), game-end gate (line 815), PROBABILITY_OVERIDE blitz (line 885). Core accumulator loop and vstr stores match binary.",
+    "score": 50845,
     "max_score": 16700,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager7DestroyEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Singleton dtor; binary has additional GOT-resolved cleanup not needed by port. See src/game/WaveManager.cpp:389-398.",
-    "score": 33661,
+    "reason": "Port destroys std::vector<WAVE_INFO*> + std::string members via STL destructors (bl _ZdlPv, bl _ZNSs4_Rep10_M_destroyE etc.); binary used fixed arrays with manual free loops. Port body at src/game/WaveManager.cpp:389-398 is semantically complete; all extra instructions are C++ container teardown.",
+    "score": 33861,
     "max_score": 5400,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManager7NewGameEv": {
     "verdict": "ACCEPT-deferred",
@@ -323,24 +323,24 @@
   },
   "_ZN11WaveManager9GetWavedtEi": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Field-access via array index vs raw offset; same calculation. See src/game/WaveManager.cpp:1397-1410.",
-    "score": 3900,
+    "reason": "Field-access via array index vs raw offset; same calculation. Binary swaps vmla operand order (s13,s14 vs s0,s1) -- vmla.f32 is commutative so identical. Port collapses playerIdx==0 dtMod branch; same result. See src/game/WaveManager.cpp:1397-1410.",
+    "score": 3890,
     "max_score": 4600,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManagerC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Multiple DIFFERS comments for placeholder defaults (m_DtIncPerMode, field_0x8c, field_0x9c). See src/game/WaveManager.cpp:72-116.",
-    "score": 22765,
+    "reason": "Port member-init list generates mass vstr/str for all fields; binary calls sub-object ctors then sets a handful of fields. DIFFERS placeholders for m_DtIncPerMode (line 102), m_SpeedMultPerMode (line 105), field_0x8c (line 108), field_0x9c (line 110). See src/game/WaveManager.cpp:72-116.",
+    "score": 22525,
     "max_score": 4200,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManagerC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 alias of C1; same as WaveManagerC1Ev.",
-    "score": 22765,
+    "reason": "C2 alias of C1; same as WaveManagerC1Ev. See src/game/WaveManager.cpp:72-116.",
+    "score": 22525,
     "max_score": 4200,
-    "decided_at": "2026-05-03T10:00Z"
+    "decided_at": "2026-05-03T09:25Z"
   },
   "_ZN11WaveManagerD1Ev": {
     "verdict": "ACCEPT-deferred",

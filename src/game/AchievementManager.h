@@ -41,7 +41,7 @@ public:
     int AchievementExists() const { return 0; }
 
     // @ 0x00109200 — parse achievementlist.xml into 11 type categories.
-    // TODO: real impl pending when achievement UI is ported.
+    // Note: no-op stub; achievement UI not ported (Tier-2).
     void LoadAchievementInfo() {}
 
     // @ 0x00108fb4 — destroy maps, free entries.
@@ -61,6 +61,12 @@ public:
 
     // @ 0x00108c40 — specialised consecutive-slice hook.
     void UnlockConsecutiveAchievement(int consecutive) { (void)consecutive; }
+
+    // Score/end-game achievement stubs (defunct OpenFeint/GameCenter).
+    void UnlockScoreAchievement(int score) { (void)score; }
+    void UnlockEndScoreAchievement(int score, int hi) { (void)score; (void)hi; }
+    void UnlockComboStarAchievement(int combo) { (void)combo; }
+    void UnlockPostGameAchievements() {}
 
     // @ (various) — init/destroy lifecycle stubs.
     void Init() {}

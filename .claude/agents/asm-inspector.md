@@ -159,8 +159,9 @@ Do **NOT** emit the line for **Diverges** or **Inconclusive** verdicts. The comm
 
 ## Stay in lane
 
-- **Do NOT edit `src/`.** If the test reveals a port bug, document it; the implementer applies the fix.
+- **Do NOT edit `src/`.** If the test reveals a port bug, document it as a source-side `// TODO: ...` (handed to the implementer in your report); the implementer applies the fix.
 - **Do NOT RE new functions broadly** — that's `re-analyst`. You only verify *specific* claims via ASM comparison. If the question requires resolving struct layouts or following GOT pointers, stop and ask for a re-analyst pass first.
+- **Do NOT write narrative `docs/*-asm-audit.md` / `*-asm-verify.md` files.** Those are deprecated — the canonical record of an ASM verification is the `// ASM-verified: ...` line in `src/` plus the verifier's `tools/asm-verify/triage.json`. Hand off via your report; the implementer pastes the marker.
 - **Do NOT trust Ghidra's decompiled C** as evidence. Decompiled C is heuristic. ASM is ground truth. If you cite "Ghidra shows X", that's not proof — show the actual instructions.
 - **Avoid `-O0`** — the binary is optimised; comparing against `-O0` toolchain output is meaningless. Use `-O2` minimum.
 

@@ -16,6 +16,8 @@
 #include "game/ScoreState.h"
 #include "game/WaveManager.h"
 #include "game/GameOver.h"
+#include "game/FruitSaveData.h"
+#include "util/StringHash.h"
 #include "Game.h"
 #include "audio/GameSound.h"
 #include "math/math3d.h"
@@ -27,6 +29,11 @@
 #include <vector>
 
 // Analysed: 2026-04-29T00:00
+
+// Count of active power-fruits (FruitInfo::m_pPowers != nullptr) on screen.
+// Decremented by KillFruit on natural-expiry path (flag 0x10 not yet set).
+// Binary @ 0x00176cc8..0x00176cd4: unconditional store, clamped to >= 0 (not >= 1).
+static int g_PowerFruitCount = 0;
 
 // Static Colour constants from _GLOBAL__I_Fruit.cpp @ 0x0017a354.
 // *DAT_0017a678: Colour(0x80, 0x80, 0xff, 0x80) = RGBA(128, 128, 255, 128)
@@ -89,6 +96,9 @@ Fruit::Fruit()
     , m_bDetached(false)
     , m_bDrawWhole(false)
     , m_bCriticalEligible(false)
+    , m_bNoPowerUp(0)
+    , m_pSlasher(nullptr)
+    , m_TrackerID(0)
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
     , m_PlayerIdx(0)
@@ -111,6 +121,9 @@ void Fruit::Init(int param1, int fruitType, int param3) {
     m_bDetached = false;
     m_bDrawWhole = false;
     m_bCriticalEligible = false;
+    m_bNoPowerUp = 0;
+    m_pSlasher = nullptr;
+    m_TrackerID = 0;
     m_ScaleAnim = 0.0f;
     m_ChuckDelay = 0.0f;
     m_PlayerIdx = 0;
@@ -491,9 +504,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
 
     if (doMissPenalty) {
         const FruitInfo* info = FruitInfo_Get(m_FruitType);
-        // DIFFERS: m_bNoPowerUp field not yet ported to Fruit.h; treating as false
-        // (safe — bombs use Bomb class, not Fruit, so only real fruits reach here)
-        if (!m_bSliced && info && info->m_Score < 5) {
+        if (!m_bNoPowerUp && !m_bSliced && info && info->m_Score < 5) {
             Game* g = Game::GetInstance();
             if (g) {
                 if (g->gameMode == 2) {
@@ -518,9 +529,30 @@ void Fruit::KillFruit(bool doMissPenalty) {
         }
     }
 
-    // TODO: unlink from SlashEntity (field_0x108 + 0x134)
-    // TODO: decrement g_PowerFruitCount if FruitInfo has powers
-    // TODO: ET_RemoveEntity(0, m_TrackerID)
+    // Matches Fruit::KillFruit cleanup tail (binary @ 0x00176c8e..0x00176cea).
+    // 1. Clear slasher's back-pointer if it still points at us.
+    // ASM-verified: 2026-05-03 binary @ 0x00176c8e..0x00176cea (asm-inspector)
+    if (m_pSlasher && m_pSlasher->m_pCurrentTarget == this) {
+        m_pSlasher->m_pCurrentTarget = nullptr;
+    }
+    // 2. Decrement g_PowerFruitCount on natural-expiry path (flag 0x10 not yet set)
+    //    AND for power-fruits (info->m_pPowers != nullptr).
+    //    Binary @ 0x00176cc8..0x00176cd4: unconditional store of 0 when count<=1
+    //    else (count-1). Port previously used conditional decrement which pinned
+    //    the counter at 1 across multiple natural expirations.
+    if (!(flags & 0x10)) {
+        const FruitInfo* killInfo = FruitInfo_Get(m_FruitType);
+        if (killInfo && killInfo->m_pPowers) {
+            int v = g_PowerFruitCount;
+            int newv = 0;
+            if (v > 1) newv = v - 1;
+            g_PowerFruitCount = newv;
+        }
+    }
+    // 3. Untrack from EntityTracker tree 0.
+    if (m_TrackerID != 0) {
+        ET_RemoveEntity(0, m_TrackerID);
+    }
 
     flags |= 0x10;
 }
@@ -679,8 +711,8 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
     static const int kCritScoreBound = 8;  // DIFFERS: DAT_001784fc unresolved
     static const int kCritResetBase  = 0;  // DIFFERS: DAT_00178504 unresolved
 
-    // FruitInfo +0x318 is m_bNoCritical — inverted: canCrit = !m_bNoCritical.
-    const bool canCritFruit = info && !info->m_bNoCritical;
+    // FruitInfo +0x318 is m_bScorable: 1 = can receive critical hit.
+    const bool canCritFruit = info && info->m_bScorable;
 
     // DIFFERS: FruitNinjaApp gating fields (+0x05 frenzy flag, +0x10 frenzy
     // timer, +0x30 score threshold) not yet ported. m_ScoreThreshold from
@@ -788,18 +820,37 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
     const float sliceLength   = bladeSpeed * 0.4f;
     FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
 
-    // Score increment — matches AddToCurrentScore (0x0010a7ac).
-    // Multiplier: critical-eligible fruit scores double.
-    // Binary also calls scoreDelegate.Call(points * multiplier) and tier
-    // SFX — both skipped (not yet ported).
-    // TODO: AddToCurrentScore tier-SFX and FruitSaveData::AddToTotal
+    // Matches CollisionResponse score+save dispatch (binary @ 0x00178e90..0x00178f04).
     if (info) {
         Game* g = Game::GetInstance();
         if (g) {
             const int multiplier = m_bCriticalEligible ? 2 : 1;
-            g->currentScore += info->m_Score * multiplier;
+            // Score: multiplier and crit x2 are applied inside AddToCurrentScore
+            // via GetScoreMultiplyer + Game::scoreMultDelegate.
+            FN::AddToCurrentScore(info->m_Score * multiplier, (int)m_PlayerIdx,
+                                  /*trackFruit=*/true, /*sendNetPacket=*/false);
+
+            // Per-fruit-name save totals.
+            if (g->pSaveData) {
+                g->pSaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+                                         /*trackSession=*/false, false);
+                g->pSaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
+                                         /*trackSession=*/true, false);
+
+                // On critical hit, record crit totals.
+                if (isCritical) {
+                    static const uint32_t hCrit      = StringHash("crit");
+                    static const uint32_t hCritTotal = StringHash("crits_total");
+                    g->pSaveData->AddToTotal("crit",        hCrit,      1, false, false);
+                    g->pSaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
+                    char critBuf[128];
+                    snprintf(critBuf, 128, "%scrit", info->m_Name);
+                    g->pSaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
+                }
+            }
         }
     }
+    // TODO: Zen-mode-only save totals (first_fruit / last_fruit)
 
     // Combo counter increment — binary @ 0x001787a8..0x001787b0.
     // ASM-verified: 2026-05-02 binary @ 0x00178708 reads m_PlayerIdx (+0x90).
@@ -1189,12 +1240,21 @@ const FruitModelInfo* Fruit::GetFruitModelInfo(int fruitType) {
     return &s_FruitModels[fruitType];
 }
 
-// Matches Fruit::RandomFruit (0x001762cc).
-// TODO: binary RE needed for exact weighting; uniform random stub.
-int Fruit::RandomFruit(bool /*allowSpecial*/) {
+// Matches Fruit::RandomFruit (binary @ 0x00176564, 113 instructions).
+// Binary: 4-path weighted selector using per-fruit m_Chance / m_bSpecial fields
+// and WaveManager::m_Random, gated by WaveManager::CriticalMode(0).
+//   includeOnSide=true  -> all fruits (uses cumulative m_Chance weights).
+//   includeOnSide=false -> only fruits with m_RandBonusMax < 1 (avail subset).
+//   Critical mode restricts to m_bSpecial fruits.
+// TODO: extend FRUIT_INFO with weight fields when LoadFruitInfo is fully ported
+//   (binary: m_RandBonusBase at +0x308, m_bSpecial at +0x318, m_RandBonusMax at +0x328
+//    do NOT match the current FruitInfo struct layout — needs RE reconciliation first).
+// Fallback until then: uniform random over non-special fruit types via WaveManager RNG.
+int Fruit::RandomFruit(bool /*includeOnSide*/) {
     int count = FruitInfo_GetCount();
     if (count <= 0) return 0;
-    // TODO: use WaveManager RNG; using stdlib for now
+    WaveManager* wm = WaveManager::GetInstance();
+    if (wm) return (int)wm->m_Random.Rand32((uint32_t)count);
     return rand() % count;
 }
 
@@ -1221,9 +1281,10 @@ void Fruit::ClearUnspawned(bool deactivateVisible) {
     }
 }
 
-// Matches Fruit::Disable (0x00126370).
+// Matches Fruit::Disable (binary @ 0x00126374): one-byte store of 1 to +0x3D.
+// ASM-verified: 2026-05-03 binary @ 0x00126374 (asm-inspector)
 void Fruit::Disable(Fruit* f) {
-    if (f) f->m_bCriticalEligible = false; // TODO: set collision guard once field is added
+    f->m_bNoPowerUp = 1;
 }
 
 // Matches Fruit::DrawShadows (0x00178f28) + AddShadow (0x00175ea0).

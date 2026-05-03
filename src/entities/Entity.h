@@ -114,4 +114,10 @@ public:
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }
 };
 
+// Free function: remove an entity from EntityTracker tree `treeIdx` by its
+// 16-bit tracker ID. Called by Fruit::KillFruit to unregister the dying
+// fruit from the spatial acceleration structure.
+// TODO: implement ET_RemoveEntity (binary @ 0x00174684) when EntityTracker tree storage is ported
+void ET_RemoveEntity(int treeIdx, uint16_t trackerID);
+
 #endif

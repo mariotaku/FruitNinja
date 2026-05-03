@@ -30,7 +30,9 @@
 
 #include <cstdint>
 
-class TiXmlElement;
+namespace tinyxml2 { class XMLElement; }
+typedef tinyxml2::XMLElement TiXmlElement;
+
 class PowerUp;
 
 class GameModifier {

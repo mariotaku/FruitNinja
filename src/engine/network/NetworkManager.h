@@ -52,6 +52,10 @@ public:
     // (symbol in list_classes) — returns false; GameCenter not available in port
     bool AreGameCenterConnectionAttemptsAllowed() const { return false; }
 
+    // vtable slot 4 @ (binary addr TBD) — clears P2P sync state between rounds.
+    // TODO: implement (binary @ 0x? -- re-analyst pass needed)
+    void SyncClear() {}
+
     // Called from ctor body — no-op stubs
     void DeregisterAllPopupAlertButtons() {}
     void SetStatusMessageTextDefaults() {}

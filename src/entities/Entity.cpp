@@ -25,3 +25,6 @@ void Entity::HeapDestroy() {
     s_pEntityHeap    = nullptr;
     s_EntityHeapSize = 0;
 }
+
+// TODO: implement ET_RemoveEntity (binary @ 0x00174684) when EntityTracker tree storage is ported
+void ET_RemoveEntity(int /*treeIdx*/, uint16_t /*trackerID*/) {}

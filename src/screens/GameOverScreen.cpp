@@ -7,6 +7,7 @@
 #include "Game.h"
 #include "game/WaveManager.h"
 #include "game/FruitSaveData.h"
+#include "game/AchievementManager.h"
 #include "entities/ActorManager.h"
 #include "entities/FruitInfo.h"
 #include "hud/MenuButton.h"
@@ -564,27 +565,28 @@ void GameOverScreen::Update(float dt) {
                     // Lifetime totals
                     save->AddToTotal("FruitsCollected", 1);
                     save->AddToTotal("TotalScore", score);
-                    // TODO: save->UnlockTotals();  -- not yet in FruitSaveData API
+                    save->UnlockTotals();  // no-op stub until AchievementManager is ported
 
-                    // TODO: AchievementManager::GetInstance()->UnlockScoreAchievement(score);
-                    // TODO: AchievementManager::GetInstance()->UnlockTotalFruitAchievement(...);
-                    // TODO: AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, hi);
+                    AchievementManager::GetInstance()->UnlockScoreAchievement(score);
+                    AchievementManager::GetInstance()->UnlockTotalFruitAchievement(0);
+                    AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, 0);
 
-                    // TODO: LeaderboardManager::RefreshLeaderboard(gameMode, 3) -- defunct
-                    // TODO: FNHighscoreList::AddPlayerScore(board) -- defunct
+                    // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
+                    // Note: FNHighscoreList::AddPlayerScore -- defunct (online-services-audit).
 
-                    // TODO: AchievementManager::GetInstance()->UnlockComboStarAchievement(...);
+                    AchievementManager::GetInstance()->UnlockComboStarAchievement(0);
 
                     int hi = GetCurrentModeHighscore();
                     if (hi / 2 < score) {
                         save->SetCurrentModeHighscore(score);
                     }
 
-                    // TODO: NetworkManager::SetLeaderboardScore(...) -- defunct
+                    // Note: NetworkManager::SetLeaderboardScore -- defunct (online-services-audit).
 
                     // Arcade-only post-game achievement
                     if (game->gameMode == 2) {
-                        // TODO: BonusManager::UnlockPostGameAchievements();
+                        // TODO: BonusManager::UnlockPostGameAchievements() -- blocked on BonusManager port.
+                        AchievementManager::GetInstance()->UnlockPostGameAchievements();
                     }
 
                     save->FinishedGame();
@@ -684,7 +686,7 @@ void GameOverScreen::Update(float dt) {
     // State 10: online leaderboard launch (defunct) — no-op, back to state 6
     // -----------------------------------------------------------------------
     case 10: {
-        // TODO: Tier-2 — NetworkManager::LaunchDashboard() (defunct)
+        // Note: NetworkManager::LaunchDashboard() -- defunct (online-services-audit).
         m_ProgressCounter = 0;
         m_pQuitBtn        = nullptr;
         m_pRetryBtn       = nullptr;

@@ -5,8 +5,8 @@
 // In-game power-up purchase screen
 // Binary: LoadContent 0x1802f4
 struct PowerUpShop {
-    static void LoadContent() {}   // TODO
-    static void UnLoadContent() {} // TODO
+    static void LoadContent() {}   // Note: no-op stub; PowerUpShop not yet ported (Tier-2).
+    static void UnLoadContent() {} // Note: no-op stub; PowerUpShop not yet ported (Tier-2).
 };
 
 #endif

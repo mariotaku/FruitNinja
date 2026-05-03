@@ -19,8 +19,6 @@
 
 #include "GameModifier.h"
 
-class TiXmlElement;
-
 class ScoreModifier : public GameModifier {
 public:
     // +0x20: XML gainAdd="N" — added to m_ScoreGainFactor per m_ApplyCount
@@ -66,6 +64,11 @@ public:
 
     // @ 0x0011cc6c
     GameModifier* Clone() override;
+
+    // Callee<ScoreModifier> callable — invoked by score delegate trampoline
+    // when m_bDeferPoints is active.
+    // TODO: implement operator() body (binary addr TBD — RE needed)
+    int operator()(int n);
 };
 
 #endif // FN_GAME_SCORE_MODIFIER_H

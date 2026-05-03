@@ -1,8 +1,17 @@
-// Analysed: 2026-04-30T00:00
+// Analysed: 2026-05-03T00:00
 
 #include "PowerUpManager.h"
 #include "PowerUp.h"
+#include "Game.h"
+#include "entities/SlashEntity.h"
+#include "network/NetworkManager.h"
+#include "util/StringHash.h"
+#include "asset/TextureManager.h"
+#include "math/Vec3.h"
+#include <tinyxml2.h>
 #include <cstdio>
+#include <cstring>
+#include <string>
 
 // @ 0x00117d20
 PowerUpManager::PowerUpManager()
@@ -49,8 +58,10 @@ void PowerUpManager::SetDefaults() {
     m_DtMod     = 1.0f;
     m_field6c   = 1.0f;
     ClearScoreMultipliers();
-    // TODO: clear global slash-power mask: *(uint32_t*)(GOT + 0x7740) = 0
-    // TODO: reset SlashEntityState blade-width/colour-mod fields via g_GameData
+    SlashEntity::s_ModPowerMask = 0;
+    // TODO: reset SlashEntityState blade-width/colour-mod fields (binary @ 0x00117a80
+    //       writes 6 float fields to 1.0 via g_pFruitNinjaApp->m_pBladeState)
+    //       when SlashEntityState is ported, wire here.
 }
 
 // @ 0x0011a218
@@ -88,7 +99,7 @@ void PowerUpManager::Update(float dt) {
                 }
             }
             int numTimed = GetNumActiveTimedPowers();
-            float& xpos  = pwr->field_0xc8;
+            float& xpos  = pwr->m_BarXPos;
             float target = (specialIdx * 110.0f)    // DAT
                          + ((numTimed - 1) * -55.0f);  // DAT_00118b94
             xpos += (target - xpos) * 0.2f;            // DAT_00118b98
@@ -133,30 +144,47 @@ void PowerUpManager::Reset(bool fullReset) {
     m_DtMod     = 1.0f;
     m_field6c   = 1.0f;
     ClearScoreMultipliers();
-    // TODO: clear global slash mask, reset SlashEntityState
+    SlashEntity::s_ModPowerMask = 0;
+    // TODO: reset SlashEntityState 6 blade-width/colour-mod fields to 1.0
+    //       (binary @ 0x00119b08 via g_pFruitNinjaApp->m_pBladeState) when
+    //       SlashEntityState is ported.
 
     if (fullReset) {
-        // TODO: (*game->m_pNetMgr->vtable[4])() - NetworkManager::SyncClear
+        Mortar::NetworkManager::GetInstance()->SyncClear();
     }
 
-    auto it = m_ActivePowerUps.begin();
+    std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
     while (it != m_ActivePowerUps.end()) {
         PowerUp* pwr = *it;
         if (pwr->IsPurchaseable()) {
             pwr->Deactivate(true);
-            if (fullReset) {
-                // TODO: ActivatePurchase(pwr) -- re-apply purchase-active modifier
-            } else if (!pwr->m_pPurchaseInfo || pwr->m_pPurchaseInfo->field_0xc0 <= 0) {
+            if (!fullReset) {
                 // ASM-verified: 2026-05-02 binary @ 0x00119bb0..0x00119bba -- check remaining-uses count
-                goto deactivate_and_free;
+                if (!pwr->m_pPurchaseInfo || pwr->m_pPurchaseInfo->m_RemainingUses <= 0) {
+                    uint32_t hash = pwr->m_NameHash;
+                    std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
+                    if (byHash != m_ActiveByHash.end()) m_ActiveByHash.erase(byHash);
+                    pwr->Release();
+                    delete pwr;
+                    it = m_ActivePowerUps.erase(it);
+                    continue;
+                }
+            } else {
+                // Full reset: purchaseable powers are freed (re-activated below if zen)
+                uint32_t hash = pwr->m_NameHash;
+                std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
+                if (byHash != m_ActiveByHash.end()) m_ActiveByHash.erase(byHash);
+                pwr->Release();
+                delete pwr;
+                it = m_ActivePowerUps.erase(it);
+                continue;
             }
             ++it;
             continue;
         }
-        deactivate_and_free:
         {
             uint32_t hash = pwr->m_NameHash;
-            auto byHash = m_ActiveByHash.find(hash);
+            std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
             if (byHash != m_ActiveByHash.end()) m_ActiveByHash.erase(byHash);
             pwr->Deactivate(false);
             pwr->Release();
@@ -167,8 +195,19 @@ void PowerUpManager::Reset(bool fullReset) {
 
     ClearScreenEffects();
 
-    // Zen mode (gameMode==2): re-activate always-on specials.
-    // TODO: if (fullReset && g_GameData->gameMode == 2) { for specials: ActivatePower(...) }
+    // Zen mode (gameMode==2): re-activate all m_bIsSpecial powers from m_AllPowerUps.
+    if (fullReset) {
+        Game* game = Game::GetInstance();
+        if (game && game->gameMode == 2) {
+            for (std::map<uint32_t, PowerUp*>::iterator it2 = m_AllPowerUps.begin();
+                 it2 != m_AllPowerUps.end(); ++it2) {
+                PowerUp* tpl = it2->second;
+                if (tpl && tpl->m_bIsSpecial) {
+                    ActivatePower(tpl->m_NameHash);
+                }
+            }
+        }
+    }
 }
 
 // @ 0x00118904
@@ -193,6 +232,25 @@ void PowerUpManager::ClearTimedPowers() {
     }
 }
 
+// @ 0x001197c4
+void PowerUpManager::ActivatePower(uint32_t hash) {
+    std::map<uint32_t, PowerUp*>::iterator it = m_AllPowerUps.find(hash);
+    if (it == m_AllPowerUps.end()) return;
+    PowerUp* tpl = it->second;
+    if (!tpl) return;
+
+    // If already active, don't double-activate
+    if (m_ActiveByHash.find(hash) != m_ActiveByHash.end()) return;
+
+    PowerUp* clone = tpl->Clone();
+    if (!clone) return;
+
+    Vec3 zeroPos(0.0f, 0.0f, 0.0f);
+    clone->Activate(false, zeroPos, 0.0f);
+    m_ActivePowerUps.push_back(clone);
+    m_ActiveByHash[hash] = clone;
+}
+
 // @ 0x00119760
 bool PowerUpManager::ActivateScreenEffect(uint32_t hash) {
     auto it = m_ScreenEffectPool.find(hash);
@@ -212,17 +270,57 @@ void PowerUpManager::ClearScreenEffects() {
 
 // @ 0x00119cb0
 void PowerUpManager::Load() {
-    // TODO: parse xml/powerUpList.xml using TiXmlDocument.
-    // Pseudocode per docs/engine/powerup-manager-deep-re.md §4.9:
-    //   TiXmlDocument* doc = new TiXmlDocument("xml/powerUpList.xml");
-    //   m_AllPowerUps.clear(); m_PurchasablePowers.clear();
-    //   if (!doc->LoadFile(0)) { delete doc; return; }
-    //   parse each <powerup> into PowerUp, insert into m_AllPowerUps;
-    //   parse each top-level <screeneffect> into m_ScreenEffectPool.
-    //   delete doc;
-    //
-    // Blocked: TiXmlElement full port needed first. Logged, not crashing.
-    printf("PowerUpManager::Load -- xml/powerUpList.xml not yet parsed (TODO)\n");
+    // Build path: Data/xml/powerUpList.xml
+    std::string path;
+    const char* dataDir = Mortar::TextureManager::GetDataDir();
+    if (dataDir && dataDir[0]) {
+        path = dataDir;
+        path += "/xml/powerUpList.xml";
+    } else {
+        path = "xml/powerUpList.xml";
+    }
+
+    tinyxml2::XMLDocument doc;
+    tinyxml2::XMLError err = doc.LoadFile(path.c_str());
+    if (err != tinyxml2::XML_SUCCESS) {
+        printf("PowerUpManager::Load -- failed to open '%s' (error %d)\n", path.c_str(), (int)err);
+        return;
+    }
+
+    tinyxml2::XMLElement* root = doc.FirstChildElement("powers");
+    if (!root) {
+        printf("PowerUpManager::Load -- no <powers> root in '%s'\n", path.c_str());
+        return;
+    }
+
+    m_AllPowerUps.clear();
+    m_PurchasablePowers.clear();
+
+    for (tinyxml2::XMLElement* child = root->FirstChildElement();
+         child; child = child->NextSiblingElement()) {
+        const char* tag = child->Name();
+        if (!tag) continue;
+
+        if (strcmp(tag, "powerup") == 0) {
+            PowerUp* pu = new PowerUp();
+            pu->Parse(child);
+            if (pu->m_NameHash == 0) {
+                delete pu;
+                continue;
+            }
+            m_AllPowerUps[pu->m_NameHash] = pu;
+            if (pu->m_bIsPurchasable) {
+                m_PurchasablePowers.push_back(pu);
+            }
+        } else if (strcmp(tag, "effect") == 0) {
+            const char* nameAttr = child->Attribute("name");
+            if (!nameAttr) continue;
+            uint32_t hash = StringHash(nameAttr);
+            ScreenEffect& se = m_ScreenEffectPool[hash];
+            se.m_NameHash = hash;
+            se.Parse(child);
+        }
+    }
 }
 
 // @ 0x0011840c
@@ -235,7 +333,10 @@ void PowerUpManager::LoadTextures() {
 
 // @ 0x00119384
 void PowerUpManager::Draw() {
-    // TODO: Tier-2 -- for each pwr in m_ActivePowerUps: pwr->DrawBar()
+    for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
+         it != m_ActivePowerUps.end(); ++it) {
+        (*it)->DrawBar();
+    }
 }
 
 // @ 0x00117b38
@@ -247,7 +348,7 @@ float PowerUpManager::GetActiveProgression(float t) const {
     }
     if (!active) return 2.0f;
     if (t > 0.0f && active->m_TotalTime > 0.0f) {
-        return (active->field_0x9c - t) / active->m_TotalTime;
+        return (active->m_LongestRemaining - t) / active->m_TotalTime;
     }
     return active->GetCurrentTimeProgress();
 }
