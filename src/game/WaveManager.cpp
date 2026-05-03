@@ -1448,11 +1448,11 @@ PROBABILITY_OVERIDE* WaveManager::GetCurrentOverideList(int playerIdx) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::AddToSpeedLossTime(float amount, int playerIdx) {
-    // Binary @ 0x001218ac. Clamps UP to 1.0 if dropping below 1.0 while active.
+    // Binary @ 0x001218ac. Clamps DOWN to 1.0 -- speed-loss accumulator cannot exceed 1.0.
     float* slot = &field_0x4c + playerIdx;  // +0x4c + p*4
     if (*slot > 0.0f) {
         float v = *slot + amount;
-        if (v < 1.0f) v = 1.0f;
+        if (v > 1.0f) v = 1.0f;  // Clamps DOWN to 1.0 -- caps at maximum 1.0f per second (binary: vcmpe s0,s15; it pl; vmovpl s0,s15)
         *slot = v;
     }
 }

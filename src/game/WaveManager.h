@@ -34,6 +34,11 @@ public:
     // Do NOT change this layout until WaveManager::WaveManager() ctor is disassembled to confirm.
     Random m_Random;
 
+    // +0x018..+0x034: gap (29 bytes). Binary Random at +0x00 is 0x35 bytes; port
+    // Random is 0x18 bytes (24 b). Padding bridges the difference so all
+    // field_0xNN comments below match the binary offsets exactly.
+    uint8_t _pad_0x18[0x1D];  // 29 bytes of gap to reach +0x35
+
     // +0x035: wave-active flag
     uint8_t field_0x35;
     // +0x036: reset flag
@@ -42,6 +47,8 @@ public:
     uint8_t field_0x37;
     // +0x038: last selected wave index (int, -1 = none)
     int field_0x38;
+    // +0x03c: gap to reach +0x40
+    uint8_t _pad_0x3c[4];
     // +0x040: play-time accumulators
     float field_0x40;
     float field_0x44;
