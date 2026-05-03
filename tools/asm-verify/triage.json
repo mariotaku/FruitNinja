@@ -1,0 +1,23 @@
+{
+  "_ZN13FruitSaveData14DownloadTweaksEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Online tweaks are defunct; port stub is intentional. See docs/engine/online-services-audit.md.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-03T00:00Z"
+  },
+  "_ZN11WaveManager16UpdateNetworkingEfi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "P2P multiplayer is defunct; port stub is intentional.",
+    "score": 300,
+    "max_score": 200,
+    "decided_at": "2026-05-03T00:00Z"
+  },
+  "_ZN11WaveManager18SendWaveSyncPacketEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "P2P sync packet -- defunct online services.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-03T00:00Z"
+  }
+}

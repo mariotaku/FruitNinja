@@ -43,6 +43,14 @@ ASM_DIFFER = pathlib.Path(os.environ.get(
     "/opt/asm-differ/diff.py"))
 USE_ASM_DIFFER = ASM_DIFFER.exists()
 
+# Triage sidecar: sticky decisions that downgrade SUSPICIOUS/DIVERGE rows
+# the user (or asm-triager agent) has already classified as "accept". Keyed
+# by the symbol's mangled name; an entry is invalidated when the diff content
+# changes (we hash the asm-differ score+max as a cheap proxy).
+TRIAGE_PATH = pathlib.Path(os.environ.get(
+    "ASM_VERIFY_TRIAGE_PATH",
+    ASM_VERIFY_DIR / "triage.json"))
+
 # Lines removed entirely before diffing.
 DROP_RE = re.compile(
     r"^\s*("
@@ -295,6 +303,38 @@ def verify_one(s: dict) -> dict:
             "bin_norm": bin_lines, "port_norm": port_lines}
 
 
+def load_triage() -> dict:
+    """Load tools/asm-verify/triage.json. Returns {} if missing or malformed."""
+    if not TRIAGE_PATH.exists():
+        return {}
+    try:
+        import json
+        return json.loads(TRIAGE_PATH.read_text())
+    except Exception:
+        return {}
+
+
+def apply_triage(results: list[dict], triage: dict) -> list[dict]:
+    """Replace SUSPICIOUS/DIVERGE verdicts with the agent's sticky decision
+    when the asm-differ score still matches the triaged hash.
+    """
+    for r in results:
+        name = r.get("mangled")
+        entry = triage.get(name)
+        if not entry:
+            continue
+        # Invalidate if score has drifted from the triage record.
+        if r.get("score") != entry.get("score") or r.get("max_score") != entry.get("max_score"):
+            r["triage_stale"] = True
+            continue
+        # Sticky verdict from triage -- prefix verdict with "(t)" so it's clear.
+        new_verdict = entry.get("verdict")
+        if new_verdict in ("ACCEPT-cosmetic", "ACCEPT-deferred", "FIX-NEEDED"):
+            r["verdict"] = new_verdict
+            r["reason"] = "triaged: " + entry.get("reason", entry.get("verdict"))
+    return results
+
+
 def write_report(results: list[dict]) -> pathlib.Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / "report.md"
@@ -303,7 +343,8 @@ def write_report(results: list[dict]) -> pathlib.Path:
     for r in results:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     lines.append("## Summary")
-    for v in ("MATCH", "COSMETIC", "SUSPICIOUS", "DIVERGE", "UNPAIRED"):
+    for v in ("MATCH", "COSMETIC", "ACCEPT-cosmetic", "ACCEPT-deferred",
+              "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
         if v in counts:
             lines.append(f"- {v}: {counts[v]}")
     lines.append("")
@@ -314,21 +355,44 @@ def write_report(results: list[dict]) -> pathlib.Path:
     for r in results:
         lines.append(f"| {r['verdict']} | `{r['mangled']}` | `{r['addr']}` | {r['reason']} |")
     lines.append("")
-    # Diff bodies for SUSPICIOUS/DIVERGE only -- cuts noise, MATCH/COSMETIC
-    # rarely deserve attention.
-    escalations = [r for r in results if r["verdict"] in ("SUSPICIOUS", "DIVERGE")]
+    # Diff bodies for SUSPICIOUS/DIVERGE/FIX-NEEDED only -- cuts noise.
+    escalations = [r for r in results
+                   if r["verdict"] in ("SUSPICIOUS", "DIVERGE", "FIX-NEEDED")]
     if escalations:
         lines.append("## Escalations (need triage)")
         for r in escalations:
             lines.append("")
             lines.append(f"### `{r['mangled']}` @ `{r['addr']}`")
+            stale = r.get("triage_stale", False)
+            if stale:
+                lines.append("")
+                lines.append("⚠ triage entry stale (score drifted since last triage)")
             lines.append("")
             lines.append("Notes: " + r.get("notes", ""))
+            if r.get("score") is not None:
+                lines.append(f"Score: {r['score']}/{r.get('max_score', '?')}")
             lines.append("")
             lines.append("```diff")
             lines.extend(r["diff"])
             lines.append("```")
     out.write_text("\n".join(lines) + "\n")
+
+    # Also write a JSON form -- consumed by the asm-triager agent.
+    import json
+    json_out = OUT_DIR / "report.json"
+    json_payload = []
+    for r in results:
+        json_payload.append({
+            "mangled": r.get("mangled"),
+            "addr":    r.get("addr"),
+            "verdict": r.get("verdict"),
+            "reason":  r.get("reason"),
+            "score":   r.get("score"),
+            "max_score": r.get("max_score"),
+            "diff":    r.get("diff", []),
+            "triage_stale": r.get("triage_stale", False),
+        })
+    json_out.write_text(json.dumps({"symbols": json_payload}, indent=2))
     return out
 
 
@@ -388,6 +452,8 @@ def main():
         if not syms:
             sys.exit(0)
 
+    triage = load_triage()
+
     # Parallel batch verify.
     jobs = args.jobs or os.cpu_count() or 1
     if jobs == 1:
@@ -397,15 +463,26 @@ def main():
         with ProcessPoolExecutor(max_workers=jobs) as ex:
             results = list(ex.map(verify_one, syms))
 
+    # Apply sticky triage decisions before rendering the report.
+    results = apply_triage(results, triage)
+
     out = write_report(results)
-    print(f"\nReport: {out.relative_to(PROJECT_ROOT)}\n")
+    try:
+        out_disp = out.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        out_disp = out.as_posix()
+    print(f"\nReport: {out_disp}\n")
     counts: dict[str, int] = {}
     for r in results:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
-    for v in ("MATCH", "COSMETIC", "SUSPICIOUS", "DIVERGE", "UNPAIRED"):
+    for v in ("MATCH", "COSMETIC", "ACCEPT-cosmetic", "ACCEPT-deferred",
+              "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
         if v in counts:
-            print(f"  {v:11} {counts[v]}")
-    bad = [r for r in results if r["verdict"] in ("SUSPICIOUS", "DIVERGE", "UNPAIRED")]
+            print(f"  {v:16} {counts[v]}")
+    # FIX-NEEDED is "user said this is genuinely broken"; treat as failure.
+    # DIVERGE / UNPAIRED / SUSPICIOUS escalate by default; ACCEPT-* downgrade.
+    bad = [r for r in results
+           if r["verdict"] in ("SUSPICIOUS", "DIVERGE", "UNPAIRED", "FIX-NEEDED")]
     if args.report_only:
         sys.exit(0)
     sys.exit(1 if bad else 0)

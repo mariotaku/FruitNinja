@@ -58,7 +58,8 @@ docker run --rm \
     -v fnverify-src:/staging:ro \
     "$IMAGE" -c '
         mkdir -p /work/tmp/asm-verify
-        cp /staging/tmp/asm-verify/report.md /work/tmp/asm-verify/report.md
+        cp /staging/tmp/asm-verify/report.md   /work/tmp/asm-verify/report.md
+        cp /staging/tmp/asm-verify/report.json /work/tmp/asm-verify/report.json
     '
 
 echo
