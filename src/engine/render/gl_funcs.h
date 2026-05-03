@@ -159,7 +159,16 @@ GL_FUNC(void, glPolygonMode, GLenum, GLenum)
 
 #undef GL_FUNC
 
-// Load all GL function pointers via SDL_GL_GetProcAddress. Call after context creation.
+// Load all GL function pointers via SDL_GL_GetProcAddress. Call after
+// context creation. Required functions abort the load on miss; optional
+// functions (GL 1.2+ extensions) get stubbed so callers can no-op safely
+// when the runtime ICD is too old. Returns false only on REQUIRED-miss.
 bool gl_load_functions();
+
+// Detect the Microsoft 1.1 software ICD (the Windows fallback when the
+// hardware GL driver isn't reachable). Returns false + prints an actionable
+// diagnostic if detected. Call from interactive entry points (the main
+// exe) after gl_load_functions(); non-rendering smoke tests should skip.
+bool gl_check_runtime();
 
 #endif
