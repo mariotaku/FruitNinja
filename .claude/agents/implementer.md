@@ -57,6 +57,11 @@ If your edit changes any instruction-emitting code in a function carrying this m
 ### `// DIFFERS: original = X from DAT_addr, using Y because <reason>`
 A deliberate deviation. Always cite the original value and a one-line reason.
 
+### `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>`
+A defunct feature stub. The class, vtable, struct fields, and public method shape are preserved as if the feature were ported; bodies are no-ops that return safe defaults. Used for permanently-dead subsystems (OpenFeint, GameCenter, P2P MP, online leaderboards, NetworkManager, OnlineNewsRenderer). Inventory: `grep -rn 'Defunct:' src/`.
+
+The point: keep the call graph identical to the binary so call sites don't need to be guarded or deleted. One marker per stubbed method body — not one per call site.
+
 ## Optional: file-level analysis timestamp
 
 Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This timestamp is **legacy** under the new policy (it used to tie source to a `docs/` doc that no longer exists). You may keep, remove, or ignore it — don't add new ones.
@@ -70,7 +75,7 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 - **Preserve function boundaries** — if a function exists as a symbol in the binary, port it as its own function. Don't inline its body even if it's one line. This keeps RE landmarks and `grep`-ability.
 - **Stub un-ported deps, don't skip the call** — create a header + stub .cpp with the RE'd public API. Singletons' `GetInstance()` must return a valid (possibly empty) object so the call graph compiles.
 - **RE+port the base class first** — vtable slot indices matter. `ActorManager::Update` walks vtable +0x10 / +0x18 unconditionally.
-- **Stub defunct features, don't remove them** — keep the SHAPE: button/struct/call with a no-op callback and a code comment.
+- **Stub defunct features, never skip them.** "Defunct" = permanently-dead subsystems (OpenFeint, GameCenter, P2P multiplayer, online leaderboards, online news, NetworkManager). The class, struct fields, vtable layout (slot order + count), and public-API methods are **preserved as if the feature were ported**. Method bodies are no-ops returning safe defaults (`0`, `false`, `nullptr`). Each stubbed method body carries `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>`. Singletons' `GetInstance()` returns a valid empty instance. Network packet structs and handler interfaces are declared so call sites compile. **Do not skip the call site itself, do not `#ifdef` it out, do not delete the class.** The call graph must match the binary so asm-verify can treat call-site differences as cosmetic-only.
 - **No empirical / "looks-right" fixes.** If a port element is visually wrong (off-position, wrong size, wrong colour, mistimed), do NOT add a port-specific offset, multiplier, or hard-coded tweak to compensate. Empirical fixes hide the root cause and accumulate drift. Instead: RE the responsible binary function (font baseline math, matrix-stack convention, alignment-flag semantics, etc.) and port it correctly. If the RE is incomplete, file a TODO and revert to "wrong-but-binary-faithful" rather than commit a fudge. The only allowed deviations are GL ES 1->2 translation and clearly-marked `// Port specific:` workarounds for genuine platform-API differences (SDL audio backend, file I/O paths) — never for game-logic positioning, sizing, timing, or colours. If you can't determine the root cause from the existing source-side spec, return a gap list with the specific binary function to RE next; don't fudge.
 
 **ARM idioms:**

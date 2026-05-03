@@ -4,8 +4,22 @@
 - **Fidelity first** — match the original game as closely as possible
 - Preserve all gameplay mechanics, physics, scoring, timing, and visual behavior
 - Preserve same-screen multiplayer (local split-touch)
-- Skip only defunct online services (OpenFeint, GameCenter, P2P multiplayer)
 - All UI screens and widgets should be ported, not just core gameplay
+
+## Defunct features — stub, never skip
+
+Defunct features (OpenFeint, GameCenter, P2P multiplayer, online news, online leaderboards, etc.) are **stubbed**, never skipped. The shape — class, struct fields, vtable, public-API methods, call sites — is **preserved as if the feature were ported**, with method bodies as no-ops that return safe defaults. Each stub carries `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>` so it's greppable.
+
+Why: skipping breaks the call graph and causes cascading port-side workarounds at every call site. Stubbing keeps the call graph identical to the binary, isolates the "this is a no-op" decision to one spot, and lets the asm-verify pass treat the call sites as cosmetic-only divergences rather than real bugs.
+
+What "stub" means concretely:
+- Class exists, vtable layout matches binary (slot order + count).
+- Public methods are declared and have bodies. Bodies typically return `0` / `false` / `nullptr` and do nothing observable.
+- Singletons' `GetInstance()` returns a valid (possibly empty) instance so call-graph-walking code doesn't crash.
+- Network packet structs / handler interfaces are declared so call sites compile.
+- A `// Defunct: ...` comment marks each method body.
+
+What "skip" would have meant (NOT what we do): omitting the class entirely so call sites in surrounding code need to be deleted or guarded with `#ifdef`s. Don't do this.
 
 ## Target Platform
 - SDL2 + OpenGL ES 2.0
@@ -37,6 +51,10 @@ Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implem
 - ARM32 Little-Endian ELF (Samsung Bada OS), Halfbrick Mortar Engine
 - 480x320 landscape (on portrait 480x800 Bada device, touch/camera rotated 90°), entry point: `OspMain`
 - Built with Samsung Sourcery G++ 4.4.1, hard-float ABI (`Tag_ABI_VFP_args: VFP registers`).
+- **`Tag_ABI_enum_size: small`** — enums are sized to the smallest underlying integer type (1/2/4 bytes depending on max value), not always 4. Cross-build must compile with `-fshort-enums`. Affects struct layouts that contain enum members.
+- **`Tag_ABI_PCS_wchar_t: 2`** — `wchar_t` is 2 bytes. Cross-build uses `-fshort-wchar`.
+- `Tag_ABI_align_needed: 8-byte`.
+- **`std::list` is 12 bytes in Samsung Bada's libstdc++ vs 8 bytes in Sourcery 2010q1's libstdc++** — the asm-verify cross-toolchain disagrees with the binary on `std::list`-containing struct layouts by 4 bytes per list. Documented limitation; the port-side struct layouts must match Samsung Bada's 12-byte list (which is what `static_assert(offsetof(...))` enforces against the production build, not the cross-build).
 
 ## RE record lives in source code, not docs
 
@@ -85,6 +103,7 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
   - `// TODO: <binary addr or descriptor> — <gap>` — unimplemented sub-block; the comment is the canonical spec for that gap. Delete the line when you close the gap.
   - `// ASM-verified: <ISO-time UTC> binary @ 0x<addr> (asm-inspector)` — confirmed by ASM diff. Inventory: `grep -rn 'ASM-verified:' src/`.
   - `// DIFFERS: original = X from DAT_addr, using Y because <reason>` — deliberate deviation.
+  - `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>` — feature is permanently dead (online services, P2P MP, etc.) but the call shape and class layout are preserved per the "stub-don't-skip" policy. Inventory: `grep -rn 'Defunct:' src/`.
 - Temp/scratch files go in `<project root>/tmp/`, NOT `/tmp` or system temp.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use plain ASCII substitutes (`->`, `--`, `'`, etc.). Comments inside source files can use Unicode freely; this is a runtime-output rule.
 
