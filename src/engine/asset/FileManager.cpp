@@ -10,7 +10,8 @@
 #ifdef _WIN32
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>          // FindFirstFileA / FindNextFileA
-#else
+#elif !defined(__arm__)
+  // dirent.h is not available on arm-none-eabi (cross-build stub target)
   #include <dirent.h>
 #endif
 
@@ -31,7 +32,7 @@ SplitPath SplitPathParts(const char* path) {
 
     std::string p(path);
     // Normalise backslashes so MSYS2 paths work both ways.
-    for (char& c : p) if (c == '\\') c = '/';
+    for (size_t ci = 0; ci < p.size(); ++ci) if (p[ci] == '\\') p[ci] = '/';
 
     size_t i = 0;
     // Windows drive letter like "C:" — treat as root.
@@ -74,7 +75,7 @@ std::string FindEntryCI(const std::string& dirPath, const std::string& target) {
         }
     } while (FindNextFileA(h, &fd));
     FindClose(h);
-#else
+#elif !defined(__arm__)
     DIR* d = opendir(dir.c_str());
     if (!d) return std::string();
     while (struct dirent* ent = readdir(d)) {
@@ -105,7 +106,7 @@ std::string ToOpenableDir(const std::string& prefix) {
     if (prefix.empty()) return ".";
     if (prefix == "/") return prefix;
     if (prefix.size() == 3 && prefix[1] == ':' && prefix[2] == '/') return prefix;
-    if (prefix.back() == '/') return prefix.substr(0, prefix.size() - 1);
+    if (!prefix.empty() && prefix[prefix.size() - 1] == '/') return prefix.substr(0, prefix.size() - 1);
     return prefix;
 }
 
@@ -116,7 +117,8 @@ std::string ResolveCI(const char* path) {
     if (sp.parts.empty() && sp.root.empty()) return std::string();
 
     std::string built = sp.root;   // always ends in '/' when non-empty, or is ""
-    for (const std::string& part : sp.parts) {
+    for (std::vector<std::string>::const_iterator pit = sp.parts.begin(); pit != sp.parts.end(); ++pit) {
+        const std::string& part = *pit;
         if (part == "." || part.empty()) continue;
         if (part == "..") {
             // Append as-is; stat will resolve it during lookup.
@@ -140,8 +142,8 @@ std::string ResolveCI(const char* path) {
     }
 
     // Strip the trailing slash we always appended after the last component.
-    if (sp.parts.size() > 0 && !built.empty() && built.back() == '/') {
-        built.pop_back();
+    if (sp.parts.size() > 0 && !built.empty() && built[built.size() - 1] == '/') {
+        built.erase(built.size() - 1);
     }
     return built;
 }
