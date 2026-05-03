@@ -1,4 +1,5 @@
 target_sources(fruit-ninja-game PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/AchievementManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameTaskState.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameInitialise.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameInit.cpp
@@ -14,6 +15,7 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TimeModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ScreenEffect.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PowerUp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PowerUpManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ItemManager.cpp
@@ -22,7 +24,9 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/GameOver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/StartupEffects.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SetupGameWork.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Bonus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BonusManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PreloadSounds.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreState.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpecificOrder.cpp
 )

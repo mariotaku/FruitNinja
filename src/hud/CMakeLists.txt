@@ -12,4 +12,5 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ComboControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpeedControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoinCounter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/NotificationControl.cpp
 )
