@@ -1,12 +1,34 @@
-#ifndef FN_LEADERBOARD_SCREEN_H
-#define FN_LEADERBOARD_SCREEN_H
+#ifndef FN_SCREENS_LEADERBOARD_SCREEN_H
+#define FN_SCREENS_LEADERBOARD_SCREEN_H
 
-// Stub — LeaderboardScreen : BaseScreen
-// Online leaderboard display (defunct — OpenFeint/GameCenter per online-services-audit)
-// Binary: LoadContent 0x106950
-struct LeaderboardScreen {
-    static void LoadContent() {}   // Note: no-op stub; online leaderboard is defunct.
-    static void UnLoadContent() {} // Note: no-op stub; online leaderboard is defunct.
+// Defunct: LeaderboardScreen -- online leaderboard UI; no-op stub.
+// Binary ctor @ 0x001481c4. HUDControl3d-derived.
+
+#include "hud/HUDControl3d.h"
+#include <cstdint>
+
+class LeaderboardScreen : public HUDControl3d {
+public:
+    LeaderboardScreen() {}
+    ~LeaderboardScreen() override {}
+
+    // Defunct: LeaderboardScreen -- no-op stub; binary @ 0x00148030
+    static void LoadContent() {}
+
+    // Defunct: LeaderboardScreen -- no-op stub
+    static void UnLoadContent() {}
+
+    // Defunct: LeaderboardScreen -- no-op stub; binary @ 0x00147cd0
+    void OnLeaderboardListPopulated(void* /*list*/) {}
+
+    // Defunct: LeaderboardScreen -- no-op stub; binary @ 0x00147d1c
+    void LoadLeaderboards(int /*gameMode*/, int /*boardId*/) {}
+
+    // Defunct: LeaderboardScreen -- no-op stub
+    void Update(float /*dt*/) override {}
+
+private:
+    uint8_t pad[0xB0];
 };
 
-#endif
+#endif // FN_SCREENS_LEADERBOARD_SCREEN_H

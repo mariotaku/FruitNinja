@@ -3,9 +3,9 @@
 
 // Analysed: 2026-04-30T00:00
 //
-// LeaderboardManager — online leaderboard handler (OpenFeint / GameCenter).
-// Defunct online service — stub satisfies callers; no real network code.
-// Size: 0x40 bytes (ctor zero-fills 4 ulongs until this+1 boundary).
+// LeaderboardManager -- online leaderboard handler (OpenFeint / GameCenter).
+// Defunct online service -- stub satisfies callers; no real network code.
+// Size: ~0x80 bytes (ctor inits 0x10 bytes + BSS through ~0x80).
 //
 // Binary addresses:
 //   ctor (real)    0x001113a8
@@ -15,9 +15,15 @@
 //   dtor (empty)   0x001113dc
 //   GetInstance    0x001114b8
 //   RefreshLeaderboard 0x00111664
-//   UpdateLeaderboard  0x0013afbc
+//   GetLeaderboard     0x001113e4
+//   ClearScores        0x00111438
+//
+// NOTE: UpdateLeaderboard @ 0x0013afbc is FruitFactControl::UpdateLeaderboard,
+//       not a method of this class. It was previously misidentified.
 
 #include <cstdint>
+
+class FNHighscoreList;
 
 class LeaderboardManager {
 public:
@@ -26,21 +32,22 @@ public:
         return &s_instance;
     }
 
-    // @ 0x00111664 — no-op for port (was a network call)
-    void RefreshLeaderboard() {}
+    // Defunct: LeaderboardManager -- no-op stub; binary @ 0x00111664
+    FNHighscoreList* RefreshLeaderboard(int /*gameMode*/, int /*boardId*/) { return nullptr; }
 
-    // @ 0x0013afbc — no-op for port (was a score-push network call)
-    void UpdateLeaderboard() {}
+    // Defunct: LeaderboardManager -- no-op stub; binary @ 0x001113e4
+    FNHighscoreList* GetLeaderboard(int /*gameMode*/, int /*boardId*/) { return nullptr; }
+
+    // Defunct: LeaderboardManager -- no-op stub; binary @ 0x00111438
+    void ClearScores(int /*gameMode*/, int /*boardId*/) {}
 
 private:
-    // ctor @ 0x001113a8: zero-fills the 0x40-byte struct
-    LeaderboardManager() {
-        for (int i = 0; i < 4; ++i) m_data[i] = 0;
-    }
+    // ctor @ 0x001113a8
+    LeaderboardManager() {}
     ~LeaderboardManager() {}
 
-    // Zero-filled 4-ulong body (0x40 / sizeof(uint64_t) = 8; binary uses 4 ulong pairs)
-    uint64_t m_data[4];
+    // binary uses 0x10 ctor-init + BSS through ~0x80
+    uint8_t m_data[0x80];
 };
 
 #endif // FN_GAME_LEADERBOARD_MANAGER_H
