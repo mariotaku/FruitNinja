@@ -90,7 +90,7 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
         return nullptr;
     }
 
-    m_Emitters.emplace_back(new PSPParticleEmitter());
+    m_Emitters.push_back(new PSPParticleEmitter());
     PSPParticleEmitter& e = *m_Emitters.back();
     // All defaults match the binary's explicit init block:
     e.m_Timer = 0.0f;
@@ -117,8 +117,9 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
 void PSPParticleManager::ClearEmitter(PSPParticleEmitter* emitter) {
     if (!emitter) return;
     for (size_t i = 0; i < m_Emitters.size(); ++i) {
-        if (m_Emitters[i].get() == emitter) {
+        if (m_Emitters[i] == emitter) {
             if (emitter->m_pRefPtr) *emitter->m_pRefPtr = nullptr;
+            delete m_Emitters[i];
             m_Emitters.erase(m_Emitters.begin() + i);
             return;
         }
@@ -203,7 +204,7 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         //              = int16 * 6.28318 * 60 / 360
         //              = int16 * 1.0472
         // Each particle gets its own random start/end rate.
-        static constexpr float SPIN_INT16_TO_RAD_PER_SEC =
+        static const float SPIN_INT16_TO_RAD_PER_SEC =
             (182.0f / 65536.0f) * 6.2831853f * 60.0f;
         p.m_SpinStart = RandRange((float)tmpl->m_SpinStartMin,
                                   (float)tmpl->m_SpinStartMax) * SPIN_INT16_TO_RAD_PER_SEC;
@@ -260,7 +261,8 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
     const float newTime = currentTime + dt * e.m_TimeScale;
 
     // Spawn pass — for each set, check window and integrate rate
-    for (const PSPParticleSet& set : et->m_Sets) {
+    for (std::vector<PSPParticleSet>::const_iterator cit = et->m_Sets.begin(); cit != et->m_Sets.end(); ++cit) {
+        const PSPParticleSet& set = *cit;
         const float startT = set.m_TimeStart;
         const float stopT  = set.m_TimeStop;
 
@@ -331,8 +333,8 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
 // state — it does not look at timer or particle counts.
 static bool EmitterTemplateEnds(const PSPEmitterTemplate* t) {
     if (!t) return true;
-    for (const PSPParticleSet& s : t->m_Sets) {
-        if (s.m_TimeStop <= 0.0f && s.m_PerSec > 0.0f) return false;
+    for (std::vector<PSPParticleSet>::const_iterator cit = t->m_Sets.begin(); cit != t->m_Sets.end(); ++cit) {
+        if (cit->m_TimeStop <= 0.0f && cit->m_PerSec > 0.0f) return false;
     }
     return true;
 }
@@ -371,6 +373,7 @@ void PSPParticleManager::Update(float dt) {
         }
         if (!keep) {
             if (e.m_pRefPtr) *e.m_pRefPtr = nullptr;
+            delete m_Emitters[i];
             m_Emitters.erase(m_Emitters.begin() + i);
             continue;
         }
@@ -406,6 +409,21 @@ static inline void LerpColour(const uint8_t a[4], const uint8_t b[4],
     }
 }
 
+static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
+                               const PSPParticleTemplate* tmpl) {
+    if (!verts.empty() && tmpl && tmpl->m_Texture.IsValid()) {
+        GLenum dstFactor = tmpl->m_BlendMode ? (GLenum)tmpl->m_BlendMode
+                                             : GL_ONE_MINUS_SRC_ALPHA;
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, dstFactor);
+        glBindTexture(GL_TEXTURE_2D, tmpl->m_Texture->m_TexId);
+        if (Renderer* r = Renderer::GetInstance()) {
+            r->DrawTriList(verts.data(), (int)verts.size());
+        }
+    }
+    verts.clear();
+}
+
 void PSPParticleManager::Draw(int layer) {
     if (m_Emitters.empty()) return;
 
@@ -418,34 +436,19 @@ void PSPParticleManager::Draw(int layer) {
     static std::vector<QUADCUSTOMVERTEX> s_verts;
     const PSPParticleTemplate* curTmpl = nullptr;
 
-    auto flush = [&]() {
-        if (!s_verts.empty() && curTmpl && curTmpl->m_Texture.IsValid()) {
-            // Blend mode: source = GL_SRC_ALPHA, dest from template (default
-            // GL_ONE_MINUS_SRC_ALPHA if unset).
-            GLenum dstFactor = curTmpl->m_BlendMode ? (GLenum)curTmpl->m_BlendMode
-                                                    : GL_ONE_MINUS_SRC_ALPHA;
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, dstFactor);
-            glBindTexture(GL_TEXTURE_2D, curTmpl->m_Texture->m_TexId);
-            if (Renderer* r = Renderer::GetInstance()) {
-                r->DrawTriList(s_verts.data(), (int)s_verts.size());
-            }
-        }
-        s_verts.clear();
-    };
-
-    for (auto& up : m_Emitters) {
-        PSPParticleEmitter& e = *up;
+    for (size_t ei = 0; ei < m_Emitters.size(); ++ei) {
+        PSPParticleEmitter& e = *m_Emitters[ei];
         if (e.m_Particles.empty()) continue;
 
-        for (PSPParticle& p : e.m_Particles) {
+        for (std::vector<PSPParticle>::iterator pit = e.m_Particles.begin(); pit != e.m_Particles.end(); ++pit) {
+            PSPParticle& p = *pit;
             // Layer filter: binary draws only particles whose template's
             // m_UseDepth matches the requested layer.
             if (p.m_pTemplate && p.m_pTemplate->m_UseDepth != layer) continue;
 
             // Group flush on template change (batches DrawTriList per texture)
             if (p.m_pTemplate != curTmpl) {
-                flush();
+                FlushParticleVerts(s_verts, curTmpl);
                 curTmpl = p.m_pTemplate;
             }
 
@@ -520,7 +523,7 @@ void PSPParticleManager::Draw(int layer) {
             }
         }
     }
-    flush();
+    FlushParticleVerts(s_verts, curTmpl);
 
     // Restore default blend state so we don't leak into subsequent draws.
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -549,7 +552,6 @@ void PSPParticleManager::LoadFile(const char* path) {
 
     // --- First loop: <particleTemplate> --------------------------------------
     std::unordered_map<uint32_t, size_t> nameToIndex;
-    nameToIndex.reserve(256);
 
     for (tinyxml2::XMLElement* pt = body->FirstChildElement("particleTemplate");
          pt != nullptr;
@@ -759,8 +761,10 @@ void PSPParticleManager::LoadFile(const char* path) {
     // Post-load patch: replace encoded index (as pointer) with real pointers
     // into the now-stable m_ParticleTemplates vector. Matches binary flow:
     // "*word0 = m_pTemplates + index * 0xB8".
-    for (auto& emit : m_EmitterTemplates) {
-        for (auto& set : emit.m_Sets) {
+    for (std::vector<PSPEmitterTemplate>::iterator eit = m_EmitterTemplates.begin(); eit != m_EmitterTemplates.end(); ++eit) {
+        PSPEmitterTemplate& emit = *eit;
+        for (std::vector<PSPParticleSet>::iterator sit = emit.m_Sets.begin(); sit != emit.m_Sets.end(); ++sit) {
+            PSPParticleSet& set = *sit;
             uintptr_t encoded = reinterpret_cast<uintptr_t>(set.m_pTemplate);
             if (encoded == 0) continue;
             size_t idx = encoded - 1;
@@ -776,12 +780,13 @@ void PSPParticleManager::LoadFile(const char* path) {
 }
 
 void PSPParticleManager::Clear() {
+    for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
     m_Emitters.clear();
 }
 
 // @ GameExit area
 void PSPParticleManager::ClearEmitters() {
-    // TODO: implement -- deactivate all live emitters on session end
+    for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
     m_Emitters.clear();
 }
 

@@ -74,7 +74,7 @@ public:
                  !std::is_same<typename std::decay<F>::type, Delegate>::value
              >::type>
     Delegate(F&& fn) {
-        using Decayed = typename std::decay<F>::type;
+        typedef typename std::decay<F>::type Decayed;  // GCC 4.4: template alias unsupported pre-4.7
         static_assert(sizeof(Functor<Decayed>) <= kInlineSize,
             "Mortar::Delegate: callable too large for 32-byte inline storage. "
             "Reduce captures or use a member function via Make().");
@@ -118,7 +118,7 @@ public:
              >::type>
     Delegate& operator=(F&& fn) {
         Reset();
-        using Decayed = typename std::decay<F>::type;
+        typedef typename std::decay<F>::type Decayed;  // GCC 4.4: template alias unsupported pre-4.7
         static_assert(sizeof(Functor<Decayed>) <= kInlineSize,
             "Mortar::Delegate: callable too large for 32-byte inline storage.");
         new (&m_Storage) Functor<Decayed>(std::forward<F>(fn));
@@ -133,7 +133,7 @@ public:
         return Ptr()->Invoke(std::forward<Args>(args)...);
     }
 
-    explicit operator bool() const noexcept { return m_bEmpty == 0; }
+    operator bool() const noexcept { return m_bEmpty == 0; }  // GCC 4.4: explicit conversion operators unsupported pre-4.5
     bool operator==(decltype(nullptr)) const noexcept { return m_bEmpty != 0; }
     bool operator!=(decltype(nullptr)) const noexcept { return m_bEmpty == 0; }
 
@@ -194,11 +194,14 @@ private:
 
     template<typename F>
     struct Functor : Concept {
-        F m_fn;
+        mutable F m_fn;  // mutable: GCC 4.4 std::bind result lacks const operator()
         explicit Functor(const F& fn) : m_fn(fn) {}
         explicit Functor(F&& fn) : m_fn(std::move(fn)) {}
         R    Invoke(Args... args) const override {
-            return m_fn(std::forward<Args>(args)...);
+            // GCC 4.4 std::bind result operator() takes _Args& (lvalue ref), so
+            // passing std::forward<> (rvalue) fails to match. Drop forwarding;
+            // all delegate args in this codebase are cheap pointer/scalar types.
+            return m_fn(args...);
         }
         void CloneTo(void* dst) const override { new (dst) Functor(*this); }
     };

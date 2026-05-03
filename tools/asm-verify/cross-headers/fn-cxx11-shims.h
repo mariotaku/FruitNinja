@@ -5,6 +5,13 @@
 #ifndef FN_CXX11_SHIMS_H
 #define FN_CXX11_SHIMS_H
 
+// `constexpr` keyword: GCC 4.4 gnu++0x does not support constexpr.
+// Map to const; libstdc++ 4.4.1 does not itself use constexpr so
+// the define is safe against system-header conflicts.
+#if defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__) < 406
+#  define constexpr const
+#endif
+
 // `noexcept` keyword: introduced in GCC 4.6. Map to C++03 throw() exception
 // specification (close enough -- both promise no thrown exceptions).
 #if defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__) < 406
