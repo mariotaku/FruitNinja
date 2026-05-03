@@ -31,6 +31,16 @@
 
 class MenuButton;
 class HUDControl;
+struct ScreenButton; // forward decl for ScreenButtonDefaults below
+
+// GCC 4.4 does not support lambdas (C++11, added in GCC 4.5). These named
+// free functions replace the in-place lambda defaults in ScreenButton's ctor.
+// They match the binary stubs at 0x001300e8 (AlwaysVisible) and 0x001300ec
+// (NoUpdate) which always return true / false respectively.
+namespace ScreenButtonDefaults {
+    inline bool AlwaysVisible(float) { return true; }
+    inline bool NoUpdate(MenuButton*, float, ScreenButton&) { return false; }
+}
 
 struct ScreenButton {
     // +0x00: tutorial slot ID (-1 = no tutorial)
@@ -86,8 +96,8 @@ struct ScreenButton {
     ScreenButton()
         : m_tutorID(-1)
         , m_pButton(nullptr)
-        , m_visCheck([](float) { return true; })        // 0x001300e8
-        , m_updateCb([](MenuButton*, float, ScreenButton&) { return false; })  // 0x001300ec
+        , m_visCheck(Mortar::Delegate<bool(float)>::MakeFree(&ScreenButtonDefaults::AlwaysVisible))          // 0x001300e8
+        , m_updateCb(Mortar::Delegate<bool(MenuButton*, float, ScreenButton&)>::MakeFree(&ScreenButtonDefaults::NoUpdate))  // 0x001300ec
         , m_pos(0, 0, 0)
         , m_fruitPos(0, 0, 0)
         , m_scaleA(0.0f)

@@ -8,8 +8,9 @@
 #include "asset/Texture.h"
 #include "core/Singleton.h"
 #include <cstdint>
-#include <memory>
 #include <vector>
+// GCC 4.4 / -fno-rtti: <memory> pulls in shared_ptr internals that use
+// typeid, which fails under -fno-rtti. Use raw-pointer ownership instead.
 
 namespace Mortar {
 
@@ -249,10 +250,11 @@ private:
     std::vector<PSPParticleTemplate> m_ParticleTemplates;
     std::vector<PSPEmitterTemplate>  m_EmitterTemplates;
 
-    // unique_ptr keeps PSPParticleEmitter addresses stable across vector
-    // growth so callers can hold raw pointers (matches MemoryPool semantics
-    // of the binary).
-    std::vector<std::unique_ptr<PSPParticleEmitter>> m_Emitters;
+    // Raw-pointer vector: each entry is owned (new'd in AddEmitter, deleted in
+    // Clear/ClearEmitter/dtor). Addresses are stable across appends because
+    // emitters are heap-allocated, not inline — same stability guarantee as
+    // unique_ptr but without <memory> / typeid dependency (GCC 4.4 / -fno-rtti).
+    std::vector<PSPParticleEmitter*> m_Emitters;
 };
 
 } // namespace Mortar

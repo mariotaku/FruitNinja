@@ -46,7 +46,9 @@ set(CMAKE_CXX_COMPILER_WORKS  1)
 #   Tag_FP_arch:          VFPv3
 #   Tag_ABI_HardFP_use:   SP and DP
 #   Tag_ABI_VFP_args:     VFP registers
-set(_BADA_FLAGS "-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3")
+#   Tag_ABI_enum_size:    small         -> -fshort-enums
+#   Tag_ABI_PCS_wchar_t:  2             -> -fshort-wchar
+set(_BADA_FLAGS "-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar")
 
 # -include cross-headers/fn-cxx11-shims.h: maps post-4.5 keywords (noexcept,
 # override, final, nullptr) to era-correct equivalents and forward-declares

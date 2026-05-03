@@ -57,4 +57,21 @@ target_include_directories(fnverify PRIVATE
 
 set_target_properties(fnverify PROPERTIES LINKER_LANGUAGE CXX)
 
+# Force recompilation of key TUs on every cmake --build run.
+# rsync inside verify.sh uses --archive (preserves source mtime) which can
+# cause stale .o files to appear newer than their source headers on Docker
+# named volumes. Adding a custom_command that always runs and touches each
+# .cpp to update its mtime in the staging tree ensures cmake recompiles them.
+#
+# Implementation: custom target with ALL that runs before the fnverify build.
+add_custom_target(force_struct_recompile ALL
+    COMMAND "${CMAKE_COMMAND}" -E touch
+        "${_PROJECT_ROOT}/src/game/PowerUp.cpp"
+        "${_PROJECT_ROOT}/src/game/WaveManager.cpp"
+        "${_PROJECT_ROOT}/src/game/ScoreModifier.cpp"
+    COMMENT "Touching struct-dep TUs to ensure recompile after header edits"
+)
+add_dependencies(fnverify force_struct_recompile)
+
 message(STATUS "fnverify OBJECTs will be at: ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/fnverify.dir/...")
+message(STATUS "CMakeLists.txt re-read: source timestamp tracking active")
