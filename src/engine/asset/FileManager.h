@@ -32,7 +32,7 @@ public:
     Mortar::IFileSystem* FindSystem(unsigned int id);
 
     // Binary @ 0x0019ae68 — id-filtered walk; first non-null sys->OpenFile wins
-    Mortar::IFile* OpenFile(const char* name, unsigned int idFilter, unsigned long flags);
+    Mortar::IFile* OpenFile(const char* name, unsigned long flags, unsigned int idFilter);
 
     // Binary @ 0x0019af60
     bool FileExists(const char* name, unsigned int idFilter);
@@ -44,8 +44,11 @@ public:
     bool GetFileData(const char* name, void** outBuf, unsigned long* outSize,
                      unsigned int idFilter, bool& outOwned);
 
-    // Binary @ 0x0019ae64 — stub returning 0 in binary
-    const char* GetSaveRootDirectory(unsigned int systemId);
+    // Binary @ 0x0019ae64 — Bada-specific save-root path resolution.
+    // Defunct: GetSaveRootDirectory — no-op stub; binary's body is also `return 0`.
+    //          The only caller (GetUserFilePath @ 0x0012b09c) is itself unused.
+    //          Port uses platform-specific paths via FileSystemPosix/Win32 directly.
+    int GetSaveRootDirectory(char* outBuf, const char* relPath, bool createDir);
 
     // DIFFERS: compat shim — not in binary; keeps existing call sites (File::Open, Texture.cpp, etc.) intact.
     // Walks m_FileSystems via sys->OpenFile; falls back to fopen if registry returns null.
@@ -54,6 +57,7 @@ public:
 
 private:
     FileManager() {}
+    ~FileManager();
 
     // Binary @ Mortar::FileManager::m_FileSystems — descending priority order on insert.
     // std::list<IFileSystem*> at +0x00; sole member, so sizeof(FileManager) == 12 (Bada list size).
