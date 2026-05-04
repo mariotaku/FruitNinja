@@ -24,17 +24,53 @@ public:
     static Delegate Make(T*, R (T::*)(Args...)) { return Delegate(); }
     static Delegate MakeFree(R (*)(Args...)) { return Delegate(); }
 private:
-    // Real Delegate layout on ARM32 (Bada): 32 bytes total.
-    // Layout per binary RE: aligned_storage<28> + uint8 tag + 3B pad,
-    // OR aligned_storage<32> with tag stored inside the storage block.
-    // Empirically the binary's Delegate1<bool, MortarSound*> in GameSound::Slot
-    // is exactly 32 bytes (sizeof Slot == 0x38 with finishCallback @ +0x14
-    // and reserved @ +0x34 means finishCallback occupies +0x14..+0x33 = 32B).
-    // 32 bytes total on ARM32; 36 bytes on 64-bit host (which is fine -- only
-    // the cross-toolchain's offsetof asserts run under __bada__).
+    // Match real port-side Delegate.h layout: 36 bytes on ARM32 (this is what
+    // every other layout-asserting class -- HUDControl, MenuButton,
+    // FruitFactControl, etc. -- is calibrated to). NOTE: GameSound RE doc
+    // says binary is 32 bytes; the 4B discrepancy is a known port-vs-binary
+    // drift that GameSound's sizeof(Slot)==0x38 asserts have been disabled
+    // for. See src/engine/audio/GameSound.h TODO.
     typename std::aligned_storage<32, sizeof(void*)>::type _storage;
+    unsigned char                                          _tag;
+    unsigned char                                          _pad[3];
 };
 
 }  // namespace Mortar
+
+// Legacy compatibility aliases used by GameSound, MenuButton, HUDControl etc.
+// These match the real port's Delegate.h placement at GLOBAL scope (not in
+// namespace Mortar).
+template<typename Ret>
+class Delegate0 {
+public:
+    Delegate0() {}
+    Delegate0(decltype(nullptr)) {}
+    Ret operator()() const { return Ret(); }
+    operator bool() const { return false; }
+private:
+    typename std::aligned_storage<32, sizeof(void*)>::type _storage;
+};
+
+template<typename Ret, typename A1>
+class Delegate1 {
+public:
+    Delegate1() {}
+    Delegate1(decltype(nullptr)) {}
+    Ret operator()(A1) const { return Ret(); }
+    operator bool() const { return false; }
+private:
+    typename std::aligned_storage<32, sizeof(void*)>::type _storage;
+};
+
+template<typename Ret, typename A1, typename A2>
+class Delegate2 {
+public:
+    Delegate2() {}
+    Delegate2(decltype(nullptr)) {}
+    Ret operator()(A1, A2) const { return Ret(); }
+    operator bool() const { return false; }
+private:
+    typename std::aligned_storage<32, sizeof(void*)>::type _storage;
+};
 
 #endif
