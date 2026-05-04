@@ -36,6 +36,22 @@ Texture::~Texture() {
 // don't cache "last bound" state. glActiveTexture is a port addition —
 // binary relies on TU0 being preselected by the frame setup.
 void Texture::Set() {
+    if (m_TexId == 0) {
+        // Texture object exists (SmartPtr is valid) but GL upload didn't
+        // happen (load failed mid-stream, or upload was skipped). Binding 0
+        // makes GL sample the default-white texture -- producing stray
+        // white quads. Warn once per Texture instance and skip the bind.
+        static bool s_warned = false;
+        if (!s_warned) {
+            fprintf(stderr,
+                "[Mortar::Texture::Set] WARN: m_TexId==0 for path='%s' -- "
+                "load failed mid-stream or upload skipped. Skipping bind.\n",
+                m_Path.c_str());
+            s_warned = true;
+        }
+        s_LastBoundTexId = 0;  // mark untextured so DrawQuad skips
+        return;
+    }
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_TexId);
