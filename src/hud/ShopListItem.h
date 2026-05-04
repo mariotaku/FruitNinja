@@ -194,10 +194,11 @@ static_assert(offsetof(ShopListItem, m_LockFlashAlpha)== 0x264, "ShopListItem::m
 
 // ARM32-only: fields after pointer-sized members m_pIconTex + m_pItemInfo.
 // On x86_64 these land 12 bytes higher due to pointer widths; that is expected.
-// Exclude cross-build arm-none-eabi toolchain: its bare-metal std::string SBO
-// layout differs from the original arm-linux-gnueabi Bada binary.
-#if (defined(__arm__) || (defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4)) \
-    && defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
+// Bada-only -- the arm-bada-eabi toolchain auto-defines __bada__.
+// NOTE: also requires the production arm-linux-gnueabi std::string SBO layout
+// (__GLIBCXX__ > 20090722); the asm-verify cross-build's bare-metal
+// arm-none-eabi std::string is shape-different and would false-fire.
+#if defined(__bada__) && defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
 static_assert(offsetof(ShopListItem, m_bOnscreenItem) == 0x27C, "ShopListItem::m_bOnscreenItem must be at +0x27C");
 static_assert(offsetof(ShopListItem, m_bSelected)     == 0x27D, "ShopListItem::m_bSelected must be at +0x27D");
 static_assert(offsetof(ShopListItem, m_bIsNew)        == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");

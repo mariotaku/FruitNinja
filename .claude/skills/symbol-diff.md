@@ -59,6 +59,10 @@ CXX=arm-none-eabi-g++
 CXXFLAGS="-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar"
 CXXFLAGS="$CXXFLAGS -std=gnu++0x -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables"
 CXXFLAGS="$CXXFLAGS -fpermissive -include /tmp/portsrc/cross-headers/fn-cxx11-shims.h"
+# -D__bada__ matches the Bada toolchain's builtin_define_std("bada") so the
+# port-side `#ifdef __bada__` static_asserts on binary-faithful struct layouts
+# (FileManager sizeof, ActorManager offsets, etc.) fire under cross-build too.
+CXXFLAGS="$CXXFLAGS -D__bada__"
 INCS="-I/tmp/portsrc/src -I/tmp/portsrc/src/engine -I/tmp/portsrc/src/game -I/tmp/portsrc/src/screens -I/tmp/portsrc/src/hud -I/tmp/portsrc/src/entities -I/tmp/portsrc/src/platform -I/tmp/portsrc/src/debug -I/tmp/portsrc/cross-headers -I/tmp/portsrc/tinyxml2"
 
 ok=0; fail=0

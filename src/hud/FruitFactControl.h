@@ -152,7 +152,7 @@ private:
 
 // Layout lock: m_LocalScore at binary offset 0x104.
 // Valid only on ARM32 (4-byte pointers, SmartPtr=4B, padding matches binary).
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#ifdef __bada__
 static_assert(offsetof(FruitFactControl, m_LocalScore) == 0x104,
               "FruitFactControl::m_LocalScore offset mismatch");
 static_assert(sizeof(FruitFactControl) == 0x204,

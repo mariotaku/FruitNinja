@@ -64,7 +64,7 @@ private:
 };
 
 // Cross-toolchain std::list patched to 12B (matches Bada). 32-bit ABI only.
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#ifdef __bada__
 static_assert(sizeof(FileManager) == 12, "FileManager sizeof mismatch (single 12B std::list field)");
 #endif
 
