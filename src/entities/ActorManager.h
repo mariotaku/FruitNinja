@@ -255,9 +255,12 @@ public:
     void SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0); }
 
     // --- Messaging ------------------------------------------------------
+    // Defunct: Mortar messaging — no-op stub; binary @ 0x0016ffd8 (Send),
+    //   0x0017085c (Add), 0x00170124 (Remove). Listener subsystem wired but
+    //   never instantiated in shipped retail.
 
-    // 0x0016ffd8. Filter listeners, fire callback+0x30, then clear list,
-    // then dispatch to target entity vtable+0x2C (Receive).
+    // 0x0016ffd8. Filter listeners, fire callback->vtable[+0x30], one-shot
+    // clear, then dispatch target->ReceiveMessage(sender, msg).
     bool SendMessage(unsigned long typeHash, Entity* sender, Mortar::Message* msg);
 
     // 0x0017085c. m_Listeners.push_back(L).
