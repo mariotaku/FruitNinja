@@ -73,15 +73,21 @@ protected:
     // Static textures (binary: GOT-relative globals, module-level singletons)
     static SmartPtr<Mortar::Texture> s_TexSmlTitle;       // slot +0: sml_title.tex
     static SmartPtr<Mortar::Texture> s_TexBlurryBacking;  // slot +4: blurry_backing.tex
+
+#ifdef __bada__
+    friend struct BaseScreenLayoutAssert;
+#endif
 };
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(BaseScreen)                       == 0x94, "BaseScreen size mismatch");
-static_assert(offsetof(BaseScreen, m_ScreenButtons)    == 0x7c, "m_ScreenButtons offset");
-static_assert(offsetof(BaseScreen, m_HUDControls)      == 0x84, "m_HUDControls offset");
-static_assert(offsetof(BaseScreen, m_TransitionAlpha)  == 0x8c, "m_TransitionAlpha offset");
-static_assert(offsetof(BaseScreen, m_State)            == 0x90, "m_State offset");
+struct BaseScreenLayoutAssert {
+    static_assert(sizeof(BaseScreen)                       == 0x94, "BaseScreen size mismatch");
+    static_assert(offsetof(BaseScreen, m_ScreenButtons)    == 0x7c, "m_ScreenButtons offset");
+    static_assert(offsetof(BaseScreen, m_HUDControls)      == 0x84, "m_HUDControls offset");
+    static_assert(offsetof(BaseScreen, m_TransitionAlpha)  == 0x8c, "m_TransitionAlpha offset");
+    static_assert(offsetof(BaseScreen, m_State)            == 0x90, "m_State offset");
+};
 #endif
 
 #endif
