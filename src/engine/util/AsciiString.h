@@ -46,6 +46,19 @@ public:
     // Binary @ 0x00183a40 -- case-insensitive variant.
     int  CompareI(const AsciiString& other) const;
 
+    // Binary @ TBD -- aliases for operator=; match binary entry points for callers using Set() by name.
+    void Set(const AsciiString& other);
+    void Set(const char* s);
+    void Set(const char* s, unsigned long len);
+
+    // Binary @ TBD -- equality test with caller-precomputed hash (length, then hash, then memcmp).
+    bool Equals (const char* s, unsigned int hash, unsigned long len) const;
+    // Binary @ TBD -- case-insensitive variant of Equals.
+    bool EqualsI(const char* s, unsigned int hash, unsigned long len) const;
+
+    // Binary @ TBD -- internal raw-pointer accessor; returns active buffer including empty-string canonical.
+    const char* _GetPtr() const;
+
     void Append(const AsciiString& other);
     void Append(char c);
     void Resize(unsigned long newLen);
@@ -86,6 +99,12 @@ struct AsciiStringLayoutAssert {
     static_assert(offsetof(AsciiString, m_hashCache) == 0x24, "AsciiString::m_hashCache offset");
 };
 #endif
+
+// Binary @ TBD -- returns true iff name == "..".
+bool IsParentFolderToken(const AsciiString& name);
+
+// Binary @ TBD -- returns true iff name == ".".
+bool IsThisFolderToken(const AsciiString& name);
 
 }  // namespace Mortar
 

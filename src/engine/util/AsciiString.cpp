@@ -132,6 +132,49 @@ int AsciiString::CompareI(const AsciiString& other) const
     return 0;
 }
 
+// Binary @ TBD -- Set overloads; aliases for operator=.
+void AsciiString::Set(const AsciiString& other)
+{
+    *this = other;
+}
+
+void AsciiString::Set(const char* s)
+{
+    *this = s;
+}
+
+void AsciiString::Set(const char* s, unsigned long len)
+{
+    m_hashCache = 0;
+    SetFromCStr(s, len);
+}
+
+// Binary @ TBD -- equality with caller-precomputed hash: length, then hash, then memcmp.
+bool AsciiString::Equals(const char* s, unsigned int hash, unsigned long len) const
+{
+    if (m_size != len) return false;
+    if (Hash() != hash) return false;
+    return memcmp(c_str(), s, len) == 0;
+}
+
+// Binary @ TBD -- case-insensitive variant of Equals.
+bool AsciiString::EqualsI(const char* s, unsigned int hash, unsigned long len) const
+{
+    if (m_size != len) return false;
+    if (Hash() != hash) return false;
+    const char* a = c_str();
+    for (unsigned long i = 0; i < len; i++) {
+        if (tolower((unsigned char)a[i]) != tolower((unsigned char)s[i])) return false;
+    }
+    return true;
+}
+
+// Binary @ TBD -- raw-pointer accessor; equivalent to c_str() but returns internal buffer address.
+const char* AsciiString::_GetPtr() const
+{
+    return Buffer();
+}
+
 bool AsciiString::operator==(const AsciiString& other) const
 {
     if (m_size != other.m_size) return false;
@@ -235,6 +278,20 @@ void AsciiString::SetFromCStr(const char* s, unsigned long len)
         m_inline_buf[len] = '\0';
     }
     m_size = len;
+}
+
+// Binary @ TBD -- returns true iff name == "..".
+bool IsParentFolderToken(const AsciiString& name)
+{
+    if (name.Length() != 2) return false;
+    return memcmp(name.c_str(), "..", 2) == 0;
+}
+
+// Binary @ TBD -- returns true iff name == ".".
+bool IsThisFolderToken(const AsciiString& name)
+{
+    if (name.Length() != 1) return false;
+    return name.c_str()[0] == '.';
 }
 
 }  // namespace Mortar
