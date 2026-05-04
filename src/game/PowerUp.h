@@ -189,6 +189,17 @@ public:
 
     // Release — free modifier list (called before delete in expiry path)
     void Release();
+
+    // Modifier list iteration helpers used by PowerUpManager::ActivatePurchase.
+    // Binary @ 0x001193d0 walks m_ModList via begin()/end() iterator pattern.
+    // Wrap as stateless begin/end accessors; callers iterate directly.
+    std::list<GameModifier*>::iterator ModListBegin() { return m_ModList.begin(); }
+    std::list<GameModifier*>::iterator ModListEnd()   { return m_ModList.end(); }
+    std::list<GameModifier*>::const_iterator ModListBegin() const { return m_ModList.begin(); }
+    std::list<GameModifier*>::const_iterator ModListEnd()   const { return m_ModList.end(); }
+
+    // @ 0x001193d0 callee — push a modifier onto this power-up's list
+    void AddModifier(GameModifier* mod) { m_ModList.push_back(mod); }
 };
 
 #endif // FN_GAME_POWER_UP_H
