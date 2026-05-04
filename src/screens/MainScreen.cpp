@@ -62,8 +62,7 @@ static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 
 // Matches ctor at 0x0014c430 (159 lines)
 MainScreen::MainScreen(Game& g)
-    : game(g),
-      pPlayButton(nullptr), pDojoButton(nullptr),
+    : pPlayButton(nullptr), pDojoButton(nullptr),
       pQuitBtn(nullptr), pMoreGamesBtn(nullptr),
       pSoundToggle(nullptr), pMusicToggle(nullptr),
       m_Alpha(1.0f),
@@ -74,7 +73,8 @@ MainScreen::MainScreen(Game& g)
       m_CameraTransition(0.0f), m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
       m_bGameStartReset(false),
       m_pDojoScreen(nullptr),
-      m_pGameModeScreen(nullptr)
+      m_pGameModeScreen(nullptr),
+      game(g)
 {
     // Load global textures (assigned to globals via GOT in original)
     m_blurryBackingTex = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");

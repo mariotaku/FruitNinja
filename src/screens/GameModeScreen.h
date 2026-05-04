@@ -75,8 +75,6 @@ public:
     void DeletedMenuButton(MenuButton* btn);
 
 private:
-    Game& game;
-
     // Binary struct layout (0xD0 = 208 bytes total):
     //   +0x8c  m_TransitionAlpha  (inherited BaseScreen)
     //   +0x90  m_State            (inherited BaseScreen)
@@ -105,6 +103,10 @@ private:
     uint8_t m_bChallenge;            // +0xb9
     int     m_ChallengeId;           // +0xbc
     void*   m_pChallengeData;        // +0xc0
+
+    // Port specific: binary accesses Game via GOT; port stores a reference here,
+    // declared after all binary-faithful fields so it does not displace them.
+    Game& game;
 
     // Static textures (binary: module-level globals, loaded in LoadContent)
     static SmartPtr<Mortar::Texture> s_TexModeSensei;   // mode_sensei.tex: panel + logo

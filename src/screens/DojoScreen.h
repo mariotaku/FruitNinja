@@ -66,8 +66,6 @@ public:
     void AboutScreenRemoved(HUDControl*) { m_pAboutScreen = nullptr; }
 
 private:
-    Game& game;
-
     // +0x94..+0x9c: sub-button pointers (lazy-created in Update state 0)
     MenuButton* m_pPlayButton;
     MenuButton* m_pShopButton;
@@ -77,6 +75,10 @@ private:
     // is shown. Port keeps a weak ptr so the parent can poll
     // m_bPendingRemoval and react.
     AboutScreen* m_pAboutScreen;
+
+    // Port specific: binary accesses Game via GOT; port stores a reference here,
+    // declared after all binary-faithful fields so it does not displace them.
+    Game& game;
 
     // Binary stores textures at GOT-relative globals, not per-instance.
     // Port mirrors this with static members so LoadContent/UnLoadContent
@@ -93,5 +95,13 @@ private:
     void ShopCallback();
     void AboutCallback();
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(offsetof(DojoScreen, m_pPlayButton)  == 0x94, "m_pPlayButton offset");
+static_assert(offsetof(DojoScreen, m_pShopButton)  == 0x98, "m_pShopButton offset");
+static_assert(offsetof(DojoScreen, m_pAboutButton) == 0x9c, "m_pAboutButton offset");
+static_assert(offsetof(DojoScreen, m_pAboutScreen) == 0xa0, "m_pAboutScreen offset");
+#endif
 
 #endif

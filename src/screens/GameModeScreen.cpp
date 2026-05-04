@@ -158,8 +158,7 @@ void GameModeScreen::UnLoadContent() {
 // m_SecondaryAlpha=-2.5, online-MP slot=null, m_FrameTimer=0.
 // ===================================================================
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
-    : game(g)
-    , m_pBackButton(nullptr)
+    : m_pBackButton(nullptr)
     , m_pClassicButton(nullptr)
     , m_pZenButton(nullptr)
     , m_pArcadeButton(nullptr)
@@ -172,6 +171,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_bChallenge(0)
     , m_ChallengeId(0)
     , m_pChallengeData(nullptr)
+    , game(g)
     , m_bSetupLevelFired(false)
 {
     LoadContent();
