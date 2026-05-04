@@ -64,7 +64,11 @@ INCS="-I/tmp/portsrc/src -I/tmp/portsrc/src/engine -I/tmp/portsrc/src/game -I/tm
 ok=0; fail=0
 > /tmp/compile_failures.txt
 cd /tmp/portsrc
-for cpp in $(find src -name "*.cpp"); do
+# Skip SDL-bound files (*SDL.cpp suffix convention) -- they require the SDL2
+# header set which the cross-toolchain does not have. The convention mirrors
+# the binary's *Bada suffix; both are platform-glue and have no portable
+# symbols to diff against the binary.
+for cpp in $(find src -name "*.cpp" ! -name "*SDL.cpp"); do
     rel=${cpp#src/}
     obj=/tmp/portsyms/$(echo "$rel" | tr "/" "_").o
     if $CXX $CXXFLAGS $INCS -c "$cpp" -o "$obj" 2>/dev/null; then

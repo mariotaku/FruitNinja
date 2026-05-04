@@ -36,9 +36,10 @@ tools/asm-verify/
     demos/gameover_demo.cpp -- standalone WaveManager::GameOver before/after
   cross-headers/
     fn-cxx11-shims.h        -- `noexcept`/`override`/`nullptr` macros + snprintf
-    SDL.h                   -- minimal SDL2 typedef stubs
     input/InputManager.h    -- libstdc++ 4.5 vector<func> bug workaround
     util/Delegate.h         -- Mortar::Delegate stub (real one needs noexcept)
+    (SDL.h removed -- SDL is now confined to *SDL.cpp files which the
+     symbol-diff skill skips and this cross-build never lists.)
   discover-symbols.py       -- nm intersection -> manifest.generated.toml
   export-binary-symbols.py  -- objdump per symbol -> bada-binary/symbols/<sym>.s
   asm-verify.py             -- diff + classify + report writer
