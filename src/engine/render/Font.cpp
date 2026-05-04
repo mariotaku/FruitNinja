@@ -98,12 +98,12 @@ static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
 // Slurps the entire file, walks byte-by-byte comparing tags.
 // ---------------------------------------------------------------------------
 
-int Font::LoadFromFile(const char* path) {
+int Font::Load(const char* path) {
     // Port specific: use a .tex-swapped path for page textures (original .tga won't exist)
 
     FILE* f = fopen(path, "rb");
     if (!f) {
-        fprintf(stderr, "Font::Load: failed to open '%s'\n", path);
+        fprintf(stderr, "Font::Create: failed to open '%s'\n", path);
         return 0;
     }
 
@@ -311,9 +311,9 @@ int Font::LoadFromFile(const char* path) {
     return 1;
 }
 
-SmartPtr<Font> Font::Load(const char* path) {
+SmartPtr<Font> Font::Create(const char* path) {
     Font* font = new Font();
-    if (!font->LoadFromFile(path)) {
+    if (!font->Load(path)) {
         delete font;
         return SmartPtr<Font>();
     }
@@ -444,7 +444,7 @@ float Font::MeasureString(const Utf8StringIterator& iterIn) const {
         const CharTemplate* g = GetCharTemplate(cp);
         iter++;
         if (!g) continue;
-        // g->xadv is in lineHeight-norm units (normalized in Font::Load).
+        // g->xadv is in lineHeight-norm units (normalized in Font::Load / Font::Create).
         // GetKerning uses the NEXT char (iter already advanced).
         uint32_t nextCp = iter.IsEmpty() ? 0 : iter.m_CurrentCodepoint;
         total += g->xadv + GetKerning(cp, nextCp);

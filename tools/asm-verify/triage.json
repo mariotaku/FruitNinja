@@ -1,4 +1,39 @@
 {
+  "_ZN6Mortar4Font4LoadEPKc": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Binary symbol Mortar::Font::Load(char const*) @ 0x189e9c is the instance-method .fnt text parser. Port renamed it LoadFromFile and introduced a new static Font::Load factory; asm-differ matches binary instance parser against port static factory, producing near-total divergence (score 41755/42900). The port must rename LoadFromFile back to Load to match the binary mangled symbol _ZN6Mortar4Font4LoadEPKc. The static factory wrapper should use a port-only name or be inlined at call sites. See src/engine/render/Font.cpp:101 (LoadFromFile) and src/engine/render/Font.h:89 (static Load).",
+    "score": 41755,
+    "max_score": 42900,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4FontC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Divergence driven by: (1) port initialises std::vector m_PageVerts at +0x42c with extra str/mov instructions for vector internal state not present in binary's raw-array layout; (2) port stores vtable pointer via ldr from literal pool; (3) binary initialises glyph-lookup array via counted loop over 0x400 bytes while port uses memset. The std::vector at +0x42c is a documented approximation replacing the binary's flat array. See src/engine/render/Font.h:80 (m_PageVerts std::vector) and src/engine/render/Font.cpp:29 (Font::Font ctor). Score 3810/2100.",
+    "score": 3810,
+    "max_score": 2100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4FontC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 base-object ctor alias of C1; identical divergence pattern (std::vector m_PageVerts init vs binary raw-array loop). See _ZN6Mortar4FontC1Ev entry. Score 3810/2100.",
+    "score": 3810,
+    "max_score": 2100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4FontD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port destructor is larger than binary because Font::Page::texture is SmartPtr<Mortar::Texture> (carries ReferenceCounter), whose destructor emits the full ref-count decrement loop (ldr [r0,#4]; subs; bgt; ldr vtable; blx r6). Binary used a raw pointer with lighter cleanup. The extra instructions at port diff offsets +0x4c..+0x68 are the SmartPtr<Texture> teardown path, semantically correct. Port also restores vtable pointer at dtor chain end. No source TODO needed; divergence fully explained by SmartPtr<Texture> in Font::Page. See src/engine/render/Font.h:53 (Page::texture SmartPtr) and src/engine/render/Font.cpp:45 (Font::~Font). Score 11905/3800.",
+    "score": 11905,
+    "max_score": 3800,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4FontD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "D2 base-object dtor alias of D1; identical divergence pattern (SmartPtr<Texture> teardown in Font::Page). See _ZN6Mortar4FontD1Ev entry. Score 11905/3800.",
+    "score": 11905,
+    "max_score": 3800,
+    "decided_at": "2026-05-04T00:00Z"
+  },
   "_ZN11PauseScreen16QuitGameCallbackEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Port uses MortarGame singleton + ClearCombo call via cbz guards; binary uses GOT-resolved GOT+offset to reach FruitSaveData. Core state stores identical (0 to [r4,#0xc8], 6 to [r4,#0xd4]). Missing strb [r5,#0x85] clear is Tier-2 SFX/pause-flag path. See src/screens/PauseScreen.cpp. Score 3330/2200.",
@@ -1084,6 +1119,90 @@
     "max_score": null,
     "decided_at": "2026-05-04T00:00Z"
   },
+  "_ZN6Mortar11MeshManager10InitialiseEi": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary: push/blx-reserve/pop (direct call). Port: b.w vector::reserve + nop padding (tail-call encoding). Same call to std::vector::reserve, different branch form. Score 700/300.",
+    "score": 700,
+    "max_score": 300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11MeshManager10ReleaseAllEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls one small intrusive-list-clear helper (2 instructions). Port calls std::vector::clear on m_Models which, for SmartPtr<Model> elements, inlines the full ref-count teardown loop (~320 bytes). Container divergence: std::vector vs binary's intrusive List. See src/engine/asset/MeshManager.h:28 (m_Models field) and MeshManager.cpp:26. Score 13805/300.",
+    "score": 13805,
+    "max_score": 300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11MeshManagerC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls PIC vtable-based sub-object ctors for the List sentinel; port zero-inits the std::vector triple (begin/end/cap at [r0,#0/4/8]) directly. Container divergence: std::vector vs intrusive List. See src/engine/asset/MeshManager.h:28 and MeshManager.cpp:12-14. Score 2600/1300.",
+    "score": 2600,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11MeshManagerC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 alias of C1; same container-divergence root cause as MeshManagerC1Ev. Score 2600/1300.",
+    "score": 2600,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11MeshManagerD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary dtor calls ReleaseAll (small helper) then destroys List sentinel (~6 instructions total). Port dtor inlines SmartPtr ref-count decrement loop for the std::vector<SmartPtr<Model>> + deleting-dtor logic (~650 bytes). Same container divergence as ReleaseAll. See src/engine/asset/MeshManager.cpp:16-19. Score 28335/1300.",
+    "score": 28335,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11MeshManagerD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "D2 alias of D1; same container-divergence root cause as MeshManagerD1Ev. Score 28335/1300.",
+    "score": 28335,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4MeshD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary tears down binary's Geometry/GeometryBinding/Effect intrusive stack (fixed-stride refs at [r4,#0x34] stride 0x9c). Port tears down std::vector<GeometryEntry> via glDeleteBuffers per VBO/IBO, plus std::vector<MeshMaterial> std::string refcount loops (_ZNSs4_Rep10_M_destroyE). Deliberate replacement documented in src/engine/asset/Mesh.h:54-72 (GeometryEntry struct replaces Geometry/GeometryBinding). Score 44260/5500.",
+    "score": 44260,
+    "max_score": 5500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4MeshD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Same Geometry/GeometryBinding replacement as MeshD0Ev; D1 (non-deleting) variant omits the final operator-delete call. See src/engine/asset/Mesh.h:54-72. Score 43490/5200.",
+    "score": 43490,
+    "max_score": 5200,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4MeshD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "D2 alias of D1; same Geometry/GeometryBinding replacement as MeshD1Ev. Score 43490/5200.",
+    "score": 43490,
+    "max_score": 5200,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar4Mesh20GetBoneVertTransformEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary walks intrusive BoneBinding array via AsciiString-based blx f5a74 (FindIndex helper) at [r6,#0x34]; port iterates std::vector<BoneBinding> with size compare ([r0,#0x10/0x14]) and reads m_SkeletonIndex at [r2,#0x1c]. Both return nullptr if no skeleton or bone unbound, else call Skeleton::GetVertex. Container choice divergence (R4 W5 commit 3eee3d1 AsciiString FindIndex). See src/engine/asset/Mesh.cpp:47-53. Score 5355/4600.",
+    "score": 5355,
+    "max_score": 4600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar4Mesh21GetBoneWorldTransformEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses blx e3b94 (GetWorld matrix copy helper) after FindIndex walk. Port zero-inits a stack Matrix44 via memset, then does vector size-check and memmove from Skeleton::GetWorld result. Same BoneBinding container divergence as GetBoneVertTransform. See src/engine/asset/Mesh.cpp:58-65. Score 6715/4600.",
+    "score": 6715,
+    "max_score": 4600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar4Mesh21GetBoneLocalTransformEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses blx f27a4 (GetLocal matrix copy helper) after FindIndex walk. Port zero-inits a stack Matrix44 via memset, then does vector size-check and memmove from Skeleton::GetLocal result. Same BoneBinding container divergence as GetBoneVertTransform. See src/engine/asset/Mesh.cpp:69-81. Score 6790/4600.",
+    "score": 6790,
+    "max_score": 4600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
   "_fix_inventory": [],
   "_ZN6Mortar11AsciiString3SetEPKc": {
     "verdict": "ACCEPT-deferred",
@@ -1272,6 +1391,160 @@
     "reason": "Binary (0x0018323c) had a simple loop; port implements 4x-unrolled comparison using operator== at 0xac-stride offsets. Inferred body from bone-array layout. Score 8870/2000.",
     "score": 8870,
     "max_score": 2000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationState10RebindAnimEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary has full ~130-instruction track-group-walk + Mesh::GenerateBindings dispatch. Port body has only m_Bindings.{m_Bones,m_Vectors}.clear() + TODO. R3 dependency. See src/engine/asset/AnimationState.cpp:99 // TODO: 0x001ad218 -- track-group walk + Mesh::GenerateBindings dispatch (R3 dependency).",
+    "score": 11335,
+    "max_score": 11200,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationState11GetAnimIterEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port plain ++it loop compiles to unrolled _Rb_tree_increment BST walk in binary (GCC 4.4.1 stdlib unrolling). Semantically identical index-based traversal. Also +0x10 vs +0xc offset on m_Anims traces to AnimBindings size mismatch from empty Bone/Vector stub structs (R3 TODO). See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 7120/3100.",
+    "score": 7120,
+    "max_score": 3100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationState11PlayAnimIdxEmfb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Store offsets shifted by -4 across the board (vstr [r4,#0x30] vs binary [r4,#0x34] for m_Time; strb [r4,#0x38] vs [r4,#0x3c] for m_Loop). Root cause: AnimBindings.m_Bones/m_Vectors are empty stub structs so AnimBindings is smaller than binary, collapsing all subsequent field offsets. R3 dependency. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 6915/1300.",
+    "score": 6915,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationState7SetTimeEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary has full duration/loop/stop logic + UpdateBinding<N> dispatch (6 cases in tbb jump table). Port has IsPlaying() gate + m_Time store + TODO. R3 dependency. See src/engine/asset/AnimationState.cpp:108 // TODO: 0x001accd0 -- duration check + loop/stop logic + UpdateBinding<N> dispatch (R3 dependency). Score 6250/6300.",
+    "score": 6250,
+    "max_score": 6300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationState8StopAnimEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls std::map::end() via blx to get end-sentinel and stores to m_CurrentIter [r4,#0x2c]; port loads m_AnimList ptr and adds +0x10 to store the sentinel node address directly. Offset +0x10 vs binary +0xc traces to AnimBindings size mismatch (empty Bone/Vector structs, R3 TODO). Semantics identical. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 915/700.",
+    "score": 915,
+    "max_score": 700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationStateD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary dtor destroys AnimBindings vectors (m_Bones + m_Vectors) via vtable-patched SmartPtr release; port empty dtor body (cpp:23) generates trivial SmartPtr<AnimationList>/SmartPtr<Model> deref only, skipping AnimBindings cleanup because Bone/Vector are empty structs. R3 dependency. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 6435/3800.",
+    "score": 6435,
+    "max_score": 3800,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationStateD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Non-deleting dtor; same AnimBindings cleanup gap as D0Ev. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 5825/3700.",
+    "score": 5825,
+    "max_score": 3700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationStateD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Base-object dtor (D2 alias of D1); same AnimBindings cleanup gap. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 5825/3700.",
+    "score": 5825,
+    "max_score": 3700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar14AnimationState11GetAnimIterEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Const overload; same +0x10/+0xc AnimBindings offset mismatch and _Rb_tree_increment unrolling divergence as non-const variant. R3 dependency. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 8410/4600.",
+    "score": 8410,
+    "max_score": 4600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar14AnimationState12GetAnimationEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "GetAnimIter(idx) inlined to full unrolled BST walk by port compiler; binary had shorter wrapper. Same AnimBindings offset cascade. Semantically equivalent (end-check + return iter->second or null). See src/engine/asset/AnimationState.cpp:65-71 + src/engine/asset/AnimationState.h:19,22. Score 8260/2000.",
+    "score": 8260,
+    "max_score": 2000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN11EffectImage12LoadTexturesEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port is a documented no-op stub: m_TexHandle remains 0 until ReloadableTexture asset pipeline is ready. Binary calls blx f0e9c (texture load helper). See src/game/ScreenEffect.cpp:135-136 // TODO: load m_TexName via ReloadableTexture::Load when asset pipeline ready. Score 800/300.",
+    "score": 800,
+    "max_score": 300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN12ScreenEffect12LoadTexturesEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port iterates m_Images[i].LoadTextures() (src/game/ScreenEffect.cpp:508-510) but EffectImage::LoadTextures is itself a no-op stub (src/game/ScreenEffect.cpp:135-136), so the compiler elides the loop entirely -- port output is bx lr + nops. Binary has a full iterator loop calling blx f3080/e8124/eed90/f1ec8/f14d8. Cascaded deferred from EffectImage TODO. Score 2500/2000.",
+    "score": 2500,
+    "max_score": 2000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN5Fruit16FruitFactTextureEl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary accesses FruitInfo array via PIC-computed static offset (mla r0, #0x330, type, base; add #0x278) with no null check. Port calls FruitInfo_Get(type) and returns info->m_FactTexture with a cbz null guard. Container-access pattern difference (direct array vs accessor function) plus added safety guard. Semantically equivalent for valid type inputs. See src/entities/Fruit.cpp:1449-1451. Score 2120/1300.",
+    "score": 2120,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14DisplayManager24SetTextureOverloadPrefixEPKc": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Struct layout offset mismatch: binary stores prefix to this+0x34 (matching DisplayManager.h header annotation); port compiles to this+0x2a (42 dec) -- a 10-byte discrepancy. Port null-terminates at this+0x39 vs binary field at 0x34+n. Implies a missing or under-sized field before m_TextureOverloadPrefix in the cross-build struct. Implementer must audit src/engine/render/DisplayManager.h field layout and reconcile compiled offsets against binary. Score 915/400.",
+    "score": 915,
+    "max_score": 400,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14TextureManager4LoadEPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port uses std::map<uint32_t,CacheEntry> (_Rb_tree BST walk + SmartPtr refcount) vs binary's intrusive linked-list cache. Documented container-choice divergence per R4 W5 context. Hashes key via StringHash, walks tree, calls Texture::Load on miss, Add() on success. Semantics identical to binary hash-lookup + linked-list-cache. See src/engine/asset/TextureManager.cpp:27-42. Score 10249/4000.",
+    "score": 10249,
+    "max_score": 4000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14TextureManagerC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls a single ctor helper blx e909c (intrusive-list init). Port expands std::map (_Rb_tree) empty construction inline (str/strb to [r0, #0..0x14]). Container-choice divergence; empty map after construction is semantically identical to binary's empty intrusive list. Score 1300/500.",
+    "score": 1300,
+    "max_score": 500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14TextureManagerC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 alias of C1; same std::map inline ctor vs binary helper divergence. See _ZN6Mortar14TextureManagerC1Ev entry. Score 1300/500.",
+    "score": 1300,
+    "max_score": 500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14TextureManagerD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls a single dtor helper blx f0cec (intrusive-list teardown). Port expands std::map (_Rb_tree) destruction inline: Rb_tree erase pass, sentinel reset (str to [r4,#0x8..0x14]), then a second Rb_tree erase bl. Container-choice divergence; same net state (empty/freed map). See src/engine/asset/TextureManager.cpp:22-25. Score 1800/500.",
+    "score": 1800,
+    "max_score": 500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14TextureManagerD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Base-object dtor (D2 alias of D1); same std::map inline dtor vs binary helper divergence. See _ZN6Mortar14TextureManagerD1Ev entry. Score 1800/500.",
+    "score": 1800,
+    "max_score": 500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar7Texture4LoadEPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "R4 W5 OpenCI-to-File migration: port uses Mortar::File chain (File::Open, File::Load, File::Data) + texture-format switch table (UploadNative per format byte) + DisplayManager overload-prefix retry path. Binary used fopen-style blx calls (~60 bytes). Port is architecturally correct per documented R4 W5 replacement; massive size increase (937% diff) reflects inlined std::string + File RAII + DisplayManager singleton guard. See src/engine/asset/Texture.cpp:108-175. Score 29059/3100.",
+    "score": 29059,
+    "max_score": 3100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar14TextureManager4FindEPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port implements Find(const char*) as StringHash then full _Rb_tree BST traversal (itte hi/ls compare-and-branch loop, SmartPtr refcount bump on hit, null store on miss). Binary called blx e3f90 (hash) then blx f5dd4 (intrusive-list lookup). Container-choice divergence; identical semantics (return cached SmartPtr or empty SmartPtr). See src/engine/asset/TextureManager.cpp:57-59. Score 4250/1100.",
+    "score": 4250,
+    "max_score": 1100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar14TextureManager4FindEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port implements Find(uint32_t hash) as inline _Rb_tree BST walk with SmartPtr refcount bump on hit, zero store on miss. Binary used push {r4,r5,lr}; sub sp; blx eac5c; blx f4c10; blx e8304 (intrusive-list find + SmartPtr wrap). Container-choice divergence; identical observable semantics. See src/engine/asset/TextureManager.cpp:44-55. Score 5385/2700.",
+    "score": 5385,
+    "max_score": 2700,
     "decided_at": "2026-05-04T00:00Z"
   }
 }

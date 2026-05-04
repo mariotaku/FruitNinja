@@ -244,17 +244,17 @@ void GameInitialise() {
 
         // +0x54 pFontMain: fonts/font_fruit_ninja.fnt (0x0010bf3a)
         // DIFFERS: binary loads HD path if ShouldUseHDFonts(); port uses SD only.
-        game->pFontMain = Mortar::Font::Load((fontDir + "font_fruit_ninja.fnt").c_str());
+        game->pFontMain = Mortar::Font::Create((fontDir + "font_fruit_ninja.fnt").c_str());
 
         // +0x58 pFontNumbers: fonts/fruit_ninja_numbers.fnt (0x0010bf6e, null-guarded)
         // DIFFERS: binary loads HD path if ShouldUseHDFonts(); port uses SD only.
         if (!game->pFontNumbers.IsValid()) {
-            game->pFontNumbers = Mortar::Font::Load((fontDir + "fruit_ninja_numbers.fnt").c_str());
+            game->pFontNumbers = Mortar::Font::Create((fontDir + "fruit_ninja_numbers.fnt").c_str());
         }
 
         // +0x6C pFontArcade: fonts/arcade_results_numbers.fnt (0x0010bfa4, null-guarded)
         if (!game->pFontArcade.IsValid()) {
-            game->pFontArcade = Mortar::Font::Load((fontDir + "arcade_results_numbers.fnt").c_str());
+            game->pFontArcade = Mortar::Font::Create((fontDir + "arcade_results_numbers.fnt").c_str());
         }
 
         // Binary immediately aliases +0x6C into +0x70, +0x74, +0x78, +0x7C as fallback
@@ -269,7 +269,7 @@ void GameInitialise() {
         {
             std::string path = fontDir + "gold_numbers.fnt";
             if (Mortar::File::Exists(path.c_str(), 0)) {
-                game->pFontGold = Mortar::Font::Load(path.c_str());
+                game->pFontGold = Mortar::Font::Create(path.c_str());
             }
         }
 
@@ -277,7 +277,7 @@ void GameInitialise() {
         {
             std::string path = fontDir + "silver_numbers.fnt";
             if (Mortar::File::Exists(path.c_str(), 0)) {
-                game->pFontSilver = Mortar::Font::Load(path.c_str());
+                game->pFontSilver = Mortar::Font::Create(path.c_str());
             }
         }
 
@@ -285,18 +285,18 @@ void GameInitialise() {
         {
             std::string path = fontDir + "bronze_numbers.fnt";
             if (Mortar::File::Exists(path.c_str(), 0)) {
-                game->pFontBronze = Mortar::Font::Load(path.c_str());
+                game->pFontBronze = Mortar::Font::Create(path.c_str());
             }
         }
 
         // +0x80 pFontBlue2: fonts/fruit_ninja_numbers_blue2.fnt (0x0010c038, null-guarded)
         if (!game->pFontBlue2.IsValid()) {
-            game->pFontBlue2 = Mortar::Font::Load((fontDir + "fruit_ninja_numbers_blue2.fnt").c_str());
+            game->pFontBlue2 = Mortar::Font::Create((fontDir + "fruit_ninja_numbers_blue2.fnt").c_str());
         }
 
         // +0x68 pFontGreen: fonts/fruit_ninja_numbers_green.fnt (0x0010c082, null-guarded)
         if (!game->pFontGreen.IsValid()) {
-            game->pFontGreen = Mortar::Font::Load((fontDir + "fruit_ninja_numbers_green.fnt").c_str());
+            game->pFontGreen = Mortar::Font::Create((fontDir + "fruit_ninja_numbers_green.fnt").c_str());
         }
     }
 
