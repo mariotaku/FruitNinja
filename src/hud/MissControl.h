@@ -11,7 +11,7 @@
 // Binary addresses:
 //   ctor                     0x001511a0
 //   dtor                     0x001513d8 / 0x00151468 / 0x001514f0
-//   vtable                   0x001e9b28
+//   vtable                   0x001e9b28  (17 slots, slot 16 = SetPlayer)
 //   GetFree                  0x00150da4
 //   MakeCritical             0x00151764
 //   MakeRare                 0x001518d8
@@ -151,15 +151,15 @@ public:
     // Binary @ 0x001513cc — vtable[5]. Drops m_Texture ref (single-line helper).
     void Release() override;
 
-    // Binary @ 0x00150e00 — vtable[8]. Empty override (single bx lr); returns layerWeights
-    // pointer unchanged. Signature float*(float*) does not match base PreDraw(const Vec3&);
-    // cannot override. No-op body; binary slot exists purely to shadow the base.
-    // NOTE: do not add as override — would insert new vtable entry breaking layout.
+    // Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
+    void PreDraw(const Vec3& hudScale) override;
 
-    // Binary @ 0x00150dfc — vtable[16]. Defunct: same-screen MP player-index hook, never wired.
-    // Not in HUDControl base vtable; adding as override would shift MissControl vtable layout.
-    // Kept as comment only per stub-don't-skip policy.
-    // Defunct: MP player-index hook — no-op stub; binary @ 0x00150dfc
+    // Binary @ 0x00150dfc — vtable[16]. New virtual not in HUDControl base; extends vtable to 17 slots.
+    // Defunct: same-screen MP player-index hook — no-op stub; binary @ 0x00150dfc
+    virtual int SetPlayer(int player);
+
+    // Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit.
+    static void CleanPool();
 
     // --- Statics (file-scope in binary, exposed here for PreUpdate) ---
     static int   s_NumCriticals;  // 0x0023123c -- incremented per busy slot in Update
