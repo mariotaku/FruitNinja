@@ -1,4 +1,5 @@
 #include "asset/Skeleton.h"
+#include "util/AsciiString.h"
 #include <cstring>
 #include <cstdio>
 
@@ -6,7 +7,23 @@
 
 namespace Mortar {
 
-// Matches Skeleton::FindIndex (0x0019323c)
+// Binary @ 0x0019323c — _ZNK6Mortar8Skeleton9FindIndexERKNS_11AsciiStringE
+// Linear scan; calls AsciiString::Equals (PLT 0x000f7764) per bone.
+// Returns first matching index, else 0xFFFFFFFF.
+// TODO: Bone::m_Name is std::string in port; binary is AsciiString.
+// Compare via .c_str() until Bone::m_Name migrates.
+uint32_t Skeleton::FindIndex(const Mortar::AsciiString& name) const {
+    uint32_t n = (uint32_t)m_Bones.size();
+    for (uint32_t i = 0; i < n; i++) {
+        if (name.Length() == m_Bones[i].m_Name.size() &&
+            memcmp(name.c_str(), m_Bones[i].m_Name.c_str(), name.Length()) == 0) {
+            return i;
+        }
+    }
+    return 0xFFFFFFFFu;
+}
+
+// Port specific: convenience overload, no binary symbol.
 uint32_t Skeleton::FindIndex(const char* name) const {
     for (uint32_t i = 0; i < (uint32_t)m_Bones.size(); i++) {
         if (m_Bones[i].m_Name == name) return i;

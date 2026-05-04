@@ -50,13 +50,17 @@ bool MortarSound::IsPaused() {
     return m_State == 1;
 }
 
-// 0x0018c850
-// If m_State==0: calls SoundManager::SFXPlay(m_Name, this), if m_Handle!=0: m_State=2
+// Binary @ 0x0018c850
+// Binary calls SFXPlay(m_Name, 0, NULL, 0x40, -1) — volume=64 (0x40), flags=-1.
+// Before the call, binary writes this+8 (=&m_Handle) into a MAMAudioController
+// listener-pair table slot, then passes NULL as the sound* arg.
+// Port specific: passes 'this' as listener instead of inline listener-table write.
+// DIFFERS: binary @ 0x0018c850 calls SFXPlay(m_Name, 0, NULL, 0x40, -1);
+//   port simplifies to 2-arg form, losing default volume 64 and listener-table semantics.
 void MortarSound::Play() {
     MortarSound_HandleGuard(this);
     if (m_State == 0) {
         SoundManager& mgr = SoundManager::GetInstance();
-        // Passes 'this' so backend stores the new handle into m_Handle
         mgr.SFXPlay(m_Name, this);
         if (m_Handle != 0) {
             m_State = 2;
