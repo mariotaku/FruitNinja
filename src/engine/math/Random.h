@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+namespace Math {
+
 // 64-bit LCG with Knuth MMIX multiplier, matching original Math::Random (24 bytes)
 // See docs/engine/rng.md for full analysis
 class Random {
@@ -24,5 +26,7 @@ public:
     // ~19 bits of precision (2^19 - 1 = 524287)
     float RandF(float range);
 };
+
+} // namespace Math
 
 #endif

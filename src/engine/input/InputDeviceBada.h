@@ -16,6 +16,8 @@
 // not on the manager. The manager broadcasts RegisterInputCallback to each
 // device in m_inputDevices.
 
+namespace Mortar {
+
 struct InputDeviceBinding {
     unsigned long         actionHash;
     InputDeviceCallback   callback;
@@ -56,5 +58,7 @@ private:
     bool                          m_queueUntilUpdate;
     bool                          m_sendDownEachUpdate;
 };
+
+} // namespace Mortar
 
 #endif // FN_ENGINE_INPUT_INPUTDEVICEBADA_H

@@ -19,11 +19,14 @@ typedef Delegate1<bool, InputEvent*> InputDeviceCallback;
 
 // Device type enum — matches binary InputDeviceTypes values.
 // Bada touch device = 0 (first slot).
+// Binary: InputDeviceTypes is in global scope (no Mortar:: prefix).
 enum InputDeviceTypes {
     INPUT_DEVICE_TOUCH = 0,
     INPUT_DEVICE_KEYBOARD = 1,
     INPUT_DEVICE_GAMEPAD = 2,
 };
+
+namespace Mortar {
 
 // Forward-declare InputActionMapper (internals not ported).
 class InputActionMapper;
@@ -67,5 +70,7 @@ public:
     // TODO: 0x00195764 — route via SendIndividualTouchCallbacks once ported.
     virtual void              DispatchEvent(InputEvent* event) = 0;
 };
+
+} // namespace Mortar
 
 #endif // FN_ENGINE_INPUT_INPUTDEVICE_H

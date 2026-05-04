@@ -48,7 +48,7 @@ void GameTaskInitInput() {
     // an action-mapper config file. Call site preserved as comment so
     // call-graph shape matches binary.
 
-    InputManager* im = InputManager::GetInstance();
+    Mortar::InputManager* im = Mortar::InputManager::GetInstance();
     if (!im) return;
 
     // --- Section B: 16-zone loop @ 0x169690 ---

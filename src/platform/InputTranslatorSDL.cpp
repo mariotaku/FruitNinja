@@ -121,7 +121,7 @@ void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
 }
 
 void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window) {
-    InputManager* mgr = InputManager::GetInstance();
+    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
     if (!mgr) return;
 
     InputEvent ie;

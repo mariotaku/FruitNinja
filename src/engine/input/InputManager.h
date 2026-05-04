@@ -20,6 +20,8 @@
 // Callback type alias (matches binary Delegate1<bool, InputEvent*>).
 typedef Delegate1<bool, InputEvent*> InputCallback;
 
+namespace Mortar {
+
 class InputManager {
 public:
     static InputManager* s_instance;
@@ -80,7 +82,7 @@ public:
     // Binary @ 0x0019607c — SetSendDownCallbacksEachUpdate: broadcast.
     void SetSendDownCallbacksEachUpdate(bool v);
 
-    // Binary @ 0x00195fd8 — ValidCharacter: return (c - 0x20) < 0x90.
+    // Binary @ 0x00195fd8 — return (c - 0x20) < 0x90.
     static bool ValidCharacter(unsigned char c);
 
     // Port-side: dispatch an InputEvent through all devices.
@@ -96,5 +98,7 @@ public:
     // +0x06..0x07 padding
     std::list<InputDevice*> m_inputDevices;  // +0x08 (12B Bada list)
 };
+
+} // namespace Mortar
 
 #endif // FN_ENGINE_INPUT_INPUTMANAGER_H

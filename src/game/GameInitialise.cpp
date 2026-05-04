@@ -122,7 +122,7 @@ void GameInitialise() {
     }
 
     // Step 10: InputManager
-    game->inputManager = new InputManager();
+    game->inputManager = new Mortar::InputManager();
     // Note: inputTranslator (SDL-bound) is allocated + Init'd in GameSDL.cpp::init().
 
     // Step 15: FruitCamera (matches original: operator_new(0x16c))

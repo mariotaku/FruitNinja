@@ -2,7 +2,7 @@
 #include "LZ8.h"
 #include <cstring>
 
-namespace Mortar { namespace Math {
+namespace Math {
 
 // Binary @ 0x00195154
 unsigned int GetUncompressedSizeLZ8(const void* src) {
@@ -48,4 +48,4 @@ unsigned int CompressLZ(const unsigned char* /*src*/, unsigned long /*size*/, un
     return 0;
 }
 
-}} // namespace Mortar::Math
+} // namespace Math

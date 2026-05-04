@@ -40,7 +40,7 @@ public:
     // m_SpeedControl occupies the binary's +0x00/+0x04 slots correctly.
     // All downstream offsets (+0x035 onward) are shifted +0x08 vs prior port layout.
     // DIFFERS: binary does not have Random as a WaveManager member; port-specific field.
-    Random m_Random;   // Port specific: +0x08
+    Math::Random m_Random;   // Port specific: +0x08
 
     // +0x020..+0x034: gap (21 bytes).
     // m_SpeedControl[2] occupies +0x00..+0x07 (matches binary +0x00/+0x04).
@@ -261,7 +261,7 @@ public:
 
     // --- Queries -------------------------------------------------------
 
-    Random& GetRandom() { return m_Random; }
+    Math::Random& GetRandom() { return m_Random; }
 
     // 0x00121834: m_Speed[playerIdx].
     float GetSpeed(int playerIdx);

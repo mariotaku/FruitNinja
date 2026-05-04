@@ -3,7 +3,7 @@
 
 #include "Vec3.h"
 
-namespace Mortar { namespace Math {
+namespace Math {
 
 // Binary @ 0x001b3248 — 2D foot-of-perpendicular in XY (Z=0); horiz/vert special-cased
 void ClosestPointOnLine(const Vec3& A, const Vec3& B, const Vec3& P, Vec3& out);
@@ -17,6 +17,6 @@ bool PointOnLineSide(const Vec3* P, const Vec3* B, const Vec3* /*unused*/, const
 // Binary @ 0x001b3324 — DEAD CODE in shipping binary; standard Catmull-Rom spline
 Vec3 CatmullRom(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3, float t);
 
-}} // namespace Mortar::Math
+} // namespace Math
 
 #endif
