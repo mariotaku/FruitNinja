@@ -61,10 +61,8 @@ void GameTaskInitInput() {
         g_TouchEntities[i] = e;
 
         Vec3 initPos = defaultPos;
-        // Binary: Entity::vtable[+0x08] called as (0, 0, &initPos).
-        // Port Entity::Init signature is (int, int, int); Vec3* cast to int.
-        // Port specific: calling with 0,0,0 -- third arg is Vec3* in binary ARM32.
-        e->Init(0, 0, 0);
+        // Binary: Entity::vtable[+0x08] called as (nullptr, 0, &initPos).
+        e->Init(nullptr, 0, &initPos);
 
         char nameDown[16], nameMove[16], nameUp[20];
         snprintf(nameDown, sizeof(nameDown), "TouchDown_%d", i);

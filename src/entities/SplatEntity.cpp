@@ -159,7 +159,9 @@ static float Clampf(float v, float lo, float hi) {
 // ---------------------------------------------------------------------
 
 SplatEntity::SplatEntity()
-    : m_ColourPhase(0.0f)
+    : pos(0, 0, 0)
+    , vel(0, 0, 0)
+    , m_ColourPhase(0.0f)
     , m_ColB(255), m_ColG(255), m_ColR(255), m_ColA(255)
     , m_AlphaBase(255.0f)
     , m_Angle(0.0f)
@@ -175,10 +177,8 @@ SplatEntity::SplatEntity()
     , m_SplatType(-1)
     , m_bAlive(0)
 {
-    entityType = 2;
-    // SplatEntity runs its own s_Pool lifecycle independent of
-    // ActorManager; m_bAlive is the live/dead flag. No ENT_INACTIVE
-    // bookkeeping needed here.
+    // SplatEntity is NOT an Entity subclass (binary @ 0x0017ed58 ctor).
+    // Pool managed by s_Pool; m_bAlive is the live/dead flag.
 }
 
 SplatEntity::~SplatEntity() {}
@@ -251,7 +251,7 @@ void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, bool param3, int fruit
     // Start airborne — Update will pick m_SplatType on landing.
     m_SplatType = -1;
     m_bAlive    = 1;
-    flags &= ~ENT_KILLED;
+    // SplatEntity has no Entity flags; m_bAlive serves as the live/dead flag.
 }
 
 // Matches SplatEntity::Update (0x0017f774). Two phases: airborne

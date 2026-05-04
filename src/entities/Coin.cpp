@@ -67,8 +67,7 @@ static void CoinArrived(Coin* coin) {
 // Coin constructor (C1) @ 0x00173394
 // ---------------------------------------------------------------------------
 Coin::Coin()
-    : angle(0)
-    , m_CoinValue(0)
+    : m_CoinValue(0)
     , m_State(0)
     , m_Timer(0.0f)
     , m_Silent(0)
@@ -104,9 +103,10 @@ void Coin::Release() {
 }
 
 // ---------------------------------------------------------------------------
-// Init @ 0x0019D5FC — stub/empty in binary
+// Init @ 0x0019D5FC — base no-op; Coin uses base (vtable slot 2 = 0x0019d5fc).
+// Coin is initialised via ctor + MakeCoins/InitCoin, never through factory-Init.
 // ---------------------------------------------------------------------------
-void Coin::Init(int, int, int) {}
+void Coin::Init(void* /*p1*/, long /*p2*/, const Vec3* /*p3*/) {}
 
 // ---------------------------------------------------------------------------
 // PostUpdate (DrawUpdate) @ 0x0017318C — empty in binary
@@ -157,7 +157,7 @@ void Coin::InitCoin(const Vec3& pos_in, const Vec3& gravity, uint16_t /*baseAngl
 {
     // flags &= 0xEE — clear active+dead bits (bits 0 and 4: ENT_INACTIVE | ENT_KILLED)
     flags &= 0xEE;
-    angle        = launchAngle;
+    m_Angle      = launchAngle;
     m_State      = 0;
     m_CoinValue  = coinValue;
     // Speed formula: (500 + rand(524287)/524287 * 550) * 0.66
@@ -203,8 +203,8 @@ void Coin::_Update(float dt) {
             }
         }
         // Compute initial velocity from launch angle
-        vel.x = SinIdx(angle) * m_Speed;
-        vel.y = CosIdx(angle) * m_Speed;
+        vel.x = SinIdx(m_Angle) * m_Speed;
+        vel.y = CosIdx(m_Angle) * m_Speed;
         vel.z = 0.0f;
         // Spawn fly emitter
         if (m_FlyFXHash != 0) {
@@ -267,7 +267,7 @@ void Coin::_Update(float dt) {
                 // SinIdx/CosIdx use (idx/65536)*2pi, so angle = atan2(dx,dy)/(2pi) * 65536
                 float a = atan2f(dx, dy);
                 if (a < 0.0f) a += 6.2831853f;
-                angle = (uint16_t)(int)(a / 6.2831853f * 65536.0f);
+                m_Angle = (uint16_t)(int)(a / 6.2831853f * 65536.0f);
             }
             m_Timer = 0.0f;
             m_State = 4; // transition to HOMING
@@ -299,9 +299,9 @@ void Coin::_Update(float dt) {
         float desiredSinA = (dist > 0.0f) ? dx / dist : 0.0f;
         float desiredCosA = (dist > 0.0f) ? dy / dist : 1.0f;
 
-        // Current heading from angle
-        float curSin = SinIdx(angle);
-        float curCos = CosIdx(angle);
+        // Current heading from m_Angle
+        float curSin = SinIdx(m_Angle);
+        float curCos = CosIdx(m_Angle);
 
         // Blend toward desired heading
         float newSin = curSin + (desiredSinA - curSin) * turnRate;
@@ -315,7 +315,7 @@ void Coin::_Update(float dt) {
         // Convert back to angle index
         float a = atan2f(newSin, newCos);
         if (a < 0.0f) a += 6.2831853f;
-        angle = (uint16_t)(int)(a / 6.2831853f * 65536.0f);
+        m_Angle = (uint16_t)(int)(a / 6.2831853f * 65536.0f);
 
         vel.x = newSin * spd;
         vel.y = newCos * spd;
@@ -382,7 +382,7 @@ void Coin::Draw(Renderer& /*r*/) {
     //         mat *= RotZ(SinIdx(angle), CosIdx(angle)); mat *= Translate(pos)
     Matrix44 mat = Matrix44::Scale44(scale);
     mat.RotY44(SinIdx(m_SpinAngle), CosIdx(m_SpinAngle));
-    mat.RotZ44(SinIdx(angle), CosIdx(angle));
+    mat.RotZ44(SinIdx(m_Angle), CosIdx(m_Angle));
     mat.GlobalTranslate44(pos);
 
     s_coinModel->Draw(mat);
