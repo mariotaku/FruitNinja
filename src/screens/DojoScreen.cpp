@@ -80,11 +80,11 @@ SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
 // Matches DojoScreen::DojoScreen @ 0x00137b90
 // ===================================================================
 DojoScreen::DojoScreen(Game& g)
-    : game(g)
-    , m_pPlayButton(nullptr)      // field_0x94
+    : m_pPlayButton(nullptr)      // field_0x94
     , m_pShopButton(nullptr)      // field_0x98
     , m_pAboutButton(nullptr)     // field_0x9c
     , m_pAboutScreen(nullptr)     // field_0xa0
+    , game(g)
 {
     LoadContent();
     m_LayerFlags = 0x80;

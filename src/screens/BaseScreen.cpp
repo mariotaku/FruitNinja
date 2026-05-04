@@ -61,7 +61,7 @@ BaseScreen::~BaseScreen() {
     // Binary @ 0x00138d94 explicitly invokes Release() in the dtor.
     // C++ static-dispatches the call here to BaseScreen::Release.
     BaseScreen::Release();
-    // m_HUDControls cleared by vector dtor.
+    // m_HUDControls cleared by list dtor.
 }
 
 // ===================================================================
@@ -305,9 +305,9 @@ void BaseScreen::AddGenericControl(HUDControl* ctrl) {
 // ===================================================================
 void BaseScreen::Release() {
     // 1. Mark all registered HUDControls for pending removal
-    for (size_t i = 0; i < m_HUDControls.size(); ++i) {
-        if (m_HUDControls[i]) {
-            m_HUDControls[i]->m_bPendingRemoval = 1;
+    for (std::list<HUDControl*>::iterator it = m_HUDControls.begin(); it != m_HUDControls.end(); ++it) {
+        if (*it) {
+            (*it)->m_bPendingRemoval = 1;
         }
     }
     m_HUDControls.clear();

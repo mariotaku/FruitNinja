@@ -215,8 +215,6 @@ void ShopScreen::UnLoadContent() {
 // ---------------------------------------------------------------------------
 ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     : HUDControl3d()
-    , game(g)
-    , m_TexInst()
     , m_TransitionAlpha(0.0f)
     // Binary ShopScreen ctor at 0x0015cdac does NOT initialize +0x80
     // (m_LayerFlagsAlt). Heap memory there is whatever the allocator
@@ -238,6 +236,7 @@ ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     , m_pSelectedItem(nullptr)
     , m_AnimFrame(0)
     , m_State(0)
+    , game(g)
     , m_bShrinking(false)
     , m_SelCounter(0)
 {
@@ -250,8 +249,7 @@ ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     // Binary: field_0x32 (m_bNoDestructor) = 0
     m_bNoDestructor = 0;
 
-    // Binary: field_0x74 SmartPtr SetNull
-    m_TexInst.SetNull();
+    // Binary: field_0x74 SmartPtr SetNull — port's HUDControl3d ctor already zeroes m_Texture.
 
     // Initialise slot items array (4 slots: SLASH_MODIFIER, BACKGROUND, UPSELL, REMOVEADS)
     m_pSlotItems[0] = nullptr;

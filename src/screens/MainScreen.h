@@ -88,8 +88,6 @@ public:
     void  SetCameraTransition(float v) { m_CameraTransition = v; }
 
 private:
-    Game& game;
-
     // +0x7c: copy of original size
     Vec3 m_OrigSize;
 
@@ -135,6 +133,10 @@ private:
     SmartPtr<Mortar::Texture> m_TexMoreGames;         // +0x114: more_games.tex (GOT+c788)
     float m_Timer2;                // +0x118: second timer
     SmartPtr<Mortar::Font> m_pFont; // +0x11c: fonts/verdana.fnt (loaded in ctor, NOT in g_GameData)
+
+    // Port specific: binary accesses Game via GOT; port stores a reference here,
+    // declared after all binary-faithful fields so it does not displace them.
+    Game& game;
 
     // Global textures (not on struct, loaded in ctor and assigned to globals via GOT)
     SmartPtr<Mortar::Texture> m_blurryBackingTex;     // blurry_backing.tex
@@ -214,5 +216,15 @@ private:
     // Touch handling removed in the touch rewrite. MenuButton::Update now
     // polls Mortar::Touch directly — MainScreen has no touch routing role.
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(offsetof(MainScreen, m_OrigSize)    == 0x7c,  "m_OrigSize offset");
+static_assert(offsetof(MainScreen, pPlayButton)   == 0x9c,  "pPlayButton offset");
+static_assert(offsetof(MainScreen, pDojoButton)   == 0xa0,  "pDojoButton offset");
+static_assert(offsetof(MainScreen, pQuitBtn)      == 0xa4,  "pQuitBtn offset");
+static_assert(offsetof(MainScreen, pMoreGamesBtn) == 0xa8,  "pMoreGamesBtn offset");
+static_assert(offsetof(MainScreen, m_pFont)       == 0x11c, "m_pFont offset");
+#endif
 
 #endif

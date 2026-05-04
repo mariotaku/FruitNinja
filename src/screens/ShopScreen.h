@@ -124,10 +124,9 @@ public:
     static void UnLoadContent();
 
 private:
-    // +0x74: per-instance texture copy (set null in ctor)
-    SmartPtr<Mortar::Texture> m_TexInst;      // field_0x74
-
     // +0x7C: transition alpha (0->1 lerp-in, *= 0.75 fade-out)
+    // field_0x74 (inherited HUDControl3d::m_Texture / SmartPtr<Texture>) is zeroed by
+    // HUDControl3d ctor and not used further in ShopScreen; not re-declared here.
     float m_TransitionAlpha;
 
     // +0x80: layer flags alt (toggled between 0x40 and 0x80 based on splats)
@@ -141,10 +140,6 @@ private:
 
     // +0x8C: equip button (lazily created when item is not equipped)
     MenuButton* m_pEquipButton;
-
-    // Port specific: Game& reference for HUD/GameSound access.
-    // Binary accesses these via GOT-relative GameTaskState pointer.
-    Game& game;
 
     // +0x90: parent dojo screen (used to trigger GameState=8 on quit)
     DojoScreen* m_pParent;
@@ -173,6 +168,10 @@ private:
 
     // +0xB8: state machine index
     int m_State;
+
+    // Port specific: binary accesses Game via GOT; port stores a reference here,
+    // declared after all binary-faithful fields so it does not displace them.
+    Game& game;
 
     // Mirrors the static BSS bool at .got + 0x451b4 set by
     // ShrinkBuyButton @ 0x0015c4cc and read by EquipCallback /
@@ -261,5 +260,14 @@ public:
     void RemoveBuyButton();
     void RemoveEquipButton();
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(offsetof(ShopScreen, m_TransitionAlpha) == 0x7c, "m_TransitionAlpha offset");
+static_assert(offsetof(ShopScreen, m_pBuyButton)      == 0x84, "m_pBuyButton offset");
+static_assert(offsetof(ShopScreen, m_pEquipButton)    == 0x8c, "m_pEquipButton offset");
+static_assert(offsetof(ShopScreen, m_pParent)         == 0x90, "m_pParent offset");
+static_assert(offsetof(ShopScreen, m_State)           == 0xb8, "m_State offset");
+#endif
 
 #endif // FN_SHOP_SCREEN_H

@@ -501,6 +501,10 @@ void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
         // vel.x = vel.y = -10.0f (nudge falling fruit)
         fruit->vel.x = -10.0f;  // 0xc1200000
         fruit->vel.y = -10.0f;  // 0xc1200000
+        // Binary literal 0xc3f00000 = -480.0f: kick fruit piece off-screen.
+        // vstr [r3,#0xbc] writes fruit->m_SecondPos.y = -480.0f.
+        // TODO: 0x146824 -- bl helper + ldmia/stmia 3-float position-copy block also present in binary.
+        fruit->m_SecondPos.y = -480.0f;  // 0xc3f00000
     }
     m_BuyTriggered = 0;
     m_BuyButton    = NULL;
