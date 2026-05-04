@@ -2,6 +2,7 @@
 #define FN_ENTITY_H
 
 #include "math/Vec3.h"
+#include "collision/Col.h"
 #include "collision/ColSphere.h"
 #include "entities/Message.h"
 #include <cstdint>
@@ -68,11 +69,11 @@ public:
     // gameplay code indexes with regular ints; value range is still 0..4.
     int entityType;
 
-    // +0x38: collision sphere pointer (nullable). Binary ctor stores nullptr
+    // +0x38: collision primitive pointer (nullable). Binary ctor stores nullptr
     // here (verified: str r6,[r4,#0x38] where r6=0). Subclasses that need
     // collision allocate a ColSphere in Init (if null) and free in dtor.
     // BombBlast leaves this null (no collision).
-    Mortar::ColSphere* m_Col;
+    Mortar::Col* m_Col;     // polymorphic; subclasses install ColSphere/ColLine/ColAABB
 
     // Binary @ 0x0019d88c — base ctor
     Entity();
@@ -125,8 +126,8 @@ public:
     virtual void CollisionResponse(const Vec3&);
 
     // Vtable slot 10 (+0x28): Collide — Binary @ 0x0019d608
-    // If m_Col, dispatch m_Col->vtable[3] with (col, hitPos, outFlags)
-    virtual void Collide(Entity* other, void* col, unsigned long* outFlags, Vec3* hitPos);
+    // If m_Col, dispatch m_Col->Collide(col, hitPos)
+    virtual void Collide(Entity* other, Mortar::Col* col, unsigned long* outFlags, Vec3* hitPos);
 
     // Vtable slot 11 (+0x2C): ReceiveMessage — Binary @ 0x0019d61c
     // msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE

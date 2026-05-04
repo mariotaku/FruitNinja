@@ -162,13 +162,15 @@ void DebugHitbox_Draw() {
     for (auto it = list.begin(); it != list.end(); ++it) {
         Entity* e = *it;
         if (!e || !e->IsActive()) continue;
-        if (!e->m_Col || e->m_Col->radius <= 0.0f) continue;
+        if (!e->m_Col) continue;
+        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(e->m_Col);
+        if (cs->radius <= 0.0f) continue;
 
         const uint32_t col = ColourFor(e->entityType);
-        const float cx = e->m_Col->center.x;
-        const float cy = e->m_Col->center.y;
+        const float cx = cs->center.x;
+        const float cy = cs->center.y;
         const float cz = -1.0f;          // slightly in front of the plane
-        const float outerR = e->m_Col->radius;
+        const float outerR = cs->radius;
         const float innerR = outerR - RING_THICKNESS;
 
         BuildRing(&s_Verts[0], cx, cy, cz,

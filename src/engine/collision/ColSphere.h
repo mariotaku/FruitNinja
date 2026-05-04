@@ -1,42 +1,45 @@
-#ifndef MORTAR_COL_SPHERE_H
-#define MORTAR_COL_SPHERE_H
+#ifndef FN_ENGINE_COLLISION_COL_SPHERE_H
+#define FN_ENGINE_COLLISION_COL_SPHERE_H
 
-#include "math/Vec3.h"
+#include "collision/Col.h"
 #include "collision/ColLine.h"
 #include <cmath>
 
 namespace Mortar {
 
-struct ColSphere {
-    Vec3 center;
-    float radius;
+// Forward declarations for double-dispatch
+class ColLine;
+class ColAABB;
 
-    ColSphere() : center(), radius(0.0f) {}
-    ColSphere(const Vec3& c, float r) : center(c), radius(r) {}
+// Binary vtable @ 0x001eb5f8. sizeof = 0x18 (24B): base 0x14 + radius float at +0x14.
+class ColSphere : public Col {
+public:
+    // center aliases m_PrimaryPoint (offset +0x04 from Col base, i.e. +0x08 from ColSphere*)
+    Vec3&  center; // reference alias for m_PrimaryPoint
+    float  radius; // +0x14
 
-    // Sphere-sphere intersection
-    bool Intersects(const ColSphere& other) const {
-        Vec3 d(center.x - other.center.x, center.y - other.center.y, center.z - other.center.z);
-        float distSq = d.x*d.x + d.y*d.y + d.z*d.z;
-        float radSum = radius + other.radius;
-        return distSq <= radSum * radSum;
-    }
+    // Binary @ 0x0019fc20 -- default ctor
+    ColSphere();
+    // Binary @ 0x0019fc50 -- parameterized ctor
+    ColSphere(const Vec3& c, float r);
 
-    // Sphere-line segment intersection (blade vs fruit collision)
-    bool IntersectsLine(const ColLine& line) const {
-        Vec3 closest = ColLineClosestPoint(line, center);
-        Vec3 d(closest.x - center.x, closest.y - center.y, closest.z - center.z);
-        float distSq = d.x*d.x + d.y*d.y + d.z*d.z;
-        return distSq <= radius * radius;
-    }
+    virtual ~ColSphere() override {}
 
-    // Test if point is inside sphere
-    bool Contains(const Vec3& p) const {
-        Vec3 d(p.x - center.x, p.y - center.y, p.z - center.z);
-        return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;
-    }
+    // Binary slot 2
+    virtual int GetType() const override { return TYPE_SPHERE; }
+
+    // Binary slot 3 -- double-dispatch by other->GetType()
+    virtual int Collide(Col* other, Vec3* outNormal) override;
+
+    // Binary slot 4
+    virtual void DrawDebug() override;
+
+    // Port-side intersection helpers (pre-hierarchy port, kept for call sites)
+    bool Intersects(const ColSphere& other) const;
+    bool IntersectsLine(const ColLine& line) const;
+    bool Contains(const Vec3& p) const;
 };
 
-} // namespace Mortar
+}  // namespace Mortar
 
 #endif
