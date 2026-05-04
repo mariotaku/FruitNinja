@@ -53,6 +53,14 @@ void GameTaskInitInput() {
 
     // --- Section B: 16-zone loop @ 0x169690 ---
     // Binary @ 0x00169670: TouchDown registered TWICE, TouchMove_X computed but unused -- preserve verbatim.
+    //
+    // DIFFERS: binary creates 16 pooled SlashEntity instances here (one per
+    //   touch zone). Port owns SlashEntity as a singleton (g_pSlashEntity)
+    //   and EntityFactory returns nullptr for type 3, so Add(3) returns
+    //   nullptr. Skip the per-zone Entity creation + Init for now and leave
+    //   g_TouchEntities[i] = nullptr; PointerMoveCallback dispatch must
+    //   null-check downstream. Full fix requires SlashEntity to be poolable
+    //   (R5+) or a dedicated TouchZoneEntity stub.
     Vec3 defaultPos(0.0f, 0.0f, 0.0f);  // GOT[+0x77cc]
     for (int i = 0; i < 16; ++i) {
         g_TouchZoneTable[i] = defaultPos;
@@ -62,7 +70,8 @@ void GameTaskInitInput() {
 
         Vec3 initPos = defaultPos;
         // Binary: Entity::vtable[+0x08] called as (nullptr, 0, &initPos).
-        e->Init(nullptr, 0, &initPos);
+        // Port-specific null-guard: skip Init when factory refused type 3.
+        if (e) e->Init(nullptr, 0, &initPos);
 
         char nameDown[16], nameMove[16], nameUp[20];
         snprintf(nameDown, sizeof(nameDown), "TouchDown_%d", i);
