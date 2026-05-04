@@ -62,6 +62,7 @@ inline SmartPtr<T> WrapPtr(T* raw) {
 
 // Binary @ 0x00188d84 -- SmartPtr<T> is a single embedded T* (intrusive refcount via T's ReferenceCounter base).
 #ifdef __bada__
+#include "util/ReferenceCounter.h"
 namespace { struct _SmartPtrSizeProbe : public ReferenceCounter {}; }
 static_assert(sizeof(SmartPtr<_SmartPtrSizeProbe>) == 4,
               "SmartPtr<T> must be exactly 4 bytes (sizeof one T* slot)");
