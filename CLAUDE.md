@@ -104,11 +104,15 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
   - `// ASM-verified: <ISO-time UTC> binary @ 0x<addr> (asm-inspector)` — confirmed by ASM diff. Inventory: `grep -rn 'ASM-verified:' src/`.
   - `// DIFFERS: original = X from DAT_addr, using Y because <reason>` — deliberate deviation.
   - `// Defunct: <subsystem> — no-op stub; binary @ 0x<addr>` — feature is permanently dead (online services, P2P MP, etc.) but the call shape and class layout are preserved per the "stub-don't-skip" policy. Inventory: `grep -rn 'Defunct:' src/`.
-- **Platform-specific files: `*SDL.cpp` suffix + `src/platform/sdl/` + explicit name list.** SDL/platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it cleanly:
-  1. **`*SDL.cpp` suffix** — mirrors the binary's `*Bada` convention (`InputDeviceBada`, `DisplayManagerBada`, `BadaSound`). Examples in tree: `GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`.
-  2. **`src/platform/sdl/` directory** — for SDL backends that come as a multi-file group, the whole subtree is excluded.
+- **Platform-specific files: `*SDL.cpp` / `*Posix.cpp` / `*Win32.cpp` suffixes + `src/platform/<backend>/` + explicit name list.** Platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it cleanly:
+  1. **Suffix** — mirrors the binary's `*Bada` convention (`InputDeviceBada`, `DisplayManagerBada`, `BadaSound`). Per backend:
+     - `*SDL.cpp` — SDL2-bound (`GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`).
+     - `*Posix.cpp` — POSIX-bound (`FileSystemPosix.cpp`, `FilePosix.cpp`).
+     - `*Win32.cpp` — Win32-bound (`FileSystemWin32.cpp`, `FileWin32.cpp`).
+     Pick exactly one suffix per file; mixed-platform code uses `#ifdef` inside, not the suffix.
+  2. **`src/platform/<backend>/` directory** — for backends that come as a multi-file group, the whole subtree is excluded (`src/platform/sdl/`, future `src/platform/posix/`, `src/platform/win32/`).
   3. **Explicit name exclusions** — for files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point that has no binary counterpart). Listed verbatim in the symbol-diff filter.
-  Public headers (`*.h`) must NOT include `<SDL.h>` or expose SDL types directly — use `void*` (with a comment naming the real SDL type) or `uint32_t` for `SDL_AudioDeviceID`. Cast at the SDL boundary inside the `*SDL.cpp` companion. The `symbol-diff` skill applies all three filters, which keeps the diff focused on portable code and means there's no SDL stub header to maintain in `tools/asm-verify/cross-headers/`.
+  Public headers (`*.h`) must NOT include `<SDL.h>` / `<windows.h>` / `<dirent.h>` or expose backend-specific types directly — use `void*` (with a comment naming the real type), `uint32_t` for handle-IDs, or polymorphic engine bases (`Mortar::IFile*`, `Mortar::IFileSystem*`) whose concrete subclass is the platform .cpp. Cast at the platform boundary inside the suffix-named .cpp. The `symbol-diff` skill applies all three filters, which keeps the diff focused on portable code and means there's no platform stub header to maintain in `tools/asm-verify/cross-headers/`.
 - Temp/scratch files go in `<project root>/tmp/`, NOT `/tmp` or system temp.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use plain ASCII substitutes (`->`, `--`, `'`, etc.). Comments inside source files can use Unicode freely; this is a runtime-output rule.
 

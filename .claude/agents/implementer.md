@@ -98,18 +98,22 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 - Temp/scratch files go in project `tmp/`, not `/tmp`.
 
 **Platform-specific files:**
-SDL/platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it (mirrors the binary's `*Bada` classifier on the other side):
+Platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it (mirrors the binary's `*Bada` classifier on the other side):
 
-1. **`*SDL.cpp` suffix** — the default for SDL-bound TUs. Examples in tree: `GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`.
-2. **`src/platform/sdl/` directory** — for SDL backends that come as a multi-file group, the whole subtree is excluded.
-3. **Explicit name list** — files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point that has no binary counterpart). Listed verbatim in the symbol-diff filter.
+1. **Suffix per backend** — pick exactly one per file:
+   - `*SDL.cpp` — SDL2 (`GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`).
+   - `*Posix.cpp` — POSIX (`FileSystemPosix.cpp`, `FilePosix.cpp` — case-insensitive directory walk + `fopen`/`dirent`).
+   - `*Win32.cpp` — Win32 (`FileSystemWin32.cpp`, `FileWin32.cpp` — `FindFirstFileA` + `_stricmp`).
+   Mixed-platform code uses `#ifdef` inside, not the suffix.
+2. **`src/platform/<backend>/` directory** — multi-file backend groups (`src/platform/sdl/`, future `src/platform/posix/`, `src/platform/win32/`).
+3. **Explicit name list** — files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point with no binary counterpart). Listed verbatim in the symbol-diff filter.
 
-The symbol-diff skill applies all three: `find src -name "*.cpp" ! -name "*SDL.cpp" ! -path "src/platform/sdl/*" ! -path "src/main.cpp"`. New explicit-name exclusions go in that filter; new SDL files prefer the suffix or directory rules so the filter doesn't grow.
+The symbol-diff skill applies all three: `find src -name "*.cpp" ! -name "*SDL.cpp" ! -name "*Posix.cpp" ! -name "*Win32.cpp" ! -path "src/platform/sdl/*" ! -path "src/main.cpp"`. New SDL/Posix/Win32 files prefer the suffix or directory rules so the filter doesn't grow.
 
 How to apply:
-- Public headers (`*.h`) must NOT include `<SDL.h>` or expose SDL types directly. Use `void*` (with an adjacent comment naming the real SDL type) or `uint32_t` for `SDL_AudioDeviceID` etc.
-- New SDL-using code lands as a new `*SDL.cpp` (or extends an existing one). If a portable .cpp grows an SDL dependency, split that part into a `<Name>SDL.cpp` companion rather than poisoning the portable file.
-- Cast at the SDL boundary (`static_cast<SDL_Window*>(window)`) inside the SDL companion, never in the portable header.
+- Public headers (`*.h`) must NOT include `<SDL.h>` / `<windows.h>` / `<dirent.h>` or expose backend-specific types directly. Use `void*` (with an adjacent comment naming the real type), `uint32_t` for handle-IDs, or — preferred — polymorphic engine bases (`Mortar::IFile*`, `Mortar::IFileSystem*`) whose concrete subclass is the platform .cpp.
+- New backend-bound code lands as a new `*<Backend>.cpp` (or extends an existing one). If a portable .cpp grows a backend dependency, split that part into a `<Name><Backend>.cpp` companion rather than poisoning the portable file.
+- Cast at the platform boundary (`static_cast<SDL_Window*>(window)`, `static_cast<FILE*>(handle)`) inside the suffix-named companion, never in the portable header.
 - The convention applies to platform glue specifically — gameplay/engine code that happens to use, say, `<cstring>` or `<vector>` is portable and stays portable.
 
 ## Build
