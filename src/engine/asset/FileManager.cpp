@@ -180,11 +180,14 @@ void FileManager::RemoveSystem(unsigned int id) {
 
 // Binary @ 0x0019b074
 void FileManager::ClearSystems() {
-    for (std::list<IFileSystem*>::iterator it = m_FileSystems.begin();
-         it != m_FileSystems.end(); ++it) {
-        delete *it;
+    while (!m_FileSystems.empty()) {
+        RemoveSystem(m_FileSystems.front());
     }
-    m_FileSystems.clear();
+}
+
+// Binary @ dtor — calls ClearSystems() before list teardown
+FileManager::~FileManager() {
+    ClearSystems();
 }
 
 // Binary @ 0x0019afa8
@@ -198,7 +201,7 @@ IFileSystem* FileManager::FindSystem(unsigned int id) {
 
 // Binary @ 0x0019ae68 — id-filtered walk; first non-null sys->OpenFile wins
 // idFilter == 0 means "any system" (no filtering)
-IFile* FileManager::OpenFile(const char* name, unsigned int idFilter, unsigned long flags) {
+IFile* FileManager::OpenFile(const char* name, unsigned long flags, unsigned int idFilter) {
     for (std::list<IFileSystem*>::iterator it = m_FileSystems.begin();
          it != m_FileSystems.end(); ++it) {
         IFileSystem* sys = *it;
@@ -226,10 +229,9 @@ unsigned int FileManager::FileSize(const char* name, unsigned int idFilter) {
          it != m_FileSystems.end(); ++it) {
         IFileSystem* sys = *it;
         if (idFilter != 0 && sys->m_systemId != idFilter) continue;
-        unsigned int sz = sys->FileSize(name);
-        if (sz > 0) return sz;
+        return sys->FileSize(name);    // first id-matching system wins, regardless of result
     }
-    return 0;
+    return 0xFFFFFFFFu;                // sentinel: no matching system (not 0 = empty file)
 }
 
 // Binary @ 0x0019aeb4
@@ -244,9 +246,10 @@ bool FileManager::GetFileData(const char* name, void** outBuf, unsigned long* ou
     return false;
 }
 
-// Binary @ 0x0019ae64 — stub returning 0 in binary
-const char* FileManager::GetSaveRootDirectory(unsigned int /*systemId*/) {
-    return nullptr;
+// Defunct: GetSaveRootDirectory — no-op stub; binary @ 0x0019ae64 body is `return 0`.
+//          Only caller GetUserFilePath @ 0x0012b09c is unused in the binary's call graph.
+int FileManager::GetSaveRootDirectory(char* /*outBuf*/, const char* /*relPath*/, bool /*createDir*/) {
+    return 0;
 }
 
 // ---- OpenCI compat shim ----
