@@ -43,6 +43,7 @@
 #include "asset/MeshManager.h"
 #include "core/SystemManager.h"
 #include "particle/PSPParticleManager.h"
+#include "asset/File.h"
 #include "asset/FileManager.h"
 #include "asset/FileSystem_Direct.h"
 #include "render/Font.h"
@@ -267,9 +268,7 @@ void GameInitialise() {
         // Not present in shipped FruitNinjaBada/Data/fonts/ — slot stays alias.
         {
             std::string path = fontDir + "gold_numbers.fnt";
-            FILE* f = FileManager::OpenCI(path.c_str(), "rb");
-            if (f) {
-                fclose(f);
+            if (Mortar::File::Exists(path.c_str(), 0)) {
                 game->pFontGold = Mortar::Font::Load(path.c_str());
             }
         }
@@ -277,9 +276,7 @@ void GameInitialise() {
         // +0x74 pFontSilver: fonts/silver_numbers.fnt (0x0010bff0, File::Exists guarded)
         {
             std::string path = fontDir + "silver_numbers.fnt";
-            FILE* f = FileManager::OpenCI(path.c_str(), "rb");
-            if (f) {
-                fclose(f);
+            if (Mortar::File::Exists(path.c_str(), 0)) {
                 game->pFontSilver = Mortar::Font::Load(path.c_str());
             }
         }
@@ -287,9 +284,7 @@ void GameInitialise() {
         // +0x78 pFontBronze: fonts/bronze_numbers.fnt (0x0010c014, File::Exists guarded)
         {
             std::string path = fontDir + "bronze_numbers.fnt";
-            FILE* f = FileManager::OpenCI(path.c_str(), "rb");
-            if (f) {
-                fclose(f);
+            if (Mortar::File::Exists(path.c_str(), 0)) {
                 game->pFontBronze = Mortar::Font::Load(path.c_str());
             }
         }

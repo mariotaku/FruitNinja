@@ -17,7 +17,7 @@ namespace Mortar {
 
 namespace {
 
-// ---- Case-insensitive path resolution (ported from FileManager::OpenCI) ----
+// ---- Case-insensitive path resolution ----
 
 struct SplitPath {
     std::string root;

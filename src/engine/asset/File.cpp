@@ -3,7 +3,6 @@
 #include "asset/FileManager.h"
 #include "asset/IFile.h"
 
-#include <cstdio>
 #include <cstring>
 
 namespace Mortar {
@@ -127,30 +126,15 @@ void File::Unload() {
 // Binary @ 0x0019b808 — static; delegates to FileManager registry
 bool File::Exists(const char* path, unsigned long systemID) {
     if (!path) return false;
-    // Try registry first (binary-faithful)
-    FileManager& fm = FileManager::GetInstance();
-    if (fm.FileExists(path, (unsigned int)systemID)) return true;
-    // Fallback: OpenCI for compat (e.g. files in working dir before FileSystem_Direct is registered)
-    FILE* fp = FileManager::OpenCI(path, "rb");
-    if (!fp) return false;
-    fclose(fp);
-    return true;
+    return FileManager::GetInstance().FileExists(path, (unsigned int)systemID);
 }
 
 // Binary @ 0x0019b90c — static; returns -1 on missing file
 long File::SizeOfFile(const char* path, unsigned long systemID) {
     if (!path) return -1L;
-    // Try registry first
-    FileManager& fm = FileManager::GetInstance();
-    unsigned int sz = fm.FileSize(path, (unsigned int)systemID);
-    if (sz > 0) return (long)sz;
-    // Fallback: direct fopen
-    FILE* fp = FileManager::OpenCI(path, "rb");
-    if (!fp) return -1L;
-    fseek(fp, 0, SEEK_END);
-    long fsz = ftell(fp);
-    fclose(fp);
-    return fsz;
+    unsigned int sz = FileManager::GetInstance().FileSize(path, (unsigned int)systemID);
+    if (sz == 0xFFFFFFFFu) return -1L;
+    return (long)sz;
 }
 
 }  // namespace Mortar
