@@ -4,6 +4,7 @@
 // Analysed: 2026-04-11T18:30
 
 #include "math/Matrix44.h"
+#include "util/AsciiString.h"
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -63,29 +64,33 @@ public:
     // Binary sequence: m_Bones.swap, swap(local), swap(world), swap(vert).
     void Swap(Skeleton& other);
 
-    // Matches Skeleton::FindIndex (0x0019323c)
-    // Linear scan by name. Returns 0xFFFFFFFF if not found.
+    // Binary @ 0x0019323c — _ZNK6Mortar8Skeleton9FindIndexERKNS_11AsciiStringE
+    // Linear scan by AsciiString name. Returns 0xFFFFFFFF if not found.
+    // ONLY overload in binary; no const char* version exists in binary.
+    uint32_t FindIndex(const Mortar::AsciiString& name) const;
+
+    // Port specific: convenience overload, no binary symbol.
     uint32_t FindIndex(const char* name) const;
 
-    // Matches Skeleton::GetVertex (0x001b15d0)
-    const Matrix44* GetVertex(int index) const {
-        if (index >= 0 && index < (int)m_VertMatrices.size())
-            return &m_VertMatrices[index];
-        return nullptr;
+    // Binary @ 0x001b15d0 — raw pointer arithmetic, no bounds check.
+    // ldr r0,[r0,#0x14]; add.w r0,r0,r1,lsl #0x6; bx lr
+    // All callers gate on m_SkeletonIndex >= 0 upstream (Mesh::GetBone*Transform).
+    const Matrix44* GetVertex(uint32_t index) const {
+        return &m_VertMatrices[index];
     }
 
-    // Matches Skeleton::GetWorld (0x001b15c8)
-    const Matrix44* GetWorld(int index) const {
-        if (index >= 0 && index < (int)m_WorldMatrices.size())
-            return &m_WorldMatrices[index];
-        return nullptr;
+    // Binary @ 0x001b15c8 — raw pointer arithmetic, no bounds check.
+    // ldr r0,[r0,#0x10]; add.w r0,r0,r1,lsl #0x6; bx lr
+    // All callers gate on m_SkeletonIndex >= 0 upstream (Mesh::GetBone*Transform).
+    const Matrix44* GetWorld(uint32_t index) const {
+        return &m_WorldMatrices[index];
     }
 
-    // Matches Skeleton::GetLocal (0x001b15c0)
-    const Matrix44* GetLocal(int index) const {
-        if (index >= 0 && index < (int)m_LocalMatrices.size())
-            return &m_LocalMatrices[index];
-        return nullptr;
+    // Binary @ 0x001b15c0 — raw pointer arithmetic, no bounds check.
+    // ldr r0,[r0,#0x0c]; add.w r0,r0,r1,lsl #0x6; bx lr
+    // All callers gate on m_SkeletonIndex >= 0 upstream (Mesh::GetBone*Transform).
+    const Matrix44* GetLocal(uint32_t index) const {
+        return &m_LocalMatrices[index];
     }
 
     bool IsValid() const { return !m_Bones.empty(); }
