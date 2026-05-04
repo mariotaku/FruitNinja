@@ -57,18 +57,22 @@ public:
 private:
     IFile*        m_pIFile;      // +0x00  Binary @ IFile* (vtbl chain: FileManager -> IFileSystem -> IFile_Direct)
     unsigned long m_systemID;    // +0x04
-    // DIFFERS: AsciiString sizeof in port (std::string-backed, ~4-8B) differs from binary
-    //          (40B SSO buffer) -- field offsets within File shift accordingly
-    AsciiString   m_filename;    // +0x08
-    void*         m_pData;       // port offset shifts due to AsciiString sizeof
-    bool          m_bIsOpen;
-    bool          m_bSaved;
-    bool          m_bIsLoaded;
-    bool          m_bOwnsBuffer;
-    unsigned long m_size;
-    int           m_openMode;
+    AsciiString   m_filename;    // +0x08 (40B SSO; binary layout now matches)
+    void*         m_pData;       // +0x30
+    bool          m_bIsOpen;     // +0x34
+    bool          m_bSaved;      // +0x35
+    bool          m_bIsLoaded;   // +0x36
+    bool          m_bOwnsBuffer; // +0x37
+    unsigned long m_size;        // +0x38
+    int           m_openMode;    // +0x3C
 };
 
 }  // namespace Mortar
+
+#ifdef __bada__
+static_assert(offsetof(File, m_filename) == 0x08, "File::m_filename offset (after vptr+systemId)");
+// TODO: verify File sizeof == 0x40 against binary before asserting (audit RE flagged uncertain)
+// static_assert(sizeof(File) == 0x40, "File sizeof");
+#endif
 
 #endif // FN_ENGINE_ASSET_FILE_H

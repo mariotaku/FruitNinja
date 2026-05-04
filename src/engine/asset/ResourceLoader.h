@@ -122,4 +122,12 @@ public:
 
 } // namespace Mortar
 
+#ifdef __bada__
+// TODO: ResourceLoader::m_BasePath is at +0x04 in binary — implies a field at +0x00
+// not present in the current port. Resolve +0x00 field before enabling these asserts.
+// static_assert(offsetof(ResourceLoader, m_BasePath) == 0x04, "ResourceLoader::m_BasePath offset");
+// static_assert(offsetof(ResourceLoader, m_Data)     == 0x2C, "ResourceLoader::m_Data offset");
+// static_assert(offsetof(ResourceLoader, m_Children) == 0x38, "ResourceLoader::m_Children offset");
+#endif
+
 #endif
