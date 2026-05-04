@@ -70,6 +70,10 @@ public:
     static void LoadContent();    // 0x13e330
     static void UnLoadContent();  // 0x13e5a8
 
+    // Binary @ 0x0013f6ac — clears m_p*Button cache on MenuButton destroy.
+    // Public: called from BtnDeletedFn helper in GameModeScreen.cpp.
+    void DeletedMenuButton(MenuButton* btn);
+
 private:
     Game& game;
 
@@ -134,9 +138,6 @@ private:
     // Binary @ 0x0013e124 — bumps coming_soon save-stat + resets tutorial
     // (typo "Commings" preserved from binary symbol)
     void CommingsSoonCallback();
-
-    // Binary @ 0x0013f6ac — clears m_p*Button cache on MenuButton destroy
-    void DeletedMenuButton(MenuButton* btn);
 
     // Defunct: online MP (Casino) -- no-op stub; binary @ 0x0013dfdc sets m_State=4
     void CasinoModeCallback();

@@ -25,7 +25,17 @@
 #include "debug/DebugFlags.h"
 #include <cmath>
 #include <cstdio>
-#include <functional>
+
+// Helper functor: captures {screen*, btn*} to call DeletedMenuButton(btn) with no args.
+// Replaces std::bind(&GameModeScreen::DeletedMenuButton, this, btn) — 8 bytes on ARM32,
+// fits the 32-byte Mortar::Delegate inline storage.
+namespace {
+struct BtnDeletedFn {
+    GameModeScreen* m_screen;
+    MenuButton*     m_btn;
+    void operator()() const { m_screen->DeletedMenuButton(m_btn); }
+};
+} // namespace
 
 // --- Binary constants (resolved from read_memory) ---
 
@@ -220,9 +230,9 @@ void GameModeScreen::CreateControls() {
     {
         MenuButton* btn = m_pBackButton;
         m_pBackButton->Init(POS_BACK,
-                            std::bind(&GameModeScreen::QuitCallback, this),
+                            Mortar::Delegate<void()>::Make(this, &GameModeScreen::QuitCallback),
                             FruitInfo_GetCount(), Vec3(0, 0, 0),
-                            std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+                            Mortar::Delegate<void()>(BtnDeletedFn{this, btn}));
     }
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
     // Marks this button as the screen's hardware Back-key handler.
@@ -242,9 +252,9 @@ void GameModeScreen::CreateControls() {
     {
         MenuButton* btn = m_pClassicButton;
         m_pClassicButton->Init(POS_CLASSIC,
-                               std::bind(&GameModeScreen::ClassicModeCallback, this),
+                               Mortar::Delegate<void()>::Make(this, &GameModeScreen::ClassicModeCallback),
                                Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0),
-                               std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+                               Mortar::Delegate<void()>(BtnDeletedFn{this, btn}));
     }
     if (game.pTutorialCtrl) {
         game.pTutorialCtrl->ResetTutePos(m_pClassicButton);
@@ -268,9 +278,9 @@ void GameModeScreen::CreateControls() {
     {
         MenuButton* btn = m_pZenButton;
         m_pZenButton->Init(POS_ZEN,
-                           std::bind(&GameModeScreen::ZenModeCallback, this),
+                           Mortar::Delegate<void()>::Make(this, &GameModeScreen::ZenModeCallback),
                            Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0),
-                           std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+                           Mortar::Delegate<void()>(BtnDeletedFn{this, btn}));
     }
     m_pZenButton->m_TargetSize = sharedTargetSize;
     if (m_pZenButton->m_pFruitPiece) {
@@ -289,10 +299,10 @@ void GameModeScreen::CreateControls() {
     {
         MenuButton* btn = m_pArcadeButton;
         m_pArcadeButton->Init(POS_ARCADE,
-                              std::bind(&GameModeScreen::ArcadeModeCallback, this),
+                              Mortar::Delegate<void()>::Make(this, &GameModeScreen::ArcadeModeCallback),
                               Fruit::FruitType(FRUIT_ARCADE, false),
                               Vec3(0, 0, 0),
-                              std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+                              Mortar::Delegate<void()>(BtnDeletedFn{this, btn}));
     }
     m_pArcadeButton->m_TargetSize = sharedTargetSize;
     if (m_pArcadeButton->m_pFruitPiece) {
