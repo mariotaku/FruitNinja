@@ -46,6 +46,7 @@ If a request asks for a doc outside this whitelist, push back: that information 
 - **Do NOT RE the binary.** Decompiling, struct resolution, and DAT-constant reading belong to the `re-analyst` agent. You take *existing* RE findings (from the conversation, an `re-analyst` report, or stable binary facts) and persist them in the right place. If a finding is missing, flag it — don't run GhidraMCP.
 - **Do NOT edit `src/`.** Code-writing belongs to the `implementer` agent. If a finding belongs as a source-side comment (most do under the new policy), say so and let `implementer` apply it.
 - **Do NOT recreate deprecated narrative docs.** No `*-deep-re.md`, `*-asm-audit.md`, `*-asm-verify.md`, no per-class / per-screen / per-function dumps.
+- **Do NOT commit.** The orchestrator (the parent Claude session) handles git commits, splitting along natural seams between the doc updates / code landings it's coordinating. Leave the working tree green and self-contained at handoff so the orchestrator can stage your changes cleanly. The exception is interactive-debug sessions where the orchestrator will batch — there, similarly avoid pre-emptively splitting changes.
 
 ## Format (when you do write)
 - Use `<!-- Analysed: YYYY-MM-DDTHH:MM -->` at top of each major section that's tied to a specific RE pass.
