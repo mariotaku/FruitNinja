@@ -256,8 +256,26 @@ int Font::LoadFromFile(const char* path) {
         m_BaseNorm /= m_LineHeight;
     }
 
-    // Load page textures
+    // Load page textures.
+    // TextureManager::Load routes through FileSystem_Direct::TranslateFileName which
+    // prepends data_dir; pass a logical (relative) path, not an absolute one.
+    // Port specific: derive logical subdir by stripping data_dir prefix from baseDir.
     const char* dataDir = TextureManager::GetDataDir();
+    const char* logicalSubDir = "";
+    char logicalSubDirBuf[512] = "";
+    if (dataDir && dataDir[0] && baseDir[0]) {
+        size_t ddLen = strlen(dataDir);
+        // baseDir may end with '/' or '\\'; dataDir typically does not
+        if (strncmp(baseDir, dataDir, ddLen) == 0) {
+            const char* rel = baseDir + ddLen;
+            while (*rel == '/' || *rel == '\\') rel++;
+            // rel now points to e.g. "fonts/" or "fonts"
+            strncpy(logicalSubDirBuf, rel, sizeof(logicalSubDirBuf) - 1);
+            logicalSubDirBuf[sizeof(logicalSubDirBuf) - 1] = '\0';
+            logicalSubDir = logicalSubDirBuf;
+        }
+    }
+
     for (int i = 0; i < m_PageCount; i++) {
         if (!m_Pages[i].filename) continue;
 
@@ -269,15 +287,19 @@ int Font::LoadFromFile(const char* path) {
         char* dot = strrchr(texName, '.');
         if (dot) strcpy(dot, ".tex");
 
-        // Try data root first, then alongside the .fnt
-        char rootPath[512];
-        snprintf(rootPath, sizeof(rootPath), "%s/%s", dataDir ? dataDir : ".", texName);
-        m_Pages[i].texture = TextureManager::GetInstance().Load(rootPath);
-        if (!m_Pages[i].texture.IsValid()) {
-            char sidePath[512];
-            snprintf(sidePath, sizeof(sidePath), "%s%s", baseDir, texName);
-            m_Pages[i].texture = TextureManager::GetInstance().Load(sidePath);
+        // Build logical path: subdir + texName (FileSystem_Direct prepends data_dir)
+        char logicalPath[512];
+        if (logicalSubDir[0]) {
+            size_t sdLen = strlen(logicalSubDir);
+            bool needSlash = sdLen > 0 &&
+                logicalSubDir[sdLen - 1] != '/' &&
+                logicalSubDir[sdLen - 1] != '\\';
+            snprintf(logicalPath, sizeof(logicalPath), "%s%s%s",
+                     logicalSubDir, needSlash ? "/" : "", texName);
+        } else {
+            snprintf(logicalPath, sizeof(logicalPath), "%s", texName);
         }
+        m_Pages[i].texture = TextureManager::GetInstance().Load(logicalPath);
     }
 
     // Pre-allocate per-page vertex buffers: 0x600 verts = 256-glyph capacity

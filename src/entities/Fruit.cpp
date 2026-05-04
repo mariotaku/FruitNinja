@@ -201,15 +201,16 @@ void Fruit::Init(void* /*p1*/, long fruitType, const Vec3* /*scaleOrNull*/) {
     if (game && meshMgr) {
         const FruitInfoData* info = FruitInfo_Get(fruitType);
         const char* modelName = (info && info->m_ModelName[0]) ? info->m_ModelName : "apple";
-        std::string meshPath = game->data_dir + "/models/Fruit/" + modelName + "_single.mmd";
+        // logical path; FileSystem_Direct prepends data_dir
+        std::string meshPath = std::string("models/Fruit/") + modelName + "_single.mmd";
         m_Model = meshMgr->Load(meshPath.c_str());
 
         // Assign fruit atlas texture to the model's mesh
         if (m_Model.IsValid() && !m_Model->m_Meshes.empty()) {
             static SmartPtr<Mortar::Texture> s_fruitAtlas;
             if (!s_fruitAtlas.IsValid()) {
-                std::string texPath = game->data_dir + "/models/fruit/textures/fruit_atlas.tex";
-                s_fruitAtlas = Mortar::TextureManager::GetInstance().Load(texPath.c_str());
+                // logical path; FileSystem_Direct prepends data_dir
+                s_fruitAtlas = Mortar::TextureManager::GetInstance().Load("models/fruit/textures/fruit_atlas.tex");
             }
             if (s_fruitAtlas.IsValid()) {
                 for (int i = 0; i < (int)m_Model->m_Meshes.size(); i++) {
