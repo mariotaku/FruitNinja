@@ -146,6 +146,20 @@ public:
     // Port helper: true if any material has a valid texture.
     bool HasDiffuseTexture() const;
 
+    // Defunct: Mortar::Geometry / Geometry_Bada / GeometryBinding /
+    //          GeometryBinding_Bada / EffectGroup / EffectBinding / PassBinding
+    //          stack -- replaced by flat GeometryEntry { vbo, ibo, primType,
+    //          layout, materialIndex } + MeshMaterial in the port.
+    //   Geometry         binary @ 0x001a3c50 ctor, 0x001a3e98 Render (non-virtual)
+    //   Geometry_Bada    binary @ 0x001a4ba8 ctor, 0x001a40bc D1
+    //   GeometryBinding* binary @ 0x001a3990..0x001a40c0
+    //
+    // Geometry::Render() is hard-Bada: glMatrixMode / glPushMatrix /
+    // glLoadMatrixf / glDrawArrays via fixed-pipeline GL ES 1.x. Port uses
+    // ES 2.0 shaders + Renderer::setup_3d_shader, so the entire effect-binding
+    // multi-pass machinery (EffectGroup -> EffectBinding[] -> PassBinding[])
+    // is bypassed. Port walks m_Geometries[] directly in Mesh::Draw.
+    //
     // Defunct: SharedEffectProperties machinery -- port stores parsed values
     // directly in MeshMaterial (no per-property name lookup needed); binary @:
     //   0x001b0988 -- GetPropertiesGroup(name) const
@@ -180,6 +194,15 @@ public:
     Model();
     virtual ~Model();
 
+    // Binary @ 0x0019346c — push mesh, then bind skeleton if valid.
+    void AddNode(const SmartPtr<Mesh>& mesh);
+
+    // Binary @ 0x001933f8 — unchecked array access (matches binary).
+    SmartPtr<Mesh> GetNode(unsigned long index) const;
+
+    // Binary @ 0x001933b8 — linear scan by name; dead code (no live callers).
+    SmartPtr<Mesh> GetNode(const std::string& name) const;
+
     // Draw all meshes with optional depth-sorting for multi-mesh models
     // Matches 0x001930e0
     void Draw(const Matrix44& transform);
@@ -192,6 +215,8 @@ public:
     // Matches Model::UpdateBoneLinks (0x00193010)
     // Calls BindSkeleton on each mesh with the model's skeleton.
     void UpdateBoneLinks();
+
+    // TODO: SetEffectGroup (binary @ ~0x00193xxx) — Defunct: EffectGroup not yet ported.
 };
 
 } // namespace Mortar

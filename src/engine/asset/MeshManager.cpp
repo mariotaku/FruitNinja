@@ -356,7 +356,7 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
         // Read<ulong> → geometryCount + per-geometry sub-resource + matIndex
         if (loader.m_ReadPos + 4 > loader.DataSize()) {
-            model->m_Meshes.push_back(SmartPtr<Mesh>(mesh));
+            model->AddNode(SmartPtr<Mesh>(mesh));
             continue;
         }
         uint32_t geomCount = loader.Read<uint32_t>();
@@ -396,7 +396,7 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             printf("[MeshManager] '%s' mesh[%u]: no geometries loaded\n", path, mi);
         }
 
-        model->m_Meshes.push_back(SmartPtr<Mesh>(mesh));
+        model->AddNode(SmartPtr<Mesh>(mesh));
     }
 
     if (model->m_Meshes.empty()) {

@@ -349,6 +349,27 @@ void Model::UpdateBoneLinks() {
     }
 }
 
+// Binary @ 0x0019346c
+void Model::AddNode(const SmartPtr<Mesh>& mesh) {
+    m_Meshes.push_back(mesh);
+    if (mesh.IsValid()) mesh->BindSkeleton(&m_Skeleton);
+}
+
+// Binary @ 0x001933f8 — unchecked array access (matches binary).
+SmartPtr<Mesh> Model::GetNode(unsigned long index) const {
+    return m_Meshes[index];
+}
+
+// Binary @ 0x001933b8 — dead code; linear scan by name.
+SmartPtr<Mesh> Model::GetNode(const std::string& name) const {
+    for (int i = 0; i < (int)m_Meshes.size(); i++) {
+        if (m_Meshes[i].IsValid() && m_Meshes[i]->m_Name == name) {
+            return m_Meshes[i];
+        }
+    }
+    return SmartPtr<Mesh>();
+}
+
 // AlphaSortNode struct used by binary qsort (0x001935a0).
 // Must be at file scope: GCC 4.4 rejects local structs as template arguments.
 struct ModelSortEntry {
