@@ -1283,7 +1283,7 @@ int Fruit::RandomFruit(bool includeOnSide) {
     }
 
     bool isCrit = WaveManager::GetInstance()->CriticalMode(0);
-    Random* rng = &WaveManager::GetInstance()->m_Random;
+    Math::Random* rng = &WaveManager::GetInstance()->m_Random;
     const int count = FruitInfo_GetCount();
 
     if (!isCrit) {

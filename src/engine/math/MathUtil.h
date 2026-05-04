@@ -29,7 +29,7 @@ inline float CosIdx(uint16_t idx) {
     return cosf((float)idx * (float)(2.0 * M_PI / 65536.0));
 }
 
-namespace Mortar { namespace Math {
+namespace Math {
 
 // Binary @ 0x00194d50 — 4096-entry sin LUT @ 0x001be4a4; sinf() is equivalent
 float SinIdx(unsigned short idx);
@@ -63,6 +63,6 @@ float SqrtAsyncGet();
 void DivAsyncSet(float a, float b);
 float DivAsyncGet();
 
-}} // namespace Mortar::Math
+} // namespace Math
 
 #endif
