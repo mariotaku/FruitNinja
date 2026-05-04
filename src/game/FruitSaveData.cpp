@@ -128,6 +128,13 @@ int FruitSaveData::GetTotal(uint32_t hash) const {
     return (it != m_Totals.end()) ? it->second.count : 0;
 }
 
+// ClearTotals -- wipes the entire m_Totals map.
+// Binary @ 0x00153ebc (PauseScreen::QuitGameCallback), 0x00153f68 (RetryGameCallback),
+// and GameOverScreen state-0 exit path.
+void FruitSaveData::ClearTotals() {
+    m_Totals.clear();
+}
+
 // ClearTotal -- erases one entry from m_Totals by hash.
 // Called by WaveManager::ResetSpeed and AddSpeed to clear "blitz_bonus" count.
 void FruitSaveData::ClearTotal(uint32_t hash) {

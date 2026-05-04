@@ -718,7 +718,7 @@ void GameOverScreen::Update(float dt) {
                     }
 
                     save->FinishedGame();
-                    // TODO: save->ClearTotals() -- not yet in FruitSaveData API
+                    save->ClearTotals();
                     FruitNinja_SaveCurrentData(false);
                 }
 

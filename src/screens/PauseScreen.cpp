@@ -369,7 +369,7 @@ void PauseScreen::PauseGameCallback2() {
 void PauseScreen::QuitGameCallback() {
     if (m_State != 3) return;
     Game* game = Game::GetInstance();
-    // TODO: FruitSaveData::ClearTotals() -- binary @ 0x00153ebc; port has ClearTotal(hash) not ClearTotals()
+    if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
     m_LastHitButton = 0;
     m_State = 6;
@@ -397,7 +397,7 @@ void PauseScreen::RetryGameCallback() {
     // TODO: g->field_0x1AC achievement-progress check (binary @ 0x00153f68 +0x1AC >= 10.5)
     // TODO: g->field_0x194 Vec3 init (binary @ 0x00153f68)
     // TODO: g->field_0x85 = 0 (tutorial-shown byte)
-    // TODO: FruitSaveData::ClearTotals() -- binary @ 0x00153f68; port has ClearTotal(hash) not ClearTotals()
+    if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
     m_State = 5;
 }
