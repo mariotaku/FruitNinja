@@ -4,6 +4,7 @@
 
 #include "Game.h"
 #include <SDL.h>
+#include "platform/InputTranslatorSDL.h"
 #include "asset/TextureManager.h"
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
@@ -16,6 +17,10 @@
 bool Game::init(void* win, void* gl) {
     window = win;        // SDL_Window* stored as void* in the header
     gl_context = gl;     // SDL_GLContext stored as void*
+    if (!inputTranslator) {
+        inputTranslator = new InputTranslatorSDL();
+        inputTranslator->Init();   // pre-compute action hashes; safe before GameInitialise
+    }
     data_dir = FN_DATA_DIR;
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
 
@@ -72,7 +77,7 @@ void Game::run() {
                 FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
                 printf("[debug] timeScale = %.1f\n", FN::g_DebugTimeScale);
             } else {
-                inputTranslator.ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
+                if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
             }
         }
 
