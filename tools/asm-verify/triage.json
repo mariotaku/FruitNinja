@@ -1084,5 +1084,194 @@
     "max_score": null,
     "decided_at": "2026-05-04T00:00Z"
   },
-  "_fix_inventory": []
+  "_fix_inventory": [],
+  "_ZN6Mortar11AsciiString3SetEPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port delegates to SetFromCStr helper (binary @ TBD). Binary inlined strlen + alloc/copy body; port routes through SetFromCStr tail-call. See src/engine/util/AsciiString.cpp:141.",
+    "score": 1240,
+    "max_score": 1500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiString3SetEPKcm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port stubs to m_hashCache=0 + SetFromCStr tail-call (binary @ TBD). Binary had full inline alloc/copy body. Inferred body not byte-verified. See src/engine/util/AsciiString.cpp:146.",
+    "score": 2330,
+    "max_score": 2300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiString3SetERKS0_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port delegates to operator=(const AsciiString&) which calls SetFromCStr; binary had full inline copy body. See src/engine/util/AsciiString.cpp:136.",
+    "score": 5100,
+    "max_score": 2600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiString6AppendERKS0_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port calls Resize + memcpy; binary had inline alloc/copy body with separate helper calls. Semantics identical. See src/engine/util/AsciiString.cpp:230.",
+    "score": 6285,
+    "max_score": 3000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiString6AppendEc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port calls Resize then writes char at oldSize; binary inlined size update without Resize call. Semantics identical. See src/engine/util/AsciiString.cpp:240.",
+    "score": 2495,
+    "max_score": 1500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiString6ResizeEm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port implements full 4-way inline/heap branch logic per Binary @ 0x00183b18 RE. Diff reflects inlined capacity checks and separate free/alloc paths. See src/engine/util/AsciiString.cpp:187.",
+    "score": 7520,
+    "max_score": 1700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringC1EPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port initializes m_size=0 and m_hashCache=0 before SetFromCStr; binary called a base-ctor blx then a different helper. Structural difference in init order. See src/engine/util/AsciiString.cpp:19.",
+    "score": 1900,
+    "max_score": 1500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringC1EPKcm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port initializes m_size=0, m_hashCache=0, then tail-calls SetFromCStr; binary called base-ctor blx + alloc helper. Same structural difference as C1(const char*). See src/engine/util/AsciiString.cpp:28.",
+    "score": 2520,
+    "max_score": 1700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringC1ERKS0_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port initializes m_size=0, m_hashCache=0, resolves SSO pointer, then calls SetFromCStr; binary called base-ctor + copy helper. Same structural pattern. See src/engine/util/AsciiString.cpp:34.",
+    "score": 2880,
+    "max_score": 1500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringC2EPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 alias of C1(const char*); same analysis. See src/engine/util/AsciiString.cpp:19.",
+    "score": 1900,
+    "max_score": 1500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringC2EPKcm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 alias of C1(const char*, len); same analysis. See src/engine/util/AsciiString.cpp:28.",
+    "score": 2520,
+    "max_score": 1700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringC2ERKS0_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 alias of C1(const AsciiString&); same analysis. See src/engine/util/AsciiString.cpp:34.",
+    "score": 2880,
+    "max_score": 1500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringD1Ev": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port inlines SSO check (ldr m_size, cmp #0x20, bls, ldr m_heap, bl _ZdaPv) vs binary single blx f39bc helper; identical semantics. Trailing nops for alignment. See src/engine/util/AsciiString.cpp:47.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar11AsciiStringD2Ev": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "D2 alias of D1; same inline-SSO-check vs blx helper analysis. See src/engine/util/AsciiString.cpp:47.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationState11GetAnimIterERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary (0x0019cec0) was a 3-instruction wrapper; port implements full BST-walk using AsciiString::Compare. Address not yet pinned. Body inferred from std::map tree traversal. Tier-2 gap.",
+    "score": 4030,
+    "max_score": 500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14AnimationState8PlayAnimERKNS_11AsciiStringEfb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary (0x0019d370) was short; port implements full BST-walk search before applying animation state. Body inferred from Skeleton/AnimationState struct. Tier-2 gap.",
+    "score": 5105,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar17IsThisFolderTokenERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port reads m_size directly (ldr [r0], cmp #1) + ldrb [r0,#4] vs binary calling GetLength + GetCharAt helpers. Inlined field access, identical semantics. Score 1510/1500. See src/engine/util/AsciiString.cpp:291.",
+    "score": 1510,
+    "max_score": 1500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar19IsParentFolderTokenERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port reads m_size directly + calls memcmp('..',2) vs binary calling GetLength + GetCharAt(0) + GetCharAt(1). Inlined field access vs helper calls; identical semantics. See src/engine/util/AsciiString.cpp:284.",
+    "score": 3315,
+    "max_score": 2000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar11AsciiString4HashEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port inlines SSO pointer resolution (cmp m_size #0x20, ite hi, ldrhi m_heap / addls inline_buf) before calling StringHash vs binary blx efbd0 (GetPtr) + blx f0fa4 + blx e3f90. Same lazy-hash logic. See src/engine/util/AsciiString.cpp:92.",
+    "score": 1770,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar11AsciiString6EqualsEPKcjm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port adds length-first early-out then inlines Hash() SSO logic before StringHash call; binary called multiple blx helpers. Binary @ TBD for Equals. Body inferred. See src/engine/util/AsciiString.cpp:153.",
+    "score": 5405,
+    "max_score": 2400,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar11AsciiString7CompareERKS0_": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port inlines GetLength (ldr [r0]) and Hash() SSO logic vs binary repeated blx efbd0/eaaac helper calls; same Compare algorithm (length->hash->memcmp). See src/engine/util/AsciiString.cpp:102.",
+    "score": 9830,
+    "max_score": 4100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar11AsciiString7EqualsIEPKcjm": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port compiler unrolled tolower loop aggressively (4x, r8/r9/sl/fp offsets); binary had simpler loop. DIFFERS marker at src/engine/util/AsciiString.cpp:121 (body inferred, not byte-verified). Score 11215/3200.",
+    "score": 11215,
+    "max_score": 3200,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar11AsciiString7_GetPtrEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port inlines Buffer() SSO check (ldr m_size, cmp #0x20, ite, ldrhi m_heap / addls inline_buf) vs binary push/blx e7650/pop wrapper. Identical return value. See src/engine/util/AsciiString.cpp:173.",
+    "score": 1000,
+    "max_score": 300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar11AsciiString8CompareIERKS0_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port compiler unrolled tolower loop 4x (matching EqualsI); binary had simpler loop. DIFFERS marker at src/engine/util/AsciiString.cpp:121 (body inferred). Score 12285/5200.",
+    "score": 12285,
+    "max_score": 5200,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar14AnimationState11GetAnimIterERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary (0x0019ce74) was a short wrapper; port implements full BST-walk using AsciiString::Compare. Same Tier-2 gap as non-const variant.",
+    "score": 4175,
+    "max_score": 1000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar14AnimationState12GetAnimationERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary (0x0019ce8c) was a short wrapper calling internal helpers; port implements full BST-walk + animation lookup. Tier-2 gap.",
+    "score": 5250,
+    "max_score": 2000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar8Skeleton9FindIndexERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary (0x0018323c) had a simple loop; port implements 4x-unrolled comparison using operator== at 0xac-stride offsets. Inferred body from bone-array layout. Score 8870/2000.",
+    "score": 8870,
+    "max_score": 2000,
+    "decided_at": "2026-05-04T00:00Z"
+  }
 }
