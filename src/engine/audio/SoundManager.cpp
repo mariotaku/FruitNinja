@@ -13,6 +13,7 @@
 // DIFFERS: music is stubbed (no Osp::Media::Player equivalent yet).
 
 #include "audio/SoundManager.h"
+#include <SDL.h>            // SDL audio backend (SoundManager is SDL-bound)
 #include "util/StringHash.h"
 #include "asset/TextureManager.h"
 #include <cstdio>

@@ -1,4 +1,5 @@
 #include "render/gl_funcs.h"
+#include <SDL.h>            // SDL_GL_GetProcAddress (SDL-bound GL loader)
 
 // Define all function pointers
 #define GL_FUNC(ret, name, ...) PFN_##name name = nullptr;

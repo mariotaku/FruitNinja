@@ -4,7 +4,6 @@
 
 #include "audio/MortarSound.h"
 #include "core/Singleton.h"
-#include <SDL.h>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -119,7 +118,7 @@ public:
 
 private:
     // SDL2 audio device
-    SDL_AudioDeviceID m_AudioDevice;   // 0 = not opened
+    uint32_t m_AudioDevice;            // SDL_AudioDeviceID; 0 = not opened (typedef of uint32_t in SDL2)
     bool              m_Interrupted;   // interruption state
 
     // Voice table (accessed from audio callback -- always lock device before touching)

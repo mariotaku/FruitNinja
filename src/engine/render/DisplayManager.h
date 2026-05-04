@@ -7,7 +7,6 @@
 #include "math/Matrix44.h"
 #include "core/MortarTypes.h"
 #include "core/Singleton.h"
-#include <SDL.h>
 #include <cstring>
 
 namespace Mortar {
@@ -40,7 +39,7 @@ public:
     void EndFrame();
 
     // Matches DisplayManagerBada::SwapBuffers (0x0019dd2c)
-    void SwapBuffers(SDL_Window* window);
+    void SwapBuffers(void* window);   // window = SDL_Window* (opaque to header)
 
     // Matches DisplayManagerBada::SetDrawColour (0x0019dde4)
     // In GLES2: stores colour for Renderer to read as shader uniform

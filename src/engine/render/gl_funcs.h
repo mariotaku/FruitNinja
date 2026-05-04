@@ -1,9 +1,9 @@
 #ifndef MORTAR_GL_FUNCS_H
 #define MORTAR_GL_FUNCS_H
 
-#include <SDL.h>
 #include <cstdint>
 #include <cstdio>
+// SDL_GL_GetProcAddress used in gl_funcs.cpp -- not needed by this header.
 
 // GL types
 typedef unsigned int GLenum;

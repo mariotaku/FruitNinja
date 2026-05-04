@@ -184,7 +184,7 @@ void ScrollingMenu::Update(float /*dt*/) {
                 // Both binary and port use Y-up touch coords (binary's
                 // GlesForm::TransformTouchPos at 0x0018327c bakes a Y-flip
                 // into its 90 degree rotation so its result matches the
-                // port's SDLInputTranslator output direction). The drag
+                // port's InputTranslatorSDL output direction). The drag
                 // formula below works on touch deltas, so absolute units
                 // (binary pixel vs port ortho) are irrelevant; only sign
                 // matters and both are Y-up.

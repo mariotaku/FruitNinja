@@ -10,17 +10,19 @@
 
 // Analysed: 2026-04-25T12:00
 
-#include <SDL.h>
 #include <string>
 #include <cstdint>
 #include "core/MortarGame.h"
 #include "math/Vec3.h"
 #include "render/Renderer.h"
 #include "input/InputManager.h"
-#include "platform/SDLInputTranslator.h"
+#include "platform/InputTranslatorSDL.h"
 #include "render/Font.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
+
+// Opaque platform handles (SDL types live behind void* in headers).
+// The SDL backend (mainSDL.cpp / GameSDL.cpp) casts these to SDL_Window* / SDL_GLContext.
 
 class HUD;
 class ActorManager;
@@ -113,11 +115,11 @@ struct Game : public Mortar::MortarGame {
 
     // === Port-specific fields (SDL replacements for Bada OS) ===
 
-    SDL_Window* window;
-    SDL_GLContext gl_context;
+    void* window;          // SDL_Window* (opaque to portable headers)
+    void* gl_context;      // SDL_GLContext (opaque)
     Renderer renderer;
     InputManager* inputManager;
-    SDLInputTranslator inputTranslator;
+    InputTranslatorSDL inputTranslator;
     ActorManager* actorManager;
 
     // Audio toggle state
@@ -144,7 +146,7 @@ struct Game : public Mortar::MortarGame {
     Game();
     ~Game();
 
-    bool init(SDL_Window* win, SDL_GLContext gl);
+    bool init(void* win, void* gl);   // win = SDL_Window*, gl = SDL_GLContext (opaque to header)
     void shutdown();
     void run();
     void runFrames(int frameCount);
