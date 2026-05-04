@@ -116,7 +116,7 @@ The symbol-diff and asm-verify pipelines key off byte-exact mangled symbols and 
 **Workflow:**
 - Do NOT commit yourself. The orchestrator (the parent Claude session) handles commits, splitting them along the natural seams between subsystems / classes / pipeline items so each commit answers a specific "what did this milestone do?" question. Your job is to leave the working tree green and self-contained at each handoff so the orchestrator can stage your slice cleanly. The exception is interactive-debug sessions where the user is iterating live — there the orchestrator will batch and you should similarly avoid pre-emptively splitting changes.
 - Build after every meaningful change to verify compilation. Stop and report on failure rather than pushing through with a broken tree.
-- Temp/scratch files go in project `tmp/`, not `/tmp`.
+- **Temp / scratch / intermediate files go in project `tmp/`**, not `/tmp` or anywhere under `docs/` or `src/`. This includes session planning notes, TODO scratch, ad-hoc analysis dumps, per-chunk reports you generate during a task. `tmp/` is gitignored; the orchestrator never commits files written there. If you find yourself writing a `.md` outside `tmp/` for a working note, redirect it to `tmp/` instead.
 
 **Platform-specific files:**
 Platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it (mirrors the binary's `*Bada` classifier on the other side):

@@ -42,6 +42,8 @@ Update or maintain only docs in this whitelist:
 
 If a request asks for a doc outside this whitelist, push back: that information should be a source-side comment near the relevant code, not a separate doc.
 
+**Working notes / planning / TODO scratch markdown go in `tmp/`** (gitignored), NOT under `docs/`. `docs/` is reserved for the load-bearing reference set above. Session planning notes (`tmp/next-batch.md`), gap-survey snapshots, dispatch-shape proposals, per-pipeline TODO breakdowns — all `tmp/`. The orchestrator commits `docs/` files; `tmp/` files are never committed.
+
 ## Stay in lane
 - **Do NOT RE the binary.** Decompiling, struct resolution, and DAT-constant reading belong to the `re-analyst` agent. You take *existing* RE findings (from the conversation, an `re-analyst` report, or stable binary facts) and persist them in the right place. If a finding is missing, flag it — don't run GhidraMCP.
 - **Do NOT edit `src/`.** Code-writing belongs to the `implementer` agent. If a finding belongs as a source-side comment (most do under the new policy), say so and let `implementer` apply it.
