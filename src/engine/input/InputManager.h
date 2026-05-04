@@ -29,7 +29,7 @@ public:
     // Binary @ 0x00196924 — dtor: list dtor only; does NOT call Destroy.
     ~InputManager();
 
-    static InputManager* GetInstance() { return s_instance; }
+    static InputManager* GetInstance();
 
     // Binary @ 0x00196cc8 — Init: alloc InputDeviceBada, dev->Init(flags), push_back.
     void Init(unsigned long flags);
