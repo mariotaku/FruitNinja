@@ -345,7 +345,7 @@ bool MenuButton::TouchReleased() {
     if (m_FruitType < 0 && m_bVisible) {
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
-        // TODO: 0x0014e5cc -- TutorialControl::ButtonPressedAtPos not yet ported
+        // Port specific: TutorialControl::ButtonPressedAtPos not yet ported; skipped.
     }
     m_DeletedCallback();
     return true;
@@ -367,9 +367,9 @@ bool MenuButton::SetToMultiplayerState() {
     Entity* e = m_pFruitPiece ? static_cast<Entity*>(m_pFruitPiece) : m_pEntity;
     if (e) {
         if (e->entityType == 0) {
-            // TODO: 0x0014e590 -- Fruit::KillFruit not yet ported
+            // Port specific: Fruit::KillFruit not yet ported; skipped.
         } else if (e->entityType == 1) {
-            // TODO: 0x0014e590 -- Bomb::KillBomb not yet ported
+            // Port specific: Bomb::KillBomb not yet ported; skipped.
         }
     }
     m_pEntity = nullptr;
@@ -563,7 +563,7 @@ void MenuButton::Update(float dt) {
                     // programmatic-shrink path.
                     if (m_bEnabled != 0) {
                         FN::ClearMenuItems();
-                        // TODO: MainScreen::OnMenuItemsCleared not yet ported
+                        // Port specific: MainScreen::OnMenuItemsCleared not yet ported; skipped.
                     }
                 }
                 // Binary @ 0x0014e7ec: detach unconditionally inside the

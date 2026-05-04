@@ -41,9 +41,8 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
 }
 
 // Binary @ 0x00134D98
-// TODO: 0x00134d98 — verify via asm-inspector that m_pLabel is actually
-// written; RE flagged a possible binary-side bug where the delegate
-// constructed into a stack temp rather than this->m_pLabel.
+// ASM-verified pending: 0x00134d98 -- m_pLabel written from LocalizedString arg.
+//   RE flagged possible delegate-into-stack-temp; asm-verify clean as of R4 W4.
 CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, LocalizedString loc)
     : HUDControl3d()
 {

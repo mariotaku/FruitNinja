@@ -257,7 +257,8 @@ PowerUp* PowerUp::Clone() const {
     }
     // ScreenEffect is not deep-copied (the clone uses the same template reference)
     // binary: clones share the ScreenEffect template; each Activate creates new state
-    // TODO: verify ScreenEffect clone semantics (re-analyst pass needed)
+    // TODO: re-RE ScreenEffect copy ctor -- clone may need to deep-copy m_TexName / m_Tint;
+    //   verify at binary address of ScreenEffect::ScreenEffect(const ScreenEffect&) before finalising.
     if (m_pScreenEffect) {
         clone->m_pScreenEffect = new ScreenEffect(*m_pScreenEffect);
         clone->m_pScreenEffect->m_pOwnerPowerUp = clone;

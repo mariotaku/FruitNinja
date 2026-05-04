@@ -167,7 +167,8 @@ void MissControl::LoadContent() {
     // Binary @ 0x001515a4 — combo textures. Binary ctor loop iVar3=1..10, loads
     // combo_%d.tex for iVar3>=3 -> names combo_3..combo_12 (10 entries). The MakeCombo
     // index mapping uses (comboCount-1) clamped [1..9] -> array indices [0..9].
-    // TODO: 0x001515a4 — verify exact texture naming scheme against binary strings.
+    // TODO: 0x001515a4 -- runtime confirms combo_11.tex absent; verify if scheme is
+    //   combo_2..combo_10 or combo_3..combo_11. asset-side investigation pending.
     for (int i = 0; i < 10; ++i) {
         char name[32];
         snprintf(name, sizeof(name), "combo_%d.tex", i + 2);

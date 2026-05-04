@@ -18,11 +18,14 @@ int ColAABB::Collide(Col* other, Vec3* outNormal) {
     if (t == TYPE_SPHERE) {
         ColSphere* s = static_cast<ColSphere*>(other);
         hit = IntersectsSphere(*s) ? 1 : 0;
-        // TODO: outNormal from AABBSphere; flip sign per binary
+        // TODO: outNormal from AABBSphere -- compute closest-point penetration vector,
+        //   then negate (binary points from sphere INTO AABB). Normal computation not
+        //   yet ported; outNormal left unwritten until full penetration math is RE'd.
     } else if (t == TYPE_LINE) {
         ColLine* l = static_cast<ColLine*>(other);
         hit = IntersectsLine(*l) ? 1 : 0;
-        // TODO: outNormal from AABBLine; flip sign per binary
+        // TODO: outNormal from AABBLine -- compute slab-intersection normal, then
+        //   negate per binary convention. Not yet ported.
     } else if (t == TYPE_AABB) {
         ColAABB* box = static_cast<ColAABB*>(other);
         hit = Intersects(*box) ? 1 : 0;

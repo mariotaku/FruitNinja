@@ -211,7 +211,7 @@ public:
     // Matches Fruit::GetNumActiveForPlayer (0x00122a00). Returns count of
     // active Fruit entities assigned to `playerIdx` (-1 = all players).
     // When checkBombs=true the caller also wants bomb counts (not used here).
-    // TODO: playerIdx filtering not yet ported (entity has no player field stub).
+    // Port specific: playerIdx filtering omitted; entity has no player-index field yet (split-screen MP stub).
     static int GetNumActiveForPlayer(int playerIdx, bool checkBombs);
 
     // Matches Fruit::ClearUnspawned (0x001762a0). Walks ActorManager type-0

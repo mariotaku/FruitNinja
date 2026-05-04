@@ -567,7 +567,7 @@ void WaveManager::Resume() {
     game->m_bUnsullied = sd->m_bWasGameOver;
 
     // 4. Re-roll all PROBABILITY_OVERIDE entries.
-    // TODO: PROBABILITY_OVERIDE::SelectType() not yet ported.
+    // Port specific: PROBABILITY_OVERIDE::SelectType() not yet ported; skipped.
     // for each po in probOverrides[game->gameMode]: po.SelectType();
 
     // 5. Reset transient queue fields.

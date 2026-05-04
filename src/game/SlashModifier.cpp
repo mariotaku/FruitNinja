@@ -8,16 +8,15 @@
 #include <cstdio>
 #include <cstring>
 
-// TODO: ParseSlashModColourType + ParseSlashPowerMask helper tables not yet ported.
+// Port specific: ParseSlashModColourType and ParseSlashPowerMask lookup tables
+// not yet ported; both return safe defaults (0) until RE'd.
 
 // ParseSlashModColourType — maps XML "type" string to colour-type int.
-// TODO: full lookup table from binary @ TBD
 static int ParseSlashModColourType(const char* /*type*/) {
     return 0;
 }
 
 // ParseSlashPowerMask — maps XML "type" string to power-mask bit.
-// TODO: bit-mask table from binary @ TBD
 static uint32_t ParseSlashPowerMask(const char* /*type*/) {
     return 0;
 }

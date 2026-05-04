@@ -18,7 +18,8 @@ int ColLine::Collide(Col* other, Vec3* outNormal) {
     if (t == TYPE_SPHERE) {
         ColSphere* s = static_cast<ColSphere*>(other);
         hit = s->IntersectsLine(*this) ? 1 : 0;
-        // TODO: outNormal from SphereLine penetration (flip sign per binary)
+        // TODO: outNormal from SphereLine -- compute penetration vector, then negate
+        //   per binary convention (binary @ 0x... points INTO sphere from line). Not yet ported.
     } else if (t == TYPE_LINE) {
         // TODO: LineLine collision helper not ported
         hit = 0;

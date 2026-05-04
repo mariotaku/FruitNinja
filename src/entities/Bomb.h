@@ -133,7 +133,7 @@ public:
     // Matches Bomb::GetNumActiveForPlayer (0x00122a14). Returns count of
     // active Bomb entities assigned to `playerIdx` (-1 = all players).
     // When checkBombs=true counts bombs in pre-spawn state too.
-    // TODO: playerIdx filtering not yet ported.
+    // Port specific: playerIdx filtering omitted; entity has no player-index field yet (split-screen MP stub).
     static int GetNumActiveForPlayer(int playerIdx, bool countPrespawn);
 
     // Matches Bomb::ClearUnspawned (0x00122ab4). Walks ActorManager type-1

@@ -9,8 +9,8 @@ using namespace Mortar;
 // Called before gameplay begins so sounds are ready without load stutter.
 namespace {
     void PreloadInGameSounds() {
-        // TODO: 0x001695e8 -- PreloadInGameSounds: SoundManager::PreloadSFX not yet ported;
-        //       SDL backend lazy-loads as fallback. Wire call when PreloadSFX is ported.
+        // Port specific: SoundManager::PreloadSFX not yet ported; SDL backend
+        // lazy-loads on first play as fallback. Wire call when PreloadSFX is ported.
         (void)0;
     }
 }

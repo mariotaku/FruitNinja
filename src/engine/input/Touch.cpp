@@ -195,8 +195,8 @@ uint32_t Touch::GetTouchInReigion(int x, int y, int w, int h) const {
 // Per-slot: AxisEvent(X), AxisEvent(Y), ButtonPressed for press/held/release/up.
 // Action codes: 0x89+i (button), 0x99+i (X axis), 0xa9+i (Y axis), i in 0..7.
 // States: 1=press, 2=held, 4=release, 8=up.
-// TODO: 0x00195764 -- InputDevice::AxisEvent / ButtonPressed not yet declared;
-//   stub until those virtual methods are ported into InputDevice.
+// Port specific: InputDevice::AxisEvent / ButtonPressed not yet declared;
+//   body is a no-op stub until those virtual methods are ported into InputDevice.
 void Touch::SendIndividualTouchCallbacks(InputDevice* /*dev*/) {
     // Stub: requires InputDevice::AxisEvent and InputDevice::ButtonPressed.
     // Full body per RE pseudocode (tmp/re-touch.md):

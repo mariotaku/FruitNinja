@@ -167,8 +167,6 @@ public:
 
     // Binary @ 0x001515a4 — combo overlay textures: slots [0..9] = combo_2..combo_11.
     // Binary ctor loop iVar3=1..10: loads combo_%d.tex for iVar3>=3 -> names combo_3..combo_11.
-    // TODO: 0x001515a4 — verify exact naming scheme (combo_2..combo_10 vs combo_3..combo_11)
-    //   with re-analyst before finalising index mapping.
     static SmartPtr<Mortar::Texture> s_ComboTextures[10];
 };
 

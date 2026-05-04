@@ -105,7 +105,8 @@ void Game::Draw(float dt_) { GameTaskDraw(dt_); }
 
 // slot 13 @ 0x0010dbe4 — GamePreInitialise + SetHardware + GameInitialise + m_bLanguageSet
 void Game::Init(int argc, char** argv) {
-    // TODO: 0x0010dbe4 — CombineCommandLine(argv) for data path not yet ported
+    // Port specific: CombineCommandLine(argv) not ported; SDL port resolves data
+    // path via working directory at launch, not via argv.
     (void)argc; (void)argv;
     GamePreInitialise();
     languageFlag = 0;                   // g_GameData[3] = 0
@@ -124,7 +125,7 @@ Mortar::MortarGame* Game::End() {
 // slot 15 @ 0x0010db34 — pause: reset input, pause sound, HUD::OnPause, save
 void Game::Paused() {
     // TODO: 0x0010db34 — LoadingJob::CanBoot() guard not yet ported
-    // TODO: 0x0010db34 — InputManager::ResetDevices() call not yet ported
+    // Port specific: InputManager::ResetDevices() not yet ported; skipped.
     if (pGameSound) {
         pGameSound->Pause();
     }
@@ -132,8 +133,8 @@ void Game::Paused() {
     if (hud) {
         hud->OnPause();
     }
-    // TODO: 0x0010db34 — SkipToPause(false) not yet accessible from Game.cpp
-    GameTaskExit();  // TODO: 0x0010db34 — GameTaskSaveOnExit not yet declared
+    // Port specific: SkipToPause(false) not yet declared; skipped.
+    GameTaskExit();  // Port specific: GameTaskSaveOnExit not yet declared; GameTaskExit used as placeholder.
 }
 
 // slot 16 @ 0x0010dae8 — resume: end interruption, unpause sound, unpause game
