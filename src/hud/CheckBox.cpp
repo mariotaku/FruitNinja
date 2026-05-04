@@ -45,8 +45,15 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
 // written; RE flagged a possible binary-side bug where the delegate
 // constructed into a stack temp rather than this->m_pLabel.
 CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, LocalizedString loc)
-    : CheckBox(inPos, inSize, static_cast<const char*>(loc))
+    : HUDControl3d()
 {
+    // Cross-build: GCC 4.4 has no C++11 delegating ctors; inline the char* ctor body.
+    m_pLabel      = static_cast<const char*>(loc);
+    m_bChecked    = 1;
+    pos           = inPos;
+    size          = inSize;
+    m_TouchSlot   = -1;
+    m_LayerFlags  = 0x80;
 }
 
 CheckBox::~CheckBox() {

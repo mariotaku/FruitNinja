@@ -1,0 +1,21 @@
+--- a/include/c++/4.4.1/bits/stl_list.h
++++ b/include/c++/4.4.1/bits/stl_list.h
+@@ -298,13 +298,15 @@
+       struct _List_impl
+       : public _Node_alloc_type
+       {
+-	_List_node_base _M_node;
++	_List_node_base _M_node;
++	// Bada libstdc++ parity (asm-verify only) -- C++11+ list size cache.
++	std::size_t _M_size;
+
+ 	_List_impl()
+-	: _Node_alloc_type(), _M_node()
++	: _Node_alloc_type(), _M_node(), _M_size(0)
+ 	{ }
+
+ 	_List_impl(const _Node_alloc_type& __a)
+-	: _Node_alloc_type(__a), _M_node()
++	: _Node_alloc_type(__a), _M_node(), _M_size(0)
+ 	{ }
+       };
