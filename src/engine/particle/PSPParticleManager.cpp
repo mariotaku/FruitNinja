@@ -108,8 +108,15 @@ PSPEmitterTemplate* PSPParticleManager::GetEmitterTemplate(int idx) {
 PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
                                                    PSPParticleEmitter** ppRef,
                                                    bool /*persistent*/) {
-    // Bada uses a MemoryPool with fixed capacity; we just grow the vector
-    // (of unique_ptr, so emitter addresses remain stable).
+    // Binary pool capacity is 120 (Create(this, 0x78) at 0x00115fc0 in LoadFile).
+    // Binary returns nullptr when pool is full (GetUsed()+1 >= capacity).
+    // DIFFERS: binary uses MemoryPool<PSPParticleEmitter>; port uses std::vector.
+    static const size_t POOL_CAPACITY = 120;
+    if (m_Emitters.size() >= POOL_CAPACITY) {
+        if (ppRef) *ppRef = nullptr;
+        return nullptr;
+    }
+
     const PSPEmitterTemplate* tmpl = FindTemplate(hash);
     if (!tmpl) {
         if (ppRef) *ppRef = nullptr;
@@ -256,7 +263,7 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         //   0 = Point     — no extra init (pos = emitter.pos, vel = rotated set vel)
         //   1 = Vertex    — start half a velocity step behind the emitter
         //   2 = Direction — rotate particle to face its own velocity
-        //   3 = Angular   — skipped (requires emitter m_field38 state)
+        //   3 = Angular   — swap pos.x/y, mirror gravity+vel by emitter quadrant
         switch (tmpl->m_Shape) {
             case 1: // Vertex
                 p.m_Pos.x -= p.m_Vel.x;
@@ -266,6 +273,13 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
             case 2: // Direction
                 p.m_Rotation += atan2f(p.m_Vel.y, p.m_Vel.x);
                 break;
+            case 3: { // Angular — binary @ 0x00115644 shape==3 branch
+                // TODO: 0x00115644 shape==3 branch — quadrant-mirror logic needs follow-up RE.
+                // RE doc summary: swap pos.x/pos.y, mirror gravity by emitter quadrant
+                // (sign of emitter.m_field38), mirror vel.x by particle pos.x sign.
+                // No XML in particles_fast/slow.xml uses Angular; no-op fallback is safe.
+                break;
+            }
             default:
                 break;
         }
