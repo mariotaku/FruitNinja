@@ -3,7 +3,7 @@
 
 // Analysed: 2026-05-04T00:00
 //
-// Mortar::Touch — binary @ 0x0019591c area.
+// Mortar::Touch -- binary @ 0x0019591c area.
 // sizeof 0x1d4 (468 bytes):
 //   +0x000: State states1[8]  (8 * 28 = 224B) -- live polled state
 //   +0x0e0: State states2[8]  (8 * 28 = 224B) -- event-applied scratch
@@ -22,6 +22,11 @@
 //
 // SDL event flow: InputTranslatorSDL calls __UpdateInternal per event.
 // Once per frame InputManager::Update broadcasts Update(dt) -> Touch::Update(dt).
+//
+// TODO: 0x002772d4+0xa0 -- global 16-slot touch table feeding IsTouchDown /
+//   TouchInRegion free functions. Port currently reads from Mortar::Touch::states1
+//   as a substitute. Real backing source unconfirmed; needs follow-up RE on
+//   GlesForm::OnTouch* dispatch chain.
 
 #include <cstdint>
 
@@ -41,9 +46,11 @@ struct TouchState {
 };
 
 // Binary Mortar::Touch::TEvnt (20 bytes).
+// Binary param 'b': true = press OR move, false = release.
+// DIFFERS: binary param named 'b'; port uses 'isActive' (was 'isMove', renamed for clarity).
 struct TEvnt {
     uint32_t extId;       // a: external pointer id
-    bool     isMove;      // b
+    bool     isActive;    // b: true=press or move, false=release
     // 3 bytes implicit padding
     float    x;           // c
     float    y;           // d
@@ -59,58 +66,63 @@ public:
 
     Touch();
 
-    // Binary @ 0x00195630 — Update(float dt).
+    // Binary @ 0x00195630 -- Update(float dt).
     // Drain events with timestamp <= dt (or all if dt == 0.0); then _Update().
     void Update(float dt);
 
-    // Binary @ 0x001953ec — _Update().
+    // Binary @ 0x001953ec -- _Update().
     // 8x: states1[i] = states2[i]; State::Update on the copy.
     void _Update();
 
-    // Binary @ 0x001952f0 — State::Update.
+    // Binary @ 0x001952f0 -- State::Update.
     // phase==1: zero extId+touchId. Else: snapshot prev=curr, promote phase==-1 to 0.
     static void StateUpdate(TouchState& s);
 
-    // Binary @ 0x00195690 — __UpdateInternal.
+    // Binary @ 0x00195690 -- __UpdateInternal.
     // Push TEvnt to ring; on overflow: Update(0.0f) then retry.
     // SDL entry point: InputTranslatorSDL calls this for each touch event.
-    // TODO: 0x00195690 — wire SDL touch events to __UpdateInternal in InputTranslatorSDL.
-    void __UpdateInternal(uint32_t extId, bool isMove, float x, float y, float t);
+    // isActive: true=press OR move, false=release (matches binary param 'b').
+    void __UpdateInternal(uint32_t extId, bool isActive, float x, float y, float t);
 
-    // Binary @ 0x00195314 — ___UpdateInternal.
+    // Binary @ 0x00195314 -- ___UpdateInternal.
     // Apply event to states2: match by extId or claim free slot (rotating cursor).
     // nextTouchId++ skipping 0 on wrap.
-    // DIFFERS: original skips touchId=0 on wrap; binary @ 0x00195314.
-    void ___UpdateInternal(uint32_t extId, bool isMove, float x, float y);
+    // isActive: true=press OR move, false=release (matches binary param 'b').
+    // Binary @ 0x00195314 -- free slot is extId==0, NOT phase>=1.
+    void ___UpdateInternal(uint32_t extId, bool isActive, float x, float y);
 
-    // Binary @ 0x00195424 — FindTouch(uint touchId).
+    // Binary @ 0x00195424 -- FindTouch(uint touchId).
     // Linear scan states1; return slot index or -1.
     int FindTouch(uint32_t touchId) const;
 
-    // Binary @ 0x001954fc — GetAnyTouch().
+    // Binary @ 0x001954fc -- GetAnyTouch().
     // First slot with phase < 1; returns touchId or 0.
     uint32_t GetAnyTouch() const;
 
-    // Binary @ 0x0019551c — GetMostRecentTouch().
+    // Binary @ 0x0019551c -- GetMostRecentTouch().
     // FindTouch(nextTouchId - 1); returns touchId or 0.
     uint32_t GetMostRecentTouch() const;
 
-    // Binary @ 0x0019543c — GetTouchPos(uint touchId, int& x, int& y).
+    // Binary @ 0x0019543c -- GetTouchPos(uint touchId, int& x, int& y).
     // Writes currX/Y of matching slot. Returns 1 if active (phase < 1), 0 if not.
+    // Binary leaves *x/*y UNTOUCHED on miss.
     int GetTouchPos(uint32_t touchId, int& x, int& y) const;
 
-    // Binary @ 0x0019546c — GetTouchDelta(uint touchId, int& dx, int& dy).
+    // Binary @ 0x0019546c -- GetTouchDelta(uint touchId, int& dx, int& dy).
     // Writes currX-prevX/dy if phase >= 0, else 0. Returns 1 if active.
     int GetTouchDelta(uint32_t touchId, int& dx, int& dy) const;
 
-    // Binary @ 0x001954b4 — GetTouchInReigion (note binary typo).
+    // Binary @ 0x001954b4 -- GetTouchInReigion (note binary typo).
     // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.
+    // Binary uses inclusive <= on all bounds.
     // Binary signature: (int x, int y, int w, int h).
     uint32_t GetTouchInReigion(int x, int y, int w, int h) const;
 
-    // Binary @ 0x00195764 — SendIndividualTouchCallbacks(InputDevice* dev).
+    // Binary @ 0x00195764 -- SendIndividualTouchCallbacks(InputDevice* dev).
     // 8x: emit AxisEvent for X/Y, ButtonPressed for press/held/release/up.
-    // TODO: 0x00195764 — InputDevice::AxisEvent / ButtonPressed not yet ported.
+    // Action codes: 0x89+i (button), 0x99+i (X axis), 0xa9+i (Y axis), i in 0..7.
+    // TODO: 0x00195764 -- InputDevice::AxisEvent / ButtonPressed not yet declared;
+    //   body is stubbed until those virtual methods are ported into InputDevice.
     void SendIndividualTouchCallbacks(InputDevice* dev);
 
     // Port-specific: slot-indexed region scan (not in binary public API).
@@ -124,8 +136,8 @@ public:
     // Note: binary has no Touch::Clear; symbol-diff false positive.
     // (Removed from port.)
 
-    // Port-specific helpers (not in binary) — used by SDL translator.
-    // These call __UpdateInternal internally for event queueing.
+    // Port-specific helpers (not in binary) -- used by SDL translator.
+    // Route through __UpdateInternal for ring-buffer ordering.
     void OnPressed (uint32_t extId, float x, float y);
     void OnMoved   (uint32_t extId, float x, float y);
     void OnReleased(uint32_t extId);
@@ -141,7 +153,6 @@ public:
     TouchState states2[MAX_SLOTS];   // +0x0e0 event-applied scratch
 
     // Ring buffer (Port specific: simpler ring; binary uses RingBufferT (Binary @ 0x001958fc init)).
-    // Port specific: simpler ring; binary uses RingBufferT (Binary @ 0x001958fc init).
     TEvnt    m_events[MAX_EVENTS];   // +0x1c0 area
     int      m_eventHead;            // ring head index
     int      m_eventTail;            // ring tail index
@@ -150,6 +161,8 @@ public:
 
 private:
     // Rotating cursor for ___UpdateInternal slot claim.
+    // DIFFERS: binary stores cursor in BSS global (GOT+0x80798); port uses struct member.
+    //          Behavior identical for singleton. Cosmetic.
     int m_slotCursor;
 };
 
