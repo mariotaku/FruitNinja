@@ -19,4 +19,5 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ScreenFadeControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/VerticalScroller.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SliderControl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ProgressionTimerControl.cpp
 )
