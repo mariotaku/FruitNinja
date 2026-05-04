@@ -70,12 +70,21 @@ private:
         } m_h;
     };
     mutable uint32_t m_hashCache;   // +0x24 (lazy; 0 = unset; cleared by every mutator)
+
+#ifdef __bada__
+    friend struct AsciiStringLayoutAssert;
+#endif
 };
 
 #ifdef __bada__
-static_assert(sizeof(AsciiString) == 40, "AsciiString must be 40 bytes (Bada SSO layout)");
-static_assert(offsetof(AsciiString, m_size)      == 0x00, "AsciiString::m_size offset");
-static_assert(offsetof(AsciiString, m_hashCache) == 0x24, "AsciiString::m_hashCache offset");
+// Friend probe: GCC 4.4.1 is strict about offsetof on private members from
+// namespace-scope static_assert; MSVC allows it. The friend struct gives the
+// asserts access without exposing the fields publicly.
+struct AsciiStringLayoutAssert {
+    static_assert(sizeof(AsciiString) == 40, "AsciiString must be 40 bytes (Bada SSO layout)");
+    static_assert(offsetof(AsciiString, m_size)      == 0x00, "AsciiString::m_size offset");
+    static_assert(offsetof(AsciiString, m_hashCache) == 0x24, "AsciiString::m_hashCache offset");
+};
 #endif
 
 }  // namespace Mortar

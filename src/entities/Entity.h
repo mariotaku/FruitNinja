@@ -57,12 +57,17 @@ public:
     // Binary @ Fruit::Init sets this->m_TrackerID = 0.
     uint16_t m_TrackerID;    // +0x08
 
-    // +0x0a: (2B alignment gap — implicit in struct)
+    // +0x0a: 2-byte gap. Explicit so binary layout (+0x0c flags) holds
+    // under any compiler -- natural alignment after a uint16_t doesn't pad
+    // before the next uint8_t.
+    uint16_t pad_0x0a;       // +0x0a
 
     // +0x0c: flag byte (see EntityFlagBits above).
     uint8_t flags;
 
-    // +0x0d: (3B alignment gap — implicit in struct; Entity::Entity uses memset 0x3C)
+    // +0x0d: 3-byte gap. Compiler will naturally pad here for Vec3's
+    // 4-byte alignment at +0x10, but documented for clarity. Entity::Entity
+    // memset 0x3C zeroes the whole struct including these gap bytes.
 
     // +0x10..+0x1b: position
     Vec3 pos;
@@ -94,20 +99,6 @@ public:
 
     // +0x38: collision primitive pointer (nullable).
     Mortar::Col* m_Col;     // +0x38 in binary -- polymorphic; subclasses install ColSphere/ColLine/ColAABB
-
-#ifdef __bada__
-    // NOTE: offsetof(m_Angle) will NOT be 0x36 in the cross-build because the
-    // port widens entityType to int (4B vs binary's 1B uint8_t). Add static_asserts
-    // only for fields that are not displaced by the widening.
-    static_assert(offsetof(Entity, field_0x04)   == 0x04, "field_0x04 offset wrong");
-    static_assert(offsetof(Entity, m_TrackerID)  == 0x08, "m_TrackerID offset wrong");
-    static_assert(offsetof(Entity, flags)        == 0x0C, "flags offset wrong");
-    static_assert(offsetof(Entity, pos)          == 0x10, "pos offset wrong");
-    static_assert(offsetof(Entity, vel)          == 0x1C, "vel offset wrong");
-    static_assert(offsetof(Entity, scale)        == 0x28, "scale offset wrong");
-    static_assert(offsetof(Entity, m_RecycleFlag)== 0x34, "m_RecycleFlag offset wrong");
-    // sizeof intentionally not asserted — port entity is larger than binary 0x3C due to int widening
-#endif
 
     // Binary @ 0x0019d88c — base ctor
     Entity();
@@ -190,6 +181,24 @@ public:
     // Binary test: `(flags & 0x11) == 0`. Inactive / killed entities fail.
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }
 };
+
+#ifdef __bada__
+// Layout asserts: outside the class so the type is complete; offsetof requires
+// public access in GCC 4.4.1 -- Entity has no `private:` block so all fields
+// are public, meeting that requirement. NOTE: offsetof(m_Angle) is intentionally
+// NOT asserted because the port widens entityType to int (4B vs binary's 1B
+// uint8_t), displacing m_Angle from binary's 0x36. Asserting only fields not
+// displaced by the widening.
+static_assert(offsetof(Entity, field_0x04)   == 0x04, "field_0x04 offset wrong");
+static_assert(offsetof(Entity, m_TrackerID)  == 0x08, "m_TrackerID offset wrong");
+static_assert(offsetof(Entity, flags)        == 0x0C, "flags offset wrong");
+static_assert(offsetof(Entity, pos)          == 0x10, "pos offset wrong");
+static_assert(offsetof(Entity, vel)          == 0x1C, "vel offset wrong");
+static_assert(offsetof(Entity, scale)        == 0x28, "scale offset wrong");
+static_assert(offsetof(Entity, m_RecycleFlag)== 0x34, "m_RecycleFlag offset wrong");
+// sizeof intentionally not asserted -- port entity is larger than binary 0x3C
+// due to int widening of entityType.
+#endif
 
 // Free function: remove an entity from EntityTracker tree `treeIdx` by its
 // 16-bit tracker ID. Called by Fruit::KillFruit to unregister the dying
