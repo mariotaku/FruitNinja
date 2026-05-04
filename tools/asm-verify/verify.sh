@@ -57,4 +57,10 @@ python3 "$SRC/tools/asm-verify/discover-symbols.py"
 python3 "$SRC/tools/asm-verify/export-binary-symbols.py"
 
 echo "=== [4/4] asm-verify ==="
-python3 "$SRC/tools/asm-verify/asm-verify.py" --report-only
+# Optional filter from host: ASM_VERIFY_FILTER (glob on mangled name).
+if [[ -n "${ASM_VERIFY_FILTER:-}" ]]; then
+    echo "  filter: $ASM_VERIFY_FILTER"
+    python3 "$SRC/tools/asm-verify/asm-verify.py" --report-only --filter "$ASM_VERIFY_FILTER"
+else
+    python3 "$SRC/tools/asm-verify/asm-verify.py" --report-only
+fi

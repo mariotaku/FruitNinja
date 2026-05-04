@@ -41,10 +41,41 @@ fi
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL='*'
 
+# Optional filter: pass --filter <glob> or --class <Foo> or --symbol <name>
+# to limit verification to a subset (lets you iterate on one class without
+# re-running ~886 symbols).
+FILTER=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --filter)  FILTER="$2"; shift 2 ;;
+        --class)   FILTER="*${2}*"; shift 2 ;;          # loose substring on class
+        --symbol)  FILTER="*${2}*"; shift 2 ;;          # loose substring on function
+        --help|-h)
+            cat <<USAGE
+Usage: bash tools/asm-verify/run.sh [options]
+
+Options:
+  --filter <glob>    Run only symbols whose mangled name matches the glob.
+                     Example: --filter '_ZN11WaveManager*'
+  --class <Foo>      Shortcut for --filter '*Foo*' (loose substring match).
+                     Example: --class WaveManager
+  --symbol <name>    Same as --class but for one specific function name.
+                     Example: --symbol GetNextWave
+
+Without a filter, runs all symbols in tmp/asm-verify/manifest.generated.toml
+(currently ~886 symbols across 110 portable TUs).
+USAGE
+            exit 0
+            ;;
+        *) echo "Unknown arg: $1 (try --help)" >&2; exit 2 ;;
+    esac
+done
+
 # Bind-mount project + named volumes for ext4-backed cmake/cache.
 # Bind-mounts on Docker-Desktop / WSL2 still go through 9p drvfs, so we
 # stage the source into an internal volume from inside the container.
 docker run --rm \
+    -e "ASM_VERIFY_FILTER=$FILTER" \
     -v "$PROJECT_ROOT_DOCKER:/work:ro" \
     -v fnverify-src:/staging \
     -v fnverify-build:/build \
