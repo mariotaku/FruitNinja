@@ -982,3 +982,146 @@ void MainScreen::QuitGamesCallback() {
 void MainScreen::DrawPostEffects() {
     // TODO: implement -- post-effect overlays (score flash, bonus anim, etc.)
 }
+
+// Binary @ 0x0014D1F8 — 8-segment radial loading spinner.
+// Called from Draw when m_State == STATE_LOADING_A (0x13) or STATE_LOADING_B (0x14).
+// Uses blurry_backing.tex as its texture (blank atlas region for coloured tris).
+// 8 segments x 6 verts each = 48 verts total; alpha-fades across segments.
+void MainScreen::DrawLoadingSymbol(const float* hudScale) {
+    if (!m_blurryBackingTex.IsValid()) return;
+
+    // DAT_0014D4B8 = 7 — mask for spinner phase (0..7)
+    int idx   = (int)m_field108 & 7;  // DAT_0014D4B8
+    int phase = (7 - idx) & 7;
+
+    // Geometry constants:
+    //   DAT_0014D4C0 = 0.03125f (1/32) — inner half-width of each segment arc
+    //   DAT_0014D4C4 = 1.0f             — outer radius
+    static const float kSmallR = 0.03125f;  // DAT_0014D4C0
+    static const float kBigR   = 1.0f;      // DAT_0014D4C4
+
+    // Build geometry once; the positions are constant, colours are updated per frame.
+    static QUADCUSTOMVERTEX s_verts[48];
+    static bool s_built = false;
+
+    if (!s_built) {
+        static const float kTwoPi = 6.283185307f;
+        for (int seg = 0; seg < 8; seg++) {
+            float a1    = (float)seg * (kTwoPi / 8.0f);
+            float a1end = a1 + (kTwoPi / 8.0f);
+            float a2    = a1 + (kTwoPi / 4.0f);
+
+            float sx1 = sinf(a1)    * kBigR,   cy1 = cosf(a1)    * kBigR;
+            float ex1 = sinf(a1end) * kBigR,   ey1 = cosf(a1end) * kBigR;
+            float sx2 = sinf(a2)    * kSmallR, cy2 = cosf(a2)    * kSmallR;
+
+            float corners[4][2] = {
+                { sx1 + sx2, cy1 + cy2 },
+                { sx1 - sx2, cy1 - cy2 },
+                { ex1 + sx2, ey1 + cy2 },
+                { ex1 - sx2, ey1 - cy2 },
+            };
+
+            // Two tris per segment (6 verts): tri0 = 0,1,2; tri1 = 1,3,2
+            static const int kOrder[6][2] = {{0,0},{1,1},{2,2},{1,1},{3,3},{2,2}};
+            int vbase = seg * 6;
+            for (int v = 0; v < 6; v++) {
+                QUADCUSTOMVERTEX& qv = s_verts[vbase + v];
+                qv.x = corners[kOrder[v][0]][0];
+                qv.y = corners[kOrder[v][0]][1];
+                qv.z = 0.0f;
+                qv.nx = 0.0f; qv.ny = 0.0f; qv.nz = 1.0f;
+                qv.colour = 0xC8FFFFFFu;  // alpha=200, white placeholder
+                qv.u = 0.0f; qv.v = 0.0f;
+            }
+        }
+        s_built = true;
+    }
+
+    // Per-frame: assign per-segment alpha based on phase.
+    // fadeIdx = (phase + seg) & 7; intensity = clamp(fadeIdx * 32, 64, 255)
+    for (int seg = 0; seg < 8; seg++) {
+        int fadeIdx   = (phase + seg) & 7;
+        int raw       = fadeIdx * 32;
+        int intensity = (raw < 64) ? 64 : ((raw > 255) ? 255 : raw);
+        uint32_t col  = ((uint32_t)200 << 24) |
+                        ((uint32_t)intensity << 16) |
+                        ((uint32_t)intensity << 8) |
+                        (uint32_t)intensity;
+        for (int v = 0; v < 6; v++) {
+            s_verts[seg * 6 + v].colour = col;
+        }
+    }
+
+    // Draw: Set blurry_backing, scale by *hudScale * 0.0625 (DAT_0014D4C8 = 1/16),
+    // translate per state.
+    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    m_blurryBackingTex->Set();
+
+    float scale = (*hudScale) * 0.0625f;  // DAT_0014D4C8
+
+    // Per-state translate:
+    //   STATE_LOADING_B (0x14): DAT_0014D4CC (X), DAT_0014D4D0 (Y) — values unresolved
+    //   STATE_LOADING_A (0x13): DAT_0014D4D8 (X), 7.0 (Y) — DAT_0014D4D8 unresolved
+    // TODO: DAT_0014D4CC, DAT_0014D4D0, DAT_0014D4D8 — read_memory pass needed to resolve values
+    float tx = 0.0f, ty = 0.0f;
+    if (m_State == STATE_LOADING_B) {
+        // TODO: DAT_0014D4CC = state 0x14 X offset (unresolved)
+        // TODO: DAT_0014D4D0 = state 0x14 Y offset (unresolved)
+        tx = 0.0f; ty = 0.0f;
+    } else {
+        // STATE_LOADING_A: DAT_0014D4D8 X (unresolved), Y = 7.0
+        tx = 0.0f; ty = 7.0f;
+    }
+
+    Vec3 drawPos(tx, ty, 0.0f);
+    mm.GetWorldStack().Reset();
+    Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
+    mat.GlobalTranslate44(drawPos);
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    game.renderer.DrawTriList(s_verts, 48);
+
+    m_blurryBackingTex->UnSet();
+}
+
+// Defunct: vtable PreDraw — no-op stub matching binary's empty body; binary @ 0x0014AC94
+// Vtable slot 6. Returns this. Binary is a 1-instruction stub (bx lr with r0=this).
+void* MainScreen::PreDraw(float* /*hudScale*/) {
+    return this;
+}
+
+// Defunct: NetworkManager::CancelNewsDisplay (online news ticker) — no-op stub; binary @ 0x0014AFB8
+// Called from AboutCallback, NewGameCallback, MoreGamesCallback, LeaderboardsCallback,
+// and Update cases 3/4. Binary calls NetworkManager::GetInstance + CancelNewsDisplay.
+void MainScreen::CancelNews() {
+    // Defunct: NetworkManager — no-op stub; binary @ 0x0014AFB8
+}
+
+// Defunct: network UI button — empty in binary (single bx lr); binary @ 0x0014ACFC
+void MainScreen::ClearNetworkButton() {
+    // Defunct: network UI button — no-op stub; binary @ 0x0014ACFC
+}
+
+// Defunct: leaderboard UI — returns this in binary (single bx lr); binary @ 0x0014AD00
+MainScreen* MainScreen::CreateNormalLeaderboardButton() {
+    // Defunct: leaderboard UI — no-op stub; binary @ 0x0014AD00
+    return this;
+}
+
+// Binary @ 0x0014AC98 — empty event hook (single bx lr in binary).
+// Called when menu items are cleared. Superseded by ButtonDeleted.
+void MainScreen::OnMenuItemsCleared() {
+    // no-op — empty in binary; binary @ 0x0014AC98
+}
+
+// Binary @ 0x0014B0AC — multiplayer variant of GameModeCallback (state 0xF instead of 0xE).
+// Near-identical to GameModeCallback @ 0x0014B068 except:
+//   - m_State = 0x0F (STATE_MODE_SELECT_2) instead of 0x0E
+//   - No FruitSaveData::DownloadTweaks() call
+void MainScreen::MultiplayerGameModeCallback() {
+    m_State = STATE_MODE_SELECT_2;
+    m_Timer2 = 1.0f;
+    RemoveButton(pQuitBtn);
+}
