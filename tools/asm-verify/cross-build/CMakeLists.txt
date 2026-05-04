@@ -150,23 +150,17 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/hud/VerticalScroller.cpp"
 
     # Screens
-    # FIXME: AboutScreen / BaseScreen / DojoScreen / GameModeScreen /
-    #        MainScreen / ShopScreen use std::bind for Mortar::Delegate1
-    #        wiring; GCC 4.4 doesn't accept the resulting std::_Bind
-    #        expression for the implicit Delegate conversion. Restore
-    #        when the bind sites are converted to QCallee or named
-    #        member-fn pointers.
-    # "${_PROJECT_ROOT}/src/screens/AboutScreen.cpp"
-    # "${_PROJECT_ROOT}/src/screens/BaseScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/AboutScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/BaseScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/BonusScreen.cpp"
-    # "${_PROJECT_ROOT}/src/screens/DojoScreen.cpp"
-    # "${_PROJECT_ROOT}/src/screens/GameModeScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/DojoScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/GameModeScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/GameOverScreen.cpp"
-    # "${_PROJECT_ROOT}/src/screens/MainScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/MainScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/PauseScreen.cpp"
     "${_PROJECT_ROOT}/src/screens/PowerUpShop.cpp"
     "${_PROJECT_ROOT}/src/screens/ScreenButton.cpp"
-    # "${_PROJECT_ROOT}/src/screens/ShopScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/ShopScreen.cpp"
 
     # Debug + platform-portable
     "${_PROJECT_ROOT}/src/debug/CrashHandler.cpp"

@@ -29,7 +29,6 @@
 #include "math/MathUtil.h"
 #include <cstdlib>
 #include <cstdio>
-#include <functional>
 
 // ---------------------------------------------------------------------------
 // Constants (resolved from binary DAT addresses via read_memory)
@@ -771,7 +770,7 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
                 m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pBuyButton->Init(POS_BACK_BUTTON,
-                    std::bind(&ShopScreen::QuitShopCallback, this),
+                    Mortar::Delegate<void()>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                 m_pBuyButton->m_bEnabled = 1;
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
@@ -779,7 +778,7 @@ void ShopScreen::Update(float dt) {
                 if (game.hud) game.hud->AddControl(m_pBuyButton, false);
                 // Binary (0x0015e3e2..0x0015e3f0): register DeletedMenuItem as m_RemoveCallback
                 m_pBuyButton->m_RemoveCallback =
-                    std::bind(&ShopScreen::DeletedMenuItem, this, std::placeholders::_1);
+                    Mortar::Delegate<void(HUDControl*)>::Make(this, &ShopScreen::DeletedMenuItem);
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pBuyButton);
                 // Binary: m_TargetSize *= 0.825; fruit piece scale *= 0.825
                 m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
@@ -841,7 +840,7 @@ void ShopScreen::Update(float dt) {
                             m_pEquipButton->m_Texture = TexIdOf(s_TexSelectItem);
                             m_pEquipButton->size      = TexSizeOf(s_TexSelectItem, 64.0f, 64.0f);
                             m_pEquipButton->Init(POS_EQUIP_BUTTON,
-                                std::bind(&ShopScreen::EquipCallback, this),
+                                Mortar::Delegate<void()>::Make(this, &ShopScreen::EquipCallback),
                                 equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
                             // Binary (0x0015e5f6): m_bEnabled = 0
                             m_pEquipButton->m_bEnabled = 0;
@@ -850,7 +849,7 @@ void ShopScreen::Update(float dt) {
                             if (game.hud) game.hud->AddControl(m_pEquipButton, false);
                             // Binary (0x0015e60e): register DeletedMenuItem as m_RemoveCallback
                             m_pEquipButton->m_RemoveCallback =
-                                std::bind(&ShopScreen::DeletedMenuItem, this, std::placeholders::_1);
+                                Mortar::Delegate<void(HUDControl*)>::Make(this, &ShopScreen::DeletedMenuItem);
                             if (game.pTutorialCtrl)
                                 game.pTutorialCtrl->ResetTutePos(m_pEquipButton);
                             // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
@@ -958,13 +957,13 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
             m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
-                std::bind(&ShopScreen::QuitShopCallback, this),
+                Mortar::Delegate<void()>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
             m_pBuyButton->m_bEnabled = 1;
             if (game.hud) game.hud->AddControl(m_pBuyButton, false);
             // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =
-                std::bind(&ShopScreen::DeletedMenuItem, this, std::placeholders::_1);
+                Mortar::Delegate<void(HUDControl*)>::Make(this, &ShopScreen::DeletedMenuItem);
         }
         // LAB_0015e874: scale new button (reached by both state 0 and state 3 paths)
         m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;

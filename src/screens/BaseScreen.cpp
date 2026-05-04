@@ -19,7 +19,6 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include <cmath>
-#include <functional>
 
 // Static texture storage (binary: GOT-relative module-level singletons)
 SmartPtr<Mortar::Texture> BaseScreen::s_TexSmlTitle;
@@ -251,8 +250,7 @@ void BaseScreen::UpdateButtons(float dt) {
             btn->m_TargetSize = btn->m_TargetSize * sb.m_scaleB;
 
             // Wire ControlDeleted as remove callback
-            btn->m_RemoveCallback = std::bind(&ScreenButton::ControlDeleted, &sb,
-                                              std::placeholders::_1);
+            btn->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>::Make(&sb, &ScreenButton::ControlDeleted);
 
             // Apply fruit piece scale + optional rotation
             if (btn->m_pFruitPiece) {
@@ -282,7 +280,7 @@ void BaseScreen::UpdateButtons(float dt) {
                     // Fruit alive: disable taps + redirect tap to shrink-call
                     btn->m_bEnabled = 0;
                     btn->SetCallback(
-                        std::bind(&ScreenButton::ShrinkButtonCall, &sb));
+                        Mortar::Delegate<void()>::Make(&sb, &ScreenButton::ShrinkButtonCall));
                 } else {
                     btn->m_bPendingRemoval = 1;
                 }
