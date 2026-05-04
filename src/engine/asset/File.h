@@ -2,6 +2,7 @@
 #define FN_ENGINE_ASSET_FILE_H
 
 #include "util/AsciiString.h"
+#include "asset/IFile.h"
 #include <cstdint>
 
 namespace Mortar {
@@ -54,7 +55,7 @@ public:
     static long SizeOfFile(const char* path, unsigned long systemID);
 
 private:
-    void*         m_pIFile;      // +0x00  opaque platform file handle (FILE* in port)
+    IFile*        m_pIFile;      // +0x00  Binary @ IFile* (vtbl chain: FileManager -> IFileSystem -> IFile_Direct)
     unsigned long m_systemID;    // +0x04
     // DIFFERS: AsciiString sizeof in port (std::string-backed, ~4-8B) differs from binary
     //          (40B SSO buffer) -- field offsets within File shift accordingly

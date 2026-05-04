@@ -1,6 +1,7 @@
 // Analysed: 2026-05-04T00:00
 #include "asset/File.h"
 #include "asset/FileManager.h"
+#include "asset/IFile.h"
 
 #include <cstdio>
 #include <cstring>
@@ -34,22 +35,18 @@ bool File::Open() {
         if ((m_openMode & 1) == 0 && !Exists(m_filename.CStr(), m_systemID)) {
             return false;
         }
-        const char* mode;
-        if (m_openMode == 0) {
-            mode = "rb";
-        } else if (m_openMode == 1) {
-            mode = "wb";
-        } else {
-            mode = "r+b";
-        }
-        FILE* fp = FileManager::OpenCI(m_filename.CStr(), mode);
-        if (fp) {
-            m_pIFile = fp;
+        // flags: bit 0 = write, bit 1 = update (r+b); read-only = 0
+        unsigned long flags = 0;
+        if (m_openMode == 1)      flags = 1;       // write-only
+        else if (m_openMode == 2) flags = 1 | 2;   // read-write
+
+        IFile* ifile = FileManager::GetInstance().OpenFile(
+            m_filename.CStr(), (unsigned int)m_systemID, flags);
+
+        if (ifile) {
+            m_pIFile  = ifile;
             m_bIsOpen = true;
-            long save = ftell(fp);
-            fseek(fp, 0, SEEK_END);
-            m_size = (unsigned long)ftell(fp);
-            fseek(fp, save, SEEK_SET);
+            m_size    = ifile->Size();
         }
     }
     return m_bIsOpen;
@@ -58,7 +55,8 @@ bool File::Open() {
 // Binary @ 0x0019b780
 void File::Close() {
     if (m_pIFile) {
-        fclose((FILE*)m_pIFile);
+        m_pIFile->Close();
+        delete m_pIFile;
         m_pIFile = nullptr;
     }
     m_bIsOpen = false;
@@ -67,23 +65,23 @@ void File::Close() {
 // Binary @ 0x0019b7ac
 bool File::Read(void* dst, unsigned long n) {
     if (!m_bIsOpen || !m_pIFile) return false;
-    return fread(dst, 1, n, (FILE*)m_pIFile) == n;
+    return m_pIFile->Read(dst, n);
 }
 
 // Binary @ 0x0019b7b8
 bool File::Write(const void* src, unsigned long n) {
     if (!m_bIsOpen || !m_pIFile) return false;
-    return fwrite(src, 1, n, (FILE*)m_pIFile) == n;
+    return m_pIFile->Write(src, n);
 }
 
 // Binary @ 0x0019b7c4
 bool File::Seek(FileSeekMode mode, long offset) {
     if (!m_bIsOpen || !m_pIFile) return false;
-    int whence;
-    if (mode == FSEEK_SET)       whence = SEEK_SET;
-    else if (mode == FSEEK_CUR)  whence = SEEK_CUR;
-    else                         whence = SEEK_END;
-    return fseek((FILE*)m_pIFile, offset, whence) == 0;
+    long whence;
+    if (mode == FSEEK_SET)       whence = 0;
+    else if (mode == FSEEK_CUR)  whence = 1;
+    else                         whence = 2;
+    return m_pIFile->Seek((unsigned long)offset, whence, false) == 0;
 }
 
 // Binary @ 0x0019b8c0
@@ -99,9 +97,10 @@ bool File::Load(void* userBuffer, unsigned long userBufferSize) {
         m_bOwnsBuffer = true;
     }
 
-    fseek((FILE*)m_pIFile, 0, SEEK_SET);
-    unsigned long read = (unsigned long)fread(m_pData, 1, m_size, (FILE*)m_pIFile);
-    if (read != m_size) {
+    // Seek to start then read entire file
+    m_pIFile->Seek(0, 0, false);
+    bool ok = m_pIFile->Read(m_pData, m_size);
+    if (!ok) {
         if (m_bOwnsBuffer) {
             delete[] (unsigned char*)m_pData;
             m_pData = nullptr;
@@ -125,24 +124,33 @@ void File::Unload() {
     Close();
 }
 
-// Binary @ 0x0019b808
-bool File::Exists(const char* path, unsigned long /*systemID*/) {
+// Binary @ 0x0019b808 — static; delegates to FileManager registry
+bool File::Exists(const char* path, unsigned long systemID) {
     if (!path) return false;
+    // Try registry first (binary-faithful)
+    FileManager& fm = FileManager::GetInstance();
+    if (fm.FileExists(path, (unsigned int)systemID)) return true;
+    // Fallback: OpenCI for compat (e.g. files in working dir before FileSystem_Direct is registered)
     FILE* fp = FileManager::OpenCI(path, "rb");
     if (!fp) return false;
     fclose(fp);
     return true;
 }
 
-// Binary @ 0x0019b90c
-long File::SizeOfFile(const char* path, unsigned long /*systemID*/) {
+// Binary @ 0x0019b90c — static; returns -1 on missing file
+long File::SizeOfFile(const char* path, unsigned long systemID) {
     if (!path) return -1L;
+    // Try registry first
+    FileManager& fm = FileManager::GetInstance();
+    unsigned int sz = fm.FileSize(path, (unsigned int)systemID);
+    if (sz > 0) return (long)sz;
+    // Fallback: direct fopen
     FILE* fp = FileManager::OpenCI(path, "rb");
     if (!fp) return -1L;
     fseek(fp, 0, SEEK_END);
-    long sz = ftell(fp);
+    long fsz = ftell(fp);
     fclose(fp);
-    return sz;
+    return fsz;
 }
 
 }  // namespace Mortar
