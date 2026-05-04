@@ -254,10 +254,11 @@ ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     // Binary: field_0x74 SmartPtr SetNull
     m_TexInst.SetNull();
 
-    // Initialise slot items array
+    // Initialise slot items array (4 slots: SLASH_MODIFIER, BACKGROUND, UPSELL, REMOVEADS)
     m_pSlotItems[0] = nullptr;
     m_pSlotItems[1] = nullptr;
     m_pSlotItems[2] = nullptr;
+    m_pSlotItems[3] = nullptr;  // +0xa8 -- REMOVEADS slot (defunct IAP); binary Init @ 0x0015f820 explicitly zeroes field_0xa8
 
     // Binary: m_ScrollOffset = (float)(ItemManager->GetNumItems()) + 0.5
     // Binary reads via vtable+0x20 on the GameTask's ItemManager ref.
@@ -342,6 +343,12 @@ void ShopScreen::CreateShopList() {
     //   -> ScrollingMenu::AddItem()
     // ShopListItem::Create sets m_ParamWidth (+0x24) = 80.0f (DAT_0015cae8),
     // which is what GetHeight() returns, giving each row a pitch of 80 units.
+    // TODO: Init zebra-stripe m_Colour.b toggle -- see tmp/re-shopscreen.md Init body
+    // Binary Init @ 0x0015f820: bVar11 starts = 1, toggles (^= 1) per row.
+    // Written to ShopListItem::m_Colour.b. Exact byte position within the
+    // packed unsigned int m_Colour (ScrollingMenuItem +0x14) not confirmed
+    // from ShopListItem RE -- dispatch re-analyst on ShopListItem::Create to verify.
+
     ItemManager* im = ItemManager::GetInstance();
     if (im) {
         int n = im->GetNumItems();
@@ -523,21 +530,35 @@ void ShopScreen::SetSelected(ShopListItem* item) {
     if (m_State != 1) return;
 
     // Binary: lazily init two fruit-type globals (guarded by __cxa_guard_acquire)
-    //   type_unlocked = Fruit::FruitType(DAT_0015c970, false)  (e.g. "watermelon")
-    //   type_locked   = Fruit::FruitType(DAT_0015c974, false)  (e.g. "coconut")
-    // Then set equip button texture and fruit type based on IsLocked.
-    // DIFFERS: fruit type strings not resolved from DAT_0015c970/c974
-    // TODO: resolve via read_memory and call Fruit::FruitType(name, false)
+    //   type_unlocked = Fruit::FruitType(DAT_0015c970, false)  -> "watermelon"
+    //   type_locked   = Fruit::FruitType(DAT_0015c974, false)  -> "coconut"
+    // Strings confirmed by RE report (tmp/re-shopscreen.md §9): watermelon = green
+    // piece for unlocked (slice-friendly), coconut = brown piece for locked.
+    // Binary uses __cxa_guard_acquire one-shot init; port calls FruitType each time
+    // (idempotent -- FruitType lookup is a pure string lookup returning a cached int).
     ItemInfo* info = item->m_pItemInfo;
+    const int type_unlocked = Fruit::FruitType("watermelon", false);  // DAT_0015c970
+    const int type_locked   = Fruit::FruitType("coconut",    false);  // DAT_0015c974
+    Fruit* equipFruit = m_pEquipButton->m_pFruitPiece;
     if (info->IsLocked() == 0) {
-        // Item is unlocked: set buy-now texture + unlocked fruit type
+        // Item is unlocked: select_item.tex + watermelon fruit type
         // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- static tex +0x18
-        // Then Fruit::SetFruitType(m_pEquipButton->m_pFruitPiece, type, 1.0)
-        // TODO: port once fruit type names are resolved
+        //         Fruit::SetFruitType(fruit, type_unlocked, 1.0f) @ 0x0017621c
+        m_pEquipButton->m_Texture = TexIdOf(s_TexSelectItem);
+        if (equipFruit) {
+            // SetFruitType is not ported as a standalone method; set m_FruitType directly.
+            // Binary SetFruitType also updates visual scale and collision radius from FruitInfo;
+            // for the button-fruit display purpose m_FruitType drives model/texture selection.
+            equipFruit->m_FruitType = type_unlocked;
+        }
     } else {
-        // Item is locked: set locked texture + locked fruit type
+        // Item is locked: locked.tex + coconut fruit type
         // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- static tex +0x14
-        // TODO
+        //         Fruit::SetFruitType(fruit, type_locked, 1.0f) @ 0x0017621c
+        m_pEquipButton->m_Texture = TexIdOf(s_TexLocked);
+        if (equipFruit) {
+            equipFruit->m_FruitType = type_locked;
+        }
     }
 }
 
@@ -987,7 +1008,7 @@ void ShopScreen::Update(float dt) {
                 if ((int)type < 4) {
                     // Binary: if cached slot item != selected item,
                     //   call ItemManager::SetEquippedItem(type, old_slot_item->ItemInfo)
-                    ShopListItem* slotItem = ((unsigned)type < 3) ? m_pSlotItems[(int)type] : nullptr;
+                    ShopListItem* slotItem = ((unsigned)type < 4) ? m_pSlotItems[(int)type] : nullptr;
                     if (slotItem != m_pSelectedItem) {
                         ItemManager* im = ItemManager::GetInstance();
                         ItemInfo* prevInfo = slotItem ? slotItem->m_pItemInfo : nullptr;
