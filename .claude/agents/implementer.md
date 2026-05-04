@@ -98,19 +98,17 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 - Temp/scratch files go in project `tmp/`, not `/tmp`.
 
 **Platform-specific files:**
-SDL/platform-bound code goes in `*SDL.cpp` suffix files (mirrors the binary's `*Bada` convention). Examples already in the tree:
-- `src/mainSDL.cpp` (entry point)
-- `src/GameSDL.cpp` (Game::init / run / runFrames — the SDL event loop)
-- `src/engine/audio/SoundManagerSDL.cpp`
-- `src/engine/render/gl_funcsSDL.cpp`
-- `src/engine/render/DisplayManagerSDL.cpp` (companion to portable DisplayManager.cpp)
-- `src/platform/InputTranslatorSDL.{h,cpp}`
+SDL/platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it (mirrors the binary's `*Bada` classifier on the other side):
 
-Why: the `symbol-diff` skill cross-compiles every `src/**/*.cpp` with the Sourcery 2010q1 toolchain to measure binary-vs-port symbol coverage. It excludes `*SDL.cpp` by filename pattern (`find src -name "*.cpp" ! -name "*SDL.cpp"`), which lets the cross-build skip the SDL-using files entirely — there's no `cross-headers/SDL.h` stub to maintain, and the symbol-diff stays focused on portable engine/gameplay code.
+1. **`*SDL.cpp` suffix** — the default for SDL-bound TUs. Examples in tree: `GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`.
+2. **`src/platform/sdl/` directory** — for SDL backends that come as a multi-file group, the whole subtree is excluded.
+3. **Explicit name list** — files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point that has no binary counterpart). Listed verbatim in the symbol-diff filter.
+
+The symbol-diff skill applies all three: `find src -name "*.cpp" ! -name "*SDL.cpp" ! -path "src/platform/sdl/*" ! -path "src/main.cpp"`. New explicit-name exclusions go in that filter; new SDL files prefer the suffix or directory rules so the filter doesn't grow.
 
 How to apply:
 - Public headers (`*.h`) must NOT include `<SDL.h>` or expose SDL types directly. Use `void*` (with an adjacent comment naming the real SDL type) or `uint32_t` for `SDL_AudioDeviceID` etc.
-- New SDL-using code lands in a new `*SDL.cpp`, or extends an existing one. If a portable .cpp grows an SDL dependency, split that part into a `<Name>SDL.cpp` companion rather than poisoning the portable file.
+- New SDL-using code lands as a new `*SDL.cpp` (or extends an existing one). If a portable .cpp grows an SDL dependency, split that part into a `<Name>SDL.cpp` companion rather than poisoning the portable file.
 - Cast at the SDL boundary (`static_cast<SDL_Window*>(window)`) inside the SDL companion, never in the portable header.
 - The convention applies to platform glue specifically — gameplay/engine code that happens to use, say, `<cstring>` or `<vector>` is portable and stays portable.
 
