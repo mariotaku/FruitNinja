@@ -284,7 +284,7 @@ void GameUpdate(float dt, bool active) {
             game->pSplashTex.SetNull();
         }
     } else {
-        Mortar::Touch::GetInstance().Update();
+        Mortar::Touch::GetInstance().Update(0.0f);  // dt=0 drains all pending events
     }
 
     const float prevBombTimer = game->bombHitTimer;
@@ -511,7 +511,9 @@ void GameExit_Handler() {
         g_pSlashEntity = nullptr;
     }
     if (InputManager* im = InputManager::GetInstance()) {
-        im->ClearActions();
+        // Binary: InputManager::Destroy (0x001968a0) clears all device callbacks.
+        im->Destroy();
+        im->Init(0);
     }
 
     // Release HUD (destroys all controls including MainScreen)

@@ -1,71 +1,100 @@
-#ifndef MORTAR_INPUT_MANAGER_H
-#define MORTAR_INPUT_MANAGER_H
+#ifndef FN_ENGINE_INPUT_INPUTMANAGER_H
+#define FN_ENGINE_INPUT_INPUTMANAGER_H
 
+// Analysed: 2026-05-04T00:00
+
+// InputManager — binary @ 0x00196980 area.
+// sizeof 0x14: vfn-table(4) + m_loadingConfig(1) + m_inUpdate(1) + pad(2) +
+//              m_inputDevices std::list<InputDevice*>(12 on Bada) = 0x14 + 4(vptr) = 0x14 total.
+//
+// Architecture: broadcaster over std::list<InputDevice*>.
+// RegisterInputCallback forwards to each device (bindings live on device, not manager).
+// Update gates on m_loadingConfig, sets m_inUpdate, broadcasts Update(dt).
+
+#include "input/InputDevice.h"
 #include "input/InputEvent.h"
-#include <functional>
-#include <vector>
+#include "util/Delegate.h"
+#include <list>
 #include <cstdint>
-#include <cstddef>
 
-// Callback type: matches original Delegate1<bool, InputEvent*>
-typedef std::function<bool(InputEvent*)> InputCallback;
+// Callback type alias (matches binary Delegate1<bool, InputEvent*>).
+typedef Delegate1<bool, InputEvent*> InputCallback;
 
-struct InputBinding {
-    uint32_t actionHash;
-    uint32_t actionFlags;
-    InputCallback callback;
-};
-
-// Matches original Mortar::InputManager singleton
-// Action-hash callback dispatch system
 class InputManager {
 public:
     static InputManager* s_instance;
 
-    InputManager() { s_instance = this; }
-    ~InputManager() { s_instance = nullptr; }
+    // Binary @ 0x00196980 — ctor: both flags = 0.
+    InputManager();
+    // Binary @ 0x00196924 — dtor: list dtor only; does NOT call Destroy.
+    ~InputManager();
 
     static InputManager* GetInstance() { return s_instance; }
 
-    // Matches RegisterInputCallback (0x19683c)
-    void RegisterInputCallback(uint32_t actionHash, uint32_t actionFlags,
-                               InputCallback callback) {
-        InputBinding b;
-        b.actionHash = actionHash;
-        b.actionFlags = actionFlags;
-        b.callback = callback;
-        m_bindings.push_back(b);
-    }
+    // Binary @ 0x00196cc8 — Init: alloc InputDeviceBada, dev->Init(flags), push_back.
+    void Init(unsigned long flags);
 
-    // Matches ClearActions (0x1961d0)
-    void ClearActions() {
-        m_bindings.clear();
-    }
+    // Binary @ 0x001968a0 — Destroy: clear flags, ClearActions(all=true) on first
+    //   device, then Destroy+dtor on each device, list.clear().
+    void Destroy();
 
-    // Dispatch to matching callbacks
-    void DispatchEvent(InputEvent* event) {
-        for (size_t i = 0; i < m_bindings.size(); i++) {
-            InputBinding& b = m_bindings[i];
-            if (b.actionHash == event->actionHash &&
-                (b.actionFlags & event->actionFlags)) {
-                if (b.callback(event))
-                    return;
-            }
-        }
-    }
+    // Binary @ 0x00196138 — Update: gate m_loadingConfig, m_inUpdate=true,
+    //   broadcast Update(dt) via device vtable slot +0x0c, m_inUpdate=false.
+    void Update(float dt);
 
-    // Dispatch to all bindings matching flag pattern (global events)
-    void DispatchGlobal(InputEvent* event) {
-        for (size_t i = 0; i < m_bindings.size(); i++) {
-            InputBinding& b = m_bindings[i];
-            if (b.actionFlags & event->actionFlags) {
-                b.callback(event);
-            }
-        }
-    }
+    // Binary @ 0x001969d8 — Defunct: input config file — Bada-only; binary @ 0x001969d8
+    int LoadConfigFile(const char* path);
 
-private:
-    std::vector<InputBinding> m_bindings;
+    // Binary @ 0x001960f8 — AddActionMapper: broadcast to devices.
+    void AddActionMapper(InputActionMapper* mapper);
+
+    // Binary @ 0x001961d0 — ClearActions: broadcast InputDevice::ClearActions(hash, last=true on final).
+    void ClearActions(unsigned long actionHash);
+
+    // Binary @ 0x00195fe8 — HasInputDevice: search devices by GetDeviceType.
+    bool HasInputDevice(InputDeviceTypes type, InputDevice** out);
+
+    // Binary @ 0x00196bc8 — OnAxisExtentsChanged: broadcast.
+    void OnAxisExtentsChanged();
+
+    // Binary @ 0x00196228 — ParseAction: lookup table of 6 hashes -> flag.
+    //   Dead unless config-file parsing enabled.
+    unsigned long ParseAction(unsigned long hash);
+
+    // Binary @ 0x0019630c — ParseKey: lookup of 60 key-name hashes -> bitmask.
+    //   Dead unless config-file parsing enabled.
+    unsigned long ParseKey(unsigned long hash);
+
+    // Binary @ 0x0019683c — RegisterInputCallback: broadcast to devices.
+    // NB: 2-param signature — NO actionFlags 3rd param (port previously had
+    // a fictitious 3rd param; corrected here per RE evidence).
+    // DIFFERS: original = per-device binding store, see Binary @ 0x0019683c
+    void RegisterInputCallback(unsigned long actionHash, InputCallback cb);
+
+    // Binary @ 0x00196194 — ResetDevices: broadcast Reset().
+    void ResetDevices();
+
+    // Binary @ 0x0019603c — SetQueueEventsUntilUpdate: broadcast.
+    void SetQueueEventsUntilUpdate(bool v);
+
+    // Binary @ 0x0019607c — SetSendDownCallbacksEachUpdate: broadcast.
+    void SetSendDownCallbacksEachUpdate(bool v);
+
+    // Binary @ 0x00195fd8 — ValidCharacter: return (c - 0x20) < 0x90.
+    static bool ValidCharacter(unsigned char c);
+
+    // Port-side: dispatch an InputEvent through all devices.
+    // Not a binary method — SDLInputTranslator drives dispatch here.
+    void DispatchEvent(InputEvent* event);
+
+    // Port-side: dispatch to all devices (global event, no hash filter).
+    void DispatchGlobal(InputEvent* event);
+
+    // Struct fields (Binary @ 0x00196980):
+    bool m_loadingConfig;   // +0x04
+    bool m_inUpdate;        // +0x05
+    // +0x06..0x07 padding
+    std::list<InputDevice*> m_inputDevices;  // +0x08 (12B Bada list)
 };
 
-#endif
+#endif // FN_ENGINE_INPUT_INPUTMANAGER_H
