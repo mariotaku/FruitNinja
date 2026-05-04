@@ -79,14 +79,14 @@ void SliceEffect_CreatePool(int capacity) {
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
     if (game && meshMgr) {
         if (!s_SliceFxNormal.IsValid()) {
-            std::string path = game->data_dir + "/models/fruit/slice_fx.mmd";
-            s_SliceFxNormal = meshMgr->Load(path.c_str());
+            // logical path; FileSystem_Direct prepends data_dir
+            s_SliceFxNormal = meshMgr->Load("models/fruit/slice_fx.mmd");
             printf("[SliceEffect] slice_fx.mmd valid=%d\n",
                    s_SliceFxNormal.IsValid());
         }
         if (!s_SliceFxCrit.IsValid()) {
-            std::string path = game->data_dir + "/models/fruit/slice_fx_crit.mmd";
-            s_SliceFxCrit = meshMgr->Load(path.c_str());
+            // logical path; FileSystem_Direct prepends data_dir
+            s_SliceFxCrit = meshMgr->Load("models/fruit/slice_fx_crit.mmd");
             printf("[SliceEffect] slice_fx_crit.mmd valid=%d\n",
                    s_SliceFxCrit.IsValid());
         }

@@ -137,14 +137,14 @@ void Bomb::LoadContent() {
     // iconic dark-body bomb, the atlas texture itself needs to be
     // replaced with a version that has the correct art at these UVs.
     {
-        std::string path = game->data_dir + "/models/Fruit/bomb.mmd";
-        g_bombData.model[0] = meshMgr->Load(path.c_str());
+        // logical path; FileSystem_Direct prepends data_dir
+        g_bombData.model[0] = meshMgr->Load("models/Fruit/bomb.mmd");
     }
 
     // Model[1]: binary string "models/Fruit/Bomb_purple.mmd" (0x1BCBF1)
     {
-        std::string path = game->data_dir + "/models/Fruit/bomb_purple.mmd";
-        g_bombData.model[1] = meshMgr->Load(path.c_str());
+        // logical path; FileSystem_Direct prepends data_dir
+        g_bombData.model[1] = meshMgr->Load("models/Fruit/bomb_purple.mmd");
     }
 
     // Original LoadContent (0x001726e8) does NOT assign textures to bomb meshes.
