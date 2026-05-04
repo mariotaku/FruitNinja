@@ -13,10 +13,20 @@ namespace Mortar {
 
 // Matches original DisplayManager / DisplayManagerBada (0x94 = 148 bytes)
 // GL state singleton — manages frame lifecycle, draw colour, depth, filtering
+// Layout (with vtable ptr at +0x00 from DisplayManagerBada being polymorphic):
+//   +0x00 vtable ptr
+//   +0x04 m_ClearColor .. +0x2D m_bSwapPending
+//   +0x2E _pad[6]  (binary has 6 bytes of platform state here, unused in port)
+//   +0x34 m_TextureOverloadPrefix .. +0x90 end of m_ScreenRotationMatrix
+//   sizeof = 0x94
 class DisplayManager : public Singleton<DisplayManager> {
     friend class Singleton<DisplayManager>;
 
 public:
+    // Virtual destructor makes DisplayManager polymorphic, placing the vtable
+    // ptr at +0x00 to match DisplayManagerBada's binary layout.
+    virtual ~DisplayManager();
+
     Colour m_ClearColor;                // +0x04
     Colour m_DrawColor;                 // +0x08
     MortarRectangle m_WindowRect;       // +0x0C (16 bytes)
@@ -24,7 +34,7 @@ public:
     Colour m_GlobalAmbience;            // +0x28
     bool m_bRenderingActive;            // +0x2C
     uint8_t m_bSwapPending;             // +0x2D
-    // padding +0x2E..+0x33
+    uint8_t _pad[6];                    // +0x2E..+0x33 (binary platform state)
     char m_TextureOverloadPrefix[16];   // +0x34
     int m_MagFilterMode;                // +0x44
     int m_MinFilterMode;                // +0x48

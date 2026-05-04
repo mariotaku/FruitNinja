@@ -1485,10 +1485,24 @@
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN6Mortar14DisplayManager24SetTextureOverloadPrefixEPKc": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Struct layout offset mismatch: binary stores prefix to this+0x34 (matching DisplayManager.h header annotation); port compiles to this+0x2a (42 dec) -- a 10-byte discrepancy. Port null-terminates at this+0x39 vs binary field at 0x34+n. Implies a missing or under-sized field before m_TextureOverloadPrefix in the cross-build struct. Implementer must audit src/engine/render/DisplayManager.h field layout and reconcile compiled offsets against binary. Score 915/400.",
-    "score": 915,
+    "verdict": "ACCEPT-deferred",
+    "reason": "Struct offset mismatch fixed: port now compiles m_TextureOverloadPrefix at +0x34 matching binary (vtable ptr at +0x00 added via virtual ~DisplayManager, plus uint8_t _pad[6] at +0x2E..+0x33). Remaining score divergence (910/400): binary calls a single blx ece94 (platform strncpy helper with baked size), port expands to explicit strncpy(dst, src, 0xf) + strb null-terminator. Semantically identical; implementation-style difference vs. binary's inlined platform helper. Score 910/400.",
+    "score": 910,
     "max_score": 400,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14DisplayManagerC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary C1 ctor uses GOT-relative indirect blx calls for Colour/Vec3/MortarRectangle field init and calls a memset helper at 18db0c for m_TextureOverloadPrefix. Port inlines all field stores directly (strb/str/vstr from VFP constants). Struct field offsets match binary (confirmed by both sides storing to +0x2c, +0x2d, +0x28, +0x34, +0x44..+0x4c). Pure code-gen style divergence; no semantic difference. Score 9990/6000.",
+    "score": 9990,
+    "max_score": 6000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar14DisplayManagerC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 base-object ctor alias of C1; identical GOT-indirect vs. inlined code-gen divergence pattern. See _ZN6Mortar14DisplayManagerC1Ev entry. Score 9990/6000.",
+    "score": 9990,
+    "max_score": 6000,
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN6Mortar14TextureManager4LoadEPKc": {
@@ -1545,6 +1559,167 @@
     "reason": "Port implements Find(uint32_t hash) as inline _Rb_tree BST walk with SmartPtr refcount bump on hit, zero store on miss. Binary used push {r4,r5,lr}; sub sp; blx eac5c; blx f4c10; blx e8304 (intrusive-list find + SmartPtr wrap). Container-choice divergence; identical observable semantics. See src/engine/asset/TextureManager.cpp:44-55. Score 5385/2700.",
     "score": 5385,
     "max_score": 2700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN10DojoScreen13ButtonDeletedEP10HUDControl": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Port reads m_pShopButton at [r0, #0xa0] but binary reads [r0, #0x98]. DojoScreen.h confirms m_pShopButton at +0x98. Port struct field offset is 8 bytes too high. Implementer should verify DojoScreen struct padding between HUDControl3d base and first member. Score 730/600.",
+    "score": 730,
+    "max_score": 600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN10MainScreen13ButtonDeletedEP10HUDControl": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Port reads button pointers at [r0,#0xa4/0xa0/0xa8/0xac] but binary reads [r0,#0xa0/0x9c/0xa4/0xa8]. MainScreen.h shows pPlayButton=+0x9c, pDojoButton=+0xa0, pQuitBtn=+0xa4, pMoreGamesBtn=+0xa8. Port offsets are all +4 high. Struct layout padding divergence -- implementer must audit members between HUDControl3d base and button pointer fields in MainScreen. Score 3255/2100.",
+    "score": 3255,
+    "max_score": 2100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN10MenuButton12DeletedPeiceEP10HUDControl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses intrusive linked-list find-and-remove (blx f59e4/ea440/e7b84 iterator helpers); port uses std::list sentinel walk + _ZNSt15_List_node_base6unhookEv + _ZdlPv. HUDControl container-layer divergence. Score 3275/2800.",
+    "score": 3275,
+    "max_score": 2800,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN10ShopScreen15DeletedMenuItemEP10HUDControl": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Port reads m_pEquipButton at [r0,#0x90] and m_pBuyButton at [r0,#0x88] but ShopScreen.h specifies m_pEquipButton=+0x8c and m_pBuyButton=+0x84 (port is +4 off throughout). Additionally binary has `bl 146824` + ldmia/stmia copying 3 floats (fruit HalfB position kick) that is absent from port. Both struct offset drift and missing position-restore block are real semantic bugs. Score 5765/5700.",
+    "score": 5765,
+    "max_score": 5700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN11PowerUpShop13ButtonDeletedEP10HUDControl": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Binary has `bl 146824` (3D position-copy helper) + ldmia/stmia 3-float block absent from port. Binary literal pool is 0xc3f00000 (-480.0f) while port pool is 0x00000000 (0.0f) -- position Y-kick constant is wrong. Port also missing vstr [r3,#0xbc] write present in binary. Incomplete fruit-position restore in delete callback. Score 2360/2900.",
+    "score": 2360,
+    "max_score": 2900,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN11SlashEntity18MissControlDeletedEP10HUDControl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary clears back-pointer at [r0,#0x130] (m_pComboMissControl) when MissControl deleted; port is empty stub (bx lr). Field not in port struct. See src/entities/SlashEntity.cpp:222 // TODO: 0x17B388 -- m_pComboMissControl field doesn't exist in port struct. Score 960/600.",
+    "score": 960,
+    "max_score": 600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN12ScreenButton14ControlDeletedEP10HUDControl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses intrusive list with PIC GOT data-table lookup (0x000bb1e4), complex remove path (blx f8420, blx ea050/e9f54/e5c7c iterator helpers). Port uses std::list sentinel walk + _ZNSt15_List_node_base6unhookEv + _ZdlPv. Container-layer divergence. Score 4725/4500.",
+    "score": 4725,
+    "max_score": 4500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN18AchievementManager19UnlockedAchievementEmP3HUD": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary allocates 0x110 bytes for NotificationControl (movs r0,#0x110); port allocates 0x114. NotificationControl.h declares sizeof=0x110; +4 likely cross-compiler struct padding. Core logic (std::map find, notifType from name[0], NotificationControl ctor, HUD::AddControl) semantically equivalent. Container iteration (std::map vs binary intrusive list) also differs. Implementer should confirm 0x114 is cross-ABI padding, not a new field. Score 7844/6100.",
+    "score": 7844,
+    "max_score": 6100,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD10AddControlEP10HUDControlb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses intrusive list hook helpers (blx e6744 push_front / blx ea440 push_back). Port allocates std::list node (_Znwj 0xc bytes), fills node fields, calls _ZNSt15_List_node_base4hookEPS_. Both push_front/push_back paths preserved. Container-layer divergence. See src/hud/HUD.cpp:46-51. Score 3435/1000.",
+    "score": 3435,
+    "max_score": 1000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD13RemoveControlEP10HUDControl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary: null-guard, fires m_RemoveCallback (adds.w r0,r1,#0x38; blx f8420), then blx edfec. Port: null-guard, fires m_RemoveCallback, then full std::list traversal + _ZNSt15_List_node_base6unhookEv + _ZdlPv. Container-layer divergence. See src/hud/HUD.cpp:54-59. Score 4728/1000.",
+    "score": 4728,
+    "max_score": 1000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD13ResetControlsEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls blx eeb74 (begin) + blx eb040 (advance) loop dispatching vtable+0x10 (Reset). Port walks std::list sentinel directly dispatching (*it)->Reset(). Same semantics, container-layer iteration differs. See src/hud/HUD.cpp:120-124. Score 1990/2300.",
+    "score": 1990,
+    "max_score": 2300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD21SetToMultiplayerStateEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Two-pass collect-then-remove pattern matches binary intent: first loop calls vtable+0x2c (SetToMultiplayerState), pushes true-returns into temp list; second loop calls RemoveControl. Binary uses intrusive iterators (blx ea440/f00f8/eeb74/f4c34); port builds std::list<HUDControl*> toRemove and iterates that. Container-layer divergence; logic is equivalent. See src/hud/HUD.cpp:157-168. Score 11823/8000.",
+    "score": 11823,
+    "max_score": 8000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD4InitEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls blx e6d38 (std::list _M_init, sentinel-only, trivial). Port expands controls.clear() to a node-iteration + _ZdlPv loop before resetting sentinels. Functional semantics match (empty list after Init). Container-layer expansion from std::list::clear(). See src/hud/HUD.cpp:21-23. Score 1330/300.",
+    "score": 1330,
+    "max_score": 300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD4SaveEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary: blx eeb74 (begin) + blx eb040 (advance) loop with cbz null-check, dispatches vtable+0x38 (Save). Port: std::list sentinel walk, cbz null-check, calls c->Save(). Semantically identical; container-layer iteration pattern differs. See src/hud/HUD.cpp:141-146. Score 1875/2300.",
+    "score": 1875,
+    "max_score": 2300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD4SkipEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary: blx eeb74 + blx eb040 loop dispatching vtable+0x34 (Skip). Port: std::list sentinel walk calling (*it)->Skip(). Container-layer divergence; same vtable slot (0x34). See src/hud/HUD.cpp:149-152. Score 1990/2300.",
+    "score": 1990,
+    "max_score": 2300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses intrusive iterator helpers (blx f7b68 conditional-erase) while port uses std::list iterator erase + _ZNSt15_List_node_base6unhookEv + _ZdlPv. Both: call MissControl::PreUpdate, reset m_globalTimeScale to 1.0f, iterate controls calling Update when active, remove pending controls via m_RemoveCallback + conditional delete. Container-layer divergence in remove path. See src/hud/HUD.cpp:94-117. Score 6320/5500.",
+    "score": 6320,
+    "max_score": 5500,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD7OnPauseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary iterates controls via blx f0bc0/eeb74, dispatches vtable+0x30 (GetType), calls blx f7c94 (ScrollingMenu::ClearTouch static) when type==8. Port has same loop structure but the ScrollingMenu::ClearTouch call is a TODO stub. See src/hud/HUD.cpp:133 // TODO: 0x00144c00 -- make ScrollingMenu::ClearTouch static and call it here. Score 2095/2600.",
+    "score": 2095,
+    "max_score": 2600,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary sets GOT+0x7990[+0x34] flag to 1 before loop and restores it after (GameData guard). Port omits this guard per documented TODO. Also binary's list teardown (blx eeb80 helpers) differs from port's explicit _ZdlPv + sentinel reset. See src/hud/HUD.cpp:28 // TODO: set GameData[+0x34] in-Release guard when GameData struct is ported. Score 5145/4700.",
+    "score": 5145,
+    "max_score": 4700,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUD9BeginDrawEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses blx eeb74/eb040 iterator pair + cbz skip-if-inactive, dispatches vtable+0x14 (BeginDraw) with vmov s0,s16 (dt). Port walks std::list sentinel, checks m_bActive with cbnz, dispatches ldr vtable+0x14 + blx. Container-layer divergence; same vtable slot. See src/hud/HUD.cpp:62-67. Score 3635/3000.",
+    "score": 3635,
+    "max_score": 3000,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUDC1Ev": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Same initialization values (vmov s15,#0x70 = 1.0f, 6x vstr). Binary calls blx f51f8 (list _M_init sentinel setup) then vstr block; port writes sentinel pointers [r3,#0]/[r3,#4] directly then vstr block. vstr field order differs (compiler scheduling reorder) but all values identical. Score 1125/1200.",
+    "score": 1125,
+    "max_score": 1200,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUDC2Ev": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "C2 alias of C1; same as HUDC1Ev -- vstr reorder + list sentinel init method differs, identical values. Score 1125/1200.",
+    "score": 1125,
+    "max_score": 1200,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUDD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary calls blx e6510 (Release/list-walk helper) + blx eeb80 (list destroy) x2. Port expands to full std::list teardown: per-node m_RemoveCallback + conditional delete loop, then sentinel-reset loop (same as HUD::Release). Container-layer expansion. See src/hud/HUD.cpp:15-18 (dtor calls Release). Score 3220/1300.",
+    "score": 3220,
+    "max_score": 1300,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN3HUDD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "D2 alias of D1; same as HUDD1Ev. Score 3220/1300.",
+    "score": 3220,
+    "max_score": 1300,
     "decided_at": "2026-05-04T00:00Z"
   }
 }

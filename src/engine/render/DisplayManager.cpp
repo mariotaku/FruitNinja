@@ -1,8 +1,18 @@
 #include "render/DisplayManager.h"
 #include <cstring>
+#include <cstddef>
 // SDL-bound bits live in DisplayManagerSDL.cpp.
 
+#ifdef __bada__
+static_assert(offsetof(Mortar::DisplayManager, m_TextureOverloadPrefix) == 0x34,
+    "DisplayManager::m_TextureOverloadPrefix must be at +0x34");
+static_assert(sizeof(Mortar::DisplayManager) == 0x94,
+    "DisplayManager must be 0x94 bytes");
+#endif
+
 namespace Mortar {
+
+DisplayManager::~DisplayManager() {}
 
 DisplayManager::DisplayManager()
     : m_ClearColor(0, 0, 0, 255)
