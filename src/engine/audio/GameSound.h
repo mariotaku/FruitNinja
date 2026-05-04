@@ -16,36 +16,30 @@ public:
     static const int MAX_SLOTS = 32;
 
     // Slot layout (stride 0x38 = 56 bytes, ARM32).
-    // Binary field order confirmed from RE; port may differ in sizeof on 64-bit host.
+    // Field order verified from SFXPlay @ 0x00129270:
+    //   str r0,[r4,#0x8] -> sound at +0x00; str r3,[r4,#0xc] -> id at +0x04.
+    // Delegate1 is 36 bytes (asm-inspector confirmed); fills +0x14..+0x37. No trailing field.
     struct Slot {
-        uint32_t                              id;             // +0x00: sound name hash
-        Mortar::MortarSound*                  sound;          // +0x04
+        Mortar::MortarSound*                  sound;          // +0x00
+        uint32_t                              id;             // +0x04: sound name hash
         bool                                  isFree;         // +0x08: 1 = available
         uint8_t                               pad09;          // +0x09: set 0 at init
         uint8_t                               pausedBySystem; // +0x0A: set 1 by Pause(), cleared by Unpause()
         uint8_t                               pad0B;          // +0x0B: alignment
         float                                 volume;         // +0x0C: default 1.0
         float                                 pitch;          // +0x10: default 1.0
-        // +0x14: 32-byte finish callback (Delegate1 on ARM32; may be wider on 64-bit host)
-        Delegate1<bool, Mortar::MortarSound*> finishCallback; // +0x14
-        uint32_t                              reserved;       // +0x34 (ARM32)
+        Delegate1<bool, Mortar::MortarSound*> finishCallback; // +0x14 (36 bytes; fills +0x14..+0x37)
     };
 
     // offsetof asserts are ARM32 / Bada-only (4-byte ptrs, short-enums ABI).
 #ifdef __bada__
-    // TODO: Slot sizeof + reserved offset asserts disabled under cross-build:
-    //   binary's Delegate1 is 32 bytes per RE; port's Delegate.h is 36 bytes
-    //   (FreeFn/MemFn/Functor concept-with-vptr design). Fixing requires
-    //   either narrowing the port's Delegate or updating the binary RE
-    //   to confirm 36B. Asserts that don't depend on Delegate sizing still fire.
-    static_assert(__builtin_offsetof(Slot, id)             == 0x00, "Slot::id offset");
-    static_assert(__builtin_offsetof(Slot, sound)          == 0x04, "Slot::sound offset");
+    static_assert(sizeof(Slot) == 0x38, "GameSound::Slot must be 0x38 bytes on ARM32");
+    static_assert(__builtin_offsetof(Slot, sound)          == 0x00, "Slot::sound offset");
+    static_assert(__builtin_offsetof(Slot, id)             == 0x04, "Slot::id offset");
     static_assert(__builtin_offsetof(Slot, isFree)         == 0x08, "Slot::isFree offset");
     static_assert(__builtin_offsetof(Slot, volume)         == 0x0C, "Slot::volume offset");
     static_assert(__builtin_offsetof(Slot, pitch)          == 0x10, "Slot::pitch offset");
     static_assert(__builtin_offsetof(Slot, finishCallback) == 0x14, "Slot::finishCallback offset");
-    // static_assert(sizeof(Slot) == 0x38, ...);
-    // static_assert(__builtin_offsetof(Slot, reserved) == 0x34, ...);
 #endif
 
     float m_MasterVolume;       // +0x00: default 1.0
