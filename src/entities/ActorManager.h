@@ -287,20 +287,26 @@ public:
     // 0x0017013c. Delete each listener, then clear list.
     // Defunct: zero in-binary callers; binary @ 0x0017013c.
     void ClearAllListeners();
+
+#ifdef __bada__
+    friend struct ActorManagerLayoutAssert;
+#endif
 };
 
 // Layout asserts. m_FactoryDelegate / m_HashDelegate offsets deviate from binary because:
 //   m_FactoryDelegate is raw fnptr (4B) vs Delegate1 object (36B) (+32B drift)
 // Those two offsets are excluded. All list-containing fields use 8B (Sourcery 2010q1).
 #ifdef __bada__
-static_assert(offsetof(ActorManager, m_FreePool)          == 0x008,  "m_FreePool offset");
-static_assert(offsetof(ActorManager, m_FreeCount)         == 0x808,  "m_FreeCount offset");
-static_assert(offsetof(ActorManager, m_PendingDeact)      == 0x80C,  "m_PendingDeact offset");
-static_assert(offsetof(ActorManager, m_PendingDeactCount) == 0x100C, "m_PendingDeactCount offset");
-static_assert(offsetof(ActorManager, m_pTypeLists)        == 0x1010, "m_pTypeLists offset");
-static_assert(offsetof(ActorManager, m_Listeners)         == 0x1014, "m_Listeners offset");
-static_assert(offsetof(ActorManager, m_NumTypes)          == 0x101C, "m_NumTypes offset");
-static_assert(offsetof(ActorManager, m_DebugDraw)         == 0x1020, "m_DebugDraw offset");
+struct ActorManagerLayoutAssert {
+    static_assert(offsetof(ActorManager, m_FreePool)          == 0x008,  "m_FreePool offset");
+    static_assert(offsetof(ActorManager, m_FreeCount)         == 0x808,  "m_FreeCount offset");
+    static_assert(offsetof(ActorManager, m_PendingDeact)      == 0x80C,  "m_PendingDeact offset");
+    static_assert(offsetof(ActorManager, m_PendingDeactCount) == 0x100C, "m_PendingDeactCount offset");
+    static_assert(offsetof(ActorManager, m_pTypeLists)        == 0x1010, "m_pTypeLists offset");
+    static_assert(offsetof(ActorManager, m_Listeners)         == 0x1014, "m_Listeners offset");
+    static_assert(offsetof(ActorManager, m_NumTypes)          == 0x101C, "m_NumTypes offset");
+    static_assert(offsetof(ActorManager, m_DebugDraw)         == 0x1020, "m_DebugDraw offset");
+};
 #endif
 
 #endif  // FN_ACTOR_MANAGER_H

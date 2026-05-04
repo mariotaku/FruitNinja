@@ -94,14 +94,20 @@ private:
     void PlayCallback();
     void ShopCallback();
     void AboutCallback();
+
+#ifdef __bada__
+    friend struct DojoScreenLayoutAssert;
+#endif
 };
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(offsetof(DojoScreen, m_pPlayButton)  == 0x94, "m_pPlayButton offset");
-static_assert(offsetof(DojoScreen, m_pShopButton)  == 0x98, "m_pShopButton offset");
-static_assert(offsetof(DojoScreen, m_pAboutButton) == 0x9c, "m_pAboutButton offset");
-static_assert(offsetof(DojoScreen, m_pAboutScreen) == 0xa0, "m_pAboutScreen offset");
+struct DojoScreenLayoutAssert {
+    static_assert(offsetof(DojoScreen, m_pPlayButton)  == 0x94, "m_pPlayButton offset");
+    static_assert(offsetof(DojoScreen, m_pShopButton)  == 0x98, "m_pShopButton offset");
+    static_assert(offsetof(DojoScreen, m_pAboutButton) == 0x9c, "m_pAboutButton offset");
+    static_assert(offsetof(DojoScreen, m_pAboutScreen) == 0xa0, "m_pAboutScreen offset");
+};
 #endif
 
 #endif
