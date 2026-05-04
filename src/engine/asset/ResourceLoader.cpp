@@ -1,5 +1,5 @@
 #include "asset/ResourceLoader.h"
-#include "asset/FileManager.h"
+#include "asset/File.h"
 #include <cstdio>
 
 namespace Mortar {
@@ -16,32 +16,14 @@ ResourceLoader::ResourceLoader()
 ResourceLoader::ResourceLoader(const char* filePath)
     : m_ReadPos(0)
 {
-    // Case-insensitive open — binary Bada paths (e.g. "models/Fruit/...")
-    // don't match the on-disk casing ("models/fruit/...") on Linux/webOS.
-    FILE* f = FileManager::OpenCI(filePath, "rb");
-    if (!f) {
+    File f(filePath, 0, 0);
+    if (!f.Load(nullptr, 0)) {
         fprintf(stderr, "ResourceLoader: failed to open '%s'\n", filePath);
         return;
     }
 
-    // Read the entire file
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (size <= 0) {
-        fclose(f);
-        return;
-    }
-
-    std::vector<uint8_t> fileData(size);
-    size_t bytesRead = fread(fileData.data(), 1, size, f);
-    fclose(f);
-
-    if ((long)bytesRead < size) {
-        fprintf(stderr, "ResourceLoader: short read for '%s' (%zu/%ld)\n",
-                filePath, bytesRead, size);
-    }
+    unsigned long size = f.Size();
+    if (size == 0) return;
 
     // Extract base path from file path
     std::string pathStr(filePath);
@@ -50,7 +32,7 @@ ResourceLoader::ResourceLoader(const char* filePath)
         m_BasePath = AsciiString(pathStr.substr(0, lastSlash + 1));
     }
 
-    Initialize(fileData.data(), fileData.size());
+    Initialize(static_cast<const uint8_t*>(f.Data()), size);
 }
 
 // Matches ResourceLoader::Initialize (0x001b4708)

@@ -9,7 +9,6 @@
 #include "asset/IFileSystem.h"
 
 #include <list>
-#include <cstdio>
 
 // Binary @ singleton pattern (Meyers via Singleton<> CRTP)
 class FileManager : public Mortar::Singleton<FileManager> {
@@ -50,11 +49,6 @@ public:
     //          Port uses platform-specific paths via FileSystemPosix/Win32 directly.
     int GetSaveRootDirectory(char* outBuf, const char* relPath, bool createDir);
 
-    // DIFFERS: compat shim — not in binary; keeps existing call sites (File::Open, Texture.cpp, etc.) intact.
-    // Walks m_FileSystems via sys->OpenFile; falls back to fopen if registry returns null.
-    // Binary: File::Open calls FileManager::OpenFile (registry only, no fopen fallback).
-    static FILE* OpenCI(const char* path, const char* mode);
-
 private:
     FileManager() {}
     ~FileManager();
@@ -62,9 +56,6 @@ private:
     // Binary @ Mortar::FileManager::m_FileSystems — descending priority order on insert.
     // std::list<IFileSystem*> at +0x00; sole member, so sizeof(FileManager) == 8 (Sourcery 2010q1 pre-C++11 list).
     std::list<Mortar::IFileSystem*> m_FileSystems;
-
-    // mode string -> flags conversion for the OpenCI compat shim
-    static unsigned long ModeToFlags(const char* mode);
 };
 
 // 32-bit ARM only (8B std::list, Sourcery 2010q1 pre-C++11).

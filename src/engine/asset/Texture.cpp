@@ -1,10 +1,8 @@
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
-#include "asset/FileManager.h"
+#include "asset/File.h"
 #include "render/DisplayManager.h"
 #include <cstdio>
-#include <cstring>
-#include <vector>
 
 namespace Mortar {
 
@@ -108,44 +106,43 @@ void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType
 
 // Matches GPUafyTexture (0x001898d8) + Texture::Load (0x00189dd4)
 SmartPtr<Texture> Texture::Load(const char* path) {
-    // Case-insensitive open — Bada shipped mixed-case paths that don't
-    // match the lowercase asset dump on case-sensitive filesystems.
-    FILE* f = FileManager::OpenCI(path, "rb");
-    if (!f) {
+    Mortar::File f(path, 0, 0);
+    bool opened = f.Open();
+    if (!opened) {
         DisplayManager& dm = DisplayManager::GetInstance();
         if (dm.m_TextureOverloadPrefix[0] != '\0') {
             std::string altPath = std::string(dm.m_TextureOverloadPrefix) + path;
-            f = FileManager::OpenCI(altPath.c_str(), "rb");
+            Mortar::File fAlt(altPath.c_str(), 0, 0);
+            if (fAlt.Open()) {
+                return Texture::Load(altPath.c_str());
+            }
         }
-        if (!f) {
-            fprintf(stderr, "Texture::Load: failed to open '%s'\n", path);
-            return SmartPtr<Texture>();
-        }
-    }
-
-    uint8_t header[12];
-    if (fread(header, 1, 12, f) != 12) {
-        fclose(f);
+        fprintf(stderr, "Texture::Load: failed to open '%s'\n", path);
         return SmartPtr<Texture>();
     }
 
-    uint8_t widthLog2  = header[0];
-    uint8_t heightLog2 = header[1];
-    uint8_t format     = header[2];
+    if (!f.Load(nullptr, 0)) {
+        fprintf(stderr, "Texture::Load: failed to load '%s'\n", path);
+        return SmartPtr<Texture>();
+    }
+
+    unsigned long fileSize = f.Size();
+    if (fileSize < 12) {
+        return SmartPtr<Texture>();
+    }
+
+    const uint8_t* data = static_cast<const uint8_t*>(f.Data());
+    uint8_t widthLog2  = data[0];
+    uint8_t heightLog2 = data[1];
+    uint8_t format     = data[2];
     int width  = 1 << widthLog2;
     int height = 1 << heightLog2;
 
-    fseek(f, 0, SEEK_END);
-    long fileSize = ftell(f);
-    long dataSize = fileSize - 12;
-    fseek(f, 12, SEEK_SET);
-
-    std::vector<uint8_t> raw(dataSize);
-    if ((long)fread(raw.data(), 1, dataSize, f) != dataSize) {
-        fclose(f);
+    long dataSize = (long)fileSize - 12;
+    const uint8_t* raw = data + 12;
+    if (dataSize <= 0) {
         return SmartPtr<Texture>();
     }
-    fclose(f);
 
     Texture* tex = new Texture();
     tex->m_Path = path;
@@ -153,19 +150,19 @@ SmartPtr<Texture> Texture::Load(const char* path) {
     // Matches TexFmtToGL (0x00189f78) — verified from Ghidra decompilation
     switch (format) {
         case 0x00: // RGB888
-            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_BYTE, raw.data());
+            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_BYTE, raw);
             break;
         case 0x01: // RGBA8888
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_BYTE, raw.data());
+            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_BYTE, raw);
             break;
         case 0x0f: // RGBA5551
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, raw.data());
+            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, raw);
             break;
         case 0x10: // RGBA4444
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4, raw.data());
+            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4, raw);
             break;
         case 0x11: // RGB565
-            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, raw.data());
+            tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, raw);
             break;
         // case 0x0b..0x0e: PVRTC compressed (not supported on desktop GL)
         default:
