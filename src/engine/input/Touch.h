@@ -47,7 +47,7 @@ struct TouchState {
 
 // Binary Mortar::Touch::TEvnt (20 bytes).
 // Binary param 'b': true = press OR move, false = release.
-// DIFFERS: binary param named 'b'; port uses 'isActive' (was 'isMove', renamed for clarity).
+// Port-specific: binary param named 'b'; port uses 'isActive' (was 'isMove', renamed for clarity).
 struct TEvnt {
     uint32_t extId;       // a: external pointer id
     bool     isActive;    // b: true=press or move, false=release

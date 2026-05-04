@@ -15,7 +15,7 @@ namespace Mortar {
 // 40-byte SSO body (inline_buf for strings <= 32 chars; heap-allocated for longer).
 // Inherits Mortar::MicroBuffer<char, 32> -- for port simplicity we inline the
 // body here.
-// DIFFERS: port doesn't model MicroBuffer as a separate template; equivalent inlined.
+// Port-specific: port doesn't model MicroBuffer as a separate template; equivalent inlined.
 class AsciiString {
 public:
     AsciiString();

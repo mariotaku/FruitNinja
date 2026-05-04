@@ -44,7 +44,7 @@ enum MainScreenState {
 
 class MainScreen : public HUDControl3d {
 public:
-    // DIFFERS: binary ctor takes no args (_ZN10MainScreenC1Ev @ 0x0014C8A8);
+    // Port-specific: binary ctor takes no args (_ZN10MainScreenC1Ev @ 0x0014C8A8);
     //   port takes Game& because Game is reachable via *GOT[0x7990] in binary.
     //   Body logic verified equivalent in R4 W2 RE.
     MainScreen(Game& g);
@@ -58,7 +58,7 @@ public:
     // Defunct: vtable PreDraw — no-op stub matching binary's empty body; binary @ 0x0014AC94
     void* PreDraw(float* hudScale);
     void Update(float dt) override;                     // vtable slot 10 @ 0x0014B278
-    // DIFFERS: binary signature is Draw(float*) at vtable slot 7 @ 0x0014D4EC;
+    // Port-specific: binary signature is Draw(float*) at vtable slot 7 @ 0x0014D4EC;
     //   port uses Draw(Vec3&, int) for ergonomic param-passing.
     //   Body logic verified equivalent in R4 W2 RE.
     void Draw(const Vec3& hudScale, int layerMask) override;
