@@ -24,12 +24,15 @@ public:
     static Delegate Make(T*, R (T::*)(Args...)) { return Delegate(); }
     static Delegate MakeFree(R (*)(Args...)) { return Delegate(); }
 private:
-    // Real Delegate layout: aligned_storage<32, sizeof(void*)> + uint8 tag + 3B pad = 36 bytes.
-    // Match exactly so containing structs (HUDControl::m_RemoveCallback, MenuButton, etc.)
-    // have the same sizeof under the cross-toolchain as on the host build.
+    // Real Delegate layout on ARM32 (Bada): 32 bytes total.
+    // Layout per binary RE: aligned_storage<28> + uint8 tag + 3B pad,
+    // OR aligned_storage<32> with tag stored inside the storage block.
+    // Empirically the binary's Delegate1<bool, MortarSound*> in GameSound::Slot
+    // is exactly 32 bytes (sizeof Slot == 0x38 with finishCallback @ +0x14
+    // and reserved @ +0x34 means finishCallback occupies +0x14..+0x33 = 32B).
+    // 32 bytes total on ARM32; 36 bytes on 64-bit host (which is fine -- only
+    // the cross-toolchain's offsetof asserts run under __bada__).
     typename std::aligned_storage<32, sizeof(void*)>::type _storage;
-    unsigned char                                          _tag;
-    unsigned char                                          _pad[3];
 };
 
 }  // namespace Mortar
