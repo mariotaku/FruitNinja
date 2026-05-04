@@ -328,7 +328,7 @@ void GameInitialise() {
     // Pool allocation + HUD registration happens in GameInit (which
     // runs AFTER the HUD is created).
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
-    PowerUpShop::LoadContent();     // TODO: power-up shop textures
+    PowerUpShop::LoadContent();     // binary @ 0x00155b50 — empty body
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
     // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
     PreloadSounds();   // STUB until ported
