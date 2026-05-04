@@ -116,6 +116,7 @@ GameOverScreen::~GameOverScreen() {
 // Initialise (0x00142674)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00142674
 void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
                                 int expressionIdx, int bgPatternIdx,
                                 int pomCount, int starCount)
@@ -234,15 +235,18 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 // Init (vtable slot 2, 0x00140548) — trivial pass-through
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00140548
 void GameOverScreen::Init() {
-    // Binary: (*vtable[10])(this) — calls Update once. Port: no-op (Update
-    // is not safe to call from Init without state being ready).
+    // TODO: 0x00140548 -- Init invokes vtable+0x10 (Update/slot 10), not vtable+0x18 -- fix misleading comment
+    // Binary: (*vtable[10])(this) calls Update once with dt=0.
+    // Port: no-op (Update not safe to call from Init without state ready).
 }
 
 // ---------------------------------------------------------------------------
 // BeginDraw (vtable slot 5, 0x00140590)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00140590
 void GameOverScreen::BeginDraw(float /*dt*/) {
     // Binary: m_LayerFlags = (m_State != 0) ? 0x81 : 1
     // Layer 1 = base Draw; layer 0x80 = PreDrawOrder/DrawOrder overlays.
@@ -253,7 +257,9 @@ void GameOverScreen::BeginDraw(float /*dt*/) {
 // Release (vtable slot 3, 0x00140d98)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00140d98
 void GameOverScreen::Release() {
+    // TODO: 0x00140d98 -- pSaveData[+0x12C] write should be byte 0, not int -1 (minor divergence)
     m_GameOverTex = 0; // field_0x114.SetNull()
 
     Game* game = Game::GetInstance();
@@ -301,6 +307,7 @@ void GameOverScreen::Release() {
 // SetTerminate (0x00140604)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00140604
 void GameOverScreen::SetTerminate() {
     // Binary: *(uint8_t*)(game + 0x33) = 1; CancelHUDProgressionTimer (no-op stub)
     m_bPendingRemoval = 1;
@@ -310,6 +317,7 @@ void GameOverScreen::SetTerminate() {
 // SetStateWait (0x00140688)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00140688
 void GameOverScreen::SetStateWait() {
     // Binary: checks if leaderboard sign-in dialog needed; if not, state = 6.
     // Port: always go to state 6 (online services defunct).
@@ -317,9 +325,70 @@ void GameOverScreen::SetStateWait() {
 }
 
 // ---------------------------------------------------------------------------
+// ProgressionTimer no-op stubs (empty in binary)
+// ---------------------------------------------------------------------------
+
+// Defunct: ProgressionTimer -- empty in binary @ 0x001405fc
+void GameOverScreen::StartProgressionTimer() {}
+
+// Defunct: ProgressionTimer -- empty in binary @ 0x00140600
+void GameOverScreen::CancelHUDProgressionTimer() {}
+
+// Defunct: ProgressionTimer -- empty in binary @ 0x00140614
+void GameOverScreen::OnProgressionTimerUp() {}
+
+// Defunct: ProgressionTimer -- empty in binary @ 0x00140618
+void GameOverScreen::HandleProgressionTimerExpiration() {}
+
+// ---------------------------------------------------------------------------
+// Social share callbacks
+// ---------------------------------------------------------------------------
+
+// Defunct: Facebook share -- no-op stub; binary @ 0x0014083c (NetworkManager::PublishText)
+void GameOverScreen::FacebookCallback() {}
+
+// Defunct: Twitter share -- empty in binary @ 0x001405f8
+void GameOverScreen::TwitterCallback() {}
+
+// Binary @ 0x001405e8 -- PostCallback(result): m_bPostInProgress=0; m_bPostOk=(result==0)
+void GameOverScreen::PostCallback(int result) {
+    m_PostInProgress = false;
+    m_PostOk = (result == 0);
+}
+
+// ---------------------------------------------------------------------------
+// LeaderboardsCallback (Binary @ 0x001405a0)
+// ---------------------------------------------------------------------------
+
+// Binary @ 0x001405a0 -- LeaderboardsCallback: state-0/6 + alpha>0.999 -> m_State=10
+//                       (launches NetworkManager dashboard, defunct)
+void GameOverScreen::LeaderboardsCallback() {
+    if (m_State == 0 || m_State == 6) {
+        Game* game = Game::GetInstance();
+        if (game && game->m_TransitionTimer > 0.999f) {
+            m_Timer = 0.0f;
+            m_State = 10;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DeletedControl (Binary @ 0x00140558)
+// ---------------------------------------------------------------------------
+
+// Binary @ 0x00140558 -- wired as remove-callback on m_pBonusScreen/m_pSlot9c/m_pNoticeCtrl.
+// On removal, clears the slot and (for bonusScreen+noticeCtrl) forces state=6.
+void GameOverScreen::DeletedControl(HUDControl* ctrl) {
+    if (ctrl == (HUDControl*)m_pBonusScreen) { m_pBonusScreen = nullptr; m_State = 6; }
+    if (ctrl == m_pSlot9c)                   { m_pSlot9c = nullptr; }
+    if (ctrl == m_pNoticeCtrl)               { m_pNoticeCtrl = nullptr; m_State = 6; }
+}
+
+// ---------------------------------------------------------------------------
 // FindMostOfFruit (0x00141a18)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00141a18
 void GameOverScreen::FindMostOfFruit() {
     Game* game = Game::GetInstance();
     FruitSaveData* save = game ? game->pSaveData : nullptr;
@@ -376,6 +445,7 @@ void GameOverScreen::FindMostOfFruit() {
 // CreateRetryButton (0x00141188)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00141188
 void GameOverScreen::CreateRetryButton() {
     if (m_pRetryBtn != nullptr) return;
 
@@ -401,18 +471,34 @@ void GameOverScreen::CreateRetryButton() {
         Mortar::Delegate<void()>::Make(this, &GameOverScreen::OnRetryClicked);
 
     game->hud->AddControl(m_pRetryBtn, false);
+    // TODO: 0x00141188 -- wire m_pRetryBtn remove-callback to DeletedControl
+}
+
+// Binary @ 0x0014105c
+void GameOverScreen::RetryCallback() {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+    if (m_State != 0 && m_State != 6 && m_State != 14 && m_State != 10) return;
+    if (game->m_TransitionTimer <= 0.989945f) return;
+    CancelHUDProgressionTimer();
+    // TODO: 0x0014105c -- session-stat reset block at GOT+DAT_00141164 (out of scope)
+    // TODO: FruitSaveData::ClearCombo (port may lack the API)
+    if (game->pSaveData) {
+        // game->pSaveData->ClearCombo();   // gate if missing
+    }
+    m_State = 7;
+    // TODO: GameSound::SFXPlay menu_retry sound
 }
 
 void GameOverScreen::OnRetryClicked() {
-    Game* g = Game::GetInstance();
-    if (g) g->retryFlag = 1;
-    m_State = 7;
+    RetryCallback();
 }
 
 // ---------------------------------------------------------------------------
 // CreateQuitButton (0x001412e4)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x001412e4
 void GameOverScreen::CreateQuitButton() {
     Game* game = Game::GetInstance();
     if (!game || !game->hud) return;
@@ -437,17 +523,33 @@ void GameOverScreen::CreateQuitButton() {
         Mortar::Delegate<void()>::Make(this, &GameOverScreen::OnQuitClicked);
 
     game->hud->AddControl(m_pQuitBtn, false);
+    // TODO: 0x001412e4 -- wire m_pQuitBtn remove-callback to DeletedControl
+}
+
+// Binary @ 0x00140620
+void GameOverScreen::QuitCallback() {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+    if (m_State != 0 && m_State != 6 && m_State != 14 && m_State != 10) return;
+    CancelHUDProgressionTimer();
+    // TODO: FruitSaveData::ClearCombo
+    m_State = 9;
+    // TODO: HitMenuBomb(Vec3(-0.0625f, 163.0f, -96.0f))
 }
 
 void GameOverScreen::OnQuitClicked() {
-    m_State = 9;
+    QuitCallback();
 }
 
 // ---------------------------------------------------------------------------
 // Update (vtable slot 10, 0x00141b34) — main state machine (529 lines)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00141b34
 void GameOverScreen::Update(float dt) {
+    // TODO: 0x00142674 -- fast-skip path: game->m_TransitionTimer should be 0.0f, not 1.0f (port-side bug, see GameOverScreen RE 2026-05-04)
+    // TODO: 0x00140d98 -- pSaveData[+0x12C] write should be byte 0, not int -1 (minor divergence)
+    // TODO: 0x00141b34 -- state 6 ComboStarAchievement should gate on (gameMode==3 && bonusScreen!=null && combo<25)
     Game* game = Game::GetInstance();
     if (!game) return;
 
@@ -790,6 +892,7 @@ void GameOverScreen::Update(float dt) {
 // PreDrawOrder (vtable slot 8, 0x0014171c)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x0014171c
 void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
     if (layerMask & 0x80) {
         // Layer 0x80: draw "days remaining" text + extra texture
@@ -811,6 +914,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 // DrawOrder (vtable slot 9, 0x00141448)
 // ---------------------------------------------------------------------------
 
+// Binary @ 0x00141448
 void GameOverScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
     if (!(layerMask & 1)) return; // cached check
 

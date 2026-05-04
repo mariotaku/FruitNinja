@@ -44,6 +44,7 @@
 #include "core/SystemManager.h"
 #include "particle/PSPParticleManager.h"
 #include "asset/FileManager.h"
+#include "asset/FileSystem_Direct.h"
 #include "render/Font.h"
 #include "util/Localisation.h"
 #include "util/StringHash.h"
@@ -94,7 +95,13 @@ void GameInitialise() {
     // Step 2: MatrixManager::Init() — 0x0019e2ac: just calls ResetAllStacks
     Mortar::MatrixManager::GetInstance().Init();
 
-    // Step 3: FileSystem — skipped, port uses direct filesystem
+    // Step 3: FileSystem — Game::CreateFileSystems @ 0x0010dca8
+    // new FileSystem_Direct(); fs->Initialise(dataRoot, false); FileManager::AddSystem(fs, 0, 0)
+    {
+        Mortar::FileSystem_Direct* fs = new Mortar::FileSystem_Direct();
+        fs->Initialise(game->data_dir.c_str(), /*writable=*/false);
+        Mortar::FileManager::GetInstance().AddSystem(fs, /*id=*/0, /*priority=*/0);
+    }
 
     // Step 4: DisplayManager::GetInstance() → SetWindowSize, SetClearColour, SetLightDirection
     {

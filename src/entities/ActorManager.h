@@ -11,9 +11,9 @@
 //   - a factory Delegate1<Entity*, long> at +0x1024 registered once from
 //     GameInitialise; callers of Add never construct entities directly.
 //
-// Field names / offsets match docs/engine/actor-manager.md (refreshed
-// 2026-04-23 from Ghidra decompile of the ctor, Initialise, Add,
-// Deactivate, Update, Draw).
+// Field names / offsets match binary ctor + RE of Initialise, Add,
+// Deactivate, Update, Draw, Find, SendMessage (2026-05-04).
+// sizeof(ActorManager) == 4204 (0x106C).
 //
 // Not modelled (stubbed or omitted):
 //   - LinkedHeap allocator at +0x000 — port uses new[] for the type-list
@@ -21,19 +21,18 @@
 //     binary's `if (m_pHeap != nullptr)` gate in Update/Draw still behaves.
 //   - Delegate2<long, ulong, bool&> hash converter at +0x1048 — not
 //     called from any live FruitNinja code path.
-//   - MessageListener list at +0x1014 — SendMessage/AddMessageListener
-//     stubbed; no port code wires them yet.
 //   - LoadEntity / PostLoad — tied to serialisation we don't implement.
 //
-// Analysed: 2026-04-23T01:00
+// Analysed: 2026-05-04T00:00
 
 #include "Entity.h"
+#include "Message.h"
 #include <cstdint>
 #include <list>
 #include <cstddef>
 
 namespace Mortar { class ColAABB; }
-namespace Mortar { class MessageListener; struct Message; }
+struct EntityChunk;   // opaque; only used by LoadEntity which is stubbed
 struct Renderer;
 
 class ActorManager {
@@ -60,17 +59,31 @@ public:
     // +0x808: free-pool count, grows on Deactivate, shrinks on Add recycle.
     int m_FreeCount;
 
+    // +0x80C: deferred-deactivation scratch used during Update. Entities
+    // that set ENT_KILLED during their own Update are queued here so the
+    // type-list iterator isn't invalidated by a mid-loop erase. Drained
+    // after the full type sweep. Binary @ 0x001701f4.
+    Entity* m_PendingDeact[256];
+
+    // +0x100C: count of pending-deact entries.
+    int m_PendingDeactCount;
+
     // +0x1010: pointer to heap-allocated std::list<Entity*> array of
     // m_NumTypes slots. Each list is the active entities of that type.
     std::list<Entity*>* m_pTypeLists;
 
-    // +0x101c
+    // +0x1014: message-listener list. Binary: std::list<MessageListener*>
+    // (12 bytes on Bada libstdc++). Populated by AddMessageListener /
+    // cleared by ClearAllListeners / iterated by SendMessage.
+    std::list<Mortar::MessageListener*> m_Listeners;
+
+    // +0x1020: count of types passed to Initialise.
     int  m_NumTypes;
 
-    // +0x1020: debug flag — Draw calls DrawDebug() when non-zero.
+    // +0x1024: debug flag — Draw calls DrawDebug() when non-zero.
     bool m_DebugDraw;
 
-    // +0x1024: factory function used when the free pool has no matching
+    // +0x1028: factory function used when the free pool has no matching
     // entity. Registered via RegisterFactory from GameInitialise.
     FactoryFn m_FactoryDelegate;
 
@@ -103,11 +116,13 @@ public:
     typedef long (*HashFn)(unsigned long key, bool& outFound);
 
     // Stores the hash-converter function into m_HashDelegate.
-    // Binary: m_HashDelegate at +0x1048 (one slot past m_FactoryDelegate +0x1024).
+    // Binary: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
     // TODO: implement -- see docs/systems/gameinit-todos.md step 16.
     void RegisterHashConverter(HashFn fn);
 
-    // +0x1048: hash converter (Delegate2 slot, see HashFn typedef above).
+    // +0x104C: hash converter (Delegate2 slot, see HashFn typedef above).
+    // DIFFERS: original binary offset +0x1048 from original field layout; offset
+    // shifts by 4 after m_DebugDraw bool padding correction.
     HashFn m_HashDelegate;
 
     // --- Entity API -----------------------------------------------------
@@ -202,11 +217,59 @@ public:
     // 0x0016fc64. Ordinal index of `entity` in its type list, or -1.
     int GetEntityIdx(Entity* entity) const;
 
-    // --- Messaging (stubbed — no callers in current port code) ---------
+    // 0x0016fd10. Linear scan of the type list `type`; returns the first
+    // entity whose m_TrackerID (Entity+0x04) equals `trackerKey`.
+    Entity* Find(long type, unsigned long trackerKey);
 
-    void SendMessage(uint32_t typeHash, Entity* sender, Mortar::Message* msg);
+    // 0x0016fd58. Type-agnostic linear scan; returns first entity whose
+    // m_TrackerID matches `trackerKey` across all type lists.
+    Entity* Find(unsigned long trackerKey);
+
+    // 0x0016fbec. Count entities whose vtable+0x20 (InRect) collision test
+    // passes against `aabb`. Port gates on Entity::InRect being wired.
+    int GetNumInAABB(Mortar::ColAABB* aabb);
+
+    // --- Level deserialiser (stubbed — .lvl loading not used by FN) -----
+
+    // 0x00170728. EntityChunk deserialise; LOD scale + AABB->pos/size + Init.
+    // Port stub returns false — not used by FruitNinja runtime.
+    bool LoadEntity(EntityChunk* chunk, void* hdr, long hdrLen, long lod);
+
+    // --- Heap diagnostics -----------------------------------------------
+
+    // 0x0016fb38. Binary returns m_HeapSize from LinkedHeap; port returns
+    // m_HeapSize directly (no heap pressure in port).
+    int  GetHeapSize() const { return m_HeapSize; }
+
+    // 0x00170370. Binary forwards to LinkedHeap::GetTotalFreeMemory; port
+    // returns m_HeapSize (no allocation tracking).
+    int  GetHeapFree() const;
+
+    // 0x00170364. Binary forwards to LinkedHeap::DisplayUsage(verbose).
+    void HeapDisplay(bool verbose);
+
+    // 0x00170354. Binary forwards to LinkedHeap::DisplayUsage(true) gated.
+    void DisplayUsage(bool dumpAll);
+
+    // 0x0016fb3c. Setter for m_DebugDraw.
+    void SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0); }
+
+    // --- Messaging ------------------------------------------------------
+    // Defunct: Mortar messaging — no-op stub; binary @ 0x0016ffd8 (Send),
+    //   0x0017085c (Add), 0x00170124 (Remove). Listener subsystem wired but
+    //   never instantiated in shipped retail.
+
+    // 0x0016ffd8. Filter listeners, fire callback->vtable[+0x30], one-shot
+    // clear, then dispatch target->ReceiveMessage(sender, msg).
+    bool SendMessage(unsigned long typeHash, Entity* sender, Mortar::Message* msg);
+
+    // 0x0017085c. m_Listeners.push_back(L).
     void AddMessageListener(Mortar::MessageListener* listener);
+
+    // 0x00170124. m_Listeners.remove(L).
     void RemoveMessageListener(Mortar::MessageListener* listener);
+
+    // 0x0017013c. Delete each listener, then clear list.
     void ClearAllListeners();
 };
 

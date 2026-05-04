@@ -1,17 +1,30 @@
-#ifndef MORTAR_COL_LINE_H
-#define MORTAR_COL_LINE_H
+#ifndef FN_ENGINE_COLLISION_COL_LINE_H
+#define FN_ENGINE_COLLISION_COL_LINE_H
 
-#include "math/Vec3.h"
+#include "collision/Col.h"
 
 namespace Mortar {
 
-// Line segment collision primitive
-struct ColLine {
-    Vec3 a; // start point
-    Vec3 b; // end point
+// Binary vtable @ 0x001eb618. sizeof = 0x20 (32B): base 0x14, b Vec3 at +0x14.
+class ColLine : public Col {
+public:
+    // a aliases m_PrimaryPoint (+0x04 in Col base)
+    Vec3&  a; // reference alias for m_PrimaryPoint (start point)
+    Vec3   b; // +0x14 (end point)
 
-    ColLine() : a(), b() {}
-    ColLine(const Vec3& start, const Vec3& end) : a(start), b(end) {}
+    ColLine();
+    ColLine(const Vec3& start, const Vec3& end);
+
+    virtual ~ColLine() override {}
+
+    // Binary slot 2
+    virtual int GetType() const override { return TYPE_LINE; }
+
+    // Binary slot 3
+    virtual int Collide(Col* other, Vec3* outNormal) override;
+
+    // Binary slot 4
+    virtual void DrawDebug() override;
 
     Vec3 Direction() const { return b - a; }
     float LengthSq() const { Vec3 d = Direction(); return d.x*d.x + d.y*d.y + d.z*d.z; }
@@ -39,6 +52,6 @@ inline Vec3 ColLineClosestPoint(const ColLine& line, const Vec3& p) {
     );
 }
 
-} // namespace Mortar
+}  // namespace Mortar
 
 #endif

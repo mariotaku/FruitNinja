@@ -9,8 +9,10 @@ namespace Mortar {
 
 // --- Mesh ---
 
+// Binary @ 0x001b0e70
 Mesh::Mesh() : m_Skeleton(nullptr) {}
 
+// Binary @ 0x001b0a5c
 Mesh::~Mesh() {
     for (int i = 0; i < (int)m_Geometries.size(); i++) {
         if (m_Geometries[i].vbo) { glDeleteBuffers(1, &m_Geometries[i].vbo); }
@@ -61,6 +63,20 @@ Matrix44 Mesh::GetBoneWorldTransform(int index) const {
     const Matrix44* w = m_Skeleton->GetWorld(skelIdx);
     if (!w) return identity;
     return *w;
+}
+
+// Binary @ 0x001b0778 — symmetric to GetBoneVertTransform; reads Skeleton::GetLocal(idx).
+Matrix44 Mesh::GetBoneLocalTransform(unsigned int idx) const {
+    if (m_Skeleton && idx < m_BoneBindings.size()) {
+        int sIdx = m_BoneBindings[idx].m_SkeletonIndex;
+        if (sIdx >= 0) {
+            // TODO: 0x001b0778 -- needs Skeleton::GetLocal(idx) accessor
+            // Skeleton only exposes GetVertex/GetWorld in the current port.
+            // Return identity until GetLocal is wired.
+        }
+    }
+    Matrix44 identity;
+    return identity;
 }
 
 // Matches Mesh::GetBounds (0x001b07f0)

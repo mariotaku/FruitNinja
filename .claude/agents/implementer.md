@@ -85,12 +85,33 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 **Code style:**
 - Use `FN_SCREEN_W` / `FN_SCREEN_H` (not `SCREEN_W` / `SCREEN_H` — collides with `windows.h` defines that some toolchains pull in transitively).
 - Header guards: `FN_<COMPONENT>_<NAME>_H` (see existing files for the pattern).
-- File layout: `src/screens/`, `src/hud/`, `src/entities/`, `src/engine/render/`, etc. — match the directory the existing class lives in. Use original binary class names (FruitCamera, ActorManager) in proper subdirs.
+- File layout: `src/screens/`, `src/hud/`, `src/entities/`, `src/engine/render/`, etc. — match the directory the existing class lives in. Use original binary class names (FruitCamera, ActorManager) in proper subdirs. **Preserve binary's typos** — if the binary symbol is `CommingsSoonCallback` or `GetTouchInReigion`, the port spells it the same way; the symbol-diff cross-build tests on the mangled name and any rename produces a phantom miss.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use `->`, `--`, `'`, etc. Comments inside source files can use Unicode freely; this rule is for runtime output only.
 - Default to writing no comments. Write a comment only when WHY is non-obvious (a hidden constraint, a workaround, surprising behavior). Don't narrate WHAT the code does.
 - The grammar in the "Source-side comment grammar" section above is the exception — those carry RE state and must be preserved verbatim.
 - Don't add error handling, fallbacks, or validation for scenarios that can't happen.
 - Don't add features beyond what the task requires. No premature abstractions.
+
+**Cross-build portability (GCC 4.4.1 / Sourcery 2010q1):**
+The asm-verify cross-build and the symbol-diff skill both compile every portable `src/**/*.cpp` with the Sourcery 2010q1 toolchain (GCC 4.4.1, partial C++0x). C++11 features that the host MSVC/MinGW build accepts will silently break the cross-build, which makes a class invisible to symbol-diff and breaks asm-verify. Avoid these specifically:
+- **No capture lambdas.** `[this, x]() { ... }` doesn't parse. Use `std::bind(&Class::Method, this, x)` instead — it's available under `-std=gnu++0x` and binds a callable with the same observable behavior. (Bug example: GameModeScreen DeletedMenuButton wiring landed with four lambdas and silently broke the cross-build until a fix-up pass.)
+- **No `auto` for type deduction in declarations.** Spell the type. `auto it = m_List.begin();` -> `std::list<T>::iterator it = m_List.begin();`. (`auto` works in trailing-return-types via the C++0x mode but the GCC 4.4 implementation is incomplete.)
+- **No range-for.** `for (auto& x : container)` doesn't parse. Use explicit iterator loops: `for (Container::iterator it = c.begin(); it != c.end(); ++it)`.
+- **No template using-aliases.** `using Vec3List = std::vector<Vec3>;` doesn't parse for templates. The cross-build sed rewrites simple non-template aliases to typedef; for template aliases, use the `template<...> struct Foo { typedef ... type; };` workaround or just spell the full type at each call site.
+- **No `enum class`, `=delete`, `=default`, variadic templates, `std::initializer_list` ctors, `std::shared_ptr`/`unique_ptr` from `<memory>`.** Use `Mortar::SmartPtr<T>` for shared ownership; use plain `enum` (with an `enum_T_` prefix to avoid name collisions) instead of scoped enums.
+- **No `decltype` in template default-args** (parse bugs in 4.4); `decltype` at statement level is fine.
+- **`nullptr` / `override` / `final` / `noexcept`** are macro-shimmed by `tools/asm-verify/cross-headers/fn-cxx11-shims.h` — these DO work via the shim, no special action needed.
+- **`explicit operator bool`** has its `explicit` stripped by the build-script sed; you can write it normally.
+- Quick check before landing a chunk: `cmake --build build` (host) AND optionally `bash tools/asm-verify/run.sh` (cross). If you suspect a C++11 feature, search the codebase for an existing pattern that does the same thing without it — usually exists.
+
+**Binary fidelity for tooling:**
+The symbol-diff and asm-verify pipelines key off byte-exact mangled symbols and binary-faithful struct layouts. Get either wrong and the tooling can't tell port code from missing code.
+- **Match function signatures byte-for-byte.** Param types, order, const-qualifiers, by-value vs const-ref all encode into the mangled name. A port-side `Foo(int, int, int)` vs binary `Foo(void*, long, const Vec3*)` produces a phantom miss in symbol-diff. If the spec gives you the binary signature, use it verbatim — even if it costs an awkward `void*` placeholder.
+- **Match struct field offsets** with `static_assert(offsetof(MyStruct, m_Field) == 0xN)` and `static_assert(sizeof(MyStruct) == 0xN)`, both guarded `#if __SIZEOF_POINTER__ == 4` so 64-bit hosts don't false-fire on different pointer sizes. Bada-side `std::list` is 12B vs Sourcery 2010q1's 8B — assertions on list-containing structs will only hold against the production build, not the cross-toolchain (documented in `CLAUDE.md`).
+- **Match vtable slot count + order.** When adding a new virtual, append at the end (highest slot index) so existing subclass overrides don't shift. Mid-vtable inserts cascade across every subclass override and silently break dispatch.
+- **Out-of-line method bodies** so symbols emit. Inline-in-header methods produce no T-symbol under nm; the binary's matching method then shows as missing in symbol-diff.
+- **Use polymorphic engine bases instead of `void*`** when the binary has a vtable — `Mortar::Col*`, `Mortar::IFile*`, `Mortar::Message*`. The previous `void*` placeholders for these caused mangling drift; once promoted to real types the mangled symbol matches the binary.
+- **Preserve binary spelling everywhere** — class names, method names, typos (`Commings` not `Comings`, `Reigion` not `Region`), the `_Bada` / `_Direct` suffixes — anywhere the binary's mangled name matters.
 
 **Workflow:**
 - Do NOT commit yourself. The orchestrator (the parent Claude session) handles commits, splitting them along the natural seams between subsystems / classes / pipeline items so each commit answers a specific "what did this milestone do?" question. Your job is to leave the working tree green and self-contained at each handoff so the orchestrator can stage your slice cleanly. The exception is interactive-debug sessions where the user is iterating live — there the orchestrator will batch and you should similarly avoid pre-emptively splitting changes.
@@ -98,18 +119,22 @@ Older files in the tree carry `// Analysed: YYYY-MM-DDTHH:MM` near the top. This
 - Temp/scratch files go in project `tmp/`, not `/tmp`.
 
 **Platform-specific files:**
-SDL/platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it (mirrors the binary's `*Bada` classifier on the other side):
+Platform-bound code is identified three ways so the `symbol-diff` cross-build can exclude all of it (mirrors the binary's `*Bada` classifier on the other side):
 
-1. **`*SDL.cpp` suffix** — the default for SDL-bound TUs. Examples in tree: `GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`.
-2. **`src/platform/sdl/` directory** — for SDL backends that come as a multi-file group, the whole subtree is excluded.
-3. **Explicit name list** — files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point that has no binary counterpart). Listed verbatim in the symbol-diff filter.
+1. **Suffix per backend** — pick exactly one per file:
+   - `*SDL.cpp` — SDL2 (`GameSDL.cpp`, `SoundManagerSDL.cpp`, `gl_funcsSDL.cpp`, `DisplayManagerSDL.cpp`, `InputTranslatorSDL.{h,cpp}`).
+   - `*Posix.cpp` — POSIX (`FileSystemPosix.cpp`, `FilePosix.cpp` — case-insensitive directory walk + `fopen`/`dirent`).
+   - `*Win32.cpp` — Win32 (`FileSystemWin32.cpp`, `FileWin32.cpp` — `FindFirstFileA` + `_stricmp`).
+   Mixed-platform code uses `#ifdef` inside, not the suffix.
+2. **`src/platform/<backend>/` directory** — multi-file backend groups (`src/platform/sdl/`, future `src/platform/posix/`, `src/platform/win32/`).
+3. **Explicit name list** — files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point with no binary counterpart). Listed verbatim in the symbol-diff filter.
 
-The symbol-diff skill applies all three: `find src -name "*.cpp" ! -name "*SDL.cpp" ! -path "src/platform/sdl/*" ! -path "src/main.cpp"`. New explicit-name exclusions go in that filter; new SDL files prefer the suffix or directory rules so the filter doesn't grow.
+The symbol-diff skill applies all three: `find src -name "*.cpp" ! -name "*SDL.cpp" ! -name "*Posix.cpp" ! -name "*Win32.cpp" ! -path "src/platform/sdl/*" ! -path "src/main.cpp"`. New SDL/Posix/Win32 files prefer the suffix or directory rules so the filter doesn't grow.
 
 How to apply:
-- Public headers (`*.h`) must NOT include `<SDL.h>` or expose SDL types directly. Use `void*` (with an adjacent comment naming the real SDL type) or `uint32_t` for `SDL_AudioDeviceID` etc.
-- New SDL-using code lands as a new `*SDL.cpp` (or extends an existing one). If a portable .cpp grows an SDL dependency, split that part into a `<Name>SDL.cpp` companion rather than poisoning the portable file.
-- Cast at the SDL boundary (`static_cast<SDL_Window*>(window)`) inside the SDL companion, never in the portable header.
+- Public headers (`*.h`) must NOT include `<SDL.h>` / `<windows.h>` / `<dirent.h>` or expose backend-specific types directly. Use `void*` (with an adjacent comment naming the real type), `uint32_t` for handle-IDs, or — preferred — polymorphic engine bases (`Mortar::IFile*`, `Mortar::IFileSystem*`) whose concrete subclass is the platform .cpp.
+- New backend-bound code lands as a new `*<Backend>.cpp` (or extends an existing one). If a portable .cpp grows a backend dependency, split that part into a `<Name><Backend>.cpp` companion rather than poisoning the portable file.
+- Cast at the platform boundary (`static_cast<SDL_Window*>(window)`, `static_cast<FILE*>(handle)`) inside the suffix-named companion, never in the portable header.
 - The convention applies to platform glue specifically — gameplay/engine code that happens to use, say, `<cstring>` or `<vector>` is portable and stays portable.
 
 ## Build

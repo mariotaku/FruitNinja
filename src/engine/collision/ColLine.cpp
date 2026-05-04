@@ -1,0 +1,41 @@
+// Analysed: 2026-05-04T00:00
+#include "collision/ColLine.h"
+#include "collision/ColSphere.h"
+#include "collision/ColAABB.h"
+
+namespace Mortar {
+
+ColLine::ColLine() : Col(), a(m_PrimaryPoint), b() {}
+
+ColLine::ColLine(const Vec3& start, const Vec3& end) : Col(), a(m_PrimaryPoint), b(end) {
+    m_PrimaryPoint = start;
+}
+
+// Binary slot 3 -- double-dispatch by other->GetType()
+int ColLine::Collide(Col* other, Vec3* outNormal) {
+    int t = other->GetType();
+    int hit = 0;
+    if (t == TYPE_SPHERE) {
+        ColSphere* s = static_cast<ColSphere*>(other);
+        hit = s->IntersectsLine(*this) ? 1 : 0;
+        // TODO: outNormal from SphereLine penetration (flip sign per binary)
+    } else if (t == TYPE_LINE) {
+        // TODO: LineLine collision helper not ported
+        hit = 0;
+    } else if (t == TYPE_AABB) {
+        ColAABB* box = static_cast<ColAABB*>(other);
+        hit = box->IntersectsLine(*this) ? 1 : 0;
+        // TODO: outNormal
+    } else {
+        return other->Collide(this, outNormal);
+    }
+    if (hit) { AddCollision(); other->AddCollision(); }
+    return hit;
+}
+
+// Binary slot 4
+void ColLine::DrawDebug() {
+    // TODO: DrawLine helper not ported
+}
+
+}  // namespace Mortar

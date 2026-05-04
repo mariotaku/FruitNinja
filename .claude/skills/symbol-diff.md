@@ -72,6 +72,8 @@ cd /tmp/portsrc
 # Add to the explicit list when a new file is portable-named but really platform-only.
 for cpp in $(find src -name "*.cpp" \
                  ! -name "*SDL.cpp" \
+                 ! -name "*Posix.cpp" \
+                 ! -name "*Win32.cpp" \
                  ! -path "src/platform/sdl/*" \
                  ! -path "src/main.cpp"); do
     rel=${cpp#src/}
