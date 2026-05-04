@@ -70,7 +70,7 @@ class PowerUp {
 public:
     // +0x00 vptr (implicit)
 
-    // +0x04 m_ModList — std::list<GameModifier*> (12 bytes on 32-bit ARM)
+    // +0x04 m_ModList — std::list<GameModifier*> (8 bytes, Sourcery 2010q1 pre-C++11)
     std::list<GameModifier*> m_ModList;
 
     // +0x10 m_Name[0x40]

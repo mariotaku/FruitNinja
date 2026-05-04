@@ -73,18 +73,13 @@ public:
     // m_NumTypes slots. Each list is the active entities of that type.
     std::list<Entity*>* m_pTypeLists;
 
-    // +0x1014: message-listener list.
-    // DIFFERS: m_Listeners std::list is 8 bytes in binary (Sourcery 2010q1 pre-C++11)
-    //          but 12 bytes after the project-wide stl_list patch. Layout deviates by 4
-    //          bytes from binary here. Acceptable because the listener subsystem is
-    //          Defunct -- no in-binary callers.
+    // +0x1014: message-listener list (8 bytes, Sourcery 2010q1 pre-C++11).
     std::list<Mortar::MessageListener*> m_Listeners;
 
-    // +0x101C (binary). Port lands at +0x1020 due to 4-byte list-size drift above.
+    // +0x101C
     int  m_NumTypes;
 
-    // +0x1020 (binary). Port lands at +0x1024 due to 4-byte drift.
-    // DIFFERS: original = bool at +0x1020 from binary layout; port at +0x1024.
+    // +0x1020
     bool m_DebugDraw;
 
     // +0x1024 (binary): factory function is Delegate1<Entity*, long> object (36 bytes).
@@ -294,19 +289,18 @@ public:
     void ClearAllListeners();
 };
 
-// Confirmed-correct offsets (toolchain patch makes these assertable).
-// Note: m_NumTypes / m_DebugDraw / m_FactoryDelegate / m_HashDelegate offsets
-// deviate from binary (+0x101C / +0x1020 / +0x1024 / +0x1048) because:
-//   (a) m_Listeners list is 12B in port (Bada-patched) vs 8B in binary (+4B drift)
-//   (b) m_FactoryDelegate is raw fnptr (4B) vs Delegate1 object (36B) (+32B drift)
-// These are documented as DIFFERS above; sizeof and the affected offsetof asserts
-// are excluded from the cross-build check.
+// Layout asserts. m_FactoryDelegate / m_HashDelegate offsets deviate from binary because:
+//   m_FactoryDelegate is raw fnptr (4B) vs Delegate1 object (36B) (+32B drift)
+// Those two offsets are excluded. All list-containing fields use 8B (Sourcery 2010q1).
 #ifdef __bada__
-static_assert(offsetof(ActorManager, m_FreePool)       == 0x008, "m_FreePool offset");
-static_assert(offsetof(ActorManager, m_FreeCount)      == 0x808, "m_FreeCount offset");
-static_assert(offsetof(ActorManager, m_PendingDeact)   == 0x80C, "m_PendingDeact offset");
+static_assert(offsetof(ActorManager, m_FreePool)          == 0x008,  "m_FreePool offset");
+static_assert(offsetof(ActorManager, m_FreeCount)         == 0x808,  "m_FreeCount offset");
+static_assert(offsetof(ActorManager, m_PendingDeact)      == 0x80C,  "m_PendingDeact offset");
 static_assert(offsetof(ActorManager, m_PendingDeactCount) == 0x100C, "m_PendingDeactCount offset");
-static_assert(offsetof(ActorManager, m_pTypeLists)     == 0x1010, "m_pTypeLists offset");
+static_assert(offsetof(ActorManager, m_pTypeLists)        == 0x1010, "m_pTypeLists offset");
+static_assert(offsetof(ActorManager, m_Listeners)         == 0x1014, "m_Listeners offset");
+static_assert(offsetof(ActorManager, m_NumTypes)          == 0x101C, "m_NumTypes offset");
+static_assert(offsetof(ActorManager, m_DebugDraw)         == 0x1020, "m_DebugDraw offset");
 #endif
 
 #endif  // FN_ACTOR_MANAGER_H

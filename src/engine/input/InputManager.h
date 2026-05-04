@@ -4,8 +4,8 @@
 // Analysed: 2026-05-04T00:00
 
 // InputManager — binary @ 0x00196980 area.
-// sizeof 0x14: vfn-table(4) + m_loadingConfig(1) + m_inUpdate(1) + pad(2) +
-//              m_inputDevices std::list<InputDevice*>(12 on Bada) = 0x14 + 4(vptr) = 0x14 total.
+// sizeof 0x10: vfn-table(4) + m_loadingConfig(1) + m_inUpdate(1) + pad(2) +
+//              m_inputDevices std::list<InputDevice*>(8, Sourcery 2010q1) = 0x10 total.
 //
 // Architecture: broadcaster over std::list<InputDevice*>.
 // RegisterInputCallback forwards to each device (bindings live on device, not manager).
@@ -96,7 +96,7 @@ public:
     bool m_loadingConfig;   // +0x04
     bool m_inUpdate;        // +0x05
     // +0x06..0x07 padding
-    std::list<InputDevice*> m_inputDevices;  // +0x08 (12B Bada list)
+    std::list<InputDevice*> m_inputDevices;  // +0x08 (8B, Sourcery 2010q1 pre-C++11)
 };
 
 // TODO: 0x00196980 — port InputManager lacks the binary's vptr at +0x00 (no
