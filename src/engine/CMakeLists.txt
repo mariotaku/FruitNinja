@@ -11,9 +11,10 @@ add_library(mortar_engine STATIC
     util/StringHash.cpp
     util/Localisation.cpp
     # Phase 2 — Core Singletons
-    render/gl_funcs.cpp
+    render/gl_funcsSDL.cpp
     render/MatrixManager.cpp
     render/DisplayManager.cpp
+    render/DisplayManagerSDL.cpp
     # Phase 3 — Rendering
     render/Renderer.cpp
     render/MortarCamera.cpp
@@ -31,7 +32,7 @@ add_library(mortar_engine STATIC
     input/InputDeviceBada.cpp
     # Phase 6 — Audio
     audio/MortarSound.cpp
-    audio/SoundManager.cpp
+    audio/SoundManagerSDL.cpp
     audio/GameSound.cpp
     # Phase 7 — Particles
     # Entity + ActorManager live in src/entities/ (game-namespace port),

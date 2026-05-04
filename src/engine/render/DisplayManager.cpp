@@ -1,6 +1,6 @@
 #include "render/DisplayManager.h"
-#include <SDL.h>
 #include <cstring>
+// SDL-bound bits live in DisplayManagerSDL.cpp.
 
 namespace Mortar {
 
@@ -52,10 +52,7 @@ void DisplayManager::EndFrame() {
     m_bRenderingActive = false;
 }
 
-void DisplayManager::SwapBuffers(void* window) {
-    SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
-    m_bSwapPending = m_bSwapPending ? 0 : 1;
-}
+// SwapBuffers — see DisplayManagerSDL.cpp (SDL-bound).
 
 void DisplayManager::SetDrawColour(const Colour& c) {
     m_DrawColor = c;

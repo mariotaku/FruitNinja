@@ -159,13 +159,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinyxml2)
 
-# --- Game library (everything except main.cpp) ---
+# --- Game library (everything except mainSDL.cpp) ---
 # Collected as a STATIC lib so both the fruit-ninja executable and the
 # tests/test_screen smoke test can link against the same compiled units.
 # Subsystem CMakeLists.txt files contribute their sources via
 # target_sources(fruit-ninja-game PRIVATE ...).
 
-add_library(fruit-ninja-game STATIC src/Game.cpp)
+add_library(fruit-ninja-game STATIC src/Game.cpp src/GameSDL.cpp)
 target_include_directories(fruit-ninja-game PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}
@@ -187,8 +187,8 @@ target_link_libraries(fruit-ninja-game PUBLIC
     SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine
 )
 
-# --- Executable (just main.cpp; everything else lives in fruit-ninja-game) ---
-add_executable(fruit-ninja src/main.cpp)
+# --- Executable (just mainSDL.cpp; everything else lives in fruit-ninja-game) ---
+add_executable(fruit-ninja src/mainSDL.cpp)
 target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
 
 # Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds
