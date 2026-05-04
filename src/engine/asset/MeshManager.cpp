@@ -297,7 +297,7 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
                     loader.ReadBytes(&bones[i].m_BoundsMax, sizeof(Vec3));
                 }
             }
-            mesh->SetBones(bones.data(), (int)boneCount);
+            mesh->SetBones(bones.data(), (unsigned long)boneCount);
         }
 
         // Read<ulong> → materialCount + per-material sub-resource

@@ -29,8 +29,10 @@ add_library(mortar_engine STATIC
     asset/Texture.cpp
     asset/TextureManager.cpp
     asset/ResourceLoader.cpp
+    asset/AnimationState.cpp
     asset/Skeleton.cpp
     asset/Mesh.cpp
+    asset/MeshDraw.cpp
     asset/MeshManager.cpp
     # Phase 5 — Input
     input/Touch.cpp
