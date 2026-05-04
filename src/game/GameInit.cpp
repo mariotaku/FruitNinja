@@ -309,7 +309,7 @@ void GameUpdate(float dt, bool active) {
     if (game->pGameSound) game->pGameSound->Update(dt);
     UpdateMusic(dt);
 
-    Mortar::PSPParticleManager::GetInstance().Update(dt);
+    Mortar::PSPParticleManager::GetInstance().Update(dt, false);
 
     FN::UpdateCriticalFlash(dt);
 
@@ -431,7 +431,7 @@ void GameDraw(float dt, bool active) {
 
     // === 3. Background particles ===
     // Binary pm.Draw(-1) @ 0x0016bb02 — drawn BEHIND the logo/shade.
-    pm.Draw(-1);
+    pm.Draw(0.0f, false, -1);
 
     // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
     // depth test off before the SlashEntity loop ×16 and all later
@@ -442,7 +442,7 @@ void GameDraw(float dt, bool active) {
 
     // === 4. Mid particles + slice lines + main-screen logo ===
     // Binary pm.Draw(0) @ 0x0016bb4a
-    pm.Draw(0);
+    pm.Draw(0.0f, false, 0);
 
     // DrawSlices @ 0x0016bb52 — slash-line pool
     FN::SliceEffect_Draw(dt);
@@ -451,7 +451,7 @@ void GameDraw(float dt, bool active) {
     if (game->hud) game->hud->Draw(0x01);
 
     // pm.Draw(1) — foreground particles @ 0x0016bb6a
-    pm.Draw(1);
+    pm.Draw(0.0f, false, 1);
 
     // WaveManager::Draw(0) @ 0x0016bb98 — stubbed (wave-banner overlay).
     WaveManager::GetInstance()->Draw(0);
