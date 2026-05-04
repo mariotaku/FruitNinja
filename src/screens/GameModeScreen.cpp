@@ -222,7 +222,7 @@ void GameModeScreen::CreateControls() {
         m_pBackButton->Init(POS_BACK,
                             std::bind(&GameModeScreen::QuitCallback, this),
                             FruitInfo_GetCount(), Vec3(0, 0, 0),
-                            [this, btn]() { DeletedMenuButton(btn); });
+                            std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
     }
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
     // Marks this button as the screen's hardware Back-key handler.
@@ -244,7 +244,7 @@ void GameModeScreen::CreateControls() {
         m_pClassicButton->Init(POS_CLASSIC,
                                std::bind(&GameModeScreen::ClassicModeCallback, this),
                                Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0),
-                               [this, btn]() { DeletedMenuButton(btn); });
+                               std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
     }
     if (game.pTutorialCtrl) {
         game.pTutorialCtrl->ResetTutePos(m_pClassicButton);
@@ -270,7 +270,7 @@ void GameModeScreen::CreateControls() {
         m_pZenButton->Init(POS_ZEN,
                            std::bind(&GameModeScreen::ZenModeCallback, this),
                            Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0),
-                           [this, btn]() { DeletedMenuButton(btn); });
+                           std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
     }
     m_pZenButton->m_TargetSize = sharedTargetSize;
     if (m_pZenButton->m_pFruitPiece) {
@@ -292,7 +292,7 @@ void GameModeScreen::CreateControls() {
                               std::bind(&GameModeScreen::ArcadeModeCallback, this),
                               Fruit::FruitType(FRUIT_ARCADE, false),
                               Vec3(0, 0, 0),
-                              [this, btn]() { DeletedMenuButton(btn); });
+                              std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
     }
     m_pArcadeButton->m_TargetSize = sharedTargetSize;
     if (m_pArcadeButton->m_pFruitPiece) {
