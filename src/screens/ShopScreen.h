@@ -31,7 +31,7 @@
 //   +0x90  DojoScreen*   m_pParent
 //   +0x94  ScrollingMenu* m_pShopList    (the scrollable item list; null in ctor)
 //   +0x98  ShopListItem*  m_pSelectedItem (ptr to currently selected list item)
-//   +0x9C..+0xA8  ShopListItem* m_pSlotItems[3]  (cached selection per slot type)
+//   +0x9C..+0xAB  ShopListItem* m_pSlotItems[4]  (cached selection per slot type; [3]=REMOVEADS defunct)
 //   +0xAC  float  m_ScrollOffset         (computed from item count + 0.5)
 //   +0xB4  int    m_AnimFrame            (sin-based animation counter)
 //   +0xB8  int    m_State                (state machine index)
@@ -161,8 +161,9 @@ public:
     ShopListItem* GetSelectedItem() const { return m_pSelectedItem; }
 private:
 
-    // +0x9C..+0xA8: per-slot cached selection (3 entries, ItemType 0-2)
-    ShopListItem* m_pSlotItems[3];
+    // +0x9C..+0xAB: per-slot cached selection (4 entries, ItemType 0-3)
+    // Type 3 = REMOVEADS (defunct IAP). Binary: Init explicitly zeroes field_0xa8.
+    ShopListItem* m_pSlotItems[4];
 
     // +0xAC: scroll position / animation offset (from item count + 0.5)
     float m_ScrollOffset;
