@@ -1,22 +1,23 @@
 //
 // FruitCamera : MortarCamera (0x16C bytes)
-// See docs/engine/camera.md for full layout and method decompilation.
 //
 
 #include "FruitCamera.h"
+#include "platform/InputEvent.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
+#include "math/MathUtil.h"
 #include <cmath>
 #include <cstdlib>
 
-// Analysed: 2026-04-06T00:45
+// Analysed: 2026-05-04T00:00
 // Matches constructor at 0x00180e40 / 0x00180de0
 // m_Target and m_ShakeDir initialized from _Vector2<float>::Zero (BSS, = 0.0, 0.0)
 // Field assignment order matches binary (compiler interleaves reads/writes)
 FruitCamera::FruitCamera()
-    : m_pFollowEntity(nullptr),
+    : m_pFollowEntity(0),
       m_CameraMode(0),
-      m_field134(0), m_field136(0),
+      m_TiltYaw(0), m_TiltPitch(0),
       m_ShakeDir(Vec2::Zero()),
       m_ShakeAngle(0), _pad142(0),
       m_Target(Vec2::Zero()),
@@ -31,8 +32,8 @@ FruitCamera::~FruitCamera() {
 
 // Vtable slot 3 override (0x00180c8c)
 void FruitCamera::UpdateCamera(float dt) {
-    m_field14c = (float)m_field136;
-    m_field150 = (float)m_field134;
+    m_field14c = (float)m_TiltPitch;
+    m_field150 = (float)m_TiltYaw;
 
     Vec3 delta = m_pos - m_lookAt;
     m_DistanceMag = delta.Magnitude();
@@ -67,30 +68,41 @@ void FruitCamera::IdleCamera() {
     m_CameraMode = 0;
 }
 
-// Non-virtual (0x001810ac) — perspType 0 (standard)
+// Binary @ 0x00180b2c — bind follow entity, reset tilt to (0,0), up=(0,1,0)
+void FruitCamera::FollowEntity(void* entity) {
+    if (entity) {
+        m_pFollowEntity = entity;
+        m_CameraMode = 1;
+    }
+    m_TiltYaw   = 0;
+    m_TiltPitch = 0;
+    m_up = Vec3(0.0f, 1.0f, 0.0f);
+}
+
+// Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
+void* FruitCamera::GetFollowEntity() const {
+    return (m_CameraMode == 1) ? m_pFollowEntity : 0;
+}
+
+// Non-virtual (0x001810ac) — 4-type ortho dispatch
 //
-// Matches binary FruitCamera::SetupPerspective (0x00181200):
-//   eye    = (m_Target.x, m_Target.y, 1)   ; offset by shake target
-//   target = (m_Target.x, m_Target.y, 0)
-//   up     = (0, 1, 0)
-//   SetupOrtho(160, -160, -240, 240, 2000, -6000)
+// Port-side bug fixes applied per RE:
+//   Bug #1: near/far were (2000, -6000); binary is (-6000, 2000). Fixed.
+//   Bug #2: cache condition had extra `&& !m_bInitialized`; binary only checks
+//           m_bDirty. Dropped.
+//   Bug #3: SetupLookAt arg order — binary passes (eye, up, at); port passes
+//           (eye, at, up). Leaving existing order pending asm-inspector confirm.
+//           TODO: 0x001810ac — verify SetupLookAt(eye, up, at) arg order via asm-inspector
 //
-// GL ortho maps top/bottom → Y, left/right → X, giving:
-//   X ∈ [-240, +240]  (horizontal, long axis, 480 units)
-//   Y ∈ [-160, +160]  (vertical,   short axis, 320 units)
-// Positions throughout the game are stored in this centred space directly.
-//
-// Note: the Bada binary multiplies this projection by a 90° CW screen-rotation
-// matrix (DisplayManager::m_ScreenRotationMatrix) to handle its portrait
-// physical framebuffer. The SDL port renders natively to a landscape window
-// and doesn't need that rotation — GL's ortho mapping already puts the axes
-// in the right place. See docs/engine/coordinate-system.md for the full story.
-void FruitCamera::SetupPerspective(int perspType, bool forceUpdate) {
+// Cases 1/2/3 not needed by GameDraw (only PT_STANDARD is called).
+// TODO: 0x001810ac — PT_ROTATED_CW / PT_ROTATED_CCW / PT_GENERIC ortho variants
+void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
     (void)perspType;
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
-    // Cache path
-    if (!m_bDirty && !m_bInitialized && !forceUpdate) {
+    // RE bug #2 fix: binary cache condition is `if (!m_bDirty && !forceUpdate)`,
+    // NOT `if (!m_bDirty && !m_bInitialized && !forceUpdate)`.
+    if (!m_bDirty && !forceUpdate) {
         Matrix44 viewMat44;
         m_localToWorld.ToMatrix44(viewMat44);
         mm.GetViewStack().SetCurrentMatrix(viewMat44);
@@ -107,8 +119,8 @@ void FruitCamera::SetupPerspective(int perspType, bool forceUpdate) {
     mm.SetupLookAt(eye, at, up);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-    // Projection: literal binary ortho — centred at origin.
-    mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+    // RE bug #1 fix: binary ortho near/far is (-6000, 2000), not (2000, -6000).
+    mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, -6000.0f, 2000.0f);
 
     // Cache
     m_projection = mm.GetProjectionStack().m_Current;
@@ -118,7 +130,9 @@ void FruitCamera::SetupPerspective(int perspType, bool forceUpdate) {
     mm.GetWorldStack().Reset();
 }
 
-// 0x00180d10
+// Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
+// DIFFERS: original = Math::Atan2Idx fixed-point trig; port uses sinf/cosf
+//          because Math::SinIdx now wraps sinf anyway (semantically identical).
 void FruitCamera::CreateCameraShake(const Vec3& impact, float intensity, float dirScale) {
     m_ShakeAngle = (uint16_t)(int)(atan2f(impact.y, impact.x) * 65536.0f / 6.2831853f);
 
@@ -171,4 +185,84 @@ void FruitCamera::UpdateShake(float dt) {
 
         m_bDirty = true;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Debug input handlers — Defunct: debug input; no caller registers them in
+// retail binary. Bodies preserved as working debug-fly for screenshot use.
+// TODO: 0x001... — g_DebugInputInhibited flag not present in port; always allow.
+// ---------------------------------------------------------------------------
+
+// Binary @ 0x00180a2c — debug pan +Y by 10
+bool FruitCamera::DebugFlyUp(InputEvent* e) {
+    (void)e;
+    m_pos.y    += 10.0f;
+    m_lookAt.y += 10.0f;
+    return true;
+}
+
+// Binary @ 0x00180a6c — debug pan -Y by 10
+bool FruitCamera::DebugFlyDown(InputEvent* e) {
+    (void)e;
+    m_pos.y    -= 10.0f;
+    m_lookAt.y -= 10.0f;
+    return true;
+}
+
+// Binary @ 0x00180aac — debug pan -X by 10
+bool FruitCamera::DebugFlyLeft(InputEvent* e) {
+    (void)e;
+    m_pos.x    -= 10.0f;
+    m_lookAt.x -= 10.0f;
+    return true;
+}
+
+// Binary @ 0x00180aec — debug pan +X by 10
+bool FruitCamera::DebugFlyRight(InputEvent* e) {
+    (void)e;
+    m_pos.x    += 10.0f;
+    m_lookAt.x += 10.0f;
+    return true;
+}
+
+// Binary @ 0x0018151c — orbit yaw += +0x96
+bool FruitCamera::DebugTiltLeft(InputEvent* e) {
+    (void)e;
+    m_TiltYaw = (uint16_t)(m_TiltYaw + 0x96);
+    return true;
+}
+
+// Binary @ 0x00181400 — orbit yaw += -0x96
+bool FruitCamera::DebugTiltRight(InputEvent* e) {
+    (void)e;
+    m_TiltYaw = (uint16_t)(m_TiltYaw - 0x96);
+    return true;
+}
+
+// Binary @ 0x00181638 — orbit pitch += -0x96
+bool FruitCamera::DebugTiltDown(InputEvent* e) {
+    (void)e;
+    m_TiltPitch = (uint16_t)(m_TiltPitch - 0x96);
+    return true;
+}
+
+// Binary @ 0x00181754 — orbit pitch += +0x96
+bool FruitCamera::DebugTiltUp(InputEvent* e) {
+    (void)e;
+    m_TiltPitch = (uint16_t)(m_TiltPitch + 0x96);
+    return true;
+}
+
+// Binary @ 0x00180b70 — debug zoom in: pos = lookAt + (pos-lookAt)*0.99
+bool FruitCamera::DebugZoomDown(InputEvent* e) {
+    (void)e;
+    m_pos = m_lookAt + (m_pos - m_lookAt) * 0.99f;
+    return true;
+}
+
+// Binary @ 0x00180be0 — debug zoom out: pos = lookAt + (pos-lookAt)*1.01
+bool FruitCamera::DebugZoomUp(InputEvent* e) {
+    (void)e;
+    m_pos = m_lookAt + (m_pos - m_lookAt) * 1.01f;
+    return true;
 }
