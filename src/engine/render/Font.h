@@ -83,10 +83,10 @@ public:
     virtual ~Font();
 
     // Instance load (matches binary 0x00199e9c). Returns 1/0.
-    int LoadFromFile(const char* path);
+    int Load(const char* path);
 
-    // Static factory (port API used by all callers): allocates, loads, returns SmartPtr.
-    static SmartPtr<Font> Load(const char* path);
+    // Static factory: allocates, loads, returns SmartPtr.
+    static SmartPtr<Font> Create(const char* path);
 
     // Matches Font_DrawString (0x00198e44).
     void DrawString(float scale, float maxWidth, float rotZ,

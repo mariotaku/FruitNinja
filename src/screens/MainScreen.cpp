@@ -107,7 +107,7 @@ MainScreen::MainScreen(Game& g)
     // See docs/engine/font.md "Font Asset Cross-Reference" (string @ 0x001bbcb3).
     {
         std::string fontPath = game.data_dir + "/fonts/verdana.fnt";
-        m_pFont = Mortar::Font::Load(fontPath.c_str());
+        m_pFont = Mortar::Font::Create(fontPath.c_str());
     }
 
     // Set size = (480.0, 138.0, 1.0)
