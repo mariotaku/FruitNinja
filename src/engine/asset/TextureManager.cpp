@@ -110,8 +110,12 @@ const char* TextureManager::GetDataDir() {
 // Matches LoadLocalisedTexture (0x0010a758)
 // Builds full path from data dir + "textures/" + name, loads via TextureManager cache.
 SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name) {
+    // Pass LOGICAL path -- FileSystem_Direct::TranslateFileName prepends
+    // the registered root (data_dir). Prepending s_DataDir here too would
+    // double-prefix and break loads after the OpenCI -> File::Open
+    // migration in R4 W5 commit 0b6143f.
     char path[512];
-    snprintf(path, sizeof(path), "%s/textures/%s", s_DataDir, name);
+    snprintf(path, sizeof(path), "textures/%s", name);
     return TextureManager::GetInstance().Load(path);
 }
 
