@@ -221,7 +221,7 @@ void MenuButton::Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
             Entity* e = game->actorManager->Add(entityType, true);
             if (e) {
                 e->pos = buttonPos;
-                e->Init(0, fruitType, 0);
+                e->Init(nullptr, (long)fruitType, nullptr);
                 e->flags &= ~0x10;  // unhide
                 m_pEntity = e;
 

@@ -168,7 +168,7 @@ Namespace column shows the C++ namespace from Ghidra symbol demangling. `Mortar:
 |-------------|---------|-----------|-------------|
 | ComboBox.cpp | 0x00136694 | — | TODO |
 | ListBox.cpp | 0x0014a5d4 | — | TODO |
-| SliderControl.cpp | 0x00160934 | — | TODO |
+| SliderControl.cpp | 0x00160268 (master ctor) / 0x001ea090 (vtable) | — | Defunct stub (no call sites) |
 | KeyboardControl.cpp | 0x0014668c | — | TODO |
 | ScrollingList.cpp | 0x0015beac | — | TODO |
 | VerticalScroller.cpp | 0x0016880c | — | TODO |

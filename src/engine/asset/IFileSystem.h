@@ -37,7 +37,7 @@ protected:
 };
 
 // sizeof check — only valid on 32-bit
-#if __SIZEOF_POINTER__ == 4
+#ifdef __bada__
 static_assert(sizeof(IFileSystem) == 12,
     "IFileSystem must be 12 bytes on 32-bit (vtable* + systemId + priority)");
 #endif

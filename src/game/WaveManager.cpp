@@ -587,9 +587,8 @@ void WaveManager::Resume() {
         int kind = es.layer;   // 0=Fruit, 1=Bomb, 4=PowerUp (binary: ent.layer)
         Entity* e = ActorManager::GetInstance()->Add(kind, true);
         if (!e) continue;
-        // vtable+0x8 == Init(int unused0, int fruitType, int param3)
-        // Port Fruit::Init / Entity::Init use (int, int, int); pass 0 for param3.
-        e->Init(0, es.type, 0);
+        // vtable+0x8 == Init(void* p1, long fruitType, const Vec3* scale).
+        e->Init(nullptr, (long)es.type, nullptr);
         e->pos = Vec3(es.pos[0], es.pos[1], es.pos[2]);
         e->vel = Vec3(es.vel[0], es.vel[1], es.vel[2]);
         if (e->entityType == 1) {
@@ -1443,7 +1442,7 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         // Z stride: (i+1)*32. binary iVar8 starts at 1. binary @ 0x001229..
         f->pos  = Vec3(posX, posY, (float)((i + 1) * 32));
         f->vel  = Vec3(velX, velY, 0.0f);
-        f->Init(0, (int)fruitType, 0);
+        f->Init(nullptr, (long)fruitType, nullptr);
         // Diagnostic: spawn parameters (low-rate, only fires per spawn-event)
         printf("[Spawn] fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) cd=%.2f place=%d\n",
                fruitType, posX, posY, velX, velY, chuckDelay, (int)spawnType);
@@ -1542,7 +1541,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         Bomb* b = static_cast<Bomb*>(e);
         b->pos = Vec3(spawnX, spawnY, spawnZ);
         b->vel = Vec3(velX, velY, 0.0f);                 // DAT_00122584 = 0
-        b->Init(0, 0, 0);
+        b->Init(nullptr, 0, nullptr);
         b->pos.y += -100.0f * b->scale.y;               // DAT_00122588 = -100
         b->Chuck(chuckDelay);
 

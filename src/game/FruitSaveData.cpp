@@ -227,6 +227,7 @@ void FruitSaveData::DownloadTweaks() {
 
 void FruitSaveData::Update(float /*dt*/, HUD* /*hud*/) {
     // 0x0012b3dc -- achievement in-progress timer ticks. Stub for now.
+    // TODO: 0x0012b5c0 — wire ItemManager::UnlockItem(hash) here when achievement-fire path lands
 }
 
 // ----------------------------------------------------------------------

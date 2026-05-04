@@ -33,13 +33,14 @@ class FruitCamera;
 class FruitSaveData;
 class GameOverScreen;
 class TimeControl;
-namespace Mortar { class GameSound; }
+class GameSound;
 
 struct Game : public Mortar::MortarGame {
     // === Game-specific fields beyond MortarGame base (original +0xFC..+0x103) ===
-    uint8_t field_0xfc;            // +0xFC
-    uint8_t field_0xfd;            // +0xFD
-    int field_0x100;               // +0x100
+    uint8_t m_bSlowHardware;       // +0xFC: set by RenderAtHalfFrames when device matches old-iOS list
+    uint8_t m_bLanguageSet;        // +0xFD: set to 1 at end of Game::Init
+    // +0xFE..+0xFF: padding
+    int m_appState;                // +0x100: app lifecycle state, init=0, no read xrefs found
 
     // === g_GameData (0x608 bytes, kept here for port convenience) ===
     // In original binary this is a separate flat C struct accessed via GOT.
@@ -104,7 +105,7 @@ struct Game : public Mortar::MortarGame {
     // GameSound instance, but the sound backend itself is no-op
     // (SoundManager is stubbed). Makes the SFXPlay call sites real
     // so they're easy to light up once audio is wired.
-    Mortar::GameSound* pGameSound;
+    GameSound* pGameSound;
     int m_gameDataLicensedState;   // +0x18C: game-level licensed state (separate from MortarGame)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
     float m_MenuReturnTimer;       // +0x1A0
@@ -137,12 +138,35 @@ struct Game : public Mortar::MortarGame {
     // === Singleton ===
     static Game* GetInstance() { return static_cast<Game*>(s_instance); }
 
-    // === MortarGame overrides ===
-    const char* SelfVersion() override;
-    void SaveOnExit() override;
-    void SetLanguage(const char* lang) override;
-    void SetAppLicensed(bool licensed) override;
-    int GetAppLicensedState() const override;
+    // === MortarGame vtable overrides (Game vtable @ 0x001e8bc0) ===
+    // Inherited (not overridden): GetHardwareString(0), IsFastHardware(1),
+    //   GetCacheDataArchive(8), SetLanguage(21), AllowOrientationChange(22), OrientationDidChange(23).
+    void RenderAtHalfFrames(const char* hwName, const char* model) override;  // slot 2 @ 0x0010dcf4
+    float GetHighResolutionScale() override;                // slot 3 @ 0x0010d9e4 returns 2.0f
+    // Defunct: OpenFeint — no-op stub; binary @ 0x0010da04
+    const char* GetOpenFeintProductKey() override;          // slot 4
+    // Defunct: OpenFeint — no-op stub; binary @ 0x0010da14
+    const char* GetOpenFeintSecret() override;              // slot 5
+    // Defunct: OpenFeint — no-op stub; binary @ 0x0010da24
+    const char* GetOpenDisplayName() override;              // slot 6
+    // Defunct: Playhaven — no-op stub; binary @ 0x0010da34
+    const char* GetPlayhavenToken() override;               // slot 7
+    void CreateFileSystems(const char* a, const char* b) override;  // slot 9 @ 0x0010dca8
+    void TellGameToStart(int multiplayer) override;         // slot 10 @ 0x0010dc80
+    void Update(float dt) override;                         // slot 11 @ 0x0010dc78
+    void Draw(float dt) override;                           // slot 12 @ 0x0010dc70
+    void Init(int argc, char** argv) override;              // slot 13 @ 0x0010dbe4
+    MortarGame* End() override;                             // slot 14 @ 0x0010db84
+    void Paused() override;                                 // slot 15 @ 0x0010db34
+    void UnPaused() override;                               // slot 16 @ 0x0010dae8
+    const char* SelfVersion() override;                     // slot 17 @ 0x0010d9ec returns "1.5.1"
+    void SaveOnExit() override;                             // slot 18 @ 0x0010dae0
+    void SetAppLicensed(bool licensed) override;            // slot 19 @ 0x0010da68
+    int GetAppLicensedState() override;                     // slot 20 @ 0x0010da94
+
+    // Non-virtual — mirrors Game_SetLanguage @ 0x0010b140 (not a vtable override;
+    // binary's slot 21 still points to MortarGame::SetLanguage base impl).
+    void SetLanguage(const char* lang);
 
     // === Methods ===
     Game();

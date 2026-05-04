@@ -34,6 +34,21 @@ RUN git clone --depth 1 "$TC_REPO" /opt/sourcery-2010q1 \
 ENV FN_TOOLCHAIN_DIR=/opt/sourcery-2010q1
 ENV PATH=/opt/sourcery-2010q1/bin:$PATH
 
+# Patch the toolchain's <list> header to add the C++11+ `_M_size` field
+# that the Bada-side libstdc++ shipped with FruitNinja.exe carries.
+# Sourcery 2010q1 was pre-C++11 and emits 8-byte std::list (sentinel only);
+# Bada's slightly newer libstdc++ emits 12-byte std::list (sentinel + size).
+# We never RUN the cross-compiled output -- this is a layout-only patch so
+# `static_assert(offsetof)` passes against binary structs that embed std::list.
+# See tools/asm-verify/stl_list-bada-size.patch for the diff.
+COPY stl_list-bada-size.patch /tmp/stl_list-bada-size.patch
+RUN apt-get update && apt-get install -y --no-install-recommends patch \
+ && rm -rf /var/lib/apt/lists/* \
+ && for tgt in arm-none-eabi arm-none-linux-gnueabi; do \
+        patch -d /opt/sourcery-2010q1/$tgt -p1 < /tmp/stl_list-bada-size.patch; \
+    done \
+ && rm /tmp/stl_list-bada-size.patch
+
 # asm-differ: Simon Lindholm's tool for normalised asm comparison with
 # register-rename heuristics. Python-only, no native deps. Pin to a
 # specific commit for reproducibility.

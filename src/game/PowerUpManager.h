@@ -1,7 +1,7 @@
 #ifndef FN_GAME_POWER_UP_MANAGER_H
 #define FN_GAME_POWER_UP_MANAGER_H
 
-// Analysed: 2026-04-30T00:00
+// Analysed: 2026-05-04T00:00
 //
 // PowerUpManager — singleton tracking all power-ups (templates + active clones),
 // screen effects, and per-frame composite modifier output slots.
@@ -38,15 +38,26 @@
 //   GetActiveProgression    0x00117b38
 //   GetActiveSingle         0x00117cac
 //   GetNumActiveTimedPowers 0x00117bb8
+//   Release (private)       0x00118724
+//   SaveActivePowerUps      0x00117df8
+//   LoadActivePowerUps      0x001199d4
+//   ActivatePurchase        0x001193d0
 
 #include <cstdint>
 #include <map>
 #include <list>
 #include "ScreenEffect.h"
+#include "math/Vec3.h"
 
 class PowerUp;
+namespace tinyxml2 { class XMLElement; }
+typedef tinyxml2::XMLElement TiXmlElement;
 
-// ScreenEffect is in ScreenEffect.h — included below.
+// TODO: PowerUpManager std::list size conflict — binary has 8-byte list here;
+// cross-toolchain patches to 12-byte. See tmp/re-powerupmanager.md.
+// offsetof asserts for m_ActivePowerUps, m_ActiveByHash, m_ActiveScreenEffects,
+// m_PurchasablePowers are gated under #ifdef __bada__ so they pass only when
+// compiled with the Bada/8-byte-list toolchain.
 
 class PowerUpManager {
 public:
@@ -70,11 +81,13 @@ public:
     // @ 0x00118904
     void ClearTimedPowers();
 
-    // @ 0x001197c4
-    void ActivatePower(uint32_t hash);
+    // @ 0x001197c4 — 3-arg form; returns active clone (or nullptr)
+    PowerUp* ActivatePower(uint32_t hash, Vec3* position, float* purchaseExtra);
+
+    // @ 0x001193d0 — re-arm a purchased PowerUp from its template
+    void ActivatePurchase(PowerUp* p);
 
     // @ 0x00119760
-    // TODO: ActivateScreenEffect full impl (Tier-2)
     bool ActivateScreenEffect(uint32_t hash);
 
     // @ 0x00117ed8
@@ -87,20 +100,25 @@ public:
     void LoadTextures();
 
     // @ 0x00119384
-    // TODO: Draw (Tier-2)
     void Draw();
+
+    // @ 0x00117df8 — emit active power-up state to XML
+    void SaveActivePowerUps(TiXmlElement* parent);
+
+    // @ 0x001199d4 — restore active power-up state from XML
+    void LoadActivePowerUps(TiXmlElement* parent, int gameMode);
 
     // @ 0x001204dc — m_DtMod *= scale
     void ApplyDtMod(float scale) { m_DtMod *= scale; }
 
-    // @ 0x001204cc — m_field6c *= scale
-    void SlowClock(float scale) { m_field6c *= scale; }
+    // @ 0x001204cc — m_SlowClockMult *= scale
+    void SlowClock(float scale) { m_SlowClockMult *= scale; }
 
-    // @ 0x00117a70 — m_field68 += duration
-    void StopClock(float duration) { m_field68 += duration; }
+    // @ 0x00117a70 — m_StopClockAccum += duration
+    void StopClock(float duration) { m_StopClockAccum += duration; }
 
-    // @ 0x001286ec — m_field70 *= scale
-    void PowerupDtModMultiply(float scale) { m_field70 *= scale; }
+    // @ 0x001286ec — m_WaveDtModCur *= scale
+    void PowerupDtModMultiply(float scale) { m_WaveDtModCur *= scale; }
 
     // @ 0x0011d10c
     void AddToScoreGainAdd(int n)      { m_ScoreGainFactor   += n; }
@@ -118,7 +136,6 @@ public:
     int GetScoreLossMultiplier() const { return m_ScoreLossMult * m_ScoreLossFactor; }
 
     // @ 0x00117b38
-    // TODO: GetActiveProgression full impl (Tier-2 / GetActiveProgression)
     float GetActiveProgression(float t) const;
 
     // @ 0x00117cac
@@ -132,7 +149,7 @@ public:
     // +0x00  m_AllPowerUps — every <powerup> parsed from XML, indexed by StringHash(name)
     std::map<uint32_t, PowerUp*> m_AllPowerUps;
 
-    // +0x18  m_ActivePowerUps — currently-active clones
+    // +0x18  m_ActivePowerUps — currently-active clones (8-byte list in binary)
     std::list<PowerUp*> m_ActivePowerUps;
 
     // +0x20  m_ActiveByHash — quick lookup of active by name-hash
@@ -141,29 +158,29 @@ public:
     // +0x38  m_ScreenEffectPool — template ScreenEffects by hash (stored by value)
     std::map<uint32_t, ScreenEffect> m_ScreenEffectPool;
 
-    // +0x50  m_ActiveScreenEffects — instances ticked each frame
+    // +0x50  m_ActiveScreenEffects — instances ticked each frame (8-byte list in binary)
     std::list<ScreenEffect> m_ActiveScreenEffects;
 
-    // +0x58  m_PurchasablePowers — alias list of purchaseable templates (not owning)
+    // +0x58  m_PurchasablePowers — alias list of purchaseable templates (not owning; 8-byte list)
     std::list<PowerUp*> m_PurchasablePowers;
 
-    // +0x60  m_field60 — pointer cache to active special PowerUp (for HUD spotlighting)
-    int m_field60;
+    // +0x60  m_pActiveSpecial — pointer cache to active special PowerUp (for HUD spotlighting)
+    PowerUp* m_pActiveSpecial;
 
     // +0x64  m_DtMod — composite time-scale multiplier (SetDefaults resets to 1.0)
     float m_DtMod;
 
-    // +0x68  m_field68 — "stop clock" accumulator (SetDefaults resets to 0.0)
-    float m_field68;
+    // +0x68  m_StopClockAccum — "stop clock" accumulator (SetDefaults resets to 0.0)
+    float m_StopClockAccum;
 
-    // +0x6c  m_field6c — "slow clock" multiplier (SetDefaults resets to 1.0)
-    float m_field6c;
+    // +0x6c  m_SlowClockMult — "slow clock" multiplier (SetDefaults resets to 1.0)
+    float m_SlowClockMult;
 
-    // +0x70  m_field70 — composite WaveModifier dt-mod (reset to 1.0 each frame)
-    float m_field70;
+    // +0x70  m_WaveDtModCur — composite WaveModifier dt-mod (reset to 1.0 each frame)
+    float m_WaveDtModCur;
 
-    // +0x74  m_field74 — previous frame's m_field70 (carried forward in Update)
-    float m_field74;
+    // +0x74  m_WaveDtModPrev — previous frame's m_WaveDtModCur (carried forward in Update)
+    float m_WaveDtModPrev;
 
     // +0x78  m_ScoreGainMult — multiplicative score-gain (default 1)
     int m_ScoreGainMult;
@@ -177,16 +194,40 @@ public:
     // +0x84  m_ScoreLossFactor — additive score-loss (default 1)
     int m_ScoreLossFactor;
 
-    // +0x88  m_field88 — highest current-time-progress across non-purchaseable specials
-    float m_field88;
+    // +0x88  m_HighestActiveProgress — highest current-time-progress across non-purchaseable specials
+    float m_HighestActiveProgress;
 
-    // +0x8c  (pad — unused)
+    // +0x8c  (pad — unused; no write or read found in any binary method)
     uint32_t _pad8c;
 
 private:
     // @ 0x00117d20
     PowerUpManager();
     ~PowerUpManager();
+
+    // @ 0x00118724 — drain all containers; called by dtor
+    void Release();
 };
+
+// TODO: PowerUpManager std::list size conflict.
+//   Binary uses 8-byte std::list at +0x18, +0x50, +0x58 (Sourcery 2010q1
+//   pre-C++11 layout). Cross-toolchain has the stl_list.h patch making
+//   std::list 12 bytes (Bada's post-C++11 layout). The asserts below
+//   were written assuming binary 8B layout but cross-build has 12B.
+//   Resolution requires either reverting the toolchain patch (project-wide
+//   impact) or recomputing offsets accounting for 12B-list expansion.
+//   Asserts disabled until the std::list size strategy is harmonized
+//   project-wide. See tmp/re-actormanager.md / tmp/re-powerupmanager.md.
+#if 0 // #ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(PowerUpManager) == 0x90, "PowerUpManager size mismatch");
+static_assert(offsetof(PowerUpManager, m_ActivePowerUps)     == 0x18, "m_ActivePowerUps offset");
+static_assert(offsetof(PowerUpManager, m_ActiveByHash)       == 0x20, "m_ActiveByHash offset");
+static_assert(offsetof(PowerUpManager, m_ScreenEffectPool)   == 0x38, "m_ScreenEffectPool offset");
+static_assert(offsetof(PowerUpManager, m_ActiveScreenEffects)== 0x50, "m_ActiveScreenEffects offset");
+static_assert(offsetof(PowerUpManager, m_PurchasablePowers)  == 0x58, "m_PurchasablePowers offset");
+static_assert(offsetof(PowerUpManager, m_pActiveSpecial)     == 0x60, "m_pActiveSpecial offset");
+static_assert(offsetof(PowerUpManager, m_HighestActiveProgress)==0x88,"m_HighestActiveProgress offset");
+#endif
 
 #endif // FN_GAME_POWER_UP_MANAGER_H

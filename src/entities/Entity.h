@@ -4,12 +4,13 @@
 #include "math/Vec3.h"
 #include "collision/Col.h"
 #include "collision/ColSphere.h"
+#include "collision/ColAABB.h"
 #include "entities/Message.h"
 #include <cstdint>
 
 struct Renderer;
 
-// Mortar::Entity base class (0x3c bytes in binary, verified from ctor memset).
+// Mortar::Entity base class (0x3C bytes in binary, verified from ctor memset).
 //
 // Flag byte lives at Entity+0x0c. The binary encodes active / scheduled-
 // for-deactivation / in-flight-update state in these bits — there is no
@@ -17,18 +18,23 @@ struct Renderer;
 // is required for ActorManager::Update and Draw to gate iteration the
 // same way the binary does (test `(flags & 0x11) == 0`).
 //
-// Analysed: 2026-04-29T00:00
+// Analysed: 2026-05-04T00:00
 //
-// TODO: Entity RE deviations deferred (cascade across all subclasses):
-//  - Update / Draw / PostUpdate should be pure-virtual (=0). Currently empty
-//    bodies. Binary uses __cxa_pure_virtual @ 0x002773d0 in slots 4/5/6.
-//  - Init signature: binary is (void*, long, const Vec3*); port has (int, int, int).
-//    Affects Bomb::Init / Fruit::Init / SplatEntity::Init signatures.
-//  - CollisionResponse signature: binary is (Entity* hitter, u32, u32, const Vec3*);
-//    port has (const Vec3&). Affects Bomb / Fruit / SlashEntity overrides.
-//  - ~Entity D1 does NOT call Release; verify each subclass D1 dtor calls Release
-//    explicitly before chaining (Bomb/Fruit/SlashEntity/Coin/SplatEntity).
-//  - Vec3 scale stays 0 from base ctor; subclasses that need 1.0 must set it.
+// Layout verified from ctor at 0x0019d88c (memset 0x3C bytes):
+//   +0x00: vtable (4B)
+//   +0x04: field_0x04 / uint32_t (4B) — RuntimeID or LoadEntity ID
+//   +0x08: m_TrackerID / uint16_t (2B) — EntityTracker spatial-tree key
+//   +0x0a: (2B gap)
+//   +0x0c: flags / uint8_t (1B)
+//   +0x0d: (3B gap)
+//   +0x10: pos / Vec3 (12B)
+//   +0x1c: vel / Vec3 (12B)
+//   +0x28: scale / Vec3 (12B)
+//   +0x34: m_RecycleFlag / uint8_t (1B)
+//   +0x35: type / uint8_t (1B) — entity type; port widens to int
+//   +0x36: m_Angle / uint16_t (2B) — used by LoadEntity and Coin::Draw
+//   +0x38: m_Col / Col* (4B)
+//   sizeof = 0x3C (60)
 enum EntityFlagBits : uint8_t {
     ENT_INACTIVE      = 0x01,  // cleared by Entity::Activate on pool recycle
     ENT_UPDATING      = 0x04,  // set while ActorManager::Update calls vtable
@@ -40,24 +46,37 @@ enum EntityFlagBits : uint8_t {
     ENT_SKIP_MASK     = ENT_INACTIVE | ENT_KILLED,
 };
 
-// Port struct — mirrors the binary offsets for fields that callers touch.
-// Exact layout isn't load-bearing for the port (we don't cast from raw
-// memory) but the named offsets keep the Ghidra cross-reference obvious.
-//
 // ASM-verified: 2026-04-28T15:55Z binary @ 0x0019d88c (asm-inspector)
 // ASM-verified: 2026-04-28T15:55Z binary @ 0x001ea478 (asm-inspector)
 class Entity {
 public:
-    // +0x0c: flag byte (see enum above).
+    // +0x04: RuntimeID / loader field. Set by LoadEntity; unread at runtime.
+    uint32_t field_0x04;
+
+    // +0x08: EntityTracker spatial-tree key. Assigned on spawn registration.
+    // Binary @ Fruit::Init sets this->m_TrackerID = 0.
+    uint16_t m_TrackerID;    // +0x08
+
+    // +0x0a: 2-byte gap. Explicit so binary layout (+0x0c flags) holds
+    // under any compiler -- natural alignment after a uint16_t doesn't pad
+    // before the next uint8_t.
+    uint16_t pad_0x0a;       // +0x0a
+
+    // +0x0c: flag byte (see EntityFlagBits above).
     uint8_t flags;
 
-    // +0x10..+0x18: position
+    // +0x0d: 3-byte gap. Compiler will naturally pad here for Vec3's
+    // 4-byte alignment at +0x10, but documented for clarity. Entity::Entity
+    // memset 0x3C zeroes the whole struct including these gap bytes.
+
+    // +0x10..+0x1b: position
     Vec3 pos;
 
-    // +0x1c..+0x24: velocity
+    // +0x1c..+0x27: velocity
     Vec3 vel;
 
-    // +0x28..+0x30: scale (visual size)
+    // +0x28..+0x33: scale (visual size). Base ctor zeroes this; subclasses that
+    // need scale=1 (Fruit, Bomb, BombBlast, Coin) must set it themselves.
     Vec3 scale;
 
     // +0x34: recycle-state byte. Zeroed by ActorManager::Add on the
@@ -67,13 +86,19 @@ public:
 
     // +0x35: entity type byte in the binary. Port widens to int since
     // gameplay code indexes with regular ints; value range is still 0..4.
+    // DIFFERS: binary = uint8_t at +0x35; port = int. Breaks offsetof for
+    //   m_Angle and m_Col below — those stay at binary-correct +0x36/+0x38
+    //   ONLY under the bada cross-build (uint8_t + natural padding). The
+    //   port desktop build may have m_Angle at a different offset; this is
+    //   acceptable since the port never casts raw memory to Entity*.
     int entityType;
 
-    // +0x38: collision primitive pointer (nullable). Binary ctor stores nullptr
-    // here (verified: str r6,[r4,#0x38] where r6=0). Subclasses that need
-    // collision allocate a ColSphere in Init (if null) and free in dtor.
-    // BombBlast leaves this null (no collision).
-    Mortar::Col* m_Col;     // polymorphic; subclasses install ColSphere/ColLine/ColAABB
+    // +0x36: 16-bit angle used by LoadEntity and Coin::Draw (Y-rotation index).
+    // Binary @ 0x0019d88c ctor: zeroed by memset. BombBlast::Init writes random.
+    uint16_t m_Angle;        // +0x36 in binary; offset may differ in port due to entityType widening
+
+    // +0x38: collision primitive pointer (nullable).
+    Mortar::Col* m_Col;     // +0x38 in binary -- polymorphic; subclasses install ColSphere/ColLine/ColAABB
 
     // Binary @ 0x0019d88c — base ctor
     Entity();
@@ -86,44 +111,60 @@ public:
     // Called from GameInit step 15 with 0x20000 (128 KB) to allocate the
     // process-global LinkedHeap Entity arena before ActorManager::Initialise.
     // DIFFERS: original = LinkedHeap arena 0x20000, port uses std new (no fixed cap).
-    // TODO: implement -- see docs/systems/gameinit-todos.md step 15.
     static void HeapCreate(unsigned int bytes);
 
     // Counterpart to HeapCreate; called from GameExit.
     // Binary: Mortar::Entity::HeapDestroy @ 0x0019d6d0.
-    // TODO: implement -- see docs/systems/gameinit-todos.md step 15.
     static void HeapDestroy();
 
-    // Vtable slot 2 (+0x08): Init — Binary @ 0x0019d5fc (base no-op)
-    virtual void Init(int, int, int);
+    // Binary @ 0x00170b18 — clear bit0 (ENT_INACTIVE). Called by ActorManager::Add
+    // recycle path. Single instruction: strb r0,[r0,#0x0c] where r0=flags & ~1.
+    void Activate() { flags &= ~static_cast<uint8_t>(0x01u); }
+
+    // Vtable slot 2 (+0x08): Init — Binary @ 0x0019d5fc (base no-op).
+    // Caller protocol: pos/vel pre-set, scale lives in p3 (nullable, default 1.0).
+    // Bomb / Fruit / SlashEntity / BombBlast override; Coin uses base (no-op).
+    // p1 and p2 are vestigial from the binary serialiser path; runtime callers
+    // always pass (nullptr, 0, &scale). Binary @ 0x0019d5fc.
+    virtual void Init(void* /*payload, unused at runtime*/,
+                      long   /*entityTypeOrLen, ignored except by .lvl loader*/,
+                      const Vec3* /*scaleOrNull; defaults to (1,1,1)*/);
 
     // Vtable slot 3 (+0x0C): Release — Binary @ 0x0019d5e8
     // Base: frees m_Col then nulls it. Subclasses override to release resources.
     virtual void Release();
 
-    // Vtable slot 4 (+0x10): Update
-    virtual void Update(float) {}
+    // Vtable slot 4 (+0x10): Update — PURE VIRTUAL (binary: __cxa_pure_virtual @ 0x002773d0)
+    virtual void Update(float dt) = 0;
 
-    // Vtable slot 5 (+0x14): Draw
-    virtual void Draw(Renderer&) {}
+    // Vtable slot 5 (+0x14): Draw — PURE VIRTUAL (binary: __cxa_pure_virtual @ 0x002773d0)
+    virtual void Draw(Renderer&) = 0;
 
-    // Vtable slot 6 (+0x18): PostUpdate (binary name: DrawUpdate).
+    // Vtable slot 6 (+0x18): PostUpdate (binary name: DrawUpdate) — PURE VIRTUAL
     // Called from ActorManager::Update right after Update, still under
-    // the gate `(flags & 0x11) == 0`. Bomb uses it to sync its fuse-emitter
-    // position with the rotation that Update just advanced.
-    virtual void PostUpdate(float) {}
+    // the gate `(flags & 0x11) == 0`.
+    virtual void PostUpdate(float dt) = 0;
 
     // Vtable slot 7 (+0x1C): PostLoad — Binary @ 0x0019d600 (base no-op)
     virtual void PostLoad();
 
-    // Vtable slot 8 (+0x20): InRect — Binary @ 0x0019d800 (sphere-broadcast helper)
-    // Base no-op; subclasses update m_Col->center from pos and dispatch collision.
-    virtual void InRect(float, float, float, float);
+    // Vtable slot 8 (+0x20): InRect — Binary @ 0x0019d800
+    // Signature: void InRect(ColAABB*) — sphere-broadcast helper.
+    // Body reads aabb->_field_0x38 (inner Col*), copies pos fields, dispatches.
+    // Called by ActorManager::GetNumInAABB. Port: no-op in base (body is complex
+    // internal Col dispatch; callers in port use CollideWithSphere directly).
+    // Binary @ 0x0019d800.
+    virtual void InRect(Mortar::ColAABB* aabb);
 
     // Vtable slot 9 (+0x24): CollisionResponse — Binary @ 0x0019d604 (base returns 0)
     // Called when the blade collision sphere hits this entity.
-    // Port previously named this OnSliced; renamed to match binary symbol.
-    virtual void CollisionResponse(const Vec3&);
+    // Args 2/3 are always 0 at runtime (.lvl-loader vestige); kept in signature
+    // for vtable parity. Returns int (Fruit: 1=already sliced, 0=ok; Bomb: 0;
+    // base: 0). Binary @ 0x0019d604.
+    virtual int CollisionResponse(Entity* hitter,
+                                  unsigned long /*flagsA*/,
+                                  unsigned long /*flagsB*/,
+                                  const Vec3*  bladeVelocity);
 
     // Vtable slot 10 (+0x28): Collide — Binary @ 0x0019d608
     // If m_Col, dispatch m_Col->Collide(col, hitPos)
@@ -140,6 +181,24 @@ public:
     // Binary test: `(flags & 0x11) == 0`. Inactive / killed entities fail.
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }
 };
+
+#ifdef __bada__
+// Layout asserts: outside the class so the type is complete; offsetof requires
+// public access in GCC 4.4.1 -- Entity has no `private:` block so all fields
+// are public, meeting that requirement. NOTE: offsetof(m_Angle) is intentionally
+// NOT asserted because the port widens entityType to int (4B vs binary's 1B
+// uint8_t), displacing m_Angle from binary's 0x36. Asserting only fields not
+// displaced by the widening.
+static_assert(offsetof(Entity, field_0x04)   == 0x04, "field_0x04 offset wrong");
+static_assert(offsetof(Entity, m_TrackerID)  == 0x08, "m_TrackerID offset wrong");
+static_assert(offsetof(Entity, flags)        == 0x0C, "flags offset wrong");
+static_assert(offsetof(Entity, pos)          == 0x10, "pos offset wrong");
+static_assert(offsetof(Entity, vel)          == 0x1C, "vel offset wrong");
+static_assert(offsetof(Entity, scale)        == 0x28, "scale offset wrong");
+static_assert(offsetof(Entity, m_RecycleFlag)== 0x34, "m_RecycleFlag offset wrong");
+// sizeof intentionally not asserted -- port entity is larger than binary 0x3C
+// due to int widening of entityType.
+#endif
 
 // Free function: remove an entity from EntityTracker tree `treeIdx` by its
 // 16-bit tracker ID. Called by Fruit::KillFruit to unregister the dying

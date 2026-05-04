@@ -36,15 +36,9 @@ namespace Mortar { struct PSPParticleEmitter; }
 class Coin : public Entity {
 public:
     // --- Binary fields beyond Entity base (Entity = 0x3C bytes) --------
-    // Note: Entity ends at +0x3C per struct layout in coin.md.
-    // The field at +0x36 is 'angle' (ushort), already in Entity base via
-    // docs/entities/entity-base.md? No — Entity base in port does not carry
-    // 'angle'. The binary struct shows +0x36 is within the 0x3C Entity region.
-    // The port Entity is smaller (no explicit 'angle' field), so we add it here.
-    // DIFFERS: Binary Entity base carries angle at +0x36 inside 0x3C region;
-    // port Entity base does not expose it, so Coin owns it as a member.
-
-    uint16_t angle;              // +0x36  launch/movement heading (16-bit angle index)
+    // m_Angle at +0x36 is now in the Entity base (added 2026-05-04).
+    // Coin's own angle field mapped to Entity::m_Angle; callers already use
+    // this->m_Angle via the base class.
 
     int      m_CoinValue;        // +0x3C  coin value credited on arrival
     int      m_State;            // +0x40  0=waiting,1=arrived,2=flying,3=decel,4=homing
@@ -68,8 +62,10 @@ public:
 
     // --- Vtable overrides ------------------------------------------------
 
-    // 0x0019D5FC — stub/empty in binary
-    void Init(int, int, int) override;
+    // 0x0019D5FC — Coin uses the base no-op Init (vtable slot 2 = base 0x0019d5fc).
+    // Coin is fully initialised by its ctor + MakeCoins/InitCoin; this override
+    // is kept so the compiler knows the virtual is satisfied (same function ptr).
+    void Init(void* p1, long p2, const Vec3* p3) override;
 
     // 0x001731F4 — clear fly emitter; called from dtor
     void Release() override;

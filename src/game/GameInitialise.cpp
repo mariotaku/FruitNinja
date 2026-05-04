@@ -100,7 +100,7 @@ void GameInitialise() {
     {
         Mortar::FileSystem_Direct* fs = new Mortar::FileSystem_Direct();
         fs->Initialise(game->data_dir.c_str(), /*writable=*/false);
-        Mortar::FileManager::GetInstance().AddSystem(fs, /*id=*/0, /*priority=*/0);
+        FileManager::GetInstance().AddSystem(fs, /*id=*/0, /*priority=*/0);
     }
 
     // Step 4: DisplayManager::GetInstance() → SetWindowSize, SetClearColour, SetLightDirection
@@ -178,7 +178,7 @@ void GameInitialise() {
     Mortar::SoundManager::GetInstance().Init();
 
     // GameSound — 32-slot pool backed by SDL2 audio.
-    game->pGameSound = new Mortar::GameSound();
+    game->pGameSound = new GameSound();
 
     // Music: no boot-time SongPlay. The binary has no separate boot call;
     // UpdateMusic (0x0016a68c) is the sole issuer of SongPlay. On the first
@@ -267,7 +267,7 @@ void GameInitialise() {
         // Not present in shipped FruitNinjaBada/Data/fonts/ — slot stays alias.
         {
             std::string path = fontDir + "gold_numbers.fnt";
-            FILE* f = Mortar::FileManager::OpenCI(path.c_str(), "rb");
+            FILE* f = FileManager::OpenCI(path.c_str(), "rb");
             if (f) {
                 fclose(f);
                 game->pFontGold = Mortar::Font::Load(path.c_str());
@@ -277,7 +277,7 @@ void GameInitialise() {
         // +0x74 pFontSilver: fonts/silver_numbers.fnt (0x0010bff0, File::Exists guarded)
         {
             std::string path = fontDir + "silver_numbers.fnt";
-            FILE* f = Mortar::FileManager::OpenCI(path.c_str(), "rb");
+            FILE* f = FileManager::OpenCI(path.c_str(), "rb");
             if (f) {
                 fclose(f);
                 game->pFontSilver = Mortar::Font::Load(path.c_str());
@@ -287,7 +287,7 @@ void GameInitialise() {
         // +0x78 pFontBronze: fonts/bronze_numbers.fnt (0x0010c014, File::Exists guarded)
         {
             std::string path = fontDir + "bronze_numbers.fnt";
-            FILE* f = Mortar::FileManager::OpenCI(path.c_str(), "rb");
+            FILE* f = FileManager::OpenCI(path.c_str(), "rb");
             if (f) {
                 fclose(f);
                 game->pFontBronze = Mortar::Font::Load(path.c_str());
@@ -328,7 +328,7 @@ void GameInitialise() {
     // Pool allocation + HUD registration happens in GameInit (which
     // runs AFTER the HUD is created).
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
-    PowerUpShop::LoadContent();     // TODO: power-up shop textures
+    PowerUpShop::LoadContent();     // binary @ 0x00155b50 — empty body
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
     // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
     PreloadSounds();   // STUB until ported
@@ -360,9 +360,9 @@ void GameDestroy() {
     PowerUpShop::UnLoadContent();
     LeaderboardScreen::UnLoadContent();
 
-    // --- 3. Data managers (not ported) ---
+    // --- 3. Data managers ---
     // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
-    // TODO: ItemManager::UnLoadItemData -- blocked on ItemManager UnLoadItemData RE.
+    ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0010b7ec — after UnLoadAchievementInfo
 
     // --- 4. HUD ---
     if (game->hud) {
