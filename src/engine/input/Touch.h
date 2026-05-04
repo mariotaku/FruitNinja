@@ -20,7 +20,7 @@
 //   Update(dt) drains ring via ___UpdateInternal -> states2, then calls _Update().
 //   _Update() copies states2 -> states1, then State::Update() on each slot.
 //
-// SDL event flow: SDLInputTranslator calls __UpdateInternal per event.
+// SDL event flow: InputTranslatorSDL calls __UpdateInternal per event.
 // Once per frame InputManager::Update broadcasts Update(dt) -> Touch::Update(dt).
 
 #include <cstdint>
@@ -75,8 +75,8 @@ public:
 
     // Binary @ 0x00195690 — __UpdateInternal.
     // Push TEvnt to ring; on overflow: Update(0.0f) then retry.
-    // SDL entry point: SDLInputTranslator calls this for each touch event.
-    // TODO: 0x00195690 — wire SDL touch events to __UpdateInternal in SDLInputTranslator.
+    // SDL entry point: InputTranslatorSDL calls this for each touch event.
+    // TODO: 0x00195690 — wire SDL touch events to __UpdateInternal in InputTranslatorSDL.
     void __UpdateInternal(uint32_t extId, bool isMove, float x, float y, float t);
 
     // Binary @ 0x00195314 — ___UpdateInternal.

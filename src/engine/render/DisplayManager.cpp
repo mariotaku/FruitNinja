@@ -1,4 +1,5 @@
 #include "render/DisplayManager.h"
+#include <SDL.h>
 #include <cstring>
 
 namespace Mortar {
@@ -51,8 +52,8 @@ void DisplayManager::EndFrame() {
     m_bRenderingActive = false;
 }
 
-void DisplayManager::SwapBuffers(SDL_Window* window) {
-    SDL_GL_SwapWindow(window);
+void DisplayManager::SwapBuffers(void* window) {
+    SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
     m_bSwapPending = m_bSwapPending ? 0 : 1;
 }
 

@@ -230,7 +230,7 @@ int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
 // ---------------------------------------------------------------------------
 // Port-specific helpers — wrap __UpdateInternal for SDL translator.
 // The SDL translator currently calls these instead of __UpdateInternal directly.
-// TODO: 0x00195690 — update SDLInputTranslator to call __UpdateInternal directly.
+// TODO: 0x00195690 — update InputTranslatorSDL to call __UpdateInternal directly.
 
 void Touch::OnPressed(uint32_t extId, float x, float y) {
     __UpdateInternal(extId, false, x, y, 0.0f);

@@ -5,6 +5,7 @@
 //
 
 #include "Game.h"
+#include <SDL.h>            // SDL backend (Game is the SDL-bound entry point)
 #include "asset/TextureManager.h"
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
@@ -78,9 +79,9 @@ int Game::GetAppLicensedState() const {
 }
 
 // Matches: FruitNinja::OnAppInitializing flow
-bool Game::init(SDL_Window* win, SDL_GLContext gl) {
-    window = win;
-    gl_context = gl;
+bool Game::init(void* win, void* gl) {
+    window = win;        // SDL_Window* stored as void* in the header
+    gl_context = gl;     // SDL_GLContext stored as void*
     data_dir = FN_DATA_DIR;
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
 
@@ -96,7 +97,7 @@ bool Game::init(SDL_Window* win, SDL_GLContext gl) {
 
     // One-shot GL state init — matches FruitNinja::InitGL @ 0x00181e54.
     int initW, initH;
-    SDL_GL_GetDrawableSize(window, &initW, &initH);
+    SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &initW, &initH);
     renderer.InitGL(initW, initH);
 
     // Matches original lifecycle:
@@ -137,7 +138,7 @@ void Game::run() {
                 FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
                 printf("[debug] timeScale = %.1f\n", FN::g_DebugTimeScale);
             } else {
-                inputTranslator.ProcessSDLEvent(ev, window);
+                inputTranslator.ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
             }
         }
 
@@ -166,7 +167,7 @@ void Game::run() {
         // matrix stack reset. glViewport isn't touched by BeginFrame — our
         // port re-applies it each frame so window resizes are picked up.
         int ww, wh;
-        SDL_GL_GetDrawableSize(window, &ww, &wh);
+        SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
         glViewport(0, 0, ww, wh);
         Mortar::DisplayManager::GetInstance().BeginFrame();
 
@@ -174,7 +175,7 @@ void Game::run() {
         GameTaskDraw(dt);
 
         // Present
-        SDL_GL_SwapWindow(window);
+        SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
 
         // Frame pacing: original Bada timer fires every 10ms (100fps)
         // All game logic uses fixed dt=1/60, tuned for this tick rate
@@ -201,11 +202,11 @@ void Game::runFrames(int frameCount) {
         GameTaskUpdate(dt);
 
         int ww, wh;
-        SDL_GL_GetDrawableSize(window, &ww, &wh);
+        SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
         glViewport(0, 0, ww, wh);
         Mortar::DisplayManager::GetInstance().BeginFrame();
         GameTaskDraw(dt);
-        SDL_GL_SwapWindow(window);
+        SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
     }
 }
 

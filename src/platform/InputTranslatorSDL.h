@@ -1,8 +1,8 @@
-#ifndef FN_SDL_INPUT_TRANSLATOR_H
-#define FN_SDL_INPUT_TRANSLATOR_H
+#ifndef FN_INPUT_TRANSLATOR_SDL_H
+#define FN_INPUT_TRANSLATOR_SDL_H
 
 //
-// SDLInputTranslator — converts SDL touch/mouse events to Mortar InputEvents
+// InputTranslatorSDL — converts SDL touch/mouse events to Mortar InputEvents
 //
 // Maps SDL finger IDs to the 16-channel touch system used by the original.
 // Each channel has actions: TouchDown_N, TouchMove_XN, TouchMove_YN, TouchUp_N
@@ -17,7 +17,7 @@
 // Forward-declare StringHash (from scoring or a utility)
 uint32_t StringHash(const char* str);
 
-class SDLInputTranslator {
+class InputTranslatorSDL {
 public:
     // Pre-computed action hashes for 16 touch channels
     uint32_t hashTouchDown[16];
@@ -35,7 +35,7 @@ public:
     bool mouseDown;
     float mouseX, mouseY;
 
-    SDLInputTranslator();
+    InputTranslatorSDL();
 
     // Initialize action hashes (call once after StringHash is available)
     void Init();

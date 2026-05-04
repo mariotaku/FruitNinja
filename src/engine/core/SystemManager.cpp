@@ -1,5 +1,4 @@
 #include "core/SystemManager.h"
-#include <SDL.h>
 #include <algorithm>
 
 namespace Mortar {

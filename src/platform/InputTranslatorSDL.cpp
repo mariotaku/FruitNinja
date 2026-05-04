@@ -1,11 +1,11 @@
 //
-// SDLInputTranslator — converts SDL events to Mortar InputEvents AND feeds
+// InputTranslatorSDL — converts SDL events to Mortar InputEvents AND feeds
 // Mortar::Touch directly (poll-based binary path). The InputManager dispatch
 // is kept for keyboard/gamepad actions only — step 7 of the touch rewrite
 // will drop the TouchDown_N / TouchMove_XN / TouchUp_N bindings.
 //
 
-#include "SDLInputTranslator.h"
+#include "platform/InputTranslatorSDL.h"
 #include "input/Touch.h"
 #include <cstdio>
 #include <cstring>
@@ -38,7 +38,7 @@ uint32_t StringHash(const char* str) {
     return c;
 }
 
-SDLInputTranslator::SDLInputTranslator()
+InputTranslatorSDL::InputTranslatorSDL()
     : hashTouchScreen(0), mouseDown(false), mouseX(0), mouseY(0) {
     memset(fingerX, 0, sizeof(fingerX));
     memset(fingerY, 0, sizeof(fingerY));
@@ -46,7 +46,7 @@ SDLInputTranslator::SDLInputTranslator()
     memset(fingerMap, 0xFF, sizeof(fingerMap));
 }
 
-void SDLInputTranslator::Init() {
+void InputTranslatorSDL::Init() {
     char buf[32];
 
     // Pre-compute hashes matching original action names from game_input.txt
@@ -72,7 +72,7 @@ void SDLInputTranslator::Init() {
 // Ortho: X ∈ [-240, +240] (horizontal), Y ∈ [-160, +160] (vertical, +up).
 // SDL pixel Y is top-down (0 at top), so we flip.
 // See docs/engine/coordinate-system.md.
-void SDLInputTranslator::TransformTouch(SDL_Window* window, int px, int py,
+void InputTranslatorSDL::TransformTouch(SDL_Window* window, int px, int py,
                                          float& gx, float& gy) {
     int ww, wh;
     SDL_GetWindowSize(window, &ww, &wh);
@@ -88,13 +88,13 @@ void SDLInputTranslator::TransformTouch(SDL_Window* window, int px, int py,
     gy = (float)(FN_SCREEN_H / 2) - ny * (float)FN_SCREEN_H;   // [+160, -160]
 }
 
-void SDLInputTranslator::TransformTouchNormalized(float nx, float ny,
+void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
                                                    float& gx, float& gy) {
     gx = nx * (float)FN_SCREEN_W - (float)(FN_SCREEN_W / 2);
     gy = (float)(FN_SCREEN_H / 2) - ny * (float)FN_SCREEN_H;
 }
 
-int SDLInputTranslator::MapFingerId(SDL_FingerID id) {
+int InputTranslatorSDL::MapFingerId(SDL_FingerID id) {
     // Check if already mapped
     for (int i = 0; i < 16; i++) {
         if (fingerActive[i] && fingerMap[i] == id)
@@ -111,7 +111,7 @@ int SDLInputTranslator::MapFingerId(SDL_FingerID id) {
     return -1;  // all 16 channels busy
 }
 
-void SDLInputTranslator::ReleaseFingerId(SDL_FingerID id) {
+void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
     for (int i = 0; i < 16; i++) {
         if (fingerActive[i] && fingerMap[i] == id) {
             fingerActive[i] = false;
@@ -120,7 +120,7 @@ void SDLInputTranslator::ReleaseFingerId(SDL_FingerID id) {
     }
 }
 
-void SDLInputTranslator::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window) {
+void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window) {
     InputManager* mgr = InputManager::GetInstance();
     if (!mgr) return;
 

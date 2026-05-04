@@ -84,7 +84,7 @@ public:
     static bool ValidCharacter(unsigned char c);
 
     // Port-side: dispatch an InputEvent through all devices.
-    // Not a binary method — SDLInputTranslator drives dispatch here.
+    // Not a binary method — InputTranslatorSDL drives dispatch here.
     void DispatchEvent(InputEvent* event);
 
     // Port-side: dispatch to all devices (global event, no hash filter).

@@ -5,14 +5,17 @@
 #include <vector>
 #include <sys/stat.h>
 
-#include <SDL.h>  // SDL_strcasecmp -- portable
-
 #ifdef _WIN32
   #define WIN32_LEAN_AND_MEAN
   #include <windows.h>          // FindFirstFileA / FindNextFileA
+  #define FN_STRCASECMP _stricmp
 #elif !defined(__arm__)
-  // dirent.h is not available on arm-none-eabi (cross-build stub target)
   #include <dirent.h>
+  #include <strings.h>          // strcasecmp (POSIX)
+  #define FN_STRCASECMP strcasecmp
+#else
+  // Cross-build target (arm-none-eabi) — case-insensitive cmp not exercised
+  #define FN_STRCASECMP strcmp
 #endif
 
 namespace Mortar {
@@ -69,7 +72,7 @@ std::string FindEntryCI(const std::string& dirPath, const std::string& target) {
     HANDLE h = FindFirstFileA(pattern.c_str(), &fd);
     if (h == INVALID_HANDLE_VALUE) return std::string();
     do {
-        if (SDL_strcasecmp(fd.cFileName, target.c_str()) == 0) {
+        if (FN_STRCASECMP(fd.cFileName, target.c_str()) == 0) {
             match = fd.cFileName;
             break;
         }
@@ -79,7 +82,7 @@ std::string FindEntryCI(const std::string& dirPath, const std::string& target) {
     DIR* d = opendir(dir.c_str());
     if (!d) return std::string();
     while (struct dirent* ent = readdir(d)) {
-        if (SDL_strcasecmp(ent->d_name, target.c_str()) == 0) {
+        if (FN_STRCASECMP(ent->d_name, target.c_str()) == 0) {
             match = ent->d_name;
             break;
         }

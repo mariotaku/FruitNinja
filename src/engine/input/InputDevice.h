@@ -62,7 +62,7 @@ public:
 
     // Port-side dispatch helper: fire all callbacks matching this event.
     // Called by InputManager::DispatchEvent.  Not a binary vtable slot —
-    // SDLInputTranslator drives dispatch by calling DispatchEvent on the
+    // InputTranslatorSDL drives dispatch by calling DispatchEvent on the
     // manager which routes here.
     // TODO: 0x00195764 — route via SendIndividualTouchCallbacks once ported.
     virtual void              DispatchEvent(InputEvent* event) = 0;
