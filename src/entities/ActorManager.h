@@ -274,7 +274,7 @@ public:
 };
 
 // Confirmed-correct offsets (toolchain patch makes these assertable):
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#ifdef __bada__
 static_assert(offsetof(ActorManager, m_FreePool)  == 0x008, "m_FreePool offset");
 static_assert(offsetof(ActorManager, m_FreeCount) == 0x808, "m_FreeCount offset");
 static_assert(offsetof(ActorManager, m_PendingDeact) == 0x80C, "m_PendingDeact offset");

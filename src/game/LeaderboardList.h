@@ -18,7 +18,7 @@ public:
     // Defunct: online leaderboards -- fields opaque.
     // Binary total: ~0x12C. On 64-bit port, sizeof(ScrollingMenu) may exceed 0x12C;
     // padding is omitted in that case (no negative-size array).
-#if (defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4)
+#ifdef __bada__
     char _pad[0x12C - sizeof(ScrollingMenu)];
 #endif
 };
