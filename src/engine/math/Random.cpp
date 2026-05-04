@@ -1,5 +1,7 @@
 #include "Random.h"
 
+namespace Math {
+
 // Constants from original binary (see docs/engine/rng.md)
 static const uint64_t kDefaultSeed  = 0x00000000DEADBEEFULL;
 static const uint64_t kMultiplier   = 0x5D588B656C078965ULL; // Knuth MMIX LCG
@@ -41,3 +43,5 @@ float Random::RandF(float range) {
     uint32_t v = Rand32(0x7FFFF); // [0, 524287)
     return ((float)v / 524287.0f) * range;
 }
+
+} // namespace Math

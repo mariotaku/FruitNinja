@@ -3,6 +3,8 @@
 #include "input/InputDeviceBada.h"
 #include <cstring>
 
+namespace Mortar {
+
 InputDeviceBada::InputDeviceBada()
     : m_touch(&Mortar::Touch::GetInstance())
     , m_queueUntilUpdate(false)
@@ -89,3 +91,5 @@ void InputDeviceBada::DispatchEvent(InputEvent* event) {
         }
     }
 }
+
+} // namespace Mortar

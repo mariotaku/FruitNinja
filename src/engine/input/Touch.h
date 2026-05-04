@@ -25,10 +25,8 @@
 
 #include <cstdint>
 
-// Forward declaration for SendIndividualTouchCallbacks.
-class InputDevice;
-
 namespace Mortar {
+class InputDevice;
 
 // Binary Mortar::Touch::State (28 bytes).
 struct TouchState {

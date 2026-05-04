@@ -120,7 +120,7 @@ struct Game : public Mortar::MortarGame {
     void* window;          // SDL_Window* (opaque to portable headers)
     void* gl_context;      // SDL_GLContext (opaque)
     Renderer renderer;
-    InputManager* inputManager;
+    Mortar::InputManager* inputManager;
     InputTranslatorSDL* inputTranslator;   // heap-allocated in GameSDL.cpp
     ActorManager* actorManager;
 

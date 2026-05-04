@@ -6,7 +6,7 @@ namespace {
     float g_divAsyncResult  = 0.0f;
 }
 
-namespace Mortar { namespace Math {
+namespace Math {
 
 // Binary @ 0x00194d50 — 4096-entry sin LUT @ 0x001be4a4; sinf() is equivalent
 float SinIdx(unsigned short idx) {
@@ -70,4 +70,4 @@ float DivAsyncGet() {
     return g_divAsyncResult;
 }
 
-}} // namespace Mortar::Math
+} // namespace Math

@@ -142,7 +142,13 @@ BADA = {'BadaSound','DisplayManagerBada','MAMAudioThread','MAMAudioController','
         'LinkedHeap','MemoryPool','PacketSerializer','BadaApplication','GlesForm','ComboBox','ListBox',
         'EditField','InputDeviceBada','GeometryBinding_Bada','IIndexStream_Bada','IVertexStream_Bada',
         'IndexStreamBasic_Bada','VertexStreamBasic_Bada','BadaTextureData','VertexElement_Bada',
-        'FileSystem_Direct','IFile_Direct'}
+        'FileSystem_Direct','IFile_Direct',
+        # SoundManager itself is portable in the binary, but the port's implementation
+        # lives entirely in src/engine/audio/SoundManagerSDL.cpp (excluded by *SDL.cpp
+        # filter) and uses simplified signatures (e.g. SFXPlay(name, sound) vs binary
+        # SFXPlay(name, ulong, MortarSound*, uchar, long)). Classified Bada-platform here
+        # until the SoundManager.cpp / SoundManagerSDL.cpp split + signature audit lands.
+        'SoundManager'}
 LIBRARY = {'TiXmlNode','TiXmlElement','TiXmlDocument','TiXmlAttribute','TiXmlBase','TiXmlComment',
            'TiXmlDeclaration','TiXmlText','TiXmlUnknown','TiXmlHandle','TiXmlPrinter','TiXmlString',
            'TiXmlAttributeSet','TiXmlDTDInfo','TiXmlParsingData'}
