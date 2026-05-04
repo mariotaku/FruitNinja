@@ -2,7 +2,7 @@
 #define FN_GAME_FN_HIGHSCORE_LIST_H
 
 // Defunct: FNHighscoreList -- online-leaderboard list; no-op stubs.
-// Binary ctor @ 0x00111408. Size 0x10 (4 std::list bytes + 4 flags).
+// Binary ctor @ 0x00111408. Size 0x10 (opaque 16 bytes; exact layout not RE'd).
 
 #include <cstddef>
 #include <cstdint>

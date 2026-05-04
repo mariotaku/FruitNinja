@@ -60,16 +60,16 @@ private:
     ~FileManager();
 
     // Binary @ Mortar::FileManager::m_FileSystems — descending priority order on insert.
-    // std::list<IFileSystem*> at +0x00; sole member, so sizeof(FileManager) == 12 (Bada list size).
+    // std::list<IFileSystem*> at +0x00; sole member, so sizeof(FileManager) == 8 (Sourcery 2010q1 pre-C++11 list).
     std::list<Mortar::IFileSystem*> m_FileSystems;
 
     // mode string -> flags conversion for the OpenCI compat shim
     static unsigned long ModeToFlags(const char* mode);
 };
 
-// Cross-toolchain std::list patched to 12B (matches Bada). 32-bit ABI only.
+// 32-bit ARM only (8B std::list, Sourcery 2010q1 pre-C++11).
 #ifdef __bada__
-static_assert(sizeof(FileManager) == 12, "FileManager sizeof mismatch (single 12B std::list field)");
+static_assert(sizeof(FileManager) == 8, "FileManager sizeof mismatch (single 8B std::list field)");
 #endif
 
 #endif // FN_ENGINE_ASSET_FILEMANAGER_H

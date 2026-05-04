@@ -53,11 +53,7 @@ class PowerUp;
 namespace tinyxml2 { class XMLElement; }
 typedef tinyxml2::XMLElement TiXmlElement;
 
-// TODO: PowerUpManager std::list size conflict — binary has 8-byte list here;
-// cross-toolchain patches to 12-byte. See tmp/re-powerupmanager.md.
-// offsetof asserts for m_ActivePowerUps, m_ActiveByHash, m_ActiveScreenEffects,
-// m_PurchasablePowers are gated under #ifdef __bada__ so they pass only when
-// compiled with the Bada/8-byte-list toolchain.
+// std::list is 8 bytes (Sourcery 2010q1 pre-C++11). Offsets below are binary-verified.
 
 class PowerUpManager {
 public:
@@ -209,25 +205,17 @@ private:
     void Release();
 };
 
-// TODO: PowerUpManager std::list size conflict.
-//   Binary uses 8-byte std::list at +0x18, +0x50, +0x58 (Sourcery 2010q1
-//   pre-C++11 layout). Cross-toolchain has the stl_list.h patch making
-//   std::list 12 bytes (Bada's post-C++11 layout). The asserts below
-//   were written assuming binary 8B layout but cross-build has 12B.
-//   Resolution requires either reverting the toolchain patch (project-wide
-//   impact) or recomputing offsets accounting for 12B-list expansion.
-//   Asserts disabled until the std::list size strategy is harmonized
-//   project-wide. See tmp/re-actormanager.md / tmp/re-powerupmanager.md.
-#if 0 // #ifdef __bada__
+// Offsets reflect binary's 8B std::list (R4 W1 RE). Cross-toolchain runs unpatched.
+#ifdef __bada__
 #include <cstddef>
 static_assert(sizeof(PowerUpManager) == 0x90, "PowerUpManager size mismatch");
-static_assert(offsetof(PowerUpManager, m_ActivePowerUps)     == 0x18, "m_ActivePowerUps offset");
-static_assert(offsetof(PowerUpManager, m_ActiveByHash)       == 0x20, "m_ActiveByHash offset");
-static_assert(offsetof(PowerUpManager, m_ScreenEffectPool)   == 0x38, "m_ScreenEffectPool offset");
-static_assert(offsetof(PowerUpManager, m_ActiveScreenEffects)== 0x50, "m_ActiveScreenEffects offset");
-static_assert(offsetof(PowerUpManager, m_PurchasablePowers)  == 0x58, "m_PurchasablePowers offset");
-static_assert(offsetof(PowerUpManager, m_pActiveSpecial)     == 0x60, "m_pActiveSpecial offset");
-static_assert(offsetof(PowerUpManager, m_HighestActiveProgress)==0x88,"m_HighestActiveProgress offset");
+static_assert(offsetof(PowerUpManager, m_ActivePowerUps)      == 0x18, "m_ActivePowerUps offset");
+static_assert(offsetof(PowerUpManager, m_ActiveByHash)        == 0x20, "m_ActiveByHash offset");
+static_assert(offsetof(PowerUpManager, m_ScreenEffectPool)    == 0x38, "m_ScreenEffectPool offset");
+static_assert(offsetof(PowerUpManager, m_ActiveScreenEffects) == 0x50, "m_ActiveScreenEffects offset");
+static_assert(offsetof(PowerUpManager, m_PurchasablePowers)   == 0x58, "m_PurchasablePowers offset");
+static_assert(offsetof(PowerUpManager, m_pActiveSpecial)      == 0x60, "m_pActiveSpecial offset");
+static_assert(offsetof(PowerUpManager, m_HighestActiveProgress)== 0x88,"m_HighestActiveProgress offset");
 #endif
 
 #endif // FN_GAME_POWER_UP_MANAGER_H

@@ -94,8 +94,7 @@ public:
     Vec3 m_HitBoundsScale;
 
     // +0x10C: child sprite list for AddPeice/UpdatePeices/DeletePeices.
-    // Binary: std::list<MenuButtonAddOn> = 12 bytes on Bada libstdc++.
-    // Port: sizeof may differ on host ABI (documented limitation per CLAUDE.md).
+    // Binary: std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11).
     std::list<MenuButtonAddOn> m_AddOns;   // +0x10C
 
     // +0x118, +0x11C: text labels (original: BakedString* fg / shadow).
