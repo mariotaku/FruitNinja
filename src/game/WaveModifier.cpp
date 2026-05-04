@@ -7,7 +7,9 @@
 #include "ItemParseUtil.h"
 #include "entities/Fruit.h"
 #include "util/StringHash.h"
+#include "math/Random.h"
 #include <tinyxml2.h>
+#include <cstdlib>
 
 // Binary @ 0x00122c64. Re-rolls fruit-type indices from string-name vector.
 // m_FruitTypeNames holds one name per fruit slot (from XML "type" attr, split by SplitWords).
@@ -28,6 +30,25 @@ void SPAWNER_INFO::SelectTypes() {
     }
 }
 
+// PROBABILITY_OVERIDE::SelectType — binary @ 0x00122b44.
+// Populates m_TypeQueue[] from m_Types string names.
+// Three lazy-init guarded statics (Bomb / BombPineapple / Random hashes).
+void PROBABILITY_OVERIDE::SelectType() {
+    static const uint32_t kHashBomb        = StringHash("Bomb");
+    static const uint32_t kHashBombPineapp = StringHash("BombPineapple");
+    static const uint32_t kHashRandom      = StringHash("Random");
+    int n = (int)m_Types.size();
+    for (int i = 0; i < n && i < 20; ++i) {
+        uint32_t h = StringHash(m_Types[i].c_str());
+        if (h == kHashBomb || h == kHashBombPineapp)
+            m_TypeQueue[i] = -2;
+        else if (h == kHashRandom)
+            m_TypeQueue[i] = Fruit::RandomFruit(false);
+        else
+            m_TypeQueue[i] = Fruit::FruitType(m_Types[i].c_str(), false);
+    }
+}
+
 // PROBABILITY_OVERIDE::Parse — binary @ 0x001231d8
 void PROBABILITY_OVERIDE::Parse(tinyxml2::XMLElement* xml) {
     xml->QueryIntAttribute("percentageChance",     &m_PercentChance);
@@ -39,6 +60,100 @@ void PROBABILITY_OVERIDE::Parse(tinyxml2::XMLElement* xml) {
     xml->QueryIntAttribute("perWave",              &m_PerWave);
     xml->QueryFloatAttribute("disableWhenPowered", &m_DisableWhenPowered);
     xml->QueryIntAttribute("numWaves",             &m_SelectedType);
+}
+
+// ----------------------------------------------------------------------------
+// WaveQue methods — binary @ 0x00124334 / 0x00123258 / 0x00124464 / 0x00121b20
+// Only used in gameMode==2 (Survival/Combo). Classic/Arcade never call these.
+// ----------------------------------------------------------------------------
+
+// WaveQue::AddWave — binary @ 0x00124334
+void WaveQue::AddWave(WAVE_INFO* wi, bool isLast, Math::Random& rng) {
+    WaveQueItem item;
+    item.m_WaveIndex = wi->m_WaveIndex;
+
+    // Roll a policy code that controls alternating normal/random spawner-op assignment.
+    int policy;
+    uint32_t roll = rng.Rand32(100);
+    if (isLast) {
+        policy = (roll < 0x33u) ? -4 : -3;
+    } else {
+        if      (roll < 0x14u) policy = 5;
+        else if (roll < 0x28u) policy = 0x5f;
+        else if (roll < 0x32u) policy = 0x23;
+        else if (roll < 0x3cu) policy = 0x41;
+        else                   policy = 0x32;
+    }
+
+    int counter1 = 0;  // count of op=1 assignments
+    int counter2 = 0;  // count of op=2 assignments
+
+    for (int i = 0; i < wi->m_TotalWeight; ++i) {
+        int op;
+        if (policy == -4) {
+            policy = -3;
+            op = 2;
+        } else if (policy == -3) {
+            policy = -4;
+            op = 1;
+        } else if (policy == 0x32) {
+            int diff = counter1 - counter2;
+            if (diff > 1)       op = 2;
+            else if (diff < -1) op = 1;
+            else                op = (rng.Rand32(2) == 0) ? 1 : 2;
+        } else {
+            uint32_t r2 = rng.Rand32(100);
+            op = ((uint32_t)policy < r2) ? 1 : 2;
+        }
+        item.m_SpawnerOps.push_back(op);
+        if (op == 1) ++counter1; else ++counter2;
+    }
+
+    m_Items.push_back(item);
+}
+
+// WaveQue::PopWave — binary @ 0x00123258
+bool WaveQue::PopWave(WaveQueItem* out) {
+    if (m_Items.begin() == m_Items.end())
+        return false;
+    *out = *m_Items.begin();
+    m_Items.erase(m_Items.begin());
+    return true;
+}
+
+// WaveQue::RandomiseOrder — binary @ 0x00124464
+// Alternately flips spawner-ops 1<->2 at every other list position (positions 0,2,4,...).
+void WaveQue::RandomiseOrder(bool doSwap) {
+    if (!doSwap) return;
+    int pos = 0;
+    for (std::list<WaveQueItem>::iterator it = m_Items.begin();
+         it != m_Items.end(); ++it, ++pos) {
+        if ((pos & 1) == 0) {
+            for (std::vector<int>::iterator oit = it->m_SpawnerOps.begin();
+                 oit != it->m_SpawnerOps.end(); ++oit) {
+                if (*oit == 1)      *oit = 2;
+                else if (*oit == 2) *oit = 1;
+            }
+        }
+    }
+}
+
+// WaveQue::AddSpecials — binary @ 0x00121b20
+// For each spawner-op in each item: with Rand32(100)<5 (or specials counter>=4),
+// and if item.specialsCount<2, set op=3 (special).
+void WaveQue::AddSpecials(Math::Random& rng) {
+    for (std::list<WaveQueItem>::iterator it = m_Items.begin();
+         it != m_Items.end(); ++it) {
+        int specialsCount = 0;
+        for (std::vector<int>::iterator oit = it->m_SpawnerOps.begin();
+             oit != it->m_SpawnerOps.end(); ++oit) {
+            uint32_t r = rng.Rand32(100);
+            if ((r < 5u || specialsCount >= 4) && specialsCount < 2) {
+                *oit = 3;
+                ++specialsCount;
+            }
+        }
+    }
 }
 
 WaveModifier::WaveModifier()

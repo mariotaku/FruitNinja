@@ -2,6 +2,7 @@
 #define FN_WAVE_STRUCTS_H
 
 namespace tinyxml2 { class XMLElement; }
+namespace Math { class Random; }
 
 // Wave data structs — binary layouts from docs/structs/wave.md and
 // docs/systems/wave-system.md.
@@ -16,6 +17,7 @@ namespace tinyxml2 { class XMLElement; }
 
 #include <cstdint>
 #include <cstring>
+#include <list>
 #include <vector>
 #include <string>
 
@@ -317,9 +319,10 @@ struct PROBABILITY_OVERIDE {
     // Parse XML attributes into this struct. binary @ 0x001231d8
     void Parse(tinyxml2::XMLElement* xml);
 
-    // TODO: implement SelectType (binary @ 0x00122b44) — needs Fruit::FruitType(str,false)
-    // and Fruit::RandomFruit(false) plus bomb-hash guarded statics.
-    void SelectType() {}
+    // Binary @ 0x00122b44. Populates m_TypeQueue[] from m_Types names.
+    // Three lazy-init guarded statics: BOMB_HASH, BOMB_PINEAPPLE_HASH, RANDOM_HASH.
+    // BOMB/BOMB_PINEAPPLE -> m_TypeQueue[i]=-2; RANDOM -> RandomFruit(false); else FruitType(name,false).
+    void SelectType();
 
     // Returns m_SelectedType index after calling SelectType (binary calls SelectType then reads +0x74).
     // Returns -1 (no valid type) when SelectType is not yet implemented.
@@ -329,16 +332,63 @@ struct PROBABILITY_OVERIDE {
     }
 };
 
-// Forward-declared in WaveManager.h, but `delete m_pWaveQue` in
-// Destroy/Reset needs a complete type for gcc/clang; MSVC tolerates
-// the forward decl. Minimal stub bodies so the deletes compile cleanly
-// on every toolchain. Real layouts (binary @ 0x00124564 SetupWaveQue)
-// not yet ported.
-struct WaveQue {
-    int dummy;  // TODO: real layout per binary §SetupWaveQue.
-};
+// WaveQueItem — binary @ 0x001268fc ctor. Size 0x20 (32 bytes).
+// Only used in gameMode==2 (Survival/Combo). SetupWaveQue populates this via AddWave.
 struct WaveQueItem {
-    int dummy;  // TODO: real layout.
+    // +0x00..+0x0b: spawner-op codes (1=normal, 2=random, 3=special)
+    std::vector<int> m_SpawnerOps;  // +0x00, 12 bytes
+    // +0x0c: padding / reserved
+    int m_field0c;                  // +0x0c
+    // +0x10: running counter (target-type tracking in AddWave loop)
+    int m_field10;                  // +0x10
+    // +0x14: unused slot
+    int m_field14;                  // +0x14
+    // +0x18: copy of WAVE_INFO::m_WaveIndex for this queue entry
+    int m_WaveIndex;                // +0x18
+    // +0x1c: reserved
+    int m_field1c;                  // +0x1c
+
+    WaveQueItem() : m_field0c(0), m_field10(0), m_field14(0), m_WaveIndex(0), m_field1c(0) {}
 };
+
+#ifdef __bada__
+static_assert(sizeof(WaveQueItem) == 0x20, "WaveQueItem size mismatch");
+#endif
+
+// WaveQue — binary @ 0x00126b10 ctor. Size 0x0c (12 bytes).
+// Only used in gameMode==2 (Survival/Combo). SetupWaveQue builds this from wave XML.
+// After RandomiseOrder, field_0x08 is initialised to 27.0 (budget constant).
+struct WaveQue {
+    // +0x00..+0x07: doubly-linked list of WaveQueItems (std::list, 8-byte sentinel layout in binary)
+    std::list<WaveQueItem> m_Items;  // +0x00
+    // +0x08: wave budget float (initialised to 27.0f after RandomiseOrder in SetupWaveQue)
+    float field_0x08;               // +0x08
+
+    WaveQue() : field_0x08(0.0f) {}
+
+    // WaveQue::AddWave — binary @ 0x00124334.
+    // Builds a WaveQueItem for wi and appends it to m_Items.
+    // isLast controls the alternating-spawn policy code.
+    // rng = WaveManager::GetInstance()->GetRandom() (binary uses global Random pointer).
+    void AddWave(WAVE_INFO* wi, bool isLast, Math::Random& rng);
+
+    // WaveQue::PopWave — binary @ 0x00123258.
+    // Pops front of m_Items into *out. Returns true if an item was available.
+    bool PopWave(WaveQueItem* out);
+
+    // WaveQue::RandomiseOrder — binary @ 0x00124464.
+    // Walks the list and alternately flips spawner-ops 1<->2 at every other position.
+    void RandomiseOrder(bool doSwap);
+
+    // WaveQue::AddSpecials — binary @ 0x00121b20.
+    // Iterates all items; for each spawner-op with Rand32(100)<5 (or counter>=4),
+    // sets the op to 3 (special) if specialsCount<2.
+    // rng = WaveManager::GetInstance()->GetRandom() (binary uses global Random pointer).
+    void AddSpecials(Math::Random& rng);
+};
+
+#ifdef __bada__
+static_assert(sizeof(WaveQue) == 0x0c, "WaveQue size mismatch");
+#endif
 
 #endif // FN_WAVE_STRUCTS_H
