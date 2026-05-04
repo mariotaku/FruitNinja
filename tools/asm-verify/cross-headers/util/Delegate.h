@@ -18,6 +18,10 @@ class Delegate<R(Args...)> {
 public:
     Delegate() {}
     Delegate(decltype(nullptr)) {}
+    // Callable-functor ctor: accept any compatible callable (lambdas,
+    // small named functors). Stub doesn't invoke; type-check only.
+    template<typename F>
+    Delegate(const F&) {}
     R operator()(Args...) const { return R(); }
     operator bool() const { return false; }
     template<typename T>
