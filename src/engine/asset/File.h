@@ -65,14 +65,20 @@ private:
     bool          m_bOwnsBuffer; // +0x37
     unsigned long m_size;        // +0x38
     int           m_openMode;    // +0x3C
-};
-
-}  // namespace Mortar
 
 #ifdef __bada__
-static_assert(offsetof(File, m_filename) == 0x08, "File::m_filename offset (after vptr+systemId)");
-// TODO: verify File sizeof == 0x40 against binary before asserting (audit RE flagged uncertain)
-// static_assert(sizeof(File) == 0x40, "File sizeof");
+    friend struct FileLayoutAssert;
 #endif
+};
+
+#ifdef __bada__
+struct FileLayoutAssert {
+    static_assert(offsetof(File, m_filename) == 0x08, "File::m_filename offset (after vptr+systemId)");
+    // TODO: verify File sizeof == 0x40 against binary before asserting (audit RE flagged uncertain)
+    // static_assert(sizeof(File) == 0x40, "File sizeof");
+};
+#endif
+
+}  // namespace Mortar
 
 #endif // FN_ENGINE_ASSET_FILE_H
