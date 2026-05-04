@@ -10,7 +10,6 @@
 #include <list>
 
 // Matches original HUD class (0x24 bytes)
-// See docs/structs/hud-class.md for layout and function list.
 class HUD {
 public:
     // +0x00: control list (8 bytes on this libstdc++ build)
@@ -28,126 +27,54 @@ public:
     // system writes values < 1.0 during last-fruit slow-motion.
     float m_globalTimeScale;
 
-    HUD() : m_globalTimeScale(1.0f) {
-        for (int i = 0; i < 6; ++i) scales[i] = 1.0f;
-    }
-    ~HUD() { Release(); }
+    // Binary @ 0x00144bb0
+    // DIFFERS: binary doesn't init m_globalTimeScale in ctor (Update sets it each frame);
+    //          port initialises to 1.0 here which is harmless.
+    HUD();
 
-    // Matches HUD::AddControl (0x105b40)
-    void AddControl(HUDControl* ctrl, bool pushFront = false) {
-        if (pushFront)
-            controls.push_front(ctrl);
-        else
-            controls.push_back(ctrl);
-    }
+    // Binary @ 0x00144cd0
+    ~HUD();
 
-    // Matches HUD::RemoveControl (0x144c40)
-    void RemoveControl(HUDControl* ctrl) {
-        if (ctrl->m_RemoveCallback)
-            ctrl->m_RemoveCallback(ctrl);
-        controls.remove(ctrl);
-    }
+    // Binary @ 0x00144d18 — controls.clear() only; does NOT reset scales/timeScale
+    void Init();
 
-    // Matches HUD::BeginDraw (0x144b28)
-    void BeginDraw(float dt) {
-        for (auto it = controls.begin(); it != controls.end(); ++it) {
-            if ((*it)->m_bActive)
-                (*it)->BeginDraw(dt);
-        }
-    }
+    // Binary @ 0x00144c5c
+    void Release();
 
-    // Matches HUD::Draw (0x00144a90)
-    // Per-control matrix discipline: reset the world matrix between controls
-    // so each control inherits identity. The binary's HUD::Draw has the same
-    // discipline (e.g. ShopScreen::Draw ends with SetCurrentMatrix(Scale44(
-    // 481, 321, 0)) for the BG_store quad and that scale must NOT bleed into
-    // the next control's first draw call). Without this, e.g. ShopListItem's
-    // Font::DrawString sees a 481x scale already in the stack and glyph
-    // quads land thousands of pixels off-screen.
+    // Binary @ 0x00144db0 — bool is "true=push_front, false=push_back"
+    void AddControl(HUDControl* ctrl, bool pushFront = false);
+
+    // Binary @ 0x00144c40
+    void RemoveControl(HUDControl* ctrl);
+
+    // Binary @ 0x00144b28
+    void BeginDraw(float dt);
+
+    // Binary @ 0x00144a90
+    // DIFFERS: port adds per-control world.Reset() for matrix discipline; binary leaves
+    //          matrix discipline to each control.
     // ASM-verified: 2026-04-29T03:29Z binary @ 0x00144a90 (HUD::Draw)
-    void Draw(int layerMask) {
-        Vec3 hudScale(scales[0], scales[1], scales[2]);
-        const Vec3 identityScale(1.0f, 1.0f, 1.0f);
-        Mortar::MatrixStack& world = Mortar::MatrixManager::GetInstance().GetWorldStack();
-        for (auto it = controls.begin(); it != controls.end(); ++it) {
-            HUDControl* ctrl = *it;
-            if (ctrl->m_bActive && (layerMask & ctrl->m_LayerFlags)) {
-                // m_bUseHUDScales != 0 (default): receives gameplay-mutable tint window.
-                // m_bUseHUDScales == 0: receives identity (1,1,1) — opted out of tint.
-                const Vec3& scaleVec = ctrl->m_bUseHUDScales ? hudScale : identityScale;
-                world.Reset();
-                ctrl->PreDrawOrder(scaleVec, layerMask);
-                world.Reset();
-                ctrl->DrawOrder(scaleVec, layerMask);
-            }
-        }
-    }
+    void Draw(int layerMask);
 
-    // Matches HUD::Update (0x00144d20)
-    void Update(float dt) {
-        MissControl::PreUpdate(dt);  // global combo-decay pre-tick
-        m_globalTimeScale = 1.0f;   // reset to normal speed each tick (vstr.32 s15,[r4,#0x20])
+    // Binary @ 0x00144d20
+    // delete c matches binary's vtable+4 deleting-dtor (semantically equivalent).
+    void Update(float dt);
 
-        for (auto it = controls.begin(); it != controls.end(); ) {
-            HUDControl* ctrl = *it;
-            if (ctrl->m_bActive)
-                ctrl->Update(dt);
+    // Binary @ 0x00144b78 — unconditional Reset() dispatch on every control
+    void ResetControls();
 
-            ctrl = *it;
-            if (ctrl->m_bPendingRemoval) {
-                if (ctrl->m_RemoveCallback)
-                    ctrl->m_RemoveCallback(ctrl);
-                ctrl = *it;
-                if (!ctrl->m_bNoDestructor) {
-                    delete ctrl;
-                    *it = nullptr;
-                }
-                it = controls.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
+    // Binary @ 0x00144c00
+    void OnPause();
 
-    // Binary @ 0x00144b78. Calls HUDControl::Reset() (vtable slot 4) on each control.
-    void ResetControls() {
-        for (auto it = controls.begin(); it != controls.end(); ++it) {
-            if (*it) (*it)->Reset();
-        }
-    }
+    // Binary @ 0x00144a20 — null-checked iterate, vtable+0x38 Save dispatch (slot 14)
+    void Save();
 
-    // Matches HUD::OnPause (0x00144c00)
-    // Binary dispatches GetType() on every control (regardless of m_bActive)
-    // and only calls ScrollingMenu::ClearTouch when GetType() == 8.
-    void OnPause() {
-        for (auto it = controls.begin(); it != controls.end(); ++it) {
-            if ((*it)->GetType() == 8 /* TYPE_SCROLLING_MENU */) {
-                // TODO: ScrollingMenu::ClearTouch when ScrollingMenu is fully
-                // ported. For now this is a no-op stub.
-                // static_cast<ScrollingMenu*>(*it)->ClearTouch();
-            }
-        }
-    }
+    // Binary @ 0x00144a58 — unconditional Skip() dispatch on every control (slot 13)
+    void Skip();
 
-    // Matches HUD::Release (0x00144c5c)
-    // Binary fires m_RemoveCallback + deleting-dtor only when m_bNoDestructor == 0.
-    // Controls with m_bNoDestructor != 0 are left untouched (HUD does not own them).
-    // TODO: set GameData[+0x34] in-Release guard when GameData struct is ported.
-    void Release() {
-        for (auto it = controls.begin(); it != controls.end(); ++it) {
-            HUDControl* ctrl = *it;
-            if (!ctrl->m_bNoDestructor) {
-                if (ctrl->m_RemoveCallback)
-                    ctrl->m_RemoveCallback(ctrl);
-                ctrl = *it;
-                if (ctrl != nullptr) {
-                    delete ctrl;
-                    *it = nullptr;
-                }
-            }
-        }
-        controls.clear();
-    }
+    // Binary @ 0x00144dcc — two-pass: collect controls whose SetToMultiplayerState
+    //                       returned true, then RemoveControl each
+    void SetToMultiplayerState();
 };
 
 #endif
