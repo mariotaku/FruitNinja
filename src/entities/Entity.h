@@ -3,6 +3,7 @@
 
 #include "math/Vec3.h"
 #include "collision/ColSphere.h"
+#include "entities/Message.h"
 #include <cstdint>
 
 struct Renderer;
@@ -128,12 +129,12 @@ public:
     virtual void Collide(Entity* other, void* col, unsigned long* outFlags, Vec3* hitPos);
 
     // Vtable slot 11 (+0x2C): ReceiveMessage — Binary @ 0x0019d61c
-    // msg.type 0 -> clear INACTIVE; type 1 -> set INACTIVE
-    virtual void ReceiveMessage(Entity* sender, void* msg);
+    // msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE
+    virtual void ReceiveMessage(Entity* sender, Mortar::Message* msg);
 
     // Vtable slot 12 (+0x30): ListenerCallback — Binary @ 0x00172f4c
-    // No-op: returns first argument (identity-return).
-    virtual Entity* ListenerCallback(Entity* a, Entity* b, void* msg);
+    // Returns first argument (identity).
+    virtual Entity* ListenerCallback(Entity* a, Entity* b, Mortar::Message* msg);
 
     // Binary test: `(flags & 0x11) == 0`. Inactive / killed entities fail.
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }

@@ -460,38 +460,41 @@ void ActorManager::ClearAllListeners() {
     m_Listeners.clear();
 }
 
-// 0x0016ffd8. Filter listeners, fire callback+0x30, one-shot clear, then
-// dispatch to sender entity vtable+0x2C (Receive).
-// DIFFERS: binary dispatches sender->vtable+0x2C (Receive) after clearing
-// the listener list; port skips that vtable call because Entity has no
-// Receive slot wired yet.
-// The unconditional m_Listeners.clear() after the dispatch loop IS the
-// binary's one-shot semantic — each SendMessage fires all matching listeners
-// exactly once then discards the list.
+// 0x0016ffd8. Filter listeners, fire callback->vtable[+0x30], one-shot clear,
+// then dispatch target->ReceiveMessage(sender, msg).
+//
+// Filter semantics (binary @ 0x0016ffd8):
+//   L->type == msg->type         (exact match; no wildcard on type)
+//   L->msgKind == 0 || L->msgKind == typeHash   (0 = any)
+//   L->senderId == 0 || (sender && L->senderId == sender->id)  (0 = any)
+//
+// The unconditional m_Listeners.clear() after the loop IS binary-faithful
+// one-shot semantic — each SendMessage fires matching listeners exactly once.
 bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
                                Mortar::Message* msg) {
     if (!msg) return false;
 
-    typedef void (*NotifyFn)(Mortar::MessageListener*, Entity*, Mortar::Message*);
+    // Binary resolves target entity by typeHash before the listener loop.
+    Entity* target = Find(typeHash);
 
-    bool fired = false;
     for (std::list<Mortar::MessageListener*>::iterator it = m_Listeners.begin();
          it != m_Listeners.end(); ++it) {
         Mortar::MessageListener* L = *it;
         if (!L) continue;
-        if (L->msgKindHash != 0 && L->msgKindHash != typeHash) continue;
+        if (L->type != (unsigned int)msg->type) continue;
+        if (L->msgKind != 0 && L->msgKind != (unsigned int)typeHash) continue;
+        // TODO: 0x0016ffd8 — L->senderId filter needs Entity::id (Entity+0x04);
+        //       field not on Entity base yet; treat senderId filter as any (0) only.
         if (L->callback) {
-            reinterpret_cast<NotifyFn>(L->callback)(L, sender, msg);
-            fired = true;
+            // TODO: 0x0016ffd8 — invoke L->callback as Delegate2:
+            //   cb->vtable[+0x30](cb, sender, target, msg)
+            // Port has no Delegate2 model; skip invoke.
         }
     }
 
-    // One-shot clear — binary's behaviour at 0x0016ffd8.
+    // One-shot clear — binary @ 0x0016ffd8.
     m_Listeners.clear();
 
-    // TODO: 0x0016ffd8 — dispatch sender->vtable+0x2C (Receive) once Entity
-    // gains that slot. Binary calls: sender->Receive(typeHash, msg) here.
-    (void)sender;
-
-    return fired;
+    if (target) target->ReceiveMessage(sender, msg);
+    return target != nullptr;
 }

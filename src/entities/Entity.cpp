@@ -60,16 +60,16 @@ void Entity::Collide(Entity* /*other*/, void* col, unsigned long* /*outFlags*/, 
     (void)col;
 }
 
-// Binary @ 0x0019d61c — slot 11: msg.type 0 -> clear INACTIVE; type 1 -> set INACTIVE
-void Entity::ReceiveMessage(Entity* /*sender*/, void* msg) {
+// Binary @ 0x0019d61c — slot 11: msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE
+void Entity::ReceiveMessage(Entity* /*sender*/, Mortar::Message* msg) {
     if (!msg) return;
-    int t = *((const int*)msg + 1);   // msg layout: [+0]=?; [+4]=type
+    int t = msg->type;
     if (t == 0)      flags &= ~0x01u;
     else if (t == 1) flags |=  0x01u;
 }
 
-// Binary @ 0x00172f4c — slot 12: ListenerCallback no-op (returns first arg)
-Entity* Entity::ListenerCallback(Entity* a, Entity* /*b*/, void* /*msg*/) {
+// Binary @ 0x00172f4c — slot 12: ListenerCallback identity (returns first arg)
+Entity* Entity::ListenerCallback(Entity* a, Entity* /*b*/, Mortar::Message* /*msg*/) {
     return a;
 }
 
