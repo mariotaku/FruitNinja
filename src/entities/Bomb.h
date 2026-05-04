@@ -86,16 +86,18 @@ public:
     Bomb();
     ~Bomb();
 
-    void Init(int param1, int fruitType, int param3) override;
+    // Vtable slot 2: Binary @ 0x00172504.
+    // p1 unused; p2 unused; p3 = scale Vec3* (nullable, default 1.0).
+    void Init(void* p1, long p2, const Vec3* scaleOrNull) override;
     void Release() override;                // 0x00171764 — fuse emitter cleanup
     void Update(float dt) override;
     void Draw(Renderer& r) override;
     void PostUpdate(float dt) override;     // 0x001714e4 — sync fuse emitter
 
-    // Matches Bomb::CollisionResponse (0x17280c). Blade has sliced the bomb:
-    // set m_bHit, trigger HitBomb (camera shake + bombHitTimer), start the
-    // BombBlast shockwave spawn loop.
-    void CollisionResponse(const Vec3& bladeVel) override;
+    // Vtable slot 9: Binary @ 0x0017280c.
+    // Returns 0. Triggers bomb hit effects (arcade/zen/menu branch).
+    int CollisionResponse(Entity* hitter, unsigned long flagsA, unsigned long flagsB,
+                          const Vec3* bladeVelocity) override;
 
     // Non-virtual cleanup helper: drops fuse emitter and sets ENT_INACTIVE.
     // Called by ActorManager::Deactivate (direct, not via vtable).

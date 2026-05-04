@@ -583,7 +583,10 @@ void SlashEntity::Update(float dt) {
 
                     Vec3 bladeVel;
                     if (CollideWithSphere(*cs, bladeVel)) {
-                        e->CollisionResponse(bladeVel);
+                        // Binary @ 0x0017d664: vtable[9](victim, slashEntity, 0, 0, &bladeVel).
+                        // Port: SlashEntity does not inherit Entity, pass nullptr for hitter.
+                        // Fruit/Bomb CollisionResponse only reads bladeVelocity; hitter unused.
+                        e->CollisionResponse(nullptr, 0, 0, &bladeVel);
                     }
                 }
             }
