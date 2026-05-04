@@ -66,7 +66,22 @@ PSPParticleManager::PSPParticleManager() {
 }
 
 PSPParticleManager::~PSPParticleManager() {
-    Clear();
+    Destroy();
+}
+
+// Binary @ 0x001155d0 — release tex refs, ClearEmitters, free 3 owned blocks.
+void PSPParticleManager::Destroy() {
+    // 1. Release texture SmartPtr refs on all particle templates
+    //    (binary: SmartPtr::SetNull on each template+0xAC).
+    for (size_t i = 0; i < m_ParticleTemplates.size(); ++i) {
+        m_ParticleTemplates[i].m_Texture.SetNull();
+    }
+    // 2. Drain active emitters (matches binary step 2: ClearEmitters).
+    ClearEmitters();
+    // 3. Free owned storage blocks (binary: free m_pTemplates, m_pParticleArray-8,
+    //    m_EmitterPool). Port equivalent: clear the owning vectors.
+    m_ParticleTemplates.clear();
+    m_EmitterTemplates.clear();
 }
 
 const PSPEmitterTemplate* PSPParticleManager::FindTemplate(uint32_t hash) const {
@@ -78,7 +93,18 @@ const PSPEmitterTemplate* PSPParticleManager::FindTemplate(uint32_t hash) const 
     return nullptr;
 }
 
-// Matches AddEmitter (0x001149e0).
+// Binary @ 0x001148dc — linear hash lookup over emitter templates; bool result.
+bool PSPParticleManager::EmitterExists(uint32_t hash) {
+    return FindTemplate(hash) != nullptr;
+}
+
+// Binary @ 0x0011490c — index lookup; returns &m_EmitterTemplates[idx] or nullptr.
+PSPEmitterTemplate* PSPParticleManager::GetEmitterTemplate(int idx) {
+    if (idx < 0 || (size_t)idx >= m_EmitterTemplates.size()) return nullptr;
+    return &m_EmitterTemplates[(size_t)idx];
+}
+
+// Binary @ 0x001149e0 — pop from pool, init defaults, prepend to m_ActiveList.
 PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
                                                    PSPParticleEmitter** ppRef,
                                                    bool /*persistent*/) {
@@ -112,8 +138,7 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     return &e;
 }
 
-// Matches ClearEmitter (0x00114934). Unlinks the emitter, clears the caller
-// back-pointer, and removes it from the active list.
+// Binary @ 0x00114934 — find by ptr, unlink, clear back-ref, return to pool.
 void PSPParticleManager::ClearEmitter(PSPParticleEmitter* emitter) {
     if (!emitter) return;
     for (size_t i = 0; i < m_Emitters.size(); ++i) {
@@ -339,9 +364,10 @@ static bool EmitterTemplateEnds(const PSPEmitterTemplate* t) {
     return true;
 }
 
-// Matches PSPParticleManager::Update (0x115ed8).
-void PSPParticleManager::Update(float dt) {
-    const bool paused = false; // port: game pause not routed here yet
+// Binary @ 0x00115ed8 — update all active emitters; skip when paused &&
+// !emitter->m_bUpdateWhenPaused.
+// TODO: wire paused from PauseScreen when that's ported (callers pass false for now).
+void PSPParticleManager::Update(float dt, bool paused) {
     for (size_t i = 0; i < m_Emitters.size(); ) {
         PSPParticleEmitter& e = *m_Emitters[i];
         const PSPEmitterTemplate* et = e.m_pTemplate;
@@ -424,7 +450,13 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
     verts.clear();
 }
 
-void PSPParticleManager::Draw(int layer) {
+// Binary @ 0x00114c64 — fused integrate+render. Port splits into Update/Draw;
+// dt and paused are unused in the Draw body (integration happens in Update).
+// DIFFERS: binary fuses per-particle integrate+render into one pass; port
+// separates them so Update/Draw can be called independently.
+void PSPParticleManager::Draw(float dt, bool paused, int layer) {
+    (void)dt;
+    (void)paused;
     if (m_Emitters.empty()) return;
 
     // Reset world matrix + upload MVP so DrawTriList uses the current ortho.
@@ -529,26 +561,28 @@ void PSPParticleManager::Draw(int layer) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
-// Matches PSPParticleManager::LoadFile (0x00115f60).
-// Layout: first loop parses `<particleTemplate>` elements into
-// m_ParticleTemplates, second loop parses `<emitter>` elements and resolves
-// each particleSet's template by name lookup.
-// The `<life>` divisor is 60.0 (DAT_001161e8 / DAT_001170a0) — seconds at 60fps.
-void PSPParticleManager::LoadFile(const char* path) {
+// Binary @ 0x00115f60 — load particle templates from XML.
+// texCategory is prepended to texture filenames: snprintf("%s/%s.tex", texCategory, name).
+// outNames (optional): caller-allocated array receiving each <particleTemplate name="...">;
+// strings are strcpy'd in parse order.
+// Returns true on success.
+bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, char** outNames) {
     tinyxml2::XMLDocument doc;
-    if (doc.LoadFile(path) != tinyxml2::XML_SUCCESS) {
-        printf("[PSPParticleManager] LoadFile: failed to load %s\n", path);
-        return;
+    if (doc.LoadFile(xmlPath) != tinyxml2::XML_SUCCESS) {
+        printf("[PSPParticleManager] LoadFile: failed to load %s\n", xmlPath);
+        return false;
     }
     tinyxml2::XMLElement* root = doc.FirstChildElement("particle_file");
-    if (!root) return;
+    if (!root) return false;
     tinyxml2::XMLElement* body = root->FirstChildElement("body");
-    if (!body) return;
+    if (!body) return false;
 
     m_ParticleTemplates.clear();
     m_EmitterTemplates.clear();
 
-    const std::string texDir = DirOf(path);
+    // texCategory is prepended to texture filenames per binary snprintf pattern.
+    // DIFFERS: binary uses texCategory/"texName".tex; old port used DirOf(xmlPath).
+    const std::string texCatStr(texCategory ? texCategory : "");
 
     // --- First loop: <particleTemplate> --------------------------------------
     std::unordered_map<uint32_t, size_t> nameToIndex;
@@ -687,7 +721,8 @@ void PSPParticleManager::LoadFile(const char* path) {
             const char* texName = e->Attribute("name");
             if (texName && *texName) {
                 char buf[256];
-                snprintf(buf, sizeof(buf), "%s/%s.tex", texDir.c_str(), texName);
+                // Binary @ 0x115f60: snprintf("%s/%s.tex", texCategory, texName)
+                snprintf(buf, sizeof(buf), "%s/%s.tex", texCatStr.c_str(), texName);
                 tmpl.m_Texture = TextureManager::GetInstance().Load(buf);
                 if (tmpl.m_Texture.IsValid()) {
                     const float tw = (float)tmpl.m_Texture->m_Width;
@@ -697,6 +732,10 @@ void PSPParticleManager::LoadFile(const char* path) {
             }
         }
 
+        // outNames: if provided, strcpy the template name into outNames[i].
+        if (outNames && name) {
+            strcpy(outNames[m_ParticleTemplates.size()], name);
+        }
         m_ParticleTemplates.push_back(tmpl);
     }
 
@@ -776,7 +815,8 @@ void PSPParticleManager::LoadFile(const char* path) {
 
     printf("[PSPParticleManager] Loaded %zu particle templates, "
            "%zu emitter templates from %s\n",
-           m_ParticleTemplates.size(), m_EmitterTemplates.size(), path);
+           m_ParticleTemplates.size(), m_EmitterTemplates.size(), xmlPath);
+    return true;
 }
 
 void PSPParticleManager::Clear() {
@@ -784,7 +824,9 @@ void PSPParticleManager::Clear() {
     m_Emitters.clear();
 }
 
-// @ GameExit area
+// Binary @ 0x00114974 — drain active list + reset particle free-list + zero
+// per-template live-list heads. Port collapses 2-3 since particles live
+// per-emitter. // DIFFERS: binary uses 3 separate lists; port uses vector.
 void PSPParticleManager::ClearEmitters() {
     for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
     m_Emitters.clear();

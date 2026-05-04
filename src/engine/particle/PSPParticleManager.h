@@ -213,32 +213,47 @@ public:
     // ppRef (optional) is filled with the returned pointer for caller cleanup;
     // it is cleared to nullptr if template lookup fails. `persistent` is
     // accepted for signature compatibility but currently unused (matches bin).
+    // Binary @ 0x001149e0 — pop from pool, init defaults, prepend to m_ActiveList
     PSPParticleEmitter* AddEmitter(uint32_t hash,
                                    PSPParticleEmitter** ppRef = nullptr,
                                    bool persistent = false);
 
     // Explicitly release an emitter (matches ClearEmitter 0x114934). Clears
     // the caller back-pointer and marks the emitter for removal on next tick.
+    // Binary @ 0x00114934 — find by ptr, unlink, clear back-ref, return to pool
     void ClearEmitter(PSPParticleEmitter* emitter);
 
-    void Update(float dt);
+    // Binary @ 0x00115ed8 — update all active emitters; skip when paused &&
+    // !emitter->m_bUpdateWhenPaused.
+    void Update(float dt, bool paused = false);
 
-    // Draw particles whose template `m_UseDepth` equals `layer`. Matches the
-    // binary filter `(float)layer == template->m_UseDepth`. Typical usage:
-    //   Draw(0)  — mid/default layer (before HUD overlays)
-    //   Draw(1)  — foreground layer   (after HUD overlays)
-    void Draw(int layer = 0);
+    // Binary @ 0x00114c64 — fused integrate+render. Port splits into Update/Draw;
+    // ABI signature kept as (dt, paused, layer). dt and paused are unused in Draw.
+    void Draw(float dt, bool paused, int layer = 0);
 
-    // Load particle templates from an XML file. Matches PSPParticleManager::LoadFile
-    // (0x115f60). Parses `<emitter>` elements into m_EmitterTemplates backed by
-    // m_TemplateData. `<particleTemplate>` elements are not present in the shipping
-    // XML files, so the particle-template side of LoadFile is a no-op.
-    void LoadFile(const char* path);
+    // Binary @ 0x00115f60 — load particle templates from XML. texCategory is
+    // prepended to texture filenames: snprintf("%s/%s.tex", texCategory, name).
+    // outNames (optional) receives a copy of each <particleTemplate name="...">
+    // string (caller-allocated array). Returns true on success.
+    bool LoadFile(const char* texCategory, const char* xmlPath, char** outNames = nullptr);
+
+    // Binary @ 0x001155d0 — release tex refs, ClearEmitters, free 3 owned blocks.
+    void Destroy();
 
     void Clear();
 
-    // @ 0x0016cf74 area — deactivate all live emitters (called from GameExit).
+    // Binary @ 0x0016cf74 area — deactivate all live emitters (called from GameExit).
+    // Binary @ 0x00114974 — drain active list + reset particle free-list + zero
+    // per-template live-list heads. Port collapses 2-3 since particles live
+    // per-emitter. // DIFFERS: binary uses 3 separate lists; port uses vector
     void ClearEmitters();
+
+    // Binary @ 0x001148dc — linear hash lookup over emitter templates; bool result.
+    bool EmitterExists(uint32_t hash);
+
+    // Binary @ 0x0011490c — index lookup into m_EmitterTemplates[idx].
+    // Returns nullptr if idx is out of range.
+    PSPEmitterTemplate* GetEmitterTemplate(int idx);
 
     // Template lookup — used by AddEmitter and unit tests.
     const PSPEmitterTemplate* FindTemplate(uint32_t hash) const;

@@ -199,7 +199,7 @@ void GameInitialise() {
         Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
         std::string partDir = game->data_dir + "/particles";
         std::string partXml = partDir + "/particles_fast.xml";
-        pm.LoadFile(partXml.c_str());
+        pm.LoadFile(partDir.c_str(), partXml.c_str());
     }
 
     // Step 13: TutorialControl (matches binary: operator_new(0xa0), Init, AddControl)
@@ -407,7 +407,7 @@ void GameDestroy() {
 
     // --- 10. Engine subsystem teardown ---
     // TODO: FileManager::ClearSystems
-    // TODO: PSPParticleManager::Destroy
+    Mortar::PSPParticleManager::GetInstance().Destroy();
     // TODO: StringTableUtilUnload
     // TODO: CleanupBomb, CleanupFruit, CleanUpSplat, CleanupSlash
 
