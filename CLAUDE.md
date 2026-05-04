@@ -54,7 +54,7 @@ Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implem
 - **`Tag_ABI_enum_size: small`** — enums are sized to the smallest underlying integer type (1/2/4 bytes depending on max value), not always 4. Cross-build must compile with `-fshort-enums`. Affects struct layouts that contain enum members.
 - **`Tag_ABI_PCS_wchar_t: 2`** — `wchar_t` is 2 bytes. Cross-build uses `-fshort-wchar`.
 - `Tag_ABI_align_needed: 8-byte`.
-- **`std::list` is 12 bytes in Samsung Bada's libstdc++ vs 8 bytes in Sourcery 2010q1's libstdc++** — the asm-verify cross-toolchain disagrees with the binary on `std::list`-containing struct layouts by 4 bytes per list. Documented limitation; the port-side struct layouts must match Samsung Bada's 12-byte list (which is what `static_assert(offsetof(...))` enforces against the production build, not the cross-build).
+- **`std::list` is 12 bytes in Samsung Bada's libstdc++ (post-C++11 list-size requirement: sentinel + cached `_M_size`) vs upstream Sourcery 2010q1's 8 bytes (sentinel only).** The asm-verify cross-toolchain has been **patched** to match Bada's 12-byte layout (see `tools/asm-verify/stl_list-bada-size.patch`, applied in the Dockerfile). The patched header is layout-only (we never run the cross-compiled output) — `static_assert(sizeof / offsetof)` on list-containing structs (ActorManager m_Listeners, HUD controls, FileManager m_FileSystems, MenuButton m_AddOns, etc.) now works under both the production toolchain AND the cross-build. Same applies to `std::map` (`_Rb_tree_impl::_M_node_count` was already present in 2010q1's `bits/stl_tree.h`).
 
 ## RE record lives in source code, not docs
 
