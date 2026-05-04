@@ -210,10 +210,8 @@ void Bomb::Release() {
 }
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00172504 (asm-inspector)
-// Matches Bomb::Init (0x172504, 99 lines)
-void Bomb::Init(int param1, int fruitType, int param3) {
-    (void)param1;
-    (void)fruitType;
+// Binary @ 0x00172504 — vtable slot 2. p1/p2 unused; p3=scale (nullable, default 1.0).
+void Bomb::Init(void* /*p1*/, long /*p2*/, const Vec3* /*scaleOrNull*/) {
 
     float scaleFactor = 1.0f;
     // Original: if (p3 != nullptr) scaleFactor = *(float*)p3;
@@ -428,7 +426,7 @@ void Bomb::Update(float /*dt*/) {
                     Entity* e = am->Add(4, true);   // type 4 = BombBlast
                     if (e) {
                         e->pos = pos;
-                        e->Init(0, 0, 0);
+                        e->Init(nullptr, 0, nullptr);
                     }
                 }
                 m_SpawnTimer = BOMBBLAST_INTERVAL;  // 0.05f (DAT_00172c9c)
@@ -634,7 +632,8 @@ void Bomb::KillBomb() {
     }
 }
 
-// Matches Bomb::CollisionResponse (0x17280c). Three branches:
+// Binary @ 0x0017280c — vtable slot 9. Returns 0.
+// Three branches:
 //   1. m_bMenuBombHit == 0, Classic/Arcade: HitBomb — bombHitTimer = 3.2,
 //      camera shake (1.6, 2.0), explosion SFX. Classic is the game-over path.
 //   2. m_bMenuBombHit == 0, Zen mode (gameMode == 2): HitMenuBomb —
@@ -642,10 +641,12 @@ void Bomb::KillBomb() {
 //      timed power-ups, mark as menu-hit so subsequent Update keeps the
 //      physics alive and the bomb falls off-screen instead of exploding.
 //   3. m_bMenuBombHit != 0 (menu bomb re-hit): just fire the hit callback.
-void Bomb::CollisionResponse(const Vec3& bladeVel) {
-    (void)bladeVel;
+int Bomb::CollisionResponse(Entity* /*hitter*/,
+                             unsigned long /*flagsA*/,
+                             unsigned long /*flagsB*/,
+                             const Vec3* /*bladeVelocity*/) {
 
-    if (m_bCollisionGuard != 0) return;   // +0x78 processed guard
+    if (m_bCollisionGuard != 0) return 0;   // +0x78 processed guard
     m_bCollisionGuard = 1;
 
     Game* game = Game::GetInstance();
@@ -722,6 +723,7 @@ void Bomb::CollisionResponse(const Vec3& bladeVel) {
     }
 
     m_bHit = 1;   // +0x68 -- triggers hit branch in Update next tick
+    return 0;
 }
 
 // Matches Bomb::GetNumActiveForPlayer (0x00171250).

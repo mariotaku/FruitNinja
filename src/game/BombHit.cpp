@@ -313,7 +313,9 @@ void ResetGameEntities(bool killAll) {
                         impulse = dir * (IMPULSE_LEN / len);
                     }
                 }
-                fruit->CollisionResponse(impulse);
+                // Binary @ BombHit: calls CollisionResponse via vtable slot 9.
+                // Pass impulse as bladeVelocity; other args are runtime-0.
+                fruit->CollisionResponse(nullptr, 0, 0, &impulse);
             }
 
             // Fling both halves off-screen — binary writes both

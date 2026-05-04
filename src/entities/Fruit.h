@@ -33,6 +33,8 @@ struct FruitModelInfo {
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
+// Binary sizeof(Fruit) = 0x118 (280). Port size differs due to std::function usage.
+// EntityFactory @ 0x0017421c: operator_new(0x118) for type 0.
 class Fruit : public Entity {
 public:
     // +0x3c: fruit type index into FRUIT_INFO array
@@ -131,16 +133,18 @@ public:
     Fruit();
     ~Fruit();
 
-    void Init(int param1, int fruitType, int param3) override;
+    // Vtable slot 2: Binary @ 0x00176708.
+    // p2 = fruitType (0..N-1); p3 = scale Vec3* (nullable, default 1.0); p1 unused.
+    void Init(void* p1, long fruitType, const Vec3* scaleOrNull) override;
     void Update(float dt) override;
     void Draw(Renderer& r) override;
     void PostUpdate(float dt) override;   // 0x0017501c — screen-edge bounce / push
 
-    // Matches Fruit::CollisionResponse (0x1780b0). Blade has hit the
-    // fruit's collision sphere: record slice angle/impulse/pos, spawn
-    // juice particle emitters, set m_SliceTimer to countdown until the
-    // fruit splits.
-    void CollisionResponse(const Vec3& bladeVel) override;
+    // Vtable slot 9: Binary @ 0x001780b0.
+    // Returns 1 if already sliced (early-out). Otherwise records slice state,
+    // spawns juice emitters, plays SFX, updates score/combo/achievements.
+    int CollisionResponse(Entity* hitter, unsigned long flagsA, unsigned long flagsB,
+                          const Vec3* bladeVelocity) override;
 
     // Non-virtual cleanup helper called by ActorManager::Deactivate.
     void Deactivate();

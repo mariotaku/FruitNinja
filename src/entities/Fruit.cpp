@@ -122,9 +122,9 @@ Fruit::~Fruit() {
 }
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
-void Fruit::Init(int param1, int fruitType, int param3) {
-    (void)param1; (void)param3;
-    m_FruitType = fruitType;
+// Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
+void Fruit::Init(void* /*p1*/, long fruitType, const Vec3* /*scaleOrNull*/) {
+    m_FruitType = (int)fruitType;
     m_bSliced = false;
     m_bDetached = false;
     m_bDrawWhole = false;
@@ -693,8 +693,9 @@ bool Fruit::CheckHasGoneOffscreen() {
     return false;
 }
 
-// Matches Fruit::CollisionResponse (0x1780b0). Visual-only pipeline:
-//   - guard (already sliced / timer positive → ignore)
+// Binary @ 0x001780b0 — vtable slot 9. Returns 1 if already sliced (early-out), else 0.
+// Visual-only pipeline:
+//   - guard (already sliced / timer positive → return 1)
 //   - critical-hit eligibility ladder (binary @ 0x001780f0..0x001781e8)
 //   - critical / special-fruit branch selection for impulse clamp + timer
 //   - slice angle/impulse/pos capture from bladeVel
@@ -703,9 +704,13 @@ bool Fruit::CheckHasGoneOffscreen() {
 //   - AddSlice visual (SliceEffect_Add)
 //   - CriticalFlash full-screen tint for critical + special-fruit paths
 // Skipped: SFX, achievements, score, power-ups, coins, MissControl.
-void Fruit::CollisionResponse(const Vec3& bladeVel) {
+int Fruit::CollisionResponse(Entity* /*hitter*/,
+                              unsigned long /*flagsA*/,
+                              unsigned long /*flagsB*/,
+                              const Vec3* bladeVelPtr) {
     // Guard: already sliced or slice timer is positive → double-hit.
-    if (m_bSliced || m_SliceTimer > -1.0f) return;
+    if (m_bSliced || m_SliceTimer > -1.0f) return 1;
+    const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
 
     const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     const bool isSpecial  = (info && info->m_Score == 0x32);
@@ -870,6 +875,7 @@ void Fruit::CollisionResponse(const Vec3& bladeVel) {
         g_LastSlasher = slasher;
     }
     g_ComboCount += 1;       // binary @ 0x001787b0
+    return 0;
 }
 
 // Matches Fruit::Slice (0x176d58), now with the binary's flipSide

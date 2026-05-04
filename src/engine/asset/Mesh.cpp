@@ -2,6 +2,7 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
+#include <cstring>
 
 // Analysed: 2026-04-11T18:30
 
@@ -48,7 +49,7 @@ const Matrix44* Mesh::GetBoneVertTransform(unsigned long index) const {
     if (index >= m_BoneBindings.size()) return nullptr;
     int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
     if (skelIdx < 0) return nullptr;
-    return m_Skeleton->GetVertex(skelIdx);
+    return m_Skeleton->GetVertex((uint32_t)skelIdx);
 }
 
 // Matches Mesh::GetBoneWorldTransform (0x001b0700)
@@ -60,23 +61,23 @@ Matrix44 Mesh::GetBoneWorldTransform(unsigned long index) const {
     if (index >= m_BoneBindings.size()) return identity;
     int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
     if (skelIdx < 0) return identity;
-    const Matrix44* w = m_Skeleton->GetWorld(skelIdx);
-    if (!w) return identity;
-    return *w;
+    return *m_Skeleton->GetWorld((uint32_t)skelIdx);
 }
 
-// Binary @ 0x001b0778 — symmetric to GetBoneVertTransform; reads Skeleton::GetLocal(idx).
+// Binary @ 0x001b0778 — has no callers; emitted for API parity.
+//                    Mirrors GetBoneVertTransform / GetBoneWorldTransform.
 Matrix44 Mesh::GetBoneLocalTransform(unsigned long idx) const {
-    if (m_Skeleton && idx < m_BoneBindings.size()) {
-        int sIdx = m_BoneBindings[idx].m_SkeletonIndex;
-        if (sIdx >= 0) {
-            // TODO: 0x001b0778 -- needs Skeleton::GetLocal(idx) accessor
-            // Skeleton only exposes GetVertex/GetWorld in the current port.
-            // Return identity until GetLocal is wired.
+    Matrix44 out;
+    if (m_Skeleton != NULL) {
+        const BoneBinding& bind = m_BoneBindings[idx];
+        if (bind.m_SkeletonIndex >= 0) {
+            const Matrix44* src = m_Skeleton->GetLocal((uint32_t)bind.m_SkeletonIndex);
+            memcpy(&out, src, sizeof(Matrix44));
+            return out;
         }
     }
-    Matrix44 identity;
-    return identity;
+    out = Matrix44();
+    return out;
 }
 
 // Matches Mesh::GetBounds (0x001b07f0)

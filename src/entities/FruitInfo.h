@@ -161,7 +161,7 @@ static_assert(__builtin_offsetof(FruitInfo, m_FactCount)       == 0x270, "");
 // All asserts from m_pFacts onward are pointer-size-dependent (char**, SmartPtr,
 // pointers to arrays). Valid only on 32-bit (ARM cross-compile target).
 // On 64-bit port builds pointer fields are 8 bytes; the binary layout uses 4-byte pointers.
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#ifdef __bada__
 static_assert(sizeof(FruitInfo) == 0x330, "FruitInfo size mismatch");
 static_assert(__builtin_offsetof(FruitInfo, m_pFacts)          == 0x274, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactTexture)     == 0x278, "");

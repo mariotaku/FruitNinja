@@ -56,7 +56,6 @@ static QUADCUSTOMVERTEX s_BlastVerts[MAX_BLASTS * VERTS_PER_BLAST];
 BombBlast::BombBlast()
     : m_BlastRadius(0.0f)
     , m_Scale(0.0f)
-    , m_Angle(0)
     , m_PosA(0, 0, 0)
     , m_PosB(0, 0, 0)
     , m_Vel1(0, 0, 0)
@@ -64,8 +63,9 @@ BombBlast::BombBlast()
     , m_Lifetime(0.0f)
 {
     entityType = 4;
+    m_Angle = 0;  // inherited from Entity base at +0x36
     // Binary ctor clears 0x11 (collision + kill); we start without both.
-    flags &= ~0x11;
+    flags &= ~0x11u;
 }
 
 BombBlast::~BombBlast() {}
@@ -75,9 +75,12 @@ BombBlast::~BombBlast() {}
 void BombBlast::LoadContent()    {}
 void BombBlast::ReleaseContent() {}
 
-// Matches BombBlast::Init (0x1718ac).
-void BombBlast::Init(int p1, int p2, int p3) {
-    (void)p1; (void)p2; (void)p3;
+// Binary @ 0x001718ac — vtable slot 2.
+// ASM-verified: 2026-05-04T08:23Z binary @ 0x001718ac (asm-inspector)
+// Confirmed: Ghidra's void* p1 was a mis-decompile artifact -- the binary
+// writes through r0 which is `this`; runtime caller passes (this, 0, 0, 0).
+// Body operates exclusively on `this` and ignores all three explicit params.
+void BombBlast::Init(void* /*p1*/, long /*p2*/, const Vec3* /*p3*/) {
 
     // Activate: clear ENT_INACTIVE | ENT_KILLED. ActorManager::Add already
     // cleared these on the recycle path; redundant on the factory path
@@ -135,9 +138,11 @@ void BombBlast::Update(float dt) {
     }
 }
 
-// Binary's vtable Draw for BombBlast is empty (0x171034). Rendering happens
-// via the global DrawActiveBlasts pass from GameDraw.
+// Binary @ 0x00171034 — vtable Draw: no-op. Rendering via DrawActiveBlasts.
 void BombBlast::Draw(Renderer& r) { (void)r; }
+
+// Binary @ 0x00171030 — vtable PostUpdate (DrawUpdate): no-op.
+void BombBlast::PostUpdate(float /*dt*/) {}
 
 // Matches DrawActiveBlasts (0x171aa0) + DrawBlast (0x171354).
 //

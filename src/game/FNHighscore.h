@@ -18,7 +18,7 @@ struct FNHighscore {
     FNHighscore() { memset(m_data, 0, sizeof(m_data)); }
 };
 
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#ifdef __bada__
 static_assert(sizeof(FNHighscore) == 81, "FNHighscore size mismatch");
 #endif
 

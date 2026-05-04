@@ -23,6 +23,10 @@ struct AnimTrackGroup;
 //                     pending R3 RE pass.
 class AnimationList : public ReferenceCounter {
 public:
+    // std::map<AsciiString, Animation*> uses AsciiString::operator< -> Compare(),
+    // which is non-lex (length-first, hash-second, memcmp-third). This matches the
+    // binary's std::map ordering.
+    // DIFFERS: would diverge if operator< were lexicographic; Compare()-based ordering is binary-faithful.
     typedef std::map<AsciiString, Animation*> AnimMap;   // ptr-valued so fwd-decl is enough
 
     AnimationList() : m_AnimCount(0) {}

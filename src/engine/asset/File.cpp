@@ -41,7 +41,7 @@ bool File::Open() {
         else if (m_openMode == 2) flags = 1 | 2;   // read-write
 
         IFile* ifile = FileManager::GetInstance().OpenFile(
-            m_filename.CStr(), (unsigned int)m_systemID, flags);
+            m_filename.CStr(), flags, (unsigned int)m_systemID);
 
         if (ifile) {
             m_pIFile  = ifile;

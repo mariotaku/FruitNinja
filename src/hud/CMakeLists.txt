@@ -1,4 +1,5 @@
 target_sources(fruit-ninja-game PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/CheckBox.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/HUD.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/HUDControl3d.cpp
@@ -15,4 +16,8 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/SpeedControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoinCounter.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/NotificationControl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ScreenFadeControl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/VerticalScroller.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SliderControl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ProgressionTimerControl.cpp
 )

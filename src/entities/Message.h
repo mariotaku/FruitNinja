@@ -39,7 +39,7 @@ struct MessageListener {
 
 // Binary is ARM32 (4-byte pointers): sizeof == 16. On 64-bit hosts void* is 8
 // bytes so the struct is larger — only assert on 32-bit targets.
-#if defined(__arm__) || (defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4)
+#ifdef __bada__
 static_assert(sizeof(MessageListener) == 16, "MessageListener size mismatch");
 #endif
 

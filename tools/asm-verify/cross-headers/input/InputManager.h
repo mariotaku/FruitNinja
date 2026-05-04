@@ -13,6 +13,8 @@
 struct InputBinding;
 typedef bool (*InputCallback)(InputEvent*);
 
+namespace Mortar {
+
 class InputManager {
 public:
     static InputManager* s_instance;
@@ -24,5 +26,7 @@ public:
     void DispatchEvent(InputEvent*);
     void DispatchGlobal(InputEvent*);
 };
+
+}  // namespace Mortar
 
 #endif

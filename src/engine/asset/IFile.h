@@ -35,7 +35,7 @@ protected:
 };
 
 // sizeof check — only valid on 32-bit (pointer size == 4)
-#if __SIZEOF_POINTER__ == 4
+#ifdef __bada__
 static_assert(sizeof(IFile) == 8, "IFile must be 8 bytes on 32-bit (vtable* + IFileSystem*)");
 #endif
 

@@ -19,14 +19,14 @@
 
 class BombBlast : public Entity {
 public:
-    // +0x28 / +0x2c: growing radius + scale
+    // +0x3C: growing radius + scale (own fields after Entity base 0x3C)
     float m_BlastRadius;
     float m_Scale;
 
-    // +0x36: random 16-bit angle from Init (determines ring orientation)
-    uint16_t m_Angle;
+    // m_Angle is inherited from Entity base at +0x36.
+    // BombBlast::Init writes a random value to it for ring orientation.
 
-    // +0x3c / +0x48: positions extruded along vel1/vel2
+    // +0x48 / +0x54: positions extruded along vel1/vel2
     Vec3 m_PosA;
     Vec3 m_PosB;
 
@@ -40,9 +40,17 @@ public:
     BombBlast();
     ~BombBlast();
 
-    void Init(int p1, int p2, int p3) override;
+    // Vtable slot 2: Binary @ 0x001718ac.
+    // ASM-verified: 2026-05-04T08:23Z binary @ 0x001718ac (asm-inspector)
+    // All three params are unused at runtime — caller passes (this, 0, 0, 0).
+    // The first arg is r0 / `this` (Ghidra's void* p1 is a free-function-rendering
+    // artifact); body operates exclusively on `this`.
+    void Init(void* p1, long p2, const Vec3* p3) override;
     void Update(float dt) override;
+    // Binary @ 0x00171034 — no-op override. Must be present (not pure-virtual abort).
     void Draw(Renderer& r) override;
+    // Binary @ 0x00171030 — no-op override. Must be present.
+    void PostUpdate(float dt) override;
 
     // Static helper called by GameDraw to render every active BombBlast.
     // Matches DrawActiveBlasts (0x171aa0).
