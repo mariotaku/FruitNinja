@@ -260,6 +260,11 @@ public:
     // 0x0012a110. Map lookup by hash; 0 if missing.
     int GetTotal(uint32_t hash) const;
 
+    // Binary @ 0x00153ebc (via PauseScreen::QuitGameCallback) -- wipes entire m_Totals map.
+    // Called from PauseScreen::QuitGameCallback, PauseScreen::RetryGameCallback, and
+    // GameOverScreen state-0 exit.
+    void ClearTotals();
+
     // Clears a single entry in m_Totals by hash (binary addr TBD; called by ResetSpeed/AddSpeed).
     void ClearTotal(uint32_t hash);
 
