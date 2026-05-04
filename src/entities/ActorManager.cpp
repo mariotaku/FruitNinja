@@ -2,15 +2,15 @@
 #include "Fruit.h"
 #include "Bomb.h"
 #include "BombBlast.h"
+#include "collision/ColAABB.h"
 #include "render/Renderer.h"
 #include <cstdio>
 #include <cstring>
 
 // Binary-faithful ActorManager port.
-// Addresses tagged in method comments reference the original FruitNinja
-// ARM32 binary; see docs/engine/actor-manager.md for the decompile.
+// Addresses tagged in method comments reference the original FruitNinja ARM32 binary.
 //
-// Analysed: 2026-04-23T01:00
+// Analysed: 2026-05-04T00:00
 
 ActorManager* ActorManager::s_Instance = nullptr;
 
@@ -20,6 +20,7 @@ ActorManager::ActorManager()
     : m_pHeap(nullptr)
     , m_HeapSize(0)
     , m_FreeCount(0)
+    , m_PendingDeactCount(0)
     , m_pTypeLists(nullptr)
     , m_NumTypes(0)
     , m_DebugDraw(false)
@@ -27,6 +28,7 @@ ActorManager::ActorManager()
     , m_HashDelegate(nullptr)
 {
     std::memset(m_FreePool, 0, sizeof(m_FreePool));
+    std::memset(m_PendingDeact, 0, sizeof(m_PendingDeact));
     s_Instance = this;
 }
 
@@ -208,15 +210,13 @@ void ActorManager::DeactivateAllEntities(int typeIdx) {
 
 // --- Per-frame update / draw ---------------------------------------------
 
-// 0x001701f4.
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x001701f4 (asm-inspector)
+// 0x001701f4. Binary queues kills into m_PendingDeact[] during the type
+// sweep and drains after, so std::list iteration is never invalidated
+// by a mid-loop erase. Binary @ 0x001701f4.
 void ActorManager::Update(float dt) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
 
-    // Two-pass update: iterate type lists first, collect kill list after.
-    // Matches the binary which stages the deactivation queue at +0x80c.
-    Entity* killList[FREE_POOL_CAP];
-    int killCount = 0;
+    m_PendingDeactCount = 0;
 
     for (int t = 0; t < m_NumTypes; t++) {
         std::list<Entity*>& list = m_pTypeLists[t];
@@ -230,15 +230,16 @@ void ActorManager::Update(float dt) {
                 e->PostUpdate(dt);  // vtable +0x18 — Bomb uses this to track fuse emitter
                 e->flags &= ~(ENT_UPDATING | ENT_POST_UPDATING);
             }
-            if ((e->flags & ENT_KILLED) && killCount < FREE_POOL_CAP) {
-                killList[killCount++] = e;
+            if ((e->flags & ENT_KILLED) && m_PendingDeactCount < 256) {
+                m_PendingDeact[m_PendingDeactCount++] = e;
             }
         }
     }
 
-    for (int i = 0; i < killCount; i++) {
-        Deactivate(killList[i]);
+    for (int i = 0; i < m_PendingDeactCount; i++) {
+        Deactivate(m_PendingDeact[i]);
     }
+    m_PendingDeactCount = 0;
 }
 
 // 0x0016fe7c.
@@ -377,9 +378,120 @@ void ActorManager::RegisterHashConverter(HashFn fn) {
     m_HashDelegate = fn;
 }
 
-// --- Messaging (stubs) ----------------------------------------------------
+// --- Find variants --------------------------------------------------------
 
-void ActorManager::SendMessage(uint32_t, Entity*, Mortar::Message*) {}
-void ActorManager::AddMessageListener(Mortar::MessageListener*) {}
-void ActorManager::RemoveMessageListener(Mortar::MessageListener*) {}
-void ActorManager::ClearAllListeners() {}
+// 0x0016fd10. Linear scan of type list `type`; returns first entity whose
+// tracker field at Entity+0x04 equals `trackerKey`.
+// TODO: 0x0016fd10 — Entity base lacks m_TrackerID (Entity+0x04); scan is a
+// no-op stub until that field is added to Entity. Only Fruit has the field now.
+Entity* ActorManager::Find(long type, unsigned long trackerKey) {
+    if (!m_pTypeLists || type < 0 || type >= (long)m_NumTypes) return nullptr;
+    (void)trackerKey;
+    // TODO: 0x0016fd10 — need m_TrackerID on Entity base (currently only on Fruit)
+    return nullptr;
+}
+
+// 0x0016fd58. Type-agnostic scan; returns first entity matching trackerKey
+// across all type lists.
+// TODO: 0x0016fd58 — same gap as Find(type, key): m_TrackerID not on Entity base.
+Entity* ActorManager::Find(unsigned long trackerKey) {
+    if (!m_pTypeLists) return nullptr;
+    (void)trackerKey;
+    // TODO: 0x0016fd58 — need m_TrackerID on Entity base (currently only on Fruit)
+    return nullptr;
+}
+
+// 0x0016fbec. Count entities whose vtable+0x20 (InRect) collision test
+// passes against aabb.
+int ActorManager::GetNumInAABB(Mortar::ColAABB* aabb) {
+    if (!m_pTypeLists || !aabb) return 0;
+    // TODO: 0x0016fbec — Entity vtable+0x20 is InRect(float,float,float,float),
+    // not a ColAABB test; need to resolve the exact binary dispatch at +0x20
+    // before implementing the inner test.
+    return 0;
+}
+
+// --- Level deserialiser ---------------------------------------------------
+
+// 0x00170728. Stubbed — EntityChunk deserialise not used by FN runtime.
+bool ActorManager::LoadEntity(EntityChunk* /*chunk*/, void* /*hdr*/,
+                              long /*hdrLen*/, long /*lod*/) {
+    // TODO: 0x00170728 — EntityChunk deserialise; not used by FN runtime
+    return false;
+}
+
+// --- Heap diagnostics (LinkedHeap stubs) ----------------------------------
+
+// 0x00170370. Binary forwards to LinkedHeap::GetTotalFreeMemory; port has
+// no heap pressure so report m_HeapSize as "all free".
+int ActorManager::GetHeapFree() const {
+    return m_HeapSize;
+}
+
+// 0x00170364.
+void ActorManager::HeapDisplay(bool /*verbose*/) {
+    // Defunct: LinkedHeap diagnostics; binary @ 0x00170364
+}
+
+// 0x00170354.
+void ActorManager::DisplayUsage(bool /*dumpAll*/) {
+    // Defunct: LinkedHeap diagnostics; binary @ 0x00170354
+}
+
+// --- Messaging ------------------------------------------------------------
+
+// 0x0017085c. m_Listeners.push_back(L).
+void ActorManager::AddMessageListener(Mortar::MessageListener* listener) {
+    if (!listener) return;
+    m_Listeners.push_back(listener);
+}
+
+// 0x00170124. m_Listeners.remove(L).
+void ActorManager::RemoveMessageListener(Mortar::MessageListener* listener) {
+    m_Listeners.remove(listener);
+}
+
+// 0x0017013c. Delete each listener (operator delete), then clear list.
+void ActorManager::ClearAllListeners() {
+    for (std::list<Mortar::MessageListener*>::iterator it = m_Listeners.begin();
+         it != m_Listeners.end(); ++it) {
+        delete *it;
+    }
+    m_Listeners.clear();
+}
+
+// 0x0016ffd8. Filter listeners, fire callback+0x30, one-shot clear, then
+// dispatch to sender entity vtable+0x2C (Receive).
+// DIFFERS: binary dispatches sender->vtable+0x2C (Receive) after clearing
+// the listener list; port skips that vtable call because Entity has no
+// Receive slot wired yet.
+// The unconditional m_Listeners.clear() after the dispatch loop IS the
+// binary's one-shot semantic — each SendMessage fires all matching listeners
+// exactly once then discards the list.
+bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
+                               Mortar::Message* msg) {
+    if (!msg) return false;
+
+    typedef void (*NotifyFn)(Mortar::MessageListener*, Entity*, Mortar::Message*);
+
+    bool fired = false;
+    for (std::list<Mortar::MessageListener*>::iterator it = m_Listeners.begin();
+         it != m_Listeners.end(); ++it) {
+        Mortar::MessageListener* L = *it;
+        if (!L) continue;
+        if (L->msgKindHash != 0 && L->msgKindHash != typeHash) continue;
+        if (L->callback) {
+            reinterpret_cast<NotifyFn>(L->callback)(L, sender, msg);
+            fired = true;
+        }
+    }
+
+    // One-shot clear — binary's behaviour at 0x0016ffd8.
+    m_Listeners.clear();
+
+    // TODO: 0x0016ffd8 — dispatch sender->vtable+0x2C (Receive) once Entity
+    // gains that slot. Binary calls: sender->Receive(typeHash, msg) here.
+    (void)sender;
+
+    return fired;
+}
