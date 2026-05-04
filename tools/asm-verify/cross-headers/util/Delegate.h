@@ -39,7 +39,8 @@ private:
 
 // Legacy compatibility aliases used by GameSound, MenuButton, HUDControl etc.
 // These match the real port's Delegate.h placement at GLOBAL scope (not in
-// namespace Mortar).
+// namespace Mortar). Sized 36B to match the primary template + every layout-
+// asserting class (HUDControl, MenuButton, FruitFactControl, GameSound::Slot).
 template<typename Ret>
 class Delegate0 {
 public:
@@ -49,6 +50,8 @@ public:
     operator bool() const { return false; }
 private:
     typename std::aligned_storage<32, sizeof(void*)>::type _storage;
+    unsigned char                                          _tag;
+    unsigned char                                          _pad[3];
 };
 
 template<typename Ret, typename A1>
@@ -60,6 +63,8 @@ public:
     operator bool() const { return false; }
 private:
     typename std::aligned_storage<32, sizeof(void*)>::type _storage;
+    unsigned char                                          _tag;
+    unsigned char                                          _pad[3];
 };
 
 template<typename Ret, typename A1, typename A2>
@@ -71,6 +76,8 @@ public:
     operator bool() const { return false; }
 private:
     typename std::aligned_storage<32, sizeof(void*)>::type _storage;
+    unsigned char                                          _tag;
+    unsigned char                                          _pad[3];
 };
 
 #endif
