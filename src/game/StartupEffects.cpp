@@ -36,7 +36,7 @@ void DrawStartFade() {
 
     // Binary calls FruitCamera::SetupPerspective(camera, 3, 1) to switch to ortho/screen mode.
     if (game->pCamera) {
-        game->pCamera->SetupPerspective(3, true);
+        game->pCamera->SetupPerspective(PT_GENERIC, true);
     }
 
     float bright, alpha_factor, rgb_factor;
