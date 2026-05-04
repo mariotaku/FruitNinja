@@ -63,7 +63,8 @@ public:
     // that set ENT_KILLED during their own Update are queued here so the
     // type-list iterator isn't invalidated by a mid-loop erase. Drained
     // after the full type sweep. Binary @ 0x001701f4.
-    Entity* m_PendingDeact[256];
+    // Binary @ 0x001701f4: Entity*[512] (2048 bytes). W4 TODO closed.
+    Entity* m_PendingDeact[512];
 
     // +0x100C: count of pending-deact entries.
     int m_PendingDeactCount;
@@ -72,19 +73,24 @@ public:
     // m_NumTypes slots. Each list is the active entities of that type.
     std::list<Entity*>* m_pTypeLists;
 
-    // +0x1014: message-listener list. Binary: std::list<MessageListener*>
-    // (12 bytes on Bada libstdc++). Populated by AddMessageListener /
-    // cleared by ClearAllListeners / iterated by SendMessage.
+    // +0x1014: message-listener list.
+    // DIFFERS: m_Listeners std::list is 8 bytes in binary (Sourcery 2010q1 pre-C++11)
+    //          but 12 bytes after the project-wide stl_list patch. Layout deviates by 4
+    //          bytes from binary here. Acceptable because the listener subsystem is
+    //          Defunct -- no in-binary callers.
     std::list<Mortar::MessageListener*> m_Listeners;
 
-    // +0x1020: count of types passed to Initialise.
+    // +0x101C (binary). Port lands at +0x1020 due to 4-byte list-size drift above.
     int  m_NumTypes;
 
-    // +0x1024: debug flag — Draw calls DrawDebug() when non-zero.
+    // +0x1020 (binary). Port lands at +0x1024 due to 4-byte drift.
+    // DIFFERS: original = bool at +0x1020 from binary layout; port at +0x1024.
     bool m_DebugDraw;
 
-    // +0x1028: factory function used when the free pool has no matching
-    // entity. Registered via RegisterFactory from GameInitialise.
+    // +0x1024 (binary): factory function is Delegate1<Entity*, long> object (36 bytes).
+    // DIFFERS: binary uses Delegate1<Entity*, long> object (36 bytes); port stores
+    //          raw fnptr (4 bytes) at the same logical offset. Functionally equivalent
+    //          for the singular call site. Layout deviates by 32 bytes from binary.
     FactoryFn m_FactoryDelegate;
 
     // Singleton — binary uses Meyers static local `em` inside
@@ -120,9 +126,9 @@ public:
     // TODO: implement -- see docs/systems/gameinit-todos.md step 16.
     void RegisterHashConverter(HashFn fn);
 
-    // +0x104C: hash converter (Delegate2 slot, see HashFn typedef above).
-    // DIFFERS: original binary offset +0x1048 from original field layout; offset
-    // shifts by 4 after m_DebugDraw bool padding correction.
+    // +0x1048 (binary): hash converter is Delegate2<long, ulong, bool&> object (36 bytes).
+    // DIFFERS: binary uses Delegate2 object (36 bytes); port stores raw fnptr (4 bytes).
+    //          Binary offset +0x1048; port offset drifts further due to Delegate1 size diff.
     HashFn m_HashDelegate;
 
     // --- Entity API -----------------------------------------------------
@@ -135,6 +141,7 @@ public:
     // 0x00170654. Push a pre-constructed entity into a type list without
     // going through the factory. Used by LoadEntity; exposed here for
     // parity but currently only stubbed callers use it.
+    // Defunct: zero live in-binary callers (only LoadEntity, itself dead); binary @ 0x00170654.
     Entity* Add(Entity* entity, long typeIdx);
 
     // 0x00170184. Erase from its type list, set ENT_INACTIVE, append to
@@ -145,10 +152,12 @@ public:
 
     // 0x001702d8. Erase + (unless ENT_NO_DESTRUCT) delete.
     // Dtor calls Release() for per-type cleanup.
+    // Defunct: zero in-binary callers; binary @ 0x001702d8.
     void Remove(Entity* entity);
 
     // 0x0016fb44. Set ENT_KILLED on every entity of the given type so
     // the next Update sweep drains them into the free pool.
+    // Defunct: zero in-binary callers; binary @ 0x0016fb44.
     void DeactivateAllEntities(int typeIdx);
 
     // --- Per-frame update / draw ---------------------------------------
@@ -166,9 +175,12 @@ public:
 
     // 0x0016fe1c. Per-entity collision-sphere debug draw. Gated on
     // m_DebugDraw.
+    // Defunct: zero in-binary callers; binary @ 0x0016fe1c.
     void DrawDebug();
 
-    // 0x0016fdc8. Stubbed — no deserialisation in port.
+    // Binary @ 0x0016fdc8 -- iterates m_pTypeLists and calls entity->vtable[+0x1c]
+    // (slot 7, PostLoad). Defunct: zero in-binary callers; LoadEntity is itself dead.
+    // Port keeps stub body as no-op for safety.
     void PostLoad();
 
     // --- Query API (binary: four GetNumEntities overloads, +Find/Get) --
@@ -215,6 +227,7 @@ public:
     Entity* GetEntity(int typeIdx, size_t slot) const;
 
     // 0x0016fc64. Ordinal index of `entity` in its type list, or -1.
+    // Defunct: zero in-binary callers; binary @ 0x0016fc64.
     int GetEntityIdx(Entity* entity) const;
 
     // 0x0016fd10. Linear scan of the type list `type`; returns the first
@@ -225,14 +238,16 @@ public:
     // m_TrackerID matches `trackerKey` across all type lists.
     Entity* Find(unsigned long trackerKey);
 
-    // 0x0016fbec. Count entities whose vtable+0x20 (InRect) collision test
-    // passes against `aabb`. Port gates on Entity::InRect being wired.
+    // 0x0016fbec. Count entities whose vtable+0x20 (InRect(ColAABB*)) collision
+    // test passes against `aabb`. Port stub returns 0.
+    // Defunct: zero in-binary callers; binary @ 0x0016fbec.
     int GetNumInAABB(Mortar::ColAABB* aabb);
 
     // --- Level deserialiser (stubbed — .lvl loading not used by FN) -----
 
     // 0x00170728. EntityChunk deserialise; LOD scale + AABB->pos/size + Init.
-    // Port stub returns false — not used by FruitNinja runtime.
+    // Port stub returns false -- not used by FruitNinja runtime.
+    // Defunct: zero in-binary callers; binary @ 0x00170728.
     bool LoadEntity(EntityChunk* chunk, void* hdr, long hdrLen, long lod);
 
     // --- Heap diagnostics -----------------------------------------------
@@ -243,48 +258,55 @@ public:
 
     // 0x00170370. Binary forwards to LinkedHeap::GetTotalFreeMemory; port
     // returns m_HeapSize (no allocation tracking).
+    // Defunct: zero in-binary callers; binary @ 0x00170370.
     int  GetHeapFree() const;
 
     // 0x00170364. Binary forwards to LinkedHeap::DisplayUsage(verbose).
+    // Defunct: zero in-binary callers; binary @ 0x00170364.
     void HeapDisplay(bool verbose);
 
     // 0x00170354. Binary forwards to LinkedHeap::DisplayUsage(true) gated.
+    // Defunct: zero in-binary callers; binary @ 0x00170354.
     void DisplayUsage(bool dumpAll);
 
     // 0x0016fb3c. Setter for m_DebugDraw.
     void SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0); }
 
     // --- Messaging ------------------------------------------------------
-    // Defunct: Mortar messaging — no-op stub; binary @ 0x0016ffd8 (Send),
-    //   0x0017085c (Add), 0x00170124 (Remove). Listener subsystem wired but
-    //   never instantiated in shipped retail.
+    // Defunct: Mortar messaging subsystem -- zero in-binary callers for all
+    // four methods. Preserved for call-graph fidelity only.
 
     // 0x0016ffd8. Filter listeners, fire callback->vtable[+0x30], one-shot
     // clear, then dispatch target->ReceiveMessage(sender, msg).
+    // Defunct: zero in-binary callers; binary @ 0x0016ffd8.
     bool SendMessage(unsigned long typeHash, Entity* sender, Mortar::Message* msg);
 
     // 0x0017085c. m_Listeners.push_back(L).
+    // Defunct: zero in-binary callers; binary @ 0x0017085c.
     void AddMessageListener(Mortar::MessageListener* listener);
 
     // 0x00170124. m_Listeners.remove(L).
+    // Defunct: zero in-binary callers; binary @ 0x00170124.
     void RemoveMessageListener(Mortar::MessageListener* listener);
 
     // 0x0017013c. Delete each listener, then clear list.
+    // Defunct: zero in-binary callers; binary @ 0x0017013c.
     void ClearAllListeners();
 };
 
-// Confirmed-correct offsets (toolchain patch makes these assertable):
+// Confirmed-correct offsets (toolchain patch makes these assertable).
+// Note: m_NumTypes / m_DebugDraw / m_FactoryDelegate / m_HashDelegate offsets
+// deviate from binary (+0x101C / +0x1020 / +0x1024 / +0x1048) because:
+//   (a) m_Listeners list is 12B in port (Bada-patched) vs 8B in binary (+4B drift)
+//   (b) m_FactoryDelegate is raw fnptr (4B) vs Delegate1 object (36B) (+32B drift)
+// These are documented as DIFFERS above; sizeof and the affected offsetof asserts
+// are excluded from the cross-build check.
 #ifdef __bada__
-static_assert(offsetof(ActorManager, m_FreePool)  == 0x008, "m_FreePool offset");
-static_assert(offsetof(ActorManager, m_FreeCount) == 0x808, "m_FreeCount offset");
-static_assert(offsetof(ActorManager, m_PendingDeact) == 0x80C, "m_PendingDeact offset");
+static_assert(offsetof(ActorManager, m_FreePool)       == 0x008, "m_FreePool offset");
+static_assert(offsetof(ActorManager, m_FreeCount)      == 0x808, "m_FreeCount offset");
+static_assert(offsetof(ActorManager, m_PendingDeact)   == 0x80C, "m_PendingDeact offset");
+static_assert(offsetof(ActorManager, m_PendingDeactCount) == 0x100C, "m_PendingDeactCount offset");
+static_assert(offsetof(ActorManager, m_pTypeLists)     == 0x1010, "m_pTypeLists offset");
 #endif
-
-// TODO: 0x00170500 -- ActorManager m_PendingDeact array size mismatch: port has
-// Entity*[256] (1024B) but binary's m_PendingDeactCount lives at +0x100C, which
-// implies Entity*[512] (2048B). Cross-build measures m_PendingDeactCount at
-// +0xC0C, m_pTypeLists at +0xC10, m_Listeners at +0xC14, m_NumTypes at +0xC20,
-// sizeof = 0xC30. Widening the array to [512] makes all later offsets match
-// binary. Re-validate via asm-inspector before flipping.
 
 #endif  // FN_ACTOR_MANAGER_H
