@@ -31,7 +31,6 @@ GameSound::GameSound()
         m_Slots[i].volume         = 1.0f;
         m_Slots[i].pitch          = 1.0f;
         // finishCallback default-constructs to empty
-        m_Slots[i].reserved       = 0;
     }
 }
 
@@ -48,7 +47,7 @@ int GameSound::FindFree() {
     return -1;
 }
 
-// Binary @ 0x00129270 -- 4-explicit-arg form; finish-callback drives looping.
+// ASM-verified: 2026-05-04T11:00 binary @ 0x00129270 (asm-inspector)
 // DIFFERS: binary @ 0x... calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
 //          port simplifies to 2-arg form. Mirror of the marker in MortarSound.cpp::Play.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch,
@@ -158,8 +157,7 @@ void GameSound::Unpause() {
     }
 }
 
-// Binary @ 0x0012930c -- finish-callback drives looping sounds.
-// If callback returns true, the entire Update bails this frame (loop restarted).
+// ASM-verified: 2026-05-04T11:00 binary @ 0x0012930c (asm-inspector)
 void GameSound::Update(float /*dt*/) {
     if (m_PausedForInterrupt) {
         SoundManager& mgr = SoundManager::GetInstance();
@@ -173,8 +171,6 @@ void GameSound::Update(float /*dt*/) {
         if (s->isFree || s->sound == NULL) continue;
 
         if (!s->sound->IsPlaying() && !s->sound->IsPaused()) {
-            // Binary @ 0x0012930c -- finish-callback drives looping.
-            // If it returns true, the whole Update bails this frame.
             if (static_cast<bool>(s->finishCallback)) {
                 bool restartedLoop = s->finishCallback(s->sound);
                 if (restartedLoop) return;
