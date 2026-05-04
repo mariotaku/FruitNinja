@@ -64,11 +64,16 @@ INCS="-I/tmp/portsrc/src -I/tmp/portsrc/src/engine -I/tmp/portsrc/src/game -I/tm
 ok=0; fail=0
 > /tmp/compile_failures.txt
 cd /tmp/portsrc
-# Skip SDL-bound files (*SDL.cpp suffix convention) -- they require the SDL2
-# header set which the cross-toolchain does not have. The convention mirrors
-# the binary's *Bada suffix; both are platform-glue and have no portable
-# symbols to diff against the binary.
-for cpp in $(find src -name "*.cpp" ! -name "*SDL.cpp"); do
+# Skip platform-glue (no portable symbols to diff against the binary):
+#   1. *SDL.cpp suffix convention (mirrors binary *Bada classifier).
+#   2. Anything under src/platform/sdl/ (whole-directory SDL backend).
+#   3. Explicit-name exclusions for entry points etc. that don't fit either rule:
+#        - src/main.cpp (SDL_main entry; never has portable symbols)
+# Add to the explicit list when a new file is portable-named but really platform-only.
+for cpp in $(find src -name "*.cpp" \
+                 ! -name "*SDL.cpp" \
+                 ! -path "src/platform/sdl/*" \
+                 ! -path "src/main.cpp"); do
     rel=${cpp#src/}
     obj=/tmp/portsyms/$(echo "$rel" | tr "/" "_").o
     if $CXX $CXXFLAGS $INCS -c "$cpp" -o "$obj" 2>/dev/null; then
