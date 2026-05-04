@@ -1,5 +1,6 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
+#include "asset/Texture.h"
 #include <cstdio>
 #include <cmath>
 
@@ -138,6 +139,22 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
          0.5f,  0.5f, 0.0f,  u1, v0,
     };
     Matrix44 mvp = Mortar::MatrixManager::GetInstance().GetMVP();
+
+    // Defensive check: if no texture has been Set() recently, GL falls back
+    // to default texture 0, which samples white -- modulating the tint then
+    // produces a stray white quad. Tracked via Mortar::Texture::s_LastBound.
+    // Once-warn + skip-draw so callers can identify the bug from logs.
+    if (Mortar::Texture::s_LastBoundTexId == 0) {
+        static bool s_warned = false;
+        if (!s_warned) {
+            fprintf(stderr,
+                "[Renderer::DrawQuad] WARN: no texture bound; tint=(%u,%u,%u,%u) "
+                "uv=(%g,%g..%g,%g) -- caller missing Texture::Set?\n",
+                tint.r, tint.g, tint.b, tint.a, u0, v0, u1, v1);
+            s_warned = true;
+        }
+        return;
+    }
 
     // Caller already bound the texture via Texture::Set (which
     // glBindTexture's to TEXTURE_2D unit 0); re-enable TEXTURE_2D and

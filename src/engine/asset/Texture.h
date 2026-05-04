@@ -35,6 +35,11 @@ public:
 
     // Upload native format directly to GL (for .tex files without CPU conversion)
     void UploadNative(int width, int height, GLenum glFormat, GLenum glType, const void* pixels);
+
+    // Tracker for the last-bound texture id (port-side; binary doesn't track
+    // this). Renderer::DrawQuad reads it to detect untextured draws that
+    // would otherwise sample default-white and produce stray white quads.
+    static GLuint s_LastBoundTexId;
 };
 
 } // namespace Mortar
