@@ -76,9 +76,10 @@ void BombBlast::LoadContent()    {}
 void BombBlast::ReleaseContent() {}
 
 // Binary @ 0x001718ac — vtable slot 2.
-// TODO: 0x001718ac — param_1 semantics: Ghidra treats it as external blob with
-//   offsets matching BombBlast own fields; likely Ghidra mis-typing (this==p1).
-//   ASM-verify before changing body interpretation.
+// ASM-verified: 2026-05-04T08:23Z binary @ 0x001718ac (asm-inspector)
+// Confirmed: Ghidra's void* p1 was a mis-decompile artifact -- the binary
+// writes through r0 which is `this`; runtime caller passes (this, 0, 0, 0).
+// Body operates exclusively on `this` and ignores all three explicit params.
 void BombBlast::Init(void* /*p1*/, long /*p2*/, const Vec3* /*p3*/) {
 
     // Activate: clear ENT_INACTIVE | ENT_KILLED. ActorManager::Add already

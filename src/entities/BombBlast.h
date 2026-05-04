@@ -41,9 +41,10 @@ public:
     ~BombBlast();
 
     // Vtable slot 2: Binary @ 0x001718ac.
-    // p1 = parent Bomb* (writes blast vectors into it); p2/p3 unused.
-    // TODO: 0x001718ac — BombBlast::Init param_1 semantics need ASM-verify;
-    //   Ghidra treats it as external blob but offsets match BombBlast own fields.
+    // ASM-verified: 2026-05-04T08:23Z binary @ 0x001718ac (asm-inspector)
+    // All three params are unused at runtime — caller passes (this, 0, 0, 0).
+    // The first arg is r0 / `this` (Ghidra's void* p1 is a free-function-rendering
+    // artifact); body operates exclusively on `this`.
     void Init(void* p1, long p2, const Vec3* p3) override;
     void Update(float dt) override;
     // Binary @ 0x00171034 — no-op override. Must be present (not pure-virtual abort).
