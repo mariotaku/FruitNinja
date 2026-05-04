@@ -119,8 +119,8 @@ static void SplatShiftVisitor(SplatEntity* s, void* user) {
     if (!s || !s->m_bAlive) return;
     if ((int8_t)s->m_SplatType < 0) return;
     SplatShiftCtx* c = static_cast<SplatShiftCtx*>(user);
-    if (s->pos.x > 50.0f) s->pos.x += c->up;
-    else                  s->pos.x -= c->down;
+    if (s->m_Pos.x > 50.0f) s->m_Pos.x += c->up;
+    else                    s->m_Pos.x -= c->down;
 }
 
 // ---------------------------------------------------------------------------
