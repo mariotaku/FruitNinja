@@ -127,6 +127,15 @@ void MissControl::Reset() {
     }
 }
 
+// Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
+void MissControl::PreDraw(const Vec3& /*hudScale*/) {}
+
+// Binary @ 0x00150dfc — vtable[16]. Defunct: same-screen MP player-index hook.
+// Defunct: same-screen MP player-index hook — no-op stub; binary @ 0x00150dfc
+int MissControl::SetPlayer(int player) {
+    return player;
+}
+
 // vtable[15] @ 0x00150e3c
 void MissControl::Skip() {
     // Fast-forward spawn animation when critical/rare label needs to appear immediately.
@@ -187,6 +196,18 @@ void MissControl::AllocatePool() {
     }
     s_PoolAllocated = true;
     printf("[MissControl] AllocatePool: %d slots\n", MISS_POOL_SIZE);
+}
+
+// --- CleanPool -------------------------------------------------------------
+
+// Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit @ 0x0016d086.
+void MissControl::CleanPool() {
+    if (!s_PoolAllocated) return;
+    for (int i = 0; i < MISS_POOL_SIZE; i++) {
+        delete s_Pool[i];
+        s_Pool[i] = nullptr;
+    }
+    s_PoolAllocated = false;
 }
 
 // --- GetFree ---------------------------------------------------------------
