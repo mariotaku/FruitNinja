@@ -7,7 +7,7 @@
 // Original: ctor 0x0014c430, Update 0x0014b278 (677 lines), Draw 0x0014d4ec (171 lines)
 //
 
-// Analysed: 2026-04-25T12:00
+// Analysed: 2026-05-04T00:00
 #include "hud/HUDControl3d.h"
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
@@ -31,7 +31,7 @@ enum MainScreenState {
     STATE_MORE_GAMES       = 10,   // Network (skip)
     STATE_NEWS             = 0x0b, // Network (skip)
     STATE_MODE_SELECT      = 0x0e, // Slide-out -> GameModeScreen
-    STATE_MODE_SELECT_2    = 0x0f, // Slide-out continued
+    STATE_MODE_SELECT_2    = 0x0f, // Slide-out continued (multiplayer variant)
     STATE_MATCHMAKER       = 0x10, // Network (skip)
     STATE_CAMERA_FADE      = 0x11, // Camera fade after game return
     STATE_LOADING_A        = 0x13, // Timer accumulate + loading symbol
@@ -44,16 +44,30 @@ enum MainScreenState {
 
 class MainScreen : public HUDControl3d {
 public:
+    // DIFFERS: binary ctor takes no args (_ZN10MainScreenC1Ev @ 0x0014C8A8);
+    //   port takes Game& because Game is reachable via *GOT[0x7990] in binary.
+    //   Body logic verified equivalent in R4 W2 RE.
     MainScreen(Game& g);
     ~MainScreen();
 
-    // HUDControl overrides (vtable order from docs/structs/hud.md)
-    void Init() override;
-    void Release() override;
-    void Reset() override;
-    void Update(float dt) override;
+    // HUDControl overrides (vtable order from R4 W2 RE section 2)
+    void Init() override;                               // vtable slot 2 @ 0x0014AC80
+    void Release() override;                            // vtable slot 3 @ 0x0014CD20
+    void Reset() override;                              // vtable slot 4 @ 0x0014AC8C (no-op)
+    // Binary @ 0x0014AC94 — vtable slot 6, no-op stub; returns this.
+    // Defunct: vtable PreDraw — no-op stub matching binary's empty body; binary @ 0x0014AC94
+    void* PreDraw(float* hudScale);
+    void Update(float dt) override;                     // vtable slot 10 @ 0x0014B278
+    // DIFFERS: binary signature is Draw(float*) at vtable slot 7 @ 0x0014D4EC;
+    //   port uses Draw(Vec3&, int) for ergonomic param-passing.
+    //   Body logic verified equivalent in R4 W2 RE.
     void Draw(const Vec3& hudScale, int layerMask) override;
-    int GetType() override { return 1; }
+    int GetType() override { return 1; }                // vtable slot 12 (base default)
+
+    // UpdateScreenElements — vtable slot 15 @ 0x0014AD3C (extension slot beyond base 15)
+    // Called from inside Update with (cameraTransition, elapsedTime).
+    // Declared as non-override here; port wires via direct call not vtable dispatch.
+    void UpdateScreenElements(float cameraTransition, float time);
 
     // Direct state writer used by child screens (DojoScreen,
     // GameModeScreen, ShopScreen, AboutScreen) when they finish
@@ -63,6 +77,7 @@ public:
     void SetState(MainScreenState s) { m_State = s; }
 
     // @ 0x0016bbb0 — post-effect overlays drawn after HUD layer 0x08.
+    // NOT a vtable slot (binary slot 9 is base default 0x12F93C).
     void DrawPostEffects();
 
     // Camera transition accessors for child screens. Binary stores
@@ -148,14 +163,17 @@ private:
     // and again after the child's RemoveCallback fires.
     GameModeScreen* m_pGameModeScreen;
 
-    // --- Methods matching docs ---
-    void UpdateScreenElements(float cameraTransition, float time);
+    // --- Internal helpers ---
     void DeleteMenuButtons();
     void Hide();
     void CreateToggles();
     void CreatePlayDojo();
     void CreateQuitButton();
     void RemoveButton(MenuButton*& btn);
+
+    // Binary @ 0x0014D1F8 — 8-segment radial loading spinner.
+    // Called from Draw step 5 when m_State == STATE_LOADING_A (0x13) or STATE_LOADING_B (0x14).
+    void DrawLoadingSymbol(const float* hudScale);
 
     // Matches MainScreen::ButtonDeleted @ 0x0014acc0. Installed as the
     // m_RemoveCallback delegate on Play / Dojo / Quit / MoreGames buttons
@@ -174,6 +192,8 @@ private:
 
     // --- Callbacks ---
     void GameModeCallback();
+    // Binary @ 0x0014B0AC — multiplayer variant of GameModeCallback (state 0xF instead of 0xE).
+    void MultiplayerGameModeCallback();
     void NewGameCallback();
     void AboutCallback();
     void SoundCallback();
@@ -181,6 +201,15 @@ private:
     void LeaderboardsCallback();
     void MoreGamesCallback();
     void QuitGamesCallback();
+
+    // Binary @ 0x0014AFB8 — Defunct: NetworkManager::CancelNewsDisplay — no-op stub
+    void CancelNews();
+    // Binary @ 0x0014ACFC — Defunct: network UI button — no-op stub (empty in binary)
+    void ClearNetworkButton();
+    // Binary @ 0x0014AD00 — Defunct: leaderboard UI button — no-op stub (returns this in binary)
+    MainScreen* CreateNormalLeaderboardButton();
+    // Binary @ 0x0014AC98 — no-op event hook (empty in binary; superseded by ButtonDeleted)
+    void OnMenuItemsCleared();
 
     // Touch handling removed in the touch rewrite. MenuButton::Update now
     // polls Mortar::Touch directly — MainScreen has no touch routing role.

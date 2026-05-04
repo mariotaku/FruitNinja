@@ -23,7 +23,7 @@
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "core/SystemManager.h"
-// Analysed: 2026-04-25T12:00
+// Analysed: 2026-05-04T00:00
 #include "audio/GameSound.h"
 #include "audio/SoundManager.h"
 #include "debug/DebugFlags.h"
@@ -575,6 +575,9 @@ static void SetupQuadMatrix(Mortar::MatrixManager& mm, const Vec3& hudScale,
 }
 
 // Matches Draw at 0x0014d4ec (171 lines)
+// DIFFERS: binary signature is Draw(float*) at vtable slot 7 @ 0x0014D4EC;
+//   port uses Draw(Vec3&, int) for ergonomic param-passing.
+//   Body logic verified equivalent in R4 W2 RE.
 void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
 
@@ -651,9 +654,26 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         m_TexSliceFruit->UnSet();
     }
 
-    // 5. Loading symbol (states 0x13, 0x14 only) — TODO
+    // 5. Loading symbol (states 0x13, 0x14 only)
+    // Binary Draw step 6 @ 0x0014D1F8 area: call DrawLoadingSymbol when loading.
+    if (m_State == STATE_LOADING_A || m_State == STATE_LOADING_B) {
+        DrawLoadingSymbol(&hudScale.x);
+    }
 
-    // 6. "Coming soon" logo overlay — TODO (depends on pPlayButton existence)
+    // 6. "Coming soon" overlay — drawn when m_TexCommingSoon valid AND pPlayButton exists.
+    // Binary: Scale(0.5, 0.5*texH/texW, 1), Translate(0, 7, 0), DrawQuad with alpha-tinted white.
+    // DAT_0014d850 = 0.0f (X offset for comming_soon).
+    if (m_TexCommingSoon.IsValid() && pPlayButton != NULL) {
+        float csW = (float)m_TexCommingSoon->m_Width;
+        float csH = (float)m_TexCommingSoon->m_Height;
+        float scaleX = csW * 0.5f;
+        float scaleY = csH * 0.5f * (csW > 0.0f ? (csH / csW) : 1.0f);
+        Vec3 csPos(0.0f, 7.0f, 0.0f);  // DAT_0014d850=0.0, 7.0, 0.0
+        m_TexCommingSoon->Set();
+        SetupQuadMatrix(mm, hudScale, scaleX, scaleY, csPos);
+        game.renderer.DrawQuad(m_DrawColour);
+        m_TexCommingSoon->UnSet();
+    }
 }
 
 // Matches 0x0014ad3c — constants verified from Ghidra decompilation + read_memory
