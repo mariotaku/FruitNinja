@@ -4,6 +4,14 @@
 //
 // Analysed: 2026-04-17T01:00
 //
+// Defunct: 4 binary symbols compiled into FruitNinja.exe but with ZERO
+// callsite xrefs -- leftover .o code from other Halfbrick build variants
+// (iPhone/iPad with Twitter/Facebook + More-Games buttons on the Dojo menu).
+// Not ported.
+//   SwitchCallback         @ 0x00137694
+//   MoreGamesCallback      @ 0x0013769c
+//   TwitterFacbookButtons  @ 0x00137738
+//   SwitchNetworkButton    @ 0x001379b0
 
 #include "DojoScreen.h"
 #include "AboutScreen.h"
@@ -319,10 +327,8 @@ void DojoScreen::Update(float dt) {
         }
 
         if (prevState == 4) {
-            // State 4: network dashboard (defunct — OpenFeint/GameCenter).
-            // Binary: waits for ActorManager::GetNumEntities(0)==0,
-            //   then NetworkManager::LaunchDashboard(), state=0.
-            // Port: skip — reset to state 0 immediately.
+            // Defunct: NetworkManager dashboard -- state 4 unreachable on Bada (no
+            // button creates it). Binary state-4 body kept for vtable parity.
             m_State = 0;
             return;
         }
