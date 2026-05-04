@@ -22,9 +22,9 @@ Mesh::~Mesh() {
 
 // Matches Mesh::SetBones (0x001b1340)
 // Resizes m_BoneBindings and copies each entry
-void Mesh::SetBones(const BoneBinding* bones, int count) {
+void Mesh::SetBones(const BoneBinding* bones, unsigned long count) {
     m_BoneBindings.resize(count);
-    for (int i = 0; i < count; i++) {
+    for (unsigned long i = 0; i < count; i++) {
         m_BoneBindings[i] = bones[i];
     }
 }
@@ -43,9 +43,9 @@ void Mesh::BindSkeleton(Skeleton* skeleton) {
 // Matches Mesh::GetBoneVertTransform (0x001b0688)
 // Returns vert matrix for binding[index] if skeleton is bound, else nullptr.
 // Caller falls back to identity when nullptr (= worldMatrix unchanged).
-const Matrix44* Mesh::GetBoneVertTransform(int index) const {
+const Matrix44* Mesh::GetBoneVertTransform(unsigned long index) const {
     if (!m_Skeleton) return nullptr;
-    if (index < 0 || index >= (int)m_BoneBindings.size()) return nullptr;
+    if (index >= m_BoneBindings.size()) return nullptr;
     int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
     if (skelIdx < 0) return nullptr;
     return m_Skeleton->GetVertex(skelIdx);
@@ -54,10 +54,10 @@ const Matrix44* Mesh::GetBoneVertTransform(int index) const {
 // Matches Mesh::GetBoneWorldTransform (0x001b0700)
 // Returns world matrix for binding[index] through skeleton. Identity when
 // no skeleton bound or bone unbound.
-Matrix44 Mesh::GetBoneWorldTransform(int index) const {
+Matrix44 Mesh::GetBoneWorldTransform(unsigned long index) const {
     Matrix44 identity;
     if (!m_Skeleton) return identity;
-    if (index < 0 || index >= (int)m_BoneBindings.size()) return identity;
+    if (index >= m_BoneBindings.size()) return identity;
     int skelIdx = m_BoneBindings[index].m_SkeletonIndex;
     if (skelIdx < 0) return identity;
     const Matrix44* w = m_Skeleton->GetWorld(skelIdx);
@@ -66,7 +66,7 @@ Matrix44 Mesh::GetBoneWorldTransform(int index) const {
 }
 
 // Binary @ 0x001b0778 — symmetric to GetBoneVertTransform; reads Skeleton::GetLocal(idx).
-Matrix44 Mesh::GetBoneLocalTransform(unsigned int idx) const {
+Matrix44 Mesh::GetBoneLocalTransform(unsigned long idx) const {
     if (m_Skeleton && idx < m_BoneBindings.size()) {
         int sIdx = m_BoneBindings[idx].m_SkeletonIndex;
         if (sIdx >= 0) {

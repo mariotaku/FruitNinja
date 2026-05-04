@@ -103,7 +103,7 @@ public:
     void Draw(const Matrix44& worldTransform) override;
 
     // Matches Mesh::SetBones (0x001b1340)
-    void SetBones(const BoneBinding* bones, int count);
+    void SetBones(const BoneBinding* bones, unsigned long count);
 
     // vtable[5]: Matches Mesh::GetBounds (0x001b07f0)
     void GetBounds(Vec3& outMin, Vec3& outMax) const override;
@@ -113,16 +113,16 @@ public:
     void BindSkeleton(Skeleton* skeleton) override;
 
     // Binary @ 0x001b0778 — symmetric to GetBoneVertTransform; reads Skeleton::GetLocal(idx).
-    Matrix44 GetBoneLocalTransform(unsigned int idx) const;
+    Matrix44 GetBoneLocalTransform(unsigned long idx) const;
 
     // Matches Mesh::GetBoneVertTransform (0x001b0688)
     // Returns pointer to vert matrix for binding[index], or nullptr if no skeleton bound.
-    const Matrix44* GetBoneVertTransform(int index) const;
+    const Matrix44* GetBoneVertTransform(unsigned long index) const;
 
     // Matches Mesh::GetBoneWorldTransform (0x001b0700)
     // Returns world matrix for binding[index] through skeleton. Identity fallback when
     // no skeleton bound or bone unbound.
-    Matrix44 GetBoneWorldTransform(int index) const;
+    Matrix44 GetBoneWorldTransform(unsigned long index) const;
 
     // vtable[9]: Matches Mesh::GetGeometryCount (0x001b1678)
     int GetGeometryCount() const override { return (int)m_Geometries.size(); }
@@ -154,6 +154,11 @@ public:
     //   0x001b1394 -- SharedPropsInfo::AddTextureMap(name, propName)
     //   0x001b0d0c -- AddGeometry(SmartPtr<Geometry>&)  (port appends in LoadMesh directly)
     //   0x001b15e4 -- GenerateBindings(name, slot, vector<Bone::Binding>&) [empty BX LR]
+    //   0x001b08e8 -- RebuildEffectBindings()  [port computes MVP via MatrixManager directly]
+    //   0x001b10d8 -- Mesh(SmartPtr<SharedEffectProperties>&, AsciiString&)  [2-arg ctor; port has default ctor only]
+    //   0x00193ed8 -- DrawCube(...)    [binary stub, returns colour unchanged]
+    //   0x00193edc -- DrawLine(...)    [binary stub, returns first vec unchanged]
+    //   0x00193ee0 -- DrawSphere(...)  [binary stub, returns colour unchanged]
 
     // TODO: 0x001b0d18 -- Mesh::GenerateBindings(Vector). Iterates
     // m_PropertiesGroups.m_TextureMaps, emits AnimBindings::Vector::Binding for
