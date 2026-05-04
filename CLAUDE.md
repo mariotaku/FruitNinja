@@ -113,7 +113,13 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
   2. **`src/platform/<backend>/` directory** — for backends that come as a multi-file group, the whole subtree is excluded (`src/platform/sdl/`, future `src/platform/posix/`, `src/platform/win32/`).
   3. **Explicit name exclusions** — for files that don't fit either rule (e.g. `src/main.cpp`, the SDL entry point that has no binary counterpart). Listed verbatim in the symbol-diff filter.
   Public headers (`*.h`) must NOT include `<SDL.h>` / `<windows.h>` / `<dirent.h>` or expose backend-specific types directly — use `void*` (with a comment naming the real type), `uint32_t` for handle-IDs, or polymorphic engine bases (`Mortar::IFile*`, `Mortar::IFileSystem*`) whose concrete subclass is the platform .cpp. Cast at the platform boundary inside the suffix-named .cpp. The `symbol-diff` skill applies all three filters, which keeps the diff focused on portable code and means there's no platform stub header to maintain in `tools/asm-verify/cross-headers/`.
-- Temp/scratch files go in `<project root>/tmp/`, NOT `/tmp` or system temp.
+- **Temp / scratch / intermediate files go in `<project root>/tmp/`** — `tmp/` is gitignored. This includes:
+  - **Session planning / handover notes** (`tmp/next-batch.md`, `tmp/handover-*.md`).
+  - **TODO/task scratch markdown** generated during a session.
+  - **Per-agent output captures**, `compile_failures.txt`, ad-hoc analysis dumps.
+  - **Compile/build logs**, `tmp/symbol-diff/*`, `tmp/asm-verify/*` reports.
+
+  Do NOT commit these. The `docs/` tree is reserved for the small load-bearing reference docs (file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance, this CLAUDE.md, plus `docs/HANDOVER*.md` / `docs/TODO.md` / `docs/port-plan.md` which capture project-wide policy that survives across sessions). Anything else — drafts, working notes, gap-survey snapshots, dispatch-shape proposals — belongs in `tmp/`.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use plain ASCII substitutes (`->`, `--`, `'`, etc.). Comments inside source files can use Unicode freely; this is a runtime-output rule.
 
 ## Key Files
