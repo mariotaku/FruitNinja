@@ -16,13 +16,15 @@
 #include "math/Vec3.h"
 #include "render/Renderer.h"
 #include "input/InputManager.h"
-#include "platform/InputTranslatorSDL.h"
 #include "render/Font.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 
 // Opaque platform handles (SDL types live behind void* in headers).
 // The SDL backend (mainSDL.cpp / GameSDL.cpp) casts these to SDL_Window* / SDL_GLContext.
+// InputTranslatorSDL is forward-declared so this header doesn't pull <SDL.h>;
+// it's heap-allocated and stored as a pointer (see GameSDL.cpp).
+class InputTranslatorSDL;
 
 class HUD;
 class ActorManager;
@@ -119,7 +121,7 @@ struct Game : public Mortar::MortarGame {
     void* gl_context;      // SDL_GLContext (opaque)
     Renderer renderer;
     InputManager* inputManager;
-    InputTranslatorSDL inputTranslator;
+    InputTranslatorSDL* inputTranslator;   // heap-allocated in GameSDL.cpp
     ActorManager* actorManager;
 
     // Audio toggle state

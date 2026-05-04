@@ -32,7 +32,7 @@ Game::Game()
       m_gameDataLicensedState(0),
       m_FrameTimer(0), m_MenuReturnTimer(0), flag_0x1a8(0), m_bFrameDirty(0),
       window(nullptr), gl_context(nullptr),
-      inputManager(nullptr), actorManager(nullptr),
+      inputManager(nullptr), inputTranslator(nullptr), actorManager(nullptr),
       soundEnabled(true), musicEnabled(true),
       running(false)
 {
@@ -84,4 +84,6 @@ void Game::shutdown() {
     s_shutdownDone = true;
     GameDestroy();
     renderer.shutdown();
+    // inputTranslator is deleted in GameSDL.cpp via the dedicated SDL teardown
+    // path; we forward-declare InputTranslatorSDL here so we can't delete it.
 }
