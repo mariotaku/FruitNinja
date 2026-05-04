@@ -33,7 +33,7 @@ class FruitCamera;
 class FruitSaveData;
 class GameOverScreen;
 class TimeControl;
-namespace Mortar { class GameSound; }
+class GameSound;
 
 struct Game : public Mortar::MortarGame {
     // === Game-specific fields beyond MortarGame base (original +0xFC..+0x103) ===
@@ -104,7 +104,7 @@ struct Game : public Mortar::MortarGame {
     // GameSound instance, but the sound backend itself is no-op
     // (SoundManager is stubbed). Makes the SFXPlay call sites real
     // so they're easy to light up once audio is wired.
-    Mortar::GameSound* pGameSound;
+    GameSound* pGameSound;
     int m_gameDataLicensedState;   // +0x18C: game-level licensed state (separate from MortarGame)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
     float m_MenuReturnTimer;       // +0x1A0

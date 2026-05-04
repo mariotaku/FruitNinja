@@ -11,18 +11,16 @@
 #include <list>
 #include <cstdio>
 
-namespace Mortar {
-
 // Binary @ singleton pattern (Meyers via Singleton<> CRTP)
-class FileManager : public Singleton<FileManager> {
-    friend class Singleton<FileManager>;
+class FileManager : public Mortar::Singleton<FileManager> {
+    friend class Mortar::Singleton<FileManager>;
 
 public:
     // Binary @ 0x0019b170 — sets sys->m_systemId / m_priority then sorted insert (descending priority)
-    void AddSystem(IFileSystem* sys, unsigned int id, int priority);
+    void AddSystem(Mortar::IFileSystem* sys, unsigned int id, int priority);
 
     // Binary @ 0x0019afe4 — find by ptr; erase; calls sys->vtable[1] (D0 dtor) — owns systems
-    void RemoveSystem(IFileSystem* sys);
+    void RemoveSystem(Mortar::IFileSystem* sys);
 
     // Binary @ 0x0019b02c — find by id; erase; calls D0 dtor
     void RemoveSystem(unsigned int id);
@@ -31,10 +29,10 @@ public:
     void ClearSystems();
 
     // Binary @ 0x0019afa8 — linear search by id
-    IFileSystem* FindSystem(unsigned int id);
+    Mortar::IFileSystem* FindSystem(unsigned int id);
 
     // Binary @ 0x0019ae68 — id-filtered walk; first non-null sys->OpenFile wins
-    IFile* OpenFile(const char* name, unsigned int idFilter, unsigned long flags);
+    Mortar::IFile* OpenFile(const char* name, unsigned int idFilter, unsigned long flags);
 
     // Binary @ 0x0019af60
     bool FileExists(const char* name, unsigned int idFilter);
@@ -59,12 +57,10 @@ private:
 
     // Binary @ Mortar::FileManager::m_FileSystems — descending priority order on insert
     // std::list<IFileSystem*> in binary (12-byte list on Bada; see binary-build-evidence.md)
-    std::list<IFileSystem*> m_FileSystems;
+    std::list<Mortar::IFileSystem*> m_FileSystems;
 
     // mode string -> flags conversion for the OpenCI compat shim
     static unsigned long ModeToFlags(const char* mode);
 };
-
-} // namespace Mortar
 
 #endif // FN_ENGINE_ASSET_FILEMANAGER_H
