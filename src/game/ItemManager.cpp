@@ -1,7 +1,7 @@
 // Analysed: 2026-04-25T10:30
 //
 // ItemManager — binary-faithful implementation.
-// Binary: ctor 0x001121d0, LoadItemData 0x00113200, GetInstance 0x00112c34,
+// Binary: ctor 0x001121d0, LoadItemData 0x001131f4, GetInstance 0x00112c34,
 //         IsEquipped 0x0015fa6c, SetEquippedItem 0x0011307c,
 //         BuyItem 0x00112498, GetNumNewItems 0x00112048,
 //         AreNewItems 0x0011200c, SaveItemInfo 0x00112210.
@@ -49,13 +49,10 @@ ItemManager::ItemManager() {
     m_DefaultItems[3] = nullptr;
 }
 
+// DIFFERS: original = no dtor (binary frees items via UnLoadItemData @ 0x001124fc).
+//          Port keeps the dtor as a defensive no-op so static-destructor order
+//          can't double-free.
 ItemManager::~ItemManager() {
-    for (std::vector<ItemInfo*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
-        delete *it;
-    }
-    m_Items.clear();
-    m_ByHash.clear();
-    for (int i = 0; i < 4; i++) m_ByHashType[i].clear();
 }
 
 // -----------------------------------------------------------------------
@@ -75,7 +72,7 @@ const char* ItemManager::GetItemSavePath() const {
 }
 
 // -----------------------------------------------------------------------
-// LoadItemData @ 0x00113200
+// LoadItemData @ 0x001131f4
 // Parse itemlist.xml, then load ItemSave.xml for persistence.
 // -----------------------------------------------------------------------
 void ItemManager::LoadItemData() {
@@ -179,7 +176,7 @@ void ItemManager::LoadItemData() {
                     const char* nameVal = e->Attribute("name");  // 0x1c3173
                     if (nameVal && *nameVal) {
                         uint32_t hash = StringHash(nameVal);
-                        auto it = m_ByHash.find(hash);
+                        std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find(hash);
                         if (it != m_ByHash.end()) {
                             ItemInfo* itm = it->second;
                             itm->m_Cost = -1;  // mark purchased
@@ -283,7 +280,7 @@ void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
 // Returns 1 on success, 0 if not found or insufficient coins.
 // -----------------------------------------------------------------------
 int ItemManager::BuyItem(uint32_t hash) {
-    auto it = m_ByHash.find(hash);
+    std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find(hash);
     if (it == m_ByHash.end()) return 0;
 
     ItemInfo* item = it->second;
@@ -326,7 +323,7 @@ bool ItemManager::AreNewItems() const {
 // GetItem @ 0x00112084 — lookup by hash in m_ByHash
 // -----------------------------------------------------------------------
 ItemInfo* ItemManager::GetItem(uint32_t hash) const {
-    auto it = m_ByHash.find(hash);
+    std::map<uint32_t, ItemInfo*>::const_iterator it = m_ByHash.find(hash);
     if (it == m_ByHash.end()) return nullptr;
     return it->second;
 }
@@ -391,9 +388,44 @@ void ItemManager::SaveItemInfo() {
 }
 
 // -----------------------------------------------------------------------
+// UnLoadItemData @ 0x001124fc — frees ItemInfo objects via virtual deleting dtor.
+// Maps are NOT cleared; LoadItemData re-clears on next load. Caller:
+// GameDestroy @ 0x0010b7ec, between AchievementManager::UnLoadAchievementInfo
+// and HUD teardown.
+// -----------------------------------------------------------------------
+// Binary @ 0x001124fc
+void ItemManager::UnLoadItemData() {
+    std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.begin();
+    for (; it != m_ByHash.end(); ++it) {
+        ItemInfo* item = it->second;
+        if (item != NULL) {
+            delete item;        // virtual dtor: ItemInfo's vtable[1] is the deleting dtor in binary
+            it->second = NULL;
+        }
+    }
+}
+
+// -----------------------------------------------------------------------
+// UnlockItem @ 0x001120b4 — achievement-driven unlock for items keyed by hash.
+// Caller: FruitSaveData::Update @ 0x0012b3dc when a non-numeric achievement
+// key fires.
+// -----------------------------------------------------------------------
+// Binary @ 0x001120b4
+bool ItemManager::UnlockItem(uint32_t hash) {
+    std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find(hash);
+    if (it == m_ByHash.end()) return false;
+    ItemInfo* item = it->second;
+    item->m_bSeen = false;     // +0x3c — flag NEW for badge
+    item->m_Cost  = -1;        // +0x0c — purchased/unlocked
+    return true;
+}
+
+// -----------------------------------------------------------------------
 // GetFirst @ 0x0015fbc8 — begin iteration over m_Items
 // it = 0 on entry; returns item at m_Items[0] or nullptr
 // -----------------------------------------------------------------------
+// DIFFERS: original = vector::iterator& (4 bytes); port uses int& index (4 bytes,
+//          functionally equivalent — both are 4-byte references walked over m_Items).
 ItemInfo* ItemManager::GetFirst(int& it) const {
     it = 0;
     if (m_Items.empty()) return nullptr;
@@ -403,6 +435,8 @@ ItemInfo* ItemManager::GetFirst(int& it) const {
 // -----------------------------------------------------------------------
 // GetNext @ 0x0015fbf4 — advance + return next item
 // -----------------------------------------------------------------------
+// DIFFERS: original = vector::iterator& (4 bytes); port uses int& index (4 bytes,
+//          functionally equivalent — both are 4-byte references walked over m_Items).
 ItemInfo* ItemManager::GetNext(int& it) const {
     it++;
     if (it < 0 || (size_t)it >= m_Items.size()) return nullptr;

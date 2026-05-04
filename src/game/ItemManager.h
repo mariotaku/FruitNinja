@@ -4,7 +4,7 @@
 // Analysed: 2026-04-25T10:30
 //
 // ItemManager — singleton that owns all shop items.
-// Binary: ctor 0x001121d0; GetInstance 0x00112c34; LoadItemData 0x00113200.
+// Binary: ctor 0x001121d0; GetInstance 0x00112c34; LoadItemData 0x001131f4.
 //
 // Struct layout (0x94 bytes) per docs/structs/items.md:
 //   +0x00..+0x0f  ItemInfo*               m_DefaultItems[4]   equipped per type
@@ -34,8 +34,14 @@ public:
     // hits 0 the default blade is restored via SetEquippedItem(0, default).
     static int EquippedSlashModCount;
 
-    // LoadItemData @ 0x00113200 — parse itemlist.xml, load ItemSave.xml
+    // LoadItemData @ 0x001131f4 — parse itemlist.xml, load ItemSave.xml
     void LoadItemData();
+
+    // UnLoadItemData @ 0x001124fc — frees all ItemInfo objects; called from GameDestroy
+    void UnLoadItemData();
+
+    // UnlockItem @ 0x001120b4 — achievement-driven unlock by hash
+    bool UnlockItem(uint32_t hash);
 
     // IsEquipped @ 0x0015fa6c — returns 1 if item == m_DefaultItems[item->m_Type]
     int IsEquipped(ItemInfo* item) const;

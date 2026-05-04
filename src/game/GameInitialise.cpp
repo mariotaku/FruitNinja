@@ -360,9 +360,9 @@ void GameDestroy() {
     PowerUpShop::UnLoadContent();
     LeaderboardScreen::UnLoadContent();
 
-    // --- 3. Data managers (not ported) ---
+    // --- 3. Data managers ---
     // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
-    // TODO: ItemManager::UnLoadItemData -- blocked on ItemManager UnLoadItemData RE.
+    ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0010b7ec — after UnLoadAchievementInfo
 
     // --- 4. HUD ---
     if (game->hud) {
