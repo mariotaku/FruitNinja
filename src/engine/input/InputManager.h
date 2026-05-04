@@ -99,6 +99,12 @@ public:
     std::list<InputDevice*> m_inputDevices;  // +0x08 (12B Bada list)
 };
 
+// TODO: 0x00196980 — port InputManager lacks the binary's vptr at +0x00 (no
+// virtual methods). Cross-build measures sizeof=16 vs binary's 20; m_inputDevices
+// at +0x04 vs binary's +0x08. Adding a static_assert here today would fire.
+// Convert to a polymorphic pseudo-vtable (Mortar fn-table at +0x00) per the
+// binary's InputManagerFns layout to enable the assert.
+
 } // namespace Mortar
 
 #endif // FN_ENGINE_INPUT_INPUTMANAGER_H

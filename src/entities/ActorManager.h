@@ -273,4 +273,18 @@ public:
     void ClearAllListeners();
 };
 
+// Confirmed-correct offsets (toolchain patch makes these assertable):
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+static_assert(offsetof(ActorManager, m_FreePool)  == 0x008, "m_FreePool offset");
+static_assert(offsetof(ActorManager, m_FreeCount) == 0x808, "m_FreeCount offset");
+static_assert(offsetof(ActorManager, m_PendingDeact) == 0x80C, "m_PendingDeact offset");
+#endif
+
+// TODO: 0x00170500 -- ActorManager m_PendingDeact array size mismatch: port has
+// Entity*[256] (1024B) but binary's m_PendingDeactCount lives at +0x100C, which
+// implies Entity*[512] (2048B). Cross-build measures m_PendingDeactCount at
+// +0xC0C, m_pTypeLists at +0xC10, m_Listeners at +0xC14, m_NumTypes at +0xC20,
+// sizeof = 0xC30. Widening the array to [512] makes all later offsets match
+// binary. Re-validate via asm-inspector before flipping.
+
 #endif  // FN_ACTOR_MANAGER_H
