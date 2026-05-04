@@ -5,6 +5,7 @@
 
 #include "HUDControl3d.h"
 #include "Game.h"
+#include "asset/Texture.h"
 #include "render/MatrixManager.h"
 #include "math/MathUtil.h"
 #include <cmath>
@@ -26,9 +27,13 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Step 2: Texture::Set
+    // Step 2: Texture::Set (m_Texture is a raw GLuint from MenuButton-loaded
+    // assets, not a Mortar::Texture* -- bypasses Texture::Set so we have to
+    // update the bound-texture tracker manually for Renderer::DrawQuad's guard.)
     glActiveTexture(GL_TEXTURE0);
+    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_Texture);
+    Mortar::Texture::s_LastBoundTexId = m_Texture;
 
     // Step 3: MatrixStack::Reset (world stack)
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
@@ -69,4 +74,5 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
 
     // Step 12: UnSet
     glBindTexture(GL_TEXTURE_2D, 0);
+    Mortar::Texture::s_LastBoundTexId = 0;
 }
