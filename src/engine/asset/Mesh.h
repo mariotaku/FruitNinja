@@ -112,6 +112,9 @@ public:
     // Stores skeleton ptr; resolves m_SkeletonIndex per BoneBinding via FindIndex.
     void BindSkeleton(Skeleton* skeleton) override;
 
+    // Binary @ 0x001b0778 — symmetric to GetBoneVertTransform; reads Skeleton::GetLocal(idx).
+    Matrix44 GetBoneLocalTransform(unsigned int idx) const;
+
     // Matches Mesh::GetBoneVertTransform (0x001b0688)
     // Returns pointer to vert matrix for binding[index], or nullptr if no skeleton bound.
     const Matrix44* GetBoneVertTransform(int index) const;
@@ -127,6 +130,9 @@ public:
     // vtable[3]: Matches Mesh::GetName (0x001b15e0)
     const std::string& GetName() const override { return m_Name; }
 
+    // DIFFERS: binary GetGeometry @ 0x001b225c returns SmartPtr<Geometry>;
+    // port returns const GeometryEntry* because GeometryEntry has trivial value
+    // semantics (no Geometry refcounted object).
     // Port specific: access GeometryEntry by index (replaces vtable[10] GetGeometry).
     const GeometryEntry* GetGeometryEntry(int idx) const {
         if (idx >= 0 && idx < (int)m_Geometries.size()) return &m_Geometries[idx];
@@ -139,6 +145,20 @@ public:
 
     // Port helper: true if any material has a valid texture.
     bool HasDiffuseTexture() const;
+
+    // Defunct: SharedEffectProperties machinery -- port stores parsed values
+    // directly in MeshMaterial (no per-property name lookup needed); binary @:
+    //   0x001b0988 -- GetPropertiesGroup(name) const
+    //   0x001b1430 -- GetPropertiesGroup(name, defs_begin, defs_end)
+    //   0x001aab94 -- GetPropertiesGroup<9>(name, defs[9])
+    //   0x001b1394 -- SharedPropsInfo::AddTextureMap(name, propName)
+    //   0x001b0d0c -- AddGeometry(SmartPtr<Geometry>&)  (port appends in LoadMesh directly)
+    //   0x001b15e4 -- GenerateBindings(name, slot, vector<Bone::Binding>&) [empty BX LR]
+
+    // TODO: 0x001b0d18 -- Mesh::GenerateBindings(Vector). Iterates
+    // m_PropertiesGroups.m_TextureMaps, emits AnimBindings::Vector::Binding for
+    // each "UVWOffset" channel match. Port has no animated UV system yet;
+    // no-op until UV-scroll animation is wired.
 };
 
 // Matches original Model (0x58 bytes) with vector<SmartPtr<Mesh>>
