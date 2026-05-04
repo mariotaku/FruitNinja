@@ -5,6 +5,9 @@ add_library(mortar_engine STATIC
     core/SystemManager.cpp
     core/MortarGame.cpp
     math/Random.cpp
+    math/MathUtil.cpp
+    math/Math.cpp
+    compression/LZ8.cpp
     util/StringHash.cpp
     util/Localisation.cpp
     # Phase 2 — Core Singletons
@@ -24,6 +27,8 @@ add_library(mortar_engine STATIC
     asset/MeshManager.cpp
     # Phase 5 — Input
     input/Touch.cpp
+    input/InputManager.cpp
+    input/InputDeviceBada.cpp
     # Phase 6 — Audio
     audio/MortarSound.cpp
     audio/SoundManager.cpp
