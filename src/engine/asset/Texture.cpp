@@ -8,6 +8,8 @@
 
 namespace Mortar {
 
+GLuint Texture::s_LastBoundTexId = 0;
+
 Texture::Texture()
     : m_TexId(0)
     , m_Width(0)
@@ -37,12 +39,14 @@ void Texture::Set() {
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, m_TexId);
+    s_LastBoundTexId = m_TexId;
 }
 
 // Matches Bada::Texture2DFromFile_Bada::UnSet (0x00189790).
 void Texture::UnSet() {
     glDisable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
+    s_LastBoundTexId = 0;
 }
 
 void Texture::UploadRGBA(int width, int height, const void* pixels) {
