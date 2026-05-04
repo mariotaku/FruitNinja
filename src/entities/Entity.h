@@ -16,6 +16,17 @@ struct Renderer;
 // same way the binary does (test `(flags & 0x11) == 0`).
 //
 // Analysed: 2026-04-29T00:00
+//
+// TODO: Entity RE deviations deferred (cascade across all subclasses):
+//  - Update / Draw / PostUpdate should be pure-virtual (=0). Currently empty
+//    bodies. Binary uses __cxa_pure_virtual @ 0x002773d0 in slots 4/5/6.
+//  - Init signature: binary is (void*, long, const Vec3*); port has (int, int, int).
+//    Affects Bomb::Init / Fruit::Init / SplatEntity::Init signatures.
+//  - CollisionResponse signature: binary is (Entity* hitter, u32, u32, const Vec3*);
+//    port has (const Vec3&). Affects Bomb / Fruit / SlashEntity overrides.
+//  - ~Entity D1 does NOT call Release; verify each subclass D1 dtor calls Release
+//    explicitly before chaining (Bomb/Fruit/SlashEntity/Coin/SplatEntity).
+//  - Vec3 scale stays 0 from base ctor; subclasses that need 1.0 must set it.
 enum EntityFlagBits : uint8_t {
     ENT_INACTIVE      = 0x01,  // cleared by Entity::Activate on pool recycle
     ENT_UPDATING      = 0x04,  // set while ActorManager::Update calls vtable
@@ -62,8 +73,12 @@ public:
     // BombBlast leaves this null (no collision).
     Mortar::ColSphere* m_Col;
 
-    Entity() : flags(0), m_RecycleFlag(0), entityType(0), m_Col(nullptr) {}
-    virtual ~Entity() {}
+    // Binary @ 0x0019d88c — base ctor
+    Entity();
+
+    // Binary @ 0x0019d5cc — D1: restores vptr only, does NOT call Release
+    // Binary @ 0x0019d794 — D0: deleting variant
+    virtual ~Entity();
 
     // Binary: Mortar::Entity::HeapCreate(size_t) @ 0x0019d708 (40 bytes).
     // Called from GameInit step 15 with 0x20000 (128 KB) to allocate the
@@ -73,16 +88,16 @@ public:
     static void HeapCreate(unsigned int bytes);
 
     // Counterpart to HeapCreate; called from GameExit.
-    // Binary: Mortar::Entity::HeapDestroy @ GameExit region.
+    // Binary: Mortar::Entity::HeapDestroy @ 0x0019d6d0.
     // TODO: implement -- see docs/systems/gameinit-todos.md step 15.
     static void HeapDestroy();
 
-    // Vtable slot 2 (+0x08): Init
-    virtual void Init(int, int, int) {}
+    // Vtable slot 2 (+0x08): Init — Binary @ 0x0019d5fc (base no-op)
+    virtual void Init(int, int, int);
 
-    // Vtable slot 3 (+0x0C): Release — per-class cleanup called by dtor.
-    // Base no-op; subclasses override to release resources.
-    virtual void Release() {}
+    // Vtable slot 3 (+0x0C): Release — Binary @ 0x0019d5e8
+    // Base: frees m_Col then nulls it. Subclasses override to release resources.
+    virtual void Release();
 
     // Vtable slot 4 (+0x10): Update
     virtual void Update(float) {}
@@ -96,19 +111,29 @@ public:
     // position with the rotation that Update just advanced.
     virtual void PostUpdate(float) {}
 
-    // Vtable slot 7 (+0x1C): PostLoad — no-op base (Entity @ 0x19d600).
-    virtual void PostLoad() {}
+    // Vtable slot 7 (+0x1C): PostLoad — Binary @ 0x0019d600 (base no-op)
+    virtual void PostLoad();
 
-    // Vtable slot 8 (+0x20): InRect — col-sphere update + dispatch
-    // (Entity @ 0x19d800). Base no-op; subclasses update m_Col->center
-    // from pos and dispatch collision.
-    virtual void InRect(float, float, float, float) {}
+    // Vtable slot 8 (+0x20): InRect — Binary @ 0x0019d800 (sphere-broadcast helper)
+    // Base no-op; subclasses update m_Col->center from pos and dispatch collision.
+    virtual void InRect(float, float, float, float);
 
-    // Vtable slot 9 (+0x24): CollisionResponse — called when the blade
-    // collision sphere hits this entity. Binary names: Bomb::CollisionResponse
-    // @ 0x17280c, Fruit::CollisionResponse @ 0x1780b0. Default: no-op.
+    // Vtable slot 9 (+0x24): CollisionResponse — Binary @ 0x0019d604 (base returns 0)
+    // Called when the blade collision sphere hits this entity.
     // Port previously named this OnSliced; renamed to match binary symbol.
-    virtual void CollisionResponse(const Vec3&) {}
+    virtual void CollisionResponse(const Vec3&);
+
+    // Vtable slot 10 (+0x28): Collide — Binary @ 0x0019d608
+    // If m_Col, dispatch m_Col->vtable[3] with (col, hitPos, outFlags)
+    virtual void Collide(Entity* other, void* col, unsigned long* outFlags, Vec3* hitPos);
+
+    // Vtable slot 11 (+0x2C): ReceiveMessage — Binary @ 0x0019d61c
+    // msg.type 0 -> clear INACTIVE; type 1 -> set INACTIVE
+    virtual void ReceiveMessage(Entity* sender, void* msg);
+
+    // Vtable slot 12 (+0x30): ListenerCallback — Binary @ 0x00172f4c
+    // No-op: returns first argument (identity-return).
+    virtual Entity* ListenerCallback(Entity* a, Entity* b, void* msg);
 
     // Binary test: `(flags & 0x11) == 0`. Inactive / killed entities fail.
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }
