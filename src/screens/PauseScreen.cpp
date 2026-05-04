@@ -299,13 +299,14 @@ void PauseScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
 // vtable[11]: SetToMultiplayerState -- Tier-2 stub
 // Binary: 0x00154060
 // -------------------------------------------------------------------------
-void PauseScreen::SetToMultiplayerState() {
+bool PauseScreen::SetToMultiplayerState() {
     // Tier-2 deferred (binary @ 0x00154060): vtable[11], called from PauseScreen::Reset on MP entry.
     // Body (3 stores):
     //   1. m_RetryButton->m_SecondaryTex = SmartPtr::Null;     // retry+0x74
     //   2. m_RetryButton->m_bHighlighted = 0;                  // retry+0x131 -- disable interactability
     //   3. m_ResumeButton->m_SecondaryTex = m_RetryButtonTex;  // resume+0x74 -- show retry icon on resume btn
     // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
+    return HUDControl::SetToMultiplayerState();
 }
 
 // -------------------------------------------------------------------------
