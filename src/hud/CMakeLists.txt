@@ -1,4 +1,5 @@
 target_sources(fruit-ninja-game PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/HUD.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/HUDControl3d.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/MenuButton.cpp

@@ -113,9 +113,10 @@ void TimeControl::AddTime(float delta) {
     m_TimeRemaining += delta;
 }
 
-void TimeControl::SetToMultiplayerState() {
+bool TimeControl::SetToMultiplayerState() {
     // vtable[11]: calls Reset
     Reset();
+    return HUDControl::SetToMultiplayerState();
 }
 
 void TimeControl::Update(float dt) {

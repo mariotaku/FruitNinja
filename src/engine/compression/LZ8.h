@@ -1,7 +1,7 @@
 #ifndef FN_ENGINE_COMPRESSION_LZ8_H
 #define FN_ENGINE_COMPRESSION_LZ8_H
 
-namespace Mortar { namespace Math {
+namespace Math {
 
 // Binary @ 0x00195154 — returns 24-bit LE decompressed size from bytes [1..3] of header
 unsigned int GetUncompressedSizeLZ8(const void* src);
@@ -15,6 +15,6 @@ void UncompressLZ8(const void* src, void* dst);
 // Binary @ 0x0019500c — LZSS compressor; not needed at runtime
 unsigned int CompressLZ(const unsigned char* src, unsigned long size, unsigned char* dst);
 
-}} // namespace Mortar::Math
+} // namespace Math
 
 #endif

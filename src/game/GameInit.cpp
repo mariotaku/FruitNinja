@@ -353,7 +353,7 @@ void GameDraw(float dt, bool active) {
     GameTaskState* ts = GetTaskState();
     // 1. Camera projection
     if (game->pCamera)
-        game->pCamera->SetupPerspective(0, false);
+        game->pCamera->SetupPerspective(PT_STANDARD, false);
 
     Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
 
@@ -510,7 +510,7 @@ void GameExit_Handler() {
         delete g_pSlashEntity;
         g_pSlashEntity = nullptr;
     }
-    if (InputManager* im = InputManager::GetInstance()) {
+    if (Mortar::InputManager* im = Mortar::InputManager::GetInstance()) {
         // Binary: InputManager::Destroy (0x001968a0) clears all device callbacks.
         im->Destroy();
         im->Init(0);

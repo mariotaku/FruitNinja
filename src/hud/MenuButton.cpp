@@ -363,7 +363,7 @@ void MenuButton::BeginDraw(float dt) {
 void MenuButton::PreDraw(const Vec3& hudScale) { (void)hudScale; }
 
 // Binary @ 0x0014e590 — kills owned fruit/bomb then defers to base SetToMultiplayerState
-void MenuButton::SetToMultiplayerState() {
+bool MenuButton::SetToMultiplayerState() {
     Entity* e = m_pFruitPiece ? static_cast<Entity*>(m_pFruitPiece) : m_pEntity;
     if (e) {
         if (e->entityType == 0) {
@@ -374,7 +374,7 @@ void MenuButton::SetToMultiplayerState() {
     }
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
-    HUDControl::SetToMultiplayerState();
+    return HUDControl::SetToMultiplayerState();
 }
 
 // Matches MenuButton::SetNewSymbol (0x0014e404)

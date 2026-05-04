@@ -172,7 +172,7 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override;
     void Release() override;
     void Skip() override;
-    void SetToMultiplayerState() override;
+    bool SetToMultiplayerState() override;
 
     // Matches MenuButton::Init (0x0014ee40, 222 lines)
     // Creates entity, sets callbacks, random rotation

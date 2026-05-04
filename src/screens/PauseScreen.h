@@ -117,7 +117,7 @@ public:
     void Update(float dt) override;
 
     // vtable[11]: SetToMultiplayerState -- Tier-2; stub
-    void SetToMultiplayerState() override;
+    bool SetToMultiplayerState() override;
 
     // Button delegate callbacks (press-action targets)
     void PauseGameCallback();

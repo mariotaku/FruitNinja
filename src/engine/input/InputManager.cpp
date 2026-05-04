@@ -4,6 +4,8 @@
 #include "input/InputDeviceBada.h"
 #include <cstddef>
 
+namespace Mortar {
+
 InputManager* InputManager::s_instance = nullptr;
 
 // Binary @ 0x00196980 — ctor: both flags = 0, list default-inits.
@@ -182,3 +184,5 @@ void InputManager::DispatchGlobal(InputEvent* event) {
     // TODO: refine global dispatch semantics when full binary dispatch path is ported.
     DispatchEvent(event);
 }
+
+} // namespace Mortar

@@ -2,7 +2,7 @@
 #include "Math.h"
 #include <cmath>
 
-namespace Mortar { namespace Math {
+namespace Math {
 
 // Binary @ 0x001b3248 — 2D foot-of-perpendicular in XY (Z=0)
 // Horizontal (A.y == B.y) and vertical (A.x == B.x) segments are special-cased.
@@ -71,4 +71,4 @@ Vec3 CatmullRom(const Vec3& p0, const Vec3& p1, const Vec3& p2, const Vec3& p3, 
         + (p0 * (-1.0f) + p1 * 3.0f - p2 * 3.0f + p3) * t3) * 0.5f;
 }
 
-}} // namespace Mortar::Math
+} // namespace Math

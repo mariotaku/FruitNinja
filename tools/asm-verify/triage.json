@@ -1090,5 +1090,26 @@
     "score": 15470,
     "max_score": 1700,
     "decided_at": "2026-05-03T12:00Z"
+  },
+  "_ZN6Mortar4Mesh4DrawERK10_Matrix44IfE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Matrix44 is a typedef of _Matrix44<float>; mangling differs only in template elaboration. Port Mesh::Draw(Matrix44 const&) is semantically and structurally identical to binary Mesh::Draw(_Matrix44<float> const&). No code change required.",
+    "score": null,
+    "max_score": null,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZNK6Mortar4Mesh9GetBoundsER4Vec3S2_": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port uses out-ref idiom (void GetBounds(Vec3&, Vec3&) const) matching original signature; behavior ASM-verified at binary @ 0x001b07f0. No divergence in bone-transform or AABB reduction logic.",
+    "score": null,
+    "max_score": null,
+    "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN6Mortar4Mesh12BindSkeletonERKNS_8SkeletonE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port uses Skeleton* (pointer) for null-safety; binary uses Skeleton const& (reference). Port BindSkeleton(Skeleton*) at 0x001b0948 has identical body. The null-pointer guard is a port-side safety addition with no observable difference when called from UpdateBoneLinks.",
+    "score": null,
+    "max_score": null,
+    "decided_at": "2026-05-04T00:00Z"
   }
 }
