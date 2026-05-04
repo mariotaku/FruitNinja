@@ -143,7 +143,9 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             TLOG("  → game coords (%.1f, %.1f) — pressing slot 0\n", mouseX, mouseY);
 
             // Poll-based path: feed Mortar::Touch directly (slot 0 = mouse).
-            Mortar::Touch::GetInstance().OnPressed(0, mouseX, mouseY);
+            // extId is +1 so 0 stays reserved as Touch's "free slot" sentinel
+            // (binary @ 0x00195314 ___UpdateInternal). Mouse maps to extId 1.
+            Mortar::Touch::GetInstance().OnPressed(1, mouseX, mouseY);
 
             // Callback path (keyboard/gamepad style) — kept until step 7.
             ie.actionHash = hashTouchScreen;
@@ -175,7 +177,7 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             TLOG("  → game coords (%.1f, %.1f) Δ(%.1f, %.1f) — moving slot 0\n",
                  gx, gy, dx, dy);
 
-            Mortar::Touch::GetInstance().OnMoved(0, gx, gy);
+            Mortar::Touch::GetInstance().OnMoved(1, gx, gy);  // extId +1 (mouse=1)
 
             ie.actionHash = hashTouchMoveX[0];
             ie.actionFlags = INPUT_ACTION_MOVE;
@@ -198,7 +200,7 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             TransformTouch(window, ev.button.x, ev.button.y, mouseX, mouseY);
             TLOG("  → game coords (%.1f, %.1f) — releasing slot 0\n", mouseX, mouseY);
 
-            Mortar::Touch::GetInstance().OnReleased(0);
+            Mortar::Touch::GetInstance().OnReleased(1);  // extId +1 (mouse=1)
 
             ie.actionHash = hashTouchUp[0];
             ie.actionFlags = INPUT_ACTION_UP;
@@ -222,8 +224,10 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         TLOG("  → ch=%d game (%.1f, %.1f) — pressing slot\n", ch, gx, gy);
 
         // Poll-based path. Mortar::Touch has 8 slots; clamp or drop extras.
+        // extId is ch+1 so 0 stays reserved as Touch's "free slot" sentinel
+        // (binary @ 0x00195314 ___UpdateInternal).
         if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnPressed(ch, gx, gy);
+            Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
         }
 
         ie.actionHash = hashTouchScreen;
@@ -256,7 +260,7 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         fingerX[ch] = gx; fingerY[ch] = gy;
 
         if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnMoved(ch, gx, gy);
+            Mortar::Touch::GetInstance().OnMoved(ch + 1, gx, gy);  // extId +1
         }
 
         ie.actionHash = hashTouchMoveX[ch];
@@ -286,7 +290,7 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
 
         if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnReleased(ch);
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);  // extId +1
         }
 
         ie.actionHash = hashTouchUp[ch];
