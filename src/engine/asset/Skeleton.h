@@ -6,7 +6,6 @@
 #include "math/Matrix44.h"
 #include "util/AsciiString.h"
 #include <vector>
-#include <string>
 #include <cstdint>
 #include <cstring>
 
@@ -27,7 +26,7 @@ public:
     // Serialised by ReadType<Skeleton::Bone> (0x001a7600):
     //   ReadString → Read<long> → Read<float[16]> → Read<float[3]> → Read<float[4]> → Read<float[9]>
     struct Bone {
-        std::string m_Name;          // +0x00: bone name
+        Mortar::AsciiString m_Name;  // +0x00: bone name (40 bytes)
         int         m_ParentIndex;   // +0x28: parent index; -1 = root
         float       m_BindPoseMat[16]; // +0x2C: bind-pose Matrix44 (float[16])
         float       m_LocalTranslation[3]; // +0x6C
