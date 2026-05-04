@@ -3,7 +3,7 @@
 #include <cstring>
 #include <cstdio>
 
-namespace Mortar {
+using namespace Mortar;
 
 GameSound::GameSound()
     : m_MasterVolume(1.0f)
@@ -172,5 +172,3 @@ void GameSound::Update(float /*dt*/) {
 void GameSound::DestroySoundInternals(MortarSound* sound) {
     sound->Destroy();
 }
-
-} // namespace Mortar

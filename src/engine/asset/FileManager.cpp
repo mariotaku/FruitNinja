@@ -21,8 +21,6 @@
   #define FN_STRCASECMP strcmp
 #endif
 
-namespace Mortar {
-
 namespace {
 
 struct SplitPath {
@@ -136,9 +134,11 @@ std::string ResolveCI(const char* path) {
 
 } // namespace
 
+using namespace Mortar;
+
 // ---- FileManager registry methods ----
 
-// Binary @ 0x0019b170 — sets sys->m_systemId / m_priority then sorted insert (descending priority)
+// Binary @ 0x0019b170 -- sets sys->m_systemId / m_priority then sorted insert (descending priority)
 void FileManager::AddSystem(IFileSystem* sys, unsigned int id, int priority) {
     if (!sys) return;
     sys->m_systemId  = id;
@@ -274,5 +274,3 @@ FILE* FileManager::OpenCI(const char* path, const char* mode) {
     if (real.empty()) return nullptr;
     return fopen(real.c_str(), mode);
 }
-
-} // namespace Mortar

@@ -7,8 +7,6 @@
 #include "util/StringHash.h"
 #include <cstdint>
 
-namespace Mortar {
-
 // Matches original GameSound (0x708 = 1800 bytes)
 // Pool-based sound manager with 32 slots
 class GameSound {
@@ -17,7 +15,7 @@ public:
 
     // SoundSlot (0x38 = 56 bytes) -- revised layout per docs/engine/sound.md
     struct SoundSlot {
-        MortarSound* pSound;   // +0x00
+        Mortar::MortarSound* pSound;   // +0x00
         uint32_t nameHash;     // +0x04
         uint8_t  pad08[8];     // +0x08: padding (2 unknown fields)
         uint8_t  isFree;       // +0x10: 1=free, 0=in use
@@ -43,17 +41,17 @@ public:
     int FindFree();
 
     // Matches SFXPlay (0x00129270)
-    MortarSound* SFXPlay(const char* name, float vol = 1.0f, float pitch = 1.0f);
+    Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float pitch = 1.0f);
 
     // Matches IsPlaying (0x00129100)
     bool IsPlaying(uint32_t hash);
     bool IsPlaying(const char* name);
 
     // Matches IsValid (0x00129138)
-    bool IsValid(MortarSound* sound, const char* name);
+    bool IsValid(Mortar::MortarSound* sound, const char* name);
 
     // Matches Release (0x0012917c)
-    void Release(MortarSound* sound, const char* name);
+    void Release(Mortar::MortarSound* sound, const char* name);
 
     // Matches KillAll (0x001291e0)
     void KillAll();
@@ -68,9 +66,7 @@ public:
     void Update(float dt);
 
     // Matches DestroySoundInternals (0x00129170) -- static
-    static void DestroySoundInternals(MortarSound* sound);
+    static void DestroySoundInternals(Mortar::MortarSound* sound);
 };
-
-} // namespace Mortar
 
 #endif
