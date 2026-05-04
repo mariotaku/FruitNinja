@@ -105,9 +105,7 @@ public:
     virtual void PreDrawOrder(const Vec3& hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
     virtual void DrawOrder(const Vec3& hudScale, int layerMask) { Draw(hudScale, layerMask); }
     virtual void Update(float dt) { (void)dt; }
-    // Binary @ 0x00143fac — returns true if control should be removed from HUD.
     // Binary @ 0x00143fac — returns true if this control should be removed (m_bPreserveOnMP == 0).
-    // DIFFERS: binary returns bool via r0; original port used void. Now returns bool to match RE.
     virtual bool SetToMultiplayerState() {
         if (m_bPreserveOnMP == 0) {
             m_bNoDestructor = 0;

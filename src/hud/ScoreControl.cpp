@@ -441,7 +441,6 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                         label, Vec3(drawX, drawY, 0.0f), tint, Mortar::FONT_ALIGN_CENTER);
 
                     // binary @ 0x001591b4: cursorX += MeasureString(label) * scale + 5.0
-                    // DIFFERS: was missing the * scale factor -> digits overlapped.
                     cursorX += game->pFontNumbers->MeasureWidth(scale, label) * scale + 5.0f;
                 }
             }

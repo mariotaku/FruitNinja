@@ -19,7 +19,6 @@
 static constexpr int MISS_POOL_SIZE = 12;
 
 // Round-robin cursor. Binary: leaves cursor at the FOUND slot index.
-// DIFFERS: was advancing past found slot (+1). binary @ 0x00150da4
 static int s_NextSlot = 0;
 
 static MissControl* s_Pool[MISS_POOL_SIZE] = { nullptr };
@@ -31,7 +30,6 @@ static SmartPtr<Mortar::Texture> s_TexCross;
 static bool s_TexturesLoaded = false;
 
 // MakeCritical / MakeRare fade init. DAT_001518b8 = 1.81f.
-// DIFFERS: was 0.808f (port comment incorrectly cited 0.808).
 // binary @ 0x00151764 (MakeCritical), 0x001518d8 (MakeRare)
 static constexpr float MISS_FADE_INIT = 1.81f;
 
@@ -83,7 +81,6 @@ MissControl::MissControl()
     m_bActive       = 1;
     m_bNoDestructor = 1;
     // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
-    // DIFFERS: was m_LayerFlags = 0x200. binary @ 0x001511a0 / 0x00150fa4
     m_LayerFlags    = 1;
 }
 
@@ -214,7 +211,6 @@ void MissControl::CleanPool() {
 // --- GetFree ---------------------------------------------------------------
 
 // binary @ 0x00150da4: cursor left at FOUND slot index, not idx+1.
-// DIFFERS: was s_NextSlot = (idx+1) % MISS_POOL_SIZE (skipped one per call).
 MissControl* MissControl::GetFree() {
     if (!s_PoolAllocated) return nullptr;
     int idx = s_NextSlot;
@@ -232,7 +228,7 @@ MissControl* MissControl::GetFree() {
 static void PopulateOverlay(MissControl* mc, const Vec3& pos,
                             const SmartPtr<Mortar::Texture>& tex,
                             float alphaScale) {
-    // m_FadeAlpha init = 1.81 (DAT_001518b8). DIFFERS: was 0.808.
+    // m_FadeAlpha init = 1.81 (DAT_001518b8).
     mc->m_FadeAlpha  = MISS_FADE_INIT;
     mc->m_AnimState  = 3;
     mc->m_AlphaScale = alphaScale;
@@ -247,7 +243,6 @@ static void PopulateOverlay(MissControl* mc, const Vec3& pos,
         mc->m_Texture = tex->m_TexId;
         // binary MakeCritical: size = (w+1, h+1, 0) then halved, then doubled.
         // Net result: size = (w+1, h+1, 0) (the halve+double cancel).
-        // DIFFERS: was keeping half-extents -> quad was half-size.
         // binary @ 0x00151764 (MakeCritical size formula)
         const float w = (float)(tex->m_Width  + 1);
         const float h = (float)(tex->m_Height + 1);

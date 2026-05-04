@@ -599,9 +599,8 @@ void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
     // Binary: SaveCurrentData @ 0x0016cd08/0x0016cd34.
     snapshot.SnapshotComboState();
 
-    // DIFFERS: port previously mutated snapshot.m_highscore from currentScore here.
     // Binary does NOT update +0x40 in SaveCurrentData; it is rebuilt as the
-    // CLASSIC-mode alias by ParseSaveFile on next load. Deviation removed.
+    // CLASSIC-mode alias by ParseSaveFile on next load.
 
     // Bomb-hit timer: binary saves only when timer is meaningfully
     // active (zen-mode special case). Port saves unconditionally for
