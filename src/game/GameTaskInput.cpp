@@ -72,17 +72,10 @@ void GameTaskInitInput() {
         snprintf(nameUp,   sizeof(nameUp),   "TouchReleased_%d", i);
 
         // Binary @ 0x00169670: TouchDown_<i> registered TWICE -- preserve verbatim.
-        // Port specific: binary RegisterInputCallback(hash, fnPtr) takes 2 args;
-        // port wraps with actionFlags = INPUT_ACTION_DOWN | INPUT_ACTION_MOVE | INPUT_ACTION_UP.
-        im->RegisterInputCallback(StringHash(nameDown),
-                                  INPUT_ACTION_DOWN | INPUT_ACTION_MOVE | INPUT_ACTION_UP,
-                                  PointerMoveCallback);
-        im->RegisterInputCallback(StringHash(nameDown),
-                                  INPUT_ACTION_DOWN | INPUT_ACTION_MOVE | INPUT_ACTION_UP,
-                                  PointerMoveCallback);
-        im->RegisterInputCallback(StringHash(nameUp),
-                                  INPUT_ACTION_DOWN | INPUT_ACTION_MOVE | INPUT_ACTION_UP,
-                                  TouchDownCallback);
+        // Binary RegisterInputCallback(hash, fnPtr) is 2-arg (no actionFlags).
+        im->RegisterInputCallback(StringHash(nameDown), PointerMoveCallback);
+        im->RegisterInputCallback(StringHash(nameDown), PointerMoveCallback);
+        im->RegisterInputCallback(StringHash(nameUp),   TouchDownCallback);
 
         // nameMove hash is computed but never registered in binary -- snprintf
         // called to match binary stack layout; hash deliberately not registered.
@@ -90,35 +83,14 @@ void GameTaskInitInput() {
     }
 
     // --- Section C: 7 global named callbacks @ 0x169a32 ---
-    // Port specific: binary RegisterInputCallback(hash, fnPtr) is 2-arg;
-    // port uses 3-arg (hash, flags, callback).
-    im->RegisterInputCallback(StringHash("PointerMove"),
-                              INPUT_ACTION_MOVE,
-                              PointerMoveCallback);       // binary @ 0x0016a4b4
-
-    im->RegisterInputCallback(StringHash("PointerPressed"),
-                              INPUT_ACTION_DOWN,
-                              PointerDownCallback);       // binary @ 0x00168e24
-
-    im->RegisterInputCallback(StringHash("PointerReleased"),
-                              INPUT_ACTION_UP,
-                              PointerUpCallback);         // binary @ 0x00168e48
-
-    im->RegisterInputCallback(StringHash("PointerPressedX"),
-                              INPUT_ACTION_DOWN,
-                              PointerDownXboxCallback);   // binary @ 0x0016a41c
-
-    im->RegisterInputCallback(StringHash("PauseGame"),
-                              INPUT_ACTION_DOWN | INPUT_ACTION_UP,
-                              PauseGameCallback);         // binary @ 0x00168fd8
-
-    im->RegisterInputCallback(StringHash("RegressMenu"),
-                              INPUT_ACTION_DOWN | INPUT_ACTION_UP,
-                              RegressMenuCallback);       // binary @ 0x00168e9c
-
-    im->RegisterInputCallback(StringHash("ShowPauseMenu"),
-                              INPUT_ACTION_DOWN | INPUT_ACTION_UP,
-                              ShowPauseMenuCallback);     // binary @ 0x00168e6c
+    // Binary RegisterInputCallback(hash, fnPtr) is 2-arg (no actionFlags param).
+    im->RegisterInputCallback(StringHash("PointerMove"),     PointerMoveCallback);       // binary @ 0x0016a4b4
+    im->RegisterInputCallback(StringHash("PointerPressed"),  PointerDownCallback);       // binary @ 0x00168e24
+    im->RegisterInputCallback(StringHash("PointerReleased"), PointerUpCallback);         // binary @ 0x00168e48
+    im->RegisterInputCallback(StringHash("PointerPressedX"), PointerDownXboxCallback);   // binary @ 0x0016a41c
+    im->RegisterInputCallback(StringHash("PauseGame"),       PauseGameCallback);         // binary @ 0x00168fd8
+    im->RegisterInputCallback(StringHash("RegressMenu"),     RegressMenuCallback);       // binary @ 0x00168e9c
+    im->RegisterInputCallback(StringHash("ShowPauseMenu"),   ShowPauseMenuCallback);     // binary @ 0x00168e6c
 }
 
 // --- Input callback stubs ---
