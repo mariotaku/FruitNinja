@@ -1,19 +1,36 @@
-#ifndef MORTAR_COL_AABB_H
-#define MORTAR_COL_AABB_H
+#ifndef FN_ENGINE_COLLISION_COL_AABB_H
+#define FN_ENGINE_COLLISION_COL_AABB_H
 
-#include "math/Vec3.h"
+#include "collision/Col.h"
 #include "collision/ColLine.h"
 #include "collision/ColSphere.h"
 #include <algorithm>
 
 namespace Mortar {
 
-struct ColAABB {
-    Vec3 m_Min;
-    Vec3 m_Max;
+// Binary vtable @ 0x001eb638. sizeof = 0x80 (128B):
+//   base Col 0x14, m_Max Vec3 at +0x14, 8 cached corners Vec3 at +0x20..+0x7F.
+class ColAABB : public Col {
+public:
+    // m_Min aliases m_PrimaryPoint (+0x04 in Col base)
+    Vec3&  m_Min; // reference alias for m_PrimaryPoint
+    Vec3   m_Max; // +0x14
+    // TODO: +0x20..+0x7F -- 8 cached corner Vec3; UpdateVertices() recomputes from m_Min/m_Max
+    // Vec3 m_Corners[8]; // +0x20
 
-    ColAABB() : m_Min(), m_Max() {}
-    ColAABB(const Vec3& min, const Vec3& max) : m_Min(min), m_Max(max) {}
+    ColAABB();
+    ColAABB(const Vec3& min, const Vec3& max);
+
+    virtual ~ColAABB() override {}
+
+    // Binary slot 2
+    virtual int GetType() const override { return TYPE_AABB; }
+
+    // Binary slot 3
+    virtual int Collide(Col* other, Vec3* outNormal) override;
+
+    // Binary slot 4
+    virtual void DrawDebug() override;
 
     Vec3 Center() const {
         return Vec3(
@@ -29,16 +46,13 @@ struct ColAABB {
                p.z >= m_Min.z && p.z <= m_Max.z;
     }
 
-    // AABB-AABB overlap test
     bool Intersects(const ColAABB& other) const {
         return m_Min.x <= other.m_Max.x && m_Max.x >= other.m_Min.x &&
                m_Min.y <= other.m_Max.y && m_Max.y >= other.m_Min.y &&
                m_Min.z <= other.m_Max.z && m_Max.z >= other.m_Min.z;
     }
 
-    // AABB-Sphere overlap test
     bool IntersectsSphere(const ColSphere& sphere) const {
-        // Clamp sphere center to AABB to find closest point
         float cx = sphere.center.x;
         float cy = sphere.center.y;
         float cz = sphere.center.z;
@@ -52,7 +66,6 @@ struct ColAABB {
         return (dx*dx + dy*dy + dz*dz) <= sphere.radius * sphere.radius;
     }
 
-    // AABB-Line segment overlap test (slab method)
     bool IntersectsLine(const ColLine& line) const {
         Vec3 d = line.Direction();
         float tmin = 0.0f;
@@ -60,9 +73,9 @@ struct ColAABB {
 
         for (int i = 0; i < 3; i++) {
             float origin = (&line.a.x)[i];
-            float dir = (&d.x)[i];
-            float bmin = (&m_Min.x)[i];
-            float bmax = (&m_Max.x)[i];
+            float dir    = (&d.x)[i];
+            float bmin   = (&m_Min.x)[i];
+            float bmax   = (&m_Max.x)[i];
 
             if (dir < -1e-8f || dir > 1e-8f) {
                 float t1 = (bmin - origin) / dir;
@@ -79,6 +92,6 @@ struct ColAABB {
     }
 };
 
-} // namespace Mortar
+}  // namespace Mortar
 
 #endif

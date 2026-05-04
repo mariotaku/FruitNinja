@@ -37,7 +37,7 @@ void Entity::HeapDestroy() {
 void Entity::Init(int, int, int) {}
 
 // Binary @ 0x0019d5e8 — base Release: dtor m_Col via vtable[1] then null it.
-// ColSphere is a plain struct (no virtual dtor); delete is the correct port substitution.
+// Col has a virtual dtor; delete dispatches to the correct subclass dtor.
 void Entity::Release() {
     if (m_Col) {
         delete m_Col;
@@ -54,10 +54,11 @@ void Entity::InRect(float, float, float, float) {}
 // Binary @ 0x0019d604 — base CollisionResponse: returns 0 (no-op)
 void Entity::CollisionResponse(const Vec3&) {}
 
-// Binary @ 0x0019d608 — slot 10: if m_Col, dispatch m_Col->vtable[3] with (col, hitPos, outFlags)
-// TODO: 0x0019d608 — needs m_Col vtable[3] dispatch; m_Col is opaque ColSphere* (plain struct, no vtable)
-void Entity::Collide(Entity* /*other*/, void* col, unsigned long* /*outFlags*/, Vec3* /*hitPos*/) {
-    (void)col;
+// Binary @ 0x0019d608 — slot 10: if m_Col and col, dispatch m_Col->Collide(col, hitPos)
+void Entity::Collide(Entity* /*other*/, Mortar::Col* col, unsigned long* /*outFlags*/, Vec3* hitPos) {
+    if (m_Col && col) {
+        m_Col->Collide(col, hitPos);
+    }
 }
 
 // Binary @ 0x0019d61c — slot 11: msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE

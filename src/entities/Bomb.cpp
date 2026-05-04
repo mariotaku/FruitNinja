@@ -258,8 +258,11 @@ void Bomb::Init(int param1, int fruitType, int param3) {
     // Binary allocates ColSphere at +0x38 in Init if the pointer is null
     // (verified: "allocated at +0x38 if NULL" in bomb_init_binary.s).
     if (!m_Col) m_Col = new Mortar::ColSphere();
-    m_Col->center = Vec3(pos.x, pos.y, 0.0f);
-    m_Col->radius = bombCol * 0.5f * scaleFactor;
+    {
+        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+        cs->center = Vec3(pos.x, pos.y, 0.0f);
+        cs->radius = bombCol * 0.5f * scaleFactor;
+    }
     m_Countdown = 0.0f;
     scale = computedScale;
     m_OrigScale = computedScale;
@@ -413,7 +416,7 @@ void Bomb::Update(float /*dt*/) {
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
         // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
         // center = (pos.x, pos.y, 0).
-        if (m_Col) m_Col->center = Vec3(pos.x, pos.y, 0.0f);
+        if (m_Col) static_cast<Mortar::ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
         // === HIT BRANCH ===
@@ -444,8 +447,9 @@ void Bomb::Update(float /*dt*/) {
 
         // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
         if (m_Col) {
-            m_Col->center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
-            m_Col->radius = HIT_COL_RADIUS;
+            Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+            cs->center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
+            cs->radius = HIT_COL_RADIUS;
         }
     }
 
@@ -802,7 +806,7 @@ void Bomb::MakeFat(Bomb* b, bool skipSpawnFx) {
     b->m_SpeedMult = 0.66597f;                    // DAT_00171eec
     b->scale      *= 1.33002f;                    // DAT_00171ef0
     b->m_OrigScale = b->scale;                    // binary writes field_0x98/9c/a0 (m_OrigScale)
-    if (b->m_Col) b->m_Col->radius *= 1.33002f;   // DAT_00171ef0
+    if (b->m_Col) static_cast<Mortar::ColSphere*>(b->m_Col)->radius *= 1.33002f;   // DAT_00171ef0
     if (!skipSpawnFx) {
         // Spawn particle emitter at +/-240.0 X anchor based on pos.x sign.
         // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.

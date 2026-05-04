@@ -39,6 +39,11 @@ add_library(mortar_engine STATIC
     # Entity + ActorManager live in src/entities/ (game-namespace port),
     # not the mortar_engine lib — the engine-namespace stubs that used to
     # be here were never wired in and have been removed.
+    # Phase 7.5 -- Collision primitives
+    collision/Col.cpp
+    collision/ColSphere.cpp
+    collision/ColLine.cpp
+    collision/ColAABB.cpp
     particle/PSPParticleManager.cpp
     # Phase 8 — Font
     render/Utf8StringIterator.cpp

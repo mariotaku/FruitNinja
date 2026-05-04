@@ -190,8 +190,9 @@ void Fruit::Init(int param1, int fruitType, int param3) {
         const float fColBase = info ? info->m_CollisionScale : 1.0f;
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
         if (!m_Col) m_Col = new Mortar::ColSphere();
-        m_Col->center = Vec3(pos.x, pos.y, 0.0f);
-        m_Col->radius = radius;
+        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+        cs->center = Vec3(pos.x, pos.y, 0.0f);
+        cs->radius = radius;
     }
 
     // Load mesh via MeshManager (cached, matches binary pattern)
@@ -337,7 +338,7 @@ void Fruit::Update(float dt) {
     }
 
     // Update collision sphere center (z clamped to 0).
-    if (m_Col) m_Col->center = Vec3(pos.x, pos.y, 0.0f);
+    if (m_Col) static_cast<Mortar::ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
 
     // Track juice emitters with the two halves so particles follow the
     // pieces instead of spraying from the original slice point. Matches
@@ -1506,8 +1507,9 @@ void Fruit::EnableCollision(bool enable) {
         const float fColBase = info ? info->m_CollisionScale : 1.0f;
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
         if (!m_Col) m_Col = new Mortar::ColSphere();
-        m_Col->center = Vec3(pos.x, pos.y, 0.0f);
-        m_Col->radius = radius;
+        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+        cs->center = Vec3(pos.x, pos.y, 0.0f);
+        cs->radius = radius;
     } else {
         delete m_Col;
         m_Col = nullptr;
@@ -1521,7 +1523,7 @@ void Fruit::SetForPlayer(int playerIdx) {
     // Mortar::NetworkManager::GetInstance().IsOnlineMultiplayer() is always false in port.
     if (Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer()) {
         if (playerIdx == 1 && m_Col) {
-            m_Col->radius *= 0.66f;
+            static_cast<Mortar::ColSphere*>(m_Col)->radius *= 0.66f;
         }
     }
 }
