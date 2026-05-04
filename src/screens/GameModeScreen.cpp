@@ -144,6 +144,8 @@ void GameModeScreen::UnLoadContent() {
 
 // ===================================================================
 // Matches GameModeScreen::GameModeScreen(bool) @ 0x0013e524
+// Binary @ 0x0013e524 — initialise BaseScreen, default m_State=0,
+// m_SecondaryAlpha=-2.5, online-MP slot=null, m_FrameTimer=0.
 // ===================================================================
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     : game(g)
@@ -151,11 +153,15 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pClassicButton(nullptr)
     , m_pZenButton(nullptr)
     , m_pArcadeButton(nullptr)
+    , m_pOnlineMpButton(nullptr)    // defunct online-MP slot
     , m_ButtonDelay(-1.0f)
-    , m_SecondaryAlpha(-2.5f)   // DAT_0013e5a0
-    , m_FrameTimer(0.0f)         // DAT_0013e59c
+    , m_SecondaryAlpha(-2.5f)       // DAT_0013e5a0
+    , m_FrameTimer(0.0f)            // DAT_0013e59c
     , m_bIsFromPause(isFromPause)
     , m_bButtonsCreated(false)
+    , m_bChallenge(0)
+    , m_ChallengeId(0)
+    , m_pChallengeData(nullptr)
     , m_bSetupLevelFired(false)
 {
     LoadContent();
@@ -171,6 +177,15 @@ void GameModeScreen::Init() {
     m_TransitionAlpha = 0.0f;
     m_bActive = 1;
 }
+
+// Binary @ 0x0013df80 — vtable slot 2 Reset(): no-op override stub
+void GameModeScreen::Reset() {}
+
+// Binary @ 0x00140498 — vtable slot 11 UpdateSpecific(): no-op (Update does all work)
+void GameModeScreen::UpdateSpecific(float /*dt*/) {}
+
+// Binary @ 0x0013df94 — vtable slot 15 IsTransitionInFinished(): bare BX LR, returns false
+bool GameModeScreen::IsTransitionInFinished() { return false; }
 
 void GameModeScreen::Release() {
     RemoveButtons();
@@ -202,9 +217,13 @@ void GameModeScreen::CreateControls() {
     m_pBackButton = new MenuButton();
     m_pBackButton->m_Texture = TexIdOf(s_TexBackIcon);
     m_pBackButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
-    m_pBackButton->Init(POS_BACK,
-                        std::bind(&GameModeScreen::QuitCallback, this),
-                        FruitInfo_GetCount(), Vec3(0, 0, 0), nullptr);
+    {
+        MenuButton* btn = m_pBackButton;
+        m_pBackButton->Init(POS_BACK,
+                            std::bind(&GameModeScreen::QuitCallback, this),
+                            FruitInfo_GetCount(), Vec3(0, 0, 0),
+                            std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+    }
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
     // Marks this button as the screen's hardware Back-key handler.
     m_pBackButton->m_bRespondsToBackKey = 1;
@@ -220,9 +239,13 @@ void GameModeScreen::CreateControls() {
     m_pClassicButton = new MenuButton();
     m_pClassicButton->m_Texture = TexIdOf(s_TexClassic);
     m_pClassicButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
-    m_pClassicButton->Init(POS_CLASSIC,
-                           std::bind(&GameModeScreen::ClassicModeCallback, this),
-                           Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0), nullptr);
+    {
+        MenuButton* btn = m_pClassicButton;
+        m_pClassicButton->Init(POS_CLASSIC,
+                               std::bind(&GameModeScreen::ClassicModeCallback, this),
+                               Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0),
+                               std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+    }
     if (game.pTutorialCtrl) {
         game.pTutorialCtrl->ResetTutePos(m_pClassicButton);
     }
@@ -242,9 +265,13 @@ void GameModeScreen::CreateControls() {
     m_pZenButton = new MenuButton();
     m_pZenButton->m_Texture = TexIdOf(s_TexMode2);
     m_pZenButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
-    m_pZenButton->Init(POS_ZEN,
-                       std::bind(&GameModeScreen::ZenModeCallback, this),
-                       Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0), nullptr);
+    {
+        MenuButton* btn = m_pZenButton;
+        m_pZenButton->Init(POS_ZEN,
+                           std::bind(&GameModeScreen::ZenModeCallback, this),
+                           Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0),
+                           std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+    }
     m_pZenButton->m_TargetSize = sharedTargetSize;
     if (m_pZenButton->m_pFruitPiece) {
         m_pZenButton->m_pFruitPiece->scale =
@@ -259,10 +286,14 @@ void GameModeScreen::CreateControls() {
     m_pArcadeButton = new MenuButton();
     m_pArcadeButton->m_Texture = TexIdOf(s_TexArcadeMode);
     m_pArcadeButton->size      = TexSizeOf(s_TexArcadeMode, 64.0f, 64.0f);
-    m_pArcadeButton->Init(POS_ARCADE,
-                          std::bind(&GameModeScreen::ArcadeModeCallback, this),
-                          Fruit::FruitType(FRUIT_ARCADE, false),
-                          Vec3(0, 0, 0), nullptr);
+    {
+        MenuButton* btn = m_pArcadeButton;
+        m_pArcadeButton->Init(POS_ARCADE,
+                              std::bind(&GameModeScreen::ArcadeModeCallback, this),
+                              Fruit::FruitType(FRUIT_ARCADE, false),
+                              Vec3(0, 0, 0),
+                              std::bind(&GameModeScreen::DeletedMenuButton, this, btn));
+    }
     m_pArcadeButton->m_TargetSize = sharedTargetSize;
     if (m_pArcadeButton->m_pFruitPiece) {
         m_pArcadeButton->m_pFruitPiece->scale =
@@ -567,4 +598,80 @@ void GameModeScreen::ArcadeModeCallback() {
     m_bSetupLevelFired = false;
     m_State = 5;
     game.gameMode = 2;
+}
+
+// Binary @ 0x0013df84 — sets m_bChallenge=true + stores id and data ptr
+//                       (entry from challenge-invite flow)
+void GameModeScreen::SetIsChallenge(int challengeId, void* data) {
+    m_bChallenge     = 1;
+    m_ChallengeId    = challengeId;
+    m_pChallengeData = data;
+}
+
+// Binary @ 0x0013e124 — coming_soon tile callback: bump save-stat counter + reset tutorial.
+// (typo "Commings" preserved from binary symbol)
+void GameModeScreen::CommingsSoonCallback() {
+    // TODO: 0x0013e124 — FruitSaveData::AddToTotal("modeS_pcoming_soon", hash, 1, true, true)
+    if (game.pTutorialCtrl) {
+        game.pTutorialCtrl->ResetTutePos(nullptr);
+    }
+}
+
+// Binary @ 0x0013f6ac — clears m_p*Button cache on MenuButton destroy;
+//                       online-MP slot also flings the orphan fruit off-screen.
+void GameModeScreen::DeletedMenuButton(MenuButton* btn) {
+    if (btn == m_pBackButton)    { m_pBackButton    = nullptr; return; }
+    if (btn == m_pClassicButton) { m_pClassicButton = nullptr; return; }
+    if (btn == m_pZenButton)     { m_pZenButton     = nullptr; return; }
+    if (btn == m_pArcadeButton)  { m_pArcadeButton  = nullptr; return; }
+    if (btn == m_pOnlineMpButton) {
+        m_pOnlineMpButton = nullptr;
+        // Defunct: online-MP detached fruit fling (binary @ 0x0013f6ac)
+    }
+}
+
+// Defunct: online MP (Casino) -- no-op stub; binary @ 0x0013dfdc sets m_State=4 + NetworkManager flag
+void GameModeScreen::CasinoModeCallback() {
+    m_State = 4;
+    // Defunct: NetworkManager online-MP flag omitted
+}
+
+// Defunct: online MP (Versus) -- no-op stub; binary @ 0x0013e01c sets m_State=7 + alpha=1.0 to enter matchmaker
+void GameModeScreen::VersusModeCallback() {
+    m_State = 7;
+    m_TransitionAlpha = 1.0f;
+    // Defunct: matchmaker entry omitted
+}
+
+// Defunct: P2P connect -- no-op stub; binary @ 0x0013dfd4 sets m_State=8 (GameCenter connect)
+void GameModeScreen::P2PConnectCallback() {
+    m_State = 8;
+    // Defunct: GameCenter/P2P connect omitted
+}
+
+// Defunct: upsell store handoff -- no-op stub; binary @ 0x0013e10c calls GotoFruitNinjaPage(1,-1) then m_State=0xd
+void GameModeScreen::BuyNow() {
+    // Defunct: GotoFruitNinjaPage(1,-1) omitted (online upsell)
+    // Defunct: m_State=0xd transition omitted (UpsellScreen is Phantom)
+}
+
+// Defunct: upsell glue -- UpsellScreen never instantiated; binary @ 0x0013e084 sets m_State=10 + bumps modeS_p* counters
+void GameModeScreen::SwitchToUpsell(int /*idx*/) {
+    // TODO: 0x0013e084 — FruitSaveData::AddToTotal stat-counter calls (modeS_p* counters)
+    // Defunct: m_State=10 transition omitted (UpsellScreen is Phantom)
+}
+
+// Defunct: upsell return path -- no-op stub; binary @ 0x0013e07c sets m_State=1 (transition-in resume)
+void GameModeScreen::UpsellFinished() {
+    // Defunct: upsell return path omitted (UpsellScreen is Phantom)
+}
+
+// Defunct: online-MP shrink hook -- no-op stub; binary @ 0x0013e02c snapshots fruit pose + zeroes vel/scale
+void GameModeScreen::ShrinkedMultiplayerButton() {
+    // Defunct: online-MP fruit snapshot omitted
+}
+
+// Defunct: online-MP button lifecycle -- no-op stub; binary @ 0x0013ecdc grows/shrinks the 4th MenuButton based on connectivity
+void GameModeScreen::UpdateOnlineMultiplayerButton(float /*dt*/) {
+    // Defunct: online-MP button grow/shrink based on connectivity omitted
 }

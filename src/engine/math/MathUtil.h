@@ -32,36 +32,28 @@ inline float CosIdx(uint16_t idx) {
 namespace Mortar { namespace Math {
 
 // Binary @ 0x00194d50 — 4096-entry sin LUT @ 0x001be4a4; sinf() is equivalent
-inline float SinIdx(unsigned short idx) { return sinf((float)idx * (2.0f * (float)M_PI / 65536.0f)); }
+float SinIdx(unsigned short idx);
 
 // Binary @ 0x00194d70 — phase-shifts SinIdx by +1024 (90 deg); shares sin LUT
-inline float CosIdx(unsigned short idx) { return cosf((float)idx * (2.0f * (float)M_PI / 65536.0f)); }
+float CosIdx(unsigned short idx);
 
 // Binary @ 0x00194d98 — SinIdx/CosIdx with 100000.0f fallback when cos==0
-inline float TanIdx(unsigned short idx) {
-    float c = CosIdx(idx);
-    return (c == 0.0f) ? 100000.0f : SinIdx(idx) / c;
-}
+float TanIdx(unsigned short idx);
 
 // Binary @ 0x00194dcc — STUB in shipping binary (returns 0); no callers in game code
-inline unsigned short AsinIdx(float /*x*/) { return 0; /* Defunct: stubbed in binary */ }
+unsigned short AsinIdx(float x);
 
 // Binary @ 0x00194dd0 — STUB in shipping binary (returns 0); no callers in game code
-inline unsigned short AcosIdx(float /*x*/) { return 0; /* Defunct: stubbed in binary */ }
+unsigned short AcosIdx(float x);
 
 // Binary @ 0x00194dd4 — atan LUT @ GOT+0xd18 (129 int16); atan2f equivalent
-inline short AtanIdx(float x) {
-    return (short)(atan2f(x, 1.0f) * (32768.0f / (float)M_PI));
-}
+short AtanIdx(float x);
 
 // Binary @ 0x00194eb0 — quadrant-folded atan LUT lookup; equivalent to atan2f(y,x)*65536/(2pi)
-inline short Atan2Idx(float y, float x) {
-    if (y == 0.0f && x == 0.0f) return 0;
-    return (short)(atan2f(y, x) * (32768.0f / (float)M_PI));
-}
+short Atan2Idx(float y, float x);
 
 // Binary @ 0x00195254 — vsqrt.f64 with NaN fallback to libc sqrt; sqrtf() is equivalent
-inline float Sqrt(float x) { return sqrtf(x); }
+float Sqrt(float x);
 
 // Binary @ 0x0019521c — fake-async cache; Set computes sqrtf eagerly, Get returns cached
 void SqrtAsyncSet(float x);

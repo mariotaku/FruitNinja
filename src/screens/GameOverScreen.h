@@ -177,11 +177,39 @@ private:
     // 0x00140604 — sets game[+0x33]=1
     void SetTerminate();
 
-    // Click thunks for the Retry / Quit MenuButtons. Plain methods rather
-    // than lambdas so the cross-build (GCC 4.4) parses; bound via
-    // Mortar::Delegate<void()>::Make in CreateRetryButton/CreateQuitButton.
+    // ProgressionTimer no-op stubs (empty in binary)
+    // Defunct: ProgressionTimer -- empty in binary @ 0x001405fc
+    void StartProgressionTimer();
+    // Defunct: ProgressionTimer -- empty in binary @ 0x00140600
+    void CancelHUDProgressionTimer();
+    // Defunct: ProgressionTimer -- empty in binary @ 0x00140614
+    void OnProgressionTimerUp();
+    // Defunct: ProgressionTimer -- empty in binary @ 0x00140618
+    void HandleProgressionTimerExpiration();
+
+    // Social share callbacks
+    // Defunct: Facebook share -- no-op stub; binary @ 0x0014083c (NetworkManager::PublishText)
+    void FacebookCallback();
+    // Defunct: Twitter share -- empty in binary @ 0x001405f8
+    void TwitterCallback();
+    // Binary @ 0x001405e8 -- PostCallback(result): m_bPostInProgress=0; m_bPostOk=(result==0)
+    void PostCallback(int result);
+
+    // Binary @ 0x001405a0 -- LeaderboardsCallback: state-0/6 + alpha>0.999 -> m_State=10
+    void LeaderboardsCallback();
+
+    // Binary @ 0x0014105c -- RetryCallback: alpha gate + state guard, stats reset, m_State=7
+    void RetryCallback();
+    // Binary @ 0x00140620 -- QuitCallback: state guard, ClearCombo, m_State=9, HitMenuBomb
+    void QuitCallback();
+
+    // Thin wrappers kept for existing button binding sites
     void OnRetryClicked();
     void OnQuitClicked();
+
+    // Binary @ 0x00140558 -- DeletedControl: wired as remove-callback on
+    // m_pBonusScreen / m_pSlot9c / m_pNoticeCtrl; clears slot, forces state=6 where applicable.
+    void DeletedControl(HUDControl* ctrl);
 };
 
 #endif // FN_GAME_OVER_SCREEN_H

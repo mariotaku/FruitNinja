@@ -4,15 +4,29 @@
 //
 // GameModeScreen : HUDControl3d (BaseScreen subclass, size ~0xD0)
 //
-// Binary refs (docs/screens/game-mode.md):
-//   Constructor         0x0013e524 (bool isFromPause)
-//   CreateControls      0x0013e764
-//   Update              0x0013f10c (212 lines)
-//   QuitCallback        0x0013F5E0 (back/quit button)
-//   ClassicModeCallback 0x0013dfb4
-//   ZenModeCallback     0x0013dffc
-//   ArcadeModeCallback  0x0013e19c
-//   SetupLevel          0x0013e21c
+// Binary refs:
+//   Constructor              0x0013e524 (bool isFromPause)
+//   Reset                    0x0013df80
+//   CreateControls           0x0013e764
+//   Update                   0x0013f10c (212 lines)
+//   UpdateSpecific           0x00140498
+//   IsTransitionInFinished   0x0013df94 (bare BX LR, returns 0)
+//   QuitCallback             0x0013F5E0
+//   ClassicModeCallback      0x0013dfb4
+//   ZenModeCallback          0x0013dffc
+//   ArcadeModeCallback       0x0013e19c
+//   SetupLevel               0x0013e21c
+//   SetIsChallenge           0x0013df84
+//   CommingsSoonCallback     0x0013e124
+//   DeletedMenuButton        0x0013f6ac
+//   CasinoModeCallback       0x0013dfdc
+//   VersusModeCallback       0x0013e01c
+//   P2PConnectCallback       0x0013dfd4
+//   BuyNow                   0x0013e10c
+//   SwitchToUpsell           0x0013e084
+//   UpsellFinished           0x0013e07c
+//   ShrinkedMultiplayerButton 0x0013e02c
+//   UpdateOnlineMultiplayerButton 0x0013ecdc
 //
 // Child screen spawned by MainScreen state 0x0e/0x0f (STATE_MODE_SELECT)
 // when m_Timer2 crosses 0.25 downward (see MainScreen::Update @ 0x0014bf40).
@@ -40,12 +54,18 @@ public:
 
     // HUDControl overrides
     void Init() override;
+    void Reset() override;                           // Binary @ 0x0013df80 — no-op override stub
     void Release() override;
     void Update(float dt) override;
+    void UpdateSpecific(float dt);                   // Binary @ 0x00140498 — no-op (Update does all work); vtable slot not in ported base yet
+    bool IsTransitionInFinished();                   // Binary @ 0x0013df94 — bare BX LR, returns false; vtable slot not in ported base yet
     void Draw(const Vec3& hudScale, int layerMask) override;
     int  GetType() override { return 1; }
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
+
+    // Binary @ 0x0013df84 — sets m_bChallenge=true + stores id and data ptr
+    void SetIsChallenge(int challengeId, void* data);
 
     static void LoadContent();    // 0x13e330
     static void UnLoadContent();  // 0x13e5a8
@@ -69,12 +89,18 @@ private:
     MenuButton* m_pClassicButton;    // classic.tex, watermelon, ClassicModeCallback
     MenuButton* m_pZenButton;        // mode_2.tex,  apple_red, ZenModeCallback
     MenuButton* m_pArcadeButton;     // arcade_mode.tex, banana, ArcadeModeCallback
+    MenuButton* m_pOnlineMpButton;   // null (defunct online MP slot)
 
     float m_ButtonDelay;             // +0xa4
-    float m_SecondaryAlpha;          // +0xb4 (also drives Draw slide-in)
+    float m_SecondaryAlpha;          // +0xb4 (starts -2.5, lerped toward 1)
     float m_FrameTimer;              // +0xc8
     bool  m_bIsFromPause;            // +0xb8
     bool  m_bButtonsCreated;
+
+    // Challenge-invite fields (Binary @ 0x0013df84 SetIsChallenge)
+    uint8_t m_bChallenge;            // +0xb9
+    int     m_ChallengeId;           // +0xbc
+    void*   m_pChallengeData;        // +0xc0
 
     // Static textures (binary: module-level globals, loaded in LoadContent)
     static SmartPtr<Mortar::Texture> s_TexModeSensei;   // mode_sensei.tex: panel + logo
@@ -99,11 +125,42 @@ private:
     // crosses -0.9. Calls PrepareForLevelStart().
     void SetupLevel();
 
-    // Button callbacks (bound via std::function).
+    // Button callbacks (bound via Delegate).
     void QuitCallback();          // 0x0013F5E0 — back button, m_State = 0xE
     void ClassicModeCallback();   // 0x0013dfb4 — m_State = 3
     void ZenModeCallback();       // 0x0013dffc — m_State = 6
     void ArcadeModeCallback();    // 0x0013e19c — m_State = 5
+
+    // Binary @ 0x0013e124 — bumps coming_soon save-stat + resets tutorial
+    // (typo "Commings" preserved from binary symbol)
+    void CommingsSoonCallback();
+
+    // Binary @ 0x0013f6ac — clears m_p*Button cache on MenuButton destroy
+    void DeletedMenuButton(MenuButton* btn);
+
+    // Defunct: online MP (Casino) -- no-op stub; binary @ 0x0013dfdc sets m_State=4
+    void CasinoModeCallback();
+
+    // Defunct: online MP (Versus) -- no-op stub; binary @ 0x0013e01c sets m_State=7 + alpha=1.0
+    void VersusModeCallback();
+
+    // Defunct: P2P connect -- no-op stub; binary @ 0x0013dfd4 sets m_State=8 (GameCenter connect)
+    void P2PConnectCallback();
+
+    // Defunct: upsell store handoff -- no-op stub; binary @ 0x0013e10c calls GotoFruitNinjaPage(1,-1) then m_State=0xd
+    void BuyNow();
+
+    // Defunct: upsell glue -- UpsellScreen never instantiated; binary @ 0x0013e084 sets m_State=10
+    void SwitchToUpsell(int idx);
+
+    // Defunct: upsell return path -- no-op stub; binary @ 0x0013e07c sets m_State=1
+    void UpsellFinished();
+
+    // Defunct: online-MP shrink hook -- no-op stub; binary @ 0x0013e02c snapshots fruit pose + zeroes vel/scale
+    void ShrinkedMultiplayerButton();
+
+    // Defunct: online-MP button lifecycle -- no-op stub; binary @ 0x0013ecdc
+    void UpdateOnlineMultiplayerButton(float dt);
 
     // Port-only one-shot latch: binary vtable[18] is idempotent but
     // WaveManager::Reset(false) is destructive — guard against per-frame calls.

@@ -21,6 +21,10 @@ InputManager::~InputManager() {
     // Devices leaked intentionally (matches binary behavior at 0x00196924).
 }
 
+InputManager* InputManager::GetInstance() {
+    return s_instance;
+}
+
 // Binary @ 0x00196cc8 — Init: alloc InputDeviceBada via new, dev->Init(flags), push_back.
 void InputManager::Init(unsigned long flags) {
     InputDeviceBada* dev = new InputDeviceBada();

@@ -577,10 +577,12 @@ void SlashEntity::Update(float dt) {
                 for (auto it = list.begin(); it != list.end(); ++it) {
                     Entity* e = *it;
                     if (!e || !e->IsActive()) continue;
-                    if (!e->m_Col || e->m_Col->radius <= 0.0f) continue;
+                    if (!e->m_Col) continue;
+                    Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(e->m_Col);
+                    if (cs->radius <= 0.0f) continue;
 
                     Vec3 bladeVel;
-                    if (CollideWithSphere(*e->m_Col, bladeVel)) {
+                    if (CollideWithSphere(*cs, bladeVel)) {
                         e->CollisionResponse(bladeVel);
                     }
                 }
