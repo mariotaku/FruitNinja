@@ -19,6 +19,11 @@ add_library(mortar_engine STATIC
     render/Renderer.cpp
     render/MortarCamera.cpp
     # Phase 4 — Asset Pipeline
+    asset/IFile.cpp
+    asset/IFileSystem.cpp
+    asset/IFile_Direct.cpp
+    asset/FileSystemPosix.cpp
+    asset/FileSystemWin32.cpp
     asset/File.cpp
     asset/FileManager.cpp
     asset/Texture.cpp
