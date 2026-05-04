@@ -104,6 +104,12 @@ public:
     // vtable[2]: Init -- forwards to Reset() per binary 0x00153e28
     void Init() override;
 
+    // vtable[3]: Release -- nulls all owned SmartPtr textures; binary @ 0x0015408c
+    void Release() override;
+
+    // vtable[4]: Reset -- restores RetryButton/ResumeButton tex to SP defaults; binary @ 0x00154024
+    void Reset() override;
+
     // vtable[5]: BeginDraw -- asserts m_LayerFlags = 8
     void BeginDraw(float dt) override;
 
@@ -123,6 +129,8 @@ public:
     void PauseGameCallback();
     void PauseGameCallback2();
     void QuitGameCallback();
+    void QuitGameCallback2();     // binary @ 0x00153ef8 — P2-Quit (MP path)
+    void RetryGameCallback();     // binary @ 0x00153f68 — P1 SP Retry
 
     // vtable[?]: IsEnabled -- binary @ 0x00153e4c
     // Returns false while transition is in-flight or bomb hit timer running.

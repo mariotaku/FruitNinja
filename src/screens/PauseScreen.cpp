@@ -21,6 +21,7 @@
 #include "game/FruitSaveData.h"
 #include "game/PowerUpManager.h"
 #include "game/BombHit.h"
+#include "game/GameTaskState.h"
 #include "asset/TextureManager.h"
 #include "asset/Texture.h"
 #include "render/MatrixManager.h"
@@ -69,44 +70,27 @@ static inline GLuint LoadTex(const char* name, int* outW = nullptr, int* outH = 
 // PauseGame / UnpauseGame (binary @ 0x00168f80 / 0x00168fb0)
 // -------------------------------------------------------------------------
 
-// Matches PauseGame (0x00168f80):
-//   *(byte*)(game+0x02) = 1;
-//   *(byte*)(game+0x0c) = 0;
-//   *(float*)(game+0x08) = 0.25f;
+// Binary @ 0x00168f80 PauseGame():
+//   gameObj+0x02 (byte) = 1   -- timer-running flag on gameObj
+//   TaskState+0x0C (byte) = 0 -- isPaused = 0 (transition entering pause)
+//   TaskState+0x08 (float) = 0.25f -- pause transition timer
 void PauseScreen::PauseGame() {
     Game* game = Game::GetInstance();
     if (!game) return;
+    GameTaskState* ts = GetTaskState();
     game->gameActiveFlag = 1;
-    // +0x0c = m_TransitionTimer flag byte; binary stores 0 here
-    // DIFFERS: port's m_TransitionTimer is a float at +0x0c; writing the
-    // "paused indicator byte" documented at +0x0c -- use retryFlag as proxy
-    // for the byte written at +0x0c in the binary (game+0x0c is actually the
-    // float m_TransitionTimer in the port struct; the binary byte at game+0x0c
-    // is the "timer active" flag). We write game->retryTimer (float at +0x08)
-    // to 0.25 and clear the byte at +0x0c via a cast.
-    //
-    // Binary writes:
-    //   strb r1, [r0, #2]   -- gameActiveFlag = 1
-    //   strb r2, [r0, #0xc] -- byte at +0xc = 0
-    //   vstr s15, [r0, #8]  -- float at +0x8 = 0.25
-    //
-    // Port field mapping: +0x08 = retryTimer (float), +0x0c = m_TransitionTimer (float).
-    // The byte-write at +0xc is a flag byte in the binary that the port
-    // doesn't have a named field for. Safe to cast:
-    game->retryTimer = 0.25f;
-    reinterpret_cast<uint8_t*>(game)[0x0c] = 0;
+    ts->isPaused = 0;
+    ts->pauseTransitionTimer = 0.25f;
 }
 
 // ASM-verified: 2026-05-03 binary @ 0x00168fb0 (re-analyst)
-// Matches UnpauseGame (0x00168fb0):
-//   *(undefined4*)(game+0x10) = DAT_00168fcc;  -- restore timer
-//   *(byte*)(game+0x0c) = 1;
+// Binary @ 0x00168fb0 UnpauseGame():
+//   TaskState+0x10 (float) = 0.4f  -- post-unpause grace window
+//   TaskState+0x0C (byte) = 1      -- isPaused = 1 (resumed)
 void PauseScreen::UnpauseGame() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-    // game+0x10 = bombHitTimer (float); binary @ DAT_00168fcc = 0.4f.
-    game->bombHitTimer = 0.4f;   // DAT_00168fcc -- post-unpause grace window
-    reinterpret_cast<uint8_t*>(game)[0x0c] = 1;
+    GameTaskState* ts = GetTaskState();
+    ts->pauseBombHitTimer = 0.4f;   // DAT_00168fcc
+    ts->isPaused = 1;
 }
 
 // -------------------------------------------------------------------------
@@ -236,6 +220,37 @@ void PauseScreen::Init() {
 }
 
 // -------------------------------------------------------------------------
+// vtable[3]: Release -- nulls all owned texture refs
+// Binary @ 0x0015408C -- vtable slot 3.
+// Nulls 5 SmartPtrs (m_SecondaryTex, m_QuitTitleTex, m_PlayButtonTex,
+// m_RetryButtonTex, m_PauseButtonTex). Port uses GLuint — no-op for GLuids;
+// GLuint refs are not ref-counted and are freed by TextureManager on shutdown.
+// -------------------------------------------------------------------------
+void PauseScreen::Release() {
+    m_SecondaryTex = 0;
+    m_QuitTitleTex = 0;
+    m_PlayButtonTex = 0;
+    m_RetryButtonTex = 0;
+    m_PauseButtonTex = 0;
+}
+
+// -------------------------------------------------------------------------
+// vtable[4]: Reset -- restores SP-mode tex assignments on resume/retry buttons
+// Binary @ 0x00154024 -- vtable slot 4.
+// Inverse of SetToMultiplayerState: re-enables RetryButton and restores
+// SecondaryTex assignments so SP layout is correct after MP session ends.
+// -------------------------------------------------------------------------
+void PauseScreen::Reset() {
+    if (m_RetryButton) {
+        reinterpret_cast<uint8_t*>(m_RetryButton)[0x131] = 1;  // m_bHighlighted = 1
+        m_RetryButton->m_SecondaryTex = m_RetryButtonTex;
+    }
+    if (m_ResumeButton) {
+        m_ResumeButton->m_SecondaryTex = m_PlayButtonTex;
+    }
+}
+
+// -------------------------------------------------------------------------
 // vtable[5]: BeginDraw -- asserts m_LayerFlags = 8
 // Binary: 0x00153e44
 // -------------------------------------------------------------------------
@@ -345,25 +360,46 @@ void PauseScreen::PauseGameCallback2() {
     // state 5 is unreachable from this callback in single-player
 }
 
-// QuitGameCallback (binary 0x00153ebc)
-// Quit button press-action:
-//   State 3 -> 6; m_LastHitButton = 0; SaveCurrentData + quit-SFX call chain.
+// Binary @ 0x00153ebc QuitGameCallback():
+//   if (m_State != 3) return;
+//   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
+//   g->field_0x85 = 0; m_LastHitButton = 0; m_State = 6;
+// NOTE: m_Alpha *= 0.5 and SaveCurrentData happen in Update case-6 entry, NOT here.
+// NOTE: SFX "MenuQuit" also happens in Update state-6 path, not this callback.
 void PauseScreen::QuitGameCallback() {
-    if (m_State == 3) {
-        // Apply one-shot 0.5 multiplier on state-3->6 transition
-        // (binary @ 0x00154468 case 3 exit). Only on entry, not per-frame.
-        m_Alpha *= 0.5f;
-        m_State = 6;
-        m_LastHitButton = 0;
-        // Binary @ 0x00153ebc: blx f25ac (SaveCurrentData/ClearTotals) +
-        //   blx f1b74 (SFX play call) sequence before setting state=6.
-        FruitNinja_SaveCurrentData(false);
-        // TODO: resolve SFX literal at binary @ 0xf1b74 thunk -- name unknown.
-        Game* game = Game::GetInstance();
-        if (game && game->pGameSound) {
-            game->pGameSound->SFXPlay("MenuQuit", 1.0f);
-        }
-    }
+    if (m_State != 3) return;
+    Game* game = Game::GetInstance();
+    // TODO: FruitSaveData::ClearTotals() -- binary @ 0x00153ebc; port has ClearTotal(hash) not ClearTotals()
+    if (game && game->pSaveData) game->pSaveData->ClearCombo();
+    m_LastHitButton = 0;
+    m_State = 6;
+}
+
+// Binary @ 0x00153ef8 QuitGameCallback2():
+//   QuitGameCallback(); m_LastHitButton = 1; g->field_0x85 = 0;
+// Used by P2-Quit button in MP path.
+// Defunct: multiplayer Quit2 -- no-op for single-player port; binary @ 0x00153ef8
+void PauseScreen::QuitGameCallback2() {
+    QuitGameCallback();
+    m_LastHitButton = 1;
+    // TODO: g->field_0x85 = 0 (tutorial-shown byte on gameObj; offset not yet named in Game.h)
+}
+
+// Binary @ 0x00153f68 RetryGameCallback():
+//   if (m_State != 3) return;
+//   if (g->field_0x1AC >= 10.5f) { FruitSaveData::AddToTotal(..., 1, true, true); }
+//   InitVec3(g->field_0x194); g->field_0x85 = 0;
+//   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
+//   m_State = 5;
+void PauseScreen::RetryGameCallback() {
+    if (m_State != 3) return;
+    Game* game = Game::GetInstance();
+    // TODO: g->field_0x1AC achievement-progress check (binary @ 0x00153f68 +0x1AC >= 10.5)
+    // TODO: g->field_0x194 Vec3 init (binary @ 0x00153f68)
+    // TODO: g->field_0x85 = 0 (tutorial-shown byte)
+    // TODO: FruitSaveData::ClearTotals() -- binary @ 0x00153f68; port has ClearTotal(hash) not ClearTotals()
+    if (game && game->pSaveData) game->pSaveData->ClearCombo();
+    m_State = 5;
 }
 
 // -------------------------------------------------------------------------
@@ -422,7 +458,7 @@ void PauseScreen::Update(float dt) {
         m_RetryButton->m_LayerFlags = 0x100;
         m_RetryButton->m_FruitType = -1;
         m_RetryButton->m_ClickCallback =
-            Mortar::Delegate<void()>::Make(this, &PauseScreen::PauseGameCallback2);
+            Mortar::Delegate<void()>::Make(this, &PauseScreen::RetryGameCallback);
         m_RetryButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_RetryButton);

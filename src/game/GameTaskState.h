@@ -78,6 +78,17 @@ struct GameTaskState {
     // +0xfc: background texture (loaded in GameInit)
     SmartPtr<Mortar::Texture> pBackgroundTexture;
 
+    // Binary @ 0x00231404 GameTaskState global pause fields.
+    // These three fields are written by PauseGame() / UnpauseGame() free functions
+    // (binary @ 0x00168f80 / 0x00168fb0) to a fixed-address global separate from gameObj.
+    // +0x08 (float) = pause transition timer; set to 0.25f by PauseGame
+    float pauseTransitionTimer;  // +0x08
+    // +0x0C (byte) = is-paused indicator; 0 = pausing, 1 = resumed; set by PauseGame/UnpauseGame
+    uint8_t isPaused;            // +0x0C
+    uint8_t _pad_0d[3];
+    // +0x10 (float) = post-unpause bomb-hit grace timer; set to 0.4f by UnpauseGame
+    float pauseBombHitTimer;     // +0x10
+
     // +0x1C: splash fade timer, statically initialised to 1.5f in .data
     // (g_TaskState + 0x1C = 0x001F3DA0, bytes 00 00 c0 3f).
     // Drains at dt * 2.0f; reaches 0 at ~0.75 s wall time.
@@ -103,6 +114,7 @@ struct GameTaskState {
           pPauseScreen(nullptr), firstFrame(false), field_0x111(false),
           initComplete(false), pAppState_x54(nullptr),
           pSliceEffectList(nullptr), pSliceEffectPool(nullptr),
+          pauseTransitionTimer(0.0f), isPaused(0), _pad_0d(), pauseBombHitTimer(0.0f),
           splashFadeTimer(1.5f),
           spawnParam0(1.0f,  1.0f, 1.0f),
           spawnParam1(1.7f,  0.3f, 1.0f),
