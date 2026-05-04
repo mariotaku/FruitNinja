@@ -10,8 +10,8 @@ namespace Mortar {
 // Binary @ 0x0019323c — _ZNK6Mortar8Skeleton9FindIndexERKNS_11AsciiStringE
 // Linear scan; calls AsciiString::Equals (PLT 0x000f7764) per bone.
 // Returns first matching index, else 0xFFFFFFFF.
-// TODO: Bone::m_Name is std::string in port; binary is AsciiString.
-// Compare via .c_str() until Bone::m_Name migrates.
+// DIFFERS: original = AsciiString m_Name; port uses std::string because
+// AsciiString ctor chain is not yet fully ported. Compare via .c_str().
 uint32_t Skeleton::FindIndex(const Mortar::AsciiString& name) const {
     uint32_t n = (uint32_t)m_Bones.size();
     for (uint32_t i = 0; i < n; i++) {

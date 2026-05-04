@@ -41,9 +41,8 @@ public:
     float    m_ThumbHeight;
 
     // +0x9C: label text (28 bytes).
-    // TODO: Utf8StringIterator not yet ported; using char[28] placeholder.
-    // Binary: Mortar::Utf8StringIterator m_Label (28B); ctor at 0x00160268
-    // initialises via Utf8StringIterator(&this->m_Label, label).
+    // DIFFERS: original = Mortar::Utf8StringIterator m_Label (28B); port uses
+    // char[28] because Utf8StringIterator is not yet ported. Binary ctor at 0x00160268.
     char     m_Label[28];
 
     // +0xB8: active touch slot; -1 when idle

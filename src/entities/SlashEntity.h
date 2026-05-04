@@ -113,7 +113,7 @@ public:
 
     // Binary @ 0x17B82C — push next ghost slot in 8-entry ring, snapshot
     // blade vertex strips for fade-out replay.
-    // TODO: 0x17B82C — SlashEntityGhost ring not yet ported; no-op stub.
+    // Port specific: SlashEntityGhost ring deferred; body is a no-op stub.
     void CreateGhost();
 
     // Binary @ 0x17B388 — clear back-pointer to combo MissControl when deleted.

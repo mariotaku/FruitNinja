@@ -420,7 +420,7 @@ void MainScreen::Update(float dt) {
             m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
             if (m_CameraTransition > -0.001f) {
                 m_CameraTransition = 0.0f;
-                // TODO: game->pauseFlag = 0;  (field not yet ported)
+                // Port specific: game->pauseFlag not yet ported; clear skipped.
             }
         }
         break;

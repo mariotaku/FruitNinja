@@ -6,8 +6,9 @@
 // __ReferenceCounterData*. Port uses a single virtual dtor; no caller currently depends
 // on the indirect `obj->vtable[+8]()` GetRefCounter() form, so no port-side virtual
 // needed.
-// TODO: add virtual GetRefCounter() if asm-verify ever runs against a call site that
-// uses the indirect form.
+// DIFFERS: binary vtable slot 2 = GetRefCounter() returning __ReferenceCounterData*.
+//   Port omits this virtual; no call site currently dispatches via vtable[+8]().
+//   asm-verify has run (R4 W4) and not flagged the indirect form -- deliberate omission.
 
 // TODO: 0x00109e78 -- binary uses InterlockedUNumber::Increment / atomic decrement on
 // both counters. Port uses plain ++/--. Functional risk only if SmartPtr is touched

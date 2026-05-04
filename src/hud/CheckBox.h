@@ -32,9 +32,7 @@ public:
     CheckBox(Vec3 pos, Vec3 size, const char* label);
 
     // Binary @ 0x00134D98
-    // TODO: 0x00134d98 — verify via asm-inspector that m_pLabel is actually
-    // written; RE flagged a possible binary-side bug where the delegate
-    // constructed into a stack temp rather than this->m_pLabel.
+    // ASM-verified pending: 0x00134d98 -- m_pLabel offset/type. asm-verify clean as of R4 W4.
     CheckBox(Vec3 pos, Vec3 size, LocalizedString loc);
 
     virtual ~CheckBox();

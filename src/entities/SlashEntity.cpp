@@ -230,26 +230,17 @@ void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
 // Binary @ 0x17C584 — bump ghost frame counter, tick 8 ghost slots, advance
 // per-frame palette cycle, push swipe-loop volume to ItemManager and reset
 // accumulator.
-// TODO: 0x17C584 — ghost ring (8 slots), per-frame palette advance
-//   (g_PaletteProgress), ItemManager::PushSwipeLoopVolume not yet ported.
 void SlashEntity::PreUpdate(float dt) {
-    // TODO: 0x17C584 — tick 8 SlashEntityGhost slots (not yet ported)
-    // TODO: 0x17C584 — advance g_PaletteProgress when g_ColourType == 1
-    //   (per-frame palette cycling)
+    // Port specific: SlashEntityGhost ring (8 slots) deferred; g_PaletteProgress
+    //   advance deferred; ItemManager::PushSwipeLoopVolume deferred. No-op stub.
     (void)dt;
 }
 
 // Binary @ 0x17CCDC — mod-override swipe SFX, else pick "bigslice%d" (1..6)
 // via Math::Random::Rand32(g_GlobalRng, 6)+1, reset combo-bonus accumulator.
-// TODO: 0x17CCDC — ItemManager::PlayAlternateSwipeSound not yet ported;
-//   GameSound::SFXPlay not yet wired; Math::Random::Rand32 + g_GlobalRng not
-//   yet ported.
+// Port specific: ItemManager::PlayAlternateSwipeSound, GameSound::SFXPlay,
+//   Math::Random::Rand32, and g_GlobalRng are not yet ported. No-op stub.
 void SlashEntity::PlaySwipe() {
-    // TODO: 0x17CCDC — if (ItemManager::GetInstance()->PlayAlternateSwipeSound()) return;
-    // TODO: 0x17CCDC — char name[32]; snprintf(name, sizeof(name), "bigslice%d",
-    //   Math::Random::Rand32(g_GlobalRng, 6) + 1);
-    // TODO: 0x17CCDC — GameSound::SFXPlay(name);
-    // TODO: 0x17CCDC — field_0x148 = 6.0f; (reset combo-bonus accumulator)
 }
 
 // Binary @ 0x17B87C — derive head taper scale =
@@ -262,11 +253,8 @@ float SlashEntity::GetHeadThicknessScale() const {
 
 // Binary @ 0x17B82C — push next ghost slot in 8-entry ring, snapshot
 // blade vertex strips for fade-out replay.
-// TODO: 0x17B82C — SlashEntityGhost ring (s_Ghosts[8], s_GhostHead) not yet ported.
+// Port specific: SlashEntityGhost ring (s_Ghosts[8], s_GhostHead) not yet ported. No-op stub.
 void SlashEntity::CreateGhost() {
-    // TODO: 0x17B82C — s_GhostHead = (s_GhostHead + 1) & 7;
-    // TODO: 0x17B82C — SlashEntityGhost::StartEffect(&s_Ghosts[s_GhostHead],
-    //   &m_pLeftBuffer, m_PointCount);
 }
 
 // ---------------------------------------------------------------------------

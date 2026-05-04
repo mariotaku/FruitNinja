@@ -74,8 +74,7 @@ private:
 #ifdef __bada__
 struct FileLayoutAssert {
     static_assert(offsetof(File, m_filename) == 0x08, "File::m_filename offset (after vptr+systemId)");
-    // TODO: verify File sizeof == 0x40 against binary before asserting (audit RE flagged uncertain)
-    // static_assert(sizeof(File) == 0x40, "File sizeof");
+    static_assert(sizeof(File) == 0x40, "File sizeof");
 };
 #endif
 
