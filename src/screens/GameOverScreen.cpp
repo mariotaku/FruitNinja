@@ -63,6 +63,84 @@ static void DoQuitToMenu() {
 }
 
 // ---------------------------------------------------------------------------
+// Static content load/unload (binary: gated by static guard)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::LoadContent() {}
+void GameOverScreen::UnLoadContent() {}
+
+// ---------------------------------------------------------------------------
+// Default ctor (binary shape)
+// ---------------------------------------------------------------------------
+
+GameOverScreen::GameOverScreen()
+    : HUDControl3d(),
+      field_0x7c(0.0f),
+      m_State(0),
+      m_Timer(0.0f),
+      m_TitleSizeX(0.0f),
+      m_TitleSizeY(0.0f),
+      m_TitleSizeZ(0.0f),
+      field_0x94(0),
+      m_pRetryBtn(nullptr),
+      m_pSlot9c(nullptr),
+      field_0xa0(0),
+      m_pQuitBtn(nullptr),
+      m_pSlotA8(nullptr),
+      m_AnimCounter(0),
+      m_OffsetPosX(0.0f),
+      m_OffsetPosY(0.0f),
+      m_OffsetPosZ(0.0f),
+      m_pFruitFact(nullptr),
+      m_pSlotC0(nullptr),
+      m_pBonusScreen(nullptr),
+      m_pNoticeCtrl(nullptr),
+      m_PostOk(0),
+      m_PostInProgress(0),
+      m_ProgressCounter(0),
+      m_GameOverTex(0),
+      field_0x118(0),
+      m_MostFruitCount(-1),
+      m_bScoreSubmitted(0),
+      m_ExpressionIdx(0),
+      m_BgPatternIdx(0),
+      m_PomCount(0),
+      m_StarCount(0),
+      m_bIsClassic(0),
+      m_FruitFactAlpha(0.0f)
+{
+    memset(m_DaysLeftLabel, 0, sizeof(m_DaysLeftLabel));
+}
+
+// ---------------------------------------------------------------------------
+// Reset — empty in binary (0x00140554, single bx lr)
+// ---------------------------------------------------------------------------
+
+void GameOverScreen::Reset() {}
+
+// ---------------------------------------------------------------------------
+// IsAllowedToExit — always 1 in binary (0x0014061c)
+// ---------------------------------------------------------------------------
+
+bool GameOverScreen::IsAllowedToExit() { return true; }
+
+// ---------------------------------------------------------------------------
+// STUBS (binary) — float* overloads
+// ---------------------------------------------------------------------------
+
+// STUB: GameOverScreen::PreDrawOrder -- binary @ 0x???? (TODO RE)
+void GameOverScreen::PreDrawOrder(float* viewVec, int layerMask)
+{
+    (void)viewVec; (void)layerMask;
+}
+
+// STUB: GameOverScreen::DrawOrder -- binary @ 0x???? (TODO RE)
+void GameOverScreen::DrawOrder(float* viewVec, int layerMask)
+{
+    (void)viewVec; (void)layerMask;
+}
+
+// ---------------------------------------------------------------------------
 // GameOverScreen constructor (0x00142900) -- thin wrapper over Initialise
 // ---------------------------------------------------------------------------
 

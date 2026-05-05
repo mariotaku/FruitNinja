@@ -194,6 +194,23 @@ public:
     // STUB: ScrollingMenu::ClearTouch -- auto stub from binary missing-symbol set
     void ClearTouch();
     // ---- end AUTO-STUB MERGE ----
+
+    // ---- STUBS (binary) ----
+    // STUB: ScrollingMenu::Collide(long) -- binary @ 0x???? (TODO RE)
+    ScrollingMenuItem* Collide(long touchSlot);
+    // STUB: ScrollingMenu::Draw(float*) -- binary @ 0x???? (TODO RE)
+    void Draw(float* viewVec) override;
+    // STUB: ScrollingMenu::Init -- binary @ 0x???? (TODO RE)
+    void Init() override;
+    // STUB: ScrollingMenu::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+    void PreDraw(float* viewVec);
+    // STUB: ScrollingMenu::Release -- binary @ 0x???? (TODO RE)
+    void Release() override;
+    // STUB: ScrollingMenu::Reset -- binary @ 0x???? (TODO RE)
+    void Reset() override;
+    // STUB: ScrollingMenu::Skip -- binary @ 0x???? (TODO RE)
+    void Skip() override;
+    // ---- end STUBS ----
 };
 
 #endif // FN_SCROLLING_MENU_H

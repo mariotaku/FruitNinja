@@ -37,19 +37,16 @@ static const float NOTIF_PARTICLE_WINDOW   = 0.5f;
 
 // Binary @ 0x00152ed0
 NotificationControl::NotificationControl(const char* name, int points,
-                                          Mortar::SmartPtr<Mortar::Texture>* icon,
-                                          uint8_t type)
+                                          Mortar::SmartPtr<Mortar::Texture> icon,
+                                          NotificationType type)
     : m_TextScale(16.0f)
     , m_StateTimer(0.0f)
     , m_Points(points)
-    , m_NotifType(type)
+    , m_NotifType((uint8_t)type)
 {
     _pad[0] = _pad[1] = _pad[2] = 0;
 
-    // Copy icon SmartPtr
-    if (icon) {
-        m_AchIcon = *icon;
-    }
+    m_AchIcon = icon;
 
     // OS_SPrintf(m_DisplayName, 128, "%s", name) then ASCII tolower→toupper inline.
     // Binary: copies name into buffer, then upper-cases each character.
@@ -64,7 +61,7 @@ NotificationControl::NotificationControl(const char* name, int points,
 
     float maxWidth = 185.0f;
 
-    if (points >= 0 && type == Type_Numeric) {
+    if (points >= 0 && type == NotificationControl::Type_Numeric) {
         snprintf(m_PointsText, sizeof(m_PointsText), "%d", points);
         maxWidth = 170.0f;
     } else {
@@ -72,7 +69,7 @@ NotificationControl::NotificationControl(const char* name, int points,
     }
 
     // Type_Named: play "achievement" SFX
-    if (type == Type_Named) {
+    if (type == NotificationControl::Type_Named) {
         Game* g = Game::GetInstance();
         if (g && g->pGameSound) {
             g->pGameSound->SFXPlay("achievement", 1.0f, 1.0f);
@@ -261,3 +258,18 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
         }
     }
 }
+
+// STUB: NotificationControl::Init -- binary @ 0x???? (TODO RE)
+void NotificationControl::Init() {}
+
+// STUB: NotificationControl::Release -- binary @ 0x???? (TODO RE)
+void NotificationControl::Release() {}
+
+// STUB: NotificationControl::Reset -- binary @ 0x???? (TODO RE)
+void NotificationControl::Reset() {}
+
+// STUB: NotificationControl::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+void NotificationControl::PreDraw(float* /*viewVec*/) {}
+
+// STUB: NotificationControl::Draw(float*) -- binary @ 0x???? (TODO RE)
+void NotificationControl::Draw(float* /*viewVec*/) {}

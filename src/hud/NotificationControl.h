@@ -16,11 +16,13 @@ struct AchievementInfo;
 // Binary @ 0x00152ed0 (ctor) / 0x00152a00 (Update) / 0x001531f8 (Draw). sizeof=0x110.
 class NotificationControl : public HUDControl3d {
 public:
-    enum NotifType : uint8_t { Type_Numeric = 1, Type_Named = 2 };
+    // Binary enum name: NotificationType (not NotifType).
+    enum NotificationType { Type_Numeric = 1, Type_Named = 2 };
 
-    // Binary @ 0x00152ed0
+    // Binary @ 0x00152ed0 — takes SmartPtr by value and NotificationType enum.
     NotificationControl(const char* name, int points,
-                        Mortar::SmartPtr<Mortar::Texture>* icon, uint8_t type);
+                        Mortar::SmartPtr<Mortar::Texture> icon,
+                        NotificationType type);
     ~NotificationControl() override;
 
     // Binary @ 0x00152a00
@@ -42,15 +44,18 @@ public:
     uint8_t m_NotifType;                   // +0x10C
     uint8_t _pad[3];                       // +0x10D..+0x10F
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
+    // ---- STUBS (binary) ----
+    // STUB: NotificationControl::Init -- binary @ 0x???? (TODO RE)
+    void Init() override;
+    // STUB: NotificationControl::Release -- binary @ 0x???? (TODO RE)
+    void Release() override;
+    // STUB: NotificationControl::Reset -- binary @ 0x???? (TODO RE)
+    void Reset() override;
+    // STUB: NotificationControl::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+    void PreDraw(float* viewVec);
+    // STUB: NotificationControl::Draw(float*) -- binary @ 0x???? (TODO RE)
+    void Draw(float* viewVec) override;
+    // ---- end STUBS ----
 };
 
 #endif // FN_HUD_NOTIFICATION_CONTROL_H
