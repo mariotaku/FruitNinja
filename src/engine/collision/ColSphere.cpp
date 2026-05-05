@@ -7,7 +7,7 @@
 ColSphere::ColSphere() : Col(), center(m_PrimaryPoint), radius(0.0f) {}
 
 // Binary @ 0x0019fc50
-ColSphere::ColSphere(const Vec3& c, float r) : Col(), center(m_PrimaryPoint), radius(r) {
+ColSphere::ColSphere(Vec3 c, float r) : Col(), center(m_PrimaryPoint), radius(r) {
     m_PrimaryPoint = c;
 }
 

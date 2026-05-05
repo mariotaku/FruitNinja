@@ -130,17 +130,17 @@ public:
     static MissControl* GetFree();
 
     // 0x00151764 -- activate critical-hit label at a slice point.
-    void MakeCritical(const Vec3& pos, int playerIdx);
+    void MakeCritical(Vec3 pos, int playerIdx);
 
     // 0x001518d8 -- activate rare/special-fruit label.
-    void MakeRare(const Vec3& pos);
+    void MakeRare(Vec3 pos);
 
     // 0x00151d94 -- zen-bomb X overlay and miss-penalty indicator.
     void MakeDisappear(const Vec3& pos, int sizeMult,
                        const SmartPtr<Mortar::Texture>& tex);
 
     // 0x001515a4 -- activate combo indicator (combo_N.tex for N=clamp(combo,2,10)).
-    void MakeCombo(const Vec3& pos, int comboCount, int entityType);
+    void MakeCombo(Vec3 pos, int comboCount, int entityType);
 
     // vtable[12] @ 0x00151a60 -- fade state machine
     void Update(float dt) override;

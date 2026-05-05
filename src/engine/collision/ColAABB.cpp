@@ -5,7 +5,7 @@
 
 ColAABB::ColAABB() : Col(), m_Min(m_PrimaryPoint), m_Max() {}
 
-ColAABB::ColAABB(const Vec3& min, const Vec3& max) : Col(), m_Min(m_PrimaryPoint), m_Max(max) {
+ColAABB::ColAABB(Vec3 min, Vec3 max) : Col(), m_Min(m_PrimaryPoint), m_Max(max) {
     m_PrimaryPoint = min;
 }
 

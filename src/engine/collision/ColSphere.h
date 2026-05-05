@@ -19,7 +19,7 @@ public:
     // Binary @ 0x0019fc20 -- default ctor
     ColSphere();
     // Binary @ 0x0019fc50 -- parameterized ctor
-    ColSphere(const Vec3& c, float r);
+    ColSphere(Vec3 c, float r);
 
     virtual ~ColSphere() override {}
 

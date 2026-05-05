@@ -35,7 +35,7 @@ static GLuint s_ThumbTexture = 0;
 //   6. m_FontSize = fontSize, m_MinValue/MaxValue/CurrentValue
 //   7. m_TouchId = -1
 //   8. m_LayerFlags = 0x200 (layer bit 9)
-SliderControl::SliderControl(const Vec3& inPos, const Vec3& inSize,
+SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
                              const char* label,
                              int32_t minValue, int32_t maxValue,
                              uint16_t fontSize, int32_t initialValue)

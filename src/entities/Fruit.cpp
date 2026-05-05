@@ -223,8 +223,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     }
 }
 
-void Fruit::Chuck(const Vec3& velocity, float delay) {
-    vel = velocity;
+void Fruit::Chuck(float delay) {
     m_ChuckDelay = delay;
     m_ScaleAnim = 0.0f;
     flags &= ~ENT_SKIP_MASK;
@@ -1094,7 +1093,7 @@ void Fruit::Slice() {
 // Spin magnitude: +(2 + RandF(2.0)) or -(2 + RandF(2.0)). Binary uses
 //   WaveManager's Random instance; port substitutes rand() since this
 //   only affects display orientation, not gameplay.
-void Fruit::RotateFacingUp(bool alignToFacing, const Vec3& spinVelAxis) {
+void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
     // Random spin magnitude: +(2 + rand[0,2)) or -(2 + rand[0,2))
     // Matches: r = RandF(2.0); sign = (Rand32(2)==0) ? 1 : -1
     float r    = (float)rand() / (float)RAND_MAX * 2.0f;   // RandF(2.0)

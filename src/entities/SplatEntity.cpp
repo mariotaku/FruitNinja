@@ -237,7 +237,7 @@ void SplatEntity::DrawUpdate(float /*dt*/) {
 // in Update's landing branch (binary @ 0x0017fa1c). Removed from MakeSplat.
 //
 // Bugfix #6: m_ScaleSpawn snapshot added after m_Scale is set.
-void SplatEntity::MakeSplat(const Vec3& p, const Vec3& v, bool param3, int fruitType) {
+void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType) {
     // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
     // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
     // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.

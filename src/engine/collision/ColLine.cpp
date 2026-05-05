@@ -5,7 +5,7 @@
 
 ColLine::ColLine() : Col(), a(m_PrimaryPoint), b() {}
 
-ColLine::ColLine(const Vec3& start, const Vec3& end) : Col(), a(m_PrimaryPoint), b(end) {
+ColLine::ColLine(Vec3 start, Vec3 end) : Col(), a(m_PrimaryPoint), b(end) {
     m_PrimaryPoint = start;
 }
 

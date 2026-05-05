@@ -462,7 +462,7 @@ void GameModeScreen::Update(float dt) {
 // Guards on isP2PSupported flag — port has no P2P, always no-op.
 // Texture at g_instance+0x34 (primary) / +0x38 (alt) — NOT zen_sign.
 // ===================================================================
-void GameModeScreen::DrawConnectTexture(const Vec3& pos) {
+void GameModeScreen::DrawConnectTexture(Vec3 pos) {
     (void)pos;
     // Port: no P2P network support — skip entirely.
     // Binary: if (m_FrameTimer <= 0 || !isP2PSupported) return;

@@ -70,7 +70,7 @@ public:
     Vec3     m_LastTouchPos;
 
     // Binary @ 0x00168230 (C2) / 0x00168304 (C1)
-    VerticalScroller(const Vec3& pos, const Vec3& size,
+    VerticalScroller(Vec3 pos, Vec3 size,
                      int32_t minValue, int32_t maxValue, uint16_t stepSize,
                      int32_t currentValue, bool reverseDir,
                      uint8_t totalRows, uint16_t visibleHeight, uint16_t totalHeight);

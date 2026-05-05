@@ -6,7 +6,7 @@ namespace Math {
 
 // Binary @ 0x001b3248 — 2D foot-of-perpendicular in XY (Z=0)
 // Horizontal (A.y == B.y) and vertical (A.x == B.x) segments are special-cased.
-void ClosestPointOnLine(const Vec3& A, const Vec3& B, const Vec3& P, Vec3& out) {
+void ClosestPointOnLine(Vec3 A, Vec3 B, Vec3 P, Vec3& out) {
     if (A.x == B.x) {
         // Vertical segment — clamp to [min,max] y
         float minY = A.y < B.y ? A.y : B.y;
@@ -33,7 +33,7 @@ void ClosestPointOnLine(const Vec3& A, const Vec3& B, const Vec3& P, Vec3& out) 
 }
 
 // Binary @ 0x001b30f8 — 2D segment-segment intersect in XY with AABB bounds check
-bool LineIntersect(const Vec3& A1, const Vec3& A2, const Vec3& B1, const Vec3& B2, Vec3& out) {
+bool LineIntersect(Vec3 A1, Vec3 A2, Vec3 B1, Vec3 B2, Vec3& out) {
     float dx1 = A2.x - A1.x;
     float dy1 = A2.y - A1.y;
     float dx2 = B2.x - B1.x;

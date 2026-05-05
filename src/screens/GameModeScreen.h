@@ -125,7 +125,7 @@ private:
     void CreateControls();
     void RemoveButtons();
 
-    void DrawConnectTexture(const Vec3& pos);  // 0x0013f754
+    void DrawConnectTexture(Vec3 pos);  // 0x0013f754
 
     // vtable[18] @ 0x0013e21c — prime the first wave once the camera fade
     // crosses -0.9. Calls PrepareForLevelStart().

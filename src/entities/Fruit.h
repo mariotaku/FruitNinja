@@ -164,8 +164,9 @@ public:
         return m_bSliced || (m_SliceTimer > -1.0f);
     }
 
-    // Launch fruit with velocity (matches Fruit::Chuck)
-    void Chuck(const Vec3& velocity, float delay = 0.0f);
+    // Matches binary `Fruit::Chuck(float)`. Velocity is read from this->vel
+    // -- callers must set `vel` before calling.
+    void Chuck(float delay);
 
     // Matches Fruit::CheckHasGoneOffscreen (0x00175218). Returns true
     // only when BOTH halves are past the offscreen boundary with outward
@@ -180,7 +181,7 @@ public:
     // random starting orientation and m_RotVel1/m_RotVel2 to axisScale * scalar.
     // When flag=true, additional q_axis * q_up composition is applied to each
     // rotation slot. See Fruit.cpp for full algorithm.
-    void RotateFacingUp(bool flag, const Vec3& axisScale);
+    void RotateFacingUp(bool flag, Vec3 axisScale);
 
     // Matches Fruit::FruitType (0x00175b10). Resolves a fruit name
     // string to the index in the FRUIT_INFO array by hashing and

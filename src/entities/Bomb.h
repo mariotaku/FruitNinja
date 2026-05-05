@@ -150,7 +150,7 @@ public:
 
     // Matches Bomb::MakeFat (0x00171d78). Bomb-multiplier-powerup upgrade:
     // scales up bomb and reduces speed. skipSpawnFx=false plays the spawn FX.
-    static void MakeFat(Bomb* b, bool skipSpawnFx);
+    void MakeFat(bool skipSpawnFx);
 };
 
 #endif
