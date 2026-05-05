@@ -468,7 +468,7 @@ void GameOverScreen::CreateRetryButton() {
     m_pRetryBtn->m_Texture    = texHandle;
 
     m_pRetryBtn->m_ClickCallback =
-        Mortar::Delegate<void()>::Make(this, &GameOverScreen::OnRetryClicked);
+        Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked);
 
     game->hud->AddControl(m_pRetryBtn, false);
     // TODO: 0x00141188 -- wire m_pRetryBtn remove-callback to DeletedControl
@@ -520,7 +520,7 @@ void GameOverScreen::CreateQuitButton() {
     // Not applicable until TutorialControl text slots are wired.
 
     m_pQuitBtn->m_ClickCallback =
-        Mortar::Delegate<void()>::Make(this, &GameOverScreen::OnQuitClicked);
+        Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked);
 
     game->hud->AddControl(m_pQuitBtn, false);
     // TODO: 0x001412e4 -- wire m_pQuitBtn remove-callback to DeletedControl

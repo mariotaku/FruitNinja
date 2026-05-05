@@ -14,8 +14,8 @@
 // InputDeviceBada.  Methods gated with // TODO: where body is not yet
 // ported.
 
-// Callback type: Delegate1<bool, InputEvent*> per binary signature.
-typedef Delegate1<bool, InputEvent*> InputDeviceCallback;
+// Callback type: Mortar::Delegate1<bool, InputEvent*> per binary signature.
+typedef Mortar::Delegate1<bool, InputEvent*> InputDeviceCallback;
 
 // Device type enum — matches binary InputDeviceTypes values.
 // Bada touch device = 0 (first slot).

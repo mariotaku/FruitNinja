@@ -279,7 +279,7 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
 // installs the hit callback, and overwrites rotation fields so menu bombs
 // spin slowly (one axis moving, one locked) rather than with the random
 // 1..7 velocities from Bomb::Init.
-void Bomb::SetCallback(std::function<void()> cb) {
+void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* /*button*/) {
     m_bMenuBombHit = 1;
     m_HitCallback  = cb;
     m_RotY    = 0x2d;   // DAT_0017121c: 45 deg initial Y angle
@@ -701,7 +701,7 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         // Menu-bomb re-hit branch. Binary code:
         //   if (field_0x84 == 0 || *(field_0x84 + 0x123) != 0)
         //       ClearMenuItems();
-        //   Delegate0<void>::operator()(&field_0x40);   // hit callback
+        //   Mortar::Delegate0<void>::operator()(&field_0x40);   // hit callback
         //
         // The ClearMenuItems call is critical: without it, a diagonal
         // slash that clips both the Quit bomb and the Dojo / Play fruit

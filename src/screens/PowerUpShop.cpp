@@ -207,7 +207,7 @@ void PowerUpShop::Release() {
 
         // Binary: MenuButton.m_bNoDestructor = 1; replace m_RemoveCallback with empty delegate.
         m_BuyButton->m_bNoDestructor = 1;
-        m_BuyButton->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>();
+        m_BuyButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>();
 
         // Binary: HUD::RemoveControl(*Game.HUD, m_BuyButton); then delete.
         Game* game = Game::GetInstance();
@@ -360,12 +360,12 @@ void PowerUpShop::Update(float dt) {
         // Spawn position: origin + Vector3(160.8, -6.0, 0.0).
         Vec3 spawnPos = g_Origin + Vec3(160.8f, -6.0f, 0.0f);
 
-        // Build delegates (Delegate0<void> for ButtonSliced, Delegate1 for ButtonDeleted).
+        // Build delegates (Mortar::Delegate0<void> for ButtonSliced, Mortar::Delegate1 for ButtonDeleted).
         // TODO: 0x00156398 — Mortar::Delegate binding to member function; port uses
-        // Mortar::Delegate<void()> and Mortar::Delegate<void(HUDControl*)> bound via
+        // Mortar::Delegate0<void> and Mortar::Delegate1<void, HUDControl*> bound via
         // MakeDelegate / callee pattern. Stub with empty delegates until callee helper ported.
-        Mortar::Delegate<void()>           slicedCb;
-        Mortar::Delegate<void(HUDControl*)> deletedCb;
+        Mortar::Delegate0<void>           slicedCb;
+        Mortar::Delegate1<void, HUDControl*> deletedCb;
 
         // TODO: 0x00156398 — MenuButton constructor signature: (tex, &spawnPos, &delegate0,
         // fruitType, &origin, &delegate1). Port MenuButton init takes separate Init() call.
@@ -441,7 +441,7 @@ void PowerUpShop::SetBuyButtonState() {
 }
 
 // ============================================================
-// ButtonSliced @ 0x00155b5c (non-virtual; bound as Delegate0<void>)
+// ButtonSliced @ 0x00155b5c (non-virtual; bound as Mortar::Delegate0<void>)
 // ============================================================
 void PowerUpShop::ButtonSliced(float pushScalar) {
     // Binary @ 0x00155bf0:
@@ -486,7 +486,7 @@ void PowerUpShop::ButtonSliced(float pushScalar) {
 }
 
 // ============================================================
-// ButtonDeleted @ 0x00156aac (non-virtual; bound as Delegate1<void,HUDControl*>)
+// ButtonDeleted @ 0x00156aac (non-virtual; bound as Mortar::Delegate1<void,HUDControl*>)
 // ============================================================
 void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
     // Binary @ 0x00156aac:

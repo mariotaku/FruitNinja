@@ -424,7 +424,7 @@ void PauseScreen::Update(float dt) {
         // toolchain (GCC 4.4) can parse this -- lambdas weren't added until
         // GCC 4.5. Same observable binding in both compilers.
         m_ResumeButton->m_ClickCallback =
-            Mortar::Delegate<void()>::Make(this, &PauseScreen::PauseGameCallback);
+            Mortar::Delegate0<void>::Make(this, &PauseScreen::PauseGameCallback);
         m_ResumeButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_ResumeButton);
@@ -441,7 +441,7 @@ void PauseScreen::Update(float dt) {
         m_QuitButton->m_LayerFlags = 0x100;
         m_QuitButton->m_FruitType = -1;
         m_QuitButton->m_ClickCallback =
-            Mortar::Delegate<void()>::Make(this, &PauseScreen::QuitGameCallback);
+            Mortar::Delegate0<void>::Make(this, &PauseScreen::QuitGameCallback);
         m_QuitButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_QuitButton);
@@ -458,7 +458,7 @@ void PauseScreen::Update(float dt) {
         m_RetryButton->m_LayerFlags = 0x100;
         m_RetryButton->m_FruitType = -1;
         m_RetryButton->m_ClickCallback =
-            Mortar::Delegate<void()>::Make(this, &PauseScreen::RetryGameCallback);
+            Mortar::Delegate0<void>::Make(this, &PauseScreen::RetryGameCallback);
         m_RetryButton->m_bHighlighted = 1;
         if (game->hud) {
             game->hud->AddControl(m_RetryButton);

@@ -18,7 +18,7 @@ public:
     // Slot layout (stride 0x38 = 56 bytes, ARM32).
     // Field order verified from SFXPlay @ 0x00129270:
     //   str r0,[r4,#0x8] -> sound at +0x00; str r3,[r4,#0xc] -> id at +0x04.
-    // Delegate1 is 36 bytes (asm-inspector confirmed); fills +0x14..+0x37. No trailing field.
+    // Mortar::Delegate1 is 36 bytes (asm-inspector confirmed); fills +0x14..+0x37. No trailing field.
     struct Slot {
         Mortar::MortarSound*                  sound;          // +0x00
         uint32_t                              id;             // +0x04: sound name hash
@@ -28,7 +28,7 @@ public:
         uint8_t                               pad0B;          // +0x0B: alignment
         float                                 volume;         // +0x0C: default 1.0
         float                                 pitch;          // +0x10: default 1.0
-        Delegate1<bool, Mortar::MortarSound*> finishCallback; // +0x14 (36 bytes; fills +0x14..+0x37)
+        Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback; // +0x14 (36 bytes; fills +0x14..+0x37)
     };
 
     // offsetof asserts are ARM32 / Bada-only (4-byte ptrs, short-enums ABI).
@@ -55,7 +55,7 @@ public:
 
     // Binary @ 0x00129270 -- 4-arg form; 3-arg overload omits finishCallback.
     Mortar::MortarSound* SFXPlay(const char* name, float vol, float pitch,
-                                 const Delegate1<bool, Mortar::MortarSound*>& finishCallback);
+                                 const Mortar::Delegate1<bool, Mortar::MortarSound*>& finishCallback);
     Mortar::MortarSound* SFXPlay(const char* name, float vol = 1.0f, float pitch = 1.0f);
 
     // Binary @ 0x00129100

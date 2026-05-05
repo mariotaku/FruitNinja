@@ -302,7 +302,7 @@ void ShopListItem::Draw() {
 
     // Guard 2: skip if not onscreen.
     // Binary: if (*(this+0x2D) == 0) return;
-    // +0x2D is m_bOnscreen in the pre-Delegate1 gap (ScrollingMenuItem::m_bOnscreen).
+    // +0x2D is m_bOnscreen in the pre-Mortar::Delegate1 gap (ScrollingMenuItem::m_bOnscreen).
     // This is NOT the same as m_bOnscreenItem (+0x27C).
     if (!m_bOnscreen) {
         // Part 8 is OUTSIDE this guard (see binary spec).

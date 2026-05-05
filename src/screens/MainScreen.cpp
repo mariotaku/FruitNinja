@@ -310,7 +310,7 @@ void MainScreen::Update(float dt) {
             // so we don't need to set the state transition here — it
             // happens in DojoScreen.cpp before HUD::Update fires this
             // callback.
-            m_pDojoScreen->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>::Make(this, &MainScreen::DojoScreenRemoved);
+            m_pDojoScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::DojoScreenRemoved);
             game.hud->AddControl(m_pDojoScreen);
         }
         break;
@@ -403,7 +403,7 @@ void MainScreen::Update(float dt) {
             m_Timer2 <= STATE_0E_THRESHOLD &&
             !m_pGameModeScreen) {
             m_pGameModeScreen = new GameModeScreen(game, false);
-            m_pGameModeScreen->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>::Make(this, &MainScreen::GameModeScreenRemoved);
+            m_pGameModeScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::GameModeScreenRemoved);
             game.hud->AddControl(m_pGameModeScreen);
         }
         break;
@@ -798,7 +798,7 @@ void MainScreen::CreateToggles() {
     pSoundToggle->m_Texture = TexId(game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
-        Mortar::Delegate<void()>::Make(this, &MainScreen::SoundCallback), -1, Vec3(0,0,0), nullptr);
+        Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1, Vec3(0,0,0), nullptr);
     pSoundToggle->m_LayerFlags = 8;
     game.hud->AddControl(pSoundToggle);
 
@@ -807,7 +807,7 @@ void MainScreen::CreateToggles() {
     pMusicToggle->m_Texture = TexId(game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
-        Mortar::Delegate<void()>::Make(this, &MainScreen::MusicCallback), -1, Vec3(0,0,0), nullptr);
+        Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1, Vec3(0,0,0), nullptr);
     pMusicToggle->m_LayerFlags = 8;
     game.hud->AddControl(pMusicToggle);
 }
@@ -823,7 +823,7 @@ void MainScreen::CreatePlayDojo() {
     pPlayButton->m_Texture = TexId(m_TexNewGame);
     pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
     pPlayButton->Init(POS_PLAY_BUTTON,
-        Mortar::Delegate<void()>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
+        Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
     pPlayButton->m_LayerFlags = 8;
     // RemoveCallback: matches binary MainScreen::ButtonDeleted @ 0x0014acc0.
     // HUD::Update fires this right before deleting the MenuButton so we
@@ -833,7 +833,7 @@ void MainScreen::CreatePlayDojo() {
     // stays dangling and STATE_CAMERA_ZOOM's `if (!pPlayButton)` guard
     // skips CreatePlayDojo on return.
     pPlayButton->m_RemoveCallback =
-        Mortar::Delegate<void(HUDControl*)>::Make(this, &MainScreen::ButtonDeleted);
+        Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     game.hud->AddControl(pPlayButton);
 
     // Binary @ 0x0014b6f8: ResetTutePos called immediately after play button
@@ -849,11 +849,11 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->m_Texture = TexId(m_TexDojoIcon);
     pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
     pDojoButton->Init(POS_DOJO_BUTTON,
-        Mortar::Delegate<void()>::Make(this, &MainScreen::AboutCallback),
+        Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
         Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
     pDojoButton->m_LayerFlags = 8;
     pDojoButton->m_RemoveCallback =
-        Mortar::Delegate<void(HUDControl*)>::Make(this, &MainScreen::ButtonDeleted);
+        Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     game.hud->AddControl(pDojoButton);
 }
 
@@ -869,10 +869,10 @@ void MainScreen::CreateQuitButton() {
     // Binary: fruitType = *g_pFruitInfo = fruitCount (>= count → Bomb entity via MenuButton)
     int fruitCount = FruitInfo_GetCount();
     pQuitBtn->Init(POS_QUIT,
-        Mortar::Delegate<void()>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, Vec3(0,0,0), nullptr);
+        Mortar::Delegate0<void>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, Vec3(0,0,0), nullptr);
     pQuitBtn->m_LayerFlags = 8;
     pQuitBtn->m_RemoveCallback =
-        Mortar::Delegate<void(HUDControl*)>::Make(this, &MainScreen::ButtonDeleted);
+        Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     game.hud->AddControl(pQuitBtn);
 }
 

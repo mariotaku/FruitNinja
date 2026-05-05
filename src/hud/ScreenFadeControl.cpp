@@ -103,7 +103,7 @@ bool ScreenFadeControl::SetToMultiplayerState()
 // Binary @ 0x0015A7F0
 // DIFFERS: binary's Colour const& param is a dead-store -- m_Colour stays at ctor-default (white); fade is alpha-only
 void ScreenFadeControl::StartFade(bool inOrOut, float duration, const Colour& color,
-                                   Mortar::Delegate<void()> onComplete)
+                                   Mortar::Delegate0<void> onComplete)
 {
     (void)color;  // dead-store per binary — colour parameter is not applied to m_Colour
 

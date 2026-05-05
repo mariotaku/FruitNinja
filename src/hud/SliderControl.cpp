@@ -28,7 +28,7 @@ static GLuint s_ThumbTexture = 0;
 // Binary ctor body:
 //   1. HUDControl3d base init
 //   2. Mortar::Utf8StringIterator(&m_Label, label)
-//   3. Delegate0<void>(&m_OnValueChanged)
+//   3. Mortar::Delegate0<void>(&m_OnValueChanged)
 //   4. Assigns pos, size
 //   5. Samples two fonts via GOT[DAT_00160390] / GOT[DAT_00160394] to compute
 //      m_TrackWidth/Height and m_ThumbWidth/Height from font glyph metrics
@@ -73,7 +73,7 @@ SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
 }
 
 // Destructor chain -- Binary @ 0x001601a8 (D2) / 0x00160140 (D1/deleting)
-// D1/D2 call Release(), ~Delegate0, ~Mortar::Utf8StringIterator, ~HUDControl3d.
+// D1/D2 call Release(), ~Mortar::Delegate0, ~Mortar::Utf8StringIterator, ~HUDControl3d.
 SliderControl::~SliderControl() {
     Release();
 }

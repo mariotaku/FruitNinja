@@ -165,7 +165,7 @@ void ProgressionTimerControl::ResetTimer() {
 // Initial sprintf("%d", ceil(duration)) into m_TextBuf.
 // Does NOT touch m_bPaused or m_ShowAnim.
 void ProgressionTimerControl::StartCountdown(float duration,
-                                              Delegate0<void> onExpired,
+                                              Mortar::Delegate0<void> onExpired,
                                               bool countUp, bool autoStop) {
     m_TotalTime         = duration;
     m_RemainingTime     = duration;

@@ -46,12 +46,12 @@
 //   +0x28  float    m_Width       (BINARY NAME confirmed via demangled symbol.
 //                                  GetWidth()/SetWidth() target this. Default 0.0f.
 //                                  ShopListItem sets 290.0f = divider span width.)
-//   +0x2C  byte     _pre_del0    (padding; not part of Delegate1)
+//   +0x2C  byte     _pre_del0    (padding; not part of Mortar::Delegate1)
 //   +0x2D  byte     m_bOnscreen  SetOnscreen 0x0013ce10: this[0x2D] = param_bool
 //   +0x2E  byte     _pre_del1    (padding)
 //   +0x2F  byte     _pre_del2    (padding)
-//   +0x30  Delegate1  m_Delegate  (36 bytes on ARM32; Delegate1<void,ScrollingMenuItem*>)
-//          Binary ctor @ 0x0015b604: r6 = this+0x30; Delegate1::Delegate1(r6) called.
+//   +0x30  Mortar::Delegate1  m_Delegate  (36 bytes on ARM32; Mortar::Delegate1<void,ScrollingMenuItem*>)
+//          Binary ctor @ 0x0015b604: r6 = this+0x30; Mortar::Delegate1::Delegate1(r6) called.
 //          Spans +0x30..+0x53 (36 bytes = 0x24). 4-byte header + 32-byte callable.
 //   +0x54  char*    m_pText       SetText 0x0015b124: *(this+0x54)
 //   +0x58  (end of ScrollingMenuItem on ARM32; total size 88 bytes)
@@ -62,7 +62,7 @@
 // Analysed: 2026-04-25T23:30
 //
 
-#include <functional>
+#include "util/Delegate.h"
 #include <cassert>
 #include <cstdint>
 #include <cstddef>
@@ -107,7 +107,7 @@ public:
     virtual void SetParent(ScrollingMenu* parent) { m_pParent = parent; }
 
     // vtable +0x24 (slot 9): SetOnscreen(bool)
-    // Binary 0x0013ce10: this[0x2D] = param  (byte at +0x2D, pre-Delegate1 gap)
+    // Binary 0x0013ce10: this[0x2D] = param  (byte at +0x2D, pre-Mortar::Delegate1 gap)
     virtual void SetOnscreen(bool onscreen) { m_bOnscreen = (uint8_t)onscreen; }
 
     // vtable +0x28 (slot 10): SetText(char*)
@@ -170,10 +170,10 @@ public:
     //        ShopListItem sets 290.0f (divider span width).
     float m_Width;                    // +0x28
 
-    // +0x2C..+0x2F: 4-byte pre-Delegate1 region.
-    // Binary ASM: r6 = this+0x30 before Delegate1::Delegate1 call (ctor 0x0015b5dc).
+    // +0x2C..+0x2F: 4-byte pre-Mortar::Delegate1 region.
+    // Binary ASM: r6 = this+0x30 before Mortar::Delegate1::Delegate1 call (ctor 0x0015b5dc).
     // SetOnscreen 0x0013ce10 writes to this[0x2D] => byte at +0x2D = m_bOnscreen.
-    // The 4 bytes +0x2C..+0x2F are NOT part of the Delegate1 object.
+    // The 4 bytes +0x2C..+0x2F are NOT part of the Mortar::Delegate1 object.
     //   +0x2C  byte  _pre_del0   (padding byte before m_bOnscreen)
     //   +0x2D  byte  m_bOnscreen (SetOnscreen target)
     //   +0x2E  byte  _pre_del1
@@ -183,17 +183,10 @@ public:
     uint8_t _pre_del1;    // +0x2E
     uint8_t _pre_del2;    // +0x2F
 
-    // +0x30..+0x53: Delegate1<void,ScrollingMenuItem*> (36 bytes in binary).
-    // Binary: Delegate1::Delegate1 called with this+0x30 (r6 at 0x0015b604).
-    // Size 36 = 4-byte header + 32-byte callable. No tail padding in binary.
-    // On x86_64, std::function (alignment 8) starts at offset 8 within the struct
-    // (4 bytes hdr + 4 bytes compiler pad). struct total size rounds to 40 bytes.
-    // m_pText at +0x54 is correct on ARM32 (36 bytes: 4+32=36, no pad).
-    // On x86_64 the struct pads to 40 bytes; _pad in ShopListItem compensates.
-    struct {
-        uint8_t _hdr[4];                                       // +0x30..+0x33 (Delegate1 header)
-        std::function<void(ScrollingMenuItem*)> _delegate_fn;  // +0x34 ARM32 / +0x38 x86_64
-    } m_Delegate;   // +0x30, 36 bytes ARM32 / 40 bytes x86_64
+    // +0x30..+0x53: Mortar::Delegate1<void,ScrollingMenuItem*> (36 bytes in binary).
+    // Binary: Mortar::Delegate1::Delegate1 called with this+0x30 (r6 at 0x0015b604).
+    // Port uses Mortar::Delegate1 directly -- same 36-byte ABI.
+    Mortar::Delegate1<void, ScrollingMenuItem*> m_Delegate;
 
     // +0x54: display text pointer
     // Binary: SetText 0x0015b124 stores at *(this+0x54).
@@ -204,7 +197,7 @@ public:
 };
 
 // Convenience accessor that matches binary SetOnscreen semantics.
-// SetOnscreen 0x0013ce10 writes byte at +0x2D (pre-Delegate1 gap, m_bOnscreen field).
+// SetOnscreen 0x0013ce10 writes byte at +0x2D (pre-Mortar::Delegate1 gap, m_bOnscreen field).
 inline void ScrollingMenuItem_SetOnscreen(ScrollingMenuItem* item, bool v) {
     item->m_bOnscreen = (uint8_t)v;
 }

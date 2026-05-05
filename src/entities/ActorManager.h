@@ -8,7 +8,7 @@
 //     DeactivateAllEntities(type) / iterator walks work as expected;
 //   - a 512-slot free pool used to recycle entities between waves
 //     instead of new/delete churn;
-//   - a factory Delegate1<Entity*, long> at +0x1024 registered once from
+//   - a factory Mortar::Delegate1<Entity*, long> at +0x1024 registered once from
 //     GameInitialise; callers of Add never construct entities directly.
 //
 // Field names / offsets match binary ctor + RE of Initialise, Add,
@@ -19,7 +19,7 @@
 //   - LinkedHeap allocator at +0x000 — port uses new[] for the type-list
 //     array and leaves m_pHeap as an opaque non-null sentinel so the
 //     binary's `if (m_pHeap != nullptr)` gate in Update/Draw still behaves.
-//   - Delegate2<long, ulong, bool&> hash converter at +0x1048 — not
+//   - Mortar::Delegate2<long, ulong, bool&> hash converter at +0x1048 — not
 //     called from any live FruitNinja code path.
 //   - LoadEntity / PostLoad — tied to serialisation we don't implement.
 //
@@ -42,7 +42,7 @@ public:
     // Binary: Entity*[0x200] flat array at +0x008.
     static const int FREE_POOL_CAP = 512;
 
-    // Factory delegate signature — matches Delegate1<Entity*, long>.
+    // Factory delegate signature — matches Mortar::Delegate1<Entity*, long>.
     typedef Entity* (*FactoryFn)(int entityType);
 
     // --- Fields mirrored from binary layout (sizes/offsets in comments) -
@@ -84,8 +84,8 @@ public:
     // +0x1020
     bool m_DebugDraw;
 
-    // +0x1024 (binary): factory function is Delegate1<Entity*, long> object (36 bytes).
-    // DIFFERS: binary uses Delegate1<Entity*, long> object (36 bytes); port stores
+    // +0x1024 (binary): factory function is Mortar::Delegate1<Entity*, long> object (36 bytes).
+    // DIFFERS: binary uses Mortar::Delegate1<Entity*, long> object (36 bytes); port stores
     //          raw fnptr (4 bytes) at the same logical offset. Functionally equivalent
     //          for the singular call site. Layout deviates by 32 bytes from binary.
     FactoryFn m_FactoryDelegate;
@@ -111,7 +111,7 @@ public:
     void RegisterFactory(FactoryFn factory) { m_FactoryDelegate = factory; }
 
     // Hash converter delegate signature --
-    //   Delegate2<long entityType, unsigned long& outHash, bool& outOk>.
+    //   Mortar::Delegate2<long entityType, unsigned long& outHash, bool& outOk>.
     // Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
     // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
     // RE-gap: exact function body behind GOT slots [0x0016ccbc..0x0016ccc0].
@@ -123,9 +123,9 @@ public:
     // TODO: implement -- see docs/systems/gameinit-todos.md step 16.
     void RegisterHashConverter(HashFn fn);
 
-    // +0x1048 (binary): hash converter is Delegate2<long, ulong, bool&> object (36 bytes).
-    // DIFFERS: binary uses Delegate2 object (36 bytes); port stores raw fnptr (4 bytes).
-    //          Binary offset +0x1048; port offset drifts further due to Delegate1 size diff.
+    // +0x1048 (binary): hash converter is Mortar::Delegate2<long, ulong, bool&> object (36 bytes).
+    // DIFFERS: binary uses Mortar::Delegate2 object (36 bytes); port stores raw fnptr (4 bytes).
+    //          Binary offset +0x1048; port offset drifts further due to Mortar::Delegate1 size diff.
     HashFn m_HashDelegate;
 
     // --- Entity API -----------------------------------------------------
@@ -296,7 +296,7 @@ public:
 };
 
 // Layout asserts. m_FactoryDelegate / m_HashDelegate offsets deviate from binary because:
-//   m_FactoryDelegate is raw fnptr (4B) vs Delegate1 object (36B) (+32B drift)
+//   m_FactoryDelegate is raw fnptr (4B) vs Mortar::Delegate1 object (36B) (+32B drift)
 // Those two offsets are excluded. All list-containing fields use 8B (Sourcery 2010q1).
 #ifdef __bada__
 struct ActorManagerLayoutAssert {

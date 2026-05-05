@@ -38,7 +38,7 @@ public:
     bool m_bAutoStopOnExpire;
 
     // +0xCC: delegate fired when timer expires (36 bytes)
-    Delegate0<void> m_OnExpiredDelegate;
+    Mortar::Delegate0<void> m_OnExpiredDelegate;
 
     // Binary @ 0x00157d08 (C2) / 0x00157dbc (C1)
     // Pos = Vec3(-230, 140, 0), size = Vec3(0, 18, 0)
@@ -96,7 +96,7 @@ public:
     // Writes total/remaining/delegate/autoStop/active=true/countUp;
     // initial sprintf("%d", ceil(duration)) into m_TextBuf.
     // Does NOT touch m_bPaused or m_ShowAnim.
-    void StartCountdown(float duration, Delegate0<void> onExpired,
+    void StartCountdown(float duration, Mortar::Delegate0<void> onExpired,
                         bool countUp, bool autoStop);
 
     // Non-virtual -- Binary @ 0x00157b8c

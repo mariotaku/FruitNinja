@@ -53,7 +53,7 @@ public:
 
     // Binary @ 0x0015A7F0 -- replace prior fade; alpha 0<->255 over duration.
     void StartFade(bool inOrOut, float duration, const Colour& color,
-                   Mortar::Delegate<void()> onComplete);
+                   Mortar::Delegate0<void> onComplete);
 
     // Binary @ 0x0015A764 -- clears visible+animating; does NOT fire OnComplete
     void CancelFade();
@@ -76,7 +76,7 @@ private:
     uint8_t  m_TargetAlpha;          // +0x8E
     uint8_t  _pad8F;                 // +0x8F
 
-    Mortar::Delegate<void()>   m_OnComplete;   // +0x90 (36 bytes)
+    Mortar::Delegate0<void>   m_OnComplete;   // +0x90 (36 bytes)
     SmartPtr<Mortar::Texture>  m_FadeTexture;  // +0xB4 (4 bytes)
 };
 

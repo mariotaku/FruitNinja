@@ -250,7 +250,7 @@ void BaseScreen::UpdateButtons(float dt) {
             btn->m_TargetSize = btn->m_TargetSize * sb.m_scaleB;
 
             // Wire ControlDeleted as remove callback
-            btn->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>::Make(&sb, &ScreenButton::ControlDeleted);
+            btn->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(&sb, &ScreenButton::ControlDeleted);
 
             // Apply fruit piece scale + optional rotation
             if (btn->m_pFruitPiece) {
@@ -280,7 +280,7 @@ void BaseScreen::UpdateButtons(float dt) {
                     // Fruit alive: disable taps + redirect tap to shrink-call
                     btn->m_bEnabled = 0;
                     btn->SetCallback(
-                        Mortar::Delegate<void()>::Make(&sb, &ScreenButton::ShrinkButtonCall));
+                        Mortar::Delegate0<void>::Make(&sb, &ScreenButton::ShrinkButtonCall));
                 } else {
                     btn->m_bPendingRemoval = 1;
                 }

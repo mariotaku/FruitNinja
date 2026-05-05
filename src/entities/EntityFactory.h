@@ -3,7 +3,7 @@
 
 // EntityFactory — matches the free function `CreateEntity` at
 // 0x0017421c in the binary. Registered with Mortar::ActorManager as the
-// Delegate1<Mortar::Entity*, long> factory at struct offset +0x1024 (via
+// Mortar::Delegate1<Mortar::Entity*, long> factory at struct offset +0x1024 (via
 // Mortar::ActorManager::RegisterFactory at 0x0016d870).
 //
 // See docs/functions/entity-factory-combo-timekeeper.md for the full
