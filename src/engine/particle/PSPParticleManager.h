@@ -75,7 +75,7 @@ struct PSPParticleTemplate {
     uint8_t  m_ColourMidMax[4];    // +0xA0
     uint8_t  m_ColourEndMin[4];    // +0xA4
     uint8_t  m_ColourEndMax[4];    // +0xA8
-    SmartPtr<Texture> m_Texture;   // +0xAC  4 bytes (pointer)
+    Mortar::SmartPtr<Texture> m_Texture;   // +0xAC  4 bytes (pointer)
     float    m_AspectRatio;        // +0xB0
     int32_t  m_UseDepth;           // +0xB4
 };

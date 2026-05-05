@@ -19,8 +19,8 @@
 // Class-static texture SmartPtrs.
 // LoadContent loads: "checked.tex" -> s_checked, "unchecked.tex" -> s_unchecked.
 // Binary @ 0x00135010 / 0x0013508C.
-SmartPtr<Mortar::Texture> CheckBox::s_checked;
-SmartPtr<Mortar::Texture> CheckBox::s_unchecked;
+Mortar::SmartPtr<Mortar::Texture> CheckBox::s_checked;
+Mortar::SmartPtr<Mortar::Texture> CheckBox::s_unchecked;
 
 // Binary @ 0x00134CE0
 CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
@@ -124,7 +124,7 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
     }
 
     // Select checked or unchecked texture.
-    SmartPtr<Mortar::Texture>& texPtr = m_bChecked ? s_checked : s_unchecked;
+    Mortar::SmartPtr<Mortar::Texture>& texPtr = m_bChecked ? s_checked : s_unchecked;
     if (!texPtr.IsValid()) return;
 
     GLuint texId = texPtr->m_TexId;

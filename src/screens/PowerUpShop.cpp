@@ -27,11 +27,11 @@
 #include <list>
 
 // Binary @ 0x_GLOBAL__I_PowerUpShop_cpp:
-// File-static SmartPtr<Texture> singletons, nulled by UnLoadContent.
+// File-static Mortar::SmartPtr<Texture> singletons, nulled by UnLoadContent.
 // LoadContent is empty; textures are resolved on first use via TextureManager.
-static SmartPtr<Mortar::Texture> g_BuyBg;
-static SmartPtr<Mortar::Texture> g_Arrow;
-static SmartPtr<Mortar::Texture> g_FruitIcons[3];
+static Mortar::SmartPtr<Mortar::Texture> g_BuyBg;
+static Mortar::SmartPtr<Mortar::Texture> g_Arrow;
+static Mortar::SmartPtr<Mortar::Texture> g_FruitIcons[3];
 
 // Zero-vector and unit-vector constants (from _GLOBAL__I_PowerUpShop_cpp).
 // Binary initialises these as file-static Vec3 (confirmed by GOT references in Update/Release).
@@ -104,7 +104,7 @@ void PowerUpShop::LoadContent() {
 }
 
 // ============================================================
-// UnLoadContent @ 0x00155dc4 — null three file-static SmartPtr<Texture>s.
+// UnLoadContent @ 0x00155dc4 — null three file-static Mortar::SmartPtr<Texture>s.
 // ============================================================
 void PowerUpShop::UnLoadContent() {
     // Binary @ 0x00155dc4:

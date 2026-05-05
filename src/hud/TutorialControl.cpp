@@ -56,7 +56,7 @@ TutorialControl::TutorialControl()
 {
     // swipe_fruit_begin.tex -> m_Texture (+0x74, the arrow)
     {
-        SmartPtr<Mortar::Texture> tex =
+        Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("swipe_fruit_begin.tex");
         if (tex.IsValid()) m_Texture = tex->m_TexId;
     }

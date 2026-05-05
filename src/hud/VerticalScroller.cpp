@@ -13,7 +13,7 @@
 #include "render/gl_funcs.h"
 
 // ---------------------------------------------------------------------------
-// Module-scope texture handles (binary: SmartPtr<Texture> GOT slots for
+// Module-scope texture handles (binary: Mortar::SmartPtr<Texture> GOT slots for
 // vbar/vslider/arrow). Port uses GLuint since Draw/LoadContent are no-op stubs.
 // Binary @ GOT[+0x7148], GOT[+0x7104], GOT[+0x7B04]
 static GLuint s_vbar    = 0;
@@ -167,8 +167,13 @@ void VerticalScroller::LoadContent() {
 // Static -- Binary @ 0x001687D0
 // Defunct: VerticalScroller -- no-op stub; binary @ 0x001687D0
 void VerticalScroller::UnloadContent() {
-    // Stub: binary calls SmartPtr<Texture>::SetNull on s_vbar, s_vslider, s_arrow.
+    // Stub: binary calls Mortar::SmartPtr<Texture>::SetNull on s_vbar, s_vslider, s_arrow.
     s_vbar    = 0;
     s_vslider = 0;
     s_arrow   = 0;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: VerticalScroller::UpdateFromGameWork -- auto stub
+void VerticalScroller::UpdateFromGameWork() {}
+// ---- end AUTO-STUB MERGE ----

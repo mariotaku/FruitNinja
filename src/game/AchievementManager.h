@@ -62,7 +62,7 @@ struct AchievementInfo {
     char      m_Description[64];                       // 0x000 (XML "description", GETSTRING-localised)
     char      m_Name[64];                              // 0x040 (XML "name" — also save-key string)
     uint32_t  m_NameHash;                              // 0x080
-    SmartPtr<Mortar::Texture> m_Texture;               // 0x084 (8 bytes)
+    Mortar::SmartPtr<Mortar::Texture> m_Texture;               // 0x084 (8 bytes)
     char      m_LongText[256];                         // 0x088 (optional element child text)
     int       m_Threshold;                             // 0x188 (XML "value" attr)
     int       m_Points;                                // 0x18C (XML "points" attr)

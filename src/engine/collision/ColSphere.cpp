@@ -58,3 +58,9 @@ bool ColSphere::Contains(const Vec3& p) const {
     return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;
 }
 
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ColSphere::ColSphereLine -- auto stub
+void ColSphere::ColSphereLine(ColSphere*, ColLine*, Vec3*) {}
+// STUB: ColSphere::ColSphereSphere -- auto stub
+void ColSphere::ColSphereSphere(ColSphere*, ColSphere*, Vec3*) {}
+// ---- end AUTO-STUB MERGE ----

@@ -7,7 +7,7 @@
 namespace Mortar {
 
 // Binary @ 0x001ad150
-AnimationState::AnimationState(SmartPtr<AnimationList> list) {
+AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
     if (list.IsValid()) {
         m_AnimList = list;
     } else {
@@ -71,7 +71,7 @@ Animation* AnimationState::GetAnimation(unsigned long idx) const {
 }
 
 // Binary @ 0x001ad398
-void AnimationState::LinkMesh(const SmartPtr<Model>& m) {
+void AnimationState::LinkMesh(const Mortar::SmartPtr<Model>& m) {
     m_Mesh = m;
     RebindAnim();
 }
@@ -119,8 +119,8 @@ bool AnimationState::IsPlaying() const {
 }
 
 // Binary @ 0x001acffc -- Meyers singleton; empty AnimationList shared across all default ctors
-SmartPtr<AnimationList> AnimationState::GetDummyAnimList() {
-    static SmartPtr<AnimationList> s_dummy(new AnimationList());
+Mortar::SmartPtr<AnimationList> AnimationState::GetDummyAnimList() {
+    static Mortar::SmartPtr<AnimationList> s_dummy(new AnimationList());
     return s_dummy;
 }
 

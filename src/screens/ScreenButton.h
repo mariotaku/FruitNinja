@@ -50,7 +50,7 @@ struct ScreenButton {
     MenuButton* m_pButton;
 
     // +0x08: button texture
-    SmartPtr<Mortar::Texture> m_tex;
+    Mortar::SmartPtr<Mortar::Texture> m_tex;
 
     // +0x0C (36 bytes in binary): visibility predicate.
     // Called with dt each frame when m_pButton is nullptr.
@@ -114,6 +114,22 @@ struct ScreenButton {
     // Matches ScreenButton::ShrinkButtonCall @ 0x001300f0.
     // Called when fruit shrink animation completes.
     void ShrinkButtonCall();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ScreenButton::DefaultButtonDelegate -- auto stub from binary missing-symbol set
+    void DefaultButtonDelegate(MenuButton*, float, ScreenButton&);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

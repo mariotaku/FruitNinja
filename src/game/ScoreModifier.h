@@ -69,6 +69,22 @@ public:
     // when m_bDeferPoints is active.
     // TODO: implement operator() body (binary addr TBD — RE needed)
     int operator()(int n);
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ScoreModifier::DeferPoints -- auto stub from binary missing-symbol set
+    void DeferPoints(int);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_GAME_SCORE_MODIFIER_H

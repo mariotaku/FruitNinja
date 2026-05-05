@@ -242,7 +242,7 @@ void ItemManager::SetEquippedItem(int type, ItemInfo* item) {
 
     if (type == ITEM_TYPE_BACKGROUND) {
         if (*funcCalls > 0) {
-            // Binary: SmartPtr<Texture> curBG; GetCurrentBackground(&curBG);
+            // Binary: Mortar::SmartPtr<Texture> curBG; GetCurrentBackground(&curBG);
             // equal = SmartPtr::operator_cast_to_bool(&curBG);
             // if equal != 0 goto DONE;
             // Port stub: we can't check curBG without ChangeBackground ported,
@@ -450,3 +450,20 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
     if (type < 0 || type >= 4) return nullptr;
     return m_DefaultItems[type];
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ItemManager::EquipItem -- auto stub
+void ItemManager::EquipItem(unsigned int) {}
+// STUB: ItemManager::PlayAlternateComboSound -- auto stub
+void ItemManager::PlayAlternateComboSound(int) {}
+// STUB: ItemManager::PlayAlternateImpactSound -- auto stub
+void ItemManager::PlayAlternateImpactSound(float, float) {}
+// STUB: ItemManager::PlayAlternateSwipeSound -- auto stub
+void ItemManager::PlayAlternateSwipeSound(float, float) {}
+// STUB: ItemManager::SetSwipeLoodVol -- auto stub
+void ItemManager::SetSwipeLoodVol(float) {}
+// STUB: ItemManager::UnequipItem -- auto stub
+void ItemManager::UnequipItem(unsigned int) {}
+// STUB: ItemManager::Update -- auto stub
+void ItemManager::Update(float) {}
+// ---- end AUTO-STUB MERGE ----

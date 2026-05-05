@@ -104,3 +104,18 @@ Entity* Entity::ListenerCallback(Entity* a, Entity* /*b*/, Mortar::Message* /*ms
 
 // TODO: implement ET_RemoveEntity (binary @ 0x00174684) when EntityTracker tree storage is ported
 void ET_RemoveEntity(int /*treeIdx*/, uint16_t /*trackerID*/) {}
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: Entity::HeapClear -- auto stub
+void Entity::HeapClear() {}
+// STUB: Entity::HeapDisplay -- auto stub
+void Entity::HeapDisplay(bool) {}
+// STUB: Entity::HeapExist -- auto stub
+void Entity::HeapExist() {}
+// STUB: Entity::HeapGetFree -- auto stub
+void Entity::HeapGetFree() {}
+// STUB: Entity::HeapGetSize -- auto stub
+void Entity::HeapGetSize() {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

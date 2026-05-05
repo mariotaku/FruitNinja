@@ -11,18 +11,18 @@
 
 namespace Mortar {
 
-// Matches Mortar::IModelNode (virtual, 0x0C = same size as ReferenceCounter)
+// Matches Mortar::IModelNode (virtual, 0x0C = same size as Mortar::ReferenceCounter)
 // Ref: Mesh vtable @ 0x001ebdd8 (11 entries), IModelNode ctor @ 0x001b1fd8
 //
-// Original inheritance: ReferenceCounter → IModelNode → Mesh
+// Original inheritance: Mortar::ReferenceCounter → IModelNode → Mesh
 // IModelNode adds no data fields — only virtual methods.
 //
 // Vtable layout:
-//   [0] ~Mesh deleting   [1] ~Mesh complete   [2] GetRefCounter (ReferenceCounter)
+//   [0] ~Mesh deleting   [1] ~Mesh complete   [2] GetRefCounter (Mortar::ReferenceCounter)
 //   [3] GetName          [4] Draw             [5] GetBounds
 //   [6] GenerateBindings [7] GenerateBindings (stub)
 //   [8] BindSkeleton     [9] GetGeometryCount [10] GetGeometry
-class IModelNode : public ReferenceCounter {
+class IModelNode : public Mortar::ReferenceCounter {
 public:
     virtual ~IModelNode() {}
 
@@ -48,7 +48,7 @@ public:
     // vtable[9]: uint GetGeometryCount() const
     virtual int GetGeometryCount() const = 0;
 
-    // vtable[10]: SmartPtr<Geometry> GetGeometry(ulong idx) const
+    // vtable[10]: Mortar::SmartPtr<Geometry> GetGeometry(ulong idx) const
     // Port: omitted — Geometry class replaced by GeometryEntry; nothing uses this polymorphically.
     // Mesh provides GetGeometryEntry(idx) directly.
 };

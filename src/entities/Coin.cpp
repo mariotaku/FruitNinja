@@ -49,7 +49,7 @@ static bool s_loaded = false;
 
 // TODO: load "models/coin.mmd" via MeshManager when asset pipeline is wired.
 // Binary: Coin::LoadContent loads a .mmd into s_coinModel.
-static SmartPtr<Mortar::Model> s_coinModel;
+static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 
 // ---------------------------------------------------------------------------
 // CoinArrived — static helper @ 0x0017320C.

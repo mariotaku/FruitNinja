@@ -18,7 +18,7 @@
 //   +0x8E: m_TargetAlpha    uint8_t
 //   (pad +0x8F)
 //   +0x90: m_OnComplete     Mortar::Delegate0<void> (36 bytes)
-//   +0xB4: m_FadeTexture    SmartPtr<Mortar::Texture> (4 bytes)
+//   +0xB4: m_FadeTexture    Mortar::SmartPtr<Mortar::Texture> (4 bytes)
 //   Total: 0xB8
 
 #include "HUDControl3d.h"
@@ -77,7 +77,7 @@ private:
     uint8_t  _pad8F;                 // +0x8F
 
     Mortar::Delegate0<void>   m_OnComplete;   // +0x90 (36 bytes)
-    SmartPtr<Mortar::Texture>  m_FadeTexture;  // +0xB4 (4 bytes)
+    Mortar::SmartPtr<Mortar::Texture>  m_FadeTexture;  // +0xB4 (4 bytes)
 };
 
 #endif // FN_HUD_SCREENFADECONTROL_H

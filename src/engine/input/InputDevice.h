@@ -69,6 +69,26 @@ public:
     // manager which routes here.
     // TODO: 0x00195764 — route via SendIndividualTouchCallbacks once ported.
     virtual void              DispatchEvent(InputEvent* event) = 0;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: InputDevice::AddAction -- auto stub from binary missing-symbol set
+    void AddAction(InputActionMapper*);
+    // STUB: InputDevice::AxisEvent -- auto stub from binary missing-symbol set
+    void AxisEvent(int, unsigned int, float, float, unsigned int, int);
+    // STUB: InputDevice::ButtonPressed -- auto stub from binary missing-symbol set
+    void ButtonPressed(unsigned int, unsigned int, float, unsigned int, int);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

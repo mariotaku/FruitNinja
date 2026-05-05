@@ -176,6 +176,22 @@ public:
 private:
     // +0x68 (inferred): item list
     std::vector<ScrollingMenuItem*> m_Items;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ScrollingMenu::ClearTouch -- auto stub from binary missing-symbol set
+    void ClearTouch();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_SCROLLING_MENU_H

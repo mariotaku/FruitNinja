@@ -14,7 +14,7 @@ namespace Mortar {
 class BakedString {
 public:
     struct PageData {
-        SmartPtr<Texture> texture;
+        Mortar::SmartPtr<Texture> texture;
         std::vector<QUADCUSTOMVERTEX> vertices;
     };
 
@@ -38,6 +38,24 @@ public:
     void Clear();
 
     bool IsValid() const { return !m_Pages.empty(); }
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: BakedString::AddDropShadow -- auto stub from binary missing-symbol set
+    void AddDropShadow();
+    // STUB: BakedString::LayoutToCircle -- auto stub from binary missing-symbol set
+    void LayoutToCircle(float);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

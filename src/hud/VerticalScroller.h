@@ -116,6 +116,22 @@ public:
     // Layout assertions -- only valid under Bada/ARM cross-toolchain.
     // sizeof check done as static_assert outside the class body below.
 #endif
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: VerticalScroller::UpdateFromGameWork -- auto stub from binary missing-symbol set
+    void UpdateFromGameWork();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

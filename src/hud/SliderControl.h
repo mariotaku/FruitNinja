@@ -96,6 +96,22 @@ private:
     // Non-virtual private helper; called by Update while touch is held.
     // Binary @ 0x0015ffb0 (~80 instructions; maps touch position to m_CurrentValue)
     void UpdateTouchPosition();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: SliderControl::UpdateFromGameWork -- auto stub from binary missing-symbol set
+    void UpdateFromGameWork();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

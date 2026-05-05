@@ -62,7 +62,7 @@ static const float TRAIL_LIFETIME = 0.25f;
 // Dojo shop UI. Until then both stay 0 (no trail for default ORIGINAL_SLASH).
 
 // --- Global content ---
-static SmartPtr<Mortar::Texture> g_BladeTex;
+static Mortar::SmartPtr<Mortar::Texture> g_BladeTex;
 
 // --- Global instance ---
 SlashEntity* g_pSlashEntity = nullptr;
@@ -93,7 +93,7 @@ static uint8_t  g_DirectionalFlag   = 0;      // 0x0024D8BC (0=no trail, 1=trail
 static uint32_t g_TrailHash         = 0;      // 0x0024D8C0
 static uint32_t g_ContactHash       = 0;      // 0x0024D8C4
 static uint32_t g_SecondHash        = 0;      // 0x0024D8C8
-static SmartPtr<Mortar::Texture> g_ModTexture; // g_SlashState.modTexture (+0xd8)
+static Mortar::SmartPtr<Mortar::Texture> g_ModTexture; // g_SlashState.modTexture (+0xd8)
 
 static float    g_Scale1            = 1.0f;   // 0x001F3E5C (lifetime divisor)
 static float    g_Scale2            = 1.0f;   // 0x001F3E60 (max thickness coeff; max width = g_Scale2 * 9.0)
@@ -634,7 +634,7 @@ void SlashEntity::Draw() {
     // blade.tex when set. Binary @ 0x0017E424:
     //   if (SmartPtr::IsValid(g_SlashState.modTexture)) bind modTexture
     //   else bind defaultTexture
-    SmartPtr<Mortar::Texture>& bladeTex =
+    Mortar::SmartPtr<Mortar::Texture>& bladeTex =
         g_ModTexture.IsValid() ? g_ModTexture : g_BladeTex;
     if (!bladeTex.IsValid()) return;
 
@@ -818,7 +818,7 @@ void SlashEntity::ColoursChanged() {
 
 // Accessors used by render consumers in this file. Hot inlines kept in
 // the .cpp so the globals stay file-scope.
-const SmartPtr<Mortar::Texture>& SlashEntity::GetModTexture()    { return g_ModTexture; }
+const Mortar::SmartPtr<Mortar::Texture>& SlashEntity::GetModTexture()    { return g_ModTexture; }
 uint32_t SlashEntity::GetTrailEmitterHash()                       { return g_TrailHash; }
 uint32_t SlashEntity::GetContactEmitterHash()                     { return g_ContactHash; }
 uint32_t SlashEntity::GetSecondEmitterHash()                      { return g_SecondHash; }

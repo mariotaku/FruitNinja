@@ -36,7 +36,7 @@ public:
     static void UnloadContent();
 
     // DrawBorders @ 0x00130230 — shade triangles + deco quad.
-    void DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
+    void DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryTex,
                      float alpha, const Vec3& secondaryTexPos);
 
     // UpdateButtons @ 0x00130ab4 — lazy ScreenButton creation + update.
@@ -71,8 +71,8 @@ protected:
     int m_State;
 
     // Static textures (binary: GOT-relative globals, module-level singletons)
-    static SmartPtr<Mortar::Texture> s_TexSmlTitle;       // slot +0: sml_title.tex
-    static SmartPtr<Mortar::Texture> s_TexBlurryBacking;  // slot +4: blurry_backing.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSmlTitle;       // slot +0: sml_title.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;  // slot +4: blurry_backing.tex
 
 #ifdef __bada__
     friend struct BaseScreenLayoutAssert;

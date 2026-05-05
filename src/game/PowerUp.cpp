@@ -339,3 +339,12 @@ void PowerUp::Release() {
     }
     m_ModList.clear();
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: PowerUp::Purchaseable -- auto stub
+void PowerUp::Purchaseable() {}
+// STUB: PowerUp::SetDeferedPoints -- auto stub
+void PowerUp::SetDeferedPoints(int) {}
+// STUB: PowerUp::UnloadTextures -- auto stub
+void PowerUp::UnloadTextures() {}
+// ---- end AUTO-STUB MERGE ----

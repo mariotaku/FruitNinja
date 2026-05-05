@@ -102,8 +102,8 @@ struct FruitInfo {
     // Textures (+0x300, +0x304)
     // Binary names: m_pFruitTexture (HUD), m_pFruitTexture2 (Zen).
     // Port keeps m_HudTexture/m_ZenTexture for backward compatibility with locked consumers.
-    SmartPtr<Mortar::Texture> m_HudTexture;    // +0x300: "hud_%s.tex" (HUD thumbnail) — binary: m_pFruitTexture
-    SmartPtr<Mortar::Texture> m_ZenTexture;    // +0x304: "zen_%s.tex" (Zen mode)      — binary: m_pFruitTexture2
+    Mortar::SmartPtr<Mortar::Texture> m_HudTexture;    // +0x300: "hud_%s.tex" (HUD thumbnail) — binary: m_pFruitTexture
+    Mortar::SmartPtr<Mortar::Texture> m_ZenTexture;    // +0x304: "zen_%s.tex" (Zen mode)      — binary: m_pFruitTexture2
 
     // Spawn weight + runtime caches
     int m_Chance;                 // +0x308: "chance" attr
@@ -133,7 +133,7 @@ struct FruitInfo {
 // Layout asserts.
 // Fields before the SmartPtr members (offsets 0x000..0x2FC) are pointer-size-
 // independent and pass on both 32-bit and 64-bit builds.
-// Fields at 0x300+ depend on SmartPtr<T> being 4 bytes (ARM32), which is only
+// Fields at 0x300+ depend on Mortar::SmartPtr<T> being 4 bytes (ARM32), which is only
 // true on the cross-compile (32-bit) path. On the 64-bit port build SmartPtr
 // is 8 bytes, so the asserts from m_HudTexture onward are guarded to 32-bit.
 static_assert(__builtin_offsetof(FruitInfo, m_Name)            == 0x000, "");

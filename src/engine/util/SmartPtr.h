@@ -8,7 +8,9 @@
 // Lifecycle: ctor+raw-ptr always AddRef; assignment is AddRef-then-Release; SetPtrCast
 // is the assignment primitive in the binary (port uses operator= for the same effect).
 
-// Intrusive smart pointer (4 bytes). Original: Mortar::SmartPtr<T>
+namespace Mortar {
+
+// Intrusive smart pointer (4 bytes). Matches binary `Mortar::SmartPtr<T>`.
 template<typename T>
 class SmartPtr {
     T* m_ptr;
@@ -60,11 +62,13 @@ inline SmartPtr<T> WrapPtr(T* raw) {
     return SmartPtr<T>(raw);
 }
 
+}  // namespace Mortar
+
 // Binary @ 0x00188d84 -- SmartPtr<T> is a single embedded T* (intrusive refcount via T's ReferenceCounter base).
 #ifdef __bada__
 #include "util/ReferenceCounter.h"
-namespace { struct _SmartPtrSizeProbe : public ReferenceCounter {}; }
-static_assert(sizeof(SmartPtr<_SmartPtrSizeProbe>) == 4,
+namespace { struct _SmartPtrSizeProbe : public Mortar::ReferenceCounter {}; }
+static_assert(sizeof(Mortar::SmartPtr<_SmartPtrSizeProbe>) == 4,
               "SmartPtr<T> must be exactly 4 bytes (sizeof one T* slot)");
 #endif
 

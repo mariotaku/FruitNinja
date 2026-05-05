@@ -616,3 +616,16 @@ void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
 void FruitNinja_SaveOnExit() {
     FruitNinja_SaveCurrentData(true);
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: FruitSaveData::DownloadedTweakValue -- auto stub
+void FruitSaveData::DownloadedTweakValue(char const*, int) {}
+// STUB: FruitSaveData::PublishUnlockedAchievements -- auto stub
+void FruitSaveData::PublishUnlockedAchievements() {}
+// STUB: FruitSaveData::SetTotal -- auto stub
+void FruitSaveData::SetTotal(char const*, int, bool, bool) {}
+// STUB: FruitSaveData::TotalExists -- auto stub
+void FruitSaveData::TotalExists(char const*) {}
+// STUB: FruitSaveData::TotalExists -- auto stub
+void FruitSaveData::TotalExists(unsigned int) {}
+// ---- end AUTO-STUB MERGE ----

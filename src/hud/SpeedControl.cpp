@@ -25,7 +25,7 @@ SpeedControl::SpeedControl()
     // Load localised speed gauge texture.
     // TODO: resolve DAT_00161440 string-table key — using "speed_control" as placeholder.
     int texW = 0, texH = 0;
-    SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture("speed_control.tex");
+    Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture("speed_control.tex");
     if (tex.IsValid()) {
         m_Texture = tex->m_TexId;
         texW = tex->m_Width;

@@ -63,6 +63,24 @@ public:
 
     static void LoadContent();
     static void ReleaseContent();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: BombBlast::DrawBlast -- auto stub from binary missing-symbol set
+    void DrawBlast();
+    // STUB: BombBlast::DrawUpdate -- auto stub from binary missing-symbol set
+    void DrawUpdate(float);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

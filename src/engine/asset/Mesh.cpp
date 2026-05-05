@@ -124,7 +124,7 @@ void Mesh::GetBounds(Vec3& outMin, Vec3& outMax) const {
     }
 }
 
-void Mesh::SetDiffuseTexture(const SmartPtr<Texture>& tex) {
+void Mesh::SetDiffuseTexture(const Mortar::SmartPtr<Texture>& tex) {
     for (int i = 0; i < (int)m_Materials.size(); i++) {
         if (!m_Materials[i].m_Texture.IsValid()) {
             m_Materials[i].m_Texture = tex;
@@ -350,24 +350,24 @@ void Model::UpdateBoneLinks() {
 }
 
 // Binary @ 0x0019346c
-void Model::AddNode(const SmartPtr<Mesh>& mesh) {
+void Model::AddNode(const Mortar::SmartPtr<Mesh>& mesh) {
     m_Meshes.push_back(mesh);
     if (mesh.IsValid()) mesh->BindSkeleton(&m_Skeleton);
 }
 
 // Binary @ 0x001933f8 — unchecked array access (matches binary).
-SmartPtr<Mesh> Model::GetNode(unsigned long index) const {
+Mortar::SmartPtr<Mesh> Model::GetNode(unsigned long index) const {
     return m_Meshes[index];
 }
 
 // Binary @ 0x001933b8 — dead code; linear scan by name.
-SmartPtr<Mesh> Model::GetNode(const std::string& name) const {
+Mortar::SmartPtr<Mesh> Model::GetNode(const std::string& name) const {
     for (int i = 0; i < (int)m_Meshes.size(); i++) {
         if (m_Meshes[i].IsValid() && m_Meshes[i]->m_Name == name) {
             return m_Meshes[i];
         }
     }
-    return SmartPtr<Mesh>();
+    return Mortar::SmartPtr<Mesh>();
 }
 
 // AlphaSortNode struct used by binary qsort (0x001935a0).

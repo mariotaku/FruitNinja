@@ -10,7 +10,7 @@ namespace Mortar {
 
 // Matches original Texture2DFromFile_Bada (32 bytes)
 // Ref-counted texture with GL handle
-class Texture : public ReferenceCounter {
+class Texture : public Mortar::ReferenceCounter {
 public:
     GLuint m_TexId;     // GL texture handle (-1 = unloaded)
     int m_Width;        // +0x10 from .tex header
@@ -28,7 +28,7 @@ public:
 
     // Load a .tex file from disk, create GL texture
     // Returns SmartPtr (null on failure)
-    static SmartPtr<Texture> Load(const char* path);
+    static Mortar::SmartPtr<Texture> Load(const char* path);
 
     // Upload raw RGBA8888 pixels (for converted textures)
     void UploadRGBA(int width, int height, const void* pixels);
@@ -40,6 +40,26 @@ public:
     // this). Renderer::DrawQuad reads it to detect untextured draws that
     // would otherwise sample default-white and produce stray white quads.
     static GLuint s_LastBoundTexId;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: Texture::LoadFromMemory -- auto stub from binary missing-symbol set
+    void LoadFromMemory(void const*, int);
+    // STUB: Texture::SetUnCached -- auto stub from binary missing-symbol set
+    void SetUnCached();
+    // STUB: Texture::UnSetUnCached -- auto stub from binary missing-symbol set
+    void UnSetUnCached();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

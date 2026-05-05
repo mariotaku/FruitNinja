@@ -56,7 +56,7 @@ static void LoadFruitModels() {
 // Called from Fruit::LoadInfo() in Fruit.cpp
 
 // Global shadow texture (loaded on fast hardware only)
-static SmartPtr<Mortar::Texture> g_FruitShadowTex;
+static Mortar::SmartPtr<Mortar::Texture> g_FruitShadowTex;
 
 // --- Fruit::LoadInfo implementation (matches 0x17987c, 509 lines) ---
 

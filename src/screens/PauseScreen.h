@@ -16,9 +16,9 @@
 // HUDControl3d base occupies 0x00..0x7b (0x7c bytes).
 // PauseScreen-specific fields begin at 0x7c.
 //
-// NOTE: Port uses GLuint for textures (not SmartPtr<Texture>) to match
+// NOTE: Port uses GLuint for textures (not Mortar::SmartPtr<Texture>) to match
 // HUDControl3d base field types already in use throughout the port.
-// SmartPtr<Texture> is used locally during load then GLuint is extracted.
+// Mortar::SmartPtr<Texture> is used locally during load then GLuint is extracted.
 //
 
 #include "hud/HUDControl3d.h"
@@ -91,7 +91,7 @@ public:
     int m_State;
 
     // Texture widths/heights for layout math (loaded alongside textures)
-    // Port-specific: binary reads these from SmartPtr<Texture>->m_Width/m_Height.
+    // Port-specific: binary reads these from Mortar::SmartPtr<Texture>->m_Width/m_Height.
     // We cache them after load so Update() can use them without holding SmartPtrs.
     float m_TitleTexW, m_TitleTexH;
     float m_PauseButtonTexW, m_PauseButtonTexH;
@@ -139,6 +139,24 @@ public:
     // Engine pause helpers matching binary 0x00168f80 / 0x00168fb0
     static void PauseGame();
     static void UnpauseGame();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: PauseScreen::ContinueGameCallback -- auto stub from binary missing-symbol set
+    void ContinueGameCallback();
+    // STUB: PauseScreen::SkipTo -- auto stub from binary missing-symbol set
+    void SkipTo();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 // Offset assertions (ARM32 binary layout).

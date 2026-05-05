@@ -69,6 +69,28 @@ private:
 #ifdef __bada__
     friend struct FileLayoutAssert;
 #endif
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: File::GetPosition -- auto stub from binary missing-symbol set
+    void GetPosition() const;
+    // STUB: File::Hash -- auto stub from binary missing-symbol set
+    void Hash() const;
+    // STUB: File::IsLocked -- auto stub from binary missing-symbol set
+    void IsLocked() const;
+    // STUB: File::Lock -- auto stub from binary missing-symbol set
+    void Lock(bool);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

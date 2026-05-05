@@ -34,7 +34,7 @@ int BombFlash::CreatePool(int n) {
 
 // @ 0x001723f4 — activate a pooled flash slot (TODO: real impl pending)
 void BombFlash::MakeFlash(Colour /*col*/, Vec3* /*pos*/, Vec3* /*dir*/,
-                           SmartPtr<Mortar::Texture>* /*tex*/) {}
+                           Mortar::SmartPtr<Mortar::Texture>* /*tex*/) {}
 
 // @ 0x00171028 — iterate pool calling Update on active slots
 void BombFlash::UpdateActiveFlashes(float dt) {
@@ -66,3 +66,14 @@ void BombFlash::CleanUp() {
     }
     s_PoolCreated = false;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: BombFlash::Draw -- auto stub
+void BombFlash::Draw() {}
+// STUB: BombFlash::DrawUpdate -- auto stub
+void BombFlash::DrawUpdate(float) {}
+// STUB: BombFlash::GetFree -- auto stub
+void BombFlash::GetFree() {}
+// STUB: BombFlash::Init -- auto stub
+void BombFlash::Init(void*, int, Vec3*) {}
+// ---- end AUTO-STUB MERGE ----

@@ -33,8 +33,8 @@ static bool s_bLoaded = false;
 // TODO: 0x001399fc -- full 17-texture name list
 // (panel backgrounds, fact backplate, combo-star, connect/download/leaderboard frames)
 // Only the core two textures are loaded here; the rest are TODO stubs.
-static SmartPtr<Mortar::Texture> s_PanelTex;
-static SmartPtr<Mortar::Texture> s_FactBackplateTex;
+static Mortar::SmartPtr<Mortar::Texture> s_PanelTex;
+static Mortar::SmartPtr<Mortar::Texture> s_FactBackplateTex;
 // ... 15 more textures to be resolved from binary DAT strings at 0x001399fc
 
 void FruitFactControl::LoadContent() {

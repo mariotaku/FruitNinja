@@ -14,7 +14,7 @@
 #include <cstring>
 
 // ---------------------------------------------------------------------------
-// Module-scope static texture handles (binary: SmartPtr<Texture> GOT slots).
+// Module-scope static texture handles (binary: Mortar::SmartPtr<Texture> GOT slots).
 // LoadContent loads "box.tex" (track) and "slider_will.tex" (thumb).
 // Port uses GLuint since LoadContent/UnloadContent are no-op stubs.
 static GLuint s_TrackTexture = 0;
@@ -174,7 +174,7 @@ void SliderControl::UpdateTouchPosition() {
 // ---------------------------------------------------------------------------
 // Static -- Binary @ 0x00160890
 // Loads "box.tex" (track background) and "slider_will.tex" (thumb) via
-// TextureManager::LoadLocalisedTexture into static SmartPtr<Texture> slots.
+// TextureManager::LoadLocalisedTexture into static Mortar::SmartPtr<Texture> slots.
 // Defunct: SliderControl -- no-op stub; binary @ 0x00160890
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
@@ -191,7 +191,12 @@ void SliderControl::LoadContent() {
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).
 void SliderControl::UnloadContent() {
-    // Stub: binary calls SmartPtr<Texture>::SetNull on s_TrackTexture, s_ThumbTexture.
+    // Stub: binary calls Mortar::SmartPtr<Texture>::SetNull on s_TrackTexture, s_ThumbTexture.
     s_TrackTexture = 0;
     s_ThumbTexture = 0;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: SliderControl::UpdateFromGameWork -- auto stub
+void SliderControl::UpdateFromGameWork() {}
+// ---- end AUTO-STUB MERGE ----

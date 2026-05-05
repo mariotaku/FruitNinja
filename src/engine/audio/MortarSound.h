@@ -51,6 +51,26 @@ public:
     // Copy name into m_Name (heap). Called from SFXPlayInternal.
     // No binary symbol -- inferred from call context (see docs/engine/sound.md)
     void Load(const char* name);
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: MortarSound::InternalLoad -- auto stub from binary missing-symbol set
+    void InternalLoad(char const*);
+    // STUB: MortarSound::IsReady -- auto stub from binary missing-symbol set
+    void IsReady();
+    // STUB: MortarSound::SetPitch -- auto stub from binary missing-symbol set
+    void SetPitch(unsigned int);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

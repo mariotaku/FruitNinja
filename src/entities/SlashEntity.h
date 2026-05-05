@@ -279,7 +279,7 @@ public:
     // Accessors for the file-scope blade-mod globals. Render consumers in
     // SlashEntity.cpp use these instead of direct global access so they can
     // be tested in isolation. Defined inline in the .cpp.
-    static const SmartPtr<Mortar::Texture>& GetModTexture();
+    static const Mortar::SmartPtr<Mortar::Texture>& GetModTexture();
     static uint32_t GetTrailEmitterHash();
     static uint32_t GetContactEmitterHash();
     static uint32_t GetSecondEmitterHash();

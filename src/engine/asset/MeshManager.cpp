@@ -26,14 +26,14 @@ void MeshManager::ReleaseAll() {
     m_Models.clear();
 }
 
-SmartPtr<Model> MeshManager::Load(const char* path) {
+Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
     for (int i = 0; i < m_Models.size(); i++) {
         if (m_Models[i].IsValid() && m_Models[i]->m_Name == path) {
             return m_Models[i];
         }
     }
 
-    SmartPtr<Model> model = LoadMeshInternal(path);
+    Mortar::SmartPtr<Model> model = LoadMeshInternal(path);
     if (model.IsValid()) {
         m_Models.push_back(model);
     }
@@ -242,11 +242,11 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
 //   4×u32 colors, float specular, unused ReadSubResourceLookup
 // Texture grandchild rawData: texMapName(ReadString), texRelPath(ReadString)
 // Geometry child rawData: index stream bytes || vertex stream bytes (sequential)
-SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
+Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     ResourceLoader loader(path);
     if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
         fprintf(stderr, "MeshManager: failed to load '%s'\n", path);
-        return SmartPtr<Model>();
+        return Mortar::SmartPtr<Model>();
     }
 
     Model* model = new Model();
@@ -265,13 +265,13 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     if (loader.m_ReadPos + 4 > loader.DataSize()) {
         fprintf(stderr, "MeshManager: '%s': truncated before meshCount\n", path);
         delete model;
-        return SmartPtr<Model>();
+        return Mortar::SmartPtr<Model>();
     }
     uint32_t meshCount = loader.Read<uint32_t>();
     if (meshCount == 0 || meshCount > 64) {
         fprintf(stderr, "MeshManager: '%s': bad meshCount=%u\n", path, meshCount);
         delete model;
-        return SmartPtr<Model>();
+        return Mortar::SmartPtr<Model>();
     }
 
     // --- LoadMesh portion (one per mesh, sequential on same loader) ---
@@ -356,7 +356,7 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
         // Read<ulong> → geometryCount + per-geometry sub-resource + matIndex
         if (loader.m_ReadPos + 4 > loader.DataSize()) {
-            model->AddNode(SmartPtr<Mesh>(mesh));
+            model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
             continue;
         }
         uint32_t geomCount = loader.Read<uint32_t>();
@@ -396,13 +396,13 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             printf("[MeshManager] '%s' mesh[%u]: no geometries loaded\n", path, mi);
         }
 
-        model->AddNode(SmartPtr<Mesh>(mesh));
+        model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
     }
 
     if (model->m_Meshes.empty()) {
         fprintf(stderr, "MeshManager: '%s': no meshes loaded\n", path);
         delete model;
-        return SmartPtr<Model>();
+        return Mortar::SmartPtr<Model>();
     }
 
     // Matches Model::SwapSkeleton → UpdateBoneLinks (0x001aaba8, 0x00193010):
@@ -411,7 +411,22 @@ SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         model->UpdateBoneLinks();
     }
 
-    return SmartPtr<Model>(model);
+    return Mortar::SmartPtr<Model>(model);
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: MeshManager::Destroy -- auto stub
+void MeshManager::Destroy() {}
+// STUB: MeshManager::Find -- auto stub
+void MeshManager::Find(AsciiString const&) const {}
+// STUB: MeshManager::Find -- auto stub
+void MeshManager::Find(SmartPtr<Model> const&) const {}
+// STUB: MeshManager::InitialiseInternal -- auto stub
+void MeshManager::InitialiseInternal() {}
+// STUB: MeshManager::Release -- auto stub
+void MeshManager::Release(SmartPtr<Model> const&) {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

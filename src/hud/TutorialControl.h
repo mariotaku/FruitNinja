@@ -81,7 +81,7 @@ private:
     // Draw uses super.m_Texture (+0x74, swipe_fruit_begin.tex) for the ARROW quad,
     // and this field for the TRAIL quads.
     // This matches the binary's texture assignment (verified @ 0x001636f8).
-    SmartPtr<Mortar::Texture> m_PressTex;     // +0x8C
+    Mortar::SmartPtr<Mortar::Texture> m_PressTex;     // +0x8C
 
     // +0x90: draw colour (alpha driven by animation phase)
     Colour m_Colour;                          // +0x90
@@ -96,6 +96,16 @@ private:
 
     // +0x9C: true if arrow points left (button is right of center)
     bool m_bFlipX;                            // +0x9C
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
 };
 
 #endif

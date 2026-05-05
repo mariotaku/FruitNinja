@@ -548,3 +548,8 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ScoreControl::AddMultipliyer -- auto stub
+void ScoreControl::AddMultipliyer(int) {}
+// ---- end AUTO-STUB MERGE ----

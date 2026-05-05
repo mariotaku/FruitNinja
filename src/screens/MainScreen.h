@@ -92,11 +92,11 @@ private:
     Vec3 m_OrigSize;
 
     // +0x88..+0x98: button textures (verified from ctor GOT offsets)
-    SmartPtr<Mortar::Texture> m_TexNewGame;       // +0x88: newgame.tex
-    SmartPtr<Mortar::Texture> m_TexDojoIcon;      // +0x8c: dojo_icon.tex
-    SmartPtr<Mortar::Texture> m_TexOpenFeint;     // +0x90: openfeint.tex (GOT+c790)
-    SmartPtr<Mortar::Texture> m_TexGCAchievements;// +0x94: gc_achievements.tex (GOT+c794)
-    SmartPtr<Mortar::Texture> m_TexQuit;          // +0x98: quit.tex (GOT+c78c)
+    Mortar::SmartPtr<Mortar::Texture> m_TexNewGame;       // +0x88: newgame.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexDojoIcon;      // +0x8c: dojo_icon.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexOpenFeint;     // +0x90: openfeint.tex (GOT+c790)
+    Mortar::SmartPtr<Mortar::Texture> m_TexGCAchievements;// +0x94: gc_achievements.tex (GOT+c794)
+    Mortar::SmartPtr<Mortar::Texture> m_TexQuit;          // +0x98: quit.tex (GOT+c78c)
 
     // +0x9c..+0xb0: button pointers (created lazily)
     MenuButton* pPlayButton;       // +0x9c
@@ -107,16 +107,16 @@ private:
     MenuButton* pMusicToggle;      // +0xb0
 
     // +0xb4: logo overlay
-    SmartPtr<Mortar::Texture> m_TexCommingSoon;       // +0xb4: comming_soon.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexCommingSoon;       // +0xb4: comming_soon.tex
 
     // +0xc4..+0xd0: toggle textures
-    SmartPtr<Mortar::Texture> m_TexSoundOn;           // +0xc4: sound.tex
-    SmartPtr<Mortar::Texture> m_TexSoundOff;          // +0xc8: sound_cross.tex
-    SmartPtr<Mortar::Texture> m_TexMusicOn;           // +0xcc: music.tex
-    SmartPtr<Mortar::Texture> m_TexMusicOff;          // +0xd0: music_cross.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexSoundOn;           // +0xc4: sound.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexSoundOff;          // +0xc8: sound_cross.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexMusicOn;           // +0xcc: music.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexMusicOff;          // +0xd0: music_cross.tex
 
     // +0xd8: dojo decoration behind logo
-    SmartPtr<Mortar::Texture> m_TexSliceFruit;        // +0xd8: slice_fruit.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexSliceFruit;        // +0xd8: slice_fruit.tex
 
     // +0xdc: logo positions and bounce state
     Vec3 m_LogoFruitPos;           // +0xdc: slice_fruit.tex draw position
@@ -130,18 +130,18 @@ private:
     float m_field108;              // +0x108: accumulator for state 0x13/0x14
     int m_State;                   // +0x10c: state machine variable
     float m_StateTimer;            // +0x110: transition countdown (NOT same as HUDControl m_Timer)
-    SmartPtr<Mortar::Texture> m_TexMoreGames;         // +0x114: more_games.tex (GOT+c788)
+    Mortar::SmartPtr<Mortar::Texture> m_TexMoreGames;         // +0x114: more_games.tex (GOT+c788)
     float m_Timer2;                // +0x118: second timer
-    SmartPtr<Mortar::Font> m_pFont; // +0x11c: fonts/verdana.fnt (loaded in ctor, NOT in g_GameData)
+    Mortar::SmartPtr<Mortar::Font> m_pFont; // +0x11c: fonts/verdana.fnt (loaded in ctor, NOT in g_GameData)
 
     // Port specific: binary accesses Game via GOT; port stores a reference here,
     // declared after all binary-faithful fields so it does not displace them.
     Game& game;
 
     // Global textures (not on struct, loaded in ctor and assigned to globals via GOT)
-    SmartPtr<Mortar::Texture> m_blurryBackingTex;     // blurry_backing.tex
-    SmartPtr<Mortar::Texture> m_fruitTextTex;         // fruit_text.tex
-    SmartPtr<Mortar::Texture> m_ninjaTextTex;         // ninja_text.tex
+    Mortar::SmartPtr<Mortar::Texture> m_blurryBackingTex;     // blurry_backing.tex
+    Mortar::SmartPtr<Mortar::Texture> m_fruitTextTex;         // fruit_text.tex
+    Mortar::SmartPtr<Mortar::Texture> m_ninjaTextTex;         // ninja_text.tex
 
     // Port: camera transition (controlled by game state)
     float m_CameraTransition;

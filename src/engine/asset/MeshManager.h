@@ -20,15 +20,39 @@ public:
     static MeshManager* GetInstance() { return s_instance; }
     static MeshManager* s_instance;
 
-    SmartPtr<Model> Load(const char* path);
+    Mortar::SmartPtr<Model> Load(const char* path);
     void ReleaseAll();
     void Initialise(int capacity = 32);
 
 private:
-    List<SmartPtr<Model>> m_Models;
+    List<Mortar::SmartPtr<Model>> m_Models;
 
     // Matches LoadMeshInternal (0x001a8518) + LoadModel (0x001a8468) + LoadMesh (0x001a7c90)
-    SmartPtr<Model> LoadMeshInternal(const char* path);
+    Mortar::SmartPtr<Model> LoadMeshInternal(const char* path);
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: MeshManager::Destroy -- auto stub from binary missing-symbol set
+    void Destroy();
+    // STUB: MeshManager::Find -- auto stub from binary missing-symbol set
+    void Find(AsciiString const&) const;
+    // STUB: MeshManager::Find -- auto stub from binary missing-symbol set
+    void Find(SmartPtr<Model> const&) const;
+    // STUB: MeshManager::InitialiseInternal -- auto stub from binary missing-symbol set
+    void InitialiseInternal();
+    // STUB: MeshManager::Release -- auto stub from binary missing-symbol set
+    void Release(SmartPtr<Model> const&);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

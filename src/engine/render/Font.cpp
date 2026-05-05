@@ -311,13 +311,13 @@ int Font::Load(const char* path) {
     return 1;
 }
 
-SmartPtr<Font> Font::Create(const char* path) {
+Mortar::SmartPtr<Font> Font::Create(const char* path) {
     Font* font = new Font();
     if (!font->Load(path)) {
         delete font;
-        return SmartPtr<Font>();
+        return Mortar::SmartPtr<Font>();
     }
-    return SmartPtr<Font>(font);
+    return Mortar::SmartPtr<Font>(font);
 }
 
 // ---------------------------------------------------------------------------
@@ -755,3 +755,10 @@ void Font::DrawString(float scale, float maxWidth, float z,
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: Font::GetStringHeight -- auto stub
+void Font::GetStringHeight(Utf8StringIterator, float, float) {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

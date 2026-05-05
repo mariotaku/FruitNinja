@@ -138,3 +138,16 @@ long File::SizeOfFile(const char* path, unsigned long systemID) {
 }
 
 }  // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: File::GetPosition -- auto stub
+void File::GetPosition() const {}
+// STUB: File::Hash -- auto stub
+void File::Hash() const {}
+// STUB: File::IsLocked -- auto stub
+void File::IsLocked() const {}
+// STUB: File::Lock -- auto stub
+void File::Lock(bool) {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

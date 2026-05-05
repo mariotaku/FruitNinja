@@ -126,3 +126,10 @@ GLenum DisplayManager::GetPlatformWrapT() {
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: DisplayManager::Destroy -- auto stub
+void DisplayManager::Destroy() {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

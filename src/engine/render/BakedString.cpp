@@ -84,3 +84,12 @@ void BakedString::Clear() {
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: BakedString::AddDropShadow -- auto stub
+void BakedString::AddDropShadow() {}
+// STUB: BakedString::LayoutToCircle -- auto stub
+void BakedString::LayoutToCircle(float) {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

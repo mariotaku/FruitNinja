@@ -65,18 +65,18 @@ struct GameTaskState {
     // TODO: type properly once SliceEffect pool is fully ported.
     void* pSliceEffectList;     // step 9
 
-    // +0xbc: SmartPtr<Model> for "slice_fx.mmd" loaded in step 8.
-    SmartPtr<Mortar::Model> sliceFxMesh;       // step 8
+    // +0xbc: Mortar::SmartPtr<Model> for "slice_fx.mmd" loaded in step 8.
+    Mortar::SmartPtr<Mortar::Model> sliceFxMesh;       // step 8
 
-    // +0xc0: SmartPtr<Model> for "slice_fx_crit.mmd" loaded in step 8.
-    SmartPtr<Mortar::Model> sliceFxCritMesh;   // step 8
+    // +0xc0: Mortar::SmartPtr<Model> for "slice_fx_crit.mmd" loaded in step 8.
+    Mortar::SmartPtr<Mortar::Model> sliceFxCritMesh;   // step 8
 
     // +0xc8: MemoryPool<...>* for SliceEffect nodes allocated in step 9.
     // TODO: type properly once SliceEffect pool is fully ported.
     void* pSliceEffectPool;     // step 9
 
     // +0xfc: background texture (loaded in GameInit)
-    SmartPtr<Mortar::Texture> pBackgroundTexture;
+    Mortar::SmartPtr<Mortar::Texture> pBackgroundTexture;
 
     // Binary @ 0x00231404 GameTaskState global pause fields.
     // These three fields are written by PauseGame() / UnpauseGame() free functions

@@ -140,7 +140,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     // Load mode-specific game-over background texture into m_SecondaryTex
     // gameMode 2 = Arcade, 3 = Zen, else Classic
     {
-        SmartPtr<Mortar::Texture> bgTex;
+        Mortar::SmartPtr<Mortar::Texture> bgTex;
         if (gameMode == 2)
             bgTex = TextureManager::LoadLocalisedTexture("textures/arcade-game-over-bg.tex");
         else if (gameMode == 3)
@@ -457,7 +457,7 @@ void GameOverScreen::CreateRetryButton() {
 
     // Texture: binary reads from GOT + DAT_001412d4 ("retry-button.tex")
     // Port fallback: load directly
-    SmartPtr<Mortar::Texture> tex =
+    Mortar::SmartPtr<Mortar::Texture> tex =
         TextureManager::LoadLocalisedTexture("textures/retry-button.tex");
     GLuint texHandle = tex ? tex->m_TexId : 0;
 
@@ -506,7 +506,7 @@ void GameOverScreen::CreateQuitButton() {
     // Position: (80, -96, 0) per binary DAT_00141428/2c
     Vec3 btnPos(80.0f, -96.0f, 0.0f);
 
-    SmartPtr<Mortar::Texture> tex =
+    Mortar::SmartPtr<Mortar::Texture> tex =
         TextureManager::LoadLocalisedTexture("textures/quit-button.tex");
     GLuint texHandle = tex ? tex->m_TexId : 0;
 
@@ -723,7 +723,7 @@ void GameOverScreen::Update(float dt) {
                 }
 
                 // Load localised "Game Over" text texture
-                SmartPtr<Mortar::Texture> govTex =
+                Mortar::SmartPtr<Mortar::Texture> govTex =
                     TextureManager::LoadLocalisedTexture("textures/game-over.tex");
                 m_GameOverTex = govTex ? govTex->m_TexId : 0;
             }

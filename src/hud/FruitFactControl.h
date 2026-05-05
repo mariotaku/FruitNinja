@@ -33,7 +33,7 @@
 //   +0x80: const char* m_pCurFactString
 //   +0x84: int m_FruitIdx
 //   +0x88: int m_FactIdx
-//   +0x8C: SmartPtr<Texture> m_FactTexture  (4B)
+//   +0x8C: Mortar::SmartPtr<Texture> m_FactTexture  (4B)
 //   +0x90..+0x9B: gap/alignment 12B
 //   +0x9C: Colour m_FactColour  (4B + 4B pad to reach +0xA4)
 //   +0xA4: int[11] m_ComboHashArray  (44B; 0xA4+44=0xD0)
@@ -44,7 +44,7 @@
 //   +0xD4: float m_StarTimer
 //   +0xD8: uint8 m_bConnectPressed
 //   +0xD9..+0xDB: padding 3B
-//   +0xDC: SmartPtr<Texture> m_ComboStarTex  (4B)
+//   +0xDC: Mortar::SmartPtr<Texture> m_ComboStarTex  (4B)
 //   +0xE0: int m_ComboType
 //   +0xE4: uint8 m_PomCount
 //   +0xE5..+0xE7: padding 3B
@@ -82,7 +82,7 @@ public:
     const char*    m_pCurFactString;     // +0x80
     int            m_FruitIdx;           // +0x84 (default -1)
     int            m_FactIdx;            // +0x88 (default -1)
-    SmartPtr<Mortar::Texture> m_FactTexture; // +0x8C
+    Mortar::SmartPtr<Mortar::Texture> m_FactTexture; // +0x8C
     // +0x90..+0x9B: 12B gap (binary layout; port offsets differ on 64-bit)
     uint8_t        _pad_8C_gap[12];
     Colour         m_FactColour;         // +0x9C  (4B)
@@ -93,7 +93,7 @@ public:
     float          m_StarTimer;          // +0xD4
     uint8_t        m_bConnectPressed;    // +0xD8
     uint8_t        _pad_D9[3];           // +0xD9
-    SmartPtr<Mortar::Texture> m_ComboStarTex; // +0xDC
+    Mortar::SmartPtr<Mortar::Texture> m_ComboStarTex; // +0xDC
     int            m_ComboType;          // +0xE0
     uint8_t        m_PomCount;           // +0xE4
     uint8_t        _pad_E5[3];           // +0xE5

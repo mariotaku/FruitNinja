@@ -20,7 +20,7 @@ public:
 
     // Binary @ 0x00152ed0
     NotificationControl(const char* name, int points,
-                        SmartPtr<Mortar::Texture>* icon, uint8_t type);
+                        Mortar::SmartPtr<Mortar::Texture>* icon, uint8_t type);
     ~NotificationControl() override;
 
     // Binary @ 0x00152a00
@@ -32,7 +32,7 @@ public:
     // +0x74: achievement icon texture (overlaps HUDControl3d::m_SecondaryTex slot in binary).
     // Port: stored as a SmartPtr here alongside the GLuint m_Texture in super.
     // m_Texture (super +0x74 GLuint) is unused for this control; icon drawn separately.
-    SmartPtr<Mortar::Texture> m_AchIcon;   // effectively at +0x7C in port (sizeof SmartPtr = 8)
+    Mortar::SmartPtr<Mortar::Texture> m_AchIcon;   // effectively at +0x7C in port (sizeof SmartPtr = 8)
 
     float   m_TextScale;                   // +0x7C in binary (port offset differs)
     float   m_StateTimer;                  // +0x80
@@ -41,6 +41,16 @@ public:
     char    m_PointsText[4];              // +0x108
     uint8_t m_NotifType;                   // +0x10C
     uint8_t _pad[3];                       // +0x10D..+0x10F
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
 };
 
 #endif // FN_HUD_NOTIFICATION_CONTROL_H

@@ -47,8 +47,8 @@ static const float ALPHA_LERP_RATE     = 0.25f;
 static const float PAUSE_VISIBILITY    = 0.01f;
 static const float SOUND_VOLUME_ON     = 0.5f;
 
-// Helper: get GLuint from SmartPtr<Texture>
-static GLuint TexId(const SmartPtr<Mortar::Texture>& tex) {
+// Helper: get GLuint from Mortar::SmartPtr<Texture>
+static GLuint TexId(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
 
@@ -783,7 +783,7 @@ void MainScreen::RemoveButton(MenuButton*& btn) {
 }
 
 // Helper: get texture size as Vec3, fallback to default
-static Vec3 TexSize(const SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
+static Vec3 TexSize(const Mortar::SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
     if (tex.IsValid() && tex->m_Width > 0)
         return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
     return Vec3(defW, defH, 1.0f);

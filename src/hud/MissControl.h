@@ -54,7 +54,7 @@ public:
     // +0x32: uint8   pool-owned flag (set by CreatePool)  [not modelled in port]
     // +0x34: uint32  "configured" flag (Init writes 1); DIFFERS: was m_LayerFlags=0x200
     // +0x5c: uint8   RGBA tint b,g,r,a (Init copies from DAT default colour)
-    // +0x74: SmartPtr<Texture> bound texture
+    // +0x74: Mortar::SmartPtr<Texture> bound texture
     // +0x7c: uint8   m_AnimState  (0=idle, 3=active fade)
     //         DIFFERS: header previously had m_AnimState at +0x84 (SWAPPED)
     // +0x7d: uint8   m_bVisible (visibility-on-screen, gates jitter)
@@ -137,7 +137,7 @@ public:
 
     // 0x00151d94 -- zen-bomb X overlay and miss-penalty indicator.
     void MakeDisappear(const Vec3& pos, int sizeMult,
-                       const SmartPtr<Mortar::Texture>& tex);
+                       const Mortar::SmartPtr<Mortar::Texture>& tex);
 
     // 0x001515a4 -- activate combo indicator (combo_N.tex for N=clamp(combo,2,10)).
     void MakeCombo(Vec3 pos, int comboCount, int entityType);
@@ -167,7 +167,7 @@ public:
 
     // Binary @ 0x001515a4 — combo overlay textures: slots [0..9] = combo_2..combo_11.
     // Binary ctor loop iVar3=1..10: loads combo_%d.tex for iVar3>=3 -> names combo_3..combo_11.
-    static SmartPtr<Mortar::Texture> s_ComboTextures[10];
+    static Mortar::SmartPtr<Mortar::Texture> s_ComboTextures[10];
 };
 
 #endif

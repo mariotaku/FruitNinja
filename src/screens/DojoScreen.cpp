@@ -59,10 +59,10 @@ static const float SHOP_SCALE  = 0.575f;  // DAT_001386b4
 static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 0.0f);
 
 // Helpers
-static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
+static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
-static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
+static Vec3 TexSizeOf(const Mortar::SmartPtr<Mortar::Texture>& tex,
                       float defW, float defH) {
     if (tex.IsValid())
         return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
@@ -70,11 +70,11 @@ static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
 }
 
 // --- Static texture storage (binary: GOT-relative globals) ---
-SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
-SmartPtr<Mortar::Texture> DojoScreen::s_TexSensei;
-SmartPtr<Mortar::Texture> DojoScreen::s_TexShop;
-SmartPtr<Mortar::Texture> DojoScreen::s_TexAbout;
-SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
+Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
+Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexSensei;
+Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexShop;
+Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexAbout;
+Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexBackIcon;
 
 // ===================================================================
 // Matches DojoScreen::DojoScreen @ 0x00137b90
@@ -464,3 +464,16 @@ void DojoScreen::AboutCallback() {
 
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: DojoScreen::MoreGamesCallback -- auto stub
+void DojoScreen::MoreGamesCallback() {}
+// STUB: DojoScreen::QuitCallback -- auto stub
+void DojoScreen::QuitCallback() {}
+// STUB: DojoScreen::SwitchCallback -- auto stub
+void DojoScreen::SwitchCallback() {}
+// STUB: DojoScreen::SwitchNetworkButton -- auto stub
+void DojoScreen::SwitchNetworkButton(MenuButton*, float, ScreenButton&) {}
+// STUB: DojoScreen::TwitterFacbookButtons -- auto stub
+void DojoScreen::TwitterFacbookButtons(MenuButton*, float, ScreenButton&) {}
+// ---- end AUTO-STUB MERGE ----
