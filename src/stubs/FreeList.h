@@ -15,12 +15,7 @@
 #include "util/AsciiString.h"
 #include <cstdint>
 
-// Forward decls for binary-shape arg types not yet ported here.
-namespace Mortar {
-  class StackHeap;
-}
-
-namespace Mortar {
+namespace Mortar { class StackHeap; }
 
 class FreeList {
 public:
@@ -29,7 +24,7 @@ public:
     // TODO: FreeList::Clear -- auto stub
     void Clear();
     // TODO: FreeList::FreeList -- auto stub
-    FreeList(StackHeap*, unsigned int);
+    FreeList(Mortar::StackHeap*, unsigned long);
     // TODO: FreeList::GetNumFreeBlocks -- auto stub
     void GetNumFreeBlocks();
     // TODO: FreeList::Release -- auto stub
@@ -43,7 +38,5 @@ public:
     // TODO: FreeList::~FreeList -- auto stub
     ~FreeList();
 };
-
-}  // namespace Mortar
 
 #endif  // FN_STUBS_FREELIST_H
