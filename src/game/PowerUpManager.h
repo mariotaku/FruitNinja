@@ -203,6 +203,28 @@ private:
 
     // @ 0x00118724 — drain all containers; called by dtor
     void Release();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: PowerUpManager::GetFirstPurchasable -- auto stub from binary missing-symbol set
+    void GetFirstPurchasable(std::_List_iterator<PowerUp*>&);
+    // STUB: PowerUpManager::GetNextPurchasable -- auto stub from binary missing-symbol set
+    void GetNextPurchasable(std::_List_iterator<PowerUp*>&);
+    // STUB: PowerUpManager::SetAppropriateScoreCallback -- auto stub from binary missing-symbol set
+    void SetAppropriateScoreCallback();
+    // STUB: PowerUpManager::UnloadTextures -- auto stub from binary missing-symbol set
+    void UnloadTextures();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 // Offsets reflect binary's 8B std::list (R4 W1 RE). Cross-toolchain runs unpatched.

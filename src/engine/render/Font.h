@@ -31,7 +31,7 @@ struct MortarRectangleDec {
     float Height() const { return bottom - top; }
 };
 
-class Font : public ReferenceCounter {
+class Font : public Mortar::ReferenceCounter {
 public:
     // 0x24 bytes per binary (ARM-confirmed at 0x0019a128)
     struct CharTemplate {
@@ -51,7 +51,7 @@ public:
     // 8 bytes per binary
     struct Page {
         const char*             filename;  // owned (new char[])
-        SmartPtr<Mortar::Texture> texture;
+        Mortar::SmartPtr<Mortar::Texture> texture;
 
         Page() : filename(nullptr) {}
         ~Page() { delete[] filename; }
@@ -86,7 +86,7 @@ public:
     int Load(const char* path);
 
     // Static factory: allocates, loads, returns SmartPtr.
-    static SmartPtr<Font> Create(const char* path);
+    static Mortar::SmartPtr<Font> Create(const char* path);
 
     // Matches Font_DrawString (0x00198e44).
     void DrawString(float scale, float maxWidth, float rotZ,
@@ -137,6 +137,20 @@ private:
     float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack);
     const char*   FindAdvanceOfNextWord(Mortar::Utf8StringIterator iter, float curX, float maxX,
                                         float scale, float spacing) const;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: Font::GetStringHeight -- auto stub from binary missing-symbol set
+    void GetStringHeight(Utf8StringIterator, float, float);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

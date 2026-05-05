@@ -164,6 +164,22 @@ private:
     // DIFFERS: binary stores cursor in BSS global (GOT+0x80798); port uses struct member.
     //          Behavior identical for singleton. Cosmetic.
     int m_slotCursor;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: Touch::Clear -- auto stub from binary missing-symbol set
+    void Clear();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 // ---------------------------------------------------------------------------

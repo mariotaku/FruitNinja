@@ -88,3 +88,8 @@ GameModifier* ScoreModifier::Clone() {
     *c = *this;
     return c;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ScoreModifier::DeferPoints -- auto stub
+void ScoreModifier::DeferPoints(int) {}
+// ---- end AUTO-STUB MERGE ----

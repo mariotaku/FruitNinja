@@ -95,10 +95,10 @@ static const float SENSEI2_Y        =  56.0f;   // DAT_0012f8f0
 // -----------------------------------------------------------------------
 // Static storage
 // -----------------------------------------------------------------------
-SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;
-SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;
-SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;
-SmartPtr<Mortar::Texture> AboutScreen::s_TexBackIcon;
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexHaiku;
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexCredits;
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexSensei;
+Mortar::SmartPtr<Mortar::Texture> AboutScreen::s_TexBackIcon;
 bool AboutScreen::s_bContentLoaded = false;
 
 // -----------------------------------------------------------------------
@@ -531,3 +531,8 @@ void AboutScreen::BackCallback()
 {
     m_State = 2;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: AboutScreen::QuitGameCallback -- auto stub
+void AboutScreen::QuitGameCallback() {}
+// ---- end AUTO-STUB MERGE ----

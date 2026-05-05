@@ -53,7 +53,7 @@ void TimeControl::Init() {
 }
 
 void TimeControl::Release() {
-    // vtable[3]: SmartPtr<Texture>::SetNull(+0x74) -- port has no texture
+    // vtable[3]: Mortar::SmartPtr<Texture>::SetNull(+0x74) -- port has no texture
 }
 
 void TimeControl::Reset() {

@@ -531,3 +531,14 @@ int PowerUpManager::GetNumActiveTimedPowers() {
     }
     return n;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: PowerUpManager::GetFirstPurchasable -- auto stub
+void PowerUpManager::GetFirstPurchasable(std::_List_iterator<PowerUp*>&) {}
+// STUB: PowerUpManager::GetNextPurchasable -- auto stub
+void PowerUpManager::GetNextPurchasable(std::_List_iterator<PowerUp*>&) {}
+// STUB: PowerUpManager::SetAppropriateScoreCallback -- auto stub
+void PowerUpManager::SetAppropriateScoreCallback() {}
+// STUB: PowerUpManager::UnloadTextures -- auto stub
+void PowerUpManager::UnloadTextures() {}
+// ---- end AUTO-STUB MERGE ----

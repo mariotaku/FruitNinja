@@ -37,6 +37,8 @@ private:
     const char* m_String;
     int         m_NumChars;
     const char* m_End;
+
+public:
 };
 
 

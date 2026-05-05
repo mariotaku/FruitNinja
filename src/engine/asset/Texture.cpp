@@ -105,7 +105,7 @@ void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType
 }
 
 // Matches GPUafyTexture (0x001898d8) + Texture::Load (0x00189dd4)
-SmartPtr<Texture> Texture::Load(const char* path) {
+Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
     Mortar::File f(path, 0, 0);
     bool opened = f.Open();
     if (!opened) {
@@ -118,17 +118,17 @@ SmartPtr<Texture> Texture::Load(const char* path) {
             }
         }
         fprintf(stderr, "Texture::Load: failed to open '%s'\n", path);
-        return SmartPtr<Texture>();
+        return Mortar::SmartPtr<Texture>();
     }
 
     if (!f.Load(nullptr, 0)) {
         fprintf(stderr, "Texture::Load: failed to load '%s'\n", path);
-        return SmartPtr<Texture>();
+        return Mortar::SmartPtr<Texture>();
     }
 
     unsigned long fileSize = f.Size();
     if (fileSize < 12) {
-        return SmartPtr<Texture>();
+        return Mortar::SmartPtr<Texture>();
     }
 
     const uint8_t* data = static_cast<const uint8_t*>(f.Data());
@@ -141,7 +141,7 @@ SmartPtr<Texture> Texture::Load(const char* path) {
     long dataSize = (long)fileSize - 12;
     const uint8_t* raw = data + 12;
     if (dataSize <= 0) {
-        return SmartPtr<Texture>();
+        return Mortar::SmartPtr<Texture>();
     }
 
     Texture* tex = new Texture();
@@ -168,10 +168,21 @@ SmartPtr<Texture> Texture::Load(const char* path) {
         default:
             fprintf(stderr, "Texture::Load: unsupported format 0x%02x in '%s'\n", format, path);
             delete tex;
-            return SmartPtr<Texture>();
+            return Mortar::SmartPtr<Texture>();
     }
 
-    return SmartPtr<Texture>(tex);
+    return Mortar::SmartPtr<Texture>(tex);
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: Texture::LoadFromMemory -- auto stub
+void Texture::LoadFromMemory(void const*, int) {}
+// STUB: Texture::SetUnCached -- auto stub
+void Texture::SetUnCached() {}
+// STUB: Texture::UnSetUnCached -- auto stub
+void Texture::UnSetUnCached() {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

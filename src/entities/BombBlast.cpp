@@ -41,7 +41,7 @@ static const float BLAST_Z       = 0.0f;     // field_0x6c initial
 
 // Shared texture — loaded by Bomb::Init, not re-loaded here.
 namespace { extern "C" {} }
-extern SmartPtr<Mortar::Texture> g_BombTexture;
+extern Mortar::SmartPtr<Mortar::Texture> g_BombTexture;
 
 // Static scratch buffer for the batched tri-list. Binary uses a global
 // at 0x00232618 sized for ~512 blasts per frame (0x1B000 / 36 / 6).
@@ -257,3 +257,10 @@ void BombBlast::RemoveAll() {
     // the free pool.
     am->DeactivateAllEntities(4);
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: BombBlast::DrawBlast -- auto stub
+void BombBlast::DrawBlast() {}
+// STUB: BombBlast::DrawUpdate -- auto stub
+void BombBlast::DrawUpdate(float) {}
+// ---- end AUTO-STUB MERGE ----

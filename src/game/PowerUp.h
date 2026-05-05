@@ -113,12 +113,12 @@ public:
     // opaque padding until a follow-up RE pass resolves them.
     uint8_t _padac[8];
 
-    // +0xb4 m_Texture1 — icon texture (SmartPtr<Texture>, 4 bytes)
+    // +0xb4 m_Texture1 — icon texture (Mortar::SmartPtr<Texture>, 4 bytes)
     // Binary @ 0x001183f0 LoadTextures: ldr from [r0,#0xb4].
-    SmartPtr<Mortar::Texture> m_Texture1;
+    Mortar::SmartPtr<Mortar::Texture> m_Texture1;
 
-    // +0xb8 m_Texture2 — popup texture (SmartPtr<Texture>, 4 bytes)
-    SmartPtr<Mortar::Texture> m_Texture2;
+    // +0xb8 m_Texture2 — popup texture (Mortar::SmartPtr<Texture>, 4 bytes)
+    Mortar::SmartPtr<Mortar::Texture> m_Texture2;
 
     // +0xbc m_pScreenEffect — owned screen effect (nullptr if none)
     ScreenEffect* m_pScreenEffect;
@@ -200,6 +200,26 @@ public:
 
     // @ 0x001193d0 callee — push a modifier onto this power-up's list
     void AddModifier(GameModifier* mod) { m_ModList.push_back(mod); }
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: PowerUp::Purchaseable -- auto stub from binary missing-symbol set
+    void Purchaseable();
+    // STUB: PowerUp::SetDeferedPoints -- auto stub from binary missing-symbol set
+    void SetDeferedPoints(int);
+    // STUB: PowerUp::UnloadTextures -- auto stub from binary missing-symbol set
+    void UnloadTextures();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_GAME_POWER_UP_H

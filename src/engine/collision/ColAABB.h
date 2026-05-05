@@ -88,6 +88,26 @@ public:
         }
         return true;
     }
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ColAABB::ColAABBAABB -- auto stub from binary missing-symbol set
+    void ColAABBAABB(ColAABB*, ColAABB*, Vec3*);
+    // STUB: ColAABB::ColAABBLine -- auto stub from binary missing-symbol set
+    void ColAABBLine(ColAABB*, ColLine*, Vec3*);
+    // STUB: ColAABB::ColAABBSphere -- auto stub from binary missing-symbol set
+    void ColAABBSphere(ColAABB*, ColSphere*, Vec3*);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

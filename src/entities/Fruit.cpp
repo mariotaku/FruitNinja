@@ -207,7 +207,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
 
         // Assign fruit atlas texture to the model's mesh
         if (m_Model.IsValid() && !m_Model->m_Meshes.empty()) {
-            static SmartPtr<Mortar::Texture> s_fruitAtlas;
+            static Mortar::SmartPtr<Mortar::Texture> s_fruitAtlas;
             if (!s_fruitAtlas.IsValid()) {
                 // logical path; FileSystem_Direct prepends data_dir
                 s_fruitAtlas = Mortar::TextureManager::GetInstance().Load("models/fruit/textures/fruit_atlas.tex");
@@ -523,7 +523,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
                 } else {
                     // Classic / Arcade miss penalty.
                     if (MissControl* mc = MissControl::GetFree()) {
-                        SmartPtr<Mortar::Texture> defTex;
+                        Mortar::SmartPtr<Mortar::Texture> defTex;
                         mc->MakeDisappear(pos, 0, defTex);
                     }
                     if (g->pGameSound) g->pGameSound->SFXPlay("fruit_miss", 1.0f, 1.0f);
@@ -1209,7 +1209,7 @@ void Fruit::LoadFruitModels() {
             snprintf(path, sizeof(path),
                      "%s/models/Fruit/%s_%c_piece_%d.mmd",
                      game->data_dir.c_str(), name, c, piece);
-            SmartPtr<Mortar::Model> m = meshMgr->Load(path);
+            Mortar::SmartPtr<Mortar::Model> m = meshMgr->Load(path);
             if (piece == 1) s_FruitModels[i].m_HalfA = m;
             else            s_FruitModels[i].m_HalfB = m;
         }
@@ -1218,7 +1218,7 @@ void Fruit::LoadFruitModels() {
             ++loaded;
             // Assign fruit_atlas texture to the half meshes — same
             // pattern as whole-fruit mesh in Fruit::Init.
-            static SmartPtr<Mortar::Texture> s_fruitAtlas;
+            static Mortar::SmartPtr<Mortar::Texture> s_fruitAtlas;
             if (!s_fruitAtlas.IsValid()) {
                 std::string texPath = game->data_dir
                                     + "/models/fruit/textures/fruit_atlas.tex";

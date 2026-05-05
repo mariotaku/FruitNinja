@@ -45,8 +45,8 @@ public:
     float    m_DrawPosZ;           // cached draw Z (always 0)
 
     // +0xA0
-    SmartPtr<Mortar::Texture> m_ScoreIconTex;       // score.tex
-    SmartPtr<Mortar::Texture> m_HighscoreBannerTex; // new_best_score.tex
+    Mortar::SmartPtr<Mortar::Texture> m_ScoreIconTex;       // score.tex
+    Mortar::SmartPtr<Mortar::Texture> m_HighscoreBannerTex; // new_best_score.tex
     float    m_BannerScaleTime;    // banner scale anim timer; -2.0 = inactive sentinel
     uint16_t m_BannerSinIdx;       // sin-table angle for banner wobble
     uint8_t  _padAE[2];
@@ -57,7 +57,7 @@ public:
     float    m_DigitAlpha[16];     // per-digit alpha 0..1; index 0 = ones place
 
     // +0xF8
-    SmartPtr<Mortar::Texture> m_FruitDigitTex;  // hud_fruit.tex (loaded by ctor; Reset copies to +0x74)
+    Mortar::SmartPtr<Mortar::Texture> m_FruitDigitTex;  // hud_fruit.tex (loaded by ctor; Reset copies to +0x74)
 
     // +0xFC
     int      m_PlayerIdx;          // 0 = P1, 1 = P2
@@ -73,6 +73,22 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override;
     int  GetType() override { return 3; }
     void Skip() override;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ScoreControl::AddMultipliyer -- auto stub from binary missing-symbol set
+    void AddMultipliyer(int);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_HUD_SCORE_CONTROL_H

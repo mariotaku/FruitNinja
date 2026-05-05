@@ -102,6 +102,34 @@ private:
 
     // Binary dtor @ 0x001120f0 / 0x00112140
     ~ItemManager();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ItemManager::EquipItem -- auto stub from binary missing-symbol set
+    void EquipItem(unsigned int);
+    // STUB: ItemManager::PlayAlternateComboSound -- auto stub from binary missing-symbol set
+    void PlayAlternateComboSound(int);
+    // STUB: ItemManager::PlayAlternateImpactSound -- auto stub from binary missing-symbol set
+    void PlayAlternateImpactSound(float, float);
+    // STUB: ItemManager::PlayAlternateSwipeSound -- auto stub from binary missing-symbol set
+    void PlayAlternateSwipeSound(float, float);
+    // STUB: ItemManager::SetSwipeLoodVol -- auto stub from binary missing-symbol set
+    void SetSwipeLoodVol(float);
+    // STUB: ItemManager::UnequipItem -- auto stub from binary missing-symbol set
+    void UnequipItem(unsigned int);
+    // STUB: ItemManager::Update -- auto stub from binary missing-symbol set
+    void Update(float);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_ITEM_MANAGER_H

@@ -109,18 +109,18 @@ private:
     Game& game;
 
     // Static textures (binary: module-level globals, loaded in LoadContent)
-    static SmartPtr<Mortar::Texture> s_TexModeSensei;   // mode_sensei.tex: panel + logo
-    static SmartPtr<Mortar::Texture> s_TexModeSelect;   // mode_select.tex: borders
-    static SmartPtr<Mortar::Texture> s_TexClassic;      // classic.tex: Classic button panel
-    static SmartPtr<Mortar::Texture> s_TexMode2;        // mode_2.tex: Zen button panel
-    static SmartPtr<Mortar::Texture> s_TexArcadeMode;   // arcade_mode.tex: Arcade button panel
-    static SmartPtr<Mortar::Texture> s_TexComingSoon;   // coming_soon.tex
-    static SmartPtr<Mortar::Texture> s_TexZenSign;      // zen_sign.tex: connect animation
+    static Mortar::SmartPtr<Mortar::Texture> s_TexModeSensei;   // mode_sensei.tex: panel + logo
+    static Mortar::SmartPtr<Mortar::Texture> s_TexModeSelect;   // mode_select.tex: borders
+    static Mortar::SmartPtr<Mortar::Texture> s_TexClassic;      // classic.tex: Classic button panel
+    static Mortar::SmartPtr<Mortar::Texture> s_TexMode2;        // mode_2.tex: Zen button panel
+    static Mortar::SmartPtr<Mortar::Texture> s_TexArcadeMode;   // arcade_mode.tex: Arcade button panel
+    static Mortar::SmartPtr<Mortar::Texture> s_TexComingSoon;   // coming_soon.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexZenSign;      // zen_sign.tex: connect animation
     // Port specific: binary reads back-button texture from Game+0x17c
     // (a global SmartPtr — back_icon.tex, matching DojoScreen's back button
     // which reads the same slot). Until we mirror that Game field, load it
     // here so the back button has the correct back-arrow visual.
-    static SmartPtr<Mortar::Texture> s_TexBackIcon;     // back_icon.tex: back button (btn 1)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;     // back_icon.tex: back button (btn 1)
 
     void CreateControls();
     void RemoveButtons();

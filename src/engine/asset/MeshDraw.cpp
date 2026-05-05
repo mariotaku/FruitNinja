@@ -79,7 +79,7 @@ void DrawQuadUnCachedDefault(Colour colour, void* fx) {
 // Binary @ 0x001b09b0 — textured + transformed quad.
 // Sequence: WorldStack.Reset / Scale(scale) / Translate(pos) / RotZ(rotZ);
 // tex->Set; DrawQuadUnCached(colour, w, h, uOff, vOff); tex->UnSet.
-// 'texture' is a SmartPtr<Texture>* in the binary; port receives void* and
+// 'texture' is a Mortar::SmartPtr<Texture>* in the binary; port receives void* and
 // casts, matching the binary's SmartPtr dereference at the call site.
 void DrawQuad(Colour colour, void* texture,
               const Vec3& pos, const Vec3& scale, float rotZ,
@@ -94,7 +94,7 @@ void DrawQuad(Colour colour, void* texture,
         ws.m_Version++;
     }
 
-    SmartPtr<Texture>* texPtr = static_cast<SmartPtr<Texture>*>(texture);
+    Mortar::SmartPtr<Texture>* texPtr = static_cast<Mortar::SmartPtr<Texture>*>(texture);
     if (texPtr && texPtr->IsValid()) {
         (*texPtr)->Set();
     }

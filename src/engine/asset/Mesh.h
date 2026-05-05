@@ -41,7 +41,7 @@ struct VertexLayout {
 // port stores directly for GLES2 shader use
 struct MeshMaterial {
     std::string m_Name;             // Material name (e.g. "fruit_atlas")
-    SmartPtr<Texture> m_Texture;    // DiffuseMap texture
+    Mortar::SmartPtr<Texture> m_Texture;    // DiffuseMap texture
     Vec3 m_Diffuse;                 // GetColourRGB(color0) — set as "Ambience" property
     Vec3 m_Ambience;                // GetColourRGB(color1) — set as "Diffuse" property
     Vec3 m_SelfIllum;               // GetColourRGB(color3) — set as "SelfIllum" property
@@ -72,7 +72,7 @@ struct GeometryEntry {
 };
 
 // Matches original Mortar::Mesh (0x7C = 124 bytes)
-// Inherits: ReferenceCounter → IModelNode → Mesh
+// Inherits: Mortar::ReferenceCounter → IModelNode → Mesh
 // Port specific: skips Effect/Geometry/SharedEffectProperties system,
 // uses direct GLES2 calls via Renderer::setup_3d_shader()
 // Ref: docs/engine/mesh.md — struct layout, vtable, Draw behavior
@@ -84,7 +84,7 @@ public:
 
     std::vector<BoneBinding> m_BoneBindings;    // +0x34 equiv: Bone binding array
 
-    // +0x40 equiv: Geometry submeshes (original: vector<SmartPtr<Geometry>>)
+    // +0x40 equiv: Geometry submeshes (original: vector<Mortar::SmartPtr<Geometry>>)
     // Port: each entry has its own VBO/IBO pair + material index
     std::vector<GeometryEntry> m_Geometries;
 
@@ -130,7 +130,7 @@ public:
     // vtable[3]: Matches Mesh::GetName (0x001b15e0)
     const std::string& GetName() const override { return m_Name; }
 
-    // DIFFERS: binary GetGeometry @ 0x001b225c returns SmartPtr<Geometry>;
+    // DIFFERS: binary GetGeometry @ 0x001b225c returns Mortar::SmartPtr<Geometry>;
     // port returns const GeometryEntry* because GeometryEntry has trivial value
     // semantics (no Geometry refcounted object).
     // Port specific: access GeometryEntry by index (replaces vtable[10] GetGeometry).
@@ -141,7 +141,7 @@ public:
 
     // Port helper: assign texture to all materials that have none.
     // Used by Fruit.cpp to assign fruit_atlas when loaded externally.
-    void SetDiffuseTexture(const SmartPtr<Texture>& tex);
+    void SetDiffuseTexture(const Mortar::SmartPtr<Texture>& tex);
 
     // Port helper: true if any material has a valid texture.
     bool HasDiffuseTexture() const;
@@ -166,10 +166,10 @@ public:
     //   0x001b1430 -- GetPropertiesGroup(name, defs_begin, defs_end)
     //   0x001aab94 -- GetPropertiesGroup<9>(name, defs[9])
     //   0x001b1394 -- SharedPropsInfo::AddTextureMap(name, propName)
-    //   0x001b0d0c -- AddGeometry(SmartPtr<Geometry>&)  (port appends in LoadMesh directly)
+    //   0x001b0d0c -- AddGeometry(Mortar::SmartPtr<Geometry>&)  (port appends in LoadMesh directly)
     //   0x001b15e4 -- GenerateBindings(name, slot, vector<Bone::Binding>&) [empty BX LR]
     //   0x001b08e8 -- RebuildEffectBindings()  [port computes MVP via MatrixManager directly]
-    //   0x001b10d8 -- Mesh(SmartPtr<SharedEffectProperties>&, AsciiString&)  [2-arg ctor; port has default ctor only]
+    //   0x001b10d8 -- Mesh(Mortar::SmartPtr<SharedEffectProperties>&, AsciiString&)  [2-arg ctor; port has default ctor only]
     //   0x00193ed8 -- DrawCube(...)    [binary stub, returns colour unchanged]
     //   0x00193edc -- DrawLine(...)    [binary stub, returns first vec unchanged]
     //   0x00193ee0 -- DrawSphere(...)  [binary stub, returns colour unchanged]
@@ -180,12 +180,12 @@ public:
     // no-op until UV-scroll animation is wired.
 };
 
-// Matches original Model (0x58 bytes) with vector<SmartPtr<Mesh>>
+// Matches original Model (0x58 bytes) with vector<Mortar::SmartPtr<Mesh>>
 // Ref: docs/engine/rendering-detail.md — Model::Draw (0x001930e0)
-class Model : public ReferenceCounter {
+class Model : public Mortar::ReferenceCounter {
 public:
     std::string m_Name;
-    std::vector<SmartPtr<Mesh>> m_Meshes;
+    std::vector<Mortar::SmartPtr<Mesh>> m_Meshes;
 
     // +0x40: stored skeleton (Skeleton struct, not pointer)
     // Matches model+0x40 from SwapSkeleton (0x001aaba8)
@@ -195,13 +195,13 @@ public:
     virtual ~Model();
 
     // Binary @ 0x0019346c — push mesh, then bind skeleton if valid.
-    void AddNode(const SmartPtr<Mesh>& mesh);
+    void AddNode(const Mortar::SmartPtr<Mesh>& mesh);
 
     // Binary @ 0x001933f8 — unchecked array access (matches binary).
-    SmartPtr<Mesh> GetNode(unsigned long index) const;
+    Mortar::SmartPtr<Mesh> GetNode(unsigned long index) const;
 
     // Binary @ 0x001933b8 — linear scan by name; dead code (no live callers).
-    SmartPtr<Mesh> GetNode(const std::string& name) const;
+    Mortar::SmartPtr<Mesh> GetNode(const std::string& name) const;
 
     // Draw all meshes with optional depth-sorting for multi-mesh models
     // Matches 0x001930e0

@@ -8,8 +8,8 @@
 //
 // Binary layout (ARM32):
 //   +0x00..+0x73: HUDControl base (0x74 bytes, includes UV floats at +0x64..+0x70)
-//   +0x74: SmartPtr<Texture> m_Texture    (primary display texture)
-//   +0x78: SmartPtr<Texture> m_SecondaryTex (secondary; initialized but unused by Draw)
+//   +0x74: Mortar::SmartPtr<Texture> m_Texture    (primary display texture)
+//   +0x78: Mortar::SmartPtr<Texture> m_SecondaryTex (secondary; initialized but unused by Draw)
 //
 // UV floats live in HUDControl base (not here), per ctor ASM at 0x001443f4
 // which only touches +0x74 and +0x78.
@@ -22,11 +22,11 @@
 
 class HUDControl3d : public HUDControl {
 public:
-    // +0x74: main display texture (binary: SmartPtr<Texture>; port: raw GLuint)
+    // +0x74: main display texture (binary: Mortar::SmartPtr<Texture>; port: raw GLuint)
     // Gate: nullptr/0 = don't draw (checked first in Draw)
     GLuint m_Texture;
 
-    // +0x78: secondary texture (binary: SmartPtr<Texture>; port: raw GLuint)
+    // +0x78: secondary texture (binary: Mortar::SmartPtr<Texture>; port: raw GLuint)
     // Initialized to 0 by ctor; not used by HUDControl3d::Draw.
     // Subclasses (TutorialControl) use this slot for their own textures.
     GLuint m_SecondaryTex;

@@ -53,13 +53,13 @@ static const float FLASH_ALPHA_MAX  = 128.0f;
 static const float FLASH_SCALE_MUL  = 10000.0f;
 
 // Lazy-loaded flash.tex (shared with DrawBombHit)
-static SmartPtr<Mortar::Texture> s_FlashTex;
+static Mortar::SmartPtr<Mortar::Texture> s_FlashTex;
 
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------
 static inline GLuint LoadTex(const char* name, int* outW = nullptr, int* outH = nullptr) {
-    SmartPtr<Mortar::Texture> t = Mortar::TextureManager::LoadLocalisedTexture(name);
+    Mortar::SmartPtr<Mortar::Texture> t = Mortar::TextureManager::LoadLocalisedTexture(name);
     if (!t.IsValid()) return 0;
     if (outW) *outW = t->m_Width;
     if (outH) *outH = t->m_Height;
@@ -628,3 +628,10 @@ void PauseScreen::Update(float dt) {
     // 7. P2 buttons inactive (Tier-2 stub -- P2 buttons are nullptr in Tier-1)
     // m_P2ResumeButton / m_P2RetryButton are always nullptr in Tier-1.
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: PauseScreen::ContinueGameCallback -- auto stub
+void PauseScreen::ContinueGameCallback() {}
+// STUB: PauseScreen::SkipTo -- auto stub
+void PauseScreen::SkipTo() {}
+// ---- end AUTO-STUB MERGE ----

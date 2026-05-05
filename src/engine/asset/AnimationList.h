@@ -21,7 +21,7 @@ struct AnimTrackGroup;
 //
 // TODO: 0x001b0600 -- AnimationList loader; full Animation struct layout
 //                     pending R3 RE pass.
-class AnimationList : public ReferenceCounter {
+class AnimationList : public Mortar::ReferenceCounter {
 public:
     // std::map<AsciiString, Animation*> uses AsciiString::operator< -> Compare(),
     // which is non-lex (length-first, hash-second, memcmp-third). This matches the

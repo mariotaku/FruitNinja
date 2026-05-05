@@ -34,7 +34,7 @@ static const float BLAST_PURGE_THR = 1.55f;   // DAT_0016a1fc
 static const float BLAST_RESET_THR = 1.5f;    // ResetGameEntities trigger
 
 static Vec3 s_BombHitPos(0, 0, 0);
-static SmartPtr<Mortar::Texture> s_FlashTex;
+static Mortar::SmartPtr<Mortar::Texture> s_FlashTex;
 
 // CriticalFlash state — matches binary CriticalFlash @ 0x0016a9a4 +
 // DrawCritHit @ 0x0016b5b4 (verified 2026-04-15).

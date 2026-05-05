@@ -322,6 +322,30 @@ public:
 
     // 0x0012b3dc. Achievement in-progress timer ticks.
     void Update(float dt, HUD* hud);
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: FruitSaveData::DownloadedTweakValue -- auto stub from binary missing-symbol set
+    void DownloadedTweakValue(char const*, int);
+    // STUB: FruitSaveData::PublishUnlockedAchievements -- auto stub from binary missing-symbol set
+    void PublishUnlockedAchievements();
+    // STUB: FruitSaveData::SetTotal -- auto stub from binary missing-symbol set
+    void SetTotal(char const*, int, bool, bool);
+    // STUB: FruitSaveData::TotalExists -- auto stub from binary missing-symbol set
+    void TotalExists(char const*);
+    // STUB: FruitSaveData::TotalExists -- auto stub from binary missing-symbol set
+    void TotalExists(unsigned int);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 // ----------------------------------------------------------------------

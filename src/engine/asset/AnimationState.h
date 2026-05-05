@@ -29,14 +29,14 @@ struct AnimBindings {
 // Mortar::AnimationState -- per-instance playback state for an animation.
 // Binary @ 0x001ad150 ctor; vtable @ 0x001ebd00; sizeof 0x40.
 // 14 missing methods landed via this shell.
-class AnimationState : public ReferenceCounter {
+class AnimationState : public Mortar::ReferenceCounter {
 public:
     // Iterator types opaque to callers
     typedef AnimationList::AnimMap::iterator       AnimIter;
     typedef AnimationList::AnimMap::const_iterator AnimConstIter;
 
     // Binary @ 0x001ad150 -- store list (or empty dummy), iter=end, time=0, speed=1, loop=false
-    explicit AnimationState(SmartPtr<AnimationList> list);
+    explicit AnimationState(Mortar::SmartPtr<AnimationList> list);
     virtual ~AnimationState();
 
     // Binary @ 0x001ace8c -- forward to m_AnimList->m_Anims.find(name)
@@ -54,7 +54,7 @@ public:
     Animation* GetAnimation(unsigned long idx) const;
 
     // Binary @ 0x001ad398 -- assign mesh pointer, then RebindAnim
-    void LinkMesh(const SmartPtr<Model>& m);
+    void LinkMesh(const Mortar::SmartPtr<Model>& m);
 
     // Binary @ 0x001ad370 -- set iter+loop+time, then RebindAnim
     void PlayAnim(const AsciiString& name, float time, bool loop);
@@ -75,12 +75,12 @@ public:
     bool IsPlaying() const;
 
     // Binary @ 0x001acffc -- Meyers singleton, empty AnimationList shared across all default ctors
-    static SmartPtr<AnimationList> GetDummyAnimList();
+    static Mortar::SmartPtr<AnimationList> GetDummyAnimList();
 
 private:
-    SmartPtr<Model>         m_Mesh;         // +0x0C
+    Mortar::SmartPtr<Model>         m_Mesh;         // +0x0C
     AnimBindings            m_Bindings;     // +0x10 (24B)
-    SmartPtr<AnimationList> m_AnimList;     // +0x28
+    Mortar::SmartPtr<AnimationList> m_AnimList;     // +0x28
     AnimIter                m_CurrentIter;  // +0x2C
     // padding                             // +0x30
     float                   m_Time;         // +0x34

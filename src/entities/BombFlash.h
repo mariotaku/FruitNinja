@@ -56,7 +56,7 @@ public:
 
     // @ 0x001723f4 — activate a pooled flash slot.
     static void MakeFlash(Colour col, Vec3* pos, Vec3* dir,
-                          SmartPtr<Mortar::Texture>* tex);
+                          Mortar::SmartPtr<Mortar::Texture>* tex);
 
     // @ 0x00171028 — iterate pool, call Update on active slots.
     static void UpdateActiveFlashes(float dt);
@@ -69,6 +69,28 @@ public:
 
     // @ 0x00171f64 — destructs each pool entry, frees backing memory.
     static void CleanUp();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: BombFlash::Draw -- auto stub from binary missing-symbol set
+    void Draw();
+    // STUB: BombFlash::DrawUpdate -- auto stub from binary missing-symbol set
+    void DrawUpdate(float);
+    // STUB: BombFlash::GetFree -- auto stub from binary missing-symbol set
+    void GetFree();
+    // STUB: BombFlash::Init -- auto stub from binary missing-symbol set
+    void Init(void*, int, Vec3*);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_ENTITIES_BOMB_FLASH_H

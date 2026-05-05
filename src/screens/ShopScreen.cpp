@@ -126,24 +126,24 @@ static void SplatShiftVisitor(SplatEntity* s, void* user) {
 // Static texture storage
 // ---------------------------------------------------------------------------
 
-SmartPtr<Mortar::Texture> ShopScreen::s_TexLocked;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectItem;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexLoading;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexScratch;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexDialogBox;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexSelected;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectedSml;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexLockedStroke;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexNewItemSmlBadge;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexBGStore;
-SmartPtr<Mortar::Texture> ShopScreen::s_TexBackIcon;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexLocked;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectItem;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexLoading;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexScratch;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexDialogBox;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexSelected;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexSelectedSml;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexLockedStroke;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexNewItemSmlBadge;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBGStore;
+Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBackIcon;
 bool ShopScreen::s_bContentLoaded = false;
 
 // Port-only helpers (mirror DojoScreen pattern).
-static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
+static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
-static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex,
+static Vec3 TexSizeOf(const Mortar::SmartPtr<Mortar::Texture>& tex,
                       float defW, float defH) {
     if (tex.IsValid())
         return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
@@ -755,7 +755,7 @@ void ShopScreen::Update(float dt) {
             // Create the back/quit button (field_0x84 = m_pBuyButton).
             // Binary: MenuButton ctor at state 0 completion uses QuitShopCallback
             // as the press delegate (confirmed via xref DATA at 0x0015e2fc/0x0015e2fe).
-            // Texture comes from *(GameTask + 0x17c) — a per-task SmartPtr<Texture>.
+            // Texture comes from *(GameTask + 0x17c) — a per-task Mortar::SmartPtr<Texture>.
             // Fruit type: *(GameTask + GOT_DAT_0015e578) — int pre-stored in task.
             // Port uses bomb fruit type (FruitInfo_GetCount()) matching the
             // DojoScreen back-button pattern: out-of-range index forces a bomb.
@@ -1328,3 +1328,12 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ShopScreen::BuyButtonCallback -- auto stub
+void ShopScreen::BuyButtonCallback() {}
+// STUB: ShopScreen::CancelCallback -- auto stub
+void ShopScreen::CancelCallback() {}
+// STUB: ShopScreen::ConfirmCallback -- auto stub
+void ShopScreen::ConfirmCallback() {}
+// ---- end AUTO-STUB MERGE ----

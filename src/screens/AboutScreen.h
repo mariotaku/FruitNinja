@@ -20,12 +20,12 @@
 //   sensei.tex     -> s_TexSensei  (slides in from right in Draw block 4)
 //
 // Instance fields (beyond HUDControl3d base at +0x7C):
-//   +0x74  SmartPtr<Texture>  field_0x74      haiku panel tex (per-instance copy)
+//   +0x74  Mortar::SmartPtr<Texture>  field_0x74      haiku panel tex (per-instance copy)
 //   +0x7C  float              m_TransitionAlpha  0->1 lerp / decay
 //   +0x8C  MenuButton*        m_pBackButton   back button (created lazily at alpha>0.999)
 //   +0x90  DojoScreen*        m_pParent       parent back-navigation
 //   +0x94  MenuButton*        m_pOFNButton    OpenFeint/GameCenter btn (defunct, stub)
-//   +0x98  SmartPtr<Texture>  field_0x98      (null in port, OFN overlay tex in binary)
+//   +0x98  Mortar::SmartPtr<Texture>  field_0x98      (null in port, OFN overlay tex in binary)
 //   +0x9C  int                m_State         0=in, 1=idle, 2=out
 //
 // State machine:
@@ -91,16 +91,16 @@ private:
     int m_State;
 
     // +0x74: per-instance copy of s_TexHaiku (queried for dimensions)
-    SmartPtr<Mortar::Texture> m_TexHaiku;
+    Mortar::SmartPtr<Mortar::Texture> m_TexHaiku;
 
     // +0x98: additional SmartPtr — null in port (OFN overlay in binary)
-    SmartPtr<Mortar::Texture> m_TexOFNOverlay;
+    Mortar::SmartPtr<Mortar::Texture> m_TexOFNOverlay;
 
     // Static textures (GOT-relative globals in binary, LoadContent manages them)
-    static SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex  (DAT_0012eca0 slot)
-    static SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (DAT_0012eca8 slot)
-    static SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex  (DAT_0012ecb0 slot)
-    static SmartPtr<Mortar::Texture> s_TexBackIcon; // back_icon.tex (port-only; binary reads game->field_0x17c)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex  (DAT_0012eca0 slot)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (DAT_0012eca8 slot)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex  (DAT_0012ecb0 slot)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon; // back_icon.tex (port-only; binary reads game->field_0x17c)
 
     // One-time init guard (binary: DAT_0012ed94 + 0xc in BSS)
     static bool s_bContentLoaded;
@@ -111,6 +111,22 @@ private:
     // Helpers
     void CreateBackButton();
     void RemoveBackButton();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: AboutScreen::QuitGameCallback -- auto stub from binary missing-symbol set
+    void QuitGameCallback();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_ABOUT_SCREEN_H

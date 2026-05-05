@@ -126,7 +126,7 @@ static const uint8_t BASE_A = 255;
 // ---------------------------------------------------------------------
 
 static Mortar::MemoryPool<SplatEntity> s_Pool;
-static SmartPtr<Mortar::Texture>       s_SplatTex;
+static Mortar::SmartPtr<Mortar::Texture>       s_SplatTex;
 
 static const int MAX_SPLATS_PER_FRAME = 128;
 static QUADCUSTOMVERTEX s_SplatVerts[MAX_SPLATS_PER_FRAME * 6];

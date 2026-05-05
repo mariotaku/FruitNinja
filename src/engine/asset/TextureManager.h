@@ -18,26 +18,26 @@ class TextureManager : public Singleton<TextureManager> {
 public:
     // Load texture by full path, using cache
     // Returns cached version if already loaded, otherwise loads from disk
-    SmartPtr<Texture> Load(const char* path);
+    Mortar::SmartPtr<Texture> Load(const char* path);
 
     // Matches LoadLocalisedTexture (0x0010a758)
     // Loads texture by name from the data/textures/ directory.
     // Tries localised path first (e.g. "textures/en/name"), falls back to "textures/name".
-    static SmartPtr<Texture> LoadLocalisedTexture(const char* name);
+    static Mortar::SmartPtr<Texture> LoadLocalisedTexture(const char* name);
 
     // Set the base data directory for texture loading (e.g. "/path/to/Data")
     static void SetDataDir(const char* dir);
     static const char* GetDataDir();
 
     // Find cached texture by hash
-    SmartPtr<Texture> Find(uint32_t hash) const;
+    Mortar::SmartPtr<Texture> Find(uint32_t hash) const;
 
     // Find cached texture by name
-    SmartPtr<Texture> Find(const char* name) const;
+    Mortar::SmartPtr<Texture> Find(const char* name) const;
 
     // Add texture to cache
-    void Add(uint32_t hash, SmartPtr<Texture> tex);
-    void Add(const char* name, SmartPtr<Texture> tex);
+    void Add(uint32_t hash, Mortar::SmartPtr<Texture> tex);
+    void Add(const char* name, Mortar::SmartPtr<Texture> tex);
 
     // Remove expired (zero ref) entries
     void PurgeExpired();
@@ -72,6 +72,28 @@ public:
     void OnTextureDestroyed(Texture* tex);
 
     static char s_DataDir[256];
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: TextureManager::Destroy -- auto stub from binary missing-symbol set
+    void Destroy();
+    // STUB: TextureManager::Initialise -- auto stub from binary missing-symbol set
+    void Initialise(int);
+    // STUB: TextureManager::InitialiseInternal -- auto stub from binary missing-symbol set
+    void InitialiseInternal();
+    // STUB: TextureManager::LoadIndependent -- auto stub from binary missing-symbol set
+    void LoadIndependent(void*, int);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

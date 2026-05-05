@@ -82,3 +82,8 @@ void ScreenButton::ControlDeleted(HUDControl* ctrl) {
     }
     m_pButton = nullptr;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ScreenButton::DefaultButtonDelegate -- auto stub
+void ScreenButton::DefaultButtonDelegate(MenuButton*, float, ScreenButton&) {}
+// ---- end AUTO-STUB MERGE ----

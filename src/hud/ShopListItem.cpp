@@ -72,7 +72,7 @@ ShopListItem::~ShopListItem() {}
 // Binary sequence:
 //   1. pos.x = x; pos.y = y; pos.z = z
 //   2. *(Vec3*)(this+0x268) = pos     // copy pos into _pad2 (iconPos)
-//   3. if (SmartPtr<Texture>::operator bool(this+0x274)):
+//   3. if (Mortar::SmartPtr<Texture>::operator bool(this+0x274)):
 //        *(float*)(this+0x268) += DAT_0015d474(35.2f) + *(this+0x18)(m_Size.x=60.0f)
 //        => _pad2.x = pos.x + 95.2f
 //   4. Animate two alpha fields each frame using game.dt:
@@ -802,3 +802,8 @@ void ShopListItem::Draw() {
         }
     }
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ShopListItem::ButtonClicked -- auto stub
+void ShopListItem::ButtonClicked() {}
+// ---- end AUTO-STUB MERGE ----

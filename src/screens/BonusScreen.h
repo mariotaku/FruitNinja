@@ -25,7 +25,7 @@ struct BonusAwardHud {
     Colour     m_Colour;          // +0x50 (4 bytes, BGRA)
     float      m_Scale;           // +0x54
     int        _pad58;            // +0x58
-    SmartPtr<Mortar::Texture> m_StarTex; // +0x5C (4 bytes on port; 8 in binary ARM SmartPtr)
+    Mortar::SmartPtr<Mortar::Texture> m_StarTex; // +0x5C (4 bytes on port; 8 in binary ARM SmartPtr)
     // pad to 0x88 in binary; ARM SmartPtr is 4-byte here so struct is shorter on port
     // Port: no ARM padding needed for asserts — see static_assert below gated on ARM.
 
@@ -80,7 +80,7 @@ public:
 
     // Binary @ 0x00133664 — called by BonusManager::SetUpBonusScreen
     // colour passed as packed BGRA uint32_t (matching BonusManager call site)
-    void AddAward(uint32_t colour, SmartPtr<Mortar::Texture> tex,
+    void AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
 private:

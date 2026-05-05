@@ -30,7 +30,7 @@ public:
     char                            m_DisplayName[64];  // +0x80
     std::vector<uint64_t>           m_PatternHashes;    // +0xC0  sizeof 12
     uint32_t                        m_AchievementHash;  // +0xCC
-    SmartPtr<Mortar::Texture>       m_StarTexture;      // +0xD0  sizeof 4
+    Mortar::SmartPtr<Mortar::Texture>       m_StarTexture;      // +0xD0  sizeof 4
 
     Bonus();                                            // Binary @ 0x0010005c
     Bonus(const Bonus& rhs);                            // Binary @ 0x00110090

@@ -92,19 +92,19 @@ static const char* FRUIT_ARCADE  = "banana";
 static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
 
 // --- Static texture storage ---
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSensei;
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSelect;
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexClassic;
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexMode2;
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexArcadeMode;
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexComingSoon;
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexZenSign;
-SmartPtr<Mortar::Texture> GameModeScreen::s_TexBackIcon;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSensei;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexModeSelect;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexClassic;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexMode2;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexArcadeMode;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexComingSoon;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexZenSign;
+Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexBackIcon;
 
-static GLuint TexIdOf(const SmartPtr<Mortar::Texture>& tex) {
+static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
-static Vec3 TexSizeOf(const SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
+static Vec3 TexSizeOf(const Mortar::SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
     if (tex.IsValid())
         return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
     return Vec3(defW, defH, 1.0f);

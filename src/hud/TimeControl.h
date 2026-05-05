@@ -45,6 +45,16 @@ public:
 
 private:
     bool IsTimedGame() const;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
 };
 
 #endif

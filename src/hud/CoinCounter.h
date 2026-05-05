@@ -44,6 +44,16 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
 
     int GetType() override { return 3; }  // binary @ 0x00135AF4
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
 };
 
 #endif // FN_HUD_COIN_COUNTER_H

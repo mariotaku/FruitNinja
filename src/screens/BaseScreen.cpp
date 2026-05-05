@@ -21,8 +21,8 @@
 #include <cmath>
 
 // Static texture storage (binary: GOT-relative module-level singletons)
-SmartPtr<Mortar::Texture> BaseScreen::s_TexSmlTitle;
-SmartPtr<Mortar::Texture> BaseScreen::s_TexBlurryBacking;
+Mortar::SmartPtr<Mortar::Texture> BaseScreen::s_TexSmlTitle;
+Mortar::SmartPtr<Mortar::Texture> BaseScreen::s_TexBlurryBacking;
 
 // DrawBorders constants (literal pool @ 0x0013056c, resolved via read_memory)
 // g_slideVec = Vec3(0, 1, 0) — vertical slide direction
@@ -90,7 +90,7 @@ void BaseScreen::UnloadContent() {
 //   3. Optional secondary texture with vertical slide + offset
 // All geometry at Z=0.0.
 // ===================================================================
-void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
+void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryTex,
                              float alpha, const Vec3& secondaryTexPos) {
     MatrixManager& mm = MatrixManager::GetInstance();
     Renderer* r = Renderer::GetInstance();

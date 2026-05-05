@@ -64,8 +64,8 @@ private:
     float       m_TouchY;     // +0x8C
     float       m_TouchPhase; // +0x90
 
-    static SmartPtr<Mortar::Texture> s_checked;
-    static SmartPtr<Mortar::Texture> s_unchecked;
+    static Mortar::SmartPtr<Mortar::Texture> s_checked;
+    static Mortar::SmartPtr<Mortar::Texture> s_unchecked;
 };
 
 #endif // FN_HUD_CHECKBOX_H

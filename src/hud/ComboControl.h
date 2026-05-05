@@ -37,6 +37,16 @@ public:
     void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
 
     int GetType() override { return 1; }
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
 };
 
 #endif // FN_HUD_COMBO_CONTROL_H

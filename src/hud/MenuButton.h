@@ -204,7 +204,7 @@ public:
     bool TouchReleased();
 
     // Binary @ 0x00150240 — spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
-    void AddPeice(SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
+    void AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                   float rotSpeed, float initialTimer,
                   Vec3 offset, Vec3 sizeScale,
                   Colour tint, int layerFlags);

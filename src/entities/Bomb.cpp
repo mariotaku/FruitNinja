@@ -52,12 +52,12 @@ static const int16_t ANGLE_SCALE      = 0xB6;
 // Global bomb data (matches BombGlobalData at GOT+0x464A0, loaded by LoadContent)
 // See docs/entities/bomb.md for full struct layout.
 // Binary field offsets (kept as comments for reference; port layout may
-// differ since we store SmartPtr<Texture> separately in g_BombTexture):
+// differ since we store Mortar::SmartPtr<Texture> separately in g_BombTexture):
 //   +0x00  Bomb*            pTrackedBomb
-//   +0x04  SmartPtr<Texture> tex_02   (bomb_explode.tex — in g_BombTexture)
+//   +0x04  Mortar::SmartPtr<Texture> tex_02   (bomb_explode.tex — in g_BombTexture)
 //   +0x08  uint8_t           bFuseSfxFiredThisFrame
-//   +0x0C  SmartPtr<Model>[3] model
-//   +0x24  SmartPtr<Texture> texMinus10
+//   +0x0C  Mortar::SmartPtr<Model>[3] model
+//   +0x24  Mortar::SmartPtr<Texture> texMinus10
 //   +0x28  bool              loaded
 //   +0x2C  uint32_t          fuseHash[2]
 struct BombGlobalData {
@@ -72,8 +72,8 @@ struct BombGlobalData {
     // SFX in one frame.
     uint8_t bFuseSfxFiredThisFrame;
 
-    SmartPtr<Mortar::Model> model[3];
-    SmartPtr<Mortar::Texture> texMinus10;
+    Mortar::SmartPtr<Mortar::Model> model[3];
+    Mortar::SmartPtr<Mortar::Texture> texMinus10;
     bool loaded;
     uint32_t fuseHash[2];
 
@@ -89,7 +89,7 @@ static BombGlobalData g_bombData;
 // comes from the .mmd embedded `fruit_atlas.tex`) — it's the
 // `bomb_explode.tex` used by BombBlast::DrawBlast for the shockwave
 // quads. BombBlast.cpp references it via `extern`.
-SmartPtr<Mortar::Texture> g_BombTexture;
+Mortar::SmartPtr<Mortar::Texture> g_BombTexture;
 
 // Global bomb Z cycling (matches GetBombZPosition at 0x169080)
 static float g_BombZCurrent = -10.0f;
@@ -110,7 +110,7 @@ static float GetBombZPosition() {
 //
 // We keep the call in LoadContent for shape-fidelity — when (if) Mortar
 // lighting is revisited, the implementation lands here for free.
-static SmartPtr<Mortar::Model>& SetupLighting(SmartPtr<Mortar::Model>& model) {
+static Mortar::SmartPtr<Mortar::Model>& SetupLighting(Mortar::SmartPtr<Mortar::Model>& model) {
     return model;
 }
 
@@ -564,7 +564,7 @@ void Bomb::Draw(Renderer& r) {
         g_bombData.pTrackedBomb = this;
     }
 
-    SmartPtr<Mortar::Model>& modelPtr = g_bombData.model[m_BombVariant];
+    Mortar::SmartPtr<Mortar::Model>& modelPtr = g_bombData.model[m_BombVariant];
     if (!modelPtr.IsValid()) return;
 
     // Matrix order must match Fruit::Draw (which renders correctly): build
@@ -679,9 +679,9 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             if (MissControl* mc = MissControl::GetFree()) {
                 // Binary: miss->MakeDisappear(pos, 0, bombTex);
                 //         miss->field_0x34 = 0x200;  // size multiplier
-                // Port: passes SmartPtr<Texture>() so MakeDisappear falls
+                // Port: passes Mortar::SmartPtr<Texture>() so MakeDisappear falls
                 // back to its default (hud_cross) via internal pick.
-                SmartPtr<Mortar::Texture> noTex;
+                Mortar::SmartPtr<Mortar::Texture> noTex;
                 mc->MakeDisappear(pos, 0x200, noTex);
             }
             // Mark as menu-hit so Update's hit branch runs the falling

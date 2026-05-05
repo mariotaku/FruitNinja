@@ -25,7 +25,7 @@
 //   +0x260  float  m_SelectedAlpha  >0 -> draw selected_sml highlight ring
 //   +0x264  float  m_LockFlashAlpha (init 0.0; set to 0.25 on locked-item tap)
 //   +0x268  char[0x0C]  _pad2       (likely Vec3 for icon translate -- not yet RE'd)
-//   +0x274  SmartPtr<Texture>  m_pIconTex  item icon texture; SetNull in ctor
+//   +0x274  Mortar::SmartPtr<Texture>  m_pIconTex  item icon texture; SetNull in ctor
 //   +0x278  ItemInfo*  m_pItemInfo          ptr to item info; 0 in ctor
 //   +0x27C  byte   m_bOnscreenItem  1 in ctor; 0 = off-screen, Draw early-exits
 //   +0x27D  byte   m_bSelected      0 in ctor; 1 = resets static colour cache
@@ -129,7 +129,7 @@ public:
     // for fields after m_pIconTex and m_pItemInfo cannot be satisfied on x86_64
     // without hiding the pointer inside a byte array. Fields below are accessed by
     // name only; the static_asserts for them are ARM32-only (guarded by sizeof(void*)==4).
-    SmartPtr<Mortar::Texture> m_pIconTex;  // +0x274 (ARM32)
+    Mortar::SmartPtr<Mortar::Texture> m_pIconTex;  // +0x274 (ARM32)
 
     // +0x278: pointer to the ItemInfo for this list entry (null = no item)
     ItemInfo* m_pItemInfo;            // +0x278 (ARM32)
@@ -148,6 +148,22 @@ public:
 
     // +0x280: cost text alpha (m_CostAlpha * 255.0f clamped -> byte alpha)
     float m_CostAlpha;                // +0x280
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ShopListItem::ButtonClicked -- auto stub from binary missing-symbol set
+    void ButtonClicked();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 // ---------------------------------------------------------------------------

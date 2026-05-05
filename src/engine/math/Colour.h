@@ -56,6 +56,26 @@ struct Colour {
         out[2] = b / 255.0f;
         out[3] = a / 255.0f;
     }
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: Colour::Lerp -- auto stub from binary missing-symbol set
+    void Lerp(Colour const&, float) const;
+    // STUB: Colour::Lerp -- auto stub from binary missing-symbol set
+    void Lerp(Colour, Colour, float);
+    // STUB: Colour::ToString -- auto stub from binary missing-symbol set
+    void ToString() const;
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

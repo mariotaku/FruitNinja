@@ -146,3 +146,14 @@ void MortarSound::Load(const char* name) {
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: MortarSound::InternalLoad -- auto stub
+void MortarSound::InternalLoad(char const*) {}
+// STUB: MortarSound::IsReady -- auto stub
+void MortarSound::IsReady() {}
+// STUB: MortarSound::SetPitch -- auto stub
+void MortarSound::SetPitch(unsigned int) {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

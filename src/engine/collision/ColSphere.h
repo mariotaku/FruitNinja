@@ -36,6 +36,24 @@ public:
     bool Intersects(const ColSphere& other) const;
     bool IntersectsLine(const ColLine& line) const;
     bool Contains(const Vec3& p) const;
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ColSphere::ColSphereLine -- auto stub from binary missing-symbol set
+    void ColSphereLine(ColSphere*, ColLine*, Vec3*);
+    // STUB: ColSphere::ColSphereSphere -- auto stub from binary missing-symbol set
+    void ColSphereSphere(ColSphere*, ColSphere*, Vec3*);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

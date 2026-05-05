@@ -16,8 +16,8 @@
 
 // File-scope banner texture statics.
 // TODO: load notification banner textures — loader function not yet identified in binary.
-static SmartPtr<Mortar::Texture> s_banner;        // numeric-type banner (notification_banner.tex or similar)
-static SmartPtr<Mortar::Texture> s_unlockBanner;  // named-type unlock banner
+static Mortar::SmartPtr<Mortar::Texture> s_banner;        // numeric-type banner (notification_banner.tex or similar)
+static Mortar::SmartPtr<Mortar::Texture> s_unlockBanner;  // named-type unlock banner
 
 // Slide animation constants from binary.
 // Binary: slide-in phase 0..0.2s, settled 0.2..2.7s, slide-out 2.7..2.9s, remove >=2.9s.
@@ -37,7 +37,7 @@ static const float NOTIF_PARTICLE_WINDOW   = 0.5f;
 
 // Binary @ 0x00152ed0
 NotificationControl::NotificationControl(const char* name, int points,
-                                          SmartPtr<Mortar::Texture>* icon,
+                                          Mortar::SmartPtr<Mortar::Texture>* icon,
                                           uint8_t type)
     : m_TextScale(16.0f)
     , m_StateTimer(0.0f)

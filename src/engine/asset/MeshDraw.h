@@ -33,7 +33,7 @@ void DrawQuadUnCached(Colour colour, float w, float h, float uOff, float vOff, v
 void DrawQuadUnCachedDefault(Colour colour, void* fx);
 
 // Binary @ 0x001b09b0 — textured + transformed quad
-void DrawQuad(Colour colour, void* texture /* SmartPtr<Texture>* */,
+void DrawQuad(Colour colour, void* texture /* Mortar::SmartPtr<Texture>* */,
               const Vec3& pos, const Vec3& scale, float rotZ,
               float w, float h, float uOff, float vOff, void* fx);
 

@@ -301,3 +301,10 @@ int IsTouchDown(int slot) {
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: Touch::Clear -- auto stub
+void Touch::Clear() {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

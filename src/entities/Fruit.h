@@ -17,17 +17,17 @@ class SlashEntity;
 // Binary layout:
 //   +0x00: EffectProperty* prop[2]  (per half piece)
 //   +0x08: EffectProperty* prop[2..3]  (optional outline variants)
-//   +0x10: SmartPtr<Model> m_HalfA   (<name>_<c>_piece_1.mmd)
-//   +0x14: SmartPtr<Model> m_HalfB   (<name>_<c>_piece_2.mmd)
-//   +0x18: SmartPtr<Model> m_OptA    (<name>_<c>_outline.mmd etc)
-//   +0x1c: SmartPtr<Model> m_OptB    (other optional variant)
+//   +0x10: Mortar::SmartPtr<Model> m_HalfA   (<name>_<c>_piece_1.mmd)
+//   +0x14: Mortar::SmartPtr<Model> m_HalfB   (<name>_<c>_piece_2.mmd)
+//   +0x18: Mortar::SmartPtr<Model> m_OptA    (<name>_<c>_outline.mmd etc)
+//   +0x1c: Mortar::SmartPtr<Model> m_OptB    (other optional variant)
 //   +0x20: ???
 //
 // Port simplified to just the two pieces actually rendered by the
 // sliced-fruit draw path. Outline/extras deferred.
 struct FruitModelInfo {
-    SmartPtr<Mortar::Model> m_HalfA;   // piece 1
-    SmartPtr<Mortar::Model> m_HalfB;   // piece 2
+    Mortar::SmartPtr<Mortar::Model> m_HalfA;   // piece 1
+    Mortar::SmartPtr<Mortar::Model> m_HalfB;   // piece 2
 };
 
 // Matches original Fruit : Mortar::Entity
@@ -129,7 +129,7 @@ public:
     float m_ZPosition;                   // +0x98
 
     // Model loaded via MeshManager (shared/cached)
-    SmartPtr<Mortar::Model> m_Model;
+    Mortar::SmartPtr<Mortar::Model> m_Model;
 
     Fruit();
     ~Fruit();

@@ -84,11 +84,11 @@ private:
     // Port mirrors this with static members so LoadContent/UnLoadContent
     // can be called from GameInitialise/GameDestroy independently of
     // any DojoScreen instance.
-    static SmartPtr<Mortar::Texture> s_TexDojo;        // +0x0c: dojo.tex
-    static SmartPtr<Mortar::Texture> s_TexSensei;      // +0x10: dojo_sensei.tex
-    static SmartPtr<Mortar::Texture> s_TexShop;        // +0x14: senseis_swag.tex
-    static SmartPtr<Mortar::Texture> s_TexAbout;       // +0x18: about.tex
-    static SmartPtr<Mortar::Texture> s_TexBackIcon;    // back_icon.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexDojo;        // +0x0c: dojo.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;      // +0x10: dojo_sensei.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexShop;        // +0x14: senseis_swag.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexAbout;       // +0x18: about.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;    // back_icon.tex
 
     // --- Callbacks ---
     void PlayCallback();
@@ -98,6 +98,30 @@ private:
 #ifdef __bada__
     friend struct DojoScreenLayoutAssert;
 #endif
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: DojoScreen::MoreGamesCallback -- auto stub from binary missing-symbol set
+    void MoreGamesCallback();
+    // STUB: DojoScreen::QuitCallback -- auto stub from binary missing-symbol set
+    void QuitCallback();
+    // STUB: DojoScreen::SwitchCallback -- auto stub from binary missing-symbol set
+    void SwitchCallback();
+    // STUB: DojoScreen::SwitchNetworkButton -- auto stub from binary missing-symbol set
+    void SwitchNetworkButton(MenuButton*, float, ScreenButton&);
+    // STUB: DojoScreen::TwitterFacbookButtons -- auto stub from binary missing-symbol set
+    void TwitterFacbookButtons(MenuButton*, float, ScreenButton&);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

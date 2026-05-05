@@ -35,9 +35,9 @@
 //   Slot 1  GOT+0x77E0  scratchs.tex        (Phase-A backdrop — used below)
 //   Slot 2  GOT+0x79DC  blurry_backing.tex  (sparkle ring base — TODO sparkle Draw)
 //   Slot 3  GOT+0x7894  new_item.tex        (Layer-2 NEW star — used below)
-static SmartPtr<Mortar::Texture> s_TexScratchs;
-static SmartPtr<Mortar::Texture> s_TexBlurryBacking;
-static SmartPtr<Mortar::Texture> s_TexNewItem;
+static Mortar::SmartPtr<Mortar::Texture> s_TexScratchs;
+static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;
+static Mortar::SmartPtr<Mortar::Texture> s_TexNewItem;
 
 // Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
 //   Pass 1 (fruits, type 0):
@@ -288,7 +288,7 @@ void MenuButton::Release() {
     delete m_pLabel1; m_pLabel1 = nullptr;
     delete m_pLabel2; m_pLabel2 = nullptr;
     DeletePeices();
-    // TODO: 0x0014f7e0 -- m_SecondaryTex SmartPtr<Texture> drop not applicable;
+    // TODO: 0x0014f7e0 -- m_SecondaryTex Mortar::SmartPtr<Texture> drop not applicable;
     //   HUDControl3d::m_SecondaryTex is GLuint in port (no ref-counting needed)
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
@@ -883,7 +883,7 @@ void MenuButton::UnLoadContent() {
 
 // Binary @ 0x00150240 — spawn child HUDControl3d sprite, attach to HUD + m_AddOns list,
 // callback DeletedPeice on removal.
-void MenuButton::AddPeice(SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
+void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                           float rotSpeed, float initialTimer,
                           Vec3 offset, Vec3 sizeScale,
                           Colour tint, int layerFlags) {
@@ -905,7 +905,7 @@ void MenuButton::AddPeice(SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
         // For now use sizeScale.z as uniform scale multiplier
         sizeScale = Vec3(sizeScale.z, sizeScale.z, 0.0f);
     }
-    // TODO: 0x00150240 -- HUDControl3d::m_SecondaryTex is GLuint not SmartPtr<Texture>;
+    // TODO: 0x00150240 -- HUDControl3d::m_SecondaryTex is GLuint not Mortar::SmartPtr<Texture>;
     //   tex SmartPtr stored in MenuButtonAddOn instead for now
     c->pos   = pos;
     c->m_Timer = initialTimer;

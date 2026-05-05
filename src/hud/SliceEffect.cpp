@@ -61,12 +61,12 @@ static const Vec3 SLICE_KEYFRAMES[SLICE_NUM_FRAMES] = {
 static Mortar::MemoryPool<SliceEffect> s_Pool;
 
 // 3D slice-fx models loaded via MeshManager. Matches binary's
-// g_sliceData + 0xbc / +0xc0 slots (SmartPtr<Model>).
+// g_sliceData + 0xbc / +0xc0 slots (Mortar::SmartPtr<Model>).
 // Paths from 0x001bc93f / 0x001bc959:
 //   "models/fruit/slice_fx.mmd"
 //   "models/fruit/slice_fx_crit.mmd"
-static SmartPtr<Mortar::Model> s_SliceFxNormal;
-static SmartPtr<Mortar::Model> s_SliceFxCrit;
+static Mortar::SmartPtr<Mortar::Model> s_SliceFxNormal;
+static Mortar::SmartPtr<Mortar::Model> s_SliceFxCrit;
 
 // ---------------------------------------------------------------------
 // Pool / content

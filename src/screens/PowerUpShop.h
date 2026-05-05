@@ -90,7 +90,7 @@ public:
 
     // Static content management (bodies in PowerUpShop.cpp)
     static void LoadContent();    // @ 0x00155b50 — empty body
-    static void UnLoadContent(); // @ 0x00155dc4 — nulls three file-static SmartPtr<Texture>s
+    static void UnLoadContent(); // @ 0x00155dc4 — nulls three file-static Mortar::SmartPtr<Texture>s
 
     // Non-virtual members
     void SetBuyButtonState();                     // @ 0x00155c4c

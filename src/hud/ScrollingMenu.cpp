@@ -520,3 +520,8 @@ void ScrollingMenu::DestroyList() {
     m_TotalHeight = 0.0f;
     m_TotalWidth  = 0.0f;
 }
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ScrollingMenu::ClearTouch -- auto stub
+void ScrollingMenu::ClearTouch() {}
+// ---- end AUTO-STUB MERGE ----

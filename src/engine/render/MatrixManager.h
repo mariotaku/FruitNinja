@@ -65,6 +65,22 @@ private:
     void _UploadCurrentMatrices(bool skipProjection);
 
     MatrixManager();
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: MatrixManager::SetupPerspective -- auto stub from binary missing-symbol set
+    void SetupPerspective(float, float, float, float, float, Matrix44*);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

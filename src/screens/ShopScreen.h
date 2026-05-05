@@ -22,7 +22,7 @@
 // Struct size: 0xBC bytes
 //
 // Base:   HUDControl3d (0x00..0x7b)
-//   +0x74  SmartPtr<Texture>  m_Texture  (field_0x74)
+//   +0x74  Mortar::SmartPtr<Texture>  m_Texture  (field_0x74)
 //   +0x7C  float  m_TransitionAlpha      (lerps 0->1 on entry)
 //   +0x80  int    m_LayerFlagsAlt        (0x40 or 0x80 depending on splats)
 //   +0x84  MenuButton*   m_pBuyButton    (lazily created in state 0)
@@ -125,7 +125,7 @@ public:
 
 private:
     // +0x7C: transition alpha (0->1 lerp-in, *= 0.75 fade-out)
-    // field_0x74 (inherited HUDControl3d::m_Texture / SmartPtr<Texture>) is zeroed by
+    // field_0x74 (inherited HUDControl3d::m_Texture / Mortar::SmartPtr<Texture>) is zeroed by
     // HUDControl3d ctor and not used further in ShopScreen; not re-declared here.
     float m_TransitionAlpha;
 
@@ -193,20 +193,20 @@ private:
 public:
     // ShopListItem::Draw accesses these via the same GOT static block.
     // Making them public so ShopListItem::Draw can reference them without a friend.
-    static SmartPtr<Mortar::Texture> s_TexLocked;          // +0x14: locked.tex
-    static SmartPtr<Mortar::Texture> s_TexSelectItem;      // +0x18: select_item.tex
-    static SmartPtr<Mortar::Texture> s_TexLoading;         // +0x2c: loading.tex
-    static SmartPtr<Mortar::Texture> s_TexScratch;         // +0x30: scratch_deviders.tex
-    static SmartPtr<Mortar::Texture> s_TexDialogBox;       // +0x34: dialog_box_shop.tex
-    static SmartPtr<Mortar::Texture> s_TexSelected;        // +0x38: selected.tex
-    static SmartPtr<Mortar::Texture> s_TexSelectedSml;     // +0x3c: selected_sml.tex
-    static SmartPtr<Mortar::Texture> s_TexLockedStroke;    // +0x40: locked_stroke.tex
-    static SmartPtr<Mortar::Texture> s_TexNewItemSmlBadge; // +0x44: new_item_sml.tex
-    static SmartPtr<Mortar::Texture> s_TexBGStore;         // +0x48: BG_store.tex / BG_store_sml.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexLocked;          // +0x14: locked.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSelectItem;      // +0x18: select_item.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexLoading;         // +0x2c: loading.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexScratch;         // +0x30: scratch_deviders.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexDialogBox;       // +0x34: dialog_box_shop.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSelected;        // +0x38: selected.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSelectedSml;     // +0x3c: selected_sml.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexLockedStroke;    // +0x40: locked_stroke.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexNewItemSmlBadge; // +0x44: new_item_sml.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexBGStore;         // +0x48: BG_store.tex / BG_store_sml.tex
     // Port-only: button textures. Binary reads from per-task slots
     // (*(GameTask + 0x17c) for back, *(GameTask + ...) for equip) which
     // aren't yet ported. Loaded by LoadContent alongside the others.
-    static SmartPtr<Mortar::Texture> s_TexBackIcon;        // back_icon.tex (port-only)
+    static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;        // back_icon.tex (port-only)
     static bool s_bContentLoaded;                           // +0x4c: one-time init guard
 
     // ShopScreen::GetDescriptionTextXPos @ 0x0015c520
@@ -263,6 +263,26 @@ public:
 #ifdef __bada__
     friend struct ShopScreenLayoutAssert;
 #endif
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ShopScreen::BuyButtonCallback -- auto stub from binary missing-symbol set
+    void BuyButtonCallback();
+    // STUB: ShopScreen::CancelCallback -- auto stub from binary missing-symbol set
+    void CancelCallback();
+    // STUB: ShopScreen::ConfirmCallback -- auto stub from binary missing-symbol set
+    void ConfirmCallback();
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

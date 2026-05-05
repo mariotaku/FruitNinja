@@ -37,3 +37,7 @@ void ColLine::DrawDebug() {
     // TODO: DrawLine helper not ported
 }
 
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// STUB: ColLine::ColLineLine -- auto stub
+void ColLine::ColLineLine(ColLine*, ColLine*, Vec3*) {}
+// ---- end AUTO-STUB MERGE ----

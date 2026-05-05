@@ -55,7 +55,7 @@ BonusScreen::BonusScreen()
 
     // Load background texture into m_SecondaryTex.
     // TODO: resolve exact texture name from binary literal pool 0x00132210
-    SmartPtr<Mortar::Texture> bgTex =
+    Mortar::SmartPtr<Mortar::Texture> bgTex =
         TextureManager::LoadLocalisedTexture("textures/dialog-box-big.tex");
     m_SecondaryTex = bgTex ? bgTex->m_TexId : 0;
 
@@ -83,7 +83,7 @@ BonusScreen::~BonusScreen() {
 // ---------------------------------------------------------------------------
 
 // Binary @ 0x00133664
-void BonusScreen::AddAward(uint32_t colour, SmartPtr<Mortar::Texture> tex,
+void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
                            const char* name, int tier) {
     BonusAwardHud entry;
     if (name) {

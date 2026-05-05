@@ -24,9 +24,9 @@ static int s_NextSlot = 0;
 static MissControl* s_Pool[MISS_POOL_SIZE] = { nullptr };
 static bool s_PoolAllocated = false;
 
-static SmartPtr<Mortar::Texture> s_TexCritical;
-static SmartPtr<Mortar::Texture> s_TexRare;
-static SmartPtr<Mortar::Texture> s_TexCross;
+static Mortar::SmartPtr<Mortar::Texture> s_TexCritical;
+static Mortar::SmartPtr<Mortar::Texture> s_TexRare;
+static Mortar::SmartPtr<Mortar::Texture> s_TexCross;
 static bool s_TexturesLoaded = false;
 
 // MakeCritical / MakeRare fade init. DAT_001518b8 = 1.81f.
@@ -63,7 +63,7 @@ int   MissControl::s_NumCriticals = 0;
 float MissControl::s_DtMod        = 0.5f;  // (float)0 + 0.5 initial
 
 // Binary @ 0x001515a4 — combo overlay textures [0..9] = combo_2..combo_11.
-SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
+Mortar::SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
 
 // --- ctor / dtor -----------------------------------------------------------
 
@@ -226,7 +226,7 @@ MissControl* MissControl::GetFree() {
 
 // Shared core of MakeCritical / MakeRare. binary @ 0x00151764 / 0x001518d8
 static void PopulateOverlay(MissControl* mc, const Vec3& pos,
-                            const SmartPtr<Mortar::Texture>& tex,
+                            const Mortar::SmartPtr<Mortar::Texture>& tex,
                             float alphaScale) {
     // m_FadeAlpha init = 1.81 (DAT_001518b8).
     mc->m_FadeAlpha  = MISS_FADE_INIT;
@@ -305,7 +305,7 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
 
 // binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
 void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
-                                const SmartPtr<Mortar::Texture>& tex) {
+                                const Mortar::SmartPtr<Mortar::Texture>& tex) {
     pos        = inPos;
     m_DrawColour.a = 0xff;  // field_0x5f = 0xff
     if (tex.IsValid()) {

@@ -6,7 +6,7 @@ namespace Mortar {
 
 char TextureManager::s_DataDir[256] = "";
 
-// Process-exit guard: file-static SmartPtr<Texture> globals are destroyed
+// Process-exit guard: file-static Mortar::SmartPtr<Texture> globals are destroyed
 // AFTER this Meyers-static singleton because they were constructed at TU
 // init time (before main()) while TextureManager is constructed lazily on
 // first GetInstance(). When the SmartPtr drops the last ref, Texture::~Texture
@@ -24,24 +24,24 @@ TextureManager::~TextureManager() {
     s_TextureManagerDestroyed = true;
 }
 
-SmartPtr<Texture> TextureManager::Load(const char* path) {
+Mortar::SmartPtr<Texture> TextureManager::Load(const char* path) {
     uint32_t hash = StringHash(path);
 
     // Check cache first
-    SmartPtr<Texture> existing = Find(hash);
+    Mortar::SmartPtr<Texture> existing = Find(hash);
     if (existing.IsValid()) {
         return existing;
     }
 
     // Cache miss — load from disk
-    SmartPtr<Texture> tex = Texture::Load(path);
+    Mortar::SmartPtr<Texture> tex = Texture::Load(path);
     if (tex.IsValid()) {
         Add(hash, tex);
     }
     return tex;
 }
 
-SmartPtr<Texture> TextureManager::Find(uint32_t hash) const {
+Mortar::SmartPtr<Texture> TextureManager::Find(uint32_t hash) const {
     std::map<uint32_t, CacheEntry>::const_iterator it = m_Cache.find(hash);
     if (it != m_Cache.end() && it->second.ptr != nullptr) {
         // The cache stores raw pointers; Texture::~Texture removes its
@@ -49,20 +49,20 @@ SmartPtr<Texture> TextureManager::Find(uint32_t hash) const {
         // here is still alive. Wrap in a fresh SmartPtr — its ctor
         // bumps the strong refcount and keeps the texture alive while
         // the caller holds it.
-        return SmartPtr<Texture>(it->second.ptr);
+        return Mortar::SmartPtr<Texture>(it->second.ptr);
     }
-    return SmartPtr<Texture>();
+    return Mortar::SmartPtr<Texture>();
 }
 
-SmartPtr<Texture> TextureManager::Find(const char* name) const {
+Mortar::SmartPtr<Texture> TextureManager::Find(const char* name) const {
     return Find(StringHash(name));
 }
 
-void TextureManager::Add(uint32_t hash, SmartPtr<Texture> tex) {
+void TextureManager::Add(uint32_t hash, Mortar::SmartPtr<Texture> tex) {
     m_Cache[hash].ptr = tex.Get();
 }
 
-void TextureManager::Add(const char* name, SmartPtr<Texture> tex) {
+void TextureManager::Add(const char* name, Mortar::SmartPtr<Texture> tex) {
     Add(StringHash(name), tex);
 }
 
@@ -79,7 +79,7 @@ void TextureManager::OnTextureDestroyed(Texture* tex) {
     // reverse map. Matches the binary's WeakPtr cleanup path which
     // also walks the map on weak-ref decrement.
     if (!tex) return;
-    // Process-exit safety: file-static SmartPtr<Texture> globals destroy
+    // Process-exit safety: file-static Mortar::SmartPtr<Texture> globals destroy
     // after our singleton (see s_TextureManagerDestroyed comment). Bail
     // before touching m_Cache.
     if (s_TextureManagerDestroyed) return;
@@ -109,7 +109,7 @@ const char* TextureManager::GetDataDir() {
 
 // Matches LoadLocalisedTexture (0x0010a758)
 // Builds full path from data dir + "textures/" + name, loads via TextureManager cache.
-SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name) {
+Mortar::SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name) {
     // Pass LOGICAL path -- FileSystem_Direct::TranslateFileName prepends
     // the registered root (data_dir). Prepending s_DataDir here too would
     // double-prefix and break loads after the OpenCI -> File::Open
@@ -120,3 +120,16 @@ SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name) {
 }
 
 } // namespace Mortar
+
+// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+namespace Mortar {
+// STUB: TextureManager::Destroy -- auto stub
+void TextureManager::Destroy() {}
+// STUB: TextureManager::Initialise -- auto stub
+void TextureManager::Initialise(int) {}
+// STUB: TextureManager::InitialiseInternal -- auto stub
+void TextureManager::InitialiseInternal() {}
+// STUB: TextureManager::LoadIndependent -- auto stub
+void TextureManager::LoadIndependent(void*, int) {}
+}  // namespace Mortar
+// ---- end AUTO-STUB MERGE ----

@@ -14,8 +14,11 @@
 // both counters. Port uses plain ++/--. Functional risk only if SmartPtr is touched
 // off-thread (Job system); upgrade if/when the threading model lands.
 
+namespace Mortar {
+
 // Intrusive reference counting base class (12 bytes: vptr +0x00, strong count +0x04,
-// weak count +0x08). Original: Mortar::__ReferenceCounterData / Mortar::ReferenceCounter
+// weak count +0x08). Matches binary `Mortar::__ReferenceCounterData` /
+// `Mortar::ReferenceCounter`.
 class ReferenceCounter {
     int m_StrongCount; // offset 0x04
     int m_WeakCount;   // offset 0x08
@@ -28,9 +31,11 @@ public:
     int GetRefCount() const { return m_StrongCount; }
 };
 
+}  // namespace Mortar
+
 // Binary @ 0x00188c6c -- __ReferenceCounterData layout: vptr + strong count + weak count.
 #ifdef __bada__
-static_assert(sizeof(ReferenceCounter) == 12,
+static_assert(sizeof(Mortar::ReferenceCounter) == 12,
               "ReferenceCounter sizeof mismatch (vptr + strong count + weak count)");
 #endif
 

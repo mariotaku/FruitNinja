@@ -50,6 +50,16 @@ public:
 
     void Update(float dt) override;
     int  GetType() override { return 1; }
+
+public:
+
+public:
+
+public:
+
+public:
+
+public:
 };
 
 // Binary sizeof = 0xAC (ARM32, 4-byte ptrs). Port size differs on 64-bit (8-byte ptrs).
