@@ -211,7 +211,7 @@ void Bomb::Release() {
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00172504 (asm-inspector)
 // Binary @ 0x00172504 — vtable slot 2. p1/p2 unused; p3=scale (nullable, default 1.0).
-void Bomb::Init(void* /*p1*/, long /*p2*/, const Vec3* /*scaleOrNull*/) {
+void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
 
     float scaleFactor = 1.0f;
     // Original: if (p3 != nullptr) scaleFactor = *(float*)p3;
@@ -255,9 +255,9 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, const Vec3* /*scaleOrNull*/) {
 
     // Binary allocates ColSphere at +0x38 in Init if the pointer is null
     // (verified: "allocated at +0x38 if NULL" in bomb_init_binary.s).
-    if (!m_Col) m_Col = new Mortar::ColSphere();
+    if (!m_Col) m_Col = new ColSphere();
     {
-        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+        ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center = Vec3(pos.x, pos.y, 0.0f);
         cs->radius = bombCol * 0.5f * scaleFactor;
     }
@@ -414,7 +414,7 @@ void Bomb::Update(float /*dt*/) {
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
         // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
         // center = (pos.x, pos.y, 0).
-        if (m_Col) static_cast<Mortar::ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
+        if (m_Col) static_cast<ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
         // === HIT BRANCH ===
@@ -422,8 +422,8 @@ void Bomb::Update(float /*dt*/) {
             // Non-menu hit: spawn a BombBlast every 0.05s using GAME dt.
             m_SpawnTimer -= gameDt;
             if (m_SpawnTimer < 0.0f) {
-                if (ActorManager* am = ActorManager::GetInstance()) {
-                    Entity* e = am->Add(4, true);   // type 4 = BombBlast
+                if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
+                    Mortar::Entity* e = am->Add(4, true);   // type 4 = BombBlast
                     if (e) {
                         e->pos = pos;
                         e->Init(nullptr, 0, nullptr);
@@ -445,7 +445,7 @@ void Bomb::Update(float /*dt*/) {
 
         // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
         if (m_Col) {
-            Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+            ColSphere* cs = static_cast<ColSphere*>(m_Col);
             cs->center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
             cs->radius = HIT_COL_RADIUS;
         }
@@ -473,7 +473,7 @@ void Bomb::Update(float /*dt*/) {
     }
 }
 
-// Matches Bomb::DrawUpdate (0x001714e4) — called from ActorManager::Update
+// Matches Bomb::DrawUpdate (0x001714e4) — called from Mortar::ActorManager::Update
 // immediately after Bomb::Update (vtable slot 6, +0x18). Updates the fuse
 // particle emitter so it tracks the bomb's fuse tip as the bomb rotates.
 //
@@ -601,7 +601,7 @@ void Bomb::Draw(Renderer& r) {
     modelPtr->Draw(mat);
 }
 
-// Non-virtual cleanup helper called by ActorManager::Deactivate.
+// Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
 // Drops the fuse emitter before the entity returns to the free pool.
 void Bomb::Deactivate() {
     Release();
@@ -641,10 +641,10 @@ void Bomb::KillBomb() {
 //      timed power-ups, mark as menu-hit so subsequent Update keeps the
 //      physics alive and the bomb falls off-screen instead of exploding.
 //   3. m_bMenuBombHit != 0 (menu bomb re-hit): just fire the hit callback.
-int Bomb::CollisionResponse(Entity* /*hitter*/,
+int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
                              unsigned long /*flagsA*/,
                              unsigned long /*flagsB*/,
-                             const Vec3* /*bladeVelocity*/) {
+                             Vec3* /*bladeVelocity*/) {
 
     if (m_bCollisionGuard != 0) return 0;   // +0x78 processed guard
     m_bCollisionGuard = 1;
@@ -733,11 +733,11 @@ int Bomb::CollisionResponse(Entity* /*hitter*/,
 // countPrespawn=true:  count bombs filtered by variant (no countdown filter).
 // ASM-verified: 2026-05-03 binary @ 0x00171250 (asm-inspector)
 int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return 0;
     int count = 0;
-    std::list<Entity*>::iterator it;
-    Entity* e = am->GetEntityFirst(1, it);
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(1, it);
     if (!countPrespawn) {
         // Active pre-spawn bombs (countdown still ticking, not yet hit).
         // Binary GetWait() returns m_Countdown when !m_bHit, else m_SpawnTimer;
@@ -766,13 +766,13 @@ int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
 
 // Matches Bomb::ClearUnspawned (0x00122ab4).
 void Bomb::ClearUnspawned() {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
-    std::list<Entity*>::iterator it;
-    Entity* e = am->GetEntityFirst(1, it);
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(1, it);
     while (e) {
         Bomb* b = static_cast<Bomb*>(e);
-        Entity* next_e = am->GetEntityNext(1, it);
+        Mortar::Entity* next_e = am->GetEntityNext(1, it);
         if (b->m_Countdown > 0.0f)
             am->Deactivate(b);
         e = next_e;
@@ -808,12 +808,12 @@ void Bomb::MakeFat(Bomb* b, bool skipSpawnFx) {
     b->m_SpeedMult = 0.66597f;                    // DAT_00171eec
     b->scale      *= 1.33002f;                    // DAT_00171ef0
     b->m_OrigScale = b->scale;                    // binary writes field_0x98/9c/a0 (m_OrigScale)
-    if (b->m_Col) static_cast<Mortar::ColSphere*>(b->m_Col)->radius *= 1.33002f;   // DAT_00171ef0
+    if (b->m_Col) static_cast<ColSphere*>(b->m_Col)->radius *= 1.33002f;   // DAT_00171ef0
     if (!skipSpawnFx) {
         // Spawn particle emitter at +/-240.0 X anchor based on pos.x sign.
         // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.
         // SFX: name string at DAT_00171f0c, MakeSFXDelegate_Coin callback.
-        // TODO: PSPParticleManager::AddEmitter and SFXPlay wiring when those callbacks land.
+        // TODO: Mortar::PSPParticleManager::AddEmitter and SFXPlay wiring when those callbacks land.
         b->Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
     }
 }

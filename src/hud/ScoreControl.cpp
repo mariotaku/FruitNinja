@@ -500,7 +500,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         float texW = (tex && tex->m_Width  > 0) ? (float)tex->m_Width  : 64.0f;
         float texH = (tex && tex->m_Height > 0) ? (float)tex->m_Height : 16.0f;
 
-        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(texW, texH, 1.0f);
         mat.GlobalTranslate44(Vec3(
@@ -531,7 +531,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         float bannerScale = SinIdx(idx);
         float wobbleScale = SinIdx(m_BannerSinIdx) * SCORE_BANNER_WOBBLE + 1.0f;  // DAT_001597bc
 
-        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(texW * bannerScale * wobbleScale,
                                            texH * bannerScale * wobbleScale, 1.0f);

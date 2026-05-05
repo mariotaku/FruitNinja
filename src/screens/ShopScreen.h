@@ -51,7 +51,7 @@
 //   3: Buy animation (alpha *= 0.75). On completion: fling old buy-button
 //        fruit piece, create new buy button with updated fruit type, state=4.
 //   4: Resets m_LayerFlagsAlt to 0x80.
-//   5/6: Wait for ActorManager empty then equip item via ItemManager.
+//   5/6: Wait for Mortar::ActorManager empty then equip item via ItemManager.
 //   7: Same as 2 (alternate quit path).
 //
 // Textures (static, loaded by LoadContent at 0x0015cb08):
@@ -214,7 +214,7 @@ public:
     // Binary: uses same slide formula as list + -80.0f local offset.
     // At alpha=1: returns 145.0f - 80.0f = 65.0f. At alpha=0: returns 430.0f - 80.0f = 350.0f.
     // DIFFERS: exact binary formula not fully confirmed; uses list slide formula with -80 offset.
-    float GetDescriptionTextXPos() const;
+    float GetDescriptionTextXPos();
 
     // --- Callbacks ---
 

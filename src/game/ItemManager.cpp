@@ -301,7 +301,7 @@ int ItemManager::BuyItem(uint32_t hash) {
 // -----------------------------------------------------------------------
 // GetNumNewItems @ 0x00112048
 // -----------------------------------------------------------------------
-int ItemManager::GetNumNewItems() const {
+int ItemManager::GetNumNewItems() {
     int count = 0;
     for (std::vector<ItemInfo*>::const_iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         if (!(*it)->m_bSeen) count++;
@@ -312,7 +312,7 @@ int ItemManager::GetNumNewItems() const {
 // -----------------------------------------------------------------------
 // AreNewItems @ 0x0011200c
 // -----------------------------------------------------------------------
-bool ItemManager::AreNewItems() const {
+bool ItemManager::AreNewItems() {
     for (std::vector<ItemInfo*>::const_iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         if (!(*it)->m_bSeen) return true;
     }
@@ -322,7 +322,7 @@ bool ItemManager::AreNewItems() const {
 // -----------------------------------------------------------------------
 // GetItem @ 0x00112084 — lookup by hash in m_ByHash
 // -----------------------------------------------------------------------
-ItemInfo* ItemManager::GetItem(uint32_t hash) const {
+ItemInfo* ItemManager::GetItem(uint32_t hash) {
     std::map<uint32_t, ItemInfo*>::const_iterator it = m_ByHash.find(hash);
     if (it == m_ByHash.end()) return nullptr;
     return it->second;

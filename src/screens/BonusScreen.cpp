@@ -113,7 +113,7 @@ void BonusScreen::AddAward(uint32_t colour, SmartPtr<Mortar::Texture> tex,
 void BonusScreen::AwardScores() {
     // TODO: Coin::MakeCoins(m_TotalScore / 6)
     // TODO: FruitCamera::CreateCameraShake(...)
-    // TODO: PSPParticleManager::AddEmitter(...) big finale particle
+    // TODO: Mortar::PSPParticleManager::AddEmitter(...) big finale particle
     // TODO: play "BonusFinale" SFX via m_RushSFX or SoundManager
     (void)m_TotalScore;
 }
@@ -160,7 +160,7 @@ void BonusScreen::Update(float dt) {
             // Just-crossed-zero this frame: spawn emitters + play SFX.
             // "Just crossed" = localT < dt (first frame localT >= 0).
             if (localT < dt) {
-                // TODO: PSPParticleManager::AddEmitter x3 for award[i]
+                // TODO: Mortar::PSPParticleManager::AddEmitter x3 for award[i]
                 // TODO: FruitCamera::CreateCameraShake(...)
                 // TODO: play SFX "BonusStar<i+1>" (BonusStar1/BonusStar2/BonusStar3)
             }

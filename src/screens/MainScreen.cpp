@@ -269,7 +269,7 @@ void MainScreen::Update(float dt) {
     case STATE_DOJO_WAIT_C:
     case STATE_DOJO_WAIT_D: {
         // Binary @ 0x0014be80: cases 3/4/0x15/0x16 share one block:
-        //   if (ActorManager::GetNumEntities(0) == 0) {
+        //   if (Mortar::ActorManager::GetNumEntities(0) == 0) {
         //       m_Timer2 *= 0.75
         //       if (m_Timer2 < ~1e-4) {
         //           m_Timer2 = 0
@@ -284,7 +284,7 @@ void MainScreen::Update(float dt) {
         // MenuButton::Update on slice) releases all menu fruits so they
         // fall offscreen and the count drops to 0; only then can the
         // decay start and the DojoScreen spawn.
-        ActorManager* am = ActorManager::GetInstance();
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         const int fruitCount = am ? am->GetNumEntities(0) : 0;
 
         if (fruitCount == 0) {
@@ -442,10 +442,10 @@ void MainScreen::Update(float dt) {
         // ASM-verified: 2026-04-30 binary @ 0x0014c078..0x0014c0ea (asm-inspector)
         // Case 0x17:
         //   TutorialControl::ResetTutePos(pTC, nullptr)
-        //   if (ActorManager::GetNumEntities(0) != 0) break;
+        //   if (Mortar::ActorManager::GetNumEntities(0) != 0) break;
         //   pLeaderboardBtn = nullptr;
-        //   qs = SystemManager::m_QuitState  (NOT Game::gameMode -- earlier
-        //       RE conflated GOT slots; +0x4c is on SystemManager, GOT slot
+        //   qs = Mortar::SystemManager::m_QuitState  (NOT Game::gameMode -- earlier
+        //       RE conflated GOT slots; +0x4c is on Mortar::SystemManager, GOT slot
         //       0x000074f8, byte field initialised to 3)
         //   if (qs == 2):  HitMenuBomb (163,-96,0); state = 0x18
         //   else if (qs == 3): m_State=0; m_Timer2=0.15
@@ -453,7 +453,7 @@ void MainScreen::Update(float dt) {
         if (game.pTutorialCtrl) {
             game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
         }
-        ActorManager* am = ActorManager::GetInstance();
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
         if (liveEntities != 0) break;
 
@@ -475,7 +475,7 @@ void MainScreen::Update(float dt) {
     case STATE_QUIT_BOMB: {
         // Binary @ 0x0014c0f2 case 0x18:
         //   TutorialControl::ResetTutePos(pTC, nullptr)
-        //   if (BombFlashFull()) SystemManager::QuitGame();
+        //   if (BombFlashFull()) Mortar::SystemManager::QuitGame();
         //
         // BombFlashFull returns true once bombHitTimer < 1.0s (the flash
         // has peaked and is on its way out). HitMenuBomb in QUIT_WAIT
@@ -559,7 +559,7 @@ void MainScreen::Update(float dt) {
 }
 
 // Helper: setup world matrix for a textured quad at given position
-static void SetupQuadMatrix(Mortar::MatrixManager& mm, const Vec3& hudScale,
+static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
                             float w, float h, const Vec3& drawPos) {
     (void)hudScale;
     // Positions are already in the binary-centred ortho space
@@ -586,7 +586,7 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
     // For STATE_MODE_SELECT: binary keeps drawing but pos.y is animated
     // off-screen in Update, which pulls the logo positions with it.
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
 
     // 1+2. Shade triangle + fruit_text — guarded by fruit_text (GOT+0x6FCC, DAT_0014d844)
     // Original: single if-block for shade + fruit_text draw
@@ -941,7 +941,7 @@ void MainScreen::MoreGamesCallback() {
 
 // ASM-verified: 2026-04-30 binary @ 0x0014b1a0..0x0014b1ed (asm-inspector + re-analyst).
 // Sequence (4 logical operations only):
-//   1. SystemManager::RequestQuit()                        // sets m_QuitState = 2
+//   1. Mortar::SystemManager::RequestQuit()                        // sets m_QuitState = 2
 //   2. bomb = pQuitBtn->m_pFruitPiece (bomb-typed MenuButton)
 //      bomb->m_bMovement = 1                                // +0x80
 //      bomb->m_AccelForce = Vec3(0,1,0) * 10.0f             // +0x8c, kick upward
@@ -952,7 +952,7 @@ void MainScreen::MoreGamesCallback() {
 // the bomb self-amplifies upward off-screen.
 //
 // No BombBlast / camera shake here in the binary — both come later via
-// HitMenuBomb (called from STATE_QUIT_WAIT once ActorManager clears).
+// HitMenuBomb (called from STATE_QUIT_WAIT once Mortar::ActorManager clears).
 // Earlier port-specific BombBlast spawn + camera shake removed.
 //
 // Vec3 const at GOT slot 0x00007214: runtime-init by _GLOBAL__I_MainScreen_cpp
@@ -965,7 +965,7 @@ void MainScreen::QuitGamesCallback() {
     // Bomb+0x84 used by KillBomb to null this slot).
     if (pQuitBtn && pQuitBtn->m_pFruitPiece) {
         Bomb* bomb = static_cast<Bomb*>(
-            static_cast<Entity*>(pQuitBtn->m_pFruitPiece));
+            static_cast<Mortar::Entity*>(pQuitBtn->m_pFruitPiece));
         bomb->m_bMovement = 1;
         bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);  // (0,1,0) * 10
     }
@@ -1052,7 +1052,7 @@ void MainScreen::DrawLoadingSymbol(const float* hudScale) {
 
     // Draw: Set blurry_backing, scale by *hudScale * 0.0625 (DAT_0014D4C8 = 1/16),
     // translate per state.
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     m_blurryBackingTex->Set();
 
     float scale = (*hudScale) * 0.0625f;  // DAT_0014D4C8

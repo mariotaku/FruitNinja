@@ -123,7 +123,7 @@ Fruit::~Fruit() {
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
 // Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
-void Fruit::Init(void* /*p1*/, long fruitType, const Vec3* /*scaleOrNull*/) {
+void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_FruitType = (int)fruitType;
     m_bSliced = false;
     m_bDetached = false;
@@ -189,8 +189,8 @@ void Fruit::Init(void* /*p1*/, long fruitType, const Vec3* /*scaleOrNull*/) {
         const float fScale  = info ? info->m_Scale          : 25.0f;
         const float fColBase = info ? info->m_CollisionScale : 1.0f;
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
-        if (!m_Col) m_Col = new Mortar::ColSphere();
-        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+        if (!m_Col) m_Col = new ColSphere();
+        ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center = Vec3(pos.x, pos.y, 0.0f);
         cs->radius = radius;
     }
@@ -339,7 +339,7 @@ void Fruit::Update(float dt) {
     }
 
     // Update collision sphere center (z clamped to 0).
-    if (m_Col) static_cast<Mortar::ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
+    if (m_Col) static_cast<ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
 
     // Track juice emitters with the two halves so particles follow the
     // pieces instead of spraying from the original slice point. Matches
@@ -367,7 +367,7 @@ static bool IsZenStrictBounceActive() {
     return (SlashEntity::s_ModPowerMask & 0x20u) != 0;
 }
 
-// Matches Fruit::DrawUpdate (0x0017501c) — called from ActorManager::Update
+// Matches Fruit::DrawUpdate (0x0017501c) — called from Mortar::ActorManager::Update
 // immediately after Update (vtable slot 6, +0x18). Also known as
 // "DrawUpdate" in per-subclass docs; same slot as Bomb::PostUpdate.
 //
@@ -453,7 +453,7 @@ static void DrawOneModel(Mortar::Model* model,
     mat.GlobalTranslate44(drawPos);
 
     // Depth-test state is owned by the 3D actor pass in GameDraw
-    // (SetDepthBuffer(1) before ActorManager::Draw, off after) -- binary
+    // (SetDepthBuffer(1) before Mortar::ActorManager::Draw, off after) -- binary
     // @ 0x0016ba10. Fruit::Draw in the binary does NOT touch GL state.
     model->Draw(mat);
 }
@@ -496,7 +496,7 @@ void Fruit::Draw(Renderer& r) {
     }
 }
 
-// Non-virtual cleanup helper called by ActorManager::Deactivate.
+// Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
 void Fruit::Deactivate() {
     // No Fruit-specific emitter cleanup needed here; emitters are cleared
     // by KillFruit before the entity is deactivated.
@@ -705,10 +705,10 @@ bool Fruit::CheckHasGoneOffscreen() {
 //   - AddSlice visual (SliceEffect_Add)
 //   - CriticalFlash full-screen tint for critical + special-fruit paths
 // Skipped: SFX, achievements, score, power-ups, coins, MissControl.
-int Fruit::CollisionResponse(Entity* /*hitter*/,
+int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
                               unsigned long /*flagsA*/,
                               unsigned long /*flagsB*/,
-                              const Vec3* bladeVelPtr) {
+                              Vec3* bladeVelPtr) {
     // Guard: already sliced or slice timer is positive → double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return 1;
     const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
@@ -1332,20 +1332,20 @@ int Fruit::RandomFruit(bool includeOnSide) {
 // Matches Fruit::GetNumActiveForPlayer (0x00122a00).
 // TODO: playerIdx filtering not ported; counts all active fruits.
 int Fruit::GetNumActiveForPlayer(int /*playerIdx*/, bool /*checkBombs*/) {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return 0;
     return am->GetNumEntities(0);
 }
 
 // Matches Fruit::ClearUnspawned (0x001762a0).
 void Fruit::ClearUnspawned(bool deactivateVisible) {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
-    std::list<Entity*>::iterator it;
-    Entity* e = am->GetEntityFirst(0, it);
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(0, it);
     while (e) {
         Fruit* f = static_cast<Fruit*>(e);
-        Entity* next_e = am->GetEntityNext(0, it);
+        Mortar::Entity* next_e = am->GetEntityNext(0, it);
         if (f->m_ChuckDelay > 0.0f || deactivateVisible)
             am->Deactivate(f);
         e = next_e;
@@ -1372,10 +1372,10 @@ void Fruit::DrawShadows() {
     QUADCUSTOMVERTEX* w = s_ShadowVerts;
     int count = 0;
 
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
-    std::list<Entity*>::iterator it;
-    Entity* e = am->GetEntityFirst(0, it);
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(0, it);
     while (e && count + 3 <= SHADOW_MAX_FRUITS * 3) {
         Fruit* f = static_cast<Fruit*>(e);
         if (f->scale.x > 0.0f) f->AddShadow(&w, &count);
@@ -1383,7 +1383,7 @@ void Fruit::DrawShadows() {
     }
     if (count == 0) return;
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
@@ -1513,8 +1513,8 @@ void Fruit::EnableCollision(bool enable) {
         const float fScale   = info ? info->m_Scale          : 25.0f;
         const float fColBase = info ? info->m_CollisionScale : 1.0f;
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
-        if (!m_Col) m_Col = new Mortar::ColSphere();
-        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(m_Col);
+        if (!m_Col) m_Col = new ColSphere();
+        ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center = Vec3(pos.x, pos.y, 0.0f);
         cs->radius = radius;
     } else {
@@ -1530,13 +1530,13 @@ void Fruit::SetForPlayer(int playerIdx) {
     // Mortar::NetworkManager::GetInstance().IsOnlineMultiplayer() is always false in port.
     if (Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer()) {
         if (playerIdx == 1 && m_Col) {
-            static_cast<Mortar::ColSphere*>(m_Col)->radius *= 0.66f;
+            static_cast<ColSphere*>(m_Col)->radius *= 0.66f;
         }
     }
 }
 
-// Binary @ 0x001761d8 — virtual Entity::Release override.
-// Called by ActorManager teardown before the destructor.
+// Binary @ 0x001761d8 — virtual Mortar::Entity::Release override.
+// Called by Mortar::ActorManager teardown before the destructor.
 void Fruit::Release() {
     if (m_pEmitter1) {
         Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
@@ -1550,7 +1550,7 @@ void Fruit::Release() {
         m_pSlasher->m_pCurrentTarget = nullptr;
     }
     m_pSlasher = nullptr;
-    Entity::Release();
+    Mortar::Entity::Release();
 }
 
 // ============================================================
@@ -1618,11 +1618,11 @@ bool Fruit::SetTrailParticles(unsigned long emitterHash) {
 void Fruit::UpdateBombAvoidance(float dt) {
     static const float AVOIDANCE_RADIUS = 70.0f;   // from binary @ 0x00175988
 
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
-    std::list<Entity*>::iterator it;
-    Entity* e = am->GetEntityFirst(1, it);   // entity type 1 = bomb
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(1, it);   // entity type 1 = bomb
     while (e) {
         if (e->IsActive()) {
             Vec3 diff = e->pos - pos;

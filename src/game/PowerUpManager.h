@@ -132,13 +132,13 @@ public:
     int GetScoreLossMultiplier() const { return m_ScoreLossMult * m_ScoreLossFactor; }
 
     // @ 0x00117b38
-    float GetActiveProgression(float t) const;
+    float GetActiveProgression(float t);
 
     // @ 0x00117cac
     PowerUp* GetActiveSingle(uint32_t hash);
 
     // @ 0x00117bb8
-    int GetNumActiveTimedPowers() const;
+    int GetNumActiveTimedPowers();
 
     // --- Struct fields (binary layout) ---
 

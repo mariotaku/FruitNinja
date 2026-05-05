@@ -3,7 +3,7 @@
 // Reimplemented from docs/structs/gameplay-misc.md
 //
 // Architecture:
-//   Layer 0 (3D): Spinning fruit entity (ActorManager::Draw, NOT MenuButton)
+//   Layer 0 (3D): Spinning fruit entity (Mortar::ActorManager::Draw, NOT MenuButton)
 //   Layer 1 (2D): Button texture quad via HUDControl3d::Draw
 //   Layer 2 (2D): "New item" star indicator (TODO)
 //   Layer 3 (2D): Sparkle ring (TODO)
@@ -65,7 +65,7 @@ static float RandScaled(float s) {
 }
 
 void FN::ClearMenuItems() {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     // Binary ClearMenuItems @ 0x0016ac7c is two back-to-back while loops
@@ -75,8 +75,8 @@ void FN::ClearMenuItems() {
 
     // --- Pass 1: fruits (type 0) ---
     {
-        std::list<Entity*>::iterator it;
-        Entity* e = am->GetEntityFirst(0, it);
+        std::list<Mortar::Entity*>::iterator it;
+        Mortar::Entity* e = am->GetEntityFirst(0, it);
         while (e != nullptr) {
             Fruit* f = static_cast<Fruit*>(e);
             if (f->m_bSliced == 0) {
@@ -101,8 +101,8 @@ void FN::ClearMenuItems() {
 
     // --- Pass 2: bombs (type 1) ---
     {
-        std::list<Entity*>::iterator it;
-        Entity* e = am->GetEntityFirst(1, it);
+        std::list<Mortar::Entity*>::iterator it;
+        Mortar::Entity* e = am->GetEntityFirst(1, it);
         while (e != nullptr) {
             // Binary-exact:
             //   if (Bomb::Enabled()) {          // !m_bCollisionGuard
@@ -218,7 +218,7 @@ void MenuButton::Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
             int entityType = (bombThreshold <= fruitType) ? 1 : 0;  // 0=Fruit, 1=Bomb
             printf("[MenuButton] Init: fruitType=%d bombThreshold=%d -> entityType=%d\n",
                    fruitType, bombThreshold, entityType);
-            Entity* e = game->actorManager->Add(entityType, true);
+            Mortar::Entity* e = game->actorManager->Add(entityType, true);
             if (e) {
                 e->pos = buttonPos;
                 e->Init(nullptr, (long)fruitType, nullptr);
@@ -276,7 +276,7 @@ void MenuButton::Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
 // Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0014f7e0 (asm-inspector)
 void MenuButton::Release() {
-    Entity* e = m_pFruitPiece;
+    Mortar::Entity* e = m_pFruitPiece;
     if (e) {
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
@@ -307,10 +307,10 @@ void MenuButton::Skip() { m_FadeCounter = 0x3ffc; }
 void MenuButton::Shake(float t) { m_ShakeTimer = t; }
 
 // Binary @ 0x0014e434 — returns (m_NewIndicatorTimer >= 0)
-bool MenuButton::HasNewSymbol() const { return m_NewIndicatorTimer >= 0.0f; }
+bool MenuButton::HasNewSymbol() { return m_NewIndicatorTimer >= 0.0f; }
 
 // Binary @ 0x0014e484 — returns (m_SparkleTimer >= 0); dead in shipped binary
-bool MenuButton::IsLoadingSymbol() const { return m_SparkleTimer >= 0.0f; }
+bool MenuButton::IsLoadingSymbol() { return m_SparkleTimer >= 0.0f; }
 
 // Binary @ 0x0014e45c — arms sparkle timer; dead in shipped binary
 void MenuButton::SetLoadingSymbol(bool show) {
@@ -364,7 +364,7 @@ void MenuButton::PreDraw(const Vec3& hudScale) { (void)hudScale; }
 
 // Binary @ 0x0014e590 — kills owned fruit/bomb then defers to base SetToMultiplayerState
 bool MenuButton::SetToMultiplayerState() {
-    Entity* e = m_pFruitPiece ? static_cast<Entity*>(m_pFruitPiece) : m_pEntity;
+    Mortar::Entity* e = m_pFruitPiece ? static_cast<Mortar::Entity*>(m_pFruitPiece) : m_pEntity;
     if (e) {
         if (e->entityType == 0) {
             // Port specific: Fruit::KillFruit not yet ported; skipped.
@@ -483,7 +483,7 @@ void MenuButton::Update(float dt) {
             // size = m_TargetSize * sin(counter * 2pi/65536). The 0x3ffc
             // index = pi/2 so sin(0x3ffc) = 1.0 -- the ratio simplifies
             // to just sin(counter), tracing a quarter-sine ease-out.
-            // Entity scale tracks the same ratio so fruit zooms together
+            // Mortar::Entity scale tracks the same ratio so fruit zooms together
             // with the button ring.
             if (m_FadeCounter < 0x3ffc) {
                 float next = (float)m_FadeCounter + dt * 109200.0f;
@@ -755,7 +755,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     if (m_LayerFlags == 0x40) {
         m_LayerFlags = 0x80;
         if (s_TexScratchs.IsValid()) {
-            Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+            MatrixManager& mm = MatrixManager::GetInstance();
             Renderer* r = Renderer::GetInstance();
             if (r) {
                 // Mirror flip via X scale (m_bFlipped chosen randomly in Init).
@@ -812,7 +812,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     if (m_NewIndicatorTimer >= 0.0f && s_TexNewItem.IsValid()
         && m_TargetSize.x != 0.0f)
     {
-        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        MatrixManager& mm = MatrixManager::GetInstance();
         Renderer* r = Renderer::GetInstance();
         if (r) {
             const float ratio = size.x / m_TargetSize.x;

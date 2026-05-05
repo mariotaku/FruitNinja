@@ -97,11 +97,11 @@ public:
 
     // Binary @ 0x001954fc -- GetAnyTouch().
     // First slot with phase < 1; returns touchId or 0.
-    uint32_t GetAnyTouch() const;
+    uint32_t GetAnyTouch();
 
     // Binary @ 0x0019551c -- GetMostRecentTouch().
     // FindTouch(nextTouchId - 1); returns touchId or 0.
-    uint32_t GetMostRecentTouch() const;
+    uint32_t GetMostRecentTouch();
 
     // Binary @ 0x0019543c -- GetTouchPos(uint touchId, int& x, int& y).
     // Writes currX/Y of matching slot. Returns 1 if active (phase < 1), 0 if not.
@@ -116,7 +116,7 @@ public:
     // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.
     // Binary uses inclusive <= on all bounds.
     // Binary signature: (int x, int y, int w, int h).
-    uint32_t GetTouchInReigion(int x, int y, int w, int h) const;
+    uint32_t GetTouchInReigion(int x, int y, int w, int h);
 
     // Binary @ 0x00195764 -- SendIndividualTouchCallbacks(InputDevice* dev).
     // 8x: emit AxisEvent for X/Y, ButtonPressed for press/held/release/up.

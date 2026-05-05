@@ -74,7 +74,7 @@ void HUD::BeginDraw(float dt) {
 void HUD::Draw(int layerMask) {
     Vec3 hudScale(scales[0], scales[1], scales[2]);
     const Vec3 identityScale(1.0f, 1.0f, 1.0f);
-    Mortar::MatrixStack& world = Mortar::MatrixManager::GetInstance().GetWorldStack();
+    MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* ctrl = *it;
         if (ctrl->m_bActive && (layerMask & ctrl->m_LayerFlags)) {

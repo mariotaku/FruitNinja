@@ -5,8 +5,6 @@
 #include "math/Vec3.h"
 #include <cassert>
 
-namespace Mortar {
-
 // Matches original MatrixStack (0x848 = 2120 bytes)
 // 32-deep matrix stack with dirty-tracking version counter
 struct MatrixStack {
@@ -64,7 +62,5 @@ struct MatrixStack {
 };
 
 static_assert(sizeof(MatrixStack) == 2120, "MatrixStack must be 0x848 bytes");
-
-} // namespace Mortar
 
 #endif

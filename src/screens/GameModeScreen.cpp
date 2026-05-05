@@ -480,7 +480,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     if ((layerMask & m_LayerFlags) == 0) return;
     if (m_TransitionAlpha <= 0.0f) return;
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
 
@@ -558,7 +558,7 @@ void GameModeScreen::QuitCallback() {
     // The +0x80 byte is m_bDetached for Fruit / m_bMovement for Bomb.
     // Falls back to m_pEntity since back-bomb's m_pFruitPiece is null.
     if (m_pBackButton && m_pBackButton->m_pEntity) {
-        Entity* e = m_pBackButton->m_pEntity;
+        Mortar::Entity* e = m_pBackButton->m_pEntity;
         float rx = (float)rand() / (float)RAND_MAX;
         float ry = (float)rand() / (float)RAND_MAX;
         if (e->entityType == 0) {

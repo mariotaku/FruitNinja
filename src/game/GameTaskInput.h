@@ -5,12 +5,12 @@
 //
 // Sets up per-session input bindings:
 //   - InputManager::LoadConfigFile
-//   - 16-slot rotated touch region loop: ActorManager::Add(3, true) per slot,
-//     Entity::Init with zone position, InputManager::RegisterInputCallback x3
+//   - 16-slot rotated touch region loop: Mortar::ActorManager::Add(3, true) per slot,
+//     Mortar::Entity::Init with zone position, InputManager::RegisterInputCallback x3
 //     per slot (touch/swipe/move handlers, "touchN"/"swipeN"/"moveN").
 //   - 7 global input callbacks (keys, accelerometer, etc.)
 //
-// Stored results: per-slot Entity ptrs -> g_TaskState +0x24..+0x60
+// Stored results: per-slot Mortar::Entity ptrs -> g_TaskState +0x24..+0x60
 //                 per-slot Vec3 zones  -> g_TaskState-adjacent InputZones array
 //                 callback table       -> InputManager singleton.
 //

@@ -106,7 +106,7 @@ void Coin::Release() {
 // Init @ 0x0019D5FC — base no-op; Coin uses base (vtable slot 2 = 0x0019d5fc).
 // Coin is initialised via ctor + MakeCoins/InitCoin, never through factory-Init.
 // ---------------------------------------------------------------------------
-void Coin::Init(void* /*p1*/, long /*p2*/, const Vec3* /*p3*/) {}
+void Coin::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {}
 
 // ---------------------------------------------------------------------------
 // PostUpdate (DrawUpdate) @ 0x0017318C — empty in binary
@@ -114,7 +114,7 @@ void Coin::Init(void* /*p1*/, long /*p2*/, const Vec3* /*p3*/) {}
 void Coin::PostUpdate(float /*dt*/) {}
 
 // ---------------------------------------------------------------------------
-// Non-virtual cleanup helper called by ActorManager::Deactivate.
+// Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
 // ---------------------------------------------------------------------------
 void Coin::Deactivate() {
     if (m_pFlyEmitter) {
@@ -409,18 +409,18 @@ void Coin::UnLoadContent() {
 
 // ---------------------------------------------------------------------------
 // ClearCoins @ 0x001731B8
-// Iterates all type-2 entities via ActorManager iterator pair.
+// Iterates all type-2 entities via Mortar::ActorManager iterator pair.
 // If arrive=true, calls Arrived() on each (credits coins); otherwise kills.
 // ---------------------------------------------------------------------------
 void Coin::ClearCoins(bool arrive) {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
-    std::list<Entity*>::iterator it;
-    Entity* e = am->GetEntityFirst(2, it);
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(2, it);
     while (e) {
         // Advance iterator before potentially modifying the entity
-        Entity* next_e = am->GetEntityNext(2, it);
+        Mortar::Entity* next_e = am->GetEntityNext(2, it);
         Coin* coin = static_cast<Coin*>(e);
         if (coin->IsActive()) {
             if (arrive) {
@@ -435,7 +435,7 @@ void Coin::ClearCoins(bool arrive) {
 
 // ---------------------------------------------------------------------------
 // MakeCoins @ 0x00173568
-// Spawn N coins via ActorManager::Add(2).
+// Spawn N coins via Mortar::ActorManager::Add(2).
 // delayStep = delayRange / (totalCoins/coinsPerCoin + 1)
 // Retry spawn position up to 10x if out of screen bounds.
 // ---------------------------------------------------------------------------
@@ -447,7 +447,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, float delayRange,
 {
     if (totalCoins <= 0) return;
 
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     // Number of coins spawned (each represents coinsPerCoin value)

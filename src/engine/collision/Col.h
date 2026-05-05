@@ -4,9 +4,7 @@
 #include "math/Vec3.h"
 #include <cstdint>
 
-namespace Mortar {
-
-// Mortar::Col -- polymorphic collision base. Binary @ ctor 0x0019fae8 / vtable 0x001eb5d0.
+// Col -- polymorphic collision base. Binary @ ctor 0x0019fae8 / vtable 0x001eb5d0.
 // sizeof = 0x14 (20B); 5 vtable slots: ~Col(D2), ~Col(D0), GetType, Collide, DrawDebug.
 // Subclasses overlay m_PrimaryPoint as their natural data (Sphere::center / Line::a / AABB::min).
 class Col {
@@ -38,7 +36,5 @@ protected:
     uint8_t   m_CollideFlag;    // +0x10 -- set when collided this frame
     // padding +0x11..+0x13 to reach sizeof = 0x14
 };
-
-}  // namespace Mortar
 
 #endif

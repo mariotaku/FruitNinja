@@ -104,8 +104,8 @@ static uint8_t  g_ScaleFlag1        = 0;      // 0x0024D8D8 (gates CreateGhost()
 static uint8_t  g_ScaleFlag2        = 1;      // 0x001F3E69 (gates UV-mirror branch)
 
 // Resolve a particle-emitter name to its template hash, validating that the
-// emitter actually exists in PSPParticleManager. Binary calls
-// `PSPParticleManager::EmitterExists(hash)` after StringHash; if not, the
+// emitter actually exists in Mortar::PSPParticleManager. Binary calls
+// `Mortar::PSPParticleManager::EmitterExists(hash)` after StringHash; if not, the
 // hash is zeroed so render consumers skip the emitter cleanly.
 static uint32_t ResolveEmitterHash(const char* path) {
     if (!path || path[0] == '\0') return 0;
@@ -143,7 +143,7 @@ SlashEntity::SlashEntity()
     memset(m_Right, 0, sizeof(m_Right));
 }
 
-// Binary @ 0x17C774 — restore vtable, call Release, chain to Entity::~Entity.
+// Binary @ 0x17C774 — restore vtable, call Release, chain to Mortar::Entity::~Mortar::Entity.
 // (vtable-restore is implicit in C++.)
 SlashEntity::~SlashEntity() {
     Release();
@@ -203,7 +203,7 @@ void SlashEntity::Reset() {
 
 // Binary @ 0x17B3BC — empty stub, returns 0.
 // SlashEntity is pure aggressor (blade), never collides into.
-// Port note: port doesn't derive from Entity; provided for call-graph completeness.
+// Port note: port doesn't derive from Mortar::Entity; provided for call-graph completeness.
 int SlashEntity::CollisionResponse() {
     return 0;
 }
@@ -556,23 +556,23 @@ void SlashEntity::Update(float dt) {
     const bool bombHitActive = game && game->bombHitTimer > 0.0f;
 
     if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive) {
-        ActorManager* am = ActorManager::GetInstance();
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
             // Only fruit (0) and bomb (1) participate in blade collision
             // — matches binary.
             for (int t = 0; t <= 1; t++) {
-                const std::list<Entity*>& list = am->GetTypeList(t);
+                const std::list<Mortar::Entity*>& list = am->GetTypeList(t);
                 for (auto it = list.begin(); it != list.end(); ++it) {
-                    Entity* e = *it;
+                    Mortar::Entity* e = *it;
                     if (!e || !e->IsActive()) continue;
                     if (!e->m_Col) continue;
-                    Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(e->m_Col);
+                    ColSphere* cs = static_cast<ColSphere*>(e->m_Col);
                     if (cs->radius <= 0.0f) continue;
 
                     Vec3 bladeVel;
                     if (CollideWithSphere(*cs, bladeVel)) {
                         // Binary @ 0x0017d664: vtable[9](victim, slashEntity, 0, 0, &bladeVel).
-                        // Port: SlashEntity does not inherit Entity, pass nullptr for hitter.
+                        // Port: SlashEntity does not inherit Mortar::Entity, pass nullptr for hitter.
                         // Fruit/Bomb CollisionResponse only reads bladeVelocity; hitter unused.
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
                     }
@@ -601,7 +601,7 @@ void SlashEntity::Update(float dt) {
 // OnTouchActive interpolates into many POINT_SPACING=64 sub-points within a
 // single frame — still registers the hit.
 // ---------------------------------------------------------------------------
-bool SlashEntity::CollideWithSphere(const Mortar::ColSphere& sphere,
+bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
                                      Vec3& outBladeVel) const {
     if (m_State == 0 || m_NumPoints < 2) {
         outBladeVel = Vec3(0, 0, 0);
@@ -614,7 +614,7 @@ bool SlashEntity::CollideWithSphere(const Mortar::ColSphere& sphere,
     // segment per update. The port has N interpolated sub-segments per frame,
     // so we pick the segment that actually intersects.
     for (int i = 0; i + 1 < m_NumPoints; ++i) {
-        Mortar::ColLine seg(m_Points[i].center, m_Points[i + 1].center);
+        ColLine seg(m_Points[i].center, m_Points[i + 1].center);
         if (sphere.IntersectsLine(seg)) {
             outBladeVel = m_Points[i + 1].center - m_Points[i].center;
             return true;
@@ -639,7 +639,7 @@ void SlashEntity::Draw() {
     if (!bladeTex.IsValid()) return;
 
     // Matrix reset + MVP upload. Matches binary Draw 0x17E424 prelude.
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
@@ -659,7 +659,7 @@ void SlashEntity::Draw() {
 // SetModColours @ 0x0017ca0c. Full spec: docs/entities/slash-mod-pipeline.md.
 //
 // Writes the colour palette + particle hashes + overlay texture into the
-// file-scope globals, then walks ActorManager type-3 (SlashEntity) actors
+// file-scope globals, then walks Mortar::ActorManager type-3 (SlashEntity) actors
 // and direct-calls ColoursChanged on each so live blade entities pick up
 // the change.
 //
@@ -725,9 +725,9 @@ void SlashEntity::SetModColours(
     g_DirectionalFlag = trailExists ? (directional ? 2 : 1) : 0;
 
     // Live-update walker. Binary @ 0x0017ca0c walks
-    // ActorManager::GetEntityFirst(type=3) and direct-calls
+    // Mortar::ActorManager::GetEntityFirst(type=3) and direct-calls
     // SlashEntity::ColoursChanged on each instance (NOT through vtable).
-    // Port: SlashEntity isn't an Entity-derived actor here — it's a
+    // Port: SlashEntity isn't an Mortar::Entity-derived actor here — it's a
     // singleton (g_pSlashEntity), so direct-call once. Multiplayer
     // (currently unported) would need a real walker.
     if (g_pSlashEntity) {

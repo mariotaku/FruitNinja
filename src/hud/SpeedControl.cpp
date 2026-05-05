@@ -53,7 +53,7 @@ void SpeedControl::Update(float dt) {
 
     if (m_DisplayedSpeed == 0.0f) {
         m_SoundVolume = 0.0f;
-        // TODO: 0x00160e08 PSPParticleManager::ClearEmitter(m_pEmitter); m_pEmitter = nullptr;
+        // TODO: 0x00160e08 Mortar::PSPParticleManager::ClearEmitter(m_pEmitter); m_pEmitter = nullptr;
         m_Speed = 0.0f;
     } else {
         // Clamp displayed speed to [3, 20] and accumulate raw speed counter.

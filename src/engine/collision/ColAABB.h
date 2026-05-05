@@ -6,8 +6,6 @@
 #include "collision/ColSphere.h"
 #include <algorithm>
 
-namespace Mortar {
-
 // Binary vtable @ 0x001eb638. sizeof = 0x80 (128B):
 //   base Col 0x14, m_Max Vec3 at +0x14, 8 cached corners Vec3 at +0x20..+0x7F.
 class ColAABB : public Col {
@@ -91,7 +89,5 @@ public:
         return true;
     }
 };
-
-}  // namespace Mortar
 
 #endif

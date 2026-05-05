@@ -5,9 +5,9 @@
 // SlashEntity — blade trail visual (entity type 3)
 // Matches binary 0x17C82C..0x17E504
 //
-// Port note: the binary's SlashEntity is an Entity subclass with vtable slots
+// Port note: the binary's SlashEntity is an Mortar::Entity subclass with vtable slots
 // for Draw/Update/CollisionResponse/DrawUpdate/TouchDown/TouchMoveX/TouchMoveY.
-// This port implements SlashEntity as a standalone class (not Entity-derived)
+// This port implements SlashEntity as a standalone class (not Mortar::Entity-derived)
 // with equivalent behaviour via a different internal representation
 // (TrailPoint[] instead of binary's m_pLeftBuffer/m_pRightBuffer vertex arrays).
 // Fields that exist in the binary but not in this port are documented as TODO.
@@ -122,7 +122,7 @@ public:
 
     // Binary @ 0x17B3BC — entity vtable slot; SlashEntity is pure aggressor,
     // never collides into. Returns 0.
-    // Port note: port doesn't derive from Entity; method kept for call-graph
+    // Port note: port doesn't derive from Mortar::Entity; method kept for call-graph
     // completeness.
     int CollisionResponse();
 
@@ -133,17 +133,17 @@ public:
     // Port note: g_state singleton not yet modelled; no-op stub.
     void DrawUpdate(float dt);
 
-    // Binary @ 0x17D61C — Entity::TouchDown vtable override: if idle, Reset()
+    // Binary @ 0x17D61C — Mortar::Entity::TouchDown vtable override: if idle, Reset()
     // and (PER_SWIPE mode) re-pick palette colour, then UpdateTouchDown.
     // Port: maps to OnTouchActive / OnTouchReleased input model.
     // Returns true (consumed).
-    // TODO: 0x17D61C — wire when Entity vtable input dispatch is ported.
+    // TODO: 0x17D61C — wire when Mortar::Entity vtable input dispatch is ported.
 
-    // Binary @ 0x17C50C — Entity::TouchMoveX vtable override: write pos.x.
-    // TODO: 0x17C50C — wire when Entity vtable input dispatch is ported.
+    // Binary @ 0x17C50C — Mortar::Entity::TouchMoveX vtable override: write pos.x.
+    // TODO: 0x17C50C — wire when Mortar::Entity vtable input dispatch is ported.
 
-    // Binary @ 0x17C490 — Entity::TouchMoveY vtable override: write pos.y.
-    // TODO: 0x17C490 — wire when Entity vtable input dispatch is ported.
+    // Binary @ 0x17C490 — Mortar::Entity::TouchMoveY vtable override: write pos.y.
+    // TODO: 0x17C490 — wire when Mortar::Entity vtable input dispatch is ported.
 
     // Binary @ 0x17B0F4 — advance palette progress by dt*lifeScale,
     // lerp between consecutive palette entries. NULL outColour = advance only.
@@ -158,7 +158,7 @@ public:
     // Returns true if any trail segment intersects the sphere. On a hit,
     // writes the segment delta (end - start) into outBladeVel so the caller
     // can derive both magnitude and direction for OnSliced.
-    bool CollideWithSphere(const Mortar::ColSphere& sphere,
+    bool CollideWithSphere(const ColSphere& sphere,
                            Vec3& outBladeVel) const;
 
     // True while the blade has at least 2 trail points and is not
@@ -204,7 +204,7 @@ private:
 
     // Particle emitter that follows the blade for smoke/sparkle trail.
     // Matches binary +0x3c (m_TrailEmitter). Created on first active touch
-    // via PSPParticleManager::AddEmitter, cleared on release.
+    // via Mortar::PSPParticleManager::AddEmitter, cleared on release.
     Mortar::PSPParticleEmitter* m_TrailEmitter;
 
     // 2-bit state machine matching binary m_bBladeActive:

@@ -130,7 +130,7 @@ void MortarGame::OrientationDidChange(int orientation) { (void)orientation; }
 
 // Matches 0x0018ac64
 void MortarGame::TellGameToQuit() {
-    SystemManager::GetInstance().QuitGame();
+    Mortar::SystemManager::GetInstance().QuitGame();
 }
 
 // Matches 0x0018aa90 — parses "M.m.p", fills version fields, sets hardware default

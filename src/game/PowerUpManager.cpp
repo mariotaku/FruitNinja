@@ -503,7 +503,7 @@ void PowerUpManager::Draw() {
 }
 
 // @ 0x00117b38
-float PowerUpManager::GetActiveProgression(float t) const {
+float PowerUpManager::GetActiveProgression(float t) {
     PowerUp* active = 0;
     for (std::list<PowerUp*>::const_iterator it = m_ActivePowerUps.begin();
          it != m_ActivePowerUps.end(); ++it) {
@@ -523,7 +523,7 @@ PowerUp* PowerUpManager::GetActiveSingle(uint32_t hash) {
 }
 
 // @ 0x00117bb8
-int PowerUpManager::GetNumActiveTimedPowers() const {
+int PowerUpManager::GetNumActiveTimedPowers() {
     int n = 0;
     for (std::list<PowerUp*>::const_iterator it = m_ActivePowerUps.begin();
          it != m_ActivePowerUps.end(); ++it) {

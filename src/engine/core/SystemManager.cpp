@@ -77,4 +77,5 @@ void SystemManager::RequestQuit() {
     m_QuitState = 2;
 }
 
-} // namespace Mortar
+
+}  // namespace Mortar

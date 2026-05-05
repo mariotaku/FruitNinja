@@ -11,6 +11,8 @@
 //
 // Binary does NOT have a length-aware constructor overload.
 
+namespace Mortar {
+
 namespace utf8 {
     // Standard UTF-8 1-6 byte decoder.  Advances *cursor past the decoded bytes.
     // Returns 0 when *cursor points at '\0'; returns 0xFFFD on malformed input.
@@ -37,4 +39,6 @@ private:
     const char* m_End;
 };
 
+
+}  // namespace Mortar
 #endif // FN_ENGINE_RENDER_UTF8STRINGITERATOR_H

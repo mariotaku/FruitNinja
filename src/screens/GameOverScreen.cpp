@@ -567,7 +567,7 @@ void GameOverScreen::Update(float dt) {
         // First frame: force game.processing=1 based on game mode + entity count
         if (m_bScoreSubmitted == 0) {
             uint8_t gm = game->gameMode;
-            ActorManager* am = game->actorManager;
+            Mortar::ActorManager* am = game->actorManager;
             if ((uint8_t)(gm - 2) < 2) { // Arcade (2) or Zen (3)
                 if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0)
                     game->m_bSlowMotion = 1; // game[+0x35] = m_bProcessing
@@ -615,7 +615,7 @@ void GameOverScreen::Update(float dt) {
     // State 1: bonus phase (Arcade only) — BonusScreen creation + slide
     // -----------------------------------------------------------------------
     case 1: {
-        ActorManager* am = game->actorManager;
+        Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0) {
             if (!m_pBonusScreen) {
                 FindMostOfFruit();
@@ -756,7 +756,7 @@ void GameOverScreen::Update(float dt) {
     // State 7: retry — guard entities & reset wave & flag pause
     // -----------------------------------------------------------------------
     case 7: {
-        ActorManager* am = game->actorManager;
+        Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) != 0 && m_pSlot9c == nullptr) {
             // Entities still on screen — snap alpha and stay in state 6
             game->m_TransitionTimer = 1.0f;
@@ -803,7 +803,7 @@ void GameOverScreen::Update(float dt) {
     // State 9: quit path — wait for entities, then QuitToMenu
     // -----------------------------------------------------------------------
     case 9: {
-        ActorManager* am = game->actorManager;
+        Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) != 0) break; // wait
         DoQuitToMenu();
         m_State = 11;

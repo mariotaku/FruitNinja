@@ -364,7 +364,7 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
     // --- Block A: dojo_sensei.tex (slot +0x10) — main panel (128x256) ---
     // Slides in from left (horizontal slide): X -= texW * (1 - alpha).
     if (s_TexSensei.IsValid()) {
-        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexSensei->m_Width + 1.0f,

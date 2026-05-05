@@ -24,7 +24,7 @@ namespace FN {
 void CriticalFlash(const Vec3& pos, const Colour& colour);
 
 // Per-frame advance of the CriticalFlash fade timer. Called from
-// GameUpdate after ActorManager::Update.
+// GameUpdate after Mortar::ActorManager::Update.
 void UpdateCriticalFlash(float dt);
 
 // Draws the current CriticalFlash tint as a full-screen quad. Called
@@ -62,7 +62,7 @@ void DrawBombHit();
 void UpdateBombHit(float prevTimer);
 
 // Matches ResetGameEntities (binary address pending RE). Walks every
-// live entity in ActorManager and deactivates fruit + bombs. Called
+// live entity in Mortar::ActorManager and deactivates fruit + bombs. Called
 // from UpdateBombHit at the 1.5s threshold to wipe the screen before
 // the game-over UI appears. The bool gates a "killAll vs partial"
 // mode in the binary — port currently treats both modes identically.

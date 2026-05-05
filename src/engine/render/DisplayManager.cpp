@@ -109,19 +109,19 @@ void DisplayManager::SetTextureOverloadPrefix(const char* prefix) {
 }
 
 // Platform filter/wrap mode lookups (matching DisplayManagerBada tables)
-GLenum DisplayManager::GetPlatformMagFilter() const {
+GLenum DisplayManager::GetPlatformMagFilter() {
     return (m_MagFilterMode == 0) ? GL_NEAREST : GL_LINEAR;
 }
 
-GLenum DisplayManager::GetPlatformMinFilter() const {
+GLenum DisplayManager::GetPlatformMinFilter() {
     return (m_MinFilterMode == 0) ? GL_NEAREST : GL_LINEAR;
 }
 
-GLenum DisplayManager::GetPlatformWrapS() const {
+GLenum DisplayManager::GetPlatformWrapS() {
     return (m_WrapSMode == 0) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
 }
 
-GLenum DisplayManager::GetPlatformWrapT() const {
+GLenum DisplayManager::GetPlatformWrapT() {
     return (m_WrapTMode == 0) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
 }
 

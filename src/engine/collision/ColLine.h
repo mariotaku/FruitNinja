@@ -3,8 +3,6 @@
 
 #include "collision/Col.h"
 
-namespace Mortar {
-
 // Binary vtable @ 0x001eb618. sizeof = 0x20 (32B): base 0x14, b Vec3 at +0x14.
 class ColLine : public Col {
 public:
@@ -51,7 +49,5 @@ inline Vec3 ColLineClosestPoint(const ColLine& line, const Vec3& p) {
         line.a.z + t * (line.b.z - line.a.z)
     );
 }
-
-}  // namespace Mortar
 
 #endif

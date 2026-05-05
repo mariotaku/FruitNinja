@@ -39,7 +39,7 @@ enum MainScreenState {
     STATE_DOJO_WAIT_C      = 0x15, // Wait for entities (variant)
     STATE_DOJO_WAIT_D      = 0x16, // Wait for entities (variant)
     STATE_QUIT_WAIT        = 0x17, // Tutorial reset -> bomb transition
-    STATE_QUIT_BOMB        = 0x18, // BombFlash -> SystemManager::QuitGame
+    STATE_QUIT_BOMB        = 0x18, // BombFlash -> Mortar::SystemManager::QuitGame
 };
 
 class MainScreen : public HUDControl3d {

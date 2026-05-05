@@ -54,7 +54,7 @@ void DrawStartFade() {
     if (!game->pSplashTex.IsValid()) return;
     game->pSplashTex->Set();
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale((float)FN_SCREEN_W, (float)FN_SCREEN_H, 0.0f);
     mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));

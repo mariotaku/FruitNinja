@@ -2,8 +2,8 @@
 #define FN_BOMB_H
 
 //
-// Bomb : Entity (size = 0xB0 / 176 bytes)
-// Entity type 1. Docs: docs/entities/bomb.md
+// Bomb : Mortar::Entity (size = 0xB0 / 176 bytes)
+// Mortar::Entity type 1. Docs: docs/entities/bomb.md
 // Binary: ctor 0x171678, Init 0x172504, Update 0x1729fc, Draw 0x171be8
 //
 // Analysed: 2026-04-10T10:00
@@ -17,9 +17,9 @@ namespace Mortar { struct PSPParticleEmitter; }
 class MenuButton;
 
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001ea478 + 0x00172504 + 0x00171764 (asm-inspector, vtable slots verified)
-class Bomb : public Entity {
+class Bomb : public Mortar::Entity {
 public:
-    // +0x38: m_Col inherited from Entity (ColSphere*, allocated in Init)
+    // +0x38: m_Col inherited from Mortar::Entity (ColSphere*, allocated in Init)
 
     // +0x3c: BombBlast spawn timer; Init = 0.6 (DAT_001726ac)
     float m_SpawnTimer;
@@ -88,7 +88,7 @@ public:
 
     // Vtable slot 2: Binary @ 0x00172504.
     // p1 unused; p2 unused; p3 = scale Vec3* (nullable, default 1.0).
-    void Init(void* p1, long p2, const Vec3* scaleOrNull) override;
+    void Init(void* p1, long p2, Vec3* scaleOrNull) override;
     void Release() override;                // 0x00171764 — fuse emitter cleanup
     void Update(float dt) override;
     void Draw(Renderer& r) override;
@@ -96,11 +96,11 @@ public:
 
     // Vtable slot 9: Binary @ 0x0017280c.
     // Returns 0. Triggers bomb hit effects (arcade/zen/menu branch).
-    int CollisionResponse(Entity* hitter, unsigned long flagsA, unsigned long flagsB,
-                          const Vec3* bladeVelocity) override;
+    int CollisionResponse(Mortar::Entity* hitter, unsigned long flagsA, unsigned long flagsB,
+                          Vec3* bladeVelocity) override;
 
     // Non-virtual cleanup helper: drops fuse emitter and sets ENT_INACTIVE.
-    // Called by ActorManager::Deactivate (direct, not via vtable).
+    // Called by Mortar::ActorManager::Deactivate (direct, not via vtable).
     void Deactivate();
 
     // Matches Bomb::Chuck (0x170f68)
@@ -136,7 +136,7 @@ public:
     // Port specific: playerIdx filtering omitted; entity has no player-index field yet (split-screen MP stub).
     static int GetNumActiveForPlayer(int playerIdx, bool countPrespawn);
 
-    // Matches Bomb::ClearUnspawned (0x00122ab4). Walks ActorManager type-1
+    // Matches Bomb::ClearUnspawned (0x00122ab4). Walks Mortar::ActorManager type-1
     // list and deactivates any bomb still in chuck-delay (pre-spawn) state.
     static void ClearUnspawned();
 

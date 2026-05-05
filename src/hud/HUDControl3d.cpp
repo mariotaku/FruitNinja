@@ -36,7 +36,7 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     Mortar::Texture::s_LastBoundTexId = m_Texture;
 
     // Step 3: MatrixStack::Reset (world stack)
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
     // Step 4: Scale44(size)

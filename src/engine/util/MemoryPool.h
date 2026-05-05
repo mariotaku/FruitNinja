@@ -85,7 +85,7 @@ public:
     }
 
     // Port helpers — not in binary, but useful for the active-iteration
-    // patterns ActorManager / DrawActive* use where the caller tracks
+    // patterns Mortar::ActorManager / DrawActive* use where the caller tracks
     // "slot is alive" via a field on T (e.g. SplatEntity::m_bActive).
 
     // Direct slot access by raw index [0, Capacity). Lets callers

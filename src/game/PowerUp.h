@@ -153,7 +153,7 @@ public:
     int Update(float dt);
 
     // Clone — heap-alloc new instance, copy state, deep-copy modifier list
-    PowerUp* Clone() const;
+    PowerUp* Clone();
 
     // @ 0x001191f8 — draw power-up HUD bar
     void DrawBar();
@@ -170,7 +170,7 @@ public:
     float GetCurrentTimeProgress() const { return m_LongestRemaining; }
 
     // @ 0x00117aec — max m_Duration_remaining across all modifiers
-    float GetLongestMod() const;
+    float GetLongestMod();
 
     // @ 0x0011a210
     void SetCurrentTime(float t) { m_LongestRemaining = t; }

@@ -131,7 +131,7 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
     if (!texId) return;
 
     // Matrix-stack reset / scale / translate / upload — matches HUDControl3d::Draw pattern.
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
     Matrix44 mat = Matrix44::MakeScale(size.x, size.y, size.z);

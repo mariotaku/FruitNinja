@@ -5,8 +5,6 @@
 #include "collision/ColLine.h"
 #include <cmath>
 
-namespace Mortar {
-
 // Forward declarations for double-dispatch
 class ColLine;
 class ColAABB;
@@ -39,7 +37,5 @@ public:
     bool IntersectsLine(const ColLine& line) const;
     bool Contains(const Vec3& p) const;
 };
-
-}  // namespace Mortar
 
 #endif

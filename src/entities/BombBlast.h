@@ -2,8 +2,8 @@
 #define FN_BOMB_BLAST_H
 
 //
-// BombBlast : Entity (size 0x70 / 112 bytes in binary)
-// Entity type 4. Expanding shockwave ring spawned by a slashed Bomb.
+// BombBlast : Mortar::Entity (size 0x70 / 112 bytes in binary)
+// Mortar::Entity type 4. Expanding shockwave ring spawned by a slashed Bomb.
 //
 // Binary refs (see docs/entities/bomb-blast.md):
 //   ctor       0x171618 / 0x171648
@@ -17,13 +17,13 @@
 #include "Entity.h"
 #include "math/Vec3.h"
 
-class BombBlast : public Entity {
+class BombBlast : public Mortar::Entity {
 public:
-    // +0x3C: growing radius + scale (own fields after Entity base 0x3C)
+    // +0x3C: growing radius + scale (own fields after Mortar::Entity base 0x3C)
     float m_BlastRadius;
     float m_Scale;
 
-    // m_Angle is inherited from Entity base at +0x36.
+    // m_Angle is inherited from Mortar::Entity base at +0x36.
     // BombBlast::Init writes a random value to it for ring orientation.
 
     // +0x48 / +0x54: positions extruded along vel1/vel2
@@ -45,7 +45,7 @@ public:
     // All three params are unused at runtime — caller passes (this, 0, 0, 0).
     // The first arg is r0 / `this` (Ghidra's void* p1 is a free-function-rendering
     // artifact); body operates exclusively on `this`.
-    void Init(void* p1, long p2, const Vec3* p3) override;
+    void Init(void* p1, long p2, Vec3* p3) override;
     void Update(float dt) override;
     // Binary @ 0x00171034 — no-op override. Must be present (not pure-virtual abort).
     void Draw(Renderer& r) override;

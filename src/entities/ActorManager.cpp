@@ -12,6 +12,8 @@
 //
 // Analysed: 2026-05-04T00:00
 
+namespace Mortar {
+
 ActorManager* ActorManager::s_Instance = nullptr;
 
 // --- Construction / singleton --------------------------------------------
@@ -271,14 +273,14 @@ void ActorManager::PostLoad() {
 
 // 0x0016ff98. Binary returns list size with NO active filtering.
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff98 (asm-inspector)
-int ActorManager::GetNumEntities(int typeIdx) const {
+int ActorManager::GetNumEntities(int typeIdx) {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return 0;
     return (int)m_pTypeLists[typeIdx].size();
 }
 
 // 0x0016ffac.
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ffac (asm-inspector)
-int ActorManager::GetNumEntities() const {
+int ActorManager::GetNumEntities() {
     if (!m_pTypeLists) return 0;
     int total = 0;
     for (int t = 0; t < m_NumTypes; t++) total += (int)m_pTypeLists[t].size();
@@ -288,7 +290,7 @@ int ActorManager::GetNumEntities() const {
 // 0x0016ff30. Sentinel is -1L, not 0 (type 0 == Bomb would be skipped wrongly).
 // Binary @ 0x0016ff30.
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff30 (asm-inspector)
-int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) const {
+int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) {
     if (!m_pTypeLists || !typeIdxNullTerminated) return 0;
     int total = 0;
     for (const long* p = typeIdxNullTerminated; *p != -1L; ++p) {
@@ -300,7 +302,7 @@ int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) const {
 
 // 0x0016ff5c.
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff5c (asm-inspector)
-int ActorManager::GetNumEntities(long typeA, long typeB) const {
+int ActorManager::GetNumEntities(long typeA, long typeB) {
     if (!m_pTypeLists) return 0;
     long lo = typeA < typeB ? typeA : typeB;
     long hi = typeA < typeB ? typeB : typeA;
@@ -313,7 +315,7 @@ int ActorManager::GetNumEntities(long typeA, long typeB) const {
 
 // 0x0016ff00.
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0016ff00 (asm-inspector)
-int ActorManager::GetNumTypes() const {
+int ActorManager::GetNumTypes() {
     if (!m_pTypeLists) return 0;
     int n = 0;
     for (int t = 0; t < m_NumTypes; t++) if (!m_pTypeLists[t].empty()) n++;
@@ -361,7 +363,7 @@ Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
 // 0x0016fc64.
 // Defunct: zero in-binary callers; binary @ 0x0016fc64.
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0016fc64 (asm-inspector)
-int ActorManager::GetEntityIdx(Entity* entity) const {
+int ActorManager::GetEntityIdx(Entity* entity) {
     if (!entity || !m_pTypeLists) return -1;
     const int type = entity->entityType;
     if (type < 0 || type >= m_NumTypes) return -1;
@@ -375,7 +377,7 @@ int ActorManager::GetEntityIdx(Entity* entity) const {
 
 // --- Factory / hash converter registration --------------------------------
 
-// Binary: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
+// Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
 // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
 // Stores the hash-converter delegate into m_HashDelegate.
 // TODO: implement full delegate -- see docs/systems/gameinit-todos.md step 16.
@@ -412,7 +414,7 @@ Entity* ActorManager::Find(unsigned long trackerKey) {
 // 0x0016fbec. Count entities whose vtable+0x20 (InRect(ColAABB*)) collision
 // test passes against aabb.
 // Defunct: zero in-binary callers; binary @ 0x0016fbec.
-int ActorManager::GetNumInAABB(Mortar::ColAABB* aabb) {
+int ActorManager::GetNumInAABB(ColAABB* aabb) {
     (void)aabb;
     return 0;
 }
@@ -508,3 +510,5 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
     if (target) target->ReceiveMessage(sender, msg);
     return target != nullptr;
 }
+
+}  // namespace Mortar

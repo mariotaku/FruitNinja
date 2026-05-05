@@ -12,8 +12,6 @@
 // GCC 4.4 / -fno-rtti: <memory> pulls in shared_ptr internals that use
 // typeid, which fails under -fno-rtti. Use raw-pointer ownership instead.
 
-namespace Mortar {
-
 // ----------------------------------------------------------------------------
 // PSPParticleTemplate — loaded from first loop of LoadFile.
 // Populated from `<particleTemplate>` XML elements. Not present in current
@@ -25,6 +23,8 @@ namespace Mortar {
 // that's fine, the port is a reimplementation, not a memory-compatible ABI copy.
 // See docs/engine/particles.md for per-field XML source.
 // ----------------------------------------------------------------------------
+namespace Mortar {
+
 struct PSPParticleTemplate {
     float    m_StartTime;          // +0x00  <life>/60
     uint16_t _pad04;               // +0x04
@@ -205,8 +205,8 @@ struct PSPParticleEmitter {
 // ----------------------------------------------------------------------------
 // Singleton manager
 // ----------------------------------------------------------------------------
-class PSPParticleManager : public Singleton<PSPParticleManager> {
-    friend class Singleton<PSPParticleManager>;
+class PSPParticleManager : public Mortar::Singleton<PSPParticleManager> {
+    friend class Mortar::Singleton<PSPParticleManager>;
 
 public:
     // Add emitter by template hash. Matches AddEmitter (0x1149e0).
@@ -272,6 +272,6 @@ private:
     std::vector<PSPParticleEmitter*> m_Emitters;
 };
 
-} // namespace Mortar
 
+}  // namespace Mortar
 #endif

@@ -177,7 +177,7 @@ void DrawCriticalFlash() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, s_WhitePx);
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(sx, sy, 1.0f);
     mat.GlobalTranslate44(Vec3(0.0f, 0.0f, 0.0f));
@@ -220,7 +220,7 @@ void DrawBombHit() {
     if (a > 255) a = 255;
     const Colour tint(255, 255, 255, (uint8_t)a);
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
     mat.GlobalTranslate44(s_BombHitPos);
@@ -265,7 +265,7 @@ static const float DIST_SQ_THRESH =  400.0f;  // DAT_0016a198
 static const float IMPULSE_LEN    =   20.0f;
 
 void ResetGameEntities(bool killAll) {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     // Use the gamemode flag as the "Zen" gate — binary reads
@@ -275,9 +275,9 @@ void ResetGameEntities(bool killAll) {
 
     // Iterate Fruit (0) + Bomb (1) type lists.
     for (int t = 0; t <= 1; t++) {
-    const std::list<Entity*>& list = am->GetTypeList(t);
+    const std::list<Mortar::Entity*>& list = am->GetTypeList(t);
     for (auto it = list.begin(); it != list.end(); ++it) {
-        Entity* e = *it;
+        Mortar::Entity* e = *it;
         if (!e || !e->IsActive()) continue;
 
         if (e->entityType == 1) {

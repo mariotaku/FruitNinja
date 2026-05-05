@@ -505,7 +505,7 @@ ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
 // behaviour comes from the matrix-stack discipline shared with HUD.
 // ---------------------------------------------------------------------------
 void ScrollingMenu::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
-    Mortar::MatrixStack& world = Mortar::MatrixManager::GetInstance().GetWorldStack();
+    MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         world.Reset();
         (*it)->Draw();

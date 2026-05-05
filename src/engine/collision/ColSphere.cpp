@@ -3,8 +3,6 @@
 #include "collision/ColLine.h"
 #include "collision/ColAABB.h"
 
-namespace Mortar {
-
 // Binary @ 0x0019fc20
 ColSphere::ColSphere() : Col(), center(m_PrimaryPoint), radius(0.0f) {}
 
@@ -60,4 +58,3 @@ bool ColSphere::Contains(const Vec3& p) const {
     return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;
 }
 
-}  // namespace Mortar

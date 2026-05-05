@@ -6,7 +6,7 @@
 // Reimplemented from docs/structs/gameplay-misc.md
 //
 // 3-layer rendering + 1 entity:
-//   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton — ActorManager::Draw)
+//   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton — Mortar::ActorManager::Draw)
 //   Layer 1 (2D): Button texture quad (+0x74)
 //   Layer 2 (2D): "New item" star indicator (+0xFC)
 //   Layer 3 (2D): Sparkle ring (+0xF8)
@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <list>
 
-class Entity;
+namespace Mortar { class Entity; }
 class Fruit;
 
 // MenuButtonAddOn — child sprite metadata for AddPeice/UpdatePeices.
@@ -47,7 +47,7 @@ namespace FN { void ClearMenuItems(); }
 class MenuButton : public HUDControl3d {
 public:
     // +0x80: real Fruit/Bomb entity spinning on button (nullptr for toggles)
-    Entity* m_pEntity;
+    Mortar::Entity* m_pEntity;
 
     // +0x84: -1 = no fruit, 0+ = fruit index, >=bombThreshold = bomb
     int m_FruitType;
@@ -186,10 +186,10 @@ public:
     void Shake(float t);
 
     // Binary @ 0x0014e434 — returns (m_NewIndicatorTimer >= 0)
-    bool HasNewSymbol() const;
+    bool HasNewSymbol();
 
     // Binary @ 0x0014e484 — returns (m_SparkleTimer >= 0); dead in shipped binary
-    bool IsLoadingSymbol() const;
+    bool IsLoadingSymbol();
 
     // Binary @ 0x0014e45c — arms sparkle timer; dead in shipped binary
     void SetLoadingSymbol(bool show);

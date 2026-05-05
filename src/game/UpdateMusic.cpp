@@ -150,9 +150,9 @@ void UpdateMusic(float dt) {
             bool skip_arm = false;
             if (g_currentVolume < 0.0f) {               // 0x0016a6c4: bpl
                 // Only skip arming if fruits AND bombs are both present
-                ActorManager* am = ActorManager::GetInstance();
-                if (am && ActorManager::GetInstance()->GetNumEntities(0) != 0) {  // type 0 = Fruit
-                    am = ActorManager::GetInstance();
+                Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+                if (am && Mortar::ActorManager::GetInstance()->GetNumEntities(0) != 0) {  // type 0 = Fruit
+                    am = Mortar::ActorManager::GetInstance();
                     if (am && am->GetNumEntities(1) != 0) {  // type 1 = Bomb
                         skip_arm = true;                 // 0x0016a6e4
                     }
@@ -190,9 +190,9 @@ void UpdateMusic(float dt) {
             if (game->m_TransitionTimer >= 0.0f) {       // 0x0016a742
                 bool skip_arm = false;
                 if (g_currentVolume < 0.0f) {            // 0x0016a74c: bpl
-                    ActorManager* am = ActorManager::GetInstance();
+                    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
                     if (am && am->GetNumEntities(0) != 0) {
-                        am = ActorManager::GetInstance();
+                        am = Mortar::ActorManager::GetInstance();
                         if (am && am->GetNumEntities(1) != 0) {
                             skip_arm = true;
                         }
@@ -273,7 +273,7 @@ void UpdateMusic(float dt) {
             float v = g_currentVolume;
             if (v < 0.0f) {
                 // Volume is on the menu side — check if we should ramp toward gameplay
-                ActorManager* am = ActorManager::GetInstance();
+                Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
                 if (am == nullptr || am->GetNumEntities(0) == 0) {
                     // No fruits (or no actor manager): skip fast-ramp, fall through to slow ramp
                     goto slow_ramp;

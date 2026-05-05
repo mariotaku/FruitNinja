@@ -134,14 +134,14 @@ static uint32_t ColourFor(int entityType) {
 void DebugHitbox_Draw() {
     if (!g_DebugHitboxes) return;
 
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     EnsureWhiteTex();
 
     // Reset world matrix — entity m_Col centres are already in world
     // space, so we draw at identity transform.
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
@@ -158,12 +158,12 @@ void DebugHitbox_Draw() {
     // Only fruits (0) and bombs (1) — same set the slash collision
     // pass tests against. Skip splats and others.
     for (int t = 0; t <= 1; t++) {
-    const std::list<Entity*>& list = am->GetTypeList(t);
+    const std::list<Mortar::Entity*>& list = am->GetTypeList(t);
     for (auto it = list.begin(); it != list.end(); ++it) {
-        Entity* e = *it;
+        Mortar::Entity* e = *it;
         if (!e || !e->IsActive()) continue;
         if (!e->m_Col) continue;
-        Mortar::ColSphere* cs = static_cast<Mortar::ColSphere*>(e->m_Col);
+        ColSphere* cs = static_cast<ColSphere*>(e->m_Col);
         if (cs->radius <= 0.0f) continue;
 
         const uint32_t col = ColourFor(e->entityType);

@@ -372,7 +372,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
     // Layer check and alpha guard
     if (m_TransitionAlpha <= 0.0f) return;
 
-    Mortar::MatrixManager& mm  = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm  = MatrixManager::GetInstance();
     Renderer*              r   = Renderer::GetInstance();
     if (!r) return;
 

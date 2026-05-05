@@ -234,7 +234,7 @@ int PowerUp::Update(float dt) {
 }
 
 // Step 7: Clone (binary @ 0x00119468)
-PowerUp* PowerUp::Clone() const {
+PowerUp* PowerUp::Clone() {
     PowerUp* clone = new PowerUp(*this);
     clone->m_bCloned = 1;
     clone->m_DeferredPoints = -1;
@@ -297,7 +297,7 @@ void PowerUp::DrawBar() {
     mat.m[14] = 0.0f;      // M[3][2] — tz
     mat.m[15] = 1.0f;      // M[3][3] — w
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
@@ -321,7 +321,7 @@ void PowerUp::LoadTextures() {
 }
 
 // GetLongestMod (binary @ 0x00117aec)
-float PowerUp::GetLongestMod() const {
+float PowerUp::GetLongestMod() {
     float longest = 0.0f;
     for (std::list<GameModifier*>::const_iterator it = m_ModList.begin();
          it != m_ModList.end(); ++it) {

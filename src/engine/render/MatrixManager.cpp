@@ -1,8 +1,6 @@
 #include "render/MatrixManager.h"
 #include "math/math3d.h"
 
-namespace Mortar {
-
 MatrixManager::MatrixManager()
     : m_ViewVersionUploaded(0)
     , m_WorldVersionUploaded(0)
@@ -77,4 +75,3 @@ Matrix44 MatrixManager::GetMVP() const {
     return m_CachedProjView * m_World.m_Current;
 }
 
-} // namespace Mortar

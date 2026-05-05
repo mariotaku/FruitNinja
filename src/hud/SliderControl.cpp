@@ -27,7 +27,7 @@ static GLuint s_ThumbTexture = 0;
 //
 // Binary ctor body:
 //   1. HUDControl3d base init
-//   2. Utf8StringIterator(&m_Label, label)
+//   2. Mortar::Utf8StringIterator(&m_Label, label)
 //   3. Delegate0<void>(&m_OnValueChanged)
 //   4. Assigns pos, size
 //   5. Samples two fonts via GOT[DAT_00160390] / GOT[DAT_00160394] to compute
@@ -55,7 +55,7 @@ SliderControl::SliderControl(const Vec3& inPos, const Vec3& inSize,
     pos  = inPos;
     size = inSize;
 
-    // Binary @ 0x00160268: label copied via Utf8StringIterator ctor.
+    // Binary @ 0x00160268: label copied via Mortar::Utf8StringIterator ctor.
     // Port: plain strncpy into char[28] placeholder.
     if (label) {
         strncpy(m_Label, label, sizeof(m_Label) - 1);
@@ -73,7 +73,7 @@ SliderControl::SliderControl(const Vec3& inPos, const Vec3& inSize,
 }
 
 // Destructor chain -- Binary @ 0x001601a8 (D2) / 0x00160140 (D1/deleting)
-// D1/D2 call Release(), ~Delegate0, ~Utf8StringIterator, ~HUDControl3d.
+// D1/D2 call Release(), ~Delegate0, ~Mortar::Utf8StringIterator, ~HUDControl3d.
 SliderControl::~SliderControl() {
     Release();
 }
@@ -144,7 +144,7 @@ int SliderControl::GetType() {
 
 // ---------------------------------------------------------------------------
 // Non-virtual. Binary @ 0x0016010c
-// Updates m_Label: constructs Utf8StringIterator from str, assigns to m_Label.
+// Updates m_Label: constructs Mortar::Utf8StringIterator from str, assigns to m_Label.
 // Defunct: SliderControl -- no-op stub; binary @ 0x0016010c
 //          (no internal call sites; OptionsScreen was repurposed to
 //          PauseScreen, leaving the slider library code unused).

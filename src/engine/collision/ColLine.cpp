@@ -3,8 +3,6 @@
 #include "collision/ColSphere.h"
 #include "collision/ColAABB.h"
 
-namespace Mortar {
-
 ColLine::ColLine() : Col(), a(m_PrimaryPoint), b() {}
 
 ColLine::ColLine(const Vec3& start, const Vec3& end) : Col(), a(m_PrimaryPoint), b(end) {
@@ -39,4 +37,3 @@ void ColLine::DrawDebug() {
     // TODO: DrawLine helper not ported
 }
 
-}  // namespace Mortar
