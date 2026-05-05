@@ -293,7 +293,7 @@ void Fruit::Update(float dt) {
         // Port keeps the same growth formula but uses the same ×60
         // position scaling as the unsliced branch so the halves
         // visibly drift instead of being frozen.
-        const float gravLen0 = m_Gravity.length();
+        const float gravLen0 = m_Gravity.Magnitude();
         const float dtNorm   = dt * 60.0f;
         const float growRate = 0.2f * dtNorm * 4.5f;   // = 0.9 per frame
         const float gravLen1 = gravLen0 + growRate;
@@ -760,7 +760,7 @@ int Fruit::CollisionResponse(Entity* /*hitter*/,
     const bool isCritical = m_bCriticalEligible;
 
     // Blade speed clamp. Critical / special → [6, 8]; normal → [4, 8].
-    float bladeSpeed = bladeVel.length() * SLICE_BLADE_SCALE;
+    float bladeSpeed = bladeVel.Magnitude() * SLICE_BLADE_SCALE;
     const float clampMin = (isCritical || isSpecial)
                            ? 6.0f : SLICE_CLAMP_MIN_NRM;
     if (bladeSpeed < clampMin)          bladeSpeed = clampMin;
