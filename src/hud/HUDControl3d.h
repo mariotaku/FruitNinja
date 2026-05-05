@@ -31,17 +31,26 @@ public:
     // Subclasses (TutorialControl) use this slot for their own textures.
     GLuint m_SecondaryTex;
 
-    HUDControl3d()
-        : m_Texture(0),
-          m_SecondaryTex(0) {
-        m_Timer = 0.0f;
-    }
+    HUDControl3d();
 
     // vtable +0x1c: Draw — matches 0x14428c (57 lines)
     void Draw(const Vec3& hudScale, int layerMask) override;
 
     // vtable +0x30
     int GetType() override { return 1; }
+
+    // ---- STUBS (binary) ----
+    // STUB: HUDControl3d::~HUDControl3d -- binary @ 0x???? (TODO RE)
+    virtual ~HUDControl3d();
+    // STUB: HUDControl3d::Release -- binary @ 0x???? (TODO RE)
+    void Release() override;
+    // STUB: HUDControl3d::PreDraw -- binary @ 0x???? (TODO RE)
+    void PreDraw(const Vec3& hudScale) override;
+    // STUB: HUDControl3d::Update -- binary @ 0x???? (TODO RE)
+    void Update(float dt) override;
+    // STUB: HUDControl3d::Draw(float*) -- binary @ 0x???? (TODO RE)
+    void Draw(float* viewVec) override;
+    // ---- end STUBS ----
 };
 
 #endif

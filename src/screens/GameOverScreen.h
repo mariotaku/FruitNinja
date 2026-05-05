@@ -117,8 +117,11 @@ public:
     float       m_FruitFactAlpha;  // +0x138
 
     // Binary: LoadContent / UnLoadContent (gated by static guard)
-    static void LoadContent() {}
-    static void UnLoadContent() {}
+    static void LoadContent();
+    static void UnLoadContent();
+
+    // Default ctor (binary shape)
+    GameOverScreen();
 
     // Parameterised ctor @ 0x00142900:
     //   param2/param3 are state/timer overrides for fast-skip path, NOT endReason/endScore.
@@ -131,7 +134,7 @@ public:
     void Init() override;
 
     // vtable slot 4: Reset — empty (0x00140554, single bx lr)
-    void Reset() override {}
+    void Reset() override;
 
     // vtable slot 5: BeginDraw — sets m_LayerFlags (0x00140590)
     void BeginDraw(float dt) override;
@@ -155,7 +158,15 @@ public:
     // (omitted: compiler uses HUDControl3d::Draw at 0x0014428c)
 
     // IsAllowedToExit — always 1 in binary (0x0014061c)
-    bool IsAllowedToExit() { return true; }
+    bool IsAllowedToExit();
+
+    // ---- STUBS (binary) ----
+    // Binary-shape overloads not covered by the vtable Vec3& variants.
+    // STUB: GameOverScreen::PreDrawOrder -- binary @ 0x???? (TODO RE)
+    void PreDrawOrder(float* viewVec, int layerMask);
+    // STUB: GameOverScreen::DrawOrder -- binary @ 0x???? (TODO RE)
+    void DrawOrder(float* viewVec, int layerMask);
+    // ---- end STUBS ----
 
 private:
     // 0x00142674

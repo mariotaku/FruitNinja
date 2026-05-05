@@ -525,3 +525,30 @@ void ScrollingMenu::DestroyList() {
 // STUB: ScrollingMenu::ClearTouch -- auto stub
 void ScrollingMenu::ClearTouch() {}
 // ---- end AUTO-STUB MERGE ----
+
+// ---- STUBS (binary) ----
+
+// STUB: ScrollingMenu::Collide(long) -- binary @ 0x???? (TODO RE)
+ScrollingMenuItem* ScrollingMenu::Collide(long touchSlot) {
+    return Collide((int)touchSlot);
+}
+
+// STUB: ScrollingMenu::Draw(float*) -- binary @ 0x???? (TODO RE)
+void ScrollingMenu::Draw(float* /*viewVec*/) {}
+
+// STUB: ScrollingMenu::Init -- binary @ 0x???? (TODO RE)
+void ScrollingMenu::Init() {}
+
+// STUB: ScrollingMenu::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+void ScrollingMenu::PreDraw(float* /*viewVec*/) {}
+
+// STUB: ScrollingMenu::Release -- binary @ 0x???? (TODO RE)
+void ScrollingMenu::Release() {}
+
+// STUB: ScrollingMenu::Reset -- binary @ 0x???? (TODO RE)
+void ScrollingMenu::Reset() {}
+
+// STUB: ScrollingMenu::Skip -- binary @ 0x???? (TODO RE)
+void ScrollingMenu::Skip() {}
+
+// ---- end STUBS ----

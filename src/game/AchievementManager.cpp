@@ -292,11 +292,12 @@ int AchievementManager::UnlockedAchievement(uint32_t hash, HUD* hud) {
     if (it == m_All.end()) return 0;
     AchievementInfo* a = it->second;
     // Binary: name[0] in '0'..'9' => Type_Numeric (1), else Type_Named (2)
-    uint8_t notifType = (a->m_Name[0] >= '0' && a->m_Name[0] <= '9')
-                        ? NotificationControl::Type_Numeric
-                        : NotificationControl::Type_Named;
+    NotificationControl::NotificationType notifType =
+        (a->m_Name[0] >= '0' && a->m_Name[0] <= '9')
+        ? NotificationControl::Type_Numeric
+        : NotificationControl::Type_Named;
     NotificationControl* ctrl = new NotificationControl(
-        a->m_Name, a->m_Points, &a->m_Texture, notifType);
+        a->m_Name, a->m_Points, a->m_Texture, notifType);
     ctrl->Init();
     if (hud) hud->AddControl(ctrl, false);
     return 1;

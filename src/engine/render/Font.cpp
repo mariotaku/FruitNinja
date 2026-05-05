@@ -447,7 +447,7 @@ float Font::MeasureString(const Mortar::Utf8StringIterator& iterIn) const {
         // g->xadv is in lineHeight-norm units (normalized in Font::Load / Font::Create).
         // GetKerning uses the NEXT char (iter already advanced).
         uint32_t nextCp = iter.IsEmpty() ? 0 : iter.m_CurrentCodepoint;
-        total += g->xadv + GetKerning(cp, nextCp);
+        total += g->xadv + GetKerning((uint32_t)cp, (uint32_t)nextCp);
     }
     return total;
 }
@@ -681,7 +681,7 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
         // Advance cursor: xadv + kerning + spacing
         // spacing * (cp == 0x20 ? 3.0 : 1.0) matches binary (spacing=0 in all shipping callers)
         float spacingMul = (cp == 0x20) ? 3.0f : 1.0f;
-        cursorX += g->xadv + GetKerning(cp, 0) + spacing * spacingMul;
+        cursorX += g->xadv + GetKerning((uint32_t)cp, (uint32_t)0) + spacing * spacingMul;
         iter++;
     }
 
@@ -754,11 +754,26 @@ void Font::DrawString(float scale, float maxWidth, float z,
     DrawString(scale, maxWidth, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
 }
 
-} // namespace Mortar
+// ---------------------------------------------------------------------------
+// Stubs (binary signatures present; bodies not yet RE'd)
+// ---------------------------------------------------------------------------
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-namespace Mortar {
-// STUB: Font::GetStringHeight -- auto stub
+// STUB: Font::DrawString(Utf8StringIterator,Vec3,Colour,float,Vec2,int,float,MortarRectangleDec*,float) -- binary @ 0x???? (TODO RE)
+void Font::DrawString(Utf8StringIterator, Vec3, Colour, float, Vec2, int, float, MortarRectangleDec*, float) {}
+
+// STUB: Font::DrawString(Utf8StringIterator,float,float,float,Colour,float,float,float,int,MortarRectangleDec*,float) -- binary @ 0x???? (TODO RE)
+void Font::DrawString(Utf8StringIterator, float, float, float, Colour, float, float, float, int, MortarRectangleDec*, float) {}
+
+// STUB: Font::FindAdvanceOfNextWord(Utf8StringIterator,float,float,float,float) -- binary @ 0x???? (TODO RE)
+float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float) { return 0.0f; }
+
+// STUB: Font::GetCharTemplate(long,int) -- binary @ 0x???? (TODO RE)
+Font::CharTemplate* Font::GetCharTemplate(long, int) { return nullptr; }
+
+// STUB: Font::GetStringHeight(Utf8StringIterator,float,float) -- binary @ 0x???? (TODO RE)
 void Font::GetStringHeight(Utf8StringIterator, float, float) {}
-}  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----
+
+// STUB: Font::MeasureString(Utf8StringIterator) -- binary @ 0x???? (TODO RE)
+float Font::MeasureString(Utf8StringIterator) { return 0.0f; }
+
+} // namespace Mortar

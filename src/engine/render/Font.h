@@ -135,24 +135,26 @@ public:
 
 private:
     float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack);
-    const char*   FindAdvanceOfNextWord(Mortar::Utf8StringIterator iter, float curX, float maxX,
-                                        float scale, float spacing) const;
 
 public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: Font::GetStringHeight -- auto stub from binary missing-symbol set
+    // ---- STUBS (binary) ----
+    // STUB: Font::DrawString(Utf8StringIterator,Vec3,Colour,float,Vec2,int,float,MortarRectangleDec*,float) -- binary @ 0x???? (TODO RE)
+    void DrawString(Utf8StringIterator, Vec3, Colour, float, Vec2, int, float, MortarRectangleDec*, float);
+    // STUB: Font::DrawString(Utf8StringIterator,float,float,float,Colour,float,float,float,int,MortarRectangleDec*,float) -- binary @ 0x???? (TODO RE)
+    void DrawString(Utf8StringIterator, float, float, float, Colour, float, float, float, int, MortarRectangleDec*, float);
+    // STUB: Font::FindAdvanceOfNextWord(Utf8StringIterator,float,float,float,float) -- binary @ 0x???? (TODO RE)
+    float FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float);
+    // STUB: Font::GetCharTemplate(long,int) -- binary @ 0x???? (TODO RE)
+    CharTemplate* GetCharTemplate(long, int);
+    // GetKerning(unsigned long,unsigned long) — same mangling as the
+    // (uint32_t, uint32_t) overload above on ARM32 (long == int == 32-bit
+    // -> both mangle as `j j`). Existing GetKerning(uint32_t, uint32_t)
+    // already covers the binary symbol.
+    // STUB: Font::GetStringHeight(Utf8StringIterator,float,float) -- binary @ 0x???? (TODO RE)
     void GetStringHeight(Utf8StringIterator, float, float);
-    // ---- end AUTO-STUB MERGE ----
+    // STUB: Font::MeasureString(Utf8StringIterator) -- binary @ 0x???? (TODO RE)
+    float MeasureString(Utf8StringIterator);
+    // ---- end STUBS ----
 };
 
 } // namespace Mortar

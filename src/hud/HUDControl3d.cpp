@@ -4,6 +4,7 @@
 //
 
 #include "HUDControl3d.h"
+#include "HUDControl.h"
 #include "Game.h"
 #include "asset/Texture.h"
 #include "render/MatrixManager.h"
@@ -75,4 +76,34 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     // Step 12: UnSet
     glBindTexture(GL_TEXTURE_2D, 0);
     Mortar::Texture::s_LastBoundTexId = 0;
+}
+
+HUDControl3d::HUDControl3d()
+    : m_Texture(0),
+      m_SecondaryTex(0) {
+    m_Timer = 0.0f;
+}
+
+// STUB: HUDControl3d::~HUDControl3d -- binary @ 0x???? (TODO RE)
+HUDControl3d::~HUDControl3d() {
+}
+
+// STUB: HUDControl3d::Release -- binary @ 0x???? (TODO RE)
+void HUDControl3d::Release() {
+    HUDControl::Release();
+}
+
+// STUB: HUDControl3d::PreDraw -- binary @ 0x???? (TODO RE)
+void HUDControl3d::PreDraw(const Vec3& hudScale) {
+    (void)hudScale;
+}
+
+// STUB: HUDControl3d::Update -- binary @ 0x???? (TODO RE)
+void HUDControl3d::Update(float dt) {
+    HUDControl::Update(dt);
+}
+
+// STUB: HUDControl3d::Draw(float*) -- binary @ 0x???? (TODO RE)
+void HUDControl3d::Draw(float* viewVec) {
+    (void)viewVec;
 }
