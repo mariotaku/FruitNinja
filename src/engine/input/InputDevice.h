@@ -81,6 +81,10 @@ public:
 public:
 
 public:
+
+public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: InputDevice::AddAction -- auto stub from binary missing-symbol set
     void AddAction(InputActionMapper*);

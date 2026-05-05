@@ -75,6 +75,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: BombBlast::DrawBlast -- auto stub from binary missing-symbol set
     void DrawBlast();

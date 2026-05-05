@@ -110,6 +110,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: DojoScreen::MoreGamesCallback -- auto stub from binary missing-symbol set
     void MoreGamesCallback();

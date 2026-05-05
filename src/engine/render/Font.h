@@ -147,6 +147,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: Font::GetStringHeight -- auto stub from binary missing-symbol set
     void GetStringHeight(Utf8StringIterator, float, float);

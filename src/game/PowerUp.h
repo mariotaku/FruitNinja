@@ -212,6 +212,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: PowerUp::Purchaseable -- auto stub from binary missing-symbol set
     void Purchaseable();

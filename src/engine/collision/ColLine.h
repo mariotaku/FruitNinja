@@ -38,6 +38,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ColLine::ColLineLine -- auto stub from binary missing-symbol set
     void ColLineLine(ColLine*, ColLine*, Vec3*);

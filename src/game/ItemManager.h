@@ -114,6 +114,10 @@ public:
 public:
 
 public:
+
+public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ItemManager::EquipItem -- auto stub from binary missing-symbol set
     void EquipItem(unsigned int);

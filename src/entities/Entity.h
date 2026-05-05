@@ -194,6 +194,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: Entity::HeapClear -- auto stub from binary missing-symbol set
     void HeapClear();

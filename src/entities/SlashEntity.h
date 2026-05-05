@@ -47,6 +47,9 @@
 #include <cstdint>
 
 namespace Mortar { struct PSPParticleEmitter; }
+namespace Mortar { class Entity; }
+
+struct InputEvent;
 
 class Fruit;
 class HUDControl;
@@ -287,6 +290,50 @@ public:
     static int      GetColourCount();
     static int      GetColourType();
     static const Colour* GetPalette();
+
+    // ---- STUBS (binary) ----
+    // Binary-faithful overloads whose signatures differ from the port-internal
+    // equivalents above. All bodies are no-ops pending full RE+port.
+
+    // STUB: SlashEntity::AddPoint -- binary @ 0x17CE0C (TODO RE)
+    void AddPoint(Vec3 pos, Vec3 dir, float unused);
+
+    // STUB: SlashEntity::CollideWithEntity -- binary @ 0x17B570 (TODO RE)
+    bool CollideWithEntity(Mortar::Entity* entity);
+
+    // STUB: SlashEntity::CollisionResponse (4-arg vtable override) -- binary @ 0x17B3BC (TODO RE)
+    int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel);
+
+    // STUB: SlashEntity::DrawSlice -- binary @ 0x17E424 (TODO RE)
+    void DrawSlice();
+
+    // STUB: SlashEntity::Init (3-arg binary form) -- binary @ 0x17C65C (TODO RE)
+    void Init(void* param1, long param2, Vec3* param3);
+
+    // STUB: SlashEntity::InitPoints -- binary @ 0x17C340 (TODO RE)
+    void InitPoints(long count);
+
+    // STUB: SlashEntity::SetModColours (non-const Colour* binary form) -- binary @ 0x17CA0C (TODO RE)
+    static void SetModColours(Colour* colours, int colourCount, int colourType,
+                              float lifeScale, const char* particlePath,
+                              const char* textureName2, bool directional,
+                              const char* contactParticle, const char* particle2);
+
+    // STUB: SlashEntity::TouchDown -- binary @ 0x17D61C (TODO RE)
+    bool TouchDown(InputEvent* event);
+
+    // STUB: SlashEntity::TouchMoveX -- binary @ 0x17C50C (TODO RE)
+    bool TouchMoveX(InputEvent* event);
+
+    // STUB: SlashEntity::TouchMoveY -- binary @ 0x17C490 (TODO RE)
+    bool TouchMoveY(InputEvent* event);
+
+    // STUB: SlashEntity::UpdatePoints -- binary @ 0x17B92C (TODO RE)
+    void UpdatePoints(float dt);
+
+    // STUB: SlashEntity::UpdateTouchDown (InputEvent* form) -- binary @ 0x17D2E4 (TODO RE)
+    void UpdateTouchDown(InputEvent* event);
+    // ---- end STUBS ----
 };
 
 // Global singleton instance -- created in GameInit, destroyed in GameDestroy.

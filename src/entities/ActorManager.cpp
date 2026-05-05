@@ -511,4 +511,62 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
     return target != nullptr;
 }
 
+// --- Out-of-line formerly-inline methods (required for symbol emission) ----
+
+// 0x0016fb38.
+int ActorManager::GetHeapSize() const { return m_HeapSize; }
+
+// 0x0016fb3c.
+void ActorManager::SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0); }
+
+// --- Long-typed overloads (binary mangles long as 'l', int as 'i') ---------
+
+// STUB: Add(long, bool) -- binary @ 0x???? (TODO RE)
+Entity* ActorManager::Add(long entityType, bool unused) {
+    return Add((int)entityType, unused);
+}
+
+// STUB: DeactivateAllEntities(long) -- binary @ 0x???? (TODO RE)
+void ActorManager::DeactivateAllEntities(long typeIdx) {
+    DeactivateAllEntities((int)typeIdx);
+}
+
+// STUB: Draw() -- binary @ 0x???? (TODO RE)
+void ActorManager::Draw() {}
+
+// STUB: GetEntity(long, unsigned long) -- binary @ 0x???? (TODO RE)
+Entity* ActorManager::GetEntity(long typeIdx, unsigned long slot) const {
+    return GetEntity((int)typeIdx, (size_t)slot);
+}
+
+// STUB: GetEntityFirst(long, iterator&) -- binary @ 0x???? (TODO RE)
+Entity* ActorManager::GetEntityFirst(long typeIdx, std::list<Entity*>::iterator& it) {
+    return GetEntityFirst((int)typeIdx, it);
+}
+
+// STUB: GetEntityNext(long, iterator&) -- binary @ 0x???? (TODO RE)
+Entity* ActorManager::GetEntityNext(long typeIdx, std::list<Entity*>::iterator& it) {
+    return GetEntityNext((int)typeIdx, it);
+}
+
+// STUB: GetNumEntities(long) -- binary @ 0x???? (TODO RE)
+int ActorManager::GetNumEntities(long typeIdx) {
+    return GetNumEntities((int)typeIdx);
+}
+
+// STUB: GetNumEntities(long*) -- binary @ 0x???? (TODO RE)
+int ActorManager::GetNumEntities(long* typeIdxNullTerminated) {
+    return GetNumEntities((const long*)typeIdxNullTerminated);
+}
+
+// STUB: Initialise(long, long) -- binary @ 0x???? (TODO RE)
+void ActorManager::Initialise(long numTypes, long heapSize) {
+    Initialise((int)numTypes, (int)heapSize);
+}
+
+// STUB: Update(float, ColAABB*, ColAABB*) -- binary @ 0x???? (TODO RE)
+void ActorManager::Update(float dt, ::ColAABB* /*boundsA*/, ::ColAABB* /*boundsB*/) {
+    Update(dt);
+}
+
 }  // namespace Mortar

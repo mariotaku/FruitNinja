@@ -32,10 +32,11 @@
 #include <cstddef>
 
 class ColAABB;
-struct EntityChunk;   // opaque; only used by LoadEntity which is stubbed
 struct Renderer;
 
 namespace Mortar {
+
+struct EntityChunk;   // opaque; only used by LoadEntity which is stubbed
 
 class ActorManager {
 public:
@@ -251,7 +252,7 @@ public:
 
     // 0x0016fb38. Binary returns m_HeapSize from LinkedHeap; port returns
     // m_HeapSize directly (no heap pressure in port).
-    int  GetHeapSize() const { return m_HeapSize; }
+    int  GetHeapSize() const;
 
     // 0x00170370. Binary forwards to LinkedHeap::GetTotalFreeMemory; port
     // returns m_HeapSize (no allocation tracking).
@@ -267,7 +268,7 @@ public:
     void DisplayUsage(bool dumpAll);
 
     // 0x0016fb3c. Setter for m_DebugDraw.
-    void SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0); }
+    void SetCollisionVisible(unsigned char v);
 
     // --- Messaging ------------------------------------------------------
     // Defunct: Mortar messaging subsystem -- zero in-binary callers for all
@@ -289,6 +290,41 @@ public:
     // 0x0017013c. Delete each listener, then clear list.
     // Defunct: zero in-binary callers; binary @ 0x0017013c.
     void ClearAllListeners();
+
+    // ---- STUBS (binary) ----
+    // Long-typed overloads required for binary-faithful mangled symbol names.
+    // ARM32: long == int in size but mangles differently ('l' vs 'i').
+
+    // STUB: Add(long, bool) -- binary @ 0x???? (TODO RE)
+    Entity* Add(long entityType, bool unused = true);
+
+    // STUB: DeactivateAllEntities(long) -- binary @ 0x???? (TODO RE)
+    void DeactivateAllEntities(long typeIdx);
+
+    // STUB: Draw() -- binary @ 0x???? (TODO RE)
+    void Draw();
+
+    // STUB: GetEntity(long, unsigned long) -- binary @ 0x???? (TODO RE)
+    Entity* GetEntity(long typeIdx, unsigned long slot) const;
+
+    // STUB: GetEntityFirst(long, iterator&) -- binary @ 0x???? (TODO RE)
+    Entity* GetEntityFirst(long typeIdx, std::list<Entity*>::iterator& it);
+
+    // STUB: GetEntityNext(long, iterator&) -- binary @ 0x???? (TODO RE)
+    Entity* GetEntityNext(long typeIdx, std::list<Entity*>::iterator& it);
+
+    // STUB: GetNumEntities(long) -- binary @ 0x???? (TODO RE)
+    int GetNumEntities(long typeIdx);
+
+    // STUB: GetNumEntities(long*) -- binary @ 0x???? (TODO RE)
+    int GetNumEntities(long* typeIdxNullTerminated);
+
+    // STUB: Initialise(long, long) -- binary @ 0x???? (TODO RE)
+    void Initialise(long numTypes, long heapSize);
+
+    // STUB: Update(float, ColAABB*, ColAABB*) -- binary @ 0x???? (TODO RE)
+    void Update(float dt, ::ColAABB* boundsA, ::ColAABB* boundsB);
+    // ---- end STUBS ----
 
 #ifdef __bada__
     friend struct ActorManagerLayoutAssert;

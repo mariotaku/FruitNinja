@@ -85,6 +85,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ScoreControl::AddMultipliyer -- auto stub from binary missing-symbol set
     void AddMultipliyer(int);
