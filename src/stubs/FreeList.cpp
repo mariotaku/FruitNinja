@@ -1,14 +1,12 @@
 // TODO: FreeList -- auto-generated stub bodies. See FreeList.h.
 #include "FreeList.h"
 
-namespace Mortar {
-
 // TODO: FreeList::Allocate -- auto stub
 void FreeList::Allocate(char const*) {}
 // TODO: FreeList::Clear -- auto stub
 void FreeList::Clear() {}
 // TODO: FreeList::FreeList -- auto stub
-FreeList::FreeList(StackHeap*, unsigned int) {}
+FreeList::FreeList(Mortar::StackHeap*, unsigned long) {}
 // TODO: FreeList::GetNumFreeBlocks -- auto stub
 void FreeList::GetNumFreeBlocks() {}
 // TODO: FreeList::Release -- auto stub
@@ -22,4 +20,3 @@ void FreeList::VerifyFreeList2() {}
 // TODO: FreeList::~FreeList -- auto stub
 FreeList::~FreeList() {}
 
-}  // namespace Mortar

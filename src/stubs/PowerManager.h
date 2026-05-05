@@ -15,8 +15,6 @@
 #include "util/AsciiString.h"
 #include <cstdint>
 
-namespace Mortar {
-
 class PowerManager {
 public:
     // TODO: PowerManager::GetInstance -- auto stub
@@ -32,7 +30,5 @@ public:
     // TODO: PowerManager::~PowerManager -- auto stub
     ~PowerManager();
 };
-
-}  // namespace Mortar
 
 #endif  // FN_STUBS_POWERMANAGER_H

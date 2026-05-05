@@ -1,8 +1,6 @@
 // TODO: PowerManager -- auto-generated stub bodies. See PowerManager.h.
 #include "PowerManager.h"
 
-namespace Mortar {
-
 // TODO: PowerManager::GetInstance -- auto stub
 void PowerManager::GetInstance() {}
 // TODO: PowerManager::GetState -- auto stub
@@ -16,4 +14,3 @@ void PowerManager::Update() {}
 // TODO: PowerManager::~PowerManager -- auto stub
 PowerManager::~PowerManager() {}
 
-}  // namespace Mortar
