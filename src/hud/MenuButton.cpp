@@ -751,7 +751,10 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
 
     // First-pass at layer 0x40 (Phase A): scratch fruit/bomb backdrop quad,
     // then demote to 0x80 and return. Binary @ 0x0014fa24..0x0014faf8.
-    // Spec: docs/engine/menubutton-backdrop.md.
+    // Binary calls DrawQuadSized(halfW=182, halfH=182, tint) producing a
+    // 364x364 px quad centered on pos at z=-5500 (DAT_0014fcf8). Port's
+    // Renderer::DrawQuad takes a unit quad (-0.5..+0.5), so we bake the
+    // FULL size (2*halfW = 364) into the scale matrix to match.
     if (m_LayerFlags == 0x40) {
         m_LayerFlags = 0x80;
         if (s_TexScratchs.IsValid()) {
@@ -761,28 +764,16 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
                 // Mirror flip via X scale (m_bFlipped chosen randomly in Init).
                 const float sx = m_bFlipped ? -1.0f : 1.0f;
 
-                mm.GetWorldStack().Reset();
-                Matrix44 mat = Matrix44::MakeScale(sx, 1.0f, 1.0f);
                 // Z = -5500 puts the backdrop deep in the ortho frustum so it
-                // sorts behind the spinning fruit/bomb mesh. Constants:
-                //   DAT_0014fcf8 = -5500.0
-                Vec3 t(pos.x, pos.y, -5500.0f);
-                mat.GlobalTranslate44(t);
+                // sorts behind the spinning fruit/bomb mesh.
+                Matrix44 mat = Matrix44::MakeScale(sx * 364.0f, 364.0f, 1.0f);
+                mat.GlobalTranslate44(Vec3(pos.x, pos.y, -5500.0f));
+                mm.GetWorldStack().Reset();
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
                 Colour tint(255, 255, 255, alpha);
                 glBindTexture(GL_TEXTURE_2D, s_TexScratchs->m_TexId);
-                // Fixed 364x364 quad (halfW = halfH = 182, full UV).
-                // Renderer::DrawQuad scales via the matrix above; we pass
-                // (uMin, vMin, uMax, vMax) = (0,0,1,1) and rely on the
-                // matrix to size. Since DrawQuad uses unit-quad geometry,
-                // bake the half-size into the scale matrix.
-                mat = Matrix44::MakeScale(sx * 182.0f, 182.0f, 1.0f);
-                mat.GlobalTranslate44(t);
-                mm.GetWorldStack().Reset();
-                mm.GetWorldStack().SetCurrentMatrix(mat);
-                mm.UploadModelViewOnly();
                 r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
                 glBindTexture(GL_TEXTURE_2D, 0);
             }
