@@ -53,7 +53,7 @@ public:
     float    m_TargetZ;          // +0x64  homing target Z
     Mortar::PSPParticleEmitter* m_pFlyEmitter;      // +0x68
     Mortar::PSPParticleEmitter* m_pCollectEmitter;  // +0x6C
-    Mortar::Delegate1<void, Coin*>  m_OnArrived;        // +0x70  24 bytes (Mortar::Delegate1<void,Coin*>)
+    Mortar::Delegate1<void, Coin*>  m_OnArrived;        // +0x70  36 bytes (Mortar::Delegate1<void,Coin*>)
 
     // --- Constructor / destructor ----------------------------------------
 

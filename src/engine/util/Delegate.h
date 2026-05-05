@@ -3,9 +3,8 @@
 
 //
 // Mortar::Delegate<R(Args...)> — type-erased callable, layout-compatible
-// with the binary's `Mortar::DelegateN<Ret, ...>` family. Drop-in
-// replacement for std::function with a fixed 36-byte size matching the
-// binary regardless of arity.
+// with the binary's `Mortar::DelegateN<Ret, ...>` family. Fixed 36-byte
+// size matching the binary regardless of arity.
 //
 // Binary spec: docs/engine/delegate-system.md
 //
