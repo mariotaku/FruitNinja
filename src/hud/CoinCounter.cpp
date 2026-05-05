@@ -12,6 +12,12 @@ CoinCounter::CoinCounter()
 // dtor @ 0x0013558c / 0x001355b8 / 0x001355dc
 CoinCounter::~CoinCounter() {}
 
+// Init @ vtable[2]: no-op stub pending RE
+void CoinCounter::Init() {}
+
+// Update @ 0x00135580: no-op
+void CoinCounter::Update(float dt) { (void)dt; }
+
 // Reset @ 0x00135548
 // Binary: clamps field_0x8C (float at this+0x8C) to [0,1.0]; sets field_0x90 (float at this+0x90) = 1.0f.
 // Offsets relative to CoinCounter base (0x7C from HUDControl3d start):
@@ -24,3 +30,15 @@ void CoinCounter::Reset() {
     if (*f8c > 1.0f) *f8c = 1.0f;
     *f90 = 1.0f;
 }
+
+// STUB: CoinCounter::Release -- binary @ 0x???? (TODO RE)
+void CoinCounter::Release() {}
+
+// STUB: CoinCounter::PreDraw -- binary @ 0x???? (TODO RE)
+void CoinCounter::PreDraw(const Vec3& hudScale) { (void)hudScale; }
+
+// STUB: CoinCounter::Draw(float*) -- binary @ 0x???? (TODO RE)
+void CoinCounter::Draw(float* viewVec) { (void)viewVec; }
+
+// STUB: CoinCounter::Skip -- binary @ 0x???? (TODO RE)
+void CoinCounter::Skip() {}

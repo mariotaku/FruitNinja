@@ -16,10 +16,30 @@ ComboControl::ComboControl(int comboCount)
 // dtor @ 0x00136c0c / 0x00136c4c / 0x00136c88
 ComboControl::~ComboControl() {}
 
+void ComboControl::Reset() {
+    // STUB: ComboControl::Reset -- binary @ 0x00136bdc (no-op in binary)
+}
+
 // Update @ 0x00136be4: lifetime -= dt; if lifetime < 0 set m_bPendingRemoval=1
 void ComboControl::Update(float dt) {
     m_Lifetime -= dt;
     if (m_Lifetime < 0.0f) {
         m_bPendingRemoval = 1;
     }
+}
+
+void ComboControl::Init() {
+    // STUB: ComboControl::Init -- binary @ 0x???? (TODO RE)
+}
+
+void ComboControl::PreDraw() {
+    // STUB: ComboControl::PreDraw -- binary @ 0x???? (TODO RE)
+}
+
+void ComboControl::Release() {
+    // STUB: ComboControl::Release -- binary @ 0x???? (TODO RE)
+}
+
+void ComboControl::Skip() {
+    // STUB: ComboControl::Skip -- binary @ 0x???? (TODO RE)
 }

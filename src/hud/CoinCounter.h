@@ -38,22 +38,23 @@ public:
     CoinCounter();
     ~CoinCounter() override;
 
-    void Init() override {}     // vtable[2]: coin texture load (called from GameInit via vtable[2])
+    void Init() override;       // vtable[2]: coin texture load (called from GameInit via vtable[2])
     void Reset() override;      // 0x00135548: clamps field_0x8C to [0,1], sets field_0x90=1.0f
-    void Update(float dt) override { (void)dt; }  // 0x00135580: no-op
+    void Update(float dt) override;  // 0x00135580: no-op
     void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
 
     int GetType() override { return 3; }  // binary @ 0x00135AF4
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
+    // ---- STUBS (binary) ----
+    // STUB: CoinCounter::Release -- binary @ 0x???? (TODO RE)
+    void Release() override;
+    // STUB: CoinCounter::PreDraw -- binary @ 0x???? (TODO RE)
+    void PreDraw(const Vec3& hudScale) override;
+    // STUB: CoinCounter::Draw(float*) -- binary @ 0x???? (TODO RE)
+    void Draw(float* viewVec) override;
+    // STUB: CoinCounter::Skip -- binary @ 0x???? (TODO RE)
+    void Skip() override;
+    // ---- end STUBS ----
 };
 
 #endif // FN_HUD_COIN_COUNTER_H

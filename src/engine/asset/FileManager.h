@@ -31,17 +31,17 @@ public:
     Mortar::IFileSystem* FindSystem(unsigned int id);
 
     // Binary @ 0x0019ae68 — id-filtered walk; first non-null sys->OpenFile wins
-    Mortar::IFile* OpenFile(const char* name, unsigned long flags, unsigned int idFilter);
+    Mortar::IFile* OpenFile(const char* name, unsigned long flags, unsigned long idFilter);
 
     // Binary @ 0x0019af60
-    bool FileExists(const char* name, unsigned int idFilter);
+    bool FileExists(const char* name, unsigned long idFilter);
 
     // Binary @ 0x0019af18
-    unsigned int FileSize(const char* name, unsigned int idFilter);
+    unsigned int FileSize(const char* name, unsigned long idFilter);
 
     // Binary @ 0x0019aeb4
     bool GetFileData(const char* name, void** outBuf, unsigned long* outSize,
-                     unsigned int idFilter, bool& outOwned);
+                     unsigned long idFilter, bool& outOwned);
 
     // Binary @ 0x0019ae64 — Bada-specific save-root path resolution.
     // Defunct: GetSaveRootDirectory — no-op stub; binary's body is also `return 0`.
@@ -50,7 +50,7 @@ public:
     int GetSaveRootDirectory(char* outBuf, const char* relPath, bool createDir);
 
 private:
-    FileManager() {}
+    FileManager();
     ~FileManager();
 
     // Binary @ Mortar::FileManager::m_FileSystems — descending priority order on insert.
