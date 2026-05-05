@@ -58,6 +58,33 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, LocalizedString loc)
 CheckBox::~CheckBox() {
 }
 
+// Binary @ 0x00134AE4 (no-op)
+void CheckBox::Init() {
+    // STUB: CheckBox::Init -- binary @ 0x???? (TODO RE)
+}
+
+// Binary @ 0x00134AE8 (no-op)
+void CheckBox::Release() {
+    // STUB: CheckBox::Release -- binary @ 0x???? (TODO RE)
+}
+
+// Binary @ 0x00134B20
+void CheckBox::PreDraw(const Vec3& hudScale) {
+    // STUB: CheckBox::PreDraw -- binary @ 0x???? (TODO RE)
+    (void)hudScale;
+}
+
+// Binary @ 0x00134B24 — empty in binary
+void CheckBox::UpdateFromGameWork() {
+    // STUB: CheckBox::UpdateFromGameWork -- binary @ 0x???? (TODO RE)
+}
+
+// Binary Draw(float*) overload — port deviation: port uses Draw(const Vec3&, int).
+void CheckBox::Draw(float* hudScale) {
+    // STUB: CheckBox::Draw -- binary @ 0x???? (TODO RE)
+    (void)hudScale;
+}
+
 // Binary @ 0x00134AEC
 // Copies x/y/phase from the tracked touch slot.
 // TODO: 0x00134AEC — binary reads touch slot data at g_GameData+0xA0 + (m_TouchSlot * 12);

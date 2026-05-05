@@ -532,13 +532,26 @@ int PowerUpManager::GetNumActiveTimedPowers() {
     return n;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: PowerUpManager::GetFirstPurchasable -- auto stub
+// @ 0x00118134
+PowerUpManager* PowerUpManager::GetInstance() {
+    static PowerUpManager s_instance;
+    return &s_instance;
+}
+
+// @ 0x00117a70
+void PowerUpManager::StopClock(float duration) {
+    m_StopClockAccum += duration;
+}
+
+// ---- STUBS (binary) ----
+// STUB: PowerUpManager::GetFirstPurchasable -- binary @ 0x???? (TODO RE)
 void PowerUpManager::GetFirstPurchasable(std::_List_iterator<PowerUp*>&) {}
-// STUB: PowerUpManager::GetNextPurchasable -- auto stub
+// STUB: PowerUpManager::GetNextPurchasable -- binary @ 0x???? (TODO RE)
 void PowerUpManager::GetNextPurchasable(std::_List_iterator<PowerUp*>&) {}
-// STUB: PowerUpManager::SetAppropriateScoreCallback -- auto stub
+// STUB: PowerUpManager::SetAppropriateScoreCallback -- binary @ 0x???? (TODO RE)
 void PowerUpManager::SetAppropriateScoreCallback() {}
-// STUB: PowerUpManager::UnloadTextures -- auto stub
+// STUB: PowerUpManager::UnloadTextures -- binary @ 0x???? (TODO RE)
 void PowerUpManager::UnloadTextures() {}
-// ---- end AUTO-STUB MERGE ----
+// STUB: PowerUpManager::ActivatePower -- binary @ 0x001197c4 (TODO RE) -- binary by-value Vec3 overload
+PowerUp* PowerUpManager::ActivatePower(unsigned long hash, Vec3 position, float* purchaseExtra) { return 0; }
+// ---- end STUBS ----

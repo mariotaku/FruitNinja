@@ -40,6 +40,7 @@ public:
     float m_CritChanceMod;
 
     WaveModifier();
+    ~WaveModifier();
 
     // @ 0x001280e4
     int UpdateSpecific(float dt) override;
@@ -50,6 +51,15 @@ public:
     void ParseSpecific(TiXmlElement* xml) override;
 
     GameModifier* Clone() override;
+
+    // ---- STUBS (binary) ----
+    // STUB: WaveModifier::ApplyModifier -- binary @ 0x???? (TODO RE)
+    void ApplyModifier(bool isPurchased, float* extra) override;
+    // STUB: WaveModifier::RemoveModifier -- binary @ 0x???? (TODO RE)
+    void RemoveModifier() override;
+    // STUB: WaveModifier::ResetSpecific -- binary @ 0x???? (TODO RE)
+    void ResetSpecific() override;
+    // ---- end STUBS ----
 };
 
 #endif // FN_GAME_WAVE_MODIFIER_H

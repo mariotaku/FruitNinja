@@ -340,11 +340,33 @@ void PowerUp::Release() {
     m_ModList.clear();
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: PowerUp::Purchaseable -- auto stub
+// AddModifier (binary @ 0x001193d0 callee — de-inlined)
+void PowerUp::AddModifier(GameModifier* mod) {
+    m_ModList.push_back(mod);
+}
+
+// SetTotalTime (binary @ 0x001180d4 — de-inlined)
+void PowerUp::SetTotalTime(float t) {
+    m_TotalTime = t;
+}
+
+// ---- STUBS (binary) ----
+
+// STUB: PowerUp::PowerUp(PowerUp*) -- binary @ 0x???? (TODO RE)
+PowerUp::PowerUp(PowerUp* src) : PowerUp() {
+    if (src) *this = *src;
+}
+
+// STUB: PowerUp::Activate(bool,bool,Vec3,float*) -- binary @ 0x???? (TODO RE)
+void PowerUp::Activate(bool /*isPurchase*/, bool /*flag2*/, Vec3 /*pos*/, float* /*extra*/) {}
+
+// STUB: PowerUp::Purchaseable -- binary @ 0x???? (TODO RE)
 void PowerUp::Purchaseable() {}
-// STUB: PowerUp::SetDeferedPoints -- auto stub
+
+// STUB: PowerUp::SetDeferedPoints -- binary @ 0x???? (TODO RE)
 void PowerUp::SetDeferedPoints(int) {}
-// STUB: PowerUp::UnloadTextures -- auto stub
+
+// STUB: PowerUp::UnloadTextures -- binary @ 0x???? (TODO RE)
 void PowerUp::UnloadTextures() {}
-// ---- end AUTO-STUB MERGE ----
+
+// ---- end STUBS ----

@@ -97,14 +97,14 @@ public:
     // vtable +0x18 (slot 6): Move(_Vector3) -- updates item world position
     // Binary: sets pos.x/y/z from incoming Vec3 argument.
     // ShopListItem overrides this at 0x0015d1fc.
-    virtual void Move(float x, float y, float z) { pos.x = x; pos.y = y; pos.z = z; }
+    virtual void Move(float x, float y, float z);
 
     // vtable +0x1C (slot 7): Remove
     virtual void Remove() {}
 
     // vtable +0x20 (slot 8): SetParent(ScrollingMenu*)
     // Binary 0x0015aeb4: *(this+0x10) = param
-    virtual void SetParent(ScrollingMenu* parent) { m_pParent = parent; }
+    virtual void SetParent(ScrollingMenu* parent);
 
     // vtable +0x24 (slot 9): SetOnscreen(bool)
     // Binary 0x0013ce10: this[0x2D] = param  (byte at +0x2D, pre-Mortar::Delegate1 gap)
@@ -112,12 +112,12 @@ public:
 
     // vtable +0x28 (slot 10): SetText(char*)
     // Binary: 0x0015b124 stores the pointer at +0x54.
-    virtual void SetText(const char* text) { m_pText = text; }
+    virtual void SetText(const char* text);
 
     // vtable +0x2C (slot 11): Draw() -- renders this item
     // ScrollingMenu::Draw dispatches here via vtable[+0x2C].
     // ShopListItem overrides at 0x0015eb00.
-    virtual void Draw() {}
+    virtual void Draw();
 
     // vtable +0x30 (slot 12): cancel-tap signal
     // Called when drag exceeds 5 units; clears pending tap highlight on the item.
@@ -135,6 +135,12 @@ public:
     // Called when the tracked finger leaves the inner scroll region.
     // Binary: 0x00147978 (base no-op)
     virtual void Slot14() {}
+
+    // ---- STUBS (binary) ----
+    // 4-param ctor: float, float, char const*, Mortar::Delegate1<void,ScrollingMenuItem*>
+    // STUB: ScrollingMenuItem::ScrollingMenuItem -- binary @ 0x???? (TODO RE)
+    ScrollingMenuItem(float, float, const char*, Mortar::Delegate1<void, ScrollingMenuItem*>);
+    // ---- end STUBS ----
 
     // CallClickedMenuItemCallback -- fires m_Callback
     void CallClickedMenuItemCallback();

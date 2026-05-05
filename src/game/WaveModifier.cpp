@@ -166,6 +166,19 @@ WaveModifier::WaveModifier()
     , m_CritChanceMod(0.0f)
 {}
 
+WaveModifier::~WaveModifier() {}
+
+// STUB: WaveModifier::ApplyModifier -- binary @ 0x???? (TODO RE)
+void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
+    GameModifier::ApplyModifier(isPurchased, extra);
+}
+
+// STUB: WaveModifier::RemoveModifier -- binary @ 0x???? (TODO RE)
+void WaveModifier::RemoveModifier() {}
+
+// STUB: WaveModifier::ResetSpecific -- binary @ 0x???? (TODO RE)
+void WaveModifier::ResetSpecific() {}
+
 // @ 0x001280e4
 int WaveModifier::UpdateSpecific(float /*dt*/) {
     WaveManager*    w = WaveManager::GetInstance();

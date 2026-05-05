@@ -38,20 +38,25 @@ public:
     virtual ~CheckBox();
 
     // Vtable overrides — match HUDControl vtable slot order.
-    virtual void   Init()    override {}                            // Binary @ 0x00134AE4 (no-op)
-    virtual void   Release() override {}                            // Binary @ 0x00134AE8 (no-op)
-    virtual void   PreDraw(const Vec3& hudScale) override { (void)hudScale; }  // Binary @ 0x00134B20
+    virtual void   Init()    override;                              // Binary @ 0x00134AE4 (no-op)
+    virtual void   Release() override;                              // Binary @ 0x00134AE8 (no-op)
+    virtual void   PreDraw(const Vec3& hudScale) override;          // Binary @ 0x00134B20
     virtual void   Update(float dt) override;                       // Binary @ 0x00134B28
     virtual void   Draw(const Vec3& hudScale, int layerMask) override;  // Binary @ 0x00134E70
     virtual int    GetType() override { return 5; }                  // Binary @ 0x001354D8
 
     // Non-virtual helpers
     void UpdateTouchPosition();   // Binary @ 0x00134AEC
-    void UpdateFromGameWork() {}  // Binary @ 0x00134B24 — empty stub in binary too
+    void UpdateFromGameWork();    // Binary @ 0x00134B24 — empty in binary too
 
     // Statics
     static void LoadContent();    // Binary @ 0x00135010
     static void UnloadContent();  // Binary @ 0x0013508C
+
+    // ---- STUBS (binary) ----
+    // Binary Draw(float*) overload — port uses Draw(const Vec3&, int) instead (port deviation).
+    virtual void   Draw(float* hudScale);  // Binary @ 0x???? (TODO RE)
+    // ---- end STUBS ----
 
 private:
     uint8_t     m_bChecked;   // +0x7C (default 1 = CHECKED)

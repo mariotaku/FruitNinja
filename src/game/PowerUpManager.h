@@ -57,10 +57,7 @@ typedef tinyxml2::XMLElement TiXmlElement;
 
 class PowerUpManager {
 public:
-    static PowerUpManager* GetInstance() {
-        static PowerUpManager s_instance;
-        return &s_instance;
-    }
+    static PowerUpManager* GetInstance();
 
     // @ 0x001189b4
     void Update(float dt);
@@ -111,7 +108,7 @@ public:
     void SlowClock(float scale) { m_SlowClockMult *= scale; }
 
     // @ 0x00117a70 — m_StopClockAccum += duration
-    void StopClock(float duration) { m_StopClockAccum += duration; }
+    void StopClock(float duration);
 
     // @ 0x001286ec — m_WaveDtModCur *= scale
     void PowerupDtModMultiply(float scale) { m_WaveDtModCur *= scale; }
@@ -205,28 +202,18 @@ private:
     void Release();
 
 public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: PowerUpManager::GetFirstPurchasable -- auto stub from binary missing-symbol set
+    // ---- STUBS (binary) ----
+    // STUB: PowerUpManager::GetFirstPurchasable -- binary @ 0x???? (TODO RE)
     void GetFirstPurchasable(std::_List_iterator<PowerUp*>&);
-    // STUB: PowerUpManager::GetNextPurchasable -- auto stub from binary missing-symbol set
+    // STUB: PowerUpManager::GetNextPurchasable -- binary @ 0x???? (TODO RE)
     void GetNextPurchasable(std::_List_iterator<PowerUp*>&);
-    // STUB: PowerUpManager::SetAppropriateScoreCallback -- auto stub from binary missing-symbol set
+    // STUB: PowerUpManager::SetAppropriateScoreCallback -- binary @ 0x???? (TODO RE)
     void SetAppropriateScoreCallback();
-    // STUB: PowerUpManager::UnloadTextures -- auto stub from binary missing-symbol set
+    // STUB: PowerUpManager::UnloadTextures -- binary @ 0x???? (TODO RE)
     void UnloadTextures();
-    // ---- end AUTO-STUB MERGE ----
+    // STUB: PowerUpManager::ActivatePower -- binary @ 0x001197c4 (TODO RE) — binary by-value Vec3 overload
+    PowerUp* ActivatePower(unsigned long hash, Vec3 position, float* purchaseExtra);
+    // ---- end STUBS ----
 };
 
 // Offsets reflect binary's 8B std::list (R4 W1 RE). Cross-toolchain runs unpatched.
