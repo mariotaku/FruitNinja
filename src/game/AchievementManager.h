@@ -100,7 +100,7 @@ public:
     int  UnlockEndScoreAchievement(int score, int hiScore);
     int  UnlockScoreAchievement(int score);
     int  UnlockScoreUnsulliedAchievement(int score);
-    int  UnlockSpecificFruitAchievement(uint32_t fruitTypeHash, uint32_t count);
+    int  UnlockSpecificFruitAchievement(int32_t fruitTypeHash, uint32_t count);
     int  UnlockSpecificOrderAchievement(uint32_t newFruitHash);
     int  UnlockTotalFruitAchievement(int total);
 

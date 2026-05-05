@@ -803,17 +803,16 @@ void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
 //   if (type == 0 && pBomb != nullptr && playerIdx > 0)
 //       Bomb::MakeFat(pBomb, false);
 // TODO: call Bomb::MakeFat(b, false) when type==0 && powerupBombMult>0 (binary @ 0x00121fa8 tail)
-void Bomb::MakeFat(Bomb* b, bool skipSpawnFx) {
-    if (!b) return;
-    b->m_SpeedMult = 0.66597f;                    // DAT_00171eec
-    b->scale      *= 1.33002f;                    // DAT_00171ef0
-    b->m_OrigScale = b->scale;                    // binary writes field_0x98/9c/a0 (m_OrigScale)
-    if (b->m_Col) static_cast<ColSphere*>(b->m_Col)->radius *= 1.33002f;   // DAT_00171ef0
+void Bomb::MakeFat(bool skipSpawnFx) {
+    m_SpeedMult = 0.66597f;                    // DAT_00171eec
+    scale      *= 1.33002f;                    // DAT_00171ef0
+    m_OrigScale = scale;                       // binary writes field_0x98/9c/a0 (m_OrigScale)
+    if (m_Col) static_cast<ColSphere*>(m_Col)->radius *= 1.33002f;   // DAT_00171ef0
     if (!skipSpawnFx) {
         // Spawn particle emitter at +/-240.0 X anchor based on pos.x sign.
         // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.
         // SFX: name string at DAT_00171f0c, MakeSFXDelegate_Coin callback.
         // TODO: Mortar::PSPParticleManager::AddEmitter and SFXPlay wiring when those callbacks land.
-        b->Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
+        Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
     }
 }

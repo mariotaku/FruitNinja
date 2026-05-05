@@ -58,7 +58,7 @@ public:
     // Binary @ 0x00160268 (master ctor)
     // Signature: (Vec3 pos, Vec3 size, const char* label,
     //             long min_val, long max_val, ushort font_size, long initial_value)
-    SliderControl(const Vec3& inPos, const Vec3& inSize,
+    SliderControl(Vec3 inPos, Vec3 inSize,
                   const char* label,
                   int32_t minValue, int32_t maxValue,
                   uint16_t fontSize, int32_t initialValue);

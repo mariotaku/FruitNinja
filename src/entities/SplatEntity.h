@@ -94,7 +94,7 @@ public:
     virtual ~SplatEntity();
 
     // Matches SplatEntity::MakeSplat (0x0017f2f0).
-    void MakeSplat(const Vec3& pos, const Vec3& vel, bool param3, int fruitType);
+    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, int fruitType);
 
     // Binary: PlaySplat @ 0x0017f5ec -- plays one of 6 splat impact SFX.
     static void PlaySplat(int splatSize);

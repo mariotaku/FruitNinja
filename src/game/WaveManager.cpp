@@ -611,7 +611,7 @@ void WaveManager::Resume() {
             Fruit* f = static_cast<Fruit*>(e);
             f->m_Gravity = Vec3(es.grav[0], es.grav[1], es.grav[2]);
             if (es.wait > 0.0f) {
-                f->Chuck(f->vel, es.wait);
+                f->Chuck(es.wait);
             }
         }
         // type 4 (PowerUp): TODO if power-ups are ported.
@@ -1460,7 +1460,7 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         }
         if (info) f->m_TimeScale = info->m_TimeScale;  // spawner+0x14
 
-        f->Chuck(f->vel, chuckDelay);
+        f->Chuck(chuckDelay);
     }
 }
 

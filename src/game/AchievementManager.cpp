@@ -436,7 +436,7 @@ int AchievementManager::UnlockBonusAchievement(uint32_t hash) {
 // UnlockSpecificFruitAchievement  (Binary @ 0x00108a88)
 // ---------------------------------------------------------------------------
 
-int AchievementManager::UnlockSpecificFruitAchievement(uint32_t fruitTypeHash, uint32_t count) {
+int AchievementManager::UnlockSpecificFruitAchievement(int32_t fruitTypeHash, uint32_t count) {
     // Binary: looks up m_ByType[SPECIFIC] by fruitTypeHash;
     // threshold (as uint32_t) <= count
     auto& bucket = m_ByType[ACHIEVEMENT_TYPE_SPECIFIC];

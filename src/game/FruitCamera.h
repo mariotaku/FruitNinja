@@ -12,6 +12,7 @@
 #include "render/MortarCamera.h"
 #include "math/Vec2.h"
 #include "math/Vec3.h"
+#include "entities/Entity.h"
 #include <cstdint>
 
 struct InputEvent;
@@ -30,7 +31,7 @@ enum PERSPECIVE_TYPE {
 class FruitCamera : public Mortar::MortarCamera {
 public:
     // +0x12C: entity pointer for follow mode (nullptr = none)
-    void* m_pFollowEntity;         // Mortar::Entity* in original
+    Mortar::Entity* m_pFollowEntity;
 
     // +0x130: 0 = idle, 1 = follow
     int m_CameraMode;
@@ -81,16 +82,16 @@ public:
     void SetupPerspective(PERSPECIVE_TYPE perspType = PT_STANDARD, bool forceUpdate = false);
 
     // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
-    void CreateCameraShake(const Vec3& impact, float intensity, float dirScale);
+    void CreateCameraShake(Vec3 impact, float intensity, float dirScale);
 
     // 0x00180ea0
     void UpdateShake(float dt);
 
     // Binary @ 0x00180b2c — bind follow entity, reset tilt to (0,0), up=(0,1,0)
-    void FollowEntity(void* entity);
+    void FollowEntity(Mortar::Entity* entity);
 
     // Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
-    void* GetFollowEntity();
+    Mortar::Entity* GetFollowEntity();
 
     // --- Debug input handlers (binary @ addresses below) ---
     // All dead in retail binary (no caller registers them). Defunct: debug input.

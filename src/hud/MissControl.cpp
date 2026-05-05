@@ -260,11 +260,11 @@ static void PopulateOverlay(MissControl* mc, const Vec3& pos,
     if (mc->pos.y - mc->size.y <  CLAMP_Y_LO) mc->pos.y =  CLAMP_Y_LO + mc->size.y;
 }
 
-void MissControl::MakeCritical(const Vec3& pos, int /*playerIdx*/) {
+void MissControl::MakeCritical(Vec3 pos, int /*playerIdx*/) {
     PopulateOverlay(this, pos, s_TexCritical, /*alphaScale*/ 1.0f);
 }
 
-void MissControl::MakeRare(const Vec3& pos) {
+void MissControl::MakeRare(Vec3 pos) {
     PopulateOverlay(this, pos, s_TexRare, /*alphaScale*/ 0.5f);
 }
 
@@ -273,7 +273,7 @@ void MissControl::MakeRare(const Vec3& pos) {
 // Sets m_bComboActive=1, m_ComboCount=combo, m_FadeAlpha=1.811, anim=3, visible=1.
 // TODO: 0x001515a4 — gameMode==2 override: m_ComboCount = (int)(WaveManager::GetSpeed(0)+0.65f)
 //   requires GameTaskState gameMode to be plumbed.
-void MissControl::MakeCombo(const Vec3& pos, int comboCount, int /*entityType*/) {
+void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
     Init();
     int idx = comboCount - 2;
     if (idx < 0)  idx = 0;

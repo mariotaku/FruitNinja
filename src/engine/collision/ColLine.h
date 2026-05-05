@@ -11,7 +11,7 @@ public:
     Vec3   b; // +0x14 (end point)
 
     ColLine();
-    ColLine(const Vec3& start, const Vec3& end);
+    ColLine(Vec3 start, Vec3 end);
 
     virtual ~ColLine() override {}
 

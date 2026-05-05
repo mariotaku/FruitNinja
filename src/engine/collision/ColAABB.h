@@ -17,7 +17,7 @@ public:
     // Vec3 m_Corners[8]; // +0x20
 
     ColAABB();
-    ColAABB(const Vec3& min, const Vec3& max);
+    ColAABB(Vec3 min, Vec3 max);
 
     virtual ~ColAABB() override {}
 

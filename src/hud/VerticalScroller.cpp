@@ -25,7 +25,7 @@ static GLuint s_arrow   = 0;
 // Binary @ 0x00168230 (C2) / 0x00168304 (C1)
 // Args (after this): pos, size, minValue, maxValue, stepSize, currentValue,
 //                   reverseDir, totalRows, visibleHeight, totalHeight
-VerticalScroller::VerticalScroller(const Vec3& inPos, const Vec3& inSize,
+VerticalScroller::VerticalScroller(Vec3 inPos, Vec3 inSize,
                                    int32_t minValue, int32_t maxValue,
                                    uint16_t stepSize, int32_t currentValue,
                                    bool reverseDir, uint8_t totalRows,

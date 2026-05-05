@@ -69,7 +69,7 @@ void FruitCamera::IdleCamera() {
 }
 
 // Binary @ 0x00180b2c — bind follow entity, reset tilt to (0,0), up=(0,1,0)
-void FruitCamera::FollowEntity(void* entity) {
+void FruitCamera::FollowEntity(Mortar::Entity* entity) {
     if (entity) {
         m_pFollowEntity = entity;
         m_CameraMode = 1;
@@ -80,8 +80,8 @@ void FruitCamera::FollowEntity(void* entity) {
 }
 
 // Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
-void* FruitCamera::GetFollowEntity() {
-    return (m_CameraMode == 1) ? m_pFollowEntity : 0;
+Mortar::Entity* FruitCamera::GetFollowEntity() {
+    return (m_CameraMode == 1) ? m_pFollowEntity : nullptr;
 }
 
 // Non-virtual (0x001810ac) — 4-type ortho dispatch
@@ -133,7 +133,7 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
 // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
 // DIFFERS: original = Math::Atan2Idx fixed-point trig; port uses sinf/cosf
 //          because Math::SinIdx now wraps sinf anyway (semantically identical).
-void FruitCamera::CreateCameraShake(const Vec3& impact, float intensity, float dirScale) {
+void FruitCamera::CreateCameraShake(Vec3 impact, float intensity, float dirScale) {
     m_ShakeAngle = (uint16_t)(int)(atan2f(impact.y, impact.x) * 65536.0f / 6.2831853f);
 
     float angle_rad = (float)m_ShakeAngle * 6.2831853f / 65536.0f;

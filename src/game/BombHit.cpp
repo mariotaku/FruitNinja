@@ -289,7 +289,8 @@ void ResetGameEntities(bool killAll) {
         } else if (e->entityType == 0) {
             // Fruit: chuck reset, optional force-slice, off-screen.
             Fruit* fruit = static_cast<Fruit*>(e);
-            fruit->Chuck(Vec3(0, 0, 0), 0.0f);
+            fruit->vel = Vec3(0, 0, 0);
+            fruit->Chuck(0.0f);
 
             const bool forceSliced = zenMode || killAll;
             if (forceSliced) {
