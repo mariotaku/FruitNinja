@@ -350,7 +350,7 @@ void Model::UpdateBoneLinks() {
 }
 
 // Binary @ 0x0019346c
-void Model::AddNode(const Mortar::SmartPtr<Mesh>& mesh) {
+void Model::AddNode(SmartPtr<Mesh> mesh) {
     m_Meshes.push_back(mesh);
     if (mesh.IsValid()) mesh->BindSkeleton(&m_Skeleton);
 }
@@ -441,6 +441,146 @@ void Model::Draw(const Matrix44& transform) {
     for (int i = 0; i < meshCount; i++) {
         sorted[i].mesh->Draw(transform);
     }
+}
+
+// ---- Mesh binary stubs ----
+
+// STUB: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x001b10d8
+// Defunct: SharedEffectProperties not ported; default-constructs instead.
+Mesh::Mesh(SmartPtr<SharedEffectProperties> const& /*props*/, AsciiString const& name)
+    : m_Skeleton(nullptr) {
+    // Defunct: SharedEffectProperties -- no-op stub; binary @ 0x001b10d8
+    m_Name = name.c_str();
+}
+
+// STUB: BindSkeleton(Skeleton const&) -- binary @ 0x001b0948
+// Binary signature takes const-ref; this overload matches the binary mangled symbol.
+void Mesh::BindSkeleton(Skeleton const& /*skeleton*/) {
+    // Defunct: const-ref BindSkeleton overload -- no-op stub; binary @ 0x001b0948
+}
+
+// STUB: GetBounds() const -- binary @ 0x????
+// Binary vtable[5] zero-arg signature; returns Bounds3D.
+Bounds3D Mesh::GetBounds() const {
+    // Defunct: zero-arg GetBounds -- no-op stub; binary @ 0x????
+    return Bounds3D();
+}
+
+// STUB: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c
+// Defunct: port appends GeometryEntry directly in LoadMesh.
+void Mesh::AddGeometry(SmartPtr<Geometry> const& /*geom*/) {
+    // Defunct: Geometry/GeometryBinding stack -- no-op stub; binary @ 0x001b0d0c
+}
+
+// STUB: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x001b0988
+SharedEffectProperties* Mesh::GetPropertiesGroup(AsciiString const& /*name*/) const {
+    // Defunct: SharedEffectProperties -- no-op stub; binary @ 0x001b0988
+    return nullptr;
+}
+
+// STUB: GetPropertiesGroup(AsciiString const&, EffectPropertyDefinition const*, EffectPropertyDefinition const*) -- binary @ 0x001b1430
+SharedEffectProperties* Mesh::GetPropertiesGroup(AsciiString const& /*name*/,
+                                                  EffectPropertyDefinition const* /*begin*/,
+                                                  EffectPropertyDefinition const* /*end*/) {
+    // Defunct: SharedEffectProperties -- no-op stub; binary @ 0x001b1430
+    return nullptr;
+}
+
+// STUB: RebuildEffectBindings() -- binary @ 0x001b08e8
+void Mesh::RebuildEffectBindings() {
+    // Defunct: EffectBinding system -- no-op stub; binary @ 0x001b08e8
+}
+
+// STUB: DrawCube(float, float, float, Colour, DrawEffectContainer*) -- binary @ 0x00193ed8
+void Mesh::DrawCube(float /*x*/, float /*y*/, float /*z*/,
+                    Colour /*colour*/, DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawCube is a binary stub (BX LR); no-op stub; binary @ 0x00193ed8
+}
+
+// STUB: DrawLine(Vec3 const&, Vec3 const&, float const&, Colour const&, Vec3 const&, DrawEffectContainer*) -- binary @ 0x00193edc
+void Mesh::DrawLine(Vec3 const& /*from*/, Vec3 const& /*to*/, float const& /*width*/,
+                    Colour const& /*colour*/, Vec3 const& /*normal*/,
+                    DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawLine is a binary stub (BX LR); no-op stub; binary @ 0x00193edc
+}
+
+// STUB: DrawSphere(float, Colour, DrawEffectContainer*) -- binary @ 0x00193ee0
+void Mesh::DrawSphere(float /*radius*/, Colour /*colour*/, DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawSphere is a binary stub (BX LR); no-op stub; binary @ 0x00193ee0
+}
+
+// STUB: DrawQuad(Colour, SmartPtr<Texture>, Vec3 const&, Vec3 const&, float, float, float, float, float, DrawEffectContainer*) -- binary @ 0x001b09b0
+void Mesh::DrawQuad(Colour /*colour*/, SmartPtr<Texture> /*texture*/,
+                    Vec3 const& /*pos*/, Vec3 const& /*scale*/, float /*rotZ*/,
+                    float /*w*/, float /*h*/, float /*uOff*/, float /*vOff*/,
+                    DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawQuad via DrawEffectContainer -- no-op stub; binary @ 0x001b09b0
+}
+
+// STUB: DrawQuadUnCached(Colour, DrawEffectContainer*) -- binary @ 0x00194180
+void Mesh::DrawQuadUnCached(Colour /*colour*/, DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawQuadUnCached -- no-op stub; binary @ 0x00194180
+}
+
+// STUB: DrawQuadUnCached(Colour, float, float, float, float, DrawEffectContainer*) -- binary @ 0x00194060
+void Mesh::DrawQuadUnCached(Colour /*colour*/, float /*w*/, float /*h*/,
+                             float /*uOff*/, float /*vOff*/, DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawQuadUnCached -- no-op stub; binary @ 0x00194060
+}
+
+// STUB: DrawTriList(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x0019404c
+void Mesh::DrawTriList(QUADCUSTOMVERTEX const* /*verts*/, long /*count*/,
+                       bool /*blend*/, DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawTriList via DrawEffectContainer -- no-op stub; binary @ 0x0019404c
+}
+
+// STUB: DrawTriStrip(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x00194038
+void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* /*verts*/, long /*count*/,
+                        bool /*blend*/, DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawTriStrip via DrawEffectContainer -- no-op stub; binary @ 0x00194038
+}
+
+// STUB: DrawTris(QUADCUSTOMVERTEX const*, long, int, bool, DrawEffectContainer*) -- binary @ 0x00193f5c
+void Mesh::DrawTris(QUADCUSTOMVERTEX const* /*verts*/, long /*count*/,
+                    int /*primType*/, bool /*blend*/, DrawEffectContainer* /*fx*/) {
+    // Defunct: DrawTris via DrawEffectContainer -- no-op stub; binary @ 0x00193f5c
+}
+
+// ---- Model stubs (binary) ----
+
+// STUB: Model(AsciiString const&) -- binary @ 0x???? (TODO RE)
+Model::Model(AsciiString const& /*name*/) {
+}
+
+// STUB: Draw(Matrix44 const&) const -- binary @ 0x???? (TODO RE)
+void Model::Draw(Matrix44 const& transform) const {
+}
+
+// STUB: GetBounds() const -- binary @ 0x???? (TODO RE)
+Bounds3D Model::GetBounds() const {
+    // Defunct: zero-arg GetBounds -- no-op stub; binary @ 0x????
+    return Bounds3D();
+}
+
+// STUB: GetNode(AsciiString const&) const -- binary @ 0x???? (TODO RE)
+SmartPtr<Mesh> Model::GetNode(AsciiString const& name) const {
+    for (int i = 0; i < (int)m_Meshes.size(); i++) {
+        if (m_Meshes[i].IsValid() &&
+            m_Meshes[i]->m_Name == std::string(name.c_str())) {
+            return m_Meshes[i];
+        }
+    }
+    return SmartPtr<Mesh>();
+}
+
+// STUB: NodeCount() const -- binary @ 0x???? (TODO RE)
+int Model::NodeCount() const {
+    return (int)m_Meshes.size();
+}
+
+// STUB: SetEffectGroup(SmartPtr<EffectGroup>) -- binary @ 0x???? (TODO RE)
+// Defunct: EffectGroup not ported; stub preserves call-graph shape.
+void Model::SetEffectGroup(SmartPtr<EffectGroup> /*effectGroup*/) {
 }
 
 } // namespace Mortar

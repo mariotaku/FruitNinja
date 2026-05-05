@@ -13,6 +13,7 @@
 #include "util/Delegate.h"
 #include "util/SmartPtr.h"
 #include "util/AsciiString.h"
+#include "util/ReferenceCounter.h"
 #include <cstdint>
 
 // Forward decls for binary-shape arg types not yet ported here.
@@ -22,7 +23,7 @@ namespace Mortar {
 
 namespace Mortar {
 
-class EffectGroup {
+class EffectGroup : public ReferenceCounter {
 public:
     // TODO: EffectGroup::AddEffect -- auto stub
     void AddEffect(Mortar::SmartPtr<Mortar::Effect> const&);

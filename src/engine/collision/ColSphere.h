@@ -48,6 +48,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ColSphere::ColSphereLine -- auto stub from binary missing-symbol set
     void ColSphereLine(ColSphere*, ColLine*, Vec3*);

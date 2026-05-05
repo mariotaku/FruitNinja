@@ -275,6 +275,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ShopScreen::BuyButtonCallback -- auto stub from binary missing-symbol set
     void BuyButtonCallback();

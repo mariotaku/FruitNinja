@@ -4,25 +4,30 @@
 // Analysed: 2026-04-11T12:00
 
 #include "util/SmartPtr.h"
+#include "util/AsciiString.h"
 #include "asset/IModelNode.h"
 #include "asset/Texture.h"
+#include "math/Colour.h"
 #include "render/gl_funcs.h"
 #include <vector>
 #include <cstdint>
 #include <string>
 
+// EffectGroup + Bounds3D stubs: included so SmartPtr<EffectGroup>/Bounds3D can resolve their dtors.
+// Both are defunct (no live callers); the includes are load-bearing for symbol mangling only.
+#include "../../stubs/EffectGroup.h"
+#include "../../stubs/Bounds3D.h"
+
+struct QUADCUSTOMVERTEX;
+
 namespace Mortar {
 
-// Matches original Mortar::Mesh::BoneBinding (0x44 = 68 bytes)
-// Ref: docs/engine/mesh.md
-struct BoneBinding {
-    std::string m_Name;         // +0x00: Bone name (port: std::string instead of AsciiString)
-    Vec3 m_BoundsMin;           // +0x28 equiv: Local AABB minimum
-    Vec3 m_BoundsMax;           // +0x34 equiv: Local AABB maximum
-    int m_SkeletonIndex;        // +0x40: Index into Skeleton; -1 = unbound
-
-    BoneBinding() : m_SkeletonIndex(-1) {}
-};
+// Forward declarations for defunct/stub types referenced by binary API
+// (Bounds3D and EffectGroup are included above for complete-type dtor resolution)
+class DrawEffectContainer;
+class EffectPropertyDefinition;
+class SharedEffectProperties;
+class Geometry;
 
 // Vertex attribute layout (from PSP vertex declaration)
 // Port specific: replaces the original Effect/Geometry/GeometryBinding system
@@ -78,6 +83,18 @@ struct GeometryEntry {
 // Ref: docs/engine/mesh.md — struct layout, vtable, Draw behavior
 class Mesh : public IModelNode {
 public:
+    // Matches original Mortar::Mesh::BoneBinding (0x44 = 68 bytes)
+    // Nested inside Mesh to match binary mangling (Mortar::Mesh::BoneBinding).
+    // Ref: docs/engine/mesh.md
+    struct BoneBinding {
+        std::string m_Name;         // +0x00: Bone name (port: std::string instead of AsciiString)
+        Vec3 m_BoundsMin;           // +0x28 equiv: Local AABB minimum
+        Vec3 m_BoundsMax;           // +0x34 equiv: Local AABB maximum
+        int m_SkeletonIndex;        // +0x40: Index into Skeleton; -1 = unbound
+
+        BoneBinding() : m_SkeletonIndex(-1) {}
+    };
+
     // --- Original fields (matching offsets where applicable) ---
 
     std::string m_Name;                         // +0x0C equiv: Mesh name
@@ -174,11 +191,85 @@ public:
     //   0x00193edc -- DrawLine(...)    [binary stub, returns first vec unchanged]
     //   0x00193ee0 -- DrawSphere(...)  [binary stub, returns colour unchanged]
 
-    // TODO: 0x001b0d18 -- Mesh::GenerateBindings(Vector). Iterates
-    // m_PropertiesGroups.m_TextureMaps, emits AnimBindings::Vector::Binding for
-    // each "UVWOffset" channel match. Port has no animated UV system yet;
-    // no-op until UV-scroll animation is wired.
+    // ---- STUBS (binary) ----
+
+    // STUB: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x001b10d8 (TODO RE)
+    Mesh(SmartPtr<SharedEffectProperties> const& props, AsciiString const& name);
+
+    // STUB: BindSkeleton(Skeleton const&) -- binary @ 0x001b0948 (TODO RE)
+    // Binary signature takes const-ref; port's existing BindSkeleton(Skeleton*) has mismatched mangling.
+    void BindSkeleton(Skeleton const& skeleton);
+
+    // STUB: GetBounds() const -- binary @ 0x???? (TODO RE)
+    // Binary vtable[5] signature; returns Bounds3D value.
+    Bounds3D GetBounds() const;
+
+    // STUB: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c (TODO RE)
+    // Defunct: port appends GeometryEntry directly in LoadMesh.
+    void AddGeometry(SmartPtr<Geometry> const& geom);
+
+    // STUB: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x001b0988 (TODO RE)
+    // Defunct: port stores material props directly in MeshMaterial.
+    SharedEffectProperties* GetPropertiesGroup(AsciiString const& name) const;
+
+    // STUB: GetPropertiesGroup(AsciiString const&, EffectPropertyDefinition const*, EffectPropertyDefinition const*) -- binary @ 0x001b1430 (TODO RE)
+    // Defunct: range-based variant; port stores material props directly.
+    SharedEffectProperties* GetPropertiesGroup(AsciiString const& name,
+                                               EffectPropertyDefinition const* begin,
+                                               EffectPropertyDefinition const* end);
+
+    // STUB: RebuildEffectBindings() -- binary @ 0x001b08e8 (TODO RE)
+    // Defunct: port computes MVP via MatrixManager directly.
+    void RebuildEffectBindings();
+
+    // STUB: DrawCube(float, float, float, Colour, DrawEffectContainer*) -- binary @ 0x00193ed8 (TODO RE)
+    // Binary is a stub (returns colour unchanged); port is likewise a no-op.
+    void DrawCube(float x, float y, float z, Colour colour, DrawEffectContainer* fx);
+
+    // STUB: DrawLine(Vec3 const&, Vec3 const&, float const&, Colour const&, Vec3 const&, DrawEffectContainer*) -- binary @ 0x00193edc (TODO RE)
+    // Binary is a stub (returns first vec unchanged); port is likewise a no-op.
+    void DrawLine(Vec3 const& from, Vec3 const& to, float const& width,
+                  Colour const& colour, Vec3 const& normal,
+                  DrawEffectContainer* fx);
+
+    // STUB: DrawSphere(float, Colour, DrawEffectContainer*) -- binary @ 0x00193ee0 (TODO RE)
+    // Binary is a stub (returns colour unchanged); port is likewise a no-op.
+    void DrawSphere(float radius, Colour colour, DrawEffectContainer* fx);
+
+    // STUB: DrawQuad(Colour, SmartPtr<Texture>, Vec3 const&, Vec3 const&, float, float, float, float, float, DrawEffectContainer*) -- binary @ 0x001b09b0 (TODO RE)
+    void DrawQuad(Colour colour, SmartPtr<Texture> texture,
+                  Vec3 const& pos, Vec3 const& scale, float rotZ,
+                  float w, float h, float uOff, float vOff,
+                  DrawEffectContainer* fx);
+
+    // STUB: DrawQuadUnCached(Colour, DrawEffectContainer*) -- binary @ 0x00194180 (TODO RE)
+    void DrawQuadUnCached(Colour colour, DrawEffectContainer* fx);
+
+    // STUB: DrawQuadUnCached(Colour, float, float, float, float, DrawEffectContainer*) -- binary @ 0x00194060 (TODO RE)
+    void DrawQuadUnCached(Colour colour, float w, float h, float uOff, float vOff,
+                          DrawEffectContainer* fx);
+
+    // STUB: DrawTriList(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x0019404c (TODO RE)
+    void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend,
+                     DrawEffectContainer* fx);
+
+    // STUB: DrawTriStrip(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x00194038 (TODO RE)
+    void DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count, bool blend,
+                      DrawEffectContainer* fx);
+
+    // STUB: DrawTris(QUADCUSTOMVERTEX const*, long, int, bool, DrawEffectContainer*) -- binary @ 0x00193f5c (TODO RE)
+    void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
+                  DrawEffectContainer* fx);
+
+    // STUB-DEFERRED: GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&) -- binary @ 0x001b0d18
+    // AnimBindings::Vector::Binding -- nested-typedef edge case; deferred until AnimBindings is fully ported.
+
+    // ---- end STUBS ----
 };
+
+// Namespace-level alias so callers that use Mortar::BoneBinding directly still compile.
+// The binary's canonical name is Mortar::Mesh::BoneBinding.
+typedef Mesh::BoneBinding BoneBinding;
 
 // Matches original Model (0x58 bytes) with vector<Mortar::SmartPtr<Mesh>>
 // Ref: docs/engine/rendering-detail.md — Model::Draw (0x001930e0)
@@ -195,7 +286,8 @@ public:
     virtual ~Model();
 
     // Binary @ 0x0019346c — push mesh, then bind skeleton if valid.
-    void AddNode(const Mortar::SmartPtr<Mesh>& mesh);
+    // STUB: by-value overload matches binary signature; kept as sole AddNode.
+    void AddNode(SmartPtr<Mesh> mesh);
 
     // Binary @ 0x001933f8 — unchecked array access (matches binary).
     Mortar::SmartPtr<Mesh> GetNode(unsigned long index) const;
@@ -216,7 +308,31 @@ public:
     // Calls BindSkeleton on each mesh with the model's skeleton.
     void UpdateBoneLinks();
 
-    // TODO: SetEffectGroup (binary @ ~0x00193xxx) — Defunct: EffectGroup not yet ported.
+    // ---- STUBS (binary) ----
+    // STUB: Model(AsciiString const&) -- binary @ 0x???? (TODO RE)
+    Model(AsciiString const& name);
+
+    // STUB: Draw(Matrix44 const&) const -- binary @ 0x???? (TODO RE)
+    void Draw(Matrix44 const& transform) const;
+
+    // STUB: GetBounds() const -- binary @ 0x???? (TODO RE)
+    Bounds3D GetBounds() const;
+
+    // STUB: GetNode(AsciiString const&) const -- binary @ 0x???? (TODO RE)
+    SmartPtr<Mesh> GetNode(AsciiString const& name) const;
+
+    // STUB: NodeCount() const -- binary @ 0x???? (TODO RE)
+    int NodeCount() const;
+
+    // STUB: SetEffectGroup(SmartPtr<EffectGroup>) -- binary @ 0x???? (TODO RE)
+    // Defunct: EffectGroup not ported; stub preserves call-graph shape.
+    void SetEffectGroup(SmartPtr<EffectGroup> effectGroup);
+
+    // STUB-DEFERRED: GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Bone::Binding>&) const
+    // AnimBindings nested-typedef edge case
+    // STUB-DEFERRED: GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&) const
+    // AnimBindings nested-typedef edge case
+    // ---- end STUBS ----
 };
 
 } // namespace Mortar

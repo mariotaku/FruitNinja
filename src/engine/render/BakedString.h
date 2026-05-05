@@ -50,6 +50,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: BakedString::AddDropShadow -- auto stub from binary missing-symbol set
     void AddDropShadow();

@@ -84,6 +84,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: TextureManager::Destroy -- auto stub from binary missing-symbol set
     void Destroy();

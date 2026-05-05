@@ -14,6 +14,7 @@
 #include "render/gl_funcs.h"
 #include "asset/TextureManager.h"
 #include "input/Touch.h"
+#include "input/InputEvent.h"
 #include "particle/PSPParticleManager.h"
 #include "collision/ColLine.h"
 #include "collision/ColSphere.h"
@@ -826,6 +827,77 @@ uint8_t  SlashEntity::GetDirectionalFlag()                        { return g_Dir
 int      SlashEntity::GetColourCount()                            { return g_ColourCount; }
 int      SlashEntity::GetColourType()                             { return g_ColourType; }
 const Colour* SlashEntity::GetPalette()                           { return g_Palette; }
+
+// ---------------------------------------------------------------------------
+// Binary stubs — bodies pending full RE+port
+// ---------------------------------------------------------------------------
+
+// STUB: SlashEntity::AddPoint(_Vector3<float>, _Vector3<float>, float)
+// Binary @ 0x17CE0C — by-value 2-Vec3 overload used by the binary's internal
+// trail building path. Port uses the const-ref overload above.
+void SlashEntity::AddPoint(Vec3 /*pos*/, Vec3 /*dir*/, float /*unused*/) {}
+
+// STUB: SlashEntity::CollideWithEntity(Mortar::Entity*)
+// Binary @ 0x17B570 — tests the per-frame blade line against a fruit/bomb
+// ColSphere. Port replaces with CollideWithSphere (iterates full trail).
+bool SlashEntity::CollideWithEntity(Mortar::Entity* /*entity*/) { return false; }
+
+// STUB: SlashEntity::CollisionResponse(Mortar::Entity*, unsigned long, unsigned long, Vec3*)
+// Binary @ 0x17B3BC — 4-arg vtable override for Mortar::Entity::CollisionResponse.
+// SlashEntity is pure aggressor; always returns 0.
+int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
+                                    unsigned long /*mask2*/, Vec3* /*bladeVel*/) { return 0; }
+
+// STUB: SlashEntity::DrawSlice()
+// Binary @ 0x17E424 — two mirrored tri-strips. Port's Draw() maps to this.
+void SlashEntity::DrawSlice() {}
+
+// STUB: SlashEntity::Init(void*, long, Vec3*)
+// Binary @ 0x17C65C — 3-arg binary form wired through ActorManager init path.
+void SlashEntity::Init(void* /*param1*/, long /*param2*/, Vec3* /*param3*/) {}
+
+// STUB: SlashEntity::InitPoints(long)
+// Binary @ 0x17C340 — allocate/reset point buffer to given capacity.
+void SlashEntity::InitPoints(long /*count*/) {}
+
+// STUB: SlashEntity::SetModColours(Colour*, ...) — non-const binary form
+// Binary @ 0x17CA0C — binary passes Colour* (non-const); delegates to const form.
+void SlashEntity::SetModColours(
+    Colour*     colours,
+    int         colourCount,
+    int         colourType,
+    float       lifeScale,
+    const char* particlePath,
+    const char* textureName2,
+    bool        directional,
+    const char* contactParticle,
+    const char* particle2)
+{
+    SetModColours(static_cast<const Colour*>(colours), colourCount, colourType,
+                  lifeScale, particlePath, textureName2, directional,
+                  contactParticle, particle2);
+}
+
+// STUB: SlashEntity::TouchDown(InputEvent*)
+// Binary @ 0x17D61C — Mortar::Entity vtable input-dispatch override.
+bool SlashEntity::TouchDown(InputEvent* /*event*/) { return false; }
+
+// STUB: SlashEntity::TouchMoveX(InputEvent*)
+// Binary @ 0x17C50C — Mortar::Entity vtable input-dispatch override.
+bool SlashEntity::TouchMoveX(InputEvent* /*event*/) { return false; }
+
+// STUB: SlashEntity::TouchMoveY(InputEvent*)
+// Binary @ 0x17C490 — Mortar::Entity vtable input-dispatch override.
+bool SlashEntity::TouchMoveY(InputEvent* /*event*/) { return false; }
+
+// STUB: SlashEntity::UpdatePoints(float)
+// Binary @ 0x17B92C — per-frame geometry rebuild from binary vertex buffers.
+// Port uses RebuildGeometry() from trail-point array instead.
+void SlashEntity::UpdatePoints(float /*dt*/) {}
+
+// STUB: SlashEntity::UpdateTouchDown(InputEvent*)
+// Binary @ 0x17D2E4 — InputEvent* dispatch form. Port uses OnTouchActive(float, float).
+void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {}
 
 // @ 0x0017e504. Iterates 8 SlashEntityGhost slots (base+0x3c, stride 0x10).
 // Render state inherited from GameDraw (alpha-blend SRC_ALPHA/ONE_MINUS_SRC_ALPHA,

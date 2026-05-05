@@ -188,6 +188,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ScrollingMenu::ClearTouch -- auto stub from binary missing-symbol set
     void ClearTouch();

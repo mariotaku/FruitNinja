@@ -41,6 +41,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: MeshManager::Destroy -- auto stub from binary missing-symbol set
     void Destroy();

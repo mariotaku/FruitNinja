@@ -215,6 +215,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: PowerUpManager::GetFirstPurchasable -- auto stub from binary missing-symbol set
     void GetFirstPurchasable(std::_List_iterator<PowerUp*>&);

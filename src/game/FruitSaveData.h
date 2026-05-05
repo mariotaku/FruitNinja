@@ -334,6 +334,10 @@ public:
 public:
 
 public:
+
+public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: FruitSaveData::DownloadedTweakValue -- auto stub from binary missing-symbol set
     void DownloadedTweakValue(char const*, int);

@@ -176,6 +176,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: Touch::Clear -- auto stub from binary missing-symbol set
     void Clear();

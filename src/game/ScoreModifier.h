@@ -81,6 +81,8 @@ public:
 public:
 
 public:
+
+public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ScoreModifier::DeferPoints -- auto stub from binary missing-symbol set
     void DeferPoints(int);
