@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
+#include <vector>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <strings.h>    // strcasecmp (POSIX)
