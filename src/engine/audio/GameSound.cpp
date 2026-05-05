@@ -51,7 +51,7 @@ int GameSound::FindFree() {
 // DIFFERS: binary @ 0x... calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
 //          port simplifies to 2-arg form. Mirror of the marker in MortarSound.cpp::Play.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch,
-                                 const Delegate1<bool, MortarSound*>& finishCallback) {
+                                 const Mortar::Delegate1<bool, MortarSound*>& finishCallback) {
     int i = FindFree();
     if (i == -1) return NULL;
 
@@ -72,7 +72,7 @@ MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch,
 
 // 3-arg overload -- no finish-callback.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch) {
-    return SFXPlay(name, vol, pitch, Delegate1<bool, MortarSound*>());
+    return SFXPlay(name, vol, pitch, Mortar::Delegate1<bool, MortarSound*>());
 }
 
 // Binary @ 0x00129100

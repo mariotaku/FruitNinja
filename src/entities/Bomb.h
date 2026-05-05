@@ -11,7 +11,7 @@
 #include "Entity.h"
 #include "math/Vec3.h"
 #include "render/gl_funcs.h"
-#include <functional>
+#include "util/Delegate.h"
 
 namespace Mortar { struct PSPParticleEmitter; }
 class MenuButton;
@@ -24,12 +24,11 @@ public:
     // +0x3c: BombBlast spawn timer; Init = 0.6 (DAT_001726ac)
     float m_SpawnTimer;
 
-    // +0x40..+0x63: hit callback delegate. Binary stores a 0x24-byte
-    // BaseDelegate; port uses std::function for the callable. Fired
-    // when CollisionResponse hits the menu-rehit branch (player slices
-    // a menu-decoration bomb that's already been registered as hit).
-    // Used by Quit button to chain into the QuitGame flow.
-    std::function<void()> m_HitCallback;
+    // +0x40..+0x63: hit callback delegate. Binary's `Mortar::Delegate0<void>`
+    // (36 bytes). Fired when CollisionResponse hits the menu-rehit branch
+    // (player slices a menu-decoration bomb that's already been registered
+    // as hit). Used by Quit button to chain into the QuitGame flow.
+    Mortar::Delegate0<void> m_HitCallback;
 
     // +0x64: bomb variant — 0=normal, 2=multiplayer
     int m_BombVariant;
@@ -109,9 +108,12 @@ public:
     // Matches Bomb::KillBomb (0x1716e8)
     void KillBomb();
 
-    // Matches Bomb::SetCallback (0x0017121c) — installs menu-bomb hit callback
-    // and overwrites rotation state for slow menu-bomb spin.
-    void SetCallback(std::function<void()> cb);
+    // Matches Bomb::SetCallback (0x0017121c) — installs menu-bomb hit
+    // callback and overwrites rotation state for slow menu-bomb spin.
+    // Binary signature takes a MenuButton* second arg (used to wire vtable
+    // dispatch). Port doesn't yet thread it through; passed as a parking
+    // arg to keep the symbol shape.
+    void SetCallback(Mortar::Delegate0<void> cb, MenuButton* button = nullptr);
 
     // ASM-verified: 2026-04-28T00:00 binary @ 0x001507e0 (asm-inspector)
     // Matches Bomb::Enabled (0x001507e0) — returns !m_bCollisionGuard.

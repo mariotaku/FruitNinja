@@ -49,8 +49,8 @@ public:
     // +0x34: bit mask for layered drawing (default = 1)
     int m_LayerFlags;
 
-    // +0x38: callback fired before removal. 36 bytes (binary Delegate1).
-    Mortar::Delegate<void(HUDControl*)> m_RemoveCallback;
+    // +0x38: callback fired before removal. 36 bytes (binary Mortar::Delegate1).
+    Mortar::Delegate1<void, HUDControl*> m_RemoveCallback;
 
     // +0x5c: tint colour (BGRA, default white)
     Colour m_DrawColour;

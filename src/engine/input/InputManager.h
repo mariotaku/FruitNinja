@@ -17,8 +17,8 @@
 #include <list>
 #include <cstdint>
 
-// Callback type alias (matches binary Delegate1<bool, InputEvent*>).
-typedef Delegate1<bool, InputEvent*> InputCallback;
+// Callback type alias (matches binary Mortar::Delegate1<bool, InputEvent*>).
+typedef Mortar::Delegate1<bool, InputEvent*> InputCallback;
 
 namespace Mortar {
 

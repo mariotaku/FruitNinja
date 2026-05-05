@@ -12,9 +12,9 @@
 
 class UpsellScreen : public HUDControl3d {
 public:
-    Mortar::Delegate<void()> m_OnDone;
+    Mortar::Delegate0<void> m_OnDone;
 
-    UpsellScreen(Mortar::Delegate<void()> onDone, int /*mode*/)
+    UpsellScreen(Mortar::Delegate0<void> onDone, int /*mode*/)
         : m_OnDone(onDone) {}
 
     ~UpsellScreen() override {}
@@ -23,7 +23,7 @@ private:
     // Pad to binary sizeof 0x1EC; HUDControl3d is 0x7C, Delegate<void()> is variable per platform.
     // Binary layout preserved via padding so any subclass offset math stays correct.
     static const int kBinarySize = 0x1EC;
-    static const int kUsedSize   = sizeof(HUDControl3d) + sizeof(Mortar::Delegate<void()>);
+    static const int kUsedSize   = sizeof(HUDControl3d) + sizeof(Mortar::Delegate0<void>);
     uint8_t pad[kBinarySize - kUsedSize];
 };
 

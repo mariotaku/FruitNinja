@@ -153,7 +153,7 @@ void Coin::Arrived() {
 void Coin::InitCoin(const Vec3& pos_in, const Vec3& gravity, uint16_t /*baseAngle*/,
                     int /*playerIdx*/, uint16_t launchAngle, int coinValue,
                     const char* flyFXName, const char* collectFXName,
-                    std::function<void(Coin*)> onArrived, float delay, bool silent)
+                    Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent)
 {
     // flags &= 0xEE — clear active+dead bits (bits 0 and 4: ENT_INACTIVE | ENT_KILLED)
     flags &= 0xEE;
@@ -443,7 +443,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, float delayRange,
                      uint16_t baseAngle, uint16_t angleSpread,
                      const Vec3& spawnPos,
                      const char* flyFXName, const char* collectFXName,
-                     std::function<void(Coin*)> onArrived, bool silent)
+                     Mortar::Delegate1<void, Coin*> onArrived, bool silent)
 {
     if (totalCoins <= 0) return;
 

@@ -498,9 +498,9 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
         // TODO: 0x0016ffd8 — L->senderId filter needs Entity::id (Entity+0x04);
         //       field not on Entity base yet; treat senderId filter as any (0) only.
         if (L->callback) {
-            // TODO: 0x0016ffd8 — invoke L->callback as Delegate2:
+            // TODO: 0x0016ffd8 — invoke L->callback as Mortar::Delegate2:
             //   cb->vtable[+0x30](cb, sender, target, msg)
-            // Port has no Delegate2 model; skip invoke.
+            // Port has no Mortar::Delegate2 model; skip invoke.
         }
     }
 

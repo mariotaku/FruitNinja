@@ -23,27 +23,21 @@ ScrollingMenuItem::ScrollingMenuItem()
     , m_bOnscreen(0)
     , _pre_del1(0)
     , _pre_del2(0)
-    // m_Delegate: struct default-ctor initialises _delegate_fn (std::function); header bytes zeroed below.
+    // m_Delegate default-ctor: empty Mortar::Delegate1.
     , m_pText(nullptr)
 {
     pos.x = 0.0f;
     pos.y = 0.0f;
     pos.z = 0.0f;
-    // Zero the Delegate1 header bytes (binary: Delegate1 ctor zeroes its first 4 bytes).
-    // m_Delegate._delegate_fn is already default-constructed (empty std::function).
-    m_Delegate._hdr[0] = 0;
-    m_Delegate._hdr[1] = 0;
-    m_Delegate._hdr[2] = 0;
-    m_Delegate._hdr[3] = 0;
 }
 
 ScrollingMenuItem::~ScrollingMenuItem() {
-    // m_Delegate._delegate_fn is destroyed automatically via struct dtor.
+    // m_Delegate destroyed automatically.
 }
 
 void ScrollingMenuItem::CallClickedMenuItemCallback() {
-    if (m_Delegate._delegate_fn) {
-        m_Delegate._delegate_fn(this);
+    if (m_Delegate) {
+        m_Delegate(this);
     }
 }
 

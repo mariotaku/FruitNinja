@@ -250,7 +250,7 @@ void AboutScreen::CreateBackButton()
     }
 
     m_pBackButton->Init(POS_BACK_BUTTON,
-                        Mortar::Delegate<void()>::Make(this, &AboutScreen::BackCallback),
+                        Mortar::Delegate0<void>::Make(this, &AboutScreen::BackCallback),
                         bombFruitType,
                         Vec3(0.0f, 0.0f, 0.0f),
                         nullptr);
@@ -525,7 +525,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
 
 // -----------------------------------------------------------------------
 // BackCallback — pressed back button starts fade-out
-// Binary: Delegate0<void>::QCallee<AboutScreen> wrapping this method
+// Binary: Mortar::Delegate0<void>::QCallee<AboutScreen> wrapping this method
 // -----------------------------------------------------------------------
 void AboutScreen::BackCallback()
 {

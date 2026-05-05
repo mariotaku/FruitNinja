@@ -233,23 +233,42 @@ static_assert(sizeof(Mortar::Delegate<void()>) ==
               "Mortar::Delegate must have a uniform size across signatures");
 
 // =====================================================================
-// Legacy compatibility shims — Delegate0..Delegate4
-// Match the older API used in pre-Mortar::Delegate code paths. Internally
-// just typedef onto the variadic Delegate.
+// Legacy compatibility shims — Mortar::Delegate0..Delegate4
+// Match the binary's `Mortar::DelegateN<Ret, ...>` template-class names so
+// signatures using these shims mangle identically to the binary symbols.
+// Internally each just wraps the variadic Mortar::Delegate.
 // =====================================================================
+
+namespace Mortar {
+
+// Each shim wraps the variadic Mortar::Delegate so it inherits all the
+// templated callable-construction. Same 36-byte ABI as Delegate.
 
 template<typename Ret>
 class Delegate0 {
-    Mortar::Delegate<Ret()> m_d;
+    Delegate<Ret()> m_d;
 public:
     Delegate0() {}
-    Delegate0(Ret (*fn)()) : m_d(Mortar::Delegate<Ret()>::MakeFree(fn)) {}
+    Delegate0(decltype(nullptr)) {}
+    Delegate0(Ret (*fn)()) : m_d(Delegate<Ret()>::MakeFree(fn)) {}
+    Delegate0(const Delegate<Ret()>& d) : m_d(d) {}
+    template<typename F,
+             typename = typename std::enable_if<
+                 !std::is_same<typename std::decay<F>::type, Delegate0>::value &&
+                 !std::is_same<typename std::decay<F>::type, Delegate<Ret()>>::value
+             >::type>
+    Delegate0(F&& fn) : m_d(std::forward<F>(fn)) {}
 
     template<typename T>
     static Delegate0 QCallee(T* obj, Ret (T::*method)()) {
-        Delegate0 d;
-        d.m_d = Mortar::Delegate<Ret()>::Make(obj, method);
-        return d;
+        return Delegate0(Delegate<Ret()>::Make(obj, method));
+    }
+    template<typename T>
+    static Delegate0 Make(T* obj, Ret (T::*method)()) {
+        return Delegate0(Delegate<Ret()>::Make(obj, method));
+    }
+    static Delegate0 MakeFree(Ret (*fn)()) {
+        return Delegate0(Delegate<Ret()>::MakeFree(fn));
     }
     Ret operator()() const { return m_d(); }
     operator bool() const { return static_cast<bool>(m_d); }
@@ -257,16 +276,29 @@ public:
 
 template<typename Ret, typename A1>
 class Delegate1 {
-    Mortar::Delegate<Ret(A1)> m_d;
+    Delegate<Ret(A1)> m_d;
 public:
     Delegate1() {}
-    Delegate1(Ret (*fn)(A1)) : m_d(Mortar::Delegate<Ret(A1)>::MakeFree(fn)) {}
+    Delegate1(decltype(nullptr)) {}
+    Delegate1(Ret (*fn)(A1)) : m_d(Delegate<Ret(A1)>::MakeFree(fn)) {}
+    Delegate1(const Delegate<Ret(A1)>& d) : m_d(d) {}
+    template<typename F,
+             typename = typename std::enable_if<
+                 !std::is_same<typename std::decay<F>::type, Delegate1>::value &&
+                 !std::is_same<typename std::decay<F>::type, Delegate<Ret(A1)>>::value
+             >::type>
+    Delegate1(F&& fn) : m_d(std::forward<F>(fn)) {}
 
     template<typename T>
     static Delegate1 QCallee(T* obj, Ret (T::*method)(A1)) {
-        Delegate1 d;
-        d.m_d = Mortar::Delegate<Ret(A1)>::Make(obj, method);
-        return d;
+        return Delegate1(Delegate<Ret(A1)>::Make(obj, method));
+    }
+    template<typename T>
+    static Delegate1 Make(T* obj, Ret (T::*method)(A1)) {
+        return Delegate1(Delegate<Ret(A1)>::Make(obj, method));
+    }
+    static Delegate1 MakeFree(Ret (*fn)(A1)) {
+        return Delegate1(Delegate<Ret(A1)>::MakeFree(fn));
     }
     Ret operator()(A1 a1) const { return m_d(a1); }
     operator bool() const { return static_cast<bool>(m_d); }
@@ -274,16 +306,29 @@ public:
 
 template<typename Ret, typename A1, typename A2>
 class Delegate2 {
-    Mortar::Delegate<Ret(A1, A2)> m_d;
+    Delegate<Ret(A1, A2)> m_d;
 public:
     Delegate2() {}
-    Delegate2(Ret (*fn)(A1, A2)) : m_d(Mortar::Delegate<Ret(A1, A2)>::MakeFree(fn)) {}
+    Delegate2(decltype(nullptr)) {}
+    Delegate2(Ret (*fn)(A1, A2)) : m_d(Delegate<Ret(A1, A2)>::MakeFree(fn)) {}
+    Delegate2(const Delegate<Ret(A1, A2)>& d) : m_d(d) {}
+    template<typename F,
+             typename = typename std::enable_if<
+                 !std::is_same<typename std::decay<F>::type, Delegate2>::value &&
+                 !std::is_same<typename std::decay<F>::type, Delegate<Ret(A1, A2)>>::value
+             >::type>
+    Delegate2(F&& fn) : m_d(std::forward<F>(fn)) {}
 
     template<typename T>
     static Delegate2 QCallee(T* obj, Ret (T::*method)(A1, A2)) {
-        Delegate2 d;
-        d.m_d = Mortar::Delegate<Ret(A1, A2)>::Make(obj, method);
-        return d;
+        return Delegate2(Delegate<Ret(A1, A2)>::Make(obj, method));
+    }
+    template<typename T>
+    static Delegate2 Make(T* obj, Ret (T::*method)(A1, A2)) {
+        return Delegate2(Delegate<Ret(A1, A2)>::Make(obj, method));
+    }
+    static Delegate2 MakeFree(Ret (*fn)(A1, A2)) {
+        return Delegate2(Delegate<Ret(A1, A2)>::MakeFree(fn));
     }
     Ret operator()(A1 a1, A2 a2) const { return m_d(a1, a2); }
     operator bool() const { return static_cast<bool>(m_d); }
@@ -291,16 +336,29 @@ public:
 
 template<typename Ret, typename A1, typename A2, typename A3>
 class Delegate3 {
-    Mortar::Delegate<Ret(A1, A2, A3)> m_d;
+    Delegate<Ret(A1, A2, A3)> m_d;
 public:
     Delegate3() {}
-    Delegate3(Ret (*fn)(A1, A2, A3)) : m_d(Mortar::Delegate<Ret(A1, A2, A3)>::MakeFree(fn)) {}
+    Delegate3(decltype(nullptr)) {}
+    Delegate3(Ret (*fn)(A1, A2, A3)) : m_d(Delegate<Ret(A1, A2, A3)>::MakeFree(fn)) {}
+    Delegate3(const Delegate<Ret(A1, A2, A3)>& d) : m_d(d) {}
+    template<typename F,
+             typename = typename std::enable_if<
+                 !std::is_same<typename std::decay<F>::type, Delegate3>::value &&
+                 !std::is_same<typename std::decay<F>::type, Delegate<Ret(A1, A2, A3)>>::value
+             >::type>
+    Delegate3(F&& fn) : m_d(std::forward<F>(fn)) {}
 
     template<typename T>
     static Delegate3 QCallee(T* obj, Ret (T::*method)(A1, A2, A3)) {
-        Delegate3 d;
-        d.m_d = Mortar::Delegate<Ret(A1, A2, A3)>::Make(obj, method);
-        return d;
+        return Delegate3(Delegate<Ret(A1, A2, A3)>::Make(obj, method));
+    }
+    template<typename T>
+    static Delegate3 Make(T* obj, Ret (T::*method)(A1, A2, A3)) {
+        return Delegate3(Delegate<Ret(A1, A2, A3)>::Make(obj, method));
+    }
+    static Delegate3 MakeFree(Ret (*fn)(A1, A2, A3)) {
+        return Delegate3(Delegate<Ret(A1, A2, A3)>::MakeFree(fn));
     }
     Ret operator()(A1 a1, A2 a2, A3 a3) const { return m_d(a1, a2, a3); }
     operator bool() const { return static_cast<bool>(m_d); }
@@ -308,19 +366,34 @@ public:
 
 template<typename Ret, typename A1, typename A2, typename A3, typename A4>
 class Delegate4 {
-    Mortar::Delegate<Ret(A1, A2, A3, A4)> m_d;
+    Delegate<Ret(A1, A2, A3, A4)> m_d;
 public:
     Delegate4() {}
-    Delegate4(Ret (*fn)(A1, A2, A3, A4)) : m_d(Mortar::Delegate<Ret(A1, A2, A3, A4)>::MakeFree(fn)) {}
+    Delegate4(decltype(nullptr)) {}
+    Delegate4(Ret (*fn)(A1, A2, A3, A4)) : m_d(Delegate<Ret(A1, A2, A3, A4)>::MakeFree(fn)) {}
+    Delegate4(const Delegate<Ret(A1, A2, A3, A4)>& d) : m_d(d) {}
+    template<typename F,
+             typename = typename std::enable_if<
+                 !std::is_same<typename std::decay<F>::type, Delegate4>::value &&
+                 !std::is_same<typename std::decay<F>::type, Delegate<Ret(A1, A2, A3, A4)>>::value
+             >::type>
+    Delegate4(F&& fn) : m_d(std::forward<F>(fn)) {}
 
     template<typename T>
     static Delegate4 QCallee(T* obj, Ret (T::*method)(A1, A2, A3, A4)) {
-        Delegate4 d;
-        d.m_d = Mortar::Delegate<Ret(A1, A2, A3, A4)>::Make(obj, method);
-        return d;
+        return Delegate4(Delegate<Ret(A1, A2, A3, A4)>::Make(obj, method));
+    }
+    template<typename T>
+    static Delegate4 Make(T* obj, Ret (T::*method)(A1, A2, A3, A4)) {
+        return Delegate4(Delegate<Ret(A1, A2, A3, A4)>::Make(obj, method));
+    }
+    static Delegate4 MakeFree(Ret (*fn)(A1, A2, A3, A4)) {
+        return Delegate4(Delegate<Ret(A1, A2, A3, A4)>::MakeFree(fn));
     }
     Ret operator()(A1 a1, A2 a2, A3 a3, A4 a4) const { return m_d(a1, a2, a3, a4); }
     operator bool() const { return static_cast<bool>(m_d); }
 };
+
+}  // namespace Mortar
 
 #endif // MORTAR_DELEGATE_H

@@ -52,11 +52,11 @@ public:
     // +0x84: -1 = no fruit, 0+ = fruit index, >=bombThreshold = bomb
     int m_FruitType;
 
-    // +0x88: fired on touch release. 36 bytes (binary Delegate0).
-    Mortar::Delegate<void()> m_ClickCallback;
+    // +0x88: fired on touch release. 36 bytes (binary Mortar::Delegate0).
+    Mortar::Delegate0<void> m_ClickCallback;
 
-    // +0xAC: fired when button removed from HUD. 36 bytes (binary Delegate0).
-    Mortar::Delegate<void()> m_DeletedCallback;
+    // +0xAC: fired when button removed from HUD. 36 bytes (binary Mortar::Delegate0).
+    Mortar::Delegate0<void> m_DeletedCallback;
 
     // +0xD0: drives alpha fade (× 1000 / 255)
     int m_FadeCounter;
@@ -175,9 +175,9 @@ public:
 
     // Matches MenuButton::Init (0x0014ee40, 222 lines)
     // Creates entity, sets callbacks, random rotation
-    void Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
-              int fruitType, const Vec3& hitBounds,
-              Mortar::Delegate<void()> deletedCb);
+    void Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
+              int fruitType, Vec3 hitBounds,
+              Mortar::Delegate0<void> deletedCb);
 
     // Matches MenuButton::SetNewSymbol (0x0014e404).
     void SetNewSymbol(bool show);
@@ -221,7 +221,7 @@ public:
     // Replaces m_ClickCallback. Used by ScreenButton::ShrinkButtonCall
     // (binary @ 0x001300f0) to swap a button's tap handler from the
     // normal action to the shrink-and-disappear handler.
-    void SetCallback(const Mortar::Delegate<void()>& cb) { m_ClickCallback = cb; }
+    void SetCallback(const Mortar::Delegate0<void>& cb) { m_ClickCallback = cb; }
 
     // Matches MenuButton::LoadContent (0x0014f674) — loads 3 shared textures
     // into class statics. Called once from GameInitialise step 23.

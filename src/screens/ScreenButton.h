@@ -56,21 +56,21 @@ struct ScreenButton {
     // Called with dt each frame when m_pButton is nullptr.
     // Return true to create the button this frame.
     // Binary default (0x001300e8): always returns true.
-    Mortar::Delegate<bool(float)> m_visCheck;
+    Mortar::Delegate1<bool, float> m_visCheck;
 
     // +0x30 (36 bytes): per-frame update delegate.
     // Called each frame when m_pButton exists.
     // Return true to trigger button removal/shrink.
     // Binary default (0x001300ec): always returns false.
-    Mortar::Delegate<bool(MenuButton*, float, ScreenButton&)> m_updateCb;
+    Mortar::Delegate3<bool, MenuButton*, float, ScreenButton&> m_updateCb;
 
     // +0x54 (36 bytes): on-click callback.
     // Wired as the MenuButton's tap callback.
-    Mortar::Delegate<void()> m_clickCb;
+    Mortar::Delegate0<void> m_clickCb;
 
     // +0x78 (36 bytes): "button deleted" callback.
     // Fired by ControlDeleted when the MenuButton is removed.
-    Mortar::Delegate<void(HUDControl*)> m_deletedCb;
+    Mortar::Delegate1<void, HUDControl*> m_deletedCb;
 
     // +0x9C: button world position
     Vec3 m_pos;
@@ -96,8 +96,8 @@ struct ScreenButton {
     ScreenButton()
         : m_tutorID(-1)
         , m_pButton(nullptr)
-        , m_visCheck(Mortar::Delegate<bool(float)>::MakeFree(&ScreenButtonDefaults::AlwaysVisible))          // 0x001300e8
-        , m_updateCb(Mortar::Delegate<bool(MenuButton*, float, ScreenButton&)>::MakeFree(&ScreenButtonDefaults::NoUpdate))  // 0x001300ec
+        , m_visCheck(Mortar::Delegate1<bool, float>::MakeFree(&ScreenButtonDefaults::AlwaysVisible))          // 0x001300e8
+        , m_updateCb(Mortar::Delegate3<bool, MenuButton*, float, ScreenButton&>::MakeFree(&ScreenButtonDefaults::NoUpdate))  // 0x001300ec
         , m_pos(0, 0, 0)
         , m_fruitPos(0, 0, 0)
         , m_scaleA(0.0f)

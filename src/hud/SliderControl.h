@@ -53,7 +53,7 @@ public:
 
     // +0xC8: fires when m_CurrentValue changes (zero-arg, void return)
     // Binary: Mortar::Delegate0<void> (36 bytes)
-    Delegate0<void> m_OnValueChanged;
+    Mortar::Delegate0<void> m_OnValueChanged;
 
     // Binary @ 0x00160268 (master ctor)
     // Signature: (Vec3 pos, Vec3 size, const char* label,

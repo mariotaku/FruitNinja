@@ -184,9 +184,9 @@ MenuButton::~MenuButton() {
 }
 
 // Matches MenuButton::Init (0x0014ee40, 222 lines)
-void MenuButton::Init(const Vec3& buttonPos, Mortar::Delegate<void()> clickCb,
-                      int fruitType, const Vec3& hitBounds,
-                      Mortar::Delegate<void()> deletedCb) {
+void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
+                      int fruitType, Vec3 hitBounds,
+                      Mortar::Delegate0<void> deletedCb) {
     pos = buttonPos;
     m_ClickCallback = clickCb;
     m_DeletedCallback = deletedCb;
@@ -543,7 +543,7 @@ void MenuButton::Update(float dt) {
 
                 // DAT_0014e978 = 0x3a83126f = 0.001f
                 if (relVelSqMag > 0.001f) {
-                    // Binary @ 0x0014e76c: Delegate0::operator()(&field7_0x88).
+                    // Binary @ 0x0014e76c: Mortar::Delegate0::operator()(&field7_0x88).
                     if (m_ClickCallback) {
                         auto cb = m_ClickCallback;
                         m_ClickCallback = nullptr;
@@ -888,7 +888,7 @@ void MenuButton::AddPeice(SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                           Vec3 offset, Vec3 sizeScale,
                           Colour tint, int layerFlags) {
     HUDControl3d* c = new HUDControl3d();
-    c->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>::Make(
+    c->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(
         this, &MenuButton::DeletedPeice);
     c->m_LayerFlags  = layerFlags;
     c->m_DrawColour  = tint;
@@ -948,7 +948,7 @@ void MenuButton::DeletePeices() {
          it != m_AddOns.end(); ++it) {
         HUDControl3d* c = it->control;
         if (c) {
-            c->m_RemoveCallback = Mortar::Delegate<void(HUDControl*)>();
+            c->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>();
             c->m_bPendingRemoval = 1;
         }
     }

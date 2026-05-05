@@ -26,8 +26,8 @@
 // Analysed: 2026-04-12T16:45
 
 #include "Entity.h"
+#include "util/Delegate.h"
 #include <cstdint>
-#include <functional>
 
 // Forward declarations
 struct Renderer;
@@ -53,7 +53,7 @@ public:
     float    m_TargetZ;          // +0x64  homing target Z
     Mortar::PSPParticleEmitter* m_pFlyEmitter;      // +0x68
     Mortar::PSPParticleEmitter* m_pCollectEmitter;  // +0x6C
-    std::function<void(Coin*)>  m_OnArrived;        // +0x70  24 bytes (Delegate1<void,Coin*>)
+    Mortar::Delegate1<void, Coin*>  m_OnArrived;        // +0x70  24 bytes (Mortar::Delegate1<void,Coin*>)
 
     // --- Constructor / destructor ----------------------------------------
 
@@ -88,7 +88,7 @@ public:
     void InitCoin(const Vec3& pos, const Vec3& gravity, uint16_t baseAngle,
                   int playerIdx, uint16_t launchAngle, int coinValue,
                   const char* flyFXName, const char* collectFXName,
-                  std::function<void(Coin*)> onArrived, float delay, bool silent);
+                  Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent);
 
     // 0x00173190 — invoke m_OnArrived, cleanup emitters, mark dead
     void Arrived();
@@ -98,7 +98,7 @@ public:
                           uint16_t baseAngle, uint16_t angleSpread,
                           const Vec3& spawnPos,
                           const char* flyFXName, const char* collectFXName,
-                          std::function<void(Coin*)> onArrived, bool silent);
+                          Mortar::Delegate1<void, Coin*> onArrived, bool silent);
 
     // 0x001731B8 — mark all active coins dead (arrive=true: credit them first)
     static void ClearCoins(bool arrive);
