@@ -33,7 +33,8 @@ struct FruitModelInfo {
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
-// Binary sizeof(Fruit) = 0x118 (280). Port size differs due to std::function usage.
+// Binary sizeof(Fruit) = 0x118 (280). Port matches via Mortar::Delegate's
+// 36-byte uniform ABI for callback fields.
 // EntityFactory @ 0x0017421c: operator_new(0x118) for type 0.
 class Fruit : public Mortar::Entity {
 public:

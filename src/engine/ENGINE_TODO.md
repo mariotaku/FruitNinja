@@ -15,7 +15,7 @@ Files in `core/`, `math/`, `util/`:
 - [x] `util/StringHash.h/.cpp` — Jenkins lookup3 hash
 - [x] `util/ReferenceCounter.h` — Intrusive refcount base (12B)
 - [x] `util/SmartPtr.h` — 4-byte intrusive smart pointer
-- [x] `util/Delegate.h` — Delegate0-4 via std::function
+- [x] `util/Delegate.h` — `Mortar::Delegate<R(Args...)>` + `Mortar::Delegate0..4` legacy shims (36-byte ABI matches binary)
 - [x] `util/NLFQueue.h` — SPSC ring buffer (16B)
 - [x] `util/AsciiString.h` — String wrapper
 - [x] `util/List.h` — Mortar List<T> template
@@ -147,6 +147,6 @@ When the engine library is complete, update game code:
 
 4. **SmartPtr is intrusive**: Objects inherit ReferenceCounter. NOT std::shared_ptr.
 
-5. **Delegate wraps std::function**: Match original API (Delegate0-4, QCallee<T> factory) but use std::function internally. Don't replicate binary layout.
+5. **Mortar::Delegate matches binary ABI**: `Mortar::Delegate<R(Args...)>` is a fixed 36-byte type-erased callable matching the binary's `BaseDelegate`/`Delegate0..4` family layout. Legacy shims `Mortar::Delegate0..4` mangle identically to the binary's class names; both forms wrap the same storage.
 
 6. **Original centered ortho**: All positions use centered coordinates. X: +160 (top) to -160 (bottom). Y: -240 (left) to +240 (right). No conversion needed.
