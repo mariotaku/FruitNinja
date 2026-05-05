@@ -1,7 +1,7 @@
 #ifndef FN_ACTOR_MANAGER_H
 #define FN_ACTOR_MANAGER_H
 
-// Mortar::ActorManager — binary-faithful port.
+// ActorManager — binary-faithful port.
 //
 // Binary class is 4204 bytes. Gameplay relies on:
 //   - per-type std::list<Entity*> so GetNumEntities(type) is O(1) and
@@ -31,9 +31,11 @@
 #include <list>
 #include <cstddef>
 
-namespace Mortar { class ColAABB; }
+class ColAABB;
 struct EntityChunk;   // opaque; only used by LoadEntity which is stubbed
 struct Renderer;
+
+namespace Mortar {
 
 class ActorManager {
 public:
@@ -110,14 +112,14 @@ public:
 
     // Hash converter delegate signature --
     //   Delegate2<long entityType, unsigned long& outHash, bool& outOk>.
-    // Binary: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
+    // Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
     // Called from GameInit step 16c @ 0x0016cb9e..0x0016cc04.
     // RE-gap: exact function body behind GOT slots [0x0016ccbc..0x0016ccc0].
     // Binary signature: entityType is the return value; takes (StringHash key, bool& outFound).
     typedef long (*HashFn)(unsigned long key, bool& outFound);
 
     // Stores the hash-converter function into m_HashDelegate.
-    // Binary: Mortar::ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
+    // Binary: ActorManager::RegisterHashConverter @ 0x001069f8 (PLT thunk).
     // TODO: implement -- see docs/systems/gameinit-todos.md step 16.
     void RegisterHashConverter(HashFn fn);
 
@@ -183,19 +185,19 @@ public:
     // 0x0016ff98. Raw list size — NO active-flag filtering (matches
     // binary; the old port's IsActive() filter diverged and caused
     // MainScreen state transitions to fire on wrong counts).
-    int  GetNumEntities(int typeIdx) const;
+    int  GetNumEntities(int typeIdx);
 
     // 0x0016ffac. Sum of all type-list sizes.
-    int  GetNumEntities() const;
+    int  GetNumEntities();
 
     // 0x0016ff30. Null-terminated type-index array variant.
-    int  GetNumEntities(const long* typeIdxNullTerminated) const;
+    int  GetNumEntities(const long* typeIdxNullTerminated);
 
     // 0x0016ff5c. Range variant: sums [min(a,b) .. max(a,b)).
-    int  GetNumEntities(long typeA, long typeB) const;
+    int  GetNumEntities(long typeA, long typeB);
 
     // 0x0016ff00. Count of type lists that contain at least one entity.
-    int  GetNumTypes() const;
+    int  GetNumTypes();
 
     // Accessor for per-type iteration. Two APIs:
     //
@@ -223,7 +225,7 @@ public:
 
     // 0x0016fc64. Ordinal index of `entity` in its type list, or -1.
     // Defunct: zero in-binary callers; binary @ 0x0016fc64.
-    int GetEntityIdx(Entity* entity) const;
+    int GetEntityIdx(Entity* entity);
 
     // 0x0016fd10. Linear scan of the type list `type`; returns the first
     // entity whose m_TrackerID (Entity+0x04) equals `trackerKey`.
@@ -236,7 +238,7 @@ public:
     // 0x0016fbec. Count entities whose vtable+0x20 (InRect(ColAABB*)) collision
     // test passes against `aabb`. Port stub returns 0.
     // Defunct: zero in-binary callers; binary @ 0x0016fbec.
-    int GetNumInAABB(Mortar::ColAABB* aabb);
+    int GetNumInAABB(ColAABB* aabb);
 
     // --- Level deserialiser (stubbed — .lvl loading not used by FN) -----
 
@@ -308,5 +310,7 @@ struct ActorManagerLayoutAssert {
     static_assert(offsetof(ActorManager, m_DebugDraw)         == 0x1020, "m_DebugDraw offset");
 };
 #endif
+
+}  // namespace Mortar
 
 #endif  // FN_ACTOR_MANAGER_H

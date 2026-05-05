@@ -17,9 +17,9 @@
 // GOT[+0x77cc] supplies the zero-vec3 default used in the loop.
 static Vec3 g_TouchZoneTable[16];
 
-// 16-slot entity pointer table — one ActorManager type-3 entity per touch zone.
+// 16-slot entity pointer table — one Mortar::ActorManager type-3 entity per touch zone.
 // Binary: stored at g_TaskState+0x24..+0x60 (4 bytes each, 16 entries).
-static Entity* g_TouchEntities[16];
+static Mortar::Entity* g_TouchEntities[16];
 
 // Forward declarations for input callbacks (bodies below).
 static bool PointerMoveCallback(InputEvent* ev);
@@ -57,7 +57,7 @@ void GameTaskInitInput() {
     // DIFFERS: binary creates 16 pooled SlashEntity instances here (one per
     //   touch zone). Port owns SlashEntity as a singleton (g_pSlashEntity)
     //   and EntityFactory returns nullptr for type 3, so Add(3) returns
-    //   nullptr. Skip the per-zone Entity creation + Init for now and leave
+    //   nullptr. Skip the per-zone Mortar::Entity creation + Init for now and leave
     //   g_TouchEntities[i] = nullptr; PointerMoveCallback dispatch must
     //   null-check downstream. Full fix requires SlashEntity to be poolable
     //   (R5+) or a dedicated TouchZoneEntity stub.
@@ -65,11 +65,11 @@ void GameTaskInitInput() {
     for (int i = 0; i < 16; ++i) {
         g_TouchZoneTable[i] = defaultPos;
 
-        Entity* e = ActorManager::GetInstance()->Add(3, true);
+        Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(3, true);
         g_TouchEntities[i] = e;
 
         Vec3 initPos = defaultPos;
-        // Binary: Entity::vtable[+0x08] called as (nullptr, 0, &initPos).
+        // Binary: Mortar::Entity::vtable[+0x08] called as (nullptr, 0, &initPos).
         // Port-specific null-guard: skip Init when factory refused type 3.
         if (e) e->Init(nullptr, 0, &initPos);
 

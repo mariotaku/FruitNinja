@@ -6,12 +6,10 @@
 #include "math/Vec3.h"
 #include "core/Singleton.h"
 
-namespace Mortar {
-
 // Matches original MatrixManager (0x2134 = 8500 bytes)
 // 4 MatrixStacks with dirty-tracking version counters
-class MatrixManager : public Singleton<MatrixManager> {
-    friend class Singleton<MatrixManager>;
+class MatrixManager : public Mortar::Singleton<MatrixManager> {
+    friend class Mortar::Singleton<MatrixManager>;
 
 public:
     // +0x04 (vtable at +0x00 is implicit)
@@ -68,7 +66,5 @@ private:
 
     MatrixManager();
 };
-
-} // namespace Mortar
 
 #endif

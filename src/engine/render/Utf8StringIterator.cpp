@@ -1,6 +1,8 @@
 // Analysed: 2026-04-29T00:00
 #include "render/Utf8StringIterator.h"
 
+namespace Mortar {
+
 namespace utf8 {
 
 uint32_t decode_next_unicode_character(const char** cursor) {
@@ -99,3 +101,5 @@ Utf8StringIterator Utf8StringIterator::operator+(int n) const {
     copy.Advance(n);
     return copy;
 }
+
+}  // namespace Mortar

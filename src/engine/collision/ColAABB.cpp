@@ -3,8 +3,6 @@
 #include "collision/ColSphere.h"
 #include "collision/ColLine.h"
 
-namespace Mortar {
-
 ColAABB::ColAABB() : Col(), m_Min(m_PrimaryPoint), m_Max() {}
 
 ColAABB::ColAABB(const Vec3& min, const Vec3& max) : Col(), m_Min(m_PrimaryPoint), m_Max(max) {
@@ -42,4 +40,3 @@ void ColAABB::DrawDebug() {
     // TODO: Mesh::DrawCube helper not ported
 }
 
-}  // namespace Mortar

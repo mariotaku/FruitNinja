@@ -79,7 +79,7 @@ void ScreenFadeControl::Draw(const Vec3& hudScale, int layerMask)
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, tex->m_TexId);
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
     Matrix44 mat = Matrix44::MakeScale(size.x, size.y, size.z);

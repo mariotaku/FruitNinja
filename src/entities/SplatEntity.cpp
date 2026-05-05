@@ -189,7 +189,7 @@ SplatEntity::SplatEntity()
     , m_bSSMPHorizGravity(0)
     , m_bAlive(0)
 {
-    // SplatEntity is NOT an Entity subclass (binary @ 0x0017ed58 ctor).
+    // SplatEntity is NOT an Mortar::Entity subclass (binary @ 0x0017ed58 ctor).
     // Pool managed by s_Pool; m_bAlive is the live/dead flag.
     // Binary ctor only sets vptr, default-inits Colour, m_SplatType=-1, m_bAlive=0.
     // The pad fields are left uninitialised (not zeroed by the binary).
@@ -562,7 +562,7 @@ void SplatEntity::UpdateActiveSplats(float dt) {
     // SplatEntity::UpdateActiveSplats @ 0x0017fd68 (instructions
     // 0x0017fe46..0x0017feda):
     //
-    //   N_total  = ActorManager::GetNumEntities()
+    //   N_total  = Mortar::ActorManager::GetNumEntities()
     //   N_active = NumActiveSplats()
     //   raw      = (N_total + N_active) / 15.0 - 0.15
     //   if raw <= 0:   spring = 1.25
@@ -570,7 +570,7 @@ void SplatEntity::UpdateActiveSplats(float dt) {
     //   else:          spring = raw + 1.25  (linear ramp 1.25..4.25)
     const int activeCount = NumActiveSplats();
     int totalEntities = 0;
-    if (ActorManager* am = ActorManager::GetInstance()) {
+    if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
         totalEntities = am->GetNumEntities();
     }
     {
@@ -765,14 +765,14 @@ void SplatEntity::DrawActiveSplats() {
 
     if (count == 0) return;
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
     s_SplatTex->Set();
 
     // Read-only depth test -- matches binary's SetDepthBufferWrite(0)
-    // call before this draw (after ActorManager::Draw).
+    // call before this draw (after Mortar::ActorManager::Draw).
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
     glDepthMask(GL_FALSE);

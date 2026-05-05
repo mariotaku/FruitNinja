@@ -123,7 +123,7 @@ int FruitSaveData::AddToTotal(const char* name, int count) {
 }
 
 // GetTotal @ 0x0012a110.
-int FruitSaveData::GetTotal(uint32_t hash) const {
+int FruitSaveData::GetTotal(uint32_t hash) {
     auto it = m_Totals.find(hash);
     return (it != m_Totals.end()) ? it->second.count : 0;
 }

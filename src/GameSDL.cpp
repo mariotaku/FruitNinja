@@ -83,7 +83,7 @@ void Game::run() {
 
         // === Game tick (matches FruitNinja::Draw at 0x1824e0) ===
 
-        // Original: dt = 0.0; SystemManager::Update(&dt) writes fixed 1/60;
+        // Original: dt = 0.0; Mortar::SystemManager::Update(&dt) writes fixed 1/60;
         // then passes dt to update + draw functions
         dt = 0.0f;
         Mortar::SystemManager::GetInstance().Update(&dt);

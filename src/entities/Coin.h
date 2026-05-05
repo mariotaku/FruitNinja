@@ -1,8 +1,8 @@
 #ifndef FN_COIN_H
 #define FN_COIN_H
 
-// Coin : Entity — entity type 2.
-// Binary struct: 0x94 / 148 bytes. Pool-based via ActorManager(2).
+// Coin : Mortar::Entity — entity type 2.
+// Binary struct: 0x94 / 148 bytes. Pool-based via Mortar::ActorManager(2).
 //
 // Binary references:
 //   Coin::Coin   (C1)  0x00173394
@@ -33,11 +33,11 @@
 struct Renderer;
 namespace Mortar { struct PSPParticleEmitter; }
 
-class Coin : public Entity {
+class Coin : public Mortar::Entity {
 public:
-    // --- Binary fields beyond Entity base (Entity = 0x3C bytes) --------
-    // m_Angle at +0x36 is now in the Entity base (added 2026-05-04).
-    // Coin's own angle field mapped to Entity::m_Angle; callers already use
+    // --- Binary fields beyond Mortar::Entity base (Mortar::Entity = 0x3C bytes) --------
+    // m_Angle at +0x36 is now in the Mortar::Entity base (added 2026-05-04).
+    // Coin's own angle field mapped to Mortar::Entity::m_Angle; callers already use
     // this->m_Angle via the base class.
 
     int      m_CoinValue;        // +0x3C  coin value credited on arrival
@@ -65,7 +65,7 @@ public:
     // 0x0019D5FC — Coin uses the base no-op Init (vtable slot 2 = base 0x0019d5fc).
     // Coin is fully initialised by its ctor + MakeCoins/InitCoin; this override
     // is kept so the compiler knows the virtual is satisfied (same function ptr).
-    void Init(void* p1, long p2, const Vec3* p3) override;
+    void Init(void* p1, long p2, Vec3* p3) override;
 
     // 0x001731F4 — clear fly emitter; called from dtor
     void Release() override;
@@ -79,7 +79,7 @@ public:
     // 0x00173CC4 — scale × RotY(spin) × RotZ(heading) × Translate
     void Draw(Renderer& r) override;
 
-    // Non-virtual cleanup helper called by ActorManager::Deactivate.
+    // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
     void Deactivate();
 
     // --- Public API ------------------------------------------------------
@@ -93,7 +93,7 @@ public:
     // 0x00173190 — invoke m_OnArrived, cleanup emitters, mark dead
     void Arrived();
 
-    // 0x00173568 — spawn N coins via ActorManager::Add(2)
+    // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2)
     static void MakeCoins(int totalCoins, int coinsPerCoin, float delayRange,
                           uint16_t baseAngle, uint16_t angleSpread,
                           const Vec3& spawnPos,

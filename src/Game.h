@@ -27,7 +27,7 @@
 class InputTranslatorSDL;
 
 class HUD;
-class ActorManager;
+namespace Mortar { class ActorManager; }
 class MainScreen;
 class FruitCamera;
 class FruitSaveData;
@@ -123,7 +123,7 @@ struct Game : public Mortar::MortarGame {
     Renderer renderer;
     Mortar::InputManager* inputManager;
     InputTranslatorSDL* inputTranslator;   // heap-allocated in GameSDL.cpp
-    ActorManager* actorManager;
+    Mortar::ActorManager* actorManager;
 
     // Audio toggle state
     bool soundEnabled;

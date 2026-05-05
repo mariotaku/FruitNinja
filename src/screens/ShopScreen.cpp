@@ -412,7 +412,7 @@ void ShopScreen::NewItem() {
 // DIFFERS: exact formula not fully confirmed from binary; approximated from
 //          the list-slide formula (LIST_SLIDE_OFF=95.0 + -80 offset = 65 rest).
 // ---------------------------------------------------------------------------
-float ShopScreen::GetDescriptionTextXPos() const {
+float ShopScreen::GetDescriptionTextXPos() {
     // Slide formula matches Block A/B: 145.0 + (1 - alpha) * 190.0 * 1.5
     // then subtract 80.0f for the text indent inside the dialog box.
     float slide_X = 145.0f + (1.0f - m_TransitionAlpha) * 190.0f * 1.5f;
@@ -993,9 +993,9 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton = nullptr;
         }
 
-        // Binary: wait until ActorManager has no active entities (both pools)
+        // Binary: wait until Mortar::ActorManager has no active entities (both pools)
         // Then equip selected item via ItemManager.
-        ActorManager* am = ActorManager::GetInstance();
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         int nLayer1 = am ? am->GetNumEntities(1) : 0;
         int nLayer0 = am ? am->GetNumEntities(0) : 0;
         if (nLayer1 == 0 && nLayer0 == 0) {
@@ -1075,7 +1075,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     static bool  s_RingVecInited = false;  // static_block+0x74
     static Vec3  s_RingVec(0.0f, 0.0f, 1.0f);  // static_block+0x78
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
 

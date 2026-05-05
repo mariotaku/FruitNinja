@@ -484,7 +484,7 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         u0 = 0.5f; v0 = 0.0f; du = 0.25f; dv = 0.75f;
     }
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
     // binary @ 0x001520ec / 0x000fc720 / 0x000f7a4c. Order: Scale -> RotZ -> Translate.

@@ -2,8 +2,8 @@
 #define FN_ENTITIES_MESSAGE_H
 
 // Mortar::Message and Mortar::MessageListener — POD envelope + filter record.
-// Binary layout confirmed from ActorManager::SendMessage @ 0x0016ffd8 and
-// Entity::ReceiveMessage @ 0x0019d61c.
+// Binary layout confirmed from Mortar::ActorManager::SendMessage @ 0x0016ffd8 and
+// Mortar::Entity::ReceiveMessage @ 0x0019d61c.
 //
 // Defunct: Mortar messaging — no-op stub; binary @ 0x0016ffd8 (Send),
 //   0x0017085c (Add), 0x00170124 (Remove). Listener subsystem wired but
@@ -17,7 +17,7 @@ namespace Mortar {
 
 // Mortar::Message — 8-byte POD message envelope; binary @ no class ctor (plain POD).
 // SendMessage @ 0x0016ffd8 reads msg->type at +4;
-// Entity::ReceiveMessage @ 0x0019d61c does the same.
+// Mortar::Entity::ReceiveMessage @ 0x0019d61c does the same.
 struct Message {
     unsigned int  reserved0;  // +0x00 — unread by SendMessage/ReceiveMessage; opaque sender slot
     int           type;       // +0x04 — primary discriminator (filter key)
@@ -30,9 +30,9 @@ static_assert(offsetof(Message, type) == 4, "Message::type offset mismatch");
 // SendMessage filter (0x0016ffd8): type is exact-match; senderId/msgKind use 0=any wildcard.
 struct MessageListener {
     unsigned int   type;      // +0x00 — exact-match against Message::type (0 is a real value, not wildcard)
-    int            senderId;  // +0x04 — Entity::id (Entity+0x04) filter; 0 = any
+    int            senderId;  // +0x04 — Mortar::Entity::id (Mortar::Entity+0x04) filter; 0 = any
     unsigned int   msgKind;   // +0x08 — SendMessage's msgKind key filter; 0 = any
-    void*          callback;  // +0x0C — Mortar::Delegate2<void, Entity*, Entity*, Message*>*
+    void*          callback;  // +0x0C — Mortar::Delegate2<void, Mortar::Entity*, Mortar::Entity*, Message*>*
                               //         polymorphism lives here, not on MessageListener itself.
                               //         Binary calls callback->vtable[+0x30](sender, target, msg).
 };

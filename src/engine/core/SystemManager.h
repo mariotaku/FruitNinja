@@ -6,8 +6,8 @@
 
 namespace Mortar {
 
-class SystemManager : public Singleton<SystemManager> {
-    friend class Singleton<SystemManager>;
+class SystemManager : public Mortar::Singleton<SystemManager> {
+    friend class Mortar::Singleton<SystemManager>;
 
     uint8_t m_bRunning;          // +0x04
     int16_t m_LastFrameTime;     // +0x06
@@ -50,5 +50,6 @@ public:
     uint8_t GetQuitState() const { return m_QuitState; }
 };
 
-} // namespace Mortar
+
+}  // namespace Mortar
 #endif

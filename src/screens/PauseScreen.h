@@ -134,7 +134,7 @@ public:
 
     // vtable[?]: IsEnabled -- binary @ 0x00153e4c
     // Returns false while transition is in-flight or bomb hit timer running.
-    bool IsEnabled() const;
+    bool IsEnabled();
 
     // Engine pause helpers matching binary 0x00168f80 / 0x00168fb0
     static void PauseGame();

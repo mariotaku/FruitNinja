@@ -35,7 +35,7 @@ struct FruitModelInfo {
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
 // Binary sizeof(Fruit) = 0x118 (280). Port size differs due to std::function usage.
 // EntityFactory @ 0x0017421c: operator_new(0x118) for type 0.
-class Fruit : public Entity {
+class Fruit : public Mortar::Entity {
 public:
     // +0x3c: fruit type index into FRUIT_INFO array
     int m_FruitType;
@@ -135,7 +135,7 @@ public:
 
     // Vtable slot 2: Binary @ 0x00176708.
     // p2 = fruitType (0..N-1); p3 = scale Vec3* (nullable, default 1.0); p1 unused.
-    void Init(void* p1, long fruitType, const Vec3* scaleOrNull) override;
+    void Init(void* p1, long fruitType, Vec3* scaleOrNull) override;
     void Update(float dt) override;
     void Draw(Renderer& r) override;
     void PostUpdate(float dt) override;   // 0x0017501c — screen-edge bounce / push
@@ -143,10 +143,10 @@ public:
     // Vtable slot 9: Binary @ 0x001780b0.
     // Returns 1 if already sliced (early-out). Otherwise records slice state,
     // spawns juice emitters, plays SFX, updates score/combo/achievements.
-    int CollisionResponse(Entity* hitter, unsigned long flagsA, unsigned long flagsB,
-                          const Vec3* bladeVelocity) override;
+    int CollisionResponse(Mortar::Entity* hitter, unsigned long flagsA, unsigned long flagsB,
+                          Vec3* bladeVelocity) override;
 
-    // Non-virtual cleanup helper called by ActorManager::Deactivate.
+    // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
     void Deactivate();
 
     // Matches Fruit::Slice (0x176d58, simplified). Flips m_bSliced,
@@ -214,7 +214,7 @@ public:
     // Port specific: playerIdx filtering omitted; entity has no player-index field yet (split-screen MP stub).
     static int GetNumActiveForPlayer(int playerIdx, bool checkBombs);
 
-    // Matches Fruit::ClearUnspawned (0x001762a0). Walks ActorManager type-0
+    // Matches Fruit::ClearUnspawned (0x001762a0). Walks Mortar::ActorManager type-0
     // list and deactivates any fruit still in pre-spawn (chuck-delay) state.
     // Binary param: false = don't deactivate already-visible fruits.
     static void ClearUnspawned(bool deactivateVisible);
@@ -256,7 +256,7 @@ public:
     // Binary @ 0x00175b78 — sets m_PlayerIdx; online-MP side-effect: P2 collision radius *= 0.66 (Defunct)
     void SetForPlayer(int playerIdx);
 
-    // Binary @ 0x001761d8 — virtual Entity::Release override
+    // Binary @ 0x001761d8 — virtual Mortar::Entity::Release override
     void Release() override;
 
     // Binary @ 0x00175ba4 — fact-of-the-day picker with save-data round-robin

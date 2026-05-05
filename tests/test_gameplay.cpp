@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < 180; ++i) {
         // Take a snapshot of (wave, active-fruit-count) before the tick;
         // any change in active count between ticks proves spawn activity.
-        ActorManager* am = game.actorManager;
+        Mortar::ActorManager* am = game.actorManager;
         int fruitsBefore = am ? am->GetNumEntities(0) : 0;
 
         game.runFrames(1);

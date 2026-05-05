@@ -134,7 +134,7 @@ int Touch::FindTouch(uint32_t touchId) const {
 
 // Binary @ 0x001954fc -- GetAnyTouch.
 // First slot with phase < 1; returns touchId or 0.
-uint32_t Touch::GetAnyTouch() const {
+uint32_t Touch::GetAnyTouch() {
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (states1[i].phase < 1) return states1[i].touchId;
     }
@@ -143,7 +143,7 @@ uint32_t Touch::GetAnyTouch() const {
 
 // Binary @ 0x0019551c -- GetMostRecentTouch.
 // FindTouch(nextTouchId - 1); returns touchId or 0.
-uint32_t Touch::GetMostRecentTouch() const {
+uint32_t Touch::GetMostRecentTouch() {
     int slot = FindTouch(nextTouchId - 1);
     if (slot < 0) return 0;
     return states1[slot].touchId;
@@ -177,7 +177,7 @@ int Touch::GetTouchDelta(uint32_t touchId, int& dx, int& dy) const {
 // Binary @ 0x001954b4 -- GetTouchInReigion (note binary typo).
 // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.
 // Binary uses inclusive <= on all bounds.
-uint32_t Touch::GetTouchInReigion(int x, int y, int w, int h) const {
+uint32_t Touch::GetTouchInReigion(int x, int y, int w, int h) {
     int x1 = x + w;
     int y1 = y + h;
     for (int i = 0; i < MAX_SLOTS; i++) {

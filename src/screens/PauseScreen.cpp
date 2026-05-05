@@ -98,7 +98,7 @@ void PauseScreen::UnpauseGame() {
 // -------------------------------------------------------------------------
 
 // ASM-verified: 2026-05-03 binary @ 0x00153e4c (re-analyst)
-bool PauseScreen::IsEnabled() const {
+bool PauseScreen::IsEnabled() {
     Game* g = Game::GetInstance();
     if (!g) return false;
     if (fabsf(g->m_TransitionTimer) < 0.001f) return false;  // [+0xc] epsilon
@@ -284,7 +284,7 @@ void PauseScreen::PreDraw(const Vec3& hudScale) {
     const float scale = m_Alpha * FLASH_SCALE_MUL;
     const Colour tint(0, 0, 0, alpha);
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
     // Centered at origin (full-screen coverage)

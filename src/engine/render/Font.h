@@ -90,7 +90,7 @@ public:
 
     // Matches Font_DrawString (0x00198e44).
     void DrawString(float scale, float maxWidth, float rotZ,
-                    Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
+                    Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                     Vec2 maxWH, int alignment, float z,
                     MortarRectangleDec* clipRect = nullptr);
 
@@ -112,18 +112,18 @@ public:
     void DrawStringWrapped(float scale, float wrapPx, float z,
                            const char* text, const Vec3& pos,
                            const Colour& colour, int alignment) {
-        Utf8StringIterator iter(text);
+        Mortar::Utf8StringIterator iter(text);
         Vec2 maxWH(wrapPx, 0.0f);
         DrawString(scale, 1.0f, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
     }
 
     // Returns normalized text width in lineHeight units (multiply by scale for world units)
     float MeasureWidth(float scale, const char* text) const;
-    float MeasureWidth(float scale, Utf8StringIterator iter) const;
+    float MeasureWidth(float scale, Mortar::Utf8StringIterator iter) const;
 
     // Binary @ 0x001988a8. Single-line measure: stops at newline or end.
     // Returns total xadvance in lineHeight-normalized units.
-    float MeasureString(const Utf8StringIterator& iterIn) const;
+    float MeasureString(const Mortar::Utf8StringIterator& iterIn) const;
     float MeasureString(const char* str) const;
 
     // Line height in world units at given scale
@@ -134,8 +134,8 @@ public:
     Page*         GetPage(int idx) const;
 
 private:
-    float         GetLineLength(Utf8StringIterator iter, float wrapWidth, float* outSlack) const;
-    const char*   FindAdvanceOfNextWord(Utf8StringIterator iter, float curX, float maxX,
+    float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack);
+    const char*   FindAdvanceOfNextWord(Mortar::Utf8StringIterator iter, float curX, float maxX,
                                         float scale, float spacing) const;
 };
 

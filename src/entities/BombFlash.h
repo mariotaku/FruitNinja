@@ -3,7 +3,7 @@
 
 // Analysed: 2026-04-30T00:00
 //
-// BombFlash — pooled standalone (NOT an Entity subclass). Has its own vtable.
+// BombFlash — pooled standalone (NOT an Mortar::Entity subclass). Has its own vtable.
 // Size: 0x44 bytes (68 bytes). Confirmed via BombFlash::CreatePool(0x20) -> 32-element pool.
 // White flash sprite spawned on bomb hit. Quadratic scale + alpha animation over a short
 // lifetime, then deactivates and returns to the pool.

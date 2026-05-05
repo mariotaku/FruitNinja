@@ -258,7 +258,7 @@ public:
     int AddToTotal(const char* name, int count);
 
     // 0x0012a110. Map lookup by hash; 0 if missing.
-    int GetTotal(uint32_t hash) const;
+    int GetTotal(uint32_t hash);
 
     // Binary @ 0x00153ebc (via PauseScreen::QuitGameCallback) -- wipes entire m_Totals map.
     // Called from PauseScreen::QuitGameCallback, PauseScreen::RetryGameCallback, and

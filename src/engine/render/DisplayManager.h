@@ -82,10 +82,10 @@ public:
     bool IsRenderingAllowed() const { return true; }
 
     // Platform filter/wrap mode lookups
-    GLenum GetPlatformMagFilter() const;
-    GLenum GetPlatformMinFilter() const;
-    GLenum GetPlatformWrapS() const;
-    GLenum GetPlatformWrapT() const;
+    GLenum GetPlatformMagFilter();
+    GLenum GetPlatformMinFilter();
+    GLenum GetPlatformWrapS();
+    GLenum GetPlatformWrapT();
 
 private:
     DisplayManager();

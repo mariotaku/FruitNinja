@@ -63,7 +63,7 @@ BombBlast::BombBlast()
     , m_Lifetime(0.0f)
 {
     entityType = 4;
-    m_Angle = 0;  // inherited from Entity base at +0x36
+    m_Angle = 0;  // inherited from Mortar::Entity base at +0x36
     // Binary ctor clears 0x11 (collision + kill); we start without both.
     flags &= ~0x11u;
 }
@@ -80,9 +80,9 @@ void BombBlast::ReleaseContent() {}
 // Confirmed: Ghidra's void* p1 was a mis-decompile artifact -- the binary
 // writes through r0 which is `this`; runtime caller passes (this, 0, 0, 0).
 // Body operates exclusively on `this` and ignores all three explicit params.
-void BombBlast::Init(void* /*p1*/, long /*p2*/, const Vec3* /*p3*/) {
+void BombBlast::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {
 
-    // Activate: clear ENT_INACTIVE | ENT_KILLED. ActorManager::Add already
+    // Activate: clear ENT_INACTIVE | ENT_KILLED. Mortar::ActorManager::Add already
     // cleared these on the recycle path; redundant on the factory path
     // but harmless and matches the binary's explicit Init sequence.
     flags &= ~ENT_SKIP_MASK;
@@ -116,7 +116,7 @@ void BombBlast::Init(void* /*p1*/, long /*p2*/, const Vec3* /*p3*/) {
     m_Scale = 50.0f;
     m_Lifetime = 0.0f;
 
-    // m_Col stays null (inherited from Entity ctor) — BombBlast doesn't collide.
+    // m_Col stays null (inherited from Mortar::Entity ctor) — BombBlast doesn't collide.
 }
 
 // Matches BombBlast::Update (0x171170).
@@ -164,7 +164,7 @@ void BombBlast::PostUpdate(float /*dt*/) {}
 // (0,0) — binary samples a single texel of `bomb_explode.tex` for a
 // flat tinted fill.
 void BombBlast::DrawActiveBlasts() {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     // Share the texture Bomb::Init already loaded (g_bombData->tex_02
@@ -173,9 +173,9 @@ void BombBlast::DrawActiveBlasts() {
 
     // Build the per-frame vertex buffer in one pass. BombBlast is type 4.
     int blastCount = 0;
-    const std::list<Entity*>& blastList = am->GetTypeList(4);
+    const std::list<Mortar::Entity*>& blastList = am->GetTypeList(4);
     for (auto it = blastList.begin(); it != blastList.end() && blastCount < MAX_BLASTS; ++it) {
-        Entity* e = *it;
+        Mortar::Entity* e = *it;
         if (!e || !e->IsActive()) continue;
 
         BombBlast* b = static_cast<BombBlast*>(e);
@@ -234,7 +234,7 @@ void BombBlast::DrawActiveBlasts() {
     if (blastCount == 0) return;
 
     // Identity world matrix — vertices are already in world space.
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
@@ -250,7 +250,7 @@ void BombBlast::DrawActiveBlasts() {
 // Matches RemoveFlashEntities (0x169ca0) — called by UpdateBombHit when
 // Game.bombHitTimer drops below 1.55s.
 void BombBlast::RemoveAll() {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
     // Binary DeactivateAllEntities(type) @ 0x0016fb44 — set ENT_KILLED on
     // every entity of the given type. Next Update sweep returns them to

@@ -98,7 +98,7 @@ void TutorialControl::Reset() {
 // Matches TutorialControl::CanShowTute @ 0x00162fb8.
 // pGameOverScreen guard is binary-faithful: slow-mo branch cannot trigger
 // until the player has died at least once (GameOverScreen allocated).
-bool TutorialControl::CanShowTute() const {
+bool TutorialControl::CanShowTute() {
     Game* game = Game::GetInstance();
     if (!game) return false;
 
@@ -261,7 +261,7 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
     if (m_AnimTimer <= 0.0f) return;
     // NOTE: no early-out on m_bHidden -- it is a UV frame selector, not a guard.
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
 

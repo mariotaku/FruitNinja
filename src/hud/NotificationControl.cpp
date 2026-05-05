@@ -125,8 +125,8 @@ void NotificationControl::Update(float dt) {
     // Type_Named only: spawn "achievement_unlock" particle emitter every 0.125s in first 0.5s
     if (m_NotifType == Type_Named && m_StateTimer < NOTIF_PARTICLE_WINDOW) {
         // TODO: spawn "achievement_unlock" particle emitter at pos
-        // Requires ActorManager / ParticleEmitter to be ported.
-        // Binary: ActorManager::GetInstance()->SpawnEmitter("achievement_unlock", pos, ...)
+        // Requires Mortar::ActorManager / ParticleEmitter to be ported.
+        // Binary: Mortar::ActorManager::GetInstance()->SpawnEmitter("achievement_unlock", pos, ...)
         (void)NOTIF_PARTICLE_INTERVAL;
     }
 }
@@ -141,7 +141,7 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
     Game* g = Game::GetInstance();
     if (!g) return;
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
 
     if (m_NotifType == Type_Numeric) {
         // --- Numeric notification (score/points pop-up) ---

@@ -320,7 +320,7 @@ void ShopListItem::Draw() {
         Mortar::Font* font = g->pFontMain.IsValid() ? g->pFontMain.Get() : nullptr;
         if (!font) goto draw_part8;
 
-        Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+        MatrixManager& mm = MatrixManager::GetInstance();
         Renderer* r = Renderer::GetInstance();
         if (!r) goto draw_part8;
 
@@ -772,7 +772,7 @@ void ShopListItem::Draw() {
         float parentX = m_pParent ? m_pParent->pos.x : pos.x;
 
         if (ShopScreen::s_TexLoading.IsValid()) {
-            Mortar::MatrixManager& mm2 = Mortar::MatrixManager::GetInstance();
+            MatrixManager& mm2 = MatrixManager::GetInstance();
             Renderer* r2 = Renderer::GetInstance();
             if (r2) {
                 glActiveTexture(GL_TEXTURE0);

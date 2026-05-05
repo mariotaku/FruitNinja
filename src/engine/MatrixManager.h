@@ -5,7 +5,7 @@
 #include "render/MatrixManager.h"
 
 // Backward-compatible unqualified names for existing game code
-using MatrixStack = Mortar::MatrixStack;
-using MatrixManager = Mortar::MatrixManager;
+using MatrixStack = MatrixStack;
+using MatrixManager = MatrixManager;
 
 #endif

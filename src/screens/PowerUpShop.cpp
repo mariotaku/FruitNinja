@@ -48,12 +48,12 @@ static const Colour g_White(255, 255, 255, 255);
 
 // Binary @ UploadMatrices_SpeedCtrl
 static void UploadMatrices() {
-    Mortar::MatrixManager::GetInstance().UploadModelViewOnly();
+    MatrixManager::GetInstance().UploadModelViewOnly();
 }
 
 // Binary @ SetMatrix_SpeedCtrl — world stack at game+0x1094
 static void SetMatrix(const Matrix44& mat) {
-    Mortar::MatrixManager::GetInstance().GetWorldStack().SetCurrentMatrix(mat);
+    MatrixManager::GetInstance().GetWorldStack().SetCurrentMatrix(mat);
 }
 
 // Binary @ MakeColour_SpeedCtrl — packs RGBA into Colour (alpha=0xff always)
@@ -199,7 +199,7 @@ void PowerUpShop::Release() {
             // Binary: sets Fruit::m_bSliced=1 and zeroes velocity/spin vectors.
             fruit->m_bSliced = true;
             fruit->vel    = g_Origin;
-            // m_AngularVel is not in Entity base; Fruit stores RotVel in m_RotVel1/m_RotVel2.
+            // m_AngularVel is not in Mortar::Entity base; Fruit stores RotVel in m_RotVel1/m_RotVel2.
             // Binary zeroes multiple vel-like fields. Port zeroes what's accessible.
             fruit->m_RotVel1 = g_Origin;
             fruit->m_RotVel2 = g_Origin;
@@ -242,7 +242,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
 
     // Binary @ 0x00155e08:
     // Step 1: scale + translate world matrix, upload.
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Push();
 
     Matrix44 scaleMat;

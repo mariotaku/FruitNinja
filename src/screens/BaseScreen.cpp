@@ -92,7 +92,7 @@ void BaseScreen::UnloadContent() {
 // ===================================================================
 void BaseScreen::DrawBorders(const SmartPtr<Mortar::Texture>& secondaryTex,
                              float alpha, const Vec3& secondaryTexPos) {
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
 

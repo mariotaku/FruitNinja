@@ -185,21 +185,21 @@ void GameInit(unsigned long) {
     game->hud->AddControl(GetTaskState()->pPauseScreen);
     game->hud->AddControl(game->pTutorialCtrl);
 
-    // step 15: Entity::HeapCreate (0x0016cb48..0x0016cb4e)
+    // step 15: Mortar::Entity::HeapCreate (0x0016cb48..0x0016cb4e)
     // Binary: Mortar::Entity::HeapCreate(0x20000) @ 0x000fd500 (PLT thunk).
-    // 0x20000 = 128 KB Entity LinkedHeap arena; must run before step 16.
+    // 0x20000 = 128 KB Mortar::Entity LinkedHeap arena; must run before step 16.
     // DIFFERS: port stub is a no-op (std new, no fixed arena). See Entity.h.
-    Entity::HeapCreate(0x20000);
+    Mortar::Entity::HeapCreate(0x20000);
 
-    // step 16: ActorManager full init (0x0016cb50..0x0016cc06)
+    // step 16: Mortar::ActorManager full init (0x0016cb50..0x0016cc06)
     // Binary: 16a Initialise(5, 0x2000), 16b RegisterFactory(delegate),
     //         16c RegisterHashConverter(delegate).
     // Factory + hash delegates reference GOT slots [0x0016ccb4..0x0016ccc0] --
     // RE-gap: addresses not yet resolved. Pass nullptr stubs for now.
-    // NOTE: ActorManager::Initialise already called in GameInitialise; binary
+    // NOTE: Mortar::ActorManager::Initialise already called in GameInitialise; binary
     // calls it again here (per-session reset). Matching binary call order.
     {
-        ActorManager* am = ActorManager::GetInstance();
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         // 16a: Mortar::ActorManager::Initialise @ 0x000f7d04 (PLT thunk)
         am->Initialise(5, 0x2000);
         // 16b: Mortar::ActorManager::RegisterFactory @ 0x00107c34 (PLT thunk)
@@ -221,16 +221,16 @@ void GameInit(unsigned long) {
     GameTaskInitInput();
 
     // step 19: 30x prespawn loop (0x0016cc0e..0x0016cc4e)
-    // Binary: do/while x30 — three ActorManager::Add calls per iteration
+    // Binary: do/while x30 — three Mortar::ActorManager::Add calls per iteration
     //   (entityType 0=Fruit, 1=Bomb, 4=Splat), then flags |= 0x11.
     // flags |= 0x11 = ENT_INACTIVE(0x01) | ENT_KILLED(0x10) = pre-spawned pool slot.
     {
-        ActorManager* am = ActorManager::GetInstance();
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         for (int i = 0; i < 30; ++i) {
             // Mortar::ActorManager::Add @ 0x00108084 (PLT thunk -> PTR_Add_001f2f7c)
-            if (Entity* e0 = am->Add(0, true)) e0->flags |= 0x11;
-            if (Entity* e1 = am->Add(1, true)) e1->flags |= 0x11;
-            if (Entity* e4 = am->Add(4, true)) e4->flags |= 0x11;
+            if (Mortar::Entity* e0 = am->Add(0, true)) e0->flags |= 0x11;
+            if (Mortar::Entity* e1 = am->Add(1, true)) e1->flags |= 0x11;
+            if (Mortar::Entity* e4 = am->Add(4, true)) e4->flags |= 0x11;
         }
     }
 
@@ -258,7 +258,7 @@ void GameInit(unsigned long) {
         sm.SetSFXVolume(sfxVol);
     }
     // Port specific: SlashEntity for touch-trail rendering.
-    // Binary uses a 2-player array in ActorManager; port keeps one global for single-touch.
+    // Binary uses a 2-player array in Mortar::ActorManager; port keeps one global for single-touch.
     if (!g_pSlashEntity) {
         g_pSlashEntity = new SlashEntity();
         g_pSlashEntity->Init();
@@ -323,7 +323,7 @@ void GameUpdate(float dt, bool active) {
 //
 // Binary draw order (verified from decompile, see comments inline):
 //   1.  Camera + background quad
-//   2.  ActorManager::Draw (3D entities — fruit, bomb, SlashEntity)
+//   2.  Mortar::ActorManager::Draw (3D entities — fruit, bomb, SlashEntity)
 //   3.  HUD::BeginDraw
 //   4.  HUD::Draw(0x40)
 //   5.  SplatEntity::DrawActiveSplats / Fruit::DrawShadows /
@@ -355,7 +355,7 @@ void GameDraw(float dt, bool active) {
     if (game->pCamera)
         game->pCamera->SetupPerspective(PT_STANDARD, false);
 
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
 
     Mortar::Texture* bgTex = GetCurrentBackground();
     // Background texture quad. Reads from the MenuBackground file-static
@@ -381,9 +381,9 @@ void GameDraw(float dt, bool active) {
     Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
     Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
 
-    // === 1. ActorManager::Draw — 3D fruit/bomb/slash entities ===
+    // === 1. Mortar::ActorManager::Draw — 3D fruit/bomb/slash entities ===
     // Binary @ 0x0016ba10: SetDepthBufferWrite(1) + SetDepthBuffer(1)
-    // just before ActorManager::Draw. Depth func stays at GL_LESS set
+    // just before Mortar::ActorManager::Draw. Depth func stays at GL_LESS set
     // by BeginFrame — binary never overrides it.
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
@@ -397,7 +397,7 @@ void GameDraw(float dt, bool active) {
     if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
     // === 2. HUD::BeginDraw + post-actor block ===
-    // Binary @ 0x0016ba10 right after ActorManager::Draw:
+    // Binary @ 0x0016ba10 right after Mortar::ActorManager::Draw:
     //   SetDepthBuffer(1)       — depth test still ON
     //   SetDepthBufferWrite(0)  — writes OFF for HUD/splats/bomb blasts
     dm.SetDepthBuffer(true);
@@ -528,9 +528,9 @@ void GameExit_Handler() {
     FruitNinja_SaveCurrentData();  // stub (writes FruitSaveData XML in binary)
     WaveManager::GetInstance()->Destroy();  // stub (frees WAVE_INFO/WaveQue)
     Mortar::PSPParticleManager::GetInstance().ClearEmitters();
-    if (ActorManager* am = ActorManager::GetInstance()) {
+    if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
         am->Clear();
         am->Destroy();
     }
-    Entity::HeapDestroy();
+    Mortar::Entity::HeapDestroy();
 }

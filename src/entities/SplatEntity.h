@@ -16,8 +16,8 @@
 //
 // Analysed: 2026-05-04T00:00
 //
-// NOTE: SplatEntity is NOT an Entity subclass (confirmed from ctor at
-// 0x0017ed58: does NOT call Entity::Entity). Managed by s_Pool, NOT ActorManager.
+// NOTE: SplatEntity is NOT an Mortar::Entity subclass (confirmed from ctor at
+// 0x0017ed58: does NOT call Mortar::Entity::Entity). Managed by s_Pool, NOT Mortar::ActorManager.
 //
 
 #include "math/Vec3.h"

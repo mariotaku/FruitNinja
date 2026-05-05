@@ -71,7 +71,7 @@ void Renderer::InitGL(int width, int height) {
 
 void Renderer::SetupGameOrtho() {
     // Verified from binary: SetupOrtho(160, -160, -240, 240, 2000, -6000)
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
     mm.GetViewStack().Reset();
     mm.GetWorldStack().Reset();
@@ -138,7 +138,7 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
         -0.5f,  0.5f, 0.0f,  u0, v0,
          0.5f,  0.5f, 0.0f,  u1, v0,
     };
-    Matrix44 mvp = Mortar::MatrixManager::GetInstance().GetMVP();
+    Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
     // Defensive check: if no texture has been Set() recently, GL falls back
     // to default texture 0, which samples white -- modulating the tint then
@@ -187,7 +187,7 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
 
 void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
                            float angle, float alpha) {
-    Mortar::MatrixStack& stack = Mortar::MatrixManager::GetInstance().GetWorldStack();
+    MatrixStack& stack = MatrixManager::GetInstance().GetWorldStack();
     stack.Reset();
     Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
     if (angle != 0.0f) {
@@ -204,7 +204,7 @@ void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
 // Matches DrawTriList (0x00193f5c) — QUADCUSTOMVERTEX stride 0x24 with
 // per-vertex RGBA colour in `verts->colour` (packed BGRA uint32).
 void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
-    Matrix44 mvp = Mortar::MatrixManager::GetInstance().GetMVP();
+    Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixf(mvp.ptr());
@@ -236,7 +236,7 @@ void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
 }
 
 void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
-    Matrix44 mvp = Mortar::MatrixManager::GetInstance().GetMVP();
+    Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
     glMatrixMode(GL_PROJECTION);
     glLoadMatrixf(mvp.ptr());

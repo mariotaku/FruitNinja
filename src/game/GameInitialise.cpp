@@ -90,11 +90,11 @@ void GameInitialise() {
     // (WaveManager, Fruit::Init, MenuButton random angles etc.).
     srand((unsigned int)time(nullptr));
 
-    // Step 1: SystemManager::Init() — 0x0018b024: m_field50=0, m_bRunning=1, clock base (skipped)
+    // Step 1: Mortar::SystemManager::Init() — 0x0018b024: m_field50=0, m_bRunning=1, clock base (skipped)
     Mortar::SystemManager::GetInstance().Init();
 
     // Step 2: MatrixManager::Init() — 0x0019e2ac: just calls ResetAllStacks
-    Mortar::MatrixManager::GetInstance().Init();
+    MatrixManager::GetInstance().Init();
 
     // Step 3: FileSystem — Game::CreateFileSystems @ 0x0010dca8
     // new FileSystem_Direct(); fs->Initialise(dataRoot, false); FileManager::AddSystem(fs, 0, 0)
@@ -133,11 +133,11 @@ void GameInitialise() {
     // Zero g_GameData fields (matches step 15 continued)
     game->worldPos = Vec3(0.0f, 0.0f, 0.0f);
 
-    // ActorManager (needed for entity creation). Binary Initialise is
+    // Mortar::ActorManager (needed for entity creation). Binary Initialise is
     // called with (numTypes=5, heapSize=0x2000) from GameInit — see
     // docs/engine/actor-manager.md. Factory is the free function
     // CreateEntity (binary 0x0017421c) — see EntityFactory.h.
-    game->actorManager = new ActorManager();
+    game->actorManager = new Mortar::ActorManager();
     game->actorManager->Initialise(5, 0x2000);
     game->actorManager->RegisterFactory(&CreateEntity);
 
@@ -202,7 +202,7 @@ void GameInitialise() {
     // Step 11 (call #22): PowerUpManager::Load — parse poweruplist.xml
     PowerUpManager::GetInstance()->Load();
 
-    // Step 12: PSPParticleManager — load particle XML templates
+    // Step 12: Mortar::PSPParticleManager — load particle XML templates
     {
         Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
         std::string partDir = game->data_dir + "/particles";
@@ -425,5 +425,5 @@ void GameDestroy() {
     // Note: Mortar::TextureManager::Destroy (binary calls twice) -- same as above.
     // Note: Mortar::DisplayManager::Destroy -- SDL2 window/GL teardown handles this.
     // Note: Mortar::SoundManager::Destroy -- SoundManager teardown on process exit.
-    // Note: SystemManager::Destroy -- no SystemManager class in port; Bada OS only.
+    // Note: Mortar::SystemManager::Destroy -- no Mortar::SystemManager class in port; Bada OS only.
 }

@@ -17,9 +17,9 @@
 
 // Analysed: 2026-04-13T10:30
 
+// Parse "x y z" into three floats via sscanf, matching ParseInt3/ParseFloat3 use.
 namespace Mortar {
 
-// Parse "x y z" into three floats via sscanf, matching ParseInt3/ParseFloat3 use.
 static bool ParseVec3(const char* s, float out[3]) {
     if (!s) return false;
     return sscanf(s, "%f %f %f", &out[0], &out[1], &out[2]) == 3;
@@ -475,7 +475,7 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
 
     // Reset world matrix + upload MVP so DrawTriList uses the current ortho.
     // Matches binary Draw 0x114c64: "MatrixStack::Reset + UploadCurrentMatrices".
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
@@ -846,4 +846,5 @@ void PSPParticleManager::ClearEmitters() {
     m_Emitters.clear();
 }
 
-} // namespace Mortar
+
+}  // namespace Mortar

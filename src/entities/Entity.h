@@ -10,7 +10,7 @@
 
 struct Renderer;
 
-// Mortar::Entity base class (0x3C bytes in binary, verified from ctor memset).
+// Entity base class (0x3C bytes in binary, verified from ctor memset).
 //
 // Flag byte lives at Entity+0x0c. The binary encodes active / scheduled-
 // for-deactivation / in-flight-update state in these bits — there is no
@@ -45,6 +45,8 @@ enum EntityFlagBits : uint8_t {
     // `(flags & 0x11) == 0`.
     ENT_SKIP_MASK     = ENT_INACTIVE | ENT_KILLED,
 };
+
+namespace Mortar {
 
 // ASM-verified: 2026-04-28T15:55Z binary @ 0x0019d88c (asm-inspector)
 // ASM-verified: 2026-04-28T15:55Z binary @ 0x001ea478 (asm-inspector)
@@ -98,7 +100,7 @@ public:
     uint16_t m_Angle;        // +0x36 in binary; offset may differ in port due to entityType widening
 
     // +0x38: collision primitive pointer (nullable).
-    Mortar::Col* m_Col;     // +0x38 in binary -- polymorphic; subclasses install ColSphere/ColLine/ColAABB
+    Col* m_Col;     // +0x38 in binary -- polymorphic; subclasses install ColSphere/ColLine/ColAABB
 
     // Binary @ 0x0019d88c — base ctor
     Entity();
@@ -107,14 +109,14 @@ public:
     // Binary @ 0x0019d794 — D0: deleting variant
     virtual ~Entity();
 
-    // Binary: Mortar::Entity::HeapCreate(size_t) @ 0x0019d708 (40 bytes).
+    // Binary: Entity::HeapCreate(size_t) @ 0x0019d708 (40 bytes).
     // Called from GameInit step 15 with 0x20000 (128 KB) to allocate the
     // process-global LinkedHeap Entity arena before ActorManager::Initialise.
     // DIFFERS: original = LinkedHeap arena 0x20000, port uses std new (no fixed cap).
     static void HeapCreate(unsigned int bytes);
 
     // Counterpart to HeapCreate; called from GameExit.
-    // Binary: Mortar::Entity::HeapDestroy @ 0x0019d6d0.
+    // Binary: Entity::HeapDestroy @ 0x0019d6d0.
     static void HeapDestroy();
 
     // Binary @ 0x00170b18 — clear bit0 (ENT_INACTIVE). Called by ActorManager::Add
@@ -128,7 +130,7 @@ public:
     // always pass (nullptr, 0, &scale). Binary @ 0x0019d5fc.
     virtual void Init(void* /*payload, unused at runtime*/,
                       long   /*entityTypeOrLen, ignored except by .lvl loader*/,
-                      const Vec3* /*scaleOrNull; defaults to (1,1,1)*/);
+                      Vec3* /*scaleOrNull; defaults to (1,1,1)*/);
 
     // Vtable slot 3 (+0x0C): Release — Binary @ 0x0019d5e8
     // Base: frees m_Col then nulls it. Subclasses override to release resources.
@@ -154,7 +156,7 @@ public:
     // Called by ActorManager::GetNumInAABB. Port: no-op in base (body is complex
     // internal Col dispatch; callers in port use CollideWithSphere directly).
     // Binary @ 0x0019d800.
-    virtual void InRect(Mortar::ColAABB* aabb);
+    virtual void InRect(ColAABB* aabb);
 
     // Vtable slot 9 (+0x24): CollisionResponse — Binary @ 0x0019d604 (base returns 0)
     // Called when the blade collision sphere hits this entity.
@@ -164,11 +166,11 @@ public:
     virtual int CollisionResponse(Entity* hitter,
                                   unsigned long /*flagsA*/,
                                   unsigned long /*flagsB*/,
-                                  const Vec3*  bladeVelocity);
+                                  Vec3*  bladeVelocity);
 
     // Vtable slot 10 (+0x28): Collide — Binary @ 0x0019d608
     // If m_Col, dispatch m_Col->Collide(col, hitPos)
-    virtual void Collide(Entity* other, Mortar::Col* col, unsigned long* outFlags, Vec3* hitPos);
+    virtual void Collide(Entity* other, Col* col, unsigned long* outFlags, Vec3* hitPos);
 
     // Vtable slot 11 (+0x2C): ReceiveMessage — Binary @ 0x0019d61c
     // msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE
@@ -199,6 +201,8 @@ static_assert(offsetof(Entity, m_RecycleFlag)== 0x34, "m_RecycleFlag offset wron
 // sizeof intentionally not asserted -- port entity is larger than binary 0x3C
 // due to int widening of entityType.
 #endif
+
+}  // namespace Mortar
 
 // Free function: remove an entity from EntityTracker tree `treeIdx` by its
 // 16-bit tracker ID. Called by Fruit::KillFruit to unregister the dying

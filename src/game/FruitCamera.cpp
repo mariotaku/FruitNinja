@@ -80,7 +80,7 @@ void FruitCamera::FollowEntity(void* entity) {
 }
 
 // Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
-void* FruitCamera::GetFollowEntity() const {
+void* FruitCamera::GetFollowEntity() {
     return (m_CameraMode == 1) ? m_pFollowEntity : 0;
 }
 
@@ -98,7 +98,7 @@ void* FruitCamera::GetFollowEntity() const {
 // TODO: 0x001810ac — PT_ROTATED_CW / PT_ROTATED_CCW / PT_GENERIC ortho variants
 void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
     (void)perspType;
-    Mortar::MatrixManager& mm = Mortar::MatrixManager::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
 
     // RE bug #2 fix: binary cache condition is `if (!m_bDirty && !forceUpdate)`,
     // NOT `if (!m_bDirty && !m_bInitialized && !forceUpdate)`.

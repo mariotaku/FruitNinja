@@ -344,7 +344,7 @@ Font::Page* Font::GetPage(int idx) const {
 // outSlack is unused (binary computes it but callers ignore it).
 // ---------------------------------------------------------------------------
 
-float Font::GetLineLength(Utf8StringIterator iter, float wrapWidth, float* outSlack) const {
+float Font::GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) {
     float runX = 0.0f;
     while (!iter.IsEmpty()) {
         uint32_t cp = iter.m_CurrentCodepoint;
@@ -352,7 +352,7 @@ float Font::GetLineLength(Utf8StringIterator iter, float wrapWidth, float* outSl
 
         // Skip <font color=...> and </font tags
         if (cp == '<') {
-            Utf8StringIterator tmp = iter + 1;
+            Mortar::Utf8StringIterator tmp = iter + 1;
             if (!tmp.IsEmpty()) {
                 uint32_t next = tmp.m_CurrentCodepoint;
                 if (next == '/') {
@@ -377,7 +377,7 @@ float Font::GetLineLength(Utf8StringIterator iter, float wrapWidth, float* outSl
         if (cp == ' ' && wrapWidth > 0.0f) {
             // Measure the next word
             float wordW = 0.0f;
-            Utf8StringIterator wi = iter + 1;
+            Mortar::Utf8StringIterator wi = iter + 1;
             while (!wi.IsEmpty() && wi.m_CurrentCodepoint != ' ' && wi.m_CurrentCodepoint != '\n') {
                 CharTemplate* wg = GetCharTemplate(wi.m_CurrentCodepoint);
                 if (wg) wordW += wg->xadv;
@@ -399,11 +399,11 @@ float Font::GetLineLength(Utf8StringIterator iter, float wrapWidth, float* outSl
 // ---------------------------------------------------------------------------
 
 float Font::MeasureWidth(float /*scale*/, const char* text) const {
-    Utf8StringIterator iter(text);
+    Mortar::Utf8StringIterator iter(text);
     return MeasureWidth(0.0f, iter);
 }
 
-float Font::MeasureWidth(float /*scale*/, Utf8StringIterator iter) const {
+float Font::MeasureWidth(float /*scale*/, Mortar::Utf8StringIterator iter) const {
     float width = 0.0f;
     float maxW  = 0.0f;
     while (!iter.IsEmpty()) {
@@ -435,8 +435,8 @@ float Font::MeasureWidth(float /*scale*/, Utf8StringIterator iter) const {
 // ---------------------------------------------------------------------------
 
 // ASM-verified-via-RE: 2026-05-03 binary @ 0x001988a8 (re-analyst)
-float Font::MeasureString(const Utf8StringIterator& iterIn) const {
-    Utf8StringIterator iter = iterIn;
+float Font::MeasureString(const Mortar::Utf8StringIterator& iterIn) const {
+    Mortar::Utf8StringIterator iter = iterIn;
     float total = 0.0f;
     while (!iter.IsEmpty()) {
         uint32_t cp = iter.m_CurrentCodepoint;
@@ -453,7 +453,7 @@ float Font::MeasureString(const Utf8StringIterator& iterIn) const {
 }
 
 float Font::MeasureString(const char* str) const {
-    Utf8StringIterator iter(str);
+    Mortar::Utf8StringIterator iter(str);
     return MeasureString(iter);
 }
 
@@ -463,7 +463,7 @@ float Font::MeasureString(const char* str) const {
 
 // ASM-verified-via-RE: 2026-05-03 binary @ 0x00198e44 (re-analyst)
 void Font::DrawString(float scale, float maxWidth, float rotZ,
-                      Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
+                      Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                       Vec2 maxWH, int alignment, float z,
                       MortarRectangleDec* clipRect)
 {
@@ -538,7 +538,7 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
 
         // Word-wrap at space
         if (cp == ' ' && wrapLimit > 0.0f) {
-            Utf8StringIterator wi = iter + 1;
+            Mortar::Utf8StringIterator wi = iter + 1;
             float wordW = 0.0f;
             while (!wi.IsEmpty() && wi.m_CurrentCodepoint != ' ' && wi.m_CurrentCodepoint != '\n') {
                 CharTemplate* wg = GetCharTemplate(wi.m_CurrentCodepoint);
@@ -557,7 +557,7 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
 
         // Color tags: <font color=RRGGBB[AA]> and </font>
         if (cp == '<') {
-            Utf8StringIterator tagIter = iter + 1;
+            Mortar::Utf8StringIterator tagIter = iter + 1;
             if (!tagIter.IsEmpty() && (tagIter.m_CurrentCodepoint == '/' ||
                 tagIter.m_CurrentCodepoint == 'f' || tagIter.m_CurrentCodepoint == 'F')) {
 
@@ -572,7 +572,7 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
                     // <font color=RRGGBB[AA]>
                     // Skip to 'color=' or 'colour=' tag
                     // Advance past '<font' to find 'color='
-                    Utf8StringIterator scan = iter + 1;
+                    Mortar::Utf8StringIterator scan = iter + 1;
                     // Skip "font"
                     while (!scan.IsEmpty() && scan.m_CurrentCodepoint != '>' &&
                            scan.m_CurrentCodepoint != '=') scan++;
@@ -749,7 +749,7 @@ void Font::DrawString(float scale, float maxWidth, float z,
                       const Colour& colour, int alignment)
 {
     if (!text || !*text) return;
-    Utf8StringIterator iter(text);
+    Mortar::Utf8StringIterator iter(text);
     Vec2 maxWH(0.0f, 0.0f);
     DrawString(scale, maxWidth, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
 }

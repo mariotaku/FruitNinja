@@ -54,13 +54,13 @@ public:
     int BuyItem(uint32_t hash);
 
     // GetNumNewItems @ 0x00112048
-    int GetNumNewItems() const;
+    int GetNumNewItems();
 
     // AreNewItems @ 0x0011200c
-    bool AreNewItems() const;
+    bool AreNewItems();
 
     // GetItem @ 0x00112084 — lookup by hash in m_ByHash
-    ItemInfo* GetItem(uint32_t hash) const;
+    ItemInfo* GetItem(uint32_t hash);
 
     // GetItemSavePath — returns "Data/xml/ItemSave.xml"
     const char* GetItemSavePath() const;

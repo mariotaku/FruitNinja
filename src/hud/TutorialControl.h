@@ -60,7 +60,7 @@ public:
 
     // Matches TutorialControl::CanShowTute @ 0x00162fb8.
     // Returns true during slow-motion or screen transitions.
-    bool CanShowTute() const;
+    bool CanShowTute();
 
     // Matches TutorialControl::ButtonPressedAtPos @ 0x00162e58.
     // Advances a nearly-complete or inactive animation forward by 9.5s.

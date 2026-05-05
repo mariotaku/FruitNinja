@@ -30,7 +30,7 @@ enum PERSPECIVE_TYPE {
 class FruitCamera : public Mortar::MortarCamera {
 public:
     // +0x12C: entity pointer for follow mode (nullptr = none)
-    void* m_pFollowEntity;         // Entity* in original
+    void* m_pFollowEntity;         // Mortar::Entity* in original
 
     // +0x130: 0 = idle, 1 = follow
     int m_CameraMode;
@@ -90,7 +90,7 @@ public:
     void FollowEntity(void* entity);
 
     // Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
-    void* GetFollowEntity() const;
+    void* GetFollowEntity();
 
     // --- Debug input handlers (binary @ addresses below) ---
     // All dead in retail binary (no caller registers them). Defunct: debug input.

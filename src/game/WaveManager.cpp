@@ -470,15 +470,15 @@ void WaveManager::Reset(bool fullReset) {
     // 5. Clear unspawned fruits + bombs, disable active ones.
     Fruit::ClearUnspawned(false);
     Bomb::ClearUnspawned();
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (am) {
         for (int i = 0; ; i++) {
-            Entity* e = am->GetEntity(0, i);
+            Mortar::Entity* e = am->GetEntity(0, i);
             if (!e) break;
             Fruit::Disable(static_cast<Fruit*>(e));
         }
         for (int i = 0; ; i++) {
-            Entity* e = am->GetEntity(1, i);
+            Mortar::Entity* e = am->GetEntity(1, i);
             if (!e) break;
             static_cast<Bomb*>(e)->Disable();
         }
@@ -585,7 +585,7 @@ void WaveManager::Resume() {
     {
         EntityState& es = *eit;
         int kind = es.layer;   // 0=Fruit, 1=Bomb, 4=PowerUp (binary: ent.layer)
-        Entity* e = ActorManager::GetInstance()->Add(kind, true);
+        Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(kind, true);
         if (!e) continue;
         // vtable+0x8 == Init(void* p1, long fruitType, const Vec3* scale).
         e->Init(nullptr, (long)es.type, nullptr);
@@ -618,8 +618,8 @@ void WaveManager::Resume() {
         respawned = true;
     }
 
-    // 7. ActorManager::Update(dt=0) to settle respawned entities.
-    ActorManager::GetInstance()->Update(0.0f);
+    // 7. Mortar::ActorManager::Update(dt=0) to settle respawned entities.
+    Mortar::ActorManager::GetInstance()->Update(0.0f);
 
     // 8. Zen mode (m_GameMode == 2): PowerUpManager::LoadTextures().
     // Binary @ 0x0011840c — iterates m_AllPowerUps and m_ScreenEffectPool.
@@ -1315,7 +1315,7 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
 
     if (playerIdx == 0) {
-        ActorManager* am = ActorManager::GetInstance();
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         bool checkedShortPath = false;
         if (w) {
             if (w->m_bWaitForProcessing == 0) {
@@ -1346,7 +1346,7 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int playerIdx) {
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     // Z-stride loop counter starts at 1 (binary iVar8 = 1, increments each iteration).
@@ -1433,9 +1433,9 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         float zOffset = info ? info->m_SpawnTimer : 0.0f;
         float chuckDelay = (zOffset > 0.0f) ? zOffset + 0.21f : 0.21f;
 
-        Entity* e = am->Add(0, true);
+        Mortar::Entity* e = am->Add(0, true);
         if (!e) {
-            fprintf(stderr, "[SpawnFruit] ActorManager::Add returned null\n");
+            fprintf(stderr, "[SpawnFruit] Mortar::ActorManager::Add returned null\n");
             continue;
         }
         Fruit* f = static_cast<Fruit*>(e);
@@ -1470,7 +1470,7 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
 
 void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int playerIdx) {
     (void)playerIdx;
-    ActorManager* am = ActorManager::GetInstance();
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
     for (long i = 1; i <= count; ++i) {
@@ -1536,7 +1536,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float chuckDelay = (zOffset >= 0.0f) ? zOffset + 0.21f : 0.21f;  // DAT_0012258c
 
         // Single-player path only (MP not ported).
-        Entity* e = am->Add(1, true);
+        Mortar::Entity* e = am->Add(1, true);
         if (!e) continue;
         Bomb* b = static_cast<Bomb*>(e);
         b->pos = Vec3(spawnX, spawnY, spawnZ);
