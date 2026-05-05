@@ -32,21 +32,18 @@ public:
     explicit ComboControl(int comboCount);
     ~ComboControl() override;
 
-    void Reset() override {}   // 0x00136bdc — no-op in binary
+    void Reset() override;     // 0x00136bdc — no-op in binary
     void Update(float dt) override;
     void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
 
     int GetType() override { return 1; }
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
+    // ---- STUBS (binary) ----
+    void Init();
+    void PreDraw();
+    void Release();
+    void Skip();
+    // ---- end STUBS ----
 };
 
 #endif // FN_HUD_COMBO_CONTROL_H

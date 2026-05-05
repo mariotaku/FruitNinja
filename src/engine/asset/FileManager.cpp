@@ -3,7 +3,12 @@
 #include "asset/IFileSystem.h"
 #include "asset/IFile.h"
 
+// Explicit instantiation so Mortar::Singleton<FileManager>::GetInstance() emits a T-symbol.
+template class Mortar::Singleton<FileManager>;
+
 using namespace Mortar;
+
+FileManager::FileManager() {}
 
 // ---- FileManager registry methods ----
 
@@ -70,7 +75,7 @@ IFileSystem* FileManager::FindSystem(unsigned int id) {
 
 // Binary @ 0x0019ae68 — id-filtered walk; first non-null sys->OpenFile wins
 // idFilter == 0 means "any system" (no filtering)
-IFile* FileManager::OpenFile(const char* name, unsigned long flags, unsigned int idFilter) {
+IFile* FileManager::OpenFile(const char* name, unsigned long flags, unsigned long idFilter) {
     for (std::list<IFileSystem*>::iterator it = m_FileSystems.begin();
          it != m_FileSystems.end(); ++it) {
         IFileSystem* sys = *it;
@@ -82,7 +87,7 @@ IFile* FileManager::OpenFile(const char* name, unsigned long flags, unsigned int
 }
 
 // Binary @ 0x0019af60
-bool FileManager::FileExists(const char* name, unsigned int idFilter) {
+bool FileManager::FileExists(const char* name, unsigned long idFilter) {
     for (std::list<IFileSystem*>::iterator it = m_FileSystems.begin();
          it != m_FileSystems.end(); ++it) {
         IFileSystem* sys = *it;
@@ -93,7 +98,7 @@ bool FileManager::FileExists(const char* name, unsigned int idFilter) {
 }
 
 // Binary @ 0x0019af18
-unsigned int FileManager::FileSize(const char* name, unsigned int idFilter) {
+unsigned int FileManager::FileSize(const char* name, unsigned long idFilter) {
     for (std::list<IFileSystem*>::iterator it = m_FileSystems.begin();
          it != m_FileSystems.end(); ++it) {
         IFileSystem* sys = *it;
@@ -105,7 +110,7 @@ unsigned int FileManager::FileSize(const char* name, unsigned int idFilter) {
 
 // Binary @ 0x0019aeb4
 bool FileManager::GetFileData(const char* name, void** outBuf, unsigned long* outSize,
-                               unsigned int idFilter, bool& outOwned) {
+                               unsigned long idFilter, bool& outOwned) {
     for (std::list<IFileSystem*>::iterator it = m_FileSystems.begin();
          it != m_FileSystems.end(); ++it) {
         IFileSystem* sys = *it;

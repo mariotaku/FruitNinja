@@ -18,6 +18,7 @@
 //   Update          0x00160dc4
 
 #include "HUDControl3d.h"
+#include "engine/audio/MortarSound.h"
 #include <cstdint>
 
 class SpeedControl : public HUDControl3d {
@@ -51,15 +52,20 @@ public:
     void Update(float dt) override;
     int  GetType() override { return 1; }
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
+    // ---- STUBS (binary) ----
+    // STUB: SpeedControl::Draw -- binary @ 0x???? (TODO RE)
+    void Draw(float* viewVec) override;
+    // STUB: SpeedControl::Init -- binary @ 0x???? (TODO RE)
+    void Init() override;
+    // STUB: SpeedControl::PreDraw -- binary @ 0x???? (TODO RE)
+    void PreDraw(float* viewVec);
+    // STUB: SpeedControl::Reset -- binary @ 0x???? (TODO RE)
+    void Reset() override;
+    // STUB: SpeedControl::Skip -- binary @ 0x???? (TODO RE)
+    void Skip() override;
+    // STUB: SpeedControl::SoundNeedsLooping -- binary @ 0x???? (TODO RE)
+    void SoundNeedsLooping(Mortar::MortarSound* sound);
+    // ---- end STUBS ----
 };
 
 // Binary sizeof = 0xAC (ARM32, 4-byte ptrs). Port size differs on 64-bit (8-byte ptrs).
