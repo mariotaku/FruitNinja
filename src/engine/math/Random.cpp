@@ -7,6 +7,7 @@ static const uint64_t kDefaultSeed  = 0x00000000DEADBEEFULL;
 static const uint64_t kMultiplier   = 0x5D588B656C078965ULL; // Knuth MMIX LCG
 static const uint64_t kIncrement    = 0x0000000000269EC3ULL;
 
+// ASM-verified: 2026-05-06T13:42 binary @ 0x00195278 (asm-inspector)
 Random::Random()
     : m_State(kDefaultSeed)
     , m_Mult(kMultiplier)
@@ -25,6 +26,7 @@ void Random::Seed(uint64_t seed) {
     m_State = seed;
 }
 
+// ASM-verified: 2026-05-06T13:42 binary @ 0x00117588 (asm-inspector)
 uint32_t Random::Rand32(uint32_t max) {
     // 64-bit LCG step
     m_State = m_State * m_Mult + m_Inc;

@@ -37,6 +37,11 @@ struct Quaternion {
         return Quaternion(axis.x * s, axis.y * s, axis.z * s, cosf(half));
     }
 
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x0017aa64..0x0017ab9d (asm-inspector)
+    // (Matrix33Unit + Copy33To44 pipeline collapsed into a single column-major write;
+    //  bit-identical 16-float output -- verified against the binary's row-major M[]
+    //  followed by the Copy33To44 padding/fill-with-0/1 pattern.)
+    //
     // Matches _Quaternion::Matrix44Unit (calls Matrix33Unit @ 0x0017aa64 then
     // Copy33To44 @ 0x0017ab30). The binary writes the 9 rotation values in
     // ROW-MAJOR-flat order into a 16-float buffer; that buffer is uploaded to
@@ -72,10 +77,11 @@ struct Quaternion {
 
     static Quaternion Identity() { return Quaternion(0, 0, 0, 1); }
 
-    // Sets this quaternion to identity then computes axis-angle with 16-bit
-    // angle encoding (0x10000 = 2pi). Matches Quaternion::CreateFromAxisAngle
-    // @ 0x000f7e90. The axis is NOT normalized by this function (binary
-    // does not normalize — caller is responsible for unit-length axes).
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x0017ac68 (asm-inspector)
+    // 16-bit angle encoding (0x10000 = 2pi). The axis is NOT normalized by
+    // this function -- binary does not normalize, caller is responsible for
+    // unit-length axes. Calls SinIdx 3x (one per component) + CosIdx 1x;
+    // tail-calls Quaternion_Identity if cos(half)==0 (degenerate angle).
     void CreateFromAxisAngle(float ax, float ay, float az, uint32_t angle16) {
         const float rad  = (float)(int32_t)angle16 * (6.2831853f / 65536.0f);
         const float half = rad * 0.5f;

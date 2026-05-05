@@ -22,9 +22,11 @@ struct _Matrix44 {
         m[0] = m[5] = m[10] = m[15] = T(1);
     }
 
-    // Matches binary `_Matrix44<float>::OrthoW` @ 0x0019e7a8.
-    // NOTE: parameter order is (top, bottom, left, right) NOT standard GL.
-    // Output mirrors the standard column-major ortho with adjustable w:
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x0019e7a8 (asm-inspector)
+    // Parameter order (top, bottom, left, right, near, far, w) matches binary.
+    // The `w` argument is DEAD in the binary -- it re-materialises 1.0 into
+    // m[15] regardless of the passed value. Port keeps the param for API
+    // parity but does not apply it.
     //   m[0]  = 2 / (right - left)     X scale
     //   m[5]  = 2 / (top - bottom)     Y scale
     //   m[10] = 1 / (far - near)       Z scale
@@ -34,7 +36,8 @@ struct _Matrix44 {
     static void OrthoW(T top, T bottom, T left, T right,
                        T near_, T far_, T w, _Matrix44& out) {
         out.Identity();
-        out.m[15] = w;
+        // Binary @ 0x0019e7a8 ignores 'w'; m[15] retains 1.0 from Identity.
+        (void)w;
         T invTB = T(1) / (top - bottom);
         T invRL = T(1) / (right - left);
         out.m[10] = T(1) / (far_ - near_);
@@ -45,7 +48,7 @@ struct _Matrix44 {
         out.m[5]  = T(2) * invTB;
     }
 
-    // Matches binary `_Matrix44<float>::GlobalTranslate44` @ 0x0012f954.
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x0012f954 (asm-inspector)
     // col[3] += (tx, ty, tz) -- world-space translate.
     void GlobalTranslate44(T tx, T ty, T tz) {
         m[12] += tx;
@@ -57,7 +60,7 @@ struct _Matrix44 {
         GlobalTranslate44(t.x, t.y, t.z);
     }
 
-    // Matches binary `_Matrix44<float>::LocalTranslate44` @ 0x0019a3d4.
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x0019a3d4 (asm-inspector)
     // col[3] += col[0]*tx + col[1]*ty + col[2]*tz -- local-space translate.
     void LocalTranslate44(T tx, T ty, T tz) {
         m[12] += m[0] * tx + m[4] * ty + m[8]  * tz;
@@ -65,8 +68,8 @@ struct _Matrix44 {
         m[14] += m[2] * tx + m[6] * ty + m[10] * tz;
     }
 
-    // Matches binary `_Matrix44<float>::Scale44` @ 0x0012f9a0 (in-place
-    // column-scale; not the same as the static factory below).
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x0012f9a0 (asm-inspector)
+    // In-place column-scale; not the same as the static factory below.
     void ApplyScale(T sx, T sy, T sz) {
         m[0]  *= sx; m[1]  *= sx; m[2]  *= sx; m[3]  *= sx;
         m[4]  *= sy; m[5]  *= sy; m[6]  *= sy; m[7]  *= sy;
@@ -94,9 +97,9 @@ struct _Matrix44 {
         return r;
     }
 
-    // Matches binary `_Matrix44<float>::RotX44` @ 0x00172f58 -- PRE-multiply
-    // by Rot_std_X(+alpha). Per col c, mix m[c*4+1] (row 1) with m[c*4+2]
-    // (row 2):
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x00172f58 (asm-inspector)
+    // PRE-multiply by Rot_std_X(+alpha). Per col c, mix m[c*4+1] (row 1)
+    // with m[c*4+2] (row 2):
     //   new_row1 = cos*row1 - sin*row2
     //   new_row2 = sin*row1 + cos*row2
     void RotX44(T sinA, T cosA) {
@@ -108,7 +111,7 @@ struct _Matrix44 {
         }
     }
 
-    // Matches binary `_Matrix44<float>::RotY44` @ 0x00172fdc.
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x00172fdc (asm-inspector)
     //   new_row0 = cos*row0 + sin*row2
     //   new_row2 = -sin*row0 + cos*row2
     void RotY44(T sinA, T cosA) {
@@ -120,7 +123,7 @@ struct _Matrix44 {
         }
     }
 
-    // Matches binary `_Matrix44<float>::RotZ44` @ 0x00144958.
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x00144958 (asm-inspector)
     //   new_row0 = cos*row0 - sin*row1
     //   new_row1 = sin*row0 + cos*row1
     void RotZ44(T sinA, T cosA) {

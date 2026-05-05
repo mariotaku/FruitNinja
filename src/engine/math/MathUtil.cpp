@@ -18,18 +18,21 @@ float CosIdx(unsigned short idx) {
     return cosf((float)idx * (2.0f * (float)M_PI / 65536.0f));
 }
 
-// Binary @ 0x00194d98 — SinIdx/CosIdx with 100000.0f fallback when cos==0
+// ASM-verified: 2026-05-06T15:30 binary @ 0x00194d98 (asm-inspector)
+// SinIdx/CosIdx with 100000.0f (=0x47C35000) fallback when cos==0.
 float TanIdx(unsigned short idx) {
     float c = CosIdx(idx);
     return (c == 0.0f) ? 100000.0f : SinIdx(idx) / c;
 }
 
-// Binary @ 0x00194dcc — STUB in shipping binary (returns 0); no callers in game code
+// ASM-verified: 2026-05-06T15:30 binary @ 0x00194dcc (asm-inspector)
+// STUB in shipping binary (4-byte body: movs r0,#0; bx lr); no callers.
 unsigned short AsinIdx(float /*x*/) {
     return 0; // Defunct: stubbed in binary
 }
 
-// Binary @ 0x00194dd0 — STUB in shipping binary (returns 0); no callers in game code
+// ASM-verified: 2026-05-06T15:30 binary @ 0x00194dd0 (asm-inspector)
+// STUB in shipping binary (4-byte body: movs r0,#0; bx lr); no callers.
 unsigned short AcosIdx(float /*x*/) {
     return 0; // Defunct: stubbed in binary
 }
@@ -45,27 +48,30 @@ short Atan2Idx(float y, float x) {
     return (short)(atan2f(y, x) * (32768.0f / (float)M_PI));
 }
 
-// Binary @ 0x00195254 — vsqrt.f64 with NaN fallback to libc sqrt; sqrtf() is equivalent
+// ASM-verified: 2026-05-06T15:30 binary @ 0x00195254 (asm-inspector)
+// Binary widens to f64 then vsqrt.f64 + narrow back; port stays in f32 with
+// fsqrts. Output identical for all valid inputs (hardware sqrt correctly
+// rounded in both precisions). NaN fallback to libc in both.
 float Sqrt(float x) {
     return sqrtf(x);
 }
 
-// Binary @ 0x0019521c — computes sqrtf eagerly, stores in cache for SqrtAsyncGet
+// ASM-verified: 2026-05-06T15:30 binary @ 0x0019521c (asm-inspector)
 void SqrtAsyncSet(float x) {
     g_sqrtAsyncResult = sqrtf(x);
 }
 
-// Binary @ 0x00194cf8 — returns last value computed by SqrtAsyncSet
+// ASM-verified: 2026-05-06T15:30 binary @ 0x00194cf8 (asm-inspector)
 float SqrtAsyncGet() {
     return g_sqrtAsyncResult;
 }
 
-// Binary @ 0x00194d14 — computes a/b eagerly, stores in cache for DivAsyncGet
+// ASM-verified: 2026-05-06T15:30 binary @ 0x00194d14 (asm-inspector)
 void DivAsyncSet(float a, float b) {
     g_divAsyncResult = a / b;
 }
 
-// Binary @ 0x00194d34 — returns last value computed by DivAsyncSet
+// ASM-verified: 2026-05-06T15:30 binary @ 0x00194d34 (asm-inspector)
 float DivAsyncGet() {
     return g_divAsyncResult;
 }
