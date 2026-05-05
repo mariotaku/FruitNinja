@@ -97,7 +97,7 @@ Coin::~Coin() {
 // ---------------------------------------------------------------------------
 void Coin::Release() {
     if (m_pFlyEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
         m_pFlyEmitter = nullptr;
     }
 }
@@ -118,11 +118,11 @@ void Coin::PostUpdate(float /*dt*/) {}
 // ---------------------------------------------------------------------------
 void Coin::Deactivate() {
     if (m_pFlyEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
         m_pFlyEmitter = nullptr;
     }
     if (m_pCollectEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
         m_pCollectEmitter = nullptr;
     }
 }
@@ -137,11 +137,11 @@ void Coin::Arrived() {
     }
     // Clear both emitters on arrival
     if (m_pFlyEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
         m_pFlyEmitter = nullptr;
     }
     if (m_pCollectEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
         m_pCollectEmitter = nullptr;
     }
     flags |= ENT_KILLED;
@@ -208,7 +208,7 @@ void Coin::_Update(float dt) {
         vel.z = 0.0f;
         // Spawn fly emitter
         if (m_FlyFXHash != 0) {
-            m_pFlyEmitter = Mortar::PSPParticleManager::GetInstance().AddEmitter(m_FlyFXHash, &m_pFlyEmitter);
+            m_pFlyEmitter = PSPParticleManager::GetInstance().AddEmitter(m_FlyFXHash, &m_pFlyEmitter);
             if (m_pFlyEmitter) {
                 m_pFlyEmitter->m_Pos = pos;
             }
@@ -248,14 +248,14 @@ void Coin::_Update(float dt) {
         if (m_Timer >= COIN_DECEL_TIME) {
             // Spawn collect/sparkle emitter
             if (m_CollectFXHash != 0) {
-                m_pCollectEmitter = Mortar::PSPParticleManager::GetInstance().AddEmitter(m_CollectFXHash, &m_pCollectEmitter);
+                m_pCollectEmitter = PSPParticleManager::GetInstance().AddEmitter(m_CollectFXHash, &m_pCollectEmitter);
                 if (m_pCollectEmitter) {
                     m_pCollectEmitter->m_Pos = pos;
                 }
             }
             // Clear fly emitter on transition to homing
             if (m_pFlyEmitter) {
-                Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
+                PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
                 m_pFlyEmitter = nullptr;
             }
             // Compute homing angle from current pos toward target

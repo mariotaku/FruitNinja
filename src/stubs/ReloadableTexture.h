@@ -33,4 +33,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::ReloadableTexture;
 #endif  // FN_STUBS_RELOADABLETEXTURE_H

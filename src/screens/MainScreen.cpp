@@ -444,8 +444,8 @@ void MainScreen::Update(float dt) {
         //   TutorialControl::ResetTutePos(pTC, nullptr)
         //   if (Mortar::ActorManager::GetNumEntities(0) != 0) break;
         //   pLeaderboardBtn = nullptr;
-        //   qs = Mortar::SystemManager::m_QuitState  (NOT Game::gameMode -- earlier
-        //       RE conflated GOT slots; +0x4c is on Mortar::SystemManager, GOT slot
+        //   qs = SystemManager::m_QuitState  (NOT Game::gameMode -- earlier
+        //       RE conflated GOT slots; +0x4c is on SystemManager, GOT slot
         //       0x000074f8, byte field initialised to 3)
         //   if (qs == 2):  HitMenuBomb (163,-96,0); state = 0x18
         //   else if (qs == 3): m_State=0; m_Timer2=0.15
@@ -457,7 +457,7 @@ void MainScreen::Update(float dt) {
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
         if (liveEntities != 0) break;
 
-        const uint8_t qs = Mortar::SystemManager::GetInstance().GetQuitState();
+        const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
             FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
             m_State = STATE_QUIT_BOMB;
@@ -475,7 +475,7 @@ void MainScreen::Update(float dt) {
     case STATE_QUIT_BOMB: {
         // Binary @ 0x0014c0f2 case 0x18:
         //   TutorialControl::ResetTutePos(pTC, nullptr)
-        //   if (BombFlashFull()) Mortar::SystemManager::QuitGame();
+        //   if (BombFlashFull()) SystemManager::QuitGame();
         //
         // BombFlashFull returns true once bombHitTimer < 1.0s (the flash
         // has peaked and is on its way out). HitMenuBomb in QUIT_WAIT
@@ -484,7 +484,7 @@ void MainScreen::Update(float dt) {
             game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
         }
         if (FN::BombFlashFull()) {
-            Mortar::SystemManager::GetInstance().QuitGame();
+            SystemManager::GetInstance().QuitGame();
             game.running = false;
         }
         break;
@@ -941,7 +941,7 @@ void MainScreen::MoreGamesCallback() {
 
 // ASM-verified: 2026-04-30 binary @ 0x0014b1a0..0x0014b1ed (asm-inspector + re-analyst).
 // Sequence (4 logical operations only):
-//   1. Mortar::SystemManager::RequestQuit()                        // sets m_QuitState = 2
+//   1. SystemManager::RequestQuit()                        // sets m_QuitState = 2
 //   2. bomb = pQuitBtn->m_pFruitPiece (bomb-typed MenuButton)
 //      bomb->m_bMovement = 1                                // +0x80
 //      bomb->m_AccelForce = Vec3(0,1,0) * 10.0f             // +0x8c, kick upward
@@ -958,7 +958,7 @@ void MainScreen::MoreGamesCallback() {
 // Vec3 const at GOT slot 0x00007214: runtime-init by _GLOBAL__I_MainScreen_cpp
 // to (0,1,0) per binary @ 0x0014dab2. Port hardcodes the resolved value.
 void MainScreen::QuitGamesCallback() {
-    Mortar::SystemManager::GetInstance().RequestQuit();
+    SystemManager::GetInstance().RequestQuit();
 
     // Bomb-typed Quit button: m_pFruitPiece IS the Bomb pointer (binary
     // @ 0x0014b1c2 reads MenuButton+0x134; bomb stores back-ref at

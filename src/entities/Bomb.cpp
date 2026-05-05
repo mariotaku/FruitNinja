@@ -204,7 +204,7 @@ Bomb::~Bomb() {
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x00171764 (asm-inspector)
 void Bomb::Release() {
     if (m_pEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;
     }
 }
@@ -461,7 +461,7 @@ void Bomb::Update(float /*dt*/) {
         const int variant = (m_BombVariant == 0) ? 0 : 1;
         const uint32_t hash = g_bombData.fuseHash[variant];
         if (hash != 0) {
-            Mortar::PSPParticleManager::GetInstance().AddEmitter(
+            PSPParticleManager::GetInstance().AddEmitter(
                 hash, &m_pEmitter,
                 /*paused*/ gameDt == 0.0f);
         }
@@ -619,7 +619,7 @@ void Bomb::Chuck(float delay) {
 void Bomb::KillBomb() {
     flags |= 0x10;  // mark for removal
     if (m_pEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;
     }
     // MenuButton owns either a Fruit or a Bomb at +0x134; clear if ours.
@@ -812,7 +812,7 @@ void Bomb::MakeFat(bool skipSpawnFx) {
         // Spawn particle emitter at +/-240.0 X anchor based on pos.x sign.
         // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.
         // SFX: name string at DAT_00171f0c, MakeSFXDelegate_Coin callback.
-        // TODO: Mortar::PSPParticleManager::AddEmitter and SFXPlay wiring when those callbacks land.
+        // TODO: PSPParticleManager::AddEmitter and SFXPlay wiring when those callbacks land.
         Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
     }
 }

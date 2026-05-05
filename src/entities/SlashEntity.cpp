@@ -105,14 +105,14 @@ static uint8_t  g_ScaleFlag1        = 0;      // 0x0024D8D8 (gates CreateGhost()
 static uint8_t  g_ScaleFlag2        = 1;      // 0x001F3E69 (gates UV-mirror branch)
 
 // Resolve a particle-emitter name to its template hash, validating that the
-// emitter actually exists in Mortar::PSPParticleManager. Binary calls
-// `Mortar::PSPParticleManager::EmitterExists(hash)` after StringHash; if not, the
+// emitter actually exists in PSPParticleManager. Binary calls
+// `PSPParticleManager::EmitterExists(hash)` after StringHash; if not, the
 // hash is zeroed so render consumers skip the emitter cleanly.
 static uint32_t ResolveEmitterHash(const char* path) {
     if (!path || path[0] == '\0') return 0;
     uint32_t h = StringHash(path);
-    const Mortar::PSPEmitterTemplate* t =
-        Mortar::PSPParticleManager::GetInstance().FindTemplate(h);
+    const PSPEmitterTemplate* t =
+        PSPParticleManager::GetInstance().FindTemplate(h);
     return t ? h : 0;
 }
 
@@ -168,7 +168,7 @@ void SlashEntity::Init() {
 void SlashEntity::Release() {
     m_NumPoints = 0;
     if (m_TrailEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
 }
@@ -190,7 +190,7 @@ void SlashEntity::Reset() {
     m_bHasHead  = false;
     m_RawTouchPos = Vec3(0, 0, 0);
     if (m_TrailEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
 }
@@ -491,7 +491,7 @@ void SlashEntity::Update(float dt) {
     // Created on first active touch, follows the head each frame, cleared
     // on release. See TRAIL_EMITTER_NAME TODO above for the full ItemManager
     // path this should come from eventually.
-    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+    PSPParticleManager& pm = PSPParticleManager::GetInstance();
     const bool bladeActive = (m_State != 0) && (m_NumPoints > 0);
     // Trail emitter only spawns when blade-mod has set g_DirectionalFlag and
     // a valid g_TrailHash (resolved by SetModColours). The default blade
@@ -715,7 +715,7 @@ void SlashEntity::SetModColours(
     g_TrailHash = (particlePath && particlePath[0] != '\0')
                 ? StringHash(particlePath) : 0;
     bool trailExists = g_TrailHash != 0 &&
-        Mortar::PSPParticleManager::GetInstance().FindTemplate(g_TrailHash) != nullptr;
+        PSPParticleManager::GetInstance().FindTemplate(g_TrailHash) != nullptr;
 
     // Contact + second hashes: zero on miss (binary's `EmitterExists` gate).
     g_ContactHash = ResolveEmitterHash(contactParticle);
@@ -796,7 +796,7 @@ void SlashEntity::SetModScales(
 // currently visible only for type-2 mods which aren't shipped.
 void SlashEntity::ColoursChanged() {
     if (m_TrailEmitter) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
+        PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
     if (m_State != 0) {
@@ -808,7 +808,7 @@ void SlashEntity::ColoursChanged() {
         // Binary @ 0x17c466-0x17c47a calls AddEmitter(hash, NULL, true) and
         // sets m_bUpdateWhenPaused = 1 on the result.
         if (g_DirectionalFlag != 0 && g_TrailHash != 0) {
-            m_TrailEmitter = Mortar::PSPParticleManager::GetInstance()
+            m_TrailEmitter = PSPParticleManager::GetInstance()
                 .AddEmitter(g_TrailHash, /*ppRef=*/nullptr, /*persistent=*/true);
             if (m_TrailEmitter) {
                 m_TrailEmitter->m_bUpdateWhenPaused = true;

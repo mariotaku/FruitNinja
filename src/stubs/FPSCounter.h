@@ -33,4 +33,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::FPSCounter;
 #endif  // FN_STUBS_FPSCOUNTER_H

@@ -1,8 +1,6 @@
 #include "core/SystemManager.h"
 #include <algorithm>
 
-namespace Mortar {
-
 SystemManager::SystemManager()
     : m_bRunning(1)
     , m_LastFrameTime(0x3C)
@@ -76,6 +74,3 @@ void SystemManager::QuitGame() {
 void SystemManager::RequestQuit() {
     m_QuitState = 2;
 }
-
-
-}  // namespace Mortar

@@ -18,8 +18,6 @@
 // Analysed: 2026-04-13T10:30
 
 // Parse "x y z" into three floats via sscanf, matching ParseInt3/ParseFloat3 use.
-namespace Mortar {
-
 static bool ParseVec3(const char* s, float out[3]) {
     if (!s) return false;
     return sscanf(s, "%f %f %f", &out[0], &out[1], &out[2]) == 3;
@@ -737,7 +735,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
                 char buf[256];
                 // Binary @ 0x115f60: snprintf("%s/%s.tex", texCategory, texName)
                 snprintf(buf, sizeof(buf), "%s/%s.tex", texCatStr.c_str(), texName);
-                tmpl.m_Texture = TextureManager::GetInstance().Load(buf);
+                tmpl.m_Texture = Mortar::TextureManager::GetInstance().Load(buf);
                 if (tmpl.m_Texture.IsValid()) {
                     const float tw = (float)tmpl.m_Texture->m_Width;
                     const float th = (float)tmpl.m_Texture->m_Height;
@@ -845,6 +843,3 @@ void PSPParticleManager::ClearEmitters() {
     for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
     m_Emitters.clear();
 }
-
-
-}  // namespace Mortar

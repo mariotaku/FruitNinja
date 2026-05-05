@@ -30,4 +30,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::Emmiter;
 #endif  // FN_STUBS_EMMITER_H

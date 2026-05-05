@@ -29,4 +29,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::LoadingJob;
 #endif  // FN_STUBS_LOADINGJOB_H
