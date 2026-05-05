@@ -33,7 +33,7 @@ class InputActionMapper;
 
 class InputDevice {
 public:
-    virtual ~InputDevice() {}
+    virtual ~InputDevice();
 
     // Binary vtable slots (per layout from RE evidence):
     // slot +0x00  — dtor
@@ -51,12 +51,12 @@ public:
     // slot +0x30  — GetDeviceType() -> InputDeviceTypes
 
     virtual void              Init(unsigned long flags) = 0;
-    virtual void              Destroy() = 0;
+    virtual void              Destroy();
     virtual void              Update(float dt) = 0;
     virtual void              AddActionMapper(InputActionMapper* mapper) = 0;
-    virtual void              ClearActions(unsigned long actionHash, bool last) = 0;
+    virtual void              ClearActions(unsigned long actionHash, bool last);
     virtual void              RegisterInputCallback(unsigned long actionHash,
-                                                    InputDeviceCallback cb) = 0;
+                                                    InputDeviceCallback cb);
     virtual void              Reset() = 0;
     virtual void              SetQueueEventsUntilUpdate(bool v) = 0;
     virtual void              SetSendDownCallbacksEachUpdate(bool v) = 0;
@@ -70,29 +70,12 @@ public:
     // TODO: 0x00195764 — route via SendIndividualTouchCallbacks once ported.
     virtual void              DispatchEvent(InputEvent* event) = 0;
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: InputDevice::AddAction -- auto stub from binary missing-symbol set
-    void AddAction(InputActionMapper*);
-    // STUB: InputDevice::AxisEvent -- auto stub from binary missing-symbol set
-    void AxisEvent(int, unsigned int, float, float, unsigned int, int);
-    // STUB: InputDevice::ButtonPressed -- auto stub from binary missing-symbol set
-    void ButtonPressed(unsigned int, unsigned int, float, unsigned int, int);
-    // ---- end AUTO-STUB MERGE ----
+    // ---- STUBS (binary) ----
+    InputDevice();
+    void AxisEvent(long, unsigned long, float, float, unsigned long, long);
+    void ButtonPressed(unsigned long, unsigned long, float, unsigned long, long);
+    void CheckActions(InputEvent*);
+    // ---- end STUBS ----
 };
 
 } // namespace Mortar

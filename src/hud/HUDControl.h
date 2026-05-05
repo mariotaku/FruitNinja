@@ -66,19 +66,8 @@ public:
     // for the (0,0)/(1,1) defaults.
     float m_UVLeft, m_UVTop, m_UVRight, m_UVBottom;
 
-    HUDControl()
-        : m_bPreserveOnMP(0),
-          m_Timer(0.0f),
-          m_bActive(1),
-          field_0x31(0),
-          m_bNoDestructor(0),
-          m_bPendingRemoval(0),
-          m_LayerFlags(1),
-          m_DrawColour(255, 255, 255, 255),
-          m_bUseHUDScales(1),
-          m_UVLeft(0.0f), m_UVTop(0.0f), m_UVRight(1.0f), m_UVBottom(1.0f) {}
-
-    virtual ~HUDControl() {}
+    HUDControl();
+    virtual ~HUDControl();
 
     // Vtable matches docs/structs/hud.md:
     // +0x00/+0x04: dtors (handled by C++ vtable)
@@ -96,23 +85,18 @@ public:
     // +0x34: Skip
     // +0x38: Save
 
-    virtual void Init() {}
-    virtual void Release() {}
-    virtual void Reset() {}
+    virtual void Init();
+    virtual void Release();
+    virtual void Reset();
     virtual void BeginDraw(float dt) { (void)dt; }
     virtual void PreDraw(const Vec3& hudScale) { (void)hudScale; }
+    virtual void Draw(float* viewVec);
     virtual void Draw(const Vec3& hudScale, int layerMask) { (void)hudScale; (void)layerMask; }
     virtual void PreDrawOrder(const Vec3& hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
     virtual void DrawOrder(const Vec3& hudScale, int layerMask) { Draw(hudScale, layerMask); }
-    virtual void Update(float dt) { (void)dt; }
+    virtual void Update(float dt);
     // Binary @ 0x00143fac — returns true if this control should be removed (m_bPreserveOnMP == 0).
-    virtual bool SetToMultiplayerState() {
-        if (m_bPreserveOnMP == 0) {
-            m_bNoDestructor = 0;
-            m_bPendingRemoval = 1;
-        }
-        return m_bPreserveOnMP == 0;
-    }
+    virtual bool SetToMultiplayerState();
     virtual int GetType() { return 0; }
     virtual void Skip() {}
     virtual void Save() {}

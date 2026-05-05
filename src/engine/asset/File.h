@@ -24,18 +24,18 @@ public:
     void Close();
 
     // Binary @ 0x0019b7ec — return m_bIsOpen
-    bool IsOpen() const { return m_bIsOpen; }
+    bool IsOpen() const;
     // Binary @ 0x0019b7dc — return m_bIsLoaded
-    bool IsLoaded() const { return m_bIsLoaded; }
+    bool IsLoaded() const;
     // Binary @ 0x0019b7f4 — bit-0 of m_openMode is the write flag
-    bool CanWrite() const { return (m_openMode & 1) != 0; }
+    bool CanWrite() const;
 
     // Binary @ 0x0019b774 — cached size set by Open() / Load()
-    unsigned long Size() const { return m_size; }
+    unsigned long Size() const;
     // Binary @ 0x0019b778 — return m_pData (only valid after Load())
-    void* Data() const { return m_pData; }
+    void* Data() const;
     // Binary @ 0x0019b77c — return the embedded AsciiString reference
-    const AsciiString& FileName() const { return m_filename; }
+    const AsciiString& FileName() const;
 
     // Binary @ 0x0019b7ac — IFile::Read (vtbl+0x10) -> fread
     bool Read(void* dst, unsigned long n);

@@ -1,4 +1,5 @@
 #include "asset/ResourceLoader.h"
+#include "asset/DataReader.h"
 #include "asset/File.h"
 #include <cstdio>
 
@@ -35,6 +36,29 @@ ResourceLoader::ResourceLoader(const char* filePath)
     Initialize(static_cast<const uint8_t*>(f.Data()), size);
 }
 
+// STUB: ResourceLoader::ResourceLoader(AsciiString const&) -- binary @ 0x???? (TODO RE)
+ResourceLoader::ResourceLoader(const AsciiString& filePath)
+    : m_ReadPos(0)
+{
+    ResourceLoader tmp(filePath.CStr());
+    m_BasePath = tmp.m_BasePath;
+    m_Data     = tmp.m_Data;
+    m_Children = tmp.m_Children;
+    m_ReadPos  = tmp.m_ReadPos;
+}
+
+// STUB: ResourceLoader::ResourceLoader(DataReader&, AsciiString const&) -- binary @ 0x???? (TODO RE)
+ResourceLoader::ResourceLoader(DataReader& /*reader*/, const AsciiString& basePath)
+    : m_BasePath(basePath)
+    , m_ReadPos(0)
+{
+}
+
+// STUB: ResourceLoader::~ResourceLoader() -- binary @ 0x???? (TODO RE)
+ResourceLoader::~ResourceLoader()
+{
+}
+
 // Matches ResourceLoader::Initialize (0x001b4708)
 // Format: skip_u32, childCount, [childSize + childData]..., typeIdCount, typeIds..., rawSize, rawData
 // Each child is recursively in the same format.
@@ -43,7 +67,7 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize) {
 
     size_t pos = 0;
 
-    // Skip unknown value (u32) — often "HBR0" text
+    // Skip unknown value (u32) -- often "HBR0" text
     pos += 4;
 
     // Read child count
@@ -91,6 +115,40 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize) {
             m_Data.assign(data + pos, data + pos + rawSize);
         }
     }
+}
+
+// STUB: ResourceLoader::Initialize(DataReader&) -- binary @ 0x???? (TODO RE)
+void ResourceLoader::Initialize(DataReader& /*reader*/)
+{
+}
+
+// STUB: ResourceLoader::ReadBytes(void*, unsigned long) -- binary @ 0x???? (TODO RE)
+void ResourceLoader::ReadBytes(void* dest, unsigned long count)
+{
+    if (count > 0 && m_ReadPos + count <= m_Data.size()) {
+        memcpy(dest, &m_Data[m_ReadPos], count);
+        m_ReadPos += count;
+    }
+}
+
+// STUB: ResourceLoader::ReadString() -- binary @ 0x???? (TODO RE)
+AsciiString ResourceLoader::ReadString()
+{
+    uint16_t len = Read<uint16_t>();
+    if (len == 0) return AsciiString("");
+    std::string str(len, '\0');
+    ReadBytes(&str[0], len);
+    return AsciiString(str);
+}
+
+// STUB: ResourceLoader::ReadSubResourceLookup() -- binary @ 0x???? (TODO RE)
+ResourceLoader* ResourceLoader::ReadSubResourceLookup()
+{
+    uint32_t index = Read<uint32_t>();
+    if (index > 0 && index - 1 < (uint32_t)m_Children.size()) {
+        return &m_Children[index - 1];
+    }
+    return nullptr;
 }
 
 } // namespace Mortar

@@ -105,6 +105,32 @@ void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> te
 }
 
 // ---------------------------------------------------------------------------
+// STUBS (binary methods not yet ported)
+// ---------------------------------------------------------------------------
+
+// STUB: BonusScreen::AddAward -- binary @ 0x???? (TODO RE)
+void BonusScreen::AddAward(Colour /*colour*/, Mortar::SmartPtr<Mortar::Texture> /*tex*/,
+                           const char* /*name*/, int /*tier*/) {}
+
+// STUB: BonusScreen::Draw -- binary @ 0x???? (TODO RE)
+void BonusScreen::Draw(float* /*mtx*/) {}
+
+// STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
+float BonusScreen::GetTimeFirstAward() { return 0.0f; }
+
+// STUB: BonusScreen::GetTimePerAward -- binary @ 0x???? (TODO RE)
+float BonusScreen::GetTimePerAward() { return 0.0f; }
+
+// STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
+void BonusScreen::LoadContent() {}
+
+// STUB: BonusScreen::Shake -- binary @ 0x???? (TODO RE)
+void BonusScreen::Shake(float /*amplitude*/, float /*duration*/) {}
+
+// STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
+void BonusScreen::UnLoadContent() {}
+
+// ---------------------------------------------------------------------------
 // AwardScores (binary @ 0x0013260C)
 // One-shot finale: coin spawn, camera shake, big particle, finish SFX.
 // ---------------------------------------------------------------------------

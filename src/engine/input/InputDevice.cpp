@@ -1,12 +1,29 @@
 #include "InputDevice.h"
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
 namespace Mortar {
-// STUB: InputDevice::AddAction -- auto stub
-void InputDevice::AddAction(InputActionMapper*) {}
-// STUB: InputDevice::AxisEvent -- auto stub
-void InputDevice::AxisEvent(int, unsigned int, float, float, unsigned int, int) {}
-// STUB: InputDevice::ButtonPressed -- auto stub
-void InputDevice::ButtonPressed(unsigned int, unsigned int, float, unsigned int, int) {}
-}  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----
+
+// STUB: InputDevice::InputDevice -- binary @ 0x???? (TODO RE)
+InputDevice::InputDevice() {}
+
+// STUB: InputDevice::~InputDevice -- binary @ 0x???? (TODO RE)
+InputDevice::~InputDevice() {}
+
+// STUB: InputDevice::Destroy -- binary @ 0x???? (TODO RE)
+void InputDevice::Destroy() {}
+
+// STUB: InputDevice::ClearActions -- binary @ 0x???? (TODO RE)
+void InputDevice::ClearActions(unsigned long, bool) {}
+
+// STUB: InputDevice::RegisterInputCallback -- binary @ 0x???? (TODO RE)
+void InputDevice::RegisterInputCallback(unsigned long, InputDeviceCallback) {}
+
+// STUB: InputDevice::AxisEvent -- binary @ 0x???? (TODO RE)
+void InputDevice::AxisEvent(long, unsigned long, float, float, unsigned long, long) {}
+
+// STUB: InputDevice::ButtonPressed -- binary @ 0x???? (TODO RE)
+void InputDevice::ButtonPressed(unsigned long, unsigned long, float, unsigned long, long) {}
+
+// STUB: InputDevice::CheckActions -- binary @ 0x???? (TODO RE)
+void InputDevice::CheckActions(InputEvent*) {}
+
+} // namespace Mortar
