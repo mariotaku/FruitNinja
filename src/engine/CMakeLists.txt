@@ -29,6 +29,7 @@ add_library(mortar_engine STATIC
     asset/FileManager.cpp
     asset/Texture.cpp
     asset/TextureManager.cpp
+    asset/DataReader.cpp
     asset/ResourceLoader.cpp
     asset/AnimationState.cpp
     asset/Skeleton.cpp
@@ -38,6 +39,7 @@ add_library(mortar_engine STATIC
     # Phase 5 — Input
     input/Touch.cpp
     input/InputManager.cpp
+    input/InputDevice.cpp
     input/InputDeviceBada.cpp
     # Phase 6 — Audio
     audio/MortarSound.cpp

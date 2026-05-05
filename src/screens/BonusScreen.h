@@ -83,6 +83,32 @@ public:
     void AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
+    // ---- STUBS (binary) ----
+    // Binary form of AddAward — Colour arg (port uses uint32_t; both overloads present)
+    // STUB: BonusScreen::AddAward -- binary @ 0x???? (TODO RE)
+    void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
+                  const char* name, int tier);
+
+    // Binary form of Draw — float* arg (port uses const Vec3&, int; both overloads present)
+    // STUB: BonusScreen::Draw -- binary @ 0x???? (TODO RE)
+    void Draw(float* mtx);
+
+    // STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
+    float GetTimeFirstAward();
+
+    // STUB: BonusScreen::GetTimePerAward -- binary @ 0x???? (TODO RE)
+    float GetTimePerAward();
+
+    // STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
+    void LoadContent();
+
+    // STUB: BonusScreen::Shake -- binary @ 0x???? (TODO RE)
+    void Shake(float amplitude, float duration);
+
+    // STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
+    void UnLoadContent();
+    // ---- end STUBS ----
+
 private:
     // Binary @ 0x0013260C — one-shot finale: coin spawn, camera shake, finish SFX
     void AwardScores();

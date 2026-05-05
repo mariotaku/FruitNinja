@@ -137,6 +137,19 @@ long File::SizeOfFile(const char* path, unsigned long systemID) {
     return (long)sz;
 }
 
+// Binary @ 0x0019b7ec
+bool File::IsOpen() const { return m_bIsOpen; }
+// Binary @ 0x0019b7dc
+bool File::IsLoaded() const { return m_bIsLoaded; }
+// Binary @ 0x0019b7f4
+bool File::CanWrite() const { return (m_openMode & 1) != 0; }
+// Binary @ 0x0019b774
+unsigned long File::Size() const { return m_size; }
+// Binary @ 0x0019b778
+void* File::Data() const { return m_pData; }
+// Binary @ 0x0019b77c
+const AsciiString& File::FileName() const { return m_filename; }
+
 }  // namespace Mortar
 
 // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----

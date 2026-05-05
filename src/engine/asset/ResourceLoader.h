@@ -3,6 +3,7 @@
 
 #include "util/AsciiString.h"
 #include "util/SmartPtr.h"
+#include "asset/DataReader.h"
 #include "asset/Skeleton.h"
 #include <vector>
 #include <cstdint>
@@ -22,10 +23,14 @@ public:
 
     ResourceLoader();
     ResourceLoader(const char* filePath);
+    ResourceLoader(const AsciiString& filePath);
+    ResourceLoader(DataReader& reader, const AsciiString& basePath);
+    ~ResourceLoader();
 
     // Initialize from raw data buffer (recursive HBR0 parsing)
     // Matches 0x001b4708
     void Initialize(const uint8_t* data, size_t dataSize);
+    void Initialize(DataReader& reader);
 
     // Sequential read methods
     template<typename T>
@@ -36,30 +41,9 @@ public:
         return val;
     }
 
-    void ReadBytes(void* dest, size_t count) {
-        if (count > 0 && m_ReadPos + count <= m_Data.size()) {
-            memcpy(dest, &m_Data[m_ReadPos], count);
-            m_ReadPos += count;
-        }
-    }
-
-    // Matches 0x001b45e0
-    AsciiString ReadString() {
-        uint16_t len = Read<uint16_t>();
-        if (len == 0) return AsciiString("");
-        std::string str(len, '\0');
-        ReadBytes(&str[0], len);
-        return AsciiString(str);
-    }
-
-    // Matches 0x001b46d0 — 1-based index into children
-    ResourceLoader* ReadSubResourceLookup() {
-        uint32_t index = Read<uint32_t>();
-        if (index > 0 && index - 1 < (uint32_t)m_Children.size()) {
-            return &m_Children[index - 1];
-        }
-        return nullptr;
-    }
+    void ReadBytes(void* dest, unsigned long count);
+    AsciiString ReadString();
+    ResourceLoader* ReadSubResourceLookup();
 
     const AsciiString& BasePathGet() const { return m_BasePath; }
     void BasePathSet(const AsciiString& path) { m_BasePath = path; }
@@ -104,7 +88,7 @@ public:
         outSkeleton.Swap(bones);
     }
 
-    // Skip Skeleton data without storing (legacy — superseded by ReadSkeleton).
+    // Skip Skeleton data without storing (legacy -- superseded by ReadSkeleton).
     void SkipSkeleton() {
         if (m_ReadPos + 4 > m_Data.size()) return;
         uint32_t boneCount = Read<uint32_t>();
@@ -118,12 +102,22 @@ public:
             m_ReadPos += 132;
         }
     }
+
+    // ---- STUBS (binary) ----
+    // STUB: ResourceLoader::ResourceLoader(AsciiString const&) -- binary @ 0x???? (TODO RE)
+    // STUB: ResourceLoader::ResourceLoader(DataReader&, AsciiString const&) -- binary @ 0x???? (TODO RE)
+    // STUB: ResourceLoader::~ResourceLoader() -- binary @ 0x???? (TODO RE)
+    // STUB: ResourceLoader::Initialize(DataReader&) -- binary @ 0x???? (TODO RE)
+    // STUB: ResourceLoader::ReadBytes(void*, unsigned long) -- binary @ 0x???? (TODO RE)
+    // STUB: ResourceLoader::ReadString() -- binary @ 0x???? (TODO RE)
+    // STUB: ResourceLoader::ReadSubResourceLookup() -- binary @ 0x???? (TODO RE)
+    // ---- end STUBS ----
 };
 
 } // namespace Mortar
 
 #ifdef __bada__
-// TODO: ResourceLoader::m_BasePath is at +0x04 in binary — implies a field at +0x00
+// TODO: ResourceLoader::m_BasePath is at +0x04 in binary -- implies a field at +0x00
 // not present in the current port. Resolve +0x00 field before enabling these asserts.
 // static_assert(offsetof(ResourceLoader, m_BasePath) == 0x04, "ResourceLoader::m_BasePath offset");
 // static_assert(offsetof(ResourceLoader, m_Data)     == 0x2C, "ResourceLoader::m_Data offset");
