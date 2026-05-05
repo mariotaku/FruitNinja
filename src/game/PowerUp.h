@@ -176,7 +176,7 @@ public:
     void SetCurrentTime(float t) { m_LongestRemaining = t; }
 
     // @ 0x001180d4
-    void SetTotalTime(float t) { m_TotalTime = t; }
+    void SetTotalTime(float t);
 
     // @ 0x0011a1c4
     void SetOnScreenAmt(float a) { m_BarRamp = a; }
@@ -199,29 +199,20 @@ public:
     std::list<GameModifier*>::const_iterator ModListEnd()   const { return m_ModList.end(); }
 
     // @ 0x001193d0 callee — push a modifier onto this power-up's list
-    void AddModifier(GameModifier* mod) { m_ModList.push_back(mod); }
+    void AddModifier(GameModifier* mod);
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: PowerUp::Purchaseable -- auto stub from binary missing-symbol set
+    // ---- STUBS (binary) ----
+    // STUB: PowerUp::PowerUp(PowerUp*) -- binary @ 0x???? (TODO RE)
+    PowerUp(PowerUp* src);
+    // STUB: PowerUp::Activate(bool,bool,Vec3,float*) -- binary @ 0x???? (TODO RE)
+    void Activate(bool isPurchase, bool flag2, Vec3 pos, float* extra);
+    // STUB: PowerUp::Purchaseable -- binary @ 0x???? (TODO RE)
     void Purchaseable();
-    // STUB: PowerUp::SetDeferedPoints -- auto stub from binary missing-symbol set
+    // STUB: PowerUp::SetDeferedPoints -- binary @ 0x???? (TODO RE)
     void SetDeferedPoints(int);
-    // STUB: PowerUp::UnloadTextures -- auto stub from binary missing-symbol set
+    // STUB: PowerUp::UnloadTextures -- binary @ 0x???? (TODO RE)
     void UnloadTextures();
-    // ---- end AUTO-STUB MERGE ----
+    // ---- end STUBS ----
 };
 
 #endif // FN_GAME_POWER_UP_H

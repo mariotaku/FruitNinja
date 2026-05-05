@@ -35,6 +35,41 @@ ScrollingMenuItem::~ScrollingMenuItem() {
     // m_Delegate destroyed automatically.
 }
 
+void ScrollingMenuItem::Move(float x, float y, float z) {
+    pos.x = x; pos.y = y; pos.z = z;
+}
+
+void ScrollingMenuItem::SetParent(ScrollingMenu* parent) {
+    m_pParent = parent;
+}
+
+void ScrollingMenuItem::SetText(const char* text) {
+    m_pText = text;
+}
+
+void ScrollingMenuItem::Draw() {
+    // TODO: 0x0015b480 -- render item text and highlight
+}
+
+// STUB: ScrollingMenuItem::ScrollingMenuItem -- binary @ 0x???? (TODO RE)
+ScrollingMenuItem::ScrollingMenuItem(float, float, const char* text, Mortar::Delegate1<void, ScrollingMenuItem*> delegate)
+    : m_pParent(nullptr)
+    , m_Colour(0xFFFFFFFF)
+    , m_Size{0.0f, 0.0f, 0.0f}
+    , m_Height(25.0f)
+    , m_Width(0.0f)
+    , _pre_del0(0)
+    , m_bOnscreen(0)
+    , _pre_del1(0)
+    , _pre_del2(0)
+    , m_Delegate(delegate)
+    , m_pText(text)
+{
+    pos.x = 0.0f;
+    pos.y = 0.0f;
+    pos.z = 0.0f;
+}
+
 void ScrollingMenuItem::CallClickedMenuItemCallback() {
     if (m_Delegate) {
         m_Delegate(this);
