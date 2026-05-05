@@ -30,4 +30,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::ScreenTint;
 #endif  // FN_STUBS_SCREENTINT_H

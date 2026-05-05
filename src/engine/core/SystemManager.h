@@ -4,8 +4,6 @@
 #include "core/Singleton.h"
 #include <cstdint>
 
-namespace Mortar {
-
 class SystemManager : public Mortar::Singleton<SystemManager> {
     friend class Mortar::Singleton<SystemManager>;
 
@@ -50,6 +48,4 @@ public:
     uint8_t GetQuitState() const { return m_QuitState; }
 };
 
-
-}  // namespace Mortar
 #endif

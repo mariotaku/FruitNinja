@@ -86,7 +86,7 @@ void Game::run() {
         // Original: dt = 0.0; Mortar::SystemManager::Update(&dt) writes fixed 1/60;
         // then passes dt to update + draw functions
         dt = 0.0f;
-        Mortar::SystemManager::GetInstance().Update(&dt);
+        SystemManager::GetInstance().Update(&dt);
 
         // Port specific: debug time-scale. We scale dt so every
         // dt-integrating update (physics, velocity, acceleration)
@@ -136,7 +136,7 @@ void Game::runFrames(int frameCount) {
         }
 
         dt = 0.0f;
-        Mortar::SystemManager::GetInstance().Update(&dt);
+        SystemManager::GetInstance().Update(&dt);
         dt *= FN::g_DebugTimeScale;
         GameTaskUpdate(dt);
 

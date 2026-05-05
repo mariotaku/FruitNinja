@@ -32,4 +32,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::PROBABILITY_OVERIDE;
 #endif  // FN_STUBS_PROBABILITY_OVERIDE_H

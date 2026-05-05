@@ -46,7 +46,7 @@
 #include "collision/ColSphere.h"
 #include <cstdint>
 
-namespace Mortar { struct PSPParticleEmitter; }
+struct PSPParticleEmitter;
 namespace Mortar { class Entity; }
 
 struct InputEvent;
@@ -207,8 +207,8 @@ private:
 
     // Particle emitter that follows the blade for smoke/sparkle trail.
     // Matches binary +0x3c (m_TrailEmitter). Created on first active touch
-    // via Mortar::PSPParticleManager::AddEmitter, cleared on release.
-    Mortar::PSPParticleEmitter* m_TrailEmitter;
+    // via PSPParticleManager::AddEmitter, cleared on release.
+    PSPParticleEmitter* m_TrailEmitter;
 
     // 2-bit state machine matching binary m_bBladeActive:
     //   0 = off, 1 = active, 2 = deactivating (fading out)

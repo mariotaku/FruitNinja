@@ -31,4 +31,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::SplatEffect;
 #endif  // FN_STUBS_SPLATEFFECT_H

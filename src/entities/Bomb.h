@@ -13,7 +13,7 @@
 #include "render/gl_funcs.h"
 #include "util/Delegate.h"
 
-namespace Mortar { struct PSPParticleEmitter; }
+struct PSPParticleEmitter;
 class MenuButton;
 
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001ea478 + 0x00172504 + 0x00171764 (asm-inspector, vtable slots verified)
@@ -57,7 +57,7 @@ public:
     uint8_t m_bCollisionGuard;
 
     // +0x7c: fuse particle emitter — lazy-created on first Update tick
-    Mortar::PSPParticleEmitter* m_pEmitter;
+    PSPParticleEmitter* m_pEmitter;
 
     // +0x80: 1 = physics enabled
     uint8_t m_bMovement;

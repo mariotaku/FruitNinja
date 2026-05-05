@@ -25,4 +25,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::WaveQue;
 #endif  // FN_STUBS_WAVEQUE_H

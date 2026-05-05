@@ -504,11 +504,11 @@ void Fruit::Deactivate() {
 // Matches Fruit::KillFruit (0x00176abc).
 void Fruit::KillFruit(bool doMissPenalty) {
     if (m_pEmitter1) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
         m_pEmitter1 = nullptr;
     }
     if (m_pEmitter2) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
         m_pEmitter2 = nullptr;
     }
 
@@ -786,10 +786,10 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     //   e->m_CosAngle =  CosIdx(-sliceAngle);
     //   e->m_SinAngle = -SinIdx(-sliceAngle);  = SinIdx(sliceAngle)
     if (info) {
-        Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
         const float sliceRad = (float)(int16_t)m_SliceAngle *
                                (6.2831853f / 65536.0f);
-        Mortar::PSPParticleEmitter* eHit = pm.AddEmitter(
+        PSPParticleEmitter* eHit = pm.AddEmitter(
             info->m_NameHash, nullptr, /*persistent=*/false);
         if (eHit) {
             eHit->m_Pos      = pos;
@@ -1538,11 +1538,11 @@ void Fruit::SetForPlayer(int playerIdx) {
 // Called by Mortar::ActorManager teardown before the destructor.
 void Fruit::Release() {
     if (m_pEmitter1) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter1);
         m_pEmitter1 = nullptr;
     }
     if (m_pEmitter2) {
-        Mortar::PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
+        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
         m_pEmitter2 = nullptr;
     }
     if (m_pSlasher && m_pSlasher->m_pCurrentTarget == this) {
@@ -1593,7 +1593,7 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
 
 // Binary @ 0x001756dc — replace m_pEmitter1 with a custom trail emitter.
 bool Fruit::SetTrailParticles(unsigned long emitterHash) {
-    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+    PSPParticleManager& pm = PSPParticleManager::GetInstance();
 
     // Binary: EmitterExists check before replace. Port uses FindTemplate
     // as the equivalent gate (AddEmitter returns nullptr for unknown hashes).

@@ -32,4 +32,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::EffectImage;
 #endif  // FN_STUBS_EFFECTIMAGE_H

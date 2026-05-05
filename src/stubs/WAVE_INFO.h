@@ -25,4 +25,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::WAVE_INFO;
 #endif  // FN_STUBS_WAVE_INFO_H

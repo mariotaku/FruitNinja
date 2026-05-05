@@ -8,7 +8,7 @@
 #include "asset/Mesh.h"
 #include "FruitInfo.h"
 
-namespace Mortar { struct PSPParticleEmitter; }
+struct PSPParticleEmitter;
 class SlashEntity;
 
 // Per-fruit mesh slot layout. Matches the binary's 0x24-byte
@@ -57,8 +57,8 @@ public:
 
     // +0x7c / +0x80: two juice-particle emitters spawned on hit, one
     // per eventual half. Point at pos and m_SecondPos respectively.
-    Mortar::PSPParticleEmitter* m_pEmitter1;
-    Mortar::PSPParticleEmitter* m_pEmitter2;
+    PSPParticleEmitter* m_pEmitter1;
+    PSPParticleEmitter* m_pEmitter2;
 
     // +0xb4: sliced state
     bool m_bSliced;

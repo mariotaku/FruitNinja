@@ -31,7 +31,7 @@
 
 // Forward declarations
 struct Renderer;
-namespace Mortar { struct PSPParticleEmitter; }
+struct PSPParticleEmitter;
 
 class Coin : public Mortar::Entity {
 public:
@@ -51,8 +51,8 @@ public:
     float    m_TargetX;          // +0x5C  homing target X (also carries gravity.x in state 0-3)
     float    m_TargetY;          // +0x60  homing target Y
     float    m_TargetZ;          // +0x64  homing target Z
-    Mortar::PSPParticleEmitter* m_pFlyEmitter;      // +0x68
-    Mortar::PSPParticleEmitter* m_pCollectEmitter;  // +0x6C
+    PSPParticleEmitter* m_pFlyEmitter;      // +0x68
+    PSPParticleEmitter* m_pCollectEmitter;  // +0x6C
     Mortar::Delegate1<void, Coin*>  m_OnArrived;        // +0x70  36 bytes (Mortar::Delegate1<void,Coin*>)
 
     // --- Constructor / destructor ----------------------------------------

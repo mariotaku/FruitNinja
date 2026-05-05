@@ -30,4 +30,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::BonusType;
 #endif  // FN_STUBS_BONUSTYPE_H

@@ -36,4 +36,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::PurchaseInfo;
 #endif  // FN_STUBS_PURCHASEINFO_H

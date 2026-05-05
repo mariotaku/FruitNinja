@@ -91,7 +91,7 @@ void GameInitialise() {
     srand((unsigned int)time(nullptr));
 
     // Step 1: Mortar::SystemManager::Init() — 0x0018b024: m_field50=0, m_bRunning=1, clock base (skipped)
-    Mortar::SystemManager::GetInstance().Init();
+    SystemManager::GetInstance().Init();
 
     // Step 2: MatrixManager::Init() — 0x0019e2ac: just calls ResetAllStacks
     MatrixManager::GetInstance().Init();
@@ -202,9 +202,9 @@ void GameInitialise() {
     // Step 11 (call #22): PowerUpManager::Load — parse poweruplist.xml
     PowerUpManager::GetInstance()->Load();
 
-    // Step 12: Mortar::PSPParticleManager — load particle XML templates
+    // Step 12: PSPParticleManager — load particle XML templates
     {
-        Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
         std::string partDir = game->data_dir + "/particles";
         std::string partXml = partDir + "/particles_fast.xml";
         pm.LoadFile(partDir.c_str(), partXml.c_str());
@@ -409,7 +409,7 @@ void GameDestroy() {
 
     // --- 10. Engine subsystem teardown ---
     // TODO: FileManager::ClearSystems
-    Mortar::PSPParticleManager::GetInstance().Destroy();
+    PSPParticleManager::GetInstance().Destroy();
     // TODO: StringTableUtilUnload
     // TODO: CleanupBomb, CleanupFruit, CleanUpSplat, CleanupSlash
 

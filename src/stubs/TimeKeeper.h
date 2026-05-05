@@ -31,4 +31,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::TimeKeeper;
 #endif  // FN_STUBS_TIMEKEEPER_H

@@ -25,4 +25,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::COIN_CHANCEINATOR;
 #endif  // FN_STUBS_COIN_CHANCEINATOR_H

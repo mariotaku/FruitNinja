@@ -309,7 +309,7 @@ void GameUpdate(float dt, bool active) {
     if (game->pGameSound) game->pGameSound->Update(dt);
     UpdateMusic(dt);
 
-    Mortar::PSPParticleManager::GetInstance().Update(dt, false);
+    PSPParticleManager::GetInstance().Update(dt, false);
 
     FN::UpdateCriticalFlash(dt);
 
@@ -378,7 +378,7 @@ void GameDraw(float dt, bool active) {
         bgTex->UnSet();
     }
 
-    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+    PSPParticleManager& pm = PSPParticleManager::GetInstance();
     Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
 
     // === 1. Mortar::ActorManager::Draw — 3D fruit/bomb/slash entities ===
@@ -527,7 +527,7 @@ void GameExit_Handler() {
     Coin::ClearCoins(false);
     FruitNinja_SaveCurrentData();  // stub (writes FruitSaveData XML in binary)
     WaveManager::GetInstance()->Destroy();  // stub (frees WAVE_INFO/WaveQue)
-    Mortar::PSPParticleManager::GetInstance().ClearEmitters();
+    PSPParticleManager::GetInstance().ClearEmitters();
     if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
         am->Clear();
         am->Destroy();

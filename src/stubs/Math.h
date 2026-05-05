@@ -27,4 +27,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::Math;
 #endif  // FN_STUBS_MATH_H

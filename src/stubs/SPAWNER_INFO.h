@@ -29,4 +29,7 @@ public:
 
 }  // namespace Mortar
 
+
+// Hoist into global scope to match the binary's class location.
+using Mortar::SPAWNER_INFO;
 #endif  // FN_STUBS_SPAWNER_INFO_H

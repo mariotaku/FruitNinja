@@ -25,8 +25,8 @@
 
 namespace Mortar {
     class MortarSound;
-    class PSPParticleEmitter;
 }
+class PSPParticleEmitter;
 
 class PowerUp;
 class HUDControl3d;
@@ -35,7 +35,7 @@ class HUDControl3d;
 // 24 bytes in binary (ARM32 layout).
 struct Emmiter {
     uint32_t                          m_NameHash;      // +0x00
-    Mortar::PSPParticleEmitter*       m_pHandle;       // +0x04
+    PSPParticleEmitter*               m_pHandle;       // +0x04
     Vec3                              m_Offset;        // +0x08
     Vec3                              m_VelocityScale; // +0x14
 

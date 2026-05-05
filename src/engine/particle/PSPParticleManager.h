@@ -23,8 +23,6 @@
 // that's fine, the port is a reimplementation, not a memory-compatible ABI copy.
 // See docs/engine/particles.md for per-field XML source.
 // ----------------------------------------------------------------------------
-namespace Mortar {
-
 struct PSPParticleTemplate {
     float    m_StartTime;          // +0x00  <life>/60
     uint16_t _pad04;               // +0x04
@@ -75,7 +73,7 @@ struct PSPParticleTemplate {
     uint8_t  m_ColourMidMax[4];    // +0xA0
     uint8_t  m_ColourEndMin[4];    // +0xA4
     uint8_t  m_ColourEndMax[4];    // +0xA8
-    Mortar::SmartPtr<Texture> m_Texture;   // +0xAC  4 bytes (pointer)
+    Mortar::SmartPtr<Mortar::Texture> m_Texture;   // +0xAC  4 bytes (pointer)
     float    m_AspectRatio;        // +0xB0
     int32_t  m_UseDepth;           // +0xB4
 };
@@ -272,6 +270,4 @@ private:
     std::vector<PSPParticleEmitter*> m_Emitters;
 };
 
-
-}  // namespace Mortar
 #endif

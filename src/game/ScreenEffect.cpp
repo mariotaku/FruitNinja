@@ -306,7 +306,7 @@ void ScreenEffect::Parse(XMLElement* xml) {
 // ---- ScreenEffect::Activate (binary @ 0x0011dbb8) ----------------------------
 
 void ScreenEffect::Activate() {
-    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+    PSPParticleManager& pm = PSPParticleManager::GetInstance();
 
     // Spawn particle emitters
     for (size_t i = 0; i < m_Emmiters.size(); ++i) {
@@ -448,7 +448,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
 
     // Cull emitters when effect near end (currentLongest >= 0.8 * maxTotal)
     if (maxTotal > 0.0f && currentLongest >= maxTotal * 0.8f) {
-        Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
         for (size_t i = 0; i < m_Emmiters.size(); ++i) {
             Emmiter& em = m_Emmiters[i];
             if (em.m_pHandle) {
@@ -478,7 +478,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
 // ---- ScreenEffect::Deactivate (binary @ 0x0011d43c) --------------------------
 
 void ScreenEffect::Deactivate() {
-    Mortar::PSPParticleManager& pm = Mortar::PSPParticleManager::GetInstance();
+    PSPParticleManager& pm = PSPParticleManager::GetInstance();
     for (size_t i = 0; i < m_Emmiters.size(); ++i) {
         Emmiter& em = m_Emmiters[i];
         if (em.m_pHandle) {
