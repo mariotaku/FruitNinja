@@ -568,9 +568,8 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
         }
     }
     FlushParticleVerts(s_verts, curTmpl);
-
-    // Restore default blend state so we don't leak into subsequent draws.
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Binary leaves blend state at whatever the last template set; subsequent
+    // draws are responsible for configuring their own. Don't restore here.
 }
 
 // Binary @ 0x00115f60 — load particle templates from XML.
