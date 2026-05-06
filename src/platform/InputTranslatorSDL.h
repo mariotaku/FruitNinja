@@ -14,9 +14,6 @@
 #include "input/InputManager.h"
 #include "render/Renderer.h"
 
-// Forward-declare StringHash (from scoring or a utility)
-uint32_t StringHash(const char* str);
-
 class InputTranslatorSDL {
 public:
     // Pre-computed action hashes for 16 touch channels

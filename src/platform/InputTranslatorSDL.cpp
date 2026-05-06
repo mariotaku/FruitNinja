@@ -7,6 +7,7 @@
 
 #include "platform/InputTranslatorSDL.h"
 #include "input/Touch.h"
+#include "util/StringHash.h"
 #include <cstdio>
 #include <cstring>
 
@@ -19,24 +20,11 @@
 #  define TLOG(...) do {} while (0)
 #endif
 
-// Simple StringHash implementation (matches original Jenkins lookup3)
-// For now, a basic DJB2 hash — replace with exact original when scoring.cpp is implemented
-uint32_t StringHash(const char* str) {
-    uint32_t hash = 0x805 + (uint32_t)strlen(str);
-    uint32_t a = 0xDEADBEEF + hash;
-    uint32_t b = a, c = a;
-    while (*str) {
-        a += (uint8_t)*str++;
-        a -= c; a ^= (c << 4) | (c >> 28); c += b;
-        b -= a; b ^= (a << 6) | (a >> 26); a += c;
-        c -= b; c ^= (b << 8) | (b >> 24); b += a;
-    }
-    // Final mix
-    c ^= b; c -= (b << 14) | (b >> 18);
-    a ^= c; a -= (c << 11) | (c >> 21);
-    b ^= a; b -= (a << 25) | (a >> 7);
-    return c;
-}
+// StringHash is provided by src/engine/util/StringHash.h (the binary-faithful
+// Jenkins lookup3 with case-folding). Earlier this file had a local DJB2-like
+// definition that produced different hashes for the same string -- causing
+// SlashEntity event-driven dispatch to silently fail. Single source of truth
+// now.
 
 InputTranslatorSDL::InputTranslatorSDL()
     : hashTouchScreen(0), mouseDown(false), mouseX(0), mouseY(0) {
