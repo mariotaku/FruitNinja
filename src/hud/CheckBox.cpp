@@ -170,16 +170,12 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texId);
 
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_FALSE);
-
+    // Depth state is owned by GameDraw at the pass level (binary @ 0x0016b888);
+    // CheckBox::Draw must NOT mutate it -- doing so leaves depth-test OFF for
+    // subsequent same-bucket draws (MenuButton scratchs.tex backdrop).
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
-
-    glDepthMask(GL_TRUE);
-    glDisable(GL_DEPTH_TEST);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 }

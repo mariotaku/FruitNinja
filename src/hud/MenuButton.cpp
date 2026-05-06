@@ -280,7 +280,11 @@ void MenuButton::Release() {
     if (e) {
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
-            // TODO: 0x0014f7e0 -- Fruit::m_pMenuButton backref at +0x108 not yet modeled
+            // Binary writes 0 to fruit+0x108. The port's +0x108 slot is
+            // modeled as m_pSlasher (SlashEntity backref); clearing it is
+            // semantically equivalent to the binary's "drop owning ref"
+            // intent on menu-button release.
+            static_cast<Fruit*>(e)->m_pSlasher = nullptr;
         } else if (m_FruitType == bombThreshold) {
             static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
         }
@@ -823,9 +827,12 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
             Vec3 drawAt = pos + off;
 
             mm.GetWorldStack().Reset();
+            // Binary @ 0x0014fdf8: Scale44(ratio*64, ratio*32, 0.0f).
+            // DAT_00150044 = 0.0f for the Z-scale; the geometry's z is unused
+            // (subsequent GlobalTranslate writes the final z=pos.z).
             Matrix44 mat = Matrix44::MakeScale(ratio * 64.0f,
                                                ratio * 32.0f,
-                                               1.0f);
+                                               0.0f);
             mat.GlobalTranslate44(drawAt);
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
