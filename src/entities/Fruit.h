@@ -244,7 +244,9 @@ public:
     // Binary @ 0x00174fc8 — return FRUIT_INFO[type].m_FactColour
     static Colour FruitFactColour(long type);
     // Binary @ 0x00174ff8 — equivalent of FruitInfo_Get(); preserved for binary call-shape parity
-    static const FruitInfo* FruitInfo(long type);
+    // Fully-qualified return type avoids GCC -Wchanges-meaning since the
+    // method name shadows the struct.
+    static const ::FruitInfo* FruitInfo(long type);
 
     // Binary @ 0x00176184 — local-MP "did a player drop their last life" check; defers to FN::GameOver
     static void CheckFruitDropped();

@@ -285,8 +285,11 @@ void MenuButton::Release() {
             static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
         }
     }
-    delete m_pLabel1; m_pLabel1 = nullptr;
-    delete m_pLabel2; m_pLabel2 = nullptr;
+    // m_pLabel1 / m_pLabel2 are always nullptr (SetText has no callers, see
+    // dead-code note below). Skip deletes -- they would be undefined behavior
+    // on void* if ever non-null, and they're never set in the first place.
+    m_pLabel1 = nullptr;
+    m_pLabel2 = nullptr;
     DeletePeices();
     // TODO: 0x0014f7e0 -- m_SecondaryTex Mortar::SmartPtr<Texture> drop not applicable;
     //   HUDControl3d::m_SecondaryTex is GLuint in port (no ref-counting needed)
