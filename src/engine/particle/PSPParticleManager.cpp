@@ -106,12 +106,15 @@ PSPEmitterTemplate* PSPParticleManager::GetEmitterTemplate(int idx) {
 PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
                                                    PSPParticleEmitter** ppRef,
                                                    bool /*persistent*/) {
-    // Binary pool capacity is 120 (Create(this, 0x78) at 0x00115fc0 in LoadFile).
-    // Binary returns nullptr when pool is full (GetUsed()+1 >= capacity).
-    // DIFFERS: binary uses MemoryPool<PSPParticleEmitter>; port uses std::vector.
-    static const size_t POOL_CAPACITY = 120;
+    // ASM-verified: 2026-05-06T16:30 binary @ 0x001149e0 (asm-inspector)
+    // Binary pool capacity is 120 (Create(this, 0x78) at 0x00115fc0); admit
+    // predicate is `used + 1 < cap` -> at most 119 live emitters. Pool-full
+    // path returns nullptr WITHOUT zeroing *ppRef; binary only zeros *ppRef
+    // on hash-miss inside the pool-OK branch.
+    // DIFFERS-BY-DESIGN: binary uses MemoryPool<PSPParticleEmitter>; port
+    // uses std::vector but mirrors the same admit/return semantics.
+    static const size_t POOL_CAPACITY = 119;
     if (m_Emitters.size() >= POOL_CAPACITY) {
-        if (ppRef) *ppRef = nullptr;
         return nullptr;
     }
 

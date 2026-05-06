@@ -352,9 +352,8 @@ void SplatEntity::UpdateSplat(float dt) {
         // --- Airborne phase ---
         m_Vel.y += UP_GRAVITY * dt;
 
-        // Velocity floor clamp -- binary uses max(vel, DAT_0017fd40 = -50).
-        if (m_Vel.x < UP_VEL_CLAMP_LO) m_Vel.x = UP_VEL_CLAMP_LO;
-        if (m_Vel.y < UP_VEL_CLAMP_LO) m_Vel.y = UP_VEL_CLAMP_LO;
+        // Binary clamps velocity ONLY in the slide-decay phase (below); the
+        // airborne phase does not floor-clamp. (asm-inspector 2026-05-06)
 
         // Check landing threshold.
         if (m_Pos.z < UP_LAND_Z) {
@@ -419,11 +418,14 @@ void SplatEntity::UpdateSplat(float dt) {
                 PlaySplat(splatSize);
             }
 
-            // Per-splat ambient pulp-drip arm: 1-in-10 chance, only if the
-            // gate isn't currently in its post-fire cooldown soak (>= -0.5).
-            // Bin: SplatEntity::Update @ 0x0017f774, arm site @ 0x0017fa56.
-            // ASM-verified: 2026-04-29T03:25Z binary @ 0x0017fa56 (asm-inspector)
-            if (RandInt(10) == 0 && s_PulpDripGate >= -0.5f) {
+            // Per-splat ambient pulp-drip arm: 1-in-10 chance, only when the
+            // gate has soaked past -0.5 (i.e. the post-fire cooldown is over
+            // and we're free to rearm). Binary uses `vcmpe gate, -0.5; it mi`
+            // -> N flag set when gate + 0.5 < 0, i.e., gate < -0.5.
+            // ASM-verified: 2026-05-06T17:00 binary @ 0x0017fa56 (asm-inspector)
+            // (Earlier port had `>= -0.5f` -- inverted comparator; rearmed
+            //  while still in cooldown soak instead of after it.)
+            if (RandInt(10) == 0 && s_PulpDripGate < -0.5f) {
                 s_PulpDripGate = 0.25f;
             }
         }
@@ -545,30 +547,46 @@ SplatEntity* SplatEntity::GetFree() {
     return s;
 }
 
-// Binary: SplatEntity::NumActiveSplats @ 0x0017ee34
-// Counts pool slots with m_bAlive != 0.
+// Cache populated by UpdateActiveSplats; NumActiveSplats returns this.
+static int s_NumActiveSplats = 0;
+
+// ASM-verified: 2026-05-06T17:00 binary @ 0x0017ee34 (asm-inspector)
+// Returns the cached counter; binary does NOT iterate the pool here.
+// The cache is refreshed at the end of UpdateActiveSplats's pool loop.
 int SplatEntity::NumActiveSplats() {
+    return s_NumActiveSplats;
+}
+
+void SplatEntity::UpdateActiveSplats(float dt) {
+    // Pool loop -- update each alive splat, push dead ones back, accumulate
+    // the new active count for the cache.
     const int N = s_Pool.Capacity();
     int activeCount = 0;
     for (int i = 0; i < N; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
-        if (s && s->m_bAlive) ++activeCount;
-    }
-    return activeCount;
-}
+        if (!s || !s->m_bAlive) continue;
 
-void SplatEntity::UpdateActiveSplats(float dt) {
+        s->UpdateSplat(dt);
+
+        if (!s->m_bAlive) {
+            s_Pool.Push(s);
+        } else {
+            ++activeCount;
+        }
+    }
+    s_NumActiveSplats = activeCount;
+
     // Per-frame spring rate compute -- matches binary's
     // SplatEntity::UpdateActiveSplats @ 0x0017fd68 (instructions
-    // 0x0017fe46..0x0017feda):
+    // 0x0017fe46..0x0017feda). Computed AFTER the pool loop so the
+    // freshly-cached count is consumed.
     //
     //   N_total  = Mortar::ActorManager::GetNumEntities()
-    //   N_active = NumActiveSplats()
+    //   N_active = s_NumActiveSplats (just refreshed)
     //   raw      = (N_total + N_active) / 15.0 - 0.15
     //   if raw <= 0:   spring = 1.25
     //   elif raw >= 3: spring = 4.25
     //   else:          spring = raw + 1.25  (linear ramp 1.25..4.25)
-    const int activeCount = NumActiveSplats();
     int totalEntities = 0;
     if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
         totalEntities = am->GetNumEntities();
@@ -578,18 +596,6 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         if (raw <= 0.0f)      s_SpringRate = 1.25f;
         else if (raw >= 3.0f) s_SpringRate = 4.25f;
         else                  s_SpringRate = raw + 1.25f;
-    }
-
-    const int N = s_Pool.Capacity();
-    for (int i = 0; i < N; ++i) {
-        SplatEntity* s = s_Pool.SlotAt(i);
-        if (!s || !s->m_bAlive) continue;
-
-        s->UpdateSplat(dt);
-
-        if (!s->m_bAlive) {
-            s_Pool.Push(s);
-        }
     }
 
     // Per-impact splat SFX gates -- three independent cooldowns by size.

@@ -78,10 +78,10 @@ HUDControl3d::HUDControl3d()
 HUDControl3d::~HUDControl3d() {
 }
 
-// STUB: HUDControl3d::Release -- binary @ 0x???? (TODO RE)
-void HUDControl3d::Release() {
-    HUDControl::Release();
-}
+// ASM-verified: 2026-05-06T17:00 binary @ 0x00143fc4 (asm-inspector)
+// Single bx lr; does NOT chain to HUDControl::Release (port previously
+// chained, removed for binary fidelity).
+void HUDControl3d::Release() {}
 
 // STUB: HUDControl3d::PreDraw -- binary @ 0x???? (TODO RE)
 void HUDControl3d::PreDraw(const Vec3& hudScale) {
