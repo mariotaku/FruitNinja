@@ -477,14 +477,24 @@ void SlashEntity::RebuildGeometry() {
 // Update — matches SlashEntity::Update (0x17D664) + UpdateTouchDown (0x17D2E4)
 // ---------------------------------------------------------------------------
 void SlashEntity::Update(float dt) {
-    // Poll Mortar::Touch slot 0 (single-player).
-    const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(0);
-    if (s) {
-        if (s->phase <= 0) {
-            OnTouchActive((float)s->currX, (float)s->currY);
-        } else if (m_bHasHead) {
-            OnTouchReleased();
+    // Find any active touch slot. The earlier port hardcoded slot 0, but
+    // Touch::___UpdateInternal cycles slot claims through 0..7 (one per
+    // press), so slot 0 only sees the FIRST touch ever -- subsequent
+    // touches go to slot 1, 2, ..., and slicing was broken for them.
+    // Binary polls Touch via GetAnyTouch / GetMostRecentTouch dynamics.
+    Mortar::Touch& touch = Mortar::Touch::GetInstance();
+    const Mortar::TouchState* s = nullptr;
+    for (int i = 0; i < Mortar::Touch::MAX_SLOTS; ++i) {
+        const Mortar::TouchState* slot = touch.GetSlot(i);
+        if (slot && slot->phase <= 0) {  // -1 just-pressed or 0 held
+            s = slot;
+            break;
         }
+    }
+    if (s) {
+        OnTouchActive((float)s->currX, (float)s->currY);
+    } else if (m_bHasHead) {
+        OnTouchReleased();
     }
 
     // Trail particle emitter — matches binary UpdateTouchDown (0x17D2E4).
