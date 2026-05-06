@@ -975,6 +975,13 @@ bool SlashEntity::TouchDown(InputEvent* event) {
             UpdateModColour(&highlight, 1.0f);
         }
     }
+    // SDL only fires TouchMove_X/Y on motion (not on press), so on press-edge
+    // m_RawTouchPos still holds the LAST RELEASED position from the previous
+    // swipe -- which causes UpdateTouchDown to start the new trail at the
+    // old end-point. The press event already carries the current xy from
+    // InputTranslatorSDL; copy it before extending the trail.
+    m_RawTouchPos.x = event->x;
+    m_RawTouchPos.y = event->y;
     UpdateTouchDown(event);
     return true;
 }
