@@ -319,20 +319,26 @@ public:
                               const char* textureName2, bool directional,
                               const char* contactParticle, const char* particle2);
 
-    // STUB: SlashEntity::TouchDown -- binary @ 0x17D61C (TODO RE)
+    // ASM-spec: SlashEntity::TouchDown @ 0x17D61C
+    // Press-edge handler. Reset() trail on idle; advances PER_SWIPE palette.
     bool TouchDown(InputEvent* event);
 
-    // STUB: SlashEntity::TouchMoveX -- binary @ 0x17C50C (TODO RE)
+    // ASM-spec: SlashEntity::TouchMoveX @ 0x17C50C -- writes pos.x.
     bool TouchMoveX(InputEvent* event);
 
-    // STUB: SlashEntity::TouchMoveY -- binary @ 0x17C490 (TODO RE)
+    // ASM-spec: SlashEntity::TouchMoveY @ 0x17C490 -- writes pos.y.
     bool TouchMoveY(InputEvent* event);
 
     // STUB: SlashEntity::UpdatePoints -- binary @ 0x17B92C (TODO RE)
     void UpdatePoints(float dt);
 
-    // STUB: SlashEntity::UpdateTouchDown (InputEvent* form) -- binary @ 0x17D2E4 (TODO RE)
+    // ASM-spec: SlashEntity::UpdateTouchDown (InputEvent* form) @ 0x17D2E4
+    // Trail-builder; forwards to OnTouchActive(pos.x, pos.y).
     void UpdateTouchDown(InputEvent* event);
+
+    // Port-helper -- binary equivalent is GameTaskInitInput @ 0x00169670 which
+    // registers per-finger callbacks on InputManager. Called from Init().
+    void RegisterInputCallbacks();
     // ---- end STUBS ----
 };
 

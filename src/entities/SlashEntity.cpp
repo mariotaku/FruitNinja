@@ -15,6 +15,7 @@
 #include "asset/TextureManager.h"
 #include "input/Touch.h"
 #include "input/InputEvent.h"
+#include "input/InputManager.h"
 #include "particle/PSPParticleManager.h"
 #include "collision/ColLine.h"
 #include "collision/ColSphere.h"
@@ -163,6 +164,32 @@ void SlashEntity::Init() {
         m_Left[i].colour  = 0xFFFFFFFF;
         m_Right[i].colour = 0xFFFFFFFF;
     }
+
+    RegisterInputCallbacks();
+}
+
+// Binary @ GameTaskInitInput 0x00169670 -- registers per-finger TouchDown/X/Y
+// callbacks on InputManager for each of 16 SlashEntity slots. Port has only
+// one g_pSlashEntity (single-touch only), so register for finger 0 only.
+// Multi-touch parity would require SlashEntity[16] + per-finger registration.
+void SlashEntity::RegisterInputCallbacks() {
+    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
+    if (!mgr) return;
+
+    char buf[20];
+    const int finger = 0;
+
+    snprintf(buf, sizeof(buf), "TouchDown_%d", finger);
+    mgr->RegisterInputCallback(StringHash(buf),
+        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchDown));
+
+    snprintf(buf, sizeof(buf), "TouchMove_X%d", finger);
+    mgr->RegisterInputCallback(StringHash(buf),
+        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveX));
+
+    snprintf(buf, sizeof(buf), "TouchMove_Y%d", finger);
+    mgr->RegisterInputCallback(StringHash(buf),
+        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveY));
 }
 
 void SlashEntity::Release() {
@@ -888,26 +915,60 @@ void SlashEntity::SetModColours(
                   contactParticle, particle2);
 }
 
-// STUB: SlashEntity::TouchDown(InputEvent*)
-// Binary @ 0x17D61C — Mortar::Entity vtable input-dispatch override.
-bool SlashEntity::TouchDown(InputEvent* /*event*/) { return false; }
+// ASM-spec: SlashEntity::TouchDown @ 0x17D61C
+// Press-edge handler. Gate: blade idle (m_State == 0). Binary also checks
+// m_bFlag4c (+0x4c) -- not yet modeled in port, omit guard. On idle press:
+// Reset() the trail; if PER_SWIPE colour mode (g_ColourType == 2), advance
+// the palette via UpdateModColour. Then call UpdateTouchDown to ingest the
+// initial touch position. Returns true (event consumed).
+bool SlashEntity::TouchDown(InputEvent* event) {
+    if (m_State == 0) {
+        Reset();
+        if (g_ColourType == 2) {
+            // TODO: 0x17D61C -- highlightColour at +0x48 not modeled in port;
+            // pass white as a placeholder. PER_SWIPE is dead in shipped XML.
+            Colour highlight(255, 255, 255, 255);
+            UpdateModColour(&highlight, 1.0f);
+        }
+    }
+    UpdateTouchDown(event);
+    return true;
+}
 
-// STUB: SlashEntity::TouchMoveX(InputEvent*)
-// Binary @ 0x17C50C — Mortar::Entity vtable input-dispatch override.
-bool SlashEntity::TouchMoveX(InputEvent* /*event*/) { return false; }
+// ASM-spec: SlashEntity::TouchMoveX @ 0x17C50C
+// Per-event X-axis ingestion. Binary writes pos.x = event->m_mapper - 0.5*W
+// (raw pixel -> centred ortho). Port's InputTranslatorSDL pre-centres into
+// event->x, so just copy. Port stores into m_RawTouchPos (no Entity::pos).
+bool SlashEntity::TouchMoveX(InputEvent* event) {
+    Game* g = Game::GetInstance();
+    if (g && g->bombHitTimer > 0.0f) return false;
+    m_RawTouchPos.x = event->x;
+    return true;
+}
 
-// STUB: SlashEntity::TouchMoveY(InputEvent*)
-// Binary @ 0x17C490 — Mortar::Entity vtable input-dispatch override.
-bool SlashEntity::TouchMoveY(InputEvent* /*event*/) { return false; }
+// ASM-spec: SlashEntity::TouchMoveY @ 0x17C490
+// Per-event Y-axis ingestion. Binary writes pos.y = -(event->m_mapper - 0.5*H)
+// (Bada portrait pixel -> Y-up centred). Port's InputTranslatorSDL already
+// produces Y-up centred, so no sign flip here.
+bool SlashEntity::TouchMoveY(InputEvent* event) {
+    Game* g = Game::GetInstance();
+    if (g && g->bombHitTimer > 0.0f) return false;
+    m_RawTouchPos.y = event->y;
+    return true;
+}
 
 // STUB: SlashEntity::UpdatePoints(float)
 // Binary @ 0x17B92C — per-frame geometry rebuild from binary vertex buffers.
 // Port uses RebuildGeometry() from trail-point array instead.
 void SlashEntity::UpdatePoints(float /*dt*/) {}
 
-// STUB: SlashEntity::UpdateTouchDown(InputEvent*)
-// Binary @ 0x17D2E4 — InputEvent* dispatch form. Port uses OnTouchActive(float, float).
-void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {}
+// ASM-spec: SlashEntity::UpdateTouchDown @ 0x17D2E4
+// Per-event trail-builder. Binary reads pos.{x,y} (set by TouchMoveX/Y this
+// same SDL event burst) and interpolates AddPoint calls along the move
+// delta. Port's existing OnTouchActive(x, y) does the same thing -- forward.
+void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
+    OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
+}
 
 // @ 0x0017e504. Iterates 8 SlashEntityGhost slots (base+0x3c, stride 0x10).
 // Render state inherited from GameDraw (alpha-blend SRC_ALPHA/ONE_MINUS_SRC_ALPHA,
