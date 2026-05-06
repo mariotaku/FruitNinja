@@ -156,24 +156,21 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
                          const Matrix44& /*world*/) {
     if (!geom.vbo || geom.vertCount == 0) return;
 
-    // Per-draw CULL_FACE enable with GL defaults (GL_BACK / GL_CCW).
-    // Confirmed via the WebGL model gallery that dropping CW back-faces
-    // is what makes effect-fruit meshes (banana_speed, dragon, plum,
-    // bomb...) render correctly — the outline / decorative shells in
-    // those meshes are modelled as slightly-larger shells fully
-    // enclosing the body with CW winding, so GL_BACK culls their
-    // camera-facing triangles, leaving only the far side visible as a
-    // silhouette border while the body renders normally.
+    // CULL_FACE: do NOT enable. The binary's Geometry::Render @ 0x001a3ec8
+    // guards its `glEnable(GL_CULL_FACE)` behind a one-shot static byte at
+    // DAT_001a4050 -- after frame 0, that byte is set, the enable never
+    // executes again, and DisplayManagerBada::BeginFrame's two glDisable
+    // calls (0x0019e012 and 0x0019e066) leave CULL_FACE off for the rest
+    // of the program's life. Net effect: the binary renders 3D meshes
+    // with cull disabled. Asm-inspector confirmed via Geometry::Render
+    // disassembly + BeginFrame trace.
     //
-    // The old code held CULL_FACE enabled via a static guard, matching
-    // Geometry::Render's latch at 0x001a3ec8. That breaks in practice
-    // because DisplayManagerBada::BeginFrame issues `glDisable(
-    // GL_CULL_FACE)` every frame — so after frame 0 the latch had no
-    // effect and the port rendered with cull permanently off (which is
-    // what produced the long-standing "mirror through bomb fuse hole"
-    // and "solid colour over effect fruit" artefacts). Enabling per
-    // draw overrides the BeginFrame disable.
-    glEnable(GL_CULL_FACE);
+    // The earlier port enabled CULL_FACE per draw under the theory that
+    // dropping CW back-faces was needed for effect-fruit meshes; that was
+    // wrong -- those meshes were never culled in the binary either, and
+    // the per-draw enable produced "fruit half-rendered" / "banana speed
+    // outline missing" artefacts when the FruitCamera's view direction
+    // happens to put a triangle's GL-default CCW winding on the back side.
 
     // Matrix stacks: push current, load MVP, pop on exit. Binary splits
     // the upload into PROJECTION = screenRot*World and MODELVIEW = view
@@ -256,14 +253,8 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 
-    // Restore cull state to the per-frame default (disabled by
-    // DisplayManagerBada::BeginFrame). Leaving cull enabled leaks to
-    // later-drawing tri-strips (SlashEntity blade, SliceEffect) whose
-    // geometry has mixed winding — the "wrong" side gets back-face
-    // culled and the visual vanishes. Binary's DisplayManagerBada
-    // disables cull every frame and the mesh-path enables it just
-    // around each Geometry::Render; the port mirrors that scoping here.
-    glDisable(GL_CULL_FACE);
+    // No cull-state restore needed: we never enabled it (binary doesn't
+    // either; see comment above the geometry-render block).
 
     // Restore matrix stacks + unbind VBOs, matching the tail of
     // Geometry::Render.
