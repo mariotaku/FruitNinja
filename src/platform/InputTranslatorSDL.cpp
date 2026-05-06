@@ -188,6 +188,15 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
 
             ie.actionHash = hashTouchMoveY[0];
             mgr->DispatchEvent(&ie);
+
+            // Binary @ 0x00169670: Bada delivers TouchDown_n events for both
+            // press AND every move while held; SlashEntity::TouchDown calls
+            // UpdateTouchDown unconditionally (extending the trail). SDL
+            // splits press from motion, so we re-fire TouchDown_n here on
+            // motion to match the binary's per-move trail-extension trigger.
+            ie.actionHash = hashTouchDown[0];
+            ie.actionFlags = INPUT_ACTION_DOWN;
+            mgr->DispatchEvent(&ie);
         }
         break;
 
@@ -271,6 +280,12 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         mgr->DispatchEvent(&ie);
 
         ie.actionHash = hashTouchMoveY[ch];
+        mgr->DispatchEvent(&ie);
+
+        // Binary @ 0x00169670: Bada delivers TouchDown_n events for both
+        // press AND every move; re-fire here on SDL_FINGERMOTION to match.
+        ie.actionHash = hashTouchDown[ch];
+        ie.actionFlags = INPUT_ACTION_DOWN;
         mgr->DispatchEvent(&ie);
         break;
     }

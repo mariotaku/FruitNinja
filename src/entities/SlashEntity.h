@@ -336,6 +336,12 @@ public:
     // Trail-builder; forwards to OnTouchActive(pos.x, pos.y).
     void UpdateTouchDown(InputEvent* event);
 
+    // Port-only release handler. Binary doesn't register a TouchReleased_n
+    // event (Bada delivers move events as TouchDown_n; release just stops
+    // them). SDL has explicit FINGERUP/MOUSEBUTTONUP -> InputTranslatorSDL
+    // dispatches TouchUp_n which routes here for the trail-fade transition.
+    bool TouchUp(InputEvent* event);
+
     // Port-helper -- binary equivalent is GameTaskInitInput @ 0x00169670 which
     // registers per-finger callbacks on InputManager. Called from Init().
     void RegisterInputCallbacks();

@@ -190,6 +190,13 @@ void SlashEntity::RegisterInputCallbacks() {
     snprintf(buf, sizeof(buf), "TouchMove_Y%d", finger);
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveY));
+
+    // Port-only: release dispatch. Binary doesn't have TouchReleased_n
+    // (Bada delivers moves as TouchDown_n; release is implicit). SDL fires
+    // explicit FINGERUP -> InputTranslatorSDL dispatches TouchUp_n.
+    snprintf(buf, sizeof(buf), "TouchUp_%d", finger);
+    mgr->RegisterInputCallback(StringHash(buf),
+        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchUp));
 }
 
 void SlashEntity::Release() {
@@ -504,25 +511,13 @@ void SlashEntity::RebuildGeometry() {
 // Update — matches SlashEntity::Update (0x17D664) + UpdateTouchDown (0x17D2E4)
 // ---------------------------------------------------------------------------
 void SlashEntity::Update(float dt) {
-    // Find any active touch slot. The earlier port hardcoded slot 0, but
-    // Touch::___UpdateInternal cycles slot claims through 0..7 (one per
-    // press), so slot 0 only sees the FIRST touch ever -- subsequent
-    // touches go to slot 1, 2, ..., and slicing was broken for them.
-    // Binary polls Touch via GetAnyTouch / GetMostRecentTouch dynamics.
-    Mortar::Touch& touch = Mortar::Touch::GetInstance();
-    const Mortar::TouchState* s = nullptr;
-    for (int i = 0; i < Mortar::Touch::MAX_SLOTS; ++i) {
-        const Mortar::TouchState* slot = touch.GetSlot(i);
-        if (slot && slot->phase <= 0) {  // -1 just-pressed or 0 held
-            s = slot;
-            break;
-        }
-    }
-    if (s) {
-        OnTouchActive((float)s->currX, (float)s->currY);
-    } else if (m_bHasHead) {
-        OnTouchReleased();
-    }
+    // Touch ingestion is event-driven via the four InputManager-registered
+    // callbacks (TouchDown_0, TouchMove_X0, TouchMove_Y0, TouchUp_0) bound
+    // in RegisterInputCallbacks(). Binary @ 0x17D664 -- the per-frame body
+    // is purely combo/scoring/SFX work; trail extension happens in
+    // UpdateTouchDown which fires on every Bada TouchDown_n event (press
+    // AND each move while held). Port replicates this by re-dispatching
+    // TouchDown_n on SDL_MOUSEMOTION/SDL_FINGERMOTION in InputTranslatorSDL.
 
     // Trail particle emitter — matches binary UpdateTouchDown (0x17D2E4).
     // Created on first active touch, follows the head each frame, cleared
@@ -968,6 +963,15 @@ void SlashEntity::UpdatePoints(float /*dt*/) {}
 // delta. Port's existing OnTouchActive(x, y) does the same thing -- forward.
 void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
+}
+
+// Port-only release handler -- see header comment. Binary detects release
+// implicitly (no more TouchDown_n events fire after Bada finger-lift; trail
+// ages out via per-frame logic). SDL has explicit FINGERUP/MOUSEBUTTONUP
+// which we route via TouchUp_n to this handler.
+bool SlashEntity::TouchUp(InputEvent* /*event*/) {
+    OnTouchReleased();
+    return true;
 }
 
 // @ 0x0017e504. Iterates 8 SlashEntityGhost slots (base+0x3c, stride 0x10).
