@@ -223,6 +223,13 @@ private:
     // bind only this finger's TouchDown_n / TouchMove_X-Y_n / TouchUp_n.
     int m_FingerId;
 
+    // Binary +0x148: cooldown timer between swipe SFX firings. PlaySwipe
+    // (binary @ 0x17ccdc) resets to 6.0f after firing; per-frame decrement
+    // (1.0f units / call) prevents back-to-back-to-back swipe sounds when
+    // a single drag slices multiple fruits in quick succession (~0.1s @
+    // 60Hz). Update ticks the decrement at top.
+    float m_SwipeSoundTimer;
+
     // Raw touch position from the most recent OnTouchActive — used as the
     // trail emitter position so particles spawn at the true finger location,
     // not the last interpolated trail point (which can lag by up to
