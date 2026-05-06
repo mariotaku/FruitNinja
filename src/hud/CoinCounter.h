@@ -50,8 +50,6 @@ public:
     void Release() override;
     // STUB: CoinCounter::PreDraw -- binary @ 0x???? (TODO RE)
     void PreDraw(const Vec3& hudScale) override;
-    // STUB: CoinCounter::Draw(float*) -- binary @ 0x???? (TODO RE)
-    void Draw(float* viewVec) override;
     // STUB: CoinCounter::Skip -- binary @ 0x???? (TODO RE)
     void Skip() override;
     // ---- end STUBS ----

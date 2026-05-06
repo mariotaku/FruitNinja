@@ -48,8 +48,6 @@ public:
     void PreDraw(const Vec3& hudScale) override;
     // STUB: HUDControl3d::Update -- binary @ 0x???? (TODO RE)
     void Update(float dt) override;
-    // STUB: HUDControl3d::Draw(float*) -- binary @ 0x???? (TODO RE)
-    void Draw(float* viewVec) override;
     // ---- end STUBS ----
 };
 

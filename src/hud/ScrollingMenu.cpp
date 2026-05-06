@@ -499,9 +499,6 @@ ScrollingMenuItem* ScrollingMenu::Collide(long touchSlot) {
     return Collide((int)touchSlot);
 }
 
-// STUB: ScrollingMenu::Draw(float*) -- binary @ 0x???? (TODO RE)
-void ScrollingMenu::Draw(float* /*viewVec*/) {}
-
 // STUB: ScrollingMenu::Init -- binary @ 0x???? (TODO RE)
 void ScrollingMenu::Init() {}
 

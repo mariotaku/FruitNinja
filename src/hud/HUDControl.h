@@ -90,7 +90,6 @@ public:
     virtual void Reset();
     virtual void BeginDraw(float dt) { (void)dt; }
     virtual void PreDraw(const Vec3& hudScale) { (void)hudScale; }
-    virtual void Draw(float* viewVec);
     virtual void Draw(const Vec3& hudScale, int layerMask) { (void)hudScale; (void)layerMask; }
     virtual void PreDrawOrder(const Vec3& hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
     virtual void DrawOrder(const Vec3& hudScale, int layerMask) { Draw(hudScale, layerMask); }

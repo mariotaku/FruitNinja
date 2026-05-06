@@ -79,11 +79,6 @@ void CheckBox::UpdateFromGameWork() {
     // STUB: CheckBox::UpdateFromGameWork -- binary @ 0x???? (TODO RE)
 }
 
-// Binary Draw(float*) overload — port deviation: port uses Draw(const Vec3&, int).
-void CheckBox::Draw(float* hudScale) {
-    // STUB: CheckBox::Draw -- binary @ 0x???? (TODO RE)
-    (void)hudScale;
-}
 
 // Binary @ 0x00134AEC
 // Copies x/y/phase from the tracked touch slot.

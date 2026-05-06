@@ -198,8 +198,6 @@ public:
     // ---- STUBS (binary) ----
     // STUB: ScrollingMenu::Collide(long) -- binary @ 0x???? (TODO RE)
     ScrollingMenuItem* Collide(long touchSlot);
-    // STUB: ScrollingMenu::Draw(float*) -- binary @ 0x???? (TODO RE)
-    void Draw(float* viewVec) override;
     // STUB: ScrollingMenu::Init -- binary @ 0x???? (TODO RE)
     void Init() override;
     // STUB: ScrollingMenu::PreDraw(float*) -- binary @ 0x???? (TODO RE)

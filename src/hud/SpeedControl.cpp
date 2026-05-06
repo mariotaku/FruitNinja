@@ -81,9 +81,6 @@ void SpeedControl::Update(float dt) {
     // TODO: 0x00160f00 PSPParticleEmitter speed-stream wiring.
 }
 
-// STUB: SpeedControl::Draw -- binary @ 0x???? (TODO RE)
-void SpeedControl::Draw(float* viewVec) {}
-
 // STUB: SpeedControl::Init -- binary @ 0x???? (TODO RE)
 void SpeedControl::Init() {}
 

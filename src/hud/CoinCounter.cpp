@@ -37,8 +37,5 @@ void CoinCounter::Release() {}
 // STUB: CoinCounter::PreDraw -- binary @ 0x???? (TODO RE)
 void CoinCounter::PreDraw(const Vec3& hudScale) { (void)hudScale; }
 
-// STUB: CoinCounter::Draw(float*) -- binary @ 0x???? (TODO RE)
-void CoinCounter::Draw(float* viewVec) { (void)viewVec; }
-
 // STUB: CoinCounter::Skip -- binary @ 0x???? (TODO RE)
 void CoinCounter::Skip() {}

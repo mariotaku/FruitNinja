@@ -271,5 +271,3 @@ void NotificationControl::Reset() {}
 // STUB: NotificationControl::PreDraw(float*) -- binary @ 0x???? (TODO RE)
 void NotificationControl::PreDraw(float* /*viewVec*/) {}
 
-// STUB: NotificationControl::Draw(float*) -- binary @ 0x???? (TODO RE)
-void NotificationControl::Draw(float* /*viewVec*/) {}

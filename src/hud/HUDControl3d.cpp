@@ -93,7 +93,3 @@ void HUDControl3d::Update(float dt) {
     HUDControl::Update(dt);
 }
 
-// STUB: HUDControl3d::Draw(float*) -- binary @ 0x???? (TODO RE)
-void HUDControl3d::Draw(float* viewVec) {
-    (void)viewVec;
-}
