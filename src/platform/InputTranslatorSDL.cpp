@@ -142,6 +142,18 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             ie.x = mouseX; ie.y = mouseY;
             mgr->DispatchEvent(&ie);
 
+            // Bada platform delivers TouchMove_X/Y before TouchDown_n on a
+            // new finger landing, so SlashEntity::TouchDown reads fresh
+            // pos.{x,y} (set by the move handlers) and starts the trail at
+            // the press point. SDL has no separate move-on-press, so we
+            // synthesize one here -- otherwise the trail begins at the
+            // previous swipe's release point.
+            ie.actionHash = hashTouchMoveX[0];
+            ie.actionFlags = INPUT_ACTION_MOVE;
+            mgr->DispatchEvent(&ie);
+            ie.actionHash = hashTouchMoveY[0];
+            mgr->DispatchEvent(&ie);
+
             ie.actionHash = hashTouchDown[0];
             ie.actionFlags = INPUT_ACTION_DOWN;
             mgr->DispatchEvent(&ie);
@@ -233,7 +245,16 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         ie.x = gx; ie.y = gy;
         mgr->DispatchEvent(&ie);
 
+        // Synthesize TouchMove_X/Y before TouchDown_n so SlashEntity sees
+        // fresh pos at press-edge (binary Bada platform fires moves first).
+        ie.actionHash = hashTouchMoveX[ch];
+        ie.actionFlags = INPUT_ACTION_MOVE;
+        mgr->DispatchEvent(&ie);
+        ie.actionHash = hashTouchMoveY[ch];
+        mgr->DispatchEvent(&ie);
+
         ie.actionHash = hashTouchDown[ch];
+        ie.actionFlags = INPUT_ACTION_DOWN;
         mgr->DispatchEvent(&ie);
         break;
     }
