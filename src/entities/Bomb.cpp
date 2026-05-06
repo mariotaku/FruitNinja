@@ -595,10 +595,25 @@ void Bomb::Draw(Renderer& r) {
     mat = rotMat * mat;                          // mat = R * S
     mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));  // + T in col3
 
-    // Binary @ 0x171be8: zero GL state calls — just Model::Draw.
-    // GL_CULL_FACE is enabled per-pass inside Mesh::DrawGeometry
-    // (and disabled at end), so no scoping is needed here.
+    // PORT QUIRK: enable GL_CULL_FACE for the bomb mesh draw only.
+    // The bomb model has duplicated/back-face geometry (body + interior
+    // shell sharing vertex positions); without backface culling the back
+    // faces blow through the front and produce a pure-white sphere
+    // artifact. Binary @ 0x171be8 itself does NOT touch GL state -- the
+    // shipped Bada game presumably relies on its GL driver treating
+    // GL_LESS as GL_LEQUAL on equal depths (so the body's later draw
+    // wins over the back shell), or some other Bada-specific quirk we
+    // can't replicate on desktop GL. Scoping the cull-enable to just
+    // this draw keeps every other mesh path matching the binary's
+    // cull-off behavior; only the bomb gets this targeted workaround.
+    // History: this workaround was added in commit e93669c (replacing
+    // an earlier glDisable(GL_DEPTH_TEST) workaround), then briefly
+    // dropped when Mesh::DrawGeometry held cull on globally, then
+    // dropped again when DrawGeometry was made cull-faithful to the
+    // binary -- the last drop re-exposed the white-sphere bug.
+    glEnable(GL_CULL_FACE);
     modelPtr->Draw(mat);
+    glDisable(GL_CULL_FACE);
 }
 
 // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
