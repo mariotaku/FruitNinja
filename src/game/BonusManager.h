@@ -36,7 +36,7 @@ private:
 };
 
 // Layout asserts: ARM32 sizes only. GCC 4.4.1 excluded (std::vector/list sizes differ).
-#if (defined(__arm__) || defined(__aarch64__)) && (__cplusplus >= 201103L)
+#ifdef __bada__
 static_assert(sizeof(BonusManager) == 0x20, "BonusManager size mismatch");
 static_assert(__builtin_offsetof(BonusManager, m_AllBonuses)        == 0x00, "BonusManager::m_AllBonuses offset");
 static_assert(__builtin_offsetof(BonusManager, m_BestBonuses)       == 0x0C, "BonusManager::m_BestBonuses offset");

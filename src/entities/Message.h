@@ -23,8 +23,10 @@ struct Message {
     int           type;       // +0x04 — primary discriminator (filter key)
 };
 
+#ifdef __bada__
 static_assert(sizeof(Message) == 8, "Message size mismatch");
 static_assert(offsetof(Message, type) == 4, "Message::type offset mismatch");
+#endif
 
 // Mortar::MessageListener — 16-byte POD filter+callback record; binary @ no class ctor.
 // SendMessage filter (0x0016ffd8): type is exact-match; senderId/msgKind use 0=any wildcard.

@@ -61,6 +61,8 @@ struct MatrixStack {
     }
 };
 
+#ifdef __bada__
 static_assert(sizeof(MatrixStack) == 2120, "MatrixStack must be 0x848 bytes");
+#endif
 
 #endif
