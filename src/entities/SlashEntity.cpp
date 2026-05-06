@@ -231,7 +231,12 @@ void SlashEntity::Reset() {
     m_NumPoints = 0;
     m_State     = 0;
     m_bHasHead  = false;
-    m_RawTouchPos = Vec3(0, 0, 0);
+    // DO NOT zero m_RawTouchPos here. Binary's Reset @ 0x17B71C clears
+    // trail buffers + per-slice combo state but leaves pos.{x,y} alone --
+    // they're set by TouchMoveX/Y just before TouchDown calls Reset, and
+    // UpdateTouchDown reads them AFTER Reset to start the new trail at
+    // the press position. Clearing here was the cause of "trail starts at
+    // screen centre" on every press.
     if (m_TrailEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
