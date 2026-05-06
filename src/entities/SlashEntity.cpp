@@ -17,6 +17,8 @@
 #include "input/InputEvent.h"
 #include "input/InputManager.h"
 #include "particle/PSPParticleManager.h"
+#include "audio/GameSound.h"
+#include "game/ItemManager.h"
 #include "collision/ColLine.h"
 #include "collision/ColSphere.h"
 #include "util/StringHash.h"
@@ -145,6 +147,7 @@ SlashEntity::SlashEntity()
     , m_State(0)
     , m_bHasHead(false)
     , m_FingerId(0)
+    , m_SwipeSoundTimer(0.0f)
     , m_RawTouchPos(0, 0, 0)
 {
     memset(m_Left,  0, sizeof(m_Left));
@@ -162,6 +165,7 @@ void SlashEntity::Init(int fingerId) {
     m_NumPoints = 0;
     m_State = 0;
     m_bHasHead = false;
+    m_SwipeSoundTimer = 0.0f;
     m_TrailEmitter = nullptr;
     m_pCurrentTarget = nullptr;
 
@@ -276,11 +280,34 @@ void SlashEntity::PreUpdate(float dt) {
     (void)dt;
 }
 
-// Binary @ 0x17CCDC — mod-override swipe SFX, else pick "bigslice%d" (1..6)
-// via Math::Random::Rand32(g_GlobalRng, 6)+1, reset combo-bonus accumulator.
-// Port specific: ItemManager::PlayAlternateSwipeSound, GameSound::SFXPlay,
-//   Math::Random::Rand32, and g_GlobalRng are not yet ported. No-op stub.
+// ASM-spec: SlashEntity::PlaySwipe @ 0x17CCDC
+// Binary path:
+//   if (ItemManager::PlayAlternateSwipeSound(1.0, 1.0) == 0) {
+//       int idx = Math::Random::Rand32(g_GlobalRng, 6) + 1;
+//       snprintf(buf, "bigslice%d", idx);
+//       Game::pGameSound->SFXPlay(buf, 1.0, 1.0);
+//   }
+//   m_SwipeSoundTimer = 6.0f;
+// Port: ItemManager::PlayAlternateSwipeSound is a stub returning void
+// (always falls through to the bigslice%d default); use rand() in lieu of
+// Math::Random::Rand32(g_GlobalRng).
 void SlashEntity::PlaySwipe() {
+    ItemManager* im = ItemManager::GetInstance();
+    if (im) {
+        // Stub returns void; binary returns int (0=not played, 1=played).
+        // Port-side stub never plays, so always fall through.
+        im->PlayAlternateSwipeSound(1.0f, 1.0f);
+    }
+
+    Game* game = Game::GetInstance();
+    if (game && game->pGameSound) {
+        char buf[16];
+        const int idx = (rand() % 6) + 1;  // bigslice1..bigslice6
+        snprintf(buf, sizeof(buf), "bigslice%d", idx);
+        game->pGameSound->SFXPlay(buf, 1.0f, 1.0f);
+    }
+
+    m_SwipeSoundTimer = 6.0f;
 }
 
 // Binary @ 0x17B87C — derive head taper scale =
@@ -593,6 +620,14 @@ void SlashEntity::Update(float dt) {
     Game* game = Game::GetInstance();
     const bool bombHitActive = game && game->bombHitTimer > 0.0f;
 
+    // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
+    // frame; PlaySwipe resets to 6.0f).
+    if (m_SwipeSoundTimer > 0.0f) {
+        m_SwipeSoundTimer -= 1.0f;
+        if (m_SwipeSoundTimer < 0.0f) m_SwipeSoundTimer = 0.0f;
+    }
+
+    bool slicedThisFrame = false;
     if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
@@ -613,10 +648,19 @@ void SlashEntity::Update(float dt) {
                         // Port: SlashEntity does not inherit Mortar::Entity, pass nullptr for hitter.
                         // Fruit/Bomb CollisionResponse only reads bladeVelocity; hitter unused.
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
+                        slicedThisFrame = true;
                     }
                 }
             }
         }
+    }
+
+    // Per-slice swipe SFX. Binary @ 0x17D664 fires PlaySwipe when a slice
+    // landed this frame and the cooldown has elapsed (m_SwipeSoundTimer ==
+    // 0). PlaySwipe re-arms the cooldown to 6.0f preventing back-to-back
+    // sounds when one swipe slices several fruits in quick succession.
+    if (slicedThisFrame && m_SwipeSoundTimer == 0.0f) {
+        PlaySwipe();
     }
 
     // TODO: BonusManager::AddCombo(comboLen) hook (binary @ 0x0017de40).
