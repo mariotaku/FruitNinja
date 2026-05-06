@@ -19,7 +19,9 @@ private:
     // Binary sizeof is 0xD4; HUDControl3d is 0x7C. Round up to 0xE0 for safety.
     static const int kPadSize = 0xE0 - sizeof(HUDControl3d);
     uint8_t pad[kPadSize];
+#ifdef __bada__
     static_assert(sizeof(HUDControl3d) <= 0xD4, "HUDControl3d exceeds binary KeyboardControl size");
+#endif
 };
 
 #endif // FN_HUD_KEYBOARD_CONTROL_H

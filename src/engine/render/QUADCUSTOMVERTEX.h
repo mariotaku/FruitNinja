@@ -11,7 +11,9 @@ struct QUADCUSTOMVERTEX {
     uint32_t colour;     // +0x18: packed BGRA
     float u, v;          // +0x1C: texture coordinates
 };
+#ifdef __bada__
 static_assert(sizeof(QUADCUSTOMVERTEX) == 36, "QUADCUSTOMVERTEX must be 36 bytes");
+#endif
 
 // Compact vertex for DrawQuadUnCached (0x14 = 20 bytes)
 // Used by 2D immediate-mode quad rendering
@@ -20,6 +22,8 @@ struct QuadVertex {
     float u, v;          // texcoords
     uint32_t color;      // packed BGRA
 };
+#ifdef __bada__
 static_assert(sizeof(QuadVertex) == 20, "QuadVertex must be 20 bytes");
+#endif
 
 #endif

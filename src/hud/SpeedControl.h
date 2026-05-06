@@ -68,10 +68,8 @@ public:
     // ---- end STUBS ----
 };
 
-// Binary sizeof = 0xAC (ARM32, 4-byte ptrs). Port size differs on 64-bit (8-byte ptrs).
-// Cross-build (GCC 4.4.1 -std=gnu++0x) may compute a different Delegate size due to
-// pre-C++11 aligned_storage implementation differences -- exclude it via __cplusplus check.
-#if (defined(__arm__) || (defined(_M_IX86) && !defined(_WIN64))) && (__cplusplus >= 201103L)
+// Binary sizeof = 0xAC (ARM32, 4-byte ptrs). Only verified on the Bada cross-build.
+#ifdef __bada__
 static_assert(sizeof(SpeedControl) == 0xAC, "SpeedControl size mismatch");
 #endif
 

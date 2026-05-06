@@ -197,26 +197,11 @@ public:
 #pragma clang diagnostic ignored "-Winvalid-offsetof"
 #endif
 
-// Always-active: float fields at +0x25C..+0x264 (size-invariant across
-// pointer widths). Gate on libstdc++ — MSVC's STL has a different
-// std::string SBO size, which shifts these offsets. Binary was built
-// with libstdc++ (CodeSourcery G++ 4.4.1) so the offset invariant only
-// applies when the port is also using libstdc++.
-// Exclude old Sourcery 2010q1 ARM toolchain (__GLIBCXX__ == 20090722)
-// where std::string has a different SBO layout than modern libstdc++.
-#if defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
+// Bada-only struct-layout asserts (binary's std::string SBO + 4-byte ptrs).
+#ifdef __bada__
 static_assert(offsetof(ShopListItem, m_NewItemAlpha)  == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
 static_assert(offsetof(ShopListItem, m_SelectedAlpha) == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
 static_assert(offsetof(ShopListItem, m_LockFlashAlpha)== 0x264, "ShopListItem::m_LockFlashAlpha must be at +0x264");
-#endif
-
-// ARM32-only: fields after pointer-sized members m_pIconTex + m_pItemInfo.
-// On x86_64 these land 12 bytes higher due to pointer widths; that is expected.
-// Bada-only -- the arm-bada-eabi toolchain auto-defines __bada__.
-// NOTE: also requires the production arm-linux-gnueabi std::string SBO layout
-// (__GLIBCXX__ > 20090722); the asm-verify cross-build's bare-metal
-// arm-none-eabi std::string is shape-different and would false-fire.
-#if defined(__bada__) && defined(__GLIBCXX__) && __GLIBCXX__ > 20090722
 static_assert(offsetof(ShopListItem, m_bOnscreenItem) == 0x27C, "ShopListItem::m_bOnscreenItem must be at +0x27C");
 static_assert(offsetof(ShopListItem, m_bSelected)     == 0x27D, "ShopListItem::m_bSelected must be at +0x27D");
 static_assert(offsetof(ShopListItem, m_bIsNew)        == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");

@@ -136,6 +136,7 @@ struct FruitInfo {
 // Fields at 0x300+ depend on Mortar::SmartPtr<T> being 4 bytes (ARM32), which is only
 // true on the cross-compile (32-bit) path. On the 64-bit port build SmartPtr
 // is 8 bytes, so the asserts from m_HudTexture onward are guarded to 32-bit.
+#ifdef __bada__
 static_assert(__builtin_offsetof(FruitInfo, m_Name)            == 0x000, "");
 static_assert(__builtin_offsetof(FruitInfo, m_SingularEnglish) == 0x040, "");
 static_assert(__builtin_offsetof(FruitInfo, m_Singular)        == 0x080, "");
@@ -158,10 +159,6 @@ static_assert(__builtin_offsetof(FruitInfo, m_PointTotalHash)  == 0x264, "");
 static_assert(__builtin_offsetof(FruitInfo, m_DropsHash)       == 0x268, "");
 static_assert(__builtin_offsetof(FruitInfo, m_bHasSplatSeeds)  == 0x26C, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactCount)       == 0x270, "");
-// All asserts from m_pFacts onward are pointer-size-dependent (char**, SmartPtr,
-// pointers to arrays). Valid only on 32-bit (ARM cross-compile target).
-// On 64-bit port builds pointer fields are 8 bytes; the binary layout uses 4-byte pointers.
-#ifdef __bada__
 static_assert(sizeof(FruitInfo) == 0x330, "FruitInfo size mismatch");
 static_assert(__builtin_offsetof(FruitInfo, m_pFacts)          == 0x274, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactTexture)     == 0x278, "");

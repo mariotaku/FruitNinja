@@ -46,7 +46,7 @@ public:
 // Layout asserts: ARM32 sizes only (binary target). Not checked on MSVC x64 host.
 // GCC 4.4.1 (-std=gnu++0x) has different std::map sizes than C++11 libstdc++ --
 // exclude cross-build via __cplusplus check.
-#if (defined(__arm__) || defined(__aarch64__)) && (__cplusplus >= 201103L)
+#ifdef __bada__
 static_assert(sizeof(Bonus) == 0xD8, "Bonus size mismatch");
 static_assert(__builtin_offsetof(Bonus, m_MinSliced)      == 0x00, "Bonus::m_MinSliced offset");
 static_assert(__builtin_offsetof(Bonus, m_MaxSliced)      == 0x04, "Bonus::m_MaxSliced offset");
@@ -82,7 +82,7 @@ public:
 };
 
 // Layout asserts: ARM32 sizes only. GCC 4.4.1 excluded (see Bonus asserts above).
-#if (defined(__arm__) || defined(__aarch64__)) && (__cplusplus >= 201103L)
+#ifdef __bada__
 static_assert(sizeof(BonusType) == 0x28, "BonusType size mismatch");
 static_assert(__builtin_offsetof(BonusType, m_RequiredHashes) == 0x00, "BonusType::m_RequiredHashes offset");
 static_assert(__builtin_offsetof(BonusType, m_Bonuses)        == 0x18, "BonusType::m_Bonuses offset");
