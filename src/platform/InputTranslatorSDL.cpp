@@ -114,13 +114,13 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
              ev.tfinger.pressure);
         int ch = MapFingerId(ev.tfinger.fingerId);
-        if (ch < 0) { TLOG("  → MapFingerId returned -1 (all 16 channels busy)\n"); break; }
+        if (ch < 0) { TLOG("  -> MapFingerId returned -1 (all 16 channels busy)\n"); break; }
 
-        // For synthetic-mouse touches (SDL_HINT_MOUSE_TOUCH_EVENTS=1), the
-        // first SDL_FINGERDOWN after window focus can carry stale or
-        // default-centred normalized coords because SDL hasn't seen any
-        // mouse motion yet. Fall back to SDL_GetMouseState which always
-        // reports the real cursor position relative to the window.
+        // The original (pre-Reset-fix) reasoning for this fallback was that
+        // SDL synthetic-mouse-touch events sometimes carry default-centred
+        // coords; the actual cause was SlashEntity::Reset zeroing
+        // m_RawTouchPos. The fallback is harmless either way -- still keep
+        // it for true edge cases (window focus before any mouse motion).
         float nx = ev.tfinger.x, ny = ev.tfinger.y;
         if (ev.tfinger.touchId == SDL_MOUSE_TOUCHID) {
             int mx = 0, my = 0;
