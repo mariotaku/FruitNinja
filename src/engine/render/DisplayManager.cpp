@@ -43,6 +43,21 @@ void DisplayManager::BeginFrame() {
     glDisable(GL_CULL_FACE);                              // 0xb44
     glDisable(GL_DEPTH_TEST);                             // 0xb71
     glDepthFunc(GL_LESS);                                 // 0x201
+
+    // Port specific: re-enable depth-buffer write before glClear. The
+    // previous frame ends with `dm.SetDepthBufferWrite(false)` for the HUD
+    // pass (depth-test-on, depth-write-off, matches binary). glClear
+    // honours glDepthMask per the GL spec, so without this the
+    // GL_DEPTH_BUFFER_BIT clear silently no-ops and the depth buffer
+    // carries stale fruit-depth values across frames -- causing the
+    // "fruit punches holes through HUD" + "fruit looks half-rendered"
+    // artefacts (depth-test rejects current-frame fruit fragments
+    // against last-frame fruit depth at the same pixel). The Bada binary
+    // doesn't need this because its GL driver clears depth regardless of
+    // mask state (DisplayManagerBada::BeginFrame does not toggle mask
+    // around the clear either; this is a desktop-GL spec divergence).
+    glDepthMask(GL_TRUE);
+
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);                 // DAT_0019e128 = 255 (clamps to 1)
     glClearDepthf(1.0f);
     glEnable(GL_BLEND);

@@ -166,6 +166,26 @@ Do **NOT** emit the line for **Diverges** or **Inconclusive** verdicts. The comm
 - **Do NOT trust Ghidra's decompiled C** as evidence. Decompiled C is heuristic. ASM is ground truth. If you cite "Ghidra shows X", that's not proof — show the actual instructions.
 - **Avoid `-O0`** — the binary is optimised; comparing against `-O0` toolchain output is meaningless. Use `-O2` minimum.
 
+## Anti-swap checklist (multi-arg functions)
+
+When the question involves a function with **two-or-more args of the same type** (e.g. `SetupOrtho(top, bottom, left, right, near, far)`, `SetupLookAt(eye, target, up)`, anything taking multiple `Vec3*` / `float`), it is the highest-risk shape for an LLM-RE swap bug — adjacent registers / VLDR slots look identical, and confident-but-wrong role assignment (`near` vs `far`, `target` vs `up`) is the failure mode that has bitten this port repeatedly. Before issuing a verdict on such a function, run **all five** of these checks:
+
+1. **Decode the literal pool, don't infer roles.** For each float-arg slot, follow the `VLDR.32 sN, [pc, #imm]` to its DAT_ address and decode the 4-byte little-endian IEEE-754 value. Report the actual decimal number per slot, not the role you guessed it played. If you write `s4=2000.0, s5=-6000.0`, you have a fact; if you write `near=2000, far=-6000`, you have a hypothesis.
+
+2. **Read the callee body, not just the call site.** Co-load the callee's disassembly. Find an instruction inside the callee that *uses* each suspect arg, and cite it. Example: `SetupOrtho`'s body computes `m[10] = 1/(arg6-arg5)`; if your hypothesis is "arg5=near, arg6=far" then arg6-arg5 should match the formula `far-near`, and `m[10] = 1/(far-near)` is consistent with standard ortho. State this match (or mismatch) explicitly. If the callee's usage of an arg contradicts the role you assigned, the assignment is wrong.
+
+3. **Cross-check with another caller.** Find at least one other caller of the same function in the binary (`get_xrefs_to`). Decode its literal pool the same way, and verify the *role* assignment is consistent — e.g. if FruitCamera passes `top=160` and another caller passes `top=halfH`, the convention is consistent; if one passes `top` and the other passes `bottom` in the same slot, you've mis-identified the slot. Single-caller verification is intrinsically weaker; flag it as such in the verdict.
+
+4. **Compile-and-byte-diff the call site.** Emit a tiny TU that calls the port's function with your proposed args, compile with the Bada toolchain (`-O2 -mthumb -mcpu=cortex-a8 -mfpu=vfpv3 -mfloat-abi=hard`), and byte-compare the call-site bytes against the binary at the original address. Hard-float ABI puts each float in `s0..s15` in order, so a swap in arg order produces a different `vldr / vmov` sequence — instantly visible. `SetupLookAt(eye, up, at)` vs `SetupLookAt(eye, at, up)` differ in which Vec3 lands in which register triple. This is the same compile+diff loop step §4 already runs for whole-function verifications; just narrow it to the call site of interest.
+
+5. **Treat "non-standard convention" claims as red flags.** When your verdict says "binary uses non-std (eye, up, target)" or "binary's near/far is swapped from GL convention" or anything that contradicts a long-established API contract, *stop*. That is the moment to require checks 1+2+3+4 to all pass before accepting. A non-standard claim with only one supporting line of evidence is a swap bug ~50% of the time. Standard conventions exist for a reason — the prior is that the binary follows them.
+
+### Confidence wording
+
+In the report, distinguish:
+- "Confirmed via literal-pool decode + callee-body usage + 2+ callers + byte-diff" → strong, paste `// ASM-verified:` marker.
+- "Confirmed via literal-pool decode only (single caller, no byte-diff)" → flag as **Inconclusive** and list which checks were skipped, even if your gut is sure. The implementer needs to know which evidence was actually gathered.
+
 ## Tooling reference
 
 - **`fnverify` Docker image** (era-correct toolchain): contains Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/`, plus cmake / python3 / rsync / i386 multilib. Build with `bash tools/asm-verify/setup.sh`. See `tools/asm-verify/Dockerfile`.

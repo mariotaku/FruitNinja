@@ -84,15 +84,10 @@ Mortar::Entity* FruitCamera::GetFollowEntity() {
     return (m_CameraMode == 1) ? m_pFollowEntity : nullptr;
 }
 
-// Non-virtual (0x001810ac) — 4-type ortho dispatch
+// Non-virtual (0x001810ac) — 4-type ortho dispatch.
 //
-// Port-side bug fixes applied per RE:
-//   Bug #1: near/far were (2000, -6000); binary is (-6000, 2000). Fixed.
-//   Bug #2: cache condition had extra `&& !m_bInitialized`; binary only checks
-//           m_bDirty. Dropped.
-//   Bug #3: SetupLookAt arg order — binary passes (eye, up, at); port passes
-//           (eye, at, up). Leaving existing order pending asm-inspector confirm.
-//           TODO: 0x001810ac — verify SetupLookAt(eye, up, at) arg order via asm-inspector
+// ASM-verified: 2026-05-06T00:00 binary @ 0x001810ac..0x001813d1 (asm-inspector)
+// ASM-verified: 2026-05-06T00:00 binary @ 0x0019e7a8..0x0019e828 (asm-inspector)
 //
 // Cases 1/2/3 not needed by GameDraw (only PT_STANDARD is called).
 // TODO: 0x001810ac — PT_ROTATED_CW / PT_ROTATED_CCW / PT_GENERIC ortho variants
@@ -100,8 +95,7 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     (void)perspType;
     MatrixManager& mm = MatrixManager::GetInstance();
 
-    // RE bug #2 fix: binary cache condition is `if (!m_bDirty && !forceUpdate)`,
-    // NOT `if (!m_bDirty && !m_bInitialized && !forceUpdate)`.
+    // Cache condition matches binary: `if (!m_bDirty && !forceUpdate)`.
     if (!m_bDirty && !forceUpdate) {
         Matrix44 viewMat44;
         m_localToWorld.ToMatrix44(viewMat44);
@@ -113,14 +107,23 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     }
 
     // View: camera looks straight down +Z with optional shake target offset.
+    // Binary @ 0x00181180..0x0018118e passes (eye, up, at) positionally to
+    // its SetupLookAt — that binary's signature is `(eye, up, target)`, opposite
+    // of the std (eye, target, up). The port's MatrixManager::SetupLookAt uses
+    // the std signature, so the call site here passes them in std order to
+    // produce the correct view matrix (binary-equivalent semantics, not the
+    // binary-equivalent argument order).
     Vec3 eye(m_Target.x, m_Target.y, 1.0f);
     Vec3 at (m_Target.x, m_Target.y, 0.0f);
     Vec3 up (0.0f, 1.0f, 0.0f);
     mm.SetupLookAt(eye, at, up);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-    // RE bug #1 fix: binary ortho near/far is (-6000, 2000), not (2000, -6000).
-    mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, -6000.0f, 2000.0f);
+    // Binary literal pool @ 0x001813ec/0x001813f0 encodes near=+2000.0f and
+    // far=-6000.0f respectively (5th/6th SetupOrtho args). Earlier port commit
+    // de35bc1 swapped these claiming an RE bug fix; that was wrong — verified
+    // by VLDR.32 PC-relative loads at the SetupOrtho call site.
+    mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
     // Cache
     m_projection = mm.GetProjectionStack().m_Current;
