@@ -82,7 +82,9 @@ public:
     static void ReleaseContent();
 
     // Matches SlashEntity::Init (0x17C65C). Allocates vertex buffers, resets state.
-    void Init();
+    // fingerId selects which of the 16 SDL finger / Bada touch slots this
+    // instance receives events from. GameInit creates one per slot 0..15.
+    void Init(int fingerId = 0);
     void Release();
 
     // Binary @ 0x17B71C — wipe touch/trail state, sentinel-mark positions,
@@ -214,6 +216,12 @@ private:
     //   0 = off, 1 = active, 2 = deactivating (fading out)
     uint8_t m_State;
     bool    m_bHasHead;
+
+    // Which SDL finger ID / Bada touch slot this instance handles. Binary
+    // has SlashEntity[16] (one per finger); port mirrors via g_pSlashEntities
+    // array. Set in Init(int finger). Used by RegisterInputCallbacks to
+    // bind only this finger's TouchDown_n / TouchMove_X-Y_n / TouchUp_n.
+    int m_FingerId;
 
     // Raw touch position from the most recent OnTouchActive — used as the
     // trail emitter position so particles spawn at the true finger location,
@@ -348,7 +356,14 @@ public:
     // ---- end STUBS ----
 };
 
-// Global singleton instance -- created in GameInit, destroyed in GameDestroy.
+// Per-finger SlashEntity instances (binary has SlashEntity[16] @ BSS).
+// Created/destroyed by GameInit/GameDestroy. Each registers for its slot's
+// per-finger TouchDown_n/TouchMove_*n/TouchUp_n callbacks.
+extern SlashEntity* g_pSlashEntities[16];
+
+// Backward-compat: aliased to g_pSlashEntities[0]. Existing one-shot uses
+// (e.g. ColoursChanged from blade-equip) operate on slot 0; for ops that
+// must affect all trails, iterate g_pSlashEntities directly.
 extern SlashEntity* g_pSlashEntity;
 
 #endif

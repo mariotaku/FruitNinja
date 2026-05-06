@@ -257,12 +257,17 @@ void GameInit(unsigned long) {
         const float sfxVol = game->m_bSoundOn ? 0.5f : 0.0f;
         sm.SetSFXVolume(sfxVol);
     }
-    // Port specific: SlashEntity for touch-trail rendering.
-    // Binary uses a 2-player array in Mortar::ActorManager; port keeps one global for single-touch.
-    if (!g_pSlashEntity) {
-        g_pSlashEntity = new SlashEntity();
-        g_pSlashEntity->Init();
+    // Per-finger SlashEntity array (binary SlashEntity[16] @ BSS, registered
+    // by GameTaskInitInput @ 0x00169670). Each instance handles one of 16
+    // SDL fingers / Bada touch slots and registers its own per-finger
+    // TouchDown_n / TouchMove_*n / TouchUp_n callbacks on InputManager.
+    for (int i = 0; i < 16; ++i) {
+        if (!g_pSlashEntities[i]) {
+            g_pSlashEntities[i] = new SlashEntity();
+            g_pSlashEntities[i]->Init(i);
+        }
     }
+    g_pSlashEntity = g_pSlashEntities[0];  // backward-compat alias
 }
 
 // Matches GameUpdate (0x16bed0, 359 lines) — main gameplay loop
@@ -314,7 +319,9 @@ void GameUpdate(float dt, bool active) {
     FN::UpdateCriticalFlash(dt);
 
     if (active) SplatEntity::UpdateActiveSplats(dt);
-    if (g_pSlashEntity) g_pSlashEntity->Update(dt);
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) g_pSlashEntities[i]->Update(dt);
+    }
     if (game->hud) game->hud->Update(dt);
     if (game->pCamera) game->pCamera->UpdateCamera(dt);
 }
@@ -414,8 +421,11 @@ void GameDraw(float dt, bool active) {
         // 2c. Fruit::DrawShadows @ 0x0016ba6e
         Fruit::DrawShadows();
 
-        // 2d. SlashEntity::PreDraw @ 0x0016ba84 — blade pre-pass
-        if (g_pSlashEntity) g_pSlashEntity->PreDraw();
+        // 2d. SlashEntity::PreDraw @ 0x0016ba84 — blade pre-pass for each
+        //     of 16 finger slots (binary loops over SlashEntity[16]).
+        for (int i = 0; i < 16; ++i) {
+            if (g_pSlashEntities[i]) g_pSlashEntities[i]->PreDraw();
+        }
 
         // 2e. BombBlast::DrawActiveBlasts @ 0x0016ba88 — drawn HERE in
         //     the binary, NOT inside the 0x200 layer. Shockwave rings
@@ -435,10 +445,11 @@ void GameDraw(float dt, bool active) {
 
     // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
     // depth test off before the SlashEntity loop ×16 and all later
-    // 2D passes. TODO: port the multiplayer SlashEntity loop
-    // (currently just one global slash entity).
+    // 2D passes.
     dm.SetDepthBuffer(false);
-    if (g_pSlashEntity) g_pSlashEntity->Draw();
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) g_pSlashEntities[i]->Draw();
+    }
 
     // === 4. Mid particles + slice lines + main-screen logo ===
     // Binary pm.Draw(0) @ 0x0016bb4a
@@ -505,11 +516,14 @@ void GameExit_Handler() {
     GameTaskState* ts = GetTaskState();
     ts->pBackgroundTexture.SetNull();
 
-    // Release SlashEntity + input callbacks
-    if (g_pSlashEntity) {
-        delete g_pSlashEntity;
-        g_pSlashEntity = nullptr;
+    // Release per-finger SlashEntity[16] array + input callbacks
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) {
+            delete g_pSlashEntities[i];
+            g_pSlashEntities[i] = nullptr;
+        }
     }
+    g_pSlashEntity = nullptr;
     if (Mortar::InputManager* im = Mortar::InputManager::GetInstance()) {
         // Binary: InputManager::Destroy (0x001968a0) clears all device callbacks.
         im->Destroy();
