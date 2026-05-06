@@ -462,10 +462,13 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
     verts.clear();
 }
 
+// ASM-verified: 2026-05-06T16:00 binary @ 0x00114c64 (asm-inspector)
 // Binary @ 0x00114c64 — fused integrate+render. Port splits into Update/Draw;
 // dt and paused are unused in the Draw body (integration happens in Update).
 // DIFFERS: binary fuses per-particle integrate+render into one pass; port
 // separates them so Update/Draw can be called independently.
+// No glBlendFunc state restore at function exit -- binary leaves blend
+// state at whatever the last template configured.
 void PSPParticleManager::Draw(float dt, bool paused, int layer) {
     (void)dt;
     (void)paused;
