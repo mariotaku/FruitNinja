@@ -396,7 +396,13 @@ void MenuButton::SetNewSymbol(bool show) {
     }
 }
 
-// Matches MenuButton::Update (0x0014e614)
+// Matches MenuButton::Update (0x0014e614).
+// Critical: at the END of Update, the binary writes
+//   m_BackdropScale = size.x * 1.125f * m_AnimScale
+// at 0x0014eb84 (read at 0x0014fa86 by Draw Phase A). This makes the
+// scratchs.tex backdrop quad LIVE every frame; without this write, the
+// quad collapses to a point and the backdrop appears invisible.
+// ASM-verified: 2026-05-06T17:50 binary @ 0x0014eb84 (asm-inspector)
 void MenuButton::Update(float dt) {
     UpdatePeices(dt);
 
@@ -703,14 +709,23 @@ void MenuButton::Update(float dt) {
             const bool insideOnRelease =
                 m_TouchX >= left && m_TouchX <= right &&
                 m_TouchY >= bottom && m_TouchY <= top;
-            const bool isToggle = (m_FruitType < 0);
-            if (insideOnRelease && isToggle && m_ClickCallback) {
-                m_ClickCallback();
+            // ASM-verified: 2026-05-06T17:50 binary @ 0x0014e6a4 (asm-inspector)
+            // Binary calls TouchReleased() on inside-release, which fires
+            // both m_ClickCallback (for toggles only, m_FruitType<0) AND
+            // m_DeletedCallback unconditionally. Earlier port fired only
+            // m_ClickCallback directly and skipped m_DeletedCallback.
+            if (insideOnRelease) {
+                TouchReleased();
             }
             m_TouchSlot = -1;
             m_bHighlighted = 0;
         }
     }
+
+    // Binary @ 0x0014eb84: m_BackdropScale (+0xEC) is computed every Update
+    // from size.x * 1.125f * m_AnimScale. Read by Draw Phase A @ 0x0014fa86
+    // to scale the scratchs.tex backdrop quad.
+    m_BackdropScale = size.x * 1.125f * m_AnimScale;
 }
 
 // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4).
@@ -827,8 +842,12 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
             const float s = SinIdx(phase);
             const float by = (s < 0.0f ? -s : s) * 6.0f;
 
-            Vec3 off(m_BounceParams.x * size.x * 0.5f,
-                     by + m_BounceParams.y * size.y * 0.5f,
+            // Binary @ 0x0014fdf4 reads m_TargetSize (+0x124..+0x128), NOT
+            // size (HUDControl base +0x20). Using size makes the anchor
+            // shrink during the grow-in animation; binary keeps the anchor
+            // fixed at the target size and only the QUAD scales via ratio.
+            Vec3 off(m_BounceParams.x * m_TargetSize.x * 0.5f,
+                     by + m_BounceParams.y * m_TargetSize.y * 0.5f,
                      0.0f);
             off = off * ratio;
             Vec3 drawAt = pos + off;
