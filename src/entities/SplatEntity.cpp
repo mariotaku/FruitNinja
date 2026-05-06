@@ -771,17 +771,14 @@ void SplatEntity::DrawActiveSplats() {
 
     s_SplatTex->Set();
 
-    // Read-only depth test -- matches binary's SetDepthBufferWrite(0)
-    // call before this draw (after Mortar::ActorManager::Draw).
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_FALSE);
-
+    // Depth state is owned by GameDraw at the pass level (binary @ 0x0016b888):
+    // SetDepthBuffer(1) + SetDepthBufferWrite(0) is set BEFORE the splat pass and
+    // stays in effect. SplatEntity::Draw must NOT mutate it -- doing so leaves
+    // depth-test OFF for subsequent same-bucket draws and breaks the fruit
+    // -occludes-backdrop sort order on the menu screen.
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawTriList(s_SplatVerts, count * 6);
     }
 
-    glDepthMask(GL_TRUE);
-    glDisable(GL_DEPTH_TEST);
     s_SplatTex->UnSet();
 }
