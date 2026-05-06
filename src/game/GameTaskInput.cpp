@@ -108,10 +108,13 @@ void GameTaskInitInput() {
 // Binary: dispatches TouchMoveX / TouchMoveY on the matching SlashEntity
 // via Game[+0xa0..+0xb8] zone table.
 // TODO: dispatch SlashEntity::TouchMoveX/Y with finger position.
+// Port: returns FALSE so dispatch continues to SlashEntity-registered
+// per-finger TouchDown callbacks (the port's preferred path while this
+// stub isn't implemented). Binary returns 1 (consumed) at end of body.
 static bool PointerMoveCallback(InputEvent* ev) {
     (void)ev;
     // TODO: implement PointerMoveCallback (binary @ 0x0016a4b4)
-    return true;
+    return false;  // not consumed; let other handlers run
 }
 
 // PointerDownCallback @ 0x00168e24
@@ -120,8 +123,7 @@ static bool PointerMoveCallback(InputEvent* ev) {
 static bool PointerDownCallback(InputEvent* ev) {
     (void)ev;
     // TODO: implement PointerDownCallback (binary @ 0x00168e24)
-    // Binary: g_GameData[+0x9c] = 1; g_GameData[+0x9e] = 1;
-    return true;
+    return false;  // unimplemented stub -- don't consume
 }
 
 // PointerUpCallback @ 0x00168e48
@@ -130,8 +132,7 @@ static bool PointerDownCallback(InputEvent* ev) {
 static bool PointerUpCallback(InputEvent* ev) {
     (void)ev;
     // TODO: implement PointerUpCallback (binary @ 0x00168e48)
-    // Binary: g_GameData[+0x9d] = 1; g_GameData[+0x9e] = 0;
-    return true;
+    return false;  // unimplemented stub -- don't consume
 }
 
 // PointerDownXboxCallback @ 0x0016a41c
@@ -139,7 +140,7 @@ static bool PointerUpCallback(InputEvent* ev) {
 static bool PointerDownXboxCallback(InputEvent* ev) {
     (void)ev;
     // TODO: implement PointerDownXboxCallback (binary @ 0x0016a41c)
-    return true;
+    return false;  // unimplemented stub -- don't consume
 }
 
 // PauseGameCallback @ 0x00168fd8
@@ -182,5 +183,5 @@ static bool ShowPauseMenuCallback(InputEvent* ev) {
 static bool TouchDownCallback(InputEvent* ev) {
     (void)ev;
     // TODO: implement TouchDownCallback (zone-loop "TouchReleased_<i>")
-    return true;
+    return false;  // unimplemented stub -- don't consume
 }

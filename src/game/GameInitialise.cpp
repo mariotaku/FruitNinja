@@ -124,6 +124,11 @@ void GameInitialise() {
 
     // Step 10: InputManager
     game->inputManager = new Mortar::InputManager();
+    // Binary @ 0x00196cc8 InputManager::Init -- alloc InputDeviceBada and
+    // push onto m_inputDevices. Without this, RegisterInputCallback has no
+    // device to broadcast to and event-driven dispatch silently no-ops
+    // (the SlashEntity event handlers fail to fire).
+    game->inputManager->Init(0);
     // Note: inputTranslator (SDL-bound) is allocated + Init'd in GameSDL.cpp::init().
 
     // Step 15: FruitCamera (matches original: operator_new(0x16c))
