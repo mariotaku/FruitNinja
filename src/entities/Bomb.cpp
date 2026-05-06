@@ -595,22 +595,50 @@ void Bomb::Draw(Renderer& r) {
     mat = rotMat * mat;                          // mat = R * S
     mat.GlobalTranslate44(Vec3(pos.x, pos.y, pos.z + m_ZPosition));  // + T in col3
 
-    // PORT QUIRK: enable GL_CULL_FACE for the bomb mesh draw only.
-    // The bomb model has duplicated/back-face geometry (body + interior
-    // shell sharing vertex positions); without backface culling the back
-    // faces blow through the front and produce a pure-white sphere
-    // artifact. Binary @ 0x171be8 itself does NOT touch GL state -- the
-    // shipped Bada game presumably relies on its GL driver treating
-    // GL_LESS as GL_LEQUAL on equal depths (so the body's later draw
-    // wins over the back shell), or some other Bada-specific quirk we
-    // can't replicate on desktop GL. Scoping the cull-enable to just
-    // this draw keeps every other mesh path matching the binary's
-    // cull-off behavior; only the bomb gets this targeted workaround.
-    // History: this workaround was added in commit e93669c (replacing
-    // an earlier glDisable(GL_DEPTH_TEST) workaround), then briefly
-    // dropped when Mesh::DrawGeometry held cull on globally, then
-    // dropped again when DrawGeometry was made cull-faithful to the
-    // binary -- the last drop re-exposed the white-sphere bug.
+    // DIFFERS: original = CULL_FACE off, port = CULL_FACE on for bomb only.
+    //
+    // Verified end-to-end via asm-inspector (2026-05-06):
+    //  - DisplayManagerBada::BeginFrame @ 0x0019dfec disables GL_CULL_FACE
+    //    twice per frame via raw glDisable (bypasses any shadow byte).
+    //  - Geometry::Render's CULL_FACE one-shot guard @ 0x001a3f32 reads
+    //    a *global* shadow byte at 0x0027488c (resolved via GOT slot
+    //    DAT_001a4050) -- the guard fires exactly once on frame 0 and
+    //    never re-enables CULL_FACE again. After frame 0, cull stays OFF.
+    //  - Bomb::Draw @ 0x00171be8 makes zero GL state calls -- only matrix
+    //    builds + Model::Draw.
+    //  - bomb.mmd genuinely ships with a duplicated back-face interior
+    //    shell: 314 triangles, 238 vertices, 176 unique XYZ positions,
+    //    44 positions duplicated with opposite-winding triangles
+    //    (156 outward / 158 inward, ~50/50). All bomb_*.mmd variants
+    //    are identical. Not a port mis-load.
+    //
+    // How the Bada original gets away without cull: Z-fighting determinism.
+    // The two shells share identical XYZ, so glDepthFunc(GL_LESS) rejects
+    // the second-drawn equal-Z fragment. The first 156 triangles in the
+    // index stream are predominantly outward, so the outer (textured) shell
+    // wins on Bada's specific GLES1 driver. GLES2 drivers don't tie-break
+    // equal-Z fragments the same way -- "first writes, second rejected"
+    // isn't guaranteed by the spec, and on desktop GL the inner shell
+    // sometimes wins, producing the pure-white sphere.
+    //
+    // Workaround: enable GL_CULL_FACE just for Bomb::Draw. The mesh's
+    // GL_BACK / GL_CCW front-face convention drops the inverted-winding
+    // interior shell wholesale, leaving the outer shell visible regardless
+    // of Z-tie ordering. Scoped to bomb only because every other mesh in
+    // the game (fruits, slash blades, splats) matches the binary's
+    // cull-off behavior fine -- only bomb has the duplicated-shell layout.
+    //
+    // Regression history (this workaround has been dropped + restored
+    // multiple times):
+    //   e93669c  added the bomb-only glEnable(GL_CULL_FACE) workaround
+    //   (later) DrawGeometry held cull on globally; bomb cover-fix moot
+    //   (this branch's earlier commit) DrawGeometry stops culling to
+    //                                  match binary; bomb white sphere
+    //                                  reappears -- analog to gallery
+    //                                  commit 6785a58 stripping a
+    //                                  "redundant" Y<->Z toggle that
+    //                                  was actually load-bearing
+    //   this commit  restore the bomb-only cull (analog to f721ed0)
     glEnable(GL_CULL_FACE);
     modelPtr->Draw(mat);
     glDisable(GL_CULL_FACE);
