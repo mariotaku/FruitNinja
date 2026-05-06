@@ -57,21 +57,11 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    // Port specific: binary's Mesh::DrawQuadUnCached does its own state setup and does
-    // not enable depth test. Port adds read-only depth test to fix menu-button ring
-    // vs 3D fruit z-fight.
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_FALSE);    // do not write — preserve fruit's depth
-
-    // Step 10-11: TintColour → DrawQuadUnCached
+    // Step 10-11: TintColour -> DrawQuadUnCached
     // ASM-verified: 2026-04-29T03:29Z binary @ 0x0013540c (asm-inspector)
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
-
-    glDepthMask(GL_TRUE);
-    glDisable(GL_DEPTH_TEST);
 
     // Step 12: UnSet
     glBindTexture(GL_TEXTURE_2D, 0);

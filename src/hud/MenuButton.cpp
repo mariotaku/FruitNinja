@@ -776,21 +776,10 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
-                // Enable depth test + write so the fruit mesh (drawn later
-                // by ActorManager at z~0) wins the GL_LESS test against this
-                // backdrop's z=-5500 fragments. Without this, scratchs draws
-                // unconditionally and ends up covering the fruit.
-                glEnable(GL_DEPTH_TEST);
-                glDepthFunc(GL_LESS);
-                glDepthMask(GL_TRUE);
-
                 Colour tint(255, 255, 255, alpha);
                 glBindTexture(GL_TEXTURE_2D, s_TexScratchs->m_TexId);
                 r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
                 glBindTexture(GL_TEXTURE_2D, 0);
-
-                glDepthMask(GL_TRUE);
-                glDisable(GL_DEPTH_TEST);
             }
         }
         return;
