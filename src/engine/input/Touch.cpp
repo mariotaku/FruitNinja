@@ -5,6 +5,15 @@
 #include <cstring>
 #include <cstdio>
 
+// Set to 1 to dump every Touch state transition to stdout. Used to debug
+// "touch only works once" type symptoms.
+#define FN_TOUCH_DEBUG 0
+#if FN_TOUCH_DEBUG
+#  define TDBG(...) do { printf("[TOUCH] " __VA_ARGS__); fflush(stdout); } while (0)
+#else
+#  define TDBG(...) do {} while (0)
+#endif
+
 namespace Mortar {
 
 Touch& Touch::GetInstance() {
@@ -62,10 +71,34 @@ void Touch::StateUpdate(TouchState& s) {
 // same finger ID matches the stale slot and never registers as a new press
 // (the user's "touch only works once" symptom).
 void Touch::_Update() {
+#if FN_TOUCH_DEBUG
+    bool anyNonIdle = false;
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        if (states2[i].extId || states2[i].phase != 1) { anyNonIdle = true; break; }
+    }
+    if (anyNonIdle) {
+        TDBG("_Update: states2 pre-StateUpdate: ");
+        for (int i = 0; i < MAX_SLOTS; i++)
+            printf("[%d:e%u/t%u/p%d] ", i, states2[i].extId, states2[i].touchId, states2[i].phase);
+        printf("\n"); fflush(stdout);
+    }
+#endif
     for (int i = 0; i < MAX_SLOTS; i++) {
         states1[i] = states2[i];
         StateUpdate(states2[i]);
     }
+#if FN_TOUCH_DEBUG
+    if (anyNonIdle) {
+        TDBG("_Update: states1 post: ");
+        for (int i = 0; i < MAX_SLOTS; i++)
+            printf("[%d:e%u/t%u/p%d] ", i, states1[i].extId, states1[i].touchId, states1[i].phase);
+        printf("\n"); fflush(stdout);
+        TDBG("_Update: states2 post: ");
+        for (int i = 0; i < MAX_SLOTS; i++)
+            printf("[%d:e%u/t%u/p%d] ", i, states2[i].extId, states2[i].touchId, states2[i].phase);
+        printf("\n"); fflush(stdout);
+    }
+#endif
 }
 
 // Binary @ 0x00195630 -- Update(float dt).
@@ -103,6 +136,15 @@ void Touch::__UpdateInternal(uint32_t extId, bool isActive, float x, float y, fl
 // isActive: true=press OR move, false=release.
 // Binary @ 0x00195314 -- free slot predicate is extId==0, NOT phase>=1.
 void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
+    TDBG("___UpdateInternal: extId=%u isActive=%d xy=(%.1f,%.1f) cursor=%d\n",
+         extId, isActive ? 1 : 0, x, y, m_slotCursor);
+    TDBG("  states2 before: ");
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        printf("[%d:e%u/t%u/p%d] ", i,
+               states2[i].extId, states2[i].touchId, states2[i].phase);
+    }
+    printf("\n"); fflush(stdout);
+
     int firstFree = -1;
     for (int i = 0; i < MAX_SLOTS; i++) {
         int idx = (m_slotCursor + i) & 7;
@@ -111,8 +153,10 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
             if (isActive) {
                 states2[idx].currX = (int32_t)x;
                 states2[idx].currY = (int32_t)y;
+                TDBG("  -> match-update slot=%d (move/press-on-existing)\n", idx);
             } else {
                 states2[idx].phase = 1;
+                TDBG("  -> match-release slot=%d phase->1\n", idx);
             }
             return;
         }
@@ -131,6 +175,12 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
         states2[firstFree].currX  = (int32_t)x;
         states2[firstFree].currY  = (int32_t)y;
         states2[firstFree].phase  = -1;
+        TDBG("  -> claim-new slot=%d touchId=%u extId=%u phase=-1 cursor->%d\n",
+             firstFree, states2[firstFree].touchId, extId, m_slotCursor);
+    } else {
+        TDBG("  -> NO-MATCH-NO-FREE: extId=%u isActive=%d firstFree=%d %s\n",
+             extId, isActive ? 1 : 0, firstFree,
+             (isActive && firstFree == -1) ? "(all slots busy!)" : "(release on missing slot)");
     }
 }
 
