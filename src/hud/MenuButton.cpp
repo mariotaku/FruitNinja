@@ -754,10 +754,11 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
 
     // First-pass at layer 0x40 (Phase A): scratch fruit/bomb backdrop quad,
     // then demote to 0x80 and return. Binary @ 0x0014fa24..0x0014faf8.
-    // Binary calls DrawQuadSized(halfW=182, halfH=182, tint) producing a
-    // 364x364 px quad centered on pos at z=-5500 (DAT_0014fcf8). Port's
-    // Renderer::DrawQuad takes a unit quad (-0.5..+0.5), so we bake the
-    // FULL size (2*halfW = 364) into the scale matrix to match.
+    // Binary's DrawQuadSized(halfW=182, halfH=182, tint) produces a 182x182
+    // quad centered on pos at z=-5500 (DAT_0014fcf8). Port's DrawQuad uses
+    // a unit quad (-0.5..+0.5), so 182 in the scale matches the binary's
+    // on-screen size 1:1. (Mortar's "halfW" naming refers to the texture-
+    // coord half-extent, not a doubled geometry size.)
     if (m_LayerFlags == 0x40) {
         m_LayerFlags = 0x80;
         if (s_TexScratchs.IsValid()) {
@@ -769,16 +770,27 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
 
                 // Z = -5500 puts the backdrop deep in the ortho frustum so it
                 // sorts behind the spinning fruit/bomb mesh.
-                Matrix44 mat = Matrix44::MakeScale(sx * 364.0f, 364.0f, 1.0f);
+                Matrix44 mat = Matrix44::MakeScale(sx * 182.0f, 182.0f, 1.0f);
                 mat.GlobalTranslate44(Vec3(pos.x, pos.y, -5500.0f));
                 mm.GetWorldStack().Reset();
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
+                // Enable depth test + write so the fruit mesh (drawn later
+                // by ActorManager at z~0) wins the GL_LESS test against this
+                // backdrop's z=-5500 fragments. Without this, scratchs draws
+                // unconditionally and ends up covering the fruit.
+                glEnable(GL_DEPTH_TEST);
+                glDepthFunc(GL_LESS);
+                glDepthMask(GL_TRUE);
+
                 Colour tint(255, 255, 255, alpha);
                 glBindTexture(GL_TEXTURE_2D, s_TexScratchs->m_TexId);
                 r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
                 glBindTexture(GL_TEXTURE_2D, 0);
+
+                glDepthMask(GL_TRUE);
+                glDisable(GL_DEPTH_TEST);
             }
         }
         return;
