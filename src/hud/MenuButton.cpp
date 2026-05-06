@@ -147,6 +147,7 @@ MenuButton::MenuButton()
       m_TouchSlot(-1),
       m_TouchX(0.0f), m_TouchY(0.0f), m_TouchPhase(0.0f),
       m_RandomOffset(0.0f),
+      m_BackdropScale(0.0f),  // Binary leaves +0xEC uninitialized; zero-init for fidelity
       m_bFlipped(false),
       m_RotationSpeed(0.0f),
       m_SparkleTimer(-1.0f),
@@ -756,13 +757,13 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         alpha = (uint8_t)a;
     }
 
-    // First-pass at layer 0x40 (Phase A): scratch fruit/bomb backdrop quad,
-    // then demote to 0x80 and return. Binary @ 0x0014fa24..0x0014faf8.
-    // Binary's DrawQuadSized(halfW=182, halfH=182, tint) produces a 182x182
-    // quad centered on pos at z=-5500 (DAT_0014fcf8). Port's DrawQuad uses
-    // a unit quad (-0.5..+0.5), so 182 in the scale matches the binary's
-    // on-screen size 1:1. (Mortar's "halfW" naming refers to the texture-
-    // coord half-extent, not a doubled geometry size.)
+    // ASM-verified: 2026-05-06T16:00 binary @ 0x0014f9cc Phase A 0x0014fa24..0x0014faf8 (asm-inspector)
+    // First-pass at layer 0x40: scratchs.tex backdrop quad, then demote to
+    // 0x80 and return. The backdrop scale is m_BackdropScale (+0xEC), which
+    // the binary leaves uninitialized (zero-init in port) so the quad
+    // collapses to a point and the layer is effectively dead. The path is
+    // preserved for binary call-graph parity even though the visual is not
+    // observable in the shipped binary.
     if (m_LayerFlags == 0x40) {
         m_LayerFlags = 0x80;
         if (s_TexScratchs.IsValid()) {
@@ -772,14 +773,20 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
                 // Mirror flip via X scale (m_bFlipped chosen randomly in Init).
                 const float sx = m_bFlipped ? -1.0f : 1.0f;
 
-                // Z = -5500 puts the backdrop deep in the ortho frustum so it
-                // sorts behind the spinning fruit/bomb mesh.
-                Matrix44 mat = Matrix44::MakeScale(sx * 182.0f, 182.0f, 1.0f);
+                // Binary @ 0x0014fa86: Scale44((sx, 1, 1) * m_BackdropScale).
+                // Z = -5500 (DAT_0014fcf8) puts the quad deep in the ortho
+                // frustum.
+                Matrix44 mat = Matrix44::MakeScale(sx * m_BackdropScale,
+                                                   m_BackdropScale,
+                                                   m_BackdropScale);
                 mat.GlobalTranslate44(Vec3(pos.x, pos.y, -5500.0f));
                 mm.GetWorldStack().Reset();
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
+                // Binary @ 0x0014faf0: DrawQuadSized(0.0, 1.0, 0.0, 1.0, &tint)
+                // -- four floats are UV bounds (uMin, uMax, vMin, vMax), not
+                // halfW/halfH. Geometry is unit-quad (-0.5..+0.5) inside DrawQuad.
                 Colour tint(255, 255, 255, alpha);
                 glBindTexture(GL_TEXTURE_2D, s_TexScratchs->m_TexId);
                 r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);

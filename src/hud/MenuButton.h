@@ -77,6 +77,16 @@ public:
     // +0xE8: random visual offset (-20 to +20)
     float m_RandomOffset;
 
+    // +0xEC: scratchs.tex backdrop per-instance scale. Binary @ 0x0014fa86
+    // multiplies the (sx, 1, 1) flip-vector by *(this+0xEC) before building
+    // the Scale44 matrix in MenuButton::Draw Phase A. The field is NEVER
+    // WRITTEN by Init or any of the 4 ctors (verified via full str/vstr/stm
+    // scan of 0x0014ee40, 0x0014f24c/348/444/55c, 2026-05-06 re-analyst).
+    // Effective runtime value depends on Mortar heap zero-fill; zero-init
+    // collapses the backdrop quad to a point -> the scratchs layer is
+    // effectively DEAD in the shipped Bada binary. Port mirrors that.
+    float m_BackdropScale;
+
     // +0xF0: random horizontal flip
     bool m_bFlipped;
 

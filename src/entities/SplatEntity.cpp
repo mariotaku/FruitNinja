@@ -737,6 +737,9 @@ void SplatEntity::DrawSplat(QUADCUSTOMVERTEX* outVerts, const float tintRGB[3]) 
 //
 // For each alive splat with m_SplatType >= 0, calls DrawSplat() to
 // write 6 vertices, then submits the batch.
+// ASM-verified: 2026-05-06T16:00 binary @ 0x00180344 (asm-inspector)
+// Depth state owned by GameDraw (binary @ 0x0016b888): no per-call
+// glEnable/glDisable(GL_DEPTH_TEST) or glDepthMask in the binary's body.
 void SplatEntity::DrawActiveSplats() {
     if (!s_SplatTex.IsValid()) return;
 
