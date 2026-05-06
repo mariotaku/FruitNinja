@@ -53,8 +53,6 @@ public:
     int  GetType() override { return 1; }
 
     // ---- STUBS (binary) ----
-    // STUB: SpeedControl::Draw -- binary @ 0x???? (TODO RE)
-    void Draw(float* viewVec) override;
     // STUB: SpeedControl::Init -- binary @ 0x???? (TODO RE)
     void Init() override;
     // STUB: SpeedControl::PreDraw -- binary @ 0x???? (TODO RE)

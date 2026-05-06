@@ -53,10 +53,6 @@ public:
     static void LoadContent();    // Binary @ 0x00135010
     static void UnloadContent();  // Binary @ 0x0013508C
 
-    // ---- STUBS (binary) ----
-    // Binary Draw(float*) overload — port uses Draw(const Vec3&, int) instead (port deviation).
-    virtual void   Draw(float* hudScale);  // Binary @ 0x???? (TODO RE)
-    // ---- end STUBS ----
 
 private:
     uint8_t     m_bChecked;   // +0x7C (default 1 = CHECKED)

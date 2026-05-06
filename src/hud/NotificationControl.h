@@ -53,8 +53,6 @@ public:
     void Reset() override;
     // STUB: NotificationControl::PreDraw(float*) -- binary @ 0x???? (TODO RE)
     void PreDraw(float* viewVec);
-    // STUB: NotificationControl::Draw(float*) -- binary @ 0x???? (TODO RE)
-    void Draw(float* viewVec) override;
     // ---- end STUBS ----
 };
 

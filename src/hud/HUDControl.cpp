@@ -25,12 +25,6 @@ void HUDControl::Release()
 void HUDControl::Reset()
 {}
 
-// STUB: HUDControl::Draw(float*) -- binary @ 0x???? (TODO RE)
-void HUDControl::Draw(float* viewVec)
-{
-    (void)viewVec;
-}
-
 void HUDControl::Update(float dt)
 {
     (void)dt;
