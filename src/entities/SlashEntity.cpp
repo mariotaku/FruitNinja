@@ -67,6 +67,11 @@ static const float TRAIL_LIFETIME = 0.25f;
 static Mortar::SmartPtr<Mortar::Texture> g_BladeTex;
 
 // --- Global instance ---
+// Per-finger array (binary SlashEntity[16]). Created/destroyed in GameInit.
+SlashEntity* g_pSlashEntities[16] = {0};
+
+// Backward-compat alias for slot 0; pointer-not-reference so callers don't
+// see it as "always slot 0" by name -- it tracks whatever slot 0 contains.
 SlashEntity* g_pSlashEntity = nullptr;
 
 // ---------------------------------------------------------------------------
@@ -139,6 +144,7 @@ SlashEntity::SlashEntity()
     , m_pCurrentTarget(nullptr)
     , m_State(0)
     , m_bHasHead(false)
+    , m_FingerId(0)
     , m_RawTouchPos(0, 0, 0)
 {
     memset(m_Left,  0, sizeof(m_Left));
@@ -151,7 +157,8 @@ SlashEntity::~SlashEntity() {
     Release();
 }
 
-void SlashEntity::Init() {
+void SlashEntity::Init(int fingerId) {
+    m_FingerId = fingerId;
     m_NumPoints = 0;
     m_State = 0;
     m_bHasHead = false;
@@ -169,32 +176,30 @@ void SlashEntity::Init() {
 }
 
 // Binary @ GameTaskInitInput 0x00169670 -- registers per-finger TouchDown/X/Y
-// callbacks on InputManager for each of 16 SlashEntity slots. Port has only
-// one g_pSlashEntity (single-touch only), so register for finger 0 only.
-// Multi-touch parity would require SlashEntity[16] + per-finger registration.
+// callbacks on InputManager for each of 16 SlashEntity[i] slots. Each slot
+// registers for ITS fingerId only; the dispatch chain routes a finger's
+// events to the matching SlashEntity instance.
 void SlashEntity::RegisterInputCallbacks() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
     if (!mgr) return;
 
     char buf[20];
-    const int finger = 0;
-
-    snprintf(buf, sizeof(buf), "TouchDown_%d", finger);
+    snprintf(buf, sizeof(buf), "TouchDown_%d", m_FingerId);
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchDown));
 
-    snprintf(buf, sizeof(buf), "TouchMove_X%d", finger);
+    snprintf(buf, sizeof(buf), "TouchMove_X%d", m_FingerId);
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveX));
 
-    snprintf(buf, sizeof(buf), "TouchMove_Y%d", finger);
+    snprintf(buf, sizeof(buf), "TouchMove_Y%d", m_FingerId);
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveY));
 
     // Port-only: release dispatch. Binary doesn't have TouchReleased_n
     // (Bada delivers moves as TouchDown_n; release is implicit). SDL fires
     // explicit FINGERUP -> InputTranslatorSDL dispatches TouchUp_n.
-    snprintf(buf, sizeof(buf), "TouchUp_%d", finger);
+    snprintf(buf, sizeof(buf), "TouchUp_%d", m_FingerId);
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchUp));
 }
@@ -759,12 +764,12 @@ void SlashEntity::SetModColours(
 
     // Live-update walker. Binary @ 0x0017ca0c walks
     // Mortar::ActorManager::GetEntityFirst(type=3) and direct-calls
-    // SlashEntity::ColoursChanged on each instance (NOT through vtable).
-    // Port: SlashEntity isn't an Mortar::Entity-derived actor here — it's a
-    // singleton (g_pSlashEntity), so direct-call once. Multiplayer
-    // (currently unported) would need a real walker.
-    if (g_pSlashEntity) {
-        g_pSlashEntity->ColoursChanged();
+    // SlashEntity::ColoursChanged on each of 16 SlashEntity instances (NOT
+    // through vtable). Port: iterate the per-finger array directly.
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) {
+            g_pSlashEntities[i]->ColoursChanged();
+        }
     }
 }
 
