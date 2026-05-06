@@ -557,9 +557,58 @@ int SplatEntity::NumActiveSplats() {
     return s_NumActiveSplats;
 }
 
+// ASM-verified: 2026-05-06T18:00 binary @ 0x0017fd68 (asm-inspector)
+// Body order matches binary 0x0017fd7c..0x0017ff38:
+//   (a) Per-impact splat-SFX gate ticks (3-iter loop).
+//   (b) Pulp-drip-gate timer + positive->non-positive fire edge.
+//   (c) Spring-rate compute -- consumes the PRIOR-frame cached count
+//       (s_NumActiveSplats), introducing an intentional 1-frame lag
+//       that's part of the original feel.
+//   (d) Pool-loop -- updates each alive splat; new active count written
+//       to s_NumActiveSplats at the very end.
 void SplatEntity::UpdateActiveSplats(float dt) {
-    // Pool loop -- update each alive splat, push dead ones back, accumulate
-    // the new active count for the cache.
+    // (a) Per-impact splat SFX gates -- three independent cooldowns by size.
+    for (int i = 0; i < 3; ++i) {
+        if (s_SplatSfxGate[i] > 0.0f) {
+            s_SplatSfxGate[i] -= dt;
+            if (s_SplatSfxGate[i] < 0.0f) s_SplatSfxGate[i] = 0.0f;
+        }
+    }
+
+    // (b) Pulp-drip ambient SFX gate tick + fire on positive->non-positive edge.
+    if (s_PulpDripGate <= 0.0f) {
+        if (s_PulpDripGate >= -0.5f) s_PulpDripGate -= dt;
+    } else {
+        s_PulpDripGate -= dt;
+        if (s_PulpDripGate <= 0.0f) {
+            const char* name = (RandInt(2) == 0) ? "Pulp-drip-2" : "Pulp-drip-1";
+            Game* game = Game::GetInstance();
+            if (game && game->pGameSound) {
+                game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+            }
+        }
+    }
+
+    // (c) Per-frame spring rate compute -- binary 0x0017fe46..0x0017feda.
+    //   N_total  = Mortar::ActorManager::GetNumEntities()
+    //   N_active = s_NumActiveSplats   // PRIOR-frame cached count
+    //   raw      = (N_total + N_active) / 15.0 - 0.15
+    //   if raw <= 0:   spring = 1.25
+    //   elif raw >= 3: spring = 4.25
+    //   else:          spring = raw + 1.25  (linear ramp 1.25..4.25)
+    int totalEntities = 0;
+    if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
+        totalEntities = am->GetNumEntities();
+    }
+    {
+        const float raw = (float)(totalEntities + s_NumActiveSplats) / 15.0f - 0.15f;
+        if (raw <= 0.0f)      s_SpringRate = 1.25f;
+        else if (raw >= 3.0f) s_SpringRate = 4.25f;
+        else                  s_SpringRate = raw + 1.25f;
+    }
+
+    // (d) Pool loop -- update each alive splat, push dead ones back,
+    //     write the new active count to s_NumActiveSplats LAST.
     const int N = s_Pool.Capacity();
     int activeCount = 0;
     for (int i = 0; i < N; ++i) {
@@ -575,52 +624,6 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         }
     }
     s_NumActiveSplats = activeCount;
-
-    // Per-frame spring rate compute -- matches binary's
-    // SplatEntity::UpdateActiveSplats @ 0x0017fd68 (instructions
-    // 0x0017fe46..0x0017feda). Computed AFTER the pool loop so the
-    // freshly-cached count is consumed.
-    //
-    //   N_total  = Mortar::ActorManager::GetNumEntities()
-    //   N_active = s_NumActiveSplats (just refreshed)
-    //   raw      = (N_total + N_active) / 15.0 - 0.15
-    //   if raw <= 0:   spring = 1.25
-    //   elif raw >= 3: spring = 4.25
-    //   else:          spring = raw + 1.25  (linear ramp 1.25..4.25)
-    int totalEntities = 0;
-    if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
-        totalEntities = am->GetNumEntities();
-    }
-    {
-        const float raw = (float)(totalEntities + activeCount) / 15.0f - 0.15f;
-        if (raw <= 0.0f)      s_SpringRate = 1.25f;
-        else if (raw >= 3.0f) s_SpringRate = 4.25f;
-        else                  s_SpringRate = raw + 1.25f;
-    }
-
-    // Per-impact splat SFX gates -- three independent cooldowns by size.
-    for (int i = 0; i < 3; ++i) {
-        if (s_SplatSfxGate[i] > 0.0f) {
-            s_SplatSfxGate[i] -= dt;
-            if (s_SplatSfxGate[i] < 0.0f) s_SplatSfxGate[i] = 0.0f;
-        }
-    }
-
-    // Pulp-drip ambient SFX gate tick + fire on positive->non-positive edge.
-    // Bin: 0x0017fd68 timer block.
-    // ASM-verified: 2026-04-29T03:25Z binary @ 0x0017fd68 (asm-inspector)
-    if (s_PulpDripGate <= 0.0f) {
-        if (s_PulpDripGate >= -0.5f) s_PulpDripGate -= dt;
-    } else {
-        s_PulpDripGate -= dt;
-        if (s_PulpDripGate <= 0.0f) {
-            const char* name = (RandInt(2) == 0) ? "Pulp-drip-2" : "Pulp-drip-1";
-            Game* game = Game::GetInstance();
-            if (game && game->pGameSound) {
-                game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
-            }
-        }
-    }
 }
 
 void SplatEntity::RemoveAllSplats() {
