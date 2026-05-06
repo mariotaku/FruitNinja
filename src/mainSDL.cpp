@@ -19,6 +19,11 @@ int main(int argc, char* argv[]) {
     // to stderr before the OS terminates the process. No-op elsewhere.
     FN::InstallCrashHandler();
 
+    // Synthesize SDL_FINGER* events from SDL_MOUSE* so the InputTranslator
+    // only needs to handle the touch path. SDL produces the synthetic
+    // events with finger id = SDL_TOUCH_MOUSEID.
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         return 1;

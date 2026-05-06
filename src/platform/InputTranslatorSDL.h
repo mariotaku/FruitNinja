@@ -2,12 +2,16 @@
 #define FN_INPUT_TRANSLATOR_SDL_H
 
 //
-// InputTranslatorSDL — converts SDL touch/mouse events to Mortar InputEvents
+// InputTranslatorSDL — converts SDL touch events to Mortar InputEvents.
 //
 // Maps SDL finger IDs to the 16-channel touch system used by the original.
-// Each channel has actions: TouchDown_N, TouchMove_XN, TouchMove_YN, TouchUp_N
-//
+// Each channel has actions: TouchDown_N, TouchMove_XN, TouchMove_YN, TouchUp_N.
 // Also generates global "TouchScreen" events for any touch.
+//
+// Mouse-only desktop platforms are handled by setting
+// SDL_HINT_MOUSE_TOUCH_EVENTS=1 before SDL_Init, which makes SDL synthesize
+// SDL_FINGER* events from SDL_MOUSE* with finger id = SDL_TOUCH_MOUSEID.
+// This file therefore only handles SDL_FINGERDOWN/MOTION/UP.
 //
 
 #include <SDL.h>
@@ -28,10 +32,6 @@ public:
     float fingerY[16];
     bool fingerActive[16];
 
-    // Mouse emulates finger 0
-    bool mouseDown;
-    float mouseX, mouseY;
-
     InputTranslatorSDL();
 
     // Initialize action hashes (call once after StringHash is available)
@@ -41,8 +41,7 @@ public:
     void ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window);
 
 private:
-    // Convert SDL pixel coords to game coords
-    void TransformTouch(SDL_Window* window, int px, int py, float& gx, float& gy);
+    // Convert normalized SDL touch coords to game coords (centred ortho).
     void TransformTouchNormalized(float nx, float ny, float& gx, float& gy);
 
     // Map SDL finger ID to channel (0-15)
