@@ -134,18 +134,6 @@ ScrollingMenuItem* ScrollingMenu::Collide(int touchSlot) {
 void ScrollingMenu::Update(float /*dt*/) {
     using namespace Mortar;
 
-    static int s_logCount = 0;
-    s_logCount++;
-    bool diag = (s_logCount % 30 == 0);  // log roughly every 0.5s
-    if (diag) {
-        printf("[SM::Update#%d] menu_pos=(%.1f,%.1f) outer=[%.1f..%.1f, %.1f..%.1f] "
-               "touchId=%d dragging=%d vel.y=%.2f\n",
-               s_logCount, pos.x, pos.y,
-               pos.x + m_OuterRegion[0], pos.x + m_OuterRegion[3],
-               pos.y + m_OuterRegion[1], pos.y + m_OuterRegion[2],
-               m_TouchId, (int)m_bDragging, m_Velocity.y);
-    }
-
     // --- Phase 1: clear tap-fired flag each frame ---
     // Binary: this->field_0xc9 = 0 at top of Update
     m_bTouchProcessed = 0;
@@ -165,13 +153,8 @@ void ScrollingMenu::Update(float /*dt*/) {
             -1);
         m_TouchId = slot;
         int touchState = IsTouchDown(slot);
-        if (slot != -1 || diag) {
-            printf("  [P2 acquire] TouchInRegion -> slot=%d  IsTouchDown=%d\n",
-                   slot, touchState);
-        }
 
         if (touchState == 2) {
-            printf("  [P2 ACQUIRED] slot=%d\n", slot);
             // Finger is HELD (state==2) — valid acquire.
             // Binary: IsTouchDown(slot) == 2 fires acquire; state==1 (just-pressed) does NOT.
             ScrollingMenuItem* hitItem = Collide(slot);
@@ -218,19 +201,8 @@ void ScrollingMenu::Update(float /*dt*/) {
         // stillIn keeps the diagnostic name; "treat as in-region" iff still down.
         int stillIn = stillTouched ? m_TouchId : -1;
 
-        const TouchState* tsDbg = Touch::GetInstance().GetSlot(m_TouchId);
-        printf("  [P3] touchState=%d touch=(%.1f,%.1f phase=%d) -> %s\n",
-               touchState,
-               tsDbg ? (float)tsDbg->currX : -999.0f,
-               tsDbg ? (float)tsDbg->currY : -999.0f,
-               tsDbg ? tsDbg->phase : -99,
-               stillTouched ? "TRACKING" : "RELEASE");
-
         if (stillIn != m_TouchId) {
             // --- Phase 3A: finger left inner region or was lifted ---
-            printf("  [P3A RELEASE] m_bDragging=%d m_Velocity.y=%.2f\n",
-                   (int)m_bDragging, m_Velocity.y);
-
             if (m_pCollidedItem) {
                 // Fire vtable[+0x38] (Slot14 = touch-release signal) on collided item
                 m_pCollidedItem->Slot14();
@@ -290,12 +262,6 @@ void ScrollingMenu::Update(float /*dt*/) {
                 // Drag threshold detection
                 float delta = currentY - anchorY;
                 if (delta < 0.0f) delta = -delta; // fabsf
-                if (diag) {
-                    printf("  [P3B drag] currY=%.1f anchorY=%.1f delta=%.3f thr=%.4f "
-                           "newOffset=%.2f -> dragging=%d\n",
-                           currentY, anchorY, delta, DRAG_THRESHOLD,
-                           newOffset, (int)(delta > DRAG_THRESHOLD));
-                }
                 if (delta > DRAG_THRESHOLD) {
                     m_bDragging = 1;
 
