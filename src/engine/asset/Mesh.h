@@ -19,21 +19,59 @@ struct QUADCUSTOMVERTEX;
 
 namespace Mortar {
 
-// Defunct binary-shape types referenced by Mesh's public API.
-// Defined inline here (rather than as full ports) because the binary uses
-// them in slot signatures we preserve for call-graph parity, but no port
-// code calls the methods — bodies stay no-op stubs in Mesh.cpp.
-class Bounds3D {
-public:
-    // Binary @ 0x????: Bounds3D::Draw(Matrix44 const&, Colour) const.
-    void Draw(Matrix44 const&, Colour) const;
+// Bounds3D — POD axis-aligned bounding box. 24 bytes.
+// Binary copy-ctor @ 0x001b1630 just copies two Vec3s. Default ctor is
+// implicit (callers like Mesh::GetBounds @ 0x001b07f0 inline-construct
+// via _Vector3::_Vector3(this, +/-1e30, +/-1e30, +/-1e30)). No vtable,
+// no refcount, no other methods — `Draw(Matrix44 const&, Colour) const`
+// from earlier auto-stub work was fabricated and doesn't exist in the
+// binary.
+struct Bounds3D {
+    Vec3 min;  // +0x00
+    Vec3 max;  // +0x0C
+
+    Bounds3D() : min(), max() {}
+    Bounds3D(const Vec3& mn, const Vec3& mx) : min(mn), max(mx) {}
 };
 
-class Effect;
+// Effect — Mortar binary's Effect class. Live render path is fully bypassed
+// in the port (Renderer uses GLES2 shaders directly, not Effect/EffectGroup
+// multi-pass dispatch), so this is a no-method shell here just to let
+// SmartPtr<Effect> instantiate inside EffectGroup::m_Effects. The vector
+// is never populated in the port (see EffectGroup::AddEffect — Defunct).
+class Effect : public ReferenceCounter {
+public:
+    virtual ~Effect() {}
+};
+
+class EffectPropertyDefinition;
+
+// EffectGroup — 0x38 bytes.
+// Binary ctor @ 0x001a2c10 (templated_ctor<Iter>), D2 @ 0x001a1a70.
+// Inherits ReferenceCounter (+0x00..+0x0B); contains:
+//   +0x0C  std::vector<EffectPropertyDefinition>  m_PropertyDefs
+//   +0x18  std::vector<SmartPtr<Effect> >         m_Effects
+//   +0x28  Event1<EffectGroup&>                   m_OnEffectAdded(?)
+//   +0x30  Event1<EffectGroup&>                   m_OnEffectRemoved(?)
+//
+// Defunct in port: AddEffect's binary body is a sorted-vector-set insert
+// (lower_bound + EffectLessThanCompare + MergeProperties); the port keeps
+// it as a no-op because every live call site (e.g. Geometry::EffectGroupSet
+// @ 0x001a00f8) is itself a binary stub. The Event1<T> slots aren't ported
+// (no Event1 type yet); pad to keep sizeof at the binary's 0x38 if asm-
+// verify ever cares.
 class EffectGroup : public ReferenceCounter {
 public:
-    // Binary @ 0x????: EffectGroup::AddEffect(SmartPtr<Effect> const&).
-    void AddEffect(SmartPtr<Effect> const&);
+    std::vector<EffectPropertyDefinition*> m_PropertyDefs;  // +0x0C  (12 bytes)
+    std::vector<SmartPtr<Effect> >         m_Effects;        // +0x18  (12 bytes)
+    // +0x24..+0x37: 4-byte align pad + two Event1<EffectGroup&> slots
+    // (8 bytes each). Not modelled; gap kept for binary-shape sizeof.
+    uint8_t _events_gap[20];
+
+    EffectGroup() {}
+    // Binary @ 0x001a0274 — sorted-vector-set insert via lower_bound.
+    // Defunct: live render path's caller is a binary stub.
+    void AddEffect(const SmartPtr<Effect>& effect);
 };
 
 // Forward declarations for defunct/stub types referenced by binary API.
@@ -135,8 +173,9 @@ public:
     // Matches Mesh::SetBones (0x001b1340)
     void SetBones(const BoneBinding* bones, unsigned long count);
 
-    // vtable[5]: Matches Mesh::GetBounds (0x001b07f0)
-    void GetBounds(Vec3& outMin, Vec3& outMax) const override;
+    // vtable[5]: Matches Mesh::GetBounds (0x001b07f0).
+    // Binary signature: Bounds3D GetBounds() const (struct-return).
+    Bounds3D GetBounds() const override;
 
     // vtable[8]: Matches Mesh::BindSkeleton (0x001b0948)
     // Stores skeleton ptr; resolves m_SkeletonIndex per BoneBinding via FindIndex.
@@ -212,10 +251,6 @@ public:
     // STUB: BindSkeleton(Skeleton const&) -- binary @ 0x001b0948 (TODO RE)
     // Binary signature takes const-ref; port's existing BindSkeleton(Skeleton*) has mismatched mangling.
     void BindSkeleton(Skeleton const& skeleton);
-
-    // STUB: GetBounds() const -- binary @ 0x???? (TODO RE)
-    // Binary vtable[5] signature; returns Bounds3D value.
-    Bounds3D GetBounds() const;
 
     // STUB: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c (TODO RE)
     // Defunct: port appends GeometryEntry directly in LoadMesh.

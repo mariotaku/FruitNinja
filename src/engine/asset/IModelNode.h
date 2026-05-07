@@ -22,6 +22,10 @@ namespace Mortar {
 //   [3] GetName          [4] Draw             [5] GetBounds
 //   [6] GenerateBindings [7] GenerateBindings (stub)
 //   [8] BindSkeleton     [9] GetGeometryCount [10] GetGeometry
+
+// Forward-declare; concrete struct lives in Mesh.h.
+struct Bounds3D;
+
 class IModelNode : public Mortar::ReferenceCounter {
 public:
     virtual ~IModelNode() {}
@@ -34,8 +38,9 @@ public:
     virtual void Draw(const Matrix44& worldMatrix) = 0;
 
     // vtable[5]: Bounds3D GetBounds() const
-    // Port: split into outMin/outMax ref params (no Bounds3D struct)
-    virtual void GetBounds(Vec3& outMin, Vec3& outMax) const = 0;
+    // Binary signature is value-return Bounds3D (struct-return via hidden r0
+    // retval ptr); port now matches.
+    virtual Bounds3D GetBounds() const = 0;
 
     // vtable[6,7]: void GenerateBindings(...)
     // Port: stub — AnimBindings not yet implemented
