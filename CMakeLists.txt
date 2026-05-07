@@ -182,14 +182,10 @@ add_subdirectory(src/platform)
 add_subdirectory(src/entities)
 add_subdirectory(src/game)
 add_subdirectory(src/debug)
-add_subdirectory(src/stubs)
 
 target_link_libraries(fruit-ninja-game PUBLIC
     SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine
 )
-if (TARGET fruit-ninja-stubs)
-    target_link_libraries(fruit-ninja-game PUBLIC fruit-ninja-stubs)
-endif()
 
 # --- Executable (just mainSDL.cpp; everything else lives in fruit-ninja-game) ---
 add_executable(fruit-ninja src/mainSDL.cpp)

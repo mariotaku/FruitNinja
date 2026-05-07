@@ -574,4 +574,12 @@ int Model::NodeCount() const {
 void Model::SetEffectGroup(SmartPtr<EffectGroup> /*effectGroup*/) {
 }
 
+// Defunct: Bounds3D / EffectGroup stub bodies. Defined inline in Mesh.h;
+// no-op bodies live here so the symbols mangle and SmartPtr<EffectGroup>
+// dtor instantiation resolves without needing src/stubs/.
+void Bounds3D::Draw(Matrix44 const&, Colour) const {
+}
+void EffectGroup::AddEffect(SmartPtr<Effect> const&) {
+}
+
 } // namespace Mortar
