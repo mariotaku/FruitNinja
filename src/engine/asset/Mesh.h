@@ -12,18 +12,31 @@
 #include <vector>
 #include <cstdint>
 #include <string>
-
-// EffectGroup + Bounds3D stubs: included so SmartPtr<EffectGroup>/Bounds3D can resolve their dtors.
-// Both are defunct (no live callers); the includes are load-bearing for symbol mangling only.
-#include "../../stubs/EffectGroup.h"
-#include "../../stubs/Bounds3D.h"
+#include "math/Colour.h"
+#include "util/ReferenceCounter.h"
 
 struct QUADCUSTOMVERTEX;
 
 namespace Mortar {
 
-// Forward declarations for defunct/stub types referenced by binary API
-// (Bounds3D and EffectGroup are included above for complete-type dtor resolution)
+// Defunct binary-shape types referenced by Mesh's public API.
+// Defined inline here (rather than as full ports) because the binary uses
+// them in slot signatures we preserve for call-graph parity, but no port
+// code calls the methods — bodies stay no-op stubs in Mesh.cpp.
+class Bounds3D {
+public:
+    // Binary @ 0x????: Bounds3D::Draw(Matrix44 const&, Colour) const.
+    void Draw(Matrix44 const&, Colour) const;
+};
+
+class Effect;
+class EffectGroup : public ReferenceCounter {
+public:
+    // Binary @ 0x????: EffectGroup::AddEffect(SmartPtr<Effect> const&).
+    void AddEffect(SmartPtr<Effect> const&);
+};
+
+// Forward declarations for defunct/stub types referenced by binary API.
 class DrawEffectContainer;
 class EffectPropertyDefinition;
 class SharedEffectProperties;
