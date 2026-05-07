@@ -1186,9 +1186,6 @@ static bool s_FruitModelsLoaded = false;
 void Fruit::LoadFruitModels() {
     if (s_FruitModelsLoaded) return;
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
     if (!meshMgr) return;
 
@@ -1206,9 +1203,10 @@ void Fruit::LoadFruitModels() {
         char path[256];
 
         for (int piece = 1; piece <= 2; ++piece) {
+            // logical path; FileSystem_Direct prepends data_dir
             snprintf(path, sizeof(path),
-                     "%s/models/Fruit/%s_%c_piece_%d.mmd",
-                     game->data_dir.c_str(), name, c, piece);
+                     "models/Fruit/%s_%c_piece_%d.mmd",
+                     name, c, piece);
             Mortar::SmartPtr<Mortar::Model> m = meshMgr->Load(path);
             if (piece == 1) s_FruitModels[i].m_HalfA = m;
             else            s_FruitModels[i].m_HalfB = m;
@@ -1220,9 +1218,9 @@ void Fruit::LoadFruitModels() {
             // pattern as whole-fruit mesh in Fruit::Init.
             static Mortar::SmartPtr<Mortar::Texture> s_fruitAtlas;
             if (!s_fruitAtlas.IsValid()) {
-                std::string texPath = game->data_dir
-                                    + "/models/fruit/textures/fruit_atlas.tex";
-                s_fruitAtlas = Mortar::TextureManager::GetInstance().Load(texPath.c_str());
+                // logical path; FileSystem_Direct prepends data_dir
+                s_fruitAtlas = Mortar::TextureManager::GetInstance().Load(
+                    "models/fruit/textures/fruit_atlas.tex");
             }
             if (s_fruitAtlas.IsValid()) {
                 for (int h = 0; h < 2; ++h) {
