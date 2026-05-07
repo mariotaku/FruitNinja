@@ -17,6 +17,33 @@
 extern bool gl_load_extensions_win32();
 #endif
 
+// glFrustumf / glClearDepthf are ES1 entry points; on every desktop GL
+// driver they're either absent (mingw / MSVC opengl32.lib, some libGL
+// builds without ARB_ES2_compatibility) or marginally available. Forward
+// to glFrustum / glClearDepth (GL 1.0 baseline -- always exported). The
+// float -> double cast is exact for representable values.
+//
+// MSVC C4273 ("inconsistent dll linkage") fires because SDL_opengl.h
+// declares these with dllimport. The link picks our definition; the
+// warning is noise -- suppress it for this TU.
+#if defined(FRUIT_GL_API_GL_COMPAT)
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4273)
+#endif
+extern "C" void APIENTRY glFrustumf(GLfloat l, GLfloat r, GLfloat b,
+                                    GLfloat t, GLfloat n, GLfloat f) {
+    glFrustum((GLdouble)l, (GLdouble)r, (GLdouble)b,
+              (GLdouble)t, (GLdouble)n, (GLdouble)f);
+}
+extern "C" void APIENTRY glClearDepthf(GLclampf d) {
+    glClearDepth((GLclampd)d);
+}
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+#endif
+
 bool gl_load_functions() {
 #if defined(_WIN32)
     return gl_load_extensions_win32();

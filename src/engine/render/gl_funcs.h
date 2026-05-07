@@ -22,16 +22,28 @@
 #include <cstdint>
 #include <cstdio>
 
-// glClearDepthf / glFrustumf are ES1-only entry points absent from
-// desktop GL headers. gl_funcsWin32.cpp provides them on Windows;
-// libGL.so on Linux exports them via ARB_ES2_compatibility. Declare
-// them here so call sites compile on every backend.
-#if defined(FRUIT_GL_API_GL_COMPAT) && defined(_WIN32)
+// glClearDepthf / glFrustumf are ES1-only entry points absent from desktop
+// GL headers (and not always exported by libGL even when the driver advertises
+// ARB_ES2_compatibility). gl_funcsSDL.cpp provides real wrappers for them
+// on every GL_COMPAT build -- forwarded to glFrustum / glClearDepth (GL 1.0
+// baseline, always exported).
+//
+// SDL_opengl.h on Windows declares these with __declspec(dllimport); we
+// re-declare them as plain extern "C" to match our definitions. C4273
+// ("inconsistent dll linkage") is suppressed for the small region.
+#if defined(FRUIT_GL_API_GL_COMPAT)
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4273)
+#endif
 extern "C" {
     void APIENTRY glClearDepthf(GLclampf depth);
     void APIENTRY glFrustumf(GLfloat l, GLfloat r, GLfloat b,
                              GLfloat t, GLfloat n, GLfloat f);
 }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 #endif
 
 // Optional entry point — desktop GL only, may not exist under GLES.
