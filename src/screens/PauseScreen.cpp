@@ -612,6 +612,19 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton->size.x = m_PauseButtonTexW * resumeScale;
         m_ResumeButton->size.y = m_PauseButtonTexH * resumeScale;
 
+        // Gate visibility on m_ButtonFadeAlpha (computed earlier in this
+        // function from IsEnabled()): 0.0 in active gameplay, 1.0 on menu
+        // / cutscene / bomb-hit. The binary effectively hides the in-game
+        // pause icon during those states; the port was missing the
+        // alpha->draw-colour propagation, so the button drew at full
+        // opacity over menu screens. Set MenuButton::m_DrawColour.a from
+        // (1 - fade) so the existing `m_DrawColour.a == 0` early-exit in
+        // MenuButton::Draw skips the button on menus.
+        float resumeAlpha = 1.0f - m_ButtonFadeAlpha;
+        if (resumeAlpha < 0.0f) resumeAlpha = 0.0f;
+        if (resumeAlpha > 1.0f) resumeAlpha = 1.0f;
+        m_ResumeButton->m_DrawColour.a = (uint8_t)(resumeAlpha * 255.0f);
+
         m_ButtonOriginPos = m_ResumeButton->pos;
     }
 
