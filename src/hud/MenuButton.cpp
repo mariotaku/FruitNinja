@@ -180,6 +180,24 @@ MenuButton::MenuButton()
     // Don't unconditionally promote here.
 }
 
+// DIFFERS: original = D2 dtor only runs subobject teardown (binary @
+// 0x0014f94c: install vtbl -> ~list<AddOn>(+0x10C) -> ~Delegate0(+0xAC) ->
+// ~Delegate0(+0x88) -> ~HUDControl3d). The binary's MenuButton::Release
+// (0x0014f7e0) is a SEPARATE vtable slot called by HUD::RemoveControl /
+// HUD::Release BEFORE delete -- it deletes m_pLabel1 / m_pLabel2 (binary
+// offsets +0x114 / +0x118) and clears fruit-piece backrefs.
+//
+// Port has the cleanup chained from the dtor instead -- HUD::Release
+// (src/hud/HUD.cpp:29) directly `delete ctrl`s without first calling
+// ctrl->Release(), so the dtor needs to drive the cleanup. Refactoring
+// to match the binary would mean threading Release() through every
+// HUDControl subclass's lifecycle; deferred. The asm-verify ~220%
+// score gap on the D0/D1/D2 chain is from this port-specific
+// inversion. m_pLabel1 / m_pLabel2 are always-NULL in the port (text
+// label feature unported), so the missed-delete in the dtor isn't a
+// leak even with the inverted lifecycle.
+// TODO: refactor HUD::Release / RemoveControl to call ctrl->Release()
+// via vtable before delete; then this dtor body can become `{}`.
 MenuButton::~MenuButton() {
     Release();
 }
@@ -306,6 +324,8 @@ void MenuButton::Release() {
 void MenuButton::Init() { Reset(); }
 
 // Binary @ 0x0014e3b8 — Reset is a no-op (vtable slot +0x10)
+// ASM-verified: 2026-05-06T00:00 binary @ 0x0014e3b8 (asm-inspector)
+// Binary body is a single `bx lr` -- empty; port's empty body matches.
 void MenuButton::Reset() {}
 
 // Binary @ 0x0014e3f8 — vtable Skip slot, snaps grow-in to full (m_FadeCounter=0x3ffc)
@@ -898,21 +918,25 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     // (See docs/structs/gameplay-misc.md MenuButton "dead code" notes.)
 }
 
+// ASM-verified: 2026-05-06T00:00 binary @ 0x0014f674 (asm-inspector)
 // Matches MenuButton::LoadContent @ 0x0014f674 — loads three shared textures
 // into class statics in the binary's order: scratchs.tex (backdrop),
-// blurry_backing.tex (sparkle), new_item.tex (NEW star).
+// blurry_backing.tex (sparkle), new_item.tex (NEW star). Binary calls
+// LoadLocalisedTexture unconditionally for each slot — idempotency is the
+// caller's contract (LoadContent runs once at content-init time). Earlier
+// port had `if (!s_TexX.IsValid())` guards around each load that the
+// binary doesn't have; removed.
 void MenuButton::LoadContent() {
-    if (!s_TexScratchs.IsValid()) {
-        s_TexScratchs = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
-    }
-    if (!s_TexBlurryBacking.IsValid()) {
-        s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
-    }
-    if (!s_TexNewItem.IsValid()) {
-        s_TexNewItem = Mortar::TextureManager::LoadLocalisedTexture("new_item.tex");
-    }
+    s_TexScratchs      = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
+    s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
+    s_TexNewItem       = Mortar::TextureManager::LoadLocalisedTexture("new_item.tex");
 }
 
+// ASM-verified: 2026-05-06T00:00 binary @ 0x0014f718 (asm-inspector)
+// Three SmartPtr clears in load-order. Port matches binary 1:1; the
+// asm-verify report's "341% diff" was an address-mapping artefact
+// (scored against `DeletedMenuButton`'s body at 0x0013f6ac instead of
+// the true UnLoadContent at 0x0014f718).
 void MenuButton::UnLoadContent() {
     s_TexScratchs.SetNull();
     s_TexBlurryBacking.SetNull();
