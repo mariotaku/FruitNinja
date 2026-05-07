@@ -247,7 +247,10 @@ void GameInitialise() {
     //   +0x7C alias, +0x80, +0x68. Binary addresses: 0x0010bf3a, 0x0010bf6e, 0x0010bfa4,
     //   0x0010bfcc, 0x0010bff0, 0x0010c014, alias write, 0x0010c038, 0x0010c082.
     {
-        std::string fontDir = game->data_dir + "/fonts/";
+        // Font::Load now routes through Mortar::File / IFile chain;
+        // FileSystem_Direct prepends data_dir, so pass logical paths.
+        // File::Exists likewise takes a logical path.
+        const std::string fontDir = "fonts/";
 
         // +0x54 pFontMain: fonts/font_fruit_ninja.fnt (0x0010bf3a)
         // DIFFERS: binary loads HD path if ShouldUseHDFonts(); port uses SD only.
