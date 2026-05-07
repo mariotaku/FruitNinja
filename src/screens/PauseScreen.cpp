@@ -485,8 +485,29 @@ void PauseScreen::Update(float dt) {
         m_RevealTimer -= dt;
         if (m_RevealTimer <= 0.0f) {
             m_RevealTimer = 0.0f;
-            // Enable Resume button for in-game pause trigger
-            if (m_ResumeButton) m_ResumeButton->m_bHighlighted = 1;
+            // DIFFERS: original re-arms `m_ResumeButton->m_bHighlighted = 1`
+            // unconditionally here (binary @ 0x00154d24, verified by re-analyst
+            // / asm-inspector — no `0` write to +0x131 exists anywhere in
+            // PauseScreen::Update). The binary avoids the menu-screen click
+            // bug because its PauseScreen instance lives in a gameplay-only
+            // HUD that doesn't tick on AboutScreen / MainScreen / GameModeScreen.
+            // The port shares one HUD across all screens, so PauseScreen::Update
+            // runs continuously; the unconditional re-arm would keep the pause
+            // button clickable at (240, -160) on every menu. Gate the re-arm
+            // (and explicitly clear m_bHighlighted otherwise) on
+            // `game->pauseFlag == 0` — true only during active gameplay
+            // (gameplay loop sets pauseFlag=0 on level start; menu / not-yet-
+            // started keeps it at 1 from GameInit step 13).
+            // TODO: refactor HUD ownership so PauseScreen lives in a
+            // gameplay-only sub-HUD (matching binary), then remove this gate.
+            if (m_ResumeButton) {
+                Game* g = Game::GetInstance();
+                if (g && g->pauseFlag == 0) {
+                    m_ResumeButton->m_bHighlighted = 1;
+                } else {
+                    m_ResumeButton->m_bHighlighted = 0;
+                }
+            }
         }
         break;
 
