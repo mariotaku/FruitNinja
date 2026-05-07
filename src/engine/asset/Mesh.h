@@ -14,6 +14,7 @@
 #include <string>
 #include "math/Colour.h"
 #include "util/ReferenceCounter.h"
+#include "asset/Effect.h"
 
 struct QUADCUSTOMVERTEX;
 
@@ -34,44 +35,42 @@ struct Bounds3D {
     Bounds3D(const Vec3& mn, const Vec3& mx) : min(mn), max(mx) {}
 };
 
-// Effect — Mortar binary's Effect class. Live render path is fully bypassed
-// in the port (Renderer uses GLES2 shaders directly, not Effect/EffectGroup
-// multi-pass dispatch), so this is a no-method shell here just to let
-// SmartPtr<Effect> instantiate inside EffectGroup::m_Effects. The vector
-// is never populated in the port (see EffectGroup::AddEffect — Defunct).
-class Effect : public ReferenceCounter {
-public:
-    virtual ~Effect() {}
-};
-
-class EffectPropertyDefinition;
-
 // EffectGroup — 0x38 bytes.
 // Binary ctor @ 0x001a2c10 (templated_ctor<Iter>), D2 @ 0x001a1a70.
-// Inherits ReferenceCounter (+0x00..+0x0B); contains:
-//   +0x0C  std::vector<EffectPropertyDefinition>  m_PropertyDefs
-//   +0x18  std::vector<SmartPtr<Effect> >         m_Effects
-//   +0x28  Event1<EffectGroup&>                   m_OnEffectAdded(?)
-//   +0x30  Event1<EffectGroup&>                   m_OnEffectRemoved(?)
+// Layout:
+//   +0x00  ReferenceCounter base (12 bytes)
+//   +0x0C  std::vector<EffectPropertyDefinition_Bada>  m_MergedDefs
+//   +0x18  std::vector<SmartPtr<Effect> >              m_Effects
+//   +0x24..+0x37  4-byte align pad + 2x Event1<EffectGroup&>
+//                 (not modelled; uint8_t pad keeps binary-shape sizeof
+//                 if asm-verify ever cares).
 //
-// Defunct in port: AddEffect's binary body is a sorted-vector-set insert
-// (lower_bound + EffectLessThanCompare + MergeProperties); the port keeps
-// it as a no-op because every live call site (e.g. Geometry::EffectGroupSet
-// @ 0x001a00f8) is itself a binary stub. The Event1<T> slots aren't ported
-// (no Event1 type yet); pad to keep sizeof at the binary's 0x38 if asm-
-// verify ever cares.
+// AddEffect (binary @ 0x001a0274): sorted-vector-set insert into m_Effects
+// via std::lower_bound + EffectLessThanCompare; on duplicate name, calls
+// `this->MergeProperties(effect->Properties())` which folds the new
+// effect's property defs into m_MergedDefs.
+//
+// Live render path is fully bypassed in the port (Renderer uses GLES2
+// shaders directly, not Effect/EffectGroup multi-pass dispatch). Both
+// AddEffect and MergeProperties are reachable in code shape but never
+// fire at runtime — every binary caller chains through stubs.
 class EffectGroup : public ReferenceCounter {
 public:
-    std::vector<EffectPropertyDefinition*> m_PropertyDefs;  // +0x0C  (12 bytes)
-    std::vector<SmartPtr<Effect> >         m_Effects;        // +0x18  (12 bytes)
-    // +0x24..+0x37: 4-byte align pad + two Event1<EffectGroup&> slots
-    // (8 bytes each). Not modelled; gap kept for binary-shape sizeof.
+    std::vector<EffectPropertyDefinition_Bada>  m_MergedDefs;   // +0x0C
+    std::vector<SmartPtr<Effect> >              m_Effects;      // +0x18
+    // +0x24..+0x37: 4-byte align pad + two Event1<EffectGroup&> slots.
+    // Not modelled; gap preserved for binary-shape sizeof.
     uint8_t _events_gap[20];
 
     EffectGroup() {}
-    // Binary @ 0x001a0274 — sorted-vector-set insert via lower_bound.
-    // Defunct: live render path's caller is a binary stub.
+
+    // Binary @ 0x001a0274 — sorted-set insert by name; merge on dup.
     void AddEffect(const SmartPtr<Effect>& effect);
+
+    // Binary @ 0x001a2030 — fold each property def in `props` into
+    // m_MergedDefs at its lower_bound position. Returns 1 on success,
+    // 0 if any def conflicts with an existing same-named entry.
+    int MergeProperties(const std::vector<EffectPropertyDefinition_Bada>& props);
 };
 
 // Forward declarations for defunct/stub types referenced by binary API.

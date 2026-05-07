@@ -3,6 +3,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include <cstring>
+#include <algorithm>
 
 // Analysed: 2026-04-11T18:30
 
@@ -599,37 +600,66 @@ void Model::SetEffectGroup(SmartPtr<EffectGroup> /*effectGroup*/) {
 }
 
 // EffectGroup::AddEffect (binary @ 0x001a0274) — sorted-vector-set insert.
-// Binary structure:
+// Binary body:
 //   it = std::lower_bound(m_Effects.begin(), m_Effects.end(), effect,
-//                         EffectLessThanCompare);
-//   if (it != m_Effects.end() && !EffectLessThanCompare(effect, *it)) {
-//       // Equivalent already in set -> merge properties into existing entry.
-//       (*it)->MergeProperties(effect->Properties());
+//                         EffectLessThanCompare());
+//   if (it != m_Effects.end() && !EffectLessThanCompare()(effect, *it)) {
+//       // Equivalent (same m_Name) already in set -> fold this effect's
+//       // property defs into the group's m_MergedDefs vector.
+//       this->MergeProperties(effect->Properties());
 //   } else {
 //       m_Effects.insert(it, effect);
 //   }
-//
-// Port mirrors this with linear-scan dedupe instead of lower_bound (the
-// `Effect` class is a no-method shell here -- there is no
-// `EffectLessThanCompare` to call, and `Effect::Properties` /
-// `Effect::MergeProperties` aren't ported). Net observable behavior
-// matches the binary's post-condition: each `effect` value is in
-// `m_Effects` exactly once. Sorted-order semantics relax to insertion-
-// order. The live render path doesn't reach this code -- every caller
-// chains through binary stubs that no-op out -- so the relaxation is
-// inert in practice.
 void EffectGroup::AddEffect(const SmartPtr<Effect>& effect) {
     if (!effect.IsValid()) return;
-    for (int i = 0; i < (int)m_Effects.size(); i++) {
-        if (m_Effects[i].Get() == effect.Get()) {
-            // Equivalent entry already present. Binary calls
-            // MergeProperties on the existing entry; port's Effect class
-            // has no such method (no Effect::Properties either), so the
-            // merge is omitted.
-            return;
+
+    EffectLessThanCompare cmp;
+    std::vector<SmartPtr<Effect> >::iterator it =
+        std::lower_bound(m_Effects.begin(), m_Effects.end(), effect, cmp);
+
+    if (it != m_Effects.end() && !cmp(effect, *it)) {
+        // Same name already present -- merge property defs.
+        this->MergeProperties(effect->Properties());
+    } else {
+        m_Effects.insert(it, effect);
+    }
+}
+
+// EffectGroup::MergeProperties (binary @ 0x001a2030) — fold each
+// EffectPropertyDefinition_Bada in `props` into `m_MergedDefs` at its
+// lower_bound position keyed on `m_Name`. Returns 1 on success, 0 if
+// any incoming def conflicts with an existing same-named entry that
+// isn't structurally equal (binary uses
+// `EffectPropertyDefinition::operator!=`; port stub treats any same-
+// name pair as equal since the rest of the def isn't RE'd yet).
+int EffectGroup::MergeProperties(
+    const std::vector<EffectPropertyDefinition_Bada>& props)
+{
+    for (size_t i = 0; i < props.size(); i++) {
+        const EffectPropertyDefinition_Bada& incoming = props[i];
+
+        // PropertyDefLessThanCompare: string-compare on m_Name.
+        size_t lo = 0, hi = m_MergedDefs.size();
+        while (lo < hi) {
+            size_t mid = lo + (hi - lo) / 2;
+            if (m_MergedDefs[mid].m_Name.compare(incoming.m_Name) < 0) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+
+        if (lo < m_MergedDefs.size() &&
+            m_MergedDefs[lo].m_Name == incoming.m_Name) {
+            // Same-name entry already present. TODO: 0x001a2030 — RE
+            // EffectPropertyDefinition::operator!= to detect structural
+            // mismatch and return 0 on conflict. Port treats same-name
+            // as equal (no conflict).
+        } else {
+            m_MergedDefs.insert(m_MergedDefs.begin() + lo, incoming);
         }
     }
-    m_Effects.push_back(effect);
+    return 1;
 }
 
 } // namespace Mortar
