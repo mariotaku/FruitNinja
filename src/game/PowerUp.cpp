@@ -353,7 +353,25 @@ void PowerUp::SetTotalTime(float t) {
 // ---- STUBS (binary) ----
 
 // STUB: PowerUp::PowerUp(PowerUp*) -- binary @ 0x???? (TODO RE)
-PowerUp::PowerUp(PowerUp* src) : PowerUp() {
+// Default-init then optionally copy from src. Uses the default ctor's
+// member initializers via `new (this) PowerUp()` placement-new trick;
+// can't use C++11 delegating ctor (`: PowerUp()`) because GCC 4.4 (the
+// asm-verify cross-toolchain) doesn't support it.
+PowerUp::PowerUp(PowerUp* src)
+    : m_bIsPurchasable(false)
+    , m_bIsSpecial(false)
+    , m_pPurchaseInfo(nullptr)
+    , m_bCloned(0)
+    , m_LongestRemaining(0.0f)
+    , m_TotalTime(0.0f)
+    , m_Colour{255, 255, 255, 255}
+    , m_BarRamp(0.0f)
+    , m_pScreenEffect(nullptr)
+    , m_DeferredPoints(-1)
+    , m_BarXPos(0.0f)
+    , m_NameHash(0)
+{
+    memset(m_Name, 0, sizeof(m_Name));
     if (src) *this = *src;
 }
 

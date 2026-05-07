@@ -56,10 +56,18 @@ set(_BADA_FLAGS "-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-en
 # glitches from error to warning.
 set(_ASM_VERIFY_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(_BADA_CXX_FLAGS
-    "${_BADA_FLAGS} -std=gnu++0x -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fpermissive -include ${_ASM_VERIFY_DIR}/cross-headers/fn-cxx11-shims.h -D__bada__")
+    "${_BADA_FLAGS} -std=gnu++0x -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables -fpermissive -include ${_ASM_VERIFY_DIR}/cross-headers/fn-cxx11-shims.h -D__bada__ -DFN_ASM_VERIFY_CROSS")
 
 # -D__bada__ matches arm-bada-eabi's `builtin_define_std("bada")` so port-side
 # `#ifdef __bada__` static_asserts on binary-faithful struct layouts fire here too.
+#
+# -DFN_ASM_VERIFY_CROSS marks "this is the asm-verify cross-build, NOT the
+# real Bada toolchain". A small set of struct-layout asserts depends on
+# stdlib ABI details (e.g. std::map's exact sizeof) where Sourcery 2010q1
+# (the cross-build) and Bada's Sourcery 4.4-157 disagree — those asserts
+# are skipped via `#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)`.
+# Use sparingly; prefer the existing FIXME-and-comment pattern over a new
+# guard if the divergence is port code, not stdlib ABI.
 
 set(CMAKE_C_FLAGS_INIT     "${_BADA_FLAGS} -O2 -ffunction-sections -fdata-sections -fno-asynchronous-unwind-tables")
 set(CMAKE_CXX_FLAGS_INIT   "${_BADA_CXX_FLAGS}")

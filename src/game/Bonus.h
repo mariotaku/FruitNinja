@@ -44,10 +44,15 @@ public:
 };
 
 // Layout asserts: ARM32 sizes only (binary target). Not checked on MSVC x64 host.
-// GCC 4.4.1 (-std=gnu++0x) has different std::map sizes than C++11 libstdc++ --
-// exclude cross-build via __cplusplus check.
+// Cross-build's Sourcery 2010q1 libstdc++ has a slightly different std::map
+// ABI than Bada's Sourcery 4.4-157 (the cached _M_node_count alignment
+// padding differs), so the total sizeof comes out wrong on cross-build even
+// when every member offset matches. Gate the size assert separately;
+// the offset asserts still fire on cross-build to catch real layout drift.
 #ifdef __bada__
+#if !defined(FN_ASM_VERIFY_CROSS)
 static_assert(sizeof(Bonus) == 0xD8, "Bonus size mismatch");
+#endif
 static_assert(__builtin_offsetof(Bonus, m_MinSliced)      == 0x00, "Bonus::m_MinSliced offset");
 static_assert(__builtin_offsetof(Bonus, m_MaxSliced)      == 0x04, "Bonus::m_MaxSliced offset");
 static_assert(__builtin_offsetof(Bonus, m_MinFruit)       == 0x08, "Bonus::m_MinFruit offset");
