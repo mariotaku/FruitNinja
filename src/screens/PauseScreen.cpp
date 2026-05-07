@@ -420,7 +420,10 @@ void PauseScreen::Update(float dt) {
     // Visibility on non-gameplay screens is an alpha/draw-time concern,
     // handled by m_ButtonFadeAlpha -> m_DrawColour.a propagation below.
     if (!m_ResumeButton) {
-        // P1 Resume button: pos (240, -160, 0), size from pause_button.tex
+        // P1 Resume button: pos (240, -160, 0), size from pause_button.tex.
+        // The pos here is the binary's MenuButton::ctor pos arg (binary @
+        // 0x001544e8..0x00154516); it gets overwritten on the very next
+        // Update tick by the post-switch tail formula (see below).
         m_ResumeButton = new MenuButton();
         m_ResumeButton->pos = Vec3(240.0f, -160.0f, 0.0f);
         m_ResumeButton->size = Vec3(m_PauseButtonTexW, m_PauseButtonTexH, 0.0f);
@@ -437,6 +440,13 @@ void PauseScreen::Update(float dt) {
             game->hud->AddControl(m_ResumeButton);
             m_ResumeButton->SetSingular();   // binary calls this -- pins button instead of cycling layers
         }
+
+        // ASM-verified post-ctor scaling (binary @ 0x001545d8..0x00154604):
+        //   m_TargetSize = (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0 = (64, 64, 64)
+        //   m_ButtonOriginPos := m_TargetSize  (one-shot copy; never refreshed)
+        // The formula tail reads m_ButtonOriginPos.x as a per-session constant.
+        m_ResumeButton->m_TargetSize = Vec3(64.0f, 64.0f, 64.0f);
+        m_ButtonOriginPos = m_ResumeButton->m_TargetSize;
     }
 
     if (!m_QuitButton) {
@@ -613,88 +623,47 @@ void PauseScreen::Update(float dt) {
         m_QuitButton->pos.y = quitY;
     }
 
-    // 6. Retry button position and Resume button scale
-    // doc: buttonOriginPos updated from Resume.m_ScreenPos each frame
-    // Port: m_ButtonOriginPos is a per-frame layout cache.
-    // Resume scale: local_64 = m_Alpha * 1.25 + 0.75
+    // 6. Resume + Retry button position recomputation.
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x00154f8a..0x001550d6 (re-analyst+asm-inspector)
+    //
+    // PauseScreen post-switch tail. Three RE passes converged on this:
+    //   - m_ButtonOriginPos.x is a per-session constant set ONCE at
+    //     lazy-create from m_ResumeButton->m_TargetSize.x. Binary builds
+    //     m_TargetSize via (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0
+    //     => (64, 64, 64). So OX = 64.
+    //   - HUD/HUDControl3d does NO parent-transform composition (binary
+    //     HUD::Draw @ 0x00144a90: flat std::list, each control resets
+    //     matrix and translates by its own pos). MenuButtons are top-
+    //     level siblings of PauseScreen; PauseScreen.pos does NOT
+    //     offset child buttons.
+    //   - Resume formula writes pos.x AND pos.y; pos.z untouched.
+    //   - Retry formula writes pos.x, pos.y, pos.z.
+    //
+    // Resume scale (separately, binary @ ~0x00154fxx): m_Alpha * 1.25 + 0.75.
     if (m_ResumeButton) {
         const float resumeScale = m_Alpha * 1.25f + 0.75f;
         m_ResumeButton->size.x = m_PauseButtonTexW * resumeScale;
         m_ResumeButton->size.y = m_PauseButtonTexH * resumeScale;
 
-        // DIFFERS: original defends against menu-screen ghost-clicks via per-
-        // frame Resume + Retry button POSITION recomputation. Formula fully
-        // decoded (re-analyst + asm-inspector, 2026-05-06):
-        //
-        //   binary @ 0x001550d6 (post-switch tail of PauseScreen::Update;
-        //   PauseScreen::Update spans 0x00154468..0x00155228). Earlier
-        //   passes mis-attributed `0x001450d6` -- that's actually inside
-        //   `_GLOBAL__I_Hud.cpp` static init, not PauseScreen.
-        //
-        //   let absFade = fabsf(m_ButtonFadeAlpha);     // PauseScreen +0xb4
-        //   let OX      = m_ButtonOriginPos.x;          // PauseScreen +0x8c
-        //   let term1   = 244.0 - 0.375 * OX;
-        //   let term2   = absFade * (10.0 + 0.75 * OX);
-        //   m_ResumeButton->pos.x = -(term1 + term2);   // vneg.f32 @ 0x001550ce
-        //   m_ResumeButton->pos.y = 0.375 * OX - 165.0; // vstr  @ 0x0015500a
-        //
-        //   m_RetryButton->pos.x = 240.0 + 0.5 * OX;
-        //   m_RetryButton->pos.y = -20.0;
-        //   m_RetryButton->pos.z = 0.0;
-        //
-        // Critical correction: there is NO feedback loop on m_ButtonOriginPos.x.
-        // It is set ONCE at lazy-create (binary @ 0x001545d8..0x00154604) by
-        // copying `m_ResumeButton->m_TargetSize` (MenuButton +0x124, NOT
-        // HUDControl::size +0x20). The earlier "OriginX-feedback steady-state"
-        // analysis was wrong; OX is a per-session constant determined by the
-        // GOT-resolved Vec3 at DAT_00154710 multiplied by 500.0 (the size
-        // arg passed to MenuButton::MenuButton). The literal Vec3 value
-        // wasn't recovered in the Ghidra session that found this; treat OX
-        // as the gameplay anchor-X (most likely 240 to match the pos arg
-        // (240, -160, 0) also passed to the ctor).
-        //
-        // Implication: with constant OX, the formula deterministically
-        // places the button at one position per session. With OX = 240:
-        //   pos.x = -((244 - 90) + |fade|*(10 + 180))
-        //         = -(154 + 190*|fade|) → -154 in gameplay (|fade|→0),
-        //                                  -344 when paused (|fade|→1)
-        //   pos.y = 0.375*240 - 165 = -75
-        //
-        // In the binary's PauseScreen-local coords (HUDControl3d::Draw
-        // applies the parent's pos transform), the (-154, -75) center +
-        // PauseScreen's own pos animation lands the icon at the visible
-        // bottom-right in the Bada framebuffer. The port's coord-system
-        // mapping needs to be RE'd before applying the formula faithfully
-        // -- naive port of `pos.x = -154` would put the icon left-of-
-        // center, not bottom-right.
-        //
-        // TODO: 0x001550d6 — apply the formula once we've RE'd
-        //   (a) the GOT-resolved m_TargetSize Vec3 (read DAT_00154710 at
-        //       runtime or via a deeper Ghidra pass),
-        //   (b) PauseScreen's own pos animation contribution and how
-        //       HUDControl3d::Draw composes the parent transform, AND
-        //   (c) the "MenuButton size arg * 500" semantics in the binary's
-        //       MenuButton::ctor (port currently assigns size from texture
-        //       dimensions, which is a port-side divergence).
-        //
-        // Until all three are nailed, applying the formula would risk
-        // breaking gameplay pause. The port keeps a `m_bActive` gate as
-        // stand-in: 0 on menu (matches "off-screen so untouchable"),
-        // 1 on gameplay (so the still-at-(240,-160) port-side initial
-        // position remains clickable).
-        if (Game* g = Game::GetInstance()) {
-            m_ResumeButton->m_bActive = (g->pauseFlag == 0) ? 1 : 0;
-        }
-
-        m_ButtonOriginPos = m_ResumeButton->pos;
+        // Per-frame position formula (binary @ 0x001550d6):
+        //   pos.x = -((244 - 0.375*OX) + |fade|*(10 + 0.75*OX))
+        //   pos.y = 0.375*OX - 165
+        // With OX=64: gameplay (|fade|=0) = (-220, -141); paused (|fade|=1) = (-278, -141).
+        const float OX = m_ButtonOriginPos.x;
+        const float absFade = std::fabs(m_ButtonFadeAlpha);
+        const float term1 = 244.0f - 0.375f * OX;
+        const float term2 = absFade * (10.0f + 0.75f * OX);
+        m_ResumeButton->pos.x = -(term1 + term2);
+        m_ResumeButton->pos.y = 0.375f * OX - 165.0f;
     }
 
     if (m_RetryButton) {
-        // doc: Retry pos = Vec3(buttonOriginX*0.5 + DAT_00155218, -20.0, 0)
-        // DAT_00155218 = 0.0 (confirmed; see doc section 4 DAT table)
-        const float retryX = m_ButtonOriginPos.x * 0.5f + 0.0f; // + DAT_00155218
-        m_RetryButton->pos.x = retryX;
+        // Per-frame position formula (binary @ 0x00155076..0x00155096):
+        //   pos = (240 + 0.5*OX, -20, 0).
+        const float OX = m_ButtonOriginPos.x;
+        m_RetryButton->pos.x = 240.0f + 0.5f * OX;
         m_RetryButton->pos.y = -20.0f;
+        m_RetryButton->pos.z = 0.0f;
 
         m_RetryButton->m_bActive = (m_Alpha > 0.0f) ? 1 : 0;
     }
