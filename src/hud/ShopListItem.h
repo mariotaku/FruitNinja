@@ -198,7 +198,12 @@ public:
 #endif
 
 // Bada-only struct-layout asserts (binary's std::string SBO + 4-byte ptrs).
-#ifdef __bada__
+// Cross-build's Sourcery 2010q1 libstdc++ has a different std::string ABI
+// (the SBO threshold and the trailing capacity field both differ from Bada's
+// Sourcery 4.4-157), so member offsets shift on the cross-build even when
+// the port-side struct order is correct. Skip the asserts on cross-build;
+// they still fire on the real Bada build.
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
 static_assert(offsetof(ShopListItem, m_NewItemAlpha)  == 0x25C, "ShopListItem::m_NewItemAlpha must be at +0x25C");
 static_assert(offsetof(ShopListItem, m_SelectedAlpha) == 0x260, "ShopListItem::m_SelectedAlpha must be at +0x260");
 static_assert(offsetof(ShopListItem, m_LockFlashAlpha)== 0x264, "ShopListItem::m_LockFlashAlpha must be at +0x264");
