@@ -48,6 +48,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/asset/Mesh.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/MeshDraw.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/MeshManager.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/Effect.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/ResourceLoader.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Skeleton.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Texture.cpp"
