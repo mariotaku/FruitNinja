@@ -666,6 +666,19 @@ void MenuButton::Update(float dt) {
     // -----------------------------------------------------------------------
     if (!m_bInteractive || !m_bEnabled) return;
 
+    // DIFFERS: original gates the touch block on m_bHighlighted (+0x131,
+    // binary @ 0x0014e994..0x0014e99a per asm-inspector); the port instead
+    // uses m_bInteractive/m_bEnabled at the line above and adds an alpha
+    // check below. Net effect matches the binary's intent: an invisible
+    // button (alpha=0, e.g. PauseScreen's Resume button on the menu)
+    // ignores clicks. Without this, the alpha-gated pause button at
+    // (240, -160) was still latching touches on the AboutScreen and
+    // firing m_ClickCallback (pausing the game from the menu).
+    // TODO: 0x0014e994 — refactor to mirror the binary's m_bHighlighted
+    // gate end-to-end (requires reworking PauseScreen's m_bHighlighted
+    // lifecycle on Resume/Quit/Retry buttons).
+    if (m_DrawColour.a == 0) return;
+
     // Compute rect bounds. Binary inflates by m_AnimSpeed/m_AnimSpeed2 which
     // are 5.0 defaults — small inset/outset that gives the button a touch-up
     // "grace zone". The port mirrors that.
