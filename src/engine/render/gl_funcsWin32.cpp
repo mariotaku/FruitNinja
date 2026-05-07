@@ -14,6 +14,17 @@
 #include "render/gl_funcs.h"
 #include <SDL.h>
 
+// SDL_opengl.h declares these GL entry points with __declspec(dllimport)
+// (the standard Windows convention, even for entry points that aren't in
+// opengl32.dll). We DEFINE them here -- redefining a dllimport-declared
+// function emits MSVC C4273 ("inconsistent dll linkage"). The link picks
+// our definition (opengl32.dll doesn't export 1.2+), so the warning is
+// noise; suppress it for this TU.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4273)
+#endif
+
 // Type-erased function-pointer slots (avoid PFN* typedef compatibility
 // games across SDL_opengl.h vs SDL_opengl_glext.h vs Khronos glext.h).
 static void  (APIENTRYP s_glActiveTexture)        (GLenum) = nullptr;
@@ -26,9 +37,6 @@ static void  (APIENTRYP s_glDeleteBuffers)        (GLsizei, const GLuint*) = nul
 static void  (APIENTRYP s_glBindBuffer)           (GLenum, GLuint) = nullptr;
 static void  (APIENTRYP s_glBufferData)           (GLenum, GLsizeiptr,
                                                    const void*, GLenum) = nullptr;
-static void  (APIENTRYP s_glClearDepthf)          (GLclampf) = nullptr;
-static void  (APIENTRYP s_glFrustumf)             (GLfloat, GLfloat, GLfloat,
-                                                   GLfloat, GLfloat, GLfloat) = nullptr;
 
 extern "C" {
 
@@ -60,13 +68,6 @@ void APIENTRY glBufferData(GLenum target, GLsizeiptr size,
                            const void* data, GLenum usage) {
     if (s_glBufferData) s_glBufferData(target, size, data, usage);
 }
-void APIENTRY glClearDepthf(GLclampf d) {
-    if (s_glClearDepthf) s_glClearDepthf(d);
-}
-void APIENTRY glFrustumf(GLfloat l, GLfloat r, GLfloat b,
-                         GLfloat t, GLfloat n, GLfloat f) {
-    if (s_glFrustumf) s_glFrustumf(l, r, b, t, n, f);
-}
 
 } // extern "C"
 
@@ -82,10 +83,12 @@ bool gl_load_extensions_win32() {
     LOAD(glDeleteBuffers);
     LOAD(glBindBuffer);
     LOAD(glBufferData);
-    LOAD(glClearDepthf);
-    LOAD(glFrustumf);
 #undef LOAD
     return true;
 }
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 #endif // _WIN32
