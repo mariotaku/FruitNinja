@@ -210,8 +210,12 @@ private:
     void ClearNetworkButton();
     // Binary @ 0x0014AD00 — Defunct: leaderboard UI button — no-op stub (returns this in binary)
     MainScreen* CreateNormalLeaderboardButton();
-    // Binary @ 0x0014AC98 — no-op event hook (empty in binary; superseded by ButtonDeleted)
+
+public:
+    // Binary @ 0x0014AC98 — no-op event hook (empty in binary; superseded by ButtonDeleted).
+    // Called by MenuButton::Update after FN::ClearMenuItems.
     void OnMenuItemsCleared();
+private:
 
     // Touch handling removed in the touch rewrite. MenuButton::Update now
     // polls Mortar::Touch directly — MainScreen has no touch routing role.
