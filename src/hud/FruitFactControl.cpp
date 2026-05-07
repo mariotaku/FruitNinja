@@ -174,24 +174,31 @@ void FruitFactControl::Release() {
     Game* game = Game::GetInstance();
     HUD* hud = game ? game->hud : nullptr;
 
-    // Order from binary: m_pLeaderboardMenu, m_pLeftButton, m_pRightButton, m_pConnectButton
+    // Order from binary: m_pLeaderboardMenu, m_pLeftButton, m_pRightButton, m_pConnectButton.
+    // Each child gets its vtable Release() invoked before delete to mirror the
+    // binary's HUD::Release lifecycle (so MenuButton::Release runs and clears
+    // entity backrefs) -- direct delete here bypasses HUD::Release's loop.
     if (m_pLeaderboardMenu) {
         if (hud) hud->RemoveControl(m_pLeaderboardMenu);
+        m_pLeaderboardMenu->Release();
         delete m_pLeaderboardMenu;
         m_pLeaderboardMenu = nullptr;
     }
     if (m_pLeftButton) {
         if (hud) hud->RemoveControl(m_pLeftButton);
+        m_pLeftButton->Release();
         delete m_pLeftButton;
         m_pLeftButton = nullptr;
     }
     if (m_pRightButton) {
         if (hud) hud->RemoveControl(m_pRightButton);
+        m_pRightButton->Release();
         delete m_pRightButton;
         m_pRightButton = nullptr;
     }
     if (m_pConnectButton) {
         if (hud) hud->RemoveControl(m_pConnectButton);
+        m_pConnectButton->Release();
         delete m_pConnectButton;
         m_pConnectButton = nullptr;
     }

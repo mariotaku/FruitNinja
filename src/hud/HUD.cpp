@@ -23,8 +23,15 @@ void HUD::Init() {
 }
 
 // Binary @ 0x00144c5c
-// Binary fires m_RemoveCallback + deleting-dtor only when m_bNoDestructor == 0.
-// Controls with m_bNoDestructor != 0 are left untouched (HUD does not own them).
+// Binary fires m_RemoveCallback + ctrl->Release() (vtable slot) +
+// deleting-dtor only when m_bNoDestructor == 0. Controls with
+// m_bNoDestructor != 0 are left untouched (HUD does not own them).
+// The Release() call before delete is binary-faithful: each subclass's
+// virtual Release() does heap-cleanup (delete child labels, null fruit-
+// piece backrefs, etc.) so the dtor can be a pure subobject-teardown.
+// Subclass dtors that still call Release() will see Release() run a
+// second time -- their Release() impls are idempotent (post-conditions:
+// pointers are nulled, lists cleared) so the second call is a no-op.
 // TODO: set GameData[+0x34] in-Release guard when GameData struct is ported.
 void HUD::Release() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
@@ -34,6 +41,7 @@ void HUD::Release() {
                 ctrl->m_RemoveCallback(ctrl);
             ctrl = *it;
             if (ctrl != nullptr) {
+                ctrl->Release();   // binary calls this via vtable before delete
                 delete ctrl;
                 *it = nullptr;
             }
@@ -106,6 +114,7 @@ void HUD::Update(float dt) {
                 ctrl->m_RemoveCallback(ctrl);
             ctrl = *it;
             if (!ctrl->m_bNoDestructor) {
+                ctrl->Release();   // binary's vtable Release before delete
                 delete ctrl;
                 *it = nullptr;
             }
