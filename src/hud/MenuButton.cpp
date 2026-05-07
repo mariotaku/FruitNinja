@@ -15,6 +15,8 @@
 #include "Game.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
+#include "TutorialControl.h"
+#include "screens/MainScreen.h"
 #include "entities/FruitInfo.h"
 #include "entities/ActorManager.h"
 #include "input/Touch.h"
@@ -363,7 +365,11 @@ bool MenuButton::TouchReleased() {
     if (m_FruitType < 0 && m_bVisible) {
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
-        // Port specific: TutorialControl::ButtonPressedAtPos not yet ported; skipped.
+        // Binary @ 0x0014e5e6 — TutorialControl::ButtonPressedAtPos(this).
+        Game* game = Game::GetInstance();
+        if (game && game->pTutorialCtrl) {
+            game->pTutorialCtrl->ButtonPressedAtPos(this);
+        }
     }
     m_DeletedCallback();
     return true;
@@ -385,9 +391,12 @@ bool MenuButton::SetToMultiplayerState() {
     Mortar::Entity* e = m_pFruitPiece ? static_cast<Mortar::Entity*>(m_pFruitPiece) : m_pEntity;
     if (e) {
         if (e->entityType == 0) {
-            // Port specific: Fruit::KillFruit not yet ported; skipped.
+            // Binary @ 0x0014e5a8 — Fruit::KillFruit(false) (no miss penalty
+            // when the menu transitions to MP, just remove the fruit).
+            static_cast<Fruit*>(e)->KillFruit(false);
         } else if (e->entityType == 1) {
-            // Port specific: Bomb::KillBomb not yet ported; skipped.
+            // Binary @ 0x0014e5b6 — Bomb::KillBomb().
+            static_cast<Bomb*>(e)->KillBomb();
         }
     }
     m_pEntity = nullptr;
@@ -587,7 +596,13 @@ void MenuButton::Update(float dt) {
                     // programmatic-shrink path.
                     if (m_bEnabled != 0) {
                         FN::ClearMenuItems();
-                        // Port specific: MainScreen::OnMenuItemsCleared not yet ported; skipped.
+                        // Binary @ 0x0014e7e8 — MainScreen::OnMenuItemsCleared.
+                        // Empty in binary (single bx lr); port matches via the
+                        // explicit no-op call so the call-graph stays parity.
+                        Game* game = Game::GetInstance();
+                        if (game && game->mainScreen) {
+                            game->mainScreen->OnMenuItemsCleared();
+                        }
                     }
                 }
                 // Binary @ 0x0014e7ec: detach unconditionally inside the
