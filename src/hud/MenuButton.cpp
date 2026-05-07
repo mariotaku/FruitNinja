@@ -306,8 +306,12 @@ void MenuButton::Release() {
     m_pLabel1 = nullptr;
     m_pLabel2 = nullptr;
     DeletePeices();
-    // TODO: 0x0014f7e0 -- m_SecondaryTex Mortar::SmartPtr<Texture> drop not applicable;
-    //   HUDControl3d::m_SecondaryTex is GLuint in port (no ref-counting needed)
+    // DIFFERS: original = ~SmartPtr<Texture> on m_SecondaryTex (+0x78).
+    // Port stores m_SecondaryTex as a bare GLuint at +0x74 (the binding
+    // handle is enough for HUDControl3d::Draw) and the upstream caller
+    // owns the SmartPtr ref keeping the texture alive. Reset to 0 so a
+    // re-attach starts clean.
+    m_SecondaryTex = 0;
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
 }
@@ -341,10 +345,22 @@ void MenuButton::SetLoadingSymbol(bool show) {
     }
 }
 
-// Binary @ 0x0014ebc0 — builds curved-text BakedString pair; zero call sites in shipped binary
-void MenuButton::SetText(const char* text, Colour fg, Colour shadow, float radius) {
-    (void)text; (void)fg; (void)shadow; (void)radius;
-    // TODO: 0x0014ebc0 -- curved-text BakedString pair; zero call sites in shipped binary
+// Defunct: SetText -- no-op in port; binary @ 0x0014ebc0
+//
+// Binary builds two `Mortar::BakedString` instances (foreground + shadow)
+// arranged on a curved arc of the given `radius`, then stores the pair
+// in m_pLabel1 / m_pLabel2 for the (separately-Defunct) label-draw block
+// at 0x0015015e. Both the SetText constructor path AND the label-draw
+// block have zero call sites in the shipped binary -- the curved-text
+// feature was authored but never wired into any released menu button.
+//
+// Port keeps the empty body for call-graph parity (so anything the
+// implementer ever wires would compile and link); not RE-ported in
+// detail because the work would land 100% dead code. The port-side
+// m_pLabel1 / m_pLabel2 fields are typed `void*` for the same reason
+// (no BakedString allocations exist).
+void MenuButton::SetText(const char* /*text*/, Colour /*fg*/,
+                         Colour /*shadow*/, float /*radius*/) {
 }
 
 // Binary @ 0x0014ed18 — release fruit piece with upward fling; dead in shipped binary
@@ -966,14 +982,28 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
         c->m_UVRight  = uvOverride->x + 1.0f;
         c->m_UVBottom = uvOverride->y + 1.0f;
     }
+    // Binary @ 0x00150240: when sizeScale is "auto" ((0,0,z)), the binary
+    // sets the AddOn's size from the texture dimensions scaled by the UV
+    // span and the .z scale factor. Default UV span is (1,1) when no
+    // override was supplied above.
     if (sizeScale.x == 0.0f && sizeScale.y == 0.0f) {
         if (sizeScale.z == 0.0f) sizeScale.z = 1.0f;
-        // TODO: 0x00150240 -- pre-scale by tex dims * UV span needs tex->GetWidth/Height
-        // For now use sizeScale.z as uniform scale multiplier
-        sizeScale = Vec3(sizeScale.z, sizeScale.z, 0.0f);
+        const float uSpan = c->m_UVRight  - c->m_UVLeft;
+        const float vSpan = c->m_UVBottom - c->m_UVTop;
+        const float texW  = tex.IsValid() ? (float)tex->m_Width  : 0.0f;
+        const float texH  = tex.IsValid() ? (float)tex->m_Height : 0.0f;
+        sizeScale = Vec3(texW * uSpan * sizeScale.z,
+                         texH * vSpan * sizeScale.z,
+                         0.0f);
     }
-    // TODO: 0x00150240 -- HUDControl3d::m_SecondaryTex is GLuint not Mortar::SmartPtr<Texture>;
-    //   tex SmartPtr stored in MenuButtonAddOn instead for now
+    // Binary @ 0x00150240: store the texture handle on the AddOn's
+    // m_SecondaryTex slot. Binary uses Mortar::SmartPtr<Texture> at
+    // HUDControl3d+0x78; port stores the bare GL handle (GLuint at +0x74)
+    // since HUDControl3d::Draw only needs the GL ID -- the SmartPtr ref
+    // count is held by `tex` until this scope ends, which is fine since
+    // the upstream caller (MenuButton::UpdatePeices) keeps its own
+    // SmartPtr alive for the AddOn's lifetime.
+    c->m_SecondaryTex = tex.IsValid() ? tex->m_TexId : 0;
     c->pos   = pos;
     c->m_Timer = initialTimer;
     c->size  = size;
