@@ -485,29 +485,11 @@ void PauseScreen::Update(float dt) {
         m_RevealTimer -= dt;
         if (m_RevealTimer <= 0.0f) {
             m_RevealTimer = 0.0f;
-            // DIFFERS: original re-arms `m_ResumeButton->m_bHighlighted = 1`
-            // unconditionally here (binary @ 0x00154d24, verified by re-analyst
-            // / asm-inspector — no `0` write to +0x131 exists anywhere in
-            // PauseScreen::Update). The binary avoids the menu-screen click
-            // bug because its PauseScreen instance lives in a gameplay-only
-            // HUD that doesn't tick on AboutScreen / MainScreen / GameModeScreen.
-            // The port shares one HUD across all screens, so PauseScreen::Update
-            // runs continuously; the unconditional re-arm would keep the pause
-            // button clickable at (240, -160) on every menu. Gate the re-arm
-            // (and explicitly clear m_bHighlighted otherwise) on
-            // `game->pauseFlag == 0` — true only during active gameplay
-            // (gameplay loop sets pauseFlag=0 on level start; menu / not-yet-
-            // started keeps it at 1 from GameInit step 13).
-            // TODO: refactor HUD ownership so PauseScreen lives in a
-            // gameplay-only sub-HUD (matching binary), then remove this gate.
-            if (m_ResumeButton) {
-                Game* g = Game::GetInstance();
-                if (g && g->pauseFlag == 0) {
-                    m_ResumeButton->m_bHighlighted = 1;
-                } else {
-                    m_ResumeButton->m_bHighlighted = 0;
-                }
-            }
+            // Re-arm the Resume button. Binary @ 0x00154d24 unconditionally
+            // writes `m_ResumeButton->m_bHighlighted = 1` here (re-analyst
+            // confirmed no `= 0` write to +0x131 exists anywhere in
+            // PauseScreen::Update). Mirror that exactly.
+            if (m_ResumeButton) m_ResumeButton->m_bHighlighted = 1;
         }
         break;
 
@@ -640,18 +622,30 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton->size.x = m_PauseButtonTexW * resumeScale;
         m_ResumeButton->size.y = m_PauseButtonTexH * resumeScale;
 
-        // Gate visibility on m_ButtonFadeAlpha (computed earlier in this
-        // function from IsEnabled()): 0.0 in active gameplay, 1.0 on menu
-        // / cutscene / bomb-hit. The binary effectively hides the in-game
-        // pause icon during those states; the port was missing the
-        // alpha->draw-colour propagation, so the button drew at full
-        // opacity over menu screens. Set MenuButton::m_DrawColour.a from
-        // (1 - fade) so the existing `m_DrawColour.a == 0` early-exit in
-        // MenuButton::Draw skips the button on menus.
-        float resumeAlpha = 1.0f - m_ButtonFadeAlpha;
-        if (resumeAlpha < 0.0f) resumeAlpha = 0.0f;
-        if (resumeAlpha > 1.0f) resumeAlpha = 1.0f;
-        m_ResumeButton->m_DrawColour.a = (uint8_t)(resumeAlpha * 255.0f);
+        // DIFFERS: original defends against menu-screen ghost-clicks via per-
+        // frame Resume button POSITION recomputation (binary @ 0x00155056..
+        // 0x001550d6 — asm-inspector finding 5). On non-gameplay screens, the
+        // binary writes `pos.x = -((K1 - 0.375*m_TitleSize.x + 4.0) +
+        // m_BackdropScale*(10.0 + 0.75*m_TitleSize.x))` which lands the AABB
+        // off-screen-left so the bottom-right corner can't intersect it. The
+        // formula's K1 constant + Y component aren't fully decoded yet
+        // (TODO: re-analyst pass on 0x00155056..0x001550d6).
+        //
+        // Port-side approximation: gate `m_ResumeButton->m_bActive` on
+        // `game->pauseFlag == 0` (true only during active gameplay). This
+        // uses the binary's actual gate mechanism (`HUDControl +0x30`,
+        // re-analyst confirmed) — when 0, HUD::Update skips the per-control
+        // Update vtable slot AND HUD::Draw skips the per-control Draw,
+        // matching the off-screen geometric defense in observable behavior
+        // (button doesn't draw, doesn't latch touches).
+        //
+        // Once the position formula constants are RE'd, this should be
+        // replaced with the per-frame position recomputation; binary leaves
+        // m_bActive at 1 throughout (re-analyst confirmed: never passed to
+        // HUDControl::SetActive @ 0x0013cdd0).
+        if (Game* g = Game::GetInstance()) {
+            m_ResumeButton->m_bActive = (g->pauseFlag == 0) ? 1 : 0;
+        }
 
         m_ButtonOriginPos = m_ResumeButton->pos;
     }
