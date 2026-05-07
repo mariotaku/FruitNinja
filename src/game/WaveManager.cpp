@@ -876,10 +876,29 @@ void WaveManager::Update(float dt) {
     // TODO: skip stat tracking (game->field_0x1ac += dt).
 
     // Fixed-timestep accumulator.
+    //
+    // ASM-spec for spawn-pump gate (binary @ 0x00125a30):
+    //   if (g_GameData->pauseFlag == 0 || m_pCurrentWave_P1 == nullptr) {
+    //       <speed accumulator + fixed-step UpdateWave loop>
+    //   } else {
+    //       UpdateComboSpeed(dt);  // combo tick only, no spawning
+    //   }
+    // i.e. spawn pump runs unless (paused AND a wave is active). On the
+    // binary's MainScreen the spawn pump still gets called but suppression
+    // happens further down because waveInfos[gameMode] is empty until
+    // PrepareForLevelStart -> Reset -> SetCurrentWave runs.
+    //
+    // DIFFERS: port loads waveInfos[*] eagerly at WaveManager::Init time,
+    // so the empty-list guard the binary relies on never trips. Gate the
+    // spawn pump on m_pCurrentWave[0] != nullptr instead -- effectively
+    // identical (current wave is null until Reset runs, set when Reset
+    // calls GetNextWave). Without this, GameUpdate on MainScreen pumps
+    // the wave timer, UpdateWave's wave-end fall-through calls GetNextWave
+    // for player 0, the first wave starts, and fruit spawns on the title.
     float accumDt = field_0x2d4 + dt;
     int wavePumps = 0;
     while (accumDt > WAVE_STEP) {
-        if (!waveInfos[game->gameMode].empty()) {
+        if (m_pCurrentWave[0] != nullptr) {
             UpdateWave(WAVE_STEP, 0, 0);
             wavePumps++;
         }
