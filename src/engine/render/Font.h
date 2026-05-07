@@ -9,7 +9,6 @@
 #include "math/Vec2.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
-#include <vector>
 
 namespace Mortar {
 
@@ -77,7 +76,15 @@ public:
     int            m_ScaleH;           // +0x420
     float          m_LineHeight;       // +0x424  stored as float
     float          m_BaseNorm;         // +0x428  = base / lineHeight
-    std::vector<std::vector<QUADCUSTOMVERTEX>> m_PageVerts; // +0x42c
+
+    // +0x42c per-page vertex scratch buffer. Binary stores 0x600 verts
+    // per page; port keeps a single flat heap allocation of size
+    // m_PageCount * 0x600 (matches binary's array-of-arrays layout
+    // without the std::vector<std::vector<>> instantiation bloat).
+    // Indexed as m_PageVerts[pg * 0x600 + slot]. Allocated by Load,
+    // freed by ~Font.
+    static const int  PAGE_VERT_CAPACITY = 0x600;
+    QUADCUSTOMVERTEX* m_PageVerts;
 
     Font();
     virtual ~Font();

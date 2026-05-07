@@ -106,8 +106,8 @@ MainScreen::MainScreen(Game& g)
     // Spec: "verdana.fnt loads into MainScreen::m_pFont, NOT g_GameData."
     // See docs/engine/font.md "Font Asset Cross-Reference" (string @ 0x001bbcb3).
     {
-        std::string fontPath = game.data_dir + "/fonts/verdana.fnt";
-        m_pFont = Mortar::Font::Create(fontPath.c_str());
+        // logical path; FileSystem_Direct (via Mortar::File in Font::Load) prepends data_dir
+        m_pFont = Mortar::Font::Create("fonts/verdana.fnt");
     }
 
     // Set size = (480.0, 138.0, 1.0)

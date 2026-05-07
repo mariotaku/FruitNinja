@@ -4,6 +4,7 @@
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
 #include "render/gl_funcs.h"
+#include "asset/File.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include "math/Matrix44.h"
@@ -38,6 +39,7 @@ Font::Font()
     , m_ScaleH(256)
     , m_LineHeight(1.0f)
     , m_BaseNorm(0.0f)
+    , m_PageVerts(nullptr)
 {
     memset(m_GlyphLookup, 0, sizeof(m_GlyphLookup));
 }
@@ -57,6 +59,9 @@ Font::~Font() {
 
     delete[] m_Kernings;
     m_Kernings = nullptr;
+
+    delete[] m_PageVerts;
+    m_PageVerts = nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,30 +99,32 @@ static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
 }
 
 // ---------------------------------------------------------------------------
-// Font::Load (matches binary 0x00199e9c)
-// Slurps the entire file, walks byte-by-byte comparing tags.
+// Font::Load -- ASM-verified: 2026-05-08T00:00 binary @ 0x00189e9c (asm-inspector)
+//
+// Slurps the entire .fnt file via Mortar::File (IFile-backed), walks
+// byte-by-byte comparing tags. Matches the binary's IFile-based slurp
+// (binary uses a stack-allocated File; port matches that pattern).
 // ---------------------------------------------------------------------------
 
 int Font::Load(const char* path) {
-    // Port specific: use a .tex-swapped path for page textures (original .tga won't exist)
-
-    FILE* f = fopen(path, "rb");
-    if (!f) {
-        fprintf(stderr, "Font::Create: failed to open '%s'\n", path);
+    // Binary @ 0x00189e9c: open via Mortar::File (IFile -> FileSystem_Direct).
+    // The path is forwarded straight through; FileSystem_Direct's prefix
+    // logic (data_dir prepend or strict) is owned by the FileSystem layer.
+    Mortar::File f(path, 0, 0);
+    if (!f.Open()) {
+        fprintf(stderr, "Font::Load: failed to open '%s'\n", path);
         return 0;
     }
-
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (fsize <= 0) {
-        fclose(f);
+    if (!f.Load(nullptr, 0)) {
+        fprintf(stderr, "Font::Load: failed to slurp '%s'\n", path);
         return 0;
     }
+    const unsigned long fsize = f.Size();
+    if (fsize == 0) return 0;
 
+    // Copy into a NUL-terminated heap buffer (parser walks `*p`).
     char* buf = new char[(size_t)fsize + 1];
-    fread(buf, 1, (size_t)fsize, f);
-    fclose(f);
+    memcpy(buf, f.Data(), (size_t)fsize);
     buf[fsize] = '\0';
 
     // Extract base directory from path for fallback texture loads
@@ -302,11 +309,12 @@ int Font::Load(const char* path) {
         m_Pages[i].texture = TextureManager::GetInstance().Load(logicalPath);
     }
 
-    // Pre-allocate per-page vertex buffers: 0x600 verts = 256-glyph capacity
-    m_PageVerts.clear();
-    for (int i = 0; i < m_PageCount; i++) {
-        m_PageVerts.push_back(std::vector<QUADCUSTOMVERTEX>(0x600));
-    }
+    // Pre-allocate per-page vertex scratch: PAGE_VERT_CAPACITY (0x600)
+    // verts per page in one flat heap allocation.
+    delete[] m_PageVerts;
+    m_PageVerts = (m_PageCount > 0)
+        ? new QUADCUSTOMVERTEX[(size_t)m_PageCount * PAGE_VERT_CAPACITY]()
+        : nullptr;
 
     return 1;
 }
@@ -489,17 +497,16 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
     // the description-text path's binary call shape.
     const float wrapLimit = maxWH.x;
 
-    // Per-page glyph vertex counts
+    // Per-page glyph vertex counts.
     int* perPageCount = new int[m_PageCount]();
 
-    // Ensure m_PageVerts has enough entries and capacity
-    while ((int)m_PageVerts.size() < m_PageCount) {
-        m_PageVerts.push_back(std::vector<QUADCUSTOMVERTEX>(0x600));
+    // m_PageVerts is a flat heap array of size m_PageCount * PAGE_VERT_CAPACITY,
+    // populated by Font::Load. Lazy-allocate here for unit-test paths that
+    // never called Load (defaults to nullptr in that case).
+    if (!m_PageVerts && m_PageCount > 0) {
+        m_PageVerts = new QUADCUSTOMVERTEX[(size_t)m_PageCount * PAGE_VERT_CAPACITY]();
     }
     for (int pg = 0; pg < m_PageCount; pg++) {
-        if (m_PageVerts[pg].size() < 0x600) {
-            m_PageVerts[pg].resize(0x600);
-        }
         perPageCount[pg] = 0;
     }
 
@@ -669,10 +676,12 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
             v[4] = { cx + hw, cy + hh, kZ, 0,0,1, curColour, u1, v0 };
             v[5] = { cx - hw, cy + hh, kZ, 0,0,1, curColour, u0, v0 };
 
-            int base = perPageCount[pageIdx] * 6;
-            if (base + 6 <= (int)m_PageVerts[pageIdx].size()) {
+            const int base = perPageCount[pageIdx] * 6;
+            if (base + 6 <= PAGE_VERT_CAPACITY) {
+                QUADCUSTOMVERTEX* dst =
+                    &m_PageVerts[(size_t)pageIdx * PAGE_VERT_CAPACITY + base];
                 for (int vi = 0; vi < 6; vi++) {
-                    m_PageVerts[pageIdx][base + vi] = v[vi];
+                    dst[vi] = v[vi];
                 }
                 perPageCount[pageIdx]++;
             }
@@ -729,7 +738,9 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
             if (!page || !page->texture.IsValid()) continue;
             page->texture->Set();
             // GL_TRIANGLES (not strip) — see vertex layout above.
-            renderer->DrawTriList(m_PageVerts[pg].data(), perPageCount[pg] * 6);
+            renderer->DrawTriList(
+                &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY],
+                perPageCount[pg] * 6);
             page->texture->UnSet();
         }
     }
