@@ -214,6 +214,7 @@ void PowerUpShop::Release() {
         if (game && game->hud) {
             game->hud->RemoveControl(m_BuyButton);
         }
+        m_BuyButton->Release();   // binary's vtable Release before delete
         delete m_BuyButton;
         m_BuyButton = NULL;
     }

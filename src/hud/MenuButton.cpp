@@ -180,27 +180,17 @@ MenuButton::MenuButton()
     // Don't unconditionally promote here.
 }
 
-// DIFFERS: original = D2 dtor only runs subobject teardown (binary @
-// 0x0014f94c: install vtbl -> ~list<AddOn>(+0x10C) -> ~Delegate0(+0xAC) ->
-// ~Delegate0(+0x88) -> ~HUDControl3d). The binary's MenuButton::Release
-// (0x0014f7e0) is a SEPARATE vtable slot called by HUD::RemoveControl /
-// HUD::Release BEFORE delete -- it deletes m_pLabel1 / m_pLabel2 (binary
-// offsets +0x114 / +0x118) and clears fruit-piece backrefs.
-//
-// Port has the cleanup chained from the dtor instead -- HUD::Release
-// (src/hud/HUD.cpp:29) directly `delete ctrl`s without first calling
-// ctrl->Release(), so the dtor needs to drive the cleanup. Refactoring
-// to match the binary would mean threading Release() through every
-// HUDControl subclass's lifecycle; deferred. The asm-verify ~220%
-// score gap on the D0/D1/D2 chain is from this port-specific
-// inversion. m_pLabel1 / m_pLabel2 are always-NULL in the port (text
-// label feature unported), so the missed-delete in the dtor isn't a
-// leak even with the inverted lifecycle.
-// TODO: refactor HUD::Release / RemoveControl to call ctrl->Release()
-// via vtable before delete; then this dtor body can become `{}`.
-MenuButton::~MenuButton() {
-    Release();
-}
+// ASM-verified: 2026-05-06T00:00 binary @ 0x0014f94c (asm-inspector)
+// Binary D2 dtor runs only subobject teardown (vtbl install ->
+// ~list<AddOn>(+0x10C) -> ~Delegate0(+0xAC) -> ~Delegate0(+0x88) ->
+// ~HUDControl3d) -- NO call to MenuButton::Release. Release() is the
+// SEPARATE vtable slot at 0x0014f7e0 invoked BEFORE delete by every
+// HUDControl-deleting site (HUD::Release / HUD::Update pending-removal
+// path / FruitFactControl::Release child-button teardown / etc.).
+// Port now matches that lifecycle: dtor empty, Release() driven by
+// caller. Implicit member-subobject destructors take over for
+// m_AddOns / Delegates / ~HUDControl3d.
+MenuButton::~MenuButton() {}
 
 // Matches MenuButton::Init (0x0014ee40, 222 lines)
 void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
