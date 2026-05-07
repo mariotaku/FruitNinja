@@ -9,7 +9,145 @@
 // collide on enum values and function typedefs when mixed. This file
 // is the single point of truth.
 
-#if defined(FRUIT_GL_API_ES1)
+#if defined(FN_ASM_VERIFY_CROSS)
+    // asm-verify cross-build: arm-none-eabi has no system GL headers and
+    // the verify .o files don't link against GL anyway. Provide a minimal
+    // stub of just the GL types + constants the port code touches.
+    typedef unsigned int  GLenum;
+    typedef unsigned int  GLbitfield;
+    typedef unsigned int  GLuint;
+    typedef int           GLint;
+    typedef int           GLsizei;
+    typedef unsigned char GLboolean;
+    typedef signed char   GLbyte;
+    typedef short         GLshort;
+    typedef unsigned char GLubyte;
+    typedef unsigned short GLushort;
+    typedef float         GLfloat;
+    typedef float         GLclampf;
+    typedef double        GLdouble;
+    typedef double        GLclampd;
+    typedef void          GLvoid;
+    typedef char          GLchar;
+    typedef long          GLintptr;
+    typedef long          GLsizeiptr;
+    #define APIENTRY
+    #define APIENTRYP *
+    #define GLAPI extern
+    // Constants the port code references at compile time.
+    #define GL_FALSE 0
+    #define GL_TRUE 1
+    #define GL_TRIANGLES 4
+    #define GL_TRIANGLE_STRIP 5
+    #define GL_TEXTURE_2D 0x0DE1
+    #define GL_TEXTURE0 0x84C0
+    #define GL_BLEND 0x0BE2
+    #define GL_DEPTH_TEST 0x0B71
+    #define GL_CULL_FACE 0x0B44
+    #define GL_LEQUAL 0x0203
+    #define GL_LESS 0x0201
+    #define GL_SRC_ALPHA 0x0302
+    #define GL_ONE_MINUS_SRC_ALPHA 0x0303
+    #define GL_ONE 1
+    #define GL_RGB 0x1907
+    #define GL_RGBA 0x1908
+    #define GL_UNSIGNED_BYTE 0x1401
+    #define GL_UNSIGNED_SHORT 0x1403
+    #define GL_FLOAT 0x1406
+    #define GL_NEAREST 0x2600
+    #define GL_LINEAR 0x2601
+    #define GL_TEXTURE_MAG_FILTER 0x2800
+    #define GL_TEXTURE_MIN_FILTER 0x2801
+    #define GL_TEXTURE_WRAP_S 0x2802
+    #define GL_TEXTURE_WRAP_T 0x2803
+    #define GL_CLAMP_TO_EDGE 0x812F
+    #define GL_REPEAT 0x2901
+    #define GL_COLOR_BUFFER_BIT 0x4000
+    #define GL_DEPTH_BUFFER_BIT 0x0100
+    #define GL_ARRAY_BUFFER 0x8892
+    #define GL_ELEMENT_ARRAY_BUFFER 0x8893
+    #define GL_STATIC_DRAW 0x88E4
+    #define GL_SCISSOR_TEST 0x0C11
+    #define GL_UNPACK_ALIGNMENT 0x0CF5
+    #define GL_VENDOR 0x1F00
+    #define GL_RENDERER 0x1F01
+    #define GL_VERSION 0x1F02
+    #define GL_NO_ERROR 0
+    #define GL_MODELVIEW 0x1700
+    #define GL_PROJECTION 0x1701
+    #define GL_VERTEX_ARRAY 0x8074
+    #define GL_NORMAL_ARRAY 0x8075
+    #define GL_COLOR_ARRAY 0x8076
+    #define GL_TEXTURE_COORD_ARRAY 0x8078
+    #define GL_TEXTURE_ENV 0x2300
+    #define GL_TEXTURE_ENV_MODE 0x2200
+    #define GL_MODULATE 0x2100
+    #define GL_REPLACE 0x1E01
+    #define GL_LIGHTING 0x0B50
+    #define GL_LIGHT0 0x4000
+    #define GL_AMBIENT 0x1200
+    #define GL_DIFFUSE 0x1201
+    #define GL_SPECULAR 0x1202
+    #define GL_EMISSION 0x1600
+    #define GL_POSITION 0x1203
+    #define GL_SMOOTH 0x1D01
+    #define GL_FRONT_AND_BACK 0x0408
+    #define GL_LINE 0x1B01
+    #define GL_FILL 0x1B02
+    #define GL_UNSIGNED_SHORT_4_4_4_4 0x8033
+    #define GL_UNSIGNED_SHORT_5_5_5_1 0x8034
+    #define GL_UNSIGNED_SHORT_5_6_5  0x8363
+    // GL entry points the port references. These don't have to link in
+    // the cross-build (no link step happens) -- declarations only.
+    extern "C" {
+        const GLubyte* glGetString(GLenum);
+        GLenum glGetError(void);
+        void glViewport(GLint, GLint, GLsizei, GLsizei);
+        void glClearColor(GLfloat, GLfloat, GLfloat, GLfloat);
+        void glClear(GLbitfield);
+        void glEnable(GLenum);
+        void glDisable(GLenum);
+        void glBlendFunc(GLenum, GLenum);
+        void glScissor(GLint, GLint, GLsizei, GLsizei);
+        void glPixelStorei(GLenum, GLint);
+        void glGenTextures(GLsizei, GLuint*);
+        void glDeleteTextures(GLsizei, const GLuint*);
+        void glBindTexture(GLenum, GLuint);
+        void glTexParameteri(GLenum, GLenum, GLint);
+        void glTexImage2D(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*);
+        void glCompressedTexImage2D(GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void*);
+        void glActiveTexture(GLenum);
+        void glDrawArrays(GLenum, GLint, GLsizei);
+        void glGenBuffers(GLsizei, GLuint*);
+        void glDeleteBuffers(GLsizei, const GLuint*);
+        void glBindBuffer(GLenum, GLuint);
+        void glBufferData(GLenum, GLsizeiptr, const void*, GLenum);
+        void glDrawElements(GLenum, GLsizei, GLenum, const void*);
+        void glDepthFunc(GLenum);
+        void glDepthMask(GLboolean);
+        void glClearDepthf(GLclampf);
+        void glMatrixMode(GLenum);
+        void glPushMatrix(void);
+        void glPopMatrix(void);
+        void glLoadMatrixf(const GLfloat*);
+        void glMultMatrixf(const GLfloat*);
+        void glLoadIdentity(void);
+        void glFrustumf(GLfloat, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat);
+        void glEnableClientState(GLenum);
+        void glDisableClientState(GLenum);
+        void glVertexPointer(GLint, GLenum, GLsizei, const void*);
+        void glNormalPointer(GLenum, GLsizei, const void*);
+        void glColorPointer(GLint, GLenum, GLsizei, const void*);
+        void glTexCoordPointer(GLint, GLenum, GLsizei, const void*);
+        void glClientActiveTexture(GLenum);
+        void glColor4ub(GLubyte, GLubyte, GLubyte, GLubyte);
+        void glMaterialfv(GLenum, GLenum, const GLfloat*);
+        void glLightfv(GLenum, GLenum, const GLfloat*);
+        void glShadeModel(GLenum);
+        void glTexEnvf(GLenum, GLenum, GLfloat);
+        void glPolygonMode(GLenum, GLenum);
+    }
+#elif defined(FRUIT_GL_API_ES1)
     // webOS / embedded Linux. libGLESv1_CM + libEGL.
     #include <GLES/gl.h>
     #include <GLES/glext.h>
