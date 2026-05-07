@@ -27,14 +27,14 @@ inline void mat4_multiply(float* out, const float* a, const float* b) {
     memcpy(out, tmp, 16 * sizeof(float));
 }
 
-inline void mat4_perspective(float* m, float fov_rad, float aspect, float near, float far) {
+inline void mat4_perspective(float* m, float fov_rad, float aspect, float nearZ, float farZ) {
     memset(m, 0, 16 * sizeof(float));
     float f = 1.0f / tanf(fov_rad / 2.0f);
     m[0]  = f / aspect;
     m[5]  = f;
-    m[10] = (far + near) / (near - far);
+    m[10] = (farZ + nearZ) / (nearZ - farZ);
     m[11] = -1.0f;
-    m[14] = (2.0f * far * near) / (near - far);
+    m[14] = (2.0f * farZ * nearZ) / (nearZ - farZ);
 }
 
 inline void mat4_look_at(float* m, float ex, float ey, float ez,

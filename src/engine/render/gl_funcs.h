@@ -1,174 +1,57 @@
 #ifndef MORTAR_GL_FUNCS_H
 #define MORTAR_GL_FUNCS_H
 
+// GL header dispatch + small runtime helpers.
+//
+// History: this header used to declare every GL entry point as a
+// function-pointer variable (PFN_*) loaded at runtime via
+// SDL_GL_GetProcAddress. That scheme produced an STT_FUNC vs STT_OBJECT
+// link-time symbol-type collision on platforms where the OS GL library
+// is statically linked (Linux libGL.so via SDL2's transitive deps, libGLESv1_CM
+// on webOS, etc.) — every variable redefined a libGL exported function.
+//
+// Now: include the OS GL header directly (via gl_compat.h) so functions
+// resolve through normal linker symbol resolution. CMake links the right
+// system library per FRUIT_GL_API. GL 1.2+ extensions on Windows
+// (opengl32.lib only exports 1.1) are provided by gl_funcsWin32.cpp,
+// which defines real C functions that lazy-load via SDL_GL_GetProcAddress.
+
+#define GL_GLEXT_PROTOTYPES 1
+#include "render/gl_compat.h"
+
 #include <cstdint>
 #include <cstdio>
-// SDL_GL_GetProcAddress used in gl_funcs.cpp -- not needed by this header.
 
-// GL types
-typedef unsigned int GLenum;
-typedef unsigned int GLbitfield;
-typedef unsigned int GLuint;
-typedef int GLint;
-typedef int GLsizei;
-typedef unsigned char GLboolean;
-typedef signed char GLbyte;
-typedef short GLshort;
-typedef unsigned char GLubyte;
-typedef unsigned short GLushort;
-typedef unsigned long GLulong;
-typedef float GLfloat;
-typedef float GLclampf;
-typedef double GLdouble;
-typedef double GLclampd;
-typedef void GLvoid;
-typedef char GLchar;
-typedef intptr_t GLintptr;
-typedef intptr_t GLsizeiptr;
+// glClearDepthf / glFrustumf are ES1-only entry points absent from
+// desktop GL headers. gl_funcsWin32.cpp provides them on Windows;
+// libGL.so on Linux exports them via ARB_ES2_compatibility. Declare
+// them here so call sites compile on every backend.
+#if defined(FRUIT_GL_API_GL_COMPAT) && defined(_WIN32)
+extern "C" {
+    void APIENTRY glClearDepthf(GLclampf depth);
+    void APIENTRY glFrustumf(GLfloat l, GLfloat r, GLfloat b,
+                             GLfloat t, GLfloat n, GLfloat f);
+}
+#endif
 
-// GL constants
-#define GL_FALSE                 0
-#define GL_TRUE                  1
-#define GL_NO_ERROR              0
-#define GL_TRIANGLES             0x0004
-#define GL_TRIANGLE_STRIP        0x0005
-#define GL_BLEND                 0x0BE2
-#define GL_SRC_ALPHA             0x0302
-#define GL_ONE_MINUS_SRC_ALPHA   0x0303
-#define GL_ONE                   0x0001
-#define GL_TEXTURE_2D            0x0DE1
-#define GL_UNSIGNED_BYTE         0x1401
-#define GL_UNSIGNED_SHORT        0x1403
-#define GL_FLOAT                 0x1406
-#define GL_RGB                   0x1907
-#define GL_RGBA                  0x1908
-#define GL_VENDOR                0x1F00
-#define GL_RENDERER              0x1F01
-#define GL_VERSION               0x1F02
-#define GL_NEAREST               0x2600
-#define GL_LINEAR                0x2601
-#define GL_TEXTURE_MAG_FILTER    0x2800
-#define GL_TEXTURE_MIN_FILTER    0x2801
-#define GL_TEXTURE_WRAP_S        0x2802
-#define GL_TEXTURE_WRAP_T        0x2803
-#define GL_CLAMP_TO_EDGE         0x812F
-#define GL_REPEAT                0x2901
-#define GL_TEXTURE0              0x84C0
-#define GL_FRAGMENT_SHADER       0x8B30
-#define GL_VERTEX_SHADER         0x8B31
-#define GL_COMPILE_STATUS        0x8B81
-#define GL_LINK_STATUS           0x8B82
-#define GL_COLOR_BUFFER_BIT      0x4000
-#define GL_DEPTH_BUFFER_BIT      0x0100
-#define GL_DEPTH_TEST            0x0B71
-#define GL_LESS                  0x0201
-#define GL_LEQUAL                0x0203
-#define GL_ARRAY_BUFFER          0x8892
-#define GL_ELEMENT_ARRAY_BUFFER  0x8893
-#define GL_STATIC_DRAW           0x88E4
-#define GL_SCISSOR_TEST          0x0C11
-#define GL_UNPACK_ALIGNMENT      0x0CF5
-#define GL_CULL_FACE             0x0B44
-#define GL_UNSIGNED_SHORT_4_4_4_4 0x8033
-#define GL_UNSIGNED_SHORT_5_5_5_1 0x8034
-#define GL_UNSIGNED_SHORT_5_6_5  0x8363
+// Optional entry point — desktop GL only, may not exist under GLES.
+// Used by the F2 wireframe debug toggle. On Windows MSYS2 / MSVC builds
+// this is provided by gl_funcsWin32.cpp via wglGetProcAddress; on Linux
+// it's exported directly by libGL when running on Mesa or proprietary
+// drivers; on GLES it's truly absent and the wrapper returns without
+// doing anything.
+//
+// (Declared via <GL/glext.h> on desktop GL; declared as a real wrapper
+// by gl_funcsWin32.cpp when targeting Windows.)
 
-// Fixed-function constants (used by GL_COMPAT / ES1 backends).
-// Harmless to always define — the values are universal across ES 1.x
-// and desktop compat profiles.
-#define GL_MODELVIEW             0x1700
-#define GL_PROJECTION            0x1701
-#define GL_VERTEX_ARRAY          0x8074
-#define GL_NORMAL_ARRAY          0x8075
-#define GL_COLOR_ARRAY           0x8076
-#define GL_TEXTURE_COORD_ARRAY   0x8078
-#define GL_TEXTURE_ENV           0x2300
-#define GL_TEXTURE_ENV_MODE      0x2200
-#define GL_MODULATE              0x2100
-#define GL_REPLACE               0x1E01
-#define GL_LIGHTING              0x0B50
-#define GL_LIGHT0                0x4000
-#define GL_AMBIENT               0x1200
-#define GL_DIFFUSE               0x1201
-#define GL_SPECULAR              0x1202
-#define GL_EMISSION              0x1600
-#define GL_POSITION              0x1203
-#define GL_SMOOTH                0x1D01
+// Optional GL types missing on some legacy GL headers (Microsoft's
+// <GL/gl.h> ships GL 1.1 only — no GLsizeiptr / GLintptr / GLclampf
+// for ES). gl_compat.h pulls <GL/glext.h> on desktop which fills these
+// in; on ES1 they come from <GLES/gl.h>.
 
-// Desktop-GL only (used by debug wireframe toggle).
-#define GL_FRONT_AND_BACK        0x0408
-#define GL_LINE                  0x1B01
-#define GL_FILL                  0x1B02
-
-// Function pointer types and declarations
-#define GL_FUNC(ret, name, ...) typedef ret (*PFN_##name)(__VA_ARGS__); extern PFN_##name name;
-
-GL_FUNC(const GLubyte*, glGetString, GLenum)
-GL_FUNC(GLenum, glGetError, void)
-GL_FUNC(void, glViewport, GLint, GLint, GLsizei, GLsizei)
-GL_FUNC(void, glClearColor, GLfloat, GLfloat, GLfloat, GLfloat)
-GL_FUNC(void, glClear, GLbitfield)
-GL_FUNC(void, glEnable, GLenum)
-GL_FUNC(void, glDisable, GLenum)
-GL_FUNC(void, glBlendFunc, GLenum, GLenum)
-GL_FUNC(void, glScissor, GLint, GLint, GLsizei, GLsizei)
-GL_FUNC(void, glPixelStorei, GLenum, GLint)
-GL_FUNC(void, glGenTextures, GLsizei, GLuint*)
-GL_FUNC(void, glDeleteTextures, GLsizei, const GLuint*)
-GL_FUNC(void, glBindTexture, GLenum, GLuint)
-GL_FUNC(void, glTexParameteri, GLenum, GLenum, GLint)
-GL_FUNC(void, glTexImage2D, GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*)
-GL_FUNC(void, glCompressedTexImage2D, GLenum, GLint, GLenum, GLsizei, GLsizei, GLint, GLsizei, const void*)
-GL_FUNC(void, glActiveTexture, GLenum)
-GL_FUNC(void, glDrawArrays, GLenum, GLint, GLsizei)
-GL_FUNC(void, glGenBuffers, GLsizei, GLuint*)
-GL_FUNC(void, glDeleteBuffers, GLsizei, const GLuint*)
-GL_FUNC(void, glBindBuffer, GLenum, GLuint)
-GL_FUNC(void, glBufferData, GLenum, GLsizeiptr, const void*, GLenum)
-GL_FUNC(void, glDrawElements, GLenum, GLsizei, GLenum, const void*)
-GL_FUNC(void, glDepthFunc, GLenum)
-GL_FUNC(void, glDepthMask, GLboolean)
-GL_FUNC(void, glClearDepthf, GLfloat)
-
-// Fixed-function pipeline (ES 1.x / desktop-GL compat). These are the
-// only draw-path entry points — no shader/attribute symbols exist in
-// this build.
-GL_FUNC(void, glMatrixMode, GLenum)
-GL_FUNC(void, glPushMatrix, void)
-GL_FUNC(void, glPopMatrix, void)
-GL_FUNC(void, glLoadMatrixf, const GLfloat*)
-GL_FUNC(void, glMultMatrixf, const GLfloat*)
-GL_FUNC(void, glLoadIdentity, void)
-GL_FUNC(void, glFrustumf, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat)
-GL_FUNC(void, glEnableClientState, GLenum)
-GL_FUNC(void, glDisableClientState, GLenum)
-GL_FUNC(void, glVertexPointer, GLint, GLenum, GLsizei, const void*)
-GL_FUNC(void, glNormalPointer, GLenum, GLsizei, const void*)
-GL_FUNC(void, glColorPointer, GLint, GLenum, GLsizei, const void*)
-GL_FUNC(void, glTexCoordPointer, GLint, GLenum, GLsizei, const void*)
-GL_FUNC(void, glClientActiveTexture, GLenum)
-GL_FUNC(void, glColor4ub, GLubyte, GLubyte, GLubyte, GLubyte)
-GL_FUNC(void, glMaterialfv, GLenum, GLenum, const GLfloat*)
-GL_FUNC(void, glLightfv, GLenum, GLenum, const GLfloat*)
-GL_FUNC(void, glShadeModel, GLenum)
-GL_FUNC(void, glTexEnvf, GLenum, GLenum, GLfloat)
-
-// Optional entry point — desktop GL only, stays nullptr under GLES. Used
-// by the F2 wireframe debug toggle; callers must null-check.
-GL_FUNC(void, glPolygonMode, GLenum, GLenum)
-
-#undef GL_FUNC
-
-// Load all GL function pointers via SDL_GL_GetProcAddress. Call after
-// context creation. Required functions abort the load on miss; optional
-// functions (GL 1.2+ extensions) get stubbed so callers can no-op safely
-// when the runtime ICD is too old. Returns false only on REQUIRED-miss.
-bool gl_load_functions();
-
-// Detect the Microsoft 1.1 software ICD (the Windows fallback when the
-// hardware GL driver isn't reachable). Returns false + prints an actionable
-// diagnostic if detected. Call from interactive entry points (the main
-// exe) after gl_load_functions(); non-rendering smoke tests should skip.
-bool gl_check_runtime();
+bool gl_load_functions();   // No-op except on Windows where it loads
+                            // 1.2+ extension wrappers via SDL_GL_GetProcAddress.
+bool gl_check_runtime();    // MS software-ICD diagnostic — prints to stderr
+                            // and returns false when the driver is broken.
 
 #endif

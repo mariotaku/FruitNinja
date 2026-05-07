@@ -13,6 +13,7 @@ add_library(mortar_engine STATIC
     util/Localisation.cpp
     # Phase 2 — Core Singletons
     render/gl_funcsSDL.cpp
+    render/gl_funcsWin32.cpp
     render/MatrixManager.cpp
     render/DisplayManager.cpp
     render/DisplayManagerSDL.cpp
@@ -66,5 +67,17 @@ add_library(mortar_engine STATIC
     network/NetworkManager.cpp
 )
 target_include_directories(mortar_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# GL backend link target. find_package(OpenGL) covers desktop GL_COMPAT
+# (libGL on Linux/Mesa; opengl32 on Windows); the ES1 / ES2 paths are
+# wired separately by FRUIT_GL_API.
+if (FRUIT_GL_API STREQUAL "GL_COMPAT")
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(mortar_engine PUBLIC OpenGL::GL)
+elseif (FRUIT_GL_API STREQUAL "ES1")
+    # webOS / embedded Linux. libGLESv1_CM + libEGL.
+    target_link_libraries(mortar_engine PUBLIC GLESv1_CM EGL)
+endif()
+
 target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2)
 target_compile_features(mortar_engine PUBLIC cxx_std_11)
