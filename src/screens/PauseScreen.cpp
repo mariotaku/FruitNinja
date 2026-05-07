@@ -412,6 +412,13 @@ void PauseScreen::Update(float dt) {
     if (!game) return;
 
     // --- Lazy button creation (SP path only) ---
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x00154468..0x001545fc (asm-inspector)
+    // Each of the three create blocks is gated only on null-on-self
+    // (`+0x98 m_ResumeButton`, `+0xa0 m_QuitButton`, `+0xac m_RetryButton`).
+    // No `IsEnabled()` / `pauseFlag` / `m_State` / `m_TransitionTimer` test
+    // wraps the allocations — binary creates eagerly on first Update().
+    // Visibility on non-gameplay screens is an alpha/draw-time concern,
+    // handled by m_ButtonFadeAlpha -> m_DrawColour.a propagation below.
     if (!m_ResumeButton) {
         // P1 Resume button: pos (240, -160, 0), size from pause_button.tex
         m_ResumeButton = new MenuButton();
