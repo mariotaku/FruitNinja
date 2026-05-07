@@ -663,81 +663,78 @@ void MenuButton::Update(float dt) {
     // Poll-based: iterates Touch slots inside the button rect. If none was
     // tracked last frame, latch the first slot inside. On release, fire the
     // callback if the release position is still inside the rect.
+    //
+    // ASM-verified: 2026-05-06T00:00 binary @ 0x0014e994..0x0014e99a (asm-inspector)
+    // Binary gates the entire touch + back-key block on m_bHighlighted (+0x131):
+    //   ldrb.w r3, [r4, #0x131]
+    //   cmp    r3, #0
+    //   beq.w  0x0014eb52     ; jump to size-sync / backdrop-scale tail
+    // The earlier port-side gate `if (!m_bInteractive || !m_bEnabled) return;`
+    // (a) tested fields the binary doesn't, and (b) returned from the entire
+    // function — bypassing the m_BackdropScale tail (binary @ 0x0014eb84).
     // -----------------------------------------------------------------------
-    if (!m_bInteractive || !m_bEnabled) return;
-
-    // DIFFERS: original gates the touch block on m_bHighlighted (+0x131,
-    // binary @ 0x0014e994..0x0014e99a per asm-inspector); the port instead
-    // uses m_bInteractive/m_bEnabled at the line above and adds an alpha
-    // check below. Net effect matches the binary's intent: an invisible
-    // button (alpha=0, e.g. PauseScreen's Resume button on the menu)
-    // ignores clicks. Without this, the alpha-gated pause button at
-    // (240, -160) was still latching touches on the AboutScreen and
-    // firing m_ClickCallback (pausing the game from the menu).
-    // TODO: 0x0014e994 — refactor to mirror the binary's m_bHighlighted
-    // gate end-to-end (requires reworking PauseScreen's m_bHighlighted
-    // lifecycle on Resume/Quit/Retry buttons).
-    if (m_DrawColour.a == 0) return;
-
-    // Compute rect bounds. Binary inflates by m_AnimSpeed/m_AnimSpeed2 which
-    // are 5.0 defaults — small inset/outset that gives the button a touch-up
-    // "grace zone". The port mirrors that.
-    float hw, hh;
-    if (m_bHasHitArea) {
-        hw = m_TargetSize.x * 0.5f;
-        hh = m_TargetSize.y * 0.5f;
-    } else {
-        hw = size.x * 0.5f;
-        hh = size.y * 0.5f;
-    }
-    const float left   = pos.x - hw - m_AnimSpeed2;
-    const float right  = pos.x + hw + m_AnimSpeed2;
-    const float bottom = pos.y - hh - m_AnimSpeed;
-    const float top    = pos.y + hh + m_AnimSpeed;
-
-    Mortar::Touch& touch = Mortar::Touch::GetInstance();
-
-    if (m_TouchSlot == -1) {
-        // Not tracking — scan for a new touch inside the rect.
-        int slot = touch.GetTouchInRegion(left, right, bottom, top, -1);
-        if (slot >= 0) {
-            // Latch the slot. Phase will be -1 (just pressed) on the first
-            // frame of a new touch; the binary fires the callback on the
-            // press edge for toggle buttons (FruitType < 0). Regular button
-            // buttons wait for release.
-            m_TouchSlot = slot;
-            m_bHighlighted = 1;
-            UpdateTouchPosition();
+    if (m_bHighlighted != 0) {
+        // Compute rect bounds. Binary inflates by m_AnimSpeed/m_AnimSpeed2 which
+        // are 5.0 defaults — small inset/outset that gives the button a touch-up
+        // "grace zone". The port mirrors that.
+        float hw, hh;
+        if (m_bHasHitArea) {
+            hw = m_TargetSize.x * 0.5f;
+            hh = m_TargetSize.y * 0.5f;
+        } else {
+            hw = size.x * 0.5f;
+            hh = size.y * 0.5f;
         }
-    } else {
-        // Tracking — refresh position and check for release.
-        UpdateTouchPosition();
-        // phase >= 1 means released. Fire callback if release was inside rect.
-        // Only toggle buttons (m_FruitType < 0, e.g. sound/music toggles)
-        // trigger on tap-release. Fruit/bomb buttons (Play / Dojo / Quit)
-        // require a slash-through instead — their callback fires via the
-        // rising-edge hit detection above (fruits) or Bomb::m_HitCallback
-        // (bombs), matching the "slice to play" gameplay intent.
-        if (m_TouchPhase >= 1.0f) {
-            const bool insideOnRelease =
-                m_TouchX >= left && m_TouchX <= right &&
-                m_TouchY >= bottom && m_TouchY <= top;
-            // ASM-verified: 2026-05-06T17:50 binary @ 0x0014e6a4 (asm-inspector)
-            // Binary calls TouchReleased() on inside-release, which fires
-            // both m_ClickCallback (for toggles only, m_FruitType<0) AND
-            // m_DeletedCallback unconditionally. Earlier port fired only
-            // m_ClickCallback directly and skipped m_DeletedCallback.
-            if (insideOnRelease) {
-                TouchReleased();
+        const float left   = pos.x - hw - m_AnimSpeed2;
+        const float right  = pos.x + hw + m_AnimSpeed2;
+        const float bottom = pos.y - hh - m_AnimSpeed;
+        const float top    = pos.y + hh + m_AnimSpeed;
+
+        Mortar::Touch& touch = Mortar::Touch::GetInstance();
+
+        if (m_TouchSlot == -1) {
+            // Not tracking — scan for a new touch inside the rect.
+            int slot = touch.GetTouchInRegion(left, right, bottom, top, -1);
+            if (slot >= 0) {
+                // Latch the slot. Phase will be -1 (just pressed) on the first
+                // frame of a new touch; the binary fires the callback on the
+                // press edge for toggle buttons (FruitType < 0). Regular button
+                // buttons wait for release.
+                m_TouchSlot = slot;
+                m_bHighlighted = 1;
+                UpdateTouchPosition();
             }
-            m_TouchSlot = -1;
-            m_bHighlighted = 0;
+        } else {
+            // Tracking — refresh position and check for release.
+            UpdateTouchPosition();
+            // phase >= 1 means released. Fire callback if release was inside rect.
+            // Only toggle buttons (m_FruitType < 0, e.g. sound/music toggles)
+            // trigger on tap-release. Fruit/bomb buttons (Play / Dojo / Quit)
+            // require a slash-through instead — their callback fires via the
+            // rising-edge hit detection above (fruits) or Bomb::m_HitCallback
+            // (bombs), matching the "slice to play" gameplay intent.
+            if (m_TouchPhase >= 1.0f) {
+                const bool insideOnRelease =
+                    m_TouchX >= left && m_TouchX <= right &&
+                    m_TouchY >= bottom && m_TouchY <= top;
+                // ASM-verified: 2026-05-06T17:50 binary @ 0x0014e6a4 (asm-inspector)
+                // Binary calls TouchReleased() on inside-release, which fires
+                // both m_ClickCallback (for toggles only, m_FruitType<0) AND
+                // m_DeletedCallback unconditionally. Earlier port fired only
+                // m_ClickCallback directly and skipped m_DeletedCallback.
+                if (insideOnRelease) {
+                    TouchReleased();
+                }
+                m_TouchSlot = -1;
+                m_bHighlighted = 0;
+            }
         }
     }
 
     // Binary @ 0x0014eb84: m_BackdropScale (+0xEC) is computed every Update
     // from size.x * 1.125f * m_AnimScale. Read by Draw Phase A @ 0x0014fa86
-    // to scale the scratchs.tex backdrop quad.
+    // to scale the scratchs.tex backdrop quad. Always runs — binary's
+    // LAB_0014eb52 falls through into this tail when m_bHighlighted == 0.
     m_BackdropScale = size.x * 1.125f * m_AnimScale;
 }
 
