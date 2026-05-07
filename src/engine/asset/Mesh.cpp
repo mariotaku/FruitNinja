@@ -80,13 +80,15 @@ Matrix44 Mesh::GetBoneLocalTransform(unsigned long idx) const {
     return out;
 }
 
-// Matches Mesh::GetBounds (0x001b07f0)
-// Computes AABB by transforming each bone's local bounds through its world
-// matrix (0x001b0840-0x001b08c0), then min/max-reducing across all bones.
+// Matches Mesh::GetBounds (0x001b07f0).
+// Binary signature: Bounds3D GetBounds() const (struct-return; r0 = hidden
+// retval ptr to a 24-byte Bounds3D). Computes AABB by transforming each
+// bone's local bounds through its world matrix, then min/max-reducing
+// across all bones. Initial values: ±1e30 (DAT_001b08e0 / DAT_001b08e4).
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001b07f0 (asm-inspector)
-void Mesh::GetBounds(Vec3& outMin, Vec3& outMax) const {
-    outMin = Vec3(1e30f, 1e30f, 1e30f);
-    outMax = Vec3(-1e30f, -1e30f, -1e30f);
+Bounds3D Mesh::GetBounds() const {
+    Bounds3D out(Vec3( 1e30f,  1e30f,  1e30f),
+                 Vec3(-1e30f, -1e30f, -1e30f));
 
     for (int i = 0; i < (int)m_BoneBindings.size(); i++) {
         const BoneBinding& bone = m_BoneBindings[i];
@@ -108,6 +110,8 @@ void Mesh::GetBounds(Vec3& outMin, Vec3& outMax) const {
         );
 
         // Reduce both transformed corners into the running AABB.
+        Vec3& outMin = out.min;
+        Vec3& outMax = out.max;
         if (wMin.x < outMin.x) outMin.x = wMin.x;
         if (wMin.y < outMin.y) outMin.y = wMin.y;
         if (wMin.z < outMin.z) outMin.z = wMin.z;
@@ -122,6 +126,8 @@ void Mesh::GetBounds(Vec3& outMin, Vec3& outMax) const {
         if (wMax.y > outMax.y) outMax.y = wMax.y;
         if (wMax.z > outMax.z) outMax.z = wMax.z;
     }
+
+    return out;
 }
 
 void Mesh::SetDiffuseTexture(const Mortar::SmartPtr<Texture>& tex) {
@@ -404,12 +410,12 @@ void Model::Draw(const Matrix44& transform) {
         //
         // Matrix44 is column-major: m[col*4 + row].
         // Col 2 (z) = m[8],m[9],m[10],m[11]; col 3 (w) = m[12],m[13],m[14],m[15].
-        Vec3 bmin, bmax;
-        m_Meshes[i]->GetBounds(bmin, bmax);
+        Bounds3D b = m_Meshes[i]->GetBounds();
+        // Bounds3D::Center @ 0x001936d0 — (min + max) * 0.5
         Vec3 c;
-        c.x = (bmin.x + bmax.x) * 0.5f;
-        c.y = (bmin.y + bmax.y) * 0.5f;
-        c.z = (bmin.z + bmax.z) * 0.5f;
+        c.x = (b.min.x + b.max.x) * 0.5f;
+        c.y = (b.min.y + b.max.y) * 0.5f;
+        c.z = (b.min.z + b.max.z) * 0.5f;
 
         float zp = c.x * mvp.m[8]  + c.y * mvp.m[9]  + c.z * mvp.m[10] + mvp.m[11];
         float wp = c.x * mvp.m[12] + c.y * mvp.m[13] + c.z * mvp.m[14] + mvp.m[15];
@@ -448,13 +454,6 @@ Mesh::Mesh(SmartPtr<SharedEffectProperties> const& /*props*/, AsciiString const&
 // Binary signature takes const-ref; this overload matches the binary mangled symbol.
 void Mesh::BindSkeleton(Skeleton const& /*skeleton*/) {
     // Defunct: const-ref BindSkeleton overload -- no-op stub; binary @ 0x001b0948
-}
-
-// STUB: GetBounds() const -- binary @ 0x????
-// Binary vtable[5] zero-arg signature; returns Bounds3D.
-Bounds3D Mesh::GetBounds() const {
-    // Defunct: zero-arg GetBounds -- no-op stub; binary @ 0x????
-    return Bounds3D();
 }
 
 // STUB: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c
@@ -569,17 +568,27 @@ int Model::NodeCount() const {
     return (int)m_Meshes.size();
 }
 
-// STUB: SetEffectGroup(SmartPtr<EffectGroup>) -- binary @ 0x???? (TODO RE)
-// Defunct: EffectGroup not ported; stub preserves call-graph shape.
+// Matches Model::SetEffectGroup (binary @ 0x0019335c). The binary does NOT
+// store the EffectGroup as a field on Model (no m_EffectGroup member);
+// instead it walks `m_Meshes` and for each calls
+// `Geometry::EffectGroupSet(geom)` (binary stub @ 0x001a00f8 — returns
+// the smart-ptr unchanged) followed by `Geometry::SetActiveEffect(geom, 0)`,
+// then `Mesh::RebuildEffectBindings()`. The Geometry calls are themselves
+// binary stubs for the live `Geometry` class (vs the legacy
+// `GeometryBinding`), so the net observable effect is a no-op modulo a
+// RebuildEffectBindings sweep — which is also a port-side defunct stub.
+// Defunct: EffectGroup wiring -- no-op stub; binary @ 0x0019335c
 void Model::SetEffectGroup(SmartPtr<EffectGroup> /*effectGroup*/) {
 }
 
-// Defunct: Bounds3D / EffectGroup stub bodies. Defined inline in Mesh.h;
-// no-op bodies live here so the symbols mangle and SmartPtr<EffectGroup>
-// dtor instantiation resolves without needing src/stubs/.
-void Bounds3D::Draw(Matrix44 const&, Colour) const {
-}
-void EffectGroup::AddEffect(SmartPtr<Effect> const&) {
+// EffectGroup::AddEffect — binary @ 0x001a0274 does a sorted-vector-set
+// insert (lower_bound + EffectLessThanCompare + MergeProperties). The
+// port keeps it as a no-op because every live caller (notably
+// Geometry::EffectGroupSet @ 0x001a00f8) is itself a binary stub — the
+// EffectGroup→EffectBinding→PassBinding render multi-pass machinery is
+// fully replaced by the port's flat GeometryEntry walk in Mesh::Draw.
+// Defunct: EffectGroup wiring -- no-op stub; binary @ 0x001a0274
+void EffectGroup::AddEffect(const SmartPtr<Effect>& /*effect*/) {
 }
 
 } // namespace Mortar
