@@ -89,9 +89,8 @@ MissControl::~MissControl() = default;
 // --- vtable overrides -------------------------------------------------------
 
 // Binary @ 0x001513cc — vtable[5]. Drops m_Texture SmartPtr ref.
-// Port stores raw GLuint; ownership lives in TextureManager, so clearing to 0 is sufficient.
 void MissControl::Release() {
-    m_Texture = 0;
+    m_Texture.SetNull();
 }
 
 // vtable[4] @ 0x00150fa4
@@ -240,7 +239,7 @@ static void PopulateOverlay(MissControl* mc, const Vec3& pos,
     mc->pos = pos;
 
     if (tex.IsValid()) {
-        mc->m_Texture = tex->m_TexId;
+        mc->m_Texture = tex;
         // binary MakeCritical: size = (w+1, h+1, 0) then halved, then doubled.
         // Net result: size = (w+1, h+1, 0) (the halve+double cancel).
         // binary @ 0x00151764 (MakeCritical size formula)
@@ -279,7 +278,7 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
     if (idx < 0)  idx = 0;
     if (idx > 9)  idx = 9;
     if (s_ComboTextures[idx].IsValid()) {
-        m_Texture = s_ComboTextures[idx]->m_TexId;
+        m_Texture = s_ComboTextures[idx];
         const float w = (float)(s_ComboTextures[idx]->m_Width  + 1);
         const float h = (float)(s_ComboTextures[idx]->m_Height + 1);
         size.x = w;
@@ -312,7 +311,7 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         // Path 1: zen-bomb X overlay (valid SmartPtr supplied).
         // binary @ 0x00151d94 path 1
         m_bUseSound    = 0;     // field_0x8c = 0 (suppress sound)
-        m_Texture      = tex->m_TexId;
+        m_Texture      = tex;
         m_bVisible     = 1;
         m_AnimState    = 3;
         // path 1: zen-bomb X overlay (DAT_00151f40 = 1.811f, same as MISS_FADE_INIT).
@@ -338,7 +337,7 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         pos.x = std::max(size.x * 0.5f - MISS_CLAMP_HALF_X, std::min(pos.x, MISS_CLAMP_HALF_X - size.x * 0.5f));
         pos.y = std::max(size.y * 0.5f - MISS_CLAMP_HALF_Y, std::min(pos.y, MISS_CLAMP_HALF_Y - size.y * 0.5f));
         m_bBusy        = 1;
-        if (s_TexCross.IsValid()) m_Texture = s_TexCross->m_TexId;
+        if (s_TexCross.IsValid()) m_Texture = s_TexCross;
     }
 }
 
@@ -419,7 +418,7 @@ void MissControl::Update(float dt) {
 // ASM-verified-partial: 2026-05-03 binary @ 0x00151f60..0x00152190 (pulse formula + fall-off only; transform field_0x14/0x20 pre-mult still a gap)
 // binary @ 0x00151f60
 void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
-    if (m_Texture == 0) return;
+    if (!m_Texture.IsValid()) return;
 
     // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block
     Vec3 drawPos = pos;
@@ -500,7 +499,7 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    glBindTexture(GL_TEXTURE_2D, m_Texture);
+    glBindTexture(GL_TEXTURE_2D, m_Texture->m_TexId);
 
     // Tint: m_DrawColour multiplied by per-frame HUD tint (MatrixManager.field_0x3c.field_0x20).
     // TODO: fetch HUD tint multiplier from MatrixManager for exact binary match.

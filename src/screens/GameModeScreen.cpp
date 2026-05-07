@@ -225,7 +225,7 @@ void GameModeScreen::CreateControls() {
     // by DojoScreen's back/play button).
     // Binary fruit type: FruitInfo_GetCount() (bomb threshold index).
     m_pBackButton = new MenuButton();
-    m_pBackButton->m_Texture = TexIdOf(s_TexBackIcon);
+    m_pBackButton->m_Texture = (s_TexBackIcon);
     m_pBackButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pBackButton;
@@ -247,7 +247,7 @@ void GameModeScreen::CreateControls() {
     // --- Button 2: CLASSIC (classic.tex, watermelon, ClassicModeCallback) ---
     // Binary: ResetTutePos is called on THIS button (not Zen).
     m_pClassicButton = new MenuButton();
-    m_pClassicButton->m_Texture = TexIdOf(s_TexClassic);
+    m_pClassicButton->m_Texture = (s_TexClassic);
     m_pClassicButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pClassicButton;
@@ -273,7 +273,7 @@ void GameModeScreen::CreateControls() {
     // --- Button 3: ZEN (mode_2.tex, apple_red, ZenModeCallback) ---
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
     m_pZenButton = new MenuButton();
-    m_pZenButton->m_Texture = TexIdOf(s_TexMode2);
+    m_pZenButton->m_Texture = (s_TexMode2);
     m_pZenButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pZenButton;
@@ -294,7 +294,7 @@ void GameModeScreen::CreateControls() {
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
     // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
     m_pArcadeButton = new MenuButton();
-    m_pArcadeButton->m_Texture = TexIdOf(s_TexArcadeMode);
+    m_pArcadeButton->m_Texture = (s_TexArcadeMode);
     m_pArcadeButton->size      = TexSizeOf(s_TexArcadeMode, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pArcadeButton;

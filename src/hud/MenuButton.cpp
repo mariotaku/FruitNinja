@@ -306,12 +306,8 @@ void MenuButton::Release() {
     m_pLabel1 = nullptr;
     m_pLabel2 = nullptr;
     DeletePeices();
-    // DIFFERS: original = ~SmartPtr<Texture> on m_SecondaryTex (+0x78).
-    // Port stores m_SecondaryTex as a bare GLuint at +0x74 (the binding
-    // handle is enough for HUDControl3d::Draw) and the upstream caller
-    // owns the SmartPtr ref keeping the texture alive. Reset to 0 so a
-    // re-attach starts clean.
-    m_SecondaryTex = 0;
+    // Binary @ 0x0014f7e0 -- ~SmartPtr<Texture> drop on m_SecondaryTex.
+    m_SecondaryTex.SetNull();
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
 }
@@ -996,14 +992,9 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
                          texH * vSpan * sizeScale.z,
                          0.0f);
     }
-    // Binary @ 0x00150240: store the texture handle on the AddOn's
-    // m_SecondaryTex slot. Binary uses Mortar::SmartPtr<Texture> at
-    // HUDControl3d+0x78; port stores the bare GL handle (GLuint at +0x74)
-    // since HUDControl3d::Draw only needs the GL ID -- the SmartPtr ref
-    // count is held by `tex` until this scope ends, which is fine since
-    // the upstream caller (MenuButton::UpdatePeices) keeps its own
-    // SmartPtr alive for the AddOn's lifetime.
-    c->m_SecondaryTex = tex.IsValid() ? tex->m_TexId : 0;
+    // Binary @ 0x00150240: store the texture SmartPtr on the AddOn's
+    // m_SecondaryTex slot (HUDControl3d +0x78, Mortar::SmartPtr<Texture>).
+    c->m_SecondaryTex = tex;
     c->pos   = pos;
     c->m_Timer = initialTimer;
     c->size  = size;

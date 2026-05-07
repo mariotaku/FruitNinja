@@ -55,7 +55,7 @@ public:
     MenuButton* m_P2QuitButton;
 
     // +0xa8: pause_button.tex (in-game pause icon; shown when m_Alpha <= 0.5)
-    GLuint m_PauseButtonTex;
+    Mortar::SmartPtr<Mortar::Texture> m_PauseButtonTex;
 
     // +0xac: P1 Retry button (retry_button.tex)
     MenuButton* m_RetryButton;
@@ -67,13 +67,13 @@ public:
     float m_ButtonFadeAlpha;
 
     // +0xb8: play_button.tex (resume icon; shown when m_Alpha > 0.5)
-    GLuint m_PlayButtonTex;
+    Mortar::SmartPtr<Mortar::Texture> m_PlayButtonTex;
 
     // +0xbc: quit_title.tex
-    GLuint m_QuitTitleTex;
+    Mortar::SmartPtr<Mortar::Texture> m_QuitTitleTex;
 
     // +0xc0: retry_button.tex
-    GLuint m_RetryButtonTex;
+    Mortar::SmartPtr<Mortar::Texture> m_RetryButtonTex;
 
     // +0xc4: padding / not written in ctor
     int _pad_c4;

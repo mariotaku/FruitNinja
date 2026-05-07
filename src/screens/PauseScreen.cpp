@@ -58,12 +58,18 @@ static Mortar::SmartPtr<Mortar::Texture> s_FlashTex;
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------
-static inline GLuint LoadTex(const char* name, int* outW = nullptr, int* outH = nullptr) {
+static inline Mortar::SmartPtr<Mortar::Texture> LoadTex(const char* name,
+                                                         int* outW = nullptr,
+                                                         int* outH = nullptr) {
     Mortar::SmartPtr<Mortar::Texture> t = Mortar::TextureManager::LoadLocalisedTexture(name);
-    if (!t.IsValid()) return 0;
-    if (outW) *outW = t->m_Width;
-    if (outH) *outH = t->m_Height;
-    return t->m_TexId;
+    if (t.IsValid()) {
+        if (outW) *outW = t->m_Width;
+        if (outH) *outH = t->m_Height;
+    } else {
+        if (outW) *outW = 0;
+        if (outH) *outH = 0;
+    }
+    return t;
 }
 
 // -------------------------------------------------------------------------
@@ -141,13 +147,9 @@ PauseScreen::PauseScreen()
       m_P2ResumeButton(nullptr),
       m_QuitButton(nullptr),
       m_P2QuitButton(nullptr),
-      m_PauseButtonTex(0),
       m_RetryButton(nullptr),
       m_P2RetryButton(nullptr),
       m_ButtonFadeAlpha(1.0f),
-      m_PlayButtonTex(0),
-      m_QuitTitleTex(0),
-      m_RetryButtonTex(0),
       _pad_c4(0),
       m_LastHitButton(-1),
       m_PressIndex(0),
@@ -166,9 +168,9 @@ PauseScreen::PauseScreen()
     // is set to the title texture so HUDControl3d::Draw renders it.
     {
         int w = 0, h = 0;
-        GLuint id = LoadTex("pause_title.tex", &w, &h);
-        m_Texture = id;           // primary: HUDControl3d::Draw uses this
-        m_SecondaryTex = id;      // also fill inherited secondary slot (binary stores here)
+        Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex", &w, &h);
+        m_Texture      = tex;     // primary: HUDControl3d::Draw uses this
+        m_SecondaryTex = tex;     // also fill inherited secondary slot (binary stores here)
         m_TitleTexW = (float)w;
         m_TitleTexH = (float)h;
     }
@@ -220,18 +222,15 @@ void PauseScreen::Init() {
 }
 
 // -------------------------------------------------------------------------
-// vtable[3]: Release -- nulls all owned texture refs
+// vtable[3]: Release -- nulls all 5 owned SmartPtr<Texture> refs.
 // Binary @ 0x0015408C -- vtable slot 3.
-// Nulls 5 SmartPtrs (m_SecondaryTex, m_QuitTitleTex, m_PlayButtonTex,
-// m_RetryButtonTex, m_PauseButtonTex). Port uses GLuint — no-op for GLuids;
-// GLuint refs are not ref-counted and are freed by TextureManager on shutdown.
 // -------------------------------------------------------------------------
 void PauseScreen::Release() {
-    m_SecondaryTex = 0;
-    m_QuitTitleTex = 0;
-    m_PlayButtonTex = 0;
-    m_RetryButtonTex = 0;
-    m_PauseButtonTex = 0;
+    m_SecondaryTex.SetNull();
+    m_QuitTitleTex.SetNull();
+    m_PlayButtonTex.SetNull();
+    m_RetryButtonTex.SetNull();
+    m_PauseButtonTex.SetNull();
 }
 
 // -------------------------------------------------------------------------

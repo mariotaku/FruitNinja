@@ -225,8 +225,8 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             bgTex = TextureManager::LoadLocalisedTexture("textures/zen-game-over-bg.tex");
         else
             bgTex = TextureManager::LoadLocalisedTexture("textures/classic-game-over-bg.tex");
-        // Store handle in m_SecondaryTex (GLuint port field)
-        m_SecondaryTex = bgTex ? bgTex->m_TexId : 0;
+        // Store the SmartPtr in m_SecondaryTex (matches binary type).
+        m_SecondaryTex = bgTex;
         // Record title size from texture dimensions
         if (bgTex) {
             m_TitleSizeX = (float)bgTex->m_Width;
@@ -537,13 +537,12 @@ void GameOverScreen::CreateRetryButton() {
     // Port fallback: load directly
     Mortar::SmartPtr<Mortar::Texture> tex =
         TextureManager::LoadLocalisedTexture("textures/retry-button.tex");
-    GLuint texHandle = tex ? tex->m_TexId : 0;
 
     m_pRetryBtn = new MenuButton();
     m_pRetryBtn->pos    = btnPos;
     m_pRetryBtn->m_LayerFlags = 0x08;
     m_pRetryBtn->m_FruitType  = -1;
-    m_pRetryBtn->m_Texture    = texHandle;
+    m_pRetryBtn->m_Texture    = tex;
 
     m_pRetryBtn->m_ClickCallback =
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked);
@@ -586,13 +585,12 @@ void GameOverScreen::CreateQuitButton() {
 
     Mortar::SmartPtr<Mortar::Texture> tex =
         TextureManager::LoadLocalisedTexture("textures/quit-button.tex");
-    GLuint texHandle = tex ? tex->m_TexId : 0;
 
     m_pQuitBtn = new MenuButton();
     m_pQuitBtn->pos    = btnPos;
     m_pQuitBtn->m_LayerFlags = 0x08;
     m_pQuitBtn->m_FruitType  = -1;
-    m_pQuitBtn->m_Texture    = texHandle;
+    m_pQuitBtn->m_Texture    = tex;
 
     // Mirror tutorial-text slots from retry button (binary: memcpy +0x124,+0x128,+0x12C)
     // Not applicable until TutorialControl text slots are wired.

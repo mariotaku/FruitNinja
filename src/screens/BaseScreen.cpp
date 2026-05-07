@@ -234,7 +234,7 @@ void BaseScreen::UpdateButtons(float dt) {
             // Lazy-create MenuButton from descriptor
             MenuButton* btn = new MenuButton();
             if (sb.m_tex.IsValid()) {
-                btn->m_Texture = sb.m_tex->m_TexId;
+                btn->m_Texture = sb.m_tex;
                 btn->size = Vec3((float)sb.m_tex->m_Width,
                                  (float)sb.m_tex->m_Height, 1.0f);
             }

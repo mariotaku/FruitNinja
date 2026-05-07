@@ -58,7 +58,7 @@ TutorialControl::TutorialControl()
     {
         Mortar::SmartPtr<Mortar::Texture> tex =
             Mortar::TextureManager::LoadLocalisedTexture("swipe_fruit_begin.tex");
-        if (tex.IsValid()) m_Texture = tex->m_TexId;
+        if (tex.IsValid()) m_Texture = tex;
     }
 
     // press_indicate.tex -> m_PressTex (+0x8C, the trail quads)
@@ -327,7 +327,7 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
     // m_bHidden selects UV frame:
     //   0 -> u0 = 0.0 * 0.5 = 0.0, u1 = 0.0 * 0.5 + 0.5 = 0.5
     //   1 -> u0 = 1.0 * 0.5 = 0.5, u1 = 1.0 * 0.5 + 0.5 = 1.0
-    if (m_Texture != 0) {
+    if (m_Texture.IsValid()) {
         float arrow_u0 = m_bHidden * 0.5f;
         float arrow_u1 = m_bHidden * 0.5f + 0.5f;
 
@@ -346,8 +346,8 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        glBindTexture(GL_TEXTURE_2D, m_Texture);
+        m_Texture->Set();
         r->DrawQuad(m_Colour, arrow_u0, 0.0f, arrow_u1, 1.0f);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        m_Texture->UnSet();
     }
 }

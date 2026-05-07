@@ -137,7 +137,7 @@ void PowerUpShop::Init() {
     if (!g_BuyBg.IsValid()) {
         g_BuyBg = Mortar::TextureManager::LoadLocalisedTexture("buy_bg.tex");
     }
-    m_SecondaryTex = g_BuyBg.Get() ? g_BuyBg.Get()->m_TexId : 0;
+    m_SecondaryTex = g_BuyBg;
 
     // Binary: reads texture w/h via vtable slots *(vtbl+0x14)/(+0x18) GetWidth/GetHeight.
     // Sets pivot = Vector3(w, h, 0) * 1.0.

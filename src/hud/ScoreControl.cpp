@@ -113,7 +113,7 @@ void ScoreControl::Init() {
 // Release @ 0x00158370 — null out all 4 texture SmartPtrs
 void ScoreControl::Release() {
     m_FruitDigitTex.SetNull();
-    m_Texture = 0;          // super.m_Texture (+0x74) — HUDControl3d GLuint
+    m_Texture.SetNull();          // super.m_Texture (+0x74) — HUDControl3d GLuint
     m_ScoreIconTex.SetNull();
     m_HighscoreBannerTex.SetNull();
 }
@@ -123,7 +123,7 @@ void ScoreControl::Reset() {
     // DIFFERS: binary Reset @ 0x001582e4 always copies m_FruitDigitTex to m_Texture;
     // port leaves m_Texture = 0 because HUDControl3d::Draw doesn't yet apply the
     // per-digit UV crop via m_DigitAlpha[]. Net effect identical until the crop hook lands.
-    m_Texture = 0;
+    m_Texture.SetNull();
 
     m_PulseAngle = 0;
     m_bDirty     = 1;
@@ -405,8 +405,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 // Rebind +0x74 (m_Texture) to per-fruit HUD icon for this frame.
                 // HUDControl3d::Draw will render it after PreDraw returns.
                 // m_HudTexture corresponds to fi->m_pFruitTexture in the binary doc.
-                Mortar::Texture* hudTex = fi->m_HudTexture.Get();
-                if (hudTex) m_Texture = hudTex->m_TexId;
+                if (fi->m_HudTexture.IsValid()) m_Texture = fi->m_HudTexture;
 
                 // Tint from FRUIT_INFO->m_FactColour (+0x2F8), alpha overridden.
                 tint.r = fi->m_FactColour[0];

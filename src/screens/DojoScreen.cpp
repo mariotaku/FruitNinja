@@ -190,7 +190,7 @@ void DojoScreen::Update(float dt) {
                 // MenuButton treats fruitType >= count as a BOMB spawn.
                 const int bombFruitType = FruitInfo_GetCount();
                 m_pPlayButton = new MenuButton();
-                m_pPlayButton->m_Texture = TexIdOf(s_TexBackIcon);
+                m_pPlayButton->m_Texture = (s_TexBackIcon);
                 m_pPlayButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pPlayButton->Init(POS_BACK_BUTTON,
                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
@@ -213,7 +213,7 @@ void DojoScreen::Update(float dt) {
                 // Binary: Fruit::FruitType((char*)DAT_001386b0, false)
                 const int shopFruitType = Fruit::FruitType("pineapple", false);
                 m_pShopButton = new MenuButton();
-                m_pShopButton->m_Texture = TexIdOf(s_TexShop);
+                m_pShopButton->m_Texture = (s_TexShop);
                 m_pShopButton->size      = TexSizeOf(s_TexShop, 64.0f, 64.0f);
                 m_pShopButton->Init(POS_SHOP_BUTTON,
                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
@@ -254,7 +254,7 @@ void DojoScreen::Update(float dt) {
                 // Binary: Fruit::FruitType((char*)DAT_001389f0, false)
                 const int aboutFruitType = Fruit::FruitType("plum", false);
                 m_pAboutButton = new MenuButton();
-                m_pAboutButton->m_Texture = TexIdOf(s_TexAbout);
+                m_pAboutButton->m_Texture = (s_TexAbout);
                 m_pAboutButton->size      = TexSizeOf(s_TexAbout, 64.0f, 64.0f);
                 m_pAboutButton->Init(POS_ABOUT_BUTTON,
                                      Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
