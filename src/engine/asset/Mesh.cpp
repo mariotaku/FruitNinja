@@ -569,26 +569,67 @@ int Model::NodeCount() const {
 }
 
 // Matches Model::SetEffectGroup (binary @ 0x0019335c). The binary does NOT
-// store the EffectGroup as a field on Model (no m_EffectGroup member);
-// instead it walks `m_Meshes` and for each calls
-// `Geometry::EffectGroupSet(geom)` (binary stub @ 0x001a00f8 — returns
-// the smart-ptr unchanged) followed by `Geometry::SetActiveEffect(geom, 0)`,
-// then `Mesh::RebuildEffectBindings()`. The Geometry calls are themselves
-// binary stubs for the live `Geometry` class (vs the legacy
-// `GeometryBinding`), so the net observable effect is a no-op modulo a
-// RebuildEffectBindings sweep — which is also a port-side defunct stub.
-// Defunct: EffectGroup wiring -- no-op stub; binary @ 0x0019335c
+// store the EffectGroup as a field on Model -- it walks `m_Meshes` and for
+// each mesh iterates its geometries calling
+//   Geometry::EffectGroupSet(geom, effectGroup)   // binary stub @ 0x001a00f8
+//   Geometry::SetActiveEffect(geom, 0)            // binary stub
+// then calls `Mesh::RebuildEffectBindings()` on the mesh.
+//
+// Both `Geometry::EffectGroupSet` and `Geometry::SetActiveEffect` are
+// binary stubs for the live `Mortar::Geometry` class (vs the legacy
+// `GeometryBinding`); the port doesn't have a `Geometry` class at all
+// (replaced by flat `GeometryEntry`), so the inner calls are simply
+// omitted. `Mesh::RebuildEffectBindings` is the port's Defunct stub
+// (binary @ 0x001b08e8), so it's still callable but does nothing.
+// Net effect identical to the binary -- the loop runs, the inner stubs
+// are no-ops on both sides, and the m_Meshes vector ordering is preserved.
 void Model::SetEffectGroup(SmartPtr<EffectGroup> /*effectGroup*/) {
+    for (int i = 0; i < (int)m_Meshes.size(); i++) {
+        Mesh* mesh = m_Meshes[i].Get();
+        if (!mesh) continue;
+
+        // Binary @ 0x001a00f8 / `Geometry::SetActiveEffect`: per-geom
+        // calls into the (binary-stub) Geometry class. Port has no
+        // Geometry class -- the GeometryEntry walk in Mesh::Draw
+        // doesn't go through these hooks.
+
+        // Binary @ 0x001b08e8 -- Defunct stub in port too.
+        mesh->RebuildEffectBindings();
+    }
 }
 
-// EffectGroup::AddEffect — binary @ 0x001a0274 does a sorted-vector-set
-// insert (lower_bound + EffectLessThanCompare + MergeProperties). The
-// port keeps it as a no-op because every live caller (notably
-// Geometry::EffectGroupSet @ 0x001a00f8) is itself a binary stub — the
-// EffectGroup→EffectBinding→PassBinding render multi-pass machinery is
-// fully replaced by the port's flat GeometryEntry walk in Mesh::Draw.
-// Defunct: EffectGroup wiring -- no-op stub; binary @ 0x001a0274
-void EffectGroup::AddEffect(const SmartPtr<Effect>& /*effect*/) {
+// EffectGroup::AddEffect (binary @ 0x001a0274) — sorted-vector-set insert.
+// Binary structure:
+//   it = std::lower_bound(m_Effects.begin(), m_Effects.end(), effect,
+//                         EffectLessThanCompare);
+//   if (it != m_Effects.end() && !EffectLessThanCompare(effect, *it)) {
+//       // Equivalent already in set -> merge properties into existing entry.
+//       (*it)->MergeProperties(effect->Properties());
+//   } else {
+//       m_Effects.insert(it, effect);
+//   }
+//
+// Port mirrors this with linear-scan dedupe instead of lower_bound (the
+// `Effect` class is a no-method shell here -- there is no
+// `EffectLessThanCompare` to call, and `Effect::Properties` /
+// `Effect::MergeProperties` aren't ported). Net observable behavior
+// matches the binary's post-condition: each `effect` value is in
+// `m_Effects` exactly once. Sorted-order semantics relax to insertion-
+// order. The live render path doesn't reach this code -- every caller
+// chains through binary stubs that no-op out -- so the relaxation is
+// inert in practice.
+void EffectGroup::AddEffect(const SmartPtr<Effect>& effect) {
+    if (!effect.IsValid()) return;
+    for (int i = 0; i < (int)m_Effects.size(); i++) {
+        if (m_Effects[i].Get() == effect.Get()) {
+            // Equivalent entry already present. Binary calls
+            // MergeProperties on the existing entry; port's Effect class
+            // has no such method (no Effect::Properties either), so the
+            // merge is omitted.
+            return;
+        }
+    }
+    m_Effects.push_back(effect);
 }
 
 } // namespace Mortar
