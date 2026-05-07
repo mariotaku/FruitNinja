@@ -244,15 +244,19 @@ void MainScreen::Update(float dt) {
         if (-m_CameraTransition > 0.999f && !m_bGameStartReset) {
             WaveManager::GetInstance()->Reset(true);
             m_bGameStartReset = true;
-            // TODO (port-level): mirror game->field_0x28 = field_0x20
-            // and game->pauseFlag = 1; both fields not yet ported.
+            // Binary @ 0x0014bb6c: game->pauseFlag = 1 (suppresses
+            // WaveManager spawn pump until the camera-settle clear below).
+            // game->field_0x28 = field_0x20 still TODO (field not in port struct).
+            game.pauseFlag = 1;
         }
         m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
         if (fabsf(m_CameraTransition) < 0.001f) {
             m_CameraTransition = 0.0f;
             m_State = STATE_CAMERA_FADE;
             m_bGameStartReset = false;
-            // TODO: game->pauseFlag = 0;
+            // Binary @ 0x0014bb78: clear pauseFlag once the camera
+            // animation has settled into gameplay.
+            game.pauseFlag = 0;
         }
 
         // Shared LAB_0014c166 pos.y animation (binary uses cameraTransition
@@ -417,7 +421,9 @@ void MainScreen::Update(float dt) {
             m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
             if (m_CameraTransition > -0.001f) {
                 m_CameraTransition = 0.0f;
-                // Port specific: game->pauseFlag not yet ported; clear skipped.
+                // Binary @ 0x0014c1a4: clear pauseFlag once the post-game
+                // camera fade has reached zero (back-to-menu return path).
+                game.pauseFlag = 0;
             }
         }
         break;
