@@ -623,44 +623,65 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton->size.y = m_PauseButtonTexH * resumeScale;
 
         // DIFFERS: original defends against menu-screen ghost-clicks via per-
-        // frame Resume button POSITION recomputation. The formula is fully
-        // decoded (asm-inspector, ASM-verified 2026-05-06):
+        // frame Resume + Retry button POSITION recomputation. Formula fully
+        // decoded (re-analyst + asm-inspector, 2026-05-06):
         //
-        //   binary @ 0x0014505a..0x001450d6 (post-switch tail of
-        //   PauseScreen::Update — note the prior pass mis-cited address
-        //   0x00155xxx which is inside UpsellScreen::Update, not here)
+        //   binary @ 0x001550d6 (post-switch tail of PauseScreen::Update;
+        //   PauseScreen::Update spans 0x00154468..0x00155228). Earlier
+        //   passes mis-attributed `0x001450d6` -- that's actually inside
+        //   `_GLOBAL__I_Hud.cpp` static init, not PauseScreen.
         //
         //   let absFade = fabsf(m_ButtonFadeAlpha);     // PauseScreen +0xb4
-        //   let originX = m_ButtonOriginPos.x;          // PauseScreen +0x8c
-        //   let term1   = 244.0 - 0.375 * originX;
-        //   let term2   = absFade * (10.0 + 0.75 * originX);
-        //   m_ResumeButton->pos.x = -(term1 + term2);   // vneg.f32 confirmed
-        //   // pos.y / pos.z left untouched
+        //   let OX      = m_ButtonOriginPos.x;          // PauseScreen +0x8c
+        //   let term1   = 244.0 - 0.375 * OX;
+        //   let term2   = absFade * (10.0 + 0.75 * OX);
+        //   m_ResumeButton->pos.x = -(term1 + term2);   // vneg.f32 @ 0x001550ce
+        //   m_ResumeButton->pos.y = 0.375 * OX - 165.0; // vstr  @ 0x0015500a
         //
-        //   // Retry button (binary @ 0x0014507a..0x00145096):
-        //   m_RetryButton->pos.x = 240.0 + 0.5 * originX;
+        //   m_RetryButton->pos.x = 240.0 + 0.5 * OX;
         //   m_RetryButton->pos.y = -20.0;
         //   m_RetryButton->pos.z = 0.0;
         //
-        // The formula is a feedback loop on m_ButtonOriginPos.x (which is
-        // updated from m_ResumeButton->pos at the end of this block). With
-        // |FadeAlpha|→0 in active gameplay, the steady state is
-        // OriginX = -244 / 0.625 = -390.4 — i.e. the Resume button's pos
-        // converges to ~(-390, -160), well off-screen-left in the centred
-        // ortho [-240, +240]. That implies the in-game pause icon visible
-        // at the bottom-right in the shipped game is rendered through a
-        // mechanism OTHER than this MenuButton (likely a direct draw from
-        // PauseScreen::Draw with the `pause_button.tex`, with hit-testing
-        // routed through some other channel). We have NOT identified that
-        // path yet.
+        // Critical correction: there is NO feedback loop on m_ButtonOriginPos.x.
+        // It is set ONCE at lazy-create (binary @ 0x001545d8..0x00154604) by
+        // copying `m_ResumeButton->m_TargetSize` (MenuButton +0x124, NOT
+        // HUDControl::size +0x20). The earlier "OriginX-feedback steady-state"
+        // analysis was wrong; OX is a per-session constant determined by the
+        // GOT-resolved Vec3 at DAT_00154710 multiplied by 500.0 (the size
+        // arg passed to MenuButton::MenuButton). The literal Vec3 value
+        // wasn't recovered in the Ghidra session that found this; treat OX
+        // as the gameplay anchor-X (most likely 240 to match the pos arg
+        // (240, -160, 0) also passed to the ctor).
         //
-        // TODO: 0x0014505a — apply the decoded formula AND track down the
-        // separate in-game pause-icon draw + hit-test path. Until then,
-        // applying the formula naively would break the user's ability to
-        // pause during gameplay, so the port keeps a `m_bActive` gate as
-        // a stand-in: 0 on menu (matches the "off-screen so untouchable"
-        // outcome), 1 on gameplay (so the still-at-(240,-160) port-side
-        // initial position remains clickable).
+        // Implication: with constant OX, the formula deterministically
+        // places the button at one position per session. With OX = 240:
+        //   pos.x = -((244 - 90) + |fade|*(10 + 180))
+        //         = -(154 + 190*|fade|) → -154 in gameplay (|fade|→0),
+        //                                  -344 when paused (|fade|→1)
+        //   pos.y = 0.375*240 - 165 = -75
+        //
+        // In the binary's PauseScreen-local coords (HUDControl3d::Draw
+        // applies the parent's pos transform), the (-154, -75) center +
+        // PauseScreen's own pos animation lands the icon at the visible
+        // bottom-right in the Bada framebuffer. The port's coord-system
+        // mapping needs to be RE'd before applying the formula faithfully
+        // -- naive port of `pos.x = -154` would put the icon left-of-
+        // center, not bottom-right.
+        //
+        // TODO: 0x001550d6 — apply the formula once we've RE'd
+        //   (a) the GOT-resolved m_TargetSize Vec3 (read DAT_00154710 at
+        //       runtime or via a deeper Ghidra pass),
+        //   (b) PauseScreen's own pos animation contribution and how
+        //       HUDControl3d::Draw composes the parent transform, AND
+        //   (c) the "MenuButton size arg * 500" semantics in the binary's
+        //       MenuButton::ctor (port currently assigns size from texture
+        //       dimensions, which is a port-side divergence).
+        //
+        // Until all three are nailed, applying the formula would risk
+        // breaking gameplay pause. The port keeps a `m_bActive` gate as
+        // stand-in: 0 on menu (matches "off-screen so untouchable"),
+        // 1 on gameplay (so the still-at-(240,-160) port-side initial
+        // position remains clickable).
         if (Game* g = Game::GetInstance()) {
             m_ResumeButton->m_bActive = (g->pauseFlag == 0) ? 1 : 0;
         }
