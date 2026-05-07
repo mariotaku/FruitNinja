@@ -27,7 +27,7 @@ SpeedControl::SpeedControl()
     int texW = 0, texH = 0;
     Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture("speed_control.tex");
     if (tex.IsValid()) {
-        m_Texture = tex->m_TexId;
+        m_Texture = tex;
         texW = tex->m_Width;
         texH = tex->m_Height;
     }

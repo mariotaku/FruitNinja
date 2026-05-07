@@ -541,7 +541,7 @@ void ShopScreen::SetSelected(ShopListItem* item) {
         // Item is unlocked: select_item.tex + watermelon fruit type
         // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- static tex +0x18
         //         Fruit::SetFruitType(fruit, type_unlocked, 1.0f) @ 0x0017621c
-        m_pEquipButton->m_Texture = TexIdOf(s_TexSelectItem);
+        m_pEquipButton->m_Texture = (s_TexSelectItem);
         if (equipFruit) {
             // SetFruitType is not ported as a standalone method; set m_FruitType directly.
             // Binary SetFruitType also updates visual scale and collision radius from FruitInfo;
@@ -552,7 +552,7 @@ void ShopScreen::SetSelected(ShopListItem* item) {
         // Item is locked: locked.tex + coconut fruit type
         // Binary: SmartPtr::operator= on (m_pEquipButton+0x74) <- static tex +0x14
         //         Fruit::SetFruitType(fruit, type_locked, 1.0f) @ 0x0017621c
-        m_pEquipButton->m_Texture = TexIdOf(s_TexLocked);
+        m_pEquipButton->m_Texture = (s_TexLocked);
         if (equipFruit) {
             equipFruit->m_FruitType = type_locked;
         }
@@ -765,7 +765,7 @@ void ShopScreen::Update(float dt) {
                 const int backFruitType = FruitInfo_GetCount();  // forces bomb spawn
                 m_pBuyButton = new MenuButton();
                 // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
-                m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
+                m_pBuyButton->m_Texture = (s_TexBackIcon);
                 m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pBuyButton->Init(POS_BACK_BUTTON,
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
@@ -835,7 +835,7 @@ void ShopScreen::Update(float dt) {
                             m_pEquipButton = new MenuButton();
                             // DIFFERS: binary uses *(GameTask + slot+0x14); port
                             // uses select_item.tex (same slot the binary assigns in SetSelected).
-                            m_pEquipButton->m_Texture = TexIdOf(s_TexSelectItem);
+                            m_pEquipButton->m_Texture = (s_TexSelectItem);
                             m_pEquipButton->size      = TexSizeOf(s_TexSelectItem, 64.0f, 64.0f);
                             m_pEquipButton->Init(POS_EQUIP_BUTTON,
                                 Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
@@ -952,7 +952,7 @@ void ShopScreen::Update(float dt) {
             const int backFruitType = FruitInfo_GetCount();
             m_pBuyButton = new MenuButton();
             // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
-            m_pBuyButton->m_Texture = TexIdOf(s_TexBackIcon);
+            m_pBuyButton->m_Texture = (s_TexBackIcon);
             m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),

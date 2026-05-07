@@ -22,19 +22,17 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     // Step 1: two gates matching binary order (0x1442a0..0x1442b4):
     //   gate 1 — no texture: SmartPtr::operator bool on this+0x74
     //   gate 2 — byte at this+0x5f == 0 (m_DrawColour.a in port layout)
-    if (!m_Texture) return;
+    if (!m_Texture.IsValid()) return;
     if (m_DrawColour.a == 0) return;
 
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Step 2: Texture::Set (m_Texture is a raw GLuint from MenuButton-loaded
-    // assets, not a Mortar::Texture* -- bypasses Texture::Set so we have to
-    // update the bound-texture tracker manually for Renderer::DrawQuad's guard.)
-    glActiveTexture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, m_Texture);
-    Mortar::Texture::s_LastBoundTexId = m_Texture;
+    // Step 2: Texture::Set — binary calls Texture::Set on the SmartPtr
+    // (binary @ 0x001892b0). Port matches now that m_Texture is a real
+    // SmartPtr<Texture>: Set() does the activeTexture / glEnable / bind
+    // and updates s_LastBoundTexId.
+    m_Texture->Set();
 
     // Step 3: MatrixStack::Reset (world stack)
     MatrixManager& mm = MatrixManager::GetInstance();
@@ -63,14 +61,12 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
 
-    // Step 12: UnSet
-    glBindTexture(GL_TEXTURE_2D, 0);
-    Mortar::Texture::s_LastBoundTexId = 0;
+    // Step 12: UnSet — matches Texture::UnSet (binary @ 0x00189790)
+    m_Texture->UnSet();
 }
 
-HUDControl3d::HUDControl3d()
-    : m_Texture(0),
-      m_SecondaryTex(0) {
+HUDControl3d::HUDControl3d() {
+    // m_Texture / m_SecondaryTex default-construct to null SmartPtrs.
     m_Timer = 0.0f;
 }
 

@@ -19,17 +19,19 @@
 
 #include "HUDControl.h"
 #include "render/gl_funcs.h"
+#include "asset/Texture.h"
+#include "util/SmartPtr.h"
 
 class HUDControl3d : public HUDControl {
 public:
-    // +0x74: main display texture (binary: Mortar::SmartPtr<Texture>; port: raw GLuint)
-    // Gate: nullptr/0 = don't draw (checked first in Draw)
-    GLuint m_Texture;
+    // +0x74: main display texture (Mortar::SmartPtr<Texture>, matches binary).
+    // Gate: !IsValid() = don't draw (checked first in Draw).
+    Mortar::SmartPtr<Mortar::Texture> m_Texture;
 
-    // +0x78: secondary texture (binary: Mortar::SmartPtr<Texture>; port: raw GLuint)
-    // Initialized to 0 by ctor; not used by HUDControl3d::Draw.
-    // Subclasses (TutorialControl) use this slot for their own textures.
-    GLuint m_SecondaryTex;
+    // +0x78: secondary texture (Mortar::SmartPtr<Texture>, matches binary).
+    // Initialized null by ctor; not used by HUDControl3d::Draw itself.
+    // Subclasses (TutorialControl, MenuButton AddOns) attach their own here.
+    Mortar::SmartPtr<Mortar::Texture> m_SecondaryTex;
 
     HUDControl3d();
 

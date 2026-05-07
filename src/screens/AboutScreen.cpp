@@ -240,7 +240,7 @@ void AboutScreen::CreateBackButton()
     // Wire the back-icon ring texture (binary reads game->field_0x17c).
     // Without this the menu-button quad renders as an untextured square.
     if (s_TexBackIcon.IsValid()) {
-        m_pBackButton->m_Texture = s_TexBackIcon->m_TexId;
+        m_pBackButton->m_Texture = s_TexBackIcon;
         m_pBackButton->size = Vec3(
             (float)(s_TexBackIcon->m_Width  + 1),
             (float)(s_TexBackIcon->m_Height + 1),

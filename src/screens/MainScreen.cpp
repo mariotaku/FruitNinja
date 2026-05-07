@@ -494,10 +494,10 @@ void MainScreen::Update(float dt) {
     // Position update (end of Update, all states)
     // Sound/music toggle texture swap
     if (pSoundToggle) {
-        pSoundToggle->m_Texture = TexId(game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
+        pSoundToggle->m_Texture = (game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     }
     if (pMusicToggle) {
-        pMusicToggle->m_Texture = TexId(game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
+        pMusicToggle->m_Texture = (game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     }
 
     // Compute the state-dependent "elapsedTime" / pause driver used by
@@ -795,7 +795,7 @@ void MainScreen::CreateToggles() {
     // Sound toggle: (216.0, 135.5, 0.0), fruitType=-1 (no fruit).
     // Size comes from the texture dimensions (TexSize fallback = 32×32).
     pSoundToggle = new MenuButton();
-    pSoundToggle->m_Texture = TexId(game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
+    pSoundToggle->m_Texture = (game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
         Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1, Vec3(0,0,0), nullptr);
@@ -804,7 +804,7 @@ void MainScreen::CreateToggles() {
 
     // Music toggle: (176.0, 135.5, 0.0)
     pMusicToggle = new MenuButton();
-    pMusicToggle->m_Texture = TexId(game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
+    pMusicToggle->m_Texture = (game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
         Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1, Vec3(0,0,0), nullptr);
@@ -820,7 +820,7 @@ void MainScreen::CreatePlayDojo() {
     // HUDControl3d Scale44(size) path where size comes from the texture's
     // reported width/height.
     pPlayButton = new MenuButton();
-    pPlayButton->m_Texture = TexId(m_TexNewGame);
+    pPlayButton->m_Texture = (m_TexNewGame);
     pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
     pPlayButton->Init(POS_PLAY_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
@@ -846,7 +846,7 @@ void MainScreen::CreatePlayDojo() {
     // in the current fruitlist, but use the runtime call per CLAUDE.md
     // "no shortcuts or abbreviations" rule.
     pDojoButton = new MenuButton();
-    pDojoButton->m_Texture = TexId(m_TexDojoIcon);
+    pDojoButton->m_Texture = (m_TexDojoIcon);
     pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
     pDojoButton->Init(POS_DOJO_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
@@ -862,7 +862,7 @@ void MainScreen::CreateQuitButton() {
 
     // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
     pQuitBtn = new MenuButton();
-    pQuitBtn->m_Texture = TexId(m_TexQuit);
+    pQuitBtn->m_Texture = (m_TexQuit);
     pQuitBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
     // Binary: m_bRespondsToBackKey set to 1 BEFORE Init.
     pQuitBtn->m_bRespondsToBackKey = 1;
