@@ -412,10 +412,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
 
             // Cursor init: MeasureWidth(scoreBuf) * m_ScalePulse * 48 + 5
             // (binary @ 0x00159062..0x00159086)
-            if (game->pFontNumbers.IsValid()) {
+            // Combo overlay font: binary loads game[+0x54] = pFontMain
+            // ("font_fruit_ninja.fnt"), NOT pFontNumbers. Verified
+            // 2026-05-09 (re-analyst @ 0x00159116/0x00159184).
+            if (game->pFontMain.IsValid()) {
                 char scoreBuf[32];
                 snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
-                float cursorX = game->pFontNumbers->MeasureWidth(48.0f, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
+                float cursorX = game->pFontMain->MeasureWidth(48.0f, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
 
                 // Per-digit loop (binary @ 0x001590B8..0x001591BC)
                 for (int i = 0; i < 16; i++) {
@@ -432,23 +435,26 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
 
                     float drawX = m_DrawPosX + cursorX;
                     float drawY = 155.0f;  // hard-coded per binary @ 0x0015914C
-                    game->pFontNumbers->DrawString(scale, 1.0f, 0.0f,
+                    game->pFontMain->DrawString(scale, 1.0f, 0.0f,
                         label, Vec3(drawX, drawY, 0.0f), tint, Mortar::FONT_ALIGN_CENTER);
 
                     // binary @ 0x001591b4: cursorX += MeasureString(label) * scale + 5.0
-                    cursorX += game->pFontNumbers->MeasureWidth(scale, label) * scale + 5.0f;
+                    cursorX += game->pFontMain->MeasureWidth(scale, label) * scale + 5.0f;
                 }
             }
         }
 
         // Arcade (mode==2): "x%d" when PowerUpManager::GetScoreGainMultiplier() > 1
+        // Arcade x-mult font: binary loads game[+0x80] = pFontBlue2
+        // ("fruit_ninja_numbers_blue2.fnt"). Verified 2026-05-09 (re-analyst
+        // @ 0x00159238).
         if (game->gameMode == 2) {
             int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
-            if (mult > 1 && game->pFontNumbers.IsValid()) {
+            if (mult > 1 && game->pFontBlue2.IsValid()) {
                 char multBuf[16];
                 snprintf(multBuf, sizeof(multBuf), "x%d", mult);
                 Colour col(255, 255, 255, alpha);
-                game->pFontNumbers->DrawString(48.0f, 1.0f, 0.0f,
+                game->pFontBlue2->DrawString(48.0f, 1.0f, 0.0f,
                     multBuf, Vec3(m_DrawPosX, m_DrawPosY + 30.0f, 0.0f),
                     col, Mortar::FONT_ALIGN_CENTER);
             }
@@ -471,16 +477,19 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 col.a = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.a + (int)((green.a - col.a) * t)));
             }
             col.a = alpha;
-            if (game->pFontNumbers.IsValid()) {
+            // Highscore "BEST" + digits: binary loads game[+0x54] = pFontMain
+            // ("font_fruit_ninja.fnt"). Verified 2026-05-09 (re-analyst @
+            // 0x00159538/0x00159594/0x00159636).
+            if (game->pFontMain.IsValid()) {
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
                 const char* label = Localisation::Get("BEST");  // key 0xB5
-                float labelW = game->pFontNumbers->MeasureWidth(20.0f, label);
+                float labelW = game->pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE;
-                game->pFontNumbers->DrawString(20.0f, 1.0f, 0.0f,
+                game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                     label, Vec3(m_DrawPosX + cursorX, m_DrawPosY - 30.0f, 0.0f),
                     col, Mortar::FONT_ALIGN_CENTER);
-                game->pFontNumbers->DrawString(48.0f, 1.0f, 0.0f,
+                game->pFontMain->DrawString(48.0f, 1.0f, 0.0f,
                     hsBuf, Vec3(m_DrawPosX, m_DrawPosY - 30.0f, 0.0f),
                     col, Mortar::FONT_ALIGN_CENTER);
             }
