@@ -285,17 +285,19 @@ void SlashEntity::PreUpdate(float dt) {
     (void)dt;
 }
 
-// ASM-spec: SlashEntity::PlaySwipe @ 0x17CCDC
+// ASM-verified: 2026-05-08 binary @ 0x17CCDC (re-analyst).
 // Binary path:
 //   if (ItemManager::PlayAlternateSwipeSound(1.0, 1.0) == 0) {
-//       int idx = Math::Random::Rand32(g_GlobalRng, 6) + 1;
-//       snprintf(buf, "bigslice%d", idx);
+//       int idx = Math::Random::Rand32(g_GlobalRng, 6) + 1;  // [1,6]
+//       snprintf(buf, "Sword-swipe-%d", idx);                // literal @ 0x1BCFE3
 //       Game::pGameSound->SFXPlay(buf, 1.0, 1.0);
 //   }
 //   m_SwipeSoundTimer = 6.0f;
-// Port: ItemManager::PlayAlternateSwipeSound is a stub returning void
-// (always falls through to the bigslice%d default); use rand() in lieu of
-// Math::Random::Rand32(g_GlobalRng).
+// Note: previous port had "bigslice%d" / range [1,6] which had no on-disk
+// assets. The actual binary literal is "Sword-swipe-%d" (Title-Case);
+// Bada's loader resolves it CI to sword-swipe-{1..6}.wav.pcm. The SDL
+// port matches the same CI behavior in SoundManager::LoadSound.
+// (sword-swipe-7.wav.pcm exists on disk but is unreachable -- RNG max=6.)
 void SlashEntity::PlaySwipe() {
     ItemManager* im = ItemManager::GetInstance();
     if (im) {
@@ -306,9 +308,9 @@ void SlashEntity::PlaySwipe() {
 
     Game* game = Game::GetInstance();
     if (game && game->pGameSound) {
-        char buf[16];
-        const int idx = (rand() % 6) + 1;  // bigslice1..bigslice6
-        snprintf(buf, sizeof(buf), "bigslice%d", idx);
+        char buf[20];
+        const int idx = (rand() % 6) + 1;  // [1, 6] — matches Rand32(rng, 6) + 1
+        snprintf(buf, sizeof(buf), "Sword-swipe-%d", idx);
         game->pGameSound->SFXPlay(buf, 1.0f, 1.0f);
     }
 
