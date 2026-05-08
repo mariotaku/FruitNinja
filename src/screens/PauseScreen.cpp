@@ -460,67 +460,82 @@ void PauseScreen::Update(float dt) {
     // wraps the allocations — binary creates eagerly on first Update().
     // Visibility on non-gameplay screens is an alpha/draw-time concern,
     // handled by m_ButtonFadeAlpha -> m_DrawColour.a propagation below.
+    // ASM-spec for binary @ 0x001544e8..0x001545fc (re-analyst):
+    //   MenuButton(this, texSP&, &pos, &clickDelegate, fruitType=-1,
+    //              &globalCenterVec, &deletedDelegate)
+    //   then SetSingular() and AddControl().
+    // For PauseScreen toggles fruitType is hard-coded -1 (no fruit entity
+    // spawned); globalCenterVec is HUD::g_GlobalCenterVec = (0,0,0);
+    // deletedDelegate is HUD::g_DeleteControlDelegate (HUD-side cleanup
+    // when the button is removed -- left empty in port until that
+    // global delegate is exposed).
+    //
+    // Port routes through MenuButton::Init(pos, clickCb, fruitType,
+    // hitBounds, deletedCb) -- the fruitType=-1 branch skips entity
+    // creation but still sets m_bVisible/Interactive/Enabled and the
+    // anim defaults. Texture / m_LayerFlags / m_TargetSize are set
+    // before/after Init since Init doesn't manage those slots.
     if (!m_ResumeButton) {
-        // P1 Resume button: pos (240, -160, 0), size from pause_button.tex.
-        // The pos here is the binary's MenuButton::ctor pos arg (binary @
-        // 0x001544e8..0x00154516); it gets overwritten on the very next
-        // Update tick by the post-switch tail formula (see below).
         m_ResumeButton = new MenuButton();
-        m_ResumeButton->pos = Vec3(240.0f, -160.0f, 0.0f);
-        m_ResumeButton->size = Vec3(m_PauseButtonTexW, m_PauseButtonTexH, 0.0f);
-        m_ResumeButton->m_Texture = m_PauseButtonTex;
+        m_ResumeButton->size       = Vec3(m_PauseButtonTexW, m_PauseButtonTexH, 0.0f);
+        m_ResumeButton->m_Texture  = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = 0x100;
-        m_ResumeButton->m_FruitType = -1;
-        // Member-function factory rather than lambda, so the cross-build
-        // toolchain (GCC 4.4) can parse this -- lambdas weren't added until
-        // GCC 4.5. Same observable binding in both compilers.
-        m_ResumeButton->m_ClickCallback =
-            Mortar::Delegate0<void>::Make(this, &PauseScreen::PauseGameCallback);
-        m_ResumeButton->m_bHighlighted = 1;
+        m_ResumeButton->Init(
+            Vec3(240.0f, -160.0f, 0.0f),  // initial pos; overwritten each frame
+            Mortar::Delegate0<void>::Make(this, &PauseScreen::PauseGameCallback),
+            /*fruitType=*/-1,             // toggle -- no fruit entity spawned
+            Vec3(0.0f, 0.0f, 0.0f),       // globalCenterVec = HUD::g_GlobalCenterVec
+            Mortar::Delegate0<void>()     // TODO: bind HUD::g_DeleteControlDelegate
+        );
+
         if (game->hud) {
             game->hud->AddControl(m_ResumeButton);
-            m_ResumeButton->SetSingular();   // binary calls this -- pins button instead of cycling layers
+            m_ResumeButton->SetSingular();
         }
 
-        // ASM-verified post-ctor scaling (binary @ 0x001545d8..0x00154604):
-        //   m_TargetSize = (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0 = (64, 64, 64)
-        //   m_ButtonOriginPos := m_TargetSize  (one-shot copy; never refreshed)
-        // The formula tail reads m_ButtonOriginPos.x as a per-session constant.
+        // ASM-verified post-Init override (binary @ 0x001545d8..0x00154604):
+        //   m_TargetSize = (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0 = (64,64,64)
+        //   m_ButtonOriginPos := m_TargetSize  (one-shot capture for OX in
+        //   the per-frame position formulas).
         m_ResumeButton->m_TargetSize = Vec3(64.0f, 64.0f, 64.0f);
-        m_ButtonOriginPos = m_ResumeButton->m_TargetSize;
+        m_ButtonOriginPos            = m_ResumeButton->m_TargetSize;
     }
 
     if (!m_QuitButton) {
-        // P1 Quit button: initial pos (0, 320, 0) -- repositioned each frame
         m_QuitButton = new MenuButton();
-        m_QuitButton->pos = Vec3(0.0f, 320.0f, 0.0f);
-        m_QuitButton->size = Vec3(m_QuitTitleTexW, m_QuitTitleTexH, 0.0f);
-        m_QuitButton->m_Texture = m_QuitTitleTex;
+        m_QuitButton->size       = Vec3(m_QuitTitleTexW, m_QuitTitleTexH, 0.0f);
+        m_QuitButton->m_Texture  = m_QuitTitleTex;
         m_QuitButton->m_LayerFlags = 0x100;
-        m_QuitButton->m_FruitType = -1;
-        m_QuitButton->m_ClickCallback =
-            Mortar::Delegate0<void>::Make(this, &PauseScreen::QuitGameCallback);
-        m_QuitButton->m_bHighlighted = 1;
+        m_QuitButton->Init(
+            Vec3(0.0f, 320.0f, 0.0f),
+            Mortar::Delegate0<void>::Make(this, &PauseScreen::QuitGameCallback),
+            /*fruitType=*/-1,
+            Vec3(0.0f, 0.0f, 0.0f),
+            Mortar::Delegate0<void>()
+        );
+
         if (game->hud) {
             game->hud->AddControl(m_QuitButton);
-            m_QuitButton->SetSingular();   // binary calls this -- pins button instead of cycling layers
+            m_QuitButton->SetSingular();
         }
     }
 
     if (!m_RetryButton) {
-        // P1 Retry button: initial pos (0, 320, 0) -- repositioned each frame
         m_RetryButton = new MenuButton();
-        m_RetryButton->pos = Vec3(0.0f, 320.0f, 0.0f);
-        m_RetryButton->size = Vec3(m_RetryButtonTexW, m_RetryButtonTexH, 0.0f);
-        m_RetryButton->m_Texture = m_RetryButtonTex;
+        m_RetryButton->size       = Vec3(m_RetryButtonTexW, m_RetryButtonTexH, 0.0f);
+        m_RetryButton->m_Texture  = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = 0x100;
-        m_RetryButton->m_FruitType = -1;
-        m_RetryButton->m_ClickCallback =
-            Mortar::Delegate0<void>::Make(this, &PauseScreen::RetryGameCallback);
-        m_RetryButton->m_bHighlighted = 1;
+        m_RetryButton->Init(
+            Vec3(0.0f, 320.0f, 0.0f),
+            Mortar::Delegate0<void>::Make(this, &PauseScreen::RetryGameCallback),
+            /*fruitType=*/-1,
+            Vec3(0.0f, 0.0f, 0.0f),
+            Mortar::Delegate0<void>()
+        );
+
         if (game->hud) {
             game->hud->AddControl(m_RetryButton);
-            m_RetryButton->SetSingular();   // binary calls this -- pins button instead of cycling layers
+            m_RetryButton->SetSingular();
         }
     }
 
