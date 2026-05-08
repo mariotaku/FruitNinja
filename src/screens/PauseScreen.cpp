@@ -22,6 +22,7 @@
 #include "game/PowerUpManager.h"
 #include "game/BombHit.h"
 #include "game/GameTaskState.h"
+#include "util/StringHash.h"
 #include "asset/TextureManager.h"
 #include "asset/Texture.h"
 #include "render/MatrixManager.h"
@@ -423,9 +424,10 @@ void PauseScreen::RetryGameCallback() {
     if (m_State != 3) return;
     Game* game = Game::GetInstance();
     if (game && game->m_AchievementProgressTimer >= 10.5f && game->pSaveData) {
-        // TODO: 0x00153fe4 — resolve achievement-key string hash; using a
-        //       placeholder key for now so the call shape is preserved.
-        game->pSaveData->AddToTotal("retry", 1, true, true);
+        // String resolved from binary DAT_00153fe4 -> 0x001ba98f.
+        const char* kKey = "retries_in_a_row";
+        game->pSaveData->AddToTotal(kKey, ::StringHash(kKey),
+                                    1, true, true);
     }
     // TODO: 0x00153f20 — helper_reset(g->m_FrameTimer): binary calls a
     //   reset on an unidentified global passing m_FrameTimer as parameter.
