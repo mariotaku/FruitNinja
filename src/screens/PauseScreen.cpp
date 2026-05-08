@@ -685,33 +685,58 @@ void PauseScreen::Update(float dt) {
     //   - Resume formula writes pos.x AND pos.y; pos.z untouched.
     //   - Retry formula writes pos.x, pos.y, pos.z.
     //
-    // Resume scale (separately, binary @ ~0x00154fxx): m_Alpha * 1.25 + 0.75.
+    // ASM-verified: 2026-05-08 binary @ 0x00154fea..0x001551d2 (re-analyst).
+    //
+    // Two-phase Resume + Retry layout:
+    //   Phase 1 (lines below): write the off-screen base positions.
+    //   Phase 2 (after the m_Alpha > 0 gate): lerp toward an on-screen
+    //     to_pos by m_Alpha. WITHOUT the lerp the buttons stay at their
+    //     base positions (off-screen left/right) for the entire pause
+    //     overlay -- which is what the user observed visually.
+    //
+    // Resume scale: m_Alpha * 1.25 + 0.75 (binary @ 0x001550da).
     if (m_ResumeButton) {
         const float resumeScale = m_Alpha * 1.25f + 0.75f;
         m_ResumeButton->size.x = m_PauseButtonTexW * resumeScale;
         m_ResumeButton->size.y = m_PauseButtonTexH * resumeScale;
+    }
 
-        // Per-frame position formula (binary @ 0x001550d6):
-        //   pos.x = -((244 - 0.375*OX) + |fade|*(10 + 0.75*OX))
-        //   pos.y = 0.375*OX - 165
-        // With OX=64: gameplay (|fade|=0) = (-220, -141); paused (|fade|=1) = (-278, -141).
-        const float OX = m_ButtonOriginPos.x;
+    const float OX = m_ButtonOriginPos.x;  // = 64
+
+    // Phase 1: write the base positions.
+    // Resume base (binary @ 0x00154fea..0x00155106):
+    //   pos.x = -((244 - 0.5*OX) + |fade|*(10 + 0.75*OX))
+    //   pos.y = 0.375*OX - 165   (y unchanged by phase-2 lerp)
+    // (Previous port had 0.375*OX in term1 -- WRONG; binary has 0.5*OX.)
+    if (m_ResumeButton) {
         const float absFade = std::fabs(m_ButtonFadeAlpha);
-        const float term1 = 244.0f - 0.375f * OX;
+        const float term1 = 244.0f - 0.5f * OX;
         const float term2 = absFade * (10.0f + 0.75f * OX);
         m_ResumeButton->pos.x = -(term1 + term2);
         m_ResumeButton->pos.y = 0.375f * OX - 165.0f;
     }
-
+    // Retry base (binary @ 0x00155076..0x00155096):
+    //   pos = (240 + 0.5*OX, -20, 0)
     if (m_RetryButton) {
-        // Per-frame position formula (binary @ 0x00155076..0x00155096):
-        //   pos = (240 + 0.5*OX, -20, 0).
-        const float OX = m_ButtonOriginPos.x;
-        m_RetryButton->pos.x = 240.0f + 0.5f * OX;
-        m_RetryButton->pos.y = -20.0f;
-        m_RetryButton->pos.z = 0.0f;
-
+        m_RetryButton->pos = Vec3(240.0f + 0.5f * OX, -20.0f, 0.0f);
         m_RetryButton->m_bActive = (m_Alpha > 0.0f) ? 1 : 0;
+    }
+
+    // Phase 2: lerp toward on-screen target by m_Alpha.
+    // Binary @ 0x00155106..0x001551d2:
+    //   button.pos += (to_pos - button.pos) * m_Alpha
+    //   Resume target = (-OX, -20, 0) -- inside-left
+    //   Retry  target = (+OX, -20, 0) -- inside-right
+    // (Online-MP path substitutes (0,0,0) for both -- defunct.)
+    if (m_Alpha > 0.0f) {
+        if (m_ResumeButton) {
+            const Vec3 target(-OX, -20.0f, 0.0f);
+            m_ResumeButton->pos += (target - m_ResumeButton->pos) * m_Alpha;
+        }
+        if (m_RetryButton) {
+            const Vec3 target(OX, -20.0f, 0.0f);
+            m_RetryButton->pos += (target - m_RetryButton->pos) * m_Alpha;
+        }
     }
 
     // 7. P2 buttons inactive (Tier-2 stub -- P2 buttons are nullptr in Tier-1)
