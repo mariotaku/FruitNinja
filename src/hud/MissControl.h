@@ -161,6 +161,11 @@ public:
     // Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit.
     static void CleanPool();
 
+    // Accessor for the file-static `s_TexCross` (hud_cross.tex). Used by
+    // GameInit step 3 to seed the 3 passive miss-counter widgets'
+    // m_Texture so MissControl::Draw doesn't early-return.
+    static const Mortar::SmartPtr<Mortar::Texture>& GetCrossTexture();
+
     // --- Statics (file-scope in binary, exposed here for PreUpdate) ---
     static int   s_NumCriticals;  // 0x0023123c -- incremented per busy slot in Update
     static float s_DtMod;         // 0x001f3d6c -- (float)s_NumCriticals + 0.5, set by PreUpdate

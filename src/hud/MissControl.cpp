@@ -195,6 +195,10 @@ void MissControl::AllocatePool() {
     printf("[MissControl] AllocatePool: %d slots\n", MISS_POOL_SIZE);
 }
 
+const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
+    return s_TexCross;
+}
+
 // --- CleanPool -------------------------------------------------------------
 
 // Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit @ 0x0016d086.
@@ -344,12 +348,19 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
 // --- Update ----------------------------------------------------------------
 
 // binary @ 0x00151a60
+// ASM-verified: 2026-05-09 binary @ 0x00151a60 (re-analyst — passive miss-counter
+// path identified). Binary does NOT short-circuit on m_bBusy at function entry;
+// the m_bComboActive gate around the separation block was previously confused
+// with an m_bBusy gate.
 void MissControl::Update(float dt) {
-    if (!m_bBusy) return;
-
-    // Visibility lazy-on: if not yet visible and anim starting (animState < 1 = single-player)
-    // binary @ 0x00151a60 lines 1-10
-    if (!m_bVisible && m_AnimState < 1) {
+    // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
+    // Their m_AnimState is 0/1/2 (slot index); m_bBusy stays 0.
+    // Toggle m_bVisible based on game->missCount vs m_AnimState — when the
+    // player has missed at least (m_AnimState + 1) fruits, the X marker
+    // turns red. binary @ 0x00151a60 lines 1-10.
+    Game* game = Game::GetInstance();
+    uint8_t missCount = (game ? game->missCount : 0);
+    if (!m_bVisible && m_AnimState < missCount) {
         m_JitterTimer  = 0x1e;
         m_DrawColour.a = 0xff;
         m_bVisible     = 1;
@@ -388,10 +399,19 @@ void MissControl::Update(float dt) {
         dt = dt * s_DtMod * m_AlphaScale;
     }
 
-    if (m_FadeAlpha <= 0.0f) return;
+    if (m_FadeAlpha <= 0.0f) {
+        // Passive deactivation: if missCount went DOWN below this slot
+        // (e.g. between rounds when the counter resets), turn the X off.
+        // binary @ 0x00151a60 fadeAlpha<=0 fall-through.
+        if (m_bVisible && m_AnimState >= missCount) {
+            m_JitterTimer  = 0x1e;
+            m_DrawColour.a = 0xff;
+            m_bVisible     = 0;
+        }
+        return;
+    }
 
     // Pause guard: if game paused, skip fade. binary @ 0x00151a60 pause guard
-    Game* game = Game::GetInstance();
     if (game && game->pauseFlag) return;
 
     pos.z = 0.0f;
