@@ -907,7 +907,10 @@ void MainScreen::GameModeCallback() {
 // Matches 0x0014c384
 void MainScreen::NewGameCallback() {
     m_State = STATE_GAME_START;
-    if (game.pGameSound) game.pGameSound->SFXPlay("swoosh_sound", 1.0f, 1.0f);
+    // ASM-verified: 2026-05-08 binary @ 0x0014c3ce (re-analyst). Literal at
+    // 0x001b96af = "Game-start" (resolves to game-start.wav.pcm; lowercased
+    // to match on-disk asset for case-sensitive filesystems).
+    if (game.pGameSound) game.pGameSound->SFXPlay("game-start", 1.0f, 1.0f);
 }
 
 // Matches 0x0014afc4
