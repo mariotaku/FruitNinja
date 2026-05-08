@@ -130,6 +130,17 @@ void FruitInfo_Load(const char* xmlPath)
     {
         FruitInfo& fi = s_FruitInfos[idx];
         memset(&fi, 0, sizeof(fi));
+        // Re-apply FRUIT_INFO ctor defaults (binary @ 0x0017ae20). The XML
+        // parser uses TinyXML QueryIntAttribute / QueryFloatAttribute which
+        // leave the destination unchanged when the attr is missing -- so
+        // any field with a non-zero default must be initialised here, NOT
+        // in the per-attr block below. Apple, banana, etc. omit `score=`,
+        // and the binary defaults to 1 via this ctor write.
+        fi.m_Score        = 1;     // FRUIT_INFO::FRUIT_INFO sets m_BaseScore=1
+        fi.m_Scale        = 1.0f;  // ctor default 0x3F800000 (overridden via "scale" attr)
+        fi.m_HitInfluence = 0.75f; // ctor default 0x3F400000
+        fi.m_CollisionScale = 25.0f; // ctor default 0x41C80000
+        fi.m_bScorable    = 1;     // ctor default; cleared if noCritical="true" or alpha=0
 
         // --- "name" attr (required) → +0x000 ---
         const char* name = elem->Attribute("name");
@@ -237,18 +248,12 @@ void FruitInfo_Load(const char* xmlPath)
 
         // ASM-verified: 2026-05-03 binary @ 0x00179f44..0x00179fc0 (asm-inspector / re-analyst)
         // --- Float attrs with defaults ---
-        fi.m_CollisionScale = 25.0f; // default 0x41C80000
-        fi.m_Scale = 1.0f; // default 0x3F800000
-        fi.m_HitInfluence = 0.75f; // default 0x3F400000
+        // Floats (defaults already applied at top of loop via ctor mirror).
         elem->QueryFloatAttribute("collision", &fi.m_CollisionScale);
         elem->QueryFloatAttribute("scale", &fi.m_Scale);
         elem->QueryFloatAttribute("hitInfluence", &fi.m_HitInfluence);
 
-        // --- Int attrs ---
-        fi.m_Chance = 0;
-        fi.m_Score = 0;
-        fi.m_CoinsMin = 0;
-        fi.m_CoinsMax = 0;
+        // --- Int attrs (defaults applied at top of loop via ctor mirror) ---
         elem->QueryIntAttribute("chance", &fi.m_Chance);
         elem->QueryIntAttribute("score", &fi.m_Score);
         fi.m_CoinsMax = fi.m_CoinsMin; // original: copy before override
