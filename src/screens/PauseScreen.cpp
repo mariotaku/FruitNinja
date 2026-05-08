@@ -358,13 +358,13 @@ void PauseScreen::PauseGameCallback() {
         PauseGame();
         // SFX "Pause"
         if (game && game->pGameSound) {
-            game->pGameSound->SFXPlay("Pause", 1.0f);
+            game->pGameSound->SFXPlay("pause", 1.0f);
         }
     } else if (m_State == 3) {
         m_State = 4;
         // SFX "Unpause"
         if (game && game->pGameSound) {
-            game->pGameSound->SFXPlay("Unpause", 1.0f);
+            game->pGameSound->SFXPlay("unpause", 1.0f);
         }
     }
 }

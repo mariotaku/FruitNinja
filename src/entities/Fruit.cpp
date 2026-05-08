@@ -526,7 +526,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
                         Mortar::SmartPtr<Mortar::Texture> defTex;
                         mc->MakeDisappear(pos, 0, defTex);
                     }
-                    if (g->pGameSound) g->pGameSound->SFXPlay("fruit_miss", 1.0f, 1.0f);
+                    if (g->pGameSound) g->pGameSound->SFXPlay("gank", 1.0f, 1.0f);
                     g->missCount++;
                     if (g->missCount > 2) {
                         // ASM-verified: 2026-05-02 binary @ 0x00176c84 -- combo reset only inside game-over branch

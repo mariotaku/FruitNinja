@@ -242,7 +242,7 @@ void ScoreControl::Update(float dt) {
             game->pGameOverScreen->m_Timer > 0.0f) {
             s_SfxCooldown = 0.05f;  // DAT_001588b4
             if (game->pGameSound)
-                game->pGameSound->SFXPlay("Bonus-count-up", 1.0f, 1.0f);
+                game->pGameSound->SFXPlay("bonus-count-up", 1.0f, 1.0f);
         }
         m_PulseAngle = 0x8000;  // DAT_001588d4 = 32768.0
     }
@@ -316,7 +316,7 @@ void ScoreControl::Update(float dt) {
         }
         if (m_BannerScaleTime > 0.0f && prev <= 0.0f) {
             if (game->pGameSound)
-                game->pGameSound->SFXPlay("New-best-score", 1.0f, 1.0f);
+                game->pGameSound->SFXPlay("new-best-score", 1.0f, 1.0f);
         }
     } else {
         m_BannerScaleTime = std::max(-1.5f, m_BannerScaleTime - dt * 20.0f);
