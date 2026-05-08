@@ -1,5 +1,6 @@
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"
+#include "util/PathCI.h"
 #include "asset/TextureManager.h"
 #include "math/Random.h"
 #include "render/Renderer.h"
@@ -585,7 +586,12 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
 // Returns true on success.
 bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, char** outNames) {
     tinyxml2::XMLDocument doc;
-    if (doc.LoadFile(xmlPath) != tinyxml2::XML_SUCCESS) {
+    tinyxml2::XMLError xerr = doc.LoadFile(xmlPath);
+    if (xerr != tinyxml2::XML_SUCCESS) {
+        std::string ci = Mortar::ResolvePathCI(xmlPath);
+        if (!ci.empty()) xerr = doc.LoadFile(ci.c_str());
+    }
+    if (xerr != tinyxml2::XML_SUCCESS) {
         printf("[PSPParticleManager] LoadFile: failed to load %s\n", xmlPath);
         return false;
     }

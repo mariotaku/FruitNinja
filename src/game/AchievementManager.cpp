@@ -13,6 +13,7 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/util/Localisation.h"
+#include "engine/util/PathCI.h"
 #include "ItemParseUtil.h"
 #include "Game.h"
 
@@ -86,6 +87,10 @@ void AchievementManager::LoadAchievementInfo() {
 
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError err = doc.LoadFile(path.c_str());
+    if (err != tinyxml2::XML_SUCCESS) {
+        std::string ci = Mortar::ResolvePathCI(path.c_str());
+        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
+    }
     if (err != tinyxml2::XML_SUCCESS) {
         printf("AchievementManager::LoadAchievementInfo -- failed to open '%s' (error %d)\n",
                path.c_str(), (int)err);

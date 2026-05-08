@@ -15,44 +15,12 @@
 #include "audio/SoundManager.h"
 #include <SDL.h>            // SDL audio backend (SoundManager is SDL-bound)
 #include "util/StringHash.h"
+#include "util/PathCI.h"
 #include "asset/TextureManager.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
-
-#if !defined(_WIN32)
-#include <dirent.h>
-#include <sys/stat.h>
-#include <strings.h>   // strcasecmp
-#endif
-
-// Case-insensitive sfx-file lookup. The binary uses Title-Case literals
-// (e.g. "Pause", "Bomb-Fuse", "Game-start") and Bada's sound loader
-// resolves them case-insensitively. NTFS / HFS+ / case-insensitive APFS
-// give that for free; ext4 and most embedded filesystems don't, so on
-// POSIX builds we scan the sfx directory once and pick the first
-// strcasecmp match. Returns the resolved path with original case, or
-// empty string on miss.
-static std::string ResolveSfxCI(const char* sfxDir, const char* base) {
-#if defined(_WIN32)
-    (void)sfxDir; (void)base;
-    return std::string();   // NTFS already case-insensitive
-#else
-    if (!sfxDir || !base) return std::string();
-    DIR* d = opendir(sfxDir);
-    if (!d) return std::string();
-    std::string match;
-    while (struct dirent* ent = readdir(d)) {
-        if (strcasecmp(ent->d_name, base) == 0) {
-            match = std::string(sfxDir) + "/" + ent->d_name;
-            break;
-        }
-    }
-    closedir(d);
-    return match;
-#endif
-}
 
 // .wav.pcm header layout (5 x int32, little-endian, 20 bytes)
 // Offset 0: type/format field (always 1)
@@ -150,17 +118,14 @@ void SoundManager::Init() {
 SoundBuffer* SoundManager::LoadSound(const char* name) {
     // Build path: DATA_DIR/sfx/<name>.wav.pcm
     // Uses TextureManager::GetDataDir() (set at boot by Game::init) to get base data dir.
-    const std::string sfxDir = std::string(TextureManager::GetDataDir()) + "/sfx";
-    const std::string base   = std::string(name) + ".wav.pcm";
-    std::string path = sfxDir + "/" + base;
+    std::string path = std::string(TextureManager::GetDataDir()) + "/sfx/" + name + ".wav.pcm";
 
     SDL_RWops* rw = SDL_RWFromFile(path.c_str(), "rb");
     if (!rw) {
         // Case-insensitive POSIX fallback. Binary uses Title-Case literals
         // ("Pause", "Bomb-Fuse", "Game-start") that Bada's sound loader
-        // resolves CI; the SDL port matches the same behavior on case-
-        // sensitive filesystems via a single dirent scan.
-        std::string ciPath = ResolveSfxCI(sfxDir.c_str(), base.c_str());
+        // resolves CI; the SDL port matches via Mortar::ResolvePathCI.
+        std::string ciPath = Mortar::ResolvePathCI(path.c_str());
         if (!ciPath.empty()) {
             rw = SDL_RWFromFile(ciPath.c_str(), "rb");
             if (rw) path = std::move(ciPath);
