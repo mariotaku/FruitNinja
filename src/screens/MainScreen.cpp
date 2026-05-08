@@ -562,6 +562,12 @@ void MainScreen::Update(float dt) {
     }
 
     UpdateScreenElements(dt, elapsedTime);
+
+    // Binary @ 0x0014b278: cameraTransition lives on game.m_TransitionTimer
+    // (+0x0c) so peers (ScoreControl, MissControl, UpdateMusic, etc.) can
+    // read it. Port owns the value on MainScreen but mirrors it here so
+    // the same ABI surface is preserved for downstream subsystems.
+    game.m_TransitionTimer = m_CameraTransition;
 }
 
 // Helper: setup world matrix for a textured quad at given position
