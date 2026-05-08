@@ -247,21 +247,20 @@ void Fruit::Update(float dt) {
 
     if (!m_bSliced) {
         // === UNSLICED FRUIT ===
+        // ASM-verified: 2026-05-09 binary @ 0x00177bb8..0x00177c1e (asm-inspector)
         // Binary integration (Fruit::Update 0x00177680):
         //   pos += (vel*dt + 0.5*g*dt²) * 60.0    (DAT_00177d00 = 60.0)
         //   vel += gravity * dt
-        // The ×60 multiplier on the position step is the binary's
-        // tuning fudge — at fixed dt=1/60 it makes effective
-        // gravity strong enough for a Fruit-Ninja-feel arc. Without
-        // it the port's fruit drift like they're underwater.
-        const float POS_INTEGRATION_SCALE = 60.0f;
+        //   pos += m_RotAxis * dt                 (NO ×60 here — binary uses
+        //                                          dt @ sp+0x1c, not dtNorm)
+        const float POS_INTEGRATION_SCALE = 60.0f;  // DAT_00177d00
         Vec3 step = (vel * dt + m_Gravity * (0.5f * dt * dt)) * POS_INTEGRATION_SCALE;
         pos += step;
         vel += m_Gravity * dt;
 
-        // Rotation axis drift — also scaled by the same fudge so
-        // it stays consistent with the velocity-driven motion.
-        pos += m_RotAxis * dt * POS_INTEGRATION_SCALE;
+        // Rotation axis drift — plain dt, no ×60. The earlier port-side
+        // ×60 here amplified PostUpdate's edge-nudge into a visible bounce.
+        pos += m_RotAxis * dt;
 
         // Backup for future split
         m_SecondPos = pos;
@@ -278,20 +277,17 @@ void Fruit::Update(float dt) {
             }
         }
     } else {
-        // ASM-verified: 2026-04-28T00:00 binary @ 0x00177680..0x001777bc (asm-inspector)
+        // ASM-verified: 2026-05-09 binary @ 0x00177736..0x001777a0 (asm-inspector)
         // === SLICED (two halves) ===
-        // Binary (Fruit::Update sliced branch, 0x00177680):
+        // Binary integration order:
         //   normalize(m_Gravity); gravLen += DAT_00177950(=0.2) * dtNorm * 4.5
         //   = gravLen += 0.9 * dtNorm   (per-frame growth at 60fps)
         //   m_Gravity *= new_gravLen / old_gravLen (rescale unit vec)
-        //
-        // Then plain Euler integration on both halves, NO ×60 fudge.
-        // This is intentional in the binary — sliced halves drift
-        // gently while the gravity ramps up.
-        //
-        // Port keeps the same growth formula but uses the same ×60
-        // position scaling as the unsliced branch so the halves
-        // visibly drift instead of being frozen.
+        //   vel        += m_Gravity * dt        (gravity uses dt @ sp+0x1c)
+        //   m_SecondVel += m_Gravity * dt
+        //   pos        += vel        * dt * 60  (position uses dtNorm @ sp+0x354)
+        //   m_SecondPos += m_SecondVel * dt * 60
+        // Both halves get the same ×60 position scale as the unsliced branch.
         const float gravLen0 = m_Gravity.Magnitude();
         const float dtNorm   = dt * 60.0f;
         const float growRate = 0.2f * dtNorm * 4.5f;   // = 0.9 per frame
@@ -383,7 +379,11 @@ static bool IsZenStrictBounceActive() {
 //
 // Bounds resolved from binary: X = ±192 (DAT_001751a0 / 751a4),
 // Y = ±128 (DAT_001751a8 / 751ac). Push / rotAxis magnitudes from
-// the disassembly: vel += ±16*dt, rotAxis += ±20.
+// the disassembly: vel += ±16*dt, rotAxis += ±20 (NO dt scaling on
+// rotAxis — accumulates per-frame, equilibrium ~200 against the
+// 0.9 damping factor).
+//
+// ASM-verified: 2026-05-09 binary @ 0x0017501c..0x00175198 (asm-inspector)
 void Fruit::PostUpdate(float dt) {
     static const float ROT_AXIS_DAMPING = 0.9f;    // DAT_0017519c
     static const float BOUND_X_LO = -192.0f;       // DAT_001751a0
