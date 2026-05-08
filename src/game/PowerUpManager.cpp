@@ -8,6 +8,7 @@
 #include "entities/SlashEntity.h"
 #include "network/NetworkManager.h"
 #include "util/StringHash.h"
+#include "util/PathCI.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include <tinyxml2.h>
@@ -445,6 +446,10 @@ void PowerUpManager::Load() {
 
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError err = doc.LoadFile(path.c_str());
+    if (err != tinyxml2::XML_SUCCESS) {
+        std::string ci = Mortar::ResolvePathCI(path.c_str());
+        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
+    }
     if (err != tinyxml2::XML_SUCCESS) {
         printf("PowerUpManager::Load -- failed to open '%s' (error %d)\n", path.c_str(), (int)err);
         return;

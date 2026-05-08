@@ -7,6 +7,7 @@
 
 #include "FruitInfo.h"
 #include "util/StringHash.h"
+#include "util/PathCI.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
 #include <tinyxml2.h>
@@ -71,6 +72,10 @@ void FruitInfo_Load(const char* xmlPath)
 
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError err = doc.LoadFile(xmlPath);
+    if (err != tinyxml2::XML_SUCCESS) {
+        std::string ci = Mortar::ResolvePathCI(xmlPath);
+        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
+    }
     if (err != tinyxml2::XML_SUCCESS)
     {
         fprintf(stderr, "Fruit::LoadInfo: failed to open '%s' (error %d)\n", xmlPath, err);

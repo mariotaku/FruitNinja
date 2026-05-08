@@ -13,9 +13,11 @@
 //   GETSTRING_STR                      0x0011fb40
 
 #include "Localisation.h"
+#include "PathCI.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 // Static state
 bool           Localisation::s_loaded        = false;
@@ -74,8 +76,15 @@ static const uint32_t kCountField       = 72;  // file offset of count
 static const uint32_t kEntriesStart     = 76;  // file offset of first entry
 
 // Helper: read entire file into heap buffer.  Caller must free().
+// Adds a POSIX case-insensitive fallback (no-op on Windows) so binary-
+// faithful Title-Case path components ("StringTables/Translations_*.str")
+// resolve against lowercase shipped assets.
 static char* ReadFile(const char* path, size_t* out_size) {
     FILE* fp = fopen(path, "rb");
+    if (!fp) {
+        std::string ci = Mortar::ResolvePathCI(path);
+        if (!ci.empty()) fp = fopen(ci.c_str(), "rb");
+    }
     if (!fp) return nullptr;
     fseek(fp, 0, SEEK_END);
     size_t sz = (size_t)ftell(fp);

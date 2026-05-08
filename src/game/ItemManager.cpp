@@ -13,6 +13,7 @@
 #include "FruitSaveData.h"
 #include "AchievementManager.h"
 #include "engine/util/StringHash.h"
+#include "engine/util/PathCI.h"
 #include "engine/MenuBackground.h"
 #include "entities/SlashEntity.h"
 #include "screens/ShopScreen.h"
@@ -80,12 +81,16 @@ void ItemManager::LoadItemData() {
     if (!game) return;
 
     // Phase 1: Parse itemlist.xml
-    // Binary uses path string "xml/itemList.xml" @ 0x1ba064 (capital L), but the
-    // shipped Bada asset is "itemlist.xml" (lowercase). Use the lowercase form so
-    // case-sensitive filesystems (Linux + some MSYS2 configs) actually find the file.
-    std::string xmlPath = game->data_dir + "/xml/itemlist.xml";
+    // Binary literal is "xml/itemList.xml" @ 0x1ba064 (capital L), shipped
+    // asset is "itemlist.xml". Bada's tinyxml resolves CI; the SDL port
+    // matches via Mortar::ResolvePathCI fallback below.
+    std::string xmlPath = game->data_dir + "/xml/itemList.xml";
     tinyxml2::XMLDocument doc;
     tinyxml2::XMLError err = doc.LoadFile(xmlPath.c_str());
+    if (err != tinyxml2::XML_SUCCESS) {
+        std::string ci = Mortar::ResolvePathCI(xmlPath.c_str());
+        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
+    }
 
     m_ByHash.clear();
     m_Items.clear();
@@ -156,6 +161,10 @@ void ItemManager::LoadItemData() {
     std::string saveFullPath = game->data_dir + "/" + savePath;
     tinyxml2::XMLDocument save;
     tinyxml2::XMLError saveErr = save.LoadFile(saveFullPath.c_str());
+    if (saveErr != tinyxml2::XML_SUCCESS) {
+        std::string ci = Mortar::ResolvePathCI(saveFullPath.c_str());
+        if (!ci.empty()) saveErr = save.LoadFile(ci.c_str());
+    }
 
     if (saveErr == tinyxml2::XML_SUCCESS) {
         tinyxml2::XMLElement* root = save.FirstChildElement("item_save_file");  // 0x1b9e4d

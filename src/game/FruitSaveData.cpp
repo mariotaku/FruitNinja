@@ -11,6 +11,7 @@
 #include "Game.h"
 #include "ItemManager.h"
 #include "engine/util/StringHash.h"
+#include "engine/util/PathCI.h"
 
 #include <tinyxml2.h>
 #include <cstdio>
@@ -427,7 +428,12 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
     if (!save) return false;
 
     tinyxml2::XMLDocument doc;
-    tinyxml2::XMLError err = doc.LoadFile(GetSavePath().c_str());
+    std::string sp = GetSavePath();
+    tinyxml2::XMLError err = doc.LoadFile(sp.c_str());
+    if (err != tinyxml2::XML_SUCCESS) {
+        std::string ci = Mortar::ResolvePathCI(sp.c_str());
+        if (!ci.empty()) err = doc.LoadFile(ci.c_str());
+    }
     if (err != tinyxml2::XML_SUCCESS) {
         return false;  // expected on first run
     }
