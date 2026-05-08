@@ -25,6 +25,7 @@ Game::Game()
       m_bTutorialShown(0), m_AchievementProgressTimer(0.0f),
       retryTimer(0), m_TransitionTimer(0), bombHitTimer(0),
       missCount(0), currentScore(0), m_bUnsullied(0),
+      m_CoinsBalance(0), m_CoinsTotalEarned(0), m_CoinsAtGameStart(0),
       m_CritTimer(0), m_ScoreThreshold(0), field_0x34(0), m_bSlowMotion(0),
       dt(0), hud(nullptr),
       pCamera(nullptr),

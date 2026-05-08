@@ -81,7 +81,7 @@ public:
     uint8_t     m_PostInProgress;  // +0x0CD
 
     // +0x0CE: "X days left" label formatted in Initialise (64 bytes)
-    char        m_DaysLeftLabel[64]; // +0x0CE..+0x10D
+    char        m_CoinsEarnedLabel[64]; // +0x0CE..+0x10D
 
     // +0x110: progress counter (0->11 in state 6; ==10 triggers score commit)
     int         m_ProgressCounter; // +0x110

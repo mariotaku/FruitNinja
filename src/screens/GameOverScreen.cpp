@@ -109,7 +109,7 @@ GameOverScreen::GameOverScreen()
       m_bIsClassic(0),
       m_FruitFactAlpha(0.0f)
 {
-    memset(m_DaysLeftLabel, 0, sizeof(m_DaysLeftLabel));
+    memset(m_CoinsEarnedLabel, 0, sizeof(m_CoinsEarnedLabel));
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
       m_bIsClassic(0),
       m_FruitFactAlpha(0.0f)
 {
-    memset(m_DaysLeftLabel, 0, sizeof(m_DaysLeftLabel));
+    memset(m_CoinsEarnedLabel, 0, sizeof(m_CoinsEarnedLabel));
     Initialise(modeName, param2, param3, expressionIdx, bgPatternIdx, pomCount, starCount);
 }
 
@@ -280,15 +280,21 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_PostOk           = 0;
     m_PostInProgress   = 0;
 
-    // Format "X days left" label.
-    // ASM-spec for binary @ 0x00142810 (re-analyst):
-    //   sprintf(m_DaysLeftLabel, "%d days left", game[+0x20] - game[+0x28])
-    // The two ints are GAME-side fields (NOT WaveManager). Port currently
-    // mis-types game[+0x20] as Vec3 retryPos (12-byte slot eats +0x20..+0x2B).
-    // Until that layout is reconciled, fall back to 0 days.
-    // TODO: 0x00142810 — once Game[+0x20]/[+0x28] are renamed to int slots
-    //   (m_TotalQuota / m_ConsumedCount?), wire the subtract.
-    snprintf(m_DaysLeftLabel, sizeof(m_DaysLeftLabel), "%d days left", 0);
+    // Format the coin-earned label.
+    // ASM-verified: 2026-05-08 binary @ 0x00142810 (re-analyst):
+    //   sprintf(m_CoinsEarnedLabel, "YOU JUST EARNT %i COINS",
+    //           game->m_CoinsBalance - game->m_CoinsAtGameStart)
+    // The "X days left" placeholder string was a mis-guess; the real
+    // format string at DAT_001428fc / 0x001bb926 is "YOU JUST EARNT %i
+    // COINS". Note: CoinsEnabled() @ 0x0010a428 returns 0 in shipping
+    // builds so the label is computed but never displayed -- still
+    // load-bearing for the binary's call shape.
+    {
+        const int coinsEarned = game
+            ? (game->m_CoinsBalance - game->m_CoinsAtGameStart) : 0;
+        snprintf(m_CoinsEarnedLabel, sizeof(m_CoinsEarnedLabel),
+                 "YOU JUST EARNT %d COINS", coinsEarned);
+    }
 
     // FAST-PATH: caller passed valid score/state and we're past wave 5 with running progress
     if (param3 >= 0.0f && param2 >= 0) {
@@ -1046,7 +1052,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
     if (layerMask & 0x80) {
         // Layer 0x80: draw "days remaining" text + extra texture
         // TODO: wire Font::DrawString once font rendering is confirmed for this screen
-        // Binary reads m_DaysLeftLabel and draws via pFont at a fixed screen position.
+        // Binary reads m_CoinsEarnedLabel and draws via pFont at a fixed screen position.
         // For now this is a no-op placeholder.
         (void)hudScale;
     }

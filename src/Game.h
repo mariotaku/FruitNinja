@@ -70,7 +70,22 @@ struct Game : public Mortar::MortarGame {
     uint8_t missCount;             // +0x14: combo counter
     int currentScore;              // +0x18
     uint8_t m_bUnsullied;          // +0x1C: 0=no misses yet
-    Vec3 retryPos;                 // +0x20
+    // +0x20: current coin balance (signed; AddCoins(n) at binary @ 0x0010a3bc).
+    int32_t m_CoinsBalance;
+    // +0x24: cumulative coins earned this session (only incremented when
+    //   AddCoins's n > 0; never decreases).
+    int32_t m_CoinsTotalEarned;
+    // +0x28: snapshot of m_CoinsBalance at game start.
+    //   GameOverScreen displays "YOU JUST EARNT %i COINS" computed as
+    //   m_CoinsBalance - m_CoinsAtGameStart (binary @ 0x00142810).
+    //   GameOverScreen::Update case-7 (retry) re-snapshots this slot.
+    //   CoinsEnabled() @ 0x0010a428 returns 0 in shipping builds, so the
+    //   coin UI never displays at runtime -- but the field layout is
+    //   load-bearing for the Initialise / Update reads.
+    // (Was previously mis-typed as Vec3 retryPos -- 12-byte slot stomped
+    //  three int fields. Re-analyst 2026-05-08 confirmed via AddCoins
+    //  pure-int ldr/str + SetupGameWork str(int) vs vstr(float) opcode.)
+    int32_t m_CoinsAtGameStart;
     float m_CritTimer;             // +0x2C
     int m_ScoreThreshold;          // +0x30
     uint8_t field_0x34;            // +0x34
