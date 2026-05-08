@@ -160,14 +160,6 @@ public:
     // IsAllowedToExit — always 1 in binary (0x0014061c)
     bool IsAllowedToExit();
 
-    // ---- STUBS (binary) ----
-    // Binary-shape overloads not covered by the vtable Vec3& variants.
-    // STUB: GameOverScreen::PreDrawOrder -- binary @ 0x???? (TODO RE)
-    void PreDrawOrder(float* viewVec, int layerMask);
-    // STUB: GameOverScreen::DrawOrder -- binary @ 0x???? (TODO RE)
-    void DrawOrder(float* viewVec, int layerMask);
-    // ---- end STUBS ----
-
 private:
     // 0x00142674
     void Initialise(const char* modeName, int param2, float param3,

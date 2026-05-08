@@ -124,21 +124,12 @@ void GameOverScreen::Reset() {}
 
 bool GameOverScreen::IsAllowedToExit() { return true; }
 
-// ---------------------------------------------------------------------------
-// STUBS (binary) — float* overloads
-// ---------------------------------------------------------------------------
-
-// STUB: GameOverScreen::PreDrawOrder -- binary @ 0x???? (TODO RE)
-void GameOverScreen::PreDrawOrder(float* viewVec, int layerMask)
-{
-    (void)viewVec; (void)layerMask;
-}
-
-// STUB: GameOverScreen::DrawOrder -- binary @ 0x???? (TODO RE)
-void GameOverScreen::DrawOrder(float* viewVec, int layerMask)
-{
-    (void)viewVec; (void)layerMask;
-}
+// (Per re-analyst 2026-05-08: the asm-verify pipeline reports
+// `_ZN14GameOverScreen12PreDrawOrderEPfi` (Pf,i = float*, int) but the
+// binary at 0x0014171c actually takes (HUDControl* parent, int layer)
+// -- the float* mangling is Ghidra noise from a missing prototype. The
+// real impl is the (const Vec3&, int) overload at the bottom of the
+// file. The previous duplicate float*-stub overloads were deleted.)
 
 // ---------------------------------------------------------------------------
 // GameOverScreen constructor (0x00142900) -- thin wrapper over Initialise
@@ -202,8 +193,8 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     // One-shot LoadContent (gated in binary by static guard; stub no-ops)
     LoadContent();
 
-    // Defunct online: NetworkManager::GetInstance()->InvalidatePublishTextCallback();
-    // (no-op: NetworkManager not ported)
+    // Defunct: NetworkManager.InvalidatePublishTextCallback -- no-op stub; binary @ 0x0014268c
+    // Single call, no return value used; safe to skip on the SDL port.
 
     m_pNoticeCtrl    = nullptr; // +0xC8
     m_PomCount       = pomCount;
@@ -283,21 +274,28 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_PostOk           = 0;
     m_PostInProgress   = 0;
 
-    // Format "X days left" label
-    // wave.totalQuota - wave.consumedCount
-    // TODO: resolve exact wave fields (docs: wave[+0x20] - wave[+0x28])
-    // For now format "0 days left" as a placeholder
+    // Format "X days left" label.
+    // ASM-spec for binary @ 0x00142810 (re-analyst):
+    //   sprintf(m_DaysLeftLabel, "%d days left", game[+0x20] - game[+0x28])
+    // The two ints are GAME-side fields (NOT WaveManager). Port currently
+    // mis-types game[+0x20] as Vec3 retryPos (12-byte slot eats +0x20..+0x2B).
+    // Until that layout is reconciled, fall back to 0 days.
+    // TODO: 0x00142810 — once Game[+0x20]/[+0x28] are renamed to int slots
+    //   (m_TotalQuota / m_ConsumedCount?), wire the subtract.
     snprintf(m_DaysLeftLabel, sizeof(m_DaysLeftLabel), "%d days left", 0);
 
     // FAST-PATH: caller passed valid score/state and we're past wave 5 with running progress
     if (param3 >= 0.0f && param2 >= 0) {
         FindMostOfFruit();
-        // DAT_001428d8 = 0.999 — binary checks wave.alpha (= game.alpha in port)
+        // ASM-spec for binary @ 0x001428a0..0x001428bc (re-analyst):
+        //   gate is `wave.alpha > 0.99899f` (DAT_001428d8 = 0x3F7FBE77)
+        //   write is `wave.alpha = 0.99982f` (DAT_001428dc = 0x3F7FF2E5)
+        //   NOT 0.999/1.0 as previously assumed.
+        const float kWaveAlphaGate  = 0.99899f;  // DAT_001428d8
+        const float kWaveAlphaSet   = 0.99982f;  // DAT_001428dc
         float waveAlpha = game ? game->m_TransitionTimer : 0.0f;
-        if (param2 > 5 && waveAlpha > 0.999f) {
-            // wave.alpha = 1.0  (DAT_001428dc)
-            // Port: game.m_TransitionTimer is the port's "wave.alpha"
-            if (game) game->m_TransitionTimer = 1.0f;
+        if (param2 > 5 && waveAlpha > kWaveAlphaGate) {
+            if (game) game->m_TransitionTimer = kWaveAlphaSet;
             m_State           = 6;
             m_bScoreSubmitted = 1;
             m_FruitFactAlpha  = 1.0f;
@@ -622,12 +620,25 @@ void GameOverScreen::OnQuitClicked() {
 // ---------------------------------------------------------------------------
 
 // Binary @ 0x00141b34
+//
+// Re-analyst 2026-05-08 corrections to legacy TODOs:
+//   - "fast-skip path m_TransitionTimer = 0.0f" — no such write exists in
+//     Update; deleted (was a port-time speculation). The fast-path lives
+//     in Initialise (now handled, see 0.99899/0.99982 constants there).
+//   - pSaveData[+0x12C] is a uint8_t = (uint8_t)SetCurrentModeHighscore(score)
+//     — port wrote -1 (int) on a different code path; corrected below.
+//   - state 6 ComboStarAchievement gate is
+//       (m_pBonusScreen != null && gameMode == 3 &&
+//        (int8_t)bonus[+0xE0] in [0, 25)).
+//     Combo length is bonus[+0xD0] (uint64_t); star type is bonus[+0xE0]
+//     (int8_t); hash via StringHash(GetComboName(starType)).
 void GameOverScreen::Update(float dt) {
-    // TODO: 0x00142674 -- fast-skip path: game->m_TransitionTimer should be 0.0f, not 1.0f (port-side bug, see GameOverScreen RE 2026-05-04)
-    // TODO: 0x00140d98 -- pSaveData[+0x12C] write should be byte 0, not int -1 (minor divergence)
-    // TODO: 0x00141b34 -- state 6 ComboStarAchievement should gate on (gameMode==3 && bonusScreen!=null && combo<25)
     Game* game = Game::GetInstance();
     if (!game) return;
+
+    // Default m_LayerFlags for the frame (binary @ 0x00141b40, before
+    // the state switch). Case 0 overrides to 1 for the entry animation.
+    m_LayerFlags = 0x80;
 
     // Advance animation counter (millisecond-resolution circular)
     // Binary: field_0xac = (float)(int)(field_0xac) + dt*1000.0, then mod 1000
@@ -702,8 +713,17 @@ void GameOverScreen::Update(float dt) {
                 BonusManager::GetInstance()->SetUpBonusScreen(m_pBonusScreen);
             } else {
                 // GO screen tracks bonus position for layout alignment.
-                // TODO: resolve DAT_00141DC8 (Y offset constant) from binary
-                float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PhaseTimer + 0.0f;
+                // ASM-spec for binary @ 0x00141bd0..0x00141bf0 (re-analyst):
+                //   ny = bonus.pos.y + bonus[+0xC0] + 135.0f   (DAT_00141DC8)
+                //   then m_OffsetPosY = max(m_OffsetPosY, ny)
+                //   plus a size_factor = pos.y / -224.0f + 1.0f rescale
+                //   (DAT_00141DCC) on the row above.
+                // bonus[+0xC0] is a per-phase rolling Y delta, NOT m_PhaseTimer
+                // (+0xB8). Port reads m_PhaseTimer as a stand-in until the
+                // real field is RE'd into BonusScreen; constant updated to 135.0f.
+                // TODO: 0x00141bd0 — wire bonus[+0xC0] (per-phase Y delta)
+                //   and the -224.0 size rescale.
+                float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PhaseTimer + 135.0f;
                 m_OffsetPosY = std::max(m_OffsetPosY, ny);
 
                 // Advance bonus phase timer from our own timer.
@@ -715,6 +735,10 @@ void GameOverScreen::Update(float dt) {
                     SetStateWait();
                 }
             }
+            // Binary @ 0x00141ce8: per-frame in this branch, force
+            // game.m_bSlowMotion = 1 (suppress entity processing during
+            // the bonus phase).
+            game->m_bSlowMotion = 1;
         }
         break;
     }
@@ -761,7 +785,10 @@ void GameOverScreen::Update(float dt) {
                 // Score submission tail (§8): most calls are no-ops until subsystems are ported
                 FruitSaveData* save = game->pSaveData;
                 if (save) {
-                    // TODO: FruitSaveData[+0x12D] = 0 (post-state clear)
+                    // Binary @ 0x00142092: pSaveData[+0x12D] = 0 hoists to
+                    // the FIRST write in the m_bScoreSubmitted == 0 block,
+                    // before any AddToTotal / Achievement calls.
+                    save->secondaryFlag = 0;
 
                     // Lifetime totals
                     save->AddToTotal("FruitsCollected", 1);
@@ -775,12 +802,25 @@ void GameOverScreen::Update(float dt) {
                     // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
                     // Note: FNHighscoreList::AddPlayerScore -- defunct (online-services-audit).
 
-                    // TODO: pass actual combo length and star type hash from session stats
+                    // Binary @ 0x00141fbc..0x00142010 (re-analyst):
+                    //   gate = (m_pBonusScreen != null && gameMode == 3 &&
+                    //           (int8_t)bonus[+0xE0] in [0, 25))
+                    //   args = (bonus[+0xD0] /*uint64_t combo*/,
+                    //           StringHash(GetComboName(starType)))
+                    // bonus[+0xE0] / bonus[+0xD0] are unported BonusScreen
+                    // fields; until they're added the gate fails and the
+                    // achievement is still credited via the placeholder
+                    // call below for compatibility.
+                    // TODO: 0x00141fbc — wire bonus[+0xE0]/[+0xD0] + GetComboName.
                     AchievementManager::GetInstance()->UnlockComboStarAchievement(0, 0);
 
                     int hi = GetCurrentModeHighscore();
                     if (hi / 2 < score) {
+                        // Binary @ 0x00142228:
+                        //   pSaveData[+0x12C] = (uint8_t)SetCurrentModeHighscore(score);
+                        // The write captures the bool return of the highscore update.
                         save->SetCurrentModeHighscore(score);
+                        save->newBestThisGame = 1;  // bool result is true when hi/2 < score
                     }
 
                     // Note: NetworkManager::SetLeaderboardScore -- defunct (online-services-audit).
