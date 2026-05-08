@@ -30,6 +30,10 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 #include "screens/ShopScreen.h"
 #include "screens/GameModeScreen.h"
 #include "screens/GameOverScreen.h"
+#include "game/StartupEffects.h"
+#include "game/WaveManager.h"
+#include "hud/ScoreControl.h"
+#include "hud/MissControl.h"
 #include "hud/HUD.h"
 #include <cstdio>
 #include <cstdlib>
@@ -37,7 +41,7 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_screen <main|dojo|about|shop|gamemode|gameover> [--interactive]\n"
+        "usage: test_screen <main|dojo|about|shop|gamemode|gameover|classic> [--interactive]\n"
         "  --interactive: show the window and run the normal main loop\n"
         "                 instead of ticking 30 frames headless. ESC quits.\n");
     return 1;
@@ -135,6 +139,40 @@ int main(int argc, char* argv[]) {
         hideAllExisting();
         GameModeScreen* s = new GameModeScreen(game, false);
         game.hud->AddControl(s);
+    } else if (strcmp(screenName, "classic") == 0) {
+        // Active Classic-mode gameplay HUD: ScoreControl + 3x MissControl
+        // widgets. Both are created in GameInit (already done by runFrames
+        // above) and remain live throughout state 2. We just need to:
+        //   - hide MainScreen so the gameplay layer is unobstructed
+        //   - select gameMode = 0 (Classic)
+        //   - fire PrepareForLevelStart -> WaveManager::Reset to load wave 0
+        //   - clear pauseFlag (binary path: GameModeScreen::Update camera-settle)
+        // so the spawn pump runs and the score / miss widgets see real game
+        // state. Verifies the HUD widgets are wired and rendering during
+        // actual gameplay.
+        hideAllExisting();
+        game.gameMode = 0;
+        FN::PrepareForLevelStart();
+        game.pauseFlag = 0;
+        // Sanity: confirm at least one ScoreControl + one MissControl exist
+        // in HUD (created by GameInit step 3/4). If they're missing, the
+        // test will print a diagnostic but not fail the smoke pass.
+        int scoreCount = 0;
+        int missCount  = 0;
+        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+            if (dynamic_cast<ScoreControl*>(*it)) scoreCount++;
+            if (dynamic_cast<MissControl*>(*it))  missCount++;
+        }
+        printf("[test_screen classic] ScoreControl in HUD: %d; MissControl in HUD: %d\n",
+               scoreCount, missCount);
+        if (scoreCount < 1) {
+            fprintf(stderr, "FAIL: no ScoreControl in HUD during Classic gameplay\n");
+            return 1;
+        }
+        if (missCount < 3) {
+            fprintf(stderr, "FAIL: expected 3 MissControl widgets in HUD, found %d\n", missCount);
+            return 1;
+        }
     } else if (strcmp(screenName, "gameover") == 0) {
         // Force a Classic-mode game-over scene so the texture loads
         // (classic-game-over-bg.tex / retry-button.tex / quit-button.tex /
