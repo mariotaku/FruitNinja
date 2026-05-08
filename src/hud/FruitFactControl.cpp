@@ -43,8 +43,8 @@ void FruitFactControl::LoadContent() {
 
     // TODO: 0x001399fc -- load full 17-texture set; names from binary DAT constants.
     // Prototype: load panel + fact backplates.
-    s_PanelTex        = TextureManager::LoadLocalisedTexture("textures/fruitfact-panel.tex");
-    s_FactBackplateTex = TextureManager::LoadLocalisedTexture("textures/fruitfact-backplate.tex");
+    s_PanelTex        = TextureManager::LoadLocalisedTexture("fruitfact-panel.tex");
+    s_FactBackplateTex = TextureManager::LoadLocalisedTexture("fruitfact-backplate.tex");
 }
 
 void FruitFactControl::UnLoadContent() {
