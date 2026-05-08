@@ -969,44 +969,71 @@ void GameOverScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // Common layout block (runs every frame after switch)
+    // Common layout block (runs every frame after switch).
+    //
+    // ASM-spec for binary @ 0x001424dc..0x00142516 (re-analyst):
+    //   DAT_00142624 =   75.0f   bonus.x base
+    //   DAT_00142628 =  480.0f   bonus.x alpha-coeff (multiplied by 1-alpha)
+    //   DAT_0014262c = -102.0f   bonus.y
+    //   DAT_00142630 = -386.0f   classic OffsetX alpha-coeff / bonus FruitFact x-offset
+    //   DAT_00142634 =  368.0f   classic OffsetX base
+    //   DAT_00142638 =   55.0f   classic OffsetY
+    //   DAT_0014263c =  183.0f   classic FruitFact x-offset
+    //   DAT_00142640 = -5000.0f  unused / sentinel
+    //   DAT_00142644 =   65.0f   retryBtn y base
+    //   DAT_00142648 =  300.0f   retryBtn y alpha-coeff
+    //   DAT_0014264c =  190.0f   retryBtn x
+    //   DAT_00142650 =  -50.0f   shake.x scale
+    //   DAT_00142654 =  120.0f   shake magnitude
+    //   DAT_00142658 = -125.0f   quitBtn y base
+    //   DAT_00142670 -> &g_JitterVec3 (per-frame jitter source)
+    //
+    // The previous port-side numeric guesses (-204 / -193 / 75 / 130 / -50 /
+    // 240 / -56) didn't come from these DATs and produced noticeably wrong
+    // layout vs the binary. Constants below are now binary-faithful.
     // -----------------------------------------------------------------------
     uint8_t gm = game->gameMode;
     if ((uint8_t)(gm - 2) < 2 && m_pBonusScreen != nullptr) {
         // Arcade or Zen with BonusScreen
-        // bonusPos.x = DAT_00142624 + (1-m_FruitFactAlpha) * DAT_00142628
-        //            = -204.0 + (1-alpha) * -193.0
-        float bx = -204.0f + (1.0f - m_FruitFactAlpha) * (-193.0f);
-        float by = 75.0f; // DAT_00142620
+        const float bx = 75.0f + (1.0f - m_FruitFactAlpha) * 480.0f;  // DAT_00142624 + (1-α) * DAT_00142628
+        const float by = -102.0f;                                     // DAT_0014262c
         m_pBonusScreen->pos.x = bx;
         m_pBonusScreen->pos.y = by;
         m_pBonusScreen->pos.z = 0.0f;
         if (m_pFruitFact) {
-            m_pFruitFact->pos.x = bx + 184.0f; // DAT_0014262c
+            // FruitFact bonus offset: bx + DAT_00142630 (-386), by + 4
+            m_pFruitFact->pos.x = bx + (-386.0f);
             m_pFruitFact->pos.y = by + 4.0f;
             m_pFruitFact->pos.z = 0.0f;
         }
     } else {
         // Classic / single-player layout
-        // m_OffsetPos.x = DAT_00142634 + DAT_00142630 * m_FruitFactAlpha
-        //              = 130.0 + (-50.0) * alpha
-        m_OffsetPosX = 130.0f + (-50.0f) * m_FruitFactAlpha;
-        m_OffsetPosY = 75.0f;  // DAT_00142638
+        m_OffsetPosX = 368.0f + (-386.0f) * m_FruitFactAlpha;  // DAT_00142634 + DAT_00142630 * α
+        m_OffsetPosY = 55.0f;                                   // DAT_00142638
         m_OffsetPosZ = 0.0f;
         if (m_pFruitFact) {
-            m_pFruitFact->pos.x = m_OffsetPosX + 60.0f; // DAT_0014263c
+            m_pFruitFact->pos.x = m_OffsetPosX + 183.0f;        // DAT_0014263c
             m_pFruitFact->pos.y = m_OffsetPosY + 12.0f;
             m_pFruitFact->pos.z = 0.0f;
         }
-        // Retry/quit button shake (jitter decays to 0 as m_FruitFactAlpha -> 1.0)
-        // Binary: spread = (extraVec[0] * (1-m_FruitFactAlpha)) * 0.6
-        // Port: simple position set only (extraVec not yet resolved)
+        // Retry button (m_pSlot9c). Binary: pos = (190, 65 + (1-α)*300, -125)
+        // plus a (1-α)*shake_scale*120 jitter sourced from g_JitterVec3
+        // (DAT_00142670 -- unported global). Port writes the static base
+        // positions; jitter remains TODO.
         if (m_pSlot9c) {
-            // DAT_00142644=-56.0, DAT_00142648=240.0
-            m_pSlot9c->pos.x = 0.0f;
-            m_pSlot9c->pos.y = -56.0f + (1.0f - m_FruitFactAlpha) * 240.0f;
-            m_pSlot9c->pos.z = 0.0f;
+            m_pSlot9c->pos.x = 190.0f;                                      // DAT_0014264c
+            m_pSlot9c->pos.y = 65.0f + (1.0f - m_FruitFactAlpha) * 300.0f;  // DAT_00142644 + (1-α) * DAT_00142648
+            m_pSlot9c->pos.z = -125.0f;                                     // shared with quit z-base
         }
+        // Quit button (m_pQuitBtn). Same as Retry but y-base = -125 (DAT_00142658).
+        // Port previously omitted this entirely.
+        if (m_pQuitBtn) {
+            m_pQuitBtn->pos.x = 190.0f;
+            m_pQuitBtn->pos.y = -125.0f + (1.0f - m_FruitFactAlpha) * 300.0f;
+            m_pQuitBtn->pos.z = -125.0f;
+        }
+        // TODO: 0x00142670 — wire g_JitterVec3 read for per-frame shake on
+        //   retry/quit buttons; spread = jitter.x * shake_scale * (1-α).
     }
 }
 
