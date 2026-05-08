@@ -211,11 +211,11 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     {
         Mortar::SmartPtr<Mortar::Texture> bgTex;
         if (gameMode == 2)
-            bgTex = TextureManager::LoadLocalisedTexture("textures/arcade-game-over-bg.tex");
+            bgTex = TextureManager::LoadLocalisedTexture("arcade-game-over-bg.tex");
         else if (gameMode == 3)
-            bgTex = TextureManager::LoadLocalisedTexture("textures/zen-game-over-bg.tex");
+            bgTex = TextureManager::LoadLocalisedTexture("zen-game-over-bg.tex");
         else
-            bgTex = TextureManager::LoadLocalisedTexture("textures/classic-game-over-bg.tex");
+            bgTex = TextureManager::LoadLocalisedTexture("classic-game-over-bg.tex");
         // Store the SmartPtr in m_SecondaryTex (matches binary type).
         m_SecondaryTex = bgTex;
         // Record title size from texture dimensions
@@ -534,7 +534,7 @@ void GameOverScreen::CreateRetryButton() {
     // Texture: binary reads from GOT + DAT_001412d4 ("retry-button.tex")
     // Port fallback: load directly
     Mortar::SmartPtr<Mortar::Texture> tex =
-        TextureManager::LoadLocalisedTexture("textures/retry-button.tex");
+        TextureManager::LoadLocalisedTexture("retry-button.tex");
 
     m_pRetryBtn = new MenuButton();
     m_pRetryBtn->pos    = btnPos;
@@ -582,7 +582,7 @@ void GameOverScreen::CreateQuitButton() {
     Vec3 btnPos(80.0f, -96.0f, 0.0f);
 
     Mortar::SmartPtr<Mortar::Texture> tex =
-        TextureManager::LoadLocalisedTexture("textures/quit-button.tex");
+        TextureManager::LoadLocalisedTexture("quit-button.tex");
 
     m_pQuitBtn = new MenuButton();
     m_pQuitBtn->pos    = btnPos;
@@ -840,7 +840,7 @@ void GameOverScreen::Update(float dt) {
 
                 // Load localised "Game Over" text texture
                 Mortar::SmartPtr<Mortar::Texture> govTex =
-                    TextureManager::LoadLocalisedTexture("textures/game-over.tex");
+                    TextureManager::LoadLocalisedTexture("game-over.tex");
                 m_GameOverTex = govTex ? govTex->m_TexId : 0;
             }
 

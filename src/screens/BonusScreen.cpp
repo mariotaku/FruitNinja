@@ -56,7 +56,7 @@ BonusScreen::BonusScreen()
     // Load background texture into m_SecondaryTex.
     // TODO: resolve exact texture name from binary literal pool 0x00132210
     Mortar::SmartPtr<Mortar::Texture> bgTex =
-        TextureManager::LoadLocalisedTexture("textures/dialog-box-big.tex");
+        TextureManager::LoadLocalisedTexture("dialog-box-big.tex");
     m_SecondaryTex = bgTex;
 
     // PreLoadSound calls — clip names at literal pool 0x00132210..0x00132224.
