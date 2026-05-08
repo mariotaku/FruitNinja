@@ -38,11 +38,12 @@ void SetupGameWork() {
     // +0x01C: m_bUnsullied = 0.
     app->m_bUnsullied = 0;
 
-    // +0x020..+0x028: retryPos = (0, 0, 0).
-    // Binary stores three separate zero words at +0x20, +0x24, +0x28 (Vec3).
-    app->retryPos.x = 0.0f;
-    app->retryPos.y = 0.0f;
-    app->retryPos.z = 0.0f;
+    // +0x020..+0x028: zero the coin trio. Binary writes 3 separate `str`
+    // (int) ops at 0x0010b568..0x0010b56c -- confirmed int via re-analyst
+    // (vstr would be used for floats, see neighbouring +0x10/+0x2c writes).
+    app->m_CoinsBalance     = 0;
+    app->m_CoinsTotalEarned = 0;
+    app->m_CoinsAtGameStart = 0;
 
     // +0x02C: m_CritTimer = 0.0f.
     app->m_CritTimer = 0.0f;
