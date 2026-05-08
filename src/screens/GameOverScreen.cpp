@@ -540,25 +540,43 @@ void GameOverScreen::CreateRetryButton() {
     Game* game = Game::GetInstance();
     if (!game || !game->hud) return;
 
-    // Position: (-80, -96, 0) per binary DAT_001412c4/c8
+    // ASM-spec for binary @ 0x00141188 (re-analyst):
+    //   pos               = (-80, -96, 0)              [DAT_001412c4..cc]
+    //   tex               = g_RetryTexSP @ GOT+0x7310  [retry.tex, loaded in LoadContent]
+    //   clickDelegate     = &RetryCallback
+    //   fruitType         = 0 (literal apple in the call site, NOT a DAT lookup)
+    //   globalCenterVec   = HUD::g_GlobalCenterVec @ 0x001f4328 (singleton)
+    //   deletedDelegate   = HUD::g_DeleteControlDelegate (HUD-wide remove cb)
+    // Port maps:
+    //   - texture: TextureManager::LoadLocalisedTexture("retry.tex") --
+    //     port-side single-shot since LoadContent is a no-op stub.
+    //   - globalCenterVec / deletedDelegate: route via MenuButton::Init's
+    //     hitBounds / deletedCb args (port's Init takes 5 args matching
+    //     the binary's ctor minus the texture, which is set via the
+    //     m_Texture SmartPtr field).
+    //   - HUD-wide deleted delegate: TODO -- routes to
+    //     HUD::DeleteControl(removed); placeholder uses self-bound
+    //     DeletedControl (slightly different semantic, but functional).
     Vec3 btnPos(-80.0f, -96.0f, 0.0f);
-
-    // Texture: binary reads from GOT + DAT_001412d4 ("retry.tex")
-    // Port fallback: load directly
+    Vec3 globalCenter(0.0f, 0.0f, 0.0f);  // HUD::g_GlobalCenterVec; HUD::Init sets to (0,0,0)
     Mortar::SmartPtr<Mortar::Texture> tex =
         TextureManager::LoadLocalisedTexture("retry.tex");
 
     m_pRetryBtn = new MenuButton();
-    m_pRetryBtn->pos    = btnPos;
-    m_pRetryBtn->m_LayerFlags = 0x08;
-    m_pRetryBtn->m_FruitType  = -1;
     m_pRetryBtn->m_Texture    = tex;
-
-    m_pRetryBtn->m_ClickCallback =
-        Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked);
+    m_pRetryBtn->m_LayerFlags = 0x08;
+    m_pRetryBtn->Init(
+        btnPos,
+        Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked),
+        /*fruitType=*/0,
+        globalCenter,
+        // TODO: 0x00141030 — bind HUD::g_DeleteControlDelegate so the
+        //   button's removal triggers HUD-side cleanup. Port currently
+        //   leaves the deletedCb empty (default-constructed Delegate0).
+        Mortar::Delegate0<void>()
+    );
 
     game->hud->AddControl(m_pRetryBtn, false);
-    // TODO: 0x00141188 -- wire m_pRetryBtn remove-callback to DeletedControl
 }
 
 // Binary @ 0x0014105c
@@ -590,26 +608,40 @@ void GameOverScreen::CreateQuitButton() {
     Game* game = Game::GetInstance();
     if (!game || !game->hud) return;
 
-    // Position: (80, -96, 0) per binary DAT_00141428/2c
+    // ASM-spec for binary @ 0x001412e4 (re-analyst):
+    //   pos               = (80, -96, 0)               [DAT_00141428..30]
+    //   tex               = g_QuitTexSP @ GOT+0x73fc   [quit.tex, loaded in LoadContent]
+    //   clickDelegate     = &QuitCallback
+    //   fruitType         = g_FruitInfo[0].m_FruitType (RUNTIME — first row of FRUIT_INFO)
+    //   globalCenterVec   = HUD::g_GlobalCenterVec
+    //   deletedDelegate   = HUD::g_DeleteControlDelegate
+    // Plus 3 quit-only post-init steps (binary 0x00141420..0x00141438):
+    //   - copy retry->[+0x124..+0x12C] (TutorialControl text slots) to quit
+    //   - set quit->[+0xE2] = 1 (singular/right-flag)
+    //   - call TutorialControl::ResetTutePos(hud->pTutorialCtrl, m_pQuitBtn)
+    // The 3 post-init steps require fields not yet ported; deferred TODO.
     Vec3 btnPos(80.0f, -96.0f, 0.0f);
-
+    Vec3 globalCenter(0.0f, 0.0f, 0.0f);
     Mortar::SmartPtr<Mortar::Texture> tex =
         TextureManager::LoadLocalisedTexture("quit.tex");
 
     m_pQuitBtn = new MenuButton();
-    m_pQuitBtn->pos    = btnPos;
-    m_pQuitBtn->m_LayerFlags = 0x08;
-    m_pQuitBtn->m_FruitType  = -1;
     m_pQuitBtn->m_Texture    = tex;
+    m_pQuitBtn->m_LayerFlags = 0x08;
+    m_pQuitBtn->Init(
+        btnPos,
+        Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked),
+        /*fruitType=*/0,  // TODO: 0x00141440 -- read g_FruitInfo[0].m_FruitType
+        globalCenter,
+        Mortar::Delegate0<void>()  // TODO: 0x00141030 -- bind HUD::g_DeleteControlDelegate
+    );
 
-    // Mirror tutorial-text slots from retry button (binary: memcpy +0x124,+0x128,+0x12C)
-    // Not applicable until TutorialControl text slots are wired.
-
-    m_pQuitBtn->m_ClickCallback =
-        Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked);
+    // TODO: 0x00141420 — quit-only post-init:
+    //   memcpy(quit+0x124..+0x12C, retry+0x124..+0x12C);  // TutorialControl text slots
+    //   quit->[+0xE2] = 1;                                 // singular/right-flag byte
+    //   TutorialControl::ResetTutePos(game->pTutorialCtrl, m_pQuitBtn);
 
     game->hud->AddControl(m_pQuitBtn, false);
-    // TODO: 0x001412e4 -- wire m_pQuitBtn remove-callback to DeletedControl
 }
 
 // Binary @ 0x00140620
