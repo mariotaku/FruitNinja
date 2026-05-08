@@ -46,4 +46,20 @@ float Random::RandF(float range) {
     return ((float)v / 524287.0f) * range;
 }
 
+// Engine-wide RNG instance (binary @ 0x0026C8B0).
+Random g_Random;
+
+// ASM-spec for binary @ 0x00153f20 (re-analyst):
+//   void Seed(uint32_t seed):
+//     state[0]=seed; state[1]=0;
+//     state[2]=0x6C078965; state[3]=0x5D588B65;     // -> m_Mult (LE 64-bit)
+//     state[4]=0x00269EC3; state[5]=0x00000000;     // -> m_Inc  (LE 64-bit)
+// The 6-dword reset is exactly Random ctor + Seed(seed): both m_Mult and
+// m_Inc come back to their port-side kMultiplier / kIncrement defaults
+// (since the constants are byte-identical and m_Mult / m_Inc are only
+// otherwise written by the ctor).
+void SeedGlobalRng(uint32_t seed) {
+    g_Random = Random((uint64_t)seed);
+}
+
 } // namespace Math

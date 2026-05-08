@@ -23,6 +23,7 @@
 #include "game/BombHit.h"
 #include "game/GameTaskState.h"
 #include "util/StringHash.h"
+#include "math/Random.h"
 #include "asset/TextureManager.h"
 #include "asset/Texture.h"
 #include "render/MatrixManager.h"
@@ -412,11 +413,8 @@ void PauseScreen::QuitGameCallback2() {
 // Binary @ 0x00153f68 RetryGameCallback():
 //   if (m_State != 3) return;
 //   if (g->m_AchievementProgressTimer >= 10.5f)
-//       FruitSaveData::AddToTotal(<hash>, 1, true, true);
-//   helper_reset(g->m_FrameTimer);   // mislabelled InitVec3_ShopScreen in Ghidra;
-//                                    // resets a separate global object using
-//                                    // m_FrameTimer as a parameter. Target global
-//                                    // not yet RE'd -- TODO at 0x00153f20.
+//       FruitSaveData::AddToTotal("retries_in_a_row", hash, 1, true, true);
+//   Math::SeedGlobalRng(g->m_FrameTimer);  // binary @ 0x00153f20
 //   g->m_bTutorialShown = 0;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
 //   m_State = 5;
@@ -429,9 +427,10 @@ void PauseScreen::RetryGameCallback() {
         game->pSaveData->AddToTotal(kKey, ::StringHash(kKey),
                                     1, true, true);
     }
-    // TODO: 0x00153f20 — helper_reset(g->m_FrameTimer): binary calls a
-    //   reset on an unidentified global passing m_FrameTimer as parameter.
-    //   Body left unwired until the target global is RE'd.
+    // Binary @ 0x00153f20: re-seed Mortar::Random g_Random with frame
+    // counter so retried runs are deterministic-from-frame-state rather
+    // than boot-clock-seeded. Re-analyst confirmed g_Random @ 0x0026C8B0.
+    if (game) Math::SeedGlobalRng((uint32_t)game->m_FrameTimer);
     if (game) game->m_bTutorialShown = 0;
     if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
@@ -726,9 +725,8 @@ void PauseScreen::ContinueGameCallback() {
     Game* g = Game::GetInstance();
     if (!g) return;
     if (g->m_bTutorialShown != 0) {
-        // TODO: 0x00153f20 — helper_reset(g->m_FrameTimer); same unidentified
-        //   global target as RetryGameCallback. Deferred until that global
-        //   is RE'd.
+        // Binary @ 0x00153f20: re-seed g_Random; see RetryGameCallback notes.
+        Math::SeedGlobalRng((uint32_t)g->m_FrameTimer);
     }
     g->m_bTutorialShown = 0;
 }
