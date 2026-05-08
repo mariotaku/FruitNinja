@@ -29,6 +29,7 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 #include "screens/AboutScreen.h"
 #include "screens/ShopScreen.h"
 #include "screens/GameModeScreen.h"
+#include "screens/GameOverScreen.h"
 #include "hud/HUD.h"
 #include <cstdio>
 #include <cstdlib>
@@ -36,7 +37,7 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_screen <main|dojo|about|shop|gamemode> [--interactive]\n"
+        "usage: test_screen <main|dojo|about|shop|gamemode|gameover> [--interactive]\n"
         "  --interactive: show the window and run the normal main loop\n"
         "                 instead of ticking 30 frames headless. ESC quits.\n");
     return 1;
@@ -133,6 +134,24 @@ int main(int argc, char* argv[]) {
     } else if (strcmp(screenName, "gamemode") == 0) {
         hideAllExisting();
         GameModeScreen* s = new GameModeScreen(game, false);
+        game.hud->AddControl(s);
+    } else if (strcmp(screenName, "gameover") == 0) {
+        // Force a Classic-mode game-over scene so the texture loads
+        // (classic-game-over-bg.tex / retry-button.tex / quit-button.tex /
+        // game-over.tex / fruitfact-panel.tex / fruitfact-backplate.tex)
+        // exercise the LoadLocalisedTexture path. Score is set to a value
+        // that triggers the highscore branch so save->newBestThisGame is
+        // also exercised.
+        hideAllExisting();
+        game.gameMode = 0;     // Classic
+        game.currentScore = 1234;
+        game.m_TransitionTimer = 0.5f;  // mid-transition; not the fast-path
+        // ctor args: (modeName, initialState, initialTimer,
+        //             expressionIdx, bgPatternIdx, pomCount, starCount).
+        // initialState=6 + initialTimer=0.0 puts us straight into the
+        // main display state; runFrames below ticks score-submission.
+        GameOverScreen* s = new GameOverScreen("classic", 6, 0.0f, 1, 1, 0, 0);
+        game.pGameOverScreen = s;
         game.hud->AddControl(s);
     } else {
         fprintf(stderr, "unknown screen '%s'\n", screenName);
