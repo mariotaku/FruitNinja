@@ -150,7 +150,6 @@ PauseScreen::PauseScreen()
       m_RetryButton(nullptr),
       m_P2RetryButton(nullptr),
       m_ButtonFadeAlpha(1.0f),
-      _pad_c4(0),
       m_LastHitButton(-1),
       m_PressIndex(0),
       m_RevealTimer(0.0f),
@@ -222,27 +221,46 @@ void PauseScreen::Init() {
 }
 
 // -------------------------------------------------------------------------
-// vtable[3]: Release -- nulls all 5 owned SmartPtr<Texture> refs.
-// Binary @ 0x0015408C -- vtable slot 3.
+// vtable[3]: Release -- nulls 5 SmartPtr<Texture> slots.
+// ASM-verified: 2026-05-08T00:00 binary @ 0x0015408C (re-analyst)
+//
+// Slots nulled (5x SmartPtrNull_Tex calls at 0x00154054):
+//   +0x74 m_Texture (HUDControl3d primary)
+//   +0xb8 m_PlayButtonTex
+//   +0xbc m_QuitTitleTex
+//   +0xc0 m_RetryButtonTex
+//   +0xc4 m_RetryHighlightTex  (the 5th slot, was mis-named _pad_c4)
+//
+// Slots NOT nulled by binary:
+//   +0x78 m_SecondaryTex (the slot pause_title.tex actually lives in)
+//   +0xa8 m_PauseButtonTex (kept live across Release calls)
 // -------------------------------------------------------------------------
 void PauseScreen::Release() {
-    m_SecondaryTex.SetNull();
-    m_QuitTitleTex.SetNull();
+    m_Texture.SetNull();
     m_PlayButtonTex.SetNull();
+    m_QuitTitleTex.SetNull();
     m_RetryButtonTex.SetNull();
-    m_PauseButtonTex.SetNull();
+    m_RetryHighlightTex.SetNull();
 }
 
 // -------------------------------------------------------------------------
 // vtable[4]: Reset -- restores SP-mode tex assignments on resume/retry buttons
-// Binary @ 0x00154024 -- vtable slot 4.
+// ASM-verified: 2026-05-08T00:00 binary @ 0x00154024 (re-analyst)
+//
+// Two if-blocks, no other PauseScreen field is touched:
+//   if (m_RetryButton) {
+//       retry->m_bHighlighted = 1;            // +0x131
+//       retry->m_SecondaryTex = m_RetryHighlightTex;   // src is +0xc4, NOT +0xc0
+//   }
+//   if (m_ResumeButton) resume->m_SecondaryTex = m_PlayButtonTex;
+//
 // Inverse of SetToMultiplayerState: re-enables RetryButton and restores
 // SecondaryTex assignments so SP layout is correct after MP session ends.
 // -------------------------------------------------------------------------
 void PauseScreen::Reset() {
     if (m_RetryButton) {
-        reinterpret_cast<uint8_t*>(m_RetryButton)[0x131] = 1;  // m_bHighlighted = 1
-        m_RetryButton->m_SecondaryTex = m_RetryButtonTex;
+        m_RetryButton->m_bHighlighted = 1;
+        m_RetryButton->m_SecondaryTex = m_RetryHighlightTex;
     }
     if (m_ResumeButton) {
         m_ResumeButton->m_SecondaryTex = m_PlayButtonTex;
@@ -359,10 +377,11 @@ void PauseScreen::PauseGameCallback2() {
     // state 5 is unreachable from this callback in single-player
 }
 
+// ASM-verified: 2026-05-08T00:00 binary @ 0x00153ebc (re-analyst)
 // Binary @ 0x00153ebc QuitGameCallback():
 //   if (m_State != 3) return;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
-//   g->field_0x85 = 0; m_LastHitButton = 0; m_State = 6;
+//   g->m_bTutorialShown = 0; m_LastHitButton = 0; m_State = 6;
 // NOTE: m_Alpha *= 0.5 and SaveCurrentData happen in Update case-6 entry, NOT here.
 // NOTE: SFX "MenuQuit" also happens in Update state-6 path, not this callback.
 void PauseScreen::QuitGameCallback() {
@@ -370,6 +389,7 @@ void PauseScreen::QuitGameCallback() {
     Game* game = Game::GetInstance();
     if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
+    if (game) game->m_bTutorialShown = 0;
     m_LastHitButton = 0;
     m_State = 6;
 }
@@ -377,25 +397,40 @@ void PauseScreen::QuitGameCallback() {
 // Binary @ 0x00153ef8 QuitGameCallback2():
 //   QuitGameCallback(); m_LastHitButton = 1; g->field_0x85 = 0;
 // Used by P2-Quit button in MP path.
-// Defunct: multiplayer Quit2 -- no-op for single-player port; binary @ 0x00153ef8
+// ASM-verified: 2026-05-08T00:00 binary @ 0x00153ef8 (re-analyst)
+// Defunct: multiplayer Quit2 path -- single-player port still wires the
+// tutorial-clear write so the cb retains its post-call observable state.
 void PauseScreen::QuitGameCallback2() {
     QuitGameCallback();
     m_LastHitButton = 1;
-    // TODO: g->field_0x85 = 0 (tutorial-shown byte on gameObj; offset not yet named in Game.h)
+    Game* game = Game::GetInstance();
+    if (game) game->m_bTutorialShown = 0;
 }
 
+// ASM-verified: 2026-05-08T00:00 binary @ 0x00153f68 (re-analyst)
 // Binary @ 0x00153f68 RetryGameCallback():
 //   if (m_State != 3) return;
-//   if (g->field_0x1AC >= 10.5f) { FruitSaveData::AddToTotal(..., 1, true, true); }
-//   InitVec3(g->field_0x194); g->field_0x85 = 0;
+//   if (g->m_AchievementProgressTimer >= 10.5f)
+//       FruitSaveData::AddToTotal(<hash>, 1, true, true);
+//   helper_reset(g->m_FrameTimer);   // mislabelled InitVec3_ShopScreen in Ghidra;
+//                                    // resets a separate global object using
+//                                    // m_FrameTimer as a parameter. Target global
+//                                    // not yet RE'd -- TODO at 0x00153f20.
+//   g->m_bTutorialShown = 0;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
 //   m_State = 5;
 void PauseScreen::RetryGameCallback() {
     if (m_State != 3) return;
     Game* game = Game::GetInstance();
-    // TODO: g->field_0x1AC achievement-progress check (binary @ 0x00153f68 +0x1AC >= 10.5)
-    // TODO: g->field_0x194 Vec3 init (binary @ 0x00153f68)
-    // TODO: g->field_0x85 = 0 (tutorial-shown byte)
+    if (game && game->m_AchievementProgressTimer >= 10.5f && game->pSaveData) {
+        // TODO: 0x00153fe4 — resolve achievement-key string hash; using a
+        //       placeholder key for now so the call shape is preserved.
+        game->pSaveData->AddToTotal("retry", 1, true, true);
+    }
+    // TODO: 0x00153f20 — helper_reset(g->m_FrameTimer): binary calls a
+    //   reset on an unidentified global passing m_FrameTimer as parameter.
+    //   Body left unwired until the target global is RE'd.
+    if (game) game->m_bTutorialShown = 0;
     if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
     m_State = 5;
@@ -671,9 +706,27 @@ void PauseScreen::Update(float dt) {
     // m_P2ResumeButton / m_P2RetryButton are always nullptr in Tier-1.
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: PauseScreen::ContinueGameCallback -- auto stub
-void PauseScreen::ContinueGameCallback() {}
-// STUB: PauseScreen::SkipTo -- auto stub
-void PauseScreen::SkipTo() {}
-// ---- end AUTO-STUB MERGE ----
+// ASM-verified: 2026-05-08T00:00 binary @ 0x00153e34 (re-analyst)
+// Binary @ 0x00153e34: external entry — force overlay fully visible and
+// jump to state 3. Used by the Bada-app-side "skip intro" handler.
+void PauseScreen::SkipTo() {
+    m_State = 3;
+    m_Alpha = 1.0f;
+}
+
+// ASM-verified: 2026-05-08T00:00 binary @ 0x00153fe8 (re-analyst)
+// Binary @ 0x00153fe8: external entry (no in-screen button binds it).
+// Likely call site: shop/tutorial popup-dismiss handler. Advances state
+// 3 -> 4 and clears the tutorial-shown flag.
+void PauseScreen::ContinueGameCallback() {
+    if (m_State != 3) return;
+    m_State = 4;
+    Game* g = Game::GetInstance();
+    if (!g) return;
+    if (g->m_bTutorialShown != 0) {
+        // TODO: 0x00153f20 — helper_reset(g->m_FrameTimer); same unidentified
+        //   global target as RetryGameCallback. Deferred until that global
+        //   is RE'd.
+    }
+    g->m_bTutorialShown = 0;
+}

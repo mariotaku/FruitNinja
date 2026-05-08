@@ -54,6 +54,16 @@ struct Game : public Mortar::MortarGame {
     uint8_t pauseFlag;             // +0x05: set by GameOver, QuitToMenu
     uint8_t retryFlag;             // +0x06
     uint8_t field_0x07;            // +0x07
+    // +0x85: tutorial-shown flag. Set by TutorialControl when intro plays;
+    //   cleared to 0 by PauseScreen Quit/Retry/Continue callbacks
+    //   (binary @ 0x00153ee0 / 0x00153f12 / 0x00153fc4 / 0x00153fc4) so the
+    //   tutorial re-arms on the next session.
+    uint8_t m_bTutorialShown;
+    // +0x1AC: achievement-progress accumulator (seconds in-game).
+    //   Threshold check >= 10.5f credits FruitSaveData::AddToTotal in
+    //   PauseScreen::RetryGameCallback (binary @ 0x00153f86).
+    //   TODO: writer not yet RE'd (likely Game::Update accumulates dt).
+    float m_AchievementProgressTimer;
     float retryTimer;              // +0x08
     float m_TransitionTimer;       // +0x0C
     float bombHitTimer;            // +0x10
