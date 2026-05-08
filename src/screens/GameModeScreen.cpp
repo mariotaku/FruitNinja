@@ -409,7 +409,7 @@ void GameModeScreen::Update(float dt) {
 
             if (fabsf(camT) < ALPHA_OUT_DONE) {
                 if (game.pGameSound) {
-                    game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
+                    game.pGameSound->SFXPlay("game-start", 1.0f, 1.0f);
                 }
                 game.mainScreen->SetCameraTransition(0.0f);
                 game.pauseFlag = 0;
