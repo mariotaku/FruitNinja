@@ -94,6 +94,16 @@ void GameInit(unsigned long) {
             mc->m_Timer     = kMC[i].rot;                       // field_0x2c = -rot (pre-negated in table above)
             mc->m_AnimState = i;                                // stored before tmp++ in binary
             mc->m_LayerFlags = 1;                               // field_0x34 = 1 (configured flag)
+            // size = (16, 16, 16) per binary @ 0x0016c75a
+            // (DAT_0016c9b8 = 64.0f * 0.5 * 0.5 = 16). Rendered as 32x32 quad
+            // (size is half-extents). RE-analyst 2026-05-09.
+            mc->size = Vec3(16.0f, 16.0f, 16.0f);
+            // DIFFERS: bind m_Texture eagerly to hud_cross.tex here so
+            // MissControl::Draw doesn't early-return. Binary's exact bind
+            // path (likely inside ctor/Init pulling from a static slot
+            // table) hasn't been pinned down; this matches the visual
+            // outcome.
+            mc->m_Texture = MissControl::GetCrossTexture();
             game->hud->AddControl(mc);
         }
     }
