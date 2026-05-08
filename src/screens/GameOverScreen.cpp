@@ -206,16 +206,22 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
 
-    // Load mode-specific game-over background texture into m_SecondaryTex
-    // gameMode 2 = Arcade, 3 = Zen, else Classic
+    // Load mode-specific game-over background texture into m_SecondaryTex.
+    // Texture names confirmed from binary @ 0x00140bb0 (re-analyst):
+    //   gameMode 2 (Arcade) -> arcade_time_up.tex
+    //   gameMode 3 (Zen)    -> time_up.tex
+    //   default (Classic)   -> gameover.tex
+    // TODO: 0x00140bb0 — confirm exact mode->variant mapping; the slot
+    //   identification is correct but the mode->slot index mapping needs
+    //   tracing through DAT_001428ec/f0/f4 GOT slots in Initialise.
     {
         Mortar::SmartPtr<Mortar::Texture> bgTex;
         if (gameMode == 2)
-            bgTex = TextureManager::LoadLocalisedTexture("arcade-game-over-bg.tex");
+            bgTex = TextureManager::LoadLocalisedTexture("arcade_time_up.tex");
         else if (gameMode == 3)
-            bgTex = TextureManager::LoadLocalisedTexture("zen-game-over-bg.tex");
+            bgTex = TextureManager::LoadLocalisedTexture("time_up.tex");
         else
-            bgTex = TextureManager::LoadLocalisedTexture("classic-game-over-bg.tex");
+            bgTex = TextureManager::LoadLocalisedTexture("gameover.tex");
         // Store the SmartPtr in m_SecondaryTex (matches binary type).
         m_SecondaryTex = bgTex;
         // Record title size from texture dimensions
@@ -531,10 +537,10 @@ void GameOverScreen::CreateRetryButton() {
     // Position: (-80, -96, 0) per binary DAT_001412c4/c8
     Vec3 btnPos(-80.0f, -96.0f, 0.0f);
 
-    // Texture: binary reads from GOT + DAT_001412d4 ("retry-button.tex")
+    // Texture: binary reads from GOT + DAT_001412d4 ("retry.tex")
     // Port fallback: load directly
     Mortar::SmartPtr<Mortar::Texture> tex =
-        TextureManager::LoadLocalisedTexture("retry-button.tex");
+        TextureManager::LoadLocalisedTexture("retry.tex");
 
     m_pRetryBtn = new MenuButton();
     m_pRetryBtn->pos    = btnPos;
@@ -582,7 +588,7 @@ void GameOverScreen::CreateQuitButton() {
     Vec3 btnPos(80.0f, -96.0f, 0.0f);
 
     Mortar::SmartPtr<Mortar::Texture> tex =
-        TextureManager::LoadLocalisedTexture("quit-button.tex");
+        TextureManager::LoadLocalisedTexture("quit.tex");
 
     m_pQuitBtn = new MenuButton();
     m_pQuitBtn->pos    = btnPos;
@@ -840,7 +846,7 @@ void GameOverScreen::Update(float dt) {
 
                 // Load localised "Game Over" text texture
                 Mortar::SmartPtr<Mortar::Texture> govTex =
-                    TextureManager::LoadLocalisedTexture("game-over.tex");
+                    TextureManager::LoadLocalisedTexture("gameover.tex");
                 m_GameOverTex = govTex ? govTex->m_TexId : 0;
             }
 
