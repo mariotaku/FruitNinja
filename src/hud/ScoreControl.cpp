@@ -267,40 +267,36 @@ void ScoreControl::Update(float dt) {
     }
 
     // Stage 6: position + layer flags
-    // base pos: DAT_00158c44/48/4c = (-218, 138, 0)
-    float posX = -218.0f;
-    float posY =  138.0f;
-    float posZ =    0.0f;
-
-    // MP offset: DAT_00158c50 = 200.0
-    float playerScale = (IsMultiplayer() && m_PlayerIdx == 1) ? -1.0f : 1.0f;
-    posX -= 200.0f * playerScale;
-
-    pos.x = posX;
-    pos.y = posY;
-    pos.z = posZ;
-
-    m_DrawPosX = posX + 24.0f;
-    m_DrawPosY = posY;
-    m_DrawPosZ = posZ;
+    // ASM-verified: 2026-05-09 binary @ 0x0015853c (re-analyst)
+    // pos = base - stride * abs(m_TransitionTimer)
+    // SCORE_MP_X_STRIDE (200.0 from DAT_00158c50) is the wave-transition slide
+    // distance, NOT a per-player MP offset. Steady-state gameplay
+    // (m_TransitionTimer == 0) leaves pos at (-218, 138, 0), on-screen.
+    float waveScale = fabsf(waveTimer);
+    pos.x = SCORE_BASE_POS_X - SCORE_MP_X_STRIDE * waveScale;
+    pos.y = SCORE_BASE_POS_Y;
+    pos.z = 0.0f;
 
     if (waveTimer > 0.0f) {
         m_LayerFlags = 8 << m_PlayerIdx;
+        // base draw pos = pos + (24, 0, 0)
+        m_DrawPosX = pos.x + 24.0f;
+        m_DrawPosY = pos.y;
+        m_DrawPosZ = pos.z;
         // wave-mode: recentre score banner. binary @ 0x00158b00..0x00158b70
-        // Measure current score string, shift pos by (-160 - w*0.5, +80, 0).
-        // DIVERGES: was missing this centring; score banner position was off-centre.
+        // Shift so score zooms toward (-160 - measW*0.5, +80, 0) absolute.
         if (game->pFontNumbers.IsValid()) {
             char scoreBuf[32];
             snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
             float measW = game->pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
             m_DrawPosX = -160.0f - measW * 0.5f;
-            m_DrawPosY = posY + 80.0f;
-        } else {
-            m_DrawPosX = posX + 24.0f;
-            m_DrawPosY = posY;
+            m_DrawPosY = pos.y + 80.0f;
         }
     } else {
         m_LayerFlags = 1 << m_PlayerIdx;
+        m_DrawPosX = pos.x + 24.0f;
+        m_DrawPosY = pos.y;
+        m_DrawPosZ = pos.z;
     }
 
     // Stage 7: highscore banner animation
