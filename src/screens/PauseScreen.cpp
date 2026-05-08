@@ -45,8 +45,14 @@ static const float FADE_CLAMP        = 0.01f;     // DAT_00154fb4
 static const float FADE_IN_RATE      = 0.25f;     // state 2 ease-in: (1-alpha)*0.25
 static const float ACTIVE_THRESHOLD  = 0.999f;    // DAT_00154fbc  state 2->3
 static const float EXIT_THRESHOLD   = 0.001f;    // DAT_00154fc0  states 4/5/6
-static const float TITLE_SLIDE_MUL  = -2.0f;     // DAT_00154fc4
-static const float TITLE_SLIDE_BASE = 240.0f;    // DAT_00154fd0
+// ASM-verified: 2026-05-08 binary @ DAT_00154fc4/d0/c8 (re-analyst).
+// Previous port values (-2.0f / 240.0f) were wrong by orders of magnitude.
+// DAT_00154fd0 = 160.0f is the SCREEN-TOP-EDGE constant, reused as the base
+// for both this->pos.y (title slide-in) and quit.pos.y. DAT_00154fc8 =
+// 240.0f is the SCREEN-RIGHT-EDGE constant, used as quit.pos.x base.
+static const float TITLE_SLIDE_MUL  = -130.0f;   // DAT_00154fc4 (was -2.0f, WRONG)
+static const float TITLE_SLIDE_BASE = 160.0f;    // DAT_00154fd0 (was 240.0f, WRONG)
+static const float SCREEN_RIGHT_X   = 240.0f;    // DAT_00154fc8 (quit.pos.x base)
 
 // flash.tex overlay: alpha = clamp(m_Alpha * 1000, 0, 128); scale = m_Alpha * 10000
 // Binary: PreDraw @ 0x0016bda0
@@ -646,14 +652,19 @@ void PauseScreen::Update(float dt) {
         pos.y = TITLE_SLIDE_BASE + sizeY + TITLE_SLIDE_MUL * m_Alpha;
     }
 
-    // 5. Quit button position (only when m_Alpha > 0.01 and m_PressIndex < 2)
+    // 5. Quit button position (only when m_Alpha > 0.01 and m_PressIndex < 2).
+    // ASM-verified: 2026-05-08 binary @ ~0x00154f7a..0x00154fae (re-analyst).
+    //   quit.pos.y = -((160 - sizeY*0.5 - 5) + (1-alpha)*(sizeY + 10))
+    //   quit.pos.x =  240 - sizeX*0.5
+    // Previous port had 240/0 instead of 160/240 -- positioned the quit
+    // button 80 units further off-screen and centered on x=0 instead of
+    // the right edge.
     if (m_QuitButton && m_Alpha > FADE_CLAMP && m_PressIndex < 2) {
         const float qSizeY = m_QuitTitleTexH;
         const float qSizeX = m_QuitTitleTexW;
-        // doc: quit.Y = -((240.0 - quitSizeY*0.5 - 5.0) + (1.0 - m_Alpha) * (quitSizeY + 10.0))
-        float quitY = -((240.0f - qSizeY * 0.5f - 5.0f)
+        float quitY = -((TITLE_SLIDE_BASE - qSizeY * 0.5f - 5.0f)
                         + (1.0f - m_Alpha) * (qSizeY + 10.0f));
-        float quitX = 0.0f - qSizeX * 0.5f;
+        float quitX = SCREEN_RIGHT_X - qSizeX * 0.5f;
         m_QuitButton->pos.x = quitX;
         m_QuitButton->pos.y = quitY;
     }
