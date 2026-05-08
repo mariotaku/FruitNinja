@@ -908,9 +908,10 @@ void MainScreen::GameModeCallback() {
 void MainScreen::NewGameCallback() {
     m_State = STATE_GAME_START;
     // ASM-verified: 2026-05-08 binary @ 0x0014c3ce (re-analyst). Literal at
-    // 0x001b96af = "Game-start" (resolves to game-start.wav.pcm; lowercased
-    // to match on-disk asset for case-sensitive filesystems).
-    if (game.pGameSound) game.pGameSound->SFXPlay("game-start", 1.0f, 1.0f);
+    // 0x001b96af is "Game-start" (Title-Case). Bada's sound loader resolves
+    // filenames case-insensitively; the SDL port mirrors that in
+    // SoundManager::LoadSound's POSIX dirent fallback.
+    if (game.pGameSound) game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
 }
 
 // Matches 0x0014afc4

@@ -365,7 +365,7 @@ void Bomb::Update(float /*dt*/) {
                 if (game->pGameSound) {
                     // Binary also calls SoundManager::PreLoadSound first;
                     // our SFX system plays on demand, no preload needed.
-                    game->pGameSound->SFXPlay("bomb-fuse", 1.0f, 1.0f);
+                    game->pGameSound->SFXPlay("Bomb-Fuse", 1.0f, 1.0f);
                 }
                 g_bombData.bFuseSfxFiredThisFrame = 1;
             }
@@ -737,7 +737,7 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             // camera shake already fired above.
             // GameOver is triggered by GameUpdate when bombHitTimer crosses 1.5 downward.
             game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
-            if (game->pGameSound) game->pGameSound->SFXPlay("bomb-explode", 1.0f, 1.0f);
+            if (game->pGameSound) game->pGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
             if (game->pSaveData) game->pSaveData->AddToTotal("bomb", 1);
         }
     } else if (m_bMenuBombHit != 0) {
