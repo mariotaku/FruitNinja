@@ -473,55 +473,37 @@ void Bomb::Update(float /*dt*/) {
     }
 }
 
-// Matches Bomb::DrawUpdate (0x001714e4) — called from Mortar::ActorManager::Update
-// immediately after Bomb::Update (vtable slot 6, +0x18). Updates the fuse
-// particle emitter so it tracks the bomb's fuse tip as the bomb rotates.
-//
-// Binary math (kept for reference):
+// ASM-verified: 2026-05-09 binary @ 0x001714e4 (asm-inspector).
+// Matches Bomb::DrawUpdate -- pure 2D circle in XY using m_RotY only:
 //   angle       = m_RotY * -0xB6
-//   offset.xy   = (sin, cos) * 0.9 * scale.x * 100.0
+//   offset.x    = sin(angle) * 0.9 * scale.x * 100.0
+//   offset.y    = cos(angle) * 0.9 * scale.x * 100.0
 //   offset.z    = 5.0
 //   emitter.pos = bomb.pos + offset
-//
-// That's a pure 2D circle in XY, using m_RotY only — the binary ignores
-// the DRAW_TILT_ANGLE X-tilt and the m_RotX Y-rotation that Draw applies.
-// In practice the emitter orbits the bomb center instead of sticking to
-// the visible fuse tip. For the port we apply the full rotation chain
-// that Draw uses to a local fuse-direction vector so the emitter actually
-// follows the fuse as the bomb tumbles. orient fields (m_ScaleY /
-// m_field30) still use the binary's m_RotY-only basis since they drive
-// the spark particleSet's 2D orientation, not the 3D fuse position.
+//   m_ScaleY    =  cos(angle)
+//   m_field30   = -sin(angle)
+// Earlier port commit extended this with a full RotX*RotY*RotZ chain
+// (and DRAW_TILT_ANGLE) to "track the visible fuse tip" as the bomb
+// tumbles -- but the binary literally ignores m_RotX and the X-tilt
+// here. Reverted to the binary-faithful 2D circle so the smoke /
+// sparks orbit on the same path as the original.
 void Bomb::PostUpdate(float /*dt*/) {
     if (!m_pEmitter) return;
 
     static const float FUSE_OFFSET_LEN   = 0.9f;    // DAT_0017159c
     static const float FUSE_SCALE_FACTOR = 100.0f;  // DAT_001715a0
 
-    // Build the same rotation that Bomb::Draw uses (Draw does
-    // RotX * RotY * RotZ on the identity then post-multiplies scale).
-    Matrix44 rotMat;
-    rotMat.RotX44(SinIdx((uint16_t)DRAW_TILT_ANGLE),
-                  CosIdx((uint16_t)DRAW_TILT_ANGLE));
-    rotMat.RotY44(SinIdx((uint16_t)(m_RotX * ANGLE_SCALE)),
-                  CosIdx((uint16_t)(m_RotX * ANGLE_SCALE)));
-    rotMat.RotZ44(SinIdx((uint16_t)(m_RotY * ANGLE_SCALE)),
-                  CosIdx((uint16_t)(m_RotY * ANGLE_SCALE)));
-
-    // Transform local fuse direction (+Y in mesh space) by the rotation.
-    // Direction transform (w=0), so the translation column is irrelevant.
-    const float L = scale.x * FUSE_OFFSET_LEN * FUSE_SCALE_FACTOR;
-    const float lx = 0.0f, ly = 0.0f, lz = L;
-    const Vec3 fuseWorld(
-        rotMat.m[0]*lx + rotMat.m[4]*ly + rotMat.m[8]*lz,
-        rotMat.m[1]*lx + rotMat.m[5]*ly + rotMat.m[9]*lz,
-        rotMat.m[2]*lx + rotMat.m[6]*ly + rotMat.m[10]*lz);
-
-    m_pEmitter->m_Pos = pos + fuseWorld;
-
-    // Spark orientation basis — still from binary's m_RotY-only math.
     const uint16_t angle = (uint16_t)(int16_t)(m_RotY * -ANGLE_SCALE);
-    m_pEmitter->m_ScaleY  =  CosIdx(angle);
-    m_pEmitter->m_field30 = -SinIdx(angle);
+    const float s = SinIdx(angle);
+    const float c = CosIdx(angle);
+    const float L = scale.x * FUSE_OFFSET_LEN * FUSE_SCALE_FACTOR;
+
+    m_pEmitter->m_Pos.x = pos.x + s * L;
+    m_pEmitter->m_Pos.y = pos.y + c * L;
+    m_pEmitter->m_Pos.z = pos.z + 5.0f;
+
+    m_pEmitter->m_ScaleY  =  c;
+    m_pEmitter->m_field30 = -s;
 }
 
 // Matches Bomb::Draw (0x171be8).
