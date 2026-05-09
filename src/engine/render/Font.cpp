@@ -655,28 +655,22 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             const float u1 = u0 + g->w * lhDivW;
             const float v1 = v0 + g->h * lhDivH;
 
-            // Port specific: 6-vertex GL_TRIANGLES layout (2 explicit
-            // triangles per glyph). The binary uses GL_TRIANGLE_STRIP with
-            // v[4]=v[3]/v[5]=v[1] degenerates; the per-glyph degenerates
-            // collapse the trailing 2 triangles to zero area but the
-            // batched strip still connects consecutive glyphs with
-            // *non-degenerate* triangles (BR_prev->BL_prev->TL_next), which
-            // produces visible streaks. Switch to GL_TRIANGLES so each
-            // glyph is independent.
-            //
-            // V swap (u0/v1 vs u0/v0): port's screen Y is up but the
-            // atlas V grows down. Pair screen-top vertices with atlas v0
-            // (top of glyph) and screen-bottom with v1.
+            // ASM-verified: 2026-05-09 binary @ 0x00199576..0x00199836
+            // (asm-inspector). Per-glyph emit is 6 verts in GL_TRIANGLE_STRIP
+            // order: LB, LT, RB, RT, then 2 degenerate copies of RT that
+            // collapse the inter-glyph connector to zero area.
+            //   strip(LB,LT,RB,RT) = tris (LB,LT,RB) + (LT,RB,RT) = one quad
+            //   strip(RT,RT,RT,nextLB) = both degenerate (zero area)
+            // V-axis pairing matches binary: cy+hh (screen-top) -> v0,
+            // cy-hh (screen-bottom) -> v1.
             const float kZ = 0.0f;  // DAT_00199a94 = 0.0f
             QUADCUSTOMVERTEX v[6];
-            // Triangle 1: TL_screen, TR_screen, BL_screen
-            v[0] = { cx - hw, cy - hh, kZ, 0,0,1, curColour, u0, v1 };
-            v[1] = { cx + hw, cy - hh, kZ, 0,0,1, curColour, u1, v1 };
-            v[2] = { cx - hw, cy + hh, kZ, 0,0,1, curColour, u0, v0 };
-            // Triangle 2: TR_screen, BR_screen, BL_screen
-            v[3] = { cx + hw, cy - hh, kZ, 0,0,1, curColour, u1, v1 };
-            v[4] = { cx + hw, cy + hh, kZ, 0,0,1, curColour, u1, v0 };
-            v[5] = { cx - hw, cy + hh, kZ, 0,0,1, curColour, u0, v0 };
+            v[0] = { cx - hw, cy - hh, kZ, 0,0,1, curColour, u0, v1 };  // LB
+            v[1] = { cx - hw, cy + hh, kZ, 0,0,1, curColour, u0, v0 };  // LT
+            v[2] = { cx + hw, cy - hh, kZ, 0,0,1, curColour, u1, v1 };  // RB
+            v[3] = { cx + hw, cy + hh, kZ, 0,0,1, curColour, u1, v0 };  // RT
+            v[4] = v[3];                                                // degenerate
+            v[5] = v[3];                                                // degenerate
 
             const int base = perPageCount[pageIdx] * 6;
             if (base + 6 <= PAGE_VERT_CAPACITY) {
@@ -739,8 +733,9 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             Page* page = GetPage(pg);
             if (!page || !page->texture.IsValid()) continue;
             page->texture->Set();
-            // GL_TRIANGLES (not strip) — see vertex layout above.
-            renderer->DrawTriList(
+            // GL_TRIANGLE_STRIP per binary @ 0x00193f5c (DrawTris with
+            // mode=5). 6 verts/glyph: LB,LT,RB,RT + 2 degenerate RTs.
+            renderer->DrawTriStrip(
                 &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY],
                 perPageCount[pg] * 6);
             page->texture->UnSet();
