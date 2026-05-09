@@ -111,13 +111,20 @@ void PauseScreen::UnpauseGame() {
 // IsEnabled (binary @ 0x00153e4c)
 // -------------------------------------------------------------------------
 
-// ASM-verified: 2026-05-03 binary @ 0x00153e4c (re-analyst)
+// ASM-verified: 2026-05-09 binary @ 0x00153e4c (re-analyst)
+// Returns TRUE when pause overlay is available -- transition timer at rest
+// (|t| < 0.001), no bomb-hit pause, and pauseFlag == 0. Earlier port had
+// the comparison inverted -- the binary uses `bpl` after vcmpe which means
+// "branch if |val| >= epsilon -> return false". Inversion was masked while
+// m_TransitionTimer sat permanently at -1.0f in the port; once MainScreen
+// started mirroring the camera transition (settles to 0 during gameplay),
+// the inversion hid the pause button entirely.
 bool PauseScreen::IsEnabled() {
     Game* g = Game::GetInstance();
     if (!g) return false;
-    if (fabsf(g->m_TransitionTimer) < 0.001f) return false;  // [+0xc] epsilon
-    if (g->bombHitTimer > 0.0f)               return false;  // [+0x10]
-    return (g->pauseFlag ^ 1) != 0;                          // [+0x05] XOR 1
+    if (fabsf(g->m_TransitionTimer) >= 0.001f) return false;  // [+0xc] epsilon
+    if (g->bombHitTimer > 0.0f)                return false;  // [+0x10]
+    return (g->pauseFlag ^ 1) != 0;                           // [+0x05] XOR 1
 }
 
 // -------------------------------------------------------------------------
