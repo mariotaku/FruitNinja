@@ -96,26 +96,64 @@ public:
     static Mortar::SmartPtr<Font> Create(const char* path);
 
     // Matches Font_DrawString (0x00198e44).
-    void DrawString(float scale, float maxWidth, float rotZ,
+    // ASM-verified: 2026-05-09 (asm-inspector) -- second float arg is the
+    // Y-axis line-pitch divisor on maxWH.y, NOT a word-wrap limit. The
+    // prologue does:
+    //     maxWH.x /= scale;
+    //     maxWH.y /= (yLineFactor * scale);
+    // Wrap-or-not is gated entirely by `maxWH.x > 0` plus the alignment
+    // bit 0x10. Most binary callers pass yLineFactor = 1.0; ScoreControl's
+    // highscore "BEST" label passes 0.9 (DAT_0015979c). Passing 0 here
+    // produces 0/0 = NaN inside the divide and corrupts vertical alignment;
+    // callers must pass 1.0 (or the binary's exact value) -- never 0.
+    void DrawString(float scale, float yLineFactor, float rotZ,
                     Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                     Vec2 maxWH, int alignment, float z,
                     MortarRectangleDec* clipRect = nullptr);
 
-    // Thin wrapper (0x00199aa0): packs x/y/z into Vec3, calls DrawString with maxWidth=1.0.
-    void DrawString(float scale, float maxWidth, float z,
+    // Binary-shape wrapper @ 0x00199aa0.
+    //
+    // ASM-verified: 2026-05-09 (asm-inspector) -- exact arg order so the
+    // hard-float ABI lays out as in the binary:
+    //   r0 = this
+    //   r1 = Utf8StringIterator& (by-reference; binary copies to local)
+    //   r2 = const Colour&        (by-reference; binary copies to local)
+    //   r3 = alignment
+    //   s0 = posX, s1 = posY, s2 = posZ
+    //   s3 = scale
+    //   s4 = maxWHx, s5 = maxWHy
+    //   s6 = rotZ
+    //   [sp+0] = MortarRectangleDec*
+    // Internally hardcodes yLineFactor = 1.0 when forwarding to the full
+    // Font_DrawString @ 0x00198e44. Use this overload when matching binary
+    // call sites byte-for-byte; for ad-hoc port-side text rendering prefer
+    // the simpler `DrawString(scale, yLineFactor, z, text, ...)` wrapper.
+    void DrawString(Mortar::Utf8StringIterator& iter,
+                    const Colour& colour, int alignment,
+                    float posX, float posY, float posZ,
+                    float scale, float maxWHx, float maxWHy, float rotZ,
+                    MortarRectangleDec* clip = nullptr);
+
+    // Port-side convenience wrapper. Forwards to the binary-shape overload
+    // above with maxWH = (0, 0). NOT a binary ABI match -- the second arg
+    // is the full overload's `yLineFactor` (the binary wrapper hardcodes
+    // 1.0; this port wrapper exposes it because some legacy callers pass
+    // non-default values). Callers that want strict binary-ABI fidelity
+    // should call the binary-shape overload above directly.
+    void DrawString(float scale, float yLineFactor, float z,
                     const char* text, const Vec3& pos,
                     const Colour& colour, int alignment = 0);
 
     // For compat with old callers that pass scale directly
-    void DrawStringSized(float targetSize, float maxWidth, float z,
+    void DrawStringSized(float targetSize, float yLineFactor, float z,
                          const char* text, const Vec3& pos,
                          const Colour& colour, int alignment = 0) {
-        DrawString(targetSize, maxWidth, z, text, pos, colour, alignment);
+        DrawString(targetSize, yLineFactor, z, text, pos, colour, alignment);
     }
 
-    // Wrap-aware variant: forwards to the full DrawString with maxWidth=1.0
-    // (line pitch) and maxWH.x = wrapPx (wrap constraint). Matches the
-    // binary's call shape for the description-text path.
+    // Wrap-aware variant: forwards to the full DrawString with yLineFactor=1.0
+    // and maxWH.x = wrapPx (wrap constraint). Matches the binary's call shape
+    // for the description-text path.
     void DrawStringWrapped(float scale, float wrapPx, float z,
                            const char* text, const Vec3& pos,
                            const Colour& colour, int alignment) {

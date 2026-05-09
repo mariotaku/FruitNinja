@@ -506,14 +506,12 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                                   0.0f);
                 const int kAlignLabel = 0x02 | 0x04 | 0x08; // RIGHT|MIDDLE|BOTTOM (0x0E)
                 const int kAlignDigit = 0x01 | 0x04 | 0x08; // CENTER|MIDDLE|BOTTOM (0x0D)
-                // Port-side note: binary param2 (vertical aspect, 0.9 / 0.0) is
-                // NOT the same as port's `maxWidth` arg (word-wrap limit; 1.0 =
-                // "no wrap" sentinel). Passing 0.0 would divide-by-zero inside
-                // Font::DrawString (`maxWH.y /= maxWidth*scale`). Pass 1.0 here
-                // and let the port's wrap-by-maxWH.x gate decide. The visual
-                // aspect-ratio difference is a port API gap (TODO: surface
-                // binary's vertical-aspect param if needed).
-                game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
+                // 2nd arg is yLineFactor (Y-axis line-pitch divisor on
+                // maxWH.y), NOT a wrap-width. Binary label call passes 0.9
+                // (DAT_0015979c); digit call uses the wrapper which
+                // hardcodes 1.0. Port wrapper exposes yLineFactor; pass
+                // matching values for binary fidelity.
+                game->pFontMain->DrawString(20.0f, 0.9f, 0.0f,
                     label, anchor, col, kAlignLabel);
                 game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                     hsBuf,  anchor, col, kAlignDigit);
