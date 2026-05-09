@@ -282,15 +282,16 @@ void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
 // Binary @ 0x17C584 — bump ghost frame counter, tick 8 ghost slots, advance
 // per-frame palette cycle, push swipe-loop volume to ItemManager and reset
 // accumulator.
-// ASM-verified: 2026-05-09 binary @ 0x0017C584 (re-analyst)
+// ASM-verified: 2026-05-10 binary @ 0x0017C584 (asm-inspector)
+//   The palette tick passes the caller's dt straight through (vmov.f32 s16,s0
+//   at 0x0017c58e then vmov.f32 s0,s16 at 0x0017c5d2 before the call). The
+//   DAT_0017c5fc = 0.0f the prior comment cited is the m_PreAccum (+0xc8)
+//   reset at 0x0017c5ec, not a constant dt argument.
 void SlashEntity::PreUpdate(float dt) {
-    (void)dt;
     // Port specific: SlashEntityGhost ring (8 slots) deferred.
     // Port specific: ItemManager::PushSwipeLoopVolume deferred.
-
-    // Advance disco palette each frame. Binary @ 0x17C584: DAT_0017E000 = 0.1f.
     if (g_ColourType == 1 /* PER_SLASH */) {
-        UpdateModColour(nullptr, 0.1f);
+        UpdateModColour(nullptr, dt);
     }
 }
 
@@ -959,15 +960,19 @@ void SlashEntity::SetModScales(
 // g_ColourType == 2. We skip that until the highlight system lands —
 // currently visible only for type-2 mods which aren't shipped.
 void SlashEntity::ColoursChanged() {
-    // Reset per-instance colour state on every blade-swap. Without this,
-    // m_HighlightColour keeps the previous mod's last UpdateModColour write
-    // (e.g. a cycled disco colour) and bleeds into the new blade's trail
-    // because UpdateModColour does not touch m_HighlightColour when
-    // g_ColourType == 0 (NONE) -- a NONE-type swap leaves stale palette
-    // bytes in m_HighlightColour, which the m_Scale==0 else-branch in
-    // RebuildGeometry then copies straight into the per-vertex stamp.
-    // Snapping to g_Palette[0] gives the new mod's first palette entry
-    // (white for NONE blades, the first cycle colour for PER_SLASH).
+    // DIFFERS: port-side plug for the m_Scale-lifecycle gap (binary @ 0x0017C41C
+    // does NOT reset m_HighlightColour or m_BaseColour here -- per asm-inspector
+    // 2026-05-10). The binary only refreshes m_HighlightColour for PER_SWIPE
+    // (g_ColourType == 2) via UpdateModColour(&m_HighlightColour, 1.0f) inside
+    // the m_bDirty branch; PER_SLASH continuously refreshes via PreUpdate, and
+    // NONE leaves the field untouched because the binary's RebuildGeometry only
+    // writes m_HighlightColour when g_ColourType != 0. With m_Scale lifecycle
+    // ported (1.0 in critical, -2*dt decay), the binary's m_Scale > 0 path
+    // would lerp white -> stale m_HighlightColour, hiding the leak. Port has
+    // m_Scale stuck at 0 so the m_Scale==0 else-branch in RebuildGeometry
+    // copies stale bytes straight to the vertex stamp -- visible as disco
+    // tint persisting through a NONE-blade swap. Snap m_HighlightColour /
+    // m_BaseColour to g_Palette[0] until m_Scale lifecycle lands.
     if (g_ColourCount > 0) {
         m_HighlightColour = g_Palette[0];
     } else {
