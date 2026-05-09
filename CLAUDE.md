@@ -80,6 +80,7 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 | `asm-triager`  | Read the `tools/asm-verify/run.sh` report and classify SUSPICIOUS / DIVERGE rows as ACCEPT-cosmetic / ACCEPT-deferred / FIX-NEEDED. | Updated `tools/asm-verify/triage.json` |
 
 **Coordination rules:**
+- **Orchestrator-stays-in-its-lane rule.** The main session is the **orchestrator**: it dispatches subagents, sequences their work, applies their patches, runs builds, commits, and answers the user. It does **not** itself open `src/` files to read code, nor read large binary disassembly, nor write code-under-test. Code exploration and RE go to subagents; code edits go to `implementer`; only the small surgical patches that the orchestrator must apply itself (commit-shaping touch-ups, cherry-picking a single agent-supplied snippet) stay in the orchestrator. If you find yourself reading more than a few dozen lines of source or `Grep`-ing across `src/` for understanding, stop and dispatch an `Explore` or `re-analyst` instead — the orchestrator's context is the bottleneck. This applies to both code exploration AND fix application.
 - One screen / system at a time. Don't spawn two agents that touch the same files in parallel.
 - For new work: spawn `re-analyst` first (RE+spec), then `implementer` (code from spec). Don't ask one agent to do both phases.
 - `re-analyst` returns a report; it does NOT edit `src/` and does NOT author narrative docs.
