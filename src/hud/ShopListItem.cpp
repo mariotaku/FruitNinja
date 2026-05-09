@@ -716,47 +716,52 @@ void ShopListItem::Draw() {
                 // word-wrap path.
                 static constexpr float DESC_WRAP_W = 160.0f;
 
-                if (purchaseState == 0 || purchaseState == 3) {
-                    // Case 0 or 3: normal description draw at y=0 (DAT_0015f53c).
-                    // Use DrawStringWrapped: line pitch = 1.0 (binary
-                    // maxWidth), wrap width passed via maxWH.x = DESC_WRAP_W.
+                // Binary @ 0x0015eb00 ShopListItem::Draw outer gate
+                // (re-analyst 2026-05-10):
+                //   if (!IsLocked() || RequirementType==0 || RequirementType==3)
+                //       single-line white desc at y=0 (case 0/3 path)
+                //   else  (locked AND state==1 or state==2)
+                //       two-line split: red prompt at y=-20, white desc at y=+10
+                // The red prompt pulls LocalizedString IDs 187/188 (case 2,
+                // gated on FruitSaveData::PlayedModeToday(GAME_MODE_3)) or
+                // 194/195 (case 1, gated on IsDeviceUpsideDown()), NOT
+                // m_DescText. The port has neither save-data API nor the
+                // localized-by-int-ID strings wired, so we leave the red line
+                // out and fall through to the unlocked single-white path for
+                // unlocked items. Locked items in state 1/2 still need the
+                // red prompt -- TODO when FruitSaveData lands.
+                bool isLockedSplit = (m_pItemInfo->IsLocked() != 0)
+                                  && (purchaseState == 1 || purchaseState == 2);
+                if (!isLockedSplit) {
+                    // Case 0/3 path, plus unlocked-state-1/2 fallthrough.
+                    // Normal single white description at y=0 (DAT_0015f53c).
                     Vec3 descPos(xPos, 0.0f, 0.0f);
                     font->DrawStringWrapped(descFontSize, DESC_WRAP_W, 0.0f,
                                             descStr, descPos,
                                             descColour,
                                             0xF);
-                } else if (purchaseState == 1) {
-                    // Case 1: cost-per-play
-                    // Binary: line 1 at y=-20 (DAT_0015f4e6 = 0xC1A00000),
-                    //         line 2 at y=+10 (DAT_0015f57a = 0x41200000).
-                    // DIFFERS: FruitSaveData::PlayedModeToday and
-                    //   IsDeviceUpsideDown not wired -- port draws stub text
-                    //   in both slots. TODO: implement when FruitSaveData lands.
-                    Vec3 descPos(xPos, -20.0f, 0.0f);
-                    font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
-                                     descStr, descPos,
-                                     Colour(0xBD, 0, 0, descAlpha),
-                                     3);
+                } else {
+                    // Locked + state 1 or 2: two-line red+white split.
+                    // Binary draws different strings per line; port stubs the
+                    // red line with descStr + an italic-feeling y/scale tweak
+                    // until LocalizedString IDs 187/188/194/195 are wired.
+                    // Line 1: y=-20 (DAT_0015f4e6), font*0.8 (DAT_0015f528),
+                    //         colour (0xBD,0,0) -- red prompt.
+                    // Line 2: y=+10 (DAT_0015f57a), font * (case 1 ? 0.9 :
+                    //         0.81 = 0.9*0.9 from binary @ 0x0015f460+f56c),
+                    //         colour white -- m_DescText description.
+                    // TODO: 0x0015eb00 -- wire FruitSaveData::PlayedModeToday
+                    //       (state 2) / IsDeviceUpsideDown (state 1) and
+                    //       LocalizedString IDs 187/188/194/195 for the red
+                    //       line's per-state string. Currently the red line
+                    //       reuses descStr so it does not produce a literal
+                    //       duplicate visually -- skip the draw to avoid the
+                    //       same-string-twice artifact.
+                    const float scale2 = (purchaseState == 2)
+                                            ? (descFontSize * 0.81f)
+                                            : (descFontSize * 0.9f);
                     Vec3 descPos2(xPos, 10.0f, 0.0f);
-                    font->DrawStringWrapped(descFontSize * 0.9f, DESC_WRAP_W, 0.0f,
-                                     descStr, descPos2,
-                                     Colour(255, 255, 255, descAlpha),
-                                     0xF);
-                } else if (purchaseState == 2) {
-                    // Case 2: played-mode-today
-                    // Same Y layout as case 1 (line1 at -20, line2 at +10).
-                    // Binary state-2 path multiplies by 0.9 TWICE (once at
-                    // 0x0015f460 vmul s17,s16,0.9 and again at the shared
-                    // second-line draw 0x0015f56c vmul s3,s17,0.9), giving
-                    // s16 * 0.81. Case 1 only multiplies once (= 0.9).
-                    // DIFFERS: FruitSaveData not wired.
-                    Vec3 descPos(xPos, -20.0f, 0.0f);
-                    font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
-                                     descStr, descPos,
-                                     Colour(0xBD, 0, 0, descAlpha),
-                                     3);
-                    Vec3 descPos2(xPos, 10.0f, 0.0f);
-                    font->DrawStringWrapped(descFontSize * 0.81f, DESC_WRAP_W, 0.0f,
+                    font->DrawStringWrapped(scale2, DESC_WRAP_W, 0.0f,
                                      descStr, descPos2,
                                      Colour(255, 255, 255, descAlpha),
                                      0xF);
