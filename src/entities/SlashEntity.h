@@ -212,6 +212,14 @@ private:
     // via PSPParticleManager::AddEmitter, cleared on release.
     PSPParticleEmitter* m_TrailEmitter;
 
+    // Binary +0x44: per-vertex stamped colour (result of white -> m_HighlightColour
+    // lerp by (1.0f - m_Scale)). Stamped onto every strip vertex in RebuildGeometry.
+    Colour m_BaseColour;       // Binary +0x44
+
+    // Binary +0x48: output of UpdateModColour — the current palette-cycle colour.
+    // UpdateModColour writes here; RebuildGeometry reads to derive m_BaseColour.
+    Colour m_HighlightColour;  // Binary +0x48
+
     // 2-bit state machine matching binary m_bBladeActive:
     //   0 = off, 1 = active, 2 = deactivating (fading out)
     uint8_t m_State;
@@ -222,6 +230,13 @@ private:
     // array. Set in Init(int finger). Used by RegisterInputCallbacks to
     // bind only this finger's TouchDown_n / TouchMove_X-Y_n / TouchUp_n.
     int m_FingerId;
+
+    // Binary +0xC4: trail-fade weight in [0, 1]. When 1.0, m_BaseColour = white
+    // lerped toward m_HighlightColour by 0 = pure white. When 0 (or less),
+    // m_BaseColour = m_HighlightColour directly (fully saturated).
+    // Set/decayed by SlashEntity::Update @ 0x17D664.
+    // TODO: 0x17D664 -- m_Scale lifecycle (1.0 on critical, -2*dt decay) not yet ported.
+    float m_Scale;             // Binary +0xC4
 
     // Binary +0x148: cooldown timer between swipe SFX firings. PlaySwipe
     // (binary @ 0x17ccdc) resets to 6.0f after firing; per-frame decrement
