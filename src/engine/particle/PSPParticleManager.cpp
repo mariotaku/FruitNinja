@@ -715,6 +715,31 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             if (e->QueryIntAttribute("endMin",   &v) == tinyxml2::XML_SUCCESS) tmpl.m_CycleYEnd   = (int16_t)v;
         }
 
+        // <gridLock x="16" y="16"/> -- snap-to-grid lock per axis, applied in Draw.
+        // Binary @ 0x00115f60 reads element attrs into template +0x64 / +0x68.
+        // Used by pixel_blade and rim_spark templates.
+        // ASM-verified: 2026-05-09 binary @ 0x00115f60 (re-analyst)
+        {
+            tinyxml2::XMLElement* e = pt->FirstChildElement("gridLock");
+            if (e) {
+                e->QueryFloatAttribute("x", &tmpl.m_GridLockStart);
+                e->QueryFloatAttribute("y", &tmpl.m_GridLockEnd);
+            }
+        }
+
+        // <friction start="x y z" end="x y z"/> -- per-component per-frame velocity
+        // LERP factor (damping). Binary stores into template +0x08..+0x1C
+        // (m_VelocityMin/Max) -- the same slots the port's UpdateEmitter integration
+        // already reads. Templates that omit this keep the identity defaults set above.
+        // pixel_1/2/3 use start="1 1 0" end="0 0 0" -> fast decel to stop.
+        {
+            tinyxml2::XMLElement* e = pt->FirstChildElement("friction");
+            if (e) {
+                ParseVec3(e->Attribute("start"), tmpl.m_VelocityMin);
+                ParseVec3(e->Attribute("end"),   tmpl.m_VelocityMax);
+            }
+        }
+
         // <rotateCycle start="base" end="endBase" speedStart="rate1" speedEnd="rate2"/>
         // Quadratic rotation accumulator modulating m_Rotation with sin.
         // Port stores the four parameters in the m_Friction* float slots so
