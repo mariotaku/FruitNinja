@@ -959,6 +959,22 @@ void SlashEntity::SetModScales(
 // g_ColourType == 2. We skip that until the highlight system lands —
 // currently visible only for type-2 mods which aren't shipped.
 void SlashEntity::ColoursChanged() {
+    // Reset per-instance colour state on every blade-swap. Without this,
+    // m_HighlightColour keeps the previous mod's last UpdateModColour write
+    // (e.g. a cycled disco colour) and bleeds into the new blade's trail
+    // because UpdateModColour does not touch m_HighlightColour when
+    // g_ColourType == 0 (NONE) -- a NONE-type swap leaves stale palette
+    // bytes in m_HighlightColour, which the m_Scale==0 else-branch in
+    // RebuildGeometry then copies straight into the per-vertex stamp.
+    // Snapping to g_Palette[0] gives the new mod's first palette entry
+    // (white for NONE blades, the first cycle colour for PER_SLASH).
+    if (g_ColourCount > 0) {
+        m_HighlightColour = g_Palette[0];
+    } else {
+        m_HighlightColour = Colour(255, 255, 255, 255);
+    }
+    m_BaseColour = m_HighlightColour;
+
     if (m_TrailEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
