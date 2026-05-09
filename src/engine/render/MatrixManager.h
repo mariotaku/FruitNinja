@@ -46,8 +46,10 @@ public:
     void SetupOrtho(float top, float bottom, float left, float right,
                     float nearVal, float farVal);
 
-    // Matches 0x0019e724
-    void SetupLookAt(const Vec3& eye, const Vec3& target, const Vec3& up);
+    // ASM-verified: 2026-05-09 binary @ 0x0019e724 + LookAt43 @ 0x0019e82c
+    // Non-canonical: forward = -eye, third arg ignored (kept in signature
+    // for binary call-shape parity). See impl for the full math.
+    void SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& unused);
 
     // "Upload all" — called by SetupOrtho, SetupLookAt (skipProjection=false)
     void UploadAll();
