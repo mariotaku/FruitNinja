@@ -519,7 +519,7 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    glBindTexture(GL_TEXTURE_2D, m_Texture->m_TexId);
+    m_Texture->Set();
 
     // Tint: m_DrawColour multiplied by per-frame HUD tint (MatrixManager.field_0x3c.field_0x20).
     // TODO: fetch HUD tint multiplier from MatrixManager for exact binary match.
@@ -543,5 +543,5 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         r->DrawTriList(v, 6);
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    m_Texture->UnSet();
 }

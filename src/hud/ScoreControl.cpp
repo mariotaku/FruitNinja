@@ -545,11 +545,12 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex ? tex->m_TexId : 0);
-        Colour col(255, 255, 255, alpha);
-        if (game) game->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        if (tex) {
+            tex->Set();
+            Colour col(255, 255, 255, alpha);
+            if (game) game->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
+            tex->UnSet();
+        }
     }
 
     // Section E: Highscore banner texture (+0xA4 = new_best_score.tex)
@@ -576,11 +577,12 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, tex ? tex->m_TexId : 0);
-        Colour col(255, 255, 255, alpha);
-        if (game) game->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        if (tex) {
+            tex->Set();
+            Colour col(255, 255, 255, alpha);
+            if (game) game->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
+            tex->UnSet();
+        }
     }
 }
 
