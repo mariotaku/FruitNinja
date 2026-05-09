@@ -732,13 +732,15 @@ void SlashEntity::Draw() {
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
-    glBindTexture(GL_TEXTURE_2D, bladeTex->m_TexId);
+    bladeTex->Set();
 
     if (Renderer* r = Renderer::GetInstance()) {
         const int vertCount = m_NumPoints * 2;
         r->DrawTriStrip(m_Left,  vertCount);
         r->DrawTriStrip(m_Right, vertCount);
     }
+
+    bladeTex->UnSet();
 }
 
 // ---------------------------------------------------------------------------

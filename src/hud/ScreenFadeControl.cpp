@@ -76,8 +76,7 @@ void ScreenFadeControl::Draw(const Vec3& hudScale, int layerMask)
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex->m_TexId);
+    tex->Set();
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -90,7 +89,7 @@ void ScreenFadeControl::Draw(const Vec3& hudScale, int layerMask)
     // Binary: Mortar::Mesh::DrawQuadUnCached(m_Colour, ...)
     game->renderer.DrawQuad(m_Colour, 0.0f, 0.0f, 1.0f, 1.0f);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    tex->UnSet();
 }
 
 // Binary @ 0x0015A754

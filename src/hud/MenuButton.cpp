@@ -850,9 +850,9 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
                 // -- four floats are UV bounds (uMin, uMax, vMin, vMax), not
                 // halfW/halfH. Geometry is unit-quad (-0.5..+0.5) inside DrawQuad.
                 Colour tint(255, 255, 255, alpha);
-                glBindTexture(GL_TEXTURE_2D, s_TexScratchs->m_TexId);
+                s_TexScratchs->Set();
                 r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
-                glBindTexture(GL_TEXTURE_2D, 0);
+                s_TexScratchs->UnSet();
             }
         }
         return;
@@ -915,9 +915,9 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
                 ? Colour(255, 255, 255, a)
                 : Colour(128, 128, 128, a);
 
-            glBindTexture(GL_TEXTURE_2D, s_TexNewItem->m_TexId);
+            s_TexNewItem->Set();
             r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            s_TexNewItem->UnSet();
         }
     }
 

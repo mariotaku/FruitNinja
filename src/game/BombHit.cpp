@@ -13,6 +13,7 @@
 #include "entities/Fruit.h"
 #include "entities/SplatEntity.h"
 #include "asset/TextureManager.h"
+#include "asset/Texture.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
@@ -176,6 +177,10 @@ void DrawCriticalFlash() {
     EnsureWhitePx();
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, s_WhitePx);
+    // Sync s_LastBoundTexId since the white-pixel is procedural (no
+    // Mortar::Texture wrapper), and Renderer::DrawQuad would otherwise
+    // skip the draw thinking nothing is bound.
+    Mortar::Texture::s_LastBoundTexId = s_WhitePx;
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -188,6 +193,7 @@ void DrawCriticalFlash() {
         r->DrawQuad(tint);
     }
     glBindTexture(GL_TEXTURE_2D, 0);
+    Mortar::Texture::s_LastBoundTexId = 0;
 }
 
 void DrawBombHit() {
