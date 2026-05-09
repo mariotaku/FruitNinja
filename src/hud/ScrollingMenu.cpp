@@ -84,14 +84,23 @@ ScrollingMenu::ScrollingMenu()
     // Bada touch coords are 90-degree-rotated, so binary's "all pos.x" encoding
     // corresponds to (xMin/xMax, yMin/yMax) split in unrotated desktop coords.
     // The port stores axes already separated in [xMin, yMin, yMax, xMax] form.
+    // Touch region. Binary @ 0x0015b3b0 (asm-inspector) calls
+    // SetVec3_ScrollMenu(-120, +120) for both outer and inner, writing
+    // `{ -120, +320, +120, -320 }` in Bada-rotated coords. Port reads
+    // indices as [xMin, yMin, yMax, xMax] in unrotated landscape coords;
+    // the magnitudes below preserve the original port mapping that
+    // worked for the list strip.
+    //
+    // Earlier port commit widened m_OuterRegion[3] to +400 ("Port
+    // specific: cover dialog-box / equip-button column"), which let
+    // touches on the right panel trigger list scroll. Reverted: the
+    // outer region must NOT extend into the dialog-box / buy-equip
+    // column. Right panel taps now route to their own buttons.
     const float HALF_ITEM = m_ItemHeight * 0.5f;   // 120.0f
     m_OuterRegion[0] = -m_Width  * 0.5f;  // xMin = -160
     m_OuterRegion[1] = -HALF_ITEM;        // yMin = -120
     m_OuterRegion[2] =  HALF_ITEM;        // yMax = +120
-    // Port specific: widen xMax to cover dialog-box / equip-button column on
-    // desktop where the user can drag from anywhere on the shop UI rather
-    // than just on the visible list strip.
-    m_OuterRegion[3] =  m_Width  * 0.5f + 240.0f;  // xMax = +400
+    m_OuterRegion[3] =  m_Width  * 0.5f;  // xMax = +160 (was +400 — DROPPED widen)
 
     m_InnerRegion[0] = -m_Width  * 0.5f;  // -160
     m_InnerRegion[1] = -HALF_ITEM * 0.5f; // -60
