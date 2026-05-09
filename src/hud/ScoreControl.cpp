@@ -477,21 +477,32 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 col.a = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.a + (int)((green.a - col.a) * t)));
             }
             col.a = alpha;
-            // Highscore "BEST" + digits: binary loads game[+0x54] = pFontMain
-            // ("font_fruit_ninja.fnt"). Verified 2026-05-09 (re-analyst @
-            // 0x00159538/0x00159594/0x00159636).
+            // Highscore "BEST" + digits: binary uses pFontMain (+0x54) for both.
+            // ASM-verified: 2026-05-09 binary @ 0x00159500..0x001596a0 (re-analyst).
+            // Constants:
+            //   - both DrawString scale = 20.0f (digits NOT 48 — uniform scale)
+            //   - Y offset = pos.y - 28.8f (DAT_001597c8 = 0x41e66667)
+            //   - X offset = pos.x + cursorX + 28.0f (literal 0x41e00000)
+            //   - label Y-scale = 0.6f (DAT_0015979c = 0x3f666666)
+            //   - label alignment = 0x0E (RIGHT|MIDDLE|BOTTOM)
+            //   - digit alignment = 0x0D (CENTER|MIDDLE|BOTTOM)
             if (game->pFontMain.IsValid()) {
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
                 const char* label = Localisation::Get("BEST");  // key 0xB5
-                float labelW = game->pFontMain->MeasureWidth(20.0f, label);
-                float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE;
+                float labelW  = game->pFontMain->MeasureWidth(20.0f, label);
+                float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
+                const float drawY = m_DrawPosY - 28.8f;                // DAT_001597c8
+                const int kAlignLabel = 0x02 | 0x04 | 0x08; // RIGHT|MIDDLE|BOTTOM (0x0E)
+                const int kAlignDigit = 0x01 | 0x04 | 0x08; // CENTER|MIDDLE|BOTTOM (0x0D)
+                game->pFontMain->DrawString(20.0f, 0.6f, 0.0f,
+                    label,
+                    Vec3(m_DrawPosX + cursorX + 28.0f, drawY, 0.0f),
+                    col, kAlignLabel);
                 game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                    label, Vec3(m_DrawPosX + cursorX, m_DrawPosY - 30.0f, 0.0f),
-                    col, Mortar::FONT_ALIGN_CENTER);
-                game->pFontMain->DrawString(48.0f, 1.0f, 0.0f,
-                    hsBuf, Vec3(m_DrawPosX, m_DrawPosY - 30.0f, 0.0f),
-                    col, Mortar::FONT_ALIGN_CENTER);
+                    hsBuf,
+                    Vec3(m_DrawPosX + 28.0f, drawY, 0.0f),
+                    col, kAlignDigit);
             }
         }
     }
