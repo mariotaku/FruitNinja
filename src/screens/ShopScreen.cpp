@@ -1105,9 +1105,11 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             // ---------------------------------------------------------------
 
             // --- Left quad: anchored to scroll pos, U=[0.03125..0.597656] ---
+            // Use Texture::Set so s_LastBoundTexId is tracked --
+            // Renderer::DrawQuad skips the draw when the tracker says
+            // nothing is bound (raw glBindTexture doesn't update it).
             if (s_TexBGStore.IsValid()) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, s_TexBGStore->m_TexId);
+                s_TexBGStore->Set();
             }
 
             // Scale Vec3 = (291, 321, 0)  DAT_0015e064, DAT_0015e068, DAT_0015e05c
@@ -1159,7 +1161,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             }
 
             if (s_TexBGStore.IsValid()) {
-                glBindTexture(GL_TEXTURE_2D, 0);
+                s_TexBGStore->UnSet();
             }
 
         } else {
@@ -1176,8 +1178,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             mm.UploadModelViewOnly();
 
             if (s_TexBGStore.IsValid()) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, s_TexBGStore->m_TexId);
+                s_TexBGStore->Set();
             }
 
             {
@@ -1191,7 +1192,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             }
 
             if (s_TexBGStore.IsValid()) {
-                glBindTexture(GL_TEXTURE_2D, 0);
+                s_TexBGStore->UnSet();
             }
 
             // Binary stores DAT_0015e1dc = 145.0f as slide_X for use in A3.
@@ -1248,13 +1249,9 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             uint8_t rByte = (r_float > 0.0f) ? (uint8_t)(int)r_float : (uint8_t)0;
             Colour colDialog(rByte, rByte, rByte, 0xFF);
 
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, s_TexDialogBox->m_TexId);
-
-            // DrawQuad_GameTask(colour) — full quad, no UV crop
+            s_TexDialogBox->Set();
             r->DrawQuad(colDialog);
-
-            glBindTexture(GL_TEXTURE_2D, 0);
+            s_TexDialogBox->UnSet();
         }
 
         return;
@@ -1314,18 +1311,10 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     // SmartPtr copy for ref-count safety (binary: SmartPtr ctor copy of +0x38 slot)
     // +0x38 in static block = s_TexSelected (selected.tex)
     if (s_TexSelected.IsValid()) {
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, s_TexSelected->m_TexId);
-    }
-
-    {
+        s_TexSelected->Set();
         Colour c = colourWhite;
-        // DrawQuad_GameTask(colour) — full quad, default UVs
         r->DrawQuad(c);
-    }
-
-    if (s_TexSelected.IsValid()) {
-        glBindTexture(GL_TEXTURE_2D, 0);
+        s_TexSelected->UnSet();
     }
 }
 
