@@ -791,6 +791,14 @@ void ShopScreen::Update(float dt) {
 
     // ---- STATE 1: Active / idle ----
     case 1: {
+        // ASM-verified: 2026-05-09 binary @ 0x0015e208 (re-analyst).
+        // Selection-ring counter (m_AnimFrame at +0xb4) defaults to DECAY
+        // each frame: param = -dt. Only the "have selected unlocked
+        // non-equipped item with m_BuyDelay <= 0" branch flips param to
+        // +dt so the ring ramps up. Without this, the ring is always
+        // visible.
+        float ringSignedDt = -dt;
+
         // Binary (0x0015e3a0): m_BuyDelay only decremented when > 0;
         // the else branch (shrink/create) only runs when already <= 0.
         if (m_BuyDelay > 0.0f) {
@@ -828,6 +836,13 @@ void ShopScreen::Update(float dt) {
                     ItemManager* im = ItemManager::GetInstance();
                     if (im) {
                         int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
+                        bool locked  = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
+                        // Selection-ring ramp-up: only when user has a real
+                        // selectable item (not equipped, not locked). Mirror
+                        // the binary's `param = +dt` override.
+                        if (equipped == 0 && !locked) {
+                            ringSignedDt = dt;
+                        }
                         if (equipped == 0 && !m_pEquipButton) {
                             // Binary: Fruit::FruitType(DAT_0015e58c, false) -> "watermelon"
                             const int equipFruitType =
@@ -871,10 +886,12 @@ void ShopScreen::Update(float dt) {
             // LAB_0015e68a: update animation frame counter (runs regardless of above)
         }
 
-        // Update sin-wave animation frame
-        // Binary: fVar = (float)m_AnimFrame + dt * DAT_0015e904
+        // Update selection-ring animation counter.
+        // Binary: fVar = (float)m_AnimFrame + signedDt * DAT_0015e904
         //         clamp to [0, 0x3ffc]
-        float fFrame = (float)m_AnimFrame + dt * ANIM_FRAME_RATE;
+        // signedDt defaults to -dt (decay); flips to +dt only on the
+        // "selected unlocked non-equipped item" branch above.
+        float fFrame = (float)m_AnimFrame + ringSignedDt * ANIM_FRAME_RATE;
         if (fFrame < 0.0f) {
             m_AnimFrame = 0;
         } else if (fFrame < (float)ANIM_FRAME_MAX) {
