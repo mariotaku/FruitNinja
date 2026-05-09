@@ -165,8 +165,7 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texId);
+    texPtr->Set();
 
     // Depth state is owned by GameDraw at the pass level (binary @ 0x0016b888);
     // CheckBox::Draw must NOT mutate it -- doing so leaves depth-test OFF for
@@ -175,7 +174,7 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    texPtr->UnSet();
 }
 
 // Binary @ 0x00135010

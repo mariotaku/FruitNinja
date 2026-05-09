@@ -156,11 +156,10 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
                 mat.GlobalTranslate44(pos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, bannerTex->m_TexId);
+                bannerTex->Set();
                 Colour col(255, 255, 255, 255);
                 g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
-                glBindTexture(GL_TEXTURE_2D, 0);
+                bannerTex->UnSet();
             }
         }
 
@@ -178,11 +177,10 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
                 mat.GlobalTranslate44(iconPos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, iconTex->m_TexId);
+                iconTex->Set();
                 Colour col(255, 255, 255, 255);
                 g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
-                glBindTexture(GL_TEXTURE_2D, 0);
+                iconTex->UnSet();
             }
         }
 
@@ -219,11 +217,10 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
                 mat.GlobalTranslate44(pos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, bannerTex->m_TexId);
+                bannerTex->Set();
                 Colour col(255, 255, 255, 255);
                 g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
-                glBindTexture(GL_TEXTURE_2D, 0);
+                bannerTex->UnSet();
             }
         }
 
@@ -241,11 +238,10 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
                 mat.GlobalTranslate44(iconPos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, iconTex->m_TexId);
+                iconTex->Set();
                 Colour col(255, 255, 255, 255);
                 g->renderer.DrawQuad(col, 0.0f, 0.0f, 1.0f, 1.0f);
-                glBindTexture(GL_TEXTURE_2D, 0);
+                iconTex->UnSet();
             }
         }
 
