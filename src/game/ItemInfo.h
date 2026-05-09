@@ -10,8 +10,6 @@
 // Derived class SlashModInfo (0x110 bytes) extends for SLASH_MODIFIER items.
 // Ctor @ 0x00113d58; ParseSlashModInfo @ 0x001126c0.
 //
-// See docs/structs/items.md for full field-offset table.
-//
 
 #include "engine/math/Colour.h"
 #include "ItemParseUtil.h"
@@ -102,36 +100,62 @@ public:
 };
 
 // -----------------------------------------------------------------------
-// SlashSoundMods (0x2c bytes) — stub; full layout not yet RE'd.
-// Stores references to swipe/impact/combo sounds for a blade mod.
-// Binary: parsed by SlashSoundMods::Parse (from <swipeSounds> etc.)
-// TODO: flesh out when audio is fully ported.
+// SlashSoundMods (0x2c bytes) — binary @ 0x00112568.
+// Stores sound names/volumes for swipe/impact/combo events on a blade mod.
 // -----------------------------------------------------------------------
 struct SlashSoundMods {
-    // 0x2c opaque bytes matching binary size
-    uint8_t _data[0x2c];
+    // +0x00  int32_t  m_SoundCount              number of <sound> children parsed
+    int32_t  m_SoundCount;
+    // +0x04  char**   m_SoundNames              heap array of strdup'd <sound> text
+    char**   m_SoundNames;
+    // +0x08  float*   m_SoundVolumes            heap array of per-sound vol (default 1.0f)
+    float*   m_SoundVolumes;
+    // +0x0c  float    m_TimePerSound            XML attr "time_per_sound", default 0.0f
+    float    m_TimePerSound;
+    // +0x10  int32_t  m_PlaySequentialy         "play_sequentialy"=="true" ? 0 : -1; default -1
+    int32_t  m_PlaySequentialy;
+    // +0x14  uint8_t  _pad14[0xc]               Reset() scratch state (opaque)
+    uint8_t  _pad14[0xc];
+    // +0x20  uint8_t  m_bPlayOntop              "play_ontop"=="true" XOR'd with default 1; default 1
+    uint8_t  m_bPlayOntop;
+    // +0x21  (3 bytes padding)
+    uint8_t  _pad21[3];
+    // +0x24  int*     m_RecentRing              new int[m_PreviousSoundsToAvoid] scratch buffer
+    int*     m_RecentRing;
+    // +0x28  int32_t  m_PreviousSoundsToAvoid   XML attr "previous_sounds_to_avoid", clamped to m_SoundCount-1
+    int32_t  m_PreviousSoundsToAvoid;
 
-    SlashSoundMods() { for (int i = 0; i < 0x2c; i++) _data[i] = 0; }
+    SlashSoundMods();
 
-    // Reset — binary: SlashSoundMods::Reset (called from SlashModInfo::SetEquipped
-    // for m_SwipeSounds +0x7c, m_ImpactSounds +0xa8, m_ComboSounds +0xd4).
-    // TODO: implement when SlashSoundMods layout is fully RE'd.
-    void Reset() {}
+    // Parse — mirrors binary @ 0x00112568
+    void Parse(tinyxml2::XMLElement* elem);
+
+    // Reset — called from Parse and from SlashModInfo::SetEquipped
+    void Reset();
 };
 
 // -----------------------------------------------------------------------
-// LoopingSound (0x10 bytes) — stub; full layout not yet RE'd.
-// Binary: part of SlashModInfo; parsed from <loop> child.
-// TODO: flesh out when looping audio is fully ported.
+// LoopingSound (0x10 bytes) — binary @ 0x0011253c.
+// Tracks a looping ambient sound attached to the equipped blade mod.
 // -----------------------------------------------------------------------
 struct LoopingSound {
-    uint8_t _data[0x10];
+    // +0x00  int32_t  m_SoundId    runtime state; ctor 0, not parsed
+    int32_t  m_SoundId;
+    // +0x04  int32_t  m_Phase      runtime state; ctor 0, not parsed
+    int32_t  m_Phase;
+    // +0x08  int32_t  m_State      runtime state; ctor 0, not parsed
+    int32_t  m_State;
+    // +0x0c  char*    m_pLoopName  CloneString of XML "loop" attr; default NULL
+    char*    m_pLoopName;
 
-    LoopingSound() { for (int i = 0; i < 0x10; i++) _data[i] = 0; }
+    LoopingSound();
 
-    // Reset — binary: LoopingSound::Reset (called from SlashModInfo::UnEquip @ 0x00112424).
-    // TODO: implement when LoopingSound layout is fully RE'd.
-    void Reset() {}
+    // Parse — mirrors binary @ 0x0011253c
+    // Reads "loop" attr from elem (the <swipeSounds> element).
+    void Parse(tinyxml2::XMLElement* elem);
+
+    // Reset — binary: LoopingSound::Reset (called from SlashModInfo::UnEquip @ 0x00112424)
+    void Reset();
 };
 
 // -----------------------------------------------------------------------
@@ -146,47 +170,45 @@ public:
     Colour*  m_pColours;
     // +0x44  int        m_ColourCount        number of <colour> child elements parsed
     int      m_ColourCount;
-    // +0x48  int        m_ColourType         ParseSlashModColourType result (0=NONE, 1=PER_SLASH?)
+    // +0x48  int        m_ColourType         ParseSlashModColourType result (0=NONE, 1=PER_SLASH, 2=PER_SWIPE)
     int      m_ColourType;
-    // +0x4c  float      m_LifeScale          XML `life` attr (float)
-    float    m_LifeScale;
+    // +0x4c  float      m_Speed              XML `speed` attr (float); default 1.0f
+    float    m_Speed;
     // +0x50  bool       m_bDirectionalParticles  `particles_directional` CompareWords "true"
     bool     m_bDirectionalParticles;
     // +0x51  (3 bytes padding)
     uint8_t  _pad51[3];
-    // +0x54  char*      m_pParticlePath      heap `"tex_%s"` snprintf from `particles` attr;
-    //                                        SetEquipped passes as SetModColours param_5 (trail emitter)
+    // +0x54  char*      m_pParticlePath      XML `particles` verbatim (trail emitter key)
     char*    m_pParticlePath;
-    // +0x58  char*      m_pTextureName2      `texture` in <slashModInfo> sub-element;
-    //                                        SetEquipped passes as SetModColours param_6 (blade texture)
+    // +0x58  char*      m_pTextureName2      `texture` in <slashModInfo>; blade overlay texture
     char*    m_pTextureName2;
-    // +0x5c  char*      m_pContactParticle   `contact_particles` attr; SetModColours param_8
+    // +0x5c  char*      m_pContactParticle   `contact_particles` attr; verbatim CloneString
     char*    m_pContactParticle;
-    // +0x60  char*      m_pParticle2         second particle attr; SetModColours param_9
-    char*    m_pParticle2;
-    // +0x64  float      m_ScaleEndThickness  <scales end_thickness=>; SetModScales param_2
-    float    m_ScaleEndThickness;
-    // +0x68  float      m_ScaleLength        <scales length=>; SetModScales param_3
-    float    m_ScaleLength;
-    // +0x6c  float      m_ScaleStartThickness <scales start_thickness=>; SetModScales param_1
+    // +0x60  char*      m_pReleaseParticle   `release_particles` attr; verbatim CloneString
+    char*    m_pReleaseParticle;
+    // +0x64  float      m_ScaleStartThickness  <scales start_thickness=>; SetModScales param_1; default 1.0f
     float    m_ScaleStartThickness;
-    // +0x70  float      m_ScaleUVLength      <scales UV_length=> (default 1.0); SetModScales param_4
-    float    m_ScaleUVLength;
-    // +0x74  bool       m_bFlipForUpsideDown  `flipForUpsideDown` CompareWords "true"; SetModScales param_5
+    // +0x68  float      m_ScaleEndThickness    <scales end_thickness=>; SetModScales param_2; default 0.0f
+    float    m_ScaleEndThickness;
+    // +0x6c  float      m_ScaleLength          <scales length=>; SetModScales param_3; default 1.0f
+    float    m_ScaleLength;
+    // +0x70  float      m_ScalePointScale      <scales point_scale=>; SetModScales param_4; default 1.0f
+    float    m_ScalePointScale;
+    // +0x74  bool       m_bSlashFlash          `slash_flash` CompareWords "true"; SetModScales param_6
+    bool     m_bSlashFlash;
+    // +0x75  bool       m_bFlipForUpsideDown   `flipForUpsideDown` CompareWords "true"; SetModScales param_5
     bool     m_bFlipForUpsideDown;
-    // +0x75  bool       m_bLoop              `loop` attr from <slashModInfo> CompareWords "true"; SetModScales param_6
-    bool     m_bLoop;
     // +0x76  (2 bytes padding)
     uint8_t  _pad76[2];
-    // +0x78  float      m_LoopUVLength       loop UV length; SetModScales param_7 (default 1.0f)
-    float    m_LoopUVLength;
+    // +0x78  float      m_ScaleUVLength        <scales UV_length=>; SetModScales param_7; default 0.0f
+    float    m_ScaleUVLength;
     // +0x7c  SlashSoundMods  m_SwipeSounds    from <swipeSounds>
     SlashSoundMods m_SwipeSounds;
     // +0xa8  SlashSoundMods  m_ImpactSounds   from <impactSounds>
     SlashSoundMods m_ImpactSounds;
     // +0xd4  SlashSoundMods  m_ComboSounds    from <comboSounds>
     SlashSoundMods m_ComboSounds;
-    // +0x100 LoopingSound    m_LoopingSound   from <loop>
+    // +0x100 LoopingSound    m_LoopingSound   "loop" attr from <swipeSounds> element
     LoopingSound   m_LoopingSound;
 
     SlashModInfo();
