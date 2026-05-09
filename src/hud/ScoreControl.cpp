@@ -506,15 +506,23 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                                   0.0f);
                 const int kAlignLabel = 0x02 | 0x04 | 0x08; // RIGHT|MIDDLE|BOTTOM (0x0E)
                 const int kAlignDigit = 0x01 | 0x04 | 0x08; // CENTER|MIDDLE|BOTTOM (0x0D)
-                // 2nd arg is yLineFactor (Y-axis line-pitch divisor on
-                // maxWH.y), NOT a wrap-width. Binary label call passes 0.9
-                // (DAT_0015979c); digit call uses the wrapper which
-                // hardcodes 1.0. Port wrapper exposes yLineFactor; pass
-                // matching values for binary fidelity.
-                game->pFontMain->DrawString(20.0f, 0.9f, 0.0f,
-                    label, anchor, col, kAlignLabel);
+                // Label call: binary uses the full Font_DrawString @ 0x00198e44
+                // directly (NOT the wrapper) so it can pass yLineFactor = 0.9
+                // (DAT_0015979c). The port's flat wrapper hardcodes 1.0 to
+                // match the binary wrapper @ 0x00199aa0; this label needs the
+                // full path.
+                {
+                    Mortar::Utf8StringIterator iterLabel(label);
+                    Vec2 maxWH(0.0f, 0.0f);
+                    game->pFontMain->DrawString(20.0f, /*yLineFactor=*/0.9f,
+                        /*rotZ=*/0.0f, iterLabel, anchor, col, maxWH,
+                        kAlignLabel, /*z=*/0.0f, nullptr);
+                }
+                // Digit call: binary uses the wrapper @ 0x00199aa0 which
+                // hardcodes yLineFactor = 1.0. Route through port's flat
+                // wrapper.
                 game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                    hsBuf,  anchor, col, kAlignDigit);
+                    hsBuf, anchor, col, kAlignDigit);
             }
         }
     }
