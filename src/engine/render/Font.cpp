@@ -99,7 +99,7 @@ static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
 }
 
 // ---------------------------------------------------------------------------
-// Font::Load -- ASM-verified: 2026-05-08T00:00 binary @ 0x00189e9c (asm-inspector)
+// Font::Load -- ASM-verified: 2026-05-08T00:00 binary @ 0x00199e9c (asm-inspector)
 //
 // Slurps the entire .fnt file via Mortar::File (IFile-backed), walks
 // byte-by-byte comparing tags. Matches the binary's IFile-based slurp
@@ -107,7 +107,7 @@ static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
 // ---------------------------------------------------------------------------
 
 int Font::Load(const char* path) {
-    // Binary @ 0x00189e9c: open via Mortar::File (IFile -> FileSystem_Direct).
+    // Binary @ 0x00199e9c: open via Mortar::File (IFile -> FileSystem_Direct).
     // The path is forwarded straight through; FileSystem_Direct's prefix
     // logic (data_dir prepend or strict) is owned by the FileSystem layer.
     Mortar::File f(path, 0, 0);
@@ -352,7 +352,7 @@ Font::Page* Font::GetPage(int idx) const {
 // outSlack is unused (binary computes it but callers ignore it).
 // ---------------------------------------------------------------------------
 
-float Font::GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) {
+float Font::GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) const {
     float runX = 0.0f;
     while (!iter.IsEmpty()) {
         uint32_t cp = iter.m_CurrentCodepoint;
@@ -442,22 +442,11 @@ float Font::MeasureWidth(float /*scale*/, Mortar::Utf8StringIterator iter) const
 // Returns total advance in lineHeight-normalized units.
 // ---------------------------------------------------------------------------
 
-// ASM-verified-via-RE: 2026-05-03 binary @ 0x001988a8 (re-analyst)
+// ASM-verified: 2026-05-09 binary @ 0x001988a8 (asm-inspector)
+// Binary's MeasureString is a thunk that calls GetLineLength(iter, 0.0f, NULL).
+// Forward through to match exactly.
 float Font::MeasureString(const Mortar::Utf8StringIterator& iterIn) const {
-    Mortar::Utf8StringIterator iter = iterIn;
-    float total = 0.0f;
-    while (!iter.IsEmpty()) {
-        uint32_t cp = iter.m_CurrentCodepoint;
-        if (cp == '\n' || cp == '\r') break;
-        const CharTemplate* g = GetCharTemplate(cp);
-        iter++;
-        if (!g) continue;
-        // g->xadv is in lineHeight-norm units (normalized in Font::Load / Font::Create).
-        // GetKerning uses the NEXT char (iter already advanced).
-        uint32_t nextCp = iter.IsEmpty() ? 0 : iter.m_CurrentCodepoint;
-        total += g->xadv + GetKerning((uint32_t)cp, (uint32_t)nextCp);
-    }
-    return total;
+    return GetLineLength(iterIn, 0.0f, nullptr);
 }
 
 float Font::MeasureString(const char* str) const {
@@ -657,10 +646,17 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
 
             // ASM-verified: 2026-05-09 binary @ 0x00199576..0x00199836
             // (asm-inspector). Per-glyph emit is 6 verts in GL_TRIANGLE_STRIP
-            // order: LB, LT, RB, RT, then 2 degenerate copies of RT that
-            // collapse the inter-glyph connector to zero area.
+            // order: LB, LT, RB, RT + 2 degenerate copies of RT.
             //   strip(LB,LT,RB,RT) = tris (LB,LT,RB) + (LT,RB,RT) = one quad
-            //   strip(RT,RT,RT,nextLB) = both degenerate (zero area)
+            // Inter-glyph connector: when starting a new glyph at base > 0,
+            // the binary OVERWRITES the previous glyph's last slot
+            // verts[base-1] with the current LB before emitting the new
+            // 6 verts. This collapses the strip transition
+            //   (RT_prev, RT_prev, LB_cur)  -> RT_prev=LB_cur degen
+            //   (RT_prev=LB_cur, LB_cur, LT_cur) -> degen (first two equal)
+            // Without the overwrite, the second tri is NON-degenerate and
+            // draws a thin connector triangle between glyphs. (Binary
+            // writes verts[base-1] @ 0x001995ee..0x00199648.)
             // V-axis pairing matches binary: cy+hh (screen-top) -> v0,
             // cy-hh (screen-bottom) -> v1.
             const float kZ = 0.0f;  // DAT_00199a94 = 0.0f
@@ -676,6 +672,12 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             if (base + 6 <= PAGE_VERT_CAPACITY) {
                 QUADCUSTOMVERTEX* dst =
                     &m_PageVerts[(size_t)pageIdx * PAGE_VERT_CAPACITY + base];
+                // Inter-glyph connector overwrite: prev glyph's last slot
+                // becomes this glyph's LB so the strip transition is fully
+                // degenerate. Binary @ 0x001995ee-0x00199648.
+                if (base > 0) {
+                    dst[-1] = v[0];
+                }
                 for (int vi = 0; vi < 6; vi++) {
                     dst[vi] = v[vi];
                 }
