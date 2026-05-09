@@ -590,6 +590,18 @@ void ShopScreen::ClickedOnShopItem(ShopListItem* item) {
 //         TutorialControl::ResetTutePos(tute, 0).
 // ---------------------------------------------------------------------------
 void ShopScreen::QuitShopCallback() {
+    // Port fix: race during m_BuyDelay post-equip window (no binary
+    // equivalent). EquipCallback user-path sets m_BuyDelay = 0.25f and the
+    // state-1 idle loop only calls ShrinkBuyButton when m_BuyDelay <= 0.
+    // If the user taps Quit during that 0.25s window, ShrinkBuyButton
+    // never fires -- the equip-button's watermelon fruit lingers in
+    // ActorManager, blocking MainScreen STATE_DOJO_WAIT_B's
+    // `if (fruitCount == 0)` gate forever (soft-lock on next dojo entry).
+    // Force the gate clear and call ShrinkBuyButton directly here;
+    // ShrinkBuyButton's internal Sliced() guard makes it idempotent.
+    m_BuyDelay = 0.0f;
+    ShrinkBuyButton();
+
     // Binary: GameSound::SFXPlay(gameSound, "menu-bomb", 1.0, 1.0)
     if (game.pGameSound) {
         game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
