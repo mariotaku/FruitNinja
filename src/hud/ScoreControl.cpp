@@ -481,32 +481,35 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 col.a = (uint8_t)std::min((int)SCORE_LERP_CLAMP_HI, std::max(0, col.a + (int)((green.a - col.a) * t)));
             }
             col.a = alpha;
-            // Highscore "BEST" + digits: binary uses pFontMain (+0x54) for both.
-            // ASM-verified: 2026-05-09 binary @ 0x00159500..0x001596a0 (re-analyst).
+            // Highscore "BEST" + digits: binary uses pFontMain (+0x54) for both
+            // calls and SHARES the anchor position; alignment flags (RIGHT vs
+            // CENTER) do the actual positioning so the label sits left of the
+            // anchor and the digit centers on it.
+            //
+            // ASM-verified: 2026-05-09 binary @ 0x00159500..0x001596a4 (re-analyst).
             // Constants:
-            //   - both DrawString scale = 20.0f (digits NOT 48 — uniform scale)
-            //   - Y offset = pos.y - 28.8f (DAT_001597c8 = 0x41e66667)
-            //   - X offset = pos.x + cursorX + 28.0f (literal 0x41e00000)
-            //   - label Y-scale = 0.6f (DAT_0015979c = 0x3f666666)
-            //   - label alignment = 0x0E (RIGHT|MIDDLE|BOTTOM)
-            //   - digit alignment = 0x0D (CENTER|MIDDLE|BOTTOM)
+            //   - both calls scale = 20.0f, anchor = pos + (cursorX + 28, -28.8, 0)
+            //   - cursorX = MeasureString(label)*20 - 48 (DAT_00159798 = 48.0)
+            //   - Y offset = pos.y - 28.8 (DAT_001597c8 = 0x41e66667)
+            //   - X micro-shift = +28.0 (literal 0x41e00000)
+            //   - label Y-scale param2 = 0.9 (DAT_0015979c = 0x3f666666)
+            //   - label alignment = 0x0E (RIGHT)
+            //   - digit alignment = 0x0D (CENTER)
             if (game->pFontMain.IsValid()) {
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
                 const char* label = Localisation::Get("BEST");  // key 0xB5
                 float labelW  = game->pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
-                const float drawY = m_DrawPosY - 28.8f;                // DAT_001597c8
+                const Vec3 anchor(m_DrawPosX + cursorX + 28.0f,
+                                  m_DrawPosY - 28.8f,
+                                  0.0f);
                 const int kAlignLabel = 0x02 | 0x04 | 0x08; // RIGHT|MIDDLE|BOTTOM (0x0E)
                 const int kAlignDigit = 0x01 | 0x04 | 0x08; // CENTER|MIDDLE|BOTTOM (0x0D)
-                game->pFontMain->DrawString(20.0f, 0.6f, 0.0f,
-                    label,
-                    Vec3(m_DrawPosX + cursorX + 28.0f, drawY, 0.0f),
-                    col, kAlignLabel);
-                game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                    hsBuf,
-                    Vec3(m_DrawPosX + 28.0f, drawY, 0.0f),
-                    col, kAlignDigit);
+                game->pFontMain->DrawString(20.0f, 0.9f, 0.0f,
+                    label, anchor, col, kAlignLabel);
+                game->pFontMain->DrawString(20.0f, 0.0f, 0.0f,
+                    hsBuf,  anchor, col, kAlignDigit);
             }
         }
     }
