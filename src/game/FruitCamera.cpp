@@ -108,15 +108,13 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
 
     // View: camera looks straight down +Z with optional shake target offset.
     // Binary @ 0x00181180..0x0018118e passes (eye, up, at) positionally to
-    // its SetupLookAt — that binary's signature is `(eye, up, target)`, opposite
-    // of the std (eye, target, up). The port's MatrixManager::SetupLookAt uses
-    // the std signature, so the call site here passes them in std order to
-    // produce the correct view matrix (binary-equivalent semantics, not the
-    // binary-equivalent argument order).
+    // SetupLookAt. The port's SetupLookAt now matches binary's LookAt43
+    // signature exactly: (eye, upHint, _unused). Pass args in the same
+    // positional order as the binary.
     Vec3 eye(m_Target.x, m_Target.y, 1.0f);
-    Vec3 at (m_Target.x, m_Target.y, 0.0f);
     Vec3 up (0.0f, 1.0f, 0.0f);
-    mm.SetupLookAt(eye, at, up);
+    Vec3 at (m_Target.x, m_Target.y, 0.0f);
+    mm.SetupLookAt(eye, up, at);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
     // Binary literal pool @ 0x001813ec/0x001813f0 encodes near=+2000.0f and
