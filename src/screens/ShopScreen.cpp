@@ -590,15 +590,17 @@ void ShopScreen::ClickedOnShopItem(ShopListItem* item) {
 //         TutorialControl::ResetTutePos(tute, 0).
 // ---------------------------------------------------------------------------
 void ShopScreen::QuitShopCallback() {
-    // Port fix: race during m_BuyDelay post-equip window (no binary
-    // equivalent). EquipCallback user-path sets m_BuyDelay = 0.25f and the
-    // state-1 idle loop only calls ShrinkBuyButton when m_BuyDelay <= 0.
-    // If the user taps Quit during that 0.25s window, ShrinkBuyButton
-    // never fires -- the equip-button's watermelon fruit lingers in
-    // ActorManager, blocking MainScreen STATE_DOJO_WAIT_B's
-    // `if (fruitCount == 0)` gate forever (soft-lock on next dojo entry).
-    // Force the gate clear and call ShrinkBuyButton directly here;
-    // ShrinkBuyButton's internal Sliced() guard makes it idempotent.
+    // DIFFERS (intentional bug fix): the binary @ 0x0015d55c does NOT call
+    // ShrinkBuyButton on shop-quit, and `~MenuButton` / `MenuButton::Release`
+    // neither KillFruit nor remove the entity from ActorManager. So if the
+    // user taps Quit during the 0.25s post-equip m_BuyDelay window (set by
+    // EquipCallback's user-path), the equip-button's watermelon fruit leaks
+    // into ActorManager forever. ASM-inspector verified the binary has the
+    // same bug -- it just goes unnoticed on Bada due to timing/QA. The
+    // fruit-count==0 gate in MainScreen::STATE_DOJO_WAIT_B then never opens
+    // on the next dojo entry, soft-locking re-entry. Force the gate clear
+    // + call ShrinkBuyButton directly here; ShrinkBuyButton's internal
+    // Sliced() guard makes it idempotent.
     m_BuyDelay = 0.0f;
     ShrinkBuyButton();
 
