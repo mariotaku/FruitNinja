@@ -2,8 +2,8 @@
 //
 // ItemInfo + SlashModInfo — method implementations.
 // Binary: ItemInfo::ctor 0x00113910, ItemInfo::Parse 0x0011293c,
-//         SlashModInfo::ctor 0x00113d58, ParseSlashModInfo 0x001126c0.
-// See docs/structs/items.md for full RE notes.
+//         SlashModInfo::ctor 0x00113d58, ParseSlashModInfo 0x001126c0,
+//         SlashSoundMods::Parse 0x00112568, LoopingSound::Parse 0x0011253c.
 
 #include "ItemInfo.h"
 #include "ItemParseUtil.h"
@@ -18,7 +18,6 @@
 // -----------------------------------------------------------------------
 
 // ItemInfo::ItemInfo ctor @ 0x00113910
-// Defaults per ctor analysis (items.md §ItemInfo ctor defaults).
 ItemInfo::ItemInfo()
     : m_pName(nullptr)
     , m_Hash(0)
@@ -59,14 +58,11 @@ void ItemInfo::UnEquip() {}
 void ItemInfo::SetEquipped() {}
 
 // ItemInfo::IsLocked @ 0x0015fa60
-// return this->m_Cost > 0;  (cost == -1 means purchased; cost > 0 = locked)
 bool ItemInfo::IsLocked() const {
     return m_Cost > 0;
 }
 
 // ItemInfo::Parse @ 0x0011293c
-// Virtual; called for all item types. SlashModInfo overrides to also parse
-// <slashModInfo> children.
 void ItemInfo::Parse(tinyxml2::XMLElement* e) {
     // --- Parse <requirements> child element (optional) ---
     tinyxml2::XMLElement* req = e->FirstChildElement("requirements");  // 0x1b9fc4
@@ -74,27 +70,22 @@ void ItemInfo::Parse(tinyxml2::XMLElement* e) {
         m_Cost = 1;  // default if present but no coins attr
         req->QueryIntAttribute("coins", &m_Cost);  // 0x1b9e68
 
-        // "description" attr reads into m_pLockedText (binary 0x1b92d1).
-        // NOTE: attr name in binary is "description" not "lockedText".
         const char* descAttr = req->Attribute("description");  // 0x1b92d1
         CloneString(&m_pLockedText, descAttr);
         if (m_pLockedText == nullptr) {
-            // Fall back to element text content
             const char* text = GETSTRING_CAST_0_STR(req->GetText());
             CloneString(&m_pLockedText, text);
         }
 
-        const char* progressAttr = req->Attribute("singular");  // 0x1b9fd1 -> m_pProgressFmt
+        const char* progressAttr = req->Attribute("singular");  // 0x1b9fd1
         CloneString(&m_pProgressFmt, progressAttr);
         if (m_pProgressFmt != nullptr) {
             const char* localised = GETSTRING_CAST_0_STR(m_pProgressFmt);
-            // CloneString re-allocates so we need to free and re-clone
             free(m_pProgressFmt);
             m_pProgressFmt = nullptr;
             CloneString(&m_pProgressFmt, localised);
         }
 
-        // Requirement type flags (all use CompareWords(attr, "true"))
         const char* trueStr = "true";  // 0x1b9ea0
         const char* upsideDown = req->Attribute("showIfUpsideDown");  // 0x1b9fda
         if (CompareWords(trueStr, upsideDown) != 0) {
@@ -117,8 +108,6 @@ void ItemInfo::Parse(tinyxml2::XMLElement* e) {
         CloneString(&m_pTotalStatKey, totalAttr);
     }
 
-    // --- Always parse from the outer <item> element ---
-
     const char* nameAttr = e->Attribute("name");  // 0x1c3173
     CloneString(&m_pName, nameAttr);
     m_Hash = StringHash(m_pName);
@@ -139,9 +128,127 @@ void ItemInfo::Parse(tinyxml2::XMLElement* e) {
     const char* colourAttr = e->Attribute("colour");  // 0x1b9f98
     ParseColour(&m_Colour1, colourAttr);
 
-    // m_Colour2: vestigial attr "titleolour" (0x1ba021 — typo/mangled in binary
-    // string table, appears unused in shipped XML)
+    // m_Colour2: vestigial attr "titleolour" (0x1ba021 — typo/mangled in binary string table)
     ParseColour(&m_Colour2, e->Attribute("titleolour"));  // 0x1ba021
+}
+
+// -----------------------------------------------------------------------
+// SlashSoundMods
+// -----------------------------------------------------------------------
+
+SlashSoundMods::SlashSoundMods()
+    : m_SoundCount(0)
+    , m_SoundNames(nullptr)
+    , m_SoundVolumes(nullptr)
+    , m_TimePerSound(0.0f)
+    , m_PlaySequentialy(-1)
+    , m_bPlayOntop(1)
+    , m_RecentRing(nullptr)
+    , m_PreviousSoundsToAvoid(0)
+{
+    for (int i = 0; i < 0xc; i++) _pad14[i] = 0;
+    _pad21[0] = _pad21[1] = _pad21[2] = 0;
+}
+
+// SlashSoundMods::Parse @ 0x00112568
+void SlashSoundMods::Parse(tinyxml2::XMLElement* elem) {
+    if (elem == nullptr) return;
+
+    // Count <sound> children
+    int count = 0;
+    tinyxml2::XMLElement* snd = elem->FirstChildElement("sound");
+    while (snd != nullptr) {
+        count++;
+        snd = snd->NextSiblingElement("sound");
+    }
+    m_SoundCount = count;
+
+    if (count > 0) {
+        m_SoundNames   = (char**)malloc(count * sizeof(char*));
+        m_SoundVolumes = (float*)malloc(count * sizeof(float));
+
+        // element-level "vol" attr is the default for all sounds
+        float defaultVol = 1.0f;
+        elem->QueryFloatAttribute("vol", &defaultVol);
+
+        int idx = 0;
+        snd = elem->FirstChildElement("sound");
+        while (snd != nullptr) {
+            const char* text = snd->GetText();
+            m_SoundNames[idx] = (text != nullptr) ? strdup(text) : strdup("");
+
+            float vol = defaultVol;
+            snd->QueryFloatAttribute("vol", &vol);
+            m_SoundVolumes[idx] = vol;
+
+            idx++;
+            snd = snd->NextSiblingElement("sound");
+        }
+    }
+
+    elem->QueryFloatAttribute("time_per_sound", &m_TimePerSound);
+
+    const char* seqAttr = elem->Attribute("play_sequentialy");
+    if (seqAttr != nullptr && strcmp(seqAttr, "true") == 0) {
+        m_PlaySequentialy = 0;
+    } else {
+        m_PlaySequentialy = -1;
+    }
+
+    const char* ontopAttr = elem->Attribute("play_ontop");
+    if (ontopAttr != nullptr && strcmp(ontopAttr, "true") == 0) {
+        m_bPlayOntop = (uint8_t)(1 ^ 1);  // XOR with default 1 -> 0
+    } else {
+        m_bPlayOntop = 1;
+    }
+
+    int avoid = 0;
+    elem->QueryIntAttribute("previous_sounds_to_avoid", &avoid);
+    if (avoid > m_SoundCount - 1) avoid = m_SoundCount - 1;
+    if (avoid < 0) avoid = 0;
+    m_PreviousSoundsToAvoid = avoid;
+
+    if (m_PreviousSoundsToAvoid > 0) {
+        m_RecentRing = new int[m_PreviousSoundsToAvoid];
+    }
+
+    Reset();
+}
+
+// SlashSoundMods::Reset — called at end of Parse and from SlashModInfo::SetEquipped
+void SlashSoundMods::Reset() {
+    // Reset scratch playback state in _pad14 region (opaque runtime counters)
+    for (int i = 0; i < 0xc; i++) _pad14[i] = 0;
+    if (m_RecentRing != nullptr) {
+        for (int i = 0; i < m_PreviousSoundsToAvoid; i++) m_RecentRing[i] = -1;
+    }
+}
+
+// -----------------------------------------------------------------------
+// LoopingSound
+// -----------------------------------------------------------------------
+
+LoopingSound::LoopingSound()
+    : m_SoundId(0)
+    , m_Phase(0)
+    , m_State(0)
+    , m_pLoopName(nullptr)
+{
+}
+
+// LoopingSound::Parse @ 0x0011253c
+void LoopingSound::Parse(tinyxml2::XMLElement* elem) {
+    if (elem != nullptr) {
+        CloneString(&m_pLoopName, elem->Attribute("loop"));
+    }
+}
+
+// LoopingSound::Reset — called from SlashModInfo::UnEquip @ 0x00112424
+void LoopingSound::Reset() {
+    // Runtime audio state reset; no-op until audio system is ported.
+    m_SoundId = 0;
+    m_Phase   = 0;
+    m_State   = 0;
 }
 
 // -----------------------------------------------------------------------
@@ -149,26 +256,24 @@ void ItemInfo::Parse(tinyxml2::XMLElement* e) {
 // -----------------------------------------------------------------------
 
 // SlashModInfo ctor @ 0x00113d58
-// Calls ItemInfo ctor (base), then sets SlashModInfo-specific defaults.
-// Binary: DAT_00113dd0 = 1.0f for m_ScaleStartThickness.
 SlashModInfo::SlashModInfo()
     : ItemInfo()
     , m_pColours(nullptr)
     , m_ColourCount(0)
     , m_ColourType(0)
-    , m_LifeScale(1.0f)
+    , m_Speed(1.0f)
     , m_bDirectionalParticles(false)
-    , m_pParticlePath(nullptr)   // +0x54 -- trail emitter (was m_pTextureName2 -- SWAPPED per spec)
-    , m_pTextureName2(nullptr)   // +0x58 -- blade overlay texture (was m_pParticlePath -- SWAPPED per spec)
+    , m_pParticlePath(nullptr)
+    , m_pTextureName2(nullptr)
     , m_pContactParticle(nullptr)
-    , m_pParticle2(nullptr)
-    , m_ScaleEndThickness(0.0f)    // +0x64
-    , m_ScaleLength(0.0f)          // +0x68
-    , m_ScaleStartThickness(1.0f)  // +0x6c  DAT_00113dd0 = 1.0f
-    , m_ScaleUVLength(1.0f)        // +0x70  default 1.0f per spec
-    , m_bFlipForUpsideDown(false)
-    , m_bLoop(false)
-    , m_LoopUVLength(1.0f)   // +0x78  default 1.0f per spec
+    , m_pReleaseParticle(nullptr)
+    , m_ScaleStartThickness(1.0f)   // +0x64  default 1.0f
+    , m_ScaleEndThickness(0.0f)     // +0x68  default 0.0f
+    , m_ScaleLength(1.0f)           // +0x6c  default 1.0f
+    , m_ScalePointScale(1.0f)       // +0x70  default 1.0f
+    , m_bSlashFlash(false)          // +0x74
+    , m_bFlipForUpsideDown(false)   // +0x75
+    , m_ScaleUVLength(0.0f)         // +0x78  default 0.0f
     , m_SwipeSounds()
     , m_ImpactSounds()
     , m_ComboSounds()
@@ -184,48 +289,35 @@ SlashModInfo::~SlashModInfo() {
     free(m_pTextureName2);
     free(m_pParticlePath);
     free(m_pContactParticle);
-    free(m_pParticle2);
+    free(m_pReleaseParticle);
 }
 
 // SlashModInfo::UnEquip @ 0x00112424
-// Binary: calls LoopingSound::Reset() on m_LoopingSound (+0x100).
-// Called when a blade skin is de-equipped.
 void SlashModInfo::UnEquip() {
-    m_LoopingSound.Reset();  // LoopingSound::Reset @ 0x00112424 (via vtable/thunk)
+    m_LoopingSound.Reset();
 }
 
 // SlashModInfo::SetEquipped @ 0x00112430 (vtable slot +0x0c)
-// Forwards all blade-skin fields to SlashEntity state.
-// Calls SetModColours + SetModScales + 3x SlashSoundMods::Reset.
 void SlashModInfo::SetEquipped() {
-    // Binary call sequence @ 0x00112430:
-    //   SetModColours(colours, colourCount, colourType, lifeScale,
-    //                 m_pParticlePath@+0x54, m_pTextureName2@+0x58,
-    //                 directional, contactParticle, particle2)
-    //   SetModScales(startThick@+0x6c, endThick@+0x64, scaleLen@+0x68,
-    //                uvLen@+0x70, flipUD@+0x74, loop@+0x75, loopUVLen@+0x78)
-    //   m_SwipeSounds.Reset() @+0x7c
-    //   m_ImpactSounds.Reset() @+0xa8
-    //   m_ComboSounds.Reset() @+0xd4
     SlashEntity::SetModColours(
         m_pColours,               // +0x40
         m_ColourCount,            // +0x44
         m_ColourType,             // +0x48
-        m_LifeScale,              // +0x4c
-        m_pParticlePath,          // +0x54 -- trail emitter name (SetModColours param_5)
-        m_pTextureName2,          // +0x58 -- blade overlay texture (SetModColours param_6)
+        m_Speed,                  // +0x4c
+        m_pParticlePath,          // +0x54 -- trail emitter name
+        m_pTextureName2,          // +0x58 -- blade overlay texture
         m_bDirectionalParticles,  // +0x50
         m_pContactParticle,       // +0x5c
-        m_pParticle2              // +0x60
+        m_pReleaseParticle        // +0x60
     );
     SlashEntity::SetModScales(
-        m_ScaleStartThickness,   // +0x6c  param_1
-        m_ScaleEndThickness,     // +0x64  param_2
-        m_ScaleLength,           // +0x68  param_3
-        m_ScaleUVLength,         // +0x70  param_4
-        m_bFlipForUpsideDown,    // +0x74  param_5
-        m_bLoop,                 // +0x75  param_6
-        m_LoopUVLength           // +0x78  param_7
+        m_ScaleStartThickness,   // +0x64  param_1
+        m_ScaleEndThickness,     // +0x68  param_2
+        m_ScaleLength,           // +0x6c  param_3
+        m_ScalePointScale,       // +0x70  param_4
+        m_bFlipForUpsideDown,    // +0x75  param_5
+        m_bSlashFlash,           // +0x74  param_6
+        m_ScaleUVLength          // +0x78  param_7
     );
     m_SwipeSounds.Reset();   // +0x7c
     m_ImpactSounds.Reset();  // +0xa8
@@ -233,21 +325,15 @@ void SlashModInfo::SetEquipped() {
 }
 
 // ParseSlashModInfo @ 0x001126c0
-// Calls ItemInfo::Parse first, then parses <slashModInfo> child element.
-// Many sub-attrs are stubbed (sound/particle paths) until those systems land.
 void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
-    // Call base ItemInfo::Parse first (binary calls it)
     ItemInfo::Parse(e);
 
     tinyxml2::XMLElement* smi = e->FirstChildElement("slashModInfo");
     if (smi == nullptr) return;
 
-    const char* trueStr = "true";  // 0x1b9ea0
+    const char* trueStr = "true";
 
-    // `type` attr -> m_ColourType. Binary maps:
-    //   "NONE"      -> 0 (static palette)
-    //   "PER_SLASH" -> 1 (per-frame anim — UpdateModColour ticks each frame)
-    //   "PER_SWIPE" -> 2 (random pick on each swipe; not used in shipped XML)
+    // `type` attr -> m_ColourType
     const char* typeStr = smi->Attribute("type");
     if (typeStr) {
         if (CompareWords(typeStr, "PER_SLASH") != 0)      m_ColourType = 1;
@@ -259,22 +345,14 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
     const char* tex2 = smi->Attribute("texture");
     CloneString(&m_pTextureName2, tex2);
 
-    // `life` attr (float)
-    smi->QueryFloatAttribute("life", &m_LifeScale);
+    // `speed` attr (float); default 1.0f already set in ctor
+    smi->QueryFloatAttribute("speed", &m_Speed);
 
     // `particles_directional` attr
     const char* dirPart = smi->Attribute("particles_directional");
     m_bDirectionalParticles = (CompareWords(trueStr, dirPart) != 0);
 
-    // `particles` attr -> verbatim (no transform).
-    // ASM-verified: 2026-05-09 binary @ 0x001126c0 (re-analyst).
-    // SetModColours @ 0x0017ca0c calls StringHash(m_pParticlePath) directly
-    // and the emitter templates in particles_fast.xml are registered under
-    // the unprefixed names ("mr_sparkle_trail", "american_blade", etc.) --
-    // so the trail-particle string must be stored verbatim. The earlier
-    // port-side "tex_%s" snprintf prepended a prefix that broke the
-    // StringHash lookup, leaving every blade-mod's particle trail
-    // invisible (e.g. Sparkle Slash, Disco Slash, Flame Blade, etc.).
+    // `particles` attr — stored verbatim; SetModColours looks up by StringHash
     const char* particles = smi->Attribute("particles");
     if (particles != nullptr && particles[0] != '\0') {
         free(m_pParticlePath);
@@ -285,16 +363,17 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
     const char* contactPart = smi->Attribute("contact_particles");
     CloneString(&m_pContactParticle, contactPart);
 
-    // second particle (see ParseSlashModInfo — exact attr name TBD)
-    // TODO: resolve exact attr name from binary string table when audio lands
+    // `release_particles` attr
+    const char* releasePart = smi->Attribute("release_particles");
+    CloneString(&m_pReleaseParticle, releasePart);
+
+    // `slash_flash` attr
+    const char* slashFlash = smi->Attribute("slash_flash");
+    m_bSlashFlash = (CompareWords(trueStr, slashFlash) != 0);
 
     // `flipForUpsideDown` attr
     const char* flip = smi->Attribute("flipForUpsideDown");
     m_bFlipForUpsideDown = (CompareWords(trueStr, flip) != 0);
-
-    // `loop` attr
-    const char* loopAttr = smi->Attribute("loop");
-    m_bLoop = (CompareWords(trueStr, loopAttr) != 0);
 
     // <scales> child element
     tinyxml2::XMLElement* scales = smi->FirstChildElement("scales");
@@ -302,33 +381,45 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
         scales->QueryFloatAttribute("start_thickness", &m_ScaleStartThickness);
         scales->QueryFloatAttribute("end_thickness",   &m_ScaleEndThickness);
         scales->QueryFloatAttribute("length",          &m_ScaleLength);
+        scales->QueryFloatAttribute("point_scale",     &m_ScalePointScale);
         scales->QueryFloatAttribute("UV_length",       &m_ScaleUVLength);
     }
 
     // <colour> children -> m_pColours array
-    // Count first, then allocate
     int count = 0;
-    for (tinyxml2::XMLElement* c = smi->FirstChildElement("colour");
-         c != nullptr; c = c->NextSiblingElement("colour")) {
+    tinyxml2::XMLElement* c = smi->FirstChildElement("colour");
+    while (c != nullptr) {
         count++;
+        c = c->NextSiblingElement("colour");
     }
     m_ColourCount = count;
     if (count > 0) {
         delete[] m_pColours;
         m_pColours = new Colour[count];
         int idx = 0;
-        for (tinyxml2::XMLElement* c = smi->FirstChildElement("colour");
-             c != nullptr; c = c->NextSiblingElement("colour")) {
+        c = smi->FirstChildElement("colour");
+        while (c != nullptr) {
             const char* cval = c->Attribute("value");
             if (cval) ParseColour(&m_pColours[idx], cval);
             idx++;
+            c = c->NextSiblingElement("colour");
         }
     }
 
-    // Sound sections — stubbed: binary calls SlashSoundMods::Parse for each.
-    // TODO: implement SlashSoundMods::Parse when audio is ported.
-    // <swipeSounds>  -> m_SwipeSounds
-    // <impactSounds> -> m_ImpactSounds
-    // <comboSounds>  -> m_ComboSounds
-    // <loop>         -> m_LoopingSound (via SlashSoundMods::Parse)
+    // Sound sections — binary calls SlashSoundMods::Parse for each child.
+    tinyxml2::XMLElement* swipeElem = smi->FirstChildElement("swipeSounds");
+    if (swipeElem != nullptr) {
+        m_SwipeSounds.Parse(swipeElem);
+        m_LoopingSound.Parse(swipeElem);  // "loop" attr lives on the same element
+    }
+
+    tinyxml2::XMLElement* impactElem = smi->FirstChildElement("impactSounds");
+    if (impactElem != nullptr) {
+        m_ImpactSounds.Parse(impactElem);
+    }
+
+    tinyxml2::XMLElement* comboElem = smi->FirstChildElement("comboSounds");
+    if (comboElem != nullptr) {
+        m_ComboSounds.Parse(comboElem);
+    }
 }
