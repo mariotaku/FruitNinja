@@ -701,16 +701,15 @@ void ShopScreen::EquipCallback() {
                    (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
                    im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
 
-            // Update the selected row's description text to reflect the
-            // new equipped state. Binary uses three literal strings:
-            //   0x001bc104 = "EQUIPPED"
-            //   0x001bc10b = "FREE"
-            //   0x001bc110 = "BOUGHT"
-            // For a successful equip we always show "EQUIPPED".
-            const char* newDesc = "EQUIPPED";
-            strncpy(m_pSelectedItem->m_DescText, newDesc,
-                    sizeof(m_pSelectedItem->m_DescText) - 1);
-            m_pSelectedItem->m_DescText[sizeof(m_pSelectedItem->m_DescText) - 1] = '\0';
+            // Binary @ 0x0015d630 EquipCallback does NOT touch m_DescText.
+            // The "currently equipped" visual is the m_SelectedAlpha highlight
+            // ring driven per-frame by ShopListItem::Move @ 0x0015d1fc polling
+            // ItemManager::IsEquipped(m_pItemInfo); description text is set
+            // ONCE in ShopListItem::Create @ 0x0015c988 and never rewritten by
+            // an equip action. The earlier port-side strncpy("EQUIPPED", ...)
+            // here was a fabrication: it permanently overwrote the row's
+            // description and was never restored, leaving the previously-
+            // equipped row showing stale "EQUIPPED" forever.
 
             // Port specific: the binary defers ItemSave.xml write until
             // GameTaskSaveOnExit / SaveCurrentData. The port's SDL exit
