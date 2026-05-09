@@ -459,16 +459,15 @@ void ShopScreen::ShrinkBuyButton() {
 // from its control list (after m_bPendingRemoval propagates through
 // MenuButton::Update's FadeCounter-to-zero path).
 //
-// Binary pseudocode (re-analysed 2026-04-28):
+// Binary pseudocode (re-RE'd 2026-05-09):
 //   if (param_1 == m_pEquipButton) {
 //       if (g_bShopButtonShrinking != 0) {
 //           fruit = param_1->m_pFruitPiece
 //           if (fruit) {
-//               fruit->m_HalfB_vel.y = -480.0   // DAT_0015d1e8
-//               fruit->m_HalfB_pos.y = -480.0   // DAT_0015d1e8
-//               // also sets m_HalfB_vel2 = -g_ShopFlingVec but port skips
-//               // the +0x9c write since it overlaps m_SecondVel region
-//               fruit->m_SecondVel.y = -10.0    // DAT = 0xC1200000
+//               fruit->m_SecondPos.y = -480.0   // DAT_0015d1e8 = 0xC3F00000
+//               fruit->pos.y         = -480.0   // DAT_0015d1e8
+//               fruit->m_Gravity     = -g_ShopFlingVec = (0,-1,0)  // +0x9c, NOT m_SecondVel
+//               fruit->m_SecondVel.y = -10.0    // DAT = 0xC1200000 (overlapping +0xc8)
 //               fruit->vel.y         = -10.0
 //           }
 //       }
@@ -482,20 +481,32 @@ void ShopScreen::ShrinkBuyButton() {
 void ShopScreen::DeletedMenuItem(HUDControl* removed) {
     if (removed == m_pEquipButton) {
         if (m_bShrinking) {
-            // Kick the fruit off-screen when the button was shrunk programmatically
+            // Kick the fruit off-screen when the button was shrunk programmatically.
+            // Binary @ 0x0015d14c writes (re-RE'd 2026-05-09 by re-analyst):
+            //   *(fruit+0xbc) = -480.0   -> m_SecondPos.y
+            //   *(fruit+0x14) = -480.0   -> entity pos.y
+            //   *(fruit+0x9c) = -g_ShopFlingVec = (0,-1,0) -> m_Gravity (NEGATE, not zero)
+            //   *(fruit+0xc8) = -10.0    -> m_SecondVel.y
+            //   *(fruit+0x20) = -10.0    -> vel.y
+            // The earlier port skipped the m_Gravity write claiming it overlapped
+            // m_SecondVel (it does NOT — m_Gravity is +0x9c, m_SecondVel is +0xc4).
+            // Without restoring downward gravity here, EquipCallback's prior
+            // m_Gravity=(0,0,0) leaves Fruit::CheckHasGoneOffscreen unable to fire
+            // — every return-true branch in that function is gated on a non-zero
+            // gravity component (verified @ binary 0x00175218). The orphan watermelon
+            // then falls forever, accumulating in ActorManager and soft-locking
+            // MainScreen::STATE_DOJO_WAIT_B. Negating g_ShopFlingVec=(0,1,0) gives
+            // m_Gravity=(0,-1,0) so the downward branch eventually returns true and
+            // KillFruit reaps the fruit (Fruit::KillFruit sets flags|=0x10, which
+            // ActorManager::Update polls per-tick).
             Fruit* fruit = m_pEquipButton->m_pFruitPiece;
             if (fruit) {
-                // Binary writes two -480 kicks and two -10 velocity kicks:
-                //   *(fruit+0xbc) = -480.0  -> m_SecondPos.y (HalfB pos y)
-                //   *(fruit+0x14) = -480.0  -> entity pos.y (main pos)
-                //   *(fruit+0xc8) = -10.0   -> m_SecondVel.y (downward kick)
-                //   *(fruit+0x20) = -10.0   -> vel.y
-                // DAT_0015d1e8 = 0xC3F00000 = -480.0f
-                fruit->m_SecondPos.y = -480.0f;   // fruit+0xbc = m_SecondPos.y
-                fruit->pos.y         = -480.0f;   // fruit+0x14 = entity pos.y
-                // DAT = 0xC1200000 = -10.0f
-                fruit->m_SecondVel.y = -10.0f;    // fruit+0xc8 = m_SecondVel.y
-                fruit->vel.y         = -10.0f;    // fruit+0x20 = vel.y
+                fruit->m_SecondPos.y = -480.0f;
+                fruit->pos.y         = -480.0f;
+                // SHOP_FLING_VEC = (0, 1, 0); negated = (0, -1, 0)
+                fruit->m_Gravity     = Vec3(0.0f, -1.0f, 0.0f);
+                fruit->m_SecondVel.y = -10.0f;
+                fruit->vel.y         = -10.0f;
             }
         }
         // Always null the pointer and add delay (binary: unconditional)
