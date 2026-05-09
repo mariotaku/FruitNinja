@@ -385,7 +385,11 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
         scales->QueryFloatAttribute("UV_length",       &m_ScaleUVLength);
     }
 
-    // <colour> children -> m_pColours array
+    // <colour>R,G,B</colour> children -> m_pColours array.
+    // The XML uses element TEXT, not a value attribute -- e.g.
+    //   <colour>255,43,78</colour>     (disco palette entry)
+    // not
+    //   <colour value="255,43,78"/>
     int count = 0;
     tinyxml2::XMLElement* c = smi->FirstChildElement("colour");
     while (c != nullptr) {
@@ -399,7 +403,7 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
         int idx = 0;
         c = smi->FirstChildElement("colour");
         while (c != nullptr) {
-            const char* cval = c->Attribute("value");
+            const char* cval = c->GetText();
             if (cval) ParseColour(&m_pColours[idx], cval);
             idx++;
             c = c->NextSiblingElement("colour");
