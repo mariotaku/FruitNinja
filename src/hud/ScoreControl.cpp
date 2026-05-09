@@ -119,11 +119,15 @@ void ScoreControl::Release() {
 }
 
 // Reset @ 0x001582e4
+// ASM-verified: 2026-05-09 binary @ 0x001582e4 (re-analyst)
 void ScoreControl::Reset() {
-    // DIFFERS: binary Reset @ 0x001582e4 always copies m_FruitDigitTex to m_Texture;
-    // port leaves m_Texture = 0 because HUDControl3d::Draw doesn't yet apply the
-    // per-digit UV crop via m_DigitAlpha[]. Net effect identical until the crop hook lands.
-    m_Texture.SetNull();
+    // Binary copies m_FruitDigitTex (+0xF8 = hud_fruit.tex) into m_Texture
+    // (+0x74) unconditionally so HUDControl3d::Draw renders the watermelon
+    // score-icon in Classic/Arcade. Combo mode (gameMode==1) PreDraw rebinds
+    // m_Texture per fruit each frame. The earlier "DIFFERS" claim that
+    // per-digit UV crop is missing was wrong -- this is the score-area icon,
+    // not a digit-sheet UV target.
+    m_Texture = m_FruitDigitTex;
 
     m_PulseAngle = 0;
     m_bDirty     = 1;
