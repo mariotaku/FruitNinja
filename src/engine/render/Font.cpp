@@ -777,19 +777,23 @@ void Font::DrawString(Mortar::Utf8StringIterator& iter,
 }
 
 // Port-side convenience wrapper. Forwards to the binary-shape overload
-// above. yLineFactor is exposed (DIFFERS from binary's hardcoded 1.0) for
-// legacy callers like ScoreControl's "BEST" label which passes 0.9.
-void Font::DrawString(float scale, float yLineFactor, float z,
+// above (which hardcodes yLineFactor = 1.0 like binary @ 0x00199b1c).
+// The 2nd arg `yLineFactor` is preserved in the signature for backward
+// source-compat with existing port callers (almost all pass 1.0), but
+// is IGNORED -- to pass a non-1.0 value (e.g. ScoreControl's BEST label
+// passing 0.9), call the full Font_DrawString directly.
+void Font::DrawString(float scale, float /*yLineFactor (ignored)*/, float z,
                       const char* text, const Vec3& pos,
                       const Colour& colour, int alignment)
 {
     if (!text || !*text) return;
     Mortar::Utf8StringIterator iter(text);
-    Vec2 maxWH(0.0f, 0.0f);
-    // Skip the binary-shape wrapper here -- it would clobber yLineFactor
-    // with 1.0. Call the full Font_DrawString directly so legacy callers
-    // can keep passing non-default yLineFactor values.
-    DrawString(scale, yLineFactor, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
+    // Forward through the binary-shape wrapper so the call shape lines up
+    // with binary's wrapper @ 0x00199aa0 (yLineFactor pinned to 1.0).
+    DrawString(iter, colour, alignment,
+               pos.x, pos.y, pos.z, scale,
+               /*maxWHx=*/0.0f, /*maxWHy=*/0.0f, /*rotZ=*/0.0f, nullptr);
+    (void)z;  // binary's wrapper ignores its z slot too
 }
 
 // ---------------------------------------------------------------------------
