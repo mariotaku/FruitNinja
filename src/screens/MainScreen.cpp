@@ -291,16 +291,6 @@ void MainScreen::Update(float dt) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         const int fruitCount = am ? am->GetNumEntities(0) : 0;
 
-        // PROBE: identify stuck gate on second dojo entry after bg-change soft-lock.
-        // Remove once root cause is pinpointed.
-        static int s_probeFrames = 0;
-        if (++s_probeFrames % 30 == 0) {
-            printf("[Dojo gate] state=%d m_pDojoScreen=%p fruitCount=%d Timer2=%.4f "
-                   "pauseFlag=%d cameraTransition=%.4f m_TransitionTimer=%.4f\n",
-                   (int)m_State, (void*)m_pDojoScreen, fruitCount, m_Timer2,
-                   (int)game.pauseFlag, m_CameraTransition, game.m_TransitionTimer);
-        }
-
         if (fruitCount == 0) {
             m_Timer2 *= 1.0f - (1.0f - 0.75f) * FN::g_DebugTimeScale;
         }
@@ -313,7 +303,6 @@ void MainScreen::Update(float dt) {
 
         // Binary DAT_0014bf10 = 0.001f (NOT 0.01f).
         if (!m_pDojoScreen && fruitCount == 0 && m_Timer2 < 0.001f) {
-            s_probeFrames = 0;  // PROBE: fresh count for next dojo trip
             m_Timer2 = 0.0f;
             m_pDojoScreen = new DojoScreen(game);
             // RemoveCallback nulls our weak ref BEFORE HUD::Update
