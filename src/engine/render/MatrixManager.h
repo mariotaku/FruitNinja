@@ -46,10 +46,14 @@ public:
     void SetupOrtho(float top, float bottom, float left, float right,
                     float nearVal, float farVal);
 
-    // ASM-verified: 2026-05-09 binary @ 0x0019e724 + LookAt43 @ 0x0019e82c
-    // Non-canonical: forward = -eye, third arg ignored (kept in signature
-    // for binary call-shape parity). See impl for the full math.
-    void SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& unused);
+    // DIFFERS from binary @ 0x0019e724 (asm-inspector). Binary's LookAt43
+    // produces a non-canonical X-flipped view matrix that is compensated
+    // by an orientation-matrix multiply in _UploadCurrentMatrices @
+    // 0x0019e2b4 (Bada portrait->landscape rotation). Port skips that
+    // compensator, so this entrypoint uses canonical glLookAt math; arg
+    // names are (eye, upHint, target) to keep positional parity with the
+    // binary call sites (3rd slot is "unused" in binary, "target" here).
+    void SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target);
 
     // "Upload all" — called by SetupOrtho, SetupLookAt (skipProjection=false)
     void UploadAll();

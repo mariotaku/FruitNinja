@@ -107,10 +107,11 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     }
 
     // View: camera looks straight down +Z with optional shake target offset.
-    // Binary @ 0x00181180..0x0018118e passes (eye, up, at) positionally to
-    // SetupLookAt. The port's SetupLookAt now matches binary's LookAt43
-    // signature exactly: (eye, upHint, _unused). Pass args in the same
-    // positional order as the binary.
+    // Binary @ 0x00181180..0x0018118e passes (eye, up, at) positionally.
+    // Port matches the positional order: SetupLookAt(eye, upHint, target).
+    // The port reinterprets slot 3 as `target` (canonical glLookAt) because
+    // it skips the binary's compensating orientation-matrix multiply --
+    // see MatrixManager::SetupLookAt comment.
     Vec3 eye(m_Target.x, m_Target.y, 1.0f);
     Vec3 up (0.0f, 1.0f, 0.0f);
     Vec3 at (m_Target.x, m_Target.y, 0.0f);
