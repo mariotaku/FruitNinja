@@ -31,51 +31,34 @@ void MatrixManager::SetupOrtho(float top, float bottom, float left, float right,
     UploadAll();
 }
 
-// ASM-verified: 2026-05-09 binary @ 0x0019e724 + LookAt43 body @
-// 0x0019e82c (asm-inspector). The binary's LookAt43 is NON-CANONICAL:
+// DIFFERS: binary @ 0x0019e724 + LookAt43 @ 0x0019e82c (asm-inspector
+// 2026-05-09) computes a NON-CANONICAL view matrix:
 //   forward = normalise(-p1)            // p3 (target/up) is IGNORED
-//   right   = normalise(cross(p2, forward))
+//   right   = normalise(cross(p2, forward))   // up x forward (NOT f x u)
 //   up'     = cross(forward, right)
-//   translation = (-dot(p1, right), -dot(p1, up'), -dot(p1, forward))
-// `p1` is treated as the eye-relative-to-target vector (i.e. the caller
-// is expected to pre-subtract or assume target is at origin); `p2` is
-// the up-hint; `p3` is read but never used. Port's earlier mat4_look_at
-// canonical implementation diverged for non-zero target positions
-// (camera shake in FruitCamera). The port now mirrors LookAt43 exactly.
+//   translation = -dot(p1, axis) for each axis row
+// With (eye=+Z, up=+Y) this gives `right = -X` -- view is X-flipped vs
+// canonical glLookAt. The binary compensates for this by multiplying the
+// projection by `DisplayManager::m_OrientationMatrix` inside
+// `_UploadCurrentMatrices` @ 0x0019e2b4 (Bada is physically portrait;
+// the 90deg rotation includes an axis-sign flip that cancels the view's
+// X-flip on the wire).
 //
-// Param naming: the slots are kept as (eye, upHint, _unused) so the
-// call sites read positionally the same as the binary's call sites.
-void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& /*unused*/) {
-    // forward = normalise(-eye)
-    Vec3 fwd(-eye.x, -eye.y, -eye.z);
-    {
-        float len = sqrtf(fwd.x*fwd.x + fwd.y*fwd.y + fwd.z*fwd.z);
-        if (len > 0.0f) { float inv = 1.0f / len; fwd.x *= inv; fwd.y *= inv; fwd.z *= inv; }
-    }
-    // right = normalise(cross(upHint, fwd))
-    Vec3 right(
-        upHint.y * fwd.z - upHint.z * fwd.y,
-        upHint.z * fwd.x - upHint.x * fwd.z,
-        upHint.x * fwd.y - upHint.y * fwd.x);
-    {
-        float len = sqrtf(right.x*right.x + right.y*right.y + right.z*right.z);
-        if (len > 0.0f) { float inv = 1.0f / len; right.x *= inv; right.y *= inv; right.z *= inv; }
-    }
-    // up' = cross(fwd, right)
-    Vec3 upOrth(
-        fwd.y * right.z - fwd.z * right.y,
-        fwd.z * right.x - fwd.x * right.z,
-        fwd.x * right.y - fwd.y * right.x);
-    // Build column-major view matrix (Matrix44 stores m[col*4 + row]).
-    // Column 0 = right, Column 1 = up', Column 2 = fwd, Column 3 = translation.
+// The port runs on a true landscape display and skips that orientation
+// matmul -- so a binary-literal LookAt43 produces visible X-mirroring.
+// Use canonical `mat4_look_at(eye, target, up)` here. The third arg
+// (named `unused` for binary-shape ABI parity) is interpreted as the
+// canonical `target` for this port path; callers must pass it.
+//
+// To match the binary byte-for-byte we'd also need to port the
+// orientation-matrix step (TODO), at which point this can be swapped
+// for the LookAt43 form.
+void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& upHint, const Vec3& target) {
     Matrix44 view;
-    view.Identity();
-    view.m[0] = right.x;  view.m[1] = upOrth.x;  view.m[2]  = fwd.x;
-    view.m[4] = right.y;  view.m[5] = upOrth.y;  view.m[6]  = fwd.y;
-    view.m[8] = right.z;  view.m[9] = upOrth.z;  view.m[10] = fwd.z;
-    view.m[12] = -(eye.x * right.x + eye.y * right.y + eye.z * right.z);
-    view.m[13] = -(eye.x * upOrth.x + eye.y * upOrth.y + eye.z * upOrth.z);
-    view.m[14] = -(eye.x * fwd.x   + eye.y * fwd.y   + eye.z * fwd.z);
+    mat4_look_at(view.ptr(),
+                 eye.x,    eye.y,    eye.z,
+                 target.x, target.y, target.z,
+                 upHint.x, upHint.y, upHint.z);
     m_View.SetCurrentMatrix(view);
 }
 
