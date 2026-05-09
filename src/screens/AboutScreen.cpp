@@ -408,10 +408,9 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, m_TexHaiku->m_TexId);
+        m_TexHaiku->Set();
         r->DrawQuad(Colour(255, 255, 255, 255));
-        glBindTexture(GL_TEXTURE_2D, 0);
+        m_TexHaiku->UnSet();
 
         // ---- Font draws (version text) ----
         // Binary draws two strings via Font::DrawString:
@@ -465,10 +464,9 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
                 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mOv);
             mm.UploadModelViewOnly();
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, m_TexOFNOverlay->m_TexId);
+            m_TexOFNOverlay->Set();
             r->DrawQuad(Colour(255, 255, 255, 255));
-            glBindTexture(GL_TEXTURE_2D, 0);
+            m_TexOFNOverlay->UnSet();
         }
     }
 
@@ -490,10 +488,9 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, s_TexCredits->m_TexId);
+        s_TexCredits->Set();
         r->DrawQuad(Colour(255, 255, 255, 255));
-        glBindTexture(GL_TEXTURE_2D, 0);
+        s_TexCredits->UnSet();
     }
 
     // ================================================================
@@ -516,10 +513,9 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, s_TexSensei->m_TexId);
+        s_TexSensei->Set();
         r->DrawQuad(Colour(255, 255, 255, 255));
-        glBindTexture(GL_TEXTURE_2D, 0);
+        s_TexSensei->UnSet();
     }
 }
 
