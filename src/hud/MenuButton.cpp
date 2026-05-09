@@ -768,11 +768,29 @@ void MenuButton::Update(float dt) {
         }
     }
 
-    // Binary @ 0x0014eb84: m_BackdropScale (+0xEC) is computed every Update
-    // from size.x * 1.125f * m_AnimScale. Read by Draw Phase A @ 0x0014fa86
-    // to scale the scratchs.tex backdrop quad. Always runs — binary's
-    // LAB_0014eb52 falls through into this tail when m_bHighlighted == 0.
-    m_BackdropScale = size.x * 1.125f * m_AnimScale;
+    // ASM-verified: 2026-05-09 binary @ 0x0014eb84 (re-analyst).
+    // m_BackdropScale (+0xEC) = size.x * 1.125f * m_AnimScale, written
+    // every Update. Read by Draw Phase A @ 0x0014fa86 to scale the
+    // scratchs.tex backdrop quad.
+    //
+    // Port quirk: port callers set `size` from texture w/h BEFORE
+    // calling Init, and port's Update at the size-bounce code path
+    // unconditionally writes `size = m_TargetSize`. Binary @ 0x0014ee40
+    // (Init) initialises `size = Vector3::Zero` (= (0,0,0)) and ONLY
+    // overwrites it for toggle buttons (m_FruitType < 0 && !m_bHasHitArea)
+    // with `(texW+1, texH+1, ...)`. Fruit-typed buttons keep size = 0
+    // in the binary, so m_BackdropScale = 0 and the scratchs backdrop
+    // collapses to a point — invisible.
+    //
+    // Port mirrors that gate here: zero m_BackdropScale for fruit-typed
+    // buttons (m_FruitType >= 0). Toggle buttons (FruitType < 0 with
+    // texture-derived size) keep the formula and render scratchs sized
+    // by the texture, matching binary.
+    if (m_FruitType >= 0) {
+        m_BackdropScale = 0.0f;
+    } else {
+        m_BackdropScale = size.x * 1.125f * m_AnimScale;
+    }
 }
 
 // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4).
@@ -819,13 +837,14 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         alpha = (uint8_t)a;
     }
 
-    // ASM-verified: 2026-05-06T16:00 binary @ 0x0014f9cc Phase A 0x0014fa24..0x0014faf8 (asm-inspector)
-    // First-pass at layer 0x40: scratchs.tex backdrop quad, then demote to
-    // 0x80 and return. The backdrop scale is m_BackdropScale (+0xEC), which
-    // the binary leaves uninitialized (zero-init in port) so the quad
-    // collapses to a point and the layer is effectively dead. The path is
-    // preserved for binary call-graph parity even though the visual is not
-    // observable in the shipped binary.
+    // ASM-verified: 2026-05-06T16:00 binary @ 0x0014f9cc Phase A
+    // 0x0014fa24..0x0014faf8 (asm-inspector).
+    // First-pass at layer 0x40: scratchs.tex backdrop quad, then demote
+    // to 0x80 and return. Backdrop scale comes from m_BackdropScale
+    // (+0xEC), computed every Update as size.x * 1.125f * m_AnimScale.
+    // For fruit-typed buttons the binary leaves size = (0,0,0) so this
+    // collapses to a point. Toggle buttons (sound/music) override size
+    // from texture w/h+1 and render a real scratchs backdrop here.
     if (m_LayerFlags == 0x40) {
         m_LayerFlags = 0x80;
         if (s_TexScratchs.IsValid()) {
