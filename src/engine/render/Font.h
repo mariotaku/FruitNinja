@@ -179,7 +179,7 @@ public:
     Page*         GetPage(int idx) const;
 
 private:
-    float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack);
+    float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) const;
 
 public:
     // ---- STUBS (binary) ----
