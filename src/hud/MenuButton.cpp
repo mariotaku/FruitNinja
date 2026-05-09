@@ -773,24 +773,15 @@ void MenuButton::Update(float dt) {
     // every Update. Read by Draw Phase A @ 0x0014fa86 to scale the
     // scratchs.tex backdrop quad.
     //
-    // Port quirk: port callers set `size` from texture w/h BEFORE
-    // calling Init, and port's Update at the size-bounce code path
-    // unconditionally writes `size = m_TargetSize`. Binary @ 0x0014ee40
-    // (Init) initialises `size = Vector3::Zero` (= (0,0,0)) and ONLY
-    // overwrites it for toggle buttons (m_FruitType < 0 && !m_bHasHitArea)
-    // with `(texW+1, texH+1, ...)`. Fruit-typed buttons keep size = 0
-    // in the binary, so m_BackdropScale = 0 and the scratchs backdrop
-    // collapses to a point — invisible.
+    // Update writes size = m_TargetSize (or scaled grow-in version)
+    // earlier in this function for fruit-typed buttons too, so size.x
+    // here is the just-written m_TargetSize.x. The scratchs backdrop
+    // is intentionally rendered for ALL MenuButtons (fruit + toggle).
     //
-    // Port mirrors that gate here: zero m_BackdropScale for fruit-typed
-    // buttons (m_FruitType >= 0). Toggle buttons (FruitType < 0 with
-    // texture-derived size) keep the formula and render scratchs sized
-    // by the texture, matching binary.
-    if (m_FruitType >= 0) {
-        m_BackdropScale = 0.0f;
-    } else {
-        m_BackdropScale = size.x * 1.125f * m_AnimScale;
-    }
+    // Per-button scaling override: only the big "NEW GAME" button has
+    // m_AnimScale = 0.5 (set by MainScreen on pPlayButton creation,
+    // binary @ 0x0014b82c). All others stay at the Init default 1.0.
+    m_BackdropScale = size.x * 1.125f * m_AnimScale;
 }
 
 // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4).
