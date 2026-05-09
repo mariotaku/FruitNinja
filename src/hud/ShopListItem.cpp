@@ -205,11 +205,21 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
     if (!pItemInfo) return;
 
     // --- Icon texture ---
-    // Binary: loads item thumbnail by name from ItemInfo::m_pTextureName
-    // (e.g. "item_discoblade") into TextureManager's textures/ subdir.
+    // ASM-verified: 2026-05-09 binary @ 0x0015c9ea (re-analyst).
+    // Binary picks one of two format strings keyed on m_Type:
+    //   BACKGROUND (type == 1): "item_%s.tex"   (DAT_0015caf8 -> "item_%s.tex")
+    //   else                  : "%s.tex"        (DAT_0015cafc -> "%s.tex")
+    // BACKGROUND items use the XML attribute texture="BG_<name>" without
+    // the item_ prefix (asset on disk is item_bg_<name>.tex). The
+    // "item_%s.tex" format prepends the prefix; case-insensitive file
+    // lookup downstream handles BG_/bg_.
     if (pItemInfo->m_pTextureName && pItemInfo->m_pTextureName[0] != '\0') {
-        std::string texFile = std::string(pItemInfo->m_pTextureName) + ".tex";
-        m_pIconTex = Mortar::TextureManager::LoadLocalisedTexture(texFile.c_str());
+        char buf[64];
+        const char* fmt = (pItemInfo->m_Type == ITEM_TYPE_BACKGROUND)
+                              ? "item_%s.tex"
+                              : "%s.tex";
+        snprintf(buf, sizeof(buf), fmt, pItemInfo->m_pTextureName);
+        m_pIconTex = Mortar::TextureManager::LoadLocalisedTexture(buf);
     }
 
     // --- Description text — 3-way branch (binary @ 0x0015ca6e/c7e/c82) ---
