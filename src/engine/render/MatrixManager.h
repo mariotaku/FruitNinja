@@ -18,17 +18,27 @@ public:
     MatrixStack m_World;       // +0x1094, 0x848 bytes
     MatrixStack m_Texture;     // +0x18DC, 0x848 bytes
 
-    // Cached Projection * View (recomputed on upload when dirty)
-    Matrix44 m_CachedProjView;
+    // ASM-verified: 2026-05-09 binary @ 0x0019e2b4 (asm-inspector)
+    // Binary's MatrixManager has NO m_CachedProjView and NO
+    // m_ProjVersionUploaded -- only the 3 ints below. Total class size
+    // is exactly 0x2134 bytes (0x4 vtable + 4 stacks * 0x848 + 3 ints).
+    // The port keeps m_CachedProjView for its ES2 shader pipeline
+    // (Renderer reads GetMVP() each draw call) -- DIFFERS from binary,
+    // which uploads matrices through GL fixed-pipeline calls inside
+    // _UploadCurrentMatrices and lets later draws inherit GL state.
+    // TODO: rewrite the upload path to match binary exactly; for now
+    // the cache field is a port-side concession.
+    Matrix44 m_CachedProjView;       // Port specific
+    int m_ProjVersionUploaded;       // Port specific (binary lacks this)
 
-    // Version tracking for dirty upload
+    // Version tracking for dirty upload (matches binary @ +0x2128/+0x212C/+0x2130).
     int m_ViewVersionUploaded;      // +0x2128
     int m_WorldVersionUploaded;     // +0x212C
     int m_TextureVersionUploaded;   // +0x2130
-    int m_ProjVersionUploaded;
 
-    // Matches 0x0019e2ac — called by GameInitialise after singleton creation
-    // Just calls ResetAllStacks (constructor already does this, but matches original)
+    // ASM-verified: 2026-05-09 binary @ 0x0019e2ac (asm-inspector)
+    // Binary is a 2-instruction tail-call to ResetAllStacks. Inlining
+    // the call here is the same effect.
     void Init() { ResetAllStacks(); }
 
     // Matches 0x0019e5a4
@@ -47,7 +57,10 @@ public:
 
     void ResetAllStacks();
 
-    // Get combined Projection * View * World matrix (uses cached ProjView)
+    // Port specific: helper for the SDL+ES2 shader pipeline. The binary
+    // has no GetMVP() -- it uploads matrices through GL fixed-pipeline
+    // inside _UploadCurrentMatrices. The port reads this from
+    // Renderer::DrawTriList/DrawTriStrip to feed the shader uniform.
     Matrix44 GetMVP() const;
 
     MatrixStack& GetWorldStack() { return m_World; }

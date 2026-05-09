@@ -27,7 +27,13 @@ void MatrixManager::SetupOrtho(float top, float bottom, float left, float right,
     UploadAll();
 }
 
-// Matches 0x0019e724
+// ASM-verified-shape: 2026-05-09 binary @ 0x0019e724 (asm-inspector)
+// Binary: LookAt43(eye, target, up, &local43) -> cast to Matrix44 ->
+//         m_View.SetCurrentMatrix(local44). NO UploadAll() at the tail
+//         (port previously had one — extra GL state churn vs binary).
+// The binary's intermediate type is Matrix43; port skips the 4x3 step
+// and writes 4x4 directly via mat4_look_at — equivalent if the cast
+// appends row [0,0,0,1] (it does).
 void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& target, const Vec3& up) {
     Matrix44 view;
     mat4_look_at(view.ptr(),
@@ -35,7 +41,6 @@ void MatrixManager::SetupLookAt(const Vec3& eye, const Vec3& target, const Vec3&
                  target.x, target.y, target.z,
                  up.x, up.y, up.z);
     m_View.SetCurrentMatrix(view);
-    UploadAll();
 }
 
 void MatrixManager::UploadAll() {
