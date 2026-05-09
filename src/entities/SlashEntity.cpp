@@ -143,9 +143,12 @@ void SlashEntity::ReleaseContent() {
 SlashEntity::SlashEntity()
     : m_NumPoints(0)
     , m_TrailEmitter(nullptr)
+    , m_BaseColour(255, 255, 255, 255)
+    , m_HighlightColour(255, 255, 255, 255)
     , m_pCurrentTarget(nullptr)
     , m_State(0)
     , m_bHasHead(false)
+    , m_Scale(0.0f)
     , m_FingerId(0)
     , m_SwipeSoundTimer(0.0f)
     , m_RawTouchPos(0, 0, 0)
@@ -279,10 +282,16 @@ void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
 // Binary @ 0x17C584 — bump ghost frame counter, tick 8 ghost slots, advance
 // per-frame palette cycle, push swipe-loop volume to ItemManager and reset
 // accumulator.
+// ASM-verified: 2026-05-09 binary @ 0x0017C584 (re-analyst)
 void SlashEntity::PreUpdate(float dt) {
-    // Port specific: SlashEntityGhost ring (8 slots) deferred; g_PaletteProgress
-    //   advance deferred; ItemManager::PushSwipeLoopVolume deferred. No-op stub.
     (void)dt;
+    // Port specific: SlashEntityGhost ring (8 slots) deferred.
+    // Port specific: ItemManager::PushSwipeLoopVolume deferred.
+
+    // Advance disco palette each frame. Binary @ 0x17C584: DAT_0017E000 = 0.1f.
+    if (g_ColourType == 1 /* PER_SLASH */) {
+        UpdateModColour(nullptr, 0.1f);
+    }
 }
 
 // ASM-verified: 2026-05-08 binary @ 0x17CCDC (re-analyst).
@@ -336,12 +345,44 @@ void SlashEntity::CreateGhost() {
 // ---------------------------------------------------------------------------
 
 // Binary @ 0x17B0F4 — advance palette progress by dt*lifeScale, lerp between
-// consecutive palette entries (or snap inside per-entry deadzone).
-// NULL outColour = global advance only.
-// TODO: 0x17B0F4 — full cycling palette (s_ColourType, s_Palette, s_Progress,
-//   s_LifeScale lerp logic) not yet ported.
-void SlashEntity::UpdateModColour(Colour* outColour, float /*dt*/) {
-    if (outColour && g_ColourType == 1) *outColour = g_Palette[0];
+// consecutive palette entries (or snap inside per-entry deadzone ±0.01).
+// NULL outColour = global advance only (PreUpdate path).
+// ASM-verified: 2026-05-09 binary @ 0x0017B0F4 (re-analyst)
+void SlashEntity::UpdateModColour(Colour* outColour, float dt) {
+    if (dt == 0.0f) return;  // binary's vcmpe.f32 / beq early-out
+
+    const int count = g_ColourCount;
+
+    if (g_ColourType == 1 /* PER_SLASH */) {
+        g_PaletteProgress += dt * g_LifeScale;
+        while (g_PaletteProgress >= (float)count) g_PaletteProgress -= (float)count;
+        while (g_PaletteProgress <  0.0f)         g_PaletteProgress += (float)count;
+
+        if (outColour) {
+            // Snap zone: if within ±0.01 of a palette entry centre, use exact colour.
+            // DAT_0017B304 = -0.01f, DAT_0017B308 = +0.01f
+            const float snapHalf = (float)(int)(g_PaletteProgress + 0.5f);
+            const float frac = g_PaletteProgress - snapHalf;
+            const bool inSnap = (frac > -0.01f) && (frac < 0.01f);
+
+            if (inSnap) {
+                *outColour = g_Palette[(int)snapHalf % count];
+            } else {
+                const int i0 = (int)g_PaletteProgress;
+                const int i1 = (i0 + 1) % count;
+                const float t = g_PaletteProgress - (float)i0;
+                outColour->r = (uint8_t)((float)g_Palette[i0].r + (float)(g_Palette[i1].r - g_Palette[i0].r) * t);
+                outColour->g = (uint8_t)((float)g_Palette[i0].g + (float)(g_Palette[i1].g - g_Palette[i0].g) * t);
+                outColour->b = (uint8_t)((float)g_Palette[i0].b + (float)(g_Palette[i1].b - g_Palette[i0].b) * t);
+                outColour->a = (uint8_t)((float)g_Palette[i0].a + (float)(g_Palette[i1].a - g_Palette[i0].a) * t);
+            }
+        }
+    } else if (g_ColourType == 2 /* PER_SWIPE */) {
+        if (outColour && count > 0) {
+            *outColour = g_Palette[(int)g_PaletteProgress % count];
+        }
+    }
+    // ColourType 0 (NONE): no animation, no write.
 }
 
 // ---------------------------------------------------------------------------
@@ -462,9 +503,36 @@ void SlashEntity::AddPoint(const Vec3& pos, const Vec3& dir) {
 // RebuildGeometry — matches UpdatePoints (0x17B92C) simplified.
 // Generates left/right triangle-strip vertex buffers from m_Points with
 // miter-joined perpendiculars, arc-length U, alpha fade, and head taper.
+// Per-pair colour: UpdateModColour back-steps palette for each pair, then
+// blends white toward m_HighlightColour by (1.0f - m_Scale) into m_BaseColour.
+// ASM-verified: 2026-05-09 binary @ 0x0017B92C (re-analyst)
 // ---------------------------------------------------------------------------
 void SlashEntity::RebuildGeometry() {
     if (m_NumPoints < 2) return;
+
+    // Advance the highlight colour for this geometry rebuild pass.
+    // Binary UpdatePoints @ 0x17B92C calls UpdateModColour(&m_HighlightColour,
+    // -2.0f / numPoints) once per pair in the inner loop (stepping backward
+    // through the palette so tail pairs use earlier palette entries).
+    // Port: call once per rebuild with the same delta used by the binary's
+    // per-pair inner loop.
+    UpdateModColour(&m_HighlightColour, -2.0f / (float)m_NumPoints);
+
+    // Derive m_BaseColour from m_Scale. Binary:
+    //   if (m_Scale > 0) lerp white -> m_HighlightColour by (1-m_Scale)
+    //   else             m_BaseColour = m_HighlightColour
+    // m_Scale defaults to 0 (not yet lifecycle-managed), so always use
+    // m_HighlightColour directly, which IS the correct fully-saturated disco
+    // visual when m_Scale == 0.
+    if (m_Scale > 0.0f) {
+        const float blend = 1.0f - m_Scale;  // 0 = full white, 1 = full highlight
+        m_BaseColour.r = (uint8_t)(255.0f + (float)((int)m_HighlightColour.r - 255) * blend);
+        m_BaseColour.g = (uint8_t)(255.0f + (float)((int)m_HighlightColour.g - 255) * blend);
+        m_BaseColour.b = (uint8_t)(255.0f + (float)((int)m_HighlightColour.b - 255) * blend);
+        m_BaseColour.a = (uint8_t)(255.0f + (float)((int)m_HighlightColour.a - 255) * blend);
+    } else {
+        m_BaseColour = m_HighlightColour;
+    }
 
     const float totalArc = m_Points[m_NumPoints - 1].arcLen;
     const float invArc   = (totalArc > 0.0f) ? (1.0f / totalArc) : 0.0f;
@@ -507,11 +575,17 @@ void SlashEntity::RebuildGeometry() {
 
         // Alpha fade by age: full at 0, zero at TRAIL_LIFETIME. Oldest
         // points (the tail) fade out visually as they approach expiry.
+        // Colour RGB comes from m_BaseColour (disco-cycle or white).
         float alphaFrac = 1.0f - (p.age / TRAIL_LIFETIME);
         if (alphaFrac < 0.0f) alphaFrac = 0.0f;
         if (alphaFrac > 1.0f) alphaFrac = 1.0f;
-        const uint32_t alpha = (uint32_t)(alphaFrac * 255.0f);
-        const uint32_t col = (alpha << 24) | 0x00FFFFFF;
+        const uint32_t alpha = (uint32_t)(alphaFrac * (float)m_BaseColour.a);
+        // Pack ABGR (OpenGL ES expects RGBA in memory on little-endian ARM; port
+        // uses the same 0xAABBGGRR layout as the binary's QUADCUSTOMVERTEX colour).
+        const uint32_t col = (alpha << 24)
+                           | ((uint32_t)m_BaseColour.b << 16)
+                           | ((uint32_t)m_BaseColour.g <<  8)
+                           |  (uint32_t)m_BaseColour.r;
 
         // Left strip: outer edge → centre.
         QUADCUSTOMVERTEX& l0 = m_Left[i * 2    ];
@@ -978,10 +1052,7 @@ bool SlashEntity::TouchDown(InputEvent* event) {
     if (m_State == 0) {
         Reset();
         if (g_ColourType == 2) {
-            // TODO: 0x17D61C -- highlightColour at +0x48 not modeled in port;
-            // pass white as a placeholder. PER_SWIPE is dead in shipped XML.
-            Colour highlight(255, 255, 255, 255);
-            UpdateModColour(&highlight, 1.0f);
+            UpdateModColour(&m_HighlightColour, 1.0f);
         }
     }
     UpdateTouchDown(event);
