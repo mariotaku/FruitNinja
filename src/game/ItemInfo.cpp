@@ -266,14 +266,19 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
     const char* dirPart = smi->Attribute("particles_directional");
     m_bDirectionalParticles = (CompareWords(trueStr, dirPart) != 0);
 
-    // `particles` attr -> heap "tex_%s" snprintf
+    // `particles` attr -> verbatim (no transform).
+    // ASM-verified: 2026-05-09 binary @ 0x001126c0 (re-analyst).
+    // SetModColours @ 0x0017ca0c calls StringHash(m_pParticlePath) directly
+    // and the emitter templates in particles_fast.xml are registered under
+    // the unprefixed names ("mr_sparkle_trail", "american_blade", etc.) --
+    // so the trail-particle string must be stored verbatim. The earlier
+    // port-side "tex_%s" snprintf prepended a prefix that broke the
+    // StringHash lookup, leaving every blade-mod's particle trail
+    // invisible (e.g. Sparkle Slash, Disco Slash, Flame Blade, etc.).
     const char* particles = smi->Attribute("particles");
     if (particles != nullptr && particles[0] != '\0') {
-        // Binary: snprintf("tex_%s", particles) into heap buffer
-        char buf[256];
-        snprintf(buf, sizeof(buf), "tex_%s", particles);
         free(m_pParticlePath);
-        m_pParticlePath = strdup(buf);
+        m_pParticlePath = strdup(particles);
     }
 
     // `contact_particles` attr
