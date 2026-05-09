@@ -175,7 +175,17 @@ public:
     float GetLineHeight(float scale) const { return scale; }
 
     CharTemplate* GetCharTemplate(uint32_t cp) const;
-    float         GetKerning(uint32_t a, uint32_t b) const { return 0.0f; }
+
+    // ASM-verified: 2026-05-09 binary @ 0x00198528 (re-analyst) -- the
+    // shipped Bada build's GetKerning is a 2-instruction stub:
+    //     vldr.32 s0, [pc, #0x4]   ; literal 0.0f
+    //     bx      lr
+    // The .fnt-parsed m_Kernings array (+0x410 / +0x414) is stored but
+    // never consulted at draw time. Call sites (GetLineLength,
+    // GetStringHeight, FindAdvanceOfNextWord, Font_DrawString @
+    // 0x00199854) add the result to the cursor advance, but it's always
+    // 0. Port matches exactly; do NOT replace with a real lookup.
+    float         GetKerning(uint32_t /*a*/, uint32_t /*b*/) const { return 0.0f; }
     Page*         GetPage(int idx) const;
 
 private:
