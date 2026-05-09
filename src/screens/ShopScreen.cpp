@@ -793,10 +793,14 @@ void ShopScreen::Update(float dt) {
     case 1: {
         // ASM-verified: 2026-05-09 binary @ 0x0015e208 (re-analyst).
         // Selection-ring counter (m_AnimFrame at +0xb4) defaults to DECAY
-        // each frame: param = -dt. Only the "have selected unlocked
-        // non-equipped item with m_BuyDelay <= 0" branch flips param to
-        // +dt so the ring ramps up. Without this, the ring is always
-        // visible.
+        // each frame: ringSignedDt = -dt. Only ONE control path keeps it
+        // at +dt: when the selected item IS EQUIPPED. The ring marks the
+        // user's currently-equipped item; the watermelon equip-button is
+        // a sibling branch that only exists on UN-equipped items, so the
+        // two paths are mutually exclusive.
+        // Earlier port version had the gate inverted (ramp-up on
+        // un-equipped) which made the ring follow the equip-button
+        // instead of the equipped loadout.
         float ringSignedDt = -dt;
 
         // Binary (0x0015e3a0): m_BuyDelay only decremented when > 0;
@@ -836,11 +840,11 @@ void ShopScreen::Update(float dt) {
                     ItemManager* im = ItemManager::GetInstance();
                     if (im) {
                         int equipped = im->IsEquipped(m_pSelectedItem->m_pItemInfo);
-                        bool locked  = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
-                        // Selection-ring ramp-up: only when user has a real
-                        // selectable item (not equipped, not locked). Mirror
-                        // the binary's `param = +dt` override.
-                        if (equipped == 0 && !locked) {
+                        // Selection-ring ramp-up gate: binary keeps
+                        // `param = +dt` only when IsEquipped != 0 (current
+                        // loadout). Equip-button creation below runs in
+                        // the mutually-exclusive `equipped == 0` branch.
+                        if (equipped != 0) {
                             ringSignedDt = dt;
                         }
                         if (equipped == 0 && !m_pEquipButton) {
