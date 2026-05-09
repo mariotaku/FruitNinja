@@ -469,8 +469,8 @@ float Font::MeasureString(const char* str) const {
 // DrawString (matches Font_DrawString 0x00198e44)
 // ---------------------------------------------------------------------------
 
-// ASM-verified-via-RE: 2026-05-03 binary @ 0x00198e44 (re-analyst)
-void Font::DrawString(float scale, float maxWidth, float rotZ,
+// ASM-verified: 2026-05-09 binary @ 0x00198e44 (asm-inspector)
+void Font::DrawString(float scale, float yLineFactor, float rotZ,
                       Mortar::Utf8StringIterator iter, const Vec3& pos, const Colour& colour,
                       Vec2 maxWH, int alignment, float z,
                       MortarRectangleDec* clipRect)
@@ -483,12 +483,14 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
 
     // Binary modifies maxWH in-place on a stack copy:
     //   maxWH.x /= scale
-    //   maxWH.y /= (maxWidth * scale)
-    // Callers must pass maxWidth >= 1.0 (the binary wrapper @ 0x00189aa0
-    // hardcodes 1.0 for the maxWidth=0-from-caller case; port callers
-    // mirror that at the call site).
+    //   maxWH.y /= (yLineFactor * scale)
+    // yLineFactor is a vertical line-pitch divisor (NOT a wrap-width limit
+    // as earlier port comments claimed). The binary's wrapper @ 0x00199aa0
+    // hardcodes yLineFactor = 1.0; ScoreControl's highscore "BEST" label
+    // passes 0.9 (DAT_0015979c). Callers must NEVER pass 0 -- the divide
+    // would produce NaN and corrupt vertical alignment.
     maxWH.x /= scale;
-    maxWH.y /= (maxWidth * scale);
+    maxWH.y /= (yLineFactor * scale);
 
     // Word-wrap threshold in lineHeight-normalized units (maxWH.x after /= scale).
     // Wrap is active whenever maxWH.x > 0; the binary's caller signals "no wrap"
@@ -714,9 +716,9 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
     // Binary ARM 0x00199920-0x00199964 (confirmed upward shift)
     if (alignment & 0xC) {
         // cursor_y is the final value after the glyph loop (= -(numLines-1))
-        // Binary: s19 = cursor_y - maxWidth (maxWidth=1.0 in wrapper callers)
-        // For direct Font_DrawString callers with maxWidth != 1.0, use maxWidth
-        float s19 = cursorY - maxWidth;
+        // Binary: s19 = cursor_y - yLineFactor (yLineFactor=1.0 in wrapper callers)
+        // For direct Font_DrawString callers with yLineFactor != 1.0, use it.
+        float s19 = cursorY - yLineFactor;
         // s14 = -maxWH.y_modified - s19
         float s14 = -maxWH.y - s19;
         float factor = (alignment & 0x4) ? 0.5f : 1.0f;
@@ -755,14 +757,39 @@ void Font::DrawString(float scale, float maxWidth, float rotZ,
 // Packs x/y/z into Vec3, calls the full overload with maxWidth=1.0.
 // ---------------------------------------------------------------------------
 
-void Font::DrawString(float scale, float maxWidth, float z,
+// Binary-shape wrapper. Matches Font::DrawString @ 0x00199aa0 byte-for-byte:
+//   - 7 individual float args mapped to s0..s6 by hard-float ABI.
+//   - by-reference iter / colour copied into local stack copies (binary
+//     does this for both — Utf8StringIterator copy ctor + Colour copy ctor).
+//   - hardcodes yLineFactor = 1.0 when forwarding to Font_DrawString.
+void Font::DrawString(Mortar::Utf8StringIterator& iter,
+                      const Colour& colour, int alignment,
+                      float posX, float posY, float posZ,
+                      float scale, float maxWHx, float maxWHy, float rotZ,
+                      MortarRectangleDec* clip)
+{
+    if (iter.IsEmpty()) return;
+    Vec3 pos(posX, posY, posZ);
+    Vec2 maxWH(maxWHx, maxWHy);
+    // Binary @ 0x00199b1c: vmov.f32 s1, 0x3f800000 -- yLineFactor pinned to 1.0.
+    DrawString(scale, /*yLineFactor=*/1.0f, rotZ,
+               iter, pos, colour, maxWH, alignment, /*z=*/0.0f, clip);
+}
+
+// Port-side convenience wrapper. Forwards to the binary-shape overload
+// above. yLineFactor is exposed (DIFFERS from binary's hardcoded 1.0) for
+// legacy callers like ScoreControl's "BEST" label which passes 0.9.
+void Font::DrawString(float scale, float yLineFactor, float z,
                       const char* text, const Vec3& pos,
                       const Colour& colour, int alignment)
 {
     if (!text || !*text) return;
     Mortar::Utf8StringIterator iter(text);
     Vec2 maxWH(0.0f, 0.0f);
-    DrawString(scale, maxWidth, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
+    // Skip the binary-shape wrapper here -- it would clobber yLineFactor
+    // with 1.0. Call the full Font_DrawString directly so legacy callers
+    // can keep passing non-default yLineFactor values.
+    DrawString(scale, yLineFactor, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
 }
 
 // ---------------------------------------------------------------------------
