@@ -489,10 +489,9 @@ void ShopListItem::Draw() {
             mm.UploadModelViewOnly();
 
             if (ShopScreen::s_TexNewItemSmlBadge.IsValid()) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexNewItemSmlBadge->m_TexId);
+                ShopScreen::s_TexNewItemSmlBadge->Set();
                 r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
-                glBindTexture(GL_TEXTURE_2D, 0);
+                ShopScreen::s_TexNewItemSmlBadge->UnSet();
             }
         }
 
@@ -521,10 +520,9 @@ void ShopListItem::Draw() {
             mm.UploadModelViewOnly();
 
             if (ShopScreen::s_TexSelectedSml.IsValid()) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexSelectedSml->m_TexId);
+                ShopScreen::s_TexSelectedSml->Set();
                 r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
-                glBindTexture(GL_TEXTURE_2D, 0);
+                ShopScreen::s_TexSelectedSml->UnSet();
             }
         }
 
@@ -550,17 +548,15 @@ void ShopListItem::Draw() {
             mm.UploadModelViewOnly();
 
             if (!isLocked) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, m_pIconTex->m_TexId);
+                m_pIconTex->Set();
                 r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
-                glBindTexture(GL_TEXTURE_2D, 0);
+                m_pIconTex->UnSet();
             } else {
                 // locked: draw locked_stroke.tex (static_block[+0x40])
                 if (ShopScreen::s_TexLockedStroke.IsValid()) {
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexLockedStroke->m_TexId);
+                    ShopScreen::s_TexLockedStroke->Set();
                     r->DrawQuad(colourWhite);  // always white
-                    glBindTexture(GL_TEXTURE_2D, 0);
+                    ShopScreen::s_TexLockedStroke->UnSet();
                 }
             }
         }
@@ -606,10 +602,13 @@ void ShopListItem::Draw() {
             mm.UploadModelViewOnly();
 
             if (ShopScreen::s_TexScratch.IsValid()) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexScratch->m_TexId);
+                // Use Texture::Set so s_LastBoundTexId is tracked --
+                // Renderer::DrawQuad skips the draw when the tracker
+                // says nothing is bound (the raw glBindTexture path
+                // doesn't update it).
+                ShopScreen::s_TexScratch->Set();
                 r->DrawQuad(dividerColour);
-                glBindTexture(GL_TEXTURE_2D, 0);
+                ShopScreen::s_TexScratch->UnSet();
             }
 
             // Second divider (gate: m_bIsNew != 0)
@@ -627,10 +626,9 @@ void ShopListItem::Draw() {
                 mm.UploadModelViewOnly();
 
                 if (ShopScreen::s_TexScratch.IsValid()) {
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexScratch->m_TexId);
+                    ShopScreen::s_TexScratch->Set();
                     r->DrawQuad(Colour(128, 128, 128, 255));  // always grey
-                    glBindTexture(GL_TEXTURE_2D, 0);
+                    ShopScreen::s_TexScratch->UnSet();
                 }
             }
         }
@@ -775,8 +773,7 @@ void ShopListItem::Draw() {
             MatrixManager& mm2 = MatrixManager::GetInstance();
             Renderer* r2 = Renderer::GetInstance();
             if (r2) {
-                glActiveTexture(GL_TEXTURE0);
-                glBindTexture(GL_TEXTURE_2D, ShopScreen::s_TexLoading->m_TexId);
+                ShopScreen::s_TexLoading->Set();
 
                 // Stripe 1 (top): Translate(parentX - 2.0, 105.0, 0)
                 {
@@ -797,7 +794,7 @@ void ShopListItem::Draw() {
                     r2->DrawQuad(Colour(0, 0, 0, 128));
                 }
 
-                glBindTexture(GL_TEXTURE_2D, 0);
+                ShopScreen::s_TexLoading->UnSet();
             }
         }
     }
