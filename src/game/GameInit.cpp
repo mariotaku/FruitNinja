@@ -74,14 +74,18 @@ void GameInit(unsigned long) {
     // field_0x2c = m_Timer (rotation), field_0x30 = m_bActive, field_0x34 = m_LayerFlags.
     //
     // ASM-verified table dump @ 0x001F3DAC (read_memory 2026-05-10):
-    //   row 0: x= 79.0  y= 10.0  rot= -5.0  scale= 0.75
-    //   row 1: x= 52.0  y= 13.0  rot= +5.0  scale= 1.00
-    //   row 2: x= 20.0  y= 18.0  rot=+10.0  scale= 1.20
-    // Earlier port had ALL signs flipped (x and y negated, rot inverted) AND
-    // dropped the scale column -- the markers landed in the bottom-left
-    // corner instead of the top-right.
+    //   row 0: x_tbl= 79.0  y_tbl= 10.0  rot_tbl= -5.0  scale= 0.75
+    //   row 1: x_tbl= 52.0  y_tbl= 13.0  rot_tbl= +5.0  scale= 1.00
+    //   row 2: x_tbl= 20.0  y_tbl= 18.0  rot_tbl=+10.0  scale= 1.20
+    //
+    // Binary code (0x0016c6c2..0x0016c744) NEGATES x, y, and rot before
+    // storing into the MissControl: vnmul.f32 with 1.0 multiplier.
+    // Vec3 ctor receives (-x_tbl, -y_tbl, 50.0); m_Timer receives -rot_tbl.
+    // The negative-stored pos values are offsets from a (480, 320, 0) screen
+    // anchor that MissControl::Draw adds at translate-time -- yielding the
+    // top-right cluster (480-79=401, 320-10=310) in binary FB coords.
     {
-        static const struct { float x, y, rot, scale; } kMC[3] = {
+        static const struct { float x_tbl, y_tbl, rot_tbl, scale; } kMC[3] = {
             {  79.0f,  10.0f,  -5.0f, 0.75f },   // iter 0, m_AnimState=0
             {  52.0f,  13.0f,  +5.0f, 1.00f },   // iter 1, m_AnimState=1
             {  20.0f,  18.0f, +10.0f, 1.20f },   // iter 2, m_AnimState=2
@@ -98,16 +102,17 @@ void GameInit(unsigned long) {
         for (int i = 0; i < 3; ++i) {
             MissControl* mc = new MissControl();
             mc->m_bActive   = 1;                                // field_0x30 = 1
-            mc->pos         = Vec3(kMC[i].x, kMC[i].y, 50.0f); // DAT_0016c9ac = 50.0
+            // Binary @ 0x0016c6f6 / 0x0016c6d6 / 0x0016c738 negate the table values.
+            mc->pos         = Vec3(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f); // DAT_0016c9ac = 50.0
             mc->pivot       = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0
-            mc->m_Timer     = kMC[i].rot;                       // field_0x2c (rotation)
+            mc->m_Timer     = -kMC[i].rot_tbl;                  // field_0x2c (rotation, negated)
             mc->m_AnimState = i;                                // stored before tmp++ in binary
             mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;       // field_0x34 = 1 (configured flag)
             // size = (16, 16, 16) * scale per binary @ 0x0016c75a
             // (DAT_0016c9b8 = 64.0f * 0.5 * 0.5 = 16; per-row scale from
             // 4th column of the table). Rendered as 32x32*scale quad.
-            const float s = 16.0f * kMC[i].scale;
-            mc->size = Vec3(s, s, s);
+            const float sz = 16.0f * kMC[i].scale;
+            mc->size = Vec3(sz, sz, sz);
             // DIFFERS: bind m_Texture eagerly to hud_cross.tex here so
             // MissControl::Draw doesn't early-return. Binary's exact bind
             // path (likely inside ctor/Init pulling from a static slot
