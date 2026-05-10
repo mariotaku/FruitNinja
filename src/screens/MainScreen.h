@@ -188,7 +188,21 @@ private:
     // them.
     void ButtonDeleted(HUDControl* ctrl);
 
-    // Port-specific: remove-callback helpers that null child screen pointers.
+    // Port-specific (no binary counterpart per re-analyst RE 2026-05-10):
+    //
+    // The binary's MainScreen has NO m_pDojoScreen / m_pGameModeScreen
+    // fields. Its Update gates re-spawn purely on m_Timer2 threshold
+    // crossings (e.g. case 3/4/0x15/0x16 fire spawn when m_Timer2 < 0.001
+    // && newly crossed); the spawned screen then directly mutates
+    // mainScreen->m_State, moving the state machine past the spawn case
+    // -- preventing re-entry without needing a weak pointer.
+    //
+    // The port adds the weak pointer + RemoveCallback as a UAF guard so
+    // re-entering the same case after the screen is removed works
+    // correctly. HUD::Update fires this when the screen finally exits
+    // (m_bPendingRemoval set on transition completion). Functionally
+    // equivalent to the binary's natural state-machine flow but with an
+    // extra safety net.
     void DojoScreenRemoved(HUDControl*)    { m_pDojoScreen     = nullptr; }
     void GameModeScreenRemoved(HUDControl*){ m_pGameModeScreen = nullptr; }
 

@@ -18,6 +18,7 @@
 #include "game/FruitCamera.h"
 #include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
+#include "math/Random.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
@@ -934,8 +935,10 @@ void MainScreen::GameModeCallback() {
     // button down naturally. Forcing m_bPendingRemoval=1 here would
     // delete the button this frame and skip the shrink animation.
     pQuitBtn = nullptr;
-    // TODO: 0x0014b020 -- InitVec3_MissControl tail-call (writes 4 const
-    //   Vec3 values into MissControl+0..0x14). Not yet ported.
+    // Binary @ 0x0014b020 (Ghidra mis-labels this "InitVec3_MissControl"):
+    // re-seeds the engine PRNG state at *(GOT+0x773c) = BSS 0x0026c8b0.
+    // Param is *(GameTask + 0x194) = m_FrameTimer.
+    Math::SeedGlobalRng((uint32_t)game.m_FrameTimer);
 }
 
 // Matches 0x0014c384
@@ -946,12 +949,15 @@ void MainScreen::NewGameCallback() {
     // 0x001b96af is "Game-start" (Title-Case). Bada's sound loader resolves
     // filenames case-insensitively; the SDL port mirrors that in
     // SoundManager::LoadSound's POSIX dirent fallback.
-    // TODO: 0x0014c384 -- binary passes a Delegate1<bool, MortarSound*>
-    //   completion callback as a 4th SFXPlay arg; port omits the delegate
-    //   (no chained logic relies on it yet). Wire when needed.
+    //
+    // Binary @ 0x0014c3bc passes a default-constructed Delegate1<bool,
+    // MortarSound*> (the "Global" empty-callee sentinel @ 0x001e89d0) to
+    // the 5-arg SFXPlay overload. That delegate's Invoke vtable slot is
+    // a no-op stub -- fire-and-forget; no completion callback is bound.
+    // The port's 3-arg SFXPlay overload is functionally equivalent.
     if (game.pGameSound) game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
-    // TODO: 0x0014b020 -- InitVec3_MissControl tail-call (writes 4 const
-    //   Vec3 values into MissControl+0..0x14). Not yet ported.
+    // Binary @ 0x0014b020: re-seed engine PRNG with m_FrameTimer.
+    Math::SeedGlobalRng((uint32_t)game.m_FrameTimer);
 }
 
 // Matches 0x0014afc4
@@ -1181,5 +1187,6 @@ void MainScreen::MultiplayerGameModeCallback() {
     // -- just nulls the pointer, no m_bPendingRemoval write. Same rationale
     // as GameModeCallback / AboutCallback above.
     pQuitBtn = nullptr;
-    // TODO: 0x0014b020 -- InitVec3_MissControl tail-call. Not yet ported.
+    // Binary @ 0x0014b020: re-seed engine PRNG with m_FrameTimer.
+    Math::SeedGlobalRng((uint32_t)game.m_FrameTimer);
 }
