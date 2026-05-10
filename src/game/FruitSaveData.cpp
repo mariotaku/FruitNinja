@@ -178,14 +178,17 @@ void FruitSaveData::RestoreComboState() {
 // Writes m_ModeHighScores[currentMode] when newScore strictly beats stored value.
 // The tiered improvement gate (currentHigh/2 < score) lives in the caller
 // (GameOverScreen::Update case 6) -- that is a separate task (#50).
-void FruitSaveData::SetCurrentModeHighscore(int newScore) {
+// Returns true iff the stored highscore was actually replaced.
+bool FruitSaveData::SetCurrentModeHighscore(int newScore) {
     Game* g = Game::GetInstance();
-    if (!g) return;
+    if (!g) return false;
     int mode = (int)g->gameMode;
-    if (mode < 0 || mode >= 4) return;
+    if (mode < 0 || mode >= 4) return false;
     if (m_ModeHighScores[mode] < newScore) {
         m_ModeHighScores[mode] = newScore;
+        return true;
     }
+    return false;
 }
 
 // ----------------------------------------------------------------------

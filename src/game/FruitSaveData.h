@@ -285,7 +285,9 @@ public:
     // SetCurrentModeHighscore @ 0x0010a388. Updates m_ModeHighScores[currentMode]
     // when the new score beats the stored value (strict greater-than at write site,
     // but caller in GameOverScreen::Update gates on currentHigh/2 < currentScore).
-    void SetCurrentModeHighscore(int score);
+    // Returns true iff the stored highscore was actually replaced; binary callers
+    // (GameOverScreen::Update case 6) capture this as the "newBest" byte.
+    bool SetCurrentModeHighscore(int score);
 
     // ------------------------------------------------------------------
     // Achievements
