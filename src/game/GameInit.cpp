@@ -104,7 +104,7 @@ void GameInit(unsigned long) {
             mc->m_bActive   = 1;                                // field_0x30 = 1
             // Binary @ 0x0016c6f6 / 0x0016c6d6 / 0x0016c738 negate the table values.
             mc->pos         = Vec3(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f); // DAT_0016c9ac = 50.0
-            mc->pivot       = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0
+            mc->m_HudScale  = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0
             mc->m_Timer     = -kMC[i].rot_tbl;                  // field_0x2c (rotation, negated)
             mc->m_AnimState = i;                                // stored before tmp++ in binary
             mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;       // field_0x34 = 1 (configured flag)

@@ -126,6 +126,9 @@ void MissControl::Reset() {
 }
 
 // Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
+// Binary's MissControl::PreDraw is a no-op (single bx lr in the original).
+// m_HudScale (+0x14) is initialised once in GameInit and not refreshed
+// per-frame; the Draw call uses the stored value directly.
 void MissControl::PreDraw(const Vec3& /*hudScale*/) {}
 
 // Binary @ 0x00150dfc — vtable[16]. Defunct: same-screen MP player-index hook.
@@ -439,7 +442,7 @@ void MissControl::Update(float dt) {
 
 // ASM-verified-partial: 2026-05-03 binary @ 0x00151f60..0x00152190 (pulse formula + fall-off only; transform field_0x14/0x20 pre-mult still a gap)
 // binary @ 0x00151f60
-void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     if (!m_Texture.IsValid()) return;
 
     // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block
@@ -463,12 +466,12 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     // Re-analyst RE 2026-05-10 confirmed the binary unconditionally reaches
     // DrawQuadUnCached as long as the texture SmartPtr is valid.
     if (m_FadeAlpha > SOUND_THRESH) return;
-    if (m_FadeAlpha <= 0.0f) {
-        // Failure-feedback y-jiggle (binary @ 0x0015208e..0x001520c4).
-        // TODO: FailureEnabled() / IsMultiplayer() gates not yet ported -- the
-        // simpler `pos_y * -3.0` path (binary @ 0x00152272) is taken for now.
-        drawPos.y += -3.0f * pos.y;
-    }
+    // Failure-feedback y-jiggle (binary @ 0x0015208e..0x001520c4) is gated
+    // on FailureEnabled() (true in non-Zen modes, runs the more complex
+    // `pos.y * 3 * abs(game->field_0xc)` formula) -- skipped in port until
+    // the failure-event field is wired. Without the gate, the simpler
+    // `-3 * pos.y` jiggle would push the markers off-screen in steady
+    // state because field_0xc is normally 0.
     // (m_FadeAlpha in (0, SOUND_THRESH]: pulse compute is omitted -- output is
     // dead in the binary too.)
 
@@ -499,19 +502,20 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         uint16_t a = (uint16_t)(int)(m_Timer * 182.0f);
         mat.RotZ44(SinIdx(a), CosIdx(a));
     }
-    // Anchor offset (binary @ 0x0015215c..0x00152186 — asm-inspector
-    // 2026-05-10): translate = pos + Vec3(480, 320, 0) * hudScale.
-    // Stored pos values are NEGATIVE offsets from the bottom-right of the
-    // binary's 480x320 framebuffer (top-left-origin), which after Bada's
-    // 90 deg device rotation lands the markers in the player's TOP-RIGHT.
-    // In the port's centered-origin (+y=up) ortho, the equivalent is to
-    // add (halfW, halfH, 0) = (240, 160, 0) -- pos = (-79, -10) maps to
-    // screen (161, 150), top-right of the centered 480x320 view.
-    // TODO: hudScale plumbing -- MissControl::PreDraw is currently a stub
-    // (line 129); m_HudScale (+0x14) isn't populated. For now use 1.0;
-    // wire when PreDraw is ported. Binary @ 0x00152170 reads m_HudScale.
-    drawPos.x += 240.0f;
-    drawPos.y += 160.0f;
+    // Anchor offset (binary @ 0x0015215c..0x00152186, asm-inspector 2026-05-10):
+    //   translate = pos + Vec3(480, 320, 0) * m_HudScale
+    // Stored pos values are NEGATIVE offsets from the binary's 480x320
+    // framebuffer bottom-right; after Bada's 90 deg device rotation that
+    // lands the markers in the player's top-right. m_HudScale is set once
+    // in GameInit to (0.5, 0.5, 0) per the table at 0x001F3DAC -- the
+    // multiply yields the centered-ortho equivalent (240, 160, 0) of the
+    // binary's (480, 320, 0) anchor in its top-left-origin 480x320 ortho.
+    (void)hudScale;  // per-frame hudScale arg is unused for MissControl
+    Vec3 anchor(
+        480.0f * m_HudScale.x,
+        320.0f * m_HudScale.y,
+        0.0f);
+    drawPos += anchor;
     mat.GlobalTranslate44(drawPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
