@@ -4,6 +4,7 @@
 #include "HUDLayer.h"
 #include "asset/TextureManager.h"
 #include "Game.h"
+#include "game/WaveManager.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "render/MatrixManager.h"
@@ -466,14 +467,29 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // Re-analyst RE 2026-05-10 confirmed the binary unconditionally reaches
     // DrawQuadUnCached as long as the texture SmartPtr is valid.
     if (m_FadeAlpha > SOUND_THRESH) return;
-    // Failure-feedback y-jiggle (binary @ 0x0015208e..0x001520c4) is gated
-    // on FailureEnabled() (true in non-Zen modes, runs the more complex
-    // `pos.y * 3 * abs(game->field_0xc)` formula) -- skipped in port until
-    // the failure-event field is wired. Without the gate, the simpler
-    // `-3 * pos.y` jiggle would push the markers off-screen in steady
-    // state because field_0xc is normally 0.
+    // Slide-in / off-screen-park y-jiggle. Binary @ 0x0015208e..0x001520c4:
+    //   if (FailureEnabled() && !IsMultiplayer())
+    //       drawPos.y -= 3.0f * pos.y * fabsf(game->m_TransitionTimer);
+    //   else
+    //       drawPos.y -= 3.0f * pos.y;   // Zen / multi-player: parked off-screen
+    // For non-Zen single-player, m_TransitionTimer drives the animation:
+    //   timer == 1.0 (in menu / mid-transition): drawPos.y shifts -3*pos.y
+    //     -> stored pos.y is negative for top-right markers, so drawPos.y
+    //        moves UP past the +160 clamp (off-screen above the viewport).
+    //   timer == 0.0 (gameplay): no shift, markers visible at top-right.
+    //   intermediate values produce the slide-in animation.
     // (m_FadeAlpha in (0, SOUND_THRESH]: pulse compute is omitted -- output is
     // dead in the binary too.)
+    {
+        Game* g = Game::GetInstance();
+        if (g) {
+            // TODO: gate on FailureEnabled() && !IsMultiplayer() per binary
+            // @ 0x0015208e once those queries are RE'd. For now, treat as the
+            // FailureEnabled() == true (non-Zen single-player) branch -- the
+            // markers are GameInit-spawned only in modes that miss-track.
+            drawPos.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+        }
+    }
 
     // Draw alpha: m_DrawColour.a directly (defaults to 0xff). Binary @
     // 0x001521ac additionally scales by `*(float*)(GAME->field_0x3c->field_0x20)`
