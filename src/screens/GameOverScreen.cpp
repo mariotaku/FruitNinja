@@ -255,14 +255,19 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
 
-    // Load mode-specific game-over background texture into m_SecondaryTex.
-    // Texture names confirmed from binary @ 0x00140bb0 (re-analyst):
+    // Load mode-specific title texture into m_Texture (+0x74) so the
+    // inherited HUDControl3d::Draw (vtable slot 7) renders it during the
+    // state-0 entry animation. The state machine in Update sets size =
+    // m_TitleSize * scale (sin-eased 0 -> 2x over 1.9s) and pos = (0,0,0)
+    // each frame; HUDControl3d::Draw binds m_Texture and renders the
+    // animated quad.
     //   gameMode 2 (Arcade) -> arcade_time_up.tex
     //   gameMode 3 (Zen)    -> time_up.tex
     //   default (Classic)   -> gameover.tex
-    // TODO: 0x00140bb0 — confirm exact mode->variant mapping; the slot
-    //   identification is correct but the mode->slot index mapping needs
-    //   tracing through DAT_001428ec/f0/f4 GOT slots in Initialise.
+    // ASM-verified: 2026-05-11 (asm-inspector). Binary's HUDControl3d::Draw
+    // @ 0x0014428c gates on +0x74 only -- +0x78 is never read for drawing,
+    // contrary to an earlier RE pass that conflated Ghidra's variable-name
+    // inference with the actual offset literal.
     {
         Mortar::SmartPtr<Mortar::Texture> bgTex;
         if (gameMode == Mortar::GAME_MODE_ARCADE)
@@ -271,9 +276,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             bgTex = TextureManager::LoadLocalisedTexture("time_up.tex");
         else
             bgTex = TextureManager::LoadLocalisedTexture("gameover.tex");
-        // Store the SmartPtr in m_SecondaryTex (matches binary type).
-        m_SecondaryTex = bgTex;
-        // Record title size from texture dimensions
+        m_Texture = bgTex;
         if (bgTex) {
             m_TitleSizeX = (float)bgTex->m_Width;
             m_TitleSizeY = (float)bgTex->m_Height;
@@ -286,16 +289,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     m_State          = 0;
     m_LayerFlags     = Mortar::HUD_LAYER_NONE; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
-    // ASM-verified: 2026-05-11 binary @ Initialise tail (asm-inspector).
-    // Binary clears m_GameOverTex (+0x114, the per-instance Quest-only
-    // overlay slot the ctor just default-constructed), NOT m_SecondaryTex
-    // (+0x78, the mode-specific title texture loaded above). m_SecondaryTex
-    // must remain populated -- HUDControl3d::Draw is called as the final
-    // line of PreDrawOrder's param2==1 arm and binds +0x78 to render the
-    // "GAME OVER" / "TIME UP" / "ARCADE TIME UP" title quad. Earlier port
-    // nulled m_SecondaryTex here, which killed the title display in all
-    // modes (user reported "is gameover texture drawn?" -- it wasn't).
-    m_GameOverTex.SetNull();
+    m_GameOverTex.SetNull();   // +0x114 Quest-only overlay slot (binary nulls this in Initialise)
     m_AnimCounter    = 0;
     m_bScoreSubmitted = 0;
     m_BgPatternIdx   = bgPatternIdx;
