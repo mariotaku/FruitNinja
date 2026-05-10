@@ -33,6 +33,10 @@
 #include "math/MathUtil.h"
 #include "math/Colour.h"
 #include "engine/audio/GameSound.h"
+#include "engine/network/NetworkManager.h"
+#include "game/GameOver.h"
+#include "screens/MainScreen.h"
+#include "entities/BombBlast.h"
 #include "Game.h"
 #include <cstdio>
 #include <cmath>
@@ -129,27 +133,68 @@ bool PauseScreen::IsEnabled() {
 }
 
 // -------------------------------------------------------------------------
-// QuitToMenu / RetryLevel stubs
-// (binary 0x00169e50 / 0x0016a25c -- full flow not yet ported)
+// QuitToMenu / EndRetryLevel -- binary @ 0x00169e50 / 0x0016a208
 // -------------------------------------------------------------------------
 static void QuitToMenu() {
-    // Binary: WaveManager::ResetGlobalDt(1.0), then MainScreen state change,
-    // NetworkManager kick, etc. Tier-1: just thaw the wave timer.
-    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
+    WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
     Game* game = Game::GetInstance();
-    if (game) {
-        game->pauseFlag = 1;
+    if (!game) return;
+    game->pauseFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
+
+    if (game->mainScreen) {
+        game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
+        game->mainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
     }
+
+    // TODO: 0x00169e86 -- TutorialControl::field_0x33 = 1 (semantics TBD)
+
+    FN::SetScore(0, -1);                               // 0x169e90
+
+    // Defunct: P2P / online disconnect -- no-op stub; binary @ 0x00169e9e
+    // (binary: NetworkManager::GetInstance()->vtable[3](0))
+    Mortar::NetworkManager::GetInstance()->SpawnThreadController();
+
+    game->m_MenuReturnTimer = -2.0f;                   // 0x169eaa: vstr -2.0f, [+0x1a0]
+
+    // TODO: 0x00169eae..0x00169ebe -- 5 clear-on-quit flag bytes (Game+0x19d,
+    //   +0x170, +0x19a, +0x19b, +0x19c); add port-side fields when RE'd.
 }
 
-static void RetryLevel() {
-    // Binary: WaveManager::ResetGlobalDt(1.0), then resets per-fruit timers,
-    // plays game-start SFX, etc. Tier-1: thaw wave timer + clear flags.
-    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
+static void EndRetryLevel() {
     Game* game = Game::GetInstance();
-    if (game) {
-        game->retryFlag = 1;
+    if (!game) return;
+
+    if (game->mainScreen) {
+        game->mainScreen->SetStateTimer(0.5f);         // 0x16a220 [+0x110]
+        game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x16a226 [+0x10c] = 0
     }
+
+    FN::SetScore(0, -1);                               // 0x16a22a
+
+    if (game->pSaveData) {
+        FruitSaveData* sd = game->pSaveData;
+        sd->m_GameOverField2 = -1;                     // 0x16a23a [+0x120]
+        sd->m_GameOverField4 = -1;                     // 0x16a23e [+0x128]
+        sd->m_GameOverField3 = -1;                     // 0x16a242 [+0x124]
+        sd->m_GameOverField1 = -1;                     // 0x16a246 [+0x11c]
+    }
+
+    // TODO: 0x16a24a -- coin baseline re-snapshot: m_LevelStartCoins = m_Coins
+    //   binary writes [game+0x28] = [game+0x20]; confirm pSaveData field layout.
+
+    FN::ResetGameEntities(false);                      // 0x16a24e
+    BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)
+    WaveManager::GetInstance()->Reset(true);           // 0x16a25c
+
+    game->retryFlag         = 0;                       // 0x16a26e [+0x06]
+    game->m_TransitionTimer = 0.5f;                    // 0x16a270 [+0x0c]
+    game->pauseFlag         = 0;                       // 0x16a274 [+0x05]
+
+    if (game->mainScreen) {
+        game->mainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
+    }
+
+    // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; binary @ 0x0016a27e
 }
 
 // -------------------------------------------------------------------------
@@ -614,7 +659,7 @@ void PauseScreen::Update(float dt) {
             m_ButtonFadeAlpha = 0.0f;
             m_State = 0;
             m_RevealTimer = 2.0f;
-            RetryLevel();
+            EndRetryLevel();
             UnpauseGame();
         }
         break;
