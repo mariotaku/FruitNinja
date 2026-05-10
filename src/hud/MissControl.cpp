@@ -494,14 +494,24 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     mm.GetWorldStack().Reset();
 
     // binary @ 0x001520ec / 0x000fc720 / 0x000f7a4c. Order: Scale -> RotZ -> Translate.
-    // TODO: HUDControl3d field_0x14 / field_0x20 pre-multiplications (anchor + local-scale)
-    // are missing here. Requires RE confirmation of base-class field port-side names.
     Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
     if (m_Timer != 0.0f) {
         uint16_t a = (uint16_t)(int)(m_Timer * 182.0f);
         mat.RotZ44(SinIdx(a), CosIdx(a));
     }
-    // Port ortho already centers on (0,0); no +480/+320 offset needed here.
+    // Anchor offset (binary @ 0x0015215c..0x00152186 — asm-inspector
+    // 2026-05-10): translate = pos + Vec3(480, 320, 0) * hudScale.
+    // Stored pos values are NEGATIVE offsets from the bottom-right of the
+    // binary's 480x320 framebuffer (top-left-origin), which after Bada's
+    // 90 deg device rotation lands the markers in the player's TOP-RIGHT.
+    // In the port's centered-origin (+y=up) ortho, the equivalent is to
+    // add (halfW, halfH, 0) = (240, 160, 0) -- pos = (-79, -10) maps to
+    // screen (161, 150), top-right of the centered 480x320 view.
+    // TODO: hudScale plumbing -- MissControl::PreDraw is currently a stub
+    // (line 129); m_HudScale (+0x14) isn't populated. For now use 1.0;
+    // wire when PreDraw is ported. Binary @ 0x00152170 reads m_HudScale.
+    drawPos.x += 240.0f;
+    drawPos.y += 160.0f;
     mat.GlobalTranslate44(drawPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
