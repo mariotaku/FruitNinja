@@ -446,6 +446,15 @@ void MissControl::Update(float dt) {
 void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     if (!m_Texture.IsValid()) return;
 
+    // Combo popups (critical/rare/MakeCombo) are alive while m_bBusy=1; once
+    // Update fades m_FadeAlpha to 0 the slot-release block sets m_bBusy=0.
+    // Binary then fires m_RemoveCallback to unlink the control from the HUD
+    // list -- the port's pool-managed lifetime doesn't follow that path, so
+    // gate Draw on m_bBusy here for combo controls. The 3 GameInit-spawned
+    // passive-miss markers have m_bComboActive=0 and remain drawable when
+    // m_bVisible==1, regardless of m_bBusy.
+    if (m_bComboActive && !m_bBusy) return;
+
     // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block
     Vec3 drawPos = pos;
     if (m_JitterTimer > 0) {
