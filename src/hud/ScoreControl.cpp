@@ -453,6 +453,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         // Arcade x-mult font: binary loads game[+0x80] = pFontBlue2
         // ("fruit_ninja_numbers_blue2.fnt"). Verified 2026-05-09 (re-analyst
         // @ 0x00159238).
+        // ASM-verified: 2026-05-10 binary @ 0x00159240..0x0015925e (re-analyst).
+        // Anchor uses raw pos (m_Pos.x/y), NOT m_DrawPosX/Y:
+        //   X = pos.x - 18.0   (literal 0x41900000)
+        //   Y = pos.y - 52.0   (DAT_001593d4 = 0x42500000)
+        // Earlier port had (m_DrawPosX, m_DrawPosY + 30.0): off by 24+18=42 px
+        // horizontally (uses +24 drawPos offset AND wrong sign of -18) and
+        // 82 px vertically (sign-flipped 30 vs -52).
         if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
             int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
             if (mult > 1 && game->pFontBlue2.IsValid()) {
@@ -460,7 +467,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 snprintf(multBuf, sizeof(multBuf), "x%d", mult);
                 Colour col(255, 255, 255, alpha);
                 game->pFontBlue2->DrawString(48.0f, 1.0f, 0.0f,
-                    multBuf, Vec3(m_DrawPosX, m_DrawPosY + 30.0f, 0.0f),
+                    multBuf, Vec3(pos.x - 18.0f, pos.y - 52.0f, 0.0f),
                     col, Mortar::FONT_ALIGN_CENTER);
             }
         }
@@ -502,8 +509,12 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 const char* label = Localisation::Get("BEST");  // key 0xB5
                 float labelW  = game->pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
-                const Vec3 anchor(m_DrawPosX + cursorX + 28.0f,
-                                  m_DrawPosY - 28.8f,
+                // ASM-verified: 2026-05-10 binary @ 0x00159588..0x001596a6 (re-analyst).
+                // Anchor uses raw pos (m_Pos.x/y at +0x8/+0xc), NOT m_DrawPosX/Y
+                // at +0x94/+0x98. Earlier port pulled m_DrawPosX (= pos.x + 24)
+                // which shifted the BEST label/digit +24 px right of correct.
+                const Vec3 anchor(pos.x + cursorX + 28.0f,
+                                  pos.y - 28.8f,
                                   0.0f);
                 const int kAlignLabel = 0x02 | 0x04 | 0x08; // RIGHT|MIDDLE|BOTTOM (0x0E)
                 const int kAlignDigit = 0x01 | 0x04 | 0x08; // CENTER|MIDDLE|BOTTOM (0x0D)
