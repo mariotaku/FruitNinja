@@ -154,7 +154,11 @@ static void QuitToMenu() {
     // (binary: NetworkManager::GetInstance()->vtable[3](0))
     Mortar::NetworkManager::GetInstance()->SpawnThreadController();
 
-    game->m_MenuReturnTimer = -2.0f;                   // 0x169eaa: vstr -2.0f, [+0x1a0]
+    // 0x169eaa: vstr 0.0f, [+0x1a0] (DAT_00169ec4 = 0x00000000 verified
+    // via read_memory). Earlier port asm-inspector misread the literal as
+    // -2.0f; binary actually CLEARS the timer on quit (resets the
+    // vestigial ramp at 0x0016c5fe back to disarmed).
+    game->m_MenuReturnTimer = 0.0f;
 
     // TODO: 0x00169eae..0x00169ebe -- 5 clear-on-quit flag bytes (Game+0x19d,
     //   +0x170, +0x19a, +0x19b, +0x19c); add port-side fields when RE'd.
