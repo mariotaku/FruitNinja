@@ -100,6 +100,11 @@ void MissControl::Release() {
 void MissControl::Init() {
     m_bComboActive = 0;
     m_bBusy        = 1;
+    // Binary's field_0x30 IS HUDControl::m_bActive (per HUDControl base
+    // layout). The port aliases both m_bActive and m_bBusy at the source
+    // level; keep them in sync so HUD::Draw's m_bActive gate sees the
+    // slot as renderable on Init/MakeCombo paths after a prior release.
+    m_bActive      = 1;
     m_Timer        = 0.0f;  // rotation (+0x2c)
     m_AnimState    = 0;
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
@@ -435,15 +440,20 @@ void MissControl::Update(float dt) {
     // Slot release when fully faded. binary @ 0x00151a60 release block
     if (m_FadeAlpha <= 0.0f) {
         m_FadeAlpha = 0.0f;
-        if (m_RemoveCallback) m_RemoveCallback(this);
-        m_bBusy = 0;
-        // DIFFERS: binary also clears m_bComboActive=0 here. Port leaves it
-        // set so MissControl::Draw's `(m_bComboActive && !m_bBusy)` gate
-        // can recognize "this is a finished combo popup -- don't draw"
-        // vs. "this is a passive miss marker (m_bComboActive=0)". The
-        // binary's equivalent gate is HUD removal via m_RemoveCallback,
-        // which we don't wire (port uses static pool); without keeping
-        // m_bComboActive set, finished popups would draw forever.
+        // ASM-verified: 2026-05-11 binary @ MissControl::Update tail
+        // (re-analyst). Slot-release writes 0 to field_0x30 (which the
+        // binary's HUDControl base names m_bActive -- same byte that
+        // MissControl's port-side comments call "m_bBusy"). HUD::Draw
+        // and HUD::Update gate on m_bActive (port: src/hud/HUD.cpp:72/88/108),
+        // so clearing it stops both Update and Draw cycles for this slot
+        // until MakeCritical/MakeRare/MakeCombo's PopulateOverlay sets
+        // m_bActive=1 again on slot reuse.
+        // m_RemoveCallback is NEVER bound for MissControl pool slots in the
+        // binary (verified: no Delegate1<...>::Callee<MissControl> exists).
+        // The disappear mechanism is purely the m_bActive flip.
+        m_bActive      = 0;
+        m_bBusy        = 0;
+        m_bComboActive = 0;
     }
 }
 
@@ -454,14 +464,13 @@ void MissControl::Update(float dt) {
 void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     if (!m_Texture.IsValid()) return;
 
-    // Combo popups (critical/rare/MakeCombo) are alive while m_bBusy=1; once
-    // Update fades m_FadeAlpha to 0 the slot-release block sets m_bBusy=0.
-    // Binary then fires m_RemoveCallback to unlink the control from the HUD
-    // list -- the port's pool-managed lifetime doesn't follow that path, so
-    // gate Draw on m_bBusy here for combo controls. The 3 GameInit-spawned
-    // passive-miss markers have m_bComboActive=0 and remain drawable when
-    // m_bVisible==1, regardless of m_bBusy.
-    if (m_bComboActive && !m_bBusy) return;
+    // ASM-verified: 2026-05-11 binary @ 0x00151f60 first ~20 instructions
+    // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
+    // m_bVisible -- those are UV-pickers later in the function, not gates.
+    // The disappear mechanism for finished combo popups is the m_bActive=0
+    // write in Update's slot-release tail (binary @ MissControl::Update);
+    // HUD::Draw filters on m_bActive (src/hud/HUD.cpp:88) so this Draw
+    // doesn't even get called for released slots.
 
     // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block
     Vec3 drawPos = pos;
