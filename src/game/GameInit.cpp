@@ -72,11 +72,19 @@ void GameInit(unsigned long) {
     // Source: docs/structs/miss-control-init.md §2. Binary do-loop at 0x0016c694..0x0016c742
     // reads from GOT+0x30 table at 0x001F3DAC (3 rows x 16 bytes, stride=4 floats).
     // field_0x2c = m_Timer (rotation), field_0x30 = m_bActive, field_0x34 = m_LayerFlags.
+    //
+    // ASM-verified table dump @ 0x001F3DAC (read_memory 2026-05-10):
+    //   row 0: x= 79.0  y= 10.0  rot= -5.0  scale= 0.75
+    //   row 1: x= 52.0  y= 13.0  rot= +5.0  scale= 1.00
+    //   row 2: x= 20.0  y= 18.0  rot=+10.0  scale= 1.20
+    // Earlier port had ALL signs flipped (x and y negated, rot inverted) AND
+    // dropped the scale column -- the markers landed in the bottom-left
+    // corner instead of the top-right.
     {
-        static const struct { float x, y, rot; } kMC[3] = {
-            { -79.0f, -10.0f,  +5.0f },   // iter 0, m_AnimState=0
-            { -52.0f, -13.0f,  -5.0f },   // iter 1, m_AnimState=1
-            { -20.0f, -18.0f, -10.0f },   // iter 2, m_AnimState=2
+        static const struct { float x, y, rot, scale; } kMC[3] = {
+            {  79.0f,  10.0f,  -5.0f, 0.75f },   // iter 0, m_AnimState=0
+            {  52.0f,  13.0f,  +5.0f, 1.00f },   // iter 1, m_AnimState=1
+            {  20.0f,  18.0f, +10.0f, 1.20f },   // iter 2, m_AnimState=2
         };
         // DIFFERS: binary calls HUD::Release(hud) before this loop. In the
         // port, HUD::Release iterates the control list and `delete`s every
@@ -92,13 +100,14 @@ void GameInit(unsigned long) {
             mc->m_bActive   = 1;                                // field_0x30 = 1
             mc->pos         = Vec3(kMC[i].x, kMC[i].y, 50.0f); // DAT_0016c9ac = 50.0
             mc->pivot       = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0
-            mc->m_Timer     = kMC[i].rot;                       // field_0x2c = -rot (pre-negated in table above)
+            mc->m_Timer     = kMC[i].rot;                       // field_0x2c (rotation)
             mc->m_AnimState = i;                                // stored before tmp++ in binary
             mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;       // field_0x34 = 1 (configured flag)
-            // size = (16, 16, 16) per binary @ 0x0016c75a
-            // (DAT_0016c9b8 = 64.0f * 0.5 * 0.5 = 16). Rendered as 32x32 quad
-            // (size is half-extents). RE-analyst 2026-05-09.
-            mc->size = Vec3(16.0f, 16.0f, 16.0f);
+            // size = (16, 16, 16) * scale per binary @ 0x0016c75a
+            // (DAT_0016c9b8 = 64.0f * 0.5 * 0.5 = 16; per-row scale from
+            // 4th column of the table). Rendered as 32x32*scale quad.
+            const float s = 16.0f * kMC[i].scale;
+            mc->size = Vec3(s, s, s);
             // DIFFERS: bind m_Texture eagerly to hud_cross.tex here so
             // MissControl::Draw doesn't early-return. Binary's exact bind
             // path (likely inside ctor/Init pulling from a static slot

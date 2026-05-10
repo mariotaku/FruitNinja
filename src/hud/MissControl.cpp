@@ -450,47 +450,32 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         m_JitterTimer--;
     }
 
-    // Two paths based on m_FadeAlpha. binary @ 0x00151f60 alpha gate
-    float drawAlpha;
+    // m_FadeAlpha branch ladder (binary @ 0x00151f60):
+    //   > 1.66f (SOUND_THRESH)  -> early return (sound-cooldown / spawn gate)
+    //   > 0                      -> compute pulse-sin into local_34 (DEAD; binary
+    //                               never reads local_34 after the store; vestigial
+    //                               and not applied to the draw colour)
+    //   <= 0                     -> y-position jiggle for failure-feedback animation;
+    //                               draw still proceeds
+    // The actual draw alpha comes from m_DrawColour (+0x5c, RGBA tint), NOT from
+    // m_FadeAlpha. The earlier port computed drawAlpha=0 in the `<=0` branch and
+    // early-returned at fade<=0, which made the 3 base markers never draw.
+    // Re-analyst RE 2026-05-10 confirmed the binary unconditionally reaches
+    // DrawQuadUnCached as long as the texture SmartPtr is valid.
+    if (m_FadeAlpha > SOUND_THRESH) return;
     if (m_FadeAlpha <= 0.0f) {
-        // binary @ 0x00152272..0x00152286: fall-off uses this->pos.y (unjittered entity field).
-        // IsMultiplayer: stub false (same-screen MP not yet ported). binary @ WaveManager.
-        // FailureEnabled: stub false (game-mode flag not yet ported). binary @ Game.
-        if (false /* FailureEnabled() */ && !false /* IsMultiplayer() */) {
-            // binary @ 0x001520a2: drawPos.y -= 3.0 * pos.y * abs(game->field_0xc)
-            // TODO: Game::field_0xc semantics undocumented; stub to 1.0 until ported
-            drawPos.y -= 3.0f * pos.y * fabsf(/*game->field_0xc*/ 1.0f);
-        } else {
-            // binary @ 0x00152272: single VMLA — no +1.0 constant; uses pos.y not drawPos.y
-            drawPos.y += -3.0f * pos.y;
-        }
-        drawAlpha = 0.0f;
-    } else {
-        if (m_FadeAlpha > SOUND_THRESH) return;  // early-return: spawning phase, no draw yet
-        // binary @ 0x00151ff2..0x0015201a: four-op VFP chain preserving float32 rounding.
-        //   vdiv s14, fade, 1.66    s14 = fade / 1.66
-        //   vmul s14, s14, 360       s14 *= 360
-        //   vmul s14, s14, 6         s14 *= 6
-        //   vmul s14, s14, 182       s14 *= 182
-        // Net: phase = (fade / 1.66) * 360 * 6 * 182  ~= fade * 236819.28
-        // pulse = |SinIdx((uint16_t)(uint32_t)max(phase,0))| with banded 0.65 floor.
-        float phase = (m_FadeAlpha / 1.66f) * 360.0f * 6.0f * 182.0f;
-        uint16_t idx = (uint16_t)(uint32_t)std::max(phase, 0.0f);
-        float pulse = fabsf(SinIdx(idx));
-        if (phase > MISS_PULSE_PHASE_LO && phase < MISS_PULSE_PHASE_HI) {
-            if (phase < MISS_PULSE_NARROW_LO || phase > MISS_PULSE_NARROW_HI) {
-                if (pulse < MISS_PULSE_FLOOR) pulse = MISS_PULSE_FLOOR;
-            } else {
-                pulse = MISS_PULSE_FLOOR;
-            }
-        }
-        drawAlpha = m_FadeAlpha * pulse;
+        // Failure-feedback y-jiggle (binary @ 0x0015208e..0x001520c4).
+        // TODO: FailureEnabled() / IsMultiplayer() gates not yet ported -- the
+        // simpler `pos_y * -3.0` path (binary @ 0x00152272) is taken for now.
+        drawPos.y += -3.0f * pos.y;
     }
+    // (m_FadeAlpha in (0, SOUND_THRESH]: pulse compute is omitted -- output is
+    // dead in the binary too.)
 
-    // Effective alpha: fade * AlphaScale, then clamp [0..1].
-    float fade = drawAlpha * m_AlphaScale;
-    if (fade <= 0.0f) return;
-    if (fade > 1.0f) fade = 1.0f;
+    // Draw alpha: m_DrawColour.a directly (defaults to 0xff). Binary @
+    // 0x001521ac additionally scales by `*(float*)(GAME->field_0x3c->field_0x20)`
+    // (a global screen-fade factor) when < 1.0 -- not yet ported; treat as 1.0.
+    const float fade = 1.0f;
 
     // UV crop based on m_bComboActive / m_bVisible. binary @ 0x00151f60 UV block
     float u0, v0, du, dv;
