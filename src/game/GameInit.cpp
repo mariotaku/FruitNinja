@@ -16,6 +16,7 @@
 #include "screens/MainScreen.h"
 #include "screens/PauseScreen.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "hud/TutorialControl.h"
 #include "hud/TimeControl.h"
 #include "hud/ScoreControl.h"
@@ -93,7 +94,7 @@ void GameInit(unsigned long) {
             mc->pivot       = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0
             mc->m_Timer     = kMC[i].rot;                       // field_0x2c = -rot (pre-negated in table above)
             mc->m_AnimState = i;                                // stored before tmp++ in binary
-            mc->m_LayerFlags = 1;                               // field_0x34 = 1 (configured flag)
+            mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;       // field_0x34 = 1 (configured flag)
             // size = (16, 16, 16) per binary @ 0x0016c75a
             // (DAT_0016c9b8 = 64.0f * 0.5 * 0.5 = 16). Rendered as 32x32 quad
             // (size is half-extents). RE-analyst 2026-05-09.
@@ -423,7 +424,7 @@ void GameDraw(float dt, bool active) {
         game->hud->BeginDraw(dt);
 
         // 2a. HUD::Draw(0x40) — menu button sprites @ 0x0016ba5a
-        game->hud->Draw(0x40);
+        game->hud->Draw(Mortar::HUD_LAYER_MENU_BG);
 
         // 2b. SplatEntity::DrawActiveSplats @ 0x0016ba6a
         SplatEntity::DrawActiveSplats();
@@ -446,7 +447,7 @@ void GameDraw(float dt, bool active) {
         BombFlash::DrawActiveFlashes();
 
         // 2g. HUD::Draw(0x80) — DojoScreen / AboutScreen @ 0x0016baf8
-        game->hud->Draw(0x80);
+        game->hud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
     }
 
     // === 3. Background particles ===
@@ -469,7 +470,7 @@ void GameDraw(float dt, bool active) {
     FN::SliceEffect_Draw(dt);
 
     // HUD::Draw(0x01) — MainScreen logo / shade @ 0x0016bb5a
-    if (game->hud) game->hud->Draw(0x01);
+    if (game->hud) game->hud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
     // pm.Draw(1) — foreground particles @ 0x0016bb6a
     pm.Draw(0.0f, false, 1);
@@ -480,7 +481,7 @@ void GameDraw(float dt, bool active) {
     // === 5. HUD overlay layers + flash effects ===
     if (game->hud) {
         // HUD::Draw(0x08) — buttons @ 0x0016bba8
-        game->hud->Draw(0x08);
+        game->hud->Draw(Mortar::HUD_LAYER_BUTTONS);
 
         // MainScreen::DrawPostEffects @ 0x0016bbb0
         if (game->mainScreen) game->mainScreen->DrawPostEffects();
@@ -491,14 +492,14 @@ void GameDraw(float dt, bool active) {
         FN::DrawCriticalFlash();
 
         // HUD::Draw(0x100) — overlays @ 0x0016bbde
-        game->hud->Draw(0x100);
+        game->hud->Draw(Mortar::HUD_LAYER_P2_SCORE);
 
         // DrawBombHit @ 0x0016bbe6 — bomb-hit white flash, gated on
         // bombFlash > 0
         FN::DrawBombHit();
 
         // HUD::Draw(0x200) — bomb-hit overlay layer @ 0x0016bbec
-        game->hud->Draw(0x200);
+        game->hud->Draw(Mortar::HUD_LAYER_SLIDER);
 
         // DrawNews / DrawStartFade @ 0x0016bbf0..0x0016bc12
         FN::DrawNews();
@@ -509,7 +510,7 @@ void GameDraw(float dt, bool active) {
 
         // HUD::Draw(0x400) — top layer @ 0x0016bd7c, ALWAYS fires
         // (binary places it OUTSIDE the `active` block).
-        game->hud->Draw(0x400);
+        game->hud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
     }
 }
 

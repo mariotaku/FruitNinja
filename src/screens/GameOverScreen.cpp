@@ -14,6 +14,7 @@
 #include "entities/FruitInfo.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "hud/FruitFactControl.h"
 #include "asset/TextureManager.h"
 #include "math/MathUtil.h"
@@ -236,7 +237,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     }
 
     m_State          = 0;
-    m_LayerFlags     = 0; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
+    m_LayerFlags     = Mortar::HUD_LAYER_NONE; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
     m_GameOverTex    = 0; // field_0x114.SetNull()
     m_AnimCounter    = 0;
     m_bScoreSubmitted = 0;
@@ -337,8 +338,13 @@ void GameOverScreen::Init() {
 // Binary @ 0x00140590
 void GameOverScreen::BeginDraw(float /*dt*/) {
     // Binary: m_LayerFlags = (m_State != 0) ? 0x81 : 1
-    // Layer 1 = base Draw; layer 0x80 = PreDrawOrder/DrawOrder overlays.
-    m_LayerFlags = (m_State != 0) ? 0x81 : 1;
+    // 0x81 = HUD_LAYER_POST_ACTOR | HUD_LAYER_DEFAULT -- Draw runs in BOTH
+    // the post-actor (0x80) and default (0x01) HUD::Draw passes during
+    // animations / transitions; once settled (m_State == 0) only the
+    // default pass renders, suppressing the second draw.
+    m_LayerFlags = (m_State != 0)
+        ? (int)(Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT)
+        : (int)Mortar::HUD_LAYER_DEFAULT;
 }
 
 // ---------------------------------------------------------------------------
@@ -564,7 +570,7 @@ void GameOverScreen::CreateRetryButton() {
 
     m_pRetryBtn = new MenuButton();
     m_pRetryBtn->m_Texture    = tex;
-    m_pRetryBtn->m_LayerFlags = 0x08;
+    m_pRetryBtn->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     m_pRetryBtn->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked),
@@ -627,7 +633,7 @@ void GameOverScreen::CreateQuitButton() {
 
     m_pQuitBtn = new MenuButton();
     m_pQuitBtn->m_Texture    = tex;
-    m_pQuitBtn->m_LayerFlags = 0x08;
+    m_pQuitBtn->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     m_pQuitBtn->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked),
@@ -682,7 +688,7 @@ void GameOverScreen::Update(float dt) {
 
     // Default m_LayerFlags for the frame (binary @ 0x00141b40, before
     // the state switch). Case 0 overrides to 1 for the entry animation.
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     // Advance animation counter (millisecond-resolution circular)
     // Binary: field_0xac = (float)(int)(field_0xac) + dt*1000.0, then mod 1000
@@ -707,7 +713,7 @@ void GameOverScreen::Update(float dt) {
             }
         }
 
-        m_LayerFlags = 1; // single-layer during entry
+        m_LayerFlags = Mortar::HUD_LAYER_DEFAULT; // single-layer during entry
 
         m_Timer += dt;
         const float ENTRY_DURATION = 1.9f;   // DAT_00141dac

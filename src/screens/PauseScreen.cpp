@@ -17,6 +17,7 @@
 #include "screens/PauseScreen.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "game/WaveManager.h"
 #include "game/FruitSaveData.h"
 #include "game/PowerUpManager.h"
@@ -174,7 +175,7 @@ PauseScreen::PauseScreen()
       m_QuitTitleTexW(0.0f), m_QuitTitleTexH(0.0f),
       m_RetryButtonTexW(0.0f), m_RetryButtonTexH(0.0f)
 {
-    m_LayerFlags = 8;
+    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
     // Load textures -- strings resolved from GOT in ctor (doc section 6 asset table)
     // pause_title.tex goes into inherited m_SecondaryTex (+0x78 in binary / +0x74 in port)
@@ -288,7 +289,7 @@ void PauseScreen::Reset() {
 // -------------------------------------------------------------------------
 void PauseScreen::BeginDraw(float dt) {
     (void)dt;
-    m_LayerFlags = 8;
+    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 }
 
 // -------------------------------------------------------------------------
@@ -486,7 +487,7 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton = new MenuButton();
         m_ResumeButton->size       = Vec3(m_PauseButtonTexW, m_PauseButtonTexH, 0.0f);
         m_ResumeButton->m_Texture  = m_PauseButtonTex;
-        m_ResumeButton->m_LayerFlags = 0x100;
+        m_ResumeButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_ResumeButton->Init(
             Vec3(240.0f, -160.0f, 0.0f),  // initial pos; overwritten each frame
             Mortar::Delegate0<void>::Make(this, &PauseScreen::PauseGameCallback),
@@ -512,7 +513,7 @@ void PauseScreen::Update(float dt) {
         m_QuitButton = new MenuButton();
         m_QuitButton->size       = Vec3(m_QuitTitleTexW, m_QuitTitleTexH, 0.0f);
         m_QuitButton->m_Texture  = m_QuitTitleTex;
-        m_QuitButton->m_LayerFlags = 0x100;
+        m_QuitButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_QuitButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
             Mortar::Delegate0<void>::Make(this, &PauseScreen::QuitGameCallback),
@@ -531,7 +532,7 @@ void PauseScreen::Update(float dt) {
         m_RetryButton = new MenuButton();
         m_RetryButton->size       = Vec3(m_RetryButtonTexW, m_RetryButtonTexH, 0.0f);
         m_RetryButton->m_Texture  = m_RetryButtonTex;
-        m_RetryButton->m_LayerFlags = 0x100;
+        m_RetryButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_RetryButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
             Mortar::Delegate0<void>::Make(this, &PauseScreen::RetryGameCallback),

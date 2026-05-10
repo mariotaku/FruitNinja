@@ -10,6 +10,7 @@
 // to match binary layout.
 
 #include "SliderControl.h"
+#include "hud/HUDLayer.h"
 #include "render/gl_funcs.h"
 #include <cstring>
 
@@ -69,7 +70,7 @@ SliderControl::SliderControl(Vec3 inPos, Vec3 inSize,
     // and GOT[0x00160394]). Fields stay zero -- widget is never rendered.
 
     // Binary @ 0x00160268: m_LayerFlags = 0x200
-    m_LayerFlags = 0x200;
+    m_LayerFlags = Mortar::HUD_LAYER_SLIDER;
 }
 
 // Destructor chain -- Binary @ 0x001601a8 (D2) / 0x00160140 (D1/deleting)

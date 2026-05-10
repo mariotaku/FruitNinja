@@ -2,6 +2,7 @@
 
 #include "TimeControl.h"
 #include "Game.h"
+#include "hud/HUDLayer.h"
 #include "game/GameOver.h"
 #include "game/ScoreState.h"
 #include "audio/GameSound.h"
@@ -126,10 +127,10 @@ void TimeControl::Update(float dt) {
 
     // Hide for non-timed modes
     if (!IsTimedGame()) {
-        m_LayerFlags = 0;
+        m_LayerFlags = Mortar::HUD_LAYER_NONE;
         return;
     }
-    m_LayerFlags = 1;
+    m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
 
     if (game->pauseFlag) return;
 

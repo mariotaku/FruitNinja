@@ -8,6 +8,7 @@
 #include "DojoScreen.h"
 #include "Game.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
 #include "entities/Fruit.h"
@@ -167,7 +168,7 @@ AboutScreen::AboutScreen(Game& g, DojoScreen* parent)
     LoadContent();
 
     // field40_0x34 = 0x80 (layer flags, matches all other screens)
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     // field_0x32 = 0 (m_bNoDestructor)
     m_bNoDestructor = 0;

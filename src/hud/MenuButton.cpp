@@ -12,6 +12,7 @@
 // Analysed: 2026-04-28T14:00
 #include "MenuButton.h"
 #include "HUD.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
@@ -280,7 +281,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
             }
         }
 
-        m_LayerFlags = 0x40;  // menu draw layer
+        m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;  // menu draw layer
     }
 }
 
@@ -391,7 +392,7 @@ bool MenuButton::TouchReleased() {
 void MenuButton::BeginDraw(float dt) {
     (void)dt;
     if (m_FruitType >= 0) {
-        m_LayerFlags = 0x40;
+        m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     }
 }
 
@@ -836,8 +837,8 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     // For fruit-typed buttons the binary leaves size = (0,0,0) so this
     // collapses to a point. Toggle buttons (sound/music) override size
     // from texture w/h+1 and render a real scratchs backdrop here.
-    if (m_LayerFlags == 0x40) {
-        m_LayerFlags = 0x80;
+    if (m_LayerFlags == (int)Mortar::HUD_LAYER_MENU_BG) {
+        m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
         if (s_TexScratchs.IsValid()) {
             MatrixManager& mm = MatrixManager::GetInstance();
             Renderer* r = Renderer::GetInstance();

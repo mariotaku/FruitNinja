@@ -3,6 +3,7 @@
 // Binary @ 0x00152ed0 (ctor) / 0x00152a00 (Update) / 0x001531f8 (Draw).
 
 #include "NotificationControl.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
@@ -85,7 +86,7 @@ NotificationControl::NotificationControl(const char* name, int points,
         }
     }
 
-    m_LayerFlags = 8;
+    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
     // Initial position: off-screen above
     pos.x = NOTIF_Y_OFFSCREEN;

@@ -3,6 +3,7 @@
 // Binary: ctor @ 0x0015AA1C, sizeof 0xB8.
 
 #include "ScreenFadeControl.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
@@ -23,7 +24,7 @@ ScreenFadeControl::ScreenFadeControl()
       m_TargetAlpha(0),
       _pad8F(0)
 {
-    m_LayerFlags = 0x400;
+    m_LayerFlags = Mortar::HUD_LAYER_FADE_MODAL;
     // TODO: 0x0015AA1C -- resolve fade-texture name from GOT[0x15aacc]
     m_FadeTexture = Mortar::TextureManager::LoadLocalisedTexture("fade_overlay.tex");
     size = Vec3(0.0f, 0.0f, 1.0f);

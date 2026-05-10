@@ -9,6 +9,7 @@
 #include "MainScreen.h"
 #include "Game.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
 #include "hud/ScrollingMenu.h"
@@ -249,7 +250,7 @@ ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     LoadContent();
 
     // Binary: field_0x34 (m_LayerFlags from HUDControl base) = 0x80
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     // Binary: field_0x32 (m_bNoDestructor) = 0
     m_bNoDestructor = 0;
@@ -337,7 +338,7 @@ void ShopScreen::CreateShopList() {
     // Without this, ScrollingMenu sat orphaned and the list was never
     // positioned or rendered. Layer 0x40 matches the menu/HUD layer
     // used by MenuButtons on the same screen.
-    m_pShopList->m_LayerFlags = 0x40;
+    m_pShopList->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
 
     // Populate from ItemManager
     // Binary (ShopScreen::Init @ 0x0015f7ac): for each ItemInfo from GetFirst/GetNext:
@@ -744,7 +745,7 @@ void ShopScreen::Update(float dt) {
 
     // Binary: SplatEntity::NumActiveSplats @ 0x0015e212 — only set flag when no splats
     if (SplatEntity::NumActiveSplats() == 0) {
-        m_LayerFlagsAlt = 0x40;
+        m_LayerFlagsAlt = Mortar::HUD_LAYER_MENU_BG;
     }
 
     // Binary pre-amble (0x0015e212..0x0015e244):
@@ -1024,7 +1025,7 @@ void ShopScreen::Update(float dt) {
 
     // ---- STATE 4: Reset layer flags ----
     case 4:
-        m_LayerFlagsAlt = 0x80;
+        m_LayerFlagsAlt = Mortar::HUD_LAYER_POST_ACTOR;
         break;
 
     // ---- STATES 5 and 6: Wait for actors empty, then equip item ----
@@ -1142,7 +1143,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         // First action: mark Block A as done so next frame falls to Block B.
         // Binary: this->m_LayerFlags = 1  at 0x0015dee6
         // ===================================================================
-        m_LayerFlags = 1;
+        m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
 
         const float alpha = m_TransitionAlpha;
 

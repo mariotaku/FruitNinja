@@ -20,6 +20,7 @@
 #include "game/FruitSaveData.h"
 #include "Game.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "hud/TutorialControl.h"
 #include "hud/MenuButton.h"
 #include "entities/FruitInfo.h"
@@ -87,7 +88,7 @@ DojoScreen::DojoScreen(Game& g)
     , game(g)
 {
     LoadContent();
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
     m_bNoDestructor = 0;
 }
 
@@ -197,7 +198,7 @@ void DojoScreen::Update(float dt) {
                                     bombFruitType, Vec3(0, 0, 0), nullptr);
                 // Binary @ 0x0013856c: strb 1 at button+0x138 = m_bRespondsToBackKey.
                 m_pPlayButton->m_bRespondsToBackKey = 1;
-                m_pPlayButton->m_LayerFlags = 0x40;
+                m_pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
                 game.hud->AddControl(m_pPlayButton);
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pPlayButton);
                 // Binary scales BOTH m_TargetSize AND fruit piece's scale by 0.825
@@ -241,7 +242,7 @@ void DojoScreen::Update(float dt) {
                 // bounce/new-indicator draw path is ported.
                 m_pShopButton->m_AnimSpeed  = -15.0f;
                 m_pShopButton->m_AnimSpeed2 = -15.0f;
-                m_pShopButton->m_LayerFlags = 0x40;
+                m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
                 m_pShopButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
                 game.hud->AddControl(m_pShopButton);
                 if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pShopButton);
@@ -259,7 +260,7 @@ void DojoScreen::Update(float dt) {
                 m_pAboutButton->Init(POS_ABOUT_BUTTON,
                                      Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
                                      aboutFruitType, Vec3(0, 0, 0), nullptr);
-                m_pAboutButton->m_LayerFlags = 0x40;
+                m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
                 game.hud->AddControl(m_pAboutButton);
             }
         }

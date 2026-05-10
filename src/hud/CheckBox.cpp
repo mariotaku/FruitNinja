@@ -5,6 +5,7 @@
 
 // Analysed: 2026-05-04T00:00
 #include "CheckBox.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
 #include "render/Renderer.h"
@@ -37,7 +38,7 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
 {
     pos           = inPos;
     size          = inSize;
-    m_LayerFlags  = 0x80;
+    m_LayerFlags  = Mortar::HUD_LAYER_POST_ACTOR;
 }
 
 // Binary @ 0x00134D98
@@ -52,7 +53,7 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, LocalizedString loc)
     pos           = inPos;
     size          = inSize;
     m_TouchSlot   = -1;
-    m_LayerFlags  = 0x80;
+    m_LayerFlags  = Mortar::HUD_LAYER_POST_ACTOR;
 }
 
 CheckBox::~CheckBox() {
