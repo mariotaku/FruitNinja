@@ -837,7 +837,10 @@ void MainScreen::CreatePlayDojo() {
     pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
     pPlayButton->Init(POS_PLAY_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
-    pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+    // Binary MainScreen::Update @ 0x0014b278 case 0 does NOT explicitly write
+    // +0x34 here; it relies on MenuButton::Init @ 0x0014ee40 having set
+    // m_LayerFlags = 0x40 (HUD_LAYER_MENU_BG) for FruitType >= 0 buttons.
+    pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     // RemoveCallback: matches binary MainScreen::ButtonDeleted @ 0x0014acc0.
     // HUD::Update fires this right before deleting the MenuButton so we
     // can null our weak ref. Required for the dojo back-slice flow:
@@ -876,7 +879,9 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->Init(POS_DOJO_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
         Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
-    pDojoButton->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+    // Binary @ 0x0014b278 has no explicit +0x34 write for the dojo button;
+    // MenuButton::Init @ 0x0014ee40 sets HUD_LAYER_MENU_BG for FruitType >= 0.
+    pDojoButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pDojoButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     game.hud->AddControl(pDojoButton);
@@ -895,7 +900,10 @@ void MainScreen::CreateQuitButton() {
     int fruitCount = FruitInfo_GetCount();
     pQuitBtn->Init(POS_QUIT,
         Mortar::Delegate0<void>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, Vec3(0,0,0), nullptr);
-    pQuitBtn->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+    // Binary @ 0x0014b278 has no explicit +0x34 write for the quit button;
+    // MenuButton::Init @ 0x0014ee40 sets HUD_LAYER_MENU_BG for FruitType >= 0
+    // (fruitCount is the bomb threshold, always >= 0 in shipped data).
+    pQuitBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pQuitBtn->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     game.hud->AddControl(pQuitBtn);
