@@ -1598,7 +1598,14 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     const FruitInfoData* chosen = FruitInfo_Get(ft);
     if (!chosen || chosen->m_FactCount <= 0) return nullptr;
 
-    int fi = factIdx % chosen->m_FactCount;
+    // Clamp negative factIdx -- C99's `-1 % N == -1` results in an OOB
+    // `m_pFacts[-1]` read which returns a garbage pointer that subsequent
+    // dereferences crash on. FruitFactControl ctor inits m_FactIdx=-1,
+    // and the binary's GetFact likely had the same input -- it must clamp
+    // to a valid index before the modulo.
+    int fi = factIdx;
+    if (fi < 0) fi = 0;
+    fi = fi % chosen->m_FactCount;
 
     if (outType)    *outType    = ft;
     if (outFactIdx) *outFactIdx = fi;
