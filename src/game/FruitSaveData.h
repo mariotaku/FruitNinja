@@ -340,6 +340,12 @@ public:
 public:
 
 public:
+    // +0x?: days remaining in some countdown (gated in GameOverScreen::PreDrawOrder).
+    // Binary references pSaveData[+0x40] for this value but +0x40 is m_highscore
+    // in the port layout; binary offset TBD. Initialized to 0 (no days shown).
+    // TODO: re-analyst to resolve binary field offset vs m_highscore conflict.
+    int      m_DaysRemaining;
+
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: FruitSaveData::DownloadedTweakValue -- auto stub from binary missing-symbol set
     void DownloadedTweakValue(char const*, int);

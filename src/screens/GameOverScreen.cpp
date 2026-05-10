@@ -24,12 +24,36 @@
 #include "asset/TextureManager.h"
 #include "math/MathUtil.h"
 #include "math/Vec3.h"
+#include "math/Matrix44.h"
+#include "math/Colour.h"
+#include "render/MatrixManager.h"
+#include "render/Renderer.h"
+#include "render/QUADCUSTOMVERTEX.h"
+#include "render/Font.h"
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
 #include <cstdlib>
 
 using Mortar::TextureManager;
+
+// ---------------------------------------------------------------------------
+// File-scope texture SmartPtr arrays (binary static class members)
+// Binary @ 0x00140cde loads these in GameOverScreen::LoadContent.
+// ---------------------------------------------------------------------------
+static Mortar::SmartPtr<Mortar::Texture> g_BgPatternTexArr[3];   // sensei_body_01..03.tex
+static Mortar::SmartPtr<Mortar::Texture> g_ExpressionTexArr[3];  // sensei_head_01..03.tex
+static Mortar::SmartPtr<Mortar::Texture> g_StarburstTex;         // blurry_backing.tex
+
+// ---------------------------------------------------------------------------
+// Starburst halo mesh (48 verts; lazy-init on first DrawOrder)
+// Binary @ 0x00141448 uses a static 48-vertex tri-list for the halo.
+// ---------------------------------------------------------------------------
+struct StarburstMesh {
+    bool initialised;
+    QUADCUSTOMVERTEX verts[48];
+};
+static StarburstMesh g_StarMesh = { false, {} };
 
 // ---------------------------------------------------------------------------
 // Helpers — local to this TU (match binary static helpers)
@@ -72,8 +96,29 @@ static void DoQuitToMenu() {
 // Static content load/unload (binary: gated by static guard)
 // ---------------------------------------------------------------------------
 
-void GameOverScreen::LoadContent() {}
-void GameOverScreen::UnLoadContent() {}
+// ASM-spec: binary @ 0x00140cde loops i=1..3 with sensei_body_0%d.tex /
+// sensei_head_0%d.tex into the per-class SmartPtr arrays. blurry_backing.tex
+// is shared across MenuButton + GameOverScreen + DrawLoadingSymbol; binary
+// loads it from MenuButton::LoadContent. Port loads here too for safety;
+// duplicate SmartPtr refcount is harmless.
+void GameOverScreen::LoadContent() {
+    for (int i = 0; i < 3; ++i) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "sensei_body_0%d.tex", i + 1);
+        g_BgPatternTexArr[i] = TextureManager::LoadLocalisedTexture(buf);
+        snprintf(buf, sizeof(buf), "sensei_head_0%d.tex", i + 1);
+        g_ExpressionTexArr[i] = TextureManager::LoadLocalisedTexture(buf);
+    }
+    g_StarburstTex = TextureManager::LoadLocalisedTexture("blurry_backing.tex");
+}
+
+void GameOverScreen::UnLoadContent() {
+    for (int i = 0; i < 3; ++i) {
+        g_BgPatternTexArr[i].SetNull();
+        g_ExpressionTexArr[i].SetNull();
+    }
+    g_StarburstTex.SetNull();
+}
 
 // ---------------------------------------------------------------------------
 // Default ctor (binary shape)
@@ -811,9 +856,11 @@ void GameOverScreen::Update(float dt) {
                 //   pos.y = fVar23;
                 //   scale = pos.y / DAT_00141dcc + 1.0f   -- DAT_00141dcc = -224.0f
                 //   size = m_TitleSize * scale
-                // TODO: 0x00141dc8 -- exact bias not yet read; assume 0.0f for now.
-                const float bias = 0.0f;  // TODO: read DAT_00141dc8
-                const float divisor = -224.0f;  // probable; verify DAT_00141dcc
+                // ASM-verified: 2026-05-10 binary @ 0x00141dc8 / 0x00141dcc (re-analyst).
+                //   DAT_00141dc8 = 135.0f -- size-rescale Y bias.
+                //   DAT_00141dcc = -224.0f -- divisor for pos.y / D + 1.0 scale.
+                const float bias = 135.0f;
+                const float divisor = -224.0f;
                 float newPosY = m_pBonusScreen->size.y + m_pBonusScreen->pos.y + bias;
                 if (newPosY < pos.y) newPosY = pos.y;
                 pos.y = newPosY;
@@ -1156,20 +1203,134 @@ void GameOverScreen::Update(float dt) {
 // PreDrawOrder (vtable slot 8, 0x0014171c)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0014171c
+// ASM-verified: 2026-05-10 binary @ 0x0014171c (re-analyst)
 void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
-    if (layerMask & 0x80) {
-        // Layer 0x80: draw "days remaining" text + extra texture
-        // TODO: wire Font::DrawString once font rendering is confirmed for this screen
-        // Binary reads m_CoinsEarnedLabel and draws via pFont at a fixed screen position.
-        // For now this is a no-op placeholder.
-        (void)hudScale;
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // -----------------------------------------------------------------
+    // Layer 0x80 path -- days-remaining label + per-button overlay quad
+    // -----------------------------------------------------------------
+    if ((layerMask & Mortar::HUD_LAYER_POST_ACTOR) != 0) {
+        Game* game = Game::GetInstance();
+        if (m_pRetryBtn && game && game->pSaveData &&
+            game->pSaveData->m_DaysRemaining > 0)
+        {
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%d", game->pSaveData->m_DaysRemaining);
+
+            const Vec3 daysPos(-163.0f, -96.0f, 0.0f);  // DAT_001419e0/4/8
+            // Binary @ 0x00141770 calls Font::DrawString(scale=btn.size*0.5,
+            //   spacing=1.0, kern=0.0, font=Game.pFontMain, text=buf,
+            //   pos=Vec3(-163,-96,0), colour=white, vec=zero, align=0xF, 0).
+            // Spec refers to btn.scale but HUDControl exposes size; using size.x.
+            const float scaleArg = m_pRetryBtn->size.x * 0.5f;
+            if (game->pFontMain) {
+                game->pFontMain->DrawString(scaleArg, 1.0f, 0.0f,
+                    buf, daysPos,
+                    Colour(255, 255, 255, 255),
+                    0xF);
+            }
+
+            // Overlay quad (gameover.tex via m_GameOverTex) -- only when
+            // texture is valid AND the retry button's size.x is in (0, 600].
+            // DAT_001419ec = 600.0f.
+            const float btnScaleX = m_pRetryBtn->size.x;
+            if (m_GameOverTex.IsValid() &&
+                btnScaleX > 0.0f && btnScaleX < 600.0f)
+            {
+                m_GameOverTex->Set();
+
+                MatrixManager& mm = MatrixManager::GetInstance();
+                mm.GetWorldStack().Reset();
+                Matrix44 mat = Matrix44::MakeScale(
+                    m_pRetryBtn->size.x,
+                    m_pRetryBtn->size.y,
+                    m_pRetryBtn->size.z);
+                mat.GlobalTranslate44(daysPos);
+                mm.GetWorldStack().SetCurrentMatrix(mat);
+                mm.UploadModelViewOnly();
+
+                r->DrawQuad(Colour(255, 255, 255, 255));
+
+                m_GameOverTex->UnSet();
+            }
+        }
     }
 
-    if (layerMask & 1) {
-        // Layer 1: expression + pattern overlays, then HUDControl3d::Draw
-        // TODO: expression/pattern overlay quads (m_ExpressionIdx, m_BgPatternIdx)
-        // Gated by m_bIsClassic per binary.
+    // -----------------------------------------------------------------
+    // Layer 1 path -- expression + bg-pattern overlays
+    // -----------------------------------------------------------------
+    if ((layerMask & Mortar::HUD_LAYER_DEFAULT) != 0) {
+        Game* game = Game::GetInstance();
+        // Gate (binary @ 0x00141810):
+        //   m_bIsClassic && (gameMode != Arcade && gameMode != Zen
+        //       || (m_pBonusScreen != null && bonus->field_0xe4 == 0))
+        bool gate = false;
+        if (m_bIsClassic && game) {
+            const uint8_t gm = game->gameMode;
+            const bool notArcadeZen =
+                gm != Mortar::GAME_MODE_ARCADE &&
+                gm != Mortar::GAME_MODE_ZEN;
+            // m_pBonusScreen->field_0xe4 == 0 sub-clause:
+            // BonusScreen has a "ready"/"settled" byte at +0xe4 we may
+            // not have ported yet. Treat as 0 if BonusScreen present.
+            const bool bonusReady = (m_pBonusScreen != nullptr);
+            gate = notArcadeZen || bonusReady;
+        }
+
+        if (gate) {
+            const Colour white(255, 255, 255, 255);
+            MatrixManager& mm = MatrixManager::GetInstance();
+
+            // Expression overlay -- sensei_head_0N.tex
+            if (m_ExpressionIdx > 0 && m_ExpressionIdx <= 3) {
+                Mortar::SmartPtr<Mortar::Texture>& tex =
+                    g_ExpressionTexArr[m_ExpressionIdx - 1];
+                if (tex.IsValid()) {
+                    tex->Set();
+
+                    mm.GetWorldStack().Reset();
+                    Matrix44 mat = Matrix44::MakeScale(
+                        0.075f * hudScale.x,
+                        0.075f * hudScale.y,
+                        0.0f);
+                    mat.GlobalTranslate44(Vec3(
+                        m_OffsetPosX, m_OffsetPosY, m_OffsetPosZ));
+                    mm.GetWorldStack().SetCurrentMatrix(mat);
+                    mm.UploadModelViewOnly();
+
+                    r->DrawQuad(white);
+                    tex->UnSet();
+                }
+            }
+
+            // Bg-pattern overlay -- sensei_body_0N.tex
+            if (m_BgPatternIdx > 0 && m_BgPatternIdx <= 3) {
+                Mortar::SmartPtr<Mortar::Texture>& tex =
+                    g_BgPatternTexArr[m_BgPatternIdx - 1];
+                if (tex.IsValid()) {
+                    tex->Set();
+
+                    mm.GetWorldStack().Reset();
+                    Matrix44 mat = Matrix44::MakeScale(
+                        0.6f * hudScale.x,
+                        0.6f * hudScale.y,
+                        0.0f);
+                    mat.GlobalTranslate44(Vec3(
+                        9.0f * hudScale.x + m_OffsetPosX,
+                        64.0f * hudScale.y + m_OffsetPosY,
+                        m_OffsetPosZ));
+                    mm.GetWorldStack().SetCurrentMatrix(mat);
+                    mm.UploadModelViewOnly();
+
+                    r->DrawQuad(white);
+                    tex->UnSet();
+                }
+            }
+        }
+
+        // Layer 1 -- always call HUDControl3d base draw last.
         HUDControl3d::Draw(hudScale, layerMask);
     }
 }
@@ -1178,14 +1339,85 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 // DrawOrder (vtable slot 9, 0x00141448)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x00141448
-void GameOverScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
-    if (!(layerMask & 1)) return; // cached check
+// ASM-verified: 2026-05-10 binary @ 0x00141448 (re-analyst)
+void GameOverScreen::DrawOrder(const Vec3& hudScale, int /*layerMask*/) {
+    if (m_State != 14) return;
+    if (!g_StarburstTex.IsValid()) return;
 
-    // Rotating starburst halo: 48-vertex triangle list, time-pulsed colour.
-    // Binary: 48 verts, rotation driven by m_AnimCounter, colour pulses RGBA.
-    // TODO: implement GL vertex buffer / immediate-mode equivalent when
-    //       render pipeline is confirmed for this screen.
-    // For now this is a no-op placeholder.
-    (void)hudScale;
+    // -----------------------------------------------------------------
+    // Lazy-init: 8 wedges x 6 verts = 48 vertices forming the halo.
+    // Per-wedge angle step = 0x1FFE (8190 / 65536 = 1/8 turn).
+    // Outer ring radius = 0.5; inner ring (offset 90 deg) radius = 0.075.
+    // -----------------------------------------------------------------
+    if (!g_StarMesh.initialised) {
+        for (int wedge = 0; wedge < 8; ++wedge) {
+            const uint16_t baseAng = (uint16_t)(wedge * 0x1FFE);
+            const float s0 = SinIdx(baseAng) * 0.5f;
+            const float c0 = CosIdx(baseAng) * 0.5f;
+            const float s1 = SinIdx((uint16_t)(baseAng + 0x3FFC)) * 0.075f;
+            const float c1 = CosIdx((uint16_t)(baseAng + 0x3FFC)) * 0.075f;
+
+            QUADCUSTOMVERTEX* v = &g_StarMesh.verts[wedge * 6];
+
+            v[0].x = s0 - s1; v[0].y = c0 - c1; v[0].z = 0; v[0].u = 0;      v[0].v = 0;
+            v[1].x = s0 + s1; v[1].y = c0 + c1; v[1].z = 0; v[1].u = 1.0f;   v[1].v = 0;
+            v[2].x = s0 * 0.6f - s1; v[2].y = c0 * 0.6f - c1; v[2].z = 0;
+                v[2].u = 0; v[2].v = 1.0f;
+            v[3].x = s0 + s1; v[3].y = c0 + c1; v[3].z = 0;
+                v[3].u = 1.0f; v[3].v = 0;
+            v[4].x = s0 * 0.6f - s1; v[4].y = c0 * 0.6f - c1; v[4].z = 0;
+                v[4].u = 0; v[4].v = 1.0f;
+            v[5].x = s0 * 0.6f + s1; v[5].y = c0 * 0.6f + c1; v[5].z = 0;
+                v[5].u = 1.0f; v[5].v = 1.0f;
+
+            for (int i = 0; i < 6; ++i) {
+                v[i].nx = 0; v[i].ny = 0; v[i].nz = 1.0f;
+            }
+        }
+        g_StarMesh.initialised = true;
+    }
+
+    // -----------------------------------------------------------------
+    // Per-frame: pulse each wedge brightness based on m_Timer.
+    // alpha = ((timer & 7) - wedgeIdx) wraps; clamped to [64, 255];
+    // BGRA = (a, a, a, 200).
+    // -----------------------------------------------------------------
+    const int timerInt = (int)m_Timer;
+    const int phase = timerInt & 7;
+    for (int wedge = 0; wedge < 8; ++wedge) {
+        // Binary computes (~((idx-1)*0x20000000) >> 0x1d), simplified:
+        //   alphaIdx = (phase - wedge) & 7
+        // then alpha = alphaIdx * 32, clamped [64..255].
+        int alphaIdx = (phase - wedge) & 7;
+        int alpha = alphaIdx * 32;
+        if (alpha > 0xFE) alpha = 0xFF;
+        if (alpha < 0x40) alpha = 0x40;
+
+        const Colour wedgeCol((uint8_t)alpha, (uint8_t)alpha,
+                              (uint8_t)alpha, 200);
+        const uint32_t packed = wedgeCol.PlatformColour();
+        QUADCUSTOMVERTEX* v = &g_StarMesh.verts[wedge * 6];
+        for (int i = 0; i < 6; ++i) v[i].colour = packed;
+    }
+
+    // -----------------------------------------------------------------
+    // Draw: scale 64 * hudScale, translate (-280, -96, 0).
+    // Binary @ 0x001416bc DrawTriList(verts, 0x30, false, nullptr).
+    // -----------------------------------------------------------------
+    g_StarburstTex->Set();
+
+    Renderer* r = Renderer::GetInstance();
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    Matrix44 mat = Matrix44::MakeScale(
+        64.0f * hudScale.x,
+        64.0f * hudScale.y,
+        64.0f * hudScale.z);
+    mat.GlobalTranslate44(Vec3(-280.0f, -96.0f, 0.0f));
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    if (r) r->DrawTriList(g_StarMesh.verts, 48);
+
+    g_StarburstTex->UnSet();
 }
