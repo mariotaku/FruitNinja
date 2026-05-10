@@ -6,6 +6,7 @@
 #include "GameOverScreen.h"
 #include "BonusScreen.h"
 #include "Game.h"
+#include "game/GameMode.h"
 #include "game/WaveManager.h"
 #include "game/FruitSaveData.h"
 #include "game/AchievementManager.h"
@@ -219,9 +220,9 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     //   tracing through DAT_001428ec/f0/f4 GOT slots in Initialise.
     {
         Mortar::SmartPtr<Mortar::Texture> bgTex;
-        if (gameMode == 2)
+        if (gameMode == Mortar::GAME_MODE_ARCADE)
             bgTex = TextureManager::LoadLocalisedTexture("arcade_time_up.tex");
-        else if (gameMode == 3)
+        else if (gameMode == Mortar::GAME_MODE_ZEN)
             bgTex = TextureManager::LoadLocalisedTexture("time_up.tex");
         else
             bgTex = TextureManager::LoadLocalisedTexture("gameover.tex");
@@ -250,7 +251,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     m_ExpressionIdx  = expressionIdx;
     field_0xa0       = 0;
     m_pSlot9c        = nullptr;
-    m_bIsClassic     = (gameMode == 0) ? 1 : 0;
+    m_bIsClassic     = (gameMode == Mortar::GAME_MODE_CLASSIC) ? 1 : 0;
     m_pQuitBtn       = nullptr;
     m_pSlotA8        = nullptr;
     m_pRetryBtn      = nullptr;
@@ -504,7 +505,7 @@ void GameOverScreen::FindMostOfFruit() {
         if (!fi) continue;
         // Binary @ 0x00141a18: in Arcade (mode==2) include only POWER fruits
         // (fi->m_pPowers != nullptr); other modes include all fruits.
-        if (gameMode == 2 && fi->m_pPowers == nullptr) continue;
+        if (gameMode == Mortar::GAME_MODE_ARCADE && fi->m_pPowers == nullptr) continue;
         candidates[numCandidates++] = i;
     }
 
@@ -763,7 +764,7 @@ void GameOverScreen::Update(float dt) {
         }
 
         if (m_Timer > ENTRY_DURATION) {
-            if (game->gameMode == 2) { // Arcade
+            if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
                 m_State = 1;
                 m_Timer = -0.333f; // DAT_00141db0
             } else {
@@ -921,7 +922,7 @@ void GameOverScreen::Update(float dt) {
                     // Note: NetworkManager::SetLeaderboardScore -- defunct (online-services-audit).
 
                     // Arcade-only post-game achievement
-                    if (game->gameMode == 2) {
+                    if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
                         // Binary @ 0x0014230c -- calls BonusManager::UnlockPostGameAchievements.
                         // Port previously called AchievementManager::UnlockPostGameAchievements
                         // in error; corrected to match binary.

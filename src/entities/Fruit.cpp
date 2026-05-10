@@ -1,4 +1,5 @@
 #include "Fruit.h"
+#include "game/GameMode.h"
 #include "ActorManager.h"
 #include "FruitInfo.h"
 #include "Bomb.h"
@@ -403,7 +404,10 @@ void Fruit::PostUpdate(float dt) {
 
     if (m_Gravity.x == 0.0f) {
         // Vertical-gravity fruit — nudge or hard-bounce on X bounds.
-        const bool zen = (game->gameMode == 2);
+        // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
+        // Verify whether the surrounding logic is intended for Arcade or Zen and
+        // rename accordingly.
+        const bool zen = (game->gameMode == Mortar::GAME_MODE_ARCADE);
         const bool zenStrict = zen && IsZenStrictBounceActive();
         if (zenStrict) {
             if (pos.x < BOUND_X_LO) { pos.x = BOUND_X_LO; vel.x = -vel.x; }
@@ -517,7 +521,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
         if (!m_bNoPowerUp && !m_bSliced && info && info->m_Score < 5) {
             Game* g = Game::GetInstance();
             if (g) {
-                if (g->gameMode == 2) {
+                if (g->gameMode == Mortar::GAME_MODE_ARCADE) {
                     // Zen mode: tracking only, no life loss.
                     // TODO: FruitSaveData::AddToTotal("zen_miss", 1) when save system is ported
                 } else {

@@ -50,7 +50,12 @@ struct Game : public Mortar::MortarGame {
     uint8_t field_0x01;            // +0x01
     uint8_t gameActiveFlag;        // +0x02: 0=paused, !=0=active
     uint8_t languageFlag;          // +0x03: SetLanguage writes 0 here
-    uint8_t gameMode;              // +0x04: 0=Classic, 1=Arcade, 2=Zen, 3=Attack
+    // +0x04: GAME_MODE enum (see game/GameMode.h) stored as uint8_t.
+    //   0=GAME_MODE_CLASSIC (originalWaveList.xml)
+    //   1=GAME_MODE_COMBO   (comboWaveList.xml; callbacks call it "Casino")
+    //   2=GAME_MODE_ARCADE  (arcadeWaveList.xml)
+    //   3=GAME_MODE_ZEN     (zenWaveList.xml)
+    uint8_t gameMode;
     uint8_t pauseFlag;             // +0x05: set by GameOver, QuitToMenu
     uint8_t retryFlag;             // +0x06
     uint8_t field_0x07;            // +0x07
