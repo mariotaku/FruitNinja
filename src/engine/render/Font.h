@@ -205,8 +205,12 @@ public:
     // (uint32_t, uint32_t) overload above on ARM32 (long == int == 32-bit
     // -> both mangle as `j j`). Existing GetKerning(uint32_t, uint32_t)
     // already covers the binary symbol.
-    // STUB: Font::GetStringHeight(Utf8StringIterator,float,float) -- binary @ 0x???? (TODO RE)
-    void GetStringHeight(Utf8StringIterator, float, float);
+    // Binary @ 0x001988f0 (asm-inspector / re-analyst). Returns the total
+    // rendered height of a multi-line string at lineHeight `lineH` wrapped
+    // to `maxWidth`. When `maxWidth <= 0`: walks the string counting '\n'
+    // and returns `lineH + n*lineH`. When `maxWidth > 0`: word-wrap path
+    // using FindAdvanceOfNextWord.
+    float GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth);
     // STUB: Font::MeasureString(Utf8StringIterator) -- binary @ 0x???? (TODO RE)
     float MeasureString(Utf8StringIterator);
     // ---- end STUBS ----
