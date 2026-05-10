@@ -923,11 +923,25 @@ void WaveManager::Update(float dt) {
 // UpdateWave — per docs/functions/wave.md (298 lines)
 // ----------------------------------------------------------------------------
 
+// Wave-end gate flag. Binary @ 0x00132f70 (TU-local file-scope static byte
+// in WaveManager's translation unit, NOT a struct member). Cleared at the
+// top of UpdateWave; set to 1 in the pre-spawn-timer-ticking branch (when
+// field_0x234 > 0); read by the wave-end block to suppress GetNextWave
+// while the pre-spawn delay is still counting down.
+// ASM-verified: 2026-05-10 binary @ 0x001253b0 / 0x00125928 / 0x0012593e
+// (asm-inspector). Without this gate the wave-end block fires GetNextWave
+// every frame the pre-spawn delay is active (no entities yet but timer is
+// ticking), which resets field_0x234 -> infinite loop -> first wave never
+// spawns.
+static bool s_PreSpawnTickedThisFrame = false;
+
 void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // game->field_0x470 = false; -- TODO: not in port Game struct
+    // Binary @ 0x001253b0: clear the wave-end gate flag at function entry.
+    s_PreSpawnTickedThisFrame = false;
+
     UpdateComboSpeed(dt);
 
     // Skip networking check (always returns 0).
@@ -943,6 +957,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // Binary reads field_0x234+p*4 (delay slot) @ 0x0012598c.
     float waveTimer = field_0x234[playerIdx];  // Fix 1: delay slot @ +0x234+p*4
     if (waveTimer > 0.0f) {
+        // Binary @ 0x00125928: set the wave-end gate flag = 1 here, in the
+        // timer-still-ticking branch, so the wave-end block won't fire
+        // GetNextWave while the pre-spawn delay is counting down.
+        s_PreSpawnTickedThisFrame = true;
         field_0x234[playerIdx] = waveTimer - dt;  // Fix 1: write back to delay slot
         // No 'return' here -- binary @ 0x00125930 falls through to wave-end block.
     } else {
@@ -1102,7 +1120,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // Wave-end block: runs regardless of whether wave is null (binary @ 0x001253fc falls through).
     // Fix 1 (binary @ 0x00125956): reads wait slot field_0x238+p*4, NOT delay slot.
     // Fix 2 (binary @ 0x00125224): no writeback to port-owned m_NextWaveDelay[] -- removed.
-    if (!IsWaveProcessing(playerIdx)) {
+    // Binary @ 0x0012593e gate: also skip when s_PreSpawnTickedThisFrame is set
+    // (pre-spawn delay is still counting down -- no entities yet but the wave
+    // is "in progress" via the timer).
+    if (!s_PreSpawnTickedThisFrame && !IsWaveProcessing(playerIdx)) {
         float nextDelay = field_0x238[playerIdx];  // Fix 1: wait slot @ +0x238+p*4
         if (nextDelay > 0.0f) {
             nextDelay -= dt;
