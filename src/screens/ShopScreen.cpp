@@ -216,18 +216,22 @@ void ShopScreen::UnLoadContent() {
 ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     : HUDControl3d()
     , m_TransitionAlpha(0.0f)
-    // Binary ShopScreen ctor at 0x0015cdac does NOT initialize +0x80
-    // (m_LayerFlagsAlt). Heap memory there is whatever the allocator
-    // returns. Port previously initialized it to 0, which combined with
-    // Update's `if (splats == 0) m_LayerFlagsAlt = 0x40` gate produced a
-    // deterministic failure: when the user enters Shop with splats still
-    // alive from Dojo's slice (which lasts ~4-6s and overlaps the ~0.5s
-    // state-0 transition), m_LayerFlagsAlt stayed at 0, the Update sync
-    // `m_LayerFlags = m_LayerFlagsAlt` made flags=0, HUD::Draw filtered
-    // ShopScreen out, and the BG slide-in animation never rendered.
-    // Default to the active drawable layer (0x40) so HUD::Draw dispatches
-    // ShopScreen during state-0 even before Update has run.
-    , m_LayerFlagsAlt(0x40)
+    // ASM-verified: 2026-05-10 binary @ 0x0015cdac (re-analyst).
+    // Binary ShopScreen ctor reads *DAT_0015cd98 = 0x00000000 into +0x80
+    // (m_LayerFlagsAlt). Combined with Update's `if (NumActiveSplats == 0)
+    // m_LayerFlagsAlt = 0x40` gate, this is INTENTIONAL: while splats are
+    // alive (the ~0.87s post-dojo-slice fade-in window), m_LayerFlagsAlt
+    // stays at 0, the per-frame sync `m_LayerFlags = m_LayerFlagsAlt`
+    // pushes m_LayerFlags to 0, and HUD::Draw filters ShopScreen out -- so
+    // the 3D shop card is HIDDEN during the splat-active window. Once
+    // RemoveAllSplats fires at the end of state-0 (alpha > 0.999), the
+    // gate latches m_LayerFlagsAlt = 0x40 and the card starts drawing.
+    // Earlier port set this to 0x40 in the ctor to "ensure shop draws";
+    // that drew the card at layer 0x40 BEFORE SplatEntity::DrawActiveSplats
+    // (which renders unconditionally between HUD(0x40) and HUD(0x80) per
+    // GameDraw @ 0x0016bb46/0x0016bb4a), so splats painted on top of the
+    // shop UI on entry frames. Initial value MUST be 0 for binary parity.
+    , m_LayerFlagsAlt(0)
     , m_pBuyButton(nullptr)
     , m_BuyDelay(0.0f)
     , m_pEquipButton(nullptr)
