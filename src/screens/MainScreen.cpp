@@ -950,12 +950,17 @@ void MainScreen::NewGameCallback() {
     // filenames case-insensitively; the SDL port mirrors that in
     // SoundManager::LoadSound's POSIX dirent fallback.
     //
-    // Binary @ 0x0014c3bc passes a default-constructed Delegate1<bool,
-    // MortarSound*> (the "Global" empty-callee sentinel @ 0x001e89d0) to
-    // the 5-arg SFXPlay overload. That delegate's Invoke vtable slot is
-    // a no-op stub -- fire-and-forget; no completion callback is bound.
-    // The port's 3-arg SFXPlay overload is functionally equivalent.
-    if (game.pGameSound) game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
+    // Binary @ 0x0014c3bc constructs a default Delegate1<bool, MortarSound*>
+    // on the stack (the "Global" empty-callee sentinel vtable @ 0x001e89d0)
+    // and passes it to the 5-arg SFXPlay overload. The empty delegate's
+    // Invoke vtable slot is a no-op stub -- fire-and-forget; no completion
+    // callback is bound. The port mirrors the binary's call shape: 4-arg
+    // SFXPlay with default-constructed Delegate1.
+    if (game.pGameSound) {
+        game.pGameSound->SFXPlay(
+            "Game-start", 1.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>());
+    }
     // Binary @ 0x0014b020: re-seed engine PRNG with m_FrameTimer.
     Math::SeedGlobalRng((uint32_t)game.m_FrameTimer);
 }
