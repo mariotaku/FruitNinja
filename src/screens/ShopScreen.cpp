@@ -216,22 +216,23 @@ void ShopScreen::UnLoadContent() {
 ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     : HUDControl3d()
     , m_TransitionAlpha(0.0f)
-    // ASM-verified: 2026-05-10 binary @ 0x0015cdac (re-analyst).
-    // Binary ShopScreen ctor reads *DAT_0015cd98 = 0x00000000 into +0x80
-    // (m_LayerFlagsAlt). Combined with Update's `if (NumActiveSplats == 0)
-    // m_LayerFlagsAlt = 0x40` gate, this is INTENTIONAL: while splats are
-    // alive (the ~0.87s post-dojo-slice fade-in window), m_LayerFlagsAlt
-    // stays at 0, the per-frame sync `m_LayerFlags = m_LayerFlagsAlt`
-    // pushes m_LayerFlags to 0, and HUD::Draw filters ShopScreen out -- so
-    // the 3D shop card is HIDDEN during the splat-active window. Once
-    // RemoveAllSplats fires at the end of state-0 (alpha > 0.999), the
-    // gate latches m_LayerFlagsAlt = 0x40 and the card starts drawing.
-    // Earlier port set this to 0x40 in the ctor to "ensure shop draws";
-    // that drew the card at layer 0x40 BEFORE SplatEntity::DrawActiveSplats
-    // (which renders unconditionally between HUD(0x40) and HUD(0x80) per
-    // GameDraw @ 0x0016bb46/0x0016bb4a), so splats painted on top of the
-    // shop UI on entry frames. Initial value MUST be 0 for binary parity.
-    , m_LayerFlagsAlt(0)
+    // DIFFERS: binary ShopScreen ctor (@ 0x0015cdac) does NOT explicitly
+    // initialise +0x80 (m_LayerFlagsAlt). The disasm shows stores to
+    // +0x34, +0x7c, +0x84, +0x88, +0x90, +0xb4, +0xb8 etc. but no store
+    // to +0x80 -- the field is left at whatever the heap allocator
+    // returned. On the Bada device the ambient bytes happened to be 0x40
+    // for the slot ShopScreen lands in, so the panel drew at layer 0x40
+    // from frame 1; on a zero-initialising allocator (Win32 / asan), the
+    // field would be 0 and Update's `if (NumActiveSplats == 0) +0x80 =
+    // 0x40` gate would leave the panel HIDDEN until splats clear.
+    // Port pins the value to 0x40 explicitly to match the Bada heap's
+    // de-facto behaviour -- the panel is visible from the moment
+    // ShopScreen lands on the HUD. Splats may briefly overdraw the panel
+    // during the ~0.87 s state-0 fade-in (per binary @ 0x0016bb46/4a's
+    // HUD(0x40) -> SplatEntity::DrawActiveSplats sequence) but
+    // RemoveAllSplats clears them at fade-in end so the artifact is
+    // bounded.
+    , m_LayerFlagsAlt(0x40)
     , m_pBuyButton(nullptr)
     , m_BuyDelay(0.0f)
     , m_pEquipButton(nullptr)
