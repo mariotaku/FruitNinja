@@ -435,7 +435,12 @@ void MissControl::Update(float dt) {
     if (m_FadeAlpha <= 0.0f) {
         m_FadeAlpha = 0.0f;
         if (m_RemoveCallback) m_RemoveCallback(this);
-        m_bBusy = 0;
+        m_bBusy        = 0;
+        // Binary slot-release also clears m_bComboActive (asm-inspector
+        // 2026-05-10). The Draw gate above (m_bComboActive && !m_bBusy)
+        // already covers this case via the m_bBusy clear, but we mirror
+        // the binary's exact field writes for parity.
+        m_bComboActive = 0;
     }
 }
 
