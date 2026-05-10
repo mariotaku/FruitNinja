@@ -342,9 +342,48 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     //   Backplate + title:        passes
     //   Backplate + body:         crashes
     //   Body alone (no other):    crashes
-    //   Body w/ literal "test":   crashes
-    //   Body w/ alignment 0x0C:   crashes
-    return;
+    Game* game = Game::GetInstance();
+    if (!game || !game->pFontMain.IsValid()) return;
+
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // ---- 1. Backplate quad (binary @ 0x0013c79c..0x0013c848) ----
+    if (m_Texture.IsValid()) {
+        m_Texture->Set();
+        MatrixManager& mm = MatrixManager::GetInstance();
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
+        mat.GlobalTranslate44(Vec3(pos.x - 1.0f, pos.y - 8.0f, pos.z));
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        r->DrawQuad(Colour(255, 255, 255, 255));
+        m_Texture->UnSet();
+    }
+
+    // ---- 2. "FRUIT FACT" title (binary @ 0x0013c852..0x0013c92c) ----
+    {
+        // TODO: 0x0013c852 -- resolve GETSTRING(0x9b) key string (likely
+        //   "CODE_FACTS_TITLE" or similar). Literal until that's RE'd.
+        const char* title = "FRUIT FACT";
+        const float titleX = pos.x - 66.0f;
+        const float titleY = pos.y;
+        game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+            title, Vec3(titleX, titleY, 0.0f),
+            m_FactColour, 0x0F);
+    }
+
+    // ---- 3. Fact body text (binary @ 0x0013c930..0x0013ca36) ----
+    if (m_pCurFactString) {
+        const Colour brown(0x74, 0x5D, 0x3B, 0xFF);
+        const float bodyX = pos.x - 64.0f;
+        const float bodyY = pos.y - 14.0f;
+        // TODO: 0x0013c95e -- auto-shrink loop:
+        //   scale = 16; while (font->GetStringHeight(scale, 128) > 96) scale -= 0.125;
+        game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+            m_pCurFactString, Vec3(bodyX, bodyY, 0.0f),
+            brown, 0x0F);
+    }
 }
 
 // ---------------------------------------------------------------------------
