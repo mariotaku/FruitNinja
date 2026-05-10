@@ -81,10 +81,14 @@ void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param
 
 // Binary free functions @ 0x0010a4b8 / 0x0010a4e8.
 // Defunct sig: playerIdx ignored (online MP scrubbed) — binary @ 0x0010a4b8 / 0x0010a4e8.
+// ASM-verified: 2026-05-10 binary @ 0x0010a4b8 (asm-inspector). Writes
+// score to Game+0x18 (the live `currentScore` that ScoreControl reads),
+// NOT to pSaveData->m_CurrentScore (which earlier port had wrong --
+// game-start SetScore(0,-1) failed to reset the live score, so the
+// previous run's final score persisted into the new game).
 void SetScore(int score, int /*playerIdx*/) {
     Game* game = Game::GetInstance();
-    if (game && game->pSaveData)
-        game->pSaveData->m_CurrentScore = score;   // FruitSaveData+0x64
+    if (game) game->currentScore = score;
 }
 
 void SetMissCount(int n, int /*playerIdx*/) {
