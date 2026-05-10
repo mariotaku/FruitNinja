@@ -9,6 +9,7 @@
 #include "hud/HUD.h"
 #include "engine/util/StringHash.h"
 
+#include <algorithm>
 #include <ctime>
 #include <cstdio>     // snprintf -- explicit for Sourcery 4.4 newlib
 
@@ -26,13 +27,28 @@ void GameOver(int endReason, float endScore, int endParam) {
 
     WaveManager::GetInstance()->ClearUnspawned();
 
-    // TODO: FruitSaveData field lookups at 0x120/0x11C/0x124/0x128 for
-    // expressionIdx/bgPatternIdx/pomCount/starCount when save fields ported.
-    // Using 0/-1 sentinels per spec.
-    int expressionIdx = 0;
-    int bgPatternIdx  = -1;
-    int pomCount      = 0;
-    int starCount     = 0;
+    // FruitSaveData carries the sensei choice fields at +0x11C/0x120/0x124/0x128
+    // (m_GameOverField1..4). Binary reads them to pick which sensei head/body
+    // texture variant + per-game pom/star counts to display. Wiring proper:
+    //   expressionIdx <- m_GameOverField2 (+0x120)
+    //   bgPatternIdx  <- m_GameOverField1 (+0x11C)
+    //   pomCount      <- m_GameOverField3 (+0x124)
+    //   starCount     <- m_GameOverField4 (+0x128)
+    // The fields default to -1 (sentinel) and are written by the gameplay
+    // achievement / bonus path which the port hasn't fully RE'd yet.
+    // DIFFERS: when a field == -1 we substitute 1 (the first valid texture
+    // variant) so sensei body + head are visible. Once the gameplay-side
+    // setters land, the substitution can come out.
+    FruitSaveData* save = game->pSaveData;
+    auto picked = [save](int field, int fallback) -> int {
+        if (!save) return fallback;
+        // m_GameOverField1 lives at the right offset; pick from the requested.
+        return field > 0 ? field : fallback;
+    };
+    int expressionIdx = picked(save ? save->m_GameOverField2 : -1, 1);
+    int bgPatternIdx  = picked(save ? save->m_GameOverField1 : -1, 1);
+    int pomCount      = save ? std::max(0, save->m_GameOverField3) : 0;
+    int starCount     = save ? std::max(0, save->m_GameOverField4) : 0;
 
     GameOverScreen* gos = new GameOverScreen(
         "GameOver", endReason, endScore,
