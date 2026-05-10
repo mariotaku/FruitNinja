@@ -19,6 +19,11 @@
 #include "engine/network/NetworkManager.h"
 #include "engine/math/Colour.h"
 #include "engine/util/Delegate.h"
+#include "engine/render/Font.h"
+#include "engine/render/MatrixManager.h"
+#include "engine/render/Renderer.h"
+#include "engine/math/Matrix44.h"
+#include "engine/util/Localisation.h"
 #include <cstring>
 #include <cstdio>
 #include <list>
@@ -308,10 +313,38 @@ void FruitFactControl::UpdateLeaderboard(float dt) {
 void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     (void)hudScale;
     (void)layerMask;
-    // TODO: 0x0013b95c -- 3 passes by layerMask + 3 branches by gameMode
-    // (3=dojo, 2=arcade, else=classic); auto-shrink fact body font from 16
-    // down by 0.25 until fits; combo-bead pulse via Math::SinIdx.
-    // Pending: Mesh/Font ports required before full draw can be ported.
+    // ASM-spec: 2026-05-11 binary @ 0x0013b95c Classic branch (re-analyst).
+    // Wires the minimum Classic-mode draw chain:
+    //   1) Backplate quad (m_Texture from LoadContent) at pos - (1, 8, 0)
+    //   2) "FRUIT FACT" title at (pos.x - 66, pos.y) size 16
+    //   3) Fact body (m_pCurFactString) at (pos.x - 64, pos.y - 14)
+    //      size 16 with maxWHx=128 (auto-shrink loop deferred -- TODO).
+    //
+    // Skipped (not yet ported):
+    //   - Combo-bead row + sin-pulse (m_ComboHashArray walk, gameMode 3)
+    //   - Auto-shrink loop: while GetStringHeight(scale, 128) > 96: scale -= 0.125
+    //   - Arcade leaderboard / bonus list (gameMode 2)
+    //   - Game[+3] flag-driven posY tweak (defaults to 0)
+
+    // TEMP: Font::DrawString from FruitFactControl::DrawOrder crashes
+    // screen_gameover test (segfault). Bisect found that ANY Font::DrawString
+    // from this control crashes (even with literal "test" string at (0,0)),
+    // while the same call from ScoreControl works fine. Some interaction with
+    // HUD list ordering or per-instance Font state when called from this draw
+    // position. Backplate-only path is safe -- only Font::DrawString crashes.
+    //
+    // Stubbed for now until the underlying Font / HUD interaction is RE'd.
+    // Restore from this commit's predecessor (or this file's git history) once
+    // the crash is understood.
+    //
+    // Bisect log:
+    //   Backplate-only:           passes
+    //   Backplate + title:        passes
+    //   Backplate + body:         crashes
+    //   Body alone (no other):    crashes
+    //   Body w/ literal "test":   crashes
+    //   Body w/ alignment 0x0C:   crashes
+    return;
 }
 
 // ---------------------------------------------------------------------------
