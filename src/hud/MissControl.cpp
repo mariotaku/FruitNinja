@@ -436,12 +436,14 @@ void MissControl::Update(float dt) {
     if (m_FadeAlpha <= 0.0f) {
         m_FadeAlpha = 0.0f;
         if (m_RemoveCallback) m_RemoveCallback(this);
-        m_bBusy        = 0;
-        // Binary slot-release also clears m_bComboActive (asm-inspector
-        // 2026-05-10). The Draw gate above (m_bComboActive && !m_bBusy)
-        // already covers this case via the m_bBusy clear, but we mirror
-        // the binary's exact field writes for parity.
-        m_bComboActive = 0;
+        m_bBusy = 0;
+        // DIFFERS: binary also clears m_bComboActive=0 here. Port leaves it
+        // set so MissControl::Draw's `(m_bComboActive && !m_bBusy)` gate
+        // can recognize "this is a finished combo popup -- don't draw"
+        // vs. "this is a passive miss marker (m_bComboActive=0)". The
+        // binary's equivalent gate is HUD removal via m_RemoveCallback,
+        // which we don't wire (port uses static pool); without keeping
+        // m_bComboActive set, finished popups would draw forever.
     }
 }
 
