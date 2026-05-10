@@ -924,11 +924,13 @@ void MainScreen::ButtonDeleted(HUDControl* ctrl) {
 void MainScreen::GameModeCallback() {
     m_State = STATE_MODE_SELECT;
     m_Timer2 = 1.0f;
-    // Remove the Quit button immediately. Binary just nulls the
-    // pointer here and relies on DeleteMenuButtons / the screen
-    // teardown to release the control; the port can't do that
-    // safely because RemoveButton requires a non-null pointer.
-    RemoveButton(pQuitBtn);
+    // Binary @ 0x0014b068 just nulls pLeaderboardBtn; ClearMenuItems
+    // (fired from the slicing fruit's MenuButton::Update gate) disables
+    // the bomb collision-guard, MenuButton::Update's released-bomb
+    // branch then detaches and the m_FadeCounter shrink rings the
+    // button down naturally. Forcing m_bPendingRemoval=1 here would
+    // delete the button this frame and skip the shrink animation.
+    pQuitBtn = nullptr;
 }
 
 // Matches 0x0014c384
@@ -945,9 +947,11 @@ void MainScreen::NewGameCallback() {
 void MainScreen::AboutCallback() {
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
-    // Same fix as GameModeCallback — remove from HUD instead of
-    // just nulling the pointer.
-    RemoveButton(pQuitBtn);
+    // Binary @ 0x0014afc4 just nulls pLeaderboardBtn; the bomb's
+    // MenuButton continues running, ClearMenuItems disables it, and the
+    // released-bomb branch shrinks the ring via m_FadeCounter naturally.
+    // Same rationale as GameModeCallback above.
+    pQuitBtn = nullptr;
 }
 
 // Matches 0x0014af64
