@@ -384,8 +384,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             float drawX = m_DrawPosX + offsetX;
             float drawY = m_DrawPosY;
             float scale = 48.0f * m_ScalePulse * scaleX;
-            // binary alignment = 0x0d (CENTER|MIDDLE|BOTTOM). DIFFERS: was FONT_ALIGN_CENTER (0x01).
+            // binary alignment = 0x0d (CENTER|MIDDLE|BOTTOM).
             // binary @ 0x00158e1c section A FontDrawString alignment.
+            // CENTER (0x01) is INERT in the binary's Font::DrawString -- it
+            // produces lineOffset = 0, identical to LEFT (0x00). So this call
+            // effectively LEFT-anchors the digit string at (drawX, drawY),
+            // which keeps multi-digit scores to the right of the watermelon
+            // icon. See ASM-verified Font::DrawString @ 0x00198e44.
             game->pFontNumbers->DrawString(scale, 1.0f, 0.0f,
                 buf, Vec3(drawX, drawY, 0.0f), col, 0x0d);
         }
@@ -506,7 +511,16 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             if (game->pFontMain.IsValid()) {
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
-                const char* label = Localisation::Get("BEST");  // key 0xB5
+                // ASM-verified: 2026-05-10 binary @ 0x001592c4..0x001592c8
+                // (re-analyst). Binary loads `movs r0, #0xb5` then BLX to
+                // GETSTRING(idx). Index 181 in translations_header.str is
+                // "CODE_SCORE_BEST" which resolves to the literal "BEST:"
+                // (with trailing colon) in english_us. Earlier port passed
+                // "BEST" which is NOT a header key -- Localisation::Get
+                // fell through and returned the literal string, displaying
+                // "BEST" (no colon) and computing cursorX off the wrong
+                // measured width.
+                const char* label = Localisation::Get("CODE_SCORE_BEST");
                 float labelW  = game->pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
                 // ASM-verified: 2026-05-10 binary @ 0x00159588..0x001596a6 (re-analyst).
@@ -530,9 +544,21 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                         /*rotZ=*/0.0f, iterLabel, anchor, col, maxWH,
                         kAlignLabel, /*z=*/0.0f, nullptr);
                 }
-                // Digit call: binary uses the wrapper @ 0x00199aa0 which
-                // hardcodes yLineFactor = 1.0. Route through port's flat
-                // wrapper.
+                // Digit call: binary @ 0x0015969c routes through PLT
+                // 0x000fd80c which resolves to Font::DrawString @ 0x00199aa0
+                // -- the wrapper, NOT a separate full overload.
+                // ASM-verified: 2026-05-10 binary @ 0x00199aa0 (asm-inspector).
+                // Caller emits s2=0.0 (DAT 0x001597c0) which the wrapper
+                // stores as anchor.z, NOT as yLineFactor. Internally, the
+                // wrapper hardcodes yLineFactor=1.0 (vmov.f32 s1,#0x3f800000
+                // at 0x00199b1c) when delegating to the Vec3-anchor overload
+                // at 0x00198e44. So the effective yLineFactor at the
+                // alignment compute is 1.0 -- which matches the port's flat
+                // wrapper that also forwards through the yLineFactor=1.0
+                // hardcoding path. Earlier port change to call the full
+                // overload with yLineFactor=0.0 was wrong: it bypassed the
+                // wrapper hardcode and produced a 9 px y mismatch vs the
+                // label.
                 game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                     hsBuf, anchor, col, kAlignDigit);
             }
