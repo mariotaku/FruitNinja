@@ -108,10 +108,12 @@ void GameInit(unsigned long) {
             mc->m_Timer     = -kMC[i].rot_tbl;                  // field_0x2c (rotation, negated)
             mc->m_AnimState = i;                                // stored before tmp++ in binary
             mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;       // field_0x34 = 1 (configured flag)
-            // size = (16, 16, 16) * scale per binary @ 0x0016c75a
-            // (DAT_0016c9b8 = 64.0f * 0.5 * 0.5 = 16; per-row scale from
-            // 4th column of the table). Rendered as 32x32*scale quad.
-            const float sz = 16.0f * kMC[i].scale;
+            // size = (32, 32, 32) * row_scale per binary @ 0x0016c712..0x0016c75e
+            // (asm-inspector 2026-05-10): base Vec3(32, 32, 32) from
+            // DAT_0016c9b4 = 0x42000000 = 32.0f, multiplied by the row's
+            // 4th column scalar, then by 1.0f (no-op). Rendered as
+            // 2*size = 64x64*row_scale quad after the [-1..+1] vertex emit.
+            const float sz = 32.0f * kMC[i].scale;
             mc->size = Vec3(sz, sz, sz);
             // DIFFERS: bind m_Texture eagerly to hud_cross.tex here so
             // MissControl::Draw doesn't early-return. Binary's exact bind
