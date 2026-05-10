@@ -146,7 +146,24 @@ static void QuitToMenu() {
         game->mainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
     }
 
-    // TODO: 0x00169e86 -- TutorialControl::field_0x33 = 1 (semantics TBD)
+    // 0x169e84/0x169e86: PauseScreen->m_bPendingRemoval = 1.
+    // ASM-verified: 2026-05-10 binary @ 0x00169e86 (re-analyst). The
+    // earlier asm-inspector pass misread the +0x16c offset as Game->mainScreen
+    // (Game has no mainScreen at +0x16c -- that's SystemManager+0x16c =
+    // pPauseScreen). The +0x33 byte write targets PauseScreen, not MainScreen.
+    //
+    // Binary destructs the pause overlay so it stops drawing + intercepting
+    // input. Port can't safely destruct (m_ResumeButton/m_QuitButton/
+    // m_RetryButton delegates reference `this` and HUD owns the buttons --
+    // destructing PauseScreen would dangle them). Instead deactivate the
+    // overlay: m_bActive = 0 + m_LayerFlags = 0 makes HUDControl3d::Draw
+    // skip the overlay entirely on subsequent frames, and SetPendingRemoval
+    // will only fire when GameExit unwinds.
+    GameTaskState* ts = GetTaskState();
+    if (ts && ts->pPauseScreen) {
+        ts->pPauseScreen->m_bActive    = 0;
+        ts->pPauseScreen->m_LayerFlags = 0;
+    }
 
     FN::SetScore(0, -1);                               // 0x169e90
 
