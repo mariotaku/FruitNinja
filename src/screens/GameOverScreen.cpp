@@ -570,7 +570,9 @@ void GameOverScreen::CreateRetryButton() {
 
     m_pRetryBtn = new MenuButton();
     m_pRetryBtn->m_Texture    = tex;
-    m_pRetryBtn->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+    // Binary CreateRetryButton @ 0x00141188 does NOT explicitly write +0x34;
+    // MenuButton::Init writes HUD_LAYER_MENU_BG for FruitType >= 0 (here 0).
+    m_pRetryBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     m_pRetryBtn->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked),
@@ -633,7 +635,10 @@ void GameOverScreen::CreateQuitButton() {
 
     m_pQuitBtn = new MenuButton();
     m_pQuitBtn->m_Texture    = tex;
-    m_pQuitBtn->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
+    // Binary CreateQuitButton @ 0x001412e4 does NOT explicitly write +0x34;
+    // MenuButton::Init writes HUD_LAYER_MENU_BG for FruitType >= 0 (the
+    // FruitType comes from a global int; shipped data keeps it >= 0).
+    m_pQuitBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     m_pQuitBtn->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked),

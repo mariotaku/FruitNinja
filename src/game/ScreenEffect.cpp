@@ -338,7 +338,11 @@ void ScreenEffect::Activate() {
         ctrl->pos = img.m_Pos;
         ctrl->size = img.m_SizeIn;
         ctrl->m_DrawColour = img.m_Tint;
-        ctrl->m_LayerFlags = (int)img.m_GroupMask ? (int)img.m_GroupMask : 1;
+        // Binary @ 0x0011dd2e: `str r1, [r2, #0x34]` -- raw copy of
+        // EffectImage::m_GroupMask, no `?: 1` fallback. If data has 0,
+        // the binary writes 0 (HUD_LAYER_NONE -> the control is filtered
+        // out of all HUD::Draw passes).
+        ctrl->m_LayerFlags = (int)img.m_GroupMask;
         img.m_pHudCtrl    = ctrl;
         img.m_bAddedToHUD = true;
         img.m_CurrentVis  = 0.0f;
