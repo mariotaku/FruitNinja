@@ -719,7 +719,19 @@ void PauseScreen::Update(float dt) {
         m_ButtonFadeAlpha += (1.0f - m_ButtonFadeAlpha) * FADE_IN_RATE;
     }
 
-    // 2. State 6 special: snap alpha = 1.0, buttonFadeAlpha = 0
+    // 2. State 6 scratch override (binary @ 0x00154eac..0x00154ec4 +
+    // 0x00155200..0x00155204).
+    // ASM-verified: 2026-05-10 binary (asm-inspector). Binary saves
+    // m_Alpha + m_ButtonFadeAlpha BEFORE the reset, runs the rendering math
+    // with the scratch values, then RESTORES the persistent fields from
+    // the saved values at function exit. The 1.0 / 0.0 reset only affects
+    // button-layout / texture-swap reads in the post-switch math; the
+    // persistent fade state continues to decay across frames.
+    // Earlier port treated the reset as a persistent state mutation, which
+    // pinned m_Alpha at 1.0 each frame and made case-6's
+    // `m_Alpha *= 0.75` decay never reach EXIT_THRESHOLD -- Quit hung.
+    const float savedAlpha           = m_Alpha;
+    const float savedButtonFadeAlpha = m_ButtonFadeAlpha;
     if (m_State == 6) {
         m_Alpha = 1.0f;
         m_ButtonFadeAlpha = 0.0f;
@@ -830,6 +842,11 @@ void PauseScreen::Update(float dt) {
 
     // 7. P2 buttons inactive (Tier-2 stub -- P2 buttons are nullptr in Tier-1)
     // m_P2ResumeButton / m_P2RetryButton are always nullptr in Tier-1.
+
+    // Restore the persistent fade state -- the state-6 reset above was a
+    // scratch override for rendering only. Binary @ 0x00155200/0x00155204.
+    m_Alpha           = savedAlpha;
+    m_ButtonFadeAlpha = savedButtonFadeAlpha;
 }
 
 // ASM-verified: 2026-05-08T00:00 binary @ 0x00153e34 (re-analyst)
