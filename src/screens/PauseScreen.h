@@ -28,6 +28,18 @@
 
 class MenuButton;
 
+// PauseScreen state machine. m_State is `int` (binary +0xd4 layout); values
+// are 0..6. ABI-compatible -- enum integer rank is int by default.
+enum PauseScreenState {
+    PAUSE_STATE_HIDDEN          = 0,  // idle / not active
+    PAUSE_STATE_BOMB_FLASH      = 1,  // bomb-flash poll (Tier-2)
+    PAUSE_STATE_FADE_IN         = 2,  // entry fade-in
+    PAUSE_STATE_ACTIVE          = 3,  // overlay shown, buttons interactable
+    PAUSE_STATE_RESUME_EXIT     = 4,  // Resume button fade-out
+    PAUSE_STATE_RETRY_EXIT      = 5,  // Retry button fade-out -> EndRetryLevel
+    PAUSE_STATE_QUIT_EXIT       = 6,  // Quit button fade-out -> QuitToMenu
+};
+
 class PauseScreen : public HUDControl3d {
 public:
     // === PauseScreen-specific fields (+0x7c..+0xd4) ===
