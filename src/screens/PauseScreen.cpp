@@ -35,6 +35,8 @@
 #include "engine/audio/GameSound.h"
 #include "engine/network/NetworkManager.h"
 #include "game/GameOver.h"
+#include "game/BombHit.h"
+#include "game/PowerUpManager.h"
 #include "screens/MainScreen.h"
 #include "entities/BombBlast.h"
 #include "Game.h"
@@ -146,24 +148,12 @@ static void QuitToMenu() {
         game->mainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
     }
 
-    // 0x169e84/0x169e86: PauseScreen->m_bPendingRemoval = 1.
-    // ASM-verified: 2026-05-10 binary @ 0x00169e86 (re-analyst). The
-    // earlier asm-inspector pass misread the +0x16c offset as Game->mainScreen
-    // (Game has no mainScreen at +0x16c -- that's SystemManager+0x16c =
-    // pPauseScreen). The +0x33 byte write targets PauseScreen, not MainScreen.
-    //
-    // Binary destructs the pause overlay so it stops drawing + intercepting
-    // input. Port can't safely destruct (m_ResumeButton/m_QuitButton/
-    // m_RetryButton delegates reference `this` and HUD owns the buttons --
-    // destructing PauseScreen would dangle them). Instead deactivate the
-    // overlay: m_bActive = 0 + m_LayerFlags = 0 makes HUDControl3d::Draw
-    // skip the overlay entirely on subsequent frames, and SetPendingRemoval
-    // will only fire when GameExit unwinds.
-    GameTaskState* ts = GetTaskState();
-    if (ts && ts->pPauseScreen) {
-        ts->pPauseScreen->m_bActive    = 0;
-        ts->pPauseScreen->m_LayerFlags = 0;
-    }
+    // 0x169e84/0x169e86 binary writes PauseScreen->m_bPendingRemoval = 1
+    // (re-analyst 2026-05-10), destructing the overlay. Port relies on
+    // PauseScreen's own state machine (BOMB_FLASH -> HIDDEN with m_Alpha
+    // decay) to fade the overlay out gradually -- if we deactivated here
+    // (m_bActive=0), Update would stop running and the BOMB_FLASH state
+    // would never advance.
 
     FN::SetScore(0, -1);                               // 0x169e90
 
@@ -634,11 +624,21 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_BOMB_FLASH:
-        // DIFFERS: Tier-2 will add real BombFlashFull() poll here.
-        // Tier-1: immediately clear and return to hidden.
-        m_Alpha = 0.0f;
-        m_ButtonFadeAlpha = 1.0f;
-        m_State = PAUSE_STATE_HIDDEN;
+        // ASM-verified: 2026-05-10 binary @ 0x00154d2a..0x00154d72 (re-analyst).
+        // Hold m_Alpha = 1.0 / m_ButtonFadeAlpha = 0.0 each frame while
+        // BombFlashFull() returns false (i.e. game->bombHitTimer >= 1.0).
+        // When the bomb-hit timer crosses below 1.0 (half the 2.0s window),
+        // reset PowerUpManager, drop to HIDDEN, and pull m_TransitionTimer
+        // to -1.0 so the slide-back-to-menu animation kicks in via MainScreen.
+        m_ButtonFadeAlpha = 0.0f;
+        m_Alpha           = 1.0f;
+        if (FN::BombFlashFull()) {
+            m_Alpha           = 1.0f;
+            m_ButtonFadeAlpha = 1.0f;
+            PowerUpManager::GetInstance()->Reset(false);
+            m_State = PAUSE_STATE_HIDDEN;
+            game->m_TransitionTimer = -1.0f;
+        }
         break;
 
     case PAUSE_STATE_FADE_IN:
@@ -686,18 +686,28 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_QUIT_EXIT:
-        // 0.5 multiplier was applied once on state-3->6 transition in QuitGameCallback.
-        // Per-frame: standard 0.75 decay only (binary @ 0x00154468 case 6).
+        // ASM-verified: 2026-05-10 binary @ 0x00154dc4..0x00154e1e (re-analyst).
+        // Binary applies 0.5x extra fast-fade in case 6 then falls through to
+        // the common 0.75 decay; both happen each frame.
+        m_Alpha *= 0.5f;
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             QuitToMenu();
-            // Tier-2: HitMenuBomb at quit button position (state 6 effect)
-            // if (m_LastHitButton >= 0) { ... HitMenuBomb(pos) ... }
-            m_ButtonFadeAlpha = 0.0f;
+            // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
+            // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
+            if (m_LastHitButton >= 0 && m_QuitButton) {
+                FN::HitMenuBomb(m_QuitButton->pos);
+            }
+            // Binary writes m_ButtonFadeAlpha = 1.0 (DAT_00154fb8), NOT 0.0.
+            // Earlier port wrote 0.0 which left the buttons at full opacity
+            // straight through the bomb-flash phase.
+            m_ButtonFadeAlpha = 1.0f;
             m_LastHitButton   = -1;
-            // Tier-2: transition to state 1 (bomb-flash). Tier-1: skip to 0.
-            m_State = PAUSE_STATE_HIDDEN;
-            m_Alpha = 0.0f;
+            // Transition to BOMB_FLASH (1), NOT HIDDEN. The bomb-flash poll
+            // in case 1 is what produces the visible white flash and tears
+            // down the gameplay HUD; jumping straight to HIDDEN skipped both.
+            m_State = PAUSE_STATE_BOMB_FLASH;
+            m_Alpha = 1.0f;
             FruitNinja_SaveCurrentData(false);
             UnpauseGame();
         }
