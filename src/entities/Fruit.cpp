@@ -839,14 +839,31 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const float sliceLength   = bladeSpeed * 0.4f;
     FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
 
-    // Matches CollisionResponse score+save dispatch (binary @ 0x00178e90..0x00178f04).
+    // Matches CollisionResponse score+save dispatch (binary @ 0x00178c3c).
+    // ASM-verified: 2026-05-10 binary @ 0x00178bc8..0x00178e30 (re-analyst).
+    // Formula:
+    //   score = info->m_Score                               // FRUIT_INFO+0x314
+    //   if (critical) score += 5                            // g_CritScoreBonus @ 0x001f3e30
+    //   if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax)
+    //       score = info->m_CoinsMin + Rand32(max - min)    // random-score override
+    //   if (critical) score *= 2                            // g_CritScoreMul / 2 = 2 (int div)
+    // Earlier port had `score * 2` for critical, missing the +5 bonus.
+    // For a normal scorable fruit (m_Score=1, no random override), this gives
+    // critical = (1+5)*2 = 12 vs port's old 1*2 = 2 -- the +10 difference user reports.
+    // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
+    // when used in this score path; same fields, dual-purpose semantics.
     if (info) {
         Game* g = Game::GetInstance();
         if (g) {
-            const int multiplier = m_bCriticalEligible ? 2 : 1;
-            // Score: multiplier and crit x2 are applied inside AddToCurrentScore
-            // via GetScoreMultiplyer + Game::scoreMultDelegate.
-            FN::AddToCurrentScore(info->m_Score * multiplier, (int)m_PlayerIdx,
+            int score = info->m_Score;
+            if (m_bCriticalEligible) score += 5;
+            if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
+                const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
+                score = info->m_CoinsMin
+                      + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
+            }
+            if (m_bCriticalEligible) score *= 2;  // g_CritScoreMul / 2 = 2
+            FN::AddToCurrentScore(score, (int)m_PlayerIdx,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
 
             // Per-fruit-name save totals.
