@@ -286,7 +286,16 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     m_State          = 0;
     m_LayerFlags     = Mortar::HUD_LAYER_NONE; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
-    m_SecondaryTex.SetNull();   // Binary @ 0x00140d?? clears +0x74 (HUDControl3d::m_SecondaryTex)
+    // ASM-verified: 2026-05-11 binary @ Initialise tail (asm-inspector).
+    // Binary clears m_GameOverTex (+0x114, the per-instance Quest-only
+    // overlay slot the ctor just default-constructed), NOT m_SecondaryTex
+    // (+0x78, the mode-specific title texture loaded above). m_SecondaryTex
+    // must remain populated -- HUDControl3d::Draw is called as the final
+    // line of PreDrawOrder's param2==1 arm and binds +0x78 to render the
+    // "GAME OVER" / "TIME UP" / "ARCADE TIME UP" title quad. Earlier port
+    // nulled m_SecondaryTex here, which killed the title display in all
+    // modes (user reported "is gameover texture drawn?" -- it wasn't).
+    m_GameOverTex.SetNull();
     m_AnimCounter    = 0;
     m_bScoreSubmitted = 0;
     m_BgPatternIdx   = bgPatternIdx;
