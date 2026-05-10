@@ -16,6 +16,7 @@
 #include "entities/Entity.h"
 #include "game/BombHit.h"
 #include "game/FruitCamera.h"
+#include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
@@ -924,6 +925,8 @@ void MainScreen::ButtonDeleted(HUDControl* ctrl) {
 void MainScreen::GameModeCallback() {
     m_State = STATE_MODE_SELECT;
     m_Timer2 = 1.0f;
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    FruitSaveData::DownloadTweaks();  // defunct stub
     // Binary @ 0x0014b068 just nulls pLeaderboardBtn; ClearMenuItems
     // (fired from the slicing fruit's MenuButton::Update gate) disables
     // the bomb collision-guard, MenuButton::Update's released-bomb
@@ -931,22 +934,32 @@ void MainScreen::GameModeCallback() {
     // button down naturally. Forcing m_bPendingRemoval=1 here would
     // delete the button this frame and skip the shrink animation.
     pQuitBtn = nullptr;
+    // TODO: 0x0014b020 -- InitVec3_MissControl tail-call (writes 4 const
+    //   Vec3 values into MissControl+0..0x14). Not yet ported.
 }
 
 // Matches 0x0014c384
 void MainScreen::NewGameCallback() {
+    CancelNews();  // defunct stub
     m_State = STATE_GAME_START;
     // ASM-verified: 2026-05-08 binary @ 0x0014c3ce (re-analyst). Literal at
     // 0x001b96af is "Game-start" (Title-Case). Bada's sound loader resolves
     // filenames case-insensitively; the SDL port mirrors that in
     // SoundManager::LoadSound's POSIX dirent fallback.
+    // TODO: 0x0014c384 -- binary passes a Delegate1<bool, MortarSound*>
+    //   completion callback as a 4th SFXPlay arg; port omits the delegate
+    //   (no chained logic relies on it yet). Wire when needed.
     if (game.pGameSound) game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
+    // TODO: 0x0014b020 -- InitVec3_MissControl tail-call (writes 4 const
+    //   Vec3 values into MissControl+0..0x14). Not yet ported.
 }
 
 // Matches 0x0014afc4
 void MainScreen::AboutCallback() {
+    CancelNews();  // defunct stub
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
     // Binary @ 0x0014afc4 just nulls pLeaderboardBtn; the bomb's
     // MenuButton continues running, ClearMenuItems disables it, and the
     // released-bomb branch shrinks the ring via m_FadeCounter naturally.
@@ -972,11 +985,13 @@ void MainScreen::MusicCallback() {
 
 // Matches 0x0014b010
 void MainScreen::LeaderboardsCallback() {
+    CancelNews();  // defunct stub
     m_State = STATE_LEADERBOARD;  // network — skip for port
 }
 
 // Matches 0x0014b000
 void MainScreen::MoreGamesCallback() {
+    CancelNews();  // defunct stub
     m_State = STATE_MORE_GAMES;  // network — skip for port
 }
 
@@ -1161,5 +1176,10 @@ void MainScreen::OnMenuItemsCleared() {
 void MainScreen::MultiplayerGameModeCallback() {
     m_State = STATE_MODE_SELECT_2;
     m_Timer2 = 1.0f;
-    RemoveButton(pQuitBtn);
+    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    // Binary @ 0x0014B0D2..0x0014B0D8: `str.w r3, [r4, #0xa4]` with r3=0
+    // -- just nulls the pointer, no m_bPendingRemoval write. Same rationale
+    // as GameModeCallback / AboutCallback above.
+    pQuitBtn = nullptr;
+    // TODO: 0x0014b020 -- InitVec3_MissControl tail-call. Not yet ported.
 }
