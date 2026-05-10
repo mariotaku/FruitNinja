@@ -849,8 +849,53 @@ float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float
 // STUB: Font::GetCharTemplate(long,int) -- binary @ 0x???? (TODO RE)
 Font::CharTemplate* Font::GetCharTemplate(long, int) { return nullptr; }
 
-// STUB: Font::GetStringHeight(Utf8StringIterator,float,float) -- binary @ 0x???? (TODO RE)
-void Font::GetStringHeight(Utf8StringIterator, float, float) {}
+// ASM-spec: 2026-05-11 binary @ 0x001988f0 (re-analyst).
+//   maxWidth <= 0: walks string counting '\n', returns lineH * (n+1).
+//   maxWidth >  0: word-wrap path; advances per word, line-breaks when
+//                  next word would exceed maxWidth.
+// Used by FruitFactControl's auto-shrink loop to pick a font scale that
+// keeps the fact body within a 96-px box.
+float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth) {
+    if (maxWidth <= 0.0f) {
+        int newlines = 0;
+        while (!iter.IsEmpty()) {
+            if (iter.m_CurrentCodepoint == '\n') ++newlines;
+            iter++;
+        }
+        return lineH * (float)(newlines + 1);
+    }
+
+    int lines = 1;
+    float curWidth = 0.0f;
+    while (!iter.IsEmpty()) {
+        uint32_t cp = iter.m_CurrentCodepoint;
+        if (cp == '\n') {
+            ++lines;
+            curWidth = 0.0f;
+            iter++;
+            continue;
+        }
+        float wordW = 0.0f;
+        Mortar::Utf8StringIterator wi = iter;
+        while (!wi.IsEmpty() && wi.m_CurrentCodepoint != ' ' && wi.m_CurrentCodepoint != '\n') {
+            CharTemplate* g = GetCharTemplate(wi.m_CurrentCodepoint);
+            if (g) wordW += g->xadv;
+            wi++;
+        }
+        if (curWidth > 0.0f && curWidth + wordW > maxWidth) {
+            ++lines;
+            curWidth = 0.0f;
+        }
+        curWidth += wordW;
+        iter = wi;
+        if (!iter.IsEmpty() && iter.m_CurrentCodepoint == ' ') {
+            CharTemplate* g = GetCharTemplate(' ');
+            if (g) curWidth += g->xadv;
+            iter++;
+        }
+    }
+    return lineH * (float)lines;
+}
 
 // STUB: Font::MeasureString(Utf8StringIterator) -- binary @ 0x???? (TODO RE)
 float Font::MeasureString(Utf8StringIterator) { return 0.0f; }

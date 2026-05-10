@@ -66,7 +66,6 @@ FruitSaveData::FruitSaveData()
     , m_blitzSpawnTime(0.0f)
     , m_VersionInfo(0)
     , m_BombQueueCount(0)
-    , m_DaysRemaining(0)
 {
     for (int i = 0; i < 4; i++) {
         m_ModeHighScores[i] = 0;

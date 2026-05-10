@@ -1212,15 +1212,19 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
     if (!r) return;
 
     // -----------------------------------------------------------------
-    // Layer 0x80 path -- days-remaining label + per-button overlay quad
+    // Layer 0x80 path -- highscore label + game-over overlay quad.
+    // ASM-verified: 2026-05-11 binary @ 0x00141742..0x0014186a (asm-inspector).
+    // The %d text is FruitSaveData::m_highscore (+0x40, all-time best),
+    // gated on m_highscore > 0. Earlier port misnamed the field as
+    // m_DaysRemaining -- there is no days-remaining concept at +0x40.
     // -----------------------------------------------------------------
     if ((layerMask & Mortar::HUD_LAYER_POST_ACTOR) != 0) {
         Game* game = Game::GetInstance();
         if (m_pRetryBtn && game && game->pSaveData &&
-            game->pSaveData->m_DaysRemaining > 0)
+            game->pSaveData->m_highscore > 0)
         {
             char buf[16];
-            snprintf(buf, sizeof(buf), "%d", game->pSaveData->m_DaysRemaining);
+            snprintf(buf, sizeof(buf), "%d", game->pSaveData->m_highscore);
 
             const Vec3 daysPos(-163.0f, -96.0f, 0.0f);  // DAT_001419e0/4/8
             // Binary @ 0x00141770 calls Font::DrawString(scale=btn.size*0.5,

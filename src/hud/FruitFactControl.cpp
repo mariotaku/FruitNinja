@@ -378,9 +378,21 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         const Colour brown(0x74, 0x5D, 0x3B, 0xFF);
         const float bodyX = pos.x - 64.0f;
         const float bodyY = pos.y - 14.0f;
-        // TODO: 0x0013c95e -- auto-shrink loop:
-        //   scale = 16; while (font->GetStringHeight(scale, 128) > 96) scale -= 0.125;
-        game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+        // ASM-verified: 2026-05-11 binary @ 0x0013c95e auto-shrink loop.
+        //   scale = 16.0f
+        //   while (Font::GetStringHeight(scale, 128.0f) > 96.0f)
+        //       scale -= 0.125f
+        // Shrinks the font until the wrapped fact body fits the 128x96 box.
+        float scale = 16.0f;
+        {
+            Mortar::Utf8StringIterator iter(m_pCurFactString);
+            while (game->pFontMain->GetStringHeight(iter, scale, 128.0f) > 96.0f) {
+                if (scale <= 0.5f) break;  // safety floor
+                scale -= 0.125f;
+                iter = Mortar::Utf8StringIterator(m_pCurFactString);
+            }
+        }
+        game->pFontMain->DrawString(scale, 1.0f, 0.0f,
             m_pCurFactString, Vec3(bodyX, bodyY, 0.0f),
             brown, 0x0F);
     }
