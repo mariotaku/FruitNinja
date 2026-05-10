@@ -1000,16 +1000,22 @@ void GameOverScreen::Update(float dt) {
             }
         }
 
-        // 6) Vertical "settle" — slide content based on alpha
-        if (pos.y < 0.0f) {
+        // 6) Vertical "settle" — title slides DOWN off-screen + shrinks.
+        // ASM-verified: 2026-05-11 binary @ 0x00141ec0+ (re-analyst).
+        //   Gate:  pos.y < 212.8 (DAT_00142614)
+        //   pos.y = lerp(0.0, 224.0, alpha)        (DAT_0014261c, DAT_00142618)
+        //   size  = m_TitleSize * lerp(2.0, 1.0, alpha)
+        // Earlier port had gate `pos.y < 0` (impossible from state 0 exit
+        // where pos.y == 0) and target 0 -- block never executed, so the
+        // title stayed at center full-size while sensei/fact/buttons slid
+        // in behind it, leaving the user "stuck on the logo".
+        if (pos.y < 212.8f) {
             float a = game->m_TransitionTimer;
-            // size = TitleSize * lerp(2.0, 1.0, alpha)
-            float sf = 2.0f + (1.0f - 2.0f) * a; // lerp(2,1,a)
+            float sf = 2.0f + (1.0f - 2.0f) * a; // lerp(2, 1, a)
             size.x = m_TitleSizeX * sf;
             size.y = m_TitleSizeY * sf;
-            // pos.y = lerp(-85.0, 0.0, alpha) per DAT_00142618/0014261c
             pos.x = 0.0f;
-            pos.y = -85.0f + (-85.0f * -1.0f) * a; // = -85*(1-a) → 0 as a→1
+            pos.y = 224.0f * a;  // lerp(0, 224, a) -- slides down off-screen
             pos.z = 0.0f;
         }
         break;
