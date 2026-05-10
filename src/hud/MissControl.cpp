@@ -480,17 +480,22 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // (a global screen-fade factor) when < 1.0 -- not yet ported; treat as 1.0.
     const float fade = 1.0f;
 
-    // UV crop based on m_bComboActive / m_bVisible. binary @ 0x00151f60 UV block
+    // UV crop based on m_bComboActive / m_bVisible.
+    // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)
+    //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
+    //   inactive: u0=0.0  u1=0.5  v0=0.25  v1=0.75  (left half, vertical centre)
+    //   active:   u0=0.5  u1=1.0  v0=0.25  v1=0.75  (right half, vertical centre)
+    // Both non-combo crops are square 0.5x0.5 -- earlier port had du=0.25 / dv=0.75
+    // which sampled a 1:3 strip onto the 1:1 quad, distorting aspect AND
+    // sampling different vertical regions for the two states (visible
+    // position shift between inactive and active).
     float u0, v0, du, dv;
     if (m_bComboActive) {
-        // Full UV quad. binary combo-active path.
-        u0 = 0.0f; v0 = 0.0f; du = 1.0f; dv = 1.0f;
+        u0 = 0.0f; v0 = 0.0f;  du = 1.0f; dv = 1.0f;
     } else if (!m_bVisible) {
-        // 25%-wide vertical crop left. binary: (u0=0, v0=0.5, du=0.25, dv=0.75)
-        u0 = 0.0f; v0 = 0.5f; du = 0.25f; dv = 0.75f;
+        u0 = 0.0f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     } else {
-        // 25%-wide vertical crop right. binary: (u0=0.5, v0=0, du=0.25, dv=0.75)
-        u0 = 0.5f; v0 = 0.0f; du = 0.25f; dv = 0.75f;
+        u0 = 0.5f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     }
 
     MatrixManager& mm = MatrixManager::GetInstance();
