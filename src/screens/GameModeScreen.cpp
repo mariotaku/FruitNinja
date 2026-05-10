@@ -10,6 +10,7 @@
 #include "Game.h"
 #include "game/StartupEffects.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
 #include "entities/FruitInfo.h"
@@ -175,7 +176,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_bSetupLevelFired(false)
 {
     LoadContent();
-    m_LayerFlags = 1;  // binary sets to 1 in ctor; raised to 0x80 by subclass Draw
+    m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;  // binary sets to 1 in ctor; raised to HUD_LAYER_POST_ACTOR by subclass Draw
 }
 
 GameModeScreen::~GameModeScreen() {

@@ -9,6 +9,7 @@
 // are preserved exactly to match binary layout.
 
 #include "VerticalScroller.h"
+#include "hud/HUDLayer.h"
 #include "engine/input/Touch.h"
 #include "render/gl_funcs.h"
 
@@ -57,7 +58,7 @@ VerticalScroller::VerticalScroller(Vec3 inPos, Vec3 inSize,
     m_TotalHeightPx   = (float)totalHeight * size.y;
 
     // Binary sets m_LayerFlags = 0x400 in ctor.
-    m_LayerFlags = 0x400;
+    m_LayerFlags = Mortar::HUD_LAYER_FADE_MODAL;
 
     _pad8D[0] = 0;
     _pad8D[1] = 0;

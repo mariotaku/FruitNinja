@@ -1,6 +1,7 @@
 // Analysed: 2026-05-03T00:00
 #include "MissControl.h"
 #include "HUD.h"
+#include "HUDLayer.h"
 #include "asset/TextureManager.h"
 #include "Game.h"
 #include "math/Matrix44.h"
@@ -81,7 +82,7 @@ MissControl::MissControl()
     m_bActive       = 1;
     m_bNoDestructor = 1;
     // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
-    m_LayerFlags    = 1;
+    m_LayerFlags    = Mortar::HUD_LAYER_DEFAULT;
 }
 
 MissControl::~MissControl() = default;
@@ -99,7 +100,8 @@ void MissControl::Init() {
     m_bBusy        = 1;
     m_Timer        = 0.0f;  // rotation (+0x2c)
     m_AnimState    = 0;
-    m_LayerFlags   = 1;     // "configured" flag; DIFFERS: was 0x200
+    // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
+    m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
     m_FadeAlpha    = 0.0f;
     m_bBusy        = 1;     // binary writes twice (first overwritten by ctor)
     m_ComboCount   = 0;

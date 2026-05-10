@@ -9,6 +9,7 @@
 #include "MenuButton.h"
 #include "Game.h"
 #include "HUD.h"
+#include "hud/HUDLayer.h"
 #include "asset/TextureManager.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
@@ -64,7 +65,7 @@ TutorialControl::TutorialControl()
     // press_indicate.tex -> m_PressTex (+0x8C, the trail quads)
     m_PressTex = Mortar::TextureManager::LoadLocalisedTexture("press_indicate.tex");
 
-    m_LayerFlags = 8;
+    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 }
 
 TutorialControl::~TutorialControl() {
@@ -74,7 +75,7 @@ TutorialControl::~TutorialControl() {
 // Matches TutorialControl::Init @ 0x00162e38
 // ===================================================================
 void TutorialControl::Init() {
-    m_LayerFlags = 8;
+    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     Reset();
 }
 
@@ -175,7 +176,7 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
 // Animation lifecycle: -10=inactive, 0..2.75=animating
 // ===================================================================
 void TutorialControl::Update(float dt) {
-    m_LayerFlags = 8;
+    m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
     // Default: hide (far off-screen); m_bHidden=1 selects UV frame 1
     m_DrawPos = Vec3(-1000.0f, -1000.0f, -1000.0f);

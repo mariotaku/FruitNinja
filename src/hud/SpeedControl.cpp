@@ -1,6 +1,7 @@
 // Analysed: 2026-05-03T00:00
 
 #include "SpeedControl.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
 
@@ -38,7 +39,7 @@ SpeedControl::SpeedControl()
     m_BaseSize = sz;
 
     // Layer mask 0x40 (binary ctor strb).
-    m_LayerFlags = 0x40;
+    m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
 }
 
 // dtor @ 0x00161558 / 0x001615d4 / 0x00161650

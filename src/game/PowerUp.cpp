@@ -6,6 +6,7 @@
 #include "Game.h"
 #include "FruitSaveData.h"
 #include "hud/MissControl.h"
+#include "hud/HUDLayer.h"
 #include "util/StringHash.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
@@ -153,7 +154,7 @@ void PowerUp::Activate(bool isPurchase, const Vec3& pos, float extra) {
             MissControl* m = MissControl::GetFree();
             if (m) {
                 m->MakeDisappear(pos, 0, m_Texture2);
-                m->m_LayerFlags = 8;
+                m->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
             }
         }
         if (m_pPurchaseInfo) {

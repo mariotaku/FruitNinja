@@ -52,7 +52,7 @@ public:
     // +0x2c: float   rotation (degrees; used as SinIdx(rot*182) in Draw)
     // +0x30: uint8   m_bBusy  -- pool slot busy flag (0=free, 1=active)
     // +0x32: uint8   pool-owned flag (set by CreatePool)  [not modelled in port]
-    // +0x34: uint32  "configured" flag (Init writes 1); DIFFERS: was m_LayerFlags=0x200
+    // +0x34: uint32  m_LayerFlags / "configured" flag (Init writes 1)
     // +0x5c: uint8   RGBA tint b,g,r,a (Init copies from DAT default colour)
     // +0x74: Mortar::SmartPtr<Texture> bound texture
     // +0x7c: uint8   m_AnimState  (0=idle, 3=active fade)

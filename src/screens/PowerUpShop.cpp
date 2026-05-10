@@ -10,6 +10,7 @@
 
 #include "screens/PowerUpShop.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
 #include "game/PowerUpManager.h"
 #include "game/FruitSaveData.h"
@@ -144,7 +145,7 @@ void PowerUpShop::Init() {
     // TODO: 0x00156b08 — pivot assignment needs texture dims; stub at (0,0,0) until
     // texture filename resolved.
 
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     // Iterate PowerUpManager::m_PurchasablePowers (GetFirstPurchasable / GetNextPurchasable
     // are not in the port; walk the list directly — equivalent traversal).

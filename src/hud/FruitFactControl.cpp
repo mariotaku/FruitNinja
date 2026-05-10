@@ -5,6 +5,7 @@
 #include "hud/FruitFactControl.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "game/BonusManager.h"
 #include "game/Bonus.h"
@@ -157,7 +158,7 @@ void FruitFactControl::Init() {
     }
 
     m_LBState = savedLBState;
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     Reset();
 }
@@ -209,7 +210,7 @@ void FruitFactControl::Release() {
 // ---------------------------------------------------------------------------
 
 void FruitFactControl::BeginDraw(float /*dt*/) {
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
@@ -217,7 +218,7 @@ void FruitFactControl::BeginDraw(float /*dt*/) {
     // If fact texture is set AND (dojo mode OR (arcade AND pom <= 1)):
     if (m_FactTexture) {
         if (gameMode == 3 || (gameMode == 2 && m_PomCount <= 1)) {
-            m_LayerFlags |= 8;
+            m_LayerFlags |= Mortar::HUD_LAYER_BUTTONS;
         }
     }
 }
@@ -231,7 +232,7 @@ void FruitFactControl::Update(float dt) {
     m_AnimTimer += dt * 8.0f;
     if (m_AnimTimer >= 8.0f) m_AnimTimer -= 8.0f;
 
-    m_LayerFlags = 0x80;
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     Game* game = Game::GetInstance();
     if (!game) return;
