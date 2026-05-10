@@ -530,15 +530,19 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
 
     QUADCUSTOMVERTEX v[6];
     std::memset(v, 0, sizeof(v));
-    // Centred quad in [-1..+1]. Matrix applies size scale + translate.
+    // Centred quad in [-0.5..+0.5] -- matches Renderer::DrawQuad and the
+    // binary's Mortar::Mesh::DrawQuadUnCached. Matrix applies size scale
+    // (full quad span = size) + translate. Earlier port used [-1..+1]
+    // which doubled the rendered size, masked previously by setting the
+    // size base to 16 instead of the binary's 32.
     const float u1 = u0 + du;
     const float v1 = v0 + dv;
-    v[0].x = -1.0f; v[0].y = -1.0f; v[0].u = u0; v[0].v = v1; v[0].colour = col;
-    v[1].x =  1.0f; v[1].y = -1.0f; v[1].u = u1; v[1].v = v1; v[1].colour = col;
-    v[2].x = -1.0f; v[2].y =  1.0f; v[2].u = u0; v[2].v = v0; v[2].colour = col;
-    v[3].x =  1.0f; v[3].y = -1.0f; v[3].u = u1; v[3].v = v1; v[3].colour = col;
-    v[4].x =  1.0f; v[4].y =  1.0f; v[4].u = u1; v[4].v = v0; v[4].colour = col;
-    v[5].x = -1.0f; v[5].y =  1.0f; v[5].u = u0; v[5].v = v0; v[5].colour = col;
+    v[0].x = -0.5f; v[0].y = -0.5f; v[0].u = u0; v[0].v = v1; v[0].colour = col;
+    v[1].x =  0.5f; v[1].y = -0.5f; v[1].u = u1; v[1].v = v1; v[1].colour = col;
+    v[2].x = -0.5f; v[2].y =  0.5f; v[2].u = u0; v[2].v = v0; v[2].colour = col;
+    v[3].x =  0.5f; v[3].y = -0.5f; v[3].u = u1; v[3].v = v1; v[3].colour = col;
+    v[4].x =  0.5f; v[4].y =  0.5f; v[4].u = u1; v[4].v = v0; v[4].colour = col;
+    v[5].x = -0.5f; v[5].y =  0.5f; v[5].u = u0; v[5].v = v0; v[5].colour = col;
 
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawTriList(v, 6);
