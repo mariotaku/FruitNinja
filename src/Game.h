@@ -132,6 +132,8 @@ struct Game : public Mortar::MortarGame {
     // so they're easy to light up once audio is wired.
     GameSound* pGameSound;
     int m_gameDataLicensedState;   // +0x18C: game-level licensed state (separate from MortarGame)
+    uint8_t m_bGameOverActive;     // +0x190 -- cleared by GameOverScreen::Update case 0xe
+    // +0x191..+0x193: padding (binary leaves 3 bytes here; port matches)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
     float m_MenuReturnTimer;       // +0x1A0
     uint8_t flag_0x1a8;            // +0x1A8
