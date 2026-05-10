@@ -475,11 +475,16 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     //   maxWH.y /= (yLineFactor * scale)
     // yLineFactor is a vertical line-pitch divisor (NOT a wrap-width limit
     // as earlier port comments claimed). The binary's wrapper @ 0x00199aa0
-    // hardcodes yLineFactor = 1.0; ScoreControl's highscore "BEST" label
-    // passes 0.9 (DAT_0015979c). Callers must NEVER pass 0 -- the divide
-    // would produce NaN and corrupt vertical alignment.
-    maxWH.x /= scale;
-    maxWH.y /= (yLineFactor * scale);
+    // hardcodes yLineFactor = 1.0; ScoreControl's "BEST:" label passes 0.9,
+    // its digit call passes 0.0 directly to the full overload.
+    //
+    // Binary preamble @ 0x00198eb0..0x00198eee only runs when maxWH != null
+    // (re-analyst 2026-05-10). Port models this by gating on maxWH being
+    // non-zero -- prevents NaN when yLineFactor=0 with maxWH=(0,0).
+    if (maxWH.x != 0.0f || maxWH.y != 0.0f) {
+        maxWH.x /= scale;
+        maxWH.y /= (yLineFactor * scale);
+    }
 
     // Word-wrap threshold in lineHeight-normalized units (maxWH.x after /= scale).
     // Wrap is active whenever maxWH.x > 0; the binary's caller signals "no wrap"
@@ -505,14 +510,37 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     uint32_t curColour = colour.PlatformColour();
     uint32_t origColour = curColour;
 
-    // Horizontal alignment: compute offset for first line
+    // Horizontal alignment: compute offset for first line.
+    // ASM-verified: 2026-05-10T00:00Z binary @ 0x00198e44 (re-analyst hand-
+    // disassembly @ 0x00198ef0..0x00198f80). Definitive alignment decode:
+    //   alignment & 3 == 0 (LEFT):       lineOffset = 0
+    //   alignment & 3 == 1 (CENTER):     lineOffset = 0  -- INERT for X
+    //                                    (the binary loads 0.0f from the
+    //                                    constant pool unconditionally for
+    //                                    this branch; bit 4 is tested but
+    //                                    both sides produce 0)
+    //   alignment & 3 == 2 (RIGHT):
+    //     measureCap = (alignment & 0x10) ? wrapLimit : 0.0f
+    //     lineOffset = wrapLimit - GetLineLength(iter, measureCap)
+    //   alignment & 3 == 3 (RIGHT|CENTER, "centre-within-box"):
+    //     same as RIGHT, then lineOffset *= 0.5
+    // Implications when callers pass maxWH=(0,0) (most callers):
+    //   - LEFT  (0x00): text starts at pos.x
+    //   - CENTER(0x01): text starts at pos.x   (NOT centred -- caller must
+    //                                           pre-offset its anchor)
+    //   - RIGHT (0x02): right edge at pos.x    (lineOffset = -lineWidth)
+    //   - 0x03         : centred on pos.x      (lineOffset = -lineWidth/2)
+    // Earlier port unconditionally applied -lineWidth*0.5 for CENTER, which
+    // moved score digits leftward over the watermelon icon. The binary's
+    // CENTER mode is intentionally inert; ScoreControl's 0x0d achieves
+    // LEFT-anchor layout via this inert path, not via a real centring op.
     const int horizAlign = alignment & 0x3;
-    float lineOffset;
-    {
-        float len = (horizAlign == 0) ? 0.0f : GetLineLength(iter, wrapLimit, nullptr);
-        if      (horizAlign == 0) lineOffset = 0.0f;
-        else if (horizAlign == 2) lineOffset = wrapLimit - len;
-        else                      lineOffset = (wrapLimit - len) * 0.5f;
+    float lineOffset = 0.0f;
+    if (horizAlign >= 2) {
+        const float measureCap = (alignment & 0x10) ? wrapLimit : 0.0f;
+        float len = GetLineLength(iter, measureCap, nullptr);
+        lineOffset = wrapLimit - len;
+        if (horizAlign == 3) lineOffset *= 0.5f;
     }
     float cursorX = 0.0f;
     float cursorY = 0.0f;  // starts at 0; vertical alignment applied via TranslateLocal
@@ -527,8 +555,15 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
 
         if (cp == '\n') {
             iter++;
-            { float _len = (horizAlign==0)?0.0f:GetLineLength(iter,wrapLimit,nullptr);
-              if(horizAlign==0) lineOffset=0.0f; else if(horizAlign==2) lineOffset=wrapLimit-_len; else lineOffset=(wrapLimit-_len)*0.5f; }
+            // Per-line recompute (binary @ 0x00198fc0..0x0019906a).
+            // Same alignment decode as the first-line block above.
+            lineOffset = 0.0f;
+            if (horizAlign >= 2) {
+                const float measureCap = (alignment & 0x10) ? wrapLimit : 0.0f;
+                float _len = GetLineLength(iter, measureCap, nullptr);
+                lineOffset = wrapLimit - _len;
+                if (horizAlign == 3) lineOffset *= 0.5f;
+            }
             cursorX = 0.0f;
             cursorY -= 1.0f;  // one lineHeight unit down
             continue;
@@ -545,8 +580,13 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             }
             if (cursorX + wordW > wrapLimit) {
                 iter++;
-                { float _len = (horizAlign==0)?0.0f:GetLineLength(iter,wrapLimit,nullptr);
-                  if(horizAlign==0) lineOffset=0.0f; else if(horizAlign==2) lineOffset=wrapLimit-_len; else lineOffset=(wrapLimit-_len)*0.5f; }
+                lineOffset = 0.0f;
+                if (horizAlign >= 2) {
+                    const float measureCap = (alignment & 0x10) ? wrapLimit : 0.0f;
+                    float _len = GetLineLength(iter, measureCap, nullptr);
+                    lineOffset = wrapLimit - _len;
+                    if (horizAlign == 3) lineOffset *= 0.5f;
+                }
                 cursorX = 0.0f;
                 cursorY -= 1.0f;
                 continue;
