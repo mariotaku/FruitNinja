@@ -1,6 +1,7 @@
 // Analysed: 2026-05-04T00:00
 
 #include "PowerUpManager.h"
+#include "GameMode.h"
 #include "PowerUp.h"
 #include "GameModifier.h"
 #include "Game.h"
@@ -223,7 +224,7 @@ void PowerUpManager::Reset(bool fullReset) {
     // Zen mode (gameMode==2 + fullReset): re-activate all m_bIsSpecial templates.
     if (fullReset) {
         Game* game = Game::GetInstance();
-        if (game && game->gameMode == 2) {
+        if (game && game->gameMode == Mortar::GAME_MODE_ARCADE) {
             for (std::map<uint32_t, PowerUp*>::iterator it2 = m_AllPowerUps.begin();
                  it2 != m_AllPowerUps.end(); ++it2) {
                 PowerUp* tpl = it2->second;
@@ -409,7 +410,7 @@ void PowerUpManager::LoadActivePowerUps(TiXmlElement* parent, int gameMode) {
         bool skip;
         if (!tpl->IsSpecial() && tpl->m_bIsSpecial == 0) {
             skip = false;
-        } else if (gameMode == 2) {
+        } else if (gameMode == Mortar::GAME_MODE_ARCADE) {
             skip = false;
         } else {
             skip = true;

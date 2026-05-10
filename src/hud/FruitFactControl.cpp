@@ -3,6 +3,7 @@
 // Binary: ctor 0x0013cb60, Init 0x0013a278, Release 0x00139d24, etc.
 
 #include "hud/FruitFactControl.h"
+#include "game/GameMode.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
@@ -217,7 +218,7 @@ void FruitFactControl::BeginDraw(float /*dt*/) {
 
     // If fact texture is set AND (dojo mode OR (arcade AND pom <= 1)):
     if (m_FactTexture) {
-        if (gameMode == 3 || (gameMode == 2 && m_PomCount <= 1)) {
+        if (gameMode == Mortar::GAME_MODE_ZEN || (gameMode == Mortar::GAME_MODE_ARCADE && m_PomCount <= 1)) {
             m_LayerFlags |= Mortar::HUD_LAYER_BUTTONS;
         }
     }
@@ -239,7 +240,7 @@ void FruitFactControl::Update(float dt) {
 
     uint8_t gameMode = game->gameMode;
 
-    if (gameMode == 2) {
+    if (gameMode == Mortar::GAME_MODE_ARCADE) {
         // Arcade mode: lazy-create leaderboard menu
         // TODO: 0x0013b604 -- lazy-create m_pLeaderboardMenu (LeaderboardList) at pos.y-8
 
@@ -259,7 +260,7 @@ void FruitFactControl::Update(float dt) {
                 bm->SetUpBonusScreen(nullptr);
             }
         }
-    } else if (gameMode == 3) {
+    } else if (gameMode == Mortar::GAME_MODE_ZEN) {
         // Dojo/Zen: combo-star SFX cadence
         // TODO: 0x0013b604 -- combo-star SFX via GameSound::SFXPlay
     }

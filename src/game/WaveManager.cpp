@@ -1,4 +1,5 @@
 #include "WaveManager.h"
+#include "GameMode.h"
 #include "ScoreState.h"
 #include "WaveStructs.h"
 #include "Game.h"
@@ -605,7 +606,7 @@ void WaveManager::Resume() {
             b->m_AccelForce = Vec3(es.grav[0], es.grav[1], es.grav[2]);
             // m_BombVariant maps to playerIdx overlay (binary +0x28).
             b->m_BombVariant = (int)es.grav[2];
-            if (game->gameMode == 2) Bomb::SetForPlayer(b, 1);
+            if (game->gameMode == Mortar::GAME_MODE_ARCADE) Bomb::SetForPlayer(b, 1);
             if (es.wait > 0.0f) {
                 if (!es.hit) {
                     b->Chuck(es.wait);
@@ -628,9 +629,9 @@ void WaveManager::Resume() {
     // 7. Mortar::ActorManager::Update(dt=0) to settle respawned entities.
     Mortar::ActorManager::GetInstance()->Update(0.0f);
 
-    // 8. Zen mode (m_GameMode == 2): PowerUpManager::LoadTextures().
+    // 8. Arcade mode (m_GameMode == 2): PowerUpManager::LoadTextures().
     // Binary @ 0x0011840c — iterates m_AllPowerUps and m_ScreenEffectPool.
-    if (game->gameMode == 2) {
+    if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
         PowerUpManager::GetInstance()->LoadTextures();
     }
 
@@ -987,7 +988,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 // Uses TimeControl::field_0x7c (GetCountDown) and blitz timers.
                 // DAT_0012558c = 30.0f (blitz refresh base), DAT_001255a0 = 0.20979f (timer compensation).
                 int blitzAdvance = 0;
-                if (game->gameMode == 2) {
+                if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
                     float countdown = 0.0f;
                     if (game->pTimeCtrl) countdown = game->pTimeCtrl->GetCountDown();
 
@@ -1025,7 +1026,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 static SPAWNER_INFO k_BlitzSpawners[3] = {
                     SPAWNER_INFO(), SPAWNER_INFO(), SPAWNER_INFO()
                 };
-                SPAWNER_INFO* blitzSpawner = (blitzAdvance && game->gameMode == 2)
+                SPAWNER_INFO* blitzSpawner = (blitzAdvance && game->gameMode == Mortar::GAME_MODE_ARCADE)
                     ? &k_BlitzSpawners[m_Random.Rand32(3)]
                     : nullptr;
                 int mode = game->gameMode;
@@ -1116,7 +1117,7 @@ void WaveManager::UpdateComboSpeed(float dt) {
     // Binary @ 0x00122f50. Gate: Arcade mode only (gameMode==2).
     // game[+0x0c] pause float not in port Game struct; drop that half of gate.
     Game* game = Game::GetInstance();
-    if (!game || game->gameMode != 2) return;
+    if (!game || game->gameMode != Mortar::GAME_MODE_ARCADE) return;
 
     float curSpeed  = m_Speed[0];
     float targetP1  = m_Speed[1];
@@ -1572,7 +1573,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         b->Chuck(chuckDelay);
 
         Game* game = Game::GetInstance();
-        if (game && game->gameMode == 2)
+        if (game && game->gameMode == Mortar::GAME_MODE_ARCADE)
             Bomb::SetForPlayer(b, 1);  // arcade single-player
     }
 }

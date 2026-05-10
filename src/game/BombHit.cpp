@@ -6,6 +6,7 @@
 //
 
 #include "BombHit.h"
+#include "game/GameMode.h"
 #include "Game.h"
 #include "entities/ActorManager.h"
 #include "entities/BombBlast.h"
@@ -277,7 +278,10 @@ void ResetGameEntities(bool killAll) {
     // Use the gamemode flag as the "Zen" gate — binary reads
     // *(game + 6) which is the gameMode byte at +0x04..+0x0c block.
     Game* game = Game::GetInstance();
-    const bool zenMode = game && (game->gameMode == 2);
+    // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
+    // Verify whether the surrounding logic is intended for Arcade or Zen and
+    // rename accordingly.
+    const bool zenMode = game && (game->gameMode == Mortar::GAME_MODE_ARCADE);
 
     // Iterate Fruit (0) + Bomb (1) type lists.
     for (int t = 0; t <= 1; t++) {

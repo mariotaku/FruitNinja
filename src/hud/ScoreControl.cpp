@@ -1,6 +1,7 @@
 // Analysed: 2026-04-30T00:00
 
 #include "ScoreControl.h"
+#include "game/GameMode.h"
 #include "Game.h"
 #include "game/ScoreState.h"
 #include "game/PowerUpManager.h"
@@ -179,7 +180,7 @@ void ScoreControl::Update(float dt) {
     if (digitsActive > 15) digitsActive = 15;
     m_DigitCount = digitsActive;
 
-    if (game->gameMode == 1 /* ASM-verified: == 1 at 0x001585A8 */) {
+    if (game->gameMode == Mortar::GAME_MODE_COMBO /* ASM-verified: == 1 at 0x001585A8 */) {
         if (digitsActive == m_LastDigitCount) {
             for (int i = 0; i < digitsActive; i++) {
                 m_DigitAlpha[i] += 6.0f * dt;
@@ -225,7 +226,7 @@ void ScoreControl::Update(float dt) {
     }
 
     int   mult     = GetScoreMultiplyer(0);
-    float baseRate = (game->gameMode == 2) ? 10.0f : 1.0f;  // gameMode==2 = Arcade
+    float baseRate = (game->gameMode == Mortar::GAME_MODE_ARCADE) ? 10.0f : 1.0f;
     float correction = (currentScore < 0) ? -0.6f : 0.6f;   // DAT_001588a4/a8
     float catchup  = ((float)currentScore + correction - m_ScoreSmoothed) * 0.1f;  // DAT_001588b0
     float maxStep  = (float)mult * 0.3f * baseRate;          // DAT_001588ac
@@ -240,7 +241,7 @@ void ScoreControl::Update(float dt) {
     if (m_DisplayedScore > prevDisplay) {
         // Binary: bonus-count-up SFX gate (Arcade end-of-game animation only).
         if (s_SfxCooldown <= 0.0f &&
-            game->gameMode == 2 &&
+            game->gameMode == Mortar::GAME_MODE_ARCADE &&
             game->pGameOverScreen != nullptr &&
             game->pGameOverScreen->m_State > 0 &&
             game->pGameOverScreen->m_Timer > 0.0f) {
@@ -392,7 +393,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         // Section B: per-digit combo overlay.
         // ASM-verified gate at 0x00158FEC: gameMode == 1.
         // (See docs/structs/hud.md ScoreControl PreDraw Section B detail.)
-        if (game->gameMode == 1) {
+        if (game->gameMode == Mortar::GAME_MODE_COMBO) {
             // Texture rebind: pick FRUIT_INFO icon by clamped combo count.
             // Executed once before the per-digit loop.
             int comboCount = m_LastDigitCount;
@@ -452,7 +453,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         // Arcade x-mult font: binary loads game[+0x80] = pFontBlue2
         // ("fruit_ninja_numbers_blue2.fnt"). Verified 2026-05-09 (re-analyst
         // @ 0x00159238).
-        if (game->gameMode == 2) {
+        if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
             int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
             if (mult > 1 && game->pFontBlue2.IsValid()) {
                 char multBuf[16];
