@@ -10,12 +10,16 @@
 #include "game/FruitSaveData.h"
 #include "game/AchievementManager.h"
 #include "game/BonusManager.h"
+#include "game/BombHit.h"
 #include "entities/ActorManager.h"
 #include "entities/FruitInfo.h"
 #include "hud/MenuButton.h"
+#include "hud/TutorialControl.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/FruitFactControl.h"
+#include "engine/audio/GameSound.h"
+#include "engine/audio/MortarSound.h"
 #include "asset/TextureManager.h"
 #include "math/MathUtil.h"
 #include "math/Vec3.h"
@@ -99,7 +103,6 @@ GameOverScreen::GameOverScreen()
       m_PostOk(0),
       m_PostInProgress(0),
       m_ProgressCounter(0),
-      m_GameOverTex(0),
       field_0x118(0),
       m_MostFruitCount(-1),
       m_bScoreSubmitted(0),
@@ -163,7 +166,6 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
       m_PostOk(0),
       m_PostInProgress(0),
       m_ProgressCounter(0),
-      m_GameOverTex(0),
       field_0x118(0),
       m_MostFruitCount(-1),
       m_bScoreSubmitted(0),
@@ -326,9 +328,9 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
 // Binary @ 0x00140548
 void GameOverScreen::Init() {
-    // TODO: 0x00140548 -- Init invokes vtable+0x10 (Update/slot 10), not vtable+0x18 -- fix misleading comment
-    // Binary: (*vtable[10])(this) calls Update once with dt=0.
-    // Port: no-op (Update not safe to call from Init without state ready).
+    // Binary @ 0x00140548: vtable[4] dispatch -- this calls Reset() virtually.
+    // Reset() is empty in this class but the call shape preserves vtable parity.
+    Reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -353,7 +355,7 @@ void GameOverScreen::BeginDraw(float /*dt*/) {
 
 // Binary @ 0x00140d98
 void GameOverScreen::Release() {
-    m_GameOverTex = 0; // field_0x114.SetNull()
+    m_GameOverTex.SetNull();
 
     Game* game = Game::GetInstance();
     if (game && game->pGameOverScreen == this) {
@@ -597,12 +599,17 @@ void GameOverScreen::RetryCallback() {
     if (game->m_TransitionTimer <= 0.989945f) return;
     CancelHUDProgressionTimer();
     // TODO: 0x0014105c -- session-stat reset block at GOT+DAT_00141164 (out of scope)
-    // TODO: FruitSaveData::ClearCombo (port may lack the API)
-    if (game->pSaveData) {
-        // game->pSaveData->ClearCombo();   // gate if missing
-    }
+    // Binary @ 0x001410d6: FruitSaveData::ClearCombo(pSaveData)
+    if (game->pSaveData) game->pSaveData->ClearCombo();
+    // Defunct: MP scene-alpha bypass -- IsMultiplayer always false in port
     m_State = 7;
-    // TODO: GameSound::SFXPlay menu_retry sound
+    // Binary @ 0x0014110c: GameSound::SFXPlay("retry"-or-similar, 1.0, 1.0, empty Delegate1)
+    // TODO: 0x00141170 -- verify SFX name from rodata; binary loads from GOT slot.
+    //   Likely "menu-retry" per Bada SFX naming convention.
+    if (game->pGameSound) {
+        game->pGameSound->SFXPlay("menu-retry", 1.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>());
+    }
 }
 
 void GameOverScreen::OnRetryClicked() {
@@ -649,12 +656,22 @@ void GameOverScreen::CreateQuitButton() {
         Mortar::Delegate0<void>()  // TODO: 0x00141030 -- bind HUD::g_DeleteControlDelegate
     );
 
-    // TODO: 0x00141420 — quit-only post-init:
-    //   memcpy(quit+0x124..+0x12C, retry+0x124..+0x12C);  // TutorialControl text slots
-    //   quit->[+0xE2] = 1;                                 // singular/right-flag byte
-    //   TutorialControl::ResetTutePos(game->pTutorialCtrl, m_pQuitBtn);
-
     game->hud->AddControl(m_pQuitBtn, false);
+
+    // Binary @ 0x001413d2: copy 12 bytes from retry button at +0x124..+0x12c.
+    // MenuButton+0x124 is m_TargetSize (Vec3).
+    if (m_pRetryBtn) {
+        m_pQuitBtn->m_TargetSize = m_pRetryBtn->m_TargetSize;
+    }
+    // Binary @ 0x00141400: byte at MenuButton+0x138 = 1.
+    // +0x138 is m_bRespondsToBackKey -- quit button captures the back-key.
+    m_pQuitBtn->m_bRespondsToBackKey = 1;
+    // Binary @ 0x0014141e: TutorialControl::ResetTutePos UNCONDITIONALLY
+    // (with retry-or-quit arg).
+    if (game->pTutorialCtrl) {
+        MenuButton* tutBtn = m_pRetryBtn ? m_pRetryBtn : m_pQuitBtn;
+        game->pTutorialCtrl->ResetTutePos(tutBtn);
+    }
 }
 
 // Binary @ 0x00140620
@@ -663,9 +680,11 @@ void GameOverScreen::QuitCallback() {
     if (!game) return;
     if (m_State != 0 && m_State != 6 && m_State != 14 && m_State != 10) return;
     CancelHUDProgressionTimer();
-    // TODO: FruitSaveData::ClearCombo
     m_State = 9;
-    // TODO: HitMenuBomb(Vec3(-0.0625f, 163.0f, -96.0f))
+    // Binary @ 0x001410d6: FruitSaveData::ClearCombo
+    if (game->pSaveData) game->pSaveData->ClearCombo();
+    // Binary @ 0x00140674: HitMenuBomb at quit-button position (DAT_00140674 = Vec3(163.0, -96.0, 0.0))
+    FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
 }
 
 void GameOverScreen::OnQuitClicked() {
@@ -765,7 +784,9 @@ void GameOverScreen::Update(float dt) {
                 FindMostOfFruit();
                 m_pBonusScreen = new BonusScreen();
                 m_pBonusScreen->pos = Vec3(0.0f, -20.0f, 0.0f);
-                // TODO: install m_RemoveCallback delegate to GameOverScreen::OnBonusRemoved
+                // Binary @ 0x00141d50: bonus->m_RemoveCallback = Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl)
+                m_pBonusScreen->m_RemoveCallback =
+                    Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
                 if (game->hud) game->hud->AddControl(m_pBonusScreen, false);
                 BonusManager::GetInstance()->SetUpBonusScreen(m_pBonusScreen);
             } else {
@@ -778,10 +799,27 @@ void GameOverScreen::Update(float dt) {
                 // bonus[+0xC0] is a per-phase rolling Y delta, NOT m_PhaseTimer
                 // (+0xB8). Port reads m_PhaseTimer as a stand-in until the
                 // real field is RE'd into BonusScreen; constant updated to 135.0f.
-                // TODO: 0x00141bd0 — wire bonus[+0xC0] (per-phase Y delta)
+                // TODO: 0x00141bd0 -- wire bonus[+0xC0] (per-phase Y delta)
                 //   and the -224.0 size rescale.
                 float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PhaseTimer + 135.0f;
                 m_OffsetPosY = std::max(m_OffsetPosY, ny);
+
+                // Binary @ 0x00141d??: pos.y rescale + size = m_TitleSize * scale.
+                //   fVar23 = bonus->size.y + bonus->pos.y + DAT_00141dc8 (small bias)
+                //   if (fVar23 < pos.y) fVar23 = pos.y;
+                //   pos.y = fVar23;
+                //   scale = pos.y / DAT_00141dcc + 1.0f   -- DAT_00141dcc = -224.0f
+                //   size = m_TitleSize * scale
+                // TODO: 0x00141dc8 -- exact bias not yet read; assume 0.0f for now.
+                const float bias = 0.0f;  // TODO: read DAT_00141dc8
+                const float divisor = -224.0f;  // probable; verify DAT_00141dcc
+                float newPosY = m_pBonusScreen->size.y + m_pBonusScreen->pos.y + bias;
+                if (newPosY < pos.y) newPosY = pos.y;
+                pos.y = newPosY;
+                const float scaleFactor = pos.y / divisor + 1.0f;
+                size.x = m_TitleSizeX * scaleFactor;
+                size.y = m_TitleSizeY * scaleFactor;
+                size.z = m_TitleSizeZ * scaleFactor;
 
                 // Advance bonus phase timer from our own timer.
                 m_Timer += dt;
@@ -804,6 +842,7 @@ void GameOverScreen::Update(float dt) {
     // State 6: main display + score submission
     // -----------------------------------------------------------------------
     case 6: {
+        const int prevState = m_State;   // Binary: r9 = m_State at 0x00141f3e (saved BEFORE any writes)
         // 1) Create FruitFactControl on first entry
         if (m_pFruitFact == nullptr) {
             m_pFruitFact = new FruitFactControl();
@@ -895,17 +934,18 @@ void GameOverScreen::Update(float dt) {
                 }
 
                 // Load localised "Game Over" text texture
-                Mortar::SmartPtr<Mortar::Texture> govTex =
-                    TextureManager::LoadLocalisedTexture("gameover.tex");
-                m_GameOverTex = govTex ? govTex->m_TexId : 0;
+                m_GameOverTex = TextureManager::LoadLocalisedTexture("gameover.tex");
             }
 
             game->m_TransitionTimer = 1.0f;
 
-            // Spawn retry/quit buttons only once and only when allowed
-            if (IsAllowedToExit()) {
+            // Spawn retry/quit buttons only when allowed AND entering from state 6
+            // Binary @ 0x00141f3a: gates on (prevState == 6) && IsAllowedToExit()
+            if (prevState == 6 && IsAllowedToExit()) {
                 CreateRetryButton();
-                if (m_pQuitBtn == nullptr) CreateQuitButton();
+            }
+            if (m_pQuitBtn == nullptr && prevState == 6 && IsAllowedToExit()) {
+                CreateQuitButton();
             }
         }
 
@@ -1005,11 +1045,21 @@ void GameOverScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // State 14: quick-restart hot path (no observable caller in stock build)
+    // State 14: quick-restart hot path (binary @ 0x001423b4-0x001423f8)
     // -----------------------------------------------------------------------
     case 14: {
+        const int prevSlot9c = (m_pSlot9c != nullptr) ? 1 : 0;  // saved before zero-out
+        m_Timer += dt * 8.0f;
+        if (m_Timer >= 8.0f) {
+            m_Timer = 0.0f;       // transient -- overwritten below
+        }
         m_State = 6;
-        m_Timer = 2.0f;
+        {
+            Game* g = Game::GetInstance();
+            if (g) g->m_bGameOverActive = 0;   // BYTE @ Game+0x190
+        }
+        if (prevSlot9c == 0) m_ProgressCounter = 0;
+        m_Timer = 2.0f;           // FINAL unconditional write
         break;
     }
 

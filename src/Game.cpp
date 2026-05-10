@@ -37,6 +37,7 @@ Game::Game()
       fruitTotal(0),
       pGameSound(nullptr),
       m_gameDataLicensedState(0),
+      m_bGameOverActive(0),
       m_FrameTimer(0), m_MenuReturnTimer(0), flag_0x1a8(0), m_bFrameDirty(0),
       window(nullptr), gl_context(nullptr),
       inputManager(nullptr), inputTranslator(nullptr), actorManager(nullptr),
