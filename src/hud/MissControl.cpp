@@ -52,12 +52,13 @@ static constexpr float SOUND_THRESH = 1.66f;
 static constexpr float MISS_CLAMP_HALF_X = 240.0f;
 static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 
-// Pulse banding thresholds. DAT_001522a4..DAT_001522b4
-static constexpr float MISS_PULSE_FLOOR       = 0.65f;    // DAT_001522b4 (OK)
-static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f; // DAT_001522a4 (OK)
-static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // DAT_001522a8. DIFFERS: was 376354.0
-static constexpr float MISS_PULSE_NARROW_LO   = 32760.0f;  // DAT_001522ac. DIFFERS: was 32764.0
-static constexpr float MISS_PULSE_NARROW_HI   = 360360.0f; // DAT_001522b0. DIFFERS: was 360104.0
+// Pulse banding thresholds. DAT_001522a4..DAT_001522b4. ASM-verified
+// 2026-05-10 (asm-inspector byte-level IEEE-754 decode).
+static constexpr float MISS_PULSE_FLOOR       = 0.65f;    // DAT_001522b4
+static constexpr float MISS_PULSE_PHASE_LO    = 16376.0f; // DAT_001522a4
+static constexpr float MISS_PULSE_PHASE_HI    = 376992.0f; // DAT_001522a8
+static constexpr float MISS_PULSE_NARROW_LO   = 32752.0f; // DAT_001522ac
+static constexpr float MISS_PULSE_NARROW_HI   = 360104.0f; // DAT_001522b0
 
 // --- Static members -------------------------------------------------------
 
@@ -469,18 +470,41 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     }
 
     // m_FadeAlpha branch ladder (binary @ 0x00151f60):
-    //   > 1.66f (SOUND_THRESH)  -> early return (sound-cooldown / spawn gate)
-    //   > 0                      -> compute pulse-sin into local_34 (DEAD; binary
-    //                               never reads local_34 after the store; vestigial
-    //                               and not applied to the draw colour)
+    //   > 1.66f (SOUND_THRESH)  -> early return (popup invisible during the
+    //                              0.15s spawn-grace from MakeCritical's 1.81 init)
+    //   > 0                      -> pulse-scale animation: scale = |SinIdx(phase)|
+    //                              with a clamp ladder; quad size = m_Size * scale
     //   <= 0                     -> y-position jiggle for failure-feedback animation;
-    //                               draw still proceeds
-    // The actual draw alpha comes from m_DrawColour (+0x5c, RGBA tint), NOT from
-    // m_FadeAlpha. The earlier port computed drawAlpha=0 in the `<=0` branch and
-    // early-returned at fade<=0, which made the 3 base markers never draw.
-    // Re-analyst RE 2026-05-10 confirmed the binary unconditionally reaches
-    // DrawQuadUnCached as long as the texture SmartPtr is valid.
+    //                              draw still proceeds (visual = passive miss markers)
+    // ASM-verified: 2026-05-10 binary @ 0x00151fe4..0x001520ec (asm-inspector).
+    // The earlier port comment claimed local_34 was a "dead store"; the
+    // decompiler mis-presented the Vec3*scalar call -- it IS read at
+    // 0x001520e0 as the scalar arg to Vec3::operator*(out, &size, &local_34)
+    // whose result feeds Matrix44::Scale44.
     if (m_FadeAlpha > SOUND_THRESH) return;
+
+    // Pulse-scale: 6-cycle |SinIdx| over m_FadeAlpha 1.66 -> 0.
+    // phase_f = (m_FadeAlpha / 1.66) * 360 * 6 * (65536/360) = ... * 6 * 182.04
+    // At m_FadeAlpha=1.66 phase_f = 393216 = 6 full sin periods (uint16 wraps to 0)
+    // Windowed clamp ladder pins floor to 0.65f in certain phase ranges.
+    float pulseScale = 1.0f;
+    if (m_FadeAlpha > 0.0f) {
+        const float phase_f =
+            (m_FadeAlpha / SOUND_THRESH) * 360.0f * 6.0f * 182.04444f;
+        const uint16_t idx = (phase_f > 0.0f) ? (uint16_t)(int)phase_f : 0;
+        pulseScale = std::fabs(SinIdx(idx));
+        // Clamp ladder (binary @ 0x00152034..0x00152088):
+        //   if 16376 < phase_f < 376992:
+        //     if 32752 < phase_f < 360104: pulseScale = 0.65 (forced)
+        //     else                       : pulseScale = max(pulseScale, 0.65)
+        if (phase_f > MISS_PULSE_PHASE_LO && phase_f < MISS_PULSE_PHASE_HI) {
+            if (phase_f > MISS_PULSE_NARROW_LO && phase_f < MISS_PULSE_NARROW_HI) {
+                pulseScale = MISS_PULSE_FLOOR;
+            } else if (pulseScale < MISS_PULSE_FLOOR) {
+                pulseScale = MISS_PULSE_FLOOR;
+            }
+        }
+    }
     // Slide-in / off-screen-park y-jiggle. Binary @ 0x0015208e..0x001520c4:
     //   if (FailureEnabled() && !IsMultiplayer())
     //       drawPos.y -= 3.0f * pos.y * fabsf(game->m_TransitionTimer);
@@ -532,7 +556,10 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     mm.GetWorldStack().Reset();
 
     // binary @ 0x001520ec / 0x000fc720 / 0x000f7a4c. Order: Scale -> RotZ -> Translate.
-    Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
+    // Binary @ 0x001520dc..0x001520ec: scale = size * pulseScale (Vec3*scalar
+    // multiply via Vec3::operator* before passing to Scale44).
+    Matrix44 mat = Matrix44::MakeScale(size.x * pulseScale,
+                                       size.y * pulseScale, 1.0f);
     if (m_Timer != 0.0f) {
         uint16_t a = (uint16_t)(int)(m_Timer * 182.0f);
         mat.RotZ44(SinIdx(a), CosIdx(a));
