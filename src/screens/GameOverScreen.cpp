@@ -238,7 +238,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     m_State          = 0;
     m_LayerFlags     = Mortar::HUD_LAYER_NONE; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
-    m_GameOverTex    = 0; // field_0x114.SetNull()
+    m_SecondaryTex.SetNull();   // Binary @ 0x00140d?? clears +0x74 (HUDControl3d::m_SecondaryTex)
     m_AnimCounter    = 0;
     m_bScoreSubmitted = 0;
     m_BgPatternIdx   = bgPatternIdx;
@@ -353,7 +353,6 @@ void GameOverScreen::BeginDraw(float /*dt*/) {
 
 // Binary @ 0x00140d98
 void GameOverScreen::Release() {
-    // TODO: 0x00140d98 -- pSaveData[+0x12C] write should be byte 0, not int -1 (minor divergence)
     m_GameOverTex = 0; // field_0x114.SetNull()
 
     Game* game = Game::GetInstance();
@@ -366,7 +365,7 @@ void GameOverScreen::Release() {
             base[0x120 / 4] = 0;
             base[0x124 / 4] = -1;
             base[0x128 / 4] = -1;
-            base[0x12C / 4] = -1;
+            sd->newBestThisGame = 0;   // Binary writes BYTE 0 to +0x12c (not int -1)
         }
     }
 
@@ -474,7 +473,9 @@ void GameOverScreen::LeaderboardsCallback() {
 // On removal, clears the slot and (for bonusScreen+noticeCtrl) forces state=6.
 void GameOverScreen::DeletedControl(HUDControl* ctrl) {
     if (ctrl == (HUDControl*)m_pBonusScreen) { m_pBonusScreen = nullptr; m_State = 6; }
-    if (ctrl == m_pSlot9c)                   { m_pSlot9c = nullptr; }
+    // Binary @ 0x00140558: middle slot is m_pRetryBtn (+0x98), not m_pSlot9c (+0x9c).
+    // No state change in this branch -- just clear the pointer.
+    if (ctrl == (HUDControl*)m_pRetryBtn)    { m_pRetryBtn = nullptr; }
     if (ctrl == m_pNoticeCtrl)               { m_pNoticeCtrl = nullptr; m_State = 6; }
 }
 
@@ -499,8 +500,9 @@ void GameOverScreen::FindMostOfFruit() {
     for (int i = 0; i < count && i < FRUIT_INFO_MAX; ++i) {
         const FruitInfo* fi = FruitInfo_Get(i);
         if (!fi) continue;
-        // In Arcade (gameMode==2), skip fruits with power-ups (special fruits)
-        if (gameMode == 2 && fi->m_bSpecial) continue;
+        // Binary @ 0x00141a18: in Arcade (mode==2) include only POWER fruits
+        // (fi->m_pPowers != nullptr); other modes include all fruits.
+        if (gameMode == 2 && fi->m_pPowers == nullptr) continue;
         candidates[numCandidates++] = i;
     }
 
@@ -873,9 +875,8 @@ void GameOverScreen::Update(float dt) {
                     if (hi / 2 < score) {
                         // Binary @ 0x00142228:
                         //   pSaveData[+0x12C] = (uint8_t)SetCurrentModeHighscore(score);
-                        // The write captures the bool return of the highscore update.
-                        save->SetCurrentModeHighscore(score);
-                        save->newBestThisGame = 1;  // bool result is true when hi/2 < score
+                        save->newBestThisGame =
+                            save->SetCurrentModeHighscore(score) ? 1 : 0;
                     }
 
                     // Note: NetworkManager::SetLeaderboardScore -- defunct (online-services-audit).
