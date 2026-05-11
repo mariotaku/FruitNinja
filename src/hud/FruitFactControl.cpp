@@ -428,7 +428,10 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         // DIAGNOSTIC: +(-100, -100) nudge to test where the text really wants to go.
         const float titleX = pos.x - 66.0f - 100.0f;
         const float titleY = pos.y + 42.0f - 100.0f;
-        game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+        // DIAGNOSTIC: drop scale 16.0 -> 4.0 to see if the title's actual
+        // rendered size is huge (truncating at screen edge despite being
+        // positioned near centre).
+        game->pFontMain->DrawString(4.0f, 1.0f, 0.0f,
             title, Vec3(titleX, titleY, 0.0f),
             m_FactColour, 0x0F);
     }
@@ -458,7 +461,8 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 iter = Mortar::Utf8StringIterator(m_pCurFactString);
             }
         }
-        game->pFontMain->DrawString(scale, 1.0f, 0.0f,
+        // DIAGNOSTIC: clamp body scale to 0.25x of binary value.
+        game->pFontMain->DrawString(scale * 0.25f, 1.0f, 0.0f,
             m_pCurFactString, Vec3(bodyX, bodyY, 0.0f),
             brown, 0x0F);
     }
