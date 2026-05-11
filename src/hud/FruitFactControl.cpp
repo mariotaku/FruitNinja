@@ -413,27 +413,15 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     {
         // ASM-verified: 2026-05-11 binary @ 0x0013c886..0x0013c894 (asm-inspector)
         //   GETSTRING(0x9b) -> "CODE_FRUIT_FACT_TITLE" -> "SENSEI'S FRUIT FACT"
-        //   binary DATs: DAT_0013cb04 = 66.0 (titleX offset), DAT_0013cb00 = 42.0 (titleY)
-        // DIFFERS: fact_board.tex already has "SENSEI'S FRUIT FACT" baked into
-        // the image (texture pixel bbox X=15..112, Y=10..29; center @ (63.5, 19.5)
-        // -> screen pos (pos.x - 1.69, pos.y + 53.44) given the backplate
-        // transform pos+(-1,-8) at size 176.7). Binary's title pos (pos.x-66,
-        // pos.y+42) with alignment 0x0F renders elsewhere -> two visible labels.
-        // Centre the dynamic title on the baked text instead so they overlap.
+        //   translate = (pos.x - 66.0, pos.y + 42.0, 0.0)
+        //   DAT_0013cb04 = 66.0, DAT_0013cb00 = 42.0
         const char* title = Localisation::Get("CODE_FRUIT_FACT_TITLE");
         if (!title) title = "FRUIT FACT";
-        const float scale = 16.0f;
-        const float textW = game->pFontMain->MeasureWidth(scale, title);
-        // Baked text centre in world coords.
-        const float bakedCenterX = pos.x - 1.69f;
-        const float bakedCenterY = pos.y + 53.44f;
-        // Use LEFT-horiz alignment (keep vertical bits 0x4/0x8) and place
-        // the left edge so the text centres on the baked text.
-        const float titleX = bakedCenterX - textW * 0.5f;
-        const float titleY = bakedCenterY;
-        game->pFontMain->DrawString(scale, 1.0f, 0.0f,
+        const float titleX = pos.x - 66.0f;
+        const float titleY = pos.y + 42.0f;
+        game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
             title, Vec3(titleX, titleY, 0.0f),
-            m_FactColour, 0x0C);
+            m_FactColour, 0x0F);
     }
 
     // ---- 3. Fact body text (binary @ 0x0013c930..0x0013ca36) ----
