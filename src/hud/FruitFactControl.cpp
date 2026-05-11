@@ -397,16 +397,19 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
     // ---- 1. Backplate quad (binary @ 0x0013c79c..0x0013c848) ----
     if (m_Texture.IsValid()) {
+        // DIAGNOSTIC: shrink backplate scale to 0.25x to test if FFC backplate
+        // is the "huge unidentifiable texture" the user is seeing.
+        const float dbgK = 0.25f;
         fprintf(stderr, "[DBG FFC backplate] tex=%dx%d size=(%.1f,%.1f,%.1f) "
-                "pos=(%.1f,%.1f,%.1f) translate=(%.1f,%.1f,%.1f)\n",
+                "pos=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
                 m_Texture->m_Width, m_Texture->m_Height,
                 size.x, size.y, size.z,
                 pos.x, pos.y, pos.z,
-                pos.x - 1.0f, pos.y - 8.0f, pos.z);
+                size.x * dbgK, size.y * dbgK);
         m_Texture->Set();
         MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
+        Matrix44 mat = Matrix44::MakeScale(size.x * dbgK, size.y * dbgK, 1.0f);
         mat.GlobalTranslate44(Vec3(pos.x - 1.0f, pos.y - 8.0f, pos.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -469,17 +472,20 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     if (m_FactTexture.IsValid()) {
         const float w = (float)m_FactTexture->m_Width;
         const float h = (float)m_FactTexture->m_Height;
+        // DIAGNOSTIC: scale fact-icon to 0.25x.
+        const float dbgK = 0.25f;
         fprintf(stderr, "[DBG FFC fact-icon] tex=%.0fx%.0f offset=(%.1f,%.1f,%.1f) "
-                "translate=(%.1f,%.1f,%.1f)\n",
+                "translate=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
                 w, h,
                 m_FactPosOffset.x, m_FactPosOffset.y, m_FactPosOffset.z,
                 pos.x + m_FactPosOffset.x - 8.0f,
                 pos.y + m_FactPosOffset.y + 8.0f,
-                pos.z + m_FactPosOffset.z);
+                pos.z + m_FactPosOffset.z,
+                w * dbgK, h * dbgK);
         m_FactTexture->Set();
         MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(w, h, 0.0f);
+        Matrix44 mat = Matrix44::MakeScale(w * dbgK, h * dbgK, 0.0f);
         mat.GlobalTranslate44(Vec3(
             pos.x + m_FactPosOffset.x - 8.0f,
             pos.y + m_FactPosOffset.y + 8.0f,
