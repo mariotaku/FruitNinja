@@ -408,12 +408,19 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         m_Texture->UnSet();
     }
 
-    // ---- 2. "FRUIT FACT" title (binary @ 0x0013c852..0x0013c92c) ----
+    // ASM-verified: 2026-05-11 binary @ 0x0013b95c (re-analyst).
+    // Every text/fact-icon draw in DrawOrder applies a global -(8, -8, 0)
+    // anchor on top of its per-drawable offset. Backplate's per-drawable
+    // offset is (-1, -8, 0) which already happens to absorb a Y-side
+    // contribution; the X-side -8 anchor shows up in title/body/icon.
+
+    // ---- 2. "SENSEI'S FRUIT FACT" title (binary @ 0x0013c852..0x0013c92c) ----
     {
-        // TODO: 0x0013c852 -- resolve GETSTRING(0x9b) key string (likely
-        //   "CODE_FACTS_TITLE" or similar). Literal until that's RE'd.
-        const char* title = "FRUIT FACT";
-        const float titleX = pos.x - 66.0f;
+        // ASM-verified: GETSTRING(0x9b) -> "CODE_FRUIT_FACT_TITLE" ->
+        //   "SENSEI'S FRUIT FACT". Binary translate X = pos.x - 66 - 8.
+        const char* title = Localisation::Get("CODE_FRUIT_FACT_TITLE");
+        if (!title) title = "FRUIT FACT";
+        const float titleX = pos.x - 66.0f - 8.0f;
         const float titleY = pos.y;
         game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
             title, Vec3(titleX, titleY, 0.0f),
@@ -423,8 +430,10 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     // ---- 3. Fact body text (binary @ 0x0013c930..0x0013ca36) ----
     if (m_pCurFactString) {
         const Colour brown(0x74, 0x5D, 0x3B, 0xFF);
-        const float bodyX = pos.x - 64.0f;
-        const float bodyY = pos.y - 14.0f;
+        // Binary translate = (pos.x - 64 - 8, pos.y, 0). Port previously
+        // used (-64, pos.y - 14, 0); both axes were off.
+        const float bodyX = pos.x - 64.0f - 8.0f;
+        const float bodyY = pos.y;
         // ASM-verified: 2026-05-11 binary @ 0x0013c95e auto-shrink loop.
         //   scale = 16.0f
         //   while (Font::GetStringHeight(scale, 128.0f) > 96.0f)
@@ -447,20 +456,21 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     // ---- 4. Per-fruit fact icon (binary @ ~0x0013ca60) ----
     // The "rings" decoration is baked INTO this per-fruit sprite (e.g.
     // apple_facts.tex draws the fruit + decorative concentric rings as a
-    // single asset). Without this draw call the user sees only the panel
-    // backplate + text, with no fruit indicator.
-    // TODO: 0x0013ca60 -- verify m_FactTexture draw uses pos + m_FactPosOffset;
-    //   exact translate formula (scale pivot, sign conventions) needs asm-verify.
+    // single asset).
+    // ASM-verified: 2026-05-11 binary @ 0x0013caae (re-analyst).
+    //   scale = (W, H, 0) -- texture's pixel dimensions; no +1, no 1.37x.
+    //   translate = pos + m_FactPosOffset - (8, -8, 0)
+    //             = (pos.x + offX - 8, pos.y + offY + 8, pos.z + offZ)
     if (m_FactTexture.IsValid()) {
         m_FactTexture->Set();
         MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
         const float w = (float)m_FactTexture->m_Width;
         const float h = (float)m_FactTexture->m_Height;
-        Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
+        Matrix44 mat = Matrix44::MakeScale(w, h, 0.0f);
         mat.GlobalTranslate44(Vec3(
-            pos.x + m_FactPosOffset.x,
-            pos.y + m_FactPosOffset.y,
+            pos.x + m_FactPosOffset.x - 8.0f,
+            pos.y + m_FactPosOffset.y + 8.0f,
             pos.z + m_FactPosOffset.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
