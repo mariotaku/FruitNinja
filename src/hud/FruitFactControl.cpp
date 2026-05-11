@@ -419,13 +419,6 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         if (!title) title = "FRUIT FACT";
         const float titleX = pos.x - 66.0f;
         const float titleY = pos.y + 42.0f;
-        // Reset world stack before DrawString -- the backplate draw above
-        // leaves MakeScale(size.x, size.y) on the stack which Font::DrawString
-        // would inherit (it does world.Push() + Scale() without first resetting),
-        // multiplying every glyph by 176x. Per-sub-draw reset matches the
-        // binary's `ResetMatrix_HUD` calls in FruitFactControl::DrawOrder.
-        mm.GetWorldStack().Reset();
-        mm.UploadModelViewOnly();
         game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
             title, Vec3(titleX, titleY, 0.0f),
             m_FactColour, 0x0F);
@@ -455,12 +448,15 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 iter = Mortar::Utf8StringIterator(m_pCurFactString);
             }
         }
-        // Reset world stack before DrawString (see title comment).
-        mm.GetWorldStack().Reset();
-        mm.UploadModelViewOnly();
-        game->pFontMain->DrawString(scale, 1.0f, 0.0f,
+        // ASM-verified: 2026-05-11 binary @ 0x0013c43c (asm-inspector).
+        //   alignment = 0x0D (NOT 0x0F -- bit 0x10 is line-pre-measurement
+        //                     for center/right-align, not wrap-enable.
+        //                     Wrap is gated only by maxWH.x > 0.)
+        //   maxWH      = (128.0, 96.0)  -- 128 = wrap width, 96 = height bound
+        //                                   used by the auto-shrink loop above.
+        game->pFontMain->DrawStringWrapped(scale, 128.0f, 0.0f,
             m_pCurFactString, Vec3(bodyX, bodyY, 0.0f),
-            brown, 0x0F);
+            brown, 0x0D);
     }
 
     // ---- 4. Per-fruit fact icon (binary @ ~0x0013ca60) ----
