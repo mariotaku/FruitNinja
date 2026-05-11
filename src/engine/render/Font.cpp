@@ -534,6 +534,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     // moved score digits leftward over the watermelon icon. The binary's
     // CENTER mode is intentionally inert; ScoreControl's 0x0d achieves
     // LEFT-anchor layout via this inert path, not via a real centring op.
+    // ASM-verified: 2026-05-11 binary @ 0x00198eee..0x00198f7c (asm-inspector)
     const int horizAlign = alignment & 0x3;
     float lineOffset = 0.0f;
     if (horizAlign >= 2) {
@@ -759,9 +760,10 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         textM.RotZ44(sinf(rotZ), cosf(rotZ));
     }
 
-    // Vertical alignment: LocalTranslate(0, alignY, 0) -- per binary @
-    // 0x00199920..0x00199964. The Y-shift depends on the final cursorY
-    // (== -(numLines - 1)) so it's known only after the glyph loop above.
+    // ASM-verified: 2026-05-11 binary @ 0x00199920..0x00199964 (asm-inspector)
+    // Vertical alignment: LocalTranslate(0, alignY, 0). The Y-shift depends
+    // on the final cursorY (== -(numLines - 1)) so it's known only after
+    // the glyph loop above.
     if (alignment & 0xC) {
         float s19 = cursorY - yLineFactor;
         float s14 = -maxWH.y - s19;
