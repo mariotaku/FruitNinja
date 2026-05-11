@@ -1243,14 +1243,12 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
             snprintf(buf, sizeof(buf), "%d", game->pSaveData->m_highscore);
 
             const Vec3 daysPos(-163.0f, -96.0f, 0.0f);  // DAT_001419e0/4/8
-            // ASM-verified: 2026-05-11 binary @ 0x00141770 (re-analyst)
-            //   font = Game::pFontNumbers (+0x58, fruit_ninja_numbers.fnt) -- NOT pFontMain
-            //   scale = m_GameOverTex->m_Width * 0.5f -- the gameover title
-            //   texture's pixel width, NOT the retry button size.
-            //   spacing=1.0, rotZ=0.0, align=0xF, white tint.
-            const float scaleArg = m_GameOverTex.IsValid()
-                ? (float)m_GameOverTex->m_Width * 0.5f
-                : 0.0f;
+            // ASM-verified: 2026-05-11 binary @ 0x00141790..0x001417d0 (asm-inspector)
+            //   ldr r1,[r4,#0x98]    ; r1 = m_pRetryBtn
+            //   vldr s14,[r1,#0x20]  ; s14 = m_pRetryBtn->size.x
+            //   vmul s0,s14,0.5      ; s0 = size.x * 0.5
+            //   font = pFontNumbers (Game+0x58), align 0xF, white.
+            const float scaleArg = m_pRetryBtn->size.x * 0.5f;
             if (game->pFontNumbers.IsValid()) {
                 game->pFontNumbers->DrawString(scaleArg, 1.0f, 0.0f,
                     buf, daysPos,
