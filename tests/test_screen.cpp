@@ -32,8 +32,11 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 #include "screens/GameOverScreen.h"
 #include "game/StartupEffects.h"
 #include "game/WaveManager.h"
+#include "game/FruitSaveData.h"
 #include "hud/ScoreControl.h"
 #include "hud/MissControl.h"
+#include "hud/FruitFactControl.h"
+#include "hud/MenuButton.h"
 #include "hud/HUD.h"
 #include <cstdio>
 #include <cstdlib>
@@ -41,7 +44,7 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_screen <main|dojo|about|shop|gamemode|gameover|classic> [--interactive]\n"
+        "usage: test_screen <main|dojo|about|shop|gamemode|gameover|gameover-transition|classic> [--interactive]\n"
         "  --interactive: show the window and run the normal main loop\n"
         "                 instead of ticking 30 frames headless. ESC quits.\n");
     return 1;
@@ -191,6 +194,156 @@ int main(int argc, char* argv[]) {
         GameOverScreen* s = new GameOverScreen("classic", 6, 0.0f, 1, 1, 0, 0);
         game.pGameOverScreen = s;
         game.hud->AddControl(s);
+    } else if (strcmp(screenName, "gameover-transition") == 0) {
+        // Full state-0 -> state-6 transition test with runtime assertions.
+        // Verifies the fixes from b477592 (title slide-out gate),
+        // a5db4b8 (sensei index defaults), 86bd3ff (highscore label),
+        // fc098ee (Fruit::GetFact clamp + DrawOrder).
+        //
+        // Boots into state 0 (entry animation) and runs frames to drive the
+        // full transition: title zooms in (state 0, 1.9s), title slides
+        // down (state 6, ~1s), sensei + fact + retry/quit appear.
+        hideAllExisting();
+        game.gameMode = 0;       // Classic
+        game.currentScore = 1234;
+        game.m_TransitionTimer = 0.0f;
+        // Seed a saved highscore so the layer-0x80 highscore-text block runs
+        if (game.pSaveData) game.pSaveData->m_highscore = 5000;
+
+        // Start at state 0 (entry animation) -- this is the realistic path
+        // from gameplay -> game over.
+        GameOverScreen* s = new GameOverScreen("classic", 0, 0.0f, 1, 1, 0, 0);
+        game.pGameOverScreen = s;
+        game.hud->AddControl(s);
+
+        // 1.9s state-0 + ~1s state-6 alpha ramp = ~180 frames at 60fps.
+        game.runFrames(180);
+        // Extra idle frames so retry/quit creation (after m_ProgressCounter == 10)
+        // and slide-in animations fully settle.
+        game.runFrames(60);
+
+        // ---- Assertions ----
+        int failures = 0;
+
+        // 1. State machine: should have advanced from 0 -> 6.
+        if (s->m_State != 6) {
+            fprintf(stderr,
+                "FAIL: m_State should be 6 after transition, got %d\n",
+                s->m_State);
+            failures++;
+        }
+
+        // 2. m_TransitionTimer should have ramped to ~1.0.
+        if (game.m_TransitionTimer < 0.99f) {
+            fprintf(stderr,
+                "FAIL: m_TransitionTimer should reach ~1.0, got %f\n",
+                game.m_TransitionTimer);
+            failures++;
+        }
+
+        // 3. Title (HUDControl3d pos.y) should have slid down off-screen.
+        //    Per binary: pos.y = 224 * alpha, gated on pos.y < 212.8.
+        //    Expected final pos.y ~ 212.8 (just below the gate cutoff).
+        if (s->pos.y < 100.0f) {
+            fprintf(stderr,
+                "FAIL: title should slide down, pos.y = %f (expected > 100)\n",
+                s->pos.y);
+            failures++;
+        }
+
+        // 4. FruitFactControl created during state 6.
+        if (!s->m_pFruitFact) {
+            fprintf(stderr, "FAIL: m_pFruitFact should be created in state 6\n");
+            failures++;
+        } else {
+            // 4a. GetFact returned a valid string (Fruit::GetFact clamp fix).
+            if (!s->m_pFruitFact->m_pCurFactString) {
+                fprintf(stderr,
+                    "FAIL: FruitFactControl::m_pCurFactString should be non-null\n");
+                failures++;
+            }
+
+            // 4b. FruitFactControl pos animated in from off-screen.
+            //     Final pos.x = m_OffsetPosX + 183.0 = -18 + 183 = 165.
+            if (s->m_pFruitFact->pos.x > 200.0f) {
+                fprintf(stderr,
+                    "FAIL: FruitFactControl should slide in (pos.x = %f, expected ~165)\n",
+                    s->m_pFruitFact->pos.x);
+                failures++;
+            }
+        }
+
+        // 5. m_OffsetPosX should have animated from 368 -> ~-18.
+        if (s->m_OffsetPosX > 50.0f) {
+            fprintf(stderr,
+                "FAIL: m_OffsetPosX should animate to ~-18, got %f\n",
+                s->m_OffsetPosX);
+            failures++;
+        }
+
+        // 6. Sensei body/head indices should be valid (binary > 0 gate).
+        if (s->m_BgPatternIdx <= 0 || s->m_BgPatternIdx > 3) {
+            fprintf(stderr,
+                "FAIL: m_BgPatternIdx out of range [1..3], got %d\n",
+                s->m_BgPatternIdx);
+            failures++;
+        }
+        if (s->m_ExpressionIdx <= 0 || s->m_ExpressionIdx > 3) {
+            fprintf(stderr,
+                "FAIL: m_ExpressionIdx out of range [1..3], got %d\n",
+                s->m_ExpressionIdx);
+            failures++;
+        }
+
+        // 7. Retry/Quit buttons should spawn after m_ProgressCounter == 10.
+        if (!s->m_pRetryBtn) {
+            fprintf(stderr, "FAIL: m_pRetryBtn should be spawned in state 6\n");
+            failures++;
+        }
+        if (!s->m_pQuitBtn) {
+            fprintf(stderr, "FAIL: m_pQuitBtn should be spawned in state 6\n");
+            failures++;
+        }
+
+        // 8. ScoreControl should have slid off-screen via wave-mode shift.
+        //    pos.x = -218 - 200 * |waveTimer|. Sliding LEFT past the base
+        //    -218 confirms the wave-mode shift is running (the actual final
+        //    pos depends on per-frame Update order; we just want < -218).
+        for (auto it = game.hud->controls.begin();
+             it != game.hud->controls.end(); ++it) {
+            ScoreControl* sc = dynamic_cast<ScoreControl*>(*it);
+            if (sc) {
+                if (sc->pos.x >= -218.0f) {
+                    fprintf(stderr,
+                        "FAIL: ScoreControl should slide left past -218, pos.x = %f\n",
+                        sc->pos.x);
+                    failures++;
+                }
+                break;
+            }
+        }
+
+        if (failures > 0) {
+            fprintf(stderr,
+                "gameover-transition test FAILED with %d assertion(s)\n",
+                failures);
+            game.shutdown();
+            SDL_GL_DeleteContext(gl);
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+            return 1;
+        }
+        fprintf(stdout, "PASS: gameover-transition all assertions ok "
+                        "(state=%d, alpha=%f, fact=%s, retry=%s, quit=%s)\n",
+                s->m_State, game.m_TransitionTimer,
+                (s->m_pFruitFact && s->m_pFruitFact->m_pCurFactString) ? "ok" : "MISSING",
+                s->m_pRetryBtn ? "ok" : "MISSING",
+                s->m_pQuitBtn ? "ok" : "MISSING");
+        game.shutdown();
+        SDL_GL_DeleteContext(gl);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 0;
     } else {
         fprintf(stderr, "unknown screen '%s'\n", screenName);
         return FailUsage();
