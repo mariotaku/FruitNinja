@@ -1300,6 +1300,12 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
             const Colour white(255, 255, 255, 255);
             MatrixManager& mm = MatrixManager::GetInstance();
 
+            // ASM-verified: 2026-05-11 binary @ 0x001418cc-0x001419a0 (re-analyst)
+            //   head scale = 257.0 (DAT_001419f0), body scale = 129.0 (DAT_001419f4)
+            //   body translate = (9.0, 40.0, 0.0) * hudScale + m_OffsetPos
+            //   unit quad (-0.5..0.5); texture m_Width/m_Height NOT involved --
+            //   constants are pixel-size on the unit quad.
+
             // Expression overlay -- sensei_head_0N.tex
             if (m_ExpressionIdx > 0 && m_ExpressionIdx <= 3) {
                 Mortar::SmartPtr<Mortar::Texture>& tex =
@@ -1309,8 +1315,8 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 
                     mm.GetWorldStack().Reset();
                     Matrix44 mat = Matrix44::MakeScale(
-                        0.075f * hudScale.x,
-                        0.075f * hudScale.y,
+                        257.0f * hudScale.x,
+                        257.0f * hudScale.y,
                         0.0f);
                     mat.GlobalTranslate44(Vec3(
                         m_OffsetPosX, m_OffsetPosY, m_OffsetPosZ));
@@ -1331,12 +1337,12 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 
                     mm.GetWorldStack().Reset();
                     Matrix44 mat = Matrix44::MakeScale(
-                        0.6f * hudScale.x,
-                        0.6f * hudScale.y,
+                        129.0f * hudScale.x,
+                        129.0f * hudScale.y,
                         0.0f);
                     mat.GlobalTranslate44(Vec3(
                         9.0f * hudScale.x + m_OffsetPosX,
-                        64.0f * hudScale.y + m_OffsetPosY,
+                        40.0f * hudScale.y + m_OffsetPosY,
                         m_OffsetPosZ));
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
