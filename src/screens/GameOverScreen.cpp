@@ -622,11 +622,12 @@ void GameOverScreen::CreateRetryButton() {
         TextureManager::LoadLocalisedTexture("retry.tex");
 
     m_pRetryBtn = new MenuButton();
-    // ASM-verified: 2026-05-11 binary @ 0x0014f24c MenuButton ctor (re-analyst).
-    // The texture arg goes into m_SecondaryTex (HUDControl3d +0x78), not
-    // m_Texture (+0x74). MenuButton::Draw Phase B reads m_SecondaryTex for
-    // the retry/quit sprite. Writing to m_Texture left the sprite unrendered.
-    m_pRetryBtn->m_SecondaryTex = tex;
+    // DIFFERS: binary stores the ctor tex arg in m_SecondaryTex (+0x78) and
+    // MenuButton::Draw Phase B reads it from there. The port's MenuButton::Draw
+    // delegates Phase B to HUDControl3d::Draw which reads m_Texture (+0x74),
+    // so the port keeps the tex in m_Texture. Functionally equivalent;
+    // diverges only in the field that holds the SmartPtr.
+    m_pRetryBtn->m_Texture    = tex;
     // Binary CreateRetryButton @ 0x00141188 does NOT explicitly write +0x34;
     // MenuButton::Init writes HUD_LAYER_MENU_BG for FruitType >= 0 (here 0).
     m_pRetryBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
@@ -696,9 +697,9 @@ void GameOverScreen::CreateQuitButton() {
         TextureManager::LoadLocalisedTexture("quit.tex");
 
     m_pQuitBtn = new MenuButton();
-    // ASM-verified: 2026-05-11 binary @ 0x0014f24c MenuButton ctor (re-analyst).
-    // Texture goes to m_SecondaryTex (+0x78), not m_Texture (+0x74).
-    m_pQuitBtn->m_SecondaryTex = tex;
+    // DIFFERS: see m_pRetryBtn -- port keeps tex in m_Texture because
+    // MenuButton::Draw delegates Phase B to HUDControl3d::Draw.
+    m_pQuitBtn->m_Texture    = tex;
     // Binary CreateQuitButton @ 0x001412e4 does NOT explicitly write +0x34;
     // MenuButton::Init writes HUD_LAYER_MENU_BG for FruitType >= 0 (the
     // FruitType comes from a global int; shipped data keeps it >= 0).
