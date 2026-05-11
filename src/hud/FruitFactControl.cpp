@@ -11,6 +11,7 @@
 #include "game/BonusManager.h"
 #include "game/Bonus.h"
 #include "game/FruitSaveData.h"
+#include "game/WaveManager.h"
 #include "game/LeaderboardList.h"
 #include "game/LeaderboardManager.h"
 #include "entities/Fruit.h"
@@ -140,26 +141,47 @@ void FruitFactControl::Init() {
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
 
-    // TODO: 0x0013a278 -- pick panel-bg texture by gameMode; set size+pos pivot from tex dimensions
+    // Bind the backplate texture so HUDControl3d::Draw (which gates on
+    // m_Texture validity at +0x74) actually renders the fact-panel
+    // background. Earlier port had a TODO here -- the backplate never
+    // bound, the user saw a transparent panel with text floating in
+    // empty space ("background panels not drawn").
+    // TODO: 0x0013a278 -- the binary picks a per-mode variant; Arcade
+    //   may use a different panel (arcade_diolog_box.tex or
+    //   arcade_results_diolog_box.tex). For now use the shared
+    //   fact_board.tex for all modes.
+    if (s_PanelTex.IsValid()) m_Texture = s_PanelTex;
+    if (m_Texture.IsValid()) {
+        // Set size from texture so the backplate draws at native pixel
+        // dimensions. Without this size stays at HUDControl3d's
+        // default (0,0,0) and the quad scales to nothing.
+        size.x = (float)(m_Texture->m_Width + 1);
+        size.y = (float)(m_Texture->m_Height + 1);
+        size.z = 0.0f;
+    }
     // TODO: 0x0013a278 -- m_PomCount set per gameMode / combo length
     // TODO: 0x0013a278 -- branch combo vs no-combo for status string
     // TODO: 0x0013a278 -- copy m_ComboHashArray + m_ComboLength from FruitSaveData
     // TODO: 0x0013a278 -- call CheckCombo / GetComboStarTexture
-    // TODO: 0x0013a278 -- call Fruit::GetFact + reload fact texture
 
     m_FactColour.a = 0xFF;
 
     // Set FruitIdx from FindMostOfFruit result stored in Game/FruitSaveData
+    // TODO: 0x0013a278 -- read most-fruit-idx from the correct game/save
+    // offset (binary reads game+0x118 / GameOverScreen field_0x118).
+    // Use random fruit index for now so the user doesn't always see apple.
+    // Negative factIdx triggers Fruit::GetFact's random-fact path.
     if (game && game->pSaveData) {
-        // Binary reads from game+0x118 (which mirrors GameOverScreen::field_0x118 = most-fruit-idx)
-        // TODO: 0x0013a278 -- read most-fruit-idx from the correct game/save offset
-        m_FruitIdx = 0;  // placeholder
+        const int n = FruitInfo_GetCount();
+        m_FruitIdx = (n > 0)
+            ? (int)WaveManager::GetInstance()->GetRandom().Rand32((uint32_t)n)
+            : 0;
     }
 
-    // Load fact string for current fruit/fact index
+    // Load fact string for current fruit/fact index (factIdx<0 = random pick).
     if (m_FruitIdx >= 0) {
         int outType = 0, outFactIdx = 0;
-        m_pCurFactString = Fruit::GetFact(&outType, &outFactIdx, m_FruitIdx, m_FactIdx);
+        m_pCurFactString = Fruit::GetFact(&outType, &outFactIdx, m_FruitIdx, -1);
         m_FactIdx = outFactIdx;
     }
 
