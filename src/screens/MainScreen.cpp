@@ -566,11 +566,22 @@ void MainScreen::Update(float dt) {
 
     UpdateScreenElements(dt, elapsedTime);
 
-    // Binary @ 0x0014b278: cameraTransition lives on game.m_TransitionTimer
-    // (+0x0c) so peers (ScoreControl, MissControl, UpdateMusic, etc.) can
-    // read it. Port owns the value on MainScreen but mirrors it here so
-    // the same ABI surface is preserved for downstream subsystems.
-    game.m_TransitionTimer = m_CameraTransition;
+    // NOTE: the binary's MainScreen::Update does NOT have an unconditional
+    // mirror back to game.m_TransitionTimer here. Game+0x0c (m_TransitionTimer)
+    // is the SINGLE source of truth -- MainScreen reads it each frame and
+    // mutates it only from within specific state-case branches (states 0,
+    // 1, 2, 0x11). States that hand off to GameOverScreen (e.g. state 8)
+    // leave Game+0x0c untouched, which is what allows GameOverScreen's
+    // state-6 alpha ramp `alpha += (1-alpha)*0.125` to accumulate across
+    // frames without being stomped.
+    // ASM-verified: 2026-05-11 binary @ 0x0014b278..0x0014c37b (asm-inspector).
+    //
+    // The port's m_CameraTransition is a port-local mirror used by some
+    // states' own animation math; deletion of the unconditional write here
+    // restores correct GameOverScreen behavior. TODO: collapse the port's
+    // m_CameraTransition field into game.m_TransitionTimer as the binary
+    // does (single source of truth) -- larger refactor; this minimum fix
+    // restores the user-visible transition.
 }
 
 // Helper: setup world matrix for a textured quad at given position
