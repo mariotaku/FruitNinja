@@ -732,54 +732,73 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         iter++;
     }
 
-    // --- Matrix setup ---
-    // DIFFERS: the binary's Font_DrawString @ 0x00198e44 does NOT consume
-    // m_Current for per-glyph submission -- it computes glyph quad coords
-    // directly from VFP scalars (verified 2026-05-11 by asm-inspector
-    // on Font::DrawString and FFC::DrawOrder; the binary never resets the
-    // matrix stack before Font::DrawString, yet text renders correctly).
+    // --- Bake text transform into vertex coords (binary-faithful, matches
+    // 0x00199216..0x00199254 architecture) ---
     //
-    // The port routes glyph submission through MatrixStack (Scale/Translate
-    // multiply into m_Current, then Renderer::DrawTriStrip reads MVP from
-    // MatrixManager). So unlike the binary, the port IS sensitive to a
-    // dirty m_Current at entry. To produce equivalent observable behaviour
-    // without a full rewrite of the per-glyph submission path: Push,
-    // overwrite m_Current with identity, build the text transform, draw,
-    // Pop. Using m_Current.Identity() directly because MatrixStack::Reset
-    // also zeroes m_Depth which would break the Push/Pop balance.
+    // ASM-verified: 2026-05-11 binary @ 0x00101c58, 0x00101964 (asm-inspector
+    // verdict (c) -- "Helper bypasses the matrix stack entirely. World coords
+    // are computed from scalars"). The binary's Font_DrawString writes
+    // screen-space scalar math directly into the vertex buffer; it never
+    // reads or writes m_Current during per-glyph submission. Per-glyph corner
+    // emit is `Vec2 ctor` + `Vec2 operator+` + direct vstr.32 into the batch
+    // vertex slots.
+    //
+    // Port replicates this: build the combined text transform matrix once,
+    // apply it as a 2D affine to every batched vertex's (x, y), then flush
+    // with an identity world matrix. The port is now insensitive to the
+    // caller's dirty m_Current, matching the binary's behaviour without the
+    // previous Push+Identity workaround.
+    //
+    // The transform is M = T_world(pos) * RotZ(rotZ) * T_local(0, alignY) * S(scale)
+    // -- build via the existing MatrixStack helpers, then snapshot the 2x3
+    // affine submatrix (m[0], m[4], m[12]; m[1], m[5], m[13]) into locals.
+    Matrix44 textM;
+    textM.Identity();
+    textM.ApplyScale(scale, scale, 1.0f);
+    if (rotZ != 0.0f) {
+        textM.RotZ44(sinf(rotZ), cosf(rotZ));
+    }
+
+    // Vertical alignment: LocalTranslate(0, alignY, 0) -- per binary @
+    // 0x00199920..0x00199964. The Y-shift depends on the final cursorY
+    // (== -(numLines - 1)) so it's known only after the glyph loop above.
+    if (alignment & 0xC) {
+        float s19 = cursorY - yLineFactor;
+        float s14 = -maxWH.y - s19;
+        float factor = (alignment & 0x4) ? 0.5f : 1.0f;
+        float translateY = s14 * factor;
+        textM.LocalTranslate44(0.0f, translateY, 0.0f);
+    }
+    textM.GlobalTranslate44(pos);
+
+    // 2x3 affine columns (Matrix44 is column-major).
+    const float a00 = textM.m[0],  a01 = textM.m[4],  ax = textM.m[12];
+    const float a10 = textM.m[1],  a11 = textM.m[5],  ay = textM.m[13];
+
+    // Apply the affine to every emitted vertex's (x, y). Z stays 0 since
+    // glyphs are flat and the binary never writes Z.
+    for (int pg = 0; pg < m_PageCount; pg++) {
+        if (perPageCount[pg] == 0) continue;
+        QUADCUSTOMVERTEX* page_verts =
+            &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY];
+        const int n = perPageCount[pg] * 6;
+        for (int i = 0; i < n; i++) {
+            const float lx = page_verts[i].x;
+            const float ly = page_verts[i].y;
+            page_verts[i].x = a00 * lx + a01 * ly + ax;
+            page_verts[i].y = a10 * lx + a11 * ly + ay;
+        }
+    }
+
+    // --- Per-page flush with identity world matrix ---
+    // Verts are in world space; the matrix stack must NOT re-transform them.
+    // Push/Pop bracket to preserve caller's m_Current.
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     world.Push();
     world.m_Current.Identity();
     world.m_Version++;
-
-    world.Scale(Vec3(scale, scale, 1.0f));
-
-    // RotZ (ARM at 0x00199908-0x0019990e)
-    if (rotZ != 0.0f) {
-        world.m_Current.RotZ44(sinf(rotZ), cosf(rotZ));
-        world.m_Version++;
-    }
-
-    // Vertical alignment: TranslateLocal(0, factor, 0) BEFORE world Translate(pos)
-    // Binary ARM 0x00199920-0x00199964 (confirmed upward shift)
-    if (alignment & 0xC) {
-        // cursor_y is the final value after the glyph loop (= -(numLines-1))
-        // Binary: s19 = cursor_y - yLineFactor (yLineFactor=1.0 in wrapper callers)
-        // For direct Font_DrawString callers with yLineFactor != 1.0, use it.
-        float s19 = cursorY - yLineFactor;
-        // s14 = -maxWH.y_modified - s19
-        float s14 = -maxWH.y - s19;
-        float factor = (alignment & 0x4) ? 0.5f : 1.0f;
-        float translateY = s14 * factor;
-        world.m_Current.LocalTranslate44(0.0f, translateY, 0.0f);
-        world.m_Version++;
-    }
-
-    world.Translate(pos);
     MatrixManager::GetInstance().UploadModelViewOnly();
 
-    // --- Per-page flush (binary step 7) ---
-    // Binary makes zero GL calls here; BeginFrame sets the steady state.
     Renderer* renderer = Renderer::GetInstance();
     if (renderer) {
         for (int pg = 0; pg < m_PageCount; pg++) {
@@ -787,8 +806,6 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             Page* page = GetPage(pg);
             if (!page || !page->texture.IsValid()) continue;
             page->texture->Set();
-            // GL_TRIANGLE_STRIP per binary @ 0x00193f5c (DrawTris with
-            // mode=5). 6 verts/glyph: LB,LT,RB,RT + 2 degenerate RTs.
             renderer->DrawTriStrip(
                 &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY],
                 perPageCount[pg] * 6);
