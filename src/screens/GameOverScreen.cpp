@@ -801,10 +801,8 @@ void GameOverScreen::Update(float dt) {
         const float ENTRY_DURATION = 1.9f;   // DAT_00141dac
         const float SIN_FULL       = 20000.0f; // DAT_00141da8
 
-        // DIAGNOSTIC: temporarily halve the * 2.0f multipliers (binary uses
-        // 2.0; using 1.0 here so the title peaks at 256x64 / 273x68 instead
-        // of 512x128 / 545x136). If the user reported "huge texture I can't
-        // identify" disappears with this, the title IS the offending draw.
+        // DIAGNOSTIC: was * 2.0f (binary value), then * 1.0f, now * 0.25f.
+        // Peak should be ~68x17 -- tiny title in the centre.
         if (m_Timer < ENTRY_DURATION) {
             float t = (m_Timer / ENTRY_DURATION) * SIN_FULL;
             uint16_t idx;
@@ -813,13 +811,13 @@ void GameOverScreen::Update(float dt) {
             float curr = SinIdx(idx);
             float full = SinIdx(0x4E34);
             float scaleF = (full != 0.0f) ? (curr / full) : 0.0f;
-            size.x = m_TitleSizeX * scaleF * 1.0f;
-            size.y = m_TitleSizeY * scaleF * 1.0f;
-            size.z = m_TitleSizeZ * scaleF * 1.0f;
+            size.x = m_TitleSizeX * scaleF * 0.25f;
+            size.y = m_TitleSizeY * scaleF * 0.25f;
+            size.z = m_TitleSizeZ * scaleF * 0.25f;
         } else {
-            size.x = m_TitleSizeX * 1.0f;
-            size.y = m_TitleSizeY * 1.0f;
-            size.z = m_TitleSizeZ * 1.0f;
+            size.x = m_TitleSizeX * 0.25f;
+            size.y = m_TitleSizeY * 0.25f;
+            size.z = m_TitleSizeZ * 0.25f;
         }
         // Throttle to every 10th frame to avoid spam.
         static int s_dbgState0Count = 0;
@@ -1032,10 +1030,9 @@ void GameOverScreen::Update(float dt) {
         // binary).
         if (pos.y < 212.8f) {
             float a = game->m_TransitionTimer;
-            // DIAGNOSTIC: was lerp(2, 1, a). Use lerp(1, 0.5, a) so peak
-            // is 1x texture size and final is 0.5x (matches state-0 halved
-            // multiplier above).
-            float sf = 1.0f + (0.5f - 1.0f) * a; // lerp(1, 0.5, a)
+            // DIAGNOSTIC: scaled down to 0.25x to match state-0 (* 0.25).
+            // Was lerp(2, 1, a), then lerp(1, 0.5, a); now lerp(0.25, 0.125, a).
+            float sf = 0.25f + (0.125f - 0.25f) * a;
             size.x = m_TitleSizeX * sf;
             size.y = m_TitleSizeY * sf;
             pos.x = 0.0f;
