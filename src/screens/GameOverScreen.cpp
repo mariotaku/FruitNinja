@@ -801,8 +801,6 @@ void GameOverScreen::Update(float dt) {
         const float ENTRY_DURATION = 1.9f;   // DAT_00141dac
         const float SIN_FULL       = 20000.0f; // DAT_00141da8
 
-        // DIAGNOSTIC: was * 2.0f (binary value), then * 1.0f, now * 0.25f.
-        // Peak should be ~68x17 -- tiny title in the centre.
         if (m_Timer < ENTRY_DURATION) {
             float t = (m_Timer / ENTRY_DURATION) * SIN_FULL;
             uint16_t idx;
@@ -811,19 +809,13 @@ void GameOverScreen::Update(float dt) {
             float curr = SinIdx(idx);
             float full = SinIdx(0x4E34);
             float scaleF = (full != 0.0f) ? (curr / full) : 0.0f;
-            size.x = m_TitleSizeX * scaleF * 0.25f;
-            size.y = m_TitleSizeY * scaleF * 0.25f;
-            size.z = m_TitleSizeZ * scaleF * 0.25f;
+            size.x = m_TitleSizeX * scaleF * 2.0f;
+            size.y = m_TitleSizeY * scaleF * 2.0f;
+            size.z = m_TitleSizeZ * scaleF * 2.0f;
         } else {
-            size.x = m_TitleSizeX * 0.25f;
-            size.y = m_TitleSizeY * 0.25f;
-            size.z = m_TitleSizeZ * 0.25f;
-        }
-        // Throttle to every 10th frame to avoid spam.
-        static int s_dbgState0Count = 0;
-        if ((s_dbgState0Count++ % 10) == 0) {
-            fprintf(stderr, "[DBG GOS state0] timer=%.3f m_TitleSize=(%.1f,%.1f) size=(%.1f,%.1f) pos=(%.1f,%.1f)\n",
-                    m_Timer, m_TitleSizeX, m_TitleSizeY, size.x, size.y, pos.x, pos.y);
+            size.x = m_TitleSizeX * 2.0f;
+            size.y = m_TitleSizeY * 2.0f;
+            size.z = m_TitleSizeZ * 2.0f;
         }
 
         if (m_Timer > ENTRY_DURATION) {
@@ -1030,17 +1022,13 @@ void GameOverScreen::Update(float dt) {
         // binary).
         if (pos.y < 212.8f) {
             float a = game->m_TransitionTimer;
-            // DIAGNOSTIC: scaled down to 0.25x to match state-0 (* 0.25).
-            // Was lerp(2, 1, a), then lerp(1, 0.5, a); now lerp(0.25, 0.125, a).
-            float sf = 0.25f + (0.125f - 0.25f) * a;
+            float sf = 2.0f + (1.0f - 2.0f) * a; // lerp(2, 1, a)
             size.x = m_TitleSizeX * sf;
             size.y = m_TitleSizeY * sf;
             pos.x = 0.0f;
             pos.y = 224.0f * a;
             pos.z = 0.0f;
         }
-        fprintf(stderr, "[DBG GOS state6] alpha=%.3f size=(%.1f,%.1f) pos=(%.1f,%.1f)\n",
-                game->m_TransitionTimer, size.x, size.y, pos.x, pos.y);
         break;
     }
 
@@ -1273,19 +1261,9 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
             // texture is valid AND the retry button's size.x is in (0, 600].
             // DAT_001419ec = 600.0f.
             const float btnScaleX = m_pRetryBtn->size.x;
-            fprintf(stderr, "[DBG GOS overlay-gate] state=%d retryBtn.size.x=%.2f "
-                    "tex-valid=%d gate-fires=%d\n",
-                    m_State, btnScaleX, (int)m_GameOverTex.IsValid(),
-                    (int)(m_GameOverTex.IsValid() && btnScaleX > 0.0f && btnScaleX < 600.0f));
             if (m_GameOverTex.IsValid() &&
                 btnScaleX > 0.0f && btnScaleX < 600.0f)
             {
-                fprintf(stderr, "[DBG GOS overlay-quad] state=%d "
-                        "retryBtn.size=(%.1f,%.1f,%.1f) translate=(%.1f,%.1f,%.1f) tex=%dx%d\n",
-                        m_State,
-                        m_pRetryBtn->size.x, m_pRetryBtn->size.y, m_pRetryBtn->size.z,
-                        daysPos.x, daysPos.y, daysPos.z,
-                        m_GameOverTex->m_Width, m_GameOverTex->m_Height);
                 m_GameOverTex->Set();
 
                 MatrixManager& mm = MatrixManager::GetInstance();
@@ -1343,12 +1321,6 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 Mortar::SmartPtr<Mortar::Texture>& tex =
                     g_BgPatternTexArr[m_BgPatternIdx - 1];
                 if (tex.IsValid()) {
-                    fprintf(stderr, "[DBG GOS sensei-body] idx=%d hudScale=(%.2f,%.2f,%.2f) "
-                            "scale=(%.1f,%.1f,0) offset=(%.1f,%.1f,%.1f) tex=%dx%d\n",
-                            m_BgPatternIdx, hudScale.x, hudScale.y, hudScale.z,
-                            257.0f * hudScale.x, 257.0f * hudScale.y,
-                            m_OffsetPosX, m_OffsetPosY, m_OffsetPosZ,
-                            tex->m_Width, tex->m_Height);
                     tex->Set();
 
                     mm.GetWorldStack().Reset();
@@ -1371,14 +1343,6 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 Mortar::SmartPtr<Mortar::Texture>& tex =
                     g_ExpressionTexArr[m_ExpressionIdx - 1];
                 if (tex.IsValid()) {
-                    fprintf(stderr, "[DBG GOS sensei-head] idx=%d scale=(%.1f,%.1f,0) "
-                            "translate=(%.1f,%.1f,%.1f) tex=%dx%d\n",
-                            m_ExpressionIdx,
-                            129.0f * hudScale.x, 129.0f * hudScale.y,
-                            9.0f * hudScale.x + m_OffsetPosX,
-                            40.0f * hudScale.y + m_OffsetPosY,
-                            m_OffsetPosZ,
-                            tex->m_Width, tex->m_Height);
                     tex->Set();
 
                     mm.GetWorldStack().Reset();

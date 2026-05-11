@@ -158,6 +158,32 @@ See `docs/entities/bomb-flash.md` and `docs/entities/bomb-blast.md`. Both Update
 - [x] MatrixManager / MatrixStack — known from T.NNN renames: Reset, Translate, Scale, SetCurrent, Upload. Offset +0x1094 in MatrixManager = the active MatrixStack.
 - [x] GeometryBinding — PassBinding::Apply fully decompiled (0x1a39f8, 101 lines). Sets up glVertexPointer/NormalPointer/ColorPointer/TexCoordPointer.
 
+### Font::DrawString matrix-state leak — INVESTIGATE
+
+Found 2026-05-11 in FruitFactControl::DrawOrder. `Font::DrawString` at
+`src/engine/render/Font.cpp:740` does `world.Push()` then `world.Scale(scale)`
+without first resetting the world stack. If the caller leaves a non-identity
+matrix on the stack (e.g. FFC backplate's `MakeScale(176, 176)`), the text's
+own scale multiplies on top of it -- glyphs render ~176× normal size.
+
+Worked around in `FruitFactControl::DrawOrder` by resetting the world stack
+before each text sub-draw, matching the binary's `ResetMatrix_HUD` calls.
+But other callers may have the same latent bug. Investigate:
+
+1. Audit every `Font::DrawString` call site in `src/` and check whether the
+   caller resets the world stack first.
+2. Decide whether the proper fix is to make `Font::DrawString` defensively
+   reset on entry (port-side hardening), or to keep the current "caller
+   resets" contract and just add resets to every offending call site.
+3. If we change Font::DrawString to self-reset, verify against binary --
+   the binary's Font_DrawString @ 0x00198e44 might already do this implicitly
+   and the port's port may have missed it.
+
+Symptom: text appears as a huge unidentifiable rectangle (a single glyph
+scaled by the caller's leftover matrix). User can confirm by shrinking
+the preceding texture quad's scale and watching the text become visible
+behind it.
+
 ## Sound System — Mostly Analyzed (147 funcs, 25+ done)
 
 Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram, BadaSound full struct + all functions (see `docs/engine/sound-system.md`).
