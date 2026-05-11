@@ -566,22 +566,28 @@ void MainScreen::Update(float dt) {
 
     UpdateScreenElements(dt, elapsedTime);
 
-    // NOTE: the binary's MainScreen::Update does NOT have an unconditional
-    // mirror back to game.m_TransitionTimer here. Game+0x0c (m_TransitionTimer)
-    // is the SINGLE source of truth -- MainScreen reads it each frame and
-    // mutates it only from within specific state-case branches (states 0,
-    // 1, 2, 0x11). States that hand off to GameOverScreen (e.g. state 8)
-    // leave Game+0x0c untouched, which is what allows GameOverScreen's
-    // state-6 alpha ramp `alpha += (1-alpha)*0.125` to accumulate across
-    // frames without being stomped.
-    // ASM-verified: 2026-05-11 binary @ 0x0014b278..0x0014c37b (asm-inspector).
+    // Port-side DIFFERS: the binary uses Game+0x0c (m_TransitionTimer) as a
+    // single source of truth, mutating it directly inside each MainScreen
+    // state-case body (states 0, 1, 2, 0x11). Port has a separate
+    // m_CameraTransition field that the state machine drives, plus this
+    // mirror line that copies it to game.m_TransitionTimer for downstream
+    // peers (ScoreControl, MissControl, PauseScreen, UpdateMusic).
     //
-    // The port's m_CameraTransition is a port-local mirror used by some
-    // states' own animation math; deletion of the unconditional write here
-    // restores correct GameOverScreen behavior. TODO: collapse the port's
-    // m_CameraTransition field into game.m_TransitionTimer as the binary
-    // does (single source of truth) -- larger refactor; this minimum fix
-    // restores the user-visible transition.
+    // Gate the mirror on `pGameOverScreen == nullptr` so GameOverScreen's
+    // state-6 alpha ramp (which writes game.m_TransitionTimer directly)
+    // can accumulate without being stomped by the steady-state-zero mirror
+    // from MainScreen.
+    // ASM-verified: 2026-05-11 binary @ 0x0014b278..0x0014c37b (asm-inspector).
+    //   Binary's state-0x11 (STATE_CAMERA_FADE) writes Game+0x0c directly
+    //   (writes at 0x0014c1c0/0x0014c1cc/0x0014c214/0x0014c21c). States
+    //   that hand off to GameOverScreen leave Game+0x0c untouched.
+    //
+    // TODO: collapse the port's m_CameraTransition field into
+    // game.m_TransitionTimer (single source of truth, binary-faithful).
+    // The gate below is a minimum-impact fix until that refactor lands.
+    if (!game.pGameOverScreen) {
+        game.m_TransitionTimer = m_CameraTransition;
+    }
 }
 
 // Helper: setup world matrix for a textured quad at given position
