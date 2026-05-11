@@ -395,21 +395,13 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
 
+    MatrixManager& mm = MatrixManager::GetInstance();
+
     // ---- 1. Backplate quad (binary @ 0x0013c79c..0x0013c848) ----
     if (m_Texture.IsValid()) {
-        // DIAGNOSTIC: shrink backplate scale to 0.25x to test if FFC backplate
-        // is the "huge unidentifiable texture" the user is seeing.
-        const float dbgK = 0.02f;
-        fprintf(stderr, "[DBG FFC backplate] tex=%dx%d size=(%.1f,%.1f,%.1f) "
-                "pos=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
-                m_Texture->m_Width, m_Texture->m_Height,
-                size.x, size.y, size.z,
-                pos.x, pos.y, pos.z,
-                size.x * dbgK, size.y * dbgK);
         m_Texture->Set();
-        MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(size.x * dbgK, size.y * dbgK, 1.0f);
+        Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
         mat.GlobalTranslate44(Vec3(pos.x - 1.0f, pos.y - 8.0f, pos.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -425,17 +417,15 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         //   DAT_0013cb04 = 66.0, DAT_0013cb00 = 42.0
         const char* title = Localisation::Get("CODE_FRUIT_FACT_TITLE");
         if (!title) title = "FRUIT FACT";
-        // DIAGNOSTIC: +(-100, -100) nudge to test where the text really wants to go.
-        const float titleX = pos.x - 66.0f - 100.0f;
-        const float titleY = pos.y + 42.0f - 100.0f;
-        // DIAGNOSTIC: reset world stack before DrawString -- backplate draw
-        // above leaves MakeScale(176, 176) on the stack which Font::DrawString
-        // appears to inherit, scaling every glyph ~176x.
-        {
-            MatrixManager& mmReset = MatrixManager::GetInstance();
-            mmReset.GetWorldStack().Reset();
-            mmReset.UploadModelViewOnly();
-        }
+        const float titleX = pos.x - 66.0f;
+        const float titleY = pos.y + 42.0f;
+        // Reset world stack before DrawString -- the backplate draw above
+        // leaves MakeScale(size.x, size.y) on the stack which Font::DrawString
+        // would inherit (it does world.Push() + Scale() without first resetting),
+        // multiplying every glyph by 176x. Per-sub-draw reset matches the
+        // binary's `ResetMatrix_HUD` calls in FruitFactControl::DrawOrder.
+        mm.GetWorldStack().Reset();
+        mm.UploadModelViewOnly();
         game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
             title, Vec3(titleX, titleY, 0.0f),
             m_FactColour, 0x0F);
@@ -449,9 +439,8 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         //   DAT_0013cb10 = 64.0, immediate 0x41600000 = 14.0
         //   (binary also has a conditional +4.0 Y bias driven by Game[+3],
         //    deferred -- TODO: 0x0013c9da resolve Game[+3] flag.)
-        // DIAGNOSTIC: +(-100, -100) nudge (same as title above).
-        const float bodyX = pos.x - 64.0f - 100.0f;
-        const float bodyY = pos.y - 14.0f - 100.0f;
+        const float bodyX = pos.x - 64.0f;
+        const float bodyY = pos.y - 14.0f;
         // ASM-verified: 2026-05-11 binary @ 0x0013c95e auto-shrink loop.
         //   scale = 16.0f
         //   while (Font::GetStringHeight(scale, 128.0f) > 96.0f)
@@ -466,12 +455,9 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 iter = Mortar::Utf8StringIterator(m_pCurFactString);
             }
         }
-        // DIAGNOSTIC: reset world stack before DrawString.
-        {
-            MatrixManager& mmReset = MatrixManager::GetInstance();
-            mmReset.GetWorldStack().Reset();
-            mmReset.UploadModelViewOnly();
-        }
+        // Reset world stack before DrawString (see title comment).
+        mm.GetWorldStack().Reset();
+        mm.UploadModelViewOnly();
         game->pFontMain->DrawString(scale, 1.0f, 0.0f,
             m_pCurFactString, Vec3(bodyX, bodyY, 0.0f),
             brown, 0x0F);
@@ -488,20 +474,9 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     if (m_FactTexture.IsValid()) {
         const float w = (float)m_FactTexture->m_Width;
         const float h = (float)m_FactTexture->m_Height;
-        // DIAGNOSTIC: fact-icon to 0.02x while plate stays at 1.0x.
-        const float dbgK = 0.02f;
-        fprintf(stderr, "[DBG FFC fact-icon] tex=%.0fx%.0f offset=(%.1f,%.1f,%.1f) "
-                "translate=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
-                w, h,
-                m_FactPosOffset.x, m_FactPosOffset.y, m_FactPosOffset.z,
-                pos.x + m_FactPosOffset.x - 8.0f,
-                pos.y + m_FactPosOffset.y + 8.0f,
-                pos.z + m_FactPosOffset.z,
-                w * dbgK, h * dbgK);
         m_FactTexture->Set();
-        MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(w * dbgK, h * dbgK, 0.0f);
+        Matrix44 mat = Matrix44::MakeScale(w, h, 0.0f);
         mat.GlobalTranslate44(Vec3(
             pos.x + m_FactPosOffset.x - 8.0f,
             pos.y + m_FactPosOffset.y + 8.0f,
