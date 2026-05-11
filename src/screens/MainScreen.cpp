@@ -417,15 +417,17 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CAMERA_FADE:
-        // Binary @ 0x0014c19a: only decay when camera < 0; clamp to 0 once
-        // camera > -0.001 (DAT_0014c2a8) and clear pauseFlag. Without the
-        // clamp the value keeps decaying forever and pauseFlag stays set.
+        // TODO: 0x0014c1a2..0x0014c1cc -- binary's gate is `timer < 0.85f`
+        // (against a persistent state-machine register s16 set in state 0x10),
+        // NOT `timer < 0`. Port's simpler gate works for the common
+        // post-game-return path (timer < 0 -> lerp to 0) but misses the
+        // 0.85-snapshot path used by other transitions. Two additional
+        // tail writes at 0x0014c306/0x0014c316 also unported.
+        // ASM-verified-partial: 2026-05-11 (asm-inspector flagged divergence).
         if (game.m_TransitionTimer < 0.0f) {
             game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
             if (game.m_TransitionTimer > -0.001f) {
                 game.m_TransitionTimer = 0.0f;
-                // Binary @ 0x0014c1a4: clear pauseFlag once the post-game
-                // camera fade has reached zero (back-to-menu return path).
                 game.pauseFlag = 0;
             }
         }
