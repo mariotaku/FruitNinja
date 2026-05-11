@@ -425,8 +425,9 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         //   DAT_0013cb04 = 66.0, DAT_0013cb00 = 42.0
         const char* title = Localisation::Get("CODE_FRUIT_FACT_TITLE");
         if (!title) title = "FRUIT FACT";
-        const float titleX = pos.x - 66.0f;
-        const float titleY = pos.y + 42.0f;
+        // DIAGNOSTIC: +(-100, -100) nudge to test where the text really wants to go.
+        const float titleX = pos.x - 66.0f - 100.0f;
+        const float titleY = pos.y + 42.0f - 100.0f;
         game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
             title, Vec3(titleX, titleY, 0.0f),
             m_FactColour, 0x0F);
@@ -440,8 +441,9 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         //   DAT_0013cb10 = 64.0, immediate 0x41600000 = 14.0
         //   (binary also has a conditional +4.0 Y bias driven by Game[+3],
         //    deferred -- TODO: 0x0013c9da resolve Game[+3] flag.)
-        const float bodyX = pos.x - 64.0f;
-        const float bodyY = pos.y - 14.0f;
+        // DIAGNOSTIC: +(-100, -100) nudge (same as title above).
+        const float bodyX = pos.x - 64.0f - 100.0f;
+        const float bodyY = pos.y - 14.0f - 100.0f;
         // ASM-verified: 2026-05-11 binary @ 0x0013c95e auto-shrink loop.
         //   scale = 16.0f
         //   while (Font::GetStringHeight(scale, 128.0f) > 96.0f)
