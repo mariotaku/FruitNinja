@@ -399,7 +399,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     if (m_Texture.IsValid()) {
         // DIAGNOSTIC: shrink backplate scale to 0.25x to test if FFC backplate
         // is the "huge unidentifiable texture" the user is seeing.
-        const float dbgK = 1.0f;
+        const float dbgK = 0.02f;
         fprintf(stderr, "[DBG FFC backplate] tex=%dx%d size=(%.1f,%.1f,%.1f) "
                 "pos=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
                 m_Texture->m_Width, m_Texture->m_Height,
