@@ -474,8 +474,8 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     if (m_FactTexture.IsValid()) {
         const float w = (float)m_FactTexture->m_Width;
         const float h = (float)m_FactTexture->m_Height;
-        // DIAGNOSTIC: scale fact-icon to 0.25x.
-        const float dbgK = 1.0f;
+        // DIAGNOSTIC: fact-icon to 0.02x while plate stays at 1.0x.
+        const float dbgK = 0.02f;
         fprintf(stderr, "[DBG FFC fact-icon] tex=%.0fx%.0f offset=(%.1f,%.1f,%.1f) "
                 "translate=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
                 w, h,
