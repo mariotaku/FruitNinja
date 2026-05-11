@@ -814,6 +814,18 @@ void MenuButton::UpdateTouchPosition() {
 void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     if (!m_bVisible || m_DrawColour.a == 0) return;
 
+    {
+        static int s_dbgCount = 0;
+        if ((s_dbgCount++ % 60) == 0) {
+            fprintf(stderr, "[DBG MenuBtn] pos=(%.1f,%.1f,%.1f) size=(%.1f,%.1f,%.1f) "
+                    "tgt=(%.1f,%.1f,%.1f) bkS=%.2f animS=%.2f fade=%d layer=0x%x fruitType=%d\n",
+                    pos.x, pos.y, pos.z, size.x, size.y, size.z,
+                    m_TargetSize.x, m_TargetSize.y, m_TargetSize.z,
+                    m_BackdropScale, m_AnimScale, m_FadeCounter,
+                    m_LayerFlags, m_FruitType);
+        }
+    }
+
     // Compute fade-derived alpha once. Used by Phase A AND Phase B.
     // Binary @ entry of Draw, before the layer test.
     //   alpha = m_FruitType < 0 ? 0xFF

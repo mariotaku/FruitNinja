@@ -817,6 +817,12 @@ void GameOverScreen::Update(float dt) {
             size.y = m_TitleSizeY * 2.0f;
             size.z = m_TitleSizeZ * 2.0f;
         }
+        // Throttle to every 10th frame to avoid spam.
+        static int s_dbgState0Count = 0;
+        if ((s_dbgState0Count++ % 10) == 0) {
+            fprintf(stderr, "[DBG GOS state0] timer=%.3f m_TitleSize=(%.1f,%.1f) size=(%.1f,%.1f) pos=(%.1f,%.1f)\n",
+                    m_Timer, m_TitleSizeX, m_TitleSizeY, size.x, size.y, pos.x, pos.y);
+        }
 
         if (m_Timer > ENTRY_DURATION) {
             if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
@@ -1029,6 +1035,8 @@ void GameOverScreen::Update(float dt) {
             pos.y = 224.0f * a;
             pos.z = 0.0f;
         }
+        fprintf(stderr, "[DBG GOS state6] alpha=%.3f size=(%.1f,%.1f) pos=(%.1f,%.1f)\n",
+                game->m_TransitionTimer, size.x, size.y, pos.x, pos.y);
         break;
     }
 
@@ -1261,9 +1269,19 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
             // texture is valid AND the retry button's size.x is in (0, 600].
             // DAT_001419ec = 600.0f.
             const float btnScaleX = m_pRetryBtn->size.x;
+            fprintf(stderr, "[DBG GOS overlay-gate] state=%d retryBtn.size.x=%.2f "
+                    "tex-valid=%d gate-fires=%d\n",
+                    m_State, btnScaleX, (int)m_GameOverTex.IsValid(),
+                    (int)(m_GameOverTex.IsValid() && btnScaleX > 0.0f && btnScaleX < 600.0f));
             if (m_GameOverTex.IsValid() &&
                 btnScaleX > 0.0f && btnScaleX < 600.0f)
             {
+                fprintf(stderr, "[DBG GOS overlay-quad] state=%d "
+                        "retryBtn.size=(%.1f,%.1f,%.1f) translate=(%.1f,%.1f,%.1f) tex=%dx%d\n",
+                        m_State,
+                        m_pRetryBtn->size.x, m_pRetryBtn->size.y, m_pRetryBtn->size.z,
+                        daysPos.x, daysPos.y, daysPos.z,
+                        m_GameOverTex->m_Width, m_GameOverTex->m_Height);
                 m_GameOverTex->Set();
 
                 MatrixManager& mm = MatrixManager::GetInstance();
@@ -1321,6 +1339,12 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 Mortar::SmartPtr<Mortar::Texture>& tex =
                     g_BgPatternTexArr[m_BgPatternIdx - 1];
                 if (tex.IsValid()) {
+                    fprintf(stderr, "[DBG GOS sensei-body] idx=%d hudScale=(%.2f,%.2f,%.2f) "
+                            "scale=(%.1f,%.1f,0) offset=(%.1f,%.1f,%.1f) tex=%dx%d\n",
+                            m_BgPatternIdx, hudScale.x, hudScale.y, hudScale.z,
+                            257.0f * hudScale.x, 257.0f * hudScale.y,
+                            m_OffsetPosX, m_OffsetPosY, m_OffsetPosZ,
+                            tex->m_Width, tex->m_Height);
                     tex->Set();
 
                     mm.GetWorldStack().Reset();
@@ -1343,6 +1367,14 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 Mortar::SmartPtr<Mortar::Texture>& tex =
                     g_ExpressionTexArr[m_ExpressionIdx - 1];
                 if (tex.IsValid()) {
+                    fprintf(stderr, "[DBG GOS sensei-head] idx=%d scale=(%.1f,%.1f,0) "
+                            "translate=(%.1f,%.1f,%.1f) tex=%dx%d\n",
+                            m_ExpressionIdx,
+                            129.0f * hudScale.x, 129.0f * hudScale.y,
+                            9.0f * hudScale.x + m_OffsetPosX,
+                            40.0f * hudScale.y + m_OffsetPosY,
+                            m_OffsetPosZ,
+                            tex->m_Width, tex->m_Height);
                     tex->Set();
 
                     mm.GetWorldStack().Reset();

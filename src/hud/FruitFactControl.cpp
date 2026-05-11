@@ -397,6 +397,12 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
     // ---- 1. Backplate quad (binary @ 0x0013c79c..0x0013c848) ----
     if (m_Texture.IsValid()) {
+        fprintf(stderr, "[DBG FFC backplate] tex=%dx%d size=(%.1f,%.1f,%.1f) "
+                "pos=(%.1f,%.1f,%.1f) translate=(%.1f,%.1f,%.1f)\n",
+                m_Texture->m_Width, m_Texture->m_Height,
+                size.x, size.y, size.z,
+                pos.x, pos.y, pos.z,
+                pos.x - 1.0f, pos.y - 8.0f, pos.z);
         m_Texture->Set();
         MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
@@ -461,11 +467,18 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     //   translate = pos + m_FactPosOffset - (8, -8, 0)
     //             = (pos.x + offX - 8, pos.y + offY + 8, pos.z + offZ)
     if (m_FactTexture.IsValid()) {
+        const float w = (float)m_FactTexture->m_Width;
+        const float h = (float)m_FactTexture->m_Height;
+        fprintf(stderr, "[DBG FFC fact-icon] tex=%.0fx%.0f offset=(%.1f,%.1f,%.1f) "
+                "translate=(%.1f,%.1f,%.1f)\n",
+                w, h,
+                m_FactPosOffset.x, m_FactPosOffset.y, m_FactPosOffset.z,
+                pos.x + m_FactPosOffset.x - 8.0f,
+                pos.y + m_FactPosOffset.y + 8.0f,
+                pos.z + m_FactPosOffset.z);
         m_FactTexture->Set();
         MatrixManager& mm = MatrixManager::GetInstance();
         mm.GetWorldStack().Reset();
-        const float w = (float)m_FactTexture->m_Width;
-        const float h = (float)m_FactTexture->m_Height;
         Matrix44 mat = Matrix44::MakeScale(w, h, 0.0f);
         mat.GlobalTranslate44(Vec3(
             pos.x + m_FactPosOffset.x - 8.0f,
