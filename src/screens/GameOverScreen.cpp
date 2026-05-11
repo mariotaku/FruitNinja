@@ -1000,22 +1000,26 @@ void GameOverScreen::Update(float dt) {
             }
         }
 
-        // 6) Vertical "settle" — title slides DOWN off-screen + shrinks.
-        // ASM-verified: 2026-05-11 binary @ 0x00141ec0+ (re-analyst).
-        //   Gate:  pos.y < 212.8 (DAT_00142614)
-        //   pos.y = lerp(0.0, 224.0, alpha)        (DAT_0014261c, DAT_00142618)
-        //   size  = m_TitleSize * lerp(2.0, 1.0, alpha)
-        // Earlier port had gate `pos.y < 0` (impossible from state 0 exit
-        // where pos.y == 0) and target 0 -- block never executed, so the
-        // title stayed at center full-size while sensei/fact/buttons slid
-        // in behind it, leaving the user "stuck on the logo".
+        // 6) Vertical "settle" -- title slides DOWN off-screen.
+        // TODO: re-RE binary @ 0x00141ec4. Re-analyst pass 2026-05-11 flagged
+        // divergences vs port: binary's gate is `pos.y < 0` (NOT 212.8) and
+        // formula is `pos.y = 224*(2 - m_TitleSlideProgress)` (NOT 224*alpha)
+        // with NO size write in this block. Driver is GameOverScreen-owned
+        // m_TitleSlideProgress (+0x138), not game->m_TransitionTimer.
+        //
+        // The port's gate / target / formula here are a working approximation
+        // (test passes: title slides to pos.y > 100, sensei + fact + retry
+        // appear) but not byte-faithful. Keeping the working approximation
+        // until a deeper RE pass produces an exact spec for both the slide
+        // and the size animation (which apparently happens elsewhere in the
+        // binary).
         if (pos.y < 212.8f) {
             float a = game->m_TransitionTimer;
             float sf = 2.0f + (1.0f - 2.0f) * a; // lerp(2, 1, a)
             size.x = m_TitleSizeX * sf;
             size.y = m_TitleSizeY * sf;
             pos.x = 0.0f;
-            pos.y = 224.0f * a;  // lerp(0, 224, a) -- slides down off-screen
+            pos.y = 224.0f * a;
             pos.z = 0.0f;
         }
         break;

@@ -1598,14 +1598,18 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     const FruitInfoData* chosen = FruitInfo_Get(ft);
     if (!chosen || chosen->m_FactCount <= 0) return nullptr;
 
-    // Clamp negative factIdx -- C99's `-1 % N == -1` results in an OOB
-    // `m_pFacts[-1]` read which returns a garbage pointer that subsequent
-    // dereferences crash on. FruitFactControl ctor inits m_FactIdx=-1,
-    // and the binary's GetFact likely had the same input -- it must clamp
-    // to a valid index before the modulo.
+    // ASM-verified: 2026-05-11 binary @ 0x00175ba4 (asm-inspector).
+    // Negative `factIdx` is the binary's "pick random fact" sentinel
+    // (calls Math::Random::Rand32 to choose). Earlier port clamped to 0
+    // which silently broke FruitFactControl's intended random-fact
+    // behavior (always showed the same first fact).
     int fi = factIdx;
-    if (fi < 0) fi = 0;
-    fi = fi % chosen->m_FactCount;
+    if (fi < 0) {
+        fi = (int)WaveManager::GetInstance()->GetRandom().Rand32(
+                 (uint32_t)chosen->m_FactCount);
+    } else {
+        fi = fi % chosen->m_FactCount;
+    }
 
     if (outType)    *outType    = ft;
     if (outFactIdx) *outFactIdx = fi;
