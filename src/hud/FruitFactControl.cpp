@@ -183,6 +183,18 @@ void FruitFactControl::Init() {
         int outType = 0, outFactIdx = 0;
         m_pCurFactString = Fruit::GetFact(&outType, &outFactIdx, m_FruitIdx, -1);
         m_FactIdx = outFactIdx;
+
+        // Load per-fruit fact texture (binary @ 0x0013a3f0). The "rings"
+        // decoration the user reported missing is baked INTO this per-fruit
+        // sprite (e.g. apple_facts.tex draws fruit + decorative rings as a
+        // single PNG). Format string from binary @ 0x001bcca0: "%s_facts".
+        // ASM-verified: 2026-05-11 (re-analyst).
+        const char* fruitBase = Fruit::FruitFactTexture(m_FruitIdx);
+        if (fruitBase && *fruitBase) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "%s_facts.tex", fruitBase);
+            m_FactTexture = TextureManager::LoadLocalisedTexture(buf);
+        }
     }
 
     m_LBState = savedLBState;
@@ -417,6 +429,32 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         game->pFontMain->DrawString(scale, 1.0f, 0.0f,
             m_pCurFactString, Vec3(bodyX, bodyY, 0.0f),
             brown, 0x0F);
+    }
+
+    // ---- 4. Per-fruit fact icon (binary @ ~0x0013ca60) ----
+    // The "rings" decoration is baked INTO this per-fruit sprite (e.g.
+    // apple_facts.tex draws the fruit + decorative concentric rings as a
+    // single asset). Without this draw call the user sees only the panel
+    // backplate + text, with no fruit indicator.
+    // ASM-spec: 2026-05-11 binary @ 0x0013ca60 (re-analyst).
+    //   scale = (tex.W, tex.H, 1.0)  (no +1, unlike the backplate)
+    //   translate = (8 - (pos.x + W), -8 - (pos.y + H), -pos.z)
+    //   colour = white
+    if (m_FactTexture.IsValid()) {
+        m_FactTexture->Set();
+        MatrixManager& mm = MatrixManager::GetInstance();
+        mm.GetWorldStack().Reset();
+        const float w = (float)m_FactTexture->m_Width;
+        const float h = (float)m_FactTexture->m_Height;
+        Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
+        mat.GlobalTranslate44(Vec3(
+            8.0f  - (pos.x + w),
+            -8.0f - (pos.y + h),
+            -pos.z));
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        r->DrawQuad(Colour(255, 255, 255, 255));
+        m_FactTexture->UnSet();
     }
 }
 
