@@ -399,7 +399,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     if (m_Texture.IsValid()) {
         // DIAGNOSTIC: shrink backplate scale to 0.25x to test if FFC backplate
         // is the "huge unidentifiable texture" the user is seeing.
-        const float dbgK = 0.02f;
+        const float dbgK = 1.0f;
         fprintf(stderr, "[DBG FFC backplate] tex=%dx%d size=(%.1f,%.1f,%.1f) "
                 "pos=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
                 m_Texture->m_Width, m_Texture->m_Height,
@@ -475,7 +475,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         const float w = (float)m_FactTexture->m_Width;
         const float h = (float)m_FactTexture->m_Height;
         // DIAGNOSTIC: scale fact-icon to 0.25x.
-        const float dbgK = 0.02f;
+        const float dbgK = 1.0f;
         fprintf(stderr, "[DBG FFC fact-icon] tex=%.0fx%.0f offset=(%.1f,%.1f,%.1f) "
                 "translate=(%.1f,%.1f,%.1f) drawSize=(%.1f,%.1f)\n",
                 w, h,
