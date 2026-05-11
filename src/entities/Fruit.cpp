@@ -19,6 +19,7 @@
 #include "game/WaveManager.h"
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
+#include "engine/util/Localisation.h"
 #include "game/FruitSaveData.h"
 #include "util/StringHash.h"
 #include "Game.h"
@@ -1618,7 +1619,14 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     // Binary calls FruitSaveData::AddToTotal("facts", 1) and
     // FruitSaveData::AddToTotal("<fruit>_fact", 1) here.
 
-    return chosen->m_pFacts ? chosen->m_pFacts[fi] : nullptr;
+    // fruitlist.xml stores localisation keys (e.g. "FRUIT_FACT_07") in
+    // <fact> elements; resolve via Localisation::Get so the caller gets
+    // the translated paragraph, not the raw key. Falls back to the key
+    // string when no translation is registered (matches binary's
+    // pass-through behaviour).
+    const char* key = chosen->m_pFacts ? chosen->m_pFacts[fi] : nullptr;
+    if (!key) return nullptr;
+    return Localisation::Get(key);
 }
 
 // Binary @ 0x001756dc — replace m_pEmitter1 with a custom trail emitter.
