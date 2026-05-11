@@ -408,20 +408,16 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         m_Texture->UnSet();
     }
 
-    // ASM-verified: 2026-05-11 binary @ 0x0013b95c (re-analyst).
-    // Every text/fact-icon draw in DrawOrder applies a global -(8, -8, 0)
-    // anchor on top of its per-drawable offset. Backplate's per-drawable
-    // offset is (-1, -8, 0) which already happens to absorb a Y-side
-    // contribution; the X-side -8 anchor shows up in title/body/icon.
-
     // ---- 2. "SENSEI'S FRUIT FACT" title (binary @ 0x0013c852..0x0013c92c) ----
     {
-        // ASM-verified: GETSTRING(0x9b) -> "CODE_FRUIT_FACT_TITLE" ->
-        //   "SENSEI'S FRUIT FACT". Binary translate X = pos.x - 66 - 8.
+        // ASM-verified: 2026-05-11 binary @ 0x0013c886..0x0013c894 (asm-inspector)
+        //   GETSTRING(0x9b) -> "CODE_FRUIT_FACT_TITLE" -> "SENSEI'S FRUIT FACT"
+        //   translate = (pos.x - 66.0, pos.y + 42.0, 0.0)
+        //   DAT_0013cb04 = 66.0, DAT_0013cb00 = 42.0
         const char* title = Localisation::Get("CODE_FRUIT_FACT_TITLE");
         if (!title) title = "FRUIT FACT";
-        const float titleX = pos.x - 66.0f - 8.0f;
-        const float titleY = pos.y;
+        const float titleX = pos.x - 66.0f;
+        const float titleY = pos.y + 42.0f;
         game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
             title, Vec3(titleX, titleY, 0.0f),
             m_FactColour, 0x0F);
@@ -430,10 +426,13 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     // ---- 3. Fact body text (binary @ 0x0013c930..0x0013ca36) ----
     if (m_pCurFactString) {
         const Colour brown(0x74, 0x5D, 0x3B, 0xFF);
-        // Binary translate = (pos.x - 64 - 8, pos.y, 0). Port previously
-        // used (-64, pos.y - 14, 0); both axes were off.
-        const float bodyX = pos.x - 64.0f - 8.0f;
-        const float bodyY = pos.y;
+        // ASM-verified: 2026-05-11 binary @ 0x0013c9ea..0x0013ca02 (asm-inspector)
+        //   translate = (pos.x - 64.0, pos.y - 14.0, 0.0)
+        //   DAT_0013cb10 = 64.0, immediate 0x41600000 = 14.0
+        //   (binary also has a conditional +4.0 Y bias driven by Game[+3],
+        //    deferred -- TODO: 0x0013c9da resolve Game[+3] flag.)
+        const float bodyX = pos.x - 64.0f;
+        const float bodyY = pos.y - 14.0f;
         // ASM-verified: 2026-05-11 binary @ 0x0013c95e auto-shrink loop.
         //   scale = 16.0f
         //   while (Font::GetStringHeight(scale, 128.0f) > 96.0f)
