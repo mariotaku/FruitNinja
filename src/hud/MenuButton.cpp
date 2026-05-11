@@ -131,16 +131,19 @@ void FN::ClearMenuItems() {
     }
 }
 
-// Constants from binary (verified via read_memory / disassembly)
-// IMPORTANT: DAT_0014f194 = 0.2f is applied to Fruit::m_RotVel1 (rotation slowdown),
-// NOT to scale. The scale is left at its gameplay value.
-static const float FRUIT_ROTVEL_MULT = 0.2f;        // DAT_0014f194 — slows fruit spin
+// Constants from binary (asm-inspector @ 0x0014f100..0x0014f188).
+// CORRECTED 2026-05-11: DAT_0014f194 = 0.2f is applied to entity->scale
+// (not to m_RotVel1 as the original port comment claimed). m_TargetSize
+// is then derived as entity->scale * 2.0f (DAT_0014f19c).
+static const float FRUIT_MENU_SCALE = 0.2f;          // DAT_0014f194 — scales fruit down
+static const float FRUIT_TARGETSIZE_MUL = 2.0f;      // DAT_0014f19c — m_TargetSize multiplier
 static const float FRUIT_ZPOS = 150.0f;              // DAT_0014f198
 static const float BOMB_MENU_SCALE = 0.85f;          // DAT_0014f1a0 — bomb scale in menu
 static const float ROT_SPEED_MIN = 8.0f;
 static const float ROT_SPEED_RANGE = 4.0f;           // 8-12 range
-static const float ROT_CLAMP_X = 0.75f;
-static const float ROT_CLAMP_Y = 0.5f;
+// Scale clamps (sign-preserving min-magnitude on entity->scale.x / .y).
+static const float SCALE_CLAMP_X = 0.75f;            // |scale.x| >= 0.75
+static const float SCALE_CLAMP_Y = 0.5f;             // |scale.y| >= 0.5
 
 MenuButton::MenuButton()
     : m_pEntity(nullptr),
@@ -238,25 +241,30 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                 m_pEntity = e;
 
                 if (entityType == 0) {
-                    // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40)
-                    // Key finding: the 0.2 multiplier (DAT_0014f194) is applied to
-                    // m_RotVel1 (fruit+0xF0), NOT to scale. Fruit keeps gameplay scale.
+                    // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40).
+                    // ASM-verified: 2026-05-11 binary @ 0x0014f100..0x0014f188 (asm-inspector)
+                    //   entity->scale *= 0.2f                 (DAT_0014f194)
+                    //   clamp |scale.x| >= 0.75 sign-preserving
+                    //   clamp |scale.y| >= 0.5  sign-preserving
+                    //   m_TargetSize = entity->scale * 2.0f   (DAT_0014f19c)
+                    // Replaces the prior misreading that put the 0.2 multiplier
+                    // on m_RotVel1 -- the binary multiplies scale, not rotvel.
                     Fruit* fruit = static_cast<Fruit*>(e);
-                    fruit->m_RotVel1 = fruit->m_RotVel1 * FRUIT_ROTVEL_MULT;
+                    e->scale = e->scale * FRUIT_MENU_SCALE;
+                    if (fabsf(e->scale.x) < SCALE_CLAMP_X)
+                        e->scale.x = (e->scale.x >= 0 ? SCALE_CLAMP_X : -SCALE_CLAMP_X);
+                    if (fabsf(e->scale.y) < SCALE_CLAMP_Y)
+                        e->scale.y = (e->scale.y >= 0 ? SCALE_CLAMP_Y : -SCALE_CLAMP_Y);
+                    m_TargetSize = e->scale * FRUIT_TARGETSIZE_MUL;
+                    // Update the button's own size so HUDControl3d::Draw + the
+                    // grow-in animation pick up the right magnitude immediately
+                    // (without this, size stays at (0,0,0) until Update ticks).
+                    size = m_TargetSize;
+
                     fruit->m_ScaleAnim = 1.0f;
                     fruit->m_ChuckDelay = 0.0f;
                     fruit->m_ZPosition = FRUIT_ZPOS;
                     m_pFruitPiece = fruit;
-
-                    // Clamp rotation magnitude (after the ×0.2 reduction)
-                    if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
-                        fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
-                    if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
-                        fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
-                    // Binary @ 0x0014f0dc..0x0014f0ea: copy clamped RotVel1 into RotVel2 so
-                    // both halves spin identically. Without this the two halves of a menu
-                    // fruit have slightly different rotational velocities once sliced.
-                    fruit->m_RotVel2 = fruit->m_RotVel1;
                 } else {
                     // Bomb entity: disable physics and scale by 0.85 (DAT_0014f1a0)
                     // MenuButton::Init (0x0014ee40): writes 0 to bomb+0x80 (m_bMovement)
