@@ -38,29 +38,30 @@ using Mortar::TextureManager;
 
 static bool s_bLoaded = false;
 
-// TODO: 0x001399fc -- full 17-texture name list
-// (panel backgrounds, fact backplate, combo-star, connect/download/leaderboard frames)
-// Only the core two textures are loaded here; the rest are TODO stubs.
-static Mortar::SmartPtr<Mortar::Texture> s_PanelTex;
-static Mortar::SmartPtr<Mortar::Texture> s_FactBackplateTex;
-// ... 15 more textures to be resolved from binary DAT strings at 0x001399fc
+// ASM-verified: 2026-05-11 binary @ 0x001399fc (re-analyst)
+// Per-mode backplate textures (DAT_0013a520 / DAT_0013a51c / DAT_0013a524).
+static Mortar::SmartPtr<Mortar::Texture> s_PanelTexClassic;  // "fact_board.tex"
+static Mortar::SmartPtr<Mortar::Texture> s_PanelTexArcade;   // "arcade_results_diolog_box.tex"
+static Mortar::SmartPtr<Mortar::Texture> s_PanelTexZen;      // "diolog_box_big.tex"
+// TODO: 0x001399fc -- load full 17-texture set; names from binary DAT constants.
+// (combo-star, connect/download/leaderboard frames; remaining ~14 textures not yet resolved)
 
 void FruitFactControl::LoadContent() {
     if (s_bLoaded) return;
     s_bLoaded = true;
 
-    // TODO: 0x001399fc -- load full 17-texture set; names from binary DAT constants.
-    // Prototype: load panel + fact backplates.
-    s_PanelTex        = TextureManager::LoadLocalisedTexture("fact_board.tex");
-    s_FactBackplateTex = TextureManager::LoadLocalisedTexture("diolog_box_big.tex");
+    s_PanelTexClassic = TextureManager::LoadLocalisedTexture("fact_board.tex");
+    s_PanelTexArcade  = TextureManager::LoadLocalisedTexture("arcade_results_diolog_box.tex");
+    s_PanelTexZen     = TextureManager::LoadLocalisedTexture("diolog_box_big.tex");
 }
 
 void FruitFactControl::UnLoadContent() {
     if (!s_bLoaded) return;
     s_bLoaded = false;
 
-    s_PanelTex.SetNull();
-    s_FactBackplateTex.SetNull();
+    s_PanelTexClassic.SetNull();
+    s_PanelTexArcade.SetNull();
+    s_PanelTexZen.SetNull();
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,7 @@ FruitFactControl::FruitFactControl()
     , m_FruitIdx(-1)
     , m_FactIdx(-1)
     , m_FactTexture()
+    , m_FactPosOffset(-69.0f, 53.0f, 0.0f)
     , m_FactColour(0x74, 0x5d, 0x3b, 0xff)
     , m_ComboLength(0)
     , m_StarTimer(-8.0f)
@@ -91,7 +93,6 @@ FruitFactControl::FruitFactControl()
     , m_StarType(0)
 {
     memset(m_ComboHashArray, 0, sizeof(m_ComboHashArray));
-    memset(_pad_8C_gap, 0, sizeof(_pad_8C_gap));
     memset(_pad_factColour, 0, sizeof(_pad_factColour));
     memset(_pad_D9, 0, sizeof(_pad_D9));
     memset(_pad_E5, 0, sizeof(_pad_E5));
@@ -141,24 +142,36 @@ void FruitFactControl::Init() {
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
 
-    // Bind the backplate texture so HUDControl3d::Draw (which gates on
-    // m_Texture validity at +0x74) actually renders the fact-panel
-    // background. Earlier port had a TODO here -- the backplate never
-    // bound, the user saw a transparent panel with text floating in
-    // empty space ("background panels not drawn").
-    // TODO: 0x0013a278 -- the binary picks a per-mode variant; Arcade
-    //   may use a different panel (arcade_diolog_box.tex or
-    //   arcade_results_diolog_box.tex). For now use the shared
-    //   fact_board.tex for all modes.
-    if (s_PanelTex.IsValid()) m_Texture = s_PanelTex;
+    // ASM-verified: 2026-05-11 binary @ 0x0013a2a6..0x0013a2ba (re-analyst)
+    // Per-mode backplate pick (DAT_0013a520/51c/524).
+    if (gameMode == 2) {
+        if (s_PanelTexArcade.IsValid()) m_Texture = s_PanelTexArcade;
+    } else if (gameMode == 3) {
+        if (s_PanelTexZen.IsValid()) m_Texture = s_PanelTexZen;
+    } else {
+        if (s_PanelTexClassic.IsValid()) m_Texture = s_PanelTexClassic;
+    }
     if (m_Texture.IsValid()) {
-        // Set size from texture so the backplate draws at native pixel
-        // dimensions. Without this size stays at HUDControl3d's
-        // default (0,0,0) and the quad scales to nothing.
         size.x = (float)(m_Texture->m_Width + 1);
         size.y = (float)(m_Texture->m_Height + 1);
         size.z = 0.0f;
+        // ASM-verified: 2026-05-11 binary @ 0x0013a31e (re-analyst)
+        // 1.37f scale (DAT_0013a500) applies only in Classic (gameMode == 0).
+        if (gameMode == 0) {
+            size.x *= 1.37f;
+            size.y *= 1.37f;
+            size.z *= 1.37f;
+        }
     }
+
+    // ASM-verified: 2026-05-11 binary @ 0x0013a278 (re-analyst)
+    // m_FactPosOffset: non-combo default (-69, 53, 0); combo path needs
+    // FruitSaveData+0x208 ComboLength >= 3 which conflicts with m_BombQueueCount
+    // at that offset -- defer combo branch until field identity confirmed.
+    // TODO: 0x0013a3xx -- combo-length read from FruitSaveData+0x208; if >= 3
+    //   and gameMode in {2,3}: m_FactPosOffset = Vec3(140.0f, -72.0f, 0.0f)
+    m_FactPosOffset = Vec3(-69.0f, 53.0f, 0.0f);
+
     // TODO: 0x0013a278 -- m_PomCount set per gameMode / combo length
     // TODO: 0x0013a278 -- branch combo vs no-combo for status string
     // TODO: 0x0013a278 -- copy m_ComboHashArray + m_ComboLength from FruitSaveData
@@ -436,10 +449,8 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     // apple_facts.tex draws the fruit + decorative concentric rings as a
     // single asset). Without this draw call the user sees only the panel
     // backplate + text, with no fruit indicator.
-    // ASM-spec: 2026-05-11 binary @ 0x0013ca60 (re-analyst).
-    //   scale = (tex.W, tex.H, 1.0)  (no +1, unlike the backplate)
-    //   translate = (8 - (pos.x + W), -8 - (pos.y + H), -pos.z)
-    //   colour = white
+    // TODO: 0x0013ca60 -- verify m_FactTexture draw uses pos + m_FactPosOffset;
+    //   exact translate formula (scale pivot, sign conventions) needs asm-verify.
     if (m_FactTexture.IsValid()) {
         m_FactTexture->Set();
         MatrixManager& mm = MatrixManager::GetInstance();
@@ -448,9 +459,9 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         const float h = (float)m_FactTexture->m_Height;
         Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
         mat.GlobalTranslate44(Vec3(
-            8.0f  - (pos.x + w),
-            -8.0f - (pos.y + h),
-            -pos.z));
+            pos.x + m_FactPosOffset.x,
+            pos.y + m_FactPosOffset.y,
+            pos.z + m_FactPosOffset.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
         r->DrawQuad(Colour(255, 255, 255, 255));
