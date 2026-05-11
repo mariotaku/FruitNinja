@@ -801,6 +801,10 @@ void GameOverScreen::Update(float dt) {
         const float ENTRY_DURATION = 1.9f;   // DAT_00141dac
         const float SIN_FULL       = 20000.0f; // DAT_00141da8
 
+        // DIAGNOSTIC: temporarily halve the * 2.0f multipliers (binary uses
+        // 2.0; using 1.0 here so the title peaks at 256x64 / 273x68 instead
+        // of 512x128 / 545x136). If the user reported "huge texture I can't
+        // identify" disappears with this, the title IS the offending draw.
         if (m_Timer < ENTRY_DURATION) {
             float t = (m_Timer / ENTRY_DURATION) * SIN_FULL;
             uint16_t idx;
@@ -809,13 +813,13 @@ void GameOverScreen::Update(float dt) {
             float curr = SinIdx(idx);
             float full = SinIdx(0x4E34);
             float scaleF = (full != 0.0f) ? (curr / full) : 0.0f;
-            size.x = m_TitleSizeX * scaleF * 2.0f;
-            size.y = m_TitleSizeY * scaleF * 2.0f;
-            size.z = m_TitleSizeZ * scaleF * 2.0f;
+            size.x = m_TitleSizeX * scaleF * 1.0f;
+            size.y = m_TitleSizeY * scaleF * 1.0f;
+            size.z = m_TitleSizeZ * scaleF * 1.0f;
         } else {
-            size.x = m_TitleSizeX * 2.0f;
-            size.y = m_TitleSizeY * 2.0f;
-            size.z = m_TitleSizeZ * 2.0f;
+            size.x = m_TitleSizeX * 1.0f;
+            size.y = m_TitleSizeY * 1.0f;
+            size.z = m_TitleSizeZ * 1.0f;
         }
         // Throttle to every 10th frame to avoid spam.
         static int s_dbgState0Count = 0;
@@ -1028,7 +1032,10 @@ void GameOverScreen::Update(float dt) {
         // binary).
         if (pos.y < 212.8f) {
             float a = game->m_TransitionTimer;
-            float sf = 2.0f + (1.0f - 2.0f) * a; // lerp(2, 1, a)
+            // DIAGNOSTIC: was lerp(2, 1, a). Use lerp(1, 0.5, a) so peak
+            // is 1x texture size and final is 0.5x (matches state-0 halved
+            // multiplier above).
+            float sf = 1.0f + (0.5f - 1.0f) * a; // lerp(1, 0.5, a)
             size.x = m_TitleSizeX * sf;
             size.y = m_TitleSizeY * sf;
             pos.x = 0.0f;
