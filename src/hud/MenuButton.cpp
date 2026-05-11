@@ -131,22 +131,16 @@ void FN::ClearMenuItems() {
     }
 }
 
-// Constants from binary (asm-inspector @ 0x0014f100..0x0014f188; raw DATs
-// re-read @ 0x0014f194..0x0014f1a0 2026-05-12). The prior reading of
-// DAT_0014f19c as 2.0f was wrong -- raw bytes `00 00 48 43` = 0x43480000
-// = 200.0f. With the corrected multiplier, apple's m_TargetSize works
-// out to (150, 100, 24) -- sensible button magnitude. The 0.75 / 0.5
-// scale clamps are VFP inline immediates at instruction encoding
-// (0x0014f026, 0x0014f078), NOT pool reads.
-static const float FRUIT_MENU_SCALE = 0.2f;          // DAT_0014f194
-static const float FRUIT_TARGETSIZE_MUL = 200.0f;    // DAT_0014f19c — m_TargetSize multiplier
-static const float FRUIT_ZPOS = 150.0f;              // DAT_0014f198 — entity Z position
+// Constants from binary (verified via read_memory / disassembly)
+// IMPORTANT: DAT_0014f194 = 0.2f is applied to Fruit::m_RotVel1 (rotation slowdown),
+// NOT to scale. The scale is left at its gameplay value.
+static const float FRUIT_ROTVEL_MULT = 0.2f;        // DAT_0014f194 — slows fruit spin
+static const float FRUIT_ZPOS = 150.0f;              // DAT_0014f198
 static const float BOMB_MENU_SCALE = 0.85f;          // DAT_0014f1a0 — bomb scale in menu
 static const float ROT_SPEED_MIN = 8.0f;
 static const float ROT_SPEED_RANGE = 4.0f;           // 8-12 range
-// Scale clamps (sign-preserving min-magnitude on entity->scale.x / .y).
-static const float SCALE_CLAMP_X = 0.75f;            // |scale.x| >= 0.75
-static const float SCALE_CLAMP_Y = 0.5f;             // |scale.y| >= 0.5
+static const float ROT_CLAMP_X = 0.75f;
+static const float ROT_CLAMP_Y = 0.5f;
 
 MenuButton::MenuButton()
     : m_pEntity(nullptr),
@@ -244,33 +238,25 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                 m_pEntity = e;
 
                 if (entityType == 0) {
-                    // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40).
-                    // ASM-verified: 2026-05-12 binary @ 0x0014f100..0x0014f188 (asm-inspector).
-                    //   entity->scale *= 0.2f                  (DAT_0014f194)
-                    //   clamp |scale.x| >= 0.75 sign-preserving (vmov.f32 imm @ 0x14f026)
-                    //   clamp |scale.y| >= 0.5  sign-preserving (vmov.f32 imm @ 0x14f078)
-                    //   m_TargetSize = entity->scale * 200.0f  (DAT_0014f19c)
-                    // Prior port misreading put 0.2 on m_RotVel1; in fact the 0.2
-                    // multiplies entity->scale and the m_TargetSize multiplier is
-                    // 200, not 2 (raw DAT bytes 00 00 48 43 = 0x43480000 = 200.0,
-                    // not 0x40000000 = 2.0). For apple this yields
-                    // m_TargetSize = (150, 100, 24) -- sensible button magnitude.
+                    // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40)
+                    // Key finding: the 0.2 multiplier (DAT_0014f194) is applied to
+                    // m_RotVel1 (fruit+0xF0), NOT to scale. Fruit keeps gameplay scale.
                     Fruit* fruit = static_cast<Fruit*>(e);
-                    e->scale = e->scale * FRUIT_MENU_SCALE;
-                    if (fabsf(e->scale.x) < SCALE_CLAMP_X)
-                        e->scale.x = (e->scale.x >= 0 ? SCALE_CLAMP_X : -SCALE_CLAMP_X);
-                    if (fabsf(e->scale.y) < SCALE_CLAMP_Y)
-                        e->scale.y = (e->scale.y >= 0 ? SCALE_CLAMP_Y : -SCALE_CLAMP_Y);
-                    m_TargetSize = e->scale * FRUIT_TARGETSIZE_MUL;
-                    // Update button's own size so HUDControl3d::Draw + the
-                    // grow-in animation pick up the right magnitude immediately
-                    // (without this, size stays at (0,0,0) until Update ticks).
-                    size = m_TargetSize;
-
+                    fruit->m_RotVel1 = fruit->m_RotVel1 * FRUIT_ROTVEL_MULT;
                     fruit->m_ScaleAnim = 1.0f;
                     fruit->m_ChuckDelay = 0.0f;
                     fruit->m_ZPosition = FRUIT_ZPOS;
                     m_pFruitPiece = fruit;
+
+                    // Clamp rotation magnitude (after the ×0.2 reduction)
+                    if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
+                        fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
+                    if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
+                        fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
+                    // Binary @ 0x0014f0dc..0x0014f0ea: copy clamped RotVel1 into RotVel2 so
+                    // both halves spin identically. Without this the two halves of a menu
+                    // fruit have slightly different rotational velocities once sliced.
+                    fruit->m_RotVel2 = fruit->m_RotVel1;
                 } else {
                     // Bomb entity: disable physics and scale by 0.85 (DAT_0014f1a0)
                     // MenuButton::Init (0x0014ee40): writes 0 to bomb+0x80 (m_bMovement)
