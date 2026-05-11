@@ -198,12 +198,33 @@ int main(int argc, char* argv[]) {
         // Full state-0 -> state-6 transition test with runtime assertions.
         // Verifies the fixes from b477592 (title slide-out gate),
         // a5db4b8 (sensei index defaults), 86bd3ff (highscore label),
-        // fc098ee (Fruit::GetFact clamp + DrawOrder).
+        // fc098ee (Fruit::GetFact clamp + DrawOrder),
+        // 25d7733 (MainScreen unconditional m_TransitionTimer mirror removal).
         //
         // Boots into state 0 (entry animation) and runs frames to drive the
         // full transition: title zooms in (state 0, 1.9s), title slides
         // down (state 6, ~1s), sensei + fact + retry/quit appear.
-        hideAllExisting();
+        //
+        // IMPORTANT: do NOT hide MainScreen here. The real-game path has
+        // MainScreen alive in the HUD list alongside GameOverScreen.
+        // MainScreen::Update writes Game+0x0c (m_TransitionTimer) only from
+        // within specific state-case bodies in the binary; an earlier
+        // port bug had an UNCONDITIONAL mirror that stomped GameOverScreen's
+        // alpha ramp to 0 every frame. Hiding MainScreen would mask such a
+        // regression. Just deactivate the other screens (Dojo, Shop, etc)
+        // so only MainScreen + GameOverScreen are live, matching the real
+        // game-over scenario.
+        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+            HUDControl* c = *it;
+            // Keep MainScreen + gameplay-HUD controls (ScoreControl /
+            // MissControl); hide the menu/screen controls.
+            if (dynamic_cast<DojoScreen*>(c)
+             || dynamic_cast<AboutScreen*>(c)
+             || dynamic_cast<ShopScreen*>(c)
+             || dynamic_cast<GameModeScreen*>(c)) {
+                c->m_bActive = 0;
+            }
+        }
         game.gameMode = 0;       // Classic
         game.currentScore = 1234;
         game.m_TransitionTimer = 0.0f;
