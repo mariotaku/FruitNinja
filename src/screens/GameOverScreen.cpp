@@ -1237,13 +1237,16 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
             snprintf(buf, sizeof(buf), "%d", game->pSaveData->m_highscore);
 
             const Vec3 daysPos(-163.0f, -96.0f, 0.0f);  // DAT_001419e0/4/8
-            // Binary @ 0x00141770 calls Font::DrawString(scale=btn.size*0.5,
-            //   spacing=1.0, kern=0.0, font=Game.pFontMain, text=buf,
-            //   pos=Vec3(-163,-96,0), colour=white, vec=zero, align=0xF, 0).
-            // Spec refers to btn.scale but HUDControl exposes size; using size.x.
-            const float scaleArg = m_pRetryBtn->size.x * 0.5f;
-            if (game->pFontMain) {
-                game->pFontMain->DrawString(scaleArg, 1.0f, 0.0f,
+            // ASM-verified: 2026-05-11 binary @ 0x00141770 (re-analyst)
+            //   font = Game::pFontNumbers (+0x58, fruit_ninja_numbers.fnt) -- NOT pFontMain
+            //   scale = m_GameOverTex->m_Width * 0.5f -- the gameover title
+            //   texture's pixel width, NOT the retry button size.
+            //   spacing=1.0, rotZ=0.0, align=0xF, white tint.
+            const float scaleArg = m_GameOverTex.IsValid()
+                ? (float)m_GameOverTex->m_Width * 0.5f
+                : 0.0f;
+            if (game->pFontNumbers.IsValid()) {
+                game->pFontNumbers->DrawString(scaleArg, 1.0f, 0.0f,
                     buf, daysPos,
                     Colour(255, 255, 255, 255),
                     0xF);
@@ -1301,15 +1304,17 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
             MatrixManager& mm = MatrixManager::GetInstance();
 
             // ASM-verified: 2026-05-11 binary @ 0x001418cc-0x001419a0 (re-analyst)
-            //   head scale = 257.0 (DAT_001419f0), body scale = 129.0 (DAT_001419f4)
-            //   body translate = (9.0, 40.0, 0.0) * hudScale + m_OffsetPos
-            //   unit quad (-0.5..0.5); texture m_Width/m_Height NOT involved --
-            //   constants are pixel-size on the unit quad.
+            //   body scale = 257.0 (DAT_001419f0) -- 256x256 tex + 1 bleed
+            //   head scale = 129.0 (DAT_001419f4) -- 128x128 tex + 1 bleed
+            //   body draws first centered on m_OffsetPos.
+            //   head draws second, translated by (9, 40, 0) * hudScale + m_OffsetPos.
+            //   unit quad (-0.5..0.5); texture m_Width/m_Height NOT multiplied --
+            //   the scale constants are pixel sizes.
 
-            // Expression overlay -- sensei_head_0N.tex
-            if (m_ExpressionIdx > 0 && m_ExpressionIdx <= 3) {
+            // Bg-pattern (sensei_body_0N.tex) -- draws FIRST as backdrop
+            if (m_BgPatternIdx > 0 && m_BgPatternIdx <= 3) {
                 Mortar::SmartPtr<Mortar::Texture>& tex =
-                    g_ExpressionTexArr[m_ExpressionIdx - 1];
+                    g_BgPatternTexArr[m_BgPatternIdx - 1];
                 if (tex.IsValid()) {
                     tex->Set();
 
@@ -1328,10 +1333,10 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 }
             }
 
-            // Bg-pattern overlay -- sensei_body_0N.tex
-            if (m_BgPatternIdx > 0 && m_BgPatternIdx <= 3) {
+            // Expression (sensei_head_0N.tex) -- draws SECOND on top
+            if (m_ExpressionIdx > 0 && m_ExpressionIdx <= 3) {
                 Mortar::SmartPtr<Mortar::Texture>& tex =
-                    g_BgPatternTexArr[m_BgPatternIdx - 1];
+                    g_ExpressionTexArr[m_ExpressionIdx - 1];
                 if (tex.IsValid()) {
                     tex->Set();
 
