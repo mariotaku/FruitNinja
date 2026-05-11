@@ -25,6 +25,17 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     if (!m_Texture.IsValid()) return;
     if (m_DrawColour.a == 0) return;
 
+    {
+        static int s_dbgHCC = 0;
+        if ((s_dbgHCC++ % 30) == 0) {
+            fprintf(stderr, "[DBG HUDC3d::Draw] this=%p tex=%dx%d size=(%.1f,%.1f,%.1f) "
+                    "pos=(%.1f,%.1f,%.1f) timer=%.3f layer=0x%x\n",
+                    (void*)this, m_Texture->m_Width, m_Texture->m_Height,
+                    size.x, size.y, size.z, pos.x, pos.y, pos.z,
+                    m_Timer, m_LayerFlags);
+        }
+    }
+
     Game* game = Game::GetInstance();
     if (!game) return;
 
