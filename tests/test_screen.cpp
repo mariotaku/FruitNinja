@@ -30,6 +30,7 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 #include "screens/ShopScreen.h"
 #include "screens/GameModeScreen.h"
 #include "screens/GameOverScreen.h"
+#include "screens/MainScreen.h"
 #include "game/StartupEffects.h"
 #include "game/WaveManager.h"
 #include "game/FruitSaveData.h"
@@ -225,6 +226,12 @@ int main(int argc, char* argv[]) {
                 c->m_bActive = 0;
             }
         }
+        // Real game has MainScreen in STATE_CAMERA_FADE during gameplay;
+        // that state only writes game.m_TransitionTimer when it's < 0
+        // (gate matches binary @ 0x0014c19a). Initial state in test is
+        // STATE_CAMERA_ZOOM which lerps timer toward -1 every frame --
+        // would fight GameOverScreen's ramp toward +1.
+        if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
         game.gameMode = 0;       // Classic
         game.currentScore = 1234;
         game.m_TransitionTimer = 0.0f;
