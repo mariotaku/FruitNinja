@@ -732,13 +732,25 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         iter++;
     }
 
-    // --- Matrix setup (matches binary 0x00199900-0x00199964) ---
-    // Push captures the current world matrix; balanced Pop at end
-    // restores it. Caller (HUD::Draw) is responsible for handing us a
-    // clean matrix -- HUD::Draw resets between controls, matching the
-    // binary's per-control discipline.
+    // --- Matrix setup ---
+    // DIFFERS: the binary's Font_DrawString @ 0x00198e44 does NOT consume
+    // m_Current for per-glyph submission -- it computes glyph quad coords
+    // directly from VFP scalars (verified 2026-05-11 by asm-inspector
+    // on Font::DrawString and FFC::DrawOrder; the binary never resets the
+    // matrix stack before Font::DrawString, yet text renders correctly).
+    //
+    // The port routes glyph submission through MatrixStack (Scale/Translate
+    // multiply into m_Current, then Renderer::DrawTriStrip reads MVP from
+    // MatrixManager). So unlike the binary, the port IS sensitive to a
+    // dirty m_Current at entry. To produce equivalent observable behaviour
+    // without a full rewrite of the per-glyph submission path: Push,
+    // overwrite m_Current with identity, build the text transform, draw,
+    // Pop. Using m_Current.Identity() directly because MatrixStack::Reset
+    // also zeroes m_Depth which would break the Push/Pop balance.
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     world.Push();
+    world.m_Current.Identity();
+    world.m_Version++;
 
     world.Scale(Vec3(scale, scale, 1.0f));
 
