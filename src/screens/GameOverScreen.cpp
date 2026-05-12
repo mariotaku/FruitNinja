@@ -1007,22 +1007,19 @@ void GameOverScreen::Update(float dt) {
             }
         }
 
-        // 6) Vertical "settle" -- title slides DOWN off-screen.
-        // TODO: re-RE binary @ 0x00141ec4. Re-analyst pass 2026-05-11 flagged
-        // divergences vs port: binary's gate is `pos.y < 0` (NOT 212.8) and
-        // formula is `pos.y = 224*(2 - m_TitleSlideProgress)` (NOT 224*alpha)
-        // with NO size write in this block. Driver is GameOverScreen-owned
-        // m_TitleSlideProgress (+0x138), not game->m_TransitionTimer.
-        //
-        // The port's gate / target / formula here are a working approximation
-        // (test passes: title slides to pos.y > 100, sensei + fact + retry
-        // appear) but not byte-faithful. Keeping the working approximation
-        // until a deeper RE pass produces an exact spec for both the slide
-        // and the size animation (which apparently happens elsewhere in the
-        // binary).
+        // 6) Vertical "settle" -- title slides up off-screen while shrinking.
+        // ASM-verified: 2026-05-12 binary @ 0x001422fc..0x0014235e (asm-inspector).
+        //   gate    = pos.y < 212.8f          (DAT_00142614)
+        //   driver  = Game[+0x0c] = m_TransitionTimer (eased above at lines 920-924
+        //             via `timer += (1 - timer) * 0.125`, asymptotic 0 -> 1)
+        //   size    = m_TitleSize * lerp(2.0, 1.0, alpha)        (sf = 2 - alpha)
+        //   pos.y   = lerp(0.0, 224.0, alpha) = 224 * alpha     (DAT_00142618=224)
+        //   pos.x/z = 0
+        // The prior `m_TitleSlideProgress (+0x138)` interpretation was incorrect --
+        // the binary uses Game[+0x0c] (m_TransitionTimer) directly as the driver.
         if (pos.y < 212.8f) {
             float a = game->m_TransitionTimer;
-            float sf = 2.0f + (1.0f - 2.0f) * a; // lerp(2, 1, a)
+            float sf = 2.0f + (1.0f - 2.0f) * a;   // lerp(2, 1, a) = 2 - a
             size.x = m_TitleSizeX * sf;
             size.y = m_TitleSizeY * sf;
             pos.x = 0.0f;
