@@ -74,26 +74,10 @@ public:
     int  GetType() override { return 3; }
     void Skip() override;
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ASM-verified: 2026-05-13 binary @ 0x0015819c (re-analyst).
-    // Real binary symbol -- not an auto-stub. Body is literally `bx lr`
-    // (returns r0 unchanged); has no callers anywhere in the shipping
-    // binary. Likely dead leftover from a refactor that moved the
-    // multiplier responsibility to ScoreMultiplyerBoard / BonusManager.
-    // Spelling preserved verbatim from the binary's exported symbol.
-    int AddMultipliyer(int x);
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: ScoreControl::AddMultipliyer -- auto stub from binary missing-symbol set
+    int AddMultipliyer(int);
+    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_HUD_SCORE_CONTROL_H
