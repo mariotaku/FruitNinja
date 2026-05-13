@@ -25,7 +25,22 @@ public:
     // +0x7C: dummy zero slot written =0 in Initialise. Legacy m_PrevState.
     float    field_0x7c;
 
-    // +0x080: state machine index (0,1,6,7,8,9,10,11,14)
+    // State-machine enumeration. Stored as plain int at +0x080 to match
+    // the binary's int slot -- these are static constexpr ints, NOT a
+    // strongly-typed enum class, so they can be used directly in case
+    // labels and equality comparisons without casts. Numeric values must
+    // match the binary's switch arms.
+    static constexpr int STATE_ENTRY_ANIM     = 0;   // title grow-in (1.9s)
+    static constexpr int STATE_BONUS_PHASE    = 1;   // Arcade-only BonusScreen slide
+    static constexpr int STATE_MAIN_DISPLAY   = 6;   // settled view (retry/quit live)
+    static constexpr int STATE_RETRY_PREPARE  = 7;   // clear entities, reset wave
+    static constexpr int STATE_RETRY_FADE     = 8;   // camera fade-out for retry
+    static constexpr int STATE_QUIT_WAIT      = 9;   // wait for entities, then QuitToMenu
+    static constexpr int STATE_LEADERBOARD    = 10;  // online leaderboard (defunct)
+    static constexpr int STATE_FINAL_FADE     = 11;  // terminate on alpha < 0
+    static constexpr int STATE_QUICK_RESTART  = 14;  // hot-path quick-restart
+
+    // +0x080: state machine index (one of STATE_* above)
     int      m_State;                // +0x080
 
     // +0x084: state-0 entry timer; reused as state-1 progression timer

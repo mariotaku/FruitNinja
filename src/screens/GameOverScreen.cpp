@@ -287,7 +287,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
         m_TitleSizeZ = 0.0f;
     }
 
-    m_State          = 0;
+    m_State          = STATE_ENTRY_ANIM;
     m_LayerFlags     = Mortar::HUD_LAYER_NONE; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
     m_GameOverTex.SetNull();   // +0x114 Quest-only overlay slot (binary nulls this in Initialise)
     m_AnimCounter    = 0;
@@ -360,7 +360,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
         float waveAlpha = game ? game->m_TransitionTimer : 0.0f;
         if (param2 > 5 && waveAlpha > kWaveAlphaGate) {
             if (game) game->m_TransitionTimer = kWaveAlphaSet;
-            m_State           = 6;
+            m_State           = STATE_MAIN_DISPLAY;
             m_bScoreSubmitted = 1;
             m_FruitFactAlpha  = 1.0f;
             // Immediate state-6 invocation
@@ -393,7 +393,7 @@ void GameOverScreen::BeginDraw(float /*dt*/) {
     // the post-actor (0x80) and default (0x01) HUD::Draw passes during
     // animations / transitions; once settled (m_State == 0) only the
     // default pass renders, suppressing the second draw.
-    m_LayerFlags = (m_State != 0)
+    m_LayerFlags = (m_State != STATE_ENTRY_ANIM)
         ? (int)(Mortar::HUD_LAYER_POST_ACTOR | Mortar::HUD_LAYER_DEFAULT)
         : (int)Mortar::HUD_LAYER_DEFAULT;
 }
@@ -465,7 +465,7 @@ void GameOverScreen::SetTerminate() {
 void GameOverScreen::SetStateWait() {
     // Binary: checks if leaderboard sign-in dialog needed; if not, state = 6.
     // Port: always go to state 6 (online services defunct).
-    m_State = 6;
+    m_State = STATE_MAIN_DISPLAY;
 }
 
 // ---------------------------------------------------------------------------
@@ -507,11 +507,11 @@ void GameOverScreen::PostCallback(int result) {
 // Binary @ 0x001405a0 -- LeaderboardsCallback: state-0/6 + alpha>0.999 -> m_State=10
 //                       (launches NetworkManager dashboard, defunct)
 void GameOverScreen::LeaderboardsCallback() {
-    if (m_State == 0 || m_State == 6) {
+    if (m_State == STATE_ENTRY_ANIM || m_State == STATE_MAIN_DISPLAY) {
         Game* game = Game::GetInstance();
         if (game && game->m_TransitionTimer > 0.999f) {
             m_Timer = 0.0f;
-            m_State = 10;
+            m_State = STATE_LEADERBOARD;
         }
     }
 }
@@ -523,11 +523,11 @@ void GameOverScreen::LeaderboardsCallback() {
 // Binary @ 0x00140558 -- wired as remove-callback on m_pBonusScreen/m_pSlot9c/m_pNoticeCtrl.
 // On removal, clears the slot and (for bonusScreen+noticeCtrl) forces state=6.
 void GameOverScreen::DeletedControl(HUDControl* ctrl) {
-    if (ctrl == (HUDControl*)m_pBonusScreen) { m_pBonusScreen = nullptr; m_State = 6; }
+    if (ctrl == (HUDControl*)m_pBonusScreen) { m_pBonusScreen = nullptr; m_State = STATE_MAIN_DISPLAY; }
     // Binary @ 0x00140558: middle slot is m_pRetryBtn (+0x98), not m_pSlot9c (+0x9c).
     // No state change in this branch -- just clear the pointer.
     if (ctrl == (HUDControl*)m_pRetryBtn)    { m_pRetryBtn = nullptr; }
-    if (ctrl == m_pNoticeCtrl)               { m_pNoticeCtrl = nullptr; m_State = 6; }
+    if (ctrl == m_pNoticeCtrl)               { m_pNoticeCtrl = nullptr; m_State = STATE_MAIN_DISPLAY; }
 }
 
 // ---------------------------------------------------------------------------
@@ -649,7 +649,8 @@ void GameOverScreen::CreateRetryButton() {
 void GameOverScreen::RetryCallback() {
     Game* game = Game::GetInstance();
     if (!game) return;
-    if (m_State != 0 && m_State != 6 && m_State != 14 && m_State != 10) return;
+    if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
+        m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
     if (game->m_TransitionTimer <= 0.989945f) return;
     CancelHUDProgressionTimer();
     // TODO: 0x0014105c -- PRNG reseed block at .bss 0x0026C8B0 (the global
@@ -666,7 +667,7 @@ void GameOverScreen::RetryCallback() {
     // Binary @ 0x001410d6: FruitSaveData::ClearCombo(pSaveData)
     if (game->pSaveData) game->pSaveData->ClearCombo();
     // Defunct: MP scene-alpha bypass -- IsMultiplayer always false in port
-    m_State = 7;
+    m_State = STATE_RETRY_PREPARE;
     // ASM-verified: 2026-05-13 binary @ 0x0014110c (re-analyst).
     //   DAT_00141170 resolves to rodata @ 0x001B96AF = "Game-start" --
     //   retry reuses the game-launch SFX, not a "menu-retry" sound.
@@ -748,9 +749,10 @@ void GameOverScreen::CreateQuitButton() {
 void GameOverScreen::QuitCallback() {
     Game* game = Game::GetInstance();
     if (!game) return;
-    if (m_State != 0 && m_State != 6 && m_State != 14 && m_State != 10) return;
+    if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
+        m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
     CancelHUDProgressionTimer();
-    m_State = 9;
+    m_State = STATE_QUIT_WAIT;
     // Binary @ 0x001410d6: FruitSaveData::ClearCombo
     if (game->pSaveData) game->pSaveData->ClearCombo();
     // Binary @ 0x00140674: HitMenuBomb at quit-button position (DAT_00140674 = Vec3(163.0, -96.0, 0.0))
@@ -796,7 +798,7 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // State 0: entry animation — sin-eased scale-in over 1.9s
     // -----------------------------------------------------------------------
-    case 0: {
+    case STATE_ENTRY_ANIM: {
         // First frame: force game.processing=1 based on game mode + entity count
         if (m_bScoreSubmitted == 0) {
             uint8_t gm = game->gameMode;
@@ -834,7 +836,7 @@ void GameOverScreen::Update(float dt) {
 
         if (m_Timer > ENTRY_DURATION) {
             if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
-                m_State = 1;
+                m_State = STATE_BONUS_PHASE;
                 m_Timer = -0.333f; // DAT_00141db0
             } else {
                 SetStateWait(); // goes to state 6 or pops sign-in dialog
@@ -847,7 +849,7 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // State 1: bonus phase (Arcade only) — BonusScreen creation + slide
     // -----------------------------------------------------------------------
-    case 1: {
+    case STATE_BONUS_PHASE: {
         Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0) {
             if (!m_pBonusScreen) {
@@ -913,7 +915,7 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // State 6: main display + score submission
     // -----------------------------------------------------------------------
-    case 6: {
+    case STATE_MAIN_DISPLAY: {
         const int prevState = m_State;   // Binary: r9 = m_State at 0x00141f3e (saved BEFORE any writes)
         // 1) Create FruitFactControl on first entry
         if (m_pFruitFact == nullptr) {
@@ -1046,12 +1048,12 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // State 7: retry — guard entities & reset wave & flag pause
     // -----------------------------------------------------------------------
-    case 7: {
+    case STATE_RETRY_PREPARE: {
         Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) != 0 && m_pSlot9c == nullptr) {
             // Entities still on screen — snap alpha and stay in state 6
             game->m_TransitionTimer = 1.0f;
-            m_State = 6;
+            m_State = STATE_MAIN_DISPLAY;
             break;
         }
         // ASM-verified: 2026-05-13 binary @ state-7 tail (re-analyst).
@@ -1061,14 +1063,14 @@ void GameOverScreen::Update(float dt) {
         game->m_CoinsAtGameStart = game->m_CoinsBalance;
         WaveManager::GetInstance()->Reset(false);
         game->pauseFlag = 1; // will be cleared in state 8
-        m_State = 8;
+        m_State = STATE_RETRY_FADE;
         break;
     }
 
     // -----------------------------------------------------------------------
     // State 8: camera fade-out for retry
     // -----------------------------------------------------------------------
-    case 8: {
+    case STATE_RETRY_FADE: {
         float& alpha = game->m_TransitionTimer;
         alpha *= 0.75f;
         m_FruitFactAlpha = alpha;
@@ -1096,31 +1098,31 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // State 9: quit path — wait for entities, then QuitToMenu
     // -----------------------------------------------------------------------
-    case 9: {
+    case STATE_QUIT_WAIT: {
         Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) != 0) break; // wait
         DoQuitToMenu();
-        m_State = 11;
+        m_State = STATE_FINAL_FADE;
         break;
     }
 
     // -----------------------------------------------------------------------
     // State 10: online leaderboard launch (defunct) — no-op, back to state 6
     // -----------------------------------------------------------------------
-    case 10: {
+    case STATE_LEADERBOARD: {
         // Note: NetworkManager::LaunchDashboard() -- defunct (online-services-audit).
         m_ProgressCounter = 0;
         m_pQuitBtn        = nullptr;
         m_pRetryBtn       = nullptr;
         field_0xa0        = 0;
-        m_State           = 6;
+        m_State           = STATE_MAIN_DISPLAY;
         break;
     }
 
     // -----------------------------------------------------------------------
     // State 11: final fade-out
     // -----------------------------------------------------------------------
-    case 11: {
+    case STATE_FINAL_FADE: {
         // Binary: if (game.alpha < 0.0f) SetTerminate()
         if (game->m_TransitionTimer < 0.0f) SetTerminate();
         break;
@@ -1129,13 +1131,13 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // State 14: quick-restart hot path (binary @ 0x001423b4-0x001423f8)
     // -----------------------------------------------------------------------
-    case 14: {
+    case STATE_QUICK_RESTART: {
         const int prevSlot9c = (m_pSlot9c != nullptr) ? 1 : 0;  // saved before zero-out
         m_Timer += dt * 8.0f;
         if (m_Timer >= 8.0f) {
             m_Timer = 0.0f;       // transient -- overwritten below
         }
-        m_State = 6;
+        m_State = STATE_MAIN_DISPLAY;
         {
             Game* g = Game::GetInstance();
             if (g) g->m_bGameOverActive = 0;   // BYTE @ Game+0x190
@@ -1388,7 +1390,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 
 // ASM-verified: 2026-05-10 binary @ 0x00141448 (re-analyst)
 void GameOverScreen::DrawOrder(const Vec3& hudScale, int /*layerMask*/) {
-    if (m_State != 14) return;
+    if (m_State != STATE_QUICK_RESTART) return;
     if (!g_StarburstTex.IsValid()) return;
 
     // -----------------------------------------------------------------
