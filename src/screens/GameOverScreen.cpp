@@ -281,7 +281,11 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
             m_TitleSizeX = (float)bgTex->m_Width;
             m_TitleSizeY = (float)bgTex->m_Height;
         } else {
-            m_TitleSizeX = 256.0f; // DIFFERS: placeholder if tex unavailable
+            // DIFFERS: binary skips the m_TitleSize write when the texture
+            // load fails (leaving stale data) -- port substitutes a hard-coded
+            // 256x128 fallback so the state-0 grow animation has sensible
+            // dimensions even when the localised .tex is missing.
+            m_TitleSizeX = 256.0f;
             m_TitleSizeY = 128.0f;
         }
         m_TitleSizeZ = 0.0f;
