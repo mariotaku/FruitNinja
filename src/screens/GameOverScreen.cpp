@@ -683,14 +683,18 @@ void GameOverScreen::CreateQuitButton() {
     //   pos               = (80, -96, 0)               [DAT_00141428..30]
     //   tex               = g_QuitTexSP @ GOT+0x73fc   [quit.tex, loaded in LoadContent]
     //   clickDelegate     = &QuitCallback
-    //   fruitType         = g_FruitInfo[0].m_FruitType (RUNTIME — first row of FRUIT_INFO)
+    //   fruitType         = **(int**)(GOT+DAT_00141440) = *(int*)g_FruitInfoArray
+    //                       = first 4 bytes of FRUIT_INFO[0].m_Name reinterpreted
+    //                       as int (`0x6C707041` = "Appl" at runtime). Per
+    //                       asm-inspector 2026-05-12 this looks like a binary
+    //                       bug (intended to pass an index but accidentally
+    //                       double-dereferenced a FRUIT_INFO* global). Port
+    //                       uses literal 0 to match retry button intent.
     //   globalCenterVec   = HUD::g_GlobalCenterVec
     //   deletedDelegate   = HUD::g_DeleteControlDelegate
-    // Plus 3 quit-only post-init steps (binary 0x00141420..0x00141438):
-    //   - copy retry->[+0x124..+0x12C] (TutorialControl text slots) to quit
-    //   - set quit->[+0xE2] = 1 (singular/right-flag)
-    //   - call TutorialControl::ResetTutePos(hud->pTutorialCtrl, m_pQuitBtn)
-    // The 3 post-init steps require fields not yet ported; deferred TODO.
+    // 3 quit-only post-init steps (binary 0x00141420..0x00141438) are
+    // implemented below at lines 720/724/727 -- m_TargetSize copy,
+    // m_bRespondsToBackKey, TutorialControl::ResetTutePos.
     Vec3 btnPos(80.0f, -96.0f, 0.0f);
     Vec3 globalCenter(0.0f, 0.0f, 0.0f);
     Mortar::SmartPtr<Mortar::Texture> tex =
@@ -707,7 +711,7 @@ void GameOverScreen::CreateQuitButton() {
     m_pQuitBtn->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked),
-        /*fruitType=*/0,  // TODO: 0x00141440 -- read g_FruitInfo[0].m_FruitType
+        /*fruitType=*/0,  // DIFFERS: binary passes *(int*)g_FruitInfoArray (binary bug); port uses 0 to match retry
         globalCenter,
         Mortar::Delegate0<void>()  // TODO: 0x00141030 -- bind HUD::g_DeleteControlDelegate
     );
