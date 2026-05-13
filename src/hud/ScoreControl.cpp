@@ -624,7 +624,9 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
     }
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ScoreControl::AddMultipliyer -- auto stub
-void ScoreControl::AddMultipliyer(int) {}
-// ---- end AUTO-STUB MERGE ----
+// ASM-verified: 2026-05-13 binary @ 0x0015819c (re-analyst).
+// Body is a single `bx lr` -- returns r0 (= the int arg) unchanged. No
+// internal callers in the shipping binary; the multiplier path is owned
+// by ScoreMultiplyerBoard. Kept here only so the port's symbol table
+// matches the binary's exported names exactly.
+int ScoreControl::AddMultipliyer(int x) { return x; }
