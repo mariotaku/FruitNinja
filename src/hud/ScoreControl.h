@@ -36,7 +36,8 @@ public:
     float    m_ScoreSmoothed;      // eased toward GetCurrentScore
     int      m_DisplayedScore;     // (int)m_ScoreSmoothed — drives formatted text
     int      m_HighscoreToShow;    // highscore value in banner (0 = no banner)
-    float    m_BannerStartTimer;   // banner activation timer; init -1.0f
+    // Defunct: unused +0x8C float; binary @ 0x00158c7c init -1.0f only (re-analyst)
+    float    _pad8C;               // +0x8C: written -1.0f in ctor, never read/written again
 
     // +0x90
     float    m_ScalePulse;         // 1.0..2.0 during wave-active scale pulse

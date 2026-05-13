@@ -81,7 +81,7 @@ ScoreControl::ScoreControl()
     , m_ScoreSmoothed(0.0f)
     , m_DisplayedScore(0)
     , m_HighscoreToShow(0)
-    , m_BannerStartTimer(-1.0f)
+    , _pad8C(-1.0f)
     , m_ScalePulse(1.0f)
     , m_DrawPosX(0.0f)
     , m_DrawPosY(0.0f)
@@ -146,12 +146,13 @@ void ScoreControl::Reset() {
     m_LayerFlags = 1 << m_PlayerIdx;
 }
 
-// Skip @ 0x001581a0 — restore from save
+// ASM-verified: 2026-05-14T00:00 binary @ 0x001581a0 (re-analyst)
+// +0x4C (game->pSaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
+// Prior port incorrectly tested game->pauseFlag (engine pause flag) instead.
 void ScoreControl::Skip() {
     m_DisplayedScore = GetCurrentScore(m_PlayerIdx);
     Game* game = Game::GetInstance();
-    // if game-over flag set, force banner active
-    if (game && game->pauseFlag) {
+    if (game && game->pSaveData && game->pSaveData->newBestThisGame != 0) {
         m_BannerScaleTime = 1.0f;
     }
 }
