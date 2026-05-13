@@ -1,8 +1,6 @@
-#ifndef FN_LOCALISATION_H
-#define FN_LOCALISATION_H
+#ifndef FN_ENGINE_UTIL_STRINGTABLE_H
+#define FN_ENGINE_UTIL_STRINGTABLE_H
 
-// Analysed: 2026-04-25T14:30
-//
 // Mortar Engine string table localisation system.
 // Loads translations_header.str (key->index map) and
 // translations_<lang>.str (per-language string blob) from the Data/
@@ -13,7 +11,9 @@
 //   StringTableUtilLoadStringsTable    0x0011f9dc
 //   Mortar::StringTable::GetInfo       0x0018a2cc
 //   Mortar::StringTable::GetString     0x0011fec8
+//   GETSTRING                          0x0011f958
 //   GETSTRING_STR                      0x0011fb40
+//   GETSTRING_CAST_0                   0x0010cff0
 //   GETSTRING_CAST_0_STR               0x00109ec0
 //
 // See docs/engine/localisation.md for full format + algorithm.
@@ -37,6 +37,15 @@
 //   12 = english_uk
 //   13 = chinese
 
+// Confirmed integer IDs from binary analysis.
+// Tag_ABI_enum_size = small: sized to int32_t (values exceed 0xFFFF).
+enum LocalizedString {
+    LSTR_COMBO_FORMAT        = 0x98,  // "%i%s"                   (FruitFactControl combo sprintf)
+    LSTR_FRUIT_FACT_TITLE    = 0x9b,  // "SENSEI'S FRUIT FACT"    (FruitFactControl title)
+    LSTR_FACT_MODE           = 0xb1,  // "factMode"               (FruitFactControl combo branch)
+    LSTR_BEST                = 0xb5,  // "BEST:"                  (ScoreControl highscore label)
+};
+
 // --- StringEntry (12 bytes) ---
 // StringEntry[str_idx].str_offset + str_blob_base -> const char* translation
 struct StringEntry {
@@ -50,7 +59,7 @@ struct StringEntry {
 struct HeaderLookup {
     const char* key_ptr;    // pointer into key_blob (set at load time)
     uint32_t    unknown1;   // observed == keylen
-    uint32_t    keylen;     // strlen of key (no null) — used by GetInfo
+    uint32_t    keylen;     // strlen of key (no null) -- used by GetInfo
     uint32_t    unknown2;   // 0x3c05 in all observed entries
     uint32_t    unknown3;
     uint32_t    unknown4;
@@ -60,8 +69,10 @@ struct HeaderLookup {
     uint32_t    str_idx;    // at +0x24: index into StringEntry[]
 };
 
-// --- Localisation singleton ---
-class Localisation {
+namespace Mortar {
+
+// Mortar::StringTable -- binary @ 0x0011fec8..0x0011fef0
+class StringTable {
 public:
     // Load string tables from the given data root (e.g. "Data/").
     // languageFlag selects the language (0 = english_us default).
@@ -71,17 +82,28 @@ public:
     // Release all heap memory and reset to unloaded state.
     static void Unload();
 
-    // Look up a localisation key.  Returns the translated string, or
-    // key itself if not found or not loaded (matches binary pass-through).
-    static const char* Get(const char* key);
+    // Look up by integer ID (position in header table).
+    // Returns the translated string, or "STRING NOT FOUND" on miss.
+    // Binary @ 0x0011fec8 (int-ID overload).
+    static const char* GetString(LocalizedString id);
+
+    // Look up a localisation key by string.
+    // Returns the translated string, or "STRING NOT FOUND" on miss.
+    // Binary @ 0x0011fec8 (string-key overload).
+    static const char* GetString(const char* key);
+
+    // Look up by pre-resolved HeaderLookup pointer (optional overload).
+    // Returns the translated string, or "STRING NOT FOUND" on miss.
+    static const char* GetString(const HeaderLookup* pre);
 
     // Returns true if Load() has completed successfully.
     static bool IsLoaded();
 
-    // Binary search implementation — mirrors Mortar::StringTable::GetInfo
+    // Binary search implementation -- mirrors Mortar::StringTable::GetInfo
+    // at 0x0018a2cc.
     static const HeaderLookup* GetInfo(const char* key);
 
-    // Internal state (public so file-scope helper functions in Localisation.cpp
+    // Internal state (public so file-scope helper functions in StringTable.cpp
     // can populate them without friendship declarations)
     static bool           s_loaded;
     static HeaderLookup*  s_header_entries;  // heap, count = s_count
@@ -91,4 +113,20 @@ public:
     static char*          s_str_blob;        // heap copy of translated strings
 };
 
-#endif // FN_LOCALISATION_H
+// Free wrapper: binary @ 0x0011f958.
+// Looks up string ID in table index tableIdx (0 = default table).
+const char* GETSTRING(LocalizedString id, int tableIdx);
+
+// Free wrapper: binary @ 0x0011fb40.
+// Looks up string key in table index tableIdx (0 = default table).
+const char* GETSTRING_STR(const char* key, int tableIdx);
+
+// Thunk to GETSTRING(id, 0): binary @ 0x0010cff0.
+const char* GETSTRING_CAST_0(LocalizedString id);
+
+// Thunk to GETSTRING_STR(key, 0): binary @ 0x00109ec0.
+const char* GETSTRING_CAST_0_STR(const char* key);
+
+} // namespace Mortar
+
+#endif // FN_ENGINE_UTIL_STRINGTABLE_H

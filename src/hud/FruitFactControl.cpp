@@ -26,7 +26,7 @@
 #include "engine/render/Renderer.h"
 #include "engine/math/Matrix44.h"
 #include "engine/math/MathUtil.h"
-#include "engine/util/Localisation.h"
+#include "engine/util/StringTable.h"
 #include <cstring>
 #include <cstdio>
 #include <list>
@@ -237,7 +237,7 @@ void FruitFactControl::Init() {
         // saveData->m_BombQueueCount holds m_ComboLength; m_BombQueue holds hashes.
         char comboBuf[128];
         snprintf(comboBuf, sizeof(comboBuf), "%i%s",
-                 game->pSaveData->m_BombQueueCount, "");  // Localisation::Get(0x98) -- BakedString stub
+                 game->pSaveData->m_BombQueueCount, "");  // GETSTRING_CAST_0(LSTR_COMBO_FORMAT) -- BakedString stub
         m_ComboLength = game->pSaveData->m_BombQueueCount;
         for (int i = 0; i < m_ComboLength && i < 11; i++) {
             m_ComboHashArray[i] = game->pSaveData->m_BombQueue[i];
@@ -534,7 +534,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
         // Title: pos.x - 8.0
         {
-            const char* title = Localisation::Get("CODE_FRUIT_FACT_TITLE");
+            const char* title = Mortar::GETSTRING_CAST_0(LSTR_FRUIT_FACT_TITLE);
             if (!title) title = "FRUIT FACT";
             const float titleX = pos.x - 8.0f;
             const float titleY = pos.y;
@@ -673,7 +673,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
         // 2. Title: dispatch on game->languageFlag (field_0x3)
         {
-            const char* title = Localisation::Get("CODE_FRUIT_FACT_TITLE");
+            const char* title = Mortar::GETSTRING_CAST_0(LSTR_FRUIT_FACT_TITLE);
             if (!title) title = "FRUIT FACT";
 
             if (!game->languageFlag) {
