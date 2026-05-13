@@ -40,10 +40,14 @@
 // Confirmed integer IDs from binary analysis.
 // Tag_ABI_enum_size = small: sized to int32_t (values exceed 0xFFFF).
 enum LocalizedString {
-    LSTR_COMBO_FORMAT        = 0x98,  // "%i%s"                   (FruitFactControl combo sprintf)
+    LSTR_BEST_COMBO          = 0x98,  // "BEST COMBO: %i FRUIT!"  (FruitFactControl combo sprintf; was mis-named COMBO_FORMAT)
     LSTR_FRUIT_FACT_TITLE    = 0x9b,  // "SENSEI'S FRUIT FACT"    (FruitFactControl title)
     LSTR_FACT_MODE           = 0xb1,  // "factMode"               (FruitFactControl combo branch)
     LSTR_BEST                = 0xb5,  // "BEST:"                  (ScoreControl highscore label)
+    LSTR_SHOP_BACKGROUND     = 0xb6,  // "BACKGROUND"             (ShopListItem::Draw type==1)
+    LSTR_SHOP_BLADE          = 0xb7,  // "BLADE"                  (ShopListItem::Draw type==0)
+    LSTR_SHOP_FULL_VERSION   = 0xb8,  // "FULL VERSION"           (ShopListItem::Draw type==2)
+    LSTR_SHOP_SPECIAL        = 0x113, // "SPECIAL"                (ShopListItem::Draw type==3 / REMOVEADS)
 };
 
 // --- StringEntry (12 bytes) ---
