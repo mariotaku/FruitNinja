@@ -404,36 +404,23 @@ void ShopListItem::Draw() {
 
         // -----------------------------------------------------------------------
         // Part 2: Cost hint text (shadow + fill)
-        // Binary: picks costStr from static_block[+0x1C + m_Type*4].
-        //   index 0 (m_Type==0): GETSTRING(0xB7)
-        //   index 1 (m_Type==1): GETSTRING(0xB6)
-        //   index 2 (m_Type==2): GETSTRING(0xB8)
-        //   index 3 (m_Type==3): GETSTRING(0x113)
+        // ASM-verified: 2026-05-14 binary @ 0x0015eb00 (re-analyst).
+        // costStr from static_block[+0x1C + m_Type*4]:
+        //   m_Type==0: GETSTRING(0xB7) = CODE_SHOP_BLADE         "BLADE"
+        //   m_Type==1: GETSTRING(0xB6) = CODE_SHOP_BACKGROUND    "BACKGROUND"
+        //   m_Type==2: GETSTRING(0xB8) = CODE_SHOP_FULL_VERSION  "FULL VERSION"
+        //   m_Type==3: GETSTRING(0x113) = CODE_SHOP_SPECIAL      "SPECIAL" (REMOVEADS)
         // Width cache: if static_block[+0x90] == 0.0f, measure all 4 and cache.
         // costScale: HD -> fVar26*16.0f; non-HD -> 20.0f (0x41A00000)
-        //
-        // DIFFERS: binary uses integer-keyed GETSTRING_CAST_0 (keys 0xB7, 0xB6,
-        //   0xB8, 0x113). Those IDs have not been confirmed against
-        //   translations_header.str ordering, so the string-key overload is
-        //   used here until the integer IDs are verified by re-analyst.
         // -----------------------------------------------------------------------
-        // costScale: HD -> fVar26 * 16.0f; non-HD -> 20.0f literal (0x41A00000)
         float costScale = isHD ? (fVar26 * 16.0f) : 20.0f;
 
-        // Cost string: binary indexes static_block[+0x1C + m_Type*4] which is
-        // populated lazily from GETSTRING_CAST_0_STR with the per-type
-        // CATEGORY label (e.g. "blade", "background"). Per
-        // translations_header.str, the keys are:
-        //   m_Type == 0 (BLADE)      -> CODE_SHOP_BLADE
-        //   m_Type == 1 (BACKGROUND) -> CODE_SHOP_BACKGROUND
-        //   m_Type == 2 (UPSELL)     -> CODE_SHOP_FULL_VERSION
-        //   m_Type == 3 (REMOVEADS)  -> no shop list entry in shipped data
-        // GETSTRING_CAST_0_STR returns "STRING NOT FOUND" on miss per binary.
         const char* costStr = nullptr;
         switch ((int)m_pItemInfo->m_Type) {
-            case 0: costStr = Mortar::GETSTRING_CAST_0_STR("CODE_SHOP_BLADE");        break;
-            case 1: costStr = Mortar::GETSTRING_CAST_0_STR("CODE_SHOP_BACKGROUND");   break;
-            case 2: costStr = Mortar::GETSTRING_CAST_0_STR("CODE_SHOP_FULL_VERSION"); break;
+            case 0: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_BLADE);        break;
+            case 1: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND);   break;
+            case 2: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION); break;
+            case 3: costStr = Mortar::GETSTRING_CAST_0(LSTR_SHOP_SPECIAL);      break;
             default: costStr = nullptr; break;
         }
 
@@ -444,10 +431,10 @@ void ShopListItem::Draw() {
         // label happened to be rendered first.
         if (s_costWidths[0] == 0.0f && font) {
             const char* k[4] = {
-                Mortar::GETSTRING_CAST_0_STR("CODE_SHOP_BLADE"),
-                Mortar::GETSTRING_CAST_0_STR("CODE_SHOP_BACKGROUND"),
-                Mortar::GETSTRING_CAST_0_STR("CODE_SHOP_FULL_VERSION"),
-                "",
+                Mortar::GETSTRING_CAST_0(LSTR_SHOP_BLADE),
+                Mortar::GETSTRING_CAST_0(LSTR_SHOP_BACKGROUND),
+                Mortar::GETSTRING_CAST_0(LSTR_SHOP_FULL_VERSION),
+                Mortar::GETSTRING_CAST_0(LSTR_SHOP_SPECIAL),
             };
             for (int i = 0; i < 4; i++) {
                 if (k[i] && k[i][0] != '\0') {

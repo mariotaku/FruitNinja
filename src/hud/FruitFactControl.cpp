@@ -235,9 +235,15 @@ void FruitFactControl::Init() {
     if (comboFlag) {
         // Combo path (binary @ 0x0013a278, comboFlag != 0 branch):
         // saveData->m_BombQueueCount holds m_ComboLength; m_BombQueue holds hashes.
+        // Binary: snprintf(buf, "%s", Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO))
+        // where LSTR_BEST_COMBO = 0x98 = "BEST COMBO: %i FRUIT!". The single
+        // BakedString slot gets the formatted-with-count string. Port renders
+        // it via the Font::DrawString path -- the BakedString optimisation
+        // is unported (it caches the rendered glyph quads).
         char comboBuf[128];
-        snprintf(comboBuf, sizeof(comboBuf), "%i%s",
-                 game->pSaveData->m_BombQueueCount, "");  // GETSTRING_CAST_0(LSTR_COMBO_FORMAT) -- BakedString stub
+        snprintf(comboBuf, sizeof(comboBuf),
+                 Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO),
+                 game->pSaveData->m_BombQueueCount);
         m_ComboLength = game->pSaveData->m_BombQueueCount;
         for (int i = 0; i < m_ComboLength && i < 11; i++) {
             m_ComboHashArray[i] = game->pSaveData->m_BombQueue[i];
