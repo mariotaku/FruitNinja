@@ -263,12 +263,16 @@ void FruitFactControl::Init() {
         m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
     }
 
-    // Always: load per-fruit <name>_facts.tex into m_FactTexture
+    // ASM-verified: 2026-05-14 binary @ 0x0013a52c (re-analyst).
+    // Binary format is "%s.tex" (DAT_0013a52c -> 0x001ba0b3). The port
+    // previously had "%s_facts.tex" -- WRONG. FruitFactTexture returns
+    // the XML factTexture attr directly (e.g. "sml_ap" for apple), which
+    // resolves to the small per-fruit icon in FruitNinjaBada/Data/textures/.
     if (m_FruitIdx >= 0) {
         const char* fruitBase = Fruit::FruitFactTexture(m_FruitIdx);
         if (fruitBase && *fruitBase) {
             char buf[128];
-            snprintf(buf, sizeof(buf), "%s_facts.tex", fruitBase);
+            snprintf(buf, sizeof(buf), "%s.tex", fruitBase);
             m_FactTexture = TextureManager::LoadLocalisedTexture(buf);
         }
     }
@@ -783,7 +787,7 @@ bool FruitFactControl::UpPressed(InputEvent* /*ev*/) {
     m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
     char buf[128];
     const char* base = Fruit::FruitFactTexture(m_FruitIdx);
-    snprintf(buf, sizeof(buf), "%s_facts", base);
+    snprintf(buf, sizeof(buf), "%s.tex", base);  // binary format DAT_001399f8 = "%s.tex"
     m_FactTexture = TextureManager::LoadLocalisedTexture(buf);
     return true;
 }
@@ -798,7 +802,7 @@ bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
     m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
     char buf[128];
     const char* base = Fruit::FruitFactTexture(m_FruitIdx);
-    snprintf(buf, sizeof(buf), "%s_facts", base);
+    snprintf(buf, sizeof(buf), "%s.tex", base);  // binary format DAT_001399f8 = "%s.tex"
     m_FactTexture = TextureManager::LoadLocalisedTexture(buf);
     return true;
 }
