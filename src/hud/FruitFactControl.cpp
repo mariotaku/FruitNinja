@@ -17,6 +17,7 @@
 #include "entities/FruitInfo.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/network/NetworkManager.h"
+#include "game/LeaderboardManager.h"
 #include "engine/audio/GameSound.h"
 #include "engine/math/Colour.h"
 #include "engine/util/Delegate.h"
@@ -24,12 +25,31 @@
 #include "engine/render/MatrixManager.h"
 #include "engine/render/Renderer.h"
 #include "engine/math/Matrix44.h"
+#include "engine/math/MathUtil.h"
 #include "engine/util/Localisation.h"
 #include <cstring>
 #include <cstdio>
 #include <list>
 
 using Mortar::TextureManager;
+
+// ---------------------------------------------------------------------------
+// File-scope stubs for binary helpers not yet ported.
+// ---------------------------------------------------------------------------
+
+// CheckCombo -- binary @ unknown (called from Init combo path).
+// Walks the hash array for a matching combo pattern; returns combo type byte.
+// Stub: always returns 0 (no combo match); outFruitIdx unchanged.
+static uint8_t CheckCombo(int* /*hashes*/, int /*count*/, int* /*outFruitIdx*/) {
+    return 0;
+}
+
+// GetComboStarTexture -- binary @ unknown (called from Init combo path).
+// Returns the star-burst texture for the given combo type.
+// Stub: returns empty SmartPtr (no texture available).
+static Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(uint8_t /*comboType*/) {
+    return Mortar::SmartPtr<Mortar::Texture>();
+}
 
 // ---------------------------------------------------------------------------
 // Static (class-level) content -- 17 shared textures.
@@ -212,15 +232,22 @@ void FruitFactControl::Init() {
     // Per-mode m_FactPosOffset: non-combo default (-69, 53, 0)
     m_FactPosOffset = Vec3(-69.0f, 53.0f, 0.0f);
 
-    // Non-combo path: store localised mode string
-    // TODO: 0x0013a278 -- global g_factModeBuf not yet declared port-side;
-    //   binary does strcpy(g_factModeBuf, Localisation::Get(0xB1))
-
-    // Combo path (gameMode==3 with comboFlag OR gameMode==2 with len>=3):
-    // TODO: 0x0013a278 -- CheckCombo / GetComboStarTexture not yet ported;
-    //   copy m_ComboHashArray from saveData[+0x20C + i*4], call CheckCombo
-    //   and GetComboStarTexture, assign texture to m_ComboStarTex.
-    (void)comboFlag;
+    if (comboFlag) {
+        // Combo path (binary @ 0x0013a278, comboFlag != 0 branch):
+        // saveData->m_BombQueueCount holds m_ComboLength; m_BombQueue holds hashes.
+        char comboBuf[128];
+        snprintf(comboBuf, sizeof(comboBuf), "%i%s",
+                 game->pSaveData->m_BombQueueCount, "");  // Localisation::Get(0x98) -- BakedString stub
+        m_ComboLength = game->pSaveData->m_BombQueueCount;
+        for (int i = 0; i < m_ComboLength && i < 11; i++) {
+            m_ComboHashArray[i] = game->pSaveData->m_BombQueue[i];
+        }
+        int localFruitIdx = 0;
+        m_ComboType = (int)CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);
+        m_ComboStarTex = GetComboStarTexture((uint8_t)m_ComboType);
+        if (m_FruitIdx != localFruitIdx) m_FruitIdx = localFruitIdx;
+        m_FactPosOffset = Vec3(140.0f, -72.0f, 0.0f);
+    }
 
     // Always: GetFact with current fruit/fact indices
     m_pCurFactString = Fruit::GetFact(&m_FruitIdx, &m_FactIdx, m_FruitIdx, m_FactIdx);
@@ -331,23 +358,39 @@ void FruitFactControl::Update(float dt) {
             // Path A (faster combo cadence): StarTimer += 2*dt, 0.5-fractional gate
             m_StarTimer += 2.0f * dt;
             if (m_StarTimer - (float)(int)m_StarTimer >= 0.5f) {
-                // SFX floor name
-                // TODO: 0x0013b604 -- SFX play floor name via GameSound::SFXPlay
+                if (game->pGameSound) {
+                    game->pGameSound->SFXPlay("Clean-Slice-1", 1.0f, 1.0f,
+                        Mortar::Delegate1<bool, Mortar::MortarSound*>());
+                }
             }
         } else {
             // Path B (per-second sin-pulse): StarTimer += 4*dt, 0.5-fractional gate
             m_StarTimer += 4.0f * dt;
             if (m_StarTimer - (float)(int)m_StarTimer >= 0.5f) {
-                // SFX "Clean-Slice-%d" with idx in [1..8]
-                // TODO: 0x0013b604 -- SFX "Clean-Slice-N" (N in 1..8) via GameSound::SFXPlay
+                int n = (int)m_StarTimer;
+                int idx = (n < 7) ? (n + 1) : 8;
+                char sfx[16];
+                snprintf(sfx, sizeof(sfx), "Clean-Slice-%d", idx);
+                if (game->pGameSound) {
+                    game->pGameSound->SFXPlay(sfx, 1.0f, 1.0f,
+                        Mortar::Delegate1<bool, Mortar::MortarSound*>());
+                }
             }
         }
     } else if (gameMode == Mortar::GAME_MODE_ARCADE) {
-        // Arcade mode: lazy-create leaderboard menu ONCE
-        // TODO: 0x0013b604 -- lazy-create m_pLeaderboardMenu (LeaderboardList) at
-        //   position (75, pos.y-8, 0), dims 240x141, item height 47;
-        //   hide leaderboard + connect button by default.
-        //   LeaderboardList not yet ported.
+        // Arcade mode: lazy-create leaderboard menu ONCE (binary @ 0x0013b604)
+        if (!m_pLeaderboardMenu) {
+            m_pLeaderboardMenu = new LeaderboardList();
+            m_pLeaderboardMenu->Init();
+            m_pLeaderboardMenu->pos = Vec3(75.0f, pos.y - 8.0f, 0.0f);
+            // Defunct: online-services -- SetItemHeight/SetWidth/SetHeight preserved for call shape.
+            m_pLeaderboardMenu->SetItemHeight(47.0f);
+            m_pLeaderboardMenu->SetWidth(240.0f);
+            m_pLeaderboardMenu->SetHeight(141.0f);
+            if (game->hud) game->hud->AddControl(m_pLeaderboardMenu, false);
+        }
+        if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_bActive = 0;
+        if (m_pConnectButton) m_pConnectButton->m_bActive = 0;
 
         if (m_PomCount == 1) {
             UpdateLeaderboard(dt);
@@ -370,8 +413,59 @@ void FruitFactControl::Update(float dt) {
 // ---------------------------------------------------------------------------
 
 void FruitFactControl::UpdateLeaderboard(float dt) {
-    // Defunct: online-services -- no-op; binary @ 0x0013afbc (5-state machine).
-    (void)dt;
+    // Binary @ 0x0013afbc -- 5-state machine for online leaderboard flow.
+    // All branches are defunct (online services are not ported).
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    int provider = Mortar::GetSocialNetworkProvider();
+    (void)provider;
+
+    switch (m_LBState) {
+        case 0:
+            // Defunct: online-services -- offline-prompt: spawn connect button bound to ConnectPressed.
+            // binary @ 0x0013afbc: creates m_pConnectButton at (pos.x-8, pos.y-8, 0),
+            // shows provider title texture, shows connect button.
+            // no observable effect; binary @ 0x0013afbc
+            break;
+
+        case 1:
+            // Defunct: online-services -- initiating connection: NetworkManager::ConnectGameCenter().
+            // binary @ 0x0013b0e4: calls ConnectGameCenter(), polls IsGameCenterAttemptingToConnect(),
+            // transitions to state 2 or state 4 on timeout.
+            // no observable effect; binary @ 0x0013b0e4
+            (void)dt;
+            break;
+
+        case 2:
+            // Defunct: online-services -- fetching: LeaderboardManager::RefreshLeaderboard() poll.
+            // binary @ 0x0013b1e4: calls RefreshLeaderboard(gameMode, boardId),
+            // draws download spinner via DrawDownloadIcon(), populates leaderboard rows.
+            // no observable effect; binary @ 0x0013b1e4
+            LeaderboardManager::GetInstance()->RefreshLeaderboard(0, 0);
+            DrawDownloadIcon();
+            if (m_pLeaderboardMenu) {
+                // Defunct: online-services -- no rows to populate; list stays empty.
+                // binary @ 0x0013b244: iterates FNHighscoreList rows into LeaderboardList items.
+            }
+            break;
+
+        case 3:
+            // Defunct: online-services -- showing: make leaderboard visible.
+            // binary @ 0x0013b39c: sets m_pLeaderboardMenu->m_bActive = 1.
+            // no observable effect; binary @ 0x0013b39c
+            if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_bActive = 1;
+            break;
+
+        case 4:
+            // Defunct: online-services -- error/offline fallback.
+            // binary @ 0x0013b418: shows no-score texture, hides leaderboard.
+            // no observable effect; binary @ 0x0013b418
+            break;
+
+        default:
+            break;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -390,9 +484,37 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
     if (layerMask == 8) {
-        // Zen combo-bead overlay (HUD layer 0x08)
+        // Zen combo-bead overlay (HUD layer 0x08, binary @ 0x0013b95c)
         if (game->gameMode != Mortar::GAME_MODE_ZEN) return;
-        // TODO: 0x0013b95c -- draw backplate + combo-star with sin pulse (Zen layer-8 path)
+        if (!m_ComboStarTex.IsValid()) return;
+        if (m_StarTimer <= (float)m_ComboLength) return;
+
+        // Normalise elapsed post-combo time to [0..1]
+        float t = (m_StarTimer - (float)m_ComboLength) * 2.0f - 1.0f;
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+
+        // Sin-pulse scale: SinIdx maps [0..65535] -> full sin period.
+        uint16_t idx = (uint16_t)(int)(t * 135.0f * 182.0f);
+        float pulse = SinIdx(idx) * 1.41421356f;
+
+        // Per-bead stride along the panel
+        float stride = ((float)(m_ComboLength - 1)) * 40.0f;
+        if (m_ComboLength > 1 && stride > 220.0f) {
+            stride = 220.0f / (float)(m_ComboLength - 1);
+        }
+
+        // Draw the combo-star texture quad with sin-pulse scale
+        const float tw = (float)m_ComboStarTex->m_Width;
+        const float th = (float)m_ComboStarTex->m_Height;
+        m_ComboStarTex->Set();
+        mm.GetWorldStack().Reset();
+        Matrix44 mat = Matrix44::MakeScale(tw * pulse, th * pulse, 1.0f);
+        mat.GlobalTranslate44(Vec3(pos.x + stride * 0.5f, pos.y, pos.z));
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
+        r->DrawQuad(Colour(255, 255, 255, 255));
+        m_ComboStarTex->UnSet();
         return;
     }
 
@@ -481,13 +603,40 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 m_FactTexture->UnSet();
             }
 
-            // Three bonus rows via BonusManager
-            // TODO: 0x0013b95c -- BonusManager::GetFirstBestBonus / GetNextBestBonus
-            //   row walk not yet fully ported (BonusScreen draw details unresolved).
-            //   Row colours: gold(0xAD,0x7E,0x00,0xFF), red(0xA0,0x05,0x05,0xFF), blue(0x01,0x5C,0x95,0xFF)
-            //   Row name at (Bonus+0x80) scale 16, align 0xF, maxWH=(193,0)
-            //   Row score OS_SPrintf("%d", Bonus+0x3C) scale 16
-            //   Row icon (Bonus+0xD0) scaled by icon W/2; Y step -= 20 per row
+            // Three bonus rows via BonusManager (binary @ 0x0013b95c, m_PomCount==0 path)
+            {
+                const Colour rowColours[3] = {
+                    Colour(0xAD, 0x7E, 0x00, 0xFF),  // gold  (1st)
+                    Colour(0xA0, 0x05, 0x05, 0xFF),  // red   (2nd)
+                    Colour(0x01, 0x5C, 0x95, 0xFF),  // blue  (3rd)
+                };
+                Vec3 rowPos(pos.x - 98.0f, pos.y + 58.0f, 0.0f);
+                BonusManager* bm = BonusManager::GetInstance();
+                std::list<Bonus>::iterator it;
+                Bonus* bonus = bm->GetFirstBestBonus(it);
+                for (int i = 0; i < 3 && bonus; i++) {
+                    Colour col = rowColours[i];
+                    // m_DisplayName at +0x80 (char[64])
+                    if (bonus->m_DisplayName[0] != '\0') {
+                        game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                            bonus->m_DisplayName,
+                            Vec3(rowPos.x + 16.0f, rowPos.y, 0.0f),
+                            col, 0x0F);
+                    }
+                    // m_Tier at +0x3C holds display score value
+                    char scoreBuf[32];
+                    snprintf(scoreBuf, sizeof(scoreBuf), "%d", bonus->m_Tier);
+                    game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                        scoreBuf,
+                        Vec3(rowPos.x + 193.0f, rowPos.y, 0.0f),
+                        col, 0x0F);
+                    if (bonus->m_StarTexture.IsValid()) {
+                        // TODO: 0x0013c5xx -- icon quad scale Vec3(W*0.5, ...). Stub: skip.
+                    }
+                    rowPos.y -= 20.0f;
+                    bonus = bm->GetNextBestBonus(it);
+                }
+            }
 
             // Title body (Zen-equivalent structure, 127/89/0.25)
             if (m_pCurFactString) {
@@ -592,7 +741,10 @@ void FruitFactControl::DrawLeaderboard() {
 
 void FruitFactControl::DrawDownloadIcon() {
     // Defunct: online-services -- no-op stub; binary @ 0x001395d0
-    // TODO: 0x001395d0 -- 8-segment spinning ring (48 verts); Mesh port required.
+    // Binary @ 0x001395d0 builds an 8-segment ring with per-segment alpha
+    // animation (48 verts, Mesh::DrawTriList). The only caller is
+    // UpdateLeaderboard state 2 which is itself defunct.
+    // Mesh::DrawTriList is not yet wired in port; ring draw omitted.
 }
 
 // ---------------------------------------------------------------------------
