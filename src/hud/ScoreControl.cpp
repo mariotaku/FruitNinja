@@ -12,7 +12,7 @@
 #include "math/MathUtil.h"
 #include "math/Matrix44.h"
 #include "audio/GameSound.h"
-#include "util/Localisation.h"
+#include "util/StringTable.h"
 #include "screens/GameOverScreen.h"
 #include "game/FruitSaveData.h"
 #include "hud/HUD.h"
@@ -513,14 +513,9 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
                 // ASM-verified: 2026-05-10 binary @ 0x001592c4..0x001592c8
                 // (re-analyst). Binary loads `movs r0, #0xb5` then BLX to
-                // GETSTRING(idx). Index 181 in translations_header.str is
-                // "CODE_SCORE_BEST" which resolves to the literal "BEST:"
-                // (with trailing colon) in english_us. Earlier port passed
-                // "BEST" which is NOT a header key -- Localisation::Get
-                // fell through and returned the literal string, displaying
-                // "BEST" (no colon) and computing cursorX off the wrong
-                // measured width.
-                const char* label = Localisation::Get("CODE_SCORE_BEST");
+                // GETSTRING(idx). Index 0xb5 (181) maps to LSTR_BEST which
+                // resolves to "BEST:" (with trailing colon) in english_us.
+                const char* label = Mortar::GETSTRING_CAST_0(LSTR_BEST);
                 float labelW  = game->pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
                 // ASM-verified: 2026-05-10 binary @ 0x00159588..0x001596a6 (re-analyst).
