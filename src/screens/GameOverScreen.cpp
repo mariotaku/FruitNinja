@@ -613,9 +613,10 @@ void GameOverScreen::CreateRetryButton() {
     //     hitBounds / deletedCb args (port's Init takes 5 args matching
     //     the binary's ctor minus the texture, which is set via the
     //     m_Texture SmartPtr field).
-    //   - HUD-wide deleted delegate: TODO -- routes to
-    //     HUD::DeleteControl(removed); placeholder uses self-bound
-    //     DeletedControl (slightly different semantic, but functional).
+    //   - HUD-wide deleted delegate: binary's MakeDelegate_HUD constructs
+    //     Delegate0<void>{HUD::DeleteControl, hud_this}. Port leaves it
+    //     empty -- MenuButton's deletedCb dispatch is never wired in port,
+    //     so the cleanup path differs but no observable break today.
     Vec3 btnPos(-80.0f, -96.0f, 0.0f);
     Vec3 globalCenter(0.0f, 0.0f, 0.0f);  // HUD::g_GlobalCenterVec; HUD::Init sets to (0,0,0)
     Mortar::SmartPtr<Mortar::Texture> tex =
@@ -636,9 +637,8 @@ void GameOverScreen::CreateRetryButton() {
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnRetryClicked),
         /*fruitType=*/0,
         globalCenter,
-        // TODO: 0x00141030 — bind HUD::g_DeleteControlDelegate so the
-        //   button's removal triggers HUD-side cleanup. Port currently
-        //   leaves the deletedCb empty (default-constructed Delegate0).
+        // Binary builds Delegate0{HUD::DeleteControl, game->hud} here.
+        // Port leaves empty -- MenuButton's deletedCb dispatch is unwired.
         Mortar::Delegate0<void>()
     );
 
@@ -652,16 +652,26 @@ void GameOverScreen::RetryCallback() {
     if (m_State != 0 && m_State != 6 && m_State != 14 && m_State != 10) return;
     if (game->m_TransitionTimer <= 0.989945f) return;
     CancelHUDProgressionTimer();
-    // TODO: 0x0014105c -- session-stat reset block at GOT+DAT_00141164 (out of scope)
+    // TODO: 0x0014105c -- PRNG reseed block at .bss 0x0026C8B0 (the global
+    // RNG state struct shared with SpawnFruit/SpawnBomb/RandFloat). Per
+    // re-analyst 2026-05-13:
+    //   prng[0]  = game->m_RngSeed       (game+0x194)
+    //   prng[1]  = 0
+    //   prng[2..3] = {0x6c078965, 0x5d588b65}  (Marsaglia LCG stream constants)
+    //   prng[4]  = 0x00269ec3                 (counter init)
+    //   prng[5]  = 0
+    // Provides deterministic-replay: retried run reproduces identical fruit
+    // sequence. Needs the port's RNG facility exposed (no Reseed entry-point
+    // yet) -- defer until WaveManager / Math RNG plumbing lands.
     // Binary @ 0x001410d6: FruitSaveData::ClearCombo(pSaveData)
     if (game->pSaveData) game->pSaveData->ClearCombo();
     // Defunct: MP scene-alpha bypass -- IsMultiplayer always false in port
     m_State = 7;
-    // Binary @ 0x0014110c: GameSound::SFXPlay("retry"-or-similar, 1.0, 1.0, empty Delegate1)
-    // TODO: 0x00141170 -- verify SFX name from rodata; binary loads from GOT slot.
-    //   Likely "menu-retry" per Bada SFX naming convention.
+    // ASM-verified: 2026-05-13 binary @ 0x0014110c (re-analyst).
+    //   DAT_00141170 resolves to rodata @ 0x001B96AF = "Game-start" --
+    //   retry reuses the game-launch SFX, not a "menu-retry" sound.
     if (game->pGameSound) {
-        game->pGameSound->SFXPlay("menu-retry", 1.0f, 1.0f,
+        game->pGameSound->SFXPlay("Game-start", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
 }
@@ -713,7 +723,7 @@ void GameOverScreen::CreateQuitButton() {
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked),
         /*fruitType=*/0,  // DIFFERS: binary passes *(int*)g_FruitInfoArray (binary bug); port uses 0 to match retry
         globalCenter,
-        Mortar::Delegate0<void>()  // TODO: 0x00141030 -- bind HUD::g_DeleteControlDelegate
+        Mortar::Delegate0<void>()  // see CreateRetryButton -- HUD-delete delegate unwired
     );
 
     game->hud->AddControl(m_pQuitBtn, false);
@@ -1044,8 +1054,11 @@ void GameOverScreen::Update(float dt) {
             m_State = 6;
             break;
         }
-        // Binary: game[+0x28] = game[+0x20] (fruitConsumed = fruitTotal)
-        // Port: no direct equivalent yet; TODO: wire when wave fields confirmed
+        // ASM-verified: 2026-05-13 binary @ state-7 tail (re-analyst).
+        //   game[+0x28] = game[+0x20] re-snapshots the start-balance for
+        //   the retry run so the "YOU JUST EARNT %i COINS" delta resets.
+        //   Earlier port comment mislabelled these as wave fields.
+        game->m_CoinsAtGameStart = game->m_CoinsBalance;
         WaveManager::GetInstance()->Reset(false);
         game->pauseFlag = 1; // will be cleared in state 8
         m_State = 8;
@@ -1200,23 +1213,23 @@ void GameOverScreen::Update(float dt) {
             m_pFruitFact->pos.y = m_OffsetPosY + 12.0f;
             m_pFruitFact->pos.z = 0.0f;
         }
+        // Defunct: g_JitterVec3 (binary @ 0x0022F198) ctor-inits to (0,0,0)
+        // and nothing in the shipping binary ever writes it -- the
+        // `(1-α) * 120 * g_JitterVec3` term is permanently zero. The shake
+        // hook was wired but never finished. Port omits the jitter math
+        // entirely; pos is set to the binary's literal base (190, -50/-125, 0).
         // Retry button (m_pSlot9c, field12_0x9c).
-        // Binary: pos = (190, -50, 0) + (1-α) * 120 * g_JitterVec3.
-        // Jitter source (DAT_00142670) not yet wired -- port treats it as 0.
         if (m_pSlot9c) {
             m_pSlot9c->pos.x = 190.0f;
             m_pSlot9c->pos.y = -50.0f;
             m_pSlot9c->pos.z = 0.0f;
         }
         // Quit button (m_pQuitBtn, field15_0xa8).
-        // Binary: pos = (190, -125, 0) + (1-α) * 120 * g_JitterVec3.
         if (m_pQuitBtn) {
             m_pQuitBtn->pos.x = 190.0f;
             m_pQuitBtn->pos.y = -125.0f;
             m_pQuitBtn->pos.z = 0.0f;
         }
-        // TODO: 0x00142670 — wire g_JitterVec3 read for per-frame shake on
-        //   retry/quit buttons; offset = (1-α) * 120 * jitter.
     }
 }
 
