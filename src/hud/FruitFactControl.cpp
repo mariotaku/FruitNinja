@@ -263,11 +263,15 @@ void FruitFactControl::Init() {
         m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
     }
 
-    // ASM-verified: 2026-05-14 binary @ 0x0013a52c (re-analyst).
-    // Binary format is "%s.tex" (DAT_0013a52c -> 0x001ba0b3). The port
-    // previously had "%s_facts.tex" -- WRONG. FruitFactTexture returns
-    // the XML factTexture attr directly (e.g. "sml_ap" for apple), which
-    // resolves to the small per-fruit icon in FruitNinjaBada/Data/textures/.
+    // ASM-verified: 2026-05-14 binary @ 0x0013a278..0x0013a4f6 (asm-inspector)
+    //   GOT base = 0x001ec130 (ldr r5,[pc,#0x000b1eb0]; adds r5,r5,r3)
+    //   GOT off  = 0xfffcdf83 (ldr r2,[pc,...])  -> r2 = 0x001ba0b3
+    //   bytes @ 0x001ba0b3 = 25 73 2E 74 65 78 00 = "%s.tex"
+    //   blx 0x001032b4 (OS_SPrintf)
+    // Port previously had "%s_facts.tex" which produced filenames that
+    // don't exist (sml_ap_facts.tex). FruitFactTexture returns the XML
+    // factTexture attr directly (e.g. "sml_ap" for apple) which resolves
+    // to the small per-fruit icon in FruitNinjaBada/Data/textures/.
     if (m_FruitIdx >= 0) {
         const char* fruitBase = Fruit::FruitFactTexture(m_FruitIdx);
         if (fruitBase && *fruitBase) {
