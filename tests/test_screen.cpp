@@ -154,10 +154,31 @@ int main(int argc, char* argv[]) {
         // so the spawn pump runs and the score / miss widgets see real game
         // state. Verifies the HUD widgets are wired and rendering during
         // actual gameplay.
-        hideAllExisting();
+        // hideAllExisting() would also kill ScoreControl + MissControl +
+        // MainScreen (m_bActive=0), which is exactly what we DON'T want for
+        // a gameplay-active test. Only deactivate menu/screen overlays.
+        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+            HUDControl* c = *it;
+            if (dynamic_cast<DojoScreen*>(c)
+             || dynamic_cast<AboutScreen*>(c)
+             || dynamic_cast<ShopScreen*>(c)
+             || dynamic_cast<GameModeScreen*>(c)) {
+                c->m_bActive = 0;
+            }
+        }
         game.gameMode = 0;
         FN::PrepareForLevelStart();
         game.pauseFlag = 0;
+        // Simulate the GameModeScreen state-6 snap (binary @ 0x0013f2b0):
+        //   game.m_TransitionTimer = 0.0f
+        //   mainScreen.m_State    = STATE_CAMERA_FADE (0x11)
+        // Without the state push, MainScreen stays in STATE_CAMERA_ZOOM
+        // (initial state) and lerps the timer toward -1 every frame, which
+        // makes ScoreControl Stage 6 compute pos.x = -218 - 200*|-1| = -418
+        // (off-screen left). STATE_CAMERA_FADE is the gameplay-active state
+        // and its update only writes timer when timer < 0.
+        if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
+        game.m_TransitionTimer = 0.0f;
         // Sanity: confirm at least one ScoreControl + one MissControl exist
         // in HUD (created by GameInit step 3/4). If they're missing, the
         // test will print a diagnostic but not fail the smoke pass.
@@ -184,9 +205,25 @@ int main(int argc, char* argv[]) {
         // exercise the LoadLocalisedTexture path. Score is set to a value
         // that triggers the highscore branch so save->newBestThisGame is
         // also exercised.
-        hideAllExisting();
+        // Don't deactivate ScoreControl / MissControl / MainScreen — they're
+        // alive during game-over (ScoreControl renders the final banner).
+        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+            HUDControl* c = *it;
+            if (dynamic_cast<DojoScreen*>(c)
+             || dynamic_cast<AboutScreen*>(c)
+             || dynamic_cast<ShopScreen*>(c)
+             || dynamic_cast<GameModeScreen*>(c)) {
+                c->m_bActive = 0;
+            }
+        }
         game.gameMode = 0;     // Classic
         game.currentScore = 1234;
+        // MainScreen menu-idle states lerp m_TransitionTimer toward -1 every
+        // frame. Pin it to STATE_CAMERA_FADE so it doesn't fight the
+        // explicit 0.5 we set below (binary path: GameModeScreen state-6
+        // snap leaves MainScreen in STATE_CAMERA_FADE then GameOverScreen
+        // ramps timer toward +1).
+        if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
         game.m_TransitionTimer = 0.5f;  // mid-transition; not the fast-path
         // ctor args: (modeName, initialState, initialTimer,
         //             expressionIdx, bgPatternIdx, pomCount, starCount).
