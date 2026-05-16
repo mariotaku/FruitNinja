@@ -213,11 +213,11 @@ int main(int argc, char* argv[]) {
         if (noMiss) {
             // Fruit::CollisionResponse (src/entities/Fruit.cpp:~536) does
             //   if (game.missCount > 2) FN::GameOver(...);
-            // Pinning missCount to a large negative gives ~2 billion misses
-            // of headroom -- effectively unlimited for visual inspection.
-            game.missCount = INT_MIN / 2;
-            printf("[test_screen classic --no-miss] game.missCount = %d (game-over disabled)\n",
-                   game.missCount);
+            // game.missCount is uint8_t so a large negative initial value
+            // wraps and doesn't help -- the per-frame reset loop below
+            // (interactive path) keeps it pinned at 0 instead.
+            game.missCount = 0;
+            printf("[test_screen classic --no-miss] per-frame missCount reset enabled\n");
         }
     } else if (strcmp(screenName, "gameover") == 0) {
         // Force a Classic-mode game-over scene so the texture loads
@@ -441,9 +441,22 @@ int main(int argc, char* argv[]) {
     }
 
     if (interactive) {
-        // Interactive: hand off to the normal main loop. ESC / window
-        // close exits. No automatic timeout.
-        game.run();
+        if (noMiss) {
+            // Custom loop that mirrors Game::run() pacing but resets
+            // game.missCount=0 every tick so misses never reach the > 2
+            // game-over trigger in Fruit::CollisionResponse. game.run()
+            // can't be intercepted mid-loop, so we use runFrames(1) +
+            // reset and rely on Game::runFrames for event pump / vsync.
+            // ESC / window close still flips game.running -> false.
+            while (game.running) {
+                game.missCount = 0;
+                game.runFrames(1);
+            }
+        } else {
+            // Interactive: hand off to the normal main loop. ESC / window
+            // close exits. No automatic timeout.
+            game.run();
+        }
     } else {
         // Headless: drive enough frames to finish the in-transition
         // and reach the screen's idle/visible state.
