@@ -209,12 +209,12 @@ class PSPParticleManager : public Mortar::Singleton<PSPParticleManager> {
 public:
     // Add emitter by template hash. Matches AddEmitter (0x1149e0).
     // ppRef (optional) is filled with the returned pointer for caller cleanup;
-    // it is cleared to nullptr if template lookup fails. `persistent` is
-    // accepted for signature compatibility but currently unused (matches bin).
+    // it is cleared to nullptr if template lookup fails.
+    // updateWhenPaused maps directly to e.m_bUpdateWhenPaused (binary third arg).
     // Binary @ 0x001149e0 — pop from pool, init defaults, prepend to m_ActiveList
     PSPParticleEmitter* AddEmitter(uint32_t hash,
                                    PSPParticleEmitter** ppRef = nullptr,
-                                   bool persistent = false);
+                                   bool updateWhenPaused = false);
 
     // Explicitly release an emitter (matches ClearEmitter 0x114934). Clears
     // the caller back-pointer and marks the emitter for removal on next tick.
