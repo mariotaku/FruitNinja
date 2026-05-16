@@ -46,12 +46,15 @@ public:
     int16_t m_RotY;        // +0x76: accumulated rotation Y
 
     // Port specific: fractional-frame accumulators so the F7 debug
-    // timescale slows bomb rotation along with physics. At 1.0× timescale
+    // timescale slows bomb rotation along with physics. At 1.0x timescale
     // these hold 0 and rotation advances exactly one (m_RotVelX/Y) step
-    // per frame, matching the binary. At 0.1× timescale the integer
-    // part advances ~every 10 frames. No binary offset — off-struct.
+    // per frame, matching the binary. At 0.1x timescale the integer
+    // part advances ~every 10 frames. No binary offset -- omitted under
+    // __bada__ so the cross-build sees a binary-faithful layout.
+#ifndef __bada__
     float m_RotAccumX;
     float m_RotAccumY;
+#endif
 
     // +0x78: collision guard (prevents double-hit)
     uint8_t m_bCollisionGuard;
@@ -154,5 +157,76 @@ public:
     // scales up bomb and reduces speed. skipSpawnFx=false plays the spawn FX.
     void MakeFat(bool skipSpawnFx);
 };
+
+#ifdef __bada__
+// Binary-faithful offsets (32-bit Bada cross-build). entityType = uint8_t,
+// m_RotAccumX/Y absent. Binary total = 0xB0 (176 bytes).
+static_assert(offsetof(Bomb, m_SpawnTimer)      == 0x3C, "m_SpawnTimer binary offset wrong");
+static_assert(offsetof(Bomb, m_HitCallback)     == 0x40, "m_HitCallback binary offset wrong");
+static_assert(offsetof(Bomb, m_BombVariant)     == 0x64, "m_BombVariant binary offset wrong");
+static_assert(offsetof(Bomb, m_bHit)            == 0x68, "m_bHit binary offset wrong");
+static_assert(offsetof(Bomb, m_ZPosition)       == 0x6C, "m_ZPosition binary offset wrong");
+static_assert(offsetof(Bomb, m_RotVelX)         == 0x70, "m_RotVelX binary offset wrong");
+static_assert(offsetof(Bomb, m_RotVelY)         == 0x72, "m_RotVelY binary offset wrong");
+static_assert(offsetof(Bomb, m_RotX)            == 0x74, "m_RotX binary offset wrong");
+static_assert(offsetof(Bomb, m_RotY)            == 0x76, "m_RotY binary offset wrong");
+static_assert(offsetof(Bomb, m_bCollisionGuard) == 0x78, "m_bCollisionGuard binary offset wrong");
+static_assert(offsetof(Bomb, m_pEmitter)        == 0x7C, "m_pEmitter binary offset wrong");
+static_assert(offsetof(Bomb, m_bMovement)       == 0x80, "m_bMovement binary offset wrong");
+static_assert(offsetof(Bomb, m_pOwnerButton)    == 0x84, "m_pOwnerButton binary offset wrong");
+static_assert(offsetof(Bomb, m_bMenuBombHit)    == 0x88, "m_bMenuBombHit binary offset wrong");
+static_assert(offsetof(Bomb, m_AccelForce)      == 0x8C, "m_AccelForce binary offset wrong");
+static_assert(offsetof(Bomb, m_OrigScale)       == 0x98, "m_OrigScale binary offset wrong");
+static_assert(offsetof(Bomb, m_Countdown)       == 0xA4, "m_Countdown binary offset wrong");
+static_assert(offsetof(Bomb, m_SpeedMult)       == 0xA8, "m_SpeedMult binary offset wrong");
+static_assert(sizeof(Bomb)                      == 0xB0, "sizeof(Bomb) wrong (binary 0xB0 / 176)");
+#else
+// Always-on port layout asserts (desktop x64). Offsets reflect: 8-byte vtable,
+// int-widened entityType (+4), 40-byte Delegate0<void>, 8-byte pointers,
+// and two extra port floats m_RotAccumX/Y (8 bytes after m_RotY).
+// Binary equivalents noted in comments for parity tracking.
+static_assert(offsetof(Bomb, m_SpawnTimer)      == 0x50,
+    "m_SpawnTimer port offset drift (binary +0x3C)");
+static_assert(offsetof(Bomb, m_HitCallback)     == 0x58,
+    "m_HitCallback port offset drift (binary +0x40)");
+static_assert(offsetof(Bomb, m_BombVariant)     == 0x80,
+    "m_BombVariant port offset drift (binary +0x64)");
+static_assert(offsetof(Bomb, m_bHit)            == 0x84,
+    "m_bHit port offset drift (binary +0x68)");
+static_assert(offsetof(Bomb, m_ZPosition)       == 0x88,
+    "m_ZPosition port offset drift (binary +0x6C)");
+static_assert(offsetof(Bomb, m_RotVelX)         == 0x8C,
+    "m_RotVelX port offset drift (binary +0x70)");
+static_assert(offsetof(Bomb, m_RotVelY)         == 0x8E,
+    "m_RotVelY port offset drift (binary +0x72)");
+static_assert(offsetof(Bomb, m_RotX)            == 0x90,
+    "m_RotX port offset drift (binary +0x74)");
+static_assert(offsetof(Bomb, m_RotY)            == 0x92,
+    "m_RotY port offset drift (binary +0x76)");
+static_assert(offsetof(Bomb, m_RotAccumX)       == 0x94,
+    "m_RotAccumX port offset drift (port-specific, no binary equivalent)");
+static_assert(offsetof(Bomb, m_RotAccumY)       == 0x98,
+    "m_RotAccumY port offset drift (port-specific, no binary equivalent)");
+static_assert(offsetof(Bomb, m_bCollisionGuard) == 0x9C,
+    "m_bCollisionGuard port offset drift (binary +0x78)");
+static_assert(offsetof(Bomb, m_pEmitter)        == 0xA0,
+    "m_pEmitter port offset drift (binary +0x7C)");
+static_assert(offsetof(Bomb, m_bMovement)       == 0xA8,
+    "m_bMovement port offset drift (binary +0x80)");
+static_assert(offsetof(Bomb, m_pOwnerButton)    == 0xB0,
+    "m_pOwnerButton port offset drift (binary +0x84)");
+static_assert(offsetof(Bomb, m_bMenuBombHit)    == 0xB8,
+    "m_bMenuBombHit port offset drift (binary +0x88)");
+static_assert(offsetof(Bomb, m_AccelForce)      == 0xBC,
+    "m_AccelForce port offset drift (binary +0x8C)");
+static_assert(offsetof(Bomb, m_OrigScale)       == 0xC8,
+    "m_OrigScale port offset drift (binary +0x98)");
+static_assert(offsetof(Bomb, m_Countdown)       == 0xD4,
+    "m_Countdown port offset drift (binary +0xA4)");
+static_assert(offsetof(Bomb, m_SpeedMult)       == 0xD8,
+    "m_SpeedMult port offset drift (binary +0xA8)");
+static_assert(sizeof(Bomb)                      == 0xE0,
+    "sizeof(Bomb) port drift (binary 0xB0; port 0xE0 due to 64-bit ptrs + entityType widening + m_RotAccum*)");
+#endif
 
 #endif
