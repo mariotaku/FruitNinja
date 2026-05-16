@@ -48,7 +48,10 @@ struct Game : public Mortar::MortarGame {
 
     uint8_t taskStateIndex;        // +0x00: 0=Splash, 1=Frontend, 2=Game
     uint8_t field_0x01;            // +0x01
-    uint8_t gameActiveFlag;        // +0x02: 0=paused, !=0=active
+    uint8_t gameActiveFlag;        // +0x02: 0=running, !=0=paused/frozen
+                                   // (Bomb::Update @ 0x00162bfe: cbnz r2 -> skip
+                                   //  countdown decrement when !=0; PauseScreen
+                                   //  sets to 1 on pause; GameInitialise inits to 0)
     uint8_t languageFlag;          // +0x03: SetLanguage writes 0 here
     // +0x04: GAME_MODE enum (see game/GameMode.h) stored as uint8_t.
     //   0=GAME_MODE_CLASSIC (originalWaveList.xml)
