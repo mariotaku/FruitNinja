@@ -48,7 +48,14 @@ set(CMAKE_CXX_COMPILER_WORKS  1)
 #   Tag_ABI_VFP_args:     VFP registers
 #   Tag_ABI_enum_size:    small         -> -fshort-enums
 #   Tag_ABI_PCS_wchar_t:  2             -> -fshort-wchar
-set(_BADA_FLAGS "-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar")
+#
+# -fpic: binary is ELF DYN (shared object), produced with Position
+# Independent Code. The GOT-relative addressing pattern `ldr r0, [r4, r3]`
+# in the binary vs. the cross-build's `R_ARM_THM_MOVW_ABS` absolute
+# relocations is the dominant source of asm-differ noise across nearly
+# every Class::function pair. -fpic switches the cross-build to emit the
+# same GOT-relative pattern, eliminating that whole diff cluster.
+set(_BADA_FLAGS "-mthumb -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3 -fshort-enums -fshort-wchar -fpic")
 
 # -include cross-headers/fn-cxx11-shims.h: maps post-4.5 keywords (noexcept,
 # override, final, nullptr) to era-correct equivalents and forward-declares
