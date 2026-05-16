@@ -38,6 +38,7 @@
 //   ~SlashEntity         0x17C774
 //
 
+#include "Entity.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -47,14 +48,12 @@
 #include <cstdint>
 
 struct PSPParticleEmitter;
-namespace Mortar { class Entity; }
-
 struct InputEvent;
 
 class Fruit;
 class HUDControl;
 
-class SlashEntity {
+class SlashEntity : public Mortar::Entity {
 public:
     static const int MAX_POINTS = 96;        // trail length (was 160 in binary)
     static const int MAX_VERTS  = MAX_POINTS * 2; // 2 verts per strip per point
@@ -85,7 +84,7 @@ public:
     // fingerId selects which of the 16 SDL finger / Bada touch slots this
     // instance receives events from. GameInit creates one per slot 0..15.
     void Init(int fingerId = 0);
-    void Release();
+    void Release() override;
 
     // Binary @ 0x17B71C — wipe touch/trail state, sentinel-mark positions,
     // clear vertex strips, clear 11-entry combo-slice array.
@@ -96,18 +95,24 @@ public:
 
     // Matches SlashEntity::Update (0x17D664). Polls Mortar::Touch slot 0 +
     // per-frame geometry rebuild.
-    void Update(float dt);
+    void Update(float dt) override;
 
     // Binary @ 0x17B3B8 frozen-branch: GameUpdate calls PostUpdate(0.0f) on
     // each slot when game is inactive (active branch drives via ActorManager).
     // No-op stub — SlashEntity has no deferred post-step work in the port.
-    void PostUpdate(float dt);
+    void PostUpdate(float dt) override;
 
     // Matches SlashEntity::PreUpdate (0x17C584). Ticks ghost frame counters,
     // advances palette cycle, pushes swipe-loop volume to ItemManager.
     void PreUpdate(float dt);
 
-    // Matches SlashEntity::DrawSlice (0x17E424). Two mirrored tri-strips.
+    // Entity vtable slot 5 (+0x14): Draw(Renderer&) override.
+    // Binary Draw @ 0x17B3B8 is a 1-instruction BX lr stub; actual rendering
+    // is in DrawSlice. Port's Draw(Renderer&) delegates to DrawSlice().
+    void Draw(Renderer& r) override;
+
+    // No-arg draw convenience: calls DrawSlice directly.
+    // Used by GameDraw which iterates g_pSlashEntities and calls Draw().
     void Draw();
 
     // Binary @ 0x17B3B8 — Draw is a 1-instruction BX lr stub; rendering is
@@ -132,8 +137,8 @@ public:
 
     // Binary @ 0x17B3BC — entity vtable slot; SlashEntity is pure aggressor,
     // never collides into. Returns 0.
-    // Port note: port doesn't derive from Mortar::Entity; method kept for call-graph
-    // completeness.
+    // Port note: non-vtable convenience overload (no args). The 4-arg vtable
+    // override is declared below in the STUBS section.
     int CollisionResponse();
 
     // Binary @ 0x17B3C0 — 4-byte stub, returns 0.
@@ -337,13 +342,13 @@ public:
     bool CollideWithEntity(Mortar::Entity* entity);
 
     // STUB: SlashEntity::CollisionResponse (4-arg vtable override) -- binary @ 0x17B3BC (TODO RE)
-    int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel);
+    int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel) override;
 
     // STUB: SlashEntity::DrawSlice -- binary @ 0x17E424 (TODO RE)
     void DrawSlice();
 
     // STUB: SlashEntity::Init (3-arg binary form) -- binary @ 0x17C65C (TODO RE)
-    void Init(void* param1, long param2, Vec3* param3);
+    void Init(void* param1, long param2, Vec3* param3) override;
 
     // STUB: SlashEntity::InitPoints -- binary @ 0x17C340 (TODO RE)
     void InitPoints(long count);
