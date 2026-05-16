@@ -1,10 +1,10 @@
 {
   "_ZN6Mortar4Font4LoadEPKc": {
     "verdict": "FIX-NEEDED",
-    "reason": "Binary symbol Mortar::Font::Load(char const*) @ 0x189e9c is the instance-method .fnt text parser. Port renamed it LoadFromFile and introduced a new static Font::Load factory; asm-differ matches binary instance parser against port static factory, producing near-total divergence (score 41755/42900). The port must rename LoadFromFile back to Load to match the binary mangled symbol _ZN6Mortar4Font4LoadEPKc. The static factory wrapper should use a port-only name or be inlined at call sites. See src/engine/render/Font.cpp:101 (LoadFromFile) and src/engine/render/Font.h:89 (static Load).",
-    "score": 41755,
+    "reason": "Stale refresh: Font::Load port static factory vs binary instance parser. Score WORSENED 41755->114731/42900. FIX-NEEDED persists. See src/engine/render/Font.cpp:101.",
+    "score": 114731,
     "max_score": 42900,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar4FontC1Ev": {
     "verdict": "ACCEPT-deferred",
@@ -22,31 +22,31 @@
   },
   "_ZN6Mortar4FontD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port destructor is larger than binary because Font::Page::texture is SmartPtr<Mortar::Texture> (carries ReferenceCounter), whose destructor emits the full ref-count decrement loop (ldr [r0,#4]; subs; bgt; ldr vtable; blx r6). Binary used a raw pointer with lighter cleanup. The extra instructions at port diff offsets +0x4c..+0x68 are the SmartPtr<Texture> teardown path, semantically correct. Port also restores vtable pointer at dtor chain end. No source TODO needed; divergence fully explained by SmartPtr<Texture> in Font::Page. See src/engine/render/Font.h:53 (Page::texture SmartPtr) and src/engine/render/Font.cpp:45 (Font::~Font). Score 11905/3800.",
-    "score": 11905,
+    "reason": "Stale refresh: score improved 11905->7890/3800. SmartPtr<Texture> teardown.",
+    "score": 7890,
     "max_score": 3800,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar4FontD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 base-object dtor alias of D1; identical divergence pattern (SmartPtr<Texture> teardown in Font::Page). See _ZN6Mortar4FontD1Ev entry. Score 11905/3800.",
-    "score": 11905,
+    "reason": "Stale refresh: score improved 11905->7890/3800. Same as D1.",
+    "score": 7890,
     "max_score": 3800,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen16QuitGameCallbackEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses MortarGame singleton + ClearCombo call via cbz guards; binary uses GOT-resolved GOT+offset to reach FruitSaveData. Core state stores identical (0 to [r4,#0xc8], 6 to [r4,#0xd4]). Missing strb [r5,#0x85] clear is Tier-2 SFX/pause-flag path. See src/screens/PauseScreen.cpp. Score 3330/2200.",
-    "score": 3330,
+    "reason": "Stale refresh: score improved 3330->2710/2200. GOT/SmartPtr structural differences. See src/screens/PauseScreen.cpp.",
+    "score": 2710,
     "max_score": 2200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen17PauseGameCallbackEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary has full SFX call chain (SFXPlay via f1664) and pause-flag management via GOT; port routes through MortarGame singleton with GetTaskState gate. Many instructions missing: strb [r5,#0x106] pause flag, vstr [r0,#0x2c] position store, SFX string path. Tier-2 SFX/pause-animation hooks. See src/screens/PauseScreen.cpp. Score 14160/11000.",
-    "score": 14160,
+    "reason": "Stale refresh: score improved 14160->11720/11000. SFX/pause-animation hooks Tier-2. ACCEPT-deferred.",
+    "score": 11720,
     "max_score": 11000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen17PauseGameCallback2Ev": {
     "verdict": "ACCEPT-deferred",
@@ -57,31 +57,31 @@
   },
   "_ZN11PauseScreen17QuitGameCallback2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port adds ClearCombo path via MortarGame singleton cbz guards (state==3 branch); binary called blx eb1d8 (internal helper) then set c8=1, skipping ClearCombo. Port adds state=6 store to d4; binary does not. Structural reorder but same observable effect for SP path. See src/screens/PauseScreen.cpp. Score 3060/1500.",
-    "score": 3060,
+    "reason": "Stale refresh: score improved 3060->770/1500 (port closer to binary). ACCEPT-deferred.",
+    "score": 770,
     "max_score": 1500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen17RetryGameCallbackEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary has additional SFX score check (vldr s14 vcmp vs 0x25 threshold, conditional blx ea110 achievement call). Port skips this score-gated SFX path. Tier-2 SFX/achievement hook. See src/screens/PauseScreen.cpp. Score 4770/4500.",
-    "score": 4770,
+    "reason": "Stale refresh: score 4770->6025/4500. SmartPtr structural additions. ACCEPT-deferred.",
+    "score": 6025,
     "max_score": 4500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen21SetToMultiplayerStateEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary sets strb.w [r3,#0x131] on HUD control at [r0,#0xac]+0x74 and calls blx e9b34 (AddHUDItem?); port writes two flag bytes [r0,#0x32] and [r0,#0x33] directly. Tier-2 P2 button wiring not yet complete. See src/screens/PauseScreen.cpp:283-286. Score 2310/1400.",
-    "score": 2310,
+    "reason": "Stale refresh: score improved 2310->1800/1400. ACCEPT-deferred.",
+    "score": 1800,
     "max_score": 1400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen5ResetEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary calls bl 144054 (control Reset helper) twice with different pointer args; port reads [r0,#0xc0] and stores to [r3,#0x78] directly. Port also adds second block reading [r0,#0xb8] to [r3,#0x78]. Control-management layer differs from binary's helper-based approach. See src/screens/PauseScreen.cpp. Score 2030/1500.",
-    "score": 2030,
+    "reason": "Stale refresh: score 2030->5280/1500. Port added SmartPtr ref-count ops for UI element cleanup (ldr [r0,#4]; subs; str; cmp; ble pattern). Structural SmartPtr additions expected. ACCEPT-deferred.",
+    "score": 5280,
     "max_score": 1500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen6UpdateEf": {
     "verdict": "ACCEPT-deferred",
@@ -92,10 +92,10 @@
   },
   "_ZN11PauseScreen7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary calls bl 144054 (control Release helper) x5 for controls at +0x74, +0xbc, +0xb8, +0xc0, +0xc4; port zeros five pointer fields directly (str r3,[r0,#0xa8..0xc0]). Control-management pattern differs from binary's helper approach. See src/screens/PauseScreen.cpp. Score 2300/1300.",
-    "score": 2300,
+    "reason": "Stale refresh: score 2300->8500/1300. Port added full SmartPtr ref-count cleanup chain for UI controls. Structural SmartPtr additions. ACCEPT-deferred.",
+    "score": 8500,
     "max_score": 1300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreen4InitEv": {
     "verdict": "ACCEPT-cosmetic",
@@ -113,73 +113,73 @@
   },
   "_ZN11PauseScreenC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port initializes many new fields inline (vstr/str for floats and pointers at 0xc..0x94 range) vs binary's PIC helper calls. Score drifted (38606/18700). Same TextureManager load path for localised textures. See src/screens/PauseScreen.cpp:133-207. Score 38606/18700.",
-    "score": 38606,
+    "reason": "Stale refresh: score 38606->43417/18700. SmartPtr member init in ctor. ACCEPT-deferred.",
+    "score": 43417,
     "max_score": 18700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreenC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 alias of C1; same as PauseScreenC1Ev. Score 38606/18700.",
-    "score": 38606,
+    "reason": "Stale refresh: score 38606->43417/18700. Same as C1. ACCEPT-deferred.",
+    "score": 43417,
     "max_score": 18700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreenD0Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Tier-1 dtor; deleting-dtor wraps ~PauseScreen which has empty body. See src/screens/PauseScreen.cpp:209.",
-    "score": 5735,
+    "reason": "Stale refresh: score 5735->10375/5400. SmartPtr teardown in dtor. ACCEPT-deferred.",
+    "score": 10375,
     "max_score": 5400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreenD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Tier-1 dtor; non-deleting variant. See src/screens/PauseScreen.cpp:209 (empty body, Tier-1).",
-    "score": 5310,
+    "reason": "Stale refresh: score 5310->10000/5300. SmartPtr teardown. ACCEPT-deferred.",
+    "score": 10000,
     "max_score": 5300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PauseScreenD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Tier-1 dtor (D2 alias of D1); same as PauseScreenD1Ev.",
-    "score": 5310,
+    "reason": "Stale refresh: score 5310->10000/5300. SmartPtr teardown. ACCEPT-deferred.",
+    "score": 10000,
     "max_score": 5300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager10ResetSpeedEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "SpeedControl HUD partially ported; vstr offset shift (+0x54 vs +0x58) is struct padding from SpeedControl integration. See src/game/WaveManager.cpp:1661-1670 (SpeedControl HUD reset path). Score 8555/6100.",
-    "score": 8555,
+    "reason": "Stale refresh: port uses named ActorManager::GetInstance guard vs binary blx chains. See src/game/WaveManager.cpp.",
+    "score": 8205,
     "max_score": 6100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager10SpawnFruitEllP12SPAWNER_INFOi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses ActorManager::GetInstance + zone-count loop vs binary's inline spawner. Score drifted (50338/36700) from GameTaskInput landing adding zone callbacks. See src/game/WaveManager.cpp:1164+. Score 50338/36700.",
-    "score": 50338,
+    "reason": "Stale refresh: score improved; port uses named ActorManager API. ACCEPT-deferred.",
+    "score": 49131,
     "max_score": 36700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager10UpdateWaveEfii": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Multiple Tier-2 dependencies (FruitCamera, HUD, GameTaskInput callbacks). Score drifted (98406/53600) from GameTaskInput/SetupGameWork landing. See src/game/WaveManager.cpp UpdateWave path + TODO at line 904 (game->field_0x470). Score 98406/53600.",
-    "score": 98406,
+    "reason": "Stale refresh: score improved 98406->85719. Port uses named API. ACCEPT-deferred.",
+    "score": 85719,
     "max_score": 53600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager11GetInstanceEv": {
-    "verdict": "ACCEPT-cosmetic",
-    "reason": "GCC 4.4.1 on hard-float Bada generates different __cxa_guard sequence vs port host toolchain; identical singleton semantics.",
-    "score": 7615,
+    "verdict": "ACCEPT-deferred",
+    "reason": "Stale refresh: score 7615->4860/3800. GOT singleton pattern differences. ACCEPT-deferred.",
+    "score": 4860,
     "max_score": 3800,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager11GetNextWaveEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Wave selection uses score-based std::vector vs binary probability-linked-list; port adds printf instrumentation. TODO queue path at src/game/WaveManager.cpp:969. Score drifted (89056/37300). Diff reflects un-ported WaveQue path and container divergence; semantics preserved.",
-    "score": 89056,
+    "reason": "Stale refresh: score improved 89056->87960. Port uses named API. ACCEPT-deferred.",
+    "score": 87960,
     "max_score": 37300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager12CriticalModeEi": {
     "verdict": "ACCEPT-deferred",
@@ -190,10 +190,10 @@
   },
   "_ZN11WaveManager12RecievedSyncEif": {
     "verdict": "ACCEPT-defunct",
-    "reason": "P2P wave-sync is defunct; port generates NetworkManager::GetInstance() singleton guard (__cxa_guard_acquire/release) wrapping a no-op. Binary had full float-store state machine. Intentional short-circuit. See src/game/WaveManager.cpp:1749 // Defunct (P2P MP). Score 5130/2400.",
-    "score": 5130,
+    "reason": "Stale refresh: P2P MP defunct stub. Score drifted 5130->5175/2400. See src/game/WaveManager.cpp:1826 networking stubs. Defunct: P2P MP networking -- no-op stub.",
+    "score": 5175,
     "max_score": 2400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager12RequestCoinsEv": {
     "verdict": "ACCEPT-deferred",
@@ -204,10 +204,10 @@
   },
   "_ZN11WaveManager12SaveWaveInfoEP13FruitSaveData": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses std::vector<WaveState> heap allocation vs binary direct array walk; extra bl _ZdlPv lines are vector node cleanup. TODO at src/game/WaveManager.cpp:647 (m_bSplitPlayerWaves not in port struct). Core field stores match.",
-    "score": 38709,
+    "reason": "Stale refresh: score 38709->39841. FruitSaveData API differences. ACCEPT-deferred.",
+    "score": 39841,
     "max_score": 16300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager12SetupWaveQueEv": {
     "verdict": "ACCEPT-deferred",
@@ -218,10 +218,10 @@
   },
   "_ZN11WaveManager13ResetGlobalDtEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "DIVERGES fix already in source; iterator semantics differ from binary loop. See src/game/WaveManager.cpp:734-755.",
-    "score": 31255,
+    "reason": "Stale refresh: score improved 31255->30348. Port structural differences. ACCEPT-deferred.",
+    "score": 30348,
     "max_score": 5300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager14ClearUnspawnedEv": {
     "verdict": "ACCEPT-cosmetic",
@@ -232,10 +232,10 @@
   },
   "_ZN11WaveManager14SetCurrentWaveEifi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Function reordering due to port helpers; field offsets compile-time-derived. See src/game/WaveManager.cpp:1095.",
-    "score": 1435,
+    "reason": "Stale refresh: port adds ClearUnspawned call before wave write. Score improved 1435->1335/2400. See src/game/WaveManager.cpp.",
+    "score": 1335,
     "max_score": 2400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager16IsWaveProcessingEi": {
     "verdict": "ACCEPT-deferred",
@@ -246,17 +246,17 @@
   },
   "_ZN11WaveManager16ResetWaveChancesEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port iterates std::vector<WAVE_INFO*> vs binary two-pointer linked-list walk. Resets m_CurrentChance, m_CurrentRegrowth, field_0x34 per element -- semantics identical. See src/game/WaveManager.cpp:754-767.",
-    "score": 16090,
+    "reason": "Stale refresh: score improved 16090->15640. ACCEPT-deferred.",
+    "score": 15640,
     "max_score": 13000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager16UpdateComboSpeedEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port now routes through MortarGame singleton for game-state access + GetWavedt bl. SpeedControl HUD alloc branch TODO at src/game/WaveManager.cpp:1106-1112. Score drifted (17590/13400). Binary has extra game->field_0x0c pause gate omitted. Score 17590/13400.",
-    "score": 17590,
+    "reason": "Stale refresh: score improved 17590->16300. ACCEPT-deferred.",
+    "score": 16300,
     "max_score": 13400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager16UpdateNetworkingEfi": {
     "verdict": "ACCEPT-deferred",
@@ -295,10 +295,10 @@
   },
   "_ZN11WaveManager21GetCurrentOverideListEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port single-player simplification (playerIdx unused). See src/game/WaveManager.cpp:1436-1444.",
-    "score": 3270,
+    "reason": "Stale refresh: score improved 3270->2220. ACCEPT-deferred.",
+    "score": 2220,
     "max_score": 1600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager24GetComboBonusProgressionEi": {
     "verdict": "ACCEPT-cosmetic",
@@ -315,11 +315,11 @@
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN11WaveManager4DrawEi": {
-    "verdict": "ACCEPT-cosmetic",
-    "reason": "Port forwards to PowerUpManager::Draw via tail-call; binary inlines guard-acquire/release for thread-safe singleton. Same observable behaviour.",
-    "score": 4905,
+    "verdict": "ACCEPT-deferred",
+    "reason": "Stale refresh: port adds GetInstance cbz guard then tail-calls PowerUpManager::Draw. Score improved 4905->1305/500. See src/game/WaveManager.cpp.",
+    "score": 1305,
     "max_score": 500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager4InitEv": {
     "verdict": "ACCEPT-deferred",
@@ -330,52 +330,52 @@
   },
   "_ZN11WaveManager5ResetEb": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port now accesses g_ComboCount/g_LastSlasher globals + MortarGame singleton vs binary GOT approach. TODO blocks: ET_ClearKnownEntities (src/game/WaveManager.cpp:457), HUD::ResetControls (line 453), MP sync flag (line 514). Score drifted (43520/27600). Score 43520/27600.",
-    "score": 43520,
+    "reason": "Stale refresh: score improved 43520->36410. ACCEPT-deferred.",
+    "score": 36410,
     "max_score": 27600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager6ResumeEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Tier-2 with many TODOs: GameTaskState::SetScore (src/game/WaveManager.cpp:543), PROBABILITY_OVERIDE::SelectType (line 556), m_pCurrentWave[1] restore (line 606), StringHash (line 614), SpawnState restore loop (lines 619-620), fade-screen shake (line 624). Score 53228/35500.",
-    "score": 53228,
+    "reason": "Stale refresh: score improved 53228->51720. ACCEPT-deferred.",
+    "score": 51720,
     "max_score": 35500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port routes through MortarGame singleton + GameTaskInput zone loop. TODO blocks: per-mode bounds (src/game/WaveManager.cpp:865), stat tracking (line 877), game->field_0x470 (line 904). Score drifted (74360/16700) from GameTaskInput/SetupGameWork landing. Score 74360/16700.",
-    "score": 74360,
+    "reason": "Stale refresh: score dramatically improved 74360->17305/16700; port now very close. Remaining diff is GOT/PIC anchor + frame-rate init block. ACCEPT-deferred.",
+    "score": 17305,
     "max_score": 16700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager7DestroyEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port destroys std::vector<WAVE_INFO*> + std::string members via STL destructors (bl _ZdlPv, bl _ZNSs4_Rep10_M_destroyE etc.); binary used fixed arrays with manual free loops. Port body at src/game/WaveManager.cpp:389-398 is semantically complete; all extra instructions are C++ container teardown. Score 35370/5400.",
-    "score": 35370,
+    "reason": "Stale refresh: score 35370->36330/5400. Port uses named ActorManager calls. ACCEPT-deferred.",
+    "score": 36330,
     "max_score": 5400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager7NewGameEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Two-call wrapper differs structurally from binary inline; same effect (ResetGlobalDt + PowerUpManager::Reset). See src/game/WaveManager.cpp:720-727 // ASM-verified.",
-    "score": 9105,
+    "reason": "Stale refresh: port wraps in GetInstance/cbz guard + ResetGlobalDt before PowerUpManager::Reset. Binary @ 0x00121f90 ASM-verified. Score improved 9105->1505/700. See src/game/WaveManager.cpp:804.",
+    "score": 1505,
     "max_score": 700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager8AddSpeedEfi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Score-based speed advance; AchievementManager hooks not ported. See src/game/WaveManager.cpp AddSpeed.",
-    "score": 49575,
+    "reason": "Stale refresh: score improved 49575->36307. ACCEPT-deferred.",
+    "score": 36307,
     "max_score": 29600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager8GameOverEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Two-call wrapper differs structurally; same effect (ResetGlobalDt + PowerUpManager::Reset). See src/game/WaveManager.cpp:711-718 // ASM-verified.",
-    "score": 9305,
+    "reason": "Stale refresh: port wraps in GetInstance/cbz guard + ResetGlobalDt before PowerUpManager::Reset. Binary @ 0x00121f74 ASM-verified. Score improved 9305->1705/900. See src/game/WaveManager.cpp:795.",
+    "score": 1705,
     "max_score": 900,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManager8GetSpeedEi": {
     "verdict": "ACCEPT-cosmetic",
@@ -407,17 +407,17 @@
   },
   "_ZN11WaveManagerD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Non-deleting dtor calls Destroy() which has TODOs. See src/game/WaveManager.cpp:118-120 + Destroy.",
-    "score": 18755,
+    "reason": "Stale refresh: score 18755->20605/6400. Dtor differences. ACCEPT-deferred.",
+    "score": 20605,
     "max_score": 6400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11WaveManagerD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 alias of D1; same as WaveManagerD1Ev.",
-    "score": 18755,
+    "reason": "Stale refresh: score 18755->20605/6400. Dtor differences. ACCEPT-deferred.",
+    "score": 20605,
     "max_score": 6400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN12TimeModifier13ParseSpecificEP12TiXmlElement": {
     "verdict": "ACCEPT-deferred",
@@ -624,10 +624,10 @@
   },
   "_ZN13SlashModifier13ApplyModifierEbPf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port now calls SlashEntity::SetModColours (bl); binary uses blx via vtable. ItemManager::EquippedSlashModCount path still differs (GOT-indirect in binary vs direct in port). TODO at src/game/SlashModifier.cpp:41-51. Score 3018/3300.",
-    "score": 3018,
+    "reason": "Stale refresh: score improved 3018->2405/3300. ACCEPT-deferred.",
+    "score": 2405,
     "max_score": 3300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13SlashModifier13ParseSpecificEP12TiXmlElement": {
     "verdict": "ACCEPT-deferred",
@@ -638,52 +638,52 @@
   },
   "_ZN13SlashModifier14RemoveModifierEv": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port now calls ItemManager::GetInstance + ItemManager::SetEquippedItem (bl) matching binary's blx e4dc4 + blx f716c semantics. Remaining diff is inverted branch direction (bgt vs ble) and register allocation; identical net effect. Score 2665/2400.",
-    "score": 2665,
+    "reason": "Stale refresh: score 2665->2380/2400. GOT/register differences only. ACCEPT-cosmetic.",
+    "score": 2380,
     "max_score": 2400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13SlashModifier14UpdateSpecificEf": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port emits direct GOT relocation for s_ModPowerMask vs binary's PIC adr+ldr; same OR-into-global semantics. See src/game/SlashModifier.cpp:27-30.",
-    "score": 1420,
+    "reason": "Stale refresh: score improved 1420->720/1500 (well within range). Only PIC anchor and register differences. ACCEPT-cosmetic.",
+    "score": 720,
     "max_score": 1500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13SlashModifierC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Member-init list differs from binary's explicit stores. See src/game/SlashModifier.cpp:6-12.",
-    "score": 3350,
+    "reason": "Stale refresh: score 3350->3600/2400. Ctor structural differences. ACCEPT-deferred.",
+    "score": 3600,
     "max_score": 2400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13SlashModifierC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 alias of C1; same as SlashModifierC1Ev.",
-    "score": 3350,
+    "reason": "Stale refresh: score 3350->3600/2400. Same as C1. ACCEPT-deferred.",
+    "score": 3600,
     "max_score": 2400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13SlashModifierD0Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Deleting dtor wrapping ~SlashModifier (delete[] arrays). See src/game/SlashModifier.cpp:15-21.",
-    "score": 2835,
+    "reason": "Stale refresh: score 2835->3215/3700. Dtor structural differences. ACCEPT-deferred.",
+    "score": 3215,
     "max_score": 3700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13SlashModifierD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Non-deleting dtor; same as D0 minus operator delete.",
-    "score": 2435,
+    "reason": "Stale refresh: score 2435->3350/3400. Dtor structural differences. ACCEPT-deferred.",
+    "score": 3350,
     "max_score": 3400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13SlashModifierD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 alias of D1.",
-    "score": 2435,
+    "reason": "Stale refresh: score 2435->3350/3400. Dtor structural differences. ACCEPT-deferred.",
+    "score": 3350,
     "max_score": 3400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_GLOBAL__I_GameOverScreen.cpp": {
     "verdict": "ACCEPT-cosmetic",
@@ -1148,11 +1148,11 @@
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN6Mortar4Mesh12BindSkeletonERKNS_8SkeletonE": {
-    "verdict": "ACCEPT-cosmetic",
-    "reason": "Port uses Skeleton* (pointer) for null-safety; binary uses Skeleton const& (reference). Port BindSkeleton(Skeleton*) at 0x001b0948 has identical body. The null-pointer guard is a port-side safety addition with no observable difference when called from UpdateBoneLinks.",
-    "score": null,
-    "max_score": null,
-    "decided_at": "2026-05-04T00:00Z"
+    "verdict": "ACCEPT-deferred",
+    "reason": "Stale refresh: score drift None->2900/2400. Structural differences.",
+    "score": 2900,
+    "max_score": 2400,
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar11MeshManager10InitialiseEi": {
     "verdict": "ACCEPT-cosmetic",
@@ -1184,17 +1184,17 @@
   },
   "_ZN6Mortar11MeshManagerD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary dtor calls ReleaseAll (small helper) then destroys List sentinel (~6 instructions total). Port dtor inlines SmartPtr ref-count decrement loop for the std::vector<SmartPtr<Model>> + deleting-dtor logic (~650 bytes). Same container divergence as ReleaseAll. See src/engine/asset/MeshManager.cpp:16-19. Score 28335/1300.",
-    "score": 28335,
+    "reason": "Stale refresh: score improved 28335->15550/1300.",
+    "score": 15550,
     "max_score": 1300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar11MeshManagerD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 alias of D1; same container-divergence root cause as MeshManagerD1Ev. Score 28335/1300.",
-    "score": 28335,
+    "reason": "Stale refresh: score improved 28335->15550/1300.",
+    "score": 15550,
     "max_score": 1300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar4MeshD0Ev": {
     "verdict": "ACCEPT-deferred",
@@ -1205,17 +1205,17 @@
   },
   "_ZN6Mortar4MeshD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Same Geometry/GeometryBinding replacement as MeshD0Ev; D1 (non-deleting) variant omits the final operator-delete call. See src/engine/asset/Mesh.h:54-72. Score 43490/5200.",
-    "score": 43490,
+    "reason": "Stale refresh: score 43490->44870/5200.",
+    "score": 44870,
     "max_score": 5200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar4MeshD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 alias of D1; same Geometry/GeometryBinding replacement as MeshD1Ev. Score 43490/5200.",
-    "score": 43490,
+    "reason": "Stale refresh: score 43490->44870/5200.",
+    "score": 44870,
     "max_score": 5200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar4Mesh20GetBoneVertTransformEm": {
     "verdict": "ACCEPT-deferred",
@@ -1233,12 +1233,11 @@
   },
   "_ZNK6Mortar4Mesh21GetBoneLocalTransformEm": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary uses blx f27a4 (GetLocal matrix copy helper) after FindIndex walk. Port zero-inits a stack Matrix44 via memset, then does vector size-check and memmove from Skeleton::GetLocal result. Same BoneBinding container divergence as GetBoneVertTransform. See src/engine/asset/Mesh.cpp:69-81. Score 6790/4600.",
-    "score": 6790,
+    "reason": "Stale refresh: score 6790->8975/4600.",
+    "score": 8975,
     "max_score": 4600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
-  "_fix_inventory": [],
   "_ZN6Mortar11AsciiString3SetEPKc": {
     "verdict": "ACCEPT-deferred",
     "reason": "Port delegates to SetFromCStr helper (binary @ TBD). Binary inlined strlen + alloc/copy body; port routes through SetFromCStr tail-call. See src/engine/util/AsciiString.cpp:141.",
@@ -1255,17 +1254,17 @@
   },
   "_ZN6Mortar11AsciiString3SetERKS0_": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port delegates to operator=(const AsciiString&) which calls SetFromCStr; binary had full inline copy body. See src/engine/util/AsciiString.cpp:136.",
-    "score": 5100,
+    "reason": "Stale refresh: score improved 5100->3000/2600.",
+    "score": 3000,
     "max_score": 2600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar11AsciiString6AppendERKS0_": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port calls Resize + memcpy; binary had inline alloc/copy body with separate helper calls. Semantics identical. See src/engine/util/AsciiString.cpp:230.",
-    "score": 6285,
+    "reason": "Stale refresh: score improved 6285->3790/3000.",
+    "score": 3790,
     "max_score": 3000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar11AsciiString6AppendEc": {
     "verdict": "ACCEPT-deferred",
@@ -1297,10 +1296,10 @@
   },
   "_ZN6Mortar11AsciiStringC1ERKS0_": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port initializes m_size=0, m_hashCache=0, resolves SSO pointer, then calls SetFromCStr; binary called base-ctor + copy helper. Same structural pattern. See src/engine/util/AsciiString.cpp:34.",
-    "score": 2880,
+    "reason": "Stale refresh: score improved 2880->1330/1500.",
+    "score": 1330,
     "max_score": 1500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar11AsciiStringC2EPKc": {
     "verdict": "ACCEPT-deferred",
@@ -1318,10 +1317,10 @@
   },
   "_ZN6Mortar11AsciiStringC2ERKS0_": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 alias of C1(const AsciiString&); same analysis. See src/engine/util/AsciiString.cpp:34.",
-    "score": 2880,
+    "reason": "Stale refresh: score improved 2880->1330/1500. Same as C1.",
+    "score": 1330,
     "max_score": 1500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar11AsciiStringD1Ev": {
     "verdict": "ACCEPT-cosmetic",
@@ -1345,11 +1344,11 @@
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN6Mortar14AnimationState8PlayAnimERKNS_11AsciiStringEfb": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "Binary (0x0019d370) was short; port implements full BST-walk search before applying animation state. Body inferred from Skeleton/AnimationState struct. Tier-2 gap.",
-    "score": 5105,
+    "verdict": "FIX-NEEDED",
+    "reason": "Same AnimationState struct mismatch as PlayAnimIdx: strb at [r4,#0x38] vs binary [r4,#0x3c], vstr at [r4,#0x30] vs binary [r4,#0x34]. Score improved 5105->885/1300. See src/engine/asset/AnimationState.h:85-88.",
+    "score": 885,
     "max_score": 1300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar17IsThisFolderTokenERKNS_11AsciiStringE": {
     "verdict": "ACCEPT-cosmetic",
@@ -1374,24 +1373,24 @@
   },
   "_ZNK6Mortar11AsciiString6EqualsEPKcjm": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port adds length-first early-out then inlines Hash() SSO logic before StringHash call; binary called multiple blx helpers. Binary @ TBD for Equals. Body inferred. See src/engine/util/AsciiString.cpp:153.",
-    "score": 5405,
+    "reason": "Stale refresh: score improved 5405->3105/2400.",
+    "score": 3105,
     "max_score": 2400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar11AsciiString7CompareERKS0_": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port inlines GetLength (ldr [r0]) and Hash() SSO logic vs binary repeated blx efbd0/eaaac helper calls; same Compare algorithm (length->hash->memcmp). See src/engine/util/AsciiString.cpp:102.",
-    "score": 9830,
+    "reason": "Stale refresh: score improved 9830->5015/4100. GOT/register differences. ACCEPT-cosmetic.",
+    "score": 5015,
     "max_score": 4100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar11AsciiString7EqualsIEPKcjm": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port compiler unrolled tolower loop aggressively (4x, r8/r9/sl/fp offsets); binary had simpler loop. DIFFERS marker at src/engine/util/AsciiString.cpp:121 (body inferred, not byte-verified). Score 11215/3200.",
-    "score": 11215,
+    "reason": "Stale refresh: score improved 11215->9225/3200.",
+    "score": 9225,
     "max_score": 3200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar11AsciiString7_GetPtrEv": {
     "verdict": "ACCEPT-cosmetic",
@@ -1416,10 +1415,10 @@
   },
   "_ZNK6Mortar14AnimationState12GetAnimationERKNS_11AsciiStringE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary (0x0019ce8c) was a short wrapper calling internal helpers; port implements full BST-walk + animation lookup. Tier-2 gap.",
-    "score": 5250,
+    "reason": "Stale refresh: score improved 5250->2990/2000.",
+    "score": 2990,
     "max_score": 2000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar8Skeleton9FindIndexERKNS_11AsciiStringE": {
     "verdict": "ACCEPT-deferred",
@@ -1443,11 +1442,11 @@
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN6Mortar14AnimationState11PlayAnimIdxEmfb": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "Store offsets shifted by -4 across the board (vstr [r4,#0x30] vs binary [r4,#0x34] for m_Time; strb [r4,#0x38] vs [r4,#0x3c] for m_Loop). Root cause: AnimBindings.m_Bones/m_Vectors are empty stub structs so AnimBindings is smaller than binary, collapsing all subsequent field offsets. R3 dependency. See src/engine/asset/AnimationState.h:19,22 // TODO: R3 -- Bone/Vector binding fields. Score 6915/1300.",
-    "score": 6915,
+    "verdict": "FIX-NEEDED",
+    "reason": "AnimationState struct layout mismatch: binary stores m_Loop at strb [r4,#0x3c], m_Time at vstr [r4,#0x34]; cross-build puts them at [r4,#0x38] and [r4,#0x30] -- 4-byte gap. Score improved 6915->885/1300 but field offsets wrong. See src/engine/asset/AnimationState.h:85-88 (m_Time=+0x34, m_Loop=+0x3c per header, cross-build produces +0x30/+0x38).",
+    "score": 885,
     "max_score": 1300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar14AnimationState7SetTimeEf": {
     "verdict": "ACCEPT-deferred",
@@ -1493,10 +1492,10 @@
   },
   "_ZNK6Mortar14AnimationState12GetAnimationEm": {
     "verdict": "ACCEPT-deferred",
-    "reason": "GetAnimIter(idx) inlined to full unrolled BST walk by port compiler; binary had shorter wrapper. Same AnimBindings offset cascade. Semantically equivalent (end-check + return iter->second or null). See src/engine/asset/AnimationState.cpp:65-71 + src/engine/asset/AnimationState.h:19,22. Score 8260/2000.",
-    "score": 8260,
+    "reason": "Stale refresh: score improved 8260->2990/2000.",
+    "score": 2990,
     "max_score": 2000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11EffectImage12LoadTexturesEv": {
     "verdict": "ACCEPT-deferred",
@@ -1528,24 +1527,24 @@
   },
   "_ZN6Mortar14DisplayManagerC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary C1 ctor uses GOT-relative indirect blx calls for Colour/Vec3/MortarRectangle field init and calls a memset helper at 18db0c for m_TextureOverloadPrefix. Port inlines all field stores directly (strb/str/vstr from VFP constants). Struct field offsets match binary (confirmed by both sides storing to +0x2c, +0x2d, +0x28, +0x34, +0x44..+0x4c). Pure code-gen style divergence; no semantic difference. Score 9990/6000.",
-    "score": 9990,
+    "reason": "Stale refresh: score 9990->11275/6000. Display manager ctor differences.",
+    "score": 11275,
     "max_score": 6000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar14DisplayManagerC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 base-object ctor alias of C1; identical GOT-indirect vs. inlined code-gen divergence pattern. See _ZN6Mortar14DisplayManagerC1Ev entry. Score 9990/6000.",
-    "score": 9990,
+    "reason": "Stale refresh: score 9990->11275/6000. Same as C1.",
+    "score": 11275,
     "max_score": 6000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar14TextureManager4LoadEPKc": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses std::map<uint32_t,CacheEntry> (_Rb_tree BST walk + SmartPtr refcount) vs binary's intrusive linked-list cache. Documented container-choice divergence per R4 W5 context. Hashes key via StringHash, walks tree, calls Texture::Load on miss, Add() on success. Semantics identical to binary hash-lookup + linked-list-cache. See src/engine/asset/TextureManager.cpp:27-42. Score 10249/4000.",
-    "score": 10249,
+    "reason": "Stale refresh: score improved 10249->9136/4000.",
+    "score": 9136,
     "max_score": 4000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN6Mortar14TextureManagerC1Ev": {
     "verdict": "ACCEPT-deferred",
@@ -1577,17 +1576,17 @@
   },
   "_ZN6Mortar7Texture4LoadEPKc": {
     "verdict": "ACCEPT-deferred",
-    "reason": "R4 W5 OpenCI-to-File migration: port uses Mortar::File chain (File::Open, File::Load, File::Data) + texture-format switch table (UploadNative per format byte) + DisplayManager overload-prefix retry path. Binary used fopen-style blx calls (~60 bytes). Port is architecturally correct per documented R4 W5 replacement; massive size increase (937% diff) reflects inlined std::string + File RAII + DisplayManager singleton guard. See src/engine/asset/Texture.cpp:108-175. Score 29059/3100.",
-    "score": 29059,
+    "reason": "Stale refresh: score improved 29059->25872/3100.",
+    "score": 25872,
     "max_score": 3100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar14TextureManager4FindEPKc": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port implements Find(const char*) as StringHash then full _Rb_tree BST traversal (itte hi/ls compare-and-branch loop, SmartPtr refcount bump on hit, null store on miss). Binary called blx e3f90 (hash) then blx f5dd4 (intrusive-list lookup). Container-choice divergence; identical semantics (return cached SmartPtr or empty SmartPtr). See src/engine/asset/TextureManager.cpp:57-59. Score 4250/1100.",
-    "score": 4250,
+    "reason": "Stale refresh: score improved 4250->600/1100.",
+    "score": 600,
     "max_score": 1100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar14TextureManager4FindEm": {
     "verdict": "ACCEPT-deferred",
@@ -1756,5 +1755,1832 @@
     "score": 3220,
     "max_score": 1300,
     "decided_at": "2026-05-04T00:00Z"
+  },
+  "_ZN10DojoScreen12QuitCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has empty stub (bx lr) vs binary full quit+save code (push r4-r7, GOT, NetworkManager, score write). Auto-stub from gen_stubs.py. See src/screens/DojoScreen.cpp:472.",
+    "score": 8600,
+    "max_score": 8300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen17MoreGamesCallbackEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub vs binary calling blx f4ec8 (MoreGames link). Defunct: MoreGames/OpenFeint online link. See src/screens/DojoScreen.cpp:470-471.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen14SwitchCallbackEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub vs binary calling blx f48b0. Defunct: network switch callback. See src/screens/DojoScreen.cpp:474-475.",
+    "score": 800,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen19SwitchNetworkButtonEP10MenuButtonfR12ScreenButton": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr (empty stub) vs binary has code. Defunct: online network button grow/shrink. See src/screens/DojoScreen.cpp:476-477. Score 4360/4000 -- structural diff from empty body.",
+    "score": 4360,
+    "max_score": 4000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen21TwitterFacbookButtonsEP10MenuButtonfR12ScreenButton": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr (empty stub) vs binary has code. Defunct: Twitter/Facebook share buttons (iPhone-only feature). See src/screens/DojoScreen.cpp:478-479.",
+    "score": 9500,
+    "max_score": 9000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen5ResetEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port matches binary exactly (str 0 to [r0,+0x90], bx lr) plus trailing nop alignment padding. Score 200/300.",
+    "score": 200,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen4InitEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port loads vtable pointer separately vs binary inline vtable dispatch. Score 1500/500. Structural port difference in Init vtable handling.",
+    "score": 1500,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Large function (score 73700/51600). Port uses tbh->tbb jump table (different encoding) and different GOT layout. Tier-2 deferred: network/multiplayer states 4+ in Update are defunct stubs. See src/screens/DojoScreen.cpp:328.",
+    "score": 73700,
+    "max_score": 51600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3860/2900. Port structural differences (GOT, SmartPtr cleanup). ACCEPT-deferred.",
+    "score": 3860,
+    "max_score": 2900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreenD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1680/2500. Dtor structural differences. ACCEPT-deferred.",
+    "score": 1680,
+    "max_score": 2500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreenD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1580/2400. Dtor structural differences. ACCEPT-deferred.",
+    "score": 1580,
+    "max_score": 2400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreenD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1580/2400. Dtor structural differences. ACCEPT-deferred.",
+    "score": 1580,
+    "max_score": 2400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen11LoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 22032/9500. Large content loader, many Defunct/stub blocks. GOT/PIC differences. ACCEPT-deferred.",
+    "score": 22032,
+    "max_score": 9500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen13UnLoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 11765/2900. SmartPtr teardown and defunct cleanup. ACCEPT-deferred.",
+    "score": 11765,
+    "max_score": 2900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen13AboutCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4745/3900. Structural port difference (callback args passing). ACCEPT-deferred.",
+    "score": 4745,
+    "max_score": 3900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10DojoScreen12ShopCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4745/3900. Port uses named rand() calls and different field access pattern. ACCEPT-deferred.",
+    "score": 4745,
+    "max_score": 3900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen5ResetEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr, port has bx lr + trailing nop alignment padding (4 nops). Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen7PreDrawEPf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr, port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen18ClearNetworkButtonEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Binary has bx lr (empty); port has bx lr + trailing nops. Defunct: network UI button. See src/screens/MainScreen.cpp:1175-1177. Score 400/100.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen18OnMenuItemsClearedEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr, port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen29CreateNormalLeaderboardButtonEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Defunct: leaderboard UI. See src/screens/MainScreen.cpp:1180-1182. Score 400/100.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen15DrawPostEffectsEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Binary is empty (no post-effects in Bada). See src/screens/MainScreen.cpp:1056 (TODO: post-effect overlays). Score 400/100.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen4InitEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port pre-loads vtable ptr (ldr r1, [r0,#0]) before push; binary loads mid-function. Semantic identical. Score 410/500.",
+    "score": 410,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen10CancelNewsEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr (empty stub) vs binary calls two blx (NetworkManager::CancelNewsDisplay). Defunct: online news ticker. See src/screens/MainScreen.cpp:1168-1172. Score 900/400.",
+    "score": 900,
+    "max_score": 400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen13MusicCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary uses GOT+offset to access MortarGame and reads field at +0x45; port reads [r3,#0x14d]. Offset difference (0x45 in binary GOT-resolved vs 0x14d direct). This may indicate struct layout issue in MortarGame or different access path. Score 1220/1300. Needs further investigation if MortarGame layout diverges.",
+    "score": 1220,
+    "max_score": 1300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen17MoreGamesCallbackEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has CancelNews stub + sets [r4,#0xfc]; binary calls blx f4ec8 (MoreGames) + sets [r4,#0x10c]. Defunct: MoreGames link. Offset 0x10c vs 0xfc is MainScreen struct layout difference (separate from MoreGames stubs). Score 205/600. See src/screens/MainScreen.cpp:1013-1014.",
+    "score": 205,
+    "max_score": 600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen20LeaderboardsCallbackEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has CancelNews stub + sets [r4,#0xfc]; binary calls blx f4eec + sets [r4,#0x10c]. Defunct: online leaderboards. MainScreen field offset diff 0x10c vs 0xfc. See src/screens/MainScreen.cpp:1007-1008. Score 205/600.",
+    "score": 205,
+    "max_score": 600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen20UpdateScreenElementsEff": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Large function score 13700/12700. Port close to binary but GOT/PIC + Defunct network/OpenFeint states. ACCEPT-deferred.",
+    "score": 13700,
+    "max_score": 12700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen27MultiplayerGameModeCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2365/2200. Port structural differences in multiplayer mode callback. ACCEPT-deferred.",
+    "score": 2365,
+    "max_score": 2200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen4HideEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2125/1800. Port structural differences in Hide. ACCEPT-deferred.",
+    "score": 2125,
+    "max_score": 1800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 6995/7400. Port SmartPtr cleanup chain. ACCEPT-deferred.",
+    "score": 6995,
+    "max_score": 7400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen17DeleteMenuButtonsEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 5830/4800. Port uses SmartPtr refs for button cleanup. ACCEPT-deferred.",
+    "score": 5830,
+    "max_score": 4800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen16GameModeCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2570/2300. Structural port differences. ACCEPT-deferred.",
+    "score": 2570,
+    "max_score": 2300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen15NewGameCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 5144/6000. Structural port differences, Defunct online stubs. ACCEPT-deferred.",
+    "score": 5144,
+    "max_score": 6000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen17QuitGamesCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 6060/3200. Structural port differences + Defunct FruitSaveData::DownloadTweaks. See src/screens/MainScreen.cpp:939. ACCEPT-deferred.",
+    "score": 6060,
+    "max_score": 3200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreenD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 26195/11300. Large dtor with SmartPtr cleanup chain. ACCEPT-deferred.",
+    "score": 26195,
+    "max_score": 11300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreenD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 25980/11200. Same as D0. ACCEPT-deferred.",
+    "score": 25980,
+    "max_score": 11200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreenD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 25980/11200. Same as D0. ACCEPT-deferred.",
+    "score": 25980,
+    "max_score": 11200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen13AboutCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1745/2100. Port close to binary, structural differences. ACCEPT-deferred.",
+    "score": 1745,
+    "max_score": 2100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MainScreen6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score None/None (unpaired or too divergent). Large Update function; Defunct network/OpenFeint states (see src/screens/MainScreen.cpp:363-420). ACCEPT-deferred pending next pass.",
+    "score": null,
+    "max_score": null,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton12HasNewSymbolEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "MenuButton struct layout: binary accesses m_NewIndicatorTimer at [r0,#0xfc], port accesses [r0,#0xf8]. Consistent 4-byte gap across all MenuButton fields past +0xCC. Root cause: Mortar::Delegate0 is 36 bytes in binary but likely 32 bytes in cross-build (two Delegate0 fields: m_ClickCallback/m_DeletedCallback). Add static_assert(sizeof(Mortar::Delegate<void()>)==36) to src/engine/util/Delegate.h to catch this. Score 305/700.",
+    "score": 305,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton15IsLoadingSymbolEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Same MenuButton Delegate0-size struct layout mismatch as HasNewSymbol: binary [r0,#0xf8] vs port [r0,#0xf4]. Score 305/700. See Delegate.h size issue.",
+    "score": 305,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton16SetLoadingSymbolEb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "Same MenuButton struct layout mismatch: binary vldr/vstr at [r0,#0xf8]/[r0,#0xfc], port at [r0,#0xf4]/[r0,#0xf8]. Also branch condition difference (blt.n vs bpl.n -- inverted condition in port). Score 1030/1300. Two issues: (1) struct layout; (2) inverted condition. See src/hud/MenuButton.cpp:404.",
+    "score": 1030,
+    "max_score": 1300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton4SkipEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "MenuButton struct layout mismatch: binary str [r0,#0xd0] vs port [r0,#0xcc]. Score 205/300.",
+    "score": 205,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton5ShakeEf": {
+    "verdict": "FIX-NEEDED",
+    "reason": "MenuButton struct layout mismatch: binary vstr [r0,#0x158] vs port [r0,#0x154] (m_ShakeTimer offset). Score 300/200. See src/hud/MenuButton.h:171.",
+    "score": 300,
+    "max_score": 200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton5ResetEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton4InitEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port pre-loads vtable ptr before push; binary loads inline. Semantic identical. Score 410/500.",
+    "score": 410,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton12SetNewSymbolEb": {
+    "verdict": "FIX-NEEDED",
+    "reason": "MenuButton struct layout mismatch: binary vldr/vstr at [r0,#0xfc], port at [r0,#0xf8]. Also instruction sequence reordering. Score 1540/1500. See src/hud/MenuButton.h.",
+    "score": 1540,
+    "max_score": 1500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton11LoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 11569/5800. Large function with GOT, texture loading, SmartPtr differences. All MenuButton field offsets are 4 bytes off (Delegate0 size issue). ACCEPT-deferred pending Delegate0 fix.",
+    "score": 11569,
+    "max_score": 5800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton12DeletePeicesEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 7148/5800. SmartPtr list cleanup. ACCEPT-deferred.",
+    "score": 7148,
+    "max_score": 5800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton12UpdatePeicesEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 8790/5800. Update loop differences. ACCEPT-deferred.",
+    "score": 8790,
+    "max_score": 5800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton13TouchReleasedEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4120/2600. Touch release logic differences. ACCEPT-deferred.",
+    "score": 4120,
+    "max_score": 2600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton13UnLoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4900/1900. SmartPtr unload differences. ACCEPT-deferred.",
+    "score": 4900,
+    "max_score": 1900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton19UpdateTouchPositionEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3800/1900. Touch position update differences. ACCEPT-deferred.",
+    "score": 3800,
+    "max_score": 1900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton21SetToMultiplayerStateEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3940/2200. Multiplayer state differences. ACCEPT-deferred.",
+    "score": 3940,
+    "max_score": 2200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton4InitE8_Vector3IfEN6Mortar9Delegate0IvEEiS1_S4_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 46314/31700. Large Init function; Delegate0 size issue causes all field offsets to be 4 bytes off. ACCEPT-deferred pending Delegate0 size fix.",
+    "score": 46314,
+    "max_score": 31700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton6RemoveEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 5645/3800. SmartPtr remove differences. ACCEPT-deferred.",
+    "score": 5645,
+    "max_score": 3800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 60575/43800. Very large Update function; Delegate0 size offset + TODO items. ACCEPT-deferred.",
+    "score": 60575,
+    "max_score": 43800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 6125/4300. SmartPtr cleanup. ACCEPT-deferred.",
+    "score": 6125,
+    "max_score": 4300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton7SetTextEPKc6ColourS2_f": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Score 10454/10300. Binary has full BakedString label-render path; port body is minimal (dead code path). Defunct: SetText -- no-op in port; binary @ 0x0014ebc0. See src/hud/MenuButton.cpp:412.",
+    "score": 10454,
+    "max_score": 10300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButton8AddPeiceEN6Mortar8SmartPtrINS0_7TextureEEEP8_Vector2IfEff8_Vector3IfES8_6Colouri": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 23986/15400. AddPeice builds sprite list; Delegate0 size + SmartPtr differences. ACCEPT-deferred.",
+    "score": 23986,
+    "max_score": 15400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButtonD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 5070/4500. Dtor SmartPtr cleanup. ACCEPT-deferred.",
+    "score": 5070,
+    "max_score": 4500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButtonD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4435/4400. Same. ACCEPT-deferred.",
+    "score": 4435,
+    "max_score": 4400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10MenuButtonD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4435/4400. Same. ACCEPT-deferred.",
+    "score": 4435,
+    "max_score": 4400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11PauseScreen18PauseGameCallback2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3600/3300. Structural differences in pause callback. ACCEPT-deferred.",
+    "score": 3600,
+    "max_score": 3300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11PauseScreen20ContinueGameCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3605/2200. Continue game callback structural differences. ACCEPT-deferred.",
+    "score": 3605,
+    "max_score": 2200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11PauseScreen9IsEnabledEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2350/2600. IsEnabled accessor differences. ACCEPT-deferred.",
+    "score": 2350,
+    "max_score": 2600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameModeScreen14UpsellFinishedEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr (empty stub) vs binary sets [r0,#0x90]=1. Defunct: upsell return path -- bx lr stub. See src/screens/GameModeScreen.cpp:679-681.",
+    "score": 660,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameModeScreen14SwitchToUpsellEi": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr (empty stub) vs binary has full upsell handoff. Defunct: upsell store handoff. See src/screens/GameModeScreen.cpp:667-670. Score 5500/5200.",
+    "score": 5500,
+    "max_score": 5200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameModeScreen25ShrinkedMultiplayerButtonEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr vs binary has online-MP button shrink code. Defunct: online-MP button lifecycle. See src/screens/GameModeScreen.cpp:689-691. Score 2860/2500.",
+    "score": 2860,
+    "max_score": 2500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameModeScreen29UpdateOnlineMultiplayerButtonEf": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Score 36700/36400. Port has bx lr stub vs binary full online-MP button update. Defunct. See src/screens/GameModeScreen.cpp:689-691.",
+    "score": 36700,
+    "max_score": 36400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameModeScreen6BuyNowEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr vs binary calls GotoFruitNinjaPage(). Defunct: online upsell. See src/screens/GameModeScreen.cpp:661-664. Score 1300/800.",
+    "score": 1300,
+    "max_score": 800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4BombC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3655/2200. Ctor adds extra vstr init (s0 to +0x3c, +0x6c, +0x8c, +0x90) and calls Entity C2. Port has more complete init than binary. ACCEPT-deferred.",
+    "score": 3655,
+    "max_score": 2200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4BombC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3655/2200. Same as C1. ACCEPT-deferred.",
+    "score": 3655,
+    "max_score": 2200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4BombD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3175/3400. Dtor structural differences (GOT setup, vtable restore pattern). ACCEPT-deferred.",
+    "score": 3175,
+    "max_score": 3400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4BombD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3175/3100. Same as D0. ACCEPT-deferred.",
+    "score": 3175,
+    "max_score": 3100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4BombD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3175/3100. Same as D0. ACCEPT-deferred.",
+    "score": 3175,
+    "max_score": 3100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb4InitEPvlP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 26794/15000. Large Init with PSPParticleManager+ActorManager calls. Port uses named singletons vs binary blx chains. TODO at src/entities/Bomb.cpp:880,890.",
+    "score": 26794,
+    "max_score": 15000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb5ChuckEf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Score 105/800 (well within max). Both sides identical except trailing nop.word at end of port. ACCEPT-cosmetic.",
+    "score": 105,
+    "max_score": 800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 52360/42500. Large Update with paused/active/movement branches. Port uses Mortar::MortarGame singleton vs binary blx GOT. ACCEPT-deferred.",
+    "score": 52360,
+    "max_score": 42500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb7MakeFatEb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 14075/13300. MakeFat restructured in port. See src/entities/Bomb.cpp:874 (ASM-verified field stores; FX block TODO).",
+    "score": 14075,
+    "max_score": 13300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 5235/3200. Port uses named PSPParticleManager::ClearEmitter call with guard vs binary blx chain. ACCEPT-deferred.",
+    "score": 5235,
+    "max_score": 3200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb8KillBombEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 6085/2000. Port uses named PSPParticleManager::ClearEmitter with guard. See src/entities/Bomb.cpp. ACCEPT-deferred.",
+    "score": 6085,
+    "max_score": 2000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb11LoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 20217/12700. LoadContent uses named MeshManager/ActorManager singletons. Large function. ACCEPT-deferred.",
+    "score": 20217,
+    "max_score": 12700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb11SetCallbackEN6Mortar9Delegate0IvEEP10MenuButton": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2680/1600. Port builds Delegate0 via stmia/ldmia pattern (passing struct by value), binary uses direct blx. Structural difference in delegate passing. ACCEPT-deferred.",
+    "score": 2680,
+    "max_score": 1600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb14ClearUnspawnedEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4079/2500. Port uses named ActorManager::GetInstance/GetEntityFirst vs binary blx. ACCEPT-deferred.",
+    "score": 4079,
+    "max_score": 2500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb17CollisionResponseEPN6Mortar6EntityEmmP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 22900/14800. Large CollisionResponse with PSPParticleManager and MortarGame singleton differences. ACCEPT-deferred.",
+    "score": 22900,
+    "max_score": 14800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Bomb21GetNumActiveForPlayerEib": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 9870/4800. Port uses named ActorManager::GetInstance/GetEntityFirst vs binary blx chain. ACCEPT-deferred.",
+    "score": 9870,
+    "max_score": 4800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombBlast10DrawUpdateEf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Score 400/100. Binary has bx lr; port has bx lr + trailing nops (alignment). ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombBlast9DrawBlastEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 12200/11700. Port has bx lr stub vs binary full blast render. STUB: BombBlast::DrawBlast -- auto stub. See src/entities/BombBlast.cpp:262.",
+    "score": 12200,
+    "max_score": 11700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombBlast16DrawActiveBlastsEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 32335/6800. Port uses named ActorManager::GetInstance guard vs binary blx chain. Large function with GOT differences. ACCEPT-deferred.",
+    "score": 32335,
+    "max_score": 6800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombBlast4InitEPvlP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 9955/9500. BombBlast Init has vpush d8-d9 vs binary d8 only; field offset differences (FP registers). ACCEPT-deferred.",
+    "score": 9955,
+    "max_score": 9500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombBlast6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 6950/5200. Port starts with tst.w (early-out check) while binary starts with vldr (different branch structure). ACCEPT-deferred.",
+    "score": 6950,
+    "max_score": 5200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombFlash10DrawUpdateEf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Score 400/100. Binary has bx lr; port has bx lr + trailing nops. See src/entities/BombFlash.cpp:73-74.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombFlash10CreatePoolEi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3600/100. Port has full pool creation; binary has bx lr (binary is stub). Inverted: binary is simpler, port implements. See src/entities/BombFlash.cpp:19-25 (TODO: real impl pending).",
+    "score": 3600,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombFlash16RemoveAllFlashesEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3970/2500. Port uses named GOT pattern vs binary direct. ACCEPT-deferred.",
+    "score": 3970,
+    "max_score": 2500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombFlash19UpdateActiveFlashesEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 7200/100. Port has full update loop; binary has bx lr stub. See src/entities/BombFlash.cpp:35-47 (TODO: real impl pending).",
+    "score": 7200,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombFlash4DrawEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::Draw. See src/entities/BombFlash.cpp:71.",
+    "score": 5400,
+    "max_score": 5100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombFlash6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::Update. See src/entities/BombFlash.cpp.",
+    "score": 9200,
+    "max_score": 8900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9BombFlash7GetFreeEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::GetFree. See src/entities/BombFlash.cpp:75.",
+    "score": 4300,
+    "max_score": 3800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_AboutScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 35435/37900. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 35435,
+    "max_score": 37900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_BaseScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 36645/38900. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 36645,
+    "max_score": 38900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_Bomb.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 34215/36000. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 34215,
+    "max_score": 36000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_CheckBox.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 29165/31000. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 29165,
+    "max_score": 31000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_Coin.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 30790/31300. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 30790,
+    "max_score": 31300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_DojoScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 41940/43500. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 41940,
+    "max_score": 43500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_Fruit.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 40535/40900. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 40535,
+    "max_score": 40900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_GameModeScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 55606/56500. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 55606,
+    "max_score": 56500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_MainScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 42325/41800. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 42325,
+    "max_score": 41800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_MenuBackground.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 28250/28800. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 28250,
+    "max_score": 28800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_MenuButton.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 33285/34800. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 33285,
+    "max_score": 34800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_MissControl.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 29905/33000. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 29905,
+    "max_score": 33000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_NotificationControl.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 29885/31100. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 29885,
+    "max_score": 31100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_PauseScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 29595/30000. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 29595,
+    "max_score": 30000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_PowerUpShop.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 37360/38700. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 37360,
+    "max_score": 38700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_GLOBAL__I_ShopScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Static initializer function. Score 48953/53100. Diff driven by PIC anchor register choice, GOT base reorder, and Thumb2 tbh vs tbb jump table encoding. Semantics identical: same static objects initialized in same order. ACCEPT-cosmetic per existing GLOBAL__I_ pattern.",
+    "score": 48953,
+    "max_score": 53100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity4DrawEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 13000/100. Binary has bx lr (1-instruction stub); port implements Draw as DrawSlice. See src/entities/SlashEntity.cpp:253-254: binary Draw is a 1-instruction BX lr stub, port Draw maps to DrawSlice.",
+    "score": 13000,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity10DrawUpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1560/1400. Port has bx lr stub vs binary has code. See src/entities/SlashEntity.cpp:270 (TODO: g_state singleton not yet modelled). ACCEPT-deferred.",
+    "score": 1560,
+    "max_score": 1400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity10InitPointsEl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 8000/7700. Port uses named API vs binary blx chains. ACCEPT-deferred.",
+    "score": 8000,
+    "max_score": 7700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity12UpdatePointsEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 85400/85100. Very close to max. Minor GOT/PIC differences. ACCEPT-deferred.",
+    "score": 85400,
+    "max_score": 85100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity9DrawSliceEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 8600/8100. Port has bx lr stub vs binary draw code. STUB: SlashEntity::DrawSlice. See src/entities/SlashEntity.cpp:1036-1038.",
+    "score": 8600,
+    "max_score": 8100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity11CreateGhostEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3200/2900. Port stub -- s_Ghosts ring not yet ported. See src/entities/SlashEntity.cpp:340.",
+    "score": 3200,
+    "max_score": 2900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity7PreDrawEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2100/1600. Port has bx lr stub for PreDraw ghost ring. See src/entities/SlashEntity.cpp:1128-1133.",
+    "score": 2100,
+    "max_score": 1600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity4InitEPvlP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 9700/9200. Port uses named calls vs blx chains. ACCEPT-deferred.",
+    "score": 9700,
+    "max_score": 9200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SlashEntity17CollideWithEntityEPN6Mortar6EntityE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 15500/15200. Collision detection close to binary with minor differences. ACCEPT-deferred.",
+    "score": 15500,
+    "max_score": 15200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11ItemManager15SetSwipeLoodVolEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has code. STUB: ItemManager::SetSwipeLoodVol. See src/game/ItemManager.cpp:472.",
+    "score": 1100,
+    "max_score": 600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11ItemManager23PlayAlternateComboSoundEi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has code. STUB: ItemManager::PlayAlternateComboSound. See src/game/ItemManager.cpp:466.",
+    "score": 1300,
+    "max_score": 800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11ItemManager23PlayAlternateSwipeSoundEff": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. STUB: ItemManager::PlayAlternateSwipeSound. See src/game/ItemManager.cpp:470.",
+    "score": 1200,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11ItemManager24PlayAlternateImpactSoundEff": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. STUB: ItemManager::PlayAlternateImpactSound. See src/game/ItemManager.cpp:468.",
+    "score": 1200,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN12ComboControl4InitEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary calls vtable slot 4. STUB: ComboControl::Init. See src/hud/ComboControl.cpp:32.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN12HUDControl3d6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port tail-calls HUDControl::Update (b.w) vs binary calls blx via vtable. ACCEPT-deferred. Score 700/300.",
+    "score": 700,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11TimeControl4SkipEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 875/1500. Port navigates MortarGame/GameData via GetInstance chain (cbz guards); binary uses blx GOT direct. Also different field offsets (+0x10c vs +0x118). ACCEPT-deferred.",
+    "score": 875,
+    "max_score": 1500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11TimeControl21SetToMultiplayerStateEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1110/600. Port pre-loads r1=[r0,#0] then saves r4; binary loads inline. Also tail-calls HUDControl::SetToMultiplayerState. ACCEPT-deferred.",
+    "score": 1110,
+    "max_score": 600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11TimeControl7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 900/400. Port has bx lr stub vs binary calls SmartPtr release at +0x74. See src/hud/HUDControl3d.cpp (STUB: HUDControl3d::Release pattern). ACCEPT-deferred.",
+    "score": 900,
+    "max_score": 400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11FruitCamera15GetFollowEntityEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Score 600/700. Port adds bx lr before nop.w path (short-circuit branch optimization); semantics identical. Trailing nops. ACCEPT-cosmetic.",
+    "score": 600,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN12ScreenButton21DefaultButtonDelegateEP10MenuButtonfRS_": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Score 560/200. Binary has movs r0,#0; bx lr. Port has bx lr + trailing nops. Effectively both return 0/nothing. ACCEPT-cosmetic.",
+    "score": 560,
+    "max_score": 200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13ScrollingMenu7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 800/300. Port has bx lr stub vs binary calls SmartPtr release. ACCEPT-deferred.",
+    "score": 800,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11MissControl9PreUpdateEf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Score 640/2000. Pure PIC anchor differences: binary uses 2-register GOT pattern, port uses 3-register GOT pattern. Same instructions, different registers. ACCEPT-cosmetic.",
+    "score": 640,
+    "max_score": 2000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SplatEntityD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1210/1900. Dtor GOT pattern differences (binary uses 2-step GOT, port uses direct vtable label). ACCEPT-deferred.",
+    "score": 1210,
+    "max_score": 1900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SplatEntityD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1145/1800. D1 same as D0. ACCEPT-deferred.",
+    "score": 1145,
+    "max_score": 1800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11SplatEntityD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1145/1800. D2 same as D0. ACCEPT-deferred.",
+    "score": 1145,
+    "max_score": 1800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11MortarSound12InternalLoadEPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has load code. STUB: MortarSound::InternalLoad. See src/engine/audio/MortarSound.cpp:152.",
+    "score": 2200,
+    "max_score": 1700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11MortarSound7IsReadyEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. STUB: MortarSound::IsReady. See src/engine/audio/MortarSound.cpp:154.",
+    "score": 860,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11MortarSoundC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1080/1600. Ctor structural differences. ACCEPT-deferred.",
+    "score": 1080,
+    "max_score": 1600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11MortarSoundC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1080/1600. Same as C1. ACCEPT-deferred.",
+    "score": 1080,
+    "max_score": 1600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar12ActorManager4DrawEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has draw loop. STUB: ActorManager::Draw. See src/entities/ActorManager.cpp:534.",
+    "score": 5900,
+    "max_score": 5400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar12ActorManager8PostLoadEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: zero in-binary callers; LoadEntity itself dead. See src/entities/ActorManager.cpp:266-269.",
+    "score": 4100,
+    "max_score": 3600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar12ActorManager9DrawDebugEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: zero in-binary callers. See src/entities/ActorManager.cpp:262-263.",
+    "score": 4600,
+    "max_score": 4100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar12ActorManager11HeapDisplayEb": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub vs binary LinkedHeap diagnostics. Defunct: LinkedHeap diagnostics -- no-op stub. See src/entities/ActorManager.cpp:440-441.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar12ActorManager12DisplayUsageEb": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: zero in-binary callers. See src/entities/ActorManager.cpp:446.",
+    "score": 1200,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar6Entity6InRectEP7ColAABB": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has rect collision check. ACCEPT-deferred.",
+    "score": 5700,
+    "max_score": 5400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13FruitSaveData11TotalExistsEPKc": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 1300/800.",
+    "score": 1300,
+    "max_score": 800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13FruitSaveData20DownloadedTweakValueEPKci": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 2800/2300.",
+    "score": 2800,
+    "max_score": 2300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13FruitSaveData27PublishUnlockedAchievementsEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub vs binary. Defunct: achievement publishing. Score 4000/3500.",
+    "score": 4000,
+    "max_score": 3500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13FruitSaveData8SetTotalEPKcibb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 2700/2200.",
+    "score": 2700,
+    "max_score": 2200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar10MortarGame18RenderAtHalfFramesEPKcS2_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr (returns 0/false) vs binary has movs r0,#0; bx lr (also returns 0). Both return 0 -- same semantics. Score 560/200.",
+    "score": 560,
+    "max_score": 200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11MeshManager7DestroyEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary has destroy code. ACCEPT-deferred. Score 800/300.",
+    "score": 800,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar14TextureManager10InitialiseEi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 800/300.",
+    "score": 800,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4File4LockEb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary lock code. ACCEPT-deferred. Score 560/200.",
+    "score": 560,
+    "max_score": 200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4Mesh11AddGeometryERKNS_8SmartPtrINS_8GeometryEEE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 900/400.",
+    "score": 900,
+    "max_score": 400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar7Texture13UnSetUnCachedEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 800/300.",
+    "score": 800,
+    "max_score": 300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZNK6Mortar4File4HashEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary hash computation. ACCEPT-deferred. Score 900/400.",
+    "score": 900,
+    "max_score": 400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZNK6Mortar4File8IsLockedEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 560/200.",
+    "score": 560,
+    "max_score": 200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar12IFile_Direct4TellEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has full Tell implementation; binary has bx lr stub. ACCEPT-deferred. Score 1705/200.",
+    "score": 1705,
+    "max_score": 200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7PowerUp12PurchaseableEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 760/400.",
+    "score": 760,
+    "max_score": 400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7PowerUp14UnloadTexturesEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1400,
+    "max_score": 900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7PowerUp16SetDeferedPointsEi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 3400,
+    "max_score": 2900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13ScoreModifier11DeferPointsEi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. Score 1500/1000.",
+    "score": 1500,
+    "max_score": 1000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14PowerUpManager20GetActiveProgressionEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4955/4500. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4955,
+    "max_score": 4500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7ColAABB11ColAABBAABBEPS_S0_P8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 10100/9800.",
+    "score": 10100,
+    "max_score": 9800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7ColAABB11ColAABBLineEPS_P7ColLineP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 39600/39300.",
+    "score": 39600,
+    "max_score": 39300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7ColAABB13ColAABBSphereEPS_P9ColSphereP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 20600/20300.",
+    "score": 20600,
+    "max_score": 20300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7ColAABB9DrawDebugEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 4500/4200.",
+    "score": 4500,
+    "max_score": 4200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7ColLine11ColLineLineEPS_S0_P8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 18300/18000.",
+    "score": 18300,
+    "max_score": 18000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN7ColLine9DrawDebugEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 4900/4600.",
+    "score": 4900,
+    "max_score": 4600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9ColSphere13ColSphereLineEPS_P7ColLineP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 6760/6400.",
+    "score": 6760,
+    "max_score": 6400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9ColSphere15ColSphereSphereEPS_S0_P8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 5760/5400.",
+    "score": 5760,
+    "max_score": 5400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN9ColSphere9DrawDebugEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 5000/4700.",
+    "score": 5000,
+    "max_score": 4700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4Mesh11DrawTriListEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub or PIC-anchored divergence vs binary draw code. ACCEPT-deferred. Score 1400/900.",
+    "score": 1400,
+    "max_score": 900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4Mesh12DrawTriStripEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub or PIC-anchored divergence vs binary draw code. ACCEPT-deferred. Score 1400/900.",
+    "score": 1400,
+    "max_score": 900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4Mesh8DrawQuadE6ColourNS_8SmartPtrINS_7TextureEEERK8_Vector3IfES8_fffffPNS_19DrawEffectContainerE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub or PIC-anchored divergence vs binary draw code. ACCEPT-deferred. Score 5700/5500.",
+    "score": 5700,
+    "max_score": 5500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4Mesh8DrawTrisEPK16QUADCUSTOMVERTEXlibPNS_19DrawEffectContainerE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub or PIC-anchored divergence vs binary draw code. ACCEPT-deferred. Score 7900/7600.",
+    "score": 7900,
+    "max_score": 7600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4Mesh18GetPropertiesGroupERKNS_11AsciiStringEPKNS_24EffectPropertyDefinitionES6_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub or PIC-anchored divergence vs binary draw code. ACCEPT-deferred. Score 5105/4800.",
+    "score": 5105,
+    "max_score": 4800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar4Mesh21RebuildEffectBindingsEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub or PIC-anchored divergence vs binary draw code. ACCEPT-deferred. Score 3900/3600.",
+    "score": 3900,
+    "max_score": 3600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11FruitCamera10UpdateIdleEf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11MissControl9SetPlayerEi": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Port has mov r0,r1 + bx lr vs binary bx lr. Port preserves r1->r0 which may be cosmetic ABI difference. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11BonusScreen11LoadContentEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11BonusScreen13UnLoadContentEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11BonusScreen15GetTimePerAwardEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Binary reads from GOT-resolved global; port reads [pc,#4] (literal pool 0). Binary has live data at GOT+offset, port has zero placeholder. Score 810/1100. ACCEPT-deferred.",
+    "score": 810,
+    "max_score": 1100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11BonusScreen17GetTimeFirstAwardEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Same as GetTimePerAwardEv: binary reads GOT global, port reads literal 0. Score 810/1100. ACCEPT-deferred.",
+    "score": 810,
+    "max_score": 1100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11BonusScreen11AwardScoresEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 30300/30000. Port has bx lr stub vs binary award logic. ACCEPT-deferred.",
+    "score": 30300,
+    "max_score": 30000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11BonusScreen4DrawEPf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 34700/34400. Port has bx lr stub vs binary draw code. ACCEPT-deferred.",
+    "score": 34700,
+    "max_score": 34400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11BonusScreen5ShakeEff": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2100/1800. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 2100,
+    "max_score": 1800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11CoinCounter4InitEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11CoinCounter4SkipEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11CoinCounter6UpdateEf": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11CoinCounter7ReleaseEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11CoinCounterD0Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 805/1800. Dtor PIC anchor differences. ACCEPT-deferred.",
+    "score": 805,
+    "max_score": 1800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11CoinCounterD1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 805/1500. Same as D0. ACCEPT-deferred.",
+    "score": 805,
+    "max_score": 1500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11CoinCounterD2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 805/1500. Same as D0. ACCEPT-deferred.",
+    "score": 805,
+    "max_score": 1500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11PowerUpShop11LoadContentEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11PowerUpShop5ResetEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11FileManagerC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1105/700. Ctor structural differences. ACCEPT-deferred.",
+    "score": 1105,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11FileManagerC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1105/700. Same as C1. ACCEPT-deferred.",
+    "score": 1105,
+    "max_score": 700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN12WaveModifier14RemoveModifierEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2200/1700. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 2200,
+    "max_score": 1700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN12SpeedControl17SoundNeedsLoopingEPN6Mortar11MortarSoundE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 7400/7100. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 7400,
+    "max_score": 7100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13ScrollingMenu10ClearTouchEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 860/500. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 860,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13ScrollingMenu4InitEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1000/500. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13ScrollingMenu5ResetEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3600/3300. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 3600,
+    "max_score": 3300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13SliderControl11LoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4600/4300. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4600,
+    "max_score": 4300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13SliderControl19UpdateTouchPositionEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 7700/7200. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 7700,
+    "max_score": 7200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13SliderControl6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4200/3700. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4200,
+    "max_score": 3700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN13MatrixManager16SetupPerspectiveEfffffP9_Matrix44IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 5660/5300. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 5660,
+    "max_score": 5300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN12ShopListItem13ButtonClickedEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1100/600. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1100,
+    "max_score": 600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14PowerUpManager14UnloadTexturesEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4600/4100. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4600,
+    "max_score": 4100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14PowerUpManager18GetNextPurchasableERSt14_List_iteratorIP7PowerUpE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4100,
+    "max_score": 3600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14PowerUpManager19GetFirstPurchasableERSt14_List_iteratorIP7PowerUpE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4200,
+    "max_score": 3700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14PowerUpManager27SetAppropriateScoreCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 11900,
+    "max_score": 11600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN16FruitFactControl15DrawLeaderboardEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub vs binary leaderboard draw. Defunct: online leaderboards. ACCEPT-defunct.",
+    "score": 42300,
+    "max_score": 42000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN16FruitFactControl16DrawDownloadIconEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub vs binary download icon draw. Defunct: online news download. ACCEPT-defunct.",
+    "score": 20800,
+    "max_score": 20500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN16VerticalScroller11LoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 6100,
+    "max_score": 5800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN16VerticalScroller19UpdateTouchPositionEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 11500,
+    "max_score": 11000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN16VerticalScroller6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 13460,
+    "max_score": 13100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN17ScrollingMenuItem4DrawEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 10900,
+    "max_score": 10600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN19NotificationControl4InitEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN19NotificationControl7ReleaseEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1000,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN4Math10CompressLZEPKhmPh": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary LZ compression. ACCEPT-deferred.",
+    "score": 14105,
+    "max_score": 13800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11BakedString14LayoutToCircleEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 19600,
+    "max_score": 19300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar5Touch28SendIndividualTouchCallbacksEPNS_11InputDeviceE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 8000,
+    "max_score": 7500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar14ResourceLoader10InitializeERNS_10DataReaderE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 10400,
+    "max_score": 9900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar14TextureManager15LoadIndependentEPvi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1100,
+    "max_score": 600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11IFileSystemC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1460/1500. IFileSystem ctor differences. ACCEPT-deferred.",
+    "score": 1460,
+    "max_score": 1500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11IFileSystemC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1460/1500. Same as C1. ACCEPT-deferred.",
+    "score": 1460,
+    "max_score": 1500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN11AboutScreen16QuitGameCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 8200/7900. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 8200,
+    "max_score": 7900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_Z10SplashDrawfb": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_Z12FrontendDrawfb": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100.",
+    "score": 400,
+    "max_score": 100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_Z12SplashUpdatefb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4100/3800. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4100,
+    "max_score": 3800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_Z14FrontendUpdatefb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3100/2800. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 3100,
+    "max_score": 2800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_Z15ET_RemoveEntityit": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 3160/2800. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 3160,
+    "max_score": 2800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10ShopScreen14CancelCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 4400/4100. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4400,
+    "max_score": 4100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10ShopScreen15ConfirmCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 5100/4800. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 5100,
+    "max_score": 4800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN10ShopScreen17BuyButtonCallbackEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 8600/8300. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 8600,
+    "max_score": 8300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar15InputDeviceBada5ResetEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1300,
+    "max_score": 800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar7Texture11SetUnCachedEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1400,
+    "max_score": 900,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar7Texture14LoadFromMemoryEPKvi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 3800,
+    "max_score": 3300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZNK6Mortar11MeshManager4FindERKNS_11AsciiStringE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 4000,
+    "max_score": 3500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZNK6Mortar11MeshManager4FindERKNS_8SmartPtrINS_5ModelEEE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 3800,
+    "max_score": 3300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar11MeshManager7ReleaseERKNS_8SmartPtrINS_5ModelEEE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 2700,
+    "max_score": 2200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZNK6Mortar12ActorManager11GetHeapFreeEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub vs binary. Defunct: LinkedHeap diagnostics. ACCEPT-defunct.",
+    "score": 805,
+    "max_score": 500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZNK6Mortar4File11GetPositionEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 1100,
+    "max_score": 600,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZNK6Mortar5Model4DrawERK9_Matrix44IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "score": 12100,
+    "max_score": 11800,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar6Entity11HeapDisplayEb": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: LinkedHeap diagnostics. Score 1660/1300.",
+    "score": 1660,
+    "max_score": 1300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar6Entity11HeapGetFreeEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: LinkedHeap diagnostics. Score 1600/1100.",
+    "score": 1600,
+    "max_score": 1100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar6Entity11HeapGetSizeEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: LinkedHeap diagnostics. Score 1160/1000.",
+    "score": 1160,
+    "max_score": 1000,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar6Entity9HeapClearEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: LinkedHeap diagnostics. Score 1600/1100.",
+    "score": 1600,
+    "max_score": 1100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN6Mortar6Entity9HeapExistEv": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Port has bx lr stub. Defunct: LinkedHeap diagnostics. Score 1560/1400.",
+    "score": 1560,
+    "max_score": 1400,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN5Fruit12SetForPlayerEi": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "Score 3850/1500. Port implements Defunct: online-mp P2 collision radius *= 0.66 via NetworkManager::GetInstance().IsOnlineMultiplayer() (always false). See src/entities/Fruit.cpp:1546-1553. The guard is correct per port policy.",
+    "score": 3850,
+    "max_score": 1500,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN5Fruit13FruitTypeHashEl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 2260/1300. Binary uses GOT-resolved global array; port uses FruitInfo_Get() named call. ACCEPT-deferred.",
+    "score": 2260,
+    "max_score": 1300,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN5Fruit13FruitTypeNameEl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 1700/1200. Binary uses GOT-resolved array; port uses FruitInfo_Get() named call. ACCEPT-deferred.",
+    "score": 1700,
+    "max_score": 1200,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN5Fruit11DrawShadowsEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 17547/7700. Large function; port uses FruitInfo_GetShadowTex() named call vs binary GOT. ACCEPT-deferred.",
+    "score": 17547,
+    "max_score": 7700,
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN5Fruit11RandomFruitEb": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Score 68860/16300. Large function; port adds WaveManager::CriticalMode gate (GetInstance/cbz). Binary uses GOT-direct blx. ACCEPT-deferred.",
+    "score": 68860,
+    "max_score": 16300,
+    "decided_at": "2026-05-16T00:00Z"
   }
 }
