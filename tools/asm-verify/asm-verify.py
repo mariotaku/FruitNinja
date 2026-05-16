@@ -329,7 +329,7 @@ def apply_triage(results: list[dict], triage: dict) -> list[dict]:
             continue
         # Sticky verdict from triage -- prefix verdict with "(t)" so it's clear.
         new_verdict = entry.get("verdict")
-        if new_verdict in ("ACCEPT-cosmetic", "ACCEPT-deferred", "FIX-NEEDED"):
+        if new_verdict in ("ACCEPT-cosmetic", "ACCEPT-deferred", "ACCEPT-defunct", "FIX-NEEDED"):
             r["verdict"] = new_verdict
             r["reason"] = "triaged: " + entry.get("reason", entry.get("verdict"))
     return results
@@ -344,7 +344,7 @@ def write_report(results: list[dict]) -> pathlib.Path:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     lines.append("## Summary")
     for v in ("MATCH", "COSMETIC", "ACCEPT-cosmetic", "ACCEPT-deferred",
-              "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
+              "ACCEPT-defunct", "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
         if v in counts:
             lines.append(f"- {v}: {counts[v]}")
     lines.append("")
@@ -476,7 +476,7 @@ def main():
     for r in results:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     for v in ("MATCH", "COSMETIC", "ACCEPT-cosmetic", "ACCEPT-deferred",
-              "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
+              "ACCEPT-defunct", "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
         if v in counts:
             print(f"  {v:16} {counts[v]}")
     # FIX-NEEDED is "user said this is genuinely broken"; treat as failure.

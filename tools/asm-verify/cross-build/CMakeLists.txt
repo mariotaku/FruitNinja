@@ -78,7 +78,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/render/Renderer.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Utf8StringIterator.cpp"
     "${_PROJECT_ROOT}/src/engine/util/AsciiString.cpp"
-    "${_PROJECT_ROOT}/src/engine/util/Localisation.cpp"
+    "${_PROJECT_ROOT}/src/engine/util/StringTable.cpp"
     "${_PROJECT_ROOT}/src/engine/util/StringHash.cpp"
 
     # Entities
