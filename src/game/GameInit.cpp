@@ -331,10 +331,17 @@ void GameUpdate(float dt, bool active) {
         FN::GameOver(-1, -1.0f, -1);
     }
 
+    // ASM-verified: 2026-05-16 binary GameUpdate @ 0x0016bed0 (re-analyst).
+    // ActorManager::Update (binary @ 0x16c2c0) is active-branch only.
     if (active && game->actorManager)
         game->actorManager->Update(dt);
 
-    if (active) WaveManager::GetInstance()->Update(dt);
+    // Binary @ 0x16c244 (active path passes scaledDt) / @ 0x16c39c (frozen
+    // path passes 0.0f) -- WaveManager::Update is called EVERY frame; the
+    // frozen branch just feeds dt=0 so the spawn pump quiesces naturally.
+    // Earlier port wholesale-gated this on `active`, which silenced the
+    // pump permanently when gameActiveFlag stayed set after pause->resume.
+    WaveManager::GetInstance()->Update(active ? dt : 0.0f);
 
     if (game->pSaveData) game->pSaveData->Update(dt, game->hud);
 

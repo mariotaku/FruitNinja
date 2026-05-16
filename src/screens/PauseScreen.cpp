@@ -113,23 +113,25 @@ void PauseScreen::UnpauseGame() {
     ts->pauseBombHitTimer = 0.4f;   // DAT_00168fcc
     ts->isPaused = 1;
 
-    // DIFFERS: binary's UnpauseGame does NOT touch gameActiveFlag
-    // (re-analyst 2026-05-16, full xref of every write to Game+0x02).
-    // Binary's GameTaskUpdate @ 0x0010a5d4 uses gameActiveFlag only to
-    // compute the `freezeArg` (iVar5) passed as the 2nd param to the
-    // per-state Update; it does NOT short-circuit the dispatch call.
-    // Each per-state Update receives freezeArg and selectively gates
-    // sub-blocks (animation / spawning / input) -- physics integration
-    // is NOT wholesale-gated.
+    // DIFFERS: binary's UnpauseGame does NOT touch gameActiveFlag and no
+    // path in the normal pause->resume cycle does either (re-analyst
+    // 2026-05-16, full xref of every write to Game+0x02). Binary's
+    // GameUpdate @ 0x0016bed0 splits into active / frozen branches on
+    // its 2nd parameter (computed from gameActiveFlag by GameTaskUpdate):
+    //   - active-only: ActorManager::Update (0x16c2c0),
+    //                  SplatEntity::UpdateActiveSplats (0x16c198)
+    //   - both branches, frozen passes dt=0: WaveManager::Update,
+    //                  SlashEntity slot 0x10/0x18, PSPParticleManager
+    // Port's GameUpdate is now binary-faithful for those gating
+    // choices (GameInit.cpp:334/337/348 audited). The remaining gap is
+    // that gameActiveFlag, once set during pause, is never lowered by
+    // any binary path we've RE'd -- so on unpause the active-only
+    // ActorManager/Splat calls stay skipped and physics freezes.
     //
-    // The port's GameUpdate (src/game/GameInit.cpp:334/337/348) does
-    // wholesale-gate actorManager / WaveManager / SplatEntity on the
-    // `active` arg, so after unpause the still-set flag keeps physics
-    // frozen and the spawn pump silent. The proper binary-faithful fix
-    // is to RE the binary's per-state GameUpdate and split the gating
-    // into the same fine-grained sub-skips. Until that lands, clearing
-    // the flag here is the minimal surface-level fix that restores
-    // observable behaviour.
+    // The binary likely lowers it implicitly via PowerManager state
+    // transitions (GameTaskUpdate's iVar5 also gates on
+    // powerManagerState). Until that path is RE'd, clear the flag
+    // here as the minimal surface-level fix.
     Game* game = Game::GetInstance();
     if (game) game->gameActiveFlag = 0;
 }
