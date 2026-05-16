@@ -5,6 +5,7 @@
 
 #include "GameTaskState.h"
 #include "Game.h"
+#include "engine/system/PowerManager.h"
 #include <cmath>
 #include <cstdio>
 
@@ -61,9 +62,11 @@ void GameTaskUpdate(float rawDt) {
         }
 
         if (stateIdx == s_taskState.prevState) {
-            // Same state: run update
-            // PowerManager::Update() — stub
-            bool canUpdate = (game->gameActiveFlag == 0) ? true : false;
+            // Binary @ 0x0010a5d4: combined gate is
+            //   active = (gameActiveFlag == 0) && (PowerManager::GetState() == 0)
+            Mortar::PowerManager::GetInstance()->Update();
+            uint32_t pmState = Mortar::PowerManager::GetInstance()->GetState();
+            bool canUpdate = (game->gameActiveFlag == 0) && (pmState == 0);
             s_updateFuncs[stateIdx](dt, canUpdate);
         } else {
             // State changed: exit old, loop will init new

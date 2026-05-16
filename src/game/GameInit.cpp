@@ -302,6 +302,17 @@ void GameUpdate(float dt, bool active) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
+    // Gap 1: drain deferred HUDControl queued via HUD::QueueDeferredAdd path.
+    // Binary @ GameUpdate entry: reads g_TaskState->pDeferredControl (+0x100);
+    // if non-null, AddControl(ctrl, false) then clears the slot.
+    {
+        GameTaskState* ts = GetTaskState();
+        if (ts->pDeferredControl && game->hud) {
+            game->hud->AddControl(ts->pDeferredControl, /*atFront=*/false);
+            ts->pDeferredControl = nullptr;
+        }
+    }
+
     // === Splash phase (g_TaskState +0x1C, init = 1.5f) ===
     // Binary @ 0x0016BED0: gated on splashFadeTimer > 0.
     GameTaskState* splashTs = GetTaskState();
@@ -317,6 +328,15 @@ void GameUpdate(float dt, bool active) {
         }
     } else {
         Mortar::Touch::GetInstance().Update(0.0f);  // dt=0 drains all pending events
+    }
+
+    // Binary @ 0x0016bf90..0x0016bfce -- per-frame slot-array re-snap.
+    game->field_0x9c = 0;
+    game->field_0x9d = 0;
+    for (int i = 0; i < 16; ++i) {
+        float& z = game->m_FingerSpawnPos[i].z;
+        if (z == 0.0f) z = -1.0f;
+        // z > 0 or z < 0: left unchanged
     }
 
     const float prevBombTimer = game->bombHitTimer;
@@ -353,8 +373,16 @@ void GameUpdate(float dt, bool active) {
     FN::UpdateCriticalFlash(dt);
 
     if (active) SplatEntity::UpdateActiveSplats(dt);
-    for (int i = 0; i < 16; ++i) {
-        if (g_pSlashEntities[i]) g_pSlashEntities[i]->Update(dt);
+    // Binary @ 0x16c378 -- frozen branch fires Update + PostUpdate per
+    // SlashEntity, both with dt=0. Active branch drives them via
+    // ActorManager::Update.
+    if (!active) {
+        for (int i = 0; i < 16; ++i) {
+            if (g_pSlashEntities[i]) {
+                g_pSlashEntities[i]->Update(0.0f);
+                g_pSlashEntities[i]->PostUpdate(0.0f);
+            }
+        }
     }
     if (game->hud) game->hud->Update(dt);
     if (game->pCamera) game->pCamera->UpdateCamera(dt);

@@ -113,25 +113,13 @@ void PauseScreen::UnpauseGame() {
     ts->pauseBombHitTimer = 0.4f;   // DAT_00168fcc
     ts->isPaused = 1;
 
-    // DIFFERS: binary's UnpauseGame does NOT touch gameActiveFlag and no
-    // path in the normal pause->resume cycle does either (re-analyst
-    // 2026-05-16, full xref of every write to Game+0x02). Binary's
-    // GameUpdate @ 0x0016bed0 splits into active / frozen branches on
-    // its 2nd parameter (computed from gameActiveFlag by GameTaskUpdate):
-    //   - active-only: ActorManager::Update (0x16c2c0),
-    //                  SplatEntity::UpdateActiveSplats (0x16c198)
-    //   - both branches, frozen passes dt=0: WaveManager::Update,
-    //                  SlashEntity slot 0x10/0x18, PSPParticleManager
-    // Port's GameUpdate is now binary-faithful for those gating
-    // choices (GameInit.cpp:334/337/348 audited). The remaining gap is
-    // that gameActiveFlag, once set during pause, is never lowered by
-    // any binary path we've RE'd -- so on unpause the active-only
-    // ActorManager/Splat calls stay skipped and physics freezes.
-    //
-    // The binary likely lowers it implicitly via PowerManager state
-    // transitions (GameTaskUpdate's iVar5 also gates on
-    // powerManagerState). Until that path is RE'd, clear the flag
-    // here as the minimal surface-level fix.
+    // DIFFERS: binary's UnpauseGame does NOT write gameActiveFlag=0.
+    // The binary relies on PowerManager::GetState() returning non-zero when
+    // backgrounded, keeping canUpdate=false without touching gameActiveFlag.
+    // In the port PowerManager::GetState() always returns 0 (foreground),
+    // so gameActiveFlag is the sole gate. Writing 0 here mirrors the binary's
+    // effective behavior on resume: both gates become 0 and canUpdate=true.
+    // Re-RE the PauseGame/UnpauseGame path if a deeper clearing path is found.
     Game* game = Game::GetInstance();
     if (game) game->gameActiveFlag = 0;
 }
