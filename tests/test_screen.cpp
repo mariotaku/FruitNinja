@@ -12,6 +12,7 @@
 #include <SDL.h>
 #include "render/gl_funcs.h"
 #include <cstdlib>
+#include <climits>
 #include <sys/stat.h>
 #ifdef _WIN32
 #  include <direct.h>
@@ -49,9 +50,14 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_screen <main|dojo|about|shop|gamemode|gameover|gameover-transition|classic> [--interactive]\n"
+        "usage: test_screen <main|dojo|about|shop|gamemode|gameover|gameover-transition|classic> [flags]\n"
         "  --interactive: show the window and run the normal main loop\n"
-        "                 instead of ticking 30 frames headless. ESC quits.\n");
+        "                 instead of ticking 30 frames headless. ESC quits.\n"
+        "  --screenshot:  dump the framebuffer to tmp/test/screenshots/.\n"
+        "  --no-miss:     Classic only -- pin game.missCount to a very large\n"
+        "                 negative value so Fruit miss penalties never reach\n"
+        "                 the > 2 game-over trigger. Use with --interactive\n"
+        "                 to leave the gameplay scene running for visual test.\n");
     return 1;
 }
 
@@ -59,9 +65,11 @@ int main(int argc, char* argv[]) {
     if (argc < 2) return FailUsage();
     const char* screenName = argv[1];
     bool interactive = false;
+    bool noMiss      = false;
     for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "--interactive") == 0) interactive = true;
-        else if (strcmp(argv[i], "--screenshot") == 0) {} // handled later
+        if      (strcmp(argv[i], "--interactive") == 0) interactive = true;
+        else if (strcmp(argv[i], "--screenshot")  == 0) {} // handled later
+        else if (strcmp(argv[i], "--no-miss")     == 0) noMiss = true;
         else return FailUsage();
     }
 
@@ -201,6 +209,15 @@ int main(int argc, char* argv[]) {
         if (missCount < 3) {
             fprintf(stderr, "FAIL: expected 3 MissControl widgets in HUD, found %d\n", missCount);
             return 1;
+        }
+        if (noMiss) {
+            // Fruit::CollisionResponse (src/entities/Fruit.cpp:~536) does
+            //   if (game.missCount > 2) FN::GameOver(...);
+            // Pinning missCount to a large negative gives ~2 billion misses
+            // of headroom -- effectively unlimited for visual inspection.
+            game.missCount = INT_MIN / 2;
+            printf("[test_screen classic --no-miss] game.missCount = %d (game-over disabled)\n",
+                   game.missCount);
         }
     } else if (strcmp(screenName, "gameover") == 0) {
         // Force a Classic-mode game-over scene so the texture loads
