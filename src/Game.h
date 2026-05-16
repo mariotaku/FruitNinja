@@ -128,6 +128,13 @@ struct Game : public Mortar::MortarGame {
 
     float field_0x88;              // +0x88
     Vec3 worldPos;                 // +0x90: light direction in GameDraw
+    uint8_t field_0x9c;            // +0x9c: per-frame transient flag (writer TBD)
+    uint8_t field_0x9d;            // +0x9d: per-frame transient flag (writer TBD)
+    uint8_t _pad_0x9e[2];          // +0x9e..+0x9f: alignment padding
+    // +0xa0..+0x16C: 16 Vec3s, one per touch/finger slot, initialised by
+    // GameTaskInitInput @ 0x00169670. GameUpdate re-snaps each .z each
+    // frame (positive stays; zero -> -1; negative left alone).
+    Vec3 m_FingerSpawnPos[16];     // +0xa0
     MainScreen* mainScreen;        // +0x160: pMainScreen
     GameOverScreen* pGameOverScreen;  // +0x164
     class TutorialControl* pTutorialCtrl;  // +0x168

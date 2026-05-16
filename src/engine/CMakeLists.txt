@@ -66,6 +66,8 @@ add_library(mortar_engine STATIC
     MenuBackground.cpp
     # Phase 9 — Network (online services stub; all methods no-op)
     network/NetworkManager.cpp
+    # Phase 10 — System stubs (Bada OS services; all no-op)
+    system/PowerManager.cpp
 )
 target_include_directories(mortar_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 

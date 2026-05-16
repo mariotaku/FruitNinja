@@ -98,6 +98,11 @@ public:
     // per-frame geometry rebuild.
     void Update(float dt);
 
+    // Binary @ 0x17B3B8 frozen-branch: GameUpdate calls PostUpdate(0.0f) on
+    // each slot when game is inactive (active branch drives via ActorManager).
+    // No-op stub — SlashEntity has no deferred post-step work in the port.
+    void PostUpdate(float dt);
+
     // Matches SlashEntity::PreUpdate (0x17C584). Ticks ghost frame counters,
     // advances palette cycle, pushes swipe-loop volume to ItemManager.
     void PreUpdate(float dt);

@@ -282,6 +282,9 @@ void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
 // Binary @ 0x17C584 — bump ghost frame counter, tick 8 ghost slots, advance
 // per-frame palette cycle, push swipe-loop volume to ItemManager and reset
 // accumulator.
+// Binary @ 0x17B3B8 frozen-branch stub — no post-step work in port.
+void SlashEntity::PostUpdate(float /*dt*/) {}
+
 // ASM-verified: 2026-05-10 binary @ 0x0017C584 (asm-inspector)
 //   The palette tick passes the caller's dt straight through (vmov.f32 s16,s0
 //   at 0x0017c58e then vmov.f32 s0,s16 at 0x0017c5d2 before the call). The

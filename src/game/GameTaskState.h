@@ -30,6 +30,7 @@
 #include "math/Vec3.h"
 
 class PauseScreen;
+class HUDControl;
 
 // Per-task state struct (matches original GameTaskState at ~0x120 bytes)
 // See docs/structs/game.md "GameTask State" section.
@@ -78,6 +79,11 @@ struct GameTaskState {
     // +0xfc: background texture (loaded in GameInit)
     Mortar::SmartPtr<Mortar::Texture> pBackgroundTexture;
 
+    // +0x100: deferred HUDControl queued by HUD::Add-via-callback paths
+    // when AddControl can't run inline. GameUpdate drains it once per frame.
+    // TODO: writers not yet RE'd; suspect a HUD::QueueDeferredAdd helper.
+    HUDControl* pDeferredControl;
+
     // Binary @ 0x00231404 GameTaskState global pause fields.
     // These three fields are written by PauseGame() / UnpauseGame() free functions
     // (binary @ 0x00168f80 / 0x00168fb0) to a fixed-address global separate from gameObj.
@@ -122,7 +128,8 @@ struct GameTaskState {
           spawnParam3(20.0f, 0.1f, 1.0f),
           spawnParam4(4.0f,  0.1f, 1.0f),
           spawnParam5(0.1f,  0.1f, 0.1f),
-          spawnParam6(0.1f,  0.1f, 0.1f) {}
+          spawnParam6(0.1f,  0.1f, 0.1f),
+          pDeferredControl(nullptr) {}
 };
 
 // State handler function types (match original function pointer table)
