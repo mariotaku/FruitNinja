@@ -54,3 +54,6 @@ bada_SDK
 bada-binary/symbols/
 build-bada-cross/
 tools/asm-verify/manifest.generated.toml
+
+# Ghidra MCP function-hash cache (moved to tmp/)
+function_hash_index.json
