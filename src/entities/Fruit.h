@@ -33,117 +33,57 @@ struct FruitModelInfo {
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
-// Binary sizeof(Fruit) = 0x118 (280). Port matches via Mortar::Delegate's
-// 36-byte uniform ABI for callback fields.
-// EntityFactory @ 0x0017421c: operator_new(0x118) for type 0.
-class Fruit : public Mortar::Entity {
+// Binary sizeof(Fruit) = 0x118 (280). EntityFactory @ 0x0017421c:
+// operator_new(0x118). Layout cross-verified by re-analyst 2026-05-17
+// against Ghidra struct + Init/Update/Ctor/IsOffscreen disassembly.
+class Fruit : public Mortar::Entity {  // Entity = 60 bytes, ends at +0x3B
 public:
-    // +0x3c: fruit type index into FRUIT_INFO array
-    int m_FruitType;
+    uint8_t  m_FruitType;                  // +0x3C  (binary: u8, NOT int)
+    uint8_t  m_bNoPowerUp;                 // +0x3D
+    uint8_t  _pad_3E[2];                   // +0x3E..+0x3F
+    PSPParticleEmitter* m_pEmitter1;       // +0x40  (was wrongly +0x80)
+    PSPParticleEmitter* m_pEmitter2;       // +0x44  (was wrongly +0x84)
+    Vec3     m_SlicePos;                   // +0x48..+0x53  (was wrongly +0x78)
+    uint8_t  _pad_54[12];                  // +0x54..+0x5F  (unused by Init/Update; possible Slice/CollisionResponse temp)
+    int32_t  m_LifetimeCounter;            // +0x60  (init=0; Update int<->float trick)
+    int32_t  m_CollisionSize;              // +0x64  (init=75; semantics: probable countdown, NOT radius)
+    int32_t  m_field_0x68;                 // +0x68  (init=4; TODO: semantics; not read by Init/Update)
+    float    m_SliceTimer;                 // +0x6C  (init=-1.0)
+    uint16_t m_SliceAngle;                 // +0x70
+    uint8_t  _pad_72[2];                   // +0x72..+0x73
+    float    m_SliceImpulse;               // +0x74
+    int32_t  m_SliceState;                 // +0x78  (init=0; written by Slice/CollisionResponse)
+    uint8_t  m_bActive;                    // +0x7C  (gates physics in unsliced branch)
+    uint8_t  _pad_7D[3];                   // +0x7D..+0x7F
+    float    m_ChuckDelay;                 // +0x80  (init=0.0)
+    Vec3     m_RotAxis;                    // +0x84..+0x8F
+    int32_t  m_PlayerIdx;                  // +0x90  (init=0)
+    float    m_TimeScale;                  // +0x94  (init=1.0)
+    float    m_ZPosition;                  // +0x98
+    Vec3     m_Gravity;                    // +0x9C..+0xA7
+    uint8_t  _pad_A8[12];                  // +0xA8..+0xB3  (unused)
+    uint8_t  m_bSliced;                    // +0xB4  (init=0)
+    uint8_t  _pad_B5[3];                   // +0xB5..+0xB7
+    Vec3     m_SecondPos;                  // +0xB8..+0xC3  (Ghidra name: m_HalfB_pos)
+    Vec3     m_SecondVel;                  // +0xC4..+0xCF  (Ghidra name: m_HalfB_vel)
+    Quaternion m_Rot1;                     // +0xD0..+0xDF
+    Quaternion m_Rot2;                     // +0xE0..+0xEF
+    Vec3     m_RotVel1;                    // +0xF0..+0xFB
+    Vec3     m_RotVel2;                    // +0xFC..+0x107
+    SlashEntity* m_pSlasher;               // +0x108  (init=0)
+    uint8_t  m_bSpawnedByCriticalSplash;   // +0x10C
+    uint8_t  m_bCriticalEligible;          // +0x10D  (init=1)
+    uint8_t  _pad_10E[2];                  // +0x10E..+0x10F
+    float    m_ScaleAnim;                  // +0x110  (init=0.0)
+    uint8_t  m_bDrawWhole;                 // +0x114  (init=0)
+    uint8_t  _pad_115[3];                  // +0x115..+0x117  -> total sizeof = 0x118
 
-    // +0x60: per-frame lifetime counter. Ticked += (int)(1000.0f * dtScaled) each
-    // Update frame (binary @ 0x17a16+). Probable emitter lifetime counter; cleared
-    // by Init. int32_t to match binary's signed 32-bit add.
-    int32_t m_LifetimeCounter;             // +0x60
-
-    // +0x6c: slice countdown — init -1.0f, set positive by OnSliced,
-    // counts down in Update until 0 → calls Slice() to split the fruit.
-    float m_SliceTimer;
-
-    // +0x70: 16-bit angle index (Atan2Idx of bladeVel). Stored on hit,
-    // used by Slice() to pick the half velocities.
-    uint16_t m_SliceAngle;
-
-    // +0x74: clamped blade speed (magnitude × 0.1, clamp [4..8] or [6..8]).
-    float m_SliceImpulse;
-
-    // +0x78..+0x83: snapshot of pos at slice time.
-    Vec3 m_SlicePos;
-
-    // +0x7C: gates physics integration in the unsliced (!m_bSliced) branch
-    // of Update. Distinct from Entity::flags bit-0 IsActive().
-    uint8_t m_bActive;                     // +0x7C
-
-    // +0x80, +0x84: two juice-particle emitters spawned on hit, one
-    // per eventual half. Point at pos and m_SecondPos respectively.
-    PSPParticleEmitter* m_pEmitter1;       // +0x80
-    PSPParticleEmitter* m_pEmitter2;       // +0x84
-
-    // +0xb4: sliced state
-    bool m_bSliced;
-
-    // Quaternion rotation (both halves)
-    Quaternion m_Rot1, m_Rot2;           // +0xd0, +0xe0
-    Vec3 m_RotVel1, m_RotVel2;          // +0xf0, +0xfc
-
-    // Second half position/velocity (after slice)
-    Vec3 m_SecondPos, m_SecondVel;       // +0xb8, m_HalfB
-
-    // Gravity (grows over time for sliced halves)
-    Vec3 m_Gravity;
-
-    // Scale animation (0→1 on spawn)
-    float m_ScaleAnim;                   // +0x110
-
-    // +0x108: back-pointer to the SlashEntity that last targeted this fruit.
-    // Cleared by KillFruit if the slasher's m_pCurrentTarget still points here
-    // (Fruit::KillFruit cleanup tail @ 0x00176c8e..0x00176cea).
-    SlashEntity* m_pSlasher;               // +0x108
-
-    // +0x10C: when set, adds an EXTRA 6.5x gravity growth multiplier on top
-    // of the base 4.5x (binary @ 0x17a16+, sliced branch). Set by the spawner
-    // that creates critical-splash secondary fruits.
-    uint8_t m_bSpawnedByCriticalSplash;    // +0x10C
-
-    // +0x10D: critical-hit eligibility, set by CollisionResponse via the
-    // WaveManager critical-chance RNG ladder (binary @ 0x001780f0..0x001781e8).
-    // Read by Fruit::Slice + CollisionResponse for crit visual/score bonuses.
-    // Default false (cleared by Init).
-    bool m_bCriticalEligible;              // +0x10D
-
-    // +0x3D: set by Fruit::Disable (binary @ 0x00126374) to suppress
-    // (a) miss penalty when the fruit drops uncut [KillFruit],
-    // (b) power-up activation when the fruit is sliced [CollisionResponse].
-    // Used by ClearMenuItems on dojo-transition retract path so menu fruits
-    // flying off don't penalise the player or trigger power-ups mid-transition.
-    uint8_t m_bNoPowerUp;
-
-    // 16-bit tracker ID used by ET_RemoveEntity to unregister this fruit from
-    // EntityTracker tree 0 when it dies. Assigned on spawn; 0 = not registered.
-    uint16_t m_TrackerID;
-
-    // +0x114: m_bDrawWhole — when set, Fruit::Draw renders the whole
-    // fruit mesh even if m_bSliced == 1. Set by ClearMenuItems
-    // @ 0x0016ac7c when releasing menu fruits during the dojo
-    // transition: the fruit is marked sliced (so MenuButton::Update
-    // stops pinning it) AND m_bDrawWhole is set so it visually flies
-    // off as a single object instead of splitting in two.
-    bool m_bDrawWhole;
-
-    // +0x80: detach flag set by SetVisible_FruitFact (0x0013785c).
-    // When set, MenuButton::Update stops pinning this fruit to the
-    // button center — the piece drifts freely with its current vel.
-    bool m_bDetached;
-
-    // Launch delay (fruit invisible during countdown)
-    float m_ChuckDelay;
-
-    // Rotation axis from config
-    Vec3 m_RotAxis;                      // +0x84
-
-    // +0x90: fruit's owning player index (single-player always 0; MP 0 or 1)
-    // ASM-verified: 2026-05-02 binary @ 0x00178708 reads [r4,#0x3c] = m_PlayerIdx
-    uint32_t m_PlayerIdx;               // +0x90 (int; 0=P1, 1=P2, 2=spectator, 3=special)
-
-    // +0x94: time-scale multiplier for slo-mo. Binary uses for slo-mo bombs;
-    // restored by WaveManager::Resume. Init sets to 1.0f.
-    float m_TimeScale;                   // +0x94 (between m_PlayerIdx and m_ZPosition)
-
-    // Z depth for draw sorting
-    float m_ZPosition;                   // +0x98
-
+    // Port-only fields (no binary slot; appended after 0x118 boundary on
+    // host build only so binary layout above is unaffected under __bada__).
+#ifndef __bada__
     // Model loaded via MeshManager (shared/cached)
     Mortar::SmartPtr<Mortar::Model> m_Model;
+#endif
 
     Fruit();
     ~Fruit();
@@ -290,14 +230,38 @@ public:
     static void DestroyFruitModels();
 };
 
-// TODO: Fruit layout audit — binary offsets for ALL fields need cross-build
-// static_asserts. Current port field order does not match the binary's ARM32
-// layout; a full re-analyst layout pass is needed before adding the __bada__
-// assert block. Binary sizeof(Fruit) = 0x118. Key binary offsets:
-//   +0x3C m_FruitType, +0x60 m_LifetimeCounter, +0x6C m_SliceTimer,
-//   +0x70 m_SliceAngle, +0x74 m_SliceImpulse, +0x78 m_SlicePos(?),
-//   +0x7C m_bActive, +0x80 m_pEmitter1, +0x84 m_pEmitter2,
-//   +0xB4 m_bSliced, +0x108 m_pSlasher, +0x10C m_bSpawnedByCriticalSplash,
-//   +0x10D m_bCriticalEligible, +0x110 m_ScaleAnim, +0x114 m_bDrawWhole.
+#ifdef __bada__
+static_assert(sizeof(Fruit) == 0x118, "Fruit sizeof must match binary 0x118");
+static_assert(__builtin_offsetof(Fruit, m_FruitType)                == 0x3C, "");
+static_assert(__builtin_offsetof(Fruit, m_bNoPowerUp)               == 0x3D, "");
+static_assert(__builtin_offsetof(Fruit, m_pEmitter1)                == 0x40, "");
+static_assert(__builtin_offsetof(Fruit, m_pEmitter2)                == 0x44, "");
+static_assert(__builtin_offsetof(Fruit, m_SlicePos)                 == 0x48, "");
+static_assert(__builtin_offsetof(Fruit, m_LifetimeCounter)          == 0x60, "");
+static_assert(__builtin_offsetof(Fruit, m_CollisionSize)            == 0x64, "");
+static_assert(__builtin_offsetof(Fruit, m_SliceTimer)               == 0x6C, "");
+static_assert(__builtin_offsetof(Fruit, m_SliceAngle)               == 0x70, "");
+static_assert(__builtin_offsetof(Fruit, m_SliceImpulse)             == 0x74, "");
+static_assert(__builtin_offsetof(Fruit, m_SliceState)               == 0x78, "");
+static_assert(__builtin_offsetof(Fruit, m_bActive)                  == 0x7C, "");
+static_assert(__builtin_offsetof(Fruit, m_ChuckDelay)               == 0x80, "");
+static_assert(__builtin_offsetof(Fruit, m_RotAxis)                  == 0x84, "");
+static_assert(__builtin_offsetof(Fruit, m_PlayerIdx)                == 0x90, "");
+static_assert(__builtin_offsetof(Fruit, m_TimeScale)                == 0x94, "");
+static_assert(__builtin_offsetof(Fruit, m_ZPosition)                == 0x98, "");
+static_assert(__builtin_offsetof(Fruit, m_Gravity)                  == 0x9C, "");
+static_assert(__builtin_offsetof(Fruit, m_bSliced)                  == 0xB4, "");
+static_assert(__builtin_offsetof(Fruit, m_SecondPos)                == 0xB8, "");
+static_assert(__builtin_offsetof(Fruit, m_SecondVel)                == 0xC4, "");
+static_assert(__builtin_offsetof(Fruit, m_Rot1)                     == 0xD0, "");
+static_assert(__builtin_offsetof(Fruit, m_Rot2)                     == 0xE0, "");
+static_assert(__builtin_offsetof(Fruit, m_RotVel1)                  == 0xF0, "");
+static_assert(__builtin_offsetof(Fruit, m_RotVel2)                  == 0xFC, "");
+static_assert(__builtin_offsetof(Fruit, m_pSlasher)                 == 0x108, "");
+static_assert(__builtin_offsetof(Fruit, m_bSpawnedByCriticalSplash) == 0x10C, "");
+static_assert(__builtin_offsetof(Fruit, m_bCriticalEligible)        == 0x10D, "");
+static_assert(__builtin_offsetof(Fruit, m_ScaleAnim)                == 0x110, "");
+static_assert(__builtin_offsetof(Fruit, m_bDrawWhole)               == 0x114, "");
+#endif
 
 #endif

@@ -95,27 +95,32 @@ static Quaternion RandomStartAngle() {
 
 Fruit::Fruit()
     : m_FruitType(0)
+    , m_bNoPowerUp(0)
+    , m_pEmitter1(nullptr)
+    , m_pEmitter2(nullptr)
+    , m_SlicePos(0, 0, 0)
     , m_LifetimeCounter(0)
+    , m_CollisionSize(0)
+    , m_field_0x68(0)
     , m_SliceTimer(-1.0f)
     , m_SliceAngle(0)
     , m_SliceImpulse(0.0f)
-    , m_SlicePos(0, 0, 0)
+    , m_SliceState(0)
     , m_bActive(0)
-    , m_pEmitter1(nullptr)
-    , m_pEmitter2(nullptr)
-    , m_bSliced(false)
-    , m_bDetached(false)
-    , m_bDrawWhole(false)
-    , m_bCriticalEligible(false)
-    , m_bNoPowerUp(0)
-    , m_pSlasher(nullptr)
-    , m_bSpawnedByCriticalSplash(0)
-    , m_TrackerID(0)
-    , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
+    , m_RotAxis(0, 0, 0)
     , m_PlayerIdx(0)
     , m_TimeScale(1.0f)
     , m_ZPosition(0.0f)
+    , m_Gravity(0, -12.0f, 0)
+    , m_bSliced(0)
+    , m_SecondPos(0, 0, 0)
+    , m_SecondVel(0, 0, 0)
+    , m_pSlasher(nullptr)
+    , m_bSpawnedByCriticalSplash(0)
+    , m_bCriticalEligible(0)
+    , m_ScaleAnim(0.0f)
+    , m_bDrawWhole(0)
 {
     entityType = 0;
 }
@@ -129,13 +134,12 @@ Fruit::~Fruit() {
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
 // Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
 void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
-    m_FruitType = (int)fruitType;
+    m_FruitType = (uint8_t)fruitType;
     m_LifetimeCounter = 0;
     m_bActive = 0;
-    m_bSliced = false;
-    m_bDetached = false;
-    m_bDrawWhole = false;
-    m_bCriticalEligible = false;
+    m_bSliced = 0;
+    m_bDrawWhole = 0;
+    m_bCriticalEligible = 0;
     m_bSpawnedByCriticalSplash = 0;
     m_bNoPowerUp = 0;
     m_pSlasher = nullptr;
@@ -204,6 +208,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     }
 
     // Load mesh via MeshManager (cached, matches binary pattern)
+#ifndef __bada__
     Game* game = Game::GetInstance();
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
     if (game && meshMgr) {
@@ -229,6 +234,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
             }
         }
     }
+#endif
 }
 
 void Fruit::Chuck(float delay) {
@@ -486,6 +492,7 @@ static void DrawOneModel(Mortar::Model* model,
 
 void Fruit::Draw(Renderer& r) {
     (void)r;
+#ifndef __bada__
     if (!IsActive() || m_ChuckDelay > 0.0f) return;
     if (!m_Model.IsValid()) return;
 
@@ -520,6 +527,7 @@ void Fruit::Draw(Renderer& r) {
         DrawOneModel(halfA, drawPosA, m_Rot1, s);
         DrawOneModel(halfB, drawPosB, m_Rot2, s);
     }
+#endif
 }
 
 // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.

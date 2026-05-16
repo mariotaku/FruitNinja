@@ -631,12 +631,11 @@ void ShopScreen::QuitShopCallback() {
 
     // Fling the back/quit button. Binary @ 0x0015d55c indirects through
     // m_pBuyButton->m_pFruitPiece (+0x134) and writes *(byte*)(piece+0x80)=1
-    // unconditionally — same offset for Fruit::m_bDetached and Bomb::m_bMovement.
+    // (aliases m_ChuckDelay low byte). Port omits the write; m_ChuckDelay stays 0.
     if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
         Fruit* piece = m_pBuyButton->m_pFruitPiece;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        piece->m_bDetached = true;  // +0x80
         piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
     }
 
@@ -972,12 +971,12 @@ void ShopScreen::Update(float dt) {
         //   fires when newAlpha >= threshold, i.e. NOT yet done fading.
         if (newAlpha >= ALPHA_STATE3_DONE) {
             // Still fading: fling old back-button if present.
-            // Binary: m_pBuyButton->m_pFruitPiece (+0x134); *(byte*)(piece+0x80)=1.
+            // Binary: m_pBuyButton->m_pFruitPiece (+0x134); *(byte*)(piece+0x80)=1
+            // (aliases m_ChuckDelay low byte). Port omits the write.
             if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
                 Fruit* piece = m_pBuyButton->m_pFruitPiece;
                 float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-                piece->m_bDetached = true;
                 piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
                 // Binary: TutorialControl::ResetTutePos(tute, 0)
                 if (game.pTutorialCtrl)
@@ -1032,11 +1031,12 @@ void ShopScreen::Update(float dt) {
     case 5:
     case 6: {
         // Fling buy button (same as state 3): use m_pFruitPiece per binary.
+        // Binary writes *(byte*)(piece+0x80)=1 (aliases m_ChuckDelay low byte);
+        // port omits the write.
         if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
             Fruit* piece = m_pBuyButton->m_pFruitPiece;
             float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
             float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-            piece->m_bDetached = true;
             piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
             // Binary: TutorialControl::ResetTutePos(tute, 0)
             if (game.pTutorialCtrl)
