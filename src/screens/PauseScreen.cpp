@@ -113,13 +113,23 @@ void PauseScreen::UnpauseGame() {
     ts->pauseBombHitTimer = 0.4f;   // DAT_00168fcc
     ts->isPaused = 1;
 
-    // DIFFERS: binary's UnpauseGame doesn't touch gameActiveFlag here, but
-    // PauseScreen STATE_FADE_IN / STATE_ACTIVE force gameActiveFlag = 1
-    // every frame while paused (matching the binary's pause-tick behaviour).
-    // Nothing else in the port resets it to 0 -- so after Resume/Retry/Quit
-    // physics stays frozen and WaveManager's spawn pump goes silent. The
-    // binary must do this clear via a path we haven't RE'd; doing it here
-    // is the smallest correct surface-level fix.
+    // DIFFERS: binary's UnpauseGame does NOT touch gameActiveFlag
+    // (re-analyst 2026-05-16, full xref of every write to Game+0x02).
+    // Binary's GameTaskUpdate @ 0x0010a5d4 uses gameActiveFlag only to
+    // compute the `freezeArg` (iVar5) passed as the 2nd param to the
+    // per-state Update; it does NOT short-circuit the dispatch call.
+    // Each per-state Update receives freezeArg and selectively gates
+    // sub-blocks (animation / spawning / input) -- physics integration
+    // is NOT wholesale-gated.
+    //
+    // The port's GameUpdate (src/game/GameInit.cpp:334/337/348) does
+    // wholesale-gate actorManager / WaveManager / SplatEntity on the
+    // `active` arg, so after unpause the still-set flag keeps physics
+    // frozen and the spawn pump silent. The proper binary-faithful fix
+    // is to RE the binary's per-state GameUpdate and split the gating
+    // into the same fine-grained sub-skips. Until that lands, clearing
+    // the flag here is the minimal surface-level fix that restores
+    // observable behaviour.
     Game* game = Game::GetInstance();
     if (game) game->gameActiveFlag = 0;
 }
