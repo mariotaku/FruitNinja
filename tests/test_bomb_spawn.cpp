@@ -29,13 +29,19 @@
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_bomb_spawn [A|B|C|all]\n"
-        "  A   bare bottom bomb (ctor defaults, count=1)\n"
-        "  B   left-side spawn\n"
-        "  C   right-side spawn\n"
-        "  all run all variants (default)\n");
+        "usage: test_bomb_spawn [A|B|C|all|visual]\n"
+        "  A      bare bottom bomb (ctor defaults, count=1)\n"
+        "  B      left-side spawn\n"
+        "  C      right-side spawn\n"
+        "  all    run all variants (default; headless, fast)\n"
+        "  visual run all variants with a visible 60Hz window;\n"
+        "         keeps the window open after the runs until you close it\n");
     return 1;
 }
+
+// Global -- only true in `visual` mode. Drives window-visibility, vsync,
+// per-variant frame count, and post-run idle loop.
+static bool g_visual = false;
 
 // Returns the number of live bombs (entity type 1).
 static int BombCount(Game& game) {
@@ -61,11 +67,14 @@ static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game) 
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
 
+    Uint32 winFlags = SDL_WINDOW_OPENGL;
+    if (!g_visual) winFlags |= SDL_WINDOW_HIDDEN;
+
     *outWindow = SDL_CreateWindow(
         "fruit-ninja-bomb-spawn-test",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         960, 640,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+        winFlags);
     if (!*outWindow) {
         fprintf(stderr, "Window failed: %s\n", SDL_GetError());
         SDL_Quit();
@@ -79,7 +88,9 @@ static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game) 
         SDL_Quit();
         return false;
     }
-    SDL_GL_SetSwapInterval(0);
+    // Visual mode: vsync on for ~60Hz watchable pacing. Headless mode: no
+    // sync so ctest finishes fast.
+    SDL_GL_SetSwapInterval(g_visual ? 1 : 0);
 
     if (!gl_load_functions()) {
         fprintf(stderr, "gl_load_functions failed\n");
@@ -120,9 +131,11 @@ static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner) {
     printf("[test_bomb_spawn] %s: spawned, bombs_before=%d bombs_now=%d\n",
            name, bombsBefore, BombCount(game));
 
-    // Tick 200 frames (~3.3s at 60Hz). Enough for a bomb arc + OOB kill.
+    // Tick frames. 200 is enough for a bomb arc + OOB kill at 60Hz;
+    // visual mode runs 360 (~6s) so the user can watch the full flight
+    // including a pause after the OOB kill before the next variant.
     game.pauseFlag = 0;
-    game.runFrames(200);
+    game.runFrames(g_visual ? 360 : 200);
 
     const int bombsAfter = BombCount(game);
     printf("[test_bomb_spawn] %s: after 200 frames bombs=%d\n",
@@ -148,8 +161,13 @@ int main(int argc, char* argv[]) {
         if (strcmp(variant, "A") != 0 &&
             strcmp(variant, "B") != 0 &&
             strcmp(variant, "C") != 0 &&
-            strcmp(variant, "all") != 0) {
+            strcmp(variant, "all") != 0 &&
+            strcmp(variant, "visual") != 0) {
             return FailUsage();
+        }
+        if (strcmp(variant, "visual") == 0) {
+            g_visual = true;
+            variant = "all";
         }
     }
 
@@ -190,6 +208,16 @@ int main(int argc, char* argv[]) {
         spawnerC.m_HorizMin   = -0.25f;
         spawnerC.m_HorizMax   =  0.5f;
         if (!RunVariant(game, "C: right-side spawn", spawnerC)) ++failures;
+    }
+
+    if (g_visual) {
+        printf("=== visual mode: variants done. Close the window to exit. ===\n");
+        // Keep rendering until the user closes the window (Game::runFrames
+        // sets game.running = false on SDL_QUIT). Use a big frame budget;
+        // the loop exits naturally on close.
+        for (int i = 0; i < 60 * 60 * 5 && game.running; ++i) {
+            game.runFrames(1);
+        }
     }
 
     game.shutdown();
