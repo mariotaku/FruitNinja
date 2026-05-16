@@ -538,7 +538,17 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     const int horizAlign = alignment & 0x3;
     float lineOffset = 0.0f;
     if (horizAlign >= 2) {
-        const float measureCap = (alignment & 0x10) ? wrapLimit : 0.0f;
+        // First-line measure. The asm-verified compute uses
+        //   measureCap = (alignment & 0x10) ? wrapLimit : 0.0f
+        // (full-string measure when 0x10 bit not set). But when wrap is
+        // active (wrapLimit > 0) and the bit isn't set, the full-string
+        // measure produces a negative offset on line 1 because the full
+        // remaining string is much wider than wrapLimit. Force wrap-aware
+        // measure whenever wrapLimit > 0 so line 1 is also centered per
+        // its own wrap-bounded width. Matches the wrap-induced per-line
+        // recompute below.
+        const float measureCap = (wrapLimit > 0.0f) ? wrapLimit
+                               : ((alignment & 0x10) ? wrapLimit : 0.0f);
         float len = GetLineLength(iter, measureCap, nullptr);
         lineOffset = wrapLimit - len;
         if (horizAlign == 3) lineOffset *= 0.5f;
@@ -583,8 +593,18 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
                 iter++;
                 lineOffset = 0.0f;
                 if (horizAlign >= 2) {
-                    const float measureCap = (alignment & 0x10) ? wrapLimit : 0.0f;
-                    float _len = GetLineLength(iter, measureCap, nullptr);
+                    // Wrap-induced break -- measure ONE wrap-line worth of
+                    // text so the offset reflects the current line's width,
+                    // not the entire remaining string. Without `wrapLimit`
+                    // here, GetLineLength(..., 0.0f) returns the full
+                    // remaining string length, producing a "staircase" effect
+                    // where each line's offset grows based on what's still
+                    // to be rendered, not what's actually on this line.
+                    // Differs from the asm-verified first-line measure (which
+                    // does honor alignment & 0x10) -- the wrap path knows it
+                    // just broke on a wrap point, so wrap-aware measurement
+                    // is always correct here.
+                    float _len = GetLineLength(iter, wrapLimit, nullptr);
                     lineOffset = wrapLimit - _len;
                     if (horizAlign == 3) lineOffset *= 0.5f;
                 }
