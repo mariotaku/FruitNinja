@@ -706,6 +706,25 @@ void SlashEntity::Update(float dt) {
     Game* game = Game::GetInstance();
     const bool bombHitActive = game && game->bombHitTimer > 0.0f;
 
+    // DIFFERS: binary @ 0x17D664 (re-analyst 2026-05-17) gates the
+    // collision loop on `(globalFlagsWord & 0x40) == 0` via DAT_0017d960
+    // (a GOT-relative flag word, likely an InputManager / game-mode
+    // bitfield; bit 0x40 = "block slicing"). That flag word is suspected
+    // to be set by PauseScreen on activation so the binary's collision
+    // loop naturally short-circuits during pause -- the binary does NOT
+    // check gameActiveFlag at this site.
+    //
+    // Port hasn't RE'd which subsystem owns DAT_0017d960 yet. As a
+    // safety net we approximate the binary's effective behaviour by
+    // gating on gameActiveFlag (set by PauseScreen FADE_IN / ACTIVE).
+    // Trail-building (UpdatePoints / AddPoint / RebuildGeometry) stays
+    // unconditional -- matches binary; the visible blade still draws
+    // during pause, only slicing is suppressed.
+    //
+    // TODO: identify DAT_0017d960 + its PauseScreen setter and replace
+    // this approximation with the binary-faithful flag-word check.
+    const bool gamePaused = game && game->gameActiveFlag != 0;
+
     // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
     // frame; PlaySwipe resets to 6.0f).
     if (m_SwipeSoundTimer > 0.0f) {
@@ -714,7 +733,7 @@ void SlashEntity::Update(float dt) {
     }
 
     bool slicedThisFrame = false;
-    if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive) {
+    if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive && !gamePaused) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
             // Only fruit (0) and bomb (1) participate in blade collision
@@ -1083,12 +1102,6 @@ void SlashEntity::SetModColours(
 // the palette via UpdateModColour. Then call UpdateTouchDown to ingest the
 // initial touch position. Returns true (event consumed).
 bool SlashEntity::TouchDown(InputEvent* event) {
-    // Suppress slash ingestion while paused so the blade doesn't slice
-    // gameplay entities behind the pause overlay. gameActiveFlag != 0
-    // == paused (per the binary's GameTaskUpdate canUpdate predicate).
-    Game* gp = Game::GetInstance();
-    if (gp && gp->gameActiveFlag != 0) return false;
-
     if (m_State == 0) {
         Reset();
         if (g_ColourType == 2) {
@@ -1106,8 +1119,6 @@ bool SlashEntity::TouchDown(InputEvent* event) {
 bool SlashEntity::TouchMoveX(InputEvent* event) {
     Game* g = Game::GetInstance();
     if (g && g->bombHitTimer > 0.0f) return false;
-    // See TouchDown comment: suppress while paused.
-    if (g && g->gameActiveFlag != 0) return false;
     m_RawTouchPos.x = event->x;
     return true;
 }
@@ -1119,7 +1130,6 @@ bool SlashEntity::TouchMoveX(InputEvent* event) {
 bool SlashEntity::TouchMoveY(InputEvent* event) {
     Game* g = Game::GetInstance();
     if (g && g->bombHitTimer > 0.0f) return false;
-    if (g && g->gameActiveFlag != 0) return false;
     m_RawTouchPos.y = event->y;
     return true;
 }
@@ -1142,8 +1152,6 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
 // ages out via per-frame logic). SDL has explicit FINGERUP/MOUSEBUTTONUP
 // which we route via TouchUp_n to this handler.
 bool SlashEntity::TouchUp(InputEvent* /*event*/) {
-    // Always handle release so any blade state started before pause
-    // gets cleaned up cleanly; no pause-gate here.
     OnTouchReleased();
     return true;
 }
