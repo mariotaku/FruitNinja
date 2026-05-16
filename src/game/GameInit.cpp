@@ -374,8 +374,20 @@ void GameUpdate(float dt, bool active) {
 
     if (active) SplatEntity::UpdateActiveSplats(dt);
     // Binary @ 0x16c378 -- frozen branch fires Update + PostUpdate per
-    // SlashEntity, both with dt=0. Active branch drives them via
-    // ActorManager::Update.
+    // SlashEntity, both with dt=0. The binary's active branch drives them
+    // via ActorManager::Update because SlashEntity is a type-3 actor
+    // (EntityFactory::case 3) in the binary.
+    //
+    // DIFFERS: port creates g_pSlashEntities[16] via plain `new` (see
+    // GameInit step ~291), NOT via ActorManager::Add(3,..), so they are
+    // NOT in the ActorManager type-list. We must drive them explicitly
+    // each frame, otherwise slicing freezes during active gameplay.
+    // TODO: port them through ActorManager so the dispatch matches binary.
+    if (active) {
+        for (int i = 0; i < 16; ++i) {
+            if (g_pSlashEntities[i]) g_pSlashEntities[i]->Update(dt);
+        }
+    }
     if (!active) {
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) {
