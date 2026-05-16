@@ -13,6 +13,7 @@
 #include "render/gl_funcs.h"
 #include <cstdlib>
 #include <climits>
+#include <set>
 #include <sys/stat.h>
 #ifdef _WIN32
 #  include <direct.h>
@@ -39,6 +40,8 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 #include "game/StartupEffects.h"
 #include "game/WaveManager.h"
 #include "game/FruitSaveData.h"
+#include "entities/ActorManager.h"
+#include "entities/Entity.h"
 #include "hud/ScoreControl.h"
 #include "hud/MissControl.h"
 #include "hud/FruitFactControl.h"
@@ -448,10 +451,53 @@ int main(int argc, char* argv[]) {
             // can't be intercepted mid-loop, so we use runFrames(1) +
             // reset and rely on Game::runFrames for event pump / vsync.
             // ESC / window close still flips game.running -> false.
-            while (game.running) {
+            //
+            // While we're here -- track every type-0 (fruit) and type-1
+            // (bomb) entity each tick so we can verify visually whether
+            // spawn happens off-screen or pops into the viewport. SPAWN
+            // logs every new pointer, DESPAWN logs removal, POS logs the
+            // trail every 10 frames. Runtime capped at 60s (~6000 frames
+            // at ~100fps Game::run pacing) so a CI capture is bounded.
+            std::set<Mortar::Entity*> seen;
+            const int kMaxFrames = 60 * 100;  // 60s at ~100fps
+            int frameIdx = 0;
+            while (game.running && frameIdx < kMaxFrames) {
                 game.missCount = 0;
+
+                Mortar::ActorManager* am = game.actorManager;
+                if (am) {
+                    std::set<Mortar::Entity*> current;
+                    for (int type = 0; type <= 1; ++type) {
+                        std::list<Mortar::Entity*>::iterator it;
+                        Mortar::Entity* e = am->GetEntityFirst(type, it);
+                        while (e) {
+                            current.insert(e);
+                            if (seen.find(e) == seen.end()) {
+                                printf("[SPAWN] f=%d type=%d ent=%p pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f)\n",
+                                       frameIdx, type, (void*)e,
+                                       e->pos.x, e->pos.y, e->vel.x, e->vel.y);
+                            } else if (frameIdx % 10 == 0) {
+                                printf("[POS]   f=%d type=%d ent=%p pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f)\n",
+                                       frameIdx, type, (void*)e,
+                                       e->pos.x, e->pos.y, e->vel.x, e->vel.y);
+                            }
+                            e = am->GetEntityNext(type, it);
+                        }
+                    }
+                    for (std::set<Mortar::Entity*>::iterator sit = seen.begin();
+                         sit != seen.end(); ++sit) {
+                        if (current.find(*sit) == current.end()) {
+                            printf("[DESPAWN] f=%d ent=%p\n", frameIdx, (void*)*sit);
+                        }
+                    }
+                    seen.swap(current);
+                }
+
                 game.runFrames(1);
+                ++frameIdx;
             }
+            printf("[test_screen classic --no-miss] exit after %d frames (%s)\n",
+                   frameIdx, game.running ? "60s timeout" : "window closed");
         } else {
             // Interactive: hand off to the normal main loop. ESC / window
             // close exits. No automatic timeout.
