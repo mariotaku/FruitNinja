@@ -85,4 +85,40 @@ public:
     // ---- end AUTO-STUB MERGE ----
 };
 
+#ifdef __bada__
+// Binary-faithful offsets (32-bit Bada cross-build). Binary total = 0x70 (112 bytes).
+// Header offset comments use the form "start_of_first / start_of_second" for pairs.
+// Resolved layout: m_BlastRadius(+0x3C) m_Scale(+0x40) [4B gap +0x44]
+//   m_PosA(+0x48) m_PosB(+0x54) m_Vel1(+0x60) m_Lifetime(+0x6C) sizeof=0x70
+// Note: only one velocity field fits at binary size 0x70; m_Vel2 may be a port
+// artefact or may displace m_Lifetime -- these asserts are conservative.
+// TODO: re-verify BombBlast binary field layout from ctor/Init disassembly.
+static_assert(offsetof(BombBlast, m_BlastRadius) == 0x3C, "m_BlastRadius binary offset wrong");
+static_assert(offsetof(BombBlast, m_Scale)       == 0x40, "m_Scale binary offset wrong");
+static_assert(offsetof(BombBlast, m_PosA)        == 0x48, "m_PosA binary offset wrong");
+static_assert(sizeof(BombBlast)                  == 0x70, "sizeof(BombBlast) wrong (binary 0x70 / 112)");
+#else
+// Always-on port layout asserts (desktop x64). Offsets reflect 8-byte vtable ptr,
+// int-widened entityType. No pointers added in BombBlast so the delta vs binary
+// is: +0x14 for base Entity growth (vtable +4, entityType widening +4, padding +4
+// around m_Col alignment, plus shifts from those).
+// Binary equivalents noted in comments for parity tracking.
+static_assert(offsetof(BombBlast, m_BlastRadius) == 0x50,
+    "m_BlastRadius port offset drift (binary +0x3C)");
+static_assert(offsetof(BombBlast, m_Scale)       == 0x54,
+    "m_Scale port offset drift (binary +0x40)");
+static_assert(offsetof(BombBlast, m_PosA)        == 0x58,
+    "m_PosA port offset drift (binary +0x48)");
+static_assert(offsetof(BombBlast, m_PosB)        == 0x64,
+    "m_PosB port offset drift (binary +0x54)");
+static_assert(offsetof(BombBlast, m_Vel1)        == 0x70,
+    "m_Vel1 port offset drift (binary +0x60)");
+static_assert(offsetof(BombBlast, m_Vel2)        == 0x7C,
+    "m_Vel2 port offset drift (binary +0x6C)");
+static_assert(offsetof(BombBlast, m_Lifetime)    == 0x88,
+    "m_Lifetime port offset drift (binary +0x6C per header comment)");
+static_assert(sizeof(BombBlast)                  == 0x90,
+    "sizeof(BombBlast) port drift (binary 0x70; port 0x90 due to 64-bit ptrs + entityType widening)");
+#endif
+
 #endif

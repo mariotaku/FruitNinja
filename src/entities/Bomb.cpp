@@ -183,7 +183,9 @@ Bomb::Bomb()
       m_ZPosition(0.0f),
       m_RotVelX(0), m_RotVelY(0),
       m_RotX(0), m_RotY(0),
+#ifndef __bada__
       m_RotAccumX(0.0f), m_RotAccumY(0.0f),
+#endif
       m_bCollisionGuard(0),
       m_pEmitter(nullptr),
       m_bMovement(0),
@@ -236,8 +238,10 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
     m_RotX    = (int16_t)(rand() % 360);     // 0..359
     m_RotVelY = (int16_t)(rand() % 7 + 1);
     m_RotY    = (int16_t)(rand() % 360);
+#ifndef __bada__
     m_RotAccumX = 0.0f;
     m_RotAccumY = 0.0f;
+#endif
 
     m_bMenuBombHit = 0;
     m_pOwnerButton = nullptr;
@@ -289,12 +293,10 @@ void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* /*button*/) {
     m_RotVelY = 0;      // Y axis locked
 }
 
-// Port specific: advance bomb's integer rotation by a per-frame step that
-// scales with the debug timescale via scaledDt. Binary always does
-// `m_RotX += m_RotVelX` once per 1/60 frame; at normal (1.0x) timescale
-// this helper is identical. At slow timescale (e.g. F7 = 0.1x) scaledDt
-// is 10x smaller so the fractional accumulator only crosses 1 every ~10
-// frames, making rotation visibly slower in sync with physics.
+// Binary: rot += vel once per frame. Port adds a fractional accumulator so
+// the F7 debug timescale slows rotation proportionally. Under __bada__ the
+// accumulator fields are absent; the binary-faithful path is used instead.
+#ifndef __bada__
 static inline void StepBombRotation(int16_t& rot, int16_t vel,
                                     float& accum, float scaledDt) {
     if (scaledDt <= 0.0f) return;
@@ -305,6 +307,11 @@ static inline void StepBombRotation(int16_t& rot, int16_t vel,
         accum -= (float)whole;
     }
 }
+#else
+static inline void StepBombRotation(int16_t& rot, int16_t vel) {
+    rot = (int16_t)(rot + vel);
+}
+#endif
 
 // Helper: accel-growth block shared by alive-branch and menu-hit-branch in
 // binary Bomb::Update. When velocity and accelForce are componentwise
@@ -409,8 +416,13 @@ void Bomb::Update(float /*dt*/) {
             AccelGrowth(vel, m_AccelForce, dtNorm);
         }
         pos += vel * dtNorm;
+#ifndef __bada__
         StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
         StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
+#else
+        StepBombRotation(m_RotX, m_RotVelX);
+        StepBombRotation(m_RotY, m_RotVelY);
+#endif
 
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
         // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
@@ -440,8 +452,13 @@ void Bomb::Update(float /*dt*/) {
                 AccelGrowth(vel, m_AccelForce, dtNorm);
             }
             pos += vel * dtNorm;
+#ifndef __bada__
             StepBombRotation(m_RotX, m_RotVelX, m_RotAccumX, scaledDt);
             StepBombRotation(m_RotY, m_RotVelY, m_RotAccumY, scaledDt);
+#else
+            StepBombRotation(m_RotX, m_RotVelX);
+            StepBombRotation(m_RotY, m_RotVelY);
+#endif
         }
 
         // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
