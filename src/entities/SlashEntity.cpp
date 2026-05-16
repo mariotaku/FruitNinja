@@ -704,28 +704,20 @@ void SlashEntity::Update(float dt) {
     // return` at 0x17D664 line ~442). This stops the blade from registering
     // more slices once a bomb has already gone off.
     Game* game = Game::GetInstance();
+    // bombHitTimer is dual-purpose (re-analyst 2026-05-17): bomb-hit freeze
+    // (3.2s set by HitBomb) AND unpause input-freeze (0.4f set by
+    // UnpauseGame @ 0x168fb0). Either way `> 0` gates the collision loop.
+    // The matching gate in UpdateTouchDown above prevents new points from
+    // being added during the freeze, so `m_NumPoints < 4` short-circuits
+    // naturally -- the same mechanism the binary uses for pause.
     const bool bombHitActive = game && game->bombHitTimer > 0.0f;
 
-    // Binary @ 0x17D664 (re-analyst 2026-05-17) gates the collision
-    // loop on `(s_ModPowerMask & 0x40) == 0` -- bit 0x40 is set by
-    // ScrollingMenu::Update on touch-acquire (binary @ 0x0015b7cc) and
-    // cleared on release (@ 0x0015baba) + DestroyList (@ 0x0015afea).
-    // This suppresses slicing while the player is dragging a shop /
-    // dojo scroll list (so taps don't slice fruits behind it).
+    // Binary @ 0x17D664: also gates on `(s_ModPowerMask & 0x40)` -- bit
+    // 0x40 set by ScrollingMenu::Update on touch-acquire (@ 0x0015b7cc)
+    // and cleared on release (@ 0x0015baba) + DestroyList (@ 0x0015afea).
+    // Suppresses slicing while the player is dragging a shop / dojo
+    // scroll list (so taps don't slice fruits behind it).
     const bool menuDragActive = (SlashEntity::s_ModPowerMask & 0x40u) != 0u;
-
-    // DIFFERS: binary's pause-time slice-suppression is NOT done via
-    // bit 0x40. The binary's PauseScreen overlay claims touch input
-    // before SlashEntity sees it, so m_RawTouchPos doesn't update and
-    // m_NumPoints never grows past 4 -- the existing `< 4` clause then
-    // gates collision naturally. The port's PauseScreen doesn't claim
-    // touch input yet (touches flow through Bada-style per-finger
-    // delegates registered by SlashEntity::Init), so we approximate
-    // via gameActiveFlag here. Trail-building still runs (visible
-    // blade tracks finger during pause; only slicing is suppressed).
-    // TODO: port PauseScreen touch-input claiming so this gate matches
-    // binary by short-circuiting via `m_NumPoints < 4`.
-    const bool gamePaused = game && game->gameActiveFlag != 0;
 
     // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
     // frame; PlaySwipe resets to 6.0f).
@@ -736,7 +728,7 @@ void SlashEntity::Update(float dt) {
 
     bool slicedThisFrame = false;
     if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive
-        && !menuDragActive && !gamePaused) {
+        && !menuDragActive) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
             // Only fruit (0) and bomb (1) participate in blade collision
@@ -1147,6 +1139,14 @@ void SlashEntity::UpdatePoints(float /*dt*/) {}
 // same SDL event burst) and interpolates AddPoint calls along the move
 // delta. Port's existing OnTouchActive(x, y) does the same thing -- forward.
 void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
+    // Binary @ 0x17D3AC short-circuits this function when bombHitTimer > 0
+    // (the timer is the dual-purpose "input freeze" window written to 0.4f
+    // by UnpauseGame and to non-zero by bomb-hit). With no AddPoint calls
+    // during the freeze, m_NumPoints stays < 4 and the collision loop in
+    // Update naturally short-circuits. Binary-faithful pause-time slice
+    // suppression -- no port-specific gameActiveFlag gate needed.
+    Game* g = Game::GetInstance();
+    if (g && g->bombHitTimer > 0.0f) return;
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
 }
 
