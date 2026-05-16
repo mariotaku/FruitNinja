@@ -685,12 +685,26 @@
     "max_score": 3400,
     "decided_at": "2026-05-04T00:00Z"
   },
+  "_GLOBAL__I_GameOverScreen.cpp": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "TU static-init function (_GLOBAL__I_*). Constructs SmartPtr<Texture> statics + GameOverScreen vtable + static-guard bytes. Codegen differences from PIC anchor ordering + member-init ordering. Score 49295/53100 (92%) -- effectively MATCH after -fpic flag.",
+    "score": 49295,
+    "max_score": 53100,
+    "decided_at": "2026-05-16T00:00Z"
+  },
   "_ZN14GameOverScreen10InitialiseEPKcifiiii": {
     "verdict": "ACCEPT-deferred",
     "reason": "Tier-2 init flow; port uses MortarGame singleton for game-data access, binary used GOT-resolved direct path. Multiple sub-controls and state initializations differ. See src/screens/GameOverScreen.cpp:116. Score 35496/20600.",
-    "score": 35496,
+    "score": 35914,
     "max_score": 20600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameOverScreen11LoadContentEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Texture-load function. Loads 13 SmartPtr<Texture> statics (5 individuals + array-of-2 leaderboards + 2 arrays-of-3 sensei body/head) and a static guard byte. Binary outlines `Mortar::AsciiString` ctor/dtor and `LoadLocalisedTexture` call shape; port inlines the AsciiString boilerplate. Residual diff dominated by string-handling inlining policy. See src/screens/GameOverScreen.cpp LoadContent (binary-faithful ordering verified 2026-05-16 via objdump).",
+    "score": 54856,
+    "max_score": 17900,
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen12PostCallbackEi": {
     "verdict": "ACCEPT-deferred",
@@ -702,16 +716,16 @@
   "_ZN14GameOverScreen12QuitCallbackEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Port sets state=9 to [r0,#0x80] (state machine transition) without binary's SFX chain (SFXPlay + blx f0368 transition). Binary also calls GetCurrentData at blx e41f4 before state set. Missing SFX + current-data call. Tier-2 SFX/transition hooks. See src/screens/GameOverScreen.cpp. Score 5235/3700.",
-    "score": 5235,
+    "score": 5385,
     "max_score": 3700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen12SetStateWaitEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Binary has full online leaderboard/HUD progression timer chain (f4c94, eeab4, ebb44, blx r9 call), port just sets state=6. All leaderboard/progression-timer logic is defunct online service. See src/screens/GameOverScreen.cpp:311-315. Score 11225/11100.",
-    "score": 11225,
+    "score": 10690,
     "max_score": 11100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen12SetTerminateEv": {
     "verdict": "ACCEPT-deferred",
@@ -723,23 +737,30 @@
   "_ZN14GameOverScreen13RetryCallbackEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Port uses MortarGame singleton gate + GetTaskState call; binary uses full GOT-resolved path. Same core flow (state check, ClearCombo, state=5) but port missing binary's SaveCurrentData call (blx e6e04) at entry. Tier-2 save path. See src/screens/GameOverScreen.cpp. Score 10195/9700.",
-    "score": 10195,
+    "score": 9947,
     "max_score": 9700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameOverScreen13UnLoadContentEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Nulls 13 SmartPtr<Texture> statics + clears guard byte. Port uses a noinline NullTex helper (commit f1dd1af) that emits `bl _ZL7NullTexPN6Mortar8SmartPtrINS_7TextureEEE` matching the binary's tree-tail-merged T.967 thunk. Score 4775/6800 (70%) -- structurally MATCH; residual diff is the 3 GOT slots (0x7af8, 0x75f4, 0x7a88) the port doesn't null because their assignment sites haven't been identified (TODO in source).",
+    "score": 4775,
+    "max_score": 6800,
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen14DeletedControlEP10HUDControl": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port checks [r0,#0xc4], [r0,#0x9c], [r0,#0xc8] in that order vs binary checking [r0,#0xc4], [r0,#0x98], [r0,#0xc8]. Field 0x9c vs 0x98 offset divergence and different state-write sequence (port stores movs #1/str #6 to [r0,#0x80] vs binary's adds #6 path). Struct layout offset drift. Score 2710/2000.",
-    "score": 2710,
+    "reason": "Port checks [r0,#0xc4], [r0,#0x9c], [r0,#0xc8] in that order vs binary checking [r0,#0xc4], [r0,#0x98], [r0,#0xc8]. Field 0x9c vs 0x98 offset divergence and different state-write sequence (port stores movs #1/str #6 to [r0,#0x80] vs binary's adds #6 path). Struct layout offset drift. Score 2710/2000. Score refreshed 2026-05-16 (was 2710, now 3295) after -fpic cross-build flag landed.",
+    "score": 3295,
     "max_score": 2000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen15FindMostOfFruitEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "std::map iteration replaces binary linked-list walk; functional equivalent. See src/screens/GameOverScreen.cpp:321.",
-    "score": 32059,
+    "reason": "std::map iteration replaces binary linked-list walk; functional equivalent. Score drifted slightly (32059 -> 31962) after -fpic cross-build flag landed. See src/screens/GameOverScreen.cpp.",
+    "score": 31962,
     "max_score": 11000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen15TwitterCallbackEv": {
     "verdict": "ACCEPT-defunct",
@@ -750,10 +771,10 @@
   },
   "_ZN14GameOverScreen16CreateQuitButtonEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port creates MenuButton via _Znwj + MenuButtonC1Ev with TextureManager::LoadLocalisedTexture path; binary used inline alloc + blx f73a0 (blx to Mortar Text helper). Score drifted (15007/12400) from TextureManager integration. See src/screens/GameOverScreen.cpp:414. Score 15007/12400.",
-    "score": 15007,
+    "reason": "Port creates MenuButton via _Znwj + MenuButtonC1Ev with TextureManager::LoadLocalisedTexture path; binary used inline alloc + blx f73a0 (blx to Mortar Text helper). Structural divergence rooted in TextureManager integration -- chasing it would require re-implementing the binary's resource-cache path. Score refreshed 2026-05-14 (drifted from 15007/12400 to 20303/12400) after the 9abe37e MenuButton::Init m_TargetSize compute increased instruction count in the callee chain that gets inlined here. See src/screens/GameOverScreen.cpp CreateQuitButton.",
+    "score": 20099,
     "max_score": 12400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen16FacebookCallbackEv": {
     "verdict": "ACCEPT-defunct",
@@ -764,17 +785,17 @@
   },
   "_ZN14GameOverScreen17CreateRetryButtonEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Same as CreateQuitButton: MenuButton factory differs structurally; port uses TextureManager::LoadLocalisedTexture path. See src/screens/GameOverScreen.cpp:377. Score 15350/13000.",
-    "score": 15350,
+    "reason": "Same root cause as CreateQuitButton: MenuButton factory differs structurally because port uses TextureManager::LoadLocalisedTexture path. Score refreshed 2026-05-14 (drifted from 15350/13000 to 19904/13000) after the 9abe37e MenuButton::Init m_TargetSize compute. See src/screens/GameOverScreen.cpp CreateRetryButton.",
+    "score": 20608,
     "max_score": 13000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen20LeaderboardsCallbackEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port reads MortarGame singleton [0x110] float (leaderboard manager pointer); binary reads [r3,#0xc] (different field offset). Struct offset drift in leaderboard-manager pointer. Score compare path (vcmpe s14,s15) is semantically equivalent. See src/screens/GameOverScreen.cpp. Score 2505/2400.",
-    "score": 2505,
+    "reason": "Port reads MortarGame singleton [0x110] float (leaderboard manager pointer); binary reads [r3,#0xc] (different field offset). Struct offset drift in leaderboard-manager pointer. Score compare path (vcmpe s14,s15) is semantically equivalent. Score dropped from 2505/2400 to 2180/2400 (90%) after -fpic cross-build flag landed -- nearly MATCH now, kept as ACCEPT-deferred due to the struct-offset note.",
+    "score": 2180,
     "max_score": 2400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen20OnProgressionTimerUpEv": {
     "verdict": "ACCEPT-defunct",
@@ -814,16 +835,16 @@
   "_ZN14GameOverScreen6UpdateEf": {
     "verdict": "ACCEPT-deferred",
     "reason": "Port now creates BonusScreen + calls AchievementManager::UnlockScoreAchievement. Score drifted (114065/90500) from BonusScreen/AchievementManager landing. TODOs at src/screens/GameOverScreen.cpp:522 (RemoveCallback delegate), 527 (DAT_00141DC8 Y-offset), 586 (FruitSaveData[+0x12D] clear). Binary's tbh jump table offsets diverge due to new states. Score 114065/90500.",
-    "score": 114065,
+    "score": 104305,
     "max_score": 90500,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "ASM-verified core; BonusManager::ClearBestBonuses still TODO. See src/screens/GameOverScreen.cpp:253-296. Score 11985/7900.",
-    "score": 11985,
+    "score": 12710,
     "max_score": 7900,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreen9BeginDrawEf": {
     "verdict": "ACCEPT-cosmetic",
@@ -834,38 +855,52 @@
   },
   "_ZN14GameOverScreenC1EPKcifiiii": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port initializes many new fields inline (vstr/str for floats, strb for flags, str for pointers at 0x0..0xce range) vs binary's sparse PIC-offset initialization. Score drifted (10320/4700) from new GameOverScreen members landing. See src/screens/GameOverScreen.cpp:66. Score 10320/4700.",
-    "score": 10320,
+    "reason": "Port initializes many new fields inline (vstr/str for floats, strb for flags, str for pointers at 0x0..0xce range) vs binary's sparse PIC-offset initialization. Score drifted (10320/4700) from new GameOverScreen members landing. See src/screens/GameOverScreen.cpp:66. Score 10320/4700. Score refreshed 2026-05-16 (was 10320, now 8035) after -fpic cross-build flag landed.",
+    "score": 8035,
     "max_score": 4700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameOverScreenC1Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "Default ctor; member-init ordering + vtable setup differ from binary. Port has additional fields the binary's ctor doesn't initialise (port-only state). See src/screens/GameOverScreen.cpp. Same root cause as the parameterised C1/C2 entry.",
+    "score": 7035,
+    "max_score": 3700,
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreenC2EPKcifiiii": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 alias of C1; same as GameOverScreenC1. Score 10320/4700.",
-    "score": 10320,
+    "reason": "C2 alias of C1; same as GameOverScreenC1. Score 10320/4700. Score refreshed 2026-05-16 (was 10320, now 8035) after -fpic cross-build flag landed.",
+    "score": 8035,
     "max_score": 4700,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
+  },
+  "_ZN14GameOverScreenC2Ev": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "C2 alias of GameOverScreenC1Ev. Same root cause.",
+    "score": 7035,
+    "max_score": 3700,
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreenD0Ev": {
     "verdict": "ACCEPT-deferred",
     "reason": "Deleting dtor wraps ~GameOverScreen (empty body). See src/screens/GameOverScreen.cpp:108.",
-    "score": 3535,
+    "score": 3695,
     "max_score": 3400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreenD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Non-deleting dtor; same as D0 minus operator delete.",
-    "score": 2975,
+    "reason": "Non-deleting dtor; same as D0 minus operator delete. Score refreshed 2026-05-16 (was 2975, now 3510) after -fpic cross-build flag landed.",
+    "score": 3510,
     "max_score": 3100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14GameOverScreenD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 alias of D1.",
-    "score": 2975,
+    "reason": "D2 alias of D1. Score refreshed 2026-05-16 (was 2975, now 3510) after -fpic cross-build flag landed.",
+    "score": 3510,
     "max_score": 3100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN14PowerUpManager11SetDefaultsEv": {
     "verdict": "ACCEPT-deferred",

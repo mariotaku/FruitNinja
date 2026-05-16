@@ -44,7 +44,7 @@ if (WIN32 AND TARGET SDL2::SDL2)
     endif()
 endif()
 
-foreach(screen main dojo about shop gamemode gameover classic)
+foreach(screen main dojo about shop gamemode gameover gameover-transition classic)
     add_test(NAME screen_${screen} COMMAND test_screen ${screen})
     set_tests_properties(screen_${screen} PROPERTIES TIMEOUT 60)
 endforeach()

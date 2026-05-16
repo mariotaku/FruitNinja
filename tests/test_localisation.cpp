@@ -1,4 +1,4 @@
-// Localisation smoke test: loads translations_*.str from the asset
+// StringTable smoke test: loads translations_*.str from the asset
 // directory and prints resolved strings for a handful of known keys.
 //
 // First-run mode: prints the resolved values so the user can verify them
@@ -8,7 +8,7 @@
 // Run via:
 //   cd build && ctest --output-on-failure -R localisation
 
-#include "util/Localisation.h"
+#include "util/StringTable.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -23,6 +23,7 @@ struct TestKey {
 
 // Expected strings, verified manually from a first run against
 // translations_english_us.str. All assertions enabled.
+// Note: miss fallback is "STRING NOT FOUND" (not the key itself) per binary.
 static const TestKey kKeys[] = {
     { "GEN_OK",        "OK"                                    },
     { "GEN_CANCEL",    "Cancel"                                },
@@ -31,10 +32,10 @@ static const TestKey kKeys[] = {
     { "DOJO_TEXT_05",  "DISCO BLADE"                           },
     { "DOJO_TEXT_06",  "SLICE 50 BANANAS TO UNLOCK. %i TO GO!" },
     { "DOJO_TEXT_22",  "ORIGINAL WOOD"                         },
-    // Pass-through: keys that don't exist in the table return the key itself.
-    { "MENU_PLAY",     "MENU_PLAY"                             },
-    { "FRONTEND_DOJO", "FRONTEND_DOJO"                         },
-    { "NOT_A_REAL_KEY","NOT_A_REAL_KEY"                        },
+    // Miss: keys not in the table return "STRING NOT FOUND" per binary.
+    { "MENU_PLAY",     "STRING NOT FOUND"                      },
+    { "FRONTEND_DOJO", "STRING NOT FOUND"                      },
+    { "NOT_A_REAL_KEY","STRING NOT FOUND"                      },
 };
 
 int main(int argc, char** argv) {
@@ -43,17 +44,18 @@ int main(int argc, char** argv) {
 
     printf("test_localisation: dataDir='%s' languageFlag=%d\n", dataDir, lang);
 
-    Localisation::Load(dataDir, lang);
+    Mortar::StringTable::Load(dataDir, lang);
 
-    if (!Localisation::IsLoaded()) {
-        fprintf(stderr, "FAIL: Localisation::Load did not complete\n");
+    if (!Mortar::StringTable::IsLoaded()) {
+        fprintf(stderr, "FAIL: StringTable::Load did not complete\n");
         return 1;
     }
-    printf("loaded: count=%u\n", Localisation::s_count);
+    printf("loaded: count=%u\n", Mortar::StringTable::s_count);
 
     int failures = 0;
-    for (const TestKey& tk : kKeys) {
-        const char* got = Localisation::Get(tk.key);
+    for (int i = 0; i < (int)(sizeof(kKeys)/sizeof(kKeys[0])); i++) {
+        const TestKey& tk = kKeys[i];
+        const char* got = Mortar::StringTable::GetString(tk.key);
         printf("  %-22s -> '%s'\n", tk.key, got ? got : "(null)");
 
         if (tk.expectedEnglishUS && tk.expectedEnglishUS[0] != '\0') {
@@ -67,7 +69,20 @@ int main(int argc, char** argv) {
         }
     }
 
-    Localisation::Unload();
+    // Test integer-ID overload for confirmed LSTR_ values.
+    {
+        const char* best = Mortar::GETSTRING_CAST_0(LSTR_BEST);
+        printf("  LSTR_BEST (0xb5)       -> '%s'\n", best ? best : "(null)");
+        // "BEST:" in english_us -- only assert if table loaded with assets.
+        if (best && std::strcmp(best, "STRING NOT FOUND") != 0) {
+            if (std::strcmp(best, "BEST:") != 0) {
+                fprintf(stderr, "    FAIL: LSTR_BEST expected 'BEST:', got '%s'\n", best);
+                ++failures;
+            }
+        }
+    }
+
+    Mortar::StringTable::Unload();
 
     if (failures != 0) {
         fprintf(stderr, "test_localisation: %d failures\n", failures);

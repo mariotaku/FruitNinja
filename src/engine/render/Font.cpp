@@ -475,11 +475,16 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     //   maxWH.y /= (yLineFactor * scale)
     // yLineFactor is a vertical line-pitch divisor (NOT a wrap-width limit
     // as earlier port comments claimed). The binary's wrapper @ 0x00199aa0
-    // hardcodes yLineFactor = 1.0; ScoreControl's highscore "BEST" label
-    // passes 0.9 (DAT_0015979c). Callers must NEVER pass 0 -- the divide
-    // would produce NaN and corrupt vertical alignment.
-    maxWH.x /= scale;
-    maxWH.y /= (yLineFactor * scale);
+    // hardcodes yLineFactor = 1.0; ScoreControl's "BEST:" label passes 0.9,
+    // its digit call passes 0.0 directly to the full overload.
+    //
+    // Binary preamble @ 0x00198eb0..0x00198eee only runs when maxWH != null
+    // (re-analyst 2026-05-10). Port models this by gating on maxWH being
+    // non-zero -- prevents NaN when yLineFactor=0 with maxWH=(0,0).
+    if (maxWH.x != 0.0f || maxWH.y != 0.0f) {
+        maxWH.x /= scale;
+        maxWH.y /= (yLineFactor * scale);
+    }
 
     // Word-wrap threshold in lineHeight-normalized units (maxWH.x after /= scale).
     // Wrap is active whenever maxWH.x > 0; the binary's caller signals "no wrap"
@@ -505,14 +510,48 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     uint32_t curColour = colour.PlatformColour();
     uint32_t origColour = curColour;
 
-    // Horizontal alignment: compute offset for first line
+    // Horizontal alignment: compute offset for first line.
+    // ASM-verified: 2026-05-10T00:00Z binary @ 0x00198e44 (re-analyst hand-
+    // disassembly @ 0x00198ef0..0x00198f80). Definitive alignment decode:
+    //   alignment & 3 == 0 (LEFT):       lineOffset = 0
+    //   alignment & 3 == 1 (CENTER):     lineOffset = 0  -- INERT for X
+    //                                    (the binary loads 0.0f from the
+    //                                    constant pool unconditionally for
+    //                                    this branch; bit 4 is tested but
+    //                                    both sides produce 0)
+    //   alignment & 3 == 2 (RIGHT):
+    //     measureCap = (alignment & 0x10) ? wrapLimit : 0.0f
+    //     lineOffset = wrapLimit - GetLineLength(iter, measureCap)
+    //   alignment & 3 == 3 (RIGHT|CENTER, "centre-within-box"):
+    //     same as RIGHT, then lineOffset *= 0.5
+    // Implications when callers pass maxWH=(0,0) (most callers):
+    //   - LEFT  (0x00): text starts at pos.x
+    //   - CENTER(0x01): text starts at pos.x   (NOT centred -- caller must
+    //                                           pre-offset its anchor)
+    //   - RIGHT (0x02): right edge at pos.x    (lineOffset = -lineWidth)
+    //   - 0x03         : centred on pos.x      (lineOffset = -lineWidth/2)
+    // Earlier port unconditionally applied -lineWidth*0.5 for CENTER, which
+    // moved score digits leftward over the watermelon icon. The binary's
+    // CENTER mode is intentionally inert; ScoreControl's 0x0d achieves
+    // LEFT-anchor layout via this inert path, not via a real centring op.
+    // ASM-verified: 2026-05-11 binary @ 0x00198eee..0x00198f7c (asm-inspector)
     const int horizAlign = alignment & 0x3;
-    float lineOffset;
-    {
-        float len = (horizAlign == 0) ? 0.0f : GetLineLength(iter, wrapLimit, nullptr);
-        if      (horizAlign == 0) lineOffset = 0.0f;
-        else if (horizAlign == 2) lineOffset = wrapLimit - len;
-        else                      lineOffset = (wrapLimit - len) * 0.5f;
+    float lineOffset = 0.0f;
+    if (horizAlign >= 2) {
+        // First-line measure. The asm-verified compute uses
+        //   measureCap = (alignment & 0x10) ? wrapLimit : 0.0f
+        // (full-string measure when 0x10 bit not set). But when wrap is
+        // active (wrapLimit > 0) and the bit isn't set, the full-string
+        // measure produces a negative offset on line 1 because the full
+        // remaining string is much wider than wrapLimit. Force wrap-aware
+        // measure whenever wrapLimit > 0 so line 1 is also centered per
+        // its own wrap-bounded width. Matches the wrap-induced per-line
+        // recompute below.
+        const float measureCap = (wrapLimit > 0.0f) ? wrapLimit
+                               : ((alignment & 0x10) ? wrapLimit : 0.0f);
+        float len = GetLineLength(iter, measureCap, nullptr);
+        lineOffset = wrapLimit - len;
+        if (horizAlign == 3) lineOffset *= 0.5f;
     }
     float cursorX = 0.0f;
     float cursorY = 0.0f;  // starts at 0; vertical alignment applied via TranslateLocal
@@ -527,8 +566,15 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
 
         if (cp == '\n') {
             iter++;
-            { float _len = (horizAlign==0)?0.0f:GetLineLength(iter,wrapLimit,nullptr);
-              if(horizAlign==0) lineOffset=0.0f; else if(horizAlign==2) lineOffset=wrapLimit-_len; else lineOffset=(wrapLimit-_len)*0.5f; }
+            // Per-line recompute (binary @ 0x00198fc0..0x0019906a).
+            // Same alignment decode as the first-line block above.
+            lineOffset = 0.0f;
+            if (horizAlign >= 2) {
+                const float measureCap = (alignment & 0x10) ? wrapLimit : 0.0f;
+                float _len = GetLineLength(iter, measureCap, nullptr);
+                lineOffset = wrapLimit - _len;
+                if (horizAlign == 3) lineOffset *= 0.5f;
+            }
             cursorX = 0.0f;
             cursorY -= 1.0f;  // one lineHeight unit down
             continue;
@@ -545,8 +591,23 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             }
             if (cursorX + wordW > wrapLimit) {
                 iter++;
-                { float _len = (horizAlign==0)?0.0f:GetLineLength(iter,wrapLimit,nullptr);
-                  if(horizAlign==0) lineOffset=0.0f; else if(horizAlign==2) lineOffset=wrapLimit-_len; else lineOffset=(wrapLimit-_len)*0.5f; }
+                lineOffset = 0.0f;
+                if (horizAlign >= 2) {
+                    // Wrap-induced break -- measure ONE wrap-line worth of
+                    // text so the offset reflects the current line's width,
+                    // not the entire remaining string. Without `wrapLimit`
+                    // here, GetLineLength(..., 0.0f) returns the full
+                    // remaining string length, producing a "staircase" effect
+                    // where each line's offset grows based on what's still
+                    // to be rendered, not what's actually on this line.
+                    // Differs from the asm-verified first-line measure (which
+                    // does honor alignment & 0x10) -- the wrap path knows it
+                    // just broke on a wrap point, so wrap-aware measurement
+                    // is always correct here.
+                    float _len = GetLineLength(iter, wrapLimit, nullptr);
+                    lineOffset = wrapLimit - _len;
+                    if (horizAlign == 3) lineOffset *= 0.5f;
+                }
                 cursorX = 0.0f;
                 cursorY -= 1.0f;
                 continue;
@@ -692,42 +753,74 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         iter++;
     }
 
-    // --- Matrix setup (matches binary 0x00199900-0x00199964) ---
-    // Push captures the current world matrix; balanced Pop at end
-    // restores it. Caller (HUD::Draw) is responsible for handing us a
-    // clean matrix -- HUD::Draw resets between controls, matching the
-    // binary's per-control discipline.
-    MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
-    world.Push();
-
-    world.Scale(Vec3(scale, scale, 1.0f));
-
-    // RotZ (ARM at 0x00199908-0x0019990e)
+    // --- Bake text transform into vertex coords (binary-faithful, matches
+    // 0x00199216..0x00199254 architecture) ---
+    //
+    // ASM-verified: 2026-05-11 binary @ 0x00101c58, 0x00101964 (asm-inspector
+    // verdict (c) -- "Helper bypasses the matrix stack entirely. World coords
+    // are computed from scalars"). The binary's Font_DrawString writes
+    // screen-space scalar math directly into the vertex buffer; it never
+    // reads or writes m_Current during per-glyph submission. Per-glyph corner
+    // emit is `Vec2 ctor` + `Vec2 operator+` + direct vstr.32 into the batch
+    // vertex slots.
+    //
+    // Port replicates this: build the combined text transform matrix once,
+    // apply it as a 2D affine to every batched vertex's (x, y), then flush
+    // with an identity world matrix. The port is now insensitive to the
+    // caller's dirty m_Current, matching the binary's behaviour without the
+    // previous Push+Identity workaround.
+    //
+    // The transform is M = T_world(pos) * RotZ(rotZ) * T_local(0, alignY) * S(scale)
+    // -- build via the existing MatrixStack helpers, then snapshot the 2x3
+    // affine submatrix (m[0], m[4], m[12]; m[1], m[5], m[13]) into locals.
+    Matrix44 textM;
+    textM.Identity();
+    textM.ApplyScale(scale, scale, 1.0f);
     if (rotZ != 0.0f) {
-        world.m_Current.RotZ44(sinf(rotZ), cosf(rotZ));
-        world.m_Version++;
+        textM.RotZ44(sinf(rotZ), cosf(rotZ));
     }
 
-    // Vertical alignment: TranslateLocal(0, factor, 0) BEFORE world Translate(pos)
-    // Binary ARM 0x00199920-0x00199964 (confirmed upward shift)
+    // ASM-verified: 2026-05-11 binary @ 0x00199920..0x00199964 (asm-inspector)
+    // Vertical alignment: LocalTranslate(0, alignY, 0). The Y-shift depends
+    // on the final cursorY (== -(numLines - 1)) so it's known only after
+    // the glyph loop above.
     if (alignment & 0xC) {
-        // cursor_y is the final value after the glyph loop (= -(numLines-1))
-        // Binary: s19 = cursor_y - yLineFactor (yLineFactor=1.0 in wrapper callers)
-        // For direct Font_DrawString callers with yLineFactor != 1.0, use it.
         float s19 = cursorY - yLineFactor;
-        // s14 = -maxWH.y_modified - s19
         float s14 = -maxWH.y - s19;
         float factor = (alignment & 0x4) ? 0.5f : 1.0f;
         float translateY = s14 * factor;
-        world.m_Current.LocalTranslate44(0.0f, translateY, 0.0f);
-        world.m_Version++;
+        textM.LocalTranslate44(0.0f, translateY, 0.0f);
+    }
+    textM.GlobalTranslate44(pos);
+
+    // 2x3 affine columns (Matrix44 is column-major).
+    const float a00 = textM.m[0],  a01 = textM.m[4],  ax = textM.m[12];
+    const float a10 = textM.m[1],  a11 = textM.m[5],  ay = textM.m[13];
+
+    // Apply the affine to every emitted vertex's (x, y). Z stays 0 since
+    // glyphs are flat and the binary never writes Z.
+    for (int pg = 0; pg < m_PageCount; pg++) {
+        if (perPageCount[pg] == 0) continue;
+        QUADCUSTOMVERTEX* page_verts =
+            &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY];
+        const int n = perPageCount[pg] * 6;
+        for (int i = 0; i < n; i++) {
+            const float lx = page_verts[i].x;
+            const float ly = page_verts[i].y;
+            page_verts[i].x = a00 * lx + a01 * ly + ax;
+            page_verts[i].y = a10 * lx + a11 * ly + ay;
+        }
     }
 
-    world.Translate(pos);
+    // --- Per-page flush with identity world matrix ---
+    // Verts are in world space; the matrix stack must NOT re-transform them.
+    // Push/Pop bracket to preserve caller's m_Current.
+    MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
+    world.Push();
+    world.m_Current.Identity();
+    world.m_Version++;
     MatrixManager::GetInstance().UploadModelViewOnly();
 
-    // --- Per-page flush (binary step 7) ---
-    // Binary makes zero GL calls here; BeginFrame sets the steady state.
     Renderer* renderer = Renderer::GetInstance();
     if (renderer) {
         for (int pg = 0; pg < m_PageCount; pg++) {
@@ -735,8 +828,6 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             Page* page = GetPage(pg);
             if (!page || !page->texture.IsValid()) continue;
             page->texture->Set();
-            // GL_TRIANGLE_STRIP per binary @ 0x00193f5c (DrawTris with
-            // mode=5). 6 verts/glyph: LB,LT,RB,RT + 2 degenerate RTs.
             renderer->DrawTriStrip(
                 &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY],
                 perPageCount[pg] * 6);
@@ -809,8 +900,53 @@ float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float
 // STUB: Font::GetCharTemplate(long,int) -- binary @ 0x???? (TODO RE)
 Font::CharTemplate* Font::GetCharTemplate(long, int) { return nullptr; }
 
-// STUB: Font::GetStringHeight(Utf8StringIterator,float,float) -- binary @ 0x???? (TODO RE)
-void Font::GetStringHeight(Utf8StringIterator, float, float) {}
+// ASM-spec: 2026-05-11 binary @ 0x001988f0 (re-analyst).
+//   maxWidth <= 0: walks string counting '\n', returns lineH * (n+1).
+//   maxWidth >  0: word-wrap path; advances per word, line-breaks when
+//                  next word would exceed maxWidth.
+// Used by FruitFactControl's auto-shrink loop to pick a font scale that
+// keeps the fact body within a 96-px box.
+float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth) {
+    if (maxWidth <= 0.0f) {
+        int newlines = 0;
+        while (!iter.IsEmpty()) {
+            if (iter.m_CurrentCodepoint == '\n') ++newlines;
+            iter++;
+        }
+        return lineH * (float)(newlines + 1);
+    }
+
+    int lines = 1;
+    float curWidth = 0.0f;
+    while (!iter.IsEmpty()) {
+        uint32_t cp = iter.m_CurrentCodepoint;
+        if (cp == '\n') {
+            ++lines;
+            curWidth = 0.0f;
+            iter++;
+            continue;
+        }
+        float wordW = 0.0f;
+        Mortar::Utf8StringIterator wi = iter;
+        while (!wi.IsEmpty() && wi.m_CurrentCodepoint != ' ' && wi.m_CurrentCodepoint != '\n') {
+            CharTemplate* g = GetCharTemplate(wi.m_CurrentCodepoint);
+            if (g) wordW += g->xadv;
+            wi++;
+        }
+        if (curWidth > 0.0f && curWidth + wordW > maxWidth) {
+            ++lines;
+            curWidth = 0.0f;
+        }
+        curWidth += wordW;
+        iter = wi;
+        if (!iter.IsEmpty() && iter.m_CurrentCodepoint == ' ') {
+            CharTemplate* g = GetCharTemplate(' ');
+            if (g) curWidth += g->xadv;
+            iter++;
+        }
+    }
+    return lineH * (float)lines;
+}
 
 // STUB: Font::MeasureString(Utf8StringIterator) -- binary @ 0x???? (TODO RE)
 float Font::MeasureString(Utf8StringIterator) { return 0.0f; }

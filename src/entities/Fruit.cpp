@@ -1,4 +1,5 @@
 #include "Fruit.h"
+#include "game/GameMode.h"
 #include "ActorManager.h"
 #include "FruitInfo.h"
 #include "Bomb.h"
@@ -18,6 +19,7 @@
 #include "game/WaveManager.h"
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
+#include "engine/util/StringTable.h"
 #include "game/FruitSaveData.h"
 #include "util/StringHash.h"
 #include "Game.h"
@@ -403,7 +405,10 @@ void Fruit::PostUpdate(float dt) {
 
     if (m_Gravity.x == 0.0f) {
         // Vertical-gravity fruit — nudge or hard-bounce on X bounds.
-        const bool zen = (game->gameMode == 2);
+        // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
+        // Verify whether the surrounding logic is intended for Arcade or Zen and
+        // rename accordingly.
+        const bool zen = (game->gameMode == Mortar::GAME_MODE_ARCADE);
         const bool zenStrict = zen && IsZenStrictBounceActive();
         if (zenStrict) {
             if (pos.x < BOUND_X_LO) { pos.x = BOUND_X_LO; vel.x = -vel.x; }
@@ -517,7 +522,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
         if (!m_bNoPowerUp && !m_bSliced && info && info->m_Score < 5) {
             Game* g = Game::GetInstance();
             if (g) {
-                if (g->gameMode == 2) {
+                if (g->gameMode == Mortar::GAME_MODE_ARCADE) {
                     // Zen mode: tracking only, no life loss.
                     // TODO: FruitSaveData::AddToTotal("zen_miss", 1) when save system is ported
                 } else {
@@ -835,14 +840,31 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const float sliceLength   = bladeSpeed * 0.4f;
     FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
 
-    // Matches CollisionResponse score+save dispatch (binary @ 0x00178e90..0x00178f04).
+    // Matches CollisionResponse score+save dispatch (binary @ 0x00178c3c).
+    // ASM-verified: 2026-05-10 binary @ 0x00178bc8..0x00178e30 (re-analyst).
+    // Formula:
+    //   score = info->m_Score                               // FRUIT_INFO+0x314
+    //   if (critical) score += 5                            // g_CritScoreBonus @ 0x001f3e30
+    //   if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax)
+    //       score = info->m_CoinsMin + Rand32(max - min)    // random-score override
+    //   if (critical) score *= 2                            // g_CritScoreMul / 2 = 2 (int div)
+    // Earlier port had `score * 2` for critical, missing the +5 bonus.
+    // For a normal scorable fruit (m_Score=1, no random override), this gives
+    // critical = (1+5)*2 = 12 vs port's old 1*2 = 2 -- the +10 difference user reports.
+    // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
+    // when used in this score path; same fields, dual-purpose semantics.
     if (info) {
         Game* g = Game::GetInstance();
         if (g) {
-            const int multiplier = m_bCriticalEligible ? 2 : 1;
-            // Score: multiplier and crit x2 are applied inside AddToCurrentScore
-            // via GetScoreMultiplyer + Game::scoreMultDelegate.
-            FN::AddToCurrentScore(info->m_Score * multiplier, (int)m_PlayerIdx,
+            int score = info->m_Score;
+            if (m_bCriticalEligible) score += 5;
+            if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
+                const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
+                score = info->m_CoinsMin
+                      + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
+            }
+            if (m_bCriticalEligible) score *= 2;  // g_CritScoreMul / 2 = 2
+            FN::AddToCurrentScore(score, (int)m_PlayerIdx,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
 
             // Per-fruit-name save totals.
@@ -1577,7 +1599,18 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     const FruitInfoData* chosen = FruitInfo_Get(ft);
     if (!chosen || chosen->m_FactCount <= 0) return nullptr;
 
-    int fi = factIdx % chosen->m_FactCount;
+    // ASM-verified: 2026-05-11 binary @ 0x00175ba4 (asm-inspector).
+    // Negative `factIdx` is the binary's "pick random fact" sentinel
+    // (calls Math::Random::Rand32 to choose). Earlier port clamped to 0
+    // which silently broke FruitFactControl's intended random-fact
+    // behavior (always showed the same first fact).
+    int fi = factIdx;
+    if (fi < 0) {
+        fi = (int)WaveManager::GetInstance()->GetRandom().Rand32(
+                 (uint32_t)chosen->m_FactCount);
+    } else {
+        fi = fi % chosen->m_FactCount;
+    }
 
     if (outType)    *outType    = ft;
     if (outFactIdx) *outFactIdx = fi;
@@ -1586,7 +1619,12 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     // Binary calls FruitSaveData::AddToTotal("facts", 1) and
     // FruitSaveData::AddToTotal("<fruit>_fact", 1) here.
 
-    return chosen->m_pFacts ? chosen->m_pFacts[fi] : nullptr;
+    // fruitlist.xml stores localisation keys (e.g. "FRUIT_FACT_07") in
+    // <fact> elements; resolve via StringTable so the caller gets the
+    // translated paragraph, not the raw key.
+    const char* key = chosen->m_pFacts ? chosen->m_pFacts[fi] : nullptr;
+    if (!key) return nullptr;
+    return Mortar::GETSTRING_CAST_0_STR(key);
 }
 
 // Binary @ 0x001756dc — replace m_pEmitter1 with a custom trail emitter.

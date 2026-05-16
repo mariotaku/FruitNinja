@@ -92,8 +92,9 @@ public:
     ScrollingMenuItem* Collide(int touchSlot);
 
     // Width/height setters
-    void SetWidth(float w)  { m_Width = w; }
-    void SetHeight(float h) { m_Height = h; }
+    void SetWidth(float w)      { m_Width = w; }
+    void SetHeight(float h)     { m_Height = h; }
+    void SetItemHeight(float h) { m_ItemHeight = h; }
 
     // --- Fields at documented binary offsets ---
     // (binary offset +0x74 relative to object start)

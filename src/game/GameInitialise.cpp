@@ -47,7 +47,7 @@
 #include "asset/FileManager.h"
 #include "asset/FileSystem_Direct.h"
 #include "render/Font.h"
-#include "util/Localisation.h"
+#include "util/StringTable.h"
 #include "util/StringHash.h"
 #include <cstdio>
 #include <cstdlib>
@@ -200,7 +200,7 @@ void GameInitialise() {
     // GETSTRING_CAST_0_STR — i.e. before LoadItemData, LoadAchievementInfo,
     // etc.): load the localisation tables. Binary:
     //   StringTableUtilLoadStrings @ 0x0011fb20 -> LoadStringsTable(language)
-    Localisation::Load(game->data_dir.c_str(), (int)game->languageFlag);
+    Mortar::StringTable::Load(game->data_dir.c_str(), (int)game->languageFlag);
 
     ItemManager::GetInstance()->LoadItemData();
 

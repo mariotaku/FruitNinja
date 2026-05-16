@@ -25,8 +25,12 @@ public:
     // +0x08: position in centered coords
     Vec3 pos;
 
-    // +0x14: pivot point (rarely used)
-    Vec3 pivot;
+    // +0x14: per-control HUD-scale multiplier. Multiplied with the
+    // (480, 320, 0) screen-anchor in HUDControl3d::Draw / MissControl::Draw
+    // / etc. before the per-control pos translate. Named "pivot" in earlier
+    // port iterations -- the binary's actual semantic is m_HudScale, set
+    // per-frame by the PreDraw chain (per-instance hudScale arg).
+    Vec3 m_HudScale;
 
     // +0x20: size (half-extents)
     Vec3 size;

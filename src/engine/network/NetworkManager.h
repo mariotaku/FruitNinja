@@ -75,6 +75,12 @@ public:
     // Defunct: NetworkManager -- no-op stub; binary @ 0x00169354
     void ChangePreferredNetworkProvider(long /*v*/) {}
 
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6b0 (returns 0)
+    int IsProviderOnline() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6b4 (returns 0)
+    int IsP2POnline() { return 0; }
+
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d704
     int IsGameCenterSupported() { return 0; }
 
@@ -181,6 +187,11 @@ private:
     // Not accessed by port code; online services are not ported.
     uint8_t m_pad[668];
 };
+
+// Defunct: online-services -- returns 0 (OpenFeint provider);
+// binary queries a GOT flag to determine active provider (OF=0, GC=1).
+// no-op stub; binary addr unknown.
+int GetSocialNetworkProvider();
 
 } // namespace Mortar
 

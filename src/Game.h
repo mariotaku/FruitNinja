@@ -50,7 +50,12 @@ struct Game : public Mortar::MortarGame {
     uint8_t field_0x01;            // +0x01
     uint8_t gameActiveFlag;        // +0x02: 0=paused, !=0=active
     uint8_t languageFlag;          // +0x03: SetLanguage writes 0 here
-    uint8_t gameMode;              // +0x04: 0=Classic, 1=Arcade, 2=Zen, 3=Attack
+    // +0x04: GAME_MODE enum (see game/GameMode.h) stored as uint8_t.
+    //   0=GAME_MODE_CLASSIC (originalWaveList.xml)
+    //   1=GAME_MODE_COMBO   (comboWaveList.xml; callbacks call it "Casino")
+    //   2=GAME_MODE_ARCADE  (arcadeWaveList.xml)
+    //   3=GAME_MODE_ZEN     (zenWaveList.xml)
+    uint8_t gameMode;
     uint8_t pauseFlag;             // +0x05: set by GameOver, QuitToMenu
     uint8_t retryFlag;             // +0x06
     uint8_t field_0x07;            // +0x07
@@ -132,6 +137,8 @@ struct Game : public Mortar::MortarGame {
     // so they're easy to light up once audio is wired.
     GameSound* pGameSound;
     int m_gameDataLicensedState;   // +0x18C: game-level licensed state (separate from MortarGame)
+    uint8_t m_bGameOverActive;     // +0x190 -- cleared by GameOverScreen::Update case 0xe
+    // +0x191..+0x193: padding (binary leaves 3 bytes here; port matches)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
     float m_MenuReturnTimer;       // +0x1A0
     uint8_t flag_0x1a8;            // +0x1A8

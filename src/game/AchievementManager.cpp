@@ -12,7 +12,7 @@
 #include "hud/HUD.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/util/StringHash.h"
-#include "engine/util/Localisation.h"
+#include "engine/util/StringTable.h"
 #include "engine/util/PathCI.h"
 #include "ItemParseUtil.h"
 #include "Game.h"
