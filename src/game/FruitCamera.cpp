@@ -118,10 +118,17 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     mm.SetupLookAt(eye, up, at);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-    // Binary literal pool @ 0x001813ec/0x001813f0 encodes near=+2000.0f and
-    // far=-6000.0f respectively (5th/6th SetupOrtho args). Earlier port commit
-    // de35bc1 swapped these claiming an RE bug fix; that was wrong — verified
-    // by VLDR.32 PC-relative loads at the SetupOrtho call site.
+    // ASM-verified: 2026-05-16 binary @ 0x001810ac..0x001813f4 (re-analyst).
+    // Literal pool @ 0x001813d8: top=+160, bottom=-160, left=-240, right=+240,
+    // near=+2000, far=-6000. Visible world is X=[-240,+240], Y=[-160,+160],
+    // camera lookAt at origin (m_Target shake offset only). No Y/Z translation.
+    // This is the ONLY ortho config GameDraw uses; PT_ROTATED variants
+    // (anonymous_namespace::SetPerspective glFrustumf) are EGL-init only and
+    // are overwritten every frame by this call. Spawn formulas in
+    // WaveManager / Bomb / Fruit deliberately land entities INSIDE this band
+    // (e.g. bombs at pos.y ~= -64); the visible "pop in" is the chuck-delay
+    // countdown freeze (m_Countdown = 0.21f from DAT_0012258c), not a
+    // viewport / camera bug.
     mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
     // Cache
