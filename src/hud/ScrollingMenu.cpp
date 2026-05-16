@@ -6,6 +6,7 @@
 
 #include "ScrollingMenu.h"
 #include "ScrollingMenuItem.h"
+#include "entities/SlashEntity.h"
 #include "engine/input/Touch.h"
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
@@ -189,7 +190,13 @@ void ScrollingMenu::Update(float /*dt*/) {
 
             m_pCollidedItem = hitItem;
 
-            // Binary: also marks touch bitmask GOT[0x7740] |= 0x40 (port-specific: skip)
+            // Binary @ 0x0015b7cc: GOT[0x7740] |= 0x40 (re-analyst 2026-05-17).
+            // GOT[0x7740] resolves to SlashEntity::s_ModPowerMask. Bit 0x40
+            // = "ScrollingMenu drag active" -- SlashEntity::Update reads it
+            // in its collision-gate to suppress fruit/bomb slicing while
+            // the player is dragging this menu (prevents accidentally
+            // slicing fruits behind a shop/score list).
+            SlashEntity::s_ModPowerMask |= 0x40u;
         } else {
             // Not a valid held touch — discard
             m_TouchId = -1;
@@ -227,14 +234,16 @@ void ScrollingMenu::Update(float /*dt*/) {
             }
 
             // Release the touch slot.
-            // Binary @ 0x0015baa0..0x0015baae clears in this exact order:
+            // Binary @ 0x0015baa0..0x0015babe clears in this exact order:
             //   field_0x74 (m_TouchId)      = -1
             //   field_0xcc (m_pCollidedItem) = 0
             //   field_0xc8 (m_bDragging)    = 0
+            //   GOT[0x7740] (s_ModPowerMask) &= ~0x40 -- re-enable slicing
             iVar2 = IsTouchDown(m_TouchId);
             m_TouchId       = -1;
             m_pCollidedItem = nullptr;
             m_bDragging     = 0;
+            SlashEntity::s_ModPowerMask &= ~0x40u;
 
         } else {
             // --- Phase 3B: finger still in inner region -> drag velocity update ---
@@ -488,6 +497,9 @@ void ScrollingMenu::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
 }
 
 void ScrollingMenu::DestroyList() {
+    // Binary @ 0x0015afea -- safety clear of the slice-suppression bit so
+    // a menu destroyed mid-drag doesn't leave slicing disabled forever.
+    SlashEntity::s_ModPowerMask &= ~0x40u;
     for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         delete *it;
     }
