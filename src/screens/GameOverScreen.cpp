@@ -41,9 +41,40 @@ using Mortar::TextureManager;
 // File-scope texture SmartPtr arrays (binary static class members)
 // Binary @ 0x00140cde loads these in GameOverScreen::LoadContent.
 // ---------------------------------------------------------------------------
-static Mortar::SmartPtr<Mortar::Texture> g_BgPatternTexArr[3];   // sensei_body_01..03.tex
-static Mortar::SmartPtr<Mortar::Texture> g_ExpressionTexArr[3];  // sensei_head_01..03.tex
-static Mortar::SmartPtr<Mortar::Texture> g_StarburstTex;         // blurry_backing.tex
+// Static class textures (binary @ 0x00130d40 literal pool).
+// LoadContent loads these once on first call (guarded); UnLoadContent
+// nulls them. Per-instance fields in the class read from these statics.
+// Order matches the binary's LoadContent call sequence exactly so
+// asm-verify groups the loads identically.
+//   GOT slot          string                       load order
+//   ----------------- ---------------------------- ----------
+//   0x75d8            "arcade_time_up.tex"         call 1
+//   0x7800            "gameover.tex"               call 2
+//   0x76f0            "time_up.tex"                call 3  (substring of arcade_time_up.tex per -fmerge-constants)
+//   0x7310            "retry.tex"                  call 4
+//   0x73fc            "quit.tex"                   call 5
+//   0x740c[+0]        "leaderboards.tex"           call 6  (array element 0 -- mid-string of gc_leaderboards.tex)
+//   0x740c[+4]        "gc_leaderboards.tex"        call 7  (array element 1)
+//   0x7160[+0..+8]    "sensei_head_0%d.tex"        loop 1  (sensei_head array -- s_ExpressionTexArr)
+//   0x7abc[+0..+8]    "sensei_body_0%d.tex"        loop 2  (sensei_body array -- s_BgPatternTexArr)
+static Mortar::SmartPtr<Mortar::Texture> g_ArcadeTimeUpTitleTex;        // arcade_time_up.tex (Arcade title)
+static Mortar::SmartPtr<Mortar::Texture> g_GameOverTitleTex;            // gameover.tex (Classic title)
+static Mortar::SmartPtr<Mortar::Texture> g_TimeUpTitleTex;              // time_up.tex (Zen title)
+static Mortar::SmartPtr<Mortar::Texture> g_RetryTex;                    // retry.tex (own GOT slot, not part of array)
+static Mortar::SmartPtr<Mortar::Texture> g_QuitTex;                     // quit.tex (own GOT slot, not part of array)
+static Mortar::SmartPtr<Mortar::Texture> g_LeaderboardsTexPair[2];      // 0: leaderboards.tex, 1: gc_leaderboards.tex
+static Mortar::SmartPtr<Mortar::Texture> g_ExpressionTexArr[3];         // sensei_head_01..03.tex
+static Mortar::SmartPtr<Mortar::Texture> g_BgPatternTexArr[3];          // sensei_body_01..03.tex
+
+// blurry_backing.tex is shared with MenuButton + DrawLoadingSymbol; binary
+// loads it from MenuButton::LoadContent, NOT GameOverScreen::LoadContent.
+// Kept here for safety -- duplicate SmartPtr refcount is harmless.
+static Mortar::SmartPtr<Mortar::Texture> g_StarburstTex;
+
+// comming_soon_highscore.tex (+0x114) is loaded by Update state-6 first-entry,
+// NOT by LoadContent. Kept as instance field m_CommingSoonHighscoreTex.
+
+static bool g_LoadContentGuard = false;
 
 // ---------------------------------------------------------------------------
 // Starburst halo mesh (48 verts; lazy-init on first DrawOrder)
@@ -96,28 +127,84 @@ static void DoQuitToMenu() {
 // Static content load/unload (binary: gated by static guard)
 // ---------------------------------------------------------------------------
 
-// ASM-spec: binary @ 0x00140cde loops i=1..3 with sensei_body_0%d.tex /
-// sensei_head_0%d.tex into the per-class SmartPtr arrays. blurry_backing.tex
-// is shared across MenuButton + GameOverScreen + DrawLoadingSymbol; binary
-// loads it from MenuButton::LoadContent. Port loads here too for safety;
-// duplicate SmartPtr refcount is harmless.
+// Binary @ 0x00130bb0: 7 explicit LoadLocalisedTexture (calls 1..7) + a
+// 3-iter loop with 2 snprintfs per iter (loops 1..2 for sensei head/body).
+// String order verified by objdump of binary literal pool @ 0x00130d40
+// against .rodata string table @ 0x001ab89c. Substring sharing per
+// GCC -fmerge-constants: "time_up.tex" is a substring pointer of
+// "arcade_time_up.tex" (offset +7); "leaderboards.tex" is a substring
+// pointer of "gc_leaderboards.tex" (offset +3).
 void GameOverScreen::LoadContent() {
+    if (g_LoadContentGuard) return;  // binary: cxa-guard on a static flag
+    g_ArcadeTimeUpTitleTex   = TextureManager::LoadLocalisedTexture("arcade_time_up.tex");
+    g_GameOverTitleTex       = TextureManager::LoadLocalisedTexture("gameover.tex");
+    g_TimeUpTitleTex         = TextureManager::LoadLocalisedTexture("time_up.tex");
+    g_RetryTex               = TextureManager::LoadLocalisedTexture("retry.tex");
+    g_QuitTex                = TextureManager::LoadLocalisedTexture("quit.tex");
+    // Array-of-2 at GOT+0x740c -- stored adjacently.
+    g_LeaderboardsTexPair[0] = TextureManager::LoadLocalisedTexture("leaderboards.tex");
+    g_LeaderboardsTexPair[1] = TextureManager::LoadLocalisedTexture("gc_leaderboards.tex");
     for (int i = 0; i < 3; ++i) {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "sensei_body_0%d.tex", i + 1);
-        g_BgPatternTexArr[i] = TextureManager::LoadLocalisedTexture(buf);
+        char buf[128];
+        // Binary loop order: sensei_head FIRST (slot 0x7160), then
+        // sensei_body (slot 0x7abc). Port keeps the same order so the
+        // GOT slot order in asm-verify matches.
         snprintf(buf, sizeof(buf), "sensei_head_0%d.tex", i + 1);
         g_ExpressionTexArr[i] = TextureManager::LoadLocalisedTexture(buf);
+        snprintf(buf, sizeof(buf), "sensei_body_0%d.tex", i + 1);
+        g_BgPatternTexArr[i]  = TextureManager::LoadLocalisedTexture(buf);
     }
-    g_StarburstTex = TextureManager::LoadLocalisedTexture("blurry_backing.tex");
+    // blurry_backing.tex is loaded by MenuButton::LoadContent in the binary;
+    // port loads it here too as a safety net (duplicate refcount harmless).
+    g_StarburstTex            = TextureManager::LoadLocalisedTexture("blurry_backing.tex");
+    g_LoadContentGuard = true;
 }
 
+// Binary-faithful tail-merged helper. Sourcery G++ 4.4.1 emits a TU-local
+// thunk `T.967` for UnLoadContent's repeating SmartPtr::SetNull pattern
+// (asm-inspector verified). Without the noinline, GCC inlines SetNull at
+// every call site which differs structurally even though the behaviour
+// is identical. Wrap the SetNull call so the cross-toolchain emits one
+// out-of-line helper that all 13 SmartPtr slots `bl` to.
+#if defined(_MSC_VER)
+#  define FN_NOINLINE __declspec(noinline)
+#else
+#  define FN_NOINLINE __attribute__((noinline))
+#endif
+static FN_NOINLINE void NullTex(Mortar::SmartPtr<Mortar::Texture>* p) {
+    p->SetNull();
+}
+#undef FN_NOINLINE
+
+// Binary @ 0x00130f68: 16 NullTex calls covering 8 individuals + array-of-2
+// + 2 arrays-of-3. Order matches the GOT-slot order observed in the
+// disassembly (objdump-verified 2026-05-16).
+//
+// TODO: 0x00130f68 - 3 GOT slots (0x7af8, 0x75f4, 0x7a88) are nullified
+// by the binary's UnLoadContent but never loaded by LoadContent. They
+// hold SmartPtr<Texture> instances zero-initialised by the TU's static-
+// init (_GLOBAL__I_GameOverScreen.cpp). Their actual assignment site
+// hasn't been identified yet -- needs a follow-up re-analyst pass to
+// trace the LoadLocalisedTexture writers for those slots. Port elides
+// them here; asm-verify will show 3 missing NullTex calls until they
+// are identified and added.
 void GameOverScreen::UnLoadContent() {
+    g_LoadContentGuard = false;
+    NullTex(&g_ArcadeTimeUpTitleTex);  // 0x75d8
+    NullTex(&g_GameOverTitleTex);      // 0x7800
+    NullTex(&g_TimeUpTitleTex);        // 0x76f0
+    NullTex(&g_RetryTex);              // 0x7310
+    NullTex(&g_QuitTex);               // 0x73fc
+    // Array-of-2 at 0x740c
+    NullTex(&g_LeaderboardsTexPair[0]);
+    NullTex(&g_LeaderboardsTexPair[1]);
+    // Array-of-3 sensei_head at 0x7160; array-of-3 sensei_body at 0x7abc.
     for (int i = 0; i < 3; ++i) {
-        g_BgPatternTexArr[i].SetNull();
-        g_ExpressionTexArr[i].SetNull();
+        NullTex(&g_ExpressionTexArr[i]);
+        NullTex(&g_BgPatternTexArr[i]);
     }
-    g_StarburstTex.SetNull();
+    // blurry_backing.tex shared with MenuButton; null here too.
+    NullTex(&g_StarburstTex);
 }
 
 // ---------------------------------------------------------------------------
@@ -271,11 +358,11 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     {
         Mortar::SmartPtr<Mortar::Texture> bgTex;
         if (gameMode == Mortar::GAME_MODE_ARCADE)
-            bgTex = TextureManager::LoadLocalisedTexture("arcade_time_up.tex");
+            bgTex = g_ArcadeTimeUpTitleTex;
         else if (gameMode == Mortar::GAME_MODE_ZEN)
-            bgTex = TextureManager::LoadLocalisedTexture("time_up.tex");
+            bgTex = g_TimeUpTitleTex;
         else
-            bgTex = TextureManager::LoadLocalisedTexture("gameover.tex");
+            bgTex = g_GameOverTitleTex;
         m_Texture = bgTex;
         if (bgTex) {
             m_TitleSizeX = (float)bgTex->m_Width;
@@ -293,7 +380,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
 
     m_State          = STATE_ENTRY_ANIM;
     m_LayerFlags     = Mortar::HUD_LAYER_NONE; // binary: m_LayerFlags = 0 in Initialise (BeginDraw sets it each frame)
-    m_GameOverTex.SetNull();   // +0x114 Quest-only overlay slot (binary nulls this in Initialise)
+    m_CommingSoonHighscoreTex.SetNull();   // +0x114 binary nulls in Initialise; loaded later in Update case-6 tail
     m_AnimCounter    = 0;
     m_bScoreSubmitted = 0;
     m_BgPatternIdx   = bgPatternIdx;
@@ -408,7 +495,7 @@ void GameOverScreen::BeginDraw(float /*dt*/) {
 
 // Binary @ 0x00140d98
 void GameOverScreen::Release() {
-    m_GameOverTex.SetNull();
+    m_CommingSoonHighscoreTex.SetNull();
 
     Game* game = Game::GetInstance();
     if (game && game->pGameOverScreen == this) {
@@ -467,8 +554,16 @@ void GameOverScreen::SetTerminate() {
 
 // Binary @ 0x00140688
 void GameOverScreen::SetStateWait() {
-    // Binary: checks if leaderboard sign-in dialog needed; if not, state = 6.
-    // Port: always go to state 6 (online services defunct).
+    Game* game = Game::GetInstance();
+    // Binary @ 0x001406b4: increment lifetime "HighScoresAchieved" counter.
+    // The leaderboard sign-in dialog gate that follows is Defunct in port,
+    // but the AddToTotal side effect must still fire.
+    if (game && game->pSaveData) {
+        game->pSaveData->AddToTotal("HighScoresAchieved", 1);
+    }
+    // Defunct: leaderboard sign-in dialog gate -- binary opens a confirm
+    // dialog when (saveData[+0x32]==0 && count>5 && score>50 &&
+    // score > hiScore - 10). Port: always go to state 6.
     m_State = STATE_MAIN_DISPLAY;
 }
 
@@ -531,6 +626,8 @@ void GameOverScreen::DeletedControl(HUDControl* ctrl) {
     // Binary @ 0x00140558: middle slot is m_pRetryBtn (+0x98), not m_pSlot9c (+0x9c).
     // No state change in this branch -- just clear the pointer.
     if (ctrl == (HUDControl*)m_pRetryBtn)    { m_pRetryBtn = nullptr; }
+    // Binary @ 0x00141408 wires quit to the same DeletedControl -- clear m_pQuitBtn on removal.
+    if (ctrl == (HUDControl*)m_pQuitBtn)     { m_pQuitBtn = nullptr; }
     if (ctrl == m_pNoticeCtrl)               { m_pNoticeCtrl = nullptr; m_State = STATE_MAIN_DISPLAY; }
 }
 
@@ -623,15 +720,11 @@ void GameOverScreen::CreateRetryButton() {
     //     so the cleanup path differs but no observable break today.
     Vec3 btnPos(-80.0f, -96.0f, 0.0f);
     Vec3 globalCenter(0.0f, 0.0f, 0.0f);  // HUD::g_GlobalCenterVec; HUD::Init sets to (0,0,0)
-    Mortar::SmartPtr<Mortar::Texture> tex =
-        TextureManager::LoadLocalisedTexture("retry.tex");
+    Mortar::SmartPtr<Mortar::Texture> tex = g_RetryTex;  // GOT+0x7310
 
     m_pRetryBtn = new MenuButton();
-    // DIFFERS: binary stores the ctor tex arg in m_SecondaryTex (+0x78) and
-    // MenuButton::Draw Phase B reads it from there. The port's MenuButton::Draw
-    // delegates Phase B to HUDControl3d::Draw which reads m_Texture (+0x74),
-    // so the port keeps the tex in m_Texture. Functionally equivalent;
-    // diverges only in the field that holds the SmartPtr.
+    // m_Texture (+0x74) is the binary's used slot: binary ctor writes ring tex
+    // to +0x74, HUDControl3d::Draw Phase B reads it from +0x74. No divergence.
     m_pRetryBtn->m_Texture    = tex;
     // Binary CreateRetryButton @ 0x00141188 does NOT explicitly write +0x34;
     // MenuButton::Init writes HUD_LAYER_MENU_BG for FruitType >= 0 (here 0).
@@ -647,6 +740,10 @@ void GameOverScreen::CreateRetryButton() {
     );
 
     game->hud->AddControl(m_pRetryBtn, false);
+    // Binary @ 0x001412a0: wires HUD-removal callback to DeletedControl.
+    // Without this, HUD::Remove leaves a dangling pointer in m_pRetryBtn.
+    m_pRetryBtn->m_RemoveCallback =
+        Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
 }
 
 // Binary @ 0x0014105c
@@ -712,12 +809,11 @@ void GameOverScreen::CreateQuitButton() {
     // m_bRespondsToBackKey, TutorialControl::ResetTutePos.
     Vec3 btnPos(80.0f, -96.0f, 0.0f);
     Vec3 globalCenter(0.0f, 0.0f, 0.0f);
-    Mortar::SmartPtr<Mortar::Texture> tex =
-        TextureManager::LoadLocalisedTexture("quit.tex");
+    Mortar::SmartPtr<Mortar::Texture> tex = g_QuitTex;  // GOT+0x73fc
 
     m_pQuitBtn = new MenuButton();
-    // DIFFERS: see m_pRetryBtn -- port keeps tex in m_Texture because
-    // MenuButton::Draw delegates Phase B to HUDControl3d::Draw.
+    // m_Texture (+0x74) is the binary's used slot: binary ctor writes ring tex
+    // to +0x74, HUDControl3d::Draw Phase B reads it from +0x74. No divergence.
     m_pQuitBtn->m_Texture    = tex;
     // Binary CreateQuitButton @ 0x001412e4 does NOT explicitly write +0x34;
     // MenuButton::Init writes HUD_LAYER_MENU_BG for FruitType >= 0 (the
@@ -732,6 +828,10 @@ void GameOverScreen::CreateQuitButton() {
     );
 
     game->hud->AddControl(m_pQuitBtn, false);
+    // Binary @ 0x00141408: wires HUD-removal callback to DeletedControl.
+    // Without this, HUD::Remove leaves a dangling pointer in m_pQuitBtn.
+    m_pQuitBtn->m_RemoveCallback =
+        Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
 
     // Binary @ 0x001413d2: copy 12 bytes from retry button at +0x124..+0x12c.
     // MenuButton+0x124 is m_TargetSize (Vec3).
@@ -765,6 +865,146 @@ void GameOverScreen::QuitCallback() {
 
 void GameOverScreen::OnQuitClicked() {
     QuitCallback();
+}
+
+// ---------------------------------------------------------------------------
+// RunStateMainDisplay — body of STATE_MAIN_DISPLAY, extracted so case 7 can
+// fall through into it in the same tick (binary uses goto switchD...caseD_6).
+// Not a binary symbol; call-shape matches the binary's fall-through exactly.
+// ---------------------------------------------------------------------------
+void GameOverScreen::RunStateMainDisplay(int prevState) {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+    // 1) Create FruitFactControl on first entry
+    if (m_pFruitFact == nullptr) {
+        m_pFruitFact = new FruitFactControl();
+        // Position: DAT_00142120=183.0, y=12.0, z=DAT_00142118=0.0
+        m_pFruitFact->pos.x = 183.0f + m_OffsetPosX;
+        m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
+        m_pFruitFact->pos.z = 0.0f;
+        m_pFruitFact->m_PomCount  = (uint8_t)m_PomCount;
+        m_pFruitFact->m_StarType  = (uint8_t)m_StarCount;
+        if (game->hud) game->hud->AddControl(m_pFruitFact, false);
+        m_pFruitFact->Init();
+    }
+
+    // 2) Pop-in animation: game.alpha (m_TransitionTimer) ramps toward 1.0
+    float& alpha = game->m_TransitionTimer; // game[+0xC] = alpha
+    const float ALPHA_THRESH = 0.999f; // DAT_00142124
+    if (alpha < ALPHA_THRESH) {
+        m_ProgressCounter = 0;
+        alpha += (1.0f - alpha) * 0.125f;
+        if (alpha < 0.75f) game->m_bSlowMotion = 1; // suppress entity processing
+        if (alpha >= ALPHA_THRESH) alpha = 1.0f;
+        m_FruitFactAlpha = alpha;
+    } else {
+        if (m_FruitFactAlpha < 1.0f)
+            m_FruitFactAlpha += (1.0f - m_FruitFactAlpha) * 0.125f;
+        if (m_ProgressCounter < 11) m_ProgressCounter++;
+    }
+
+    // 3) On frame 10 (single-shot via m_bScoreSubmitted): commit scores
+    if (m_ProgressCounter == 10) {
+        m_ProgressCounter = 11; // latch
+        if (m_bScoreSubmitted == 0) {
+            int score = GetCurrentScore(0);
+            m_bScoreSubmitted = 1;
+
+            // Score submission tail (§8): most calls are no-ops until subsystems are ported
+            FruitSaveData* save = game->pSaveData;
+            if (save) {
+                // Binary @ 0x00142092: pSaveData[+0x12D] = 0 hoists to
+                // the FIRST write in the m_bScoreSubmitted == 0 block,
+                // before any AddToTotal / Achievement calls.
+                save->secondaryFlag = 0;
+
+                // Lifetime totals
+                save->AddToTotal("FruitsCollected", 1);
+                save->AddToTotal("TotalScore", score);
+                save->UnlockTotals();  // no-op stub until AchievementManager is ported
+
+                AchievementManager::GetInstance()->UnlockScoreAchievement(score);
+                // Binary @ 0x00141fe6: passes game+0x174 (fruitTotal = last AddToTotal result).
+                AchievementManager::GetInstance()->UnlockTotalFruitAchievement(game->fruitTotal);
+                // Binary @ 0x00142000: second arg is current-mode highscore fetched just before.
+                AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, GetCurrentModeHighscore());
+
+                // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
+                // Note: FNHighscoreList::AddPlayerScore -- defunct (online-services-audit).
+
+                // Binary @ 0x00142048: gate on m_pBonusScreen + Arcade mode + valid star type.
+                // TODO: 0x00142048 — gate on bonus[+0xE0]/[+0xD0]; fields not yet ported to BonusScreen.
+
+                int hi = GetCurrentModeHighscore();
+                if (hi / 2 < score) {
+                    // Binary @ 0x00142228:
+                    //   pSaveData[+0x12C] = (uint8_t)SetCurrentModeHighscore(score);
+                    save->newBestThisGame =
+                        save->SetCurrentModeHighscore(score) ? 1 : 0;
+                }
+
+                // Note: NetworkManager::SetLeaderboardScore -- defunct (online-services-audit).
+
+                // Arcade-only post-game achievement
+                if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
+                    // Binary @ 0x0014230c -- calls BonusManager::UnlockPostGameAchievements.
+                    // Port previously called AchievementManager::UnlockPostGameAchievements
+                    // in error; corrected to match binary.
+                    BonusManager::GetInstance()->UnlockPostGameAchievements();
+                }
+
+                save->FinishedGame();
+                save->ClearTotals();
+                FruitNinja_SaveCurrentData(false);
+            }
+
+            // Binary @ 0x00141fae loads "comming_soon_highscore.tex" into
+            // m_CommingSoonHighscoreTex (+0x114). The asset isn't shipped --
+            // LoadLocalisedTexture returns a null SmartPtr and the PreDraw
+            // overlay's IsValid() gate then skips the quad. This is the
+            // intended behaviour (Defunct: "coming soon" highscore-leaderboard
+            // placeholder for an unreleased feature). Earlier port loaded
+            // "gameover.tex" -- a shipped asset that DOES exist -- so the
+            // overlay rendered on the retry button when the binary doesn't.
+            // Binary @ 0x00131fae loads inline here, NOT in LoadContent.
+            // Stores to per-instance field +0x114 (m_CommingSoonHighscoreTex).
+            // Asset isn't shipped so the SmartPtr stays null and PreDraw's
+            // IsValid() gate skips the overlay. Defunct: "coming soon"
+            // highscore-leaderboard placeholder.
+            m_CommingSoonHighscoreTex = TextureManager::LoadLocalisedTexture("comming_soon_highscore.tex");
+        }
+
+        game->m_TransitionTimer = 1.0f;
+
+        // Spawn retry/quit buttons only when allowed AND entering from state 6
+        // Binary @ 0x00141f3a: gates on (prevState == 6) && IsAllowedToExit()
+        if (prevState == 6 && IsAllowedToExit()) {
+            CreateRetryButton();
+        }
+        if (m_pQuitBtn == nullptr && prevState == 6 && IsAllowedToExit()) {
+            CreateQuitButton();
+        }
+    }
+
+    // 6) Vertical "settle" -- title slides up off-screen while shrinking.
+    // ASM-verified: 2026-05-12 binary @ 0x001422fc..0x0014235e (asm-inspector).
+    //   gate    = pos.y < 212.8f          (DAT_00142614)
+    //   driver  = Game[+0x0c] = m_TransitionTimer (eased above at lines 920-924
+    //             via `timer += (1 - timer) * 0.125`, asymptotic 0 -> 1)
+    //   size    = m_TitleSize * lerp(2.0, 1.0, alpha)        (sf = 2 - alpha)
+    //   pos.y   = lerp(0.0, 224.0, alpha) = 224 * alpha     (DAT_00142618=224)
+    //   pos.x/z = 0
+    // The prior `m_TitleSlideProgress (+0x138)` interpretation was incorrect --
+    // the binary uses Game[+0x0c] (m_TransitionTimer) directly as the driver.
+    if (pos.y < 212.8f) {
+        float a = game->m_TransitionTimer;
+        float sf = 2.0f + (1.0f - 2.0f) * a;   // lerp(2, 1, a) = 2 - a
+        size.x = m_TitleSizeX * sf;
+        size.y = m_TitleSizeY * sf;
+        pos.x = 0.0f;
+        pos.y = 224.0f * a;
+        pos.z = 0.0f;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -899,15 +1139,15 @@ void GameOverScreen::Update(float dt) {
                 size.y = m_TitleSizeY * scaleFactor;
                 size.z = m_TitleSizeZ * scaleFactor;
 
-                // Advance bonus phase timer from our own timer.
-                m_Timer += dt;
-                m_pBonusScreen->m_PhaseTimer = m_Timer;
-
                 // When BonusScreen sets m_bPendingRemoval, transition to main display.
                 if (m_pBonusScreen->m_bPendingRemoval) {
                     SetStateWait();
                 }
             }
+            // Binary: m_Timer += dt and m_PhaseTimer write happen in BOTH
+            // create + existing branches (hoisted out of else to after the if/else).
+            m_Timer += dt;
+            if (m_pBonusScreen) m_pBonusScreen->m_PhaseTimer = m_Timer;
             // Binary @ 0x00141ce8: per-frame in this branch, force
             // game.m_bSlowMotion = 1 (suppress entity processing during
             // the bonus phase).
@@ -921,131 +1161,7 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     case STATE_MAIN_DISPLAY: {
         const int prevState = m_State;   // Binary: r9 = m_State at 0x00141f3e (saved BEFORE any writes)
-        // 1) Create FruitFactControl on first entry
-        if (m_pFruitFact == nullptr) {
-            m_pFruitFact = new FruitFactControl();
-            // Position: DAT_00142120=183.0, y=12.0, z=DAT_00142118=0.0
-            m_pFruitFact->pos.x = 183.0f + m_OffsetPosX;
-            m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
-            m_pFruitFact->pos.z = 0.0f;
-            m_pFruitFact->m_PomCount  = (uint8_t)m_PomCount;
-            m_pFruitFact->m_StarType  = (uint8_t)m_StarCount;
-            if (game->hud) game->hud->AddControl(m_pFruitFact, false);
-            m_pFruitFact->Init();
-        }
-
-        // 2) Pop-in animation: game.alpha (m_TransitionTimer) ramps toward 1.0
-        float& alpha = game->m_TransitionTimer; // game[+0xC] = alpha
-        const float ALPHA_THRESH = 0.999f; // DAT_00142124
-        if (alpha < ALPHA_THRESH) {
-            m_ProgressCounter = 0;
-            alpha += (1.0f - alpha) * 0.125f;
-            if (alpha < 0.75f) game->m_bSlowMotion = 1; // suppress entity processing
-            if (alpha >= ALPHA_THRESH) alpha = 1.0f;
-            m_FruitFactAlpha = alpha;
-        } else {
-            if (m_FruitFactAlpha < 1.0f)
-                m_FruitFactAlpha += (1.0f - m_FruitFactAlpha) * 0.125f;
-            if (m_ProgressCounter < 11) m_ProgressCounter++;
-        }
-
-        // 3) On frame 10 (single-shot via m_bScoreSubmitted): commit scores
-        if (m_ProgressCounter == 10) {
-            m_ProgressCounter = 11; // latch
-            if (m_bScoreSubmitted == 0) {
-                int score = GetCurrentScore(0);
-                m_bScoreSubmitted = 1;
-
-                // Score submission tail (§8): most calls are no-ops until subsystems are ported
-                FruitSaveData* save = game->pSaveData;
-                if (save) {
-                    // Binary @ 0x00142092: pSaveData[+0x12D] = 0 hoists to
-                    // the FIRST write in the m_bScoreSubmitted == 0 block,
-                    // before any AddToTotal / Achievement calls.
-                    save->secondaryFlag = 0;
-
-                    // Lifetime totals
-                    save->AddToTotal("FruitsCollected", 1);
-                    save->AddToTotal("TotalScore", score);
-                    save->UnlockTotals();  // no-op stub until AchievementManager is ported
-
-                    AchievementManager::GetInstance()->UnlockScoreAchievement(score);
-                    AchievementManager::GetInstance()->UnlockTotalFruitAchievement(0);
-                    AchievementManager::GetInstance()->UnlockEndScoreAchievement(score, 0);
-
-                    // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
-                    // Note: FNHighscoreList::AddPlayerScore -- defunct (online-services-audit).
-
-                    // Binary @ 0x00141fbc..0x00142010 (re-analyst):
-                    //   gate = (m_pBonusScreen != null && gameMode == 3 &&
-                    //           (int8_t)bonus[+0xE0] in [0, 25))
-                    //   args = (bonus[+0xD0] /*uint64_t combo*/,
-                    //           StringHash(GetComboName(starType)))
-                    // bonus[+0xE0] / bonus[+0xD0] are unported BonusScreen
-                    // fields; until they're added the gate fails and the
-                    // achievement is still credited via the placeholder
-                    // call below for compatibility.
-                    // TODO: 0x00141fbc — wire bonus[+0xE0]/[+0xD0] + GetComboName.
-                    AchievementManager::GetInstance()->UnlockComboStarAchievement(0, 0);
-
-                    int hi = GetCurrentModeHighscore();
-                    if (hi / 2 < score) {
-                        // Binary @ 0x00142228:
-                        //   pSaveData[+0x12C] = (uint8_t)SetCurrentModeHighscore(score);
-                        save->newBestThisGame =
-                            save->SetCurrentModeHighscore(score) ? 1 : 0;
-                    }
-
-                    // Note: NetworkManager::SetLeaderboardScore -- defunct (online-services-audit).
-
-                    // Arcade-only post-game achievement
-                    if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
-                        // Binary @ 0x0014230c -- calls BonusManager::UnlockPostGameAchievements.
-                        // Port previously called AchievementManager::UnlockPostGameAchievements
-                        // in error; corrected to match binary.
-                        BonusManager::GetInstance()->UnlockPostGameAchievements();
-                    }
-
-                    save->FinishedGame();
-                    save->ClearTotals();
-                    FruitNinja_SaveCurrentData(false);
-                }
-
-                // Load localised "Game Over" text texture
-                m_GameOverTex = TextureManager::LoadLocalisedTexture("gameover.tex");
-            }
-
-            game->m_TransitionTimer = 1.0f;
-
-            // Spawn retry/quit buttons only when allowed AND entering from state 6
-            // Binary @ 0x00141f3a: gates on (prevState == 6) && IsAllowedToExit()
-            if (prevState == 6 && IsAllowedToExit()) {
-                CreateRetryButton();
-            }
-            if (m_pQuitBtn == nullptr && prevState == 6 && IsAllowedToExit()) {
-                CreateQuitButton();
-            }
-        }
-
-        // 6) Vertical "settle" -- title slides up off-screen while shrinking.
-        // ASM-verified: 2026-05-12 binary @ 0x001422fc..0x0014235e (asm-inspector).
-        //   gate    = pos.y < 212.8f          (DAT_00142614)
-        //   driver  = Game[+0x0c] = m_TransitionTimer (eased above at lines 920-924
-        //             via `timer += (1 - timer) * 0.125`, asymptotic 0 -> 1)
-        //   size    = m_TitleSize * lerp(2.0, 1.0, alpha)        (sf = 2 - alpha)
-        //   pos.y   = lerp(0.0, 224.0, alpha) = 224 * alpha     (DAT_00142618=224)
-        //   pos.x/z = 0
-        // The prior `m_TitleSlideProgress (+0x138)` interpretation was incorrect --
-        // the binary uses Game[+0x0c] (m_TransitionTimer) directly as the driver.
-        if (pos.y < 212.8f) {
-            float a = game->m_TransitionTimer;
-            float sf = 2.0f + (1.0f - 2.0f) * a;   // lerp(2, 1, a) = 2 - a
-            size.x = m_TitleSizeX * sf;
-            size.y = m_TitleSizeY * sf;
-            pos.x = 0.0f;
-            pos.y = 224.0f * a;
-            pos.z = 0.0f;
-        }
+        RunStateMainDisplay(prevState);
         break;
     }
 
@@ -1055,9 +1171,11 @@ void GameOverScreen::Update(float dt) {
     case STATE_RETRY_PREPARE: {
         Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) != 0 && m_pSlot9c == nullptr) {
-            // Entities still on screen — snap alpha and stay in state 6
+            // Entities still on screen — snap alpha and fall through into
+            // STATE_MAIN_DISPLAY in the SAME tick (binary: goto case 6).
             game->m_TransitionTimer = 1.0f;
             m_State = STATE_MAIN_DISPLAY;
+            RunStateMainDisplay(/*prevState=*/STATE_MAIN_DISPLAY);
             break;
         }
         // ASM-verified: 2026-05-13 binary @ state-7 tail (re-analyst).
@@ -1114,6 +1232,11 @@ void GameOverScreen::Update(float dt) {
     // State 10: online leaderboard launch (defunct) — no-op, back to state 6
     // -----------------------------------------------------------------------
     case STATE_LEADERBOARD: {
+        // Binary gate: if (ActorManager::GetNumEntities(0) + GetNumEntities(1) == 0)
+        Mortar::ActorManager* amLb = game->actorManager;
+        const int totalEnts = amLb ? (amLb->GetNumEntities(0) + amLb->GetNumEntities(1)) : 0;
+        if (totalEnts != 0) break;
+
         // Note: NetworkManager::LaunchDashboard() -- defunct (online-services-audit).
         m_ProgressCounter = 0;
         m_pQuitBtn        = nullptr;
@@ -1167,14 +1290,14 @@ void GameOverScreen::Update(float dt) {
     //   DAT_00142634 =  368.0f   classic OffsetX base
     //   DAT_00142638 =   55.0f   classic OffsetY
     //   DAT_0014263c =  183.0f   classic FruitFact x-offset
-    //   DAT_00142640 = -5000.0f  unused / sentinel
-    //   DAT_00142644 =   65.0f   retryBtn y base
-    //   DAT_00142648 =  300.0f   retryBtn y alpha-coeff
-    //   DAT_0014264c =  190.0f   retryBtn x
-    //   DAT_00142650 =  -50.0f   shake.x scale
-    //   DAT_00142654 =  120.0f   shake magnitude
-    //   DAT_00142658 = -125.0f   quitBtn y base
-    //   DAT_00142670 -> &g_JitterVec3 (per-frame jitter source)
+    //   DAT_00142640 = -5000.0f  m_pSlotC0 Z (far-behind camera during slide)
+    //   DAT_00142644 =   65.0f   m_pSlotC0 Y base
+    //   DAT_00142648 =  300.0f   m_pSlotC0 Y slide coeff
+    //   DAT_0014264c =  190.0f   retry/quit X base
+    //   DAT_00142650 =  -50.0f   retry Y
+    //   DAT_00142654 =  120.0f   retry/quit X slide coeff
+    //   DAT_00142658 = -125.0f   quit Y
+    //   DAT_00142670 -> &g_JitterVec3 (per-frame jitter source; zero in shipping binary)
     //
     // The previous port-side numeric guesses (-204 / -193 / 75 / 130 / -50 /
     // 240 / -56) didn't come from these DATs and produced noticeably wrong
@@ -1182,10 +1305,10 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // ASM-verified: 2026-05-09 binary @ 0x00141b34..0x00142613 (re-analyst).
     // DAT constants:
-    //   0x00142620 = -20.0  (BonusScreen.y / Arcade-Zen FruitFact base.y)
-    //   0x00142624 =  75.0  (BonusScreen.x base)
-    //   0x00142628 = 480.0  (BonusScreen.x slide coeff)
-    //   0x0014262c = -102.0 (Arcade-Zen FruitFact x-offset; NOT bonus.y)
+    //   0x00142620 = -20.0  (unused in shipping layout; earlier port used as BonusScreen.y)
+    //   0x00142624 =  75.0  (Arcade-Zen FruitFact x base)
+    //   0x00142628 = 480.0  (Arcade-Zen FruitFact x slide coeff)
+    //   0x0014262c = -102.0 (Arcade-Zen m_OffsetPosX delta from fruitFact.x)
     //   0x00142630 = -386.0 (Classic FruitFact slide coeff)
     //   0x00142634 = 368.0  (Classic m_OffsetPosX base)
     //   0x00142638 =  55.0  (Classic m_OffsetPosY)
@@ -1196,19 +1319,19 @@ void GameOverScreen::Update(float dt) {
     //   0x00142658 = -125.0 (Quit Y base)
     //   0x00142670 = &g_JitterVec3 (shake source — port-side stub returns 0)
     uint8_t gm = game->gameMode;
-    if ((uint8_t)(gm - 2) < 2 && m_pBonusScreen != nullptr) {
-        // Arcade or Zen with BonusScreen
-        const float bx = 75.0f + (1.0f - m_FruitFactAlpha) * 480.0f;
-        const float by = -20.0f;  // DAT_00142620
-        m_pBonusScreen->pos.x = bx;
-        m_pBonusScreen->pos.y = by;
-        m_pBonusScreen->pos.z = 0.0f;
-        if (m_pFruitFact) {
-            // FruitFact bonus offset: bx + DAT_0014262c (-102), by + 4, 0
-            m_pFruitFact->pos.x = bx + (-102.0f);
-            m_pFruitFact->pos.y = by + 4.0f;
-            m_pFruitFact->pos.z = 0.0f;
-        }
+    if ((uint8_t)(gm - 2) < 2 && m_pFruitFact != nullptr) {
+        // Binary @ 0x0014245c..0x00142498 — online/Arcade modes (gameMode in {2,3})
+        // fruitfact layout. The gate is on m_pFruitFact != nullptr; the binary does
+        // NOT touch m_pBonusScreen->pos here. Earlier port mis-attributed the gate
+        // + included a stray bonus-pos write that wasn't in the binary.
+        const float ffX = (1.0f - m_FruitFactAlpha) * 480.0f + 75.0f;
+        m_pFruitFact->pos.x = ffX;
+        m_pFruitFact->pos.y = 53.0f;
+        m_pFruitFact->pos.z = 0.0f;
+        // m_OffsetPos = fruitFact->pos + (-102, 4, 0)
+        m_OffsetPosX = ffX - 102.0f;
+        m_OffsetPosY = 53.0f + 4.0f;   // = 57.0f
+        m_OffsetPosZ = 0.0f;
     } else {
         // Classic / single-player layout
         m_OffsetPosX = 368.0f + (-386.0f) * m_FruitFactAlpha;
@@ -1219,20 +1342,30 @@ void GameOverScreen::Update(float dt) {
             m_pFruitFact->pos.y = m_OffsetPosY + 12.0f;
             m_pFruitFact->pos.z = 0.0f;
         }
-        // Defunct: g_JitterVec3 (binary @ 0x0022F198) ctor-inits to (0,0,0)
-        // and nothing in the shipping binary ever writes it -- the
-        // `(1-α) * 120 * g_JitterVec3` term is permanently zero. The shake
-        // hook was wired but never finished. Port omits the jitter math
-        // entirely; pos is set to the binary's literal base (190, -50/-125, 0).
-        // Retry button (m_pSlot9c, field12_0x9c).
+        // Binary @ 0x001424b4..0x001424d8 — m_pSlotC0 slides vertically when set.
+        // Z = -5000 puts it far behind the camera (the binary uses this to hide it
+        // when m_FruitFactAlpha is low / ramping up). The earlier port comment
+        // claiming -5000 was an unused sentinel was incorrect.
+        // DAT_00142640 = -5000.0f, DAT_00142644 = 65.0f, DAT_00142648 = 300.0f.
+        if (m_pSlotC0) {
+            m_pSlotC0->pos.x = 0.0f;
+            m_pSlotC0->pos.y = (1.0f - m_FruitFactAlpha) * 300.0f + 65.0f;
+            m_pSlotC0->pos.z = -5000.0f;
+        }
+        // Binary @ 0x001424ec..0x00142520: retry+quit slide in from off-screen-right
+        // via pos.x = 190 + (1 - m_FruitFactAlpha) * 120.0f. The +120 UnitX term IS
+        // the slide formula -- earlier port comment conflating it with the unused
+        // g_JitterVec3 was incorrect. The pos.y is fixed (-50 for retry, -125 for
+        // quit). DAT_0014264c = 190.0f, DAT_00142654 = 120.0f, DAT_00142650 = -50.0f,
+        // DAT_00142658 = -125.0f.
+        const float slideX = 190.0f + (1.0f - m_FruitFactAlpha) * 120.0f;
         if (m_pSlot9c) {
-            m_pSlot9c->pos.x = 190.0f;
+            m_pSlot9c->pos.x = slideX;
             m_pSlot9c->pos.y = -50.0f;
             m_pSlot9c->pos.z = 0.0f;
         }
-        // Quit button (m_pQuitBtn, field15_0xa8).
         if (m_pQuitBtn) {
-            m_pQuitBtn->pos.x = 190.0f;
+            m_pQuitBtn->pos.x = slideX;
             m_pQuitBtn->pos.y = -125.0f;
             m_pQuitBtn->pos.z = 0.0f;
         }
@@ -1277,14 +1410,16 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     0xF);
             }
 
-            // Overlay quad (gameover.tex via m_GameOverTex) -- only when
-            // texture is valid AND the retry button's size.x is in (0, 600].
-            // DAT_001419ec = 600.0f.
+            // Overlay quad (comming_soon_highscore.tex via
+            // m_CommingSoonHighscoreTex) -- only when texture is valid AND
+            // the retry button's size.x is in (0, 600]. DAT_001419ec = 600.0f.
+            // Asset isn't shipped so IsValid() is always false in practice;
+            // the gate keeps the call-shape parity with the binary.
             const float btnScaleX = m_pRetryBtn->size.x;
-            if (m_GameOverTex.IsValid() &&
+            if (m_CommingSoonHighscoreTex.IsValid() &&
                 btnScaleX > 0.0f && btnScaleX < 600.0f)
             {
-                m_GameOverTex->Set();
+                m_CommingSoonHighscoreTex->Set();
 
                 MatrixManager& mm = MatrixManager::GetInstance();
                 mm.GetWorldStack().Reset();
@@ -1298,7 +1433,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
 
                 r->DrawQuad(Colour(255, 255, 255, 255));
 
-                m_GameOverTex->UnSet();
+                m_CommingSoonHighscoreTex->UnSet();
             }
         }
     }
