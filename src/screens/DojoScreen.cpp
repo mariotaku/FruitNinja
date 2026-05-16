@@ -405,14 +405,14 @@ void DojoScreen::PlayCallback() {
 
     // 3. Fling the back-bomb with random rightward velocity.
     //    Binary @ 0x001389f4: indirects through m_pPlayButton->m_pFruitPiece
-    //    (+0x134), writes *(byte*)(piece+0x80) = 1 unconditionally (same
-    //    offset for Fruit::m_bDetached and Bomb::m_bMovement), then writes
-    //    Vec3(r1+5, -r2, 0) to piece->vel.
+    //    (+0x134), writes *(byte*)(piece+0x80) = 1 unconditionally (aliases
+    //    Fruit::m_ChuckDelay low byte / Bomb::m_bMovement), then writes
+    //    Vec3(r1+5, -r2, 0) to piece->vel. Port omits the byte write since
+    //    m_ChuckDelay is already 0 at this point and the write is write-only.
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
         Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        piece->m_bDetached = true;  // +0x80 — same byte for Fruit and Bomb back-buttons
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
@@ -434,12 +434,12 @@ void DojoScreen::ShopCallback() {
     m_State = 2;
 
     // Binary @ 0x00137864: m_pPlayButton->m_pFruitPiece (+0x134), set
-    // *(byte*)(piece+0x80) = 1 unconditionally, write fling vel.
+    // *(byte*)(piece+0x80) = 1 (aliases m_ChuckDelay low byte), write fling vel.
+    // Port omits the byte write; m_ChuckDelay stays 0.
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
         Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        piece->m_bDetached = true;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
@@ -454,12 +454,12 @@ void DojoScreen::AboutCallback() {
     m_State = 3;
 
     // Binary @ 0x001378e0: m_pPlayButton->m_pFruitPiece (+0x134), set
-    // *(byte*)(piece+0x80) = 1 unconditionally, write fling vel.
+    // *(byte*)(piece+0x80) = 1 (aliases m_ChuckDelay low byte), write fling vel.
+    // Port omits the byte write; m_ChuckDelay stays 0.
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
         Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        piece->m_bDetached = true;
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 

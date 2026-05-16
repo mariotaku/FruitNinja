@@ -555,16 +555,14 @@ void GameModeScreen::QuitCallback() {
     // 2. Enter back-out state
     m_State = 0xe;
 
-    // 3. Fling back button (binary: byte at +0x80 = 1, then random vel).
-    // The +0x80 byte is m_bDetached for Fruit / m_bMovement for Bomb.
-    // Falls back to m_pEntity since back-bomb's m_pFruitPiece is null.
+    // 3. Fling back button (binary: *(byte*)(piece+0x80) = 1, then random vel).
+    // +0x80 aliases m_ChuckDelay (Fruit) / m_bMovement (Bomb). Port omits the
+    // Fruit byte write since m_ChuckDelay is write-only here; Bomb write kept.
     if (m_pBackButton && m_pBackButton->m_pEntity) {
         Mortar::Entity* e = m_pBackButton->m_pEntity;
         float rx = (float)rand() / (float)RAND_MAX;
         float ry = (float)rand() / (float)RAND_MAX;
-        if (e->entityType == 0) {
-            static_cast<Fruit*>(e)->m_bDetached = true;
-        } else if (e->entityType == 1) {
+        if (e->entityType == 1) {
             static_cast<Bomb*>(e)->m_bMovement = 1;
         }
         e->vel = Vec3(rx + 5.0f, -ry, 0.0f);
