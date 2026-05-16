@@ -766,20 +766,6 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         if (m_HitCallback) {
             m_HitCallback();
         }
-        // DIFFERS: re-enable m_bMovement so gravity brings the sliced menu
-        // bomb back down. MenuButton::Init sets m_bMovement=0 for menu
-        // bombs (they sit stationary on the button). When the player slices
-        // the back-button bomb, the slice imparts a velocity but without
-        // gravity the bomb flies in slice direction at constant velocity
-        // until OOB at +/-240 -- with a slow upward slash, that can take
-        // 30+ seconds, during which the fuse particle keeps emitting
-        // off-screen. The binary likely has the same quirk (re-analyst
-        // 2026-05-16 confirmed CollisionResponse path matches), but the
-        // visual effect of a stuck off-screen-up fussing bomb is the
-        // user-visible bug being fixed. Re-enabling gravity on the sliced
-        // bomb makes it fall back naturally -- still exits via OOB, but
-        // within ~1-3s regardless of slice direction.
-        m_bMovement = 1;
     }
 
     m_bHit = 1;   // +0x68 -- triggers hit branch in Update next tick
