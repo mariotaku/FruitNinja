@@ -4454,9 +4454,9 @@
   "_ZN11PowerUpShop17SetBuyButtonStateEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "PowerUpShop method stub/divergence. Score 5400/3600.",
-    "score": 5400,
+    "score": 5210,
     "max_score": 3600,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11PowerUpShop4InitEv": {
     "verdict": "ACCEPT-deferred",
@@ -4571,11 +4571,11 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN11SlashEntity15UpdateTouchDownEP10InputEvent": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "UpdateTouchDown: binary @ 0x17C584 implements full touch-delta COL math; port is Tier-2 stub. See src/entities/SlashEntity.h:155 // TODO: wire when Mortar::Entity vtable input dispatch is ported.",
-    "score": 27840,
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary-faithful port: early-return on bombHitTimer>0 mirrors binary @ 0x17D3AC. Score drift is register-allocation / PIC-anchor noise only.",
+    "score": 27025,
     "max_score": 28000,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN11SlashEntity17CollisionResponseEPN6Mortar6EntityEmmP8_Vector3IfE": {
     "verdict": "ACCEPT-cosmetic",
@@ -5341,11 +5341,11 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN13ScrollingMenu11DestroyListEv": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 4770/4100.",
-    "score": 4770,
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary-faithful port: s_ModPowerMask &= ~0x40 safety clear on list destroy mirrors binary @ 0x0015afea. Score overshoot is register-alloc noise.",
+    "score": 4950,
     "max_score": 4100,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13ScrollingMenu4SkipEv": {
     "verdict": "ACCEPT-cosmetic",
@@ -5355,11 +5355,11 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN13ScrollingMenu6UpdateEf": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 67525/57800.",
-    "score": 67525,
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Binary-faithful port: s_ModPowerMask |= 0x40 on touch-acquire / clear on release mirrors binary @ 0x0015b7cc (SET) and 0x0015baba (CLEAR). Score overshoot is instruction-ordering noise from larger function body.",
+    "score": 67790,
     "max_score": 57800,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN13ScrollingMenu7AddItemEP17ScrollingMenuItem": {
     "verdict": "ACCEPT-deferred",
@@ -6834,9 +6834,9 @@
   "_ZN5Fruit4InitEPvlP8_Vector3IfE": {
     "verdict": "ACCEPT-deferred",
     "reason": "Fruit method stub/divergence. Score 57433/26700.",
-    "score": 57433,
+    "score": 57833,
     "max_score": 26700,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN5Fruit5ChuckEf": {
     "verdict": "ACCEPT-deferred",
@@ -6855,9 +6855,9 @@
   "_ZN5Fruit6UpdateEf": {
     "verdict": "ACCEPT-deferred",
     "reason": "Fruit::Update restructured to match binary outer gate (!m_bSliced vs sliced); IsActive/ChuckDelay moved inside unsliced branch; m_bDrawWhole gate on ScaleAnim in sliced branch; m_LifetimeCounter tail tick added (binary @ 0x17a16+). Remaining score from cross-build field-layout differences. ACCEPT-deferred pending cross-build offset validation.",
-    "score": 112870,
+    "score": 114250,
     "max_score": 85600,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN5Fruit7GetFactEPiS0_ii": {
     "verdict": "ACCEPT-deferred",
@@ -6911,16 +6911,16 @@
   "_ZN5FruitC1Ev": {
     "verdict": "ACCEPT-deferred",
     "reason": "FruitC1/C2: port initialises extended float fields; structural divergence from Tier-2 field additions. Score 6500/2500.",
-    "score": 6500,
+    "score": 6565,
     "max_score": 2500,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN5FruitC2Ev": {
     "verdict": "ACCEPT-deferred",
     "reason": "FruitC1/C2: port initialises extended float fields; structural divergence from Tier-2 field additions. Score 6500/2500.",
-    "score": 6500,
+    "score": 6565,
     "max_score": 2500,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZN5FruitD0Ev": {
     "verdict": "ACCEPT-deferred",
@@ -8745,9 +8745,9 @@
   "_ZNK5Fruit11IsOffscreenEv": {
     "verdict": "ACCEPT-deferred",
     "reason": "Fruit::IsOffscreen rewritten with binary-faithful gravity-axis projection (DAT_001756d4=160.0/DAT_001756d8=240.0/DAT_001756d0=50.0; m_SecondPos checked unconditionally, no m_bSliced gate). Remaining score from field-layout differences in cross-build. ACCEPT-deferred pending cross-build offset validation.",
-    "score": 6105,
+    "score": 3585,
     "max_score": 5500,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-16T00:00Z"
   },
   "_ZNK6Mortar12ActorManager11GetHeapSizeEv": {
     "verdict": "ACCEPT-cosmetic",
