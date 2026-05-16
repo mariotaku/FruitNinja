@@ -90,6 +90,12 @@ public:
     float GetCameraTransition() const;
     void  SetCameraTransition(float v);
 
+    // Drop the four menu buttons (Play/Dojo/MoreGames/Quit). Called by
+    // STATE_LEADERBOARD/MORE_GAMES/MATCHMAKER/NEWS and STATE_LOADING_A/B
+    // transitions internally; exposed for test harnesses that snap
+    // straight into the gameplay stage and need the menu UI cleared.
+    void DeleteMenuButtons();
+
 private:
     // +0x7c: copy of original size
     Vec3 m_OrigSize;
@@ -169,7 +175,6 @@ private:
     GameModeScreen* m_pGameModeScreen;
 
     // --- Internal helpers ---
-    void DeleteMenuButtons();
     void Hide();
     void CreateToggles();
     void CreatePlayDojo();
