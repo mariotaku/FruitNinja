@@ -250,11 +250,11 @@ private:
 #ifdef __bada__
 #include <cstddef>
 struct MainScreenLayoutAssert {
-    static_assert(offsetof(MainScreen, m_OrigSize)    == 0x7c,  "m_OrigSize offset");
-    static_assert(offsetof(MainScreen, pPlayButton)   == 0x9c,  "pPlayButton offset");
-    static_assert(offsetof(MainScreen, pDojoButton)   == 0xa0,  "pDojoButton offset");
-    static_assert(offsetof(MainScreen, pQuitBtn)      == 0xa4,  "pQuitBtn offset");
-    static_assert(offsetof(MainScreen, pMoreGamesBtn) == 0xa8,  "pMoreGamesBtn offset");
+    static_assert(__builtin_offsetof(MainScreen, m_OrigSize)    == 0x7c,  "m_OrigSize offset");
+    static_assert(__builtin_offsetof(MainScreen, pPlayButton)   == 0x9c,  "pPlayButton offset");
+    static_assert(__builtin_offsetof(MainScreen, pDojoButton)   == 0xa0,  "pDojoButton offset");
+    static_assert(__builtin_offsetof(MainScreen, pQuitBtn)      == 0xa4,  "pQuitBtn offset");
+    static_assert(__builtin_offsetof(MainScreen, pMoreGamesBtn) == 0xa8,  "pMoreGamesBtn offset");
     // TODO: m_pFont currently lands at != 0x11c in cross-build; residual
     // drift between pMoreGamesBtn (+0xa8) and m_pFont (+0x11c). Audit pending.
     // static_assert(offsetof(MainScreen, m_pFont)       == 0x11c, "m_pFont offset");

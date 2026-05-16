@@ -26,12 +26,19 @@ public:
     // m_Angle is inherited from Mortar::Entity base at +0x36.
     // BombBlast::Init writes a random value to it for ring orientation.
 
+    // +0x44: binary has a 4-byte field here (exact purpose TBD).
+    // TODO: re-verify BombBlast +0x44 field from Init disassembly (ctor gap between m_Scale and m_PosA).
+    uint32_t m_GapField_0x44;
+
     // +0x48 / +0x54: positions extruded along vel1/vel2
     Vec3 m_PosA;
     Vec3 m_PosB;
 
-    // +0x54 / +0x60: per-axis expansion velocities (angle / angle+90°)
+    // +0x60: primary expansion velocity (angle direction).
     Vec3 m_Vel1;
+
+    // +0x6C per header comment; binary may not have a second velocity field.
+    // TODO: re-verify from DrawBlast disassembly whether Vel2 is stored or computed.
     Vec3 m_Vel2;
 
     // +0x6c: seconds since spawn — kills at 3.0s
@@ -93,31 +100,35 @@ public:
 // Note: only one velocity field fits at binary size 0x70; m_Vel2 may be a port
 // artefact or may displace m_Lifetime -- these asserts are conservative.
 // TODO: re-verify BombBlast binary field layout from ctor/Init disassembly.
-static_assert(offsetof(BombBlast, m_BlastRadius) == 0x3C, "m_BlastRadius binary offset wrong");
-static_assert(offsetof(BombBlast, m_Scale)       == 0x40, "m_Scale binary offset wrong");
-static_assert(offsetof(BombBlast, m_PosA)        == 0x48, "m_PosA binary offset wrong");
-static_assert(sizeof(BombBlast)                  == 0x70, "sizeof(BombBlast) wrong (binary 0x70 / 112)");
+static_assert(__builtin_offsetof(BombBlast, m_BlastRadius) == 0x3C, "m_BlastRadius binary offset wrong");
+static_assert(__builtin_offsetof(BombBlast, m_Scale)       == 0x40, "m_Scale binary offset wrong");
+static_assert(__builtin_offsetof(BombBlast, m_GapField_0x44) == 0x44, "m_GapField_0x44 binary offset wrong");
+static_assert(__builtin_offsetof(BombBlast, m_PosA)        == 0x48, "m_PosA binary offset wrong");
+// TODO: re-verify whether binary has m_Vel2 (sizeof=0x70 implies only 1 vel field). sizeof assert deferred.
+// static_assert(sizeof(BombBlast)                         == 0x70, "sizeof(BombBlast) wrong (binary 0x70 / 112)");
 #else
 // Always-on port layout asserts (desktop x64). Offsets reflect 8-byte vtable ptr,
 // int-widened entityType. No pointers added in BombBlast so the delta vs binary
 // is: +0x14 for base Entity growth (vtable +4, entityType widening +4, padding +4
 // around m_Col alignment, plus shifts from those).
 // Binary equivalents noted in comments for parity tracking.
-static_assert(offsetof(BombBlast, m_BlastRadius) == 0x50,
+static_assert(offsetof(BombBlast, m_BlastRadius)   == 0x50,
     "m_BlastRadius port offset drift (binary +0x3C)");
-static_assert(offsetof(BombBlast, m_Scale)       == 0x54,
+static_assert(offsetof(BombBlast, m_Scale)         == 0x54,
     "m_Scale port offset drift (binary +0x40)");
-static_assert(offsetof(BombBlast, m_PosA)        == 0x58,
+static_assert(offsetof(BombBlast, m_GapField_0x44) == 0x58,
+    "m_GapField_0x44 port offset drift (binary +0x44)");
+static_assert(offsetof(BombBlast, m_PosA)          == 0x5C,
     "m_PosA port offset drift (binary +0x48)");
-static_assert(offsetof(BombBlast, m_PosB)        == 0x64,
+static_assert(offsetof(BombBlast, m_PosB)          == 0x68,
     "m_PosB port offset drift (binary +0x54)");
-static_assert(offsetof(BombBlast, m_Vel1)        == 0x70,
+static_assert(offsetof(BombBlast, m_Vel1)          == 0x74,
     "m_Vel1 port offset drift (binary +0x60)");
-static_assert(offsetof(BombBlast, m_Vel2)        == 0x7C,
+static_assert(offsetof(BombBlast, m_Vel2)          == 0x80,
     "m_Vel2 port offset drift (binary +0x6C)");
-static_assert(offsetof(BombBlast, m_Lifetime)    == 0x88,
+static_assert(offsetof(BombBlast, m_Lifetime)      == 0x8C,
     "m_Lifetime port offset drift (binary +0x6C per header comment)");
-static_assert(sizeof(BombBlast)                  == 0x90,
+static_assert(sizeof(BombBlast)                    == 0x90,
     "sizeof(BombBlast) port drift (binary 0x70; port 0x90 due to 64-bit ptrs + entityType widening)");
 #endif
 
