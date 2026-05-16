@@ -1424,7 +1424,10 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         float velMultX = info ? info->m_VelXScale : 1.0f;
         float velMultY = info ? info->m_VelYScale : 1.0f;
         float velX = sin_a * speed * velMultX;
-        float velY = cos_a * speed * velMultY;
+        // Mirror SpawnBomb: binary @ 0x00122744 has vmul s14,s14,s15 with
+        // DAT_0012284c = 1.075f (same value/role as bomb's DAT_00122218).
+        // ASM-verified: 2026-05-16 binary @ 0x00122744 (re-analyst)
+        float velY = cos_a * speed * velMultY * 1.075f;
 
         float posX = 0.0f;
         float posY = 0.0f;
@@ -1434,10 +1437,12 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         switch (spawnType) {
         case PLACEMENT_BOTTOM:
         default:
-            // spawnX = iBase (degree-baseline after spread), spawnY = -160.
-            // binary @ 0x001228be: iVar21 -> s20, iVar7=-0xa0 -> s16
+            // spawnX = iBase, spawnY = -160 * Vec3::One.y = -160. Binary
+            // literal at 0x00122776 = mvn r9,#0x9f = -160; multiplied by the
+            // GOT-resident _Vector3<float>::One (confirmed (1,1,1) so the
+            // multiplication is a no-op). Binary @ 0x001228ca/0xce.
             posX = (float)iBase;
-            posY = -160.0f;  // DAT = -0xa0 = -160. DIFFERS: was -240. binary @ 0x001228da
+            posY = -160.0f;
             break;
         case PLACEMENT_BOTTOM_SLOW:
             posX = (float)iBase;
