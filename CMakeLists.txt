@@ -236,6 +236,11 @@ if (WIN32 AND TARGET SDL2::SDL2)
     endif()
 endif()
 
+option(FRUITNINJA_BOMB_TRACE "Enable per-frame Bomb::Update trace logging" OFF)
+if (FRUITNINJA_BOMB_TRACE)
+    target_compile_definitions(fruit-ninja-game PRIVATE MORTAR_BOMB_TRACE=1)
+endif()
+
 # --- ctest ---
 enable_testing()
 add_subdirectory(tests)

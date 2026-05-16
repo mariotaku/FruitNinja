@@ -30,6 +30,12 @@
 
 // Analysed: 2026-04-29T00:00
 
+// Per-bomb physics trace for the test_bomb_spawn diagnostic. Off by
+// default; enable with -DFRUITNINJA_BOMB_TRACE=ON at cmake config time.
+#ifndef MORTAR_BOMB_TRACE
+#  define MORTAR_BOMB_TRACE 0
+#endif
+
 // --- Constants from binary (docs/entities/bomb.md) ---
 static const float SPAWN_TIMER_INIT  = 0.6f;     // DAT_001726ac
 static const float DEFAULT_CHUCK_DELAY = 0.2f;    // DAT_00170f80
@@ -424,6 +430,21 @@ void Bomb::Update(float /*dt*/) {
         StepBombRotation(m_RotY, m_RotVelY);
 #endif
 
+#if MORTAR_BOMB_TRACE
+        {
+            unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
+            printf("[BOMB %03x] pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f) "
+                   "accel=(%5.2f,%6.2f) scl.y=%.3f bMv=%d bHit=%d "
+                   "cd=%.3f dt=%.4f\n",
+                   id, pos.x, pos.y, vel.x, vel.y,
+                   m_AccelForce.x, m_AccelForce.y,
+                   scale.y,
+                   (int)m_bMovement, (int)m_bHit,
+                   m_Countdown, gameDt);
+            fflush(stdout);
+        }
+#endif
+
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
         // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
         // center = (pos.x, pos.y, 0).
@@ -474,6 +495,14 @@ void Bomb::Update(float /*dt*/) {
     // an emitter attached in the same frame.
     if (pos.y <= BOUNDS_MIN_Y || pos.y >= BOUNDS_MAX_Y ||
         pos.x <= BOUNDS_MIN_X || pos.x >= BOUNDS_MAX_X) {
+#if MORTAR_BOMB_TRACE
+        {
+            unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
+            printf("[BOMB %03x] OOB KILL pos=(%.1f,%.1f) vel=(%.2f,%.2f)\n",
+                   id, pos.x, pos.y, vel.x, vel.y);
+            fflush(stdout);
+        }
+#endif
         KillBomb();
     } else if (!m_pEmitter) {
         const int variant = (m_BombVariant == 0) ? 0 : 1;

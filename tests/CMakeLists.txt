@@ -77,3 +77,33 @@ foreach(mode classic combo arcade zen)
     add_test(NAME gameplay_${mode} COMMAND test_gameplay ${mode})
     set_tests_properties(gameplay_${mode} PROPERTIES TIMEOUT 60)
 endforeach()
+
+# Bomb-spawn diagnostic. Spawns bombs directly via WaveManager::SpawnBomb,
+# ticks 200 frames per variant, asserts no entity leak.
+# To see per-frame trace output, configure with -DFRUITNINJA_BOMB_TRACE=ON
+# (that define propagates to fruit-ninja-game; the test exe itself carries
+# no trace define since Bomb.cpp lives in the library).
+add_executable(test_bomb_spawn test_bomb_spawn.cpp)
+target_link_libraries(test_bomb_spawn PRIVATE fruit-ninja-game SDL2::SDL2main)
+if (WIN32)
+    target_link_libraries(test_bomb_spawn PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_bomb_spawn PRIVATE OpenGL::GL)
+endif()
+if (WIN32 AND TARGET SDL2::SDL2)
+    set(_sdl2_real SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET test_bomb_spawn POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2::SDL2>
+                $<TARGET_FILE_DIR:test_bomb_spawn>)
+    endif()
+endif()
+add_test(NAME bomb_spawn COMMAND test_bomb_spawn all)
+set_tests_properties(bomb_spawn PROPERTIES TIMEOUT 60)
