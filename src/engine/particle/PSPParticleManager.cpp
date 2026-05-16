@@ -106,8 +106,7 @@ PSPEmitterTemplate* PSPParticleManager::GetEmitterTemplate(int idx) {
 // Binary @ 0x001149e0 — pop from pool, init defaults, prepend to m_ActiveList.
 PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
                                                    PSPParticleEmitter** ppRef,
-                                                   bool /*persistent*/) {
-    // ASM-verified: 2026-05-06T16:30 binary @ 0x001149e0 (asm-inspector)
+                                                   bool updateWhenPaused) {
     // Binary pool capacity is 120 (Create(this, 0x78) at 0x00115fc0); admit
     // predicate is `used + 1 < cap` -> at most 119 live emitters. Pool-full
     // path returns nullptr WITHOUT zeroing *ppRef; binary only zeros *ppRef
@@ -139,7 +138,7 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     e.m_field34 = 1.0f;
     e.m_field38 = 0;
     e.m_ParticleHead = 1;
-    e.m_bUpdateWhenPaused = false;
+    e.m_bUpdateWhenPaused = updateWhenPaused;
     e.m_pTemplate = tmpl;
     e.m_pRefPtr = ppRef;
     e.m_bActive = true;
