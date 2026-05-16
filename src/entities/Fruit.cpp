@@ -1648,10 +1648,11 @@ bool Fruit::SetTrailParticles(unsigned long emitterHash) {
 // Chunk D: UpdateBombAvoidance + DestroyFruitModels
 // ============================================================
 
-// Binary @ 0x00175988 — push bombs away from this fruit on the X axis
-// when they are within 70px and have matching velocity direction.
+// Binary @ 0x00175988 — push bombs away from this fruit on the X axis.
+// ASM-verified: re-analyst 2026-05-16 confirmed DAT_00175a5c=4900.0f,
+// DAT_00175a60=56.25f, multiplier=12.0f; dist check is MagnitudeSqr(diff)<4900.
 void Fruit::UpdateBombAvoidance(float dt) {
-    static const float AVOIDANCE_RADIUS = 70.0f;   // from binary @ 0x00175988
+    if (m_bSliced != 0) return;
 
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
@@ -1659,14 +1660,16 @@ void Fruit::UpdateBombAvoidance(float dt) {
     std::list<Mortar::Entity*>::iterator it;
     Mortar::Entity* e = am->GetEntityFirst(1, it);   // entity type 1 = bomb
     while (e) {
-        if (e->IsActive()) {
-            Vec3 diff = e->pos - pos;
-            float dist = fabsf(diff.x);
-            if (dist < AVOIDANCE_RADIUS) {
-                // Push bomb away on X axis when velocities agree in direction.
-                float pushDir = (diff.x >= 0.0f) ? 1.0f : -1.0f;
-                if ((e->vel.x * pushDir) >= 0.0f) {
-                    e->vel.x += pushDir * dt * 16.0f;
+        Bomb* bomb = static_cast<Bomb*>(e);
+        if (bomb->IsActive() && bomb->m_Col != NULL) {
+            Vec3 diff = bomb->pos - pos;
+            float distSqr = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+            if (distSqr < 4900.0f) {   // DAT_00175a5c = 4900.0 (70^2)
+                float dvx = vel.x - bomb->vel.x;
+                float dvy = vel.y - bomb->vel.y;
+                if (dvx * dvx + dvy * dvy < 56.25f) {   // DAT_00175a60 = 56.25 (7.5^2)
+                    float dir = (diff.x < 0.0f) ? -1.0f : 1.0f;
+                    bomb->vel.x += dir * dt * 12.0f;
                 }
             }
         }
