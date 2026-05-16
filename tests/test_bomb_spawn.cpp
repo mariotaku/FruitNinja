@@ -24,6 +24,11 @@
 #include "game/StartupEffects.h"
 #include "entities/ActorManager.h"
 #include "hud/HUD.h"
+#include "screens/MainScreen.h"
+#include "screens/DojoScreen.h"
+#include "screens/AboutScreen.h"
+#include "screens/ShopScreen.h"
+#include "screens/GameModeScreen.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -192,17 +197,31 @@ int main(int argc, char* argv[]) {
     Game game;
     if (!GameSetup(&window, &gl, &game)) return 1;
 
-    // Drop into the Classic gameplay stage so spawn happens with the
-    // gameplay camera, dojo background, and HUD instead of the main menu.
-    // PrepareForLevelStart resets WaveManager + populates m_pCurrentWave[0]
-    // and sets pauseFlag = 1; the spawn-pump gate then needs pauseFlag = 0
-    // to actually run physics. We then zero each spawner's m_RemainingCount
-    // every tick so the wave manager does NOT spawn its own fruit/bombs
-    // alongside our test bombs -- the test stays a single-bomb-at-a-time
-    // visualisation.
+    // Drop into the Classic gameplay stage. PrepareForLevelStart alone
+    // only resets WaveManager data -- the actual screen transition out of
+    // MainScreen needs the state machine kicked into STATE_CAMERA_FADE
+    // (0x11) and the camera transition timer zeroed, otherwise MainScreen
+    // stays in its CAMERA_ZOOM state and renders the menu. Mirror the
+    // sequence used by test_screen.cpp's "classic" path.
+    //
+    // Per-tick we also zero every spawner's m_RemainingCount so the wave
+    // manager does NOT spawn its own fruit/bombs alongside our test bombs
+    // -- the test stays a single-bomb-at-a-time visualisation.
+    for (std::list<HUDControl*>::iterator it = game.hud->controls.begin();
+         it != game.hud->controls.end(); ++it) {
+        HUDControl* c = *it;
+        if (dynamic_cast<DojoScreen*>(c)
+         || dynamic_cast<AboutScreen*>(c)
+         || dynamic_cast<ShopScreen*>(c)
+         || dynamic_cast<GameModeScreen*>(c)) {
+            c->m_bActive = 0;
+        }
+    }
     game.gameMode = 0;
     FN::PrepareForLevelStart();
     game.pauseFlag = 0;
+    if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
+    game.m_TransitionTimer = 0.0f;
 
     // Settle the camera + HUD into gameplay.
     game.runFrames(60);
