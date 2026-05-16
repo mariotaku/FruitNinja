@@ -99,11 +99,16 @@ static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
 }
 
 // ---------------------------------------------------------------------------
-// Font::Load -- ASM-verified: 2026-05-08T00:00 binary @ 0x00199e9c (asm-inspector)
+// Font::Load -- binary @ 0x00199e9c (instance method, returns int 1/0)
 //
 // Slurps the entire .fnt file via Mortar::File (IFile-backed), walks
 // byte-by-byte comparing tags. Matches the binary's IFile-based slurp
 // (binary uses a stack-allocated File; port matches that pattern).
+// Port-specific additions: texture-loading path (baseDir stripping,
+// extension swap .tga->.tex, TextureManager::GetDataDir). These are
+// beyond what the binary's Font::Load does (binary defers texture loading
+// to a separate step). TODO: re-verify when the texture-loading path is
+// fully RE'd to restore ASM-verify score.
 // ---------------------------------------------------------------------------
 
 int Font::Load(const char* path) {

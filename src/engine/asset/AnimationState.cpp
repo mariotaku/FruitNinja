@@ -14,6 +14,7 @@ AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
         m_AnimList = GetDummyAnimList();
     }
     m_CurrentIter = m_AnimList->m_Anims.end();
+    m_Pad_0x30 = 0;
     m_Time  = 0.0f;
     m_Speed = 1.0f;
     m_Loop  = false;

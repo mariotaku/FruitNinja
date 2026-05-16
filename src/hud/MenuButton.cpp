@@ -143,7 +143,8 @@ static const float ROT_CLAMP_X = 0.75f;
 static const float ROT_CLAMP_Y = 0.5f;
 
 MenuButton::MenuButton()
-    : m_pEntity(nullptr),
+    : m_Pad_0x7C(0),
+      m_pEntity(nullptr),
       m_FruitType(-1),
       m_FadeCounter(0),
       m_fieldD4(0),

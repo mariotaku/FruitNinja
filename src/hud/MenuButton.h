@@ -46,6 +46,9 @@ namespace FN { void ClearMenuItems(); }
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0014ee40 + 0x0014e614 + 0x0014f7e0 (asm-inspector, base-shift unaffected)
 class MenuButton : public HUDControl3d {
 public:
+    // +0x7C: TODO: re-verify MenuButton +0x7C field from binary (4-byte gap between base end and m_pEntity)
+    uint32_t m_Pad_0x7C;
+
     // +0x80: real Fruit/Bomb entity spinning on button (nullptr for toggles)
     Mortar::Entity* m_pEntity;
 
@@ -244,5 +247,12 @@ private:
     // x/y/phase from the currently tracked Touch slot into m_TouchX/Y/Phase.
     void UpdateTouchPosition();
 };
+
+#ifdef __bada__
+static_assert(__builtin_offsetof(MenuButton, m_pEntity)   == 0x80, "MenuButton m_pEntity offset");
+static_assert(__builtin_offsetof(MenuButton, m_FadeCounter) == 0xD0, "MenuButton m_FadeCounter offset");
+static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer) == 0x158, "MenuButton m_ShakeTimer offset");
+static_assert(sizeof(MenuButton) == 0x15C, "MenuButton sizeof mismatch");
+#endif
 
 #endif

@@ -82,11 +82,17 @@ private:
     AnimBindings            m_Bindings;     // +0x10 (24B)
     Mortar::SmartPtr<AnimationList> m_AnimList;     // +0x28
     AnimIter                m_CurrentIter;  // +0x2C
-    // padding                             // +0x30
+    // TODO: re-verify AnimationState +0x30 field from binary (binary writes here; RE gap)
+    uint32_t                m_Pad_0x30;     // +0x30
     float                   m_Time;         // +0x34
     float                   m_Speed;        // +0x38 (dead field in this class; AnimationManager uses)
     bool                    m_Loop;         // +0x3C
 };
+
+#ifdef __bada__
+static_assert(sizeof(Mortar::AnimationState) == 0x40,
+              "AnimationState sizeof mismatch (expected 0x40; check m_Pad_0x30 gap field)");
+#endif
 
 }  // namespace Mortar
 
