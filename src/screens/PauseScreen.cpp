@@ -112,6 +112,16 @@ void PauseScreen::UnpauseGame() {
     GameTaskState* ts = GetTaskState();
     ts->pauseBombHitTimer = 0.4f;   // DAT_00168fcc
     ts->isPaused = 1;
+
+    // DIFFERS: binary's UnpauseGame doesn't touch gameActiveFlag here, but
+    // PauseScreen STATE_FADE_IN / STATE_ACTIVE force gameActiveFlag = 1
+    // every frame while paused (matching the binary's pause-tick behaviour).
+    // Nothing else in the port resets it to 0 -- so after Resume/Retry/Quit
+    // physics stays frozen and WaveManager's spawn pump goes silent. The
+    // binary must do this clear via a path we haven't RE'd; doing it here
+    // is the smallest correct surface-level fix.
+    Game* game = Game::GetInstance();
+    if (game) game->gameActiveFlag = 0;
 }
 
 // -------------------------------------------------------------------------
