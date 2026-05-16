@@ -41,6 +41,11 @@ public:
     // +0x3c: fruit type index into FRUIT_INFO array
     int m_FruitType;
 
+    // +0x60: per-frame lifetime counter. Ticked += (int)(1000.0f * dtScaled) each
+    // Update frame (binary @ 0x17a16+). Probable emitter lifetime counter; cleared
+    // by Init. int32_t to match binary's signed 32-bit add.
+    int32_t m_LifetimeCounter;             // +0x60
+
     // +0x6c: slice countdown — init -1.0f, set positive by OnSliced,
     // counts down in Update until 0 → calls Slice() to split the fruit.
     float m_SliceTimer;
@@ -52,13 +57,17 @@ public:
     // +0x74: clamped blade speed (magnitude × 0.1, clamp [4..8] or [6..8]).
     float m_SliceImpulse;
 
-    // +0x78..+0x84: snapshot of pos at slice time.
+    // +0x78..+0x83: snapshot of pos at slice time.
     Vec3 m_SlicePos;
 
-    // +0x7c / +0x80: two juice-particle emitters spawned on hit, one
+    // +0x7C: gates physics integration in the unsliced (!m_bSliced) branch
+    // of Update. Distinct from Entity::flags bit-0 IsActive().
+    uint8_t m_bActive;                     // +0x7C
+
+    // +0x80, +0x84: two juice-particle emitters spawned on hit, one
     // per eventual half. Point at pos and m_SecondPos respectively.
-    PSPParticleEmitter* m_pEmitter1;
-    PSPParticleEmitter* m_pEmitter2;
+    PSPParticleEmitter* m_pEmitter1;       // +0x80
+    PSPParticleEmitter* m_pEmitter2;       // +0x84
 
     // +0xb4: sliced state
     bool m_bSliced;
@@ -76,16 +85,21 @@ public:
     // Scale animation (0→1 on spawn)
     float m_ScaleAnim;                   // +0x110
 
+    // +0x108: back-pointer to the SlashEntity that last targeted this fruit.
+    // Cleared by KillFruit if the slasher's m_pCurrentTarget still points here
+    // (Fruit::KillFruit cleanup tail @ 0x00176c8e..0x00176cea).
+    SlashEntity* m_pSlasher;               // +0x108
+
+    // +0x10C: when set, adds an EXTRA 6.5x gravity growth multiplier on top
+    // of the base 4.5x (binary @ 0x17a16+, sliced branch). Set by the spawner
+    // that creates critical-splash secondary fruits.
+    uint8_t m_bSpawnedByCriticalSplash;    // +0x10C
+
     // +0x10D: critical-hit eligibility, set by CollisionResponse via the
     // WaveManager critical-chance RNG ladder (binary @ 0x001780f0..0x001781e8).
     // Read by Fruit::Slice + CollisionResponse for crit visual/score bonuses.
     // Default false (cleared by Init).
-    bool m_bCriticalEligible;
-
-    // +0x108: back-pointer to the SlashEntity that last targeted this fruit.
-    // Cleared by KillFruit if the slasher's m_pCurrentTarget still points here
-    // (Fruit::KillFruit cleanup tail @ 0x00176c8e..0x00176cea).
-    SlashEntity* m_pSlasher;
+    bool m_bCriticalEligible;              // +0x10D
 
     // +0x3D: set by Fruit::Disable (binary @ 0x00126374) to suppress
     // (a) miss penalty when the fruit drops uncut [KillFruit],
@@ -275,5 +289,15 @@ public:
     // Binary @ 0x0017911c — releases the FruitModelInfo[] array + per-MP-player SmartPtr slots; called on shutdown
     static void DestroyFruitModels();
 };
+
+// TODO: Fruit layout audit — binary offsets for ALL fields need cross-build
+// static_asserts. Current port field order does not match the binary's ARM32
+// layout; a full re-analyst layout pass is needed before adding the __bada__
+// assert block. Binary sizeof(Fruit) = 0x118. Key binary offsets:
+//   +0x3C m_FruitType, +0x60 m_LifetimeCounter, +0x6C m_SliceTimer,
+//   +0x70 m_SliceAngle, +0x74 m_SliceImpulse, +0x78 m_SlicePos(?),
+//   +0x7C m_bActive, +0x80 m_pEmitter1, +0x84 m_pEmitter2,
+//   +0xB4 m_bSliced, +0x108 m_pSlasher, +0x10C m_bSpawnedByCriticalSplash,
+//   +0x10D m_bCriticalEligible, +0x110 m_ScaleAnim, +0x114 m_bDrawWhole.
 
 #endif

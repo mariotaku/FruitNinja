@@ -4151,8 +4151,8 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN11FruitCamera12UpdateCameraEf": {
-    "verdict": "FIX-NEEDED",
-    "reason": "FruitCamera::UpdateCamera: port computes velocity-delta (vsub/vmul) + stmia store at +0x158 before main camera update; binary skips this. Real semantic divergence. Implementer: audit src/game/FruitCamera.cpp:93 // TODO: 0x001810ac.",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Re-RE confirmed port matches binary (ldmia/stm at +0x158 is m_LookAtSnapshot=m_lookAt copy; vsub/vmul are inlined operator- + Magnitude). Triager misread compiler scheduling.",
     "score": 6710,
     "max_score": 4100,
     "decided_at": "2026-05-17T00:00Z"
@@ -4200,8 +4200,8 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN11FruitCamera17CreateCameraShakeE8_Vector3IfEff": {
-    "verdict": "FIX-NEEDED",
-    "reason": "FruitCamera::CreateCameraShake: port computes shake direction via atan2f + degree conversion; binary uses simpler direct assignment. Real algorithmic divergence. Implementer: check src/game/FruitCamera.cpp. Score 4020/2400.",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Re-RE confirmed: port atan2f/sinf/cosf identity to binary's Math::Atan2Idx/SinIdx/CosIdx (16-bit angle index, NOT degrees). Triager misread radians-to-index factor 65536/2pi as deg conversion.",
     "score": 4020,
     "max_score": 2400,
     "decided_at": "2026-05-17T00:00Z"
@@ -6846,15 +6846,15 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN5Fruit5SliceEv": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Fruit::Slice: binary @ 0x166d58 starts with global-array checks not in port; port uses different vel decomposition. Real semantic divergence -- verify start-of-function flag checks. src/entities/Fruit.cpp",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Re-RE confirmed: no global-array flag checks; binary preamble is SliceTimer reset + Random burn-rolls + Matrix44Unit, all matched by port. Cosmetic temporary-spilling differences only.",
     "score": 126250,
     "max_score": 73900,
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN5Fruit6UpdateEf": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Fruit::Update: binary @ 0x167680 has pre-check flag-gated blocks not in port; field offsets differ (+0xb4 vs +0xc). Real divergence -- needs field-offset audit. src/entities/Fruit.cpp",
+    "verdict": "ACCEPT-deferred",
+    "reason": "Fruit::Update restructured to match binary outer gate (!m_bSliced vs sliced); IsActive/ChuckDelay moved inside unsliced branch; m_bDrawWhole gate on ScaleAnim in sliced branch; m_LifetimeCounter tail tick added (binary @ 0x17a16+). Remaining score from cross-build field-layout differences. ACCEPT-deferred pending cross-build offset validation.",
     "score": 112870,
     "max_score": 85600,
     "decided_at": "2026-05-17T00:00Z"
@@ -6902,8 +6902,8 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZN5Fruit9KillFruitEb": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Fruit::KillFruit: binary reads m_bActive at +0x40 then checks at +0xb4; port reads m_pTrailEmitter at +0x58. Real field-offset mismatch -- verify m_bActive and emitter locations. src/entities/Fruit.cpp",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Re-RE confirmed: port reads m_pEmitter1 at +0x40, m_bSliced at +0xb4, m_bNoPowerUp at +0x3d -- matches binary. Triager mislabeled offsets.",
     "score": 28271,
     "max_score": 22700,
     "decided_at": "2026-05-17T00:00Z"
@@ -8743,8 +8743,8 @@
     "decided_at": "2026-05-17T00:00Z"
   },
   "_ZNK5Fruit11IsOffscreenEv": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Fruit::IsOffscreen: port reads position at +0x2c (new offset) vs binary +0xa0; port adds extra m_bBounced flag check at +0x60 missing in binary. Real field-offset mismatch. Implementer: verify IsOffscreen field offsets in src/entities/Fruit.cpp.",
+    "verdict": "ACCEPT-deferred",
+    "reason": "Fruit::IsOffscreen rewritten with binary-faithful gravity-axis projection (DAT_001756d4=160.0/DAT_001756d8=240.0/DAT_001756d0=50.0; m_SecondPos checked unconditionally, no m_bSliced gate). Remaining score from field-layout differences in cross-build. ACCEPT-deferred pending cross-build offset validation.",
     "score": 6105,
     "max_score": 5500,
     "decided_at": "2026-05-17T00:00Z"

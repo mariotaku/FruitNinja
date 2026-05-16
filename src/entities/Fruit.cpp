@@ -95,10 +95,12 @@ static Quaternion RandomStartAngle() {
 
 Fruit::Fruit()
     : m_FruitType(0)
+    , m_LifetimeCounter(0)
     , m_SliceTimer(-1.0f)
     , m_SliceAngle(0)
     , m_SliceImpulse(0.0f)
     , m_SlicePos(0, 0, 0)
+    , m_bActive(0)
     , m_pEmitter1(nullptr)
     , m_pEmitter2(nullptr)
     , m_bSliced(false)
@@ -107,6 +109,7 @@ Fruit::Fruit()
     , m_bCriticalEligible(false)
     , m_bNoPowerUp(0)
     , m_pSlasher(nullptr)
+    , m_bSpawnedByCriticalSplash(0)
     , m_TrackerID(0)
     , m_ScaleAnim(0.0f)
     , m_ChuckDelay(0.0f)
@@ -127,10 +130,13 @@ Fruit::~Fruit() {
 // Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
 void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_FruitType = (int)fruitType;
+    m_LifetimeCounter = 0;
+    m_bActive = 0;
     m_bSliced = false;
     m_bDetached = false;
     m_bDrawWhole = false;
     m_bCriticalEligible = false;
+    m_bSpawnedByCriticalSplash = 0;
     m_bNoPowerUp = 0;
     m_pSlasher = nullptr;
     m_TrackerID = 0;
@@ -232,23 +238,26 @@ void Fruit::Chuck(float delay) {
 }
 
 void Fruit::Update(float dt) {
-    if (!IsActive()) return;
-
-    // Launch delay
-    if (m_ChuckDelay > 0.0f) {
-        m_ChuckDelay -= dt;
-        if (m_ChuckDelay > 0.0f) return;
-        m_ChuckDelay = 0.0f;
-    }
-
-    // Scale animation (0 → 1 over ~0.3s)
-    if (m_ScaleAnim < 1.0f) {
-        m_ScaleAnim += dt * 3.0f;
-        if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
-    }
-
+    // Binary @ 0x00177680: outer gate is !m_bSliced vs sliced — no early
+    // returns before the branch. IsActive() and m_ChuckDelay checks live
+    // INSIDE the unsliced path only.
     if (!m_bSliced) {
         // === UNSLICED FRUIT ===
+        if (!IsActive()) return;
+
+        // Launch delay (unsliced path only)
+        if (m_ChuckDelay > 0.0f) {
+            m_ChuckDelay -= dt;
+            if (m_ChuckDelay > 0.0f) return;
+            m_ChuckDelay = 0.0f;
+        }
+
+        // Scale animation (0 → 1 over ~0.3s)
+        if (m_ScaleAnim < 1.0f) {
+            m_ScaleAnim += dt * 3.0f;
+            if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
+        }
+
         // ASM-verified: 2026-05-09 binary @ 0x00177bb8..0x00177c1e (asm-inspector)
         // Binary integration (Fruit::Update 0x00177680):
         //   pos += (vel*dt + 0.5*g*dt²) * 60.0    (DAT_00177d00 = 60.0)
@@ -304,6 +313,14 @@ void Fruit::Update(float dt) {
         m_SecondVel += m_Gravity * dt;
         pos        += vel        * dt * POS_INTEGRATION_SCALE;
         m_SecondPos += m_SecondVel * dt * POS_INTEGRATION_SCALE;
+
+        // Scale grow only when not drawing whole (binary gates this on !m_bDrawWhole).
+        if (!m_bDrawWhole) {
+            if (m_ScaleAnim < 1.0f) {
+                m_ScaleAnim += dt * 3.0f;
+                if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
+            }
+        }
     }
 
     // Quaternion rotation update (both halves). Matches binary Fruit::Update
@@ -347,6 +364,11 @@ void Fruit::Update(float dt) {
     if (CheckHasGoneOffscreen()) {
         KillFruit(true);
     }
+
+    // Lifetime counter tick — Update tail (binary @ 0x17a16+).
+    // dtScaled = dt * m_TimeScale (slo-mo multiplier).
+    const float dtScaled = dt * m_TimeScale;
+    m_LifetimeCounter += (int)(1000.0f * dtScaled);
 }
 
 // Zen-mode "mirror bounce at X limits" flag. Reads bit 0x20 of
@@ -1509,18 +1531,21 @@ void Fruit::CheckFruitDropped() {
     }
 }
 
-// Binary @ 0x00175624 — "is either half outside the play field" predicate.
-// Play-field bounds match PostUpdate (±192 X, ±128 Y) plus 50*scale margin.
+// Binary @ 0x00175624 — gravity-axis projection offscreen check.
+// DAT_001756d4=160.0f (Y-bound base), DAT_001756d8=240.0f (X-bound base),
+// DAT_001756d0=50.0f (margin scale per scale.y).
+// m_SecondPos is checked unconditionally (no m_bSliced gate).
 bool Fruit::IsOffscreen() const {
-    const float margin = 50.0f * scale.y;
-    const float xBound = 192.0f + margin;
-    const float yBound = 128.0f + margin;
-
-    if (pos.x < -xBound || pos.x > xBound) return true;
-    if (pos.y < -yBound || pos.y > yBound) return true;
-    if (m_bSliced) {
-        if (m_SecondPos.x < -xBound || m_SecondPos.x > xBound) return true;
-        if (m_SecondPos.y < -yBound || m_SecondPos.y > yBound) return true;
+    const float scaleY = scale.y;
+    if (fabsf(m_Gravity.y) > 0.0f) {
+        const float bound = 160.0f + 50.0f * scaleY;
+        if (pos.y < -bound || pos.y > bound) return true;
+        return (m_SecondPos.y < -bound || m_SecondPos.y > bound);
+    }
+    if (fabsf(m_Gravity.x) > 0.0f) {
+        const float bound = 240.0f + 50.0f * scaleY;
+        if (pos.x < -bound || pos.x > bound) return true;
+        return (m_SecondPos.x < -bound || m_SecondPos.x > bound);
     }
     return false;
 }
