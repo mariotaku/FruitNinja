@@ -431,7 +431,12 @@ void Bomb::Update(float /*dt*/) {
 #endif
 
 #if MORTAR_BOMB_TRACE
-        {
+        // Skip still bombs (menu / pre-throw): vel exactly 0 means the
+        // entity isn't moving this frame, so the trace would be the same
+        // pos/vel/accel line spamming every tick. Once physics imparts
+        // any velocity (slice, gravity integration, chuck-launch) the
+        // trace lights up.
+        if (vel.x != 0.0f || vel.y != 0.0f) {
             unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
             printf("[BOMB %03x] pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f) "
                    "accel=(%5.2f,%6.2f) scl.y=%.3f bMv=%d bHit=%d "
