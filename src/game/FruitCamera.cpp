@@ -31,6 +31,10 @@ FruitCamera::~FruitCamera() {
 }
 
 // Vtable slot 3 override (0x00180c8c)
+// ASM-verified: 2026-05-17 binary @ 0x00180c8c..0x00180d0e (re-analyst).
+// The ldmia/stm at +0x158 in binary is m_LookAtSnapshot = m_lookAt copy
+// (NOT a velocity-delta -- asm-triager misread). vsub/vmul are inlined
+// operator- + Magnitude (vsqrt+vmul) computing m_DistanceMag.
 void FruitCamera::UpdateCamera(float dt) {
     m_field14c = (float)m_TiltPitch;
     m_field150 = (float)m_TiltYaw;
@@ -140,8 +144,13 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
 }
 
 // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
-// DIFFERS: original = Math::Atan2Idx fixed-point trig; port uses sinf/cosf
-//          because Math::SinIdx now wraps sinf anyway (semantically identical).
+// ASM-verified: 2026-05-17 binary @ 0x00180d10..0x00180d68 (re-analyst).
+// Binary: Atan2Idx -> CosIdx*9 -> SinIdx*9 -> operator*=(dirScale).
+// Port collapses *9*dirScale into one expression (compiler folds; cosmetic).
+// DIFFERS: original = Math::Atan2Idx 16-bit-angle-index trig; port uses
+//          atan2f/sinf/cosf with the (radians ↔ 16-bit-index) conversion
+//          factor 65536/2π. Mathematically identical to the binary LUT
+//          (NOT degrees -- triager misread the constant as deg conv).
 void FruitCamera::CreateCameraShake(Vec3 impact, float intensity, float dirScale) {
     m_ShakeAngle = (uint16_t)(int)(atan2f(impact.y, impact.x) * 65536.0f / 6.2831853f);
 
