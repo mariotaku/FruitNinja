@@ -146,6 +146,16 @@ static void QuitToMenu() {
     if (game->mainScreen) {
         game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
         game->mainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
+        // DIFFERS: binary does NOT call DeleteMenuButtons here. Binary's
+        // menu fruit/bomb entities survive gameplay (ResetGameEntities
+        // re-chucks them, doesn't destroy them, per re-analyst
+        // 2026-05-16). Port's gameplay teardown path destroys those
+        // entities (or nulls m_pFruitPiece via the OOB-kill back-ref
+        // clear in KillBomb), leaving the MenuButtons rendering an
+        // empty ring after quit + Bomb::SetCallback rotation state
+        // lost. Forcing a delete+re-create round-trip fixes both
+        // symptoms until the entity-survival path is ported.
+        game->mainScreen->DeleteMenuButtons();
     }
 
     // 0x169e84/0x169e86 binary writes PauseScreen->m_bPendingRemoval = 1
