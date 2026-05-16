@@ -709,7 +709,7 @@ void SlashEntity::Update(float dt) {
     // UnpauseGame @ 0x168fb0). Either way `> 0` gates the collision loop.
     // The matching gate in UpdateTouchDown above prevents new points from
     // being added during the freeze, so `m_NumPoints < 4` short-circuits
-    // naturally -- the same mechanism the binary uses for pause.
+    // naturally -- the same mechanism the binary uses post-unpause.
     const bool bombHitActive = game && game->bombHitTimer > 0.0f;
 
     // Binary @ 0x17D664: also gates on `(s_ModPowerMask & 0x40)` -- bit
@@ -718,6 +718,19 @@ void SlashEntity::Update(float dt) {
     // Suppresses slicing while the player is dragging a shop / dojo
     // scroll list (so taps don't slice fruits behind it).
     const bool menuDragActive = (SlashEntity::s_ModPowerMask & 0x40u) != 0u;
+
+    // DIFFERS: port-specific gate for during-pause slice suppression.
+    // 3 RE passes (2026-05-17) confirmed the binary does NOT suppress
+    // slicing during the pause overlay itself -- the only pause-related
+    // mechanism is the 0.4s post-unpause freeze via bombHitTimer
+    // (covered by bombHitActive above). Bada's OS-level touch routing
+    // for modal overlays likely intercepts touches before SlashEntity
+    // sees them, but the SDL port has no equivalent so the binary's
+    // observable "no slicing during pause" doesn't happen for us.
+    // Port-side extension: gate on gameActiveFlag too. Trail-building
+    // (UpdatePoints / RebuildGeometry) stays unconditional so the
+    // visible blade tracks the finger; only collision is suppressed.
+    const bool gamePaused = game && game->gameActiveFlag != 0;
 
     // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
     // frame; PlaySwipe resets to 6.0f).
@@ -728,7 +741,7 @@ void SlashEntity::Update(float dt) {
 
     bool slicedThisFrame = false;
     if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive
-        && !menuDragActive) {
+        && !menuDragActive && !gamePaused) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         if (am) {
             // Only fruit (0) and bomb (1) participate in blade collision
