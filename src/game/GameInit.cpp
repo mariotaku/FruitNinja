@@ -288,9 +288,10 @@ void GameInit(unsigned long) {
     // by GameTaskInitInput @ 0x00169670). Each instance handles one of 16
     // SDL fingers / Bada touch slots and registers its own per-finger
     // TouchDown_n / TouchMove_*n / TouchUp_n callbacks on InputManager.
+    // Binary: ActorManager::Add(3, true) — CreateEntity case 3 — for each slot.
     for (int i = 0; i < 16; ++i) {
         if (!g_pSlashEntities[i]) {
-            g_pSlashEntities[i] = new SlashEntity();
+            g_pSlashEntities[i] = static_cast<SlashEntity*>(game->actorManager->Add(3, true));
             g_pSlashEntities[i]->Init(i);
         }
     }
@@ -373,21 +374,9 @@ void GameUpdate(float dt, bool active) {
     FN::UpdateCriticalFlash(dt);
 
     if (active) SplatEntity::UpdateActiveSplats(dt);
-    // Binary @ 0x16c378 -- frozen branch fires Update + PostUpdate per
-    // SlashEntity, both with dt=0. The binary's active branch drives them
-    // via ActorManager::Update because SlashEntity is a type-3 actor
-    // (EntityFactory::case 3) in the binary.
-    //
-    // DIFFERS: port creates g_pSlashEntities[16] via plain `new` (see
-    // GameInit step ~291), NOT via ActorManager::Add(3,..), so they are
-    // NOT in the ActorManager type-list. We must drive them explicitly
-    // each frame, otherwise slicing freezes during active gameplay.
-    // TODO: port them through ActorManager so the dispatch matches binary.
-    if (active) {
-        for (int i = 0; i < 16; ++i) {
-            if (g_pSlashEntities[i]) g_pSlashEntities[i]->Update(dt);
-        }
-    }
+    // Binary @ 0x16c378 -- frozen branch fires Update(0) + PostUpdate(0) per
+    // SlashEntity. Active branch is handled by ActorManager::Update above
+    // (SlashEntity is now a type-3 actor driven through the pool like the binary).
     if (!active) {
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) {

@@ -141,7 +141,8 @@ void SlashEntity::ReleaseContent() {
 // Lifecycle
 // ---------------------------------------------------------------------------
 SlashEntity::SlashEntity()
-    : m_NumPoints(0)
+    : Mortar::Entity()
+    , m_NumPoints(0)
     , m_TrailEmitter(nullptr)
     , m_BaseColour(255, 255, 255, 255)
     , m_HighlightColour(255, 255, 255, 255)
@@ -794,6 +795,15 @@ bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
 // ---------------------------------------------------------------------------
 // DrawSlice — matches 0x17E424
 // ---------------------------------------------------------------------------
+
+// Entity vtable slot 5 (+0x14): Draw(Renderer&) override.
+// Binary Draw @ 0x17B3B8 is a 1-instruction BX lr stub; actual rendering is
+// in DrawSlice (called explicitly by GameDraw after ActorManager::Draw).
+// Port delegates to the no-arg Draw() so ActorManager::Draw stays wired.
+void SlashEntity::Draw(Renderer& /*r*/) {
+    Draw();
+}
+
 void SlashEntity::Draw() {
     if (m_NumPoints < 2) return;
 
