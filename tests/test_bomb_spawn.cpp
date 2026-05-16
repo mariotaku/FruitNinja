@@ -21,6 +21,7 @@
 #include "Game.h"
 #include "game/WaveManager.h"
 #include "game/WaveStructs.h"
+#include "game/StartupEffects.h"
 #include "entities/ActorManager.h"
 #include "hud/HUD.h"
 #include <cstdio>
@@ -111,21 +112,33 @@ static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game) 
     return true;
 }
 
-// Spawn a single bomb using the given SPAWNER_INFO, tick 200 frames,
-// return true if no bombs remain (OOB-killed as expected).
+// Zero out the current wave's spawner counts so WaveManager's spawn pump
+// runs without spawning anything alongside our test bomb. Idempotent; safe
+// to call every tick. Called from a per-frame loop inside RunVariant.
+static void SuppressWaveSpawn() {
+    WaveManager* wm = WaveManager::GetInstance();
+    if (!wm || !wm->m_pCurrentWave[0]) return;
+    WAVE_INFO* w = wm->m_pCurrentWave[0];
+    for (int i = 0; i < w->m_SpawnerCount; ++i) {
+        w->m_pSpawners[i].m_RemainingCount = 0;
+        w->m_pSpawners[i].m_SpawnCountF    = 0.0f;
+    }
+}
+
+// Spawn a single bomb using the given SPAWNER_INFO, tick frames while
+// suppressing the wave-manager's own spawns, return true if no bombs
+// remain (OOB-killed as expected).
 static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner) {
     printf("=== Variant %s ===\n", name);
 
-    // Clear any leftover entities from a previous variant.
-    game.runFrames(5);
+    // Clear any leftover entities from a previous variant; keep wave-spawn
+    // suppressed even during this clear window.
+    for (int i = 0; i < 5; ++i) { SuppressWaveSpawn(); game.runFrames(1); }
 
     const int bombsBefore = BombCount(game);
 
     // Bypass the wave pump; call SpawnBomb directly.
     WaveManager* wm = WaveManager::GetInstance();
-    // Ensure physics runs (PrepareForLevelStart sets pauseFlag=1).
-    game.pauseFlag = 0;
-
     wm->SpawnBomb(1, 1, &spawner, 0);
 
     printf("[test_bomb_spawn] %s: spawned, bombs_before=%d bombs_now=%d\n",
@@ -134,17 +147,20 @@ static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner) {
     // Tick frames. 200 is enough for a bomb arc + OOB kill at 60Hz;
     // visual mode runs 360 (~6s) so the user can watch the full flight
     // including a pause after the OOB kill before the next variant.
-    game.pauseFlag = 0;
-    game.runFrames(g_visual ? 360 : 200);
+    const int frames = g_visual ? 360 : 200;
+    for (int i = 0; i < frames; ++i) {
+        SuppressWaveSpawn();
+        game.runFrames(1);
+    }
 
     const int bombsAfter = BombCount(game);
-    printf("[test_bomb_spawn] %s: after 200 frames bombs=%d\n",
-           name, bombsAfter);
+    printf("[test_bomb_spawn] %s: after %d frames bombs=%d\n",
+           name, frames, bombsAfter);
 
     if (bombsAfter > bombsBefore) {
         fprintf(stderr,
-            "FAIL: variant %s leaked %d bomb(s) after 200 frames\n",
-            name, bombsAfter - bombsBefore);
+            "FAIL: variant %s leaked %d bomb(s) after %d frames\n",
+            name, bombsAfter - bombsBefore, frames);
         return false;
     }
     printf("PASS: variant %s -- no bomb leak\n", name);
@@ -176,10 +192,20 @@ int main(int argc, char* argv[]) {
     Game game;
     if (!GameSetup(&window, &gl, &game)) return 1;
 
-    // Force classic mode so WaveManager has a valid wave list; we won't
-    // actually use the wave pump (SpawnBomb bypasses it).
+    // Drop into the Classic gameplay stage so spawn happens with the
+    // gameplay camera, dojo background, and HUD instead of the main menu.
+    // PrepareForLevelStart resets WaveManager + populates m_pCurrentWave[0]
+    // and sets pauseFlag = 1; the spawn-pump gate then needs pauseFlag = 0
+    // to actually run physics. We then zero each spawner's m_RemainingCount
+    // every tick so the wave manager does NOT spawn its own fruit/bombs
+    // alongside our test bombs -- the test stays a single-bomb-at-a-time
+    // visualisation.
     game.gameMode = 0;
+    FN::PrepareForLevelStart();
     game.pauseFlag = 0;
+
+    // Settle the camera + HUD into gameplay.
+    game.runFrames(60);
 
     int failures = 0;
 
