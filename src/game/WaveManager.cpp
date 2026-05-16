@@ -1424,10 +1424,13 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         float velMultX = info ? info->m_VelXScale : 1.0f;
         float velMultY = info ? info->m_VelYScale : 1.0f;
         float velX = sin_a * speed * velMultX;
-        // Mirror SpawnBomb: binary @ 0x00122744 has vmul s14,s14,s15 with
-        // DAT_0012284c = 1.075f (same value/role as bomb's DAT_00122218).
-        // ASM-verified: 2026-05-16 binary @ 0x00122744 (re-analyst)
-        float velY = cos_a * speed * velMultY * 1.075f;
+        // DIFFERS: binary @ 0x00122744 has vmul s14,s14,s15 with
+        // DAT_0012284c = 1.075f, but applying it runtime-traced bombs past
+        // the +240 OOB top so they died at apex instead of arcing back. The
+        // 1.075 likely applies to a different quantity in the binary's per-
+        // frame integration that we haven't pinned down yet; dropping it
+        // here keeps apex within bounds and produces visibly faithful arcs.
+        float velY = cos_a * speed * velMultY;
 
         float posX = 0.0f;
         float posY = 0.0f;
@@ -1546,7 +1549,10 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float zOffset  = (type == 0) ? 0.0f : spawner->m_SpawnTimer;
 
         float velX = sin_a * speed * velMultX;
-        float velY = cos_a * speed * velMultY * 1.075f;  // DAT_00122218
+        // DIFFERS: binary @ 0x001220e6 has vmul s14,s14,s15 with
+        // DAT_00122218 = 1.075f. See SpawnFruit comment above -- same reason
+        // (apex past +240 OOB), same workaround.
+        float velY = cos_a * speed * velMultY;
 
         // Spawn position (bottom default).
         float spawnX = (float)baseDeg;
