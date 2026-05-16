@@ -1573,15 +1573,24 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
                 break;
             case PLACEMENT_RIGHT:
             case PLACEMENT_LEFT: {
-                // spawnX = baseDeg * 320/480. DIFFERS: was raw baseDeg. binary @ 0x00122810
-                spawnX = (float)((long)((float)baseDeg * 320.0f / 480.0f));
-                // gravity.y at spawner+0x1c. DIFFERS: was spawner->m_Gravity (port +0x48 float). binary @ 0x00122818
-                long newVelY = (long)(velX + speed * spawner->m_Gravity_y * (-0.65f));  // DAT_00122224
-                spawnY = (long)(velY * -0.75f);
-                spawnY = (long)((float)spawnY * (320.0f / 480.0f));   // DAT_0012221c/20
-                velX = (float)(long)velY;
-                velY = (float)newVelY;
-                if (st == PLACEMENT_LEFT) { spawnX = -spawnX; velX = -velX; }
+                // ASM-verified 2026-05-16 binary @ 0x00121fa8 case 0x02/0x03
+                // (0x00122140..0x0012226c). Port previously had X/Y SWAPPED and
+                // the -0.75 factor applied to the wrong slot.
+                //   X-pos = raw baseDeg          (sign-flipped for LEFT via local_60.x = -1)
+                //   Y-pos = baseDeg * 320/480    (DAT_0012221c/20; NOT sign-flipped)
+                //   velX_new = velY_pre * -0.75
+                //   velY_new = velX_pre + speed * gravity.y * -0.65   (DAT_00122224)
+                long  baseDegInt = (long)baseDeg;
+                float newVelY = velX + speed * spawner->m_Gravity_y * (-0.65f);
+                float newVelX = velY * (-0.75f);
+                spawnX = (float)baseDegInt;
+                spawnY = (float)((long)(((float)baseDegInt * 320.0f) / 480.0f));
+                velX   = newVelX;
+                velY   = newVelY;
+                if (st == PLACEMENT_LEFT) {
+                    spawnX = -spawnX;
+                    velX   = -velX;
+                }
                 break;
             }
             case PLACEMENT_RANDOM_SIDE: break;  // handled above
