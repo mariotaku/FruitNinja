@@ -253,7 +253,17 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType) {
         m_ColB = info->m_FruitColour[0];
         m_ColG = info->m_FruitColour[1];
         m_ColR = info->m_FruitColour[2];
-        m_ColA = 255;
+        // ASM-verified: 2026-05-16 binary @ 0x0016f342 — FruitTypeColour
+        // helper fills all 4 bytes (B, G, R, A) from FruitInfo, including
+        // the alpha. The next suppression block (binary @ 0x0016f45e:
+        // `ldrb r3,[r4,#11]; cbz r3, exit`) then exits if m_ColA == 0 so
+        // transparent fruits never spawn a splat. Earlier port hardcoded
+        // m_ColA = 255, producing solid-black splats for any fruit with
+        // alpha=0 in the XML (banana's `colour="0,0,0,0"` is the visible
+        // case -- yellow juice particles still render via a separate code
+        // path, but the persistent background splat-mark was rendering
+        // opaque-black instead of being suppressed).
+        m_ColA = info->m_FruitColour[3];
     } else {
         m_ColourPhase = MS_COL_PHASE_DEF;
         m_ColB = BASE_B;
@@ -262,10 +272,13 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType) {
         m_ColA = BASE_A;
     }
 
-    // Special-fruit additional suppression (binary @ 0x0017f456-f482 tail):
-    // if m_ColA == 0 suppress (rare: transparent fruit). Already handled by
-    // the colour block above since we always write 255.
-    // if info->m_bSpecial && Rand(3)==0 suppress.
+    // Suppression block (binary @ 0x0016f456-f482 tail):
+    //   if (m_ColA == 0) suppress      -- transparent fruit (e.g. banana)
+    //   if (info->m_bSpecial && Rand(3) == 0) suppress
+    if (m_ColA == 0) {
+        m_bAlive = 0;
+        return;
+    }
     if (info && info->m_bSpecial && RandInt(3) == 0) {
         m_bAlive = 0;
         return;
