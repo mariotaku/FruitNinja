@@ -104,33 +104,30 @@ void PauseScreen::PauseGame() {
     ts->pauseTransitionTimer = 0.25f;
 }
 
-// ASM-verified: 2026-05-17 binary @ 0x00168fb0 (re-analyst).
+// ASM-verified: 2026-05-17 binary @ 0x00168fb0 (re-analyst, re-verified).
 // Binary @ 0x00168fb0 UnpauseGame():
-//   Game+0x10 (float) = 0.4f  -- post-unpause input-freeze window
-//                                (read by SlashEntity::UpdateTouchDown to
-//                                short-circuit point ingestion; gates blade
-//                                collision via the existing m_NumPoints < 4
-//                                clause when no points are added)
-//   TaskState+0x0C (byte) = 1 -- isPaused = 1 (resumed)
-// Earlier port wrote 0.4f to TaskState+0x10 (pauseBombHitTimer); that was
-// a misidentification -- the real field is on Game (the same byte we call
-// bombHitTimer at Game+0x10, dual-purpose: bomb-hit freeze + unpause grace).
+//   GameTaskState+0x10 (float) = 0.4f  -- pauseBombHitTimer
+//   GameTaskState+0x0C (byte)  = 1     -- isPaused = 1 (resumed)
+// The DAT chain at 0x168fd4 = 0x000452d4 (GOT offset to GameTaskState
+// DIRECT struct, NOT a pointer-dereferenced Game). An earlier RE pass
+// mis-identified this as Game+0x10 and re-routed the write to
+// Game::bombHitTimer, which clobbered HitMenuBomb's 2.0f set on Quit
+// and broke the 2.0->1.5 downward crossing that fires
+// ResetGameEntities(false) in GameUpdate -- gameplay fruits/bombs
+// stopped clearing after Quit-from-Pause.
 void PauseScreen::UnpauseGame() {
     GameTaskState* ts = GetTaskState();
     ts->isPaused = 1;
+    ts->pauseBombHitTimer = 0.4f;        // DAT_00168fcc, GameTaskState+0x10
 
+    // DIFFERS: binary's UnpauseGame does NOT write gameActiveFlag=0
+    // either; it relies on PowerManager::GetState() going non-zero on
+    // background to keep canUpdate=false. Port's PowerManager stub
+    // always returns 0, so gameActiveFlag is the sole gate to
+    // GameUpdate's wholesale ActorManager/Splat skips. Writing 0 here
+    // is the port-side mirror for resume.
     Game* game = Game::GetInstance();
-    if (game) {
-        game->bombHitTimer = 0.4f;       // DAT_00168fcc, binary @ 0x168fb0
-        // DIFFERS: binary's UnpauseGame does NOT write gameActiveFlag=0.
-        // It relies on PowerManager::GetState() returning non-zero when
-        // backgrounded, keeping canUpdate=false without touching the flag.
-        // Port's PowerManager::GetState() always returns 0 (foreground),
-        // so gameActiveFlag is the sole gate to GameUpdate's `active`
-        // wholesale skips of ActorManager / SplatEntity. Writing 0 here
-        // is the port-side mirror for the binary's effective resume.
-        game->gameActiveFlag = 0;
-    }
+    if (game) game->gameActiveFlag = 0;
 }
 
 // -------------------------------------------------------------------------
