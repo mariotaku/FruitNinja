@@ -101,8 +101,11 @@ public:
     // +0x110: progress counter (0->11 in state 6; ==10 triggers score commit)
     int         m_ProgressCounter; // +0x110
 
-    // +0x114: game-over.tex (loaded in state 6 tail; SmartPtr matches binary type)
-    Mortar::SmartPtr<Mortar::Texture> m_GameOverTex;  // +0x114 -- gameover.tex (Update case 6)
+    // +0x114: comming_soon_highscore.tex (loaded in Update state-6 tail).
+    // Asset isn't shipped -- LoadLocalisedTexture returns null; PreDraw's
+    // IsValid() gate skips the overlay. Defunct: "coming soon" highscore
+    // placeholder.
+    Mortar::SmartPtr<Mortar::Texture> m_CommingSoonHighscoreTex;  // +0x114
 
     // +0x118: always 0; never set elsewhere after Initialise
     int         field_0x118;       // +0x118
@@ -228,6 +231,11 @@ private:
     // Binary @ 0x00140558 -- DeletedControl: wired as remove-callback on
     // m_pBonusScreen / m_pSlot9c / m_pNoticeCtrl; clears slot, forces state=6 where applicable.
     void DeletedControl(HUDControl* ctrl);
+
+    // Port-internal helper: body of STATE_MAIN_DISPLAY, extracted so case 7
+    // can fall through into it in the same tick (binary uses goto). Not a
+    // binary symbol -- call-shape matches the binary's fall-through exactly.
+    void RunStateMainDisplay(int prevState);
 };
 
 #endif // FN_GAME_OVER_SCREEN_H
