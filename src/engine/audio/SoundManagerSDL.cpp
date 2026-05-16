@@ -145,10 +145,15 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
         return nullptr;
     }
 
-    // hdr[0] = type (1), hdr[1] = sampleRate, hdr[2] = bitDepth (16),
-    // hdr[3] = sampleCount, hdr[4] = loop flag
+    // hdr[0] = type (1), hdr[1] = sampleRate (16000), hdr[2] = bitDepth (16),
+    // hdr[3] = sampleCount, hdr[4] = loop-start sample offset (0 = no loop).
+    // ASM-verified: MAMAudioController::LoadSound binary @ 0x0018c468.
+    // Bomb-Fuse hdr[4] = 12736: skip the 0.8s ignition intro, loop the 5.4s
+    // burn tail forever. Matches the binary's MAMAudioThread::FillBuffer
+    // rewind-to-loopStart behaviour.
     int sampleCount = hdr[3];
-    bool loop       = (hdr[4] != 0);
+    int loopStart   = hdr[4];
+    bool loop       = (loopStart != 0);
 
     if (sampleCount <= 0 || sampleCount > 4 * 1024 * 1024) {
         fprintf(stderr, "[SoundManager] LoadSound: bad sampleCount %d in '%s'\n",
@@ -178,6 +183,7 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     buf->samples     = raw;
     buf->sampleCount = sampleCount;
     buf->loop        = loop;
+    buf->loopStart   = loopStart;
     return buf;
 }
 
@@ -220,7 +226,9 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
         for (int s = 0; s < nSamples; ) {
             if (v.cursor >= total) {
                 if (v.buf->loop) {
-                    v.cursor = 0;
+                    // Rewind to loopStart, not 0. Matches binary's
+                    // MAMAudioThread::FillBuffer @ 0x0018c020.
+                    v.cursor = v.buf->loopStart;
                 } else {
                     v.id      = 0;
                     v.playing = false;
