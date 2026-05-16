@@ -12,6 +12,10 @@
 #include <SDL.h>
 #include "render/gl_funcs.h"
 #include <cstdlib>
+#include <sys/stat.h>
+#ifdef _WIN32
+#  include <direct.h>
+#endif
 
 // Test-only: glReadPixels isn't in the project's thin gl_funcs.h
 // wrapper. Load it dynamically via SDL_GL_GetProcAddress so the test
@@ -453,7 +457,19 @@ int main(int argc, char* argv[]) {
             if (px && g_glReadPixels) {
                 g_glReadPixels(0, 0, ww, wh, GL_RGB, GL_UNSIGNED_BYTE, px);
                 char path[256];
-                snprintf(path, sizeof(path), "screen_%s.ppm", screenName);
+                // Per CLAUDE.md: temp/scratch files live in <project>/tmp/
+                // (gitignored). The "screen_*.ppm" files are throwaway and
+                // would otherwise clutter the repo root on every run.
+#ifdef _WIN32
+                _mkdir("tmp");
+                _mkdir("tmp/test");
+                _mkdir("tmp/test/screenshots");
+#else
+                mkdir("tmp", 0755);
+                mkdir("tmp/test", 0755);
+                mkdir("tmp/test/screenshots", 0755);
+#endif
+                snprintf(path, sizeof(path), "tmp/test/screenshots/screen_%s.ppm", screenName);
                 FILE* f = fopen(path, "wb");
                 if (f) {
                     fprintf(f, "P6\n%d %d\n255\n", ww, wh);
