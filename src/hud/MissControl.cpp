@@ -4,6 +4,7 @@
 #include "HUDLayer.h"
 #include "asset/TextureManager.h"
 #include "Game.h"
+#include "game/WaveManager.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "render/MatrixManager.h"
@@ -51,12 +52,13 @@ static constexpr float SOUND_THRESH = 1.66f;
 static constexpr float MISS_CLAMP_HALF_X = 240.0f;
 static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 
-// Pulse banding thresholds. DAT_001522a4..DAT_001522b4
-static constexpr float MISS_PULSE_FLOOR       = 0.65f;    // DAT_001522b4 (OK)
-static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f; // DAT_001522a4 (OK)
-static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // DAT_001522a8. DIFFERS: was 376354.0
-static constexpr float MISS_PULSE_NARROW_LO   = 32760.0f;  // DAT_001522ac. DIFFERS: was 32764.0
-static constexpr float MISS_PULSE_NARROW_HI   = 360360.0f; // DAT_001522b0. DIFFERS: was 360104.0
+// Pulse banding thresholds. DAT_001522a4..DAT_001522b4. ASM-verified
+// 2026-05-10 (asm-inspector byte-level IEEE-754 decode).
+static constexpr float MISS_PULSE_FLOOR       = 0.65f;    // DAT_001522b4
+static constexpr float MISS_PULSE_PHASE_LO    = 16376.0f; // DAT_001522a4
+static constexpr float MISS_PULSE_PHASE_HI    = 376992.0f; // DAT_001522a8
+static constexpr float MISS_PULSE_NARROW_LO   = 32752.0f; // DAT_001522ac
+static constexpr float MISS_PULSE_NARROW_HI   = 360104.0f; // DAT_001522b0
 
 // --- Static members -------------------------------------------------------
 
@@ -98,6 +100,11 @@ void MissControl::Release() {
 void MissControl::Init() {
     m_bComboActive = 0;
     m_bBusy        = 1;
+    // Binary's field_0x30 IS HUDControl::m_bActive (per HUDControl base
+    // layout). The port aliases both m_bActive and m_bBusy at the source
+    // level; keep them in sync so HUD::Draw's m_bActive gate sees the
+    // slot as renderable on Init/MakeCombo paths after a prior release.
+    m_bActive      = 1;
     m_Timer        = 0.0f;  // rotation (+0x2c)
     m_AnimState    = 0;
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
@@ -126,6 +133,9 @@ void MissControl::Reset() {
 }
 
 // Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
+// Binary's MissControl::PreDraw is a no-op (single bx lr in the original).
+// m_HudScale (+0x14) is initialised once in GameInit and not refreshed
+// per-frame; the Draw call uses the stored value directly.
 void MissControl::PreDraw(const Vec3& /*hudScale*/) {}
 
 // Binary @ 0x00150dfc — vtable[16]. Defunct: same-screen MP player-index hook.
@@ -430,8 +440,20 @@ void MissControl::Update(float dt) {
     // Slot release when fully faded. binary @ 0x00151a60 release block
     if (m_FadeAlpha <= 0.0f) {
         m_FadeAlpha = 0.0f;
-        if (m_RemoveCallback) m_RemoveCallback(this);
-        m_bBusy = 0;
+        // ASM-verified: 2026-05-11 binary @ MissControl::Update tail
+        // (re-analyst). Slot-release writes 0 to field_0x30 (which the
+        // binary's HUDControl base names m_bActive -- same byte that
+        // MissControl's port-side comments call "m_bBusy"). HUD::Draw
+        // and HUD::Update gate on m_bActive (port: src/hud/HUD.cpp:72/88/108),
+        // so clearing it stops both Update and Draw cycles for this slot
+        // until MakeCritical/MakeRare/MakeCombo's PopulateOverlay sets
+        // m_bActive=1 again on slot reuse.
+        // m_RemoveCallback is NEVER bound for MissControl pool slots in the
+        // binary (verified: no Delegate1<...>::Callee<MissControl> exists).
+        // The disappear mechanism is purely the m_bActive flip.
+        m_bActive      = 0;
+        m_bBusy        = 0;
+        m_bComboActive = 0;
     }
 }
 
@@ -439,8 +461,16 @@ void MissControl::Update(float dt) {
 
 // ASM-verified-partial: 2026-05-03 binary @ 0x00151f60..0x00152190 (pulse formula + fall-off only; transform field_0x14/0x20 pre-mult still a gap)
 // binary @ 0x00151f60
-void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     if (!m_Texture.IsValid()) return;
+
+    // ASM-verified: 2026-05-11 binary @ 0x00151f60 first ~20 instructions
+    // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
+    // m_bVisible -- those are UV-pickers later in the function, not gates.
+    // The disappear mechanism for finished combo popups is the m_bActive=0
+    // write in Update's slot-release tail (binary @ MissControl::Update);
+    // HUD::Draw filters on m_bActive (src/hud/HUD.cpp:88) so this Draw
+    // doesn't even get called for released slots.
 
     // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block
     Vec3 drawPos = pos;
@@ -450,73 +480,115 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
         m_JitterTimer--;
     }
 
-    // Two paths based on m_FadeAlpha. binary @ 0x00151f60 alpha gate
-    float drawAlpha;
-    if (m_FadeAlpha <= 0.0f) {
-        // binary @ 0x00152272..0x00152286: fall-off uses this->pos.y (unjittered entity field).
-        // IsMultiplayer: stub false (same-screen MP not yet ported). binary @ WaveManager.
-        // FailureEnabled: stub false (game-mode flag not yet ported). binary @ Game.
-        if (false /* FailureEnabled() */ && !false /* IsMultiplayer() */) {
-            // binary @ 0x001520a2: drawPos.y -= 3.0 * pos.y * abs(game->field_0xc)
-            // TODO: Game::field_0xc semantics undocumented; stub to 1.0 until ported
-            drawPos.y -= 3.0f * pos.y * fabsf(/*game->field_0xc*/ 1.0f);
-        } else {
-            // binary @ 0x00152272: single VMLA — no +1.0 constant; uses pos.y not drawPos.y
-            drawPos.y += -3.0f * pos.y;
-        }
-        drawAlpha = 0.0f;
-    } else {
-        if (m_FadeAlpha > SOUND_THRESH) return;  // early-return: spawning phase, no draw yet
-        // binary @ 0x00151ff2..0x0015201a: four-op VFP chain preserving float32 rounding.
-        //   vdiv s14, fade, 1.66    s14 = fade / 1.66
-        //   vmul s14, s14, 360       s14 *= 360
-        //   vmul s14, s14, 6         s14 *= 6
-        //   vmul s14, s14, 182       s14 *= 182
-        // Net: phase = (fade / 1.66) * 360 * 6 * 182  ~= fade * 236819.28
-        // pulse = |SinIdx((uint16_t)(uint32_t)max(phase,0))| with banded 0.65 floor.
-        float phase = (m_FadeAlpha / 1.66f) * 360.0f * 6.0f * 182.0f;
-        uint16_t idx = (uint16_t)(uint32_t)std::max(phase, 0.0f);
-        float pulse = fabsf(SinIdx(idx));
-        if (phase > MISS_PULSE_PHASE_LO && phase < MISS_PULSE_PHASE_HI) {
-            if (phase < MISS_PULSE_NARROW_LO || phase > MISS_PULSE_NARROW_HI) {
-                if (pulse < MISS_PULSE_FLOOR) pulse = MISS_PULSE_FLOOR;
-            } else {
-                pulse = MISS_PULSE_FLOOR;
+    // m_FadeAlpha branch ladder (binary @ 0x00151f60):
+    //   > 1.66f (SOUND_THRESH)  -> early return (popup invisible during the
+    //                              0.15s spawn-grace from MakeCritical's 1.81 init)
+    //   > 0                      -> pulse-scale animation: scale = |SinIdx(phase)|
+    //                              with a clamp ladder; quad size = m_Size * scale
+    //   <= 0                     -> y-position jiggle for failure-feedback animation;
+    //                              draw still proceeds (visual = passive miss markers)
+    // ASM-verified: 2026-05-10 binary @ 0x00151fe4..0x001520ec (asm-inspector).
+    // The earlier port comment claimed local_34 was a "dead store"; the
+    // decompiler mis-presented the Vec3*scalar call -- it IS read at
+    // 0x001520e0 as the scalar arg to Vec3::operator*(out, &size, &local_34)
+    // whose result feeds Matrix44::Scale44.
+    if (m_FadeAlpha > SOUND_THRESH) return;
+
+    // Pulse-scale: 6-cycle |SinIdx| over m_FadeAlpha 1.66 -> 0.
+    // phase_f = (m_FadeAlpha / 1.66) * 360 * 6 * (65536/360) = ... * 6 * 182.04
+    // At m_FadeAlpha=1.66 phase_f = 393216 = 6 full sin periods (uint16 wraps to 0)
+    // Windowed clamp ladder pins floor to 0.65f in certain phase ranges.
+    float pulseScale = 1.0f;
+    if (m_FadeAlpha > 0.0f) {
+        const float phase_f =
+            (m_FadeAlpha / SOUND_THRESH) * 360.0f * 6.0f * 182.04444f;
+        const uint16_t idx = (phase_f > 0.0f) ? (uint16_t)(int)phase_f : 0;
+        pulseScale = std::fabs(SinIdx(idx));
+        // Clamp ladder (binary @ 0x00152034..0x00152088):
+        //   if 16376 < phase_f < 376992:
+        //     if 32752 < phase_f < 360104: pulseScale = 0.65 (forced)
+        //     else                       : pulseScale = max(pulseScale, 0.65)
+        if (phase_f > MISS_PULSE_PHASE_LO && phase_f < MISS_PULSE_PHASE_HI) {
+            if (phase_f > MISS_PULSE_NARROW_LO && phase_f < MISS_PULSE_NARROW_HI) {
+                pulseScale = MISS_PULSE_FLOOR;
+            } else if (pulseScale < MISS_PULSE_FLOOR) {
+                pulseScale = MISS_PULSE_FLOOR;
             }
         }
-        drawAlpha = m_FadeAlpha * pulse;
+    }
+    // Slide-in / off-screen-park y-jiggle. Binary @ 0x0015208e..0x001520c4:
+    //   if (FailureEnabled() && !IsMultiplayer())
+    //       drawPos.y -= 3.0f * pos.y * fabsf(game->m_TransitionTimer);
+    //   else
+    //       drawPos.y -= 3.0f * pos.y;   // Zen / multi-player: parked off-screen
+    // For non-Zen single-player, m_TransitionTimer drives the animation:
+    //   timer == 1.0 (in menu / mid-transition): drawPos.y shifts -3*pos.y
+    //     -> stored pos.y is negative for top-right markers, so drawPos.y
+    //        moves UP past the +160 clamp (off-screen above the viewport).
+    //   timer == 0.0 (gameplay): no shift, markers visible at top-right.
+    //   intermediate values produce the slide-in animation.
+    // (m_FadeAlpha in (0, SOUND_THRESH]: pulse compute is omitted -- output is
+    // dead in the binary too.)
+    {
+        Game* g = Game::GetInstance();
+        if (g) {
+            // TODO: gate on FailureEnabled() && !IsMultiplayer() per binary
+            // @ 0x0015208e once those queries are RE'd. For now, treat as the
+            // FailureEnabled() == true (non-Zen single-player) branch -- the
+            // markers are GameInit-spawned only in modes that miss-track.
+            drawPos.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+        }
     }
 
-    // Effective alpha: fade * AlphaScale, then clamp [0..1].
-    float fade = drawAlpha * m_AlphaScale;
-    if (fade <= 0.0f) return;
-    if (fade > 1.0f) fade = 1.0f;
+    // Draw alpha: m_DrawColour.a directly (defaults to 0xff). Binary @
+    // 0x001521ac additionally scales by `*(float*)(GAME->field_0x3c->field_0x20)`
+    // (a global screen-fade factor) when < 1.0 -- not yet ported; treat as 1.0.
+    const float fade = 1.0f;
 
-    // UV crop based on m_bComboActive / m_bVisible. binary @ 0x00151f60 UV block
+    // UV crop based on m_bComboActive / m_bVisible.
+    // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)
+    //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
+    //   inactive: u0=0.0  u1=0.5  v0=0.25  v1=0.75  (left half, vertical centre)
+    //   active:   u0=0.5  u1=1.0  v0=0.25  v1=0.75  (right half, vertical centre)
+    // Both non-combo crops are square 0.5x0.5 -- earlier port had du=0.25 / dv=0.75
+    // which sampled a 1:3 strip onto the 1:1 quad, distorting aspect AND
+    // sampling different vertical regions for the two states (visible
+    // position shift between inactive and active).
     float u0, v0, du, dv;
     if (m_bComboActive) {
-        // Full UV quad. binary combo-active path.
-        u0 = 0.0f; v0 = 0.0f; du = 1.0f; dv = 1.0f;
+        u0 = 0.0f; v0 = 0.0f;  du = 1.0f; dv = 1.0f;
     } else if (!m_bVisible) {
-        // 25%-wide vertical crop left. binary: (u0=0, v0=0.5, du=0.25, dv=0.75)
-        u0 = 0.0f; v0 = 0.5f; du = 0.25f; dv = 0.75f;
+        u0 = 0.0f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     } else {
-        // 25%-wide vertical crop right. binary: (u0=0.5, v0=0, du=0.25, dv=0.75)
-        u0 = 0.5f; v0 = 0.0f; du = 0.25f; dv = 0.75f;
+        u0 = 0.5f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     }
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
     // binary @ 0x001520ec / 0x000fc720 / 0x000f7a4c. Order: Scale -> RotZ -> Translate.
-    // TODO: HUDControl3d field_0x14 / field_0x20 pre-multiplications (anchor + local-scale)
-    // are missing here. Requires RE confirmation of base-class field port-side names.
-    Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
+    // Binary @ 0x001520dc..0x001520ec: scale = size * pulseScale (Vec3*scalar
+    // multiply via Vec3::operator* before passing to Scale44).
+    Matrix44 mat = Matrix44::MakeScale(size.x * pulseScale,
+                                       size.y * pulseScale, 1.0f);
     if (m_Timer != 0.0f) {
         uint16_t a = (uint16_t)(int)(m_Timer * 182.0f);
         mat.RotZ44(SinIdx(a), CosIdx(a));
     }
-    // Port ortho already centers on (0,0); no +480/+320 offset needed here.
+    // Anchor offset (binary @ 0x0015215c..0x00152186, asm-inspector 2026-05-10):
+    //   translate = pos + Vec3(480, 320, 0) * m_HudScale
+    // Stored pos values are NEGATIVE offsets from the binary's 480x320
+    // framebuffer bottom-right; after Bada's 90 deg device rotation that
+    // lands the markers in the player's top-right. m_HudScale is set once
+    // in GameInit to (0.5, 0.5, 0) per the table at 0x001F3DAC -- the
+    // multiply yields the centered-ortho equivalent (240, 160, 0) of the
+    // binary's (480, 320, 0) anchor in its top-left-origin 480x320 ortho.
+    (void)hudScale;  // per-frame hudScale arg is unused for MissControl
+    Vec3 anchor(
+        480.0f * m_HudScale.x,
+        320.0f * m_HudScale.y,
+        0.0f);
+    drawPos += anchor;
     mat.GlobalTranslate44(drawPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
@@ -531,15 +603,19 @@ void MissControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
 
     QUADCUSTOMVERTEX v[6];
     std::memset(v, 0, sizeof(v));
-    // Centred quad in [-1..+1]. Matrix applies size scale + translate.
+    // Centred quad in [-0.5..+0.5] -- matches Renderer::DrawQuad and the
+    // binary's Mortar::Mesh::DrawQuadUnCached. Matrix applies size scale
+    // (full quad span = size) + translate. Earlier port used [-1..+1]
+    // which doubled the rendered size, masked previously by setting the
+    // size base to 16 instead of the binary's 32.
     const float u1 = u0 + du;
     const float v1 = v0 + dv;
-    v[0].x = -1.0f; v[0].y = -1.0f; v[0].u = u0; v[0].v = v1; v[0].colour = col;
-    v[1].x =  1.0f; v[1].y = -1.0f; v[1].u = u1; v[1].v = v1; v[1].colour = col;
-    v[2].x = -1.0f; v[2].y =  1.0f; v[2].u = u0; v[2].v = v0; v[2].colour = col;
-    v[3].x =  1.0f; v[3].y = -1.0f; v[3].u = u1; v[3].v = v1; v[3].colour = col;
-    v[4].x =  1.0f; v[4].y =  1.0f; v[4].u = u1; v[4].v = v0; v[4].colour = col;
-    v[5].x = -1.0f; v[5].y =  1.0f; v[5].u = u0; v[5].v = v0; v[5].colour = col;
+    v[0].x = -0.5f; v[0].y = -0.5f; v[0].u = u0; v[0].v = v1; v[0].colour = col;
+    v[1].x =  0.5f; v[1].y = -0.5f; v[1].u = u1; v[1].v = v1; v[1].colour = col;
+    v[2].x = -0.5f; v[2].y =  0.5f; v[2].u = u0; v[2].v = v0; v[2].colour = col;
+    v[3].x =  0.5f; v[3].y = -0.5f; v[3].u = u1; v[3].v = v1; v[3].colour = col;
+    v[4].x =  0.5f; v[4].y =  0.5f; v[4].u = u1; v[4].v = v0; v[4].colour = col;
+    v[5].x = -0.5f; v[5].y =  0.5f; v[5].u = u0; v[5].v = v0; v[5].colour = col;
 
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawTriList(v, 6);

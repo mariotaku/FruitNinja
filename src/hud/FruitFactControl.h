@@ -34,7 +34,7 @@
 //   +0x84: int m_FruitIdx
 //   +0x88: int m_FactIdx
 //   +0x8C: Mortar::SmartPtr<Texture> m_FactTexture  (4B)
-//   +0x90..+0x9B: gap/alignment 12B
+//   +0x90: Vec3 m_FactPosOffset (12B) -- ASM-verified: 2026-05-11 binary @ 0x0013a278 (re-analyst)
 //   +0x9C: Colour m_FactColour  (4B + 4B pad to reach +0xA4)
 //   +0xA4: int[11] m_ComboHashArray  (44B; 0xA4+44=0xD0)
 // TODO: 0x0013cb60 -- RE spec says int[12] at +0xA4 but places m_ComboLength
@@ -83,8 +83,8 @@ public:
     int            m_FruitIdx;           // +0x84 (default -1)
     int            m_FactIdx;            // +0x88 (default -1)
     Mortar::SmartPtr<Mortar::Texture> m_FactTexture; // +0x8C
-    // +0x90..+0x9B: 12B gap (binary layout; port offsets differ on 64-bit)
-    uint8_t        _pad_8C_gap[12];
+    // ASM-verified: 2026-05-11 binary @ 0x0013a278 (re-analyst)
+    Vec3           m_FactPosOffset;      // +0x90 (12B: x,y,z floats)
     Colour         m_FactColour;         // +0x9C  (4B)
     uint8_t        _pad_factColour[4];   // +0xA0: 4B pad to reach +0xA4
     // +0xA4: int[11] (44B) -- see TODO above re: spec says int[12]

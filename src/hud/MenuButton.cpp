@@ -204,7 +204,13 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_DeletedCallback = deletedCb;
     m_FruitType = fruitType;
     m_HitBoundsScale = hitBounds;
-    m_bHasHitArea = (hitBounds.x > 0.0f || hitBounds.y > 0.0f);
+    // TODO: 0x0014eede..0x0014eef2 — binary also overwrites `size` (this+0x20)
+    // from the same global as the tail's m_HitBoundsScale. Currently we trust
+    // the caller's pre-set `size`. Resolve the global to re-enable.
+    // Binary @ 0x0014eea2..0x0014ef44: m_bHasHitArea = 0 < (|x| + |y|).
+    // Sum-of-absolute-values so negative-coord hitBounds also count as
+    // "has hit area" (the OR-of-positives form missed that case).
+    m_bHasHitArea = (fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f;
     // m_TargetSize is the "full size" the FadeCounter shrink curve
     // multiplies against in MenuButton::Update (binary 0x0014e94?). If
     // explicit hit bounds were passed use those; otherwise fall back to
@@ -221,6 +227,24 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_Timer = 0.0f;        // DAT_0014ee68
     m_bHighlighted = 1;    // DAT_0014ee6c
 
+    // Binary @ 0x0014f1bc..0x0014f1f8 — toggle branch (no fruit, no explicit
+    // hitBounds): auto-size m_TargetSize and base.size from the bound
+    // secondary texture. The +1 mirrors the binary's pixel-bleed margin
+    // (same as ScoreControl's banner-tex sizing).
+    if (fruitType < 0 && !m_bHasHitArea && m_SecondaryTex.IsValid()) {
+        Mortar::Texture* tex = m_SecondaryTex.Get();
+        if (tex) {
+            float w = (float)(tex->m_Width  + 1);
+            float h = (float)(tex->m_Height + 1);
+            m_TargetSize.x = w;
+            m_TargetSize.y = h;
+            // .z unchanged (binary preserves it)
+            size.x = w;
+            size.y = h;
+            // size.z unchanged
+        }
+    }
+
     // Create fruit entity if fruitType >= 0 (toggles use -1)
     if (fruitType >= 0) {
         Game* game = Game::GetInstance();
@@ -228,8 +252,6 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
             // Original: entityType = (FruitInfo_GetCount() <= fruitType) ? 1 : 0
             int bombThreshold = FruitInfo_GetCount();
             int entityType = (bombThreshold <= fruitType) ? 1 : 0;  // 0=Fruit, 1=Bomb
-            printf("[MenuButton] Init: fruitType=%d bombThreshold=%d -> entityType=%d\n",
-                   fruitType, bombThreshold, entityType);
             Mortar::Entity* e = game->actorManager->Add(entityType, true);
             if (e) {
                 e->pos = buttonPos;
@@ -278,11 +300,56 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                 // Random rotation speed (8-12 deg/frame, random direction)
                 m_RotationSpeed = ROT_SPEED_MIN + (float)(rand() % 40) / 10.0f;
                 if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
+
+                // Binary @ 0x0014f0f4..0x0014f184 — m_TargetSize derived from entity scale.
+                // Skipped when m_bHasHitArea (caller passed explicit hitBounds).
+                //
+                // DIFFERS: also skip when the caller pre-set `size` (non-zero).
+                // The binary's `m_TargetSize = entity->scale * 200.0f` produces
+                // values matched to the binary's FruitInfo scale storage. The
+                // port's FruitInfo stores m_Scale * 100 (e.g. watermelon = 75)
+                // and Fruit::Init does scale = m_Scale * 0.01 (line 180), so
+                // entity->scale ends up the same 0..1 range. BUT callers in
+                // Shop/Dojo/MainScreen pre-set `size = TexSizeOf(tex, 64, 64)`
+                // expecting m_TargetSize = size (the port's prior fallback).
+                // Skipping the binary compute when size is non-zero preserves
+                // those callers' intent. Only GameOverScreen retry/quit (which
+                // leave size=(0,0,0)) trigger the entity-scale compute.
+                bool callerSetSize = (size.x > 0.0f || size.y > 0.0f);
+                if (!m_bHasHitArea && !callerSetSize) {
+                    if (entityType == 0) {
+                        // Fruit branch: m_TargetSize = entity->scale * 200.0f
+                        // DAT_0014f19c = 0x43480000 = 200.0f
+                        m_TargetSize = e->scale * 200.0f;
+                    } else {
+                        // Bomb branch: m_TargetSize = (BombSizeVec * 2.0f) * entity->scale
+                        // TODO: 0x001f4334 — confirm BombSizeVec source; if quit-ring
+                        // size mismatches binary, the writer of this vec is the next gap.
+                        Vec3 bombSize(56.0f, 56.0f, 56.0f);
+                        m_TargetSize.x = bombSize.x * 2.0f * e->scale.x;
+                        m_TargetSize.y = bombSize.y * 2.0f * e->scale.y;
+                        m_TargetSize.z = bombSize.z * 2.0f * e->scale.z;
+                    }
+                }
             }
         }
 
         m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;  // menu draw layer
     }
+
+    // Binary @ 0x0014f1f8..0x0014f23d — unconditional tail (LAB_0014f1f8).
+    // Runs whether or not an entity was created; toggle path falls through
+    // here and both Fruit/Bomb branches `goto LAB_0014f1f8`.
+    m_pFruitPiece    = static_cast<Fruit*>(m_pEntity);  // Bomb branch also writes
+    m_FadeCounter    = 0;
+    m_BounceParams.x = 0.85f;  // DAT_0014f240
+    m_BounceParams.y = 0.85f;  // DAT_0014f240
+    m_BounceParams.z = 0.0f;   // DAT_0014f244
+    // TODO: 0x000073ec (GOT entry, DAT_0014f1a8/0014f248) — Vec3 read from
+    // a global. Same global is also used at function top for `base.size`.
+    // Likely Mortar::MenuButton::s_DefaultButtonSize or similar; needs an
+    // re-analyst pass to resolve. Leaving the m_HitBoundsScale assignment
+    // out for now since the post-Init value is unused by any caller.
 }
 
 // Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()

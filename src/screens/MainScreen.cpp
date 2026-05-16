@@ -73,7 +73,7 @@ MainScreen::MainScreen(Game& g)
       m_BounceVelocity(0.0f), m_field108(0.0f),
       m_State(STATE_CAMERA_ZOOM), m_StateTimer(0.0f),
       m_Timer2(0.0f),
-      m_CameraTransition(0.0f), m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
+      m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
       m_bGameStartReset(false),
       m_pDojoScreen(nullptr),
       m_pGameModeScreen(nullptr),
@@ -176,7 +176,7 @@ void MainScreen::Update(float dt) {
     case STATE_CAMERA_ZOOM: {
         // Camera zoom-in from splash. Create play/dojo buttons.
         // Lerp camera transition toward -1.0
-        m_CameraTransition += (-1.0f - m_CameraTransition) * CAMERA_LERP_RATE;
+        game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
         m_Timer2 += dt;
 
         // Create play/dojo buttons if they don't exist
@@ -188,7 +188,7 @@ void MainScreen::Update(float dt) {
         // `camera < 0` (sign), but the lerp converges to -1 either way.
         // The Quit button is lazy-created in state 1 itself, not on the
         // transition (matches binary's "only on first frame of state 1").
-        if (m_CameraTransition < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
+        if (game.m_TransitionTimer < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
             m_State = STATE_CREATE_BUTTONS;
         }
         break;
@@ -200,7 +200,7 @@ void MainScreen::Update(float dt) {
         // Per-frame:
         //   - SetNewSymbol on the dojo button with ItemManager::AreNewItems().
         //   - Continue camera lerp toward -1.0 at rate 0.125.
-        //   - pos.y animation (inline formula, alpha = m_CameraTransition).
+        //   - pos.y animation (inline formula, alpha = game.m_TransitionTimer).
         //
         // Lazy creation: only the bomb-Quit button. The decompiler shows a
         // second "MoreGames" creation block at the same field +0xA4, but
@@ -218,15 +218,15 @@ void MainScreen::Update(float dt) {
         }
 
         // Continue camera lerp toward -1.0 (binary continues state 0's lerp).
-        m_CameraTransition += (-1.0f - m_CameraTransition) * CAMERA_LERP_RATE;
+        game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
 
-        // pos.y animation: alpha = m_CameraTransition (negative). Binary
+        // pos.y animation: alpha = game.m_TransitionTimer (negative). Binary
         // formula: pos.y = (size.y + 320 + size.y * (-cameraTransition) * -2) * 0.5
         //                 = (size.y + 320 - 2*size.y*(-cameraTransition)) * 0.5.
         // At cameraTransition = -1: pos.y = (size.y + 320 - 2*size.y) * 0.5
         //                                 = (320 - size.y) * 0.5.
         const float sizeY_1 = size.y;
-        const float alpha_1 = -m_CameraTransition;     // 0..1 as zoom completes
+        const float alpha_1 = -game.m_TransitionTimer;     // 0..1 as zoom completes
         pos.y = (sizeY_1 + 320.0f - 2.0f * sizeY_1 * alpha_1) * 0.5f;
         break;
     }
@@ -244,7 +244,7 @@ void MainScreen::Update(float dt) {
         //       cameraTransition = 0;
         //       m_State = STATE_CAMERA_FADE (0x11);
         //   }
-        if (-m_CameraTransition > 0.999f && !m_bGameStartReset) {
+        if (-game.m_TransitionTimer > 0.999f && !m_bGameStartReset) {
             WaveManager::GetInstance()->Reset(true);
             m_bGameStartReset = true;
             // Binary @ 0x0014bb6c: game->pauseFlag = 1 (suppresses
@@ -252,9 +252,9 @@ void MainScreen::Update(float dt) {
             // game->field_0x28 = field_0x20 still TODO (field not in port struct).
             game.pauseFlag = 1;
         }
-        m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
-        if (fabsf(m_CameraTransition) < 0.001f) {
-            m_CameraTransition = 0.0f;
+        game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
+        if (fabsf(game.m_TransitionTimer) < 0.001f) {
+            game.m_TransitionTimer = 0.0f;
             m_State = STATE_CAMERA_FADE;
             m_bGameStartReset = false;
             // Binary @ 0x0014bb78: clear pauseFlag once the camera
@@ -265,7 +265,7 @@ void MainScreen::Update(float dt) {
         // Shared LAB_0014c166 pos.y animation (binary uses cameraTransition
         // as alpha; here we use its absolute magnitude). Logos track pos.y.
         const float sizeY_2 = size.y;
-        const float alpha_2 = fabsf(m_CameraTransition);
+        const float alpha_2 = fabsf(game.m_TransitionTimer);
         const float tt_2 = sizeY_2 * alpha_2;
         pos.y = (sizeY_2 + 320.0f - 2.0f * tt_2) * 0.5f;
         break;
@@ -367,7 +367,7 @@ void MainScreen::Update(float dt) {
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
         m_Timer2 = -0.85f;
-        m_CameraTransition = 0.0f;
+        game.m_TransitionTimer = 0.0f;
         DeleteMenuButtons();
         break;
 
@@ -417,15 +417,17 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CAMERA_FADE:
-        // Binary @ 0x0014c19a: only decay when camera < 0; clamp to 0 once
-        // camera > -0.001 (DAT_0014c2a8) and clear pauseFlag. Without the
-        // clamp the value keeps decaying forever and pauseFlag stays set.
-        if (m_CameraTransition < 0.0f) {
-            m_CameraTransition *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
-            if (m_CameraTransition > -0.001f) {
-                m_CameraTransition = 0.0f;
-                // Binary @ 0x0014c1a4: clear pauseFlag once the post-game
-                // camera fade has reached zero (back-to-menu return path).
+        // TODO: 0x0014c1a2..0x0014c1cc -- binary's gate is `timer < 0.85f`
+        // (against a persistent state-machine register s16 set in state 0x10),
+        // NOT `timer < 0`. Port's simpler gate works for the common
+        // post-game-return path (timer < 0 -> lerp to 0) but misses the
+        // 0.85-snapshot path used by other transitions. Two additional
+        // tail writes at 0x0014c306/0x0014c316 also unported.
+        // ASM-verified-partial: 2026-05-11 (asm-inspector flagged divergence).
+        if (game.m_TransitionTimer < 0.0f) {
+            game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
+            if (game.m_TransitionTimer > -0.001f) {
+                game.m_TransitionTimer = 0.0f;
                 game.pauseFlag = 0;
             }
         }
@@ -443,7 +445,7 @@ void MainScreen::Update(float dt) {
         }
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
-        m_CameraTransition = 0.0f;
+        game.m_TransitionTimer = 0.0f;
         DeleteMenuButtons();
         break;
 
@@ -511,10 +513,10 @@ void MainScreen::Update(float dt) {
 
     // Compute the state-dependent "elapsedTime" / pause driver used by
     // BOTH the toggle positioning block and UpdateScreenElements below.
-    // Binary: at the top of Update, pTVar13 = -m_CameraTransition. The
+    // Binary: at the top of Update, pTVar13 = -game.m_TransitionTimer. The
     // OUT switch cases (0xe/0xf/3/4) and SLIDE_IN overwrite pTVar13 with
     // their decayed/growing m_Timer2 before reaching this point. All
-    // other states retain pTVar13 = -m_CameraTransition.
+    // other states retain pTVar13 = -game.m_TransitionTimer.
     float elapsedTime;
     switch (m_State) {
     case STATE_DOJO_WAIT_A:
@@ -528,13 +530,13 @@ void MainScreen::Update(float dt) {
         elapsedTime = m_Timer2;
         break;
     default:
-        elapsedTime = -m_CameraTransition;  // 0 -> +1 as camera zooms in
+        elapsedTime = -game.m_TransitionTimer;  // 0 -> +1 as camera zooms in
         break;
     }
 
     // Toggle button positioning.
     // Binary: pauseAmount = clamp(pTVar13 + GetPauseAmount(), 0, 1)
-    // The port's earlier version used fabsf(m_CameraTransition) which
+    // The port's earlier version used fabsf(game.m_TransitionTimer) which
     // flipped -1 -> +1 and forced slideOffset=0 during OUT, so the
     // toggles stayed on-screen while blurry_backing slid off. Using the
     // routed elapsedTime (which tracks m_Timer2 during OUT/SLIDE_IN)
@@ -566,12 +568,19 @@ void MainScreen::Update(float dt) {
 
     UpdateScreenElements(dt, elapsedTime);
 
-    // Binary @ 0x0014b278: cameraTransition lives on game.m_TransitionTimer
-    // (+0x0c) so peers (ScoreControl, MissControl, UpdateMusic, etc.) can
-    // read it. Port owns the value on MainScreen but mirrors it here so
-    // the same ABI surface is preserved for downstream subsystems.
-    game.m_TransitionTimer = m_CameraTransition;
+    // Binary-faithful: game.m_TransitionTimer is the SINGLE source of truth.
+    // MainScreen's state-case bodies above write it directly (states 0/1/2/
+    // 0x11). No tail mirror -- states that hand off to GameOverScreen
+    // (e.g. state 8) leave the timer untouched so GameOverScreen's state-6
+    // alpha ramp can accumulate. ASM-verified: 2026-05-11 binary
+    // @ 0x0014b278..0x0014c37b (asm-inspector).
 }
+
+// Binary @ 0x0014b278: Game+0x0c is the camera-transition timer. These
+// accessors route directly through the Game singleton -- no port-local
+// mirror field.
+float MainScreen::GetCameraTransition() const { return game.m_TransitionTimer; }
+void  MainScreen::SetCameraTransition(float v) { game.m_TransitionTimer = v; }
 
 // Helper: setup world matrix for a textured quad at given position
 static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,

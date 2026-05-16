@@ -75,17 +75,20 @@ public:
     // Mirrors the binary pattern at e.g. 0x001389B0 where DojoScreen
     // writes mainScreen->m_State = 8 directly.
     void SetState(MainScreenState s) { m_State = s; }
+    void SetStateTimer(float t) { m_StateTimer = t; }
 
     // @ 0x0016bbb0 — post-effect overlays drawn after HUD layer 0x08.
     // NOT a vtable slot (binary slot 9 is base default 0x12F93C).
     void DrawPostEffects();
 
-    // Camera transition accessors for child screens. Binary stores
-    // this at game.m_TransitionTimer (+0x0c); port owns it on MainScreen.
-    // GameModeScreen state 3-6 decays this toward 0 during mode-picked
-    // fade-out (matches decompile at 0x0013f10c).
-    float GetCameraTransition() const { return m_CameraTransition; }
-    void  SetCameraTransition(float v) { m_CameraTransition = v; }
+    // Camera-transition accessors for child screens. Binary @ 0x0014b278
+    // stores this at game.m_TransitionTimer (+0x0c) as the single source
+    // of truth. Port previously kept a mirror field on MainScreen which
+    // caused stomping during GameOverScreen's alpha ramp. Refactored to
+    // read/write game.m_TransitionTimer directly (binary-faithful).
+    // ASM-verified: 2026-05-11 (asm-inspector).
+    float GetCameraTransition() const;
+    void  SetCameraTransition(float v);
 
 private:
     // +0x7c: copy of original size
@@ -143,8 +146,8 @@ private:
     Mortar::SmartPtr<Mortar::Texture> m_fruitTextTex;         // fruit_text.tex
     Mortar::SmartPtr<Mortar::Texture> m_ninjaTextTex;         // ninja_text.tex
 
-    // Port: camera transition (controlled by game state)
-    float m_CameraTransition;
+    // Camera transition lives on game.m_TransitionTimer (binary single source of truth).
+    // Member field removed; GetCameraTransition/SetCameraTransition route through `game`.
     float m_GlobalAlphaTarget;
     float m_Time;
 

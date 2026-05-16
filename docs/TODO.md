@@ -158,6 +158,31 @@ See `docs/entities/bomb-flash.md` and `docs/entities/bomb-blast.md`. Both Update
 - [x] MatrixManager / MatrixStack — known from T.NNN renames: Reset, Translate, Scale, SetCurrent, Upload. Offset +0x1094 in MatrixManager = the active MatrixStack.
 - [x] GeometryBinding — PassBinding::Apply fully decompiled (0x1a39f8, 101 lines). Sets up glVertexPointer/NormalPointer/ColorPointer/TexCoordPointer.
 
+### Font::DrawString matrix-state leak — FIXED (2026-05-11, binary-faithful)
+
+Found in FruitFactControl::DrawOrder. The port's `Font::DrawString` originally
+built the text transform on the world MatrixStack (`world.Scale + RotZ +
+LocalTranslate + Translate`) and submitted glyph verts in font-local space,
+relying on GL to multiply by m_Current at draw time. If the caller left a
+dirty m_Current (e.g. FFC backplate's `MakeScale(176, 176)`), the text's
+own transform stacked on top -- glyphs rendered ~176x too large.
+
+asm-inspector trace (binary @ 0x00101c58, 0x00101964): the binary's
+Font_DrawString bypasses the matrix stack entirely. Per-glyph corner emit
+is `Vec2 ctor` + `Vec2 operator+` writing screen-space scalar math directly
+into the batch vertex slots; m_Current is never read.
+
+**Port fix**: build the text transform matrix once after the glyph loop
+(scale + rotZ + alignmentYShift + pos), apply it as a 2D affine to every
+batched vertex's (x, y) on the CPU, flush with an identity world matrix.
+Port now matches binary architecture (world-space verts, identity matrix
+at flush) and is insensitive to the caller's m_Current state.
+
+Other audit items left to do (proactively check the rest of the engine):
+- Audit other engine functions that call `world.Push()` + a transform op;
+  check whether they assume an identity baseline. Suspects: Mesh::Draw,
+  ParticleManager::Draw, Model::Draw, SplatEntity::Draw, etc.
+
 ## Sound System — Mostly Analyzed (147 funcs, 25+ done)
 
 Documented: GameSound::SFXPlay, MAMAudioThread struct, architecture diagram, BadaSound full struct + all functions (see `docs/engine/sound-system.md`).

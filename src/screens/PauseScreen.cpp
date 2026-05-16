@@ -33,6 +33,12 @@
 #include "math/MathUtil.h"
 #include "math/Colour.h"
 #include "engine/audio/GameSound.h"
+#include "engine/network/NetworkManager.h"
+#include "game/GameOver.h"
+#include "game/BombHit.h"
+#include "game/PowerUpManager.h"
+#include "screens/MainScreen.h"
+#include "entities/BombBlast.h"
 #include "Game.h"
 #include <cstdio>
 #include <cmath>
@@ -129,27 +135,77 @@ bool PauseScreen::IsEnabled() {
 }
 
 // -------------------------------------------------------------------------
-// QuitToMenu / RetryLevel stubs
-// (binary 0x00169e50 / 0x0016a25c -- full flow not yet ported)
+// QuitToMenu / EndRetryLevel -- binary @ 0x00169e50 / 0x0016a208
 // -------------------------------------------------------------------------
 static void QuitToMenu() {
-    // Binary: WaveManager::ResetGlobalDt(1.0), then MainScreen state change,
-    // NetworkManager kick, etc. Tier-1: just thaw the wave timer.
-    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
+    WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
     Game* game = Game::GetInstance();
-    if (game) {
-        game->pauseFlag = 1;
+    if (!game) return;
+    game->pauseFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
+
+    if (game->mainScreen) {
+        game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
+        game->mainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
     }
+
+    // 0x169e84/0x169e86 binary writes PauseScreen->m_bPendingRemoval = 1
+    // (re-analyst 2026-05-10), destructing the overlay. Port relies on
+    // PauseScreen's own state machine (BOMB_FLASH -> HIDDEN with m_Alpha
+    // decay) to fade the overlay out gradually -- if we deactivated here
+    // (m_bActive=0), Update would stop running and the BOMB_FLASH state
+    // would never advance.
+
+    FN::SetScore(0, -1);                               // 0x169e90
+
+    // Defunct: P2P / online disconnect -- no-op stub; binary @ 0x00169e9e
+    // (binary: NetworkManager::GetInstance()->vtable[3](0))
+    Mortar::NetworkManager::GetInstance()->SpawnThreadController();
+
+    // 0x169eaa: vstr 0.0f, [+0x1a0] (DAT_00169ec4 = 0x00000000 verified
+    // via read_memory). Earlier port asm-inspector misread the literal as
+    // -2.0f; binary actually CLEARS the timer on quit (resets the
+    // vestigial ramp at 0x0016c5fe back to disarmed).
+    game->m_MenuReturnTimer = 0.0f;
+
+    // TODO: 0x00169eae..0x00169ebe -- 5 clear-on-quit flag bytes (Game+0x19d,
+    //   +0x170, +0x19a, +0x19b, +0x19c); add port-side fields when RE'd.
 }
 
-static void RetryLevel() {
-    // Binary: WaveManager::ResetGlobalDt(1.0), then resets per-fruit timers,
-    // plays game-start SFX, etc. Tier-1: thaw wave timer + clear flags.
-    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
+static void EndRetryLevel() {
     Game* game = Game::GetInstance();
-    if (game) {
-        game->retryFlag = 1;
+    if (!game) return;
+
+    if (game->mainScreen) {
+        game->mainScreen->SetStateTimer(0.5f);         // 0x16a220 [+0x110]
+        game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x16a226 [+0x10c] = 0
     }
+
+    FN::SetScore(0, -1);                               // 0x16a22a
+
+    if (game->pSaveData) {
+        FruitSaveData* sd = game->pSaveData;
+        sd->m_GameOverField2 = -1;                     // 0x16a23a [+0x120]
+        sd->m_GameOverField4 = -1;                     // 0x16a23e [+0x128]
+        sd->m_GameOverField3 = -1;                     // 0x16a242 [+0x124]
+        sd->m_GameOverField1 = -1;                     // 0x16a246 [+0x11c]
+    }
+
+    // TODO: 0x16a24a -- coin baseline re-snapshot: m_LevelStartCoins = m_Coins
+    //   binary writes [game+0x28] = [game+0x20]; confirm pSaveData field layout.
+
+    FN::ResetGameEntities(false);                      // 0x16a24e
+    BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)
+    WaveManager::GetInstance()->Reset(true);           // 0x16a25c
+
+    game->retryFlag         = 0;                       // 0x16a26e [+0x06]
+    game->m_TransitionTimer = 0.5f;                    // 0x16a270 [+0x0c]
+    game->pauseFlag         = 0;                       // 0x16a274 [+0x05]
+
+    if (game->mainScreen) {
+        game->mainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
+    }
+
+    // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; binary @ 0x0016a27e
 }
 
 // -------------------------------------------------------------------------
@@ -169,7 +225,7 @@ PauseScreen::PauseScreen()
       m_LastHitButton(-1),
       m_PressIndex(0),
       m_RevealTimer(0.0f),
-      m_State(0),
+      m_State(PAUSE_STATE_HIDDEN),
       m_TitleTexW(0.0f), m_TitleTexH(0.0f),
       m_PauseButtonTexW(0.0f), m_PauseButtonTexH(0.0f),
       m_QuitTitleTexW(0.0f), m_QuitTitleTexH(0.0f),
@@ -367,15 +423,15 @@ bool PauseScreen::SetToMultiplayerState() {
 //   State 3 -> 4 (resume)
 void PauseScreen::PauseGameCallback() {
     Game* game = Game::GetInstance();
-    if (m_State == 0) {
-        m_State = 2;
+    if (m_State == PAUSE_STATE_HIDDEN) {
+        m_State = PAUSE_STATE_FADE_IN;
         PauseGame();
         // SFX "Pause"
         if (game && game->pGameSound) {
             game->pGameSound->SFXPlay("Pause", 1.0f);
         }
-    } else if (m_State == 3) {
-        m_State = 4;
+    } else if (m_State == PAUSE_STATE_ACTIVE) {
+        m_State = PAUSE_STATE_RESUME_EXIT;
         // SFX "Unpause"
         if (game && game->pGameSound) {
             game->pGameSound->SFXPlay("Unpause", 1.0f);
@@ -385,7 +441,7 @@ void PauseScreen::PauseGameCallback() {
 
 // ASM-verified: 2026-05-02 binary @ 0x00154400 (asm-inspector)
 void PauseScreen::PauseGameCallback2() {
-    bool wasIdle = (m_ButtonFadeAlpha == 0.0f) && (m_State == 0);
+    bool wasIdle = (m_ButtonFadeAlpha == 0.0f) && (m_State == PAUSE_STATE_HIDDEN);
     PauseGameCallback();   // drives state 0->2 or 3->4
     if (wasIdle) {
         m_PressIndex = 1;
@@ -401,13 +457,13 @@ void PauseScreen::PauseGameCallback2() {
 // NOTE: m_Alpha *= 0.5 and SaveCurrentData happen in Update case-6 entry, NOT here.
 // NOTE: SFX "MenuQuit" also happens in Update state-6 path, not this callback.
 void PauseScreen::QuitGameCallback() {
-    if (m_State != 3) return;
+    if (m_State != PAUSE_STATE_ACTIVE) return;
     Game* game = Game::GetInstance();
     if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
     if (game) game->m_bTutorialShown = 0;
     m_LastHitButton = 0;
-    m_State = 6;
+    m_State = PAUSE_STATE_QUIT_EXIT;
 }
 
 // Binary @ 0x00153ef8 QuitGameCallback2():
@@ -433,7 +489,7 @@ void PauseScreen::QuitGameCallback2() {
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
 //   m_State = 5;
 void PauseScreen::RetryGameCallback() {
-    if (m_State != 3) return;
+    if (m_State != PAUSE_STATE_ACTIVE) return;
     Game* game = Game::GetInstance();
     if (game && game->m_AchievementProgressTimer >= 10.5f && game->pSaveData) {
         // String resolved from binary DAT_00153fe4 -> 0x001ba98f.
@@ -448,7 +504,7 @@ void PauseScreen::RetryGameCallback() {
     if (game) game->m_bTutorialShown = 0;
     if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
-    m_State = 5;
+    m_State = PAUSE_STATE_RETRY_EXIT;
 }
 
 // -------------------------------------------------------------------------
@@ -550,7 +606,7 @@ void PauseScreen::Update(float dt) {
     // --- State machine ---
     switch (m_State) {
 
-    case 0: // Hidden / idle
+    case PAUSE_STATE_HIDDEN:
         // Alpha decay toward 0
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < FADE_CLAMP) m_Alpha = 0.0f;
@@ -567,15 +623,25 @@ void PauseScreen::Update(float dt) {
         }
         break;
 
-    case 1: // Bomb-flash poll (Tier-2 -- skip directly to 0)
-        // DIFFERS: Tier-2 will add real BombFlashFull() poll here.
-        // Tier-1: immediately clear and return to hidden.
-        m_Alpha = 0.0f;
-        m_ButtonFadeAlpha = 1.0f;
-        m_State = 0;
+    case PAUSE_STATE_BOMB_FLASH:
+        // ASM-verified: 2026-05-10 binary @ 0x00154d2a..0x00154d72 (re-analyst).
+        // Hold m_Alpha = 1.0 / m_ButtonFadeAlpha = 0.0 each frame while
+        // BombFlashFull() returns false (i.e. game->bombHitTimer >= 1.0).
+        // When the bomb-hit timer crosses below 1.0 (half the 2.0s window),
+        // reset PowerUpManager, drop to HIDDEN, and pull m_TransitionTimer
+        // to -1.0 so the slide-back-to-menu animation kicks in via MainScreen.
+        m_ButtonFadeAlpha = 0.0f;
+        m_Alpha           = 1.0f;
+        if (FN::BombFlashFull()) {
+            m_Alpha           = 1.0f;
+            m_ButtonFadeAlpha = 1.0f;
+            PowerUpManager::GetInstance()->Reset(false);
+            m_State = PAUSE_STATE_HIDDEN;
+            game->m_TransitionTimer = -1.0f;
+        }
         break;
 
-    case 2: // Entry fade-in
+    case PAUSE_STATE_FADE_IN:
         m_Alpha += (1.0f - m_Alpha) * FADE_IN_RATE;
 
         // Force game pause flag each frame while fading in (SP path only)
@@ -583,11 +649,11 @@ void PauseScreen::Update(float dt) {
 
         if (m_Alpha > ACTIVE_THRESHOLD) {
             m_Alpha = 1.0f;
-            m_State = 3;
+            m_State = PAUSE_STATE_ACTIVE;
         }
         break;
 
-    case 3: // Active menu -- buttons interactable
+    case PAUSE_STATE_ACTIVE:
         // Force game pause flag each frame (SP path only)
         game->gameActiveFlag = 1;
 
@@ -596,42 +662,52 @@ void PauseScreen::Update(float dt) {
         if (m_RetryButton)  m_RetryButton->m_bHighlighted  = 1;
         break;
 
-    case 4: // Resume exit-fade
+    case PAUSE_STATE_RESUME_EXIT:
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             m_Alpha = 0.0f;
-            m_State = 0;
+            m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             UnpauseGame();
         }
         break;
 
-    case 5: // Retry exit-fade
+    case PAUSE_STATE_RETRY_EXIT:
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             FruitNinja_SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
-            m_State = 0;
+            m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
-            RetryLevel();
+            EndRetryLevel();
             UnpauseGame();
         }
         break;
 
-    case 6: // Quit confirm exit
-        // 0.5 multiplier was applied once on state-3->6 transition in QuitGameCallback.
-        // Per-frame: standard 0.75 decay only (binary @ 0x00154468 case 6).
+    case PAUSE_STATE_QUIT_EXIT:
+        // ASM-verified: 2026-05-10 binary @ 0x00154dc4..0x00154e1e (re-analyst).
+        // Binary applies 0.5x extra fast-fade in case 6 then falls through to
+        // the common 0.75 decay; both happen each frame.
+        m_Alpha *= 0.5f;
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             QuitToMenu();
-            // Tier-2: HitMenuBomb at quit button position (state 6 effect)
-            // if (m_LastHitButton >= 0) { ... HitMenuBomb(pos) ... }
-            m_ButtonFadeAlpha = 0.0f;
+            // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
+            // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
+            if (m_LastHitButton >= 0 && m_QuitButton) {
+                FN::HitMenuBomb(m_QuitButton->pos);
+            }
+            // Binary writes m_ButtonFadeAlpha = 1.0 (DAT_00154fb8), NOT 0.0.
+            // Earlier port wrote 0.0 which left the buttons at full opacity
+            // straight through the bomb-flash phase.
+            m_ButtonFadeAlpha = 1.0f;
             m_LastHitButton   = -1;
-            // Tier-2: transition to state 1 (bomb-flash). Tier-1: skip to 0.
-            m_State = 0;
-            m_Alpha = 0.0f;
+            // Transition to BOMB_FLASH (1), NOT HIDDEN. The bomb-flash poll
+            // in case 1 is what produces the visible white flash and tears
+            // down the gameplay HUD; jumping straight to HIDDEN skipped both.
+            m_State = PAUSE_STATE_BOMB_FLASH;
+            m_Alpha = 1.0f;
             FruitNinja_SaveCurrentData(false);
             UnpauseGame();
         }
@@ -653,8 +729,20 @@ void PauseScreen::Update(float dt) {
         m_ButtonFadeAlpha += (1.0f - m_ButtonFadeAlpha) * FADE_IN_RATE;
     }
 
-    // 2. State 6 special: snap alpha = 1.0, buttonFadeAlpha = 0
-    if (m_State == 6) {
+    // 2. State 6 scratch override (binary @ 0x00154eac..0x00154ec4 +
+    // 0x00155200..0x00155204).
+    // ASM-verified: 2026-05-10 binary (asm-inspector). Binary saves
+    // m_Alpha + m_ButtonFadeAlpha BEFORE the reset, runs the rendering math
+    // with the scratch values, then RESTORES the persistent fields from
+    // the saved values at function exit. The 1.0 / 0.0 reset only affects
+    // button-layout / texture-swap reads in the post-switch math; the
+    // persistent fade state continues to decay across frames.
+    // Earlier port treated the reset as a persistent state mutation, which
+    // pinned m_Alpha at 1.0 each frame and made case-6's
+    // `m_Alpha *= 0.75` decay never reach EXIT_THRESHOLD -- Quit hung.
+    const float savedAlpha           = m_Alpha;
+    const float savedButtonFadeAlpha = m_ButtonFadeAlpha;
+    if (m_State == PAUSE_STATE_QUIT_EXIT) {
         m_Alpha = 1.0f;
         m_ButtonFadeAlpha = 0.0f;
     }
@@ -764,13 +852,18 @@ void PauseScreen::Update(float dt) {
 
     // 7. P2 buttons inactive (Tier-2 stub -- P2 buttons are nullptr in Tier-1)
     // m_P2ResumeButton / m_P2RetryButton are always nullptr in Tier-1.
+
+    // Restore the persistent fade state -- the state-6 reset above was a
+    // scratch override for rendering only. Binary @ 0x00155200/0x00155204.
+    m_Alpha           = savedAlpha;
+    m_ButtonFadeAlpha = savedButtonFadeAlpha;
 }
 
 // ASM-verified: 2026-05-08T00:00 binary @ 0x00153e34 (re-analyst)
 // Binary @ 0x00153e34: external entry — force overlay fully visible and
 // jump to state 3. Used by the Bada-app-side "skip intro" handler.
 void PauseScreen::SkipTo() {
-    m_State = 3;
+    m_State = PAUSE_STATE_ACTIVE;
     m_Alpha = 1.0f;
 }
 
@@ -779,8 +872,8 @@ void PauseScreen::SkipTo() {
 // Likely call site: shop/tutorial popup-dismiss handler. Advances state
 // 3 -> 4 and clears the tutorial-shown flag.
 void PauseScreen::ContinueGameCallback() {
-    if (m_State != 3) return;
-    m_State = 4;
+    if (m_State != PAUSE_STATE_ACTIVE) return;
+    m_State = PAUSE_STATE_RESUME_EXIT;
     Game* g = Game::GetInstance();
     if (!g) return;
     if (g->m_bTutorialShown != 0) {

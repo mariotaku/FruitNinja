@@ -8,6 +8,7 @@
 // state-machine prose description.
 
 #include "UpdateMusic.h"
+#include "GameMode.h"
 #include "Game.h"
 #include "entities/ActorManager.h"
 #include "audio/SoundManager.h"
@@ -180,12 +181,13 @@ void UpdateMusic(float dt) {
 
     // -----------------------------------------------------------------------
     // BLOCK 3: Arm preload-arcade-sounds countdown
-    // Condition: gameMode == 0x02 (Zen/ZenBlitz)  AND  NOT already armed
+    // Condition: gameMode == 0x02 (GAME_MODE_ARCADE)  AND  NOT already armed
     //            AND  m_TransitionTimer >= 0.0
     // Sub-condition (to SKIP arming): currentVol < 0.0
     //   AND GetNumEntities(Fruit) != 0  AND GetNumEntities(Bomb) != 0
+    // TODO: comment formerly said "Zen/ZenBlitz" -- binary's 0x02 is GAME_MODE_ARCADE.
     // -----------------------------------------------------------------------
-    if (game->gameMode == 0x02) {                        // 0x0016a726
+    if (game->gameMode == Mortar::GAME_MODE_ARCADE) {    // 0x0016a726
         if (!g_armedArcade) {                            // 0x0016a730
             if (game->m_TransitionTimer >= 0.0f) {       // 0x0016a742
                 bool skip_arm = false;

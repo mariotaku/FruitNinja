@@ -15,6 +15,9 @@ public:
     LeaderboardList() {}
     ~LeaderboardList() override {}
 
+    // Defunct: online leaderboards -- no-op stub; binary address unknown.
+    void Init() {}
+
     // Defunct: online leaderboards -- fields opaque.
     // Binary total: ~0x12C. On 64-bit port, sizeof(ScrollingMenu) may exceed 0x12C;
     // padding is omitted in that case (no negative-size array).

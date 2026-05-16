@@ -1,6 +1,7 @@
 // Analysed: 2026-04-30T12:00
 
 #include "TimeControl.h"
+#include "game/GameMode.h"
 #include "Game.h"
 #include "hud/HUDLayer.h"
 #include "game/GameOver.h"
@@ -46,7 +47,7 @@ TimeControl::TimeControl() {
 bool TimeControl::IsTimedGame() const {
     Game* game = Game::GetInstance();
     if (!game) return false;
-    return game->gameMode == 2 || game->gameMode == 3;
+    return game->gameMode == Mortar::GAME_MODE_ARCADE || game->gameMode == Mortar::GAME_MODE_ZEN;
 }
 
 void TimeControl::Init() {
@@ -65,7 +66,7 @@ void TimeControl::Reset() {
     m_TimeRemaining = startSecs;
 
     Game* game = Game::GetInstance();
-    bool arcadeOrMP = game && (game->gameMode == 2 || IsMultiplayer());
+    bool arcadeOrMP = game && (game->gameMode == Mortar::GAME_MODE_ARCADE || IsMultiplayer());
     if (arcadeOrMP) {
         m_TimeRemaining = ARCADE_START_TIME;
 
@@ -104,7 +105,7 @@ float TimeControl::GetCountDown() const {
     // 0x00162134
     Game* game = Game::GetInstance();
     if (!game) return m_CountdownStart;
-    if (game->gameMode != 2 /* Arcade */ && !IsMultiplayer())
+    if (game->gameMode != Mortar::GAME_MODE_ARCADE && !IsMultiplayer())
         return ARCADE_START_TIME;    // DAT_0016215c fallback
     return m_CountdownStart;
 }

@@ -10,7 +10,7 @@ add_library(mortar_engine STATIC
     compression/LZ8.cpp
     util/StringHash.cpp
     util/AsciiString.cpp
-    util/Localisation.cpp
+    util/StringTable.cpp
     util/PathCI.cpp
     # Phase 2 — Core Singletons
     render/gl_funcsSDL.cpp

@@ -1,4 +1,5 @@
 #include "Bomb.h"
+#include "game/GameMode.h"
 #include "ActorManager.h"
 #include "BombBlast.h"
 #include "FruitInfo.h"
@@ -679,7 +680,10 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
     if (m_bMenuBombHit == 0 && game != nullptr) {
         FN::SetBombHitPos(pos);
 
-        const bool isZen = (game->gameMode == 2);
+        // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
+        // Verify whether the surrounding logic is intended for Arcade or Zen and
+        // rename accordingly.
+        const bool isZen = (game->gameMode == Mortar::GAME_MODE_ARCADE);
 
         // Camera shake — FruitCamera::CreateCameraShake at 0x180d10.
         // Binary intensities: Classic/Arcade = 1.6/2.0, Zen = 2.0/3.0.

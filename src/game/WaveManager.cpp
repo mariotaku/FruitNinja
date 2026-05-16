@@ -1,4 +1,5 @@
 #include "WaveManager.h"
+#include "GameMode.h"
 #include "ScoreState.h"
 #include "WaveStructs.h"
 #include "Game.h"
@@ -605,7 +606,7 @@ void WaveManager::Resume() {
             b->m_AccelForce = Vec3(es.grav[0], es.grav[1], es.grav[2]);
             // m_BombVariant maps to playerIdx overlay (binary +0x28).
             b->m_BombVariant = (int)es.grav[2];
-            if (game->gameMode == 2) Bomb::SetForPlayer(b, 1);
+            if (game->gameMode == Mortar::GAME_MODE_ARCADE) Bomb::SetForPlayer(b, 1);
             if (es.wait > 0.0f) {
                 if (!es.hit) {
                     b->Chuck(es.wait);
@@ -628,9 +629,9 @@ void WaveManager::Resume() {
     // 7. Mortar::ActorManager::Update(dt=0) to settle respawned entities.
     Mortar::ActorManager::GetInstance()->Update(0.0f);
 
-    // 8. Zen mode (m_GameMode == 2): PowerUpManager::LoadTextures().
+    // 8. Arcade mode (m_GameMode == 2): PowerUpManager::LoadTextures().
     // Binary @ 0x0011840c — iterates m_AllPowerUps and m_ScreenEffectPool.
-    if (game->gameMode == 2) {
+    if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
         PowerUpManager::GetInstance()->LoadTextures();
     }
 
@@ -922,11 +923,25 @@ void WaveManager::Update(float dt) {
 // UpdateWave — per docs/functions/wave.md (298 lines)
 // ----------------------------------------------------------------------------
 
+// Wave-end gate flag. Binary @ 0x00132f70 (TU-local file-scope static byte
+// in WaveManager's translation unit, NOT a struct member). Cleared at the
+// top of UpdateWave; set to 1 in the pre-spawn-timer-ticking branch (when
+// field_0x234 > 0); read by the wave-end block to suppress GetNextWave
+// while the pre-spawn delay is still counting down.
+// ASM-verified: 2026-05-10 binary @ 0x001253b0 / 0x00125928 / 0x0012593e
+// (asm-inspector). Without this gate the wave-end block fires GetNextWave
+// every frame the pre-spawn delay is active (no entities yet but timer is
+// ticking), which resets field_0x234 -> infinite loop -> first wave never
+// spawns.
+static bool s_PreSpawnTickedThisFrame = false;
+
 void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // game->field_0x470 = false; -- TODO: not in port Game struct
+    // Binary @ 0x001253b0: clear the wave-end gate flag at function entry.
+    s_PreSpawnTickedThisFrame = false;
+
     UpdateComboSpeed(dt);
 
     // Skip networking check (always returns 0).
@@ -942,6 +957,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // Binary reads field_0x234+p*4 (delay slot) @ 0x0012598c.
     float waveTimer = field_0x234[playerIdx];  // Fix 1: delay slot @ +0x234+p*4
     if (waveTimer > 0.0f) {
+        // Binary @ 0x00125928: set the wave-end gate flag = 1 here, in the
+        // timer-still-ticking branch, so the wave-end block won't fire
+        // GetNextWave while the pre-spawn delay is counting down.
+        s_PreSpawnTickedThisFrame = true;
         field_0x234[playerIdx] = waveTimer - dt;  // Fix 1: write back to delay slot
         // No 'return' here -- binary @ 0x00125930 falls through to wave-end block.
     } else {
@@ -987,7 +1006,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 // Uses TimeControl::field_0x7c (GetCountDown) and blitz timers.
                 // DAT_0012558c = 30.0f (blitz refresh base), DAT_001255a0 = 0.20979f (timer compensation).
                 int blitzAdvance = 0;
-                if (game->gameMode == 2) {
+                if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
                     float countdown = 0.0f;
                     if (game->pTimeCtrl) countdown = game->pTimeCtrl->GetCountDown();
 
@@ -1025,7 +1044,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 static SPAWNER_INFO k_BlitzSpawners[3] = {
                     SPAWNER_INFO(), SPAWNER_INFO(), SPAWNER_INFO()
                 };
-                SPAWNER_INFO* blitzSpawner = (blitzAdvance && game->gameMode == 2)
+                SPAWNER_INFO* blitzSpawner = (blitzAdvance && game->gameMode == Mortar::GAME_MODE_ARCADE)
                     ? &k_BlitzSpawners[m_Random.Rand32(3)]
                     : nullptr;
                 int mode = game->gameMode;
@@ -1101,7 +1120,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // Wave-end block: runs regardless of whether wave is null (binary @ 0x001253fc falls through).
     // Fix 1 (binary @ 0x00125956): reads wait slot field_0x238+p*4, NOT delay slot.
     // Fix 2 (binary @ 0x00125224): no writeback to port-owned m_NextWaveDelay[] -- removed.
-    if (!IsWaveProcessing(playerIdx)) {
+    // Binary @ 0x0012593e gate: also skip when s_PreSpawnTickedThisFrame is set
+    // (pre-spawn delay is still counting down -- no entities yet but the wave
+    // is "in progress" via the timer).
+    if (!s_PreSpawnTickedThisFrame && !IsWaveProcessing(playerIdx)) {
         float nextDelay = field_0x238[playerIdx];  // Fix 1: wait slot @ +0x238+p*4
         if (nextDelay > 0.0f) {
             nextDelay -= dt;
@@ -1116,7 +1138,7 @@ void WaveManager::UpdateComboSpeed(float dt) {
     // Binary @ 0x00122f50. Gate: Arcade mode only (gameMode==2).
     // game[+0x0c] pause float not in port Game struct; drop that half of gate.
     Game* game = Game::GetInstance();
-    if (!game || game->gameMode != 2) return;
+    if (!game || game->gameMode != Mortar::GAME_MODE_ARCADE) return;
 
     float curSpeed  = m_Speed[0];
     float targetP1  = m_Speed[1];
@@ -1248,40 +1270,36 @@ void WaveManager::GetNextWave(int playerIdx) {
     // Set wave timing (m_WaveDt at +0x10, m_WaveDtInc at +0x14, m_WaveDtSpInc at +0x18).
     (void)(wave->m_WaveDt + wave->m_WaveDtInc * wave->field_0x34);  // consumed by GetWavedt
 
-    // SLOT SWAP CORRECTION: prior audit's Fix 1 had the slot directions
-    // backwards. Walk-through: UpdateWave's wave-end block reads
-    // field_0x238 (lines ~870-879); when 0 it fires GetNextWave. With XML
-    // "delay" mapped to field_0x234, field_0x238 was always 0 (XML "wait"
-    // is absent in classic XML), so GetNextWave fired every frame and the
-    // before-delay timer (field_0x234) kept getting reset before it could
-    // tick down to spawn fruit. Swapping fixes both: after GetNextWave,
-    // field_0x234 = 0 (no in-wave before-delay), spawn fires immediately;
-    // field_0x238 = 0.6 (between-wave pause), gates GetNextWave for ~36
-    // frames after fruit clears.
+    // ASM-verified: 2026-05-10 binary @ 0x001251cc / 0x00125210 (re-analyst).
+    // Binary mapping (the previous "SLOT SWAP CORRECTION" was wrong, restored):
+    //   WAVE_INFO+0x20 (m_NextWaveDelay, XML "delay") -> field_0x234[p]
+    //     This is the PRE-SPAWN timer. UpdateWave gates the spawn loop on
+    //     field_0x234 <= 0; while > 0 it ticks down and early-returns.
+    //     For classic wave 0 with delay="1.0", first wave waits ~1s before
+    //     fruit spawn.
+    //   WAVE_INFO+0x28 (m_NextWaveWait,  XML "wait")  -> field_0x238[p]
+    //     This is the wave-end gate (delays the next GetNextWave call after
+    //     fruit clears).
+    // Earlier port had these swapped, which made field_0x234 = 0 each frame
+    // and the pre-spawn loop fire immediately on frame 1 (user-visible: first
+    // wave came too fast).
+    if (wave->m_NextWaveDelay > 0.0f) {
+        float delay = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
+        if (delay < 0.05f) delay = 0.05f;
+        field_0x234[playerIdx] = delay;
+    } else {
+        field_0x234[playerIdx] = 0.0f;          // DAT_00125328
+    }
     {
-        // m_NextWaveWait (XML "wait" attr; 0 in classic) -> in-wave pre-spawn
-        // timer. With wait=0, no wait, spawn happens this frame.
         float wait  = wave->m_NextWaveWait;
         float spinc = wave->m_NextWaveWaitSpInc;
         if (spinc != 0.0f) {
             float w2 = wait + spinc * m_Speed[playerIdx];
-            if (w2 <= 0.05f) w2 = 0.05f;
+            if (w2 < 0.05f) w2 = 0.05f;
             wait = w2;
         }
-        field_0x234[playerIdx] = wait;
+        field_0x238[playerIdx] = wait;
     }
-    // m_NextWaveDelay (XML "delay" attr; 0.6 in classic wave 0) -> between-
-    // wave wait. After wave drains, field_0x238 ticks 0.6 -> 0 then
-    // GetNextWave fires.
-    if (wave->m_NextWaveDelay > 0.0f) {
-        float delay = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
-        if (delay < 0.05f) delay = 0.05f;
-        field_0x238[playerIdx] = delay;
-    } else {
-        field_0x238[playerIdx] = 0.0f;
-    }
-    // Fix 2 (binary @ 0x001251cc): binary has NO writeback to a port-owned m_NextWaveDelay[].
-    // The port's extra 'm_NextWaveDelay[playerIdx] = field_0x234' is removed here.
 
     // Reset all spawners in this wave.
     for (int i = 0; i < wave->m_SpawnerCount; ++i)
@@ -1572,7 +1590,7 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         b->Chuck(chuckDelay);
 
         Game* game = Game::GetInstance();
-        if (game && game->gameMode == 2)
+        if (game && game->gameMode == Mortar::GAME_MODE_ARCADE)
             Bomb::SetForPlayer(b, 1);  // arcade single-player
     }
 }

@@ -1,6 +1,7 @@
 // Analysed: 2026-04-30T00:00
 
 #include "ScoreControl.h"
+#include "game/GameMode.h"
 #include "Game.h"
 #include "game/ScoreState.h"
 #include "game/PowerUpManager.h"
@@ -11,7 +12,7 @@
 #include "math/MathUtil.h"
 #include "math/Matrix44.h"
 #include "audio/GameSound.h"
-#include "util/Localisation.h"
+#include "util/StringTable.h"
 #include "screens/GameOverScreen.h"
 #include "game/FruitSaveData.h"
 #include "hud/HUD.h"
@@ -80,7 +81,7 @@ ScoreControl::ScoreControl()
     , m_ScoreSmoothed(0.0f)
     , m_DisplayedScore(0)
     , m_HighscoreToShow(0)
-    , m_BannerStartTimer(-1.0f)
+    , _pad8C(-1.0f)
     , m_ScalePulse(1.0f)
     , m_DrawPosX(0.0f)
     , m_DrawPosY(0.0f)
@@ -96,6 +97,14 @@ ScoreControl::ScoreControl()
 
     // Load hud_fruit.tex into m_FruitDigitTex (+0xF8)
     m_FruitDigitTex = TextureManager::LoadLocalisedTexture("hud_fruit.tex");
+    // Load score.tex into m_ScoreIconTex (+0xA0) — the "SCORE" wordmark that
+    // appears above the digits during game-over (PreDraw Section D quad).
+    // Load new_best_score.tex into m_HighscoreBannerTex (+0xA4) — the "NEW
+    // BEST!" banner shown when the run beats the saved highscore (Section E).
+    // Earlier port only loaded hud_fruit.tex, so Section D/E quads were
+    // gated out by IsValid() and the SCORE wordmark never rendered.
+    m_ScoreIconTex        = TextureManager::LoadLocalisedTexture("score.tex");
+    m_HighscoreBannerTex  = TextureManager::LoadLocalisedTexture("new_best_score.tex");
 
     for (int i = 0; i < 16; i++) m_DigitAlpha[i] = 0.0f;
 
@@ -145,12 +154,13 @@ void ScoreControl::Reset() {
     m_LayerFlags = 1 << m_PlayerIdx;
 }
 
-// Skip @ 0x001581a0 — restore from save
+// ASM-verified: 2026-05-14T00:00 binary @ 0x001581a0 (re-analyst)
+// +0x4C (game->pSaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
+// Prior port incorrectly tested game->pauseFlag (engine pause flag) instead.
 void ScoreControl::Skip() {
     m_DisplayedScore = GetCurrentScore(m_PlayerIdx);
     Game* game = Game::GetInstance();
-    // if game-over flag set, force banner active
-    if (game && game->pauseFlag) {
+    if (game && game->pSaveData && game->pSaveData->newBestThisGame != 0) {
         m_BannerScaleTime = 1.0f;
     }
 }
@@ -179,7 +189,7 @@ void ScoreControl::Update(float dt) {
     if (digitsActive > 15) digitsActive = 15;
     m_DigitCount = digitsActive;
 
-    if (game->gameMode == 1 /* ASM-verified: == 1 at 0x001585A8 */) {
+    if (game->gameMode == Mortar::GAME_MODE_COMBO /* ASM-verified: == 1 at 0x001585A8 */) {
         if (digitsActive == m_LastDigitCount) {
             for (int i = 0; i < digitsActive; i++) {
                 m_DigitAlpha[i] += 6.0f * dt;
@@ -225,7 +235,7 @@ void ScoreControl::Update(float dt) {
     }
 
     int   mult     = GetScoreMultiplyer(0);
-    float baseRate = (game->gameMode == 2) ? 10.0f : 1.0f;  // gameMode==2 = Arcade
+    float baseRate = (game->gameMode == Mortar::GAME_MODE_ARCADE) ? 10.0f : 1.0f;
     float correction = (currentScore < 0) ? -0.6f : 0.6f;   // DAT_001588a4/a8
     float catchup  = ((float)currentScore + correction - m_ScoreSmoothed) * 0.1f;  // DAT_001588b0
     float maxStep  = (float)mult * 0.3f * baseRate;          // DAT_001588ac
@@ -240,7 +250,7 @@ void ScoreControl::Update(float dt) {
     if (m_DisplayedScore > prevDisplay) {
         // Binary: bonus-count-up SFX gate (Arcade end-of-game animation only).
         if (s_SfxCooldown <= 0.0f &&
-            game->gameMode == 2 &&
+            game->gameMode == Mortar::GAME_MODE_ARCADE &&
             game->pGameOverScreen != nullptr &&
             game->pGameOverScreen->m_State > 0 &&
             game->pGameOverScreen->m_Timer > 0.0f) {
@@ -287,14 +297,34 @@ void ScoreControl::Update(float dt) {
         m_DrawPosX = pos.x + 24.0f;
         m_DrawPosY = pos.y;
         m_DrawPosZ = pos.z;
-        // wave-mode: recentre score banner. binary @ 0x00158b00..0x00158b70
-        // Shift so score zooms toward (-160 - measW*0.5, +80, 0) absolute.
+        // wave-mode: recentre score banner. binary @ 0x001589f0..0x00158ac6
+        // Anchor: (-160 - measW*0.5, 80, 0) absolute. DAT_00158c58 = 80.0f.
+        // Earlier port used `pos.y + 80` which put the banner off-screen at
+        // y = +218 (Y range is [-160, +160], +Y up) and the score never
+        // rendered during game-over.
+        // TODO: 0x00158a64..0x00158ac6 -- binary implements a two-step lerp
+        //   first  : m_DrawPos = _Stack_98 - pos (= (200|t|, 0, 0))
+        //   then   : m_DrawPos += (anchor - m_DrawPos) * (1.0 - factor)
+        //            factor = m_ScalePulse * waveTimer * 0.25 (mid DAT
+        //            constant unverified -- could be 0.5 giving *0.25)
+        // Port snaps to the anchor (no zoom-in animation) for now.
         if (game->pFontNumbers.IsValid()) {
             char scoreBuf[32];
             snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
             float measW = game->pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
             m_DrawPosX = -160.0f - measW * 0.5f;
-            m_DrawPosY = pos.y + 80.0f;
+            m_DrawPosY = 80.0f;  // DAT_00158c58 absolute, NOT pos.y + 80
+            // TODO: visual check vs original Bada device — digit text
+            // visually drifts right of the SCORE wordmark centre because
+            // MeasureString returns advance-sum (glyph[0x1c]) while
+            // Font::DrawString positions the first glyph at scale *
+            // left-bearing (glyph[0x14]). Arithmetic is binary-faithful
+            // per asm-inspector @ 0x00158a64..0x00158a9e -- the binary
+            // suffers the same offset. If the original Bada renders
+            // perfectly centred, decode FontNumbers.fnt glyph[0x14] for
+            // digits; if non-zero, this is purely a font-asset artefact;
+            // a deliberate `// DIFFERS` compensation (subtract first-glyph
+            // bearing) would centre the visible bounds.
         }
     } else {
         m_LayerFlags = 1 << m_PlayerIdx;
@@ -383,8 +413,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             float drawX = m_DrawPosX + offsetX;
             float drawY = m_DrawPosY;
             float scale = 48.0f * m_ScalePulse * scaleX;
-            // binary alignment = 0x0d (CENTER|MIDDLE|BOTTOM). DIFFERS: was FONT_ALIGN_CENTER (0x01).
+            // binary alignment = 0x0d (CENTER|MIDDLE|BOTTOM).
             // binary @ 0x00158e1c section A FontDrawString alignment.
+            // CENTER (0x01) is INERT in the binary's Font::DrawString -- it
+            // produces lineOffset = 0, identical to LEFT (0x00). So this call
+            // effectively LEFT-anchors the digit string at (drawX, drawY),
+            // which keeps multi-digit scores to the right of the watermelon
+            // icon. See ASM-verified Font::DrawString @ 0x00198e44.
             game->pFontNumbers->DrawString(scale, 1.0f, 0.0f,
                 buf, Vec3(drawX, drawY, 0.0f), col, 0x0d);
         }
@@ -392,7 +427,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         // Section B: per-digit combo overlay.
         // ASM-verified gate at 0x00158FEC: gameMode == 1.
         // (See docs/structs/hud.md ScoreControl PreDraw Section B detail.)
-        if (game->gameMode == 1) {
+        if (game->gameMode == Mortar::GAME_MODE_COMBO) {
             // Texture rebind: pick FRUIT_INFO icon by clamped combo count.
             // Executed once before the per-digit loop.
             int comboCount = m_LastDigitCount;
@@ -452,14 +487,21 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         // Arcade x-mult font: binary loads game[+0x80] = pFontBlue2
         // ("fruit_ninja_numbers_blue2.fnt"). Verified 2026-05-09 (re-analyst
         // @ 0x00159238).
-        if (game->gameMode == 2) {
+        // ASM-verified: 2026-05-10 binary @ 0x00159240..0x0015925e (re-analyst).
+        // Anchor uses raw pos (m_Pos.x/y), NOT m_DrawPosX/Y:
+        //   X = pos.x - 18.0   (literal 0x41900000)
+        //   Y = pos.y - 52.0   (DAT_001593d4 = 0x42500000)
+        // Earlier port had (m_DrawPosX, m_DrawPosY + 30.0): off by 24+18=42 px
+        // horizontally (uses +24 drawPos offset AND wrong sign of -18) and
+        // 82 px vertically (sign-flipped 30 vs -52).
+        if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
             int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
             if (mult > 1 && game->pFontBlue2.IsValid()) {
                 char multBuf[16];
                 snprintf(multBuf, sizeof(multBuf), "x%d", mult);
                 Colour col(255, 255, 255, alpha);
                 game->pFontBlue2->DrawString(48.0f, 1.0f, 0.0f,
-                    multBuf, Vec3(m_DrawPosX, m_DrawPosY + 30.0f, 0.0f),
+                    multBuf, Vec3(pos.x - 18.0f, pos.y - 52.0f, 0.0f),
                     col, Mortar::FONT_ALIGN_CENTER);
             }
         }
@@ -498,11 +540,19 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             if (game->pFontMain.IsValid()) {
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
-                const char* label = Localisation::Get("BEST");  // key 0xB5
+                // ASM-verified: 2026-05-10 binary @ 0x001592c4..0x001592c8
+                // (re-analyst). Binary loads `movs r0, #0xb5` then BLX to
+                // GETSTRING(idx). Index 0xb5 (181) maps to LSTR_BEST which
+                // resolves to "BEST:" (with trailing colon) in english_us.
+                const char* label = Mortar::GETSTRING_CAST_0(LSTR_BEST);
                 float labelW  = game->pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
-                const Vec3 anchor(m_DrawPosX + cursorX + 28.0f,
-                                  m_DrawPosY - 28.8f,
+                // ASM-verified: 2026-05-10 binary @ 0x00159588..0x001596a6 (re-analyst).
+                // Anchor uses raw pos (m_Pos.x/y at +0x8/+0xc), NOT m_DrawPosX/Y
+                // at +0x94/+0x98. Earlier port pulled m_DrawPosX (= pos.x + 24)
+                // which shifted the BEST label/digit +24 px right of correct.
+                const Vec3 anchor(pos.x + cursorX + 28.0f,
+                                  pos.y - 28.8f,
                                   0.0f);
                 const int kAlignLabel = 0x02 | 0x04 | 0x08; // RIGHT|MIDDLE|BOTTOM (0x0E)
                 const int kAlignDigit = 0x01 | 0x04 | 0x08; // CENTER|MIDDLE|BOTTOM (0x0D)
@@ -518,9 +568,21 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                         /*rotZ=*/0.0f, iterLabel, anchor, col, maxWH,
                         kAlignLabel, /*z=*/0.0f, nullptr);
                 }
-                // Digit call: binary uses the wrapper @ 0x00199aa0 which
-                // hardcodes yLineFactor = 1.0. Route through port's flat
-                // wrapper.
+                // Digit call: binary @ 0x0015969c routes through PLT
+                // 0x000fd80c which resolves to Font::DrawString @ 0x00199aa0
+                // -- the wrapper, NOT a separate full overload.
+                // ASM-verified: 2026-05-10 binary @ 0x00199aa0 (asm-inspector).
+                // Caller emits s2=0.0 (DAT 0x001597c0) which the wrapper
+                // stores as anchor.z, NOT as yLineFactor. Internally, the
+                // wrapper hardcodes yLineFactor=1.0 (vmov.f32 s1,#0x3f800000
+                // at 0x00199b1c) when delegating to the Vec3-anchor overload
+                // at 0x00198e44. So the effective yLineFactor at the
+                // alignment compute is 1.0 -- which matches the port's flat
+                // wrapper that also forwards through the yLineFactor=1.0
+                // hardcoding path. Earlier port change to call the full
+                // overload with yLineFactor=0.0 was wrong: it bypassed the
+                // wrapper hardcode and produced a 9 px y mismatch vs the
+                // label.
                 game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                     hsBuf, anchor, col, kAlignDigit);
             }
@@ -586,7 +648,9 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
     }
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ScoreControl::AddMultipliyer -- auto stub
-void ScoreControl::AddMultipliyer(int) {}
-// ---- end AUTO-STUB MERGE ----
+// ASM-verified: 2026-05-13 binary @ 0x0015819c (re-analyst).
+// Body is a single `bx lr` -- returns r0 (= the int arg) unchanged. No
+// internal callers in the shipping binary; the multiplier path is owned
+// by ScoreMultiplyerBoard. Kept here only so the port's symbol table
+// matches the binary's exported names exactly.
+int ScoreControl::AddMultipliyer(int x) { return x; }
