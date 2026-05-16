@@ -104,24 +104,33 @@ void PauseScreen::PauseGame() {
     ts->pauseTransitionTimer = 0.25f;
 }
 
-// ASM-verified: 2026-05-03 binary @ 0x00168fb0 (re-analyst)
+// ASM-verified: 2026-05-17 binary @ 0x00168fb0 (re-analyst).
 // Binary @ 0x00168fb0 UnpauseGame():
-//   TaskState+0x10 (float) = 0.4f  -- post-unpause grace window
-//   TaskState+0x0C (byte) = 1      -- isPaused = 1 (resumed)
+//   Game+0x10 (float) = 0.4f  -- post-unpause input-freeze window
+//                                (read by SlashEntity::UpdateTouchDown to
+//                                short-circuit point ingestion; gates blade
+//                                collision via the existing m_NumPoints < 4
+//                                clause when no points are added)
+//   TaskState+0x0C (byte) = 1 -- isPaused = 1 (resumed)
+// Earlier port wrote 0.4f to TaskState+0x10 (pauseBombHitTimer); that was
+// a misidentification -- the real field is on Game (the same byte we call
+// bombHitTimer at Game+0x10, dual-purpose: bomb-hit freeze + unpause grace).
 void PauseScreen::UnpauseGame() {
     GameTaskState* ts = GetTaskState();
-    ts->pauseBombHitTimer = 0.4f;   // DAT_00168fcc
     ts->isPaused = 1;
 
-    // DIFFERS: binary's UnpauseGame does NOT write gameActiveFlag=0.
-    // The binary relies on PowerManager::GetState() returning non-zero when
-    // backgrounded, keeping canUpdate=false without touching gameActiveFlag.
-    // In the port PowerManager::GetState() always returns 0 (foreground),
-    // so gameActiveFlag is the sole gate. Writing 0 here mirrors the binary's
-    // effective behavior on resume: both gates become 0 and canUpdate=true.
-    // Re-RE the PauseGame/UnpauseGame path if a deeper clearing path is found.
     Game* game = Game::GetInstance();
-    if (game) game->gameActiveFlag = 0;
+    if (game) {
+        game->bombHitTimer = 0.4f;       // DAT_00168fcc, binary @ 0x168fb0
+        // DIFFERS: binary's UnpauseGame does NOT write gameActiveFlag=0.
+        // It relies on PowerManager::GetState() returning non-zero when
+        // backgrounded, keeping canUpdate=false without touching the flag.
+        // Port's PowerManager::GetState() always returns 0 (foreground),
+        // so gameActiveFlag is the sole gate to GameUpdate's `active`
+        // wholesale skips of ActorManager / SplatEntity. Writing 0 here
+        // is the port-side mirror for the binary's effective resume.
+        game->gameActiveFlag = 0;
+    }
 }
 
 // -------------------------------------------------------------------------
