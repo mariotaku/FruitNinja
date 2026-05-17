@@ -104,14 +104,13 @@ bool AboutScreen::s_bContentLoaded = false;
 
 // -----------------------------------------------------------------------
 // GetVersionString — returns a C string for the version number.
-// Binary: GetVersionString @ 0x0010d594 reads a GOT-relative string object.
-// Port: return a hardcoded placeholder; replace when version tracking is wired.
-// DIFFERS: binary reads a runtime-constructed version string from GOT/BSS;
-//          port uses a literal until version infrastructure is implemented.
+// Binary: Game::SelfVersion @ 0x0010d9ec returns the literal at .rodata
+// 0x001B9938 ("1.5.1"). GetVersionString @ 0x0010d594 reads the same
+// constant via the MortarGame::m_VersionStr slot populated by SetVersion.
 // -----------------------------------------------------------------------
 static const char* GetVersionString()
 {
-    return "1.5.4";
+    return "1.5.1";
 }
 
 // -----------------------------------------------------------------------
@@ -409,17 +408,14 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         r->DrawQuad(Colour(255, 255, 255, 255));
         m_TexHaiku->UnSet();
 
-        // ---- Font draws (version text) ----
-        // Binary draws two strings via Font::DrawString:
-        //   1. A Utf8String at draw_base + DAT_0012f6cc (= RTTI garbage in this build)
-        //   2. GetVersionString() — the game version number
-        // Both at pos = Vec3(FONT_X(-200), yDrawn + FONT_TEXT_Y_OFFSET(97) - 10, 0).
-        // Font comes from game.pFontMain (+0x54). Scale = 1.0f, maxWidth = FONT_MAX_W(200).
-        // Colour = RGB(0x74, 0x5D, 0x3C) = warm brown.
-        //
-        // Port: skip draw #1 (the Utf8String is RTTI garbage in the Bada binary;
-        //   the actual haiku text lives in haikus.tex as a pre-rendered image).
-        //   Draw #2 (version string) uses Font::DrawString when pFontMain is available.
+        // ---- Font draws (version text "V1.5.1") ----
+        // Binary draws two Font::DrawString calls back-to-back:
+        //   1. "V" — 1-char literal at .rodata 0x001BAE40 (drawn at FONT_X)
+        //   2. GetVersionString() — "1.5.1" at .rodata 0x001B9938 (drawn
+        //      immediately right of "V" via MeasureString("V") * scale)
+        // Both share scale=14.0f, maxWidth=FONT_MAX_W(200), colour
+        // RGB(0x74,0x5D,0x3C). pFontMain comes from game (+0x54).
+        // Net displayed text: "V1.5.1".
         if (game.pFontMain.IsValid()) {
             // Reset the world matrix before Font::DrawString. The haiku
             // quad draw above left a Scale(texW+1, texH+1, 1) on the
@@ -430,17 +426,25 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
             mm.GetWorldStack().Reset();
             mm.UploadModelViewOnly();
 
-            // ASM-verified: 2026-04-30 binary @ 0x0012f5ae (asm-inspector).
-            // Scale = 14.0f (inline VFP immediate vmov.f32 s3,#0x41600000).
-            // Both the haiku and version DrawString calls share this scale.
-            // The binary draws version immediately after the haiku string
-            // on the same line; port skips the haiku (RTTI garbage in
-            // shipped binary) so we just place the version at FONT_X.
+            // ASM-verified: 2026-05-17 binary @ 0x0012f49a..0x0012f4f0 (re-analyst).
+            // Scale = 14.0f (vmov.f32 s3,#0x41600000 inline immediate).
             const float versionScale = 14.0f;
-            const Vec3 fontPos(FONT_X, yDrawn + FONT_TEXT_Y_OFFSET - 10.0f, 0.0f);
+            const float fontY = yDrawn + FONT_TEXT_Y_OFFSET - 10.0f;
             const Colour fontColour(0x74, 0x5D, 0x3C, 255);
+
+            const char* kVerPrefix = "V";
             game.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
-                                       GetVersionString(), fontPos,
+                                       kVerPrefix,
+                                       Vec3(FONT_X, fontY, 0.0f),
+                                       fontColour, Mortar::FONT_ALIGN_LEFT);
+
+            // Binary caches MeasureString("V") * 14 in BSS via __cxa_guard
+            // one-time init; port recomputes each frame (same numeric result).
+            // DIFFERS: port skips the one-time-init guard.
+            const float prefixW = game.pFontMain->MeasureString(kVerPrefix) * versionScale;
+            game.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
+                                       GetVersionString(),
+                                       Vec3(prefixW - FONT_MAX_W, fontY, 0.0f),
                                        fontColour, Mortar::FONT_ALIGN_LEFT);
         }
 
