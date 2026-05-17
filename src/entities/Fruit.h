@@ -23,9 +23,10 @@ class SlashEntity;
 //   +0x1c: Mortar::SmartPtr<Model> m_OptB    (other optional variant)
 //   +0x20: ???
 //
-// Port simplified to just the two pieces actually rendered by the
-// sliced-fruit draw path. Outline/extras deferred.
+// Port simplified to the two half-pieces and the whole-fruit model.
+// Outline/extras deferred.
 struct FruitModelInfo {
+    Mortar::SmartPtr<Mortar::Model> m_Whole;    // <name>_single.mmd (whole fruit)
     Mortar::SmartPtr<Mortar::Model> m_HalfA;   // piece 1
     Mortar::SmartPtr<Mortar::Model> m_HalfB;   // piece 2
 };
@@ -77,13 +78,6 @@ public:
     float    m_ScaleAnim;                  // +0x110  (init=0.0)
     uint8_t  m_bDrawWhole;                 // +0x114  (init=0)
     uint8_t  _pad_115[3];                  // +0x115..+0x117  -> total sizeof = 0x118
-
-    // Port-only fields (no binary slot; appended after 0x118 boundary on
-    // host build only so binary layout above is unaffected under __bada__).
-#ifndef __bada__
-    // Model loaded via MeshManager (shared/cached)
-    Mortar::SmartPtr<Mortar::Model> m_Model;
-#endif
 
     Fruit();
     ~Fruit();

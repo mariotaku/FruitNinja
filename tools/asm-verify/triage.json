@@ -6833,8 +6833,8 @@
   },
   "_ZN5Fruit4InitEPvlP8_Vector3IfE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Fruit method stub/divergence. Score 57433/26700.",
-    "score": 57833,
+    "reason": "Fruit::Init remaining divergence after removing per-instance model-load block. Score improved from 57433 to 43804/26700. Remaining diff is Init body field assignments vs binary; further RE needed.",
+    "score": 43804,
     "max_score": 26700,
     "decided_at": "2026-05-16T00:00Z"
   },
