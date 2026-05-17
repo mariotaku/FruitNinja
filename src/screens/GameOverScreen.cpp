@@ -788,17 +788,22 @@ void GameOverScreen::CreateQuitButton() {
     Game* game = Game::GetInstance();
     if (!game || !game->hud) return;
 
-    // ASM-spec for binary @ 0x001412e4 (re-analyst):
+    // ASM-spec for binary @ 0x001412e4 (re-analyst 2026-05-18):
     //   pos               = (80, -96, 0)               [DAT_00141428..30]
     //   tex               = g_QuitTexSP @ GOT+0x73fc   [quit.tex, loaded in LoadContent]
     //   clickDelegate     = &QuitCallback
-    //   fruitType         = **(int**)(GOT+DAT_00141440) = *(int*)g_FruitInfoArray
-    //                       = first 4 bytes of FRUIT_INFO[0].m_Name reinterpreted
-    //                       as int (`0x6C707041` = "Appl" at runtime). Per
-    //                       asm-inspector 2026-05-12 this looks like a binary
-    //                       bug (intended to pass an index but accidentally
-    //                       double-dereferenced a FRUIT_INFO* global). Port
-    //                       uses literal 0 to match retry button intent.
+    //   fruitType         = **(int**)(GOT+DAT_00141440) -- the GOT chain
+    //                       0x00007060 -> 0x001f3190 -> g_pFruitInfoArrayHead,
+    //                       deref to first 4 bytes of FRUIT_INFO[0].m_Name
+    //                       = "Appl" little-endian = 0x6C707041 = 1818849377.
+    //                       Intentional "huge sentinel" idiom: any printable
+    //                       4-char string read as int exceeds the bomb
+    //                       threshold (FruitInfo_GetCount() = 23), so
+    //                       MenuButton::Init's `(count <= fruitType)` check
+    //                       routes ActorManager::Add to type 1 = BOMB.
+    //                       (Earlier port comment labelled this a "binary bug"
+    //                       and substituted 0, which silently turned the Quit
+    //                       bomb into an Apple -- user-reported symptom.)
     //   globalCenterVec   = HUD::g_GlobalCenterVec
     //   deletedDelegate   = HUD::g_DeleteControlDelegate
     // 3 quit-only post-init steps (binary 0x00141420..0x00141438) are
@@ -819,7 +824,11 @@ void GameOverScreen::CreateQuitButton() {
     m_pQuitBtn->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked),
-        /*fruitType=*/0,  // DIFFERS: binary passes *(int*)g_FruitInfoArray (binary bug); port uses 0 to match retry
+        // Binary passes 1818849377 ("Appl" reinterpreted as int); any value
+        // >= FruitInfo_GetCount() triggers MenuButton::Init's bomb branch.
+        // Use the threshold directly -- equivalent runtime semantics, more
+        // readable, won't break if the fruit set changes.
+        /*fruitType=Bomb*/ FruitInfo_GetCount(),
         globalCenter,
         Mortar::Delegate0<void>()  // see CreateRetryButton -- HUD-delete delegate unwired
     );
