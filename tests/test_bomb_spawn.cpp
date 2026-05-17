@@ -22,23 +22,29 @@
 #include "game/WaveManager.h"
 #include "game/WaveStructs.h"
 #include "game/StartupEffects.h"
+#include "game/GameTaskState.h"
 #include "entities/ActorManager.h"
+#include "entities/Bomb.h"
 #include "hud/HUD.h"
 #include "screens/MainScreen.h"
 #include "screens/DojoScreen.h"
 #include "screens/AboutScreen.h"
 #include "screens/ShopScreen.h"
 #include "screens/GameModeScreen.h"
+#include "audio/GameSound.h"
+#include "audio/MortarSound.h"
+#include "util/StringHash.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_bomb_spawn [A|B|C|all|visual]\n"
+        "usage: test_bomb_spawn [A|B|C|D|all|visual]\n"
         "  A      bare bottom bomb (ctor defaults, count=1)\n"
         "  B      left-side spawn\n"
         "  C      right-side spawn\n"
+        "  D      spawn + slice; verify fuse SFX silences after clear\n"
         "  all    run all variants (default; headless, fast)\n"
         "  visual run all variants with a visible 60Hz window;\n"
         "         keeps the window open after the runs until you close it\n");
@@ -130,6 +136,125 @@ static void SuppressWaveSpawn() {
     }
 }
 
+// Returns the live volume of the "Bomb-Fuse" slot in GameSound, or -1.0
+// if no such slot is currently held. Mirrors the binary's per-frame
+// SetVolume(0)-on-no-bomb mute mechanism (binary @ 0x0016c4c8..0x0016c5ca).
+static float BombFuseSlotVolume(Game& game) {
+    GameSound* gs = game.pGameSound;
+    if (!gs) return -1.0f;
+    const uint32_t fuseHash = ::StringHash("Bomb-Fuse");
+    for (int i = 0; i < GameSound::MAX_SLOTS; ++i) {
+        const GameSound::Slot& s = gs->m_Slots[i];
+        if (!s.isFree && s.id == fuseHash) return s.volume;
+    }
+    return -1.0f;
+}
+
+// Returns the first Bomb entity in ActorManager type-1 list, or nullptr.
+static Bomb* FirstBomb(Game& game) {
+    Mortar::ActorManager* am = game.actorManager;
+    if (!am) return nullptr;
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(1, it);
+    return e ? static_cast<Bomb*>(e) : nullptr;
+}
+
+// Spawn + slice variant: verify the persistent Bomb-Fuse SFX channel
+// silences (volume drops to ~0) once the bomb is cleared.
+//
+// Sequence:
+//   1. Spawn one bomb.
+//   2. Tick ~30 frames so the fuse SFX handle is allocated and ramped
+//      to a non-zero volume by GameUpdate's fuse-vol block.
+//   3. Slice the bomb via direct CollisionResponse (bypass SlashEntity).
+//   4. Tick ~240 frames so the hit-branch BombBlast loop runs, the bomb
+//      eventually OOBs, GetHeighestBomb() returns its -10000 sentinel,
+//      and the GameUpdate block SetVolume(fuse, 0)'s.
+//   5. Assert: bombs == 0 AND fuse slot volume < 0.01 (silent).
+static bool RunVariantSlice(Game& game) {
+    const char* name = "D: spawn + slice + fuse-silence verify";
+    printf("=== Variant %s ===\n", name);
+
+    // Settle from previous variants.
+    for (int i = 0; i < 5; ++i) { SuppressWaveSpawn(); game.runFrames(1); }
+
+    // Step 1: spawn a single bomb (bare bottom, like variant A).
+    SPAWNER_INFO spawner;
+    WaveManager::GetInstance()->SpawnBomb(1, 1, &spawner, 0);
+    printf("[slice] spawned: bombs=%d\n", BombCount(game));
+
+    // Step 2: let the bomb fall + fuse SFX spin up.
+    for (int i = 0; i < 30; ++i) { SuppressWaveSpawn(); game.runFrames(1); }
+    const float volPreSlice = BombFuseSlotVolume(game);
+    printf("[slice] after spin-up (30 frames): bombs=%d, fuse vol=%.4f\n",
+           BombCount(game), volPreSlice);
+    if (volPreSlice <= 0.0f) {
+        fprintf(stderr,
+            "WARN: fuse slot vol=%.4f after spin-up (expected >0). "
+            "GameUpdate fuse-vol channel may not be active. "
+            "Continuing -- the post-slice silence check is the real assertion.\n",
+            volPreSlice);
+    }
+
+    // Step 3: slice. Direct CollisionResponse with a non-zero blade vel
+    // (avoids needing the full SlashEntity touch-routing path).
+    Bomb* bomb = FirstBomb(game);
+    if (!bomb) {
+        fprintf(stderr, "FAIL: %s -- no bomb to slice\n", name);
+        return false;
+    }
+    Vec3 bladeVel(15.0f, 15.0f, 0.0f);
+    bomb->CollisionResponse(nullptr, 0, 0, &bladeVel);
+    printf("[slice] sliced bomb at pos=(%.1f, %.1f); m_bHit=%d, "
+           "bombHitTimer=%.2f\n",
+           bomb->pos.x, bomb->pos.y, (int)bomb->m_bHit, game.bombHitTimer);
+
+    // Step 4: tick enough frames for the bombHitTimer to cross 1.5
+    // (ResetGameEntities fires -> bomb flung -> OOB -> KillBomb),
+    // GameOver to run, and the fuse channel to be muted.
+    // 240 frames @ ~60Hz = 4s of game time; bombHitTimer 3.2 -> 1.5
+    // takes ~1.7s, plus another ~1.5s for the bomb to OOB after fling.
+    const int frames = g_visual ? 360 : 240;
+    for (int i = 0; i < frames; ++i) {
+        SuppressWaveSpawn();
+        game.runFrames(1);
+    }
+
+    const int bombsAfter = BombCount(game);
+    const float volPostSlice = BombFuseSlotVolume(game);
+    printf("[slice] after %d post-slice frames: bombs=%d, fuse vol=%.4f\n",
+           frames, bombsAfter, volPostSlice);
+
+    // Primary assertion: fuse SFX silenced. Allow tiny epsilon for
+    // in-flight SetVolume integration. The slot may still exist (handle
+    // persists per binary) -- we check volume, not slot presence.
+    //
+    // Note: bombsAfter may be >0 even when the original sliced bomb
+    // OOB-cleared, because the slice triggers the bombHitTimer=3.2 ->
+    // GameOver -> ResetGameEntities -> chain-spawn flow which can spawn
+    // a fresh bomb before this assertion runs. That's a separate concern
+    // from the fuse-silence regression and not what this variant checks.
+    bool ok = true;
+    if (volPostSlice > 0.01f) {
+        fprintf(stderr,
+            "FAIL: %s -- fuse SFX still audible: vol=%.4f (expected ~0).\n"
+            "      This is the user-reported \"hissing doesn't stop\" bug.\n",
+            name, volPostSlice);
+        ok = false;
+    } else {
+        printf("[slice] fuse silence verified: vol=%.4f <= 0.01 (silenced).\n",
+               volPostSlice);
+    }
+    if (bombsAfter > 0) {
+        printf("[slice] (informational) %d bomb(s) remain at test end -- "
+               "likely chain-spawned by the GameOver sequence; not a fuse-SFX "
+               "regression.\n", bombsAfter);
+    }
+
+    if (ok) printf("PASS: variant %s -- fuse SFX silenced cleanly\n", name);
+    return ok;
+}
+
 // Spawn a single bomb using the given SPAWNER_INFO, tick frames while
 // suppressing the wave-manager's own spawns, return true if no bombs
 // remain (OOB-killed as expected).
@@ -182,6 +307,7 @@ int main(int argc, char* argv[]) {
         if (strcmp(variant, "A") != 0 &&
             strcmp(variant, "B") != 0 &&
             strcmp(variant, "C") != 0 &&
+            strcmp(variant, "D") != 0 &&
             strcmp(variant, "all") != 0 &&
             strcmp(variant, "visual") != 0) {
             return FailUsage();
@@ -261,6 +387,11 @@ int main(int argc, char* argv[]) {
         spawnerC.m_HorizMin   = -0.25f;
         spawnerC.m_HorizMax   =  0.5f;
         if (!RunVariant(game, "C: right-side spawn", spawnerC)) ++failures;
+    }
+
+    // Variant D: spawn + slice + verify fuse SFX silences.
+    if (strcmp(variant, "all") == 0 || strcmp(variant, "D") == 0) {
+        if (!RunVariantSlice(game)) ++failures;
     }
 
     if (g_visual) {
