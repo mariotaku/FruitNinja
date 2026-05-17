@@ -4,6 +4,7 @@
 #include "HUDLayer.h"
 #include "asset/TextureManager.h"
 #include "Game.h"
+#include "game/GameMode.h"
 #include "game/WaveManager.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
@@ -532,11 +533,21 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     {
         Game* g = Game::GetInstance();
         if (g) {
-            // TODO: gate on FailureEnabled() && !IsMultiplayer() per binary
-            // @ 0x0015208e once those queries are RE'd. For now, treat as the
-            // FailureEnabled() == true (non-Zen single-player) branch -- the
-            // markers are GameInit-spawned only in modes that miss-track.
-            drawPos.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+            // Binary @ 0x0015208e:
+            //   if (FailureEnabled() && !IsMultiplayer())
+            //       drawPos.y -= 3.0f * pos.y * |m_TransitionTimer|;
+            //   else
+            //       drawPos.y -= 3.0f * pos.y;     // Zen / MP: parked off-screen
+            // In Zen mode the stored pos.y is still negative (-10/-13/-18) so
+            // the constant shift moves the marker UP past the +160 clamp and
+            // off the top of the viewport, hiding it for the whole game.
+            const bool failureEnabled =
+                Mortar::FailureEnabled(g->gameMode);  // IsMultiplayer() unported -> false
+            if (failureEnabled) {
+                drawPos.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+            } else {
+                drawPos.y -= 3.0f * pos.y;
+            }
         }
     }
 
