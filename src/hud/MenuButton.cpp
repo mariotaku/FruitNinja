@@ -782,35 +782,53 @@ void MenuButton::Update(float dt) {
 
         if (m_TouchSlot == -1) {
             // Not tracking — scan for a new touch inside the rect.
+            // ASM-verified: 2026-05-17 binary @ 0x0014ea48..0x0014ea7e (re-analyst).
+            // Binary's toggle gate is PRESS-EDGE only: after acquiring a slot
+            // via TouchInRegion, it calls IsTouchDown(slot). If the slot's
+            // phase is 2 (press-edge / just-pressed) AND m_FruitType<0, fire
+            // m_ClickCallback immediately. Otherwise release the slot without
+            // firing. This rejects slice-drags that pass through the rect --
+            // their phase is 1 (held) by the time TouchInRegion latches.
             int slot = touch.GetTouchInRegion(left, right, bottom, top, -1);
             if (slot >= 0) {
-                // Latch the slot. Phase will be -1 (just pressed) on the first
-                // frame of a new touch; the binary fires the callback on the
-                // press edge for toggle buttons (FruitType < 0). Regular button
-                // buttons wait for release.
                 m_TouchSlot = slot;
                 m_bHighlighted = 1;
                 UpdateTouchPosition();
+                if (m_FruitType < 0) {
+                    // Toggle button (Resume / Sound / Music / Quit /
+                    // Retry / etc.) — true tap-only behaviour. Fire on
+                    // press-edge if visible; otherwise release slot.
+                    if (Mortar::IsTouchDown(slot) == 2 && m_bVisible) {
+                        if (m_ClickCallback) m_ClickCallback();
+                        // Slot stays latched until release; binary falls
+                        // through the lower release-wait path on subsequent
+                        // frames but the callback won't re-fire (phase moves
+                        // to held=1, then released=0 and slot clears below).
+                    } else {
+                        // Not press-edge -> drag-through; reject the slot
+                        // so a later true tap in the same region can latch.
+                        m_TouchSlot = -1;
+                        m_bHighlighted = 0;
+                    }
+                }
             }
         } else {
             // Tracking — refresh position and check for release.
             UpdateTouchPosition();
-            // phase >= 1 means released. Fire callback if release was inside rect.
-            // Only toggle buttons (m_FruitType < 0, e.g. sound/music toggles)
-            // trigger on tap-release. Fruit/bomb buttons (Play / Dojo / Quit)
-            // require a slash-through instead — their callback fires via the
-            // rising-edge hit detection above (fruits) or Bomb::m_HitCallback
-            // (bombs), matching the "slice to play" gameplay intent.
+            // phase >= 1 means released. For non-toggle buttons (fruit-type
+            // entity buttons not used in the shipped binary's toggles) the
+            // binary calls TouchReleased() on inside-release. For toggles
+            // (m_FruitType<0) the callback has already fired on press-edge
+            // above, so TouchReleased here is a no-op for them.
             if (m_TouchPhase >= 1.0f) {
                 const bool insideOnRelease =
                     m_TouchX >= left && m_TouchX <= right &&
                     m_TouchY >= bottom && m_TouchY <= top;
                 // ASM-verified: 2026-05-06T17:50 binary @ 0x0014e6a4 (asm-inspector)
-                // Binary calls TouchReleased() on inside-release, which fires
-                // both m_ClickCallback (for toggles only, m_FruitType<0) AND
-                // m_DeletedCallback unconditionally. Earlier port fired only
-                // m_ClickCallback directly and skipped m_DeletedCallback.
-                if (insideOnRelease) {
+                // TouchReleased fires m_DeletedCallback unconditionally; for
+                // toggles m_ClickCallback was already nulled or never set on
+                // the release path.
+                if (insideOnRelease && m_FruitType >= 0) {
                     TouchReleased();
                 }
                 m_TouchSlot = -1;

@@ -165,8 +165,11 @@ void ScrollingMenu::Update(float /*dt*/) {
         int touchState = IsTouchDown(slot);
 
         if (touchState == 2) {
-            // Finger is HELD (state==2) — valid acquire.
-            // Binary: IsTouchDown(slot) == 2 fires acquire; state==1 (just-pressed) does NOT.
+            // PRESS-EDGE (state==2 = just-pressed, one frame) — valid acquire.
+            // Binary: IsTouchDown(slot) == 2 fires acquire; state==1 (held) does NOT.
+            // (Comment previously inverted "held"/"just-pressed" labels --
+            //  re-verified 2026-05-17, binary @ 0x00169144 returns 2 for the
+            //  press-edge phase float 2.0f and 1 for held phase float 1.0f.)
             ScrollingMenuItem* hitItem = Collide(slot);
             m_DragTargetIdx = -1;  // field77_0xc0 = -1
 

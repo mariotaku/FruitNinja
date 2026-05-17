@@ -177,9 +177,9 @@ private:
 //          Binary @ 0x001954b4 / 0x001691cc.
 int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot);
 
-// IsTouchDown @ 0x00169144
-// Returns 0=up, 1=just-pressed, 2=held for given slot.
-// DIFFERS: takes slot index; binary equivalent is GetTouchPos(touchId,...).
+// IsTouchDown @ 0x00169144 (asm-verified 2026-05-17)
+// Returns 0=up, 1=held, 2=press-edge (just-pressed, one frame) for given slot.
+// Matches binary signature verbatim (int slot -> int 0/1/2).
 int IsTouchDown(int slot);
 
 } // namespace Mortar

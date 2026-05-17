@@ -298,16 +298,25 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
     return -1;
 }
 
-// IsTouchDown @ 0x00169144
-// Returns 0=up, 1=just-pressed (phase==-1), 2=held (phase==0).
-// DIFFERS: takes slot index; binary equivalent is GetTouchPos(touchId,...).
+// IsTouchDown @ 0x00169144 (asm-verified 2026-05-17 re-analyst)
+// Binary reads phase float at states[slot]+0xa8 and returns:
+//   phase float == 2.0f -> 2  (press-edge, just-pressed, one frame only)
+//   phase float == 1.0f -> 1  (held)
+//   else                -> 0  (up/inactive)
+// Port maps its int phase enum to the same return values:
+//   port phase == -1 (just-pressed) -> 2
+//   port phase ==  0 (held)         -> 1
+//   port phase >= 1 (released/free) -> 0
+// MenuButton::Update toggle gate depends on `IsTouchDown == 2` to fire on
+// press-edge only and reject slice-drags through the button. Signature
+// matches binary verbatim (takes slot index, returns int 0/1/2).
 int IsTouchDown(int slot) {
     const Touch& t = Touch::GetInstance();
     if (slot < 0 || slot >= Touch::MAX_SLOTS) return 0;
     int ph = t.states1[slot].phase;
     if (ph >= 1)  return 0;
-    if (ph == -1) return 1;
-    return 2;
+    if (ph == -1) return 2;
+    return 1;
 }
 
 } // namespace Mortar
