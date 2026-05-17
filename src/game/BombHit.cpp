@@ -305,7 +305,7 @@ void ResetGameEntities(bool killAll) {
             // indefinitely after a slice. User-reported as "smoke doesn't
             // disappear after bomb destroyed".
             if (bomb->m_pEmitter) {
-                Mortar::PSPParticleManager::GetInstance().ClearEmitter(bomb->m_pEmitter);
+                PSPParticleManager::GetInstance().ClearEmitter(bomb->m_pEmitter);
                 bomb->m_pEmitter = nullptr;
             }
             bomb->Chuck(0.0f);
