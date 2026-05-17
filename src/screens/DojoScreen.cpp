@@ -63,12 +63,6 @@ static const Vec3 POS_DOJO_BG(-180.0f, -47.0f, 0.0f);
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
-static Vec3 TexSizeOf(const Mortar::SmartPtr<Mortar::Texture>& tex,
-                      float defW, float defH) {
-    if (tex.IsValid())
-        return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
-    return Vec3(defW, defH, 1.0f);
-}
 
 // --- Static texture storage (binary: GOT-relative globals) ---
 Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexDojo;
@@ -192,7 +186,6 @@ void DojoScreen::Update(float dt) {
                 const int bombFruitType = FruitInfo_GetCount();
                 m_pPlayButton = new MenuButton();
                 m_pPlayButton->m_Texture = (s_TexBackIcon);
-                m_pPlayButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pPlayButton->Init(POS_BACK_BUTTON,
                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                                     bombFruitType, Vec3(0, 0, 0), nullptr);
@@ -215,7 +208,6 @@ void DojoScreen::Update(float dt) {
                 const int shopFruitType = Fruit::FruitType("pineapple", false);
                 m_pShopButton = new MenuButton();
                 m_pShopButton->m_Texture = (s_TexShop);
-                m_pShopButton->size      = TexSizeOf(s_TexShop, 64.0f, 64.0f);
                 m_pShopButton->Init(POS_SHOP_BUTTON,
                                     Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
                                     shopFruitType, Vec3(0, 0, 0), nullptr);
@@ -256,7 +248,6 @@ void DojoScreen::Update(float dt) {
                 const int aboutFruitType = Fruit::FruitType("plum", false);
                 m_pAboutButton = new MenuButton();
                 m_pAboutButton->m_Texture = (s_TexAbout);
-                m_pAboutButton->size      = TexSizeOf(s_TexAbout, 64.0f, 64.0f);
                 m_pAboutButton->Init(POS_ABOUT_BUTTON,
                                      Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
                                      aboutFruitType, Vec3(0, 0, 0), nullptr);

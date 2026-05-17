@@ -144,12 +144,6 @@ bool ShopScreen::s_bContentLoaded = false;
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
-static Vec3 TexSizeOf(const Mortar::SmartPtr<Mortar::Texture>& tex,
-                      float defW, float defH) {
-    if (tex.IsValid())
-        return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
-    return Vec3(defW, defH, 1.0f);
-}
 
 // ---------------------------------------------------------------------------
 // ShopScreen::LoadContent @ 0x0015cb08
@@ -795,7 +789,6 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton = new MenuButton();
                 // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
                 m_pBuyButton->m_Texture = (s_TexBackIcon);
-                m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
                 m_pBuyButton->Init(POS_BACK_BUTTON,
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
@@ -884,7 +877,6 @@ void ShopScreen::Update(float dt) {
                             // DIFFERS: binary uses *(GameTask + slot+0x14); port
                             // uses select_item.tex (same slot the binary assigns in SetSelected).
                             m_pEquipButton->m_Texture = (s_TexSelectItem);
-                            m_pEquipButton->size      = TexSizeOf(s_TexSelectItem, 64.0f, 64.0f);
                             m_pEquipButton->Init(POS_EQUIP_BUTTON,
                                 Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
                                 equipFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
@@ -1003,7 +995,6 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton = new MenuButton();
             // DIFFERS: binary uses *(GameTask + 0x17c); port uses back_icon.tex.
             m_pBuyButton->m_Texture = (s_TexBackIcon);
-            m_pBuyButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
