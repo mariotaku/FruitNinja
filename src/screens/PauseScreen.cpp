@@ -216,8 +216,10 @@ static void EndRetryLevel() {
         sd->m_GameOverField1 = -1;                     // 0x16a246 [+0x11c]
     }
 
-    // TODO: 0x16a24a -- coin baseline re-snapshot: m_LevelStartCoins = m_Coins
-    //   binary writes [game+0x28] = [game+0x20]; confirm pSaveData field layout.
+    // Binary @ 0x0016a24a: m_CoinsAtGameStart re-snapshot so the retried
+    // run's "YOU JUST EARNT %i COINS" delta starts from zero.
+    // (game+0x28) = (game+0x20).
+    game->m_CoinsAtGameStart = game->m_CoinsBalance;
 
     FN::ResetGameEntities(false);                      // 0x16a24e
     BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)

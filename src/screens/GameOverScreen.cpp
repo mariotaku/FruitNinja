@@ -23,6 +23,7 @@
 #include "engine/audio/MortarSound.h"
 #include "asset/TextureManager.h"
 #include "math/MathUtil.h"
+#include "math/Random.h"
 #include "math/Vec3.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
@@ -754,17 +755,13 @@ void GameOverScreen::RetryCallback() {
         m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
     if (game->m_TransitionTimer <= 0.989945f) return;
     CancelHUDProgressionTimer();
-    // TODO: 0x0014105c -- PRNG reseed block at .bss 0x0026C8B0 (the global
-    // RNG state struct shared with SpawnFruit/SpawnBomb/RandFloat). Per
-    // re-analyst 2026-05-13:
-    //   prng[0]  = game->m_RngSeed       (game+0x194)
-    //   prng[1]  = 0
-    //   prng[2..3] = {0x6c078965, 0x5d588b65}  (Marsaglia LCG stream constants)
-    //   prng[4]  = 0x00269ec3                 (counter init)
-    //   prng[5]  = 0
-    // Provides deterministic-replay: retried run reproduces identical fruit
-    // sequence. Needs the port's RNG facility exposed (no Reseed entry-point
-    // yet) -- defer until WaveManager / Math RNG plumbing lands.
+    // Binary @ 0x001410a8..0x001410d2: inlined SeedGlobalRng equivalent --
+    // same 6-word PRNG reseed that PauseScreen::RetryGameCallback bl's at
+    // 0x00153fbc. Seeded from Game+0x194 (the port's m_FrameTimer field --
+    // binary reuses the frame counter bits as RNG entropy on retry).
+    // Constants in the inlined version (0x6c078965, 0x5d588b65) are
+    // Knuth/MMIX LCG multipliers, not Marsaglia.
+    Math::SeedGlobalRng((uint32_t)game->m_FrameTimer);
     // Binary @ 0x001410d6: FruitSaveData::ClearCombo(pSaveData)
     if (game->pSaveData) game->pSaveData->ClearCombo();
     // Defunct: MP scene-alpha bypass -- IsMultiplayer always false in port
