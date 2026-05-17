@@ -105,11 +105,6 @@ Mortar::SmartPtr<Mortar::Texture> GameModeScreen::s_TexBackIcon;
 static GLuint TexIdOf(const Mortar::SmartPtr<Mortar::Texture>& tex) {
     return tex.IsValid() ? tex->m_TexId : 0;
 }
-static Vec3 TexSizeOf(const Mortar::SmartPtr<Mortar::Texture>& tex, float defW, float defH) {
-    if (tex.IsValid())
-        return Vec3((float)tex->m_Width, (float)tex->m_Height, 1.0f);
-    return Vec3(defW, defH, 1.0f);
-}
 
 // ===================================================================
 // Matches GameModeScreen::LoadContent @ 0x13e330
@@ -227,7 +222,6 @@ void GameModeScreen::CreateControls() {
     // Binary fruit type: FruitInfo_GetCount() (bomb threshold index).
     m_pBackButton = new MenuButton();
     m_pBackButton->m_Texture = (s_TexBackIcon);
-    m_pBackButton->size      = TexSizeOf(s_TexBackIcon, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pBackButton;
         m_pBackButton->Init(POS_BACK,
@@ -249,7 +243,6 @@ void GameModeScreen::CreateControls() {
     // Binary: ResetTutePos is called on THIS button (not Zen).
     m_pClassicButton = new MenuButton();
     m_pClassicButton->m_Texture = (s_TexClassic);
-    m_pClassicButton->size      = TexSizeOf(s_TexClassic, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pClassicButton;
         m_pClassicButton->Init(POS_CLASSIC,
@@ -275,7 +268,6 @@ void GameModeScreen::CreateControls() {
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
     m_pZenButton = new MenuButton();
     m_pZenButton->m_Texture = (s_TexMode2);
-    m_pZenButton->size      = TexSizeOf(s_TexMode2, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pZenButton;
         m_pZenButton->Init(POS_ZEN,
@@ -296,7 +288,6 @@ void GameModeScreen::CreateControls() {
     // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
     m_pArcadeButton = new MenuButton();
     m_pArcadeButton->m_Texture = (s_TexArcadeMode);
-    m_pArcadeButton->size      = TexSizeOf(s_TexArcadeMode, 64.0f, 64.0f);
     {
         MenuButton* btn = m_pArcadeButton;
         m_pArcadeButton->Init(POS_ARCADE,
