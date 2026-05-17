@@ -50,7 +50,7 @@ void SpeedControl::Update(float dt) {
     Game* g = Game::GetInstance();
     if (!g) return;
 
-    if (g->pauseFlag != 0) return;
+    if (g->levelTransitionFlag != 0) return;
 
     if (m_DisplayedSpeed == 0.0f) {
         m_SoundVolume = 0.0f;

@@ -20,10 +20,10 @@ void GameOver(int endReason, float endScore, int endParam) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // re-entry guard: pauseFlag at g_GameData+0x05
-    if (game->pauseFlag != 0) return;
+    // re-entry guard: levelTransitionFlag at g_GameData+0x05
+    if (game->levelTransitionFlag != 0) return;
 
-    game->pauseFlag = 1;
+    game->levelTransitionFlag = 1;
 
     WaveManager::GetInstance()->ClearUnspawned();
 

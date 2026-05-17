@@ -236,30 +236,30 @@ void MainScreen::Update(float dt) {
         //   if (-cameraTransition > 0.999) {                 // gate fully zoomed in
         //       game->field_0x28 = game->field_0x20;
         //       WaveManager::Reset(true);
-        //       game->pauseFlag = 1;
+        //       game->levelTransitionFlag = 1;
         //   }
         //   cameraTransition *= 0.75;
         //   if (|cameraTransition| < 0.001) {                // DAT_0014bb74
-        //       game->pauseFlag = 0;
+        //       game->levelTransitionFlag = 0;
         //       cameraTransition = 0;
         //       m_State = STATE_CAMERA_FADE (0x11);
         //   }
         if (-game.m_TransitionTimer > 0.999f && !m_bGameStartReset) {
             WaveManager::GetInstance()->Reset(true);
             m_bGameStartReset = true;
-            // Binary @ 0x0014bb6c: game->pauseFlag = 1 (suppresses
+            // Binary @ 0x0014bb6c: game->levelTransitionFlag = 1 (suppresses
             // WaveManager spawn pump until the camera-settle clear below).
             // game->field_0x28 = field_0x20 still TODO (field not in port struct).
-            game.pauseFlag = 1;
+            game.levelTransitionFlag = 1;
         }
         game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
         if (fabsf(game.m_TransitionTimer) < 0.001f) {
             game.m_TransitionTimer = 0.0f;
             m_State = STATE_CAMERA_FADE;
             m_bGameStartReset = false;
-            // Binary @ 0x0014bb78: clear pauseFlag once the camera
+            // Binary @ 0x0014bb78: clear levelTransitionFlag once the camera
             // animation has settled into gameplay.
-            game.pauseFlag = 0;
+            game.levelTransitionFlag = 0;
         }
 
         // Shared LAB_0014c166 pos.y animation (binary uses cameraTransition
@@ -428,7 +428,7 @@ void MainScreen::Update(float dt) {
             game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
             if (game.m_TransitionTimer > -0.001f) {
                 game.m_TransitionTimer = 0.0f;
-                game.pauseFlag = 0;
+                game.levelTransitionFlag = 0;
             }
         }
         break;

@@ -85,7 +85,7 @@ void PrepareForLevelStart() {
     printf("[FN::PrepareForLevelStart] firing -> WaveManager::Reset(false)\n");
     WaveManager::GetInstance()->Reset(false);
     Game* game = Game::GetInstance();
-    if (game) game->pauseFlag = 1;
+    if (game) game->levelTransitionFlag = 1;
 }
 
 } // namespace FN

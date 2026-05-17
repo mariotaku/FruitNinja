@@ -202,7 +202,7 @@ void GameInit(unsigned long) {
         TutorialControl* tc = new TutorialControl();
         tc->Init();
         game->pTutorialCtrl = tc;
-        game->pauseFlag      = 1;      // g_GameData+0x05 = 1
+        game->levelTransitionFlag      = 1;      // g_GameData+0x05 = 1
         game->m_TransitionTimer = -1.0f; // g_GameData+0x0c = -1.0f
     }
 
@@ -348,7 +348,7 @@ void GameUpdate(float dt, bool active) {
     FN::UpdateBombHit(prevBombTimer);
 
     // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
-    if (prevBombTimer > 1.5f && game->bombHitTimer <= 1.5f && !game->pauseFlag) {
+    if (prevBombTimer > 1.5f && game->bombHitTimer <= 1.5f && !game->levelTransitionFlag) {
         FN::GameOver(-1, -1.0f, -1);
     }
 

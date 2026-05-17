@@ -64,7 +64,7 @@ void GamePreInitialise() {
     game->taskStateIndex = 0;
     game->gameActiveFlag = 0;
     game->gameMode = 0;
-    game->pauseFlag = 0;
+    game->levelTransitionFlag = 0;
     game->m_TransitionTimer = 0;
     game->bombHitTimer = 0;
     game->dt = 0;

@@ -139,7 +139,10 @@ void TimeControl::Update(float dt) {
     // Countdown logic (gated by pause/count-up). Note: must NOT early-return
     // -- binary's LAB_00162818 pos.y re-anchor runs unconditionally for any
     // timed mode (binary @ 0x001624a4 falls through pause/count-up branches).
-    if (!game->pauseFlag) {
+    // Pause gate uses gameActiveFlag (Game+0x02 -- canonical port pause
+    // indicator set by PauseScreen::PauseGame). levelTransitionFlag (Game+0x05) is a
+    // separate gameover-suppression latch, not the user-pause flag.
+    if (game->gameActiveFlag == 0) {
         if (m_CountdownStart <= 0.0f) {
             // count-up mode (Zen). binary @ 0x001624a4 count-up branch.
             m_TimeRemaining += dt;
