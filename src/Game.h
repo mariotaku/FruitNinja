@@ -2,10 +2,47 @@
 #define GAME_H
 
 //
-// Game : MortarGame (singleton, size = 0x104 for the C++ object)
+// Game : MortarGame (singleton)
 //
-// In the original binary, gameplay state lives in a separate g_GameData global
-// (0x608 bytes). For the port, gameplay fields are kept here for convenience.
+// =============================================================================
+// PORT-SIDE MERGE NOTE -- READ BEFORE TRUSTING FIELD OFFSETS
+// =============================================================================
+//
+// In the original binary, "the game" is split across TWO independent globals:
+//
+//   1. g_MortarGame  (Ghidra: `Game`, ~260 bytes) -- engine singleton.
+//      Holds vtable, m_versionString / m_formattedVersion, locale string,
+//      hardware string, m_bFastHardware, m_licensedState, m_bInitialized.
+//      Boot-time init, persistent across gameplay sessions.
+//
+//   2. g_GameData    (Ghidra: `GameContext`, 0x608 / 1544 bytes) -- per-session
+//      gameplay state. Holds taskStateIndex, pausedFlag, gameMode,
+//      levelTransitionFlag, retryFlag, score, coin balance, HUD pointer, font
+//      slots, etc. Reset on every Quit-to-menu. Accessed via raw GOT offset
+//      from gameplay code; does NOT inherit from MortarGame in the binary.
+//
+// They live at DIFFERENT addresses with DIFFERENT lifetimes. The binary keeps
+// them split because gameplay code has no business knowing the engine's locale
+// strings, and engine code has no business knowing the player's score.
+//
+// The port MERGES both into this single `Game` class for source-code
+// convenience: MortarGame base provides ~252 bytes of engine state, then the
+// g_GameData fields follow as direct members. This eliminates a two-singleton
+// dance at every call site but means:
+//
+//   * The "+0x00", "+0x02", "+0x05" etc. offsets on the g_GameData-block
+//     fields below are RELATIVE TO g_GameData (the binary's flat struct),
+//     NOT to the port's `Game` class. In port memory those fields actually
+//     live at sizeof(MortarGame) + N. Cross-reference with binary
+//     disassembly accordingly.
+//   * Struct layout diverges from the binary; asm-verify's cross-build
+//     excludes this merged struct from offset-equivalence checks.
+//   * If you ever need true binary fidelity (e.g. for a memory-dump-based
+//     debugger), the merge would have to be undone -- ~50 call sites would
+//     migrate from `game->pausedFlag` to `gameContext->pausedFlag`.
+//
+// See docs/structs/game.md for the full original g_GameData layout.
+// =============================================================================
 //
 
 // Analysed: 2026-04-25T12:00
