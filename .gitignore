@@ -57,3 +57,6 @@ tools/asm-verify/manifest.generated.toml
 
 # Ghidra MCP function-hash cache (moved to tmp/)
 function_hash_index.json
+
+# Claude Code scheduler lock
+.claude/scheduled_tasks.lock
