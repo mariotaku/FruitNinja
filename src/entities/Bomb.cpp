@@ -368,21 +368,21 @@ void Bomb::Update(float /*dt*/) {
                 m_Countdown -= gameDt;
             }
 
-            // Fuse SFX: plays once per frame across all bombs when any bomb's
-            // countdown crosses 0.2s downward. Gated by bFuseSfxFiredThisFrame
-            // (cleared in Bomb::Draw) and levelTransitionFlag==0.
+            // DIFFERS (port-side simplification): the binary @ 0x00172bd8
+            // fires a per-bomb "Bomb-Fuse" SFXPlay here (gated by
+            // bFuseSfxFiredThisFrame on Bomb global +0x08). The Bomb-Fuse
+            // wav loops indefinitely (loopStart=12736 in the .wav.pcm hdr)
+            // and the binary never explicitly stops these per-bomb slots --
+            // they accumulate over time as silent-when-no-bomb but the
+            // SetVolume-based mute lives in GameUpdate (see GameInit.cpp's
+            // Bomb-Fuse block). Port omits this redundant call because we
+            // don't currently slot-age stale looping SFX; the GameUpdate
+            // channel is the dominant audible fuse hiss anyway. Removing
+            // this fixes the user-reported "fuse hiss doesn't stop after
+            // explosion" by ensuring the only Bomb-Fuse handle is the one
+            // GameUpdate volume-modulates to 0 when no bombs are present.
             static const float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
-            if (m_Countdown <= FUSE_SFX_THRESHOLD &&
-                prevCountdown > FUSE_SFX_THRESHOLD &&
-                !g_bombData.bFuseSfxFiredThisFrame &&
-                game->levelTransitionFlag == 0) {
-                if (game->pGameSound) {
-                    // Binary also calls SoundManager::PreLoadSound first;
-                    // our SFX system plays on demand, no preload needed.
-                    game->pGameSound->SFXPlay("Bomb-Fuse", 1.0f, 1.0f);
-                }
-                g_bombData.bFuseSfxFiredThisFrame = 1;
-            }
+            (void)prevCountdown; (void)FUSE_SFX_THRESHOLD;
 
             if (m_Countdown > 0.0f) return;
 
@@ -812,6 +812,25 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
 // countPrespawn=false: count prespawn bombs (countdown > 0 and not yet hit) of any variant.
 // countPrespawn=true:  count bombs filtered by variant (no countdown filter).
 // ASM-verified: 2026-05-03 binary @ 0x00171250 (asm-inspector)
+// ASM-verified: 2026-05-18 binary @ 0x001712c8 (re-analyst).
+// Used by GameUpdate fuse-vol block. SP-only path: iterate ActorManager
+// type-1 bomb list, return max (pos.y + 160) across bombs whose
+// m_bMenuBombHit == 0. Returns -10000.0f sentinel when no qualifying
+// bomb exists -- caller treats `<= 0.0f` as "no audible bomb".
+float Bomb::GetHeighestBomb() {
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    if (!am) return -10000.0f;
+    float best = -10000.0f;
+    std::list<Mortar::Entity*>::iterator it;
+    for (Mortar::Entity* e = am->GetEntityFirst(1, it); e; e = am->GetEntityNext(1, it)) {
+        Bomb* b = static_cast<Bomb*>(e);
+        if (b->m_bMenuBombHit != 0) continue;
+        const float metric = b->pos.y + 160.0f;
+        if (metric > best) best = metric;
+    }
+    return best;
+}
+
 int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return 0;
