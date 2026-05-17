@@ -125,11 +125,15 @@ public:
     //   body is a no-op stub until those virtual methods are ported into InputDevice.
     void SendIndividualTouchCallbacks(InputDevice* dev);
 
-    // Port-specific: slot-indexed region scan (not in binary public API).
-    // DIFFERS: binary GetTouchInReigion(x,y,w,h) returns touchId; this shim
-    //          takes (left,right,bottom,top) and returns slot index for call
-    //          sites in MenuButton/ScrollingMenu pending their touchId migration.
-    //          Binary @ 0x001954b4.
+    // Port-side Tier A region-scan helper. Implements binary's free function
+    // TouchInRegion @ 0x001691cc (the slot-returning ABI used by every UI
+    // widget: MenuButton, CheckBox, ScrollingMenu, SliderControl,
+    // VerticalScroller, ComboBox). Returns slot index 0..7 (binary: 0..15)
+    // or -1. Caller pairs the result with IsTouchDown(slot) for phase.
+    //
+    // NOT the binary's same-named member `GetTouchInReigion @ 0x001954b4`
+    // (Tier B, touchId-returning) -- that API is DEAD in the binary (zero
+    // internal callers, only an unused public-symbol export). Don't conflate.
     int GetTouchInRegion(float left, float right, float bottom, float top,
                          int preferredSlot = -1) const;
 
@@ -142,9 +146,11 @@ public:
     void OnMoved   (uint32_t extId, float x, float y);
     void OnReleased(uint32_t extId);
 
-    // Port-specific: direct slot read (not in binary public API).
-    // Used by MenuButton/ScrollingMenu until those are ported to touchId model.
-    // DIFFERS: binary uses GetTouchPos(touchId, x, y) not slot-indexed GetSlot.
+    // Port-side Tier A slot read helper. Returns the TouchState* by slot
+    // index for callers that already track a slot (latched via the Tier A
+    // GetTouchInRegion above). Binary Tier B equivalent is
+    // GetTouchPos(touchId, &x, &y) @ 0x0019543c -- but Tier B is only used
+    // by InputDeviceBada::Update; UI widgets use Tier A throughout.
     const TouchState* GetSlot(int slot) const;
     bool IsSlotDown(int slot) const;
 
@@ -160,9 +166,9 @@ public:
     uint32_t nextTouchId;            // +0x1d0 init 1
 
 private:
-    // Rotating cursor for ___UpdateInternal slot claim.
-    // DIFFERS: binary stores cursor in BSS global (GOT+0x80798); port uses struct member.
-    //          Behavior identical for singleton. Cosmetic.
+    // Rotating cursor for ___UpdateInternal slot claim. Binary stores this
+    // in a BSS global at GOT+0x80798; port uses a struct member -- identical
+    // behaviour since Touch is a singleton, cosmetic-only.
     int m_slotCursor;
 
 };
@@ -170,11 +176,12 @@ private:
 // ---------------------------------------------------------------------------
 // Free functions matching binary helpers.
 
-// TouchInRegion @ 0x001691cc
-// Scans all slots for a touch inside [x0..x1] x [y0..y1].
-// DIFFERS: binary GetTouchInReigion takes (x,y,w,h); this free function uses
-//          port's (left,right,bottom,top) convention for existing call sites.
-//          Binary @ 0x001954b4 / 0x001691cc.
+// TouchInRegion @ 0x001691cc -- Tier A slot-returning helper used by every
+// UI widget (MenuButton, CheckBox, ScrollingMenu, SliderControl,
+// VerticalScroller, ComboBox). Scans all slots for a touch inside the rect.
+// Port uses (left, right, bottom, top) instead of binary's (x, y, w, h)
+// because every call site already computes edges from pos +/- halfSize;
+// numerically equivalent.
 int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot);
 
 // IsTouchDown @ 0x00169144 (asm-verified 2026-05-17)

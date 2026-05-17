@@ -222,10 +222,12 @@ void Touch::SendIndividualTouchCallbacks(InputDevice* /*dev*/) {
     //       dev->ButtonPressed(code, 8, 1.0, 0, 0, dev)                 // up
 }
 
-// Port-specific: slot-indexed region scan.
-// DIFFERS: binary GetTouchInReigion(x,y,w,h) returns touchId; this shim
-//          takes (left,right,bottom,top) and returns slot index for MenuButton/ScrollingMenu.
-//          Binary @ 0x001954b4.
+// Tier A slot-returning region scan. Mirrors binary's free function
+// TouchInRegion @ 0x001691cc (the API actually used by UI widgets).
+// NOT to be confused with binary's same-class GetTouchInReigion @ 0x001954b4
+// which returns touchId -- that Tier B method is dead in the binary (no
+// internal callers; only used externally by InputDeviceBada::Update which
+// reaches into Touch via GetMostRecentTouch / GetTouchPos directly).
 int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
                              int preferredSlot) const {
     if (preferredSlot >= 0 && preferredSlot < MAX_SLOTS) {
@@ -261,8 +263,10 @@ void Touch::OnReleased(uint32_t extId) {
     __UpdateInternal(extId, false, 0.0f, 0.0f, 0.0f);
 }
 
-// Port-specific: direct slot read.
-// DIFFERS: binary uses GetTouchPos(touchId, x, y) not slot-indexed GetSlot.
+// Tier A slot read helper. Returns TouchState* by slot index for callers
+// that already track a slot (latched via Tier A GetTouchInRegion). Binary
+// Tier B equivalent GetTouchPos(touchId, &x, &y) is used only by
+// InputDeviceBada::Update -- UI widgets use the slot model throughout.
 const TouchState* Touch::GetSlot(int slot) const {
     if (slot < 0 || slot >= MAX_SLOTS) return 0;
     return &states1[slot];
@@ -276,10 +280,11 @@ bool Touch::IsSlotDown(int slot) const {
 // ---------------------------------------------------------------------------
 // Free functions.
 
-// TouchInRegion @ 0x001691cc
-// DIFFERS: binary GetTouchInReigion takes (x,y,w,h); this free function uses
-//          port's (left,right,bottom,top) convention for existing call sites.
-//          Binary @ 0x001954b4 / 0x001691cc.
+// TouchInRegion @ 0x001691cc -- Tier A slot-returning helper. Used by every
+// UI widget Update() in the binary (MenuButton, CheckBox, ScrollingMenu,
+// SliderControl, VerticalScroller, ComboBox). Port uses (left, right,
+// bottom, top) instead of binary's (x, y, w, h) -- numerically equivalent
+// since all call sites compute edges from pos +/- halfSize.
 int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
     Touch& t = Touch::GetInstance();
     if (hint_slot >= 0 && hint_slot < Touch::MAX_SLOTS) {
