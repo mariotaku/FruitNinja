@@ -719,17 +719,23 @@ void SlashEntity::Update(float dt) {
     // scroll list (so taps don't slice fruits behind it).
     const bool menuDragActive = (SlashEntity::s_ModPowerMask & 0x40u) != 0u;
 
-    // DIFFERS: port-specific gate for during-pause slice suppression.
-    // 3 RE passes (2026-05-17) confirmed the binary does NOT suppress
-    // slicing during the pause overlay itself -- the only pause-related
-    // mechanism is the 0.4s post-unpause freeze via bombHitTimer
-    // (covered by bombHitActive above). Bada's OS-level touch routing
-    // for modal overlays likely intercepts touches before SlashEntity
-    // sees them, but the SDL port has no equivalent so the binary's
-    // observable "no slicing during pause" doesn't happen for us.
-    // Port-side extension: gate on pausedFlag too. Trail-building
-    // (UpdatePoints / RebuildGeometry) stays unconditional so the
-    // visible blade tracks the finger; only collision is suppressed.
+    // Note: the binary has NO pause gate inside SlashEntity itself.
+    // Slicing during pause is suppressed STRUCTURALLY in the binary:
+    //   - GameTaskUpdate @ 0x0010a5d4 forces `active = false` when
+    //     Game->pausedFlag != 0.
+    //   - GameUpdate @ 0x0016c378 only calls ActorManager::Update on
+    //     the active branch -- so Fruit/Bomb collision tests never
+    //     run while paused.
+    //   - SlashEntity::Update keeps running with real dt; the trail
+    //     builds and fades normally, just has nothing to hit.
+    // Earlier RE pass speculated about "Bada OS-level touch routing"
+    // intercepting touches during pause -- that was wrong, the
+    // PauseScreen is just an in-game UI element; touches still reach
+    // SlashEntity in both binary and port.
+    //
+    // Port-side defense (NOT in binary): also short-circuit our own
+    // collision loop on pausedFlag. Redundant if ActorManager::Update
+    // is properly gated above; kept as belt-and-braces.
     const bool gamePaused = game && game->pausedFlag;
 
     // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
