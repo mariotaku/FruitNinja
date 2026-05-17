@@ -374,14 +374,23 @@ void GameUpdate(float dt, bool active) {
     FN::UpdateCriticalFlash(dt);
 
     if (active) SplatEntity::UpdateActiveSplats(dt);
-    // Binary @ 0x16c378 -- frozen branch fires Update(0) + PostUpdate(0) per
-    // SlashEntity. Active branch is handled by ActorManager::Update above
-    // (SlashEntity is now a type-3 actor driven through the pool like the binary).
+    // ASM-verified: 2026-05-17 binary @ 0x0016c378 inactive branch (re-analyst).
+    // Binary calls SlashEntity::PreUpdate(0.0f) ONCE then loops 16x calling
+    // Update(scaledDt) + PostUpdate(scaledDt) with the REAL dt (not zero).
+    // Active branch is handled by ActorManager::Update above (SlashEntity is
+    // a type-3 actor driven through the pool like the binary).
+    //
+    // Earlier port passed 0.0f to Update/PostUpdate too, which froze the
+    // blade trail in place during pause -- user-visible "slice trail doesn't
+    // fade while paused" bug. Binary's real-dt path lets the trail age and
+    // decay normally; nothing slices because ActorManager::Update isn't
+    // running on the inactive branch.
     if (!active) {
+        // TODO: PreUpdate(0.0f) once SlashEntity::PreUpdate is exposed.
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) {
-                g_pSlashEntities[i]->Update(0.0f);
-                g_pSlashEntities[i]->PostUpdate(0.0f);
+                g_pSlashEntities[i]->Update(dt);
+                g_pSlashEntities[i]->PostUpdate(dt);
             }
         }
     }
