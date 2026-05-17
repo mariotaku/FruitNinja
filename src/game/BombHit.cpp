@@ -13,6 +13,7 @@
 #include "entities/Bomb.h"
 #include "entities/Fruit.h"
 #include "entities/SplatEntity.h"
+#include "particle/PSPParticleManager.h"
 #include "asset/TextureManager.h"
 #include "asset/Texture.h"
 #include "render/Renderer.h"
@@ -293,6 +294,20 @@ void ResetGameEntities(bool killAll) {
         if (e->entityType == 1) {
             // Bomb: reset chuck, fling off-screen.
             Bomb* bomb = static_cast<Bomb*>(e);
+            // DIFFERS: binary calls Bomb::Init via vtable+0x10 here which
+            // nulls m_pEmitter (and relies on its particle manager to decay
+            // the abandoned infinite-set emitter naturally). Port's
+            // PSPParticleManager keeps infinite-set emitters alive until
+            // explicit ClearEmitter (see PSPParticleManager.cpp:402-403 --
+            // bomb_smoke has TimeStop=0/PerSec=50, naturallyInfinite=true).
+            // So we must explicitly clear instead of leak-and-decay, or the
+            // smoke trail keeps puffing from the bomb's last position
+            // indefinitely after a slice. User-reported as "smoke doesn't
+            // disappear after bomb destroyed".
+            if (bomb->m_pEmitter) {
+                Mortar::PSPParticleManager::GetInstance().ClearEmitter(bomb->m_pEmitter);
+                bomb->m_pEmitter = nullptr;
+            }
             bomb->Chuck(0.0f);
             bomb->pos.y = OFFSCREEN_Y;
             bomb->vel.y = DRIFT_Y;
