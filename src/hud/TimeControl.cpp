@@ -126,72 +126,85 @@ void TimeControl::Update(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Hide for non-timed modes
+    // Hide for non-timed modes (early return — binary does the same).
     if (!IsTimedGame()) {
         m_LayerFlags = Mortar::HUD_LAYER_NONE;
         return;
     }
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
 
-    if (game->pauseFlag) return;
+    // Binary re-anchors pos.x at the top of the timed branch every frame.
+    pos.x = (480.0f - size.x) * 0.5f - 5.0f;
 
-    // count-up mode when m_CountdownStart <= 0. binary @ 0x001624a4 count-up branch.
-    if (m_CountdownStart <= 0.0f) {
-        m_TimeRemaining += dt;
-        return;
-    }
+    // Countdown logic (gated by pause/count-up). Note: must NOT early-return
+    // -- binary's LAB_00162818 pos.y re-anchor runs unconditionally for any
+    // timed mode (binary @ 0x001624a4 falls through pause/count-up branches).
+    if (!game->pauseFlag) {
+        if (m_CountdownStart <= 0.0f) {
+            // count-up mode (Zen). binary @ 0x001624a4 count-up branch.
+            m_TimeRemaining += dt;
+        } else {
+            m_TimeRemaining -= dt;
 
-    m_TimeRemaining -= dt;
+            // Capture colour before flash mutation for tick-tock gate.
+            uint8_t entryColourR = m_DrawColour.r;
 
-    // Capture colour before flash mutation for tick-tock gate.
-    uint8_t entryColourR = m_DrawColour.r;
+            // Colour tint bands as time runs low.
+            // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
+            // Thresholds: 3/6/11.
+            // binary @ 0x001624a4 flash section.
+            float t = m_TimeRemaining;
+            Colour tint(255, 255, 255, 255);
+            static const Colour RED_TINT(255, 100, 100, 255);
+            if (t < 3.0f) {
+                tint = (((int)(t * 8.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+            } else if (t < 6.0f) {
+                tint = (((int)(t * 4.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+            } else if (t < 11.0f) {
+                tint = (((int)(t * 2.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+            }
+            m_DrawColour = tint;
 
-    // Colour tint bands as time runs low.
-    // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
-    // Thresholds: 3/6/11.
-    // binary @ 0x001624a4 flash section.
-    float t = m_TimeRemaining;
-    Colour tint(255, 255, 255, 255);
-    static const Colour RED_TINT(255, 100, 100, 255);
-    if (t < 3.0f) {
-        // 8 Hz: ((int)(t*8.0)) & 1
-        tint = (((int)(t * 8.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-    } else if (t < 6.0f) {
-        // 4 Hz: ((int)(t*4.0)) & 1
-        tint = (((int)(t * 4.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-    } else if (t < 11.0f) {
-        // 2 Hz: ((int)(t+t)) & 1 = ((int)(t*2.0)) & 1
-        tint = (((int)(t * 2.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-    }
-    m_DrawColour = tint;
+            // Binary @ 0x00162732: tick-tock when colour band flipped this frame.
+            if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
+                m_DrawColour.r != entryColourR) {
+                static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80; first call -> "Time-tick"
+                s_TickTockToggle ^= 1;
+                const char* name = s_TickTockToggle ? "Time-tick" : "Time-tock";
+                if (game->pGameSound) {
+                    game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+                }
+            }
 
-    // Binary @ 0x00162732: tick-tock when colour band flipped this frame.
-    if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
-        m_DrawColour.r != entryColourR) {
-        static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80; first call -> "Time-tick"
-        s_TickTockToggle ^= 1;
-        const char* name = s_TickTockToggle ? "Time-tick" : "Time-tock";
-        if (game->pGameSound) {
-            // TODO: pass SFXDelegate when delegate API is ported
-            game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+            // Binary @ 0x00162818: persist for resume after suspend.
+            if (game->pSaveData) {
+                game->pSaveData->m_TimeRemainingSave = m_TimeRemaining;
+            }
+
+            // GameOver trigger: 0x001625be
+            if (m_TimeRemaining < 0.5f) {
+                FN::GameOver(-1, -1.0f, -1);
+                m_TimeRemaining = 0.0f;    // DAT_001627a0
+                // Reset combo on Arcade timeout -- binary @ 0x001625dc.
+                g_ComboCount  = 0;
+                g_LastSlasher = -1;
+                if (game->pGameSound) game->pGameSound->SFXPlay("time-up", 1.0f, 1.0f);
+            }
         }
     }
 
-    // Binary @ 0x00162818: persist for resume after suspend.
-    if (game->pSaveData) {
-        game->pSaveData->m_TimeRemainingSave = m_TimeRemaining;
+    // Binary @ LAB_00162818 -- pos.y re-anchor every timed frame based on
+    // camera transition. Non-MP branch:
+    //   tiltMix = 1.0 - |cameraTransition|
+    //   pos.y   = size.y * -2 * tiltMix + (2*size.y + 320) * 0.5
+    // For size.y=18 and stable in-game camera (transition=0), pos.y = 142.
+    // (Without this the ctor's static 164 left the countdown 22px too low.)
+    float camTilt = 0.0f;
+    if (game->mainScreen) {
+        camTilt = fabsf(game->mainScreen->GetCameraTransition());
     }
-
-    // GameOver trigger: 0x001625be
-    if (m_TimeRemaining < 0.5f) {
-        FN::GameOver(-1, -1.0f, -1);
-        m_TimeRemaining = 0.0f;    // DAT_001627a0
-        // Reset combo on Arcade timeout -- binary @ 0x001625dc (g_ComboCount = 0)
-        // and adjacent last-slasher write (0xFFFFFFFF = -1 sentinel).
-        g_ComboCount  = 0;
-        g_LastSlasher = -1;
-        if (game->pGameSound) game->pGameSound->SFXPlay("time-up", 1.0f, 1.0f);
-    }
+    const float tiltMix = 1.0f - camTilt;   // non-MP path; SameScreenMP unported
+    pos.y = size.y * -2.0f * tiltMix + (size.y * 2.0f + 320.0f) * 0.5f;
 }
 
 void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
