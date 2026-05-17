@@ -234,9 +234,11 @@ void BaseScreen::UpdateButtons(float dt) {
             // Lazy-create MenuButton from descriptor
             MenuButton* btn = new MenuButton();
             if (sb.m_tex.IsValid()) {
-                btn->m_Texture = sb.m_tex;
-                btn->size = Vec3((float)sb.m_tex->m_Width,
-                                 (float)sb.m_tex->m_Height, 1.0f);
+                // Binary passes texture via MenuButton ctor arg -> m_SecondaryTex.
+                // Init's fruitType<0 text-button branch reads m_SecondaryTex to
+                // auto-size m_TargetSize/size. m_Texture is set for Draw.
+                btn->m_SecondaryTex = sb.m_tex;
+                btn->m_Texture      = sb.m_tex;
             }
             if (sb.m_clickCb) {
                 btn->Init(sb.m_pos, sb.m_clickCb,

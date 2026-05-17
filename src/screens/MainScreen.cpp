@@ -818,20 +818,23 @@ void MainScreen::CreateToggles() {
 
     // Sound toggle: (216.0, 135.5, 0.0), fruitType=-1 (no fruit).
     // Size comes from the texture dimensions (TexSize fallback = 32×32).
+    // Binary @ 0x0014b278 (pre-switch toggle init): hitBounds passed to ctor as
+    // Vec3(TOGGLE_SIZE, TOGGLE_SIZE, 1.0) so MenuButton::Init's hitBounds path
+    // sets m_TargetSize directly. No post-Init m_TargetSize write.
     pSoundToggle = new MenuButton();
     pSoundToggle->m_Texture = (game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
-    pSoundToggle->size = TexSize(m_TexSoundOn, 32.0f, 32.0f);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
-        Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1, Vec3(0,0,0), nullptr);
+        Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1,
+        TexSize(m_TexSoundOn, 32.0f, 32.0f), nullptr);
     pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     game.hud->AddControl(pSoundToggle);
 
     // Music toggle: (176.0, 135.5, 0.0)
     pMusicToggle = new MenuButton();
     pMusicToggle->m_Texture = (game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
-    pMusicToggle->size = TexSize(m_TexMusicOn, 32.0f, 32.0f);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
-        Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1, Vec3(0,0,0), nullptr);
+        Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1,
+        TexSize(m_TexMusicOn, 32.0f, 32.0f), nullptr);
     pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
     game.hud->AddControl(pMusicToggle);
 }
@@ -845,9 +848,18 @@ void MainScreen::CreatePlayDojo() {
     // reported width/height.
     pPlayButton = new MenuButton();
     pPlayButton->m_Texture = (m_TexNewGame);
-    pPlayButton->size = TexSize(m_TexNewGame, 64.0f, 64.0f);
     pPlayButton->Init(POS_PLAY_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
+    // Binary @ 0x0014b782..0x0014b80c: Play button overrides m_TargetSize
+    // to (m_TexNewGame->GetWidth()+1, GetHeight()+1, 1.0) AFTER Init returns.
+    // Without this the fruit-branch compute (entity->scale * 200 = 150 for
+    // watermelon) makes the NEW GAME ring ~40% too small. Texture is 256x256
+    // so m_TargetSize = (257, 257, 1).
+    if (m_TexNewGame.IsValid()) {
+        pPlayButton->m_TargetSize.x = (float)(m_TexNewGame->m_Width  + 1);
+        pPlayButton->m_TargetSize.y = (float)(m_TexNewGame->m_Height + 1);
+        pPlayButton->m_TargetSize.z = 1.0f;
+    }
     // Binary MainScreen::Update @ 0x0014b278 case 0 does NOT explicitly write
     // +0x34 here; it relies on MenuButton::Init @ 0x0014ee40 having set
     // m_LayerFlags = 0x40 (HUD_LAYER_MENU_BG) for FruitType >= 0 buttons.
@@ -886,7 +898,6 @@ void MainScreen::CreatePlayDojo() {
     // "no shortcuts or abbreviations" rule.
     pDojoButton = new MenuButton();
     pDojoButton->m_Texture = (m_TexDojoIcon);
-    pDojoButton->size = TexSize(m_TexDojoIcon, 64.0f, 64.0f);
     pDojoButton->Init(POS_DOJO_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
         Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
@@ -896,6 +907,13 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     game.hud->AddControl(pDojoButton);
+
+    // Binary @ 0x0014b278 case 0 final block: post-Init scaling for Dojo button.
+    // DAT_0014bb68 = 0.9f (fruit scale), DAT_0014bb6c = 1.05f (ring scale).
+    if (pDojoButton->m_pFruitPiece) {
+        pDojoButton->m_pFruitPiece->scale = pDojoButton->m_pFruitPiece->scale * 0.9f;
+    }
+    pDojoButton->m_TargetSize = pDojoButton->m_TargetSize * 1.05f;
 }
 
 void MainScreen::CreateQuitButton() {
@@ -904,7 +922,6 @@ void MainScreen::CreateQuitButton() {
     // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
     pQuitBtn = new MenuButton();
     pQuitBtn->m_Texture = (m_TexQuit);
-    pQuitBtn->size = TexSize(m_TexQuit, 48.0f, 48.0f);
     // Binary: m_bRespondsToBackKey set to 1 BEFORE Init.
     pQuitBtn->m_bRespondsToBackKey = 1;
     // Binary: fruitType = *g_pFruitInfo = fruitCount (>= count → Bomb entity via MenuButton)

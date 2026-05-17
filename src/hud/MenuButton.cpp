@@ -205,20 +205,13 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_DeletedCallback = deletedCb;
     m_FruitType = fruitType;
     m_HitBoundsScale = hitBounds;
-    // TODO: 0x0014eede..0x0014eef2 — binary also overwrites `size` (this+0x20)
-    // from the same global as the tail's m_HitBoundsScale. Currently we trust
-    // the caller's pre-set `size`. Resolve the global to re-enable.
     // Binary @ 0x0014eea2..0x0014ef44: m_bHasHitArea = 0 < (|x| + |y|).
     // Sum-of-absolute-values so negative-coord hitBounds also count as
     // "has hit area" (the OR-of-positives form missed that case).
     m_bHasHitArea = (fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f;
-    // m_TargetSize is the "full size" the FadeCounter shrink curve
-    // multiplies against in MenuButton::Update (binary 0x0014e94?). If
-    // explicit hit bounds were passed use those; otherwise fall back to
-    // the button's own `size` (set by the caller from the texture
-    // dimensions). Without this, dojo sub-buttons whose hitBounds is
-    // (0,0,0) would shrink from zero to zero (invisible).
-    m_TargetSize = m_bHasHitArea ? hitBounds : size;
+    // Binary @ 0x0014ee40: m_TargetSize = hitBounds unconditionally.
+    // Later branches (entity-scale compute, text-button tex-size) may overwrite.
+    m_TargetSize = hitBounds;
     m_bVisible = 1;
     m_bInteractive = 1;
     m_bEnabled = 1;
@@ -302,34 +295,23 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                 m_RotationSpeed = ROT_SPEED_MIN + (float)(rand() % 40) / 10.0f;
                 if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
 
-                // Binary @ 0x0014f0f4..0x0014f184 — m_TargetSize derived from entity scale.
-                // Skipped when m_bHasHitArea (caller passed explicit hitBounds).
-                //
-                // DIFFERS: also skip when the caller pre-set `size` (non-zero).
-                // The binary's `m_TargetSize = entity->scale * 200.0f` produces
-                // values matched to the binary's FruitInfo scale storage. The
-                // port's FruitInfo stores m_Scale * 100 (e.g. watermelon = 75)
-                // and Fruit::Init does scale = m_Scale * 0.01 (line 180), so
-                // entity->scale ends up the same 0..1 range. BUT callers in
-                // Shop/Dojo/MainScreen pre-set `size = TexSizeOf(tex, 64, 64)`
-                // expecting m_TargetSize = size (the port's prior fallback).
-                // Skipping the binary compute when size is non-zero preserves
-                // those callers' intent. Only GameOverScreen retry/quit (which
-                // leave size=(0,0,0)) trigger the entity-scale compute.
-                bool callerSetSize = (size.x > 0.0f || size.y > 0.0f);
-                if (!m_bHasHitArea && !callerSetSize) {
+                // Binary @ 0x0014f0f4..0x0014f188: gate is `!m_bHasHitArea` only.
+                // `callerSetSize` was a port-side concept with no binary counterpart;
+                // removed. The binary's bomb/fruit size compute always runs when
+                // no explicit hitBounds were passed.
+                if (!m_bHasHitArea) {
                     if (entityType == 0) {
                         // Fruit branch: m_TargetSize = entity->scale * 200.0f
                         // DAT_0014f19c = 0x43480000 = 200.0f
                         m_TargetSize = e->scale * 200.0f;
                     } else {
-                        // Bomb branch: m_TargetSize = (BombSizeVec * 2.0f) * entity->scale
-                        // TODO: 0x001f4334 — confirm BombSizeVec source; if quit-ring
-                        // size mismatches binary, the writer of this vec is the next gap.
-                        Vec3 bombSize(56.0f, 56.0f, 56.0f);
-                        m_TargetSize.x = bombSize.x * 2.0f * e->scale.x;
-                        m_TargetSize.y = bombSize.y * 2.0f * e->scale.y;
-                        m_TargetSize.z = bombSize.z * 2.0f * e->scale.z;
+                        // Bomb branch: m_TargetSize = BombSizeVec * 2.0f * FruitInfo_GetBombSize()
+                        // = (1,1,1) * 2.0f * 55.0f = (110, 110, 110)
+                        // Binary @ 0x0014f156..0x0014f188: BombSizeVec at GOT+0x77CC.
+                        const float bombSize = FruitInfo_GetBombSize();
+                        m_TargetSize.x = 2.0f * bombSize;
+                        m_TargetSize.y = 2.0f * bombSize;
+                        m_TargetSize.z = 2.0f * bombSize;
                     }
                 }
             }

@@ -237,17 +237,13 @@ void AboutScreen::CreateBackButton()
     // the bomb-threshold (FruitInfo_GetCount()). Matches DojoScreen pattern.
     const int bombFruitType = FruitInfo_GetCount();
 
+    // Binary @ 0x0012f1a0..0x0012f242: caller does NOT pre-set size from
+    // texture dims. MenuButton::Init's bomb-branch writes:
+    //   m_TargetSize = (1,1,1) * 2 * FruitInfo_GetBombSize() = (110,110,110)
+    // which the post-Init *= 0.825 then scales to (90.75, 90.75, 90.75).
     m_pBackButton = new MenuButton();
-    // Wire the back-icon ring texture (binary reads game->field_0x17c).
-    // Without this the menu-button quad renders as an untextured square.
     if (s_TexBackIcon.IsValid()) {
         m_pBackButton->m_Texture = s_TexBackIcon;
-        m_pBackButton->size = Vec3(
-            (float)(s_TexBackIcon->m_Width  + 1),
-            (float)(s_TexBackIcon->m_Height + 1),
-            1.0f);
-    } else {
-        m_pBackButton->size = Vec3(65.0f, 65.0f, 1.0f);
     }
 
     m_pBackButton->Init(POS_BACK_BUTTON,
