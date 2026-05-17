@@ -31,6 +31,7 @@
 
 class PauseScreen;
 class HUDControl;
+namespace Mortar { class MortarSound; }
 
 // Per-task state struct (matches original GameTaskState at ~0x120 bytes)
 // See docs/structs/game.md "GameTask State" section.
@@ -84,6 +85,14 @@ struct GameTaskState {
     // TODO: writers not yet RE'd; suspect a HUD::QueueDeferredAdd helper.
     HUDControl* pDeferredControl;
 
+    // +0xD8: persistent looping "Bomb-Fuse" MortarSound* (binary
+    // @ 0x0016c4c8..0x0016c5ca, GameUpdate fuse-vol block). Lazily spawned
+    // on first frame with an active bomb; volume modulated every frame by
+    // (Bomb::GetHeighestBomb() / 100.0) * master vol. Muted (vol=0) when
+    // no bombs / paused / level transition. Never explicitly Released --
+    // the silent-loop matches the binary's behaviour.
+    Mortar::MortarSound* m_pBombFuseSound;
+
     // Binary @ 0x00231404 GameTaskState global pause fields.
     // These three fields are written by PauseGame() / UnpauseGame() free functions
     // (binary @ 0x00168f80 / 0x00168fb0) to a fixed-address global separate from gameObj.
@@ -129,7 +138,8 @@ struct GameTaskState {
           spawnParam4(4.0f,  0.1f, 1.0f),
           spawnParam5(0.1f,  0.1f, 0.1f),
           spawnParam6(0.1f,  0.1f, 0.1f),
-          pDeferredControl(nullptr) {}
+          pDeferredControl(nullptr),
+          m_pBombFuseSound(nullptr) {}
 };
 
 // State handler function types (match original function pointer table)

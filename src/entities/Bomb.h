@@ -157,6 +157,13 @@ public:
     // Sets m_SpawnTimer (blast interval) and activates the entity.
     static void SetHit(Bomb* b, float speed);
 
+    // Binary @ 0x001712c8 — float result. Used by GameUpdate to drive the
+    // looping "Bomb-Fuse" SFX volume. SP path returns pos.y + 160 of the
+    // visually-highest non-menu-hit bomb (filter: skip m_bMenuBombHit=1).
+    // Empty / all-filtered returns -10000.0f (sentinel; GameUpdate treats
+    // <= 0 as "no audible bomb"). Port omits the IsMultiplayer branch.
+    static float GetHeighestBomb();
+
     // Matches Bomb::MakeFat (0x00171d78). Bomb-multiplier-powerup upgrade:
     // scales up bomb and reduces speed. skipSpawnFx=false plays the spawn FX.
     void MakeFat(bool skipSpawnFx);

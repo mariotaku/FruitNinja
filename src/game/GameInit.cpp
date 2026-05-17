@@ -42,6 +42,8 @@
 #include "debug/DebugFlags.h"
 #include "UpdateMusic.h"
 #include "audio/GameSound.h"
+#include "audio/MortarSound.h"
+#include "entities/Bomb.h"
 #include "audio/SoundManager.h"
 #include "GameOver.h"
 #include "GameTaskInput.h"
@@ -406,6 +408,37 @@ void GameUpdate(float dt, bool active) {
     }
     if (game->hud) game->hud->Update(dt);
     if (game->pCamera) game->pCamera->UpdateCamera(dt);
+
+    // ASM-spec for bomb-fuse SFX (binary @ 0x0016c4c8..0x0016c5ca, GameUpdate):
+    //   metric = Bomb::GetHeighestBomb()   (binary @ 0x001712c8)
+    //   if (NoSFX || metric <= 0 || paused): mute existing handle (SetVolume 0)
+    //   else: lazy SFXPlay("Bomb-Fuse", vol=0, pitch=1) and store in
+    //         GameTaskState+0xD8; per-frame SetVolume((metric/100)*master).
+    // Bomb-Fuse wav loops forever (loopStart=12736); binary never explicitly
+    // Releases the handle -- silent-when-no-bomb is achieved via SetVolume(0).
+    {
+        GameTaskState* ts = GetTaskState();
+        GameSound* gs = game->pGameSound;
+        const bool noSfx  = (game->levelTransitionFlag != 0);
+        const bool paused = game->pausedFlag;
+        const float metric = Bomb::GetHeighestBomb();   // -10000 when no bomb
+        float vol;
+        Mortar::MortarSound* fuse;
+        if (noSfx || metric <= 0.0f || paused) {
+            fuse = ts->m_pBombFuseSound;
+            vol = 0.0f;
+        } else {
+            if (!ts->m_pBombFuseSound && gs) {
+                ts->m_pBombFuseSound = gs->SFXPlay("Bomb-Fuse", 0.0f, 1.0f);
+            }
+            fuse = ts->m_pBombFuseSound;
+            float t = metric / 100.0f;                  // GAME_BOMB_SFX_RANGE
+            if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+            const float master = gs ? gs->m_MasterVolume : 1.0f;
+            vol = t * master;
+        }
+        if (fuse) fuse->SetVolume(vol);
+    }
 
     // m_MenuReturnTimer ramp -- binary @ 0x0016c5fe..0x0016c626 (re-analyst
     // 2026-05-10). Vestigial in the shipped binary: nothing arms +0x1A0 to a
