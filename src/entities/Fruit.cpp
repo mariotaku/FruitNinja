@@ -333,6 +333,17 @@ void Fruit::Update(float dt) {
     // Update collision sphere center (z clamped to 0).
     if (m_Col) static_cast<ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
 
+    // ASM-verified: 2026-05-18 binary @ 0x00177f30..0x00177f42 (re-analyst).
+    // Pause-detach: when scaled dt is zero (paused or m_TimeScale==0),
+    // release the juice emitters so they stop tracking the fruit's
+    // position while frozen. Re-armed on next slice/SetTrailParticles.
+    const float dtScaled = dt * m_TimeScale;
+    if (dtScaled == 0.0f) {
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
+        if (m_pEmitter1) { pm.ClearEmitter(m_pEmitter1); m_pEmitter1 = nullptr; }
+        if (m_pEmitter2) { pm.ClearEmitter(m_pEmitter2); m_pEmitter2 = nullptr; }
+    }
+
     // Track juice emitters with the two halves so particles follow the
     // pieces instead of spraying from the original slice point. Matches
     // binary Fruit::Update @ 0x177680 tail section.
@@ -344,8 +355,6 @@ void Fruit::Update(float dt) {
     }
 
     // Lifetime counter tick — Update tail (binary @ 0x17a16+).
-    // dtScaled = dt * m_TimeScale (slo-mo multiplier).
-    const float dtScaled = dt * m_TimeScale;
     m_LifetimeCounter += (int)(1000.0f * dtScaled);
 }
 
@@ -789,6 +798,17 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     // + the same scale factor that Atan2Idx produces.
     const float rad = atan2f(bladeVel.x, bladeVel.y);
     m_SliceAngle   = (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
+
+    // ASM-verified: 2026-05-18 binary @ 0x00178454..0x00178466 (re-analyst).
+    // Clear any prior trail/juice emitters before allocating the slice-
+    // burst + persistent juice emitters below. Mirrors the pattern used
+    // by Release/KillFruit so special-fruit trails (from
+    // SetTrailParticles) don't leak when the fruit gets sliced.
+    {
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
+        if (m_pEmitter1) { pm.ClearEmitter(m_pEmitter1); m_pEmitter1 = nullptr; }
+        if (m_pEmitter2) { pm.ClearEmitter(m_pEmitter2); m_pEmitter2 = nullptr; }
+    }
 
     // Impact particle emitter — one-shot, rotated by the blade direction.
     // Uses FRUIT_INFO.m_NameHash (e.g. "apple") as the template lookup. The
