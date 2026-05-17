@@ -386,7 +386,17 @@ void GameUpdate(float dt, bool active) {
     // decay normally; nothing slices because ActorManager::Update isn't
     // running on the inactive branch.
     if (!active) {
-        // TODO: PreUpdate(0.0f) once SlashEntity::PreUpdate is exposed.
+        // Binary @ 0x0016c378 calls PreUpdate once (on the first valid
+        // SlashEntity) with dt=0 before the Update/PostUpdate loop. The
+        // dt=0 freezes the per-frame palette cycle / ghost ring tick
+        // while paused; only the per-instance Update/PostUpdate gets
+        // real dt to let the trail age and fade.
+        for (int i = 0; i < 16; ++i) {
+            if (g_pSlashEntities[i]) {
+                g_pSlashEntities[i]->PreUpdate(0.0f);
+                break;
+            }
+        }
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) {
                 g_pSlashEntities[i]->Update(dt);
