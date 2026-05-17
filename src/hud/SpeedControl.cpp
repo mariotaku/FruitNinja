@@ -4,6 +4,11 @@
 #include "hud/HUDLayer.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
+#include "engine/audio/GameSound.h"
+#include "engine/audio/MortarSound.h"
+#include "particle/PSPParticleManager.h"
+#include "game/WaveManager.h"
+#include "game/GameMode.h"
 
 // ctor @ 0x0016133c
 SpeedControl::SpeedControl()
@@ -45,41 +50,105 @@ SpeedControl::SpeedControl()
 // dtor @ 0x00161558 / 0x001615d4 / 0x00161650
 SpeedControl::~SpeedControl() {}
 
-// Update @ 0x00160dc4
+// ASM-verified: 2026-05-17 binary @ 0x00160dc4 (re-analyst)
+// Binary computes ducking + per-frame lerps for the Combo-Blitz speed
+// effect: master-volume duck (via GameSound::m_MasterVolume), looping
+// stream SFX gated on combo progression, fuse-style trail emitter
+// released on idle. HUDState one-shot flags (pulseTrigger/volSnapFlag)
+// at GOT+0x7c44 not ported -- both treated as 0 (skip mini-blocks).
+// The "Combo-Blitz-Backing-Light" looping sound is the constant SFX
+// name (.rodata @ 0x001bc258).
 void SpeedControl::Update(float dt) {
     Game* g = Game::GetInstance();
-    if (!g) return;
+    if (!g || !g->pGameSound) return;
+    GameSound* gs = g->pGameSound;
 
     if (g->levelTransitionFlag != 0) return;
 
+    float deltaTarget, volTarget;
     if (m_DisplayedSpeed == 0.0f) {
+        // Idle: release the speed-stream emitter and stream sound.
         m_SoundVolume = 0.0f;
-        // TODO: 0x00160e08 PSPParticleManager::ClearEmitter(m_pEmitter); m_pEmitter = nullptr;
+        if (m_pEmitter) {
+            PSPParticleManager::GetInstance().ClearEmitter(
+                static_cast<PSPParticleEmitter*>(m_pEmitter));
+            m_pEmitter = nullptr;
+        }
         m_Speed = 0.0f;
+        deltaTarget = 1.0f;
+        volTarget   = 0.0f;
     } else {
-        // Clamp displayed speed to [3, 20] and accumulate raw speed counter.
+        // Active: combo-blitz drives the ducking. progression is the
+        // wave-manager's bonus accumulator [0..1]; map [0.25..1.0]->[0..1].
+        if (g->gameMode == Mortar::GAME_MODE_ARCADE && g->levelTransitionFlag == 0) {
+            float p   = WaveManager::GetInstance()->GetComboBonusProgression(0);
+            float c01 = (p - 0.25f) / 0.75f;
+            if (c01 < 0.0f) c01 = 0.0f; else if (c01 > 1.0f) c01 = 1.0f;
+            float ha  = 2.0f * m_SmoothedAlpha;
+            if (ha < 0.0f) ha = 0.0f; else if (ha > 1.0f) ha = 1.0f;
+            deltaTarget = 1.0f + c01 * -0.2f;   // 1.0 -> 0.8 (master-vol duck)
+            volTarget   = c01 * ha;             // stream SFX volume
+        } else {
+            deltaTarget = 1.0f;
+            m_DisplayedSpeed = 0.0f;
+            volTarget   = 0.0f;
+        }
+        // RawSpeed wraps as uint16_t per binary (signed-short accumulator).
         float clamped = m_DisplayedSpeed;
         if (clamped < 3.0f)  clamped = 3.0f;
         if (clamped > 20.0f) clamped = 20.0f;
-        // Binary: signed-short wrapping accumulator (uint16_t wraps naturally).
         m_RawSpeed = (uint16_t)((float)m_RawSpeed + dt * 32760.0f * clamped * 0.25f);
     }
 
-    // Smooth alpha toward clamp(m_Speed * 1.333, 0, 1).
-    float target = m_Speed * 1.333f;
-    if (target < 0.0f) target = 0.0f;
-    if (target > 1.0f) target = 1.0f;
-    m_SmoothedAlpha += (target - m_SmoothedAlpha) * 0.1f;
+    // Smooth alpha toward clamp(m_Speed * 1.333, 0, 1) by 0.1 per frame.
+    float t = m_Speed * 1.333f;
+    if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
+    m_SmoothedAlpha += (t - m_SmoothedAlpha) * 0.1f;
 
-    // Map smoothed alpha to draw colour alpha channel (binary: * 16, clamped [0,255]).
-    float alphaF = m_SmoothedAlpha * 16.0f;
-    if (alphaF < 0.0f)   alphaF = 0.0f;
-    if (alphaF > 255.0f) alphaF = 255.0f;
-    m_DrawColour = Colour(0xF6, 0xD4, 0xC1, (uint8_t)alphaF);
+    // Master-volume duck + SoundVolume lerp gated on Arcade mode.
+    // Binary writes *(float*)gs == gs->m_MasterVolume directly.
+    if (g->gameMode == Mortar::GAME_MODE_ARCADE) {
+        float master = gs->m_MasterVolume;
+        if      (master > deltaTarget) { master -= dt; if (master < deltaTarget) master = deltaTarget; }
+        else if (master < deltaTarget) { master += dt; if (master > deltaTarget) master = deltaTarget; }
+        gs->m_MasterVolume = master;
 
-    // TODO: 0x00160e80 pulse-scale + game[+0x188] global-uniform write.
-    // TODO: 0x00160ea0 sound play/stop via GameSound::SFXPlay/Release (m_pSound, m_SoundIdx).
-    // TODO: 0x00160f00 PSPParticleEmitter speed-stream wiring.
+        float v = m_SoundVolume;
+        if      (v > volTarget) { v -= dt * 0.5f; if (v < volTarget) v = volTarget; }
+        else if (v < volTarget) { v += dt * 0.5f; if (v > volTarget) v = volTarget; }
+        m_SoundVolume = v;
+    } else {
+        m_SoundVolume = 0.0f;
+        gs->m_MasterVolume = 1.0f;
+    }
+
+    // Looping SFX start/stop on m_SoundVolume.
+    static const char* const kStreamSfx = "Combo-Blitz-Backing-Light";
+    if (m_SoundVolume <= 0.0f) {
+        if (m_pSound) {
+            gs->Release(static_cast<Mortar::MortarSound*>(m_pSound), kStreamSfx);
+            m_pSound = nullptr;
+        }
+    } else {
+        if (!m_pSound) {
+            m_SoundIdx = 0;
+            // TODO: bind SoundNeedsLooping callback once the Delegate1
+            // looping-cb plumbing is fleshed out; 2-arg SFXPlay is fine
+            // for one-shot kickoff.
+            m_pSound = gs->SFXPlay(kStreamSfx, m_SoundVolume, 1.0f);
+        }
+        if (m_pSound) {
+            static_cast<Mortar::MortarSound*>(m_pSound)->SetVolume(m_SoundVolume);
+        }
+    }
+
+    // Final draw-colour alpha = clamp(m_SmoothedAlpha * 16, 0, 255).
+    float aF = m_SmoothedAlpha * 16.0f;
+    uint8_t a;
+    if      (aF <= 0.0f)   a = 0;
+    else if (aF >= 255.0f) a = 0xFF;
+    else                   a = (uint8_t)aF;
+    m_DrawColour = Colour(0xF6, 0xD4, 0xC1, a);
 }
 
 // STUB: SpeedControl::Init -- binary @ 0x???? (TODO RE)
