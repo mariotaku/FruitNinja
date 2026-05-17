@@ -567,8 +567,12 @@ void PauseScreen::Update(float dt) {
     // before/after Init since Init doesn't manage those slots.
     if (!m_ResumeButton) {
         m_ResumeButton = new MenuButton();
-        m_ResumeButton->size       = Vec3(m_PauseButtonTexW, m_PauseButtonTexH, 0.0f);
-        m_ResumeButton->m_Texture  = m_PauseButtonTex;
+        // Binary passes texture via ctor arg -> m_SecondaryTex; Init's
+        // fruitType<0 text-button branch reads m_SecondaryTex to auto-size
+        // m_TargetSize and size from texture dims. m_Texture is set for
+        // HUDControl3d::Draw rendering.
+        m_ResumeButton->m_SecondaryTex = m_PauseButtonTex;
+        m_ResumeButton->m_Texture      = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_ResumeButton->Init(
             Vec3(240.0f, -160.0f, 0.0f),  // initial pos; overwritten each frame
@@ -593,8 +597,9 @@ void PauseScreen::Update(float dt) {
 
     if (!m_QuitButton) {
         m_QuitButton = new MenuButton();
-        m_QuitButton->size       = Vec3(m_QuitTitleTexW, m_QuitTitleTexH, 0.0f);
-        m_QuitButton->m_Texture  = m_QuitTitleTex;
+        // Binary @ 0x001544e8: texture via ctor arg -> m_SecondaryTex for Init auto-size.
+        m_QuitButton->m_SecondaryTex = m_QuitTitleTex;
+        m_QuitButton->m_Texture      = m_QuitTitleTex;
         m_QuitButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_QuitButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
@@ -612,8 +617,9 @@ void PauseScreen::Update(float dt) {
 
     if (!m_RetryButton) {
         m_RetryButton = new MenuButton();
-        m_RetryButton->size       = Vec3(m_RetryButtonTexW, m_RetryButtonTexH, 0.0f);
-        m_RetryButton->m_Texture  = m_RetryButtonTex;
+        // Binary @ 0x001544e8: texture via ctor arg -> m_SecondaryTex for Init auto-size.
+        m_RetryButton->m_SecondaryTex = m_RetryButtonTex;
+        m_RetryButton->m_Texture      = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_RetryButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
