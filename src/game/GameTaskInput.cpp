@@ -145,12 +145,12 @@ static bool PointerDownXboxCallback(InputEvent* ev) {
 
 // PauseGameCallback @ 0x00168fd8
 // Binary: if (g_GameData[+2] == 0) PauseGame(); else UnpauseGame();
-// g_GameData[+2] = gameActiveFlag in port (0=paused, else=active).
+// g_GameData[+2] = pausedFlag in port (false=running, true=paused).
 static bool PauseGameCallback(InputEvent* ev) {
     (void)ev;
     Game* game = Game::GetInstance();
     if (!game) return true;
-    if (game->gameActiveFlag == 0) {
+    if (!game->pausedFlag) {
         PauseScreen::PauseGame();
     } else {
         PauseScreen::UnpauseGame();

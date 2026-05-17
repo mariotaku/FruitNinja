@@ -361,7 +361,7 @@ void GameUpdate(float dt, bool active) {
     // path passes 0.0f) -- WaveManager::Update is called EVERY frame; the
     // frozen branch just feeds dt=0 so the spawn pump quiesces naturally.
     // Earlier port wholesale-gated this on `active`, which silenced the
-    // pump permanently when gameActiveFlag stayed set after pause->resume.
+    // pump permanently when pausedFlag stayed set after pause->resume.
     WaveManager::GetInstance()->Update(active ? dt : 0.0f);
 
     if (game->pSaveData) game->pSaveData->Update(dt, game->hud);

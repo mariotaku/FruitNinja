@@ -513,7 +513,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             // ASM-verified: 2026-05-03T00:00 binary @ 0x00159334..0x001594e0 (asm-inspector)
             Colour col(0xB4, 0x80, 0x05, 200);  // base orange
             if (m_HighscoreToShow == m_DisplayedScore) {
-                s_BannerSinIdx += (game->gameActiveFlag == 0) ? 6 : 0;
+                s_BannerSinIdx += (!game->pausedFlag) ? 6 : 0;
                 if (s_BannerSinIdx > 0xB3) s_BannerSinIdx = 0xB4;
                 float t = CosIdx((int16_t)s_BannerSinIdx * 0xB6) * -0.5f + 0.5f;
                 Colour green(0x64, 0x96, 0x19, 200);

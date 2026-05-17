@@ -63,10 +63,10 @@ void GameTaskUpdate(float rawDt) {
 
         if (stateIdx == s_taskState.prevState) {
             // Binary @ 0x0010a5d4: combined gate is
-            //   active = (gameActiveFlag == 0) && (PowerManager::GetState() == 0)
+            //   active = (!pausedFlag) && (PowerManager::GetState() == 0)
             Mortar::PowerManager::GetInstance()->Update();
             uint32_t pmState = Mortar::PowerManager::GetInstance()->GetState();
-            bool canUpdate = (game->gameActiveFlag == 0) && (pmState == 0);
+            bool canUpdate = (!game->pausedFlag) && (pmState == 0);
             s_updateFuncs[stateIdx](dt, canUpdate);
         } else {
             // State changed: exit old, loop will init new

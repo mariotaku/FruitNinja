@@ -99,7 +99,7 @@ void PauseScreen::PauseGame() {
     Game* game = Game::GetInstance();
     if (!game) return;
     GameTaskState* ts = GetTaskState();
-    game->gameActiveFlag = 1;
+    game->pausedFlag = true;
     ts->isPaused = 0;
     ts->pauseTransitionTimer = 0.25f;
 }
@@ -120,14 +120,14 @@ void PauseScreen::UnpauseGame() {
     ts->isPaused = 1;
     ts->pauseBombHitTimer = 0.4f;        // DAT_00168fcc, GameTaskState+0x10
 
-    // DIFFERS: binary's UnpauseGame does NOT write gameActiveFlag=0
+    // DIFFERS: binary's UnpauseGame does NOT write pausedFlag=0
     // either; it relies on PowerManager::GetState() going non-zero on
     // background to keep canUpdate=false. Port's PowerManager stub
-    // always returns 0, so gameActiveFlag is the sole gate to
+    // always returns 0, so pausedFlag is the sole gate to
     // GameUpdate's wholesale ActorManager/Splat skips. Writing 0 here
     // is the port-side mirror for resume.
     Game* game = Game::GetInstance();
-    if (game) game->gameActiveFlag = 0;
+    if (game) game->pausedFlag = false;
 }
 
 // -------------------------------------------------------------------------
@@ -679,7 +679,7 @@ void PauseScreen::Update(float dt) {
         m_Alpha += (1.0f - m_Alpha) * FADE_IN_RATE;
 
         // Force game pause flag each frame while fading in (SP path only)
-        game->gameActiveFlag = 1;
+        game->pausedFlag = true;
 
         if (m_Alpha > ACTIVE_THRESHOLD) {
             m_Alpha = 1.0f;
@@ -689,7 +689,7 @@ void PauseScreen::Update(float dt) {
 
     case PAUSE_STATE_ACTIVE:
         // Force game pause flag each frame (SP path only)
-        game->gameActiveFlag = 1;
+        game->pausedFlag = true;
 
         // Enable hit detection on Resume and Retry
         if (m_ResumeButton) m_ResumeButton->m_bHighlighted = 1;
