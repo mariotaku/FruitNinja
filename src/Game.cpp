@@ -20,7 +20,7 @@
 Game::Game()
     : Mortar::MortarGame(),
       m_bSlowHardware(0), m_bLanguageSet(0), m_appState(0),
-      taskStateIndex(0), field_0x01(0), gameActiveFlag(0), languageFlag(0),
+      taskStateIndex(0), field_0x01(0), pausedFlag(false), languageFlag(0),
       gameMode(0), levelTransitionFlag(0), retryFlag(0), field_0x07(0),
       m_bTutorialShown(0), m_AchievementProgressTimer(0.0f),
       retryTimer(0), m_TransitionTimer(0), bombHitTimer(0),

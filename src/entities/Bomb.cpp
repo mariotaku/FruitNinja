@@ -363,8 +363,8 @@ void Bomb::Update(float /*dt*/) {
 
             const float prevCountdown = m_Countdown;
             // Tick countdown using GAME dt (not entity scaledDt) — but only
-            // when game is active (gameActiveFlag == 0).
-            if (game->gameActiveFlag == 0) {
+            // when game is active (!pausedFlag).
+            if (!game->pausedFlag) {
                 m_Countdown -= gameDt;
             }
 

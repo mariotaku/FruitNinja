@@ -48,10 +48,15 @@ struct Game : public Mortar::MortarGame {
 
     uint8_t taskStateIndex;        // +0x00: 0=Splash, 1=Frontend, 2=Game
     uint8_t field_0x01;            // +0x01
-    uint8_t gameActiveFlag;        // +0x02: 0=running, !=0=paused/frozen
-                                   // (Bomb::Update @ 0x00162bfe: cbnz r2 -> skip
-                                   //  countdown decrement when !=0; PauseScreen
-                                   //  sets to 1 on pause; GameInitialise inits to 0)
+    // +0x02: user-pause flag. true = paused (PauseScreen overlay active or
+    //  fade-to-pause in progress); false = running. Matches Ghidra's
+    //  `m_Paused` field on GameContext. Set true by PauseScreen::PauseGame,
+    //  false by PauseScreen::UnpauseGame. Read by Bomb::Update (skip fuse
+    //  countdown), SlashEntity::Update (suppress trail), TimeControl::Update
+    //  (freeze countdown), ScoreControl, GameTaskInput::PauseGameCallback
+    //  (toggle), GameTaskState::canUpdate (wholesale ActorManager/Splat gate).
+    //  NOT the same as levelTransitionFlag (+0x05) -- see that field's notes.
+    bool    pausedFlag;
     uint8_t languageFlag;          // +0x03: SetLanguage writes 0 here
     // +0x04: GAME_MODE enum (see game/GameMode.h) stored as uint8_t.
     //   0=GAME_MODE_CLASSIC (originalWaveList.xml)
@@ -60,7 +65,7 @@ struct Game : public Mortar::MortarGame {
     //   3=GAME_MODE_ZEN     (zenWaveList.xml)
     uint8_t gameMode;
     // +0x05: non-interactive transition gate. NOT a user-pause flag (that's
-    // gameActiveFlag at +0x02). Set !=0 while the game-state machine is in a
+    // pausedFlag at +0x02). Set !=0 while the game-state machine is in a
     // non-interactive transition (level setup / game-over / menu fade).
     //   Set 1 by GameOver (idempotency-guarded), QuitToMenu,
     //     PrepareForLevelStart, MainScreen state transitions, GameOverScreen

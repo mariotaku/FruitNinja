@@ -727,10 +727,10 @@ void SlashEntity::Update(float dt) {
     // for modal overlays likely intercepts touches before SlashEntity
     // sees them, but the SDL port has no equivalent so the binary's
     // observable "no slicing during pause" doesn't happen for us.
-    // Port-side extension: gate on gameActiveFlag too. Trail-building
+    // Port-side extension: gate on pausedFlag too. Trail-building
     // (UpdatePoints / RebuildGeometry) stays unconditional so the
     // visible blade tracks the finger; only collision is suppressed.
-    const bool gamePaused = game && game->gameActiveFlag != 0;
+    const bool gamePaused = game && game->pausedFlag;
 
     // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
     // frame; PlaySwipe resets to 6.0f).
@@ -1157,7 +1157,7 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
     // by UnpauseGame and to non-zero by bomb-hit). With no AddPoint calls
     // during the freeze, m_NumPoints stays < 4 and the collision loop in
     // Update naturally short-circuits. Binary-faithful pause-time slice
-    // suppression -- no port-specific gameActiveFlag gate needed.
+    // suppression -- no port-specific pausedFlag gate needed.
     Game* g = Game::GetInstance();
     if (g && g->bombHitTimer > 0.0f) return;
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
