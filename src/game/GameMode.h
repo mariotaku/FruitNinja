@@ -33,6 +33,20 @@ enum GameMode {
     // out of scope for the SP-port; add as needed.
 };
 
+// Binary @ 0x0010a404 -- ((uint8_t)(gameMode - 2u) > 1u) means modes 0/1
+// (Classic, Combo) return true; 2/3 (Arcade, Zen) return false. Gates the
+// 3-strike miss-penalty / MissControl spawn path.
+inline bool FailureEnabled(uint8_t gameMode) {
+    return ((uint8_t)(gameMode - 2u)) > 1u;
+}
+
+// Binary @ 0x0010a44c -- ((uint8_t)(gameMode - 2u) < 2u) means modes 2/3
+// (Arcade, Zen) return true; 0/1 (Classic, Combo) return false. Gates the
+// TimeControl countdown HUD.
+inline bool IsTimedGame(uint8_t gameMode) {
+    return ((uint8_t)(gameMode - 2u)) < 2u;
+}
+
 } // namespace Mortar
 
 #endif // FN_GAME_MODE_H

@@ -524,11 +524,16 @@ void Fruit::KillFruit(bool doMissPenalty) {
         if (!m_bNoPowerUp && !m_bSliced && info && info->m_Score < 5) {
             Game* g = Game::GetInstance();
             if (g) {
+                // Binary @ 0x00176b14..0x00176c00 (Fruit::KillFruit miss path):
+                //   if (gameMode == ARCADE)            -> AddToTotal tracking only
+                //   else if (FailureEnabled())          -> miss penalty (Classic/Combo)
+                //   else (Zen) -> nothing
+                // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
                 if (g->gameMode == Mortar::GAME_MODE_ARCADE) {
-                    // Zen mode: tracking only, no life loss.
-                    // TODO: FruitSaveData::AddToTotal("zen_miss", 1) when save system is ported
-                } else {
-                    // Classic / Arcade miss penalty.
+                    // Arcade: tracking only, no life loss, no MissControl spawn.
+                    // TODO: FruitSaveData::AddToTotal("arcade_miss", 1) when save system is ported
+                } else if (Mortar::FailureEnabled(g->gameMode)) {
+                    // Classic / Combo miss penalty (Zen falls through to no-op).
                     if (MissControl* mc = MissControl::GetFree()) {
                         Mortar::SmartPtr<Mortar::Texture> defTex;
                         mc->MakeDisappear(pos, 0, defTex);
