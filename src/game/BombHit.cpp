@@ -294,16 +294,21 @@ void ResetGameEntities(bool killAll) {
         if (e->entityType == 1) {
             // Bomb: reset chuck, fling off-screen.
             Bomb* bomb = static_cast<Bomb*>(e);
-            // DIFFERS: binary calls Bomb::Init via vtable+0x10 here which
-            // nulls m_pEmitter (and relies on its particle manager to decay
-            // the abandoned infinite-set emitter naturally). Port's
-            // PSPParticleManager keeps infinite-set emitters alive until
-            // explicit ClearEmitter (see PSPParticleManager.cpp:402-403 --
-            // bomb_smoke has TimeStop=0/PerSec=50, naturallyInfinite=true).
-            // So we must explicitly clear instead of leak-and-decay, or the
-            // smoke trail keeps puffing from the bomb's last position
-            // indefinitely after a slice. User-reported as "smoke doesn't
-            // disappear after bomb destroyed".
+            // DIFFERS (better-than-binary): explicit ClearEmitter for the
+            // fuse trail. Binary Bomb::Init @ 0x00172504 sets m_pEmitter
+            // = NULL without ClearEmitter -- the emitter then survives in
+            // PSPParticleManager's active list because bomb_smoke is
+            // naturallyInfinite+active (TimeStop=0, PerSec=50, so
+            // PSPEmitterTemplate::Ends() returns false). Binary only
+            // reaps it later at level/screen teardown via ClearEmitters().
+            // PSPParticleManager::Update @ 0x00115ed8 DOES support a
+            // back-ref reap mechanism (m_pRefPtr nulls the owner pointer
+            // on reap), but Bomb::Update @ 0x00172e?? deliberately passes
+            // ppRef=NULL to AddEmitter so the hook is unused. Result in
+            // binary: visible smoke trail leaks across the game-over
+            // re-chuck animation until teardown. Port explicitly clears
+            // here to avoid that visible leak; binary-faithful would be a
+            // bug, not a feature.
             if (bomb->m_pEmitter) {
                 PSPParticleManager::GetInstance().ClearEmitter(bomb->m_pEmitter);
                 bomb->m_pEmitter = nullptr;
