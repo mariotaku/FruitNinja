@@ -352,10 +352,10 @@ void Bomb::Update(float /*dt*/) {
         // === ALIVE BRANCH ===
         if (m_Countdown > 0.0f) {
             // Early-kill: if a bomb just exploded (bombHitTimer>0) or game
-            // is transitioning out (pauseFlag!=0), force this bomb off-screen
+            // is transitioning out (levelTransitionFlag!=0), force this bomb off-screen
             // so it expires on the OOB check below. Binary resets countdown
             // to 0 (DAT_00172f28) and pos.y to -320 (DAT_00172cb0).
-            if (game->bombHitTimer > 0.0f || game->pauseFlag != 0) {
+            if (game->bombHitTimer > 0.0f || game->levelTransitionFlag != 0) {
                 m_Countdown = 0.0f;
                 pos.y = OFFSCREEN_Y;
                 vel = Vec3(HIT_COL_POS, -1.0f, HIT_COL_POS);
@@ -370,12 +370,12 @@ void Bomb::Update(float /*dt*/) {
 
             // Fuse SFX: plays once per frame across all bombs when any bomb's
             // countdown crosses 0.2s downward. Gated by bFuseSfxFiredThisFrame
-            // (cleared in Bomb::Draw) and pauseFlag==0.
+            // (cleared in Bomb::Draw) and levelTransitionFlag==0.
             static const float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
             if (m_Countdown <= FUSE_SFX_THRESHOLD &&
                 prevCountdown > FUSE_SFX_THRESHOLD &&
                 !g_bombData.bFuseSfxFiredThisFrame &&
-                game->pauseFlag == 0) {
+                game->levelTransitionFlag == 0) {
                 if (game->pGameSound) {
                     // Binary also calls SoundManager::PreLoadSound first;
                     // our SFX system plays on demand, no preload needed.

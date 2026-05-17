@@ -165,7 +165,7 @@ int main(int argc, char* argv[]) {
         //   - hide MainScreen so the gameplay layer is unobstructed
         //   - select gameMode = 0 (Classic)
         //   - fire PrepareForLevelStart -> WaveManager::Reset to load wave 0
-        //   - clear pauseFlag (binary path: GameModeScreen::Update camera-settle)
+        //   - clear levelTransitionFlag (binary path: GameModeScreen::Update camera-settle)
         // so the spawn pump runs and the score / miss widgets see real game
         // state. Verifies the HUD widgets are wired and rendering during
         // actual gameplay.
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]) {
         }
         game.gameMode = 0;
         FN::PrepareForLevelStart();
-        game.pauseFlag = 0;
+        game.levelTransitionFlag = 0;
         // Simulate the GameModeScreen state-6 snap (binary @ 0x0013f2b0):
         //   game.m_TransitionTimer = 0.0f
         //   mainScreen.m_State    = STATE_CAMERA_FADE (0x11)

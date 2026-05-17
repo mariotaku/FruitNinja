@@ -404,7 +404,7 @@ void GameModeScreen::Update(float dt) {
                     game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
                 game.mainScreen->SetCameraTransition(0.0f);
-                game.pauseFlag = 0;
+                game.levelTransitionFlag = 0;
                 m_bPendingRemoval = 1;
                 game.mainScreen->SetState(STATE_CAMERA_FADE);
                 // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped

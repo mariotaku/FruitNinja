@@ -425,7 +425,7 @@ void MissControl::Update(float dt) {
     }
 
     // Pause guard: if game paused, skip fade. binary @ 0x00151a60 pause guard
-    if (game && game->pauseFlag) return;
+    if (game && game->levelTransitionFlag) return;
 
     pos.z = 0.0f;
 

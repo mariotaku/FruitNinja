@@ -107,11 +107,11 @@ int main(int argc, char* argv[]) {
     printf("[test_gameplay] PrepareForLevelStart primed wave=%p\n",
            (void*)wm->m_pCurrentWave[0]);
 
-    // PrepareForLevelStart sets pauseFlag = 1 (binary @ 0x169a9c). The
+    // PrepareForLevelStart sets levelTransitionFlag = 1 (binary @ 0x169a9c). The
     // binary clears it from MainScreen::Update case 2-end / case 0x11
     // once the camera has zoomed into gameplay; the unit test bypasses
     // that state machine, so clear it manually to enable the spawn pump.
-    game.pauseFlag = 0;
+    game.levelTransitionFlag = 0;
 
     // Tick ~3 seconds of frames (180 @ 60Hz) and look for spawn activity.
     // We can't easily count fruit (ActorManager::Add returns recycled

@@ -118,10 +118,10 @@ static void DoSetTerminate() {
 
 static void DoQuitToMenu() {
     // Binary 0x00169e50 -- full flow not yet ported.
-    // Port: thaw wave timer, set pauseFlag.
+    // Port: thaw wave timer, set levelTransitionFlag.
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);
     Game* g = Game::GetInstance();
-    if (g) g->pauseFlag = 1;
+    if (g) g->levelTransitionFlag = 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1181,7 +1181,7 @@ void GameOverScreen::Update(float dt) {
         //   Earlier port comment mislabelled these as wave fields.
         game->m_CoinsAtGameStart = game->m_CoinsBalance;
         WaveManager::GetInstance()->Reset(false);
-        game->pauseFlag = 1; // will be cleared in state 8
+        game->levelTransitionFlag = 1; // will be cleared in state 8
         m_State = STATE_RETRY_FADE;
         break;
     }
@@ -1198,7 +1198,7 @@ void GameOverScreen::Update(float dt) {
         if (alpha < ALPHA_LOW) {
             WaveManager::GetInstance()->Reset(false);
             alpha = 0.0f;
-            game->pauseFlag = 0;
+            game->levelTransitionFlag = 0;
             m_FruitFactAlpha = 0.0f;
             WaveManager::NewGame();
             SetTerminate();

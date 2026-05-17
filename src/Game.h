@@ -59,7 +59,22 @@ struct Game : public Mortar::MortarGame {
     //   2=GAME_MODE_ARCADE  (arcadeWaveList.xml)
     //   3=GAME_MODE_ZEN     (zenWaveList.xml)
     uint8_t gameMode;
-    uint8_t pauseFlag;             // +0x05: set by GameOver, QuitToMenu
+    // +0x05: non-interactive transition gate. NOT a user-pause flag (that's
+    // gameActiveFlag at +0x02). Set !=0 while the game-state machine is in a
+    // non-interactive transition (level setup / game-over / menu fade).
+    //   Set 1 by GameOver (idempotency-guarded), QuitToMenu,
+    //     PrepareForLevelStart, MainScreen state transitions, GameOverScreen
+    //     RETRY_PREPARE, GameInit::SetupGameWork, WaveManager::Reset.
+    //   Set 0 by SkipToPause, SkipToGameOver, EndRetryLevel, RetryLevel,
+    //     InstantLevelDestroy, MainScreen state 0x11 completion.
+    //   Read by PauseScreen::IsEnabled (`+5 ^ 1`), Bomb::Update (suppress
+    //     fuse SFX + snap off-screen), GameUpdate (GameOver auto-trigger
+    //     gate), Bomb::CollisionResponse, Fruit::KillFruit, ScoreControl,
+    //     plus several wave/HUD update paths.
+    // (Renamed from `pauseFlag`; the old name suggested user-pause but the
+    //  flag is a separate gameplay-suspension latch — see re-analyst pass
+    //  2026-05-17 for full xref list.)
+    uint8_t levelTransitionFlag;   // +0x05
     uint8_t retryFlag;             // +0x06
     uint8_t field_0x07;            // +0x07
     // +0x85: tutorial-shown flag. Set by TutorialControl when intro plays;

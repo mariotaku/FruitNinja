@@ -884,7 +884,7 @@ void WaveManager::Update(float dt) {
     // TODO: skip stat tracking (game->field_0x1ac += dt).
 
     // Spawn-pump gate (binary @ 0x00125a30):
-    //   if (g_GameData->pauseFlag == 0 || m_pCurrentWave[0] == nullptr) {
+    //   if (g_GameData->levelTransitionFlag == 0 || m_pCurrentWave[0] == nullptr) {
     //       <speed accumulator + fixed-step UpdateWave loop>
     //   } else {
     //       UpdateComboSpeed(dt);  // combo tick only, no spawning
@@ -892,18 +892,18 @@ void WaveManager::Update(float dt) {
     // Spawn pump runs unless (paused AND a wave is already active).
     //
     // MainScreen suppression flow (cold boot):
-    //   - GameInit sets pauseFlag = 1 (binary @ 0x0010caa8 / port GameInit step 13).
+    //   - GameInit sets levelTransitionFlag = 1 (binary @ 0x0010caa8 / port GameInit step 13).
     //   - Frame 1: m_pCurrentWave[0] is null, so the OR-clause is true:
     //     spawn pump runs, UpdateWave is called, but its inner spawner loop
     //     is gated on `wave != null` (line ~921) -- the wave-end fall-through
     //     fires GetNextWave to populate m_pCurrentWave[0], no fruit spawns.
-    //   - Frame 2+: pauseFlag == 1 AND m_pCurrentWave[0] != null -> outer
+    //   - Frame 2+: levelTransitionFlag == 1 AND m_pCurrentWave[0] != null -> outer
     //     gate FALSE, only UpdateComboSpeed runs. No spawning.
     //   - When the user clicks Classic and PrepareForLevelStart -> Reset
     //     populates state and MainScreen's case-2/0x11 path clears
-    //     pauseFlag = 0, the OR-clause becomes true via pauseFlag and the
+    //     levelTransitionFlag = 0, the OR-clause becomes true via levelTransitionFlag and the
     //     spawn pump resumes for real gameplay.
-    if (game->pauseFlag == 0 || m_pCurrentWave[0] == nullptr) {
+    if (game->levelTransitionFlag == 0 || m_pCurrentWave[0] == nullptr) {
         float accumDt = field_0x2d4 + dt;
         while (accumDt > WAVE_STEP) {
             UpdateWave(WAVE_STEP, 0, 0);

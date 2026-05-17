@@ -156,7 +156,7 @@ void ScoreControl::Reset() {
 
 // ASM-verified: 2026-05-14T00:00 binary @ 0x001581a0 (re-analyst)
 // +0x4C (game->pSaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
-// Prior port incorrectly tested game->pauseFlag (engine pause flag) instead.
+// Prior port incorrectly tested game->levelTransitionFlag (engine pause flag) instead.
 void ScoreControl::Skip() {
     m_DisplayedScore = GetCurrentScore(m_PlayerIdx);
     Game* game = Game::GetInstance();
@@ -274,7 +274,7 @@ void ScoreControl::Update(float dt) {
     m_ScalePulse = (waveTimer > 0.0f) ? ((waveTimer >= 1.0f) ? 2.0f : 1.0f + waveTimer) : 1.0f;
 
     // Stage 5: highscore tracking
-    if (game->pauseFlag == 0 || currentScore == 0) {
+    if (game->levelTransitionFlag == 0 || currentScore == 0) {
         int modeHS = GetCurrentModeHighscore();
         m_HighscoreToShow = (modeHS != 0)
             ? std::max(m_DisplayedScore, modeHS) : 0;

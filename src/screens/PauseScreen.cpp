@@ -136,7 +136,7 @@ void PauseScreen::UnpauseGame() {
 
 // ASM-verified: 2026-05-09 binary @ 0x00153e4c (re-analyst)
 // Returns TRUE when pause overlay is available -- transition timer at rest
-// (|t| < 0.001), no bomb-hit pause, and pauseFlag == 0. Earlier port had
+// (|t| < 0.001), no bomb-hit pause, and levelTransitionFlag == 0. Earlier port had
 // the comparison inverted -- the binary uses `bpl` after vcmpe which means
 // "branch if |val| >= epsilon -> return false". Inversion was masked while
 // m_TransitionTimer sat permanently at -1.0f in the port; once MainScreen
@@ -147,7 +147,7 @@ bool PauseScreen::IsEnabled() {
     if (!g) return false;
     if (fabsf(g->m_TransitionTimer) >= 0.001f) return false;  // [+0xc] epsilon
     if (g->bombHitTimer > 0.0f)                return false;  // [+0x10]
-    return (g->pauseFlag ^ 1) != 0;                           // [+0x05] XOR 1
+    return (g->levelTransitionFlag ^ 1) != 0;                           // [+0x05] XOR 1
 }
 
 // -------------------------------------------------------------------------
@@ -157,7 +157,7 @@ static void QuitToMenu() {
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
     Game* game = Game::GetInstance();
     if (!game) return;
-    game->pauseFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
+    game->levelTransitionFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
 
     if (game->mainScreen) {
         game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
@@ -227,7 +227,7 @@ static void EndRetryLevel() {
 
     game->retryFlag         = 0;                       // 0x16a26e [+0x06]
     game->m_TransitionTimer = 0.5f;                    // 0x16a270 [+0x0c]
-    game->pauseFlag         = 0;                       // 0x16a274 [+0x05]
+    game->levelTransitionFlag         = 0;                       // 0x16a274 [+0x05]
 
     if (game->mainScreen) {
         game->mainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
@@ -548,7 +548,7 @@ void PauseScreen::Update(float dt) {
     // ASM-verified: 2026-05-06T00:00 binary @ 0x00154468..0x001545fc (asm-inspector)
     // Each of the three create blocks is gated only on null-on-self
     // (`+0x98 m_ResumeButton`, `+0xa0 m_QuitButton`, `+0xac m_RetryButton`).
-    // No `IsEnabled()` / `pauseFlag` / `m_State` / `m_TransitionTimer` test
+    // No `IsEnabled()` / `levelTransitionFlag` / `m_State` / `m_TransitionTimer` test
     // wraps the allocations — binary creates eagerly on first Update().
     // Visibility on non-gameplay screens is an alpha/draw-time concern,
     // handled by m_ButtonFadeAlpha -> m_DrawColour.a propagation below.
