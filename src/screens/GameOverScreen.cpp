@@ -14,6 +14,10 @@
 #include "game/BombHit.h"
 #include "entities/ActorManager.h"
 #include "entities/FruitInfo.h"
+#ifndef __bada__
+#include "entities/Fruit.h"
+#include "entities/Bomb.h"
+#endif
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
 #include "hud/HUD.h"
@@ -1132,6 +1136,72 @@ void GameOverScreen::Update(float dt) {
     // tmp/bonus-phase-stall-spec.md for full RE.
     case STATE_BONUS_PHASE: {
         Mortar::ActorManager* am = game->actorManager;
+#ifndef __bada__
+        {
+            static int  s_bonusStallLogFrame = 0;
+            static bool s_bonusEntryLogged   = false;
+            static int  s_bonusEntryFrame    = 0;
+
+            int nf = am ? am->GetNumEntities(0) : 0;
+            int nb = am ? am->GetNumEntities(1) : 0;
+
+            // Once-per-entry log — fires the first Update tick in this state.
+            if (!s_bonusEntryLogged) {
+                s_bonusEntryLogged   = true;
+                s_bonusEntryFrame    = s_bonusStallLogFrame;
+                std::printf("[BONUS_PHASE_STALL] ENTRY frame=%d entities=(%d,%d)\n",
+                            s_bonusStallLogFrame, nf, nb);
+                std::fflush(stdout);
+            }
+
+            if (am && (nf != 0 || nb != 0)) {
+                ++s_bonusStallLogFrame;
+                if (s_bonusStallLogFrame % 60 == 1) {
+                    std::printf("[BONUS_PHASE_STALL] timer=%.3f fruits=%d bombs=%d\n",
+                                m_Timer, nf, nb);
+                    // Walk Fruit list (type 0)
+                    const std::list<Mortar::Entity*>& fruits = am->GetTypeList(0);
+                    std::list<Mortar::Entity*>::const_iterator it;
+                    for (it = fruits.begin(); it != fruits.end(); ++it) {
+                        Mortar::Entity* e = *it;
+                        if (!e) continue;
+                        Fruit* f = static_cast<Fruit*>(e);
+                        std::printf("[BONUS_PHASE_STALL]   Fruit type=%d flags=0x%02x"
+                                    " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
+                                    " sliced=%d chuckDelay=%.3f sliceTimer=%.3f\n",
+                                    (int)f->m_FruitType, (unsigned)f->flags,
+                                    f->pos.x, f->pos.y, f->pos.z,
+                                    f->vel.x, f->vel.y, f->vel.z,
+                                    (int)f->m_bSliced, f->m_ChuckDelay, f->m_SliceTimer);
+                    }
+                    // Walk Bomb list (type 1)
+                    const std::list<Mortar::Entity*>& bombs = am->GetTypeList(1);
+                    for (it = bombs.begin(); it != bombs.end(); ++it) {
+                        Mortar::Entity* e = *it;
+                        if (!e) continue;
+                        Bomb* b = static_cast<Bomb*>(e);
+                        std::printf("[BONUS_PHASE_STALL]   Bomb flags=0x%02x"
+                                    " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
+                                    " hit=%d movement=%d\n",
+                                    (unsigned)b->flags,
+                                    b->pos.x, b->pos.y, b->pos.z,
+                                    b->vel.x, b->vel.y, b->vel.z,
+                                    (int)b->m_bHit, (int)b->m_bMovement);
+                    }
+                    std::fflush(stdout);
+                }
+            } else if (s_bonusEntryLogged && nf == 0 && nb == 0) {
+                // Gate just cleared — log exit so we can measure how long it blocked.
+                int framesBlocked = s_bonusStallLogFrame - s_bonusEntryFrame;
+                std::printf("[BONUS_PHASE_STALL] EXIT after=%d frames\n", framesBlocked);
+                std::fflush(stdout);
+                // Reset for next game-over.
+                s_bonusStallLogFrame = 0;
+                s_bonusEntryLogged   = false;
+                s_bonusEntryFrame    = 0;
+            }
+        }
+#endif
         if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0) {
             if (!m_pBonusScreen) {
                 FindMostOfFruit();
