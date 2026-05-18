@@ -116,8 +116,12 @@ void AchievementManager::LoadAchievementInfo() {
 
         uint32_t nameHash = StringHash(nameAttr);
 
-        // Skip if already unlocked
-        if (FruitSaveData::IsAchievementUnlocked(nameHash)) continue;
+        // Skip if already unlocked (check through save data instance)
+        {
+            Game* g_chk = Game::GetInstance();
+            FruitSaveData* sd_chk = g_chk ? g_chk->pSaveData : 0;
+            if (sd_chk && sd_chk->IsAchievementUnlocked(nameHash) != 0) continue;
+        }
 
         // Skip if already loaded (duplicate in XML)
         if (m_All.find(nameHash) != m_All.end()) continue;
@@ -424,18 +428,15 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockBonusAchievement  (Binary @ 0x00108de4)
+// UnlockBonusAchievement  (Binary @ 0x00108af0)
+// ASM-verified: 2026-05-18 binary @ 0x00108af0 (re-analyst)
 // ---------------------------------------------------------------------------
 
-int AchievementManager::UnlockBonusAchievement(uint32_t hash) {
-    // Binary: looks up m_ByType[BONUS] by hash (secondary key = specific_type hash)
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_BONUS];
-    auto it = bucket.find(hash);
-    if (it == bucket.end()) return 0;
-    AchievementInfo* info = it->second;
-    if (!info) return 0;
-    if (!ModeBitmaskAllows(info->m_ModeBitmask)) return 0;
-    return QueAchievement(info, it);
+int AchievementManager::UnlockBonusAchievement(Bonus* bonus) {
+    // TODO: 0x00108af0 -- Phase B: read hash from bonus+0x108, look up m_ByType[BONUS],
+    //   check mode bitmask, call QueAchievement. Body deferred to Phase B.
+    (void)bonus;
+    return 0;
 }
 
 // ---------------------------------------------------------------------------

@@ -33,16 +33,19 @@ struct SliceTotal {
     SliceTotal(const std::string& n, int c) : name(n), count(c) {}
 };
 
-// AchievementItem -- per-achievement progress + unlocked-state. Binary
-// has name at +0x00 (32 chars) and progress at +0x94 (float). Port keeps
-// only what the writer/reader serialises.
+// AchievementItem -- pending / unlocked achievement entry stored inside
+// FruitSaveData::m_PendingUnlocks (+0x158) and m_UnlockedAchievements (+0x170).
+// Binary layout @ FruitSaveData::AddToQue (0x0012b38c):
+//   +0x00  char  name[128]  -- strcpy'd from AchievementInfo::m_Name
+//   +0x80  float timer      -- 3.0f or 0.0f; counts down each Update tick
+// sizeof = 0x84 (132 bytes).
 struct AchievementItem {
-    std::string name;       // -- key in plain text (binary stores at +0x00)
-    float       progress;   // -- 0.0..1.0 (binary stores at +0x94)
+    char  m_Name[128];  // +0x00
+    float m_Timer;      // +0x80
 
-    AchievementItem() : progress(0.0f) {}
-    AchievementItem(const std::string& n, float p) : name(n), progress(p) {}
+    AchievementItem() : m_Timer(0.0f) { m_Name[0] = '\0'; }
 };
+static_assert(sizeof(AchievementItem) == 0x84, "AchievementItem must be 0x84 bytes");
 
 // EntityState -- queued resume snapshot for a fruit / bomb / power-up.
 // Binary serialises one per active actor when m_bHasActiveGame is set.
@@ -201,11 +204,13 @@ public:
     // +0x150: queued wave states for resume.
     std::list<WaveState> m_WaveStates;
 
-    // +0x158: unlocked achievements (with progress).
-    std::map<uint32_t, AchievementItem> m_Achievements;
+    // +0x158: queued pending unlocks; populated by AddToQue, ticked by Update.
+    // ASM-verified: 2026-05-18 binary @ 0x0012b38c (re-analyst)
+    std::map<uint32_t, AchievementItem> m_PendingUnlocks;
 
-    // +0x170: in-progress achievements.
-    std::map<uint32_t, AchievementItem> m_AchievementProgress;
+    // +0x170: fully unlocked achievements; persisted in <achievements> XML block.
+    // ASM-verified: 2026-05-18 binary @ 0x0012b3dc (re-analyst)
+    std::map<uint32_t, AchievementItem> m_UnlockedAchievements;
 
     // +0x188..+0x190: blitz mode state.
     int      m_blitzSpawnedThisGame;       // +0x188
@@ -293,16 +298,16 @@ public:
     // Achievements
     // ------------------------------------------------------------------
 
-    // Static helper (binary takes self ptr but only reads m_Achievements).
-    // Looks up hash in the singleton instance's m_Achievements map.
-    static bool IsAchievementUnlocked(uint32_t hash);
+    // 0x00129c50. Checks whether hash is pending (returns 2) or already
+    // unlocked (returns 1), or absent (returns 0).
+    // Binary: non-static; checks m_PendingUnlocks then m_UnlockedAchievements.
+    int IsAchievementUnlocked(uint32_t hash);
 
     // 0x00124f10. Unlocks "total-X" achievements when thresholds hit.
     void UnlockTotals();
 
-    // Binary @ (unknown — called from AchievementManager::QueAchievement).
-    // Queues an achievement unlock by name+hash; returns 1 on success, 0 if
-    // already queued or unlocked. Stub returns 1 (allow unlock flow to proceed).
+    // 0x0012b38c. Queues an achievement unlock by name+hash. Skips if
+    // IsAchievementUnlocked returns non-zero. Returns 1 on success, 0 if skipped.
     int AddToQue(const char* name, uint32_t hash);
 
     // ------------------------------------------------------------------

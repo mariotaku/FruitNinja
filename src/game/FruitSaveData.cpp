@@ -195,10 +195,11 @@ bool FruitSaveData::SetCurrentModeHighscore(int newScore) {
 // Achievements
 // ----------------------------------------------------------------------
 
-bool FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
-    Game* g = Game::GetInstance();
-    if (!g || !g->pSaveData) return false;
-    return g->pSaveData->m_Achievements.find(hash) != g->pSaveData->m_Achievements.end();
+// 0x00129c50 -- returns 2 if pending, 1 if unlocked, 0 otherwise.
+// TODO: 0x00129c50 -- Phase C: full body (check m_PendingUnlocks then m_UnlockedAchievements)
+int FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
+    if (m_PendingUnlocks.find(hash) != m_PendingUnlocks.end()) return 2;
+    return (m_UnlockedAchievements.find(hash) != m_UnlockedAchievements.end()) ? 1 : 0;
 }
 
 void FruitSaveData::UnlockTotals() {
@@ -340,26 +341,26 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         root->InsertEndChild(e);
     }
 
-    // Achievement progress map ("achievement" container).
-    if (!save->m_AchievementProgress.empty()) {
-        tinyxml2::XMLElement* ach = doc.NewElement("achievement");
-        for (std::map<uint32_t, AchievementItem>::iterator it = save->m_AchievementProgress.begin();
-             it != save->m_AchievementProgress.end(); ++it) {
+    // Pending unlocks map ("unlocked" container with timer attr).
+    if (!save->m_PendingUnlocks.empty()) {
+        tinyxml2::XMLElement* ach = doc.NewElement("unlocked");
+        for (std::map<uint32_t, AchievementItem>::iterator it = save->m_PendingUnlocks.begin();
+             it != save->m_PendingUnlocks.end(); ++it) {
             tinyxml2::XMLElement* e = doc.NewElement("achievement");
-            e->SetAttribute("name", it->second.name.c_str());
-            e->SetAttribute("progress", it->second.progress);
+            e->SetAttribute("name", it->second.m_Name);
+            e->SetAttribute("timer", it->second.m_Timer);
             ach->InsertEndChild(e);
         }
         root->InsertEndChild(ach);
     }
 
-    // Unlocked achievements ("unlocked" container).
-    if (!save->m_Achievements.empty()) {
-        tinyxml2::XMLElement* unl = doc.NewElement("unlocked");
-        for (std::map<uint32_t, AchievementItem>::iterator it = save->m_Achievements.begin();
-             it != save->m_Achievements.end(); ++it) {
+    // Unlocked achievements ("achievements" container).
+    if (!save->m_UnlockedAchievements.empty()) {
+        tinyxml2::XMLElement* unl = doc.NewElement("achievements");
+        for (std::map<uint32_t, AchievementItem>::iterator it = save->m_UnlockedAchievements.begin();
+             it != save->m_UnlockedAchievements.end(); ++it) {
             tinyxml2::XMLElement* e = doc.NewElement("achievement");
-            e->SetAttribute("name", it->second.name.c_str());
+            e->SetAttribute("name", it->second.m_Name);
             unl->InsertEndChild(e);
         }
         root->InsertEndChild(unl);
@@ -488,25 +489,30 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         }
     }
 
-    // Achievement progress: <achievement> container.
-    if (tinyxml2::XMLElement* progress = root->FirstChildElement("achievement")) {
+    // Pending unlocks: <unlocked> container (with timer attr).
+    if (tinyxml2::XMLElement* progress = root->FirstChildElement("unlocked")) {
         for (tinyxml2::XMLElement* e = progress->FirstChildElement("achievement"); e;
              e = e->NextSiblingElement("achievement")) {
             const char* name = e->Attribute("name");
             if (!name || !*name) continue;
-            float prog = 0.0f;
-            e->QueryFloatAttribute("progress", &prog);
-            save->m_AchievementProgress[StringHash(name)] = AchievementItem(name, prog);
+            AchievementItem item;
+            strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
+            item.m_Name[sizeof(item.m_Name) - 1] = '\0';
+            e->QueryFloatAttribute("timer", &item.m_Timer);
+            save->m_PendingUnlocks[StringHash(name)] = item;
         }
     }
 
-    // Unlocked achievements: <unlocked> container.
-    if (tinyxml2::XMLElement* unl = root->FirstChildElement("unlocked")) {
+    // Unlocked achievements: <achievements> container.
+    if (tinyxml2::XMLElement* unl = root->FirstChildElement("achievements")) {
         for (tinyxml2::XMLElement* e = unl->FirstChildElement("achievement"); e;
              e = e->NextSiblingElement("achievement")) {
             const char* name = e->Attribute("name");
             if (!name || !*name) continue;
-            save->m_Achievements[StringHash(name)] = AchievementItem(name, 1.0f);
+            AchievementItem item;
+            strncpy(item.m_Name, name, sizeof(item.m_Name) - 1);
+            item.m_Name[sizeof(item.m_Name) - 1] = '\0';
+            save->m_UnlockedAchievements[StringHash(name)] = item;
         }
     }
 
