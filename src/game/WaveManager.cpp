@@ -826,9 +826,10 @@ void WaveManager::NewGame() {
     }
 }
 
-// TODO: RE exact binary address; stubbed true (matches binary default).
+// ASM-verified: 2026-05-18 binary @ 0x0010a42c (re-analyst)
 bool WaveManager::PowersEnabled() {
-    return true;
+    Game* game = Game::GetInstance();
+    return game && game->gameMode == Mortar::GAME_MODE_ARCADE;
 }
 
 void WaveManager::ResetGlobalDt(float dt) {
