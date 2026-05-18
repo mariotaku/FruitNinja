@@ -155,10 +155,11 @@ static bool PointerDownXboxCallback(InputEvent* /*ev*/) {
 }
 
 // PauseGameCallback @ 0x00168fd8
-// Binary: if (g_GameData[+2] == 0) PauseGame(); else UnpauseGame();
+// Binary: if (ev != NULL) { if (g_GameData[+2] == 0) PauseGame(); else UnpauseGame(); }
 // g_GameData[+2] = pausedFlag in port (false=running, true=paused).
+// ASM-verified: 2026-05-18 binary @ 0x00168fd8 (re-analyst)
 static bool PauseGameCallback(InputEvent* ev) {
-    (void)ev;
+    if (!ev) return true;
     Game* game = Game::GetInstance();
     if (!game) return true;
     if (!game->pausedFlag) {
@@ -170,21 +171,31 @@ static bool PauseGameCallback(InputEvent* ev) {
 }
 
 // RegressMenuCallback @ 0x00168e9c
-// Binary: g_GameData->m_bRegressMenu = 1.
-// TODO: m_bRegressMenu not yet in Game.h; add field at +0x9c (or its actual offset)
-//       and replace this stub with: Game::GetInstance()->m_bRegressMenu = 1;
+// Binary: g_GameData[+0x604] = 1; (unconditional)
+// +0x604 is m_bFrameDirty in port (same slot ShowPauseMenuCallback writes
+// when its gate passes -- both actions flip the same "menu input pending"
+// latch consumed downstream).
+// ASM-verified: 2026-05-18 binary @ 0x00168e9c (re-analyst)
 static bool RegressMenuCallback(InputEvent* ev) {
     (void)ev;
-    // TODO: implement RegressMenuCallback (binary @ 0x00168e9c)
-    // Binary: g_GameData[m_bRegressMenu] = 1; (offset TBD in port)
+    Game* g = Game::GetInstance();
+    if (!g) return true;
+    g->m_bFrameDirty = 1;
     return true;
 }
 
 // ShowPauseMenuCallback @ 0x00168e6c
-// TODO: implement (binary @ 0x00168e6c)
+// Binary: if (m_TransitionTimer == 0.0f && pausedFlag == 0)
+//             g_GameData[+0x604] = 1;
+// +0x604 is m_bFrameDirty -- same field as RegressMenuCallback.
+// ASM-verified: 2026-05-18 binary @ 0x00168e6c (re-analyst)
 static bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
-    // TODO: implement ShowPauseMenuCallback (binary @ 0x00168e6c)
+    Game* g = Game::GetInstance();
+    if (!g) return true;
+    if (g->m_TransitionTimer == 0.0f && !g->pausedFlag) {
+        g->m_bFrameDirty = 1;
+    }
     return true;
 }
 
