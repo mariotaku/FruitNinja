@@ -631,8 +631,9 @@ void GameDraw(float dt, bool active) {
         FN::DrawNews();
         FN::DrawStartFade();
 
-        // Debug overlay — fruit/bomb hitboxes (F1 toggle)
+        // Debug overlay — fruit/bomb hitboxes + MenuButton AABBs (F1 toggle)
         FN::DebugHitbox_Draw();
+        FN::DebugMenuButton_Draw();
 
         // HUD::Draw(0x400) — top layer @ 0x0016bd7c, ALWAYS fires
         // (binary places it OUTSIDE the `active` block).

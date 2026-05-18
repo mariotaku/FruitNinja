@@ -242,6 +242,10 @@ public:
     static void LoadContent();
     static void UnLoadContent();
 
+    // Port specific: debug registry — iterate all currently active MenuButtons.
+    // Populated by Init(Vec3,...) / cleared by Release(). Used by DebugMenuButton_Draw().
+    static const std::list<MenuButton*>& GetActiveButtons();
+
 private:
     // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4). Copies
     // x/y/phase from the currently tracked Touch slot into m_TouchX/Y/Phase.
