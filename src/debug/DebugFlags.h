@@ -1,6 +1,8 @@
 #ifndef FN_DEBUG_FLAGS_H
 #define FN_DEBUG_FLAGS_H
 
+#ifndef __bada__
+
 //
 // Debug overlay — draws fruit + bomb collision spheres as translucent
 // circles. Toggle with F1 in the SDL event loop.
@@ -29,5 +31,7 @@ void DebugHitbox_Draw();
 void DebugMenuButton_Draw();
 
 } // namespace FN
+
+#endif // !__bada__
 
 #endif

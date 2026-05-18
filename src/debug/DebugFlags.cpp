@@ -3,6 +3,8 @@
 // outlined discs. Toggle with F1 in the SDL event loop (Game::run).
 //
 
+#ifndef __bada__
+
 #include "DebugFlags.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
@@ -273,3 +275,5 @@ void DebugMenuButton_Draw() {
 }
 
 } // namespace FN
+
+#endif // !__bada__
