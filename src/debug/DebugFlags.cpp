@@ -264,10 +264,10 @@ void DebugMenuButton_Draw() {
             hw = btn->size.x * 0.5f;
             hh = btn->size.y * 0.5f;
         }
-        const float left   = btn->pos.x - hw - btn->m_AnimSpeed2;
-        const float right  = btn->pos.x + hw + btn->m_AnimSpeed2;
-        const float bottom = btn->pos.y - hh - btn->m_AnimSpeed;
-        const float top    = btn->pos.y + hh + btn->m_AnimSpeed;
+        const float left   = btn->pos.x - hw - btn->m_HitInsetX;
+        const float right  = btn->pos.x + hw + btn->m_HitInsetX;
+        const float bottom = btn->pos.y - hh - btn->m_HitInsetY;
+        const float top    = btn->pos.y + hh + btn->m_HitInsetY;
 
         BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kMenuBoxColour);
         r->DrawTriList(s_BoxVerts, 24);

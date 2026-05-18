@@ -216,8 +216,8 @@ void DojoScreen::Update(float dt) {
                 //   [+0x124] m_TargetSize = (texW+1, texH+1, 1.0)   (absolute)
                 //   [+0x13C] m_AnimScale  = 0.5
                 //   [+0x140] m_BounceParams *= 0.575 (SHOP_SCALE)   (NOT m_TargetSize)
-                //   [+0x150] m_AnimSpeed   = -15.0
-                //   [+0x14C] m_AnimSpeed2  = -15.0
+                //   [+0x150] m_HitInsetY  = -15.0  (was m_AnimSpeed)
+                //   [+0x14C] m_HitInsetX  = -15.0  (was m_AnimSpeed2)
                 // Earlier port had `m_TargetSize *= SHOP_SCALE` which
                 // shrank the ring to ~57.5% of tex size -- wrong. 0.575
                 // is the bounce multiplier, not a size multiplier.
@@ -232,8 +232,8 @@ void DojoScreen::Update(float dt) {
                 // read m_BounceParams yet (MenuButton rework reverted),
                 // so this write is currently a no-op. Restore once the
                 // bounce/new-indicator draw path is ported.
-                m_pShopButton->m_AnimSpeed  = -15.0f;
-                m_pShopButton->m_AnimSpeed2 = -15.0f;
+                m_pShopButton->m_HitInsetY  = -15.0f;
+                m_pShopButton->m_HitInsetX = -15.0f;
                 m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
                 m_pShopButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
                 game.hud->AddControl(m_pShopButton);

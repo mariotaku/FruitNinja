@@ -104,8 +104,8 @@ public:
     // +0xFC: >= 0 = "new" star indicator active
     float m_NewIndicatorTimer;
 
-    // +0x100: hit-test bounds scale from constructor
-    Vec3 m_HitBoundsScale;
+    // +0x100 — entity base scale captured on first frame; Update writes entity->scale = m_BaseScale * sizeFrac. Was m_HitBoundsScale (misleading).
+    Vec3 m_BaseScale;
 
     // +0x10C: child sprite list for AddPeice/UpdatePeices/DeletePeices.
     // Binary: std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11).
@@ -145,8 +145,8 @@ public:
     // +0x130: true if hitBounds > 0
     bool m_bHasHitArea;
 
-    // +0x131: affects tint (0.5 vs 1.0 alpha)
-    uint8_t m_bHighlighted;
+    // +0x131: Touch-held state gate; set on press, cleared when finger leaves rect or releases. Was m_bHighlighted (misleading: not visual state).
+    uint8_t m_bTouchHeld;
 
     // +0x134: direct fruit reference for scale/rotate access
     Fruit* m_pFruitPiece;
@@ -163,11 +163,11 @@ public:
     // +0x140: for "new" indicator bounce
     Vec3 m_BounceParams;
 
-    // +0x14C: = 5.0
-    float m_AnimSpeed2;
+    // +0x14C — touch-area X inset (grace zone, default 5px). Was m_AnimSpeed2.
+    float m_HitInsetX;
 
-    // +0x150: = 5.0
-    float m_AnimSpeed;
+    // +0x150 — touch-area Y inset (grace zone, default 5px). Was m_AnimSpeed.
+    float m_HitInsetY;
 
     // +0x154
     float m_field154;
