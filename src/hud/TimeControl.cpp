@@ -10,6 +10,8 @@
 #include "screens/MainScreen.h"
 #include "render/Font.h"
 #include "game/FruitSaveData.h"
+#include "game/PowerUpManager.h"
+#include "game/WaveManager.h"
 #include <cstdio>
 #include <cstring>
 #include <cmath>
@@ -162,9 +164,22 @@ void TimeControl::Update(float dt) {
             // ARCADE / MP count-down branch.
             uint8_t entryColourR = m_DrawColour.r;
 
-            // TODO: 0x00162528 — PowerUpManager::m_field68 > 0 path: red tint + "+N" overlay + skip tick
-            // TODO: 0x0016257c — PowerUpManager::m_field6c tick-rate modulation (dt *= m_field6c)
-            m_TimeRemaining -= dt;
+            // ASM-verified: 2026-05-18 binary @ 0x00162528 (re-analyst)
+            // ASM-verified: 2026-05-18 binary @ 0x0016257c (re-analyst)
+            if (WaveManager::PowersEnabled()) {
+                PowerUpManager* pum = PowerUpManager::GetInstance();
+                if (pum && pum->m_StopClockAccum > 0.0f) {
+                    m_DrawColour = Colour(255, 100, 100, 255);
+                    snprintf(m_PowerupOverlay, sizeof(m_PowerupOverlay),
+                             "+%i", (int)pum->m_StopClockAccum + 1);
+                    goto LAB_00162818;
+                }
+                m_PowerupOverlay[0] = '\0';
+                m_TimeRemaining -= dt * (pum ? pum->m_SlowClockMult : 1.0f);
+            } else {
+                m_PowerupOverlay[0] = '\0';
+                m_TimeRemaining -= dt;
+            }
 
             // GameOver trigger (binary @ 0x001625be).
             if (m_TimeRemaining < 0.5f) {
@@ -214,6 +229,7 @@ void TimeControl::Update(float dt) {
     // LAB_00162818 — runs unconditionally for all timed modes (including when suppressed).
     // Write HUD-side timer mirror every frame (binary @ 0x00162830).
     // ASM-verified: 2026-05-18 binary @ 0x00162830 (re-analyst)
+    LAB_00162818:
     if (game->mainScreen) {
         game->mainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
     }
