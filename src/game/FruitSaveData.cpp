@@ -10,6 +10,7 @@
 #include "ScoreState.h"
 #include "Game.h"
 #include "ItemManager.h"
+#include "AchievementManager.h"
 #include "engine/util/StringHash.h"
 #include "engine/util/PathCI.h"
 
@@ -196,7 +197,7 @@ bool FruitSaveData::SetCurrentModeHighscore(int newScore) {
 // ----------------------------------------------------------------------
 
 // 0x00129c50 -- returns 2 if pending, 1 if unlocked, 0 otherwise.
-// TODO: 0x00129c50 -- Phase C: full body (check m_PendingUnlocks then m_UnlockedAchievements)
+// ASM-verified: 2026-05-18 binary @ 0x00129c50 (re-analyst)
 int FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
     if (m_PendingUnlocks.find(hash) != m_PendingUnlocks.end()) return 2;
     return (m_UnlockedAchievements.find(hash) != m_UnlockedAchievements.end()) ? 1 : 0;
@@ -207,9 +208,20 @@ void FruitSaveData::UnlockTotals() {
     // 0x00124f10 -- "total-X" thresholds; full impl blocked on AchievementManager port.
 }
 
-// Binary @ (unknown) -- stub: always allow queuing.
-// Full impl: inserts name+hash into queued-unlock list, deduplicates.
-int FruitSaveData::AddToQue(const char* /*name*/, uint32_t /*hash*/) {
+// Binary @ 0x0012b38c. Queue an achievement unlock. Skip if already pending or unlocked.
+// field_0x16c: when non-zero the popup display is staggered (3.0f delay); otherwise
+// the timer fires on the next Update tick (0.0f). field_0x16c writer not yet RE'd;
+// port always uses 0 (immediate fire, which is the binary's most common path).
+// TODO: 0x0012b38c -- field_0x16c writer not yet RE'd; gate needs re-analyst pass
+//   to identify what sets it. For now always 0.0f (immediate, same as field_0x16c==0).
+// ASM-verified: 2026-05-18 binary @ 0x0012b38c (re-analyst)
+int FruitSaveData::AddToQue(const char* name, uint32_t hash) {
+    if (IsAchievementUnlocked(hash) != 0) return 0;
+    AchievementItem& slot = m_PendingUnlocks[hash];
+    strncpy(slot.m_Name, name, sizeof(slot.m_Name) - 1);
+    slot.m_Name[sizeof(slot.m_Name) - 1] = '\0';
+    // field_0x16c == 0 in port (writer not RE'd); binary: timer = field_0x16c ? 3.0f : 0.0f
+    slot.m_Timer = 0.0f;
     return 1;
 }
 
@@ -237,9 +249,47 @@ void FruitSaveData::DownloadTweaks() {
 // Per-frame tick
 // ----------------------------------------------------------------------
 
-void FruitSaveData::Update(float /*dt*/, HUD* /*hud*/) {
-    // 0x0012b3dc -- achievement in-progress timer ticks. Stub for now.
-    // TODO: 0x0012b5c0 — wire ItemManager::UnlockItem(hash) here when achievement-fire path lands
+// Binary @ 0x0012b3dc. Achievement timer tick: find the pending entry with the
+// smallest timer, decrement it, fire when it reaches zero, then move to unlocked map.
+// Name prefix '0'..'9' -> UnlockAchievementInNetwork (defunct online ID); else -> ItemManager::UnlockItem.
+// ASM-verified: 2026-05-18 binary @ 0x0012b3dc (re-analyst)
+void FruitSaveData::Update(float dt, HUD* hud) {
+    if (m_PendingUnlocks.empty()) return;
+
+    // Find the entry with the smallest timer.
+    std::map<uint32_t, AchievementItem>::iterator nextIt = m_PendingUnlocks.end();
+    float smallest = 1e30f;
+    for (std::map<uint32_t, AchievementItem>::iterator it = m_PendingUnlocks.begin();
+         it != m_PendingUnlocks.end(); ++it) {
+        if (it->second.m_Timer < smallest) {
+            smallest = it->second.m_Timer;
+            nextIt = it;
+        }
+    }
+    if (nextIt == m_PendingUnlocks.end()) return;
+
+    AchievementItem& item = nextIt->second;
+    bool wasPositive = (item.m_Timer > 0.0f);
+    item.m_Timer -= dt;
+
+    if (wasPositive && item.m_Timer <= 0.0f) {
+        // Crossed the threshold: dispatch unlock.
+        uint32_t hash = nextIt->first;
+        if (item.m_Name[0] >= '0' && item.m_Name[0] <= '9') {
+            // Defunct: online achievement ID -- no-op in port.
+            AchievementManager::GetInstance()->UnlockAchievementInNetwork(item.m_Name);
+        } else {
+            ItemManager::GetInstance()->UnlockItem(hash);
+        }
+        AchievementManager::GetInstance()->UnlockedAchievement(hash, hud);
+    }
+
+    if (item.m_Timer <= 0.0f) {
+        // Move to unlocked map; erase from pending.
+        uint32_t hash = nextIt->first;
+        m_UnlockedAchievements[hash] = item;
+        m_PendingUnlocks.erase(nextIt);
+    }
 }
 
 // ----------------------------------------------------------------------
