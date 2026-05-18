@@ -170,40 +170,48 @@ void Bonus::Parse(tinyxml2::XMLElement* e) {
 
 // ---------------------------------------------------------------------------
 // Bonus::IsAchieved -- Binary @ 0x0010df38
+// ASM-verified: 2026-05-18 binary @ 0x0010df38 (re-analyst Claude #49)
 //
 // Returns non-zero tier value when the bonus conditions are met, 0 otherwise.
 // Checks:
-//   1. score within [m_MinSliced, m_MaxSliced] (0 = no bound)
-//   2. per-fruit counts within [m_MinFruit[k], m_MaxFruit[k]]
-//   3. m_DivisibleBy != 0: score must be divisible by m_DivisibleBy
+//   1. totalAcrossFruits within [m_MinSliced, m_MaxSliced] (0 = no bound)
+//   2. iterate fruitCounts; for each entry look up min (default 0) and max
+//      (default 1,000,000 = DAT_0010e090); fail if count outside bounds.
+//   3. m_DivisibleBy != 0: totalAcrossFruits must be divisible by m_DivisibleBy
 //   4. m_PatternHashes non-empty: at least one pattern hash must be found
 //      in fruitCounts (non-zero count)
+// Binary iterates fruitCounts (param_2), not m_MinFruit/m_MaxFruit, so a fruit
+// hash present in m_MinFruit but absent from fruitCounts is silently skipped.
 // ---------------------------------------------------------------------------
-int Bonus::IsAchieved(int score, std::map<uint64_t, int>& fruitCounts) {
+// DIFFERS: original param name was `score` — renamed to `totalAcrossFruits`
+//   to match call-site semantics (UnlockAchievements passes the fruit-slice sum,
+//   not the game score). Cosmetic only; no ABI change.
+int Bonus::IsAchieved(int totalAcrossFruits, std::map<uint64_t, int>& fruitCounts) {
     if (m_Tier < 0) return 0;
 
     // Min/max sliced bounds (0 = unconstrained)
-    if (m_MinSliced > 0 && score < m_MinSliced) return 0;
-    if (m_MaxSliced > 0 && score > m_MaxSliced) return 0;
+    if (m_MinSliced > 0 && totalAcrossFruits < m_MinSliced) return 0;
+    if (m_MaxSliced > 0 && totalAcrossFruits > m_MaxSliced) return 0;
 
-    // Per-fruit min bounds
-    for (std::map<uint64_t, int>::iterator it = m_MinFruit.begin();
-         it != m_MinFruit.end(); ++it) {
-        std::map<uint64_t, int>::iterator fc = fruitCounts.find(it->first);
-        int count = (fc != fruitCounts.end()) ? fc->second : 0;
-        if (count < it->second) return 0;
-    }
+    // Per-fruit bounds: iterate fruitCounts (binary's param_2 iteration direction).
+    // Missing key in m_MinFruit defaults to 0; missing key in m_MaxFruit defaults
+    // to 1,000,000 (DAT_0010e090 = 0x000f4240).
+    static const int kNoMaxSentinel = 1000000;
+    for (std::map<uint64_t, int>::iterator fc = fruitCounts.begin();
+         fc != fruitCounts.end(); ++fc) {
+        int count = fc->second;
 
-    // Per-fruit max bounds
-    for (std::map<uint64_t, int>::iterator it = m_MaxFruit.begin();
-         it != m_MaxFruit.end(); ++it) {
-        std::map<uint64_t, int>::iterator fc = fruitCounts.find(it->first);
-        int count = (fc != fruitCounts.end()) ? fc->second : 0;
-        if (count > it->second) return 0;
+        std::map<uint64_t, int>::const_iterator minIt = m_MinFruit.find(fc->first);
+        int minVal = (minIt != m_MinFruit.end()) ? minIt->second : 0;
+        if (count < minVal) return 0;
+
+        std::map<uint64_t, int>::const_iterator maxIt = m_MaxFruit.find(fc->first);
+        int maxVal = (maxIt != m_MaxFruit.end()) ? maxIt->second : kNoMaxSentinel;
+        if (count > maxVal) return 0;
     }
 
     // Divisible-by check
-    if (m_DivisibleBy > 0 && (score % m_DivisibleBy) != 0) return 0;
+    if (m_DivisibleBy > 0 && (totalAcrossFruits % m_DivisibleBy) != 0) return 0;
 
     // Pattern check: at least one pattern hash present in fruitCounts
     if (!m_PatternHashes.empty()) {
@@ -350,31 +358,52 @@ Bonus* BonusType::GetBest() {
 }
 
 // ---------------------------------------------------------------------------
-// BonusType::UnlockAchievements -- Binary @ 0x0010e12c
+// GetBonusTotal -- Binary @ 0x0010ddb4 (file-scope helper)
 //
-// For each bonus in m_Bonuses that has an m_AchievementHash, unlock it
-// via FruitSaveData::IsAchievementUnlocked (port: we just return true if any).
-// Binary: calls AchievementManager::UnlockAchievement on m_AchievementHash.
-// Returns true if any achievement was unlocked.
+// If hash == StringHash("score"), return the current game score for player 0.
+// Otherwise return FruitSaveData::GetTotal(sd, hash).
+// The "score" string hash is cached on first call (function-local static).
+// ---------------------------------------------------------------------------
+static int GetBonusTotal(uint64_t hash) {
+    static const uint32_t kScoreHash = StringHash("score");
+    if ((uint32_t)hash == kScoreHash) {
+        Game* g = Game::GetInstance();
+        return g ? g->currentScore : 0;
+    }
+    Game* g = Game::GetInstance();
+    FruitSaveData* sd = g ? g->pSaveData : 0;
+    return sd ? sd->GetTotal((uint32_t)hash) : 0;
+}
+
+// ---------------------------------------------------------------------------
+// BonusType::UnlockAchievements -- Binary @ 0x0010e12c
+// ASM-verified: 2026-05-18 binary @ 0x0010e12c (re-analyst Claude #49)
+//
+// Pre-pass: refresh per-fruit totals into m_RequiredHashes values (the map
+// keys were populated by Parse from the "requires" CSV; values get overwritten
+// here with GetBonusTotal), sum into totalAcrossFruits.
+// Then for each Bonus with m_AchievementHash != 0, call IsAchieved; on success
+// call AchievementManager::UnlockBonusAchievement.
+// Returns true if any achievement was awarded.
 // ---------------------------------------------------------------------------
 bool BonusType::UnlockAchievements() {
-    // Binary @ 0x0010e12c.
-    // Pre-pass: refresh per-fruit totals into m_RequiredHashes values (spec calls this
-    // m_FruitTotals; same field at +0x00), then sum into totalAcrossFruits.
-    // TODO: 0x0010e12c -- pre-pass blocked: GetBonusTotal() not in port, and
-    //   Bonus::IsAchieved signature mismatch (spec: IsAchieved(totalAcrossFruits, BonusType*)
-    //   vs port: IsAchieved(int score, std::map<uint64_t,int>&)).
-    //   Dispatch re-analyst: decompile @ 0x0010e12c + 0x0010df38 to settle
-    //   IsAchieved's true second param type.
-    // For now: use the existing GetBest()-style fruit-count building and call
-    // UnlockBonusAchievement for each bonus that has m_AchievementHash != 0.
     if (!m_HasAchievement) return false;
-    bool any = false;
-    for (size_t i = 0; i < m_Bonuses.size(); ++i) {
-        Bonus& b = m_Bonuses[i];
-        if (b.m_AchievementHash == 0) continue;
-        AchievementManager::GetInstance()->UnlockBonusAchievement((unsigned long)b.m_AchievementHash);
-        any = true;
+
+    int totalAcrossFruits = 0;
+    for (std::map<uint64_t, int>::iterator it = m_RequiredHashes.begin();
+         it != m_RequiredHashes.end(); ++it) {
+        int total = GetBonusTotal(it->first);
+        it->second = total;
+        totalAcrossFruits += total;
     }
-    return any;
+
+    bool anyAwarded = false;
+    for (size_t i = 0; i < m_Bonuses.size(); ++i) {
+        Bonus* b = &m_Bonuses[i];
+        if (b->m_AchievementHash == 0) continue;
+        if (!b->IsAchieved(totalAcrossFruits, m_RequiredHashes)) continue;
+        AchievementManager::GetInstance()->UnlockBonusAchievement((unsigned long)b->m_AchievementHash);
+        anyAwarded = true;
+    }
+    return anyAwarded;
 }
