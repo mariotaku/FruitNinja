@@ -152,6 +152,7 @@ FruitFactControl::FruitFactControl()
     , m_StarType(0)
 {
     memset(m_ComboHashArray, 0, sizeof(m_ComboHashArray));
+    m_ComboActiveFlag = 0;
     memset(_pad_factColour, 0, sizeof(_pad_factColour));
     memset(_pad_D9, 0, sizeof(_pad_D9));
     memset(_pad_E5, 0, sizeof(_pad_E5));
@@ -222,18 +223,32 @@ void FruitFactControl::Init() {
 
     m_FactColour.a = 0xFF;
 
-    // Combo flag: gameMode==3 and saveData[+0x208] >= 3
+    // ASM-verified: 2026-05-18 binary @ 0x0013a34e..0x0013a3ac (re-analyst)
+    // TWO distinct gates in the binary:
+    //   1. comboFlag (m_ComboActiveFlag / field_0xa0): Zen ONLY (mode==3 && cnt>=3).
+    //      Stored in m_ComboActiveFlag; consumed by Update/Draw layout paths.
+    //   2. comboPath (text+hash+offset): Arcade OR Zen (mode in {2,3} && cnt>=3).
+    //      Selects BEST COMBO snippet over plain fact text.
+    // +0x208: m_BombQueueCount -- misleading name; semantically the best-combo length, NOT a bomb queue count.
     int comboFlag = 0;
+    int comboPath = 0;
     if (game && game->pSaveData) {
-        if (gameMode == 3 && game->pSaveData->m_BombQueueCount >= 3) {
+        // ASM-verified: 2026-05-18 binary @ 0x0013a398 (re-analyst)
+        int count = game->pSaveData->m_BombQueueCount;
+        if (gameMode == 3 && count >= 3) {
             comboFlag = 1;
         }
+        if (comboFlag || (gameMode == 2 && count >= 3)) {
+            comboPath = 1;
+        }
     }
+    m_ComboActiveFlag = (uint8_t)comboFlag; // field_0xa0 -- Zen-only; consumed by Update/Draw
+
     // Per-mode m_FactPosOffset: non-combo default (-69, 53, 0)
     m_FactPosOffset = Vec3(-69.0f, 53.0f, 0.0f);
 
-    if (comboFlag) {
-        // Combo path (binary @ 0x0013a278, comboFlag != 0 branch):
+    if (comboPath) {
+        // Combo path (binary @ 0x0013a3ae, comboPath branch):
         // saveData->m_BombQueueCount holds m_ComboLength; m_BombQueue holds hashes.
         // Binary: snprintf(buf, "%s", Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO))
         // where LSTR_BEST_COMBO = 0x98 = "BEST COMBO: %i FRUIT!". The single
