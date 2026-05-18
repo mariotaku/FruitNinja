@@ -275,6 +275,26 @@ private:
     // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
     uint32_t field_0x130;
 
+    // Binary +0x124: combo-window accumulator. Initialized to 0.1f in Init.
+    // Ticks up each Update while >= 0; reset to -1 when combo window closes.
+    // The per-swipe combo counter fires AddSpeed when this >= 0 and ComboCount > 2.
+    float m_ComboTimer;         // Binary +0x124
+
+    // Binary +0x128: count of fruits sliced in the current swipe combo.
+    // Incremented by CollisionResponse via the combo-slice array;
+    // reset to 0 when a new swipe starts.
+    int m_ComboCount;           // Binary +0x128
+
+    // Binary +0x12c: entity type of the most recently combo'd fruit.
+    int m_ComboEntityType;      // Binary +0x12c
+
+    // Binary +0x154: 11-entry int32 combo-slice array. Each slot stores a
+    // fruit-entity-type tag for the combo's sliced entities; -1 = empty.
+    // m_ComboSliceArr[1] (binary +0x158) gates the AddSpeed call in Update:
+    // when >= 0, a secondary slice has registered and the combo is live.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+    int32_t m_ComboSliceArr[11]; // Binary +0x154 .. +0x17c
+
     // Binary +0x144: 2-bit shift-register fuse for "swipe just ended".
     // Writer (outside SlashEntity): sets bit0 on finger-lift (m_SwipeEndEdge |= 1).
     // Reader: DrawSlice shifts left each frame; fires CreateGhost + contact burst
