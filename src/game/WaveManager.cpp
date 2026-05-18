@@ -531,18 +531,33 @@ void WaveManager::Reset(bool fullReset) {
 // Resume / SaveWaveInfo
 // ----------------------------------------------------------------------------
 
-// 0x001255b8 — not yet ported; stub so Resume can call.
+// ASM-spec corrected 2026-05-18 (re-analyst): SkipToPause is a FREE function
+// at binary @ 0x00169c48 -- NOT a WaveManager member, addr 0x001255b8 was
+// an internal call site inside WaveManager::UpdateWave. Binary body:
+//   if (force || (g_PauseScreen && g_PauseScreen->IsEnabled())) {
+//       gs->m_TransitionTimer = 0.0f;
+//       PauseScreen::SkipTo(g_PauseScreen);
+//       gs->pausedFlag = 1;
+//       gs->levelTransitionFlag = 0;
+//       MainScreen::Hide(g_MainScreen);
+//       HUD::Skip(gs->hud);
+//       PreloadInGameSounds();
+//   }
+// Port stub kept until PauseScreen::SkipTo + MainScreen::Hide are exposed.
 static void SkipToPause(bool /*flag*/) {
-    // TODO: 0x001255b8 — re-enter paused game state.
-    // See docs/engine/splat-pool-and-wave-resume.md A7 "SkipToPause wave-state restore".
+    // TODO: implement once PauseScreen::SkipTo + MainScreen::Hide + HUD::Skip + PreloadInGameSounds are wired.
 }
 
-// 0x00125450 — not yet ported; stub so Resume can call.
+// ASM-spec corrected 2026-05-18: SkipToGameOver is also a free function at
+// binary @ 0x0016ada0 (not 0x00125450). Binary body conditionally zeroes
+// pCamera +0x10c and TimeControl +0x7c when IsTimedGame, then writes
+// gs->bombHitTimer/m_TransitionTimer, conditionally fires GameOver,
+// clears MainScreen flag_0xf8, then HUD::Skip(hud). Port stub kept until
+// MainScreen::Hide + the camera/timecontrol field offsets are wired.
 static void SkipToGameOver(int /*goState*/, float /*goTimer*/,
                            float /*nextComboBonus*/, float /*bombHitTimer*/,
                            int /*field5*/) {
-    // TODO: 0x00125450 — fast-forward into game-over screen state.
-    // See docs/engine/splat-pool-and-wave-resume.md A7 branch selection.
+    // TODO: implement once MainScreen::Hide is exposed; full spec above.
 }
 
 // ASM-verified: not yet — implementation from spec A7 @ 0x00124b1c.
@@ -1662,9 +1677,14 @@ float WaveManager::GetCriticalChance(int playerIdx) {
 }
 
 bool WaveManager::CriticalMode(int playerIdx) {
-    // Binary @ 0x001219e4. Reads first int from global RNG state (not Rand32).
-    // TODO: 0x001219e4 needs global Random state slot to be exposed before implementing.
-    // Returning false means no critical hits ever fire; does not crash.
+    // Binary @ 0x001219e4: returns
+    //   (float)((int64_t)*(int*)g_RandomState / 2) < GetCriticalChance(p)
+    // The LHS is a huge quasi-random float [INT_MIN/2..INT_MAX/2]; comparison
+    // against a small [0..N] chance makes it effectively a sign-of-seed coin
+    // flip. Requires Math::Random::PeekState() (currently absent in port's
+    // Random class) -- peeks the first 4 bytes of the LCG state without
+    // advancing. Returning false (no crits) is safe -- minor cosmetic gap
+    // until Random::PeekState() is added.
     (void)playerIdx;
     return false;
 }
@@ -1827,6 +1847,14 @@ void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }
 // ----------------------------------------------------------------------------
 
 int  WaveManager::UpdateNetworking(float /*dt*/, int /*playerIdx*/) { return 0; }
+// Defunct: P2P MP wave-sync packet -- empty in binary @ 0x0012197c too
+// (literal `return;`); only the GOT trampoline at 0x00102390 had a body,
+// and that calls a NetworkManager fn pointer that's null on Bada.
 void WaveManager::SendWaveSyncPacket()                               {}
 bool WaveManager::ShouldDisplayNetworkWaitIndicator()               { return false; }
+// TODO: 0x00121a1c -- COIN_CHANCEINATOR::GetCoins() singleton not yet ported.
+// Binary path: if (m_pCurrentWave[0]->m_CoinSpawnChance == 0 ||
+//                  COIN_CHANCEINATOR::GetCoins() < 1)
+//                  COIN_CHANCEINATOR::GetCoins();   // RNG advance
+// Coin-drop rate gating. Implement when coin spawn subsystem ports.
 void WaveManager::RequestCoins()                                     {}

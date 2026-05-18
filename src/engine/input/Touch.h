@@ -23,10 +23,15 @@
 // SDL event flow: InputTranslatorSDL calls __UpdateInternal per event.
 // Once per frame InputManager::Update broadcasts Update(dt) -> Touch::Update(dt).
 //
-// TODO: 0x002772d4+0xa0 -- global 16-slot touch table feeding IsTouchDown /
-//   TouchInRegion free functions. Port currently reads from Mortar::Touch::states1
-//   as a substitute. Real backing source unconfirmed; needs follow-up RE on
-//   GlesForm::OnTouch* dispatch chain.
+// Clarified 2026-05-18: 0x002772d4+0xa0 is a SEPARATE 16-slot table in BSS
+// used ONLY by free helpers IsTouchDown @ 0x00169144 and TouchInRegion @
+// 0x001691cc. Entries are {float x@+0xa0, y@+0xa4, phase@+0xa8}, stride 12,
+// indexed 0..15. Phase: 1.0=held, 2.0=press-edge, <=0=up.
+// The BSS table is written by a legacy Mortar input layer that has zero
+// observable callers in this binary (Bada caps point ids at 8 per
+// GlesForm::OnTouch* @ 0x0018334c). Mortar::Touch::states1 is the only live
+// source, and port's IsTouchDown/TouchInRegion correctly read it. The
+// 8-slot vs 16-slot cap is binary-faithful, not a port shortcut.
 
 #include <cstdint>
 
