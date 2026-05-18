@@ -561,7 +561,12 @@ SplatEntity* SplatEntity::GetFree() {
 }
 
 // Cache populated by UpdateActiveSplats; NumActiveSplats returns this.
+// Also serves as the per-call vertex write cursor inside DrawSplat (GOT +0x72c4).
 static int s_NumActiveSplats = 0;
+
+// Set by DrawActiveSplats before each DrawSplat call.
+// Points into HUD::scales[3..5] (world tint) for the duration of the batch pass.
+static const float* s_CurrentTintRGB = 0;
 
 // ASM-verified: 2026-05-06T17:00 binary @ 0x0017ee34 (asm-inspector)
 // Returns the cached counter; binary does NOT iterate the pool here.
@@ -661,11 +666,14 @@ void SplatEntity::ForEachInPool(PoolVisitor fn, void* user) {
 // ---------------------------------------------------------------------
 // SplatEntity::DrawSplat (0x0017f008) -- virtual per-instance render
 // Vtable slot 4.
+// ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst)
 // ---------------------------------------------------------------------
-// Writes 6 QUADCUSTOMVERTEX entries for this splat into the
-// caller-provided buffer (outVerts must point to at least 6 slots).
-// Called indirectly via vtable from DrawActiveSplats.
-void SplatEntity::DrawSplat(QUADCUSTOMVERTEX* outVerts, const float tintRGB[3]) {
+// Writes 6 QUADCUSTOMVERTEX entries into s_SplatVerts at the cursor
+// position given by s_NumActiveSplats. Tint read from s_CurrentTintRGB.
+// Called indirectly via vtable from DrawActiveSplats (pure thiscall).
+void SplatEntity::DrawSplat() {
+    QUADCUSTOMVERTEX* outVerts = &s_SplatVerts[s_NumActiveSplats * 6];
+    const float* tintRGB = s_CurrentTintRGB;
     // Quad corner construction -- matches binary DrawSplat (0x0017f008).
     // The four corners are built from the sum/diff of the two axis
     // vectors, scaled by m_Scale.x for X and m_Scale.y for Y. Note
@@ -757,36 +765,43 @@ void SplatEntity::DrawSplat(QUADCUSTOMVERTEX* outVerts, const float tintRGB[3]) 
 // Batched draw -- matches DrawActiveSplats (0x00180344)
 // ---------------------------------------------------------------------
 //
-// For each alive splat with m_SplatType >= 0, calls DrawSplat() to
-// write 6 vertices, then submits the batch.
-// ASM-verified: 2026-05-06T16:00 binary @ 0x00180344 (asm-inspector)
+// Zeros s_NumActiveSplats at entry (binary @ 0x00180356), sets
+// s_CurrentTintRGB from HUD::scales[3..5], then for each alive landed
+// splat calls DrawSplat() (pure thiscall, vtable slot 4) and increments
+// s_NumActiveSplats (binary @ 0x0018039c). Submits the completed batch.
+// ASM-verified: 2026-05-18 binary @ 0x00180344 (re-analyst)
 // Depth state owned by GameDraw (binary @ 0x0016b888): no per-call
 // glEnable/glDisable(GL_DEPTH_TEST) or glDepthMask in the binary's body.
 void SplatEntity::DrawActiveSplats() {
     if (!s_SplatTex.IsValid()) return;
 
-    // Fetch world tint from HUD::scales[3..5].
-    // Binary @ 0x0017f1ec passes &pHUD->scales[3] to DrawSplat.
+    // Binary @ 0x00180356: *s_NumActiveSplats = 0 before the loop.
+    s_NumActiveSplats = 0;
+
+    // Fetch world tint from HUD::scales[3..5] and store in s_CurrentTintRGB.
+    // DrawSplat reads this directly rather than receiving it as an argument.
     // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
-    const float* worldTint = Colour::IdentityTint();
+    s_CurrentTintRGB = Colour::IdentityTint();
     if (Game* game = Game::GetInstance()) {
         if (game->hud) {
-            worldTint = &game->hud->scales[3];
+            s_CurrentTintRGB = &game->hud->scales[3];
         }
     }
 
     const int N = s_Pool.Capacity();
-    int count = 0;
 
-    for (int i = 0; i < N && count < MAX_SPLATS_PER_FRAME; ++i) {
+    for (int i = 0; i < N && s_NumActiveSplats < MAX_SPLATS_PER_FRAME; ++i) {
         SplatEntity* s = s_Pool.SlotAt(i);
         if (!s || !s->m_bAlive)     continue;
         if (s->m_SplatType < 0)     continue;  // still airborne
 
-        s->DrawSplat(&s_SplatVerts[count * 6], worldTint);
+        s->DrawSplat();
 
-        ++count;
+        // Binary @ 0x0018039c: cursor++ after each DrawSplat call.
+        ++s_NumActiveSplats;
     }
+
+    const int count = s_NumActiveSplats;
 
     if (count == 0) return;
 
