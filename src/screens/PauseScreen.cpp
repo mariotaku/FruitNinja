@@ -198,7 +198,7 @@ static void QuitToMenu() {
     // identified. Clearing is binary-faithful; runtime effect of all-zero
     // is unchanged until those readers surface. Field comments in Game.h.
     game->field_0x19d = 0;
-    game->field_0x170 = 0;
+    game->m_bMPRetryPending = 0;
     game->field_0x19a = 0;
     game->field_0x19b = 0;
     game->field_0x19c = 0;

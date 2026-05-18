@@ -71,9 +71,8 @@ void SetupGameWork() {
     // TODO: add field at +0x16C to Game.h; stub store omitted until field exists.
     // Binary: *(int*)(g_GameData + 0x16C) = 0;
 
-    // +0x170: field_0x170 = 0.
-    // TODO: add field at +0x170 to Game.h; stub store omitted until field exists.
-    // Binary: *(int*)(g_GameData + 0x170) = 0;
+    // +0x170: m_bMPRetryPending = 0 (strb, binary @ 0x0010b550).
+    app->m_bMPRetryPending = 0;
 
     // +0x198: field_0x198 = 0.
     // TODO: add field at +0x198 to Game.h; stub store omitted until field exists.
