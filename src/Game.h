@@ -207,6 +207,19 @@ struct Game : public Mortar::MortarGame {
     uint8_t m_bGameOverActive;     // +0x190 -- cleared by GameOverScreen::Update case 0xe
     // +0x191..+0x193: padding (binary leaves 3 bytes here; port matches)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
+    // +0x19a..+0x19d: 4 single-byte clear-on-quit flags. Cleared by
+    // PauseScreen::QuitToMenu (binary @ 0x00169eae-be). Reader sites not
+    // yet RE'd -- the binary writes 0 but no non-zero writer or read site
+    // has been identified. Likely game-state-transition gates. Field
+    // declarations preserved so the QuitToMenu clear is grep-traceable.
+    uint8_t field_0x19a;           // +0x19A
+    uint8_t field_0x19b;           // +0x19B
+    uint8_t field_0x19c;           // +0x19C
+    uint8_t field_0x19d;           // +0x19D
+    // +0x170: another clear-on-quit flag (cleared as 4-byte int by
+    // SetupGameWork.cpp:74-76; QuitToMenu only clears the low byte).
+    // Modelled as uint8_t here -- reader sites also unknown.
+    uint8_t field_0x170;           // +0x170
     float m_MenuReturnTimer;       // +0x1A0
     uint8_t flag_0x1a8;            // +0x1A8
     uint8_t m_bFrameDirty;         // +0x604

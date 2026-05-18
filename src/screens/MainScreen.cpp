@@ -417,20 +417,26 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CAMERA_FADE:
-        // TODO: 0x0014c1a2..0x0014c1cc -- binary's gate is `timer < 0.85f`
-        // (against a persistent state-machine register s16 set in state 0x10),
-        // NOT `timer < 0`. Port's simpler gate works for the common
-        // post-game-return path (timer < 0 -> lerp to 0) but misses the
-        // 0.85-snapshot path used by other transitions. Two additional
-        // tail writes at 0x0014c306/0x0014c316 also unported.
-        // ASM-verified-partial: 2026-05-11 (asm-inspector flagged divergence).
-        if (game.m_TransitionTimer < 0.0f) {
-            game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
+        // ASM-verified: 2026-05-18 binary @ 0x0014c19a..0x0014c1d2 (re-analyst).
+        // Gate is `timer < -0.85f` against game.m_TransitionTimer (NOT a
+        // separate s16 register -- Ghidra IL had confused the issue, the
+        // "persistent state-machine register" is just m_TransitionTimer
+        // itself, armed by GameOver/PrepareForLevelStart to a deep-negative).
+        // Body decays 0.75x toward zero; on the first frame the new timer
+        // exceeds -0.001f, clamp back to -0.85f and clear levelTransitionFlag
+        // (one-shot release). Constants: -0.85 @ 0x14c284, 0.75 inline,
+        // -0.001 @ 0x14c2a8.
+        if (game.m_TransitionTimer < -0.85f) {
+            game.m_TransitionTimer *= 0.75f;
             if (game.m_TransitionTimer > -0.001f) {
-                game.m_TransitionTimer = 0.0f;
+                game.m_TransitionTimer = -0.85f;
                 game.levelTransitionFlag = 0;
             }
         }
+        // Tail writes at 0x0014c306/0x0014c316 -- those are unconditional
+        // post-switch logoFlash1/2 pos.z bobbing animation (binary @
+        // 0x0014c1f4..0x0014c36e), not part of STATE_CAMERA_FADE. Port
+        // doesn't carry m_pLogoFlash1/2 yet -- TODO for separate dispatch.
         break;
 
     case STATE_LOADING_A:

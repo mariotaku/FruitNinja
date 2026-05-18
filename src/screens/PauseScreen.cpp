@@ -193,8 +193,15 @@ static void QuitToMenu() {
     // vestigial ramp at 0x0016c5fe back to disarmed).
     game->m_MenuReturnTimer = 0.0f;
 
-    // TODO: 0x00169eae..0x00169ebe -- 5 clear-on-quit flag bytes (Game+0x19d,
-    //   +0x170, +0x19a, +0x19b, +0x19c); add port-side fields when RE'd.
+    // Binary @ 0x00169eae..0x00169ebe: 5 single-byte clear-on-quit flags.
+    // Reader sites not yet RE'd -- no non-zero writer or read site
+    // identified. Clearing is binary-faithful; runtime effect of all-zero
+    // is unchanged until those readers surface. Field comments in Game.h.
+    game->field_0x19d = 0;
+    game->field_0x170 = 0;
+    game->field_0x19a = 0;
+    game->field_0x19b = 0;
+    game->field_0x19c = 0;
 }
 
 static void EndRetryLevel() {

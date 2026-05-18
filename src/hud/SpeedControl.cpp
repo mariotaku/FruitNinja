@@ -151,17 +151,44 @@ void SpeedControl::Update(float dt) {
     m_DrawColour = Colour(0xF6, 0xD4, 0xC1, a);
 }
 
-// STUB: SpeedControl::Init -- binary @ 0x???? (TODO RE)
+// Binary @ 0x00160cdc -- no-op (single bx lr). Slot exists for vtable
+// parity; Update() handles all per-frame state, including lazy emitter
+// alloc, on the first non-idle frame.
 void SpeedControl::Init() {}
 
-// STUB: SpeedControl::PreDraw -- binary @ 0x???? (TODO RE)
-void SpeedControl::PreDraw(float* viewVec) {}
+// Binary @ 0x00160ce4 -- empty pass-through.
+void SpeedControl::PreDraw(float* /*viewVec*/) {}
 
-// STUB: SpeedControl::Reset -- binary @ 0x???? (TODO RE)
+// Binary @ 0x00160cd8 -- no-op (single bx lr). State is driven entirely
+// by m_DisplayedSpeed in Update; no per-Reset wipe.
 void SpeedControl::Reset() {}
 
-// STUB: SpeedControl::Skip -- binary @ 0x???? (TODO RE)
+// Binary @ 0x00160ce0 -- no-op (single bx lr).
 void SpeedControl::Skip() {}
 
-// STUB: SpeedControl::SoundNeedsLooping -- binary @ 0x???? (TODO RE)
-void SpeedControl::SoundNeedsLooping(Mortar::MortarSound* sound) {}
+// Binary @ 0x00160ce8 (re-analyst 2026-05-18) -- looping-stream restart
+// callback handed to GameSound::SFXPlay. When the previous stream
+// instance finishes, re-issue SFXPlay with the appropriate name (light
+// or heavy variant by wave count). Returns false (binary uint32 0).
+bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
+    if (m_pSound != finished) return false;   // not our loop -- ignore
+
+    // After 6+ waves use the "heavy" stream variant. WaveManager+0x5c.
+    // TODO: confirm exact field name when WaveManager wave count is RE'd;
+    // current name guess from re-analyst pass.
+    WaveManager* wm = WaveManager::GetInstance();
+    if (wm && wm->m_WaveCount[0] > 5) {
+        m_SoundIdx = 1;
+    }
+
+    // TODO: confirm second SFX name ("Combo-Blitz-Backing-Heavy"?) from
+    // .rodata GOT[0x00160dac][1]. Until then, single-variant restart.
+    static const char* const kStreamSfx = "Combo-Blitz-Backing-Light";
+    Game* g = Game::GetInstance();
+    if (!g || !g->pGameSound) return false;
+    m_pSound = g->pGameSound->SFXPlay(kStreamSfx, 0.0f, 1.0f);
+    if (m_pSound) {
+        static_cast<Mortar::MortarSound*>(m_pSound)->SetVolume(0.0f);
+    }
+    return false;
+}
