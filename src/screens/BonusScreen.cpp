@@ -6,23 +6,81 @@
 #include "BonusScreen.h"
 #include "hud/HUD.h"
 #include "Game.h"
+#include "game/FruitCamera.h"
+#include "game/GameOver.h"
+#include "entities/Coin.h"
 #include "engine/audio/MortarSound.h"
+#include "engine/audio/GameSound.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/math/MathUtil.h"
+#include "engine/particle/PSPParticleManager.h"
+#include "engine/util/StringHash.h"
+#include "util/Delegate.h"
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <algorithm>
 
 using Mortar::TextureManager;
 
-// Phase-timer rodata constants — binary @ GOT_DAT_00132cdc area.
-// TODO: resolve phase-timer rodata @ DAT_00132cdc
-static const float PRE_OFFSET     = 1.0f;
-static const float AWARD_SPACING  = 0.5f;
-static const float REVEAL_END     = 1.0f;
-static const float FINALE_HOLD    = 0.5f;
-static const float DISMISS_BUFFER = 0.5f;
+// Phase-timer rodata — binary @ 0x001f3d48, five floats.
+// ASM-verified: 2026-05-18 binary @ 0x001f3d48 (re-analyst)
+static const float kRevealStart     = 0.66597f;  // pfVar14[0]
+static const float kPerAward        = 0.6f;       // pfVar14[1]
+static const float kRevealHalfBeat  = 0.33298f;   // pfVar14[2]
+static const float kFinaleHoldExtra = 0.25f;      // pfVar14[3]
+static const float kDismissBuffer   = 7.0f;       // pfVar14[4]
+
+// ---------------------------------------------------------------------------
+// Per-coin arrival callback — binary @ 0x0013243c
+// Fires on each coin that reaches the HUD score target.
+// Milestones at 3, 6, >= 9: camera shake + firework SFX + particles.
+// Always credits coin.scoreValue via AddToCurrentScore.
+// ---------------------------------------------------------------------------
+
+static int s_BonusCoinCounter = 0;
+
+static void AddToScoreOnArrival(Coin* coin) {
+    if (!coin) return;
+    s_BonusCoinCounter++;
+
+    bool milestone = (s_BonusCoinCounter == 3 || s_BonusCoinCounter == 6
+                      || s_BonusCoinCounter >= 9);
+
+    if (milestone) {
+        Game* game = Game::GetInstance();
+        if (game && game->pCamera) {
+            Vec3 coinPos = coin->pos;
+            game->pCamera->CreateCameraShake(coinPos, 0.3f, 0.75f);
+        }
+        if (game && game->pGameSound) {
+            game->pGameSound->SFXPlay("Bonus-Firework-Explode", 1.0f, 1.0f);
+        }
+        {
+            PSPParticleManager& pm = PSPParticleManager::GetInstance();
+            PSPParticleEmitter* e1 = pm.AddEmitter(StringHash("bonus_mode_fx_red"));
+            if (e1) e1->m_Pos = coin->pos;
+            // sprintf'd particle: "Bonus-Explosion-%i" with i in {1, 3, 5} cycling per milestone
+            char pname[32];
+            static const int kExplosionIds[3] = {1, 3, 5};
+            int slot = (s_BonusCoinCounter == 3) ? 0 : (s_BonusCoinCounter == 6) ? 1 : 2;
+            snprintf(pname, sizeof(pname), "Bonus-Explosion-%i", kExplosionIds[slot]);
+            PSPParticleEmitter* e2 = pm.AddEmitter(StringHash(pname));
+            if (e2) {
+                e2->m_Pos = coin->pos;
+                // random offset: x in [-12..0], y in [+3..15]
+                e2->m_Pos.x += (float)(rand() % 13) * -1.0f;
+                e2->m_Pos.y += 3.0f + (float)(rand() % 13);
+            }
+        }
+        if (s_BonusCoinCounter >= 9) {
+            s_BonusCoinCounter = 0;
+        }
+    }
+
+    FN::AddToCurrentScore(coin->m_CoinValue, 0, false, false);
+}
 
 // ---------------------------------------------------------------------------
 // BonusScreen ctor (binary @ 0x00132048)
@@ -137,11 +195,66 @@ void BonusScreen::UnLoadContent() {}
 
 // Binary @ 0x0013260C
 void BonusScreen::AwardScores() {
-    // TODO: Coin::MakeCoins(m_TotalScore / 6)
-    // TODO: FruitCamera::CreateCameraShake(...)
-    // TODO: PSPParticleManager::AddEmitter(...) big finale particle
-    // TODO: play "BonusFinale" SFX via m_RushSFX or SoundManager
-    (void)m_TotalScore;
+    // Spawn position: base pos + m_PosOffset chain (binary: pos + member field chain).
+    // TODO: resolve exact member offsets from _Stack_9c/_Stack_a8/_Stack_b4 in binary frame.
+    Vec3 spawnPos = pos;
+    spawnPos.x += m_PosOffset.x;
+    spawnPos.y += m_PosOffset.y;
+    spawnPos.z += m_PosOffset.z;
+
+    // Reset per-coin milestone counter for this batch.
+    s_BonusCoinCounter = 0;
+
+    Mortar::Delegate1<void, Coin*> onArrived =
+        Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival);
+
+    int total = m_TotalScore;
+    if (total <= 5) {
+        // Single batch, all coins, delay step -0.05 / cap -0.3.
+        Coin::MakeCoins(total, 6,
+                        Vec3(-0.05f, -0.3f, 0.0f),
+                        0xff3a, 0, spawnPos,
+                        "bonus_star_trail", "bonus_star_impact",
+                        onArrived, false);
+    } else {
+        // First batch: 6 coins, tighter delay cap -0.5.
+        Coin::MakeCoins(6, 6,
+                        Vec3(-0.05f, -0.5f, 0.0f),
+                        0xff3a, 0, spawnPos,
+                        "bonus_star_trail", "bonus_star_impact",
+                        onArrived, false);
+        // Second batch: leftover, no arrival callback (silent score credit).
+        Coin::MakeCoins(total - 6, 6,
+                        Vec3(-0.05f, -0.3f, 0.0f),
+                        0xff3a, 0, spawnPos,
+                        "bonus_star_trail", "bonus_star_impact",
+                        Mortar::Delegate1<void, Coin*>(), false);
+    }
+
+    // TODO: 0x0013260C — *(int*)(Game +0x34) = 3 (BonusFinalePhase flag, offset unconfirmed).
+
+    Game* game = Game::GetInstance();
+    if (game && game->pCamera) {
+        game->pCamera->CreateCameraShake(spawnPos, 0.3f, 1.0f);
+    }
+
+    {
+        PSPParticleManager& pm = PSPParticleManager::GetInstance();
+        PSPParticleEmitter* e = pm.AddEmitter(StringHash("impact_fx"));
+        if (e) { e->m_Pos = spawnPos; }
+    }
+
+    // Return value discarded in binary (cache-warming call).
+    if (game) {
+        (void)game->currentScore;
+    }
+
+    // Vol = 0.0f is the literal binary value (DAT_00132910 = 0x00000000).
+    // Per-coin fireworks in AddToScoreOnArrival handle audibility.
+    if (game && game->pGameSound) {
+        game->pGameSound->SFXPlay("equip-unlock", 0.0f, 1.0f,
+                                  Mortar::Delegate1<bool, Mortar::MortarSound*>());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -169,37 +282,47 @@ void BonusScreen::Update(float dt) {
 #endif
 
     // -----------------------------------------------------------------------
+    // Dismiss check (binary: early-out before phase B/C logic)
+    // pfVar14[4] + pfVar14[3] = 7.0 + 0.25 = 7.25
+    // -----------------------------------------------------------------------
+    if (m_PhaseTimer > kDismissBuffer + kFinaleHoldExtra) {
+        m_bPendingRemoval = 1;
+    }
+
+    // -----------------------------------------------------------------------
     // Phase A: pre-show slide-in (timer < 0)
     // -----------------------------------------------------------------------
     if (m_PhaseTimer < 0.0f) {
         // Slide-in from off-screen. m_PosOffset.y interpolates toward 0.
         // TODO: resolve exact slide-in math from binary @ 0x00132930
-        m_PosOffset.y = m_PhaseTimer * PRE_OFFSET;
+        m_PosOffset.y = m_PhaseTimer * kRevealStart;
 
         // Start rush SFX once.
         // TODO: SoundManager::PreLoadSound / play "BonusRush" into m_RushSFX
         return;
     }
 
+    // Compute finaleStart: revealStart + perAward * (numAwards + 0.25)
+    float finaleStart = kRevealStart + kPerAward * ((float)m_Awards.size() + 0.25f);
+
     // -----------------------------------------------------------------------
-    // Phase B: per-award reveal (0 <= timer < REVEAL_END + awards * AWARD_SPACING)
+    // Phase B: per-award reveal (0 <= timer < finaleStart)
     // -----------------------------------------------------------------------
-    float revealEnd = REVEAL_END + (float)(m_Awards.size() > 0 ? (int)m_Awards.size() - 1 : 0) * AWARD_SPACING;
-    if (m_PhaseTimer < revealEnd) {
+    if (m_PhaseTimer < finaleStart) {
         int totalDisplayed = 0;
         for (int i = 0; i < (int)m_Awards.size(); ++i) {
             BonusAwardHud& entry = m_Awards[i];
-            float localT = m_PhaseTimer - (float)i * AWARD_SPACING;
+            // Each award reveals at kRevealStart + i * kPerAward.
+            float revealTime = kRevealStart + (float)i * kPerAward;
+            float localT = m_PhaseTimer - revealTime;
 
             if (localT < 0.0f) {
-                // Not yet revealed.
                 entry.m_Scale          = 0.0f;
                 entry.m_DisplayedScore = 0;
                 continue;
             }
 
             // Just-crossed-zero this frame: spawn emitters + play SFX.
-            // "Just crossed" = localT < dt (first frame localT >= 0).
             if (localT < dt) {
                 // TODO: PSPParticleManager::AddEmitter x3 for award[i]
                 // TODO: FruitCamera::CreateCameraShake(...)
@@ -213,7 +336,7 @@ void BonusScreen::Update(float dt) {
 
             // Score counter ramp-up.
             // TODO: resolve exact multiplier ramp math from binary @ 0x00132b00
-            float scoreT = localT * 0.5f + 0.5f;
+            float scoreT = localT / kRevealHalfBeat;
             if (scoreT > 1.0f) scoreT = 1.0f;
             entry.m_DisplayedScore = (int)((float)(entry.m_TierBase * entry.m_Multiplier) * scoreT);
 
@@ -224,13 +347,14 @@ void BonusScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // Phase C: finale one-shot (timer >= REVEAL_END + ..., only once)
+    // Phase C: finale one-shot (timer >= finaleStart, only once)
+    // Binary: edge triggered — fires when prev <= finaleStart < m_PhaseTimer.
+    // m_LeaderboardSubmitted is reused as the "finale fired" latch.
     // -----------------------------------------------------------------------
-    float finaleStart = revealEnd;
-    if (m_PhaseTimer >= finaleStart && m_LeaderboardSubmitted == 0) {
+    if (m_LeaderboardSubmitted == 0) {
         m_LeaderboardSubmitted = 1;
         AwardScores();
-        // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
+        // Defunct: LeaderboardManager::RefreshLeaderboard (online-services-audit).
 
         // Tally final displayed scores.
         int totalDisplayed = 0;
@@ -239,14 +363,6 @@ void BonusScreen::Update(float dt) {
             totalDisplayed += m_Awards[i].m_DisplayedScore;
         }
         m_DisplayedScore = totalDisplayed;
-    }
-
-    // -----------------------------------------------------------------------
-    // Phase D: dismiss (timer past finale + hold + buffer)
-    // -----------------------------------------------------------------------
-    float dismissAt = finaleStart + FINALE_HOLD + DISMISS_BUFFER;
-    if (m_PhaseTimer >= dismissAt) {
-        m_bPendingRemoval = 1;
     }
 
     // -----------------------------------------------------------------------

@@ -93,8 +93,9 @@ public:
     // 0x00173190 — invoke m_OnArrived, cleanup emitters, mark dead
     void Arrived();
 
-    // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2)
-    static void MakeCoins(int totalCoins, int coinsPerCoin, float delayRange,
+    // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2).
+    // delay.x = per-coin delay step; delay.y = max total delay (binary Vec3 arg).
+    static void MakeCoins(int totalCoins, int coinsPerCoin, const Vec3& delay,
                           uint16_t baseAngle, uint16_t angleSpread,
                           const Vec3& spawnPos,
                           const char* flyFXName, const char* collectFXName,
