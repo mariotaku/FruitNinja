@@ -208,7 +208,9 @@ void TimeControl::Update(float dt) {
             }
 
             // Tick-tock SFX when colour band toggled this frame (binary @ 0x00162716).
-            // TODO: verify DAT_001627c4/c8 order (name inversion may be correct or inverted)
+            // ASM-verified: 2026-05-18 binary @ 0x0016273a (re-analyst)
+            // s_TickTockToggle ? "Time-tick" : "Time-tock" is correct post-XOR order;
+            // first fire after Reset is "Time-tick".
             if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
                 m_DrawColour.r != entryColourR) {
                 static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80
