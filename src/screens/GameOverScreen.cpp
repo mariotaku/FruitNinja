@@ -938,8 +938,25 @@ void GameOverScreen::RunStateMainDisplay(int prevState) {
                 // Note: LeaderboardManager::RefreshLeaderboard -- defunct (online-services-audit).
                 // Note: FNHighscoreList::AddPlayerScore -- defunct (online-services-audit).
 
-                // Binary @ 0x00142048: gate on m_pBonusScreen + Arcade mode + valid star type.
-                // TODO: 0x00142048 — gate on bonus[+0xE0]/[+0xD0]; fields not yet ported to BonusScreen.
+                // Binary @ 0x00142048: combo-star achievement -- gate on
+                // m_pFruitFact != null (NOT m_pBonusScreen; the prior TODO
+                // misattributed the +0xC0/+0xD0/+0xE0 fields to BonusScreen,
+                // they actually live on FruitFactControl per re-analyst
+                // 2026-05-18). Zen-mode gameplay only; valid star type
+                // is m_ComboType in [0, 25).
+                if (m_pFruitFact && game->gameMode == Mortar::GAME_MODE_ZEN) {
+                    int comboType = (int8_t)m_pFruitFact->m_ComboType;  // +0xE0
+                    if (comboType >= 0 && comboType < 25) {
+                        int comboLen = m_pFruitFact->m_ComboLength;     // +0xD0
+                        // TODO: GetComboName(comboType) -> uses .rodata
+                        // combo-name string array; deferred until that
+                        // table is ported. Pass 0 hash for now -- the
+                        // achievement unlock still records the combo
+                        // length, just without the per-star-type variant.
+                        AchievementManager::GetInstance()->UnlockComboStarAchievement(
+                            comboLen, 0);
+                    }
+                }
 
                 int hi = GetCurrentModeHighscore();
                 if (hi / 2 < score) {
@@ -1118,12 +1135,11 @@ void GameOverScreen::Update(float dt) {
                 //   then m_OffsetPosY = max(m_OffsetPosY, ny)
                 //   plus a size_factor = pos.y / -224.0f + 1.0f rescale
                 //   (DAT_00141DCC) on the row above.
-                // bonus[+0xC0] is a per-phase rolling Y delta, NOT m_PhaseTimer
-                // (+0xB8). Port reads m_PhaseTimer as a stand-in until the
-                // real field is RE'd into BonusScreen; constant updated to 135.0f.
-                // TODO: 0x00141bd0 -- wire bonus[+0xC0] (per-phase Y delta)
-                //   and the -224.0 size rescale.
-                float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PhaseTimer + 135.0f;
+                // bonus[+0xC0] is BonusScreen::m_PosOffset.y (Vec3 starts at
+                // +0xBC, .y at +0xC0). Per re-analyst 2026-05-18 (was
+                // previously misread as m_PhaseTimer). The 135.0f bias is
+                // DAT_00141DC8.
+                float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_PosOffset.y + 135.0f;
                 m_OffsetPosY = std::max(m_OffsetPosY, ny);
 
                 // Binary @ 0x00141d??: pos.y rescale + size = m_TitleSize * scale.
