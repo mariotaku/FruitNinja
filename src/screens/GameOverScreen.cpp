@@ -1119,6 +1119,17 @@ void GameOverScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // State 1: bonus phase (Arcade only) — BonusScreen creation + slide
     // -----------------------------------------------------------------------
+    // TODO: BONUS_PHASE stall investigation (Claude task #41).
+    // Binary has NO fallback timeout here; trusts entities to drain
+    // via gravity + Fruit/Bomb CheckHasGoneOffscreen. Port stalls in
+    // Arcade -- some entity isn't draining. RE @ 0x00141b34 found
+    // m_bSlowMotion is NOT a gate (cosmetic write-only). Likely
+    // candidates: (a) Fruit::ClearUnspawned semantic -- binary calls
+    //   KillFruit(this, 0), port calls am->Deactivate(f); (b) some
+    //   fruit-half pos/vel state staying on-screen indefinitely.
+    // Needs runtime logging of surviving (pos, vel, flags,
+    // m_ChuckDelay, m_bSliced) per frame to identify. See
+    // tmp/bonus-phase-stall-spec.md for full RE.
     case STATE_BONUS_PHASE: {
         Mortar::ActorManager* am = game->actorManager;
         if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0) {
