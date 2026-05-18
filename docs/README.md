@@ -17,7 +17,7 @@ This `docs/` tree previously held large per-class / per-screen / per-function RE
 The remaining docs cover information that **isn't derivable from `src/`**:
 
 ### Project-level
-- [`HANDOVER.md`](HANDOVER.md), [`HANDOVER-gameplay.md`](HANDOVER-gameplay.md) — onboarding context.
+- [`HANDOVER.md`](HANDOVER.md) — onboarding context.
 - RE backlog lives in Claude tasks (`TaskList`), not in any docs/ file.
 - Intentional-skip list lives in [`engine/online-services-audit.md`](engine/online-services-audit.md).
 - [`port-plan.md`](port-plan.md) — high-level port intent.
