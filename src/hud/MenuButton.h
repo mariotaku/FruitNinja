@@ -128,8 +128,10 @@ public:
     // +0x120
     uint8_t m_bScoreSubmitted;
 
-    // +0x121: = 1 after Init
-    uint8_t m_bVisible;
+    // +0x121 — set to 0 by KeyboardControl::Update for press-edge fire (keyboard keys);
+    //           default 1 for normal/toggle buttons (fire on release).
+    //           Real semantics: m_bFireOnRelease.
+    uint8_t m_bFireOnRelease;
 
     // +0x122: = 1 — accepts touch input
     uint8_t m_bInteractive;

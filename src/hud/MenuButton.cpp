@@ -170,7 +170,7 @@ MenuButton::MenuButton()
       m_pLabel1(nullptr), m_pLabel2(nullptr),
       m_PlayerIndex(0),
       m_bScoreSubmitted(0),
-      m_bVisible(1),
+      m_bFireOnRelease(1),
       m_bInteractive(1),
       m_bEnabled(1),
       m_TargetSize(0.0f, 0.0f, 0.0f),
@@ -222,7 +222,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // Binary @ 0x0014ee40: m_TargetSize = hitBounds unconditionally.
     // Later branches (entity-scale compute, text-button tex-size) may overwrite.
     m_TargetSize = hitBounds;
-    m_bVisible = 1;
+    m_bFireOnRelease = 1;
     m_bInteractive = 1;
     m_bEnabled = 1;
     m_AnimScale = 1.0f;
@@ -456,7 +456,7 @@ void MenuButton::Remove() {
 
 // Binary @ 0x0014e5cc — fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
 bool MenuButton::TouchReleased() {
-    if (m_FruitType < 0 && m_bVisible) {
+    if (m_FruitType < 0 && m_bFireOnRelease) {
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
         // Binary @ 0x0014e5e6 — TutorialControl::ButtonPressedAtPos(this).
@@ -793,6 +793,7 @@ void MenuButton::Update(float dt) {
     // (a) tested fields the binary doesn't, and (b) returned from the entire
     // function — bypassing the m_BackdropScale tail (binary @ 0x0014eb84).
     // -----------------------------------------------------------------------
+    bool bPressPulse = false;
     if (m_bHighlighted != 0) {
         // Compute rect bounds. Binary inflates by m_AnimSpeed/m_AnimSpeed2 which
         // are 5.0 defaults — small inset/outset that gives the button a touch-up
@@ -812,61 +813,58 @@ void MenuButton::Update(float dt) {
 
         Mortar::Touch& touch = Mortar::Touch::GetInstance();
 
+        // ASM-verified: 2026-05-18 binary @ 0x0014e614 / 0x0014eb40 (re-analyst)
         if (m_TouchSlot == -1) {
-            // Not tracking — scan for a new touch inside the rect.
-            // ASM-verified: 2026-05-17 binary @ 0x0014ea48..0x0014ea7e (re-analyst).
-            // Binary's toggle gate is PRESS-EDGE only: after acquiring a slot
-            // via TouchInRegion, it calls IsTouchDown(slot). If the slot's
-            // phase is 2 (press-edge / just-pressed) AND m_FruitType<0, fire
-            // m_ClickCallback immediately. Otherwise release the slot without
-            // firing. This rejects slice-drags that pass through the rect --
-            // their phase is 1 (held) by the time TouchInRegion latches.
+            // Untracked -- scan for a new touch inside the rect.
             int slot = touch.GetTouchInRegion(left, right, bottom, top, -1);
+            m_TouchSlot = slot;
             if (slot >= 0) {
-                m_TouchSlot = slot;
-                m_bHighlighted = 1;
-                UpdateTouchPosition();
-                if (m_FruitType < 0) {
-                    // Toggle button (Resume / Sound / Music / Quit /
-                    // Retry / etc.) — true tap-only behaviour. Fire on
-                    // press-edge if visible; otherwise release slot.
-                    if (Mortar::IsTouchDown(slot) == 2 && m_bVisible) {
+                if (Mortar::IsTouchDown(slot) == 2) {
+                    // Press-edge. Keyboard-key path fires on press-edge (m_bFireOnRelease == 0).
+                    // Toggles (m_bFireOnRelease == 1) fall through; slot stays latched for release.
+                    if (!m_bFireOnRelease && m_FruitType < 0) {
                         if (m_ClickCallback) m_ClickCallback();
-                        // Slot stays latched until release; binary falls
-                        // through the lower release-wait path on subsequent
-                        // frames but the callback won't re-fire (phase moves
-                        // to held=1, then released=0 and slot clears below).
-                    } else {
-                        // Not press-edge -> drag-through; reject the slot
-                        // so a later true tap in the same region can latch.
-                        m_TouchSlot = -1;
-                        m_bHighlighted = 0;
                     }
+                } else {
+                    // Drag-through: not a clean press; reject slot so a later true tap can latch.
+                    // Binary does NOT write m_bHighlighted here.
+                    m_TouchSlot = -1;
                 }
             }
         } else {
-            // Tracking — refresh position and check for release.
-            UpdateTouchPosition();
-            // phase >= 1 means released. For non-toggle buttons (fruit-type
-            // entity buttons not used in the shipped binary's toggles) the
-            // binary calls TouchReleased() on inside-release. For toggles
-            // (m_FruitType<0) the callback has already fired on press-edge
-            // above, so TouchReleased here is a no-op for them.
-            if (m_TouchPhase >= 1.0f) {
+            // Tracking slot.
+            int down = Mortar::IsTouchDown(m_TouchSlot);
+            if (down == 0) {
+                // Released.
+                UpdateTouchPosition();
                 const bool insideOnRelease =
                     m_TouchX >= left && m_TouchX <= right &&
                     m_TouchY >= bottom && m_TouchY <= top;
-                // ASM-verified: 2026-05-06T17:50 binary @ 0x0014e6a4 (asm-inspector)
-                // TouchReleased fires m_DeletedCallback unconditionally; for
-                // toggles m_ClickCallback was already nulled or never set on
-                // the release path.
-                if (insideOnRelease && m_FruitType >= 0) {
+                m_TouchSlot = -1;
+                if (insideOnRelease) {
+                    // Unconditional -- TouchReleased gates on m_FruitType / m_bFireOnRelease internally.
                     TouchReleased();
                 }
-                m_TouchSlot = -1;
-                m_bHighlighted = 0;
+            } else {
+                // Still held.
+                UpdateTouchPosition();
+                if (m_FruitType >= 0 || !m_bInteractive) {
+                    // Fruit-type buttons / non-interactive: no press-pulse.
+                } else {
+                    const bool insideNow =
+                        m_TouchX >= left && m_TouchX <= right &&
+                        m_TouchY >= bottom && m_TouchY <= top;
+                    if (!insideNow) {
+                        size = m_TargetSize;
+                        if (!m_bFireOnRelease) m_TouchSlot = -1;  // keyboard cancel
+                    } else {
+                        // press-pulse (DAT_0014ebb8); applied after eb52 size-set below.
+                        bPressPulse = true;
+                    }
+                }
             }
         }
+        // Binary never writes m_bHighlighted from Update.
     }
 
     // ASM-verified: 2026-05-18 binary @ 0x0014eb52 (re-analyst).
@@ -878,7 +876,11 @@ void MenuButton::Update(float dt) {
     if (m_FruitType < 0) {
         size = m_TargetSize;
     }
-    // TODO: 0x0014eb40 -- 0.95x press-pulse for held toggles (size = m_TargetSize * 0.95f when held inside rect)
+    // press-pulse (binary @ 0x0014eb40): held+inside overrides full-size with 0.95x.
+    // Applied after eb52 size-set so the 0.95x is the final value for this frame.
+    if (bPressPulse) {
+        size = m_TargetSize * 0.95f;
+    }
 
     // ASM-verified: 2026-05-09 binary @ 0x0014eb84 (re-analyst).
     // m_BackdropScale (+0xEC) = size.x * 1.125f * m_AnimScale, written
@@ -923,7 +925,7 @@ void MenuButton::UpdateTouchPosition() {
 // the sprite then renders at 0x80 after splats. The backdrop quad TODO
 // stays for full fidelity.
 void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
-    if (!m_bVisible || m_DrawColour.a == 0) return;
+    if (!m_bFireOnRelease || m_DrawColour.a == 0) return;
 
     // Compute fade-derived alpha once. Used by Phase A AND Phase B.
     // Binary @ entry of Draw, before the layer test.
