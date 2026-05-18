@@ -5,6 +5,7 @@
 
 #include "Bonus.h"
 #include "FruitSaveData.h"
+#include "AchievementManager.h"
 #include "../Game.h"
 #include "engine/util/StringHash.h"
 #include "engine/asset/TextureManager.h"
@@ -357,13 +358,22 @@ Bonus* BonusType::GetBest() {
 // Returns true if any achievement was unlocked.
 // ---------------------------------------------------------------------------
 bool BonusType::UnlockAchievements() {
+    // Binary @ 0x0010e12c.
+    // Pre-pass: refresh per-fruit totals into m_RequiredHashes values (spec calls this
+    // m_FruitTotals; same field at +0x00), then sum into totalAcrossFruits.
+    // TODO: 0x0010e12c -- pre-pass blocked: GetBonusTotal() not in port, and
+    //   Bonus::IsAchieved signature mismatch (spec: IsAchieved(totalAcrossFruits, BonusType*)
+    //   vs port: IsAchieved(int score, std::map<uint64_t,int>&)).
+    //   Dispatch re-analyst: decompile @ 0x0010e12c + 0x0010df38 to settle
+    //   IsAchieved's true second param type.
+    // For now: use the existing GetBest()-style fruit-count building and call
+    // UnlockBonusAchievement for each bonus that has m_AchievementHash != 0.
     if (!m_HasAchievement) return false;
     bool any = false;
     for (size_t i = 0; i < m_Bonuses.size(); ++i) {
         Bonus& b = m_Bonuses[i];
         if (b.m_AchievementHash == 0) continue;
-        // TODO: call AchievementManager::UnlockAchievement(b.m_AchievementHash)
-        // when AchievementManager is fully ported.
+        AchievementManager::GetInstance()->UnlockBonusAchievement(&b);
         any = true;
     }
     return any;

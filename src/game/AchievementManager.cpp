@@ -261,31 +261,44 @@ void AchievementManager::UnLoadAchievementInfo() {
 
 int AchievementManager::AchievementExists(uint32_t hash) {
     // Binary: find() in m_All; returns iterator distance (non-zero = found) or 0
-    auto it = m_All.find(hash);
-    return (it != m_All.end()) ? 1 : 0;
+    return (m_All.find(hash) != m_All.end()) ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------
-// QueAchievement  (Binary @ 0x001084a0)
+// QueAchievement  (Binary @ 0x00108978)
+// ASM-verified: 2026-05-18 binary @ 0x00108978 (re-analyst)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::QueAchievement(AchievementInfo* info,
                                         std::map<uint32_t, AchievementInfo*>::iterator& it)
 {
-    // Binary: calls FruitSaveData::AddToQue(name, hash); on success, erases
-    // the entry from its m_ByType[typeIdx] slot via the passed iterator.
-    FruitSaveData* sd = nullptr;
+    // Binary @ 0x00108978: call FruitSaveData::AddToQue(name, hash);
+    // on success pre-advance caller's iterator, then erase from m_ByType[typeIdx].
+    // Pre-advance before erase so callers iterating m_All or m_ByType[x]
+    // can unconditionally continue without using the erased iterator.
+    if (!info) return 0;
+    FruitSaveData* sd = 0;
     Game* g = Game::GetInstance();
     if (g) sd = g->pSaveData;
     if (!sd) return 0;
 
     int result = sd->AddToQue(info->m_Name, info->m_NameHash);
     if (result != 0) {
-        // Remove from secondary type-map so it won't be matched again
+        ++it;  // pre-advance caller's iterator before invalidating
+
+        // Erase info from m_ByType[ti] by scanning for the pointer value.
+        // The secondary-key used during insert is not available here, so
+        // we find by pointer equality (matches binary's approach).
         int ti = info->m_TypeIndex;
         if (ti >= 0 && ti <= 10) {
-            // it points into m_ByType[ti]; erase via passed iterator
-            m_ByType[ti].erase(it);
+            std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ti];
+            for (std::map<uint32_t, AchievementInfo*>::iterator bi = bucket.begin();
+                 bi != bucket.end(); ++bi) {
+                if (bi->second == info) {
+                    bucket.erase(bi);
+                    break;
+                }
+            }
         }
     }
     return result;
@@ -297,7 +310,7 @@ int AchievementManager::QueAchievement(AchievementInfo* info,
 
 int AchievementManager::UnlockedAchievement(uint32_t hash, HUD* hud) {
     // Binary @ 0x001090d0
-    auto it = m_All.find(hash);
+    std::map<uint32_t, AchievementInfo*>::iterator it = m_All.find(hash);
     if (it == m_All.end()) return 0;
     AchievementInfo* a = it->second;
     // Binary: name[0] in '0'..'9' => Type_Numeric (1), else Type_Named (2)
@@ -342,14 +355,13 @@ int AchievementManager::UnlockTotalFruitAchievement(int total) {
     // Binary: iterates m_ByType[TOTAL]; for each entry whose threshold <= total,
     // and whose mode bitmask allows current mode, calls QueAchievement.
     int unlocked = 0;
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_TOTAL];
-    for (auto it = bucket.begin(); it != bucket.end(); ) {
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_TOTAL];
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
         if (info->m_Threshold <= total && ModeBitmaskAllows(info->m_ModeBitmask)) {
-            auto cur = it++;
-            QueAchievement(info, cur);
-            ++unlocked;
+            if (QueAchievement(info, it)) ++unlocked;
+            // it was pre-advanced by QueAchievement; don't ++it
         } else {
             ++it;
         }
@@ -364,14 +376,12 @@ int AchievementManager::UnlockTotalFruitAchievement(int total) {
 int AchievementManager::UnlockScoreAchievement(int score) {
     // Binary: iterates m_ByType[SCORE]; threshold <= score + mode gate
     int unlocked = 0;
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_SCORE];
-    for (auto it = bucket.begin(); it != bucket.end(); ) {
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SCORE];
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
         if (info->m_Threshold <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
-            auto cur = it++;
-            QueAchievement(info, cur);
-            ++unlocked;
+            if (QueAchievement(info, it)) ++unlocked;
         } else {
             ++it;
         }
@@ -386,14 +396,12 @@ int AchievementManager::UnlockScoreAchievement(int score) {
 int AchievementManager::UnlockScoreUnsulliedAchievement(int score) {
     // Binary: same as UnlockScoreAchievement but also checks m_RequiresUnsullied
     int unlocked = 0;
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_SCORE_UNSULLIED];
-    for (auto it = bucket.begin(); it != bucket.end(); ) {
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SCORE_UNSULLIED];
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
         if (info->m_Threshold <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
-            auto cur = it++;
-            QueAchievement(info, cur);
-            ++unlocked;
+            if (QueAchievement(info, it)) ++unlocked;
         } else {
             ++it;
         }
@@ -409,17 +417,15 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
     // Binary: iterates m_ByType[END_SCORE]; threshold <= score AND score > hiScore/2
     // (end-of-game high-score beat check)
     int unlocked = 0;
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_END_SCORE];
-    for (auto it = bucket.begin(); it != bucket.end(); ) {
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_END_SCORE];
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
         if (info->m_Threshold <= score &&
             score > hiScore / 2 &&
             ModeBitmaskAllows(info->m_ModeBitmask))
         {
-            auto cur = it++;
-            QueAchievement(info, cur);
-            ++unlocked;
+            if (QueAchievement(info, it)) ++unlocked;
         } else {
             ++it;
         }
@@ -433,8 +439,13 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockBonusAchievement(Bonus* bonus) {
-    // TODO: 0x00108af0 -- Phase B: read hash from bonus+0x108, look up m_ByType[BONUS],
-    //   check mode bitmask, call QueAchievement. Body deferred to Phase B.
+    // TODO: 0x00108af0 -- BLOCKED: spec says read hash from bonus+0x108, but
+    //   sizeof(Bonus)==0xD8 so bonus+0x108 is out-of-bounds. The binary may
+    //   read from AchievementManager+0x108 (= m_ByType[8], the COMBO_STAR bucket),
+    //   not from bonus+0x108. Need asm-inspector to confirm which pointer base
+    //   the binary uses (param_1 = AchievementManager *this vs Bonus*).
+    //   Dispatch re-analyst: disassemble_function @ 0x00108af0 to settle this.
+    //   Until confirmed, return 0 to avoid reading past struct end.
     (void)bonus;
     return 0;
 }
@@ -446,8 +457,8 @@ int AchievementManager::UnlockBonusAchievement(Bonus* bonus) {
 int AchievementManager::UnlockSpecificFruitAchievement(int32_t fruitTypeHash, uint32_t count) {
     // Binary: looks up m_ByType[SPECIFIC] by fruitTypeHash;
     // threshold (as uint32_t) <= count
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_SPECIFIC];
-    auto it = bucket.find(fruitTypeHash);
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SPECIFIC];
+    std::map<uint32_t, AchievementInfo*>::iterator it = bucket.find((uint32_t)fruitTypeHash);
     if (it == bucket.end()) return 0;
     AchievementInfo* info = it->second;
     if (!info) return 0;
@@ -461,16 +472,35 @@ int AchievementManager::UnlockSpecificFruitAchievement(int32_t fruitTypeHash, ui
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockConsecutiveAchievement(int count, uint32_t fruitTypeHash) {
-    // Binary: looks up m_ByType[CONSECUTIVE] by fruitTypeHash;
-    // threshold <= count + mode gate
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_CONSECUTIVE];
-    auto it = bucket.find(fruitTypeHash);
-    if (it == bucket.end()) return 0;
-    AchievementInfo* info = it->second;
-    if (!info) return 0;
-    if (info->m_Threshold > count) return 0;
-    if (!ModeBitmaskAllows(info->m_ModeBitmask)) return 0;
-    return QueAchievement(info, it);
+    // Binary @ 0x00108c40: two bucket lookups.
+    // Bucket CONSECUTIVE (5): keyed by fruitTypeHash; threshold <= count + mode gate.
+    // Bucket CONSECUTIVE_ANY (6): keyed by count itself (m_Threshold == count).
+    int awarded = 0;
+    {
+        std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_CONSECUTIVE];
+        std::map<uint32_t, AchievementInfo*>::iterator it = bucket.find(fruitTypeHash);
+        if (it != bucket.end()) {
+            AchievementInfo* info = it->second;
+            if (info &&
+                info->m_Threshold <= count &&
+                ModeBitmaskAllows(info->m_ModeBitmask))
+            {
+                if (QueAchievement(info, it)) awarded = 1;
+            }
+        }
+    }
+    {
+        // CONSECUTIVE_ANY entries are keyed by their threshold (= count) at load time.
+        std::map<uint32_t, AchievementInfo*>& bucket2 = m_ByType[ACHIEVEMENT_TYPE_CONSECUTIVE_ANY];
+        std::map<uint32_t, AchievementInfo*>::iterator it2 = bucket2.find((uint32_t)count);
+        if (it2 != bucket2.end()) {
+            AchievementInfo* info = it2->second;
+            if (info && ModeBitmaskAllows(info->m_ModeBitmask)) {
+                if (QueAchievement(info, it2)) awarded = 1;
+            }
+        }
+    }
+    return awarded;
 }
 
 // ---------------------------------------------------------------------------
@@ -480,8 +510,8 @@ int AchievementManager::UnlockConsecutiveAchievement(int count, uint32_t fruitTy
 int AchievementManager::UnlockComboStarAchievement(int combo, uint32_t starTypeHash) {
     // Binary: looks up m_ByType[COMBO_STAR] by starTypeHash;
     // threshold <= combo + mode gate
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_COMBO_STAR];
-    auto it = bucket.find(starTypeHash);
+    std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_COMBO_STAR];
+    std::map<uint32_t, AchievementInfo*>::iterator it = bucket.find(starTypeHash);
     if (it == bucket.end()) return 0;
     AchievementInfo* info = it->second;
     if (!info) return 0;
@@ -495,23 +525,21 @@ int AchievementManager::UnlockComboStarAchievement(int combo, uint32_t starTypeH
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockSpecificOrderAchievement(uint32_t newFruitHash) {
-    // Binary @ 0x001089cc
-    // For each entry in m_ByType[SPECIFIC_ORDER]:
-    //   look up entry by GetFirstFruitTypeHash() as the bucket key;
-    //   call SpecificOrder::Check(newFruitHash); on match, QueAchievement.
+    // Binary @ 0x00108b58: iterates m_All (NOT m_ByType[SPECIFIC_ORDER]).
+    // No mode gate here; mode-gating is implicit at load time (only achievements
+    // for the current mode are inserted into m_All via LoadAchievementInfo).
+    // Every entry with a m_SpecificOrder pointer is checked via Check(newFruitHash).
     int unlocked = 0;
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_SPECIFIC_ORDER];
-    for (auto it = bucket.begin(); it != bucket.end(); ) {
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = m_All.begin(); it != m_All.end(); ) {
         AchievementInfo* info = it->second;
         if (!info || !info->m_SpecificOrder) { ++it; continue; }
-        // Binary: bucket key = GetFirstFruitTypeHash(); only visit entries
-        // whose first fruit matches the incoming hash (early-out optimisation).
-        // The Check call handles full sequence tracking.
-        int result = info->m_SpecificOrder->Check(newFruitHash);
-        if (result != 0 && ModeBitmaskAllows(info->m_ModeBitmask)) {
-            auto cur = it++;
-            QueAchievement(info, cur);
-            ++unlocked;
+        if (info->m_SpecificOrder->Check(newFruitHash) != 0) {
+            if (QueAchievement(info, it)) {
+                ++unlocked;
+                // QueAchievement pre-advanced it; do NOT ++it again
+            } else {
+                ++it;
+            }
         } else {
             ++it;
         }
@@ -524,16 +552,20 @@ int AchievementManager::UnlockSpecificOrderAchievement(uint32_t newFruitHash) {
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
-    // Binary: iterates m_ByType[COMBO]; threshold <= comboLen + mode gate.
-    // Also checks:
-    //   m_RequiresUnsullied — all fruitArr entries must be non-bomb (complex)
-    //   m_SpecificOrder     — calls SpecificOrder::Check per fruit in fruitArr
-    // TODO: SpecificOrder check (binary @ unknown)
-    // Port: handles threshold + mode gate; skips SpecificOrder + RequiresUnsullied
-    //       checks (returns 0 for those paths)
+    // Binary @ 0x00108a10: iterates m_All (NOT m_ByType[COMBO]).
+    // threshold <= comboLen + mode gate.
+    // SpecificOrder gate (COMBO semantics): count fruitArr entries whose hash
+    //   matches GetFirstFruitTypeHash(); require count >= threshold.
+    //   (Different from UnlockSpecificOrderAchievement which tracks a full sequence.)
+    // RequiresUnsullied gate: comboLen > 2 AND g_Game->pTimeCtrl->m_TimeRemaining <= 0.
+    //   TODO: 0x00108a10 -- RequiresUnsullied reads g_Game[+0x180]->field[+0x7c].
+    //     In port pTimeCtrl is at +0x180 and m_TimeRemaining is at +0x7c.
+    //     The spec names this field m_BombHitTimer but the binary struct field
+    //     at that offset is TimeControl::m_TimeRemaining. Needs asm-inspector
+    //     confirmation: disassemble_function @ 0x00108a10, verify ldr offset
+    //     into the pointer read from g_Game+0x180. Until confirmed, defer.
     int unlocked = 0;
-    auto& bucket = m_ByType[ACHIEVEMENT_TYPE_COMBO];
-    for (auto it = bucket.begin(); it != bucket.end(); ) {
+    for (std::map<uint32_t, AchievementInfo*>::iterator it = m_All.begin(); it != m_All.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
 
@@ -542,34 +574,33 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
             continue;
         }
 
-        // SpecificOrder check — iterate fruitArr and feed each hash to Check
-        if (info->m_SpecificOrder != nullptr) {
-            // Binary @ 0x00108b3c: for each fruit in fruitArr, call Check(hash).
-            // fruitArr contains fruit type hashes; on Check returning 1, allow unlock.
-            bool orderMet = false;
+        // SpecificOrder gate (COMBO semantics): count matches of the first hash.
+        if (info->m_SpecificOrder != 0) {
+            uint32_t firstHash = info->m_SpecificOrder->GetFirstFruitTypeHash();
+            int matches = 0;
             for (int fi = 0; fi < comboLen; ++fi) {
-                if (info->m_SpecificOrder->Check((uint32_t)fruitArr[fi]) != 0) {
-                    orderMet = true;
-                    break;
-                }
+                if ((uint32_t)fruitArr[fi] == firstHash) ++matches;
             }
-            if (!orderMet) {
+            if (matches < info->m_Threshold) {
                 ++it;
                 continue;
             }
         }
 
-        // RequiresUnsullied check — stub skips these entries
+        // RequiresUnsullied gate.
+        // TODO: 0x00108a10 -- deferred: ambiguous whether binary reads
+        //   pTimeCtrl->m_TimeRemaining or a different BombHitTimer field.
+        //   Skipping (allowing unlock) is conservative vs skipping the achievement.
         if (info->m_RequiresUnsullied) {
-            // TODO: validate fruitArr[0..comboLen-1] are all non-bomb
-            (void)fruitArr;
             ++it;
             continue;
         }
 
-        auto cur = it++;
-        QueAchievement(info, cur);
-        ++unlocked;
+        if (QueAchievement(info, it)) {
+            ++unlocked;
+        } else {
+            ++it;
+        }
     }
     return unlocked;
 }
