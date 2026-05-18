@@ -173,15 +173,18 @@ void MissControl::LoadContent() {
     s_TexCritical = Mortar::TextureManager::LoadLocalisedTexture("critical.tex");
     s_TexRare     = Mortar::TextureManager::LoadLocalisedTexture("ultra_rare_plus_50.tex");
     s_TexCross    = Mortar::TextureManager::LoadLocalisedTexture("hud_cross.tex");
-    // Binary @ 0x001515a4 — combo textures. Binary ctor loop iVar3=1..10, loads
-    // combo_%d.tex for iVar3>=3 -> names combo_3..combo_12 (10 entries). The MakeCombo
-    // index mapping uses (comboCount-1) clamped [1..9] -> array indices [0..9].
-    // TODO: 0x001515a4 -- runtime confirms combo_11.tex absent; verify if scheme is
-    //   combo_2..combo_10 or combo_3..combo_11. asset-side investigation pending.
+    // ASM-verified: 2026-05-18 binary @ 0x001515a4 (re-analyst)
+    // Binary loop: iVar3=1..10; loads combo_%d.tex only for iVar3>=3.
+    // Slots [0] and [1] are intentionally NULL (combo=1,2 have no texture).
+    // Names: combo_3.tex .. combo_10.tex -> array indices [2..9].
     for (int i = 0; i < 10; ++i) {
-        char name[32];
-        snprintf(name, sizeof(name), "combo_%d.tex", i + 2);
-        s_ComboTextures[i] = Mortar::TextureManager::LoadLocalisedTexture(name);
+        if (i < 2) {
+            s_ComboTextures[i].SetNull();
+        } else {
+            char name[32];
+            snprintf(name, sizeof(name), "combo_%d.tex", i + 1);
+            s_ComboTextures[i] = Mortar::TextureManager::LoadLocalisedTexture(name);
+        }
     }
     s_TexturesLoaded = true;
     printf("[MissControl] LoadContent: critical=%d rare=%d cross=%d\n",
@@ -558,10 +561,17 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         }
     }
 
-    // Draw alpha: m_DrawColour.a directly (defaults to 0xff). Binary @
-    // 0x001521ac additionally scales by `*(float*)(GAME->field_0x3c->field_0x20)`
-    // (a global screen-fade factor) when < 1.0 -- not yet ported; treat as 1.0.
-    const float fade = 1.0f;
+    // ASM-verified: 2026-05-18 binary @ 0x00151f60 (re-analyst)
+    // Binary @ 0x001521ac: scale alpha by Game->hud->m_globalTimeScale (slow-mo factor)
+    // only when < 1.0 (normal gameplay = 1.0, branch skipped).
+    float fade = 1.0f;
+    {
+        Game* gFade = Game::GetInstance();
+        if (gFade && gFade->hud) {
+            float ts = gFade->hud->m_globalTimeScale;
+            if (ts < 1.0f) fade = ts;
+        }
+    }
 
     // UV crop based on m_bComboActive / m_bVisible.
     // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)

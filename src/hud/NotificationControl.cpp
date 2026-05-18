@@ -165,17 +165,13 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
         }
 
         // Icon quad
+        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
         if (m_AchIcon.IsValid()) {
             Mortar::Texture* iconTex = m_AchIcon.Get();
             if (iconTex) {
-                float iw = (float)iconTex->m_Width;
-                float ih = (float)iconTex->m_Height;
                 mm.GetWorldStack().Reset();
-                Matrix44 mat = Matrix44::MakeScale(iw, ih, 1.0f);
-                // TODO: exact icon offset from binary DAT not yet resolved
-                // DIFFERS: offset placeholder until DAT constants are RE'd
-                Vec3 iconPos(pos.x, pos.y - 20.0f, pos.z);
-                mat.GlobalTranslate44(iconPos);
+                Matrix44 mat = Matrix44::MakeScale(30.0f, 30.0f, 30.0f);
+                mat.GlobalTranslate44(pos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 iconTex->Set();
@@ -186,21 +182,21 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
         }
 
         // Name text
-        // TODO: exact x/y offsets from binary not yet resolved
+        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
         if (g->pFontMain.IsValid()) {
-            Colour col(255, 255, 255, 255);
-            Vec3 textPos(pos.x + 10.0f, pos.y, pos.z);
+            Colour col(50, 50, 50, 255);
+            Vec3 textPos(pos.x + 18.0f, pos.y, pos.z);
             g->pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
-                m_DisplayName, textPos, col, Mortar::FONT_ALIGN_LEFT);
+                m_DisplayName, textPos, col, 0x0C);
         }
 
         // Points text (right-aligned)
+        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
         if (m_PointsText[0] != '\0' && g->pFontMain.IsValid()) {
-            Colour col(255, 255, 255, 255);
-            // TODO: exact right-align offset from binary not yet resolved
-            Vec3 ptPos(pos.x + 160.0f, pos.y, pos.z);
+            Colour col(50, 50, 50, 255);
+            Vec3 ptPos(pos.x + 186.0f, pos.y, pos.z);
             g->pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
-                m_PointsText, ptPos, col, Mortar::FONT_ALIGN_RIGHT);
+                m_PointsText, ptPos, col, 0x0C);
         }
 
     } else if (m_NotifType == Type_Named) {
@@ -226,16 +222,13 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
         }
 
         // Larger icon quad
+        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
         if (m_AchIcon.IsValid()) {
             Mortar::Texture* iconTex = m_AchIcon.Get();
             if (iconTex) {
-                // Binary: larger scale for named achievement icon than numeric
-                float iw = (float)iconTex->m_Width  * 1.5f;
-                float ih = (float)iconTex->m_Height * 1.5f;
                 mm.GetWorldStack().Reset();
-                Matrix44 mat = Matrix44::MakeScale(iw, ih, 1.0f);
-                // TODO: exact icon offset from binary DAT not yet resolved
-                Vec3 iconPos(pos.x, pos.y - 24.0f, pos.z);
+                Matrix44 mat = Matrix44::MakeScale(32.0f, 32.0f, 32.0f);
+                Vec3 iconPos(pos.x, pos.y + 16.0f, pos.z);
                 mat.GlobalTranslate44(iconPos);
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
@@ -247,11 +240,12 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
         }
 
         // Name text only (no points text for named type)
+        // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
         if (g->pFontMain.IsValid()) {
-            Colour col(255, 255, 255, 255);
-            Vec3 textPos(pos.x + 10.0f, pos.y, pos.z);
+            Colour col(50, 50, 50, 255);
+            Vec3 textPos(pos.x + 18.0f, pos.y + 16.0f, pos.z);
             g->pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
-                m_DisplayName, textPos, col, Mortar::FONT_ALIGN_LEFT);
+                m_DisplayName, textPos, col, 0x0C);
         }
     }
 }
