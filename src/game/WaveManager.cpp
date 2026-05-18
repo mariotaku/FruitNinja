@@ -52,9 +52,9 @@ static bool IsSameScreenMultiplayer() {
     return false;
 }
 
-void WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
+int WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
     out.clear();
-    if (!str || !*str) return;
+    if (!str || !*str) return 0;
     const char* p = str;
     while (*p) {
         while (*p == ' ' || *p == '\t' || *p == ',') ++p;
@@ -66,6 +66,8 @@ void WaveManager::SplitWords(const char* str, std::vector<std::string>& out) {
         if (end > start)
             out.push_back(std::string(start, end));
     }
+    return (int)out.size();
+    // ASM-verified: 2026-05-18 binary @ 0x001231d8 (re-analyst)
 }
 
 SpawnPlacement WaveManager::ParsePlacement(const char* side) {
@@ -223,7 +225,7 @@ void WaveManager::Init() {
         {
             PROBABILITY_OVERIDE po;
             const char* types = el->Attribute("types");
-            if (types) SplitWords(types, po.m_Types);
+            if (types) po.m_field68 = SplitWords(types, po.m_Types);
             el->QueryIntAttribute("percentageChance", &po.m_PercentChance);
             el->QueryIntAttribute("perWave", &po.m_PerWave);
             el->QueryIntAttribute("waveCount", &po.m_PerWaveCount);
@@ -1078,11 +1080,14 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         // Gate: waveCount minimum (field_0x5c = blitz score total)
                         if (po.m_PerWaveCount > 0 && field_0x5c < po.m_PerWaveCount) continue;
                         // Gate: disableWhenPowered — binary @ 0x00117b38
+                        // GetActiveProgression returns 2.0 when no power active, [0..1] otherwise.
+                        // Skip only when a power is active AND progression dropped to/below threshold.
+                        // ASM-verified: 2026-05-18 binary @ 0x00125390 (re-analyst)
                         if (po.m_DisableWhenPowered > 0.0f) {
                             float prog = PowerUpManager::GetInstance()
                                              ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f)
-                                             : 0.0f;
-                            if (prog >= po.m_DisableWhenPowered) continue;
+                                             : 2.0f;
+                            if (po.m_DisableWhenPowered >= prog) continue;
                         }
                         totalChance += po.m_PercentChance;
                     }
@@ -1099,13 +1104,24 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             if (po.m_DisableWhenPowered > 0.0f) {
                                 float prog = PowerUpManager::GetInstance()
                                                  ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f)
-                                                 : 0.0f;
-                                if (prog >= po.m_DisableWhenPowered) continue;
+                                                 : 2.0f;
+                                if (po.m_DisableWhenPowered >= prog) continue;
                             }
                             cumulative += po.m_PercentChance;
                             if (roll < cumulative) {
                                 chosenType = po.GetType();
-                                if (chosenType >= 0) po.m_Counter++;
+                                if (chosenType >= 0) {
+                                    const FruitInfo* fi = FruitInfo_Get(chosenType);
+                                    // Bug 4: AnyActivePowers early-exit — binary @ 0x001254f2.
+                                    // If this fruit's power is already active, abort spawn.
+                                    // ASM-verified: 2026-05-18 binary @ 0x001254f2 (re-analyst)
+                                    if (fi && fi->m_pPowers && fi->m_pPowers->AnyActivePowers()) {
+                                        chosenType = -1;
+                                        break;
+                                    }
+                                    po.m_Counter++;
+                                    field_0x23d++;
+                                }
                                 break;
                             }
                         }

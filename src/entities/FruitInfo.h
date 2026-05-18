@@ -46,6 +46,9 @@ struct FRUIT_POWERS {
     FRUIT_POWER* m_pArray;  // +0x00
     uint32_t     m_Count;   // +0x04
     FRUIT_POWERS() : m_pArray(nullptr), m_Count(0) {}
+
+    // Binary @ 0x00175714. Returns true if any power in m_pArray is currently active.
+    bool AnyActivePowers() const;
 };
 
 // Port alias so existing code using FruitPowers still compiles

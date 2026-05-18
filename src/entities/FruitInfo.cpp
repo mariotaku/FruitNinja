@@ -10,6 +10,7 @@
 #include "util/PathCI.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
+#include "game/PowerUpManager.h"
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstdlib>
@@ -402,4 +403,16 @@ FruitInfo* FruitInfo_GetArray()
 Mortar::Texture* FruitInfo_GetShadowTex()
 {
     return g_FruitShadowTex.IsValid() ? g_FruitShadowTex.Get() : nullptr;
+}
+
+// FRUIT_POWERS::AnyActivePowers — binary @ 0x00175714
+// Returns true if any power in m_pArray is currently active via PowerUpManager.
+// ASM-verified: 2026-05-18 binary @ 0x00175714 (re-analyst)
+bool FRUIT_POWERS::AnyActivePowers() const {
+    PowerUpManager* mgr = PowerUpManager::GetInstance();
+    if (!mgr) return false;
+    for (uint32_t i = 0; i < m_Count; ++i) {
+        if (mgr->GetActiveSingle(m_pArray[i].m_PowerHash)) return true;
+    }
+    return false;
 }

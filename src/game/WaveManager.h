@@ -326,8 +326,9 @@ public:
     // 0x00121a1c: calls COIN_CHANCEINATOR::GetCoins().
     static void RequestCoins();
 
-    // Split whitespace-separated string into tokens.
-    static void SplitWords(const char* str, std::vector<std::string>& out);
+    // Split whitespace-separated string into tokens. Returns the count written.
+    // Binary return value used by PROBABILITY_OVERIDE::Parse to set m_field68.
+    static int SplitWords(const char* str, std::vector<std::string>& out);
 
 private:
     // Parse placement string to SpawnPlacement enum.
