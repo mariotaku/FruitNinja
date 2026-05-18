@@ -163,6 +163,9 @@ public:
     void Deactivate();
     // Binary @ 0x0011d1ec
     void LoadTextures();
+    // Binary addr TBD — called by PowerUp::UnloadTextures and PowerUpManager::UnloadTextures
+    // TODO: implement when ScreenEffect texture unload addr is RE'd
+    void UnloadTextures() {}
 };
 
 #endif // FN_GAME_SCREEN_EFFECT_H

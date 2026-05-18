@@ -1005,6 +1005,20 @@ void SlashEntity::SetModScales(
     g_ScaleFlag2 = loop   ? 1 : 0;
 }
 
+// ResetModScales — set all 6 blade-mod scale globals back to 1.0f.
+// Called by PowerUpManager::SetDefaults (0x00117a80) and ::Reset (0x00119b08).
+// Binary writes 6 float fields to 0x3f800000 (1.0f) via the struct held in
+// g_pFruitNinjaApp->m_pGame at +0x3c; port maps these to the file-scope globals.
+void SlashEntity::ResetModScales() {
+    g_Scale1     = 1.0f;
+    g_Scale2     = 1.0f;
+    g_Scale3     = 1.0f;
+    g_Scale4     = 1.0f;
+    g_Scale5     = 1.0f;
+    g_ScaleFlag1 = 1;
+    g_ScaleFlag2 = 1;
+}
+
 // ColoursChanged @ 0x0017c41c. Per-instance live-update fired by the
 // SetModColours walker. NOT virtual (binary direct-calls).
 //

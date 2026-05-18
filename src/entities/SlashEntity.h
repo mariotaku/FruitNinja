@@ -299,6 +299,11 @@ public:
     // TODO: implement when blade colour palette / overlay texture wiring lands.
     static void InitModColours();
 
+    // ResetModScales — reset all 6 blade-mod scale fields to 1.0f.
+    // Called by PowerUpManager::SetDefaults and ::Reset to undo any active SlashModifier.
+    // ASM-verified: 2026-05-18 binary @ 0x00117a80 / 0x00119b08 (re-analyst)
+    static void ResetModScales();
+
     // SetModScales @ 0x0017b328
     // Writes trail thickness/length/UV scale fields into the global singleton.
     // Default no-mod call: SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f).
