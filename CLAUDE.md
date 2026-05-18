@@ -127,7 +127,7 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 
 The canonical RE record is in `src/`. The surviving `docs/` set is small and load-bearing only — things you cannot derive from code:
 
-- `docs/HANDOVER.md`, `docs/HANDOVER-gameplay.md` — onboarding context.
+- `docs/HANDOVER.md` — onboarding context.
 - `docs/port-plan.md` — high-level port intent.
 - `docs/resources.md` — asset directory layout, XML schemas, loading flow (data, not derivable from code).
 - `docs/source-files.md` — port file → binary symbol cross-reference index.

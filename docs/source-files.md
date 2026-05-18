@@ -86,7 +86,7 @@ Namespace column shows the C++ namespace from Ghidra symbol demangling. `Mortar:
 | Source File | Address | Namespace | Port Status |
 |-------------|---------|-----------|-------------|
 | Fruit.cpp | 0x0017a354 | — | Ported |
-| Bomb.cpp | 0x0017200c | — | TODO |
+| Bomb.cpp | 0x0017200c | — | Ported (partial) |
 | Slash.cpp | 0x0017e52c | — | TODO |
 | Splat.cpp | 0x0017ff6c | — | TODO |
 | SplatEffect.cpp | 0x00180530 | — | TODO |
@@ -108,7 +108,7 @@ Namespace column shows the C++ namespace from Ghidra symbol demangling. `Mortar:
 | ComboChecker.cpp | 0x00110fc4 | — | TODO |
 | HighscoreList.cpp | 0x001118f0 | — | TODO |
 | LocalScoreList.cpp | 0x001145c4 | — | TODO |
-| WaveManager.cpp | 0x00125f08 | — | TODO |
+| WaveManager.cpp | 0x00125f08 | — | Ported (core) |
 | TimeKeeper.cpp | 0x00128da8 | — | TODO |
 | OperatorOptions.cpp | 0x00129864 | — | Skip (operator settings) |
 | NetworkManager_common.cpp | 0x0018e3ec | — | Skip (online) |
@@ -176,11 +176,11 @@ Namespace column shows the C++ namespace from Ghidra symbol demangling. `Mortar:
 ### Game HUD Widgets
 | Source File | Address | Namespace | Port Status |
 |-------------|---------|-----------|-------------|
-| MissControl.cpp | 0x001522d0 | — | TODO |
-| ComboControl.cpp | 0x00136e08 | — | TODO |
-| ScoreControl.cpp | 0x00159998 | — | TODO |
-| TimeControl.cpp | 0x00162b24 | — | TODO |
-| SpeedControl.cpp | 0x001616d0 | — | TODO |
+| MissControl.cpp | 0x001522d0 | — | Ported |
+| ComboControl.cpp | 0x00136e08 | — | Ported |
+| ScoreControl.cpp | 0x00159998 | — | Ported |
+| TimeControl.cpp | 0x00162b24 | — | Ported |
+| SpeedControl.cpp | 0x001616d0 | — | Ported |
 | BombCounter.cpp | 0x00131aac | — | TODO |
 | CoinCounter.cpp | 0x001357e4 | — | TODO |
 | StarfruitCounter.cpp | 0x00161b9c | — | TODO |
@@ -203,7 +203,7 @@ Namespace column shows the C++ namespace from Ghidra symbol demangling. `Mortar:
 ## Modifiers & Effects
 | Source File | Address | Namespace | Port Status |
 |-------------|---------|-----------|-------------|
-| ScoreModifier.cpp | 0x0011cdb4 | — | TODO |
+| ScoreModifier.cpp | 0x0011cdb4 | — | Ported |
 | SlashModifier.cpp | 0x0011f61c | — | TODO |
 | TimeModifier.cpp | 0x001201b0 | — | TODO |
 | WaveModifier.cpp | 0x00128448 | — | TODO |
@@ -270,4 +270,8 @@ Many engine classes do NOT use the `Mortar::` prefix in symbols (MatrixManager, 
 | UI Controls | 31 | 3 | 25 | 3 | 0 |
 | Modifiers/Effects | 8 | 0 | 8 | 0 | 0 |
 | Multiplayer Packets | 7 | 0 | 1 | 6 | 0 |
-| **Total** | **142** | **23** | **83** | **27** | **8** |
+| **Total** | **142** | **30** | **76** | **27** | **8** |
+
+---
+
+**Last Updated: 2026-05-18**
