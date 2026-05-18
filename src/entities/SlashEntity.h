@@ -107,13 +107,11 @@ public:
     void PreUpdate(float dt);
 
     // Entity vtable slot 5 (+0x14): Draw(Renderer&) override.
-    // Binary Draw @ 0x17B3B8 is a 1-instruction BX lr stub; actual rendering
-    // is in DrawSlice. Port's Draw(Renderer&) delegates to DrawSlice().
+    // Binary Draw @ 0x17B3B8 is a 1-instruction BX lr stub -- no-op.
+    // All blade rendering goes through DrawSlice, dispatched explicitly
+    // from GameDraw (binary @ 0x0016b888 vtable-loop over 16 slots).
+    // ASM-verified: 2026-05-18 binary @ 0x0017B3B8 (re-analyst)
     void Draw(Renderer& r) override;
-
-    // No-arg draw convenience: calls DrawSlice directly.
-    // Used by GameDraw which iterates g_pSlashEntities and calls Draw().
-    void Draw();
 
     // Binary @ 0x17B3B8 — Draw is a 1-instruction BX lr stub; rendering is
     // in DrawSlice. Port's Draw() maps to DrawSlice behaviour.
@@ -207,15 +205,23 @@ private:
     // Bulk-shifts the array when full (drops the oldest point).
     void AddPoint(const Vec3& pos, const Vec3& dir);
 
-    // Rebuilds m_Left / m_Right vertex buffers from m_Points. Matches
-    // SlashEntity::UpdatePoints (0x17B92C) simplified.
+    // Rebuilds m_pLeftBuffer / m_pRightBuffer vertex buffers from m_Points.
+    // Matches SlashEntity::UpdatePoints (0x17B92C) simplified.
     void RebuildGeometry();
 
     TrailPoint m_Points[MAX_POINTS];
     int m_NumPoints;
 
-    QUADCUSTOMVERTEX m_Left [MAX_VERTS];  // centre → upper edge strip
-    QUADCUSTOMVERTEX m_Right[MAX_VERTS];  // centre → lower edge strip
+    // Binary +0x50: capacity passed to InitPoints; drives heap buffer size.
+    // InitPoints @ 0x17C340 sets m_SplitPoint = splitPoint (160 from Init).
+    int m_SplitPoint;
+
+    // Binary +0x5c, +0x60: heap-allocated vertex strips.
+    // Sized as (m_SplitPoint+2)*sizeof(QUADCUSTOMVERTEX). Allocated in
+    // InitPoints, freed in Release. Nulled by ctor and after delete[].
+    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+    QUADCUSTOMVERTEX* m_pLeftBuffer;   // +0x5c heap-allocated by InitPoints
+    QUADCUSTOMVERTEX* m_pRightBuffer;  // +0x60 heap-allocated by InitPoints
 
     // Particle emitter that follows the blade for smoke/sparkle trail.
     // Matches binary +0x3c (m_TrailEmitter). Created on first active touch
@@ -349,13 +355,20 @@ public:
     // STUB: SlashEntity::CollisionResponse (4-arg vtable override) -- binary @ 0x17B3BC (TODO RE)
     int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel) override;
 
-    // STUB: SlashEntity::DrawSlice -- binary @ 0x17E424 (TODO RE)
+    // DrawSlice -- binary @ 0x17E424. Main blade render (two mirrored tri-strips).
+    // Called explicitly from GameDraw's 16-slot vtable loop (binary @ 0x0016b888),
+    // NOT from ActorManager::Draw which hits the BX lr Draw stub instead.
+    // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
     void DrawSlice();
 
-    // STUB: SlashEntity::Init (3-arg binary form) -- binary @ 0x17C65C (TODO RE)
+    // Init (3-arg binary form) -- binary @ 0x17C65C. Vtable slot 2.
+    // Allocates ColLine, calls InitPoints(160), inits ghost ring + combo array.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
     void Init(void* param1, long param2, Vec3* param3) override;
 
-    // STUB: SlashEntity::InitPoints -- binary @ 0x17C340 (TODO RE)
+    // InitPoints -- binary @ 0x17C340. Heap-allocates m_pLeftBuffer /
+    // m_pRightBuffer and fills with sentinel/white records.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
     void InitPoints(long count);
 
     // STUB: SlashEntity::SetModColours (non-const Colour* binary form) -- binary @ 0x17CA0C (TODO RE)

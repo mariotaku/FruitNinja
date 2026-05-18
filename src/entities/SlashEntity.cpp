@@ -140,9 +140,16 @@ void SlashEntity::ReleaseContent() {
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
+// Binary @ 0x0017C82C -- ctor sets vtable, default-constructs m_BaseColour /
+// m_HighlightColour, zeros field_0x130 and m_TrailEmitter. The buffer
+// pointers (m_pLeftBuffer, m_pRightBuffer) inherit zero from Mortar::Entity
+// zero-init; port makes them explicit nullptr for clarity.
 SlashEntity::SlashEntity()
     : Mortar::Entity()
     , m_NumPoints(0)
+    , m_SplitPoint(0)
+    , m_pLeftBuffer(nullptr)
+    , m_pRightBuffer(nullptr)
     , m_TrailEmitter(nullptr)
     , m_BaseColour(255, 255, 255, 255)
     , m_HighlightColour(255, 255, 255, 255)
@@ -154,8 +161,6 @@ SlashEntity::SlashEntity()
     , m_SwipeSoundTimer(0.0f)
     , m_RawTouchPos(0, 0, 0)
 {
-    memset(m_Left,  0, sizeof(m_Left));
-    memset(m_Right, 0, sizeof(m_Right));
 }
 
 // Binary @ 0x17C774 — restore vtable, call Release, chain to Mortar::Entity::~Mortar::Entity.
@@ -164,22 +169,15 @@ SlashEntity::~SlashEntity() {
     Release();
 }
 
+// Port-only convenience: stores fingerId, calls binary-faithful 3-arg Init,
+// then registers per-finger input callbacks (done by GameTaskInitInput in
+// the binary, externally to Init itself).
 void SlashEntity::Init(int fingerId) {
     m_FingerId = fingerId;
-    m_NumPoints = 0;
-    m_State = 0;
-    m_bHasHead = false;
-    m_SwipeSoundTimer = 0.0f;
-    m_TrailEmitter = nullptr;
-    m_pCurrentTarget = nullptr;
-
-    for (int i = 0; i < MAX_VERTS; ++i) {
-        m_Left[i].nx  = 0; m_Left[i].ny  = 0; m_Left[i].nz  = 1.0f;
-        m_Right[i].nx = 0; m_Right[i].ny = 0; m_Right[i].nz = 1.0f;
-        m_Left[i].colour  = 0xFFFFFFFF;
-        m_Right[i].colour = 0xFFFFFFFF;
-    }
-
+    // Delegate to binary-faithful 3-arg form (vtable slot 2).
+    // Binary's GameTaskInitInput @ 0x00169670 calls Init(0, 0, &initialPos)
+    // per finger after ActorManager::Add(3, true) constructs a fresh instance.
+    Init(static_cast<void*>(nullptr), 0L, static_cast<Vec3*>(nullptr));
     RegisterInputCallbacks();
 }
 
@@ -212,12 +210,25 @@ void SlashEntity::RegisterInputCallbacks() {
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchUp));
 }
 
+// Binary @ 0x0017C60C -- frees heap vertex buffers, clears trail emitter,
+// clears a 1-byte input-init guard (port: TODO), chains to Entity::Release.
+// ASM-verified: 2026-05-18 binary @ 0x0017C60C (re-analyst)
 void SlashEntity::Release() {
-    m_NumPoints = 0;
+    if (m_pLeftBuffer) {
+        delete[] m_pLeftBuffer;
+        m_pLeftBuffer = nullptr;
+    }
+    if (m_pRightBuffer) {
+        delete[] m_pRightBuffer;
+        m_pRightBuffer = nullptr;
+    }
     if (m_TrailEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
+    m_NumPoints = 0;
+    // TODO: 0x0017C60C -- clear 1-byte input-init guard at GOT+DAT_0017c658+0x17c6e4
+    //   (likely an "input-registered" flag to prevent double-registration).
 }
 
 // ---------------------------------------------------------------------------
@@ -252,9 +263,6 @@ void SlashEntity::Reset() {
 // ---------------------------------------------------------------------------
 // Chunk A stubs — trivial binary stubs
 // ---------------------------------------------------------------------------
-
-// Binary @ 0x17B3B8 — Draw is a 1-instruction BX lr stub; rendering is in DrawSlice.
-// Port: Draw() maps to DrawSlice; see Draw() below.
 
 // Binary @ 0x17B3BC — empty stub, returns 0.
 // SlashEntity is pure aggressor (blade), never collides into.
@@ -525,6 +533,7 @@ void SlashEntity::AddPoint(const Vec3& pos, const Vec3& dir) {
 // ---------------------------------------------------------------------------
 void SlashEntity::RebuildGeometry() {
     if (m_NumPoints < 2) return;
+    if (!m_pLeftBuffer || !m_pRightBuffer) return;
 
     // Advance the highlight colour for this geometry rebuild pass.
     // Binary UpdatePoints @ 0x17B92C calls UpdateModColour(&m_HighlightColour,
@@ -603,12 +612,12 @@ void SlashEntity::RebuildGeometry() {
                            | ((uint32_t)m_BaseColour.g <<  8)
                            |  (uint32_t)m_BaseColour.r;
 
-        // Left strip: outer edge → centre.
-        QUADCUSTOMVERTEX& l0 = m_Left[i * 2    ];
-        QUADCUSTOMVERTEX& l1 = m_Left[i * 2 + 1];
-        // Right strip: centre → outer edge.
-        QUADCUSTOMVERTEX& r0 = m_Right[i * 2    ];
-        QUADCUSTOMVERTEX& r1 = m_Right[i * 2 + 1];
+        // Left strip: outer edge to centre.
+        QUADCUSTOMVERTEX& l0 = m_pLeftBuffer[i * 2    ];
+        QUADCUSTOMVERTEX& l1 = m_pLeftBuffer[i * 2 + 1];
+        // Right strip: centre to outer edge.
+        QUADCUSTOMVERTEX& r0 = m_pRightBuffer[i * 2    ];
+        QUADCUSTOMVERTEX& r1 = m_pRightBuffer[i * 2 + 1];
 
         l0.x = p.center.x - perpX;
         l0.y = p.center.y - perpY;
@@ -841,38 +850,12 @@ bool SlashEntity::CollideWithSphere(const ColSphere& sphere,
 // ---------------------------------------------------------------------------
 
 // Entity vtable slot 5 (+0x14): Draw(Renderer&) override.
-// Binary Draw @ 0x17B3B8 is a 1-instruction BX lr stub; actual rendering is
-// in DrawSlice (called explicitly by GameDraw after ActorManager::Draw).
-// Port delegates to the no-arg Draw() so ActorManager::Draw stays wired.
+// Binary @ 0x17B3B8 is a 1-instruction BX lr stub. ActorManager::Draw walks
+// type-3 entities and calls this slot, getting no output. All blade rendering
+// goes through DrawSlice, dispatched explicitly from GameDraw's 16-slot loop.
+// ASM-verified: 2026-05-18 binary @ 0x0017B3B8 (re-analyst)
 void SlashEntity::Draw(Renderer& /*r*/) {
-    Draw();
-}
-
-void SlashEntity::Draw() {
-    if (m_NumPoints < 2) return;
-
-    // Texture select: blade-mod overlay (g_ModTexture) replaces the default
-    // blade.tex when set. Binary @ 0x0017E424:
-    //   if (SmartPtr::IsValid(g_SlashState.modTexture)) bind modTexture
-    //   else bind defaultTexture
-    Mortar::SmartPtr<Mortar::Texture>& bladeTex =
-        g_ModTexture.IsValid() ? g_ModTexture : g_BladeTex;
-    if (!bladeTex.IsValid()) return;
-
-    // Matrix reset + MVP upload. Matches binary Draw 0x17E424 prelude.
-    MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-    mm.UploadModelViewOnly();
-
-    bladeTex->Set();
-
-    if (Renderer* r = Renderer::GetInstance()) {
-        const int vertCount = m_NumPoints * 2;
-        r->DrawTriStrip(m_Left,  vertCount);
-        r->DrawTriStrip(m_Right, vertCount);
-    }
-
-    bladeTex->UnSet();
+    // No-op. Matches binary's single-instruction BX lr stub.
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,29 +1091,154 @@ bool SlashEntity::CollideWithEntity(Mortar::Entity* /*entity*/) { return false; 
 int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
                                     unsigned long /*mask2*/, Vec3* /*bladeVel*/) { return 0; }
 
-// Binary @ 0x17E424 -- main blade render (two mirrored tri-strips). Port's
-// Draw() already implements ~85% of this. Two known gaps (deferred; both
-// block on ghost-ring port):
-//   - field_0x144 swipe-just-ended edge detector + CreateGhost + g_ContactHash
-//     contact-emitter spawn at swipe end.
-//   - m_NumPoints>3 gate (port uses >=2; less strict but visually similar).
-// Forward to Draw() for binary-symbol callers.
-void SlashEntity::DrawSlice() { Draw(); }
+// Binary @ 0x17E424 -- main blade render (two mirrored tri-strips).
+// Called from GameDraw's 16-slot vtable loop (binary @ 0x0016b888),
+// NOT from ActorManager::Draw (which hits the BX lr Draw stub instead).
+// ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
+//
+// Known gaps (deferred, both block on ghost-ring port):
+//   TODO: 0x0017E424 -- field_0x144 swipe-just-ended edge detector +
+//     CreateGhost + g_ContactHash contact-emitter spawn at swipe end.
+// DIFFERS: binary gate is m_NumPoints > 3; port uses >= 2 to render
+//   single-tap micro-trails (cosmetic only).
+void SlashEntity::DrawSlice() {
+    if (m_NumPoints < 2) return;
+    if (!m_pLeftBuffer || !m_pRightBuffer) return;
 
-// Binary @ 0x17C65C -- 3-arg ctor body wired through ActorManager::Add init
-// path. Allocates ColLine into m_Col, calls InitPoints(160), defaults 8-slot
-// ghost-dir ring, init 11-entry combo-slice array to -1, sets initial swipe
-// cooldown field_0x148 = 6.0f. Port's int-finger-slot Init(int) covers the
-// observable state; forward.
-void SlashEntity::Init(void* /*param1*/, long /*param2*/, Vec3* /*param3*/) {
-    Init(0);
+    // Texture select: blade-mod overlay (g_ModTexture) replaces the default
+    // blade.tex when set. Binary @ 0x0017E424:
+    //   if (SmartPtr::IsValid(g_SlashState.modTexture)) bind modTexture
+    //   else bind defaultTexture
+    Mortar::SmartPtr<Mortar::Texture>& bladeTex =
+        g_ModTexture.IsValid() ? g_ModTexture : g_BladeTex;
+    if (!bladeTex.IsValid()) return;
+
+    // Matrix reset + MVP upload. Matches binary DrawSlice 0x17E424 prelude.
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    bladeTex->Set();
+
+    if (Renderer* r = Renderer::GetInstance()) {
+        // 2 verts per trail point (interleaved edge + centre in each buffer).
+        // RebuildGeometry writes indices 0..m_NumPoints*2-1.
+        const int vertCount = m_NumPoints * 2;
+        r->DrawTriStrip(m_pLeftBuffer,  vertCount);
+        r->DrawTriStrip(m_pRightBuffer, vertCount);
+    }
+
+    bladeTex->UnSet();
 }
 
-// Binary @ 0x17C340 -- allocates m_pLeftBuffer/m_pRightBuffer arrays sized
-// for `count` point pairs and zeros tail/head/prev-head Vec3s. Port uses
-// fixed-size arrays; just reset point count.
-void SlashEntity::InitPoints(long /*count*/) {
-    m_NumPoints = 0;
+// Binary @ 0x17C65C -- vtable slot 2. All 3 params are vestigial and ignored.
+// Allocates ColLine into m_Col, calls InitPoints(160), inits ghost-dir ring,
+// 11-entry combo-slice array to -1, sets field_0x148 = 6.0f.
+// ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
+    // 1. Allocate ColLine into m_Col (+0x38). Set "has collider" flag bit.
+    m_Col = new ColLine();
+    flags |= 0x02;
+
+    // 2. Reset scale-adjacent float at +0x94.
+    *(float*)((char*)this + 0x94) = -1.0f;
+
+    // 3. Build vertex buffers (160 pairs).
+    InitPoints(160);
+
+    // 4. Per-frame scratch state.
+    *(float*)((char*)this + 0x98) = 0.0f;
+    m_TrailEmitter = nullptr;
+    m_Scale        = 0.0f;
+    *(uint32_t*)((char*)this + 0x9c) = 0xFFFFFFFFu;
+
+    // 5. Copy Colour::White into both colour fields.
+    Colour white(255, 255, 255, 255);
+    m_HighlightColour = white;
+    m_BaseColour      = white;
+
+    // 6. Combo / ghost-ring init.
+    *(float*)((char*)this + 0x124) = 0.1f;   // per-swipe accumulator (DAT_0017c764)
+    *(int*)  ((char*)this + 0x128) = 0;
+    *(int*)  ((char*)this + 0x12c) = 0;
+    // m_GhostDir at +0x118 (Vec3): zero
+    *(float*)((char*)this + 0x118) = 0.0f;
+    *(float*)((char*)this + 0x11c) = 0.0f;
+    *(float*)((char*)this + 0x120) = 0.0f;
+    *(float*)((char*)this + 0x134) = 0.0f;
+    *(uint8_t*)((char*)this + 0x4c) = 0;   // m_bFlag4c
+    *(int*)    ((char*)this + 0x138) = 0;
+    *(uint16_t*)((char*)this + 0x36) = 0;  // angle
+    *(int*)    ((char*)this + 0x114) = 0;  // m_GhostCount
+    *(int*)    ((char*)this + 0x110) = 0;  // m_GhostIndex
+
+    // 7. 6-slot Vec3 ghost-direction ring at +0xc8 (6 entries, stride 12).
+    // TODO: 0x0017C65C -- ghost ring consumer uses 8 slots (mod 8 in AddPoint)
+    //   but Init only zeros 6. Follow-up RE on CreateGhost @ 0x17B82C to confirm.
+    for (int i = 0; i < 6; ++i) {
+        *(float*)((char*)this + 0xc8 + i * 12     ) = 0.0f;
+        *(float*)((char*)this + 0xc8 + i * 12 + 4 ) = 0.0f;
+        *(float*)((char*)this + 0xc8 + i * 12 + 8 ) = 0.0f;
+    }
+
+    // 8. 11-entry int32 combo-slice array at +0x154, all set to -1.
+    for (int i = 0; i < 11; ++i) {
+        *(int32_t*)((char*)this + 0x154 + i * 4) = -1;
+    }
+
+    // 9. Swipe-SFX cooldown timer (binary m_SwipeSoundTimer at +0xc4).
+    m_SwipeSoundTimer = 0.0f;
+
+    // 10. Extra combo fields.
+    *(int*)((char*)this + 0x150) = -1;  // m_ExtraFieldB
+    *(int*)((char*)this + 0x14c) = -1;  // m_ExtraFieldA
+    *(int*)((char*)this + 0x12c) = 0;
+    *(int*)((char*)this + 0x128) = 0;
+
+    // 11. Initial post-init swipe SFX cooldown at +0x148 = 6.0f.
+    *(float*)((char*)this + 0x148) = 6.0f;
+}
+
+// Binary @ 0x17C340 -- allocates m_pLeftBuffer/m_pRightBuffer arrays,
+// fills with sentinel/white records, resets counters and Vec3 sentinels.
+// ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+void SlashEntity::InitPoints(long count) {
+    // Stack-local Colour::White -> packed PlatformColour (0xFFFFFFFF for white).
+    Colour whiteColour(255, 255, 255, 255);
+    uint32_t whitePacked = whiteColour.PlatformColour();
+
+    // Reset point counters.
+    m_NumPoints  = 0;
+    m_SplitPoint = (int)count;   // +0x50: set to 160 from Init's call
+
+    // Sentinel value -65504.0f (DAT_0017c408 = 0xC77FFF00).
+    static const float SENTINEL = -65504.0f;
+    const Vec3 sentinel(SENTINEL, SENTINEL, SENTINEL);
+
+    // NaN bit pattern reinterpreted as float (0xFFFFFFFF = quiet NaN).
+    uint32_t nanBits = 0xFFFFFFFFu;
+    float nanFloat;
+    memcpy(&nanFloat, &nanBits, sizeof(float));
+
+    // Allocate left + right vertex buffers. Binary allocates (count+2) records
+    // per buffer at 1 vert per point. Port's RebuildGeometry writes 2 verts
+    // per trail point (edge + centre interleaved), so each buffer needs
+    // (count*2 + 2) entries.
+    // DIFFERS: binary = (count+2) * 0x24; port = (count*2+2) * 0x24 because
+    //   RebuildGeometry interleaves 2 verts per trail point per buffer.
+    for (int side = 0; side < 2; ++side) {
+        QUADCUSTOMVERTEX* buf = new QUADCUSTOMVERTEX[(count * 2 + 2)];
+        (&m_pLeftBuffer)[side] = buf;
+
+        // Fill valid slots [0..count*2-1] with sentinel/white.
+        // Slots [count*2, count*2+1] left uninitialised (scratch shift slots).
+        for (int i = 0; i < count * 2; ++i) {
+            buf[i].x  = nanFloat; buf[i].y  = nanFloat; buf[i].z  = nanFloat;
+            buf[i].u  = nanFloat; buf[i].v  = nanFloat;
+            buf[i].nx = nanFloat; buf[i].ny = nanFloat; buf[i].nz = 1.0f;
+            buf[i].colour = whitePacked;
+        }
+    }
 }
 
 // STUB: SlashEntity::SetModColours(Colour*, ...) — non-const binary form

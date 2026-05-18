@@ -470,7 +470,7 @@ void GameUpdate(float dt, bool active) {
 //       BombFlash::DrawActiveFlashes            [not yet ported]
 //   6.  HUD::Draw(0x80)
 //   7.  pm.Draw(-1)   — "background" particles (useDepth=-1, earliest)
-//   8.  (vtable loop over 16 objects)           [not yet ported]
+//   8.  SlashEntity::DrawSlice x16 via g_pSlashEntities vtable loop
 //   9.  pm.Draw(0)    — "mid" particles
 //   10. DrawSlices    — SlashEntity::DrawSlice blade ribbon
 //   11. HUD::Draw(0x01) — MainScreen (logo + shade). Drawn AFTER slash
@@ -576,11 +576,16 @@ void GameDraw(float dt, bool active) {
     pm.Draw(0.0f, false, -1);
 
     // Binary @ 0x0016ba10 after pm.Draw(-1): SetDepthBuffer(0) turns
-    // depth test off before the SlashEntity loop ×16 and all later
-    // 2D passes.
+    // depth test off before the SlashEntity DrawSlice loop x16 and all
+    // later 2D passes.
+    // Binary @ 0x0016b888: explicit per-finger DrawSlice dispatch loop.
+    // ActorManager::Draw above already walked type-3 SlashEntity slots but
+    // their Draw(Renderer&) vtable slot is a BX lr stub -- no output.
+    // All blade rendering comes from here.
+    // ASM-verified: 2026-05-18 binary @ 0x0016b888 (re-analyst)
     dm.SetDepthBuffer(false);
     for (int i = 0; i < 16; ++i) {
-        if (g_pSlashEntities[i]) g_pSlashEntities[i]->Draw();
+        if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();
     }
 
     // === 4. Mid particles + slice lines + main-screen logo ===
