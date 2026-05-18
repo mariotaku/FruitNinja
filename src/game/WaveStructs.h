@@ -326,6 +326,9 @@ struct PROBABILITY_OVERIDE {
 
     // Binary @ 0x001217e4. Returns m_TypeQueue[Rand32(m_field68)].
     // Does NOT call SelectType (SelectType is called once at Reset/NewGame).
+    // TODO: latent — Data/xml/fruitlist.xml has no <FruitInfo name="starfruit">; FruitType("starfruit",false)==-1.
+    // GetType() returns -1 for the starfruit override, which falls through to RandomFruit in callers.
+    // Restore fruitlist.xml entry if starfruit override (arcadewavelist.xml OverideProbability) should work.
     int GetType();
 };
 
