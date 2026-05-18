@@ -1067,6 +1067,13 @@ void GameOverScreen::Update(float dt) {
     m_AnimCounter = (int)(((float)m_AnimCounter + dt * 1000.0f));
     if (m_AnimCounter >= 1000) m_AnimCounter -= 1000;
 
+#ifndef __bada__
+    // Statics for edge-triggered BONUS_PHASE_STALL logging.
+    static int s_lastBonusState     = -1;
+    static int s_bonusStallLogFrame = 0;
+    static int s_bonusEntryFrame    = 0;
+#endif
+
     switch (m_State) {
 
     // -----------------------------------------------------------------------
@@ -1138,17 +1145,12 @@ void GameOverScreen::Update(float dt) {
         Mortar::ActorManager* am = game->actorManager;
 #ifndef __bada__
         {
-            static int  s_bonusStallLogFrame = 0;
-            static bool s_bonusEntryLogged   = false;
-            static int  s_bonusEntryFrame    = 0;
-
             int nf = am ? am->GetNumEntities(0) : 0;
             int nb = am ? am->GetNumEntities(1) : 0;
 
-            // Once-per-entry log — fires the first Update tick in this state.
-            if (!s_bonusEntryLogged) {
-                s_bonusEntryLogged   = true;
-                s_bonusEntryFrame    = s_bonusStallLogFrame;
+            // ENTRY edge: first tick in STATE_BONUS_PHASE.
+            if (s_lastBonusState != STATE_BONUS_PHASE) {
+                s_bonusEntryFrame = s_bonusStallLogFrame;
                 std::printf("[BONUS_PHASE_STALL] ENTRY frame=%d entities=(%d,%d)\n",
                             s_bonusStallLogFrame, nf, nb);
                 std::fflush(stdout);
@@ -1190,15 +1192,6 @@ void GameOverScreen::Update(float dt) {
                     }
                     std::fflush(stdout);
                 }
-            } else if (s_bonusEntryLogged && nf == 0 && nb == 0) {
-                // Gate just cleared — log exit so we can measure how long it blocked.
-                int framesBlocked = s_bonusStallLogFrame - s_bonusEntryFrame;
-                std::printf("[BONUS_PHASE_STALL] EXIT after=%d frames\n", framesBlocked);
-                std::fflush(stdout);
-                // Reset for next game-over.
-                s_bonusStallLogFrame = 0;
-                s_bonusEntryLogged   = false;
-                s_bonusEntryFrame    = 0;
             }
         }
 #endif
@@ -1384,6 +1377,18 @@ void GameOverScreen::Update(float dt) {
         // Unhandled states (2..5, 12, 13, 15+): do nothing (matches binary)
         break;
     }
+
+#ifndef __bada__
+    // EXIT edge: state just left STATE_BONUS_PHASE this tick.
+    if (s_lastBonusState == STATE_BONUS_PHASE && m_State != STATE_BONUS_PHASE) {
+        int framesBlocked = s_bonusStallLogFrame - s_bonusEntryFrame;
+        std::printf("[BONUS_PHASE_STALL] EXIT after=%d frames\n", framesBlocked);
+        std::fflush(stdout);
+        s_bonusStallLogFrame = 0;
+        s_bonusEntryFrame    = 0;
+    }
+    s_lastBonusState = m_State;
+#endif
 
     // -----------------------------------------------------------------------
     // Common layout block (runs every frame after switch).
