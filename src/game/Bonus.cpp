@@ -5,6 +5,7 @@
 
 #include "Bonus.h"
 #include "FruitSaveData.h"
+#include "../Game.h"
 #include "engine/util/StringHash.h"
 #include "engine/asset/TextureManager.h"
 #include <tinyxml2.h>
@@ -334,11 +335,7 @@ Bonus* BonusType::GetBest() {
         it->second = FruitSaveData::IsAchievementUnlocked((uint32_t)it->first) ? 1 : 0;
     }
 
-    // Evaluate bonuses in tier-descending order.
-    // Use currentScore from Game.
-    int score = 0;
-    // We can't pull Game here without circularity, so pass 0 -- IsAchieved
-    // will still check per-fruit bounds which is the primary gate.
+    int score = Game::GetInstance() ? Game::GetInstance()->currentScore : 0;
     for (size_t i = 0; i < m_Bonuses.size(); ++i) {
         if (m_Bonuses[i].IsAchieved(score, fruitCounts) != 0) {
             return &m_Bonuses[i];
