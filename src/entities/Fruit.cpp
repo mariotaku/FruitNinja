@@ -1507,7 +1507,12 @@ const char* Fruit::FruitFactTexture(long type) {
 
 // Binary @ 0x00174f80
 Colour Fruit::FruitTypeColour(long type) {
-    // TODO: 0x00174fbc/0x00174fc0 — special-fruit colour override (StarFruit etc.); default specialIdx=-1 means no override
+    // DIFFERS: binary checks g_SpecialFruitIdx == type (DAT_0x00174fbc) and
+    // returns g_SpecialFruitColour (DAT_0x00174fc0) when matched, set by
+    // StarFruit/Gem/Pomegranate spawners as per-frame colour overrides.
+    // Port has neither global wired (none of those spawners are ported yet);
+    // -1 default means "never match", so this branch always falls through
+    // to FRUIT_INFO[type]. Re-enable when those spawners port.
     const FruitInfoData* info = FruitInfo_Get((int)type);
     if (!info) return Colour(255, 255, 255, 255);
     return Colour(info->m_FruitColour[0], info->m_FruitColour[1],
@@ -1536,9 +1541,12 @@ const ::FruitInfo* Fruit::FruitInfo(long type) {
 // ported (GetNumActiveForPlayer doesn't filter by player yet). Stub the
 // per-player gating and call GameOver when count hits zero for player 0.
 void Fruit::CheckFruitDropped() {
-    // TODO: 0x00176184 — per-player live-count gate (local-MP); needs
-    // GetNumActiveForPlayer player filtering + per-player life tracking.
-    // For now: single-player path only.
+    // DIFFERS: binary @ 0x00176184 tracks per-player active-fruit counts
+    // in g_PlayerActiveFruit[3] (incremented in Fruit::Init, decremented in
+    // Fruit::Destroy keyed on m_PlayerIdx). On any player hitting 0,
+    // GameOver(-1,-1.0f, loserIdx). Port has no MP yet -- single-player
+    // path uses GetNumActiveForPlayer(0,false). MP gate enabled when
+    // m_PlayerIdx + per-player counters are wired.
     if (GetNumActiveForPlayer(0, false) == 0) {
         FN::GameOver(-1, -1.0f, -1);
     }
@@ -1719,7 +1727,11 @@ void Fruit::UpdateBombAvoidance(float dt) {
 void Fruit::DestroyFruitModels() {
     s_FruitModels.clear();
     s_FruitModelsLoaded = false;
-    // TODO: 0x0017911c — per-MP-player SmartPtr cleanup pending FruitModelInfo struct expansion
+    // DIFFERS: binary @ 0x0017911c additionally walks 4 MP-player model
+    // slots per FruitModelInfo (SmartPtr<Model>[4] at +0x10..+0x20, raw
+    // Model*[4] at +0x00..+0x0c) and nulls each, guarded by g_MPModelsLoaded
+    // (+0xc4). Port's FruitModelInfo is single-slot; MP slot expansion is
+    // deferred until same-screen MP ports its per-player model variants.
     // (m.slot[p+4] for p=0..3; requires FruitModelInfo extended to 0x24 bytes)
 }
 

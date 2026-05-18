@@ -328,11 +328,13 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_BounceParams.x = 0.85f;  // DAT_0014f240
     m_BounceParams.y = 0.85f;  // DAT_0014f240
     m_BounceParams.z = 0.0f;   // DAT_0014f244
-    // TODO: 0x000073ec (GOT entry, DAT_0014f1a8/0014f248) — Vec3 read from
-    // a global. Same global is also used at function top for `base.size`.
-    // Likely Mortar::MenuButton::s_DefaultButtonSize or similar; needs an
-    // re-analyst pass to resolve. Leaving the m_HitBoundsScale assignment
-    // out for now since the post-Init value is unused by any caller.
+    // ASM-resolved 2026-05-18: GOT entry 0x000073ec -> BSS 0x001f4328 =
+    // engine-global Mortar::Vec3::One = (1, 1, 1), initialised by
+    // _GLOBAL__I_TutorialControl_cpp @ 0x001638cc. Same pointer used at
+    // function top for base.size default. Both yield (1,1,1).
+    m_HitBoundsScale.x = 1.0f;
+    m_HitBoundsScale.y = 1.0f;
+    m_HitBoundsScale.z = 1.0f;
 }
 
 // Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()

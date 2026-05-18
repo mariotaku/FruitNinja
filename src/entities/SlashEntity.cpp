@@ -228,8 +228,10 @@ void SlashEntity::Release() {
 //   m_SliceFruitTypes/m_BladeDir/m_HeadPos/m_TailPos/m_PrevHeadPos/
 //   m_GhostIndex/m_GhostCount/m_GhostDirs don't exist in port; port resets
 //   its equivalent state (m_NumPoints, m_State, m_bHasHead).
-// TODO: 0x17B71C — binary also clears m_bFlag4c and fills m_pLeftBuffer/
-//   m_pRightBuffer entries with white (u=v=0.5) up to m_SplitPoint.
+// DIFFERS: binary @ 0x17B71C also clears m_bFlag4c (swipe-just-released edge)
+//   and white-fills m_pLeftBuffer/m_pRightBuffer up to m_SplitPoint. Port
+//   carries neither field; per-frame RebuildGeometry stamps m_BaseColour onto
+//   every vertex, achieving the same trail-colour-flush visual.
 // ---------------------------------------------------------------------------
 void SlashEntity::Reset() {
     m_NumPoints = 0;
@@ -267,12 +269,19 @@ int SlashEntity::UpdateCollisionLine(long /*dt*/) {
 }
 
 // Binary @ 0x17B398 — clears g_state.bombSkipFlag=0, sets g_state.needsDrawFlag=1.
-// TODO: 0x17B398 — g_state singleton (bombSkipFlag / needsDrawFlag) not yet modelled in port.
+// DIFFERS: g_state is the binary's GameTaskState singleton; bombSkipFlag is
+// the "don't slice during bomb-explosion freeze" gate -- port already covers
+// this via game->bombHitTimer > 0 in UpdateTouchDown. needsDrawFlag is the
+// SDK's render-needed-this-frame hint; SDL port redraws unconditionally so
+// it's irrelevant. Functionally equivalent no-op.
 void SlashEntity::DrawUpdate(float /*dt*/) {
 }
 
 // Binary @ 0x17B388 — clear back-pointer to combo MissControl when it gets deleted.
-// TODO: 0x17B388 — m_pComboMissControl field doesn't exist in port struct.
+// DIFFERS: m_pComboMissControl back-ref isn't modelled in port. The binary's
+// HUDControl::~HUDControl walks all SlashEntity[16] and nulls this slot;
+// port's combo-counter subsystem isn't yet ported, so no dangling-ref hazard.
+// Revisit when HUD combo subsystem ports.
 void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
 }
 
@@ -333,8 +342,10 @@ void SlashEntity::PlaySwipe() {
 
 // Binary @ 0x17B87C — derive head taper scale =
 //   lastPairHalfWidth / (g_Scale2 * 9.0), clamped to >= 1.0.
-// TODO: 0x17B87C — lastPairHalfWidth comes from binary's m_pLeftBuffer vertex
-//   pair, not modelled in port. Return 1.0 (no taper override).
+// DIFFERS: lastPairHalfWidth comes from binary's m_pLeftBuffer last vertex
+//   pair. Port stores per-point centre+thickness in m_Points[] instead;
+//   binary's only consumer is CreateGhost() (unported) so return 1.0
+//   is a binary-equivalent no-op (no taper override).
 float SlashEntity::GetHeadThicknessScale() const {
     return 1.0f;
 }
@@ -1060,36 +1071,53 @@ int      SlashEntity::GetColourType()                             { return g_Col
 const Colour* SlashEntity::GetPalette()                           { return g_Palette; }
 
 // ---------------------------------------------------------------------------
-// Binary stubs — bodies pending full RE+port
+// Binary symbol parity (re-analyst 2026-05-18) — these match binary symbol
+// names but the actual port-side equivalents live elsewhere. Each function
+// forwards or no-ops with documentation.
 // ---------------------------------------------------------------------------
 
-// STUB: SlashEntity::AddPoint(_Vector3<float>, _Vector3<float>, float)
-// Binary @ 0x17CE0C — by-value 2-Vec3 overload used by the binary's internal
-// trail building path. Port uses the const-ref overload above.
+// Binary @ 0x17CE0C -- main per-point append into m_pLeftBuffer/m_pRightBuffer
+// with rotation-angle bookkeeping. Port replaces with the OnTouchActive +
+// AddPoint(const Vec3&) + RebuildGeometry pipeline driven from the touch
+// move events. This 3-arg form has no port equivalent caller; keep as
+// no-op stub for binary-symbol parity.
 void SlashEntity::AddPoint(Vec3 /*pos*/, Vec3 /*dir*/, float /*unused*/) {}
 
-// STUB: SlashEntity::CollideWithEntity(Mortar::Entity*)
-// Binary @ 0x17B570 — tests the per-frame blade line against a fruit/bomb
-// ColSphere. Port replaces with CollideWithSphere (iterates full trail).
+// Binary @ 0x17B570 -- vtable slot 9 override on Mortar::Entity. Tests this
+// blade's ColLine against entity->m_Col (a ColSphere). Port's Update slice
+// loop calls CollideWithSphere() per-entity directly (iterates full trail),
+// so this entry point is unreached. Keep `return false` for safety.
 bool SlashEntity::CollideWithEntity(Mortar::Entity* /*entity*/) { return false; }
 
-// STUB: SlashEntity::CollisionResponse(Mortar::Entity*, unsigned long, unsigned long, Vec3*)
-// Binary @ 0x17B3BC — 4-arg vtable override for Mortar::Entity::CollisionResponse.
-// SlashEntity is pure aggressor; always returns 0.
+// Binary @ 0x17B3BC -- 1-instruction stub `mov r0,#0; bx lr`. SlashEntity is
+// pure aggressor (it hits things, not the other way around).
 int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
                                     unsigned long /*mask2*/, Vec3* /*bladeVel*/) { return 0; }
 
-// STUB: SlashEntity::DrawSlice()
-// Binary @ 0x17E424 — two mirrored tri-strips. Port's Draw() maps to this.
-void SlashEntity::DrawSlice() {}
+// Binary @ 0x17E424 -- main blade render (two mirrored tri-strips). Port's
+// Draw() already implements ~85% of this. Two known gaps (deferred; both
+// block on ghost-ring port):
+//   - field_0x144 swipe-just-ended edge detector + CreateGhost + g_ContactHash
+//     contact-emitter spawn at swipe end.
+//   - m_NumPoints>3 gate (port uses >=2; less strict but visually similar).
+// Forward to Draw() for binary-symbol callers.
+void SlashEntity::DrawSlice() { Draw(); }
 
-// STUB: SlashEntity::Init(void*, long, Vec3*)
-// Binary @ 0x17C65C — 3-arg binary form wired through ActorManager init path.
-void SlashEntity::Init(void* /*param1*/, long /*param2*/, Vec3* /*param3*/) {}
+// Binary @ 0x17C65C -- 3-arg ctor body wired through ActorManager::Add init
+// path. Allocates ColLine into m_Col, calls InitPoints(160), defaults 8-slot
+// ghost-dir ring, init 11-entry combo-slice array to -1, sets initial swipe
+// cooldown field_0x148 = 6.0f. Port's int-finger-slot Init(int) covers the
+// observable state; forward.
+void SlashEntity::Init(void* /*param1*/, long /*param2*/, Vec3* /*param3*/) {
+    Init(0);
+}
 
-// STUB: SlashEntity::InitPoints(long)
-// Binary @ 0x17C340 — allocate/reset point buffer to given capacity.
-void SlashEntity::InitPoints(long /*count*/) {}
+// Binary @ 0x17C340 -- allocates m_pLeftBuffer/m_pRightBuffer arrays sized
+// for `count` point pairs and zeros tail/head/prev-head Vec3s. Port uses
+// fixed-size arrays; just reset point count.
+void SlashEntity::InitPoints(long /*count*/) {
+    m_NumPoints = 0;
+}
 
 // STUB: SlashEntity::SetModColours(Colour*, ...) — non-const binary form
 // Binary @ 0x17CA0C — binary passes Colour* (non-const); delegates to const form.
