@@ -86,7 +86,8 @@ public:
     // ASM-verified: 2026-05-11 binary @ 0x0013a278 (re-analyst)
     Vec3           m_FactPosOffset;      // +0x90 (12B: x,y,z floats)
     Colour         m_FactColour;         // +0x9C  (4B)
-    uint8_t        _pad_factColour[4];   // +0xA0: 4B pad to reach +0xA4
+    uint8_t        m_ComboActiveFlag;    // +0xA0: field_0xa0; Zen-only comboFlag (set by Init, read by Update/Draw)
+    uint8_t        _pad_factColour[3];   // +0xA1: 3B pad to reach +0xA4
     // +0xA4: int[11] (44B) -- see TODO above re: spec says int[12]
     int            m_ComboHashArray[11]; // +0xA4
     int            m_ComboLength;        // +0xD0
