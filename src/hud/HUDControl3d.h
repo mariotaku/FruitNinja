@@ -8,13 +8,14 @@
 //
 // Binary layout (ARM32):
 //   +0x00..+0x73: HUDControl base (0x74 bytes, includes UV floats at +0x64..+0x70)
-//   +0x74: Mortar::SmartPtr<Texture> m_Texture    (primary display texture)
-//   +0x78: Mortar::SmartPtr<Texture> m_SecondaryTex (secondary; initialized but unused by Draw)
+//   +0x74: Mortar::SmartPtr<Texture> m_Texture     (NOT used by HUDControl3d::Draw base)
+//   +0x78: Mortar::SmartPtr<Texture> m_SecondaryTex (the texture drawn by HUDControl3d::Draw)
 //
-// UV floats live in HUDControl base (not here), per ctor ASM at 0x001443f4
-// which only touches +0x74 and +0x78.
+// Draw reads +0x78 (m_SecondaryTex), not +0x74.  Subclasses that need a primary
+// tex (MenuButton, MissControl) write m_Texture and either override Draw or use
+// their own path.  The 2026-04-28 ASM-verified marker on Draw was a false positive.
 //
-// ASM-verified: 2026-04-28T16:35Z binary @ 0x001443f4 (asm-inspector)
+// ASM-verified: 2026-04-28T16:35Z binary @ 0x001443f4 (asm-inspector) -- ctor layout only
 //
 
 #include "HUDControl.h"
@@ -24,13 +25,14 @@
 
 class HUDControl3d : public HUDControl {
 public:
-    // +0x74: main display texture (Mortar::SmartPtr<Texture>, matches binary).
-    // Gate: !IsValid() = don't draw (checked first in Draw).
+    // +0x74: m_Texture (Mortar::SmartPtr<Texture>, matches binary).
+    // NOT read by HUDControl3d::Draw -- base Draw uses m_SecondaryTex.
+    // Subclasses that need this slot write it and use their own draw path.
     Mortar::SmartPtr<Mortar::Texture> m_Texture;
 
-    // +0x78: secondary texture (Mortar::SmartPtr<Texture>, matches binary).
-    // Initialized null by ctor; not used by HUDControl3d::Draw itself.
-    // Subclasses (TutorialControl, MenuButton AddOns) attach their own here.
+    // +0x78: m_SecondaryTex (Mortar::SmartPtr<Texture>, matches binary).
+    // THIS is the texture gate-checked and drawn by HUDControl3d::Draw base.
+    // BonusScreen, and any subclass relying on base Draw, loads here.
     Mortar::SmartPtr<Mortar::Texture> m_SecondaryTex;
 
     HUDControl3d();

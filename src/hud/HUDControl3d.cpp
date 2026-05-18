@@ -15,54 +15,43 @@
 static const float ROT_SPEED = 182.0f;
 
 // Matches 0x14428c (57 lines)
-// ASM-verified: 2026-04-28T16:35Z binary @ 0x0014428c (asm-inspector)
+// CORRECTION (2026-05-18): binary draws m_SecondaryTex (+0x78), not m_Texture (+0x74).
+// The 2026-04-28 ASM-verified marker was a false positive on the wrong slot.
+// Binary gates: SmartPtr::operator bool on +0x78 (m_SecondaryTex), then field_0x5f != 0
+// (m_DrawColour.a). Subclasses that need a primary tex (MenuButton, MissControl)
+// write m_Texture and either override Draw or rely on their own draw path.
 void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
 
-    // Step 1: two gates matching binary order (0x1442a0..0x1442b4):
-    //   gate 1 — no texture: SmartPtr::operator bool on this+0x74
-    //   gate 2 — byte at this+0x5f == 0 (m_DrawColour.a in port layout)
-    if (!m_Texture.IsValid()) return;
+    if (!m_SecondaryTex.IsValid()) return;
     if (m_DrawColour.a == 0) return;
 
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Step 2: Texture::Set — binary calls Texture::Set on the SmartPtr
-    // (binary @ 0x001892b0). Port matches now that m_Texture is a real
-    // SmartPtr<Texture>: Set() does the activeTexture / glEnable / bind
-    // and updates s_LastBoundTexId.
-    m_Texture->Set();
+    m_SecondaryTex->Set();
 
-    // Step 3: MatrixStack::Reset (world stack)
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
 
-    // Step 4: Scale44(size)
     Matrix44 mat = Matrix44::MakeScale(size.x, size.y, size.z);
 
-    // Step 5: RotZ44 if m_Timer != 0
-    // Binary: idx = (uint16_t)(int)(timer * 182.0), then SinIdx/CosIdx
     if (m_Timer != 0.0f) {
         uint16_t idx = (uint16_t)(int)(m_Timer * ROT_SPEED);
         mat.RotZ44(SinIdx(idx), CosIdx(idx));
     }
 
-    // Step 6-7: Skipping (480,320,0) * hudScale + pos; port ortho already centers on (0,0).
     mat.GlobalTranslate44(pos);
 
-    // Step 8-9: Upload matrices
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    // Step 10-11: TintColour -> DrawQuadUnCached
     // ASM-verified: 2026-04-29T03:29Z binary @ 0x0013540c (asm-inspector)
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
 
-    // Step 12: UnSet — matches Texture::UnSet (binary @ 0x00189790)
-    m_Texture->UnSet();
+    m_SecondaryTex->UnSet();
 }
 
 HUDControl3d::HUDControl3d() {

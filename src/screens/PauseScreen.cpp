@@ -275,8 +275,8 @@ PauseScreen::PauseScreen()
     {
         int w = 0, h = 0;
         Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex", &w, &h);
-        m_Texture      = tex;     // primary: HUDControl3d::Draw uses this
-        m_SecondaryTex = tex;     // also fill inherited secondary slot (binary stores here)
+        m_Texture      = tex;     // +0x74 slot (PauseScreen::DrawOrder uses its own path)
+        m_SecondaryTex = tex;     // +0x78 slot (binary stores here; HUDControl3d::Draw base reads this)
         m_TitleTexW = (float)w;
         m_TitleTexH = (float)h;
     }
