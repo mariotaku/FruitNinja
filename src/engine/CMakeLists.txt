@@ -11,6 +11,7 @@ add_library(mortar_engine STATIC
     util/StringHash.cpp
     util/AsciiString.cpp
     util/StringTable.cpp
+    util/Localisation.cpp
     util/PathCI.cpp
     # Phase 2 — Core Singletons
     render/gl_funcsSDL.cpp
