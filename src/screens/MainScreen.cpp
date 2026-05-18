@@ -73,6 +73,7 @@ MainScreen::MainScreen(Game& g)
       m_BounceVelocity(0.0f), m_field108(0.0f),
       m_State(STATE_CAMERA_ZOOM), m_StateTimer(0.0f),
       m_Timer2(0.0f),
+      m_TimeRemainingDisplay(-1.0f),
       m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
       m_bGameStartReset(false),
       m_pDojoScreen(nullptr),

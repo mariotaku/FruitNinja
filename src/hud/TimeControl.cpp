@@ -84,7 +84,7 @@ void TimeControl::Reset() {
             game->pSaveData->m_TimeRemainingSave = -1.0f;
         }
     }
-    m_TickFrame = 0.0f;
+    m_SlowClockPhase = 0.0f;
     m_DrawColour = Colour(255, 255, 255, 255);
 }
 
@@ -95,7 +95,7 @@ void TimeControl::Skip() {
     if (game && game->pSaveData) {
         m_TimeRemaining = game->pSaveData->m_TimeRemainingSave;
     }
-    m_TickFrame = 0.0f;
+    m_SlowClockPhase = 0.0f;
 }
 
 void TimeControl::CountDown(float startSeconds) {
@@ -128,52 +128,75 @@ void TimeControl::Update(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    // Hide for non-timed modes (early return — binary does the same).
+    float entrySizeX = size.x;   // cached before any pos mutation (binary s16)
+
+    // Hide for non-timed modes — early return to epilogue (binary @ 0x001624c0..0x001624fe).
+    // ASM-verified: 2026-05-18 binary @ 0x001624c0 (re-analyst)
     if (!IsTimedGame()) {
         m_LayerFlags = Mortar::HUD_LAYER_NONE;
+        // binary @ 0x001624f6: write -1.0f sentinel to HUD mirror on non-timed path
+        if (game->mainScreen) game->mainScreen->m_TimeRemainingDisplay = -1.0f;
         return;
     }
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
 
     // Binary re-anchors pos.x at the top of the timed branch every frame.
-    pos.x = (480.0f - size.x) * 0.5f - 5.0f;
+    // ASM-verified: 2026-05-18 binary @ 0x00162510 (re-analyst)
+    pos.x = (480.0f - entrySizeX) * 0.5f - 5.0f;
 
-    // Countdown logic (gated by pause/count-up). Note: must NOT early-return
-    // -- binary's LAB_00162818 pos.y re-anchor runs unconditionally for any
-    // timed mode (binary @ 0x001624a4 falls through pause/count-up branches).
-    // Pause gate uses pausedFlag (Game+0x02 -- canonical port pause
-    // indicator set by PauseScreen::PauseGame). levelTransitionFlag (Game+0x05) is a
-    // separate gameover-suppression latch, not the user-pause flag.
-    if (!game->pausedFlag) {
+    // Pause / suppress gate — binary @ 0x001624e6..0x00162510.
+    // Three conditions suppress the timer tick (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
+    // ASM-verified: 2026-05-18 binary @ 0x001624e6 (re-analyst)
+    bool suppress = game->pausedFlag
+                 || game->levelTransitionFlag
+                 || (game->field_0x170 && !game->field_0x199);
+
+    if (!suppress) {
         if (m_CountdownStart <= 0.0f) {
-            // count-up mode (Zen). binary @ 0x001624a4 count-up branch.
+            // ZEN count-up branch: only tick time and compute slow-clock.
+            // No flash, no GameOver. Binary @ 0x001624a4 Zen branch.
+            // ASM-verified: 2026-05-18 binary @ 0x001627ea (re-analyst)
             m_TimeRemaining += dt;
+            m_SlowClockPhase = (float)((int)m_TimeRemaining % 6) + 0.5f;
         } else {
-            m_TimeRemaining -= dt;
-
-            // Capture colour before flash mutation for tick-tock gate.
+            // ARCADE / MP count-down branch.
             uint8_t entryColourR = m_DrawColour.r;
 
-            // Colour tint bands as time runs low.
-            // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
-            // Thresholds: 3/6/11.
-            // binary @ 0x001624a4 flash section.
-            float t = m_TimeRemaining;
-            Colour tint(255, 255, 255, 255);
-            static const Colour RED_TINT(255, 100, 100, 255);
-            if (t < 3.0f) {
-                tint = (((int)(t * 8.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-            } else if (t < 6.0f) {
-                tint = (((int)(t * 4.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-            } else if (t < 11.0f) {
-                tint = (((int)(t * 2.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-            }
-            m_DrawColour = tint;
+            // TODO: 0x00162528 — PowerUpManager::m_field68 > 0 path: red tint + "+N" overlay + skip tick
+            // TODO: 0x0016257c — PowerUpManager::m_field6c tick-rate modulation (dt *= m_field6c)
+            m_TimeRemaining -= dt;
 
-            // Binary @ 0x00162732: tick-tock when colour band flipped this frame.
+            // GameOver trigger (binary @ 0x001625be).
+            if (m_TimeRemaining < 0.5f) {
+                FN::GameOver(-1, -1.0f, -1);
+                m_TimeRemaining = 0.0f;    // DAT_001627a0
+                // Reset combo on Arcade timeout (binary @ 0x001625dc).
+                g_ComboCount  = 0;
+                g_LastSlasher = -1;
+                m_DrawColour = Colour(255, 100, 100, 255);
+                if (game->pGameSound) game->pGameSound->SFXPlay("time-up", 1.0f, 1.0f);
+            } else {
+                // Colour tint bands as time runs low.
+                // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
+                // Thresholds: 3/6/11 seconds.
+                float t = m_TimeRemaining;
+                Colour tint(255, 255, 255, 255);
+                static const Colour RED_TINT(255, 100, 100, 255);
+                if (t < 3.0f) {
+                    tint = (((int)(t * 8.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+                } else if (t < 6.0f) {
+                    tint = (((int)(t * 4.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+                } else if (t < 11.0f) {
+                    tint = (((int)(t * 2.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+                }
+                m_DrawColour = tint;
+            }
+
+            // Tick-tock SFX when colour band toggled this frame (binary @ 0x00162716).
+            // TODO: verify DAT_001627c4/c8 order (name inversion may be correct or inverted)
             if (m_TimeRemaining > 0.0f && m_TimeRemaining < 11.0f &&
                 m_DrawColour.r != entryColourR) {
-                static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80; first call -> "Time-tick"
+                static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80
                 s_TickTockToggle ^= 1;
                 const char* name = s_TickTockToggle ? "Time-tick" : "Time-tock";
                 if (game->pGameSound) {
@@ -181,21 +204,18 @@ void TimeControl::Update(float dt) {
                 }
             }
 
-            // Binary @ 0x00162818: persist for resume after suspend.
-            if (game->pSaveData) {
-                game->pSaveData->m_TimeRemainingSave = m_TimeRemaining;
-            }
-
-            // GameOver trigger: 0x001625be
-            if (m_TimeRemaining < 0.5f) {
-                FN::GameOver(-1, -1.0f, -1);
-                m_TimeRemaining = 0.0f;    // DAT_001627a0
-                // Reset combo on Arcade timeout -- binary @ 0x001625dc.
-                g_ComboCount  = 0;
-                g_LastSlasher = -1;
-                if (game->pGameSound) game->pGameSound->SFXPlay("time-up", 1.0f, 1.0f);
-            }
+            // Slow-clock shimmer accumulator (arcade path, binary @ 0x001627d2..0x001627e2).
+            // ASM-verified: 2026-05-18 binary @ 0x001627d2 (re-analyst)
+            int q = (int)(m_CountdownStart - m_TimeRemaining);
+            m_SlowClockPhase = (float)(q % 6) + 0.5f;
         }
+    }
+
+    // LAB_00162818 — runs unconditionally for all timed modes (including when suppressed).
+    // Write HUD-side timer mirror every frame (binary @ 0x00162830).
+    // ASM-verified: 2026-05-18 binary @ 0x00162830 (re-analyst)
+    if (game->mainScreen) {
+        game->mainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
     }
 
     // Binary @ LAB_00162818 -- pos.y re-anchor every timed frame based on
@@ -203,7 +223,6 @@ void TimeControl::Update(float dt) {
     //   tiltMix = 1.0 - |cameraTransition|
     //   pos.y   = size.y * -2 * tiltMix + (2*size.y + 320) * 0.5
     // For size.y=18 and stable in-game camera (transition=0), pos.y = 142.
-    // (Without this the ctor's static 164 left the countdown 22px too low.)
     float camTilt = 0.0f;
     if (game->mainScreen) {
         camTilt = fabsf(game->mainScreen->GetCameraTransition());

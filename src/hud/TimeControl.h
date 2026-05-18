@@ -17,8 +17,11 @@ public:
     char  m_TextBuffer[64];
     // +0xC0: initial seconds; -1.0 sentinel = not configured
     float m_CountdownStart;
-    // +0xC4: animation phase timer for flash/tick bands
-    float m_TickFrame;
+    // +0xC4: slow-clock shimmer accumulator: ((elapsed_seconds % 6) + 0.5f).
+    // Written every frame in Update (both Zen and Arcade paths).
+    // ASM-verified: 2026-05-18 binary @ 0x001627e2 (re-analyst)
+    // TODO: 0xC4 — reader site TBD
+    float m_SlowClockPhase;
     // +0xC8: "+N" powerup overlay text; [0]==0 means hide
     char  m_PowerupOverlay[64];
 
