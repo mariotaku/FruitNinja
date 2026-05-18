@@ -61,8 +61,11 @@ public:
     void Reset() override;
     // STUB: SpeedControl::Skip -- binary @ 0x???? (TODO RE)
     void Skip() override;
-    // STUB: SpeedControl::SoundNeedsLooping -- binary @ 0x???? (TODO RE)
-    void SoundNeedsLooping(Mortar::MortarSound* sound);
+    // Binary @ 0x00160ce8 -- looping-stream restart callback bound to
+    // GameSound::SFXPlay's finishCallback arg. Returns false (binary
+    // uint32 0). Re-issues SFXPlay when the previous loop instance
+    // finishes; switches to the "heavy" variant after 6+ waves.
+    bool SoundNeedsLooping(Mortar::MortarSound* sound);
     // ---- end STUBS ----
 };
 

@@ -511,31 +511,47 @@ void ScrollingMenu::DestroyList() {
     m_TotalWidth  = 0.0f;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ScrollingMenu::ClearTouch -- auto stub
-void ScrollingMenu::ClearTouch() {}
-// ---- end AUTO-STUB MERGE ----
+// ---- Lifecycle methods ported from binary (re-analyst 2026-05-18) ----
 
-// ---- STUBS (binary) ----
+// Binary @ 0x0015af3c -- ClearTouch. Drops the tracked touch slot and
+// clears the drag flag. Used by callers that need to abort an in-flight
+// drag without waiting for finger lift (e.g. when the menu is hidden).
+void ScrollingMenu::ClearTouch() {
+    m_TouchId   = -1;
+    m_bDragging = 0;
+}
 
-// STUB: ScrollingMenu::Collide(long) -- binary @ 0x???? (TODO RE)
+// Binary @ 0x0015af50 -- Collide(long) is the same body as Collide(int);
+// the binary exports both signatures because the type-resolver delegate
+// uses long, and gameplay callers use int. Port forwards.
 ScrollingMenuItem* ScrollingMenu::Collide(long touchSlot) {
     return Collide((int)touchSlot);
 }
 
-// STUB: ScrollingMenu::Init -- binary @ 0x???? (TODO RE)
+// Binary @ 0x0015af28 -- chains to vtable[+0x10] (HUDControl::Init).
+// Port's HUDControl::Init is a no-op, so the body is effectively empty.
 void ScrollingMenu::Init() {}
 
-// STUB: ScrollingMenu::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+// Binary @ 0x0015af34 -- empty pass-through.
 void ScrollingMenu::PreDraw(float* /*viewVec*/) {}
 
-// STUB: ScrollingMenu::Release -- binary @ 0x???? (TODO RE)
-void ScrollingMenu::Release() {}
+// Binary -- no standalone Release symbol; HUDControl3d::Release base
+// runs. Port mirrors via DestroyList so item leaks don't survive the
+// HUD control's removal from the HUD list.
+void ScrollingMenu::Release() {
+    DestroyList();
+}
 
-// STUB: ScrollingMenu::Reset -- binary @ 0x???? (TODO RE)
-void ScrollingMenu::Reset() {}
+// Binary @ 0x0015aeb8 -- Reset. Wipes touch/drag state and zeros 4 Vec3
+// scroll-state slots. Re-enables collision via m_fieldCA = 1.
+void ScrollingMenu::Reset() {
+    m_DragTargetIdx   = -1;
+    m_TouchId         = -1;
+    m_pCollidedItem   = nullptr;
+    m_bDragging       = 0;
+    m_SnapDist        = 1.0f;
+    m_TouchAnchorPos  = Vec3(0.0f, 0.0f, 0.0f);
+}
 
-// STUB: ScrollingMenu::Skip -- binary @ 0x???? (TODO RE)
+// Binary @ 0x0015af38 -- no-op stub (single bx lr).
 void ScrollingMenu::Skip() {}
-
-// ---- end STUBS ----

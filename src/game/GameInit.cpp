@@ -671,8 +671,8 @@ void GameExit_Handler() {
     game->mainScreen = nullptr;
 
     Coin::ClearCoins(false);
-    FruitNinja_SaveCurrentData();  // stub (writes FruitSaveData XML in binary)
-    WaveManager::GetInstance()->Destroy();  // stub (frees WAVE_INFO/WaveQue)
+    FruitNinja_SaveCurrentData();           // writes FruitSaveData XML; matches binary @ 0x0016ccc8
+    WaveManager::GetInstance()->Destroy();  // frees per-session wave state; matches binary @ 0x00121bf0
     PSPParticleManager::GetInstance().ClearEmitters();
     if (Mortar::ActorManager* am = Mortar::ActorManager::GetInstance()) {
         am->Clear();

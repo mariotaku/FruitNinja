@@ -24,6 +24,8 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "debug/DebugFlags.h"
+#include "util/StringHash.h"
+#include "game/FruitSaveData.h"
 #include <cmath>
 #include <cstdio>
 
@@ -611,7 +613,11 @@ void GameModeScreen::SetIsChallenge(int challengeId, void* data) {
 // Binary @ 0x0013e124 — coming_soon tile callback: bump save-stat counter + reset tutorial.
 // (typo "Commings" preserved from binary symbol)
 void GameModeScreen::CommingsSoonCallback() {
-    // TODO: 0x0013e124 — FruitSaveData::AddToTotal("modeS_pcoming_soon", hash, 1, true, true)
+    // Binary @ 0x0013e124: FruitSaveData::AddToTotal("modeS_pcoming_soon", hash, 1, true, true).
+    if (game.pSaveData) {
+        const char* key = "modeS_pcoming_soon";
+        game.pSaveData->AddToTotal(key, ::StringHash(key), 1, true, true);
+    }
     if (game.pTutorialCtrl) {
         game.pTutorialCtrl->ResetTutePos(nullptr);
     }
@@ -656,9 +662,18 @@ void GameModeScreen::BuyNow() {
 }
 
 // Defunct: upsell glue -- UpsellScreen never instantiated; binary @ 0x0013e084 sets m_State=10 + bumps modeS_p* counters
-void GameModeScreen::SwitchToUpsell(int /*idx*/) {
-    // TODO: 0x0013e084 — FruitSaveData::AddToTotal stat-counter calls (modeS_p* counters)
-    // Defunct: m_State=10 transition omitted (UpsellScreen is Phantom)
+void GameModeScreen::SwitchToUpsell(int idx) {
+    // Binary @ 0x0013e084: FruitSaveData::AddToTotal for the matching
+    // modeS_p* counter. Per-idx key is "modeS_p<n>" where <n> is the
+    // tile slot. Stat tracking happens even though the UpsellScreen
+    // transition itself is defunct (UpsellScreen is Phantom in this build).
+    if (game.pSaveData) {
+        char key[16];
+        snprintf(key, sizeof(key), "modeS_p%d", idx);
+        game.pSaveData->AddToTotal(key, ::StringHash(key), 1, true, true);
+    }
+    // Defunct: m_State=10 transition omitted (UpsellScreen is Phantom).
+    (void)idx;
 }
 
 // Defunct: upsell return path -- no-op stub; binary @ 0x0013e07c sets m_State=1 (transition-in resume)
