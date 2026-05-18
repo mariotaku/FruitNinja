@@ -457,15 +457,16 @@ void DojoScreen::AboutCallback() {
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: DojoScreen::MoreGamesCallback -- auto stub
+// ---- Defunct callbacks (zero callsite xrefs in Bada shipped binary) ----
+// See file-header "Defunct: 4 binary symbols compiled into FruitNinja.exe but
+// with ZERO callsite xrefs" comment. iPhone/iPad-variant leftover .o code.
+// Defunct: iOS "More Games" button -- no-op stub; binary @ 0x0013769c
 void DojoScreen::MoreGamesCallback() {}
-// STUB: DojoScreen::QuitCallback -- auto stub
+// Defunct: iOS Quit-from-Dojo callback -- no-op stub; binary @ 0x????
 void DojoScreen::QuitCallback() {}
-// STUB: DojoScreen::SwitchCallback -- auto stub
+// Defunct: network-switch button -- no-op stub; binary @ 0x00137694
 void DojoScreen::SwitchCallback() {}
-// STUB: DojoScreen::SwitchNetworkButton -- auto stub
+// Defunct: network-switch ScreenButton frame helper -- no-op stub; binary @ 0x001379b0
 void DojoScreen::SwitchNetworkButton(MenuButton*, float, ScreenButton&) {}
-// STUB: DojoScreen::TwitterFacbookButtons -- auto stub
+// Defunct: Twitter/Facebook social buttons (iOS variant) -- no-op stub; binary @ 0x00137738
 void DojoScreen::TwitterFacbookButtons(MenuButton*, float, ScreenButton&) {}
-// ---- end AUTO-STUB MERGE ----
