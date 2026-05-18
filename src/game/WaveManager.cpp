@@ -1357,6 +1357,10 @@ void WaveManager::SetupWaveQue() {
 // ----------------------------------------------------------------------------
 
 void WaveManager::ClearUnspawned() {
+    // TODO: verify semantic vs binary KillFruit(this, 0) -- port
+    // uses am->Deactivate(f) which may not perform the full kill
+    // (emitter clear, collision release, etc.) the binary does.
+    // Suspected entity-drain stall in BONUS_PHASE (task #41).
     Fruit::ClearUnspawned(false);
     Bomb::ClearUnspawned();
 }
