@@ -863,7 +863,7 @@ int Bomb::GetNumActiveForPlayer(int playerIdx, bool countPrespawn) {
     return count;
 }
 
-// Matches Bomb::ClearUnspawned (0x00122ab4).
+// ASM-verified: 2026-05-18 binary @ 0x0017171c (re-analyst)
 void Bomb::ClearUnspawned() {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
@@ -872,8 +872,8 @@ void Bomb::ClearUnspawned() {
     while (e) {
         Bomb* b = static_cast<Bomb*>(e);
         Mortar::Entity* next_e = am->GetEntityNext(1, it);
-        if (b->m_Countdown > 0.0f)
-            am->Deactivate(b);
+        if (b->m_bHit == 0 && b->m_Countdown > 0.0f)
+            b->KillBomb();
         e = next_e;
     }
 }

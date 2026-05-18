@@ -168,10 +168,10 @@ public:
     // Port specific: playerIdx filtering omitted; entity has no player-index field yet (split-screen MP stub).
     static int GetNumActiveForPlayer(int playerIdx, bool checkBombs);
 
-    // Matches Fruit::ClearUnspawned (0x001762a0). Walks Mortar::ActorManager type-0
-    // list and deactivates any fruit still in pre-spawn (chuck-delay) state.
-    // Binary param: false = don't deactivate already-visible fruits.
-    static void ClearUnspawned(bool deactivateVisible);
+    // Matches Fruit::ClearUnspawned (0x00176d14). Walks Mortar::ActorManager type-0
+    // list and kills fruits via KillFruit(0). clearAll=false: only pre-spawn
+    // (m_ChuckDelay > 0) fruits; clearAll=true: every fruit.
+    static void ClearUnspawned(bool clearAll);
 
     // Matches Fruit::Disable (binary @ 0x00126374). Sets m_bNoPowerUp = 1,
     // suppressing miss penalty and power-up activation for this fruit.
