@@ -8853,5 +8853,131 @@
     "score": 4635,
     "max_score": 1400,
     "decided_at": "2026-05-17T00:00Z"
+  },
+  "_ZN13ScoreModifier11DeferPointsEi": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "ScoreModifier::DeferPoints — documented stub; binary accumulates directly into m_DeferredPoints via field at +0x38 while port dispatches through m_pOwner->AddDeferedPoints(). Semantics equivalent. See src/game/ScoreModifier.cpp:94 // ScoreModifier::DeferPoints is not yet RE'd. Score 1860/1000.",
+    "score": 1860,
+    "max_score": 1000,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN7PowerUp16SetDeferedPointsEi": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "PowerUp::SetDeferedPoints — binary and port both walk m_ModList and call DeferPoints on type-2 (ScoreModifier) entries. Diff is entirely std::list iterator codegen: binary uses Sourcery-GCC 4.4.1 linked-list node traversal directly; port uses C++11-style iterator. Logic confirmed ASM-verified. Score 3210/2900.",
+    "score": 3210,
+    "max_score": 2900,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN7PowerUp5CloneEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "PowerUp::Clone — binary allocates 0xcc bytes vs port's 0xc8 bytes (4-byte struct size delta); binary uses heavier SmartPtr ref-count chain (blx e9f54/ef048) for m_ScreenEffect handling. Port source at src/game/PowerUp.cpp:241 has // TODO: per-subclass Clone impls when Modifier trio lands. SmartPtr copy semantics also differ. Score 7260/5300.",
+    "score": 7260,
+    "max_score": 5300,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN7PowerUpC1EPS_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "PowerUp copy ctor C1 — marked ASM-verified: 2026-05-18 in source (src/game/PowerUp.cpp:348). Large score delta driven by binary Sourcery SmartPtr ref-count chain (blx e64bc/ef048/etc.) vs port's simpler direct SmartPtr copy. Struct field layout and ordering confirmed correct. Score 15715/9700.",
+    "score": 15715,
+    "max_score": 9700,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN7PowerUpC2EPS_": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "PowerUp copy ctor C2 — alias of C1; identical divergence pattern (Sourcery SmartPtr ref-count codegen vs port). See _ZN7PowerUpC1EPS_ entry. Score 15715/9700.",
+    "score": 15715,
+    "max_score": 9700,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN14PowerUpManager11SetDefaultsEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "PowerUpManager::SetDefaults — binary inlines 6x vstr s16,[r3,#offset] for SlashEntity mod-scale fields; port calls SlashEntity::ResetModScales() which does exactly those 6 stores. Semantically identical. Remaining diff is PIC anchor + register choice. Score 3315/3400.",
+    "score": 3315,
+    "max_score": 3400,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN14PowerUpManager14UnloadTexturesEv": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "PowerUpManager::UnloadTextures — binary uses single std::map iterator loop pattern with binary STL; port iterates m_AllPowerUps then m_ScreenEffectPool with port std::map iterators. Semantically identical two-loop UnloadTextures walk. GOT/iterator codegen differences only. Score 4295/4100.",
+    "score": 4295,
+    "max_score": 4100,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN14PowerUpManager18GetNextPurchasableERSt14_List_iteratorIP7PowerUpE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "PowerUpManager::GetNextPurchasable — marked ASM-verified: 2026-05-18 in source (src/game/PowerUpManager.cpp:549). High score ratio driven by binary Sourcery std::map+std::list iterator machinery vs port std::map/list iterators. Logic identical: advance iterator, return NULL at end or map-resolved PowerUp. Score 7130/3600.",
+    "score": 7130,
+    "max_score": 3600,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN14PowerUpManager19GetFirstPurchasableERSt14_List_iteratorIP7PowerUpE": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "PowerUpManager::GetFirstPurchasable — same pattern as GetNextPurchasable. Binary uses Sourcery std::list::begin + std::map::find machinery; port uses simpler direct calls. Logic preserved: begin iterator, NULL at end, map-resolved result. Score 7095/3700.",
+    "score": 7095,
+    "max_score": 3700,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN14PowerUpManager5ResetEb": {
+    "verdict": "ACCEPT-defunct",
+    "reason": "PowerUpManager::Reset — extra __cxa_guard_acquire/release block at port offset 0x22a-0x254 is the NetworkManager::GetInstance() singleton guard from the Defunct online MP call (src/game/PowerUpManager.cpp:173 // Defunct: online MP). Binary has no NetworkManager reference. Core list-iteration + PowerUp teardown logic preserved. Score 27514/15600.",
+    "score": 27514,
+    "max_score": 15600,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN11SlashEntity10InitPointsEl": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "SlashEntity::InitPoints — binary dynamically allocates m_pLeftBuffer/m_pRightBuffer arrays sized for count point pairs; port uses fixed-size arrays and just resets m_NumPoints=0. Documented at src/entities/SlashEntity.cpp:1133 // Binary @ 0x17C340 -- allocates m_pLeftBuffer/m_pRightBuffer ... Port uses fixed-size arrays; just reset point count. Score 7815/7700.",
+    "score": 7815,
+    "max_score": 7700,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN11SlashEntity4InitEPvlP8_Vector3IfE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "SlashEntity::Init(void*,long,Vec3*) — binary does full 3-arg init (alloc, set state flags, copy vectors); port delegates to Init(0) as documented stub at src/entities/SlashEntity.cpp:1125. Binary path not yet ported. Score 9510/9200.",
+    "score": 9510,
+    "max_score": 9200,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN11SlashEntity9DrawSliceEv": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "SlashEntity::DrawSlice — port has b.w _ZN11SlashEntity4DrawEv (tail-calls Draw); binary has full per-slice rendering code. Port's Draw() is the complete renderer (src/entities/SlashEntity.cpp:844). Documented redirect. Score 8500/8100.",
+    "score": 8500,
+    "max_score": 8100,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN11TimeControl6UpdateEf": {
+    "verdict": "FIX-NEEDED",
+    "reason": "TimeControl::Update — port adds bl _ZNK11TimeControl11IsTimedGameEv gate at offset 0x22 not present in binary; binary proceeds directly into the timer logic. Port also restructures the slow-clock accumulation differently (s16 register use, extra speed-governor branches). No source-side TODO covering these differences. Implementer should compare binary 0x001524a4 vs port. Score 36940/34700.",
+    "score": 36940,
+    "max_score": 34700,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN12ScoreControl6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "ScoreControl::Update — very large function (169%); port adds P2 score path stub and PowerUpManager integration. Documented gap at src/hud/ScoreControl.cpp:55 // TODO: P2 score when MP is ported. Additional structural divergence from PowerUpManager lerp changes on this branch. Score 99605/58800.",
+    "score": 99605,
+    "max_score": 58800,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN12SpeedControl17SoundNeedsLoopingEPN6Mortar11MortarSoundE": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "SpeedControl::SoundNeedsLooping — binary uses a complex sound-vector init path (blx f4178 + stack-allocated sound struct); port simplifies to WaveManager::GetSpeed() + SFXPlay. Documented at src/hud/SpeedControl.cpp:137 // TODO: bind SoundNeedsLooping callback once the Delegate1 looping-cb plumbing is fleshed out. Score 7520/7100.",
+    "score": 7520,
+    "max_score": 7100,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN12SpeedControl6UpdateEf": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "SpeedControl::Update — port adds bl _ZN18PSPParticleManager12ClearEmitterEP18PSPParticleEmitter call at port offset 0x6a not in binary; port also has guard-acquire pattern for singleton init. Structural differences from fuller port implementation of particle/sound management. Cascades from SoundNeedsLooping TODO (src/hud/SpeedControl.cpp:137). Score 43956/33000.",
+    "score": 43956,
+    "max_score": 33000,
+    "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN11MissControl9MakeComboE8_Vector3IfEii": {
+    "verdict": "ACCEPT-deferred",
+    "reason": "MissControl::MakeCombo — port adds bl _ZN11WaveManager11GetInstanceEv + bl _ZN11WaveManager8GetSpeedEi block at end (port offset 0x180+) for wave-speed integration; binary uses different combo-position calculation. Documented gaps at src/hud/MissControl.cpp:447 // TODO: full SFX logic and src/hud/MissControl.cpp:627 // TODO: fetch HUD tint multiplier from MatrixManager. Score 20895/13700.",
+    "score": 20895,
+    "max_score": 13700,
+    "decided_at": "2026-05-18T00:00Z"
   }
 }
