@@ -287,9 +287,16 @@ void MissControl::MakeRare(Vec3 pos) {
 // binary @ 0x001515a4
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
 // Sets m_bComboActive=1, m_ComboCount=combo, m_FadeAlpha=1.811, anim=3, visible=1.
-// TODO: 0x001515a4 — gameMode==2 override: m_ComboCount = (int)(WaveManager::GetSpeed(0)+0.65f)
-//   requires GameTaskState gameMode to be plumbed.
 void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
+    // Arcade-mode override: comboCount is computed from wave-speed
+    // rather than the caller's literal. Binary @ 0x001515a4 reads
+    // (int)(WaveManager::GetSpeed(0) + 0.65f) and uses that as the
+    // effective combo count when gameMode == ARCADE.
+    Game* g = Game::GetInstance();
+    if (g && g->gameMode == Mortar::GAME_MODE_ARCADE) {
+        WaveManager* wm = WaveManager::GetInstance();
+        if (wm) comboCount = (int)(wm->GetSpeed(0) + 0.65f);
+    }
     Init();
     int idx = comboCount - 2;
     if (idx < 0)  idx = 0;
