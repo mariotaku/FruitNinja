@@ -21,6 +21,24 @@ What "stub" means concretely:
 
 What "skip" would have meant (NOT what we do): omitting the class entirely so call sites in surrounding code need to be deleted or guarded with `#ifdef`s. Don't do this.
 
+## No band-aid fixes
+
+When a port-side bug is identified, the fix is to **RE the binary correctly and port it faithfully**, NOT to apply an empirical workaround that happens to make the visible symptom go away.
+
+Forbidden patterns:
+- **Magic-number fudges** — `pos.y - 20` because "it looked right", `scale * 0.7f` to compensate for an oversize bug, hardcoded offsets that aren't in the binary.
+- **Symptom-masking branches** — `if (problem_value) { force_correct_value(); }` instead of finding why the value is wrong.
+- **Empirical try-this-might-work patches** — guessing at fix values without RE'ing the binary's actual semantic.
+- **"Good enough for now" workarounds** that drift from binary behaviour without an explicit `// DIFFERS:` marker explaining why fidelity is intentionally sacrificed.
+
+Required workflow when a port-side bug surfaces:
+1. **RE the binary** to find what the binary actually does at the relevant function/field. This is non-negotiable — every fix starts here.
+2. **Identify the port's divergence** against that binary baseline — a missing call site, an inverted gate, a wrong field offset, a missing struct member, a swapped argument.
+3. **Fix at the root** — port the missing binary code. If a dependency is unported (e.g. `Fruit::KillFruit` semantic), port that too rather than calling a less-correct port-side substitute (`am->Deactivate`).
+4. If the fix genuinely cannot land yet (blocked on a larger subsystem port), leave a `// TODO: <binary addr> — <gap>` marker with the binary spec inline, NOT an empirical mitigation.
+
+When a deviation is intentional and binary fidelity is sacrificed (e.g. SDL2 replacing Bada audio backend), it must carry a `// DIFFERS: original = X, using Y because <reason>` marker so future RE doesn't get confused. `// Port specific:` is the SDL/platform variant. Anything else without a marker is a band-aid and must be removed at the root.
+
 ## Target Platform
 - SDL2 + OpenGL ES 2.0
 - Build: CMake. Windows: MSYS2/MinGW or MSVC (VS Build Tools 2022). Linux/webOS NDK: GCC.
