@@ -19,25 +19,26 @@
 //   LoadAchievementInfo           0x00109200
 //   UnLoadAchievementInfo         0x00108fb4
 //   AchievementExists             0x00108ea4
-//   UnlockBonusAchievement        0x00108de4
-//   UnlockComboAchievement        0x00108b3c
+//   UnlockBonusAchievement        0x00108af0  (was 0x00108de4)
+//   UnlockComboAchievement        0x00108a10  (was 0x00108b3c)
 //   UnlockComboStarAchievement    0x00108c40  (was incorrectly namespaced in old stub)
 //   UnlockConsecutiveAchievement  0x00108c40
 //   UnlockEndScoreAchievement     0x00108e14
 //   UnlockScoreAchievement        0x00108d44
 //   UnlockScoreUnsulliedAchievement 0x00108d94
 //   UnlockSpecificFruitAchievement  0x00108a88
-//   UnlockSpecificOrderAchievement  0x001089cc
+//   UnlockSpecificOrderAchievement  0x00108b58  (was 0x001089cc -- that addr is SpecificOrder::Check)
 //   UnlockTotalFruitAchievement   0x00108eec
 //   UnlockedAchievement           0x001090d0
 //   UnlockAchievementInNetwork    0x001085a0
-//   QueAchievement                0x001084a0
+//   QueAchievement                0x00108978  (was 0x001084a0)
 
 #include <cstdint>
 #include <map>
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 
+class Bonus;
 class HUD;
 class SpecificOrder;
 
@@ -93,7 +94,10 @@ public:
     int  AchievementExists(uint32_t hash);
 
     // Unlock paths — Binary addresses above
-    int  UnlockBonusAchievement(uint32_t hash);
+    // ASM-verified: 2026-05-18 binary @ 0x00108af0 (re-analyst)
+    // Takes Bonus*; reads m_AchievementHash from bonus+0x108 internally.
+    int  UnlockBonusAchievement(Bonus* bonus);
+    // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
     int  UnlockComboAchievement(int comboLen, int* fruitArr);
     int  UnlockComboStarAchievement(int combo, uint32_t starTypeHash);
     int  UnlockConsecutiveAchievement(int count, uint32_t fruitTypeHash);

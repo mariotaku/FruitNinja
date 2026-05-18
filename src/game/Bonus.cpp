@@ -330,9 +330,13 @@ Bonus* BonusType::GetBest() {
 
     // Use GetTotal (lifetime totals) as a proxy for fruitCounts.
     // TODO: binary uses session totals for this check; port uses lifetime.
-    for (std::map<uint64_t, int>::iterator it = fruitCounts.begin();
-         it != fruitCounts.end(); ++it) {
-        it->second = FruitSaveData::IsAchievementUnlocked((uint32_t)it->first) ? 1 : 0;
+    {
+        Game* g_b = Game::GetInstance();
+        FruitSaveData* sd_b = g_b ? g_b->pSaveData : 0;
+        for (std::map<uint64_t, int>::iterator it = fruitCounts.begin();
+             it != fruitCounts.end(); ++it) {
+            it->second = (sd_b && sd_b->IsAchievementUnlocked((uint32_t)it->first) != 0) ? 1 : 0;
+        }
     }
 
     int score = Game::GetInstance() ? Game::GetInstance()->currentScore : 0;
