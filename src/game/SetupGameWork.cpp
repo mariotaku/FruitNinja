@@ -79,9 +79,8 @@ void SetupGameWork() {
     // TODO: add field at +0x198 to Game.h; stub store omitted until field exists.
     // Binary: *(byte*)(g_GameData + 0x198) = 0;
 
-    // +0x199: field_0x199 = 0.
-    // TODO: add field at +0x199 to Game.h; stub store omitted until field exists.
-    // Binary: *(byte*)(g_GameData + 0x199) = 0;
+    // +0x199: field_0x199 = 0 (dead-code MP sync flag; binary @ 0x0010b53e).
+    app->field_0x199 = 0;
 
     // +0x19E: field_0x19E = 0.
     // TODO: add field at +0x19E to Game.h; stub store omitted until field exists.

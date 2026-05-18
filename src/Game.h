@@ -210,9 +210,9 @@ struct Game : public Mortar::MortarGame {
     uint8_t _pad_0x198;            // +0x198: alignment padding
     // +0x199: pause-suppress latch read by TimeControl::Update pause gate
     // (binary @ 0x0016250a: ldrb r3,[r4,#0x199]; cmp r3,#0).
-    // Writer site not yet RE'd; read by TimeControl::Update as !field_0x199
-    // to suppress timer tick while true.
-    // TODO: 0x00162504 — writer site for field_0x199 not yet RE'd
+    // Dead-code member: 3 clear-to-zero writers in binary (SetupGameWork @ 0x0010b53e,
+    // WaveManager::Reset @ 0x00125eb8, RetryOnlineMultiplayerGame @ 0x001694b2);
+    // no non-zero writer exists. Kept for asm-verify layout fidelity.
     uint8_t field_0x199;           // +0x199
     // +0x19a..+0x19d: 4 single-byte clear-on-quit flags. Cleared by
     // PauseScreen::QuitToMenu (binary @ 0x00169eae-be). Reader sites not
