@@ -115,10 +115,10 @@ void BonusManager::ClearBestBonuses() {
 //   tier 0 (gold):   BGRA(0xAD, 0x7E, 0x00, 0x00)
 //   tier 1 (red):    BGRA(0xA0, 0x05, 0x05, 0x00)
 //   tier 2 (blue):   BGRA(0x01, 0x5C, 0x95, 0x00)
+// ASM-verified: 2026-05-18 binary @ 0x0010e404 (re-analyst) -- screen null-guard
+// wraps ONLY the AddAward loop; the cache-rebuild prefix runs unconditionally.
 // ---------------------------------------------------------------------------
 void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
-    if (!screen) return;
-
     // Hardcoded tier colours matching binary constants.
     static const uint32_t k_TierColours[3] = {
         // BGRA packed: B=0xAD, G=0x7E, R=0x00, A=0x00
@@ -148,12 +148,14 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
         m_BestBonuses.push_back(*candidates[i]);
     }
 
-    // Call AddAward on BonusScreen for each.
-    int idx = 0;
-    for (std::list<Bonus>::iterator it = m_BestBonuses.begin();
-         it != m_BestBonuses.end() && idx < 3; ++it, ++idx) {
-        uint32_t colour = k_TierColours[idx];
-        screen->AddAward(colour, it->m_StarTexture, it->m_DisplayName, it->m_Tier);
+    // Call AddAward on BonusScreen for each -- only when screen is non-null.
+    if (screen) {
+        int idx = 0;
+        for (std::list<Bonus>::iterator it = m_BestBonuses.begin();
+             it != m_BestBonuses.end() && idx < 3; ++it, ++idx) {
+            uint32_t colour = k_TierColours[idx];
+            screen->AddAward(colour, it->m_StarTexture, it->m_DisplayName, it->m_Tier);
+        }
     }
 }
 
