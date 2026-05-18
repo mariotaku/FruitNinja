@@ -48,33 +48,18 @@ public:
     // Free m_Name, Stop, RemoveListener (0x0018c8a4)
     void InternalDestroy();
 
-    // Copy name into m_Name (heap). Called from SFXPlayInternal.
-    // No binary symbol -- inferred from call context (see docs/engine/sound.md)
+    // 0x0018c6f4 -- one-line wrapper, calls InternalLoad
     void Load(const char* name);
 
-public:
+    // Heap-copies name into m_Name; calls InternalDestroy first if m_Name != null (0x0018c8d0)
+    void InternalLoad(const char* name);
 
-public:
+    // Handle-validity guard + always returns true (0x0018c7a8)
+    // Note: binary is a no-op stub; loads complete synchronously.
+    bool IsReady();
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: MortarSound::InternalLoad -- auto stub from binary missing-symbol set
-    void InternalLoad(char const*);
-    // STUB: MortarSound::IsReady -- auto stub from binary missing-symbol set
-    void IsReady();
-    // STUB: MortarSound::SetPitch -- auto stub from binary missing-symbol set
-    void SetPitch(unsigned int);
-    // ---- end AUTO-STUB MERGE ----
+    // Handle-validity guard; pitch argument is discarded in binary (0x0018c778)
+    void SetPitch(unsigned int pitch);
 };
 
 } // namespace Mortar
