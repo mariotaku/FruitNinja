@@ -16,7 +16,7 @@ ScoreModifier::ScoreModifier()
     , m_ApplyCount(0)
     , m_bDeferPoints(false)
     , _pad35{0, 0, 0}
-    , field_0x38(0)
+    , m_DeferredScore(0)
 {}
 
 // @ 0x0011cb44
@@ -77,11 +77,6 @@ void ScoreModifier::ParseSpecific(TiXmlElement* xml) {
     }
 }
 
-int ScoreModifier::operator()(int n) {
-    // TODO: implement operator() body (binary addr TBD — RE needed)
-    return n;
-}
-
 // @ 0x0011cc6c
 GameModifier* ScoreModifier::Clone() {
     ScoreModifier* c = new ScoreModifier();
@@ -89,10 +84,9 @@ GameModifier* ScoreModifier::Clone() {
     return c;
 }
 
-// DeferPoints — accumulate deferred score on the owning PowerUp.
-// Called by PowerUp::SetDeferedPoints when this modifier's GetType() == 2.
-// ScoreModifier::DeferPoints is not yet RE'd (binary addr TBD); stub maps
-// points into the owner's m_DeferredPoints via AddDeferedPoints.
-void ScoreModifier::DeferPoints(int points) {
-    if (m_pOwner) m_pOwner->AddDeferedPoints(points);
+// ASM-verified: 2026-05-18 binary @ 0x0011cb58 (re-analyst)
+int ScoreModifier::DeferPoints(int points) {
+    m_pOwner->AddDeferedPoints(points);
+    m_DeferredScore += points;
+    return 0;
 }
