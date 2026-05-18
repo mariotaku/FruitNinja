@@ -330,34 +330,44 @@ void PowerUpShop::Update(float dt) {
         float targetZ = (i == m_SelectedIndex) ? 1.25f : 1.0f;
         slot.z += (targetZ - slot.z) * 0.15f;
 
-        // Binary: touch hit-test against pos + slot ± 32.
-        // TODO: 0x00156398 — touch read from game+0x9e/0x90/0x94 (InputManager last-touch
-        // slot). Port InputManager touch API not fully wired; skip hit-test until done.
-        (void)game;
+        // ASM-verified: 2026-05-18 binary @ 0x00156398 (re-analyst)
+        // Reads GameContext aliased fields:
+        //   +0x9e  uint8_t  m_bPointerActive -- set by PointerDownCallback @ 0x00168e24,
+        //                                       cleared by PointerUpCallback @ 0x00168e48.
+        //   +0x90  float    worldPos.x       -- aliased with light direction; PointerMoveCallback
+        //                                       action 0x74 writes the centered-ortho X.
+        //   +0x94  float    worldPos.y       -- aliased with light direction; action 0x75 writes Y.
+        //  Hit zone = (slot ± 32) on both axes. On hit: m_SelectedIndex = i; SetBuyButtonState().
+        if (game && game->m_bPointerActive) {
+            const float px = game->worldPos.x;
+            const float py = game->worldPos.y;
+            const float HALF = 32.0f;  // DAT_001566a0
+            Vec3 worldPt = pos + slot;
+            if (px > worldPt.x - HALF && px < worldPt.x + HALF &&
+                py > worldPt.y - HALF && py < worldPt.y + HALF) {
+                m_SelectedIndex = i;
+                SetBuyButtonState();
+            }
+        }
     }
 
     // Step 3: if m_BuyButton == NULL and m_BuyTriggered == 0, create buy button.
     if (m_BuyButton == NULL && m_BuyTriggered == 0) {
         // Binary: first-time fruit-type lookup via cxa_guard (3 fruit types from DAT strings).
-        // TODO: 0x00156398 — three buy-button fruit type strings (DAT_001566bc / DAT_001566c0)
-        // not resolved by RE pass; use FruitType(-1) sentinel until confirmed.
-        static bool s_fruitTypesInit = false;
-        static int s_fruitType0 = -1;
-        static int s_fruitType1 = -1;
-        static int s_fruitType2 = -1;
-        if (!s_fruitTypesInit) {
-            s_fruitTypesInit = true;
-            // TODO: 0x00156398 — resolve binary DAT_001566bc / DAT_001566c0 fruit name strings
-            // and call Fruit::FruitType(<name>, false) for each of the three buy-button fruits.
-            // s_fruitType0 = Fruit::FruitType("kiwi", false);
-            // s_fruitType1 = Fruit::FruitType("watermelon", false);
-            // s_fruitType2 = Fruit::FruitType("lemon", false);
+        // DAT_001566bc = "banana" @ 0x001b9a70; DAT_001566c0 = "banana_locked" @ 0x001bbf1c.
+        // Binary calls FruitType("banana_locked", false) twice for state 1 and 2 -- intentional dup;
+        // preserve verbatim per binary fidelity policy.
+        static int s_fruitTypeCache[3] = { -1, -1, -1 };
+        static bool s_fruitTypeCacheInit = false;
+        if (!s_fruitTypeCacheInit) {
+            s_fruitTypeCacheInit = true;
+            s_fruitTypeCache[0] = Fruit::FruitType("banana",        false);  // state 0 = enabled
+            s_fruitTypeCache[1] = Fruit::FruitType("banana_locked", false);  // state 1 = greyed
+            s_fruitTypeCache[2] = Fruit::FruitType("banana_locked", false);  // state 2 = active (intentional dup per binary @ DAT_001566c0)
         }
 
-        // Pick fruit type based on m_BuyButtonState (0/1/2 indexing into g_FruitIcons).
-        int fruitType = s_fruitType0;
-        if (m_BuyButtonState == 1) fruitType = s_fruitType1;
-        if (m_BuyButtonState == 2) fruitType = s_fruitType2;
+        // Pick fruit type based on m_BuyButtonState (0/1/2).
+        int fruitType = s_fruitTypeCache[m_BuyButtonState];
 
         // Spawn position: origin + Vector3(160.8, -6.0, 0.0).
         Vec3 spawnPos = g_Origin + Vec3(160.8f, -6.0f, 0.0f);

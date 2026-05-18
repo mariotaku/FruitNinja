@@ -184,10 +184,19 @@ struct Game : public Mortar::MortarGame {
     Mortar::SmartPtr<Mortar::Font> pFontBlue2;        // +0x80: fonts/fruit_ninja_numbers_blue2.fnt
 
     float field_0x88;              // +0x88
-    Vec3 worldPos;                 // +0x90: light direction in GameDraw
+    // +0x90/+0x94 are dual-purpose: GameDraw consumes them as light direction
+    // (SetLightDirection), but PointerMoveCallback @ 0x0016a4b4 overwrites them
+    // on every pointer event (action 0x74/0x75 = global pointer X/Y in centered
+    // ortho). PowerUpShop::Update reads them as touch position. Binary alias is
+    // faithful; the "light direction" subtly follows the cursor in gameplay.
+    Vec3 worldPos;                 // +0x90: light direction AND global pointer X/Y
     uint8_t field_0x9c;            // +0x9c: per-frame transient flag (writer TBD)
     uint8_t field_0x9d;            // +0x9d: per-frame transient flag (writer TBD)
-    uint8_t _pad_0x9e[2];          // +0x9e..+0x9f: alignment padding
+    // +0x9e is the global "pointer-is-down" flag, not padding.
+    // Written by PointerDownCallback @ 0x00168e24 (=1) / PointerUpCallback @ 0x00168e48 (=0).
+    // Read by PowerUpShop::Update for hit-test gating.
+    uint8_t m_bPointerActive;      // +0x9e
+    uint8_t _pad_0x9f;             // +0x9f
     // +0xa0..+0x16C: 16 Vec3s, one per touch/finger slot, initialised by
     // GameTaskInitInput @ 0x00169670. GameUpdate re-snaps each .z each
     // frame (positive stays; zero -> -1; negative left alone).
