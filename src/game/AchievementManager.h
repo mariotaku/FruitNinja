@@ -38,7 +38,6 @@
 #include "engine/util/SmartPtr.h"
 #include "engine/asset/Texture.h"
 
-class Bonus;
 class HUD;
 class SpecificOrder;
 
@@ -94,9 +93,8 @@ public:
     int  AchievementExists(uint32_t hash);
 
     // Unlock paths — Binary addresses above
-    // ASM-verified: 2026-05-18 binary @ 0x00108af0 (re-analyst)
-    // Takes Bonus*; reads m_AchievementHash from bonus+0x108 internally.
-    int  UnlockBonusAchievement(Bonus* bonus);
+    // ASM-verified: 2026-05-18T00:00 binary @ 0x00108af0..0x00108b4f (asm-inspector)
+    unsigned int UnlockBonusAchievement(unsigned long bonusId);
     // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
     int  UnlockComboAchievement(int comboLen, int* fruitArr);
     int  UnlockComboStarAchievement(int combo, uint32_t starTypeHash);

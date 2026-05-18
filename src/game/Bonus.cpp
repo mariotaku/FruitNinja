@@ -373,7 +373,7 @@ bool BonusType::UnlockAchievements() {
     for (size_t i = 0; i < m_Bonuses.size(); ++i) {
         Bonus& b = m_Bonuses[i];
         if (b.m_AchievementHash == 0) continue;
-        AchievementManager::GetInstance()->UnlockBonusAchievement(&b);
+        AchievementManager::GetInstance()->UnlockBonusAchievement((unsigned long)b.m_AchievementHash);
         any = true;
     }
     return any;

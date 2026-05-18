@@ -435,19 +435,17 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
 
 // ---------------------------------------------------------------------------
 // UnlockBonusAchievement  (Binary @ 0x00108af0)
-// ASM-verified: 2026-05-18 binary @ 0x00108af0 (re-analyst)
+// ASM-verified: 2026-05-18T00:00 binary @ 0x00108af0..0x00108b4f (asm-inspector)
 // ---------------------------------------------------------------------------
 
-int AchievementManager::UnlockBonusAchievement(Bonus* bonus) {
-    // TODO: 0x00108af0 -- BLOCKED: spec says read hash from bonus+0x108, but
-    //   sizeof(Bonus)==0xD8 so bonus+0x108 is out-of-bounds. The binary may
-    //   read from AchievementManager+0x108 (= m_ByType[8], the COMBO_STAR bucket),
-    //   not from bonus+0x108. Need asm-inspector to confirm which pointer base
-    //   the binary uses (param_1 = AchievementManager *this vs Bonus*).
-    //   Dispatch re-analyst: disassemble_function @ 0x00108af0 to settle this.
-    //   Until confirmed, return 0 to avoid reading past struct end.
-    (void)bonus;
-    return 0;
+unsigned int AchievementManager::UnlockBonusAchievement(unsigned long bonusId) {
+    std::map<uint32_t, AchievementInfo*>::iterator it =
+        m_ByType[ACHIEVEMENT_TYPE_BONUS].find((uint32_t)bonusId);
+    if (it == m_ByType[ACHIEVEMENT_TYPE_BONUS].end()) return 0;
+    AchievementInfo* info = it->second;
+    unsigned int modeBit = ModeBitmaskAllows(info->m_ModeBitmask);
+    if (modeBit == 0) return 0;
+    return (unsigned int)QueAchievement(info, it);
 }
 
 // ---------------------------------------------------------------------------
