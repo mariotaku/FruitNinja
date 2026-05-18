@@ -324,12 +324,9 @@ struct PROBABILITY_OVERIDE {
     // BOMB/BOMB_PINEAPPLE -> m_TypeQueue[i]=-2; RANDOM -> RandomFruit(false); else FruitType(name,false).
     void SelectType();
 
-    // Returns m_SelectedType index after calling SelectType (binary calls SelectType then reads +0x74).
-    // Returns -1 (no valid type) when SelectType is not yet implemented.
-    int GetType() {
-        SelectType();
-        return m_SelectedType;
-    }
+    // Binary @ 0x001217e4. Returns m_TypeQueue[Rand32(m_field68)].
+    // Does NOT call SelectType (SelectType is called once at Reset/NewGame).
+    int GetType();
 };
 
 // WaveQueItem — binary @ 0x001268fc ctor. Size 0x20 (32 bytes).
