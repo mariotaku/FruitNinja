@@ -19,11 +19,11 @@ See also `docs/engine/sound-system.md` for the full four-layer architecture and
 | MortarSound GOT thunks (resolved to concrete bodies) | 5 | Resolved -- same bodies |
 | MortarSoundMAM methods (ctor + 2 dtors) | 3 | Accessible (no extra overrides) |
 | MAMAudioController methods called by MortarSound | 6 | Accessible |
-| MortarSound::Load (called from SFXPlayInternal, no symbol) | 1 | Symbol missing; behaviour inferable |
+| MortarSound::Load (0x0018c6f4), InternalLoad (0x0018c8d0), IsReady (0x0018c7a8), SetPitch (0x0018c778) | 4 | Resolved; Load @ 0x0018c6f4 is a one-line wrapper calling InternalLoad |
 | MAMAudioController::GetInstance, Find, RemoveListener | 3 | No matching symbol; called via GOT only |
 
 **Total accessible:** 18 bodies fully decompiled.  
-**GOT-thunk-blind:** 4 helper symbols (`Load`, `GetInstance`, `Find`, `RemoveListener`) -- these
+**GOT-thunk-blind:** 3 helper symbols (`GetInstance`, `Find`, `RemoveListener`) -- these
 are either inlined or behind unresolvable thunks; their behaviour is inferred from call sites.
 
 ---
@@ -114,24 +114,20 @@ Constant: DAT_0018c7ec = `0x437f0000` = **255.0f**.
 | 0x0018c6fc | -- | Destroy() | `void(this)` | Calls InternalDestroy(this). Non-virtual wrapper. |
 | 0x0018c8a4 | -- | InternalDestroy() | `void(this)` | If m_Name!=NULL: operator_delete(m_Name); m_Name=NULL. Calls Stop(0.0f). Calls MAMAudioController::RemoveListener(m_Handle). |
 
-### Missing symbol: MortarSound::Load
+### MortarSound::Load and InternalLoad (resolved)
 
-`SoundManagerMAM::SFXPlayInternal` (0x0018cd34) calls `MortarSound::Load(sound, name)` in the
-branch where `sound != NULL`. No symbol for `Load` exists in the binary; it is either inlined
-or accessed only through an unresolvable GOT thunk. Based on usage context (called immediately
-before `Play()`), `Load` almost certainly just copies the name string into `m_Name` (possibly
-with a heap allocation). The port should implement it as:
+`Load @ 0x0018c6f4` -- one-line wrapper that calls `InternalLoad`. (Previously believed to
+have no binary symbol; resolved by re-analyst 2026-05-18.)
 
-```c
-void MortarSound::Load(const char* name) {
-    if (m_Name) { delete[] m_Name; m_Name = nullptr; }
-    if (name && *name) {
-        size_t len = strlen(name) + 1;
-        m_Name = new char[len];
-        memcpy(m_Name, name, len);
-    }
-}
-```
+`InternalLoad @ 0x0018c8d0` -- heap-copies name, tears down existing `m_Name` first via
+`InternalDestroy` (which also calls `Stop(0)` and zeros `m_Handle`). Calling `InternalLoad`
+on an actively-playing sound silently stops it.
+
+`IsReady @ 0x0018c7a8` -- no-op stub in binary: handle-validity guard + always returns true.
+Loads complete synchronously so IsReady is trivially always true.
+
+`SetPitch @ 0x0018c778` -- no-op stub in binary: handle-validity guard only; pitch argument
+is discarded entirely. Pitch shifting was not supported by the MAMAudioController.
 
 ---
 
@@ -369,7 +365,6 @@ recursively, but with `sound==NULL`. The port's `MortarSound::Play` implementati
 
 | Symbol | Reason | Impact |
 |--------|--------|--------|
-| `MortarSound::Load` | No binary symbol; Ghidra infers name from call context only | Low -- behaviour fully inferable from usage; implement as name-string copy |
 | `MAMAudioController::GetInstance` | Singleton behind GOT; no resolvable body found | Low -- standard singleton; port uses its own instance |
 | `MAMAudioController::Find` | Called inside PlaySound/StopSound; no symbol | Low -- simple linked-list search; only needed if completion callbacks are implemented |
 | `MAMAudioController::RemoveListener` | Same | Low -- remove ListenPair node by ID |

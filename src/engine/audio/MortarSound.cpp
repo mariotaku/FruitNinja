@@ -134,26 +134,32 @@ void MortarSound::InternalDestroy() {
     // listener cleanup is implicit in port (no listener list maintained)
 }
 
-// No binary symbol -- inferred from SFXPlayInternal call context.
-// Heap-copies name string into m_Name.
+// 0x0018c6f4
 void MortarSound::Load(const char* name) {
-    if (m_Name) { delete[] m_Name; m_Name = nullptr; }
-    if (name && *name) {
-        size_t len = strlen(name) + 1;
-        m_Name = new char[len];
-        memcpy(m_Name, name, len);
-    }
+    InternalLoad(name);
+}
+
+// ASM-verified: 2026-05-18 binary @ 0x0018c8d0 (re-analyst)
+// Calling InternalLoad on an actively-playing sound silently stops it
+// because InternalDestroy calls Stop(0) and zeros m_Handle before m_Name is replaced.
+void MortarSound::InternalLoad(const char* name) {
+    if (m_Name != nullptr) InternalDestroy();
+    size_t n = strlen(name) + 1;
+    m_Name = new char[n];
+    memcpy(m_Name, name, n);
+}
+
+// ASM-verified: 2026-05-18 binary @ 0x0018c7a8 (re-analyst)
+// Note: binary is a no-op stub; loads complete synchronously.
+bool MortarSound::IsReady() {
+    if (m_Handle == 0) m_State = 0;
+    return true;
+}
+
+// DIFFERS: binary @ 0x0018c778 discards pitch arg; not implementing real pitch shift to match
+void MortarSound::SetPitch(unsigned int /*pitch*/) {
+    if (m_Handle == 0) m_State = 0;
+    // binary discards the pitch argument; not implementing real pitch shift to match
 }
 
 } // namespace Mortar
-
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-namespace Mortar {
-// STUB: MortarSound::InternalLoad -- auto stub
-void MortarSound::InternalLoad(char const*) {}
-// STUB: MortarSound::IsReady -- auto stub
-void MortarSound::IsReady() {}
-// STUB: MortarSound::SetPitch -- auto stub
-void MortarSound::SetPitch(unsigned int) {}
-}  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----
