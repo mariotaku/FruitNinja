@@ -83,9 +83,7 @@ void PowerUpManager::SetDefaults() {
     m_SlowClockMult         = 1.0f;
     ClearScoreMultipliers();
     SlashEntity::s_ModPowerMask = 0;
-    // TODO: reset SlashEntityState blade-width/colour-mod fields (binary @ 0x00117a80
-    //       writes 6 float fields to 1.0 via g_pFruitNinjaApp->m_pBladeState)
-    //       when SlashEntityState is ported, wire here.
+    SlashEntity::ResetModScales();
 }
 
 // @ 0x0011a218
@@ -169,9 +167,7 @@ void PowerUpManager::Reset(bool fullReset) {
     m_SlowClockMult         = 1.0f;
     ClearScoreMultipliers();
     SlashEntity::s_ModPowerMask = 0;
-    // TODO: reset SlashEntityState 6 blade-width/colour-mod fields to 1.0
-    //       (binary @ 0x00119b08 via g_pFruitNinjaApp->m_pBladeState) when
-    //       SlashEntityState is ported.
+    SlashEntity::ResetModScales();
 
     if (fullReset) {
         Mortar::NetworkManager::GetInstance()->SyncClear();  // Defunct: online MP
@@ -183,12 +179,6 @@ void PowerUpManager::Reset(bool fullReset) {
         if (pwr->IsPurchaseable()) {
             pwr->Deactivate(true);
             if (fullReset) {
-                // Full reset: call ActivatePurchase to re-arm the power from template.
-                // Binary @ 0x00119ba6 calls PowerUp::ActivatePurchase (method on PowerUp,
-                // not PowerUpManager::ActivatePurchase); deferred to PowerUp RE pass.
-                // TODO: 0x00119ba6 — call pwr->ActivatePurchase() when PowerUp::ActivatePurchase
-                //       is ported (separate RE pass, method on PowerUp not PowerUpManager).
-                //       For now PowerUpManager::ActivatePurchase re-arms via template clone path.
                 ActivatePurchase(pwr);
                 ++it;
                 continue;
@@ -272,10 +262,7 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3* position, float* pur
         PowerUp* existing = byHash->second;
         existing->GetLongestMod();   // observed call in binary; result discarded
         Vec3 posCopy(*position);
-        // TODO: PowerUp::Activate signature widening pending separate RE pass.
-        // Binary calls Activate(existing, false, (purchaseExtra != null), posCopy, &posCopy.x)
-        // (5-arg form). Port has 3-arg form; using it until Activate is widened.
-        existing->Activate((purchaseExtra != NULL), posCopy, purchaseExtra ? *purchaseExtra : 0.0f);
+        existing->Activate(true, (purchaseExtra != NULL), posCopy, purchaseExtra);
         clone = existing;
     } else {
         // (B) Not yet active -> clone template, push back, decide path.
@@ -293,8 +280,7 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3* position, float* pur
         if (skipPurge) {
             // (B1) Single activate, don't purge other specials.
             Vec3 posCopy(*position);
-            // TODO: PowerUp::Activate signature widening pending separate RE pass.
-            clone->Activate((purchaseExtra != NULL), posCopy, purchaseExtra ? *purchaseExtra : 0.0f);
+            clone->Activate(true, (purchaseExtra != NULL), posCopy, purchaseExtra);
         } else {
             // (B2) Purge-other-specials path.
             // Note: shortestTime computation below is in the binary but the result is
@@ -309,19 +295,17 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, Vec3* position, float* pur
             }
             (void)shortestTime;  // binary discards this; suppress unused-variable warning
 
-            // Activate(false, false, ...) on every other special.
+            // Activate(false, false, ZERO_VEC, NULL) on every other special.
             Vec3 ghostPos(0.0f, 0.0f, 0.0f);  // DAT_001199d0 canonical zero Vec3
             for (std::list<PowerUp*>::iterator pit = m_ActivePowerUps.begin();
                  pit != m_ActivePowerUps.end(); ++pit) {
                 if ((*pit)->IsSpecial() && *pit != clone) {
                     Vec3 gp(ghostPos);
-                    // TODO: PowerUp::Activate signature widening pending separate RE pass.
-                    (*pit)->Activate(false, gp, 0.0f);
+                    (*pit)->Activate(false, false, gp, NULL);
                 }
             }
             Vec3 posCopy(*position);
-            // TODO: PowerUp::Activate signature widening pending separate RE pass.
-            clone->Activate(false, posCopy, 0.0f);
+            clone->Activate(true, false, posCopy, NULL);
         }
 
         // (B-tail) Assign Y-position for HUD bar.
@@ -549,15 +533,41 @@ void PowerUpManager::StopClock(float duration) {
     m_StopClockAccum += duration;
 }
 
-// ---- STUBS (binary) ----
-// STUB: PowerUpManager::GetFirstPurchasable -- binary @ 0x???? (TODO RE)
-void PowerUpManager::GetFirstPurchasable(std::_List_iterator<PowerUp*>&) {}
-// STUB: PowerUpManager::GetNextPurchasable -- binary @ 0x???? (TODO RE)
-void PowerUpManager::GetNextPurchasable(std::_List_iterator<PowerUp*>&) {}
-// STUB: PowerUpManager::SetAppropriateScoreCallback -- binary @ 0x???? (TODO RE)
+// @ 0x00117c50 — return first active purchasable; set outIt to its position
+// ASM-verified: 2026-05-18 binary @ 0x00117c50 (re-analyst)
+PowerUp* PowerUpManager::GetFirstPurchasable(std::list<PowerUp*>::iterator& outIt) {
+    outIt = m_ActivePowerUps.begin();
+    if (outIt == m_ActivePowerUps.end()) return NULL;
+    uint32_t hash = (*outIt)->m_NameHash;
+    std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
+    if (byHash == m_ActiveByHash.end()) return *outIt;
+    return byHash->second;
+}
+
+// @ 0x00117bf4 — advance it, return next active purchasable
+// ASM-verified: 2026-05-18 binary @ 0x00117bf4 (re-analyst)
+PowerUp* PowerUpManager::GetNextPurchasable(std::list<PowerUp*>::iterator& it) {
+    ++it;
+    if (it == m_ActivePowerUps.end()) return NULL;
+    uint32_t hash = (*it)->m_NameHash;
+    std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
+    if (byHash == m_ActiveByHash.end()) return *it;
+    return byHash->second;
+}
+
+// @ 0x00118c14
+// TODO: 0x00118c14 — needs ScoreModifier::m_pCustomCallback + OnScore
 void PowerUpManager::SetAppropriateScoreCallback() {}
-// STUB: PowerUpManager::UnloadTextures -- binary @ 0x???? (TODO RE)
-void PowerUpManager::UnloadTextures() {}
-// STUB: PowerUpManager::ActivatePower -- binary @ 0x001197c4 (TODO RE) -- binary by-value Vec3 overload
-PowerUp* PowerUpManager::ActivatePower(unsigned long hash, Vec3 position, float* purchaseExtra) { return 0; }
-// ---- end STUBS ----
+
+// @ 0x0011836c — walk m_AllPowerUps and m_ScreenEffectPool, call UnloadTextures
+// ASM-verified: 2026-05-18 binary @ 0x0011836c (re-analyst)
+void PowerUpManager::UnloadTextures() {
+    for (std::map<uint32_t, PowerUp*>::iterator it = m_AllPowerUps.begin();
+         it != m_AllPowerUps.end(); ++it) {
+        it->second->UnloadTextures();
+    }
+    for (std::map<uint32_t, ScreenEffect>::iterator it = m_ScreenEffectPool.begin();
+         it != m_ScreenEffectPool.end(); ++it) {
+        it->second.UnloadTextures();
+    }
+}

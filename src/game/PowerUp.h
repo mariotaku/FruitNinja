@@ -59,6 +59,11 @@ public:
 
     // TODO: implement LoadTextures (binary @ 0x? -- re-analyst pass needed)
     void LoadTextures() {}
+
+    // @ 0x00118334 — three ReloadableTexture::Unload() calls on texture fields inside PurchaseInfo
+    // ASM-verified: 2026-05-18 binary @ 0x00118334 (re-analyst)
+    // TODO: 3x PurchaseInfo texture slots within _pad08 — RE separately
+    void UnloadTextures() {}
 };
 
 // Colour as stored in binary (RGBA8 packed in 4 bytes).
@@ -144,7 +149,12 @@ public:
     void Parse(tinyxml2::XMLElement* elem);
 
     // @ 0x00119134 — activate this power-up clone
-    void Activate(bool isPurchase, const Vec3& pos, float extra);
+    // ASM-verified: 2026-05-18 binary @ 0x00119134 (re-analyst)
+    // param1: showPopup — display miss control + deduct coins
+    // param2: isPurchased — forwarded to ApplyModifier
+    // param3: position — by-value in binary; port uses const& for ergonomics
+    // param4: extraParam — NULL on most calls; non-null when re-loading from save
+    void Activate(bool showPopup, bool isPurchased, const Vec3& pos, float* extraParam);
 
     // @ 0x00117f18 — deactivate, call RemoveModifier on all mods; returns 0
     int Deactivate(bool removeAll);
@@ -201,18 +211,21 @@ public:
     // @ 0x001193d0 callee — push a modifier onto this power-up's list
     void AddModifier(GameModifier* mod);
 
-    // ---- STUBS (binary) ----
-    // STUB: PowerUp::PowerUp(PowerUp*) -- binary @ 0x???? (TODO RE)
+    // @ 0x00118ed4 — copy constructor (C1/C2 ctor variants)
+    // ASM-verified: 2026-05-18 binary @ 0x00118ed4 (re-analyst)
     PowerUp(PowerUp* src);
-    // STUB: PowerUp::Activate(bool,bool,Vec3,float*) -- binary @ 0x???? (TODO RE)
-    void Activate(bool isPurchase, bool flag2, Vec3 pos, float* extra);
-    // STUB: PowerUp::Purchaseable -- binary @ 0x???? (TODO RE)
-    void Purchaseable();
-    // STUB: PowerUp::SetDeferedPoints -- binary @ 0x???? (TODO RE)
-    void SetDeferedPoints(int);
-    // STUB: PowerUp::UnloadTextures -- binary @ 0x???? (TODO RE)
+
+    // @ 0x00117a44 — returns coin cost if purchaseable, else 0
+    // ASM-verified: 2026-05-18 binary @ 0x00117a44 (re-analyst)
+    int Purchaseable() const;
+
+    // @ 0x00117cdc — walk m_ModList, forward to ScoreModifier::DeferPoints on type==2
+    // ASM-verified: 2026-05-18 binary @ 0x00117cdc (re-analyst)
+    void SetDeferedPoints(int points);
+
+    // @ 0x00118350 — null-guarded calls to m_pScreenEffect and m_pPurchaseInfo
+    // ASM-verified: 2026-05-18 binary @ 0x00118350 (re-analyst)
     void UnloadTextures();
-    // ---- end STUBS ----
 };
 
 #endif // FN_GAME_POWER_UP_H

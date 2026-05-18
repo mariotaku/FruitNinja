@@ -89,7 +89,10 @@ GameModifier* ScoreModifier::Clone() {
     return c;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ScoreModifier::DeferPoints -- auto stub
-void ScoreModifier::DeferPoints(int) {}
-// ---- end AUTO-STUB MERGE ----
+// DeferPoints — accumulate deferred score on the owning PowerUp.
+// Called by PowerUp::SetDeferedPoints when this modifier's GetType() == 2.
+// ScoreModifier::DeferPoints is not yet RE'd (binary addr TBD); stub maps
+// points into the owner's m_DeferredPoints via AddDeferedPoints.
+void ScoreModifier::DeferPoints(int points) {
+    if (m_pOwner) m_pOwner->AddDeferedPoints(points);
+}

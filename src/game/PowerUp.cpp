@@ -2,6 +2,7 @@
 // Fix: PowerUp struct +0xac _padac[8] inserted so m_Texture1@+0xb4, m_DeferredPoints@+0xc4.
 
 #include "PowerUp.h"
+#include "ScoreModifier.h"
 #include "ScreenEffect.h"
 #include "Game.h"
 #include "FruitSaveData.h"
@@ -148,12 +149,14 @@ void PowerUp::Parse(tinyxml2::XMLElement* elem) {
 }
 
 // Step 4: Activate (binary @ 0x00119134)
-void PowerUp::Activate(bool isPurchase, const Vec3& pos, float extra) {
-    if (!isPurchase) {
+// ASM-verified: 2026-05-18 binary @ 0x00119134 (re-analyst)
+void PowerUp::Activate(bool showPopup, bool isPurchased, const Vec3& pos, float* extraParam) {
+    if (showPopup) {
         if (m_Texture2.IsValid()) {
             MissControl* m = MissControl::GetFree();
             if (m) {
-                m->MakeDisappear(pos, 0, m_Texture2);
+                Vec3 posCopy(pos);
+                m->MakeDisappear(posCopy, 0, m_Texture2);
                 m->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
             }
         }
@@ -168,10 +171,10 @@ void PowerUp::Activate(bool isPurchase, const Vec3& pos, float extra) {
          it != m_ModList.end(); ++it) {
         GameModifier* mod = *it;
         if (!mod->m_bApplied) {
-            mod->ApplyModifier(isPurchase, &extra);
+            mod->ApplyModifier(isPurchased, extraParam);
         }
     }
-    if (m_pScreenEffect && !isPurchase) {
+    if (m_pScreenEffect && showPopup) {
         m_pScreenEffect->Activate();
     }
 }
@@ -236,12 +239,10 @@ int PowerUp::Update(float dt) {
 
 // Step 7: Clone (binary @ 0x00119468)
 PowerUp* PowerUp::Clone() {
-    PowerUp* clone = new PowerUp(*this);
-    clone->m_bCloned = 1;
-    clone->m_DeferredPoints = -1;
-    // The copy-ctor copies m_ModList by value (list<GameModifier*>) — that
-    // copies the pointers, not the objects. We need deep copies.
-    clone->m_ModList.clear();
+    // Binary passes `this` (pointer) to the PowerUp(PowerUp*) copy ctor.
+    PowerUp* clone = new PowerUp(this);
+    // Copy ctor already sets m_bCloned=1, m_DeferredPoints=-1, m_pPurchaseInfo=NULL,
+    // leaves m_ModList empty. Deep-copy modifiers below.
     for (std::list<GameModifier*>::const_iterator it = m_ModList.begin();
          it != m_ModList.end(); ++it) {
         // virtual slot 9 — per-subclass Clone
@@ -256,14 +257,7 @@ PowerUp* PowerUp::Clone() {
         clone->m_pPurchaseInfo = new PurchaseInfo();
         *clone->m_pPurchaseInfo = *m_pPurchaseInfo;
     }
-    // ScreenEffect is not deep-copied (the clone uses the same template reference)
-    // binary: clones share the ScreenEffect template; each Activate creates new state
-    // TODO: re-RE ScreenEffect copy ctor -- clone may need to deep-copy m_TexName / m_Tint;
-    //   verify at binary address of ScreenEffect::ScreenEffect(const ScreenEffect&) before finalising.
-    if (m_pScreenEffect) {
-        clone->m_pScreenEffect = new ScreenEffect(*m_pScreenEffect);
-        clone->m_pScreenEffect->m_pOwnerPowerUp = clone;
-    }
+    // m_pScreenEffect already deep-copied in the copy ctor.
     return clone;
 }
 
@@ -351,41 +345,67 @@ void PowerUp::SetTotalTime(float t) {
     m_TotalTime = t;
 }
 
-// ---- STUBS (binary) ----
-
-// STUB: PowerUp::PowerUp(PowerUp*) -- binary @ 0x???? (TODO RE)
-// Default-init then optionally copy from src. Uses the default ctor's
-// member initializers via `new (this) PowerUp()` placement-new trick;
-// can't use C++11 delegating ctor (`: PowerUp()`) because GCC 4.4 (the
-// asm-verify cross-toolchain) doesn't support it.
+// PowerUp::PowerUp(PowerUp*) copy ctor — binary @ 0x00118ed4 (C1) / 0x00119004 (C2)
+// ASM-verified: 2026-05-18 binary @ 0x00118ed4 (re-analyst)
 PowerUp::PowerUp(PowerUp* src)
     : m_bIsPurchasable(false)
     , m_bIsSpecial(false)
-    , m_pPurchaseInfo(nullptr)
-    , m_bCloned(0)
+    , m_pPurchaseInfo(NULL)
+    , m_bCloned(1)
     , m_LongestRemaining(0.0f)
     , m_TotalTime(0.0f)
     , m_Colour{255, 255, 255, 255}
     , m_BarRamp(0.0f)
-    , m_pScreenEffect(nullptr)
+    , m_pScreenEffect(NULL)
     , m_DeferredPoints(-1)
     , m_BarXPos(0.0f)
     , m_NameHash(0)
 {
     memset(m_Name, 0, sizeof(m_Name));
-    if (src) *this = *src;
+    memset(m_DisplayName, 0, sizeof(m_DisplayName));
+    memset(_pad92, 0, sizeof(_pad92));
+    memset(_padac, 0, sizeof(_padac));
+    memset(_padc0, 0, sizeof(_padc0));
+
+    m_NameHash = src->m_NameHash;
+    strcpy(m_Name,        src->m_Name);
+    strcpy(m_DisplayName, src->m_DisplayName);
+    m_Colour         = src->m_Colour;
+    m_bIsSpecial     = src->m_bIsSpecial;
+    m_bIsPurchasable = src->m_bIsPurchasable;
+    m_TotalTime      = src->m_TotalTime;
+    // m_BarXPos: NOT copied — reset to 0 (binary confirmed @ +0xc8 not in copy path)
+    // m_pPurchaseInfo: NOT deep-copied — ActivatePurchase reseeds
+    // m_ModList: left EMPTY — Clone() deep-copies separately
+    if (src->m_pScreenEffect) {
+        m_pScreenEffect = new ScreenEffect();
+        *m_pScreenEffect = *src->m_pScreenEffect;
+        m_pScreenEffect->m_pOwnerPowerUp = this;
+    }
+    m_Texture1 = src->m_Texture1;
+    m_Texture2 = src->m_Texture2;
 }
 
-// STUB: PowerUp::Activate(bool,bool,Vec3,float*) -- binary @ 0x???? (TODO RE)
-void PowerUp::Activate(bool /*isPurchase*/, bool /*flag2*/, Vec3 /*pos*/, float* /*extra*/) {}
+// @ 0x00117a44 — returns coin cost if purchaseable, else 0
+// ASM-verified: 2026-05-18 binary @ 0x00117a44 (re-analyst)
+int PowerUp::Purchaseable() const {
+    return m_pPurchaseInfo ? m_pPurchaseInfo->m_Cost : 0;
+}
 
-// STUB: PowerUp::Purchaseable -- binary @ 0x???? (TODO RE)
-void PowerUp::Purchaseable() {}
+// @ 0x00117cdc — walk m_ModList; on type==2 mods, call DeferPoints
+// ASM-verified: 2026-05-18 binary @ 0x00117cdc (re-analyst)
+void PowerUp::SetDeferedPoints(int points) {
+    for (std::list<GameModifier*>::iterator it = m_ModList.begin();
+         it != m_ModList.end(); ++it) {
+        if ((*it)->GetType() == 2) {
+            static_cast<ScoreModifier*>(*it)->DeferPoints(points);
+        }
+    }
+}
 
-// STUB: PowerUp::SetDeferedPoints -- binary @ 0x???? (TODO RE)
-void PowerUp::SetDeferedPoints(int) {}
-
-// STUB: PowerUp::UnloadTextures -- binary @ 0x???? (TODO RE)
-void PowerUp::UnloadTextures() {}
-
-// ---- end STUBS ----
+// @ 0x00118350 — null-guarded UnloadTextures calls
+// ASM-verified: 2026-05-18 binary @ 0x00118350 (re-analyst)
+void PowerUp::UnloadTextures() {
+    if (m_pScreenEffect)  m_pScreenEffect->UnloadTextures();
+    if (m_pPurchaseInfo)  m_pPurchaseInfo->UnloadTextures();
+}
