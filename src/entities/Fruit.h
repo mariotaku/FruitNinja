@@ -62,7 +62,11 @@ public:
     float    m_TimeScale;                  // +0x94  (init=1.0)
     float    m_ZPosition;                  // +0x98
     Vec3     m_Gravity;                    // +0x9C..+0xA7
-    uint8_t  _pad_A8[12];                  // +0xA8..+0xB3  (unused)
+    // +0xA8..+0xB3 -- duplicate of entity scale (+0x28); written by SetFruitType
+    // for both slots but never read by Draw/Shadows/AddShadow/KillFruit (all read +0x28).
+    // Vestigial write-only cache kept for binary layout fidelity.
+    // Do NOT route rendering through this field.
+    Vec3     m_VisualScale;                // +0xA8: vestigial write-only cache; binary @ 0x00176290 stm r8,{r0,r1,r2}
     uint8_t  m_bSliced;                    // +0xB4  (init=0)
     uint8_t  _pad_B5[3];                   // +0xB5..+0xB7
     Vec3     m_SecondPos;                  // +0xB8..+0xC3  (Ghidra name: m_HalfB_pos)
@@ -244,6 +248,7 @@ static_assert(__builtin_offsetof(Fruit, m_PlayerIdx)                == 0x90, "")
 static_assert(__builtin_offsetof(Fruit, m_TimeScale)                == 0x94, "");
 static_assert(__builtin_offsetof(Fruit, m_ZPosition)                == 0x98, "");
 static_assert(__builtin_offsetof(Fruit, m_Gravity)                  == 0x9C, "");
+static_assert(__builtin_offsetof(Fruit, m_VisualScale)               == 0xA8, "");
 static_assert(__builtin_offsetof(Fruit, m_bSliced)                  == 0xB4, "");
 static_assert(__builtin_offsetof(Fruit, m_SecondPos)                == 0xB8, "");
 static_assert(__builtin_offsetof(Fruit, m_SecondVel)                == 0xC4, "");

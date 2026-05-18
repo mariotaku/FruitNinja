@@ -189,6 +189,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         const FruitInfoData* info = FruitInfo_Get(fruitType);
         float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
         scale = Vec3::One() * fruitScale;
+        m_VisualScale = scale;  // ASM-verified: 2026-05-18 binary @ 0x00176290 (re-analyst)
 
         // Collision sphere (SetFruitType @ 0x0017621c, verified
         // 2026-04-15 from disassembly).
