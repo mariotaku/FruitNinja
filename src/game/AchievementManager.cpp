@@ -16,6 +16,7 @@
 #include "engine/util/PathCI.h"
 #include "ItemParseUtil.h"
 #include "Game.h"
+#include "hud/TimeControl.h"
 
 #include <tinyxml2.h>
 #include <cstring>
@@ -555,13 +556,8 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
     // SpecificOrder gate (COMBO semantics): count fruitArr entries whose hash
     //   matches GetFirstFruitTypeHash(); require count >= threshold.
     //   (Different from UnlockSpecificOrderAchievement which tracks a full sequence.)
-    // RequiresUnsullied gate: comboLen > 2 AND g_Game->pTimeCtrl->m_TimeRemaining <= 0.
-    //   TODO: 0x00108a10 -- RequiresUnsullied reads g_Game[+0x180]->field[+0x7c].
-    //     In port pTimeCtrl is at +0x180 and m_TimeRemaining is at +0x7c.
-    //     The spec names this field m_BombHitTimer but the binary struct field
-    //     at that offset is TimeControl::m_TimeRemaining. Needs asm-inspector
-    //     confirmation: disassemble_function @ 0x00108a10, verify ldr offset
-    //     into the pointer read from g_Game+0x180. Until confirmed, defer.
+    // RequiresUnsullied gate: pTimeCtrl != NULL AND comboLen > 2 AND
+    //   pTimeCtrl->m_TimeRemaining <= 0. See gate body below.
     int unlocked = 0;
     for (std::map<uint32_t, AchievementInfo*>::iterator it = m_All.begin(); it != m_All.end(); ) {
         AchievementInfo* info = it->second;
@@ -585,13 +581,19 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
             }
         }
 
-        // RequiresUnsullied gate.
-        // TODO: 0x00108a10 -- deferred: ambiguous whether binary reads
-        //   pTimeCtrl->m_TimeRemaining or a different BombHitTimer field.
-        //   Skipping (allowing unlock) is conservative vs skipping the achievement.
+        // RequiresUnsullied gate (binary @ 0x00108aa0-0x00108ab6):
+        //   Despite the XML attribute name, this gates on the TIMED-MODE COUNTDOWN
+        //   having expired, NOT on Game::m_bUnsullied. Binary reads
+        //   g_GameData->pTimeCtrl->m_TimeRemaining. If pTimeCtrl is NULL (Classic mode,
+        //   no timer HUD), reject. If comboLen <= 2, reject. If countdown still
+        //   running, reject. Only when the Arcade/Zen-timed countdown has hit 0.0f
+        //   does the achievement become eligible.
+        // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
         if (info->m_RequiresUnsullied) {
-            ++it;
-            continue;
+            Game* g = Game::GetInstance();
+            if (g->pTimeCtrl == NULL) { ++it; continue; }
+            if (comboLen <= 2)        { ++it; continue; }
+            if (g->pTimeCtrl->m_TimeRemaining > 0.0f) { ++it; continue; }
         }
 
         if (QueAchievement(info, it)) {
