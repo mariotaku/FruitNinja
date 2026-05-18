@@ -1392,8 +1392,8 @@ int Fruit::GetNumActiveForPlayer(int /*playerIdx*/, bool /*checkBombs*/) {
     return am->GetNumEntities(0);
 }
 
-// Matches Fruit::ClearUnspawned (0x001762a0).
-void Fruit::ClearUnspawned(bool deactivateVisible) {
+// ASM-verified: 2026-05-18 binary @ 0x00176d14 (re-analyst)
+void Fruit::ClearUnspawned(bool clearAll) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
     std::list<Mortar::Entity*>::iterator it;
@@ -1401,8 +1401,8 @@ void Fruit::ClearUnspawned(bool deactivateVisible) {
     while (e) {
         Fruit* f = static_cast<Fruit*>(e);
         Mortar::Entity* next_e = am->GetEntityNext(0, it);
-        if (f->m_ChuckDelay > 0.0f || deactivateVisible)
-            am->Deactivate(f);
+        if (clearAll || f->m_ChuckDelay > 0.0f)
+            f->KillFruit(false);
         e = next_e;
     }
 }
