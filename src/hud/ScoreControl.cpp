@@ -51,8 +51,11 @@ static bool IsMultiplayer() { return false; }
 
 // GetCurrentScore: returns score for the given player index.
 // Player 1 (idx=0) uses game->currentScore. Player 2 is not yet ported.
+// ASM-verified: 2026-05-18 binary @ 0x00148e00 (re-analyst)
+// Stat persistence for P2 happens in GameOverScreen::Update @ 0x00141b34, not here.
+// Same-screen MP does not split saved stats; no "Score_P2" key exists.
 static int GetCurrentScore(int playerIdx) {
-    if (playerIdx != 0) return 0;  // TODO: P2 score when MP is ported
+    if (playerIdx != 0) return 0;
     Game* game = Game::GetInstance();
     return game ? game->currentScore : 0;
 }
