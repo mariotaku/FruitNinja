@@ -882,15 +882,15 @@ void MainScreen::CreatePlayDojo() {
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
     // ASM-verified: 2026-05-09 binary @ 0x0014b818..0x0014b82c (re-analyst).
     // pPlayButton is the only MenuButton in the game whose Init defaults
-    // (m_AnimSpeed=5, m_AnimSpeed2=5, m_AnimScale=1) are overridden:
-    //   m_AnimSpeed  = -50.0f   (DAT_0014b860)
-    //   m_AnimSpeed2 = -50.0f
+    // (m_HitInsetY=5, m_HitInsetX=5, m_AnimScale=1) are overridden:
+    //   m_HitInsetY  = -50.0f   (DAT_0014b860)  (was m_AnimSpeed)
+    //   m_HitInsetX  = -50.0f                    (was m_AnimSpeed2)
     //   m_AnimScale  = 0.5f
     // m_AnimScale halves the scratchs backdrop scale formula
     //   (size.x * 1.125 * m_AnimScale) on the big NEW GAME button so it
     // doesn't dominate the splash screen.
-    pPlayButton->m_AnimSpeed  = -50.0f;
-    pPlayButton->m_AnimSpeed2 = -50.0f;
+    pPlayButton->m_HitInsetY  = -50.0f;
+    pPlayButton->m_HitInsetX = -50.0f;
     pPlayButton->m_AnimScale  = 0.5f;
     game.hud->AddControl(pPlayButton);
 

@@ -122,10 +122,10 @@ void TutorialControl::ResetTutePos(MenuButton* btn) {
         // Copy button position
         pos = btn->pos;
 
-        // halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0 - 10.0
+        // halfWidth = btn->m_TargetSize.x - btn->m_HitInsetX * 2.0 - 10.0
         // Binary fields: field_0x124 = m_TargetSize (Vec3 at +0x124, .x),
-        //                field_0x14c = m_AnimSpeed2 (float at +0x14C)
-        float halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0f - 10.0f;
+        //                field_0x14c = m_HitInsetX (float at +0x14C; was m_AnimSpeed2)
+        float halfWidth = btn->m_TargetSize.x - btn->m_HitInsetX * 2.0f - 10.0f;
         // Binary @ 0x00162f44: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;
@@ -156,9 +156,9 @@ void TutorialControl::ButtonPressedAtPos(MenuButton* btn) {
     if (btn != nullptr) {
         pos = btn->pos;
 
-        // halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0 - 10.0
-        // Binary fields: field_0x124 = m_TargetSize.x, field_0x14c = m_AnimSpeed2
-        float halfWidth = btn->m_TargetSize.x - btn->m_AnimSpeed2 * 2.0f - 10.0f;
+        // halfWidth = btn->m_TargetSize.x - btn->m_HitInsetX * 2.0 - 10.0
+        // Binary fields: field_0x124 = m_TargetSize.x, field_0x14c = m_HitInsetX (was m_AnimSpeed2)
+        float halfWidth = btn->m_TargetSize.x - btn->m_HitInsetX * 2.0f - 10.0f;
         // Binary @ 0x00162ea6: halve, don't clamp
         if (halfWidth > HALFWIDTH_THRESH) halfWidth *= HALFWIDTH_HALVE;
         m_HalfWidth = halfWidth;

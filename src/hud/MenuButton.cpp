@@ -166,7 +166,7 @@ MenuButton::MenuButton()
       m_RotationSpeed(0.0f),
       m_SparkleTimer(-1.0f),
       m_NewIndicatorTimer(-1.0f),
-      m_HitBoundsScale(0.0f, 0.0f, 0.0f),
+      m_BaseScale(0.0f, 0.0f, 0.0f),
       m_pLabel1(nullptr), m_pLabel2(nullptr),
       m_PlayerIndex(0),
       m_bScoreSubmitted(0),
@@ -175,15 +175,15 @@ MenuButton::MenuButton()
       m_bEnabled(1),
       m_TargetSize(0.0f, 0.0f, 0.0f),
       m_bHasHitArea(false),
-      m_bHighlighted(0),
+      m_bTouchHeld(0),
       m_pFruitPiece(nullptr),
       m_bRespondsToBackKey(0),
       m_AnimScale(1.0f),
       // m_BounceParams = (0.85, 0.85, 0.0) per binary @ 0x0014f240/0x0014f244.
       // Drives the new-item star anchor offset (0.425*W, 0.425*H from button centre).
       m_BounceParams(0.85f, 0.85f, 0.0f),
-      m_AnimSpeed2(5.0f),
-      m_AnimSpeed(5.0f),
+      m_HitInsetX(5.0f),
+      m_HitInsetY(5.0f),
       m_field154(0.0f),
       m_ShakeTimer(0.0f)
 {
@@ -214,7 +214,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_ClickCallback = clickCb;
     m_DeletedCallback = deletedCb;
     m_FruitType = fruitType;
-    m_HitBoundsScale = hitBounds;
+    m_BaseScale = hitBounds;
     // Binary @ 0x0014eea2..0x0014ef44: m_bHasHitArea = 0 < (|x| + |y|).
     // Sum-of-absolute-values so negative-coord hitBounds also count as
     // "has hit area" (the OR-of-positives form missed that case).
@@ -226,10 +226,10 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_bInteractive = 1;
     m_bEnabled = 1;
     m_AnimScale = 1.0f;
-    m_AnimSpeed = 5.0f;
-    m_AnimSpeed2 = 5.0f;
+    m_HitInsetY = 5.0f;
+    m_HitInsetX = 5.0f;
     m_Timer = 0.0f;        // DAT_0014ee68
-    m_bHighlighted = 1;    // DAT_0014ee6c
+    m_bTouchHeld = 1;    // DAT_0014ee6c
 
     // Binary @ 0x0014f1bc..0x0014f1f8 — toggle branch (no fruit, no explicit
     // hitBounds): auto-size m_TargetSize and base.size from the bound
@@ -344,14 +344,14 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // Vec3::Zero (0,0,0) at BSS 0x001f4328 -- NOT Vec3::One as a
     // prior re-analyst miscategorised. Vec3::One lives at the SEPARATE
     // GOT offset 0x77CC which MenuButton::Init never reads.
-    // The tail thus writes m_HitBoundsScale = (0,0,0). Since the ctor's
-    // member-initialiser list already sets m_HitBoundsScale(0,0,0), the
+    // The tail thus writes m_BaseScale = (0,0,0). Since the ctor's
+    // member-initialiser list already sets m_BaseScale(0,0,0), the
     // explicit write is semantically redundant; port omits it.
     //
     // First-frame capture (MenuButton::Update @ 0x0014e74e):
-    //   if (m_HitBoundsScale.x == 0.0) m_HitBoundsScale = entity->scale;
+    //   if (m_BaseScale.x == 0.0) m_BaseScale = entity->scale;
     // captures whatever per-fruit scale Fruit::Init / Bomb's *=0.85 set.
-    // Subsequent frames: entity->scale = m_HitBoundsScale * sizeFrac,
+    // Subsequent frames: entity->scale = m_BaseScale * sizeFrac,
     // where sizeFrac = sin(m_FadeCounter*2pi/65536), in [0,1].
     // See tmp/menubutton-sizefrac-spec.md for full GOT resolution.
 
@@ -520,7 +520,7 @@ void MenuButton::Update(float dt) {
     UpdatePeices(dt);
 
     // Hardware Back/Menu key auto-fire. Binary @ 0x0014e9a8: when
-    // m_bHighlighted && Game::m_BackKeyPressed && m_bRespondsToBackKey,
+    // m_bTouchHeld && Game::m_BackKeyPressed && m_bRespondsToBackKey,
     // simulate slice (Fruit) or fire click delegate (Bomb). The port
     // doesn't track Game::m_BackKeyPressed yet (TODO), so the gate is
     // currently dead; the field still records the per-screen "this is
@@ -593,15 +593,15 @@ void MenuButton::Update(float dt) {
 
             // Snapshot the entity's base scale on the first frame once
             // CreateControls' per-button fruit->scale multiplier has
-            // already been applied. m_HitBoundsScale starts at (0,0,0)
+            // already been applied. m_BaseScale starts at (0,0,0)
             // from MenuButton::Init (hitBounds arg is Vec3(0,0,0)); on
             // the first Update frame we capture m_pEntity->scale into
             // it, then per-frame scale the entity by the grow-in ratio.
             // Matches binary MenuButton::Update @ 0x0014e614:
-            //   if (m_HitBoundsScale.x == 0.0) m_HitBoundsScale = entity->scale
-            //   entity->scale = m_HitBoundsScale * (size.x / m_TargetSize.x)
-            if (m_HitBoundsScale.x == 0.0f) {
-                m_HitBoundsScale = m_pEntity->scale;
+            //   if (m_BaseScale.x == 0.0) m_BaseScale = entity->scale
+            //   entity->scale = m_BaseScale * (size.x / m_TargetSize.x)
+            if (m_BaseScale.x == 0.0f) {
+                m_BaseScale = m_pEntity->scale;
                 m_pEntity->scale = Vec3(0.0f, 0.0f, 0.0f);  // ASM @ 0x0014e76c
             }
 
@@ -621,10 +621,10 @@ void MenuButton::Update(float dt) {
                     (float)m_FadeCounter * (6.2831853f / 65536.0f);
                 const float sizeFrac = sinf(counterRad);
                 size             = m_TargetSize     * sizeFrac;
-                m_pEntity->scale = m_HitBoundsScale * sizeFrac;
+                m_pEntity->scale = m_BaseScale * sizeFrac;
             } else {
                 size             = m_TargetSize;
-                m_pEntity->scale = m_HitBoundsScale;
+                m_pEntity->scale = m_BaseScale;
             }
         } else {
             // Released path is split by entity type — the binary has two
@@ -677,9 +677,9 @@ void MenuButton::Update(float dt) {
                         m_ClickCallback = nullptr;
                         cb();
                     }
-                    // Binary @ 0x0014e7c0: restore entity scale from m_HitBoundsScale
+                    // Binary @ 0x0014e7c0: restore entity scale from m_BaseScale
                     if (m_pFruitPiece) {
-                        m_pFruitPiece->scale = m_HitBoundsScale;
+                        m_pFruitPiece->scale = m_BaseScale;
                     }
                     // Binary @ 0x0014e7d0: stationary-fruit-piece edge case
                     if (m_pFruitPiece && m_pFruitPiece->entityType == 0 &&
@@ -721,7 +721,7 @@ void MenuButton::Update(float dt) {
                 pos.z = -5.0f;
                 bomb->pos.z = 150.0f;
                 if (!bomb->Enabled()) {
-                    bomb->scale = m_HitBoundsScale;
+                    bomb->scale = m_BaseScale;
                     // Binary does NOT write m_FadeCounter on detach -- it
                     // falls through to the grow-clamp at 0x3ffc and lets
                     // the next-frame m_pEntity==null shrink handle the
@@ -760,7 +760,7 @@ void MenuButton::Update(float dt) {
         // This is the ShopScreen equip-button case where EquipCallback's
         // shrink branch zeros vel/m_Gravity -- the fruit then shrinks
         // proportionally to the ring.
-        // The binary's else branch (vel != 0) sets scale = m_HitBoundsScale,
+        // The binary's else branch (vel != 0) sets scale = m_BaseScale,
         // but for general menu fruits sliced by the user, that overrides
         // the fruit's own per-frame scale animation. The port skips the
         // else branch so user-sliced halves keep their own scale.
@@ -768,7 +768,7 @@ void MenuButton::Update(float dt) {
             m_pFruitPiece->vel.x == 0.0f && m_pFruitPiece->vel.y == 0.0f) {
             float ratio = (m_TargetSize.x != 0.0f)
                           ? (size.x / m_TargetSize.x) : 0.0f;
-            m_pFruitPiece->scale = m_HitBoundsScale * ratio;
+            m_pFruitPiece->scale = m_BaseScale * ratio;
         }
     }
 
@@ -785,7 +785,7 @@ void MenuButton::Update(float dt) {
     // callback if the release position is still inside the rect.
     //
     // ASM-verified: 2026-05-06T00:00 binary @ 0x0014e994..0x0014e99a (asm-inspector)
-    // Binary gates the entire touch + back-key block on m_bHighlighted (+0x131):
+    // Binary gates the entire touch + back-key block on m_bTouchHeld (+0x131):
     //   ldrb.w r3, [r4, #0x131]
     //   cmp    r3, #0
     //   beq.w  0x0014eb52     ; jump to size-sync / backdrop-scale tail
@@ -794,8 +794,8 @@ void MenuButton::Update(float dt) {
     // function — bypassing the m_BackdropScale tail (binary @ 0x0014eb84).
     // -----------------------------------------------------------------------
     bool bPressPulse = false;
-    if (m_bHighlighted != 0) {
-        // Compute rect bounds. Binary inflates by m_AnimSpeed/m_AnimSpeed2 which
+    if (m_bTouchHeld != 0) {
+        // Compute rect bounds. Binary inflates by m_HitInsetY/m_HitInsetX which
         // are 5.0 defaults — small inset/outset that gives the button a touch-up
         // "grace zone". The port mirrors that.
         float hw, hh;
@@ -806,10 +806,10 @@ void MenuButton::Update(float dt) {
             hw = size.x * 0.5f;
             hh = size.y * 0.5f;
         }
-        const float left   = pos.x - hw - m_AnimSpeed2;
-        const float right  = pos.x + hw + m_AnimSpeed2;
-        const float bottom = pos.y - hh - m_AnimSpeed;
-        const float top    = pos.y + hh + m_AnimSpeed;
+        const float left   = pos.x - hw - m_HitInsetX;
+        const float right  = pos.x + hw + m_HitInsetX;
+        const float bottom = pos.y - hh - m_HitInsetY;
+        const float top    = pos.y + hh + m_HitInsetY;
 
         Mortar::Touch& touch = Mortar::Touch::GetInstance();
 
@@ -827,7 +827,7 @@ void MenuButton::Update(float dt) {
                     }
                 } else {
                     // Drag-through: not a clean press; reject slot so a later true tap can latch.
-                    // Binary does NOT write m_bHighlighted here.
+                    // Binary does NOT write m_bTouchHeld here.
                     m_TouchSlot = -1;
                 }
             }
@@ -864,7 +864,7 @@ void MenuButton::Update(float dt) {
                 }
             }
         }
-        // Binary never writes m_bHighlighted from Update.
+        // Binary never writes m_bTouchHeld from Update.
     }
 
     // ASM-verified: 2026-05-18 binary @ 0x0014eb52 (re-analyst).
@@ -1000,7 +1000,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     //   Anchor: pos + ratio * (m_BounceParams.x * size.x * 0.5,
     //                          |sin(timer * 32760)| * 6 + m_BounceParams.y * size.y * 0.5,
     //                          0)
-    //   Tint:  m_bHighlighted ? white : grey(128); alpha = m_DrawColour.a (parent fade).
+    //   Tint:  m_bTouchHeld ? white : grey(128); alpha = m_DrawColour.a (parent fade).
     if (m_NewIndicatorTimer >= 0.0f && s_TexNewItem.IsValid()
         && m_TargetSize.x != 0.0f)
     {
@@ -1035,7 +1035,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
             mm.UploadModelViewOnly();
 
             const uint8_t a = m_DrawColour.a;
-            Colour tint = m_bHighlighted
+            Colour tint = m_bTouchHeld
                 ? Colour(255, 255, 255, a)
                 : Colour(128, 128, 128, a);
 
