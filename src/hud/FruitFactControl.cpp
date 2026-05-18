@@ -519,11 +519,12 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         }
 
         // Draw the combo-star texture quad with sin-pulse scale
+        // ASM-verified: 2026-05-18 binary @ 0x0013a06c (re-analyst)
         const float tw = (float)m_ComboStarTex->m_Width;
         const float th = (float)m_ComboStarTex->m_Height;
         m_ComboStarTex->Set();
         mm.GetWorldStack().Reset();
-        Matrix44 mat = Matrix44::MakeScale(tw * pulse, th * pulse, 1.0f);
+        Matrix44 mat = Matrix44::MakeScale((tw + 1.0f) * pulse, (th + 1.0f) * pulse, 0.0f);
         mat.GlobalTranslate44(Vec3(pos.x + stride * 0.5f, pos.y, pos.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
@@ -645,11 +646,18 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                         Vec3(rowPos.x + 193.0f, rowPos.y, 0.0f),
                         col, 0x0F);
                     if (bonus->m_StarTexture.IsValid()) {
-                        // TODO: 0x0013b95c -- star-icon scale constant not yet located.
-                        // re-analyst: search FruitFactControl::DrawOrder @ 0x0013b95c for
-                        // the m_StarTexture (+0x44 in Bonus struct) block; find the Scale44
-                        // call preceding DrawQuad and read the DAT_0013Cxxx constant.
-                        // Likely Vec3(W*0.5, H*0.5, 1.0) per iOS port pattern but unverified.
+                        // ASM-verified: 2026-05-18 binary @ 0x0013a06c (re-analyst)
+                        bonus->m_StarTexture->Set();
+                        mm.GetWorldStack().Reset();
+                        Matrix44 starMat = Matrix44::MakeScale(
+                            (float)bonus->m_StarTexture->m_Width * 0.5f,
+                            (float)bonus->m_StarTexture->m_Height * 0.5f,
+                            0.0f);
+                        starMat.GlobalTranslate44(rowPos);
+                        mm.GetWorldStack().SetCurrentMatrix(starMat);
+                        mm.UploadModelViewOnly();
+                        r->DrawQuad(Colour(255, 255, 255, 255));
+                        bonus->m_StarTexture->UnSet();
                     }
                     rowPos.y -= 20.0f;
                     bonus = bm->GetNextBestBonus(it);
