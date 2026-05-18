@@ -74,9 +74,11 @@ public:
     virtual void Release();
 
     // --- Vtable slot 4: DrawSplat (binary @ 0x0017f008) ---
-    // Writes 6 QUADCUSTOMVERTEX entries for this splat into caller's buffer.
-    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
-    virtual void DrawSplat(QUADCUSTOMVERTEX* outVerts, const float tintRGB[3]);
+    // Pure thiscall -- pulls vertex cursor from s_NumActiveSplats and writes
+    // into s_pSplatVertexBuffer. Tint read from s_CurrentTintRGB (set by
+    // DrawActiveSplats before dispatch).
+    // ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst)
+    virtual void DrawSplat();
 
     // --- Vtable slot 5: Update (binary @ 0x0017f774) ---
     // Per-splat physics, landing transition, slide/colour decay.
