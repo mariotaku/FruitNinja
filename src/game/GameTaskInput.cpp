@@ -104,43 +104,54 @@ void GameTaskInitInput() {
 // Full bodies require InputEvent struct shape + Game field offsets.
 // Binary addresses in comments are from the decompile of GameTaskInitInput.
 
-// PointerMoveCallback @ 0x0016a4b4
-// Binary: dispatches TouchMoveX / TouchMoveY on the matching SlashEntity
-// via Game[+0xa0..+0xb8] zone table.
-// TODO: dispatch SlashEntity::TouchMoveX/Y with finger position.
-// Port: returns FALSE so dispatch continues to SlashEntity-registered
-// per-finger TouchDown callbacks (the port's preferred path while this
-// stub isn't implemented). Binary returns 1 (consumed) at end of body.
-static bool PointerMoveCallback(InputEvent* ev) {
-    (void)ev;
-    // TODO: implement PointerMoveCallback (binary @ 0x0016a4b4)
-    return false;  // not consumed; let other handlers run
+// PointerMoveCallback @ 0x0016a4b4 (re-analyst 2026-05-18)
+// DIFFERS: binary multiplexes by event action ID (0x74/0x75/0xCC/0xCD +
+// zone ranges 0x99..0xA8/0xA9..0xB8), writing Game.worldPos.x/y,
+// per-zone Entity pos.y/z, and dispatching SlashEntity::TouchMoveX/Y
+// on the matching slot. Port has no action-ID byte on its InputEvent
+// (different ABI than binary; port uses SDL's per-finger TouchMove_n
+// callbacks bound to each SlashEntity directly in SlashEntity::Init).
+// The per-finger path already covers TouchMoveX/Y dispatch, so this
+// global hook stays a no-op pass-through. The worldPos.x/y writes are
+// also handled by InputTranslatorSDL on the SDL backend.
+static bool PointerMoveCallback(InputEvent* /*ev*/) {
+    return false;  // pass-through; per-finger handlers do the real work
 }
 
-// PointerDownCallback @ 0x00168e24
-// Binary: Game[+0x9c]=1; Game[+0x9e]=1.
-// TODO: set corresponding Game fields when they are added to Game.h.
-static bool PointerDownCallback(InputEvent* ev) {
-    (void)ev;
-    // TODO: implement PointerDownCallback (binary @ 0x00168e24)
-    return false;  // unimplemented stub -- don't consume
+// PointerDownCallback @ 0x00168e24 -- Game[+0x9c]=1, Game[+0x9e]=1.
+// Both fields are per-frame "pointer-down-this-frame" flags consumed
+// elsewhere (binary readers not RE'd; cleared per frame somewhere in
+// GameUpdate). Wiring them keeps the call-graph binary-faithful.
+static bool PointerDownCallback(InputEvent* /*ev*/) {
+    Game* g = Game::GetInstance();
+    if (!g) return false;
+    g->field_0x9c = 1;
+    g->_pad_0x9e[0] = 1;
+    return false;
 }
 
-// PointerUpCallback @ 0x00168e48
-// Binary: Game[+0x9d]=1; Game[+0x9e]=0.
-// TODO: set corresponding Game fields when they are added to Game.h.
-static bool PointerUpCallback(InputEvent* ev) {
-    (void)ev;
-    // TODO: implement PointerUpCallback (binary @ 0x00168e48)
-    return false;  // unimplemented stub -- don't consume
+// PointerUpCallback @ 0x00168e48 -- Game[+0x9d]=1, Game[+0x9e]=0.
+static bool PointerUpCallback(InputEvent* /*ev*/) {
+    Game* g = Game::GetInstance();
+    if (!g) return false;
+    g->field_0x9d = 1;
+    g->_pad_0x9e[0] = 0;
+    return false;
 }
 
-// PointerDownXboxCallback @ 0x0016a41c
-// TODO: implement (binary @ 0x0016a41c)
-static bool PointerDownXboxCallback(InputEvent* ev) {
-    (void)ev;
-    // TODO: implement PointerDownXboxCallback (binary @ 0x0016a41c)
-    return false;  // unimplemented stub -- don't consume
+// PointerDownXboxCallback @ 0x0016a41c (re-analyst 2026-05-18)
+// Despite the "Xbox" name this is the down-edge handler used when the
+// input config supplies a "PointerPressedX" action. Binary writes same
+// Game fields as PointerDownCallback then dispatches SlashEntity::
+// TouchDown on the matching per-finger entity. Port covers the
+// TouchDown dispatch via per-finger SlashEntity callbacks bound in
+// SlashEntity::Init -- so just the Game-field writes here.
+static bool PointerDownXboxCallback(InputEvent* /*ev*/) {
+    Game* g = Game::GetInstance();
+    if (!g) return false;
+    g->field_0x9c = 1;
+    g->_pad_0x9e[0] = 1;
+    return false;
 }
 
 // PauseGameCallback @ 0x00168fd8
@@ -177,11 +188,11 @@ static bool ShowPauseMenuCallback(InputEvent* ev) {
     return true;
 }
 
-// TouchDownCallback -- registered for "TouchReleased_<i>" actions in zone loop.
-// Binary addr: TBD from zone-loop decompile; distinct from global PointerDownCallback.
-// TODO: implement full body.
-static bool TouchDownCallback(InputEvent* ev) {
-    (void)ev;
-    // TODO: implement TouchDownCallback (zone-loop "TouchReleased_<i>")
-    return false;  // unimplemented stub -- don't consume
+// TouchDownCallback -- misnamed; registered for "TouchReleased_<i>" actions
+// in the zone loop (binary GOT slot 0x00169a64 trampoline). Per re-analyst
+// the binary dispatches SlashEntity::TouchUp on the matching per-zone entity.
+// Port covers this via per-finger TouchUp_n callbacks bound in SlashEntity::
+// Init directly -- so this global hook is a no-op pass-through.
+static bool TouchDownCallback(InputEvent* /*ev*/) {
+    return false;  // pass-through; per-finger TouchUp_n handlers do the work
 }
