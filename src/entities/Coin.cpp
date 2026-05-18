@@ -436,10 +436,10 @@ void Coin::ClearCoins(bool arrive) {
 // ---------------------------------------------------------------------------
 // MakeCoins @ 0x00173568
 // Spawn N coins via Mortar::ActorManager::Add(2).
-// delayStep = delayRange / (totalCoins/coinsPerCoin + 1)
+// delay.x = per-coin delay step; delay.y = max total delay (binary Vec3 arg).
 // Retry spawn position up to 10x if out of screen bounds.
 // ---------------------------------------------------------------------------
-void Coin::MakeCoins(int totalCoins, int coinsPerCoin, float delayRange,
+void Coin::MakeCoins(int totalCoins, int coinsPerCoin, const Vec3& delay,
                      uint16_t baseAngle, uint16_t angleSpread,
                      const Vec3& spawnPos,
                      const char* flyFXName, const char* collectFXName,
@@ -452,7 +452,11 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, float delayRange,
 
     // Number of coins spawned (each represents coinsPerCoin value)
     int numCoinEntities = (totalCoins + coinsPerCoin - 1) / coinsPerCoin;
-    float delayStep = delayRange / (float)(numCoinEntities + 1);
+    (void)numCoinEntities;
+    // delay.x = per-coin delay increment (negative); delay.y = max total delay cap (negative).
+    // Each coin i gets delay.x * (i+1), clamped so it never exceeds delay.y in magnitude.
+    float perStep = delay.x;
+    float maxDelay = delay.y;
 
     Vec3 gravity = COIN_DEFAULT_GRAVITY;
 
@@ -491,11 +495,13 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, float delayRange,
         }
 
         Vec3 coinPos(spawnX, spawnY, spawnPos.z);
-        float delay = delayStep * (float)(idx + 1);
+        // Stagger delay: perStep * (idx+1), but never more negative than maxDelay.
+        float coinDelay = perStep * (float)(idx + 1);
+        if (maxDelay < 0.0f && coinDelay < maxDelay) coinDelay = maxDelay;
         int coinValue = remaining < coinsPerCoin ? remaining : coinsPerCoin;
 
         coin->InitCoin(coinPos, gravity, baseAngle, 0, randAngle, coinValue,
-                       flyFXName, collectFXName, onArrived, delay, silent);
+                       flyFXName, collectFXName, onArrived, coinDelay, silent);
 
         remaining -= coinsPerCoin;
         idx++;
