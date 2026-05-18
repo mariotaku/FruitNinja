@@ -107,3 +107,31 @@ if (WIN32 AND TARGET SDL2::SDL2)
 endif()
 add_test(NAME bomb_spawn COMMAND test_bomb_spawn all)
 set_tests_properties(bomb_spawn PROPERTIES TIMEOUT 60)
+
+# BONUS_PHASE stall regression test. Boots Arcade-mode GameOverScreen in
+# STATE_BONUS_PHASE and ticks 600 frames (10s). Asserts state advances
+# to STATE_MAIN_DISPLAY within the timeout. Currently FAILS (stall bug).
+add_executable(test_bonus_phase test_bonus_phase.cpp)
+target_link_libraries(test_bonus_phase PRIVATE fruit-ninja-game SDL2::SDL2main)
+if (WIN32)
+    target_link_libraries(test_bonus_phase PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(test_bonus_phase PRIVATE OpenGL::GL)
+endif()
+if (WIN32 AND TARGET SDL2::SDL2)
+    set(_sdl2_real SDL2::SDL2)
+    get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
+    if (_alias)
+        set(_sdl2_real ${_alias})
+    endif()
+    get_target_property(_sdl2_type ${_sdl2_real} TYPE)
+    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET test_bonus_phase POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:SDL2::SDL2>
+                $<TARGET_FILE_DIR:test_bonus_phase>)
+    endif()
+endif()
+add_test(NAME bonus_phase COMMAND test_bonus_phase)
+set_tests_properties(bonus_phase PROPERTIES TIMEOUT 120)

@@ -150,8 +150,23 @@ void BonusScreen::AwardScores() {
 
 // Binary @ 0x00132930
 void BonusScreen::Update(float dt) {
-    // Advance phase timer unconditionally each frame.
-    m_PhaseTimer += dt;
+    // ASM-verified: 2026-05-18 binary @ 0x00132930 (re-analyst). Timer is owned by GameOverScreen, not BonusScreen.
+    // m_PhaseTimer is written by GameOverScreen::Update case-1 postlude: m_pBonusScreen->m_PhaseTimer = m_Timer;
+    // BonusScreen::Update only READS m_PhaseTimer; it must NOT advance it here.
+#ifndef __bada__
+    {
+        static int s_LogFrame = 0;
+        static int s_LogThrottle = 0;
+        if (s_LogThrottle == 0) {
+            printf("[BONUS_SCREEN] frame=%d phaseTimer=%.3f awards=%d\n",
+                s_LogFrame,
+                m_PhaseTimer,
+                (int)m_Awards.size());
+        }
+        s_LogFrame++;
+        s_LogThrottle = (s_LogThrottle + 1) % 60;
+    }
+#endif
 
     // -----------------------------------------------------------------------
     // Phase A: pre-show slide-in (timer < 0)
