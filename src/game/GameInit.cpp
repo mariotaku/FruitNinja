@@ -526,14 +526,18 @@ void GameDraw(float dt, bool active) {
     // by BeginFrame — binary never overrides it.
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
+#ifndef __bada__
     // Port specific: wireframe debug mode (F2). glPolygonMode is loaded
     // optionally by gl_funcs — stays nullptr on GLES, so the toggle is a
     // silent no-op there.
     const bool wireframe = FN::g_DebugWireframe && glPolygonMode != nullptr;
     if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+#endif
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
+#ifndef __bada__
     if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+#endif
 
     // === 2. HUD::BeginDraw + post-actor block ===
     // Binary @ 0x0016ba10 right after Mortar::ActorManager::Draw:
@@ -632,8 +636,10 @@ void GameDraw(float dt, bool active) {
         FN::DrawStartFade();
 
         // Debug overlay — fruit/bomb hitboxes + MenuButton AABBs (F1 toggle)
+#ifndef __bada__
         FN::DebugHitbox_Draw();
         FN::DebugMenuButton_Draw();
+#endif
 
         // HUD::Draw(0x400) — top layer @ 0x0016bd7c, ALWAYS fires
         // (binary places it OUTSIDE the `active` block).

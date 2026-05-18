@@ -165,7 +165,7 @@ set(VERIFY_SOURCES
 
     # Debug + platform-portable
     "${_PROJECT_ROOT}/src/debug/CrashHandler.cpp"
-    "${_PROJECT_ROOT}/src/debug/DebugFlags.cpp"
+    # DebugFlags.cpp is port-only (guarded by #ifndef __bada__); excluded from cross-build.
     "${_PROJECT_ROOT}/src/platform/InputManager.cpp"
 )
 
