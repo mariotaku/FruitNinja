@@ -91,6 +91,36 @@ Single live caller; the call resolves to a no-op with no side effects.
 | `Mortar::NetworkManager` | **safe to leave stubbed** — zero live callers; even `GetInstance()` is never invoked. The header documents binary addresses but no port code reaches it. |
 | `LeaderboardScreen` | **safe to leave stubbed** — single live call (`UnLoadContent` on shutdown) hits a no-op body. |
 
+## 5. Defunct UI Classes — Phantom Candidates
+
+RE confirmed 13 candidates are **phantoms** (only translation-unit init exists
+in binary; instance methods were dead-code-stripped in the original build).
+These have **no callable instance code** in the binary and thus no port
+obligation. Listed for completeness:
+
+- `AttractScreen`
+- `BladeScreen`
+- `LocalScoreEntryScreen`
+- `VSGameOverScreen`
+- `OptionsScreen`
+- `ChallengeScreenSL`
+- `ChallengeHistoryScreenSL`
+- `CreateChallengeScreenSL`
+- `BuyStarfruitScreen`
+- `OperatorAlertControl`
+- `CreditCounterControl`
+- `MultiplayerTutorialControl`
+- `ZenVersusControl`
+
+Two UI classes have real instance code and are **stubbed**:
+
+| Class | Port file | Binary size | Status |
+|-------|-----------|-------------|--------|
+| `UpsellScreen` | `src/screens/UpsellScreen.h` | 0x1EC | Defunct: purchase prompt UI (no IAP on port); ctor @ 0x00164814. Stub invokes `onDone` immediately so state machine advances. |
+| `KeyboardControl` | `src/hud/KeyboardControl.h` | 0xD4 | Defunct: Bada native on-screen keyboard. Port routes text input through SDL2 if ever needed. Ctor @ 0x0014649c. |
+
+Both carry source-side `// Defunct: ...` comments per project grammar.
+
 ## 4. Action Items
 
 None for online-services safety. All stubs are confirmed safe with respect
@@ -101,8 +131,8 @@ Optional follow-ups (NOT online-safety issues, separately tracked):
 - When achievement notification UI is ported, fill `UnlockAchievement`,
   `UnlockConsecutiveAchievement`, `UnlockTotalFruitAchievement` bodies and
   add the missing call sites in `Fruit::CollisionResponse`,
-  `WaveManager::GetNextWave`, and `GameOverScreen::Update` — track in
-  `docs/TODO.md` under achievements, not here.
+  `WaveManager::GetNextWave`, and `GameOverScreen::Update` — track as a
+  Claude task, not here.
 - `FruitFactControl::Update` currently does not invoke
   `LeaderboardManager::UpdateLeaderboard`; same fidelity-gap category.
 

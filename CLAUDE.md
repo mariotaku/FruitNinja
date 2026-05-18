@@ -120,14 +120,13 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
   - **Per-agent output captures**, `compile_failures.txt`, ad-hoc analysis dumps.
   - **Compile/build logs**, `tmp/symbol-diff/*`, `tmp/asm-verify/*` reports.
 
-  Do NOT commit these. The `docs/` tree is reserved for the small load-bearing reference docs (file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance, this CLAUDE.md, plus `docs/HANDOVER*.md` / `docs/TODO.md` / `docs/port-plan.md` which capture project-wide policy that survives across sessions). Anything else — drafts, working notes, gap-survey snapshots, dispatch-shape proposals — belongs in `tmp/`.
+  Do NOT commit these. The `docs/` tree is reserved for the small load-bearing reference docs (file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance, this CLAUDE.md, plus `docs/HANDOVER*.md` / `docs/port-plan.md` which capture project-wide policy that survives across sessions). Anything else — drafts, working notes, gap-survey snapshots, dispatch-shape proposals — belongs in `tmp/`. **RE backlog lives in Claude tasks (`TaskCreate`/`TaskList`), NOT in any `docs/` file.** The intentional-skip list lives in `docs/engine/online-services-audit.md`.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use plain ASCII substitutes (`->`, `--`, `'`, etc.). Comments inside source files can use Unicode freely; this is a runtime-output rule.
 
 ## Key Files
 
 The canonical RE record is in `src/`. The surviving `docs/` set is small and load-bearing only — things you cannot derive from code:
 
-- `docs/TODO.md` — project-wide RE backlog and intentional-skip lists.
 - `docs/HANDOVER.md`, `docs/HANDOVER-gameplay.md` — onboarding context.
 - `docs/port-plan.md` — high-level port intent.
 - `docs/resources.md` — asset directory layout, XML schemas, loading flow (data, not derivable from code).

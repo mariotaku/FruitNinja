@@ -189,9 +189,9 @@ Caveats:
 
 ## Key paths
 - Source: `src/engine/` (Mortar engine), `src/entities/` (game entities), `src/game/` (game-side managers + screens), `src/hud/` (HUD), `src/screens/` (screen classes).
-- Reference docs (small, load-bearing only): `docs/TODO.md`, `docs/HANDOVER*.md`, `docs/engine/` (formats, init order, coordinate system, online-services audit, build evidence), `docs/resources.md`.
+- Reference docs (small, load-bearing only): `docs/HANDOVER*.md`, `docs/engine/` (formats, init order, coordinate system, online-services audit, build evidence), `docs/resources.md`. Project-wide RE backlog lives in Claude tasks (`TaskList`), not in any docs/ file.
 
 ## Before writing code
 1. Read the relevant `src/` file(s) to understand current state, including any `// TODO:` / `// ASM-verified:` markers in or near the function.
 2. If a `// TODO:` cites a binary address, you can pull surrounding ASM from Ghidra (read-only — disassemble_function / decompile_function) to confirm the gap before closing it. Do not run new RE workflows; if the gap is wider than the comment indicates, return a gap list and ask for `re-analyst`.
-3. `docs/TODO.md` still lists project-wide RE backlog and the intentional-skip set — consult it for "is this in scope at all?" questions.
+3. For "is this in scope at all?" questions, consult Claude tasks (`TaskList`) for the active RE backlog, and `docs/engine/online-services-audit.md` for the intentional-skip set.

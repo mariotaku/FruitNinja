@@ -225,4 +225,4 @@ Read `tmp/symbol-diff/missing_organized.md` and present:
 
 ## Updating classification rules
 
-The `BADA / LIBRARY / DEFUNCT / PHANTOM / FALSE_POS` sets in step 3 should be kept in sync with `docs/engine/online-services-audit.md` and `docs/TODO.md` "Phantom" lists. When a new class is identified as defunct/Bada/phantom, add it to the relevant set so the report classifies it correctly.
+The `BADA / LIBRARY / DEFUNCT / PHANTOM / FALSE_POS` sets in step 3 should be kept in sync with `docs/engine/online-services-audit.md` (the authoritative skip-list, including the phantoms inventory in §5). When a new class is identified as defunct/Bada/phantom, add it to the relevant set so the report classifies it correctly.
