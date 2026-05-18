@@ -917,6 +917,14 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     }
     // TODO: Zen-mode-only save totals (first_fruit / last_fruit)
 
+    // Arcade-mode speed-loss-timer refresh — binary @ 0x00178cbc.
+    // Called before the score dispatch so SpeedControl HUD ticks correctly.
+    // DAT_00178cbc = 0.05f.
+    // ASM-verified: 2026-05-18 binary @ 0x00178cbc (re-analyst)
+    if (Game::GetInstance() && Game::GetInstance()->gameMode == Mortar::GAME_MODE_ARCADE) {
+        WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
+    }
+
     // Combo counter increment — binary @ 0x001787a8..0x001787b0.
     // ASM-verified: 2026-05-02 binary @ 0x00178708 reads m_PlayerIdx (+0x90).
     int slasher = (int)m_PlayerIdx;

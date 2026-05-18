@@ -1037,8 +1037,9 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         }
                     } else {
                         // Blitz already triggered; check for forced re-spawn.
-                        // DAT_0012558c=30.0f: blitz repeats every ~30s.
-                        float blitzBase = 30.0f;  // DAT_0012558c
+                        // DAT_0012558c=35.0f: blitz repeats every ~35s.
+                        // ASM-verified: 2026-05-18 binary @ 0x0012558c (re-analyst)
+                        float blitzBase = 35.0f;  // DAT_0012558c
                         float blitzComp = 0.20979f; // DAT_001255a0 (spawner timer compensation)
                         float threshold = field_0x240 - blitzBase + blitzComp * (float)field_0x5c;
                         if (threshold < countdown) {
@@ -1056,13 +1057,44 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 //   [0]: m_MaxAngle=0.0,  m_MinVel=-0.5, m_MaxVel= 0.5, m_SpawnType=1
                 //   [1]: m_MaxAngle=0.0,  m_MinVel=-1.0, m_MaxVel=-0.5, m_SpawnType=3
                 //   [2]: m_MaxAngle=0.75, m_MinVel=-1.0, m_MaxVel=-0.5, m_SpawnType=2
-                // TODO: k_BlitzSpawners field init requires designated initializer support
-                // (C++20) or constructor overloads. Currently initialised as defaults.
-                // Wire blitz-spawner selection when SPAWNER_INFO gains an init-from-constants ctor.
-                // Binary selects one of 3 static blitz-spawner templates (non-const pointer in binary).
-                static SPAWNER_INFO k_BlitzSpawners[3] = {
-                    SPAWNER_INFO(), SPAWNER_INFO(), SPAWNER_INFO()
-                };
+                // 3 static blitz-spawner templates (non-const pointer in binary).
+                // Binary values: all share TimeScale=0.75, Gravity=(0,-1.1,0), HorizMin=0.6660.
+                // ASM-verified: 2026-05-18 binary @ 0x00125390 (re-analyst)
+                static bool s_BlitzSpawnersInited = false;
+                static SPAWNER_INFO k_BlitzSpawners[3];
+                if (!s_BlitzSpawnersInited) {
+                    s_BlitzSpawnersInited = true;
+                    // [0]: SpawnType=BOTTOM_SLOW, MinVel=-0.5, MaxVel=0.5, MaxAngle=0.0
+                    k_BlitzSpawners[0].m_TimeScale  = 0.75f;
+                    k_BlitzSpawners[0].m_Gravity_x  = 0.0f;
+                    k_BlitzSpawners[0].m_Gravity_y  = -1.1f;
+                    k_BlitzSpawners[0].m_Gravity_z  = 0.0f;
+                    k_BlitzSpawners[0].m_HorizMin   = 0.6660f;
+                    k_BlitzSpawners[0].m_HorizMax   = 0.0f;
+                    k_BlitzSpawners[0].m_SpawnMin   = -0.5f;
+                    k_BlitzSpawners[0].m_SpawnMax   = 0.5f;
+                    k_BlitzSpawners[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
+                    // [1]: SpawnType=RIGHT, MinVel=-1.0, MaxVel=-0.5, MaxAngle=0.0
+                    k_BlitzSpawners[1].m_TimeScale  = 0.75f;
+                    k_BlitzSpawners[1].m_Gravity_x  = 0.0f;
+                    k_BlitzSpawners[1].m_Gravity_y  = -1.1f;
+                    k_BlitzSpawners[1].m_Gravity_z  = 0.0f;
+                    k_BlitzSpawners[1].m_HorizMin   = 0.6660f;
+                    k_BlitzSpawners[1].m_HorizMax   = 0.0f;
+                    k_BlitzSpawners[1].m_SpawnMin   = -1.0f;
+                    k_BlitzSpawners[1].m_SpawnMax   = -0.5f;
+                    k_BlitzSpawners[1].m_SpawnType  = PLACEMENT_RIGHT;
+                    // [2]: SpawnType=LEFT, MinVel=-1.0, MaxVel=-0.5, MaxAngle=0.75
+                    k_BlitzSpawners[2].m_TimeScale  = 0.75f;
+                    k_BlitzSpawners[2].m_Gravity_x  = 0.0f;
+                    k_BlitzSpawners[2].m_Gravity_y  = -1.1f;
+                    k_BlitzSpawners[2].m_Gravity_z  = 0.0f;
+                    k_BlitzSpawners[2].m_HorizMin   = 0.6660f;
+                    k_BlitzSpawners[2].m_HorizMax   = 0.75f;
+                    k_BlitzSpawners[2].m_SpawnMin   = -1.0f;
+                    k_BlitzSpawners[2].m_SpawnMax   = -0.5f;
+                    k_BlitzSpawners[2].m_SpawnType  = PLACEMENT_LEFT;
+                }
                 SPAWNER_INFO* blitzSpawner = (blitzAdvance && game->gameMode == Mortar::GAME_MODE_ARCADE)
                     ? &k_BlitzSpawners[m_Random.Rand32(3)]
                     : nullptr;

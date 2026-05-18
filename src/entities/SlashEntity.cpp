@@ -23,6 +23,8 @@
 #include "collision/ColSphere.h"
 #include "util/StringHash.h"
 #include "Game.h"
+#include "game/GameMode.h"
+#include "game/WaveManager.h"
 #include <cstring>
 #include <cmath>
 #include <cstdio>
@@ -161,8 +163,12 @@ SlashEntity::SlashEntity()
     , m_SwipeSoundTimer(0.0f)
     , m_RawTouchPos(0, 0, 0)
     , field_0x130(0)    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    , m_ComboTimer(0.0f)
+    , m_ComboCount(0)
+    , m_ComboEntityType(0)
     , m_SwipeEndEdge(0)
 {
+    for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
 }
 
 // Binary @ 0x17C774 — restore vtable, call Release, chain to Mortar::Entity::~Mortar::Entity.
@@ -806,14 +812,20 @@ void SlashEntity::Update(float dt) {
         PlaySwipe();
     }
 
-    // TODO: BonusManager::AddCombo(comboLen) hook (binary @ 0x0017de40).
-    // The Arcade-mode combo bonus AddToCurrentScore for blitz combos lives in
-    // WaveManager::BlitzBonus (coordination-locked; see WaveManager.cpp).
-    // Once WaveManager lock is lifted, wire:
-    //   if (game && game->gameMode == 2) {
-    //       BonusManager::GetInstance()->AddCombo(g_ComboCount);
-    //   }
-    // after each successful fruit slice (g_ComboCount >= 3 threshold).
+    // Per-swipe combo counter — binary SlashEntity::Update @ 0x0017de72.
+    // Ticks m_ComboTimer; fires AddSpeed when ComboCount > 2 in Arcade mode.
+    // ASM-verified: 2026-05-18 binary @ 0x0017de72 (re-analyst)
+    if (m_ComboTimer >= 0.0f) {
+        m_ComboTimer += dt;
+        if (m_ComboCount > 1 && m_ComboSliceArr[1] >= 0) {
+            if (m_ComboCount > 2 && game && game->gameMode == Mortar::GAME_MODE_ARCADE) {
+                WaveManager::GetInstance()->AddSpeed(
+                    (float)m_ComboCount / 3.0f, 0);
+                // TODO: 0x0017dde6 — AddToCurrentScore + combo-bonus VFX/SFX trailing block
+                // (binary @ 0x0017dde6..0x0017dec4; ~30 ARM instructions; RE needed).
+            }
+        }
+    }
 
     RebuildGeometry();
 }
@@ -1175,9 +1187,9 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     m_BaseColour      = white;
 
     // 6. Combo / ghost-ring init.
-    *(float*)((char*)this + 0x124) = 0.1f;   // per-swipe accumulator (DAT_0017c764)
-    *(int*)  ((char*)this + 0x128) = 0;
-    *(int*)  ((char*)this + 0x12c) = 0;
+    m_ComboTimer      = 0.1f;   // per-swipe accumulator (DAT_0017c764)
+    m_ComboCount      = 0;
+    m_ComboEntityType = 0;
     // m_GhostDir at +0x118 (Vec3): zero
     *(float*)((char*)this + 0x118) = 0.0f;
     *(float*)((char*)this + 0x11c) = 0.0f;
@@ -1200,19 +1212,19 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
         *(float*)((char*)this + 0xc8 + i * 12 + 8 ) = 0.0f;
     }
 
-    // 8. 11-entry int32 combo-slice array at +0x154, all set to -1.
+    // 8. 11-entry int32 combo-slice array, all set to -1.
     for (int i = 0; i < 11; ++i) {
-        *(int32_t*)((char*)this + 0x154 + i * 4) = -1;
+        m_ComboSliceArr[i] = -1;
     }
 
     // 9. Swipe-SFX cooldown timer (binary m_SwipeSoundTimer at +0xc4).
     m_SwipeSoundTimer = 0.0f;
 
-    // 10. Extra combo fields.
+    // 10. Extra combo fields (binary +0x14c, +0x150 within combo-slice array range).
     *(int*)((char*)this + 0x150) = -1;  // m_ExtraFieldB
     *(int*)((char*)this + 0x14c) = -1;  // m_ExtraFieldA
-    *(int*)((char*)this + 0x12c) = 0;
-    *(int*)((char*)this + 0x128) = 0;
+    m_ComboEntityType = 0;
+    m_ComboCount      = 0;
 
     // 11. Initial post-init swipe SFX cooldown at +0x148 = 6.0f.
     *(float*)((char*)this + 0x148) = 6.0f;
