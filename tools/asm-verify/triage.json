@@ -8979,5 +8979,12 @@
     "score": 20895,
     "max_score": 13700,
     "decided_at": "2026-05-18T00:00Z"
+  },
+  "_ZN11MissControl4DrawERK8_Vector3IfEi": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Blocked on MatrixManager::GetTintColour engine gap; binary @ 0x001520ec multiplies m_DrawColour by the HUD-layer tint via MatrixManager field +0x3c.field_0x20. Port renders with stored m_DrawColour only. Tint is a per-frame HUD visual, no gameplay impact. ACCEPT-cosmetic until engine-side tint stack lands.",
+    "score": 0,
+    "max_score": 0,
+    "decided_at": "2026-05-18T00:00Z"
   }
 }

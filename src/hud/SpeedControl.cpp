@@ -134,10 +134,11 @@ void SpeedControl::Update(float dt) {
     } else {
         if (!m_pSound) {
             m_SoundIdx = 0;
-            // TODO: bind SoundNeedsLooping callback once the Delegate1
-            // looping-cb plumbing is fleshed out; 2-arg SFXPlay is fine
-            // for one-shot kickoff.
-            m_pSound = gs->SFXPlay(kStreamSfx, m_SoundVolume, 1.0f);
+            Mortar::Delegate1<bool, Mortar::MortarSound*> loopCb =
+                Mortar::Delegate1<bool, Mortar::MortarSound*>::Make(
+                    this, &SpeedControl::SoundNeedsLooping);
+            // ASM-verified: 2026-05-18 binary @ 0x00160dc4 (re-analyst)
+            m_pSound = gs->SFXPlay(kStreamSfx, m_SoundVolume, 0.0f, loopCb);
         }
         if (m_pSound) {
             static_cast<Mortar::MortarSound*>(m_pSound)->SetVolume(m_SoundVolume);
@@ -191,7 +192,10 @@ bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     const char* const kStreamSfx = kSfxNames[m_SoundIdx];
     Game* g = Game::GetInstance();
     if (!g || !g->pGameSound) return false;
-    m_pSound = g->pGameSound->SFXPlay(kStreamSfx, 0.0f, 1.0f);
+    Mortar::Delegate1<bool, Mortar::MortarSound*> loopCb =
+        Mortar::Delegate1<bool, Mortar::MortarSound*>::Make(
+            this, &SpeedControl::SoundNeedsLooping);
+    m_pSound = g->pGameSound->SFXPlay(kStreamSfx, 0.0f, 0.0f, loopCb);
     if (m_pSound) {
         static_cast<Mortar::MortarSound*>(m_pSound)->SetVolume(0.0f);
     }

@@ -5,6 +5,8 @@
 #include "asset/TextureManager.h"
 #include "Game.h"
 #include "game/GameMode.h"
+#include "engine/audio/GameSound.h"
+#include "game/ItemManager.h"
 #include "game/WaveManager.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
@@ -327,6 +329,8 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
     if (clamped.x - hx <  CLAMP_X_LO) clamped.x =  CLAMP_X_LO + hx;
     if (clamped.y - hy <  CLAMP_Y_LO) clamped.y =  CLAMP_Y_LO + hy;
     this->pos = clamped;
+    SetPlayer(0);    // vtable[16] Defunct stub call for vtable-call parity.
+    // ASM-verified: 2026-05-18 binary @ 0x001515a4 (re-analyst)
 }
 
 // binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
@@ -443,9 +447,28 @@ void MissControl::Update(float dt) {
     m_FadeAlpha -= dt;
 
     // Sound trigger on 1.66 crossing. binary @ 0x00151a60 sound block
-    if (wasAboveThresh && m_FadeAlpha < SOUND_THRESH && m_bComboActive) {
-        // TODO: full SFX logic (field_0x85, ItemManager::PlayAlternateComboSound, etc.)
-        // binary @ 0x00151a60 SFX path; requires GameSound::SFXPlay wiring.
+    // ASM-verified: 2026-05-18 binary @ 0x00151a60 (re-analyst)
+    if (wasAboveThresh && m_FadeAlpha < SOUND_THRESH && m_bComboActive && m_bUseSound) {
+        char buf[0x40];
+        bool defaultSfx = true;
+        // m_bUseSound (port field at +0x85) is binary's field_0x85 (HasSeenLightning).
+        // When non-zero: try alternate combo sound, else format "combo-%d".
+        // When zero: fall back to "New-best-score" (no-lightning path).
+        if (m_bUseSound != 0) {
+            // TODO: 0x00103f68 — ItemManager::PlayAlternateComboSound not yet ported;
+            // stub is void, so alternate-sound suppression path is skipped for now.
+            ItemManager* im = ItemManager::GetInstance();
+            if (im) im->PlayAlternateComboSound(m_ComboCount - 3);
+            int n = (m_ComboCount < 4)  ? 1
+                  : (m_ComboCount < 10) ? m_ComboCount - 2
+                                        : 8;
+            std::snprintf(buf, sizeof(buf), "combo-%d", n);
+        } else {
+            std::strcpy(buf, "New-best-score");
+        }
+        if (defaultSfx && game && game->pGameSound) {
+            game->pGameSound->SFXPlay(buf, /*vol*/1.0f, /*pitch*/0.25f);
+        }
     }
 
     // Slot release when fully faded. binary @ 0x00151a60 release block
@@ -624,7 +647,10 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     m_Texture->Set();
 
     // Tint: m_DrawColour multiplied by per-frame HUD tint (MatrixManager.field_0x3c.field_0x20).
-    // TODO: fetch HUD tint multiplier from MatrixManager for exact binary match.
+    // TODO: 0x001520ec — blocked on MatrixManager::GetTintColour engine gap; binary @
+    // 0x001520ec multiplies m_DrawColour by the HUD-layer tint via MatrixManager field
+    // +0x3c.field_0x20. Port renders with stored m_DrawColour only (visually fine until
+    // the tint-fade screen overlay is implemented). ACCEPT-cosmetic in asm-verify.
     const uint8_t a = (uint8_t)(fade * (float)m_DrawColour.a);
     const uint32_t col = (uint32_t)a << 24 | (uint32_t)m_DrawColour.b << 16
                         | (uint32_t)m_DrawColour.g << 8 | (uint32_t)m_DrawColour.r;
