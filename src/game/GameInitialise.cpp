@@ -48,6 +48,7 @@
 #include "asset/FileSystem_Direct.h"
 #include "render/Font.h"
 #include "util/StringTable.h"
+#include "util/Localisation.h"
 #include "util/StringHash.h"
 #include <cstdio>
 #include <cstdlib>
@@ -197,10 +198,10 @@ void GameInitialise() {
     // Called after AchievementManager::LoadAchievementInfo (step 13).
 
     // Step 1 of InitialiseData (must run before any XML parser that calls
-    // GETSTRING_CAST_0_STR — i.e. before LoadItemData, LoadAchievementInfo,
+    // GETSTRING_CAST_0_STR -- i.e. before LoadItemData, LoadAchievementInfo,
     // etc.): load the localisation tables. Binary:
     //   StringTableUtilLoadStrings @ 0x0011fb20 -> LoadStringsTable(language)
-    Mortar::StringTable::Load(game->data_dir.c_str(), (int)game->languageFlag);
+    Localisation::Load(game->data_dir.c_str(), (int)game->languageFlag);
 
     ItemManager::GetInstance()->LoadItemData();
 
