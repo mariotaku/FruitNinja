@@ -31,9 +31,8 @@ void SetupGameWork() {
     // +0x18C: m_gameDataLicensedState = 0.
     app->m_gameDataLicensedState = 0;
 
-    // +0x1AC: field_0x1AC = 0.0f.
-    // TODO: add field at +0x1AC to Game.h; stub store omitted until field exists.
-    // Binary: *(float*)(g_GameData + 0x1AC) = 0.0f;
+    // +0x1AC: m_AchievementProgressTimer = 0.0f (binary @ 0x0010b522).
+    app->m_AchievementProgressTimer = 0.0f;
 
     // +0x01C: m_bUnsullied = 0.
     app->m_bUnsullied = 0;
@@ -67,23 +66,20 @@ void SetupGameWork() {
     // +0x164: pGameOverScreen = 0 (clear pointer).
     app->pGameOverScreen = nullptr;
 
-    // +0x16C: field_0x16C = 0.
-    // TODO: add field at +0x16C to Game.h; stub store omitted until field exists.
-    // Binary: *(int*)(g_GameData + 0x16C) = 0;
+    // +0x16C: field_0x16c = 0 (binary @ 0x0010b55c).
+    app->field_0x16c = 0;
 
     // +0x170: m_bMPRetryPending = 0 (strb, binary @ 0x0010b550).
     app->m_bMPRetryPending = 0;
 
-    // +0x198: field_0x198 = 0.
-    // TODO: add field at +0x198 to Game.h; stub store omitted until field exists.
-    // Binary: *(byte*)(g_GameData + 0x198) = 0;
+    // +0x198: field_0x198 = 0 (binary @ 0x0010b554).
+    app->field_0x198 = 0;
 
     // +0x199: field_0x199 = 0 (dead-code MP sync flag; binary @ 0x0010b53e).
     app->field_0x199 = 0;
 
-    // +0x19E: field_0x19E = 0.
-    // TODO: add field at +0x19E to Game.h; stub store omitted until field exists.
-    // Binary: *(byte*)(g_GameData + 0x19E) = 0;
+    // +0x19E: field_0x19e = 0 (binary @ 0x0010b558).
+    app->field_0x19e = 0;
 
     // +0x1A0: m_MenuReturnTimer = 0.0f.
     app->m_MenuReturnTimer = 0.0f;
@@ -91,7 +87,6 @@ void SetupGameWork() {
     // +0x1A8: flag_0x1a8 = 0.
     app->flag_0x1a8 = 0;
 
-    // +0x1B0: field_0x1B0 = 0.
-    // TODO: add field at +0x1B0 to Game.h; stub store omitted until field exists.
-    // Binary: *(int*)(g_GameData + 0x1B0) = 0;
+    // +0x1B0: field_0x1b0 = 0 (binary @ 0x0010b56e).
+    app->field_0x1b0 = 0;
 }
