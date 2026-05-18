@@ -5,6 +5,7 @@
 
 #include "BonusScreen.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
 #include "Game.h"
 #include "game/FruitCamera.h"
 #include "game/GameOver.h"
@@ -110,6 +111,10 @@ BonusScreen::BonusScreen()
       _padfield24(0)
 {
     m_Awards.reserve(3);
+
+    // Binary @ 0x0013211c: m_LayerFlags = 0x80 (HUD_LAYER_POST_ACTOR).
+    // ASM-verified: 2026-05-18 binary @ 0x0013211c (re-analyst)
+    m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     // Load background texture into m_SecondaryTex.
     // TODO: resolve exact texture name from binary literal pool 0x00132210

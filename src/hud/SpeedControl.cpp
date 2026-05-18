@@ -35,6 +35,9 @@ SpeedControl::SpeedControl()
     int texW = 0, texH = 0;
     Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture("loading.tex");
     if (tex.IsValid()) {
+        // TODO: SpeedControl draw audit — binary @ 0x0016133c may write m_SecondaryTex
+        // rather than m_Texture. HUDControl3d::Draw base now reads m_SecondaryTex (+0x78).
+        // SpeedControl has no Draw override; if binary ctor stores here, this must change.
         m_Texture = tex;
         texW = tex->m_Width;
         texH = tex->m_Height;
