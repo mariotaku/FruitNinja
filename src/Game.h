@@ -207,6 +207,13 @@ struct Game : public Mortar::MortarGame {
     uint8_t m_bGameOverActive;     // +0x190 -- cleared by GameOverScreen::Update case 0xe
     // +0x191..+0x193: padding (binary leaves 3 bytes here; port matches)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
+    uint8_t _pad_0x198;            // +0x198: alignment padding
+    // +0x199: pause-suppress latch read by TimeControl::Update pause gate
+    // (binary @ 0x0016250a: ldrb r3,[r4,#0x199]; cmp r3,#0).
+    // Writer site not yet RE'd; read by TimeControl::Update as !field_0x199
+    // to suppress timer tick while true.
+    // TODO: 0x00162504 — writer site for field_0x199 not yet RE'd
+    uint8_t field_0x199;           // +0x199
     // +0x19a..+0x19d: 4 single-byte clear-on-quit flags. Cleared by
     // PauseScreen::QuitToMenu (binary @ 0x00169eae-be). Reader sites not
     // yet RE'd -- the binary writes 0 but no non-zero writer or read site

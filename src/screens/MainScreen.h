@@ -237,6 +237,12 @@ public:
     // Binary @ 0x0014AC98 — no-op event hook (empty in binary; superseded by ButtonDeleted).
     // Called by MenuButton::Update after FN::ClearMenuItems.
     void OnMenuItemsCleared();
+
+    // +0x10c (binary): HUD-side timer mirror written by TimeControl::Update every frame.
+    // Written -1.0f on non-timed modes (binary @ 0x001624f6), written m_TimeRemaining
+    // each timed frame (binary @ 0x00162830). Used during camera transition / game resume.
+    // ASM-verified: 2026-05-18 binary @ 0x001624f6 / 0x00162830 (re-analyst)
+    float m_TimeRemainingDisplay;
 private:
 
     // Touch handling removed in the touch rewrite. MenuButton::Update now
