@@ -26,7 +26,9 @@ static const float POWERUP_Y_OFFSET = 32.0f;
 // DAT_001628c4 = 60.0 (seconds-per-minute)
 static const float SECS_PER_MIN = 60.0f;
 
-// TODO: full IsMultiplayer (binary @ 0x000f6e04 thunk) when split-screen MP is ported.
+// ASM-verified: 2026-05-18 binary @ 0x000f6e04 (re-analyst)
+// Binary IsMultiplayer() thunk -> impl @ 0x0010a470: unconditionally returns false.
+// Same-screen MP exists as code structure but is gated off in the shipping build.
 static inline bool IsMultiplayer() { return false; }
 
 TimeControl::TimeControl() {

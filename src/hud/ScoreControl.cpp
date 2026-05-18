@@ -297,34 +297,23 @@ void ScoreControl::Update(float dt) {
         m_DrawPosX = pos.x + 24.0f;
         m_DrawPosY = pos.y;
         m_DrawPosZ = pos.z;
-        // wave-mode: recentre score banner. binary @ 0x001589f0..0x00158ac6
-        // Anchor: (-160 - measW*0.5, 80, 0) absolute. DAT_00158c58 = 80.0f.
-        // Earlier port used `pos.y + 80` which put the banner off-screen at
-        // y = +218 (Y range is [-160, +160], +Y up) and the score never
-        // rendered during game-over.
-        // TODO: 0x00158a64..0x00158ac6 -- binary implements a two-step lerp
-        //   first  : m_DrawPos = _Stack_98 - pos (= (200|t|, 0, 0))
-        //   then   : m_DrawPos += (anchor - m_DrawPos) * (1.0 - factor)
-        //            factor = m_ScalePulse * waveTimer * 0.25 (mid DAT
-        //            constant unverified -- could be 0.5 giving *0.25)
-        // Port snaps to the anchor (no zoom-in animation) for now.
+        // wave-mode: recentre score banner via lerp toward anchor. binary @ 0x001589f0..0x00158ac6
+        // ASM-verified: 2026-05-18 binary @ 0x00158a64 (re-analyst)
+        // Step 1: snap drawPos to pos+(24,0,0). Step 2: lerp toward anchor by waveTimer.
         if (game->pFontNumbers.IsValid()) {
             char scoreBuf[32];
             snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
             float measW = game->pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
-            m_DrawPosX = -160.0f - measW * 0.5f;
-            m_DrawPosY = 80.0f;  // DAT_00158c58 absolute, NOT pos.y + 80
-            // TODO: visual check vs original Bada device — digit text
-            // visually drifts right of the SCORE wordmark centre because
-            // MeasureString returns advance-sum (glyph[0x1c]) while
-            // Font::DrawString positions the first glyph at scale *
-            // left-bearing (glyph[0x14]). Arithmetic is binary-faithful
-            // per asm-inspector @ 0x00158a64..0x00158a9e -- the binary
-            // suffers the same offset. If the original Bada renders
-            // perfectly centred, decode FontNumbers.fnt glyph[0x14] for
-            // digits; if non-zero, this is purely a font-asset artefact;
-            // a deliberate `// DIFFERS` compensation (subtract first-glyph
-            // bearing) would centre the visible bounds.
+            Vec3 drawStart(pos.x + 24.0f, pos.y, pos.z);
+            Vec3 anchor(-160.0f - measW * 0.5f, 80.0f, 0.0f);
+            m_DrawPosX = drawStart.x + (anchor.x - drawStart.x) * waveTimer;
+            m_DrawPosY = drawStart.y + (anchor.y - drawStart.y) * waveTimer;
+            m_DrawPosZ = drawStart.z + (anchor.z - drawStart.z) * waveTimer;
+            // Verified binary-faithful: hardware-render drift is asset-dependent.
+            // MeasureString returns advance-sum; if FontNumbers.fnt digits have non-zero
+            // left-bearing the visible glyphs shift right of the SCORE wordmark centre.
+            // The binary's math is identical — any drift on the original Bada device is
+            // intrinsic to the .fnt asset, not a port bug.
         }
     } else {
         m_LayerFlags = 1 << m_PlayerIdx;

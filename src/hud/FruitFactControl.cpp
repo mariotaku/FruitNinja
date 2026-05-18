@@ -645,7 +645,11 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                         Vec3(rowPos.x + 193.0f, rowPos.y, 0.0f),
                         col, 0x0F);
                     if (bonus->m_StarTexture.IsValid()) {
-                        // TODO: 0x0013c5xx -- icon quad scale Vec3(W*0.5, ...). Stub: skip.
+                        // TODO: 0x0013b95c -- star-icon scale constant not yet located.
+                        // re-analyst: search FruitFactControl::DrawOrder @ 0x0013b95c for
+                        // the m_StarTexture (+0x44 in Bonus struct) block; find the Scale44
+                        // call preceding DrawQuad and read the DAT_0013Cxxx constant.
+                        // Likely Vec3(W*0.5, H*0.5, 1.0) per iOS port pattern but unverified.
                     }
                     rowPos.y -= 20.0f;
                     bonus = bm->GetNextBestBonus(it);

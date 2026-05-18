@@ -665,17 +665,18 @@ void ShopListItem::Draw() {
 
                 float descFontSize = 18.0f;
 
-                // Font shrink loop: while height > 82.5f (DAT_0015f524), reduce by 0.25f
-                // Binary: Font::GetStringHeight(font, descBuf, descFontSize, 160.0f)
-                // Port: Font::GetStringHeight is available; wire if the method exists.
-                // DIFFERS: Font::GetStringHeight not confirmed on port Font class; stubbed.
-                // TODO: Replace with font->GetStringHeight(descStr, descFontSize, 160.0f) > 82.5f
-                // when the method is verified.
-                (void)descFontSize;  // suppress unused-variable warning until loop is wired
-                descFontSize = 18.0f;
-                // Stub: loop would be:
-                //   float h = font->GetStringHeight(descStr, descFontSize, 160.0f);
-                //   while (h > 82.5f) { descFontSize -= 0.25f; h = font->GetStringHeight(...); }
+                // ASM-verified: 2026-05-18 binary @ 0x0015eb00 (re-analyst)
+                // Shrink font until wrapped height fits within 82.5f (DAT_0015f524).
+                // maxWidth = 160.0f (DAT_0015f540).
+                if (font) {
+                    Mortar::Utf8StringIterator iterH(descStr);
+                    float h = font->GetStringHeight(iterH, descFontSize, 160.0f);
+                    while (h > 82.5f) {
+                        descFontSize -= 0.25f;
+                        iterH = Mortar::Utf8StringIterator(descStr);
+                        h = font->GetStringHeight(iterH, descFontSize, 160.0f);
+                    }
+                }
 
                 float xPos = 65.0f;  // fallback
                 if (m_pShopScreen) {

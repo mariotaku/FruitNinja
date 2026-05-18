@@ -29,9 +29,11 @@ SpeedControl::SpeedControl()
     m_bUseHUDScales = 0;
 
     // Load localised speed gauge texture.
-    // TODO: resolve DAT_00161440 string-table key — using "speed_control" as placeholder.
+    // ASM-verified: 2026-05-18 binary @ 0x0016133c (re-analyst)
+    // Binary loads literal "loading.tex". At runtime TextureManager::LoadLocalisedTexture
+    // may remap this to the actual combo-blitz asset via the localisation table.
     int texW = 0, texH = 0;
-    Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture("speed_control.tex");
+    Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture("loading.tex");
     if (tex.IsValid()) {
         m_Texture = tex;
         texW = tex->m_Width;
@@ -173,17 +175,20 @@ void SpeedControl::Skip() {}
 bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     if (m_pSound != finished) return false;   // not our loop -- ignore
 
-    // After 6+ waves use the "heavy" stream variant. WaveManager+0x5c.
-    // TODO: confirm exact field name when WaveManager wave count is RE'd;
-    // current name guess from re-analyst pass.
+    // ASM-verified: 2026-05-18 binary @ 0x00160ce8 (re-analyst)
+    // After 6+ waves (WaveManager+0x5C), swap to the heavier stream variant.
     WaveManager* wm = WaveManager::GetInstance();
-    if (wm && wm->m_WaveCount[0] > 5) {
+    if (wm && wm->field_0x5c > 5) {
         m_SoundIdx = 1;
     }
 
-    // TODO: confirm second SFX name ("Combo-Blitz-Backing-Heavy"?) from
-    // .rodata GOT[0x00160dac][1]. Until then, single-variant restart.
-    static const char* const kStreamSfx = "Combo-Blitz-Backing-Light";
+    // Second SFX name confirmed from .rodata GOT[0x00160dac][1].
+    // ASM-verified: 2026-05-18 binary @ 0x00160ce8 (re-analyst)
+    static const char* const kSfxNames[2] = {
+        "Combo-Blitz-Backing-Light",
+        "Combo-Blitz-Backing"
+    };
+    const char* const kStreamSfx = kSfxNames[m_SoundIdx];
     Game* g = Game::GetInstance();
     if (!g || !g->pGameSound) return false;
     m_pSound = g->pGameSound->SFXPlay(kStreamSfx, 0.0f, 1.0f);
