@@ -12,6 +12,9 @@
 #include "engine/audio/SoundManager.h"
 #include "engine/audio/GameSound.h"
 #include "game/WaveManager.h"
+#include "engine/asset/FileManager.h"
+#include "engine/asset/FileSystem_Direct.h"
+#include "screens/PauseScreen.h"
 #include <cstdio>
 #include <cstring>
 // SDL-bound bits (init / run / runFrames) live in GameSDL.cpp.
@@ -88,7 +91,13 @@ const char* Game::GetPlayhavenToken() { return "FIX!"; }
 // slot 9 @ 0x0010dca8 — sets up FileSystem_Direct; args unused (root path from rodata)
 void Game::CreateFileSystems(const char* a, const char* b) {
     (void)a; (void)b;
-    // TODO: 0x0010dca8 — FileSystem_Direct construction not yet ported
+    // Binary @ 0x0010dca8: instantiate FileSystem_Direct(0x14 bytes),
+    // call Initialise(g_DataRoot, /*writable*/false), register with
+    // FileManager::AddSystem(fs, 0, 0). Port resolves data root via cwd
+    // (empty string -> SDL backend cwd handling), matching binary intent.
+    Mortar::FileSystem_Direct* fs = new Mortar::FileSystem_Direct();
+    fs->Initialise(/*root*/ "", /*writable*/ false);
+    FileManager::GetInstance().AddSystem(fs, 0, 0);
 }
 
 // slot 10 @ 0x0010dc80 — sets HUD multiplayer state, resets WaveManager
@@ -127,8 +136,8 @@ Mortar::MortarGame* Game::End() {
 
 // slot 15 @ 0x0010db34 — pause: reset input, pause sound, HUD::OnPause, save
 void Game::Paused() {
-    // TODO: 0x0010db34 — LoadingJob::CanBoot() guard not yet ported
-    // Port specific: InputManager::ResetDevices() not yet ported; skipped.
+    // Port specific: LoadingJob::CanBoot() always-true on Bada (no
+    // async loading screen). InputManager::ResetDevices() not yet ported.
     if (pGameSound) {
         pGameSound->Pause();
     }
@@ -136,18 +145,29 @@ void Game::Paused() {
     if (hud) {
         hud->OnPause();
     }
-    // Port specific: SkipToPause(false) not yet declared; skipped.
-    GameTaskExit();  // Port specific: GameTaskSaveOnExit not yet declared; GameTaskExit used as placeholder.
+    // Port specific: SkipToPause(false) free fn not yet ported (see
+    // WaveManager.cpp stub @ binary 0x00169c48). Save path uses the
+    // partial GameTaskExit until GameTaskSaveOnExit @ 0x0016cf40 lands
+    // -- TODO: replace with GameTaskSaveOnExit(); when that ports
+    // (binary body: gs->field_0x190=1; if (!GetIsSavingBool() && hud)
+    // { hud->Save(); SaveCurrentData(true); }).
+    GameTaskExit();
 }
 
 // slot 16 @ 0x0010dae8 — resume: end interruption, unpause sound, unpause game
 void Game::UnPaused() {
-    // TODO: 0x0010dae8 — LoadingJob::CanBoot() guard not yet ported
+    // Port specific: LoadingJob::CanBoot() always-true on Bada (no
+    // async loading screen). Skipped -- no port equivalent needed.
     if (pGameSound) {
         Mortar::SoundManager::GetInstance().EndInterruption();
         pGameSound->Unpause();
     }
-    // TODO: 0x0010dae8 — UnpauseGame() conditioned on m_TransitionTimer != 0.0f
+    // Binary @ 0x0010dae8: gate UnpauseGame on m_TransitionTimer != 0.0f
+    // (the camera transition isn't mid-fade). PauseScreen::UnpauseGame
+    // sets gs->m_TransitionTimer=0.4f, gs->pausedFlag=1.
+    if (m_TransitionTimer != 0.0f) {
+        PauseScreen::UnpauseGame();
+    }
 }
 
 // slot 17 @ 0x0010d9ec
@@ -155,7 +175,13 @@ const char* Game::SelfVersion() { return "1.5.1"; }
 
 // slot 18 @ 0x0010dae0 — tail call to GameTaskSaveOnExit
 void Game::SaveOnExit() {
-    // TODO: 0x0010dae0 — GameTaskSaveOnExit not yet declared; using GameTaskExit as placeholder
+    // TODO: replace with GameTaskSaveOnExit() (binary @ 0x0016cf40) once
+    // ported. Binary body: gs->field_0x190 = 1 (save-pending flag); if
+    // (!GetIsSavingBool() && hud) { HUD::Save(); SaveCurrentData(true); }
+    // Using GameTaskExit as placeholder -- this tears down resources on a
+    // save-exit transition where binary keeps them; mostly OK for the
+    // app's full-exit path but wrong if SaveOnExit is invoked from a
+    // resumeable suspend. Re-verify usage when GameTaskSaveOnExit lands.
     GameTaskExit();
 }
 
