@@ -205,6 +205,9 @@ struct Game : public Mortar::MortarGame {
     GameOverScreen* pGameOverScreen;  // +0x164
     class TutorialControl* pTutorialCtrl;  // +0x168
     // +0x16C: cleared by SetupGameWork (binary @ 0x0010b55c). Reader not yet RE'd.
+    // NOTE: this is a separate Game struct field unrelated to
+    // FruitSaveData::m_PendingUnlocks._M_node_count which also sits at
+    // FruitSaveData+0x16C. Do not conflate.
     int field_0x16c;               // +0x16C
     int fruitTotal;                // +0x174: last AddToTotal result
     class CoinCounter* pCoinCounter; // +0x178: step 5 in GameInit

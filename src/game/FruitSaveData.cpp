@@ -209,19 +209,18 @@ void FruitSaveData::UnlockTotals() {
 }
 
 // Binary @ 0x0012b38c. Queue an achievement unlock. Skip if already pending or unlocked.
-// field_0x16c: when non-zero the popup display is staggered (3.0f delay); otherwise
-// the timer fires on the next Update tick (0.0f). field_0x16c writer not yet RE'd;
-// port always uses 0 (immediate fire, which is the binary's most common path).
-// TODO: 0x0012b38c -- field_0x16c writer not yet RE'd; gate needs re-analyst pass
-//   to identify what sets it. For now always 0.0f (immediate, same as field_0x16c==0).
+// Stagger semantics: if any popup is still in the queue, delay the new one by 3.0s
+// so popups don't stomp each other; otherwise fire on the next Update tick (0.0f).
 // ASM-verified: 2026-05-18 binary @ 0x0012b38c (re-analyst)
+//   ldr.w r3,[this,#0x16c]  -> m_PendingUnlocks._M_node_count (std::map
+//   stores its cached size at base+0x14; map base = +0x158).
 int FruitSaveData::AddToQue(const char* name, uint32_t hash) {
     if (IsAchievementUnlocked(hash) != 0) return 0;
+    float timer = m_PendingUnlocks.empty() ? 0.0f : 3.0f;
     AchievementItem& slot = m_PendingUnlocks[hash];
     strncpy(slot.m_Name, name, sizeof(slot.m_Name) - 1);
     slot.m_Name[sizeof(slot.m_Name) - 1] = '\0';
-    // field_0x16c == 0 in port (writer not RE'd); binary: timer = field_0x16c ? 3.0f : 0.0f
-    slot.m_Timer = 0.0f;
+    slot.m_Timer = timer;
     return 1;
 }
 
