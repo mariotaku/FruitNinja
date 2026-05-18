@@ -204,6 +204,7 @@ int main(int /*argc*/, char* /*argv*/[])
     gos->m_Timer = -0.333f;  // match state-0 -> state-1 initial timer (DAT_00141db0)
     game.pGameOverScreen = gos;
     game.hud->AddControl(gos);
+    game.levelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
 
     printf("[bonus_phase] GameOverScreen created in STATE_BONUS_PHASE (%d)\n",
            GameOverScreen::STATE_BONUS_PHASE);
@@ -310,10 +311,9 @@ int main(int /*argc*/, char* /*argv*/[])
         // tick of STATE_MAIN_DISPLAY (prevState == 6 gate in RunStateMainDisplay).
         printf("[bonus_phase] Settling for %d frames in MAIN_DISPLAY...\n", SETTLE_FRAMES);
         for (int i = 0; i < SETTLE_FRAMES; ++i) {
-            // Do NOT drain entities here: MenuButton::Init spawns a fruit entity
-            // (type 0). If DeactivateAllEntities(0) fires after the button is
-            // created, the entity dies, MenuButton self-removes, DeletedControl
-            // fires and nulls m_pRetryBtn/m_pQuitBtn.
+            // Do NOT drain entities: MenuButton::Init spawns a fruit entity
+            // (type 0). DeactivateAllEntities(0) would kill it, triggering
+            // DeletedControl and nulling m_pRetryBtn/m_pQuitBtn.
             TickFrame(game, /*drainEntities=*/false);
             // If state drifted out of MAIN_DISPLAY during settle, stop.
             if (gos->m_State != GameOverScreen::STATE_MAIN_DISPLAY) {
@@ -387,6 +387,7 @@ int main(int /*argc*/, char* /*argv*/[])
             /*starCount=*/0);
         game.pGameOverScreen = gos2;
         game.hud->AddControl(gos2);
+        game.levelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
 
         // Settle to create the quit button (no entity drain -- same reason as above).
         printf("[bonus_phase]   settling %d frames for gos2 buttons...\n", SETTLE_FRAMES);
