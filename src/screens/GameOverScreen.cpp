@@ -753,7 +753,9 @@ void GameOverScreen::RetryCallback() {
     if (!game) return;
     if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
         m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
+    // ASM-verified: 2026-05-18 binary @ 0x0014105c (re-analyst). STATE_BONUS_PHASE intentionally excluded -- binary silent-absorbs taps during the bonus animation; the real "tap doesn't work" symptom is BONUS_PHASE stalling, tracked separately.
     if (game->m_TransitionTimer <= 0.989945f) return;
+    // ASM-verified: 2026-05-18 binary @ 0x0014105c (re-analyst). m_TransitionTimer > 0.989945f gate matches DAT_00141158; floating-point literal reproduced exactly from binary rodata.
     CancelHUDProgressionTimer();
     // Binary @ 0x001410a8..0x001410d2: inlined SeedGlobalRng equivalent --
     // same 6-word PRNG reseed that PauseScreen::RetryGameCallback bl's at
@@ -861,6 +863,7 @@ void GameOverScreen::QuitCallback() {
     if (!game) return;
     if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
         m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
+    // ASM-verified: 2026-05-18 binary @ 0x00140620 (re-analyst). STATE_BONUS_PHASE intentionally excluded -- binary silent-absorbs taps during the bonus animation; the real "tap doesn't work" symptom is BONUS_PHASE stalling, tracked separately.
     CancelHUDProgressionTimer();
     m_State = STATE_QUIT_WAIT;
     // Binary @ 0x001410d6: FruitSaveData::ClearCombo
