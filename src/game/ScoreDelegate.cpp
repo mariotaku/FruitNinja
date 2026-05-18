@@ -32,6 +32,6 @@ void SetDefaultScoreDelegate() {
 }
 
 static int TrampolineCall(int n) {
-    if (s_activeMod) return (*s_activeMod)(n);
+    if (s_activeMod) return s_activeMod->DeferPoints(n);
     return n;
 }

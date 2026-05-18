@@ -40,8 +40,8 @@ public:
     bool m_bDeferPoints;
     uint8_t _pad35[3];
 
-    // +0x38: pad
-    uint32_t field_0x38;
+    // +0x38: running accumulator — incremented by DeferPoints each call
+    int m_DeferredScore;
 
     ScoreModifier();
 
@@ -65,28 +65,8 @@ public:
     // @ 0x0011cc6c
     GameModifier* Clone() override;
 
-    // Callee<ScoreModifier> callable — invoked by score delegate trampoline
-    // when m_bDeferPoints is active.
-    // TODO: implement operator() body (binary addr TBD — RE needed)
-    int operator()(int n);
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ScoreModifier::DeferPoints -- auto stub from binary missing-symbol set
-    void DeferPoints(int);
-    // ---- end AUTO-STUB MERGE ----
+    // @ 0x0011cb58 — score delegate target when m_bDeferPoints is active
+    int DeferPoints(int points);
 };
 
 #endif // FN_GAME_SCORE_MODIFIER_H

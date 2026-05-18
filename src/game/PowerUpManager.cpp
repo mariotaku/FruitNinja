@@ -4,6 +4,8 @@
 #include "GameMode.h"
 #include "PowerUp.h"
 #include "GameModifier.h"
+#include "ScoreModifier.h"
+#include "ScoreDelegate.h"
 #include "Game.h"
 #include "GameOver.h"
 #include "entities/SlashEntity.h"
@@ -555,9 +557,25 @@ PowerUp* PowerUpManager::GetNextPurchasable(std::list<PowerUp*>::iterator& it) {
     return byHash->second;
 }
 
-// @ 0x00118c14
-// TODO: 0x00118c14 — needs ScoreModifier::m_pCustomCallback + OnScore
-void PowerUpManager::SetAppropriateScoreCallback() {}
+// ASM-verified: 2026-05-18 binary @ 0x00118c14 (re-analyst)
+void PowerUpManager::SetAppropriateScoreCallback() {
+    for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
+         it != m_ActivePowerUps.end(); ++it) {
+        PowerUp* p = *it;
+        for (std::list<GameModifier*>::iterator mit = p->m_ModList.begin();
+             mit != p->m_ModList.end(); ++mit) {
+            GameModifier* mod = *mit;
+            if (mod->GetType() == 2) {
+                ScoreModifier* sm = static_cast<ScoreModifier*>(mod);
+                if (sm->m_bDeferPoints) {
+                    SetScoreDelegate(sm);
+                    return;
+                }
+            }
+        }
+    }
+    SetDefaultScoreDelegate();
+}
 
 // @ 0x0011836c — walk m_AllPowerUps and m_ScreenEffectPool, call UnloadTextures
 // ASM-verified: 2026-05-18 binary @ 0x0011836c (re-analyst)
