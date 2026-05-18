@@ -195,6 +195,8 @@ struct Game : public Mortar::MortarGame {
     MainScreen* mainScreen;        // +0x160: pMainScreen
     GameOverScreen* pGameOverScreen;  // +0x164
     class TutorialControl* pTutorialCtrl;  // +0x168
+    // +0x16C: cleared by SetupGameWork (binary @ 0x0010b55c). Reader not yet RE'd.
+    int field_0x16c;               // +0x16C
     int fruitTotal;                // +0x174: last AddToTotal result
     class CoinCounter* pCoinCounter; // +0x178: step 5 in GameInit
     TimeControl* pTimeCtrl;        // +0x180
@@ -207,7 +209,8 @@ struct Game : public Mortar::MortarGame {
     uint8_t m_bGameOverActive;     // +0x190 -- cleared by GameOverScreen::Update case 0xe
     // +0x191..+0x193: padding (binary leaves 3 bytes here; port matches)
     int m_FrameTimer;              // +0x194: (int)(dt * scale) + prev
-    uint8_t _pad_0x198;            // +0x198: alignment padding
+    // +0x198: cleared by SetupGameWork (binary @ 0x0010b554). Reader not yet RE'd.
+    uint8_t field_0x198;           // +0x198
     // +0x199: pause-suppress latch read by TimeControl::Update pause gate
     // (binary @ 0x0016250a: ldrb r3,[r4,#0x199]; cmp r3,#0).
     // Dead-code member: 3 clear-to-zero writers in binary (SetupGameWork @ 0x0010b53e,
@@ -223,6 +226,8 @@ struct Game : public Mortar::MortarGame {
     uint8_t field_0x19b;           // +0x19B
     uint8_t field_0x19c;           // +0x19C
     uint8_t field_0x19d;           // +0x19D
+    // +0x19E: cleared by SetupGameWork (binary @ 0x0010b558). Reader not yet RE'd.
+    uint8_t field_0x19e;           // +0x19E
     // +0x170: online-MP retry handshake "waiting for peer to ack rematch start" flag. Set=1 only by RetryOnlineMultiplayerGame @ 0x00169488. Cleared by SetupGameWork, QuitToMenu, HandleDisconnection. Defunct in port. Was field_0x170 (unnamed).
     // Defunct: online-MP retry handshake -- set by RetryOnlineMultiplayerGame (binary @ 0x00169488),
     //          cleared by QuitToMenu / HandleDisconnection / SetupGameWork. TimeControl pause
@@ -231,6 +236,8 @@ struct Game : public Mortar::MortarGame {
     uint8_t m_bMPRetryPending;     // +0x170
     float m_MenuReturnTimer;       // +0x1A0
     uint8_t flag_0x1a8;            // +0x1A8
+    // +0x1B0: cleared by SetupGameWork (binary @ 0x0010b56e). Reader not yet RE'd.
+    uint8_t field_0x1b0;           // +0x1B0
     uint8_t m_bFrameDirty;         // +0x604
 
     // +0xF4: splash logo texture (HB_logo.tex), loaded on demand in GameUpdate.
