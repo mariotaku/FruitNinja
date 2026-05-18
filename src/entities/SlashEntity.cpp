@@ -160,6 +160,8 @@ SlashEntity::SlashEntity()
     , m_FingerId(0)
     , m_SwipeSoundTimer(0.0f)
     , m_RawTouchPos(0, 0, 0)
+    , field_0x130(0)    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    , m_SwipeEndEdge(0)
 {
 }
 
@@ -358,9 +360,11 @@ float SlashEntity::GetHeadThicknessScale() const {
     return 1.0f;
 }
 
-// Binary @ 0x17B82C — push next ghost slot in 8-entry ring, snapshot
-// blade vertex strips for fade-out replay.
+// Binary @ 0x17B82C — push next slot in global SlashEntityGhost effect ring (8 slots,
+// DAT_0017b878 base+0x3c, wrap mask 0x80000007), snapshot blade vertex strips for
+// fade-out replay. Distinct from the per-entity ghost-direction ring (6 slots at +0xc8).
 // Port specific: SlashEntityGhost ring (s_Ghosts[8], s_GhostHead) not yet ported. No-op stub.
+// ASM-verified: 2026-05-18 binary @ 0x0017B82C (re-analyst)
 void SlashEntity::CreateGhost() {
 }
 
@@ -1096,12 +1100,25 @@ int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*m
 // NOT from ActorManager::Draw (which hits the BX lr Draw stub instead).
 // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
 //
-// Known gaps (deferred, both block on ghost-ring port):
-//   TODO: 0x0017E424 -- field_0x144 swipe-just-ended edge detector +
-//     CreateGhost + g_ContactHash contact-emitter spawn at swipe end.
+// m_SwipeEndEdge is a 2-bit shift-register fuse: writer (touch-up handler,
+// outside SlashEntity) sets bit0; each DrawSlice call shifts left and fires
+// CreateGhost + contact-burst emitter on the frame when the last bit falls off.
+// TODO: 0x???????? -- touch-up writer for m_SwipeEndEdge bit 0
 // DIFFERS: binary gate is m_NumPoints > 3; port uses >= 2 to render
 //   single-tap micro-trails (cosmetic only).
 void SlashEntity::DrawSlice() {
+    // 2-frame fuse: shift register fires burst exactly 2 DrawSlice frames
+    // after touch-up writer set bit0. Matches binary @ 0x0017E424.
+    // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
+    {
+        uint8_t prev = m_SwipeEndEdge;
+        m_SwipeEndEdge = (prev << 1) & 0x02;
+        if (prev != 0 && m_SwipeEndEdge == 0) {
+            if (g_ScaleFlag1) CreateGhost();
+            // TODO: 0x0017E424 -- contact-burst emitter spawn at this->pos
+        }
+    }
+
     if (m_NumPoints < 2) return;
     if (!m_pLeftBuffer || !m_pRightBuffer) return;
 
@@ -1172,9 +1189,11 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     *(int*)    ((char*)this + 0x114) = 0;  // m_GhostCount
     *(int*)    ((char*)this + 0x110) = 0;  // m_GhostIndex
 
-    // 7. 6-slot Vec3 ghost-direction ring at +0xc8 (6 entries, stride 12).
-    // TODO: 0x0017C65C -- ghost ring consumer uses 8 slots (mod 8 in AddPoint)
-    //   but Init only zeros 6. Follow-up RE on CreateGhost @ 0x17B82C to confirm.
+    // 7. Per-entity ghost-direction average ring: 6 slots (Vec3[6] at +0xc8, stride 12).
+    // This is distinct from the global SlashEntityGhost effect ring (8 slots, DAT_0017b878).
+    // Binary Init @ 0x0017C65C zeroes 6 entries (loop bound 0x48 = 72 = 6*12).
+    // AddPoint mod-divisor is 6 (binary @ 0x0017CF8E: movs r1,#0x6; idivmod).
+    // ASM-verified: 2026-05-18 binary @ 0x0017CE0C (re-analyst)
     for (int i = 0; i < 6; ++i) {
         *(float*)((char*)this + 0xc8 + i * 12     ) = 0.0f;
         *(float*)((char*)this + 0xc8 + i * 12 + 4 ) = 0.0f;

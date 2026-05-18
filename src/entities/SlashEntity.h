@@ -269,6 +269,19 @@ private:
     // where base.pos is the raw touch input.
     Vec3 m_RawTouchPos;
 
+    // Binary +0x130: dead member — only ever written (to 0) by ctor.
+    // No reads anywhere in binary. Preserved for layout.
+    // Defunct member: relic of removed feature; only ever written (to 0) by ctor.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    uint32_t field_0x130;
+
+    // Binary +0x144: 2-bit shift-register fuse for "swipe just ended".
+    // Writer (outside SlashEntity): sets bit0 on finger-lift (m_SwipeEndEdge |= 1).
+    // Reader: DrawSlice shifts left each frame; fires CreateGhost + contact burst
+    // on the frame when the last bit falls off.
+    // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
+    uint8_t m_SwipeEndEdge;
+
 public:
     // -----------------------------------------------------------------------
     // Blade modifier (SlashModInfo) apply functions.
