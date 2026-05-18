@@ -126,7 +126,7 @@ static bool PointerDownCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
     g->field_0x9c = 1;
-    g->_pad_0x9e[0] = 1;
+    g->m_bPointerActive = 1;
     return false;
 }
 
@@ -135,7 +135,7 @@ static bool PointerUpCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
     g->field_0x9d = 1;
-    g->_pad_0x9e[0] = 0;
+    g->m_bPointerActive = 0;
     return false;
 }
 
@@ -150,7 +150,7 @@ static bool PointerDownXboxCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
     g->field_0x9c = 1;
-    g->_pad_0x9e[0] = 1;
+    g->m_bPointerActive = 1;
     return false;
 }
 
