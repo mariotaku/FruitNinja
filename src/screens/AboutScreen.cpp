@@ -18,6 +18,7 @@
 #include "render/Renderer.h"
 #include "render/Font.h"
 #include "math/Colour.h"
+#include "audio/GameSound.h"
 #include <cstdio>
 
 // -----------------------------------------------------------------------
@@ -529,7 +530,20 @@ void AboutScreen::BackCallback()
     m_State = 2;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: AboutScreen::QuitGameCallback -- auto stub
-void AboutScreen::QuitGameCallback() {}
-// ---- end AUTO-STUB MERGE ----
+// Binary @ 0x0012eb30 (re-analyst 2026-05-18). Plays menu-bomb SFX,
+// transitions to fade-out state 2, repositions tutorial ninja to a
+// random off-screen point. Mirrors the binary's exit handler when the
+// player taps the AboutScreen's quit/back-out button.
+void AboutScreen::QuitGameCallback() {
+    if (game.pGameSound) {
+        game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    }
+    m_State = 2;
+    if (game.pTutorialCtrl) {
+        // Binary randomises off-screen target via RandFloat5() (≈ [0,5)).
+        // Simple rand() fallback -- the exact distribution is cosmetic.
+        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;   // [5, 10)
+        float ry = -((float)(rand() % 500) / 100.0f);          // (-5, 0]
+        game.pTutorialCtrl->ResetTutePos(Vec3(rx, ry, 0.0f));
+    }
+}

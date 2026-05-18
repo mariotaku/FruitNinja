@@ -1360,11 +1360,62 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     }
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ShopScreen::BuyButtonCallback -- auto stub
-void ShopScreen::BuyButtonCallback() {}
-// STUB: ShopScreen::CancelCallback -- auto stub
-void ShopScreen::CancelCallback() {}
-// STUB: ShopScreen::ConfirmCallback -- auto stub
-void ShopScreen::ConfirmCallback() {}
-// ---- end AUTO-STUB MERGE ----
+// Binary @ 0x0015c568 (re-analyst 2026-05-18). 3-way branch on selected
+// item state: locked -> buy; equipped -> unequip; unlocked-not-equipped
+// -> swap into slot. Status-text writes (binary writes "BUY"/"EQUIP"/
+// "UNEQUIP"/"SELECTED" into selected->m_StatusText@+0x54) are skipped:
+// port's ShopListItem doesn't expose that char* slot. Visible button-
+// label updates happen elsewhere via SetSelected reading current state.
+void ShopScreen::BuyButtonCallback() {
+    ShopListItem* sel = m_pSelectedItem;
+    if (!sel || !sel->m_pItemInfo) return;
+    ItemInfo* info = sel->m_pItemInfo;
+    int type = (int)info->m_Type;
+    ItemManager* mgr = ItemManager::GetInstance();
+    if (!mgr) return;
+
+    if (info->IsLocked()) {
+        // LOCKED -> attempt purchase. BuyItem deducts coins, marks owned.
+        mgr->BuyItem(info->m_Hash);
+        return;
+    }
+
+    if (mgr->IsEquipped(info)) {
+        // EQUIPPED -> unequip; clear slot cache.
+        mgr->SetEquippedItem(type, nullptr);
+        if (type >= 0 && type < 4) m_pSlotItems[type] = nullptr;
+        return;
+    }
+
+    // UNLOCKED & NOT EQUIPPED -> swap into slot.
+    if (type >= 0 && type < 4) m_pSlotItems[type] = sel;
+    mgr->SetEquippedItem(type, info);
+}
+
+// Binary @ 0x0015c758 (re-analyst 2026-05-18). Commits the in-flight
+// selection to the per-type slot cache and transitions to state 5 (exit
+// confirm sub-screen). Repositions tutorial ninja off-screen.
+void ShopScreen::ConfirmCallback() {
+    ShopListItem* sel = m_pSelectedItem;
+    if (sel && sel->m_pItemInfo) {
+        int type = (int)sel->m_pItemInfo->m_Type;
+        if (type >= 0 && type < 4) m_pSlotItems[type] = sel;
+    }
+    m_State = 5;
+    if (game.pTutorialCtrl) {
+        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
+        float ry = -((float)(rand() % 500) / 100.0f);
+        game.pTutorialCtrl->ResetTutePos(Vec3(rx, ry, 0.0f));
+    }
+}
+
+// Binary @ 0x0015c7f0 (re-analyst 2026-05-18). Skip the slot-commit;
+// transition to state 6. Same tutorial-ninja reposition as Confirm.
+void ShopScreen::CancelCallback() {
+    m_State = 6;
+    if (game.pTutorialCtrl) {
+        float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
+        float ry = -((float)(rand() % 500) / 100.0f);
+        game.pTutorialCtrl->ResetTutePos(Vec3(rx, ry, 0.0f));
+    }
+}
