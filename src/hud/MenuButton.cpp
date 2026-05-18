@@ -869,6 +869,17 @@ void MenuButton::Update(float dt) {
         }
     }
 
+    // ASM-verified: 2026-05-18 binary @ 0x0014eb52 (re-analyst).
+    // Toggle buttons (m_FruitType < 0) have no entity to drive the
+    // grow-in/shrink path that writes `size`. Binary unconditionally
+    // writes `size = m_TargetSize` here so the draw quad is sized.
+    // Without this, toggles (Sound/Music/Resume/Quit/Retry) render
+    // at HUDControl default size (0,0,0) -> invisible.
+    if (m_FruitType < 0) {
+        size = m_TargetSize;
+    }
+    // TODO: 0x0014eb40 -- 0.95x press-pulse for held toggles (size = m_TargetSize * 0.95f when held inside rect)
+
     // ASM-verified: 2026-05-09 binary @ 0x0014eb84 (re-analyst).
     // m_BackdropScale (+0xEC) = size.x * 1.125f * m_AnimScale, written
     // every Update. Read by Draw Phase A @ 0x0014fa86 to scale the
