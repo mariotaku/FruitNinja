@@ -156,7 +156,7 @@ MenuButton::MenuButton()
     : m_Pad_0x7C(0),
       m_pEntity(nullptr),
       m_FruitType(-1),
-      m_FadeCounter(0),
+      m_AnimPhase(0),
       m_fieldD4(0),
       m_TouchSlot(-1),
       m_TouchX(0.0f), m_TouchY(0.0f), m_TouchPhase(0.0f),
@@ -334,7 +334,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // Runs whether or not an entity was created; toggle path falls through
     // here and both Fruit/Bomb branches `goto LAB_0014f1f8`.
     m_pFruitPiece    = static_cast<Fruit*>(m_pEntity);  // Bomb branch also writes
-    m_FadeCounter    = 0;
+    m_AnimPhase    = 0;
     m_BounceParams.x = 0.85f;  // DAT_0014f240
     m_BounceParams.y = 0.85f;  // DAT_0014f240
     m_BounceParams.z = 0.0f;   // DAT_0014f244
@@ -352,7 +352,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     //   if (m_BaseScale.x == 0.0) m_BaseScale = entity->scale;
     // captures whatever per-fruit scale Fruit::Init / Bomb's *=0.85 set.
     // Subsequent frames: entity->scale = m_BaseScale * sizeFrac,
-    // where sizeFrac = sin(m_FadeCounter*2pi/65536), in [0,1].
+    // where sizeFrac = sin(m_AnimPhase*2pi/65536), in [0,1].
     // See tmp/menubutton-sizefrac-spec.md for full GOT resolution.
 
 #ifndef __bada__
@@ -402,8 +402,8 @@ void MenuButton::Init() { Reset(); }
 // Binary body is a single `bx lr` -- empty; port's empty body matches.
 void MenuButton::Reset() {}
 
-// Binary @ 0x0014e3f8 — vtable Skip slot, snaps grow-in to full (m_FadeCounter=0x3ffc)
-void MenuButton::Skip() { m_FadeCounter = 0x3ffc; }
+// Binary @ 0x0014e3f8 — vtable Skip slot, snaps animation to full (m_AnimPhase = 0x3ffc = pi/2)
+void MenuButton::Skip() { m_AnimPhase = 0x3ffc; }
 
 // Binary @ 0x0014e3bc — sets m_ShakeTimer (zero call sites in binary)
 void MenuButton::Shake(float t) { m_ShakeTimer = t; }
@@ -568,9 +568,9 @@ void MenuButton::Update(float dt) {
     //           pin entity to button center (vel=0)
     //
     //   if (m_pEntity == nullptr):
-    //       m_FadeCounter -= dt * 108543              # ~9 frames to 0
-    //       if (m_FadeCounter < 1):
-    //           m_FadeCounter = 0
+    //       m_AnimPhase -= dt * 108543              # ~9 frames to 0
+    //       if (m_AnimPhase < 1):
+    //           m_AnimPhase = 0
     //           m_bPendingRemoval = 1                 # HUD deletes button
     //       size = m_TargetSize * (sin(counter) / sin(0x3ffc))
     if (m_pEntity && m_pEntity->IsActive()) {
@@ -606,19 +606,19 @@ void MenuButton::Update(float dt) {
             }
 
             // Grow-in animation (binary MenuButton::Update @ 0x0014e614).
-            // m_FadeCounter starts at 0 from Init, ramps to 0x3ffc at
+            // m_AnimPhase starts at 0 from Init, ramps to 0x3ffc at
             // DAT_0014e97c = 109200.0 counts/sec (~9 frames to full).
             // size = m_TargetSize * sin(counter * 2pi/65536). The 0x3ffc
             // index = pi/2 so sin(0x3ffc) = 1.0 -- the ratio simplifies
             // to just sin(counter), tracing a quarter-sine ease-out.
             // Mortar::Entity scale tracks the same ratio so fruit zooms together
             // with the button ring.
-            if (m_FadeCounter < 0x3ffc) {
-                float next = (float)m_FadeCounter + dt * 109200.0f;
+            if (m_AnimPhase < 0x3ffc) {
+                float next = (float)m_AnimPhase + dt * 109200.0f;
                 if (next > 16380.0f) next = 16380.0f;
-                m_FadeCounter = (int)next;
+                m_AnimPhase = (int)next;
                 const float counterRad =
-                    (float)m_FadeCounter * (6.2831853f / 65536.0f);
+                    (float)m_AnimPhase * (6.2831853f / 65536.0f);
                 const float sizeFrac = sinf(counterRad);
                 size             = m_TargetSize     * sizeFrac;
                 m_pEntity->scale = m_BaseScale * sizeFrac;
@@ -722,7 +722,7 @@ void MenuButton::Update(float dt) {
                 bomb->pos.z = 150.0f;
                 if (!bomb->Enabled()) {
                     bomb->scale = m_BaseScale;
-                    // Binary does NOT write m_FadeCounter on detach -- it
+                    // Binary does NOT write m_AnimPhase on detach -- it
                     // falls through to the grow-clamp at 0x3ffc and lets
                     // the next-frame m_pEntity==null shrink handle the
                     // ramp-down naturally. Don't force-write FadeCounter.
@@ -739,19 +739,19 @@ void MenuButton::Update(float dt) {
     if (m_pEntity && !m_pEntity->IsActive()) {
         m_pEntity = nullptr;
         m_pFruitPiece = nullptr;
-        if (m_FadeCounter == 0) m_FadeCounter = 0x3ffc;
+        if (m_AnimPhase == 0) m_AnimPhase = 0x3ffc;
     }
 
-    if (m_pEntity == nullptr && m_FadeCounter > 0) {
+    if (m_pEntity == nullptr && m_AnimPhase > 0) {
         // Shrink-to-disappearance phase. Binary DAT_0014e97c = 109200.0
         // (0x47d547ff). Per-second decrement rate; over a 60Hz tick that's
         // ~1820 counts/frame -> ~9 frames from 0x3ffc (16380) to 0.
-        m_FadeCounter -= (int)(dt * 109200.0f);
-        if (m_FadeCounter < 1) {
-            m_FadeCounter = 0;
+        m_AnimPhase -= (int)(dt * 109200.0f);
+        if (m_AnimPhase < 1) {
+            m_AnimPhase = 0;
             m_bPendingRemoval = 1;
         }
-        const float counterRad = (float)m_FadeCounter * (6.2831853f / 65536.0f);
+        const float counterRad = (float)m_AnimPhase * (6.2831853f / 65536.0f);
         const float scaleFrac  = sinf(counterRad);
         size = m_TargetSize * scaleFrac;
 
@@ -930,12 +930,12 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
     // Compute fade-derived alpha once. Used by Phase A AND Phase B.
     // Binary @ entry of Draw, before the layer test.
     //   alpha = m_FruitType < 0 ? 0xFF
-    //                          : clamp(m_FadeCounter * 256 / 16380, 0, 255)
+    //                          : clamp(m_AnimPhase * 256 / 16380, 0, 255)
     uint8_t alpha;
     if (m_FruitType < 0) {
         alpha = 0xFF;
     } else {
-        float n = (float)m_FadeCounter * 256.0f / 16380.0f;
+        float n = (float)m_AnimPhase * 256.0f / 16380.0f;
         int   a = (int)n;
         if (a > 254) a = 0xFF;
         if (a < 0)   a = 0;

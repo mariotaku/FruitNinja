@@ -223,10 +223,12 @@ struct Game : public Mortar::MortarGame {
     uint8_t field_0x19b;           // +0x19B
     uint8_t field_0x19c;           // +0x19C
     uint8_t field_0x19d;           // +0x19D
-    // +0x170: another clear-on-quit flag (cleared as 4-byte int by
-    // SetupGameWork.cpp:74-76; QuitToMenu only clears the low byte).
-    // Modelled as uint8_t here -- reader sites also unknown.
-    uint8_t field_0x170;           // +0x170
+    // +0x170: online-MP retry handshake "waiting for peer to ack rematch start" flag. Set=1 only by RetryOnlineMultiplayerGame @ 0x00169488. Cleared by SetupGameWork, QuitToMenu, HandleDisconnection. Defunct in port. Was field_0x170 (unnamed).
+    // Defunct: online-MP retry handshake -- set by RetryOnlineMultiplayerGame (binary @ 0x00169488),
+    //          cleared by QuitToMenu / HandleDisconnection / SetupGameWork. TimeControl pause
+    //          gate reads `(m_bMPRetryPending && !field_0x199)`.
+    // Stub stays at 0 always in the port (RetryOnlineMultiplayerGame is a no-op stub), so the gate is naturally inert.
+    uint8_t m_bMPRetryPending;     // +0x170
     float m_MenuReturnTimer;       // +0x1A0
     uint8_t flag_0x1a8;            // +0x1A8
     uint8_t m_bFrameDirty;         // +0x604

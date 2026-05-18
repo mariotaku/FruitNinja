@@ -61,8 +61,8 @@ public:
     // +0xAC: fired when button removed from HUD. 36 bytes (binary Mortar::Delegate0).
     Mortar::Delegate0<void> m_DeletedCallback;
 
-    // +0xD0: drives alpha fade (× 1000 / 255)
-    int m_FadeCounter;
+    // +0xD0: 16-bit Q14 angle (0..0x3ffc = 0..pi/2) feeding Math::SinIdx for grow-in AND shrink-out quarter-sine ease. Was m_FadeCounter (misleading: not a fade).
+    int m_AnimPhase;
 
     // +0xD4: padding / reserved (binary has a field here we haven't RE'd yet)
     int m_fieldD4;
@@ -258,7 +258,7 @@ private:
 
 #ifdef __bada__
 static_assert(__builtin_offsetof(MenuButton, m_pEntity)   == 0x80, "MenuButton m_pEntity offset");
-static_assert(__builtin_offsetof(MenuButton, m_FadeCounter) == 0xD0, "MenuButton m_FadeCounter offset");
+static_assert(__builtin_offsetof(MenuButton, m_AnimPhase) == 0xD0, "MenuButton m_AnimPhase offset");
 static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer) == 0x158, "MenuButton m_ShakeTimer offset");
 static_assert(sizeof(MenuButton) == 0x15C, "MenuButton sizeof mismatch");
 #endif

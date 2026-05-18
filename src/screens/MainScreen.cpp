@@ -964,7 +964,7 @@ void MainScreen::GameModeCallback() {
     // Binary @ 0x0014b068 just nulls pLeaderboardBtn; ClearMenuItems
     // (fired from the slicing fruit's MenuButton::Update gate) disables
     // the bomb collision-guard, MenuButton::Update's released-bomb
-    // branch then detaches and the m_FadeCounter shrink rings the
+    // branch then detaches and the m_AnimPhase shrink rings the
     // button down naturally. Forcing m_bPendingRemoval=1 here would
     // delete the button this frame and skip the shrink animation.
     pQuitBtn = nullptr;
@@ -1006,7 +1006,7 @@ void MainScreen::AboutCallback() {
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
     // Binary @ 0x0014afc4 just nulls pLeaderboardBtn; the bomb's
     // MenuButton continues running, ClearMenuItems disables it, and the
-    // released-bomb branch shrinks the ring via m_FadeCounter naturally.
+    // released-bomb branch shrinks the ring via m_AnimPhase naturally.
     // Same rationale as GameModeCallback above.
     pQuitBtn = nullptr;
 }

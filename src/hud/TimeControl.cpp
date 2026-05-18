@@ -151,7 +151,7 @@ void TimeControl::Update(float dt) {
     // ASM-verified: 2026-05-18 binary @ 0x001624e6 (re-analyst)
     bool suppress = game->pausedFlag
                  || game->levelTransitionFlag
-                 || (game->field_0x170 && !game->field_0x199);
+                 || (game->m_bMPRetryPending && !game->field_0x199);
 
     if (!suppress) {
         if (m_CountdownStart <= 0.0f) {
