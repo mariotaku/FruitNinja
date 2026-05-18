@@ -6,6 +6,7 @@
 #include "DebugFlags.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
+#include "hud/MenuButton.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -13,6 +14,7 @@
 #include "math/Vec3.h"
 #include <cmath>
 #include <cstdio>
+#include <list>
 
 namespace FN {
 
@@ -183,6 +185,91 @@ void DebugHitbox_Draw() {
     }  // end type loop
 
     (void)drawn;
+}
+
+// Build an AABB box outline as 4 thin-quad sides, 6 verts each = 24 verts.
+// (left, right, bottom, top) are the hitbox edges in centered world space.
+static void BuildAABBOutline(QUADCUSTOMVERTEX* out,
+                             float left, float right,
+                             float bottom, float top,
+                             float z, float thickness,
+                             uint32_t col) {
+    // 4 sides: bottom, top, left, right
+    struct Side { float x0, y0, x1, y1; };
+    const Side sides[4] = {
+        { left,  bottom, right, bottom },  // bottom edge (horizontal)
+        { left,  top,    right, top    },  // top edge    (horizontal)
+        { left,  bottom, left,  top    },  // left edge   (vertical)
+        { right, bottom, right, top    },  // right edge  (vertical)
+    };
+    const float h = thickness * 0.5f;
+    for (int i = 0; i < 4; ++i) {
+        const float dx = sides[i].x1 - sides[i].x0;
+        const float dy = sides[i].y1 - sides[i].y0;
+        // Perpendicular outward half-width vector.
+        float len = sqrtf(dx * dx + dy * dy);
+        if (len < 0.001f) len = 0.001f;
+        const float px = (-dy / len) * h;
+        const float py = (dx  / len) * h;
+        QUADCUSTOMVERTEX* v = &out[i * 6];
+        v[0].x = sides[i].x0 + px; v[0].y = sides[i].y0 + py; v[0].z = z;
+        v[1].x = sides[i].x0 - px; v[1].y = sides[i].y0 - py; v[1].z = z;
+        v[2].x = sides[i].x1 + px; v[2].y = sides[i].y1 + py; v[2].z = z;
+        v[3].x = sides[i].x1 + px; v[3].y = sides[i].y1 + py; v[3].z = z;
+        v[4].x = sides[i].x0 - px; v[4].y = sides[i].y0 - py; v[4].z = z;
+        v[5].x = sides[i].x1 - px; v[5].y = sides[i].y1 - py; v[5].z = z;
+        for (int k = 0; k < 6; ++k) {
+            v[k].nx = 0.0f; v[k].ny = 0.0f; v[k].nz = 1.0f;
+            v[k].u  = 0.5f; v[k].v  = 0.5f;
+            v[k].colour = col;
+        }
+    }
+}
+
+void DebugMenuButton_Draw() {
+    if (!g_DebugHitboxes) return;
+
+    const std::list<MenuButton*>& buttons = MenuButton::GetActiveButtons();
+    if (buttons.empty()) return;
+
+    EnsureWhiteTex();
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.UploadModelViewOnly();
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s_WhiteTex);
+
+    Renderer* r = Renderer::GetInstance();
+    if (!r) return;
+
+    // Magenta at 80% alpha (BGRA: B=0xFF G=0x00 R=0xFF A=0xCC).
+    static const uint32_t kMenuBoxColour = 0xCCFF00FF;
+    // 4 sides x 6 verts = 24 verts
+    static QUADCUSTOMVERTEX s_BoxVerts[24];
+
+    for (std::list<MenuButton*>::const_iterator it = buttons.begin();
+         it != buttons.end(); ++it) {
+        MenuButton* btn = *it;
+        if (!btn || !btn->m_bActive) continue;
+
+        float hw, hh;
+        if (btn->m_bHasHitArea) {
+            hw = btn->m_TargetSize.x * 0.5f;
+            hh = btn->m_TargetSize.y * 0.5f;
+        } else {
+            hw = btn->size.x * 0.5f;
+            hh = btn->size.y * 0.5f;
+        }
+        const float left   = btn->pos.x - hw - btn->m_AnimSpeed2;
+        const float right  = btn->pos.x + hw + btn->m_AnimSpeed2;
+        const float bottom = btn->pos.y - hh - btn->m_AnimSpeed;
+        const float top    = btn->pos.y + hh + btn->m_AnimSpeed;
+
+        BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kMenuBoxColour);
+        r->DrawTriList(s_BoxVerts, 24);
+    }
 }
 
 } // namespace FN
