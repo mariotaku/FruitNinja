@@ -23,7 +23,6 @@ Update or maintain only docs in this whitelist:
 | Doc | Why it's load-bearing |
 |-----|----------------------|
 | `docs/README.md` | Index + policy statement |
-| `docs/TODO.md` | Project-wide RE backlog and intentional-skip lists |
 | `docs/HANDOVER.md`, `docs/HANDOVER-gameplay.md` | Onboarding context |
 | `docs/port-plan.md` | High-level port intent |
 | `docs/resources.md` | Asset directory layout + XML schemas (data, not derivable from code) |

@@ -148,7 +148,7 @@ ASM extracts saved per method during the verification passes. Useful as ground t
 ## KEY DOC POINTERS
 
 - `docs/README.md` — documentation index
-- `docs/TODO.md` — pre-existing TODO list (separate from this handover)
+- RE backlog lives in Claude tasks (`TaskList`)
 - `docs/structs/game.md` — GameTaskState full 19-field layout
 - `docs/screens/shop-buttons.md` — recently-written shop equip-button RE
 - `docs/gallery/textures/index.html`, `docs/gallery/models/index.html` — visual asset browsers
