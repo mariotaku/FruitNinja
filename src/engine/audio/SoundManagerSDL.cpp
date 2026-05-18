@@ -210,11 +210,22 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
 
     // Mix each SFX voice. Matches MAMAudioThread::FillBuffer (0x0018c020):
     // samples were attenuated >>4 in LoadSound to leave headroom for 16
-    // simultaneous voices, then mixed RAW (out += src). The binary has no
-    // per-voice volume multiplication -- field_0xc/field_0xd are binary
-    // mute flags only. s_SFXMuted/s_MusicMuted preserve that gating;
-    // s_SFXVolume/s_MusicVolume are kept for the toggle UI but do not
-    // scale samples beyond the mute threshold.
+    // simultaneous voices, then mixed RAW (out += src). s_SFXMuted /
+    // s_MusicMuted preserve the master mute gating.
+    //
+    // DIFFERS: port additionally multiplies each voice by v.volume in the
+    // mix. The binary's MAMAudioThread::FillBuffer skipped per-voice
+    // attenuation -- its Voice struct used byte mute flags
+    // (field_0xc/field_0xd) instead, so MortarSound::SetVolume(handle, 0)
+    // produced an unconditional silence via that flag, and any non-zero
+    // volume restored full-amplitude playback. The port stores volume as
+    // a float in Voice::volume; without applying it in the mixer,
+    // SFXSetVolume() becomes a no-op and persistent-loop SFX (e.g.
+    // Bomb-Fuse, controlled by GameUpdate's SetVolume(0)-on-no-bomb mute
+    // pattern at 0x0016c4c8..0x0016c5ca) never actually go silent.
+    // Port-side multiply is the lossless equivalent of the binary's
+    // boolean mute when volume is 0 or 1; intermediate values produce
+    // smoother fades than the binary supported, which is harmless.
     for (int vi = 0; vi < VOICE_COUNT; vi++) {
         Voice& v = self->m_Voices[vi];
         if (v.id == 0 || !v.playing || !v.buf) continue;
@@ -222,6 +233,7 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
         int16_t* src = v.buf->samples;
         int total    = v.buf->sampleCount;
         bool muted   = s_SFXMuted;
+        const float voiceVol = v.volume;   // 0.0..1.0; 1.0 = passthrough.
 
         for (int s = 0; s < nSamples; ) {
             if (v.cursor >= total) {
@@ -235,8 +247,9 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
                     break;
                 }
             }
-            if (!muted) {
-                int32_t mixed = out[s] + src[v.cursor];
+            if (!muted && voiceVol > 0.0f) {
+                int32_t scaled = (int32_t)((float)src[v.cursor] * voiceVol);
+                int32_t mixed  = out[s] + scaled;
                 if (mixed >  32767) mixed =  32767;
                 if (mixed < -32768) mixed = -32768;
                 out[s] = (int16_t)mixed;
