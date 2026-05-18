@@ -328,13 +328,22 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_BounceParams.x = 0.85f;  // DAT_0014f240
     m_BounceParams.y = 0.85f;  // DAT_0014f240
     m_BounceParams.z = 0.0f;   // DAT_0014f244
-    // ASM-resolved 2026-05-18: GOT entry 0x000073ec -> BSS 0x001f4328 =
-    // engine-global Mortar::Vec3::One = (1, 1, 1), initialised by
-    // _GLOBAL__I_TutorialControl_cpp @ 0x001638cc. Same pointer used at
-    // function top for base.size default. Both yield (1,1,1).
-    m_HitBoundsScale.x = 1.0f;
-    m_HitBoundsScale.y = 1.0f;
-    m_HitBoundsScale.z = 1.0f;
+    // ASM-verified: 2026-05-18 binary @ 0x0014f1f8..0x0014f222 (re-analyst).
+    // Binary's Init tail loads from GOT offset 0x000073EC, which
+    // _GLOBAL__I_TutorialControl.cpp @ 0x001638cc initialises to
+    // Vec3::Zero (0,0,0) at BSS 0x001f4328 -- NOT Vec3::One as a
+    // prior re-analyst miscategorised. Vec3::One lives at the SEPARATE
+    // GOT offset 0x77CC which MenuButton::Init never reads.
+    // The tail thus writes m_HitBoundsScale = (0,0,0). Since the ctor's
+    // member-initialiser list already sets m_HitBoundsScale(0,0,0), the
+    // explicit write is semantically redundant; port omits it.
+    //
+    // First-frame capture (MenuButton::Update @ 0x0014e74e):
+    //   if (m_HitBoundsScale.x == 0.0) m_HitBoundsScale = entity->scale;
+    // captures whatever per-fruit scale Fruit::Init / Bomb's *=0.85 set.
+    // Subsequent frames: entity->scale = m_HitBoundsScale * sizeFrac,
+    // where sizeFrac = sin(m_FadeCounter*2pi/65536), in [0,1].
+    // See tmp/menubutton-sizefrac-spec.md for full GOT resolution.
 }
 
 // Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()
@@ -573,6 +582,7 @@ void MenuButton::Update(float dt) {
             //   entity->scale = m_HitBoundsScale * (size.x / m_TargetSize.x)
             if (m_HitBoundsScale.x == 0.0f) {
                 m_HitBoundsScale = m_pEntity->scale;
+                m_pEntity->scale = Vec3(0.0f, 0.0f, 0.0f);  // ASM @ 0x0014e76c
             }
 
             // Grow-in animation (binary MenuButton::Update @ 0x0014e614).
