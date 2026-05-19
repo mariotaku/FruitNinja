@@ -42,16 +42,6 @@ static Mortar::SmartPtr<Mortar::Texture> s_TexScratchs;
 static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;
 static Mortar::SmartPtr<Mortar::Texture> s_TexNewItem;
 
-#ifndef __bada__
-// Port specific: debug registry of active MenuButtons.
-static std::list<MenuButton*> s_ActiveButtons;
-
-// Port specific: accessor for DebugMenuButton_Draw().
-const std::list<MenuButton*>& MenuButton::GetActiveButtons() {
-    return s_ActiveButtons;
-}
-#endif
-
 // Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
 //   Pass 1 (fruits, type 0):
 //     guard:  if entity->m_bSliced != 0 → skip
@@ -355,10 +345,6 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // where sizeFrac = sin(m_AnimPhase*2pi/65536), in [0,1].
     // See tmp/menubutton-sizefrac-spec.md for full GOT resolution.
 
-#ifndef __bada__
-    // Port specific: register in debug registry.
-    s_ActiveButtons.push_back(this);
-#endif
 }
 
 // Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()
@@ -388,10 +374,6 @@ void MenuButton::Release() {
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
 
-#ifndef __bada__
-    // Port specific: deregister from debug registry.
-    s_ActiveButtons.remove(this);
-#endif
 }
 
 // Binary @ 0x0014e3ac — vtable Init slot, calls vtable Reset (no-op for MenuButton)

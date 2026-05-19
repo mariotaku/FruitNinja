@@ -638,7 +638,7 @@ void GameDraw(float dt, bool active) {
         // Debug overlay — fruit/bomb hitboxes + MenuButton AABBs (F1 toggle)
 #ifndef __bada__
         FN::DebugHitbox_Draw();
-        FN::DebugMenuButton_Draw();
+        FN::DebugHUDBounds_Draw();
 #endif
 
         // HUD::Draw(0x400) — top layer @ 0x0016bd7c, ALWAYS fires

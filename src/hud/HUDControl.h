@@ -13,6 +13,9 @@
 #include "math/Colour.h"
 #include "util/Delegate.h"
 #include <cstdint>
+#ifndef __bada__
+#include <list>
+#endif
 
 struct Renderer;
 
@@ -72,6 +75,12 @@ public:
 
     HUDControl();
     virtual ~HUDControl();
+
+#ifndef __bada__
+    // Port specific: debug registry — iterate all currently active HUDControls.
+    // Populated by HUDControl ctor / cleared by HUDControl dtor. Covers all subclasses.
+    static const std::list<HUDControl*>& GetActiveControls();
+#endif
 
     // Vtable matches docs/structs/hud.md:
     // +0x00/+0x04: dtors (handled by C++ vtable)
