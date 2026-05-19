@@ -115,6 +115,13 @@ public:
 
     void SetPendingRemoval() { m_bPendingRemoval = 1; }
 
+    // Port specific: debug overlay (F1 hitbox toggle) needs the effective
+    // draw-space position, not the raw `pos` field. Subclasses whose Draw
+    // transforms `pos` through a non-identity anchor override this so the
+    // overlay AABB matches the rendered quad. Default returns `pos` unmodified.
+    // Not in binary; appended after binary vtable.
+    virtual Vec3 GetDrawPos() const { return pos; }
+
     // Binary: called after HUD::AddControl to pin the control to a single
     // layer slot instead of cycling. Tier-1 stub — full RE pending.
     // Binary addr not yet resolved (referenced from PauseScreen::Update lazy-create block).

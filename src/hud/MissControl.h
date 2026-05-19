@@ -148,6 +148,13 @@ public:
     // Defunct: same-screen MP player-index hook — no-op stub; binary @ 0x00150dfc
     virtual int SetPlayer(int player);
 
+    // Port specific: F1 overlay support. MissControl::Draw renders at
+    // pos + (480 * m_HudScale.x, 320 * m_HudScale.y, 0) (see binary @
+    // 0x0015215c..0x00152186). For pool slots m_HudScale defaults to
+    // (0,0,0) so this is a no-op; for the 3 GameInit passive widgets it
+    // shifts the AABB to the top-right cluster where the X markers render.
+    Vec3 GetDrawPos() const override;
+
     // Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit.
     static void CleanPool();
 

@@ -141,6 +141,13 @@ int MissControl::SetPlayer(int player) {
     return player;
 }
 
+// Port specific: matches MissControl::Draw anchor add at binary @ 0x0015215c.
+Vec3 MissControl::GetDrawPos() const {
+    return Vec3(pos.x + 480.0f * m_HudScale.x,
+                pos.y + 320.0f * m_HudScale.y,
+                pos.z);
+}
+
 // vtable[15] @ 0x00150e3c
 void MissControl::Skip() {
     // Fast-forward spawn animation when critical/rare label needs to appear immediately.
