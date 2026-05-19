@@ -21,7 +21,9 @@ static const float ROT_SPEED = 182.0f;
 void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
 
-    if (!m_Texture.IsValid()) return;
+    if (!m_Texture.IsValid()) {
+        return;
+    }
     if (m_DrawColour.a == 0) return;
 
     Game* game = Game::GetInstance();
