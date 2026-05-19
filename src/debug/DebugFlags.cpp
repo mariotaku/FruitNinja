@@ -8,7 +8,7 @@
 #include "DebugFlags.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
-#include "hud/MenuButton.h"
+#include "hud/HUDControl.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -228,11 +228,11 @@ static void BuildAABBOutline(QUADCUSTOMVERTEX* out,
     }
 }
 
-void DebugMenuButton_Draw() {
+void DebugHUDBounds_Draw() {
     if (!g_DebugHitboxes) return;
 
-    const std::list<MenuButton*>& buttons = MenuButton::GetActiveButtons();
-    if (buttons.empty()) return;
+    const std::list<HUDControl*>& controls = HUDControl::GetActiveControls();
+    if (controls.empty()) return;
 
     EnsureWhiteTex();
 
@@ -247,29 +247,25 @@ void DebugMenuButton_Draw() {
     if (!r) return;
 
     // Magenta at 80% alpha (BGRA: B=0xFF G=0x00 R=0xFF A=0xCC).
-    static const uint32_t kMenuBoxColour = 0xCCFF00FF;
+    static const uint32_t kHUDBoxColour = 0xCCFF00FF;
     // 4 sides x 6 verts = 24 verts
     static QUADCUSTOMVERTEX s_BoxVerts[24];
 
-    for (std::list<MenuButton*>::const_iterator it = buttons.begin();
-         it != buttons.end(); ++it) {
-        MenuButton* btn = *it;
-        if (!btn || !btn->m_bActive) continue;
+    for (std::list<HUDControl*>::const_iterator it = controls.begin();
+         it != controls.end(); ++it) {
+        HUDControl* ctrl = *it;
+        if (!ctrl || !ctrl->m_bActive) continue;
 
-        float hw, hh;
-        if (btn->m_bHasHitArea) {
-            hw = btn->m_TargetSize.x * 0.5f;
-            hh = btn->m_TargetSize.y * 0.5f;
-        } else {
-            hw = btn->size.x * 0.5f;
-            hh = btn->size.y * 0.5f;
-        }
-        const float left   = btn->pos.x - hw - btn->m_HitInsetX;
-        const float right  = btn->pos.x + hw + btn->m_HitInsetX;
-        const float bottom = btn->pos.y - hh - btn->m_HitInsetY;
-        const float top    = btn->pos.y + hh + btn->m_HitInsetY;
+        const float hw = ctrl->size.x * 0.5f;
+        const float hh = ctrl->size.y * 0.5f;
+        if (hw == 0.0f && hh == 0.0f) continue;
 
-        BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kMenuBoxColour);
+        const float left   = ctrl->pos.x - hw;
+        const float right  = ctrl->pos.x + hw;
+        const float bottom = ctrl->pos.y - hh;
+        const float top    = ctrl->pos.y + hh;
+
+        BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kHUDBoxColour);
         r->DrawTriList(s_BoxVerts, 24);
     }
 }

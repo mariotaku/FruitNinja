@@ -25,10 +25,11 @@ extern float g_DebugTimeScale; // Port specific: debug-only, no binary equivalen
 // No-op when g_DebugHitboxes is false.
 void DebugHitbox_Draw();
 
-// Render every active MenuButton click hitbox as a magenta AABB outline.
+// Render every active HUDControl bounding box as a magenta AABB outline.
+// Covers all HUDControl subclasses (MenuButton, BonusScreen controls, etc.).
 // Call from GameDraw right after DebugHitbox_Draw().
 // No-op when g_DebugHitboxes is false.
-void DebugMenuButton_Draw();
+void DebugHUDBounds_Draw();
 
 } // namespace FN
 
