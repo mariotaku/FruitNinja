@@ -18,7 +18,9 @@
 #include "math/Colour.h"
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <list>
+#include <typeinfo>
 
 namespace FN {
 
@@ -238,6 +240,16 @@ static void BuildAABBOutline(QUADCUSTOMVERTEX* out,
     }
 }
 
+static const char* StripMangle(const char* s) {
+    if (!s || *s == '\0') return "?";
+    // GCC: mangled name starts with decimal digit(s) for name length (e.g. "9MenuButton")
+    while (*s >= '0' && *s <= '9') ++s;
+    // MSVC: "class MenuButton" or "struct Foo"
+    if (strncmp(s, "class ", 6) == 0) s += 6;
+    if (strncmp(s, "struct ", 7) == 0) s += 7;
+    return (*s != '\0') ? s : "?";
+}
+
 void DebugHUDBounds_Draw() {
     if (!g_DebugHitboxes) return;
 
@@ -287,13 +299,24 @@ void DebugHUDBounds_Draw() {
         r->DrawTriList(s_BoxVerts, 24);
 
         if (s_DebugFont.IsValid()) {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%p", static_cast<void*>(ctrl));
-            const Vec3 labelPos(left + kLabelInsetX, top - kLabelInsetY, kLabelZ);
+            const char* className = StripMangle(typeid(*ctrl).name());
+            char ptrBuf[32];
+            snprintf(ptrBuf, sizeof(ptrBuf), "%p", static_cast<void*>(ctrl));
+
+            // Class name on the top line, pointer address one line below.
+            // kLabelScale is 8pt; use the same scale for both lines so the
+            // vertical spacing is one line height (kLabelScale pixels).
+            const float lineH = kLabelScale + 1.0f;
+            const Vec3 classPos(left + kLabelInsetX, top - kLabelInsetY,        kLabelZ);
+            const Vec3 ptrPos  (left + kLabelInsetX, top - kLabelInsetY - lineH, kLabelZ);
+
             mm.GetWorldStack().Reset();
             mm.UploadModelViewOnly();
             s_DebugFont->DrawString(kLabelScale, 1.0f, 0.0f,
-                                    buf, labelPos, kLabelColour,
+                                    className, classPos, kLabelColour,
+                                    Mortar::FONT_ALIGN_LEFT);
+            s_DebugFont->DrawString(kLabelScale, 1.0f, 0.0f,
+                                    ptrBuf, ptrPos, kLabelColour,
                                     Mortar::FONT_ALIGN_LEFT);
         }
     }
