@@ -290,10 +290,11 @@ void DebugHUDBounds_Draw() {
         const float hh = ctrl->size.y * 0.5f;
         if (hw == 0.0f && hh == 0.0f) continue;
 
-        const float left   = ctrl->pos.x - hw;
-        const float right  = ctrl->pos.x + hw;
-        const float bottom = ctrl->pos.y - hh;
-        const float top    = ctrl->pos.y + hh;
+        const Vec3 dp = ctrl->GetDrawPos();
+        const float left   = dp.x - hw;
+        const float right  = dp.x + hw;
+        const float bottom = dp.y - hh;
+        const float top    = dp.y + hh;
 
         BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kHUDBoxColour);
         r->DrawTriList(s_BoxVerts, 24);
