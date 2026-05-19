@@ -89,11 +89,8 @@ public:
 
     // +0xc4: 5th SmartPtr<Texture> slot. Source for the retry button's
     // m_Texture in Reset() (binary @ 0x00154024 reads from +0xc4,
-    // not +0xc0). Default-null in ctor; SetToMultiplayerState may write
-    // to it. Release nulls this slot. (Was previously misnamed _pad_c4.)
-    // TODO: 0x00155460 — find the assignment site so this gets a real
-    // texture loaded; until then it stays null and Reset effectively
-    // clears the retry button's secondary tex.
+    // not +0xc0). Loaded from retry.tex (distinct from retry_button.tex at +0xc0).
+    // Release nulls this slot. SetToMultiplayerState may also write to it.
     Mortar::SmartPtr<Mortar::Texture> m_RetryHighlightTex;
 
     // +0xc8: index of last-hit button; ctor = -1; QuitGameCallback sets 0

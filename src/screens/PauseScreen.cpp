@@ -306,6 +306,14 @@ PauseScreen::PauseScreen()
         m_RetryButtonTexH = (float)h;
     }
 
+    // +0xc4 m_RetryHighlightTex: loaded from retry.tex (distinct from retry_button.tex at +0xc0).
+    // Reset() assigns this to m_RetryButton->m_Texture to restore the SP highlight state.
+    // WaveManager::Reset -> HUD::ResetControls -> PauseScreen::Reset fires every level reset;
+    // without a valid texture here the RetryButton's m_Texture is cleared to null each wave reset.
+    {
+        m_RetryHighlightTex = LoadTex("retry.tex");
+    }
+
     // Title size stored in m_TitleSize for slide-in math (doc section 4 #6)
     m_TitleSize = Vec3(m_TitleTexW, m_TitleTexH, 0.0f);
 
