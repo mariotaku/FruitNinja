@@ -1021,32 +1021,45 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 // Binary @ 0x001254f2-0x001256f2: PROBABILITY_OVERIDE blitz selection.
                 int chosenType = -1;
 
-                // Step A: Arcade/Zen blitz state machine (gameMode == 2 only).
-                // Uses TimeControl::field_0x7c (GetCountDown) and blitz timers.
-                // DAT_0012558c = 30.0f (blitz refresh base), DAT_001255a0 = 0.20979f (timer compensation).
+                // Blitz state machine (binary @ 0x001254f2):
+                //   Arcade only. Gate: elapsed = GetCountDown() - m_TimeRemaining; blitz fires
+                //   when elapsed >= field_0x240. After each fire field_0x240 = RandF(10)+35.0.
+                //   Phase counter field_0x23e: 0->1 (first fire, set mark), 1->2 only when
+                //   field_0x23d==1 (one extra fire after the very first global blitz).
+                //   Global counter field_0x23d: increments each successful override; once > 5
+                //   each override's m_PercentChance is halved on subsequent rolls.
+                // ASM-verified: 2026-05-18 binary @ 0x001254f2 (re-analyst)
                 int blitzAdvance = 0;
+                bool gateOpen = false;
                 if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
-                    float countdown = 0.0f;
-                    if (game->pTimeCtrl) countdown = game->pTimeCtrl->GetCountDown();
-
-                    if (field_0x23d == 0) {
-                        // First blitz spawn not yet triggered this game.
-                        if (field_0x240 < countdown) {
-                            field_0x23d = 1;
-                            blitzAdvance = 1;
-                        }
-                    } else {
-                        // Blitz already triggered; check for forced re-spawn.
-                        // DAT_0012558c=35.0f: blitz repeats every ~35s.
-                        // ASM-verified: 2026-05-18 binary @ 0x0012558c (re-analyst)
-                        float blitzBase = 35.0f;  // DAT_0012558c
-                        float blitzComp = 0.20979f; // DAT_001255a0 (spawner timer compensation)
-                        float threshold = field_0x240 - blitzBase + blitzComp * (float)field_0x5c;
-                        if (threshold < countdown) {
-                            field_0x23d = 1;
-                            blitzAdvance = 1;
-                        }
+                    float timeRemaining = 0.0f;
+                    float countdownStart = 0.0f;
+                    if (game->pTimeCtrl) {
+                        timeRemaining  = game->pTimeCtrl->m_TimeRemaining;
+                        countdownStart = game->pTimeCtrl->GetCountDown();
                     }
+                    // Bug 1 fix: gate = "elapsed >= field_0x240"
+                    // elapsed = GetCountDown() - m_TimeRemaining
+                    // binary: if (GetCountDown() - field_0x240 < m_TimeRemaining) skip
+                    // i.e. fire when (countdownStart - field_0x240) >= timeRemaining
+                    if (countdownStart - field_0x240 >= timeRemaining) {
+                        gateOpen = true;
+                    }
+                }
+
+                if (!gateOpen && game->gameMode == Mortar::GAME_MODE_ARCADE) {
+                    blitzAdvance = 0;
+                } else if (field_0x23e == 0) {
+                    // Phase 0->1: fresh cycle — fire and re-arm mark.
+                    field_0x23e = 1;
+                    blitzAdvance = (field_0x23d < 2) ? (1 - (int)field_0x23d) : 0;
+                    field_0x240  = m_Random.RandF(10.0f) + 35.0f; // DAT_0012558c = 35.0f
+                } else if (field_0x23e == 1 && field_0x23d == 1) {
+                    // Bug 2 fix: phase 1->2 extra fire, only when exactly one prior global fire.
+                    field_0x23e = 2;
+                    blitzAdvance = 1;
+                } else {
+                    blitzAdvance = 0;
                 }
 
                 // Step B: weighted roll over probOverrides[mode].
@@ -1101,6 +1114,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 int mode = game->gameMode;
                 std::vector<PROBABILITY_OVERIDE>& overrides = probOverrides[mode];
 
+                // Step B: weighted roll over probOverrides[mode].
+                // Gate predicates: m_PerWave, m_PerWaveCount, m_DisableWhenPowered.
+                // Bug 3 fix: when field_0x23d > 5, each override's percent-chance is halved.
+                // ASM-verified: 2026-05-18 binary @ 0x001253b0 (re-analyst)
                 if (!overrides.empty() && blitzAdvance) {
                     int totalChance = 0;
                     for (std::vector<PROBABILITY_OVERIDE>::iterator oit = overrides.begin();
@@ -1113,7 +1130,6 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         if (po.m_PerWaveCount > 0 && field_0x5c < po.m_PerWaveCount) continue;
                         // Gate: disableWhenPowered — binary @ 0x00117b38
                         // GetActiveProgression returns 2.0 when no power active, [0..1] otherwise.
-                        // Skip only when a power is active AND progression dropped to/below threshold.
                         // ASM-verified: 2026-05-18 binary @ 0x00125390 (re-analyst)
                         if (po.m_DisableWhenPowered > 0.0f) {
                             float prog = PowerUpManager::GetInstance()
@@ -1121,7 +1137,9 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                              : 2.0f;
                             if (po.m_DisableWhenPowered >= prog) continue;
                         }
-                        totalChance += po.m_PercentChance;
+                        int pc = po.m_PercentChance;
+                        if (field_0x23d > 5) pc >>= 1;
+                        totalChance += pc;
                     }
 
                     if (totalChance > 0) {
@@ -1139,12 +1157,14 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                                                  : 2.0f;
                                 if (po.m_DisableWhenPowered >= prog) continue;
                             }
-                            cumulative += po.m_PercentChance;
-                            if (roll < cumulative) {
+                            int pc = po.m_PercentChance;
+                            if (field_0x23d > 5) pc >>= 1;
+                            cumulative += pc;
+                            if (roll < cumulative || (po.m_PercentChance > 0 && blitzAdvance != 0)) {
                                 chosenType = po.GetType();
                                 if (chosenType >= 0) {
                                     const FruitInfo* fi = FruitInfo_Get(chosenType);
-                                    // Bug 4: AnyActivePowers early-exit — binary @ 0x001254f2.
+                                    // AnyActivePowers early-exit — binary @ 0x001254f2.
                                     // If this fruit's power is already active, abort spawn.
                                     // ASM-verified: 2026-05-18 binary @ 0x001254f2 (re-analyst)
                                     if (fi && fi->m_pPowers && fi->m_pPowers->AnyActivePowers()) {
@@ -1158,7 +1178,6 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                             }
                         }
                     }
-                    field_0x23e++;
                 }
 
                 if (chosenType < 0) {
