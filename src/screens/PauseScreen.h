@@ -66,8 +66,8 @@ public:
     // +0xa4: P2 Quit button (MP only -- Tier-2; always nullptr in Tier-1)
     MenuButton* m_P2QuitButton;
 
-    // +0xa8: pause_button.tex (in-game pause icon; shown when m_Alpha <= 0.5)
-    Mortar::SmartPtr<Mortar::Texture> m_PauseButtonTex;
+    // +0xa8: 5th MenuButton* slot (binary nulled at ctor; never assigned in shipped code)
+    MenuButton* m_Pad_0xA8;
 
     // +0xac: P1 Retry button (retry_button.tex)
     MenuButton* m_RetryButton;
@@ -78,20 +78,17 @@ public:
     // +0xb4: secondary button-fade alpha; ctor = 1.0
     float m_ButtonFadeAlpha;
 
-    // +0xb8: play_button.tex (resume icon; shown when m_Alpha > 0.5)
+    // +0xb8: pause_button.tex (in-game pause icon; shown when m_Alpha <= 0.5)
+    Mortar::SmartPtr<Mortar::Texture> m_PauseButtonTex;
+
+    // +0xbc: play_button.tex (resume icon; shown when m_Alpha > 0.5)
     Mortar::SmartPtr<Mortar::Texture> m_PlayButtonTex;
 
-    // +0xbc: quit_title.tex
+    // +0xc0: quit_title.tex
     Mortar::SmartPtr<Mortar::Texture> m_QuitTitleTex;
 
-    // +0xc0: retry_button.tex
+    // +0xc4: retry_button.tex
     Mortar::SmartPtr<Mortar::Texture> m_RetryButtonTex;
-
-    // +0xc4: 5th SmartPtr<Texture> slot. Source for the retry button's
-    // m_Texture in Reset() (binary @ 0x00154024 reads from +0xc4,
-    // not +0xc0). Loaded from retry.tex (distinct from retry_button.tex at +0xc0).
-    // Release nulls this slot. SetToMultiplayerState may also write to it.
-    Mortar::SmartPtr<Mortar::Texture> m_RetryHighlightTex;
 
     // +0xc8: index of last-hit button; ctor = -1; QuitGameCallback sets 0
     int m_LastHitButton;
@@ -190,14 +187,14 @@ public:
 //   m_P2ResumeButton +0x9c
 //   m_QuitButton     +0xa0
 //   m_P2QuitButton   +0xa4
-//   m_PauseButtonTex +0xa8
+//   m_Pad_0xA8       +0xa8  (5th MenuButton* slot, never assigned)
 //   m_RetryButton    +0xac
 //   m_P2RetryButton  +0xb0
 //   m_ButtonFadeAlpha+0xb4
-//   m_PlayButtonTex  +0xb8
-//   m_QuitTitleTex   +0xbc
-//   m_RetryButtonTex +0xc0
-//   _pad_c4          +0xc4
+//   m_PauseButtonTex +0xb8
+//   m_PlayButtonTex  +0xbc
+//   m_QuitTitleTex   +0xc0
+//   m_RetryButtonTex +0xc4
 //   m_LastHitButton  +0xc8
 //   m_PressIndex     +0xcc
 //   m_RevealTimer    +0xd0

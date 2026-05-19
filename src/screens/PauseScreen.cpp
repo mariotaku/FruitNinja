@@ -254,6 +254,7 @@ PauseScreen::PauseScreen()
       m_P2ResumeButton(nullptr),
       m_QuitButton(nullptr),
       m_P2QuitButton(nullptr),
+      m_Pad_0xA8(nullptr),
       m_RetryButton(nullptr),
       m_P2RetryButton(nullptr),
       m_ButtonFadeAlpha(1.0f),
@@ -281,6 +282,7 @@ PauseScreen::PauseScreen()
         m_TitleTexH = (float)h;
     }
 
+    // +0xb8 m_PauseButtonTex: pause_button.tex (in-game pause icon)
     {
         int w = 0, h = 0;
         m_PauseButtonTex = LoadTex("pause_button.tex", &w, &h);
@@ -288,10 +290,12 @@ PauseScreen::PauseScreen()
         m_PauseButtonTexH = (float)h;
     }
 
+    // +0xbc m_PlayButtonTex: play_button.tex (resume icon)
     {
         m_PlayButtonTex = LoadTex("play_button.tex");
     }
 
+    // +0xc0 m_QuitTitleTex: quit_title.tex
     {
         int w = 0, h = 0;
         m_QuitTitleTex = LoadTex("quit_title.tex", &w, &h);
@@ -299,19 +303,13 @@ PauseScreen::PauseScreen()
         m_QuitTitleTexH = (float)h;
     }
 
+    // +0xc4 m_RetryButtonTex: retry_button.tex
+    // Reset() assigns this to m_RetryButton->m_Texture on every level reset.
     {
         int w = 0, h = 0;
         m_RetryButtonTex = LoadTex("retry_button.tex", &w, &h);
         m_RetryButtonTexW = (float)w;
         m_RetryButtonTexH = (float)h;
-    }
-
-    // +0xc4 m_RetryHighlightTex: loaded from retry_button.tex -- same texture as +0xc0.
-    // Reset() assigns this to m_RetryButton->m_Texture to restore the texture after
-    // WaveManager::Reset -> HUD::ResetControls -> PauseScreen::Reset fires every level
-    // reset; without a valid texture here the RetryButton's m_Texture is cleared to null.
-    {
-        m_RetryHighlightTex = LoadTex("retry_button.tex");
     }
 
     // Title size stored in m_TitleSize for slide-in math (doc section 4 #6)
@@ -341,21 +339,17 @@ void PauseScreen::Init() {
 //
 // Slots nulled (5x SmartPtrNull_Tex calls at 0x00154054):
 //   +0x74 m_Texture (HUDControl3d primary)
-//   +0xb8 m_PlayButtonTex
-//   +0xbc m_QuitTitleTex
-//   +0xc0 m_RetryButtonTex
-//   +0xc4 m_RetryHighlightTex  (the 5th slot, was mis-named _pad_c4)
-//
-// Slots NOT nulled by binary:
-//   +0x78 m_Texture (the slot pause_title.tex actually lives in)
-//   +0xa8 m_PauseButtonTex (kept live across Release calls)
+//   +0xb8 m_PauseButtonTex
+//   +0xbc m_PlayButtonTex
+//   +0xc0 m_QuitTitleTex
+//   +0xc4 m_RetryButtonTex
 // -------------------------------------------------------------------------
 void PauseScreen::Release() {
     m_Texture.SetNull();
+    m_PauseButtonTex.SetNull();
     m_PlayButtonTex.SetNull();
     m_QuitTitleTex.SetNull();
     m_RetryButtonTex.SetNull();
-    m_RetryHighlightTex.SetNull();
 }
 
 // -------------------------------------------------------------------------
@@ -365,7 +359,7 @@ void PauseScreen::Release() {
 // Two if-blocks, no other PauseScreen field is touched:
 //   if (m_RetryButton) {
 //       retry->m_bTouchHeld = 1;            // +0x131
-//       retry->m_Texture = m_RetryHighlightTex;   // src is +0xc4, NOT +0xc0
+//       retry->m_Texture = m_RetryButtonTex;   // src is +0xc4 (binary)
 //   }
 //   if (m_ResumeButton) resume->m_Texture = m_PlayButtonTex;
 //
@@ -375,7 +369,7 @@ void PauseScreen::Release() {
 void PauseScreen::Reset() {
     if (m_RetryButton) {
         m_RetryButton->m_bTouchHeld = 1;
-        m_RetryButton->m_Texture = m_RetryHighlightTex;
+        m_RetryButton->m_Texture = m_RetryButtonTex;
     }
     if (m_ResumeButton) {
         m_ResumeButton->m_Texture = m_PlayButtonTex;
@@ -450,8 +444,8 @@ bool PauseScreen::SetToMultiplayerState() {
     // Tier-2 deferred (binary @ 0x00154060): vtable[11], called from PauseScreen::Reset on MP entry.
     // Body (3 stores):
     //   1. m_RetryButton->m_Texture = SmartPtr::Null;     // retry+0x74
-    //   2. m_RetryButton->m_bTouchHeld = 0;                  // retry+0x131 -- disable interactability
-    //   3. m_ResumeButton->m_Texture = m_RetryButtonTex;  // resume+0x74 -- show retry icon on resume btn
+    //   2. m_RetryButton->m_bTouchHeld = 0;               // retry+0x131 -- disable interactability
+    //   3. m_ResumeButton->m_Texture = m_RetryButtonTex;  // resume+0x74 -- show retry icon (+0xc4) on resume btn
     // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
     return HUDControl::SetToMultiplayerState();
 }

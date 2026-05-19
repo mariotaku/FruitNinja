@@ -29,9 +29,9 @@
 //      lazy-loads the 4 shared textures (critical.tex,
 //      ultra_rare_plus_50.tex, hud_cross.tex, and combo_%d.tex for 3..10).
 //   2. Make* picks a pool slot via GetFree, populates pos/texture/anim
-//      state, sets m_bBusy = 1.
+//      state, sets m_bActive = 1 (binary field_0x30 = HUDControl::m_bActive).
 //   3. Update fades m_FadeAlpha to 0 via linear dt*s_DtMod*m_AlphaScale,
-//      then clears m_bBusy so GetFree can re-use the slot.
+//      then clears m_bActive so GetFree can re-use the slot.
 //   4. HUD::Draw renders each busy slot via HUDControl3d::Draw.
 //
 // Struct layout verified by asm-inspector 2026-04-30. Field offsets are
@@ -46,33 +46,25 @@
 
 class MissControl : public HUDControl3d {
 public:
-    // NOTE: HUDControl3d base ends at some offset; these fields follow.
-    // The binary's struct layout (size=0x94, audited 2026-04-30):
+    // NOTE: HUDControl3d base ends at +0x7b (sizeof = 0x7c). Subclass fields follow.
+    // The binary's struct layout (size=0x94, audited 2026-04-30 + corrected 2026-05-18):
     //
-    // +0x2c: float   rotation (degrees; used as SinIdx(rot*182) in Draw)
-    // +0x30: uint8   m_bBusy  -- pool slot busy flag (0=free, 1=active)
-    // +0x32: uint8   pool-owned flag (set by CreatePool)  [not modelled in port]
+    // +0x2c: float   m_Timer (rotation degrees; used as SinIdx(rot*182) in Draw)
+    // +0x30: uint8   m_bActive (HUDControl base) -- pool busy flag; GetFree reads this
     // +0x34: uint32  m_LayerFlags / "configured" flag (Init writes 1)
     // +0x5c: uint8   RGBA tint b,g,r,a (Init copies from DAT default colour)
-    // +0x74: Mortar::SmartPtr<Texture> bound texture
+    // +0x74: Mortar::SmartPtr<Texture> bound texture (HUDControl3d base)
     // +0x7c: uint8   m_AnimState  (0=idle, 3=active fade)
-    //         DIFFERS: header previously had m_AnimState at +0x84 (SWAPPED)
     // +0x7d: uint8   m_bVisible (visibility-on-screen, gates jitter)
     // +0x7e: uint16  jitter shake counter (decremented in Draw)
-    // +0x80: float   m_FadeAlpha (init 1.81, NOT 0.808 as old port had)
+    // +0x80: float   m_FadeAlpha (init 1.81)
     // +0x84: uint8   m_bComboActive
-    //         DIFFERS: header previously had m_bComboActive at +0x7c (SWAPPED)
-    // +0x85: uint8   "use sound" flag
+    // +0x85: uint8   m_bUseSound flag
     // +0x88: int32   m_ComboCount
-    // +0x8c: uint8   unknown flag (Init writes 1)
+    // +0x8c: uint8   unknown flag (Init writes 1)  [not modelled in port]
     // +0x90: float   m_AlphaScale (1.0 critical, 0.5 rare)
-    //         DIFFERS: was m_AlphaScale at +0x88 in old comments
-
-    // +0x30: pool busy flag
-    uint8_t m_bBusy;
 
     // +0x7c: animation state (0=idle, 3=active fade)
-    // DIFFERS: old header comment said this was at +0x84 (swapped with m_bComboActive)
     uint8_t m_AnimState;
 
     // +0x7d: visible on screen (set when anim starts, gates jitter)
@@ -85,7 +77,6 @@ public:
     float m_FadeAlpha;
 
     // +0x84: combo indicator active flag
-    // DIFFERS: old header comment said this was at +0x7c (swapped with m_AnimState)
     uint8_t m_bComboActive;
 
     // +0x85: "use sound" flag (gates SFXPlay in Update)
@@ -95,7 +86,6 @@ public:
     int m_ComboCount;
 
     // +0x90: alpha scale multiplier (1.0 critical, 0.5 rare)
-    // DIFFERS: old comment said m_AlphaScale was at +0x88
     float m_AlphaScale;
 
     MissControl();
@@ -174,5 +164,15 @@ public:
     // Binary ctor loop iVar3=1..10: loads combo_%d.tex for iVar3>=3 -> names combo_3..combo_11.
     static Mortar::SmartPtr<Mortar::Texture> s_ComboTextures[10];
 };
+
+#ifdef __bada__
+static_assert(__builtin_offsetof(MissControl, m_AnimState)    == 0x7C, "MissControl m_AnimState offset");
+static_assert(__builtin_offsetof(MissControl, m_bVisible)     == 0x7D, "MissControl m_bVisible offset");
+static_assert(__builtin_offsetof(MissControl, m_JitterTimer)  == 0x7E, "MissControl m_JitterTimer offset");
+static_assert(__builtin_offsetof(MissControl, m_FadeAlpha)    == 0x80, "MissControl m_FadeAlpha offset");
+static_assert(__builtin_offsetof(MissControl, m_bComboActive) == 0x84, "MissControl m_bComboActive offset");
+static_assert(__builtin_offsetof(MissControl, m_AlphaScale)   == 0x90, "MissControl m_AlphaScale offset");
+static_assert(sizeof(MissControl) == 0x94, "MissControl sizeof mismatch");
+#endif
 
 #endif
