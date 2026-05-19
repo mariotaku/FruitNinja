@@ -17,6 +17,9 @@
 #include "engine/particle/PSPParticleManager.h"
 #include "engine/util/StringHash.h"
 #include "util/Delegate.h"
+#include "render/MatrixManager.h"
+#include "math/Matrix44.h"
+#include "render/Utf8StringIterator.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -25,13 +28,15 @@
 
 using Mortar::TextureManager;
 
-// Phase-timer rodata — binary @ 0x001f3d48, five floats.
+// Phase-timer rodata — binary @ 0x001f3d48, seven floats.
 // ASM-verified: 2026-05-18 binary @ 0x001f3d48 (re-analyst)
 static const float kRevealStart     = 0.66597f;  // pfVar14[0]
 static const float kPerAward        = 0.6f;       // pfVar14[1]
 static const float kRevealHalfBeat  = 0.33298f;   // pfVar14[2]
 static const float kFinaleHoldExtra = 0.25f;      // pfVar14[3]
 static const float kDismissBuffer   = 7.0f;       // pfVar14[4]
+static const float kAwardYStep      = -42.0f;     // pfVar14[5] timerArr+0x14 @ 0x001f3d5c
+static const float kTextOffsetScalar = 250.0f;    // pfVar14[6] timerArr+0x18 @ 0x001f3d60
 
 // ---------------------------------------------------------------------------
 // Per-coin arrival callback — binary @ 0x0013243c
@@ -387,36 +392,124 @@ void BonusScreen::Update(float dt) {
 // Draw (binary @ 0x0013325C)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0013325C
+// Binary @ 0x0013325C -- BonusScreen::Draw
+// Layout: HUDControl3d::Draw renders dialog box; then total score (pFontBlue2,
+// scale 26..40 by displayed/total ratio); then per-award row loop with
+// star icon + name + score (pFontMain). Row Y step = -42.0 (timerArr[5]).
+// Row 0 base = pos + m_PosOffset + Vec3(-105, 40, 0).
+// Loop break (NOT continue) on first not-yet-revealed award.
+// ASM-verified: 2026-05-18 binary @ 0x0013325C (re-analyst)
 void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
-    // Apply m_PosOffset to position before base draw.
+    // Apply m_PosOffset to pos before base draw, save original.
     Vec3 savedPos = pos;
     pos.x += m_PosOffset.x;
     pos.y += m_PosOffset.y;
     pos.z += m_PosOffset.z;
 
-    // Base box draw (HUDControl3d::Draw handles the dialog background via m_SecondaryTex).
+    // Background dialog box.
     HUDControl3d::Draw(hudScale, layerMask);
 
-    // Restore position.
-    pos = savedPos;
-
-    // Per-award rendering.
-    for (int i = 0; i < (int)m_Awards.size(); ++i) {
-        const BonusAwardHud& entry = m_Awards[i];
-        if (entry.m_Scale <= 0.0f) continue;
-
-        // TODO: set matrix scale + translate per award position
-        // Award Y positions stacked vertically (TODO: resolve spacing constant)
-        // float awardY = pos.y + m_PosOffset.y + (float)i * 20.0f;
-        // float awardX = pos.x + m_PosOffset.x;
-
-        // TODO: DrawQuadUnCached(entry.m_StarTex, awardX, awardY, entry.m_Scale * 16.0f, entry.m_Scale * 16.0f)
-        // TODO: Font::DrawString(entry.m_Name, awardX + 20.0f, awardY, m_NameScale)
-        // TODO: DrawString tier*multiplier score text
-
-        (void)entry;
-        (void)hudScale;
-        (void)layerMask;
+    Game* game = Game::GetInstance();
+    if (!game) {
+        pos = savedPos;
+        return;
     }
+
+    // --- Total-score text (pFontBlue2, scale 26..40, alignment 0x0F) ---
+    // Binary @ 0x0013325C: scale = 26 + 14 * (displayed/total), clamped when total <= 0.
+    // ASM-verified: 2026-05-18 binary @ 0x0013325C (re-analyst)
+    {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%i", m_DisplayedScore);
+
+        float scale;
+        if (m_DisplayedScore < 1) {
+            scale = 26.0f;
+        } else {
+            scale = ((float)m_DisplayedScore / (float)m_TotalScore) * 14.0f + 26.0f;
+        }
+        scale *= m_NameScale;
+
+        // kScoreOffset = Vec3(40, -60, 0) — BonusScreen .bss +0x0c @ 0x0022f32C
+        Vec3 textPos(pos.x + 40.0f, pos.y + (-60.0f), pos.z + 0.0f);
+        // kTotalScoreColour = Colour(0, 0, 0, 0xff) — DAT @ 0x001f34d4
+        Colour totalColour(0, 0, 0, 0xff);
+
+        Mortar::Font* fontBlue2 = game->pFontBlue2.Get();
+        if (fontBlue2) {
+            Mortar::Utf8StringIterator iter(buf);
+            // TODO: CopyGlobalVec2_BonusScreen — pass Vec2(0,0) until global is RE'd
+            Vec2 align(0.0f, 0.0f);
+            fontBlue2->DrawString(scale, 1.0f, 0.0f, iter, textPos, totalColour,
+                                  align, 0x0F, 0.0f, nullptr);
+        }
+    }
+
+    // --- Pre-loop offset: kStarOffset = Vec3(-105, 40, 0) — .bss +0x44 @ 0x0022f364 ---
+    // ASM-verified: 2026-05-18 binary @ 0x0013325C (re-analyst)
+    pos.x += -105.0f;
+    pos.y += 40.0f;
+    // pos.z += 0.0f  (no z change)
+
+    // --- Per-award row loop (pFontMain) ---
+    // ASM-verified: 2026-05-18 binary @ 0x0013325C (re-analyst)
+    Mortar::Font* fontMain = game->pFontMain.Get();
+    MatrixManager& mm = MatrixManager::GetInstance();
+
+    for (int i = 0; i < (int)m_Awards.size(); ++i) {
+        // Visibility gate — break (not continue): awards revealed in order.
+        if (m_PhaseTimer - kRevealStart < (float)i * kPerAward) break;
+
+        const BonusAwardHud& entry = m_Awards[i];
+
+        // Star quad: DrawQuadUnCached equivalent — port uses renderer.DrawQuad.
+        if (entry.m_StarTex.IsValid()) {
+            entry.m_StarTex->Set();
+            uint32_t texW = (uint32_t)entry.m_StarTex->m_Width;
+            uint32_t texH = (uint32_t)entry.m_StarTex->m_Height;
+            float w = (float)texW + 1.0f;
+            float h = (float)texH + 1.0f;
+
+            Matrix44 mat = Matrix44::MakeScale(w, h, 1.0f);
+            mat.GlobalTranslate44(pos);
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
+
+            game->renderer.DrawQuad(entry.m_Colour, 0.0f, 0.0f, 1.0f, 1.0f);
+            entry.m_StarTex->UnSet();
+        }
+
+        if (fontMain) {
+            // Award name: scale = 20, clamped so measure*20 <= 220.
+            Mortar::Utf8StringIterator nameIter(entry.m_Name);
+            float measure = fontMain->MeasureString(nameIter);
+            float nameScale = 20.0f;
+            if (measure * 20.0f > 220.0f) {
+                nameScale = 220.0f / measure;
+            }
+            Vec2 align(0.0f, 0.0f);
+            // Re-construct iter (MeasureString may advance it).
+            Mortar::Utf8StringIterator nameIter2(entry.m_Name);
+            fontMain->DrawString(nameScale, 1.0f, 0.0f, nameIter2, pos,
+                                 entry.m_Colour, align, 0x0D, 0.0f, nullptr);
+
+            // Award score: scale = entry.m_Scale * 24, pos += Vec3(250,250,250).
+            // NOTE: Vec3(250,250,250) is the literal binary constant (timerArr[6] = 250.0).
+            char scoreBuf[64];
+            snprintf(scoreBuf, sizeof(scoreBuf), "%i", entry.m_DisplayedScore);
+            Vec3 scorePos(pos.x + kTextOffsetScalar,
+                          pos.y + kTextOffsetScalar,
+                          pos.z + kTextOffsetScalar);
+            float scoreScale = entry.m_Scale * 24.0f;
+            Mortar::Utf8StringIterator scoreIter(scoreBuf);
+            fontMain->DrawString(scoreScale, 1.0f, 0.0f, scoreIter, scorePos,
+                                 entry.m_Colour, align, 0x0D, 0.0f, nullptr);
+        }
+
+        // Advance Y for next row: kAwardYStep = -42.0 (timerArr[5]).
+        pos.y += kAwardYStep;
+    }
+
+    // Restore saved pos.
+    pos = savedPos;
 }
