@@ -235,8 +235,8 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // hitBounds): auto-size m_TargetSize and base.size from the bound
     // secondary texture. The +1 mirrors the binary's pixel-bleed margin
     // (same as ScoreControl's banner-tex sizing).
-    if (fruitType < 0 && !m_bHasHitArea && m_SecondaryTex.IsValid()) {
-        Mortar::Texture* tex = m_SecondaryTex.Get();
+    if (fruitType < 0 && !m_bHasHitArea && m_Texture.IsValid()) {
+        Mortar::Texture* tex = m_Texture.Get();
         if (tex) {
             float w = (float)(tex->m_Width  + 1);
             float h = (float)(tex->m_Height + 1);
@@ -383,8 +383,8 @@ void MenuButton::Release() {
     m_pLabel1 = nullptr;
     m_pLabel2 = nullptr;
     DeletePeices();
-    // Binary @ 0x0014f7e0 -- ~SmartPtr<Texture> drop on m_SecondaryTex.
-    m_SecondaryTex.SetNull();
+    // Binary @ 0x0014f7e0 -- ~SmartPtr<Texture> drop on m_Texture.
+    m_Texture.SetNull();
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
 
@@ -1117,8 +1117,8 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
                          0.0f);
     }
     // Binary @ 0x00150240: store the texture SmartPtr on the AddOn's
-    // m_SecondaryTex slot (HUDControl3d +0x78, Mortar::SmartPtr<Texture>).
-    c->m_SecondaryTex = tex;
+    // m_Texture slot (HUDControl3d +0x78, Mortar::SmartPtr<Texture>).
+    c->m_Texture = tex;
     c->pos   = pos;
     c->m_Timer = initialTimer;
     c->size  = size;

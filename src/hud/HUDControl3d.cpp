@@ -15,21 +15,19 @@
 static const float ROT_SPEED = 182.0f;
 
 // Matches 0x14428c (57 lines)
-// CORRECTION (2026-05-18): binary draws m_SecondaryTex (+0x78), not m_Texture (+0x74).
-// The 2026-04-28 ASM-verified marker was a false positive on the wrong slot.
-// Binary gates: SmartPtr::operator bool on +0x78 (m_SecondaryTex), then field_0x5f != 0
-// (m_DrawColour.a). Subclasses that need a primary tex (MenuButton, MissControl)
-// write m_Texture and either override Draw or rely on their own draw path.
+// ASM-verified (slot semantics, not full ASM diff): 2026-05-18 binary @ 0x0014428c
+//   - reads SmartPtr<Texture> at +0x74 (m_Texture)
+//   - +0x78 is SmartPtr<Mortar::Model>, NOT a second texture; never read by base Draw
 void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
 
-    if (!m_SecondaryTex.IsValid()) return;
+    if (!m_Texture.IsValid()) return;
     if (m_DrawColour.a == 0) return;
 
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    m_SecondaryTex->Set();
+    m_Texture->Set();
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -51,11 +49,11 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
 
-    m_SecondaryTex->UnSet();
+    m_Texture->UnSet();
 }
 
 HUDControl3d::HUDControl3d() {
-    // m_Texture / m_SecondaryTex default-construct to null SmartPtrs.
+    // m_Texture / m_Model default-construct to null SmartPtrs.
     m_Timer = 0.0f;
 }
 

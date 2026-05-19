@@ -31,7 +31,7 @@ public:
     // Binary @ 0x001531f8
     void Draw(const Vec3& hudScale, int layerMask) override;
 
-    // +0x74: achievement icon texture (overlaps HUDControl3d::m_SecondaryTex slot in binary).
+    // +0x74: achievement icon texture (overlaps HUDControl3d::m_Texture slot in binary).
     // Port: stored as a SmartPtr here alongside the GLuint m_Texture in super.
     // m_Texture (super +0x74 GLuint) is unused for this control; icon drawn separately.
     Mortar::SmartPtr<Mortar::Texture> m_AchIcon;   // effectively at +0x7C in port (sizeof SmartPtr = 8)

@@ -130,15 +130,15 @@ void PowerUpShop::Init() {
     m_PulseScale        = 1.0f;
     m_FruitScale        = 1.0f;
 
-    // Load buy-background texture into m_SecondaryTex (+0x78).
+    // Load buy-background texture into m_Texture (+0x78).
     // Binary: SetPtr from GOT[buybg_texture]; port uses TextureManager.
     // TODO: 0x00156b08 — confirm exact buy-bg texture filename from binary DAT string
     // (binary references GOT-loaded SmartPtr; filename not resolved by RE pass yet).
-    // g_BuyBg texture is loaded on demand; assign to m_SecondaryTex when available.
+    // g_BuyBg texture is loaded on demand; assign to m_Texture when available.
     if (!g_BuyBg.IsValid()) {
         g_BuyBg = Mortar::TextureManager::LoadLocalisedTexture("buy_bg.tex");
     }
-    m_SecondaryTex = g_BuyBg;
+    m_Texture = g_BuyBg;
 
     // Binary: reads texture w/h via vtable slots *(vtbl+0x14)/(+0x18) GetWidth/GetHeight.
     // Sets pivot = Vector3(w, h, 0) * 1.0.
@@ -260,7 +260,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
     SetMatrix(combined);
     UploadMatrices();
 
-    // Step 2: draw buy background quad via m_SecondaryTex.
+    // Step 2: draw buy background quad via m_Texture.
     // TODO: 0x00155e08 — Mesh::DrawQuadUnCached call requires Mesh utility not yet
     // extracted as a standalone draw helper. Skipping quad draw until Mesh draw
     // helper ported (binary calls DrawQuadUnCached with a Colour*).
