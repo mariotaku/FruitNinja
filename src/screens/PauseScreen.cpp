@@ -581,7 +581,6 @@ void PauseScreen::Update(float dt) {
         // m_TargetSize and size from texture dims. m_Texture is set for
         // HUDControl3d::Draw rendering.
         m_ResumeButton->m_Texture = m_PauseButtonTex;
-        m_ResumeButton->m_Texture      = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_ResumeButton->Init(
             Vec3(240.0f, -160.0f, 0.0f),  // initial pos; overwritten each frame
@@ -608,7 +607,6 @@ void PauseScreen::Update(float dt) {
         m_QuitButton = new MenuButton();
         // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
         m_QuitButton->m_Texture = m_QuitTitleTex;
-        m_QuitButton->m_Texture      = m_QuitTitleTex;
         m_QuitButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_QuitButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
@@ -628,7 +626,6 @@ void PauseScreen::Update(float dt) {
         m_RetryButton = new MenuButton();
         // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
         m_RetryButton->m_Texture = m_RetryButtonTex;
-        m_RetryButton->m_Texture      = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_RetryButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
@@ -846,11 +843,14 @@ void PauseScreen::Update(float dt) {
     //     base positions (off-screen left/right) for the entire pause
     //     overlay -- which is what the user observed visually.
     //
-    // Resume scale: m_Alpha * 1.25 + 0.75 (binary @ 0x001550da).
+    // ASM-verified: 2026-05-18 binary @ 0x00154468 (re-analyst)
+    // Per-frame Resume m_TargetSize: m_ButtonOriginPos (captured (64,64,64)
+    // at lazy-create) scaled by resumeScale = m_Alpha * 1.25 + 0.75.
+    // MenuButton::Update writes `size = m_TargetSize` each frame, so only
+    // m_TargetSize matters here -- writes to size.x/y are clobbered.
     if (m_ResumeButton) {
         const float resumeScale = m_Alpha * 1.25f + 0.75f;
-        m_ResumeButton->size.x = m_PauseButtonTexW * resumeScale;
-        m_ResumeButton->size.y = m_PauseButtonTexH * resumeScale;
+        m_ResumeButton->m_TargetSize = m_ButtonOriginPos * resumeScale;
     }
 
     const float OX = m_ButtonOriginPos.x;  // = 64
@@ -871,7 +871,21 @@ void PauseScreen::Update(float dt) {
     //   pos = (240 + 0.5*OX, -20, 0)
     if (m_RetryButton) {
         m_RetryButton->pos = Vec3(240.0f + 0.5f * OX, -20.0f, 0.0f);
-        m_RetryButton->m_bActive = (m_Alpha > 0.0f) ? 1 : 0;
+    }
+
+    // ASM-verified: 2026-05-18 binary @ 0x00154468 tail (re-analyst)
+    // Retry m_TargetSize := Resume m_TargetSize when m_Alpha > 0.
+    // Without this, Retry stays at MenuButton::Init texture-auto-size
+    // (129,129,0) -- 2x oversize hitbox and .z=0 degenerate render matrix.
+    {
+        bool retryActive = false;
+        if (m_Alpha > 0.0f && m_ResumeButton && m_RetryButton) {
+            m_RetryButton->m_TargetSize = m_ResumeButton->m_TargetSize;
+            retryActive = true;
+        }
+        if (m_RetryButton) {
+            m_RetryButton->m_bActive = retryActive ? 1 : 0;
+        }
     }
 
     // Phase 2: lerp toward on-screen target by m_Alpha.
