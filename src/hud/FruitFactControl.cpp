@@ -200,17 +200,17 @@ void FruitFactControl::Init() {
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
 
-    // Per-mode backplate stored in m_SecondaryTex (binary @ 0x0013a2a6..0x0013a2ba)
+    // Per-mode backplate stored in m_Texture (binary @ 0x0013a2a6..0x0013a2ba)
     if (gameMode == 2) {
-        if (s_PanelTexArcade.IsValid()) m_SecondaryTex = s_PanelTexArcade;
+        if (s_PanelTexArcade.IsValid()) m_Texture = s_PanelTexArcade;
     } else if (gameMode == 3) {
-        if (s_PanelTexZen.IsValid()) m_SecondaryTex = s_PanelTexZen;
+        if (s_PanelTexZen.IsValid()) m_Texture = s_PanelTexZen;
     } else {
-        if (s_PanelTexClassic.IsValid()) m_SecondaryTex = s_PanelTexClassic;
+        if (s_PanelTexClassic.IsValid()) m_Texture = s_PanelTexClassic;
     }
-    if (m_SecondaryTex.IsValid()) {
-        size.x = (float)(m_SecondaryTex->m_Width + 1);
-        size.y = (float)(m_SecondaryTex->m_Height + 1);
+    if (m_Texture.IsValid()) {
+        size.x = (float)(m_Texture->m_Width + 1);
+        size.y = (float)(m_Texture->m_Height + 1);
         size.z = 0.0f;
         // ASM-verified: 2026-05-11 binary @ 0x0013a31e (re-analyst)
         // 1.37f scale (DAT_0013a500) applies only in Classic (gameMode == 0).
@@ -380,7 +380,7 @@ void FruitFactControl::Update(float dt) {
 
     if (gameMode == Mortar::GAME_MODE_ZEN) {
         // SecondaryTex = combo-star tex
-        m_SecondaryTex = m_ComboStarTex;
+        m_Texture = m_ComboStarTex;
 
         // Gate on m_TransitionTimer (game[+0xC]) <= 0.75 OR m_StarTimer >= m_ComboLength
         if (game->m_TransitionTimer <= 0.75f || m_StarTimer >= (float)m_ComboLength) {
@@ -550,16 +550,16 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
     if (game->gameMode == Mortar::GAME_MODE_ZEN) {
         // ---- Zen body ----
-        // Backplate from m_SecondaryTex (set to combo-star or PanelTexZen in Init/Update)
-        if (m_SecondaryTex.IsValid()) {
-            m_SecondaryTex->Set();
+        // Backplate from m_Texture (set to combo-star or PanelTexZen in Init/Update)
+        if (m_Texture.IsValid()) {
+            m_Texture->Set();
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
             mat.GlobalTranslate44(Vec3(pos.x - 1.0f, pos.y - 8.0f, pos.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             r->DrawQuad(Colour(255, 255, 255, 255));
-            m_SecondaryTex->UnSet();
+            m_Texture->UnSet();
         }
 
         // Title: pos.x - 8.0
@@ -701,15 +701,15 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
         // 1. Backplate quad
         // Offset from GOT[DAT_0013cb1c] + (-1, -8, 0); const unknown, treat as (0,0,0)
-        if (m_SecondaryTex.IsValid()) {
-            m_SecondaryTex->Set();
+        if (m_Texture.IsValid()) {
+            m_Texture->Set();
             mm.GetWorldStack().Reset();
             Matrix44 mat = Matrix44::MakeScale(size.x, size.y, 1.0f);
             mat.GlobalTranslate44(Vec3(pos.x - 1.0f, pos.y - 8.0f, pos.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
             r->DrawQuad(Colour(255, 255, 255, 255));
-            m_SecondaryTex->UnSet();
+            m_Texture->UnSet();
         }
 
         // 2. Title: dispatch on game->languageFlag (field_0x3)

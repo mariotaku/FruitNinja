@@ -4,36 +4,38 @@
 //
 // HUDControl3d : HUDControl (size = 0x7C)
 // Verified from Ghidra: ctor at 0x1443f4, Draw at 0x14428c (57 lines)
-// See docs/structs/hud.md for full layout.
 //
 // Binary layout (ARM32):
 //   +0x00..+0x73: HUDControl base (0x74 bytes, includes UV floats at +0x64..+0x70)
-//   +0x74: Mortar::SmartPtr<Texture> m_Texture     (NOT used by HUDControl3d::Draw base)
-//   +0x78: Mortar::SmartPtr<Texture> m_SecondaryTex (the texture drawn by HUDControl3d::Draw)
+//   +0x74: Mortar::SmartPtr<Texture> m_Texture  — the texture drawn by HUDControl3d::Draw base
+//   +0x78: Mortar::SmartPtr<Model>   m_Model    — 3D mesh slot, RESERVED; base Draw never reads it;
+//                                                  no FN subclass observed writing it.
+//                                                  Dtor @ 0x00144474 calls SmartPtr<Model>::~SmartPtr
+//                                                  on this+0x78 confirming the type.
 //
-// Draw reads +0x78 (m_SecondaryTex), not +0x74.  Subclasses that need a primary
-// tex (MenuButton, MissControl) write m_Texture and either override Draw or use
-// their own path.  The 2026-04-28 ASM-verified marker on Draw was a false positive.
-//
+// ASM-verified (slot semantics, not full ASM diff): 2026-05-18 binary @ 0x0014428c
+//   - reads SmartPtr<Texture> at +0x74 (called m_Texture in this port)
+//   - +0x78 is SmartPtr<Mortar::Model>, NOT a second texture; never read by base Draw
 // ASM-verified: 2026-04-28T16:35Z binary @ 0x001443f4 (asm-inspector) -- ctor layout only
 //
 
 #include "HUDControl.h"
 #include "render/gl_funcs.h"
 #include "asset/Texture.h"
+#include "asset/Mesh.h"
 #include "util/SmartPtr.h"
 
 class HUDControl3d : public HUDControl {
 public:
-    // +0x74: m_Texture (Mortar::SmartPtr<Texture>, matches binary).
-    // NOT read by HUDControl3d::Draw -- base Draw uses m_SecondaryTex.
-    // Subclasses that need this slot write it and use their own draw path.
+    // +0x74: m_Texture (Mortar::SmartPtr<Texture>).
+    // THIS is the texture gate-checked and drawn by HUDControl3d::Draw base.
     Mortar::SmartPtr<Mortar::Texture> m_Texture;
 
-    // +0x78: m_SecondaryTex (Mortar::SmartPtr<Texture>, matches binary).
-    // THIS is the texture gate-checked and drawn by HUDControl3d::Draw base.
-    // BonusScreen, and any subclass relying on base Draw, loads here.
-    Mortar::SmartPtr<Mortar::Texture> m_SecondaryTex;
+    // +0x78: m_Model (Mortar::SmartPtr<Model>).
+    // RESERVED — 3D mesh slot present in the engine; base Draw never reads it;
+    // no HUDControl3d subclass in FruitNinja writes it. Preserved for binary sizeof = 0x7c.
+    // Dtor @ 0x00144474 calls SmartPtr<Model>::~SmartPtr on this+0x78.
+    Mortar::SmartPtr<Mortar::Model> m_Model;
 
     HUDControl3d();
 

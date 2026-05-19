@@ -297,5 +297,5 @@ void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
                          overlayTint, 0);
     }
 
-    // Binary @ 0x00162a..: tick-tock UV quad branch. Dead code in shipped binary; m_SecondaryTex never assigned. Skipped.
+    // Binary @ 0x00162a..: tick-tock UV quad branch. Dead code in shipped binary; m_Texture never assigned. Skipped.
 }

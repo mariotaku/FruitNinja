@@ -269,14 +269,14 @@ PauseScreen::PauseScreen()
     m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
     // Load textures -- strings resolved from GOT in ctor (doc section 6 asset table)
-    // pause_title.tex goes into inherited m_SecondaryTex (+0x78 in binary / +0x74 in port)
-    // Port: m_SecondaryTex is the inherited GLuint; m_Texture (the primary display tex)
+    // pause_title.tex goes into inherited m_Texture (+0x78 in binary / +0x74 in port)
+    // Port: m_Texture is the inherited GLuint; m_Texture (the primary display tex)
     // is set to the title texture so HUDControl3d::Draw renders it.
     {
         int w = 0, h = 0;
         Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex", &w, &h);
         m_Texture      = tex;     // +0x74 slot (PauseScreen::DrawOrder uses its own path)
-        m_SecondaryTex = tex;     // +0x78 slot (binary stores here; HUDControl3d::Draw base reads this)
+        m_Texture = tex;     // +0x78 slot (binary stores here; HUDControl3d::Draw base reads this)
         m_TitleTexW = (float)w;
         m_TitleTexH = (float)h;
     }
@@ -339,7 +339,7 @@ void PauseScreen::Init() {
 //   +0xc4 m_RetryHighlightTex  (the 5th slot, was mis-named _pad_c4)
 //
 // Slots NOT nulled by binary:
-//   +0x78 m_SecondaryTex (the slot pause_title.tex actually lives in)
+//   +0x78 m_Texture (the slot pause_title.tex actually lives in)
 //   +0xa8 m_PauseButtonTex (kept live across Release calls)
 // -------------------------------------------------------------------------
 void PauseScreen::Release() {
@@ -357,9 +357,9 @@ void PauseScreen::Release() {
 // Two if-blocks, no other PauseScreen field is touched:
 //   if (m_RetryButton) {
 //       retry->m_bTouchHeld = 1;            // +0x131
-//       retry->m_SecondaryTex = m_RetryHighlightTex;   // src is +0xc4, NOT +0xc0
+//       retry->m_Texture = m_RetryHighlightTex;   // src is +0xc4, NOT +0xc0
 //   }
-//   if (m_ResumeButton) resume->m_SecondaryTex = m_PlayButtonTex;
+//   if (m_ResumeButton) resume->m_Texture = m_PlayButtonTex;
 //
 // Inverse of SetToMultiplayerState: re-enables RetryButton and restores
 // SecondaryTex assignments so SP layout is correct after MP session ends.
@@ -367,10 +367,10 @@ void PauseScreen::Release() {
 void PauseScreen::Reset() {
     if (m_RetryButton) {
         m_RetryButton->m_bTouchHeld = 1;
-        m_RetryButton->m_SecondaryTex = m_RetryHighlightTex;
+        m_RetryButton->m_Texture = m_RetryHighlightTex;
     }
     if (m_ResumeButton) {
-        m_ResumeButton->m_SecondaryTex = m_PlayButtonTex;
+        m_ResumeButton->m_Texture = m_PlayButtonTex;
     }
 }
 
@@ -441,9 +441,9 @@ void PauseScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
 bool PauseScreen::SetToMultiplayerState() {
     // Tier-2 deferred (binary @ 0x00154060): vtable[11], called from PauseScreen::Reset on MP entry.
     // Body (3 stores):
-    //   1. m_RetryButton->m_SecondaryTex = SmartPtr::Null;     // retry+0x74
+    //   1. m_RetryButton->m_Texture = SmartPtr::Null;     // retry+0x74
     //   2. m_RetryButton->m_bTouchHeld = 0;                  // retry+0x131 -- disable interactability
-    //   3. m_ResumeButton->m_SecondaryTex = m_RetryButtonTex;  // resume+0x74 -- show retry icon on resume btn
+    //   3. m_ResumeButton->m_Texture = m_RetryButtonTex;  // resume+0x74 -- show retry icon on resume btn
     // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
     return HUDControl::SetToMultiplayerState();
 }
@@ -576,11 +576,11 @@ void PauseScreen::Update(float dt) {
     // before/after Init since Init doesn't manage those slots.
     if (!m_ResumeButton) {
         m_ResumeButton = new MenuButton();
-        // Binary passes texture via ctor arg -> m_SecondaryTex; Init's
-        // fruitType<0 text-button branch reads m_SecondaryTex to auto-size
+        // Binary passes texture via ctor arg -> m_Texture; Init's
+        // fruitType<0 text-button branch reads m_Texture to auto-size
         // m_TargetSize and size from texture dims. m_Texture is set for
         // HUDControl3d::Draw rendering.
-        m_ResumeButton->m_SecondaryTex = m_PauseButtonTex;
+        m_ResumeButton->m_Texture = m_PauseButtonTex;
         m_ResumeButton->m_Texture      = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_ResumeButton->Init(
@@ -606,8 +606,8 @@ void PauseScreen::Update(float dt) {
 
     if (!m_QuitButton) {
         m_QuitButton = new MenuButton();
-        // Binary @ 0x001544e8: texture via ctor arg -> m_SecondaryTex for Init auto-size.
-        m_QuitButton->m_SecondaryTex = m_QuitTitleTex;
+        // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
+        m_QuitButton->m_Texture = m_QuitTitleTex;
         m_QuitButton->m_Texture      = m_QuitTitleTex;
         m_QuitButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_QuitButton->Init(
@@ -626,8 +626,8 @@ void PauseScreen::Update(float dt) {
 
     if (!m_RetryButton) {
         m_RetryButton = new MenuButton();
-        // Binary @ 0x001544e8: texture via ctor arg -> m_SecondaryTex for Init auto-size.
-        m_RetryButton->m_SecondaryTex = m_RetryButtonTex;
+        // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
+        m_RetryButton->m_Texture = m_RetryButtonTex;
         m_RetryButton->m_Texture      = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_RetryButton->Init(
