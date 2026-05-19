@@ -12,8 +12,10 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "render/Font.h"
 #include "render/gl_funcs.h"
 #include "math/Vec3.h"
+#include "math/Colour.h"
 #include <cmath>
 #include <cstdio>
 #include <list>
@@ -24,11 +26,19 @@ bool  g_DebugHitboxes  = false;
 bool  g_DebugWireframe = false; // Port specific: desktop GL only (F2)
 float g_DebugTimeScale = 1.0f; // Port specific: debug-only, no binary equivalent
 
-// Lazy 1×1 white texture for the vertex-colour shader path. The
+// Lazy 1x1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex
 // color; without a bound texture we'd see undefined samples. A solid
 // white sample lets the vertex colour drive the visible tint.
 static GLuint s_WhiteTex = 0;
+
+// Lazy debug font (verdana.fnt) for pointer-address labels in DebugHUDBounds_Draw.
+static Mortar::SmartPtr<Mortar::Font> s_DebugFont;
+
+static void EnsureDebugFont() {
+    if (s_DebugFont.IsValid()) return;
+    s_DebugFont = Mortar::Font::Create("fonts/verdana.fnt");
+}
 
 static void EnsureWhiteTex() {
     if (s_WhiteTex) return;
@@ -235,6 +245,7 @@ void DebugHUDBounds_Draw() {
     if (controls.empty()) return;
 
     EnsureWhiteTex();
+    EnsureDebugFont();
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -250,6 +261,13 @@ void DebugHUDBounds_Draw() {
     static const uint32_t kHUDBoxColour = 0xCCFF00FF;
     // 4 sides x 6 verts = 24 verts
     static QUADCUSTOMVERTEX s_BoxVerts[24];
+
+    // Yellow, fully opaque for high contrast against magenta outline.
+    static const Colour kLabelColour(255, 255, 0, 255);
+    static const float kLabelScale  = 8.0f;
+    static const float kLabelInsetX = 2.0f;
+    static const float kLabelInsetY = 2.0f;
+    static const float kLabelZ      = -0.4f; // slightly in front of the AABB outline
 
     for (std::list<HUDControl*>::const_iterator it = controls.begin();
          it != controls.end(); ++it) {
@@ -267,6 +285,17 @@ void DebugHUDBounds_Draw() {
 
         BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kHUDBoxColour);
         r->DrawTriList(s_BoxVerts, 24);
+
+        if (s_DebugFont.IsValid()) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%p", static_cast<void*>(ctrl));
+            const Vec3 labelPos(left + kLabelInsetX, top - kLabelInsetY, kLabelZ);
+            mm.GetWorldStack().Reset();
+            mm.UploadModelViewOnly();
+            s_DebugFont->DrawString(kLabelScale, 1.0f, 0.0f,
+                                    buf, labelPos, kLabelColour,
+                                    Mortar::FONT_ALIGN_LEFT);
+        }
     }
 }
 
