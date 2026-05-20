@@ -50,6 +50,7 @@
 #include "StartupEffects.h"
 #include "entities/Coin.h"
 #include "debug/Logger.h"
+#include "game/GameWork.h"
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup.
 // Call order matches binary 23-step sequence (see inline step comments).
@@ -62,8 +63,8 @@ void GameInit(unsigned long) {
     GameTaskState* ts = GetTaskState();
     if (ts->initComplete) return;
     // step 1: HUD allocation (Game+0x3c)
-    if (!game->hud) {
-        game->hud = new HUD();
+    if (!game_work.mHud) {
+        game_work.mHud = new HUD();
     }
 
     // step 2: HUD::Release post-construction housekeeping
@@ -123,7 +124,7 @@ void GameInit(unsigned long) {
             // table) hasn't been pinned down; this matches the visual
             // outcome.
             mc->m_Texture = MissControl::GetCrossTexture();
-            game->hud->AddControl(mc);
+            game_work.mHud->AddControl(mc);
         }
     }
     // step 3b: 12-entry pool (MissControl::CreatePool(0xc, hud)).
@@ -131,19 +132,19 @@ void GameInit(unsigned long) {
 
     // step 4: ScoreControl (size 0x100) + AddControl
     ScoreControl* sc = new ScoreControl();
-    game->hud->AddControl(sc);
+    game_work.mHud->AddControl(sc);
 
-    // step 5: CoinCounter (size 0xD4) + AddControl -> game.pCoinCounter (Game+0x178)
+    // step 5: CoinCounter (size 0xD4) + AddControl -> game_work.mCoinCounter (Game+0x178)
     CoinCounter* cc = new CoinCounter();
-    game->hud->AddControl(cc);
-    game->pCoinCounter = cc;
+    game_work.mHud->AddControl(cc);
+    game_work.mCoinCounter = cc;
 
-    // step 6: TimeControl (size 0x108) + CountDown(90.9f) + AddControl -> game.pTimeCtrl (Game+0x180)
+    // step 6: TimeControl (size 0x108) + CountDown(90.9f) + AddControl -> game_work.mCountDown (Game+0x180)
     // DAT_0016c9cc = 90.9 (Zen mode initial countdown time)
     TimeControl* tc = new TimeControl();
     tc->CountDown(90.9f);
-    game->pTimeCtrl = tc;
-    game->hud->AddControl(tc);
+    game_work.mCountDown = tc;
+    game_work.mHud->AddControl(tc);
 
     // step 7: Background load (gb_game.tex / gb_game_sml.tex IsFastHardware branch)
     // Binary GameInit @ 0x..: same call shape (ChangeBackground(NULL) -> default "gb_game" + suffix).
@@ -180,7 +181,7 @@ void GameInit(unsigned long) {
 
     // step 11: MainScreen allocation
     MainScreen* mainScreen = new MainScreen(*game);
-    game->mainScreen = mainScreen;
+    game_work.mMainScreen = mainScreen;
     // step 12: PauseScreen allocation (0x0016cad8..0x0016caf8)
     // Binary: operator new(0xd8), PauseScreen::PauseScreen, vtable[2] (Init).
     // Stored at g_TaskState +0x04.
@@ -196,23 +197,23 @@ void GameInit(unsigned long) {
     // Binary unconditionally re-allocs g_GameData+0x168, leaking the previous ptr.
     // Port matches fidelity: delete existing and re-alloc here.
     // DIFFERS: port deletes the previous ptr; binary leaks it (no free before re-alloc).
-    if (game->pTutorialCtrl) {
-        delete game->pTutorialCtrl;
-        game->pTutorialCtrl = nullptr;
+    if (game_work.m_TutorialControl) {
+        delete game_work.m_TutorialControl;
+        game_work.m_TutorialControl = nullptr;
     }
     {
         TutorialControl* tc = new TutorialControl();
         tc->Init();
-        game->pTutorialCtrl = tc;
-        game->levelTransitionFlag      = 1;      // g_GameData+0x05 = 1
-        game->m_TransitionTimer = -1.0f; // g_GameData+0x0c = -1.0f
+        game_work.m_TutorialControl = tc;
+        game_work.m_LevelTransitionFlag      = 1;      // g_GameData+0x05 = 1
+        game_work.m_GameDt = -1.0f; // g_GameData+0x0c = -1.0f
     }
 
     // step 14: AddControl x3 batch (MainScreen + PauseScreen + TutorialControl)
     // Binary: HUD::AddControl x3 in order: MainScreen, PauseScreen, TutorialControl.
-    game->hud->AddControl(mainScreen);
-    game->hud->AddControl(GetTaskState()->pPauseScreen);
-    game->hud->AddControl(game->pTutorialCtrl);
+    game_work.mHud->AddControl(mainScreen);
+    game_work.mHud->AddControl(GetTaskState()->pPauseScreen);
+    game_work.mHud->AddControl(game_work.m_TutorialControl);
 
     // step 15: Mortar::Entity::HeapCreate (0x0016cb48..0x0016cb4e)
     // Binary: Mortar::Entity::HeapCreate(0x20000) @ 0x000fd500 (PLT thunk).
@@ -283,7 +284,7 @@ void GameInit(unsigned long) {
     {
         Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
         sm.Initialise("assets/sound");  // DIFFERS: original = "Sound/Win32Project/Win/FruitNinja"
-        const float sfxVol = game->m_bSoundOn ? 0.5f : 0.0f;
+        const float sfxVol = game_work.m_bSoundOn ? 0.5f : 0.0f;
         sm.SetSFXVolume(sfxVol);
     }
     // Per-finger SlashEntity array (binary SlashEntity[16] @ BSS, registered
@@ -310,8 +311,8 @@ void GameUpdate(float dt, bool active) {
     // if non-null, AddControl(ctrl, false) then clears the slot.
     {
         GameTaskState* ts = GetTaskState();
-        if (ts->pDeferredControl && game->hud) {
-            game->hud->AddControl(ts->pDeferredControl, /*atFront=*/false);
+        if (ts->pDeferredControl && game_work.mHud) {
+            game_work.mHud->AddControl(ts->pDeferredControl, /*atFront=*/false);
             ts->pDeferredControl = nullptr;
         }
     }
@@ -323,7 +324,7 @@ void GameUpdate(float dt, bool active) {
         if (!game->pSplashTex) {
             game->pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
         }
-        game->dt = 0.0f;
+        game_work.dt = 0.0f;
         splashTs->splashFadeTimer -= dt * 2.0f;
         if (splashTs->splashFadeTimer <= 0.0f) {
             splashTs->splashFadeTimer = 0.0f;
@@ -334,10 +335,10 @@ void GameUpdate(float dt, bool active) {
     }
 
     // Binary @ 0x0016bf90..0x0016bfce -- per-frame slot-array re-snap.
-    game->field_0x9c = 0;
-    game->field_0x9d = 0;
+    game_work.field_0x9c = 0;
+    game_work.field_0x9d = 0;
     for (int i = 0; i < 16; ++i) {
-        float& z = game->m_FingerSpawnPos[i].z;
+        float& z = game_work.m_FingerSpawnPos[i].z;
         if (z == 0.0f) z = -1.0f;
         // z > 0 or z < 0: left unchanged
     }
@@ -351,15 +352,15 @@ void GameUpdate(float dt, bool active) {
     // force-slices menu fruits on the Quit-from-Pause transition, causing
     // phantom GameModeCallback / AboutCallback fires.
     if (active) {
-        const float prevBombTimer = game->bombHitTimer;
-        if (game->bombHitTimer > 0.0f) {
-            game->bombHitTimer -= dt;
-            if (game->bombHitTimer < 0.0f) game->bombHitTimer = 0.0f;
+        const float prevBombTimer = game_work.m_BombHitTimer;
+        if (game_work.m_BombHitTimer > 0.0f) {
+            game_work.m_BombHitTimer -= dt;
+            if (game_work.m_BombHitTimer < 0.0f) game_work.m_BombHitTimer = 0.0f;
         }
         FN::UpdateBombHit(prevBombTimer);
 
         // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
-        if (prevBombTimer > 1.5f && game->bombHitTimer <= 1.5f && !game->levelTransitionFlag) {
+        if (prevBombTimer > 1.5f && game_work.m_BombHitTimer <= 1.5f && !game_work.m_LevelTransitionFlag) {
             FN::GameOver(-1, -1.0f, -1);
         }
     }
@@ -376,9 +377,9 @@ void GameUpdate(float dt, bool active) {
     // pump permanently when pausedFlag stayed set after pause->resume.
     WaveManager::GetInstance()->Update(active ? dt : 0.0f);
 
-    if (game->pSaveData) game->pSaveData->Update(dt, game->hud);
+    if (game_work.m_SaveData) game_work.m_SaveData->Update(dt, game_work.mHud);
 
-    if (game->pGameSound) game->pGameSound->Update(dt);
+    if (game_work.mGameSound) game_work.mGameSound->Update(dt);
     UpdateMusic(dt);
 
     PSPParticleManager::GetInstance().Update(dt, false);
@@ -406,12 +407,12 @@ void GameUpdate(float dt, bool active) {
         // -> BombFlashFull returns true -> state 1 -> 0.
         {
             static const float GAME_CAMERA_TRANSITION_THRESHOLD = 0.99896961f;  // DAT_0x0016c574/8 = 0x3f7fbe77
-            game->m_bSlowMotion = false;
-            const float tt = game->m_TransitionTimer;
+            game_work.m_bSlowMotion = false;
+            const float tt = game_work.m_GameDt;
             const bool unpause = (tt < 0.0f)
                 ? (tt < -GAME_CAMERA_TRANSITION_THRESHOLD)
                 : (tt >  GAME_CAMERA_TRANSITION_THRESHOLD);
-            if (unpause) game->pausedFlag = false;
+            if (unpause) game_work.m_Paused = false;
         }
 
         // Binary @ 0x0016c378 calls PreUpdate once (on the first valid
@@ -432,8 +433,8 @@ void GameUpdate(float dt, bool active) {
             }
         }
     }
-    if (game->hud) game->hud->Update(dt);
-    if (game->pCamera) game->pCamera->UpdateCamera(dt);
+    if (game_work.mHud) game_work.mHud->Update(dt);
+    if (game_work.m_FruitCamera) game_work.m_FruitCamera->UpdateCamera(dt);
 
     // ASM-spec for bomb-fuse SFX (binary @ 0x0016c4c8..0x0016c5ca, GameUpdate):
     //   metric = Bomb::GetHeighestBomb()   (binary @ 0x001712c8)
@@ -444,9 +445,9 @@ void GameUpdate(float dt, bool active) {
     // Releases the handle -- silent-when-no-bomb is achieved via SetVolume(0).
     {
         GameTaskState* ts = GetTaskState();
-        GameSound* gs = game->pGameSound;
-        const bool noSfx  = (game->levelTransitionFlag != 0);
-        const bool paused = game->pausedFlag;
+        GameSound* gs = game_work.mGameSound;
+        const bool noSfx  = (game_work.m_LevelTransitionFlag != 0);
+        const bool paused = game_work.m_Paused;
         const float metric = Bomb::GetHeighestBomb();   // -10000 when no bomb
         float vol;
         Mortar::MortarSound* fuse;
@@ -472,9 +473,9 @@ void GameUpdate(float dt, bool active) {
     // structural parity in case a future RE pass identifies a code path that
     // does arm it (e.g. delayed-quit from a popup the port hasn't traced).
     // Ramp uses RAW dt (s17 saved at function entry), not the wave-scaled dt.
-    if (game->m_MenuReturnTimer > 0.0f) {
-        game->m_MenuReturnTimer -= dt;
-        if (game->m_MenuReturnTimer <= 0.0f) {
+    if (game_work.m_MenuReturnTimer > 0.0f) {
+        game_work.m_MenuReturnTimer -= dt;
+        if (game_work.m_MenuReturnTimer <= 0.0f) {
             // Binary @ 0x0016c622: blx CleanupAndReturnToMainMenu (0x0016b2dc).
             // Port body lives in PauseScreen.cpp QuitToMenu (and GameOverScreen
             // QuitCallback for the alternate path); both fire the same writes
@@ -517,8 +518,8 @@ void GameDraw(float dt, bool active) {
 
     GameTaskState* ts = GetTaskState();
     // 1. Camera projection
-    if (game->pCamera)
-        game->pCamera->SetupPerspective(PT_STANDARD, false);
+    if (game_work.m_FruitCamera)
+        game_work.m_FruitCamera->SetupPerspective(PT_STANDARD, false);
 
     MatrixManager& mm = MatrixManager::GetInstance();
 
@@ -571,11 +572,11 @@ void GameDraw(float dt, bool active) {
     //   SetDepthBufferWrite(0)  — writes OFF for HUD/splats/bomb blasts
     dm.SetDepthBuffer(true);
     dm.SetDepthBufferWrite(false);
-    if (game->hud) {
-        game->hud->BeginDraw(dt);
+    if (game_work.mHud) {
+        game_work.mHud->BeginDraw(dt);
 
         // 2a. HUD::Draw(0x40) — menu button sprites @ 0x0016ba5a
-        game->hud->Draw(Mortar::HUD_LAYER_MENU_BG);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_MENU_BG);
 
         // 2b. SplatEntity::DrawActiveSplats @ 0x0016ba6a
         SplatEntity::DrawActiveSplats();
@@ -598,7 +599,7 @@ void GameDraw(float dt, bool active) {
         BombFlash::DrawActiveFlashes();
 
         // 2g. HUD::Draw(0x80) — DojoScreen / AboutScreen @ 0x0016baf8
-        game->hud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
     }
 
     // === 3. Background particles ===
@@ -626,7 +627,7 @@ void GameDraw(float dt, bool active) {
     FN::SliceEffect_Draw(dt);
 
     // HUD::Draw(0x01) — MainScreen logo / shade @ 0x0016bb5a
-    if (game->hud) game->hud->Draw(Mortar::HUD_LAYER_DEFAULT);
+    if (game_work.mHud) game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
     // pm.Draw(1) — foreground particles @ 0x0016bb6a
     pm.Draw(0.0f, false, 1);
@@ -635,12 +636,12 @@ void GameDraw(float dt, bool active) {
     WaveManager::GetInstance()->Draw(0);
 
     // === 5. HUD overlay layers + flash effects ===
-    if (game->hud) {
+    if (game_work.mHud) {
         // HUD::Draw(0x08) — buttons @ 0x0016bba8
-        game->hud->Draw(Mortar::HUD_LAYER_BUTTONS);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);
 
         // MainScreen::DrawPostEffects @ 0x0016bbb0
-        if (game->mainScreen) game->mainScreen->DrawPostEffects();
+        if (game_work.mMainScreen) game_work.mMainScreen->DrawPostEffects();
 
         // DrawCritHit (CriticalFlash) @ 0x0016bbd2 — gated on
         // critFlash > 0 && IsFastHardware. Port has CriticalFlash
@@ -648,14 +649,14 @@ void GameDraw(float dt, bool active) {
         FN::DrawCriticalFlash();
 
         // HUD::Draw(0x100) — overlays @ 0x0016bbde
-        game->hud->Draw(Mortar::HUD_LAYER_P2_SCORE);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_P2_SCORE);
 
         // DrawBombHit @ 0x0016bbe6 — bomb-hit white flash, gated on
         // bombFlash > 0
         FN::DrawBombHit();
 
         // HUD::Draw(0x200) — bomb-hit overlay layer @ 0x0016bbec
-        game->hud->Draw(Mortar::HUD_LAYER_SLIDER);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_SLIDER);
 
         // DrawNews / DrawStartFade @ 0x0016bbf0..0x0016bc12
         FN::DrawNews();
@@ -669,7 +670,7 @@ void GameDraw(float dt, bool active) {
 
         // HUD::Draw(0x400) — top layer @ 0x0016bd7c, ALWAYS fires
         // (binary places it OUTSIDE the `active` block).
-        game->hud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
     }
 }
 
@@ -701,12 +702,12 @@ void GameExit_Handler() {
     }
 
     // Release HUD (destroys all controls including MainScreen)
-    if (game->hud) {
-        game->hud->Release();
-        delete game->hud;
-        game->hud = nullptr;
+    if (game_work.mHud) {
+        game_work.mHud->Release();
+        delete game_work.mHud;
+        game_work.mHud = nullptr;
     }
-    game->mainScreen = nullptr;
+    game_work.mMainScreen = nullptr;
 
     Coin::ClearCoins(false);
     FruitNinja_SaveCurrentData();           // writes FruitSaveData XML; matches binary @ 0x0016ccc8

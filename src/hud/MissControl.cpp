@@ -18,6 +18,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include "game/GameWork.h"
 
 // Pool size: binary CreatePool(0xC, hud) = 12 slots. DIFFERS: was 9.
 // binary @ 0x001512d8
@@ -150,9 +151,9 @@ Vec3 MissControl::GetDrawPos() const {
         Game* g = Game::GetInstance();
         if (g) {
             const bool failureEnabled =
-                Mortar::FailureEnabled(g->gameMode);  // IsMultiplayer() unported -> false
+                Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
             if (failureEnabled) {
-                p.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+                p.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
             } else {
                 p.y -= 3.0f * pos.y;
             }
@@ -217,13 +218,13 @@ void MissControl::LoadContent() {
 void MissControl::AllocatePool() {
     if (s_PoolAllocated) return;
     Game* game = Game::GetInstance();
-    if (!game || !game->hud) {
+    if (!game || !game_work.mHud) {
         LOG_WARN("MissControl", "AllocatePool: HUD not ready");
         return;
     }
     for (int i = 0; i < MISS_POOL_SIZE; ++i) {
         s_Pool[i] = new MissControl();
-        game->hud->AddControl(s_Pool[i]);
+        game_work.mHud->AddControl(s_Pool[i]);
     }
     s_PoolAllocated = true;
     LOG_DEBUG("MissControl", "AllocatePool: %d slots", MISS_POOL_SIZE);
@@ -313,7 +314,7 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
     // (int)(WaveManager::GetSpeed(0) + 0.65f) and uses that as the
     // effective combo count when gameMode == ARCADE.
     Game* g = Game::GetInstance();
-    if (g && g->gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (g && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         WaveManager* wm = WaveManager::GetInstance();
         if (wm) comboCount = (int)(wm->GetSpeed(0) + 0.65f);
     }
@@ -397,11 +398,11 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
     // Their m_AnimState is 0/1/2 (slot index); m_bActive stays 0.
-    // Toggle m_bVisible based on game->missCount vs m_AnimState — when the
+    // Toggle m_bVisible based on game_work.missCount vs m_AnimState — when the
     // player has missed at least (m_AnimState + 1) fruits, the X marker
     // turns red. binary @ 0x00151a60 lines 1-10.
     Game* game = Game::GetInstance();
-    uint8_t missCount = (game ? game->missCount : 0);
+    uint8_t missCount = (game ? game_work.missCount : 0);
     if (!m_bVisible && m_AnimState < missCount) {
         m_JitterTimer  = 0x1e;
         m_DrawColour.a = 0xff;
@@ -454,7 +455,7 @@ void MissControl::Update(float dt) {
     }
 
     // Pause guard: if game paused, skip fade. binary @ 0x00151a60 pause guard
-    if (game && game->levelTransitionFlag) return;
+    if (game && game_work.m_LevelTransitionFlag) return;
 
     pos.z = 0.0f;
 
@@ -485,8 +486,8 @@ void MissControl::Update(float dt) {
         } else {
             std::strcpy(buf, "New-best-score");
         }
-        if (defaultSfx && game && game->pGameSound) {
-            game->pGameSound->SFXPlay(buf, /*vol*/1.0f, /*pitch*/0.25f);
+        if (defaultSfx && game && game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay(buf, /*vol*/1.0f, /*pitch*/0.25f);
         }
     }
 
@@ -524,7 +525,7 @@ void MissControl::Update(float dt) {
 //
 //     if (m_FadeAlpha <= 0.0f):               // passive miss-marker path only
 //         if (FailureEnabled() && !IsMultiplayer()):
-//             anchorBase.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer)
+//             anchorBase.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt)
 //         else:
 //             anchorBase.y -= 3.0f * pos.y    // Zen / MP: park off-screen
 //
@@ -588,7 +589,7 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // Only applied when m_FadeAlpha <= 0 (passive miss-marker path).
     // Pulse path (m_FadeAlpha > 0) skips this entirely.
     //   if (FailureEnabled() && !IsMultiplayer())
-    //       drawPos.y -= 3.0f * pos.y * fabsf(game->m_TransitionTimer);
+    //       drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
     //   else
     //       drawPos.y -= 3.0f * pos.y;   // Zen / multi-player: parked off-screen
     // For non-Zen single-player, m_TransitionTimer drives the animation:
@@ -601,9 +602,9 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         Game* g = Game::GetInstance();
         if (g) {
             const bool failureEnabled =
-                Mortar::FailureEnabled(g->gameMode);  // IsMultiplayer() unported -> false
+                Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
             if (failureEnabled) {
-                drawPos.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+                drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
             } else {
                 drawPos.y -= 3.0f * pos.y;
             }
@@ -616,8 +617,8 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     float fade = 1.0f;
     {
         Game* gFade = Game::GetInstance();
-        if (gFade && gFade->hud) {
-            float ts = gFade->hud->m_globalTimeScale;
+        if (gFade && game_work.mHud) {
+            float ts = game_work.mHud->m_globalTimeScale;
             if (ts < 1.0f) fade = ts;
         }
     }

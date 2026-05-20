@@ -50,6 +50,7 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "game/GameWork.h"
 
 static int FailUsage() {
     fprintf(stderr,
@@ -57,7 +58,7 @@ static int FailUsage() {
         "  --interactive: show the window and run the normal main loop\n"
         "                 instead of ticking 30 frames headless. ESC quits.\n"
         "  --screenshot:  dump the framebuffer to tmp/test/screenshots/.\n"
-        "  --no-miss:     Classic only -- pin game.missCount to a very large\n"
+        "  --no-miss:     Classic only -- pin game_work.missCount to a very large\n"
         "                 negative value so Fruit miss penalties never reach\n"
         "                 the > 2 game-over trigger. Use with --interactive\n"
         "                 to leave the gameplay scene running for visual test.\n");
@@ -117,8 +118,8 @@ int main(int argc, char* argv[]) {
     // Drive a few frames first so the splash -> game transition
     // initialises HUD + MainScreen.
     game.runFrames(5);
-    if (!game.hud) {
-        fprintf(stderr, "FAIL: game.hud is null after runFrames(5)\n");
+    if (!game_work.mHud) {
+        fprintf(stderr, "FAIL: game_work.mHud is null after runFrames(5)\n");
         return 1;
     }
 
@@ -127,7 +128,7 @@ int main(int argc, char* argv[]) {
     // only the requested screen. Without this, parent menus draw under
     // the target screen and clutter the output.
     auto hideAllExisting = [&]() {
-        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+        for (auto it = game_work.mHud->controls.begin(); it != game_work.mHud->controls.end(); ++it) {
             (*it)->m_bActive = 0;
         }
     };
@@ -137,27 +138,27 @@ int main(int argc, char* argv[]) {
     } else if (strcmp(screenName, "dojo") == 0) {
         hideAllExisting();
         DojoScreen* s = new DojoScreen(game);
-        game.hud->AddControl(s);
+        game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "about") == 0) {
         hideAllExisting();
         DojoScreen* dojo = new DojoScreen(game);
         dojo->m_bActive = 0;  // dojo is just AboutScreen's parent for back-nav
-        game.hud->AddControl(dojo);
+        game_work.mHud->AddControl(dojo);
         AboutScreen* s = new AboutScreen(game, dojo);
         s->Init();
-        game.hud->AddControl(s);
+        game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "shop") == 0) {
         hideAllExisting();
         DojoScreen* dojo = new DojoScreen(game);
         dojo->m_bActive = 0;
-        game.hud->AddControl(dojo);
+        game_work.mHud->AddControl(dojo);
         ShopScreen* s = new ShopScreen(game, dojo);
-        game.hud->AddControl(s, false);
+        game_work.mHud->AddControl(s, false);
         s->Init();
     } else if (strcmp(screenName, "gamemode") == 0) {
         hideAllExisting();
         GameModeScreen* s = new GameModeScreen(game, false);
-        game.hud->AddControl(s);
+        game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "classic") == 0) {
         // Active Classic-mode gameplay HUD: ScoreControl + 3x MissControl
         // widgets. Both are created in GameInit (already done by runFrames
@@ -172,7 +173,7 @@ int main(int argc, char* argv[]) {
         // hideAllExisting() would also kill ScoreControl + MissControl +
         // MainScreen (m_bActive=0), which is exactly what we DON'T want for
         // a gameplay-active test. Only deactivate menu/screen overlays.
-        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+        for (auto it = game_work.mHud->controls.begin(); it != game_work.mHud->controls.end(); ++it) {
             HUDControl* c = *it;
             if (dynamic_cast<DojoScreen*>(c)
              || dynamic_cast<AboutScreen*>(c)
@@ -181,25 +182,25 @@ int main(int argc, char* argv[]) {
                 c->m_bActive = 0;
             }
         }
-        game.gameMode = 0;
+        game_work.gameMode = 0;
         FN::PrepareForLevelStart();
-        game.levelTransitionFlag = 0;
+        game_work.m_LevelTransitionFlag = 0;
         // Simulate the GameModeScreen state-6 snap (binary @ 0x0013f2b0):
-        //   game.m_TransitionTimer = 0.0f
+        //   game_work.m_GameDt = 0.0f
         //   mainScreen.m_State    = STATE_CAMERA_FADE (0x11)
         // Without the state push, MainScreen stays in STATE_CAMERA_ZOOM
         // (initial state) and lerps the timer toward -1 every frame, which
         // makes ScoreControl Stage 6 compute pos.x = -218 - 200*|-1| = -418
         // (off-screen left). STATE_CAMERA_FADE is the gameplay-active state
         // and its update only writes timer when timer < 0.
-        if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
-        game.m_TransitionTimer = 0.0f;
+        if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
+        game_work.m_GameDt = 0.0f;
         // Sanity: confirm at least one ScoreControl + one MissControl exist
         // in HUD (created by GameInit step 3/4). If they're missing, the
         // test will print a diagnostic but not fail the smoke pass.
         int scoreCount = 0;
         int missCount  = 0;
-        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+        for (auto it = game_work.mHud->controls.begin(); it != game_work.mHud->controls.end(); ++it) {
             if (dynamic_cast<ScoreControl*>(*it)) scoreCount++;
             if (dynamic_cast<MissControl*>(*it))  missCount++;
         }
@@ -215,11 +216,11 @@ int main(int argc, char* argv[]) {
         }
         if (noMiss) {
             // Fruit::CollisionResponse (src/entities/Fruit.cpp:~536) does
-            //   if (game.missCount > 2) FN::GameOver(...);
-            // game.missCount is uint8_t so a large negative initial value
+            //   if (game_work.missCount > 2) FN::GameOver(...);
+            // game_work.missCount is uint8_t so a large negative initial value
             // wraps and doesn't help -- the per-frame reset loop below
             // (interactive path) keeps it pinned at 0 instead.
-            game.missCount = 0;
+            game_work.missCount = 0;
             printf("[test_screen classic --no-miss] per-frame missCount reset enabled\n");
         }
     } else if (strcmp(screenName, "gameover") == 0) {
@@ -231,7 +232,7 @@ int main(int argc, char* argv[]) {
         // also exercised.
         // Don't deactivate ScoreControl / MissControl / MainScreen — they're
         // alive during game-over (ScoreControl renders the final banner).
-        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+        for (auto it = game_work.mHud->controls.begin(); it != game_work.mHud->controls.end(); ++it) {
             HUDControl* c = *it;
             if (dynamic_cast<DojoScreen*>(c)
              || dynamic_cast<AboutScreen*>(c)
@@ -240,22 +241,22 @@ int main(int argc, char* argv[]) {
                 c->m_bActive = 0;
             }
         }
-        game.gameMode = 0;     // Classic
-        game.currentScore = 1234;
+        game_work.gameMode = 0;     // Classic
+        game_work.currentScore = 1234;
         // MainScreen menu-idle states lerp m_TransitionTimer toward -1 every
         // frame. Pin it to STATE_CAMERA_FADE so it doesn't fight the
         // explicit 0.5 we set below (binary path: GameModeScreen state-6
         // snap leaves MainScreen in STATE_CAMERA_FADE then GameOverScreen
         // ramps timer toward +1).
-        if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
-        game.m_TransitionTimer = 0.5f;  // mid-transition; not the fast-path
+        if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
+        game_work.m_GameDt = 0.5f;  // mid-transition; not the fast-path
         // ctor args: (modeName, initialState, initialTimer,
         //             expressionIdx, bgPatternIdx, pomCount, starCount).
         // initialState=6 + initialTimer=0.0 puts us straight into the
         // main display state; runFrames below ticks score-submission.
         GameOverScreen* s = new GameOverScreen("classic", 6, 0.0f, 1, 1, 0, 0);
-        game.pGameOverScreen = s;
-        game.hud->AddControl(s);
+        game_work.pGameOverScreen = s;
+        game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "gameover-transition") == 0) {
         // Full state-0 -> state-6 transition test with runtime assertions.
         // Verifies the fixes from b477592 (title slide-out gate),
@@ -276,7 +277,7 @@ int main(int argc, char* argv[]) {
         // regression. Just deactivate the other screens (Dojo, Shop, etc)
         // so only MainScreen + GameOverScreen are live, matching the real
         // game-over scenario.
-        for (auto it = game.hud->controls.begin(); it != game.hud->controls.end(); ++it) {
+        for (auto it = game_work.mHud->controls.begin(); it != game_work.mHud->controls.end(); ++it) {
             HUDControl* c = *it;
             // Keep MainScreen + gameplay-HUD controls (ScoreControl /
             // MissControl); hide the menu/screen controls.
@@ -288,22 +289,22 @@ int main(int argc, char* argv[]) {
             }
         }
         // Real game has MainScreen in STATE_CAMERA_FADE during gameplay;
-        // that state only writes game.m_TransitionTimer when it's < 0
+        // that state only writes game_work.m_GameDt when it's < 0
         // (gate matches binary @ 0x0014c19a). Initial state in test is
         // STATE_CAMERA_ZOOM which lerps timer toward -1 every frame --
         // would fight GameOverScreen's ramp toward +1.
-        if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
-        game.gameMode = 0;       // Classic
-        game.currentScore = 1234;
-        game.m_TransitionTimer = 0.0f;
+        if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
+        game_work.gameMode = 0;       // Classic
+        game_work.currentScore = 1234;
+        game_work.m_GameDt = 0.0f;
         // Seed a saved highscore so the layer-0x80 highscore-text block runs
-        if (game.pSaveData) game.pSaveData->m_highscore = 5000;
+        if (game_work.m_SaveData) game_work.m_SaveData->m_highscore = 5000;
 
         // Start at state 0 (entry animation) -- this is the realistic path
         // from gameplay -> game over.
         GameOverScreen* s = new GameOverScreen("classic", 0, 0.0f, 1, 1, 0, 0);
-        game.pGameOverScreen = s;
-        game.hud->AddControl(s);
+        game_work.pGameOverScreen = s;
+        game_work.mHud->AddControl(s);
 
         // 1.9s state-0 + ~1s state-6 alpha ramp = ~180 frames at 60fps.
         game.runFrames(180);
@@ -323,10 +324,10 @@ int main(int argc, char* argv[]) {
         }
 
         // 2. m_TransitionTimer should have ramped to ~1.0.
-        if (game.m_TransitionTimer < 0.99f) {
+        if (game_work.m_GameDt < 0.99f) {
             fprintf(stderr,
                 "FAIL: m_TransitionTimer should reach ~1.0, got %f\n",
-                game.m_TransitionTimer);
+                game_work.m_GameDt);
             failures++;
         }
 
@@ -398,8 +399,8 @@ int main(int argc, char* argv[]) {
         //    pos.x = -218 - 200 * |waveTimer|. Sliding LEFT past the base
         //    -218 confirms the wave-mode shift is running (the actual final
         //    pos depends on per-frame Update order; we just want < -218).
-        for (auto it = game.hud->controls.begin();
-             it != game.hud->controls.end(); ++it) {
+        for (auto it = game_work.mHud->controls.begin();
+             it != game_work.mHud->controls.end(); ++it) {
             ScoreControl* sc = dynamic_cast<ScoreControl*>(*it);
             if (sc) {
                 if (sc->pos.x >= -218.0f) {
@@ -424,7 +425,7 @@ int main(int argc, char* argv[]) {
         }
         fprintf(stdout, "PASS: gameover-transition all assertions ok "
                         "(state=%d, alpha=%f, fact=%s, retry=%s, quit=%s)\n",
-                s->m_State, game.m_TransitionTimer,
+                s->m_State, game_work.m_GameDt,
                 (s->m_pFruitFact && s->m_pFruitFact->m_pCurFactString) ? "ok" : "MISSING",
                 s->m_pRetryBtn ? "ok" : "MISSING",
                 s->m_pQuitBtn ? "ok" : "MISSING");
@@ -446,7 +447,7 @@ int main(int argc, char* argv[]) {
     if (interactive) {
         if (noMiss) {
             // Custom loop that mirrors Game::run() pacing but resets
-            // game.missCount=0 every tick so misses never reach the > 2
+            // game_work.missCount=0 every tick so misses never reach the > 2
             // game-over trigger in Fruit::CollisionResponse. game.run()
             // can't be intercepted mid-loop, so we use runFrames(1) +
             // reset and rely on Game::runFrames for event pump / vsync.
@@ -462,7 +463,7 @@ int main(int argc, char* argv[]) {
             const int kMaxFrames = 60 * 100;  // 60s at ~100fps
             int frameIdx = 0;
             while (game.running && frameIdx < kMaxFrames) {
-                game.missCount = 0;
+                game_work.missCount = 0;
 
                 Mortar::ActorManager* am = game.actorManager;
                 if (am) {

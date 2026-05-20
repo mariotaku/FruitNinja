@@ -33,6 +33,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include "game/GameWork.h"
 
 // Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
 // LoadContent loads three shared SmartPtrs in this order, verified by RE
@@ -459,8 +460,8 @@ bool MenuButton::TouchReleased() {
     } else if (m_pEntity != nullptr) {
         // Binary @ 0x0014e5e6 — TutorialControl::ButtonPressedAtPos(this).
         Game* game = Game::GetInstance();
-        if (game && game->pTutorialCtrl) {
-            game->pTutorialCtrl->ButtonPressedAtPos(this);
+        if (game && game_work.m_TutorialControl) {
+            game_work.m_TutorialControl->ButtonPressedAtPos(this);
         }
     }
     m_DeletedCallback();
@@ -712,8 +713,8 @@ void MenuButton::Update(float dt) {
                         // Empty in binary (single bx lr); port matches via the
                         // explicit no-op call so the call-graph stays parity.
                         Game* game = Game::GetInstance();
-                        if (game && game->mainScreen) {
-                            game->mainScreen->OnMenuItemsCleared();
+                        if (game && game_work.mMainScreen) {
+                            game_work.mMainScreen->OnMenuItemsCleared();
                         }
                     }
                 }
@@ -1141,8 +1142,8 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
     c->size  = size;
 
     Game* game = Game::GetInstance();
-    if (game && game->hud) {
-        game->hud->AddControl(c, false);
+    if (game && game_work.mHud) {
+        game_work.mHud->AddControl(c, false);
     }
 
     MenuButtonAddOn addOn;

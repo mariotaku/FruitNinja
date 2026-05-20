@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cstdio>
 #include <algorithm>
+#include "game/GameWork.h"
 
 // ---- helper -----------------------------------------------------------------
 
@@ -162,8 +163,8 @@ void PowerUp::Activate(bool showPopup, bool isPurchased, const Vec3& pos, float*
         }
         if (m_pPurchaseInfo) {
             Game* game = Game::GetInstance();
-            if (game && game->pSaveData) {
-                game->pSaveData->AddCoins(-m_pPurchaseInfo->m_Cost);
+            if (game && game_work.m_SaveData) {
+                game_work.m_SaveData->AddCoins(-m_pPurchaseInfo->m_Cost);
             }
         }
     }

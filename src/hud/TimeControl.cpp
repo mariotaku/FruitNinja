@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cmath>
+#include "game/GameWork.h"
 
 // DAT_001621ec / DAT_0016215c = 60.9 (Arcade/MP starting time)
 static const float ARCADE_START_TIME = 60.9f;
@@ -51,7 +52,7 @@ TimeControl::TimeControl() {
 bool TimeControl::IsTimedGame() const {
     Game* game = Game::GetInstance();
     if (!game) return false;
-    return game->gameMode == Mortar::GAME_MODE_ARCADE || game->gameMode == Mortar::GAME_MODE_ZEN;
+    return game_work.gameMode == Mortar::GAME_MODE_ARCADE || game_work.gameMode == Mortar::GAME_MODE_ZEN;
 }
 
 void TimeControl::Init() {
@@ -70,20 +71,20 @@ void TimeControl::Reset() {
     m_TimeRemaining = startSecs;
 
     Game* game = Game::GetInstance();
-    bool arcadeOrMP = game && (game->gameMode == Mortar::GAME_MODE_ARCADE || IsMultiplayer());
+    bool arcadeOrMP = game && (game_work.gameMode == Mortar::GAME_MODE_ARCADE || IsMultiplayer());
     if (arcadeOrMP) {
         m_TimeRemaining = ARCADE_START_TIME;
 
         // Binary @ 0x001621ac: first-boot save-slot seed.
-        if (game->pSaveData &&
-            game->pSaveData->m_TimeRemainingSave == 0.0f &&
-            game->mainScreen && game->mainScreen->GetCameraTransition() < 0.0f) {
-            game->pSaveData->m_TimeRemainingSave = 60.9f;   // DAT_001621ec
+        if (game_work.m_SaveData &&
+            game_work.m_SaveData->m_TimeRemainingSave == 0.0f &&
+            game_work.mMainScreen && game_work.mMainScreen->GetCameraTransition() < 0.0f) {
+            game_work.m_SaveData->m_TimeRemainingSave = 60.9f;   // DAT_001621ec
         }
     } else {
         // Binary @ 0x001624ec: sentinel write for non-timed modes.
-        if (game && game->pSaveData) {
-            game->pSaveData->m_TimeRemainingSave = -1.0f;
+        if (game && game_work.m_SaveData) {
+            game_work.m_SaveData->m_TimeRemainingSave = -1.0f;
         }
     }
     m_SlowClockPhase = 0.0f;
@@ -94,8 +95,8 @@ void TimeControl::Reset() {
 void TimeControl::Skip() {
     // Binary @ 0x001629xx: restore from save.
     Game* game = Game::GetInstance();
-    if (game && game->pSaveData) {
-        m_TimeRemaining = game->pSaveData->m_TimeRemainingSave;
+    if (game && game_work.m_SaveData) {
+        m_TimeRemaining = game_work.m_SaveData->m_TimeRemainingSave;
     }
     m_SlowClockPhase = 0.0f;
 }
@@ -109,7 +110,7 @@ float TimeControl::GetCountDown() const {
     // 0x00162134
     Game* game = Game::GetInstance();
     if (!game) return m_CountdownStart;
-    if (game->gameMode != Mortar::GAME_MODE_ARCADE && !IsMultiplayer())
+    if (game_work.gameMode != Mortar::GAME_MODE_ARCADE && !IsMultiplayer())
         return ARCADE_START_TIME;    // DAT_0016215c fallback
     return m_CountdownStart;
 }
@@ -137,7 +138,7 @@ void TimeControl::Update(float dt) {
     if (!IsTimedGame()) {
         m_LayerFlags = Mortar::HUD_LAYER_NONE;
         // binary @ 0x001624f6: write -1.0f sentinel to HUD mirror on non-timed path
-        if (game->mainScreen) game->mainScreen->m_TimeRemainingDisplay = -1.0f;
+        if (game_work.mMainScreen) game_work.mMainScreen->m_TimeRemainingDisplay = -1.0f;
         return;
     }
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
@@ -149,9 +150,9 @@ void TimeControl::Update(float dt) {
     // Pause / suppress gate — binary @ 0x001624e6..0x00162510.
     // Three conditions suppress the timer tick (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
     // ASM-verified: 2026-05-18 binary @ 0x001624e6 (re-analyst)
-    bool suppress = game->pausedFlag
-                 || game->levelTransitionFlag
-                 || (game->m_bMPRetryPending && !game->field_0x199);
+    bool suppress = game_work.m_Paused
+                 || game_work.m_LevelTransitionFlag
+                 || (game_work.m_bMPRetryPending && !game_work.field_0x199);
 
     if (!suppress) {
         if (m_CountdownStart <= 0.0f) {
@@ -189,7 +190,7 @@ void TimeControl::Update(float dt) {
                 g_ComboCount  = 0;
                 g_LastSlasher = -1;
                 m_DrawColour = Colour(255, 100, 100, 255);
-                if (game->pGameSound) game->pGameSound->SFXPlay("time-up", 1.0f, 1.0f);
+                if (game_work.mGameSound) game_work.mGameSound->SFXPlay("time-up", 1.0f, 1.0f);
             } else {
                 // Colour tint bands as time runs low.
                 // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
@@ -216,8 +217,8 @@ void TimeControl::Update(float dt) {
                 static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80
                 s_TickTockToggle ^= 1;
                 const char* name = s_TickTockToggle ? "Time-tick" : "Time-tock";
-                if (game->pGameSound) {
-                    game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+                if (game_work.mGameSound) {
+                    game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
                 }
             }
 
@@ -232,8 +233,8 @@ void TimeControl::Update(float dt) {
     // Write HUD-side timer mirror every frame (binary @ 0x00162830).
     // ASM-verified: 2026-05-18 binary @ 0x00162830 (re-analyst)
     LAB_00162818:
-    if (game->mainScreen) {
-        game->mainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
     }
 
     // Binary @ LAB_00162818 -- pos.y re-anchor every timed frame based on
@@ -242,8 +243,8 @@ void TimeControl::Update(float dt) {
     //   pos.y   = size.y * -2 * tiltMix + (2*size.y + 320) * 0.5
     // For size.y=18 and stable in-game camera (transition=0), pos.y = 142.
     float camTilt = 0.0f;
-    if (game->mainScreen) {
-        camTilt = fabsf(game->mainScreen->GetCameraTransition());
+    if (game_work.mMainScreen) {
+        camTilt = fabsf(game_work.mMainScreen->GetCameraTransition());
     }
     const float tiltMix = 1.0f - camTilt;   // non-MP path; SameScreenMP unported
     pos.y = size.y * -2.0f * tiltMix + (size.y * 2.0f + 320.0f) * 0.5f;
@@ -257,15 +258,15 @@ void TimeControl::Draw(const Vec3& hudScale, int layerMask) {
     if (!game) return;
 
     // Guard: camera fully transitioned to menu -> skip
-    if (game->mainScreen) {
-        float ct = game->mainScreen->GetCameraTransition();
+    if (game_work.mMainScreen) {
+        float ct = game_work.mMainScreen->GetCameraTransition();
         if (fabsf(ct) >= 1.0f) return;
     }
 
     // Guard: non-timed mode (m_LayerFlags=0 set by Update, but also gate here)
     if (!IsTimedGame()) return;
 
-    Mortar::Font* font = game->pFontNumbers.Get();
+    Mortar::Font* font = game_work.pFontNumbers.Get();
     if (!font) return;
 
     // Format countdown: OS_SPrintf("%i:%02i", min, sec) -- DAT_00162bc4 = "%i:%02i"

@@ -42,6 +42,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "game/GameWork.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -113,8 +114,8 @@ static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game)
 
     // Burn through GameInit + splash frames so HUD is live.
     game->runFrames(120);
-    if (!game->hud) {
-        fprintf(stderr, "FAIL: game.hud null after 120 frames\n");
+    if (!game_work.mHud) {
+        fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
         return false;
     }
     return true;
@@ -124,8 +125,8 @@ static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game)
 // game-over scene. Mirrors the pattern used by test_screen.cpp.
 static void HideMenuScreens(Game& game)
 {
-    for (std::list<HUDControl*>::iterator it = game.hud->controls.begin();
-         it != game.hud->controls.end(); ++it) {
+    for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
+         it != game_work.mHud->controls.end(); ++it) {
         HUDControl* c = *it;
         if (dynamic_cast<DojoScreen*>(c)
          || dynamic_cast<AboutScreen*>(c)
@@ -183,12 +184,12 @@ int main(int /*argc*/, char* /*argv*/[])
 
     // Set up Arcade mode.
     HideMenuScreens(game);
-    game.gameMode = 2;  // GAME_MODE_ARCADE
+    game_work.gameMode = 2;  // GAME_MODE_ARCADE
 
     // Put MainScreen into the gameplay-active state so it does not fight
     // the transition timer.
-    if (game.mainScreen) game.mainScreen->SetState(STATE_CAMERA_FADE);
-    game.m_TransitionTimer = 1.0f;  // fully faded in
+    if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
+    game_work.m_GameDt = 1.0f;  // fully faded in
 
     // Drain any entities so the BONUS_PHASE gate clears immediately.
     DrainEntities(game);
@@ -202,9 +203,9 @@ int main(int /*argc*/, char* /*argv*/[])
     // the real game.
     GameOverScreen* gos = new GameOverScreen("arcade", GameOverScreen::STATE_BONUS_PHASE, 0.0f, 1, 1, 0, 0);
     gos->m_Timer = -0.333f;  // match state-0 -> state-1 initial timer (DAT_00141db0)
-    game.pGameOverScreen = gos;
-    game.hud->AddControl(gos);
-    game.levelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
+    game_work.pGameOverScreen = gos;
+    game_work.mHud->AddControl(gos);
+    game_work.m_LevelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
 
     printf("[bonus_phase] GameOverScreen created in STATE_BONUS_PHASE (%d)\n",
            GameOverScreen::STATE_BONUS_PHASE);
@@ -324,7 +325,7 @@ int main(int /*argc*/, char* /*argv*/[])
         }
 
         // Ensure m_TransitionTimer satisfies RetryCallback's alpha gate.
-        game.m_TransitionTimer = 1.0f;
+        game_work.m_GameDt = 1.0f;
 
         // ---- Sub-test A: RetryCallback via m_pRetryBtn click delegate ----
         printf("[bonus_phase] Sub-test A: RetryCallback\n");
@@ -376,7 +377,7 @@ int main(int /*argc*/, char* /*argv*/[])
         // the fast path: param2=6(>5 gate), param3=0.0f, with waveAlpha=1.0f.
         // The fast-path block at Initialise L448 requires param2>5 && waveAlpha>kWaveAlphaGate.
         // We set m_TransitionTimer=1.0f (satisfies the gate) before construction.
-        game.m_TransitionTimer = 1.0f;
+        game_work.m_GameDt = 1.0f;
         GameOverScreen* gos2 = new GameOverScreen(
             "arcade",
             /*param2=state=*/GameOverScreen::STATE_MAIN_DISPLAY,
@@ -385,9 +386,9 @@ int main(int /*argc*/, char* /*argv*/[])
             /*bgPatternIdx=*/1,
             /*pomCount=*/0,
             /*starCount=*/0);
-        game.pGameOverScreen = gos2;
-        game.hud->AddControl(gos2);
-        game.levelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
+        game_work.pGameOverScreen = gos2;
+        game_work.mHud->AddControl(gos2);
+        game_work.m_LevelTransitionFlag = 1;  // mirror production: GameOver() sets LTF=1 before creating GameOverScreen
 
         // Settle to create the quit button (no entity drain -- same reason as above).
         printf("[bonus_phase]   settling %d frames for gos2 buttons...\n", SETTLE_FRAMES);
@@ -400,7 +401,7 @@ int main(int /*argc*/, char* /*argv*/[])
             }
         }
 
-        game.m_TransitionTimer = 1.0f;
+        game_work.m_GameDt = 1.0f;
 
         printf("[bonus_phase]   state before = %d, m_pQuitBtn = %p\n",
                gos2->m_State, (void*)gos2->m_pQuitBtn);

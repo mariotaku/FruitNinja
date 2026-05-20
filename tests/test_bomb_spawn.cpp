@@ -37,6 +37,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "game/GameWork.h"
 
 static int FailUsage() {
     fprintf(stderr,
@@ -116,8 +117,8 @@ static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game) 
 
     // Burn through GameInit + splash frames.
     game->runFrames(120);
-    if (!game->hud) {
-        fprintf(stderr, "FAIL: game.hud null after 120 frames\n");
+    if (!game_work.mHud) {
+        fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
         return false;
     }
     return true;
@@ -140,7 +141,7 @@ static void SuppressWaveSpawn() {
 // if no such slot is currently held. Mirrors the binary's per-frame
 // SetVolume(0)-on-no-bomb mute mechanism (binary @ 0x0016c4c8..0x0016c5ca).
 static float BombFuseSlotVolume(Game& game) {
-    GameSound* gs = game.pGameSound;
+    GameSound* gs = game_work.mGameSound;
     if (!gs) return -1.0f;
     const uint32_t fuseHash = ::StringHash("Bomb-Fuse");
     for (int i = 0; i < GameSound::MAX_SLOTS; ++i) {
@@ -207,7 +208,7 @@ static bool RunVariantSlice(Game& game) {
     bomb->CollisionResponse(nullptr, 0, 0, &bladeVel);
     printf("[slice] sliced bomb at pos=(%.1f, %.1f); m_bHit=%d, "
            "bombHitTimer=%.2f\n",
-           bomb->pos.x, bomb->pos.y, (int)bomb->m_bHit, game.bombHitTimer);
+           bomb->pos.x, bomb->pos.y, (int)bomb->m_bHit, game_work.m_BombHitTimer);
 
     // Step 4: tick enough frames for the bombHitTimer to cross 1.5
     // (ResetGameEntities fires -> bomb flung -> OOB -> KillBomb),
@@ -333,8 +334,8 @@ int main(int argc, char* argv[]) {
     // Per-tick we also zero every spawner's m_RemainingCount so the wave
     // manager does NOT spawn its own fruit/bombs alongside our test bombs
     // -- the test stays a single-bomb-at-a-time visualisation.
-    for (std::list<HUDControl*>::iterator it = game.hud->controls.begin();
-         it != game.hud->controls.end(); ++it) {
+    for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
+         it != game_work.mHud->controls.end(); ++it) {
         HUDControl* c = *it;
         if (dynamic_cast<DojoScreen*>(c)
          || dynamic_cast<AboutScreen*>(c)
@@ -343,19 +344,19 @@ int main(int argc, char* argv[]) {
             c->m_bActive = 0;
         }
     }
-    game.gameMode = 0;
+    game_work.gameMode = 0;
     FN::PrepareForLevelStart();
-    game.levelTransitionFlag = 0;
-    if (game.mainScreen) {
-        game.mainScreen->SetState(STATE_CAMERA_FADE);
+    game_work.m_LevelTransitionFlag = 0;
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
         // test_screen.cpp's "classic" path leaves the menu buttons in
         // place because its smoke test only checks HUD widget presence.
         // For a visual test we explicitly drop the menu buttons -- the
         // binary's normal Play-flow eventually calls DeleteMenuButtons
         // (via STATE_LOADING_A path) once the camera has settled.
-        game.mainScreen->DeleteMenuButtons();
+        game_work.mMainScreen->DeleteMenuButtons();
     }
-    game.m_TransitionTimer = 0.0f;
+    game_work.m_GameDt = 0.0f;
 
     // Settle the camera + HUD into gameplay.
     game.runFrames(60);

@@ -9,6 +9,7 @@
 #include "particle/PSPParticleManager.h"
 #include "game/WaveManager.h"
 #include "game/GameMode.h"
+#include "game/GameWork.h"
 
 // ctor @ 0x0016133c
 SpeedControl::SpeedControl()
@@ -63,10 +64,10 @@ SpeedControl::~SpeedControl() {}
 // name (.rodata @ 0x001bc258).
 void SpeedControl::Update(float dt) {
     Game* g = Game::GetInstance();
-    if (!g || !g->pGameSound) return;
-    GameSound* gs = g->pGameSound;
+    if (!g || !game_work.mGameSound) return;
+    GameSound* gs = game_work.mGameSound;
 
-    if (g->levelTransitionFlag != 0) return;
+    if (game_work.m_LevelTransitionFlag != 0) return;
 
     float deltaTarget, volTarget;
     if (m_DisplayedSpeed == 0.0f) {
@@ -83,7 +84,7 @@ void SpeedControl::Update(float dt) {
     } else {
         // Active: combo-blitz drives the ducking. progression is the
         // wave-manager's bonus accumulator [0..1]; map [0.25..1.0]->[0..1].
-        if (g->gameMode == Mortar::GAME_MODE_ARCADE && g->levelTransitionFlag == 0) {
+        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE && game_work.m_LevelTransitionFlag == 0) {
             float p   = WaveManager::GetInstance()->GetComboBonusProgression(0);
             float c01 = (p - 0.25f) / 0.75f;
             if (c01 < 0.0f) c01 = 0.0f; else if (c01 > 1.0f) c01 = 1.0f;
@@ -110,7 +111,7 @@ void SpeedControl::Update(float dt) {
 
     // Master-volume duck + SoundVolume lerp gated on Arcade mode.
     // Binary writes *(float*)gs == gs->m_MasterVolume directly.
-    if (g->gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         float master = gs->m_MasterVolume;
         if      (master > deltaTarget) { master -= dt; if (master < deltaTarget) master = deltaTarget; }
         else if (master < deltaTarget) { master += dt; if (master > deltaTarget) master = deltaTarget; }
@@ -192,11 +193,11 @@ bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     };
     const char* const kStreamSfx = kSfxNames[m_SoundIdx];
     Game* g = Game::GetInstance();
-    if (!g || !g->pGameSound) return false;
+    if (!g || !game_work.mGameSound) return false;
     Mortar::Delegate1<bool, Mortar::MortarSound*> loopCb =
         Mortar::Delegate1<bool, Mortar::MortarSound*>::Make(
             this, &SpeedControl::SoundNeedsLooping);
-    m_pSound = g->pGameSound->SFXPlay(kStreamSfx, 0.0f, 0.0f, loopCb);
+    m_pSound = game_work.mGameSound->SFXPlay(kStreamSfx, 0.0f, 0.0f, loopCb);
     if (m_pSound) {
         static_cast<Mortar::MortarSound*>(m_pSound)->SetVolume(0.0f);
     }

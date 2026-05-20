@@ -54,6 +54,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
+#include "game/GameWork.h"
 
 // Matches GamePreInitialise (0x10b588) — zero the Game singleton
 void GamePreInitialise() {
@@ -62,19 +63,19 @@ void GamePreInitialise() {
 
     // Original: CpuFill8(game, 0, 0x608)
     // For port: zero the gameplay fields (not the SDL/port fields)
-    game->taskStateIndex = 0;
-    game->pausedFlag = false;
-    game->gameMode = 0;
-    game->levelTransitionFlag = 0;
-    game->m_TransitionTimer = 0;
-    game->bombHitTimer = 0;
-    game->dt = 0;
-    game->hud = nullptr;
-    game->mainScreen = nullptr;
-    game->pGameOverScreen = nullptr;
-    game->pTimeCtrl = nullptr;
-    game->m_FrameTimer = 0;
-    game->pGameSound = nullptr;
+    game_work.taskStateIndex = 0;
+    game_work.m_Paused = false;
+    game_work.gameMode = 0;
+    game_work.m_LevelTransitionFlag = 0;
+    game_work.m_GameDt = 0;
+    game_work.m_BombHitTimer = 0;
+    game_work.dt = 0;
+    game_work.mHud = nullptr;
+    game_work.mMainScreen = nullptr;
+    game_work.pGameOverScreen = nullptr;
+    game_work.mCountDown = nullptr;
+    game_work.m_FrameTimer = 0;
+    game_work.mGameSound = nullptr;
 }
 
 // Matches GameInitialise (0x10bdfc, 305 lines) — boot all singletons
@@ -133,11 +134,11 @@ void GameInitialise() {
     // Note: inputTranslator (SDL-bound) is allocated + Init'd in GameSDL.cpp::init().
 
     // Step 15: FruitCamera (matches original: operator_new(0x16c))
-    game->pCamera = new FruitCamera();
-    game->pCamera->Init(1.0f, 10000.0f, 16.95f, 11.3f);  // fovOrNear, farClip, fovX, fovY
+    game_work.m_FruitCamera = new FruitCamera();
+    game_work.m_FruitCamera->Init(1.0f, 10000.0f, 16.95f, 11.3f);  // fovOrNear, farClip, fovX, fovY
 
     // Zero g_GameData fields (matches step 15 continued)
-    game->worldPos = Vec3(0.0f, 0.0f, 0.0f);
+    game_work.worldPos = Vec3(0.0f, 0.0f, 0.0f);
 
     // Mortar::ActorManager (needed for entity creation). Binary Initialise is
     // called with (numTypes=5, heapSize=0x2000) from GameInit — see
@@ -151,11 +152,11 @@ void GameInitialise() {
     // docs/structs/game.md and docs/systems/save-system.md. Binary
     // InitialiseData @ 0x0010b66c follows the ctor with a LoadGame call
     // so persistent state is restored before the rest of init runs.
-    game->pSaveData = new FruitSaveData();
-    FruitNinja_LoadGame(game->pSaveData);
+    game_work.m_SaveData = new FruitSaveData();
+    FruitNinja_LoadGame(game_work.m_SaveData);
 
     // InitialiseData step 7: restore last-used game mode from save
-    game->gameMode = (uint8_t)game->pSaveData->m_GameMode;
+    game_work.gameMode = (uint8_t)game_work.m_SaveData->m_GameMode;
 
     // InitialiseData step 8: SetupGameWork (0x0010b4e8)
     SetupGameWork();
@@ -164,14 +165,14 @@ void GameInitialise() {
     {
         const unsigned int hSoundOff = StringHash("sound_off");
         const unsigned int hMusicOff = StringHash("music_off");
-        game->m_bSoundOn = (game->pSaveData->GetTotal(hSoundOff) == 0);
-        game->m_bMusicOn = (game->pSaveData->GetTotal(hMusicOff) == 0);
-        const int soundOffCount = game->pSaveData->GetTotal(hSoundOff);
-        const int musicOffCount = game->pSaveData->GetTotal(hMusicOff);
+        game_work.m_bSoundOn = (game_work.m_SaveData->GetTotal(hSoundOff) == 0);
+        game_work.m_bMusicOn = (game_work.m_SaveData->GetTotal(hMusicOff) == 0);
+        const int soundOffCount = game_work.m_SaveData->GetTotal(hSoundOff);
+        const int musicOffCount = game_work.m_SaveData->GetTotal(hMusicOff);
         if (soundOffCount != 0)
-            game->pSaveData->AddToTotal("sound_off", hSoundOff, -soundOffCount, false, true);
+            game_work.m_SaveData->AddToTotal("sound_off", hSoundOff, -soundOffCount, false, true);
         if (musicOffCount != 0)
-            game->pSaveData->AddToTotal("music_off", hMusicOff, -musicOffCount, false, true);
+            game_work.m_SaveData->AddToTotal("music_off", hMusicOff, -musicOffCount, false, true);
     }
 
     // InitialiseData step 12: per-power-up slash colour table
@@ -185,7 +186,7 @@ void GameInitialise() {
     Mortar::SoundManager::GetInstance().Init();
 
     // GameSound — 32-slot pool backed by SDL2 audio.
-    game->pGameSound = new GameSound();
+    game_work.mGameSound = new GameSound();
 
     // Music: no boot-time SongPlay. The binary has no separate boot call;
     // UpdateMusic (0x0016a68c) is the sole issuer of SongPlay. On the first
@@ -201,7 +202,7 @@ void GameInitialise() {
     // GETSTRING_CAST_0_STR -- i.e. before LoadItemData, LoadAchievementInfo,
     // etc.): load the localisation tables. Binary:
     //   StringTableUtilLoadStrings @ 0x0011fb20 -> LoadStringsTable(language)
-    Localisation::Load(game->data_dir.c_str(), (int)game->languageFlag);
+    Localisation::Load(game->data_dir.c_str(), (int)game_work.languageFlag);
 
     ItemManager::GetInstance()->LoadItemData();
 
@@ -219,16 +220,16 @@ void GameInitialise() {
     }
 
     // Step 13: TutorialControl (matches binary: operator_new(0xa0), Init, AddControl)
-    game->pTutorialCtrl = new TutorialControl();
-    game->pTutorialCtrl->Init();
-    if (game->hud) game->hud->AddControl(game->pTutorialCtrl);
+    game_work.m_TutorialControl = new TutorialControl();
+    game_work.m_TutorialControl->Init();
+    if (game_work.mHud) game_work.mHud->AddControl(game_work.m_TutorialControl);
 
     // Binary GameInit @ 0x0016cb2a: writes -1.0f to g_GameData+0x0c
     // (m_TransitionTimer) immediately after the TutorialControl block.
     // This is the seed value that puts UpdateMusic into the transition
     // branch on its first eligible frame, so SongPlay("Music-menu") fires
     // first instead of SongPlay("background"). See docs/systems/music-state.md.
-    game->m_TransitionTimer = -1.0f;
+    game_work.m_GameDt = -1.0f;
 
     // Note: PowerUpManager::Load is called above (step 11). LeaderboardManager is defunct.
 
@@ -255,32 +256,32 @@ void GameInitialise() {
 
         // +0x54 pFontMain: fonts/font_fruit_ninja.fnt (0x0010bf3a)
         // DIFFERS: binary loads HD path if ShouldUseHDFonts(); port uses SD only.
-        game->pFontMain = Mortar::Font::Create((fontDir + "font_fruit_ninja.fnt").c_str());
+        game_work.pFontMain = Mortar::Font::Create((fontDir + "font_fruit_ninja.fnt").c_str());
 
         // +0x58 pFontNumbers: fonts/fruit_ninja_numbers.fnt (0x0010bf6e, null-guarded)
         // DIFFERS: binary loads HD path if ShouldUseHDFonts(); port uses SD only.
-        if (!game->pFontNumbers.IsValid()) {
-            game->pFontNumbers = Mortar::Font::Create((fontDir + "fruit_ninja_numbers.fnt").c_str());
+        if (!game_work.pFontNumbers.IsValid()) {
+            game_work.pFontNumbers = Mortar::Font::Create((fontDir + "fruit_ninja_numbers.fnt").c_str());
         }
 
         // +0x6C pFontArcade: fonts/arcade_results_numbers.fnt (0x0010bfa4, null-guarded)
-        if (!game->pFontArcade.IsValid()) {
-            game->pFontArcade = Mortar::Font::Create((fontDir + "arcade_results_numbers.fnt").c_str());
+        if (!game_work.pFontArcade.IsValid()) {
+            game_work.pFontArcade = Mortar::Font::Create((fontDir + "arcade_results_numbers.fnt").c_str());
         }
 
         // Binary immediately aliases +0x6C into +0x70, +0x74, +0x78, +0x7C as fallback
         // before the File::Exists-guarded overwrites. (0x0010bfc8 region)
-        game->pFontGold         = game->pFontArcade;
-        game->pFontSilver       = game->pFontArcade;
-        game->pFontBronze       = game->pFontArcade;
-        game->pFontArcadeAlias  = game->pFontArcade;
+        game_work.pFontGold         = game_work.pFontArcade;
+        game_work.pFontSilver       = game_work.pFontArcade;
+        game_work.pFontBronze       = game_work.pFontArcade;
+        game_work.pFontArcadeAlias  = game_work.pFontArcade;
 
         // +0x70 pFontGold: fonts/gold_numbers.fnt (0x0010bfcc, File::Exists guarded)
         // Not present in shipped FruitNinjaBada/Data/fonts/ — slot stays alias.
         {
             std::string path = fontDir + "gold_numbers.fnt";
             if (Mortar::File::Exists(path.c_str(), 0)) {
-                game->pFontGold = Mortar::Font::Create(path.c_str());
+                game_work.pFontGold = Mortar::Font::Create(path.c_str());
             }
         }
 
@@ -288,7 +289,7 @@ void GameInitialise() {
         {
             std::string path = fontDir + "silver_numbers.fnt";
             if (Mortar::File::Exists(path.c_str(), 0)) {
-                game->pFontSilver = Mortar::Font::Create(path.c_str());
+                game_work.pFontSilver = Mortar::Font::Create(path.c_str());
             }
         }
 
@@ -296,18 +297,18 @@ void GameInitialise() {
         {
             std::string path = fontDir + "bronze_numbers.fnt";
             if (Mortar::File::Exists(path.c_str(), 0)) {
-                game->pFontBronze = Mortar::Font::Create(path.c_str());
+                game_work.pFontBronze = Mortar::Font::Create(path.c_str());
             }
         }
 
         // +0x80 pFontBlue2: fonts/fruit_ninja_numbers_blue2.fnt (0x0010c038, null-guarded)
-        if (!game->pFontBlue2.IsValid()) {
-            game->pFontBlue2 = Mortar::Font::Create((fontDir + "fruit_ninja_numbers_blue2.fnt").c_str());
+        if (!game_work.pFontBlue2.IsValid()) {
+            game_work.pFontBlue2 = Mortar::Font::Create((fontDir + "fruit_ninja_numbers_blue2.fnt").c_str());
         }
 
         // +0x68 pFontGreen: fonts/fruit_ninja_numbers_green.fnt (0x0010c082, null-guarded)
-        if (!game->pFontGreen.IsValid()) {
-            game->pFontGreen = Mortar::Font::Create((fontDir + "fruit_ninja_numbers_green.fnt").c_str());
+        if (!game_work.pFontGreen.IsValid()) {
+            game_work.pFontGreen = Mortar::Font::Create((fontDir + "fruit_ninja_numbers_green.fnt").c_str());
         }
     }
 
@@ -371,18 +372,18 @@ void GameDestroy() {
     ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0010b7ec — after UnLoadAchievementInfo
 
     // --- 4. HUD ---
-    if (game->hud) {
-        delete game->hud;
-        game->hud = nullptr;
+    if (game_work.mHud) {
+        delete game_work.mHud;
+        game_work.mHud = nullptr;
     }
-    game->mainScreen = nullptr;
-    game->pGameOverScreen = nullptr;  // owned by HUD; nulled here after HUD Release
-    game->pTimeCtrl = nullptr;        // owned by HUD; nulled here after HUD Release
+    game_work.mMainScreen = nullptr;
+    game_work.pGameOverScreen = nullptr;  // owned by HUD; nulled here after HUD Release
+    game_work.mCountDown = nullptr;        // owned by HUD; nulled here after HUD Release
 
     // --- 5. FruitCamera ---
-    if (game->pCamera) { delete game->pCamera; game->pCamera = nullptr; }
+    if (game_work.m_FruitCamera) { delete game_work.m_FruitCamera; game_work.m_FruitCamera = nullptr; }
     // TutorialControl is a HUDControl — destroyed by HUD teardown above.
-    game->pTutorialCtrl = nullptr;
+    game_work.m_TutorialControl = nullptr;
 
     // --- 6. Fonts (field_0x50..0x80, 11 Font* slots) ---
     // Matches GameDestroy @ 0x0010b7ec font teardown sequence.
@@ -395,25 +396,25 @@ void GameDestroy() {
     //   else if slot_ptr != null: Font::~Font + operator_delete + null
     // SmartPtr assignment to null handles this correctly for non-aliases.
     // For aliases: SmartPtr operator= already handles ref-count safely.
-    game->pFontGold.SetNull();
-    game->pFontSilver.SetNull();
-    game->pFontBronze.SetNull();
-    game->pFontArcadeAlias.SetNull();
+    game_work.pFontGold.SetNull();
+    game_work.pFontSilver.SetNull();
+    game_work.pFontBronze.SetNull();
+    game_work.pFontArcadeAlias.SetNull();
     // Now safe to destroy the owned arcade font
-    game->pFontArcade.SetNull();
-    game->pFontReserved2.SetNull();   // always null, matches binary null-check delete
-    game->pFontBlue2.SetNull();
-    game->pFontGreen.SetNull();
-    game->pFontNumbers.SetNull();
-    game->pFontMain.SetNull();
-    game->pFontReserved1.SetNull();   // always null
-    game->pFontReserved0.SetNull();   // always null
+    game_work.pFontArcade.SetNull();
+    game_work.pFontReserved2.SetNull();   // always null, matches binary null-check delete
+    game_work.pFontBlue2.SetNull();
+    game_work.pFontGreen.SetNull();
+    game_work.pFontNumbers.SetNull();
+    game_work.pFontMain.SetNull();
+    game_work.pFontReserved1.SetNull();   // always null
+    game_work.pFontReserved0.SetNull();   // always null
 
     // --- 7. FruitSaveData ---
-    if (game->pSaveData) { delete game->pSaveData; game->pSaveData = nullptr; }
+    if (game_work.m_SaveData) { delete game_work.m_SaveData; game_work.m_SaveData = nullptr; }
 
     // --- 8. GameSound ---
-    if (game->pGameSound) { delete game->pGameSound; game->pGameSound = nullptr; }
+    if (game_work.mGameSound) { delete game_work.mGameSound; game_work.mGameSound = nullptr; }
 
     // --- 9. SmartPtr clear (field_0x17c) ---
     // TODO: SmartPtr::SetNull(&game->field_0x17c)

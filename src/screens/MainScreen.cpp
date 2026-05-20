@@ -33,6 +33,7 @@
 #include "debug/Logger.h"
 #include <cstdio>
 #include <cmath>
+#include "game/GameWork.h"
 
 // Timing constants (verified from binary, see docs/screens/main.md)
 static const float CAMERA_LERP_RATE    = 0.125f;
@@ -196,27 +197,27 @@ void MainScreen::Update(float dt) {
         // and clear levelTransitionFlag. Menu buttons (Play/Dojo) lazy-created
         // only when m_Timer2 > threshold. Keeps menu off-screen during bomb-flash
         // so ResetGameEntities does not see any menu fruit to force-slice.
-        const bool flashActive = (m_StateTimer > 0.0f) || (game.bombHitTimer > 0.7f);
+        const bool flashActive = (m_StateTimer > 0.0f) || (game_work.m_BombHitTimer > 0.7f);
         if (flashActive) {
             m_StateTimer -= dt;
-            game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
+            game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
         } else {
             // Binary @ 0x0014b60e: strb r2,[r3,#0x4] — writes 0 to g_GameData+0x04 (gameMode),
             // NOT +0x05 (levelTransitionFlag). Prior port revision wrote levelTransitionFlag
             // here which cleared the WaveManager spawn-pump gate and caused menu fruits to
             // keep spawning. levelTransitionFlag stays 1 (set by QuitToMenu) so the gate holds.
-            LOG_INFO("SCREEN/MainScreen", "CAMERA_ZOOM else-branch: clearing gameMode (was %d -> 0)", (int)game.gameMode);
-            game.gameMode = 0;
+            LOG_INFO("SCREEN/MainScreen", "CAMERA_ZOOM else-branch: clearing gameMode (was %d -> 0)", (int)game_work.gameMode);
+            game_work.gameMode = 0;
             m_Timer2 += dt;
-            game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
+            game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
         }
 
         // Lazy-create play/dojo buttons once m_Timer2 threshold reached and
         // camera has settled, then transition to state 1.
-        if (!pPlayButton && m_Timer2 > TIMER2_THRESHOLD && game.m_TransitionTimer < CAMERA_THRESHOLD) {
+        if (!pPlayButton && m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt < CAMERA_THRESHOLD) {
             CreatePlayDojo();
         }
-        if (game.m_TransitionTimer < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
+        if (game_work.m_GameDt < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             m_State = STATE_CREATE_BUTTONS;
         }
@@ -229,7 +230,7 @@ void MainScreen::Update(float dt) {
         // Per-frame:
         //   - SetNewSymbol on the dojo button with ItemManager::AreNewItems().
         //   - Continue camera lerp toward -1.0 at rate 0.125.
-        //   - pos.y animation (inline formula, alpha = game.m_TransitionTimer).
+        //   - pos.y animation (inline formula, alpha = game_work.m_GameDt).
         //
         // Lazy creation: only the bomb-Quit button. The decompiler shows a
         // second "MoreGames" creation block at the same field +0xA4, but
@@ -247,15 +248,15 @@ void MainScreen::Update(float dt) {
         }
 
         // Continue camera lerp toward -1.0 (binary continues state 0's lerp).
-        game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
+        game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
 
-        // pos.y animation: alpha = game.m_TransitionTimer (negative). Binary
+        // pos.y animation: alpha = game_work.m_GameDt (negative). Binary
         // formula: pos.y = (size.y + 320 + size.y * (-cameraTransition) * -2) * 0.5
         //                 = (size.y + 320 - 2*size.y*(-cameraTransition)) * 0.5.
         // At cameraTransition = -1: pos.y = (size.y + 320 - 2*size.y) * 0.5
         //                                 = (320 - size.y) * 0.5.
         const float sizeY_1 = size.y;
-        const float alpha_1 = -game.m_TransitionTimer;     // 0..1 as zoom completes
+        const float alpha_1 = -game_work.m_GameDt;     // 0..1 as zoom completes
         pos.y = (sizeY_1 + 320.0f - 2.0f * sizeY_1 * alpha_1) * 0.5f;
         break;
     }
@@ -265,37 +266,37 @@ void MainScreen::Update(float dt) {
         //   if (-cameraTransition > 0.999) {                 // gate fully zoomed in
         //       game->field_0x28 = game->field_0x20;
         //       WaveManager::Reset(true);
-        //       game->levelTransitionFlag = 1;
+        //       game_work.m_LevelTransitionFlag = 1;
         //   }
         //   cameraTransition *= 0.75;
         //   if (|cameraTransition| < 0.001) {                // DAT_0014bb74
-        //       game->levelTransitionFlag = 0;
+        //       game_work.m_LevelTransitionFlag = 0;
         //       cameraTransition = 0;
         //       m_State = STATE_CAMERA_FADE (0x11);
         //   }
-        if (-game.m_TransitionTimer > 0.999f && !m_bGameStartReset) {
+        if (-game_work.m_GameDt > 0.999f && !m_bGameStartReset) {
             WaveManager::GetInstance()->Reset(true);
             m_bGameStartReset = true;
-            // Binary @ 0x0014bb6c: game->levelTransitionFlag = 1 (suppresses
+            // Binary @ 0x0014bb6c: game_work.m_LevelTransitionFlag = 1 (suppresses
             // WaveManager spawn pump until the camera-settle clear below).
             // game->field_0x28 = field_0x20 still TODO (field not in port struct).
-            game.levelTransitionFlag = 1;
+            game_work.m_LevelTransitionFlag = 1;
         }
-        game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
-        if (fabsf(game.m_TransitionTimer) < 0.001f) {
-            game.m_TransitionTimer = 0.0f;
+        game_work.m_GameDt *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
+        if (fabsf(game_work.m_GameDt) < 0.001f) {
+            game_work.m_GameDt = 0.0f;
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Update/GAME_START camera settled");
             m_State = STATE_CAMERA_FADE;
             m_bGameStartReset = false;
             // Binary @ 0x0014bb78: clear levelTransitionFlag once the camera
             // animation has settled into gameplay.
-            game.levelTransitionFlag = 0;
+            game_work.m_LevelTransitionFlag = 0;
         }
 
         // Shared LAB_0014c166 pos.y animation (binary uses cameraTransition
         // as alpha; here we use its absolute magnitude). Logos track pos.y.
         const float sizeY_2 = size.y;
-        const float alpha_2 = fabsf(game.m_TransitionTimer);
+        const float alpha_2 = fabsf(game_work.m_GameDt);
         const float tt_2 = sizeY_2 * alpha_2;
         pos.y = (sizeY_2 + 320.0f - 2.0f * tt_2) * 0.5f;
         break;
@@ -348,7 +349,7 @@ void MainScreen::Update(float dt) {
             // happens in DojoScreen.cpp before HUD::Update fires this
             // callback.
             m_pDojoScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::DojoScreenRemoved);
-            game.hud->AddControl(m_pDojoScreen);
+            game_work.mHud->AddControl(m_pDojoScreen);
         }
         break;
     }
@@ -399,7 +400,7 @@ void MainScreen::Update(float dt) {
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
         m_Timer2 = -0.85f;
-        game.m_TransitionTimer = 0.0f;
+        game_work.m_GameDt = 0.0f;
         DeleteMenuButtons();
         break;
 
@@ -424,7 +425,7 @@ void MainScreen::Update(float dt) {
         // After spawning, MainScreen stays in this state — GameModeScreen
         // writes mainScreen->m_State later (CAMERA_FADE on mode pick,
         // SLIDE_IN on back-out).
-        LOG_INFO("SCREEN/MainScreen", "STATE_MODE_SELECT tick: gameMode=%d", (int)game.gameMode);
+        LOG_INFO("SCREEN/MainScreen", "STATE_MODE_SELECT tick: gameMode=%d", (int)game_work.gameMode);
         const float oldTimer2 = m_Timer2;
         // Port specific: per-frame decay needs to slow with the debug
         // time-scale. Binary x *= 0.85 each frame → 15% decay. With
@@ -445,14 +446,14 @@ void MainScreen::Update(float dt) {
             !m_pGameModeScreen) {
             m_pGameModeScreen = new GameModeScreen(game, false);
             m_pGameModeScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::GameModeScreenRemoved);
-            game.hud->AddControl(m_pGameModeScreen);
+            game_work.mHud->AddControl(m_pGameModeScreen);
         }
         break;
     }
 
     case STATE_CAMERA_FADE:
         // ASM-verified: 2026-05-18 binary @ 0x0014c19a..0x0014c1d2 (re-analyst).
-        // Gate is `timer < -0.85f` against game.m_TransitionTimer (NOT a
+        // Gate is `timer < -0.85f` against game_work.m_GameDt (NOT a
         // separate s16 register -- Ghidra IL had confused the issue, the
         // "persistent state-machine register" is just m_TransitionTimer
         // itself, armed by GameOver/PrepareForLevelStart to a deep-negative).
@@ -461,12 +462,12 @@ void MainScreen::Update(float dt) {
         // (one-shot release). Constants: -0.85 @ 0x14c284, 0.75 inline,
         // -0.001 @ 0x14c2a8.
         LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE tick: m_TransitionTimer=%.3f, gameMode=%d, levelTransitionFlag=%d",
-                 game.m_TransitionTimer, (int)game.gameMode, (int)game.levelTransitionFlag);
-        if (game.m_TransitionTimer < -0.85f) {
-            game.m_TransitionTimer *= 0.75f;
-            if (game.m_TransitionTimer > -0.001f) {
-                game.m_TransitionTimer = -0.85f;
-                game.levelTransitionFlag = 0;
+                 game_work.m_GameDt, (int)game_work.gameMode, (int)game_work.m_LevelTransitionFlag);
+        if (game_work.m_GameDt < -0.85f) {
+            game_work.m_GameDt *= 0.75f;
+            if (game_work.m_GameDt > -0.001f) {
+                game_work.m_GameDt = -0.85f;
+                game_work.m_LevelTransitionFlag = 0;
                 LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to -0.85f, levelTransitionFlag cleared");
             }
         }
@@ -489,7 +490,7 @@ void MainScreen::Update(float dt) {
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/LOADING");
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
-        game.m_TransitionTimer = 0.0f;
+        game_work.m_GameDt = 0.0f;
         DeleteMenuButtons();
         break;
 
@@ -505,8 +506,8 @@ void MainScreen::Update(float dt) {
         //   if (qs == 2):  HitMenuBomb (163,-96,0); state = 0x18
         //   else if (qs == 3): m_State=0; m_Timer2=0.15
         //   else (0,1):    pending OS dialog; stay in QUIT_WAIT
-        if (game.pTutorialCtrl) {
-            game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+        if (game_work.m_TutorialControl) {
+            game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
         const int liveEntities = am ? am->GetNumEntities(0) : 0;
@@ -537,8 +538,8 @@ void MainScreen::Update(float dt) {
         // BombFlashFull returns true once bombHitTimer < 1.0s (the flash
         // has peaked and is on its way out). HitMenuBomb in QUIT_WAIT
         // primed it to 2.0; GameUpdate ticks it down each frame.
-        if (game.pTutorialCtrl) {
-            game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+        if (game_work.m_TutorialControl) {
+            game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
         if (FN::BombFlashFull()) {
             SystemManager::GetInstance().QuitGame();
@@ -551,18 +552,18 @@ void MainScreen::Update(float dt) {
     // Position update (end of Update, all states)
     // Sound/music toggle texture swap
     if (pSoundToggle) {
-        pSoundToggle->m_Texture = (game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
+        pSoundToggle->m_Texture = (game_work.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     }
     if (pMusicToggle) {
-        pMusicToggle->m_Texture = (game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
+        pMusicToggle->m_Texture = (game_work.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     }
 
     // Compute the state-dependent "elapsedTime" / pause driver used by
     // BOTH the toggle positioning block and UpdateScreenElements below.
-    // Binary: at the top of Update, pTVar13 = -game.m_TransitionTimer. The
+    // Binary: at the top of Update, pTVar13 = -game_work.m_GameDt. The
     // OUT switch cases (0xe/0xf/3/4) and SLIDE_IN overwrite pTVar13 with
     // their decayed/growing m_Timer2 before reaching this point. All
-    // other states retain pTVar13 = -game.m_TransitionTimer.
+    // other states retain pTVar13 = -game_work.m_GameDt.
     float elapsedTime;
     switch (m_State) {
     case STATE_DOJO_WAIT_A:
@@ -576,13 +577,13 @@ void MainScreen::Update(float dt) {
         elapsedTime = m_Timer2;
         break;
     default:
-        elapsedTime = -game.m_TransitionTimer;  // 0 -> +1 as camera zooms in
+        elapsedTime = -game_work.m_GameDt;  // 0 -> +1 as camera zooms in
         break;
     }
 
     // Toggle button positioning.
     // Binary: pauseAmount = clamp(pTVar13 + GetPauseAmount(), 0, 1)
-    // The port's earlier version used fabsf(game.m_TransitionTimer) which
+    // The port's earlier version used fabsf(game_work.m_GameDt) which
     // flipped -1 -> +1 and forced slideOffset=0 during OUT, so the
     // toggles stayed on-screen while blurry_backing slid off. Using the
     // routed elapsedTime (which tracks m_Timer2 during OUT/SLIDE_IN)
@@ -614,7 +615,7 @@ void MainScreen::Update(float dt) {
 
     UpdateScreenElements(dt, elapsedTime);
 
-    // Binary-faithful: game.m_TransitionTimer is the SINGLE source of truth.
+    // Binary-faithful: game_work.m_GameDt is the SINGLE source of truth.
     // MainScreen's state-case bodies above write it directly (states 0/1/2/
     // 0x11). No tail mirror -- states that hand off to GameOverScreen
     // (e.g. state 8) leave the timer untouched so GameOverScreen's state-6
@@ -625,8 +626,8 @@ void MainScreen::Update(float dt) {
 // Binary @ 0x0014b278: Game+0x0c is the camera-transition timer. These
 // accessors route directly through the Game singleton -- no port-local
 // mirror field.
-float MainScreen::GetCameraTransition() const { return game.m_TransitionTimer; }
-void  MainScreen::SetCameraTransition(float v) { game.m_TransitionTimer = v; }
+float MainScreen::GetCameraTransition() const { return game_work.m_GameDt; }
+void  MainScreen::SetCameraTransition(float v) { game_work.m_GameDt = v; }
 
 // Helper: setup world matrix for a textured quad at given position
 static void SetupQuadMatrix(MatrixManager& mm, const Vec3& hudScale,
@@ -861,7 +862,7 @@ static Vec3 TexSize(const Mortar::SmartPtr<Mortar::Texture>& tex, float defW, fl
 }
 
 void MainScreen::CreateToggles() {
-    if (!game.hud) return;
+    if (!game_work.mHud) return;
 
     // Sound toggle: (216.0, 135.5, 0.0), fruitType=-1 (no fruit).
     // Size comes from the texture dimensions (TexSize fallback = 32×32).
@@ -869,25 +870,25 @@ void MainScreen::CreateToggles() {
     // Vec3(TOGGLE_SIZE, TOGGLE_SIZE, 1.0) so MenuButton::Init's hitBounds path
     // sets m_TargetSize directly. No post-Init m_TargetSize write.
     pSoundToggle = new MenuButton();
-    pSoundToggle->m_Texture = (game.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
+    pSoundToggle->m_Texture = (game_work.m_bSoundOn ? m_TexSoundOn : m_TexSoundOff);
     pSoundToggle->Init(POS_SOUND_TOGGLE,
         Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1,
         TexSize(m_TexSoundOn, 32.0f, 32.0f), nullptr);
     pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
-    game.hud->AddControl(pSoundToggle);
+    game_work.mHud->AddControl(pSoundToggle);
 
     // Music toggle: (176.0, 135.5, 0.0)
     pMusicToggle = new MenuButton();
-    pMusicToggle->m_Texture = (game.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
+    pMusicToggle->m_Texture = (game_work.m_bMusicOn ? m_TexMusicOn : m_TexMusicOff);
     pMusicToggle->Init(POS_MUSIC_TOGGLE,
         Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1,
         TexSize(m_TexMusicOn, 32.0f, 32.0f), nullptr);
     pMusicToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
-    game.hud->AddControl(pMusicToggle);
+    game_work.mHud->AddControl(pMusicToggle);
 }
 
 void MainScreen::CreatePlayDojo() {
-    if (!game.hud) return;
+    if (!game_work.mHud) return;
 
     // Play button: (16.0, -66.0, -50.0), fruitType=3 (watermelon)
     // Ring texture drawn at native texture size — matches the binary's
@@ -932,12 +933,12 @@ void MainScreen::CreatePlayDojo() {
     pPlayButton->m_HitInsetY  = -50.0f;
     pPlayButton->m_HitInsetX = -50.0f;
     pPlayButton->m_AnimScale  = 0.5f;
-    game.hud->AddControl(pPlayButton);
+    game_work.mHud->AddControl(pPlayButton);
 
     // Binary @ 0x0014b6f8: ResetTutePos called immediately after play button
     // is created and wired, so the tutorial arrow targets the Play button.
-    if (game.pTutorialCtrl)
-        game.pTutorialCtrl->ResetTutePos(pPlayButton);
+    if (game_work.m_TutorialControl)
+        game_work.m_TutorialControl->ResetTutePos(pPlayButton);
 
     // Dojo button: (-144.0, -65.0, 0.0). Binary calls
     // Fruit::FruitType("mango", false) at runtime — resolves to 9
@@ -953,7 +954,7 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pDojoButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-    game.hud->AddControl(pDojoButton);
+    game_work.mHud->AddControl(pDojoButton);
 
     // Binary @ 0x0014b278 case 0 final block: post-Init scaling for Dojo button.
     // DAT_0014bb68 = 0.9f (fruit scale), DAT_0014bb6c = 1.05f (ring scale).
@@ -964,7 +965,7 @@ void MainScreen::CreatePlayDojo() {
 }
 
 void MainScreen::CreateQuitButton() {
-    if (!game.hud) return;
+    if (!game_work.mHud) return;
 
     // Quit button: (182.0, -106.0, 0.0) — binary uses quit.tex (+0x98) at +0xA4
     pQuitBtn = new MenuButton();
@@ -981,7 +982,7 @@ void MainScreen::CreateQuitButton() {
     pQuitBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pQuitBtn->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-    game.hud->AddControl(pQuitBtn);
+    game_work.mHud->AddControl(pQuitBtn);
 }
 
 // Matches MainScreen::ButtonDeleted @ 0x0014acc0. Binary dispatches by
@@ -1000,7 +1001,7 @@ void MainScreen::GameModeCallback() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT), "GameModeCallback");
     m_State = STATE_MODE_SELECT;
     m_Timer2 = 1.0f;
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
     FruitSaveData::DownloadTweaks();  // defunct stub
     // Binary @ 0x0014b068 just nulls pLeaderboardBtn; ClearMenuItems
     // (fired from the slicing fruit's MenuButton::Update gate) disables
@@ -1012,7 +1013,7 @@ void MainScreen::GameModeCallback() {
     // Binary @ 0x0014b020 (Ghidra mis-labels this "InitVec3_MissControl"):
     // re-seeds the engine PRNG state at *(GOT+0x773c) = BSS 0x0026c8b0.
     // Param is *(GameTask + 0x194) = m_FrameTimer.
-    Math::SeedGlobalRng((uint32_t)game.m_FrameTimer);
+    Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
 // Matches 0x0014c384
@@ -1031,13 +1032,13 @@ void MainScreen::NewGameCallback() {
     // Invoke vtable slot is a no-op stub -- fire-and-forget; no completion
     // callback is bound. The port mirrors the binary's call shape: 4-arg
     // SFXPlay with default-constructed Delegate1.
-    if (game.pGameSound) {
-        game.pGameSound->SFXPlay(
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay(
             "Game-start", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
     // Binary @ 0x0014b020: re-seed engine PRNG with m_FrameTimer.
-    Math::SeedGlobalRng((uint32_t)game.m_FrameTimer);
+    Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
 // Matches 0x0014afc4
@@ -1046,7 +1047,7 @@ void MainScreen::AboutCallback() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_DOJO_WAIT_B), "AboutCallback");
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
     // Binary @ 0x0014afc4 just nulls pLeaderboardBtn; the bomb's
     // MenuButton continues running, ClearMenuItems disables it, and the
     // released-bomb branch shrinks the ring via m_AnimPhase naturally.
@@ -1056,9 +1057,9 @@ void MainScreen::AboutCallback() {
 
 // Matches 0x0014af64
 void MainScreen::SoundCallback() {
-    game.m_bSoundOn = !game.m_bSoundOn;
+    game_work.m_bSoundOn = !game_work.m_bSoundOn;
     Mortar::SoundManager::GetInstance().SetSFXVolume(
-        game.m_bSoundOn ? SOUND_VOLUME_ON : 0.0f);
+        game_work.m_bSoundOn ? SOUND_VOLUME_ON : 0.0f);
 }
 
 // Matches 0x0014ac9c
@@ -1067,7 +1068,7 @@ void MainScreen::MusicCallback() {
     // consults it and ramps SetMusicVolume up/down via its crossfade state
     // machine. Do NOT add a SetMusicVolume call here -- the spec confirms the
     // binary does not.
-    game.m_bMusicOn = !game.m_bMusicOn;
+    game_work.m_bMusicOn = !game_work.m_bMusicOn;
 }
 
 // Matches 0x0014b010
@@ -1267,11 +1268,11 @@ void MainScreen::MultiplayerGameModeCallback() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT_2), "MultiplayerGameModeCallback");
     m_State = STATE_MODE_SELECT_2;
     m_Timer2 = 1.0f;
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
     // Binary @ 0x0014B0D2..0x0014B0D8: `str.w r3, [r4, #0xa4]` with r3=0
     // -- just nulls the pointer, no m_bPendingRemoval write. Same rationale
     // as GameModeCallback / AboutCallback above.
     pQuitBtn = nullptr;
     // Binary @ 0x0014b020: re-seed engine PRNG with m_FrameTimer.
-    Math::SeedGlobalRng((uint32_t)game.m_FrameTimer);
+    Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }

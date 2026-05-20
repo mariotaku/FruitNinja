@@ -16,6 +16,7 @@
 #include "math/Colour.h"
 #include "engine/input/Touch.h"
 #include <cstring>
+#include "game/GameWork.h"
 
 // Class-static texture SmartPtrs.
 // LoadContent loads: "checked.tex" -> s_checked, "unchecked.tex" -> s_unchecked.
@@ -142,9 +143,9 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
 
     // Draw label text.
     // Binary: Font::DrawString at pos + (10 + size.x / 2, 10, 0).
-    if (m_pLabel && game->pFontMain.IsValid()) {
+    if (m_pLabel && game_work.pFontMain.IsValid()) {
         Vec3 textPos(pos.x + 10.0f + size.x * 0.5f, pos.y + 10.0f, 0.0f);
-        game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
+        game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                                     m_pLabel, textPos,
                                     Colour(255, 255, 255, 255), 0);
     }

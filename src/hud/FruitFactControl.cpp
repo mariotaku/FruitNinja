@@ -30,6 +30,7 @@
 #include <cstring>
 #include <cstdio>
 #include <list>
+#include "game/GameWork.h"
 
 using Mortar::TextureManager;
 
@@ -198,7 +199,7 @@ void FruitFactControl::Init() {
     m_TabIndex = 0;
 
     Game* game = Game::GetInstance();
-    uint8_t gameMode = game ? game->gameMode : 0;
+    uint8_t gameMode = game ? game_work.gameMode : 0;
 
     // Per-mode backplate stored in m_Texture (binary @ 0x0013a2a6..0x0013a2ba)
     if (gameMode == 2) {
@@ -232,9 +233,9 @@ void FruitFactControl::Init() {
     // +0x208: m_BombQueueCount -- misleading name; semantically the best-combo length, NOT a bomb queue count.
     int comboFlag = 0;
     int comboPath = 0;
-    if (game && game->pSaveData) {
+    if (game && game_work.m_SaveData) {
         // ASM-verified: 2026-05-18 binary @ 0x0013a398 (re-analyst)
-        int count = game->pSaveData->m_BombQueueCount;
+        int count = game_work.m_SaveData->m_BombQueueCount;
         if (gameMode == 3 && count >= 3) {
             comboFlag = 1;
         }
@@ -258,10 +259,10 @@ void FruitFactControl::Init() {
         char comboBuf[128];
         snprintf(comboBuf, sizeof(comboBuf),
                  Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO),
-                 game->pSaveData->m_BombQueueCount);
-        m_ComboLength = game->pSaveData->m_BombQueueCount;
+                 game_work.m_SaveData->m_BombQueueCount);
+        m_ComboLength = game_work.m_SaveData->m_BombQueueCount;
         for (int i = 0; i < m_ComboLength && i < 11; i++) {
-            m_ComboHashArray[i] = game->pSaveData->m_BombQueue[i];
+            m_ComboHashArray[i] = game_work.m_SaveData->m_BombQueue[i];
         }
         int localFruitIdx = 0;
         m_ComboType = (int)CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);
@@ -315,7 +316,7 @@ void FruitFactControl::Release() {
     m_ComboStarTex.SetNull();
 
     Game* game = Game::GetInstance();
-    HUD* hud = game ? game->hud : nullptr;
+    HUD* hud = game ? game_work.mHud : nullptr;
 
     // Order from binary: m_pLeaderboardMenu, m_pLeftButton, m_pRightButton, m_pConnectButton.
     if (m_pLeaderboardMenu) {
@@ -356,7 +357,7 @@ void FruitFactControl::BeginDraw(float /*dt*/) {
     if (!s_SenseiHeadTex.IsValid()) return;
 
     Game* game = Game::GetInstance();
-    uint8_t gameMode = game ? game->gameMode : 0;
+    uint8_t gameMode = game ? game_work.gameMode : 0;
 
     if (gameMode == Mortar::GAME_MODE_ZEN || (gameMode == Mortar::GAME_MODE_ARCADE && m_TabIndex <= 1)) {
         m_LayerFlags |= Mortar::HUD_LAYER_BUTTONS;
@@ -376,19 +377,19 @@ void FruitFactControl::Update(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    uint8_t gameMode = game->gameMode;
+    uint8_t gameMode = game_work.gameMode;
 
     if (gameMode == Mortar::GAME_MODE_ZEN) {
         // SecondaryTex = combo-star tex
         m_Texture = m_ComboStarTex;
 
         // Gate on m_TransitionTimer (game[+0xC]) <= 0.75 OR m_StarTimer >= m_ComboLength
-        if (game->m_TransitionTimer <= 0.75f || m_StarTimer >= (float)m_ComboLength) {
+        if (game_work.m_GameDt <= 0.75f || m_StarTimer >= (float)m_ComboLength) {
             // Path A (faster combo cadence): StarTimer += 2*dt, 0.5-fractional gate
             m_StarTimer += 2.0f * dt;
             if (m_StarTimer - (float)(int)m_StarTimer >= 0.5f) {
-                if (game->pGameSound) {
-                    game->pGameSound->SFXPlay("Clean-Slice-1", 1.0f, 1.0f,
+                if (game_work.mGameSound) {
+                    game_work.mGameSound->SFXPlay("Clean-Slice-1", 1.0f, 1.0f,
                         Mortar::Delegate1<bool, Mortar::MortarSound*>());
                 }
             }
@@ -400,8 +401,8 @@ void FruitFactControl::Update(float dt) {
                 int idx = (n < 7) ? (n + 1) : 8;
                 char sfx[16];
                 snprintf(sfx, sizeof(sfx), "Clean-Slice-%d", idx);
-                if (game->pGameSound) {
-                    game->pGameSound->SFXPlay(sfx, 1.0f, 1.0f,
+                if (game_work.mGameSound) {
+                    game_work.mGameSound->SFXPlay(sfx, 1.0f, 1.0f,
                         Mortar::Delegate1<bool, Mortar::MortarSound*>());
                 }
             }
@@ -416,7 +417,7 @@ void FruitFactControl::Update(float dt) {
             m_pLeaderboardMenu->SetItemHeight(47.0f);
             m_pLeaderboardMenu->SetWidth(240.0f);
             m_pLeaderboardMenu->SetHeight(141.0f);
-            if (game->hud) game->hud->AddControl(m_pLeaderboardMenu, false);
+            if (game_work.mHud) game_work.mHud->AddControl(m_pLeaderboardMenu, false);
         }
         if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_bActive = 0;
         if (m_pConnectButton) m_pConnectButton->m_bActive = 0;
@@ -505,7 +506,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
     (void)hudScale;
 
     Game* game = Game::GetInstance();
-    if (!game || !game->pFontMain.IsValid()) return;
+    if (!game || !game_work.pFontMain.IsValid()) return;
 
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
@@ -514,7 +515,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
     if (layerMask == 8) {
         // Zen combo-bead overlay (HUD layer 0x08, binary @ 0x0013b95c)
-        if (game->gameMode != Mortar::GAME_MODE_ZEN) return;
+        if (game_work.gameMode != Mortar::GAME_MODE_ZEN) return;
         if (!m_ComboStarTex.IsValid()) return;
         if (m_StarTimer <= (float)m_ComboLength) return;
 
@@ -548,7 +549,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         return;
     }
 
-    if (game->gameMode == Mortar::GAME_MODE_ZEN) {
+    if (game_work.gameMode == Mortar::GAME_MODE_ZEN) {
         // ---- Zen body ----
         // Backplate from m_Texture (set to combo-star or PanelTexZen in Init/Update)
         if (m_Texture.IsValid()) {
@@ -570,15 +571,15 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             const float titleY = pos.y;
             // Triple-pass: shadow + dark-brown stroke at scale 20 + main colour at scale 20
             // Shadow pass
-            game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
+            game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                 title, Vec3(titleX + 1.0f, titleY, 0.0f),
                 Colour(0, 0, 0, 128), 0x0F);
             // Dark-brown stroke
-            game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
+            game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                 title, Vec3(titleX + 1.0f, titleY, 0.0f),
                 Colour(0x4B, 0x32, 0x28, 200), 0x0F);
             // Main colour
-            game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
+            game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                 title, Vec3(titleX + 1.0f, titleY, 0.0f),
                 m_FactColour, 0x0F);
         }
@@ -588,13 +589,13 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             float scale = 16.0f;
             {
                 Mortar::Utf8StringIterator iter(m_pCurFactString);
-                while (game->pFontMain->GetStringHeight(iter, scale, 127.0f) > 89.0f) {
+                while (game_work.pFontMain->GetStringHeight(iter, scale, 127.0f) > 89.0f) {
                     if (scale <= 0.5f) break;
                     scale -= 0.25f;
                     iter = Mortar::Utf8StringIterator(m_pCurFactString);
                 }
             }
-            game->pFontMain->DrawStringWrapped(scale, 127.0f, 0.0f,
+            game_work.pFontMain->DrawStringWrapped(scale, 127.0f, 0.0f,
                 m_pCurFactString, Vec3(pos.x - 8.0f, pos.y, 0.0f),
                 m_FactColour, 0x0D);
         }
@@ -613,7 +614,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             m_FactTexture->UnSet();
         }
 
-    } else if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
+    } else if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         // ---- Arcade body ----
         if (m_TabIndex == 1) {
             DrawLeaderboard();
@@ -648,7 +649,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                     Colour col = rowColours[i];
                     // m_DisplayName at +0x80 (char[64])
                     if (bonus->m_DisplayName[0] != '\0') {
-                        game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                        game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                             bonus->m_DisplayName,
                             Vec3(rowPos.x + 16.0f, rowPos.y, 0.0f),
                             col, 0x0F);
@@ -656,7 +657,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                     // m_Tier at +0x3C holds display score value
                     char scoreBuf[32];
                     snprintf(scoreBuf, sizeof(scoreBuf), "%d", bonus->m_Tier);
-                    game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                    game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                         scoreBuf,
                         Vec3(rowPos.x + 193.0f, rowPos.y, 0.0f),
                         col, 0x0F);
@@ -684,13 +685,13 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 float scale = 16.0f;
                 {
                     Mortar::Utf8StringIterator iter(m_pCurFactString);
-                    while (game->pFontMain->GetStringHeight(iter, scale, 127.0f) > 89.0f) {
+                    while (game_work.pFontMain->GetStringHeight(iter, scale, 127.0f) > 89.0f) {
                         if (scale <= 0.5f) break;
                         scale -= 0.25f;
                         iter = Mortar::Utf8StringIterator(m_pCurFactString);
                     }
                 }
-                game->pFontMain->DrawStringWrapped(scale, 127.0f, 0.0f,
+                game_work.pFontMain->DrawStringWrapped(scale, 127.0f, 0.0f,
                     m_pCurFactString, Vec3(pos.x - 8.0f, pos.y, 0.0f),
                     m_FactColour, 0x0D);
             }
@@ -712,19 +713,19 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             m_Texture->UnSet();
         }
 
-        // 2. Title: dispatch on game->languageFlag (field_0x3)
+        // 2. Title: dispatch on game_work.languageFlag (field_0x3)
         {
             const char* title = Mortar::GETSTRING_CAST_0(LSTR_FRUIT_FACT_TITLE);
             if (!title) title = "FRUIT FACT";
 
-            if (!game->languageFlag) {
+            if (!game_work.languageFlag) {
                 // clear branch: pos.x - 66, pos.y + 42, maxWH=(42, 0), scale 16, align 0xF
-                game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                     title, Vec3(pos.x - 66.0f, pos.y + 42.0f, 0.0f),
                     m_FactColour, 0x0F);
             } else {
                 // set branch: pos.x - 64, maxWH=(128, 0), scale 16, align 0xF
-                game->pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
                     title, Vec3(pos.x - 64.0f, pos.y + 42.0f, 0.0f),
                     m_FactColour, 0x0F);
             }
@@ -738,13 +739,13 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             float scale = 16.0f;
             {
                 Mortar::Utf8StringIterator iter(m_pCurFactString);
-                while (game->pFontMain->GetStringHeight(iter, scale, 128.0f) > 96.0f) {
+                while (game_work.pFontMain->GetStringHeight(iter, scale, 128.0f) > 96.0f) {
                     if (scale <= 0.5f) break;
                     scale -= 0.125f;
                     iter = Mortar::Utf8StringIterator(m_pCurFactString);
                 }
             }
-            game->pFontMain->DrawStringWrapped(scale, 128.0f, 0.0f,
+            game_work.pFontMain->DrawStringWrapped(scale, 128.0f, 0.0f,
                 m_pCurFactString, Vec3(bodyX, bodyY, 0.0f),
                 brown, 0x0D);
         }
@@ -845,28 +846,28 @@ bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
 // Binary @ 0x0013a130
 void FruitFactControl::LeftButton() {
     Game* g = Game::GetInstance();
-    if (g && g->pGameSound) {
-        g->pGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
+    if (g && game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
     --m_TabIndex;
     if ((int)m_TabIndex < 0) m_TabIndex = 1;
-    if (g && g->pSaveData) {
-        g->pSaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
+    if (g && game_work.m_SaveData) {
+        game_work.m_SaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
     }
 }
 
 // Binary @ 0x0013a1d4
 void FruitFactControl::RightButton() {
     Game* g = Game::GetInstance();
-    if (g && g->pGameSound) {
-        g->pGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
+    if (g && game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
     ++m_TabIndex;
     if ((int)m_TabIndex > 1) m_TabIndex = 0;
-    if (g && g->pSaveData) {
-        g->pSaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
+    if (g && game_work.m_SaveData) {
+        game_work.m_SaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
     }
 }
 

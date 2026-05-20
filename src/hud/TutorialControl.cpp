@@ -16,6 +16,7 @@
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
 #include <cmath>
+#include "game/GameWork.h"
 
 // Animation phase boundaries (seconds)
 static const float ANIM_INACTIVE   = -10.0f;  // sentinel: timer reset value
@@ -104,14 +105,14 @@ bool TutorialControl::CanShowTute() {
     if (!game) return false;
 
     // Binary @ 0x00162fce: DAT = 0x3F7D70A4 (0.99f).
-    if (fabsf(game->m_TransitionTimer) > 0.99f)
+    if (fabsf(game_work.m_GameDt) > 0.99f)
         return true;
 
     // Binary checks pGameOverScreen (+0x164): null -> return false.
-    if (!game->pGameOverScreen) return false;
+    if (!game_work.pGameOverScreen) return false;
 
-    if (!game->hud) return false;
-    return game->hud->m_globalTimeScale < 1.0f;
+    if (!game_work.mHud) return false;
+    return game_work.mHud->m_globalTimeScale < 1.0f;
 }
 
 // ===================================================================

@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
+#include "game/GameWork.h"
 
 using Mortar::TextureManager;
 
@@ -56,12 +57,12 @@ static void AddToScoreOnArrival(Coin* coin) {
 
     if (milestone) {
         Game* game = Game::GetInstance();
-        if (game && game->pCamera) {
+        if (game && game_work.m_FruitCamera) {
             Vec3 coinPos = coin->pos;
-            game->pCamera->CreateCameraShake(coinPos, 0.3f, 0.75f);
+            game_work.m_FruitCamera->CreateCameraShake(coinPos, 0.3f, 0.75f);
         }
-        if (game && game->pGameSound) {
-            game->pGameSound->SFXPlay("Bonus-Firework-Explode", 1.0f, 1.0f);
+        if (game && game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("Bonus-Firework-Explode", 1.0f, 1.0f);
         }
         {
             PSPParticleManager& pm = PSPParticleManager::GetInstance();
@@ -244,8 +245,8 @@ void BonusScreen::AwardScores() {
     // TODO: 0x0013260C — *(int*)(Game +0x34) = 3 (BonusFinalePhase flag, offset unconfirmed).
 
     Game* game = Game::GetInstance();
-    if (game && game->pCamera) {
-        game->pCamera->CreateCameraShake(spawnPos, 0.3f, 1.0f);
+    if (game && game_work.m_FruitCamera) {
+        game_work.m_FruitCamera->CreateCameraShake(spawnPos, 0.3f, 1.0f);
     }
 
     {
@@ -256,13 +257,13 @@ void BonusScreen::AwardScores() {
 
     // Return value discarded in binary (cache-warming call).
     if (game) {
-        (void)game->currentScore;
+        (void)game_work.currentScore;
     }
 
     // Vol = 0.0f is the literal binary value (DAT_00132910 = 0x00000000).
     // Per-coin fireworks in AddToScoreOnArrival handle audibility.
-    if (game && game->pGameSound) {
-        game->pGameSound->SFXPlay("equip-unlock", 0.0f, 1.0f,
+    if (game && game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("equip-unlock", 0.0f, 1.0f,
                                   Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
 }
@@ -435,7 +436,7 @@ void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
         // kTotalScoreColour = Colour(0, 0, 0, 0xff) — DAT @ 0x001f34d4
         Colour totalColour(0, 0, 0, 0xff);
 
-        Mortar::Font* fontBlue2 = game->pFontBlue2.Get();
+        Mortar::Font* fontBlue2 = game_work.pFontBlue2.Get();
         if (fontBlue2) {
             Mortar::Utf8StringIterator iter(buf);
             // TODO: CopyGlobalVec2_BonusScreen — pass Vec2(0,0) until global is RE'd
@@ -453,7 +454,7 @@ void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
 
     // --- Per-award row loop (pFontMain) ---
     // ASM-verified: 2026-05-18 binary @ 0x0013325C (re-analyst)
-    Mortar::Font* fontMain = game->pFontMain.Get();
+    Mortar::Font* fontMain = game_work.pFontMain.Get();
     MatrixManager& mm = MatrixManager::GetInstance();
 
     for (int i = 0; i < (int)m_Awards.size(); ++i) {
