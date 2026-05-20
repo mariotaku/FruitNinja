@@ -63,6 +63,19 @@ static const Vec3 POS_MORE_GAMES(182.0f, -106.0f, 0.0f);
 static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 
+void MainScreen::SetState(MainScreenState s) {
+    m_State = s;
+    if (s == STATE_CAMERA_ZOOM) {
+        // Port specific: m_pDojoScreen / m_pGameModeScreen are weak pointers to
+        // child screens managed by HUD. Their removal callback can race the state
+        // transition. Forcibly clear them here so STATE_CAMERA_ZOOM (the main-menu
+        // entry state used by QuitToMenu @ 0x00169e50) doesn't keep a stale weak
+        // pointer that would block a future DojoScreen push.
+        m_pDojoScreen = nullptr;
+        m_pGameModeScreen = nullptr;
+    }
+}
+
 // Matches ctor at 0x0014c430 (159 lines)
 MainScreen::MainScreen(Game& g)
     : pPlayButton(nullptr), pDojoButton(nullptr),
