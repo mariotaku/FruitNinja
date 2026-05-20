@@ -1,7 +1,7 @@
 #include "asset/ResourceLoader.h"
 #include "asset/DataReader.h"
 #include "asset/File.h"
-#include <cstdio>
+#include "debug/Logger.h"
 
 namespace Mortar {
 
@@ -19,7 +19,7 @@ ResourceLoader::ResourceLoader(const char* filePath)
 {
     File f(filePath, 0, 0);
     if (!f.Load(nullptr, 0)) {
-        fprintf(stderr, "ResourceLoader: failed to open '%s'\n", filePath);
+        LOG_ERROR("RESOURCE", "failed to open '%s'", filePath);
         return;
     }
 

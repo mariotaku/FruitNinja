@@ -6,6 +6,7 @@
 // Analysed: 2026-05-04T00:00
 
 #include "Game.h"
+#include "game/GameWork.h"
 #include "game/GameTaskState.h"
 #include "hud/HUD.h"
 #include "entities/ActorManager.h"
@@ -23,31 +24,13 @@
 Game::Game()
     : Mortar::MortarGame(),
       m_bSlowHardware(0), m_bLanguageSet(0), m_appState(0),
-      taskStateIndex(0), field_0x01(0), pausedFlag(false), languageFlag(0),
-      gameMode(0), levelTransitionFlag(0), retryFlag(0), field_0x07(0),
-      m_bTutorialShown(0), m_AchievementProgressTimer(0.0f),
-      retryTimer(0), m_TransitionTimer(0), bombHitTimer(0),
-      missCount(0), currentScore(0), m_bUnsullied(0),
-      m_CoinsBalance(0), m_CoinsTotalEarned(0), m_CoinsAtGameStart(0),
-      m_CritTimer(0), m_ScoreThreshold(0), field_0x34(0), m_bSlowMotion(0),
-      dt(0), hud(nullptr),
-      pCamera(nullptr),
-      pSaveData(nullptr),
-      m_bSoundOn(true), m_bMusicOn(true),
-      field_0x88(0),
-      mainScreen(nullptr),
-      pTutorialCtrl(nullptr),
-      fruitTotal(0),
-      pGameSound(nullptr),
-      m_gameDataLicensedState(0),
-      m_bGameOverActive(0),
-      m_FrameTimer(0), m_MenuReturnTimer(0), flag_0x1a8(0), m_bFrameDirty(0),
       window(nullptr), gl_context(nullptr),
       inputManager(nullptr), inputTranslator(nullptr), actorManager(nullptr),
       soundEnabled(true), musicEnabled(true),
       running(false)
 {
     // s_instance already set by MortarGame ctor
+    // game_work fields are zero-initialised at BSS load time (C-linkage global)
 }
 
 Game::~Game() {
@@ -103,8 +86,8 @@ void Game::CreateFileSystems(const char* a, const char* b) {
 // slot 10 @ 0x0010dc80 — sets HUD multiplayer state, resets WaveManager
 void Game::TellGameToStart(int multiplayer) {
     (void)multiplayer;
-    if (hud) {
-        hud->SetToMultiplayerState();
+    if (game_work.mHud) {
+        game_work.mHud->SetToMultiplayerState();
         WaveManager::GetInstance()->Reset(true);
     }
 }
@@ -121,7 +104,7 @@ void Game::Init(int argc, char** argv) {
     // path via working directory at launch, not via argv.
     (void)argc; (void)argv;
     GamePreInitialise();
-    languageFlag = 0;                   // g_GameData[3] = 0
+    game_work.languageFlag = 0;         // g_GameData[3] = 0
     SetHardware("BADA", false);
     GameInitialise();
     m_bLanguageSet = 1;
@@ -138,12 +121,12 @@ Mortar::MortarGame* Game::End() {
 void Game::Paused() {
     // Port specific: LoadingJob::CanBoot() always-true on Bada (no
     // async loading screen). InputManager::ResetDevices() not yet ported.
-    if (pGameSound) {
-        pGameSound->Pause();
+    if (game_work.mGameSound) {
+        game_work.mGameSound->Pause();
     }
     Mortar::SoundManager::GetInstance().BeginInterruption();
-    if (hud) {
-        hud->OnPause();
+    if (game_work.mHud) {
+        game_work.mHud->OnPause();
     }
     // Port specific: SkipToPause(false) free fn not yet ported (see
     // WaveManager.cpp stub @ binary 0x00169c48). Save path uses the
@@ -158,14 +141,14 @@ void Game::Paused() {
 void Game::UnPaused() {
     // Port specific: LoadingJob::CanBoot() always-true on Bada (no
     // async loading screen). Skipped -- no port equivalent needed.
-    if (pGameSound) {
+    if (game_work.mGameSound) {
         Mortar::SoundManager::GetInstance().EndInterruption();
-        pGameSound->Unpause();
+        game_work.mGameSound->Unpause();
     }
-    // Binary @ 0x0010dae8: gate UnpauseGame on m_TransitionTimer != 0.0f
+    // Binary @ 0x0010dae8: gate UnpauseGame on m_GameDt != 0.0f
     // (the camera transition isn't mid-fade). PauseScreen::UnpauseGame
-    // sets gs->m_TransitionTimer=0.4f, gs->pausedFlag=1.
-    if (m_TransitionTimer != 0.0f) {
+    // sets gs->m_GameDt=0.4f, gs->m_Paused=1.
+    if (game_work.m_GameDt != 0.0f) {
         PauseScreen::UnpauseGame();
     }
 }
@@ -188,20 +171,20 @@ void Game::SaveOnExit() {
 // slot 19 @ 0x0010da68 — reads/writes g_GameData+0x18C
 void Game::SetAppLicensed(bool licensed) {
     if (licensed) {
-        m_gameDataLicensedState = 1;
-    } else if (m_gameDataLicensedState != 1) {
-        m_gameDataLicensedState = 2;
+        game_work.m_gameDataLicensedState = 1;
+    } else if (game_work.m_gameDataLicensedState != 1) {
+        game_work.m_gameDataLicensedState = 2;
     }
 }
 
 // slot 20 @ 0x0010da94 — returns g_GameData+0x18C
-int Game::GetAppLicensedState() { return m_gameDataLicensedState; }
+int Game::GetAppLicensedState() { return game_work.m_gameDataLicensedState; }
 
 // Non-virtual — mirrors Game_SetLanguage @ 0x0010b140
 // NOT a vtable override; binary slot 21 still uses MortarGame::SetLanguage base impl.
 void Game::SetLanguage(const char* lang) {
     (void)lang;
-    languageFlag = 0;
+    game_work.languageFlag = 0;
 }
 
 // --- Port-specific SDL methods ---

@@ -1,3 +1,4 @@
+#include "game/GameWork.h"
 #ifndef FN_GAME_STARTUP_EFFECTS_H
 #define FN_GAME_STARTUP_EFFECTS_H
 
@@ -15,7 +16,7 @@ void DrawStartFade();
 
 // @ 0x00169a9c — prime the first wave when the player picks a game mode.
 // Called by GameModeScreen::SetupLevel (vtable[18]) once the camera fade
-// crosses -0.9. Resets WaveManager and sets game.levelTransitionFlag = 1 so the
+// crosses -0.9. Resets WaveManager and sets game_work.m_LevelTransitionFlag = 1 so the
 // gameplay loop doesn't tick until STATE_CAMERA_FADE clears the flag.
 void PrepareForLevelStart();
 

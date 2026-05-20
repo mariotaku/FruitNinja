@@ -8,16 +8,13 @@
 #include "platform/InputTranslatorSDL.h"
 #include "input/Touch.h"
 #include "util/StringHash.h"
-#include <cstdio>
 #include <cstring>
 
-// Touch event logging — flip to 0 to silence after diagnosing crashes
-// caused by stray mouse/finger events on startup.
-#define TOUCH_LOG 0
-#if TOUCH_LOG
-#  define TLOG(...) do { printf("[TOUCH] " __VA_ARGS__); fflush(stdout); } while (0)
+#ifdef FN_DEBUG_TOUCH
+#  include "debug/Logger.h"
+#  define TLOG(fmt, ...) LOG_VERBOSE("TOUCH", fmt, ##__VA_ARGS__)
 #else
-#  define TLOG(...) do {} while (0)
+#  define TLOG(...) ((void)0)
 #endif
 
 // StringHash is provided by src/engine/util/StringHash.h (the binary-faithful

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <ctime>
 #include <cstdio>     // snprintf -- explicit for Sourcery 4.4 newlib
+#include "game/GameWork.h"
 
 namespace FN {
 
@@ -21,9 +22,9 @@ void GameOver(int endReason, float endScore, int endParam) {
     if (!game) return;
 
     // re-entry guard: levelTransitionFlag at g_GameData+0x05
-    if (game->levelTransitionFlag != 0) return;
+    if (game_work.m_LevelTransitionFlag != 0) return;
 
-    game->levelTransitionFlag = 1;
+    game_work.m_LevelTransitionFlag = 1;
 
     WaveManager::GetInstance()->ClearUnspawned();
 
@@ -32,28 +33,28 @@ void GameOver(int endReason, float endScore, int endParam) {
     // texture variant + per-game pom/star counts to display. Wiring proper:
     //   expressionIdx <- m_GameOverField2 (+0x120)
     //   bgPatternIdx  <- m_GameOverField1 (+0x11C)
-    //   pomCount      <- m_GameOverField3 (+0x124)
+    //   tabIndex      <- m_GameOverField3 (+0x124)
     //   starCount     <- m_GameOverField4 (+0x128)
     // The fields default to -1 (sentinel) and are written by the gameplay
     // achievement / bonus path which the port hasn't fully RE'd yet.
     // DIFFERS: when a field == -1 we substitute 1 (the first valid texture
     // variant) so sensei body + head are visible. Once the gameplay-side
     // setters land, the substitution can come out.
-    FruitSaveData* save = game->pSaveData;
+    FruitSaveData* save = game_work.m_SaveData;
     // Substitute 1 when the gameplay-side setter hasn't written a real value
     // (sentinel -1). Inlined per-field instead of a helper lambda -- the
     // cross-toolchain (GCC 4.4.1) doesn't support C++11 lambdas.
     int expressionIdx = (save && save->m_GameOverField2 > 0) ? save->m_GameOverField2 : 1;
     int bgPatternIdx  = (save && save->m_GameOverField1 > 0) ? save->m_GameOverField1 : 1;
-    int pomCount      = save ? std::max(0, save->m_GameOverField3) : 0;
+    int tabIndex      = save ? std::max(0, save->m_GameOverField3) : 0;
     int starCount     = save ? std::max(0, save->m_GameOverField4) : 0;
 
     GameOverScreen* gos = new GameOverScreen(
         "GameOver", endReason, endScore,
-        expressionIdx, bgPatternIdx, pomCount, starCount);
+        expressionIdx, bgPatternIdx, tabIndex, starCount);
 
     // +0x164: pGameOverScreen
-    game->pGameOverScreen = gos;
+    game_work.pGameOverScreen = gos;
 
     // TODO: FruitSaveData::AddToTotal("GamesPlayed-...") + unique-day tracking
     // if (endReason == -1) { ... }
@@ -62,13 +63,13 @@ void GameOver(int endReason, float endScore, int endParam) {
     // TODO: clear FruitSaveData fields when ported
 
     gos->Init();
-    game->hud->AddControl(gos);
+    game_work.mHud->AddControl(gos);
 
     // Binary @ 0x00169f94: bump <MODE>_today and write m_LastPlayedDay[mode].
     // 0x00169fec: sd->m_LastPlayedDay[mode] = GetDaysSince1900().
-    if (game->pSaveData) {
+    if (game_work.m_SaveData) {
         static const char* k_ModeNames[4] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
-        int mode = (int)game->gameMode;
+        int mode = (int)game_work.gameMode;
         if (mode >= 0 && mode < 4) {
             // Compute days-since-1900 inline (same helper as FruitSaveData.cpp).
             static const int DAYS_FROM_1900_TO_EPOCH = 25569;
@@ -79,8 +80,8 @@ void GameOver(int endReason, float endScore, int endParam) {
             std::snprintf(todayKey, sizeof(todayKey), "%s_today", k_ModeNames[mode]);
             uint32_t todayHash = StringHash(todayKey);
 
-            game->pSaveData->AddToTotal(todayKey, todayHash, 1, false, false);
-            game->pSaveData->m_LastPlayedDay[mode] = today;
+            game_work.m_SaveData->AddToTotal(todayKey, todayHash, 1, false, false);
+            game_work.m_SaveData->m_LastPlayedDay[mode] = today;
         }
     }
 }
@@ -90,7 +91,7 @@ void GameOver(int endReason, float endScore, int endParam) {
 void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param3*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
-    game->currentScore += points;
+    game_work.currentScore += points;
 }
 
 // Binary free functions @ 0x0010a4b8 / 0x0010a4e8.
@@ -102,13 +103,13 @@ void AddToCurrentScore(int points, int /*param1*/, bool /*param2*/, bool /*param
 // previous run's final score persisted into the new game).
 void SetScore(int score, int /*playerIdx*/) {
     Game* game = Game::GetInstance();
-    if (game) game->currentScore = score;
+    if (game) game_work.currentScore = score;
 }
 
 void SetMissCount(int n, int /*playerIdx*/) {
     Game* game = Game::GetInstance();
-    if (game && game->pSaveData)
-        game->pSaveData->m_CurrentMissCount = n;   // FruitSaveData+0x68
+    if (game && game_work.m_SaveData)
+        game_work.m_SaveData->m_CurrentMissCount = n;   // FruitSaveData+0x68
 }
 
 } // namespace FN

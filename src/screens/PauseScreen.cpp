@@ -15,6 +15,7 @@
 // All three depend on subsystems not yet ported. Specs are RE-complete.
 
 #include "screens/PauseScreen.h"
+#include "debug/Logger.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
@@ -43,6 +44,7 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include "game/GameWork.h"
 
 // -------------------------------------------------------------------------
 // Constants from binary (see docs section 4 DAT table)
@@ -99,35 +101,22 @@ void PauseScreen::PauseGame() {
     Game* game = Game::GetInstance();
     if (!game) return;
     GameTaskState* ts = GetTaskState();
-    game->pausedFlag = true;
+    game_work.m_Paused = true;
     ts->isPaused = 0;
     ts->pauseTransitionTimer = 0.25f;
 }
 
-// ASM-verified: 2026-05-17 binary @ 0x00168fb0 (re-analyst, re-verified).
-// Binary @ 0x00168fb0 UnpauseGame():
-//   GameTaskState+0x10 (float) = 0.4f  -- pauseBombHitTimer
-//   GameTaskState+0x0C (byte)  = 1     -- isPaused = 1 (resumed)
-// The DAT chain at 0x168fd4 = 0x000452d4 (GOT offset to GameTaskState
-// DIRECT struct, NOT a pointer-dereferenced Game). An earlier RE pass
-// mis-identified this as Game+0x10 and re-routed the write to
-// Game::bombHitTimer, which clobbered HitMenuBomb's 2.0f set on Quit
-// and broke the 2.0->1.5 downward crossing that fires
-// ResetGameEntities(false) in GameUpdate -- gameplay fruits/bombs
-// stopped clearing after Quit-from-Pause.
+// ASM-verified: 2026-05-20 binary @ 0x00168fb0 UnpauseGame (re-analyst)
+// Binary writes ONLY GameTaskState+0xc and +0x10. Does NOT touch game_work.m_Paused.
+// pausedFlag stays set through QUIT_EXIT/RETRY_EXIT/BOMB_FLASH so the dispatcher's
+// `active = !pausedFlag && pmState == 0` evaluates to false during those transitions,
+// which makes UpdateBombHit and GameOver-cross-1.5 skip. The port's RESUME_EXIT case
+// in PauseScreen::Update has its own port-specific pausedFlag clear (DIFFERS) because
+// the port's PowerManager stub always returns 0.
 void PauseScreen::UnpauseGame() {
     GameTaskState* ts = GetTaskState();
     ts->isPaused = 1;
     ts->pauseBombHitTimer = 0.4f;        // DAT_00168fcc, GameTaskState+0x10
-
-    // DIFFERS: binary's UnpauseGame does NOT write pausedFlag=0
-    // either; it relies on PowerManager::GetState() going non-zero on
-    // background to keep canUpdate=false. Port's PowerManager stub
-    // always returns 0, so pausedFlag is the sole gate to
-    // GameUpdate's wholesale ActorManager/Splat skips. Writing 0 here
-    // is the port-side mirror for resume.
-    Game* game = Game::GetInstance();
-    if (game) game->pausedFlag = false;
 }
 
 // -------------------------------------------------------------------------
@@ -145,23 +134,24 @@ void PauseScreen::UnpauseGame() {
 bool PauseScreen::IsEnabled() {
     Game* g = Game::GetInstance();
     if (!g) return false;
-    if (fabsf(g->m_TransitionTimer) >= 0.001f) return false;  // [+0xc] epsilon
-    if (g->bombHitTimer > 0.0f)                return false;  // [+0x10]
-    return (g->levelTransitionFlag ^ 1) != 0;                           // [+0x05] XOR 1
+    if (fabsf(game_work.m_GameDt) >= 0.001f) return false;  // [+0xc] epsilon
+    if (game_work.m_BombHitTimer > 0.0f)                return false;  // [+0x10]
+    return (game_work.m_LevelTransitionFlag ^ 1) != 0;                           // [+0x05] XOR 1
 }
 
 // -------------------------------------------------------------------------
 // QuitToMenu / EndRetryLevel -- binary @ 0x00169e50 / 0x0016a208
 // -------------------------------------------------------------------------
 static void QuitToMenu() {
+    LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu enter", "binary @ 0x00169e50");
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
     Game* game = Game::GetInstance();
     if (!game) return;
-    game->levelTransitionFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
+    game_work.m_LevelTransitionFlag = 1;                               // 0x169e6e: strb 1, [+0x05]
 
-    if (game->mainScreen) {
-        game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
-        game->mainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM); // 0x169e7c [+0x10c] = 0
+        game_work.mMainScreen->SetStateTimer(0.5f);         // 0x169e80 [+0x110]
         // DIFFERS: binary does NOT call DeleteMenuButtons here. Binary's
         // menu fruit/bomb entities survive gameplay (ResetGameEntities
         // re-chucks them, doesn't destroy them, per re-analyst
@@ -171,7 +161,7 @@ static void QuitToMenu() {
         // empty ring after quit + Bomb::SetCallback rotation state
         // lost. Forcing a delete+re-create round-trip fixes both
         // symptoms until the entity-survival path is ported.
-        game->mainScreen->DeleteMenuButtons();
+        game_work.mMainScreen->DeleteMenuButtons();
     }
 
     // 0x169e84/0x169e86 binary writes PauseScreen->m_bPendingRemoval = 1
@@ -191,32 +181,37 @@ static void QuitToMenu() {
     // via read_memory). Earlier port asm-inspector misread the literal as
     // -2.0f; binary actually CLEARS the timer on quit (resets the
     // vestigial ramp at 0x0016c5fe back to disarmed).
-    game->m_MenuReturnTimer = 0.0f;
+    game_work.m_MenuReturnTimer = 0.0f;
 
     // Binary @ 0x00169eae..0x00169ebe: 5 single-byte clear-on-quit flags.
     // Reader sites not yet RE'd -- no non-zero writer or read site
     // identified. Clearing is binary-faithful; runtime effect of all-zero
     // is unchanged until those readers surface. Field comments in Game.h.
-    game->field_0x19d = 0;
-    game->m_bMPRetryPending = 0;
-    game->field_0x19a = 0;
-    game->field_0x19b = 0;
-    game->field_0x19c = 0;
+    game_work.field_0x19d = 0;
+    game_work.m_bMPRetryPending = 0;
+    game_work.field_0x19a = 0;
+    game_work.field_0x19b = 0;
+    game_work.field_0x19c = 0;
 }
 
 static void EndRetryLevel() {
+    LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "EndRetryLevel enter", "binary @ 0x0016a208");
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    if (game->mainScreen) {
-        game->mainScreen->SetStateTimer(0.5f);         // 0x16a220 [+0x110]
-        game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x16a226 [+0x10c] = 0
+    // Binary @ 0x0016a220 / 0x0016a226: writes to GameTaskState+0x110 (0.5f)
+    // and GameTaskState+0x10c (0). NOT MainScreen -- decompiler misdirected
+    // these to mainScreen method calls in the prior port.
+    GameTaskState* ts = GetTaskState();
+    if (ts) {
+        ts->m_ScoreStateField_0x110 = 0.5f;            // 0x16a220 [GTS+0x110]
+        ts->m_TimedModeAccumulator = 0;                 // 0x16a226 [GTS+0x10c]
     }
 
     FN::SetScore(0, -1);                               // 0x16a22a
 
-    if (game->pSaveData) {
-        FruitSaveData* sd = game->pSaveData;
+    if (game_work.m_SaveData) {
+        FruitSaveData* sd = game_work.m_SaveData;
         sd->m_GameOverField2 = -1;                     // 0x16a23a [+0x120]
         sd->m_GameOverField4 = -1;                     // 0x16a23e [+0x128]
         sd->m_GameOverField3 = -1;                     // 0x16a242 [+0x124]
@@ -226,18 +221,19 @@ static void EndRetryLevel() {
     // Binary @ 0x0016a24a: m_CoinsAtGameStart re-snapshot so the retried
     // run's "YOU JUST EARNT %i COINS" delta starts from zero.
     // (game+0x28) = (game+0x20).
-    game->m_CoinsAtGameStart = game->m_CoinsBalance;
+    game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
 
     FN::ResetGameEntities(false);                      // 0x16a24e
     BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)
     WaveManager::GetInstance()->Reset(true);           // 0x16a25c
 
-    game->retryFlag         = 0;                       // 0x16a26e [+0x06]
-    game->m_TransitionTimer = 0.5f;                    // 0x16a270 [+0x0c]
-    game->levelTransitionFlag         = 0;                       // 0x16a274 [+0x05]
+    game_work.retryFlag         = 0;                       // 0x16a26e [+0x06]
+    // ASM-verified: 2026-05-20T00:00:00Z binary @ 0x0016a208 (asm-inspector)
+    game_work.m_GameDt = 0.0f;                    // 0x16a270 [+0x0c] DAT_0016a284=0.0f
+    game_work.m_LevelTransitionFlag         = 0;                       // 0x16a274 [+0x05]
 
-    if (game->mainScreen) {
-        game->mainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
     }
 
     // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; binary @ 0x0016a27e
@@ -254,6 +250,7 @@ PauseScreen::PauseScreen()
       m_P2ResumeButton(nullptr),
       m_QuitButton(nullptr),
       m_P2QuitButton(nullptr),
+      m_Pad_0xA8(nullptr),
       m_RetryButton(nullptr),
       m_P2RetryButton(nullptr),
       m_ButtonFadeAlpha(1.0f),
@@ -269,18 +266,19 @@ PauseScreen::PauseScreen()
     m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
     // Load textures -- strings resolved from GOT in ctor (doc section 6 asset table)
-    // pause_title.tex goes into inherited m_SecondaryTex (+0x78 in binary / +0x74 in port)
-    // Port: m_SecondaryTex is the inherited GLuint; m_Texture (the primary display tex)
+    // pause_title.tex goes into inherited m_Texture (+0x78 in binary / +0x74 in port)
+    // Port: m_Texture is the inherited GLuint; m_Texture (the primary display tex)
     // is set to the title texture so HUDControl3d::Draw renders it.
     {
         int w = 0, h = 0;
         Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex", &w, &h);
-        m_Texture      = tex;     // primary: HUDControl3d::Draw uses this
-        m_SecondaryTex = tex;     // also fill inherited secondary slot (binary stores here)
+        m_Texture      = tex;     // +0x74 slot (PauseScreen::DrawOrder uses its own path)
+        m_Texture = tex;     // +0x78 slot (binary stores here; HUDControl3d::Draw base reads this)
         m_TitleTexW = (float)w;
         m_TitleTexH = (float)h;
     }
 
+    // +0xb8 m_PauseButtonTex: pause_button.tex (in-game pause icon)
     {
         int w = 0, h = 0;
         m_PauseButtonTex = LoadTex("pause_button.tex", &w, &h);
@@ -288,10 +286,12 @@ PauseScreen::PauseScreen()
         m_PauseButtonTexH = (float)h;
     }
 
+    // +0xbc m_PlayButtonTex: play_button.tex (resume icon)
     {
         m_PlayButtonTex = LoadTex("play_button.tex");
     }
 
+    // +0xc0 m_QuitTitleTex: quit_title.tex
     {
         int w = 0, h = 0;
         m_QuitTitleTex = LoadTex("quit_title.tex", &w, &h);
@@ -299,6 +299,8 @@ PauseScreen::PauseScreen()
         m_QuitTitleTexH = (float)h;
     }
 
+    // +0xc4 m_RetryButtonTex: retry_button.tex
+    // Reset() assigns this to m_RetryButton->m_Texture on every level reset.
     {
         int w = 0, h = 0;
         m_RetryButtonTex = LoadTex("retry_button.tex", &w, &h);
@@ -333,21 +335,17 @@ void PauseScreen::Init() {
 //
 // Slots nulled (5x SmartPtrNull_Tex calls at 0x00154054):
 //   +0x74 m_Texture (HUDControl3d primary)
-//   +0xb8 m_PlayButtonTex
-//   +0xbc m_QuitTitleTex
-//   +0xc0 m_RetryButtonTex
-//   +0xc4 m_RetryHighlightTex  (the 5th slot, was mis-named _pad_c4)
-//
-// Slots NOT nulled by binary:
-//   +0x78 m_SecondaryTex (the slot pause_title.tex actually lives in)
-//   +0xa8 m_PauseButtonTex (kept live across Release calls)
+//   +0xb8 m_PauseButtonTex
+//   +0xbc m_PlayButtonTex
+//   +0xc0 m_QuitTitleTex
+//   +0xc4 m_RetryButtonTex
 // -------------------------------------------------------------------------
 void PauseScreen::Release() {
     m_Texture.SetNull();
+    m_PauseButtonTex.SetNull();
     m_PlayButtonTex.SetNull();
     m_QuitTitleTex.SetNull();
     m_RetryButtonTex.SetNull();
-    m_RetryHighlightTex.SetNull();
 }
 
 // -------------------------------------------------------------------------
@@ -357,9 +355,9 @@ void PauseScreen::Release() {
 // Two if-blocks, no other PauseScreen field is touched:
 //   if (m_RetryButton) {
 //       retry->m_bTouchHeld = 1;            // +0x131
-//       retry->m_SecondaryTex = m_RetryHighlightTex;   // src is +0xc4, NOT +0xc0
+//       retry->m_Texture = m_RetryButtonTex;   // src is +0xc4 (binary)
 //   }
-//   if (m_ResumeButton) resume->m_SecondaryTex = m_PlayButtonTex;
+//   if (m_ResumeButton) resume->m_Texture = m_PlayButtonTex;
 //
 // Inverse of SetToMultiplayerState: re-enables RetryButton and restores
 // SecondaryTex assignments so SP layout is correct after MP session ends.
@@ -367,10 +365,10 @@ void PauseScreen::Release() {
 void PauseScreen::Reset() {
     if (m_RetryButton) {
         m_RetryButton->m_bTouchHeld = 1;
-        m_RetryButton->m_SecondaryTex = m_RetryHighlightTex;
+        m_RetryButton->m_Texture = m_RetryButtonTex;
     }
     if (m_ResumeButton) {
-        m_ResumeButton->m_SecondaryTex = m_PlayButtonTex;
+        m_ResumeButton->m_Texture = m_PlayButtonTex;
     }
 }
 
@@ -441,9 +439,9 @@ void PauseScreen::DrawOrder(const Vec3& hudScale, int layerMask) {
 bool PauseScreen::SetToMultiplayerState() {
     // Tier-2 deferred (binary @ 0x00154060): vtable[11], called from PauseScreen::Reset on MP entry.
     // Body (3 stores):
-    //   1. m_RetryButton->m_SecondaryTex = SmartPtr::Null;     // retry+0x74
-    //   2. m_RetryButton->m_bTouchHeld = 0;                  // retry+0x131 -- disable interactability
-    //   3. m_ResumeButton->m_SecondaryTex = m_RetryButtonTex;  // resume+0x74 -- show retry icon on resume btn
+    //   1. m_RetryButton->m_Texture = SmartPtr::Null;     // retry+0x74
+    //   2. m_RetryButton->m_bTouchHeld = 0;               // retry+0x131 -- disable interactability
+    //   3. m_ResumeButton->m_Texture = m_RetryButtonTex;  // resume+0x74 -- show retry icon (+0xc4) on resume btn
     // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
     return HUDControl::SetToMultiplayerState();
 }
@@ -459,17 +457,19 @@ bool PauseScreen::SetToMultiplayerState() {
 void PauseScreen::PauseGameCallback() {
     Game* game = Game::GetInstance();
     if (m_State == PAUSE_STATE_HIDDEN) {
+        LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_FADE_IN), "PauseGameCallback");
         m_State = PAUSE_STATE_FADE_IN;
         PauseGame();
         // SFX "Pause"
-        if (game && game->pGameSound) {
-            game->pGameSound->SFXPlay("Pause", 1.0f);
+        if (game && game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("Pause", 1.0f);
         }
     } else if (m_State == PAUSE_STATE_ACTIVE) {
+        LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "PauseGameCallback");
         m_State = PAUSE_STATE_RESUME_EXIT;
         // SFX "Unpause"
-        if (game && game->pGameSound) {
-            game->pGameSound->SFXPlay("Unpause", 1.0f);
+        if (game && game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("Unpause", 1.0f);
         }
     }
 }
@@ -488,16 +488,17 @@ void PauseScreen::PauseGameCallback2() {
 // Binary @ 0x00153ebc QuitGameCallback():
 //   if (m_State != 3) return;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
-//   g->m_bTutorialShown = 0; m_LastHitButton = 0; m_State = 6;
+//   game_work.m_bTutorialShown = 0; m_LastHitButton = 0; m_State = 6;
 // NOTE: m_Alpha *= 0.5 and SaveCurrentData happen in Update case-6 entry, NOT here.
 // NOTE: SFX "MenuQuit" also happens in Update state-6 path, not this callback.
 void PauseScreen::QuitGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
     Game* game = Game::GetInstance();
-    if (game && game->pSaveData) game->pSaveData->ClearTotals();
-    if (game && game->pSaveData) game->pSaveData->ClearCombo();
-    if (game) game->m_bTutorialShown = 0;
+    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
+    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
+    if (game) game_work.m_bTutorialShown = 0;
     m_LastHitButton = 0;
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x00153ebc");
     m_State = PAUSE_STATE_QUIT_EXIT;
 }
 
@@ -511,34 +512,35 @@ void PauseScreen::QuitGameCallback2() {
     QuitGameCallback();
     m_LastHitButton = 1;
     Game* game = Game::GetInstance();
-    if (game) game->m_bTutorialShown = 0;
+    if (game) game_work.m_bTutorialShown = 0;
 }
 
 // ASM-verified: 2026-05-08T00:00 binary @ 0x00153f68 (re-analyst)
 // Binary @ 0x00153f68 RetryGameCallback():
 //   if (m_State != 3) return;
-//   if (g->m_AchievementProgressTimer >= 10.5f)
+//   if (game_work.m_AchievementProgressTimer >= 10.5f)
 //       FruitSaveData::AddToTotal("retries_in_a_row", hash, 1, true, true);
-//   Math::SeedGlobalRng(g->m_FrameTimer);  // binary @ 0x00153f20
-//   g->m_bTutorialShown = 0;
+//   Math::SeedGlobalRng(game_work.m_FrameTimer);  // binary @ 0x00153f20
+//   game_work.m_bTutorialShown = 0;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
 //   m_State = 5;
 void PauseScreen::RetryGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
     Game* game = Game::GetInstance();
-    if (game && game->m_AchievementProgressTimer >= 10.5f && game->pSaveData) {
+    if (game && game_work.m_AchievementProgressTimer >= 10.5f && game_work.m_SaveData) {
         // String resolved from binary DAT_00153fe4 -> 0x001ba98f.
         const char* kKey = "retries_in_a_row";
-        game->pSaveData->AddToTotal(kKey, ::StringHash(kKey),
+        game_work.m_SaveData->AddToTotal(kKey, ::StringHash(kKey),
                                     1, true, true);
     }
     // Binary @ 0x00153f20: re-seed Mortar::Random g_Random with frame
     // counter so retried runs are deterministic-from-frame-state rather
     // than boot-clock-seeded. Re-analyst confirmed g_Random @ 0x0026C8B0.
-    if (game) Math::SeedGlobalRng((uint32_t)game->m_FrameTimer);
-    if (game) game->m_bTutorialShown = 0;
-    if (game && game->pSaveData) game->pSaveData->ClearTotals();
-    if (game && game->pSaveData) game->pSaveData->ClearCombo();
+    if (game) Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
+    if (game) game_work.m_bTutorialShown = 0;
+    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
+    if (game && game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x00153f68");
     m_State = PAUSE_STATE_RETRY_EXIT;
 }
 
@@ -576,12 +578,11 @@ void PauseScreen::Update(float dt) {
     // before/after Init since Init doesn't manage those slots.
     if (!m_ResumeButton) {
         m_ResumeButton = new MenuButton();
-        // Binary passes texture via ctor arg -> m_SecondaryTex; Init's
-        // fruitType<0 text-button branch reads m_SecondaryTex to auto-size
+        // Binary passes texture via ctor arg -> m_Texture; Init's
+        // fruitType<0 text-button branch reads m_Texture to auto-size
         // m_TargetSize and size from texture dims. m_Texture is set for
         // HUDControl3d::Draw rendering.
-        m_ResumeButton->m_SecondaryTex = m_PauseButtonTex;
-        m_ResumeButton->m_Texture      = m_PauseButtonTex;
+        m_ResumeButton->m_Texture = m_PauseButtonTex;
         m_ResumeButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_ResumeButton->Init(
             Vec3(240.0f, -160.0f, 0.0f),  // initial pos; overwritten each frame
@@ -591,8 +592,8 @@ void PauseScreen::Update(float dt) {
             Mortar::Delegate0<void>()     // TODO: bind HUD::g_DeleteControlDelegate
         );
 
-        if (game->hud) {
-            game->hud->AddControl(m_ResumeButton);
+        if (game_work.mHud) {
+            game_work.mHud->AddControl(m_ResumeButton);
             m_ResumeButton->SetSingular();
         }
 
@@ -606,9 +607,8 @@ void PauseScreen::Update(float dt) {
 
     if (!m_QuitButton) {
         m_QuitButton = new MenuButton();
-        // Binary @ 0x001544e8: texture via ctor arg -> m_SecondaryTex for Init auto-size.
-        m_QuitButton->m_SecondaryTex = m_QuitTitleTex;
-        m_QuitButton->m_Texture      = m_QuitTitleTex;
+        // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
+        m_QuitButton->m_Texture = m_QuitTitleTex;
         m_QuitButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_QuitButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
@@ -618,17 +618,16 @@ void PauseScreen::Update(float dt) {
             Mortar::Delegate0<void>()
         );
 
-        if (game->hud) {
-            game->hud->AddControl(m_QuitButton);
+        if (game_work.mHud) {
+            game_work.mHud->AddControl(m_QuitButton);
             m_QuitButton->SetSingular();
         }
     }
 
     if (!m_RetryButton) {
         m_RetryButton = new MenuButton();
-        // Binary @ 0x001544e8: texture via ctor arg -> m_SecondaryTex for Init auto-size.
-        m_RetryButton->m_SecondaryTex = m_RetryButtonTex;
-        m_RetryButton->m_Texture      = m_RetryButtonTex;
+        // Binary @ 0x001544e8: texture via ctor arg -> m_Texture for Init auto-size.
+        m_RetryButton->m_Texture = m_RetryButtonTex;
         m_RetryButton->m_LayerFlags = Mortar::HUD_LAYER_P2_SCORE;
         m_RetryButton->Init(
             Vec3(0.0f, 320.0f, 0.0f),
@@ -638,8 +637,8 @@ void PauseScreen::Update(float dt) {
             Mortar::Delegate0<void>()
         );
 
-        if (game->hud) {
-            game->hud->AddControl(m_RetryButton);
+        if (game_work.mHud) {
+            game_work.mHud->AddControl(m_RetryButton);
             m_RetryButton->SetSingular();
         }
     }
@@ -667,7 +666,7 @@ void PauseScreen::Update(float dt) {
     case PAUSE_STATE_BOMB_FLASH:
         // ASM-verified: 2026-05-10 binary @ 0x00154d2a..0x00154d72 (re-analyst).
         // Hold m_Alpha = 1.0 / m_ButtonFadeAlpha = 0.0 each frame while
-        // BombFlashFull() returns false (i.e. game->bombHitTimer >= 1.0).
+        // BombFlashFull() returns false (i.e. game_work.m_BombHitTimer >= 1.0).
         // When the bomb-hit timer crosses below 1.0 (half the 2.0s window),
         // reset PowerUpManager, drop to HIDDEN, and pull m_TransitionTimer
         // to -1.0 so the slide-back-to-menu animation kicks in via MainScreen.
@@ -677,8 +676,9 @@ void PauseScreen::Update(float dt) {
             m_Alpha           = 1.0f;
             m_ButtonFadeAlpha = 1.0f;
             PowerUpManager::GetInstance()->Reset(false);
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/BOMB_FLASH complete");
             m_State = PAUSE_STATE_HIDDEN;
-            game->m_TransitionTimer = -1.0f;
+            game_work.m_GameDt = -1.0f;
         }
         break;
 
@@ -686,17 +686,18 @@ void PauseScreen::Update(float dt) {
         m_Alpha += (1.0f - m_Alpha) * FADE_IN_RATE;
 
         // Force game pause flag each frame while fading in (SP path only)
-        game->pausedFlag = true;
+        game_work.m_Paused = true;
 
         if (m_Alpha > ACTIVE_THRESHOLD) {
             m_Alpha = 1.0f;
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_ACTIVE), "Update/FADE_IN alpha settled");
             m_State = PAUSE_STATE_ACTIVE;
         }
         break;
 
     case PAUSE_STATE_ACTIVE:
         // Force game pause flag each frame (SP path only)
-        game->pausedFlag = true;
+        game_work.m_Paused = true;
 
         // Enable hit detection on Resume and Retry
         if (m_ResumeButton) m_ResumeButton->m_bTouchHeld = 1;
@@ -707,9 +708,18 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             m_Alpha = 0.0f;
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RESUME_EXIT faded");
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             UnpauseGame();
+            // DIFFERS: binary relies on PowerManager::GetState() going non-zero on
+            // background to make the dispatcher's active=(!pausedFlag&&pmState==0)
+            // evaluate true again after resume. Port's PowerManager stub always
+            // returns 0, so pausedFlag is the sole gate. Clear it here (resume path
+            // only) so GameUpdate resumes ticking. QUIT_EXIT and RETRY_EXIT leave
+            // pausedFlag set -- binary-faithful -- so active=false holds through
+            // BOMB_FLASH and the 1.5f GameOver-cross check skips.
+            if (game) game_work.m_Paused = false;
         }
         break;
 
@@ -719,6 +729,7 @@ void PauseScreen::Update(float dt) {
             FruitNinja_SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RETRY_EXIT faded");
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             EndRetryLevel();
@@ -733,11 +744,15 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= 0.5f;
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
+            LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu @ 0x00169e50", "QUIT_EXIT faded");
             QuitToMenu();
             // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
             if (m_LastHitButton >= 0 && m_QuitButton) {
                 FN::HitMenuBomb(m_QuitButton->pos);
+                LOG_INFO("BOMBHIT", "QuitToMenu fires HitMenuBomb at (%.1f,%.1f); bombHitTimer set to %.3f",
+                         m_QuitButton->pos.x, m_QuitButton->pos.y,
+                         game ? game_work.m_BombHitTimer : -1.0f);
             }
             // Binary writes m_ButtonFadeAlpha = 1.0 (DAT_00154fb8), NOT 0.0.
             // Earlier port wrote 0.0 which left the buttons at full opacity
@@ -747,6 +762,7 @@ void PauseScreen::Update(float dt) {
             // Transition to BOMB_FLASH (1), NOT HIDDEN. The bomb-flash poll
             // in case 1 is what produces the visible white flash and tears
             // down the gameplay HUD; jumping straight to HIDDEN skipped both.
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_BOMB_FLASH), "Update/QUIT_EXIT faded");
             m_State = PAUSE_STATE_BOMB_FLASH;
             m_Alpha = 1.0f;
             FruitNinja_SaveCurrentData(false);
@@ -846,11 +862,14 @@ void PauseScreen::Update(float dt) {
     //     base positions (off-screen left/right) for the entire pause
     //     overlay -- which is what the user observed visually.
     //
-    // Resume scale: m_Alpha * 1.25 + 0.75 (binary @ 0x001550da).
+    // ASM-verified: 2026-05-18 binary @ 0x00154468 (re-analyst)
+    // Per-frame Resume m_TargetSize: m_ButtonOriginPos (captured (64,64,64)
+    // at lazy-create) scaled by resumeScale = m_Alpha * 1.25 + 0.75.
+    // MenuButton::Update writes `size = m_TargetSize` each frame, so only
+    // m_TargetSize matters here -- writes to size.x/y are clobbered.
     if (m_ResumeButton) {
         const float resumeScale = m_Alpha * 1.25f + 0.75f;
-        m_ResumeButton->size.x = m_PauseButtonTexW * resumeScale;
-        m_ResumeButton->size.y = m_PauseButtonTexH * resumeScale;
+        m_ResumeButton->m_TargetSize = m_ButtonOriginPos * resumeScale;
     }
 
     const float OX = m_ButtonOriginPos.x;  // = 64
@@ -871,7 +890,21 @@ void PauseScreen::Update(float dt) {
     //   pos = (240 + 0.5*OX, -20, 0)
     if (m_RetryButton) {
         m_RetryButton->pos = Vec3(240.0f + 0.5f * OX, -20.0f, 0.0f);
-        m_RetryButton->m_bActive = (m_Alpha > 0.0f) ? 1 : 0;
+    }
+
+    // ASM-verified: 2026-05-18 binary @ 0x00154468 tail (re-analyst)
+    // Retry m_TargetSize := Resume m_TargetSize when m_Alpha > 0.
+    // Without this, Retry stays at MenuButton::Init texture-auto-size
+    // (129,129,0) -- 2x oversize hitbox and .z=0 degenerate render matrix.
+    {
+        bool retryActive = false;
+        if (m_Alpha > 0.0f && m_ResumeButton && m_RetryButton) {
+            m_RetryButton->m_TargetSize = m_ResumeButton->m_TargetSize;
+            retryActive = true;
+        }
+        if (m_RetryButton) {
+            m_RetryButton->m_bActive = retryActive ? 1 : 0;
+        }
     }
 
     // Phase 2: lerp toward on-screen target by m_Alpha.
@@ -914,12 +947,13 @@ void PauseScreen::SkipTo() {
 // 3 -> 4 and clears the tutorial-shown flag.
 void PauseScreen::ContinueGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "ContinueGameCallback @ 0x00153fe8");
     m_State = PAUSE_STATE_RESUME_EXIT;
     Game* g = Game::GetInstance();
     if (!g) return;
-    if (g->m_bTutorialShown != 0) {
+    if (game_work.m_bTutorialShown != 0) {
         // Binary @ 0x00153f20: re-seed g_Random; see RetryGameCallback notes.
-        Math::SeedGlobalRng((uint32_t)g->m_FrameTimer);
+        Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
     }
-    g->m_bTutorialShown = 0;
+    game_work.m_bTutorialShown = 0;
 }

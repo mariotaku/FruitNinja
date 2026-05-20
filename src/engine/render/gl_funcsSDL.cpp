@@ -12,6 +12,7 @@
 // actionable diagnostic.
 
 #include "render/gl_funcs.h"
+#include "debug/Logger.h"
 
 #if defined(_WIN32)
 extern bool gl_load_extensions_win32();
@@ -69,18 +70,10 @@ bool gl_check_runtime() {
         _ms_vendor;
 
     if (is_ms_software_icd) {
-        fprintf(stderr,
-            "\n========================================================================\n"
-            " GL: Falling back to Microsoft 1.1 software ICD.\n"
-            "     GL_VENDOR=%s\n"
-            "     GL_VERSION=%s\n"
-            " The hardware GL driver isn't reachable -- rendering will be incomplete.\n"
-            " Most extension entry points (glActiveTexture, glGenBuffers, etc.) will\n"
-            " be null. Possible causes:\n"
-            "   - GPU driver crashed; reboot or reinstall it.\n"
-            "   - Running over RDP / inside a VM without GPU passthrough.\n"
-            "   - Anti-cheat / driver overlay blocking ICD lookup.\n"
-            "========================================================================\n",
+        LOG_ERROR("GL/loader",
+            "falling back to Microsoft 1.1 software ICD -- rendering will be incomplete.\n"
+            "  GL_VENDOR=%s  GL_VERSION=%s\n"
+            "  Possible causes: GPU driver crashed; RDP/VM without GPU passthrough; anti-cheat blocking ICD.",
             vendor ? vendor : "<null>",
             version ? version : "<null>");
         return false;

@@ -13,6 +13,9 @@
 #include "math/Colour.h"
 #include "util/Delegate.h"
 #include <cstdint>
+#ifndef __bada__
+#include <list>
+#endif
 
 struct Renderer;
 
@@ -73,6 +76,12 @@ public:
     HUDControl();
     virtual ~HUDControl();
 
+#ifndef __bada__
+    // Port specific: debug registry — iterate all currently active HUDControls.
+    // Populated by HUDControl ctor / cleared by HUDControl dtor. Covers all subclasses.
+    static const std::list<HUDControl*>& GetActiveControls();
+#endif
+
     // Vtable matches docs/structs/hud.md:
     // +0x00/+0x04: dtors (handled by C++ vtable)
     // +0x08: Init
@@ -105,6 +114,13 @@ public:
     virtual void Save() {}
 
     void SetPendingRemoval() { m_bPendingRemoval = 1; }
+
+    // Port specific: debug overlay (F1 hitbox toggle) needs the effective
+    // draw-space position, not the raw `pos` field. Subclasses whose Draw
+    // transforms `pos` through a non-identity anchor override this so the
+    // overlay AABB matches the rendered quad. Default returns `pos` unmodified.
+    // Not in binary; appended after binary vtable.
+    virtual Vec3 GetDrawPos() const { return pos; }
 
     // Binary: called after HUD::AddControl to pin the control to a single
     // layer slot instead of cycling. Tier-1 stub — full RE pending.

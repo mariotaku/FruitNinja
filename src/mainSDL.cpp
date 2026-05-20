@@ -3,7 +3,7 @@
 #include "Game.h"
 #include "render/Renderer.h"
 #include "debug/CrashHandler.h"
-#include <cstdio>
+#include "debug/Logger.h"
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
@@ -72,9 +72,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("GL Vendor: %s\n", (const char*)glGetString(GL_VENDOR));
-    printf("GL Renderer: %s\n", (const char*)glGetString(GL_RENDERER));
-    printf("GL Version: %s\n", (const char*)glGetString(GL_VERSION));
+    LOG_INFO("GL", "GL Vendor: %s", (const char*)glGetString(GL_VENDOR));
+    LOG_INFO("GL", "GL Renderer: %s", (const char*)glGetString(GL_RENDERER));
+    LOG_INFO("GL", "GL Version: %s", (const char*)glGetString(GL_VERSION));
 
     // Surface the "Microsoft 1.1 software ICD" fallback to the user --
     // rendering will be broken in that case, but the game would otherwise

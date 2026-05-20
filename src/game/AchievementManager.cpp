@@ -18,9 +18,10 @@
 #include "Game.h"
 #include "hud/TimeControl.h"
 
+#include "debug/Logger.h"
 #include <tinyxml2.h>
 #include <cstring>
-#include <cstdio>
+#include "game/GameWork.h"
 
 using Mortar::TextureManager;
 
@@ -93,14 +94,14 @@ void AchievementManager::LoadAchievementInfo() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        printf("AchievementManager::LoadAchievementInfo -- failed to open '%s' (error %d)\n",
+        LOG_ERROR("ACHIEVEMENT/LoadAchievementInfo", "failed to open '%s' (error %d)",
                path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("achievementManagerFile");
     if (!root) {
-        printf("AchievementManager::LoadAchievementInfo -- no <achievementManagerFile> root\n");
+        LOG_WARN("ACHIEVEMENT/LoadAchievementInfo", "no <achievementManagerFile> root");
         return;
     }
 
@@ -120,7 +121,7 @@ void AchievementManager::LoadAchievementInfo() {
         // Skip if already unlocked (check through save data instance)
         {
             Game* g_chk = Game::GetInstance();
-            FruitSaveData* sd_chk = g_chk ? g_chk->pSaveData : 0;
+            FruitSaveData* sd_chk = g_chk ? game_work.m_SaveData : 0;
             if (sd_chk && sd_chk->IsAchievementUnlocked(nameHash) != 0) continue;
         }
 
@@ -280,7 +281,7 @@ int AchievementManager::QueAchievement(AchievementInfo* info,
     if (!info) return 0;
     FruitSaveData* sd = 0;
     Game* g = Game::GetInstance();
-    if (g) sd = g->pSaveData;
+    if (g) sd = game_work.m_SaveData;
     if (!sd) return 0;
 
     int result = sd->AddToQue(info->m_Name, info->m_NameHash);
@@ -344,7 +345,7 @@ int AchievementManager::UnlockAchievementInNetwork(const char* /*name*/) {
 static int ModeBitmaskAllows(uint32_t bitmask) {
     Game* g = Game::GetInstance();
     if (!g) return 0;
-    uint8_t gm = g->gameMode & 0x03;
+    uint8_t gm = game_work.gameMode & 0x03;
     return (bitmask & (1u << gm)) ? 1 : 0;
 }
 
@@ -591,9 +592,9 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         // ASM-verified: 2026-05-18 binary @ 0x00108a10 (re-analyst)
         if (info->m_RequiresUnsullied) {
             Game* g = Game::GetInstance();
-            if (g->pTimeCtrl == NULL) { ++it; continue; }
+            if (game_work.mCountDown == NULL) { ++it; continue; }
             if (comboLen <= 2)        { ++it; continue; }
-            if (g->pTimeCtrl->m_TimeRemaining > 0.0f) { ++it; continue; }
+            if (game_work.mCountDown->m_TimeRemaining > 0.0f) { ++it; continue; }
         }
 
         if (QueAchievement(info, it)) {

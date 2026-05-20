@@ -27,6 +27,8 @@ void Random::Seed(uint64_t seed) {
 }
 
 // ASM-verified: 2026-05-06T13:42 binary @ 0x00117588 (asm-inspector)
+// ASM-verified: 2026-05-18 binary @ 0x00117588 (re-analyst) — gate is max in [1,0xFFFFFFFE]; Rand32(1) returns 0.
+// Binary: add r12,r1,#-1; cmn r12,#3; it ls; umull.ls r2,r3,r1,r3; mov r0,r3
 uint32_t Random::Rand32(uint32_t max) {
     // 64-bit LCG step
     m_State = m_State * m_Mult + m_Inc;
@@ -34,8 +36,8 @@ uint32_t Random::Rand32(uint32_t max) {
     // Output = upper 32 bits
     uint32_t output = (uint32_t)(m_State >> 32);
 
-    // Range reduction via multiply-high
-    if (max >= 2 && max <= 0xFFFFFFFE) {
+    // Range reduction via multiply-high: binary gates on max-1 <=u 0xFFFFFFFD, i.e. max in [1,0xFFFFFFFE].
+    if (max >= 1 && max <= 0xFFFFFFFE) {
         output = (uint32_t)(((uint64_t)max * (uint64_t)output) >> 32);
     }
     return output;

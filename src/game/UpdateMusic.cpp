@@ -13,8 +13,9 @@
 #include "entities/ActorManager.h"
 #include "audio/SoundManager.h"
 #include "audio/GameSound.h"
-#include <cstdio>
+#include "debug/Logger.h"
 #include <cmath>
+#include "game/GameWork.h"
 
 // ---------------------------------------------------------------------------
 // Static state (binary: BSS, zero-initialised at process start)
@@ -84,7 +85,7 @@ static void PreloadInGameSounds() {
             sm.PreLoadSound(buf);
         }
     }
-    printf("UpdateMusic: PreloadInGameSounds fired\n");
+    LOG_DEBUG("UPDATEMUSIC", "UpdateMusic: PreloadInGameSounds fired");
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ static void PreloadArcadeModeSounds() {
     sm.PreLoadSound("Bonus-Banana-X2");
     // Remaining four arcade SFX (addresses in the spec; exact names from binary strings)
     // TODO: re-analyst to confirm remaining 4 names at 0x001ba775..nearby if needed.
-    printf("UpdateMusic: PreloadArcadeModeSounds fired\n");
+    LOG_DEBUG("UPDATEMUSIC", "UpdateMusic: PreloadArcadeModeSounds fired");
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +148,7 @@ void UpdateMusic(float dt) {
     //   AND GetNumEntities(Bomb==1)  != 0
     // -----------------------------------------------------------------------
     if (!g_armedIngame) {                                // 0x0016a6a0
-        if (game->m_TransitionTimer >= 0.0f) {           // 0x0016a6ba: vcmpe / blt
+        if (game_work.m_GameDt >= 0.0f) {           // 0x0016a6ba: vcmpe / blt
             bool skip_arm = false;
             if (g_currentVolume < 0.0f) {               // 0x0016a6c4: bpl
                 // Only skip arming if fruits AND bombs are both present
@@ -187,9 +188,9 @@ void UpdateMusic(float dt) {
     //   AND GetNumEntities(Fruit) != 0  AND GetNumEntities(Bomb) != 0
     // TODO: comment formerly said "Zen/ZenBlitz" -- binary's 0x02 is GAME_MODE_ARCADE.
     // -----------------------------------------------------------------------
-    if (game->gameMode == Mortar::GAME_MODE_ARCADE) {    // 0x0016a726
+    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {    // 0x0016a726
         if (!g_armedArcade) {                            // 0x0016a730
-            if (game->m_TransitionTimer >= 0.0f) {       // 0x0016a742
+            if (game_work.m_GameDt >= 0.0f) {       // 0x0016a742
                 bool skip_arm = false;
                 if (g_currentVolume < 0.0f) {            // 0x0016a74c: bpl
                     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
@@ -224,7 +225,7 @@ void UpdateMusic(float dt) {
     // -----------------------------------------------------------------------
     // BLOCK 5: Volume ramp — split on m_bMusicOn flag (+0x45)
     // -----------------------------------------------------------------------
-    if (game->m_bMusicOn == 0) {
+    if (game_work.m_bMusicOn == 0) {
         // ---- Music DISABLED branch (0x0016a868) ----
         // Ramp currentVol toward 0.0 from either direction
         float v = g_currentVolume;                       // 0x0016a86c
@@ -250,7 +251,7 @@ void UpdateMusic(float dt) {
     } else {
         // ---- Music ENABLED branch (0x0016a7b6) ----
         // Check if gameplay is in "transition" (m_TransitionTimer < 0)
-        if (game->m_TransitionTimer < 0.0f) {            // 0x0016a7ba: bpl -> 0x0016a80a
+        if (game_work.m_GameDt < 0.0f) {            // 0x0016a7ba: bpl -> 0x0016a80a
             // Transition active: ramp DOWN toward -1.0 (kill gameplay music)
             float v = g_currentVolume - delta;           // 0x0016a7d0: vsub s16,s14,s16
             if (v <= -1.0f) {                            // 0x0016a7d4: vcmpe s16,s15 (s15=-1.0)
@@ -294,7 +295,7 @@ void UpdateMusic(float dt) {
             // Volume >= 0 (gameplay side) or no fruits: slow ramp upward
             // Cap = 0.55 * pGameSound->m_MasterVolume
             // g_MusicVolMaxScale = DAT_0016a93c = 0.55
-            float masterVol = (game->pGameSound) ? game->pGameSound->m_MasterVolume : 1.0f;
+            float masterVol = (game_work.mGameSound) ? game_work.mGameSound->m_MasterVolume : 1.0f;
             float cap = 0.55f * masterVol;               // 0x0016a8ee..0x0016a904
             float newV = g_currentVolume + delta;        // 0x0016a8fc: vadd s16,s16,s15
             if (newV >= cap) {                           // 0x0016a908: vcmpe s16,s15

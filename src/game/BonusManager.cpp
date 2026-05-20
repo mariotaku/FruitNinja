@@ -9,11 +9,12 @@
 #include "engine/util/StringHash.h"
 #include "engine/util/PathCI.h"
 #include "screens/BonusScreen.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include "game/GameWork.h"
 
 using Mortar::TextureManager;
 
@@ -67,14 +68,14 @@ void BonusManager::Init() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        printf("BonusManager::Init -- failed to open '%s' (error %d)\n",
+        LOG_ERROR("BONUS/Init", "failed to open '%s' (error %d)",
                path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("bonusAwardsFile");
     if (!root) {
-        printf("BonusManager::Init -- no <bonusAwardsFile> root in '%s'\n",
+        LOG_WARN("BONUS/Init", "no <bonusAwardsFile> root in '%s'",
                path.c_str());
         return;
     }
@@ -170,11 +171,11 @@ void BonusManager::AddCombo(int comboLen) {
     if (comboLen < 3) return;
 
     Game* game = Game::GetInstance();
-    if (!game || !game->pSaveData) return;
+    if (!game || !game_work.m_SaveData) return;
 
     // Mode name table per binary GetModeName @ 0x0010b15c.
     static const char* k_ModeNames[4] = { "Classic", "Casino", "Arcade", "Zen" };
-    int mode = (int)game->gameMode;
+    int mode = (int)game_work.gameMode;
     if (mode < 0 || mode > 3) mode = 0;
     const char* modeName = k_ModeNames[mode];
 
@@ -185,7 +186,7 @@ void BonusManager::AddCombo(int comboLen) {
     snprintf(keyTotal, sizeof(keyTotal), "CombosTotal-%s", modeName);
     snprintf(keyBest,  sizeof(keyBest),  "BestCombo-%s",   modeName);
 
-    FruitSaveData* sd = game->pSaveData;
+    FruitSaveData* sd = game_work.m_SaveData;
     sd->AddToTotal(keyTotal, StringHash(keyTotal), 1, false, false);
 
     int existing = sd->GetTotal(StringHash(keyBest));

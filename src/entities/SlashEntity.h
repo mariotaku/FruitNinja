@@ -146,17 +146,20 @@ public:
     // Port note: g_state singleton not yet modelled; no-op stub.
     void DrawUpdate(float dt);
 
-    // Binary @ 0x17D61C — Mortar::Entity::TouchDown vtable override: if idle, Reset()
-    // and (PER_SWIPE mode) re-pick palette colour, then UpdateTouchDown.
-    // Port: maps to OnTouchActive / OnTouchReleased input model.
-    // Returns true (consumed).
-    // TODO: 0x17D61C — wire when Mortar::Entity vtable input dispatch is ported.
+    // Binary @ 0x17D61C — TouchDown: gate m_SwipeEndEdge==0 && m_State==0; Reset();
+    // if PER_SWIPE colour mode advance palette; call UpdateTouchDown. Returns true.
+    // Port: wired via InputManager::RegisterInputCallback("TouchDown_<n>") in
+    // SlashEntity::RegisterInputCallbacks (SlashEntity.cpp:205). Declared below
+    // in STUBS section.
+    // ASM-verified: 2026-05-20 binary @ 0x0017D61C (re-analyst)
 
-    // Binary @ 0x17C50C — Mortar::Entity::TouchMoveX vtable override: write pos.x.
-    // TODO: 0x17C50C — wire when Mortar::Entity vtable input dispatch is ported.
+    // Binary @ 0x17C50C — TouchMoveX: write m_RawTouchPos.x from event->x.
+    // Port: wired via InputManager::RegisterInputCallback("TouchMove_X<n>").
+    // ASM-verified: 2026-05-20 binary @ 0x0017C50C (re-analyst)
 
-    // Binary @ 0x17C490 — Mortar::Entity::TouchMoveY vtable override: write pos.y.
-    // TODO: 0x17C490 — wire when Mortar::Entity vtable input dispatch is ported.
+    // Binary @ 0x17C490 — TouchMoveY: write m_RawTouchPos.y from event->y.
+    // Port: wired via InputManager::RegisterInputCallback("TouchMove_Y<n>").
+    // ASM-verified: 2026-05-20 binary @ 0x0017C490 (re-analyst)
 
     // Binary @ 0x17B0F4 — advance palette progress by dt*lifeScale,
     // lerp between consecutive palette entries. NULL outColour = advance only.
@@ -247,11 +250,25 @@ private:
     // bind only this finger's TouchDown_n / TouchMove_X-Y_n / TouchUp_n.
     int m_FingerId;
 
+    // Binary +0xA8: snapshot of m_BladeDir at the moment of a slice hit.
+    // Written in Update's fruit-collision branch immediately after
+    // CollisionResponse fires. Read by caller sites that need blade direction.
+    Vec3 m_BladeVelAtSlice;    // Binary +0xA8
+
+    // Binary +0xB4: world position of the sliced fruit at impact.
+    // Written in Update's fruit-collision branch (fruit->pos at hit time).
+    // Read by combo Coin::MakeCoins as the coin spawn origin.
+    Vec3 m_SlicePos;           // Binary +0xB4
+
+    // Binary +0xC0: m_FruitType of the most recently sliced entity.
+    // Written in Update's fruit-collision branch alongside m_BladeVelAtSlice
+    // and m_SlicePos (same write-group). Read for spawn-type tagging.
+    int m_SliceEntityType;     // Binary +0xC0
+
     // Binary +0xC4: trail-fade weight in [0, 1]. When 1.0, m_BaseColour = white
     // lerped toward m_HighlightColour by 0 = pure white. When 0 (or less),
     // m_BaseColour = m_HighlightColour directly (fully saturated).
-    // Set/decayed by SlashEntity::Update @ 0x17D664.
-    // TODO: 0x17D664 -- m_Scale lifecycle (1.0 on critical, -2*dt decay) not yet ported.
+    // Set to 1.0 on critical hit; decays at -2*dt/frame clamped to 0.
     float m_Scale;             // Binary +0xC4
 
     // Binary +0x148: cooldown timer between swipe SFX firings. PlaySwipe
@@ -274,6 +291,26 @@ private:
     // Defunct member: relic of removed feature; only ever written (to 0) by ctor.
     // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
     uint32_t field_0x130;
+
+    // Binary +0x124: combo-window accumulator. Initialized to 0.1f in Init.
+    // Ticks up each Update while >= 0; reset to -1 when combo window closes.
+    // The per-swipe combo counter fires AddSpeed when this >= 0 and ComboCount > 2.
+    float m_ComboTimer;         // Binary +0x124
+
+    // Binary +0x128: count of fruits sliced in the current swipe combo.
+    // Incremented by CollisionResponse via the combo-slice array;
+    // reset to 0 when a new swipe starts.
+    int m_ComboCount;           // Binary +0x128
+
+    // Binary +0x12c: entity type of the most recently combo'd fruit.
+    int m_ComboEntityType;      // Binary +0x12c
+
+    // Binary +0x154: 11-entry int32 combo-slice array. Each slot stores a
+    // fruit-entity-type tag for the combo's sliced entities; -1 = empty.
+    // m_ComboSliceArr[1] (binary +0x158) gates the AddSpeed call in Update:
+    // when >= 0, a secondary slice has registered and the combo is live.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+    int m_ComboSliceArr[11]; // Binary +0x154 .. +0x17c
 
     // Binary +0x144: 2-bit shift-register fuse for "swipe just ended".
     // Writer (outside SlashEntity): sets bit0 on finger-lift (m_SwipeEndEdge |= 1).

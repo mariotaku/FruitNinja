@@ -19,6 +19,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <ctime>
+#include "game/GameWork.h"
 
 // ----------------------------------------------------------------------
 // Construction / destruction
@@ -66,7 +67,7 @@ FruitSaveData::FruitSaveData()
     , m_blitzForceSpawnedCounter(0)
     , m_blitzSpawnTime(0.0f)
     , m_VersionInfo(0)
-    , m_BombQueueCount(0)
+    , m_BestComboLength(0)
 {
     for (int i = 0; i < 4; i++) {
         m_ModeHighScores[i] = 0;
@@ -74,7 +75,7 @@ FruitSaveData::FruitSaveData()
         m_LastPlayedDay[i] = 0;
     }
     for (int i = 0; i < 32; i++) m_FruitQueue[i] = -1;
-    for (int i = 0; i < 11; i++) m_BombQueue[i] = -1;
+    for (int i = 0; i < 11; i++) m_BestComboFruits[i] = -1;
 }
 
 FruitSaveData::~FruitSaveData() {}
@@ -183,7 +184,7 @@ void FruitSaveData::RestoreComboState() {
 bool FruitSaveData::SetCurrentModeHighscore(int newScore) {
     Game* g = Game::GetInstance();
     if (!g) return false;
-    int mode = (int)g->gameMode;
+    int mode = (int)game_work.gameMode;
     if (mode < 0 || mode >= 4) return false;
     if (m_ModeHighScores[mode] < newScore) {
         m_ModeHighScores[mode] = newScore;
@@ -335,6 +336,18 @@ std::string GetSavePath() {
 static const int k_SaveVersion = 1;
 
 } // namespace
+
+// PlayedModeToday @ 0x0012a248. Returns true iff gameMode was played today
+// (m_LastPlayedDay[gameMode] == GetDaysSince1900()) and the per-mode
+// "<MODE>_today" total is > 0.
+// Key format confirmed via GameOver.cpp AddToTotal site (0x00169f94).
+bool FruitSaveData::PlayedModeToday(int gameMode) {
+    if (gameMode < 0 || gameMode >= 4) return false;
+    if (m_LastPlayedDay[gameMode] != GetDaysSince1900()) return false;
+    char buf[68];
+    snprintf(buf, sizeof(buf), "%s_today", k_ModeNames[gameMode]);
+    return GetTotal(StringHash(buf)) > 0;
+}
 
 // ----------------------------------------------------------------------
 // FruitNinja_SaveGame @ 0x0012a2fc
@@ -646,18 +659,18 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
 // ----------------------------------------------------------------------
 void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
     Game* g = Game::GetInstance();
-    if (!g || !g->pSaveData) return;
+    if (!g || !game_work.m_SaveData) return;
 
     // ItemSave.xml is always written (coin balance + bought/equipped).
     ItemManager::GetInstance()->SaveItemInfo();
 
     // Snapshot: deep-copy current pSaveData, then overwrite live fields.
-    FruitSaveData snapshot = *g->pSaveData;
+    FruitSaveData snapshot = *game_work.m_SaveData;
 
-    snapshot.m_CurrentScore     = g->currentScore;
-    snapshot.m_CurrentMissCount = (int)g->missCount;
-    snapshot.m_GameMode         = (uint32_t)g->gameMode;
-    snapshot.m_CriticalChance   = g->m_ScoreThreshold;
+    snapshot.m_CurrentScore     = game_work.currentScore;
+    snapshot.m_CurrentMissCount = (int)game_work.missCount;
+    snapshot.m_GameMode         = (uint32_t)game_work.gameMode;
+    snapshot.m_CriticalChance   = game_work.m_ScoreThreshold;
 
     // Snapshot combo globals into save fields before writing.
     // Binary: SaveCurrentData @ 0x0016cd08/0x0016cd34.
@@ -669,7 +682,7 @@ void FruitNinja_SaveCurrentData(bool /*fullSave*/) {
     // Bomb-hit timer: binary saves only when timer is meaningfully
     // active (zen-mode special case). Port saves unconditionally for
     // simplicity.
-    snapshot.m_BombHitTimer = g->bombHitTimer;
+    snapshot.m_BombHitTimer = game_work.m_BombHitTimer;
 
     FruitNinja_SaveGame(&snapshot);
 }

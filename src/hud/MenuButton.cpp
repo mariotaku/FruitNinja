@@ -11,6 +11,7 @@
 
 // Analysed: 2026-04-28T14:00
 #include "MenuButton.h"
+#include "debug/Logger.h"
 #include "HUD.h"
 #include "hud/HUDLayer.h"
 #include "Game.h"
@@ -31,6 +32,8 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstdint>
+#include <map>
+#include "game/GameWork.h"
 
 // Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
 // LoadContent loads three shared SmartPtrs in this order, verified by RE
@@ -41,16 +44,6 @@
 static Mortar::SmartPtr<Mortar::Texture> s_TexScratchs;
 static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;
 static Mortar::SmartPtr<Mortar::Texture> s_TexNewItem;
-
-#ifndef __bada__
-// Port specific: debug registry of active MenuButtons.
-static std::list<MenuButton*> s_ActiveButtons;
-
-// Port specific: accessor for DebugMenuButton_Draw().
-const std::list<MenuButton*>& MenuButton::GetActiveButtons() {
-    return s_ActiveButtons;
-}
-#endif
 
 // Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
 //   Pass 1 (fruits, type 0):
@@ -106,6 +99,8 @@ void FN::ClearMenuItems() {
                 f->vel.x = absVx * sign;
 
                 f->m_SecondVel = f->vel;               // m_HalfB_vel = vel
+                LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ClearMenuItems)",
+                         static_cast<void*>(f), f->pos.x, f->pos.y, (int)f->m_FruitType);
                 f->m_bSliced = 1;
             }
             e = am->GetEntityNext(0, it);
@@ -194,6 +189,24 @@ MenuButton::MenuButton()
     // Don't unconditionally promote here.
 }
 
+// Binary ctor @ 0x0014f24c — construction-time init with all parameters.
+// onTap → m_ClickCallback; onRemove → m_RemoveCallback (fired with HUDControl* on deletion).
+MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
+                       Mortar::Delegate0<void>* onTap,
+                       int fruitType, Vec3* restPos,
+                       Mortar::Delegate1<void, HUDControl*>* onRemove)
+{
+    (void)tex;
+    Init(*spawnPos,
+         onTap ? *onTap : Mortar::Delegate0<void>(),
+         fruitType,
+         restPos ? *restPos : Vec3(0.0f, 0.0f, 0.0f),
+         Mortar::Delegate0<void>());
+    if (onRemove) {
+        m_RemoveCallback = *onRemove;
+    }
+}
+
 // ASM-verified: 2026-05-06T00:00 binary @ 0x0014f94c (asm-inspector)
 // Binary D2 dtor runs only subobject teardown (vtbl install ->
 // ~list<AddOn>(+0x10C) -> ~Delegate0(+0xAC) -> ~Delegate0(+0x88) ->
@@ -210,6 +223,10 @@ MenuButton::~MenuButton() {}
 void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                       int fruitType, Vec3 hitBounds,
                       Mortar::Delegate0<void> deletedCb) {
+    LOG_INFO("MENUBUTTON", "reset entity=%p (bSliced was %d) button=%p fruitType=%d",
+             static_cast<void*>(m_pEntity),
+             (m_pFruitPiece && m_pEntity) ? (int)m_pFruitPiece->m_bSliced : -1,
+             static_cast<void*>(this), fruitType);
     pos = buttonPos;
     m_ClickCallback = clickCb;
     m_DeletedCallback = deletedCb;
@@ -235,8 +252,8 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // hitBounds): auto-size m_TargetSize and base.size from the bound
     // secondary texture. The +1 mirrors the binary's pixel-bleed margin
     // (same as ScoreControl's banner-tex sizing).
-    if (fruitType < 0 && !m_bHasHitArea && m_SecondaryTex.IsValid()) {
-        Mortar::Texture* tex = m_SecondaryTex.Get();
+    if (fruitType < 0 && !m_bHasHitArea && m_Texture.IsValid()) {
+        Mortar::Texture* tex = m_Texture.Get();
         if (tex) {
             float w = (float)(tex->m_Width  + 1);
             float h = (float)(tex->m_Height + 1);
@@ -262,6 +279,8 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                 e->Init(nullptr, (long)fruitType, nullptr);
                 e->flags &= ~0x10;  // unhide
                 m_pEntity = e;
+                LOG_INFO("MENUBUTTON", "spawn entity=%p pos=(%.1f,%.1f) type=%d button=%p",
+                         static_cast<void*>(e), e->pos.x, e->pos.y, entityType, static_cast<void*>(this));
 
                 if (entityType == 0) {
                     // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40)
@@ -290,7 +309,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                     Bomb* bomb = static_cast<Bomb*>(e);
                     bomb->m_bMovement = 0;
                     bomb->scale = bomb->scale * BOMB_MENU_SCALE;
-                    bomb->SetCallback(clickCb);
+                    bomb->SetCallback(clickCb, this);
                     // Matches binary MenuButton::Init bomb branch @ 0x0014f144:
                     //   vstr.32 s15,[r0,#0x6c]   ; *(bomb+0x6c) = 150.0
                     // (s15 = DAT = FRUIT_ZPOS = 150.0). Overrides the depth
@@ -355,10 +374,6 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     // where sizeFrac = sin(m_AnimPhase*2pi/65536), in [0,1].
     // See tmp/menubutton-sizefrac-spec.md for full GOT resolution.
 
-#ifndef __bada__
-    // Port specific: register in debug registry.
-    s_ActiveButtons.push_back(this);
-#endif
 }
 
 // Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()
@@ -383,15 +398,15 @@ void MenuButton::Release() {
     m_pLabel1 = nullptr;
     m_pLabel2 = nullptr;
     DeletePeices();
-    // Binary @ 0x0014f7e0 -- ~SmartPtr<Texture> drop on m_SecondaryTex.
-    m_SecondaryTex.SetNull();
+    // Binary @ 0x0014f7e0 -- ~SmartPtr<Texture> drop on m_Texture.
+    m_Texture.SetNull();
+    LOG_INFO("MENUBUTTON", "destroy entity=%p (bSliced=%d) button=%p",
+             static_cast<void*>(m_pEntity),
+             (m_pFruitPiece && m_pEntity) ? (int)m_pFruitPiece->m_bSliced : -1,
+             static_cast<void*>(this));
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
 
-#ifndef __bada__
-    // Port specific: deregister from debug registry.
-    s_ActiveButtons.remove(this);
-#endif
 }
 
 // Binary @ 0x0014e3ac — vtable Init slot, calls vtable Reset (no-op for MenuButton)
@@ -457,12 +472,14 @@ void MenuButton::Remove() {
 // Binary @ 0x0014e5cc — fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
 bool MenuButton::TouchReleased() {
     if (m_FruitType < 0 && m_bFireOnRelease) {
+        LOG_INFO("BUTTON", "MenuButton::Update touch path fires m_ClickCallback (this=%p enabled=%d pos=(%.1f,%.1f))",
+                 static_cast<void*>(this), (int)m_bEnabled, pos.x, pos.y);
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
         // Binary @ 0x0014e5e6 — TutorialControl::ButtonPressedAtPos(this).
         Game* game = Game::GetInstance();
-        if (game && game->pTutorialCtrl) {
-            game->pTutorialCtrl->ButtonPressedAtPos(this);
+        if (game && game_work.m_TutorialControl) {
+            game_work.m_TutorialControl->ButtonPressedAtPos(this);
         }
     }
     m_DeletedCallback();
@@ -517,6 +534,21 @@ void MenuButton::SetNewSymbol(bool show) {
 // quad collapses to a point and the backdrop appears invisible.
 // ASM-verified: 2026-05-06T17:50 binary @ 0x0014eb84 (asm-inspector)
 void MenuButton::Update(float dt) {
+    if (m_pEntity) {
+        static std::map<MenuButton*, uint8_t> s_PrevSliced;
+        uint8_t curr = m_pFruitPiece ? m_pFruitPiece->m_bSliced : 0;
+        std::map<MenuButton*, uint8_t>::iterator it = s_PrevSliced.find(this);
+        uint8_t prev = (it != s_PrevSliced.end()) ? it->second : 0;
+        if (curr != prev) {
+            LOG_INFO("MENUBUTTON", "Update sees bSliced transition %d->%d on entity=%p pos=(%.1f,%.1f) button=%p",
+                     (int)prev, (int)curr,
+                     static_cast<void*>(m_pEntity),
+                     m_pEntity->pos.x, m_pEntity->pos.y,
+                     static_cast<void*>(this));
+            s_PrevSliced[this] = curr;
+        }
+    }
+
     UpdatePeices(dt);
 
     // Hardware Back/Menu key auto-fire. Binary @ 0x0014e9a8: when
@@ -673,6 +705,10 @@ void MenuButton::Update(float dt) {
                 if (relVelSqMag > 0.001f) {
                     // Binary @ 0x0014e76c: Mortar::Delegate0::operator()(&field7_0x88).
                     if (m_ClickCallback) {
+                        LOG_INFO("BUTTON", "MenuButton::Update slice path fires m_ClickCallback (entity=%p bSliced=%d pos=(%.1f,%.1f))",
+                                 static_cast<void*>(m_pEntity),
+                                 m_pFruitPiece ? (int)m_pFruitPiece->m_bSliced : -1,
+                                 pos.x, pos.y);
                         auto cb = m_ClickCallback;
                         m_ClickCallback = nullptr;
                         cb();
@@ -695,8 +731,8 @@ void MenuButton::Update(float dt) {
                         // Empty in binary (single bx lr); port matches via the
                         // explicit no-op call so the call-graph stays parity.
                         Game* game = Game::GetInstance();
-                        if (game && game->mainScreen) {
-                            game->mainScreen->OnMenuItemsCleared();
+                        if (game && game_work.mMainScreen) {
+                            game_work.mMainScreen->OnMenuItemsCleared();
                         }
                     }
                 }
@@ -1117,15 +1153,15 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
                          0.0f);
     }
     // Binary @ 0x00150240: store the texture SmartPtr on the AddOn's
-    // m_SecondaryTex slot (HUDControl3d +0x78, Mortar::SmartPtr<Texture>).
-    c->m_SecondaryTex = tex;
+    // m_Texture slot (HUDControl3d +0x78, Mortar::SmartPtr<Texture>).
+    c->m_Texture = tex;
     c->pos   = pos;
     c->m_Timer = initialTimer;
     c->size  = size;
 
     Game* game = Game::GetInstance();
-    if (game && game->hud) {
-        game->hud->AddControl(c, false);
+    if (game && game_work.mHud) {
+        game_work.mHud->AddControl(c, false);
     }
 
     MenuButtonAddOn addOn;

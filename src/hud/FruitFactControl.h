@@ -46,7 +46,7 @@
 //   +0xD9..+0xDB: padding 3B
 //   +0xDC: Mortar::SmartPtr<Texture> m_ComboStarTex  (4B)
 //   +0xE0: int m_ComboType
-//   +0xE4: uint8 m_PomCount
+//   +0xE4: uint8 m_TabIndex
 //   +0xE5..+0xE7: padding 3B
 //   +0xE8: LeaderboardList* m_pLeaderboardMenu
 //   +0xEC: MenuButton* m_pConnectButton
@@ -96,7 +96,7 @@ public:
     uint8_t        _pad_D9[3];           // +0xD9
     Mortar::SmartPtr<Mortar::Texture> m_ComboStarTex; // +0xDC
     int            m_ComboType;          // +0xE0
-    uint8_t        m_PomCount;           // +0xE4
+    uint8_t        m_TabIndex;           // +0xE4
     uint8_t        _pad_E5[3];           // +0xE5
     LeaderboardList* m_pLeaderboardMenu; // +0xE8
     MenuButton*    m_pConnectButton;     // +0xEC

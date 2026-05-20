@@ -17,6 +17,7 @@
 #include "engine/MenuBackground.h"
 #include "entities/SlashEntity.h"
 #include "screens/ShopScreen.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstdlib>
@@ -27,9 +28,10 @@
 // Port: exposed via FruitSaveData.h (the instance lives in Game::pSaveData).
 // We access it through the Game singleton here.
 #include "Game.h"
+#include "game/GameWork.h"
 static FruitSaveData* GetSaveData() {
     Game* g = Game::GetInstance();
-    return g ? g->pSaveData : nullptr;
+    return g ? game_work.m_SaveData : nullptr;
 }
 
 // g_SetEquippedItemFuncCalls @ 0x1f3cec — static call-guard for SetEquippedItem.
@@ -150,8 +152,8 @@ void ItemManager::LoadItemData() {
             }
         }
     } else {
-        fprintf(stderr, "ItemManager::LoadItemData: failed to open '%s' (error %d)\n",
-                xmlPath.c_str(), (int)err);
+        LOG_ERROR("ITEM/LoadItemData", "failed to open '%s' (error %d)",
+                  xmlPath.c_str(), (int)err);
     }
 
     // Phase 2: Load save state from ItemSave.xml
@@ -463,8 +465,12 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
 // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
 // STUB: ItemManager::EquipItem -- auto stub
 void ItemManager::EquipItem(unsigned int) {}
-// STUB: ItemManager::PlayAlternateComboSound -- auto stub
-void ItemManager::PlayAlternateComboSound(int) {}
+// PlayAlternateComboSound @ 0x0011303c
+bool ItemManager::PlayAlternateComboSound(int comboIdx) {
+    SlashModInfo* m = static_cast<SlashModInfo*>(m_DefaultItems[0]);
+    if (!m) return false;
+    return m->m_ComboSounds.PlaySound(comboIdx, 1.0f, 1.0f);
+}
 // STUB: ItemManager::PlayAlternateImpactSound -- auto stub
 void ItemManager::PlayAlternateImpactSound(float, float) {}
 // STUB: ItemManager::PlayAlternateSwipeSound -- auto stub

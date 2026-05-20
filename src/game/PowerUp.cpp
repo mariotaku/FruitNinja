@@ -1,5 +1,4 @@
 // Analysed: 2026-05-03T00:00
-// Fix: PowerUp struct +0xac _padac[8] inserted so m_Texture1@+0xb4, m_DeferredPoints@+0xc4.
 
 #include "PowerUp.h"
 #include "ScoreModifier.h"
@@ -19,6 +18,7 @@
 #include <cctype>
 #include <cstdio>
 #include <algorithm>
+#include "game/GameWork.h"
 
 // ---- helper -----------------------------------------------------------------
 
@@ -51,8 +51,7 @@ PowerUp::PowerUp()
     memset(m_Name, 0, sizeof(m_Name));
     memset(m_DisplayName, 0, sizeof(m_DisplayName));
     memset(_pad92, 0, sizeof(_pad92));
-    memset(_padac, 0, sizeof(_padac));
-    memset(_padc0, 0, sizeof(_padc0));
+    memset(_padb8, 0, sizeof(_padb8));
 }
 
 // Steps 2: dtor (binary @ 0x001186bc)
@@ -162,8 +161,8 @@ void PowerUp::Activate(bool showPopup, bool isPurchased, const Vec3& pos, float*
         }
         if (m_pPurchaseInfo) {
             Game* game = Game::GetInstance();
-            if (game && game->pSaveData) {
-                game->pSaveData->AddCoins(-m_pPurchaseInfo->m_Cost);
+            if (game && game_work.m_SaveData) {
+                game_work.m_SaveData->AddCoins(-m_pPurchaseInfo->m_Cost);
             }
         }
     }
@@ -214,7 +213,7 @@ int PowerUp::Update(float dt) {
     // Bar ramp: fade-in at 4/sec, fade-out at 12/sec
     // Purchasable special-case: check remaining uses
     bool keepAlive = (activeCount > 0);
-    if (m_bIsPurchasable && m_pPurchaseInfo && m_pPurchaseInfo->m_RemainingUses > 0) {
+    if (m_bIsPurchasable && m_pPurchaseInfo && m_pPurchaseInfo->m_CurrentUses > 0) {
         keepAlive = true;
     }
 
@@ -364,8 +363,7 @@ PowerUp::PowerUp(PowerUp* src)
     memset(m_Name, 0, sizeof(m_Name));
     memset(m_DisplayName, 0, sizeof(m_DisplayName));
     memset(_pad92, 0, sizeof(_pad92));
-    memset(_padac, 0, sizeof(_padac));
-    memset(_padc0, 0, sizeof(_padc0));
+    memset(_padb8, 0, sizeof(_padb8));
 
     m_NameHash = src->m_NameHash;
     strcpy(m_Name,        src->m_Name);

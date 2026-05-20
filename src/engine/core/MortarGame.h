@@ -2,6 +2,7 @@
 #define FN_MORTAR_GAME_H
 
 #include <cstdint>
+#include <cstddef>
 
 namespace Mortar {
 
@@ -92,5 +93,23 @@ protected:
 };
 
 } // namespace Mortar
+
+// Field-offset assertions for MortarGame (binary @ g_MortarGame, ARM32).
+// Offsets are instance-relative (include the vtable pointer at +0x00).
+// Guarded by __bada__ so they fire only on the cross-build / Bada toolchain
+// where struct layout must match the binary exactly.
+#ifdef __bada__
+static_assert(offsetof(Mortar::MortarGame, m_versionString)    == 0x04, "MortarGame::m_versionString must be at +0x04");
+static_assert(offsetof(Mortar::MortarGame, m_formattedVersion) == 0x44, "MortarGame::m_formattedVersion must be at +0x44");
+static_assert(offsetof(Mortar::MortarGame, m_languageString)   == 0x84, "MortarGame::m_languageString must be at +0x84");
+static_assert(offsetof(Mortar::MortarGame, m_versionCombined)  == 0xA4, "MortarGame::m_versionCombined must be at +0xA4");
+static_assert(offsetof(Mortar::MortarGame, m_versionMajor)     == 0xA8, "MortarGame::m_versionMajor must be at +0xA8");
+static_assert(offsetof(Mortar::MortarGame, m_versionMinor)     == 0xAC, "MortarGame::m_versionMinor must be at +0xAC");
+static_assert(offsetof(Mortar::MortarGame, m_versionPatch)     == 0xB0, "MortarGame::m_versionPatch must be at +0xB0");
+static_assert(offsetof(Mortar::MortarGame, m_hardwareString)   == 0xB4, "MortarGame::m_hardwareString must be at +0xB4");
+static_assert(offsetof(Mortar::MortarGame, m_bFastHardware)    == 0xF4, "MortarGame::m_bFastHardware must be at +0xF4");
+static_assert(offsetof(Mortar::MortarGame, m_licensedState)    == 0xF8, "MortarGame::m_licensedState must be at +0xF8");
+static_assert(sizeof(Mortar::MortarGame)                       == 0xFC, "sizeof(MortarGame) must be 0xFC");
+#endif
 
 #endif

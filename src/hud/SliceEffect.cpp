@@ -16,10 +16,11 @@
 #include "math/Matrix44.h"
 #include "Game.h"
 #include "audio/GameSound.h"
+#include "debug/Logger.h"
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <string>
+#include "game/GameWork.h"
 
 namespace FN {
 
@@ -81,17 +82,17 @@ void SliceEffect_CreatePool(int capacity) {
         if (!s_SliceFxNormal.IsValid()) {
             // logical path; FileSystem_Direct prepends data_dir
             s_SliceFxNormal = meshMgr->Load("models/fruit/slice_fx.mmd");
-            printf("[SliceEffect] slice_fx.mmd valid=%d\n",
-                   s_SliceFxNormal.IsValid());
+            LOG_DEBUG("SliceEffect", "slice_fx.mmd valid=%d",
+                      s_SliceFxNormal.IsValid());
         }
         if (!s_SliceFxCrit.IsValid()) {
             // logical path; FileSystem_Direct prepends data_dir
             s_SliceFxCrit = meshMgr->Load("models/fruit/slice_fx_crit.mmd");
-            printf("[SliceEffect] slice_fx_crit.mmd valid=%d\n",
-                   s_SliceFxCrit.IsValid());
+            LOG_DEBUG("SliceEffect", "slice_fx_crit.mmd valid=%d",
+                      s_SliceFxCrit.IsValid());
         }
     }
-    printf("[SliceEffect] CreatePool: capacity=%d\n", capacity);
+    LOG_DEBUG("SliceEffect", "CreatePool: capacity=%d", capacity);
 }
 
 void SliceEffect_DestroyPool() {
@@ -137,9 +138,9 @@ void SliceEffect_Add(const Vec3& pos, float angleDeg, float impulse, bool critic
     // fall-through path when one gate fails and is never played here.
     if (impulse > 2.5f && (rand() % 3) == 0 && (rand() % 3) == 0) {
         Game* g = Game::GetInstance();
-        if (g && g->pGameSound) {
+        if (g && game_work.mGameSound) {
             const char* name = (rand() % 2 == 0) ? "Clean-Slice-1" : "Clean-Slice-3";
-            g->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+            game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
         }
     }
 }

@@ -9,23 +9,27 @@
 // event during gameplay.
 
 #include "screens/PowerUpShop.h"
+#include "debug/Logger.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
 #include "game/PowerUpManager.h"
 #include "game/FruitSaveData.h"
 #include "entities/Fruit.h"
+#include "asset/MeshDraw.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
 #include "math/Matrix44.h"
 #include "math/Random.h"
+#include "screens/PurchaseInfo.h"
 #include "util/Delegate.h"
 #include "Game.h"
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <list>
+#include "game/GameWork.h"
 
 // Binary @ 0x_GLOBAL__I_PowerUpShop_cpp:
 // File-static Mortar::SmartPtr<Texture> singletons, nulled by UnLoadContent.
@@ -130,20 +134,10 @@ void PowerUpShop::Init() {
     m_PulseScale        = 1.0f;
     m_FruitScale        = 1.0f;
 
-    // Load buy-background texture into m_SecondaryTex (+0x78).
-    // Binary: SetPtr from GOT[buybg_texture]; port uses TextureManager.
-    // TODO: 0x00156b08 — confirm exact buy-bg texture filename from binary DAT string
-    // (binary references GOT-loaded SmartPtr; filename not resolved by RE pass yet).
-    // g_BuyBg texture is loaded on demand; assign to m_SecondaryTex when available.
-    if (!g_BuyBg.IsValid()) {
-        g_BuyBg = Mortar::TextureManager::LoadLocalisedTexture("buy_bg.tex");
-    }
-    m_SecondaryTex = g_BuyBg;
-
-    // Binary: reads texture w/h via vtable slots *(vtbl+0x14)/(+0x18) GetWidth/GetHeight.
-    // Sets pivot = Vector3(w, h, 0) * 1.0.
-    // TODO: 0x00156b08 — pivot assignment needs texture dims; stub at (0,0,0) until
-    // texture filename resolved.
+    // Defunct: binary @ 0x00156b08 — m_Texture(+0x74) SmartPtr static at .bss
+    // 0x00231288 never assigned. Buy-bg path is dead in shipped binary. Init's
+    // GetWidth/GetHeight calls only fire when IsValid().
+    // m_Texture is default-constructed (null); pivot assignment only executes when valid.
 
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
@@ -182,8 +176,8 @@ void PowerUpShop::Init() {
     // player.m_Coins lives at game+pSaveData+0x20.
     Game* game = Game::GetInstance();
     int coins = 0;
-    if (game && game->pSaveData) {
-        coins = game->pSaveData->m_Coins;
+    if (game && game_work.m_SaveData) {
+        coins = game_work.m_SaveData->m_Coins;
     }
     snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
 }
@@ -198,6 +192,8 @@ void PowerUpShop::Release() {
         Fruit* fruit = m_BuyButton->m_pFruitPiece;
         if (fruit != NULL) {
             // Binary: sets Fruit::m_bSliced=1 and zeroes velocity/spin vectors.
+            LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in PowerUpShop teardown)",
+                     static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
             fruit->m_bSliced = true;
             fruit->vel    = g_Origin;
             // m_AngularVel is not in Mortar::Entity base; Fruit stores RotVel in m_RotVel1/m_RotVel2.
@@ -212,8 +208,8 @@ void PowerUpShop::Release() {
 
         // Binary: HUD::RemoveControl(*Game.HUD, m_BuyButton); then delete.
         Game* game = Game::GetInstance();
-        if (game && game->hud) {
-            game->hud->RemoveControl(m_BuyButton);
+        if (game && game_work.mHud) {
+            game_work.mHud->RemoveControl(m_BuyButton);
         }
         m_BuyButton->Release();   // binary's vtable Release before delete
         delete m_BuyButton;
@@ -260,20 +256,22 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
     SetMatrix(combined);
     UploadMatrices();
 
-    // Step 2: draw buy background quad via m_SecondaryTex.
-    // TODO: 0x00155e08 — Mesh::DrawQuadUnCached call requires Mesh utility not yet
-    // extracted as a standalone draw helper. Skipping quad draw until Mesh draw
-    // helper ported (binary calls DrawQuadUnCached with a Colour*).
+    // Step 2: draw buy background quad via g_BuyBg.
+    // Binary @ 0x00155e08: calls g_BuyBg->Set(), Mesh::DrawQuadUnCached(Colour*, fx),
+    // g_BuyBg->UnSet(). Port uses MeshDraw::DrawQuadUnCachedDefault (same binary at
+    // 0x00194180: default 1x1 quad with current world matrix).
+    if (g_BuyBg.IsValid()) {
+        g_BuyBg->Set();
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+        g_BuyBg->UnSet();
+    }
 
-    // Step 3: draw m_BuyText via font.
-    // Binary: Font::DrawString at (75 + ScreenY, 0, 20.5), anchor=3 (center+top).
-    Game* game = Game::GetInstance();
-    if (game && game->pFontMain.IsValid()) {
-        // Binary: text Y = 75 + HUD bottomY (param_1[3]). Port uses a fixed offset
-        // from the centered coordinate: pos.y is the control's Y in centered space.
-        Vec3 textPos(pos.x + 75.0f, 0.0f, 20.5f);
-        game->pFontMain->DrawString(1.0f, 1.0f, 20.5f, m_BuyText, textPos,
-                                    g_White, Mortar::FONT_ALIGN_CENTER | Mortar::FONT_ALIGN_MIDDLE);
+    // Step 3: draw m_BuyText (header label) via font.
+    // Binary @ 0x00155e08: pos = (shop.x, shop.y + 75), size 20, anchor 3, white.
+    if (game_work.pFontMain.IsValid()) {
+        Vec3 textPos(pos.x, pos.y + 75.0f, 0.0f);
+        game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f, m_BuyText, textPos,
+                                        g_White, 3);
     }
 
     // Step 4: draw each slot icon.
@@ -285,16 +283,136 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
             continue;
         }
 
-        // TODO: 0x00155e08 — PurchaseInfo::GetTexture / GetGreyTexture / GetInUseTexture
-        // not yet ported (PurchaseInfo is partially stubbed in PowerUp.h).
-        // Icon draw, progress bars, and description text depend on these accessors.
-        // Skip icon rendering until PurchaseInfo is fully ported.
+        PurchaseInfo* pi = p->m_pPurchaseInfo;
 
-        // Slot layout interpolation (z lerps toward 1.25 for selected, 1.0 for idle).
-        // Slot world pos = pos + slot. Scale = slot.z * 64.0.
-        // Description/title labels at selected slot (draw at -84 and -30 Y offset, scale 16).
-        // Cost/timer label at slot bottom (scale 17, anchor 0xf).
-        // All TODOs deferred to PurchaseInfo RE follow-up.
+        // Determine affordability for label colour and inactive texture selection.
+        int coins = 0;
+        if (game_work.m_SaveData) {
+            coins = game_work.m_SaveData->m_Coins;
+        }
+        bool affordable = (pi->m_Cost <= coins && m_PurchasedCount < 3
+                           && game_work.gameMode < 3);
+
+        Vec3 slot = m_SlotLayout[i];
+        float barScale = slot.z;
+        float iconScale = barScale * 64.0f;
+
+        // Slot translate+scale matrix (used for both quad bg and TriStrip bar).
+        mm.GetWorldStack().Push();
+        Matrix44 slotTrans;
+        slotTrans.Identity();
+        slotTrans.GlobalTranslate44(Vec3(pos.x + slot.x + 480.0f,
+                                        pos.y + slot.y + 320.0f, pos.z + slot.z));
+        Matrix44 slotScaleMat;
+        slotScaleMat.Identity();
+        slotScaleMat.ApplyScale(iconScale, iconScale, 1.0f);
+        SetMatrix(slotTrans * slotScaleMat);
+        UploadMatrices();
+
+        if (p->m_bCloned != 0) {
+            // Active branch: grey bg quad, then TriStrip progress bar.
+            Mortar::ReloadableTexture& greyTex = pi->GetGreyTexture();
+            if (greyTex.IsLoaded()) {
+                greyTex.Set();
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+                greyTex.UnSet();
+            }
+
+            Mortar::ReloadableTexture& barTex = pi->GetInUseTexture();
+            if (barTex.IsLoaded() && pi->m_MaxUses > 0) {
+                float fillFrac = ((float)pi->m_CurrentUses * 0.75f / (float)pi->m_MaxUses)
+                                 + 0.125f;
+                if (fillFrac > 1.0f) fillFrac = 1.0f;
+                if (fillFrac < 0.0f) fillFrac = 0.0f;
+
+                // Restore slot matrix (DrawQuadUnCachedDefault resets the world stack).
+                SetMatrix(slotTrans * slotScaleMat);
+                UploadMatrices();
+
+                // 4-vertex TriStrip bar in unit space (-0.5..0.5 icon extent).
+                // Fill clips the right edge to fillFrac.
+                float x0 = -0.5f;
+                float x1 = -0.5f + fillFrac;
+                float y0 = -0.5f;
+                float y1 =  0.5f;
+                QUADCUSTOMVERTEX barVerts[4];
+                // bottom-left
+                barVerts[0].x = x0; barVerts[0].y = y0; barVerts[0].z = 0.0f;
+                barVerts[0].nx = 0.0f; barVerts[0].ny = 0.0f; barVerts[0].nz = 1.0f;
+                barVerts[0].colour = 0xFFFFFFFFu;
+                barVerts[0].u = 0.0f; barVerts[0].v = 1.0f;
+                // bottom-right
+                barVerts[1].x = x1; barVerts[1].y = y0; barVerts[1].z = 0.0f;
+                barVerts[1].nx = 0.0f; barVerts[1].ny = 0.0f; barVerts[1].nz = 1.0f;
+                barVerts[1].colour = 0xFFFFFFFFu;
+                barVerts[1].u = fillFrac; barVerts[1].v = 1.0f;
+                // top-left
+                barVerts[2].x = x0; barVerts[2].y = y1; barVerts[2].z = 0.0f;
+                barVerts[2].nx = 0.0f; barVerts[2].ny = 0.0f; barVerts[2].nz = 1.0f;
+                barVerts[2].colour = 0xFFFFFFFFu;
+                barVerts[2].u = 0.0f; barVerts[2].v = 0.0f;
+                // top-right
+                barVerts[3].x = x1; barVerts[3].y = y1; barVerts[3].z = 0.0f;
+                barVerts[3].nx = 0.0f; barVerts[3].ny = 0.0f; barVerts[3].nz = 1.0f;
+                barVerts[3].colour = 0xFFFFFFFFu;
+                barVerts[3].u = fillFrac; barVerts[3].v = 0.0f;
+
+                barTex.Set();
+                Mortar::MeshDraw::DrawTriStrip(barVerts, 4, true, NULL);
+                barTex.UnSet();
+            }
+        } else {
+            // Inactive branch: affordable or greyed icon quad.
+            Mortar::ReloadableTexture* iconTex = affordable
+                ? &pi->GetTexture()
+                : &pi->GetGreyTexture();
+            if (iconTex && iconTex->IsLoaded()) {
+                iconTex->Set();
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+                iconTex->UnSet();
+            }
+        }
+
+        mm.GetWorldStack().Pop();
+        UploadMatrices();
+
+        // Text labels (drawn in centered coordinate space via active world matrix).
+        Vec3 barPos(pos.x + slot.x, pos.y + slot.y, pos.z);
+
+        // Cost-or-READY label: pos (barPos.x, barPos.y - 32*barScale), size 17, anchor 0xF.
+        if (game_work.pFontMain.IsValid()) {
+            char costBuf[32];
+            Colour labelColour;
+            if (p->m_bCloned != 0) {
+                // Active: "READY"
+                snprintf(costBuf, sizeof(costBuf), "READY");
+                labelColour = MakeColour(0xFF, 0xFF, 0xFF);
+            } else if (affordable) {
+                snprintf(costBuf, sizeof(costBuf), "%i", pi->m_Cost);
+                labelColour = MakeColour(0x8B, 0x4F, 0x22);
+            } else {
+                snprintf(costBuf, sizeof(costBuf), "%i", pi->m_Cost);
+                labelColour = MakeColour(0x80, 0x80, 0x80);
+            }
+            Vec3 labelPos(barPos.x, barPos.y + (-32.0f * barScale), barPos.z);
+            game_work.pFontMain->DrawString(17.0f, 1.0f, 0.0f,
+                                            costBuf, labelPos, labelColour, 0xF);
+        }
+
+        // Selected-slot title + description.
+        if (i == m_SelectedIndex && game_work.pFontMain.IsValid()) {
+            float sx = pos.x + slot.x;
+            float sy = pos.y + slot.y;
+            Vec3 titlePos(sx - 224.0f, sy - 30.0f, pos.z);
+            Colour titleColour = MakeColour(0xD1, 0x25, 0x0B);
+            game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                                            pi->m_DisplayName, titlePos, titleColour, 0xF);
+
+            Vec3 descPos(sx - 224.0f, sy - 54.0f, pos.z);
+            Colour descColour = MakeColour(0x74, 0x5D, 0x3B);
+            game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                                            pi->m_Description, descPos, descColour, 0xF);
+        }
     }
 
     mm.GetWorldStack().Pop();
@@ -338,9 +456,9 @@ void PowerUpShop::Update(float dt) {
         //                                       action 0x74 writes the centered-ortho X.
         //   +0x94  float    worldPos.y       -- aliased with light direction; action 0x75 writes Y.
         //  Hit zone = (slot ± 32) on both axes. On hit: m_SelectedIndex = i; SetBuyButtonState().
-        if (game && game->m_bPointerActive) {
-            const float px = game->worldPos.x;
-            const float py = game->worldPos.y;
+        if (game && game_work.m_bPointerActive) {
+            const float px = game_work.worldPos.x;
+            const float py = game_work.worldPos.y;
             const float HALF = 32.0f;  // DAT_001566a0
             Vec3 worldPt = pos + slot;
             if (px > worldPt.x - HALF && px < worldPt.x + HALF &&
@@ -372,29 +490,48 @@ void PowerUpShop::Update(float dt) {
         // Spawn position: origin + Vector3(160.8, -6.0, 0.0).
         Vec3 spawnPos = g_Origin + Vec3(160.8f, -6.0f, 0.0f);
 
-        // Build delegates (Mortar::Delegate0<void> for ButtonSliced, Mortar::Delegate1 for ButtonDeleted).
-        // TODO: 0x00156398 — Mortar::Delegate binding to member function; port uses
-        // Mortar::Delegate0<void> and Mortar::Delegate1<void, HUDControl*> bound via
-        // MakeDelegate / callee pattern. Stub with empty delegates until callee helper ported.
-        Mortar::Delegate0<void>           slicedCb;
-        Mortar::Delegate1<void, HUDControl*> deletedCb;
+        // Build slicedCb: binary @ 0x00156398 binds PowerUpShop::ButtonSliced as
+        // Delegate0<void> via QCallee.
+        Mortar::Delegate0<void> slicedCb =
+            Mortar::Delegate0<void>::QCallee(this, &PowerUpShop::ButtonSliced);
 
-        // TODO: 0x00156398 — MenuButton constructor signature: (tex, &spawnPos, &delegate0,
-        // fruitType, &origin, &delegate1). Port MenuButton init takes separate Init() call.
-        // Skipping buy-button construction until delegate binding resolved.
+        // Build removeCb: binary binds PowerUpShop::ButtonDeleted as
+        // Delegate1<void, HUDControl*> via QCallee, wired to m_RemoveCallback.
+        Mortar::Delegate1<void, HUDControl*> removeCb =
+            Mortar::Delegate1<void, HUDControl*>::QCallee(
+                this, &PowerUpShop::ButtonDeleted);
+
         // Binary sequence:
-        //   m_BuyButton = new MenuButton(...)
-        //   m_BuyButton->Init()
+        //   m_BuyButton = new MenuButton(NULL, &spawnPos, &slicedCb, fruitType,
+        //                                &origin, &deletedCb)
+        //   m_BuyButton->Init()          — vtable no-arg Init (calls Reset, no-op)
         //   m_BuyButton->vel.x = 0
-        //   MenuButton.field_0x123 = 0
-        //   HUD::AddControl(game->hud, m_BuyButton, false)
+        //   m_BuyButton->m_bEnabled = 0  (field_0x123)
+        //   HUD::AddControl(game_work.mHud, m_BuyButton, false)
         //   Rand32(524287); Rand32(2)
         //   Fruit angular vel *= 0.85 on x and y
         //   Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
-        (void)fruitType;
-        (void)spawnPos;
-        (void)slicedCb;
-        (void)deletedCb;
+        Vec3 restPos = g_Origin;
+        m_BuyButton = new MenuButton(static_cast<Mortar::SmartPtr<Mortar::Texture>*>(NULL),
+                                     &spawnPos, &slicedCb,
+                                     fruitType, &restPos, &removeCb);
+        m_BuyButton->Init();
+        // Binary: m_BuyButton->vel.x = 0 (vel field not mapped; fruit piece vel zeroed below)
+        m_BuyButton->m_bEnabled = 0;
+
+        if (game_work.mHud) {
+            game_work.mHud->AddControl(m_BuyButton, false);
+        }
+
+        Math::g_Random.Rand32(524287);
+        Math::g_Random.Rand32(2);
+
+        if (m_BuyButton->m_pFruitPiece != NULL) {
+            m_BuyButton->m_pFruitPiece->m_RotVel1.x *= 0.85f;
+            m_BuyButton->m_pFruitPiece->m_RotVel1.y *= 0.85f;
+            // ASM-verified: 2026-05-20 binary @ 0x00156398 — RotateFacingUp(false, (0,1,0)).
+            m_BuyButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
+        }
     } else if (m_BuyButton != NULL) {
         // Step 4: update existing buy button.
 
@@ -438,8 +575,8 @@ void PowerUpShop::SetBuyButtonState() {
         // Not yet active — check affordability and purchase cap.
         Game* game = Game::GetInstance();
         int coins = 0;
-        if (game && game->pSaveData) {
-            coins = game->pSaveData->m_Coins;
+        if (game && game_work.m_SaveData) {
+            coins = game_work.m_SaveData->m_Coins;
         }
         int cost = p->m_pPurchaseInfo ? p->m_pPurchaseInfo->m_Cost : 0;
         if (cost <= coins && m_PurchasedCount < 3) {
@@ -455,46 +592,43 @@ void PowerUpShop::SetBuyButtonState() {
 // ============================================================
 // ButtonSliced @ 0x00155b5c (non-virtual; bound as Mortar::Delegate0<void>)
 // ============================================================
-void PowerUpShop::ButtonSliced(float pushScalar) {
-    // Binary @ 0x00155bf0:
-    if (m_BuyTriggered == 0 && m_BuyButtonState == 0) {
-        if (m_PurchasablePowerUps.empty()) {
-            return;
-        }
-        // hash = m_PurchasablePowerUps[m_SelectedIndex]->m_TypeId (m_NameHash in port)
-        PowerUp* selected = m_PurchasablePowerUps[m_SelectedIndex];
-        uint32_t hash = selected->m_NameHash;
-
-        // Binary @ 0x00155bf0: ActivatePower(hash, &origin, &pushScalar)
-        Vec3 origin = g_Origin;
-        PowerUpManager* pum = PowerUpManager::GetInstance();
-        PowerUp* singleActive = pum->ActivatePower(hash, &origin, &pushScalar);
-
-        if (singleActive != NULL) {
-            m_BuyButtonState = 2;
-            m_PurchasedCount++;
-            m_PurchasablePowerUps[m_SelectedIndex] = singleActive;
-        }
-
-        // Refresh coin text.
-        Game* game = Game::GetInstance();
-        int coins = 0;
-        if (game && game->pSaveData) {
-            coins = game->pSaveData->m_Coins;
-        }
-        snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
-
-    } else if (m_BuyTriggered != 0) {
-        // Safety reset: zero fruit velocity for despawning button-fruit.
-        if (m_BuyButton != NULL && m_BuyButton->m_pFruitPiece != NULL) {
-            Fruit* fruit = m_BuyButton->m_pFruitPiece;
-            if (!fruit->Sliced()) {
-                fruit->vel      = g_Origin;
-                fruit->m_RotVel1 = g_Origin;
-                fruit->m_RotVel2 = g_Origin;
-            }
-        }
+void PowerUpShop::ButtonSliced() {
+    // Binary @ 0x00155b70: split predicate (avoids GCC 16-bit load-fuse on
+    // combined &&; binary emits two ldrb.w, one per field).
+    if (m_BuyTriggered != 0) {
+        // Already-purchased "spit fruit out" branch (binary @ 0x00155b80)
+        if (m_BuyButton == NULL) return;
+        Fruit* fruit = m_BuyButton->m_pFruitPiece;
+        if (fruit == NULL) return;
+        // 3-float ldmia/stmia copy block: freeze both halves at current position.
+        fruit->m_SecondPos = fruit->pos;       // +0xB8 <- +0x10
+        fruit->vel         = g_Origin;         // +0x1C
+        fruit->m_SecondVel = g_Origin;         // +0xC4
+        fruit->m_Gravity   = g_Origin;         // +0x9C
+        return;
     }
+    if (m_BuyButtonState != 0) return;
+    if (m_PurchasablePowerUps.empty()) return;
+
+    PowerUp* p = m_PurchasablePowerUps[m_SelectedIndex];
+    uint32_t hash = p->m_NameHash;
+
+    // Binary: copy g_Origin to stack-local, then ActivatePower(hash, &local, &local.x).
+    // r2 AND r3 both point to the same Vec3 -- ActivatePower treats the float* as Vec3*.
+    Vec3 localOrigin = g_Origin;
+    PowerUpManager* pum = PowerUpManager::GetInstance();
+    pum->ActivatePower(hash, &localOrigin, reinterpret_cast<float*>(&localOrigin));
+
+    PowerUp* singleActive = PowerUpManager::GetInstance()->GetActiveSingle(hash);
+    if (singleActive != NULL) {
+        m_PurchasablePowerUps[m_SelectedIndex] = singleActive;
+        m_BuyButtonState  = 2;
+        m_PurchasedCount += 1;
+    }
+
+    // Binary: direct game_work.m_SaveData->m_Coins read; no Game::GetInstance() call.
+    int coins = game_work.m_SaveData ? game_work.m_SaveData->m_Coins : 0;
+    snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
 }
 
 // ============================================================

@@ -28,8 +28,9 @@
 #include "render/Renderer.h"
 #include "math/Colour.h"
 #include "math/MathUtil.h"
+#include "debug/Logger.h"
 #include <cstdlib>
-#include <cstdio>
+#include "game/GameWork.h"
 
 // ---------------------------------------------------------------------------
 // Constants (resolved from binary DAT addresses via read_memory)
@@ -360,8 +361,8 @@ void ShopScreen::CreateShopList() {
         }
     }
 
-    if (game.hud) {
-        game.hud->AddControl(m_pShopList);
+    if (game_work.mHud) {
+        game_work.mHud->AddControl(m_pShopList);
     }
 }
 
@@ -444,6 +445,8 @@ void ShopScreen::ShrinkBuyButton() {
     if (!fruit) return;
     if (fruit->Sliced()) return;       // already retracting -- noop
 
+    LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ShrinkBuyButton)",
+             static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
     fruit->m_bSliced           = true;  // *(fruit+0xb4) = 1
     m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
     m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0
@@ -580,15 +583,15 @@ void ShopScreen::ClickedOnShopItem(ShopListItem* item) {
 
     if (!item->m_pItemInfo || item->m_pItemInfo->IsLocked() != 0) {
         // Binary: GameSound::SFXPlay(gameSound, "equip-locked", 1.0, 1.0)
-        if (game.pGameSound) {
-            game.pGameSound->SFXPlay("equip-locked", 1.0f, 1.0f);
+        if (game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("equip-locked", 1.0f, 1.0f);
         }
         item->m_LockFlashAlpha = 0.25f;   // 0x3e800000 in binary; offset +0x264
     } else {
         if (m_pEquipButton) {
             // Matches ShopScreen::ClickedOnShopItem @ 0x0015d4e4
-            if (game.pTutorialCtrl)
-                game.pTutorialCtrl->ButtonPressedAtPos(m_pEquipButton);
+            if (game_work.m_TutorialControl)
+                game_work.m_TutorialControl->ButtonPressedAtPos(m_pEquipButton);
         }
     }
 }
@@ -616,8 +619,8 @@ void ShopScreen::QuitShopCallback() {
     ShrinkBuyButton();
 
     // Binary: GameSound::SFXPlay(gameSound, "menu-bomb", 1.0, 1.0)
-    if (game.pGameSound) {
-        game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
 
     // Set state to transition-out (state 2)
@@ -634,8 +637,8 @@ void ShopScreen::QuitShopCallback() {
     }
 
     // Binary: TutorialControl::ResetTutePos(tute, 0) — null MenuButton* hides arrow
-    if (game.pTutorialCtrl) {
-        game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    if (game_work.m_TutorialControl) {
+        game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
     }
 }
 
@@ -652,9 +655,9 @@ void ShopScreen::QuitShopCallback() {
 //     ItemManager::SetEquippedItem; play equip SFX
 // ---------------------------------------------------------------------------
 void ShopScreen::EquipCallback() {
-    printf("[Shop] EquipCallback fired: m_bShrinking=%d m_pEquipButton=%p m_pSelectedItem=%p info=%p\n",
-           (int)m_bShrinking, (void*)m_pEquipButton, (void*)m_pSelectedItem,
-           m_pSelectedItem ? (void*)m_pSelectedItem->m_pItemInfo : nullptr);
+    LOG_DEBUG("Shop", "EquipCallback fired: m_bShrinking=%d m_pEquipButton=%p m_pSelectedItem=%p info=%p",
+              (int)m_bShrinking, (void*)m_pEquipButton, (void*)m_pSelectedItem,
+              m_pSelectedItem ? (void*)m_pSelectedItem->m_pItemInfo : nullptr);
     if (!m_pEquipButton) return;
 
     // Binary: if (g_bShopButtonShrinking != 0): programmatic path
@@ -692,13 +695,13 @@ void ShopScreen::EquipCallback() {
     if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
         ItemInfo* info = m_pSelectedItem->m_pItemInfo;
         ItemManager* im = ItemManager::GetInstance();
-        printf("[Shop] EquipCallback user-path: type=%d name='%s' im=%p\n",
-               (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
+        LOG_DEBUG("Shop", "EquipCallback user-path: type=%d name='%s' im=%p",
+                  (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
         if (im) {
             im->SetEquippedItem((int)info->m_Type, info);
-            printf("[Shop] EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)\n",
-                   (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
-                   im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
+            LOG_DEBUG("Shop", "EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)",
+                      (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
+                      im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
 
             // Binary @ 0x0015d630 EquipCallback does NOT touch m_DescText.
             // The "currently equipped" visual is the m_SelectedAlpha highlight
@@ -716,16 +719,16 @@ void ShopScreen::EquipCallback() {
             // / segfault) would lose the equip. Force-save here so the
             // equip persists immediately.
             im->SaveItemInfo();
-            printf("[Shop] EquipCallback SaveItemInfo done\n");
+            LOG_DEBUG("Shop", "EquipCallback SaveItemInfo done");
         }
         // Binary: SFX depends on item type:
         //   type == 0 (blade):      SFXPlay("equip-new-sword")
         //   type == 1 (background): SFXPlay("equip-new-wallpaper")
-        if (game.pGameSound) {
+        if (game_work.mGameSound) {
             const char* sfxName = (info->m_Type == ITEM_TYPE_BLADE)
                                   ? "equip-new-sword"
                                   : "equip-new-wallpaper";
-            game.pGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
+            game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
         }
     }
 }
@@ -795,11 +798,11 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->m_bEnabled = 1;
                 // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
                 m_pBuyButton->m_bRespondsToBackKey = 1;
-                if (game.hud) game.hud->AddControl(m_pBuyButton, false);
+                if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
                 // Binary (0x0015e3e2..0x0015e3f0): register DeletedMenuItem as m_RemoveCallback
                 m_pBuyButton->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
-                if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pBuyButton);
+                if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBuyButton);
                 // Binary: m_TargetSize *= 0.825; fruit piece scale *= 0.825
                 m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
                 if (m_pBuyButton->m_pFruitPiece) {
@@ -850,8 +853,8 @@ void ShopScreen::Update(float dt) {
                         bool locked   = m_pSelectedItem->m_pItemInfo->IsLocked() != 0;
                         if (equipped || locked) {
                             // Binary: TutorialControl::ResetTutePos(tute, null) — hide arrow
-                            if (game.pTutorialCtrl)
-                                game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+                            if (game_work.m_TutorialControl)
+                                game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
                         }
                     }
                 }
@@ -884,12 +887,12 @@ void ShopScreen::Update(float dt) {
                             m_pEquipButton->m_bEnabled = 0;
                             // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
                             SetSelected(m_pSelectedItem);
-                            if (game.hud) game.hud->AddControl(m_pEquipButton, false);
+                            if (game_work.mHud) game_work.mHud->AddControl(m_pEquipButton, false);
                             // Binary (0x0015e60e): register DeletedMenuItem as m_RemoveCallback
                             m_pEquipButton->m_RemoveCallback =
                                 Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
-                            if (game.pTutorialCtrl)
-                                game.pTutorialCtrl->ResetTutePos(m_pEquipButton);
+                            if (game_work.m_TutorialControl)
+                                game_work.m_TutorialControl->ResetTutePos(m_pEquipButton);
                             // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
                             m_bShrinking = false;
                             // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
@@ -946,8 +949,8 @@ void ShopScreen::Update(float dt) {
             //         => mainScreen->m_State = STATE_SLIDE_IN (8)
             // DAT_0015e924 = 0x7990 (GOT offset to the GameTask/game pointer),
             // +0x160 = mainScreen ptr in Game, +0x10c = m_State in MainScreen.
-            if (game.mainScreen) {
-                game.mainScreen->SetState(STATE_SLIDE_IN);
+            if (game_work.mMainScreen) {
+                game_work.mMainScreen->SetState(STATE_SLIDE_IN);
             }
         }
         break;
@@ -971,8 +974,8 @@ void ShopScreen::Update(float dt) {
                 float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
                 piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
                 // Binary: TutorialControl::ResetTutePos(tute, 0)
-                if (game.pTutorialCtrl)
-                    game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+                if (game_work.m_TutorialControl)
+                    game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
                 m_pBuyButton = nullptr;
             }
             break;
@@ -999,7 +1002,7 @@ void ShopScreen::Update(float dt) {
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, Vec3(0.0f, 0.0f, 0.0f), nullptr);
             m_pBuyButton->m_bEnabled = 1;
-            if (game.hud) game.hud->AddControl(m_pBuyButton, false);
+            if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
             // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =
                 Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
@@ -1030,8 +1033,8 @@ void ShopScreen::Update(float dt) {
             float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
             piece->vel = Vec3(r1 + FLING_VEL_BASE, -r2, 0.0f);
             // Binary: TutorialControl::ResetTutePos(tute, 0)
-            if (game.pTutorialCtrl)
-                game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+            if (game_work.m_TutorialControl)
+                game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
             m_pBuyButton = nullptr;
         }
 
@@ -1266,8 +1269,8 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             mm.UploadModelViewOnly();
 
             // --- Compute dial_alpha ---
-            // dt = game.dt  (Game+0x38, DAT_0015e1f0=0x7990 GOT offset to Game*)
-            const float dt = game.dt;
+            // dt = game_work.dt  (Game+0x38, DAT_0015e1f0=0x7990 GOT offset to Game*)
+            const float dt = game_work.dt;
 
             bool is_locked = false;
             if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
@@ -1402,10 +1405,10 @@ void ShopScreen::ConfirmCallback() {
         if (type >= 0 && type < 4) m_pSlotItems[type] = sel;
     }
     m_State = 5;
-    if (game.pTutorialCtrl) {
+    if (game_work.m_TutorialControl) {
         float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
         float ry = -((float)(rand() % 500) / 100.0f);
-        game.pTutorialCtrl->ResetTutePos(Vec3(rx, ry, 0.0f));
+        game_work.m_TutorialControl->ResetTutePos(Vec3(rx, ry, 0.0f));
     }
 }
 
@@ -1413,9 +1416,9 @@ void ShopScreen::ConfirmCallback() {
 // transition to state 6. Same tutorial-ninja reposition as Confirm.
 void ShopScreen::CancelCallback() {
     m_State = 6;
-    if (game.pTutorialCtrl) {
+    if (game_work.m_TutorialControl) {
         float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;
         float ry = -((float)(rand() % 500) / 100.0f);
-        game.pTutorialCtrl->ResetTutePos(Vec3(rx, ry, 0.0f));
+        game_work.m_TutorialControl->ResetTutePos(Vec3(rx, ry, 0.0f));
     }
 }

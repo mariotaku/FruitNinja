@@ -6,6 +6,7 @@
 //
 
 #include "SlashEntity.h"
+#include "debug/Logger.h"
 #include "ActorManager.h"
 #include "Entity.h"
 #include "hud/HUDControl.h"
@@ -23,9 +24,109 @@
 #include "collision/ColSphere.h"
 #include "util/StringHash.h"
 #include "Game.h"
+#include "game/GameMode.h"
+#include "game/WaveManager.h"
+#include "game/GameTaskState.h"
+#include "game/GameOver.h"
+#include "game/BonusManager.h"
+#include "game/AchievementManager.h"
+#include "game/FruitSaveData.h"
+#include "engine/network/NetworkManager.h"
+#include "Fruit.h"
 #include <cstring>
 #include <cmath>
 #include <cstdio>
+#include "game/GameWork.h"
+#include "Coin.h"
+
+// ASM-verified: 2026-05-20 binary @ 0x00110cb0 CheckCombo (re-analyst)
+// Returns signed-char combo quality score (-1, 0x00..0x18) sign-extended to int.
+// Score table:
+//   0x18: 2 unique types in strict ABAB... (any length)
+//   0x14: 2 unique types, count==5, scratch[0]/[1].type == 2 (pomegranate)
+//   0x15: 3 unique types, count==5, scratch[0]/[1].type == 2 (binary quirk
+//         omits slot[2] -- preserved verbatim)
+//   0x17/0x16: any slot has count 4/3 (only when uniq>1)
+//   0x04: all unique, count >= 5
+//   Rare single-fruit table: 14 named fruit -> 0x06..0x12 (uniq==1 path)
+//   Fallback: {-1,-1,-1,0,1,2,3} for count<7 else 5
+static int CheckCombo(int* fruitTypes, int count, int* outDominantType) {
+    struct Slot { int type; int n; };
+    static const struct RareEntry { const char* name; signed char score; } rareTable[16] = {
+        {"apple",        0x06}, {"apple_red",   0x06},
+        {"orange",       0x07}, {"pineapple",   0x08},
+        {"watermelon",   0x09}, {"kiwi",        0x0A},
+        {"mango",        0x0B}, {"strawberry",  0x0C},
+        {"pear",         0x0D}, {"banana",      0x0E},
+        {"lime",         0x0F}, {"lemon",       0x10},
+        {"coconut",      0x11}, {"passionfruit",0x12},
+        {NULL,           0x00}, {NULL,          0x00},
+    };
+    static int  rareTypes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    static bool rareInit = false;
+    if (!rareInit) {
+        for (int i = 0; i < 14; ++i)
+            rareTypes[i] = Fruit::FruitType(rareTable[i].name, false);
+        rareInit = true;
+    }
+
+    Slot scratch[11];
+    int  uniq = 0, maxCount = 0, dom = 0;
+    bool alternating = true;
+
+    for (int i = 0; i < count; ++i) {
+        int t = fruitTypes[i];
+        bool found = false;
+        for (int j = 0; j < uniq; ++j) {
+            if (scratch[j].type == t) {
+                found = true;
+                if (++scratch[j].n > maxCount) { maxCount = scratch[j].n; dom = t; }
+                if (j != uniq - 1) alternating = false;
+            }
+        }
+        if (!found) {
+            scratch[uniq].type = t; scratch[uniq].n = 1; ++uniq;
+            if (maxCount == 0) { dom = t; maxCount = 1; }
+        }
+    }
+    if (outDominantType) *outDominantType = dom;
+
+    signed char r = -1;
+    if (uniq == 1) {
+        for (int k = 0; k < 16; ++k)
+            if (fruitTypes[0] == rareTypes[k]) return (signed char)rareTable[k].score;
+    } else if (uniq == 2) {
+        if (alternating) {
+            bool ok = true;
+            for (int i = 0; i < count; ++i) {
+                int expect = (i & 1) ? scratch[1].type : scratch[0].type;
+                if (fruitTypes[i] != expect) { ok = false; break; }
+            }
+            if (ok) return 0x18;
+        }
+        if (count == 5 && (scratch[0].type == 2 || scratch[1].type == 2)) return 0x14;
+    } else if (uniq == 3 && count == 5) {
+        if (scratch[0].type == 2 || scratch[1].type == 2) return 0x15;
+        // Quirk preserved: binary only checks slots 0 and 1 -- slot 2 pomegranate is missed.
+    } else if (uniq == count && uniq > 4) {
+        return 0x04;
+    }
+
+    if (uniq > 1) {
+        for (int k = 0; k < uniq; ++k) {
+            if      (scratch[k].n == 3 && r == -1)    r = 0x16;
+            else if (scratch[k].n == 4 && r <  0x17)  r = 0x17;
+        }
+        if (r != -1) return r;
+    }
+
+    static const signed char fallback[7] = { -1, -1, -1, 0, 1, 2, 3 };
+    return ((unsigned)count < 7) ? (int)fallback[count] : 5;
+}
+
+// File-static CheckCombo cache sentinel. -1 = uncomputed for current best combo.
+// Binary @ BSS (file-scope in SlashEntity.cpp translation unit).
+static signed char s_CheckComboFlag = -1;
 
 const float SlashEntity::POINT_SPACING         = 64.0f;   // DAT_0017d5fc
 const float SlashEntity::MOVE_THRESH_ACTIVE    = 5.0f;    // sqrt(25)
@@ -156,13 +257,20 @@ SlashEntity::SlashEntity()
     , m_pCurrentTarget(nullptr)
     , m_State(0)
     , m_bHasHead(false)
+    , m_BladeVelAtSlice(0, 0, 0)
+    , m_SlicePos(0, 0, 0)
+    , m_SliceEntityType(0)
     , m_Scale(0.0f)
     , m_FingerId(0)
     , m_SwipeSoundTimer(0.0f)
     , m_RawTouchPos(0, 0, 0)
     , field_0x130(0)    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    , m_ComboTimer(0.0f)
+    , m_ComboCount(0)
+    , m_ComboEntityType(0)
     , m_SwipeEndEdge(0)
 {
+    for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
 }
 
 // Binary @ 0x17C774 — restore vtable, call Release, chain to Mortar::Entity::~Mortar::Entity.
@@ -229,8 +337,10 @@ void SlashEntity::Release() {
         m_TrailEmitter = nullptr;
     }
     m_NumPoints = 0;
-    // TODO: 0x0017C60C -- clear 1-byte input-init guard at GOT+DAT_0017c658+0x17c6e4
-    //   (likely an "input-registered" flag to prevent double-registration).
+    // Defunct: dead BSS guard at 0x0024C848 -- no-op stub; binary @ 0x0017C60C.
+    // Binary Release writes a 1-byte 0 to a static slot with no other accessors
+    // (likely a once-flag whose set/check sites were inlined out / DCE'd). Port
+    // omits the write; semantically equivalent. (re-analyst 2026-05-20)
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +391,7 @@ int SlashEntity::UpdateCollisionLine(long /*dt*/) {
 // Binary @ 0x17B398 — clears g_state.bombSkipFlag=0, sets g_state.needsDrawFlag=1.
 // DIFFERS: g_state is the binary's GameTaskState singleton; bombSkipFlag is
 // the "don't slice during bomb-explosion freeze" gate -- port already covers
-// this via game->bombHitTimer > 0 in UpdateTouchDown. needsDrawFlag is the
+// this via game_work.m_BombHitTimer > 0 in UpdateTouchDown. needsDrawFlag is the
 // SDK's render-needed-this-frame hint; SDL port redraws unconditionally so
 // it's irrelevant. Functionally equivalent no-op.
 void SlashEntity::DrawUpdate(float /*dt*/) {
@@ -340,11 +450,11 @@ void SlashEntity::PlaySwipe() {
     }
 
     Game* game = Game::GetInstance();
-    if (game && game->pGameSound) {
+    if (game && game_work.mGameSound) {
         char buf[20];
         const int idx = (rand() % 6) + 1;  // [1, 6] — matches Rand32(rng, 6) + 1
         snprintf(buf, sizeof(buf), "Sword-swipe-%d", idx);
-        game->pGameSound->SFXPlay(buf, 1.0f, 1.0f);
+        game_work.mGameSound->SFXPlay(buf, 1.0f, 1.0f);
     }
 
     m_SwipeSoundTimer = 6.0f;
@@ -550,9 +660,6 @@ void SlashEntity::RebuildGeometry() {
     // Derive m_BaseColour from m_Scale. Binary:
     //   if (m_Scale > 0) lerp white -> m_HighlightColour by (1-m_Scale)
     //   else             m_BaseColour = m_HighlightColour
-    // m_Scale defaults to 0 (not yet lifecycle-managed), so always use
-    // m_HighlightColour directly, which IS the correct fully-saturated disco
-    // visual when m_Scale == 0.
     if (m_Scale > 0.0f) {
         const float blend = 1.0f - m_Scale;  // 0 = full white, 1 = full highlight
         m_BaseColour.r = (uint8_t)(255.0f + (float)((int)m_HighlightColour.r - 255) * blend);
@@ -734,7 +841,7 @@ void SlashEntity::Update(float dt) {
     // The matching gate in UpdateTouchDown above prevents new points from
     // being added during the freeze, so `m_NumPoints < 4` short-circuits
     // naturally -- the same mechanism the binary uses post-unpause.
-    const bool bombHitActive = game && game->bombHitTimer > 0.0f;
+    const bool bombHitActive = game && game_work.m_BombHitTimer > 0.0f;
 
     // Binary @ 0x17D664: also gates on `(s_ModPowerMask & 0x40)` -- bit
     // 0x40 set by ScrollingMenu::Update on touch-acquire (@ 0x0015b7cc)
@@ -760,7 +867,7 @@ void SlashEntity::Update(float dt) {
     // Port-side defense (NOT in binary): also short-circuit our own
     // collision loop on pausedFlag. Redundant if ActorManager::Update
     // is properly gated above; kept as belt-and-braces.
-    const bool gamePaused = game && game->pausedFlag;
+    const bool gamePaused = game && game_work.m_Paused;
 
     // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
     // frame; PlaySwipe resets to 6.0f).
@@ -768,6 +875,11 @@ void SlashEntity::Update(float dt) {
         m_SwipeSoundTimer -= 1.0f;
         if (m_SwipeSoundTimer < 0.0f) m_SwipeSoundTimer = 0.0f;
     }
+
+    // m_Scale decay — binary @ 0x17D664. Set to 1.0 on critical hit (see
+    // CollisionResponse loop below); decays at -2*dt/frame until clamped at 0.
+    m_Scale -= 2.0f * dt;
+    if (m_Scale < 0.0f) m_Scale = 0.0f;
 
     bool slicedThisFrame = false;
     if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive
@@ -789,8 +901,25 @@ void SlashEntity::Update(float dt) {
                     if (CollideWithSphere(*cs, bladeVel)) {
                         // Binary @ 0x0017d664: vtable[9](victim, slashEntity, 0, 0, &bladeVel).
                         // Port: SlashEntity does not inherit Mortar::Entity, pass nullptr for hitter.
-                        // Fruit/Bomb CollisionResponse only reads bladeVelocity; hitter unused.
+                        // Binary passes this (slashEntity) as hitter; Fruit::CollisionResponse
+                        // sets hitter->m_Scale = 1.0 on critical hit via the hitter pointer.
+                        // Port replicates by reading m_bCriticalEligible after the call.
+                        LOG_INFO("SLASH", "hit fruit %p at (%.1f,%.1f) trail_n=%d",
+                                    static_cast<void*>(e), cs->center.x, cs->center.y, m_NumPoints);
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
+                        // Binary @ 0x0017d664 write-group: snapshot slice state
+                        // immediately after CollisionResponse returns.
+                        m_BladeVelAtSlice = bladeVel;
+                        m_SlicePos        = e->pos;
+                        if (t == 0) {
+                            Fruit* fruit = static_cast<Fruit*>(e);
+                            m_SliceEntityType = (int)fruit->m_FruitType;
+                            if (fruit->m_bCriticalEligible) {
+                                m_Scale = 1.0f;
+                            }
+                        } else {
+                            m_SliceEntityType = (int)e->entityType;
+                        }
                         slicedThisFrame = true;
                     }
                 }
@@ -806,14 +935,95 @@ void SlashEntity::Update(float dt) {
         PlaySwipe();
     }
 
-    // TODO: BonusManager::AddCombo(comboLen) hook (binary @ 0x0017de40).
-    // The Arcade-mode combo bonus AddToCurrentScore for blitz combos lives in
-    // WaveManager::BlitzBonus (coordination-locked; see WaveManager.cpp).
-    // Once WaveManager lock is lifted, wire:
-    //   if (game && game->gameMode == 2) {
-    //       BonusManager::GetInstance()->AddCombo(g_ComboCount);
-    //   }
-    // after each successful fruit slice (g_ComboCount >= 3 threshold).
+    // Per-swipe combo resolution — binary SlashEntity::Update @ 0x0017dde6..0x0017dfd0.
+    // Rising-edge trigger: fires once when m_ComboTimer crosses kComboWindow.
+    // ASM-verified: 2026-05-18 binary @ 0x0017dde6..0x0017dfd0 (re-analyst)
+    // DAT_0017e004 = 0.1f, verified 2026-05-20.
+    static const float kComboWindow = 0.1f;
+    if (m_ComboTimer < kComboWindow) {
+        m_ComboTimer += dt;
+        if (m_ComboTimer >= kComboWindow) {
+            // Rising edge: combo window just closed — resolve combo.
+            if (m_ComboCount > 1 && m_ComboSliceArr[0] >= 0) {
+                // (a) Score-threshold refund: bulk-decrement critical credit by combo size.
+                // SHARED with Fruit::EligibleForCritical -- both decrement game_work.m_ScoreThreshold.
+                // ASM-verified: 2026-05-20 binary @ 0x0017dde6 (asm-inspector)
+                {
+                    int t = game_work.m_ScoreThreshold - m_ComboCount;
+                    if (t < 2) t = 2;
+                    game_work.m_ScoreThreshold = t;
+                }
+
+                // (b) Combo body: only if count >= 3 AND m_ComboSliceArr[1] >= 0 (binary field_0x158).
+                if (m_ComboCount > 2 && m_ComboSliceArr[1] >= 0) {
+                    if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                        WaveManager::GetInstance()->AddSpeed(
+                            (float)m_ComboCount / 3.0f, 0);
+                        FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, true);
+                        BonusManager::GetInstance()->AddCombo(m_ComboCount);
+                    } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboEntityType != 2) {
+                        FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, false);
+                    }
+                    // Per-mode stat: "combo_<modename>"
+                    if (game && game_work.m_SaveData) {
+                        char buf[32];
+                        snprintf(buf, sizeof(buf), "combo_%s", Mortar::GetModeName(game_work.gameMode));
+                        game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
+                    }
+                    // (c) Combo coin spawn — binary @ 0x0017df88.
+                    {
+                        int bonusCoins = 0;
+                        for (int i = 0; i < m_ComboCount; ++i) {
+                            const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboSliceArr[i]);
+                            if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCount; break; }
+                        }
+                        Vec3 coinPos = m_SlicePos;
+                        // if (m_pMissControl) coinPos = m_pMissControl->pos;
+                        // (commented-in pending field_0x130 type cleanup)
+                        Mortar::Delegate1<void, Coin*> onArrived =
+                            Coin::DefaultArrivedDelegate();
+                        Coin::MakeCoins(bonusCoins, 1,
+                                        Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
+                                        coinPos, nullptr, nullptr,
+                                        onArrived, true);
+                    }
+                    // (d) Achievement unlock
+                    AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCount, m_ComboSliceArr);
+                    // (e) Best-combo save + CheckCombo cache — binary @ 0x0017e418.
+                    {
+                        FruitSaveData* sd = game_work.m_SaveData;
+                        int len = m_ComboCount;
+                        if (sd && len > sd->m_BestComboLength) {
+                            for (int i = 0; i < 11; ++i) sd->m_BestComboFruits[i] = m_ComboSliceArr[i];
+                            sd->m_BestComboLength = len;
+                            s_CheckComboFlag = (signed char)CheckCombo(m_ComboSliceArr, len, nullptr);
+                        } else if (sd && len == sd->m_BestComboLength) {
+                            if (s_CheckComboFlag == -1)
+                                s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, len, nullptr);
+                            int newScore = (signed char)CheckCombo(m_ComboSliceArr, m_ComboCount, nullptr);
+                            if (s_CheckComboFlag < newScore) {
+                                for (int i = 0; i < 11; ++i) sd->m_BestComboFruits[i] = m_ComboSliceArr[i];
+                                sd->m_BestComboLength = m_ComboCount;
+                                // Binary fidelity: s_CheckComboFlag is NOT re-primed here.
+                            }
+                        }
+                    }
+                    // Online MP PointsPacket Send — Defunct: online-services stub per policy
+                }
+            }
+            // (f) State reset (unconditional in this arm)
+            m_ComboCount = 0;
+            m_ComboEntityType = 0;
+            field_0x130 = 0;
+            for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
+        }
+    } else {
+        // Already past window: clear partial state.
+        m_ComboCount = 0;
+        m_ComboEntityType = 0;
+        field_0x130 = 0;
+        for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
+    }
 
     RebuildGeometry();
 }
@@ -1018,19 +1228,14 @@ void SlashEntity::ResetModScales() {
 // g_ColourType == 2. We skip that until the highlight system lands —
 // currently visible only for type-2 mods which aren't shipped.
 void SlashEntity::ColoursChanged() {
-    // DIFFERS: port-side plug for the m_Scale-lifecycle gap (binary @ 0x0017C41C
-    // does NOT reset m_HighlightColour or m_BaseColour here -- per asm-inspector
-    // 2026-05-10). The binary only refreshes m_HighlightColour for PER_SWIPE
-    // (g_ColourType == 2) via UpdateModColour(&m_HighlightColour, 1.0f) inside
-    // the m_bDirty branch; PER_SLASH continuously refreshes via PreUpdate, and
-    // NONE leaves the field untouched because the binary's RebuildGeometry only
-    // writes m_HighlightColour when g_ColourType != 0. With m_Scale lifecycle
-    // ported (1.0 in critical, -2*dt decay), the binary's m_Scale > 0 path
-    // would lerp white -> stale m_HighlightColour, hiding the leak. Port has
-    // m_Scale stuck at 0 so the m_Scale==0 else-branch in RebuildGeometry
-    // copies stale bytes straight to the vertex stamp -- visible as disco
-    // tint persisting through a NONE-blade swap. Snap m_HighlightColour /
-    // m_BaseColour to g_Palette[0] until m_Scale lifecycle lands.
+    // DIFFERS: binary @ 0x0017C41C does NOT snap m_HighlightColour here
+    // (per asm-inspector 2026-05-10). The binary refreshes m_HighlightColour
+    // only via PreUpdate (PER_SLASH) or the m_bDirty UpdateModColour branch
+    // (PER_SWIPE/g_ColourType==2); NONE leaves it untouched. Port snaps to
+    // g_Palette[0] here because the PER_SLASH/PER_SWIPE refresh paths are not
+    // yet ported, so stale bytes would persist through a blade-type swap.
+    // TODO: remove this snap once PreUpdate colour refresh (binary @ 0x17C3C4)
+    //   and the m_bDirty UpdateModColour branch are ported.
     if (g_ColourCount > 0) {
         m_HighlightColour = g_Palette[0];
     } else {
@@ -1115,7 +1320,12 @@ void SlashEntity::DrawSlice() {
         m_SwipeEndEdge = (prev << 1) & 0x02;
         if (prev != 0 && m_SwipeEndEdge == 0) {
             if (g_ScaleFlag1) CreateGhost();
-            // TODO: 0x0017E424 -- contact-burst emitter spawn at this->pos
+            if (g_ContactHash != 0) {
+                PSPParticleEmitter* eBurst =
+                    PSPParticleManager::GetInstance().AddEmitter(
+                        g_ContactHash, nullptr, /*persistent=*/false);
+                if (eBurst) eBurst->m_Pos = pos;
+            }
         }
     }
 
@@ -1175,9 +1385,9 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     m_BaseColour      = white;
 
     // 6. Combo / ghost-ring init.
-    *(float*)((char*)this + 0x124) = 0.1f;   // per-swipe accumulator (DAT_0017c764)
-    *(int*)  ((char*)this + 0x128) = 0;
-    *(int*)  ((char*)this + 0x12c) = 0;
+    m_ComboTimer      = 0.1f;   // per-swipe accumulator (DAT_0017c764)
+    m_ComboCount      = 0;
+    m_ComboEntityType = 0;
     // m_GhostDir at +0x118 (Vec3): zero
     *(float*)((char*)this + 0x118) = 0.0f;
     *(float*)((char*)this + 0x11c) = 0.0f;
@@ -1200,19 +1410,19 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
         *(float*)((char*)this + 0xc8 + i * 12 + 8 ) = 0.0f;
     }
 
-    // 8. 11-entry int32 combo-slice array at +0x154, all set to -1.
+    // 8. 11-entry int32 combo-slice array, all set to -1.
     for (int i = 0; i < 11; ++i) {
-        *(int32_t*)((char*)this + 0x154 + i * 4) = -1;
+        m_ComboSliceArr[i] = -1;
     }
 
     // 9. Swipe-SFX cooldown timer (binary m_SwipeSoundTimer at +0xc4).
     m_SwipeSoundTimer = 0.0f;
 
-    // 10. Extra combo fields.
+    // 10. Extra combo fields (binary +0x14c, +0x150 within combo-slice array range).
     *(int*)((char*)this + 0x150) = -1;  // m_ExtraFieldB
     *(int*)((char*)this + 0x14c) = -1;  // m_ExtraFieldA
-    *(int*)((char*)this + 0x12c) = 0;
-    *(int*)((char*)this + 0x128) = 0;
+    m_ComboEntityType = 0;
+    m_ComboCount      = 0;
 
     // 11. Initial post-init swipe SFX cooldown at +0x148 = 6.0f.
     *(float*)((char*)this + 0x148) = 6.0f;
@@ -1285,7 +1495,7 @@ void SlashEntity::SetModColours(
 // the palette via UpdateModColour. Then call UpdateTouchDown to ingest the
 // initial touch position. Returns true (event consumed).
 bool SlashEntity::TouchDown(InputEvent* event) {
-    if (m_State == 0) {
+    if (m_SwipeEndEdge == 0 && m_State == 0) {
         Reset();
         if (g_ColourType == 2) {
             UpdateModColour(&m_HighlightColour, 1.0f);
@@ -1301,7 +1511,7 @@ bool SlashEntity::TouchDown(InputEvent* event) {
 // event->x, so just copy. Port stores into m_RawTouchPos (no Entity::pos).
 bool SlashEntity::TouchMoveX(InputEvent* event) {
     Game* g = Game::GetInstance();
-    if (g && g->bombHitTimer > 0.0f) return false;
+    if (g && game_work.m_BombHitTimer > 0.0f) return false;
     m_RawTouchPos.x = event->x;
     return true;
 }
@@ -1312,7 +1522,7 @@ bool SlashEntity::TouchMoveX(InputEvent* event) {
 // produces Y-up centred, so no sign flip here.
 bool SlashEntity::TouchMoveY(InputEvent* event) {
     Game* g = Game::GetInstance();
-    if (g && g->bombHitTimer > 0.0f) return false;
+    if (g && game_work.m_BombHitTimer > 0.0f) return false;
     m_RawTouchPos.y = event->y;
     return true;
 }
@@ -1334,7 +1544,7 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
     // Update naturally short-circuits. Binary-faithful pause-time slice
     // suppression -- no port-specific pausedFlag gate needed.
     Game* g = Game::GetInstance();
-    if (g && g->bombHitTimer > 0.0f) return;
+    if (g && game_work.m_BombHitTimer > 0.0f) return;
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
 }
 

@@ -22,11 +22,12 @@
 #include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"
+#include "debug/Logger.h"
 #include <cstdlib>
-#include <cstdio>
 #include <cmath>
 #include <cstring>
 #include <string>
+#include "game/GameWork.h"
 
 // Analysed: 2026-04-29T00:00
 
@@ -290,9 +291,10 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
 // installs the hit callback, and overwrites rotation fields so menu bombs
 // spin slowly (one axis moving, one locked) rather than with the random
 // 1..7 velocities from Bomb::Init.
-void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* /*button*/) {
-    m_bMenuBombHit = 1;
-    m_HitCallback  = cb;
+void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* button) {
+    m_bMenuBombHit   = 1;
+    m_HitCallback    = cb;
+    m_pOwnerButton   = button;
     m_RotY    = 0x2d;   // DAT_0017121c: 45 deg initial Y angle
     m_RotVelX = 2;      // slow spin on X
     m_RotX    = 0;
@@ -344,7 +346,7 @@ void Bomb::Update(float /*dt*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    const float gameDt  = game->dt;
+    const float gameDt  = game_work.dt;
     const float scaledDt = gameDt * m_SpeedMult;
     const float dtNorm   = (DT_NORMALIZE > 0.0f) ? scaledDt / DT_NORMALIZE : 1.0f;
 
@@ -355,7 +357,7 @@ void Bomb::Update(float /*dt*/) {
             // is transitioning out (levelTransitionFlag!=0), force this bomb off-screen
             // so it expires on the OOB check below. Binary resets countdown
             // to 0 (DAT_00172f28) and pos.y to -320 (DAT_00172cb0).
-            if (game->bombHitTimer > 0.0f || game->levelTransitionFlag != 0) {
+            if (game_work.m_BombHitTimer > 0.0f || game_work.m_LevelTransitionFlag != 0) {
                 m_Countdown = 0.0f;
                 pos.y = OFFSCREEN_Y;
                 vel = Vec3(HIT_COL_POS, -1.0f, HIT_COL_POS);
@@ -364,7 +366,7 @@ void Bomb::Update(float /*dt*/) {
             const float prevCountdown = m_Countdown;
             // Tick countdown using GAME dt (not entity scaledDt) — but only
             // when game is active (!pausedFlag).
-            if (!game->pausedFlag) {
+            if (!game_work.m_Paused) {
                 m_Countdown -= gameDt;
             }
 
@@ -438,15 +440,14 @@ void Bomb::Update(float /*dt*/) {
         // trace lights up.
         if (vel.x != 0.0f || vel.y != 0.0f) {
             unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
-            printf("[BOMB %03x] pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f) "
+            LOG_VERBOSE("BOMB", "%03x pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f) "
                    "accel=(%5.2f,%6.2f) scl.y=%.3f bMv=%d bHit=%d "
-                   "cd=%.3f dt=%.4f\n",
+                   "cd=%.3f dt=%.4f",
                    id, pos.x, pos.y, vel.x, vel.y,
                    m_AccelForce.x, m_AccelForce.y,
                    scale.y,
                    (int)m_bMovement, (int)m_bHit,
                    m_Countdown, gameDt);
-            fflush(stdout);
         }
 #endif
 
@@ -503,9 +504,8 @@ void Bomb::Update(float /*dt*/) {
 #if MORTAR_BOMB_TRACE
         {
             unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
-            printf("[BOMB %03x] OOB KILL pos=(%.1f,%.1f) vel=(%.2f,%.2f)\n",
+            LOG_VERBOSE("BOMB", "%03x OOB KILL pos=(%.1f,%.1f) vel=(%.2f,%.2f)",
                    id, pos.x, pos.y, vel.x, vel.y);
-            fflush(stdout);
         }
 #endif
         KillBomb();
@@ -734,23 +734,23 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
         // Verify whether the surrounding logic is intended for Arcade or Zen and
         // rename accordingly.
-        const bool isZen = (game->gameMode == Mortar::GAME_MODE_ARCADE);
+        const bool isZen = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
 
         // Camera shake — FruitCamera::CreateCameraShake at 0x180d10.
         // Binary intensities: Classic/Arcade = 1.6/2.0, Zen = 2.0/3.0.
-        if (game->pCamera) {
+        if (game_work.m_FruitCamera) {
             if (isZen)
-                game->pCamera->CreateCameraShake(pos, 2.0f, 3.0f);
+                game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
             else
-                game->pCamera->CreateCameraShake(pos, 1.6f, 2.0f);
+                game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
         }
 
         if (isZen) {
             // Zen penalty path. Binary HitMenuBomb (0x16b234) — plays
             // "menu-bomb" SFX (string at 0x001B96C9), bombHitTimer = 2.0,
             // sets g_bombHitData->m_bMenuBombHit_flag = 1. No camera shake.
-            game->bombHitTimer = 2.0f;
-            if (game->pGameSound) game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+            game_work.m_BombHitTimer = 2.0f;
+            if (game_work.mGameSound) game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
             FN::AddToCurrentScore(-10, 0, false, false);
             PowerUpManager::GetInstance()->ClearTimedPowers();
             WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
@@ -773,31 +773,22 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             // stat for hash "bomb" (0x001B96CE), sets bombHitTimer = 3.2,
             // camera shake already fired above.
             // GameOver is triggered by GameUpdate when bombHitTimer crosses 1.5 downward.
-            game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
-            if (game->pGameSound) game->pGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
-            if (game->pSaveData) game->pSaveData->AddToTotal("bomb", 1);
+            game_work.m_BombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
+            if (game_work.mGameSound) game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
+            if (game_work.m_SaveData) game_work.m_SaveData->AddToTotal("bomb", 1);
         }
     } else if (m_bMenuBombHit != 0) {
-        // Menu-bomb re-hit branch. Binary code:
-        //   if (field_0x84 == 0 || *(field_0x84 + 0x123) != 0)
-        //       ClearMenuItems();
-        //   Mortar::Delegate0<void>::operator()(&field_0x40);   // hit callback
-        //
-        // The ClearMenuItems call is critical: without it, a diagonal
-        // slash that clips both the Quit bomb and the Dojo / Play fruit
-        // in the same frame lets MenuButton::Update fire BOTH callbacks,
-        // and whichever state write lands last wins the race -- user-
-        // visible symptom: slicing the Quit bomb lands on the Dojo
-        // screen. Clearing the sibling menu items flags their fruits
-        // with m_bDrawWhole=1, which makes MenuButton::Update see them
-        // as "ClearMenuItems-released" (not user-sliced) and skip their
-        // click callbacks.
-        //
-        // field_0x84 is the binary's backref to the owning state
-        // struct; the +0x123 gate isn't modelled in the port, so we
-        // always call the clear.
-        FN::ClearMenuItems();
+        // ASM-verified: 2026-05-20T00:00Z binary @ 0x00172826..0x0017283c (asm-inspector)
+        // Binary: gate at +0x123 (MenuButton::m_bEnabled) only guards ClearMenuItems.
+        // Callback is always unconditional.
+        if (m_pOwnerButton == nullptr || m_pOwnerButton->m_bEnabled != 0) {
+            FN::ClearMenuItems();
+        }
         if (m_HitCallback) {
+            LOG_INFO("BUTTON", "Bomb::CollisionResponse fires m_HitCallback re-hit (owner=%p enabled=%d pos=(%.1f,%.1f))",
+                     static_cast<void*>(m_pOwnerButton),
+                     m_pOwnerButton ? (int)m_pOwnerButton->m_bEnabled : -1,
+                     pos.x, pos.y);
             m_HitCallback();
         }
     }
@@ -901,7 +892,6 @@ void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
 // Trigger condition in WaveManager::SpawnBomb post-spawn branch:
 //   if (type == 0 && pBomb != nullptr && playerIdx > 0)
 //       Bomb::MakeFat(pBomb, false);
-// TODO: call Bomb::MakeFat(b, false) when type==0 && powerupBombMult>0 (binary @ 0x00121fa8 tail)
 void Bomb::MakeFat(bool skipSpawnFx) {
     m_SpeedMult = 0.66597f;                    // DAT_00171eec
     scale      *= 1.33002f;                    // DAT_00171ef0

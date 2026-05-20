@@ -12,13 +12,14 @@
 
 #include "GameTaskState.h"
 #include "Game.h"
-#include <cstdio>
+#include "debug/Logger.h"
+#include "game/GameWork.h"
 
 void SplashInit(unsigned long) {
-    printf("SplashInit: transitioning to State 2 (Game)\n");
+    LOG_INFO("SPLASH", "SplashInit: transitioning to State 2 (Game)");
     Game* game = Game::GetInstance();
     if (game) {
-        game->taskStateIndex = 2;  // auto-transition to Game state
+        game_work.taskStateIndex = 2;  // auto-transition to Game state
     }
 }
 
@@ -34,6 +35,6 @@ void SplashDraw(float dt, bool active) {
 }
 
 void SplashExit() {
-    printf("SplashExit\n");
+    LOG_INFO("SPLASH", "SplashExit");
     // Original: InputManager::ClearActions, destroy MenuBackground
 }

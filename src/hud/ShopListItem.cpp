@@ -26,6 +26,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include "game/GameWork.h"
+#include "game/FruitSaveData.h"
+#include "game/GameMode.h"
 
 // Binary: RandFloat5_GameTask @ 0x0015c658. Returns [0, 5) using the
 // process-global GameTask::Random LCG. Port uses rand() since the
@@ -75,7 +78,7 @@ ShopListItem::~ShopListItem() {}
 //   3. if (Mortar::SmartPtr<Texture>::operator bool(this+0x274)):
 //        *(float*)(this+0x268) += DAT_0015d474(35.2f) + *(this+0x18)(m_Size.x=60.0f)
 //        => _pad2.x = pos.x + 95.2f
-//   4. Animate two alpha fields each frame using game.dt:
+//   4. Animate two alpha fields each frame using game_work.dt:
 //        - one ramps toward 1 when ScrollingMenu->field_0x3c == 0
 //          (port maps to m_LockFlashAlpha @ +0x264 -- best fit for the
 //           "ramp up while menu is active" semantic).
@@ -92,7 +95,7 @@ float    ShopListItem::s_ShimmerY    = 0.0f;
 
 void ShopListItem::Move(float x, float y, float z) {
     Game* g = Game::GetInstance();
-    const float dt = g ? g->dt : 0.0f;
+    const float dt = g ? game_work.dt : 0.0f;
 
     // (1) Sin-jitter — runs only when this item is the current selection.
     // Binary @ 0x0015d214-0x0015d278: phase += dt * 65520, output =
@@ -327,7 +330,7 @@ void ShopListItem::Draw() {
         Game* g = Game::GetInstance();
         if (!g) goto draw_part8;
 
-        Mortar::Font* font = g->pFontMain.IsValid() ? g->pFontMain.Get() : nullptr;
+        Mortar::Font* font = game_work.pFontMain.IsValid() ? game_work.pFontMain.Get() : nullptr;
         if (!font) goto draw_part8;
 
         MatrixManager& mm = MatrixManager::GetInstance();
@@ -354,7 +357,7 @@ void ShopListItem::Draw() {
 
         // HD mode: Game.field_0x03 == '\f' (0x0C).
         // Binary: if HD -> scale=20, else scale=25
-        bool isHD = (g->languageFlag == 0x0C);
+        bool isHD = (game_work.languageFlag == 0x0C);
         float titleScale = isHD ? 20.0f : 25.0f;
 
         // fVar26: title fit ratio (1.0 if no shrink), used to derive costScale.
@@ -728,21 +731,31 @@ void ShopListItem::Draw() {
                                             0xF);
                 } else {
                     // Locked + state 1 or 2: two-line red+white split.
-                    // Binary draws different strings per line; port stubs the
-                    // red line with descStr + an italic-feeling y/scale tweak
-                    // until LocalizedString IDs 187/188/194/195 are wired.
                     // Line 1: y=-20 (DAT_0015f4e6), font*0.8 (DAT_0015f528),
-                    //         colour (0xBD,0,0) -- red prompt.
+                    //         colour (0xBD,0,0) -- red prompt string.
+                    //         state 2: shown iff PlayedModeToday(GAME_MODE_ZEN)
+                    //                  -> LocalizedString IDs 187/188.
+                    //         state 1: shown iff IsDeviceUpsideDown()
+                    //                  -> LocalizedString IDs 194/195.
                     // Line 2: y=+10 (DAT_0015f57a), font * (case 1 ? 0.9 :
                     //         0.81 = 0.9*0.9 from binary @ 0x0015f460+f56c),
                     //         colour white -- m_DescText description.
-                    // TODO: 0x0015eb00 -- wire FruitSaveData::PlayedModeToday
-                    //       (state 2) / IsDeviceUpsideDown (state 1) and
-                    //       LocalizedString IDs 187/188/194/195 for the red
-                    //       line's per-state string. Currently the red line
-                    //       reuses descStr so it does not produce a literal
-                    //       duplicate visually -- skip the draw to avoid the
-                    //       same-string-twice artifact.
+                    // TODO: 0x0015eb00 -- wire LocalizedString IDs 187/188 (state 2)
+                    //       and 194/195 (state 1) for the red prompt line. The gate
+                    //       conditions (PlayedModeToday / IsDeviceUpsideDown) are
+                    //       now implemented; only the string lookup is missing.
+                    bool showRedPrompt = false;
+                    if (purchaseState == 2 && game_work.m_SaveData) {
+                        showRedPrompt = game_work.m_SaveData->PlayedModeToday(Mortar::GAME_MODE_ZEN);
+                    } else if (purchaseState == 1) {
+                        showRedPrompt = Mortar::IsDeviceUpsideDown();
+                    }
+                    if (showRedPrompt) {
+                        // Red prompt line: string from LocalizedString 187/188 or
+                        // 194/195 (not yet wired -- draw nothing until IDs land).
+                        // TODO: 0x0015eb00 -- draw red prompt at y=-20 using
+                        //       LocalizedString(187 or 194) / (188 or 195).
+                    }
                     const float scale2 = (purchaseState == 2)
                                             ? (descFontSize * 0.81f)
                                             : (descFontSize * 0.9f);
