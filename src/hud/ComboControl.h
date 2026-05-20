@@ -1,11 +1,16 @@
 #ifndef FN_HUD_COMBO_CONTROL_H
 #define FN_HUD_COMBO_CONTROL_H
 
+// Defunct: ComboControl — unused in binary; class shape and vtable preserved
+// per stub-don't-skip policy. Zero call sites in binary; combo popup is
+// rendered by MissControl (binary @ 0x0017dad8). Binary @ 0x00136cc4 ctor.
+// re-analyst confirmed 2026-05-20.
+//
 // Analysed: 2026-04-30T00:00
 //
 // ComboControl : HUDControl3d (size = 0x8C)
 // Struct size: 0x8C (super 0x7C + lifetime float + comboCount int + char[8] label + max float at +0x84).
-// Combo count pop-up (e.g. "x3"). 1-second lifetime, then self-removes via m_bPendingRemoval.
+// Combo count pop-up (e.g. "3"). 1-second lifetime, then self-removes via m_bPendingRemoval.
 // Spawned by combo logic; owned by HUD until removed (fire-and-forget).
 //
 // Binary addresses:
@@ -26,7 +31,7 @@ public:
     float m_Lifetime;
     // +0x80: combo count passed to ctor; stored for label formatting.
     int m_ComboCount;
-    // +0x84: label buffer (OS_SPrintf'd "x%d" string, 8 bytes per binary layout)
+    // +0x84: label buffer ("%i" formatted string, 8 bytes per binary layout)
     char m_Label[8];
 
     explicit ComboControl(int comboCount);
@@ -34,16 +39,15 @@ public:
 
     void Reset() override;     // 0x00136bdc — no-op in binary
     void Update(float dt) override;
-    void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
+    void Draw(const Vec3& hudScale, int layerMask) override;
 
-    int GetType() override { return 1; }
+    // ASM-verified: 2026-05-20 binary @ 0x00137124 (re-analyst) -- returns 6
+    int GetType() override { return 6; }
 
-    // ---- STUBS (binary) ----
     void Init();
     void PreDraw();
     void Release();
     void Skip();
-    // ---- end STUBS ----
 };
 
 #endif // FN_HUD_COMBO_CONTROL_H

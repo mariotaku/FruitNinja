@@ -1,15 +1,21 @@
+// Defunct: ComboControl — unused in binary; class shape and vtable preserved
+// per stub-don't-skip policy. Zero call sites in binary; combo popup is
+// rendered by MissControl (binary @ 0x0017dad8). Binary @ 0x00136cc4 ctor.
+// re-analyst confirmed 2026-05-20.
+//
 // Analysed: 2026-04-30T00:00
 
 #include "ComboControl.h"
+#include "../game/GameWork.h"
+#include "../engine/render/Font.h"
 #include <cstdio>
 #include <cstring>
 
-// ctor @ 0x00136cc4
-// Sets vtable, formats label via OS_SPrintf(buf, 8, fmt, comboCount), lifetime=1.0f.
+// ASM-verified: 2026-05-20 binary @ 0x00136cc4 (re-analyst) -- format is "%i", not "x%d"
 ComboControl::ComboControl(int comboCount)
     : m_Lifetime(1.0f), m_ComboCount(comboCount) {
     std::memset(m_Label, 0, sizeof(m_Label));
-    std::snprintf(m_Label, sizeof(m_Label), "x%d", comboCount);
+    std::snprintf(m_Label, sizeof(m_Label), "%i", comboCount);
     m_bNoDestructor = 0;
 }
 
@@ -17,7 +23,7 @@ ComboControl::ComboControl(int comboCount)
 ComboControl::~ComboControl() {}
 
 void ComboControl::Reset() {
-    // STUB: ComboControl::Reset -- binary @ 0x00136bdc (no-op in binary)
+    // no-op in binary @ 0x00136bdc
 }
 
 // Update @ 0x00136be4: lifetime -= dt; if lifetime < 0 set m_bPendingRemoval=1
@@ -28,18 +34,32 @@ void ComboControl::Update(float dt) {
     }
 }
 
-void ComboControl::Init() {
-    // STUB: ComboControl::Init -- binary @ 0x???? (TODO RE)
-}
+// ASM-verified: 2026-05-20 binary @ 0x00136bd0 (re-analyst) -- tail-calls Reset
+void ComboControl::Init() { Reset(); }
 
-void ComboControl::PreDraw() {
-    // STUB: ComboControl::PreDraw -- binary @ 0x???? (TODO RE)
-}
+// ASM-verified: 2026-05-20 binary @ 0x00136be0 (re-analyst) -- no-op
+void ComboControl::Release() {}
 
-void ComboControl::Release() {
-    // STUB: ComboControl::Release -- binary @ 0x???? (TODO RE)
-}
+// ASM-verified: 2026-05-20 binary @ 0x00136c08 (re-analyst) -- no-op
+void ComboControl::Skip() {}
 
-void ComboControl::Skip() {
-    // STUB: ComboControl::Skip -- binary @ 0x???? (TODO RE)
+// ASM-verified: 2026-05-20 binary @ 0x00136c04 (re-analyst) -- extra vtable slot, no-op
+void ComboControl::PreDraw() {}
+
+// ASM-verified: 2026-05-20 binary @ 0x00136d74 (re-analyst) -- font=pFontNumbers, white,
+// center, scale=30, no z/maxWH/rot/clip. Binary's Draw is the extra-vtable slot +0x40
+// no-args form; port wires the body inside the base Draw(hudScale,layerMask) override
+// since no port-side caller hits the +0x40 slot.
+void ComboControl::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
+    if (!game_work.pFontNumbers.IsValid()) return;
+    Mortar::Utf8StringIterator iter(m_Label);
+    Colour col(0xFF, 0xFF, 0xFF, 0xFF);
+    game_work.pFontNumbers->DrawString(
+        iter, col,
+        Mortar::FONT_ALIGN_CENTER,
+        pos.x, pos.y, 0.0f,
+        30.0f,
+        0.0f, 0.0f,
+        0.0f,
+        nullptr);
 }
