@@ -13,6 +13,7 @@
 #include "entities/Bomb.h"
 #include "entities/Fruit.h"
 #include "entities/SplatEntity.h"
+#include "entities/SlashEntity.h"
 #include "particle/PSPParticleManager.h"
 #include "asset/TextureManager.h"
 #include "asset/Texture.h"
@@ -251,8 +252,7 @@ void DrawBombHit() {
 // "everything flies away" animation before the game-over screen.
 //
 // Sequence:
-//   1. (Skipped — port has 1 SlashEntity not 16; SlashEntity::Reset
-//       isn't a thing right now)
+//   1. SlashEntity::Reset x16 — blade trail flush (binary entry loop)
 //   2. Bombs: pos.y = -480, vel.y = -1.5, Chuck(0)
 //   3. Fruits: Chuck(0). If Zen mode or killAll → force m_bSliced.
 //      Otherwise compute impulse from camera origin and call
@@ -273,6 +273,19 @@ static const float DIST_SQ_THRESH =  400.0f;  // DAT_0016a198
 static const float IMPULSE_LEN    =   20.0f;
 
 void ResetGameEntities(bool killAll) {
+    // ASM-verified: 2026-05-20 binary @ 0x0016a058 (asm-inspector)
+    // Binary entry loop: iVar4 = 0; do { iVar4 += 4;
+    // g_pSlashEntities[iVar4>>2 - 1]->Reset(); } while (iVar4 != 0x40);
+    // 16 iterations. Drops every live blade trail (m_NumPoints = 0) so
+    // the collision loop in SlashEntity::Update cannot fire
+    // CollisionResponse on freshly-spawned menu fruit for the next
+    // several frames. Without this flush, the Quit-gesture slash
+    // survives across the PauseScreen->MainScreen transition and slices
+    // the just-created Play / Dojo / About menu fruits in trajectory order.
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) g_pSlashEntities[i]->Reset();
+    }
+
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
