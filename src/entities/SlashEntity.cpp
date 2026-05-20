@@ -26,6 +26,12 @@
 #include "Game.h"
 #include "game/GameMode.h"
 #include "game/WaveManager.h"
+#include "game/GameTaskState.h"
+#include "game/GameOver.h"
+#include "game/BonusManager.h"
+#include "game/AchievementManager.h"
+#include "game/FruitSaveData.h"
+#include "engine/network/NetworkManager.h"
 #include <cstring>
 #include <cmath>
 #include <cstdio>
@@ -815,19 +821,55 @@ void SlashEntity::Update(float dt) {
         PlaySwipe();
     }
 
-    // Per-swipe combo counter — binary SlashEntity::Update @ 0x0017de72.
-    // Ticks m_ComboTimer; fires AddSpeed when ComboCount > 2 in Arcade mode.
-    // ASM-verified: 2026-05-18 binary @ 0x0017de72 (re-analyst)
-    if (m_ComboTimer >= 0.0f) {
+    // Per-swipe combo resolution — binary SlashEntity::Update @ 0x0017dde6..0x0017dfd0.
+    // Rising-edge trigger: fires once when m_ComboTimer crosses kComboWindow.
+    // ASM-verified: 2026-05-18 binary @ 0x0017dde6..0x0017dfd0 (re-analyst)
+    static const float kComboWindow = 0.5f; // TODO: 0x0017e004 -- exact combo-window value (placeholder 0.5f)
+    if (m_ComboTimer < kComboWindow) {
         m_ComboTimer += dt;
-        if (m_ComboCount > 1 && m_ComboSliceArr[1] >= 0) {
-            if (m_ComboCount > 2 && game && game->gameMode == Mortar::GAME_MODE_ARCADE) {
-                WaveManager::GetInstance()->AddSpeed(
-                    (float)m_ComboCount / 3.0f, 0);
-                // TODO: 0x0017dde6 — AddToCurrentScore + combo-bonus VFX/SFX trailing block
-                // (binary @ 0x0017dde6..0x0017dec4; ~30 ARM instructions; RE needed).
+        if (m_ComboTimer >= kComboWindow) {
+            // Rising edge: combo window just closed — resolve combo.
+            if (m_ComboCount > 1 && m_ComboSliceArr[0] >= 0) {
+                // (a) Slow-mo refund: decrement m_SlowMoFrames by m_ComboCount, clamp >= 2.
+                // TODO: 0x0017dde6 -- GameTaskState lacks m_SlowMoFrames (+0x30); add field when RE'd.
+
+                // (b) Combo body: only if count >= 3 AND m_ComboSliceArr[1] >= 0 (binary field_0x158).
+                if (m_ComboCount > 2 && m_ComboSliceArr[1] >= 0) {
+                    if (game && game->gameMode == Mortar::GAME_MODE_ARCADE) {
+                        WaveManager::GetInstance()->AddSpeed(
+                            (float)m_ComboCount / 3.0f, 0);
+                        FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, true);
+                        BonusManager::GetInstance()->AddCombo(m_ComboCount);
+                    } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboEntityType != 2) {
+                        FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, false);
+                    }
+                    // Per-mode stat: "combo_<modename>"
+                    if (game && game->pSaveData) {
+                        char buf[32];
+                        snprintf(buf, sizeof(buf), "combo_%s", Mortar::GetModeName(game->gameMode));
+                        game->pSaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
+                    }
+                    // (c) Coin spawn VFX — deferred
+                    // TODO: 0x0017df88 -- spawn combo coins via Coin::MakeCoins
+                    // (d) Achievement unlock
+                    AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCount, m_ComboSliceArr);
+                    // (e) Best-combo save — deferred
+                    // TODO: 0x0017df88 -- best-combo save slot (saveData+0x208/+0x20c) not yet ported
+                    // Online MP PointsPacket Send — Defunct: online-services stub per policy
+                }
             }
+            // (f) State reset (unconditional in this arm)
+            m_ComboCount = 0;
+            m_ComboEntityType = 0;
+            field_0x130 = 0;
+            for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
         }
+    } else {
+        // Already past window: clear partial state.
+        m_ComboCount = 0;
+        m_ComboEntityType = 0;
+        field_0x130 = 0;
+        for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
     }
 
     RebuildGeometry();

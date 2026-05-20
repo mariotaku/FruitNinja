@@ -47,6 +47,15 @@ inline bool IsTimedGame(uint8_t gameMode) {
     return ((uint8_t)(gameMode - 2u)) < 2u;
 }
 
+// Binary @ 0x0010b15c -- GetModeName(GAME_MODE). Returns the ASCII mode-name
+// string used to construct per-mode stat keys ("combo_CLASSIC", "combo_ARCADE", etc.).
+// Names taken from rodata / FruitSaveData key evidence; see also FruitSaveData.cpp:k_ModeNames.
+inline const char* GetModeName(uint8_t gameMode) {
+    static const char* s_Names[] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
+    if (gameMode < 4) return s_Names[gameMode];
+    return "UNKNOWN";
+}
+
 } // namespace Mortar
 
 #endif // FN_GAME_MODE_H
