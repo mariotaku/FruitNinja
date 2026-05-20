@@ -57,6 +57,14 @@ inline const char* GetModeName(uint8_t gameMode) {
     return "UNKNOWN";
 }
 
+// Binary @ 0x0010a500. Probes accelerometer via Game+0x1a4; that field is
+// never set in the shipped binary (dead initialisation path), so the function
+// unconditionally returns 0. Gating the ShopListItem locked-state-1 red prompt.
+// Defunct: accelerometer DeviceUpsideDown -- no-op stub; binary @ 0x0010a500
+inline bool IsDeviceUpsideDown() {
+    return false;
+}
+
 } // namespace Mortar
 
 #endif // FN_GAME_MODE_H

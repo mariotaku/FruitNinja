@@ -205,7 +205,7 @@ static void EndRetryLevel() {
     GameTaskState* ts = GetTaskState();
     if (ts) {
         ts->m_ScoreStateField_0x110 = 0.5f;            // 0x16a220 [GTS+0x110]
-        ts->m_ScoreStateField_0x10c = 0;               // 0x16a226 [GTS+0x10c]
+        ts->m_TimedModeAccumulator = 0;                 // 0x16a226 [GTS+0x10c]
     }
 
     FN::SetScore(0, -1);                               // 0x16a22a

@@ -673,11 +673,10 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
 
     m_Texture->Set();
 
-    // Tint: m_DrawColour multiplied by per-frame HUD tint (MatrixManager.field_0x3c.field_0x20).
-    // TODO: 0x001520ec — blocked on MatrixManager::GetTintColour engine gap; binary @
-    // 0x001520ec multiplies m_DrawColour by the HUD-layer tint via MatrixManager field
-    // +0x3c.field_0x20. Port renders with stored m_DrawColour only (visually fine until
-    // the tint-fade screen overlay is implemented). ACCEPT-cosmetic in asm-verify.
+    // TODO: 0x001520ec -- HUD-layer fade alpha (float at MatrixManager.field_0x3c+0x20)
+    // not yet wired. Binary reads it each frame and multiplies into m_DrawColour.a.
+    // Setter binary site is unknown (likely a ScreenTint / fade-in-out transition).
+    // Until that's RE'd, port skips the multiplier (m_DrawColour.a passes through unchanged).
     const uint8_t a = (uint8_t)(fade * (float)m_DrawColour.a);
     const uint32_t col = (uint32_t)a << 24 | (uint32_t)m_DrawColour.b << 16
                         | (uint32_t)m_DrawColour.g << 8 | (uint32_t)m_DrawColour.r;
