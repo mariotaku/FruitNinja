@@ -1954,8 +1954,8 @@ void WaveManager::RequestCoins() {
             return;
     }
     // Fallback: RNG-advance only — return value discarded (binary behaviour).
-    // TODO: 0x00121a1c — byte index for coinChance[] slot comes from GOT 0x7990
-    // (game_work at some offset); field not yet pinned. Using gameMode as proxy.
+    // ASM-verified: 2026-05-20 binary @ 0x00121a1c — coinChance index = game_work.gameMode
+    // (uint8 @ +0x04). Per-mode table at WaveManager+0x1dc, stride 8.
     int idx = game_work.gameMode;
     if (idx >= 0 && idx < 4)
         self->coinChance[idx].GetCoins();

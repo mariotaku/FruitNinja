@@ -1156,10 +1156,9 @@ void Fruit::Slice() {
 //   WaveManager's Random instance; port substitutes rand() since this
 //   only affects display orientation, not gameplay.
 void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
-    // Random spin magnitude: +(2 + rand[0,2)) or -(2 + rand[0,2))
-    // Matches: r = RandF(2.0); sign = (Rand32(2)==0) ? 1 : -1
-    float r    = (float)rand() / (float)RAND_MAX * 2.0f;   // RandF(2.0)
-    float sign = (rand() % 2 == 0) ? 1.0f : -1.0f;         // Rand32(2) == 0
+    // ASM-verified: 2026-05-20 binary @ 0x001757f4 — RotateFacingUp uses Math::g_Random
+    float r    = Math::g_Random.RandF(2.0f);
+    float sign = (Math::g_Random.Rand32(2) == 0) ? 1.0f : -1.0f;
     float magnitude = sign * (2.0f + r);
 
     for (int i = 0; i < 2; i++) {

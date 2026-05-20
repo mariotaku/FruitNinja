@@ -242,7 +242,13 @@ void BonusScreen::AwardScores() {
                         Mortar::Delegate1<void, Coin*>(), false);
     }
 
-    // TODO: 0x0013260C — *(int*)(Game +0x34) = 3 (BonusFinalePhase flag, offset unconfirmed).
+    // ASM-verified: 2026-05-20 binary @ 0x0013260C -- game_work.field_0x34 = 3 (BonusFinalePhase).
+    // Field is uint8 in the port -- binary uses 4-byte `str.w` instructions at +0x34 because
+    // the source value (small enum) is known-zero in upper bytes, not because the field is
+    // int32. The adjacent +0x35 (m_bSlowMotion) is a true byte field (`strb.w`), confirmed
+    // by independent writes at 0x0016c178/0x0016c1b6/0x0016c324/0x00141bec/0x00141e52/
+    // 0x00142002. Layout stays as {uint8 field_0x34; uint8 m_bSlowMotion;}.
+    game_work.field_0x34 = 3;
 
     Game* game = Game::GetInstance();
     if (game && game_work.m_FruitCamera) {
