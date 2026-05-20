@@ -205,6 +205,7 @@ void MainScreen::Update(float dt) {
             // NOT +0x05 (levelTransitionFlag). Prior port revision wrote levelTransitionFlag
             // here which cleared the WaveManager spawn-pump gate and caused menu fruits to
             // keep spawning. levelTransitionFlag stays 1 (set by QuitToMenu) so the gate holds.
+            LOG_INFO("SCREEN/MainScreen", "CAMERA_ZOOM else-branch: clearing gameMode (was %d -> 0)", (int)game.gameMode);
             game.gameMode = 0;
             m_Timer2 += dt;
             game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
@@ -423,6 +424,7 @@ void MainScreen::Update(float dt) {
         // After spawning, MainScreen stays in this state — GameModeScreen
         // writes mainScreen->m_State later (CAMERA_FADE on mode pick,
         // SLIDE_IN on back-out).
+        LOG_INFO("SCREEN/MainScreen", "STATE_MODE_SELECT tick: gameMode=%d", (int)game.gameMode);
         const float oldTimer2 = m_Timer2;
         // Port specific: per-frame decay needs to slow with the debug
         // time-scale. Binary x *= 0.85 each frame → 15% decay. With
@@ -458,11 +460,14 @@ void MainScreen::Update(float dt) {
         // exceeds -0.001f, clamp back to -0.85f and clear levelTransitionFlag
         // (one-shot release). Constants: -0.85 @ 0x14c284, 0.75 inline,
         // -0.001 @ 0x14c2a8.
+        LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE tick: m_TransitionTimer=%.3f, gameMode=%d, levelTransitionFlag=%d",
+                 game.m_TransitionTimer, (int)game.gameMode, (int)game.levelTransitionFlag);
         if (game.m_TransitionTimer < -0.85f) {
             game.m_TransitionTimer *= 0.75f;
             if (game.m_TransitionTimer > -0.001f) {
                 game.m_TransitionTimer = -0.85f;
                 game.levelTransitionFlag = 0;
+                LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to -0.85f, levelTransitionFlag cleared");
             }
         }
         // Tail writes at 0x0014c306/0x0014c316 -- those are unconditional

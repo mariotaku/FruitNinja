@@ -24,6 +24,7 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "debug/DebugFlags.h"
+#include "debug/Logger.h"
 #include "util/StringHash.h"
 #include "game/FruitSaveData.h"
 #include <cmath>
@@ -389,6 +390,9 @@ void GameModeScreen::Update(float dt) {
 
         if (game.mainScreen) {
             float camT = game.mainScreen->GetCameraTransition();
+            LOG_INFO("MODESEL", "state=%d camT=%.4f alpha=%.4f setupFired=%d levelTransitionFlag=%d gameMode=%d",
+                     (int)m_State, camT, m_TransitionAlpha, (int)m_bSetupLevelFired,
+                     (int)game.levelTransitionFlag, (int)game.gameMode);
             camT *= CAMERA_DECAY;
             game.mainScreen->SetCameraTransition(camT);
             // Binary @ 0x0013f2e2: vtable[18] (SetupLevel) dispatched once
@@ -397,6 +401,7 @@ void GameModeScreen::Update(float dt) {
             // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
             // Latch keeps it one-shot per mode-pick.
             if (!m_bSetupLevelFired && camT > -0.9f) {
+                LOG_INFO("MODESEL", "SetupLevel called; game->gameMode=%d", (int)game.gameMode);
                 SetupLevel();
                 m_bSetupLevelFired = true;
             }
@@ -405,6 +410,8 @@ void GameModeScreen::Update(float dt) {
                 if (game.pGameSound) {
                     game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
+                LOG_INFO("MODESEL", "%d -> STATE_CAMERA_FADE (camT done; levelTransitionFlag=%d gameMode=%d)",
+                         (int)m_State, (int)game.levelTransitionFlag, (int)game.gameMode);
                 game.mainScreen->SetCameraTransition(0.0f);
                 game.levelTransitionFlag = 0;
                 m_bPendingRemoval = 1;
@@ -582,9 +589,12 @@ void GameModeScreen::SetupLevel() {
 
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
+    LOG_INFO("MODESEL/Classic", "callback fired; setting gameMode=0; m_State=3");
     m_bSetupLevelFired = false;
     m_State = 3;
     game.gameMode = 0;
+    LOG_INFO("MODESEL/Classic", "after writes: gameMode=%d m_State=%d m_bSetupLevelFired=%d",
+             (int)game.gameMode, (int)m_State, (int)m_bSetupLevelFired);
 }
 
 // Matches ZenModeCallback @ 0x0013dffc
