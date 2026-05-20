@@ -758,28 +758,24 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const bool canCritFruit = info && info->m_bScorable;
 
     // DIFFERS: FruitNinjaApp gating fields (+0x05 frenzy flag, +0x10 frenzy
-    // timer, +0x30 score threshold) not yet ported. m_ScoreThreshold from
-    // Game::currentScore ladder is simulated with a local static counter.
+    // timer) not yet ported. Score threshold now reads/writes game_work.m_ScoreThreshold
+    // (the real field at +0x30, shared with SlashEntity combo-resolve).
     const int score = game_work.currentScore;
 
-    // s_CritThreshold simulates FruitNinjaApp::m_ScoreThreshold (+0x30).
-    // DIFFERS: real counter lives in FruitNinjaApp, not here.
-    static int s_CritThreshold = kCritScoreBound;
-
     if (score >= 2 && canCritFruit /* && !frenzyFlag && frenzyTimer <= 0 */) {
-        s_CritThreshold = (s_CritThreshold < 3) ? 2 : (s_CritThreshold - 1);
+        int& thresh = game_work.m_ScoreThreshold;
+        thresh = (thresh < 3) ? 2 : (thresh - 1);
 
         const float chance = WaveManager::GetInstance()->GetCriticalChance(0);
         if (chance > 0.0f) {
-            const int   bound  = (s_CritThreshold < kCritScoreBound)
-                                 ? s_CritThreshold : kCritScoreBound;
+            const int   bound  = (thresh < kCritScoreBound) ? thresh : kCritScoreBound;
             const float ratio  = (float)bound / chance;
             const uint32_t reroll = (ratio <= 1.0f) ? 1u : (uint32_t)ratio;
 
             const uint32_t roll = WaveManager::GetInstance()->GetRandom().Rand32(reroll);
             if (roll == 0) {
                 m_bCriticalEligible = true;
-                s_CritThreshold = kCritResetBase + kCritScoreBound;
+                thresh = kCritResetBase + kCritScoreBound;
             }
         }
     }

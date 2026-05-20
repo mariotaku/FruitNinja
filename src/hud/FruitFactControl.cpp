@@ -230,12 +230,11 @@ void FruitFactControl::Init() {
     //      Stored in m_ComboActiveFlag; consumed by Update/Draw layout paths.
     //   2. comboPath (text+hash+offset): Arcade OR Zen (mode in {2,3} && cnt>=3).
     //      Selects BEST COMBO snippet over plain fact text.
-    // +0x208: m_BombQueueCount -- misleading name; semantically the best-combo length, NOT a bomb queue count.
     int comboFlag = 0;
     int comboPath = 0;
     if (game && game_work.m_SaveData) {
         // ASM-verified: 2026-05-18 binary @ 0x0013a398 (re-analyst)
-        int count = game_work.m_SaveData->m_BombQueueCount;
+        int count = game_work.m_SaveData->m_BestComboLength;
         if (gameMode == 3 && count >= 3) {
             comboFlag = 1;
         }
@@ -249,8 +248,7 @@ void FruitFactControl::Init() {
     m_FactPosOffset = Vec3(-69.0f, 53.0f, 0.0f);
 
     if (comboPath) {
-        // Combo path (binary @ 0x0013a3ae, comboPath branch):
-        // saveData->m_BombQueueCount holds m_ComboLength; m_BombQueue holds hashes.
+        // Combo path (binary @ 0x0013a3ae, comboPath branch).
         // Binary: snprintf(buf, "%s", Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO))
         // where LSTR_BEST_COMBO = 0x98 = "BEST COMBO: %i FRUIT!". The single
         // BakedString slot gets the formatted-with-count string. Port renders
@@ -259,10 +257,10 @@ void FruitFactControl::Init() {
         char comboBuf[128];
         snprintf(comboBuf, sizeof(comboBuf),
                  Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO),
-                 game_work.m_SaveData->m_BombQueueCount);
-        m_ComboLength = game_work.m_SaveData->m_BombQueueCount;
+                 game_work.m_SaveData->m_BestComboLength);
+        m_ComboLength = game_work.m_SaveData->m_BestComboLength;
         for (int i = 0; i < m_ComboLength && i < 11; i++) {
-            m_ComboHashArray[i] = game_work.m_SaveData->m_BombQueue[i];
+            m_ComboHashArray[i] = game_work.m_SaveData->m_BestComboFruits[i];
         }
         int localFruitIdx = 0;
         m_ComboType = (int)CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);

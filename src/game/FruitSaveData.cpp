@@ -67,7 +67,7 @@ FruitSaveData::FruitSaveData()
     , m_blitzForceSpawnedCounter(0)
     , m_blitzSpawnTime(0.0f)
     , m_VersionInfo(0)
-    , m_BombQueueCount(0)
+    , m_BestComboLength(0)
 {
     for (int i = 0; i < 4; i++) {
         m_ModeHighScores[i] = 0;
@@ -75,7 +75,7 @@ FruitSaveData::FruitSaveData()
         m_LastPlayedDay[i] = 0;
     }
     for (int i = 0; i < 32; i++) m_FruitQueue[i] = -1;
-    for (int i = 0; i < 11; i++) m_BombQueue[i] = -1;
+    for (int i = 0; i < 11; i++) m_BestComboFruits[i] = -1;
 }
 
 FruitSaveData::~FruitSaveData() {}
