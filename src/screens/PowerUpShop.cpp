@@ -22,6 +22,7 @@
 #include "render/Font.h"
 #include "math/Matrix44.h"
 #include "math/Random.h"
+#include "screens/PurchaseInfo.h"
 #include "util/Delegate.h"
 #include "Game.h"
 #include <cstdio>
@@ -295,16 +296,56 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
             continue;
         }
 
-        // TODO: 0x00155e08 — PurchaseInfo::GetTexture / GetGreyTexture / GetInUseTexture
-        // not yet ported (PurchaseInfo is partially stubbed in PowerUp.h).
-        // Icon draw, progress bars, and description text depend on these accessors.
-        // Skip icon rendering until PurchaseInfo is fully ported.
+        // Pick icon texture: active slot uses GetInUseTexture(); affordable uses
+        // GetTexture(); greyed (can't afford or max uses reached) uses GetGreyTexture().
+        // Binary @ 0x00155e08 selects per-slot based on m_bCloned and coin/cost check.
+        PurchaseInfo* pi = p->m_pPurchaseInfo;
+        Mortar::ReloadableTexture* iconTex = NULL;
+        {
+            int coins = 0;
+            Game* g2 = Game::GetInstance();
+            if (g2 && game_work.m_SaveData) {
+                coins = game_work.m_SaveData->m_Coins;
+            }
+            if (p->m_bCloned != 0) {
+                iconTex = &pi->GetInUseTexture();
+            } else if (pi->m_Cost <= coins && m_PurchasedCount < 3) {
+                iconTex = &pi->GetTexture();
+            } else {
+                iconTex = &pi->GetGreyTexture();
+            }
+        }
+
+        // Draw icon quad at slot world position scaled by slot.z * 64.
+        // Binary @ 0x00155e08: slot world pos = pos + slot; scale = slot.z * 64.0.
+        Vec3 slot = m_SlotLayout[i];
+        float iconScale = slot.z * 64.0f;
+
+        mm.GetWorldStack().Push();
+        Matrix44 slotTrans;
+        slotTrans.Identity();
+        slotTrans.GlobalTranslate44(Vec3(pos.x + slot.x + 480.0f,
+                                        pos.y + slot.y + 320.0f, pos.z + slot.z));
+        Matrix44 slotScale;
+        slotScale.Identity();
+        slotScale.ApplyScale(iconScale, iconScale, 1.0f);
+        SetMatrix(slotTrans * slotScale);
+        UploadMatrices();
+
+        if (iconTex && iconTex->IsLoaded()) {
+            iconTex->Set();
+            Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+            iconTex->UnSet();
+        }
+
+        mm.GetWorldStack().Pop();
+        UploadMatrices();
 
         // Slot layout interpolation (z lerps toward 1.25 for selected, 1.0 for idle).
-        // Slot world pos = pos + slot. Scale = slot.z * 64.0.
         // Description/title labels at selected slot (draw at -84 and -30 Y offset, scale 16).
         // Cost/timer label at slot bottom (scale 17, anchor 0xf).
-        // All TODOs deferred to PurchaseInfo RE follow-up.
+        // TODO: 0x00155e08 — progress bars and description text labels (font draw calls
+        // for slot name/cost); deferred until PurchaseInfo::LoadTextures and Parse are ported.
     }
 
     mm.GetWorldStack().Pop();
@@ -382,29 +423,48 @@ void PowerUpShop::Update(float dt) {
         // Spawn position: origin + Vector3(160.8, -6.0, 0.0).
         Vec3 spawnPos = g_Origin + Vec3(160.8f, -6.0f, 0.0f);
 
-        // Build delegates (Mortar::Delegate0<void> for ButtonSliced, Mortar::Delegate1 for ButtonDeleted).
-        // TODO: 0x00156398 — Mortar::Delegate binding to member function; port uses
-        // Mortar::Delegate0<void> and Mortar::Delegate1<void, HUDControl*> bound via
-        // MakeDelegate / callee pattern. Stub with empty delegates until callee helper ported.
-        Mortar::Delegate0<void>           slicedCb;
-        Mortar::Delegate1<void, HUDControl*> deletedCb;
+        // Build slicedCb: binary @ 0x00156398 binds PowerUpShop::ButtonSliced as
+        // Delegate0<void> via QCallee.
+        Mortar::Delegate0<void> slicedCb =
+            Mortar::Delegate0<void>::QCallee(this, &PowerUpShop::ButtonSliced);
 
-        // TODO: 0x00156398 — MenuButton constructor signature: (tex, &spawnPos, &delegate0,
-        // fruitType, &origin, &delegate1). Port MenuButton init takes separate Init() call.
-        // Skipping buy-button construction until delegate binding resolved.
+        // Build removeCb: binary binds PowerUpShop::ButtonDeleted as
+        // Delegate1<void, HUDControl*> via QCallee, wired to m_RemoveCallback.
+        Mortar::Delegate1<void, HUDControl*> removeCb =
+            Mortar::Delegate1<void, HUDControl*>::QCallee(
+                this, &PowerUpShop::ButtonDeleted);
+
         // Binary sequence:
-        //   m_BuyButton = new MenuButton(...)
-        //   m_BuyButton->Init()
+        //   m_BuyButton = new MenuButton(NULL, &spawnPos, &slicedCb, fruitType,
+        //                                &origin, &deletedCb)
+        //   m_BuyButton->Init()          — vtable no-arg Init (calls Reset, no-op)
         //   m_BuyButton->vel.x = 0
-        //   MenuButton.field_0x123 = 0
+        //   m_BuyButton->m_bEnabled = 0  (field_0x123)
         //   HUD::AddControl(game_work.mHud, m_BuyButton, false)
         //   Rand32(524287); Rand32(2)
         //   Fruit angular vel *= 0.85 on x and y
         //   Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
-        (void)fruitType;
-        (void)spawnPos;
-        (void)slicedCb;
-        (void)deletedCb;
+        Vec3 restPos = g_Origin;
+        m_BuyButton = new MenuButton(static_cast<Mortar::SmartPtr<Mortar::Texture>*>(NULL),
+                                     &spawnPos, &slicedCb,
+                                     fruitType, &restPos, &removeCb);
+        m_BuyButton->Init();
+        // Binary: m_BuyButton->vel.x = 0 (vel field not mapped; fruit piece vel zeroed below)
+        m_BuyButton->m_bEnabled = 0;
+
+        if (game_work.mHud) {
+            game_work.mHud->AddControl(m_BuyButton, false);
+        }
+
+        Math::g_Random.Rand32(524287);
+        Math::g_Random.Rand32(2);
+
+        if (m_BuyButton->m_pFruitPiece != NULL) {
+            m_BuyButton->m_pFruitPiece->m_RotVel1.x *= 0.85f;
+            m_BuyButton->m_pFruitPiece->m_RotVel1.y *= 0.85f;
+            // TODO: 0x00156398 — Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
+            // not yet in port; binary @ unknown addr.
+        }
     } else if (m_BuyButton != NULL) {
         // Step 4: update existing buy button.
 
@@ -465,7 +525,7 @@ void PowerUpShop::SetBuyButtonState() {
 // ============================================================
 // ButtonSliced @ 0x00155b5c (non-virtual; bound as Mortar::Delegate0<void>)
 // ============================================================
-void PowerUpShop::ButtonSliced(float pushScalar) {
+void PowerUpShop::ButtonSliced() {
     // Binary @ 0x00155bf0:
     if (m_BuyTriggered == 0 && m_BuyButtonState == 0) {
         if (m_PurchasablePowerUps.empty()) {
@@ -476,6 +536,8 @@ void PowerUpShop::ButtonSliced(float pushScalar) {
         uint32_t hash = selected->m_NameHash;
 
         // Binary @ 0x00155bf0: ActivatePower(hash, &origin, &pushScalar)
+        // pushScalar is a local zero float in the binary (no parameter).
+        float pushScalar = 0.0f;
         Vec3 origin = g_Origin;
         PowerUpManager* pum = PowerUpManager::GetInstance();
         PowerUp* singleActive = pum->ActivatePower(hash, &origin, &pushScalar);

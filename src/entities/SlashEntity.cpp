@@ -39,10 +39,90 @@
 #include "game/GameWork.h"
 #include "Coin.h"
 
-// TODO: 0x00110cb0 -- CheckCombo body (rare-fruit table, alternating-types
-//   detection, count-based fallback table) not yet ported; cache wiring uses
-//   stub that returns 0. See re-analyst report 2026-05-20.
-static int CheckCombo(const int* /*arr*/, int /*len*/, int* /*out*/) { return 0; }
+// ASM-verified: 2026-05-20 binary @ 0x00110cb0 CheckCombo (re-analyst)
+// Returns signed-char combo quality score (-1, 0x00..0x18) sign-extended to int.
+// Score table:
+//   0x18: 2 unique types in strict ABAB... (any length)
+//   0x14: 2 unique types, count==5, scratch[0]/[1].type == 2 (pomegranate)
+//   0x15: 3 unique types, count==5, scratch[0]/[1].type == 2 (binary quirk
+//         omits slot[2] -- preserved verbatim)
+//   0x17/0x16: any slot has count 4/3 (only when uniq>1)
+//   0x04: all unique, count >= 5
+//   Rare single-fruit table: 14 named fruit -> 0x06..0x12 (uniq==1 path)
+//   Fallback: {-1,-1,-1,0,1,2,3} for count<7 else 5
+static int CheckCombo(int* fruitTypes, int count, int* outDominantType) {
+    struct Slot { int type; int n; };
+    static const struct RareEntry { const char* name; signed char score; } rareTable[16] = {
+        {"apple",        0x06}, {"apple_red",   0x06},
+        {"orange",       0x07}, {"pineapple",   0x08},
+        {"watermelon",   0x09}, {"kiwi",        0x0A},
+        {"mango",        0x0B}, {"strawberry",  0x0C},
+        {"pear",         0x0D}, {"banana",      0x0E},
+        {"lime",         0x0F}, {"lemon",       0x10},
+        {"coconut",      0x11}, {"passionfruit",0x12},
+        {NULL,           0x00}, {NULL,          0x00},
+    };
+    static int  rareTypes[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    static bool rareInit = false;
+    if (!rareInit) {
+        for (int i = 0; i < 14; ++i)
+            rareTypes[i] = Fruit::FruitType(rareTable[i].name, false);
+        rareInit = true;
+    }
+
+    Slot scratch[11];
+    int  uniq = 0, maxCount = 0, dom = 0;
+    bool alternating = true;
+
+    for (int i = 0; i < count; ++i) {
+        int t = fruitTypes[i];
+        bool found = false;
+        for (int j = 0; j < uniq; ++j) {
+            if (scratch[j].type == t) {
+                found = true;
+                if (++scratch[j].n > maxCount) { maxCount = scratch[j].n; dom = t; }
+                if (j != uniq - 1) alternating = false;
+            }
+        }
+        if (!found) {
+            scratch[uniq].type = t; scratch[uniq].n = 1; ++uniq;
+            if (maxCount == 0) { dom = t; maxCount = 1; }
+        }
+    }
+    if (outDominantType) *outDominantType = dom;
+
+    signed char r = -1;
+    if (uniq == 1) {
+        for (int k = 0; k < 16; ++k)
+            if (fruitTypes[0] == rareTypes[k]) return (signed char)rareTable[k].score;
+    } else if (uniq == 2) {
+        if (alternating) {
+            bool ok = true;
+            for (int i = 0; i < count; ++i) {
+                int expect = (i & 1) ? scratch[1].type : scratch[0].type;
+                if (fruitTypes[i] != expect) { ok = false; break; }
+            }
+            if (ok) return 0x18;
+        }
+        if (count == 5 && (scratch[0].type == 2 || scratch[1].type == 2)) return 0x14;
+    } else if (uniq == 3 && count == 5) {
+        if (scratch[0].type == 2 || scratch[1].type == 2) return 0x15;
+        // Quirk preserved: binary only checks slots 0 and 1 -- slot 2 pomegranate is missed.
+    } else if (uniq == count && uniq > 4) {
+        return 0x04;
+    }
+
+    if (uniq > 1) {
+        for (int k = 0; k < uniq; ++k) {
+            if      (scratch[k].n == 3 && r == -1)    r = 0x16;
+            else if (scratch[k].n == 4 && r <  0x17)  r = 0x17;
+        }
+        if (r != -1) return r;
+    }
+
+    static const signed char fallback[7] = { -1, -1, -1, 0, 1, 2, 3 };
+    return ((unsigned)count < 7) ? (int)fallback[count] : 5;
+}
 
 // File-static CheckCombo cache sentinel. -1 = uncomputed for current best combo.
 // Binary @ BSS (file-scope in SlashEntity.cpp translation unit).

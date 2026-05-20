@@ -176,6 +176,16 @@ public:
     float m_ShakeTimer;
 
     MenuButton();
+
+    // Binary ctor @ 0x0014f24c — construction-time init with all parameters.
+    // tex may be NULL (entity visuals via fruitType take precedence when fruitType >= 0).
+    // onTap binds to m_ClickCallback; onRemove binds to m_RemoveCallback.
+    // Proxies to MenuButton::Init(5-arg) then wires the remove callback.
+    MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
+               Mortar::Delegate0<void>* onTap,
+               int fruitType, Vec3* restPos,
+               Mortar::Delegate1<void, HUDControl*>* onRemove);
+
     ~MenuButton();
 
     // HUDControl overrides

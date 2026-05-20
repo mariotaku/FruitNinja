@@ -94,7 +94,7 @@ public:
 
     // Non-virtual members
     void SetBuyButtonState();                     // @ 0x00155c4c
-    void ButtonSliced(float pushScalar);          // @ 0x00155b5c
+    void ButtonSliced();                          // @ 0x00155b5c
     void ButtonDeleted(HUDControl* deletedCtrl);  // @ 0x00156aac
 };
 

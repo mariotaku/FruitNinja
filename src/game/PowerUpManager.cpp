@@ -187,7 +187,7 @@ void PowerUpManager::Reset(bool fullReset) {
                 continue;
             } else {
                 // Non-fullReset: keep if remaining uses > 0, discard otherwise.
-                if (!pwr->m_pPurchaseInfo || pwr->m_pPurchaseInfo->m_RemainingUses < 1) {
+                if (!pwr->m_pPurchaseInfo || pwr->m_pPurchaseInfo->m_CurrentUses < 1) {
                     uint32_t hash = pwr->m_NameHash;
                     std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
                     if (byHash != m_ActiveByHash.end()) m_ActiveByHash.erase(byHash);
@@ -343,7 +343,7 @@ void PowerUpManager::ActivatePurchase(PowerUp* p) {
             }
         }
     }
-    --p->m_pPurchaseInfo->m_RemainingUses;
+    --p->m_pPurchaseInfo->m_CurrentUses;
 }
 
 // @ 0x00119760

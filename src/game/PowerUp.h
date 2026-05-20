@@ -37,50 +37,7 @@
 #include "math/Vec3.h"
 #include <tinyxml2.h>
 
-// Minimal PurchaseInfo layout (0xc4-byte struct in binary).
-// Fields verified from binary (re-analyst PowerUp lifecycle pass).
-class PurchaseInfo {
-public:
-    // +0x00: vptr (implicit)
-    // +0x04: m_Cost — coin cost of the purchasable power-up
-    int m_Cost;
-    // +0x08..+0xa7: unported fields (binary layout 0xc4 bytes)
-    uint8_t _pad08[0xa0];
-    // +0xa8: m_Texture0 — ReloadableTexture (8 bytes each; 3 resolved at +0xA8/+0xB0/+0xB8)
-    // ASM-verified: 2026-05-18 binary @ 0x00118334 (re-analyst)
-    // TODO: semantic names for the 3 texture slots — RE PurchaseScreen consumers to identify icon/popup/splash
-    uint8_t m_Texture0[8];  // +0xa8
-    uint8_t m_Texture1[8];  // +0xb0
-    uint8_t m_Texture2[8];  // +0xb8
-    // +0xc0: m_RemainingUses — remaining use count; 0 = exhausted
-    // ASM-verified @ 0x00119bb0
-    int m_RemainingUses;
-
-    PurchaseInfo() : m_Cost(0), m_RemainingUses(0) {
-        for (int i = 0; i < (int)sizeof(_pad08); ++i) _pad08[i] = 0;
-        for (int i = 0; i < 8; ++i) m_Texture0[i] = 0;
-        for (int i = 0; i < 8; ++i) m_Texture1[i] = 0;
-        for (int i = 0; i < 8; ++i) m_Texture2[i] = 0;
-    }
-
-    // TODO: implement Parse (binary @ 0x? -- re-analyst pass needed)
-    void Parse(tinyxml2::XMLElement* /*xml*/) {}
-
-    // TODO: implement LoadTextures (binary @ 0x? -- re-analyst pass needed)
-    void LoadTextures() {}
-
-    // @ 0x00118334 — three ReloadableTexture::Unload() calls on texture fields inside PurchaseInfo
-    // ASM-verified: 2026-05-18 binary @ 0x00118334 (re-analyst)
-    void UnloadTextures() {
-        // Each slot is a ReloadableTexture; Unload zeroes the GLuint handle.
-        // Binary calls Unload() on +0xA8, +0xB0, +0xB8 in sequence.
-        // Stub: zero the handle word (bytes 4..7 of each 8-byte slot, matching
-        // ReloadableTexture layout: name[4] + GLuint handle at +0x4).
-        *reinterpret_cast<uint32_t*>(m_Texture0 + 4) = 0;
-        *reinterpret_cast<uint32_t*>(m_Texture1 + 4) = 0;
-        *reinterpret_cast<uint32_t*>(m_Texture2 + 4) = 0;
-    }
-};
+#include "screens/PurchaseInfo.h"
 
 // Colour as stored in binary (RGBA8 packed in 4 bytes).
 struct PUColour {
