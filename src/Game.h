@@ -49,6 +49,7 @@
 
 #include <string>
 #include <cstdint>
+#include <cstddef>
 #include "core/MortarGame.h"
 #include "math/Vec3.h"
 #include "render/Renderer.h"
@@ -317,6 +318,26 @@ struct Game : public Mortar::MortarGame {
     void run();
     void runFrames(int frameCount);
 };
+
+// Field-offset assertions for Game (binary @ g_MortarGame, ARM32).
+//
+// NOTE: The g_GameData-block fields (taskStateIndex, pausedFlag, gameMode, etc.)
+// carry "// +0xNN" comments that are g_GameData-RELATIVE offsets, NOT
+// offsetof(Game, field). The port merges two separate binary globals (g_MortarGame
+// + g_GameData) into this one class, so those fields sit at sizeof(MortarGame
+// extension) + N in port memory. Adding offsetof(Game, pausedFlag) == 0x02 would
+// always fail and not indicate a bug -- the layout divergence is intentional and
+// documented in the merge note at the top of this file. The cross-build asm-verify
+// excludes this merged struct from offset-equivalence checks accordingly.
+//
+// What CAN be asserted here: the Game-specific fields that extend MortarGame in the
+// binary (m_bSlowHardware, m_bLanguageSet, m_appState), whose offsets are relative
+// to the binary's Game instance and should be stable on the cross-build.
+#ifdef __bada__
+static_assert(offsetof(Game, m_bSlowHardware) == 0xFC, "Game::m_bSlowHardware must be at +0xFC");
+static_assert(offsetof(Game, m_bLanguageSet)  == 0xFD, "Game::m_bLanguageSet must be at +0xFD");
+static_assert(offsetof(Game, m_appState)      == 0x100, "Game::m_appState must be at +0x100");
+#endif
 
 // Forward declarations for lifecycle functions (src/game/)
 void GamePreInitialise();
