@@ -784,6 +784,10 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             FN::ClearMenuItems();
         }
         if (m_HitCallback) {
+            LOG_INFO("BUTTON", "Bomb::CollisionResponse fires m_HitCallback re-hit (owner=%p enabled=%d pos=(%.1f,%.1f))",
+                     static_cast<void*>(m_pOwnerButton),
+                     m_pOwnerButton ? (int)m_pOwnerButton->m_bEnabled : -1,
+                     pos.x, pos.y);
             m_HitCallback();
         }
     }
