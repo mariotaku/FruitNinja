@@ -1,5 +1,4 @@
 // Analysed: 2026-05-03T00:00
-// Fix: PowerUp struct +0xac _padac[8] inserted so m_Texture1@+0xb4, m_DeferredPoints@+0xc4.
 
 #include "PowerUp.h"
 #include "ScoreModifier.h"
@@ -52,8 +51,7 @@ PowerUp::PowerUp()
     memset(m_Name, 0, sizeof(m_Name));
     memset(m_DisplayName, 0, sizeof(m_DisplayName));
     memset(_pad92, 0, sizeof(_pad92));
-    memset(_padac, 0, sizeof(_padac));
-    memset(_padc0, 0, sizeof(_padc0));
+    memset(_padb8, 0, sizeof(_padb8));
 }
 
 // Steps 2: dtor (binary @ 0x001186bc)
@@ -365,8 +363,7 @@ PowerUp::PowerUp(PowerUp* src)
     memset(m_Name, 0, sizeof(m_Name));
     memset(m_DisplayName, 0, sizeof(m_DisplayName));
     memset(_pad92, 0, sizeof(_pad92));
-    memset(_padac, 0, sizeof(_padac));
-    memset(_padc0, 0, sizeof(_padc0));
+    memset(_padb8, 0, sizeof(_padb8));
 
     m_NameHash = src->m_NameHash;
     strcpy(m_Name,        src->m_Name);

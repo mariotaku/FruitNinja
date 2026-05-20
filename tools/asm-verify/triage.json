@@ -1022,9 +1022,9 @@
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN7PowerUp12LoadTexturesEv": {
-    "verdict": "FIX-NEEDED",
-    "reason": "Cross-build emits ldr [r4,#0x8c] for m_pPurchaseInfo but binary @ 0x1083fe accesses [r4,#0x94] and PowerUp.h declares +0x94. 8-byte offset mismatch: binary also has m_pScreenEffect at +0xb4 while port header places it at +0xbc. _padac[8] region at src/game/PowerUp.h:92 may be misassigned. Static asserts guarded by #ifdef __bada__ -- not checked by cross-build. Score 1015/900. Verify PowerUp struct layout offsets and add non-bada offsetof assertions.",
-    "score": 1015,
+    "verdict": "ACCEPT-deferred",
+    "reason": "Layout fix landed (task #76): m_Texture1@+0xac, m_Texture2@+0xb0, m_pScreenEffect@+0xb4 per RE of ctor 0x00118d3c. Cross-build diff ([r0,#0xac] vs binary [r0,#0xb4] for m_pScreenEffect; [r0,#0x8c] vs [r0,#0x94] for m_pPurchaseInfo) is entirely the Bada std::list=12bytes vs Sourcery 2010q1 std::list=8bytes ABI difference; binary-faithful struct layout confirmed via #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS) static_asserts. Score 1020/900.",
+    "score": 1020,
     "max_score": 900,
     "decided_at": "2026-05-20T12:00Z"
   },
