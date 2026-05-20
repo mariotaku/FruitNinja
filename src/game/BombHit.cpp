@@ -335,6 +335,7 @@ void ResetGameEntities(bool killAll) {
             bomb->Chuck(0.0f);
             bomb->pos.y = OFFSCREEN_Y;
             bomb->vel.y = DRIFT_Y;
+            bomb->Update(0.0f);
         } else if (e->entityType == 0) {
             // Fruit: chuck reset, optional force-slice, off-screen.
             Fruit* fruit = static_cast<Fruit*>(e);
@@ -368,6 +369,7 @@ void ResetGameEntities(bool killAll) {
                 // Binary @ BombHit: calls CollisionResponse via vtable slot 9.
                 // Pass impulse as bladeVelocity; other args are runtime-0.
                 fruit->CollisionResponse(nullptr, 0, 0, &impulse);
+                fruit->Slice();
             }
 
             // Fling both halves off-screen — binary writes both
@@ -376,6 +378,9 @@ void ResetGameEntities(bool killAll) {
             fruit->m_SecondPos.y = OFFSCREEN_Y;
             fruit->vel.y         = DRIFT_Y;
             fruit->m_SecondVel.y = DRIFT_Y;
+            // Zero-dt update propagates new pos/vel through entity physics
+            // before the next frame can observe stale state.
+            fruit->Update(0.0f);
         }
     }
     }  // end type loop
