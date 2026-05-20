@@ -190,20 +190,27 @@ void MainScreen::Update(float dt) {
 
     switch (m_State) {
     case STATE_CAMERA_ZOOM: {
-        // Camera zoom-in from splash. Create play/dojo buttons.
-        // Lerp camera transition toward -1.0
-        game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
-        m_Timer2 += dt;
-
-        // Create play/dojo buttons if they don't exist
-        if (!pPlayButton && m_Timer2 > TIMER2_THRESHOLD) {
-            CreatePlayDojo();
+        // ASM-verified: 2026-05-20 binary @ 0x0014b278 case 0 (re-analyst)
+        // Two-phase: while (m_StateTimer > 0 || bombHitTimer > 0.7), just lerp
+        // the camera and idle. Once both elapsed, start incrementing m_Timer2
+        // and clear levelTransitionFlag. Menu buttons (Play/Dojo) lazy-created
+        // only when m_Timer2 > threshold. Keeps menu off-screen during bomb-flash
+        // so ResetGameEntities does not see any menu fruit to force-slice.
+        const bool flashActive = (m_StateTimer > 0.0f) || (game.bombHitTimer > 0.7f);
+        if (flashActive) {
+            m_StateTimer -= dt;
+            game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
+        } else {
+            game.levelTransitionFlag = 0;
+            m_Timer2 += dt;
+            game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
         }
 
-        // Transition to CREATE_BUTTONS when camera settles. Binary checks
-        // `camera < 0` (sign), but the lerp converges to -1 either way.
-        // The Quit button is lazy-created in state 1 itself, not on the
-        // transition (matches binary's "only on first frame of state 1").
+        // Lazy-create play/dojo buttons once m_Timer2 threshold reached and
+        // camera has settled, then transition to state 1.
+        if (!pPlayButton && m_Timer2 > TIMER2_THRESHOLD && game.m_TransitionTimer < CAMERA_THRESHOLD) {
+            CreatePlayDojo();
+        }
         if (game.m_TransitionTimer < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             m_State = STATE_CREATE_BUTTONS;
