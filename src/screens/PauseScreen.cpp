@@ -36,7 +36,6 @@
 #include "engine/audio/GameSound.h"
 #include "engine/network/NetworkManager.h"
 #include "game/GameOver.h"
-#include "game/BombHit.h"
 #include "game/PowerUpManager.h"
 #include "screens/MainScreen.h"
 #include "entities/BombBlast.h"
@@ -194,50 +193,8 @@ static void QuitToMenu() {
     game_work.field_0x19c = 0;
 }
 
-static void EndRetryLevel() {
-    LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "EndRetryLevel enter", "binary @ 0x0016a208");
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
-    // Binary @ 0x0016a220 / 0x0016a226: writes to GameTaskState+0x110 (0.5f)
-    // and GameTaskState+0x10c (0). NOT MainScreen -- decompiler misdirected
-    // these to mainScreen method calls in the prior port.
-    GameTaskState* ts = GetTaskState();
-    if (ts) {
-        ts->m_ScoreStateField_0x110 = 0.5f;            // 0x16a220 [GTS+0x110]
-        ts->m_TimedModeAccumulator = 0;                 // 0x16a226 [GTS+0x10c]
-    }
-
-    FN::SetScore(0, -1);                               // 0x16a22a
-
-    if (game_work.m_SaveData) {
-        FruitSaveData* sd = game_work.m_SaveData;
-        sd->m_GameOverField2 = -1;                     // 0x16a23a [+0x120]
-        sd->m_GameOverField4 = -1;                     // 0x16a23e [+0x128]
-        sd->m_GameOverField3 = -1;                     // 0x16a242 [+0x124]
-        sd->m_GameOverField1 = -1;                     // 0x16a246 [+0x11c]
-    }
-
-    // Binary @ 0x0016a24a: m_CoinsAtGameStart re-snapshot so the retried
-    // run's "YOU JUST EARNT %i COINS" delta starts from zero.
-    // (game+0x28) = (game+0x20).
-    game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
-
-    FN::ResetGameEntities(false);                      // 0x16a24e
-    BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)
-    WaveManager::GetInstance()->Reset(true);           // 0x16a25c
-
-    game_work.retryFlag         = 0;                       // 0x16a26e [+0x06]
-    // ASM-verified: 2026-05-20T00:00:00Z binary @ 0x0016a208 (asm-inspector)
-    game_work.m_GameDt = 0.0f;                    // 0x16a270 [+0x0c] DAT_0016a284=0.0f
-    game_work.m_LevelTransitionFlag         = 0;                       // 0x16a274 [+0x05]
-
-    if (game_work.mMainScreen) {
-        game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
-    }
-
-    // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; binary @ 0x0016a27e
-}
+// EndRetryLevel moved to BombHit.cpp (FN::EndRetryLevel) so GameUpdate can call it
+// directly from the retry dispatch tail. PauseScreen calls FN::EndRetryLevel() below.
 
 // -------------------------------------------------------------------------
 // ctor
@@ -726,13 +683,17 @@ void PauseScreen::Update(float dt) {
     case PAUSE_STATE_RETRY_EXIT:
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
+            // Binary @ 0x00154dbc: SaveCurrentData(false) before RetryLevel.
             FruitNinja_SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RETRY_EXIT faded");
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
-            EndRetryLevel();
+            // Binary calls RetryLevel (0x0016b008), NOT EndRetryLevel (0x0016a208).
+            // RetryLevel sets retryFlag=1 + retryTimer=0.1f; GameUpdate's retry
+            // dispatch tail then calls RetryUpdate per frame and EndRetryLevel at 0.
+            FN::RetryLevel();
             UnpauseGame();
         }
         break;

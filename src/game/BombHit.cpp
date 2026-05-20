@@ -25,6 +25,11 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "audio/GameSound.h"
+#include "game/WaveManager.h"
+#include "game/GameTaskState.h"
+#include "game/FruitSaveData.h"
+#include "game/GameOver.h"
+#include "screens/MainScreen.h"
 #include <cstdio>
 #include "game/GameWork.h"
 
@@ -296,18 +301,14 @@ void ResetGameEntities(bool killAll) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
-    // Use the gamemode flag as the "Zen" gate — binary reads
-    // *(game + 6) which is the gameMode byte at +0x04..+0x0c block.
-    Game* game = Game::GetInstance();
-    // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
-    // Verify whether the surrounding logic is intended for Arcade or Zen and
-    // rename accordingly.
-    const bool zenMode = game && (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
+    // ASM-verified: 2026-05-20 binary @ 0x0016a0e4 reads game+0x6 (retryFlag).
+    // DIFFERS: prior port code read gameMode as 'zen'; actual binary reads retryFlag.
+    const bool forceSliceAll = (game_work.retryFlag != 0) || killAll;
 
     // Iterate Fruit (0) + Bomb (1) type lists.
     for (int t = 0; t <= 1; t++) {
     const std::list<Mortar::Entity*>& list = am->GetTypeList(t);
-    for (auto it = list.begin(); it != list.end(); ++it) {
+    for (std::list<Mortar::Entity*>::const_iterator it = list.begin(); it != list.end(); ++it) {
         Mortar::Entity* e = *it;
         if (!e || !e->IsActive()) continue;
 
@@ -343,10 +344,9 @@ void ResetGameEntities(bool killAll) {
             fruit->vel = Vec3(0, 0, 0);
             fruit->Chuck(0.0f);
 
-            const bool forceSliced = zenMode || killAll;
-            if (forceSliced) {
-                LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in BombHit forceSliced zenMode=%d killAll=%d)",
-                         static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType, (int)zenMode, (int)killAll);
+            if (forceSliceAll) {
+                LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in BombHit forceSliceAll killAll=%d retryFlag=%d)",
+                         static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType, (int)killAll, (int)game_work.retryFlag);
                 fruit->m_bSliced = true;
             }
 
@@ -412,6 +412,127 @@ void UpdateBombHit(float prevTimer) {
     if (currentTimer > 0.0f && currentTimer < BLAST_PURGE_THR) {
         BombBlast::RemoveAll();
     }
+}
+
+// ASM-verified: 2026-05-20T00:00:00Z binary @ 0x0016a208 (asm-inspector)
+// (previously implemented as a file-static in PauseScreen.cpp; moved here
+//  so GameUpdate can call it from the retry dispatch tail)
+void EndRetryLevel() {
+    LOG_INFO("BOMBHIT", "%s (%s)", "EndRetryLevel enter", "binary @ 0x0016a208");
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    // Binary @ 0x0016a220 / 0x0016a226: writes to GameTaskState+0x110 (0.5f)
+    // and GameTaskState+0x10c (0). NOT MainScreen -- decompiler misdirected
+    // these to mainScreen method calls in the prior port.
+    GameTaskState* ts = GetTaskState();
+    if (ts) {
+        ts->m_ScoreStateField_0x110 = 0.5f;            // 0x16a220 [GTS+0x110]
+        ts->m_TimedModeAccumulator  = 0;               // 0x16a226 [GTS+0x10c]
+    }
+
+    FN::SetScore(0, -1);                               // 0x16a22a
+
+    if (game_work.m_SaveData) {
+        FruitSaveData* sd = game_work.m_SaveData;
+        sd->m_GameOverField2 = -1;                     // 0x16a23a [+0x120]
+        sd->m_GameOverField4 = -1;                     // 0x16a23e [+0x128]
+        sd->m_GameOverField3 = -1;                     // 0x16a242 [+0x124]
+        sd->m_GameOverField1 = -1;                     // 0x16a246 [+0x11c]
+    }
+
+    // Binary @ 0x0016a24a: m_CoinsAtGameStart re-snapshot so the retried
+    // run's "YOU JUST EARNT %i COINS" delta starts from zero.
+    // (game+0x28) = (game+0x20).
+    game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
+
+    FN::ResetGameEntities(false);                      // 0x16a24e
+    BombBlast::RemoveAll();                            // 0x16a252 (RemoveFlashEntities)
+    WaveManager::GetInstance()->Reset(true);           // 0x16a25c
+
+    game_work.retryFlag            = 0;                // 0x16a26e [+0x06]
+    game_work.m_GameDt             = 0.0f;             // 0x16a270 [+0x0c] DAT_0016a284=0.0f
+    game_work.m_LevelTransitionFlag = 0;               // 0x16a274 [+0x05]
+
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
+    }
+
+    // Defunct: RetryOnlineMultiplayerGame (binary 0x001053e4) -- no-op stub; binary @ 0x0016a27e
+}
+
+// ASM-verified: 2026-05-20 binary @ 0x0016b008 (re-analyst)
+void RetryLevel() {
+    // game+0x08 = retryTimer: 0.1f initial countdown window.
+    game_work.retryTimer = 0.1f;
+    // game+0x06 = retryFlag: arms the retry-update dispatch in GameUpdate.
+    game_work.retryFlag = 1;
+    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
+    // game+0x05 = m_LevelTransitionFlag: suppresses GameOver cross-check + fuse SFX.
+    game_work.m_LevelTransitionFlag = 1;
+
+    // ASM-verified: 2026-05-20 binary @ 0x0016b040 (re-analyst follow-up)
+    // Iterates WaveManager's wave-list (std::vector<WAVE_INFO*>, stride 0x78),
+    // NOT ActorManager fruits as a prior RE incorrectly claimed.
+    // Sets each wave's +0x6c = 0.25f, clamps +0x68 <= 0.15f.
+    // Port-side WAVE_INFO has +0x68 = m_WaveIndex (int) and +0x6c = m_pCoinChance (void*),
+    // but the binary writes floats to these slots; access via reinterpret cast.
+    {
+        WaveManager* wm = WaveManager::GetInstance();
+        if (wm) {
+            std::vector<WAVE_INFO*>& waves = wm->waveInfos[game_work.gameMode];
+            for (std::vector<WAVE_INFO*>::iterator it = waves.begin(); it != waves.end(); ++it) {
+                WAVE_INFO* wave = *it;
+                if (!wave) continue;
+                *reinterpret_cast<float*>(&wave->m_pCoinChance) = 0.25f;  // +0x6c
+                float& fade68 = *reinterpret_cast<float*>(&wave->m_WaveIndex);  // +0x68
+                if (fade68 > 0.15f) fade68 = 0.15f;
+            }
+        }
+    }
+
+    // TODO: 0x0016b0c4 -- MortarSound::SetVolume(g_AmbientSound, 0.0f) --
+    // g_AmbientSound global not yet in port.
+
+    // TODO: 0x0016b0f8 -- GameSound::SFXPlay(retry-sfx-name, 1.0f, 1.0f,
+    // MakeSFXDelegate_GT()) -- retry SFX string at DAT_0016b0f8 not yet resolved;
+    // MakeSFXDelegate_GT not yet ported.
+}
+
+// ASM-verified: 2026-05-20 binary @ 0x00169cd4 (re-analyst)
+void RetryUpdate(float dt) {
+    static const float TARGET_TIME = 0.1f;  // matches retryTimer initial value
+    const float t_raw = (TARGET_TIME - game_work.retryTimer) / TARGET_TIME;
+    const float t = t_raw * t_raw;
+
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    if (!am) return;
+
+    // Bombs (type 1): scale = -original_scale; vel = (0,0,0).
+    {
+        const std::list<Mortar::Entity*>& list = am->GetTypeList(1);
+        for (std::list<Mortar::Entity*>::const_iterator it = list.begin(); it != list.end(); ++it) {
+            Mortar::Entity* e = *it;
+            if (!e || !e->IsActive()) continue;
+            Bomb* bomb = static_cast<Bomb*>(e);
+            bomb->scale = Vec3(-t, -t, -t);
+            bomb->vel   = Vec3(0.0f, 0.0f, 0.0f);
+        }
+    }
+
+    // Fruits (type 0): scale = -original_scale; vel = (0,0,0); pos.* = 0 for second half.
+    {
+        const std::list<Mortar::Entity*>& list = am->GetTypeList(0);
+        for (std::list<Mortar::Entity*>::const_iterator it = list.begin(); it != list.end(); ++it) {
+            Mortar::Entity* e = *it;
+            if (!e || !e->IsActive()) continue;
+            Fruit* fruit = static_cast<Fruit*>(e);
+            fruit->scale      = Vec3(-t, -t, -t);
+            fruit->vel        = Vec3(0.0f, 0.0f, 0.0f);
+            fruit->m_SecondPos = Vec3(0.0f, 0.0f, 0.0f);
+        }
+    }
+    (void)dt;
 }
 
 } // namespace FN
