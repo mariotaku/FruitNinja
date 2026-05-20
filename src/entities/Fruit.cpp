@@ -1,4 +1,5 @@
 #include "Fruit.h"
+#include "debug/Logger.h"
 #include "game/GameMode.h"
 #include "ActorManager.h"
 #include "FruitInfo.h"
@@ -137,6 +138,8 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_FruitType = (uint8_t)fruitType;
     m_LifetimeCounter = 0;
     m_bActive = 0;
+    LOG_INFO("FRUIT", "m_bSliced=0 set on entity=%p pos=(%.1f,%.1f) type=%d (in Init)",
+             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = 0;
     m_bDrawWhole = 0;
     m_bCriticalEligible = 0;

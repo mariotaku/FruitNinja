@@ -97,6 +97,8 @@ void FN::ClearMenuItems() {
                 f->vel.x = absVx * sign;
 
                 f->m_SecondVel = f->vel;               // m_HalfB_vel = vel
+                LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ClearMenuItems)",
+                         static_cast<void*>(f), f->pos.x, f->pos.y, (int)f->m_FruitType);
                 f->m_bSliced = 1;
             }
             e = am->GetEntityNext(0, it);
@@ -201,6 +203,10 @@ MenuButton::~MenuButton() {}
 void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                       int fruitType, Vec3 hitBounds,
                       Mortar::Delegate0<void> deletedCb) {
+    LOG_INFO("MENUBUTTON", "reset entity=%p (bSliced was %d) button=%p fruitType=%d",
+             static_cast<void*>(m_pEntity),
+             (m_pFruitPiece && m_pEntity) ? (int)m_pFruitPiece->m_bSliced : -1,
+             static_cast<void*>(this), fruitType);
     pos = buttonPos;
     m_ClickCallback = clickCb;
     m_DeletedCallback = deletedCb;
@@ -253,6 +259,8 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                 e->Init(nullptr, (long)fruitType, nullptr);
                 e->flags &= ~0x10;  // unhide
                 m_pEntity = e;
+                LOG_INFO("MENUBUTTON", "spawn entity=%p pos=(%.1f,%.1f) type=%d button=%p",
+                         static_cast<void*>(e), e->pos.x, e->pos.y, entityType, static_cast<void*>(this));
 
                 if (entityType == 0) {
                     // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40)
@@ -372,6 +380,10 @@ void MenuButton::Release() {
     DeletePeices();
     // Binary @ 0x0014f7e0 -- ~SmartPtr<Texture> drop on m_Texture.
     m_Texture.SetNull();
+    LOG_INFO("MENUBUTTON", "destroy entity=%p (bSliced=%d) button=%p",
+             static_cast<void*>(m_pEntity),
+             (m_pFruitPiece && m_pEntity) ? (int)m_pFruitPiece->m_bSliced : -1,
+             static_cast<void*>(this));
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
 

@@ -444,6 +444,8 @@ void ShopScreen::ShrinkBuyButton() {
     if (!fruit) return;
     if (fruit->Sliced()) return;       // already retracting -- noop
 
+    LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ShrinkBuyButton)",
+             static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
     fruit->m_bSliced           = true;  // *(fruit+0xb4) = 1
     m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
     m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0
