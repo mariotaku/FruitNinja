@@ -1,7 +1,7 @@
 #include "HUDControl.h"
 
 #ifndef __bada__
-#include <cstdio>
+#include "debug/Logger.h"
 #include <list>
 static std::list<HUDControl*> s_ActiveControls;
 
@@ -24,14 +24,14 @@ HUDControl::HUDControl()
 {
 #ifndef __bada__
     s_ActiveControls.push_back(this);
-    std::printf("[HUDCONTROL] ctor this=%p\n", static_cast<void*>(this));
+    LOG_DEBUG("HUDCONTROL", "ctor this=%p", static_cast<void*>(this));
 #endif
 }
 
 HUDControl::~HUDControl()
 {
 #ifndef __bada__
-    std::printf("[HUDCONTROL] dtor this=%p\n", static_cast<void*>(this));
+    LOG_DEBUG("HUDCONTROL", "dtor this=%p", static_cast<void*>(this));
     s_ActiveControls.remove(this);
 #endif
 }

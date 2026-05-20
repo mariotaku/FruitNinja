@@ -35,8 +35,8 @@
 #include "render/Renderer.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/Font.h"
+#include "debug/Logger.h"
 #include <cstring>
-#include <cstdio>
 #include <algorithm>
 #include <cstdlib>
 
@@ -1151,16 +1151,15 @@ void GameOverScreen::Update(float dt) {
             // ENTRY edge: first tick in STATE_BONUS_PHASE.
             if (s_lastBonusState != STATE_BONUS_PHASE) {
                 s_bonusEntryFrame = s_bonusStallLogFrame;
-                std::printf("[BONUS_PHASE_STALL] ENTRY frame=%d entities=(%d,%d)\n",
-                            s_bonusStallLogFrame, nf, nb);
-                std::fflush(stdout);
+                LOG_DEBUG("BONUS_PHASE_STALL", "ENTRY frame=%d entities=(%d,%d)",
+                          s_bonusStallLogFrame, nf, nb);
             }
 
             if (am && (nf != 0 || nb != 0)) {
                 ++s_bonusStallLogFrame;
                 if (s_bonusStallLogFrame % 60 == 1) {
-                    std::printf("[BONUS_PHASE_STALL] timer=%.3f fruits=%d bombs=%d\n",
-                                m_Timer, nf, nb);
+                    LOG_DEBUG("BONUS_PHASE_STALL", "timer=%.3f fruits=%d bombs=%d",
+                              m_Timer, nf, nb);
                     // Walk Fruit list (type 0)
                     const std::list<Mortar::Entity*>& fruits = am->GetTypeList(0);
                     std::list<Mortar::Entity*>::const_iterator it;
@@ -1168,13 +1167,14 @@ void GameOverScreen::Update(float dt) {
                         Mortar::Entity* e = *it;
                         if (!e) continue;
                         Fruit* f = static_cast<Fruit*>(e);
-                        std::printf("[BONUS_PHASE_STALL]   Fruit type=%d flags=0x%02x"
-                                    " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
-                                    " sliced=%d chuckDelay=%.3f sliceTimer=%.3f\n",
-                                    (int)f->m_FruitType, (unsigned)f->flags,
-                                    f->pos.x, f->pos.y, f->pos.z,
-                                    f->vel.x, f->vel.y, f->vel.z,
-                                    (int)f->m_bSliced, f->m_ChuckDelay, f->m_SliceTimer);
+                        LOG_DEBUG("BONUS_PHASE_STALL",
+                                  "  Fruit type=%d flags=0x%02x"
+                                  " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
+                                  " sliced=%d chuckDelay=%.3f sliceTimer=%.3f",
+                                  (int)f->m_FruitType, (unsigned)f->flags,
+                                  f->pos.x, f->pos.y, f->pos.z,
+                                  f->vel.x, f->vel.y, f->vel.z,
+                                  (int)f->m_bSliced, f->m_ChuckDelay, f->m_SliceTimer);
                     }
                     // Walk Bomb list (type 1)
                     const std::list<Mortar::Entity*>& bombs = am->GetTypeList(1);
@@ -1182,15 +1182,15 @@ void GameOverScreen::Update(float dt) {
                         Mortar::Entity* e = *it;
                         if (!e) continue;
                         Bomb* b = static_cast<Bomb*>(e);
-                        std::printf("[BONUS_PHASE_STALL]   Bomb flags=0x%02x"
-                                    " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
-                                    " hit=%d movement=%d\n",
-                                    (unsigned)b->flags,
-                                    b->pos.x, b->pos.y, b->pos.z,
-                                    b->vel.x, b->vel.y, b->vel.z,
-                                    (int)b->m_bHit, (int)b->m_bMovement);
+                        LOG_DEBUG("BONUS_PHASE_STALL",
+                                  "  Bomb flags=0x%02x"
+                                  " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
+                                  " hit=%d movement=%d",
+                                  (unsigned)b->flags,
+                                  b->pos.x, b->pos.y, b->pos.z,
+                                  b->vel.x, b->vel.y, b->vel.z,
+                                  (int)b->m_bHit, (int)b->m_bMovement);
                     }
-                    std::fflush(stdout);
                 }
             }
         }
@@ -1382,8 +1382,7 @@ void GameOverScreen::Update(float dt) {
     // EXIT edge: state just left STATE_BONUS_PHASE this tick.
     if (s_lastBonusState == STATE_BONUS_PHASE && m_State != STATE_BONUS_PHASE) {
         int framesBlocked = s_bonusStallLogFrame - s_bonusEntryFrame;
-        std::printf("[BONUS_PHASE_STALL] EXIT after=%d frames\n", framesBlocked);
-        std::fflush(stdout);
+        LOG_DEBUG("BONUS_PHASE_STALL", "EXIT after=%d frames", framesBlocked);
         s_bonusStallLogFrame = 0;
         s_bonusEntryFrame    = 0;
     }

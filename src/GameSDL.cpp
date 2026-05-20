@@ -10,8 +10,8 @@
 #include "core/SystemManager.h"
 #include "game/GameTaskState.h"
 #include "debug/DebugFlags.h"
+#include "debug/Logger.h"
 #include "config.h"
-#include <cstdio>
 
 // Matches: FruitNinja::OnAppInitializing flow
 bool Game::init(void* win, void* gl) {
@@ -66,16 +66,16 @@ void Game::run() {
                 running = false;
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
                 FN::g_DebugHitboxes = !FN::g_DebugHitboxes;
-                printf("[Debug] Hitboxes %s\n", FN::g_DebugHitboxes ? "ON" : "OFF");
+                LOG_DEBUG("Debug", "Hitboxes %s", FN::g_DebugHitboxes ? "ON" : "OFF");
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F2) {
                 // Port specific: glPolygonMode(GL_LINE) around the 3D
                 // entity draw pass. Desktop GL only -- no-op under GLES.
                 FN::g_DebugWireframe = !FN::g_DebugWireframe;
-                printf("[Debug] Wireframe %s\n", FN::g_DebugWireframe ? "ON" : "OFF");
+                LOG_DEBUG("Debug", "Wireframe %s", FN::g_DebugWireframe ? "ON" : "OFF");
             } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
                 // Port specific: debug-only, no binary equivalent
                 FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
-                printf("[debug] timeScale = %.1f\n", FN::g_DebugTimeScale);
+                LOG_DEBUG("Debug", "timeScale = %.1f", FN::g_DebugTimeScale);
             } else {
                 if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
             }

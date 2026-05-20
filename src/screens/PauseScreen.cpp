@@ -15,6 +15,7 @@
 // All three depend on subsystems not yet ported. Specs are RE-complete.
 
 #include "screens/PauseScreen.h"
+#include "debug/Logger.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
@@ -154,6 +155,7 @@ bool PauseScreen::IsEnabled() {
 // QuitToMenu / EndRetryLevel -- binary @ 0x00169e50 / 0x0016a208
 // -------------------------------------------------------------------------
 static void QuitToMenu() {
+    LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu enter", "binary @ 0x00169e50");
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);   // 0x169e58/60
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -205,6 +207,7 @@ static void QuitToMenu() {
 }
 
 static void EndRetryLevel() {
+    LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "EndRetryLevel enter", "binary @ 0x0016a208");
     Game* game = Game::GetInstance();
     if (!game) return;
 
@@ -466,6 +469,7 @@ bool PauseScreen::SetToMultiplayerState() {
 void PauseScreen::PauseGameCallback() {
     Game* game = Game::GetInstance();
     if (m_State == PAUSE_STATE_HIDDEN) {
+        LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_FADE_IN), "PauseGameCallback");
         m_State = PAUSE_STATE_FADE_IN;
         PauseGame();
         // SFX "Pause"
@@ -473,6 +477,7 @@ void PauseScreen::PauseGameCallback() {
             game->pGameSound->SFXPlay("Pause", 1.0f);
         }
     } else if (m_State == PAUSE_STATE_ACTIVE) {
+        LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "PauseGameCallback");
         m_State = PAUSE_STATE_RESUME_EXIT;
         // SFX "Unpause"
         if (game && game->pGameSound) {
@@ -505,6 +510,7 @@ void PauseScreen::QuitGameCallback() {
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
     if (game) game->m_bTutorialShown = 0;
     m_LastHitButton = 0;
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x00153ebc");
     m_State = PAUSE_STATE_QUIT_EXIT;
 }
 
@@ -546,6 +552,7 @@ void PauseScreen::RetryGameCallback() {
     if (game) game->m_bTutorialShown = 0;
     if (game && game->pSaveData) game->pSaveData->ClearTotals();
     if (game && game->pSaveData) game->pSaveData->ClearCombo();
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x00153f68");
     m_State = PAUSE_STATE_RETRY_EXIT;
 }
 
@@ -681,6 +688,7 @@ void PauseScreen::Update(float dt) {
             m_Alpha           = 1.0f;
             m_ButtonFadeAlpha = 1.0f;
             PowerUpManager::GetInstance()->Reset(false);
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/BOMB_FLASH complete");
             m_State = PAUSE_STATE_HIDDEN;
             game->m_TransitionTimer = -1.0f;
         }
@@ -694,6 +702,7 @@ void PauseScreen::Update(float dt) {
 
         if (m_Alpha > ACTIVE_THRESHOLD) {
             m_Alpha = 1.0f;
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_ACTIVE), "Update/FADE_IN alpha settled");
             m_State = PAUSE_STATE_ACTIVE;
         }
         break;
@@ -711,6 +720,7 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
             m_Alpha = 0.0f;
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RESUME_EXIT faded");
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             UnpauseGame();
@@ -723,6 +733,7 @@ void PauseScreen::Update(float dt) {
             FruitNinja_SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/RETRY_EXIT faded");
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             EndRetryLevel();
@@ -737,10 +748,12 @@ void PauseScreen::Update(float dt) {
         m_Alpha *= 0.5f;
         m_Alpha *= FADE_DECAY;
         if (m_Alpha < EXIT_THRESHOLD) {
+            LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "QuitToMenu @ 0x00169e50", "QUIT_EXIT faded");
             QuitToMenu();
             // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
             if (m_LastHitButton >= 0 && m_QuitButton) {
+                LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "HitMenuBomb", "QUIT_EXIT");
                 FN::HitMenuBomb(m_QuitButton->pos);
             }
             // Binary writes m_ButtonFadeAlpha = 1.0 (DAT_00154fb8), NOT 0.0.
@@ -751,6 +764,7 @@ void PauseScreen::Update(float dt) {
             // Transition to BOMB_FLASH (1), NOT HIDDEN. The bomb-flash poll
             // in case 1 is what produces the visible white flash and tears
             // down the gameplay HUD; jumping straight to HIDDEN skipped both.
+            LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_BOMB_FLASH), "Update/QUIT_EXIT faded");
             m_State = PAUSE_STATE_BOMB_FLASH;
             m_Alpha = 1.0f;
             FruitNinja_SaveCurrentData(false);
@@ -935,6 +949,7 @@ void PauseScreen::SkipTo() {
 // 3 -> 4 and clears the tutorial-shown flag.
 void PauseScreen::ContinueGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "ContinueGameCallback @ 0x00153fe8");
     m_State = PAUSE_STATE_RESUME_EXIT;
     Game* g = Game::GetInstance();
     if (!g) return;

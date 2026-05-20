@@ -70,7 +70,10 @@ add_library(mortar_engine STATIC
     # Phase 10 — System stubs (Bada OS services; all no-op)
     system/PowerManager.cpp
 )
-target_include_directories(mortar_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mortar_engine PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+)
 
 # GL backend link target. find_package(OpenGL) covers desktop GL_COMPAT
 # (libGL on Linux/Mesa; opengl32 on Windows); the ES1 / ES2 paths are
