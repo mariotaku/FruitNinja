@@ -467,6 +467,20 @@ void GameUpdate(float dt, bool active) {
         if (fuse) fuse->SetVolume(vol);
     }
 
+    // Retry dispatch tail -- binary @ 0x0016c5ca..0x0016c5fe (GameUpdate).
+    // When retryFlag is set (by RetryLevel), drain retryTimer each frame,
+    // calling RetryUpdate to shrink entities. Once retryTimer reaches zero,
+    // fire EndRetryLevel which resets the game state and clears retryFlag.
+    if (game_work.retryFlag != 0) {
+        if (game_work.retryTimer > 0.0f) {
+            FN::RetryUpdate(dt);
+            game_work.retryTimer -= dt;
+        } else {
+            // Binary: blx EndRetryLevel @ 0x0016a208 (clears retryFlag internally).
+            FN::EndRetryLevel();
+        }
+    }
+
     // m_MenuReturnTimer ramp -- binary @ 0x0016c5fe..0x0016c626 (re-analyst
     // 2026-05-10). Vestigial in the shipped binary: nothing arms +0x1A0 to a
     // positive value, so this branch never fires in normal play. Kept for

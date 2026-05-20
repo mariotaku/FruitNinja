@@ -69,6 +69,24 @@ void UpdateBombHit(float prevTimer);
 // mode in the binary — port currently treats both modes identically.
 void ResetGameEntities(bool killAll);
 
+// Matches EndRetryLevel @ 0x0016a208. Resets game state after the retry
+// shrink animation completes (retryTimer -> 0). Clears retryFlag, resets
+// score/save fields, calls ResetGameEntities(false), resets WaveManager,
+// clears m_LevelTransitionFlag, and sets MainScreen to CAMERA_FADE state.
+void EndRetryLevel();
+
+// Matches RetryLevel @ 0x0016b008. Called from PauseScreen RETRY_EXIT.
+// Sets retryFlag=1, retryTimer=0.1f, arms level-transition gate, sets
+// per-fruit timed-fade params, mutes ambient SFX, plays retry SFX.
+// GameUpdate's retry dispatch tail then calls RetryUpdate each frame until
+// retryTimer reaches 0, then hands off to EndRetryLevel.
+void RetryLevel();
+
+// Matches RetryUpdate @ 0x00169cd4. Called each frame from GameUpdate
+// while retryFlag != 0 and retryTimer > 0. Scales fruits/bombs toward
+// negative (visually shrinks them to zero) over the retryTimer window.
+void RetryUpdate(float dt);
+
 } // namespace FN
 
 #endif
