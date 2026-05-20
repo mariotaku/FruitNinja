@@ -319,9 +319,17 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
         if (wm) comboCount = (int)(wm->GetSpeed(0) + 0.65f);
     }
     Init();
-    int idx = comboCount - 2;
-    if (idx < 0)  idx = 0;
-    if (idx > 9)  idx = 9;
+    // ASM-verified: 2026-05-20 binary @ 0x001515a4 (re-analyst)
+    // Binary index math (asm 0x001515c4..0x001515de):
+    //   comboCount <= 1            -> idx = 0
+    //   2 <= comboCount <= 9       -> idx = comboCount - 1
+    //   comboCount >= 10           -> idx = 9
+    // Array slots: [0]=[1]=NULL, [2..9]=combo_3..combo_10. Combo=2 deliberately
+    // renders nothing (slot 1 is NULL); combo=3 -> slot 2 ("combo_3.tex").
+    int idx;
+    if (comboCount <= 1)       idx = 0;
+    else if (comboCount <= 9)  idx = comboCount - 1;
+    else                       idx = 9;
     if (s_ComboTextures[idx].IsValid()) {
         m_Texture = s_ComboTextures[idx];
         const float w = (float)(s_ComboTextures[idx]->m_Width  + 1);
@@ -491,18 +499,19 @@ void MissControl::Update(float dt) {
         }
     }
 
-    // Slot release when fully faded. binary @ 0x00151a60 release block
+    // Slot release when fully faded. binary @ 0x00151a60 tail (0x00151d0a).
     if (m_FadeAlpha <= 0.0f) {
         m_FadeAlpha = 0.0f;
-        // ASM-verified: 2026-05-11 binary @ MissControl::Update tail
-        // (re-analyst). Slot-release writes 0 to field_0x30 = m_bActive.
-        // HUD::Draw and HUD::Update gate on m_bActive (port: src/hud/HUD.cpp:72/88/108),
-        // so clearing it stops both Update and Draw cycles for this slot
-        // until MakeCritical/MakeRare/MakeCombo's PopulateOverlay sets
-        // m_bActive=1 again on slot reuse.
-        // m_RemoveCallback is NEVER bound for MissControl pool slots in the
-        // binary (verified: no Delegate1<...>::Callee<MissControl> exists).
-        // The disappear mechanism is purely the m_bActive flip (binary field_0x30 = 0).
+        // ASM-verified: 2026-05-20 binary @ 0x00151d0a (re-analyst)
+        // Binary fires m_RemoveCallback BEFORE writing m_bActive = 0.
+        // For combo popups, SlashEntity::Update has bound the callback to
+        // SlashEntity::MissControlDeleted (binary @ 0x0017d900..0x0017d908)
+        // which nulls its m_pComboMissControl back-pointer.
+        // Binary does NOT clear m_RemoveCallback after firing; the next
+        // overwrite (Delegate1::operator=) replaces in-place. Empty
+        // delegates are safe to invoke (Delegate1::operator() no-ops when
+        // m_bEmpty != 0), so no guard is needed.
+        m_RemoveCallback(this);
         m_bActive      = 0;
         m_bComboActive = 0;
     }

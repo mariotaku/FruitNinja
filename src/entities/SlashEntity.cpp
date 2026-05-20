@@ -933,7 +933,14 @@ void SlashEntity::Update(float dt) {
                                         m_pComboMissControl = MissControl::GetFree();
                                         if (m_pComboMissControl) {
                                             m_pComboMissControl->MakeCombo(m_SlicePos, m_ComboCount, m_ComboEntityType);
-                                            // TODO: 0x0017db44 — wire MissControl delete delegate
+                                            // ASM-verified: 2026-05-20 binary @ 0x0017d8e4..0x0017d908 (re-analyst).
+                                            // Bind m_RemoveCallback so when the MissControl pool slot recycles
+                                            // (fade completes in MissControl::Update tail), MissControlDeleted
+                                            // fires and nulls m_pComboMissControl. Binary uses QCallee<SlashEntity>
+                                            // + Delegate1::operator=; port's Delegate1::Make is the equivalent.
+                                            m_pComboMissControl->m_RemoveCallback =
+                                                Mortar::Delegate1<void, HUDControl*>::Make(
+                                                    this, &SlashEntity::MissControlDeleted);
                                         }
                                     } else {
                                         Vec3 existingPos = m_pComboMissControl->pos;
