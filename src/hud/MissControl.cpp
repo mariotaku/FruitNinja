@@ -469,11 +469,15 @@ void MissControl::Update(float dt) {
         // m_bUseSound (port field at +0x85) is binary's field_0x85 (HasSeenLightning).
         // When non-zero: try alternate combo sound, else format "combo-%d".
         // When zero: fall back to "New-best-score" (no-lightning path).
+        // ASM-verified: 2026-05-20T00:00Z binary @ 0x00103f68, 0x00151cf8 (re-analyst)
         if (m_bUseSound != 0) {
-            // TODO: 0x00103f68 — ItemManager::PlayAlternateComboSound not yet ported;
-            // stub is void, so alternate-sound suppression path is skipped for now.
             ItemManager* im = ItemManager::GetInstance();
-            if (im) im->PlayAlternateComboSound(m_ComboCount - 3);
+            bool altPlayed = im ? im->PlayAlternateComboSound(m_ComboCount - 3) : false;
+            if (!altPlayed) {
+                defaultSfx = true;
+            } else {
+                defaultSfx = false;
+            }
             int n = (m_ComboCount < 4)  ? 1
                   : (m_ComboCount < 10) ? m_ComboCount - 2
                                         : 8;
