@@ -18,9 +18,9 @@
 #include "hud/TimeControl.h"
 #include "hud/SpeedControl.h"
 #include "engine/network/NetworkManager.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
 #include <cstring>
-#include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -148,7 +148,7 @@ void WaveManager::Init() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    printf("[WaveManager] Init: data_dir=%s\n", game->data_dir.c_str());
+    LOG_DEBUG("WaveManager", "Init: data_dir=%s", game->data_dir.c_str());
 
     for (int mode = 0; mode < 4; ++mode) {
         // Free any previously-loaded wave infos for this mode.
@@ -167,7 +167,7 @@ void WaveManager::Init() {
             if (!ci.empty()) xerr = doc.LoadFile(ci.c_str());
         }
         if (xerr != tinyxml2::XML_SUCCESS) {
-            printf("[WaveManager] Init: failed to load %s\n", path.c_str());
+            LOG_WARN("WaveManager", "Init: failed to load %s", path.c_str());
             continue;
         }
 
@@ -399,8 +399,8 @@ void WaveManager::Init() {
             waveInfos[mode].push_back(wi);
         }
 
-        printf("[WaveManager] Init: mode %d -> %d waves from %s\n",
-               mode, (int)waveInfos[mode].size(), s_WaveXML[mode]);
+        LOG_DEBUG("WaveManager", "Init: mode %d -> %d waves from %s",
+                  mode, (int)waveInfos[mode].size(), s_WaveXML[mode]);
     }
 }
 
@@ -434,9 +434,9 @@ void WaveManager::Reset(bool fullReset) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    printf("[WaveManager] Reset(full=%d) gameMode=%d waveInfos[%d].size=%zu\n",
-           fullReset ? 1 : 0, (int)game->gameMode, (int)game->gameMode,
-           waveInfos[game->gameMode].size());
+    LOG_DEBUG("WaveManager", "Reset(full=%d) gameMode=%d waveInfos[%d].size=%zu",
+              fullReset ? 1 : 0, (int)game->gameMode, (int)game->gameMode,
+              waveInfos[game->gameMode].size());
 
     // 1. Drop wave queue.
     delete m_pWaveQue;     m_pWaveQue = nullptr;
@@ -510,14 +510,14 @@ void WaveManager::Reset(bool fullReset) {
 
     // 7. Kick first wave if waves loaded.
     if (!waveInfos[game->gameMode].empty()) {
-        printf("[WaveManager] Reset: calling GetNextWave(0)\n");
+        LOG_DEBUG("WaveManager", "Reset: calling GetNextWave(0)");
         GetNextWave(0);
-        printf("[WaveManager] Reset: m_pCurrentWave[0]=%p\n",
-               (void*)m_pCurrentWave[0]);
+        LOG_DEBUG("WaveManager", "Reset: m_pCurrentWave[0]=%p",
+                  (void*)m_pCurrentWave[0]);
         // IsSameScreenMultiplayer() returns false (single-player) — skip MP delay bump.
     } else {
-        printf("[WaveManager] Reset: NO WAVES for mode %d! GetNextWave skipped.\n",
-               (int)game->gameMode);
+        LOG_WARN("WaveManager", "Reset: NO WAVES for mode %d! GetNextWave skipped.",
+                 (int)game->gameMode);
     }
 
     // 8. Final per-mode speed-multiplier defaults.
@@ -1268,9 +1268,9 @@ void WaveManager::GetNextWave(int playerIdx) {
     if (!game) return;
 
     m_WaveCount[playerIdx]++;
-    printf("[WaveManager] GetNextWave(p=%d) waveCount=%d mode=%d waveInfos=%zu\n",
-           playerIdx, m_WaveCount[playerIdx], (int)game->gameMode,
-           waveInfos[game->gameMode].size());
+    LOG_DEBUG("WaveManager", "GetNextWave(p=%d) waveCount=%d mode=%d waveInfos=%zu",
+              playerIdx, m_WaveCount[playerIdx], (int)game->gameMode,
+              waveInfos[game->gameMode].size());
 
     // Speed ramp: increment revisit counter on previously-visited wave.
     if (m_WaveCount[playerIdx] > 1 && m_pCurrentWave[playerIdx])
@@ -1325,10 +1325,10 @@ void WaveManager::GetNextWave(int playerIdx) {
     }
 
     WAVE_INFO* wave = m_pCurrentWave[playerIdx];
-    printf("[WaveManager] GetNextWave: matchCount=%d totalWeight=%d picked=%p (waveNo=%d, spawners=%d)\n",
-           matchCount, totalWeight, (void*)wave,
-           wave ? wave->m_WaveNumber : -999,
-           wave ? wave->m_SpawnerCount : -1);
+    LOG_DEBUG("WaveManager", "GetNextWave: matchCount=%d totalWeight=%d picked=%p (waveNo=%d, spawners=%d)",
+              matchCount, totalWeight, (void*)wave,
+              wave ? wave->m_WaveNumber : -999,
+              wave ? wave->m_SpawnerCount : -1);
     if (!wave) return;
 
     // Decrement selected wave's chance (depletes until regrowth restores it).
@@ -1580,8 +1580,8 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         f->vel  = Vec3(velX, velY, 0.0f);
         f->Init(nullptr, (long)fruitType, nullptr);
         // Diagnostic: spawn parameters (low-rate, only fires per spawn-event)
-        printf("[Spawn] fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) cd=%.2f place=%d\n",
-               fruitType, posX, posY, velX, velY, chuckDelay, (int)spawnType);
+        LOG_VERBOSE("Spawn", "fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) cd=%.2f place=%d",
+                    fruitType, posX, posY, velX, velY, chuckDelay, (int)spawnType);
 
         // Post-Init gravity from spawner Vec3. binary @ 0x00122954..0x0012299e
         // f->m_Gravity = spawner.gravityVec3 * (-f->m_Gravity.y)

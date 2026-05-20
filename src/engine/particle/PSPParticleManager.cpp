@@ -7,8 +7,8 @@
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
@@ -591,7 +591,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         if (!ci.empty()) xerr = doc.LoadFile(ci.c_str());
     }
     if (xerr != tinyxml2::XML_SUCCESS) {
-        printf("[PSPParticleManager] LoadFile: failed to load %s\n", xmlPath);
+        LOG_WARN("PSPParticleManager", "LoadFile: failed to load %s", xmlPath);
         return false;
     }
     tinyxml2::XMLElement* root = doc.FirstChildElement("particle_file");
@@ -860,9 +860,8 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         }
     }
 
-    printf("[PSPParticleManager] Loaded %zu particle templates, "
-           "%zu emitter templates from %s\n",
-           m_ParticleTemplates.size(), m_EmitterTemplates.size(), xmlPath);
+    LOG_DEBUG("PSPParticleManager", "Loaded %zu particle templates, %zu emitter templates from %s",
+              m_ParticleTemplates.size(), m_EmitterTemplates.size(), xmlPath);
     return true;
 }
 

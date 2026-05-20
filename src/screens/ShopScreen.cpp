@@ -28,8 +28,8 @@
 #include "render/Renderer.h"
 #include "math/Colour.h"
 #include "math/MathUtil.h"
+#include "debug/Logger.h"
 #include <cstdlib>
-#include <cstdio>
 
 // ---------------------------------------------------------------------------
 // Constants (resolved from binary DAT addresses via read_memory)
@@ -652,9 +652,9 @@ void ShopScreen::QuitShopCallback() {
 //     ItemManager::SetEquippedItem; play equip SFX
 // ---------------------------------------------------------------------------
 void ShopScreen::EquipCallback() {
-    printf("[Shop] EquipCallback fired: m_bShrinking=%d m_pEquipButton=%p m_pSelectedItem=%p info=%p\n",
-           (int)m_bShrinking, (void*)m_pEquipButton, (void*)m_pSelectedItem,
-           m_pSelectedItem ? (void*)m_pSelectedItem->m_pItemInfo : nullptr);
+    LOG_DEBUG("Shop", "EquipCallback fired: m_bShrinking=%d m_pEquipButton=%p m_pSelectedItem=%p info=%p",
+              (int)m_bShrinking, (void*)m_pEquipButton, (void*)m_pSelectedItem,
+              m_pSelectedItem ? (void*)m_pSelectedItem->m_pItemInfo : nullptr);
     if (!m_pEquipButton) return;
 
     // Binary: if (g_bShopButtonShrinking != 0): programmatic path
@@ -692,13 +692,13 @@ void ShopScreen::EquipCallback() {
     if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
         ItemInfo* info = m_pSelectedItem->m_pItemInfo;
         ItemManager* im = ItemManager::GetInstance();
-        printf("[Shop] EquipCallback user-path: type=%d name='%s' im=%p\n",
-               (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
+        LOG_DEBUG("Shop", "EquipCallback user-path: type=%d name='%s' im=%p",
+                  (int)info->m_Type, info->m_pName ? info->m_pName : "(null)", (void*)im);
         if (im) {
             im->SetEquippedItem((int)info->m_Type, info);
-            printf("[Shop] EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)\n",
-                   (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
-                   im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
+            LOG_DEBUG("Shop", "EquipCallback after SetEquippedItem: m_DefaultItems[%d]=%p (=info?%d)",
+                      (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
+                      im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
 
             // Binary @ 0x0015d630 EquipCallback does NOT touch m_DescText.
             // The "currently equipped" visual is the m_SelectedAlpha highlight
@@ -716,7 +716,7 @@ void ShopScreen::EquipCallback() {
             // / segfault) would lose the equip. Force-save here so the
             // equip persists immediately.
             im->SaveItemInfo();
-            printf("[Shop] EquipCallback SaveItemInfo done\n");
+            LOG_DEBUG("Shop", "EquipCallback SaveItemInfo done");
         }
         // Binary: SFX depends on item type:
         //   type == 0 (blade):      SFXPlay("equip-new-sword")

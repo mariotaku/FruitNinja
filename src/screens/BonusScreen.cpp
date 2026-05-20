@@ -20,8 +20,8 @@
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"
 #include "render/Utf8StringIterator.h"
+#include "debug/Logger.h"
 #include <cstring>
-#include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <algorithm>
@@ -281,10 +281,10 @@ void BonusScreen::Update(float dt) {
         static int s_LogFrame = 0;
         static int s_LogThrottle = 0;
         if (s_LogThrottle == 0) {
-            printf("[BONUS_SCREEN] frame=%d phaseTimer=%.3f awards=%d\n",
-                s_LogFrame,
-                m_PhaseTimer,
-                (int)m_Awards.size());
+            LOG_VERBOSE("BONUS_SCREEN", "frame=%d phaseTimer=%.3f awards=%d",
+                        s_LogFrame,
+                        m_PhaseTimer,
+                        (int)m_Awards.size());
         }
         s_LogFrame++;
         s_LogThrottle = (s_LogThrottle + 1) % 60;

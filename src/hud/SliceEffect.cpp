@@ -16,8 +16,8 @@
 #include "math/Matrix44.h"
 #include "Game.h"
 #include "audio/GameSound.h"
+#include "debug/Logger.h"
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -81,17 +81,17 @@ void SliceEffect_CreatePool(int capacity) {
         if (!s_SliceFxNormal.IsValid()) {
             // logical path; FileSystem_Direct prepends data_dir
             s_SliceFxNormal = meshMgr->Load("models/fruit/slice_fx.mmd");
-            printf("[SliceEffect] slice_fx.mmd valid=%d\n",
-                   s_SliceFxNormal.IsValid());
+            LOG_DEBUG("SliceEffect", "slice_fx.mmd valid=%d",
+                      s_SliceFxNormal.IsValid());
         }
         if (!s_SliceFxCrit.IsValid()) {
             // logical path; FileSystem_Direct prepends data_dir
             s_SliceFxCrit = meshMgr->Load("models/fruit/slice_fx_crit.mmd");
-            printf("[SliceEffect] slice_fx_crit.mmd valid=%d\n",
-                   s_SliceFxCrit.IsValid());
+            LOG_DEBUG("SliceEffect", "slice_fx_crit.mmd valid=%d",
+                      s_SliceFxCrit.IsValid());
         }
     }
-    printf("[SliceEffect] CreatePool: capacity=%d\n", capacity);
+    LOG_DEBUG("SliceEffect", "CreatePool: capacity=%d", capacity);
 }
 
 void SliceEffect_DestroyPool() {

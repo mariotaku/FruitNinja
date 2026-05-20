@@ -14,7 +14,7 @@
 #include "render/Renderer.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
-#include <cstdio>
+#include "debug/Logger.h"
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
@@ -205,8 +205,8 @@ void MissControl::LoadContent() {
         }
     }
     s_TexturesLoaded = true;
-    printf("[MissControl] LoadContent: critical=%d rare=%d cross=%d\n",
-           s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
+    LOG_DEBUG("MissControl", "LoadContent: critical=%d rare=%d cross=%d",
+              s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
 }
 
 // --- Pool allocation -------------------------------------------------------
@@ -218,7 +218,7 @@ void MissControl::AllocatePool() {
     if (s_PoolAllocated) return;
     Game* game = Game::GetInstance();
     if (!game || !game->hud) {
-        printf("[MissControl] AllocatePool: HUD not ready\n");
+        LOG_WARN("MissControl", "AllocatePool: HUD not ready");
         return;
     }
     for (int i = 0; i < MISS_POOL_SIZE; ++i) {
@@ -226,7 +226,7 @@ void MissControl::AllocatePool() {
         game->hud->AddControl(s_Pool[i]);
     }
     s_PoolAllocated = true;
-    printf("[MissControl] AllocatePool: %d slots\n", MISS_POOL_SIZE);
+    LOG_DEBUG("MissControl", "AllocatePool: %d slots", MISS_POOL_SIZE);
 }
 
 const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {

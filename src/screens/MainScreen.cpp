@@ -30,6 +30,7 @@
 #include "audio/GameSound.h"
 #include "audio/SoundManager.h"
 #include "debug/DebugFlags.h"
+#include "debug/Logger.h"
 #include <cstdio>
 #include <cmath>
 
@@ -64,6 +65,7 @@ static const Vec3 POS_SOUND_TOGGLE(216.0f, 135.5f, 0.0f);
 static const Vec3 POS_MUSIC_TOGGLE(176.0f, 135.5f, 0.0f);
 
 void MainScreen::SetState(MainScreenState s) {
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
     m_State = s;
     if (s == STATE_CAMERA_ZOOM) {
         // Port specific: m_pDojoScreen / m_pGameModeScreen are weak pointers to
@@ -203,6 +205,7 @@ void MainScreen::Update(float dt) {
         // The Quit button is lazy-created in state 1 itself, not on the
         // transition (matches binary's "only on first frame of state 1").
         if (game.m_TransitionTimer < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
+            LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             m_State = STATE_CREATE_BUTTONS;
         }
         break;
@@ -269,6 +272,7 @@ void MainScreen::Update(float dt) {
         game.m_TransitionTimer *= 1.0f - (1.0f - STATE_2_DECAY) * FN::g_DebugTimeScale;
         if (fabsf(game.m_TransitionTimer) < 0.001f) {
             game.m_TransitionTimer = 0.0f;
+            LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Update/GAME_START camera settled");
             m_State = STATE_CAMERA_FADE;
             m_bGameStartReset = false;
             // Binary @ 0x0014bb78: clear levelTransitionFlag once the camera
@@ -359,6 +363,7 @@ void MainScreen::Update(float dt) {
             m_Timer2 += dt;  // dt already scaled by g_DebugTimeScale
             if (m_Timer2 > STATE_8_DURATION) {
                 m_Timer2 = STATE_8_RESET_TIMER;
+                LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/SLIDE_IN hold expired");
                 m_State = STATE_CAMERA_ZOOM;
                 // Binary does NOT reset m_StateTimer here; removed.
             }
@@ -378,6 +383,7 @@ void MainScreen::Update(float dt) {
         // resets m_StateTimer = 0 and m_Timer2 = -0.85 (DAT_0014c28c),
         // bouncing back to STATE_CAMERA_ZOOM with the slide-in animation
         // already armed for the next frame.
+        LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
         m_Timer2 = -0.85f;
@@ -388,6 +394,7 @@ void MainScreen::Update(float dt) {
     case STATE_NEWS:            // binary case 0xb
         // Defunct — NetworkManager::UpdateNews polls for remote news.
         // Binary @ 0x0014c0..: m_StateTimer=0, m_State=1, m_Timer2=-0.85.
+        LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/defunct-news state");
         m_State = STATE_CREATE_BUTTONS;
         m_StateTimer = 0.0f;
         m_Timer2 = -0.85f;
@@ -463,6 +470,7 @@ void MainScreen::Update(float dt) {
         if (m_field108 >= 8.0f) {
             m_field108 = 0.0f;
         }
+        LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/LOADING");
         m_State = STATE_CAMERA_ZOOM;
         m_StateTimer = 0.0f;
         game.m_TransitionTimer = 0.0f;
@@ -491,10 +499,12 @@ void MainScreen::Update(float dt) {
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
             FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+            LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
             m_State = STATE_QUIT_BOMB;
             m_StateTimer = 0.0f;
         } else if (qs == 3) {
             // OS-cancelled / idle. Reset to camera-zoom flow.
+            LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/QUIT_WAIT qs==3 cancelled");
             m_State = STATE_CAMERA_ZOOM;
             m_StateTimer = 0.0f;
             m_Timer2 = 0.15f;       // DAT_0014c298
@@ -810,6 +820,7 @@ void MainScreen::DeleteMenuButtons() {
 
 // Matches 0x0014ad04 (7 lines)
 void MainScreen::Hide() {
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
     m_State = STATE_CAMERA_FADE;
     pos = Vec3(0.0f, 0.0f, 0.0f);
 }
@@ -970,6 +981,7 @@ void MainScreen::ButtonDeleted(HUDControl* ctrl) {
 
 // Matches 0x0014b068
 void MainScreen::GameModeCallback() {
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT), "GameModeCallback");
     m_State = STATE_MODE_SELECT;
     m_Timer2 = 1.0f;
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -990,6 +1002,7 @@ void MainScreen::GameModeCallback() {
 // Matches 0x0014c384
 void MainScreen::NewGameCallback() {
     CancelNews();  // defunct stub
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_GAME_START), "NewGameCallback");
     m_State = STATE_GAME_START;
     // ASM-verified: 2026-05-08 binary @ 0x0014c3ce (re-analyst). Literal at
     // 0x001b96af is "Game-start" (Title-Case). Bada's sound loader resolves
@@ -1014,6 +1027,7 @@ void MainScreen::NewGameCallback() {
 // Matches 0x0014afc4
 void MainScreen::AboutCallback() {
     CancelNews();  // defunct stub
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_DOJO_WAIT_B), "AboutCallback");
     m_State = STATE_DOJO_WAIT_B;
     m_Timer2 = 1.0f;
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
@@ -1043,12 +1057,14 @@ void MainScreen::MusicCallback() {
 // Matches 0x0014b010
 void MainScreen::LeaderboardsCallback() {
     CancelNews();  // defunct stub
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_LEADERBOARD), "LeaderboardsCallback");
     m_State = STATE_LEADERBOARD;  // network — skip for port
 }
 
 // Matches 0x0014b000
 void MainScreen::MoreGamesCallback() {
     CancelNews();  // defunct stub
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MORE_GAMES), "MoreGamesCallback");
     m_State = STATE_MORE_GAMES;  // network — skip for port
 }
 
@@ -1083,6 +1099,7 @@ void MainScreen::QuitGamesCallback() {
         bomb->m_AccelForce = Vec3(0.0f, 10.0f, 0.0f);  // (0,1,0) * 10
     }
 
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_WAIT), "QuitGamesCallback");
     m_State = STATE_QUIT_WAIT;
     m_StateTimer = 0.0f;
 }
@@ -1231,6 +1248,7 @@ void MainScreen::OnMenuItemsCleared() {
 //   - m_State = 0x0F (STATE_MODE_SELECT_2) instead of 0x0E
 //   - No FruitSaveData::DownloadTweaks() call
 void MainScreen::MultiplayerGameModeCallback() {
+    LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT_2), "MultiplayerGameModeCallback");
     m_State = STATE_MODE_SELECT_2;
     m_Timer2 = 1.0f;
     if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);

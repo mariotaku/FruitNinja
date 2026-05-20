@@ -17,7 +17,7 @@
 #include "util/StringHash.h"
 #include "util/PathCI.h"
 #include "asset/TextureManager.h"
-#include <cstdio>
+#include "debug/Logger.h"
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -81,8 +81,8 @@ void SoundManager::Init() {
     // Re-init SDL audio subsystem if not already done
     if (!(SDL_WasInit(SDL_INIT_AUDIO) & SDL_INIT_AUDIO)) {
         if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
-            fprintf(stderr, "[SoundManager] SDL_InitSubSystem(AUDIO) failed: %s\n",
-                    SDL_GetError());
+            LOG_ERROR("SoundManager", "SDL_InitSubSystem(AUDIO) failed: %s",
+                      SDL_GetError());
             return;
         }
     }
@@ -101,13 +101,12 @@ void SoundManager::Init() {
 
     m_AudioDevice = SDL_OpenAudioDevice(NULL, 0, &want, &got, 0);
     if (!m_AudioDevice) {
-        fprintf(stderr, "[SoundManager] SDL_OpenAudioDevice failed: %s\n",
-                SDL_GetError());
+        LOG_ERROR("SoundManager", "SDL_OpenAudioDevice failed: %s", SDL_GetError());
         return;
     }
 
-    printf("[SoundManager] Audio opened: freq=%d ch=%d fmt=%d samples=%d\n",
-           got.freq, got.channels, got.format, got.samples);
+    LOG_INFO("SoundManager", "Audio opened: freq=%d ch=%d fmt=%d samples=%d",
+             got.freq, got.channels, got.format, got.samples);
 
     // Start playback
     SDL_PauseAudioDevice(m_AudioDevice, 0);
@@ -132,15 +131,15 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
         }
     }
     if (!rw) {
-        fprintf(stderr, "[SoundManager] LoadSound: cannot open '%s': %s\n",
-                path.c_str(), SDL_GetError());
+        LOG_ERROR("SoundManager", "LoadSound: cannot open '%s': %s",
+                  path.c_str(), SDL_GetError());
         return nullptr;
     }
 
     // Read 20-byte header (5 x int32 LE)
     int32_t hdr[5];
     if (SDL_RWread(rw, hdr, sizeof(int32_t), 5) != 5) {
-        fprintf(stderr, "[SoundManager] LoadSound: short header in '%s'\n", path.c_str());
+        LOG_ERROR("SoundManager", "LoadSound: short header in '%s'", path.c_str());
         SDL_RWclose(rw);
         return nullptr;
     }
@@ -156,8 +155,8 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     bool loop       = (loopStart != 0);
 
     if (sampleCount <= 0 || sampleCount > 4 * 1024 * 1024) {
-        fprintf(stderr, "[SoundManager] LoadSound: bad sampleCount %d in '%s'\n",
-                sampleCount, path.c_str());
+        LOG_ERROR("SoundManager", "LoadSound: bad sampleCount %d in '%s'",
+                  sampleCount, path.c_str());
         SDL_RWclose(rw);
         return nullptr;
     }
@@ -167,7 +166,7 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     SDL_RWclose(rw);
 
     if (read <= 0) {
-        fprintf(stderr, "[SoundManager] LoadSound: no sample data in '%s'\n", path.c_str());
+        LOG_ERROR("SoundManager", "LoadSound: no sample data in '%s'", path.c_str());
         delete[] raw;
         return nullptr;
     }
