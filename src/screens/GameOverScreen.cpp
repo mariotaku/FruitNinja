@@ -246,7 +246,7 @@ GameOverScreen::GameOverScreen()
       m_bScoreSubmitted(0),
       m_ExpressionIdx(0),
       m_BgPatternIdx(0),
-      m_PomCount(0),
+      m_TabIndex(0),
       m_StarCount(0),
       m_bIsClassic(0),
       m_FruitFactAlpha(0.0f)
@@ -279,7 +279,7 @@ bool GameOverScreen::IsAllowedToExit() { return true; }
 
 GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
                                int expressionIdx, int bgPatternIdx,
-                               int pomCount, int starCount)
+                               int tabIndex, int starCount)
     : HUDControl3d(),
       field_0x7c(0.0f),
       m_State(0),
@@ -309,13 +309,13 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
       m_bScoreSubmitted(0),
       m_ExpressionIdx(expressionIdx),
       m_BgPatternIdx(bgPatternIdx),
-      m_PomCount(pomCount),
+      m_TabIndex(tabIndex),
       m_StarCount(starCount),
       m_bIsClassic(0),
       m_FruitFactAlpha(0.0f)
 {
     memset(m_CoinsEarnedLabel, 0, sizeof(m_CoinsEarnedLabel));
-    Initialise(modeName, param2, param3, expressionIdx, bgPatternIdx, pomCount, starCount);
+    Initialise(modeName, param2, param3, expressionIdx, bgPatternIdx, tabIndex, starCount);
 }
 
 GameOverScreen::~GameOverScreen() {
@@ -329,7 +329,7 @@ GameOverScreen::~GameOverScreen() {
 // Binary @ 0x00142674
 void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
                                 int expressionIdx, int bgPatternIdx,
-                                int pomCount, int starCount)
+                                int tabIndex, int starCount)
 {
     // One-shot LoadContent (gated in binary by static guard; stub no-ops)
     LoadContent();
@@ -338,7 +338,7 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
     // Single call, no return value used; safe to skip on the SDL port.
 
     m_pNoticeCtrl    = nullptr; // +0xC8
-    m_PomCount       = pomCount;
+    m_TabIndex       = tabIndex;
     m_Timer          = 0.0f;
     m_MostFruitCount = -1;
     field_0x118      = 0;
@@ -895,7 +895,7 @@ void GameOverScreen::RunStateMainDisplay(int prevState) {
         m_pFruitFact->pos.x = 183.0f + m_OffsetPosX;
         m_pFruitFact->pos.y = 12.0f  + m_OffsetPosY;
         m_pFruitFact->pos.z = 0.0f;
-        m_pFruitFact->m_PomCount  = (uint8_t)m_PomCount;
+        m_pFruitFact->m_TabIndex  = (uint8_t)m_TabIndex;
         m_pFruitFact->m_StarType  = (uint8_t)m_StarCount;
         if (game->hud) game->hud->AddControl(m_pFruitFact, false);
         m_pFruitFact->Init();
