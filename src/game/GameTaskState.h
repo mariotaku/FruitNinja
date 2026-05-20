@@ -131,9 +131,11 @@ struct GameTaskState {
     // Gap +0x104..+0x10B: unnamed binary fields not yet RE'd
     uint8_t _gap_104[8];
 
-    // +0x10c: written by EndRetryLevel (binary @ 0x0016a226) to 0.
-    // TODO: 0x0016a234 — resolve GameTaskState +0x10c semantic (camera state?)
-    int32_t m_ScoreStateField_0x10c;  // step 10 / EndRetryLevel
+    // +0x10C: per-attempt timed-mode accumulator. Reset to 0 alongside TimeControl
+    // (+0x180)+0x7c at EndRetryLevel (binary @ 0x0016a226) and SkipToGameOver
+    // (binary @ 0x0016adba, guarded by IsTimedGame). Reader not yet RE'd -- treat
+    // as write-only. ASM-verified: 2026-05-20 binary @ 0x0016a226 (re-analyst).
+    int32_t m_TimedModeAccumulator;
 
     // +0x110..+0x113: written by EndRetryLevel (binary @ 0x0016a220) as float 0.5f,
     // but individual bytes also accessed: +0x111 cleared by GameInit, +0x112 used as
@@ -176,7 +178,7 @@ struct GameTaskState {
           pBackgroundTexture(),
           pDeferredControl(nullptr),
           _gap_104(),
-          m_ScoreStateField_0x10c(0),
+          m_TimedModeAccumulator(0),
           m_ScoreStateField_0x110(0.0f),
           pAppState_x54(nullptr) {}
 };
@@ -206,7 +208,7 @@ static_assert(offsetof(GameTaskState, pSliceEffectPool)      == 0xC8,  "GameTask
 static_assert(offsetof(GameTaskState, m_pBombFuseSound)      == 0xD8,  "GameTaskState::m_pBombFuseSound must be at +0xD8");
 static_assert(offsetof(GameTaskState, pBackgroundTexture)    == 0xFC,  "GameTaskState::pBackgroundTexture must be at +0xFC");
 static_assert(offsetof(GameTaskState, pDeferredControl)      == 0x100, "GameTaskState::pDeferredControl must be at +0x100");
-static_assert(offsetof(GameTaskState, m_ScoreStateField_0x10c) == 0x10C, "GameTaskState::m_ScoreStateField_0x10c must be at +0x10C");
+static_assert(offsetof(GameTaskState, m_TimedModeAccumulator) == 0x10C, "GameTaskState::m_TimedModeAccumulator must be at +0x10C");
 static_assert(offsetof(GameTaskState, m_ScoreStateField_0x110) == 0x110, "GameTaskState::m_ScoreStateField_0x110 must be at +0x110");
 static_assert(offsetof(GameTaskState, field_0x111)           == 0x111, "GameTaskState::field_0x111 must be at +0x111");
 static_assert(offsetof(GameTaskState, initComplete)          == 0x112, "GameTaskState::initComplete must be at +0x112");

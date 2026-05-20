@@ -337,6 +337,18 @@ static const int k_SaveVersion = 1;
 
 } // namespace
 
+// PlayedModeToday @ 0x0012a248. Returns true iff gameMode was played today
+// (m_LastPlayedDay[gameMode] == GetDaysSince1900()) and the per-mode
+// "<MODE>_today" total is > 0.
+// Key format confirmed via GameOver.cpp AddToTotal site (0x00169f94).
+bool FruitSaveData::PlayedModeToday(int gameMode) {
+    if (gameMode < 0 || gameMode >= 4) return false;
+    if (m_LastPlayedDay[gameMode] != GetDaysSince1900()) return false;
+    char buf[68];
+    snprintf(buf, sizeof(buf), "%s_today", k_ModeNames[gameMode]);
+    return GetTotal(StringHash(buf)) > 0;
+}
+
 // ----------------------------------------------------------------------
 // FruitNinja_SaveGame @ 0x0012a2fc
 // ----------------------------------------------------------------------
