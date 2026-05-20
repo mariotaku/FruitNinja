@@ -1926,9 +1926,37 @@ int  WaveManager::UpdateNetworking(float /*dt*/, int /*playerIdx*/) { return 0; 
 // and that calls a NetworkManager fn pointer that's null on Bada.
 void WaveManager::SendWaveSyncPacket()                               {}
 bool WaveManager::ShouldDisplayNetworkWaitIndicator()               { return false; }
-// TODO: 0x00121a1c -- COIN_CHANCEINATOR::GetCoins() singleton not yet ported.
-// Binary path: if (m_pCurrentWave[0]->m_CoinSpawnChance == 0 ||
-//                  COIN_CHANCEINATOR::GetCoins() < 1)
-//                  COIN_CHANCEINATOR::GetCoins();   // RNG advance
-// Coin-drop rate gating. Implement when coin spawn subsystem ports.
-void WaveManager::RequestCoins()                                     {}
+
+// Binary @ 0x00121778.
+int COIN_CHANCEINATOR::GetCoins() const {
+    Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+    for (int i = 0; i < m_Count; ++i) {
+        Entry* e = &m_pEntries[i];
+        if (rng.Rand32(e->chance) == 0) {
+            if (e->min < e->max)
+                return e->min + (int)rng.Rand32((uint32_t)(e->max - e->min));
+            return e->min;
+        }
+    }
+    return 0;
+}
+
+// Binary @ 0x00121a1c.
+// First: try the global chanceinator via m_pCurrentWave[0]->m_pCoinChance.
+// If that yields > 0, done. Else: advance RNG via fallback coinChance[idx].
+// The fallback byte index comes from the current game-mode coin-table slot.
+void WaveManager::RequestCoins() {
+    WaveManager* self = GetInstance();
+    WAVE_INFO* curWave = self->m_pCurrentWave[0];
+    if (curWave) {
+        COIN_CHANCEINATOR* primary = static_cast<COIN_CHANCEINATOR*>(curWave->m_pCoinChance);
+        if (primary && primary->GetCoins() > 0)
+            return;
+    }
+    // Fallback: RNG-advance only — return value discarded (binary behaviour).
+    // TODO: 0x00121a1c — byte index for coinChance[] slot comes from GOT 0x7990
+    // (game_work at some offset); field not yet pinned. Using gameMode as proxy.
+    int idx = game_work.gameMode;
+    if (idx >= 0 && idx < 4)
+        self->coinChance[idx].GetCoins();
+}

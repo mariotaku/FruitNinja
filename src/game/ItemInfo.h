@@ -114,8 +114,12 @@ struct SlashSoundMods {
     float    m_TimePerSound;
     // +0x10  int32_t  m_PlaySequentialy         "play_sequentialy"=="true" ? 0 : -1; default -1
     int32_t  m_PlaySequentialy;
-    // +0x14  uint8_t  _pad14[0xc]               Reset() scratch state (opaque)
-    uint8_t  _pad14[0xc];
+    // +0x14  float    m_TimeUntilNextSound      auto-decay timer; >0 throttles random pick
+    float    m_TimeUntilNextSound;
+    // +0x18  float    m_LastVolume              stored by PlaySound for use by PlaySoundIdx
+    float    m_LastVolume;
+    // +0x1c  float    m_LastPitch               stored by PlaySound; passed as vol arg to SFXPlay
+    float    m_LastPitch;
     // +0x20  uint8_t  m_bPlayOntop              "play_ontop"=="true" XOR'd with default 1; default 1
     uint8_t  m_bPlayOntop;
     // +0x21  (3 bytes padding)
@@ -132,6 +136,16 @@ struct SlashSoundMods {
 
     // Reset — called from Parse and from SlashModInfo::SetEquipped
     void Reset();
+
+    // PlaySound @ 0x00112fd4 — plays sound by idx (-1 = auto-pick); returns m_bPlayOntop != 0
+    bool PlaySound(int idx, float volume, float pitch);
+
+    // PlaySoundIdx @ 0x00112e94 — plays a specific sound slot via GameSound::SFXPlay
+    void PlaySoundIdx(int i);
+
+    // GetNextSound @ 0x00112cf0 — random+ring sequencer
+    // TODO: 0x00112cf0 -- random+ring sequencer not yet RE'd; returns 0
+    int GetNextSound();
 };
 
 // -----------------------------------------------------------------------
@@ -221,5 +235,12 @@ public:
     // vtable[+0x10] Parse override — ParseSlashModInfo @ 0x001126c0
     virtual void Parse(tinyxml2::XMLElement* e) override;
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(offsetof(SlashSoundMods, m_TimeUntilNextSound) == 0x14, "SlashSoundMods::m_TimeUntilNextSound");
+static_assert(offsetof(SlashSoundMods, m_LastVolume)         == 0x18, "SlashSoundMods::m_LastVolume");
+static_assert(offsetof(SlashSoundMods, m_LastPitch)          == 0x1c, "SlashSoundMods::m_LastPitch");
+#endif
 
 #endif // FN_ITEM_INFO_H
