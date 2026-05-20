@@ -687,10 +687,10 @@
   },
   "_GLOBAL__I_GameOverScreen.cpp": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "TU static-init function (_GLOBAL__I_*). Constructs SmartPtr<Texture> statics + GameOverScreen vtable + static-guard bytes. Codegen differences from PIC anchor ordering + member-init ordering. Score 49295/53100 (92%) -- effectively MATCH after -fpic flag.",
-    "score": 49295,
+    "reason": "Score drift 49295->48895/53100. Cross-build global-init structure differs from binary (GOT-relative static init guard vs port __aeabi_atexit pattern). Semantics identical. [score refreshed 2026-05-20T12:00Z]",
+    "score": 48895,
     "max_score": 53100,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN14GameOverScreen10InitialiseEPKcifiiii": {
     "verdict": "ACCEPT-deferred",
@@ -743,10 +743,10 @@
   },
   "_ZN14GameOverScreen13UnLoadContentEv": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Nulls 13 SmartPtr<Texture> statics + clears guard byte. Port uses a noinline NullTex helper (commit f1dd1af) that emits `bl _ZL7NullTexPN6Mortar8SmartPtrINS_7TextureEEE` matching the binary's tree-tail-merged T.967 thunk. Score 4775/6800 (70%) -- structurally MATCH; residual diff is the 3 GOT slots (0x7af8, 0x75f4, 0x7a88) the port doesn't null because their assignment sites haven't been identified (TODO in source).",
-    "score": 4775,
+    "reason": "Score drift 4775->4995/6800. Both sides call NullTex thunk in same order; port uses LANCHOR labels vs binary GOT offsets. Structural cosmetic. [score refreshed 2026-05-20T12:00Z]",
+    "score": 4995,
     "max_score": 6800,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN14GameOverScreen14DeletedControlEP10HUDControl": {
     "verdict": "ACCEPT-deferred",
@@ -925,10 +925,10 @@
   },
   "_ZN14PowerUpManager16ActivatePurchaseEP7PowerUp": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses std::list iterator (ldr r3,[r4,#8] / _ZNSt15_List_node_base4hookEPS_ / _ZdlPv pattern) vs binary's intrusive linked-list walk. Field access [r4,#8] in port vs [r3,#0xc] in binary reflects std::list node vs raw-pointer offset. Container divergence throughout. See src/game/PowerUpManager.cpp. Score 8410/6100. [score refreshed 2026-05-17T00:00Z]",
-    "score": 7855,
+    "reason": "Score drift 7855->7845/6100. Port calls PowerUp::AddModifier via direct bl; binary uses vtable indirect. See src/game/PowerUp.cpp:134 // TODO: dispatch to modifier factory. [score refreshed 2026-05-20T12:00Z]",
+    "score": 7845,
     "max_score": 6100,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN14PowerUpManager16ClearTimedPowersEv": {
     "verdict": "ACCEPT-deferred",
@@ -1022,11 +1022,11 @@
     "decided_at": "2026-05-04T00:00Z"
   },
   "_ZN7PowerUp12LoadTexturesEv": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "Fixed: _padac[8] added; port body accesses m_pScreenEffect (at +0xbc in cross-build, +0xb4 in binary due to std::list size ABI difference). Cross-build offset residual expected. See src/game/PowerUp.h + src/game/PowerUp.cpp.",
-    "score": 1760,
+    "verdict": "FIX-NEEDED",
+    "reason": "Cross-build emits ldr [r4,#0x8c] for m_pPurchaseInfo but binary @ 0x1083fe accesses [r4,#0x94] and PowerUp.h declares +0x94. 8-byte offset mismatch: binary also has m_pScreenEffect at +0xb4 while port header places it at +0xbc. _padac[8] region at src/game/PowerUp.h:92 may be misassigned. Static asserts guarded by #ifdef __bada__ -- not checked by cross-build. Score 1015/900. Verify PowerUp struct layout offsets and add non-bada offsetof assertions.",
+    "score": 1015,
     "max_score": 900,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN7PowerUp16AddDeferedPointsEi": {
     "verdict": "ACCEPT-deferred",
@@ -1037,10 +1037,10 @@
   },
   "_ZN7PowerUp5CloneEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "PowerUp::Clone — binary allocates 0xcc bytes vs port's 0xc8 bytes (4-byte struct size delta); binary uses heavier SmartPtr ref-count chain (blx e9f54/ef048) for m_ScreenEffect handling. Port source at src/game/PowerUp.cpp:241 has // TODO: per-subclass Clone impls when Modifier trio lands. SmartPtr copy semantics also differ. Score 7260/5300. [score refreshed 2026-05-20T00:00Z]",
-    "score": 8775,
+    "reason": "Score improved 8775->6440/5300. Port uses PowerUpC1 copy ctor; binary does explicit member copy. TODO: per-subclass Clone. See src/game/PowerUp.cpp:250. [score refreshed 2026-05-20T12:00Z]",
+    "score": 6440,
     "max_score": 5300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN7PowerUp5ParseEP12TiXmlElement": {
     "verdict": "ACCEPT-deferred",
@@ -1086,17 +1086,17 @@
   },
   "_ZN7PowerUpD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Dtor now calls ScreenEffectD1Ev + _ZdlPv + string-ref-count derefs; binary used blx indirects for same. See src/game/PowerUp.cpp:28-32. [score refreshed 2026-05-17T00:00Z]",
-    "score": 8170,
+    "reason": "Score drift 8170->8130/3900. Port calls PurchaseInfo::D1Ev + ScreenEffect::D1Ev. _padac[8] layout region (+0xac..+0xb3) still pending resolution. [score refreshed 2026-05-20T12:00Z]",
+    "score": 8130,
     "max_score": 3900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN7PowerUpD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 alias of D1; same as PowerUpD1Ev. [score refreshed 2026-05-17T00:00Z]",
-    "score": 8170,
+    "reason": "Score drift 8170->8130/3900. Base-object dtor; same as D1Ev. [score refreshed 2026-05-20T12:00Z]",
+    "score": 8130,
     "max_score": 3900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN12SPAWNER_INFO11SelectTypesEv": {
     "verdict": "ACCEPT-deferred",
@@ -1709,10 +1709,10 @@
   },
   "_ZN3HUD7OnPauseEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary iterates controls via blx f0bc0/eeb74, dispatches vtable+0x30 (GetType), calls blx f7c94 (ScrollingMenu::ClearTouch static) when type==8. Port has same loop structure but the ScrollingMenu::ClearTouch call is a TODO stub. See src/hud/HUD.cpp:133 // TODO: 0x00144c00 -- make ScrollingMenu::ClearTouch static and call it here. Score 2095/2600.",
-    "score": 2095,
+    "reason": "Score increased 2095->3275/2600. Port iterates list calling ClearTouch() on TYPE_SCROLLING_MENU. Binary does additional calls (blx f0bc0/eeb74) not yet identified. Pending HUD::OnPause full RE. [score refreshed 2026-05-20T12:00Z]",
+    "score": 3275,
     "max_score": 2600,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN3HUD7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
@@ -2640,10 +2640,10 @@
   },
   "_ZN11ItemManager23PlayAlternateComboSoundEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port has bx lr stub vs binary has code. STUB: ItemManager::PlayAlternateComboSound. See src/game/ItemManager.cpp:466.",
-    "score": 1300,
+    "reason": "Score drift 1300->1305/800. Binary uses blx call+return wrapper; port uses b.w tail-call to SlashSoundMods::PlaySound. Tail-call optimisation difference, semantics identical. [score refreshed 2026-05-20T12:00Z]",
+    "score": 1305,
     "max_score": 800,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN11ItemManager23PlayAlternateSwipeSoundEff": {
     "verdict": "ACCEPT-deferred",
@@ -3088,10 +3088,10 @@
   },
   "_ZN11BonusScreen11AwardScoresEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Score 30300/30000. Port has bx lr stub vs binary award logic. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 38004,
+    "reason": "Score drift 38004->38245/30000. Pending member-offset resolution for _Stack_9c/_Stack_a8/_Stack_b4. See src/screens/BonusScreen.cpp:210 // TODO: resolve exact member offsets. [score refreshed 2026-05-20T12:00Z]",
+    "score": 38245,
     "max_score": 30000,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN11BonusScreen4DrawEPf": {
     "verdict": "ACCEPT-deferred",
@@ -3578,10 +3578,10 @@
   },
   "_ZN5Fruit11RandomFruitEb": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Score 68860/16300. Large function; port adds WaveManager::CriticalMode gate (GetInstance/cbz). Binary uses GOT-direct blx. ACCEPT-deferred. [score refreshed 2026-05-17T00:00Z]",
-    "score": 68665,
+    "reason": "Score drift 68665->68755/16300. Port weight-table rebuild (WaveManager::CriticalMode + FruitInfo_GetCount) is binary-faithful per RE but structurally larger. [score refreshed 2026-05-20T12:00Z]",
+    "score": 68755,
     "max_score": 16300,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "T.470": {
     "verdict": "ACCEPT-deferred",
@@ -4453,24 +4453,24 @@
   },
   "_ZN11PowerUpShop17SetBuyButtonStateEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "PowerUpShop method stub/divergence. Score 5400/3600. [score refreshed 2026-05-20T00:00Z]",
-    "score": 5090,
+    "reason": "Score drift 5090->4900/3600. Port accesses game_work.m_SaveData->m_Coins via GOT chain vs binary literal. Remaining delta: ItemSlot list vs m_PurchasablePowerUps[m_SelectedIndex]. Pending full PowerUpShop RE. [score refreshed 2026-05-20T12:00Z]",
+    "score": 4900,
     "max_score": 3600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN11PowerUpShop4InitEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "PowerUpShop method stub/divergence. Score 28875/12500. [score refreshed 2026-05-20T00:00Z]",
-    "score": 29506,
+    "reason": "Score improved 29506->25326/12500. Port iterates PowerUpManager list via vector push_back; binary simpler approach. Pending full PowerUpShop::Init RE (binary @ 0x00156b08). [score refreshed 2026-05-20T12:00Z]",
+    "score": 25326,
     "max_score": 12500,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN11PowerUpShop6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "PowerUpShop method stub/divergence. Score 49455/38300. [score refreshed 2026-05-20T00:00Z]",
-    "score": 50099,
+    "reason": "Score increased 50099->56596/38300. Port Update loop diverging; pending full PowerUpShop::Update RE (binary @ 0x00156398). [score refreshed 2026-05-20T12:00Z]",
+    "score": 56596,
     "max_score": 38300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN11PowerUpShop7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
@@ -4572,10 +4572,10 @@
   },
   "_ZN11SlashEntity15UpdateTouchDownEP10InputEvent": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Binary-faithful port: early-return on bombHitTimer>0 mirrors binary @ 0x17D3AC. Score drift is register-allocation / PIC-anchor noise only. [score refreshed 2026-05-20T00:00Z]",
-    "score": 27055,
+    "reason": "Score drift 27055->27550/28000. Port routes touch-trail building through OnTouchActive(x,y); binary has equivalent logic inline. Semantically equivalent. See src/entities/SlashEntity.cpp:1539. [score refreshed 2026-05-20T12:00Z]",
+    "score": 27550,
     "max_score": 28000,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN11SlashEntity17CollisionResponseEPN6Mortar6EntityEmmP8_Vector3IfE": {
     "verdict": "ACCEPT-cosmetic",
@@ -4635,10 +4635,10 @@
   },
   "_ZN11SlashEntity9TouchDownEP10InputEvent": {
     "verdict": "ACCEPT-deferred",
-    "reason": "TouchDown: port refactored to call UpdateTouchDown directly; binary inlines reset+mode check. See src/entities/SlashEntity.h:158 // TODO: wire when Entity vtable input dispatch is ported. [score refreshed 2026-05-20T00:00Z]",
-    "score": 2005,
+    "reason": "Score drift 2005->2295/2700. Port added UpdateTouchDown dispatch; binary accesses +0x4c vs port +0xcd0 for swipe-end flag (SlashEntity struct layout delta). [score refreshed 2026-05-20T12:00Z]",
+    "score": 2295,
     "max_score": 2700,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN11SlashEntityC1Ev": {
     "verdict": "ACCEPT-deferred",
@@ -6756,10 +6756,10 @@
   },
   "_ZN5Fruit14RotateFacingUpEb8_Vector3IfE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Fruit::RotateFacingUp: binary has full 3D rotation; port is Tier-2 stub. Score 24316/9900.",
-    "score": 24316,
+    "reason": "Score improved 24316->23075/9900. Port calls cosf/sinf for quaternion construction; binary uses pre-computed angle16 constants. ASM-verified 2026-05-20. [score refreshed 2026-05-20T12:00Z]",
+    "score": 23075,
     "max_score": 9900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN5Fruit15EnableCollisionEb": {
     "verdict": "ACCEPT-deferred",
@@ -7253,10 +7253,10 @@
   },
   "_ZN6Mortar12ActorManager11SendMessageEmPNS_6EntityEPNS_7MessageE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 6685/5800.",
-    "score": 6685,
+    "reason": "Score increased 6685->8725/5800. Port calls ActorManager::Find + delete path; binary uses two-iterator list pattern. TODO: senderId filter. See src/entities/ActorManager.cpp:500. [score refreshed 2026-05-20T12:00Z]",
+    "score": 8725,
     "max_score": 5800,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN6Mortar12ActorManager12GetEntityIdxEPNS_6EntityE": {
     "verdict": "ACCEPT-deferred",
@@ -8604,10 +8604,10 @@
   },
   "_ZN9ColSphere7CollideEP3ColP8_Vector3IfE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ColSphere method stub/divergence. Score 4480/4000.",
-    "score": 4480,
+    "reason": "Score jumped 4480->29480/4000 (737%) after b0262c0 added collision-normal helpers. Binary @ 0x0019feac uses vtable double-dispatch; port inlines AABB intersection math via helper methods. Semantics binary-faithful per commit b0262c0. Structural diff only. [score refreshed 2026-05-20T12:00Z]",
+    "score": 29480,
     "max_score": 4000,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T12:00Z"
   },
   "_ZN9ColSphereC1E8_Vector3IfEf": {
     "verdict": "ACCEPT-deferred",
@@ -8881,5 +8881,12 @@
     "score": 4165,
     "max_score": 4500,
     "decided_at": "2026-05-20T00:00Z"
+  },
+  "_ZN11PowerUpShop12ButtonSlicedEv": {
+    "verdict": "FIX-NEEDED",
+    "reason": "New entry (54da30b). (1) binary ldrb.w at +0x130 (m_BuyTriggered, uint8) but cross-build emits ldrh.w (halfword); struct field width issue. (2) binary copies 3-float origin block via ldmia/stmia; port passes g_Origin directly, missing the copy (TODO at src/screens/PowerUpShop.cpp:657). (3) binary list-copy path differs from port vector path. Score 13200/8000 (165%). Investigate binary @ 0x00155b5c.",
+    "score": 13200,
+    "max_score": 8000,
+    "decided_at": "2026-05-20T12:00Z"
   }
 }
