@@ -177,6 +177,9 @@ SlashEntity::SlashEntity()
     , m_pCurrentTarget(nullptr)
     , m_State(0)
     , m_bHasHead(false)
+    , m_BladeVelAtSlice(0, 0, 0)
+    , m_SlicePos(0, 0, 0)
+    , m_SliceEntityType(0)
     , m_Scale(0.0f)
     , m_FingerId(0)
     , m_SwipeSoundTimer(0.0f)
@@ -824,11 +827,18 @@ void SlashEntity::Update(float dt) {
                         LOG_INFO("SLASH", "hit fruit %p at (%.1f,%.1f) trail_n=%d",
                                     static_cast<void*>(e), cs->center.x, cs->center.y, m_NumPoints);
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
+                        // Binary @ 0x0017d664 write-group: snapshot slice state
+                        // immediately after CollisionResponse returns.
+                        m_BladeVelAtSlice = bladeVel;
+                        m_SlicePos        = e->pos;
                         if (t == 0) {
                             Fruit* fruit = static_cast<Fruit*>(e);
+                            m_SliceEntityType = (int)fruit->m_FruitType;
                             if (fruit->m_bCriticalEligible) {
                                 m_Scale = 1.0f;
                             }
+                        } else {
+                            m_SliceEntityType = (int)e->entityType;
                         }
                         slicedThisFrame = true;
                     }
@@ -887,11 +897,9 @@ void SlashEntity::Update(float dt) {
                             const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboSliceArr[i]);
                             if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCount; break; }
                         }
-                        Vec3 coinPos = m_RawTouchPos;
-                        // field_0x130 is dead (always 0); m_pMissControl branch
-                        // preserved for binary fidelity — will activate once
-                        // field_0x130 is re-typed to MissControl*.
+                        Vec3 coinPos = m_SlicePos;
                         // if (m_pMissControl) coinPos = m_pMissControl->pos;
+                        // (commented-in pending field_0x130 type cleanup)
                         Mortar::Delegate1<void, Coin*> onArrived =
                             Coin::DefaultArrivedDelegate();
                         Coin::MakeCoins(bonusCoins, 1,

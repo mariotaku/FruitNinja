@@ -34,7 +34,7 @@ struct MessageListener {
     unsigned int   type;      // +0x00 — exact-match against Message::type (0 is a real value, not wildcard)
     int            senderId;  // +0x04 — Mortar::Entity::id (Mortar::Entity+0x04) filter; 0 = any
     unsigned int   msgKind;   // +0x08 — SendMessage's msgKind key filter; 0 = any
-    void*          callback;  // +0x0C — Mortar::Delegate2<void, Mortar::Entity*, Mortar::Entity*, Message*>*
+    void*          callback;  // +0x0C — Mortar::Delegate3<void, Mortar::Entity*, Mortar::Entity*, Message*>*
                               //         polymorphism lives here, not on MessageListener itself.
                               //         Binary calls callback->vtable[+0x30](sender, target, msg).
 };
