@@ -38,6 +38,8 @@
 #include <cstdio>
 #include "game/GameWork.h"
 #include "Coin.h"
+#include "hud/MissControl.h"
+#include "math/Random.h"
 
 // ASM-verified: 2026-05-20 binary @ 0x00110cb0 CheckCombo (re-analyst)
 // Returns signed-char combo quality score (-1, 0x00..0x18) sign-extended to int.
@@ -242,7 +244,7 @@ void SlashEntity::ReleaseContent() {
 // Lifecycle
 // ---------------------------------------------------------------------------
 // Binary @ 0x0017C82C -- ctor sets vtable, default-constructs m_BaseColour /
-// m_HighlightColour, zeros field_0x130 and m_TrailEmitter. The buffer
+// m_HighlightColour, zeros m_pComboMissControl and m_TrailEmitter. The buffer
 // pointers (m_pLeftBuffer, m_pRightBuffer) inherit zero from Mortar::Entity
 // zero-init; port makes them explicit nullptr for clarity.
 SlashEntity::SlashEntity()
@@ -264,7 +266,7 @@ SlashEntity::SlashEntity()
     , m_FingerId(0)
     , m_SwipeSoundTimer(0.0f)
     , m_RawTouchPos(0, 0, 0)
-    , field_0x130(0)    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    , m_pComboMissControl(nullptr)  // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
     , m_ComboTimer(0.0f)
     , m_ComboCount(0)
     , m_ComboEntityType(0)
@@ -397,12 +399,10 @@ int SlashEntity::UpdateCollisionLine(long /*dt*/) {
 void SlashEntity::DrawUpdate(float /*dt*/) {
 }
 
-// Binary @ 0x17B388 — clear back-pointer to combo MissControl when it gets deleted.
-// DIFFERS: m_pComboMissControl back-ref isn't modelled in port. The binary's
-// HUDControl::~HUDControl walks all SlashEntity[16] and nulls this slot;
-// port's combo-counter subsystem isn't yet ported, so no dangling-ref hazard.
-// Revisit when HUD combo subsystem ports.
+// Binary @ 0x17B388 — clears m_pComboMissControl when the MissControl pool
+// slot is recycled (m_RemoveCallback fires on HUD removal).
 void SlashEntity::MissControlDeleted(HUDControl* /*ctrl*/) {
+    m_pComboMissControl = nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -917,6 +917,30 @@ void SlashEntity::Update(float dt) {
                             if (fruit->m_bCriticalEligible) {
                                 m_Scale = 1.0f;
                             }
+                            // ASM-verified: 2026-05-20 binary @ 0x0017dad8 (re-analyst) -- per-slice combo accumulator + MissControl popup spawn
+                            m_ComboTimer = 0.0f;
+                            m_ComboSliceArr[m_ComboCount] = (int)fruit->m_FruitType;
+                            m_ComboEntityType = (m_FingerId == 0) ? 0 : (m_FingerId == 2 ? 2 : 1);
+                            m_ComboCount += 1;
+                            if (m_ComboCount >= 10) m_ComboTimer = 0.095f;
+                            m_SwipeSoundTimer -= (float)m_ComboCount * (Math::g_Random.RandF(0.5f) + 0.75f);
+                            // Binary: ComboControl is dead code; combo popup is rendered by MissControl::MakeCombo.
+                            // TODO: 0x0017dad8 — CombosEnabled() not yet ported; assumed true
+                            if (m_ComboCount > 2) {
+                                bool online = Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer();
+                                if (!online || m_ComboEntityType != 2) {
+                                    if (m_pComboMissControl == nullptr) {
+                                        m_pComboMissControl = MissControl::GetFree();
+                                        if (m_pComboMissControl) {
+                                            m_pComboMissControl->MakeCombo(m_SlicePos, m_ComboCount, m_ComboEntityType);
+                                            // TODO: 0x0017db44 — wire MissControl delete delegate
+                                        }
+                                    } else {
+                                        Vec3 existingPos = m_pComboMissControl->pos;
+                                        m_pComboMissControl->MakeCombo(existingPos, m_ComboCount, m_ComboEntityType);
+                                    }
+                                }
+                            }
                         } else {
                             m_SliceEntityType = (int)e->entityType;
                         }
@@ -978,8 +1002,7 @@ void SlashEntity::Update(float dt) {
                             if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCount; break; }
                         }
                         Vec3 coinPos = m_SlicePos;
-                        // if (m_pMissControl) coinPos = m_pMissControl->pos;
-                        // (commented-in pending field_0x130 type cleanup)
+                        if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
                         Mortar::Delegate1<void, Coin*> onArrived =
                             Coin::DefaultArrivedDelegate();
                         Coin::MakeCoins(bonusCoins, 1,
@@ -1014,14 +1037,14 @@ void SlashEntity::Update(float dt) {
             // (f) State reset (unconditional in this arm)
             m_ComboCount = 0;
             m_ComboEntityType = 0;
-            field_0x130 = 0;
+            m_pComboMissControl = nullptr;
             for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
         }
     } else {
         // Already past window: clear partial state.
         m_ComboCount = 0;
         m_ComboEntityType = 0;
-        field_0x130 = 0;
+        m_pComboMissControl = nullptr;
         for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
     }
 

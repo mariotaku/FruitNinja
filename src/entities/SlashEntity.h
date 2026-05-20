@@ -52,6 +52,7 @@ struct InputEvent;
 
 class Fruit;
 class HUDControl;
+class MissControl;
 
 class SlashEntity : public Mortar::Entity {
 public:
@@ -130,7 +131,6 @@ public:
     void CreateGhost();
 
     // Binary @ 0x17B388 — clear back-pointer to combo MissControl when deleted.
-    // Port note: m_pComboMissControl doesn't exist in port struct; no-op.
     void MissControlDeleted(HUDControl* ctrl);
 
     // Binary @ 0x17B3BC — entity vtable slot; SlashEntity is pure aggressor,
@@ -286,11 +286,12 @@ private:
     // where base.pos is the raw touch input.
     Vec3 m_RawTouchPos;
 
-    // Binary +0x130: dead member — only ever written (to 0) by ctor.
-    // No reads anywhere in binary. Preserved for layout.
-    // Defunct member: relic of removed feature; only ever written (to 0) by ctor.
+    // Binary +0x130: back-pointer to the MissControl pool slot currently
+    // showing the combo popup for this slash. Cleared by MissControlDeleted
+    // when the pool slot is recycled (m_bActive -> 0). Also cleared in the
+    // combo-resolve reset block in Update.
     // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
-    uint32_t field_0x130;
+    MissControl* m_pComboMissControl;
 
     // Binary +0x124: combo-window accumulator. Initialized to 0.1f in Init.
     // Ticks up each Update while >= 0; reset to -1 when combo window closes.
