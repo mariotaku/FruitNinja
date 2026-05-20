@@ -77,6 +77,12 @@ static Mortar::SmartPtr<Mortar::Texture> g_BgPatternTexArr[3];          // sense
 // Kept here for safety -- duplicate SmartPtr refcount is harmless.
 static Mortar::SmartPtr<Mortar::Texture> g_StarburstTex;
 
+// Defunct: binary @ 0x00140f68 — 3 dead-texture SmartPtr statics at .bss
+// 0x001e9f50/0x0018d5c0/0x0011cb58. Nulled only; never assigned in binary.
+static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_7af8;   // .bss 0x001e9f50 -- never assigned in binary
+static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_75f4;   // .bss 0x0018d5c0
+static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_7a88;   // .bss 0x0011cb58
+
 // comming_soon_highscore.tex (+0x114) is loaded by Update state-6 first-entry,
 // NOT by LoadContent. Kept as instance field m_CommingSoonHighscoreTex.
 
@@ -184,16 +190,8 @@ static FN_NOINLINE void NullTex(Mortar::SmartPtr<Mortar::Texture>* p) {
 
 // Binary @ 0x00130f68: 16 NullTex calls covering 8 individuals + array-of-2
 // + 2 arrays-of-3. Order matches the GOT-slot order observed in the
-// disassembly (objdump-verified 2026-05-16).
-//
-// TODO: 0x00130f68 - 3 GOT slots (0x7af8, 0x75f4, 0x7a88) are nullified
-// by the binary's UnLoadContent but never loaded by LoadContent. They
-// hold SmartPtr<Texture> instances zero-initialised by the TU's static-
-// init (_GLOBAL__I_GameOverScreen.cpp). Their actual assignment site
-// hasn't been identified yet -- needs a follow-up re-analyst pass to
-// trace the LoadLocalisedTexture writers for those slots. Port elides
-// them here; asm-verify will show 3 missing NullTex calls until they
-// are identified and added.
+// disassembly (objdump-verified 2026-05-16). Plus 3 dead-texture statics
+// (never assigned; see s_DeadTex_* above).
 void GameOverScreen::UnLoadContent() {
     g_LoadContentGuard = false;
     NullTex(&g_ArcadeTimeUpTitleTex);  // 0x75d8
@@ -211,6 +209,9 @@ void GameOverScreen::UnLoadContent() {
     }
     // blurry_backing.tex shared with MenuButton; null here too.
     NullTex(&g_StarburstTex);
+    NullTex(&s_DeadTex_7af8);
+    NullTex(&s_DeadTex_75f4);
+    NullTex(&s_DeadTex_7a88);
 }
 
 // ---------------------------------------------------------------------------

@@ -134,20 +134,10 @@ void PowerUpShop::Init() {
     m_PulseScale        = 1.0f;
     m_FruitScale        = 1.0f;
 
-    // Load buy-background texture into m_Texture (+0x78).
-    // Binary: SetPtr from GOT[buybg_texture]; port uses TextureManager.
-    // TODO: 0x00156b08 — confirm exact buy-bg texture filename from binary DAT string
-    // (binary references GOT-loaded SmartPtr; filename not resolved by RE pass yet).
-    // g_BuyBg texture is loaded on demand; assign to m_Texture when available.
-    if (!g_BuyBg.IsValid()) {
-        g_BuyBg = Mortar::TextureManager::LoadLocalisedTexture("buy_bg.tex");
-    }
-    m_Texture = g_BuyBg;
-
-    // Binary: reads texture w/h via vtable slots *(vtbl+0x14)/(+0x18) GetWidth/GetHeight.
-    // Sets pivot = Vector3(w, h, 0) * 1.0.
-    // TODO: 0x00156b08 — pivot assignment needs texture dims; stub at (0,0,0) until
-    // texture filename resolved.
+    // Defunct: binary @ 0x00156b08 — m_Texture(+0x74) SmartPtr static at .bss
+    // 0x00231288 never assigned. Buy-bg path is dead in shipped binary. Init's
+    // GetWidth/GetHeight calls only fire when IsValid().
+    // m_Texture is default-constructed (null); pivot assignment only executes when valid.
 
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
@@ -462,8 +452,8 @@ void PowerUpShop::Update(float dt) {
         if (m_BuyButton->m_pFruitPiece != NULL) {
             m_BuyButton->m_pFruitPiece->m_RotVel1.x *= 0.85f;
             m_BuyButton->m_pFruitPiece->m_RotVel1.y *= 0.85f;
-            // TODO: 0x00156398 — Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
-            // not yet in port; binary @ unknown addr.
+            // ASM-verified: 2026-05-20 binary @ 0x00156398 — RotateFacingUp(false, (0,1,0)).
+            m_BuyButton->m_pFruitPiece->RotateFacingUp(false, Vec3(0.0f, 1.0f, 0.0f));
         }
     } else if (m_BuyButton != NULL) {
         // Step 4: update existing buy button.

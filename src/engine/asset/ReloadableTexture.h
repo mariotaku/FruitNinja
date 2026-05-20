@@ -33,6 +33,11 @@ public:
         m_Handle = 0;
     }
 
+    // Port-specific: loads the texture named by filename via TextureManager::LoadLocalisedTexture
+    // and stores the resulting GL handle. The binary's ReloadableTexture::Load reads the filename
+    // from elsewhere (see PurchaseInfo::m_TextureFilenames[]); this method is a port-side bridge.
+    void Load(const char* filename);
+
     // Bind this texture for rendering (equivalent to Texture::Set()).
     void Set() const;
 
