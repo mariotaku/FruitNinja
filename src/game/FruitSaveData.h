@@ -230,9 +230,12 @@ public:
     // Russian transliteration; semantically "last day this mode was played".
     int      m_LastPlayedDay[4];    // +0x1f8
 
-    // +0x208..+0x238: bomb queue for resume.
-    int      m_BombQueueCount;     // +0x208
-    int      m_BombQueue[11];      // +0x20c
+    // +0x208: best combo length (fruit count) ever achieved across all sessions.
+    // +0x20c..+0x234: fruit-type sequence for that best combo (11 slots, -1 = unused).
+    // Updated by SlashEntity combo-resolve block @ 0x0017df88 when a new high-combo
+    // is achieved; read by FruitFactControl to display the "best combo" fact card.
+    int      m_BestComboLength;    // +0x208
+    int      m_BestComboFruits[11]; // +0x20c
 
     // ------------------------------------------------------------------
     // Construction

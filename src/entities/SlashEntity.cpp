@@ -825,14 +825,21 @@ void SlashEntity::Update(float dt) {
     // Per-swipe combo resolution — binary SlashEntity::Update @ 0x0017dde6..0x0017dfd0.
     // Rising-edge trigger: fires once when m_ComboTimer crosses kComboWindow.
     // ASM-verified: 2026-05-18 binary @ 0x0017dde6..0x0017dfd0 (re-analyst)
-    static const float kComboWindow = 0.5f; // TODO: 0x0017e004 -- exact combo-window value (placeholder 0.5f)
+    // DAT_0017e004 = 0.1f, verified 2026-05-20.
+    static const float kComboWindow = 0.1f;
     if (m_ComboTimer < kComboWindow) {
         m_ComboTimer += dt;
         if (m_ComboTimer >= kComboWindow) {
             // Rising edge: combo window just closed — resolve combo.
             if (m_ComboCount > 1 && m_ComboSliceArr[0] >= 0) {
-                // (a) Slow-mo refund: decrement m_SlowMoFrames by m_ComboCount, clamp >= 2.
-                // TODO: 0x0017dde6 -- GameTaskState lacks m_SlowMoFrames (+0x30); add field when RE'd.
+                // (a) Score-threshold refund: bulk-decrement critical credit by combo size.
+                // SHARED with Fruit::EligibleForCritical -- both decrement game_work.m_ScoreThreshold.
+                // ASM-verified: 2026-05-20 binary @ 0x0017dde6 (asm-inspector)
+                {
+                    int t = game_work.m_ScoreThreshold - m_ComboCount;
+                    if (t < 2) t = 2;
+                    game_work.m_ScoreThreshold = t;
+                }
 
                 // (b) Combo body: only if count >= 3 AND m_ComboSliceArr[1] >= 0 (binary field_0x158).
                 if (m_ComboCount > 2 && m_ComboSliceArr[1] >= 0) {
@@ -854,8 +861,17 @@ void SlashEntity::Update(float dt) {
                     // TODO: 0x0017df88 -- spawn combo coins via Coin::MakeCoins
                     // (d) Achievement unlock
                     AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCount, m_ComboSliceArr);
-                    // (e) Best-combo save — deferred
-                    // TODO: 0x0017df88 -- best-combo save slot (saveData+0x208/+0x20c) not yet ported
+                    // (e) Best-combo save.
+                    // ASM-verified: 2026-05-20 binary @ 0x0017df88 (asm-inspector)
+                    {
+                        FruitSaveData* sd = game_work.m_SaveData;
+                        if (sd && m_ComboCount > sd->m_BestComboLength) {
+                            for (int i = 0; i < 11; ++i) sd->m_BestComboFruits[i] = m_ComboSliceArr[i];
+                            sd->m_BestComboLength = m_ComboCount;
+                            // TODO: 0x0017e418 -- file-static CheckCombo cache for the
+                            //   equal-length-but-better-quality re-check branch.
+                        }
+                    }
                     // Online MP PointsPacket Send — Defunct: online-services stub per policy
                 }
             }
