@@ -243,8 +243,10 @@ void SlashEntity::Release() {
         m_TrailEmitter = nullptr;
     }
     m_NumPoints = 0;
-    // TODO: 0x0017C60C -- clear 1-byte input-init guard at GOT+DAT_0017c658+0x17c6e4
-    //   (likely an "input-registered" flag to prevent double-registration).
+    // Defunct: dead BSS guard at 0x0024C848 -- no-op stub; binary @ 0x0017C60C.
+    // Binary Release writes a 1-byte 0 to a static slot with no other accessors
+    // (likely a once-flag whose set/check sites were inlined out / DCE'd). Port
+    // omits the write; semantically equivalent. (re-analyst 2026-05-20)
 }
 
 // ---------------------------------------------------------------------------
