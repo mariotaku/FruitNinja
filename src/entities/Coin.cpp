@@ -508,3 +508,12 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, const Vec3& delay,
         idx++;
     }
 }
+
+// ---------------------------------------------------------------------------
+// DefaultArrivedDelegate — factory returning a Delegate1 bound to CoinArrived.
+// Exposes the file-static CoinArrived helper (binary @ 0x0017320C) to callers
+// in other translation units (e.g. SlashEntity::Update combo-coin spawn).
+// ---------------------------------------------------------------------------
+Mortar::Delegate1<void, Coin*> Coin::DefaultArrivedDelegate() {
+    return Mortar::Delegate1<void, Coin*>::MakeFree(&CoinArrived);
+}
