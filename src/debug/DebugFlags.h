@@ -33,6 +33,19 @@ void DebugHUDBounds_Draw();
 
 } // namespace FN
 
+#else // __bada__
+
+// On the Bada / cross-build target there is no debug time scaling.
+// Provide g_DebugTimeScale as a compile-time constant so call sites
+// that multiply by it compile and reduce to no-op arithmetic.
+namespace FN {
+static const float g_DebugTimeScale = 1.0f;
+static const bool  g_DebugHitboxes  = false;
+static const bool  g_DebugWireframe = false;
+inline void DebugHitbox_Draw()  {}
+inline void DebugHUDBounds_Draw() {}
+} // namespace FN
+
 #endif // !__bada__
 
 #endif

@@ -16,6 +16,7 @@
 #include "StringTable.h"
 #include "PathCI.h"
 #include "debug/Logger.h"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
