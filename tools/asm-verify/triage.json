@@ -197,10 +197,10 @@
   },
   "_ZN11WaveManager12RequestCoinsEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Online coins stub (Tapjoy). See src/game/WaveManager.cpp:1567 // empty stub for online services.",
-    "score": 2400,
+    "reason": "COIN_CHANCEINATOR::GetCoins() ported; fallback coinChance[] byte-index from GOT 0x7990 (game_work offset) not yet pinned -- using gameMode as proxy. See src/game/WaveManager.cpp TODO @ 0x00121a1c.",
+    "score": 2795,
     "max_score": 2100,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN11WaveManager12SaveWaveInfoEP13FruitSaveData": {
     "verdict": "ACCEPT-deferred",
@@ -393,17 +393,17 @@
   },
   "_ZN11WaveManagerC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port now calls Random::Random() ctor + initializes many new AchievementManager/BonusScreen/GameTaskInput struct fields. Score drifted (22625/4200). Binary calls sub-object ctors only. DIFFERS placeholders at src/game/WaveManager.cpp:72-116. All new fields are correct member-init.",
-    "score": 22625,
+    "reason": "Port now calls Random::Random() ctor + initializes many new AchievementManager/BonusScreen/GameTaskInput struct fields. Score drifted (22430/4200). Binary calls sub-object ctors only. DIFFERS placeholders at src/game/WaveManager.cpp:72-116. All new fields are correct member-init.",
+    "score": 22430,
     "max_score": 4200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN11WaveManagerC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 alias of C1; same as WaveManagerC1Ev. Score drifted (22625/4200). See src/game/WaveManager.cpp:72-116.",
-    "score": 22625,
+    "reason": "C2 alias of C1; same as WaveManagerC1Ev. Score drifted (22430/4200). See src/game/WaveManager.cpp:72-116.",
+    "score": 22430,
     "max_score": 4200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN11WaveManagerD1Ev": {
     "verdict": "ACCEPT-deferred",

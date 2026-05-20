@@ -7,7 +7,9 @@
 
 #include "ItemInfo.h"
 #include "ItemParseUtil.h"
+#include "GameWork.h"
 #include "engine/util/StringHash.h"
+#include "engine/audio/GameSound.h"
 #include "entities/SlashEntity.h"
 #include <cstdio>
 #include <cstdlib>
@@ -142,11 +144,13 @@ SlashSoundMods::SlashSoundMods()
     , m_SoundVolumes(nullptr)
     , m_TimePerSound(0.0f)
     , m_PlaySequentialy(-1)
+    , m_TimeUntilNextSound(0.0f)
+    , m_LastVolume(0.0f)
+    , m_LastPitch(0.0f)
     , m_bPlayOntop(1)
     , m_RecentRing(nullptr)
     , m_PreviousSoundsToAvoid(0)
 {
-    for (int i = 0; i < 0xc; i++) _pad14[i] = 0;
     _pad21[0] = _pad21[1] = _pad21[2] = 0;
 }
 
@@ -217,11 +221,51 @@ void SlashSoundMods::Parse(tinyxml2::XMLElement* elem) {
 
 // SlashSoundMods::Reset — called at end of Parse and from SlashModInfo::SetEquipped
 void SlashSoundMods::Reset() {
-    // Reset scratch playback state in _pad14 region (opaque runtime counters)
-    for (int i = 0; i < 0xc; i++) _pad14[i] = 0;
+    m_TimeUntilNextSound = 0.0f;
+    m_LastVolume         = 0.0f;
+    m_LastPitch          = 0.0f;
     if (m_RecentRing != nullptr) {
         for (int i = 0; i < m_PreviousSoundsToAvoid; i++) m_RecentRing[i] = -1;
     }
+}
+
+// SlashSoundMods::GetNextSound @ 0x00112cf0 — random+ring sequencer
+// TODO: 0x00112cf0 -- random+ring sequencer not yet RE'd; returns 0
+int SlashSoundMods::GetNextSound() {
+    return 0;
+}
+
+// SlashSoundMods::PlaySoundIdx @ 0x00112e94
+void SlashSoundMods::PlaySoundIdx(int i) {
+    if (i < 0) return;
+    if (i > m_SoundCount - 1) i = m_SoundCount - 1;
+    const char* name = m_SoundNames[i];
+    float vol = m_SoundVolumes[i];
+    GameSound* gs = game_work.mGameSound;
+    Mortar::Delegate1<bool, Mortar::MortarSound*> empty;
+    // NOTE: binary passes m_LastPitch in the vol position and per-sound vol in the pitch position
+    gs->SFXPlay(name, m_LastPitch, vol, empty);
+}
+
+// SlashSoundMods::PlaySound @ 0x00112fd4
+bool SlashSoundMods::PlaySound(int idx, float volume, float pitch) {
+    if (m_SoundCount == 0) return false;
+    m_LastPitch  = pitch;
+    m_LastVolume = volume;
+    if (idx >= 0) {
+        PlaySoundIdx(idx);
+    } else {
+        if (m_TimeUntilNextSound > 0.0f) {
+            m_TimeUntilNextSound += 1.0f;
+        } else {
+            int picked = GetNextSound();
+            PlaySoundIdx(picked);
+            if (picked >= 0 && m_TimePerSound > 0.0f) {
+                m_TimeUntilNextSound = 0.99898f;  // DAT_00113038 = 0x3F7FBE77
+            }
+        }
+    }
+    return m_bPlayOntop != 0;
 }
 
 // -----------------------------------------------------------------------
