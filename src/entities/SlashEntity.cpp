@@ -32,6 +32,7 @@
 #include "game/AchievementManager.h"
 #include "game/FruitSaveData.h"
 #include "engine/network/NetworkManager.h"
+#include "Fruit.h"
 #include <cstring>
 #include <cmath>
 #include <cstdio>
@@ -566,9 +567,6 @@ void SlashEntity::RebuildGeometry() {
     // Derive m_BaseColour from m_Scale. Binary:
     //   if (m_Scale > 0) lerp white -> m_HighlightColour by (1-m_Scale)
     //   else             m_BaseColour = m_HighlightColour
-    // m_Scale defaults to 0 (not yet lifecycle-managed), so always use
-    // m_HighlightColour directly, which IS the correct fully-saturated disco
-    // visual when m_Scale == 0.
     if (m_Scale > 0.0f) {
         const float blend = 1.0f - m_Scale;  // 0 = full white, 1 = full highlight
         m_BaseColour.r = (uint8_t)(255.0f + (float)((int)m_HighlightColour.r - 255) * blend);
@@ -785,6 +783,11 @@ void SlashEntity::Update(float dt) {
         if (m_SwipeSoundTimer < 0.0f) m_SwipeSoundTimer = 0.0f;
     }
 
+    // m_Scale decay — binary @ 0x17D664. Set to 1.0 on critical hit (see
+    // CollisionResponse loop below); decays at -2*dt/frame until clamped at 0.
+    m_Scale -= 2.0f * dt;
+    if (m_Scale < 0.0f) m_Scale = 0.0f;
+
     bool slicedThisFrame = false;
     if (m_NumPoints >= 2 && m_State != 0 && !bombHitActive
         && !menuDragActive && !gamePaused) {
@@ -805,10 +808,18 @@ void SlashEntity::Update(float dt) {
                     if (CollideWithSphere(*cs, bladeVel)) {
                         // Binary @ 0x0017d664: vtable[9](victim, slashEntity, 0, 0, &bladeVel).
                         // Port: SlashEntity does not inherit Mortar::Entity, pass nullptr for hitter.
-                        // Fruit/Bomb CollisionResponse only reads bladeVelocity; hitter unused.
+                        // Binary passes this (slashEntity) as hitter; Fruit::CollisionResponse
+                        // sets hitter->m_Scale = 1.0 on critical hit via the hitter pointer.
+                        // Port replicates by reading m_bCriticalEligible after the call.
                         LOG_INFO("SLASH", "hit fruit %p at (%.1f,%.1f) trail_n=%d",
                                     static_cast<void*>(e), cs->center.x, cs->center.y, m_NumPoints);
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
+                        if (t == 0) {
+                            Fruit* fruit = static_cast<Fruit*>(e);
+                            if (fruit->m_bCriticalEligible) {
+                                m_Scale = 1.0f;
+                            }
+                        }
                         slicedThisFrame = true;
                     }
                 }
@@ -1094,19 +1105,14 @@ void SlashEntity::ResetModScales() {
 // g_ColourType == 2. We skip that until the highlight system lands —
 // currently visible only for type-2 mods which aren't shipped.
 void SlashEntity::ColoursChanged() {
-    // DIFFERS: port-side plug for the m_Scale-lifecycle gap (binary @ 0x0017C41C
-    // does NOT reset m_HighlightColour or m_BaseColour here -- per asm-inspector
-    // 2026-05-10). The binary only refreshes m_HighlightColour for PER_SWIPE
-    // (g_ColourType == 2) via UpdateModColour(&m_HighlightColour, 1.0f) inside
-    // the m_bDirty branch; PER_SLASH continuously refreshes via PreUpdate, and
-    // NONE leaves the field untouched because the binary's RebuildGeometry only
-    // writes m_HighlightColour when g_ColourType != 0. With m_Scale lifecycle
-    // ported (1.0 in critical, -2*dt decay), the binary's m_Scale > 0 path
-    // would lerp white -> stale m_HighlightColour, hiding the leak. Port has
-    // m_Scale stuck at 0 so the m_Scale==0 else-branch in RebuildGeometry
-    // copies stale bytes straight to the vertex stamp -- visible as disco
-    // tint persisting through a NONE-blade swap. Snap m_HighlightColour /
-    // m_BaseColour to g_Palette[0] until m_Scale lifecycle lands.
+    // DIFFERS: binary @ 0x0017C41C does NOT snap m_HighlightColour here
+    // (per asm-inspector 2026-05-10). The binary refreshes m_HighlightColour
+    // only via PreUpdate (PER_SLASH) or the m_bDirty UpdateModColour branch
+    // (PER_SWIPE/g_ColourType==2); NONE leaves it untouched. Port snaps to
+    // g_Palette[0] here because the PER_SLASH/PER_SWIPE refresh paths are not
+    // yet ported, so stale bytes would persist through a blade-type swap.
+    // TODO: remove this snap once PreUpdate colour refresh (binary @ 0x17C3C4)
+    //   and the m_bDirty UpdateModColour branch are ported.
     if (g_ColourCount > 0) {
         m_HighlightColour = g_Palette[0];
     } else {
