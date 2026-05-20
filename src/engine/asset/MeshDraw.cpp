@@ -32,13 +32,11 @@ namespace Mortar { namespace MeshDraw {
 // Port: forwards to Renderer::DrawTriList / DrawTriStrip which handle the
 // GLES2 VBO path. The original used GLES1 client-state arrays; the port
 // Renderer already provides the equivalent GLES2 implementation.
-// TODO: 0x00193f5c — blend flag was applied via glEnable/glDisable(GL_BLEND)
-// around the draw call; Renderer does not currently thread that flag through
-// DrawTriList/DrawTriStrip. Blend state is left at its current value.
-void DrawTris(const QUADCUSTOMVERTEX* verts, long count, int primType, bool /*blend*/, void* /*fx*/) {
+void DrawTris(const QUADCUSTOMVERTEX* verts, long count, int primType, bool blend, void* /*fx*/) {
     if (!verts || count <= 0) return;
     Renderer* r = Renderer::GetInstance();
     if (!r) return;
+    if (blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     // primType 4 = GL_TRIANGLES, 5 = GL_TRIANGLE_STRIP (same values on GLES2).
     if (primType == 5) {
         r->DrawTriStrip(const_cast<QUADCUSTOMVERTEX*>(verts), (int)count);
