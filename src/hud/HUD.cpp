@@ -1,6 +1,7 @@
 // Analysed: 2026-05-04T00:00
 
 #include "HUD.h"
+#include "ScrollingMenu.h"
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
 #include <list>
@@ -134,14 +135,13 @@ void HUD::ResetControls() {
 
 // Binary @ 0x00144c00
 // Binary dispatches GetType() on every control (regardless of m_bActive)
-// and calls ScrollingMenu::ClearTouch (static) when GetType() == 8.
+// and calls ScrollingMenu::ClearTouch on the instance when GetType() == 8.
+// Ghidra decompile showed no-arg call due to unknown-convention warning;
+// disasm @ 0x00144c22-0x00144c26 confirms r0 (this) is reloaded before blx.
 void HUD::OnPause() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         if ((*it)->GetType() == 8 /* TYPE_SCROLLING_MENU */) {
-            // TODO: 0x00144c00 — make ScrollingMenu::ClearTouch static and call it here.
-            // Binary calls a static function (no instance pointer), not an instance method.
-            // static_cast<ScrollingMenu*>(*it)->ClearTouch();  // placeholder — NOT correct (would be instance)
-            // ScrollingMenu::ClearTouch();  // correct form when ported
+            static_cast<ScrollingMenu*>(*it)->ClearTouch();
         }
     }
 }
