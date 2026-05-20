@@ -398,6 +398,22 @@ void GameUpdate(float dt, bool active) {
     // decay normally; nothing slices because ActorManager::Update isn't
     // running on the inactive branch.
     if (!active) {
+        // ASM-verified: 2026-05-20 binary @ 0x0016c31a..0x0016c35e GameUpdate else-branch (re-analyst)
+        // Entry to the else-branch unconditionally clears m_bSlowMotion, then if
+        // |m_TransitionTimer| exceeds 0.99896961f it also clears pausedFlag. This is the
+        // recovery PauseScreen QUIT_EXIT (m_TransitionTimer = -1.0f) relies on to escape
+        // BOMB_FLASH: clears pausedFlag -> next frame active=true -> bombHitTimer drains
+        // -> BombFlashFull returns true -> state 1 -> 0.
+        {
+            static const float GAME_CAMERA_TRANSITION_THRESHOLD = 0.99896961f;  // DAT_0x0016c574/8 = 0x3f7fbe77
+            game->m_bSlowMotion = false;
+            const float tt = game->m_TransitionTimer;
+            const bool unpause = (tt < 0.0f)
+                ? (tt < -GAME_CAMERA_TRANSITION_THRESHOLD)
+                : (tt >  GAME_CAMERA_TRANSITION_THRESHOLD);
+            if (unpause) game->pausedFlag = false;
+        }
+
         // Binary @ 0x0016c378 calls PreUpdate once (on the first valid
         // SlashEntity) with dt=0 before the Update/PostUpdate loop. The
         // dt=0 freezes the per-frame palette cycle / ghost ring tick
