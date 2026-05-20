@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstdint>
+#include <map>
 
 // Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
 // LoadContent loads three shared SmartPtrs in this order, verified by RE
@@ -514,6 +515,21 @@ void MenuButton::SetNewSymbol(bool show) {
 // quad collapses to a point and the backdrop appears invisible.
 // ASM-verified: 2026-05-06T17:50 binary @ 0x0014eb84 (asm-inspector)
 void MenuButton::Update(float dt) {
+    if (m_pEntity) {
+        static std::map<MenuButton*, uint8_t> s_PrevSliced;
+        uint8_t curr = m_pFruitPiece ? m_pFruitPiece->m_bSliced : 0;
+        std::map<MenuButton*, uint8_t>::iterator it = s_PrevSliced.find(this);
+        uint8_t prev = (it != s_PrevSliced.end()) ? it->second : 0;
+        if (curr != prev) {
+            LOG_INFO("MENUBUTTON", "Update sees bSliced transition %d->%d on entity=%p pos=(%.1f,%.1f) button=%p",
+                     (int)prev, (int)curr,
+                     static_cast<void*>(m_pEntity),
+                     m_pEntity->pos.x, m_pEntity->pos.y,
+                     static_cast<void*>(this));
+            s_PrevSliced[this] = curr;
+        }
+    }
+
     UpdatePeices(dt);
 
     // Hardware Back/Menu key auto-fire. Binary @ 0x0014e9a8: when

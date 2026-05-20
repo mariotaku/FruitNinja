@@ -343,6 +343,8 @@ void ResetGameEntities(bool killAll) {
 
             const bool forceSliced = zenMode || killAll;
             if (forceSliced) {
+                LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in BombHit forceSliced zenMode=%d killAll=%d)",
+                         static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType, (int)zenMode, (int)killAll);
                 fruit->m_bSliced = true;
             }
 
