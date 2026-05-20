@@ -438,13 +438,13 @@ void PowerUpManager::Load() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        LOG_ERROR("POWERUP", "PowerUpManager::Load -- failed to open '%s' (error %d)", path.c_str(), (int)err);
+        LOG_ERROR("POWERUP/Load", "failed to open '%s' (error %d)", path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("powers");
     if (!root) {
-        LOG_WARN("POWERUP", "PowerUpManager::Load -- no <powers> root in '%s'", path.c_str());
+        LOG_WARN("POWERUP/Load", "no <powers> root in '%s'", path.c_str());
         return;
     }
 

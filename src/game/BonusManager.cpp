@@ -67,14 +67,14 @@ void BonusManager::Init() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        LOG_ERROR("BONUS", "BonusManager::Init -- failed to open '%s' (error %d)",
+        LOG_ERROR("BONUS/Init", "failed to open '%s' (error %d)",
                path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("bonusAwardsFile");
     if (!root) {
-        LOG_WARN("BONUS", "BonusManager::Init -- no <bonusAwardsFile> root in '%s'",
+        LOG_WARN("BONUS/Init", "no <bonusAwardsFile> root in '%s'",
                path.c_str());
         return;
     }
