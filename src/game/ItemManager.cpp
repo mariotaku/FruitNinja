@@ -17,6 +17,7 @@
 #include "engine/MenuBackground.h"
 #include "entities/SlashEntity.h"
 #include "screens/ShopScreen.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstdlib>
@@ -150,8 +151,8 @@ void ItemManager::LoadItemData() {
             }
         }
     } else {
-        fprintf(stderr, "ItemManager::LoadItemData: failed to open '%s' (error %d)\n",
-                xmlPath.c_str(), (int)err);
+        LOG_ERROR("ITEM", "LoadItemData: failed to open '%s' (error %d)",
+                  xmlPath.c_str(), (int)err);
     }
 
     // Phase 2: Load save state from ItemSave.xml
