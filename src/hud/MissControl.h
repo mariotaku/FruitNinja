@@ -170,8 +170,8 @@ public:
     static int   s_NumCriticals;  // 0x0023123c -- incremented per busy slot in Update
     static float s_DtMod;         // 0x001f3d6c -- (float)s_NumCriticals + 0.5, set by PreUpdate
 
-    // Binary @ 0x001515a4 — combo overlay textures: slots [0..9] = combo_2..combo_11.
-    // Binary ctor loop iVar3=1..10: loads combo_%d.tex for iVar3>=3 -> names combo_3..combo_11.
+    // Binary @ 0x001515a4 — combo overlay textures: [0..1]=NULL, [2..9]=combo_3..combo_10.
+    // MakeCombo index = clamp(comboCount-1, 0, 9) — see MissControl.cpp.
     static Mortar::SmartPtr<Mortar::Texture> s_ComboTextures[10];
 };
 
