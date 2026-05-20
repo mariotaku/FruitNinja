@@ -593,47 +593,42 @@ void PowerUpShop::SetBuyButtonState() {
 // ButtonSliced @ 0x00155b5c (non-virtual; bound as Mortar::Delegate0<void>)
 // ============================================================
 void PowerUpShop::ButtonSliced() {
-    // Binary @ 0x00155bf0:
-    if (m_BuyTriggered == 0 && m_BuyButtonState == 0) {
-        if (m_PurchasablePowerUps.empty()) {
-            return;
-        }
-        // hash = m_PurchasablePowerUps[m_SelectedIndex]->m_TypeId (m_NameHash in port)
-        PowerUp* selected = m_PurchasablePowerUps[m_SelectedIndex];
-        uint32_t hash = selected->m_NameHash;
-
-        // Binary @ 0x00155bf0: ActivatePower(hash, &origin, &pushScalar)
-        // pushScalar is a local zero float in the binary (no parameter).
-        float pushScalar = 0.0f;
-        Vec3 origin = g_Origin;
-        PowerUpManager* pum = PowerUpManager::GetInstance();
-        PowerUp* singleActive = pum->ActivatePower(hash, &origin, &pushScalar);
-
-        if (singleActive != NULL) {
-            m_BuyButtonState = 2;
-            m_PurchasedCount++;
-            m_PurchasablePowerUps[m_SelectedIndex] = singleActive;
-        }
-
-        // Refresh coin text.
-        Game* game = Game::GetInstance();
-        int coins = 0;
-        if (game && game_work.m_SaveData) {
-            coins = game_work.m_SaveData->m_Coins;
-        }
-        snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
-
-    } else if (m_BuyTriggered != 0) {
-        // Safety reset: zero fruit velocity for despawning button-fruit.
-        if (m_BuyButton != NULL && m_BuyButton->m_pFruitPiece != NULL) {
-            Fruit* fruit = m_BuyButton->m_pFruitPiece;
-            if (!fruit->Sliced()) {
-                fruit->vel      = g_Origin;
-                fruit->m_RotVel1 = g_Origin;
-                fruit->m_RotVel2 = g_Origin;
-            }
-        }
+    // Binary @ 0x00155b70: split predicate (avoids GCC 16-bit load-fuse on
+    // combined &&; binary emits two ldrb.w, one per field).
+    if (m_BuyTriggered != 0) {
+        // Already-purchased "spit fruit out" branch (binary @ 0x00155b80)
+        if (m_BuyButton == NULL) return;
+        Fruit* fruit = m_BuyButton->m_pFruitPiece;
+        if (fruit == NULL) return;
+        // 3-float ldmia/stmia copy block: freeze both halves at current position.
+        fruit->m_SecondPos = fruit->pos;       // +0xB8 <- +0x10
+        fruit->vel         = g_Origin;         // +0x1C
+        fruit->m_SecondVel = g_Origin;         // +0xC4
+        fruit->m_Gravity   = g_Origin;         // +0x9C
+        return;
     }
+    if (m_BuyButtonState != 0) return;
+    if (m_PurchasablePowerUps.empty()) return;
+
+    PowerUp* p = m_PurchasablePowerUps[m_SelectedIndex];
+    uint32_t hash = p->m_NameHash;
+
+    // Binary: copy g_Origin to stack-local, then ActivatePower(hash, &local, &local.x).
+    // r2 AND r3 both point to the same Vec3 -- ActivatePower treats the float* as Vec3*.
+    Vec3 localOrigin = g_Origin;
+    PowerUpManager* pum = PowerUpManager::GetInstance();
+    pum->ActivatePower(hash, &localOrigin, reinterpret_cast<float*>(&localOrigin));
+
+    PowerUp* singleActive = PowerUpManager::GetInstance()->GetActiveSingle(hash);
+    if (singleActive != NULL) {
+        m_PurchasablePowerUps[m_SelectedIndex] = singleActive;
+        m_BuyButtonState  = 2;
+        m_PurchasedCount += 1;
+    }
+
+    // Binary: direct game_work.m_SaveData->m_Coins read; no Game::GetInstance() call.
+    int coins = game_work.m_SaveData ? game_work.m_SaveData->m_Coins : 0;
+    snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
 }
 
 // ============================================================
