@@ -891,7 +891,6 @@ void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
 // Trigger condition in WaveManager::SpawnBomb post-spawn branch:
 //   if (type == 0 && pBomb != nullptr && playerIdx > 0)
 //       Bomb::MakeFat(pBomb, false);
-// TODO: call Bomb::MakeFat(b, false) when type==0 && powerupBombMult>0 (binary @ 0x00121fa8 tail)
 void Bomb::MakeFat(bool skipSpawnFx) {
     m_SpeedMult = 0.66597f;                    // DAT_00171eec
     scale      *= 1.33002f;                    // DAT_00171ef0

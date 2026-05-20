@@ -1605,7 +1605,6 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
 // ----------------------------------------------------------------------------
 
 void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int playerIdx) {
-    (void)playerIdx;
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
@@ -1692,6 +1691,11 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         b->Init(nullptr, 0, nullptr);
         b->pos.y += -100.0f * b->scale.y;               // DAT_00122588 = -100
         b->Chuck(chuckDelay);
+
+        // Binary @ 0x00121fa8 tail: if default-spawner bomb and bomb-multiplier
+        // powerup active (playerIdx > 0), scale the bomb up.
+        if (type == 0 && playerIdx > 0)
+            b->MakeFat(false);
 
         Game* game = Game::GetInstance();
         if (game && game->gameMode == Mortar::GAME_MODE_ARCADE)
