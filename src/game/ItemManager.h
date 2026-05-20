@@ -121,8 +121,9 @@ public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ItemManager::EquipItem -- auto stub from binary missing-symbol set
     void EquipItem(unsigned int);
-    // STUB: ItemManager::PlayAlternateComboSound -- auto stub from binary missing-symbol set
-    void PlayAlternateComboSound(int);
+    // PlayAlternateComboSound @ 0x0011303c — plays combo sound from equipped blade mod.
+    // Returns true if an alternate sound was played (suppresses default combo SFX).
+    bool PlayAlternateComboSound(int);
     // STUB: ItemManager::PlayAlternateImpactSound -- auto stub from binary missing-symbol set
     void PlayAlternateImpactSound(float, float);
     // STUB: ItemManager::PlayAlternateSwipeSound -- auto stub from binary missing-symbol set

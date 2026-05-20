@@ -464,8 +464,16 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
 // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
 // STUB: ItemManager::EquipItem -- auto stub
 void ItemManager::EquipItem(unsigned int) {}
-// STUB: ItemManager::PlayAlternateComboSound -- auto stub
-void ItemManager::PlayAlternateComboSound(int) {}
+// PlayAlternateComboSound @ 0x0011303c
+// TODO: SlashSoundMods::PlaySound not yet ported — body uses m_DefaultItems[0]->m_ComboSounds.PlaySound(comboIdx, 1.0f, 1.0f)
+bool ItemManager::PlayAlternateComboSound(int comboIdx) {
+    SlashModInfo* m = static_cast<SlashModInfo*>(m_DefaultItems[0]);
+    if (!m) return false;
+    // TODO: 0x0011303c — return m->m_ComboSounds.PlaySound(comboIdx, 1.0f, 1.0f);
+    // SlashSoundMods::PlaySound not yet declared; returning false until ported.
+    (void)comboIdx;
+    return false;
+}
 // STUB: ItemManager::PlayAlternateImpactSound -- auto stub
 void ItemManager::PlayAlternateImpactSound(float, float) {}
 // STUB: ItemManager::PlayAlternateSwipeSound -- auto stub
