@@ -16,6 +16,7 @@
 #include "game/PowerUpManager.h"
 #include "game/FruitSaveData.h"
 #include "entities/Fruit.h"
+#include "asset/MeshDraw.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
@@ -263,10 +264,15 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
     SetMatrix(combined);
     UploadMatrices();
 
-    // Step 2: draw buy background quad via m_Texture.
-    // TODO: 0x00155e08 — Mesh::DrawQuadUnCached call requires Mesh utility not yet
-    // extracted as a standalone draw helper. Skipping quad draw until Mesh draw
-    // helper ported (binary calls DrawQuadUnCached with a Colour*).
+    // Step 2: draw buy background quad via g_BuyBg.
+    // Binary @ 0x00155e08: calls g_BuyBg->Set(), Mesh::DrawQuadUnCached(Colour*, fx),
+    // g_BuyBg->UnSet(). Port uses MeshDraw::DrawQuadUnCachedDefault (same binary at
+    // 0x00194180: default 1x1 quad with current world matrix).
+    if (g_BuyBg.IsValid()) {
+        g_BuyBg->Set();
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+        g_BuyBg->UnSet();
+    }
 
     // Step 3: draw m_BuyText via font.
     // Binary: Font::DrawString at (75 + ScreenY, 0, 20.5), anchor=3 (center+top).
