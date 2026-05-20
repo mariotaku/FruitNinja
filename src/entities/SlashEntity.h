@@ -250,8 +250,7 @@ private:
     // Binary +0xC4: trail-fade weight in [0, 1]. When 1.0, m_BaseColour = white
     // lerped toward m_HighlightColour by 0 = pure white. When 0 (or less),
     // m_BaseColour = m_HighlightColour directly (fully saturated).
-    // Set/decayed by SlashEntity::Update @ 0x17D664.
-    // TODO: 0x17D664 -- m_Scale lifecycle (1.0 on critical, -2*dt decay) not yet ported.
+    // Set to 1.0 on critical hit; decays at -2*dt/frame clamped to 0.
     float m_Scale;             // Binary +0xC4
 
     // Binary +0x148: cooldown timer between swipe SFX firings. PlaySwipe
