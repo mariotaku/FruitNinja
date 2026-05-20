@@ -266,15 +266,12 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
         g_BuyBg->UnSet();
     }
 
-    // Step 3: draw m_BuyText via font.
-    // Binary: Font::DrawString at (75 + ScreenY, 0, 20.5), anchor=3 (center+top).
-    Game* game = Game::GetInstance();
-    if (game && game_work.pFontMain.IsValid()) {
-        // Binary: text Y = 75 + HUD bottomY (param_1[3]). Port uses a fixed offset
-        // from the centered coordinate: pos.y is the control's Y in centered space.
-        Vec3 textPos(pos.x + 75.0f, 0.0f, 20.5f);
-        game_work.pFontMain->DrawString(1.0f, 1.0f, 20.5f, m_BuyText, textPos,
-                                    g_White, Mortar::FONT_ALIGN_CENTER | Mortar::FONT_ALIGN_MIDDLE);
+    // Step 3: draw m_BuyText (header label) via font.
+    // Binary @ 0x00155e08: pos = (shop.x, shop.y + 75), size 20, anchor 3, white.
+    if (game_work.pFontMain.IsValid()) {
+        Vec3 textPos(pos.x, pos.y + 75.0f, 0.0f);
+        game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f, m_BuyText, textPos,
+                                        g_White, 3);
     }
 
     // Step 4: draw each slot icon.
@@ -286,56 +283,136 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
             continue;
         }
 
-        // Pick icon texture: active slot uses GetInUseTexture(); affordable uses
-        // GetTexture(); greyed (can't afford or max uses reached) uses GetGreyTexture().
-        // Binary @ 0x00155e08 selects per-slot based on m_bCloned and coin/cost check.
         PurchaseInfo* pi = p->m_pPurchaseInfo;
-        Mortar::ReloadableTexture* iconTex = NULL;
-        {
-            int coins = 0;
-            Game* g2 = Game::GetInstance();
-            if (g2 && game_work.m_SaveData) {
-                coins = game_work.m_SaveData->m_Coins;
-            }
-            if (p->m_bCloned != 0) {
-                iconTex = &pi->GetInUseTexture();
-            } else if (pi->m_Cost <= coins && m_PurchasedCount < 3) {
-                iconTex = &pi->GetTexture();
-            } else {
-                iconTex = &pi->GetGreyTexture();
-            }
+
+        // Determine affordability for label colour and inactive texture selection.
+        int coins = 0;
+        if (game_work.m_SaveData) {
+            coins = game_work.m_SaveData->m_Coins;
         }
+        bool affordable = (pi->m_Cost <= coins && m_PurchasedCount < 3
+                           && game_work.gameMode < 3);
 
-        // Draw icon quad at slot world position scaled by slot.z * 64.
-        // Binary @ 0x00155e08: slot world pos = pos + slot; scale = slot.z * 64.0.
         Vec3 slot = m_SlotLayout[i];
-        float iconScale = slot.z * 64.0f;
+        float barScale = slot.z;
+        float iconScale = barScale * 64.0f;
 
+        // Slot translate+scale matrix (used for both quad bg and TriStrip bar).
         mm.GetWorldStack().Push();
         Matrix44 slotTrans;
         slotTrans.Identity();
         slotTrans.GlobalTranslate44(Vec3(pos.x + slot.x + 480.0f,
                                         pos.y + slot.y + 320.0f, pos.z + slot.z));
-        Matrix44 slotScale;
-        slotScale.Identity();
-        slotScale.ApplyScale(iconScale, iconScale, 1.0f);
-        SetMatrix(slotTrans * slotScale);
+        Matrix44 slotScaleMat;
+        slotScaleMat.Identity();
+        slotScaleMat.ApplyScale(iconScale, iconScale, 1.0f);
+        SetMatrix(slotTrans * slotScaleMat);
         UploadMatrices();
 
-        if (iconTex && iconTex->IsLoaded()) {
-            iconTex->Set();
-            Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
-            iconTex->UnSet();
+        if (p->m_bCloned != 0) {
+            // Active branch: grey bg quad, then TriStrip progress bar.
+            Mortar::ReloadableTexture& greyTex = pi->GetGreyTexture();
+            if (greyTex.IsLoaded()) {
+                greyTex.Set();
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+                greyTex.UnSet();
+            }
+
+            Mortar::ReloadableTexture& barTex = pi->GetInUseTexture();
+            if (barTex.IsLoaded() && pi->m_MaxUses > 0) {
+                float fillFrac = ((float)pi->m_CurrentUses * 0.75f / (float)pi->m_MaxUses)
+                                 + 0.125f;
+                if (fillFrac > 1.0f) fillFrac = 1.0f;
+                if (fillFrac < 0.0f) fillFrac = 0.0f;
+
+                // Restore slot matrix (DrawQuadUnCachedDefault resets the world stack).
+                SetMatrix(slotTrans * slotScaleMat);
+                UploadMatrices();
+
+                // 4-vertex TriStrip bar in unit space (-0.5..0.5 icon extent).
+                // Fill clips the right edge to fillFrac.
+                float x0 = -0.5f;
+                float x1 = -0.5f + fillFrac;
+                float y0 = -0.5f;
+                float y1 =  0.5f;
+                QUADCUSTOMVERTEX barVerts[4];
+                // bottom-left
+                barVerts[0].x = x0; barVerts[0].y = y0; barVerts[0].z = 0.0f;
+                barVerts[0].nx = 0.0f; barVerts[0].ny = 0.0f; barVerts[0].nz = 1.0f;
+                barVerts[0].colour = 0xFFFFFFFFu;
+                barVerts[0].u = 0.0f; barVerts[0].v = 1.0f;
+                // bottom-right
+                barVerts[1].x = x1; barVerts[1].y = y0; barVerts[1].z = 0.0f;
+                barVerts[1].nx = 0.0f; barVerts[1].ny = 0.0f; barVerts[1].nz = 1.0f;
+                barVerts[1].colour = 0xFFFFFFFFu;
+                barVerts[1].u = fillFrac; barVerts[1].v = 1.0f;
+                // top-left
+                barVerts[2].x = x0; barVerts[2].y = y1; barVerts[2].z = 0.0f;
+                barVerts[2].nx = 0.0f; barVerts[2].ny = 0.0f; barVerts[2].nz = 1.0f;
+                barVerts[2].colour = 0xFFFFFFFFu;
+                barVerts[2].u = 0.0f; barVerts[2].v = 0.0f;
+                // top-right
+                barVerts[3].x = x1; barVerts[3].y = y1; barVerts[3].z = 0.0f;
+                barVerts[3].nx = 0.0f; barVerts[3].ny = 0.0f; barVerts[3].nz = 1.0f;
+                barVerts[3].colour = 0xFFFFFFFFu;
+                barVerts[3].u = fillFrac; barVerts[3].v = 0.0f;
+
+                barTex.Set();
+                Mortar::MeshDraw::DrawTriStrip(barVerts, 4, true, NULL);
+                barTex.UnSet();
+            }
+        } else {
+            // Inactive branch: affordable or greyed icon quad.
+            Mortar::ReloadableTexture* iconTex = affordable
+                ? &pi->GetTexture()
+                : &pi->GetGreyTexture();
+            if (iconTex && iconTex->IsLoaded()) {
+                iconTex->Set();
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+                iconTex->UnSet();
+            }
         }
 
         mm.GetWorldStack().Pop();
         UploadMatrices();
 
-        // Slot layout interpolation (z lerps toward 1.25 for selected, 1.0 for idle).
-        // Description/title labels at selected slot (draw at -84 and -30 Y offset, scale 16).
-        // Cost/timer label at slot bottom (scale 17, anchor 0xf).
-        // TODO: 0x00155e08 — progress bars and description text labels (font draw calls
-        // for slot name/cost); deferred until PurchaseInfo::LoadTextures and Parse are ported.
+        // Text labels (drawn in centered coordinate space via active world matrix).
+        Vec3 barPos(pos.x + slot.x, pos.y + slot.y, pos.z);
+
+        // Cost-or-READY label: pos (barPos.x, barPos.y - 32*barScale), size 17, anchor 0xF.
+        if (game_work.pFontMain.IsValid()) {
+            char costBuf[32];
+            Colour labelColour;
+            if (p->m_bCloned != 0) {
+                // Active: "READY"
+                snprintf(costBuf, sizeof(costBuf), "READY");
+                labelColour = MakeColour(0xFF, 0xFF, 0xFF);
+            } else if (affordable) {
+                snprintf(costBuf, sizeof(costBuf), "%i", pi->m_Cost);
+                labelColour = MakeColour(0x8B, 0x4F, 0x22);
+            } else {
+                snprintf(costBuf, sizeof(costBuf), "%i", pi->m_Cost);
+                labelColour = MakeColour(0x80, 0x80, 0x80);
+            }
+            Vec3 labelPos(barPos.x, barPos.y + (-32.0f * barScale), barPos.z);
+            game_work.pFontMain->DrawString(17.0f, 1.0f, 0.0f,
+                                            costBuf, labelPos, labelColour, 0xF);
+        }
+
+        // Selected-slot title + description.
+        if (i == m_SelectedIndex && game_work.pFontMain.IsValid()) {
+            float sx = pos.x + slot.x;
+            float sy = pos.y + slot.y;
+            Vec3 titlePos(sx - 224.0f, sy - 30.0f, pos.z);
+            Colour titleColour = MakeColour(0xD1, 0x25, 0x0B);
+            game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                                            pi->m_DisplayName, titlePos, titleColour, 0xF);
+
+            Vec3 descPos(sx - 224.0f, sy - 54.0f, pos.z);
+            Colour descColour = MakeColour(0x74, 0x5D, 0x3B);
+            game_work.pFontMain->DrawString(16.0f, 1.0f, 0.0f,
+                                            pi->m_Description, descPos, descColour, 0xF);
+        }
     }
 
     mm.GetWorldStack().Pop();
