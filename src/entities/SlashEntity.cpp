@@ -1172,7 +1172,12 @@ void SlashEntity::DrawSlice() {
         m_SwipeEndEdge = (prev << 1) & 0x02;
         if (prev != 0 && m_SwipeEndEdge == 0) {
             if (g_ScaleFlag1) CreateGhost();
-            // TODO: 0x0017E424 -- contact-burst emitter spawn at this->pos
+            if (g_ContactHash != 0) {
+                PSPParticleEmitter* eBurst =
+                    PSPParticleManager::GetInstance().AddEmitter(
+                        g_ContactHash, nullptr, /*persistent=*/false);
+                if (eBurst) eBurst->m_Pos = pos;
+            }
         }
     }
 
