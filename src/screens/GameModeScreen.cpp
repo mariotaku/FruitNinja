@@ -391,9 +391,6 @@ void GameModeScreen::Update(float dt) {
 
         if (game_work.mMainScreen) {
             float camT = game_work.mMainScreen->GetCameraTransition();
-            LOG_INFO("MODESEL", "state=%d camT=%.4f alpha=%.4f setupFired=%d levelTransitionFlag=%d gameMode=%d",
-                     (int)m_State, camT, m_TransitionAlpha, (int)m_bSetupLevelFired,
-                     (int)game_work.m_LevelTransitionFlag, (int)game_work.gameMode);
             camT *= CAMERA_DECAY;
             game_work.mMainScreen->SetCameraTransition(camT);
             // Binary @ 0x0013f2e2: vtable[18] (SetupLevel) dispatched once
