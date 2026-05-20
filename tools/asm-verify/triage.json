@@ -3199,9 +3199,9 @@
     "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN13ScrollingMenu10ClearTouchEv": {
-    "verdict": "FIX-NEEDED",
-    "reason": "ScrollingMenu struct layout bug: port writes m_bDragging=0 to +0xbc (where m_ClosestIdx should be), binary writes to +0xc8. Missing ~12 bytes of fields between +0xac and +0xbc in port struct causes m_bDragging to land at wrong offset. Fix requires adding missing ScrollingMenu fields between +0xac and +0xbc. See src/hud/ScrollingMenu.h field map (gap between m_TotalHeight at +0xac and m_ClosestIdx at +0xbc).",
-    "score": 215,
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Layout fix applied (m_Items vector inserted at +0xb0): port now generates strb at +0xc8 matching binary. Remaining diff is register-idiom: binary uses adds r3,#1 from -1 to get 0; port uses movs r3,#0. Semantics identical. Score 210/500. [score refreshed 2026-05-20T00:00Z]",
+    "score": 210,
     "max_score": 500,
     "decided_at": "2026-05-20T00:00Z"
   },
@@ -3795,8 +3795,8 @@
   },
   "_ZN10ShopScreen11SetSelectedEP12ShopListItem": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ShopScreen method stub/divergence. Score 10800/9400. [score refreshed 2026-05-20T00:00Z]",
-    "score": 10760,
+    "reason": "ShopScreen method stub/divergence. Score drift from ScrollingMenu layout fix changing field-offset immediates in callers. [score refreshed 2026-05-20T00:00Z]",
+    "score": 10620,
     "max_score": 9400,
     "decided_at": "2026-05-20T00:00Z"
   },
@@ -4781,9 +4781,9 @@
     "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN11TimeControl6UpdateEf": {
-    "verdict": "FIX-NEEDED",
-    "reason": "TimeControl::Update — port adds bl _ZNK11TimeControl11IsTimedGameEv gate at offset 0x22 not present in binary; binary proceeds directly into the timer logic. Port also restructures the slow-clock accumulation differently (s16 register use, extra speed-governor branches). No source-side TODO covering these differences. Implementer should compare binary 0x001524a4 vs port. Score 36940/34700. [score refreshed 2026-05-20T00:00Z]",
-    "score": 49345,
+    "verdict": "ACCEPT-deferred",
+    "reason": "TimeControl::Update — IsTimedGame() gate removed and single slow-clock join point added per binary spec (0x001524a4). Remaining score divergence (47450/34700) driven by struct field offset mismatches: mMainScreen->m_TimeRemainingDisplay at port +0x134 vs binary +0x10c, and other pre-existing GameWork/MainScreen layout differences. Logic structure now matches binary. ACCEPT-deferred pending struct layout fixes. [score refreshed 2026-05-20T00:00Z]",
+    "score": 47450,
     "max_score": 34700,
     "decided_at": "2026-05-20T00:00Z"
   },
@@ -5356,17 +5356,17 @@
   },
   "_ZN13ScrollingMenu6UpdateEf": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Binary-faithful port: s_ModPowerMask |= 0x40 on touch-acquire / clear on release mirrors binary @ 0x0015b7cc (SET) and 0x0015baba (CLEAR). Score overshoot is instruction-ordering noise from larger function body.",
-    "score": 67790,
+    "reason": "Binary-faithful port: s_ModPowerMask |= 0x40 on touch-acquire / clear on release mirrors binary @ 0x0015b7cc (SET) and 0x0015baba (CLEAR). Score overshoot is instruction-ordering noise from larger function body. [score refreshed 2026-05-20T00:00Z]",
+    "score": 66645,
     "max_score": 57800,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN13ScrollingMenu7AddItemEP17ScrollingMenuItem": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 2973/3200.",
-    "score": 2973,
+    "reason": "ScrollingMenu AddItem method divergence post-layout fix. Score 2833/3200. [score refreshed 2026-05-20T00:00Z]",
+    "score": 2833,
     "max_score": 3200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN13ScrollingMenu7CollideEl": {
     "verdict": "ACCEPT-deferred",
@@ -5384,17 +5384,17 @@
   },
   "_ZN13ScrollingMenuC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 8855/6300.",
-    "score": 8855,
+    "reason": "ScrollingMenu ctor divergence post-layout fix (m_Items vector now at +0xb0 changes field-offset immediates in init sequence). Core init order matches binary. [score refreshed 2026-05-20T00:00Z]",
+    "score": 8210,
     "max_score": 6300,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN13ScrollingMenuC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 8855/6300.",
-    "score": 8855,
+    "reason": "C2 base-object ctor alias of C1; identical divergence pattern post-layout fix. [score refreshed 2026-05-20T00:00Z]",
+    "score": 8210,
     "max_score": 6300,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN13ScrollingMenuD0Ev": {
     "verdict": "ACCEPT-deferred",
