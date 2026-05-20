@@ -13,6 +13,7 @@
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include "render/Font.h"
+#include "game/GameWork.h"
 
 struct Game;
 class MenuButton;
@@ -74,7 +75,7 @@ public:
     // fading out and want to push MainScreen into the next state.
     // Mirrors the binary pattern at e.g. 0x001389B0 where DojoScreen
     // writes mainScreen->m_State = 8 directly.
-    void SetState(MainScreenState s) { m_State = s; }
+    void SetState(MainScreenState s);
     void SetStateTimer(float t) { m_StateTimer = t; }
 
     // @ 0x0016bbb0 — post-effect overlays drawn after HUD layer 0x08.
@@ -82,10 +83,10 @@ public:
     void DrawPostEffects();
 
     // Camera-transition accessors for child screens. Binary @ 0x0014b278
-    // stores this at game.m_TransitionTimer (+0x0c) as the single source
+    // stores this at game_work.m_GameDt (+0x0c) as the single source
     // of truth. Port previously kept a mirror field on MainScreen which
     // caused stomping during GameOverScreen's alpha ramp. Refactored to
-    // read/write game.m_TransitionTimer directly (binary-faithful).
+    // read/write game_work.m_GameDt directly (binary-faithful).
     // ASM-verified: 2026-05-11 (asm-inspector).
     float GetCameraTransition() const;
     void  SetCameraTransition(float v);
@@ -152,7 +153,7 @@ private:
     Mortar::SmartPtr<Mortar::Texture> m_fruitTextTex;         // fruit_text.tex
     Mortar::SmartPtr<Mortar::Texture> m_ninjaTextTex;         // ninja_text.tex
 
-    // Camera transition lives on game.m_TransitionTimer (binary single source of truth).
+    // Camera transition lives on game_work.m_GameDt (binary single source of truth).
     // Member field removed; GetCameraTransition/SetCameraTransition route through `game`.
     float m_GlobalAlphaTarget;
     float m_Time;

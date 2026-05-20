@@ -6,6 +6,7 @@
 //
 
 #include "BombHit.h"
+#include "debug/Logger.h"
 #include "game/GameMode.h"
 #include "Game.h"
 #include "entities/ActorManager.h"
@@ -13,6 +14,7 @@
 #include "entities/Bomb.h"
 #include "entities/Fruit.h"
 #include "entities/SplatEntity.h"
+#include "entities/SlashEntity.h"
 #include "particle/PSPParticleManager.h"
 #include "asset/TextureManager.h"
 #include "asset/Texture.h"
@@ -24,6 +26,7 @@
 #include "math/Colour.h"
 #include "audio/GameSound.h"
 #include <cstdio>
+#include "game/GameWork.h"
 
 namespace FN {
 
@@ -90,12 +93,12 @@ void HitMenuBomb(const Vec3& pos) {
     Game* game = Game::GetInstance();
     if (!game) return;
     SetBombHitPos(pos);
-    game->bombHitTimer = 2.0f;                       // binary: 0x40000000 = 2.0f
-    if (game->pGameSound) {
+    game_work.m_BombHitTimer = 2.0f;                       // binary: 0x40000000 = 2.0f
+    if (game_work.mGameSound) {
         // Binary pre-loads the SFX via SoundManager::PreLoadSound; the
         // port's GameSound::SFXPlay loads on demand, so preload is a
         // no-op deferred.
-        game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
 }
 
@@ -108,7 +111,7 @@ void HitMenuBomb(const Vec3& pos) {
 bool BombFlashFull() {
     const Game* game = Game::GetInstance();
     if (!game) return true;
-    return game->bombHitTimer < 1.0f;
+    return game_work.m_BombHitTimer < 1.0f;
 }
 
 // Matches CriticalFlash @ 0x0016a9a4. Stores the colour and resets
@@ -119,7 +122,7 @@ void CriticalFlash(const Vec3& pos, const Colour& colour) {
     (void)pos;
     s_CritFlashColour = colour;
     if (Game* game = Game::GetInstance()) {
-        game->m_CritTimer = CRITICAL_FLASH_TIME;
+        game_work.m_CritTimer = CRITICAL_FLASH_TIME;
     }
 }
 
@@ -128,9 +131,9 @@ void CriticalFlash(const Vec3& pos, const Colour& colour) {
 void UpdateCriticalFlash(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
-    if (game->m_CritTimer > 0.0f) {
-        game->m_CritTimer -= dt;
-        if (game->m_CritTimer < 0.0f) game->m_CritTimer = 0.0f;
+    if (game_work.m_CritTimer > 0.0f) {
+        game_work.m_CritTimer -= dt;
+        if (game_work.m_CritTimer < 0.0f) game_work.m_CritTimer = 0.0f;
     }
 }
 
@@ -140,7 +143,7 @@ void UpdateCriticalFlash(float dt) {
 void DrawCriticalFlash() {
     Game* game = Game::GetInstance();
     if (!game) return;
-    const float t = game->m_CritTimer;
+    const float t = game_work.m_CritTimer;
 
     // Binary guard at the head of DrawCritHit: early-exit if the timer
     // has already exceeded the full duration. The very first frame
@@ -201,7 +204,7 @@ void DrawCriticalFlash() {
 void DrawBombHit() {
     Game* game = Game::GetInstance();
     if (!game) return;
-    const float timer = game->bombHitTimer;
+    const float timer = game_work.m_BombHitTimer;
     if (timer <= 0.0f || timer >= FLASH_THRESHOLD) return;
 
     if (!s_FlashTex.IsValid()) {
@@ -251,8 +254,7 @@ void DrawBombHit() {
 // "everything flies away" animation before the game-over screen.
 //
 // Sequence:
-//   1. (Skipped — port has 1 SlashEntity not 16; SlashEntity::Reset
-//       isn't a thing right now)
+//   1. SlashEntity::Reset x16 — blade trail flush (binary entry loop)
 //   2. Bombs: pos.y = -480, vel.y = -1.5, Chuck(0)
 //   3. Fruits: Chuck(0). If Zen mode or killAll → force m_bSliced.
 //      Otherwise compute impulse from camera origin and call
@@ -273,6 +275,24 @@ static const float DIST_SQ_THRESH =  400.0f;  // DAT_0016a198
 static const float IMPULSE_LEN    =   20.0f;
 
 void ResetGameEntities(bool killAll) {
+    // ASM-verified: 2026-05-20 binary @ 0x0016a058 (asm-inspector)
+    // Binary entry loop: iVar4 = 0; do { iVar4 += 4;
+    // g_pSlashEntities[iVar4>>2 - 1]->Reset(); } while (iVar4 != 0x40);
+    // 16 iterations. Drops every live blade trail (m_NumPoints = 0) so
+    // the collision loop in SlashEntity::Update cannot fire
+    // CollisionResponse on freshly-spawned menu fruit for the next
+    // several frames. Without this flush, the Quit-gesture slash
+    // survives across the PauseScreen->MainScreen transition and slices
+    // the just-created Play / Dojo / About menu fruits in trajectory order.
+    int count_non_null = 0;
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) {
+            if (g_pSlashEntities[i]->IsBladeActive()) count_non_null++;
+            g_pSlashEntities[i]->Reset();
+        }
+    }
+    LOG_INFO("BOMBHIT", "ResetGameEntities(killAll=%d) flushed %d slash slots", (int)killAll, count_non_null);
+
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
@@ -282,7 +302,7 @@ void ResetGameEntities(bool killAll) {
     // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
     // Verify whether the surrounding logic is intended for Arcade or Zen and
     // rename accordingly.
-    const bool zenMode = game && (game->gameMode == Mortar::GAME_MODE_ARCADE);
+    const bool zenMode = game && (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
 
     // Iterate Fruit (0) + Bomb (1) type lists.
     for (int t = 0; t <= 1; t++) {
@@ -316,6 +336,7 @@ void ResetGameEntities(bool killAll) {
             bomb->Chuck(0.0f);
             bomb->pos.y = OFFSCREEN_Y;
             bomb->vel.y = DRIFT_Y;
+            bomb->Update(0.0f);
         } else if (e->entityType == 0) {
             // Fruit: chuck reset, optional force-slice, off-screen.
             Fruit* fruit = static_cast<Fruit*>(e);
@@ -324,6 +345,8 @@ void ResetGameEntities(bool killAll) {
 
             const bool forceSliced = zenMode || killAll;
             if (forceSliced) {
+                LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in BombHit forceSliced zenMode=%d killAll=%d)",
+                         static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType, (int)zenMode, (int)killAll);
                 fruit->m_bSliced = true;
             }
 
@@ -347,6 +370,7 @@ void ResetGameEntities(bool killAll) {
                 // Binary @ BombHit: calls CollisionResponse via vtable slot 9.
                 // Pass impulse as bladeVelocity; other args are runtime-0.
                 fruit->CollisionResponse(nullptr, 0, 0, &impulse);
+                fruit->Slice();
             }
 
             // Fling both halves off-screen — binary writes both
@@ -355,6 +379,9 @@ void ResetGameEntities(bool killAll) {
             fruit->m_SecondPos.y = OFFSCREEN_Y;
             fruit->vel.y         = DRIFT_Y;
             fruit->m_SecondVel.y = DRIFT_Y;
+            // Zero-dt update propagates new pos/vel through entity physics
+            // before the next frame can observe stale state.
+            fruit->Update(0.0f);
         }
     }
     }  // end type loop
@@ -367,13 +394,16 @@ void ResetGameEntities(bool killAll) {
 void UpdateBombHit(float prevTimer) {
     Game* game = Game::GetInstance();
     if (!game) return;
-    const float currentTimer = game->bombHitTimer;
+    const float currentTimer = game_work.m_BombHitTimer;
+
+    LOG_VERBOSE("BOMBHIT", "UpdateBombHit prev=%.3f curr=%.3f", prevTimer, currentTimer);
 
     // Binary UpdateBombHit (0x16a1a8): at the 1.5s downward edge
     // (i.e. timer just dropped below 1.5), call ResetGameEntities
     // to wipe the gameplay area before the game-over screen
     // renders over it.
     if (prevTimer > BLAST_RESET_THR && currentTimer <= BLAST_RESET_THR) {
+        LOG_INFO("BOMBHIT", "UpdateBombHit firing ResetGameEntities at timer crossing (prev=%.3f curr=%.3f)", prevTimer, currentTimer);
         ResetGameEntities(false);
     }
 

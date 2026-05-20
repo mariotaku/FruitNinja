@@ -8,15 +8,19 @@
 #include "DebugFlags.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
-#include "hud/MenuButton.h"
+#include "hud/HUDControl.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "render/Font.h"
 #include "render/gl_funcs.h"
 #include "math/Vec3.h"
+#include "math/Colour.h"
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <list>
+#include <typeinfo>
 
 namespace FN {
 
@@ -24,11 +28,19 @@ bool  g_DebugHitboxes  = false;
 bool  g_DebugWireframe = false; // Port specific: desktop GL only (F2)
 float g_DebugTimeScale = 1.0f; // Port specific: debug-only, no binary equivalent
 
-// Lazy 1×1 white texture for the vertex-colour shader path. The
+// Lazy 1x1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex
 // color; without a bound texture we'd see undefined samples. A solid
 // white sample lets the vertex colour drive the visible tint.
 static GLuint s_WhiteTex = 0;
+
+// Lazy debug font (verdana.fnt) for pointer-address labels in DebugHUDBounds_Draw.
+static Mortar::SmartPtr<Mortar::Font> s_DebugFont;
+
+static void EnsureDebugFont() {
+    if (s_DebugFont.IsValid()) return;
+    s_DebugFont = Mortar::Font::Create("fonts/verdana.fnt");
+}
 
 static void EnsureWhiteTex() {
     if (s_WhiteTex) return;
@@ -228,13 +240,24 @@ static void BuildAABBOutline(QUADCUSTOMVERTEX* out,
     }
 }
 
-void DebugMenuButton_Draw() {
+static const char* StripMangle(const char* s) {
+    if (!s || *s == '\0') return "?";
+    // GCC: mangled name starts with decimal digit(s) for name length (e.g. "9MenuButton")
+    while (*s >= '0' && *s <= '9') ++s;
+    // MSVC: "class MenuButton" or "struct Foo"
+    if (strncmp(s, "class ", 6) == 0) s += 6;
+    if (strncmp(s, "struct ", 7) == 0) s += 7;
+    return (*s != '\0') ? s : "?";
+}
+
+void DebugHUDBounds_Draw() {
     if (!g_DebugHitboxes) return;
 
-    const std::list<MenuButton*>& buttons = MenuButton::GetActiveButtons();
-    if (buttons.empty()) return;
+    const std::list<HUDControl*>& controls = HUDControl::GetActiveControls();
+    if (controls.empty()) return;
 
     EnsureWhiteTex();
+    EnsureDebugFont();
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -247,30 +270,56 @@ void DebugMenuButton_Draw() {
     if (!r) return;
 
     // Magenta at 80% alpha (BGRA: B=0xFF G=0x00 R=0xFF A=0xCC).
-    static const uint32_t kMenuBoxColour = 0xCCFF00FF;
+    static const uint32_t kHUDBoxColour = 0xCCFF00FF;
     // 4 sides x 6 verts = 24 verts
     static QUADCUSTOMVERTEX s_BoxVerts[24];
 
-    for (std::list<MenuButton*>::const_iterator it = buttons.begin();
-         it != buttons.end(); ++it) {
-        MenuButton* btn = *it;
-        if (!btn || !btn->m_bActive) continue;
+    // Yellow, fully opaque for high contrast against magenta outline.
+    static const Colour kLabelColour(255, 255, 0, 255);
+    static const float kLabelScale  = 8.0f;
+    static const float kLabelInsetX = 2.0f;
+    static const float kLabelInsetY = 2.0f;
+    static const float kLabelZ      = -0.4f; // slightly in front of the AABB outline
 
-        float hw, hh;
-        if (btn->m_bHasHitArea) {
-            hw = btn->m_TargetSize.x * 0.5f;
-            hh = btn->m_TargetSize.y * 0.5f;
-        } else {
-            hw = btn->size.x * 0.5f;
-            hh = btn->size.y * 0.5f;
-        }
-        const float left   = btn->pos.x - hw - btn->m_HitInsetX;
-        const float right  = btn->pos.x + hw + btn->m_HitInsetX;
-        const float bottom = btn->pos.y - hh - btn->m_HitInsetY;
-        const float top    = btn->pos.y + hh + btn->m_HitInsetY;
+    for (std::list<HUDControl*>::const_iterator it = controls.begin();
+         it != controls.end(); ++it) {
+        HUDControl* ctrl = *it;
+        if (!ctrl || !ctrl->m_bActive) continue;
 
-        BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kMenuBoxColour);
+        const float hw = ctrl->size.x * 0.5f;
+        const float hh = ctrl->size.y * 0.5f;
+        if (hw == 0.0f && hh == 0.0f) continue;
+
+        const Vec3 dp = ctrl->GetDrawPos();
+        const float left   = dp.x - hw;
+        const float right  = dp.x + hw;
+        const float bottom = dp.y - hh;
+        const float top    = dp.y + hh;
+
+        BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kHUDBoxColour);
         r->DrawTriList(s_BoxVerts, 24);
+
+        if (s_DebugFont.IsValid()) {
+            const char* className = StripMangle(typeid(*ctrl).name());
+            char ptrBuf[32];
+            snprintf(ptrBuf, sizeof(ptrBuf), "%p", static_cast<void*>(ctrl));
+
+            // Class name on the top line, pointer address one line below.
+            // kLabelScale is 8pt; use the same scale for both lines so the
+            // vertical spacing is one line height (kLabelScale pixels).
+            const float lineH = kLabelScale + 1.0f;
+            const Vec3 classPos(left + kLabelInsetX, top - kLabelInsetY,        kLabelZ);
+            const Vec3 ptrPos  (left + kLabelInsetX, top - kLabelInsetY - lineH, kLabelZ);
+
+            mm.GetWorldStack().Reset();
+            mm.UploadModelViewOnly();
+            s_DebugFont->DrawString(kLabelScale, 1.0f, 0.0f,
+                                    className, classPos, kLabelColour,
+                                    Mortar::FONT_ALIGN_LEFT);
+            s_DebugFont->DrawString(kLabelScale, 1.0f, 0.0f,
+                                    ptrBuf, ptrPos, kLabelColour,
+                                    Mortar::FONT_ALIGN_LEFT);
+        }
     }
 }
 

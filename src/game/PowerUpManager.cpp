@@ -14,10 +14,11 @@
 #include "util/PathCI.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
 #include <cstring>
 #include <string>
+#include "game/GameWork.h"
 
 // @ 0x00117d20
 PowerUpManager::PowerUpManager()
@@ -186,7 +187,7 @@ void PowerUpManager::Reset(bool fullReset) {
                 continue;
             } else {
                 // Non-fullReset: keep if remaining uses > 0, discard otherwise.
-                if (!pwr->m_pPurchaseInfo || pwr->m_pPurchaseInfo->m_RemainingUses < 1) {
+                if (!pwr->m_pPurchaseInfo || pwr->m_pPurchaseInfo->m_CurrentUses < 1) {
                     uint32_t hash = pwr->m_NameHash;
                     std::map<uint32_t, PowerUp*>::iterator byHash = m_ActiveByHash.find(hash);
                     if (byHash != m_ActiveByHash.end()) m_ActiveByHash.erase(byHash);
@@ -216,7 +217,7 @@ void PowerUpManager::Reset(bool fullReset) {
     // Zen mode (gameMode==2 + fullReset): re-activate all m_bIsSpecial templates.
     if (fullReset) {
         Game* game = Game::GetInstance();
-        if (game && game->gameMode == Mortar::GAME_MODE_ARCADE) {
+        if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
             for (std::map<uint32_t, PowerUp*>::iterator it2 = m_AllPowerUps.begin();
                  it2 != m_AllPowerUps.end(); ++it2) {
                 PowerUp* tpl = it2->second;
@@ -342,7 +343,7 @@ void PowerUpManager::ActivatePurchase(PowerUp* p) {
             }
         }
     }
-    --p->m_pPurchaseInfo->m_RemainingUses;
+    --p->m_pPurchaseInfo->m_CurrentUses;
 }
 
 // @ 0x00119760
@@ -438,13 +439,13 @@ void PowerUpManager::Load() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        printf("PowerUpManager::Load -- failed to open '%s' (error %d)\n", path.c_str(), (int)err);
+        LOG_ERROR("POWERUP/Load", "failed to open '%s' (error %d)", path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("powers");
     if (!root) {
-        printf("PowerUpManager::Load -- no <powers> root in '%s'\n", path.c_str());
+        LOG_WARN("POWERUP/Load", "no <powers> root in '%s'", path.c_str());
         return;
     }
 

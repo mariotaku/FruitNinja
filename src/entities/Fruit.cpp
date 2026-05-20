@@ -1,4 +1,5 @@
 #include "Fruit.h"
+#include "debug/Logger.h"
 #include "game/GameMode.h"
 #include "ActorManager.h"
 #include "FruitInfo.h"
@@ -31,6 +32,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "game/GameWork.h"
 
 // Analysed: 2026-04-29T00:00
 
@@ -137,6 +139,8 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_FruitType = (uint8_t)fruitType;
     m_LifetimeCounter = 0;
     m_bActive = 0;
+    LOG_INFO("FRUIT", "m_bSliced=0 set on entity=%p pos=(%.1f,%.1f) type=%d (in Init)",
+             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = 0;
     m_bDrawWhole = 0;
     m_bCriticalEligible = 0;
@@ -418,7 +422,7 @@ void Fruit::PostUpdate(float dt) {
         // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
         // Verify whether the surrounding logic is intended for Arcade or Zen and
         // rename accordingly.
-        const bool zen = (game->gameMode == Mortar::GAME_MODE_ARCADE);
+        const bool zen = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
         const bool zenStrict = zen && IsZenStrictBounceActive();
         if (zenStrict) {
             if (pos.x < BOUND_X_LO) { pos.x = BOUND_X_LO; vel.x = -vel.x; }
@@ -539,18 +543,18 @@ void Fruit::KillFruit(bool doMissPenalty) {
                 //   else if (FailureEnabled())          -> miss penalty (Classic/Combo)
                 //   else (Zen) -> nothing
                 // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
-                if (g->gameMode == Mortar::GAME_MODE_ARCADE) {
+                if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
                     // Arcade: tracking only, no life loss, no MissControl spawn.
                     // TODO: FruitSaveData::AddToTotal("arcade_miss", 1) when save system is ported
-                } else if (Mortar::FailureEnabled(g->gameMode)) {
+                } else if (Mortar::FailureEnabled(game_work.gameMode)) {
                     // Classic / Combo miss penalty (Zen falls through to no-op).
                     if (MissControl* mc = MissControl::GetFree()) {
                         Mortar::SmartPtr<Mortar::Texture> defTex;
                         mc->MakeDisappear(pos, 0, defTex);
                     }
-                    if (g->pGameSound) g->pGameSound->SFXPlay("gank", 1.0f, 1.0f);
-                    g->missCount++;
-                    if (g->missCount > 2) {
+                    if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
+                    game_work.missCount++;
+                    if (game_work.missCount > 2) {
                         // ASM-verified: 2026-05-02 binary @ 0x00176c84 -- combo reset only inside game-over branch
                         g_ComboCount  = 0;
                         g_LastSlasher = -1;  // binary writes 0xFFFFFFFF @ 0x00176c8c
@@ -730,7 +734,9 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
                               unsigned long /*flagsA*/,
                               unsigned long /*flagsB*/,
                               Vec3* bladeVelPtr) {
-    // Guard: already sliced or slice timer is positive → double-hit.
+    LOG_INFO("FRUIT", "CollisionResponse entry: entity=%p pos=(%.1f,%.1f) type=%d bSliced=%d",
+             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType, (int)m_bSliced);
+    // Guard: already sliced or slice timer is positive -> double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return 1;
     const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
 
@@ -752,28 +758,24 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const bool canCritFruit = info && info->m_bScorable;
 
     // DIFFERS: FruitNinjaApp gating fields (+0x05 frenzy flag, +0x10 frenzy
-    // timer, +0x30 score threshold) not yet ported. m_ScoreThreshold from
-    // Game::currentScore ladder is simulated with a local static counter.
-    const int score = Game::GetInstance()->currentScore;
-
-    // s_CritThreshold simulates FruitNinjaApp::m_ScoreThreshold (+0x30).
-    // DIFFERS: real counter lives in FruitNinjaApp, not here.
-    static int s_CritThreshold = kCritScoreBound;
+    // timer) not yet ported. Score threshold now reads/writes game_work.m_ScoreThreshold
+    // (the real field at +0x30, shared with SlashEntity combo-resolve).
+    const int score = game_work.currentScore;
 
     if (score >= 2 && canCritFruit /* && !frenzyFlag && frenzyTimer <= 0 */) {
-        s_CritThreshold = (s_CritThreshold < 3) ? 2 : (s_CritThreshold - 1);
+        int& thresh = game_work.m_ScoreThreshold;
+        thresh = (thresh < 3) ? 2 : (thresh - 1);
 
         const float chance = WaveManager::GetInstance()->GetCriticalChance(0);
         if (chance > 0.0f) {
-            const int   bound  = (s_CritThreshold < kCritScoreBound)
-                                 ? s_CritThreshold : kCritScoreBound;
+            const int   bound  = (thresh < kCritScoreBound) ? thresh : kCritScoreBound;
             const float ratio  = (float)bound / chance;
             const uint32_t reroll = (ratio <= 1.0f) ? 1u : (uint32_t)ratio;
 
             const uint32_t roll = WaveManager::GetInstance()->GetRandom().Rand32(reroll);
             if (roll == 0) {
                 m_bCriticalEligible = true;
-                s_CritThreshold = kCritResetBase + kCritScoreBound;
+                thresh = kCritResetBase + kCritScoreBound;
             }
         }
     }
@@ -896,26 +898,34 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
 
             // Per-fruit-name save totals.
-            if (g->pSaveData) {
-                g->pSaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+            if (game_work.m_SaveData) {
+                game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
                                          /*trackSession=*/false, false);
-                g->pSaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
+                game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
                                          /*trackSession=*/true, false);
 
                 // On critical hit, record crit totals.
                 if (isCritical) {
                     static const uint32_t hCrit      = StringHash("crit");
                     static const uint32_t hCritTotal = StringHash("crits_total");
-                    g->pSaveData->AddToTotal("crit",        hCrit,      1, false, false);
-                    g->pSaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
+                    game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
+                    game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
                     char critBuf[128];
                     snprintf(critBuf, 128, "%scrit", info->m_Name);
-                    g->pSaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
+                    game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
                 }
             }
         }
     }
     // TODO: Zen-mode-only save totals (first_fruit / last_fruit)
+
+    // Arcade-mode speed-loss-timer refresh — binary @ 0x00178cbc.
+    // Called before the score dispatch so SpeedControl HUD ticks correctly.
+    // DAT_00178cbc = 0.05f.
+    // ASM-verified: 2026-05-18 binary @ 0x00178cbc (re-analyst)
+    if (Game::GetInstance() && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+        WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
+    }
 
     // Combo counter increment — binary @ 0x001787a8..0x001787b0.
     // ASM-verified: 2026-05-02 binary @ 0x00178708 reads m_PlayerIdx (+0x90).
@@ -1064,6 +1074,8 @@ void Fruit::Slice() {
     m_SecondVel = halfVelA;
     vel         = halfVelB;
 
+    LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in Fruit::Slice)",
+             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = true;
 
     // Reset gravity so the ramp-up in Update starts fresh.
@@ -1144,10 +1156,9 @@ void Fruit::Slice() {
 //   WaveManager's Random instance; port substitutes rand() since this
 //   only affects display orientation, not gameplay.
 void Fruit::RotateFacingUp(bool alignToFacing, Vec3 spinVelAxis) {
-    // Random spin magnitude: +(2 + rand[0,2)) or -(2 + rand[0,2))
-    // Matches: r = RandF(2.0); sign = (Rand32(2)==0) ? 1 : -1
-    float r    = (float)rand() / (float)RAND_MAX * 2.0f;   // RandF(2.0)
-    float sign = (rand() % 2 == 0) ? 1.0f : -1.0f;         // Rand32(2) == 0
+    // ASM-verified: 2026-05-20 binary @ 0x001757f4 — RotateFacingUp uses Math::g_Random
+    float r    = Math::g_Random.RandF(2.0f);
+    float sign = (Math::g_Random.Rand32(2) == 0) ? 1.0f : -1.0f;
     float magnitude = sign * (2.0f + r);
 
     for (int i = 0; i < 2; i++) {

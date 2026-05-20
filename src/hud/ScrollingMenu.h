@@ -17,7 +17,6 @@
 //
 //  Binary name        | Binary offset | Port field
 //  -------------------|---------------|---------------------
-//  (std::vector)      | +0x68 (infer) | m_Items (private)
 //  field22_0x74       | +0x74         | m_TouchId
 //  field_0x78..0x80   | +0x78         | m_TouchAnchorPos (Vec3)
 //  field_0x84..0x8c   | +0x84         | m_AnchorOffset (Vec3; copy of velocity at anchor-down)
@@ -27,6 +26,7 @@
 //  field61_0xa4       | +0xa4         | m_ItemHeight (DAT_0015b470 = -120.0f)
 //  field62_0xa8       | +0xa8         | m_TotalWidth
 //  field63_0xac       | +0xac         | m_TotalHeight
+//  (std::vector)      | +0xb0..+0xbb  | m_Items
 //  field76_0xbc       | +0xbc         | m_ClosestIdx
 //  field78_0xc4       | +0xc4         | m_SnapDist  (snap-dist acc; init 1.0f)
 //  field77_0xc0       | +0xc0         | m_DragTargetIdx  (ephemeral; NOT persistent selection)
@@ -129,6 +129,9 @@ public:
     // +0xac: total scroll height accumulator (field63_0xac, updated by AddItem)
     float m_TotalHeight;
 
+    // +0xb0..+0xbb: item list (Sourcery pre-C++11 std::vector = 12 bytes)
+    std::vector<ScrollingMenuItem*> m_Items;
+
     // +0xbc: closest-to-zero item index (field76_0xbc; what ShopScreen reads)
     int m_ClosestIdx;
 
@@ -174,22 +177,6 @@ public:
     //   Binary: field104_0xf0, field105_0xf4, field106_0xf8, field107_0xfc
     float m_InnerRegion[4];
 
-private:
-    // +0x68 (inferred): item list
-    std::vector<ScrollingMenuItem*> m_Items;
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
 public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ScrollingMenu::ClearTouch -- auto stub from binary missing-symbol set
@@ -211,5 +198,18 @@ public:
     void Skip() override;
     // ---- end STUBS ----
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(offsetof(ScrollingMenu, m_TotalHeight)    == 0xac, "ScrollingMenu::m_TotalHeight offset");
+static_assert(offsetof(ScrollingMenu, m_Items)          == 0xb0, "ScrollingMenu::m_Items offset");
+static_assert(offsetof(ScrollingMenu, m_ClosestIdx)     == 0xbc, "ScrollingMenu::m_ClosestIdx offset");
+static_assert(offsetof(ScrollingMenu, m_DragTargetIdx)  == 0xc0, "ScrollingMenu::m_DragTargetIdx offset");
+static_assert(offsetof(ScrollingMenu, m_SnapDist)       == 0xc4, "ScrollingMenu::m_SnapDist offset");
+static_assert(offsetof(ScrollingMenu, m_bDragging)      == 0xc8, "ScrollingMenu::m_bDragging offset");
+static_assert(offsetof(ScrollingMenu, m_bTouchProcessed) == 0xc9, "ScrollingMenu::m_bTouchProcessed offset");
+static_assert(offsetof(ScrollingMenu, m_fieldCA)        == 0xca, "ScrollingMenu::m_fieldCA offset");
+static_assert(offsetof(ScrollingMenu, m_pCollidedItem)  == 0xcc, "ScrollingMenu::m_pCollidedItem offset");
+#endif
 
 #endif // FN_SCROLLING_MENU_H

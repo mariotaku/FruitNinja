@@ -9,6 +9,7 @@
 #include "entities/ActorManager.h"
 #include "screens/PauseScreen.h"
 #include <cstdio>
+#include "game/GameWork.h"
 
 // ASM-verified: 2026-05-03 binary @ 0x00169670 (re-analyst)
 
@@ -125,8 +126,8 @@ static bool PointerMoveCallback(InputEvent* /*ev*/) {
 static bool PointerDownCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
-    g->field_0x9c = 1;
-    g->m_bPointerActive = 1;
+    game_work.field_0x9c = 1;
+    game_work.m_bPointerActive = 1;
     return false;
 }
 
@@ -134,8 +135,8 @@ static bool PointerDownCallback(InputEvent* /*ev*/) {
 static bool PointerUpCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
-    g->field_0x9d = 1;
-    g->m_bPointerActive = 0;
+    game_work.field_0x9d = 1;
+    game_work.m_bPointerActive = 0;
     return false;
 }
 
@@ -149,8 +150,8 @@ static bool PointerUpCallback(InputEvent* /*ev*/) {
 static bool PointerDownXboxCallback(InputEvent* /*ev*/) {
     Game* g = Game::GetInstance();
     if (!g) return false;
-    g->field_0x9c = 1;
-    g->m_bPointerActive = 1;
+    game_work.field_0x9c = 1;
+    game_work.m_bPointerActive = 1;
     return false;
 }
 
@@ -162,7 +163,7 @@ static bool PauseGameCallback(InputEvent* ev) {
     if (!ev) return true;
     Game* game = Game::GetInstance();
     if (!game) return true;
-    if (!game->pausedFlag) {
+    if (!game_work.m_Paused) {
         PauseScreen::PauseGame();
     } else {
         PauseScreen::UnpauseGame();
@@ -180,7 +181,7 @@ static bool RegressMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
     if (!g) return true;
-    g->m_bFrameDirty = 1;
+    game_work.m_bFrameDirty = 1;
     return true;
 }
 
@@ -193,8 +194,8 @@ static bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
     Game* g = Game::GetInstance();
     if (!g) return true;
-    if (g->m_TransitionTimer == 0.0f && !g->pausedFlag) {
-        g->m_bFrameDirty = 1;
+    if (game_work.m_GameDt == 0.0f && !game_work.m_Paused) {
+        game_work.m_bFrameDirty = 1;
     }
     return true;
 }

@@ -12,6 +12,7 @@
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include <cstdint>
+#include "game/GameWork.h"
 
 class MenuButton;
 class HUDControl;
@@ -122,13 +123,13 @@ public:
     // +0x128: background pattern index (1..3; randomised when ctor param < 1)
     int         m_BgPatternIdx;    // +0x128
 
-    // +0x12C: pom-pom decoration count (passed to FruitFactControl +0xE5)
-    int         m_PomCount;        // +0x12C
+    // +0x12C: fruit-fact tab index (0 or 1; passed to FruitFactControl::m_TabIndex at +0xE4)
+    int         m_TabIndex;        // +0x12C
 
     // +0x130: star decoration count (passed to FruitFactControl +0xE9)
     int         m_StarCount;       // +0x130
 
-    // +0x134: 1 when game.gameMode == 0 (Classic); gates expression/pattern overlay
+    // +0x134: 1 when game_work.gameMode == 0 (Classic); gates expression/pattern overlay
     uint8_t     m_bIsClassic;      // +0x134
 
     // +0x138: pop-in alpha interpolator (0->1, ramps at 0.125/frame)
@@ -145,7 +146,7 @@ public:
     //   param2/param3 are state/timer overrides for fast-skip path, NOT endReason/endScore.
     //   Score is read via GetCurrentScore(0) in state 6.
     GameOverScreen(const char* modeName, int param2, float param3,
-                   int expressionIdx, int bgPatternIdx, int pomCount, int starCount);
+                   int expressionIdx, int bgPatternIdx, int tabIndex, int starCount);
     ~GameOverScreen() override;
 
     // vtable slot 2: Init — trivial pass-through (0x00140548)
@@ -181,7 +182,7 @@ public:
 private:
     // 0x00142674
     void Initialise(const char* modeName, int param2, float param3,
-                    int expressionIdx, int bgPatternIdx, int pomCount, int starCount);
+                    int expressionIdx, int bgPatternIdx, int tabIndex, int starCount);
 
     // 0x00141188
     void CreateRetryButton();

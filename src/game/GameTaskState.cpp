@@ -8,6 +8,7 @@
 #include "engine/system/PowerManager.h"
 #include <cmath>
 #include <cstdio>
+#include "game/GameWork.h"
 
 // Verified timing constants from binary (read_memory)
 static const float TASK_MAX_RAW_DT = 0.1f;     // DAT_0010a708
@@ -44,10 +45,10 @@ void GameTaskUpdate(float rawDt) {
         }
 
         float frameMs = dt * TASK_DT_TO_MS;
-        uint8_t stateIdx = game->taskStateIndex;
+        uint8_t stateIdx = game_work.taskStateIndex;
 
-        game->dt = dt;
-        game->m_FrameTimer += (int)frameMs;
+        game_work.dt = dt;
+        game_work.m_FrameTimer += (int)frameMs;
         s_taskState.totalTime += dt;
 
         if (!s_taskState.initialized) {
@@ -66,7 +67,7 @@ void GameTaskUpdate(float rawDt) {
             //   active = (!pausedFlag) && (PowerManager::GetState() == 0)
             Mortar::PowerManager::GetInstance()->Update();
             uint32_t pmState = Mortar::PowerManager::GetInstance()->GetState();
-            bool canUpdate = (!game->pausedFlag) && (pmState == 0);
+            bool canUpdate = (!game_work.m_Paused) && (pmState == 0);
             s_updateFuncs[stateIdx](dt, canUpdate);
         } else {
             // State changed: exit old, loop will init new
@@ -83,7 +84,7 @@ void GameTaskDraw(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    uint8_t stateIdx = game->taskStateIndex;
+    uint8_t stateIdx = game_work.taskStateIndex;
     if (stateIdx == s_taskState.prevState && s_taskState.initialized) {
         s_drawFuncs[stateIdx](dt, true);
     }

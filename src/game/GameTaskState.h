@@ -23,6 +23,7 @@
 //
 
 #include <cstdint>
+#include <cstddef>
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "asset/Mesh.h"
@@ -37,35 +38,60 @@ namespace Mortar { class MortarSound; }
 // See docs/structs/game.md "GameTask State" section.
 // Binary fields added per docs/systems/gameinit-todos.md steps 8-10, 12.
 struct GameTaskState {
-    float totalTime;        // +0x00: accumulated time
-    float prevStateDt;      // dt from previous state
-    uint8_t prevState;      // last state index
-    bool initialized;       // true after Init called
+    // +0x00: accumulated time
+    float totalTime;
 
     // +0x04: PauseScreen pointer — allocated in GameInit step 12.
     // Binary: g_TaskState +0x04. Step 14 AddControl batch registers this.
     PauseScreen* pPauseScreen;  // step 12
 
+    // +0x08 (float) = pause transition timer; set to 0.25f by PauseGame
+    // Written by PauseGame() / UnpauseGame() free functions
+    // (binary @ 0x00168f80 / 0x00168fb0).
+    float pauseTransitionTimer;
+
+    // +0x0C (byte) = is-paused indicator; 0 = pausing, 1 = resumed; set by PauseGame/UnpauseGame
+    uint8_t isPaused;
+    uint8_t _pad_0d[3];
+
+    // +0x10 (float) = post-unpause bomb-hit grace timer; set to 0.4f by UnpauseGame
+    float pauseBombHitTimer;
+
+    // Gap +0x14..+0x1B: unasserted fields fit here
+    float prevStateDt;          // dt from previous state
+    uint8_t prevState;          // last state index
+    bool initialized;           // true after Init called
     // +0x0c: "first frame" flag — cleared in step 10; semantics TBD.
     // TODO: confirm xrefs to GameTaskState+0x0c (RE gap, step 10).
     bool firstFrame;            // step 10
+    uint8_t _pad_1b;
 
-    // +0x111: unknown flag — cleared to 0 in step 10.
-    // TODO: confirm xrefs to GameTaskState+0x111 (RE gap, step 10).
-    bool field_0x111;           // step 10
+    // +0x1C: splash fade timer, statically initialised to 1.5f in .data
+    // (g_TaskState + 0x1C = 0x001F3DA0, bytes 00 00 c0 3f).
+    // Drains at dt * 2.0f; reaches 0 at ~0.75 s wall time.
+    float splashFadeTimer;
 
-    // +0x112: GameInit-complete / re-entry guard.
-    // Set to 1 at the end of step 10 to prevent GameInit from re-running.
-    // Also read at GameInit entry: if non-zero, GameInit bails out.
-    bool initComplete;          // step 10
-
-    // +0x114: copy of g_GameData+0x54 written in step 10.
-    // TODO: identify g_GameData+0x54 semantics (RE gap).
-    void* pAppState_x54;        // step 10
+    // Gap +0x20..+0x63: unnamed binary fields not yet RE'd
+    uint8_t _gap_20[0x44];
 
     // +0x64: List<SliceEffect>* allocated in step 9.
     // TODO: type properly once SliceEffect pool is fully ported.
     void* pSliceEffectList;     // step 9
+
+    // +0x68..+0xb0: 7 fruit-spawn-parameter defaults.
+    // Set by _GLOBAL__I_GameTask.cpp @ 0x0016d0dc.
+    // Constants resolved from read_memory(0x0016d3e8, 16):
+    //   DAT_0016d3ec = 0x3FD9999A = 1.7f
+    //   DAT_0016d3f0 = 0x3E99999A = 0.3f
+    //   DAT_0016d3f4 = 0x3DCCCCCD = 0.1f
+    // Semantic mapping (spawn-rate / variance params) not yet RE'd -- TODO.
+    Vec3 spawnParam0;   // +0x68: (1.0, 1.0, 1.0)  -- likely "global scale" default
+    Vec3 spawnParam1;   // +0x74: (1.7, 0.3, 1.0)  -- TODO: identify
+    Vec3 spawnParam2;   // +0x80: (8.0, 0.1, 1.0)  -- TODO: identify
+    Vec3 spawnParam3;   // +0x8c: (20.0, 0.1, 1.0) -- TODO: identify
+    Vec3 spawnParam4;   // +0x98: (4.0, 0.1, 1.0)  -- TODO: identify
+    Vec3 spawnParam5;   // +0xa4: (0.1, 0.1, 0.1)  -- TODO: identify
+    Vec3 spawnParam6;   // +0xb0: (0.1, 0.1, 0.1)  -- TODO: identify
 
     // +0xbc: Mortar::SmartPtr<Model> for "slice_fx.mmd" loaded in step 8.
     Mortar::SmartPtr<Mortar::Model> sliceFxMesh;       // step 8
@@ -73,17 +99,15 @@ struct GameTaskState {
     // +0xc0: Mortar::SmartPtr<Model> for "slice_fx_crit.mmd" loaded in step 8.
     Mortar::SmartPtr<Mortar::Model> sliceFxCritMesh;   // step 8
 
+    // Gap +0xC4..+0xC7: unnamed
+    uint8_t _gap_c4[4];
+
     // +0xc8: MemoryPool<...>* for SliceEffect nodes allocated in step 9.
     // TODO: type properly once SliceEffect pool is fully ported.
     void* pSliceEffectPool;     // step 9
 
-    // +0xfc: background texture (loaded in GameInit)
-    Mortar::SmartPtr<Mortar::Texture> pBackgroundTexture;
-
-    // +0x100: deferred HUDControl queued by HUD::Add-via-callback paths
-    // when AddControl can't run inline. GameUpdate drains it once per frame.
-    // TODO: writers not yet RE'd; suspect a HUD::QueueDeferredAdd helper.
-    HUDControl* pDeferredControl;
+    // Gap +0xCC..+0xD7: unnamed binary fields not yet RE'd
+    uint8_t _gap_cc[0x0C];
 
     // +0xD8: persistent looping "Bomb-Fuse" MortarSound* (binary
     // @ 0x0016c4c8..0x0016c5ca, GameUpdate fuse-vol block). Lazily spawned
@@ -93,44 +117,51 @@ struct GameTaskState {
     // the silent-loop matches the binary's behaviour.
     Mortar::MortarSound* m_pBombFuseSound;
 
-    // Binary @ 0x00231404 GameTaskState global pause fields.
-    // These three fields are written by PauseGame() / UnpauseGame() free functions
-    // (binary @ 0x00168f80 / 0x00168fb0) to a fixed-address global separate from gameObj.
-    // +0x08 (float) = pause transition timer; set to 0.25f by PauseGame
-    float pauseTransitionTimer;  // +0x08
-    // +0x0C (byte) = is-paused indicator; 0 = pausing, 1 = resumed; set by PauseGame/UnpauseGame
-    uint8_t isPaused;            // +0x0C
-    uint8_t _pad_0d[3];
-    // +0x10 (float) = post-unpause bomb-hit grace timer; set to 0.4f by UnpauseGame
-    float pauseBombHitTimer;     // +0x10
+    // Gap +0xDC..+0xFB: unnamed binary fields not yet RE'd
+    uint8_t _gap_dc[0x20];
 
-    // +0x1C: splash fade timer, statically initialised to 1.5f in .data
-    // (g_TaskState + 0x1C = 0x001F3DA0, bytes 00 00 c0 3f).
-    // Drains at dt * 2.0f; reaches 0 at ~0.75 s wall time.
-    float splashFadeTimer;
+    // +0xfc: background texture (loaded in GameInit)
+    Mortar::SmartPtr<Mortar::Texture> pBackgroundTexture;
 
-    // +0x68..+0xb0: 7 fruit-spawn-parameter defaults.
-    // Set by _GLOBAL__I_GameTask.cpp @ 0x0016d0dc.
-    // Constants resolved from read_memory(0x0016d3e8, 16):
-    //   DAT_0016d3ec = 0x3FD9999A = 1.7f
-    //   DAT_0016d3f0 = 0x3E99999A = 0.3f
-    //   DAT_0016d3f4 = 0x3DCCCCCD = 0.1f
-    // Semantic mapping (spawn-rate / variance params) not yet RE'd — TODO.
-    Vec3 spawnParam0;   // +0x68: (1.0, 1.0, 1.0)  — likely "global scale" default
-    Vec3 spawnParam1;   // +0x74: (1.7, 0.3, 1.0)  — TODO: identify
-    Vec3 spawnParam2;   // +0x80: (8.0, 0.1, 1.0)  — TODO: identify
-    Vec3 spawnParam3;   // +0x8c: (20.0, 0.1, 1.0) — TODO: identify
-    Vec3 spawnParam4;   // +0x98: (4.0, 0.1, 1.0)  — TODO: identify
-    Vec3 spawnParam5;   // +0xa4: (0.1, 0.1, 0.1)  — TODO: identify
-    Vec3 spawnParam6;   // +0xb0: (0.1, 0.1, 0.1)  — TODO: identify
+    // +0x100: deferred HUDControl queued by HUD::Add-via-callback paths
+    // when AddControl can't run inline. GameUpdate drains it once per frame.
+    // TODO: writers not yet RE'd; suspect a HUD::QueueDeferredAdd helper.
+    HUDControl* pDeferredControl;
+
+    // Gap +0x104..+0x10B: unnamed binary fields not yet RE'd
+    uint8_t _gap_104[8];
+
+    // +0x10C: per-attempt timed-mode accumulator. Reset to 0 alongside TimeControl
+    // (+0x180)+0x7c at EndRetryLevel (binary @ 0x0016a226) and SkipToGameOver
+    // (binary @ 0x0016adba, guarded by IsTimedGame). Reader not yet RE'd -- treat
+    // as write-only. ASM-verified: 2026-05-20 binary @ 0x0016a226 (re-analyst).
+    int32_t m_TimedModeAccumulator;
+
+    // +0x110..+0x113: written by EndRetryLevel (binary @ 0x0016a220) as float 0.5f,
+    // but individual bytes also accessed: +0x111 cleared by GameInit, +0x112 used as
+    // initComplete guard. Modelled as union so both float-write and byte-read call sites compile.
+    union {
+        float m_ScoreStateField_0x110;  // +0x110: float write path (EndRetryLevel, 0.5f)
+        struct {
+            uint8_t _unused_0x110;      // byte 0 of float
+            bool field_0x111;           // +0x111: unknown flag cleared in step 10
+            bool initComplete;          // +0x112: GameInit-complete / re-entry guard
+            uint8_t _pad_113;           // +0x113: padding
+        };
+    };
+
+    // +0x114: copy of g_GameData+0x54 written in step 10.
+    // TODO: identify g_GameData+0x54 semantics (RE gap).
+    void* pAppState_x54;        // step 10
 
     GameTaskState()
-        : totalTime(0), prevStateDt(0), prevState(0), initialized(false),
-          pPauseScreen(nullptr), firstFrame(false), field_0x111(false),
-          initComplete(false), pAppState_x54(nullptr),
-          pSliceEffectList(nullptr), pSliceEffectPool(nullptr),
+        : totalTime(0),
+          pPauseScreen(nullptr),
           pauseTransitionTimer(0.0f), isPaused(0), _pad_0d(), pauseBombHitTimer(0.0f),
+          prevStateDt(0), prevState(0), initialized(false), firstFrame(false), _pad_1b(0),
           splashFadeTimer(1.5f),
+          _gap_20(),
+          pSliceEffectList(nullptr),
           spawnParam0(1.0f,  1.0f, 1.0f),
           spawnParam1(1.7f,  0.3f, 1.0f),
           spawnParam2(8.0f,  0.1f, 1.0f),
@@ -138,9 +169,52 @@ struct GameTaskState {
           spawnParam4(4.0f,  0.1f, 1.0f),
           spawnParam5(0.1f,  0.1f, 0.1f),
           spawnParam6(0.1f,  0.1f, 0.1f),
+          sliceFxMesh(), sliceFxCritMesh(),
+          _gap_c4(),
+          pSliceEffectPool(nullptr),
+          _gap_cc(),
+          m_pBombFuseSound(nullptr),
+          _gap_dc(),
+          pBackgroundTexture(),
           pDeferredControl(nullptr),
-          m_pBombFuseSound(nullptr) {}
+          _gap_104(),
+          m_TimedModeAccumulator(0),
+          m_ScoreStateField_0x110(0.0f),
+          pAppState_x54(nullptr) {}
 };
+
+// Field-offset assertions for GameTaskState (binary global @ 0x00231404 area, ARM32).
+// Offsets are struct-relative. Guarded by __bada__ so they fire only on the
+// cross-build / Bada toolchain where the struct layout must match the binary.
+// If any of these fail the struct member order is wrong — fix the layout, not the assert.
+#ifdef __bada__
+static_assert(offsetof(GameTaskState, totalTime)             == 0x00,  "GameTaskState::totalTime must be at +0x00");
+static_assert(offsetof(GameTaskState, pPauseScreen)          == 0x04,  "GameTaskState::pPauseScreen must be at +0x04");
+static_assert(offsetof(GameTaskState, pauseTransitionTimer)  == 0x08,  "GameTaskState::pauseTransitionTimer must be at +0x08");
+static_assert(offsetof(GameTaskState, isPaused)              == 0x0C,  "GameTaskState::isPaused must be at +0x0C");
+static_assert(offsetof(GameTaskState, pauseBombHitTimer)     == 0x10,  "GameTaskState::pauseBombHitTimer must be at +0x10");
+static_assert(offsetof(GameTaskState, splashFadeTimer)       == 0x1C,  "GameTaskState::splashFadeTimer must be at +0x1C");
+static_assert(offsetof(GameTaskState, pSliceEffectList)      == 0x64,  "GameTaskState::pSliceEffectList must be at +0x64");
+static_assert(offsetof(GameTaskState, spawnParam0)           == 0x68,  "GameTaskState::spawnParam0 must be at +0x68");
+static_assert(offsetof(GameTaskState, spawnParam1)           == 0x74,  "GameTaskState::spawnParam1 must be at +0x74");
+static_assert(offsetof(GameTaskState, spawnParam2)           == 0x80,  "GameTaskState::spawnParam2 must be at +0x80");
+static_assert(offsetof(GameTaskState, spawnParam3)           == 0x8C,  "GameTaskState::spawnParam3 must be at +0x8C");
+static_assert(offsetof(GameTaskState, spawnParam4)           == 0x98,  "GameTaskState::spawnParam4 must be at +0x98");
+static_assert(offsetof(GameTaskState, spawnParam5)           == 0xA4,  "GameTaskState::spawnParam5 must be at +0xA4");
+static_assert(offsetof(GameTaskState, spawnParam6)           == 0xB0,  "GameTaskState::spawnParam6 must be at +0xB0");
+static_assert(offsetof(GameTaskState, sliceFxMesh)           == 0xBC,  "GameTaskState::sliceFxMesh must be at +0xBC");
+static_assert(offsetof(GameTaskState, sliceFxCritMesh)       == 0xC0,  "GameTaskState::sliceFxCritMesh must be at +0xC0");
+static_assert(offsetof(GameTaskState, pSliceEffectPool)      == 0xC8,  "GameTaskState::pSliceEffectPool must be at +0xC8");
+static_assert(offsetof(GameTaskState, m_pBombFuseSound)      == 0xD8,  "GameTaskState::m_pBombFuseSound must be at +0xD8");
+static_assert(offsetof(GameTaskState, pBackgroundTexture)    == 0xFC,  "GameTaskState::pBackgroundTexture must be at +0xFC");
+static_assert(offsetof(GameTaskState, pDeferredControl)      == 0x100, "GameTaskState::pDeferredControl must be at +0x100");
+static_assert(offsetof(GameTaskState, m_TimedModeAccumulator) == 0x10C, "GameTaskState::m_TimedModeAccumulator must be at +0x10C");
+static_assert(offsetof(GameTaskState, m_ScoreStateField_0x110) == 0x110, "GameTaskState::m_ScoreStateField_0x110 must be at +0x110");
+static_assert(offsetof(GameTaskState, field_0x111)           == 0x111, "GameTaskState::field_0x111 must be at +0x111");
+static_assert(offsetof(GameTaskState, initComplete)          == 0x112, "GameTaskState::initComplete must be at +0x112");
+static_assert(offsetof(GameTaskState, pAppState_x54)         == 0x114, "GameTaskState::pAppState_x54 must be at +0x114");
+static_assert(sizeof(GameTaskState)                          == 0x118, "sizeof(GameTaskState) must be 0x118");
+#endif
 
 // State handler function types (match original function pointer table)
 typedef void (*StateInitFn)(unsigned long);

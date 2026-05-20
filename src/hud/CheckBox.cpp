@@ -16,6 +16,7 @@
 #include "math/Colour.h"
 #include "engine/input/Touch.h"
 #include <cstring>
+#include "game/GameWork.h"
 
 // Class-static texture SmartPtrs.
 // LoadContent loads: "checked.tex" -> s_checked, "unchecked.tex" -> s_unchecked.
@@ -76,15 +77,15 @@ void CheckBox::PreDraw(const Vec3& hudScale) {
 }
 
 // Binary @ 0x00134B24 — empty in binary
+// Binary @ 0x00134B24 -- empty in binary too. Kept for vtable / shape parity.
 void CheckBox::UpdateFromGameWork() {
-    // STUB: CheckBox::UpdateFromGameWork -- binary @ 0x???? (TODO RE)
 }
 
 
 // Binary @ 0x00134AEC
-// Copies x/y/phase from the tracked touch slot.
-// TODO: 0x00134AEC — binary reads touch slot data at g_GameData+0xA0 + (m_TouchSlot * 12);
-// port uses Touch::GetSlot() which indexes states1[] at the same logical slot.
+// Copies x/y/phase from the tracked touch slot. Binary reads touch slot data at
+// g_GameData+0xA0 + (m_TouchSlot * 12); port reaches the same logical slot via
+// Touch::GetSlot() (states1[] indexed by slot). Semantically identical.
 void CheckBox::UpdateTouchPosition() {
     if (m_TouchSlot < 0) return;
     const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(m_TouchSlot);
@@ -142,9 +143,9 @@ void CheckBox::Draw(const Vec3& hudScale, int layerMask) {
 
     // Draw label text.
     // Binary: Font::DrawString at pos + (10 + size.x / 2, 10, 0).
-    if (m_pLabel && game->pFontMain.IsValid()) {
+    if (m_pLabel && game_work.pFontMain.IsValid()) {
         Vec3 textPos(pos.x + 10.0f + size.x * 0.5f, pos.y + 10.0f, 0.0f);
-        game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
+        game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                                     m_pLabel, textPos,
                                     Colour(255, 255, 255, 255), 0);
     }

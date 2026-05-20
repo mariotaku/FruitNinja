@@ -2,6 +2,7 @@
 #define FN_GAME_MODE_H
 
 #include <cstdint>
+#include "game/GameWork.h"
 
 //
 // Mortar / Fruit Ninja game-mode enum.
@@ -18,7 +19,7 @@
 //   3 -> "xml/zenWaveList.xml"        (Zen)
 //
 // Use these named constants instead of raw 0/1/2/3 literals when
-// comparing `game->gameMode`. Keep the storage type uint8_t so the
+// comparing `game_work.gameMode`. Keep the storage type uint8_t so the
 // Game struct layout (and asm-verify cross-build symbol shape) is
 // unchanged.
 //
@@ -45,6 +46,23 @@ inline bool FailureEnabled(uint8_t gameMode) {
 // TimeControl countdown HUD.
 inline bool IsTimedGame(uint8_t gameMode) {
     return ((uint8_t)(gameMode - 2u)) < 2u;
+}
+
+// Binary @ 0x0010b15c -- GetModeName(GAME_MODE). Returns the ASCII mode-name
+// string used to construct per-mode stat keys ("combo_CLASSIC", "combo_ARCADE", etc.).
+// Names taken from rodata / FruitSaveData key evidence; see also FruitSaveData.cpp:k_ModeNames.
+inline const char* GetModeName(uint8_t gameMode) {
+    static const char* s_Names[] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
+    if (gameMode < 4) return s_Names[gameMode];
+    return "UNKNOWN";
+}
+
+// Binary @ 0x0010a500. Probes accelerometer via Game+0x1a4; that field is
+// never set in the shipped binary (dead initialisation path), so the function
+// unconditionally returns 0. Gating the ShopListItem locked-state-1 red prompt.
+// Defunct: accelerometer DeviceUpsideDown -- no-op stub; binary @ 0x0010a500
+inline bool IsDeviceUpsideDown() {
+    return false;
 }
 
 } // namespace Mortar

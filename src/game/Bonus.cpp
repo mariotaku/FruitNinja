@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include "game/GameWork.h"
 
 using Mortar::TextureManager;
 
@@ -341,14 +342,14 @@ Bonus* BonusType::GetBest() {
     // TODO: binary uses session totals for this check; port uses lifetime.
     {
         Game* g_b = Game::GetInstance();
-        FruitSaveData* sd_b = g_b ? g_b->pSaveData : 0;
+        FruitSaveData* sd_b = g_b ? game_work.m_SaveData : 0;
         for (std::map<uint64_t, int>::iterator it = fruitCounts.begin();
              it != fruitCounts.end(); ++it) {
             it->second = (sd_b && sd_b->IsAchievementUnlocked((uint32_t)it->first) != 0) ? 1 : 0;
         }
     }
 
-    int score = Game::GetInstance() ? Game::GetInstance()->currentScore : 0;
+    int score = Game::GetInstance() ? game_work.currentScore : 0;
     for (size_t i = 0; i < m_Bonuses.size(); ++i) {
         if (m_Bonuses[i].IsAchieved(score, fruitCounts) != 0) {
             return &m_Bonuses[i];
@@ -368,10 +369,10 @@ static int GetBonusTotal(uint64_t hash) {
     static const uint32_t kScoreHash = StringHash("score");
     if ((uint32_t)hash == kScoreHash) {
         Game* g = Game::GetInstance();
-        return g ? g->currentScore : 0;
+        return g ? game_work.currentScore : 0;
     }
     Game* g = Game::GetInstance();
-    FruitSaveData* sd = g ? g->pSaveData : 0;
+    FruitSaveData* sd = g ? game_work.m_SaveData : 0;
     return sd ? sd->GetTotal((uint32_t)hash) : 0;
 }
 

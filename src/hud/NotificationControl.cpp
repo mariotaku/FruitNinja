@@ -14,6 +14,7 @@
 #include <cstring>
 #include <cctype>
 #include <algorithm>
+#include "game/GameWork.h"
 
 // File-scope banner texture statics.
 // TODO: load notification banner textures — loader function not yet identified in binary.
@@ -72,15 +73,15 @@ NotificationControl::NotificationControl(const char* name, int points,
     // Type_Named: play "achievement" SFX
     if (type == NotificationControl::Type_Named) {
         Game* g = Game::GetInstance();
-        if (g && g->pGameSound) {
-            g->pGameSound->SFXPlay("achievement", 1.0f, 1.0f);
+        if (g && game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
         }
     }
 
     // Measure text width and scale down if exceeds maxWidth
     Game* g = Game::GetInstance();
-    if (g && g->pFontMain.IsValid()) {
-        float measured = g->pFontMain->MeasureWidth(m_TextScale, m_DisplayName);
+    if (g && game_work.pFontMain.IsValid()) {
+        float measured = game_work.pFontMain->MeasureWidth(m_TextScale, m_DisplayName);
         if (measured > maxWidth) {
             m_TextScale *= maxWidth / measured;
         }
@@ -183,19 +184,19 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
 
         // Name text
         // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
-        if (g->pFontMain.IsValid()) {
+        if (game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 textPos(pos.x + 18.0f, pos.y, pos.z);
-            g->pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
+            game_work.pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
                 m_DisplayName, textPos, col, 0x0C);
         }
 
         // Points text (right-aligned)
         // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
-        if (m_PointsText[0] != '\0' && g->pFontMain.IsValid()) {
+        if (m_PointsText[0] != '\0' && game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 ptPos(pos.x + 186.0f, pos.y, pos.z);
-            g->pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
+            game_work.pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
                 m_PointsText, ptPos, col, 0x0C);
         }
 
@@ -241,10 +242,10 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
 
         // Name text only (no points text for named type)
         // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
-        if (g->pFontMain.IsValid()) {
+        if (game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             Vec3 textPos(pos.x + 18.0f, pos.y + 16.0f, pos.z);
-            g->pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
+            game_work.pFontMain->DrawString(m_TextScale, 1.0f, 0.0f,
                 m_DisplayName, textPos, col, 0x0C);
         }
     }

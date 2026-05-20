@@ -1,6 +1,6 @@
 #include "asset/MeshManager.h"
 #include "asset/TextureManager.h"
-#include <cstdio>
+#include "debug/Logger.h"
 #include <cstring>
 
 // Analysed: 2026-04-12T00:00
@@ -245,7 +245,7 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
 Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     ResourceLoader loader(path);
     if (loader.DataSize() == 0 && loader.ChildCount() == 0) {
-        fprintf(stderr, "MeshManager: failed to load '%s'\n", path);
+        LOG_ERROR("MeshManager", "failed to load '%s'", path);
         return Mortar::SmartPtr<Model>();
     }
 
@@ -263,13 +263,13 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
     // meshCount: number of Mesh sub-resources that follow
     if (loader.m_ReadPos + 4 > loader.DataSize()) {
-        fprintf(stderr, "MeshManager: '%s': truncated before meshCount\n", path);
+        LOG_ERROR("MeshManager", "'%s': truncated before meshCount", path);
         delete model;
         return Mortar::SmartPtr<Model>();
     }
     uint32_t meshCount = loader.Read<uint32_t>();
     if (meshCount == 0 || meshCount > 64) {
-        fprintf(stderr, "MeshManager: '%s': bad meshCount=%u\n", path, meshCount);
+        LOG_ERROR("MeshManager", "'%s': bad meshCount=%u", path, meshCount);
         delete model;
         return Mortar::SmartPtr<Model>();
     }
@@ -388,19 +388,19 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             if (geom.vbo || geom.ibo) {
                 mesh->m_Geometries.push_back(geom);
             } else {
-                printf("[MeshManager] '%s' mesh[%u] geom[%u]: no GPU data\n", path, mi, i);
+                LOG_WARN("MeshManager", "'%s' mesh[%u] geom[%u]: no GPU data", path, mi, i);
             }
         }
 
         if (mesh->m_Geometries.empty()) {
-            printf("[MeshManager] '%s' mesh[%u]: no geometries loaded\n", path, mi);
+            LOG_WARN("MeshManager", "'%s' mesh[%u]: no geometries loaded", path, mi);
         }
 
         model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
     }
 
     if (model->m_Meshes.empty()) {
-        fprintf(stderr, "MeshManager: '%s': no meshes loaded\n", path);
+        LOG_ERROR("MeshManager", "'%s': no meshes loaded", path);
         delete model;
         return Mortar::SmartPtr<Model>();
     }

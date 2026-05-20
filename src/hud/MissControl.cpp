@@ -14,10 +14,11 @@
 #include "render/Renderer.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
-#include <cstdio>
+#include "debug/Logger.h"
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include "game/GameWork.h"
 
 // Pool size: binary CreatePool(0xC, hud) = 12 slots. DIFFERS: was 9.
 // binary @ 0x001512d8
@@ -74,8 +75,7 @@ Mortar::SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
 // --- ctor / dtor -----------------------------------------------------------
 
 MissControl::MissControl()
-    : m_bBusy(0)
-    , m_AnimState(0)
+    : m_AnimState(0)
     , m_bVisible(0)
     , m_JitterTimer(0)
     , m_FadeAlpha(0.0f)
@@ -84,7 +84,7 @@ MissControl::MissControl()
     , m_ComboCount(0)
     , m_AlphaScale(1.0f)
 {
-    m_bActive       = 1;
+    m_bActive       = 0;   // pool slot starts free; Init/Make* sets to 1
     m_bNoDestructor = 1;
     // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
     m_LayerFlags    = Mortar::HUD_LAYER_DEFAULT;
@@ -102,18 +102,13 @@ void MissControl::Release() {
 // vtable[4] @ 0x00150fa4
 void MissControl::Init() {
     m_bComboActive = 0;
-    m_bBusy        = 1;
-    // Binary's field_0x30 IS HUDControl::m_bActive (per HUDControl base
-    // layout). The port aliases both m_bActive and m_bBusy at the source
-    // level; keep them in sync so HUD::Draw's m_bActive gate sees the
-    // slot as renderable on Init/MakeCombo paths after a prior release.
-    m_bActive      = 1;
+    m_bActive      = 1;   // binary field_0x30 = 1; marks slot as busy/active
     m_Timer        = 0.0f;  // rotation (+0x2c)
     m_AnimState    = 0;
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
     m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
     m_FadeAlpha    = 0.0f;
-    m_bBusy        = 1;     // binary writes twice (first overwritten by ctor)
+    m_bActive      = 1;   // binary writes field_0x30 twice (second write is redundant but faithful)
     m_ComboCount   = 0;
     m_bUseSound    = 0;
     m_AlphaScale   = 1.0f;
@@ -130,7 +125,7 @@ void MissControl::Reset() {
     m_JitterTimer  = 0;
     m_bVisible     = 0;
     if (m_FadeAlpha > 0.0f) {
-        m_bBusy        = 0;
+        m_bActive      = 0;   // binary field_0x30 = 0; frees slot
         m_DrawColour.a = 0;
     }
 }
@@ -145,6 +140,28 @@ void MissControl::PreDraw(const Vec3& /*hudScale*/) {}
 // Defunct: same-screen MP player-index hook — no-op stub; binary @ 0x00150dfc
 int MissControl::SetPlayer(int player) {
     return player;
+}
+
+// Port specific: mirrors the quad-origin formula from MissControl::Draw
+// (binary @ 0x00151f60..0x00152186) so the F1 boundary tracks the rendered quad.
+// Jitter term is omitted (non-deterministic RandUint; short-lived and cosmetic).
+Vec3 MissControl::GetDrawPos() const {
+    Vec3 p = pos;
+    if (m_FadeAlpha <= 0.0f) {
+        Game* g = Game::GetInstance();
+        if (g) {
+            const bool failureEnabled =
+                Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
+            if (failureEnabled) {
+                p.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
+            } else {
+                p.y -= 3.0f * pos.y;
+            }
+        }
+    }
+    return Vec3(p.x + 480.0f * m_HudScale.x,
+                p.y + 320.0f * m_HudScale.y,
+                p.z);
 }
 
 // vtable[15] @ 0x00150e3c
@@ -189,8 +206,8 @@ void MissControl::LoadContent() {
         }
     }
     s_TexturesLoaded = true;
-    printf("[MissControl] LoadContent: critical=%d rare=%d cross=%d\n",
-           s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
+    LOG_DEBUG("MissControl", "LoadContent: critical=%d rare=%d cross=%d",
+              s_TexCritical.IsValid(), s_TexRare.IsValid(), s_TexCross.IsValid());
 }
 
 // --- Pool allocation -------------------------------------------------------
@@ -201,16 +218,16 @@ void MissControl::LoadContent() {
 void MissControl::AllocatePool() {
     if (s_PoolAllocated) return;
     Game* game = Game::GetInstance();
-    if (!game || !game->hud) {
-        printf("[MissControl] AllocatePool: HUD not ready\n");
+    if (!game || !game_work.mHud) {
+        LOG_WARN("MissControl", "AllocatePool: HUD not ready");
         return;
     }
     for (int i = 0; i < MISS_POOL_SIZE; ++i) {
         s_Pool[i] = new MissControl();
-        game->hud->AddControl(s_Pool[i]);
+        game_work.mHud->AddControl(s_Pool[i]);
     }
     s_PoolAllocated = true;
-    printf("[MissControl] AllocatePool: %d slots\n", MISS_POOL_SIZE);
+    LOG_DEBUG("MissControl", "AllocatePool: %d slots", MISS_POOL_SIZE);
 }
 
 const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
@@ -236,7 +253,7 @@ MissControl* MissControl::GetFree() {
     if (!s_PoolAllocated) return nullptr;
     int idx = s_NextSlot;
     for (int tries = 0; tries < MISS_POOL_SIZE; ++tries) {
-        if (s_Pool[idx] && s_Pool[idx]->m_bBusy == 0) break;
+        if (s_Pool[idx] && s_Pool[idx]->m_bActive == 0) break;
         idx = (idx + 1) % MISS_POOL_SIZE;
     }
     s_NextSlot = idx;  // binary leaves cursor at found slot, not +1
@@ -253,9 +270,8 @@ static void PopulateOverlay(MissControl* mc, const Vec3& pos,
     mc->m_FadeAlpha  = MISS_FADE_INIT;
     mc->m_AnimState  = 3;
     mc->m_AlphaScale = alphaScale;
-    mc->m_bActive    = 1;
+    mc->m_bActive    = 1;   // binary field_0x30 = 1; marks slot busy
     mc->m_bComboActive = 1;
-    mc->m_bBusy      = 1;
     mc->m_JitterTimer = 0;   // field_0x7e = 0. binary @ 0x001518b8
     mc->m_DrawColour.a = 0xff;  // field_0x5f = 0xff. binary @ 0x001518b4
     mc->pos = pos;
@@ -298,7 +314,7 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
     // (int)(WaveManager::GetSpeed(0) + 0.65f) and uses that as the
     // effective combo count when gameMode == ARCADE.
     Game* g = Game::GetInstance();
-    if (g && g->gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (g && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         WaveManager* wm = WaveManager::GetInstance();
         if (wm) comboCount = (int)(wm->GetSpeed(0) + 0.65f);
     }
@@ -350,7 +366,7 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         m_JitterTimer  = 0;
         m_bComboActive = 1;
         size = Vec3((float)(tex->m_Width + 1), (float)(tex->m_Height + 1), 0.0f);
-        m_bBusy        = 1;
+        m_bActive      = 1;   // binary field_0x30 = 1; marks slot busy
         // No screen clamp on path 1. binary @ 0x00151d94
     } else {
         // Path 2: fruit miss-penalty (invalid SmartPtr = use existing texture).
@@ -367,7 +383,7 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         // DAT_00151f50 = 240.0, DAT_00151f54 = 160.0 (centred-ortho half-extents).
         pos.x = std::max(size.x * 0.5f - MISS_CLAMP_HALF_X, std::min(pos.x, MISS_CLAMP_HALF_X - size.x * 0.5f));
         pos.y = std::max(size.y * 0.5f - MISS_CLAMP_HALF_Y, std::min(pos.y, MISS_CLAMP_HALF_Y - size.y * 0.5f));
-        m_bBusy        = 1;
+        m_bActive      = 1;   // binary field_0x30 = 1; marks slot busy
         if (s_TexCross.IsValid()) m_Texture = s_TexCross;
     }
 }
@@ -376,17 +392,17 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
 
 // binary @ 0x00151a60
 // ASM-verified: 2026-05-09 binary @ 0x00151a60 (re-analyst — passive miss-counter
-// path identified). Binary does NOT short-circuit on m_bBusy at function entry;
+// path identified). Binary does NOT short-circuit on m_bActive at function entry;
 // the m_bComboActive gate around the separation block was previously confused
-// with an m_bBusy gate.
+// with an m_bActive gate.
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
-    // Their m_AnimState is 0/1/2 (slot index); m_bBusy stays 0.
-    // Toggle m_bVisible based on game->missCount vs m_AnimState — when the
+    // Their m_AnimState is 0/1/2 (slot index); m_bActive stays 0.
+    // Toggle m_bVisible based on game_work.missCount vs m_AnimState — when the
     // player has missed at least (m_AnimState + 1) fruits, the X marker
     // turns red. binary @ 0x00151a60 lines 1-10.
     Game* game = Game::GetInstance();
-    uint8_t missCount = (game ? game->missCount : 0);
+    uint8_t missCount = (game ? game_work.missCount : 0);
     if (!m_bVisible && m_AnimState < missCount) {
         m_JitterTimer  = 0x1e;
         m_DrawColour.a = 0xff;
@@ -399,7 +415,7 @@ void MissControl::Update(float dt) {
         float accX = 0.0f, accY = 0.0f;
         for (int k = 0; k < MISS_POOL_SIZE; ++k) {
             MissControl* other = s_Pool[k];
-            if (!other || other == this || !other->m_bBusy) continue;
+            if (!other || other == this || !other->m_bActive) continue;
             float dx = other->pos.x - pos.x;
             float dy = other->pos.y - pos.y;
             float distSq = dx*dx + dy*dy;
@@ -439,7 +455,7 @@ void MissControl::Update(float dt) {
     }
 
     // Pause guard: if game paused, skip fade. binary @ 0x00151a60 pause guard
-    if (game && game->levelTransitionFlag) return;
+    if (game && game_work.m_LevelTransitionFlag) return;
 
     pos.z = 0.0f;
 
@@ -454,11 +470,15 @@ void MissControl::Update(float dt) {
         // m_bUseSound (port field at +0x85) is binary's field_0x85 (HasSeenLightning).
         // When non-zero: try alternate combo sound, else format "combo-%d".
         // When zero: fall back to "New-best-score" (no-lightning path).
+        // ASM-verified: 2026-05-20T00:00Z binary @ 0x00103f68, 0x00151cf8 (re-analyst)
         if (m_bUseSound != 0) {
-            // TODO: 0x00103f68 — ItemManager::PlayAlternateComboSound not yet ported;
-            // stub is void, so alternate-sound suppression path is skipped for now.
             ItemManager* im = ItemManager::GetInstance();
-            if (im) im->PlayAlternateComboSound(m_ComboCount - 3);
+            bool altPlayed = im ? im->PlayAlternateComboSound(m_ComboCount - 3) : false;
+            if (!altPlayed) {
+                defaultSfx = true;
+            } else {
+                defaultSfx = false;
+            }
             int n = (m_ComboCount < 4)  ? 1
                   : (m_ComboCount < 10) ? m_ComboCount - 2
                                         : 8;
@@ -466,8 +486,8 @@ void MissControl::Update(float dt) {
         } else {
             std::strcpy(buf, "New-best-score");
         }
-        if (defaultSfx && game && game->pGameSound) {
-            game->pGameSound->SFXPlay(buf, /*vol*/1.0f, /*pitch*/0.25f);
+        if (defaultSfx && game && game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay(buf, /*vol*/1.0f, /*pitch*/0.25f);
         }
     }
 
@@ -475,25 +495,40 @@ void MissControl::Update(float dt) {
     if (m_FadeAlpha <= 0.0f) {
         m_FadeAlpha = 0.0f;
         // ASM-verified: 2026-05-11 binary @ MissControl::Update tail
-        // (re-analyst). Slot-release writes 0 to field_0x30 (which the
-        // binary's HUDControl base names m_bActive -- same byte that
-        // MissControl's port-side comments call "m_bBusy"). HUD::Draw
-        // and HUD::Update gate on m_bActive (port: src/hud/HUD.cpp:72/88/108),
+        // (re-analyst). Slot-release writes 0 to field_0x30 = m_bActive.
+        // HUD::Draw and HUD::Update gate on m_bActive (port: src/hud/HUD.cpp:72/88/108),
         // so clearing it stops both Update and Draw cycles for this slot
         // until MakeCritical/MakeRare/MakeCombo's PopulateOverlay sets
         // m_bActive=1 again on slot reuse.
         // m_RemoveCallback is NEVER bound for MissControl pool slots in the
         // binary (verified: no Delegate1<...>::Callee<MissControl> exists).
-        // The disappear mechanism is purely the m_bActive flip.
+        // The disappear mechanism is purely the m_bActive flip (binary field_0x30 = 0).
         m_bActive      = 0;
-        m_bBusy        = 0;
         m_bComboActive = 0;
     }
 }
 
 // --- Draw ------------------------------------------------------------------
 
-// ASM-verified-partial: 2026-05-03 binary @ 0x00151f60..0x00152190 (pulse formula + fall-off only; transform field_0x14/0x20 pre-mult still a gap)
+// ASM-verified: 2026-05-20T00:00Z binary @ 0x00151f60 (re-analyst)
+// Quad-origin formula (binary @ 0x00151f60..0x00152186):
+//
+//   origin = pos + anchorBase + Vec3(480 * m_HudScale.x, 320 * m_HudScale.y, 0)
+//
+//   anchorBase derivation:
+//     if (m_JitterTimer > 0):
+//         anchorBase = Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_JitterTimer--
+//     else:
+//         anchorBase = Vec3(0, 0, 0)
+//         // NOTE: binary reads GOT slot 0x001f251c (function ptr, not Vec3);
+//         // path is dead in practice; port treats as zero.
+//
+//     if (m_FadeAlpha <= 0.0f):               // passive miss-marker path only
+//         if (FailureEnabled() && !IsMultiplayer()):
+//             anchorBase.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt)
+//         else:
+//             anchorBase.y -= 3.0f * pos.y    // Zen / MP: park off-screen
+//
 // binary @ 0x00151f60
 void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     if (!m_Texture.IsValid()) return;
@@ -550,9 +585,11 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
             }
         }
     }
-    // Slide-in / off-screen-park y-jiggle. Binary @ 0x0015208e..0x001520c4:
+    // Slide-in / off-screen-park y-shift. Binary @ 0x0015208e..0x001520c4:
+    // Only applied when m_FadeAlpha <= 0 (passive miss-marker path).
+    // Pulse path (m_FadeAlpha > 0) skips this entirely.
     //   if (FailureEnabled() && !IsMultiplayer())
-    //       drawPos.y -= 3.0f * pos.y * fabsf(game->m_TransitionTimer);
+    //       drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
     //   else
     //       drawPos.y -= 3.0f * pos.y;   // Zen / multi-player: parked off-screen
     // For non-Zen single-player, m_TransitionTimer drives the animation:
@@ -561,23 +598,13 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     //        moves UP past the +160 clamp (off-screen above the viewport).
     //   timer == 0.0 (gameplay): no shift, markers visible at top-right.
     //   intermediate values produce the slide-in animation.
-    // (m_FadeAlpha in (0, SOUND_THRESH]: pulse compute is omitted -- output is
-    // dead in the binary too.)
-    {
+    if (m_FadeAlpha <= 0.0f) {
         Game* g = Game::GetInstance();
         if (g) {
-            // Binary @ 0x0015208e:
-            //   if (FailureEnabled() && !IsMultiplayer())
-            //       drawPos.y -= 3.0f * pos.y * |m_TransitionTimer|;
-            //   else
-            //       drawPos.y -= 3.0f * pos.y;     // Zen / MP: parked off-screen
-            // In Zen mode the stored pos.y is still negative (-10/-13/-18) so
-            // the constant shift moves the marker UP past the +160 clamp and
-            // off the top of the viewport, hiding it for the whole game.
             const bool failureEnabled =
-                Mortar::FailureEnabled(g->gameMode);  // IsMultiplayer() unported -> false
+                Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
             if (failureEnabled) {
-                drawPos.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+                drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
             } else {
                 drawPos.y -= 3.0f * pos.y;
             }
@@ -590,8 +617,8 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     float fade = 1.0f;
     {
         Game* gFade = Game::GetInstance();
-        if (gFade && gFade->hud) {
-            float ts = gFade->hud->m_globalTimeScale;
+        if (gFade && game_work.mHud) {
+            float ts = game_work.mHud->m_globalTimeScale;
             if (ts < 1.0f) fade = ts;
         }
     }
@@ -646,11 +673,10 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
 
     m_Texture->Set();
 
-    // Tint: m_DrawColour multiplied by per-frame HUD tint (MatrixManager.field_0x3c.field_0x20).
-    // TODO: 0x001520ec — blocked on MatrixManager::GetTintColour engine gap; binary @
-    // 0x001520ec multiplies m_DrawColour by the HUD-layer tint via MatrixManager field
-    // +0x3c.field_0x20. Port renders with stored m_DrawColour only (visually fine until
-    // the tint-fade screen overlay is implemented). ACCEPT-cosmetic in asm-verify.
+    // TODO: 0x001520ec -- HUD-layer fade alpha (float at MatrixManager.field_0x3c+0x20)
+    // not yet wired. Binary reads it each frame and multiplies into m_DrawColour.a.
+    // Setter binary site is unknown (likely a ScreenTint / fade-in-out transition).
+    // Until that's RE'd, port skips the multiplier (m_DrawColour.a passes through unchanged).
     const uint8_t a = (uint8_t)(fade * (float)m_DrawColour.a);
     const uint32_t col = (uint32_t)a << 24 | (uint32_t)m_DrawColour.b << 16
                         | (uint32_t)m_DrawColour.g << 8 | (uint32_t)m_DrawColour.r;

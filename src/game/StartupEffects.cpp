@@ -11,7 +11,9 @@
 #include "render/Renderer.h"
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
+#include "debug/Logger.h"
 #include <cstdint>
+#include "game/GameWork.h"
 
 namespace FN {
 
@@ -35,8 +37,8 @@ void DrawStartFade() {
     if (!game) return;
 
     // Binary calls FruitCamera::SetupPerspective(camera, 3, 1) to switch to ortho/screen mode.
-    if (game->pCamera) {
-        game->pCamera->SetupPerspective(PT_GENERIC, true);
+    if (game_work.m_FruitCamera) {
+        game_work.m_FruitCamera->SetupPerspective(PT_GENERIC, true);
     }
 
     float bright, alpha_factor, rgb_factor;
@@ -82,10 +84,10 @@ void DrawStartFade() {
 
 // @ 0x00169a9c
 void PrepareForLevelStart() {
-    printf("[FN::PrepareForLevelStart] firing -> WaveManager::Reset(false)\n");
+    LOG_DEBUG("FN", "PrepareForLevelStart: firing -> WaveManager::Reset(false)");
     WaveManager::GetInstance()->Reset(false);
     Game* game = Game::GetInstance();
-    if (game) game->levelTransitionFlag = 1;
+    if (game) game_work.m_LevelTransitionFlag = 1;
 }
 
 } // namespace FN

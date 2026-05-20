@@ -6,6 +6,7 @@
 #include "Coin.h"
 #include "BombBlast.h"
 #include "SlashEntity.h"
+#include "debug/Logger.h"
 
 #include <cstdio>
 
@@ -33,7 +34,7 @@ Mortar::Entity* CreateEntity(int entityType) {
     case 3:  return new SlashEntity();
     case 4:  return new BombBlast();
     default:
-        fprintf(stderr, "CreateEntity: unknown entity type %d\n", entityType);
+        LOG_WARN("ENTITYFACTORY", "unknown entity type %d", entityType);
         return nullptr;
     }
 }

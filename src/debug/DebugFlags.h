@@ -25,11 +25,25 @@ extern float g_DebugTimeScale; // Port specific: debug-only, no binary equivalen
 // No-op when g_DebugHitboxes is false.
 void DebugHitbox_Draw();
 
-// Render every active MenuButton click hitbox as a magenta AABB outline.
+// Render every active HUDControl bounding box as a magenta AABB outline.
+// Covers all HUDControl subclasses (MenuButton, BonusScreen controls, etc.).
 // Call from GameDraw right after DebugHitbox_Draw().
 // No-op when g_DebugHitboxes is false.
-void DebugMenuButton_Draw();
+void DebugHUDBounds_Draw();
 
+} // namespace FN
+
+#else // __bada__
+
+// On the Bada / cross-build target there is no debug time scaling.
+// Provide g_DebugTimeScale as a compile-time constant so call sites
+// that multiply by it compile and reduce to no-op arithmetic.
+namespace FN {
+static const float g_DebugTimeScale = 1.0f;
+static const bool  g_DebugHitboxes  = false;
+static const bool  g_DebugWireframe = false;
+inline void DebugHitbox_Draw()  {}
+inline void DebugHUDBounds_Draw() {}
 } // namespace FN
 
 #endif // !__bada__

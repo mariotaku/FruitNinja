@@ -10,8 +10,9 @@
 #include "util/PathCI.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
+#include "game/PowerUpManager.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -78,13 +79,13 @@ void FruitInfo_Load(const char* xmlPath)
     }
     if (err != tinyxml2::XML_SUCCESS)
     {
-        fprintf(stderr, "Fruit::LoadInfo: failed to open '%s' (error %d)\n", xmlPath, err);
+        LOG_ERROR("FRUITINFO/LoadInfo", "failed to open '%s' (error %d)", xmlPath, err);
         return;
     }
     tinyxml2::XMLElement* root = doc.FirstChildElement("fruitInfoFile");
     if (!root)
     {
-        fprintf(stderr, "Fruit::LoadInfo: no <fruitInfoFile> root element\n");
+        LOG_ERROR("FRUITINFO/LoadInfo", "no <fruitInfoFile> root element");
         return;
     }
 
@@ -366,7 +367,7 @@ void FruitInfo_Load(const char* xmlPath)
             }
         }
     }
-    printf("Fruit::LoadInfo: loaded %d fruit types from '%s'\n", s_FruitInfoCount, xmlPath);
+    LOG_INFO("FRUITINFO", "Fruit::LoadInfo: loaded %d fruit types from '%s'", s_FruitInfoCount, xmlPath);
 
     // Original: calls LoadFruitModels() at the very end (loads 3D mesh per fruit type)
     LoadFruitModels();
@@ -402,4 +403,16 @@ FruitInfo* FruitInfo_GetArray()
 Mortar::Texture* FruitInfo_GetShadowTex()
 {
     return g_FruitShadowTex.IsValid() ? g_FruitShadowTex.Get() : nullptr;
+}
+
+// FRUIT_POWERS::AnyActivePowers — binary @ 0x00175714
+// Returns true if any power in m_pArray is currently active via PowerUpManager.
+// ASM-verified: 2026-05-18 binary @ 0x00175714 (re-analyst)
+bool FRUIT_POWERS::AnyActivePowers() const {
+    PowerUpManager* mgr = PowerUpManager::GetInstance();
+    if (!mgr) return false;
+    for (uint32_t i = 0; i < m_Count; ++i) {
+        if (mgr->GetActiveSingle(m_pArray[i].m_PowerHash)) return true;
+    }
+    return false;
 }

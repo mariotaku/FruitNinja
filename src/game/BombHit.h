@@ -12,6 +12,7 @@
 
 #include "math/Vec3.h"
 #include "math/Colour.h"
+#include "game/GameWork.h"
 
 namespace FN {
 
@@ -39,7 +40,7 @@ void SetBombHitPos(const Vec3& pos);
 // Matches HitMenuBomb (binary 0x0016b234). Triggers the bomb-hit flash +
 // SFX for the zen / menu-bomb paths. Concretely:
 //   * plays "menu-bomb" SFX
-//   * game->bombHitTimer = 2.0f
+//   * game_work.m_BombHitTimer = 2.0f
 //   * SetBombHitPos(pos)
 // Called from Bomb::CollisionResponse's zen branch (m_bMenuBombHit == 0
 // && gameMode == 2) and from MainScreen::Update case 0x17 (QUIT_WAIT).

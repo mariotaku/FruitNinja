@@ -208,7 +208,7 @@ void FruitCamera::UpdateShake(float dt) {
 // ---------------------------------------------------------------------------
 // Debug input handlers — Defunct: debug input; no caller registers them in
 // retail binary. Bodies preserved as working debug-fly for screenshot use.
-// TODO: 0x001... — g_DebugInputInhibited flag not present in port; always allow.
+// Defunct: g_DebugInputInhibited -- debug-only flag; port has no debug input subsystem so the gate is always-allow.
 // ---------------------------------------------------------------------------
 
 // Binary @ 0x00180a2c — debug pan +Y by 10

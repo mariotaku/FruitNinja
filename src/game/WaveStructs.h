@@ -274,11 +274,29 @@ struct DEFAULT_WAVE_INFO {
 };
 
 // COIN_CHANCEINATOR — size 0x08, stored at WaveManager+0x1dc per mode.
+// Binary layout per GetCoins @ 0x00121778.
 struct COIN_CHANCEINATOR {
-    float m_Chance;     // +0x00
-    int   m_field04;    // +0x04
-    COIN_CHANCEINATOR() : m_Chance(0.0f), m_field04(0) {}
+    struct Entry {
+        int      max;     // +0x00
+        int      min;     // +0x04
+        uint32_t chance;  // +0x08 (1-in-N gate; arg to Rand32)
+    };
+
+    Entry* m_pEntries;  // +0x00
+    int    m_Count;     // +0x04
+
+    COIN_CHANCEINATOR() : m_pEntries(0), m_Count(0) {}
+
+    // Binary @ 0x00121778. Walks entries; for each, rolls Rand32(chance)==0 gate.
+    // If gate passes and min<max, returns min + Rand32(max-min); else returns min.
+    // Returns 0 if no entry passes.
+    int GetCoins() const;
 };
+
+#ifdef __bada__
+static_assert(sizeof(COIN_CHANCEINATOR) == 8, "COIN_CHANCEINATOR size mismatch");
+static_assert(sizeof(COIN_CHANCEINATOR::Entry) == 0xc, "COIN_CHANCEINATOR::Entry size mismatch");
+#endif
 
 // PROBABILITY_OVERIDE — size 0x78. Binary ctor @ 0x00126870.
 // Field order matches binary layout exactly.
@@ -324,12 +342,12 @@ struct PROBABILITY_OVERIDE {
     // BOMB/BOMB_PINEAPPLE -> m_TypeQueue[i]=-2; RANDOM -> RandomFruit(false); else FruitType(name,false).
     void SelectType();
 
-    // Returns m_SelectedType index after calling SelectType (binary calls SelectType then reads +0x74).
-    // Returns -1 (no valid type) when SelectType is not yet implemented.
-    int GetType() {
-        SelectType();
-        return m_SelectedType;
-    }
+    // Binary @ 0x001217e4. Returns m_TypeQueue[Rand32(m_field68)].
+    // Does NOT call SelectType (SelectType is called once at Reset/NewGame).
+    // TODO: latent — Data/xml/fruitlist.xml has no <FruitInfo name="starfruit">; FruitType("starfruit",false)==-1.
+    // GetType() returns -1 for the starfruit override, which falls through to RandomFruit in callers.
+    // Restore fruitlist.xml entry if starfruit override (arcadewavelist.xml OverideProbability) should work.
+    int GetType();
 };
 
 // WaveQueItem — binary @ 0x001268fc ctor. Size 0x20 (32 bytes).

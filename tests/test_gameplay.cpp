@@ -1,4 +1,4 @@
-// Per-mode gameplay smoke test. Boots the game, sets game.gameMode and
+// Per-mode gameplay smoke test. Boots the game, sets game_work.gameMode and
 // fires the SetupLevel pipeline, ticks ~3 seconds of frames, and verifies
 // (a) the wave manager loads the expected wave count for that mode,
 // (b) m_pCurrentWave[0] becomes non-null after SetupLevel,
@@ -24,6 +24,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include "game/GameWork.h"
 
 static int FailUsage() {
     fprintf(stderr,
@@ -80,8 +81,8 @@ int main(int argc, char* argv[]) {
 
     // Burn through GameInit + splash.
     game.runFrames(120);
-    if (!game.hud) {
-        fprintf(stderr, "FAIL: game.hud null after 120 frames\n");
+    if (!game_work.mHud) {
+        fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
         return 1;
     }
 
@@ -97,7 +98,7 @@ int main(int argc, char* argv[]) {
            modeName, gameMode, waveCountAtMode);
 
     // Force into gameMode + fire SetupLevel as if the user clicked.
-    game.gameMode = (uint8_t)gameMode;
+    game_work.gameMode = (uint8_t)gameMode;
     FN::PrepareForLevelStart();
 
     if (!wm->m_pCurrentWave[0]) {
@@ -111,7 +112,7 @@ int main(int argc, char* argv[]) {
     // binary clears it from MainScreen::Update case 2-end / case 0x11
     // once the camera has zoomed into gameplay; the unit test bypasses
     // that state machine, so clear it manually to enable the spawn pump.
-    game.levelTransitionFlag = 0;
+    game_work.m_LevelTransitionFlag = 0;
 
     // Tick ~3 seconds of frames (180 @ 60Hz) and look for spawn activity.
     // We can't easily count fruit (ActorManager::Add returns recycled

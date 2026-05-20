@@ -1,6 +1,7 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "asset/Texture.h"
+#include "debug/Logger.h"
 #include <cstdio>
 #include <cmath>
 
@@ -147,9 +148,8 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
     if (Mortar::Texture::s_LastBoundTexId == 0) {
         static bool s_warned = false;
         if (!s_warned) {
-            fprintf(stderr,
-                "[Renderer::DrawQuad] WARN: no texture bound; tint=(%u,%u,%u,%u) "
-                "uv=(%g,%g..%g,%g) -- caller missing Texture::Set?\n",
+            LOG_WARN("RENDERER/DrawQuad",
+                "no texture bound; tint=(%u,%u,%u,%u) uv=(%g,%g..%g,%g) -- caller missing Texture::Set?",
                 tint.r, tint.g, tint.b, tint.a, u0, v0, u1, v1);
             s_warned = true;
         }
