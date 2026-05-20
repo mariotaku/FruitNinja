@@ -290,9 +290,10 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
 // installs the hit callback, and overwrites rotation fields so menu bombs
 // spin slowly (one axis moving, one locked) rather than with the random
 // 1..7 velocities from Bomb::Init.
-void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* /*button*/) {
-    m_bMenuBombHit = 1;
-    m_HitCallback  = cb;
+void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* button) {
+    m_bMenuBombHit   = 1;
+    m_HitCallback    = cb;
+    m_pOwnerButton   = button;
     m_RotY    = 0x2d;   // DAT_0017121c: 45 deg initial Y angle
     m_RotVelX = 2;      // slow spin on X
     m_RotX    = 0;
@@ -776,25 +777,12 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             if (game->pSaveData) game->pSaveData->AddToTotal("bomb", 1);
         }
     } else if (m_bMenuBombHit != 0) {
-        // Menu-bomb re-hit branch. Binary code:
-        //   if (field_0x84 == 0 || *(field_0x84 + 0x123) != 0)
-        //       ClearMenuItems();
-        //   Mortar::Delegate0<void>::operator()(&field_0x40);   // hit callback
-        //
-        // The ClearMenuItems call is critical: without it, a diagonal
-        // slash that clips both the Quit bomb and the Dojo / Play fruit
-        // in the same frame lets MenuButton::Update fire BOTH callbacks,
-        // and whichever state write lands last wins the race -- user-
-        // visible symptom: slicing the Quit bomb lands on the Dojo
-        // screen. Clearing the sibling menu items flags their fruits
-        // with m_bDrawWhole=1, which makes MenuButton::Update see them
-        // as "ClearMenuItems-released" (not user-sliced) and skip their
-        // click callbacks.
-        //
-        // field_0x84 is the binary's backref to the owning state
-        // struct; the +0x123 gate isn't modelled in the port, so we
-        // always call the clear.
-        FN::ClearMenuItems();
+        // ASM-verified: 2026-05-20T00:00Z binary @ 0x00172826..0x0017283c (asm-inspector)
+        // Binary: gate at +0x123 (MenuButton::m_bEnabled) only guards ClearMenuItems.
+        // Callback is always unconditional.
+        if (m_pOwnerButton == nullptr || m_pOwnerButton->m_bEnabled != 0) {
+            FN::ClearMenuItems();
+        }
         if (m_HitCallback) {
             m_HitCallback();
         }
