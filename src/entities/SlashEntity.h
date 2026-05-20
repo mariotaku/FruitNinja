@@ -293,7 +293,7 @@ private:
     // m_ComboSliceArr[1] (binary +0x158) gates the AddSpeed call in Update:
     // when >= 0, a secondary slice has registered and the combo is live.
     // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
-    int32_t m_ComboSliceArr[11]; // Binary +0x154 .. +0x17c
+    int m_ComboSliceArr[11]; // Binary +0x154 .. +0x17c
 
     // Binary +0x144: 2-bit shift-register fuse for "swipe just ended".
     // Writer (outside SlashEntity): sets bit0 on finger-lift (m_SwipeEndEdge |= 1).

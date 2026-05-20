@@ -85,6 +85,9 @@ public:
     // +0x88: combo count (determines which combo_N.tex to use)
     int m_ComboCount;
 
+    // +0x8c: unknown flag written by Init (binary Init writes 1 to this+0x8c)
+    uint8_t field_0x8c;
+
     // +0x90: alpha scale multiplier (1.0 critical, 0.5 rare)
     float m_AlphaScale;
 
