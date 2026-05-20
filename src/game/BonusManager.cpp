@@ -9,8 +9,8 @@
 #include "engine/util/StringHash.h"
 #include "engine/util/PathCI.h"
 #include "screens/BonusScreen.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
@@ -67,14 +67,14 @@ void BonusManager::Init() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        printf("BonusManager::Init -- failed to open '%s' (error %d)\n",
+        LOG_ERROR("BONUS", "BonusManager::Init -- failed to open '%s' (error %d)",
                path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("bonusAwardsFile");
     if (!root) {
-        printf("BonusManager::Init -- no <bonusAwardsFile> root in '%s'\n",
+        LOG_WARN("BONUS", "BonusManager::Init -- no <bonusAwardsFile> root in '%s'",
                path.c_str());
         return;
     }

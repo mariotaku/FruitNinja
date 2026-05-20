@@ -18,9 +18,9 @@
 #include "Game.h"
 #include "hud/TimeControl.h"
 
+#include "debug/Logger.h"
 #include <tinyxml2.h>
 #include <cstring>
-#include <cstdio>
 
 using Mortar::TextureManager;
 
@@ -93,14 +93,14 @@ void AchievementManager::LoadAchievementInfo() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        printf("AchievementManager::LoadAchievementInfo -- failed to open '%s' (error %d)\n",
+        LOG_ERROR("ACHIEVEMENT", "AchievementManager::LoadAchievementInfo -- failed to open '%s' (error %d)",
                path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("achievementManagerFile");
     if (!root) {
-        printf("AchievementManager::LoadAchievementInfo -- no <achievementManagerFile> root\n");
+        LOG_WARN("ACHIEVEMENT", "AchievementManager::LoadAchievementInfo -- no <achievementManagerFile> root");
         return;
     }
 

@@ -11,8 +11,8 @@
 #include "Game.h"
 #include "asset/TextureManager.h"
 #include "game/PowerUpManager.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -367,7 +367,7 @@ void FruitInfo_Load(const char* xmlPath)
             }
         }
     }
-    printf("Fruit::LoadInfo: loaded %d fruit types from '%s'\n", s_FruitInfoCount, xmlPath);
+    LOG_INFO("FRUITINFO", "Fruit::LoadInfo: loaded %d fruit types from '%s'", s_FruitInfoCount, xmlPath);
 
     // Original: calls LoadFruitModels() at the very end (loads 3D mesh per fruit type)
     LoadFruitModels();

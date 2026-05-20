@@ -1,7 +1,6 @@
 target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/DebugFlags.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CrashHandler.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LoggerSDL.cpp
 )
 
 # CrashHandler links dbghelp.lib (MSVC: via #pragma comment; MinGW: via target).

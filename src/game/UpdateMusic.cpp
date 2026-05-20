@@ -13,7 +13,7 @@
 #include "entities/ActorManager.h"
 #include "audio/SoundManager.h"
 #include "audio/GameSound.h"
-#include <cstdio>
+#include "debug/Logger.h"
 #include <cmath>
 
 // ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ static void PreloadInGameSounds() {
             sm.PreLoadSound(buf);
         }
     }
-    printf("UpdateMusic: PreloadInGameSounds fired\n");
+    LOG_DEBUG("UPDATEMUSIC", "UpdateMusic: PreloadInGameSounds fired");
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ static void PreloadArcadeModeSounds() {
     sm.PreLoadSound("Bonus-Banana-X2");
     // Remaining four arcade SFX (addresses in the spec; exact names from binary strings)
     // TODO: re-analyst to confirm remaining 4 names at 0x001ba775..nearby if needed.
-    printf("UpdateMusic: PreloadArcadeModeSounds fired\n");
+    LOG_DEBUG("UPDATEMUSIC", "UpdateMusic: PreloadArcadeModeSounds fired");
 }
 
 // ---------------------------------------------------------------------------

@@ -50,7 +50,7 @@
 #include "util/StringTable.h"
 #include "util/Localisation.h"
 #include "util/StringHash.h"
-#include <cstdio>
+#include "debug/Logger.h"
 #include <cstdlib>
 #include <ctime>
 #include <string>
@@ -83,7 +83,7 @@ void GameInitialise() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    printf("GameInitialise: booting engine\n");
+    LOG_INFO("GAMEINIT", "GameInitialise: booting engine");
 
     // _GLOBAL__I_EngineMathBada.cpp @ 0x001952bc: Math::Random ctor calls
     // time(NULL)-equivalent seed before OspMain. Port seeds here (first call
@@ -339,7 +339,7 @@ void GameInitialise() {
     // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
     PreloadSounds();   // STUB until ported
 
-    printf("GameInitialise: done\n");
+    LOG_INFO("GAMEINIT", "GameInitialise: done");
 }
 
 // Matches GameDestroy (0x10b7ec, 174 lines) — full engine teardown.
@@ -348,7 +348,7 @@ void GameDestroy() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    printf("GameDestroy: shutting down\n");
+    LOG_INFO("GAMEINIT", "GameDestroy: shutting down");
 
     // --- 1. Online services (defunct — skipped per online-services-audit) ---
     // Note: LeaderboardManager::Destroy -- skipped (online-services-audit)

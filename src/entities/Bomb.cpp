@@ -22,8 +22,8 @@
 #include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"
+#include "debug/Logger.h"
 #include <cstdlib>
-#include <cstdio>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -438,15 +438,14 @@ void Bomb::Update(float /*dt*/) {
         // trace lights up.
         if (vel.x != 0.0f || vel.y != 0.0f) {
             unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
-            printf("[BOMB %03x] pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f) "
+            LOG_VERBOSE("BOMB", "%03x pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f) "
                    "accel=(%5.2f,%6.2f) scl.y=%.3f bMv=%d bHit=%d "
-                   "cd=%.3f dt=%.4f\n",
+                   "cd=%.3f dt=%.4f",
                    id, pos.x, pos.y, vel.x, vel.y,
                    m_AccelForce.x, m_AccelForce.y,
                    scale.y,
                    (int)m_bMovement, (int)m_bHit,
                    m_Countdown, gameDt);
-            fflush(stdout);
         }
 #endif
 
@@ -503,9 +502,8 @@ void Bomb::Update(float /*dt*/) {
 #if MORTAR_BOMB_TRACE
         {
             unsigned id = (unsigned)((uintptr_t)this >> 4) & 0xfff;
-            printf("[BOMB %03x] OOB KILL pos=(%.1f,%.1f) vel=(%.2f,%.2f)\n",
+            LOG_VERBOSE("BOMB", "%03x OOB KILL pos=(%.1f,%.1f) vel=(%.2f,%.2f)",
                    id, pos.x, pos.y, vel.x, vel.y);
-            fflush(stdout);
         }
 #endif
         KillBomb();
