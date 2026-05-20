@@ -141,11 +141,26 @@ int MissControl::SetPlayer(int player) {
     return player;
 }
 
-// Port specific: matches MissControl::Draw anchor add at binary @ 0x0015215c.
+// Port specific: mirrors the quad-origin formula from MissControl::Draw
+// (binary @ 0x00151f60..0x00152186) so the F1 boundary tracks the rendered quad.
+// Jitter term is omitted (non-deterministic RandUint; short-lived and cosmetic).
 Vec3 MissControl::GetDrawPos() const {
-    return Vec3(pos.x + 480.0f * m_HudScale.x,
-                pos.y + 320.0f * m_HudScale.y,
-                pos.z);
+    Vec3 p = pos;
+    if (m_FadeAlpha <= 0.0f) {
+        Game* g = Game::GetInstance();
+        if (g) {
+            const bool failureEnabled =
+                Mortar::FailureEnabled(g->gameMode);  // IsMultiplayer() unported -> false
+            if (failureEnabled) {
+                p.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer);
+            } else {
+                p.y -= 3.0f * pos.y;
+            }
+        }
+    }
+    return Vec3(p.x + 480.0f * m_HudScale.x,
+                p.y + 320.0f * m_HudScale.y,
+                p.z);
 }
 
 // vtable[15] @ 0x00150e3c
@@ -490,7 +505,25 @@ void MissControl::Update(float dt) {
 
 // --- Draw ------------------------------------------------------------------
 
-// ASM-verified-partial: 2026-05-03 binary @ 0x00151f60..0x00152190 (pulse formula + fall-off only; transform field_0x14/0x20 pre-mult still a gap)
+// ASM-verified: 2026-05-20T00:00Z binary @ 0x00151f60 (re-analyst)
+// Quad-origin formula (binary @ 0x00151f60..0x00152186):
+//
+//   origin = pos + anchorBase + Vec3(480 * m_HudScale.x, 320 * m_HudScale.y, 0)
+//
+//   anchorBase derivation:
+//     if (m_JitterTimer > 0):
+//         anchorBase = Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_JitterTimer--
+//     else:
+//         anchorBase = Vec3(0, 0, 0)
+//         // NOTE: binary reads GOT slot 0x001f251c (function ptr, not Vec3);
+//         // path is dead in practice; port treats as zero.
+//
+//     if (m_FadeAlpha <= 0.0f):               // passive miss-marker path only
+//         if (FailureEnabled() && !IsMultiplayer()):
+//             anchorBase.y -= 3.0f * pos.y * fabsf(g->m_TransitionTimer)
+//         else:
+//             anchorBase.y -= 3.0f * pos.y    // Zen / MP: park off-screen
+//
 // binary @ 0x00151f60
 void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     if (!m_Texture.IsValid()) return;
@@ -547,7 +580,9 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
             }
         }
     }
-    // Slide-in / off-screen-park y-jiggle. Binary @ 0x0015208e..0x001520c4:
+    // Slide-in / off-screen-park y-shift. Binary @ 0x0015208e..0x001520c4:
+    // Only applied when m_FadeAlpha <= 0 (passive miss-marker path).
+    // Pulse path (m_FadeAlpha > 0) skips this entirely.
     //   if (FailureEnabled() && !IsMultiplayer())
     //       drawPos.y -= 3.0f * pos.y * fabsf(game->m_TransitionTimer);
     //   else
@@ -558,19 +593,9 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     //        moves UP past the +160 clamp (off-screen above the viewport).
     //   timer == 0.0 (gameplay): no shift, markers visible at top-right.
     //   intermediate values produce the slide-in animation.
-    // (m_FadeAlpha in (0, SOUND_THRESH]: pulse compute is omitted -- output is
-    // dead in the binary too.)
-    {
+    if (m_FadeAlpha <= 0.0f) {
         Game* g = Game::GetInstance();
         if (g) {
-            // Binary @ 0x0015208e:
-            //   if (FailureEnabled() && !IsMultiplayer())
-            //       drawPos.y -= 3.0f * pos.y * |m_TransitionTimer|;
-            //   else
-            //       drawPos.y -= 3.0f * pos.y;     // Zen / MP: parked off-screen
-            // In Zen mode the stored pos.y is still negative (-10/-13/-18) so
-            // the constant shift moves the marker UP past the +160 clamp and
-            // off the top of the viewport, hiding it for the whole game.
             const bool failureEnabled =
                 Mortar::FailureEnabled(g->gameMode);  // IsMultiplayer() unported -> false
             if (failureEnabled) {
