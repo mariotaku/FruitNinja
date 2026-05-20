@@ -6,6 +6,7 @@
 //
 
 #include "BombHit.h"
+#include "debug/Logger.h"
 #include "game/GameMode.h"
 #include "Game.h"
 #include "entities/ActorManager.h"
@@ -282,9 +283,14 @@ void ResetGameEntities(bool killAll) {
     // several frames. Without this flush, the Quit-gesture slash
     // survives across the PauseScreen->MainScreen transition and slices
     // the just-created Play / Dojo / About menu fruits in trajectory order.
+    int count_non_null = 0;
     for (int i = 0; i < 16; ++i) {
-        if (g_pSlashEntities[i]) g_pSlashEntities[i]->Reset();
+        if (g_pSlashEntities[i]) {
+            if (g_pSlashEntities[i]->IsBladeActive()) count_non_null++;
+            g_pSlashEntities[i]->Reset();
+        }
     }
+    LOG_INFO("BOMBHIT", "ResetGameEntities(killAll=%d) flushed %d slash slots", (int)killAll, count_non_null);
 
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
@@ -382,11 +388,14 @@ void UpdateBombHit(float prevTimer) {
     if (!game) return;
     const float currentTimer = game->bombHitTimer;
 
+    LOG_VERBOSE("BOMBHIT", "UpdateBombHit prev=%.3f curr=%.3f", prevTimer, currentTimer);
+
     // Binary UpdateBombHit (0x16a1a8): at the 1.5s downward edge
     // (i.e. timer just dropped below 1.5), call ResetGameEntities
     // to wipe the gameplay area before the game-over screen
     // renders over it.
     if (prevTimer > BLAST_RESET_THR && currentTimer <= BLAST_RESET_THR) {
+        LOG_INFO("BOMBHIT", "UpdateBombHit firing ResetGameEntities at timer crossing (prev=%.3f curr=%.3f)", prevTimer, currentTimer);
         ResetGameEntities(false);
     }
 

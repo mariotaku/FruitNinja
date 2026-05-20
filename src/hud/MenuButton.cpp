@@ -11,6 +11,7 @@
 
 // Analysed: 2026-04-28T14:00
 #include "MenuButton.h"
+#include "debug/Logger.h"
 #include "HUD.h"
 #include "hud/HUDLayer.h"
 #include "Game.h"
@@ -439,6 +440,8 @@ void MenuButton::Remove() {
 // Binary @ 0x0014e5cc — fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
 bool MenuButton::TouchReleased() {
     if (m_FruitType < 0 && m_bFireOnRelease) {
+        LOG_INFO("BUTTON", "MenuButton::Update touch path fires m_ClickCallback (this=%p enabled=%d pos=(%.1f,%.1f))",
+                 static_cast<void*>(this), (int)m_bEnabled, pos.x, pos.y);
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
         // Binary @ 0x0014e5e6 — TutorialControl::ButtonPressedAtPos(this).
@@ -655,6 +658,10 @@ void MenuButton::Update(float dt) {
                 if (relVelSqMag > 0.001f) {
                     // Binary @ 0x0014e76c: Mortar::Delegate0::operator()(&field7_0x88).
                     if (m_ClickCallback) {
+                        LOG_INFO("BUTTON", "MenuButton::Update slice path fires m_ClickCallback (entity=%p bSliced=%d pos=(%.1f,%.1f))",
+                                 static_cast<void*>(m_pEntity),
+                                 m_pFruitPiece ? (int)m_pFruitPiece->m_bSliced : -1,
+                                 pos.x, pos.y);
                         auto cb = m_ClickCallback;
                         m_ClickCallback = nullptr;
                         cb();

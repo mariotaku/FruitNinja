@@ -753,8 +753,10 @@ void PauseScreen::Update(float dt) {
             // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
             if (m_LastHitButton >= 0 && m_QuitButton) {
-                LOG_INFO("SCREEN/PauseScreen", "%s (%s)", "HitMenuBomb", "QUIT_EXIT");
                 FN::HitMenuBomb(m_QuitButton->pos);
+                LOG_INFO("BOMBHIT", "QuitToMenu fires HitMenuBomb at (%.1f,%.1f); bombHitTimer set to %.3f",
+                         m_QuitButton->pos.x, m_QuitButton->pos.y,
+                         game ? game->bombHitTimer : -1.0f);
             }
             // Binary writes m_ButtonFadeAlpha = 1.0 (DAT_00154fb8), NOT 0.0.
             // Earlier port wrote 0.0 which left the buttons at full opacity

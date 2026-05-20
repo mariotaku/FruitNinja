@@ -6,6 +6,7 @@
 //
 
 #include "SlashEntity.h"
+#include "debug/Logger.h"
 #include "ActorManager.h"
 #include "Entity.h"
 #include "hud/HUDControl.h"
@@ -796,6 +797,8 @@ void SlashEntity::Update(float dt) {
                         // Binary @ 0x0017d664: vtable[9](victim, slashEntity, 0, 0, &bladeVel).
                         // Port: SlashEntity does not inherit Mortar::Entity, pass nullptr for hitter.
                         // Fruit/Bomb CollisionResponse only reads bladeVelocity; hitter unused.
+                        LOG_VERBOSE("SLASH", "hit fruit %p at (%.1f,%.1f) trail_n=%d",
+                                    static_cast<void*>(e), cs->center.x, cs->center.y, m_NumPoints);
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
                         slicedThisFrame = true;
                     }
