@@ -37,6 +37,16 @@
 #include <cmath>
 #include <cstdio>
 #include "game/GameWork.h"
+#include "Coin.h"
+
+// TODO: 0x00110cb0 -- CheckCombo body (rare-fruit table, alternating-types
+//   detection, count-based fallback table) not yet ported; cache wiring uses
+//   stub that returns 0. See re-analyst report 2026-05-20.
+static int CheckCombo(const int* /*arr*/, int /*len*/, int* /*out*/) { return 0; }
+
+// File-static CheckCombo cache sentinel. -1 = uncomputed for current best combo.
+// Binary @ BSS (file-scope in SlashEntity.cpp translation unit).
+static signed char s_CheckComboFlag = -1;
 
 const float SlashEntity::POINT_SPACING         = 64.0f;   // DAT_0017d5fc
 const float SlashEntity::MOVE_THRESH_ACTIVE    = 5.0f;    // sqrt(25)
@@ -870,19 +880,44 @@ void SlashEntity::Update(float dt) {
                         snprintf(buf, sizeof(buf), "combo_%s", Mortar::GetModeName(game_work.gameMode));
                         game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
                     }
-                    // (c) Coin spawn VFX — deferred
-                    // TODO: 0x0017df88 -- spawn combo coins via Coin::MakeCoins
+                    // (c) Combo coin spawn — binary @ 0x0017df88.
+                    {
+                        int bonusCoins = 0;
+                        for (int i = 0; i < m_ComboCount; ++i) {
+                            const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboSliceArr[i]);
+                            if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCount; break; }
+                        }
+                        Vec3 coinPos = m_RawTouchPos;
+                        // field_0x130 is dead (always 0); m_pMissControl branch
+                        // preserved for binary fidelity — will activate once
+                        // field_0x130 is re-typed to MissControl*.
+                        // if (m_pMissControl) coinPos = m_pMissControl->pos;
+                        Mortar::Delegate1<void, Coin*> onArrived =
+                            Coin::DefaultArrivedDelegate();
+                        Coin::MakeCoins(bonusCoins, 1,
+                                        Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
+                                        coinPos, nullptr, nullptr,
+                                        onArrived, true);
+                    }
                     // (d) Achievement unlock
                     AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCount, m_ComboSliceArr);
-                    // (e) Best-combo save.
-                    // ASM-verified: 2026-05-20 binary @ 0x0017df88 (asm-inspector)
+                    // (e) Best-combo save + CheckCombo cache — binary @ 0x0017e418.
                     {
                         FruitSaveData* sd = game_work.m_SaveData;
-                        if (sd && m_ComboCount > sd->m_BestComboLength) {
+                        int len = m_ComboCount;
+                        if (sd && len > sd->m_BestComboLength) {
                             for (int i = 0; i < 11; ++i) sd->m_BestComboFruits[i] = m_ComboSliceArr[i];
-                            sd->m_BestComboLength = m_ComboCount;
-                            // TODO: 0x0017e418 -- file-static CheckCombo cache for the
-                            //   equal-length-but-better-quality re-check branch.
+                            sd->m_BestComboLength = len;
+                            s_CheckComboFlag = (signed char)CheckCombo(m_ComboSliceArr, len, nullptr);
+                        } else if (sd && len == sd->m_BestComboLength) {
+                            if (s_CheckComboFlag == -1)
+                                s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, len, nullptr);
+                            int newScore = (signed char)CheckCombo(m_ComboSliceArr, m_ComboCount, nullptr);
+                            if (s_CheckComboFlag < newScore) {
+                                for (int i = 0; i < 11; ++i) sd->m_BestComboFruits[i] = m_ComboSliceArr[i];
+                                sd->m_BestComboLength = m_ComboCount;
+                                // Binary fidelity: s_CheckComboFlag is NOT re-primed here.
+                            }
                         }
                     }
                     // Online MP PointsPacket Send — Defunct: online-services stub per policy
@@ -1372,7 +1407,7 @@ void SlashEntity::SetModColours(
 // the palette via UpdateModColour. Then call UpdateTouchDown to ingest the
 // initial touch position. Returns true (event consumed).
 bool SlashEntity::TouchDown(InputEvent* event) {
-    if (m_State == 0) {
+    if (m_SwipeEndEdge == 0 && m_State == 0) {
         Reset();
         if (g_ColourType == 2) {
             UpdateModColour(&m_HighlightColour, 1.0f);

@@ -104,6 +104,11 @@ public:
     // 0x001731B8 — mark all active coins dead (arrive=true: credit them first)
     static void ClearCoins(bool arrive);
 
+    // Returns a Delegate1<void,Coin*> bound to the file-static CoinArrived helper
+    // (binary @ 0x0017320C). Callers outside Coin.cpp use this to obtain the
+    // standard arrived callback without needing to know CoinArrived's linkage.
+    static Mortar::Delegate1<void, Coin*> DefaultArrivedDelegate();
+
     // 0x00173114 — set loaded flag; model loaded elsewhere
     static void LoadContent();
 

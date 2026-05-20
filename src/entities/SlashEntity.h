@@ -146,17 +146,20 @@ public:
     // Port note: g_state singleton not yet modelled; no-op stub.
     void DrawUpdate(float dt);
 
-    // Binary @ 0x17D61C — Mortar::Entity::TouchDown vtable override: if idle, Reset()
-    // and (PER_SWIPE mode) re-pick palette colour, then UpdateTouchDown.
-    // Port: maps to OnTouchActive / OnTouchReleased input model.
-    // Returns true (consumed).
-    // TODO: 0x17D61C — wire when Mortar::Entity vtable input dispatch is ported.
+    // Binary @ 0x17D61C — TouchDown: gate m_SwipeEndEdge==0 && m_State==0; Reset();
+    // if PER_SWIPE colour mode advance palette; call UpdateTouchDown. Returns true.
+    // Port: wired via InputManager::RegisterInputCallback("TouchDown_<n>") in
+    // SlashEntity::RegisterInputCallbacks (SlashEntity.cpp:205). Declared below
+    // in STUBS section.
+    // ASM-verified: 2026-05-20 binary @ 0x0017D61C (re-analyst)
 
-    // Binary @ 0x17C50C — Mortar::Entity::TouchMoveX vtable override: write pos.x.
-    // TODO: 0x17C50C — wire when Mortar::Entity vtable input dispatch is ported.
+    // Binary @ 0x17C50C — TouchMoveX: write m_RawTouchPos.x from event->x.
+    // Port: wired via InputManager::RegisterInputCallback("TouchMove_X<n>").
+    // ASM-verified: 2026-05-20 binary @ 0x0017C50C (re-analyst)
 
-    // Binary @ 0x17C490 — Mortar::Entity::TouchMoveY vtable override: write pos.y.
-    // TODO: 0x17C490 — wire when Mortar::Entity vtable input dispatch is ported.
+    // Binary @ 0x17C490 — TouchMoveY: write m_RawTouchPos.y from event->y.
+    // Port: wired via InputManager::RegisterInputCallback("TouchMove_Y<n>").
+    // ASM-verified: 2026-05-20 binary @ 0x0017C490 (re-analyst)
 
     // Binary @ 0x17B0F4 — advance palette progress by dt*lifeScale,
     // lerp between consecutive palette entries. NULL outColour = advance only.
