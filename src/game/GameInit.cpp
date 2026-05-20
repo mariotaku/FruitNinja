@@ -49,7 +49,7 @@
 #include "GameTaskInput.h"
 #include "StartupEffects.h"
 #include "entities/Coin.h"
-#include <cstdio>
+#include "debug/Logger.h"
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup.
 // Call order matches binary 23-step sequence (see inline step comments).
@@ -652,7 +652,7 @@ void GameExit_Handler() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    printf("GameExit: cleaning up\n");
+    LOG_INFO("GAMEINIT", "GameExit: cleaning up");
 
     // Release background texture (shared MenuBackground slot)
     UnloadBackground();

@@ -69,6 +69,8 @@ add_library(mortar_engine STATIC
     network/NetworkManager.cpp
     # Phase 10 — System stubs (Bada OS services; all no-op)
     system/PowerManager.cpp
+    # Debug logger (SDL_Log backend)
+    ${CMAKE_SOURCE_DIR}/src/debug/LoggerSDL.cpp
 )
 target_include_directories(mortar_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}

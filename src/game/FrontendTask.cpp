@@ -4,14 +4,14 @@
 
 #include "GameTaskState.h"
 #include "Game.h"
-#include <cstdio>
+#include "debug/Logger.h"
 
 void FrontendInit(unsigned long) {
-    printf("FrontendInit: transitioning to State 2 (Game)\n");
+    LOG_INFO("FRONTEND", "FrontendInit: transitioning to State 2 (Game)");
     Game* game = Game::GetInstance();
     if (game) game->taskStateIndex = 2;
 }
 
 void FrontendUpdate(float dt, bool active) { (void)dt; (void)active; }
 void FrontendDraw(float dt, bool active) { (void)dt; (void)active; }
-void FrontendExit() { printf("FrontendExit\n"); }
+void FrontendExit() { LOG_INFO("FRONTEND", "FrontendExit"); }

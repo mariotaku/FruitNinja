@@ -14,8 +14,8 @@
 #include "util/PathCI.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
+#include "debug/Logger.h"
 #include <tinyxml2.h>
-#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -438,13 +438,13 @@ void PowerUpManager::Load() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        printf("PowerUpManager::Load -- failed to open '%s' (error %d)\n", path.c_str(), (int)err);
+        LOG_ERROR("POWERUP", "PowerUpManager::Load -- failed to open '%s' (error %d)", path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("powers");
     if (!root) {
-        printf("PowerUpManager::Load -- no <powers> root in '%s'\n", path.c_str());
+        LOG_WARN("POWERUP", "PowerUpManager::Load -- no <powers> root in '%s'", path.c_str());
         return;
     }
 
