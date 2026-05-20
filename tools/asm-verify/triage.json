@@ -4642,15 +4642,15 @@
   },
   "_ZN11SlashEntityC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "SlashEntityC1/C2: port initialises extended m_Points[] field block via vstr loop; binary uses memset. Divergence from Tier-2 AddPoint/InitPoints stubs. See src/entities/SlashEntity.h:338. [score refreshed 2026-05-20T00:00Z]",
-    "score": 8570,
+    "reason": "SlashEntityC1/C2: port initialises extended m_Points[] field block via vstr loop; binary uses memset. Score increase (+400) from adding m_BladeVelAtSlice/m_SlicePos/m_SliceEntityType initialisation (3 new fields at +0xA8..+0xC0). Divergence from Tier-2 AddPoint/InitPoints stubs. See src/entities/SlashEntity.h. [score refreshed 2026-05-20T00:00Z]",
+    "score": 8970,
     "max_score": 2200,
     "decided_at": "2026-05-20T00:00Z"
   },
   "_ZN11SlashEntityC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "SlashEntityC1/C2: port initialises extended m_Points[] field block via vstr loop; binary uses memset. Divergence from Tier-2 AddPoint/InitPoints stubs. See src/entities/SlashEntity.h:338. [score refreshed 2026-05-20T00:00Z]",
-    "score": 8570,
+    "reason": "SlashEntityC1/C2: port initialises extended m_Points[] field block via vstr loop; binary uses memset. Score increase (+400) from adding m_BladeVelAtSlice/m_SlicePos/m_SliceEntityType initialisation (3 new fields at +0xA8..+0xC0). Divergence from Tier-2 AddPoint/InitPoints stubs. See src/entities/SlashEntity.h. [score refreshed 2026-05-20T00:00Z]",
+    "score": 8970,
     "max_score": 2200,
     "decided_at": "2026-05-20T00:00Z"
   },

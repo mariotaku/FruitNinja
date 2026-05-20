@@ -250,6 +250,21 @@ private:
     // bind only this finger's TouchDown_n / TouchMove_X-Y_n / TouchUp_n.
     int m_FingerId;
 
+    // Binary +0xA8: snapshot of m_BladeDir at the moment of a slice hit.
+    // Written in Update's fruit-collision branch immediately after
+    // CollisionResponse fires. Read by caller sites that need blade direction.
+    Vec3 m_BladeVelAtSlice;    // Binary +0xA8
+
+    // Binary +0xB4: world position of the sliced fruit at impact.
+    // Written in Update's fruit-collision branch (fruit->pos at hit time).
+    // Read by combo Coin::MakeCoins as the coin spawn origin.
+    Vec3 m_SlicePos;           // Binary +0xB4
+
+    // Binary +0xC0: m_FruitType of the most recently sliced entity.
+    // Written in Update's fruit-collision branch alongside m_BladeVelAtSlice
+    // and m_SlicePos (same write-group). Read for spawn-type tagging.
+    int m_SliceEntityType;     // Binary +0xC0
+
     // Binary +0xC4: trail-fade weight in [0, 1]. When 1.0, m_BaseColour = white
     // lerped toward m_HighlightColour by 0 = pure white. When 0 (or less),
     // m_BaseColour = m_HighlightColour directly (fully saturated).

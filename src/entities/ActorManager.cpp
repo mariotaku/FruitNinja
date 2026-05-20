@@ -1,4 +1,5 @@
 #include "ActorManager.h"
+#include "../engine/util/Delegate.h"
 #include "Fruit.h"
 #include "Bomb.h"
 #include "BombBlast.h"
@@ -499,9 +500,11 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
         // TODO: 0x0016ffd8 — L->senderId filter needs Entity::id (Entity+0x04);
         //       field not on Entity base yet; treat senderId filter as any (0) only.
         if (L->callback) {
-            // TODO: 0x0016ffd8 — invoke L->callback as Mortar::Delegate2:
-            //   cb->vtable[+0x30](cb, sender, target, msg)
-            // Port has no Mortar::Delegate2 model; skip invoke.
+            // ASM-verified: 2026-05-20 binary @ 0x0016ffd8 (asm-inspector)
+            // Binary: cb->vtable[+0x30](cb, sender, target, msg) — Delegate3 invoke.
+            Mortar::Delegate3<void, Entity*, Entity*, Message*>* cb =
+                static_cast<Mortar::Delegate3<void, Entity*, Entity*, Message*>*>(L->callback);
+            (*cb)(sender, target, msg);
         }
     }
 
