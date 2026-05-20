@@ -1,4 +1,5 @@
 target_sources(fruit-ninja-game PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameWork.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/AchievementManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameTaskState.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/GameInitialise.cpp
