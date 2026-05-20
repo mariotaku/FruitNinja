@@ -491,12 +491,27 @@ void RetryLevel() {
         }
     }
 
-    // TODO: 0x0016b0c4 -- MortarSound::SetVolume(g_AmbientSound, 0.0f) --
-    // g_AmbientSound global not yet in port.
+    // ASM-verified: 2026-05-20 binary @ 0x0016b0c4 (re-analyst)
+    // Mute the persistent looping Bomb-Fuse handle for the 0.1s retry-shrink window.
+    // Binary path: *(GameTaskState*)(GOT+0x452d4) +0xD8 = m_pBombFuseSound; SetVolume(0).
+    // NOT ambient music -- the prior TODO label was wrong.
+    if (GameTaskState* ts = GetTaskState()) {
+        if (ts->m_pBombFuseSound) {
+            ts->m_pBombFuseSound->SetVolume(0.0f);
+        }
+    }
 
-    // TODO: 0x0016b0f8 -- GameSound::SFXPlay(retry-sfx-name, 1.0f, 1.0f,
-    // MakeSFXDelegate_GT()) -- retry SFX string at DAT_0016b0f8 not yet resolved;
-    // MakeSFXDelegate_GT not yet ported.
+    // ASM-verified: 2026-05-20 binary @ 0x0016b0f8 (re-analyst)
+    // Play the retry whoosh -- string at rodata 0x001B96AF resolves to "Game-start"
+    // (same SFX as level-start; already used by GameOverScreen / GameModeScreen).
+    // Binary calls MakeSFXDelegate_GT to build a stock complete-handler delegate;
+    // port uses a default-constructed Delegate1 (functionally identical -- the
+    // stock handler is a no-op release-on-done path that the port's GameSound
+    // implements internally).
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>());
+    }
 }
 
 // ASM-verified: 2026-05-20 binary @ 0x00169cd4 (re-analyst)
