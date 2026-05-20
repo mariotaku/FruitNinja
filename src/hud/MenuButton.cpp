@@ -189,6 +189,24 @@ MenuButton::MenuButton()
     // Don't unconditionally promote here.
 }
 
+// Binary ctor @ 0x0014f24c — construction-time init with all parameters.
+// onTap → m_ClickCallback; onRemove → m_RemoveCallback (fired with HUDControl* on deletion).
+MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
+                       Mortar::Delegate0<void>* onTap,
+                       int fruitType, Vec3* restPos,
+                       Mortar::Delegate1<void, HUDControl*>* onRemove)
+{
+    (void)tex;
+    Init(*spawnPos,
+         onTap ? *onTap : Mortar::Delegate0<void>(),
+         fruitType,
+         restPos ? *restPos : Vec3(0.0f, 0.0f, 0.0f),
+         Mortar::Delegate0<void>());
+    if (onRemove) {
+        m_RemoveCallback = *onRemove;
+    }
+}
+
 // ASM-verified: 2026-05-06T00:00 binary @ 0x0014f94c (asm-inspector)
 // Binary D2 dtor runs only subobject teardown (vtbl install ->
 // ~list<AddOn>(+0x10C) -> ~Delegate0(+0xAC) -> ~Delegate0(+0x88) ->

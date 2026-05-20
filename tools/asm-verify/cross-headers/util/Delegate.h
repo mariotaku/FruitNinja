@@ -57,6 +57,8 @@ public:
     Ret operator()() const { return Ret(); }
     operator bool() const { return false; }
     template<typename T>
+    static Delegate0 QCallee(T*, Ret (T::*)()) { return Delegate0(); }
+    template<typename T>
     static Delegate0 Make(T*, Ret (T::*)()) { return Delegate0(); }
     static Delegate0 MakeFree(Ret (*)()) { return Delegate0(); }
 private:
@@ -74,6 +76,8 @@ public:
     Delegate1(const F&) {}
     Ret operator()(A1) const { return Ret(); }
     operator bool() const { return false; }
+    template<typename T>
+    static Delegate1 QCallee(T*, Ret (T::*)(A1)) { return Delegate1(); }
     template<typename T>
     static Delegate1 Make(T*, Ret (T::*)(A1)) { return Delegate1(); }
     static Delegate1 MakeFree(Ret (*)(A1)) { return Delegate1(); }
@@ -93,6 +97,8 @@ public:
     Ret operator()(A1, A2) const { return Ret(); }
     operator bool() const { return false; }
     template<typename T>
+    static Delegate2 QCallee(T*, Ret (T::*)(A1, A2)) { return Delegate2(); }
+    template<typename T>
     static Delegate2 Make(T*, Ret (T::*)(A1, A2)) { return Delegate2(); }
     static Delegate2 MakeFree(Ret (*)(A1, A2)) { return Delegate2(); }
 private:
@@ -111,6 +117,8 @@ public:
     Ret operator()(A1, A2, A3) const { return Ret(); }
     operator bool() const { return false; }
     template<typename T>
+    static Delegate3 QCallee(T*, Ret (T::*)(A1, A2, A3)) { return Delegate3(); }
+    template<typename T>
     static Delegate3 Make(T*, Ret (T::*)(A1, A2, A3)) { return Delegate3(); }
     static Delegate3 MakeFree(Ret (*)(A1, A2, A3)) { return Delegate3(); }
 private:
@@ -128,6 +136,8 @@ public:
     Delegate4(const F&) {}
     Ret operator()(A1, A2, A3, A4) const { return Ret(); }
     operator bool() const { return false; }
+    template<typename T>
+    static Delegate4 QCallee(T*, Ret (T::*)(A1, A2, A3, A4)) { return Delegate4(); }
     template<typename T>
     static Delegate4 Make(T*, Ret (T::*)(A1, A2, A3, A4)) { return Delegate4(); }
     static Delegate4 MakeFree(Ret (*)(A1, A2, A3, A4)) { return Delegate4(); }

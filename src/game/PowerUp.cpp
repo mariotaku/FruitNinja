@@ -215,7 +215,7 @@ int PowerUp::Update(float dt) {
     // Bar ramp: fade-in at 4/sec, fade-out at 12/sec
     // Purchasable special-case: check remaining uses
     bool keepAlive = (activeCount > 0);
-    if (m_bIsPurchasable && m_pPurchaseInfo && m_pPurchaseInfo->m_RemainingUses > 0) {
+    if (m_bIsPurchasable && m_pPurchaseInfo && m_pPurchaseInfo->m_CurrentUses > 0) {
         keepAlive = true;
     }
 
