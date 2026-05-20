@@ -342,16 +342,26 @@ void GameUpdate(float dt, bool active) {
         // z > 0 or z < 0: left unchanged
     }
 
-    const float prevBombTimer = game->bombHitTimer;
-    if (game->bombHitTimer > 0.0f) {
-        game->bombHitTimer -= dt;
-        if (game->bombHitTimer < 0.0f) game->bombHitTimer = 0.0f;
-    }
-    FN::UpdateBombHit(prevBombTimer);
+    // ASM-verified: 2026-05-20 binary @ 0x0016bed0 GameUpdate (re-analyst)
+    // Binary gates the bomb-hit timer drain + UpdateBombHit + GameOver cross-1.5
+    // trigger on `if (active)`. When `active == false` (menu, pause, quit
+    // transition), the bomb-flash timer set by HitMenuBomb sits at 2.0f
+    // untouched until MainScreen STATE 0x18's BombFlashFull() poll picks it up.
+    // Without this gate, the port fires UpdateBombHit -> ResetGameEntities ->
+    // force-slices menu fruits on the Quit-from-Pause transition, causing
+    // phantom GameModeCallback / AboutCallback fires.
+    if (active) {
+        const float prevBombTimer = game->bombHitTimer;
+        if (game->bombHitTimer > 0.0f) {
+            game->bombHitTimer -= dt;
+            if (game->bombHitTimer < 0.0f) game->bombHitTimer = 0.0f;
+        }
+        FN::UpdateBombHit(prevBombTimer);
 
-    // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
-    if (prevBombTimer > 1.5f && game->bombHitTimer <= 1.5f && !game->levelTransitionFlag) {
-        FN::GameOver(-1, -1.0f, -1);
+        // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
+        if (prevBombTimer > 1.5f && game->bombHitTimer <= 1.5f && !game->levelTransitionFlag) {
+            FN::GameOver(-1, -1.0f, -1);
+        }
     }
 
     // ASM-verified: 2026-05-16 binary GameUpdate @ 0x0016bed0 (re-analyst).
