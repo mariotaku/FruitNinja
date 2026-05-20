@@ -126,25 +126,19 @@ bool TimeControl::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
+// ASM-verified: 2026-05-20 binary @ 0x001624a4 (re-analyst)
 void TimeControl::Update(float dt) {
     // 0x001624a4
+    float entrySizeX = size.x;   // cached before GetInstance call (binary s16)
     Game* game = Game::GetInstance();
-    if (!game) return;
-
-    float entrySizeX = size.x;   // cached before any pos mutation (binary s16)
-
-    // Hide for non-timed modes — early return to epilogue (binary @ 0x001624c0..0x001624fe).
-    // ASM-verified: 2026-05-18 binary @ 0x001624c0 (re-analyst)
-    if (!IsTimedGame()) {
+    if (!game) {
         m_LayerFlags = Mortar::HUD_LAYER_NONE;
-        // binary @ 0x001624f6: write -1.0f sentinel to HUD mirror on non-timed path
         if (game_work.mMainScreen) game_work.mMainScreen->m_TimeRemainingDisplay = -1.0f;
         return;
     }
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
 
-    // Binary re-anchors pos.x at the top of the timed branch every frame.
-    // ASM-verified: 2026-05-18 binary @ 0x00162510 (re-analyst)
+    // Binary re-anchors pos.x every frame (no IsTimedGame() gate at this level).
     pos.x = (480.0f - entrySizeX) * 0.5f - 5.0f;
 
     // Pause / suppress gate — binary @ 0x001624e6..0x00162510.
@@ -155,12 +149,12 @@ void TimeControl::Update(float dt) {
                  || (game_work.m_bMPRetryPending && !game_work.field_0x199);
 
     if (!suppress) {
+        int q;
         if (m_CountdownStart <= 0.0f) {
-            // ZEN count-up branch: only tick time and compute slow-clock.
-            // No flash, no GameOver. Binary @ 0x001624a4 Zen branch.
+            // ZEN count-up branch: tick time only; slow-clock join below.
             // ASM-verified: 2026-05-18 binary @ 0x001627ea (re-analyst)
             m_TimeRemaining += dt;
-            m_SlowClockPhase = (float)((int)m_TimeRemaining % 6) + 0.5f;
+            q = (int)m_TimeRemaining;
         } else {
             // ARCADE / MP count-down branch.
             uint8_t entryColourR = m_DrawColour.r;
@@ -222,11 +216,13 @@ void TimeControl::Update(float dt) {
                 }
             }
 
-            // Slow-clock shimmer accumulator (arcade path, binary @ 0x001627d2..0x001627e2).
+            // Arcade q value for slow-clock join below.
             // ASM-verified: 2026-05-18 binary @ 0x001627d2 (re-analyst)
-            int q = (int)(m_CountdownStart - m_TimeRemaining);
-            m_SlowClockPhase = (float)(q % 6) + 0.5f;
+            q = (int)(m_CountdownStart - m_TimeRemaining);
         }
+        // Single slow-clock join point for both Zen and Arcade paths.
+        // StopClock overlay path (goto LAB_00162818) skips this.
+        m_SlowClockPhase = (float)(q % 6) + 0.5f;
     }
 
     // LAB_00162818 — runs unconditionally for all timed modes (including when suppressed).
