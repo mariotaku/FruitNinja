@@ -733,7 +733,9 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
                               unsigned long /*flagsA*/,
                               unsigned long /*flagsB*/,
                               Vec3* bladeVelPtr) {
-    // Guard: already sliced or slice timer is positive → double-hit.
+    LOG_INFO("FRUIT", "CollisionResponse entry: entity=%p pos=(%.1f,%.1f) type=%d bSliced=%d",
+             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType, (int)m_bSliced);
+    // Guard: already sliced or slice timer is positive -> double-hit.
     if (m_bSliced || m_SliceTimer > -1.0f) return 1;
     const Vec3& bladeVel = bladeVelPtr ? *bladeVelPtr : Vec3(0, 0, 0);
 
@@ -1075,6 +1077,8 @@ void Fruit::Slice() {
     m_SecondVel = halfVelA;
     vel         = halfVelB;
 
+    LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in Fruit::Slice)",
+             static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = true;
 
     // Reset gravity so the ramp-up in Update starts fresh.
