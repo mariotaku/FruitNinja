@@ -116,10 +116,8 @@ public:
     void KillBomb();
 
     // Matches Bomb::SetCallback (0x0017121c) — installs menu-bomb hit
-    // callback and overwrites rotation state for slow menu-bomb spin.
-    // Binary signature takes a MenuButton* second arg (used to wire vtable
-    // dispatch). Port doesn't yet thread it through; passed as a parking
-    // arg to keep the symbol shape.
+    // callback, stores owning MenuButton backref at +0x84, and overwrites
+    // rotation state for slow menu-bomb spin.
     void SetCallback(Mortar::Delegate0<void> cb, MenuButton* button = nullptr);
 
     // ASM-verified: 2026-04-28T00:00 binary @ 0x001507e0 (asm-inspector)

@@ -280,7 +280,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                     Bomb* bomb = static_cast<Bomb*>(e);
                     bomb->m_bMovement = 0;
                     bomb->scale = bomb->scale * BOMB_MENU_SCALE;
-                    bomb->SetCallback(clickCb);
+                    bomb->SetCallback(clickCb, this);
                     // Matches binary MenuButton::Init bomb branch @ 0x0014f144:
                     //   vstr.32 s15,[r0,#0x6c]   ; *(bomb+0x6c) = 150.0
                     // (s15 = DAT = FRUIT_ZPOS = 150.0). Overrides the depth
