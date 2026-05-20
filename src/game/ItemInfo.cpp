@@ -10,6 +10,7 @@
 #include "GameWork.h"
 #include "engine/util/StringHash.h"
 #include "engine/audio/GameSound.h"
+#include "engine/math/Random.h"
 #include "entities/SlashEntity.h"
 #include <cstdio>
 #include <cstdlib>
@@ -229,10 +230,26 @@ void SlashSoundMods::Reset() {
     }
 }
 
-// SlashSoundMods::GetNextSound @ 0x00112cf0 — random+ring sequencer
-// TODO: 0x00112cf0 -- random+ring sequencer not yet RE'd; returns 0
+// SlashSoundMods::GetNextSound @ 0x00112cf0
+// ASM-verified: 2026-05-20 binary @ 0x00112cf0 (asm-inspector)
 int SlashSoundMods::GetNextSound() {
-    return 0;
+    if (!m_SoundNames || m_SoundCount <= 0) return -1;
+    if (m_SoundCount == 1) return 0;
+    if (m_PlaySequentialy >= 0) {
+        int pick = m_PlaySequentialy % m_SoundCount;
+        if (++m_PlaySequentialy >= m_SoundCount) m_PlaySequentialy = 0;
+        return pick;
+    }
+    int pick = (int)Math::g_Random.Rand32((uint32_t)m_SoundCount);
+    if (m_PreviousSoundsToAvoid <= 0) return pick;
+    for (int i = 0; i < m_PreviousSoundsToAvoid; ++i) {
+        if (m_RecentRing[i] == pick) pick = (int)Math::g_Random.Rand32((uint32_t)m_SoundCount);
+    }
+    for (int k = m_PreviousSoundsToAvoid - 1; k > 0; --k) {
+        m_RecentRing[k] = m_RecentRing[k - 1];
+    }
+    m_RecentRing[0] = pick;
+    return pick;
 }
 
 // SlashSoundMods::PlaySoundIdx @ 0x00112e94
