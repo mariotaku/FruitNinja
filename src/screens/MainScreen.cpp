@@ -201,7 +201,11 @@ void MainScreen::Update(float dt) {
             m_StateTimer -= dt;
             game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
         } else {
-            game.levelTransitionFlag = 0;
+            // Binary @ 0x0014b60e: strb r2,[r3,#0x4] — writes 0 to g_GameData+0x04 (gameMode),
+            // NOT +0x05 (levelTransitionFlag). Prior port revision wrote levelTransitionFlag
+            // here which cleared the WaveManager spawn-pump gate and caused menu fruits to
+            // keep spawning. levelTransitionFlag stays 1 (set by QuitToMenu) so the gate holds.
+            game.gameMode = 0;
             m_Timer2 += dt;
             game.m_TransitionTimer += (-1.0f - game.m_TransitionTimer) * CAMERA_LERP_RATE;
         }
