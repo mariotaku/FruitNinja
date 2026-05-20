@@ -143,8 +143,8 @@ struct SlashSoundMods {
     // PlaySoundIdx @ 0x00112e94 — plays a specific sound slot via GameSound::SFXPlay
     void PlaySoundIdx(int i);
 
-    // GetNextSound @ 0x00112cf0 — random+ring sequencer
-    // TODO: 0x00112cf0 -- random+ring sequencer not yet RE'd; returns 0
+    // GetNextSound @ 0x00112cf0 — sequential mode (m_PlaySequentialy >= 0)
+    // or random with recent-ring avoidance. ASM-verified 2026-05-20.
     int GetNextSound();
 };
 

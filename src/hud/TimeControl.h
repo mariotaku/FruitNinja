@@ -20,7 +20,10 @@ public:
     // +0xC4: slow-clock shimmer accumulator: ((elapsed_seconds % 6) + 0.5f).
     // Written every frame in Update (both Zen and Arcade paths).
     // ASM-verified: 2026-05-18 binary @ 0x001627e2 (re-analyst)
-    // TODO: 0xC4 — reader site TBD
+    // No port-side reader exists yet -- the binary's Draw reads it for a
+    // shimmer animation that the port's simplified Draw omits. Kept as a
+    // write-only field so the layout matches binary; can be wired into
+    // Draw if/when the shimmer is restored.
     float m_SlowClockPhase;
     // +0xC8: "+N" powerup overlay text; [0]==0 means hide
     char  m_PowerupOverlay[64];
