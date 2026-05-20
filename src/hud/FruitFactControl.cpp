@@ -141,7 +141,7 @@ FruitFactControl::FruitFactControl()
     , m_bConnectPressed(0)
     , m_ComboStarTex()
     , m_ComboType(-1)
-    , m_PomCount(0)
+    , m_TabIndex(0)
     , m_pLeaderboardMenu(nullptr)
     , m_pConnectButton(nullptr)
     , m_LBVisitedCount(0)
@@ -194,8 +194,8 @@ void FruitFactControl::Init() {
     m_StarTimer = -0.5f;
     m_ComboStarTex.SetNull();
 
-    uint8_t savedPomCount = m_PomCount;
-    m_PomCount = 0;
+    uint8_t savedTabIndex = m_TabIndex;
+    m_TabIndex = 0;
 
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
@@ -300,7 +300,7 @@ void FruitFactControl::Init() {
     m_bConnectPressed = 0;
     m_LBProgressTimer = 0.0f;
 
-    m_PomCount = savedPomCount;
+    m_TabIndex = savedTabIndex;
     m_LayerFlags = 0x80;
 
     Reset();
@@ -358,7 +358,7 @@ void FruitFactControl::BeginDraw(float /*dt*/) {
     Game* game = Game::GetInstance();
     uint8_t gameMode = game ? game->gameMode : 0;
 
-    if (gameMode == Mortar::GAME_MODE_ZEN || (gameMode == Mortar::GAME_MODE_ARCADE && m_PomCount <= 1)) {
+    if (gameMode == Mortar::GAME_MODE_ZEN || (gameMode == Mortar::GAME_MODE_ARCADE && m_TabIndex <= 1)) {
         m_LayerFlags |= Mortar::HUD_LAYER_BUTTONS;
     }
 }
@@ -421,11 +421,11 @@ void FruitFactControl::Update(float dt) {
         if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_bActive = 0;
         if (m_pConnectButton) m_pConnectButton->m_bActive = 0;
 
-        if (m_PomCount == 1) {
+        if (m_TabIndex == 1) {
             UpdateLeaderboard(dt);
             return;
         }
-        if (m_PomCount == 0) {
+        if (m_TabIndex == 0) {
             std::list<Bonus>::iterator it;
             BonusManager* bm = BonusManager::GetInstance();
             Bonus* bonus = bm->GetFirstBestBonus(it);
@@ -615,12 +615,12 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
 
     } else if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
         // ---- Arcade body ----
-        if (m_PomCount == 1) {
+        if (m_TabIndex == 1) {
             DrawLeaderboard();
             return;
         }
 
-        if (m_PomCount == 0) {
+        if (m_TabIndex == 0) {
             // Backplate from m_FactTexture (per-mode secondary backplate)
             if (m_FactTexture.IsValid()) {
                 m_FactTexture->Set();
@@ -633,7 +633,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 m_FactTexture->UnSet();
             }
 
-            // Three bonus rows via BonusManager (binary @ 0x0013b95c, m_PomCount==0 path)
+            // Three bonus rows via BonusManager (binary @ 0x0013b95c, m_TabIndex==0 path)
             {
                 const Colour rowColours[3] = {
                     Colour(0xAD, 0x7E, 0x00, 0xFF),  // gold  (1st)
@@ -849,10 +849,10 @@ void FruitFactControl::LeftButton() {
         g->pGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
-    --m_PomCount;
-    if ((int)m_PomCount < 0) m_PomCount = 1;
+    --m_TabIndex;
+    if ((int)m_TabIndex < 0) m_TabIndex = 1;
     if (g && g->pSaveData) {
-        g->pSaveData->SetTotal("PomTabIndex", (int)m_PomCount + 1, true, true);
+        g->pSaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
     }
 }
 
@@ -863,10 +863,10 @@ void FruitFactControl::RightButton() {
         g->pGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
-    ++m_PomCount;
-    if ((int)m_PomCount > 1) m_PomCount = 0;
+    ++m_TabIndex;
+    if ((int)m_TabIndex > 1) m_TabIndex = 0;
     if (g && g->pSaveData) {
-        g->pSaveData->SetTotal("PomTabIndex", (int)m_PomCount + 1, true, true);
+        g->pSaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
     }
 }
 

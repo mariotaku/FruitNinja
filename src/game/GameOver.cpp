@@ -32,7 +32,7 @@ void GameOver(int endReason, float endScore, int endParam) {
     // texture variant + per-game pom/star counts to display. Wiring proper:
     //   expressionIdx <- m_GameOverField2 (+0x120)
     //   bgPatternIdx  <- m_GameOverField1 (+0x11C)
-    //   pomCount      <- m_GameOverField3 (+0x124)
+    //   tabIndex      <- m_GameOverField3 (+0x124)
     //   starCount     <- m_GameOverField4 (+0x128)
     // The fields default to -1 (sentinel) and are written by the gameplay
     // achievement / bonus path which the port hasn't fully RE'd yet.
@@ -45,12 +45,12 @@ void GameOver(int endReason, float endScore, int endParam) {
     // cross-toolchain (GCC 4.4.1) doesn't support C++11 lambdas.
     int expressionIdx = (save && save->m_GameOverField2 > 0) ? save->m_GameOverField2 : 1;
     int bgPatternIdx  = (save && save->m_GameOverField1 > 0) ? save->m_GameOverField1 : 1;
-    int pomCount      = save ? std::max(0, save->m_GameOverField3) : 0;
+    int tabIndex      = save ? std::max(0, save->m_GameOverField3) : 0;
     int starCount     = save ? std::max(0, save->m_GameOverField4) : 0;
 
     GameOverScreen* gos = new GameOverScreen(
         "GameOver", endReason, endScore,
-        expressionIdx, bgPatternIdx, pomCount, starCount);
+        expressionIdx, bgPatternIdx, tabIndex, starCount);
 
     // +0x164: pGameOverScreen
     game->pGameOverScreen = gos;
