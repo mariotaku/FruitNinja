@@ -93,14 +93,14 @@ void AchievementManager::LoadAchievementInfo() {
         if (!ci.empty()) err = doc.LoadFile(ci.c_str());
     }
     if (err != tinyxml2::XML_SUCCESS) {
-        LOG_ERROR("ACHIEVEMENT", "AchievementManager::LoadAchievementInfo -- failed to open '%s' (error %d)",
+        LOG_ERROR("ACHIEVEMENT/LoadAchievementInfo", "failed to open '%s' (error %d)",
                path.c_str(), (int)err);
         return;
     }
 
     tinyxml2::XMLElement* root = doc.FirstChildElement("achievementManagerFile");
     if (!root) {
-        LOG_WARN("ACHIEVEMENT", "AchievementManager::LoadAchievementInfo -- no <achievementManagerFile> root");
+        LOG_WARN("ACHIEVEMENT/LoadAchievementInfo", "no <achievementManagerFile> root");
         return;
     }
 

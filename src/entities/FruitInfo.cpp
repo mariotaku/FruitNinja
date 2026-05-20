@@ -79,13 +79,13 @@ void FruitInfo_Load(const char* xmlPath)
     }
     if (err != tinyxml2::XML_SUCCESS)
     {
-        fprintf(stderr, "Fruit::LoadInfo: failed to open '%s' (error %d)\n", xmlPath, err);
+        LOG_ERROR("FRUITINFO/LoadInfo", "failed to open '%s' (error %d)", xmlPath, err);
         return;
     }
     tinyxml2::XMLElement* root = doc.FirstChildElement("fruitInfoFile");
     if (!root)
     {
-        fprintf(stderr, "Fruit::LoadInfo: no <fruitInfoFile> root element\n");
+        LOG_ERROR("FRUITINFO/LoadInfo", "no <fruitInfoFile> root element");
         return;
     }
 

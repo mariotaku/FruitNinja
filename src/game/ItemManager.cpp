@@ -151,7 +151,7 @@ void ItemManager::LoadItemData() {
             }
         }
     } else {
-        LOG_ERROR("ITEM", "LoadItemData: failed to open '%s' (error %d)",
+        LOG_ERROR("ITEM/LoadItemData", "failed to open '%s' (error %d)",
                   xmlPath.c_str(), (int)err);
     }
 

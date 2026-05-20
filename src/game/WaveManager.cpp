@@ -1571,7 +1571,7 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
 
         Mortar::Entity* e = am->Add(0, true);
         if (!e) {
-            fprintf(stderr, "[SpawnFruit] Mortar::ActorManager::Add returned null\n");
+            LOG_WARN("WAVE/SpawnFruit", "ActorManager::Add returned null");
             continue;
         }
         Fruit* f = static_cast<Fruit*>(e);

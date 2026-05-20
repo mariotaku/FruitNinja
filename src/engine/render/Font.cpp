@@ -8,6 +8,7 @@
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include "math/Matrix44.h"
+#include "debug/Logger.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -117,11 +118,11 @@ int Font::Load(const char* path) {
     // logic (data_dir prepend or strict) is owned by the FileSystem layer.
     Mortar::File f(path, 0, 0);
     if (!f.Open()) {
-        fprintf(stderr, "Font::Load: failed to open '%s'\n", path);
+        LOG_ERROR("FONT/Load", "failed to open '%s'", path);
         return 0;
     }
     if (!f.Load(nullptr, 0)) {
-        fprintf(stderr, "Font::Load: failed to slurp '%s'\n", path);
+        LOG_ERROR("FONT/Load", "failed to slurp '%s'", path);
         return 0;
     }
     const unsigned long fsize = f.Size();

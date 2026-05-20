@@ -4,6 +4,7 @@
 #include "BombBlast.h"
 #include "collision/ColAABB.h"
 #include "render/Renderer.h"
+#include "debug/Logger.h"
 #include <cstdio>
 #include <cstring>
 
@@ -132,7 +133,7 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
 
     // --- Factory path: pool empty or no matching type. ---
     if (!m_FactoryDelegate) {
-        fprintf(stderr, "ActorManager::Add: no factory registered (type %d)\n", entityType);
+        LOG_WARN("ACTOR/Add", "no factory registered (type %d)", entityType);
         return nullptr;
     }
     Entity* entity = m_FactoryDelegate(entityType);

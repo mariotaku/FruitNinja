@@ -219,18 +219,18 @@ void Mortar::StringTable::Load(const char* dataDir, int languageFlag) {
     snprintf(lang_path, sizeof(lang_path), "%s/stringtables/translations_%s.str",     dataDir, lang);
 
     if (!LoadHeader(hdr_path)) {
-        LOG_ERROR("STRINGTABLE", "StringTable: failed to load header: %s", hdr_path);
+        LOG_ERROR("STRINGTABLE/Load", "failed to load header: %s", hdr_path);
         return;
     }
 
     // Fall back to english_us on failure
     // (mirrors StringTableUtilLoadStringsTable fallback at 0x0011faa8)
     if (!LoadLanguage(lang_path)) {
-        LOG_WARN("STRINGTABLE", "StringTable: failed to load language '%s', falling back to english_us", lang);
+        LOG_WARN("STRINGTABLE/Load", "failed to load language '%s', falling back to english_us", lang);
         snprintf(lang_path, sizeof(lang_path),
                  "%s/stringtables/translations_english_us.str", dataDir);
         if (!LoadLanguage(lang_path)) {
-            LOG_ERROR("STRINGTABLE", "StringTable: fallback english_us also failed");
+            LOG_ERROR("STRINGTABLE/Load", "fallback english_us also failed");
             return;
         }
     }

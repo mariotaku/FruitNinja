@@ -41,7 +41,7 @@ void Texture::Set() {
         // white quads. Warn once per Texture instance and skip the bind.
         static bool s_warned = false;
         if (!s_warned) {
-            LOG_WARN("TEXTURE", "m_TexId==0 for path='%s' -- load failed mid-stream or upload skipped. Skipping bind.",
+            LOG_WARN("TEXTURE/Set", "m_TexId==0 for path='%s' (load failed mid-stream); skipping bind",
                 m_Path.c_str());
             s_warned = true;
         }
@@ -115,12 +115,12 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
                 return Texture::Load(altPath.c_str());
             }
         }
-        LOG_ERROR("TEXTURE", "failed to open '%s'", path);
+        LOG_ERROR("TEXTURE/Load", "failed to open '%s'", path);
         return Mortar::SmartPtr<Texture>();
     }
 
     if (!f.Load(nullptr, 0)) {
-        LOG_ERROR("TEXTURE", "failed to load '%s'", path);
+        LOG_ERROR("TEXTURE/Load", "failed to parse '%s'", path);
         return Mortar::SmartPtr<Texture>();
     }
 
@@ -164,7 +164,7 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
             break;
         // case 0x0b..0x0e: PVRTC compressed (not supported on desktop GL)
         default:
-            LOG_ERROR("TEXTURE", "unsupported format 0x%02x in '%s'", format, path);
+            LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", format, path);
             delete tex;
             return Mortar::SmartPtr<Texture>();
     }
