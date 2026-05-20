@@ -9,6 +9,7 @@
 // event during gameplay.
 
 #include "screens/PowerUpShop.h"
+#include "debug/Logger.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
@@ -198,6 +199,8 @@ void PowerUpShop::Release() {
         Fruit* fruit = m_BuyButton->m_pFruitPiece;
         if (fruit != NULL) {
             // Binary: sets Fruit::m_bSliced=1 and zeroes velocity/spin vectors.
+            LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in PowerUpShop teardown)",
+                     static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
             fruit->m_bSliced = true;
             fruit->vel    = g_Origin;
             // m_AngularVel is not in Mortar::Entity base; Fruit stores RotVel in m_RotVel1/m_RotVel2.
