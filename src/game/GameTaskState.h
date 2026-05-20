@@ -23,6 +23,7 @@
 //
 
 #include <cstdint>
+#include <cstddef>
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "asset/Mesh.h"
@@ -151,6 +152,39 @@ struct GameTaskState {
           pDeferredControl(nullptr),
           m_pBombFuseSound(nullptr) {}
 };
+
+// Field-offset assertions for GameTaskState (binary global @ 0x00231404 area, ARM32).
+// Offsets are struct-relative. Guarded by __bada__ so they fire only on the
+// cross-build / Bada toolchain where the struct layout must match the binary.
+// If any of these fail the struct member order is wrong — fix the layout, not the assert.
+#ifdef __bada__
+static_assert(offsetof(GameTaskState, totalTime)             == 0x00,  "GameTaskState::totalTime must be at +0x00");
+static_assert(offsetof(GameTaskState, pPauseScreen)          == 0x04,  "GameTaskState::pPauseScreen must be at +0x04");
+static_assert(offsetof(GameTaskState, pauseTransitionTimer)  == 0x08,  "GameTaskState::pauseTransitionTimer must be at +0x08");
+static_assert(offsetof(GameTaskState, isPaused)              == 0x0C,  "GameTaskState::isPaused must be at +0x0C");
+static_assert(offsetof(GameTaskState, pauseBombHitTimer)     == 0x10,  "GameTaskState::pauseBombHitTimer must be at +0x10");
+static_assert(offsetof(GameTaskState, splashFadeTimer)       == 0x1C,  "GameTaskState::splashFadeTimer must be at +0x1C");
+static_assert(offsetof(GameTaskState, pSliceEffectList)      == 0x64,  "GameTaskState::pSliceEffectList must be at +0x64");
+static_assert(offsetof(GameTaskState, spawnParam0)           == 0x68,  "GameTaskState::spawnParam0 must be at +0x68");
+static_assert(offsetof(GameTaskState, spawnParam1)           == 0x74,  "GameTaskState::spawnParam1 must be at +0x74");
+static_assert(offsetof(GameTaskState, spawnParam2)           == 0x80,  "GameTaskState::spawnParam2 must be at +0x80");
+static_assert(offsetof(GameTaskState, spawnParam3)           == 0x8C,  "GameTaskState::spawnParam3 must be at +0x8C");
+static_assert(offsetof(GameTaskState, spawnParam4)           == 0x98,  "GameTaskState::spawnParam4 must be at +0x98");
+static_assert(offsetof(GameTaskState, spawnParam5)           == 0xA4,  "GameTaskState::spawnParam5 must be at +0xA4");
+static_assert(offsetof(GameTaskState, spawnParam6)           == 0xB0,  "GameTaskState::spawnParam6 must be at +0xB0");
+static_assert(offsetof(GameTaskState, sliceFxMesh)           == 0xBC,  "GameTaskState::sliceFxMesh must be at +0xBC");
+static_assert(offsetof(GameTaskState, sliceFxCritMesh)       == 0xC0,  "GameTaskState::sliceFxCritMesh must be at +0xC0");
+static_assert(offsetof(GameTaskState, pSliceEffectPool)      == 0xC8,  "GameTaskState::pSliceEffectPool must be at +0xC8");
+static_assert(offsetof(GameTaskState, m_pBombFuseSound)      == 0xD8,  "GameTaskState::m_pBombFuseSound must be at +0xD8");
+static_assert(offsetof(GameTaskState, pBackgroundTexture)    == 0xFC,  "GameTaskState::pBackgroundTexture must be at +0xFC");
+static_assert(offsetof(GameTaskState, pDeferredControl)      == 0x100, "GameTaskState::pDeferredControl must be at +0x100");
+static_assert(offsetof(GameTaskState, m_ScoreStateField_0x10c) == 0x10C, "GameTaskState::m_ScoreStateField_0x10c must be at +0x10C");
+static_assert(offsetof(GameTaskState, m_ScoreStateField_0x110) == 0x110, "GameTaskState::m_ScoreStateField_0x110 must be at +0x110");
+static_assert(offsetof(GameTaskState, field_0x111)           == 0x111, "GameTaskState::field_0x111 must be at +0x111");
+static_assert(offsetof(GameTaskState, initComplete)          == 0x112, "GameTaskState::initComplete must be at +0x112");
+static_assert(offsetof(GameTaskState, pAppState_x54)         == 0x114, "GameTaskState::pAppState_x54 must be at +0x114");
+static_assert(sizeof(GameTaskState)                          == 0x118, "sizeof(GameTaskState) must be 0x118");
+#endif
 
 // State handler function types (match original function pointer table)
 typedef void (*StateInitFn)(unsigned long);
