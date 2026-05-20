@@ -105,30 +105,17 @@ void PauseScreen::PauseGame() {
     ts->pauseTransitionTimer = 0.25f;
 }
 
-// ASM-verified: 2026-05-17 binary @ 0x00168fb0 (re-analyst, re-verified).
-// Binary @ 0x00168fb0 UnpauseGame():
-//   GameTaskState+0x10 (float) = 0.4f  -- pauseBombHitTimer
-//   GameTaskState+0x0C (byte)  = 1     -- isPaused = 1 (resumed)
-// The DAT chain at 0x168fd4 = 0x000452d4 (GOT offset to GameTaskState
-// DIRECT struct, NOT a pointer-dereferenced Game). An earlier RE pass
-// mis-identified this as Game+0x10 and re-routed the write to
-// Game::bombHitTimer, which clobbered HitMenuBomb's 2.0f set on Quit
-// and broke the 2.0->1.5 downward crossing that fires
-// ResetGameEntities(false) in GameUpdate -- gameplay fruits/bombs
-// stopped clearing after Quit-from-Pause.
+// ASM-verified: 2026-05-20 binary @ 0x00168fb0 UnpauseGame (re-analyst)
+// Binary writes ONLY GameTaskState+0xc and +0x10. Does NOT touch game->pausedFlag.
+// pausedFlag stays set through QUIT_EXIT/RETRY_EXIT/BOMB_FLASH so the dispatcher's
+// `active = !pausedFlag && pmState == 0` evaluates to false during those transitions,
+// which makes UpdateBombHit and GameOver-cross-1.5 skip. The port's RESUME_EXIT case
+// in PauseScreen::Update has its own port-specific pausedFlag clear (DIFFERS) because
+// the port's PowerManager stub always returns 0.
 void PauseScreen::UnpauseGame() {
     GameTaskState* ts = GetTaskState();
     ts->isPaused = 1;
     ts->pauseBombHitTimer = 0.4f;        // DAT_00168fcc, GameTaskState+0x10
-
-    // DIFFERS: binary's UnpauseGame does NOT write pausedFlag=0
-    // either; it relies on PowerManager::GetState() going non-zero on
-    // background to keep canUpdate=false. Port's PowerManager stub
-    // always returns 0, so pausedFlag is the sole gate to
-    // GameUpdate's wholesale ActorManager/Splat skips. Writing 0 here
-    // is the port-side mirror for resume.
-    Game* game = Game::GetInstance();
-    if (game) game->pausedFlag = false;
 }
 
 // -------------------------------------------------------------------------
@@ -724,6 +711,14 @@ void PauseScreen::Update(float dt) {
             m_State = PAUSE_STATE_HIDDEN;
             m_RevealTimer = 2.0f;
             UnpauseGame();
+            // DIFFERS: binary relies on PowerManager::GetState() going non-zero on
+            // background to make the dispatcher's active=(!pausedFlag&&pmState==0)
+            // evaluate true again after resume. Port's PowerManager stub always
+            // returns 0, so pausedFlag is the sole gate. Clear it here (resume path
+            // only) so GameUpdate resumes ticking. QUIT_EXIT and RETRY_EXIT leave
+            // pausedFlag set -- binary-faithful -- so active=false holds through
+            // BOMB_FLASH and the 1.5f GameOver-cross check skips.
+            if (game) game->pausedFlag = false;
         }
         break;
 
