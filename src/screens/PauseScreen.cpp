@@ -208,9 +208,13 @@ static void EndRetryLevel() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    if (game->mainScreen) {
-        game->mainScreen->SetStateTimer(0.5f);         // 0x16a220 [+0x110]
-        game->mainScreen->SetState(STATE_CAMERA_ZOOM); // 0x16a226 [+0x10c] = 0
+    // Binary @ 0x0016a220 / 0x0016a226: writes to GameTaskState+0x110 (0.5f)
+    // and GameTaskState+0x10c (0). NOT MainScreen -- decompiler misdirected
+    // these to mainScreen method calls in the prior port.
+    GameTaskState* ts = GetTaskState();
+    if (ts) {
+        ts->m_ScoreStateField_0x110 = 0.5f;            // 0x16a220 [GTS+0x110]
+        ts->m_ScoreStateField_0x10c = 0;               // 0x16a226 [GTS+0x10c]
     }
 
     FN::SetScore(0, -1);                               // 0x16a22a
@@ -233,7 +237,8 @@ static void EndRetryLevel() {
     WaveManager::GetInstance()->Reset(true);           // 0x16a25c
 
     game->retryFlag         = 0;                       // 0x16a26e [+0x06]
-    game->m_TransitionTimer = 0.5f;                    // 0x16a270 [+0x0c]
+    // ASM-verified: 2026-05-20T00:00:00Z binary @ 0x0016a208 (asm-inspector)
+    game->m_TransitionTimer = 0.0f;                    // 0x16a270 [+0x0c] DAT_0016a284=0.0f
     game->levelTransitionFlag         = 0;                       // 0x16a274 [+0x05]
 
     if (game->mainScreen) {
