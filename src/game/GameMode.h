@@ -2,6 +2,7 @@
 #define FN_GAME_MODE_H
 
 #include <cstdint>
+#include "game/GameWork.h"
 
 //
 // Mortar / Fruit Ninja game-mode enum.
@@ -18,7 +19,7 @@
 //   3 -> "xml/zenWaveList.xml"        (Zen)
 //
 // Use these named constants instead of raw 0/1/2/3 literals when
-// comparing `game->gameMode`. Keep the storage type uint8_t so the
+// comparing `game_work.gameMode`. Keep the storage type uint8_t so the
 // Game struct layout (and asm-verify cross-build symbol shape) is
 // unchanged.
 //

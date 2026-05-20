@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
+#include "game/GameWork.h"
 
 // Analysed: 2026-04-12T16:45
 
@@ -58,8 +59,8 @@ static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 // ---------------------------------------------------------------------------
 static void CoinArrived(Coin* coin) {
     Game* game = Game::GetInstance();
-    if (game && game->pSaveData) {
-        game->pSaveData->AddCoins(coin->m_CoinValue);
+    if (game && game_work.m_SaveData) {
+        game_work.m_SaveData->AddCoins(coin->m_CoinValue);
     }
 }
 
@@ -198,8 +199,8 @@ void Coin::_Update(float dt) {
         // Timer expired: play "achievement" SFX if not silent
         if (m_Silent == 0) {
             Game* game = Game::GetInstance();
-            if (game && game->pGameSound) {
-                game->pGameSound->SFXPlay("achievement", 1.0f, 1.0f);
+            if (game && game_work.mGameSound) {
+                game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
             }
         }
         // Compute initial velocity from launch angle

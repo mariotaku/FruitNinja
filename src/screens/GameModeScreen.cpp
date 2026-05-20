@@ -29,6 +29,7 @@
 #include "game/FruitSaveData.h"
 #include <cmath>
 #include <cstdio>
+#include "game/GameWork.h"
 
 // Helper functor: captures {screen*, btn*} to call DeletedMenuButton(btn) with no args.
 // Replaces std::bind(&GameModeScreen::DeletedMenuButton, this, btn) — 8 bytes on ARM32,
@@ -217,7 +218,7 @@ void GameModeScreen::Release() {
 void GameModeScreen::CreateControls() {
     // Port specific: guards not in binary.
     if (m_bButtonsCreated) return;
-    if (!game.hud) return;
+    if (!game_work.mHud) return;
 
     // --- Button 1: BACK (back_icon.tex, bomb fruit, QuitCallback) ---
     // Binary texture: Game+0x17c = back_icon.tex (same global slot used
@@ -235,7 +236,7 @@ void GameModeScreen::CreateControls() {
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
     // Marks this button as the screen's hardware Back-key handler.
     m_pBackButton->m_bRespondsToBackKey = 1;
-    game.hud->AddControl(m_pBackButton);
+    game_work.mHud->AddControl(m_pBackButton);
     m_pBackButton->m_TargetSize = m_pBackButton->m_TargetSize * BACK_TARGET_SCALE;
     if (m_pBackButton->m_pFruitPiece) {
         m_pBackButton->m_pFruitPiece->scale =
@@ -253,10 +254,10 @@ void GameModeScreen::CreateControls() {
                                Fruit::FruitType(FRUIT_CLASSIC, false), Vec3(0, 0, 0),
                                Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
-    if (game.pTutorialCtrl) {
-        game.pTutorialCtrl->ResetTutePos(m_pClassicButton);
+    if (game_work.m_TutorialControl) {
+        game_work.m_TutorialControl->ResetTutePos(m_pClassicButton);
     }
-    game.hud->AddControl(m_pClassicButton);
+    game_work.mHud->AddControl(m_pClassicButton);
     m_pClassicButton->m_TargetSize = m_pClassicButton->m_TargetSize * CLASSIC_TARGET_SCALE;
     if (m_pClassicButton->m_pFruitPiece) {
         m_pClassicButton->m_pFruitPiece->scale =
@@ -283,7 +284,7 @@ void GameModeScreen::CreateControls() {
         m_pZenButton->m_pFruitPiece->scale =
             m_pZenButton->m_pFruitPiece->scale * ZEN_FRUIT_SCALE;
     }
-    game.hud->AddControl(m_pZenButton);
+    game_work.mHud->AddControl(m_pZenButton);
 
     // --- Button 4: ARCADE (arcade_mode.tex, banana, ArcadeModeCallback) ---
     // Binary: scale -> RotateFacingUp(false, Vec3(0,1,0)) -> AddControl.
@@ -307,7 +308,7 @@ void GameModeScreen::CreateControls() {
             false,
             Vec3(0.0f, 1.0f, 0.0f));
     }
-    game.hud->AddControl(m_pArcadeButton);
+    game_work.mHud->AddControl(m_pArcadeButton);
 
     m_bButtonsCreated = true;
 }
@@ -388,34 +389,34 @@ void GameModeScreen::Update(float dt) {
         m_TransitionAlpha *= modeDecay;
         m_SecondaryAlpha = m_TransitionAlpha;
 
-        if (game.mainScreen) {
-            float camT = game.mainScreen->GetCameraTransition();
+        if (game_work.mMainScreen) {
+            float camT = game_work.mMainScreen->GetCameraTransition();
             LOG_INFO("MODESEL", "state=%d camT=%.4f alpha=%.4f setupFired=%d levelTransitionFlag=%d gameMode=%d",
                      (int)m_State, camT, m_TransitionAlpha, (int)m_bSetupLevelFired,
-                     (int)game.levelTransitionFlag, (int)game.gameMode);
+                     (int)game_work.m_LevelTransitionFlag, (int)game_work.gameMode);
             camT *= CAMERA_DECAY;
-            game.mainScreen->SetCameraTransition(camT);
+            game_work.mMainScreen->SetCameraTransition(camT);
             // Binary @ 0x0013f2e2: vtable[18] (SetupLevel) dispatched once
             // camera transition crosses -0.9 (DAT_0013f460). camT decays
             // toward 0 from -1 (main menu zoom-in), so the actual gate is
             // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
             // Latch keeps it one-shot per mode-pick.
             if (!m_bSetupLevelFired && camT > -0.9f) {
-                LOG_INFO("MODESEL", "SetupLevel called; game->gameMode=%d", (int)game.gameMode);
+                LOG_INFO("MODESEL", "SetupLevel called; game_work.gameMode=%d", (int)game_work.gameMode);
                 SetupLevel();
                 m_bSetupLevelFired = true;
             }
 
             if (fabsf(camT) < ALPHA_OUT_DONE) {
-                if (game.pGameSound) {
-                    game.pGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
+                if (game_work.mGameSound) {
+                    game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 }
                 LOG_INFO("MODESEL", "%d -> STATE_CAMERA_FADE (camT done; levelTransitionFlag=%d gameMode=%d)",
-                         (int)m_State, (int)game.levelTransitionFlag, (int)game.gameMode);
-                game.mainScreen->SetCameraTransition(0.0f);
-                game.levelTransitionFlag = 0;
+                         (int)m_State, (int)game_work.m_LevelTransitionFlag, (int)game_work.gameMode);
+                game_work.mMainScreen->SetCameraTransition(0.0f);
+                game_work.m_LevelTransitionFlag = 0;
                 m_bPendingRemoval = 1;
-                game.mainScreen->SetState(STATE_CAMERA_FADE);
+                game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
                 // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped
             }
         }
@@ -437,7 +438,7 @@ void GameModeScreen::Update(float dt) {
         m_SecondaryAlpha  = m_TransitionAlpha;
 
         if (oldAlpha > 0.25f && m_TransitionAlpha <= 0.25f) {
-            if (game.mainScreen) game.mainScreen->SetState(STATE_SLIDE_IN);
+            if (game_work.mMainScreen) game_work.mMainScreen->SetState(STATE_SLIDE_IN);
         }
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
             m_bPendingRemoval = 1;
@@ -548,8 +549,8 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
 // button's fruit piece and flings it up-right, then resets tutorial arrow.
 void GameModeScreen::QuitCallback() {
     // 1. SFX
-    if (game.pGameSound) {
-        game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
 
     // 2. Enter back-out state
@@ -569,8 +570,8 @@ void GameModeScreen::QuitCallback() {
     }
 
     // 4. Clear any active tutorial arrow
-    if (game.pTutorialCtrl) {
-        game.pTutorialCtrl->ResetTutePos(nullptr);
+    if (game_work.m_TutorialControl) {
+        game_work.m_TutorialControl->ResetTutePos(nullptr);
     }
 
     // 5. Port specific: cascade-release the other menu buttons' fruits
@@ -592,16 +593,16 @@ void GameModeScreen::ClassicModeCallback() {
     LOG_INFO("MODESEL/Classic", "callback fired; setting gameMode=0; m_State=3");
     m_bSetupLevelFired = false;
     m_State = 3;
-    game.gameMode = 0;
+    game_work.gameMode = 0;
     LOG_INFO("MODESEL/Classic", "after writes: gameMode=%d m_State=%d m_bSetupLevelFired=%d",
-             (int)game.gameMode, (int)m_State, (int)m_bSetupLevelFired);
+             (int)game_work.gameMode, (int)m_State, (int)m_bSetupLevelFired);
 }
 
 // Matches ZenModeCallback @ 0x0013dffc
 void GameModeScreen::ZenModeCallback() {
     m_bSetupLevelFired = false;
     m_State = 6;
-    game.gameMode = 3;
+    game_work.gameMode = 3;
 }
 
 // Matches ArcadeModeCallback @ 0x0013e19c
@@ -609,7 +610,7 @@ void GameModeScreen::ZenModeCallback() {
 void GameModeScreen::ArcadeModeCallback() {
     m_bSetupLevelFired = false;
     m_State = 5;
-    game.gameMode = 2;
+    game_work.gameMode = 2;
 }
 
 // Binary @ 0x0013df84 — sets m_bChallenge=true + stores id and data ptr
@@ -624,12 +625,12 @@ void GameModeScreen::SetIsChallenge(int challengeId, void* data) {
 // (typo "Commings" preserved from binary symbol)
 void GameModeScreen::CommingsSoonCallback() {
     // Binary @ 0x0013e124: FruitSaveData::AddToTotal("modeS_pcoming_soon", hash, 1, true, true).
-    if (game.pSaveData) {
+    if (game_work.m_SaveData) {
         const char* key = "modeS_pcoming_soon";
-        game.pSaveData->AddToTotal(key, ::StringHash(key), 1, true, true);
+        game_work.m_SaveData->AddToTotal(key, ::StringHash(key), 1, true, true);
     }
-    if (game.pTutorialCtrl) {
-        game.pTutorialCtrl->ResetTutePos(nullptr);
+    if (game_work.m_TutorialControl) {
+        game_work.m_TutorialControl->ResetTutePos(nullptr);
     }
 }
 
@@ -677,10 +678,10 @@ void GameModeScreen::SwitchToUpsell(int idx) {
     // modeS_p* counter. Per-idx key is "modeS_p<n>" where <n> is the
     // tile slot. Stat tracking happens even though the UpsellScreen
     // transition itself is defunct (UpsellScreen is Phantom in this build).
-    if (game.pSaveData) {
+    if (game_work.m_SaveData) {
         char key[16];
         snprintf(key, sizeof(key), "modeS_p%d", idx);
-        game.pSaveData->AddToTotal(key, ::StringHash(key), 1, true, true);
+        game_work.m_SaveData->AddToTotal(key, ::StringHash(key), 1, true, true);
     }
     // Defunct: m_State=10 transition omitted (UpsellScreen is Phantom).
     (void)idx;

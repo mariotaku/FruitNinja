@@ -18,6 +18,7 @@
 #include <tinyxml2.h>
 #include <cstring>
 #include <string>
+#include "game/GameWork.h"
 
 // @ 0x00117d20
 PowerUpManager::PowerUpManager()
@@ -216,7 +217,7 @@ void PowerUpManager::Reset(bool fullReset) {
     // Zen mode (gameMode==2 + fullReset): re-activate all m_bIsSpecial templates.
     if (fullReset) {
         Game* game = Game::GetInstance();
-        if (game && game->gameMode == Mortar::GAME_MODE_ARCADE) {
+        if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
             for (std::map<uint32_t, PowerUp*>::iterator it2 = m_AllPowerUps.begin();
                  it2 != m_AllPowerUps.end(); ++it2) {
                 PowerUp* tpl = it2->second;

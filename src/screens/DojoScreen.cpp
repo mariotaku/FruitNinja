@@ -36,6 +36,7 @@
 #include "math/Colour.h"
 #include <cstdio>
 #include <cstdlib>
+#include "game/GameWork.h"
 
 // --- Constants (resolved from binary via read_memory) ---
 
@@ -197,8 +198,8 @@ void DojoScreen::Update(float dt) {
                 // Binary @ 0x0013856c: strb 1 at button+0x138 = m_bRespondsToBackKey.
                 m_pPlayButton->m_bRespondsToBackKey = 1;
                 m_pPlayButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-                game.hud->AddControl(m_pPlayButton);
-                if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pPlayButton);
+                game_work.mHud->AddControl(m_pPlayButton);
+                if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pPlayButton);
                 // Binary scales BOTH m_TargetSize AND fruit piece's scale by 0.825
                 m_pPlayButton->m_TargetSize = m_pPlayButton->m_TargetSize * BACK_SCALE;
                 if (m_pPlayButton->m_pFruitPiece) {
@@ -241,8 +242,8 @@ void DojoScreen::Update(float dt) {
                 m_pShopButton->m_HitInsetX = -15.0f;
                 m_pShopButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
                 m_pShopButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::ButtonDeleted);
-                game.hud->AddControl(m_pShopButton);
-                if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos(m_pShopButton);
+                game_work.mHud->AddControl(m_pShopButton);
+                if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pShopButton);
                 // ItemManager not ported — always show no badge
                 m_pShopButton->SetNewSymbol(false);
             }
@@ -257,7 +258,7 @@ void DojoScreen::Update(float dt) {
                                      Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
                                      aboutFruitType, Vec3(0, 0, 0), nullptr);
                 m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
-                game.hud->AddControl(m_pAboutButton);
+                game_work.mHud->AddControl(m_pAboutButton);
             }
         }
 
@@ -305,7 +306,7 @@ void DojoScreen::Update(float dt) {
             // Binary relies on AboutScreen calling parent->Reset() which sets state=0.
             // Port keeps both: Init() via RemoveCallback (redundant but harmless).
             m_pAboutScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &DojoScreen::AboutScreenRemoved);
-            game.hud->AddControl(m_pAboutScreen);
+            game_work.mHud->AddControl(m_pAboutScreen);
             return;
         }
 
@@ -314,9 +315,9 @@ void DojoScreen::Update(float dt) {
             // Binary: FruitSaveData::CheckDatesHaveChanged(game->save), then
             //   ShopScreen* shop = operator_new(0xbc); ShopScreen::ShopScreen(shop, this);
             //   HUD::AddControl(hud, shop, false); shop->Init();
-            if (game.pSaveData) game.pSaveData->CheckDatesHaveChanged();
+            if (game_work.m_SaveData) game_work.m_SaveData->CheckDatesHaveChanged();
             ShopScreen* shop = new ShopScreen(game, this);
-            game.hud->AddControl(shop, false);
+            game_work.mHud->AddControl(shop, false);
             shop->Init();
             return;
         }
@@ -340,10 +341,10 @@ void DojoScreen::Update(float dt) {
         if (m_TransitionAlpha < ALPHA_OUT_DONE) {
             LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "pending-removal", "state-6 alpha faded");
             m_bPendingRemoval = 1;
-            // Binary: *(game->mainScreen + 0x10c) = 8
+            // Binary: *(game_work.mMainScreen + 0x10c) = 8
             // 0x10c into MainScreen is m_State = STATE_SLIDE_IN (8)
-            if (game.mainScreen) {
-                game.mainScreen->SetState(STATE_SLIDE_IN);
+            if (game_work.mMainScreen) {
+                game_work.mMainScreen->SetState(STATE_SLIDE_IN);
             }
         }
         break;
@@ -395,8 +396,8 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
 // ===================================================================
 void DojoScreen::PlayCallback() {
     // 1. SFX
-    if (game.pGameSound) {
-        game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
 
     // 2. State 6 (quit fade-out)
@@ -416,7 +417,7 @@ void DojoScreen::PlayCallback() {
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
 
     // Port specific: cascade-release Shop/About fruits so they fly off
     // and their buttons shrink alongside the back-bomb. Binary doesn't
@@ -444,7 +445,7 @@ void DojoScreen::ShopCallback() {
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
 }
 
 // ===================================================================
@@ -465,7 +466,7 @@ void DojoScreen::AboutCallback() {
         piece->vel = Vec3(r1 + 5.0f, -r2, 0.0f);
     }
 
-    if (game.pTutorialCtrl) game.pTutorialCtrl->ResetTutePos((MenuButton*)nullptr);
+    if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
 }
 
 // ---- Defunct callbacks (zero callsite xrefs in Bada shipped binary) ----

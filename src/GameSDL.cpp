@@ -3,6 +3,7 @@
 // in Game.h are cast to SDL_Window* / SDL_GLContext at the SDL boundary.
 
 #include "Game.h"
+#include "game/GameWork.h"
 #include <SDL.h>
 #include "platform/InputTranslatorSDL.h"
 #include "asset/TextureManager.h"
@@ -44,7 +45,7 @@ bool Game::init(void* win, void* gl) {
     GameInitialise();      // boot all engine singletons + load shared data
 
     // Start in Splash state (will auto-transition to Game)
-    taskStateIndex = 0;
+    game_work.taskStateIndex = 0;
     running = true;
     return true;
 }
@@ -85,8 +86,8 @@ void Game::run() {
 
         // Original: dt = 0.0; Mortar::SystemManager::Update(&dt) writes fixed 1/60;
         // then passes dt to update + draw functions
-        dt = 0.0f;
-        SystemManager::GetInstance().Update(&dt);
+        game_work.dt = 0.0f;
+        SystemManager::GetInstance().Update(&game_work.dt);
 
         // Port specific: debug time-scale. We scale dt so every
         // dt-integrating update (physics, velocity, acceleration)
@@ -96,10 +97,10 @@ void Game::run() {
         // 0.1x the lerp advances 10x less per frame. Result: both
         // categories slow uniformly AND render every real frame, so
         // animations stay smooth at slow speed.
-        dt *= FN::g_DebugTimeScale;
+        game_work.dt *= FN::g_DebugTimeScale;
 
         // Update: 3-state dispatcher
-        GameTaskUpdate(dt);
+        GameTaskUpdate(game_work.dt);
 
         // Per-frame GL setup. Binary calls DisplayManagerBada::BeginFrame
         // (0x0019dfec) which handles clears, depth/blend state reset, and
@@ -111,7 +112,7 @@ void Game::run() {
         Mortar::DisplayManager::GetInstance().BeginFrame();
 
         // Draw: state-specific rendering
-        GameTaskDraw(dt);
+        GameTaskDraw(game_work.dt);
 
         // Present
         SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
@@ -135,16 +136,16 @@ void Game::runFrames(int frameCount) {
             if (ev.type == SDL_QUIT) running = false;
         }
 
-        dt = 0.0f;
-        SystemManager::GetInstance().Update(&dt);
-        dt *= FN::g_DebugTimeScale;
-        GameTaskUpdate(dt);
+        game_work.dt = 0.0f;
+        SystemManager::GetInstance().Update(&game_work.dt);
+        game_work.dt *= FN::g_DebugTimeScale;
+        GameTaskUpdate(game_work.dt);
 
         int ww, wh;
         SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
         glViewport(0, 0, ww, wh);
         Mortar::DisplayManager::GetInstance().BeginFrame();
-        GameTaskDraw(dt);
+        GameTaskDraw(game_work.dt);
         SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
     }
 }

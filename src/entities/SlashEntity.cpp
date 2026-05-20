@@ -35,6 +35,7 @@
 #include <cstring>
 #include <cmath>
 #include <cstdio>
+#include "game/GameWork.h"
 
 const float SlashEntity::POINT_SPACING         = 64.0f;   // DAT_0017d5fc
 const float SlashEntity::MOVE_THRESH_ACTIVE    = 5.0f;    // sqrt(25)
@@ -294,7 +295,7 @@ int SlashEntity::UpdateCollisionLine(long /*dt*/) {
 // Binary @ 0x17B398 — clears g_state.bombSkipFlag=0, sets g_state.needsDrawFlag=1.
 // DIFFERS: g_state is the binary's GameTaskState singleton; bombSkipFlag is
 // the "don't slice during bomb-explosion freeze" gate -- port already covers
-// this via game->bombHitTimer > 0 in UpdateTouchDown. needsDrawFlag is the
+// this via game_work.m_BombHitTimer > 0 in UpdateTouchDown. needsDrawFlag is the
 // SDK's render-needed-this-frame hint; SDL port redraws unconditionally so
 // it's irrelevant. Functionally equivalent no-op.
 void SlashEntity::DrawUpdate(float /*dt*/) {
@@ -353,11 +354,11 @@ void SlashEntity::PlaySwipe() {
     }
 
     Game* game = Game::GetInstance();
-    if (game && game->pGameSound) {
+    if (game && game_work.mGameSound) {
         char buf[20];
         const int idx = (rand() % 6) + 1;  // [1, 6] — matches Rand32(rng, 6) + 1
         snprintf(buf, sizeof(buf), "Sword-swipe-%d", idx);
-        game->pGameSound->SFXPlay(buf, 1.0f, 1.0f);
+        game_work.mGameSound->SFXPlay(buf, 1.0f, 1.0f);
     }
 
     m_SwipeSoundTimer = 6.0f;
@@ -747,7 +748,7 @@ void SlashEntity::Update(float dt) {
     // The matching gate in UpdateTouchDown above prevents new points from
     // being added during the freeze, so `m_NumPoints < 4` short-circuits
     // naturally -- the same mechanism the binary uses post-unpause.
-    const bool bombHitActive = game && game->bombHitTimer > 0.0f;
+    const bool bombHitActive = game && game_work.m_BombHitTimer > 0.0f;
 
     // Binary @ 0x17D664: also gates on `(s_ModPowerMask & 0x40)` -- bit
     // 0x40 set by ScrollingMenu::Update on touch-acquire (@ 0x0015b7cc)
@@ -773,7 +774,7 @@ void SlashEntity::Update(float dt) {
     // Port-side defense (NOT in binary): also short-circuit our own
     // collision loop on pausedFlag. Redundant if ActorManager::Update
     // is properly gated above; kept as belt-and-braces.
-    const bool gamePaused = game && game->pausedFlag;
+    const bool gamePaused = game && game_work.m_Paused;
 
     // Tick the swipe-SFX cooldown timer (binary +0x148, decremented per
     // frame; PlaySwipe resets to 6.0f).
@@ -835,7 +836,7 @@ void SlashEntity::Update(float dt) {
 
                 // (b) Combo body: only if count >= 3 AND m_ComboSliceArr[1] >= 0 (binary field_0x158).
                 if (m_ComboCount > 2 && m_ComboSliceArr[1] >= 0) {
-                    if (game && game->gameMode == Mortar::GAME_MODE_ARCADE) {
+                    if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
                         WaveManager::GetInstance()->AddSpeed(
                             (float)m_ComboCount / 3.0f, 0);
                         FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, true);
@@ -844,10 +845,10 @@ void SlashEntity::Update(float dt) {
                         FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, false);
                     }
                     // Per-mode stat: "combo_<modename>"
-                    if (game && game->pSaveData) {
+                    if (game && game_work.m_SaveData) {
                         char buf[32];
-                        snprintf(buf, sizeof(buf), "combo_%s", Mortar::GetModeName(game->gameMode));
-                        game->pSaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
+                        snprintf(buf, sizeof(buf), "combo_%s", Mortar::GetModeName(game_work.gameMode));
+                        game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
                     }
                     // (c) Coin spawn VFX — deferred
                     // TODO: 0x0017df88 -- spawn combo coins via Coin::MakeCoins
@@ -1363,7 +1364,7 @@ bool SlashEntity::TouchDown(InputEvent* event) {
 // event->x, so just copy. Port stores into m_RawTouchPos (no Entity::pos).
 bool SlashEntity::TouchMoveX(InputEvent* event) {
     Game* g = Game::GetInstance();
-    if (g && g->bombHitTimer > 0.0f) return false;
+    if (g && game_work.m_BombHitTimer > 0.0f) return false;
     m_RawTouchPos.x = event->x;
     return true;
 }
@@ -1374,7 +1375,7 @@ bool SlashEntity::TouchMoveX(InputEvent* event) {
 // produces Y-up centred, so no sign flip here.
 bool SlashEntity::TouchMoveY(InputEvent* event) {
     Game* g = Game::GetInstance();
-    if (g && g->bombHitTimer > 0.0f) return false;
+    if (g && game_work.m_BombHitTimer > 0.0f) return false;
     m_RawTouchPos.y = event->y;
     return true;
 }
@@ -1396,7 +1397,7 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
     // Update naturally short-circuits. Binary-faithful pause-time slice
     // suppression -- no port-specific pausedFlag gate needed.
     Game* g = Game::GetInstance();
-    if (g && g->bombHitTimer > 0.0f) return;
+    if (g && game_work.m_BombHitTimer > 0.0f) return;
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
 }
 

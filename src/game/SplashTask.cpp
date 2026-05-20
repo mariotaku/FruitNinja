@@ -13,12 +13,13 @@
 #include "GameTaskState.h"
 #include "Game.h"
 #include "debug/Logger.h"
+#include "game/GameWork.h"
 
 void SplashInit(unsigned long) {
     LOG_INFO("SPLASH", "SplashInit: transitioning to State 2 (Game)");
     Game* game = Game::GetInstance();
     if (game) {
-        game->taskStateIndex = 2;  // auto-transition to Game state
+        game_work.taskStateIndex = 2;  // auto-transition to Game state
     }
 }
 

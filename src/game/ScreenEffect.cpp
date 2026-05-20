@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
+#include "game/GameWork.h"
 
 using namespace tinyxml2;
 using namespace Mortar;
@@ -323,7 +324,7 @@ void ScreenEffect::Activate() {
 
     // Create HUD controls for images
     Game* game = Game::GetInstance();
-    HUD* hud   = game ? game->hud : nullptr;
+    HUD* hud   = game ? game_work.mHud : nullptr;
 
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
@@ -423,7 +424,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
 
     // Per-tint colour multiply on HUD scales
     Game* game = Game::GetInstance();
-    HUD*  hud  = game ? game->hud : nullptr;
+    HUD*  hud  = game ? game_work.mHud : nullptr;
     if (hud) {
         for (size_t i = 0; i < m_Tints.size(); ++i) {
             ScreenTint& t = m_Tints[i];
@@ -466,7 +467,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     if (m_TotalDuration > 0.0f) {
         float elapsed = m_TotalDuration - m_RemainingTime;
         Game* g = Game::GetInstance();
-        GameSound* gs = g ? g->pGameSound : nullptr;
+        GameSound* gs = g ? game_work.mGameSound : nullptr;
 
         for (int si = (int)m_Sounds.size() - 1; si >= 0; --si) {
             SoundEffect& sfx = m_Sounds[si];

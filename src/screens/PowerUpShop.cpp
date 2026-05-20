@@ -28,6 +28,7 @@
 #include <cstring>
 #include <cmath>
 #include <list>
+#include "game/GameWork.h"
 
 // Binary @ 0x_GLOBAL__I_PowerUpShop_cpp:
 // File-static Mortar::SmartPtr<Texture> singletons, nulled by UnLoadContent.
@@ -184,8 +185,8 @@ void PowerUpShop::Init() {
     // player.m_Coins lives at game+pSaveData+0x20.
     Game* game = Game::GetInstance();
     int coins = 0;
-    if (game && game->pSaveData) {
-        coins = game->pSaveData->m_Coins;
+    if (game && game_work.m_SaveData) {
+        coins = game_work.m_SaveData->m_Coins;
     }
     snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
 }
@@ -216,8 +217,8 @@ void PowerUpShop::Release() {
 
         // Binary: HUD::RemoveControl(*Game.HUD, m_BuyButton); then delete.
         Game* game = Game::GetInstance();
-        if (game && game->hud) {
-            game->hud->RemoveControl(m_BuyButton);
+        if (game && game_work.mHud) {
+            game_work.mHud->RemoveControl(m_BuyButton);
         }
         m_BuyButton->Release();   // binary's vtable Release before delete
         delete m_BuyButton;
@@ -277,11 +278,11 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
     // Step 3: draw m_BuyText via font.
     // Binary: Font::DrawString at (75 + ScreenY, 0, 20.5), anchor=3 (center+top).
     Game* game = Game::GetInstance();
-    if (game && game->pFontMain.IsValid()) {
+    if (game && game_work.pFontMain.IsValid()) {
         // Binary: text Y = 75 + HUD bottomY (param_1[3]). Port uses a fixed offset
         // from the centered coordinate: pos.y is the control's Y in centered space.
         Vec3 textPos(pos.x + 75.0f, 0.0f, 20.5f);
-        game->pFontMain->DrawString(1.0f, 1.0f, 20.5f, m_BuyText, textPos,
+        game_work.pFontMain->DrawString(1.0f, 1.0f, 20.5f, m_BuyText, textPos,
                                     g_White, Mortar::FONT_ALIGN_CENTER | Mortar::FONT_ALIGN_MIDDLE);
     }
 
@@ -347,9 +348,9 @@ void PowerUpShop::Update(float dt) {
         //                                       action 0x74 writes the centered-ortho X.
         //   +0x94  float    worldPos.y       -- aliased with light direction; action 0x75 writes Y.
         //  Hit zone = (slot ± 32) on both axes. On hit: m_SelectedIndex = i; SetBuyButtonState().
-        if (game && game->m_bPointerActive) {
-            const float px = game->worldPos.x;
-            const float py = game->worldPos.y;
+        if (game && game_work.m_bPointerActive) {
+            const float px = game_work.worldPos.x;
+            const float py = game_work.worldPos.y;
             const float HALF = 32.0f;  // DAT_001566a0
             Vec3 worldPt = pos + slot;
             if (px > worldPt.x - HALF && px < worldPt.x + HALF &&
@@ -396,7 +397,7 @@ void PowerUpShop::Update(float dt) {
         //   m_BuyButton->Init()
         //   m_BuyButton->vel.x = 0
         //   MenuButton.field_0x123 = 0
-        //   HUD::AddControl(game->hud, m_BuyButton, false)
+        //   HUD::AddControl(game_work.mHud, m_BuyButton, false)
         //   Rand32(524287); Rand32(2)
         //   Fruit angular vel *= 0.85 on x and y
         //   Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
@@ -447,8 +448,8 @@ void PowerUpShop::SetBuyButtonState() {
         // Not yet active — check affordability and purchase cap.
         Game* game = Game::GetInstance();
         int coins = 0;
-        if (game && game->pSaveData) {
-            coins = game->pSaveData->m_Coins;
+        if (game && game_work.m_SaveData) {
+            coins = game_work.m_SaveData->m_Coins;
         }
         int cost = p->m_pPurchaseInfo ? p->m_pPurchaseInfo->m_Cost : 0;
         if (cost <= coins && m_PurchasedCount < 3) {
@@ -488,8 +489,8 @@ void PowerUpShop::ButtonSliced(float pushScalar) {
         // Refresh coin text.
         Game* game = Game::GetInstance();
         int coins = 0;
-        if (game && game->pSaveData) {
-            coins = game->pSaveData->m_Coins;
+        if (game && game_work.m_SaveData) {
+            coins = game_work.m_SaveData->m_Coins;
         }
         snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
 

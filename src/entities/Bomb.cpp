@@ -27,6 +27,7 @@
 #include <cmath>
 #include <cstring>
 #include <string>
+#include "game/GameWork.h"
 
 // Analysed: 2026-04-29T00:00
 
@@ -345,7 +346,7 @@ void Bomb::Update(float /*dt*/) {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    const float gameDt  = game->dt;
+    const float gameDt  = game_work.dt;
     const float scaledDt = gameDt * m_SpeedMult;
     const float dtNorm   = (DT_NORMALIZE > 0.0f) ? scaledDt / DT_NORMALIZE : 1.0f;
 
@@ -356,7 +357,7 @@ void Bomb::Update(float /*dt*/) {
             // is transitioning out (levelTransitionFlag!=0), force this bomb off-screen
             // so it expires on the OOB check below. Binary resets countdown
             // to 0 (DAT_00172f28) and pos.y to -320 (DAT_00172cb0).
-            if (game->bombHitTimer > 0.0f || game->levelTransitionFlag != 0) {
+            if (game_work.m_BombHitTimer > 0.0f || game_work.m_LevelTransitionFlag != 0) {
                 m_Countdown = 0.0f;
                 pos.y = OFFSCREEN_Y;
                 vel = Vec3(HIT_COL_POS, -1.0f, HIT_COL_POS);
@@ -365,7 +366,7 @@ void Bomb::Update(float /*dt*/) {
             const float prevCountdown = m_Countdown;
             // Tick countdown using GAME dt (not entity scaledDt) — but only
             // when game is active (!pausedFlag).
-            if (!game->pausedFlag) {
+            if (!game_work.m_Paused) {
                 m_Countdown -= gameDt;
             }
 
@@ -733,23 +734,23 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
         // Verify whether the surrounding logic is intended for Arcade or Zen and
         // rename accordingly.
-        const bool isZen = (game->gameMode == Mortar::GAME_MODE_ARCADE);
+        const bool isZen = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
 
         // Camera shake — FruitCamera::CreateCameraShake at 0x180d10.
         // Binary intensities: Classic/Arcade = 1.6/2.0, Zen = 2.0/3.0.
-        if (game->pCamera) {
+        if (game_work.m_FruitCamera) {
             if (isZen)
-                game->pCamera->CreateCameraShake(pos, 2.0f, 3.0f);
+                game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
             else
-                game->pCamera->CreateCameraShake(pos, 1.6f, 2.0f);
+                game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
         }
 
         if (isZen) {
             // Zen penalty path. Binary HitMenuBomb (0x16b234) — plays
             // "menu-bomb" SFX (string at 0x001B96C9), bombHitTimer = 2.0,
             // sets g_bombHitData->m_bMenuBombHit_flag = 1. No camera shake.
-            game->bombHitTimer = 2.0f;
-            if (game->pGameSound) game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+            game_work.m_BombHitTimer = 2.0f;
+            if (game_work.mGameSound) game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
             FN::AddToCurrentScore(-10, 0, false, false);
             PowerUpManager::GetInstance()->ClearTimedPowers();
             WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
@@ -772,9 +773,9 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             // stat for hash "bomb" (0x001B96CE), sets bombHitTimer = 3.2,
             // camera shake already fired above.
             // GameOver is triggered by GameUpdate when bombHitTimer crosses 1.5 downward.
-            game->bombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
-            if (game->pGameSound) game->pGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
-            if (game->pSaveData) game->pSaveData->AddToTotal("bomb", 1);
+            game_work.m_BombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
+            if (game_work.mGameSound) game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
+            if (game_work.m_SaveData) game_work.m_SaveData->AddToTotal("bomb", 1);
         }
     } else if (m_bMenuBombHit != 0) {
         // ASM-verified: 2026-05-20T00:00Z binary @ 0x00172826..0x0017283c (asm-inspector)

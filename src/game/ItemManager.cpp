@@ -28,9 +28,10 @@
 // Port: exposed via FruitSaveData.h (the instance lives in Game::pSaveData).
 // We access it through the Game singleton here.
 #include "Game.h"
+#include "game/GameWork.h"
 static FruitSaveData* GetSaveData() {
     Game* g = Game::GetInstance();
-    return g ? g->pSaveData : nullptr;
+    return g ? game_work.m_SaveData : nullptr;
 }
 
 // g_SetEquippedItemFuncCalls @ 0x1f3cec — static call-guard for SetEquippedItem.

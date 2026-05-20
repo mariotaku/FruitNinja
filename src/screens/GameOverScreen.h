@@ -12,6 +12,7 @@
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include <cstdint>
+#include "game/GameWork.h"
 
 class MenuButton;
 class HUDControl;
@@ -128,7 +129,7 @@ public:
     // +0x130: star decoration count (passed to FruitFactControl +0xE9)
     int         m_StarCount;       // +0x130
 
-    // +0x134: 1 when game.gameMode == 0 (Classic); gates expression/pattern overlay
+    // +0x134: 1 when game_work.gameMode == 0 (Classic); gates expression/pattern overlay
     uint8_t     m_bIsClassic;      // +0x134
 
     // +0x138: pop-in alpha interpolator (0->1, ramps at 0.125/frame)

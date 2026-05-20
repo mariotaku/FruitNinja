@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#include "game/GameWork.h"
 
 using Mortar::TextureManager;
 
@@ -50,14 +51,14 @@ static uint16_t s_BannerSinIdx = 0;     // sin-table idx for new-best colour pul
 static bool IsMultiplayer() { return false; }
 
 // GetCurrentScore: returns score for the given player index.
-// Player 1 (idx=0) uses game->currentScore. Player 2 is not yet ported.
+// Player 1 (idx=0) uses game_work.currentScore. Player 2 is not yet ported.
 // ASM-verified: 2026-05-18 binary @ 0x00148e00 (re-analyst)
 // Stat persistence for P2 happens in GameOverScreen::Update @ 0x00141b34, not here.
 // Same-screen MP does not split saved stats; no "Score_P2" key exists.
 static int GetCurrentScore(int playerIdx) {
     if (playerIdx != 0) return 0;
     Game* game = Game::GetInstance();
-    return game ? game->currentScore : 0;
+    return game ? game_work.currentScore : 0;
 }
 
 // GetScoreMultiplyer: returns PowerUpManager::GetScoreGainMultiplier().
@@ -71,8 +72,8 @@ static int GetScoreMultiplyer(int /*playerIdx*/) {
 // pSaveData has highscore array at +0x44 (m_ModeHighScores[4]), indexed by gameMode (0..3).
 static int GetCurrentModeHighscore() {
     Game* gd = Game::GetInstance();
-    if (gd && gd->gameMode < 4 && gd->pSaveData)
-        return gd->pSaveData->m_ModeHighScores[gd->gameMode];
+    if (gd && game_work.gameMode < 4 && game_work.m_SaveData)
+        return game_work.m_SaveData->m_ModeHighScores[game_work.gameMode];
     return 0;
 }
 
@@ -158,12 +159,12 @@ void ScoreControl::Reset() {
 }
 
 // ASM-verified: 2026-05-14T00:00 binary @ 0x001581a0 (re-analyst)
-// +0x4C (game->pSaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
-// Prior port incorrectly tested game->levelTransitionFlag (engine pause flag) instead.
+// +0x4C (game_work.m_SaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
+// Prior port incorrectly tested game_work.m_LevelTransitionFlag (engine pause flag) instead.
 void ScoreControl::Skip() {
     m_DisplayedScore = GetCurrentScore(m_PlayerIdx);
     Game* game = Game::GetInstance();
-    if (game && game->pSaveData && game->pSaveData->newBestThisGame != 0) {
+    if (game && game_work.m_SaveData && game_work.m_SaveData->newBestThisGame != 0) {
         m_BannerScaleTime = 1.0f;
     }
 }
@@ -192,7 +193,7 @@ void ScoreControl::Update(float dt) {
     if (digitsActive > 15) digitsActive = 15;
     m_DigitCount = digitsActive;
 
-    if (game->gameMode == Mortar::GAME_MODE_COMBO /* ASM-verified: == 1 at 0x001585A8 */) {
+    if (game_work.gameMode == Mortar::GAME_MODE_COMBO /* ASM-verified: == 1 at 0x001585A8 */) {
         if (digitsActive == m_LastDigitCount) {
             for (int i = 0; i < digitsActive; i++) {
                 m_DigitAlpha[i] += 6.0f * dt;
@@ -238,7 +239,7 @@ void ScoreControl::Update(float dt) {
     }
 
     int   mult     = GetScoreMultiplyer(0);
-    float baseRate = (game->gameMode == Mortar::GAME_MODE_ARCADE) ? 10.0f : 1.0f;
+    float baseRate = (game_work.gameMode == Mortar::GAME_MODE_ARCADE) ? 10.0f : 1.0f;
     float correction = (currentScore < 0) ? -0.6f : 0.6f;   // DAT_001588a4/a8
     float catchup  = ((float)currentScore + correction - m_ScoreSmoothed) * 0.1f;  // DAT_001588b0
     float maxStep  = (float)mult * 0.3f * baseRate;          // DAT_001588ac
@@ -253,13 +254,13 @@ void ScoreControl::Update(float dt) {
     if (m_DisplayedScore > prevDisplay) {
         // Binary: bonus-count-up SFX gate (Arcade end-of-game animation only).
         if (s_SfxCooldown <= 0.0f &&
-            game->gameMode == Mortar::GAME_MODE_ARCADE &&
-            game->pGameOverScreen != nullptr &&
-            game->pGameOverScreen->m_State > 0 &&
-            game->pGameOverScreen->m_Timer > 0.0f) {
+            game_work.gameMode == Mortar::GAME_MODE_ARCADE &&
+            game_work.pGameOverScreen != nullptr &&
+            game_work.pGameOverScreen->m_State > 0 &&
+            game_work.pGameOverScreen->m_Timer > 0.0f) {
             s_SfxCooldown = 0.05f;  // DAT_001588b4
-            if (game->pGameSound)
-                game->pGameSound->SFXPlay("Bonus-count-up", 1.0f, 1.0f);
+            if (game_work.mGameSound)
+                game_work.mGameSound->SFXPlay("Bonus-count-up", 1.0f, 1.0f);
         }
         m_PulseAngle = 0x8000;  // DAT_001588d4 = 32768.0
     }
@@ -273,11 +274,11 @@ void ScoreControl::Update(float dt) {
     float pulseSin = SinIdx(m_PulseAngle);
 
     // waveTimer from m_TransitionTimer (g_GameData+0x0C)
-    float waveTimer = game->m_TransitionTimer;
+    float waveTimer = game_work.m_GameDt;
     m_ScalePulse = (waveTimer > 0.0f) ? ((waveTimer >= 1.0f) ? 2.0f : 1.0f + waveTimer) : 1.0f;
 
     // Stage 5: highscore tracking
-    if (game->levelTransitionFlag == 0 || currentScore == 0) {
+    if (game_work.m_LevelTransitionFlag == 0 || currentScore == 0) {
         int modeHS = GetCurrentModeHighscore();
         m_HighscoreToShow = (modeHS != 0)
             ? std::max(m_DisplayedScore, modeHS) : 0;
@@ -303,10 +304,10 @@ void ScoreControl::Update(float dt) {
         // wave-mode: recentre score banner via lerp toward anchor. binary @ 0x001589f0..0x00158ac6
         // ASM-verified: 2026-05-18 binary @ 0x00158a64 (re-analyst)
         // Step 1: snap drawPos to pos+(24,0,0). Step 2: lerp toward anchor by waveTimer.
-        if (game->pFontNumbers.IsValid()) {
+        if (game_work.pFontNumbers.IsValid()) {
             char scoreBuf[32];
             snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
-            float measW = game->pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
+            float measW = game_work.pFontNumbers->MeasureWidth(m_ScalePulse * 48.0f, scoreBuf);
             Vec3 drawStart(pos.x + 24.0f, pos.y, pos.z);
             Vec3 anchor(-160.0f - measW * 0.5f, 80.0f, 0.0f);
             m_DrawPosX = drawStart.x + (anchor.x - drawStart.x) * waveTimer;
@@ -327,7 +328,7 @@ void ScoreControl::Update(float dt) {
 
     // Stage 7: highscore banner animation
     bool wantBanner = (waveTimer > SCORE_BANNER_TIMER_THRESH) &&
-                      (game->pSaveData && game->pSaveData->newBestThisGame);
+                      (game_work.m_SaveData && game_work.m_SaveData->newBestThisGame);
     if (wantBanner) {
         float prev = m_BannerScaleTime;
         m_BannerScaleTime = std::min(1.0f, m_BannerScaleTime + dt * 5.0f);
@@ -337,8 +338,8 @@ void ScoreControl::Update(float dt) {
             m_BannerSinIdx = 0;
         }
         if (m_BannerScaleTime > 0.0f && prev <= 0.0f) {
-            if (game->pGameSound)
-                game->pGameSound->SFXPlay("New-best-score", 1.0f, 1.0f);
+            if (game_work.mGameSound)
+                game_work.mGameSound->SFXPlay("New-best-score", 1.0f, 1.0f);
         }
     } else {
         m_BannerScaleTime = std::max(-1.5f, m_BannerScaleTime - dt * 20.0f);
@@ -358,9 +359,9 @@ void ScoreControl::Draw(const Vec3& hudScale, int layerMask) {
     if (!game) return;
 
     // g_GameData.someTimer >= -1.0f — uses m_TransitionTimer (+0x0C)
-    if (game->m_TransitionTimer < -1.0f) return;
+    if (game_work.m_GameDt < -1.0f) return;
 
-    float intensity = (game->hud) ? game->hud->m_globalTimeScale : 1.0f;
+    float intensity = (game_work.mHud) ? game_work.mHud->m_globalTimeScale : 1.0f;
     float alphaF = 255.0f * intensity;
     uint8_t alpha = (alphaF > 255.0f) ? 255 : (alphaF < 0.0f ? 0 : (uint8_t)alphaF);
     m_DrawColour.a = alpha;
@@ -375,13 +376,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
 
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
 
-    float cameraIntensity = (game->hud) ? game->hud->m_globalTimeScale : 1.0f;
+    float cameraIntensity = (game_work.mHud) ? game_work.mHud->m_globalTimeScale : 1.0f;
     uint8_t alpha = (uint8_t)std::min(255.0f, std::max(0.0f, 255.0f * cameraIntensity));
-    float transTimer = game->m_TransitionTimer;  // g_GameData.someTimer
+    float transTimer = game_work.m_GameDt;  // g_GameData.someTimer
 
     if (transTimer >= -1.0f) {
         // Section A: Score digits
-        if (game->pFontNumbers.IsValid()) {
+        if (game_work.pFontNumbers.IsValid()) {
             char buf[32];
             snprintf(buf, sizeof(buf), "%d", m_DisplayedScore);
 
@@ -393,8 +394,8 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             if (m_DisplayedScore >= 1000) {
                 // PERF: binary caches via cxa-guard at 0x00159090 (= 96.0 = 48 * 2);
                 // recomputing each frame is functionally equivalent.
-                float baseline = game->pFontNumbers->MeasureWidth(48.0f, "000") * 96.0f;
-                float printed  = game->pFontNumbers->MeasureWidth(48.0f, buf);
+                float baseline = game_work.pFontNumbers->MeasureWidth(48.0f, "000") * 96.0f;
+                float printed  = game_work.pFontNumbers->MeasureWidth(48.0f, buf);
                 if (printed > baseline) {
                     scaleX  = baseline / printed;
                     offsetX = (printed - baseline) * 0.5f;
@@ -412,14 +413,14 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             // effectively LEFT-anchors the digit string at (drawX, drawY),
             // which keeps multi-digit scores to the right of the watermelon
             // icon. See ASM-verified Font::DrawString @ 0x00198e44.
-            game->pFontNumbers->DrawString(scale, 1.0f, 0.0f,
+            game_work.pFontNumbers->DrawString(scale, 1.0f, 0.0f,
                 buf, Vec3(drawX, drawY, 0.0f), col, 0x0d);
         }
 
         // Section B: per-digit combo overlay.
         // ASM-verified gate at 0x00158FEC: gameMode == 1.
         // (See docs/structs/hud.md ScoreControl PreDraw Section B detail.)
-        if (game->gameMode == Mortar::GAME_MODE_COMBO) {
+        if (game_work.gameMode == Mortar::GAME_MODE_COMBO) {
             // Texture rebind: pick FRUIT_INFO icon by clamped combo count.
             // Executed once before the per-digit loop.
             int comboCount = m_LastDigitCount;
@@ -446,10 +447,10 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             // Combo overlay font: binary loads game[+0x54] = pFontMain
             // ("font_fruit_ninja.fnt"), NOT pFontNumbers. Verified
             // 2026-05-09 (re-analyst @ 0x00159116/0x00159184).
-            if (game->pFontMain.IsValid()) {
+            if (game_work.pFontMain.IsValid()) {
                 char scoreBuf[32];
                 snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
-                float cursorX = game->pFontMain->MeasureWidth(48.0f, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
+                float cursorX = game_work.pFontMain->MeasureWidth(48.0f, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
 
                 // Per-digit loop (binary @ 0x001590B8..0x001591BC)
                 for (int i = 0; i < 16; i++) {
@@ -466,11 +467,11 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
 
                     float drawX = m_DrawPosX + cursorX;
                     float drawY = 155.0f;  // hard-coded per binary @ 0x0015914C
-                    game->pFontMain->DrawString(scale, 1.0f, 0.0f,
+                    game_work.pFontMain->DrawString(scale, 1.0f, 0.0f,
                         label, Vec3(drawX, drawY, 0.0f), tint, Mortar::FONT_ALIGN_CENTER);
 
                     // binary @ 0x001591b4: cursorX += MeasureString(label) * scale + 5.0
-                    cursorX += game->pFontMain->MeasureWidth(scale, label) * scale + 5.0f;
+                    cursorX += game_work.pFontMain->MeasureWidth(scale, label) * scale + 5.0f;
                 }
             }
         }
@@ -486,13 +487,13 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
         // Earlier port had (m_DrawPosX, m_DrawPosY + 30.0): off by 24+18=42 px
         // horizontally (uses +24 drawPos offset AND wrong sign of -18) and
         // 82 px vertically (sign-flipped 30 vs -52).
-        if (game->gameMode == Mortar::GAME_MODE_ARCADE) {
+        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
             int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
-            if (mult > 1 && game->pFontBlue2.IsValid()) {
+            if (mult > 1 && game_work.pFontBlue2.IsValid()) {
                 char multBuf[16];
                 snprintf(multBuf, sizeof(multBuf), "x%d", mult);
                 Colour col(255, 255, 255, alpha);
-                game->pFontBlue2->DrawString(48.0f, 1.0f, 0.0f,
+                game_work.pFontBlue2->DrawString(48.0f, 1.0f, 0.0f,
                     multBuf, Vec3(pos.x - 18.0f, pos.y - 52.0f, 0.0f),
                     col, Mortar::FONT_ALIGN_CENTER);
             }
@@ -505,7 +506,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             // ASM-verified: 2026-05-03T00:00 binary @ 0x00159334..0x001594e0 (asm-inspector)
             Colour col(0xB4, 0x80, 0x05, 200);  // base orange
             if (m_HighscoreToShow == m_DisplayedScore) {
-                s_BannerSinIdx += (!game->pausedFlag) ? 6 : 0;
+                s_BannerSinIdx += (!game_work.m_Paused) ? 6 : 0;
                 if (s_BannerSinIdx > 0xB3) s_BannerSinIdx = 0xB4;
                 float t = CosIdx((int16_t)s_BannerSinIdx * 0xB6) * -0.5f + 0.5f;
                 Colour green(0x64, 0x96, 0x19, 200);
@@ -529,7 +530,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
             //   - label Y-scale param2 = 0.9 (DAT_0015979c = 0x3f666666)
             //   - label alignment = 0x0E (RIGHT)
             //   - digit alignment = 0x0D (CENTER)
-            if (game->pFontMain.IsValid()) {
+            if (game_work.pFontMain.IsValid()) {
                 char hsBuf[32];
                 snprintf(hsBuf, sizeof(hsBuf), "%d", m_HighscoreToShow);
                 // ASM-verified: 2026-05-10 binary @ 0x001592c4..0x001592c8
@@ -537,7 +538,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 // GETSTRING(idx). Index 0xb5 (181) maps to LSTR_BEST which
                 // resolves to "BEST:" (with trailing colon) in english_us.
                 const char* label = Mortar::GETSTRING_CAST_0(LSTR_BEST);
-                float labelW  = game->pFontMain->MeasureWidth(20.0f, label);
+                float labelW  = game_work.pFontMain->MeasureWidth(20.0f, label);
                 float cursorX = labelW * 20.0f - SCORE_LABEL_BASELINE; // -48
                 // ASM-verified: 2026-05-10 binary @ 0x00159588..0x001596a6 (re-analyst).
                 // Anchor uses raw pos (m_Pos.x/y at +0x8/+0xc), NOT m_DrawPosX/Y
@@ -556,7 +557,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 {
                     Mortar::Utf8StringIterator iterLabel(label);
                     Vec2 maxWH(0.0f, 0.0f);
-                    game->pFontMain->DrawString(20.0f, /*yLineFactor=*/0.9f,
+                    game_work.pFontMain->DrawString(20.0f, /*yLineFactor=*/0.9f,
                         /*rotZ=*/0.0f, iterLabel, anchor, col, maxWH,
                         kAlignLabel, /*z=*/0.0f, nullptr);
                 }
@@ -575,7 +576,7 @@ void ScoreControl::PreDraw(const Vec3& /*hudScale*/) {
                 // overload with yLineFactor=0.0 was wrong: it bypassed the
                 // wrapper hardcode and produced a 9 px y mismatch vs the
                 // label.
-                game->pFontMain->DrawString(20.0f, 1.0f, 0.0f,
+                game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
                     hsBuf, anchor, col, kAlignDigit);
             }
         }

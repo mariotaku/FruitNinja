@@ -20,6 +20,7 @@
 #include "math/Colour.h"
 #include "audio/GameSound.h"
 #include <cstdio>
+#include "game/GameWork.h"
 
 // -----------------------------------------------------------------------
 // Constants  (resolved from binary via read_memory)
@@ -255,15 +256,15 @@ void AboutScreen::CreateBackButton()
     // Binary @ 0x0012f2a8-0x0012f2ea step order:
     //   1. virtual Init (already covered by Init() above — vtable[2] is empty)
     //   2. strb 1 at button+0x138 = m_bRespondsToBackKey
-    //   3. game.hud->AddControl(button)
+    //   3. game_work.mHud->AddControl(button)
     //   4. TutorialControl::ResetTutePos(button)
     //   5. scale m_TargetSize *= 0.825
     //   6. scale m_pFruitPiece->scale *= 0.825
     m_pBackButton->m_bRespondsToBackKey = 1;
-    game.hud->AddControl(m_pBackButton);
+    game_work.mHud->AddControl(m_pBackButton);
 
-    if (game.pTutorialCtrl) {
-        game.pTutorialCtrl->ResetTutePos(m_pBackButton);
+    if (game_work.m_TutorialControl) {
+        game_work.m_TutorialControl->ResetTutePos(m_pBackButton);
     }
 
     m_pBackButton->m_TargetSize = m_pBackButton->m_TargetSize * BACK_SCALE;
@@ -417,7 +418,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         // Both share scale=14.0f, maxWidth=FONT_MAX_W(200), colour
         // RGB(0x74,0x5D,0x3C). pFontMain comes from game (+0x54).
         // Net displayed text: "V1.5.1".
-        if (game.pFontMain.IsValid()) {
+        if (game_work.pFontMain.IsValid()) {
             // Reset the world matrix before Font::DrawString. The haiku
             // quad draw above left a Scale(texW+1, texH+1, 1) on the
             // stack; Font::DrawString does Push+Scale(scale,scale,1) and
@@ -434,7 +435,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
             const Colour fontColour(0x74, 0x5D, 0x3C, 255);
 
             const char* kVerPrefix = "V";
-            game.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
+            game_work.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
                                        kVerPrefix,
                                        Vec3(FONT_X, fontY, 0.0f),
                                        fontColour, Mortar::FONT_ALIGN_LEFT);
@@ -442,8 +443,8 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
             // Binary caches MeasureString("V") * 14 in BSS via __cxa_guard
             // one-time init; port recomputes each frame (same numeric result).
             // DIFFERS: port skips the one-time-init guard.
-            const float prefixW = game.pFontMain->MeasureString(kVerPrefix) * versionScale;
-            game.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
+            const float prefixW = game_work.pFontMain->MeasureString(kVerPrefix) * versionScale;
+            game_work.pFontMain->DrawString(versionScale, FONT_MAX_W, 0.0f,
                                        GetVersionString(),
                                        Vec3(prefixW - FONT_MAX_W, fontY, 0.0f),
                                        fontColour, Mortar::FONT_ALIGN_LEFT);
@@ -535,15 +536,15 @@ void AboutScreen::BackCallback()
 // random off-screen point. Mirrors the binary's exit handler when the
 // player taps the AboutScreen's quit/back-out button.
 void AboutScreen::QuitGameCallback() {
-    if (game.pGameSound) {
-        game.pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
     m_State = 2;
-    if (game.pTutorialCtrl) {
+    if (game_work.m_TutorialControl) {
         // Binary randomises off-screen target via RandFloat5() (≈ [0,5)).
         // Simple rand() fallback -- the exact distribution is cosmetic.
         float rx = ((float)(rand() % 500) / 100.0f) + 5.0f;   // [5, 10)
         float ry = -((float)(rand() % 500) / 100.0f);          // (-5, 0]
-        game.pTutorialCtrl->ResetTutePos(Vec3(rx, ry, 0.0f));
+        game_work.m_TutorialControl->ResetTutePos(Vec3(rx, ry, 0.0f));
     }
 }

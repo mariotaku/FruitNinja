@@ -19,6 +19,7 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include <cmath>
+#include "game/GameWork.h"
 
 // Static texture storage (binary: GOT-relative module-level singletons)
 Mortar::SmartPtr<Mortar::Texture> BaseScreen::s_TexSmlTitle;
@@ -266,9 +267,9 @@ void BaseScreen::UpdateButtons(float dt) {
             }
 
             Game* game = Game::GetInstance();
-            if (game && game->hud) game->hud->AddControl(btn);
-            if (sb.m_tutorID >= 0 && game && game->pTutorialCtrl)
-                game->pTutorialCtrl->ResetTutePos(btn);
+            if (game && game_work.mHud) game_work.mHud->AddControl(btn);
+            if (sb.m_tutorID >= 0 && game && game_work.m_TutorialControl)
+                game_work.m_TutorialControl->ResetTutePos(btn);
 
             // First-frame update call with -1.0f
             if (sb.m_updateCb) sb.m_updateCb(btn, -1.0f, sb);
@@ -317,7 +318,7 @@ void BaseScreen::Release() {
     // 2. Disable ScreenButton MenuButtons + clear delegates
     // Binary: guarded by *(char*)(gameState + 0x34) != 0
     Game* game = Game::GetInstance();
-    if (game && game->field_0x34 != 0) {
+    if (game && game_work.field_0x34 != 0) {
         for (std::list<ScreenButton>::iterator it = m_ScreenButtons.begin(); it != m_ScreenButtons.end(); ++it) {
             ScreenButton& sb = *it;
             if (sb.m_pButton) {

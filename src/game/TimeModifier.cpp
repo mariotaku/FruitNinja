@@ -6,6 +6,7 @@
 #include "hud/TimeControl.h"
 #include "ItemParseUtil.h"
 #include <tinyxml2.h>
+#include "game/GameWork.h"
 
 TimeModifier::TimeModifier()
     : GameModifier()
@@ -31,8 +32,8 @@ int TimeModifier::UpdateSpecific(float dt) {
         if (--m_AddTimeDelay == 0) {
             Game* game = Game::GetInstance();
             // TODO: route through HUD::GetTimeControl() once exposed
-            if (game && game->pTimeCtrl)
-                game->pTimeCtrl->AddTime(m_AddTime);   // binary @ 0x001204f0
+            if (game && game_work.mCountDown)
+                game_work.mCountDown->AddTime(m_AddTime);   // binary @ 0x001204f0
             return 1;
         }
     }

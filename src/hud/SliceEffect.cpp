@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <string>
+#include "game/GameWork.h"
 
 namespace FN {
 
@@ -137,9 +138,9 @@ void SliceEffect_Add(const Vec3& pos, float angleDeg, float impulse, bool critic
     // fall-through path when one gate fails and is never played here.
     if (impulse > 2.5f && (rand() % 3) == 0 && (rand() % 3) == 0) {
         Game* g = Game::GetInstance();
-        if (g && g->pGameSound) {
+        if (g && game_work.mGameSound) {
             const char* name = (rand() % 2 == 0) ? "Clean-Slice-1" : "Clean-Slice-3";
-            g->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+            game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
         }
     }
 }

@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
+#include "game/GameWork.h"
 
 // ---------------------------------------------------------------------
 // Binary constants (resolved from Ghidra; all addresses in ARM32 .text/.rodata)
@@ -523,8 +524,8 @@ void SplatEntity::PlaySplat(int splatSize) {
     const char* name = kPairs[sz][RandInt(2)];
 
     Game* game = Game::GetInstance();
-    if (game && game->pGameSound) {
-        game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+    if (game && game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
     }
 
     s_SplatSfxGate[sz] = 0.5f;
@@ -601,8 +602,8 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         if (s_PulpDripGate <= 0.0f) {
             const char* name = (RandInt(2) == 0) ? "Pulp-drip-2" : "Pulp-drip-1";
             Game* game = Game::GetInstance();
-            if (game && game->pGameSound) {
-                game->pGameSound->SFXPlay(name, 1.0f, 1.0f);
+            if (game && game_work.mGameSound) {
+                game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
             }
         }
     }
@@ -783,8 +784,8 @@ void SplatEntity::DrawActiveSplats() {
     // ASM-verified: 2026-04-29T03:29Z binary @ 0x0017f1ec (asm-inspector)
     s_CurrentTintRGB = Colour::IdentityTint();
     if (Game* game = Game::GetInstance()) {
-        if (game->hud) {
-            s_CurrentTintRGB = &game->hud->scales[3];
+        if (game_work.mHud) {
+            s_CurrentTintRGB = &game_work.mHud->scales[3];
         }
     }
 

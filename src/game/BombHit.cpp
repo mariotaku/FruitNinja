@@ -26,6 +26,7 @@
 #include "math/Colour.h"
 #include "audio/GameSound.h"
 #include <cstdio>
+#include "game/GameWork.h"
 
 namespace FN {
 
@@ -92,12 +93,12 @@ void HitMenuBomb(const Vec3& pos) {
     Game* game = Game::GetInstance();
     if (!game) return;
     SetBombHitPos(pos);
-    game->bombHitTimer = 2.0f;                       // binary: 0x40000000 = 2.0f
-    if (game->pGameSound) {
+    game_work.m_BombHitTimer = 2.0f;                       // binary: 0x40000000 = 2.0f
+    if (game_work.mGameSound) {
         // Binary pre-loads the SFX via SoundManager::PreLoadSound; the
         // port's GameSound::SFXPlay loads on demand, so preload is a
         // no-op deferred.
-        game->pGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
 }
 
@@ -110,7 +111,7 @@ void HitMenuBomb(const Vec3& pos) {
 bool BombFlashFull() {
     const Game* game = Game::GetInstance();
     if (!game) return true;
-    return game->bombHitTimer < 1.0f;
+    return game_work.m_BombHitTimer < 1.0f;
 }
 
 // Matches CriticalFlash @ 0x0016a9a4. Stores the colour and resets
@@ -121,7 +122,7 @@ void CriticalFlash(const Vec3& pos, const Colour& colour) {
     (void)pos;
     s_CritFlashColour = colour;
     if (Game* game = Game::GetInstance()) {
-        game->m_CritTimer = CRITICAL_FLASH_TIME;
+        game_work.m_CritTimer = CRITICAL_FLASH_TIME;
     }
 }
 
@@ -130,9 +131,9 @@ void CriticalFlash(const Vec3& pos, const Colour& colour) {
 void UpdateCriticalFlash(float dt) {
     Game* game = Game::GetInstance();
     if (!game) return;
-    if (game->m_CritTimer > 0.0f) {
-        game->m_CritTimer -= dt;
-        if (game->m_CritTimer < 0.0f) game->m_CritTimer = 0.0f;
+    if (game_work.m_CritTimer > 0.0f) {
+        game_work.m_CritTimer -= dt;
+        if (game_work.m_CritTimer < 0.0f) game_work.m_CritTimer = 0.0f;
     }
 }
 
@@ -142,7 +143,7 @@ void UpdateCriticalFlash(float dt) {
 void DrawCriticalFlash() {
     Game* game = Game::GetInstance();
     if (!game) return;
-    const float t = game->m_CritTimer;
+    const float t = game_work.m_CritTimer;
 
     // Binary guard at the head of DrawCritHit: early-exit if the timer
     // has already exceeded the full duration. The very first frame
@@ -203,7 +204,7 @@ void DrawCriticalFlash() {
 void DrawBombHit() {
     Game* game = Game::GetInstance();
     if (!game) return;
-    const float timer = game->bombHitTimer;
+    const float timer = game_work.m_BombHitTimer;
     if (timer <= 0.0f || timer >= FLASH_THRESHOLD) return;
 
     if (!s_FlashTex.IsValid()) {
@@ -301,7 +302,7 @@ void ResetGameEntities(bool killAll) {
     // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
     // Verify whether the surrounding logic is intended for Arcade or Zen and
     // rename accordingly.
-    const bool zenMode = game && (game->gameMode == Mortar::GAME_MODE_ARCADE);
+    const bool zenMode = game && (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
 
     // Iterate Fruit (0) + Bomb (1) type lists.
     for (int t = 0; t <= 1; t++) {
@@ -393,7 +394,7 @@ void ResetGameEntities(bool killAll) {
 void UpdateBombHit(float prevTimer) {
     Game* game = Game::GetInstance();
     if (!game) return;
-    const float currentTimer = game->bombHitTimer;
+    const float currentTimer = game_work.m_BombHitTimer;
 
     LOG_VERBOSE("BOMBHIT", "UpdateBombHit prev=%.3f curr=%.3f", prevTimer, currentTimer);
 

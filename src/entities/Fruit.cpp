@@ -32,6 +32,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "game/GameWork.h"
 
 // Analysed: 2026-04-29T00:00
 
@@ -421,7 +422,7 @@ void Fruit::PostUpdate(float dt) {
         // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
         // Verify whether the surrounding logic is intended for Arcade or Zen and
         // rename accordingly.
-        const bool zen = (game->gameMode == Mortar::GAME_MODE_ARCADE);
+        const bool zen = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
         const bool zenStrict = zen && IsZenStrictBounceActive();
         if (zenStrict) {
             if (pos.x < BOUND_X_LO) { pos.x = BOUND_X_LO; vel.x = -vel.x; }
@@ -542,18 +543,18 @@ void Fruit::KillFruit(bool doMissPenalty) {
                 //   else if (FailureEnabled())          -> miss penalty (Classic/Combo)
                 //   else (Zen) -> nothing
                 // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
-                if (g->gameMode == Mortar::GAME_MODE_ARCADE) {
+                if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
                     // Arcade: tracking only, no life loss, no MissControl spawn.
                     // TODO: FruitSaveData::AddToTotal("arcade_miss", 1) when save system is ported
-                } else if (Mortar::FailureEnabled(g->gameMode)) {
+                } else if (Mortar::FailureEnabled(game_work.gameMode)) {
                     // Classic / Combo miss penalty (Zen falls through to no-op).
                     if (MissControl* mc = MissControl::GetFree()) {
                         Mortar::SmartPtr<Mortar::Texture> defTex;
                         mc->MakeDisappear(pos, 0, defTex);
                     }
-                    if (g->pGameSound) g->pGameSound->SFXPlay("gank", 1.0f, 1.0f);
-                    g->missCount++;
-                    if (g->missCount > 2) {
+                    if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
+                    game_work.missCount++;
+                    if (game_work.missCount > 2) {
                         // ASM-verified: 2026-05-02 binary @ 0x00176c84 -- combo reset only inside game-over branch
                         g_ComboCount  = 0;
                         g_LastSlasher = -1;  // binary writes 0xFFFFFFFF @ 0x00176c8c
@@ -759,7 +760,7 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     // DIFFERS: FruitNinjaApp gating fields (+0x05 frenzy flag, +0x10 frenzy
     // timer, +0x30 score threshold) not yet ported. m_ScoreThreshold from
     // Game::currentScore ladder is simulated with a local static counter.
-    const int score = Game::GetInstance()->currentScore;
+    const int score = game_work.currentScore;
 
     // s_CritThreshold simulates FruitNinjaApp::m_ScoreThreshold (+0x30).
     // DIFFERS: real counter lives in FruitNinjaApp, not here.
@@ -901,21 +902,21 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
                                   /*trackFruit=*/true, /*sendNetPacket=*/false);
 
             // Per-fruit-name save totals.
-            if (g->pSaveData) {
-                g->pSaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+            if (game_work.m_SaveData) {
+                game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
                                          /*trackSession=*/false, false);
-                g->pSaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
+                game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
                                          /*trackSession=*/true, false);
 
                 // On critical hit, record crit totals.
                 if (isCritical) {
                     static const uint32_t hCrit      = StringHash("crit");
                     static const uint32_t hCritTotal = StringHash("crits_total");
-                    g->pSaveData->AddToTotal("crit",        hCrit,      1, false, false);
-                    g->pSaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
+                    game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
+                    game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
                     char critBuf[128];
                     snprintf(critBuf, 128, "%scrit", info->m_Name);
-                    g->pSaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
+                    game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
                 }
             }
         }
@@ -926,7 +927,7 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     // Called before the score dispatch so SpeedControl HUD ticks correctly.
     // DAT_00178cbc = 0.05f.
     // ASM-verified: 2026-05-18 binary @ 0x00178cbc (re-analyst)
-    if (Game::GetInstance() && Game::GetInstance()->gameMode == Mortar::GAME_MODE_ARCADE) {
+    if (Game::GetInstance() && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
     }
 
