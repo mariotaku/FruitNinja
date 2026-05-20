@@ -50,6 +50,14 @@ struct GameTaskState {
     // TODO: confirm xrefs to GameTaskState+0x0c (RE gap, step 10).
     bool firstFrame;            // step 10
 
+    // +0x10c: written by EndRetryLevel (binary @ 0x0016a226) to 0.
+    // TODO: 0x0016a234 — resolve GameTaskState +0x10c semantic (camera state?)
+    int32_t m_ScoreStateField_0x10c;  // step 10 / EndRetryLevel
+
+    // +0x110: written by EndRetryLevel (binary @ 0x0016a220) to 0.5f.
+    // TODO: 0x0016a234 — resolve GameTaskState +0x110 semantic (transition timer?)
+    float m_ScoreStateField_0x110;    // step 10 / EndRetryLevel
+
     // +0x111: unknown flag — cleared to 0 in step 10.
     // TODO: confirm xrefs to GameTaskState+0x111 (RE gap, step 10).
     bool field_0x111;           // step 10
@@ -126,7 +134,9 @@ struct GameTaskState {
 
     GameTaskState()
         : totalTime(0), prevStateDt(0), prevState(0), initialized(false),
-          pPauseScreen(nullptr), firstFrame(false), field_0x111(false),
+          pPauseScreen(nullptr), firstFrame(false),
+          m_ScoreStateField_0x10c(0), m_ScoreStateField_0x110(0.0f),
+          field_0x111(false),
           initComplete(false), pAppState_x54(nullptr),
           pSliceEffectList(nullptr), pSliceEffectPool(nullptr),
           pauseTransitionTimer(0.0f), isPaused(0), _pad_0d(), pauseBombHitTimer(0.0f),
