@@ -340,10 +340,9 @@ static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
 }
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x001729fc (asm-inspector)
+// ASM-verified: 2026-05-20 binary @ Bomb::Update (re-analyst) -- no IsActive early-return; tail OOB-kill must always fire.
 // Matches Bomb::Update (0x001729fc, 195 lines).
 void Bomb::Update(float /*dt*/) {
-    if (!IsActive()) return;
-
     Game* game = Game::GetInstance();
     if (!game) return;
 
