@@ -178,6 +178,16 @@ static void DoQuitToMenu() {
     game_work.field_0x19a       = 0;                              // 0x169eb6
     game_work.field_0x19b       = 0;                              // 0x169eba
     game_work.field_0x19c       = 0;                              // 0x169ebe
+
+    // DIFFERS: binary relies on the OS task scheduler swapping from Game task
+    // to Frontend task, which triggers GameExit_Handler via GameTaskExit.
+    // Port collapses both tasks into one; we drive the transition explicitly
+    // by flipping taskStateIndex to 1 (Frontend). FrontendInit immediately
+    // writes taskStateIndex=2, so the net effect on the next two GameTaskUpdate
+    // ticks is: GameExit_Handler (teardown HUD + WaveManager) then GameInit
+    // (fresh game). Without this flip GameExit_Handler never runs and
+    // SpeedControl / other HUD controls are never released.
+    game_work.taskStateIndex = 1;
 }
 
 // ---------------------------------------------------------------------------
