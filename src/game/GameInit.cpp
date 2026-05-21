@@ -694,7 +694,17 @@ void GameDraw(float dt, bool active) {
     }
 }
 
-// Matches GameExit (0x16cf74, 98 lines) — per-session cleanup
+// Matches GameExit (0x16cf74). Order matters:
+//   1. UnloadBackground / pBackgroundTexture.SetNull
+//   2. mHud->Release()   -- destroys HUDControls (MenuButtons etc.); does NOT
+//                          delete their m_pEntity (ActorManager-owned).
+//   3. Coin::ClearCoins, SaveCurrentData, WaveManager::Destroy, ParticleMgr clear.
+//   4. ActorManager::Clear  -- Release+delete every entity in type lists,
+//                              including g_pSlashEntities[16] (type 3) and
+//                              fruits/bombs (type 0/1).
+//   5. Null g_pSlashEntities[*] (already deleted by Clear; just drop refs).
+//   6. InputManager Destroy/Init reset.
+//   7. Entity::HeapDestroy (free the entity pool itself).
 void GameExit_Handler() {
     Game* game = Game::GetInstance();
     if (!game) return;
@@ -707,21 +717,9 @@ void GameExit_Handler() {
     GameTaskState* ts = GetTaskState();
     ts->pBackgroundTexture.SetNull();
 
-    // Release per-finger SlashEntity[16] array + input callbacks
-    for (int i = 0; i < 16; ++i) {
-        if (g_pSlashEntities[i]) {
-            delete g_pSlashEntities[i];
-            g_pSlashEntities[i] = nullptr;
-        }
-    }
-    g_pSlashEntity = nullptr;
-    if (Mortar::InputManager* im = Mortar::InputManager::GetInstance()) {
-        // Binary: InputManager::Destroy (0x001968a0) clears all device callbacks.
-        im->Destroy();
-        im->Init(0);
-    }
-
-    // Release HUD (destroys all controls including MainScreen)
+    // Release HUD (destroys all controls including MainScreen).
+    // MenuButton::Release does NOT delete its m_pEntity (entities are
+    // ActorManager-owned); ActorManager::Clear below handles entity deletion.
     if (game_work.mHud) {
         game_work.mHud->Release();
         delete game_work.mHud;
@@ -729,6 +727,9 @@ void GameExit_Handler() {
     }
     game_work.mMainScreen = nullptr;
 
+    // ActorManager owns SlashEntity[16] + all fruits/bombs. Clear before
+    // we null the SlashEntity pointers so the entity destruction order is
+    // ActorManager-driven (Release + delete per slot via the type-list walk).
     Coin::ClearCoins(false);
     FruitNinja_SaveCurrentData();           // writes FruitSaveData XML; matches binary @ 0x0016ccc8
     WaveManager::GetInstance()->Destroy();  // frees per-session wave state; matches binary @ 0x00121bf0
@@ -737,5 +738,19 @@ void GameExit_Handler() {
         am->Clear();
         am->Destroy();
     }
+
+    // Now ActorManager has deleted all SlashEntities -- just null the
+    // global pointers (no explicit delete; that's the double-free bug
+    // that crashed GameExit on quit-to-main).
+    for (int i = 0; i < 16; ++i) {
+        g_pSlashEntities[i] = nullptr;
+    }
+    g_pSlashEntity = nullptr;
+    if (Mortar::InputManager* im = Mortar::InputManager::GetInstance()) {
+        // Binary: InputManager::Destroy (0x001968a0) clears all device callbacks.
+        im->Destroy();
+        im->Init(0);
+    }
+
     Mortar::Entity::HeapDestroy();
 }
