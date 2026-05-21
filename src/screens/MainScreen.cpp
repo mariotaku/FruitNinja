@@ -450,21 +450,19 @@ void MainScreen::Update(float dt) {
     }
 
     case STATE_CAMERA_FADE:
-        // ASM-verified: 2026-05-18 binary @ 0x0014c19a..0x0014c1d2 (re-analyst).
-        // Gate is `timer < -0.85f` against game_work.m_GameDt (NOT a
-        // separate s16 register -- Ghidra IL had confused the issue, the
-        // "persistent state-machine register" is just m_TransitionTimer
-        // itself, armed by GameOver/PrepareForLevelStart to a deep-negative).
-        // Body decays 0.75x toward zero; on the first frame the new timer
-        // exceeds -0.001f, clamp back to -0.85f and clear levelTransitionFlag
-        // (one-shot release). Constants: -0.85 @ 0x14c284, 0.75 inline,
-        // -0.001 @ 0x14c2a8.
-        if (game_work.m_GameDt < -0.85f) {
+        // Binary @ 0x0014c19a-0x0014c1d2 (re-verified 2026-05-20):
+        //   s16 = 0.0f (PC-rel literal @ 0x0014c288)
+        //   s14 = -0.001f (PC-rel literal @ 0x0014c2a8)
+        //   if (m_GameDt < 0.0f) {
+        //       m_GameDt *= 0.75f;
+        //       if (m_GameDt > -0.001f) { m_GameDt = 0.0f; m_LevelTransitionFlag = 0; }
+        //   }
+        if (game_work.m_GameDt < 0.0f) {
             game_work.m_GameDt *= 0.75f;
             if (game_work.m_GameDt > -0.001f) {
-                game_work.m_GameDt = -0.85f;
+                game_work.m_GameDt = 0.0f;
                 game_work.m_LevelTransitionFlag = 0;
-                LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to -0.85f, levelTransitionFlag cleared");
+                LOG_INFO("SCREEN/MainScreen", "STATE_CAMERA_FADE: timer clamped to 0.0f, levelTransitionFlag cleared");
             }
         }
         // Tail writes at 0x0014c306/0x0014c316 -- those are unconditional

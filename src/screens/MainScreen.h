@@ -77,6 +77,8 @@ public:
     // writes mainScreen->m_State = 8 directly.
     void SetState(MainScreenState s);
     void SetStateTimer(float t) { m_StateTimer = t; }
+    // Used by EndRetryLevel to emulate GameInit step 11 (fresh MainScreen ctor).
+    void ResetTimers() { m_StateTimer = 0.0f; m_Timer2 = 0.0f; }
 
     // @ 0x0016bbb0 — post-effect overlays drawn after HUD layer 0x08.
     // NOT a vtable slot (binary slot 9 is base default 0x12F93C).

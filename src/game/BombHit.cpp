@@ -454,6 +454,19 @@ void EndRetryLevel() {
     game_work.m_GameDt             = 0.0f;             // 0x16a270 [+0x0c] DAT_0016a284=0.0f
     game_work.m_LevelTransitionFlag = 0;               // 0x16a274 [+0x05]
 
+    // ASM-spec: GameInit binary @ 0x0016ca7c steps 11/13 creates a fresh
+    // MainScreen (m_State=0) and sets m_GameDt = -1.0f. Port collapses
+    // Frontend/Game task split into one task so MainScreen drifts past
+    // STATE_CAMERA_ZOOM into STATE_GAME_START during gameplay entry,
+    // leaving m_GameDt = 0. This breaks the Pause->Retry recovery path
+    // (|m_GameDt| > 0.998969 threshold in GameUpdate !active branch never
+    // fires). Reach the binary's same end-state by resetting here.
+    // re-analyst RE: 2026-05-20.
+    game_work.m_GameDt = -1.0f;
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->ResetTimers();  // GameInit step 11: fresh ctor values
+    }
+
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
     }
