@@ -28,6 +28,23 @@
 #include "game/GameWork.h"
 #include <cstdio>
 #include <cstdlib>
+#ifdef _WIN32
+#  include <direct.h>
+#else
+#  include <sys/stat.h>
+#  include <sys/types.h>
+#endif
+
+// Pull glReadPixels via SDL_GL_GetProcAddress (same trick as test_screen).
+typedef int          GLint_t;
+typedef unsigned int GLsizei_t;
+typedef unsigned int GLenum_t;
+typedef void         GLvoid_t;
+typedef void (*PFN_glReadPixels)(GLint_t, GLint_t, GLsizei_t, GLsizei_t,
+                                 GLenum_t, GLenum_t, GLvoid_t*);
+static PFN_glReadPixels g_glReadPixels = NULL;
+#define FN_GL_RGB           0x1907
+#define FN_GL_UNSIGNED_BYTE 0x1401
 
 static const int TIMEOUT_FRAMES = 600;   // 10s at 60fps cap
 
@@ -150,6 +167,66 @@ int main(int /*argc*/, char* /*argv*/[])
         return 5;
     }
     fprintf(stdout, "OK: m_bPendingRemoval=1 at frame %d\n", dismissFrame);
+
+    // GATE 5: pixel readback. Tick a few more frames at a mid-reveal phase
+    // (m_PhaseTimer ~0.5s past first reveal beat) so the dialog + at least
+    // one award row is on-screen, then glReadPixels and count non-background
+    // pixels. Asserts the dialog actually rendered.
+    bs->m_bPendingRemoval = 0;            // reset so HUD doesn't drop it
+    bs->m_PhaseTimer = 0.5f;              // mid-reveal: first award visible
+    for (int i = 0; i < 5; ++i) game.runFrames(1);
+
+    int ww = 0, wh = 0;
+    SDL_GL_GetDrawableSize(window, &ww, &wh);
+    unsigned char* px = (unsigned char*)malloc((size_t)ww * wh * 3);
+    if (!g_glReadPixels) {
+        g_glReadPixels = (PFN_glReadPixels)SDL_GL_GetProcAddress("glReadPixels");
+    }
+    if (!px || !g_glReadPixels) {
+        fprintf(stderr, "FAIL: glReadPixels unavailable\n");
+        if (px) free(px);
+        return 6;
+    }
+    g_glReadPixels(0, 0, ww, wh, FN_GL_RGB, FN_GL_UNSIGNED_BYTE, px);
+
+    // Count "bright" pixels (any channel > 200) -- the dialog box texture
+    // is mostly light grey/white, easily distinguishable from the dark
+    // gameplay background. Background MainScreen renders darker bg_game.tex.
+    int bright = 0;
+    int total  = ww * wh;
+    for (int i = 0; i < total; ++i) {
+        const unsigned char r = px[i*3 + 0];
+        const unsigned char g = px[i*3 + 1];
+        const unsigned char b = px[i*3 + 2];
+        if (r > 200 || g > 200 || b > 200) ++bright;
+    }
+
+    // Dump screenshot for inspection regardless of pass/fail.
+#ifdef _WIN32
+    _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
+#else
+    mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
+#endif
+    FILE* f = fopen("tmp/test/screenshots/bonus_screen.ppm", "wb");
+    if (f) {
+        fprintf(f, "P6\n%d %d\n255\n", ww, wh);
+        for (int y = wh - 1; y >= 0; y--) {
+            fwrite(px + (size_t)y * ww * 3, 1, (size_t)ww * 3, f);
+        }
+        fclose(f);
+        fprintf(stdout, "OK: screenshot dumped to tmp/test/screenshots/bonus_screen.ppm (%dx%d)\n",
+                ww, wh);
+    }
+    free(px);
+
+    // Expect at least ~5000 bright pixels (the dialog box covers ~512x256
+    // of a ~960x640 framebuffer when texture-sized matches the binary).
+    if (bright < 5000) {
+        fprintf(stderr, "FAIL: only %d bright pixels in %dx%d framebuffer (dialog likely invisible)\n",
+                bright, ww, wh);
+        return 7;
+    }
+    fprintf(stdout, "OK: %d bright pixels rendered (dialog visible)\n", bright);
 
     // GATE 4: total displayed >= sum of tier bases (allow for Multiplier path
     // that might leave finals at 0 if m_Multiplier isn't wired up yet -- in
