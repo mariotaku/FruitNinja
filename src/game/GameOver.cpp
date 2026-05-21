@@ -106,10 +106,18 @@ void SetScore(int score, int /*playerIdx*/) {
     if (game) game_work.currentScore = score;
 }
 
+// ASM-verified: 2026-05-22 binary @ 0x0010a4e8 (re-analyst).
+// Binary writes `strb r0, [game_work + 0x14]` -- the LIVE missCount that
+// MissControl::Update reads. Prior port wrote to m_SaveData->m_CurrentMissCount
+// (FruitSaveData+0x68, the persisted snapshot) which is a DIFFERENT field.
+// The bug allowed the X miss markers from a finished Arcade game to persist
+// across game starts and on MainScreen indefinitely, because no reset path
+// (WaveManager::Reset(true), WaveManager::Resume, etc.) was actually clearing
+// the live counter. FruitSaveData snapshot writes already happen elsewhere
+// (FruitSaveData.cpp:671 mirrors game_work.missCount on save).
 void SetMissCount(int n, int /*playerIdx*/) {
     Game* game = Game::GetInstance();
-    if (game && game_work.m_SaveData)
-        game_work.m_SaveData->m_CurrentMissCount = n;   // FruitSaveData+0x68
+    if (game) game_work.missCount = (uint8_t)n;
 }
 
 } // namespace FN

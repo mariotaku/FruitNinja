@@ -726,6 +726,11 @@ void GameExit_Handler() {
         game_work.mHud = nullptr;
     }
 
+    // Binary @ 0x0016d086 -- release the 12-slot MissControl pool. Pool slots
+    // are created with m_bNoDestructor=1 so HUD::Release skips them; CleanPool
+    // is the only path that actually frees them. Heap leak otherwise.
+    MissControl::CleanPool();
+
     // Null all game_work / GameTaskState pointers that GameInit allocates
     // and HUD::Release destroys. Binary's GameInit leaks the previous values
     // on re-init (just overwrites); port's GameInit deletes-first, which
