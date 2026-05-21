@@ -1223,10 +1223,19 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
 }
 
 void WaveManager::UpdateComboSpeed(float dt) {
-    // Binary @ 0x00122f50. Gate: Arcade mode only (gameMode==2).
-    // game[+0x0c] pause float not in port Game struct; drop that half of gate.
+    // ASM-verified: 2026-05-20 binary @ 0x00122f5e (re-analyst). DUAL gate:
+    //   (game_work.m_GameDt == 0.0f) AND (gameMode == ARCADE)
+    // game_work.m_GameDt (+0x0C) is the pause/fade indicator: 0.0f during
+    // active gameplay, non-zero during pause/gameover/quit transitions
+    // (e.g. -1.0f post-quit-to-main). The previous port comment claiming
+    // "m_GameDt not in port" was wrong (see GameWork.h:39).
+    // Without the m_GameDt == 0 half, quit-to-main from Arcade leaves
+    // gameMode==ARCADE and the body lazy-recreates SpeedControl in the
+    // menu HUD, leaking the empty-gauge frame.
     Game* game = Game::GetInstance();
-    if (!game || game_work.gameMode != Mortar::GAME_MODE_ARCADE) return;
+    if (!game) return;
+    if (game_work.m_GameDt != 0.0f) return;
+    if (game_work.gameMode != Mortar::GAME_MODE_ARCADE) return;
 
     float curSpeed  = m_Speed[0];
     float targetP1  = m_Speed[1];
