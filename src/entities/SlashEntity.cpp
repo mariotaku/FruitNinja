@@ -890,9 +890,15 @@ void SlashEntity::Update(float dt) {
             // — matches binary.
             for (int t = 0; t <= 1; t++) {
                 const std::list<Mortar::Entity*>& list = am->GetTypeList(t);
-                for (auto it = list.begin(); it != list.end(); ++it) {
+                for (std::list<Mortar::Entity*>::const_iterator it = list.begin(); it != list.end(); ++it) {
                     Mortar::Entity* e = *it;
-                    if (!e || !e->IsActive()) continue;
+                    if (!e) continue;
+                    // ASM-verified: 2026-05-20 binary @ 0x0017D788 (re-analyst)
+                    // Fruit branch (t==0) gates on !Sliced() BEFORE IsActive(), binary order.
+                    // Without this, the blade re-hits already-sliced fruits every frame they
+                    // remain in the active list, re-arming the combo counter indefinitely.
+                    if (t == 0 && static_cast<Fruit*>(e)->Sliced()) continue;
+                    if (!e->IsActive()) continue;
                     if (!e->m_Col) continue;
                     ColSphere* cs = static_cast<ColSphere*>(e->m_Col);
                     if (cs->radius <= 0.0f) continue;
