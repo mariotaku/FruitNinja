@@ -67,7 +67,13 @@ void SpeedControl::Update(float dt) {
     if (!g || !game_work.mGameSound) return;
     GameSound* gs = game_work.mGameSound;
 
-    if (game_work.m_LevelTransitionFlag != 0) return;
+    // ASM-verified: 2026-05-20 binary @ 0x00160de4 ldrb r3,[r3,#0x2] (re-analyst)
+    // Gate reads game_work+0x02 = m_Paused, NOT +0x05 = m_LevelTransitionFlag.
+    // Wrong gate caused Arcade-entry white-line flash: m_LevelTransitionFlag=1
+    // at Arcade start, port returned early, default opaque-white m_DrawColour
+    // (from HUDControl base ctor) persisted, HUDControl3d::Draw rendered the
+    // quad for a frame or two until LTF cleared.
+    if (game_work.m_Paused) return;
 
     float deltaTarget, volTarget;
     if (m_DisplayedSpeed == 0.0f) {
@@ -84,7 +90,7 @@ void SpeedControl::Update(float dt) {
     } else {
         // Active: combo-blitz drives the ducking. progression is the
         // wave-manager's bonus accumulator [0..1]; map [0.25..1.0]->[0..1].
-        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE && game_work.m_LevelTransitionFlag == 0) {
+        if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
             float p   = WaveManager::GetInstance()->GetComboBonusProgression(0);
             float c01 = (p - 0.25f) / 0.75f;
             if (c01 < 0.0f) c01 = 0.0f; else if (c01 > 1.0f) c01 = 1.0f;
