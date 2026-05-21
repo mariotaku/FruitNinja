@@ -1,4 +1,6 @@
 // Analysed: 2026-05-04T00:00
+// TODO: m_DtMod consumer not wired -- Freeze powerup has no effect until the
+//   game's dt path is scaled by PowerUpManager::m_DtMod each frame (in GameUpdate).
 
 #include "PowerUpManager.h"
 #include "GameMode.h"

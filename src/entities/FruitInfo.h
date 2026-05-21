@@ -49,6 +49,9 @@ struct FRUIT_POWERS {
 
     // Binary @ 0x00175714. Returns true if any power in m_pArray is currently active.
     bool AnyActivePowers() const;
+
+    // Binary @ 0x0017a7d8. Weighted random pick; returns m_PowerHash of selected entry.
+    uint32_t RandomPower() const;
 };
 
 // Port alias so existing code using FruitPowers still compiles
