@@ -1426,12 +1426,24 @@ int Fruit::RandomFruit(bool includeOnSide) {
     return (int)rng->Rand32((uint32_t)(count - 1));
 }
 
-// Matches Fruit::GetNumActiveForPlayer (0x00122a00).
-// TODO: playerIdx filtering not ported; counts all active fruits.
-int Fruit::GetNumActiveForPlayer(int /*playerIdx*/, bool /*checkBombs*/) {
+// ASM-verified: 2026-05-20 binary @ 0x00175928 (re-analyst).
+// Second param is a MODE-SELECTOR, NOT "checkBombs" as the name suggested.
+//   byPlayerMode==false: counts INACTIVE fruits (ignores playerIdx).
+//   byPlayerMode==true : counts fruits where m_PlayerIdx == playerIdx
+//                        (any active state). Bombs are NEVER iterated.
+int Fruit::GetNumActiveForPlayer(int playerIdx, bool byPlayerMode) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return 0;
-    return am->GetNumEntities(0);
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(0, it);
+    int count = 0;
+    while (e) {
+        Fruit* f = static_cast<Fruit*>(e);
+        if (!byPlayerMode) { if (!f->IsActive()) ++count; }
+        else               { if (f->m_PlayerIdx == playerIdx) ++count; }
+        e = am->GetEntityNext(0, it);
+    }
+    return count;
 }
 
 // ASM-verified: 2026-05-18 binary @ 0x00176d14 (re-analyst)
@@ -1584,12 +1596,10 @@ const ::FruitInfo* Fruit::FruitInfo(long type) {
 // ported (GetNumActiveForPlayer doesn't filter by player yet). Stub the
 // per-player gating and call GameOver when count hits zero for player 0.
 void Fruit::CheckFruitDropped() {
-    // DIFFERS: binary @ 0x00176184 tracks per-player active-fruit counts
-    // in g_PlayerActiveFruit[3] (incremented in Fruit::Init, decremented in
-    // Fruit::Destroy keyed on m_PlayerIdx). On any player hitting 0,
-    // GameOver(-1,-1.0f, loserIdx). Port has no MP yet -- single-player
-    // path uses GetNumActiveForPlayer(0,false). MP gate enabled when
-    // m_PlayerIdx + per-player counters are wired.
+    // Binary @ 0x00176184: per-player live-count check uses MissControl/HeartControl
+    // lives counters at iVar1+4/+8, NOT per-fruit active counts. The per-fruit count
+    // is computed on-demand via GetNumActiveForPlayer(idx, true). Single-player path:
+    // count INACTIVE fruits == 0 means the wave is clear, which maps to byPlayerMode=false.
     if (GetNumActiveForPlayer(0, false) == 0) {
         FN::GameOver(-1, -1.0f, -1);
     }
@@ -1774,20 +1784,25 @@ void Fruit::UpdateBombAvoidance(float dt) {
 void Fruit::DestroyFruitModels() {
     s_FruitModels.clear();
     s_FruitModelsLoaded = false;
-    // DIFFERS: binary @ 0x0017911c additionally walks 4 MP-player model
-    // slots per FruitModelInfo (SmartPtr<Model>[4] at +0x10..+0x20, raw
-    // Model*[4] at +0x00..+0x0c) and nulls each, guarded by g_MPModelsLoaded
-    // (+0xc4). Port's FruitModelInfo is single-slot; MP slot expansion is
-    // deferred until same-screen MP ports its per-player model variants.
-    // (m.slot[p+4] for p=0..3; requires FruitModelInfo extended to 0x24 bytes)
 }
 
 // ============================================================
+// Port specific: binary reads g_Game+0x4 for SSM flag; port re-derives.
+// TODO: implement full IsSameScreenMultiplayer when gameMode bitmask is further RE'd.
+static bool Fruit_IsSameScreenMultiplayer() {
+    return false;
+}
 
+// ASM-verified: 2026-05-20 binary @ 0x00175ea0 (re-analyst).
+// SSM Player 2 swaps shadow-offset axes; offset rotates 90 deg and the
+// sign follows the fruit's screen-half (pos.x < 0 -> negative).
 void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
-    // DIFFERS: m_PlayerIdx not ported; same-screen MP shadow mirror skipped.
-    const float mirrorX = 1.0f;
-    const float mirrorY = 0.0f;   // DAT_00176160
+    float mirrorX = 1.0f;
+    float mirrorY = 0.0f;   // DAT_00176160
+    if (m_PlayerIdx >= 1 && Fruit_IsSameScreenMultiplayer()) {
+        mirrorX = 0.0f;
+        mirrorY = (pos.x < 0.0f) ? -1.0f : 1.0f;
+    }
 
     // Quad 1: spawn-fade whole-fruit shadow (active while m_ScaleAnim < 1).
     if (m_ScaleAnim < 1.0f) {

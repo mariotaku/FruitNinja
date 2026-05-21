@@ -13,23 +13,36 @@ class SlashEntity;
 
 // Per-fruit mesh slot layout. Matches the binary's 0x24-byte
 // FruitModelInfo struct allocated by LoadFruitModels (0x1794e0).
+// Binary allocates new uint32_t[N*0x24 + 8] (sizeof element = 0x24).
 //
-// Binary layout:
-//   +0x00: EffectProperty* prop[2]  (per half piece)
-//   +0x08: EffectProperty* prop[2..3]  (optional outline variants)
-//   +0x10: Mortar::SmartPtr<Model> m_HalfA   (<name>_<c>_piece_1.mmd)
-//   +0x14: Mortar::SmartPtr<Model> m_HalfB   (<name>_<c>_piece_2.mmd)
-//   +0x18: Mortar::SmartPtr<Model> m_OptA    (<name>_<c>_outline.mmd etc)
-//   +0x1c: Mortar::SmartPtr<Model> m_OptB    (other optional variant)
-//   +0x20: ???
+// Binary layout (LoadFruitModels @ 0x001794e0):
+//   +0x00: EffectProperty* m_pHalfEffectA   (per half piece A)
+//   +0x04: EffectProperty* m_pHalfEffectB   (per half piece B)
+//   +0x08: EffectProperty* m_pWholeEffect   (set only if whole .mmd exists)
+//   +0x0c: EffectProperty* m_pMpEffect      (set only if MP .mmd exists)
+//   +0x10: Mortar::SmartPtr<Model> m_HalfA  (<name>_<c>_piece_1.mmd)
+//   +0x14: Mortar::SmartPtr<Model> m_HalfB  (<name>_<c>_piece_2.mmd)
+//   +0x18: Mortar::SmartPtr<Model> m_Whole  (<name>_single.mmd)
+//   +0x1c: Mortar::SmartPtr<Model> m_pMpModel (MP variant .mmd)
+//   +0x20: uint32_t pad (unused/reserved)
 //
-// Port simplified to the two half-pieces and the whole-fruit model.
-// Outline/extras deferred.
+// g_MPModelsLoaded is NOT a FruitModelInfo field -- it lives at
+// GameTaskState+0xc4 and gates the LoadFruitModels MP load path.
 struct FruitModelInfo {
-    Mortar::SmartPtr<Mortar::Model> m_Whole;    // <name>_single.mmd (whole fruit)
-    Mortar::SmartPtr<Mortar::Model> m_HalfA;   // piece 1
-    Mortar::SmartPtr<Mortar::Model> m_HalfB;   // piece 2
+    void*  m_pHalfEffectA;                       // +0x00 EffectProperty* (unported)
+    void*  m_pHalfEffectB;                       // +0x04 EffectProperty* (unported)
+    void*  m_pWholeEffect;                       // +0x08 EffectProperty* (unported)
+    void*  m_pMpEffect;                          // +0x0c EffectProperty* (unported)
+    Mortar::SmartPtr<Mortar::Model> m_HalfA;    // +0x10 piece 1
+    Mortar::SmartPtr<Mortar::Model> m_HalfB;    // +0x14 piece 2
+    Mortar::SmartPtr<Mortar::Model> m_Whole;    // +0x18 whole fruit (<name>_single.mmd)
+    Mortar::SmartPtr<Mortar::Model> m_pMpModel; // +0x1c MP variant
+    uint32_t                         m_pad;     // +0x20 unused/reserved
 };
+
+#ifdef __bada__
+static_assert(sizeof(FruitModelInfo) == 0x24, "FruitModelInfo sizeof must match binary 0x24");
+#endif
 
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
@@ -169,11 +182,10 @@ public:
     // Critical mode (WaveManager::CriticalMode) restricts to m_bSpecial fruits.
     static int RandomFruit(bool includeOnSide);
 
-    // Matches Fruit::GetNumActiveForPlayer (0x00122a00). Returns count of
-    // active Fruit entities assigned to `playerIdx` (-1 = all players).
-    // When checkBombs=true the caller also wants bomb counts (not used here).
-    // Port specific: playerIdx filtering omitted; entity has no player-index field yet (split-screen MP stub).
-    static int GetNumActiveForPlayer(int playerIdx, bool checkBombs);
+    // Matches Fruit::GetNumActiveForPlayer (0x00175928).
+    // byPlayerMode==false: counts INACTIVE fruits (ignores playerIdx).
+    // byPlayerMode==true : counts fruits where m_PlayerIdx == playerIdx.
+    static int GetNumActiveForPlayer(int playerIdx, bool byPlayerMode);
 
     // Matches Fruit::ClearUnspawned (0x00176d14). Walks Mortar::ActorManager type-0
     // list and kills fruits via KillFruit(0). clearAll=false: only pre-spawn
