@@ -725,7 +725,18 @@ void GameExit_Handler() {
         delete game_work.mHud;
         game_work.mHud = nullptr;
     }
-    game_work.mMainScreen = nullptr;
+
+    // Null all game_work / GameTaskState pointers that GameInit allocates
+    // and HUD::Release destroys. Binary's GameInit leaks the previous values
+    // on re-init (just overwrites); port's GameInit deletes-first, which
+    // requires explicit nulls here so the re-run guards become no-ops.
+    game_work.mMainScreen       = nullptr;
+    game_work.mCoinCounter      = nullptr;
+    game_work.mCountDown        = nullptr;
+    game_work.m_TutorialControl = nullptr;
+    ts->pPauseScreen            = nullptr;
+    ts->pDeferredControl        = nullptr;
+    ts->m_pBombFuseSound        = nullptr;
 
     // ActorManager owns SlashEntity[16] + all fruits/bombs. Clear before
     // we null the SlashEntity pointers so the entity destruction order is
