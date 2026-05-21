@@ -43,6 +43,7 @@
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
 #include "screens/MainScreen.h"
+#include "engine/util/StringHash.h"
 
 using Mortar::TextureManager;
 
@@ -937,6 +938,25 @@ void GameOverScreen::OnQuitClicked() {
     QuitCallback();
 }
 
+// Binary @ 0x001e84b8 -- 25 const char* entries indexed by FruitFactControl::m_ComboType.
+// ASM-verified: 2026-05-20 binary @ 0x00110c94 GetComboName (re-analyst).
+// Used only to feed StringHash() into AchievementManager::UnlockComboStarAchievement.
+static const char* const g_ComboNameTable[25] = {
+    "3_FRUIT", "4_FRUIT", "5_FRUIT", "6_FRUIT",
+    "ALL_DIFFERENT", "7_FRUIT_PLUS",
+    "ALL_APPLES", "ALL_ORANGES", "ALL_PINEAPPLES", "ALL_WATERMELONS",
+    "ALL_KIWIS", "ALL_MANGOES", "ALL_STRAWBERRIES", "ALL_PEARS",
+    "ALL_BANANAS", "ALL_LIMES", "ALL_LEMONS", "ALL_COCONUTS",
+    "ALL_PASSIONFRUITS",
+    "ALPHABETICAL", "FULLHOUSE",
+    "2_PAIR", "3_OF_A_KIND", "4_OF_A_KIND", "5_OF_A_KIND",
+};
+
+static const char* GetComboName(int starType) {
+    // Binary @ 0x00110c94 -- no bounds check; caller gates 0 <= starType <= 24.
+    return g_ComboNameTable[starType];
+}
+
 // ---------------------------------------------------------------------------
 // RunStateMainDisplay — body of STATE_MAIN_DISPLAY, extracted so case 7 can
 // fall through into it in the same tick (binary uses goto switchD...caseD_6).
@@ -1012,13 +1032,12 @@ void GameOverScreen::RunStateMainDisplay(int prevState) {
                     int comboType = (int8_t)m_pFruitFact->m_ComboType;  // +0xE0
                     if (comboType >= 0 && comboType < 25) {
                         int comboLen = m_pFruitFact->m_ComboLength;     // +0xD0
-                        // TODO: GetComboName(comboType) -> uses .rodata
-                        // combo-name string array; deferred until that
-                        // table is ported. Pass 0 hash for now -- the
-                        // achievement unlock still records the combo
-                        // length, just without the per-star-type variant.
+                        // ASM-verified: 2026-05-20 binary @ 0x001421e8 (re-analyst).
+                        // StringHash(GetComboName(comboType)) is the per-star-variant key
+                        // used to look up the achievement in
+                        // AchievementManager::m_AchievementsByHash (this+0xd8).
                         AchievementManager::GetInstance()->UnlockComboStarAchievement(
-                            comboLen, 0);
+                            comboLen, StringHash(GetComboName(comboType)));
                     }
                 }
 
