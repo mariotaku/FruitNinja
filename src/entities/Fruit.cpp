@@ -105,7 +105,7 @@ Fruit::Fruit()
     , m_SlicePos(0, 0, 0)
     , m_LifetimeCounter(0)
     , m_CollisionSize(0)
-    , m_field_0x68(0)
+    , m_VestigialInitFour(0)
     , m_SliceTimer(-1.0f)
     , m_SliceAngle(0)
     , m_SliceImpulse(0.0f)
@@ -372,15 +372,13 @@ void Fruit::Update(float dt) {
 // Zen-mode "mirror bounce at X limits" flag. Reads bit 0x20 of
 // SlashEntity::s_ModPowerMask (binary BSS 0x0024d8cc) — a uint bitmask
 // that active SlashModifier instances OR their bits into each frame.
-// Bit 0x20 is set by a SlashModifier whose XML declares
-// <power colour_type="..."/> hashing to the zen-bounce power.
-//
-// Port: mask + SlashModifier::UpdateSpecific are wired, but
-// PowerUpManager isn't ported yet so no modifier runs and the mask
-// stays 0. The flag reads false in practice; the soft-nudge branch
-// always runs. Once PowerUpManager ticks SlashModifier each frame the
-// mirror-bounce lights up automatically.
-static bool IsZenStrictBounceActive() {
+// Bit 0x20 of SlashEntity::s_ModPowerMask is set by a SlashModifier
+// registered in the Arcade-mode wave list. When active, vertical-gravity
+// fruits hard-bounce off ±192 X bounds instead of being soft-nudged.
+// Historically mislabelled "Zen" in port comments -- binary @ 0x00175066
+// checks gameMode == 2 = ARCADE.
+// ASM-verified: 2026-05-20 binary @ 0x00175066 (re-analyst)
+static bool IsArcadeStrictBounceActive() {
     return (SlashEntity::s_ModPowerMask & 0x20u) != 0;
 }
 
@@ -392,10 +390,10 @@ static bool IsZenStrictBounceActive() {
 //   m_RotAxis *= 0.9                                    // DAT_0017519c damping
 //   if (!m_bSliced && m_ChuckDelay <= 0) {
 //     if (m_Gravity.x == 0) {                            // vertical-gravity fruit
-//       if (zen && (zenFlag & 0x20)) { hard bounce x on ±192 }
-//       else                         { soft nudge x toward centre }
+//       if (arcade && (s_ModPowerMask & 0x20)) { hard bounce x on +-192 }
+//       else                                   { soft nudge x toward centre }
 //     } else if (m_Gravity.y == 0) {                     // horizontal-gravity fruit
-//       soft nudge y toward centre on ±128
+//       soft nudge y toward centre on +-128
 //     }
 //   }
 //
@@ -425,12 +423,11 @@ void Fruit::PostUpdate(float dt) {
 
     if (m_Gravity.x == 0.0f) {
         // Vertical-gravity fruit — nudge or hard-bounce on X bounds.
-        // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
-        // Verify whether the surrounding logic is intended for Arcade or Zen and
-        // rename accordingly.
-        const bool zen = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
-        const bool zenStrict = zen && IsZenStrictBounceActive();
-        if (zenStrict) {
+        // ASM-verified: 2026-05-20 binary @ 0x00175066 (re-analyst) — gate is
+        // gameMode == ARCADE (literal cmp #0x2) plus s_ModPowerMask bit 0x20.
+        const bool arcade = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
+        const bool strictBounce = arcade && IsArcadeStrictBounceActive();
+        if (strictBounce) {
             if (pos.x < BOUND_X_LO) { pos.x = BOUND_X_LO; vel.x = -vel.x; }
             if (pos.x > BOUND_X_HI) { pos.x = BOUND_X_HI; vel.x = -vel.x; }
         } else {

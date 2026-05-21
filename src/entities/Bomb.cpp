@@ -731,21 +731,21 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
     if (m_bMenuBombHit == 0 && game != nullptr) {
         FN::SetBombHitPos(pos);
 
-        // TODO: variable name says "zen" but binary's gameMode==2 is GAME_MODE_ARCADE.
-        // Verify whether the surrounding logic is intended for Arcade or Zen and
-        // rename accordingly.
-        const bool isZen = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
+        // ASM-verified: 2026-05-20 binary @ 0x00175066 (re-analyst) — gate is
+        // gameMode == ARCADE (literal cmp #0x2). Variable was historically
+        // mislabelled "isArcade" in port comments; renamed to isArcade.
+        const bool isArcade = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
 
         // Camera shake — FruitCamera::CreateCameraShake at 0x180d10.
         // Binary intensities: Classic/Arcade = 1.6/2.0, Zen = 2.0/3.0.
         if (game_work.m_FruitCamera) {
-            if (isZen)
+            if (isArcade)
                 game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
             else
                 game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
         }
 
-        if (isZen) {
+        if (isArcade) {
             // Zen penalty path. Binary HitMenuBomb (0x16b234) — plays
             // "menu-bomb" SFX (string at 0x001B96C9), bombHitTimer = 2.0,
             // sets g_bombHitData->m_bMenuBombHit_flag = 1. No camera shake.

@@ -48,7 +48,12 @@ public:
     uint8_t  _pad_54[12];                  // +0x54..+0x5F  (unused by Init/Update; possible Slice/CollisionResponse temp)
     int32_t  m_LifetimeCounter;            // +0x60  (init=0; Update int<->float trick)
     int32_t  m_CollisionSize;              // +0x64  (init=75; semantics: probable countdown, NOT radius)
-    int32_t  m_field_0x68;                 // +0x68  (init=4; TODO: semantics; not read by Init/Update)
+    // +0x68: write-only field, set to 4 by Init (binary @ 0x001769d0).
+    // No reader exists anywhere in the binary — confirmed by full-binary
+    // [reg,#0x68] scan 2026-05-20. Likely dead code from a removed feature.
+    // Kept for layout fidelity; do NOT route any logic through this field.
+    // Same status as m_VisualScale (+0xA8).
+    int32_t m_VestigialInitFour;            // +0x68 (init=4; write-only / dead)
     float    m_SliceTimer;                 // +0x6C  (init=-1.0)
     uint16_t m_SliceAngle;                 // +0x70
     uint8_t  _pad_72[2];                   // +0x72..+0x73
@@ -126,8 +131,10 @@ public:
     // velocity. Also bounces sliced halves off the near edge.
     bool CheckHasGoneOffscreen();
 
-    // Matches Fruit::KillFruit (0x00176abc). Clears emitters, applies
-    // miss penalty (TODO), and marks the entity killed (flags |= 0x10).
+    // Matches Fruit::KillFruit (0x00176abc). Clears emitters, applies miss
+    // penalty in Classic/Combo (life loss + MissControl::MakeDisappear),
+    // tracks dropped fruit in Arcade, no-op in Zen. Marks the entity killed
+    // (flags |= 0x10).
     void KillFruit(bool doMissPenalty);
 
     // Matches Fruit::RotateFacingUp (0x001757f4). Sets m_Rot1/m_Rot2 to a
