@@ -753,4 +753,11 @@ void GameExit_Handler() {
     }
 
     Mortar::Entity::HeapDestroy();
+
+    // Clear the initComplete guard so the next GameInit (via FrontendInit ->
+    // taskStateIndex=2 handoff) can rebuild HUD + MainScreen. Without this,
+    // GameInit's early-return at the initComplete check leaves the screen
+    // blank after quit-to-main. Binary @ 0x0016cf74 head clears the
+    // equivalent flag at GameTaskState +0x113.
+    ts->initComplete = false;
 }
