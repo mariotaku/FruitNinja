@@ -1,4 +1,4 @@
-// test_bomb_spawn — spawns bombs directly via WaveManager::SpawnBomb,
+// test_bomb_spawn -- spawns bombs directly via WaveManager::SpawnBomb,
 // ticks 200 frames per variant, and asserts that all bombs have been
 // cleaned up by OOB-kill (no entity leak).
 //
@@ -15,10 +15,12 @@
 // Or with trace enabled:
 //   cmake -DFRUITNINJA_BOMB_TRACE=ON -B build && cmake --build build
 //   ctest --test-dir build -R bomb_spawn --output-on-failure
+//
+// Interactive (visible window, watchable pacing, post-run idle loop):
+//   ./build/tests/Debug/test_bomb_spawn.exe --interactive
+//   ./build/tests/Debug/test_bomb_spawn.exe all --interactive
 
-#include <SDL.h>
-#include "render/gl_funcs.h"
-#include "Game.h"
+#include "test_harness.h"
 #include "game/WaveManager.h"
 #include "game/WaveStructs.h"
 #include "game/StartupEffects.h"
@@ -34,94 +36,25 @@
 #include "audio/GameSound.h"
 #include "audio/MortarSound.h"
 #include "util/StringHash.h"
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include "game/GameWork.h"
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_bomb_spawn [A|B|C|D|all|visual]\n"
+        "usage: test_bomb_spawn [A|B|C|D|all] [--interactive] [--screenshot]\n"
         "  A      bare bottom bomb (ctor defaults, count=1)\n"
         "  B      left-side spawn\n"
         "  C      right-side spawn\n"
         "  D      spawn + slice; verify fuse SFX silences after clear\n"
         "  all    run all variants (default; headless, fast)\n"
-        "  visual run all variants with a visible 60Hz window;\n"
-        "         keeps the window open after the runs until you close it\n");
+        "  --interactive  run with a visible 60Hz window;\n"
+        "                 keeps the window open after the runs until you close it\n");
     return 1;
 }
-
-// Global -- only true in `visual` mode. Drives window-visibility, vsync,
-// per-variant frame count, and post-run idle loop.
-static bool g_visual = false;
 
 // Returns the number of live bombs (entity type 1).
 static int BombCount(Game& game) {
     Mortar::ActorManager* am = game.actorManager;
     return am ? am->GetNumEntities(1) : 0;
-}
-
-// Initialise a full game context. Returns false on failure.
-static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game) {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-        return false;
-    }
-#if defined(FRUIT_GL_API_ES1)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#endif
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-
-    Uint32 winFlags = SDL_WINDOW_OPENGL;
-    if (!g_visual) winFlags |= SDL_WINDOW_HIDDEN;
-
-    *outWindow = SDL_CreateWindow(
-        "fruit-ninja-bomb-spawn-test",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        960, 640,
-        winFlags);
-    if (!*outWindow) {
-        fprintf(stderr, "Window failed: %s\n", SDL_GetError());
-        SDL_Quit();
-        return false;
-    }
-
-    *outGl = SDL_GL_CreateContext(*outWindow);
-    if (!*outGl) {
-        fprintf(stderr, "GL ctx failed: %s\n", SDL_GetError());
-        SDL_DestroyWindow(*outWindow);
-        SDL_Quit();
-        return false;
-    }
-    // Visual mode: vsync on for ~60Hz watchable pacing. Headless mode: no
-    // sync so ctest finishes fast.
-    SDL_GL_SetSwapInterval(g_visual ? 1 : 0);
-
-    if (!gl_load_functions()) {
-        fprintf(stderr, "gl_load_functions failed\n");
-        return false;
-    }
-
-    if (!game->init(*outWindow, *outGl)) {
-        fprintf(stderr, "game.init failed\n");
-        return false;
-    }
-
-    // Burn through GameInit + splash frames.
-    game->runFrames(120);
-    if (!game_work.mHud) {
-        fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
-        return false;
-    }
-    return true;
 }
 
 // Zero out the current wave's spawner counts so WaveManager's spawn pump
@@ -172,7 +105,7 @@ static Bomb* FirstBomb(Game& game) {
 //      eventually OOBs, GetHeighestBomb() returns its -10000 sentinel,
 //      and the GameUpdate block SetVolume(fuse, 0)'s.
 //   5. Assert: bombs == 0 AND fuse slot volume < 0.01 (silent).
-static bool RunVariantSlice(Game& game) {
+static bool RunVariantSlice(Game& game, bool visual) {
     const char* name = "D: spawn + slice + fuse-silence verify";
     printf("=== Variant %s ===\n", name);
 
@@ -215,7 +148,7 @@ static bool RunVariantSlice(Game& game) {
     // GameOver to run, and the fuse channel to be muted.
     // 240 frames @ ~60Hz = 4s of game time; bombHitTimer 3.2 -> 1.5
     // takes ~1.7s, plus another ~1.5s for the bomb to OOB after fling.
-    const int frames = g_visual ? 360 : 240;
+    const int frames = visual ? 360 : 240;
     for (int i = 0; i < frames; ++i) {
         SuppressWaveSpawn();
         game.runFrames(1);
@@ -259,7 +192,7 @@ static bool RunVariantSlice(Game& game) {
 // Spawn a single bomb using the given SPAWNER_INFO, tick frames while
 // suppressing the wave-manager's own spawns, return true if no bombs
 // remain (OOB-killed as expected).
-static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner) {
+static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner, bool visual) {
     printf("=== Variant %s ===\n", name);
 
     // Clear any leftover entities from a previous variant; keep wave-spawn
@@ -278,7 +211,7 @@ static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner) {
     // Tick frames. 200 is enough for a bomb arc + OOB kill at 60Hz;
     // visual mode runs 360 (~6s) so the user can watch the full flight
     // including a pause after the OOB kill before the next variant.
-    const int frames = g_visual ? 360 : 200;
+    const int frames = visual ? 360 : 200;
     for (int i = 0; i < frames; ++i) {
         SuppressWaveSpawn();
         game.runFrames(1);
@@ -298,12 +231,15 @@ static bool RunVariant(Game& game, const char* name, SPAWNER_INFO& spawner) {
     return true;
 }
 
-int main(int argc, char* argv[]) {
-    setvbuf(stdout, NULL, _IONBF, 0);
-    setvbuf(stderr, NULL, _IONBF, 0);
+// Idle callback for RunInteractive -- keeps ticking indefinitely until
+// ESC / window close.
+static bool IdleTick(Game& /*game*/, int /*frame*/, void* /*userdata*/) {
+    return true;
+}
 
+int main(int argc, char* argv[]) {
     const char* variant = "all";
-    if (argc >= 2) {
+    if (argc >= 2 && argv[1][0] != '-') {
         variant = argv[1];
         if (strcmp(variant, "A") != 0 &&
             strcmp(variant, "B") != 0 &&
@@ -313,16 +249,23 @@ int main(int argc, char* argv[]) {
             strcmp(variant, "visual") != 0) {
             return FailUsage();
         }
+        // Legacy "visual" positional arg: treat as --interactive + "all".
         if (strcmp(variant, "visual") == 0) {
-            g_visual = true;
             variant = "all";
         }
     }
 
-    SDL_Window*   window = NULL;
-    SDL_GLContext gl     = NULL;
-    Game game;
-    if (!GameSetup(&window, &gl, &game)) return 1;
+    fn::TestHarness h(argc, argv, "bomb_spawn");
+    h.SetInitFrames(120);
+    if (!h.ParseFlags()) return 1;
+    if (!h.Init()) return 1;
+
+    if (!game_work.mHud) {
+        fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
+        return 1;
+    }
+
+    const bool visual = h.IsInteractive();
 
     // Drop into the Classic gameplay stage. PrepareForLevelStart alone
     // only resets WaveManager data -- the actual screen transition out of
@@ -359,7 +302,7 @@ int main(int argc, char* argv[]) {
     game_work.m_GameDt = 0.0f;
 
     // Settle the camera + HUD into gameplay.
-    game.runFrames(60);
+    h.RunHeadless(60);
 
     int failures = 0;
 
@@ -367,7 +310,7 @@ int main(int argc, char* argv[]) {
     if (strcmp(variant, "all") == 0 || strcmp(variant, "A") == 0) {
         SPAWNER_INFO spawnerA;
         // All ctor defaults: PLACEMENT_BOTTOM, gravity (0,-1,0), horiz full range.
-        if (!RunVariant(game, "A: bare bottom bomb", spawnerA)) ++failures;
+        if (!RunVariant(h.game, "A: bare bottom bomb", spawnerA, visual)) ++failures;
     }
 
     // Variant B: left-side spawn.
@@ -377,7 +320,7 @@ int main(int argc, char* argv[]) {
         spawnerB.m_Gravity_y  = -0.5f;
         spawnerB.m_HorizMin   = -0.25f;
         spawnerB.m_HorizMax   =  0.5f;
-        if (!RunVariant(game, "B: left-side spawn", spawnerB)) ++failures;
+        if (!RunVariant(h.game, "B: left-side spawn", spawnerB, visual)) ++failures;
     }
 
     // Variant C: right-side spawn.
@@ -387,33 +330,25 @@ int main(int argc, char* argv[]) {
         spawnerC.m_Gravity_y  = -0.5f;
         spawnerC.m_HorizMin   = -0.25f;
         spawnerC.m_HorizMax   =  0.5f;
-        if (!RunVariant(game, "C: right-side spawn", spawnerC)) ++failures;
+        if (!RunVariant(h.game, "C: right-side spawn", spawnerC, visual)) ++failures;
     }
 
     // Variant D: spawn + slice + verify fuse SFX silences.
     if (strcmp(variant, "all") == 0 || strcmp(variant, "D") == 0) {
-        if (!RunVariantSlice(game)) ++failures;
+        if (!RunVariantSlice(h.game, visual)) ++failures;
     }
 
-    if (g_visual) {
-        printf("=== visual mode: variants done. Close the window to exit. ===\n");
-        // Keep rendering until the user closes the window (Game::runFrames
-        // sets game.running = false on SDL_QUIT). Use a big frame budget;
-        // the loop exits naturally on close.
-        for (int i = 0; i < 60 * 60 * 5 && game.running; ++i) {
-            game.runFrames(1);
-        }
+    if (visual) {
+        printf("=== interactive mode: variants done. Close the window to exit. ===\n");
+        h.RunInteractive(IdleTick, NULL, /*maxFrames=*/60 * 60 * 5);
     }
 
-    game.shutdown();
-    SDL_GL_DeleteContext(gl);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    if (h.IsScreenshot()) h.Screenshot();
 
     if (failures > 0) {
         fprintf(stderr, "FAIL: %d variant(s) failed\n", failures);
-        return 1;
+        return h.Shutdown();
     }
     printf("PASS: all bomb_spawn variants OK\n");
-    return 0;
+    return h.Shutdown();
 }
