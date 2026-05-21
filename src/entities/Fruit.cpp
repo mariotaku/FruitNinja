@@ -547,7 +547,17 @@ void Fruit::KillFruit(bool doMissPenalty) {
                 // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
                 if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
                     // Arcade: tracking only, no life loss, no MissControl spawn.
-                    // TODO: FruitSaveData::AddToTotal("arcade_miss", 1) when save system is ported
+                    // ASM-verified: 2026-05-20 binary @ 0x00176bbe..0x00176c00 (re-analyst)
+                    // Dropped-fruit tracking (NOT a life loss). "dropped" is the global counter;
+                    // m_DropsKey is the same per-fruit key used by the score path (line ~904), but
+                    // here trackSession=false. Per-fruit AddToTotal is gated on info != null.
+                    if (game_work.m_SaveData) {
+                        static const uint32_t hDropped = StringHash("dropped");
+                        game_work.m_SaveData->AddToTotal("dropped", hDropped, 1, false, false);
+                        if (info) {
+                            game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1, false, false);
+                        }
+                    }
                 } else if (Mortar::FailureEnabled(game_work.gameMode)) {
                     // Classic / Combo miss penalty (Zen falls through to no-op).
                     if (MissControl* mc = MissControl::GetFree()) {
@@ -927,14 +937,24 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
             }
         }
     }
-    // TODO: Zen-mode-only save totals (first_fruit / last_fruit)
-
-    // Arcade-mode speed-loss-timer refresh — binary @ 0x00178cbc.
-    // Called before the score dispatch so SpeedControl HUD ticks correctly.
-    // DAT_00178cbc = 0.05f.
-    // ASM-verified: 2026-05-18 binary @ 0x00178cbc (re-analyst)
+    // ASM-verified: 2026-05-20 binary @ 0x00178b40..0x00178c34 (re-analyst)
+    // Arcade-mode-only (NOT Zen as a prior TODO claimed):
+    //   AddToSpeedLossTime(0.05f, 0)             -- SpeedControl HUD tick refresh.
+    //   first_fruit = sticky write-once          -- records m_FruitType+1 of first
+    //                                               slice ever (savefile-wide).
+    //   last_fruit  = set to current m_FruitType+1 via delta math (total := newVal).
     if (Game::GetInstance() && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
+        if (game_work.m_SaveData && info) {
+            static const uint32_t hFirstFruit = StringHash("first_fruit");
+            static const uint32_t hLastFruit  = StringHash("last_fruit");
+            const int newVal = (int)m_FruitType + 1;
+            if (game_work.m_SaveData->GetTotal(hFirstFruit) <= 0) {
+                game_work.m_SaveData->AddToTotal("first_fruit", hFirstFruit, newVal, false, false);
+            }
+            const int cur = game_work.m_SaveData->GetTotal(hLastFruit);
+            game_work.m_SaveData->AddToTotal("last_fruit", hLastFruit, newVal - cur, false, false);
+        }
     }
 
     // Combo counter increment — binary @ 0x001787a8..0x001787b0.
@@ -1667,25 +1687,29 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     const FruitInfoData* chosen = FruitInfo_Get(ft);
     if (!chosen || chosen->m_FactCount <= 0) return nullptr;
 
-    // ASM-verified: 2026-05-11 binary @ 0x00175ba4 (asm-inspector).
-    // Negative `factIdx` is the binary's "pick random fact" sentinel
-    // (calls Math::Random::Rand32 to choose). Earlier port clamped to 0
-    // which silently broke FruitFactControl's intended random-fact
-    // behavior (always showed the same first fact).
+    // ASM-verified: 2026-05-20 binary @ 0x00175c8c..0x00175cd4 (re-analyst)
+    // Fact-tracking AddToTotal pair drives deterministic fact rotation (NOT Rand32):
+    // per-fruit `<Name>_facts` count modulo m_FactCount picks the index.
+    // Both calls use trackSession=true, unlockAchievement=true.
     int fi = factIdx;
-    if (fi < 0) {
-        fi = (int)WaveManager::GetInstance()->GetRandom().Rand32(
-                 (uint32_t)chosen->m_FactCount);
+    if (fi < 0) {  // pick-random path
+        if (game_work.m_SaveData) {
+            static const uint32_t hFactsGlobal = StringHash("_facts");
+            game_work.m_SaveData->AddToTotal("_facts", hFactsGlobal, 1, true, true);
+
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%s_facts", chosen->m_Name);
+            int newTotal = game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
+            fi = (newTotal - 1) % chosen->m_FactCount;
+        } else {
+            fi = 0;
+        }
     } else {
         fi = fi % chosen->m_FactCount;
     }
 
     if (outType)    *outType    = ft;
     if (outFactIdx) *outFactIdx = fi;
-
-    // TODO: FruitSaveData::AddToTotal — defer save-tracking; pick fact via raw modulo.
-    // Binary calls FruitSaveData::AddToTotal("facts", 1) and
-    // FruitSaveData::AddToTotal("<fruit>_fact", 1) here.
 
     // fruitlist.xml stores localisation keys (e.g. "FRUIT_FACT_07") in
     // <fact> elements; resolve via StringTable so the caller gets the
