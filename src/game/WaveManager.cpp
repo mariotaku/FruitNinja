@@ -1589,6 +1589,14 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         f->pos  = Vec3(posX, posY, (float)((i + 1) * 32));
         f->vel  = Vec3(velX, velY, 0.0f);
         f->Init(nullptr, (long)fruitType, nullptr);
+        // DIFFERS: binary @ 0x00122a00 only writes m_PlayerIdx in the online-MP branch
+        // via SetForPlayer(newFruit, 0). For SSM (same-screen split-touch), per-fruit
+        // attribution is required by AddShadow / KillFruit -> MissControl::MakeDisappear,
+        // so we wire it from the spawn parameter. The binary's omission appears to be a
+        // Halfbrick bug; the port honors SSM design intent inferred from the downstream
+        // consumers.
+        // ASM-verified: 2026-05-20 binary @ 0x00122a00 (re-analyst).
+        f->m_PlayerIdx = playerIdx;
         // Diagnostic: spawn parameters (low-rate, only fires per spawn-event)
         LOG_VERBOSE("Spawn", "fruit type=%ld pos=(%.1f,%.1f) vel=(%.2f,%.2f) cd=%.2f place=%d",
                     fruitType, posX, posY, velX, velY, chuckDelay, (int)spawnType);
