@@ -923,7 +923,11 @@ void WaveManager::Update(float dt) {
     //     populates state and MainScreen's case-2/0x11 path clears
     //     levelTransitionFlag = 0, the OR-clause becomes true via levelTransitionFlag and the
     //     spawn pump resumes for real gameplay.
-    if (game_work.m_LevelTransitionFlag == 0 || m_pCurrentWave[0] == nullptr) {
+    // ASM-verified: 2026-05-20 binary @ 0x00125a62 reads WaveManager+0x230 =
+    // m_pCurrentWave[1] (P2 pointer), not [0]. In SP m_pCurrentWave[1] is
+    // always null so spawn-pump runs every frame; the gate meaningfully
+    // suppresses spawning only in P2P MP. (re-analyst)
+    if (game_work.m_LevelTransitionFlag == 0 || m_pCurrentWave[1] == nullptr) {
         float accumDt = field_0x2d4 + dt;
         while (accumDt > WAVE_STEP) {
             UpdateWave(WAVE_STEP, 0, 0);

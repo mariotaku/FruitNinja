@@ -136,16 +136,17 @@ Fruit::~Fruit() {
 }
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
+// ASM-verified: 2026-05-20 binary @ 0x00176708 (re-analyst) -- bActive and bCriticalEligible default to 1, not 0.
 // Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
 void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_FruitType = (uint8_t)fruitType;
     m_LifetimeCounter = 0;
-    m_bActive = 0;
+    m_bActive = 1;
     LOG_INFO("FRUIT", "m_bSliced=0 set on entity=%p pos=(%.1f,%.1f) type=%d (in Init)",
              static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = 0;
     m_bDrawWhole = 0;
-    m_bCriticalEligible = 0;
+    m_bCriticalEligible = 1;
     m_bSpawnedByCriticalSplash = 0;
     m_bNoPowerUp = 0;
     m_pSlasher = nullptr;
@@ -284,12 +285,15 @@ void Fruit::Update(float dt) {
         //   pos        += vel        * dt * 60  (position uses dtNorm @ sp+0x354)
         //   m_SecondPos += m_SecondVel * dt * 60
         // Both halves get the same ×60 position scale as the unsliced branch.
-        const float gravLen0 = m_Gravity.Magnitude();
-        const float dtNorm   = dt * 60.0f;
-        const float growRate = 0.2f * dtNorm * 4.5f;   // = 0.9 per frame
-        const float gravLen1 = gravLen0 + growRate;
-        if (gravLen0 > 0.0001f) {
-            m_Gravity = m_Gravity * (gravLen1 / gravLen0);
+        // ASM-verified: 2026-05-20 binary @ 0x001777a8..0x001777ee (re-analyst) -- gravity grow gated.
+        const float dtNorm = dt * 60.0f;
+        if (m_bCriticalEligible == 0) {
+            float len = m_Gravity.Normalise();   // unit-izes, returns old magnitude
+            m_Gravity *= len + 0.9f * dtNorm;
+        }
+        if (m_bSpawnedByCriticalSplash != 0) {
+            float len = m_Gravity.Normalise();
+            m_Gravity *= len + 1.3f * dtNorm;
         }
 
         // Two-body physics — same ×60 position scale as unsliced.
