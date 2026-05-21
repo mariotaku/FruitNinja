@@ -124,10 +124,14 @@ BonusScreen::BonusScreen()
     // ASM-verified: 2026-05-18 binary @ 0x0013211c (re-analyst)
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
-    // Load background texture into m_Texture (base slot +0x74, drawn by HUDControl3d::Draw).
-    // TODO: resolve exact texture name from binary literal pool 0x00132210
+    // ASM-verified: 2026-05-22 binary @ 0x0013207e..0x00132088 (re-analyst).
+    // DAT_00132204 -> rodata "arcade_diolog_box.tex" (literal typo "diolog"
+    // matches the asset on disk at Data/textures/arcade_diolog_box.tex).
+    // Prior port string "dialog-box-big.tex" was a guess and didn't resolve --
+    // m_Texture invalid -> size stayed at (0,0,0) -> HUDControl3d::Draw produced
+    // a degenerate 0x0 quad and the dialog box was invisible.
     Mortar::SmartPtr<Mortar::Texture> bgTex =
-        TextureManager::LoadLocalisedTexture("dialog-box-big.tex");
+        TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
     m_Texture = bgTex;
 
     // ASM-verified: 2026-05-22 binary @ 0x001320cc..0x001320f4 (re-analyst).
@@ -138,14 +142,19 @@ BonusScreen::BonusScreen()
         size = Vec3(w, h, 0.0f);
     }
 
-    // PreLoadSound calls — clip names at literal pool 0x00132210..0x00132224.
-    // TODO: resolve clip names from binary literal pool 0x00132210..0x00132224
-    // TODO: PreLoadSound("BonusRush");
-    // TODO: PreLoadSound("BonusStar1");
-    // TODO: PreLoadSound("BonusStar2");
-    // TODO: PreLoadSound("BonusStar3");
-    // TODO: PreLoadSound("BonusFinale");
-    // TODO: PreLoadSound("BonusCount");
+    // ASM-verified: 2026-05-22 binary @ 0x0013218a..0x001321c8 (re-analyst).
+    // SFX preloads in order; clip names resolved from literal pool
+    // 0x00132210..0x00132224. PreLoadSoundEx variant for the drum-roll
+    // (vtbl[1]) -- looping/streamed flavour vs the one-shot fireworks/explosions.
+    {
+        Mortar::SoundManager& sm = Mortar::SoundManager::GetInstance();
+        sm.PreLoadSound  ("Bonus-Firework-Explode");
+        sm.PreLoadSoundEx("Bonus-drum-roll", true);
+        sm.PreLoadSound  ("equip-unlock");
+        sm.PreLoadSound  ("Bonus-Explosion-1");
+        sm.PreLoadSound  ("Bonus-Explosion-3");
+        sm.PreLoadSound  ("Bonus-Explosion-5");
+    }
 }
 
 // ---------------------------------------------------------------------------
