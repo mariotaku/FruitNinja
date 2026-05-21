@@ -22,10 +22,9 @@
 //   ctest --test-dir build -R bonus_phase --output-on-failure
 // or:
 //   ./build/tests/Debug/test_bonus_phase.exe
+//   ./build/tests/Debug/test_bonus_phase.exe --interactive
 
-#include <SDL.h>
-#include "render/gl_funcs.h"
-#include "Game.h"
+#include "test_harness.h"
 #include "screens/GameOverScreen.h"
 #include "screens/BonusScreen.h"
 #include "screens/MainScreen.h"
@@ -38,11 +37,6 @@
 #include "entities/ActorManager.h"
 #include "game/FruitSaveData.h"
 #include "engine/math/Vec3.h"
-#include "engine/audio/SoundManager.h"
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include "game/GameWork.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,67 +53,6 @@ static const int SETTLE_FRAMES = 60;
 
 // Maximum frames to wait for the state to advance after firing a callback.
 static const int ADVANCE_TIMEOUT = 120;
-
-static bool GameSetup(SDL_Window** outWindow, SDL_GLContext* outGl, Game* game)
-{
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-        return false;
-    }
-
-#if defined(FRUIT_GL_API_ES1)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#endif
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-
-    *outWindow = SDL_CreateWindow(
-        "fruit-ninja-bonus-phase-test",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        960, 640,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
-    if (!*outWindow) {
-        fprintf(stderr, "Window failed: %s\n", SDL_GetError());
-        SDL_Quit();
-        return false;
-    }
-
-    *outGl = SDL_GL_CreateContext(*outWindow);
-    if (!*outGl) {
-        fprintf(stderr, "GL ctx failed: %s\n", SDL_GetError());
-        SDL_DestroyWindow(*outWindow);
-        SDL_Quit();
-        return false;
-    }
-    SDL_GL_SetSwapInterval(0);  // headless: no vsync
-
-    if (!gl_load_functions()) {
-        fprintf(stderr, "gl_load_functions failed\n");
-        return false;
-    }
-
-    if (!game->init(*outWindow, *outGl)) {
-        fprintf(stderr, "game.init failed\n");
-        return false;
-    }
-
-    // Silence SFX after init so no audio output appears in test logs.
-    Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
-
-    // Burn through GameInit + splash frames so HUD is live.
-    game->runFrames(120);
-    if (!game_work.mHud) {
-        fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
-        return false;
-    }
-    return true;
-}
 
 // Deactivate all menu / mode-select HUD overlays so they do not fight the
 // game-over scene. Mirrors the pattern used by test_screen.cpp.
@@ -172,18 +105,20 @@ static void TickFrame(Game& game, bool drainEntities = true)
 // Main test
 // ---------------------------------------------------------------------------
 
-int main(int /*argc*/, char* /*argv*/[])
+int main(int argc, char* argv[])
 {
-    setvbuf(stdout, NULL, _IONBF, 0);
-    setvbuf(stderr, NULL, _IONBF, 0);
+    fn::TestHarness h(argc, argv, "bonus_phase");
+    h.SetInitFrames(120);  // burn through GameInit + splash so HUD is live
+    if (!h.ParseFlags()) return 1;
+    if (!h.Init()) return 1;
 
-    SDL_Window*   window = NULL;
-    SDL_GLContext gl     = NULL;
-    Game game;
-    if (!GameSetup(&window, &gl, &game)) return 1;
+    if (!game_work.mHud) {
+        fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
+        return 1;
+    }
 
     // Set up Arcade mode.
-    HideMenuScreens(game);
+    HideMenuScreens(h.game);
     game_work.gameMode = 2;  // GAME_MODE_ARCADE
 
     // Put MainScreen into the gameplay-active state so it does not fight
@@ -192,7 +127,7 @@ int main(int /*argc*/, char* /*argv*/[])
     game_work.m_GameDt = 1.0f;  // fully faded in
 
     // Drain any entities so the BONUS_PHASE gate clears immediately.
-    DrainEntities(game);
+    DrainEntities(h.game);
 
     // Create GameOverScreen in STATE_BONUS_PHASE (m_State=1) directly.
     // The ctor param2 / param3 are state / timer overrides; they only apply
@@ -225,7 +160,7 @@ int main(int /*argc*/, char* /*argv*/[])
     int bonusCreateFrame = -1;
 
     for (int frame = 0; frame < TIMEOUT_FRAMES; ++frame) {
-        TickFrame(game);
+        TickFrame(h.game);
 
         const int state = gos->m_State;
 
@@ -240,7 +175,7 @@ int main(int /*argc*/, char* /*argv*/[])
 
         // Log once per second while in BONUS_PHASE.
         if (state == GameOverScreen::STATE_BONUS_PHASE && frame % 60 == 0) {
-            Mortar::ActorManager* am = game.actorManager;
+            Mortar::ActorManager* am = h.game.actorManager;
             int nf = am ? am->GetNumEntities(0) : 0;
             int nb = am ? am->GetNumEntities(1) : 0;
             printf("[bonus_phase] frame=%d STATE_BONUS_PHASE timer=%.3f entities=(%d,%d)",
@@ -301,6 +236,17 @@ int main(int /*argc*/, char* /*argv*/[])
     }
 
     // =========================================================================
+    // Interactive mode: once STATE_MAIN_DISPLAY is reached, hand off to the
+    // event loop so the tester can visually inspect the screen. ESC / window
+    // close exits.
+    // =========================================================================
+    if (h.IsInteractive() && exitFrame >= 0 && finalState == GameOverScreen::STATE_MAIN_DISPLAY) {
+        printf("[bonus_phase] --interactive: entering event loop from STATE_MAIN_DISPLAY\n");
+        h.RunInteractive(NULL, NULL, -1);
+        return h.Shutdown();
+    }
+
+    // =========================================================================
     // Part 2: post-BONUS_PHASE flow validation
     // Only run if we reached STATE_MAIN_DISPLAY.
     // =========================================================================
@@ -315,7 +261,7 @@ int main(int /*argc*/, char* /*argv*/[])
             // Do NOT drain entities: MenuButton::Init spawns a fruit entity
             // (type 0). DeactivateAllEntities(0) would kill it, triggering
             // DeletedControl and nulling m_pRetryBtn/m_pQuitBtn.
-            TickFrame(game, /*drainEntities=*/false);
+            TickFrame(h.game, /*drainEntities=*/false);
             // If state drifted out of MAIN_DISPLAY during settle, stop.
             if (gos->m_State != GameOverScreen::STATE_MAIN_DISPLAY) {
                 printf("[bonus_phase] State drifted to %d during settle at settle-frame %d\n",
@@ -364,7 +310,7 @@ int main(int /*argc*/, char* /*argv*/[])
                        stateAfterTap);
                 // Run a few ticks to stabilise (state may settle into RETRY_FADE or similar).
                 for (int i = 0; i < ADVANCE_TIMEOUT; ++i) {
-                    TickFrame(game, /*drainEntities=*/false);
+                    TickFrame(h.game, /*drainEntities=*/false);
                 }
             }
         }
@@ -393,7 +339,7 @@ int main(int /*argc*/, char* /*argv*/[])
         // Settle to create the quit button (no entity drain -- same reason as above).
         printf("[bonus_phase]   settling %d frames for gos2 buttons...\n", SETTLE_FRAMES);
         for (int i = 0; i < SETTLE_FRAMES; ++i) {
-            TickFrame(game, /*drainEntities=*/false);
+            TickFrame(h.game, /*drainEntities=*/false);
             if (gos2->m_State != GameOverScreen::STATE_MAIN_DISPLAY) {
                 printf("[bonus_phase]   gos2 state drifted to %d at settle-frame %d\n",
                        gos2->m_State, i);
@@ -424,7 +370,7 @@ int main(int /*argc*/, char* /*argv*/[])
             int advanceFrame = -1;
             int advancedState = gos2->m_State;
             for (int i = 0; i < ADVANCE_TIMEOUT; ++i) {
-                TickFrame(game, /*drainEntities=*/false);
+                TickFrame(h.game, /*drainEntities=*/false);
                 if (gos2->m_State != GameOverScreen::STATE_MAIN_DISPLAY) {
                     advanceFrame  = i;
                     advancedState = gos2->m_State;
@@ -445,14 +391,9 @@ int main(int /*argc*/, char* /*argv*/[])
         }
     }
 
-    game.shutdown();
-    SDL_GL_DeleteContext(gl);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-
     if (failures > 0) {
         fprintf(stderr, "FAIL: %d assertion(s) failed\n", failures);
-        return 1;
+        return h.Shutdown();
     }
-    return 0;
+    return h.Shutdown();
 }

@@ -13,28 +13,32 @@
 //   gameplay_zen      -> mode 3, expects zen XML waves to spawn
 //   gameplay_combo    -> mode 1, expects combo XML waves to spawn
 
-#include <SDL.h>
-#include "render/gl_funcs.h"
-#include "Game.h"
+#include "test_harness.h"
 #include "game/WaveManager.h"
 #include "game/StartupEffects.h"
 #include "entities/ActorManager.h"
 #include "entities/Fruit.h"
 #include "hud/HUD.h"
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include "game/GameWork.h"
 
 static int FailUsage() {
     fprintf(stderr,
-        "usage: test_gameplay <classic|arcade|zen|combo>\n");
+        "usage: test_gameplay <classic|arcade|zen|combo> [--interactive] [--screenshot]\n");
     return 1;
+}
+
+// Interactive tick callback: just keeps ticking. Returns true always so the
+// loop runs until ESC / window close.
+static bool GameplayTick(Game& /*game*/, int /*frame*/, void* /*userdata*/) {
+    return true;
 }
 
 int main(int argc, char* argv[]) {
     if (argc < 2) return FailUsage();
     const char* modeName = argv[1];
+
+    // argv[1] must be the mode name, not a flag.
+    if (modeName[0] == '-') return FailUsage();
 
     int gameMode = -1;
     int expectedMinWaves = 1;
@@ -44,43 +48,11 @@ int main(int argc, char* argv[]) {
     else if (strcmp(modeName, "zen")     == 0) { gameMode = 3; expectedMinWaves = 5;  }
     else return FailUsage();
 
-    setvbuf(stdout, nullptr, _IONBF, 0);
-    setvbuf(stderr, nullptr, _IONBF, 0);
+    fn::TestHarness h(argc, argv, "gameplay");
+    h.SetInitFrames(120);
+    if (!h.ParseFlags()) return 1;
+    if (!h.Init()) return 1;
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-        return 1;
-    }
-#if defined(FRUIT_GL_API_ES1)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#endif
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-
-    SDL_Window* window = SDL_CreateWindow(
-        "fruit-ninja-gameplay-test",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        960, 640,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
-    if (!window) { fprintf(stderr, "Window failed: %s\n", SDL_GetError()); SDL_Quit(); return 1; }
-
-    SDL_GLContext gl = SDL_GL_CreateContext(window);
-    if (!gl) { fprintf(stderr, "GL ctx failed: %s\n", SDL_GetError()); SDL_DestroyWindow(window); SDL_Quit(); return 1; }
-    SDL_GL_SetSwapInterval(0);
-
-    if (!gl_load_functions()) { fprintf(stderr, "gl_load_functions failed\n"); return 1; }
-
-    Game game;
-    if (!game.init(window, gl)) { fprintf(stderr, "game.init failed\n"); return 1; }
-
-    // Burn through GameInit + splash.
-    game.runFrames(120);
     if (!game_work.mHud) {
         fprintf(stderr, "FAIL: game_work.mHud null after 120 frames\n");
         return 1;
@@ -114,6 +86,13 @@ int main(int argc, char* argv[]) {
     // that state machine, so clear it manually to enable the spawn pump.
     game_work.m_LevelTransitionFlag = 0;
 
+    if (h.IsInteractive()) {
+        // After SetupLevel, keep ticking until ESC so the tester can watch
+        // gameplay for the chosen mode.
+        h.RunInteractive(GameplayTick, NULL, /*maxFrames=*/-1);
+        return h.Shutdown();
+    }
+
     // Tick ~3 seconds of frames (180 @ 60Hz) and look for spawn activity.
     // We can't easily count fruit (ActorManager::Add returns recycled
     // entities; counting active fruits via flag bits is the right path).
@@ -123,10 +102,10 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < 180; ++i) {
         // Take a snapshot of (wave, active-fruit-count) before the tick;
         // any change in active count between ticks proves spawn activity.
-        Mortar::ActorManager* am = game.actorManager;
+        Mortar::ActorManager* am = h.game.actorManager;
         int fruitsBefore = am ? am->GetNumEntities(0) : 0;
 
-        game.runFrames(1);
+        h.RunHeadless(1);
 
         int fruitsAfter = am ? am->GetNumEntities(0) : 0;
         if (fruitsAfter > fruitsBefore) {
@@ -146,17 +125,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     if (waveTransitions == 0) {
-        // Not strictly fatal — first wave could still be running — but
+        // Not strictly fatal -- first wave could still be running -- but
         // useful as a soft signal.
         printf("[test_gameplay] WARN: no wave transitions in 3s; first wave still active.\n");
     }
 
-    game.shutdown();
-    SDL_GL_DeleteContext(gl);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    if (h.IsScreenshot()) h.Screenshot();
 
     printf("PASS: gameplay mode '%s' OK (%d spawns, %d wave transitions)\n",
            modeName, spawnCount, waveTransitions);
-    return 0;
+    return h.Shutdown();
 }

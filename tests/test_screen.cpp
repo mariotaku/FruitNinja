@@ -9,27 +9,10 @@
 //
 // Each ctest entry passes a different screen name.
 
-#include <SDL.h>
-#include "render/gl_funcs.h"
-#include <cstdlib>
+#include "test_harness.h"
 #include <climits>
 #include <set>
-#include <sys/stat.h>
-#ifdef _WIN32
-#  include <direct.h>
-#endif
 
-// Test-only: glReadPixels isn't in the project's thin gl_funcs.h
-// wrapper. Load it dynamically via SDL_GL_GetProcAddress so the test
-// doesn't need a static link to opengl32 / libGL.
-typedef int     GLint_t;
-typedef unsigned int GLsizei_t;
-typedef unsigned int GLenum_t;
-typedef void    GLvoid_t;
-typedef void (*PFN_glReadPixels)(GLint_t, GLint_t, GLsizei_t, GLsizei_t,
-                                 GLenum_t, GLenum_t, GLvoid_t*);
-static PFN_glReadPixels g_glReadPixels = nullptr;
-#include "Game.h"
 #include "render/Renderer.h"
 #include "screens/DojoScreen.h"
 #include "screens/AboutScreen.h"
@@ -47,10 +30,6 @@ static PFN_glReadPixels g_glReadPixels = nullptr;
 #include "hud/FruitFactControl.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include "game/GameWork.h"
 
 static int FailUsage() {
     fprintf(stderr,
@@ -65,59 +44,66 @@ static int FailUsage() {
     return 1;
 }
 
+// Userdata for the classic --no-miss interactive callback.
+struct ClassicNoMissData {
+    std::set<Mortar::Entity*> seen;
+    int frameIdx;
+    Game* game;
+};
+
+static bool ClassicNoMissTick(Game& game, int frame, void* userdata) {
+    ClassicNoMissData* d = (ClassicNoMissData*)userdata;
+    game_work.missCount = 0;
+
+    Mortar::ActorManager* am = game.actorManager;
+    if (am) {
+        std::set<Mortar::Entity*> current;
+        for (int type = 0; type <= 1; ++type) {
+            std::list<Mortar::Entity*>::iterator it;
+            Mortar::Entity* e = am->GetEntityFirst(type, it);
+            while (e) {
+                current.insert(e);
+                if (d->seen.find(e) == d->seen.end()) {
+                    printf("[SPAWN] f=%d type=%d ent=%p pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f)\n",
+                           frame, type, (void*)e,
+                           e->pos.x, e->pos.y, e->vel.x, e->vel.y);
+                } else if (frame % 10 == 0) {
+                    printf("[POS]   f=%d type=%d ent=%p pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f)\n",
+                           frame, type, (void*)e,
+                           e->pos.x, e->pos.y, e->vel.x, e->vel.y);
+                }
+                e = am->GetEntityNext(type, it);
+            }
+        }
+        for (std::set<Mortar::Entity*>::iterator sit = d->seen.begin();
+             sit != d->seen.end(); ++sit) {
+            if (current.find(*sit) == current.end()) {
+                printf("[DESPAWN] f=%d ent=%p\n", frame, (void*)*sit);
+            }
+        }
+        d->seen.swap(current);
+    }
+
+    return true;  // keep running; harness caps at maxFrames
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) return FailUsage();
     const char* screenName = argv[1];
-    bool interactive = false;
-    bool noMiss      = false;
+
+    bool noMiss = false;
     for (int i = 2; i < argc; i++) {
-        if      (strcmp(argv[i], "--interactive") == 0) interactive = true;
-        else if (strcmp(argv[i], "--screenshot")  == 0) {} // handled later
+        if      (strcmp(argv[i], "--interactive") == 0) {}  // handled by harness
+        else if (strcmp(argv[i], "--screenshot")  == 0) {}  // handled by harness
         else if (strcmp(argv[i], "--no-miss")     == 0) noMiss = true;
         else return FailUsage();
     }
 
-    setvbuf(stdout, nullptr, _IONBF, 0);
-    setvbuf(stderr, nullptr, _IONBF, 0);
+    fn::TestHarness h(argc, argv, screenName);
+    h.SetInitFrames(5);
+    if (!h.ParseFlags()) return 1;
+    if (!h.Init()) return 1;
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-        return 1;
-    }
-
-#if defined(FRUIT_GL_API_ES1)
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#else
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-#endif
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
-
-    // Hidden in headless mode (FB still rendered); shown in interactive.
-    Uint32 winFlags = SDL_WINDOW_OPENGL | (interactive ? SDL_WINDOW_SHOWN : SDL_WINDOW_HIDDEN);
-    SDL_Window* window = SDL_CreateWindow(
-        "fruit-ninja-test",
-        interactive ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED,
-        interactive ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED,
-        960, 640, winFlags);
-    if (!window) { fprintf(stderr, "Window failed: %s\n", SDL_GetError()); SDL_Quit(); return 1; }
-
-    SDL_GLContext gl = SDL_GL_CreateContext(window);
-    if (!gl) { fprintf(stderr, "GL ctx failed: %s\n", SDL_GetError()); SDL_DestroyWindow(window); SDL_Quit(); return 1; }
-    SDL_GL_SetSwapInterval(interactive ? 1 : 0);
-
-    if (!gl_load_functions()) { fprintf(stderr, "gl_load_functions failed\n"); return 1; }
-
-    Game game;
-    if (!game.init(window, gl)) { fprintf(stderr, "game.init failed\n"); return 1; }
-
-    // Drive a few frames first so the splash -> game transition
-    // initialises HUD + MainScreen.
-    game.runFrames(5);
     if (!game_work.mHud) {
         fprintf(stderr, "FAIL: game_work.mHud is null after runFrames(5)\n");
         return 1;
@@ -137,27 +123,27 @@ int main(int argc, char* argv[]) {
         // already there — leave MainScreen active
     } else if (strcmp(screenName, "dojo") == 0) {
         hideAllExisting();
-        DojoScreen* s = new DojoScreen(game);
+        DojoScreen* s = new DojoScreen(h.game);
         game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "about") == 0) {
         hideAllExisting();
-        DojoScreen* dojo = new DojoScreen(game);
+        DojoScreen* dojo = new DojoScreen(h.game);
         dojo->m_bActive = 0;  // dojo is just AboutScreen's parent for back-nav
         game_work.mHud->AddControl(dojo);
-        AboutScreen* s = new AboutScreen(game, dojo);
+        AboutScreen* s = new AboutScreen(h.game, dojo);
         s->Init();
         game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "shop") == 0) {
         hideAllExisting();
-        DojoScreen* dojo = new DojoScreen(game);
+        DojoScreen* dojo = new DojoScreen(h.game);
         dojo->m_bActive = 0;
         game_work.mHud->AddControl(dojo);
-        ShopScreen* s = new ShopScreen(game, dojo);
+        ShopScreen* s = new ShopScreen(h.game, dojo);
         game_work.mHud->AddControl(s, false);
         s->Init();
     } else if (strcmp(screenName, "gamemode") == 0) {
         hideAllExisting();
-        GameModeScreen* s = new GameModeScreen(game, false);
+        GameModeScreen* s = new GameModeScreen(h.game, false);
         game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "classic") == 0) {
         // Active Classic-mode gameplay HUD: ScoreControl + 3x MissControl
@@ -307,10 +293,10 @@ int main(int argc, char* argv[]) {
         game_work.mHud->AddControl(s);
 
         // 1.9s state-0 + ~1s state-6 alpha ramp = ~180 frames at 60fps.
-        game.runFrames(180);
+        h.RunHeadless(180);
         // Extra idle frames so retry/quit creation (after m_ProgressCounter == 10)
         // and slide-in animations fully settle.
-        game.runFrames(60);
+        h.RunHeadless(60);
 
         // ---- Assertions ----
         int failures = 0;
@@ -417,10 +403,7 @@ int main(int argc, char* argv[]) {
             fprintf(stderr,
                 "gameover-transition test FAILED with %d assertion(s)\n",
                 failures);
-            game.shutdown();
-            SDL_GL_DeleteContext(gl);
-            SDL_DestroyWindow(window);
-            SDL_Quit();
+            h.Shutdown();
             return 1;
         }
         fprintf(stdout, "PASS: gameover-transition all assertions ok "
@@ -429,23 +412,14 @@ int main(int argc, char* argv[]) {
                 (s->m_pFruitFact && s->m_pFruitFact->m_pCurFactString) ? "ok" : "MISSING",
                 s->m_pRetryBtn ? "ok" : "MISSING",
                 s->m_pQuitBtn ? "ok" : "MISSING");
-        game.shutdown();
-        SDL_GL_DeleteContext(gl);
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 0;
+        return h.Shutdown();
     } else {
         fprintf(stderr, "unknown screen '%s'\n", screenName);
         return FailUsage();
     }
 
-    bool screenshot = false;
-    for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "--screenshot") == 0) screenshot = true;
-    }
-
-    if (interactive) {
-        if (noMiss) {
+    if (h.IsInteractive()) {
+        if (strcmp(screenName, "classic") == 0 && noMiss) {
             // Custom loop that mirrors Game::run() pacing but resets
             // game_work.missCount=0 every tick so misses never reach the > 2
             // game-over trigger in Fruit::CollisionResponse. game.run()
@@ -459,50 +433,17 @@ int main(int argc, char* argv[]) {
             // logs every new pointer, DESPAWN logs removal, POS logs the
             // trail every 10 frames. Runtime capped at 60s (~6000 frames
             // at ~100fps Game::run pacing) so a CI capture is bounded.
-            std::set<Mortar::Entity*> seen;
             const int kMaxFrames = 60 * 100;  // 60s at ~100fps
-            int frameIdx = 0;
-            while (game.running && frameIdx < kMaxFrames) {
-                game_work.missCount = 0;
-
-                Mortar::ActorManager* am = game.actorManager;
-                if (am) {
-                    std::set<Mortar::Entity*> current;
-                    for (int type = 0; type <= 1; ++type) {
-                        std::list<Mortar::Entity*>::iterator it;
-                        Mortar::Entity* e = am->GetEntityFirst(type, it);
-                        while (e) {
-                            current.insert(e);
-                            if (seen.find(e) == seen.end()) {
-                                printf("[SPAWN] f=%d type=%d ent=%p pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f)\n",
-                                       frameIdx, type, (void*)e,
-                                       e->pos.x, e->pos.y, e->vel.x, e->vel.y);
-                            } else if (frameIdx % 10 == 0) {
-                                printf("[POS]   f=%d type=%d ent=%p pos=(%6.1f,%6.1f) vel=(%6.2f,%6.2f)\n",
-                                       frameIdx, type, (void*)e,
-                                       e->pos.x, e->pos.y, e->vel.x, e->vel.y);
-                            }
-                            e = am->GetEntityNext(type, it);
-                        }
-                    }
-                    for (std::set<Mortar::Entity*>::iterator sit = seen.begin();
-                         sit != seen.end(); ++sit) {
-                        if (current.find(*sit) == current.end()) {
-                            printf("[DESPAWN] f=%d ent=%p\n", frameIdx, (void*)*sit);
-                        }
-                    }
-                    seen.swap(current);
-                }
-
-                game.runFrames(1);
-                ++frameIdx;
-            }
-            printf("[test_screen classic --no-miss] exit after %d frames (%s)\n",
-                   frameIdx, game.running ? "60s timeout" : "window closed");
+            ClassicNoMissData d;
+            d.frameIdx = 0;
+            d.game = &h.game;
+            h.RunInteractive(ClassicNoMissTick, &d, kMaxFrames);
+            printf("[test_screen classic --no-miss] exit after interactive run (%s)\n",
+                   h.game.running ? "60s timeout" : "window closed");
         } else {
             // Interactive: hand off to the normal main loop. ESC / window
             // close exits. No automatic timeout.
-            game.run();
+            h.RunInteractive(NULL, NULL, -1);
         }
     } else {
         // Headless: drive enough frames to finish the in-transition
@@ -519,59 +460,20 @@ int main(int argc, char* argv[]) {
         //   pass 2: 30 more frames of "idle Draw" — this is what catches
         //           rendering bugs that only fire post-transition (e.g.
         //           glyph emission once the screen is fully alpha=1).
-        game.runFrames(180);
-        game.runFrames(30);
+        h.RunHeadless(180);
+        h.RunHeadless(30);
 
-        // --screenshot: dump the framebuffer to a PPM next to the exe so
-        // remote testers can inspect what the screen rendered without a
-        // visible window.
-        if (screenshot) {
-            int ww = 0, wh = 0;
-            SDL_GL_GetDrawableSize(window, &ww, &wh);
-            unsigned char* px = (unsigned char*)malloc((size_t)ww * wh * 3);
-            if (!g_glReadPixels)
-                g_glReadPixels = (PFN_glReadPixels)SDL_GL_GetProcAddress("glReadPixels");
-            if (px && g_glReadPixels) {
-                g_glReadPixels(0, 0, ww, wh, GL_RGB, GL_UNSIGNED_BYTE, px);
-                char path[256];
-                // Per CLAUDE.md: temp/scratch files live in <project>/tmp/
-                // (gitignored). The "screen_*.ppm" files are throwaway and
-                // would otherwise clutter the repo root on every run.
-#ifdef _WIN32
-                _mkdir("tmp");
-                _mkdir("tmp/test");
-                _mkdir("tmp/test/screenshots");
-#else
-                mkdir("tmp", 0755);
-                mkdir("tmp/test", 0755);
-                mkdir("tmp/test/screenshots", 0755);
-#endif
-                snprintf(path, sizeof(path), "tmp/test/screenshots/screen_%s.ppm", screenName);
-                FILE* f = fopen(path, "wb");
-                if (f) {
-                    fprintf(f, "P6\n%d %d\n255\n", ww, wh);
-                    // glReadPixels gives bottom-up; flip to top-down so
-                    // viewers (most expect P6 top-down) show correctly.
-                    for (int y = wh - 1; y >= 0; y--) {
-                        fwrite(px + (size_t)y * ww * 3, 1, (size_t)ww * 3, f);
-                    }
-                    fclose(f);
-                    fprintf(stdout, "wrote %s (%dx%d)\n", path, ww, wh);
-                }
-                free(px);
-            }
+        if (h.IsScreenshot()) {
+            char screenshotName[64];
+            snprintf(screenshotName, sizeof(screenshotName), "screen_%s", screenName);
+            h.Screenshot(screenshotName);
         }
     }
 
-    game.shutdown();
-    SDL_GL_DeleteContext(gl);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-
-    if (!interactive) {
+    if (!h.IsInteractive()) {
         fprintf(stdout,
             "PASS: screen '%s' transition + 30 idle frames clean\n",
             screenName);
     }
-    return 0;
+    return h.Shutdown();
 }
