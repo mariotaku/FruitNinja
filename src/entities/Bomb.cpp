@@ -28,6 +28,7 @@
 #include <cstring>
 #include <string>
 #include "game/GameWork.h"
+#include "game/GameTaskState.h"
 
 // Analysed: 2026-04-29T00:00
 
@@ -773,6 +774,11 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
             // stat for hash "bomb" (0x001B96CE), sets bombHitTimer = 3.2,
             // camera shake already fired above.
             // GameOver is triggered by GameUpdate when bombHitTimer crosses 1.5 downward.
+            // Clear menu-bomb flash flag so GameUpdate's cross-1.5 trigger fires
+            // GameOver normally on a real gameplay bomb hit. binary @ 0x0016b154.
+            if (GameTaskState* ts = GetTaskState()) {
+                ts->m_bMenuBombFlashFlag = 0;
+            }
             game_work.m_BombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
             if (game_work.mGameSound) game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
             if (game_work.m_SaveData) game_work.m_SaveData->AddToTotal("bomb", 1);

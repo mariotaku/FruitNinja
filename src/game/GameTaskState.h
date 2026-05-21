@@ -117,8 +117,17 @@ struct GameTaskState {
     // the silent-loop matches the binary's behaviour.
     Mortar::MortarSound* m_pBombFuseSound;
 
-    // Gap +0xDC..+0xFB: unnamed binary fields not yet RE'd
-    uint8_t _gap_dc[0x20];
+    // Gap +0xDC..+0xF7: unnamed binary fields not yet RE'd
+    uint8_t _gap_dc[0xf8 - 0xdc];  // 0x1c bytes (+0xdc..+0xf7)
+
+    // +0xf8: "Menu-bomb flash" flag. Set to 1 by HitMenuBomb (binary @ 0x0016b234)
+    // before arming bombHitTimer=2.0; cleared to 0 by HitBomb (binary @ 0x0016b0fc)
+    // before arming bombHitTimer=3.2. Gates the GameUpdate cross-1.5 GameOver
+    // trigger so that Quit-from-GameOverScreen / PauseScreen quit / Zen-mode bomb
+    // penalty animations don't re-fire GameOver.
+    // ASM-verified: 2026-05-20 binary @ 0x0016b270 / 0x0016b154 / 0x0016c2bc (re-analyst)
+    uint8_t m_bMenuBombFlashFlag;          // +0xf8
+    uint8_t _gap_f9[0x03];                 // +0xf9..+0xfb pad
 
     // +0xfc: background texture (loaded in GameInit)
     Mortar::SmartPtr<Mortar::Texture> pBackgroundTexture;
@@ -175,6 +184,8 @@ struct GameTaskState {
           _gap_cc(),
           m_pBombFuseSound(nullptr),
           _gap_dc(),
+          m_bMenuBombFlashFlag(0),
+          _gap_f9(),
           pBackgroundTexture(),
           pDeferredControl(nullptr),
           _gap_104(),
@@ -206,6 +217,7 @@ static_assert(offsetof(GameTaskState, sliceFxMesh)           == 0xBC,  "GameTask
 static_assert(offsetof(GameTaskState, sliceFxCritMesh)       == 0xC0,  "GameTaskState::sliceFxCritMesh must be at +0xC0");
 static_assert(offsetof(GameTaskState, pSliceEffectPool)      == 0xC8,  "GameTaskState::pSliceEffectPool must be at +0xC8");
 static_assert(offsetof(GameTaskState, m_pBombFuseSound)      == 0xD8,  "GameTaskState::m_pBombFuseSound must be at +0xD8");
+static_assert(offsetof(GameTaskState, m_bMenuBombFlashFlag)  == 0xF8,  "GameTaskState m_bMenuBombFlashFlag at +0xF8");
 static_assert(offsetof(GameTaskState, pBackgroundTexture)    == 0xFC,  "GameTaskState::pBackgroundTexture must be at +0xFC");
 static_assert(offsetof(GameTaskState, pDeferredControl)      == 0x100, "GameTaskState::pDeferredControl must be at +0x100");
 static_assert(offsetof(GameTaskState, m_TimedModeAccumulator) == 0x10C, "GameTaskState::m_TimedModeAccumulator must be at +0x10C");
