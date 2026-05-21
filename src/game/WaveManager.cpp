@@ -1241,7 +1241,12 @@ void WaveManager::UpdateComboSpeed(float dt) {
     if (!sc) {
         sc = new SpeedControl();
         m_SpeedControl[0] = sc;
-        // TODO: install OnDestroy delegate calling WaveManager::DeleteSpeedControl.
+        // ASM-verified: binary @ 0x00122f50 (re-analyst) constructs a
+        // Delegate1<void, HUDControl*>::QCallee<WaveManager>(this, &DeleteSpeedControl)
+        // and stores it into sc->m_RemoveCallback so HUD::Release nulls
+        // m_SpeedControl when the control is torn down on GameExit.
+        sc->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(
+            this, &WaveManager::DeleteSpeedControl);
         if (game_work.mHud) game_work.mHud->AddControl(sc, false);
     }
     SpeedControl* spc = static_cast<SpeedControl*>(sc);
