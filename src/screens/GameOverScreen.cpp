@@ -40,6 +40,9 @@
 #include <algorithm>
 #include <cstdlib>
 #include "game/GameWork.h"
+#include "game/GameOver.h"
+#include "engine/network/NetworkManager.h"
+#include "screens/MainScreen.h"
 
 using Mortar::TextureManager;
 
@@ -127,12 +130,54 @@ static void DoSetTerminate() {
     }
 }
 
+// ASM-spec for QuitToMenu (binary @ 0x00169e50):
+//   ResetGlobalDt(1.0f)
+//   game_work.m_LevelTransitionFlag = 1                        // +0x05
+//   mainScreen->m_State      = STATE_CAMERA_ZOOM (0)           // +0x10c
+//   mainScreen->m_StateTimer = 0.5f                            // +0x110
+//   if (game_work.field_0x16c) ((HUDControl*)f)->m_bPendingRemoval = 1
+//   SetScore(0, -1)
+//   NetworkManager::GetInstance()->VTable[3](0)   // defunct
+//   game_work.m_MenuReturnTimer = 0.0f                          // +0x1a0
+//   game_work.field_0x19d     = 0                               // +0x19d
+//   game_work.m_bMPRetryPending = 0                             // +0x170
+//   game_work.field_0x19a/b/c = 0                               // +0x19a..+0x19c
+//
+// NOTE: This is THE SAME binary function called by PauseScreen quit path
+// (ported at src/screens/PauseScreen.cpp:144-194). Duplication faithful
+// to the binary's call sites. GameOverScreen omits the
+// MainScreen::DeleteMenuButtons() workaround PauseScreen uses (no menu
+// buttons live on this screen).
+// ASM-verified: 2026-05-20 binary @ 0x00169e50 (re-analyst)
 static void DoQuitToMenu() {
-    // Binary 0x00169e50 -- full flow not yet ported.
-    // Port: thaw wave timer, set levelTransitionFlag.
-    WaveManager::GetInstance()->ResetGlobalDt(1.0f);
-    Game* g = Game::GetInstance();
-    if (g) game_work.m_LevelTransitionFlag = 1;
+    WaveManager::GetInstance()->ResetGlobalDt(1.0f);              // 0x169e58/60
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    game_work.m_LevelTransitionFlag = 1;                          // 0x169e6e
+
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);       // 0x169e7c -> m_State = 0
+        game_work.mMainScreen->SetStateTimer(0.5f);               // 0x169e80 -> m_StateTimer = 0.5f
+    }
+
+    // 0x169e84/0x169e86: field_0x16c is a HUDControl* (always null in
+    // current port). Kept for binary fidelity; runtime no-op.
+    if (game_work.field_0x16c) {
+        reinterpret_cast<HUDControl*>(static_cast<intptr_t>(game_work.field_0x16c))->m_bPendingRemoval = 1;
+    }
+
+    FN::SetScore(0, -1);                                          // 0x169e90
+
+    // Defunct: P2P / online disconnect -- no-op stub; binary @ 0x00169e9e
+    Mortar::NetworkManager::GetInstance()->SpawnThreadController(); // vtable[3](0)
+
+    game_work.m_MenuReturnTimer = 0.0f;                           // 0x169eaa
+    game_work.field_0x19d       = 0;                              // 0x169eae
+    game_work.m_bMPRetryPending = 0;                              // 0x169eb2
+    game_work.field_0x19a       = 0;                              // 0x169eb6
+    game_work.field_0x19b       = 0;                              // 0x169eba
+    game_work.field_0x19c       = 0;                              // 0x169ebe
 }
 
 // ---------------------------------------------------------------------------
