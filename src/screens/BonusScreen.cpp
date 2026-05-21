@@ -102,16 +102,18 @@ BonusScreen::BonusScreen()
       m_PulseField17(1.0f),
       m_PulseAngle(0),
       _padPulse(0),
-      m_PulseColour(255, 255, 255, 255),
-      _padA4(0),
-      _padA8(0),
+      m_PulseTarget(0.0f, 0.0f, 0.0f),
       m_NameScale(1.0f),
       m_LeaderboardSubmitted(0),
       _pad1(0),
       _pad2(0),
       _pad3(0),
       m_RushSFX(nullptr),
-      m_PhaseTimer(0.0f),
+      // ASM-verified: 2026-05-22 binary @ 0x00132048 ctor reads
+      // -kRevealHalfBeat (0.33298f) from a global timer array.
+      // Negative phase = slide-in animation; transitions to 0 then positive
+      // for the reveal beats.
+      m_PhaseTimer(-kRevealHalfBeat),
       m_PosOffset(0.0f, 0.0f, 0.0f),
       _padfield23(0),
       _padfield24(0)
@@ -127,6 +129,14 @@ BonusScreen::BonusScreen()
     Mortar::SmartPtr<Mortar::Texture> bgTex =
         TextureManager::LoadLocalisedTexture("dialog-box-big.tex");
     m_Texture = bgTex;
+
+    // ASM-verified: 2026-05-22 binary @ 0x001320cc..0x001320f4 (re-analyst).
+    // Without this write, HUDControl3d::Draw renders a degenerate 0x0 quad.
+    if (m_Texture.IsValid()) {
+        float w = (float)m_Texture->m_Width;
+        float h = (float)m_Texture->m_Height;
+        size = Vec3(w, h, 0.0f);
+    }
 
     // PreLoadSound calls — clip names at literal pool 0x00132210..0x00132224.
     // TODO: resolve clip names from binary literal pool 0x00132210..0x00132224
@@ -326,40 +336,37 @@ void BonusScreen::Update(float dt) {
     // Phase B: per-award reveal (0 <= timer < finaleStart)
     // -----------------------------------------------------------------------
     if (m_PhaseTimer < finaleStart) {
-        int totalDisplayed = 0;
+        // ASM-verified: 2026-05-22 binary @ 0x00132930 (re-analyst).
+        m_DisplayedScore = 0;
         for (int i = 0; i < (int)m_Awards.size(); ++i) {
             BonusAwardHud& entry = m_Awards[i];
-            // Each award reveals at kRevealStart + i * kPerAward.
-            float revealTime = kRevealStart + (float)i * kPerAward;
-            float localT = m_PhaseTimer - revealTime;
+            float normT = (m_PhaseTimer - (float)i * kPerAward) / kPerAward;
 
-            if (localT < 0.0f) {
-                entry.m_Scale          = 0.0f;
-                entry.m_DisplayedScore = 0;
-                continue;
+            if (normT < 0.0f || normT > 1.0f) {
+                // Outside this award's reveal window.
+                entry.m_Colour.a = 0xff;
+                entry.m_DisplayedScore = entry.m_TierBase * entry.m_Multiplier;
+                entry.m_Scale = 1.0f;
+            } else {
+                // Within reveal beat.
+                float beat = fmodf(m_PhaseTimer, kPerAward);
+                float alpha = beat / 0.2f;
+                if (alpha > 1.0f) alpha = 1.0f;
+                if (alpha < 0.0f) alpha = 0.0f;
+                entry.m_Colour.a = (uint8_t)(alpha * 255.0f);
+                if (beat <= 0.0f) {
+                    entry.m_DisplayedScore = 0;
+                } else {
+                    entry.m_DisplayedScore = (int)((float)(entry.m_TierBase * entry.m_Multiplier) * (beat * 0.5f + 0.5f));
+                }
+                // Scale wobble: SinIdx(beat*115*182) / SinIdx(0x5550).
+                // SinIdx is BAM-style (65536 = 2*pi). sinf approximation pending BAM-table port.
+                float angle = beat * 115.0f * 182.0f * (2.0f * 3.14159265f / 65536.0f);
+                float denom = 0.882f;  // sinf(0x5550 * 2*pi/65536) ~= 0.882
+                entry.m_Scale = sinf(angle) / denom;
             }
-
-            // Just-crossed-zero this frame: spawn emitters + play SFX.
-            if (localT < dt) {
-                // TODO: PSPParticleManager::AddEmitter x3 for award[i]
-                // TODO: FruitCamera::CreateCameraShake(...)
-                // TODO: play SFX "BonusStar<i+1>" (BonusStar1/BonusStar2/BonusStar3)
-            }
-
-            // Scale pulse: sin-based scale wobble on reveal.
-            // TODO: resolve exact sin formula from binary @ 0x00132a50
-            entry.m_Scale = 1.0f + 0.3f * sinf(localT * 6.28f);
-            if (entry.m_Scale < 0.0f) entry.m_Scale = 0.0f;
-
-            // Score counter ramp-up.
-            // TODO: resolve exact multiplier ramp math from binary @ 0x00132b00
-            float scoreT = localT / kRevealHalfBeat;
-            if (scoreT > 1.0f) scoreT = 1.0f;
-            entry.m_DisplayedScore = (int)((float)(entry.m_TierBase * entry.m_Multiplier) * scoreT);
-
-            totalDisplayed += entry.m_DisplayedScore;
+            m_DisplayedScore += entry.m_DisplayedScore;
         }
-        m_DisplayedScore = totalDisplayed;
         return;
     }
 
@@ -387,7 +394,7 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     if (m_PulseTimer > 0.0f) {
         m_PulseTimer -= dt;
-        // Damped wobble around m_PulseColour.
+        // Damped wobble toward m_PulseTarget.
         // TODO: resolve exact wobble math from binary @ 0x00132c80
         float wobble = m_PulseTimer * m_PulseField17;
         m_PulseAngle = (int16_t)((int)m_PulseAngle + (int)(wobble * 100.0f));

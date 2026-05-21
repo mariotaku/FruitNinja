@@ -47,9 +47,9 @@ public:
     float                            m_PulseField17;          // +0x98 (init 1.0)
     int16_t                          m_PulseAngle;            // +0x9C
     int16_t                          _padPulse;               // +0x9E
-    Colour                           m_PulseColour;           // +0xA0 (4 bytes)
-    int                              _padA4;                  // +0xA4
-    int                              _padA8;                  // +0xA8
+    // ASM-verified: 2026-05-22 binary @ Update pulse-postlude. Vec3 drift/pulse
+    // target accumulator, NOT a Colour. Prior port mis-typed as Colour+pads.
+    Vec3                             m_PulseTarget;           // +0xA0..+0xAB
     float                            m_NameScale;             // +0xAC (init 1.0)
     uint8_t                          m_LeaderboardSubmitted;  // +0xB0
     uint8_t                          _pad1;                   // +0xB1
@@ -75,8 +75,9 @@ public:
     // vtable slot: Draw (binary @ 0x0013325C)
     void Draw(const Vec3& hudScale, int layerMask) override;
 
-    // GetType -- returns 8 (TODO: confirm from binary)
-    int GetType() override { return 8; }
+    // ASM-verified: 2026-05-22 BonusScreen does NOT override GetType per binary
+    // vtable -- inherits HUDControl3d::GetType which returns 1. Prior port
+    // value of 8 collided with TYPE_SCROLLING_MENU and corrupted state on pause.
 
     // Binary @ 0x00133664 — called by BonusManager::SetUpBonusScreen
     // colour passed as packed BGRA uint32_t (matching BonusManager call site)
