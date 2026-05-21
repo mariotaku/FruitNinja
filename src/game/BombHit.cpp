@@ -98,6 +98,11 @@ void HitMenuBomb(const Vec3& pos) {
     Game* game = Game::GetInstance();
     if (!game) return;
     SetBombHitPos(pos);
+    // Set menu-bomb flash flag so GameUpdate's cross-1.5 GameOver trigger
+    // skips re-firing GameOver on this bomb. binary @ 0x0016b270.
+    if (GameTaskState* ts = GetTaskState()) {
+        ts->m_bMenuBombFlashFlag = 1;
+    }
     game_work.m_BombHitTimer = 2.0f;                       // binary: 0x40000000 = 2.0f
     if (game_work.mGameSound) {
         // Binary pre-loads the SFX via SoundManager::PreLoadSound; the

@@ -360,8 +360,14 @@ void GameUpdate(float dt, bool active) {
         FN::UpdateBombHit(prevBombTimer);
 
         // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
-        if (prevBombTimer > 1.5f && game_work.m_BombHitTimer <= 1.5f && !game_work.m_LevelTransitionFlag) {
-            FN::GameOver(-1, -1.0f, -1);
+        // ASM-verified: 2026-05-20 binary @ 0x0016c2bc (re-analyst) -- taskState+0xf8 gate
+        {
+            GameTaskState* ts = GetTaskState();
+            if (prevBombTimer > 1.5f && game_work.m_BombHitTimer <= 1.5f &&
+                !game_work.m_LevelTransitionFlag &&
+                (!ts || ts->m_bMenuBombFlashFlag == 0)) {
+                FN::GameOver(-1, -1.0f, -1);
+            }
         }
     }
 
