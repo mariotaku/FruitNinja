@@ -29,8 +29,13 @@ struct BonusAwardHud {
     // pad to 0x88 in binary; ARM SmartPtr is 4-byte here so struct is shorter on port
     // Port: no ARM padding needed for asserts — see static_assert below gated on ARM.
 
+    // ASM-verified: 2026-05-22 binary @ 0x00134130 (re-analyst).
+    // Binary default ctor writes m_Multiplier = 1 (`movs r3,#0x1; str r3,[r4,#0x44]`).
+    // AddAward does NOT touch +0x44, so the default value is load-bearing -- every
+    // per-award DisplayedScore = TierBase * Multiplier, and Multiplier defaulting
+    // to 0 made all scores render "0".
     BonusAwardHud()
-        : m_TierBase(0), m_Multiplier(0), _pad48(0), m_DisplayedScore(0),
+        : m_TierBase(0), m_Multiplier(1), _pad48(0), m_DisplayedScore(0),
           m_Scale(1.0f), _pad58(0) {
         m_Name[0] = '\0';
     }

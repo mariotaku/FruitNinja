@@ -56,12 +56,18 @@ int main(int argc, char* argv[]) {
         std::fprintf(stderr, "FAIL: m_Awards.size()=%zu expected 3\n", bs->m_Awards.size());
         return 3;
     }
-    // BonusManager normally sets m_Multiplier; fake it so the test exercises
-    // Update's score-ramp formula. (Known follow-up RE gap.)
+    // Binary default ctor sets m_Multiplier = 1; AddAward leaves it alone.
+    // Verify the default propagated; bump to 2/3/4 anyway so the test
+    // exercises non-trivial DisplayedScore = tier * multiplier.
+    if (bs->m_Awards[0].m_Multiplier != 1) {
+        std::fprintf(stderr, "FAIL: default m_Multiplier=%d expected 1 (BonusAwardHud ctor regression)\n",
+                     bs->m_Awards[0].m_Multiplier);
+        return 3;
+    }
     bs->m_Awards[0].m_Multiplier = 2;
     bs->m_Awards[1].m_Multiplier = 3;
     bs->m_Awards[2].m_Multiplier = 4;
-    std::printf("OK: 3 awards added (tiers 150/300/500, fake mults 2/3/4)\n");
+    std::printf("OK: 3 awards added (tiers 150/300/500, default mult=1 verified, bumped to 2/3/4)\n");
 
     game_work.mHud->AddControl(bs);
 

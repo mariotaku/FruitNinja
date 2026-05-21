@@ -180,7 +180,10 @@ void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> te
     }
     entry.m_StarTex        = tex;
     entry.m_TierBase       = tier;
-    entry.m_Multiplier     = 0;
+    // ASM-verified: 2026-05-22 binary @ 0x00133664 (re-analyst).
+    // Binary AddAward does NOT touch +0x44 (m_Multiplier) -- relies on the
+    // default-ctor value of 1. Earlier port wrote 0 here, which silently
+    // zeroed every per-award DisplayedScore.
     entry.m_DisplayedScore = 0;
     // Pack uint32_t BGRA into Colour (stored as b,g,r,a fields).
     entry.m_Colour.b = (uint8_t)((colour >>  0) & 0xFF);
