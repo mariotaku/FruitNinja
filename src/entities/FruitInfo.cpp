@@ -11,6 +11,8 @@
 #include "Game.h"
 #include "asset/TextureManager.h"
 #include "game/PowerUpManager.h"
+#include "game/WaveManager.h"
+#include "math/Random.h"
 #include "debug/Logger.h"
 #include <tinyxml2.h>
 #include <cstdlib>
@@ -415,4 +417,22 @@ bool FRUIT_POWERS::AnyActivePowers() const {
         if (mgr->GetActiveSingle(m_pArray[i].m_PowerHash)) return true;
     }
     return false;
+}
+
+// ASM-verified: 2026-05-22 binary @ 0x0017a7d8 (re-analyst).
+// Weighted random pick. m_CumulativeWeight is a running total set at XML load;
+// total weight == m_pArray[m_Count-1].m_CumulativeWeight. Roll in [0, total),
+// return first entry whose cumulative > roll. Falls back to last entry (cannot
+// happen given roll < total, but the binary's loop structure permits it).
+uint32_t FRUIT_POWERS::RandomPower() const {
+    if (m_Count == 0 || m_pArray == nullptr) return 0;
+    Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+    uint32_t total = m_pArray[m_Count - 1].m_CumulativeWeight;
+    uint32_t roll  = rng.Rand32(total);
+    FRUIT_POWER* p = m_pArray;
+    for (uint32_t i = 0; i < m_Count; ++i) {
+        p = &m_pArray[i];
+        if (roll < p->m_CumulativeWeight) break;
+    }
+    return p->m_PowerHash;
 }

@@ -18,6 +18,7 @@
 #include "game/BombHit.h"
 #include "game/ScoreState.h"
 #include "game/WaveManager.h"
+#include "game/PowerUpManager.h"
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/util/StringTable.h"
@@ -956,6 +957,19 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
             const int cur = game_work.m_SaveData->GetTotal(hLastFruit);
             game_work.m_SaveData->AddToTotal("last_fruit", hLastFruit, newVal - cur, false, false);
         }
+    }
+
+    // ASM-verified: 2026-05-22 binary @ 0x001780b0 ~+0x360 (re-analyst).
+    // Powerup-fruit slice activates the modifier polymorphism chain. Without
+    // this call, no Freeze/Frenzy/x2/Blitz effects ever fire in Arcade.
+    // TODO: bomb-hit-cinematic gate (second branch of the if) -- needs
+    // kBombHitMax/kBombHitMin DAT resolution. For now LTF==0 is the only
+    // permitting condition; the bomb-hit window won't grant powerups.
+    if (info && info->m_pPowers && !m_bNoPowerUp
+        && game_work.m_LevelTransitionFlag == 0) {
+        uint32_t hash = info->m_pPowers->RandomPower();
+        Vec3 localPos = pos;
+        PowerUpManager::GetInstance()->ActivatePower(hash, &localPos, reinterpret_cast<float*>(&localPos));
     }
 
     // Combo counter increment — binary @ 0x001787a8..0x001787b0.
