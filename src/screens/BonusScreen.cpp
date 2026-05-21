@@ -525,8 +525,11 @@ void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
                           pos.z + kTextOffsetScalar);
             float scoreScale = entry.m_Scale * 24.0f;
             Mortar::Utf8StringIterator scoreIter(scoreBuf);
+            // ASM-verified: 2026-05-22 binary @ 0x001335ae (re-analyst).
+            // Per-award SCORE uses flag 0x0F (movs r6,#0xf), NOT 0x0D like
+            // the name above. Prior port used 0x0D for both.
             fontMain->DrawString(scoreScale, 1.0f, 0.0f, scoreIter, scorePos,
-                                 entry.m_Colour, align, 0x0D, 0.0f, nullptr);
+                                 entry.m_Colour, align, 0x0F, 0.0f, nullptr);
         }
 
         // Advance Y for next row: kAwardYStep = -42.0 (timerArr[5]).

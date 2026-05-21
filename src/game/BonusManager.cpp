@@ -120,14 +120,18 @@ void BonusManager::ClearBestBonuses() {
 // wraps ONLY the AddAward loop; the cache-rebuild prefix runs unconditionally.
 // ---------------------------------------------------------------------------
 void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
-    // Hardcoded tier colours matching binary constants.
+    // ASM-verified: 2026-05-22 binary @ 0x0010e1f0 (MakeColour_BGRA 3-arg
+    // overload) hardcodes alpha = 0xFF (`strb 0xff,[r0,#0x3]`). Port was
+    // packing 0x00 in the high byte, making every per-award entry.m_Colour
+    // alpha=0 -- which made the star quad, award name text, and award score
+    // text all invisible. (re-analyst)
     static const uint32_t k_TierColours[3] = {
-        // BGRA packed: B=0xAD, G=0x7E, R=0x00, A=0x00
-        (0xAD) | (0x7E << 8) | (0x00 << 16) | (0x00 << 24),  // gold
-        // B=0xA0, G=0x05, R=0x05, A=0x00
-        (0xA0) | (0x05 << 8) | (0x05 << 16) | (0x00 << 24),  // red
-        // B=0x01, G=0x5C, R=0x95, A=0x00
-        (0x01) | (0x5C << 8) | (0x95 << 16) | (0x00 << 24),  // blue
+        // BGRA packed: B=0xAD, G=0x7E, R=0x00, A=0xFF
+        (0xAD) | (0x7E << 8) | (0x00 << 16) | (0xFFu << 24),  // gold
+        // B=0xA0, G=0x05, R=0x05, A=0xFF
+        (0xA0) | (0x05 << 8) | (0x05 << 16) | (0xFFu << 24),  // red
+        // B=0x01, G=0x5C, R=0x95, A=0xFF
+        (0x01) | (0x5C << 8) | (0x95 << 16) | (0xFFu << 24),  // blue
     };
 
     // Gather best bonus from each type.
