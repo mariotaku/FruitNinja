@@ -50,8 +50,10 @@ static int g_PowerFruitCount = 0;
 // *DAT_0017a678: Colour(0x80, 0x80, 0xff, 0x80) = RGBA(128, 128, 255, 128)
 // Likely g_FruitOutlineTint or g_FruitGlowTint. Exact consumer not yet RE'd -- TODO.
 static Colour g_FruitTint1(128, 128, 255, 128);  // DAT_0017a678
-// *DAT_0017a670: copy-ctor from DAT_0017a674. Source value not yet RE'd -- TODO.
-static Colour g_FruitTint2(0, 0, 0, 255);        // DAT_0017a670 (placeholder, copy from DAT_0017a674)
+// DAT_0017a670: copy-ctor from BLUE singleton (DAT_0017a674 -> GOT off 0x7a5c
+// == BLUE created in _GLOBAL__I_Colour_cpp @ 0x00184068).
+// ASM-verified: 2026-05-20 binary @ 0x0017a512..0x0017a51c (re-analyst).
+static Colour g_FruitTint2(0, 0, 255, 255);      // DAT_0017a670: blue
 
 // Binary constants for fruit slicing.
 // Resolved from DATs near CollisionResponse (0x1780b0) and Slice (0x176d58).
@@ -748,21 +750,29 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     // All gates must pass; on success roll Rand32(reroll) -- 0 == hit.
     m_bCriticalEligible = false;
 
-    // DIFFERS: DAT_001784fc (kCritScoreBound) and DAT_00178504 (kCritResetBase)
-    // are GOT globals not yet resolved by re-analyst. Using binary-plausible
-    // defaults until the next re-analyst pass fills them in.
-    static const int kCritScoreBound = 8;  // DIFFERS: DAT_001784fc unresolved
-    static const int kCritResetBase  = 0;  // DIFFERS: DAT_00178504 unresolved
+    // ASM-verified: 2026-05-20 binary @ 0x00178154/0x001781d4 (re-analyst).
+    // kCritScoreBound and kCritResetBase are GOT-indirect int32 globals.
+    // DAT_001784fc -> GOT[0x7674] -> *0x001f3e34 = 5
+    // DAT_00178504 -> GOT[0x77c8] -> *0x001f3e38 = 30
+    // Used as: bound = min(m_ScoreThreshold, 5); on crit hit: m_ScoreThreshold = 30 + 5 = 35.
+    static const int kCritScoreBound = 5;   // DAT_001784fc
+    static const int kCritResetBase  = 30;  // DAT_00178504
 
     // FruitInfo +0x318 is m_bScorable: 1 = can receive critical hit.
     const bool canCritFruit = info && info->m_bScorable;
 
-    // DIFFERS: FruitNinjaApp gating fields (+0x05 frenzy flag, +0x10 frenzy
-    // timer) not yet ported. Score threshold now reads/writes game_work.m_ScoreThreshold
-    // (the real field at +0x30, shared with SlashEntity combo-resolve).
+    // ASM-verified: 2026-05-20 binary @ 0x001780f0 (re-analyst).
+    // Critical-hit ladder gates on game_work fields at +0x05 (m_LevelTransitionFlag)
+    // and +0x10 (m_BombHitTimer) -- the same "non-interactive cinematic" pair used
+    // by GameOver, bomb-hit, level-transition. Previously mislabelled as "frenzy"
+    // gating, but it's just the existing transition-gate + bomb-hit-timer pair.
     const int score = game_work.currentScore;
 
-    if (score >= 2 && canCritFruit /* && !frenzyFlag && frenzyTimer <= 0 */) {
+    if (score >= 2
+        && canCritFruit
+        && game_work.m_LevelTransitionFlag == 0   // +0x05
+        && game_work.m_BombHitTimer       <= 0.0f // +0x10
+       ) {
         int& thresh = game_work.m_ScoreThreshold;
         thresh = (thresh < 3) ? 2 : (thresh - 1);
 
