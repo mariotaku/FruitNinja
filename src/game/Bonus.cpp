@@ -8,6 +8,7 @@
 #include "AchievementManager.h"
 #include "../Game.h"
 #include "engine/util/StringHash.h"
+#include "engine/util/StringTable.h"
 #include "engine/asset/TextureManager.h"
 #include <tinyxml2.h>
 #include <cstring>
@@ -154,7 +155,14 @@ void Bonus::Parse(tinyxml2::XMLElement* e, const char* parentTexName) {
         }
     }
 
-    strncpy(m_DisplayName, m_NameTemplate, sizeof(m_DisplayName) - 1);
+    // ASM-verified: 2026-05-22 binary @ 0x0010e61c (re-analyst). Binary's
+    // Bonus::Parse calls GETSTRING_CAST_0_STR on the inner text BEFORE
+    // strcpy -- the <bonus>GAME_TEXTURE_13</bonus> text is a localisation
+    // key, not the display text. Without this lookup the raw key renders
+    // verbatim on BonusScreen.
+    const char* localised = Mortar::GETSTRING_CAST_0_STR(m_NameTemplate);
+    strncpy(m_DisplayName, localised ? localised : m_NameTemplate,
+            sizeof(m_DisplayName) - 1);
     m_DisplayName[sizeof(m_DisplayName) - 1] = '\0';
 }
 
