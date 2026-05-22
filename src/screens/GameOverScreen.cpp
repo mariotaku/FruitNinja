@@ -1271,6 +1271,18 @@ void GameOverScreen::Update(float dt) {
             }
         }
 #endif
+#ifndef __bada__
+        // TEMP DEBUG: BonusScreen black block
+        {
+            static int s_DbgBonusEntFrame = 0;
+            if (++s_DbgBonusEntFrame % 60 == 0) {
+                LOG_INFO("BONUS/Entities",
+                    "fruits=%d bombs=%d",
+                    am ? am->GetNumEntities(0) : -1,
+                    am ? am->GetNumEntities(1) : -1);
+            }
+        }
+#endif
         if (am && am->GetNumEntities(0) == 0 && am->GetNumEntities(1) == 0) {
             if (!m_pBonusScreen) {
                 FindMostOfFruit();

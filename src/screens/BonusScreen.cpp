@@ -193,6 +193,17 @@ void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> te
     entry.m_Scale    = 1.0f;
     m_TotalScore    += tier;
     m_Awards.push_back(entry);
+    // TEMP DEBUG: BonusScreen black block
+    LOG_INFO("BONUS/AddAward",
+        "tier=%d colour=BGRA(%02x,%02x,%02x,%02x) name='%s' starTex=%p valid=%d w=%d h=%d",
+        tier,
+        (unsigned)entry.m_Colour.b, (unsigned)entry.m_Colour.g,
+        (unsigned)entry.m_Colour.r, (unsigned)entry.m_Colour.a,
+        name ? name : "(null)",
+        entry.m_StarTex.Get(),
+        (int)entry.m_StarTex.IsValid(),
+        entry.m_StarTex.IsValid() ? entry.m_StarTex->m_Width  : -1,
+        entry.m_StarTex.IsValid() ? entry.m_StarTex->m_Height : -1);
 }
 
 // ---------------------------------------------------------------------------
@@ -487,6 +498,19 @@ void BonusScreen::Draw(const Vec3& hudScale, int layerMask) {
         if (m_PhaseTimer - kRevealStart < (float)i * kPerAward) break;
 
         const BonusAwardHud& entry = m_Awards[i];
+
+        // TEMP DEBUG: BonusScreen black block
+        {
+            static int s_DbgBonusDrawFrame = 0;
+            if (s_DbgBonusDrawFrame++ < 5) {
+                LOG_INFO("BONUS/Draw",
+                    "row %d pos=(%.1f,%.1f) colour=BGRA(%02x,%02x,%02x,%02x) hasTex=%d",
+                    i, pos.x, pos.y,
+                    (unsigned)entry.m_Colour.b, (unsigned)entry.m_Colour.g,
+                    (unsigned)entry.m_Colour.r, (unsigned)entry.m_Colour.a,
+                    (int)entry.m_StarTex.IsValid());
+            }
+        }
 
         // Star quad: DrawQuadUnCached equivalent — port uses renderer.DrawQuad.
         if (entry.m_StarTex.IsValid()) {
