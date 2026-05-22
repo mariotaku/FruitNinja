@@ -100,16 +100,22 @@ void PowerUp::Parse(tinyxml2::XMLElement* elem) {
         m_Colour.a = rgba[3];
     }
 
-    // "bar" attr — icon/bar texture name
+    // "bar" attr — icon/bar texture name. XML values omit the .tex suffix
+    // (e.g. "arcade_banana_meter_freeze"); the shipped files have it. Mirror
+    // Bonus.cpp's pattern (snprintf "%s.tex") so loads land on the real file.
     const char* bar = elem->Attribute("bar");
-    if (bar) {
-        m_Texture1 = Mortar::TextureManager::LoadLocalisedTexture(bar);
+    if (bar && bar[0]) {
+        char texPath[128];
+        snprintf(texPath, sizeof(texPath), "%s.tex", bar);
+        m_Texture1 = Mortar::TextureManager::LoadLocalisedTexture(texPath);
     }
 
-    // "popup" attr — popup texture name
+    // "popup" attr — popup texture name. Same .tex-suffix convention.
     const char* popup = elem->Attribute("popup");
-    if (popup) {
-        m_Texture2 = Mortar::TextureManager::LoadLocalisedTexture(popup);
+    if (popup && popup[0]) {
+        char texPath[128];
+        snprintf(texPath, sizeof(texPath), "%s.tex", popup);
+        m_Texture2 = Mortar::TextureManager::LoadLocalisedTexture(texPath);
     }
 
     // Iterate child elements
