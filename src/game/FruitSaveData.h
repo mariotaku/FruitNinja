@@ -155,13 +155,12 @@ public:
     int      m_FruitQueue[32];     // +0x80 (all -1 by default)
 
     // +0x100..+0x108: per-player base speed snapshot.
-    // CORRECTED: previously named m_CameraShakeX/Y/Z. Verified by Resume
-    // (writes WaveManager::field_0x4c from +0x100, m_Speed_P0 from +0x104,
-    // field_0x60 from +0x108) and SaveWaveInfo (inverse direction).
-    // There is no camera-shake snapshot in FruitSaveData.
-    float    m_Speed_P0;           // +0x100  (WaveManager::field_0x4c)
-    float    m_Speed_P0_alias;     // +0x104  (WaveManager::m_Speed_P0)
-    float    m_Speed_P1;           // +0x108  (WaveManager::field_0x60)
+    // Resume: m_Speed_P0 -> WaveManager::m_ComboTimer[0]; m_Speed_P0_alias -> m_Speed[0]/[1];
+    // m_Speed_P1 (stored as float) -> WaveManager::m_BlitzBonus[1] (int).
+    // SaveWaveInfo (inverse): m_Speed[0] -> m_Speed_P0, m_BlitzBonus[1] -> m_Speed_P1.
+    float    m_Speed_P0;           // +0x100  (WaveManager::m_ComboTimer[0])
+    float    m_Speed_P0_alias;     // +0x104  (WaveManager::m_Speed[0]/[1])
+    float    m_Speed_P1;           // +0x108  (WaveManager::m_BlitzBonus[1], stored as float)
 
     // +0x10C: persists TimeControl::m_TimeRemaining for resume.
     //         -1.0f sentinel = "non-timed mode, no saved time".
