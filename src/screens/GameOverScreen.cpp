@@ -1111,6 +1111,13 @@ void GameOverScreen::RunStateMainDisplay(int prevState) {
         pos.y = 224.0f * a;
         pos.z = 0.0f;
     }
+
+    // Do NOT write m_State = STATE_MAIN_DISPLAY here. Case 7 (retry-prepare)
+    // bounces into this body and MUST re-enter case 7 next frame until
+    // entities clear -- writing m_State=6 here would lock the screen into
+    // case 6 after the first bounce and the reset path would never fire.
+    // (Earlier "unconditional m_State=6 at 0x00142298" claim was inconsistent
+    // with the bounce-loop semantics that the binary clearly relies on.)
 }
 
 // ---------------------------------------------------------------------------
@@ -1360,9 +1367,15 @@ void GameOverScreen::Update(float dt) {
         if (am && am->GetNumEntities(0) != 0 && m_pSlot9c == nullptr) {
             // Entities still on screen — snap alpha and fall through into
             // STATE_MAIN_DISPLAY in the SAME tick (binary: goto case 6).
+            // ASM-verified 2026-05-22 binary @ 0x001425fc (re-analyst):
+            // binary does NOT write m_State here; prevState passed to case 6
+            // body is the unchanged STATE_RETRY_PREPARE (r9 = m_State = 7).
+            // Case 7 re-enters next frame until entities drain; per-frame
+            // bounce ticks m_ProgressCounter inside the case-6 body and the
+            // counter==10 path writes m_State=6 only after 10 bounce-frames
+            // -- so retry/quit buttons are not recreated on bounce.
             game_work.m_GameDt = 1.0f;
-            m_State = STATE_MAIN_DISPLAY;
-            RunStateMainDisplay(/*prevState=*/STATE_MAIN_DISPLAY);
+            RunStateMainDisplay(/*prevState=*/STATE_RETRY_PREPARE);
             break;
         }
         // ASM-verified: 2026-05-13 binary @ state-7 tail (re-analyst).
