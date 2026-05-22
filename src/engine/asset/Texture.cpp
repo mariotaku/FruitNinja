@@ -3,6 +3,7 @@
 #include "asset/File.h"
 #include "render/DisplayManager.h"
 #include "debug/Logger.h"
+#include <vector>
 
 namespace Mortar {
 
@@ -156,9 +157,27 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
         case 0x0f: // RGBA5551
             tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, raw);
             break;
-        case 0x10: // RGBA4444
-            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4, raw);
+        case 0x10: { // RGBA4444 -> CPU-unpack to RGBA8888
+            // GL_UNSIGNED_SHORT_4_4_4_4 nibble order differs across desktop GL drivers.
+            // Binary stores LE uint16: bits 15..12=R, 11..8=G, 7..4=B, 3..0=A.
+            // Unpack on CPU and upload as GL_UNSIGNED_BYTE to avoid driver variance.
+            const size_t pixCount = (size_t)width * (size_t)height;
+            std::vector<unsigned char> rgba(pixCount * 4);
+            const unsigned short* src16 = reinterpret_cast<const unsigned short*>(raw);
+            for (size_t i = 0; i < pixCount; ++i) {
+                unsigned short p = src16[i];
+                unsigned char r = (unsigned char)((p >> 12) & 0xF);
+                unsigned char g = (unsigned char)((p >>  8) & 0xF);
+                unsigned char b = (unsigned char)((p >>  4) & 0xF);
+                unsigned char a = (unsigned char)((p >>  0) & 0xF);
+                rgba[i*4 + 0] = (r << 4) | r;
+                rgba[i*4 + 1] = (g << 4) | g;
+                rgba[i*4 + 2] = (b << 4) | b;
+                rgba[i*4 + 3] = (a << 4) | a;
+            }
+            tex->UploadNative(width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
             break;
+        }
         case 0x11: // RGB565
             tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, raw);
             break;
