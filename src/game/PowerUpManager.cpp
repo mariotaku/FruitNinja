@@ -34,9 +34,11 @@ PowerUpManager::PowerUpManager()
     , m_ScoreLossFactor(1)
     , m_HighestActiveProgress(0.0f)
     , _pad8c(0)
+#ifndef __bada__
     , m_DtMod_DecayTimer(0.0f)
     , m_DtMod_DecayRate(0.0f)
     , m_WaveStress(1.0f)
+#endif
 {
     // Containers default-constructed by member initialisation.
     // Binary explicitly writes m_WaveDtModCur = m_WaveDtModPrev = 1.0f (above).
