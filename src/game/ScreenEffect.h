@@ -72,6 +72,18 @@ struct EffectImage {
     uint32_t     m_FlagBits;         // +0x74
     bool         m_bLowEndOnly;      // +0x78
 
+    // Port-side trailing fields (no binary offset — not in the 0x50-byte binary struct).
+    // XML `transitionMoveOut="X,Y"` -- exit velocity used during the fade-out phase.
+    // Stored alongside m_Vel which holds entry-phase velocity (transitionMoveIn).
+    // Active in 8 <image> entries in powerUpList.xml.
+    // TODO: Update consumer (binary @ TBD) -- currently stored but not yet
+    // wired into the fade-out animation path.
+    Vec3         m_VelOut;
+    // XML `transition="fade"|"slide"|...` -- animation mode, stored as a hash.
+    // Active value seen: "fade". Used to select mode-specific animation paths.
+    // TODO: Update consumer for mode-specific animation paths (binary @ TBD).
+    uint32_t     m_TransitionHash;
+
     EffectImage()
         : m_TexHandle(0)
         , m_pHudCtrl(nullptr)
@@ -87,6 +99,7 @@ struct EffectImage {
         , m_ColourScale(1,1,1)
         , m_Tint(255,255,255,255)
         , m_FlagBits(0), m_bLowEndOnly(false)
+        , m_VelOut(0,0,0), m_TransitionHash(0)
     {
         memset(m_TexName, 0, sizeof(m_TexName));
     }
