@@ -1537,13 +1537,12 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
 
         float velMultX = info ? info->m_VelXScale : 1.0f;
         float velMultY = info ? info->m_VelYScale : 1.0f;
-        float velX = sin_a * speed * velMultX;
-        // DIFFERS: binary @ 0x00122744 has vmul s14,s14,s15 with
-        // DAT_0012284c = 1.075f, but applying it runtime-traced bombs past
-        // the +240 OOB top so they died at apex instead of arcing back. The
-        // 1.075 likely applies to a different quantity in the binary's per-
-        // frame integration that we haven't pinned down yet; dropping it
-        // here keeps apex within bounds and produces visibly faithful arcs.
+        // velX_pre includes the 1.075f boost from DAT_0012284c (binary @ 0x00122744).
+        // Previously disabled with a // DIFFERS note because runtime-traced bombs went
+        // past +240 OOB at apex — that was actually a symptom of the side-spawn X-basis
+        // being wrong (raw iBase instead of constant 240). With the X-basis fix below
+        // the 1.075f boost is binary-faithful and arcs land within bounds.
+        float velX = sin_a * speed * velMultX * 1.075f;
         float velY = cos_a * speed * velMultY;
 
         float posX = 0.0f;
@@ -1572,24 +1571,23 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         }   /* fall through */
         case PLACEMENT_LEFT:
         case PLACEMENT_RIGHT: {
-            // Side: spawnX = baseDeg * 320/480. binary @ 0x00122802: DAT_00122850/4=320/480
-            float spawnXf = (float)((long)((float)iBase * 320.0f / 480.0f));
-            // spawnY = velY * -0.75 * 320/480. binary @ 0x00122802
-            float spawnYf = (float)((long)(velY * -0.75f * (320.0f / 480.0f)));
-            // velY uses spawner gravity.y: velX + speed * gravity_y * -0.65
-            // binary @ 0x00122818: spawner+0x1c = gravity.y
+            // ASM-verified: 2026-05-22 binary @ 0x001225a0 (side-spawn block
+            // 0x001227fe..0x001228de) (asm-inspector). Formula:
+            //   pos.x = (int)(240.0f * sign)                  // DAT_00122870 = int 240
+            //   pos.y = (int)(baseDeg * 320 / 480)            // DAT_00122850/54
+            //   vel.x = (velX_pre * -0.75f) * sign
+            //   vel.y = velY_pre + speed * spawner.m_Gravity_y * -0.65f
+            //   sign  = -1 for LEFT, +1 for RIGHT
+            // Prior port had X/Y bases swapped (used iBase * 320/480 for X) AND swapped
+            // velocity sources (velX_new <- velY_pre instead of velX_pre). Both wrong.
+            // X-basis is the constant 240 (half of 480-wide landscape screen), NOT
+            // baseDeg -- the pre-switch iVar21=baseDeg is clobbered by DAT_00122870.
             float gravY = info ? info->m_Gravity_y : 0.0f;
-            float newVelX = velY;
-            float newVelY = (float)((long)(velX + speed * gravY * (-0.65f)));
-            if (spawnType == PLACEMENT_LEFT) {
-                posX = -spawnXf;
-                velX = -newVelX;
-            } else {
-                posX = spawnXf;
-                velX = newVelX;
-            }
-            posY = spawnYf;
-            velY = newVelY;
+            float signX = (spawnType == PLACEMENT_LEFT) ? -1.0f : 1.0f;
+            posX = (float)((long)(240.0f * signX));
+            posY = (float)((long)(((float)iBase * 320.0f) / 480.0f));
+            velX = velX * (-0.75f) * signX;
+            velY = velY + speed * gravY * (-0.65f);
             break;
         }
         }
@@ -1669,10 +1667,11 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float velMultY = (type == 0) ? 1.0f : spawner->m_VelYScale;
         float zOffset  = (type == 0) ? 0.0f : spawner->m_SpawnTimer;
 
-        float velX = sin_a * speed * velMultX;
-        // DIFFERS: binary @ 0x001220e6 has vmul s14,s14,s15 with
-        // DAT_00122218 = 1.075f. See SpawnFruit comment above -- same reason
-        // (apex past +240 OOB), same workaround.
+        // velX_pre includes the 1.075f boost from DAT_00122218 (binary @ 0x001220e6).
+        // Previously disabled to mask a downstream X-basis bug -- with the side-spawn
+        // X=240 fix below the boost is binary-faithful. See SpawnFruit comment for
+        // full rationale.
+        float velX = sin_a * speed * velMultX * 1.075f;
         float velY = cos_a * speed * velMultY;
 
         // Spawn position (bottom default).
@@ -1694,24 +1693,21 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
                 break;
             case PLACEMENT_RIGHT:
             case PLACEMENT_LEFT: {
-                // ASM-verified 2026-05-16 binary @ 0x00121fa8 case 0x02/0x03
-                // (0x00122140..0x0012226c). Port previously had X/Y SWAPPED and
-                // the -0.75 factor applied to the wrong slot.
-                //   X-pos = raw baseDeg          (sign-flipped for LEFT via local_60.x = -1)
-                //   Y-pos = baseDeg * 320/480    (DAT_0012221c/20; NOT sign-flipped)
-                //   velX_new = velY_pre * -0.75
-                //   velY_new = velX_pre + speed * gravity.y * -0.65   (DAT_00122224)
-                long  baseDegInt = (long)baseDeg;
-                float newVelY = velX + speed * spawner->m_Gravity_y * (-0.65f);
-                float newVelX = velY * (-0.75f);
-                spawnX = (float)baseDegInt;
-                spawnY = (float)((long)(((float)baseDegInt * 320.0f) / 480.0f));
-                velX   = newVelX;
-                velY   = newVelY;
-                if (st == PLACEMENT_LEFT) {
-                    spawnX = -spawnX;
-                    velX   = -velX;
-                }
+                // ASM-verified: 2026-05-22 binary @ 0x00121fa8 (side-spawn block
+                // mirrors SpawnFruit @ 0x001225a0) (asm-inspector). Formula:
+                //   pos.x = (int)(240.0f * sign)                  // DAT_00122228 = int 240
+                //   pos.y = (int)(baseDeg * 320 / 480)            // DAT_0012221c/20
+                //   vel.x = (velX_pre * -0.75f) * sign            // DAT 0xBF400000
+                //   vel.y = velY_pre + speed * spawner.m_Gravity_y * -0.65f  // DAT_00122224
+                //   sign  = -1 for LEFT, +1 for RIGHT
+                // Previous "2026-05-16" port spec was wrong on two counts: X-basis is
+                // the constant 240 (not baseDeg), and the velocity sources are NOT
+                // swapped (vel.x <- velX_pre * -0.75, NOT velY_pre * -0.75).
+                float signX = (st == PLACEMENT_LEFT) ? -1.0f : 1.0f;
+                spawnX = (float)((long)(240.0f * signX));
+                spawnY = (float)((long)(((float)baseDeg * 320.0f) / 480.0f));
+                velX   = velX * (-0.75f) * signX;
+                velY   = velY + speed * spawner->m_Gravity_y * (-0.65f);
                 break;
             }
             case PLACEMENT_RANDOM_SIDE: break;  // handled above
