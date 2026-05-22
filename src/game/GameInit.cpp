@@ -350,6 +350,10 @@ void GameUpdate(float dt, bool active) {
     // because nothing reads m_DtMod for dt scaling.
     float gameplayDt = dt;
     float waveStress = 1.0f;
+#ifndef __bada__
+    // m_DtMod_DecayTimer/Rate/WaveStress are port-only trailing extensions
+    // until two-pass RE resolves the +0x80..+0x88 semantic conflict.
+    // Cross-build skips the consumer entirely (no fields to read).
     if (active) {
         PowerUpManager* pum = PowerUpManager::GetInstance();
         float effectiveDt = 1.0f;
@@ -371,6 +375,7 @@ void GameUpdate(float dt, bool active) {
         gameplayDt = dt * waveStress * effectiveDt;
         game_work.m_GameDt *= waveStress * effectiveDt;
     }
+#endif
 
     // ASM-verified: 2026-05-20 binary @ 0x0016bed0 GameUpdate (re-analyst)
     // Binary gates the bomb-hit timer drain + UpdateBombHit + GameOver cross-1.5
