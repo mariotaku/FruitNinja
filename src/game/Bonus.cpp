@@ -27,7 +27,7 @@ Bonus::Bonus()
     : m_MinSliced(0)
     , m_MaxSliced(0)
     , m_DivisibleBy(0)
-    , m_Tier(-1)
+    , m_Tier(0)
     , m_AchievementHash(0)
 {
     memset(m_NameTemplate, 0, sizeof(m_NameTemplate));
@@ -76,33 +76,33 @@ Bonus& Bonus::operator=(const Bonus& rhs) {
 // ---------------------------------------------------------------------------
 // Bonus::Parse -- Binary @ 0x0010e61c
 //
-// Reads attributes from a <bonus> XML element:
-//   requires-min = int          -> m_MinSliced
-//   requires-max = int          -> m_MaxSliced
-//   single       = int          -> m_DivisibleBy
-//   modulo       = int          -> m_DivisibleBy (alias)
-//   priority     = int          -> m_Tier
-//   texture      = string       -> m_StarTexture (loads "<name>.tex")
-//   pattern      = csv hashes   -> m_PatternHashes
-//   achievement  = string       -> m_AchievementHash (StringHash)
-//   min-<fruit>  = int          -> m_MinFruit[StringHash(fruit)]
-//   max-<fruit>  = int          -> m_MaxFruit[StringHash(fruit)]
+// Reads attributes from a <bonus> XML element (real bonusawards.xml schema):
+//   min      = int          -> m_MinSliced (lower bound on totalAcrossFruits)
+//   max      = int          -> m_MaxSliced (upper bound; also alias "equals" sets both)
+//   equals   = int          -> m_MinSliced = m_MaxSliced = val (exact match)
+//   multiple = int          -> m_DivisibleBy
+//   points   = int          -> m_Tier (award tier; absent -> stays 0)
+//   texture  = string       -> m_StarTexture (loads "<name>.tex"); if absent,
+//                              caller (BonusType::Parse) may inject via parentTexName
+//   achievement = string    -> m_AchievementHash (StringHash)
+//   min-<fruit> = int       -> m_MinFruit[StringHash(fruit)]
+//   max-<fruit> = int       -> m_MaxFruit[StringHash(fruit)]
 // Inner text -> m_NameTemplate (stripped)
+// parentTexName: fallback texture from parent <bonusType texture="...">; may be NULL.
 // ---------------------------------------------------------------------------
-void Bonus::Parse(tinyxml2::XMLElement* e) {
+void Bonus::Parse(tinyxml2::XMLElement* e, const char* parentTexName) {
     if (!e) return;
 
-    e->QueryIntAttribute("requires-min", &m_MinSliced);
-    e->QueryIntAttribute("requires-max", &m_MaxSliced);
-    e->QueryIntAttribute("single",       &m_DivisibleBy);
-    e->QueryIntAttribute("modulo",       &m_DivisibleBy);
-    e->QueryIntAttribute("priority",     &m_Tier);
+    e->QueryIntAttribute("min",      &m_MinSliced);
+    e->QueryIntAttribute("max",      &m_MaxSliced);
+    e->QueryIntAttribute("multiple", &m_DivisibleBy);
+    e->QueryIntAttribute("points",   &m_Tier);
 
-    const char* texName = e->Attribute("texture");
-    if (texName && texName[0]) {
-        char texPath[128];
-        snprintf(texPath, sizeof(texPath), "%s.tex", texName);
-        m_StarTexture = TextureManager::LoadLocalisedTexture(texPath);
+    // "equals" sets an exact-match range on the total.
+    int equalsVal = -1;
+    if (e->QueryIntAttribute("equals", &equalsVal) == tinyxml2::XML_SUCCESS) {
+        m_MinSliced = equalsVal;
+        m_MaxSliced = equalsVal;
     }
 
     const char* achievement = e->Attribute("achievement");
@@ -110,23 +110,15 @@ void Bonus::Parse(tinyxml2::XMLElement* e) {
         m_AchievementHash = StringHash(achievement);
     }
 
-    // pattern attr: comma-separated list of strings -> hash each token
-    const char* pattern = e->Attribute("pattern");
-    if (pattern && pattern[0]) {
-        char buf[256];
-        strncpy(buf, pattern, sizeof(buf) - 1);
-        buf[sizeof(buf) - 1] = '\0';
-        char* tok = strtok(buf, ",");
-        while (tok) {
-            // trim leading/trailing whitespace
-            while (*tok == ' ') ++tok;
-            char* end = tok + strlen(tok) - 1;
-            while (end > tok && *end == ' ') { *end = '\0'; --end; }
-            if (*tok) {
-                m_PatternHashes.push_back((uint64_t)StringHash(tok));
-            }
-            tok = strtok(nullptr, ",");
-        }
+    // Texture: per-bonus override first, then parent bonusType fallback.
+    const char* texName = e->Attribute("texture");
+    if (!texName || !texName[0]) {
+        texName = parentTexName;
+    }
+    if (texName && texName[0]) {
+        char texPath[128];
+        snprintf(texPath, sizeof(texPath), "%s.tex", texName);
+        m_StarTexture = TextureManager::LoadLocalisedTexture(texPath);
     }
 
     // Walk all attributes to pick up "min-<fruit>" and "max-<fruit>" prefixes.
@@ -149,14 +141,12 @@ void Bonus::Parse(tinyxml2::XMLElement* e) {
         }
     }
 
-    // Inner text -> m_NameTemplate
+    // Inner text -> m_NameTemplate (strip whitespace)
     const char* text = e->GetText();
     if (text) {
-        // Strip leading whitespace
         while (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n') ++text;
         strncpy(m_NameTemplate, text, sizeof(m_NameTemplate) - 1);
         m_NameTemplate[sizeof(m_NameTemplate) - 1] = '\0';
-        // Strip trailing whitespace
         int len = (int)strlen(m_NameTemplate);
         while (len > 0 && (m_NameTemplate[len-1] == ' ' || m_NameTemplate[len-1] == '\t'
                || m_NameTemplate[len-1] == '\r' || m_NameTemplate[len-1] == '\n')) {
@@ -164,16 +154,14 @@ void Bonus::Parse(tinyxml2::XMLElement* e) {
         }
     }
 
-    // m_DisplayName: same as m_NameTemplate by default (XML may override separately).
     strncpy(m_DisplayName, m_NameTemplate, sizeof(m_DisplayName) - 1);
     m_DisplayName[sizeof(m_DisplayName) - 1] = '\0';
 }
 
 // ---------------------------------------------------------------------------
 // Bonus::IsAchieved -- Binary @ 0x0010df38
-// ASM-verified: 2026-05-18 binary @ 0x0010df38 (re-analyst Claude #49)
 //
-// Returns non-zero tier value when the bonus conditions are met, 0 otherwise.
+// Returns non-zero when bonus conditions are met, 0 otherwise.
 // Checks:
 //   1. totalAcrossFruits within [m_MinSliced, m_MaxSliced] (0 = no bound)
 //   2. iterate fruitCounts; for each entry look up min (default 0) and max
@@ -183,13 +171,14 @@ void Bonus::Parse(tinyxml2::XMLElement* e) {
 //      in fruitCounts (non-zero count)
 // Binary iterates fruitCounts (param_2), not m_MinFruit/m_MaxFruit, so a fruit
 // hash present in m_MinFruit but absent from fruitCounts is silently skipped.
-// ---------------------------------------------------------------------------
-// DIFFERS: original param name was `score` — renamed to `totalAcrossFruits`
-//   to match call-site semantics (UnlockAchievements passes the fruit-slice sum,
-//   not the game score). Cosmetic only; no ABI change.
+// Returns m_Tier on success (>0); for tier=0 achievement-only entries returns 1
+// so callers can treat any nonzero as "conditions met".
+// TODO: 0x0010df38 -- re-verify IsAchieved after schema fix (m_Tier default changed
+//   from -1 to 0; old guard `if (m_Tier < 0) return 0` removed; return changed from
+//   `m_Tier` to `m_Tier > 0 ? m_Tier : 1`).
+// DIFFERS: original param name was `score` -- renamed to `totalAcrossFruits`
+//   to match call-site semantics. Cosmetic only; no ABI change.
 int Bonus::IsAchieved(int totalAcrossFruits, std::map<uint64_t, int>& fruitCounts) {
-    if (m_Tier < 0) return 0;
-
     // Min/max sliced bounds (0 = unconstrained)
     if (m_MinSliced > 0 && totalAcrossFruits < m_MinSliced) return 0;
     if (m_MaxSliced > 0 && totalAcrossFruits > m_MaxSliced) return 0;
@@ -227,7 +216,9 @@ int Bonus::IsAchieved(int totalAcrossFruits, std::map<uint64_t, int>& fruitCount
         if (!found) return 0;
     }
 
-    return m_Tier;
+    // Return tier as success weight; tier=0 entries (achievement-only, no points=)
+    // return 1 so callers can treat nonzero = "conditions met".
+    return m_Tier > 0 ? m_Tier : 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,37 +254,41 @@ BonusType& BonusType::operator=(const BonusType& rhs) {
 // ---------------------------------------------------------------------------
 // BonusType::Parse -- Binary @ 0x0010e7ec
 //
-// Reads a <bonusType> element:
-//   "requires" attr (CSV of fruit names) -> m_RequiredHashes
-//   <bonus> children                     -> m_Bonuses
+// Reads a <bonusType> element (real bonusawards.xml schema):
+//   "total" attr (CSV of fruit/stat names) -> m_RequiredHashes keys (values=0)
+//   "texture" attr                         -> parent texture passed to Bonus::Parse
+//   <bonus> children                       -> m_Bonuses
 // ---------------------------------------------------------------------------
 void BonusType::Parse(tinyxml2::XMLElement* e) {
     if (!e) return;
 
-    const char* requires_ = e->Attribute("requires");
-    if (requires_ && requires_[0]) {
+    // Parent-level texture fallback for child <bonus> elements that omit texture=.
+    const char* parentTex = e->Attribute("texture");
+
+    const char* total = e->Attribute("total");
+    if (total && total[0]) {
         char buf[256];
-        strncpy(buf, requires_, sizeof(buf) - 1);
+        strncpy(buf, total, sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
         char* tok = strtok(buf, ",");
         while (tok) {
             while (*tok == ' ') ++tok;
+            char* end = tok + strlen(tok) - 1;
+            while (end > tok && *end == ' ') { *end = '\0'; --end; }
             if (*tok) {
                 uint64_t key = (uint64_t)StringHash(tok);
-                m_RequiredHashes[key] = 1;
+                m_RequiredHashes[key] = 0;
             }
-            tok = strtok(nullptr, ",");
+            tok = strtok(NULL, ",");
         }
     }
 
     for (tinyxml2::XMLElement* child = e->FirstChildElement("bonus");
          child; child = child->NextSiblingElement("bonus")) {
         Bonus b;
-        b.Parse(child);
-        if (b.m_Tier >= 0) {
-            if (b.m_AchievementHash != 0) m_HasAchievement = true;
-            m_Bonuses.push_back(b);
-        }
+        b.Parse(child, parentTex);
+        if (b.m_AchievementHash != 0) m_HasAchievement = true;
+        m_Bonuses.push_back(b);
     }
 }
 

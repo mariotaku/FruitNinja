@@ -89,11 +89,11 @@ void BonusManager::Init() {
             BonusType bt;
             bt.Parse(child);
             m_AllBonuses.push_back(bt);
-        } else if (strcmp(tag, "l") == 0) {
-            // <l N="value"> combo level entry
-            int val = 0;
-            child->QueryIntAttribute("N", &val);
-            m_ComboTotalsByLevel.push_back(val);
+        } else if (strcmp(tag, "combo") == 0) {
+            // <combo length="N" bonus="B" /> -- bonus value for combos of that length.
+            int bonus = 0;
+            child->QueryIntAttribute("bonus", &bonus);
+            m_ComboTotalsByLevel.push_back(bonus);
         }
     }
 }
