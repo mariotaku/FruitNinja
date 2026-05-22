@@ -116,7 +116,14 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
                 return Texture::Load(altPath.c_str());
             }
         }
-        LOG_ERROR("TEXTURE/Load", "failed to open '%s'", path);
+        // Many texture loads are optional (HUD fruit-icons absent from the
+        // Bada slow-hardware texture pack, defunct "coming_soon" placeholder,
+        // fruit_shadow.tex only shipped on fast-hardware packages, etc.).
+        // Callers handle missing files via SmartPtr.IsValid() gates -- this
+        // is not an ERROR-class condition. Keep the trace at INFO so it's
+        // still grep-able without polluting the console. Parse failures
+        // below stay at ERROR (real corruption / bad header).
+        LOG_INFO("TEXTURE/Load", "no such file '%s' (caller handles via IsValid)", path);
         return Mortar::SmartPtr<Texture>();
     }
 
