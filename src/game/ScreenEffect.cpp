@@ -70,12 +70,29 @@ void EffectImage::Parse(XMLElement* xml) {
         m_Pos = Vec3(x, y, z);
     }
 
-    const char* vel = xml->Attribute("vel");
-    if (vel) {
+    // XML uses transitionMoveIn / transitionMoveOut for entry and exit velocity.
+    // m_Vel stores the entry vector; exit vector is not yet separately tracked.
+    // TODO: add m_VelOut field when exit-slide animation is ported.
+    const char* moveIn = xml->Attribute("transitionMoveIn");
+    if (moveIn) {
         float x = 0.0f, y = 0.0f, z = 0.0f;
-        sscanf(vel, "%f %f %f", &x, &y, &z);
+        sscanf(moveIn, "%f,%f,%f", &x, &y, &z);
         m_Vel = Vec3(x, y, z);
     }
+    // TODO: transitionMoveOut — not separately stored yet; needs m_VelOut field
+    // const char* moveOut = xml->Attribute("transitionMoveOut");
+
+    // transitionTime drives m_FadeRate (seconds for fade-in/out).
+    // TODO: "fade" attribute not present in current powerUpList.xml; kept for
+    // any older XML that may use the direct rate form.
+    const char* transitionTime = xml->Attribute("transitionTime");
+    if (transitionTime) m_FadeRate = (float)atof(transitionTime);
+    const char* fade = xml->Attribute("fade");
+    if (fade) m_FadeRate = (float)atof(fade);
+
+    // TODO: "transition" string ("fade", "slide") — controls animation mode;
+    // not yet separately stored. Needs a mode enum field when ported.
+    // const char* transition = xml->Attribute("transition");
 
     xml->QueryUnsignedAttribute("group", &m_GroupMask);
 
@@ -87,9 +104,6 @@ void EffectImage::Parse(XMLElement* xml) {
 
     const char* amp2 = xml->Attribute("amp2");
     if (amp2) m_Amp2 = (float)atof(amp2);
-
-    const char* fade = xml->Attribute("fade");
-    if (fade) m_FadeRate = (float)atof(fade);
 
     const char* sizeIn = xml->Attribute("sizeIn");
     if (sizeIn) {
@@ -105,11 +119,11 @@ void EffectImage::Parse(XMLElement* xml) {
         m_SizeOut = Vec3(x, y, z);
     }
 
-    const char* startT = xml->Attribute("startT");
-    if (startT) m_StartT = (float)atof(startT);
+    const char* timeStart = xml->Attribute("timeStart");
+    if (timeStart) m_StartT = (float)atof(timeStart);
 
-    const char* endT = xml->Attribute("endT");
-    if (endT) m_EndT = (float)atof(endT);
+    const char* timeEnd = xml->Attribute("timeEnd");
+    if (timeEnd) m_EndT = (float)atof(timeEnd);
 
     const char* cs = xml->Attribute("colourScale");
     if (cs) {
@@ -142,15 +156,20 @@ void EffectImage::LoadTextures() {
 void ScreenTint::Parse(XMLElement* xml) {
     if (!xml) return;
 
+    // TODO: "length" attribute not present in current powerUpList.xml; may exist
+    // in older XML versions. Keep read in case binary used it.
     const char* length = xml->Attribute("length");
     if (length) m_Length = (float)atof(length);
 
-    const char* startT = xml->Attribute("startT");
-    if (startT) m_StartT = (float)atof(startT);
+    const char* timeStart = xml->Attribute("timeStart");
+    if (timeStart) m_StartT = (float)atof(timeStart);
 
-    const char* fadeIn = xml->Attribute("fadeIn");
-    if (fadeIn) m_FadeIn = (float)atof(fadeIn);
+    const char* transitionTime = xml->Attribute("transitionTime");
+    if (transitionTime) m_FadeIn = (float)atof(transitionTime);
 
+    // TODO: "to" / "from" attributes not present in current powerUpList.xml;
+    // XML uses "tint=", "backTint=", "hudTint=" instead. Keep reads for
+    // compatibility with any other XML that may use the older attribute names.
     const char* to = xml->Attribute("to");
     if (to) {
         float x = 1.0f, y = 1.0f, z = 1.0f;
@@ -177,11 +196,11 @@ void SoundEffect::Parse(XMLElement* xml) {
         m_SoundName[sizeof(m_SoundName) - 1] = '\0';
     }
 
-    const char* startT = xml->Attribute("startT");
-    if (startT) m_StartT = (float)atof(startT);
+    const char* timeStart = xml->Attribute("timeStart");
+    if (timeStart) m_StartT = (float)atof(timeStart);
 
-    const char* endT = xml->Attribute("endT");
-    if (endT) m_EndT = (float)atof(endT);
+    const char* timeEnd = xml->Attribute("timeEnd");
+    if (timeEnd) m_EndT = (float)atof(timeEnd);
 }
 
 // ---- ScreenEffect ctor/dtor --------------------------------------------------
