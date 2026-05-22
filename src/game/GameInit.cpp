@@ -350,32 +350,25 @@ void GameUpdate(float dt, bool active) {
     // because nothing reads m_DtMod for dt scaling.
     float gameplayDt = dt;
     float waveStress = 1.0f;
-#ifndef __bada__
-    // m_DtMod_DecayTimer/Rate/WaveStress are port-only trailing extensions
-    // until two-pass RE resolves the +0x80..+0x88 semantic conflict.
-    // Cross-build skips the consumer entirely (no fields to read).
     if (active) {
         PowerUpManager* pum = PowerUpManager::GetInstance();
         float effectiveDt = 1.0f;
-        if (pum && pum->m_DtMod_DecayTimer > 0.0f) {
-            pum->m_DtMod_DecayTimer -= dt * pum->m_DtMod_DecayRate;
-            effectiveDt = (pum->m_DtMod - 1.0f) * pum->m_DtMod_DecayTimer + 1.0f;
-            if (pum->m_DtMod_DecayTimer < 0.0f) pum->m_DtMod_DecayTimer = 0.0f;
+        if (g_DtModDecayTimer > 0.0f) {
+            g_DtModDecayTimer -= dt * g_DtModDecayRate;
+            if (pum) effectiveDt = (pum->m_DtMod - 1.0f) * g_DtModDecayTimer + 1.0f;
+            if (g_DtModDecayTimer < 0.0f) g_DtModDecayTimer = 0.0f;
         }
 
         // Wave-stress decay (binary 0x16c020): drains 10x/sec (5x in slow-mo).
-        if (pum) {
-            const float decay = game_work.m_bSlowMotion ? 5.0f : 10.0f;
-            waveStress = pum->m_WaveStress - dt * decay;
-            if (waveStress < 1.0f) waveStress = 1.0f;
-            pum->m_WaveStress = waveStress;
-        }
+        const float decay = game_work.m_bSlowMotion ? 5.0f : 10.0f;
+        waveStress = g_PUM_WaveStress - dt * decay;
+        if (waveStress < 1.0f) waveStress = 1.0f;
+        g_PUM_WaveStress = waveStress;
 
         // THE gameplay-dt consumer: scaled dt for entities/waves/particles.
         gameplayDt = dt * waveStress * effectiveDt;
         game_work.m_GameDt *= waveStress * effectiveDt;
     }
-#endif
 
     // ASM-verified: 2026-05-20 binary @ 0x0016bed0 GameUpdate (re-analyst)
     // Binary gates the bomb-hit timer drain + UpdateBombHit + GameOver cross-1.5

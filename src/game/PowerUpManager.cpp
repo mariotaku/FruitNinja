@@ -20,6 +20,13 @@
 #include <string>
 #include "game/GameWork.h"
 
+// Binary file-static globals at 0x001f3d84..0x001f3da8.
+// Port-side: hoisted out of PowerUpManager so the binary-faithful 0x90
+// sizeof stays unconditional. Accessed by GameInit.cpp's m_DtMod consumer.
+float g_DtModDecayTimer = 1.0f;   // binary @ 0x001f3d84
+float g_DtModDecayRate  = 0.0f;   // binary @ 0x001f3d88 (TODO: verify default 0.0 vs 1.0)
+float g_PUM_WaveStress  = 1.0f;   // binary @ 0x001f3da8
+
 // @ 0x00117d20
 PowerUpManager::PowerUpManager()
     : m_pActiveSpecial(0)
@@ -34,11 +41,6 @@ PowerUpManager::PowerUpManager()
     , m_ScoreLossFactor(1)
     , m_HighestActiveProgress(0.0f)
     , _pad8c(0)
-#ifndef __bada__
-    , m_DtMod_DecayTimer(0.0f)
-    , m_DtMod_DecayRate(0.0f)
-    , m_WaveStress(1.0f)
-#endif
 {
     // Containers default-constructed by member initialisation.
     // Binary explicitly writes m_WaveDtModCur = m_WaveDtModPrev = 1.0f (above).
