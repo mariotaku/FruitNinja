@@ -79,8 +79,13 @@ void EffectImage::Parse(XMLElement* xml) {
         sscanf(moveIn, "%f,%f,%f", &x, &y, &z);
         m_Vel = Vec3(x, y, z);
     }
-    // TODO: transitionMoveOut — not separately stored yet; needs m_VelOut field
-    // const char* moveOut = xml->Attribute("transitionMoveOut");
+    // transitionMoveOut="X,Y" -- exit velocity (Vec3).
+    const char* moveOut = xml->Attribute("transitionMoveOut");
+    if (moveOut) {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        sscanf(moveOut, "%f,%f,%f", &x, &y, &z);
+        m_VelOut = Vec3(x, y, z);
+    }
 
     // transitionTime drives m_FadeRate (seconds for fade-in/out).
     // TODO: "fade" attribute not present in current powerUpList.xml; kept for
@@ -90,9 +95,9 @@ void EffectImage::Parse(XMLElement* xml) {
     const char* fade = xml->Attribute("fade");
     if (fade) m_FadeRate = (float)atof(fade);
 
-    // TODO: "transition" string ("fade", "slide") — controls animation mode;
-    // not yet separately stored. Needs a mode enum field when ported.
-    // const char* transition = xml->Attribute("transition");
+    // transition="fade"|"slide" -- animation mode (port-side trailing field).
+    const char* mode = xml->Attribute("transition");
+    m_TransitionHash = (mode && *mode) ? StringHash(mode) : 0u;
 
     xml->QueryUnsignedAttribute("group", &m_GroupMask);
 
