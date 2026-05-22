@@ -155,10 +155,10 @@
   },
   "_ZN11WaveManager10SpawnFruitEllP12SPAWNER_INFOi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses named ActorManager API vs binary GOT blx chain. Score 46045/36700. [score refreshed 2026-05-20T12:00Z]",
-    "score": 46045,
+    "reason": "Port uses named ActorManager API vs binary GOT blx chain. commit 421e895 fixed side-spawn pos/vel sources (pos.x=+/-240, pos.y=baseDeg*320/480, velX boost 1.075f) per ASM-verified spec. Score improved 46045->45430/36700. [score refreshed 2026-05-22T00:00Z]",
+    "score": 45430,
     "max_score": 36700,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-22T00:00Z"
   },
   "_ZN11WaveManager10UpdateWaveEfii": {
     "verdict": "ACCEPT-deferred",
@@ -834,10 +834,10 @@
   },
   "_ZN14GameOverScreen6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "GameOverScreen::Update -- port creates BonusScreen plus calls AchievementManager. TODOs at src/screens/GameOverScreen.cpp:522 (RemoveCallback delegate), :527 (DAT Y-offset), :586 (FruitSaveData field clear). Score 114096/90500. [score refreshed 2026-05-20T12:00Z]",
-    "score": 114096,
+    "reason": "GameOverScreen::Update -- port creates BonusScreen plus calls AchievementManager. TODOs at src/screens/GameOverScreen.cpp:522 (RemoveCallback delegate), :527 (DAT Y-offset), :586 (FruitSaveData field clear). commit 9b1b0c1 removed erroneous m_State write on STATE_RETRY_PREPARE bounce path; RunStateMainDisplay now passes STATE_RETRY_PREPARE per binary @ 0x001425fc. Score improved 114096->113346/90500. [score refreshed 2026-05-22T00:00Z]",
+    "score": 113346,
     "max_score": 90500,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-22T00:00Z"
   },
   "_ZN14GameOverScreen7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
@@ -1576,10 +1576,10 @@
   },
   "_ZN6Mortar7Texture4LoadEPKc": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 29059->25872/3100. [score refreshed 2026-05-20T00:00Z]",
-    "score": 22869,
+    "reason": "Port adds SDL-based file loading path absent from binary. commit 1830279 demoted file-not-found log from LOG_ERROR to LOG_INFO with a longer message string; the score regression 22869->34920/3100 is entirely from the longer string literal embedded in the port -- no behavioral divergence from binary. [score refreshed 2026-05-22T00:00Z]",
+    "score": 34920,
     "max_score": 3100,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-22T00:00Z"
   },
   "_ZNK6Mortar14TextureManager4FindEPKc": {
     "verdict": "ACCEPT-deferred",
@@ -2143,10 +2143,10 @@
   },
   "_ZN10MenuButton4InitE8_Vector3IfEN6Mortar9Delegate0IvEEiS1_S4_": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Score 46314/31700. Large Init function; Delegate0 size issue causes all field offsets to be 4 bytes off. ACCEPT-deferred pending Delegate0 size fix. [score refreshed 2026-05-17T00:00Z] [score refreshed 2026-05-20T00:00Z]",
-    "score": 43142,
+    "reason": "Large Init function; Delegate0 size issue causes all field offsets to be 4 bytes off. ACCEPT-deferred pending Delegate0 size fix. commit bb69e52 added fruit->m_bSpawnedByCriticalSplash=1 in the Fruit-branch (binary +0x10C menu-marker write per re-analyst), causing slight score increase 43142->44712/31700; semantics correct. [score refreshed 2026-05-22T00:00Z]",
+    "score": 44712,
     "max_score": 31700,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-22T00:00Z"
   },
   "_ZN10MenuButton6RemoveEv": {
     "verdict": "ACCEPT-deferred",
