@@ -997,15 +997,33 @@ void SlashEntity::Update(float dt) {
                         WaveManager::GetInstance()->AddSpeed(
                             (float)m_ComboCount / 3.0f, 0);
                         FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, true);
-                        BonusManager::GetInstance()->AddCombo(m_ComboCount);
                     } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboEntityType != 2) {
                         FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, false);
                     }
-                    // Per-mode stat: "combo_<modename>"
+                    BonusManager::GetInstance()->AddCombo(m_ComboCount);
+                    // ASM-verified: 2026-05-22 binary @ 0x0017df80..0x0017dff0 (re-analyst).
+                    // Per-combo persistence:
+                    //   1. "<MODE>_combos" -- always +1, trackSession=true, unlockAchievement=true.
+                    //   2. "strawberry_combo_total" -- +1 if combo contains any strawberry,
+                    //      trackSession=true, unlockAchievement=false. Single increment per combo.
                     if (game && game_work.m_SaveData) {
-                        char buf[32];
-                        snprintf(buf, sizeof(buf), "combo_%s", Mortar::GetModeName(game_work.gameMode));
+                        char buf[64];
+                        snprintf(buf, sizeof(buf), "%s_combos", Mortar::GetModeName(game_work.gameMode));
                         game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
+
+                        static int s_StrawberryType = -2;
+                        if (s_StrawberryType == -2)
+                            s_StrawberryType = Fruit::FruitType("strawberry", false);
+                        if (s_StrawberryType >= 0) {
+                            for (int i = 0; i < m_ComboCount; ++i) {
+                                if (m_ComboSliceArr[i] == s_StrawberryType) {
+                                    static const uint32_t hStrawberryCombo = StringHash("strawberry_combo_total");
+                                    game_work.m_SaveData->AddToTotal(
+                                        "strawberry_combo_total", hStrawberryCombo, 1, true, false);
+                                    break;
+                                }
+                            }
+                        }
                     }
                     // (c) Combo coin spawn — binary @ 0x0017df88.
                     {

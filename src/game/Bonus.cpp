@@ -297,65 +297,28 @@ void BonusType::Parse(tinyxml2::XMLElement* e) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// BonusType::GetBest -- Binary @ 0x0010e094
-//
-// Builds a fruitCounts map from current session totals in FruitSaveData,
-// then walks m_Bonuses (which are sorted descending by tier) and returns
-// the first one whose IsAchieved passes. Returns nullptr if none pass.
-// ---------------------------------------------------------------------------
+static int GetBonusTotal(uint64_t hash);
+
+// ASM-verified: 2026-05-22 binary @ 0x0010e094 (re-analyst).
 Bonus* BonusType::GetBest() {
-    // Build fruit-count map from session totals.
-    // Binary uses pSaveData->m_SessionTotals for per-fruit counts.
-    // Port: call FruitSaveData::GetTotal per required hash.
-    // We can only use the fruitCounts map from what's available in saves;
-    // for simplicity build from m_RequiredHashes keys and check GetTotal.
-    // The binary also checks m_RequiredHashes against zero first.
+    int totalAcrossFruits = 0;
+    for (std::map<uint64_t, int>::iterator it = m_RequiredHashes.begin();
+         it != m_RequiredHashes.end(); ++it) {
+        int total = GetBonusTotal(it->first);
+        it->second = total;
+        totalAcrossFruits += total;
+    }
 
-    // Sort m_Bonuses descending by tier for deterministic best-first pick.
-    std::sort(m_Bonuses.begin(), m_Bonuses.end());
-
-    // Build fruitCounts: for each RequiredHash key, look up session total.
-    std::map<uint64_t, int> fruitCounts;
-    // We build from all pattern hashes + min/max keys across bonuses.
-    // The binary walks the session totals map directly; port approximates
-    // by populating with GetTotal for each hash we know about.
+    Bonus* best = nullptr;
+    int bestTier = 0;
     for (size_t i = 0; i < m_Bonuses.size(); ++i) {
-        Bonus& b = m_Bonuses[i];
-        for (std::map<uint64_t, int>::iterator it = b.m_MinFruit.begin();
-             it != b.m_MinFruit.end(); ++it) {
-            if (fruitCounts.find(it->first) == fruitCounts.end())
-                fruitCounts[it->first] = 0;
-        }
-        for (std::map<uint64_t, int>::iterator it = b.m_MaxFruit.begin();
-             it != b.m_MaxFruit.end(); ++it) {
-            if (fruitCounts.find(it->first) == fruitCounts.end())
-                fruitCounts[it->first] = 0;
-        }
-        for (size_t j = 0; j < b.m_PatternHashes.size(); ++j) {
-            if (fruitCounts.find(b.m_PatternHashes[j]) == fruitCounts.end())
-                fruitCounts[b.m_PatternHashes[j]] = 0;
+        int tier = m_Bonuses[i].m_Tier;
+        if (tier > bestTier && m_Bonuses[i].IsAchieved(totalAcrossFruits, m_RequiredHashes)) {
+            best = &m_Bonuses[i];
+            bestTier = tier;
         }
     }
-
-    // Use GetTotal (lifetime totals) as a proxy for fruitCounts.
-    // TODO: binary uses session totals for this check; port uses lifetime.
-    {
-        Game* g_b = Game::GetInstance();
-        FruitSaveData* sd_b = g_b ? game_work.m_SaveData : 0;
-        for (std::map<uint64_t, int>::iterator it = fruitCounts.begin();
-             it != fruitCounts.end(); ++it) {
-            it->second = (sd_b && sd_b->IsAchievementUnlocked((uint32_t)it->first) != 0) ? 1 : 0;
-        }
-    }
-
-    int score = Game::GetInstance() ? game_work.currentScore : 0;
-    for (size_t i = 0; i < m_Bonuses.size(); ++i) {
-        if (m_Bonuses[i].IsAchieved(score, fruitCounts) != 0) {
-            return &m_Bonuses[i];
-        }
-    }
-    return nullptr;
+    return best;
 }
 
 // ---------------------------------------------------------------------------
