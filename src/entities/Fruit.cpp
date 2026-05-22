@@ -824,6 +824,22 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const float rad = atan2f(bladeVel.x, bladeVel.y);
     m_SliceAngle   = (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
 
+    // Menu-fruit fast-path: skip emitters / particles / SliceEffect / score /
+    // save totals. Slice-state writes above are sufficient for the next
+    // Fruit::Update tick to call Slice() -> m_bSliced=1 -> MenuButton::Update
+    // detects the transition and fires the click callback (Retry/Quit/etc).
+    //
+    // Binary @ 0x001780b0 suppresses score via GameTaskState+0x05 byte gate
+    // (set during menu-mode runtime) -- port's GameTaskState layout has
+    // pPauseScreen at +0x04 swallowing the +0x05 byte, so we can't replicate
+    // that gate cleanly today. This fast-path matches the net binary outcome
+    // for menu-fruit slices: slice state set, score NOT added.
+    // TODO: 0x001780b0 -- replicate the GameTaskState+0x05 gate properly
+    // once the GameTaskState struct layout is fixed.
+    if (m_bSpawnedByCriticalSplash != 0) {
+        return 0;
+    }
+
     // ASM-verified: 2026-05-18 binary @ 0x00178454..0x00178466 (re-analyst).
     // Clear any prior trail/juice emitters before allocating the slice-
     // burst + persistent juice emitters below. Mirrors the pattern used

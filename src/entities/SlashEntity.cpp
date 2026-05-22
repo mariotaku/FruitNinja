@@ -917,7 +917,17 @@ void SlashEntity::Update(float dt) {
                         // immediately after CollisionResponse returns.
                         m_BladeVelAtSlice = bladeVel;
                         m_SlicePos        = e->pos;
-                        if (t == 0) {
+                        // ASM-verified: 2026-05-22 binary @ 0x0017d8a4 (re-analyst).
+                        // Binary gates combo bookkeeping + MissControl popup spawn on
+                        // Fruit+0x10C == 0 (i.e., NOT a menu fruit). Menu fruits still
+                        // run through CollisionResponse (which itself short-circuits
+                        // the score path via the m_bSpawnedByCriticalSplash check),
+                        // but the slash-side combo accumulator + popup must NOT fire
+                        // -- they would corrupt the in-game combo score arithmetic
+                        // on the next real fruit slice.
+                        const bool isMenuFruit = (t == 0) &&
+                            static_cast<Fruit*>(e)->m_bSpawnedByCriticalSplash != 0;
+                        if (t == 0 && !isMenuFruit) {
                             Fruit* fruit = static_cast<Fruit*>(e);
                             m_SliceEntityType = (int)fruit->m_FruitType;
                             if (fruit->m_bCriticalEligible) {
