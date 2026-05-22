@@ -448,9 +448,12 @@ void PowerUpManager::Load() {
         return;
     }
 
-    tinyxml2::XMLElement* root = doc.FirstChildElement("powers");
+    // Real XML uses <powerInfoFile> root + <power> children -- not the
+    // <powers>+<powerup> the port guessed. Same fix-pattern as
+    // BonusManager's bonusawards.xml schema mismatch.
+    tinyxml2::XMLElement* root = doc.FirstChildElement("powerInfoFile");
     if (!root) {
-        LOG_WARN("POWERUP/Load", "no <powers> root in '%s'", path.c_str());
+        LOG_WARN("POWERUP/Load", "no <powerInfoFile> root in '%s'", path.c_str());
         return;
     }
 
@@ -462,7 +465,7 @@ void PowerUpManager::Load() {
         const char* tag = child->Name();
         if (!tag) continue;
 
-        if (strcmp(tag, "powerup") == 0) {
+        if (strcmp(tag, "power") == 0) {
             PowerUp* pu = new PowerUp();
             pu->Parse(child);
             if (pu->m_NameHash == 0) {
