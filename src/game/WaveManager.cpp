@@ -1121,8 +1121,13 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                 // Step B: weighted roll over probOverrides[mode].
                 // Gate predicates: m_PerWave, m_PerWaveCount, m_DisableWhenPowered.
                 // Bug 3 fix: when field_0x23d > 5, each override's percent-chance is halved.
-                // ASM-verified: 2026-05-18 binary @ 0x001253b0 (re-analyst)
-                if (!overrides.empty() && blitzAdvance) {
+                // ASM-verified: 2026-05-22 binary @ 0x001253b0..0x00125584 (re-analyst).
+                // Prior gate `&& blitzAdvance` was wrong -- binary's loop runs on every
+                // RANDOM spawn slot regardless of the blitz timer. The blitz interaction
+                // is internal: blitz only halves chance (field_0x23d > 5) and adds an
+                // early-trigger short-circuit (line 1167). Without this fix the
+                // Arcade special-banana overrides (freeze/frenzy/scorex2) never rolled.
+                if (!overrides.empty()) {
                     int totalChance = 0;
                     for (std::vector<PROBABILITY_OVERIDE>::iterator oit = overrides.begin();
                          oit != overrides.end(); ++oit)
@@ -1146,8 +1151,15 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         totalChance += pc;
                     }
 
-                    if (totalChance > 0) {
-                        int roll = (int)m_Random.Rand32((uint32_t)totalChance);
+                    // Roll source per binary @ 0x00125568: Rand32(wave+0x70) =
+                    // Rand32(m_OverideProbabilityPool), NOT Rand32(totalChance).
+                    // Pool defaults to 100 (WAVE_INFO ctor); per-entry m_PercentChance
+                    // expresses percent-of-pool. Override only wins if the cumulative
+                    // sum surpasses the roll -- if all entries miss, fall-through
+                    // returns chosenType=-1 and the spawn defaults to RandomFruit.
+                    if (wave->m_OverideProbabilityPool > 0) {
+                        (void)totalChance;
+                        int roll = (int)m_Random.Rand32((uint32_t)wave->m_OverideProbabilityPool);
                         int cumulative = 0;
                         for (std::vector<PROBABILITY_OVERIDE>::iterator oit = overrides.begin();
                              oit != overrides.end(); ++oit)
