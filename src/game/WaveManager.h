@@ -65,25 +65,19 @@ public:
     float field_0x44;
     // +0x048
     int field_0x48;
-    // +0x04c: combo timer (per-player stride 4)
-    float field_0x4c;
-    float field_0x4c_p1;
+    // +0x04c: per-player combo "blitz" timer (decays via GetWavedt; AddSpeed
+    // pumps to 1.0f on every successful blitz multi-slice).
+    // ASM-verified: 2026-05-22 binary @ 0x00123510 / 0x00122f50 (re-analyst).
+    float m_ComboTimer[2];       // +0x4c (P0), +0x50 (P1)
     // +0x054: wave speed per player [2]
     float m_Speed[2];            // +0x54, +0x58
     // +0x058: boosted speed slot (overlaps m_Speed[1], per AddSpeed note)
     // field_0x58 == &m_Speed[1]  -- used by AddSpeed for player 0
-    // +0x05c: blitz-bonus persistent score (loaded from save "blitz_bonus" key).
-    // Used by Arcade <OverideProbability waveCount="N"/> gate -- special-banana
-    // overrides only spawn once m_BlitzBonus >= N. Also referenced by the
-    // per-player [playerIdx] sites (line ~1808 etc) which read/write
-    // (&m_BlitzBonus)[playerIdx] -- player 1 access overlaps field_0x60.
-    // TODO: confirm via RE whether binary has m_BlitzBonus[2] here (in which
-    // case field_0x60's m_ComboTimer label is wrong) or m_BlitzBonus[1] with
-    // a separate p1 slot elsewhere.
-    int m_BlitzBonus;
-    // +0x060: combo timer 2 per player
-    float field_0x60;
-    float field_0x60_p1;
+    // +0x05c: per-player blitz-bonus persistent score
+    // (loaded from save "blitz_bonus" key for P0; P1 from FruitSaveData+0x108).
+    // Used by Arcade <OverideProbability waveCount=N> gate.
+    // ASM-verified: 2026-05-22 binary @ 0x00123510 AddSpeed (re-analyst).
+    int m_BlitzBonus[2];         // +0x5c (P0), +0x60 (P1)
     // +0x064: fruit-multiplier (BombScale power-up)
     float field_0x64;
     // +0x068: bomb chain spawn level (BombMultiplyer power-up)
