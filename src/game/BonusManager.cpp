@@ -174,9 +174,16 @@ void BonusManager::AddCombo(int comboLen) {
     static const uint32_t hComboBonus = StringHash("combo_bonus");
     static const uint32_t hBestCombo  = StringHash("best_combo");
 
-    // TODO: 0x0010de24 -- load payout from m_ComboValues[clamp(comboLen-3,0,size-1)].
-    // m_ComboValues not yet ported; use comboLen as payout placeholder.
-    int payout = comboLen;
+    // ASM-verified: 2026-05-22 binary @ 0x0010de24 (re-analyst).
+    // Indexed lookup into m_ComboTotalsByLevel (parsed from <combo bonus="N"/>).
+    int payout = 0;
+    if (!m_ComboTotalsByLevel.empty()) {
+        int idx = (comboLen < 4) ? 0 : (comboLen - 3);
+        int last = (int)m_ComboTotalsByLevel.size() - 1;
+        if (idx > last) idx = last;
+        if (idx < 0) idx = 0;
+        payout = m_ComboTotalsByLevel[idx];
+    }
 
     game_work.m_SaveData->AddToTotal("combo_bonus", hComboBonus,
                                      payout, false, false);

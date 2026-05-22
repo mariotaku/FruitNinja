@@ -962,11 +962,19 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     // ASM-verified: 2026-05-22 binary @ 0x001780b0 ~+0x360 (re-analyst).
     // Powerup-fruit slice activates the modifier polymorphism chain. Without
     // this call, no Freeze/Frenzy/x2/Blitz effects ever fire in Arcade.
-    // TODO: bomb-hit-cinematic gate (second branch of the if) -- needs
-    // kBombHitMax/kBombHitMin DAT resolution. For now LTF==0 is the only
-    // permitting condition; the bomb-hit window won't grant powerups.
+    // ASM-verified: 2026-05-22 binary @ 0x00178c30 (re-analyst).
+    // Powerup-fruit slice fires either during normal gameplay (LTF==0) OR
+    // inside the bomb-hit cinematic window (LTF in {2,3} = HitBomb-set state
+    // AND the timer is in (-0.1f, 0.95f)). The binary's compound check is
+    // `LTF == 0 || ((LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f)`.
+    static const float kBombHitMax = 0.95f;
+    static const float kBombHitMin = -0.1f;
+    const uint8_t ltf = (uint8_t)game_work.m_LevelTransitionFlag;
+    const bool bombHitWindow = (uint8_t)(ltf - 2u) < 2u
+        && game_work.m_BombHitTimer < kBombHitMax
+        && game_work.m_BombHitTimer > kBombHitMin;
     if (info && info->m_pPowers && !m_bNoPowerUp
-        && game_work.m_LevelTransitionFlag == 0) {
+        && (ltf == 0 || bombHitWindow)) {
         uint32_t hash = info->m_pPowers->RandomPower();
         Vec3 localPos = pos;
         PowerUpManager::GetInstance()->ActivatePower(hash, &localPos, reinterpret_cast<float*>(&localPos));

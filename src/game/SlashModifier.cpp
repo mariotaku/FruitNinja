@@ -7,17 +7,35 @@
 #include <tinyxml2.h>
 #include <cstdio>
 #include <cstring>
+#include "util/StringHash.h"
 
-// Port specific: ParseSlashModColourType and ParseSlashPowerMask lookup tables
-// not yet ported; both return safe defaults (0) until RE'd.
-
-// ParseSlashModColourType — maps XML "type" string to colour-type int.
-static int ParseSlashModColourType(const char* /*type*/) {
-    return 0;
+// ASM-verified: 2026-05-22 binary @ 0x0017b4a8 (re-analyst).
+// Maps XML "type" string to colour-type enum (NONE/LERP/PER_SLASH/CONTINUOUS).
+// Binary uses StringHash + cached table hashes (__cxa_guard); port computes
+// StringHash on every call -- semantically identical since StringHash is pure.
+static int ParseSlashModColourType(const char* s) {
+    if (!s || !*s) return 0;
+    uint32_t h = StringHash(s);
+    if (h == StringHash("LERP"))       return 1;
+    if (h == StringHash("PER_SLASH"))  return 2;
+    if (h == StringHash("CONTINUOUS")) return 3;
+    return 0;  // NONE / unknown
 }
 
-// ParseSlashPowerMask — maps XML "type" string to power-mask bit.
-static uint32_t ParseSlashPowerMask(const char* /*type*/) {
+// ASM-verified: 2026-05-22 binary @ 0x0017b3c8 (re-analyst).
+// Maps XML "type" string to power-mask bit (1<<index). Six entries; results
+// OR into SlashEntity::s_ModPowerMask which gates attract/repel/bomb-suppress/
+// fruit-bounce blade behaviours. Prior port stub returned 0 -- those bits
+// never lit.
+static uint32_t ParseSlashPowerMask(const char* s) {
+    if (!s || !*s) return 0;
+    uint32_t h = StringHash(s);
+    static const char* const kNames[6] = {
+        "PUSH_FRUIT", "PULL_FRUIT", "PUSH_BOMB", "PULL_BOMB", "BOMB_HIT", "FRUIT_BOUNCE"
+    };
+    for (int i = 0; i < 6; ++i) {
+        if (h == StringHash(kNames[i])) return 1u << i;
+    }
     return 0;
 }
 

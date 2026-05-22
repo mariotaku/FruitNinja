@@ -193,20 +193,6 @@ public:
     // +0x8c  (pad — unused; no write or read found in any binary method)
     uint32_t _pad8c;
 
-    // Port-side trailing extension — these fields are NOT in the binary struct
-    // (binary size = 0x90). The re-analyst spec targets +0x80/+0x84/+0x88 but
-    // those offsets are occupied by m_ScoreLossMult/Factor/HighestActiveProgress
-    // in the binary layout. Two RE passes conflict on which semantic those
-    // slots really hold; until a third pass resolves, keep these as port-only
-    // trailing extensions so the binary-faithful 0x90 sizeof + offsets above
-    // stay clean. Gated `#ifndef __bada__` so the asm-verify cross-build sees
-    // a binary-sized struct.
-#ifndef __bada__
-    float m_DtMod_DecayTimer;   // decay timer for smooth DtMod ramp (init 0.0f)
-    float m_DtMod_DecayRate;    // decay rate for m_DtMod ramp (init 0.0f)
-    float m_WaveStress;         // wave-stress multiplier (init 1.0f, clamped >= 1.0)
-#endif
-
 private:
     // @ 0x00117d20
     PowerUpManager();
@@ -233,9 +219,18 @@ public:
     void UnloadTextures();
 };
 
+// Binary file-statics hoisted to translation-unit scope in PowerUpManager.cpp.
+// Declared extern here so GameInit.cpp (the m_DtMod consumer) can reach them
+// without adding a new accessor method to the binary's public API.
+extern float g_DtModDecayTimer;  // binary @ 0x001f3d84
+extern float g_DtModDecayRate;   // binary @ 0x001f3d88
+extern float g_PUM_WaveStress;   // binary @ 0x001f3da8
+
 // Offsets reflect binary's 8B std::list (R4 W1 RE). Cross-toolchain runs unpatched.
-#ifdef __bada__
+// sizeof is binary-faithful 0x90: trailing fields hoisted to file-statics in PowerUpManager.cpp.
+// The assert fires on the Bada/cross-build ABI where STL container sizes match the binary.
 #include <cstddef>
+#ifdef __bada__
 static_assert(sizeof(PowerUpManager) == 0x90, "PowerUpManager size mismatch");
 static_assert(offsetof(PowerUpManager, m_ActivePowerUps)      == 0x18, "m_ActivePowerUps offset");
 static_assert(offsetof(PowerUpManager, m_ActiveByHash)        == 0x20, "m_ActiveByHash offset");
