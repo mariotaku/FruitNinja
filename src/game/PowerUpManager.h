@@ -193,6 +193,15 @@ public:
     // +0x8c  (pad — unused; no write or read found in any binary method)
     uint32_t _pad8c;
 
+    // Port-side trailing extension — these fields are NOT in the binary struct
+    // (binary size = 0x90). The re-analyst spec targets +0x80/+0x84/+0x88 but
+    // those offsets are occupied by m_ScoreLossMult/Factor/HighestActiveProgress
+    // in the binary layout. Adding here as a port-side extension to avoid
+    // struct-layout regression on the binary-faithful 0x90 fields above.
+    float m_DtMod_DecayTimer;   // decay timer for smooth DtMod ramp (init 0.0f)
+    float m_DtMod_DecayRate;    // decay rate for m_DtMod ramp (init 0.0f)
+    float m_WaveStress;         // wave-stress multiplier (init 1.0f, clamped >= 1.0)
+
 private:
     // @ 0x00117d20
     PowerUpManager();

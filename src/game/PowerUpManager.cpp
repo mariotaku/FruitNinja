@@ -1,6 +1,4 @@
 // Analysed: 2026-05-04T00:00
-// TODO: m_DtMod consumer not wired -- Freeze powerup has no effect until the
-//   game's dt path is scaled by PowerUpManager::m_DtMod each frame (in GameUpdate).
 
 #include "PowerUpManager.h"
 #include "GameMode.h"
@@ -36,6 +34,9 @@ PowerUpManager::PowerUpManager()
     , m_ScoreLossFactor(1)
     , m_HighestActiveProgress(0.0f)
     , _pad8c(0)
+    , m_DtMod_DecayTimer(0.0f)
+    , m_DtMod_DecayRate(0.0f)
+    , m_WaveStress(1.0f)
 {
     // Containers default-constructed by member initialisation.
     // Binary explicitly writes m_WaveDtModCur = m_WaveDtModPrev = 1.0f (above).

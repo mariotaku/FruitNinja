@@ -51,6 +51,7 @@
 #include "entities/Coin.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
+#include "game/PowerUpManager.h"
 
 // Matches GameInit (0x16c644, 274 lines) — per-session setup.
 // Call order matches binary 23-step sequence (see inline step comments).
@@ -343,6 +344,34 @@ void GameUpdate(float dt, bool active) {
         // z > 0 or z < 0: left unchanged
     }
 
+    // ASM-verified: 2026-05-22 binary @ 0x0016c020..0x0016c08c (re-analyst).
+    // m_DtMod consumer + wave-stress decay. Without this, Freeze powerup
+    // (and any TimeModifier that scales m_DtMod) has no effect on gameplay
+    // because nothing reads m_DtMod for dt scaling.
+    float gameplayDt = dt;
+    float waveStress = 1.0f;
+    if (active) {
+        PowerUpManager* pum = PowerUpManager::GetInstance();
+        float effectiveDt = 1.0f;
+        if (pum && pum->m_DtMod_DecayTimer > 0.0f) {
+            pum->m_DtMod_DecayTimer -= dt * pum->m_DtMod_DecayRate;
+            effectiveDt = (pum->m_DtMod - 1.0f) * pum->m_DtMod_DecayTimer + 1.0f;
+            if (pum->m_DtMod_DecayTimer < 0.0f) pum->m_DtMod_DecayTimer = 0.0f;
+        }
+
+        // Wave-stress decay (binary 0x16c020): drains 10x/sec (5x in slow-mo).
+        if (pum) {
+            const float decay = game_work.m_bSlowMotion ? 5.0f : 10.0f;
+            waveStress = pum->m_WaveStress - dt * decay;
+            if (waveStress < 1.0f) waveStress = 1.0f;
+            pum->m_WaveStress = waveStress;
+        }
+
+        // THE gameplay-dt consumer: scaled dt for entities/waves/particles.
+        gameplayDt = dt * waveStress * effectiveDt;
+        game_work.m_GameDt *= waveStress * effectiveDt;
+    }
+
     // ASM-verified: 2026-05-20 binary @ 0x0016bed0 GameUpdate (re-analyst)
     // Binary gates the bomb-hit timer drain + UpdateBombHit + GameOver cross-1.5
     // trigger on `if (active)`. When `active == false` (menu, pause, quit
@@ -354,7 +383,7 @@ void GameUpdate(float dt, bool active) {
     if (active) {
         const float prevBombTimer = game_work.m_BombHitTimer;
         if (game_work.m_BombHitTimer > 0.0f) {
-            game_work.m_BombHitTimer -= dt;
+            game_work.m_BombHitTimer -= gameplayDt;
             if (game_work.m_BombHitTimer < 0.0f) game_work.m_BombHitTimer = 0.0f;
         }
         FN::UpdateBombHit(prevBombTimer);
@@ -374,25 +403,37 @@ void GameUpdate(float dt, bool active) {
     // ASM-verified: 2026-05-16 binary GameUpdate @ 0x0016bed0 (re-analyst).
     // ActorManager::Update (binary @ 0x16c2c0) is active-branch only.
     if (active && game->actorManager)
-        game->actorManager->Update(dt);
+        game->actorManager->Update(gameplayDt);
+
+    if (active)
+        BombFlash::UpdateActiveFlashes(gameplayDt);
 
     // Binary @ 0x16c244 (active path passes scaledDt) / @ 0x16c39c (frozen
     // path passes 0.0f) -- WaveManager::Update is called EVERY frame; the
     // frozen branch just feeds dt=0 so the spawn pump quiesces naturally.
     // Earlier port wholesale-gated this on `active`, which silenced the
     // pump permanently when pausedFlag stayed set after pause->resume.
-    WaveManager::GetInstance()->Update(active ? dt : 0.0f);
+    WaveManager::GetInstance()->Update(active ? gameplayDt : 0.0f);
 
     if (game_work.m_SaveData) game_work.m_SaveData->Update(dt, game_work.mHud);
 
     if (game_work.mGameSound) game_work.mGameSound->Update(dt);
     UpdateMusic(dt);
 
-    PSPParticleManager::GetInstance().Update(dt, false);
+    {
+        WaveManager* wm = WaveManager::GetInstance();
+        float particleDt = gameplayDt;
+        if (active && wm) {
+            const float wavedt = wm->GetWavedt(0);
+            const float renorm = (wavedt > 0.0f && (1.0f / wavedt) > 1.0f) ? (1.0f / wavedt) : 1.0f;
+            particleDt = gameplayDt / renorm;
+        }
+        PSPParticleManager::GetInstance().Update(active ? particleDt : dt, false);
+    }
 
     FN::UpdateCriticalFlash(dt);
 
-    if (active) SplatEntity::UpdateActiveSplats(dt);
+    if (active) SplatEntity::UpdateActiveSplats(gameplayDt);
     // ASM-verified: 2026-05-17 binary @ 0x0016c378 inactive branch (re-analyst).
     // Binary calls SlashEntity::PreUpdate(0.0f) ONCE then loops 16x calling
     // Update(scaledDt) + PostUpdate(scaledDt) with the REAL dt (not zero).
