@@ -291,6 +291,14 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                     fruit->m_ScaleAnim = 1.0f;
                     fruit->m_ChuckDelay = 0.0f;
                     fruit->m_ZPosition = FRUIT_ZPOS;
+                    // ASM-verified: 2026-05-22 binary @ 0x0014f0de (re-analyst). Fruit-
+                    // branch writes byte=1 to Fruit+0x10C (m_bSpawnedByCriticalSplash).
+                    // Dual-purpose: (a) marks the fruit as menu-owned so the slash
+                    // dispatcher skips combo bookkeeping + Fruit::CollisionResponse
+                    // skips score-add; (b) Fruit::Update's sliced-branch reads this
+                    // flag to apply +1.3*dt extra gravity on released halves -- the
+                    // menu animation's "drop fast on slice" effect.
+                    fruit->m_bSpawnedByCriticalSplash = 1;
                     m_pFruitPiece = fruit;
 
                     // Clamp rotation magnitude (after the ×0.2 reduction)
