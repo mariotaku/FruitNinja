@@ -187,7 +187,7 @@ bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     // ASM-verified: 2026-05-18 binary @ 0x00160ce8 (re-analyst)
     // After 6+ waves (WaveManager+0x5C), swap to the heavier stream variant.
     WaveManager* wm = WaveManager::GetInstance();
-    if (wm && wm->field_0x5c > 5) {
+    if (wm && wm->m_BlitzBonus > 5) {
         m_SoundIdx = 1;
     }
 

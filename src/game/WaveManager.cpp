@@ -95,7 +95,7 @@ WaveManager::WaveManager()
     , field_0x40(0.0f), field_0x44(0.0f)
     , field_0x48(0)
     , field_0x4c(0.0f), field_0x4c_p1(0.0f)
-    , field_0x5c(0)
+    , m_BlitzBonus(0)
     , field_0x60(0.0f), field_0x60_p1(0.0f)
     , field_0x64(1.0f)
     , field_0x6c(1.0f)
@@ -497,7 +497,7 @@ void WaveManager::Reset(bool fullReset) {
 
     // 6. Reset per-wave chance counters + PROBABILITY_OVERIDE state.
     ResetWaveChances();
-    field_0x5c = 0;
+    m_BlitzBonus = 0;
     for (std::vector<PROBABILITY_OVERIDE>::iterator pit = probOverrides[game_work.gameMode].begin();
          pit != probOverrides[game_work.gameMode].end(); ++pit)
         pit->SelectType();
@@ -688,7 +688,7 @@ void WaveManager::Resume() {
         m_Speed[0]           = sd->m_Speed_P0_alias;
         m_Speed[1]           = sd->m_Speed_P0_alias;
         // Binary: hash of "blitz_bonus" — same key AddSpeed increments.
-        field_0x5c = sd->GetTotal(StringHash("blitz_bonus"));
+        m_BlitzBonus = sd->GetTotal(StringHash("blitz_bonus"));
 
         ResetWaveChances();
 
@@ -1135,8 +1135,8 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         PROBABILITY_OVERIDE& po = *oit;
                         // Gate: perWave cap
                         if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
-                        // Gate: waveCount minimum (field_0x5c = blitz score total)
-                        if (po.m_PerWaveCount > 0 && field_0x5c < po.m_PerWaveCount) continue;
+                        // Gate: waveCount minimum (m_BlitzBonus = blitz score total)
+                        if (po.m_PerWaveCount > 0 && m_BlitzBonus < po.m_PerWaveCount) continue;
                         // Gate: disableWhenPowered — binary @ 0x00117b38
                         // GetActiveProgression returns 2.0 when no power active, [0..1] otherwise.
                         // ASM-verified: 2026-05-18 binary @ 0x00125390 (re-analyst)
@@ -1166,7 +1166,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                         {
                             PROBABILITY_OVERIDE& po = *oit;
                             if (po.m_PerWave > 0 && po.m_Counter >= po.m_PerWave) continue;
-                            if (po.m_PerWaveCount > 0 && field_0x5c < po.m_PerWaveCount) continue;
+                            if (po.m_PerWaveCount > 0 && m_BlitzBonus < po.m_PerWaveCount) continue;
                             if (po.m_DisableWhenPowered > 0.0f) {
                                 float prog = PowerUpManager::GetInstance()
                                                  ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f)
@@ -1805,7 +1805,7 @@ float WaveManager::GetComboBonusProgression(int playerIdx) {
     float progress = (&field_0x60)[playerIdx] / -2.5f + 1.0f;  // m_ComboTimer[p] / -2.5 + 1
     if (progress < 0.0f) progress = 0.0f;
     if (progress > 1.0f) progress = 1.0f;
-    float result = ((float)(&field_0x5c)[playerIdx] + progress) / 6.0f;  // m_BlitzBonus[p]
+    float result = ((float)(&m_BlitzBonus)[playerIdx] + progress) / 6.0f;  // m_BlitzBonus[p]
     if (result > 1.0f) result = 1.0f;
     return result;
 }
@@ -1849,7 +1849,7 @@ void WaveManager::ResetSpeed(int playerIdx) {
         game_work.m_SaveData->ClearTotal(s_blitzBonusHash);
 
     (&field_0x60)[playerIdx] = 0.0f;   // m_ComboTimer[p] at +0x60 + p*4
-    (&field_0x5c)[playerIdx] = 0;      // m_BlitzBonus[p] at +0x5c + p*4
+    (&m_BlitzBonus)[playerIdx] = 0;      // m_BlitzBonus[p] at +0x5c + p*4
 
     // ASM-verified: 2026-05-03 binary @ 0x00122e94 (re-analyst)
     // Binary @ 0x00122e94: if SpeedControl exists, zero its display state.
@@ -1891,7 +1891,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 (&field_0x60)[playerIdx] = 2.5f; // m_ComboTimer[p]
                 sd->ClearTotal(s_blitzBonusHash);
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
-                (&field_0x5c)[playerIdx] = newCount;  // m_BlitzBonus[p]
+                (&m_BlitzBonus)[playerIdx] = newCount;  // m_BlitzBonus[p]
                 FN::AddToCurrentScore(5, playerIdx, false, false);
                 static uint32_t s_blitzCountHash = 0;
                 if (!s_blitzCountHash) s_blitzCountHash = StringHash("blitz_count");
@@ -1906,7 +1906,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
             if (sd) {
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 int level = (newCount < 6) ? newCount : 6;
-                (&field_0x5c)[playerIdx] = newCount;  // m_BlitzBonus[p]
+                (&m_BlitzBonus)[playerIdx] = newCount;  // m_BlitzBonus[p]
 
                 {
                     char buf[40];
@@ -1920,7 +1920,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                     if (game_work.mGameSound) game_work.mGameSound->SFXPlay(k_BlitzSfx[sfxLevel - 1], 1.0f, 1.0f);
                 }
 
-                int clamped = ((&field_0x5c)[playerIdx] > 5) ? 6 : (&field_0x5c)[playerIdx];
+                int clamped = ((&m_BlitzBonus)[playerIdx] > 5) ? 6 : (&m_BlitzBonus)[playerIdx];
                 FN::AddToCurrentScore(clamped * 5, playerIdx, false, false);
                 (&field_0x60)[playerIdx] = 2.5f;
             }
@@ -1932,7 +1932,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     if (!s_blitzMaxHash) s_blitzMaxHash = StringHash("blitz_max");
     if (sd) {
         int existing = sd->GetTotal(s_blitzMaxHash);
-        int delta    = (&field_0x5c)[playerIdx] - existing;
+        int delta    = (&m_BlitzBonus)[playerIdx] - existing;
         if (delta > 0)
             sd->AddToTotal("blitz_max", s_blitzMaxHash, delta, false, false);
     }
