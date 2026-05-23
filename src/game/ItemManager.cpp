@@ -471,10 +471,31 @@ bool ItemManager::PlayAlternateComboSound(int comboIdx) {
     if (!m) return false;
     return m->m_ComboSounds.PlaySound(comboIdx, 1.0f, 1.0f);
 }
-// STUB: ItemManager::PlayAlternateImpactSound -- auto stub
-void ItemManager::PlayAlternateImpactSound(float, float) {}
-// STUB: ItemManager::PlayAlternateSwipeSound -- auto stub
-void ItemManager::PlayAlternateSwipeSound(float, float) {}
+// -----------------------------------------------------------------------
+// PlayAlternateImpactSound @ 0x00113054
+// Delegates to m_pCurrentSlashMod->m_ImpactSounds.PlaySound(-1, volume, pitch).
+// Returns true iff a sound played (suppresses per-fruit impact-N iteration).
+// TODO: stash m_pCurrentSlashMod once SetEquipped binds it; until then always
+// falls through to the per-fruit sounds path (returns false).
+// -----------------------------------------------------------------------
+bool ItemManager::PlayAlternateImpactSound(float volume, float pitch) {
+    SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
+    if (!mod) return false;
+    return mod->m_ImpactSounds.PlaySound(-1, volume, pitch);
+}
+
+// -----------------------------------------------------------------------
+// PlayAlternateSwipeSound @ 0x00113068
+// Delegates to m_pCurrentSlashMod->m_SwipeSounds.PlaySound(-1, volume, pitch).
+// Returns true iff a sound played (suppresses default Sword-swipe SFX).
+// TODO: stash m_pCurrentSlashMod once SetEquipped binds it; until then always
+// falls through to the default swipe path (returns false).
+// -----------------------------------------------------------------------
+bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
+    SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
+    if (!mod) return false;
+    return mod->m_SwipeSounds.PlaySound(-1, volume, pitch);
+}
 // STUB: ItemManager::SetSwipeLoodVol -- auto stub
 void ItemManager::SetSwipeLoodVol(float) {}
 // STUB: ItemManager::UnequipItem -- auto stub

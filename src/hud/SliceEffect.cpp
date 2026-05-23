@@ -130,19 +130,7 @@ void SliceEffect_Add(const Vec3& pos, float angleDeg, float impulse, bool critic
     s->pos      = pos;         // +0x0c (Vec3*)
     s->critical = critical ? 1 : 0;
 
-    // Clean-Slice SFX gate from binary (0x0016b480):
-    //   if (impulse > 2.5f && Rand32(3)==0 && Rand32(3)==0)
-    //       name = (Rand32(2)==0) ? "Clean-Slice-1" : "Clean-Slice-3"
-    //       GameSound::SFXPlay(name, 1.0, pitch, cb)
-    // Compound gate gives ~1/9 actual rate. "Clean-Slice-2" is the binary's
-    // fall-through path when one gate fails and is never played here.
-    if (impulse > 2.5f && (rand() % 3) == 0 && (rand() % 3) == 0) {
-        Game* g = Game::GetInstance();
-        if (g && game_work.mGameSound) {
-            const char* name = (rand() % 2 == 0) ? "Clean-Slice-1" : "Clean-Slice-3";
-            game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
-        }
-    }
+    // Clean-Slice-N SFX moved to Fruit::Slice post-splat-loop (binary-faithful).
 }
 
 // ---------------------------------------------------------------------
