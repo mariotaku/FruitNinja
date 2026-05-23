@@ -37,6 +37,12 @@ public:
 
     void SetTexture(float, float, float, float, float, Vec3* /*pos*/, void* /*tex*/) {}
     void SetAngle(unsigned short /*angleIdx*/, float /*duration*/) {}
+    // TODO: 0x00166ff2 / 0x0016700c (R1.2 popup-N gap) -- AddSound is empty;
+    // binary's UpsellScreenElement::AddSound queues {name, startT, endT} into
+    // m_Sounds vector. UpsellScreenElement::Update fires GameSound::SFXPlay
+    // when elapsed >= startT. Round 2: add m_Sounds<USESound> vector + AddSound
+    // body + Update SFX-fire loop. Loop in MakeMainUpsellScreen iterates 4x
+    // queuing "popup-%i" + "popup-1" finale.
     void AddSound(const char* /*path*/, float /*t0*/, float /*t1*/) {}
     void ClearSounds() {}
 

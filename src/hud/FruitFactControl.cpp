@@ -519,7 +519,14 @@ void FruitFactControl::Update(float dt) {
         // SecondaryTex = combo-star tex
         m_Texture = m_ComboStarTex;
 
-        // Gate on m_TransitionTimer (game[+0xC]) <= 0.75 OR m_StarTimer >= m_ComboLength
+        // TODO: 0x0013b7be (R1.2 Cluster A popup-N gap) -- per re-analyst
+        // 2026-05-23, binary's FruitFactControl::Update plays "popup-%i" /
+        // "popup-1" (rodata 0x001bb438 / 0x001bc50f), NOT "Clean-Slice-%d"
+        // (which fires elsewhere). The current port has the right field
+        // semantics (m_StarTimer = field_0xd4 float, idx via int truncation,
+        // clamp 1..8) but the SFX names are likely WRONG. Round 2: confirm
+        // whether Path A literal should be "popup-1" and Path B format should
+        // be "popup-%i", then update the snprintf + literal.
         if (game_work.m_GameDt <= 0.75f || m_StarTimer >= (float)m_ComboLength) {
             // Path A (faster combo cadence): StarTimer += 2*dt, 0.5-fractional gate
             m_StarTimer += 2.0f * dt;
@@ -983,7 +990,8 @@ bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
 void FruitFactControl::LeftButton() {
     Game* g = Game::GetInstance();
     if (g && game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
+        // ASM-verified: 2026-05-23 binary @ 0x0013a160 (re-analyst)
+        game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
     --m_TabIndex;
@@ -997,7 +1005,8 @@ void FruitFactControl::LeftButton() {
 void FruitFactControl::RightButton() {
     Game* g = Game::GetInstance();
     if (g && game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("score_select_button", 1.0f, 1.0f,
+        // ASM-verified: 2026-05-23 binary @ 0x0013a204 (re-analyst)
+        game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>());
     }
     ++m_TabIndex;

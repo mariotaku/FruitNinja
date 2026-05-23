@@ -45,11 +45,16 @@ static const float COIN_FIXED_DT = 1.0f / 60.0f;
 // Static data
 // ---------------------------------------------------------------------------
 
-// 0x00173114 loaded flag.  Model SmartPtr is TODO — asset pipeline not ready.
+// 0x00173114 loaded flag.
 static bool s_loaded = false;
 
-// TODO: load "models/coin.mmd" via MeshManager when asset pipeline is wired.
-// Binary: Coin::LoadContent loads a .mmd into s_coinModel.
+// R1.6 re-analyst 2026-05-23: prior comment ("load models/coin.mmd") was
+// wrong. Binary @ 0x00173114 Coin::LoadContent is a no-op stub that just
+// sets the loaded flag. s_coinModel is never assigned. Coins render via
+// the fruit-actor pool: Coin::MakeCoins calls ActorManager::Add(type=2,
+// true) at binary @ 0x00173568, and the spawned actor uses fruit graphics.
+// No model file "coin.mmd" exists in Data/models/. Slot kept for vtable
+// parity but is never resolved.
 static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 
 // ---------------------------------------------------------------------------
