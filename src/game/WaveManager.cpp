@@ -102,7 +102,12 @@ WaveManager::WaveManager()
     , field_0x240(0.0f)
     , field_0x2cc(0), field_0x2d0(0)
     , field_0x2d4(0.0f)
-    , field_0x108(1), field_0x109(0)
+    // field_0x108 (waitForEntities) / field_0x109 (waitForProcessing) default to 1
+    // so absent <defaults> attributes produce "wait" semantics (binary
+    // DEFAULT_WAVE_INFO ctor default per re-analyst 2026-05-22).
+    // Earlier field_0x109(0) was a port bug -- propagating that to per-wave
+    // m_bWaitForProcessing made all waves transition with no inter-wave delay.
+    , field_0x108(1), field_0x109(1)
     , m_pWaveQue(nullptr), m_pWaveQueItem(nullptr)
 {
     m_ComboTimer[0] = 0.0f; m_ComboTimer[1] = 0.0f;
