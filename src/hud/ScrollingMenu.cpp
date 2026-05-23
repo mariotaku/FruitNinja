@@ -65,8 +65,8 @@ ScrollingMenu::ScrollingMenu()
     , m_Width(320.0f)        // DAT_0015b468 = 0x43a00000
     , m_Height(320.0f)       // DAT_0015b468 (binary uses SAME word for width AND height)
     , m_ItemHeight(240.0f)   // DAT_0015b46c = 0x43700000
-    , m_TotalWidth(0.0f)
     , m_TotalHeight(0.0f)
+    , m_TotalWidth(0.0f)
     , m_ClosestIdx(0)
     , m_DragTargetIdx(-1)
     , m_SnapDist(1.0f)
@@ -205,43 +205,93 @@ void ScrollingMenu::Update(float /*dt*/) {
         }
     }
 
+    // iVar2 = pre-Phase-3 snapshot of m_DragTargetIdx (binary saves r-reg before Phase 3 branch).
+    // Phase 6 uses iVar2 == -1 as the "no drag target was active" gate for click callback.
+    // DIFFERS: binary uses pos.x for Y bounds (Bada portrait-rotation); port uses pos.y.
+    int iVar2 = m_DragTargetIdx;
+
     // --- Phase 3: active touch tracking ---
-    int iVar2 = -1; // tracks IsTouchDown result for release detection (used in Phase 6)
     if (m_TouchId != -1) {
-        // Once a touch has been acquired, keep tracking until the finger
-        // is RELEASED (IsTouchDown == 0). The inner-region check used to
-        // gate this, but the binary's check is "still touched", and the
-        // inner region is too small for the visible list area on this
-        // ortho — drags outside ±60 vertical of the menu's pos.y were
-        // releasing instantly, springing the scroll right back.
-        int touchState = IsTouchDown(m_TouchId);
-        bool stillTouched = (touchState != 0);
-        // stillIn keeps the diagnostic name; "treat as in-region" iff still down.
-        int stillIn = stillTouched ? m_TouchId : -1;
+        // Binary checks TouchInRegion on the inner region to decide if finger is still in.
+        // DIFFERS: binary uses pos.x for Y bounds (Bada portrait-rotation); port uses pos.y.
+        float px = pos.x;
+        float py = pos.y;
+        int stillIn = TouchInRegion(
+            px + m_InnerRegion[0],   // LEFT
+            px + m_InnerRegion[2],   // RIGHT
+            py + m_InnerRegion[3],   // BOTTOM
+            py + m_InnerRegion[1],   // TOP
+            m_TouchId);              // hint
 
         if (stillIn != m_TouchId) {
             // --- Phase 3A: finger left inner region or was lifted ---
             if (m_pCollidedItem) {
-                // Fire vtable[+0x38] (Slot14 = touch-release signal) on collided item
-                m_pCollidedItem->Slot14();
+                m_pCollidedItem->Slot14();   // vtable[+0x38] Slot14 = touch-release
             }
 
-            if (!m_bDragging && m_pCollidedItem == nullptr) {
-                // No drag occurred AND no item tracked -> snap to closest
-                m_DragTargetIdx = -1;  // field77_0xc0 = -1
-
-                // Binary: accumulate closest item by distance
-                // (full closest-item search; simplified here to -1 as no-drag snap)
-                // The actual closest-item tracking happens in Phase 5.
+            if (!m_bDragging) {
+                if (m_pCollidedItem == nullptr) {
+                    // No item collided AND no drag -> closest-item search at press-time anchor
+                    m_DragTargetIdx = -1;
+                    float fVar20 = -m_Velocity.y;
+                    int idx = 0;
+                    float bestDist3A = 10000.0f;   // DAT_0015ba10
+                    for (std::vector<ScrollingMenuItem*>::iterator it3 = m_Items.begin();
+                         it3 != m_Items.end(); ++it3) {
+                        float fVar17 = (fVar20 + pos.y + m_Height * -0.5f) - m_TouchAnchorPos.y;
+                        if (fVar17 < 0.0f) fVar17 = -fVar17;
+                        if (fVar17 < bestDist3A) {
+                            bestDist3A = fVar17;
+                            if (fVar20 + m_TotalHeight + m_Velocity.y < m_Height)
+                                m_DragTargetIdx = -1;
+                            else
+                                m_DragTargetIdx = idx;
+                        }
+                        idx++;
+                        float h = (*it3)->GetHeight();
+                        fVar20 -= h;
+                    }
+                    m_PendingVelocity = Vec3(0.0f, 0.0f, 0.0f);
+                }
+            } else {
+                // DRAGGING path: friction projection + snap distance computation
+                float fVar21 = m_PendingVelocity.y;
+                float fVar17 = 0.0f;
+                while (fVar21 < -0.05f || fVar21 > 0.05f) {
+                    fVar21 *= 0.9f;
+                    fVar17 += fVar21;
+                }
+                bool nonTrivial = (fVar17 < -0.01f || fVar17 > 0.01f);
+                if (nonTrivial) {
+                    float fVar14 = m_Velocity.y;
+                    float projected = fVar14 + fVar17;
+                    if (projected <= 0.01f &&
+                        (m_ItemHeight - m_TotalHeight) + 0.01f <= projected) {
+                        float py5 = pos.y;
+                        fVar14 = (py5 - fVar14) - fVar17;
+                        float bestDist3Bd = 10000.0f;
+                        float bestOff = 0.0f;
+                        for (std::vector<ScrollingMenuItem*>::iterator it3b = m_Items.begin();
+                             it3b != m_Items.end(); ++it3b) {
+                            float fVar16 = fVar14 - py5;
+                            float fVar19 = (fVar16 < 0.0f) ? -fVar16 : fVar16;
+                            if (fVar19 < bestDist3Bd) {
+                                bestDist3Bd = fVar19;
+                                bestOff = fVar16;
+                            }
+                            float h = (*it3b)->GetHeight();
+                            fVar21 -= h;
+                            h = (*it3b)->GetHeight();
+                            fVar14 -= h;
+                        }
+                        float ratio = (bestOff - m_Velocity.y) / fVar17;
+                        if (ratio < 0.0f) ratio = -ratio;
+                        m_SnapDist = ratio;
+                    }
+                }
             }
 
-            // Release the touch slot.
-            // Binary @ 0x0015baa0..0x0015babe clears in this exact order:
-            //   field_0x74 (m_TouchId)      = -1
-            //   field_0xcc (m_pCollidedItem) = 0
-            //   field_0xc8 (m_bDragging)    = 0
-            //   GOT[0x7740] (s_ModPowerMask) &= ~0x40 -- re-enable slicing
-            iVar2 = IsTouchDown(m_TouchId);
+            // Release clears (run regardless of m_bDragging branch)
             m_TouchId       = -1;
             m_pCollidedItem = nullptr;
             m_bDragging     = 0;
@@ -249,47 +299,33 @@ void ScrollingMenu::Update(float /*dt*/) {
 
         } else {
             // --- Phase 3B: finger still in inner region -> drag velocity update ---
-
-            // Reset snap-distance accumulator during active drag (field78_0xc4)
             m_SnapDist = 1.0f;
 
-            // Compute new scroll offset from drag delta:
-            // offset = (anchorScrollY - (currentY - anchorY)) * -0.5
             const TouchState* ts = Touch::GetInstance().GetSlot(m_TouchId);
             if (ts) {
                 float currentY = (float)ts->currY;
-                float anchorY  = m_TouchAnchorPos.y;   // y at finger-down
-                float anchorScrollY = m_AnchorOffset.y; // scroll offset at finger-down
+                float anchorY       = m_TouchAnchorPos.y;
+                float anchorScrollY = m_AnchorOffset.y;
 
-                // Binary formula (RE-confirmed via shop-scroll-debug.md, line ~263):
-                //   new_offset = (m_Velocity.y - (anchorScrollY - (currentY - anchorY))) * -0.5
-                float newOffset = (m_Velocity.y -
-                                   (anchorScrollY - (currentY - anchorY)))
-                                  * DRAG_DELTA_FACTOR;
-                m_PendingVelocity.y = newOffset;
+                m_PendingVelocity.y = (m_Velocity.y -
+                                       (anchorScrollY - (currentY - anchorY)))
+                                      * DRAG_DELTA_FACTOR;
 
-                // Handle collided item: check if it was lifted mid-drag
+                // Phase 3B: clear collided item if Slot13 (re-test) returns 0
                 if (m_pCollidedItem) {
-                    // Binary: if IsTouchDown(item_tracked_slot) == 0: clear collided item
-                    // Port: check if touch is still down on the tracked slot
-                    // (m_TouchId is the slot; we already checked it's still in region)
-                    // Just check if the global IsTouchDown is 0 for the slot
-                    if (IsTouchDown(m_TouchId) == 0) {
+                    if (m_pCollidedItem->Slot13(m_TouchId) == nullptr) {
                         m_pCollidedItem = nullptr;
                     }
                 }
 
-                // Drag threshold detection
                 float delta = currentY - anchorY;
-                if (delta < 0.0f) delta = -delta; // fabsf
+                if (delta < 0.0f) delta = -delta;
                 if (delta > DRAG_THRESHOLD) {
-                    m_bDragging = 1;
-
-                    // Cancel pending tap if drag is large
                     if (delta > DRAG_CANCEL_DIST && m_pCollidedItem) {
-                        m_pCollidedItem->Slot12();  // vtable[+0x30]: cancel-tap signal
+                        m_pCollidedItem->Slot12();
                         m_pCollidedItem = nullptr;
                     }
+                    m_bDragging = 1;
                 }
             }
         }
@@ -402,12 +438,12 @@ void ScrollingMenu::Update(float /*dt*/) {
                 // Set "tap processed" flag
                 m_bTouchProcessed = 1;
 
-                // Fire callback only if touch was fully released (iVar2 == -1 from IsTouchDown)
-                // Binary: iVar2 == -1 means touch was released during this frame's tracking
-                // AND a collided item pointer exists (or closest item is tracked)
+                // Binary gate: iVar2 == -1 means m_DragTargetIdx was -1 before Phase 3
+                // (no drag target active at frame start). Port uses GetItemClosestToZero()
+                // in place of binary's latched this_00 pointer (equivalent when closest
+                // search correctly updates m_ClosestIdx, which it does).
                 ScrollingMenuItem* closest = GetItemClosestToZero();
                 if (iVar2 == -1 && closest) {
-                    // ScrollingMenuItem::CallClickedMenuItemCallback @ 0x0015c27c
                     closest->CallClickedMenuItemCallback();
                 }
             }
@@ -421,34 +457,30 @@ void ScrollingMenu::Update(float /*dt*/) {
     //   offset < totalScrollH        -> past BOTTOM, spring to totalScrollH
     //   totalScrollH = m_Height - m_TotalHeight (NEGATIVE when content > viewport)
     float offset = m_Velocity.y;
-    float totalScrollH = m_Height - m_TotalHeight;
-    if (totalScrollH > 0.0f) totalScrollH = 0.0f;  // content shorter than viewport
+    // Binary field38_0x9c (port: m_Width — name-swap per SetWidth comment) minus
+    // field41_0xa8 (m_TotalHeight after the +0xa8/+0xac rename). Binary uses +0x9c,
+    // NOT +0xa0 (m_Height). No clamp — binary lets totalScrollH>0 fall through naturally.
+    float totalScrollH = m_Width - m_TotalHeight;
 
-    if (offset <= 0.0f || m_DragTargetIdx >= 0) {
-        if (offset >= totalScrollH || m_DragTargetIdx >= 0) {
-            if (m_TouchId != -1) return;
-            // Binary at 0x0015bddc: vldr.32 s14,[r4,#0x94] -- gates the
-            // snap step on m_PendingVelocity.y, NOT m_Velocity.y. After a
-            // drag release, m_PendingVelocity decays to ~0.05 within a few
-            // frames (0.9 friction), while m_Velocity may still be 50+
-            // from accumulated drag input. Using m_Velocity here meant
-            // the snap was almost never gated open. Reading m_PendingVelocity
-            // matches the binary and lets snap fire on release.
-            float vel = m_PendingVelocity.y;
-            bool velSmall = (vel < 0.0f) ? (vel >= VEL_NEAR_ZERO_LO)
-                                          : (vel <  VEL_NEAR_ZERO_HI);
-            if (!velSmall) return;
-            m_Velocity.y = offset + snapDist * VEL_NEAR_ZERO_HI;
-            return;
-        }
-        // offset < totalScrollH -> past bottom, spring toward totalScrollH
-        m_Velocity.y = offset + (totalScrollH - offset) * SPRING_FWD_COEF;
+    if (offset > 0.0f && m_DragTargetIdx < 0) {
+        // PAST TOP: spring back toward 0
+        offset *= SPRING_BACK_COEF;
+    } else if (offset < totalScrollH && m_DragTargetIdx < 0) {
+        // PAST BOTTOM: spring forward toward totalScrollH
+        offset = offset + (totalScrollH - offset) * SPRING_FWD_COEF;
     } else {
-        // offset > 0 -> past top, spring to 0
-        m_Velocity.y = offset * SPRING_BACK_COEF;
+        // IN RANGE or being dragged
+        if (m_TouchId != -1) return;
+        float pv = m_PendingVelocity.y;
+        bool gate = (pv < 0.0f) ? (pv >= VEL_NEAR_ZERO_LO) : (pv <= VEL_NEAR_ZERO_HI);
+        if (!gate) return;
+        m_Velocity.y = offset + snapDist * VEL_NEAR_ZERO_HI;
+        return;
     }
+    m_Velocity.y = offset;
 
     // Apply friction to pending velocity again (end-of-phase)
+    // ASM-verified: 2026-05-24 binary @ 0x0015b744 Phase 7 (re-analyst)
     Vec3Scale_ScrollMenu(&m_PendingVelocity);
 }
 
@@ -457,11 +489,12 @@ void ScrollingMenu::Update(float /*dt*/) {
 // ---------------------------------------------------------------------------
 ScrollingMenuItem* ScrollingMenu::AddItem(ScrollingMenuItem* item) {
     if (!item) return nullptr;
-    m_TotalHeight += item->GetHeight();
-    m_TotalWidth  += item->GetWidth();
+    m_TotalWidth  += item->GetWidth();    // field42_0xac += vtable[+0x0c](item)
+    m_TotalHeight += item->GetHeight();   // field41_0xa8 += vtable[+0x08](item)
     item->SetParent(this);
     m_Items.push_back(item);
     return item;
+    // ASM-verified: 2026-05-24 binary @ 0x0015be54 (re-analyst)
 }
 
 int ScrollingMenu::GetNumItems() const {
@@ -480,34 +513,32 @@ ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() const {
 
 // ---------------------------------------------------------------------------
 // ScrollingMenu::Draw @ 0x0015af98
-// Pure iterator -- calls Draw() on every item in m_Items.
-// No scissor, no clipping, no per-item position update.
-//
-// Per-item matrix discipline: reset the world matrix between items so
-// each item's Draw inherits a clean identity. Mirrors HUD::Draw's
-// per-control reset; without it, a previous item's dirty matrix
-// (e.g. ShopListItem's Part 5 icon SetCurrentMatrix(Scale44(64,64,0)))
-// bleeds into the next item's first draw call. Binary equivalent
-// behaviour comes from the matrix-stack discipline shared with HUD.
+// Binary: pure iterator over m_Items calling vtable+0x2c (Draw) on each.
+// No world.Reset() between items in binary.
+// DIFFERS: original does not Reset world stack between items; port adds
+// world.Reset() because ShopListItem's Draw leaks Scale44 into the next
+// item's first draw call. Fix the leak in ShopListItem to match binary.
+// ASM-verified: 2026-05-24 binary @ 0x0015af98 (re-analyst)
 // ---------------------------------------------------------------------------
 void ScrollingMenu::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
         world.Reset();
+        // DIFFERS: original = no Reset here; using Reset because ShopListItem leaks Scale44
         (*it)->Draw();
     }
 }
 
 void ScrollingMenu::DestroyList() {
-    // Binary @ 0x0015afea -- safety clear of the slice-suppression bit so
-    // a menu destroyed mid-drag doesn't leave slicing disabled forever.
     SlashEntity::s_ModPowerMask &= ~0x40u;
     for (std::vector<ScrollingMenuItem*>::iterator it = m_Items.begin(); it != m_Items.end(); ++it) {
-        delete *it;
+        ScrollingMenuItem* item = *it;
+        item->Remove();   // vtable slot 7 (+0x1c)
+        delete item;      // vtable slot 1 dtor+operator_delete
     }
     m_Items.clear();
-    m_TotalHeight = 0.0f;
-    m_TotalWidth  = 0.0f;
+    // Binary does NOT zero m_TotalWidth/m_TotalHeight here.
+    // ASM-verified: 2026-05-24 binary @ 0x0015afd0 (re-analyst)
 }
 
 // ---- Lifecycle methods ported from binary (re-analyst 2026-05-18) ----
@@ -541,15 +572,21 @@ void ScrollingMenu::Release() {
     DestroyList();
 }
 
-// Binary @ 0x0015aeb8 -- Reset. Wipes touch/drag state and zeros 4 Vec3
-// scroll-state slots. Re-enables collision via m_fieldCA = 1.
+// Binary @ 0x0015aeb8
 void ScrollingMenu::Reset() {
-    m_DragTargetIdx   = -1;
-    m_TouchId         = -1;
-    m_pCollidedItem   = nullptr;
-    m_bDragging       = 0;
-    m_SnapDist        = 1.0f;
-    m_TouchAnchorPos  = Vec3(0.0f, 0.0f, 0.0f);
+    m_DragTargetIdx     = -1;
+    m_TouchId           = -1;
+    m_pCollidedItem     = nullptr;
+    // Binary writes byte 1 at HUDControl base +0x32 (m_bNoDestructor).
+    m_bNoDestructor     = 1;
+    m_bConstrainedView  = 0;
+    m_Velocity          = Vec3(0.0f, 0.0f, 0.0f);
+    m_TouchAnchorPos    = Vec3(0.0f, 0.0f, 0.0f);
+    m_AnchorOffset      = Vec3(0.0f, 0.0f, 0.0f);
+    m_SnapDist          = 1.0f;
+    m_PendingVelocity   = Vec3(0.0f, 0.0f, 0.0f);
+    // Note: binary does NOT clear m_bDragging (+0xc8) in Reset.
+    // ASM-verified: 2026-05-24 binary @ 0x0015aeb8 (re-analyst)
 }
 
 // Binary @ 0x0015af38 -- no-op stub (single bx lr).
