@@ -116,18 +116,26 @@ ScrollingMenu::~ScrollingMenu() {
 // ---------------------------------------------------------------------------
 // ScrollingMenu::SetWidth @ 0x00147998
 // Writes field40_0xa4 (port: m_ItemHeight — names swapped vs binary semantics,
-// preserved to avoid mangled-symbol drift) and recomputes the cross-axis
-// (Y in centered-ortho) bounds for outer/inner touch regions.
-// Binary: field40_0xa4 = w; then recomputes outer[1]/[2] and inner[1]/[2]
-// using HALF = w * 0.5.
+// preserved to avoid mangled-symbol drift) and recomputes touch-region cross-
+// axis bounds.
+//
+// DIFFERS from binary: binary writes outer[1]/[2] (Y bounds in its pixel-
+// post-rotation coord space). In port's centered-ortho landscape coords with
+// vertical-scroll list (ShopScreen stacks items top-to-bottom), the cross-
+// axis is X, so SetWidth must update outer[0]/[3] (X bounds) instead. Y
+// bounds (scroll axis) stay at the wide ctor defaults so swipes anywhere
+// along the visible item column are acquired.
+//
+// ASM-verified intent: 2026-05-23 binary @ 0x00147998 (re-analyst); axis
+// rotation is a port-specific adjustment to match centered-ortho layout.
 // ---------------------------------------------------------------------------
 void ScrollingMenu::SetWidth(float w) {
     m_ItemHeight = w;
     const float HALF = w * 0.5f;
-    m_OuterRegion[1] = -HALF;
-    m_OuterRegion[2] =  HALF;
-    m_InnerRegion[1] = -HALF * 0.5f;
-    m_InnerRegion[2] =  HALF * 0.5f;
+    m_OuterRegion[0] = -HALF;
+    m_OuterRegion[3] =  HALF;
+    m_InnerRegion[0] = -HALF * 0.5f;
+    m_InnerRegion[3] =  HALF * 0.5f;
 }
 
 // ---------------------------------------------------------------------------
