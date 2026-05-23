@@ -6,13 +6,20 @@
 
 using namespace Mortar;
 
-// Binary @ 0x001695e8 -- free function, preloads the 6 in-game SFX.
-// Called before gameplay begins so sounds are ready without load stutter.
+// ASM-verified: 2026-05-23 binary @ 0x001695e8 (re-analyst)
+// Preloads 6 in-game SFX: Time-tick, Time-tock, Critical, Combo-1..3.
+// Loop: OS_SPrintf(buf, 0x80, "%s%d", "Combo-", i) for i in [1,3].
 namespace {
     void PreloadInGameSounds() {
-        // Port specific: SoundManager::PreloadSFX not yet ported; SDL backend
-        // lazy-loads on first play as fallback. Wire call when PreloadSFX is ported.
-        (void)0;
+        SoundManager& mgr = SoundManager::GetInstance();
+        mgr.PreLoadSound("Time-tick");
+        mgr.PreLoadSound("Time-tock");
+        mgr.PreLoadSound("Critical");
+        char buf[0x80];
+        for (int i = 1; i != 4; ++i) {
+            snprintf(buf, sizeof(buf), "%s%d", "Combo-", i);
+            mgr.PreLoadSound(buf);
+        }
     }
 }
 
