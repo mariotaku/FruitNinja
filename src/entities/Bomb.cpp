@@ -711,12 +711,16 @@ void Bomb::KillBomb() {
 
 // Binary @ 0x0017280c — vtable slot 9. Returns 0.
 // Three branches:
-//   1. m_bMenuBombHit == 0, Classic/Arcade: HitBomb — bombHitTimer = 3.2,
-//      camera shake (1.6, 2.0), explosion SFX. Classic is the game-over path.
-//   2. m_bMenuBombHit == 0, Zen mode (gameMode == 2): HitMenuBomb —
+//   1. m_bMenuBombHit == 0, Classic/Zen: HitBomb — bombHitTimer = 3.2,
+//      camera shake (1.6, 2.0), explosion SFX. Game-over fires via
+//      GameUpdate's cross-1.5 trigger when m_bMenuBombFlashFlag == 0.
+//   2. m_bMenuBombHit == 0, Arcade mode (gameMode == 2): HitMenuBomb —
 //      bombHitTimer = 2.0, camera shake (2.0, 3.0), -10 score, clear
-//      timed power-ups, mark as menu-hit so subsequent Update keeps the
-//      physics alive and the bomb falls off-screen instead of exploding.
+//      timed power-ups. HitMenuBomb sets m_bMenuBombFlashFlag = 1
+//      (binary @ 0x0016b270) which suppresses GameUpdate's cross-1.5
+//      GameOver trigger, so arcade survives the bomb hit. Marks
+//      m_bMenuBombHit=1 so subsequent Update keeps the physics alive
+//      and the bomb falls off-screen instead of exploding.
 //   3. m_bMenuBombHit != 0 (menu bomb re-hit): just fire the hit callback.
 int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
                              unsigned long /*flagsA*/,
@@ -746,15 +750,17 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         }
 
         if (isArcade) {
-            // Zen penalty path. Binary HitMenuBomb (0x16b234) — plays
-            // "menu-bomb" SFX (string at 0x001B96C9), bombHitTimer = 2.0,
-            // sets g_bombHitData->m_bMenuBombHit_flag = 1. No camera shake.
-            game_work.m_BombHitTimer = 2.0f;
-            if (game_work.mGameSound) game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+            // Arcade penalty path -- route through FN::HitMenuBomb so the
+            // m_bMenuBombFlashFlag=1 write (binary @ 0x0016b270) actually
+            // fires. Previous inline implementation set m_BombHitTimer=2.0
+            // and the menu-bomb SFX, but forgot the flash-flag write --
+            // so ~0.5s later GameUpdate's cross-1.5 GameOver trigger fired
+            // and ended arcade immediately on every bomb slice.
+            FN::HitMenuBomb(pos);  // timer=2.0, "menu-bomb" SFX, flash-flag=1
             FN::AddToCurrentScore(-10, 0, false, false);
             PowerUpManager::GetInstance()->ClearTimedPowers();
             WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
-            // "X" MissControl indicator for zen bomb hit. Uses the
+            // "X" MissControl indicator for arcade bomb hit. Uses the
             // shared hud_cross overlay; MissControl pre-loads it.
             if (MissControl* mc = MissControl::GetFree()) {
                 // Binary: miss->MakeDisappear(pos, 0, bombTex);
