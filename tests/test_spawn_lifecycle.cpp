@@ -1,4 +1,4 @@
-// test_arcade_spawn -- per-mode spawn lifecycle diagnostic.
+// test_spawn_lifecycle -- per-mode spawn lifecycle diagnostic.
 //
 // Boots the game in the chosen mode (classic/arcade/zen), fires
 // PrepareForLevelStart, and ticks N frames. Default duration matches
@@ -23,12 +23,12 @@
 // binary should produce. Always returns 0 unless setup fails.
 //
 // Run:
-//   ./build/tests/Debug/test_arcade_spawn.exe                   # arcade, 65s default
-//   ./build/tests/Debug/test_arcade_spawn.exe --mode=classic    # classic, 35s default
-//   ./build/tests/Debug/test_arcade_spawn.exe --mode=zen        # zen, 95s default
-//   ./build/tests/Debug/test_arcade_spawn.exe --frames=600      # override frame count
-//   ./build/tests/Debug/test_arcade_spawn.exe --trace=30        # log entity pos/vel every 30 frames
-//   ./build/tests/Debug/test_arcade_spawn.exe --interactive     # visible window
+//   ./build/tests/Debug/test_spawn_lifecycle.exe                   # arcade, 65s default
+//   ./build/tests/Debug/test_spawn_lifecycle.exe --mode=classic    # classic, 35s default
+//   ./build/tests/Debug/test_spawn_lifecycle.exe --mode=zen        # zen, 95s default
+//   ./build/tests/Debug/test_spawn_lifecycle.exe --frames=600      # override frame count
+//   ./build/tests/Debug/test_spawn_lifecycle.exe --trace=30        # log entity pos/vel every 30 frames
+//   ./build/tests/Debug/test_spawn_lifecycle.exe --interactive     # visible window
 //
 // Lifecycle entries are tagged [SPAWN-N], [WAVE], [BLITZ], [TRACE], [KILL]
 // so users can grep easily.

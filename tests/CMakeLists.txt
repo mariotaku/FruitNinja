@@ -165,17 +165,17 @@ endif()
 add_test(NAME bonus_screen COMMAND test_bonus_screen)
 set_tests_properties(bonus_screen PROPERTIES TIMEOUT 60)
 
-# Arcade-mode spawn lifecycle diagnostic. Logs every fruit/bomb spawn
-# with full pos/vel/gravity parameters plus per-wave spawner config so
-# divergences vs. binary expectations are readable line-by-line.
-# Always returns success unless setup fails -- it's a log dump, not pass/fail.
-add_executable(test_arcade_spawn test_arcade_spawn.cpp)
-target_link_libraries(test_arcade_spawn PRIVATE fruit-ninja-game SDL2::SDL2main)
+# Per-mode spawn lifecycle diagnostic. Logs every fruit/bomb spawn with
+# full pos/vel/gravity parameters plus per-wave spawner config so
+# divergences vs. binary expectations are readable line-by-line. Always
+# returns success unless setup fails -- it's a log dump, not pass/fail.
+add_executable(test_spawn_lifecycle test_spawn_lifecycle.cpp)
+target_link_libraries(test_spawn_lifecycle PRIVATE fruit-ninja-game SDL2::SDL2main)
 if (WIN32)
-    target_link_libraries(test_arcade_spawn PRIVATE opengl32)
+    target_link_libraries(test_spawn_lifecycle PRIVATE opengl32)
 else()
     find_package(OpenGL REQUIRED)
-    target_link_libraries(test_arcade_spawn PRIVATE OpenGL::GL)
+    target_link_libraries(test_spawn_lifecycle PRIVATE OpenGL::GL)
 endif()
 if (WIN32 AND TARGET SDL2::SDL2)
     set(_sdl2_real SDL2::SDL2)
@@ -185,14 +185,14 @@ if (WIN32 AND TARGET SDL2::SDL2)
     endif()
     get_target_property(_sdl2_type ${_sdl2_real} TYPE)
     if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(TARGET test_arcade_spawn POST_BUILD
+        add_custom_command(TARGET test_spawn_lifecycle POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:test_arcade_spawn>)
+                $<TARGET_FILE_DIR:test_spawn_lifecycle>)
     endif()
 endif()
 foreach(spawn_mode classic arcade zen)
-    add_test(NAME ${spawn_mode}_spawn COMMAND test_arcade_spawn --mode=${spawn_mode})
+    add_test(NAME ${spawn_mode}_spawn COMMAND test_spawn_lifecycle --mode=${spawn_mode})
 endforeach()
 # Per-mode timeout matches the in-game session length + slack:
 #   classic 30s + 5s buffer + 15s slack = 50s
