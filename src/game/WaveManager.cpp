@@ -1902,12 +1902,19 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     // cold-start trigger -- combos couldn't accumulate to 2.9 speed and
     // fire the first blitz tier because the float timer was treated as
     // an int and round-tripped through `(int)amount` truncation.
-    float v = m_Speed[1 + playerIdx] + amount;
+    const float oldSpeed = m_Speed[1 + playerIdx];
+    float v = oldSpeed + amount;
     if (v <= 0.0f)       v = 0.0f;
     else if (v >= 14.0f) v = 14.0f;
     m_Speed[1 + playerIdx] = v;
 
     if (amount <= 0.0f) return;
+
+    // Diagnostic: log every AddSpeed call so the user can see combos feeding
+    // the speed bar and the cold-timer state in real time.
+    LOG_INFO("BLITZ", "AddSpeed p=%d amount=%.3f speed=%.3f->%.3f coldTimer=%.3f level=%d",
+             playerIdx, amount, oldSpeed, m_Speed[1 + playerIdx],
+             m_ColdTimer[playerIdx], m_BlitzBonus[playerIdx]);
 
     static uint32_t s_blitzBonusHash = 0;
     if (!s_blitzBonusHash) s_blitzBonusHash = StringHash("blitz_bonus");
@@ -1930,7 +1937,14 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 if (!s_blitzCountHash) s_blitzCountHash = StringHash("blitz_count");
                 PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitzCountHash);
                 if (game_work.mGameSound) game_work.mGameSound->SFXPlay("combo-blitz-1", 1.0f, 1.0f);
+                LOG_INFO("BLITZ", "  COLD-START FIRE p=%d level=%d +5 score, combo-blitz-1 SFX, blitz_count effect",
+                         playerIdx, newCount);
+            } else {
+                LOG_INFO("BLITZ", "  cold-start gate passed (speed>2.9) but FruitSaveData is null -- skipped");
             }
+        } else {
+            LOG_INFO("BLITZ", "  cold-start: speed=%.3f <= 2.9, no fire yet (need %.3f more)",
+                     m_Speed[1 + playerIdx], 2.9f - m_Speed[1 + playerIdx]);
         }
     } else {
         // Combo continuation path (binary @ 0x001235d2 onwards).
@@ -1938,6 +1952,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
         // not an int truncation. With amount=combo/3.0 typically in [0.3,2.0],
         // levelling up takes ~2-3 combos worth of timer drain (timer counts
         // down 3.0 -> 0.0).
+        const float oldTimer = m_ColdTimer[playerIdx];
         m_ColdTimer[playerIdx] -= amount;
         if (m_ColdTimer[playerIdx] <= 0.0f) {
             if (sd) {
@@ -1960,7 +1975,12 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 int clamped = (m_BlitzBonus[playerIdx] > 5) ? 6 : m_BlitzBonus[playerIdx];
                 FN::AddToCurrentScore(clamped * 5, playerIdx, false, false);
                 m_ColdTimer[playerIdx] = 3.0f;  // reset timer for next level-up
+                LOG_INFO("BLITZ", "  LEVEL-UP FIRE p=%d level=%d (clamped=%d) +%d score, combo-blitz-%d SFX, blitz_%d_count effect",
+                         playerIdx, newCount, clamped, clamped * 5, level, level);
             }
+        } else {
+            LOG_INFO("BLITZ", "  continuation: timer %.3f->%.3f (need %.3f more drain to fire next tier)",
+                     oldTimer, m_ColdTimer[playerIdx], m_ColdTimer[playerIdx]);
         }
     }
 

@@ -1004,6 +1004,12 @@ void SlashEntity::Update(float dt) {
                 // (b) Combo body: only if count >= 3 AND m_ComboSliceArr[1] >= 0 (binary field_0x158).
                 if (m_ComboCount > 2 && m_ComboSliceArr[1] >= 0) {
                     if (game && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+                        // Diagnostic: every arcade combo that crosses the
+                        // size>=3 gate feeds WaveManager::AddSpeed -- combo
+                        // count tells us whether the trigger pipeline is
+                        // even reaching the speed-bar feed.
+                        LOG_INFO("BLITZ", "SlashEntity arcade combo: count=%d amount=%.3f -> AddSpeed",
+                                 m_ComboCount, (float)m_ComboCount / 3.0f);
                         WaveManager::GetInstance()->AddSpeed(
                             (float)m_ComboCount / 3.0f, 0);
                         FN::AddToCurrentScore(m_ComboCount, m_ComboEntityType, true, true);
