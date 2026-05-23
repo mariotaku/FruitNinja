@@ -23,6 +23,7 @@
 #include "game/FruitSaveData.h"
 #include "game/PowerUpManager.h"
 #include "game/BombHit.h"
+#include "entities/Bomb.h"
 #include "game/GameTaskState.h"
 #include "util/StringHash.h"
 #include "math/Random.h"
@@ -639,7 +640,7 @@ void PauseScreen::Update(float dt) {
         // to -1.0 so the slide-back-to-menu animation kicks in via MainScreen.
         m_ButtonFadeAlpha = 0.0f;
         m_Alpha           = 1.0f;
-        if (FN::BombFlashFull()) {
+        if (Bomb::BombFlashFull()) {
             m_Alpha           = 1.0f;
             m_ButtonFadeAlpha = 1.0f;
             PowerUpManager::GetInstance()->Reset(false);
@@ -720,7 +721,7 @@ void PauseScreen::Update(float dt) {
             // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
             if (m_LastHitButton >= 0 && m_QuitButton) {
-                FN::HitMenuBomb(m_QuitButton->pos);
+                Bomb::HitMenuBomb(m_QuitButton->pos);
                 LOG_INFO("BOMBHIT", "QuitToMenu fires HitMenuBomb at (%.1f,%.1f); bombHitTimer set to %.3f",
                          m_QuitButton->pos.x, m_QuitButton->pos.y,
                          game ? game_work.m_BombHitTimer : -1.0f);

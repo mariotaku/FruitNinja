@@ -384,7 +384,7 @@ void GameUpdate(float dt, bool active) {
             game_work.m_BombHitTimer -= gameplayDt;
             if (game_work.m_BombHitTimer < 0.0f) game_work.m_BombHitTimer = 0.0f;
         }
-        FN::UpdateBombHit(prevBombTimer);
+        Bomb::UpdateBombHit(prevBombTimer);
 
         // Binary 0x0016c284: bombHitTimer crossing 1.5 downward triggers GameOver.
         // ASM-verified: 2026-05-20 binary @ 0x0016c2bc (re-analyst) -- taskState+0xf8 gate
@@ -712,7 +712,7 @@ void GameDraw(float dt, bool active) {
 
         // DrawBombHit @ 0x0016bbe6 — bomb-hit white flash, gated on
         // bombFlash > 0
-        FN::DrawBombHit();
+        Bomb::DrawBombHit();
 
         // HUD::Draw(0x200) — bomb-hit overlay layer @ 0x0016bbec
         game_work.mHud->Draw(Mortar::HUD_LAYER_SLIDER);

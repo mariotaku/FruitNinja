@@ -931,7 +931,7 @@ void GameOverScreen::QuitCallback() {
     // Binary @ 0x001410d6: FruitSaveData::ClearCombo
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
     // Binary @ 0x00140674: HitMenuBomb at quit-button position (DAT_00140674 = Vec3(163.0, -96.0, 0.0))
-    FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+    Bomb::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
 }
 
 void GameOverScreen::OnQuitClicked() {

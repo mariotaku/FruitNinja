@@ -100,16 +100,6 @@ static BombGlobalData g_bombData;
 // quads. BombBlast.cpp references it via `extern`.
 Mortar::SmartPtr<Mortar::Texture> g_BombTexture;
 
-// Global bomb Z cycling (matches GetBombZPosition at 0x169080)
-static float g_BombZCurrent = -10.0f;
-
-static float GetBombZPosition() {
-    float z = g_BombZCurrent - 50.0f;  // DAT_001690bc
-    if (z < -400.0f)                    // DAT_001690c0
-        z = -10.0f;
-    g_BombZCurrent = z;
-    return z;
-}
 
 // SetupLighting @ 0x00175018 — single `bx lr`, a genuine no-op stub in
 // the shipped binary. Both Bomb::LoadContent (0x001727d8) and
@@ -278,7 +268,7 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
     scale = computedScale;
     m_OrigScale = computedScale;
     m_AccelForce = Vec3(0.0f, GRAVITY_Y, 0.0f);
-    m_ZPosition = GetBombZPosition();
+    m_ZPosition = Bomb::GetBombZPosition();
 
     // Activate — same intent as the binary's flag clear at Init start.
     flags &= ~ENT_SKIP_MASK;
@@ -747,15 +737,12 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
     Game* game = Game::GetInstance();
 
     if (m_bMenuBombHit == 0 && game != nullptr) {
-        FN::SetBombHitPos(pos);
-
         // ASM-verified: 2026-05-20 binary @ 0x00175066 (re-analyst) — gate is
-        // gameMode == ARCADE (literal cmp #0x2). Variable was historically
-        // mislabelled "isArcade" in port comments; renamed to isArcade.
+        // gameMode == ARCADE (literal cmp #0x2).
         const bool isArcade = (game_work.gameMode == Mortar::GAME_MODE_ARCADE);
 
         // Camera shake — FruitCamera::CreateCameraShake at 0x180d10.
-        // Binary intensities: Classic/Arcade = 1.6/2.0, Zen = 2.0/3.0.
+        // Binary intensities: Arcade = 2.0/3.0, Classic/Zen = 1.6/2.0.
         if (game_work.m_FruitCamera) {
             if (isArcade)
                 game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
@@ -764,43 +751,17 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
         }
 
         if (isArcade) {
-            // Arcade penalty path -- route through FN::HitMenuBomb so the
-            // m_bMenuBombFlashFlag=1 write (binary @ 0x0016b270) actually
-            // fires. Previous inline implementation set m_BombHitTimer=2.0
-            // and the menu-bomb SFX, but forgot the flash-flag write --
-            // so ~0.5s later GameUpdate's cross-1.5 GameOver trigger fired
-            // and ended arcade immediately on every bomb slice.
-            FN::HitMenuBomb(pos);  // timer=2.0, "menu-bomb" SFX, flash-flag=1
+            Bomb::HitMenuBomb(pos);  // timer=2.0, "menu-bomb" SFX, flash-flag=1
             FN::AddToCurrentScore(-10, 0, false, false);
             PowerUpManager::GetInstance()->ClearTimedPowers();
-            WaveManager::GetInstance()->ResetSpeed(0);  // stub until blitz combo lands
-            // "X" MissControl indicator for arcade bomb hit. Uses the
-            // shared hud_cross overlay; MissControl pre-loads it.
+            WaveManager::GetInstance()->ResetSpeed(0);
             if (MissControl* mc = MissControl::GetFree()) {
-                // Binary: miss->MakeDisappear(pos, 0, bombTex);
-                //         miss->field_0x34 = 0x200;  // size multiplier
-                // Port: passes Mortar::SmartPtr<Texture>() so MakeDisappear falls
-                // back to its default (hud_cross) via internal pick.
                 Mortar::SmartPtr<Mortar::Texture> noTex;
                 mc->MakeDisappear(pos, 0x200, noTex);
             }
-            // Mark as menu-hit so Update's hit branch runs the falling
-            // physics instead of the BombBlast shockwave spawn loop.
             m_bMenuBombHit = 1;
         } else {
-            // Classic/Arcade game-over path. Binary HitBomb (0x16b0fc) —
-            // plays "Bomb-explode" SFX (string at 0x001B96FC), records
-            // stat for hash "bomb" (0x001B96CE), sets bombHitTimer = 3.2,
-            // camera shake already fired above.
-            // GameOver is triggered by GameUpdate when bombHitTimer crosses 1.5 downward.
-            // Clear menu-bomb flash flag so GameUpdate's cross-1.5 trigger fires
-            // GameOver normally on a real gameplay bomb hit. binary @ 0x0016b154.
-            if (GameTaskState* ts = GetTaskState()) {
-                ts->m_bMenuBombFlashFlag = 0;
-            }
-            game_work.m_BombHitTimer = 3.2f;      // DAT_0016b218 = 3.2
-            if (game_work.mGameSound) game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
-            if (game_work.m_SaveData) game_work.m_SaveData->AddToTotal("bomb", 1);
+            Bomb::HitBomb(pos);
         }
     } else if (m_bMenuBombHit != 0) {
         // ASM-verified: 2026-05-20T00:00Z binary @ 0x00172826..0x0017283c (asm-inspector)
@@ -931,5 +892,118 @@ void Bomb::MakeFat(bool skipSpawnFx) {
         // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.
         // TODO: PSPParticleManager::AddEmitter wiring when those callbacks land.
         Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
+    }
+}
+
+// --- Bomb-hit overlay static methods (binary @ Bomb:: namespace) ---
+
+// s_BombHitPos tracks the world position of the last bomb hit, used by DrawBombHit
+// to centre the flash quad. Set by HitBomb / HitMenuBomb; also exposed to BombHit.cpp
+// via FN::SetBombHitPos (which writes here).
+Vec3 g_BombHitPos(0.0f, 0.0f, 0.0f);
+
+// Binary @ 0x00169080. Cycles the global spawn-z counter: decrements by 50
+// each call; wraps back to -10 when it drops below -400. Each fresh bomb gets
+// a unique z layer so overlapping bombs sort correctly.
+static float s_BombZCounter = -10.0f;
+float Bomb::GetBombZPosition() {
+    static const float STEP  =  50.0f;   // DAT_001690bc
+    static const float FLOOR = -400.0f;  // DAT_001690c0
+    static const float RESET = -10.0f;   // 0xc1200000
+    s_BombZCounter -= STEP;
+    if (s_BombZCounter < FLOOR) {
+        s_BombZCounter = RESET;
+    }
+    return s_BombZCounter;
+}
+
+// Binary @ 0x00168f24.
+bool Bomb::BombFlashFull() {
+    return game_work.m_BombHitTimer < 1.0f;
+}
+
+// Binary @ 0x0016b0fc. Called from Bomb::CollisionResponse for Classic/Zen paths.
+// Camera shake is already fired by the caller before this function.
+void Bomb::HitBomb(const Vec3& pos) {
+    g_BombHitPos = pos;
+    if (GameTaskState* ts = GetTaskState()) {
+        ts->m_bMenuBombFlashFlag = 0;   // binary @ 0x0016b154
+    }
+    game_work.m_BombHitTimer = 3.2f;    // DAT_0016b218
+    if (game_work.mGameSound)
+        game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
+    if (game_work.m_SaveData)
+        game_work.m_SaveData->AddToTotal("bomb", 1);
+}
+
+// Binary @ 0x0016b234.
+void Bomb::HitMenuBomb(const Vec3& pos) {
+    g_BombHitPos = pos;
+    if (GameTaskState* ts = GetTaskState()) {
+        ts->m_bMenuBombFlashFlag = 1;   // binary @ 0x0016b270
+    }
+    game_work.m_BombHitTimer = 2.0f;
+    if (game_work.mGameSound)
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+}
+
+// Binary @ 0x0016b73c.
+static const float BOMB_FLASH_START     = 1.55f;   // DAT_0016b864
+static const float BOMB_FLASH_DUR_RECIP = -0.45f;  // DAT_0016b868
+static const float BOMB_FLASH_MAX_SCALE = 20000.0f; // DAT_0016b870
+static const float BOMB_FLASH_ALPHA_MUL = 255.0f;  // DAT_0016b874
+static const float BOMB_FLASH_THRESHOLD = 2.0f;
+
+static Mortar::SmartPtr<Mortar::Texture> s_BombFlashTex;
+
+void Bomb::DrawBombHit() {
+    const float timer = game_work.m_BombHitTimer;
+    if (timer <= 0.0f || timer >= BOMB_FLASH_THRESHOLD) return;
+
+    if (!s_BombFlashTex.IsValid()) {
+        s_BombFlashTex = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
+        if (!s_BombFlashTex.IsValid()) return;
+    }
+
+    const float t = (timer - BOMB_FLASH_START) / BOMB_FLASH_DUR_RECIP + 1.0f;
+    float scale;
+    if (t <= 0.0f)      scale = 0.0f;
+    else if (t < 1.0f)  scale = t * BOMB_FLASH_MAX_SCALE;
+    else                scale = BOMB_FLASH_MAX_SCALE;
+
+    if (scale <= 0.0f) return;
+
+    int a = (int)(BOMB_FLASH_ALPHA_MUL * timer);
+    if (a < 0)   a = 0;
+    if (a > 255) a = 255;
+    const Colour tint(255, 255, 255, (uint8_t)a);
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
+    mat.GlobalTranslate44(g_BombHitPos);
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    s_BombFlashTex->Set();
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->DrawQuad(tint);
+    }
+    s_BombFlashTex->UnSet();
+}
+
+// Binary @ 0x0016a1a8.
+static const float BOMB_BLAST_PURGE_THR = 1.55f;  // DAT_0016a1fc
+static const float BOMB_BLAST_RESET_THR = 1.5f;
+
+void Bomb::UpdateBombHit(float prevTimer) {
+    const float currentTimer = game_work.m_BombHitTimer;
+
+    if (prevTimer > BOMB_BLAST_RESET_THR && currentTimer <= BOMB_BLAST_RESET_THR) {
+        FN::ResetGameEntities(false);
+    }
+
+    if (currentTimer > 0.0f && currentTimer < BOMB_BLAST_PURGE_THR) {
+        BombBlast::RemoveAll();
     }
 }

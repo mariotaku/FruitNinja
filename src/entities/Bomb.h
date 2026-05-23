@@ -155,6 +155,36 @@ public:
     // Sets m_SpawnTimer (blast interval) and activates the entity.
     static void SetHit(Bomb* b, float speed);
 
+    // Matches Bomb::GetBombZPosition (0x00169080). Cycles a static z-depth
+    // counter: decrement by 50 each call; if below -400 reset to -10.
+    // Returns the new z value. Used by Init to assign m_ZPosition for
+    // layering multiple simultaneous bombs in z.
+    static float GetBombZPosition();
+
+    // Matches Bomb::BombFlashFull (0x00168f24). Returns true once
+    // game_work.m_BombHitTimer < 1.0f (flash peak passed or idle).
+    static bool BombFlashFull();
+
+    // Matches Bomb::HitBomb (0x0016b0fc). Registers a classic/zen bomb hit:
+    // clears m_bMenuBombFlashFlag, sets bombHitTimer=3.2, plays "Bomb-explode"
+    // SFX, records "bomb" stat. Camera shake is fired by the CollisionResponse
+    // caller before this function.
+    static void HitBomb(const Vec3& pos);
+
+    // Matches Bomb::HitMenuBomb (0x0016b234). Triggers bomb-hit flash for
+    // zen/menu/arcade paths: sets m_bMenuBombFlashFlag=1, bombHitTimer=2.0,
+    // plays "menu-bomb" SFX, stores hit position.
+    static void HitMenuBomb(const Vec3& pos);
+
+    // Matches Bomb::DrawBombHit (0x0016b73c). Renders bomb-flash overlay quad.
+    // Called from GameDraw.
+    static void DrawBombHit();
+
+    // Matches Bomb::UpdateBombHit (0x0016a1a8). Per-frame tick of bomb-hit
+    // timer / BombBlast purge / ResetGameEntities trigger. Called from
+    // GameUpdate.
+    static void UpdateBombHit(float prevTimer);
+
     // Binary @ 0x001712c8 — float result. Used by GameUpdate to drive the
     // looping "Bomb-Fuse" SFX volume. SP path returns pos.y + 160 of the
     // visually-highest non-menu-hit bomb (filter: skip m_bMenuBombHit=1).
@@ -239,5 +269,9 @@ static_assert(offsetof(Bomb, m_GapField_0xAC)  == 0xDC,
 static_assert(sizeof(Bomb)                      == 0xE0,
     "sizeof(Bomb) port drift (binary 0xB0; port 0xE0 due to 64-bit ptrs + entityType widening + m_RotAccum*)");
 #endif
+
+// World position of the last bomb hit; written by Bomb::HitBomb / Bomb::HitMenuBomb
+// and FN::SetBombHitPos. Read by Bomb::DrawBombHit.
+extern Vec3 g_BombHitPos;
 
 #endif

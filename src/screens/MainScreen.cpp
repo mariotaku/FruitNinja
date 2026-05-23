@@ -509,7 +509,7 @@ void MainScreen::Update(float dt) {
 
         const uint8_t qs = SystemManager::GetInstance().GetQuitState();
         if (qs == 2) {
-            FN::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
+            Bomb::HitMenuBomb(Vec3(163.0f, -96.0f, 0.0f));
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_QUIT_BOMB), "Update/QUIT_WAIT qs==2");
             m_State = STATE_QUIT_BOMB;
             m_StateTimer = 0.0f;
@@ -535,7 +535,7 @@ void MainScreen::Update(float dt) {
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
         }
-        if (FN::BombFlashFull()) {
+        if (Bomb::BombFlashFull()) {
             SystemManager::GetInstance().QuitGame();
             game.running = false;
         }
