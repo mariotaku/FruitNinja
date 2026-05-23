@@ -1010,6 +1010,17 @@ void MainScreen::GameModeCallback() {
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
+// Defunct: orphaned callback in shipping binary -- binary @ 0x0014c384
+// Re-analyst 2026-05-22 confirmed: ZERO inbound xrefs. No bl/blx target,
+// no literal-pool entry, no GOT slot points here. STATE_GAME_START
+// (m_State = 2) is genuinely unreachable in shipping FruitNinja.exe;
+// the only writer of state=2 is inside NewGameCallback itself, and
+// since NewGameCallback is never called, state 2 never enters. The
+// gameplay-entry flow is: GameModeScreen tail writes MainScreen.m_State
+// = 0x11 (STATE_CAMERA_FADE) directly. Body retained for vtable / layout
+// fidelity; do NOT call from new code. The arcade-special activation
+// (ready_set_go countdown overlay) must originate elsewhere -- see
+// Claude task #10 / #12 for the ongoing RE.
 // Matches 0x0014c384
 void MainScreen::NewGameCallback() {
     CancelNews();  // defunct stub
