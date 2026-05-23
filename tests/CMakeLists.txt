@@ -191,5 +191,13 @@ if (WIN32 AND TARGET SDL2::SDL2)
                 $<TARGET_FILE_DIR:test_arcade_spawn>)
     endif()
 endif()
-add_test(NAME arcade_spawn COMMAND test_arcade_spawn)
-set_tests_properties(arcade_spawn PROPERTIES TIMEOUT 60)
+foreach(spawn_mode classic arcade zen)
+    add_test(NAME ${spawn_mode}_spawn COMMAND test_arcade_spawn --mode=${spawn_mode})
+endforeach()
+# Per-mode timeout matches the in-game session length + slack:
+#   classic 30s + 5s buffer + 15s slack = 50s
+#   arcade  60s + 5s buffer + 30s slack = 90s
+#   zen     90s + 5s buffer + 30s slack = 120s
+set_tests_properties(classic_spawn PROPERTIES TIMEOUT 50)
+set_tests_properties(arcade_spawn  PROPERTIES TIMEOUT 90)
+set_tests_properties(zen_spawn     PROPERTIES TIMEOUT 120)
