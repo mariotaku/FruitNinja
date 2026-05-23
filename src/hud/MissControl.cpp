@@ -492,6 +492,13 @@ void MissControl::Update(float dt) {
                                         : 8;
             std::snprintf(buf, sizeof(buf), "combo-%d", n);
         } else {
+            // TODO: 0x00151ce8 (R1.1 Cluster C combo SFX non-music path) --
+            // binary's field_0x85==0 (non-music-mode) branch strcpys literal
+            // "Combo-" (capital, no index) from rodata 0x001bc6cc, NOT
+            // "New-best-score". Round 2: confirm port's m_bUseSound maps to
+            // field_0x85 and fix the literal accordingly. Likely
+            // m_bUseSound==0 is an unrelated "suppress combo audio" case
+            // and "Combo-" literal is the music-mode-OFF combo-tick name.
             std::strcpy(buf, "New-best-score");
         }
         if (defaultSfx && game && game_work.mGameSound) {
