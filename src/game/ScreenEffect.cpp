@@ -8,6 +8,8 @@
 #include "hud/HUDControl3d.h"
 #include "hud/HUD.h"
 #include "audio/GameSound.h"
+#include "engine/asset/TextureManager.h"
+#include "engine/asset/Texture.h"
 #include "Game.h"
 #include <tinyxml2.h>
 #include <cstring>
@@ -152,8 +154,15 @@ void EffectImage::Parse(XMLElement* xml) {
 }
 
 void EffectImage::LoadTextures() {
-    // TODO: load m_TexName via ReloadableTexture::Load when asset pipeline ready
-    // For now: no-op stub — m_TexHandle remains 0.
+    // Binary @ 0x0011d1e4 trampolines to ReloadableTexture::Load (0x001213b8)
+    // which calls TextureManager::LoadLocalisedTexture("<m_pName>.tex"). XML
+    // attribute values omit the .tex suffix (e.g. `texture="arcade_60seconds"`
+    // -> file `arcade_60seconds.tex`). Mirror the binary's name+".tex" append.
+    if (m_TexName[0] == '\0') return;
+    if (m_Texture.IsValid()) return;  // already loaded
+    char texPath[80];
+    snprintf(texPath, sizeof(texPath), "%s.tex", m_TexName);
+    m_Texture = Mortar::TextureManager::LoadLocalisedTexture(texPath);
 }
 
 // ---- ScreenTint::Parse -------------------------------------------------------
@@ -363,6 +372,13 @@ void ScreenEffect::Activate() {
         ctrl->pos = img.m_Pos;
         ctrl->size = img.m_SizeIn;
         ctrl->m_DrawColour = img.m_Tint;
+        // Texture assignment per binary @ 0x0011dd2e onwards: the loaded
+        // ReloadableTexture's SmartPtr is copied into HUDControl3d.m_Texture
+        // (at HUDControl3d+0x74). Without this the spawned HUD control has
+        // no texture and HUDControl3d::Draw's `if (m_Texture)` gate skips
+        // rendering -- which is the root cause of arcade_60seconds /
+        // arcade_go / blitz_1..6 / ice_cover never appearing on screen.
+        ctrl->m_Texture = img.m_Texture;
         // Binary @ 0x0011dd2e: `str r1, [r2, #0x34]` -- raw copy of
         // EffectImage::m_GroupMask, no `?: 1` fallback. If data has 0,
         // the binary writes 0 (HUD_LAYER_NONE -> the control is filtered

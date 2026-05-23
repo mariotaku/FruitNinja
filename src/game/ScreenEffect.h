@@ -21,6 +21,8 @@
 #include "math/Vec3.h"
 #include "math/Colour.h"
 #include "hud/HUDControl.h"
+#include "engine/util/SmartPtr.h"
+#include "engine/asset/Texture.h"
 #include <tinyxml2.h>
 
 namespace Mortar {
@@ -47,9 +49,16 @@ struct Emmiter {
 // Only fields accessed in Activate/Update/Deactivate are listed here.
 // ReloadableTexture base is stubbed as a texture name + handle pair.
 struct EffectImage {
-    // ReloadableTexture base (stub: name[64] + GLuint)
+    // ReloadableTexture base (stub: name[64] + GLuint).
+    // Binary's ReloadableTexture is 8 bytes (SmartPtr<Texture> + char*) and
+    // EffectImage::LoadTextures trampolines to ReloadableTexture::Load which
+    // calls TextureManager::LoadLocalisedTexture("<m_pName>.tex"). The port
+    // stashes the loaded SmartPtr in m_Texture so Activate can copy it into
+    // the spawned HUDControl3d (which is what HUDControl3d::Draw actually
+    // renders). re-analyst 2026-05-22 binary @ 0x0011d1e4.
     char     m_TexName[64];          // +0x00 (base)
     uint32_t m_TexHandle;            // +0x40 (stub, GLuint)
+    Mortar::SmartPtr<Mortar::Texture> m_Texture;  // port-only -- holds loaded tex
 
     HUDControl*  m_pHudCtrl;         // +0x08 (port offset; original +0x08 in derived)
     bool         m_bAddedToHUD;      // +0x0C
