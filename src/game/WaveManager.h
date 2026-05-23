@@ -73,11 +73,23 @@ public:
     float m_Speed[2];            // +0x54, +0x58
     // +0x058: boosted speed slot (overlaps m_Speed[1], per AddSpeed note)
     // field_0x58 == &m_Speed[1]  -- used by AddSpeed for player 0
-    // +0x05c: per-player blitz-bonus persistent score
-    // (loaded from save "blitz_bonus" key for P0; P1 from FruitSaveData+0x108).
-    // Used by Arcade <OverideProbability waveCount=N> gate.
-    // ASM-verified: 2026-05-22 binary @ 0x00123510 AddSpeed (re-analyst).
+    // +0x05c: per-player blitz score-level (int, 1..6+).
+    //   AddSpeed cold-start writes AddToTotal("blitz_bonus") return; subsequent
+    //   level-ups bump it; clamp(level,1,6)*5 is awarded as score on each fire.
+    //   Used by Arcade <OverideProbability waveCount=N> gate (P0 only).
+    // ASM-verified: 2026-05-22 binary @ 0x00123510 AddSpeed (asm-inspector).
     int m_BlitzBonus[2];         // +0x5c (P0), +0x60 (P1)
+    // +0x060: per-player blitz cold-timer (float, resets to 3.0f).
+    //   AddSpeed cold-start sets =3.0f; subsequent calls subtract `amount`;
+    //   when <=0.0f the level-up branch fires (next blitz tier + SFX +
+    //   AddToTotal + score award).
+    // ASM-verified: 2026-05-22 binary @ 0x00123510 AddSpeed (asm-inspector).
+    // DIFFERS: binary aliases m_BlitzBonus[1] with m_ColdTimer[0] at +0x60
+    // (both stride-4 arrays whose footprints overlap by design -- single-
+    // player gameplay uses only P0 so the binary's collision is dormant).
+    // Port keeps them as separate non-overlapping fields (m_ColdTimer offset
+    // drifts to a port-only slot); audit any consumer of m_BlitzBonus[1].
+    float m_ColdTimer[2];        // +0x60 (P0) per binary; port: non-overlapping
     // +0x064: fruit-multiplier (BombScale power-up)
     float field_0x64;
     // +0x068: bomb chain spawn level (BombMultiplyer power-up)

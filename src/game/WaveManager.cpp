@@ -112,6 +112,7 @@ WaveManager::WaveManager()
 {
     m_ComboTimer[0] = 0.0f; m_ComboTimer[1] = 0.0f;
     m_BlitzBonus[0] = 0;   m_BlitzBonus[1] = 0;
+    m_ColdTimer[0] = 0.0f; m_ColdTimer[1] = 0.0f;
     m_Speed[0] = m_Speed[1] = 0.0f;
     m_pCurrentWave[0] = m_pCurrentWave[1] = nullptr;
     m_WaveCount[0] = m_WaveCount[1] = 0;
@@ -514,6 +515,7 @@ void WaveManager::Reset(bool fullReset) {
     // 6. Reset per-wave chance counters + PROBABILITY_OVERIDE state.
     ResetWaveChances();
     m_BlitzBonus[0] = 0; m_BlitzBonus[1] = 0;
+    m_ColdTimer[0] = 0.0f; m_ColdTimer[1] = 0.0f;
     for (std::vector<PROBABILITY_OVERIDE>::iterator pit = probOverrides[game_work.gameMode].begin();
          pit != probOverrides[game_work.gameMode].end(); ++pit)
         pit->SelectType();
@@ -1854,7 +1856,10 @@ void WaveManager::AddToSpeedLossTime(float amount, int playerIdx) {
 }
 
 void WaveManager::ResetSpeed(int playerIdx) {
-    // Binary @ 0x00122e94.
+    // Binary @ 0x00122e94. Re-verified 2026-05-22 (asm-inspector): clears
+    // both the int blitz-level AND the float cold-timer (binary writes
+    // separate stores: `mov r1,#0; str.w r1, [r2,#0x4]` for the int and
+    // `vmov r1,s15; str.w r1, [r6,r5,lsl#0x2]` with s15=0.0f for the float).
     m_Speed[1 + playerIdx] = 0.0f;      // +0x58 + p*4 (combo-speed overlap slot)
     m_Speed[playerIdx]     = 0.0f;      // +0x54 + p*4
     m_ComboTimer[playerIdx] = 0.0f;
@@ -1868,6 +1873,7 @@ void WaveManager::ResetSpeed(int playerIdx) {
         game_work.m_SaveData->ClearTotal(s_blitzBonusHash);
 
     m_BlitzBonus[playerIdx] = 0;
+    m_ColdTimer[playerIdx]  = 0.0f;
 
     // ASM-verified: 2026-05-03 binary @ 0x00122e94 (re-analyst)
     // Binary @ 0x00122e94: if SpeedControl exists, zero its display state.
@@ -1887,6 +1893,15 @@ static const char* const k_BlitzSfx[6] = {
 
 void WaveManager::AddSpeed(float amount, int playerIdx) {
     // Binary @ 0x00123510.
+    // Re-verified 2026-05-22 (asm-inspector): the cold-start gate / timer-
+    // countdown logic operates on the FLOAT m_ColdTimer[] field at +0x60
+    // (vldr.32 / vcmpe / vsub / vmov.f32 #3.0 / vstr.32). The int
+    // m_BlitzBonus[] field at +0x5c only holds the AddToTotal()-returned
+    // level counter (1..6+) used to drive score and SFX selection.
+    // Previous port collapsed both into a single int, breaking the
+    // cold-start trigger -- combos couldn't accumulate to 2.9 speed and
+    // fire the first blitz tier because the float timer was treated as
+    // an int and round-tripped through `(int)amount` truncation.
     float v = m_Speed[1 + playerIdx] + amount;
     if (v <= 0.0f)       v = 0.0f;
     else if (v >= 14.0f) v = 14.0f;
@@ -1902,11 +1917,11 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     Game* game = Game::GetInstance();
     FruitSaveData* sd = game ? game_work.m_SaveData : nullptr;
 
-    if (m_BlitzBonus[playerIdx] <= 0) {
-        // Cold-start path.
+    if (m_ColdTimer[playerIdx] <= 0.0f) {
+        // Cold-start path (binary @ 0x001236da onwards).
         if (m_Speed[1 + playerIdx] > 2.9f) {    // DAT_00123828
             if (sd) {
-                m_BlitzBonus[playerIdx] = 2;
+                m_ColdTimer[playerIdx] = 3.0f;  // binary vmov.f32 #0x40200000
                 sd->ClearTotal(s_blitzBonusHash);
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 m_BlitzBonus[playerIdx] = newCount;
@@ -1918,9 +1933,13 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
             }
         }
     } else {
-        // Combo continuation path.
-        m_BlitzBonus[playerIdx] -= (int)amount;
-        if (m_BlitzBonus[playerIdx] <= 0) {
+        // Combo continuation path (binary @ 0x001235d2 onwards).
+        // Binary subtracts the FLOAT amount from the cold-timer (vsub.f32),
+        // not an int truncation. With amount=combo/3.0 typically in [0.3,2.0],
+        // levelling up takes ~2-3 combos worth of timer drain (timer counts
+        // down 3.0 -> 0.0).
+        m_ColdTimer[playerIdx] -= amount;
+        if (m_ColdTimer[playerIdx] <= 0.0f) {
             if (sd) {
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 int level = (newCount < 6) ? newCount : 6;
@@ -1940,7 +1959,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
 
                 int clamped = (m_BlitzBonus[playerIdx] > 5) ? 6 : m_BlitzBonus[playerIdx];
                 FN::AddToCurrentScore(clamped * 5, playerIdx, false, false);
-                m_BlitzBonus[playerIdx] = 2;
+                m_ColdTimer[playerIdx] = 3.0f;  // reset timer for next level-up
             }
         }
     }
