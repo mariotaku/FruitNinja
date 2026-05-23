@@ -601,8 +601,8 @@ void MainScreen::Update(float dt) {
         if (pauseAmount > 1.0f) pauseAmount = 1.0f;
 
         float slideOffset = size.y * 2.0f * (1.0f - pauseAmount);
-        pSoundToggle->m_bActive = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
-        pMusicToggle->m_bActive = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
+        pSoundToggle->m_Active = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
+        pMusicToggle->m_Active = (pauseAmount > PAUSE_VISIBILITY) ? 1 : 0;
         pSoundToggle->pos.y += slideOffset;
         pMusicToggle->pos.y += slideOffset;
     }

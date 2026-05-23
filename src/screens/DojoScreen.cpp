@@ -131,7 +131,7 @@ void DojoScreen::Init() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Init");
     m_State = 0;
     m_TransitionAlpha = 0.0f;
-    m_bActive = 1;
+    m_Active = 1;
 }
 
 // Matches DojoScreen::Reset @ 0x0013767c (vtable slot +0x10).
@@ -139,7 +139,7 @@ void DojoScreen::Init() {
 // when AboutScreen completes its fade-out and wants DojoScreen to
 // re-fade-in. Init() is more eager (also zeros alpha + sets active);
 // at the AboutScreen-state-2 callsite the alpha is already <0.001 and
-// m_bActive was never cleared, so Init's extras are no-ops there.
+// m_Active was never cleared, so Init's extras are no-ops there.
 void DojoScreen::Reset() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 0, "Reset @ 0x0013767c");
     m_State = 0;

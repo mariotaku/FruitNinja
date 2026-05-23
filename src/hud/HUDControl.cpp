@@ -11,21 +11,28 @@ const std::list<HUDControl*>& HUDControl::GetActiveControls() {
 #endif
 
 HUDControl::HUDControl()
-    : m_bPreserveOnMP(0),
-      m_Timer(0.0f),
-      m_bActive(1),
+    : m_Singular(0),                              // +0x04
+      m_Timer(0.0f),                              // DIFFERS: binary leaves uninitialised; port zero-inits for determinism
+      m_Active(1),                                // +0x30
       field_0x31(0),
       m_bNoDestructor(0),
       m_bPendingRemoval(0),
       m_LayerFlags(1),
-      m_DrawColour(255, 255, 255, 255),
-      m_bUseHUDScales(1),
-      m_UVLeft(0.0f), m_UVTop(0.0f), m_UVRight(1.0f), m_UVBottom(1.0f)
+      m_DrawColour(255, 255, 255, 255),           // +0x5c (g_WhiteColour)
+      m_bUseHUDScales(1),                         // +0x60
+      m_UVLeft(0.0f), m_UVTop(0.0f),             // +0x64, GOT[0x78c0] = (0,0)
+      m_UVRight(1.0f), m_UVBottom(1.0f)          // +0x6c, GOT[0x7170] = (1,1)
 {
+    // TODO: 0x00144184 — assign m_RemoveCallback to HUD::OnControlRemoved
+    //                    delegate (MakeDelegate_PauseScreen_HUD). Currently
+    //                    default-constructed; HUD callback chain not yet ported.
 #ifndef __bada__
+    // Port specific: debug-only registry. Binary has no global HUDControl
+    // list; ctor/dtor xrefs confirm. Used by F1 hitbox overlay only.
     s_ActiveControls.push_back(this);
     LOG_DEBUG("HUDCONTROL", "ctor this=%p", static_cast<void*>(this));
 #endif
+    // ASM-verified: 2026-05-24 binary @ 0x00144104 (re-analyst)
 }
 
 HUDControl::~HUDControl()
@@ -36,6 +43,7 @@ HUDControl::~HUDControl()
 #endif
 }
 
+// ASM-verified: 2026-05-24 binary @ 0x00143f98..0x00143fa8 (re-analyst)
 void HUDControl::Init()
 {}
 
@@ -50,12 +58,13 @@ void HUDControl::Update(float dt)
     (void)dt;
 }
 
-// Binary @ 0x00143fac
 bool HUDControl::SetToMultiplayerState()
 {
-    if (m_bPreserveOnMP == 0) {
+    if (m_Singular == 0) {
         m_bNoDestructor = 0;
         m_bPendingRemoval = 1;
+        return true;
     }
-    return m_bPreserveOnMP == 0;
+    return false;
+    // ASM-verified: 2026-05-24 binary @ 0x00143fac (re-analyst)
 }

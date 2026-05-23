@@ -168,7 +168,7 @@ static void QuitToMenu() {
     // (re-analyst 2026-05-10), destructing the overlay. Port relies on
     // PauseScreen's own state machine (BOMB_FLASH -> HIDDEN with m_Alpha
     // decay) to fade the overlay out gradually -- if we deactivated here
-    // (m_bActive=0), Update would stop running and the BOMB_FLASH state
+    // (m_Active=0), Update would stop running and the BOMB_FLASH state
     // would never advance.
 
     FN::SetScore(0, -1);                               // 0x169e90
@@ -875,7 +875,7 @@ void PauseScreen::Update(float dt) {
             retryActive = true;
         }
         if (m_RetryButton) {
-            m_RetryButton->m_bActive = retryActive ? 1 : 0;
+            m_RetryButton->m_Active = retryActive ? 1 : 0;
         }
     }
 

@@ -185,7 +185,7 @@ GameModeScreen::~GameModeScreen() {
 void GameModeScreen::Init() {
     m_State = 0;
     m_TransitionAlpha = 0.0f;
-    m_bActive = 1;
+    m_Active = 1;
 }
 
 // Binary @ 0x0013df80 — vtable slot 2 Reset(): no-op override stub

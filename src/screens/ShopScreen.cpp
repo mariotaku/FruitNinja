@@ -281,7 +281,7 @@ ShopScreen::~ShopScreen() {
 // ---------------------------------------------------------------------------
 // ShopScreen::Init (vtable slot 2, called by DojoScreen after AddControl)
 // Binary: (**(code**)(*(int*)shop + 8))(shop)
-// HUDControl3d::Init sets m_bActive = 1 typically. No symbol in binary
+// HUDControl3d::Init sets m_Active = 1 typically. No symbol in binary
 // for ShopScreen::Init — inherited or trivial override.
 // ---------------------------------------------------------------------------
 void ShopScreen::Init() {

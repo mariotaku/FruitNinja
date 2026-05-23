@@ -75,7 +75,7 @@ void GameInit(unsigned long) {
     // step 3: 3x visible MissControl widgets + 12-entry pool.
     // Source: docs/structs/miss-control-init.md §2. Binary do-loop at 0x0016c694..0x0016c742
     // reads from GOT+0x30 table at 0x001F3DAC (3 rows x 16 bytes, stride=4 floats).
-    // field_0x2c = m_Timer (rotation), field_0x30 = m_bActive, field_0x34 = m_LayerFlags.
+    // field_0x2c = m_Timer (rotation), field_0x30 = m_Active, field_0x34 = m_LayerFlags.
     //
     // ASM-verified table dump @ 0x001F3DAC (read_memory 2026-05-10):
     //   row 0: x_tbl= 79.0  y_tbl= 10.0  rot_tbl= -5.0  scale= 0.75
@@ -105,7 +105,7 @@ void GameInit(unsigned long) {
         // version.
         for (int i = 0; i < 3; ++i) {
             MissControl* mc = new MissControl();
-            mc->m_bActive   = 1;                                // field_0x30 = 1
+            mc->m_Active    = 1;                                // field_0x30 = 1
             // Binary @ 0x0016c6f6 / 0x0016c6d6 / 0x0016c738 negate the table values.
             mc->pos         = Vec3(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f); // DAT_0016c9ac = 50.0
             mc->m_HudScale  = Vec3(0.5f, 0.5f, 0.0f);          // DAT_0016c9b0 = 0.0

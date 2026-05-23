@@ -4,9 +4,6 @@
 //
 // HUDControl — base class for all HUD elements
 // Verified from Ghidra: ctor at 0x144104, size = 0x74
-// See docs/structs/hud.md for full layout and vtable.
-//
-// ASM-verified: 2026-04-28T16:35Z binary @ 0x00144104 (asm-inspector)
 //
 
 #include "math/Vec3.h"
@@ -23,7 +20,7 @@ class HUDControl {
 public:
     // +0x04: if 0, SetToMultiplayerState marks for removal; if 1, preserved.
     // Binary uses strb (byte store) @ 0x00143fac.
-    uint8_t m_bPreserveOnMP;
+    uint8_t m_Singular;
 
     // +0x08: position in centered coords
     Vec3 pos;
@@ -42,7 +39,7 @@ public:
     float m_Timer;
 
     // +0x30: non-zero = visible + receives updates
-    uint8_t m_bActive;
+    uint8_t m_Active;
 
     // +0x31
     uint8_t field_0x31;
@@ -107,7 +104,7 @@ public:
     virtual void PreDrawOrder(const Vec3& hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
     virtual void DrawOrder(const Vec3& hudScale, int layerMask) { Draw(hudScale, layerMask); }
     virtual void Update(float dt);
-    // Binary @ 0x00143fac — returns true if this control should be removed (m_bPreserveOnMP == 0).
+    // Binary @ 0x00143fac — returns true if this control should be removed (m_Singular == 0).
     virtual bool SetToMultiplayerState();
     virtual int GetType() { return 0; }
     virtual void Skip() {}
@@ -122,10 +119,15 @@ public:
     // Not in binary; appended after binary vtable.
     virtual Vec3 GetDrawPos() const { return pos; }
 
-    // Binary: called after HUD::AddControl to pin the control to a single
-    // layer slot instead of cycling. Tier-1 stub — full RE pending.
-    // Binary addr not yet resolved (referenced from PauseScreen::Update lazy-create block).
-    void SetSingular() {}
+    void SetSingular() {
+        m_Singular = 1;
+        // ASM-verified: 2026-05-24 binary @ 0x0014dda8 (re-analyst)
+    }
+
+    void SetActive(bool b) {
+        m_Active = b ? 1 : 0;
+        // ASM-verified: 2026-05-24 binary @ 0x0013cdd0 (re-analyst)
+    }
 };
 
 #endif

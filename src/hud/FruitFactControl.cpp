@@ -562,8 +562,8 @@ void FruitFactControl::Update(float dt) {
             m_pLeaderboardMenu->SetHeight(141.0f);
             if (game_work.mHud) game_work.mHud->AddControl(m_pLeaderboardMenu, false);
         }
-        if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_bActive = 0;
-        if (m_pConnectButton) m_pConnectButton->m_bActive = 0;
+        if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_Active = 0;
+        if (m_pConnectButton) m_pConnectButton->m_Active = 0;
 
         if (m_TabIndex == 1) {
             UpdateLeaderboard(dt);
@@ -625,9 +625,9 @@ void FruitFactControl::UpdateLeaderboard(float dt) {
 
         case 3:
             // Defunct: online-services -- showing: make leaderboard visible.
-            // binary @ 0x0013b39c: sets m_pLeaderboardMenu->m_bActive = 1.
+            // binary @ 0x0013b39c: sets m_pLeaderboardMenu->m_Active = 1.
             // no observable effect; binary @ 0x0013b39c
-            if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_bActive = 1;
+            if (m_pLeaderboardMenu) m_pLeaderboardMenu->m_Active = 1;
             break;
 
         case 4:
