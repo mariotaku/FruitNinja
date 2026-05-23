@@ -148,24 +148,24 @@
   },
   "_ZN11WaveManager10ResetSpeedEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: port uses named ActorManager::GetInstance guard vs binary blx chains. See src/game/WaveManager.cpp. [score refreshed 2026-05-20T00:00Z]",
-    "score": 7910,
+    "reason": "Stale refresh: port uses named ActorManager::GetInstance guard vs binary blx chains. See src/game/WaveManager.cpp. [score refreshed 2026-05-23T00:00Z]",
+    "score": 7000,
     "max_score": 6100,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager10SpawnFruitEllP12SPAWNER_INFOi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port uses named ActorManager API vs binary GOT blx chain. commit 421e895 fixed side-spawn pos/vel sources (pos.x=+/-240, pos.y=baseDeg*320/480, velX boost 1.075f) per ASM-verified spec. Score improved 46045->45430/36700. [score refreshed 2026-05-22T00:00Z]",
+    "reason": "Port uses named ActorManager API vs binary GOT blx chain. commit 421e895 fixed side-spawn pos/vel sources (pos.x=+/-240, pos.y=baseDeg*320/480, velX boost 1.075f) per ASM-verified spec. Score improved 46045->45430/36700. [score refreshed 2026-05-23T00:00Z]",
     "score": 45430,
     "max_score": 36700,
-    "decided_at": "2026-05-22T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager10UpdateWaveEfii": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 98406->85719. Port uses named API. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 91906,
+    "reason": "Stale refresh: score improved 98406->85719. Port uses named API. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 92591,
     "max_score": 53600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager11GetInstanceEv": {
     "verdict": "ACCEPT-deferred",
@@ -176,10 +176,10 @@
   },
   "_ZN11WaveManager11GetNextWaveEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 89056->87960. Port uses named API. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 83298,
+    "reason": "Stale refresh: score improved 89056->87960. Port uses named API. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 64189,
     "max_score": 37300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager12CriticalModeEi": {
     "verdict": "ACCEPT-deferred",
@@ -197,17 +197,17 @@
   },
   "_ZN11WaveManager12RequestCoinsEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "COIN_CHANCEINATOR::GetCoins() ported; fallback coinChance[] byte-index from GOT 0x7990 (game_work offset) not yet pinned -- using gameMode as proxy. See src/game/WaveManager.cpp TODO @ 0x00121a1c.",
-    "score": 2795,
+    "reason": "COIN_CHANCEINATOR::GetCoins() ported; fallback coinChance[] byte-index from GOT 0x7990 (game_work offset) not yet pinned -- using gameMode as proxy. See src/game/WaveManager.cpp TODO @ 0x00121a1c. [score refreshed 2026-05-23T00:00Z]",
+    "score": 2985,
     "max_score": 2100,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager12SaveWaveInfoEP13FruitSaveData": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score 38709->39841. FruitSaveData API differences. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 38582,
+    "reason": "Stale refresh: score 38709->39841. FruitSaveData API differences. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 38762,
     "max_score": 16300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager12SetupWaveQueEv": {
     "verdict": "ACCEPT-deferred",
@@ -218,10 +218,10 @@
   },
   "_ZN11WaveManager13ResetGlobalDtEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 31255->30348. Port structural differences. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 30993,
+    "reason": "Stale refresh: score improved 31255->30348. Port structural differences. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 31048,
     "max_score": 5300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager14ClearUnspawnedEv": {
     "verdict": "ACCEPT-cosmetic",
@@ -232,10 +232,10 @@
   },
   "_ZN11WaveManager14SetCurrentWaveEifi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: port adds ClearUnspawned call before wave write. Score improved 1435->1335/2400. See src/game/WaveManager.cpp.",
-    "score": 1335,
+    "reason": "Stale refresh: port adds ClearUnspawned call before wave write. Score improved 1435->1335/2400. See src/game/WaveManager.cpp. [score refreshed 2026-05-23T00:00Z]",
+    "score": 1390,
     "max_score": 2400,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager16IsWaveProcessingEi": {
     "verdict": "ACCEPT-deferred",
@@ -246,10 +246,10 @@
   },
   "_ZN11WaveManager16ResetWaveChancesEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 16090->15640. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 15890,
+    "reason": "Stale refresh: score improved 16090->15640. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 15955,
     "max_score": 13000,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager16UpdateComboSpeedEf": {
     "verdict": "ACCEPT-deferred",
@@ -267,17 +267,17 @@
   },
   "_ZN11WaveManager17GetCriticalChanceEi": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Two-pointer arithmetic differs from binary (m_pCurrentWave[playerIdx] vs *(this+offset+playerIdx*4)); same end value. See src/game/WaveManager.cpp:1412.",
-    "score": 1535,
+    "reason": "Two-pointer arithmetic differs from binary (m_pCurrentWave[playerIdx] vs *(this+offset+playerIdx*4)); same end value. See src/game/WaveManager.cpp:1412. [score refreshed 2026-05-23T00:00Z]",
+    "score": 1215,
     "max_score": 900,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager18AddToSpeedLossTimeEfi": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Fixed inverted clamp: now `if (v > 1.0f) v = 1.0f` matching binary `it pl; vmovpl`. Remaining diff is register-name variants and trailing nops only.",
-    "score": 1040,
+    "reason": "Fixed inverted clamp: now `if (v > 1.0f) v = 1.0f` matching binary `it pl; vmovpl`. Remaining diff is register-name variants and trailing nops only. [score refreshed 2026-05-23T00:00Z]",
+    "score": 420,
     "max_score": 1400,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager18DeleteSpeedControlEP10HUDControl": {
     "verdict": "ACCEPT-cosmetic",
@@ -295,17 +295,17 @@
   },
   "_ZN11WaveManager21GetCurrentOverideListEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 3270->2220. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 2155,
+    "reason": "Stale refresh: score improved 3270->2220. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 2535,
     "max_score": 1600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager24GetComboBonusProgressionEi": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Same arithmetic, different register allocation. See src/game/WaveManager.cpp:1426-1434.",
-    "score": 2665,
+    "reason": "Same arithmetic, different register allocation. See src/game/WaveManager.cpp:1426-1434. [score refreshed 2026-05-23T00:00Z]",
+    "score": 3225,
     "max_score": 3000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager33ShouldDisplayNetworkWaitIndicatorEv": {
     "verdict": "ACCEPT-deferred",
@@ -330,31 +330,31 @@
   },
   "_ZN11WaveManager5ResetEb": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 43520->36410. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 32686,
+    "reason": "Stale refresh: score improved 43520->36410. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 32626,
     "max_score": 27600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager6ResumeEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 53228->51720. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 51545,
+    "reason": "Stale refresh: score improved 53228->51720. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 51900,
     "max_score": 35500,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "WaveManager::Update -- port uses GOT/PIC anchor; frame-rate init block difference; UpdateComboSpeed tail-call vs binary inline. Score 17250/16700. [score refreshed 2026-05-20T12:00Z]",
-    "score": 17250,
+    "reason": "WaveManager::Update -- port uses GOT/PIC anchor; frame-rate init block difference; UpdateComboSpeed tail-call vs binary inline. Score 17250/16700. [score refreshed 2026-05-23T00:00Z]",
+    "score": 16925,
     "max_score": 16700,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager7DestroyEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score 35370->36330/5400. Port uses named ActorManager calls. ACCEPT-deferred.",
-    "score": 36330,
+    "reason": "Stale refresh: score 35370->36330/5400. Port uses named ActorManager calls. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 36430,
     "max_score": 5400,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager7NewGameEv": {
     "verdict": "ACCEPT-deferred",
@@ -365,10 +365,10 @@
   },
   "_ZN11WaveManager8AddSpeedEfi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Stale refresh: score improved 49575->36307. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
-    "score": 34370,
+    "reason": "Stale refresh: score improved 49575->36307. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z]",
+    "score": 32521,
     "max_score": 29600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManager8GameOverEv": {
     "verdict": "ACCEPT-deferred",
@@ -386,24 +386,24 @@
   },
   "_ZN11WaveManager9GetWavedtEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port collapses playerIdx==0 dtMod branch, uses commutative vmla.f32 reordering, different bounds check (vcmpe vs #0 instead of pool constant). Register-level differences plus simplified SP-only branch structure. Score 3890/4600. [score refreshed 2026-05-20T12:00Z]",
-    "score": 3890,
+    "reason": "Port collapses playerIdx==0 dtMod branch, uses commutative vmla.f32 reordering, different bounds check (vcmpe vs #0 instead of pool constant). Register-level differences plus simplified SP-only branch structure. Score 3890/4600. [score refreshed 2026-05-23T00:00Z]",
+    "score": 3865,
     "max_score": 4600,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManagerC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port calls Random::Random() ctor plus initializes many new fields (AchievementManager/BonusScreen/GameTaskInput) not in binary ctor. DIFFERS placeholders at src/game/WaveManager.cpp:72-116. Score 22520/4200. [score refreshed 2026-05-20T12:00Z]",
-    "score": 22520,
+    "reason": "Port calls Random::Random() ctor plus initializes many new fields (AchievementManager/BonusScreen/GameTaskInput) not in binary ctor. DIFFERS placeholders at src/game/WaveManager.cpp:72-116. Score 22520/4200. [score refreshed 2026-05-23T00:00Z]",
+    "score": 22535,
     "max_score": 4200,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManagerC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 alias of C1; same as WaveManagerC1Ev. Score 22520/4200. See src/game/WaveManager.cpp:72-116. [score refreshed 2026-05-20T12:00Z]",
-    "score": 22520,
+    "reason": "C2 alias of C1; same as WaveManagerC1Ev. Score 22520/4200. See src/game/WaveManager.cpp:72-116. [score refreshed 2026-05-23T00:00Z]",
+    "score": 22535,
     "max_score": 4200,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11WaveManagerD1Ev": {
     "verdict": "ACCEPT-deferred",
@@ -834,10 +834,10 @@
   },
   "_ZN14GameOverScreen6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "GameOverScreen::Update -- port creates BonusScreen plus calls AchievementManager. TODOs at src/screens/GameOverScreen.cpp:522 (RemoveCallback delegate), :527 (DAT Y-offset), :586 (FruitSaveData field clear). commit 9b1b0c1 removed erroneous m_State write on STATE_RETRY_PREPARE bounce path; RunStateMainDisplay now passes STATE_RETRY_PREPARE per binary @ 0x001425fc. Score improved 114096->113346/90500. [score refreshed 2026-05-22T00:00Z]",
+    "reason": "GameOverScreen::Update -- port adds MortarGame singleton guard and BonusScreen/AchievementManager calls; binary uses direct GOT dereferences. Documented TODOs at src/screens/GameOverScreen.cpp:522,:527,:586. Score 113346/90500. [score refreshed 2026-05-23T00:00Z]",
     "score": 113346,
     "max_score": 90500,
-    "decided_at": "2026-05-22T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN14GameOverScreen7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
@@ -1576,10 +1576,10 @@
   },
   "_ZN6Mortar7Texture4LoadEPKc": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port adds SDL-based file loading path absent from binary. commit 1830279 demoted file-not-found log from LOG_ERROR to LOG_INFO with a longer message string; the score regression 22869->34920/3100 is entirely from the longer string literal embedded in the port -- no behavioral divergence from binary. [score refreshed 2026-05-22T00:00Z]",
+    "reason": "Mortar::Texture::Load (0x00179dd4) -- port replaces Bada file APIs with Mortar::File POSIX + CPU RGBA4444 unpack + std::vector pixel buffer. Binary used Bada SDK blx chain. Full platform port replacement (src/engine/asset/Texture.cpp:107-199). Score 34920/3100.",
     "score": 34920,
     "max_score": 3100,
-    "decided_at": "2026-05-22T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZNK6Mortar14TextureManager4FindEPKc": {
     "verdict": "ACCEPT-deferred",
@@ -2143,10 +2143,10 @@
   },
   "_ZN10MenuButton4InitE8_Vector3IfEN6Mortar9Delegate0IvEEiS1_S4_": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Large Init function; Delegate0 size issue causes all field offsets to be 4 bytes off. ACCEPT-deferred pending Delegate0 size fix. commit bb69e52 added fruit->m_bSpawnedByCriticalSplash=1 in the Fruit-branch (binary +0x10C menu-marker write per re-analyst), causing slight score increase 43142->44712/31700; semantics correct. [score refreshed 2026-05-22T00:00Z]",
+    "reason": "MenuButton::Init (0x0013ee40) -- port has LOG_INFO call + extra VFP register saves (vpush {d8-d10} vs {d8}) + GOT-relative PIC anchor differences. Layer-2/layer-3 sparkle ring init missing (src/hud/MenuButton.cpp:8-9 TODO). Score 44712/31700.",
     "score": 44712,
     "max_score": 31700,
-    "decided_at": "2026-05-22T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN10MenuButton6RemoveEv": {
     "verdict": "ACCEPT-deferred",
@@ -3606,10 +3606,10 @@
   },
   "_Z10GameUpdatefb": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Global game function _Z10GameUpdatefb: significant port-side TODO gaps including m_DtMod consumer and PowerUpManager trailing fields. Score 98302/62200. [score refreshed 2026-05-20T12:00Z]",
-    "score": 98302,
+    "reason": "GameUpdate -- port adds MortarGame::GetInstance null-guard, GetTaskState indirection, GameSound::SFXPlay call (R3 SFX work), and g_DtModDecayTimer/wave-stress block. Binary @ 0x0015bed0 uses direct GOT dereferences. All divergences covered by DIFFERS/TODO markers in src/game/GameInit.cpp:97,104,122,177,200,222. Score 100947/62200.",
+    "score": 100947,
     "max_score": 62200,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_Z10SplashExitv": {
     "verdict": "ACCEPT-deferred",
@@ -4453,10 +4453,10 @@
   },
   "_ZN11PowerUpShop17SetBuyButtonStateEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "PowerUpShop::SetBuyButtonState -- port reads game_work.m_SaveData->m_Coins via GOT chain; binary uses different coin-balance path. ItemSlot list vs m_PurchasablePowerUps[m_SelectedIndex]. Pending full PowerUpShop RE. Score 5090/3600. [score refreshed 2026-05-20T12:00Z]",
-    "score": 5090,
+    "reason": "SetBuyButtonState (0x00145c4c) -- binary uses blx ee10c (list-node getter) x2 to reach PowerUp; port does direct vector subscript. Same 3 output states {0,1,2} into m_BuyButtonState at +0x131. Acceptable structural divergence pending full list/vector unification RE. Score 4900/3600.",
+    "score": 4900,
     "max_score": 3600,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN11PowerUpShop4InitEv": {
     "verdict": "ACCEPT-deferred",
@@ -4831,10 +4831,10 @@
   },
   "_ZN12BonusManager16SetUpBonusScreenEP11BonusScreen": {
     "verdict": "ACCEPT-deferred",
-    "reason": "BonusManager::SetUpBonusScreen -- port uses std::vector+std::sort+std::list vs binary intrusive list with custom comparator. Functional equivalent. Score 41675/20100. [score refreshed 2026-05-20T12:00Z]",
-    "score": 41675,
+    "reason": "BonusManager::SetUpBonusScreen (0x000fe404) -- port uses std::vector candidates + std::sort + std::list m_BestBonuses; binary uses intrusive list. ASM-verified colour constants and AddAward call order per 2026-05-22 re-analyst (src/game/BonusManager.cpp:119-127). Score 41175/20100.",
+    "score": 41175,
     "max_score": 20100,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN12BonusManager17GetFirstBestBonusERSt14_List_iteratorI5BonusE": {
     "verdict": "ACCEPT-deferred",
@@ -4859,10 +4859,10 @@
   },
   "_ZN12BonusManager8AddComboEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "BonusManager method stub/divergence. Score 11565/8500. [score refreshed 2026-05-20T00:00Z]",
-    "score": 12330,
+    "reason": "BonusManager::AddCombo (0x000fde24) -- port adds MortarGame::GetInstance + m_SaveData null guard; binary dereferences game+0x4c directly. ASM-verified combo payout index logic (src/game/BonusManager.cpp:177-186). Score 15915/8500.",
+    "score": 15915,
     "max_score": 8500,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN12BonusManagerC1Ev": {
     "verdict": "ACCEPT-deferred",
@@ -6735,17 +6735,17 @@
   },
   "_ZN5BonusC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Bonus method stub/divergence. Score 5240/3900.",
-    "score": 5240,
+    "reason": "Bonus ctor (0x000fe324) -- binary calls std::map ctors (blx f46dc x2) + vector ctor (blx f09bc) + SmartPtr ctor (blx ed6e0); port uses C++ member-initializer list + memset. All field offsets verified by static_assert in src/game/Bonus.h:56-66. Score 5250/3900.",
+    "score": 5250,
     "max_score": 3900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN5BonusC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Bonus method stub/divergence. Score 5240/3900.",
-    "score": 5240,
+    "reason": "C2 base-object ctor alias of C1; identical divergence pattern. See _ZN5BonusC1Ev entry. Score 5250/3900.",
+    "score": 5250,
     "max_score": 3900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN5Fruit14ClearUnspawnedEb": {
     "verdict": "ACCEPT-deferred",
@@ -6784,10 +6784,10 @@
   },
   "_ZN5Fruit15LoadFruitModelsEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Fruit::LoadFruitModels -- port has load-once guard plus FruitInfo count loop; binary has different load path. Tier-2. See src/entities/Fruit.cpp:1684. Score 105125/34700. [score refreshed 2026-05-20T12:00Z]",
-    "score": 105125,
+    "reason": "Fruit::LoadFruitModels (0x001694e0) -- port uses std::vector s_FruitModels + SmartPtr model slots + atlas texture assignment not in binary. Binary walks raw array with inlined snprintf. Port adds fruit_atlas.tex load per src/entities/Fruit.cpp:1375-1428. Score 105060/34700.",
+    "score": 105060,
     "max_score": 34700,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN5Fruit17CheckFruitDroppedEv": {
     "verdict": "ACCEPT-deferred",
@@ -8583,10 +8583,10 @@
   },
   "_ZN9BonusType7GetBestEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "BonusType method stub/divergence. Score 45665/5900. [score refreshed 2026-05-20T00:00Z]",
-    "score": 47290,
+    "reason": "BonusType::GetBest (0x000fe094) -- port uses std::list m_Bonuses iteration + MortarGame null guard; binary uses intrusive list walk. Same algorithm (find best Bonus by tier), different container. Score 14754/5900.",
+    "score": 14754,
     "max_score": 5900,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-23T00:00Z"
   },
   "_ZN9BonusTypeC1Ev": {
     "verdict": "ACCEPT-deferred",
@@ -8888,5 +8888,19 @@
     "score": 8600,
     "max_score": 8000,
     "decided_at": "2026-05-20T00:00Z"
+  },
+  "T.575": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Compiler-generated introsort/heapsort helper (std::sort pivot-select + sift-down); binary at 0x00141578 had a different sort impl. Port generates this synthetic via -O2 std::sort template expansion. Pure codegen difference, same observable sort behaviour.",
+    "score": 23500,
+    "max_score": 1100,
+    "decided_at": "2026-05-23T00:00Z"
+  },
+  "T.576": {
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Compiler-generated heap-sift helper called by T.575 (std::sort inner loop); binary at 0x00141a4c had a tiny 2-instruction stub. Port generates full sift-down. Same algorithmic contract, pure codegen difference.",
+    "score": 8120,
+    "max_score": 400,
+    "decided_at": "2026-05-23T00:00Z"
   }
 }
