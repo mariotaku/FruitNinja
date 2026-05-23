@@ -92,31 +92,29 @@ public:
     void AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
-    // ---- STUBS (binary) ----
     // Binary form of AddAward — Colour arg (port uses uint32_t; both overloads present)
-    // STUB: BonusScreen::AddAward -- binary @ 0x???? (TODO RE)
+    // STUB: BonusScreen::AddAward(Colour,...) -- binary @ 0x???? (TODO RE)
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
     // Binary form of Draw — float* arg (port uses const Vec3&, int; both overloads present)
-    // STUB: BonusScreen::Draw -- binary @ 0x???? (TODO RE)
+    // STUB: BonusScreen::Draw(float*) -- binary @ 0x???? (TODO RE)
     void Draw(float* mtx);
 
-    // STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
+    // Binary @ 0x00131d58 — returns kRevealStart (0.6660f)
     float GetTimeFirstAward();
 
-    // STUB: BonusScreen::GetTimePerAward -- binary @ 0x???? (TODO RE)
+    // Binary @ 0x00131d74 — returns kPerAward (0.6f)
     float GetTimePerAward();
 
-    // STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
+    // Binary @ 0x00131d50 — empty (bx lr)
     void LoadContent();
 
-    // STUB: BonusScreen::Shake -- binary @ 0x???? (TODO RE)
+    // Binary @ 0x00131d94 — sets pulse shake fields, randomizes angle
     void Shake(float amplitude, float duration);
 
-    // STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
+    // Binary @ 0x00131d54 — empty (bx lr)
     void UnLoadContent();
-    // ---- end STUBS ----
 
 private:
     // Binary @ 0x0013260C — one-shot finale: coin spawn, camera shake, finish SFX
