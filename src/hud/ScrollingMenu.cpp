@@ -79,34 +79,18 @@ ScrollingMenu::ScrollingMenu()
     , m_pad_d1{0, 0, 0}
     , m_Velocity(0.0f, 0.0f, 0.0f)
 {
-    // Touch region bounds. Binary helper SetVec3_ScrollMenu(p1, p2, out) writes
-    //   out = { p1, 320.0f, p2, -320.0f }   (DAT_0015b2d8/dc)
-    // Outer = SetVec3_ScrollMenu(-120, +120); Inner = same call -> identical region.
-    // Bada touch coords are 90-degree-rotated, so binary's "all pos.x" encoding
-    // corresponds to (xMin/xMax, yMin/yMax) split in unrotated desktop coords.
-    // The port stores axes already separated in [xMin, yMin, yMax, xMax] form.
-    // Touch region. Binary @ 0x0015b3b0 (asm-inspector) calls
-    // SetVec3_ScrollMenu(-120, +120) for both outer and inner, writing
-    // `{ -120, +320, +120, -320 }` in Bada-rotated coords. Port reads
-    // indices as [xMin, yMin, yMax, xMax] in unrotated landscape coords;
-    // the magnitudes below preserve the original port mapping that
-    // worked for the list strip.
-    //
-    // Earlier port commit widened m_OuterRegion[3] to +400 ("Port
-    // specific: cover dialog-box / equip-button column"), which let
-    // touches on the right panel trigger list scroll. Reverted: the
-    // outer region must NOT extend into the dialog-box / buy-equip
-    // column. Right panel taps now route to their own buttons.
-    const float HALF_ITEM = m_ItemHeight * 0.5f;   // 120.0f
-    m_OuterRegion[0] = -m_Width  * 0.5f;  // xMin = -160
-    m_OuterRegion[1] = -HALF_ITEM;        // yMin = -120
-    m_OuterRegion[2] =  HALF_ITEM;        // yMax = +120
-    m_OuterRegion[3] =  m_Width  * 0.5f;  // xMax = +160 (was +400 — DROPPED widen)
+    // Binary ctor helper @ 0x0015b2bc writes { -120, +320, +120, -320 } for both
+    // outer and inner: [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM.
+    // ASM-verified: 2026-05-24 binary @ 0x0015b3b0 ctor (asm-inspector)
+    m_OuterRegion[0] = -120.0f;  // LEFT
+    m_OuterRegion[1] =  320.0f;  // TOP
+    m_OuterRegion[2] =  120.0f;  // RIGHT
+    m_OuterRegion[3] = -320.0f;  // BOTTOM
 
-    m_InnerRegion[0] = -m_Width  * 0.5f;  // -160
-    m_InnerRegion[1] = -HALF_ITEM * 0.5f; // -60
-    m_InnerRegion[2] =  HALF_ITEM * 0.5f; // +60
-    m_InnerRegion[3] =  m_Width  * 0.5f;  // +160
+    m_InnerRegion[0] = -120.0f;  // LEFT
+    m_InnerRegion[1] =  320.0f;  // TOP
+    m_InnerRegion[2] =  120.0f;  // RIGHT
+    m_InnerRegion[3] = -320.0f;  // BOTTOM
 }
 
 ScrollingMenu::~ScrollingMenu() {
@@ -114,28 +98,21 @@ ScrollingMenu::~ScrollingMenu() {
 }
 
 // ---------------------------------------------------------------------------
-// ScrollingMenu::SetWidth @ 0x00147998
+// ScrollingMenu::SetWidth @ 0x001479a0
 // Writes field40_0xa4 (port: m_ItemHeight — names swapped vs binary semantics,
-// preserved to avoid mangled-symbol drift) and recomputes touch-region cross-
-// axis bounds.
-//
-// DIFFERS from binary: binary writes outer[1]/[2] (Y bounds in its pixel-
-// post-rotation coord space). In port's centered-ortho landscape coords with
-// vertical-scroll list (ShopScreen stacks items top-to-bottom), the cross-
-// axis is X, so SetWidth must update outer[0]/[3] (X bounds) instead. Y
-// bounds (scroll axis) stay at the wide ctor defaults so swipes anywhere
-// along the visible item column are acquired.
-//
-// ASM-verified intent: 2026-05-23 binary @ 0x00147998 (re-analyst); axis
-// rotation is a port-specific adjustment to match centered-ortho layout.
+// preserved to avoid mangled-symbol drift) and recomputes LEFT/RIGHT bounds
+// of both touch regions. TOP/BOTTOM indices [1]/[3] keep ctor defaults.
+// ASM-verified: 2026-05-24 binary @ 0x001479a0 (asm-inspector)
 // ---------------------------------------------------------------------------
 void ScrollingMenu::SetWidth(float w) {
     m_ItemHeight = w;
-    const float HALF = w * 0.5f;
-    m_OuterRegion[0] = -HALF;
-    m_OuterRegion[3] =  HALF;
-    m_InnerRegion[0] = -HALF * 0.5f;
-    m_InnerRegion[3] =  HALF * 0.5f;
+    const float HALF       = w * 0.5f;
+    const float INNER_HALF = w * 0.625f;
+    m_OuterRegion[0] = -HALF;        // LEFT
+    m_OuterRegion[2] =  HALF;        // RIGHT
+    m_InnerRegion[0] = -INNER_HALF;  // LEFT
+    m_InnerRegion[2] =  INNER_HALF;  // RIGHT
+    // Indices [1] (TOP) and [3] (BOTTOM) keep ctor defaults +320 / -320.
 }
 
 // ---------------------------------------------------------------------------
@@ -175,17 +152,14 @@ void ScrollingMenu::Update(float /*dt*/) {
 
     // --- Phase 2: touch acquire (only when no active touch) ---
     if (m_TouchId == -1) {
-        // Scan outer region for a held finger
-        // Binary: TouchInRegion(pos.x + field100, pos.x + field102,
-        //                       pos.x + field103, pos.x + field101, -1)
-        // Outer region: [0]=xMin_rel, [1]=yMin_rel, [2]=yMax_rel, [3]=xMax_rel
-        // Param order for TouchInRegion: x0, x1, y0, y1, hint
-        int slot = TouchInRegion(
-            pos.x + m_OuterRegion[0],  // x0 = pos.x + xMin
-            pos.x + m_OuterRegion[3],  // x1 = pos.x + xMax
-            pos.y + m_OuterRegion[1],  // y0 = pos.y + yMin
-            pos.y + m_OuterRegion[2],  // y1 = pos.y + yMax
-            -1);
+        // Scan outer region for a held finger.
+        // Layout: [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM.
+        // TouchInRegion param order: xMin, xMax, yMin, yMax, hint.
+        const float xMin = pos.x + m_OuterRegion[0];  // LEFT
+        const float yMax = pos.y + m_OuterRegion[1];  // TOP
+        const float xMax = pos.x + m_OuterRegion[2];  // RIGHT
+        const float yMin = pos.y + m_OuterRegion[3];  // BOTTOM
+        int slot = TouchInRegion(xMin, xMax, yMin, yMax, -1);
         m_TouchId = slot;
         int touchState = IsTouchDown(slot);
 

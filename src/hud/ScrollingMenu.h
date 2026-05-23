@@ -92,15 +92,14 @@ public:
     ScrollingMenuItem* Collide(int touchSlot);
 
     // Width/height setters
-    // Binary SetWidth @ 0x00147998: writes field40_0xa4 (port m_ItemHeight) AND
-    // recomputes m_OuterRegion[1]/[2] (cross-axis Y bounds) and m_InnerRegion[1]/[2].
-    // DIFFERS: port field names m_Width/m_ItemHeight are swapped vs binary semantics;
-    // SetWidth correctly writes m_ItemHeight (per binary field40_0xa4) and updates
-    // the outer/inner region cross-axis bounds. Names preserved to avoid mangling drift.
-    // ASM-verified: 2026-05-23 binary @ 0x00147998 (re-analyst)
+    // SetWidth @ 0x001479a0: writes field40_0xa4 (port: m_ItemHeight — field-name
+    // swap vs binary semantics; names preserved to avoid mangled-symbol drift) and
+    // recomputes m_OuterRegion[0]/[2] (LEFT/RIGHT) and m_InnerRegion[0]/[2].
+    // ASM-verified: 2026-05-24 binary @ 0x001479a0 (asm-inspector)
     void SetWidth(float w);
     void SetHeight(float h)     { m_Height = h; }
-    void SetItemHeight(float h) { m_ItemHeight = h; }
+    // SetItemHeight @ 0x001479d4: writes +0x9c (port: m_Width — field-name swap).
+    void SetItemHeight(float h) { m_Width = h; }
 
     // --- Fields at documented binary offsets ---
     // (binary offset +0x74 relative to object start)
@@ -173,13 +172,13 @@ public:
     // Binary: field_0xd4..field_0xdc
     Vec3 m_Velocity;
 
-    // +0xe0..0xec: outer touch region (4 floats relative to pos.x)
-    //   [0]=xMin_rel, [1]=yMin_rel, [2]=yMax_rel, [3]=xMax_rel
+    // +0xe0..0xec: outer touch region (4 floats relative to pos)
+    //   [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM
     //   Binary: field100_0xe0, field101_0xe4, field102_0xe8, field103_0xec
     float m_OuterRegion[4];
 
-    // +0xf0..0xfc: inner touch region (4 floats relative to pos.x)
-    //   [0]=xMin_rel, [1]=yMin_rel, [2]=yMax_rel, [3]=xMax_rel
+    // +0xf0..0xfc: inner touch region (4 floats relative to pos)
+    //   [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM
     //   Binary: field104_0xf0, field105_0xf4, field106_0xf8, field107_0xfc
     float m_InnerRegion[4];
 
