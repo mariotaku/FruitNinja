@@ -417,17 +417,30 @@ void GameModeScreen::Update(float dt) {
                 game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
                 // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped
 
-                // Call WaveManager::NewGame to fire the automatic-powerup
-                // activation pass (PowerUpManager::Reset(true) iterates
-                // m_AllPowerUps and activates every template with
-                // m_bIsSpecial=1 -- i.e. <power automatic="true">). Without
-                // this the arcade ready_set_go ScreenEffect (arcade_60seconds
-                // + arcade_go countdown overlay) never fires because nothing
-                // else in the port flow reaches NewGame for the
-                // GameModeScreen-initiated arcade start. Binary handles this
-                // via the Game::TellGameToStart handshake (slot 10 @
-                // 0x0010dc80) which is unwired in the port; this direct call
-                // matches the net effect.
+                // DIFFERS: port-side band-aid -- call WaveManager::NewGame
+                // here so PowerUpManager::Reset(true) fires and activates
+                // m_bIsSpecial templates (ready_set_go etc.). The binary
+                // genuinely SKIPS STATE_GAME_START on the arcade
+                // GameModeScreen path (asm-inspector 2026-05-22 confirmed:
+                // binary @ 0x0013f382 writes 0x11/STATE_CAMERA_FADE
+                // directly, NOT 0x2/STATE_GAME_START). So
+                // WaveManager::Reset(true) / NewGame() is never reached
+                // via MainScreen's STATE_GAME_START case on the arcade
+                // path. Game::TellGameToStart (vtable slot 10 @ 0x0010dc80)
+                // is dead code in the binary.
+                //
+                // The binary's real activation chain is via the chain
+                // `[MainScreen+0x160]+0x10c = 0x11` -- i.e. the binary
+                // transitions a CHILD object's state, not MainScreen's
+                // own m_State. That child object's state machine likely
+                // owns the WaveManager::NewGame call internally. Port
+                // hasn't RE'd what lives at MainScreen+0x160 yet -- see
+                // Claude task #10 for the follow-up. Until then this
+                // direct NewGame() call produces the net runtime effect
+                // (automatic powerups activate, ready_set_go fires).
+                // TODO: 0x0013f382 -- resolve [MainScreen+0x160] target
+                // and replace this band-aid with the binary-faithful
+                // state-machine transition.
                 WaveManager::NewGame();
             }
         }
