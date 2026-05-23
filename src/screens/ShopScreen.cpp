@@ -319,13 +319,17 @@ void ShopScreen::CreateShopList() {
     // pre-populated from items.xml at init time. Port creates a local one.
     m_pShopList = new ScrollingMenu();
 
-    // Binary ShopScreen::Init at 0x0015f820 calls:
-    //   vtable[18] = SetWidth(80.0)      -- sets cross-axis touch bounds and m_ItemHeight
-    //   vtable[20] = SetItemHeight(80.0) -- sets m_Width (binary field38_0x9c)
-    // SetWidth is the call that updates the outer/inner touch region Y bounds.
-    // Port previously called SetHeight(80) which left m_OuterRegion[1]/[2] at ctor
-    // defaults (±120), causing an asymmetric dead zone in the lower screen quarter.
-    // ASM-verified: 2026-05-23 binary @ 0x0015f820 (re-analyst)
+    // Binary ShopScreen::Init makes THREE setter calls, in order:
+    //   @ 0x0015f7fc: vtable[0x50](290.0f)  -- SetHeight(290) writes m_Height
+    //   @ 0x0015f810: vtable[0x4c](80.0f)   -- SetWidth(80)     writes m_ItemHeight (+0xa4)
+    //                                          AND updates outer[1]/[2] touch bounds
+    //   @ 0x0015f828: vtable[0x54](80.0f)   -- SetItemHeight(80) writes m_Width (+0x9c)
+    // Note: port's m_Width/m_Height/m_ItemHeight names are SWAPPED vs binary's
+    // setter semantics -- preserved to avoid mangled-symbol drift. The three
+    // values are distinct concepts: 290 = total list height (m_Height,
+    // controls scroll range), 80 = item-row size (m_ItemHeight / m_Width).
+    // ASM-verified: 2026-05-24 binary @ 0x0015f7fc..0x0015f830 (asm-inspector)
+    m_pShopList->SetHeight(290.0f);
     m_pShopList->SetWidth(80.0f);
     m_pShopList->SetItemHeight(80.0f);
 
