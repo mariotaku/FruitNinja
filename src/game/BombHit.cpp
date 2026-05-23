@@ -35,18 +35,6 @@
 
 namespace FN {
 
-// Binary DAT constants for DrawBombHit (docs/entities/bomb.md)
-static const float FLASH_START     = 1.55f;   // DAT_0016b864
-static const float FLASH_DUR_RECIP = -0.45f;  // DAT_0016b868 (divisor)
-static const float FLASH_MAX_SCALE = 20000.0f;// DAT_0016b870
-static const float FLASH_ALPHA_MUL = 255.0f;  // DAT_0016b874
-static const float FLASH_THRESHOLD = 2.0f;    // only draws when timer < 2.0
-static const float BLAST_PURGE_THR = 1.55f;   // DAT_0016a1fc
-static const float BLAST_RESET_THR = 1.5f;    // ResetGameEntities trigger
-
-static Vec3 s_BombHitPos(0, 0, 0);
-static Mortar::SmartPtr<Mortar::Texture> s_FlashTex;
-
 // CriticalFlash state — matches binary CriticalFlash @ 0x0016a9a4 +
 // DrawCritHit @ 0x0016b5b4 (verified 2026-04-15).
 //
@@ -86,42 +74,11 @@ static void EnsureWhitePx() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+// Writes the bomb-hit world position used by Bomb::DrawBombHit.
+// Bomb::HitBomb and Bomb::HitMenuBomb now write g_BombHitPos directly;
+// this wrapper remains for call sites that use the FN:: form.
 void SetBombHitPos(const Vec3& pos) {
-    s_BombHitPos = pos;
-}
-
-// Matches HitMenuBomb (0x0016b234). Binary also writes a task-state
-// flag at +0xf8 and gates on a field_0x10c check -- the port's
-// equivalent state (BombFlash pool / task-state guard) isn't ported,
-// so we drop the guard and just trigger the timer + SFX + pos.
-void HitMenuBomb(const Vec3& pos) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-    SetBombHitPos(pos);
-    // Set menu-bomb flash flag so GameUpdate's cross-1.5 GameOver trigger
-    // skips re-firing GameOver on this bomb. binary @ 0x0016b270.
-    if (GameTaskState* ts = GetTaskState()) {
-        ts->m_bMenuBombFlashFlag = 1;
-    }
-    game_work.m_BombHitTimer = 2.0f;                       // binary: 0x40000000 = 2.0f
-    if (game_work.mGameSound) {
-        // Binary pre-loads the SFX via SoundManager::PreLoadSound; the
-        // port's GameSound::SFXPlay loads on demand, so preload is a
-        // no-op deferred.
-        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
-    }
-}
-
-// Matches BombFlashFull (0x00168f24). Returns true once the bomb-hit
-// flash has wound below 1.0s of remaining time (i.e. past the main
-// flash peak). The binary also checks a redundant 1.55 upper bound --
-// since 1.0 is tighter, the effective test is just `timer < 1.0`.
-// In the idle state (timer == 0) this returns true, so callers must
-// only poll it AFTER kicking the timer via HitMenuBomb / HitBomb.
-bool BombFlashFull() {
-    const Game* game = Game::GetInstance();
-    if (!game) return true;
-    return game_work.m_BombHitTimer < 1.0f;
+    g_BombHitPos = pos;
 }
 
 // Matches CriticalFlash @ 0x0016a9a4. Stores the colour and resets
@@ -209,50 +166,6 @@ void DrawCriticalFlash() {
     }
     glBindTexture(GL_TEXTURE_2D, 0);
     Mortar::Texture::s_LastBoundTexId = 0;
-}
-
-void DrawBombHit() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-    const float timer = game_work.m_BombHitTimer;
-    if (timer <= 0.0f || timer >= FLASH_THRESHOLD) return;
-
-    if (!s_FlashTex.IsValid()) {
-        // Binary DrawBombHit (0x16b73c) lazy-loads `flash.tex` into
-        // `g_bombHitData + 0x10c` on first call. String resolved at
-        // 0x001BC7E9 via re-analyst RE pass 2026-04-13.
-        s_FlashTex = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
-        if (!s_FlashTex.IsValid()) return;
-    }
-
-    // Scale animation: starts at 0 when timer == 1.55, grows to 20000 as
-    // timer drops to 1.1, then stays at 20000 until FLASH_THRESHOLD passes.
-    const float t = (timer - FLASH_START) / FLASH_DUR_RECIP + 1.0f;
-    float scale;
-    if (t <= 0.0f)      scale = 0.0f;
-    else if (t < 1.0f)  scale = t * FLASH_MAX_SCALE;
-    else                scale = FLASH_MAX_SCALE;
-
-    if (scale <= 0.0f) return;
-
-    // Alpha = clamp(255 * timer, 0, 255)
-    int a = (int)(FLASH_ALPHA_MUL * timer);
-    if (a < 0) a = 0;
-    if (a > 255) a = 255;
-    const Colour tint(255, 255, 255, (uint8_t)a);
-
-    MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-    Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
-    mat.GlobalTranslate44(s_BombHitPos);
-    mm.GetWorldStack().SetCurrentMatrix(mat);
-    mm.UploadModelViewOnly();
-
-    s_FlashTex->Set();
-    if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawQuad(tint);
-    }
-    s_FlashTex->UnSet();
 }
 
 // Matches ResetGameEntities (binary 0x0016a058, 40 lines).
@@ -394,29 +307,6 @@ void ResetGameEntities(bool killAll) {
     // Splats: binary only purges in same-screen multiplayer
     // (SplatEntity::RemoveAllSplats @ 0x0017eea4). Port has no
     // multiplayer so we skip — splats fade naturally.
-}
-
-void UpdateBombHit(float prevTimer) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-    const float currentTimer = game_work.m_BombHitTimer;
-
-    LOG_VERBOSE("BOMBHIT", "UpdateBombHit prev=%.3f curr=%.3f", prevTimer, currentTimer);
-
-    // Binary UpdateBombHit (0x16a1a8): at the 1.5s downward edge
-    // (i.e. timer just dropped below 1.5), call ResetGameEntities
-    // to wipe the gameplay area before the game-over screen
-    // renders over it.
-    if (prevTimer > BLAST_RESET_THR && currentTimer <= BLAST_RESET_THR) {
-        LOG_INFO("BOMBHIT", "UpdateBombHit firing ResetGameEntities at timer crossing (prev=%.3f curr=%.3f)", prevTimer, currentTimer);
-        ResetGameEntities(false);
-    }
-
-    // Below 1.55s, bulk-remove every live BombBlast (type 4) — matches
-    // RemoveFlashEntities (0x169ca0).
-    if (currentTimer > 0.0f && currentTimer < BLAST_PURGE_THR) {
-        BombBlast::RemoveAll();
-    }
 }
 
 // ASM-verified: 2026-05-20T00:00:00Z binary @ 0x0016a208 (asm-inspector)
