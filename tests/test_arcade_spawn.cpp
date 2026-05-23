@@ -1,7 +1,15 @@
-// test_arcade_spawn -- arcade-mode spawn lifecycle diagnostic.
+// test_arcade_spawn -- per-mode spawn lifecycle diagnostic.
 //
-// Boots the game in arcade mode (gameMode=2), fires PrepareForLevelStart,
-// and ticks N frames (default 360 = 6 s @ 60 Hz). On every frame:
+// Boots the game in the chosen mode (classic/arcade/zen), fires
+// PrepareForLevelStart, and ticks N frames. Default duration matches
+// the timed-mode game length + a 5s buffer so the run covers the real
+// playable session:
+//   classic  -> 30s + 5s   (no built-in timer; sanity duration)
+//   arcade   -> 60s + 5s   (arcade countdown is 60s)
+//   zen      -> 90s + 5s   (zen countdown is 90s)
+// Frame count derived at ~60 Hz simulated.
+//
+// On every frame:
 //
 //   * Detect new fruit/bomb entities arriving in ActorManager (compared to
 //     the previous frame's snapshot) and log their initial pos, vel,
@@ -15,10 +23,12 @@
 // binary should produce. Always returns 0 unless setup fails.
 //
 // Run:
-//   ./build/tests/Debug/test_arcade_spawn.exe                  # 360 frames headless
-//   ./build/tests/Debug/test_arcade_spawn.exe --frames=600     # custom run length
-//   ./build/tests/Debug/test_arcade_spawn.exe --trace=30       # log entity pos/vel every 30 frames
-//   ./build/tests/Debug/test_arcade_spawn.exe --interactive    # visible window
+//   ./build/tests/Debug/test_arcade_spawn.exe                   # arcade, 65s default
+//   ./build/tests/Debug/test_arcade_spawn.exe --mode=classic    # classic, 35s default
+//   ./build/tests/Debug/test_arcade_spawn.exe --mode=zen        # zen, 95s default
+//   ./build/tests/Debug/test_arcade_spawn.exe --frames=600      # override frame count
+//   ./build/tests/Debug/test_arcade_spawn.exe --trace=30        # log entity pos/vel every 30 frames
+//   ./build/tests/Debug/test_arcade_spawn.exe --interactive     # visible window
 //
 // Lifecycle entries are tagged [SPAWN-N], [WAVE], [BLITZ], [TRACE], [KILL]
 // so users can grep easily.
@@ -38,6 +48,7 @@
 #include "entities/Entity.h"
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"  // FN::ClearMenuItems
+#include "screens/MainScreen.h"
 
 #include <cstring>
 #include <cstdlib>
@@ -56,9 +67,8 @@ static const char* PlacementName(int p) {
     }
 }
 
-// Detects which wave-list slot waveInfos[2] (arcade) holds for this WAVE_INFO*
-// so the log can quote a wave index even though there's no debugName field.
-static int WaveIndexInArcade(WAVE_INFO* w) {
+// Returns the WAVE_INFO's m_WaveIndex (sequential XML position) or -1 if null.
+static int WaveIdx(WAVE_INFO* w) {
     if (!w) return -1;
     return w->m_WaveIndex;
 }
@@ -136,11 +146,53 @@ static int ParseTraceInterval(int argc, char** argv) {
     return 0;  // 0 = trace off
 }
 
+// Returns 0=classic, 2=arcade, 3=zen. Defaults to arcade for back-compat
+// with the test's original name. Aborts the test with usage info on
+// unknown values rather than silently running a different mode.
+static int ParseGameMode(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        if (std::strncmp(argv[i], "--mode=", 7) == 0) {
+            const char* m = argv[i] + 7;
+            if (std::strcmp(m, "classic") == 0) return 0;
+            if (std::strcmp(m, "arcade")  == 0) return 2;
+            if (std::strcmp(m, "zen")     == 0) return 3;
+            fprintf(stderr, "FAIL: unknown --mode=%s (use classic/arcade/zen)\n", m);
+            std::exit(1);
+        }
+    }
+    return 2;  // arcade default
+}
+
+// Mode -> default frame count. Headless runs at ~60 Hz; the durations
+// match real-game session length + 5s buffer so the menu-bomb that
+// title-screen leaves in ActorManager has time to OOB-kill itself and
+// the test doesn't surface that as a "stall".
+static int DefaultFramesForMode(int gameMode) {
+    switch (gameMode) {
+        case 0: return 35 * 60;   // classic: 30s + 5s
+        case 2: return 65 * 60;   // arcade: 60s + 5s
+        case 3: return 95 * 60;   // zen: 90s + 5s
+        default: return 360;
+    }
+}
+
+static const char* ModeName(int gameMode) {
+    switch (gameMode) {
+        case 0: return "classic";
+        case 2: return "arcade";
+        case 3: return "zen";
+        default: return "?";
+    }
+}
+
 int main(int argc, char* argv[]) {
-    const int frameCount    = ParseFrames(argc, argv, 360);
+    const int gameMode      = ParseGameMode(argc, argv);
+    const int frameCount    = ParseFrames(argc, argv, DefaultFramesForMode(gameMode));
     const int traceInterval = ParseTraceInterval(argc, argv);
 
-    fn::TestHarness h(argc, argv, "arcade_spawn");
+    char labelBuf[32];
+    std::snprintf(labelBuf, sizeof(labelBuf), "%s_spawn", ModeName(gameMode));
+    fn::TestHarness h(argc, argv, labelBuf);
     h.SetInitFrames(120);
     if (!h.ParseFlags()) return 1;
     if (!h.Init()) return 1;
@@ -156,22 +208,34 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const int arcadeWaveCount = (int)wm->waveInfos[2].size();
-    printf("[BOOT] arcade waveInfos[2].size=%d\n", arcadeWaveCount);
-    if (arcadeWaveCount == 0) {
-        fprintf(stderr, "FAIL: arcade wave list empty -- XML load failed?\n");
+    const int modeWaveCount = (int)wm->waveInfos[gameMode].size();
+    printf("[BOOT] mode=%s gameMode=%d waveInfos[%d].size=%d frames=%d\n",
+           ModeName(gameMode), gameMode, gameMode, modeWaveCount, frameCount);
+    if (modeWaveCount == 0) {
+        fprintf(stderr, "FAIL: %s wave list empty -- XML load failed?\n",
+                ModeName(gameMode));
         return 1;
     }
 
-    // Force arcade and run the standard level-start pipeline.
     // In real gameplay, GameModeScreen's mode-click handler fires
     // FN::ClearMenuItems() (which flings/disables the menu-screen fruits
-    // and bombs) before transitioning. Our test bypasses GameModeScreen,
-    // so call ClearMenuItems explicitly -- otherwise the title-screen
-    // menu fruits stay in ActorManager forever and block IsWaveProcessing
-    // from clearing.
+    // and bombs) before transitioning, then MainScreen advances to
+    // STATE_CAMERA_FADE for gameplay (which DOES NOT lazy-recreate menu
+    // buttons each frame).
+    //
+    // Our test bypasses GameModeScreen entirely, so we have to:
+    //   (a) call ClearMenuItems to fling the menu fruits/bombs, AND
+    //   (b) advance MainScreen to STATE_CAMERA_FADE so it stops lazy-
+    //       creating new QUIT bombs each frame the title screen is
+    //       active. Without (b) the QUIT MenuButton's m_pQuitBtn==null
+    //       branch keeps respawning the bomb, locking IsWaveProcessing
+    //       at true forever and surfacing a fake "wave stall" that
+    //       doesn't exist in real arcade gameplay.
     FN::ClearMenuItems();
-    game_work.gameMode = 2;
+    if (game_work.mMainScreen) {
+        game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
+    }
+    game_work.gameMode = (uint8_t)gameMode;
     FN::PrepareForLevelStart();
     game_work.m_LevelTransitionFlag = 0;  // bypass MainScreen camera-fade gate
     // Let the flung menu items physics-die before we start counting spawns.
@@ -231,7 +295,7 @@ int main(int argc, char* argv[]) {
         // Wave-change detection.
         if (wm->m_pCurrentWave[0] != prevWave) {
             printf("[WAVE-CHANGE @f=%d] from idx=%d to idx=%d\n",
-                   frame, WaveIndexInArcade(prevWave), WaveIndexInArcade(wm->m_pCurrentWave[0]));
+                   frame, WaveIdx(prevWave), WaveIdx(wm->m_pCurrentWave[0]));
             prevWave = wm->m_pCurrentWave[0];
             if (prevWave) DumpWave(frame, prevWave);
         }
@@ -316,7 +380,7 @@ int main(int argc, char* argv[]) {
             printf("[TRACE @f=%d] waveProc=%d curWave=idx%d wfProc=%d wfEnt=%d"
                    " | amFruits=%d (live=%d inact=%d killed=%d) GnaInact=%d"
                    " | amBombs=%d GnaCountdown=%d\n",
-                   frame, procP0, WaveIndexInArcade(w),
+                   frame, procP0, WaveIdx(w),
                    w ? (int)w->m_bWaitForProcessing : -1,
                    w ? (int)w->m_bWaitForEntities  : -1,
                    amFruitsRaw, liveFruits, inactiveFruits, killedFruits, fruitsInactive,
@@ -340,7 +404,7 @@ int main(int argc, char* argv[]) {
     }
 
     printf("[DONE] frames=%d spawnsLogged=%d finalWave=idx%d\n",
-           frameCount, spawnNo, WaveIndexInArcade(wm->m_pCurrentWave[0]));
+           frameCount, spawnNo, WaveIdx(wm->m_pCurrentWave[0]));
 
     return h.Shutdown();
 }
