@@ -442,15 +442,29 @@ void WaveManager::Destroy() {
 // ----------------------------------------------------------------------------
 
 void WaveManager::Reset(bool fullReset) {
+    Game* game = Game::GetInstance();
+    if (!game) return;
+
+    // ASM-verified: 2026-05-23 binary @ 0x00125bfe..0x00125c0a (re-analyst).
+    // Reset prologue: load arcade powerup textures unconditionally on every
+    // Reset when gameMode == ARCADE, independent of fullReset. This is the
+    // ONLY path that loads ScreenEffect / EffectImage textures during normal
+    // play; without it ScreenEffect::Activate copies empty SmartPtrs into
+    // HUDControl3d, HUDControl3d::Draw's `if (m_Texture)` gate fails, and
+    // arcade_go / arcade_60seconds / ice_cover / clock_freeze / hud_x2_sign
+    // popups never render. Binary's resume-from-save path repeats the same
+    // gated call (0x00124d12..0x00124d1e); the port already mirrors that one
+    // in WaveManager::Load.
+    if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+        PowerUpManager::GetInstance()->LoadTextures();
+    }
+
     // Reset combo state — binary @ 0x00125cdc (g_ComboCount = 0) and
     // adjacent last-slasher write. Binary writes 1 to last-slasher at reset;
     // port uses -1 (cold-boot sentinel) to keep consistent with TimeControl
     // game-over path and avoid a spurious same-player guard on first slice.
     g_ComboCount  = 0;
     g_LastSlasher = -1;
-
-    Game* game = Game::GetInstance();
-    if (!game) return;
 
     LOG_DEBUG("WaveManager", "Reset(full=%d) gameMode=%d waveInfos[%d].size=%zu",
               fullReset ? 1 : 0, (int)game_work.gameMode, (int)game_work.gameMode,
@@ -1933,11 +1947,16 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
                 m_BlitzBonus[playerIdx] = newCount;
                 FN::AddToCurrentScore(5, playerIdx, false, false);
-                static uint32_t s_blitzCountHash = 0;
-                if (!s_blitzCountHash) s_blitzCountHash = StringHash("blitz_count");
-                PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitzCountHash);
+                // ASM-verified: 2026-05-23 binary @ 0x00123760..0x00123798 (re-analyst).
+                // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773),
+                // NOT "blitz_count". Earlier port-side guess didn't match any
+                // m_ScreenEffectPool entry so the activation silently failed and the
+                // blitz_1 popup never appeared on the first tier crossing.
+                static uint32_t s_blitz1Hash = 0;
+                if (!s_blitz1Hash) s_blitz1Hash = StringHash("blitz_1");
+                PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitz1Hash);
                 if (game_work.mGameSound) game_work.mGameSound->SFXPlay("combo-blitz-1", 1.0f, 1.0f);
-                LOG_INFO("BLITZ", "  COLD-START FIRE p=%d level=%d +5 score, combo-blitz-1 SFX, blitz_count effect",
+                LOG_INFO("BLITZ", "  COLD-START FIRE p=%d level=%d +5 score, combo-blitz-1 SFX, blitz_1 effect",
                          playerIdx, newCount);
             } else {
                 LOG_INFO("BLITZ", "  cold-start gate passed (speed>2.9) but FruitSaveData is null -- skipped");
@@ -1961,8 +1980,13 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
                 m_BlitzBonus[playerIdx] = newCount;
 
                 {
-                    char buf[40];
-                    std::snprintf(buf, sizeof(buf), "blitz_%d_count", level);
+                    // ASM-verified: 2026-05-23 binary @ 0x00123614..0x00123642 (re-analyst).
+                    // Continuation tier uses format "blitz_%i" (rodata @ 0x001ba76a),
+                    // composing "blitz_1".."blitz_6" -- matching the XML <effect name="blitz_N">
+                    // entries. Earlier port-side guess "blitz_%d_count" produced a hash
+                    // that never matched the pool, so blitz_2..blitz_6 popups never appeared.
+                    char buf[16];
+                    std::snprintf(buf, sizeof(buf), "blitz_%i", level);
                     PowerUpManager::GetInstance()->ActivateScreenEffect(StringHash(buf));
                 }
                 {
