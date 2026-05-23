@@ -9,7 +9,6 @@
 #include "MainScreen.h"
 #include "Game.h"
 #include "game/StartupEffects.h"
-#include "game/WaveManager.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
@@ -411,37 +410,32 @@ void GameModeScreen::Update(float dt) {
                 }
                 LOG_INFO("MODESEL", "%d -> STATE_CAMERA_FADE (camT done; levelTransitionFlag=%d gameMode=%d)",
                          (int)m_State, (int)game_work.m_LevelTransitionFlag, (int)game_work.gameMode);
+                // ASM-verified: 2026-05-22 binary @ 0x0013f366..0x0013f386
+                // (re-analyst). Tail of GameModeScreen::Update cases 3..6:
+                //   g_GameData->cameraFadeTimer = 0.0f;       // +0x0c
+                //   g_GameData->byte_0x5 = 0;                 // m_LevelTransitionFlag
+                //   this->m_bPendingRemoval = 1;
+                //   g_GameData->pMainScreen->m_State = 0x11;  // STATE_CAMERA_FADE
+                //   if (IsSameScreenMultiplayer()) for-each-Slash: ColoursChanged
+                // State 0x11 is a PASSIVE camera-fade wait state -- it does
+                // NOT call WaveManager::Reset(true)/NewGame() nor
+                // PowerUpManager::Reset(true) anywhere. The earlier
+                // misreading of [r5+0x160] as a child-object state machine
+                // was wrong (r5 was the GOT base, not MainScreen*).
+                //
+                // The binary's arcade-start path does NOT trigger
+                // PowerUpManager's m_bIsSpecial activation here. The real
+                // trigger for ready_set_go is elsewhere -- likely
+                // PowerUpManager::Update scanning specials with an
+                // in-game gate, or some other entry point not yet RE'd.
+                // TODO: find the real m_bIsSpecial activation site so
+                // ready_set_go / arcade_60seconds / arcade_go fire on
+                // arcade start. See Claude task #10.
                 game_work.mMainScreen->SetCameraTransition(0.0f);
                 game_work.m_LevelTransitionFlag = 0;
                 m_bPendingRemoval = 1;
                 game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
                 // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped
-
-                // DIFFERS: port-side band-aid -- call WaveManager::NewGame
-                // here so PowerUpManager::Reset(true) fires and activates
-                // m_bIsSpecial templates (ready_set_go etc.). The binary
-                // genuinely SKIPS STATE_GAME_START on the arcade
-                // GameModeScreen path (asm-inspector 2026-05-22 confirmed:
-                // binary @ 0x0013f382 writes 0x11/STATE_CAMERA_FADE
-                // directly, NOT 0x2/STATE_GAME_START). So
-                // WaveManager::Reset(true) / NewGame() is never reached
-                // via MainScreen's STATE_GAME_START case on the arcade
-                // path. Game::TellGameToStart (vtable slot 10 @ 0x0010dc80)
-                // is dead code in the binary.
-                //
-                // The binary's real activation chain is via the chain
-                // `[MainScreen+0x160]+0x10c = 0x11` -- i.e. the binary
-                // transitions a CHILD object's state, not MainScreen's
-                // own m_State. That child object's state machine likely
-                // owns the WaveManager::NewGame call internally. Port
-                // hasn't RE'd what lives at MainScreen+0x160 yet -- see
-                // Claude task #10 for the follow-up. Until then this
-                // direct NewGame() call produces the net runtime effect
-                // (automatic powerups activate, ready_set_go fires).
-                // TODO: 0x0013f382 -- resolve [MainScreen+0x160] target
-                // and replace this band-aid with the binary-faithful
-                // state-machine transition.
-                WaveManager::NewGame();
             }
         }
         break;
