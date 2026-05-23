@@ -299,17 +299,18 @@ void DebugHUDBounds_Draw() {
             // Inner region (yellow @ 70%): BGRA = B=0x00 G=0xFF R=0xFF A=0xB0
             static const uint32_t kInnerColour = 0xB000FFFF;
 
-            const float ox0 = sm->pos.x + sm->m_OuterRegion[0];
-            const float ox1 = sm->pos.x + sm->m_OuterRegion[3];
-            const float oy0 = sm->pos.y + sm->m_OuterRegion[1];
-            const float oy1 = sm->pos.y + sm->m_OuterRegion[2];
+            // Region layout: [0]=LEFT, [1]=TOP, [2]=RIGHT, [3]=BOTTOM.
+            const float ox0 = sm->pos.x + sm->m_OuterRegion[0];  // LEFT
+            const float oy1 = sm->pos.y + sm->m_OuterRegion[1];  // TOP
+            const float ox1 = sm->pos.x + sm->m_OuterRegion[2];  // RIGHT
+            const float oy0 = sm->pos.y + sm->m_OuterRegion[3];  // BOTTOM
             BuildAABBOutline(s_BoxVerts, ox0, ox1, oy0, oy1, -0.6f, 2.0f, kOuterColour);
             r->DrawTriList(s_BoxVerts, 24);
 
-            const float ix0 = sm->pos.x + sm->m_InnerRegion[0];
-            const float ix1 = sm->pos.x + sm->m_InnerRegion[3];
-            const float iy0 = sm->pos.y + sm->m_InnerRegion[1];
-            const float iy1 = sm->pos.y + sm->m_InnerRegion[2];
+            const float ix0 = sm->pos.x + sm->m_InnerRegion[0];  // LEFT
+            const float iy1 = sm->pos.y + sm->m_InnerRegion[1];  // TOP
+            const float ix1 = sm->pos.x + sm->m_InnerRegion[2];  // RIGHT
+            const float iy0 = sm->pos.y + sm->m_InnerRegion[3];  // BOTTOM
             BuildAABBOutline(s_BoxVerts, ix0, ix1, iy0, iy1, -0.7f, 1.5f, kInnerColour);
             r->DrawTriList(s_BoxVerts, 24);
 
