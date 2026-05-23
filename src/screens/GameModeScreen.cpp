@@ -9,6 +9,7 @@
 #include "MainScreen.h"
 #include "Game.h"
 #include "game/StartupEffects.h"
+#include "game/WaveManager.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
@@ -415,6 +416,19 @@ void GameModeScreen::Update(float dt) {
                 m_bPendingRemoval = 1;
                 game_work.mMainScreen->SetState(STATE_CAMERA_FADE);
                 // Binary: same-screen MP SlashEntity::ColoursChanged loop — skipped
+
+                // Call WaveManager::NewGame to fire the automatic-powerup
+                // activation pass (PowerUpManager::Reset(true) iterates
+                // m_AllPowerUps and activates every template with
+                // m_bIsSpecial=1 -- i.e. <power automatic="true">). Without
+                // this the arcade ready_set_go ScreenEffect (arcade_60seconds
+                // + arcade_go countdown overlay) never fires because nothing
+                // else in the port flow reaches NewGame for the
+                // GameModeScreen-initiated arcade start. Binary handles this
+                // via the Game::TellGameToStart handshake (slot 10 @
+                // 0x0010dc80) which is unwired in the port; this direct call
+                // matches the net effect.
+                WaveManager::NewGame();
             }
         }
         break;
