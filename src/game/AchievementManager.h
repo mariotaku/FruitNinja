@@ -122,6 +122,14 @@ private:
 
     std::map<uint32_t, AchievementInfo*> m_All;         // 0x000 (owns)
     std::map<uint32_t, AchievementInfo*> m_ByType[11];  // 0x018..0x108 (non-owning)
+
+    // Textures loaded in the preamble of LoadAchievementInfo (binary @ 0x00109188).
+    // Slot DAT_001096a8: achievment_banner.tex (sic — typo matches actual asset file).
+    Mortar::SmartPtr<Mortar::Texture> m_AchievementBannerTex;
+    // TODO: DAT_001096ac — identity of second preamble texture not yet RE'd.
+    Mortar::SmartPtr<Mortar::Texture> m_BannerExtra1;
+    // TODO: DAT_001096b0 — identity of third preamble texture not yet RE'd.
+    Mortar::SmartPtr<Mortar::Texture> m_BannerExtra2;
 };
 // Note: sizeof(AchievementManager) == 0x120 on ARM32 binary.
 // x64 port differs due to std::map size differences; assert omitted.
