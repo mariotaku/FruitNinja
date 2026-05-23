@@ -53,6 +53,12 @@ static int g_PowerFruitCount = 0;
 // Prevents multiple fruits chucked in the same frame from each playing the SFX.
 static bool s_FruitThrowSfxFiredThisFrame = false;
 
+// GetFruitZPosition counter (binary @ 0x001690cc).
+// Decrements by 100 per call, wraps back to -500 when it falls below -2499.
+// Constants from binary DATs: step=100 (DAT_00169108), lower=-2499 (DAT_0016910c),
+// reset=-500 (DAT_00169110).
+static float s_FruitZCounter = -500.0f;
+
 // Static Colour constants from _GLOBAL__I_Fruit.cpp @ 0x0017a354.
 // *DAT_0017a678: Colour(0x80, 0x80, 0xff, 0x80) = RGBA(128, 128, 255, 128)
 // Likely g_FruitOutlineTint or g_FruitGlowTint. Exact consumer not yet RE'd -- TODO.
@@ -163,6 +169,8 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_PlayerIdx = 0;
     m_TimeScale = 1.0f;
     flags &= ~ENT_SKIP_MASK;  // activate + unhide
+
+    m_ZPosition = GetFruitZPosition();
 
     // Reset slice state (binary Fruit::Init — m_SliceTimer = -1).
     m_SliceTimer   = -1.0f;
@@ -1182,6 +1190,8 @@ void Fruit::Slice() {
     m_SecondVel = halfVelA;
     vel         = halfVelB;
 
+    MoveFruitZPositionToBack(this);
+
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in Fruit::Slice)",
              static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = true;
@@ -1662,6 +1672,27 @@ Colour Fruit::FruitFactColour(long type) {
 // Binary @ 0x00174ff8
 const ::FruitInfo* Fruit::FruitInfo(long type) {
     return FruitInfo_Get((int)type);
+}
+
+// Binary @ 0x001690cc — return next z-slot and advance counter.
+// Counter starts at -500, decrements by 100 per call, resets to -500 when
+// it falls below -2499. DATs: step=100 (0x00169108), lower=-2499 (0x0016910c),
+// reset=-500 (0x00169110).
+// ASM-verified: 2026-05-23 binary @ 0x001690cc (re-analyst)
+float Fruit::GetFruitZPosition() {
+    s_FruitZCounter -= 100.0f;
+    if (s_FruitZCounter < -2499.0f) {
+        s_FruitZCounter = -500.0f;
+    }
+    return s_FruitZCounter;
+}
+
+// Binary @ 0x0016911c — move sliced fruit to back of z-order.
+// Formula from disassembly (VNMLS): *m_ZPosition = (500 + *m_ZPosition)*0.5 - 2600
+// DATs: addend=500 (0x0016913c), subtrahend=2600 (0x00169140), half=0.5 (vmov literal).
+// ASM-verified: 2026-05-23 binary @ 0x0016911c (re-analyst)
+void Fruit::MoveFruitZPositionToBack(Fruit* f) {
+    f->m_ZPosition = (500.0f + f->m_ZPosition) * 0.5f - 2600.0f;
 }
 
 // ============================================================
