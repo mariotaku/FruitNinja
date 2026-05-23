@@ -6,22 +6,6 @@
 
 using namespace Mortar;
 
-// ASM-verified: 2026-05-23 binary @ 0x001695e8 (re-analyst)
-// Preloads 6 in-game SFX: Time-tick, Time-tock, Critical, Combo-1..3.
-// Loop: OS_SPrintf(buf, 0x80, "%s%d", "Combo-", i) for i in [1,3].
-namespace {
-    void PreloadInGameSounds() {
-        SoundManager& mgr = SoundManager::GetInstance();
-        mgr.PreLoadSound("Time-tick");
-        mgr.PreLoadSound("Time-tock");
-        mgr.PreLoadSound("Critical");
-        char buf[0x80];
-        for (int i = 1; i != 4; ++i) {
-            snprintf(buf, sizeof(buf), "%s%d", "Combo-", i);
-            mgr.PreLoadSound(buf);
-        }
-    }
-}
 
 GameSound::GameSound()
     : m_MasterVolume(1.0f)
