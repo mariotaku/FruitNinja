@@ -319,13 +319,15 @@ void ShopScreen::CreateShopList() {
     // pre-populated from items.xml at init time. Port creates a local one.
     m_pShopList = new ScrollingMenu();
 
-    // Binary ShopScreen::Init at 0x0015f820 calls vtable[19] = SetHeight(80.0).
-    // Port previously left m_Height at the ctor default (240), making
-    // totalScrollH = 240 - 17*80 = -1120 and clipping the scroll range to
-    // -1120 -- the bottom 2 snap targets (-1200, -1280) became unreachable.
-    // With m_Height = 80 (one row), totalScrollH = 80 - 1360 = -1280, which
-    // covers every item's snap target.
-    m_pShopList->SetHeight(80.0f);
+    // Binary ShopScreen::Init at 0x0015f820 calls:
+    //   vtable[18] = SetWidth(80.0)      -- sets cross-axis touch bounds and m_ItemHeight
+    //   vtable[20] = SetItemHeight(80.0) -- sets m_Width (binary field38_0x9c)
+    // SetWidth is the call that updates the outer/inner touch region Y bounds.
+    // Port previously called SetHeight(80) which left m_OuterRegion[1]/[2] at ctor
+    // defaults (±120), causing an asymmetric dead zone in the lower screen quarter.
+    // ASM-verified: 2026-05-23 binary @ 0x0015f820 (re-analyst)
+    m_pShopList->SetWidth(80.0f);
+    m_pShopList->SetItemHeight(80.0f);
 
     // ScrollingMenu must live in the HUD so HUD::Update ticks its
     // Update (touch + scroll physics + per-item layout via Move) and
