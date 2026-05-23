@@ -76,6 +76,12 @@ AchievementManager* AchievementManager::GetInstance() {
 // ---------------------------------------------------------------------------
 
 void AchievementManager::LoadAchievementInfo() {
+    // ASM-verified: 2026-05-23 binary @ 0x00109188 (re-analyst)
+    // Binary loads "achievment_banner.tex" (sic) into DAT_001096a8 BEFORE opening the XML doc.
+    m_AchievementBannerTex = TextureManager::LoadLocalisedTexture("achievment_banner.tex");
+    // TODO: DAT_001096ac — load second preamble texture (identity not yet RE'd).
+    // TODO: DAT_001096b0 — load third preamble texture (identity not yet RE'd).
+
     // Binary: parses Data/xml/achievementlist.xml
     // Root: <achievementManagerFile> -> <achievement> children
     std::string path;
