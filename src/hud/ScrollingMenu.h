@@ -24,8 +24,8 @@
 //  field59_0x9c       | +0x9c         | m_Width   (DAT_0015b468 = 320.0f)
 //  field60_0xa0       | +0xa0         | m_Height  (DAT_0015b46c = 240.0f)
 //  field61_0xa4       | +0xa4         | m_ItemHeight (DAT_0015b470 = -120.0f)
-//  field62_0xa8       | +0xa8         | m_TotalWidth
-//  field63_0xac       | +0xac         | m_TotalHeight
+//  field41_0xa8       | +0xa8         | m_TotalHeight  (AddItem += GetHeight())
+//  field42_0xac       | +0xac         | m_TotalWidth   (AddItem += GetWidth())
 //  (std::vector)      | +0xb0..+0xbb  | m_Items
 //  field76_0xbc       | +0xbc         | m_ClosestIdx
 //  field78_0xc4       | +0xc4         | m_SnapDist  (snap-dist acc; init 1.0f)
@@ -91,6 +91,12 @@ public:
     // Only active when m_fieldCA != 0.
     ScrollingMenuItem* Collide(int touchSlot);
 
+    // Inline accessors — binary @ 0x0014797c..0x001479dc
+    int   GetType() override { return 8; }            // 0x0014797c
+    float GetHeight() const        { return m_Height; }            // 0x00147988 reads +0xa0
+    float GetWidth()  const        { return m_ItemHeight; }        // 0x00147990 reads +0xa4 (port name swap)
+    float GetItemHeight() const    { return m_Width; }             // 0x001479dc reads +0x9c (port name swap)
+
     // Width/height setters
     // SetWidth @ 0x001479a0: writes field40_0xa4 (port: m_ItemHeight — field-name
     // swap vs binary semantics; names preserved to avoid mangled-symbol drift) and
@@ -129,10 +135,10 @@ public:
     // +0xa4: outer-region half-height used in touch rect setup (DAT_0015b470 = -120.0f)
     float m_ItemHeight;
 
-    // +0xa8: total scroll width accumulator (field62_0xa8, updated by AddItem)
-    float m_TotalWidth;
-    // +0xac: total scroll height accumulator (field63_0xac, updated by AddItem)
+    // +0xa8: total scroll height accumulator (field41_0xa8, updated by AddItem += GetHeight())
     float m_TotalHeight;
+    // +0xac: total scroll width accumulator (field42_0xac, updated by AddItem += GetWidth())
+    float m_TotalWidth;
 
     // +0xb0..+0xbb: item list (Sourcery pre-C++11 std::vector = 12 bytes)
     std::vector<ScrollingMenuItem*> m_Items;
@@ -206,7 +212,8 @@ public:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(offsetof(ScrollingMenu, m_TotalHeight)    == 0xac, "ScrollingMenu::m_TotalHeight offset");
+static_assert(offsetof(ScrollingMenu, m_TotalHeight)    == 0xa8, "ScrollingMenu::m_TotalHeight offset");
+static_assert(offsetof(ScrollingMenu, m_TotalWidth)     == 0xac, "ScrollingMenu::m_TotalWidth offset");
 static_assert(offsetof(ScrollingMenu, m_Items)          == 0xb0, "ScrollingMenu::m_Items offset");
 static_assert(offsetof(ScrollingMenu, m_ClosestIdx)     == 0xbc, "ScrollingMenu::m_ClosestIdx offset");
 static_assert(offsetof(ScrollingMenu, m_DragTargetIdx)  == 0xc0, "ScrollingMenu::m_DragTargetIdx offset");
