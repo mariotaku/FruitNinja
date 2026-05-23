@@ -119,8 +119,8 @@ public:
 
 public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ItemManager::EquipItem -- auto stub from binary missing-symbol set
-    void EquipItem(unsigned int);
+    // EquipItem @ 0x00103198 — equip item by hash; returns 1 on success.
+    int EquipItem(unsigned int hash);
     // PlayAlternateComboSound @ 0x0011303c — plays combo sound from equipped blade mod.
     // Returns true if an alternate sound was played (suppresses default combo SFX).
     bool PlayAlternateComboSound(int);
@@ -133,8 +133,8 @@ public:
     bool PlayAlternateSwipeSound(float volume, float pitch);
     // STUB: ItemManager::SetSwipeLoodVol -- auto stub from binary missing-symbol set
     void SetSwipeLoodVol(float);
-    // STUB: ItemManager::UnequipItem -- auto stub from binary missing-symbol set
-    void UnequipItem(unsigned int);
+    // UnequipItem @ 0x0010314c — unequip item by hash; returns true if found.
+    bool UnequipItem(unsigned int hash);
     // STUB: ItemManager::Update -- auto stub from binary missing-symbol set
     void Update(float);
     // ---- end AUTO-STUB MERGE ----

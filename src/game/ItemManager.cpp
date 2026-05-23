@@ -463,8 +463,43 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
 }
 
 // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ItemManager::EquipItem -- auto stub
-void ItemManager::EquipItem(unsigned int) {}
+
+// -----------------------------------------------------------------------
+// EquipItem @ 0x00103198 (ELF) / 0x00113198 (Ghidra)
+// Equip item by hash. Returns 1 on success, 0 if not found or not purchased.
+// Binary: lookup m_ByHash; gate on m_Cost < 0; UnEquip current slot; SetEquippedItem.
+// ASM-verified: 2026-05-23 binary @ 0x00103198 (re-analyst)
+// -----------------------------------------------------------------------
+int ItemManager::EquipItem(unsigned int hash) {
+    std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find((uint32_t)hash);
+    if (it == m_ByHash.end()) return 0;
+    ItemInfo* item = it->second;
+    if (item->m_Cost >= 0) return 0;
+
+    // Call UnEquip() on currently-equipped item in this slot (virtual slot +8)
+    ItemInfo* current = m_DefaultItems[(int)(int8_t)item->m_Type];
+    if (current != nullptr) {
+        current->UnEquip();
+    }
+    SetEquippedItem((int)(int8_t)item->m_Type, item);
+    return 1;
+}
+
+// -----------------------------------------------------------------------
+// UnequipItem @ 0x0010314c (ELF) / 0x0011314c (Ghidra)
+// Unequip item by hash. Returns true if item was found.
+// Binary: lookup m_ByHash; if found, UnEquip() + SetEquippedItem(type, nullptr).
+// ASM-verified: 2026-05-23 binary @ 0x0010314c (re-analyst)
+// -----------------------------------------------------------------------
+bool ItemManager::UnequipItem(unsigned int hash) {
+    std::map<uint32_t, ItemInfo*>::iterator it = m_ByHash.find((uint32_t)hash);
+    if (it == m_ByHash.end()) return false;
+    ItemInfo* item = it->second;
+    item->UnEquip();
+    SetEquippedItem((int)(int8_t)item->m_Type, nullptr);
+    return true;
+}
+
 // PlayAlternateComboSound @ 0x0011303c
 bool ItemManager::PlayAlternateComboSound(int comboIdx) {
     SlashModInfo* m = static_cast<SlashModInfo*>(m_DefaultItems[0]);
@@ -473,10 +508,9 @@ bool ItemManager::PlayAlternateComboSound(int comboIdx) {
 }
 // -----------------------------------------------------------------------
 // PlayAlternateImpactSound @ 0x00113054
-// Delegates to m_pCurrentSlashMod->m_ImpactSounds.PlaySound(-1, volume, pitch).
-// Returns true iff a sound played (suppresses per-fruit impact-N iteration).
-// TODO: stash m_pCurrentSlashMod once SetEquipped binds it; until then always
-// falls through to the per-fruit sounds path (returns false).
+// Binary: *(int*)this == m_DefaultItems[0] (first field = blade slot pointer).
+// Dereferences to SlashModInfo, calls m_ImpactSounds.PlaySound(-1, vol, pitch).
+// ASM-verified: 2026-05-23 binary @ 0x00113054 / 0x00113068 (re-analyst)
 // -----------------------------------------------------------------------
 bool ItemManager::PlayAlternateImpactSound(float volume, float pitch) {
     SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
@@ -486,10 +520,7 @@ bool ItemManager::PlayAlternateImpactSound(float volume, float pitch) {
 
 // -----------------------------------------------------------------------
 // PlayAlternateSwipeSound @ 0x00113068
-// Delegates to m_pCurrentSlashMod->m_SwipeSounds.PlaySound(-1, volume, pitch).
-// Returns true iff a sound played (suppresses default Sword-swipe SFX).
-// TODO: stash m_pCurrentSlashMod once SetEquipped binds it; until then always
-// falls through to the default swipe path (returns false).
+// Binary: *(int*)this == m_DefaultItems[0]; calls m_SwipeSounds.PlaySound(-1, vol, pitch).
 // -----------------------------------------------------------------------
 bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
     SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
@@ -498,8 +529,6 @@ bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
 }
 // STUB: ItemManager::SetSwipeLoodVol -- auto stub
 void ItemManager::SetSwipeLoodVol(float) {}
-// STUB: ItemManager::UnequipItem -- auto stub
-void ItemManager::UnequipItem(unsigned int) {}
 // STUB: ItemManager::Update -- auto stub
 void ItemManager::Update(float) {}
 // ---- end AUTO-STUB MERGE ----
