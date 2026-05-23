@@ -1,5 +1,6 @@
 // Analysed: 2026-05-04T08:00
 #include "audio/GameSound.h"
+#include "debug/Logger.h"
 #include <cstring>
 #include <cstdio>
 
@@ -53,7 +54,14 @@ int GameSound::FindFree() {
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float pitch,
                                  const Mortar::Delegate1<bool, MortarSound*>& finishCallback) {
     int i = FindFree();
-    if (i == -1) return NULL;
+    if (i == -1) {
+        LOG_INFO("SFX", "SFXPlay('%s', vol=%.2f, pitch=%.2f) -- NO FREE SLOT",
+                 name ? name : "(null)", vol, pitch);
+        return NULL;
+    }
+
+    LOG_INFO("SFX", "SFXPlay('%s', vol=%.2f, pitch=%.2f, master=%.2f) slot=%d",
+             name ? name : "(null)", vol, pitch, m_MasterVolume, i);
 
     SoundManager& mgr = SoundManager::GetInstance();
     mgr.SFXPlay(name, m_Slots[i].sound);
