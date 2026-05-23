@@ -240,6 +240,18 @@ void WaveManager::Init() {
         {
             WAVE_INFO* wi = new WAVE_INFO();
             wi->m_WaveIndex = waveIndex++;
+            // ASM-verified: 2026-05-22 binary @ 0x001267c8 (re-analyst).
+            // Binary uses a defaults-taking WAVE_INFO ctor that copies
+            // DEFAULT_WAVE_INFO.field_0x2c (m_bAllowBombs) and field_0x2d
+            // (m_bWaitForProcessing) into the new WAVE_INFO. Port stores
+            // these on WaveManager (field_0x108/0x109); propagate them
+            // here so per-wave m_bWaitForProcessing inherits the XML's
+            // <defaults waitForProcessing> value when absent on the
+            // wave's own <NextWaveDelay>. NOTE: m_bWaitForEntities is
+            // NOT in DEFAULT_WAVE_INFO -- the binary hardcodes the
+            // WAVE_INFO ctor default for it (typically 1), only
+            // overridden by <NextWaveDelay waitForEntities>.
+            wi->m_bWaitForProcessing = field_0x109;
 
             // waveNo attr -> binary stores to local then +0x0 (m_ScoreThreshold) via conditional.
             // m_OverideProbabilityPool also written to +0x70 (second read wins in binary).
@@ -1462,14 +1474,21 @@ void WaveManager::ClearUnspawned() {
 // IsWaveProcessing — per wave-system-impl.md §4
 // ----------------------------------------------------------------------------
 
-// ASM-verified: 2026-04-30T07:15 binary @ 0x00122a40..0x00122ad6 (asm-inspector)
+// ASM-verified: 2026-05-22 binary @ 0x00122a40..0x00122ad6 (re-analyst).
+// Updated 2026-05-22: restored the entry-flag gate (was incorrectly removed
+// as "invented" -- the binary genuinely has `ldrb r3,[r4,#0x23c+p]; cbz r3, ...`
+// at 0x00122a48). Flag is set by Reset (field_0x23c = 1 for player 0) and
+// by UpdateWave's per-spawn loop (line 1209 `field_0x23c = 1` after each
+// SpawnFruit/SpawnBomb). Flag is cleared by IsWaveProcessing tail when
+// "nothing left to wait for". This stateful counter lets IsWaveProcessing
+// return false immediately on the frame AFTER the last entity drained,
+// matching binary semantics that prevent the tight GetNextWave loop.
 bool WaveManager::IsWaveProcessing(int playerIdx) {
-    // Binary @ 0x00122a48 loads flag = (&field_0x23c)[p] but does NOT
-    // branch on it at entry. The flag is referenced only at the exit
-    // (LAB_ac4 stores 0). The earlier port-side `if (!flag) return false`
-    // short-circuit was an invented gate -- once any frame cleared the
-    // flag, every subsequent frame returned false and GetNextWave fired
-    // in a tight loop. Removed.
+    // Entry-flag gate (binary @ 0x00122a48). If the per-player wave-active
+    // flag is 0, no wave activity is in progress for this player -- return
+    // false without checking entities or clearing the flag.
+    if ((&field_0x23c)[playerIdx] == 0) return false;
+
     WAVE_INFO* w = m_pCurrentWave[playerIdx];
 
     if (playerIdx == 0) {
