@@ -47,6 +47,9 @@ static const float kTextOffsetScalar = 250.0f;    // pfVar14[6] timerArr+0x18 @ 
 // ---------------------------------------------------------------------------
 
 static int s_BonusCoinCounter = 0;
+// Per-award explosion SFX counter: starts at 1, increments by 2 per award.
+// Binary @ 0x00132f2c: uVar17 starts at 1 and += 2 per reveal.
+static uint32_t s_BonusExplosionCounter = 1;
 
 static void AddToScoreOnArrival(Coin* coin) {
     if (!coin) return;
@@ -114,6 +117,7 @@ BonusScreen::BonusScreen()
       // Negative phase = slide-in animation; transitions to 0 then positive
       // for the reveal beats.
       m_PhaseTimer(-kRevealHalfBeat),
+      m_bDrumRollFired(false),
       m_PosOffset(0.0f, 0.0f, 0.0f),
       _padfield23(0),
       _padfield24(0)
@@ -355,6 +359,24 @@ void BonusScreen::Update(float dt) {
     // Compute finaleStart: revealStart + perAward * (numAwards + 0.25)
     float finaleStart = kRevealStart + kPerAward * ((float)m_Awards.size() + 0.25f);
 
+    // ASM-verified: 2026-05-23 binary @ 0x001329d8 / 0x00132c14 (re-analyst)
+    // Drum-roll fires once when m_PhaseTimer crosses kRevealStart - kHalfBeat
+    // from below (ascending timer). Binary gates: prevTimer > thresh >= newTimer
+    // in a descending-timer context; equivalent ascending-timer gate: timer >= thresh
+    // and not yet fired.
+    // DAT_00132ccc = kRevealStart (0.66597), threshold = kRevealStart - kHalfBeat.
+    {
+        float drumRollThresh = kRevealStart - kRevealHalfBeat;
+        if (!m_bDrumRollFired && m_PhaseTimer >= drumRollThresh) {
+            m_bDrumRollFired = true;
+            // Reset per-award explosion counter for this BonusScreen instance.
+            s_BonusExplosionCounter = 1;
+            if (game_work.mGameSound) {
+                game_work.mGameSound->SFXPlay("Bonus-drum-roll", 1.0f, 1.0f);
+            }
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Phase B: per-award reveal (0 <= timer < finaleStart)
     // -----------------------------------------------------------------------
@@ -387,6 +409,22 @@ void BonusScreen::Update(float dt) {
                 float angle = beat * 115.0f * 182.0f * (2.0f * 3.14159265f / 65536.0f);
                 float denom = 0.882f;  // sinf(0x5550 * 2*pi/65536) ~= 0.882
                 entry.m_Scale = sinf(angle) / denom;
+
+                // ASM-verified: 2026-05-23 binary @ 0x00132f2c (re-analyst)
+                // Fire per-award explosion SFX on first beat entry (beat < dt threshold).
+                // Binary: uVar17 starts at 1, += 2 per award (1, 3, 5, 7, ...).
+                // SFX volume = DAT_001330b4 = 1.0f.
+                // Gate: this fires at the onset of the beat (normT transitions 0->small).
+                // Use beat < kPerAward * 0.05f as a narrow one-frame-wide onset window.
+                if (beat < kPerAward * 0.05f) {
+                    char sfxName[32];
+                    snprintf(sfxName, sizeof(sfxName), "Bonus-Explosion-%u",
+                             (unsigned)s_BonusExplosionCounter);
+                    if (game_work.mGameSound) {
+                        game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
+                    }
+                    s_BonusExplosionCounter += 2;
+                }
             }
             m_DisplayedScore += entry.m_DisplayedScore;
         }

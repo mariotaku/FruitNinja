@@ -62,6 +62,9 @@ public:
     uint8_t                          _pad3;                   // +0xB3
     Mortar::MortarSound*             m_RushSFX;               // +0xB4
     float                            m_PhaseTimer;            // +0xB8
+    // Port: drum-roll one-shot latch (no binary field; latch needed because
+    // m_PhaseTimer is written externally each frame and there is no prev-timer field).
+    bool                             m_bDrumRollFired;        // port-side latch
     Vec3                             m_PosOffset;             // +0xBC
     int                              _padfield23;             // +0xC8
     int                              _padfield24;             // +0xCC
