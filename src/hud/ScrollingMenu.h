@@ -92,7 +92,13 @@ public:
     ScrollingMenuItem* Collide(int touchSlot);
 
     // Width/height setters
-    void SetWidth(float w)      { m_Width = w; }
+    // Binary SetWidth @ 0x00147998: writes field40_0xa4 (port m_ItemHeight) AND
+    // recomputes m_OuterRegion[1]/[2] (cross-axis Y bounds) and m_InnerRegion[1]/[2].
+    // DIFFERS: port field names m_Width/m_ItemHeight are swapped vs binary semantics;
+    // SetWidth correctly writes m_ItemHeight (per binary field40_0xa4) and updates
+    // the outer/inner region cross-axis bounds. Names preserved to avoid mangling drift.
+    // ASM-verified: 2026-05-23 binary @ 0x00147998 (re-analyst)
+    void SetWidth(float w);
     void SetHeight(float h)     { m_Height = h; }
     void SetItemHeight(float h) { m_ItemHeight = h; }
 

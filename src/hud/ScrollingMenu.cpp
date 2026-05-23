@@ -114,6 +114,23 @@ ScrollingMenu::~ScrollingMenu() {
 }
 
 // ---------------------------------------------------------------------------
+// ScrollingMenu::SetWidth @ 0x00147998
+// Writes field40_0xa4 (port: m_ItemHeight — names swapped vs binary semantics,
+// preserved to avoid mangled-symbol drift) and recomputes the cross-axis
+// (Y in centered-ortho) bounds for outer/inner touch regions.
+// Binary: field40_0xa4 = w; then recomputes outer[1]/[2] and inner[1]/[2]
+// using HALF = w * 0.5.
+// ---------------------------------------------------------------------------
+void ScrollingMenu::SetWidth(float w) {
+    m_ItemHeight = w;
+    const float HALF = w * 0.5f;
+    m_OuterRegion[1] = -HALF;
+    m_OuterRegion[2] =  HALF;
+    m_InnerRegion[1] = -HALF * 0.5f;
+    m_InnerRegion[2] =  HALF * 0.5f;
+}
+
+// ---------------------------------------------------------------------------
 // ScrollingMenu::Collide @ 0x0015af4c
 // Walks m_Items calling vtable[+0x34] (Slot13) on each.
 // Returns the first item that returns non-null, or nullptr.
