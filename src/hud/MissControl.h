@@ -29,7 +29,7 @@
 //      lazy-loads the 4 shared textures (critical.tex,
 //      ultra_rare_plus_50.tex, hud_cross.tex, and combo_%d.tex for 3..10).
 //   2. Make* picks a pool slot via GetFree, populates pos/texture/anim
-//      state, sets m_bActive = 1 (binary field_0x30 = HUDControl::m_bActive).
+//      state, sets m_Active = 1 (binary field_0x30 = HUDControl::m_Active).
 //   3. Update fades m_FadeAlpha to 0 via linear dt*s_DtMod*m_AlphaScale,
 //      then clears m_bActive so GetFree can re-use the slot.
 //   4. HUD::Draw renders each busy slot via HUDControl3d::Draw.
@@ -50,7 +50,7 @@ public:
     // The binary's struct layout (size=0x94, audited 2026-04-30 + corrected 2026-05-18):
     //
     // +0x2c: float   m_Timer (rotation degrees; used as SinIdx(rot*182) in Draw)
-    // +0x30: uint8   m_bActive (HUDControl base) -- pool busy flag; GetFree reads this
+    // +0x30: uint8   m_Active (HUDControl base) -- pool busy flag; GetFree reads this
     // +0x34: uint32  m_LayerFlags / "configured" flag (Init writes 1)
     // +0x5c: uint8   RGBA tint b,g,r,a (Init copies from DAT default colour)
     // +0x74: Mortar::SmartPtr<Texture> bound texture (HUDControl3d base)

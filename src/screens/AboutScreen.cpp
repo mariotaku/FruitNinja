@@ -202,7 +202,7 @@ void AboutScreen::Init()
 {
     m_State = 0;
     m_TransitionAlpha = 0.0f;
-    m_bActive = 1;
+    m_Active = 1;
 }
 
 // -----------------------------------------------------------------------

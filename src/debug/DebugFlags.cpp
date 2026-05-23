@@ -285,7 +285,7 @@ void DebugHUDBounds_Draw() {
     for (std::list<HUDControl*>::const_iterator it = controls.begin();
          it != controls.end(); ++it) {
         HUDControl* ctrl = *it;
-        if (!ctrl || !ctrl->m_bActive) continue;
+        if (!ctrl || !ctrl->m_Active) continue;
 
         // ScrollingMenu: overlay the touch-acquire regions BEFORE the
         // size==0 gate, since ScrollingMenu typically has size=(0,0) but

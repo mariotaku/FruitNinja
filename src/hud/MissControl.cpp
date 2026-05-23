@@ -84,7 +84,7 @@ MissControl::MissControl()
     , m_ComboCount(0)
     , m_AlphaScale(1.0f)
 {
-    m_bActive       = 0;   // pool slot starts free; Init/Make* sets to 1
+    m_Active        = 0;   // pool slot starts free; Init/Make* sets to 1
     m_bNoDestructor = 1;
     // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
     m_LayerFlags    = Mortar::HUD_LAYER_DEFAULT;
@@ -102,13 +102,13 @@ void MissControl::Release() {
 // vtable[4] @ 0x00150fa4
 void MissControl::Init() {
     m_bComboActive = 0;
-    m_bActive      = 1;   // binary field_0x30 = 1; marks slot as busy/active
+    m_Active       = 1;   // binary field_0x30 = 1; marks slot as busy/active
     m_Timer        = 0.0f;  // rotation (+0x2c)
     m_AnimState    = 0;
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
     m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
     m_FadeAlpha    = 0.0f;
-    m_bActive      = 1;   // binary writes field_0x30 twice (second write is redundant but faithful)
+    m_Active       = 1;   // binary writes field_0x30 twice (second write is redundant but faithful)
     m_ComboCount   = 0;
     m_bUseSound    = 0;
     m_AlphaScale   = 1.0f;
@@ -125,7 +125,7 @@ void MissControl::Reset() {
     m_JitterTimer  = 0;
     m_bVisible     = 0;
     if (m_FadeAlpha > 0.0f) {
-        m_bActive      = 0;   // binary field_0x30 = 0; frees slot
+        m_Active       = 0;   // binary field_0x30 = 0; frees slot
         m_DrawColour.a = 0;
     }
 }
@@ -253,7 +253,7 @@ MissControl* MissControl::GetFree() {
     if (!s_PoolAllocated) return nullptr;
     int idx = s_NextSlot;
     for (int tries = 0; tries < MISS_POOL_SIZE; ++tries) {
-        if (s_Pool[idx] && s_Pool[idx]->m_bActive == 0) break;
+        if (s_Pool[idx] && s_Pool[idx]->m_Active == 0) break;
         idx = (idx + 1) % MISS_POOL_SIZE;
     }
     s_NextSlot = idx;  // binary leaves cursor at found slot, not +1
@@ -270,7 +270,7 @@ static void PopulateOverlay(MissControl* mc, const Vec3& pos,
     mc->m_FadeAlpha  = MISS_FADE_INIT;
     mc->m_AnimState  = 3;
     mc->m_AlphaScale = alphaScale;
-    mc->m_bActive    = 1;   // binary field_0x30 = 1; marks slot busy
+    mc->m_Active     = 1;   // binary field_0x30 = 1; marks slot busy
     mc->m_bComboActive = 1;
     mc->m_JitterTimer = 0;   // field_0x7e = 0. binary @ 0x001518b8
     mc->m_DrawColour.a = 0xff;  // field_0x5f = 0xff. binary @ 0x001518b4
@@ -374,7 +374,7 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         m_JitterTimer  = 0;
         m_bComboActive = 1;
         size = Vec3((float)(tex->m_Width + 1), (float)(tex->m_Height + 1), 0.0f);
-        m_bActive      = 1;   // binary field_0x30 = 1; marks slot busy
+        m_Active       = 1;   // binary field_0x30 = 1; marks slot busy
         // No screen clamp on path 1. binary @ 0x00151d94
     } else {
         // Path 2: fruit miss-penalty (invalid SmartPtr = use existing texture).
@@ -391,7 +391,7 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         // DAT_00151f50 = 240.0, DAT_00151f54 = 160.0 (centred-ortho half-extents).
         pos.x = std::max(size.x * 0.5f - MISS_CLAMP_HALF_X, std::min(pos.x, MISS_CLAMP_HALF_X - size.x * 0.5f));
         pos.y = std::max(size.y * 0.5f - MISS_CLAMP_HALF_Y, std::min(pos.y, MISS_CLAMP_HALF_Y - size.y * 0.5f));
-        m_bActive      = 1;   // binary field_0x30 = 1; marks slot busy
+        m_Active       = 1;   // binary field_0x30 = 1; marks slot busy
         if (s_TexCross.IsValid()) m_Texture = s_TexCross;
     }
 }
@@ -400,12 +400,12 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
 
 // binary @ 0x00151a60
 // ASM-verified: 2026-05-09 binary @ 0x00151a60 (re-analyst — passive miss-counter
-// path identified). Binary does NOT short-circuit on m_bActive at function entry;
+// path identified). Binary does NOT short-circuit on m_Active at function entry;
 // the m_bComboActive gate around the separation block was previously confused
-// with an m_bActive gate.
+// with an m_Active gate.
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
-    // Their m_AnimState is 0/1/2 (slot index); m_bActive stays 0.
+    // Their m_AnimState is 0/1/2 (slot index); m_Active stays 0.
     // Toggle m_bVisible based on game_work.missCount vs m_AnimState — when the
     // player has missed at least (m_AnimState + 1) fruits, the X marker
     // turns red. binary @ 0x00151a60 lines 1-10.
@@ -423,7 +423,7 @@ void MissControl::Update(float dt) {
         float accX = 0.0f, accY = 0.0f;
         for (int k = 0; k < MISS_POOL_SIZE; ++k) {
             MissControl* other = s_Pool[k];
-            if (!other || other == this || !other->m_bActive) continue;
+            if (!other || other == this || !other->m_Active) continue;
             float dx = other->pos.x - pos.x;
             float dy = other->pos.y - pos.y;
             float distSq = dx*dx + dy*dy;
@@ -510,7 +510,7 @@ void MissControl::Update(float dt) {
     if (m_FadeAlpha <= 0.0f) {
         m_FadeAlpha = 0.0f;
         // ASM-verified: 2026-05-20 binary @ 0x00151d0a (re-analyst)
-        // Binary fires m_RemoveCallback BEFORE writing m_bActive = 0.
+        // Binary fires m_RemoveCallback BEFORE writing m_Active = 0.
         // For combo popups, SlashEntity::Update has bound the callback to
         // SlashEntity::MissControlDeleted (binary @ 0x0017d900..0x0017d908)
         // which nulls its m_pComboMissControl back-pointer.
@@ -519,7 +519,7 @@ void MissControl::Update(float dt) {
         // delegates are safe to invoke (Delegate1::operator() no-ops when
         // m_bEmpty != 0), so no guard is needed.
         m_RemoveCallback(this);
-        m_bActive      = 0;
+        m_Active       = 0;
         m_bComboActive = 0;
     }
 }
@@ -552,9 +552,9 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // ASM-verified: 2026-05-11 binary @ 0x00151f60 first ~20 instructions
     // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
     // m_bVisible -- those are UV-pickers later in the function, not gates.
-    // The disappear mechanism for finished combo popups is the m_bActive=0
+    // The disappear mechanism for finished combo popups is the m_Active=0
     // write in Update's slot-release tail (binary @ MissControl::Update);
-    // HUD::Draw filters on m_bActive (src/hud/HUD.cpp:88) so this Draw
+    // HUD::Draw filters on m_Active (src/hud/HUD.cpp:88) so this Draw
     // doesn't even get called for released slots.
 
     // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block

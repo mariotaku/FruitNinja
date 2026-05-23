@@ -70,7 +70,7 @@ void HUD::RemoveControl(HUDControl* ctrl) {
 // Binary @ 0x00144b28
 void HUD::BeginDraw(float dt) {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
-        if ((*it)->m_bActive)
+        if ((*it)->m_Active)
             (*it)->BeginDraw(dt);
     }
 }
@@ -86,7 +86,7 @@ void HUD::Draw(int layerMask) {
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* ctrl = *it;
-        if (ctrl->m_bActive && (layerMask & ctrl->m_LayerFlags)) {
+        if (ctrl->m_Active && (layerMask & ctrl->m_LayerFlags)) {
             // m_bUseHUDScales != 0 (default): receives gameplay-mutable tint window.
             // m_bUseHUDScales == 0: receives identity (1,1,1) — opted out of tint.
             const Vec3& scaleVec = ctrl->m_bUseHUDScales ? hudScale : identityScale;
@@ -106,7 +106,7 @@ void HUD::Update(float dt) {
 
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ) {
         HUDControl* ctrl = *it;
-        if (ctrl->m_bActive)
+        if (ctrl->m_Active)
             ctrl->Update(dt);
 
         ctrl = *it;
