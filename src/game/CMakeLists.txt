@@ -31,4 +31,6 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreState.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpecificOrder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveSyncPacket.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitSlicedPacket.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CoinChanceinator.cpp
 )

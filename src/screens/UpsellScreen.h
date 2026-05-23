@@ -19,6 +19,12 @@ public:
 
     ~UpsellScreen() override {}
 
+    // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x00166d20
+    static UpsellScreen* MakeMainUpsellScreen(Mortar::Delegate0<void> onDone);
+
+    // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x00166708
+    static UpsellScreen* MakeModeUpsellScreen(Mortar::Delegate0<void> onDone, int mode);
+
 private:
     // Pad to binary sizeof 0x1EC; HUDControl3d is 0x7C, Delegate<void()> is variable per platform.
     // Binary layout preserved via padding so any subclass offset math stays correct.
