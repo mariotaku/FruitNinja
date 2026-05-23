@@ -124,10 +124,13 @@ public:
     // PlayAlternateComboSound @ 0x0011303c — plays combo sound from equipped blade mod.
     // Returns true if an alternate sound was played (suppresses default combo SFX).
     bool PlayAlternateComboSound(int);
-    // STUB: ItemManager::PlayAlternateImpactSound -- auto stub from binary missing-symbol set
-    void PlayAlternateImpactSound(float, float);
-    // STUB: ItemManager::PlayAlternateSwipeSound -- auto stub from binary missing-symbol set
-    void PlayAlternateSwipeSound(float, float);
+    // PlayAlternateImpactSound @ 0x00113054 — delegates to m_pCurrentSlashMod->m_ImpactSounds.PlaySound.
+    // Returns true iff an alternate sound played (suppresses per-fruit impact SFX iteration).
+    // ASM-verified: 2026-05-23 binary @ 0x00113054 / 0x00113068 (re-analyst)
+    bool PlayAlternateImpactSound(float volume, float pitch);
+    // PlayAlternateSwipeSound @ 0x00113068 — delegates to m_pCurrentSlashMod->m_SwipeSounds.PlaySound.
+    // Returns true iff an alternate sound played (suppresses default Sword-swipe SFX).
+    bool PlayAlternateSwipeSound(float volume, float pitch);
     // STUB: ItemManager::SetSwipeLoodVol -- auto stub from binary missing-symbol set
     void SetSwipeLoodVol(float);
     // STUB: ItemManager::UnequipItem -- auto stub from binary missing-symbol set

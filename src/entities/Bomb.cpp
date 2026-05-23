@@ -341,6 +341,7 @@ static inline void AccelGrowth(Vec3& vel, Vec3& accel, float dtNorm) {
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x001729fc (asm-inspector)
 // ASM-verified: 2026-05-20 binary @ Bomb::Update (re-analyst) -- no IsActive early-return; tail OOB-kill must always fire.
+// ASM-verified: 2026-05-23 binary @ 0x001729FC (re-analyst) -- Throw-bomb SFX on countdown negative-going edge via bFuseSfxFiredThisFrame gate.
 // Matches Bomb::Update (0x001729fc, 195 lines).
 void Bomb::Update(float /*dt*/) {
     Game* game = Game::GetInstance();
@@ -370,6 +371,20 @@ void Bomb::Update(float /*dt*/) {
                 m_Countdown -= gameDt;
             }
 
+            // Binary @ 0x001729FC: "Throw-bomb" SFX fires on the negative-going
+            // edge of countdown crossing DAT_00172CA0 (0.2f). Gate is
+            // g_bombData.bFuseSfxFiredThisFrame (+0x08), which Bomb::Draw
+            // clears every frame. Set non-zero here to prevent re-fire within
+            // the same frame across multiple bombs.
+            static const float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
+            if (prevCountdown >= FUSE_SFX_THRESHOLD && m_Countdown < FUSE_SFX_THRESHOLD) {
+                if (!g_bombData.bFuseSfxFiredThisFrame) {
+                    g_bombData.bFuseSfxFiredThisFrame = 1;
+                    if (game_work.mGameSound)
+                        game_work.mGameSound->SFXPlay("Throw-bomb", 1.0f, 1.0f);
+                }
+            }
+
             // DIFFERS (port-side simplification): the binary @ 0x00172bd8
             // fires a per-bomb "Bomb-Fuse" SFXPlay here (gated by
             // bFuseSfxFiredThisFrame on Bomb global +0x08). The Bomb-Fuse
@@ -383,8 +398,7 @@ void Bomb::Update(float /*dt*/) {
             // this fixes the user-reported "fuse hiss doesn't stop after
             // explosion" by ensuring the only Bomb-Fuse handle is the one
             // GameUpdate volume-modulates to 0 when no bombs are present.
-            static const float FUSE_SFX_THRESHOLD = 0.2f;  // DAT_00172ca0
-            (void)prevCountdown; (void)FUSE_SFX_THRESHOLD;
+            (void)prevCountdown;
 
             if (m_Countdown > 0.0f) return;
 
@@ -897,7 +911,8 @@ void Bomb::SetForPlayer(Bomb* b, int playerIdx) {
     b->m_BombVariant = playerIdx;
 }
 
-// ASM-verified: 2026-05-03 binary @ 0x00171d78..0x00171ee8 (asm-inspector, field stores only; FX/SFX block remains TODO)
+// ASM-verified: 2026-05-03 binary @ 0x00171d78..0x00171ee8 (asm-inspector, field stores only)
+// ASM-verified: 2026-05-23 binary @ 0x00171E9E (re-analyst) -- "player-bomb-launch" SFX fires unconditionally in !skipSpawnFx branch.
 // Binary @ 0x00171d78: bomb-multiplier-powerup upgrade. Fires when default-spawner
 // bomb is created with bomb-multiplier active (playerIdx>0 from SpawnBomb).
 // Trigger condition in WaveManager::SpawnBomb post-spawn branch:
@@ -909,10 +924,12 @@ void Bomb::MakeFat(bool skipSpawnFx) {
     m_OrigScale = scale;                       // binary writes field_0x98/9c/a0 (m_OrigScale)
     if (m_Col) static_cast<ColSphere*>(m_Col)->radius *= 1.33002f;   // DAT_00171ef0
     if (!skipSpawnFx) {
+        // Binary @ 0x00171E9E: "player-bomb-launch" SFX fires unconditionally.
+        if (game_work.mGameSound)
+            game_work.mGameSound->SFXPlay("player-bomb-launch", 1.0f, 1.0f);
         // Spawn particle emitter at +/-240.0 X anchor based on pos.x sign.
         // Hash key: variant!=2 -> DAT_00171f00; variant==2 -> DAT_00171f04.
-        // SFX: name string at DAT_00171f0c, MakeSFXDelegate_Coin callback.
-        // TODO: PSPParticleManager::AddEmitter and SFXPlay wiring when those callbacks land.
+        // TODO: PSPParticleManager::AddEmitter wiring when those callbacks land.
         Chuck(0.25f);  // fuse reset to 0.25s post-upgrade
     }
 }

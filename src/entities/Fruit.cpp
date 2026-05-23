@@ -19,6 +19,7 @@
 #include "game/ScoreState.h"
 #include "game/WaveManager.h"
 #include "game/PowerUpManager.h"
+#include "game/ItemManager.h"
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/util/StringTable.h"
@@ -46,6 +47,11 @@ typedef ::FruitInfo FruitInfoData;
 // Decremented by KillFruit on natural-expiry path (flag 0x10 not yet set).
 // Binary @ 0x00176cc8..0x00176cd4: unconditional store, clamped to >= 0 (not >= 1).
 static int g_PowerFruitCount = 0;
+
+// Per-frame gate for "Throw-fruit" SFX. Binary stores at *(g_fruitGlobal + 0x48)
+// (DAT_00177960 + 0x48). Reset in Fruit::Chuck so each new launch can fire once.
+// Prevents multiple fruits chucked in the same frame from each playing the SFX.
+static bool s_FruitThrowSfxFiredThisFrame = false;
 
 // Static Colour constants from _GLOBAL__I_Fruit.cpp @ 0x0017a354.
 // *DAT_0017a678: Colour(0x80, 0x80, 0xff, 0x80) = RGBA(128, 128, 255, 128)
@@ -222,6 +228,7 @@ void Fruit::Chuck(float delay) {
     m_ChuckDelay = delay;
     m_ScaleAnim = 0.0f;
     flags &= ~ENT_SKIP_MASK;
+    s_FruitThrowSfxFiredThisFrame = false;
 }
 
 void Fruit::Update(float dt) {
@@ -233,8 +240,20 @@ void Fruit::Update(float dt) {
         if (!IsActive()) return;
 
         // Launch delay (unsliced path only)
+        // ASM-verified: 2026-05-23 binary @ 0x00177866 (re-analyst) -- "Throw-fruit" SFX
+        // fires on negative-going edge of m_ChuckDelay crossing 0.2f, gated by
+        // s_FruitThrowSfxFiredThisFrame (mirrors *(g_fruitGlobal+0x48) in binary).
         if (m_ChuckDelay > 0.0f) {
+            static const float THROW_FRUIT_SFX_THRESHOLD = 0.2f;  // DAT_00177960+0x48 threshold
+            const float prevChuckDelay = m_ChuckDelay;
             m_ChuckDelay -= dt;
+            if (prevChuckDelay >= THROW_FRUIT_SFX_THRESHOLD && m_ChuckDelay < THROW_FRUIT_SFX_THRESHOLD) {
+                if (!s_FruitThrowSfxFiredThisFrame) {
+                    s_FruitThrowSfxFiredThisFrame = true;
+                    if (game_work.mGameSound)
+                        game_work.mGameSound->SFXPlay("Throw-fruit", 1.0f, 1.0f);
+                }
+            }
             if (m_ChuckDelay > 0.0f) return;
             m_ChuckDelay = 0.0f;
         }
@@ -878,6 +897,20 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
         if (m_pEmitter2) m_pEmitter2->m_Pos = pos;
     }
 
+    // ASM-verified: 2026-05-23 binary @ 0x001781e8..0x00178218 (re-analyst)
+    {
+        bool altPlayed = ItemManager::GetInstance()->PlayAlternateImpactSound(1.0f, 0.5f);
+        if (!altPlayed && info->m_pSounds && info->m_SoundCount > 0) {
+            for (int si = 0; si < info->m_SoundCount; ++si) {
+                const char* sndName = info->m_pSounds[si].m_SoundName;
+                if (sndName && game_work.mGameSound) {
+                    game_work.mGameSound->SFXPlay(sndName, 0.5f, 1.0f,
+                        Mortar::Delegate1<bool, Mortar::MortarSound*>());
+                }
+            }
+        }
+    }
+
     // Full-screen tint flash. Critical uses the configured crit colour
     // (gold/yellow); special-fruit uses half-alpha white. Matches
     // CriticalFlash @ 0x0016a9a4.
@@ -1090,8 +1123,14 @@ void Fruit::Slice() {
         if (s) s->MakeSplat(pos, sv, isCritical, m_FruitType);
     }
 
-    // Clean-Slice SFX is played by SliceEffect_Add (via AddSlice call below),
-    // not directly here. Binary @ 0x0016b480 gates the SFX inside AddSlice.
+    // ASM-verified: 2026-05-23 binary @ 0x001770e0 (re-analyst)
+    if (splatCount > 0 && game_work.mGameSound) {
+        char cleanSliceBuf[16];
+        uint32_t r = Math::g_Random.Rand32(3);
+        snprintf(cleanSliceBuf, sizeof(cleanSliceBuf), "Clean-Slice-%u", r + 1);
+        game_work.mGameSound->SFXPlay(cleanSliceBuf, 1.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>());
+    }
 
     // --- Half velocities ---
     // Binary uses sliceFactor = 1 - FRUIT_INFO[+0x24c]. That field
