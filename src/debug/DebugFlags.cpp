@@ -287,21 +287,9 @@ void DebugHUDBounds_Draw() {
         HUDControl* ctrl = *it;
         if (!ctrl || !ctrl->m_bActive) continue;
 
-        const float hw = ctrl->size.x * 0.5f;
-        const float hh = ctrl->size.y * 0.5f;
-        if (hw == 0.0f && hh == 0.0f) continue;
-
-        const Vec3 dp = ctrl->GetDrawPos();
-        const float left   = dp.x - hw;
-        const float right  = dp.x + hw;
-        const float bottom = dp.y - hh;
-        const float top    = dp.y + hh;
-
-        BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kHUDBoxColour);
-        r->DrawTriList(s_BoxVerts, 24);
-
-        // ScrollingMenu: also overlay the touch-acquire regions so the
-        // F1 debug view shows WHERE a scroll gesture actually triggers.
+        // ScrollingMenu: overlay the touch-acquire regions BEFORE the
+        // size==0 gate, since ScrollingMenu typically has size=(0,0) but
+        // its touch hitbox lives in m_OuterRegion / m_InnerRegion.
         // - OuterRegion (cyan): the bounds that acquire a new touch.
         // - InnerRegion (yellow): the drag-tracking bounds.
         // Bounds formula must match ScrollingMenu::Update Phase 2 exactly.
@@ -324,7 +312,33 @@ void DebugHUDBounds_Draw() {
             const float iy1 = sm->pos.y + sm->m_InnerRegion[2];
             BuildAABBOutline(s_BoxVerts, ix0, ix1, iy0, iy1, -0.7f, 1.5f, kInnerColour);
             r->DrawTriList(s_BoxVerts, 24);
+
+            // Label at the outer-rect corner so we know which control this is.
+            if (s_DebugFont.IsValid()) {
+                char ptrBuf[40];
+                snprintf(ptrBuf, sizeof(ptrBuf), "ScrollingMenu %p outer=(%.0f..%.0f,%.0f..%.0f)",
+                         static_cast<void*>(sm), ox0, ox1, oy0, oy1);
+                static const Colour kSmLabel(0, 255, 255, 255);
+                const Vec3 labelPos(ox0 + 2.0f, oy1 - 2.0f, -0.4f);
+                mm.GetWorldStack().Reset();
+                mm.UploadModelViewOnly();
+                s_DebugFont->DrawString(8.0f, 1.0f, 0.0f, ptrBuf, labelPos,
+                                        kSmLabel, Mortar::FONT_ALIGN_LEFT);
+            }
         }
+
+        const float hw = ctrl->size.x * 0.5f;
+        const float hh = ctrl->size.y * 0.5f;
+        if (hw == 0.0f && hh == 0.0f) continue;
+
+        const Vec3 dp = ctrl->GetDrawPos();
+        const float left   = dp.x - hw;
+        const float right  = dp.x + hw;
+        const float bottom = dp.y - hh;
+        const float top    = dp.y + hh;
+
+        BuildAABBOutline(s_BoxVerts, left, right, bottom, top, -0.5f, 1.5f, kHUDBoxColour);
+        r->DrawTriList(s_BoxVerts, 24);
 
         if (s_DebugFont.IsValid()) {
             const char* className = StripMangle(typeid(*ctrl).name());
