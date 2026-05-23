@@ -15,6 +15,7 @@
 #include "engine/asset/TextureManager.h"
 #include "engine/math/MathUtil.h"
 #include "engine/particle/PSPParticleManager.h"
+#include "math/Random.h"
 #include "engine/util/StringHash.h"
 #include "util/Delegate.h"
 #include "render/MatrixManager.h"
@@ -31,13 +32,19 @@ using Mortar::TextureManager;
 
 // Phase-timer rodata — binary @ 0x001f3d48, seven floats.
 // ASM-verified: 2026-05-18 binary @ 0x001f3d48 (re-analyst)
-static const float kRevealStart     = 0.66597f;  // pfVar14[0]
-static const float kPerAward        = 0.6f;       // pfVar14[1]
-static const float kRevealHalfBeat  = 0.33298f;   // pfVar14[2]
-static const float kFinaleHoldExtra = 0.25f;      // pfVar14[3]
-static const float kDismissBuffer   = 7.0f;       // pfVar14[4]
-static const float kAwardYStep      = -42.0f;     // pfVar14[5] timerArr+0x14 @ 0x001f3d5c
-static const float kTextOffsetScalar = 250.0f;    // pfVar14[6] timerArr+0x18 @ 0x001f3d60
+// Corrected values from read_memory decode (0x3F2A7EFA = 0.6660f, 0x3EAA7EFA = 0.3330f):
+static const float kRevealStart     = 0.6660f;    // pfVar14[0] DAT_001f3d48
+static const float kPerAward        = 0.6f;       // pfVar14[1] DAT_001f3d4c
+static const float kRevealHalfBeat  = 0.3330f;    // pfVar14[2] DAT_001f3d50
+static const float kFinaleHoldExtra = 0.25f;      // pfVar14[3] DAT_001f3d54
+static const float kDismissBuffer   = 7.0f;       // pfVar14[4] DAT_001f3d58
+static const float kAwardYStep      = -42.0f;     // pfVar14[5] DAT_001f3d5c
+static const float kTextOffsetScalar = 250.0f;    // pfVar14[6] DAT_001f3d60
+
+// Per-award reveal animation constants — binary @ 0x00133080..0x001330b4
+static const float kAlphaRampWidth  = 0.1f;       // DAT_00133080: beat/0.1 for alpha
+static const float kOnsetThresh     = 0.2f;       // DAT_00133084: beat crossing for SFX onset
+static const float kDrumRollPreThresh = 0.2f - 0.3330f; // DAT_00132ccc - pfVar14[2] = -0.133f
 
 // ---------------------------------------------------------------------------
 // Per-coin arrival callback — binary @ 0x0013243c
@@ -214,26 +221,41 @@ void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> te
 // STUBS (binary methods not yet ported)
 // ---------------------------------------------------------------------------
 
-// STUB: BonusScreen::AddAward -- binary @ 0x???? (TODO RE)
+// STUB: BonusScreen::AddAward(Colour,...) -- binary @ 0x???? (TODO RE)
 void BonusScreen::AddAward(Colour /*colour*/, Mortar::SmartPtr<Mortar::Texture> /*tex*/,
                            const char* /*name*/, int /*tier*/) {}
 
-// STUB: BonusScreen::Draw -- binary @ 0x???? (TODO RE)
+// STUB: BonusScreen::Draw(float*) -- binary @ 0x???? (TODO RE)
 void BonusScreen::Draw(float* /*mtx*/) {}
 
-// STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
-float BonusScreen::GetTimeFirstAward() { return 0.0f; }
+// Binary @ 0x00131d58 — returns pfVar14[0] = kRevealStart (0.6660f).
+// ASM-verified: 2026-05-23 binary @ 0x00131d58 (re-analyst)
+float BonusScreen::GetTimeFirstAward() {
+    return kRevealStart;
+}
 
-// STUB: BonusScreen::GetTimePerAward -- binary @ 0x???? (TODO RE)
-float BonusScreen::GetTimePerAward() { return 0.0f; }
+// Binary @ 0x00131d74 — returns pfVar14[1] = kPerAward (0.6f).
+// ASM-verified: 2026-05-23 binary @ 0x00131d74 (re-analyst)
+float BonusScreen::GetTimePerAward() {
+    return kPerAward;
+}
 
-// STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
+// Binary @ 0x00131d50 — confirmed empty (single bx lr).
+// ASM-verified: 2026-05-23 binary @ 0x00131d50 (re-analyst)
 void BonusScreen::LoadContent() {}
 
-// STUB: BonusScreen::Shake -- binary @ 0x???? (TODO RE)
-void BonusScreen::Shake(float /*amplitude*/, float /*duration*/) {}
+// Binary @ 0x00131d94 — sets pulse-shake fields and randomizes angle.
+// param_1 = amplitude, param_2 = duration.
+// ASM-verified: 2026-05-23 binary @ 0x00131d94 (re-analyst)
+void BonusScreen::Shake(float amplitude, float duration) {
+    m_PulseField15 = duration;
+    m_PulseField17 = amplitude;
+    m_PulseTimer   = amplitude;
+    m_PulseAngle   = (int16_t)Math::g_Random.Rand32(0xff3a);
+}
 
-// STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
+// Binary @ 0x00131d54 — confirmed empty (single bx lr).
+// ASM-verified: 2026-05-23 binary @ 0x00131d54 (re-analyst)
 void BonusScreen::UnLoadContent() {}
 
 // ---------------------------------------------------------------------------
@@ -359,17 +381,16 @@ void BonusScreen::Update(float dt) {
     // Compute finaleStart: revealStart + perAward * (numAwards + 0.25)
     float finaleStart = kRevealStart + kPerAward * ((float)m_Awards.size() + 0.25f);
 
-    // ASM-verified: 2026-05-23 binary @ 0x001329d8 / 0x00132c14 (re-analyst)
-    // Drum-roll fires once when m_PhaseTimer crosses kRevealStart - kHalfBeat
-    // from below (ascending timer). Binary gates: prevTimer > thresh >= newTimer
-    // in a descending-timer context; equivalent ascending-timer gate: timer >= thresh
-    // and not yet fired.
-    // DAT_00132ccc = kRevealStart (0.66597), threshold = kRevealStart - kHalfBeat.
+    // Binary @ 0x00132c06: drum-roll fires when timer crosses kDrumRollPreThresh = -0.133f
+    // from below (DAT_00132ccc=0.2f minus pfVar14[2]=0.3330f = -0.133f).
+    // Gate: prevTimer <= thresh < newTimer (ascending, prev = m_PhaseTimer - dt).
+    // ASM-verified: 2026-05-23 binary @ 0x00132c06 (re-analyst)
     {
-        float drumRollThresh = kRevealStart - kRevealHalfBeat;
-        if (!m_bDrumRollFired && m_PhaseTimer >= drumRollThresh) {
+        float prevTimer = m_PhaseTimer - dt;
+        if (!m_bDrumRollFired
+                && kDrumRollPreThresh < m_PhaseTimer
+                && prevTimer <= kDrumRollPreThresh) {
             m_bDrumRollFired = true;
-            // Reset per-award explosion counter for this BonusScreen instance.
             s_BonusExplosionCounter = 1;
             if (game_work.mGameSound) {
                 game_work.mGameSound->SFXPlay("Bonus-drum-roll", 1.0f, 1.0f);
@@ -395,7 +416,9 @@ void BonusScreen::Update(float dt) {
             } else {
                 // Within reveal beat.
                 float beat = fmodf(m_PhaseTimer, kPerAward);
-                float alpha = beat / 0.2f;
+                // Alpha ramp: beat / kAlphaRampWidth (0.1f), clamped 0..1.
+                // Binary @ 0x00132d60: fVar20 = fVar19 / DAT_00133080 (0.1f).
+                float alpha = beat / kAlphaRampWidth;
                 if (alpha > 1.0f) alpha = 1.0f;
                 if (alpha < 0.0f) alpha = 0.0f;
                 entry.m_Colour.a = (uint8_t)(alpha * 255.0f);
@@ -404,19 +427,19 @@ void BonusScreen::Update(float dt) {
                 } else {
                     entry.m_DisplayedScore = (int)((float)(entry.m_TierBase * entry.m_Multiplier) * (beat * 0.5f + 0.5f));
                 }
-                // Scale wobble: SinIdx(beat*115*182) / SinIdx(0x5550).
+                // Scale wobble: SinIdx(beat*120*182) / SinIdx(0x5550).
                 // SinIdx is BAM-style (65536 = 2*pi). sinf approximation pending BAM-table port.
-                float angle = beat * 115.0f * 182.0f * (2.0f * 3.14159265f / 65536.0f);
+                // Binary @ 0x00133068: DAT_00133090=120, DAT_001330b0=182.
+                float angle = beat * 120.0f * 182.0f * (2.0f * 3.14159265f / 65536.0f);
                 float denom = 0.882f;  // sinf(0x5550 * 2*pi/65536) ~= 0.882
                 entry.m_Scale = sinf(angle) / denom;
 
+                // Per-award explosion SFX onset gate: fires when beat crosses kOnsetThresh (0.2f).
+                // Binary @ 0x00132f2c: gate = (beat-dt-0.2f)/0.1f <= 0 AND (beat-0.2f)/0.1f > 0
+                //   simplified: prevBeat <= 0.2f AND beat > 0.2f  (prevBeat = beat - dt).
                 // ASM-verified: 2026-05-23 binary @ 0x00132f2c (re-analyst)
-                // Fire per-award explosion SFX on first beat entry (beat < dt threshold).
-                // Binary: uVar17 starts at 1, += 2 per award (1, 3, 5, 7, ...).
-                // SFX volume = DAT_001330b4 = 1.0f.
-                // Gate: this fires at the onset of the beat (normT transitions 0->small).
-                // Use beat < kPerAward * 0.05f as a narrow one-frame-wide onset window.
-                if (beat < kPerAward * 0.05f) {
+                float prevBeat = beat - dt;
+                if (prevBeat <= kOnsetThresh && beat > kOnsetThresh) {
                     char sfxName[32];
                     snprintf(sfxName, sizeof(sfxName), "Bonus-Explosion-%u",
                              (unsigned)s_BonusExplosionCounter);
