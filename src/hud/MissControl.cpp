@@ -56,13 +56,13 @@ static constexpr float SOUND_THRESH = 1.66f;
 static constexpr float MISS_CLAMP_HALF_X = 240.0f;
 static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 
-// Pulse banding thresholds. DAT_001522a4..DAT_001522b4. ASM-verified
-// 2026-05-10 (asm-inspector byte-level IEEE-754 decode).
-static constexpr float MISS_PULSE_FLOOR       = 0.65f;    // DAT_001522b4
-static constexpr float MISS_PULSE_PHASE_LO    = 16376.0f; // DAT_001522a4
-static constexpr float MISS_PULSE_PHASE_HI    = 376992.0f; // DAT_001522a8
-static constexpr float MISS_PULSE_NARROW_LO   = 32752.0f; // DAT_001522ac
-static constexpr float MISS_PULSE_NARROW_HI   = 360104.0f; // DAT_001522b0
+// Pulse banding thresholds. DAT_001522a4..DAT_001522b4.
+// ASM-verified: 2026-05-24 binary @ 0x001522a4 (re-analyst) — byte-exact IEEE-754.
+static constexpr float MISS_PULSE_FLOOR       = 0.65f;     // DAT_001522b4 = 0x3f266666
+static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f;  // DAT_001522a4 = 0x467ff000
+static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // DAT_001522a8 = 0x48b7f480
+static constexpr float MISS_PULSE_NARROW_LO   = 32760.0f;  // DAT_001522ac = 0x46fff000
+static constexpr float MISS_PULSE_NARROW_HI   = 360360.0f; // DAT_001522b0 = 0x48aff500
 
 // --- Static members -------------------------------------------------------
 
@@ -647,10 +647,10 @@ void MissControl::Update(float dt) {
 // ASM-verified: 2026-05-24 binary @ 0x00151f60 (re-analyst)
 // Quad-origin formula (binary @ 0x00151f60..0x00152186):
 //
-//   origin = drawPos + this->pos + Vec3(480 * m_HudScale.x, 320 * m_HudScale.y, 0)
+//   origin = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale  (Vec3*Vec3)
 //
 //   drawPos derivation:
-//     init from global Vec3 *pfVar4 (DAT_001522c4 -- see TODO below)
+//     init from _Vector3<float>::Zero (DAT_001522c4, binary @ 0x001f4328) = Vec3(0,0,0)
 //     if (m_JitterTimer > 0): drawPos REPLACED with Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_JitterTimer--
 //
 //     if (m_FadeAlpha <= 0.0f):               // passive miss-marker path only
@@ -669,10 +669,9 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // HUD::Draw filters on m_Active (src/hud/HUD.cpp:88) so this Draw
     // doesn't even get called for released slots.
 
-    // TODO: 0x001522c4 -- Draw phase 0: drawPos is initialised from *pfVar4 (a global Vec3
-    // ptr resolved from DAT_001522c4), NOT from this->pos. Binary then translates with
-    // drawPos + this->pos + anchor. Needs DAT_001522c4 GOT resolution to identify the Vec3.
-    // For now, port inits drawPos to (0,0,0) matching the expected zero-init of that global.
+    // _Vector3<float>::Zero global (binary @ 0x001f4328, GOT slot 0x73ec).
+    // Binary loads Zero.{x,y,z} into stack-local drawPos -- semantically Vec3(0,0,0).
+    // ASM-verified: 2026-05-24 binary @ 0x001522c4 (re-analyst)
     Vec3 drawPos(0.0f, 0.0f, 0.0f);
 
     // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
@@ -703,11 +702,13 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         const uint16_t pidx = (phase_f > 0.0f) ? (uint16_t)(int)phase_f : 0;
         pulseScale = std::fabs(SinIdx(pidx));
         // Clamp ladder (binary @ 0x00152034..0x00152088):
-        //   if 16376 < phase_f < 376992:
-        //     if 32752 < phase_f < 360104: pulseScale = 0.65 (forced)
-        //     else                       : pulseScale = max(pulseScale, 0.65)
+        //   if phase_f > 16380 && phase_f < 376740:
+        //     if phase_f >= 32760 && phase_f <= 360360: pulseScale = 0.65 (forced)
+        //     else                                    : pulseScale = max(pulseScale, 0.65)
+        // ASM-verified: 2026-05-24 binary @ 0x00152034 (re-analyst)
+        // Outer band: strict > / < (bhi/blo). Inner band: inclusive >= / <= (bmi/ble).
         if (phase_f > MISS_PULSE_PHASE_LO && phase_f < MISS_PULSE_PHASE_HI) {
-            if (phase_f > MISS_PULSE_NARROW_LO && phase_f < MISS_PULSE_NARROW_HI) {
+            if (phase_f >= MISS_PULSE_NARROW_LO && phase_f <= MISS_PULSE_NARROW_HI) {
                 pulseScale = MISS_PULSE_FLOOR;
             } else if (pulseScale < MISS_PULSE_FLOOR) {
                 pulseScale = MISS_PULSE_FLOOR;
@@ -715,15 +716,14 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         }
     } else {
         // m_FadeAlpha <= 0 -- passive miss-marker path: y-shift
-        Game* g = Game::GetInstance();
-        if (g) {
-            const bool failureEnabled =
-                Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
-            if (failureEnabled) {
-                drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
-            } else {
-                drawPos.y -= 3.0f * pos.y;
-            }
+        // Binary has NO Game::GetInstance gate here -- reads game_work directly.
+        // ASM-verified: 2026-05-24 binary @ 0x00151fe4 (re-analyst)
+        const bool failureEnabled =
+            Mortar::FailureEnabled(game_work.gameMode);  // IsMultiplayer() unported -> false
+        if (failureEnabled) {
+            drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
+        } else {
+            drawPos.y -= 3.0f * pos.y;
         }
     }
 
@@ -743,39 +743,36 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         mat.RotZ44(SinIdx(a), CosIdx(a));
     }
     // Anchor offset (binary @ 0x00152140..0x00152186):
-    //   final = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale
+    //   final = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale  (Vec3*Vec3 componentwise)
+    // ASM-verified: 2026-05-24 binary @ 0x00152140 (re-analyst)
     (void)hudScale;  // per-frame hudScale arg is unused for MissControl
-    Vec3 anchor(
-        480.0f * m_HudScale.x,
-        320.0f * m_HudScale.y,
-        0.0f);
-    Vec3 final_pos = drawPos + pos + anchor;
-    mat.GlobalTranslate44(final_pos);
+    Vec3 t1 = drawPos + pos;
+    Vec3 anchor(480.0f, 320.0f, 0.0f);
+    Vec3 anchorScaled = anchor * m_HudScale;  // Vec3*Vec3 componentwise -- binary blx 0x001060ec
+    Vec3 final_t = t1 + anchorScaled;
+    mat.GlobalTranslate44(final_t.x, final_t.y, final_t.z);
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    // ASM-verified: 2026-05-18 binary @ 0x00151f60 (re-analyst)
-    // Binary @ 0x001521ac: scale alpha by Game->hud->m_globalTimeScale (slow-mo factor)
-    // only when < 1.0 (normal gameplay = 1.0, branch skipped).
-    float fade = 1.0f;
+    // Binary @ 0x001521ac: scale alpha by game_work.mHud->m_globalTimeScale (HUD + 0x20).
+    // Binary has NO Game::GetInstance gate here -- reads game_work.mHud directly.
+    // Skips multiplier when ts >= 1.0 (bpl branch @ 0x001521aa -> 0x001521d8).
+    // ASM-verified: 2026-05-24 binary @ 0x001520ec (re-analyst)
+    Colour tint = m_DrawColour;
     {
-        Game* gFade = Game::GetInstance();
-        if (gFade && game_work.mHud) {
-            float ts = game_work.mHud->m_globalTimeScale;
-            if (ts < 1.0f) fade = ts;
+        float ts = game_work.mHud->m_globalTimeScale;  // HUD + 0x20
+        if (ts < 1.0f) {
+            int aScaled = (int)((float)tint.a * ts);
+            if (aScaled < 1)          tint.a = 0;
+            else if (aScaled >= 255)  tint.a = 255;
+            else                      tint.a = (uint8_t)aScaled;
         }
     }
-
-    // TODO: 0x001520ec -- HUD-layer fade alpha (float at MatrixManager.field_0x3c+0x20)
-    // not yet wired. Binary reads it each frame and multiplies into m_DrawColour.a.
-    // Setter binary site is unknown (likely a ScreenTint / fade-in-out transition).
-    // Until that's RE'd, port skips the multiplier (m_DrawColour.a passes through unchanged).
-    const uint8_t a = (uint8_t)(fade * (float)m_DrawColour.a);
-    const uint32_t col = (uint32_t)a << 24 | (uint32_t)m_DrawColour.b << 16
-                        | (uint32_t)m_DrawColour.g << 8 | (uint32_t)m_DrawColour.r;
+    const uint32_t col = (uint32_t)tint.a << 24 | (uint32_t)tint.b << 16
+                        | (uint32_t)tint.g << 8 | (uint32_t)tint.r;
 
     // UV crop based on m_bComboActive / m_bVisible.
     // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)
