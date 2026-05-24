@@ -1653,108 +1653,108 @@
   },
   "_ZN3HUD10AddControlEP10HUDControlb": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary uses intrusive list hook helpers (blx e6744 push_front / blx ea440 push_back). Port allocates std::list node (_Znwj 0xc bytes), fills node fields, calls _ZNSt15_List_node_base4hookEPS_. Both push_front/push_back paths preserved. Container-layer divergence. See src/hud/HUD.cpp:46-51. Score 3435/1000.",
+    "reason": "Binary uses intrusive list hook helpers (blx e6744 push_front / blx ea440 push_back). Port allocates std::list node (_Znwj 0xc bytes), fills node fields, calls _ZNSt15_List_node_base4hookEPS_. Both push_front/push_back paths preserved. Container-layer divergence. See src/hud/HUD.cpp:46-51. Score 3435/1000. [score refreshed 2026-05-24]",
     "score": 3435,
     "max_score": 1000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD13RemoveControlEP10HUDControl": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary: null-guard, fires m_RemoveCallback (adds.w r0,r1,#0x38; blx f8420), then blx edfec. Port: null-guard, fires m_RemoveCallback, then full std::list traversal + _ZNSt15_List_node_base6unhookEv + _ZdlPv. Container-layer divergence. See src/hud/HUD.cpp:54-59. Score 4728/1000.",
+    "reason": "Binary: null-guard, fires m_RemoveCallback (adds.w r0,r1,#0x38; blx f8420), then blx edfec. Port: null-guard, fires m_RemoveCallback, then full std::list traversal + _ZNSt15_List_node_base6unhookEv + _ZdlPv. Container-layer divergence. See src/hud/HUD.cpp:54-59. Score 4728/1000. [score refreshed 2026-05-24]",
     "score": 4728,
     "max_score": 1000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD13ResetControlsEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary calls blx eeb74 (begin) + blx eb040 (advance) loop dispatching vtable+0x10 (Reset). Port walks std::list sentinel directly dispatching (*it)->Reset(). Same semantics, container-layer iteration differs. See src/hud/HUD.cpp:120-124. Score 1990/2300.",
+    "reason": "Binary calls blx eeb74 (begin) + blx eb040 (advance) loop dispatching vtable+0x10 (Reset). Port walks std::list sentinel directly dispatching (*it)->Reset(). Same semantics, container-layer iteration differs. See src/hud/HUD.cpp:120-124. Score 1990/2300. [score refreshed 2026-05-24]",
     "score": 1990,
     "max_score": 2300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD21SetToMultiplayerStateEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Two-pass collect-then-remove pattern matches binary intent: first loop calls vtable+0x2c (SetToMultiplayerState), pushes true-returns into temp list; second loop calls RemoveControl. Binary uses intrusive iterators (blx ea440/f00f8/eeb74/f4c34); port builds std::list<HUDControl*> toRemove and iterates that. Container-layer divergence; logic is equivalent. See src/hud/HUD.cpp:157-168. Score 11823/8000. [score refreshed 2026-05-17T00:00Z]",
+    "reason": "Two-pass collect-then-remove pattern matches binary intent: first loop calls vtable+0x2c (SetToMultiplayerState), pushes true-returns into temp list; second loop calls RemoveControl. Binary uses intrusive iterators (blx ea440/f00f8/eeb74/f4c34); port builds std::list<HUDControl*> toRemove and iterates that. Container-layer divergence; logic is equivalent. See src/hud/HUD.cpp:157-168. Score 9552/8000. [score refreshed 2026-05-24]",
     "score": 9552,
     "max_score": 8000,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD4InitEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary calls blx e6d38 (std::list _M_init, sentinel-only, trivial). Port expands controls.clear() to a node-iteration + _ZdlPv loop before resetting sentinels. Functional semantics match (empty list after Init). Container-layer expansion from std::list::clear(). See src/hud/HUD.cpp:21-23. Score 1330/300.",
+    "reason": "Binary calls blx e6d38 (std::list _M_init, sentinel-only, trivial). Port expands controls.clear() to a node-iteration + _ZdlPv loop before resetting sentinels. Functional semantics match (empty list after Init). Container-layer expansion from std::list::clear(). See src/hud/HUD.cpp:21-23. Score 1330/300. [score refreshed 2026-05-24]",
     "score": 1330,
     "max_score": 300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD4SaveEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary: blx eeb74 (begin) + blx eb040 (advance) loop with cbz null-check, dispatches vtable+0x38 (Save). Port: std::list sentinel walk, cbz null-check, calls c->Save(). Semantically identical; container-layer iteration pattern differs. See src/hud/HUD.cpp:141-146. Score 1875/2300.",
+    "reason": "Binary: blx eeb74 (begin) + blx eb040 (advance) loop with cbz null-check, dispatches vtable+0x38 (Save). Port: std::list sentinel walk, cbz null-check, calls c->Save(). Semantically identical; container-layer iteration pattern differs. See src/hud/HUD.cpp:141-146. Score 1875/2300. [score refreshed 2026-05-24]",
     "score": 1875,
     "max_score": 2300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD4SkipEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary: blx eeb74 + blx eb040 loop dispatching vtable+0x34 (Skip). Port: std::list sentinel walk calling (*it)->Skip(). Container-layer divergence; same vtable slot (0x34). See src/hud/HUD.cpp:149-152. Score 1990/2300.",
+    "reason": "Binary: blx eeb74 + blx eb040 loop dispatching vtable+0x34 (Skip). Port: std::list sentinel walk calling (*it)->Skip(). Container-layer divergence; same vtable slot (0x34). See src/hud/HUD.cpp:149-152. Score 1990/2300. [score refreshed 2026-05-24]",
     "score": 1990,
     "max_score": 2300,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary uses intrusive iterator helpers (blx f7b68 conditional-erase) while port uses std::list iterator erase + _ZNSt15_List_node_base6unhookEv + _ZdlPv. Both: call MissControl::PreUpdate, reset m_globalTimeScale to 1.0f, iterate controls calling Update when active, remove pending controls via m_RemoveCallback + conditional delete. Container-layer divergence in remove path. See src/hud/HUD.cpp:94-117. Score 6320/5500. [score refreshed 2026-05-17T00:00Z]",
+    "reason": "Binary uses intrusive iterator helpers (blx f7b68 conditional-erase) while port uses std::list iterator erase + _ZNSt15_List_node_base6unhookEv + _ZdlPv. Both: call MissControl::PreUpdate, reset m_globalTimeScale to 1.0f, iterate controls calling Update when active, remove pending controls via m_RemoveCallback + conditional delete. Container-layer divergence in remove path. See src/hud/HUD.cpp:94-117. Score 6620/5500. [score refreshed 2026-05-24]",
     "score": 6620,
     "max_score": 5500,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD7OnPauseEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Score increased 2095->3275/2600. Port iterates list calling ClearTouch() on TYPE_SCROLLING_MENU. Binary does additional calls (blx f0bc0/eeb74) not yet identified. Pending HUD::OnPause full RE. [score refreshed 2026-05-20T12:00Z]",
+    "reason": "Score increased 2095->3275/2600. Port iterates list calling ClearTouch() on TYPE_SCROLLING_MENU. Binary does additional calls (blx f0bc0/eeb74) not yet identified. Pending HUD::OnPause full RE. [score refreshed 2026-05-24]",
     "score": 3275,
     "max_score": 2600,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary sets GOT+0x7990[+0x34] flag to 1 before loop and restores it after (GameData guard). Port omits this guard per documented TODO. Also binary's list teardown (blx eeb80 helpers) differs from port's explicit _ZdlPv + sentinel reset. See src/hud/HUD.cpp:28 // TODO: set GameData[+0x34] in-Release guard when GameData struct is ported. Score 5145/4700. [score refreshed 2026-05-17T00:00Z]",
+    "reason": "Binary sets GOT+0x7990[+0x34] flag to 1 before loop and restores it after (GameData guard). Port omits this guard per documented TODO. Also binary's list teardown (blx eeb80 helpers) differs from port's explicit _ZdlPv + sentinel reset. See src/hud/HUD.cpp:28 // TODO: set GameData[+0x34] in-Release guard when GameData struct is ported. Score 5395/4700. [score refreshed 2026-05-24]",
     "score": 5395,
     "max_score": 4700,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUD9BeginDrawEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary uses blx eeb74/eb040 iterator pair + cbz skip-if-inactive, dispatches vtable+0x14 (BeginDraw) with vmov s0,s16 (dt). Port walks std::list sentinel, checks m_bActive with cbnz, dispatches ldr vtable+0x14 + blx. Container-layer divergence; same vtable slot. See src/hud/HUD.cpp:62-67. Score 3635/3000.",
+    "reason": "Binary uses blx eeb74/eb040 iterator pair + cbz skip-if-inactive, dispatches vtable+0x14 (BeginDraw) with vmov s0,s16 (dt). Port walks std::list sentinel, checks m_bActive with cbnz, dispatches ldr vtable+0x14 + blx. Container-layer divergence; same vtable slot. See src/hud/HUD.cpp:62-67. Score 3635/3000. [score refreshed 2026-05-24]",
     "score": 3635,
     "max_score": 3000,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUDC1Ev": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Same initialization values (vmov s15,#0x70 = 1.0f, 6x vstr). Binary calls blx f51f8 (list _M_init sentinel setup) then vstr block; port writes sentinel pointers [r3,#0]/[r3,#4] directly then vstr block. vstr field order differs (compiler scheduling reorder) but all values identical. Score 1125/1200.",
+    "reason": "Same initialization values (vmov s15,#0x70 = 1.0f, 6x vstr). Binary calls blx f51f8 (list _M_init sentinel setup) then vstr block; port writes sentinel pointers [r3,#0]/[r3,#4] directly then vstr block. vstr field order differs (compiler scheduling reorder) but all values identical. Score 1125/1200. [score refreshed 2026-05-24]",
     "score": 1125,
     "max_score": 1200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUDC2Ev": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "C2 alias of C1; same as HUDC1Ev -- vstr reorder + list sentinel init method differs, identical values. Score 1125/1200.",
+    "reason": "C2 alias of C1; same as HUDC1Ev -- vstr reorder + list sentinel init method differs, identical values. Score 1125/1200. [score refreshed 2026-05-24]",
     "score": 1125,
     "max_score": 1200,
-    "decided_at": "2026-05-04T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUDD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Binary calls blx e6510 (Release/list-walk helper) + blx eeb80 (list destroy) x2. Port expands to full std::list teardown: per-node m_RemoveCallback + conditional delete loop, then sentinel-reset loop (same as HUD::Release). Container-layer expansion. See src/hud/HUD.cpp:15-18 (dtor calls Release). Score 3220/1300. [score refreshed 2026-05-17T00:00Z]",
+    "reason": "Binary calls blx e6510 (Release/list-walk helper) + blx eeb80 (list destroy) x2. Port expands to full std::list teardown: per-node m_RemoveCallback + conditional delete loop, then sentinel-reset loop (same as HUD::Release). Container-layer expansion. See src/hud/HUD.cpp:15-18 (dtor calls Release). Score 1610/1300. [score refreshed 2026-05-24]",
     "score": 1610,
     "max_score": 1300,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN3HUDD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "D2 alias of D1; same as HUDD1Ev. Score 3220/1300. [score refreshed 2026-05-17T00:00Z]",
+    "reason": "D2 alias of D1; same as HUDD1Ev. Score 1610/1300. [score refreshed 2026-05-24]",
     "score": 1610,
     "max_score": 1300,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN10DojoScreen12QuitCallbackEv": {
     "verdict": "ACCEPT-deferred",
@@ -2668,10 +2668,10 @@
   },
   "_ZN12HUDControl3d6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port tail-calls HUDControl::Update (b.w) vs binary calls blx via vtable. ACCEPT-deferred. Score 700/300.",
+    "reason": "Port tail-calls HUDControl::Update (b.w) vs binary calls blx via vtable. ACCEPT-deferred. Score 700/300. [score refreshed 2026-05-24]",
     "score": 700,
     "max_score": 300,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11TimeControl4SkipEv": {
     "verdict": "ACCEPT-deferred",
@@ -2710,17 +2710,17 @@
   },
   "_ZN13ScrollingMenu7ReleaseEv": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port uses b.w DestroyList tail-call. Binary equivalent: call + return. Same semantics. Score 700/300 driven by nop padding. See src/hud/ScrollingMenu.cpp ScrollingMenu::Release.",
+    "reason": "Port uses b.w DestroyList tail-call. Binary equivalent: call + return. Same semantics. Score 700/300 driven by nop padding. See src/hud/ScrollingMenu.cpp ScrollingMenu::Release. [score refreshed 2026-05-24]",
     "score": 700,
     "max_score": 300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl9PreUpdateEf": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Score 640/2000. Pure PIC anchor differences: binary uses 2-register GOT pattern, port uses 3-register GOT pattern. Same instructions, different registers. ACCEPT-cosmetic.",
+    "reason": "Score 640/2000. Pure PIC anchor differences: binary uses 2-register GOT pattern, port uses 3-register GOT pattern. Same instructions, different registers. ACCEPT-cosmetic. [score refreshed 2026-05-24]",
     "score": 640,
     "max_score": 2000,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11SplatEntityD0Ev": {
     "verdict": "ACCEPT-deferred",
@@ -3053,10 +3053,10 @@
   },
   "_ZN11MissControl9SetPlayerEi": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port has mov r0,r1 + bx lr vs binary bx lr. Port preserves r1->r0 which may be cosmetic ABI difference. Score 400/100. ACCEPT-cosmetic.",
+    "reason": "Port has mov r0,r1 + bx lr vs binary bx lr. Port preserves r1->r0 which may be cosmetic ABI difference. Score 400/100. ACCEPT-cosmetic. [score refreshed 2026-05-24]",
     "score": 400,
     "max_score": 100,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11BonusScreen11LoadContentEv": {
     "verdict": "ACCEPT-cosmetic",
@@ -3200,24 +3200,24 @@
   },
   "_ZN13ScrollingMenu10ClearTouchEv": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Layout fix applied (m_Items vector inserted at +0xb0): port now generates strb at +0xc8 matching binary. Remaining diff is register-idiom: binary uses adds r3,#1 from -1 to get 0; port uses movs r3,#0. Semantics identical. Score 210/500. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "Layout fix applied (m_Items vector inserted at +0xb0): port now generates strb at +0xc8 matching binary. Remaining diff is register-idiom: binary uses adds r3,#1 from -1 to get 0; port uses movs r3,#0. Semantics identical. Score 210/500. [score refreshed 2026-05-24]",
     "score": 210,
     "max_score": 500,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenu4InitEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Score 1000/500. Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "reason": "Score 1000/500. Port has bx lr stub vs binary. ACCEPT-deferred. [score refreshed 2026-05-24]",
     "score": 1000,
     "max_score": 500,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenu5ResetEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Score 3600/3300. Port has bx lr stub vs binary. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "Score 3925/3300. Port has bx lr stub vs binary. ACCEPT-deferred. [score refreshed 2026-05-24]",
     "score": 3925,
     "max_score": 3300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13SliderControl11LoadContentEv": {
     "verdict": "ACCEPT-deferred",
@@ -3284,17 +3284,17 @@
   },
   "_ZN16FruitFactControl15DrawLeaderboardEv": {
     "verdict": "ACCEPT-defunct",
-    "reason": "Port has bx lr stub vs binary leaderboard draw. Defunct: online leaderboards. ACCEPT-defunct.",
+    "reason": "Port has bx lr stub vs binary leaderboard draw. Defunct: online leaderboards. ACCEPT-defunct. [score refreshed 2026-05-24]",
     "score": 42300,
     "max_score": 42000,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl16DrawDownloadIconEv": {
     "verdict": "ACCEPT-defunct",
-    "reason": "Port has bx lr stub vs binary download icon draw. Defunct: online news download. ACCEPT-defunct.",
+    "reason": "Port has bx lr stub vs binary download icon draw. Defunct: online news download. ACCEPT-defunct. [score refreshed 2026-05-24]",
     "score": 20800,
     "max_score": 20500,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16VerticalScroller11LoadContentEv": {
     "verdict": "ACCEPT-deferred",
@@ -3319,10 +3319,10 @@
   },
   "_ZN17ScrollingMenuItem4DrawEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred.",
+    "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [score refreshed 2026-05-24]",
     "score": 10900,
     "max_score": 10600,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN19NotificationControl4InitEv": {
     "verdict": "ACCEPT-deferred",
@@ -4341,108 +4341,108 @@
   },
   "_ZN11MissControl12MakeCriticalE8_Vector3IfEi": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 13840/11100. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 13715/11100. [score refreshed 2026-05-24]",
     "score": 13715,
     "max_score": 11100,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl4InitEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 6885/6400. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 6865/6400. [score refreshed 2026-05-24]",
     "score": 6865,
     "max_score": 6400,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl4SkipEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 1830/2000. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 1680/2000. [score refreshed 2026-05-24]",
     "score": 1680,
     "max_score": 2000,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl5ResetEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 3220/3400. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 3215/3400. [score refreshed 2026-05-24]",
     "score": 3215,
     "max_score": 3400,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 103760/27200. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 108545/27200. [score refreshed 2026-05-24]",
     "score": 108545,
     "max_score": 27200,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl7GetFreeEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 19960/3600. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 19955/3600. [score refreshed 2026-05-24]",
     "score": 19955,
     "max_score": 3600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 2010/400.",
+    "reason": "MissControl method stub/divergence. Score 2010/400. [score refreshed 2026-05-24]",
     "score": 2010,
     "max_score": 400,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl8MakeRareE8_Vector3IfE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 13939/11100. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 14205/11100. [score refreshed 2026-05-24]",
     "score": 14205,
     "max_score": 11100,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl9CleanPoolEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 9915/3500.",
+    "reason": "MissControl method stub/divergence. Score 9915/3500. [score refreshed 2026-05-24]",
     "score": 9915,
     "max_score": 3500,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControl9MakeComboE8_Vector3IfEii": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl::MakeCombo -- port adds WaveManager::GetInstance cbz guard at start plus SFX/HUD tint TODOs at src/hud/MissControl.cpp:447 and :627. Score 21710/13700. [score refreshed 2026-05-20T12:00Z]",
+    "reason": "MissControl::MakeCombo -- port adds WaveManager::GetInstance cbz guard at start plus SFX/HUD tint TODOs at src/hud/MissControl.cpp:447 and :627. Score 21710/13700. [score refreshed 2026-05-24]",
     "score": 21710,
     "max_score": 13700,
-    "decided_at": "2026-05-20T12:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControlC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 12870/12300. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 12470/12300. [score refreshed 2026-05-24]",
     "score": 12470,
     "max_score": 12300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControlC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 12870/12300. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "MissControl method stub/divergence. Score 12470/12300. [score refreshed 2026-05-24]",
     "score": 12470,
     "max_score": 12300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControlD0Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 4585/5700.",
+    "reason": "MissControl method stub/divergence. Score 4585/5700. [score refreshed 2026-05-24]",
     "score": 4585,
     "max_score": 5700,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControlD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 4725/5400.",
+    "reason": "MissControl method stub/divergence. Score 4725/5400. [score refreshed 2026-05-24]",
     "score": 4725,
     "max_score": 5400,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11MissControlD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "MissControl method stub/divergence. Score 4725/5400.",
+    "reason": "MissControl method stub/divergence. Score 4725/5400. [score refreshed 2026-05-24]",
     "score": 4725,
     "max_score": 5400,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN11PowerUpShop13UnLoadContentEv": {
     "verdict": "ACCEPT-deferred",
@@ -4957,45 +4957,45 @@
   },
   "_ZN12HUDControl3d7ReleaseEv": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port body matches binary; extra nops are alignment padding.",
+    "reason": "Port body matches binary; extra nops are alignment padding. [score refreshed 2026-05-24]",
     "score": 400,
     "max_score": 100,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN12HUDControl3dC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "HUDControl3d method stub/divergence. Score 2030/2200.",
+    "reason": "HUDControl3d method stub/divergence. Score 2030/2200. [score refreshed 2026-05-24]",
     "score": 2030,
     "max_score": 2200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN12HUDControl3dC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "HUDControl3d method stub/divergence. Score 2030/2200.",
+    "reason": "HUDControl3d method stub/divergence. Score 2030/2200. [score refreshed 2026-05-24]",
     "score": 2030,
     "max_score": 2200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN12HUDControl3dD0Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "HUDControl3d method stub/divergence. Score 5295/4000.",
+    "reason": "HUDControl3d method stub/divergence. Score 5295/4000. [score refreshed 2026-05-24]",
     "score": 5295,
     "max_score": 4000,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN12HUDControl3dD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "HUDControl3d method stub/divergence. Score 5715/3900.",
+    "reason": "HUDControl3d method stub/divergence. Score 5715/3900. [score refreshed 2026-05-24]",
     "score": 5715,
     "max_score": 3900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN12HUDControl3dD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "HUDControl3d method stub/divergence. Score 5715/3900.",
+    "reason": "HUDControl3d method stub/divergence. Score 5715/3900. [score refreshed 2026-05-24]",
     "score": 5715,
     "max_score": 3900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN12ScoreControl14AddMultipliyerEi": {
     "verdict": "ACCEPT-deferred",
@@ -5342,80 +5342,80 @@
   },
   "_ZN13ScrollingMenu11DestroyListEv": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Binary-faithful port: s_ModPowerMask &= ~0x40 safety clear on list destroy mirrors binary @ 0x0015afea. Score overshoot is register-alloc noise.",
+    "reason": "Binary-faithful port: s_ModPowerMask &= ~0x40 safety clear on list destroy mirrors binary @ 0x0015afea. Score overshoot is register-alloc noise. [score refreshed 2026-05-24]",
     "score": 4950,
     "max_score": 4100,
-    "decided_at": "2026-05-16T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenu4SkipEv": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port body matches binary; extra nops are alignment padding.",
+    "reason": "Port body matches binary; extra nops are alignment padding. [score refreshed 2026-05-24]",
     "score": 400,
     "max_score": 100,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenu6UpdateEf": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Binary-faithful port: s_ModPowerMask |= 0x40 on touch-acquire / clear on release mirrors binary @ 0x0015b7cc (SET) and 0x0015baba (CLEAR). Score overshoot is instruction-ordering noise from larger function body. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "Binary-faithful port: s_ModPowerMask |= 0x40 on touch-acquire / clear on release mirrors binary @ 0x0015b7cc (SET) and 0x0015baba (CLEAR). Score overshoot is instruction-ordering noise from larger function body. [score refreshed 2026-05-24]",
     "score": 66645,
     "max_score": 57800,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenu7AddItemEP17ScrollingMenuItem": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu AddItem method divergence post-layout fix. Score 2833/3200. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "ScrollingMenu AddItem method divergence post-layout fix. Score 2833/3200. [score refreshed 2026-05-24]",
     "score": 2833,
     "max_score": 3200,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenu7CollideEl": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 3600/3200.",
+    "reason": "ScrollingMenu method stub/divergence. Score 3600/3200. [score refreshed 2026-05-24]",
     "score": 3600,
     "max_score": 3200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenu7PreDrawEPf": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port body matches binary; extra nops are alignment padding.",
+    "reason": "Port body matches binary; extra nops are alignment padding. [score refreshed 2026-05-24]",
     "score": 400,
     "max_score": 100,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenuC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu ctor divergence post-layout fix (m_Items vector now at +0xb0 changes field-offset immediates in init sequence). Core init order matches binary. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "ScrollingMenu ctor divergence post-layout fix (m_Items vector now at +0xb0 changes field-offset immediates in init sequence). Core init order matches binary. [score refreshed 2026-05-24]",
     "score": 8210,
     "max_score": 6300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenuC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "C2 base-object ctor alias of C1; identical divergence pattern post-layout fix. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "C2 base-object ctor alias of C1; identical divergence pattern post-layout fix. [score refreshed 2026-05-24]",
     "score": 8210,
     "max_score": 6300,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenuD0Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 3255/3000.",
+    "reason": "ScrollingMenu method stub/divergence. Score 3255/3000. [score refreshed 2026-05-24]",
     "score": 3255,
     "max_score": 3000,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenuD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 3445/2900.",
+    "reason": "ScrollingMenu method stub/divergence. Score 3445/2900. [score refreshed 2026-05-24]",
     "score": 3445,
     "max_score": 2900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13ScrollingMenuD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenu method stub/divergence. Score 3445/2900.",
+    "reason": "ScrollingMenu method stub/divergence. Score 3445/2900. [score refreshed 2026-05-24]",
     "score": 3445,
     "max_score": 2900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN13SliderControl13UnloadContentEv": {
     "verdict": "ACCEPT-deferred",
@@ -5832,136 +5832,136 @@
   },
   "_ZN16FruitFactControl10LeftButtonEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 8100/6200. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 7680/6200. [score refreshed 2026-05-24]",
     "score": 7680,
     "max_score": 6200,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl11DownPressedEP10InputEvent": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 8969/6600.",
+    "reason": "FruitFactControl method stub/divergence. Score 8969/6600. [score refreshed 2026-05-24]",
     "score": 8969,
     "max_score": 6600,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl11LeftPressedEP10InputEvent": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 2245/2000.",
+    "reason": "FruitFactControl method stub/divergence. Score 2245/2000. [score refreshed 2026-05-24]",
     "score": 2245,
     "max_score": 2000,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl11LoadContentEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 63403/27600.",
+    "reason": "FruitFactControl method stub/divergence. Score 63403/27600. [score refreshed 2026-05-24]",
     "score": 63403,
     "max_score": 27600,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl11RightButtonEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 6522/6200. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 7262/6200. [score refreshed 2026-05-24]",
     "score": 7262,
     "max_score": 6200,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl12RightPressedEP10InputEvent": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 700/2000.",
+    "reason": "FruitFactControl method stub/divergence. Score 700/2000. [score refreshed 2026-05-24]",
     "score": 700,
     "max_score": 2000,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl13UnLoadContentEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 28040/7900.",
+    "reason": "FruitFactControl method stub/divergence. Score 28040/7900. [score refreshed 2026-05-24]",
     "score": 28040,
     "max_score": 7900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl14ConnectPressedEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 5220/3800.",
+    "reason": "FruitFactControl method stub/divergence. Score 5220/3800. [score refreshed 2026-05-24]",
     "score": 5220,
     "max_score": 3800,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl17UpdateLeaderboardEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 53665/55600.",
+    "reason": "FruitFactControl method stub/divergence. Score 53665/55600. [score refreshed 2026-05-24]",
     "score": 53665,
     "max_score": 55600,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl4InitEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 39779/23600. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 40525/23600. [score refreshed 2026-05-24]",
     "score": 40525,
     "max_score": 23600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl6UpdateEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 30490/27600. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 31102/27600. [score refreshed 2026-05-24]",
     "score": 31102,
     "max_score": 27600,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl7ReleaseEv": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 6290/6700. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 6830/6700. [score refreshed 2026-05-24]",
     "score": 6830,
     "max_score": 6700,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl9BeginDrawEf": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 3380/3000. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 2995/3000. [score refreshed 2026-05-24]",
     "score": 2995,
     "max_score": 3000,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControl9UpPressedEP10InputEvent": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 9119/6600.",
+    "reason": "FruitFactControl method stub/divergence. Score 9119/6600. [score refreshed 2026-05-24]",
     "score": 9119,
     "max_score": 6600,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControlC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 16695/10100. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 17100/10100. [score refreshed 2026-05-24]",
     "score": 17100,
     "max_score": 10100,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControlC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 16695/10100. [score refreshed 2026-05-20T00:00Z]",
+    "reason": "FruitFactControl method stub/divergence. Score 17100/10100. [score refreshed 2026-05-24]",
     "score": 17100,
     "max_score": 10100,
-    "decided_at": "2026-05-20T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControlD0Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 7120/5500.",
+    "reason": "FruitFactControl method stub/divergence. Score 7120/5500. [score refreshed 2026-05-24]",
     "score": 7120,
     "max_score": 5500,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControlD1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 6600/5200.",
+    "reason": "FruitFactControl method stub/divergence. Score 6600/5200. [score refreshed 2026-05-24]",
     "score": 6600,
     "max_score": 5200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16FruitFactControlD2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "FruitFactControl method stub/divergence. Score 6600/5200.",
+    "reason": "FruitFactControl method stub/divergence. Score 6600/5200. [score refreshed 2026-05-24]",
     "score": 6600,
     "max_score": 5200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN16VerticalScroller13UnloadContentEv": {
     "verdict": "ACCEPT-deferred",
@@ -6112,45 +6112,45 @@
   },
   "_ZN17ScrollingMenuItem7SetTextEPKc": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenuItem method stub/divergence. Score 2210/1900.",
+    "reason": "ScrollingMenuItem method stub/divergence. Score 2210/1900. [score refreshed 2026-05-24]",
     "score": 2210,
     "max_score": 1900,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN17ScrollingMenuItem9SetParentEP13ScrollingMenu": {
     "verdict": "ACCEPT-cosmetic",
-    "reason": "Port body matches binary; extra nops are alignment padding.",
+    "reason": "Port body matches binary; extra nops are alignment padding. [score refreshed 2026-05-24]",
     "score": 300,
     "max_score": 200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN17ScrollingMenuItemC1EffPKcN6Mortar9Delegate1IvPS_EE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenuItem method stub/divergence. Score 7265/5200.",
+    "reason": "ScrollingMenuItem method stub/divergence. Score 7265/5200. [score refreshed 2026-05-24]",
     "score": 7265,
     "max_score": 5200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN17ScrollingMenuItemC1Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenuItem method stub/divergence. Score 6680/5200.",
+    "reason": "ScrollingMenuItem method stub/divergence. Score 6680/5200. [score refreshed 2026-05-24]",
     "score": 6680,
     "max_score": 5200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN17ScrollingMenuItemC2EffPKcN6Mortar9Delegate1IvPS_EE": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenuItem method stub/divergence. Score 7265/5200.",
+    "reason": "ScrollingMenuItem method stub/divergence. Score 7265/5200. [score refreshed 2026-05-24]",
     "score": 7265,
     "max_score": 5200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN17ScrollingMenuItemC2Ev": {
     "verdict": "ACCEPT-deferred",
-    "reason": "ScrollingMenuItem method stub/divergence. Score 6680/5200.",
+    "reason": "ScrollingMenuItem method stub/divergence. Score 6680/5200. [score refreshed 2026-05-24]",
     "score": 6680,
     "max_score": 5200,
-    "decided_at": "2026-05-17T00:00Z"
+    "decided_at": "2026-05-24T00:00Z"
   },
   "_ZN18AchievementManager11GetInstanceEv": {
     "verdict": "ACCEPT-deferred",
