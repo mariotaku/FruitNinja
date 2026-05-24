@@ -46,13 +46,13 @@ struct EffectTexture3D   { uint32_t id; };
 struct EffectTextureCube { uint32_t id; };
 
 // EffectPropertyDefinition — 12 bytes.
-// +0x00  m_Name  (Immutable<std::string>, 4 bytes)
+// +0x00  m_Name  (Immutable, 4 bytes)
 // +0x04  m_Type  (uint32_t; wire-level storage for EffectDataTypes::Type enum;
 //                 stored as uint32_t because -fshort-enums makes the enum 1 byte
 //                 but we need the field at offset +0x04 and size 4 for the assert)
-// +0x08  m_Count (uint32_t; per-bucket stride — number of elements to reserve)
+// +0x08  m_Count (uint32_t; per-bucket stride -- number of elements to reserve)
 struct EffectPropertyDefinition {
-    Immutable<std::string> m_Name;   // +0x00, 4 bytes
+    Immutable m_Name;   // +0x00, 4 bytes
     uint32_t               m_Type;   // +0x04, 4 bytes
     uint32_t               m_Count;  // +0x08, 4 bytes
 

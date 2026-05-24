@@ -1,21 +1,23 @@
 #ifndef FN_ENGINE_UTIL_IMMUTABLE_H
 #define FN_ENGINE_UTIL_IMMUTABLE_H
 
-// Immutable<std::string> — thin interned-string handle.
+// Immutable -- thin interned-string handle (std::string only; de-templated).
 // Layout: single 4-byte Node* pointer (m_Node).
 // Two equal strings always produce the same Node*, so operator== is pointer comparison (O(1)).
 //
-// Fruit Ninja is single-threaded — no mutex is needed for the intern pool.
+// Fruit Ninja is single-threaded -- no mutex is needed for the intern pool.
 // If threading is ever added, the pool map must be protected.
+//
+// Heavy members (GetPool, Intern, AddRef, Release, and the two value ctors) are
+// defined out-of-line in Immutable.cpp. The pool is a file-scope static (not a
+// function-local static), so no __cxa_guard / __aeabi_atexit is emitted per call
+// site. Previously these were inline-in-header template bodies, which caused the
+// Mesh ctor to expand the full map-walk 4 times (one per Immutable<string> call).
 
 #include <string>
 #include <map>
 
-template<typename T>
-class Immutable;
-
-template<>
-class Immutable<std::string> {
+class Immutable {
 public:
     struct Node {
         int         m_RefCount;
@@ -27,52 +29,18 @@ public:
 private:
     Node* m_Node;
 
-    static std::map<std::string, Node*>& GetPool() {
-        static std::map<std::string, Node*> s_Pool;
-        return s_Pool;
-    }
-
-    static Node* Intern(const std::string& str) {
-        std::map<std::string, Node*>& pool = GetPool();
-        std::map<std::string, Node*>::iterator it = pool.find(str);
-        if (it != pool.end()) {
-            return it->second;
-        }
-        Node* node = new Node(str);
-        pool[str] = node;
-        return node;
-    }
-
-    void AddRef() {
-        if (m_Node) {
-            m_Node->m_RefCount++;
-        }
-    }
-
-    void Release() {
-        if (m_Node) {
-            m_Node->m_RefCount--;
-            if (m_Node->m_RefCount <= 0) {
-                std::map<std::string, Node*>& pool = GetPool();
-                pool.erase(m_Node->s);
-                delete m_Node;
-            }
-            m_Node = NULL;
-        }
-    }
+    static std::map<std::string, Node*>& GetPool();
+    static Node* Intern(const std::string& str);
+    void AddRef();
+    void Release();
 
 public:
     Immutable() : m_Node(NULL) {}
 
-    explicit Immutable(const std::string& str) : m_Node(Intern(str)) {
-        AddRef();
-    }
+    explicit Immutable(const std::string& str);
+    explicit Immutable(const char* str);
 
-    explicit Immutable(const char* str) : m_Node(Intern(std::string(str))) {
-        AddRef();
-    }
-
-    Immutable(const Immutable<std::string>& other) : m_Node(other.m_Node) {
+    Immutable(const Immutable& other) : m_Node(other.m_Node) {
         AddRef();
     }
 
@@ -80,7 +48,7 @@ public:
         Release();
     }
 
-    Immutable<std::string>& operator=(const Immutable<std::string>& other) {
+    Immutable& operator=(const Immutable& other) {
         if (this != &other) {
             if (other.m_Node) other.m_Node->m_RefCount++;
             Release();
@@ -89,11 +57,11 @@ public:
         return *this;
     }
 
-    bool operator==(const Immutable<std::string>& other) const {
+    bool operator==(const Immutable& other) const {
         return m_Node == other.m_Node;
     }
 
-    bool operator!=(const Immutable<std::string>& other) const {
+    bool operator!=(const Immutable& other) const {
         return m_Node != other.m_Node;
     }
 
@@ -109,8 +77,8 @@ public:
 };
 
 #ifdef __bada__
-static_assert(sizeof(Immutable<std::string>) == 4,
-              "Immutable<std::string> must be 4 bytes (single Node* pointer)");
+static_assert(sizeof(Immutable) == 4,
+              "Immutable must be 4 bytes (single Node* pointer)");
 #endif
 
 #endif  // FN_ENGINE_UTIL_IMMUTABLE_H
