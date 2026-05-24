@@ -356,9 +356,17 @@ void Mesh::DrawQuad(Colour colour, SmartPtr<Texture> texture,
 }
 
 // Binary @ 0x00194180
-// ASM-verified: 2026-05-24 binary @ 0x00194180 (re-analyst)
+// DIFFERS: binary passes (0.0f, 1.0f, 0.0f, 1.0f) to the 6-arg, which the binary
+// interprets as (u_left=0, u_right=1, v_top=0, v_bottom=1) -- parameter ORDER in
+// the binary's 6-arg is (colour, u_left, u_right, v_top, v_bottom, fx), not the
+// port's (colour, u0, v0, u1, v1). Port passes (0,0,1,1) to match the port's
+// Renderer::DrawQuad vertex-UV convention (u0=left, v0=top, u1=right, v1=bottom).
+// True root-cause fix would be reordering the 6-arg signature to (uL,uR,vT,vB)
+// and updating all ~30 6-arg call sites; deferred. ASM-verified marker removed
+// because port emit no longer matches binary's literal float args; the DIFFERS
+// block above is the canonical record.
 void Mesh::DrawQuadUnCached(Colour colour, DrawEffectContainer* fx) {
-    DrawQuadUnCached(colour, 0.0f, 1.0f, 0.0f, 1.0f, fx);
+    DrawQuadUnCached(colour, 0.0f, 0.0f, 1.0f, 1.0f, fx);
 }
 
 // Binary @ 0x00194060
