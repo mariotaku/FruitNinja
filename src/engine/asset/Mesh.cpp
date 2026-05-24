@@ -1,4 +1,5 @@
 #include "asset/Mesh.h"
+#include "asset/SharedEffectProperties.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
@@ -13,7 +14,10 @@ namespace Mortar {
 // --- Mesh ---
 
 // Binary @ 0x001b0e70
-Mesh::Mesh() : m_Skeleton(nullptr) {}
+Mesh::Mesh()
+    : m_Skeleton(nullptr)
+    , m_WorldProp(NULL), m_ViewProp(NULL), m_ProjProp(NULL), m_WVPProp(NULL)
+{}
 
 // Binary @ 0x001b0a5c
 Mesh::~Mesh() {
@@ -323,12 +327,34 @@ void Mesh::Draw(const Matrix44& worldTransform) {
 
 // ---- Mesh binary stubs ----
 
-// STUB: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x001b10d8
-// Defunct: SharedEffectProperties not ported; default-constructs instead.
-Mesh::Mesh(SmartPtr<SharedEffectProperties> const& /*props*/, AsciiString const& name)
-    : m_Skeleton(nullptr) {
-    // Defunct: SharedEffectProperties -- no-op stub; binary @ 0x001b10d8
+// Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b10d8
+// Binary: builds a 4-entry EffectPropertyDefinition array (World, SceneCamera.View,
+// SceneCamera.Projection, WorldViewProjection; type=3, count=1 each), then either
+// reuses parent if it Contains() all defs, or news up SharedEffectProperties as
+// m_OwnGroup. Finally caches the 4 EffectProperty* handles via GetProperty(name).
+// Port: EffectPropertyList::Contains() stub returns true, so parent is always reused
+// when valid; GetProperty() stub returns nullptr for all 4 cached handles.
+Mesh::Mesh(SmartPtr<SharedEffectProperties> const& parent, AsciiString const& name)
+    : m_Skeleton(NULL)
+    , m_WorldProp(NULL), m_ViewProp(NULL), m_ProjProp(NULL), m_WVPProp(NULL)
+{
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b10d8
     m_Name = name.c_str();
+    EffectPropertyDefinition defs[4] = {
+        { NULL, 3, 1 },  // "World"
+        { NULL, 3, 1 },  // "SceneCamera.View"
+        { NULL, 3, 1 },  // "SceneCamera.Projection"
+        { NULL, 3, 1 },  // "WorldViewProjection"
+    };
+    if (parent.IsValid() && parent->GetList().Contains(defs)) {
+        m_OwnGroup = parent;
+    } else {
+        m_OwnGroup = new SharedEffectProperties(defs, defs + 4, parent);
+    }
+    m_WorldProp = m_OwnGroup->GetList().GetProperty("World");
+    m_ViewProp  = m_OwnGroup->GetList().GetProperty("SceneCamera.View");
+    m_ProjProp  = m_OwnGroup->GetList().GetProperty("SceneCamera.Projection");
+    m_WVPProp   = m_OwnGroup->GetList().GetProperty("WorldViewProjection");
 }
 
 // STUB: BindSkeleton(Skeleton const&) -- binary @ 0x001b0948
@@ -337,29 +363,55 @@ void Mesh::BindSkeleton(Skeleton const& /*skeleton*/) {
     // Defunct: const-ref BindSkeleton overload -- no-op stub; binary @ 0x001b0948
 }
 
-// STUB: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c
-// Defunct: port appends GeometryEntry directly in LoadMesh.
+// Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b0d0c
+// Binary: pushes SmartPtr<Geometry> into m_Geometries (vector<SmartPtr<Geometry>>).
+// Port: m_Geometries is vector<GeometryEntry>; storage types don't match.
+// DIFFERS: binary appends SmartPtr<Geometry>; port uses GeometryEntry directly loaded
+// in LoadMesh -- this overload is unreachable at runtime but kept for call-graph parity.
 void Mesh::AddGeometry(SmartPtr<Geometry> const& /*geom*/) {
-    // Defunct: Geometry/GeometryBinding stack -- no-op stub; binary @ 0x001b0d0c
+    // Defunct: SharedEffectProperties subsystem -- no-op stub; binary @ 0x001b0d0c
 }
 
-// STUB: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x001b0988
-SharedEffectProperties* Mesh::GetPropertiesGroup(AsciiString const& /*name*/) const {
-    // Defunct: SharedEffectProperties -- no-op stub; binary @ 0x001b0988
-    return nullptr;
+// Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b0988
+// Binary: looks up name in m_GroupsByName; returns &slot.m_Group if found, nullptr if not.
+SmartPtr<SharedEffectProperties>* Mesh::GetPropertiesGroup(AsciiString const& name) const {
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b0988
+    std::map<AsciiString, SharedPropsInfo>::const_iterator it = m_GroupsByName.find(name);
+    if (it == m_GroupsByName.end()) return NULL;
+    return const_cast<SmartPtr<SharedEffectProperties>*>(&it->second.m_Group);
 }
 
-// STUB: GetPropertiesGroup(AsciiString const&, EffectPropertyDefinition const*, EffectPropertyDefinition const*) -- binary @ 0x001b1430
-SharedEffectProperties* Mesh::GetPropertiesGroup(AsciiString const& /*name*/,
-                                                  EffectPropertyDefinition const* /*begin*/,
-                                                  EffectPropertyDefinition const* /*end*/) {
-    // Defunct: SharedEffectProperties -- no-op stub; binary @ 0x001b1430
-    return nullptr;
+// Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b1430
+// Binary: checks if existing group already contains all defs; if so returns it.
+// Otherwise inserts a new SharedEffectProperties(begin, end, parent) into m_GroupsByName.
+// Port: EffectPropertyList::Contains() stub returns true, so the fast-path wins
+// whenever a group is already present; new-group construction fires only on first call.
+SmartPtr<SharedEffectProperties>* Mesh::GetPropertiesGroup(AsciiString const& name,
+                                                            EffectPropertyDefinition const* begin,
+                                                            EffectPropertyDefinition const* end) {
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b1430
+    SmartPtr<SharedEffectProperties>* existing = GetPropertiesGroup(name);
+    if (existing) {
+        const EffectPropertyDefinition* p = begin;
+        while (p < end && (*existing)->GetList().Contains(p)) ++p;
+        if (p == end) return existing;
+    }
+    SmartPtr<SharedEffectProperties>& slot = m_GroupsByName[name].m_Group;
+    SmartPtr<SharedEffectProperties> parent = existing ? *existing : m_OwnGroup;
+    slot = new SharedEffectProperties(begin, end, parent);
+    return &slot;
 }
 
-// STUB: RebuildEffectBindings() -- binary @ 0x001b08e8
+// Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b08e8
+// Binary: re-fetches the 4 cached prop handles (World/View/Proj/WVP) from m_OwnGroup.
+// Port: GetProperty() stub returns nullptr; handles stay nullptr.
 void Mesh::RebuildEffectBindings() {
-    // Defunct: EffectBinding system -- no-op stub; binary @ 0x001b08e8
+    // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b08e8
+    if (!m_OwnGroup.IsValid()) return;
+    m_WorldProp = m_OwnGroup->GetList().GetProperty("World");
+    m_ViewProp  = m_OwnGroup->GetList().GetProperty("SceneCamera.View");
+    m_ProjProp  = m_OwnGroup->GetList().GetProperty("SceneCamera.Projection");
+    m_WVPProp   = m_OwnGroup->GetList().GetProperty("WorldViewProjection");
 }
 
 // STUB: DrawCube(float, float, float, Colour, DrawEffectContainer*) -- binary @ 0x00193ed8
