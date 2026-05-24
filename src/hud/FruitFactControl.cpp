@@ -279,7 +279,7 @@ FruitFactControl::FruitFactControl()
     , m_StarTimer(0.0f)
     , m_bConnectPressed(0)
     , m_ComboStarTex()
-    , m_ComboType(-1)
+    , m_ComboType(0xFF)
     , m_TabIndex(0)
     , m_pLeaderboardMenu(nullptr)
     , m_pConnectButton(nullptr)
@@ -294,14 +294,16 @@ FruitFactControl::FruitFactControl()
     m_ComboActiveFlag = 0;
     memset(_pad_factColour, 0, sizeof(_pad_factColour));
     memset(_pad_D9, 0, sizeof(_pad_D9));
+    memset(_pad_E1, 0, sizeof(_pad_E1));
     memset(_pad_E5, 0, sizeof(_pad_E5));
     memset(_pad_LocalScore, 0, sizeof(_pad_LocalScore));
     memset(_pad_FriendScore1, 0, sizeof(_pad_FriendScore1));
     memset(_pad_FriendScore2, 0, sizeof(_pad_FriendScore2));
     memset(_pad_201, 0, sizeof(_pad_201));
 
-    // Binary: snapshot NetworkManager+4 byte to m_StarType
-    // Defunct: NetworkManager online state -- no-op; m_StarType stays 0
+    // Binary @ 0x0013cb60: snapshots game_work.gameMode (gw+4) into m_StarType at construction.
+    // ASM-verified: 2026-05-24 binary @ 0x0013cb60 (re-analyst)
+    // Defunct stub: gameMode is 0 at pre-game construction time, so m_StarType stays 0 -- identical effect.
 
     // Binary: IsProviderOnline() -> m_LBState (1 = always offline branch)
     // Defunct: always offline; m_LBState = 1 set in initializer list above
@@ -360,8 +362,6 @@ void FruitFactControl::Init() {
         }
     }
 
-    m_FactColour.a = 0xFF;
-
     // ASM-verified: 2026-05-18 binary @ 0x0013a34e..0x0013a3ac (re-analyst)
     // TWO distinct gates in the binary:
     //   1. comboFlag (m_ComboActiveFlag / field_0xa0): Zen ONLY (mode==3 && cnt>=3).
@@ -382,9 +382,13 @@ void FruitFactControl::Init() {
     }
     m_ComboActiveFlag = (uint8_t)comboFlag; // field_0xa0 -- Zen-only; consumed by Update/Draw
 
+    // NB: field_0xe0 = m_ComboType (uint8). 0xFF = "no combo" default per binary @ 0x0013a3ae
+    m_ComboType = 0xFF;
+
     // Per-mode m_FactPosOffset: non-combo default (-69, 53, 0)
     m_FactPosOffset = Vec3(-69.0f, 53.0f, 0.0f);
 
+    // TODO: 0x0013a3ae -- non-combo path: strcpy LSTR_FRUIT_FACT_INTRO (id 0xb1) into BakedString buf @ DAT_0013a528; BakedString unported
     if (comboPath) {
         // Combo path (binary @ 0x0013a3ae, comboPath branch).
         // Binary: snprintf(buf, "%s", Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO))
@@ -401,8 +405,8 @@ void FruitFactControl::Init() {
             m_ComboHashArray[i] = game_work.m_SaveData->m_BestComboFruits[i];
         }
         int localFruitIdx = 0;
-        m_ComboType = (int)CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);
-        m_ComboStarTex = GetComboStarTexture((uint8_t)m_ComboType);
+        m_ComboType = CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);
+        m_ComboStarTex = GetComboStarTexture(m_ComboType);
         if (m_FruitIdx != localFruitIdx) m_FruitIdx = localFruitIdx;
         m_FactPosOffset = Vec3(140.0f, -72.0f, 0.0f);
     }
@@ -410,10 +414,9 @@ void FruitFactControl::Init() {
     // Always: GetFact with current fruit/fact indices
     m_pCurFactString = Fruit::GetFact(&m_FruitIdx, &m_FactIdx, m_FruitIdx, m_FactIdx);
 
-    // Always: colour from fruit
-    if (m_FruitIdx >= 0) {
-        m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
-    }
+    // Always: colour from fruit (binary always assigns; Fruit::FruitFactColour clamps internally)
+    // ASM-verified: 2026-05-24 binary @ 0x0013a278 (re-analyst) -- unconditional, no m_FruitIdx guard
+    m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
 
     // ASM-verified: 2026-05-14 binary @ 0x0013a278..0x0013a4f6 (asm-inspector)
     //   GOT base = 0x001ec130 (ldr r5,[pc,#0x000b1eb0]; adds r5,r5,r3)
@@ -424,7 +427,8 @@ void FruitFactControl::Init() {
     // don't exist (sml_ap_facts.tex). FruitFactTexture returns the XML
     // factTexture attr directly (e.g. "sml_ap" for apple) which resolves
     // to the small per-fruit icon in FruitNinjaBada/Data/textures/.
-    if (m_FruitIdx >= 0) {
+    // Binary always calls FruitFactTexture + sprintf unconditionally (@ 0x0013a434..0x0013a47c)
+    {
         const char* fruitBase = Fruit::FruitFactTexture(m_FruitIdx);
         if (fruitBase && *fruitBase) {
             char buf[128];
@@ -519,34 +523,41 @@ void FruitFactControl::Update(float dt) {
         // SecondaryTex = combo-star tex
         m_Texture = m_ComboStarTex;
 
-        // TODO: 0x0013b7be (R1.2 Cluster A popup-N gap) -- per re-analyst
-        // 2026-05-23, binary's FruitFactControl::Update plays "popup-%i" /
-        // "popup-1" (rodata 0x001bb438 / 0x001bc50f), NOT "Clean-Slice-%d"
-        // (which fires elsewhere). The current port has the right field
-        // semantics (m_StarTimer = field_0xd4 float, idx via int truncation,
-        // clamp 1..8) but the SFX names are likely WRONG. Round 2: confirm
-        // whether Path A literal should be "popup-1" and Path B format should
-        // be "popup-%i", then update the snprintf + literal.
+        // ASM-verified: 2026-05-24 binary @ 0x0013b604 (re-analyst)
+        // Path A: post-combo single-shot "achievement" SFX, dt*2 step.
+        // Path B: during-combo per-beat "popup-%i" SFX, dt*4 step.
+        // Gate: (gw.m_GameDt > 0.75f && m_StarTimer < ComboLength) -> Path B; else Path A.
         if (game_work.m_GameDt <= 0.75f || m_StarTimer >= (float)m_ComboLength) {
-            // Path A (faster combo cadence): StarTimer += 2*dt, 0.5-fractional gate
+            // Path A: post-combo single-shot crossing trigger
+            float old = m_StarTimer;
             m_StarTimer += 2.0f * dt;
-            if (m_StarTimer - (float)(int)m_StarTimer >= 0.5f) {
-                if (game_work.mGameSound) {
-                    game_work.mGameSound->SFXPlay("Clean-Slice-1", 1.0f, 1.0f,
-                        Mortar::Delegate1<bool, Mortar::MortarSound*>());
+            if (m_StarTimer > 0.0f && m_ComboStarTex.IsValid()) {
+                float oldFrac = old - (float)(int)old;
+                float newFrac = m_StarTimer - (float)(int)m_StarTimer;
+                if (oldFrac < 0.5f && newFrac >= 0.5f) {
+                    if (game_work.mGameSound) {
+                        // DAT_0013b92c = 0xfffcd195 -> "achievement" @ 0x001b92c5
+                        game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f,
+                            Mortar::Delegate1<bool, Mortar::MortarSound*>());
+                    }
                 }
             }
         } else {
-            // Path B (per-second sin-pulse): StarTimer += 4*dt, 0.5-fractional gate
+            // Path B: during-combo per-beat
+            float old = m_StarTimer;
             m_StarTimer += 4.0f * dt;
-            if (m_StarTimer - (float)(int)m_StarTimer >= 0.5f) {
-                int n = (int)m_StarTimer;
-                int idx = (n < 7) ? (n + 1) : 8;
-                char sfx[16];
-                snprintf(sfx, sizeof(sfx), "Clean-Slice-%d", idx);
-                if (game_work.mGameSound) {
-                    game_work.mGameSound->SFXPlay(sfx, 1.0f, 1.0f,
-                        Mortar::Delegate1<bool, Mortar::MortarSound*>());
+            if (m_StarTimer > 0.0f) {
+                float oldFrac = old - (float)(int)old;
+                float newFrac = m_StarTimer - (float)(int)m_StarTimer;
+                if (oldFrac < 0.5f && newFrac >= 0.5f) {
+                    int idx_n = (int)m_StarTimer;
+                    int idx = (idx_n <= 6) ? (idx_n + 1) : 8;
+                    char sfx[16];
+                    snprintf(sfx, sizeof(sfx), "popup-%i", idx);  // DAT_0013b928 -> "popup-%i" @ 0x001bb438
+                    if (game_work.mGameSound) {
+                        game_work.mGameSound->SFXPlay(sfx, 1.0f, 1.0f,
+                            Mortar::Delegate1<bool, Mortar::MortarSound*>());
+                    }
                 }
             }
         }
@@ -997,7 +1008,7 @@ void FruitFactControl::LeftButton() {
     --m_TabIndex;
     if ((int)m_TabIndex < 0) m_TabIndex = 1;
     if (g && game_work.m_SaveData) {
-        game_work.m_SaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
+        game_work.m_SaveData->SetTotal("factMode", (int)m_TabIndex + 1, true, true);
     }
 }
 
@@ -1012,7 +1023,7 @@ void FruitFactControl::RightButton() {
     ++m_TabIndex;
     if ((int)m_TabIndex > 1) m_TabIndex = 0;
     if (g && game_work.m_SaveData) {
-        game_work.m_SaveData->SetTotal("PomTabIndex", (int)m_TabIndex + 1, true, true);
+        game_work.m_SaveData->SetTotal("factMode", (int)m_TabIndex + 1, true, true);
     }
 }
 

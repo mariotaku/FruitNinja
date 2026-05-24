@@ -36,16 +36,13 @@
 //   +0x8C: Mortar::SmartPtr<Texture> m_FactTexture  (4B)
 //   +0x90: Vec3 m_FactPosOffset (12B) -- ASM-verified: 2026-05-11 binary @ 0x0013a278 (re-analyst)
 //   +0x9C: Colour m_FactColour  (4B + 4B pad to reach +0xA4)
-//   +0xA4: int[11] m_ComboHashArray  (44B; 0xA4+44=0xD0)
-// TODO: 0x0013cb60 -- RE spec says int[12] at +0xA4 but places m_ComboLength
-//       at +0xD0, which is inconsistent (int[12] would end at +0xD4). Using
-//       int[11] (44B, 0xA4..0xCF) so m_ComboLength lands at +0xD0 as spec states.
-//   +0xD0: int m_ComboLength  (was wrongly named m_ComboHash in prior stub)
+//   +0xA4: int[11] m_ComboHashArray  (44B; 0xA4+44=0xD0) -- ASM-verified: 2026-05-24 binary @ 0x0013cb60 (re-analyst)
+//   +0xD0: int m_ComboLength
 //   +0xD4: float m_StarTimer
 //   +0xD8: uint8 m_bConnectPressed
 //   +0xD9..+0xDB: padding 3B
 //   +0xDC: Mortar::SmartPtr<Texture> m_ComboStarTex  (4B)
-//   +0xE0: int m_ComboType
+//   +0xE0: uint8_t m_ComboType (0xFF = no combo) -- ASM-verified: 2026-05-24 binary @ 0x0013cb60 (re-analyst)
 //   +0xE4: uint8 m_TabIndex
 //   +0xE5..+0xE7: padding 3B
 //   +0xE8: LeaderboardList* m_pLeaderboardMenu
@@ -95,7 +92,9 @@ public:
     uint8_t        m_bConnectPressed;    // +0xD8
     uint8_t        _pad_D9[3];           // +0xD9
     Mortar::SmartPtr<Mortar::Texture> m_ComboStarTex; // +0xDC
-    int            m_ComboType;          // +0xE0
+    // ASM-verified: 2026-05-24 binary @ 0x0013cb60 (re-analyst) -- uint8_t, NOT int; 0xFF = "no combo"
+    uint8_t        m_ComboType;          // +0xE0
+    uint8_t        _pad_E1[3];           // +0xE1
     uint8_t        m_TabIndex;           // +0xE4
     uint8_t        _pad_E5[3];           // +0xE5
     LeaderboardList* m_pLeaderboardMenu; // +0xE8
