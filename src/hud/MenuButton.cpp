@@ -22,8 +22,9 @@
 #include "entities/FruitInfo.h"
 #include "entities/ActorManager.h"
 #include "input/Touch.h"
+#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
@@ -998,30 +999,30 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
         if (s_TexScratchs.IsValid()) {
             MatrixManager& mm = MatrixManager::GetInstance();
-            Renderer* r = Renderer::GetInstance();
-            if (r) {
-                // Mirror flip via X scale (m_bFlipped chosen randomly in Init).
-                const float sx = m_bFlipped ? -1.0f : 1.0f;
+            // Mirror flip via X scale (m_bFlipped chosen randomly in Init).
+            const float sx = m_bFlipped ? -1.0f : 1.0f;
 
-                // Binary @ 0x0014fa86: Scale44((sx, 1, 1) * m_BackdropScale).
-                // Z = -5500 (DAT_0014fcf8) puts the quad deep in the ortho
-                // frustum.
-                Matrix44 mat = Matrix44::MakeScale(sx * m_BackdropScale,
-                                                   m_BackdropScale,
-                                                   m_BackdropScale);
-                mat.GlobalTranslate44(Vec3(pos.x, pos.y, -5500.0f));
-                mm.GetWorldStack().Reset();
-                mm.GetWorldStack().SetCurrentMatrix(mat);
-                mm.UploadModelViewOnly();
+            // Binary @ 0x0014fa86: Scale44((sx, 1, 1) * m_BackdropScale).
+            // Z = -5500 (DAT_0014fcf8) puts the quad deep in the ortho
+            // frustum.
+            Matrix44 mat = Matrix44::MakeScale(sx * m_BackdropScale,
+                                               m_BackdropScale,
+                                               m_BackdropScale);
+            mat.GlobalTranslate44(Vec3(pos.x, pos.y, -5500.0f));
+            mm.GetWorldStack().Reset();
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
 
-                // Binary @ 0x0014faf0: DrawQuadSized(0.0, 1.0, 0.0, 1.0, &tint)
-                // -- four floats are UV bounds (uMin, uMax, vMin, vMax), not
-                // halfW/halfH. Geometry is unit-quad (-0.5..+0.5) inside DrawQuad.
-                Colour tint(255, 255, 255, alpha);
-                s_TexScratchs->Set();
-                r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
-                s_TexScratchs->UnSet();
+            // Binary @ 0x0014faf0: DrawQuadSized(0.0, 1.0, 0.0, 1.0, &tint)
+            // -- four floats are UV bounds (uMin, uMax, vMin, vMax), not
+            // halfW/halfH. Geometry is unit-quad (-0.5..+0.5) inside DrawQuad.
+            Colour tint(255, 255, 255, alpha);
+            s_TexScratchs->Set();
+            {
+                Mortar::Mesh m;
+                m.DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
             }
+            s_TexScratchs->UnSet();
         }
         return;
     }
@@ -1049,44 +1050,44 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         && m_TargetSize.x != 0.0f)
     {
         MatrixManager& mm = MatrixManager::GetInstance();
-        Renderer* r = Renderer::GetInstance();
-        if (r) {
-            const float ratio = size.x / m_TargetSize.x;
-            const uint16_t phase =
-                (uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f);
-            const float s = SinIdx(phase);
-            const float by = (s < 0.0f ? -s : s) * 6.0f;
+        const float ratio = size.x / m_TargetSize.x;
+        const uint16_t phase =
+            (uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f);
+        const float s = SinIdx(phase);
+        const float by = (s < 0.0f ? -s : s) * 6.0f;
 
-            // Binary @ 0x0014fdf4 reads m_TargetSize (+0x124..+0x128), NOT
-            // size (HUDControl base +0x20). Using size makes the anchor
-            // shrink during the grow-in animation; binary keeps the anchor
-            // fixed at the target size and only the QUAD scales via ratio.
-            Vec3 off(m_BounceParams.x * m_TargetSize.x * 0.5f,
-                     by + m_BounceParams.y * m_TargetSize.y * 0.5f,
-                     0.0f);
-            off = off * ratio;
-            Vec3 drawAt = pos + off;
+        // Binary @ 0x0014fdf4 reads m_TargetSize (+0x124..+0x128), NOT
+        // size (HUDControl base +0x20). Using size makes the anchor
+        // shrink during the grow-in animation; binary keeps the anchor
+        // fixed at the target size and only the QUAD scales via ratio.
+        Vec3 off(m_BounceParams.x * m_TargetSize.x * 0.5f,
+                 by + m_BounceParams.y * m_TargetSize.y * 0.5f,
+                 0.0f);
+        off = off * ratio;
+        Vec3 drawAt = pos + off;
 
-            mm.GetWorldStack().Reset();
-            // Binary @ 0x0014fdf8: Scale44(ratio*64, ratio*32, 0.0f).
-            // DAT_00150044 = 0.0f for the Z-scale; the geometry's z is unused
-            // (subsequent GlobalTranslate writes the final z=pos.z).
-            Matrix44 mat = Matrix44::MakeScale(ratio * 64.0f,
-                                               ratio * 32.0f,
-                                               0.0f);
-            mat.GlobalTranslate44(drawAt);
-            mm.GetWorldStack().SetCurrentMatrix(mat);
-            mm.UploadModelViewOnly();
+        mm.GetWorldStack().Reset();
+        // Binary @ 0x0014fdf8: Scale44(ratio*64, ratio*32, 0.0f).
+        // DAT_00150044 = 0.0f for the Z-scale; the geometry's z is unused
+        // (subsequent GlobalTranslate writes the final z=pos.z).
+        Matrix44 mat = Matrix44::MakeScale(ratio * 64.0f,
+                                           ratio * 32.0f,
+                                           0.0f);
+        mat.GlobalTranslate44(drawAt);
+        mm.GetWorldStack().SetCurrentMatrix(mat);
+        mm.UploadModelViewOnly();
 
-            const uint8_t a = m_DrawColour.a;
-            Colour tint = m_bTouchHeld
-                ? Colour(255, 255, 255, a)
-                : Colour(128, 128, 128, a);
+        const uint8_t a = m_DrawColour.a;
+        Colour tint = m_bTouchHeld
+            ? Colour(255, 255, 255, a)
+            : Colour(128, 128, 128, a);
 
-            s_TexNewItem->Set();
-            r->DrawQuad(tint, 0.0f, 0.0f, 1.0f, 1.0f);
-            s_TexNewItem->UnSet();
+        s_TexNewItem->Set();
+        {
+            Mortar::Mesh m;
+            m.DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
         }
+        s_TexNewItem->UnSet();
     }
 
     // Layer 3: Sparkle ring — INTENTIONALLY OMITTED. Per RE pass 2026-04-29,

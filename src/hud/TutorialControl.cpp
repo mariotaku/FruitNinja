@@ -10,8 +10,9 @@
 #include "Game.h"
 #include "HUD.h"
 #include "hud/HUDLayer.h"
+#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
@@ -264,9 +265,6 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
     // NOTE: no early-out on m_bHidden -- it is a UV frame selector, not a guard.
 
     MatrixManager& mm = MatrixManager::GetInstance();
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
-
     float flipSign = m_bFlipX ? -1.0f : 1.0f;
 
     // --- (1) Trail quads (press_indicate.tex, m_PressTex at +0x8C) ---
@@ -320,7 +318,10 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
 
             m_PressTex->Set();
             // UV: full (0.0, 0.0, 1.0, 1.0) per DAT_001635c4=0.0, 0x3f800000=1.0
-            r->DrawQuad(trailColour, 0.0f, 0.0f, 1.0f, 1.0f);
+            {
+                Mortar::Mesh m;
+                m.DrawQuadUnCached(trailColour, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
+            }
             m_PressTex->UnSet();
         }
     }
@@ -349,7 +350,10 @@ void TutorialControl::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         m_Texture->Set();
-        r->DrawQuad(m_Colour, arrow_u0, 0.0f, arrow_u1, 1.0f);
+        {
+            Mortar::Mesh m;
+            m.DrawQuadUnCached(m_Colour, arrow_u0, 0.0f, arrow_u1, 1.0f, NULL);
+        }
         m_Texture->UnSet();
     }
 }

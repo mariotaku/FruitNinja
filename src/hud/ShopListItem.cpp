@@ -13,8 +13,8 @@
 #include "game/ItemManager.h"
 #include "screens/ShopScreen.h"
 #include "Game.h"
+#include "engine/asset/MeshDraw.h"
 #include "engine/render/MatrixManager.h"
-#include "engine/render/Renderer.h"
 #include "engine/render/Font.h"
 #include "engine/math/Matrix44.h"
 #include "engine/math/Colour.h"
@@ -334,8 +334,6 @@ void ShopListItem::Draw() {
         if (!font) goto draw_part8;
 
         MatrixManager& mm = MatrixManager::GetInstance();
-        Renderer* r = Renderer::GetInstance();
-        if (!r) goto draw_part8;
 
         // White colour singleton (*(Colour**)(GOT+0x73a4) in binary = {255,255,255,255})
         const Colour colourWhite(255, 255, 255, 255);
@@ -488,7 +486,7 @@ void ShopListItem::Draw() {
 
             if (ShopScreen::s_TexNewItemSmlBadge.IsValid()) {
                 ShopScreen::s_TexNewItemSmlBadge->Set();
-                r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
                 ShopScreen::s_TexNewItemSmlBadge->UnSet();
             }
         }
@@ -519,7 +517,7 @@ void ShopListItem::Draw() {
 
             if (ShopScreen::s_TexSelectedSml.IsValid()) {
                 ShopScreen::s_TexSelectedSml->Set();
-                r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
                 ShopScreen::s_TexSelectedSml->UnSet();
             }
         }
@@ -547,13 +545,13 @@ void ShopListItem::Draw() {
 
             if (!isLocked) {
                 m_pIconTex->Set();
-                r->DrawQuad(colourWhite);  // always white (binary uses white singleton)
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
                 m_pIconTex->UnSet();
             } else {
                 // locked: draw locked_stroke.tex (static_block[+0x40])
                 if (ShopScreen::s_TexLockedStroke.IsValid()) {
                     ShopScreen::s_TexLockedStroke->Set();
-                    r->DrawQuad(colourWhite);  // always white
+                    Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
                     ShopScreen::s_TexLockedStroke->UnSet();
                 }
             }
@@ -600,12 +598,8 @@ void ShopListItem::Draw() {
             mm.UploadModelViewOnly();
 
             if (ShopScreen::s_TexScratch.IsValid()) {
-                // Use Texture::Set so s_LastBoundTexId is tracked --
-                // Renderer::DrawQuad skips the draw when the tracker
-                // says nothing is bound (the raw glBindTexture path
-                // doesn't update it).
                 ShopScreen::s_TexScratch->Set();
-                r->DrawQuad(dividerColour);
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(dividerColour, NULL);
                 ShopScreen::s_TexScratch->UnSet();
             }
 
@@ -625,7 +619,7 @@ void ShopListItem::Draw() {
 
                 if (ShopScreen::s_TexScratch.IsValid()) {
                     ShopScreen::s_TexScratch->Set();
-                    r->DrawQuad(Colour(128, 128, 128, 255));  // always grey
+                    Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(128, 128, 128, 255), NULL);  // always grey
                     ShopScreen::s_TexScratch->UnSet();
                 }
             }
@@ -785,31 +779,28 @@ void ShopListItem::Draw() {
 
         if (ShopScreen::s_TexLoading.IsValid()) {
             MatrixManager& mm2 = MatrixManager::GetInstance();
-            Renderer* r2 = Renderer::GetInstance();
-            if (r2) {
-                ShopScreen::s_TexLoading->Set();
+            ShopScreen::s_TexLoading->Set();
 
-                // Stripe 1 (top): Translate(parentX - 2.0, 105.0, 0)
-                {
-                    Matrix44 matTop = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
-                    matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);    // DAT_0015f724=105.0f
-                    mm2.GetWorldStack().Reset();
-                    mm2.GetWorldStack().SetCurrentMatrix(matTop);
-                    mm2.UploadModelViewOnly();
-                    r2->DrawQuad(Colour(0, 0, 0, 128));  // (0,0,0,0x80)
-                }
-                // Stripe 2 (bottom): Translate(parentX - 2.0, -105.0, 0)
-                {
-                    Matrix44 matBot = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
-                    matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);   // DAT_0015f728=-105.0f
-                    mm2.GetWorldStack().Reset();
-                    mm2.GetWorldStack().SetCurrentMatrix(matBot);
-                    mm2.UploadModelViewOnly();
-                    r2->DrawQuad(Colour(0, 0, 0, 128));
-                }
-
-                ShopScreen::s_TexLoading->UnSet();
+            // Stripe 1 (top): Translate(parentX - 2.0, 105.0, 0)
+            {
+                Matrix44 matTop = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
+                matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);    // DAT_0015f724=105.0f
+                mm2.GetWorldStack().Reset();
+                mm2.GetWorldStack().SetCurrentMatrix(matTop);
+                mm2.UploadModelViewOnly();
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(0, 0, 0, 128), NULL);  // (0,0,0,0x80)
             }
+            // Stripe 2 (bottom): Translate(parentX - 2.0, -105.0, 0)
+            {
+                Matrix44 matBot = Matrix44::Scale44(290.0f, 120.0f, 0.0f);  // DAT_0015f718, DAT_0015f71c
+                matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);   // DAT_0015f728=-105.0f
+                mm2.GetWorldStack().Reset();
+                mm2.GetWorldStack().SetCurrentMatrix(matBot);
+                mm2.UploadModelViewOnly();
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(0, 0, 0, 128), NULL);
+            }
+
+            ShopScreen::s_TexLoading->UnSet();
         }
     }
 }
