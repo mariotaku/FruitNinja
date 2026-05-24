@@ -3,20 +3,19 @@
 
 //
 // HUDControl3d : HUDControl (size = 0x7C)
-// Verified from Ghidra: ctor at 0x1443f4, Draw at 0x14428c (57 lines)
+// Zero-divergence verified 2026-05-24 — see tmp/symdiff/hudcontrol3d-spec.md.
 //
 // Binary layout (ARM32):
 //   +0x00..+0x73: HUDControl base (0x74 bytes, includes UV floats at +0x64..+0x70)
-//   +0x74: Mortar::SmartPtr<Texture> m_Texture  — the texture drawn by HUDControl3d::Draw base
+//   +0x74: Mortar::SmartPtr<Texture> m_Texture  — drawn by HUDControl3d::Draw base
 //   +0x78: Mortar::SmartPtr<Model>   m_Model    — 3D mesh slot, RESERVED; base Draw never reads it;
 //                                                  no FN subclass observed writing it.
 //                                                  Dtor @ 0x00144474 calls SmartPtr<Model>::~SmartPtr
 //                                                  on this+0x78 confirming the type.
 //
-// ASM-verified (slot semantics, not full ASM diff): 2026-05-18 binary @ 0x0014428c
-//   - reads SmartPtr<Texture> at +0x74 (called m_Texture in this port)
-//   - +0x78 is SmartPtr<Mortar::Model>, NOT a second texture; never read by base Draw
-// ASM-verified: 2026-04-28T16:35Z binary @ 0x001443f4 (asm-inspector) -- ctor layout only
+// ASM-verified: 2026-05-24 binary @ 0x001443f4 / 0x00144434 (ctors), 0x00144474 /
+//   0x001444e0 / 0x00144548 (dtors), 0x00143fc4 (Release), 0x00143fc8 (PreDraw),
+//   0x00143fcc (Update), 0x0014428c (Draw) (re-analyst)
 //
 
 #include "HUDControl.h"
@@ -39,22 +38,19 @@ public:
 
     HUDControl3d();
 
-    // vtable +0x1c: Draw — matches 0x14428c (57 lines)
+    // vtable +0x1c: Draw — binary @ 0x0014428c
     void Draw(const Vec3& hudScale, int layerMask) override;
 
-    // vtable +0x30
+    // vtable +0x30: returns 1.
     int GetType() override { return 1; }
 
-    // ---- STUBS (binary) ----
-    // STUB: HUDControl3d::~HUDControl3d -- binary @ 0x???? (TODO RE)
+    // Dtor — binary @ 0x00144474 (D0) / 0x001444e0 (D1) / 0x00144548 (D2).
     virtual ~HUDControl3d();
-    // STUB: HUDControl3d::Release -- binary @ 0x???? (TODO RE)
-    void Release() override;
-    // STUB: HUDControl3d::PreDraw -- binary @ 0x???? (TODO RE)
-    void PreDraw(const Vec3& hudScale) override;
-    // STUB: HUDControl3d::Update -- binary @ 0x???? (TODO RE)
-    void Update(float dt) override;
-    // ---- end STUBS ----
+
+    // Vtable overrides (all verified — see .cpp markers).
+    void Release() override;                       // binary @ 0x00143fc4: bx lr
+    void PreDraw(const Vec3& hudScale) override;   // binary @ 0x00143fc8: bx lr
+    void Update(float dt) override;                // binary @ 0x00143fcc: tail-calls base
 };
 
 #endif
