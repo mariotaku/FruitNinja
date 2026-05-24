@@ -318,69 +318,8 @@ public:
 // The binary's canonical name is Mortar::Mesh::BoneBinding.
 typedef Mesh::BoneBinding BoneBinding;
 
-// Matches original Model (0x58 bytes) with vector<Mortar::SmartPtr<Mesh>>
-// Ref: docs/engine/rendering-detail.md — Model::Draw (0x001930e0)
-class Model : public Mortar::ReferenceCounter {
-public:
-    std::string m_Name;
-    std::vector<Mortar::SmartPtr<Mesh>> m_Meshes;
-
-    // +0x40: stored skeleton (Skeleton struct, not pointer)
-    // Matches model+0x40 from SwapSkeleton (0x001aaba8)
-    Skeleton m_Skeleton;
-
-    Model();
-    virtual ~Model();
-
-    // Binary @ 0x0019346c — push mesh, then bind skeleton if valid.
-    // STUB: by-value overload matches binary signature; kept as sole AddNode.
-    void AddNode(SmartPtr<Mesh> mesh);
-
-    // Binary @ 0x001933f8 — unchecked array access (matches binary).
-    Mortar::SmartPtr<Mesh> GetNode(unsigned long index) const;
-
-    // Binary @ 0x001933b8 — linear scan by name; dead code (no live callers).
-    Mortar::SmartPtr<Mesh> GetNode(const std::string& name) const;
-
-    // Draw all meshes with optional depth-sorting for multi-mesh models
-    // Matches 0x001930e0
-    void Draw(const Matrix44& transform);
-
-    // Matches Model::SwapSkeleton (0x001aaba8)
-    // Calls Skeleton::Swap(Skeleton&) (0x001a89c4) to swap all arrays
-    // from skel into m_Skeleton (no matrix rebuild), then calls UpdateBoneLinks.
-    void SwapSkeleton(Skeleton& skel);
-
-    // Matches Model::UpdateBoneLinks (0x00193010)
-    // Calls BindSkeleton on each mesh with the model's skeleton.
-    void UpdateBoneLinks();
-
-    // ---- STUBS (binary) ----
-    // STUB: Model(AsciiString const&) -- binary @ 0x???? (TODO RE)
-    Model(AsciiString const& name);
-
-    // STUB: Draw(Matrix44 const&) const -- binary @ 0x???? (TODO RE)
-    void Draw(Matrix44 const& transform) const;
-
-    // STUB: GetBounds() const -- binary @ 0x???? (TODO RE)
-    Bounds3D GetBounds() const;
-
-    // STUB: GetNode(AsciiString const&) const -- binary @ 0x???? (TODO RE)
-    SmartPtr<Mesh> GetNode(AsciiString const& name) const;
-
-    // STUB: NodeCount() const -- binary @ 0x???? (TODO RE)
-    int NodeCount() const;
-
-    // STUB: SetEffectGroup(SmartPtr<EffectGroup>) -- binary @ 0x???? (TODO RE)
-    // Defunct: EffectGroup not ported; stub preserves call-graph shape.
-    void SetEffectGroup(SmartPtr<EffectGroup> effectGroup);
-
-    // STUB-DEFERRED: GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Bone::Binding>&) const
-    // AnimBindings nested-typedef edge case
-    // STUB-DEFERRED: GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&) const
-    // AnimBindings nested-typedef edge case
-    // ---- end STUBS ----
-};
+// Model is declared in Model.h.
+class Model;
 
 } // namespace Mortar
 

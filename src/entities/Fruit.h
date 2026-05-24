@@ -6,6 +6,7 @@
 #include "math/Colour.h"
 #include "util/SmartPtr.h"
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "FruitInfo.h"
 
 struct PSPParticleEmitter;

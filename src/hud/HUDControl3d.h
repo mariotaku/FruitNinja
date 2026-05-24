@@ -22,6 +22,7 @@
 #include "render/gl_funcs.h"
 #include "asset/Texture.h"
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "util/SmartPtr.h"
 
 class HUDControl3d : public HUDControl {

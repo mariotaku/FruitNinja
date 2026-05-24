@@ -3,6 +3,7 @@
 #include "asset/AnimationState.h"
 #include "asset/AnimationList.h"
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 
 namespace Mortar {
 

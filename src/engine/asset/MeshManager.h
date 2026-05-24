@@ -2,6 +2,7 @@
 #define MORTAR_MESH_MANAGER_H
 
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "asset/ResourceLoader.h"
 #include "util/SmartPtr.h"
 #include "util/List.h"

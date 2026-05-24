@@ -27,6 +27,7 @@
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "util/SmartPtr.h"
 #include "math/Vec3.h"
 

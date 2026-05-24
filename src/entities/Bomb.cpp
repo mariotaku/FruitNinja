@@ -16,6 +16,7 @@
 #include "asset/TextureManager.h"
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "hud/MenuButton.h"
 #include "hud/MissControl.h"
 #include "math/Matrix44.h"
