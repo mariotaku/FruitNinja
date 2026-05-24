@@ -1,5 +1,6 @@
 #include "asset/SharedEffectProperties.h"
 
+#include <algorithm>
 #include <cstring>
 #include <cstdlib>
 
@@ -48,6 +49,74 @@ EffectPropertyValues::~EffectPropertyValues() {
         m_ValueBuffer.m_Buffer = NULL;
     }
 }
+
+// EffectPropertyList dtor — frees arena and all heap-allocated EffectProperty entries.
+EffectPropertyList::~EffectPropertyList() {
+    for (std::vector<EffectProperty*>::iterator it = m_Props.begin();
+         it != m_Props.end(); ++it) {
+        delete *it;
+    }
+    m_Props.clear();
+    delete m_Values;
+    m_Values = NULL;
+}
+
+// SortProperties — sorts m_Props by name so binary-search in GetProperty works.
+void EffectPropertyList::SortProperties() {
+    std::sort(m_Props.begin(), m_Props.end(), NameLessThan());
+}
+
+// GetProperty(char*) @ 0x001b67b8.
+// Binary-searches m_Props (sorted by interned name ptr) for `name`, then
+// recurses to parent list if not found.
+EffectProperty* EffectPropertyList::GetProperty(const char* name) const {
+    std::vector<EffectProperty*>::const_iterator lo =
+        std::lower_bound(m_Props.begin(), m_Props.end(), name, NameLessThan());
+    if (lo != m_Props.end() && std::strcmp((*lo)->m_Def.m_Name.c_str(), name) == 0)
+        return *lo;
+    if (m_Parent.IsValid())
+        return m_Parent->GetList().GetProperty(name);
+    return NULL;
+}
+
+// GetProperty(string&) @ 0x001b6820 — forwards to char* overload.
+EffectProperty* EffectPropertyList::GetProperty(const std::string& name) const {
+    return GetProperty(name.c_str());
+}
+
+// Contains(def&) @ 0x001b6828 — pulls name from def and delegates to GetProperty.
+bool EffectPropertyList::Contains(const EffectPropertyDefinition& def) const {
+    return GetProperty(def.m_Name.c_str()) != NULL;
+}
+
+// Contains(ptr) — single-pointer convenience; delegates to ref overload.
+// Kept for Mesh.cpp call sites that pass a raw pointer.
+bool EffectPropertyList::Contains(const EffectPropertyDefinition* def) const {
+    return Contains(*def);
+}
+
+// Contains(begin, end) @ 0x001b1938 — range overload; true iff all defs present.
+bool EffectPropertyList::Contains(const EffectPropertyDefinition* begin,
+                                  const EffectPropertyDefinition* end) const {
+    for (const EffectPropertyDefinition* p = begin; p != end; ++p) {
+        if (!Contains(*p)) return false;
+    }
+    return true;
+}
+
+// SharedEffectProperties range ctor @ 0x001b2708.
+SharedEffectProperties::SharedEffectProperties(
+        const EffectPropertyDefinition* begin,
+        const EffectPropertyDefinition* end,
+        const SmartPtr<SharedEffectProperties>& parent) {
+    m_List.InitPropertyList(begin, end, parent);
+}
+
+// Explicit instantiation of InitPropertyList for the const EffectPropertyDefinition*
+// iterator so the symbol emits from this TU.
+template void EffectPropertyList::InitPropertyList<const EffectPropertyDefinition*>(
+    const EffectPropertyDefinition*, const EffectPropertyDefinition*,
+    const SmartPtr<SharedEffectProperties>&);
 
 // Explicit template instantiations so the out-of-line specialisations emit
 // symbols. GCC 4.4.1 (cross-build) requires explicit instantiation for
