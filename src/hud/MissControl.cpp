@@ -112,7 +112,11 @@ void MissControl::Init() {
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
     m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
     m_AnimState    = 0;
-    m_Texture      = s_TexCritical;
+    // ASM-verified: 2026-05-24 binary @ 0x00150fc0 (re-analyst v3)
+    // Init defaults m_Texture to s_TexCross (hud_cross.tex), NOT s_TexCritical.
+    // This is the red X used by path 2 of MakeDisappear (fruit-miss penalty).
+    // MakeCritical/MakeRare/MakeCombo override with their respective textures.
+    m_Texture      = s_TexCross;
     m_FadeAlpha    = 0.0f;
     m_Active       = 1;   // binary writes field_0x30 twice (second write is redundant but faithful)
     m_ComboCount   = 0;
@@ -466,12 +470,10 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         SetPlayer(sizeMult);
     } else {
         // Path 2: fruit miss-penalty / arcade-bomb cross overlay.
-        // binary @ 0x00151d94 else branch -- sets m_Texture to the cross
-        // (s_TexCross = hud_cross.tex). The earlier v1 spec wrongly claimed
-        // path 2 reused Init()'s s_TexCritical default; that produced a
-        // gold star instead of the red X. Restored per visible symptom +
-        // re-read of binary path-2 store sequence.
-        m_Texture      = s_TexCross;
+        // binary @ 0x00151d94 else branch -- does NOT touch m_Texture.
+        // The red X comes from Init()'s default `m_Texture = s_TexCross`
+        // (binary @ 0x00150fc0). Path 2 just updates pose / size / alpha /
+        // anim-state; the texture binding from Init carries through.
         m_JitterTimer  = (sizeMult >= 1) ? 0x1e : 0;
         m_FadeAlpha    = SOUND_THRESH;   // DAT_00151f48 = 1.66f
         m_AnimState    = 3;
