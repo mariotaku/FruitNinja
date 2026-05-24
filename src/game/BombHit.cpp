@@ -16,9 +16,9 @@
 #include "entities/SplatEntity.h"
 #include "entities/SlashEntity.h"
 #include "particle/PSPParticleManager.h"
+#include "asset/MeshDraw.h"
 #include "asset/TextureManager.h"
 #include "asset/Texture.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "util/SmartPtr.h"
@@ -161,9 +161,7 @@ void DrawCriticalFlash() {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawQuad(tint);
-    }
+    Mortar::MeshDraw::DrawQuadUnCachedDefault(tint, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
     Mortar::Texture::s_LastBoundTexId = 0;
 }

@@ -8,9 +8,10 @@
 #include "hud/MissControl.h"
 #include "hud/HUDLayer.h"
 #include "util/StringHash.h"
+#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
-#include "render/Renderer.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include <tinyxml2.h>
@@ -303,7 +304,10 @@ void PowerUp::DrawBar() {
 
     tex->Set();
     Colour white(255, 255, 255, 255);
-    Renderer::GetInstance()->DrawQuad(white, 0.0f, 1.0f, 0.0f, 1.0f);
+    {
+        Mortar::Mesh m;
+        m.DrawQuadUnCached(white, 0.0f, 1.0f, 0.0f, 1.0f, NULL);
+    }
     tex->UnSet();
 }
 
