@@ -101,9 +101,13 @@ public:
     // +0xb4 m_pScreenEffect — owned screen effect (nullptr if none)
     ScreenEffect* m_pScreenEffect;
 
-    // +0xb8..+0xbf — 8 bytes; ctor never writes; contents unknown.
-    // TODO: DrawBar @ 0x001191f8 — follow-up RE to identify these fields.
-    uint8_t _padb8[8];
+    // +0xb8..+0xc3 — 12 bytes of dead space in the binary. Verified via
+    // exhaustive scan of all 367 PowerUp-related functions (re-analyst
+    // ab6c7206): no ldr/str/vldr/vstr ever touches offsets in [+0xb8, +0xc3]
+    // through a PowerUp this-pointer. Likely remnants of removed Vec3 cache
+    // fields from earlier Mortar engine ancestors. DO NOT shrink — required
+    // for binary-compatible sizeof == 0xCC.
+    uint8_t _padb8[12];
 
     // +0xc4 m_DeferredPoints — -1 = "no deferred points pending"; >=0 accumulated
     // Binary @ 0x00117a50 AddDeferedPoints: str to [r0,#0xc4].
@@ -129,8 +133,13 @@ public:
     // @ 0x00117f18 — deactivate, call RemoveModifier on all mods; returns 0
     int Deactivate(bool removeAll);
 
-    // @ 0x00117f90 — update all modifiers; returns 1 when all expired, 0 otherwise
-    int Update(float dt);
+    // @ 0x00117f90 — update all modifiers; returns 1 when all expired, 0 otherwise.
+    // VIRTUAL — sole virtual method in the binary; sits in vtable slot[0] at
+    // 0x001e8cb8. Vtable has 3 slots; slots[1,2] are NULL (reserved/unused,
+    // never dispatched in the binary). All other "method" calls (Activate,
+    // Deactivate, DrawBar, Release, ~PowerUp, etc.) are direct PLT calls,
+    // NOT vtable dispatch -- do NOT make them virtual.
+    virtual int Update(float dt);
 
     // Clone — heap-alloc new instance, copy state, deep-copy modifier list
     PowerUp* Clone();
@@ -200,17 +209,13 @@ public:
 
 // std::list<GameModifier*> is 8 bytes on BOTH the Bada production binary AND the
 // asm-verify cross-toolchain (Sourcery 2010q1 sentinel-only, per R4 W1 RE and the
-// cross-build probe in tmp/asm-compare/list_size_probe.s).
-//
-// FIXME: cross-build (FN_ASM_VERIFY_CROSS) currently emits sizeof(PowerUp)==0xC4 with
-// m_NameHash at +0x08 (not +0x0c). Root cause: the port's PowerUp has NO virtual
-// methods, so no vptr is allocated. The binary's PowerUp class DOES have a vptr
-// (every offset is shifted by +4 vs port). Likely a missing `virtual` qualifier on
-// Clone/Update/Deactivate or similar. Guard asm-verify cross-build until that's
-// resolved; the asserts still fire on the real Bada toolchain build (production).
-// TODO: re-analyst pass to identify which PowerUp method is virtual in the binary.
-// Host (x86_64) has a different ABI (24-byte list, 8-byte pointers) so __bada__ stays.
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+// cross-build probe in tmp/asm-compare/list_size_probe.s). With m_NameHash placed
+// at its binary-correct +0x0c slot, the virtual Update declaration providing the
+// vptr at +0x00, and _padb8 sized to 12 bytes (binary-faithful dead region per
+// re-analyst ab6c7206), every offset below holds under both ABIs so the asserts
+// validate the cross-build too. Host (x86_64) has a different ABI (24-byte list,
+// 8-byte pointers) so __bada__ stays.
+#if defined(__bada__)
 static_assert(offsetof(PowerUp, m_NameHash)       == 0x0c, "PowerUp::m_NameHash @ +0x0c");
 static_assert(offsetof(PowerUp, m_Name)           == 0x10, "PowerUp::m_Name @ +0x10");
 static_assert(offsetof(PowerUp, m_pPurchaseInfo)  == 0x94, "PowerUp::m_pPurchaseInfo @ +0x94");
