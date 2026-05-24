@@ -357,7 +357,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
                 barVerts[3].u = fillFrac; barVerts[3].v = 0.0f;
 
                 barTex.Set();
-                { Mortar::Mesh m; m.DrawTriStrip(barVerts, 4, true, NULL); }
+                Mortar::Mesh::DrawTriStrip(barVerts, 4, true, NULL);
                 barTex.UnSet();
             }
         } else {

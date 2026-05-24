@@ -1419,8 +1419,8 @@ void SlashEntity::DrawSlice() {
     // 2 verts per trail point (interleaved edge + centre in each buffer).
     // RebuildGeometry writes indices 0..m_NumPoints*2-1.
     const int vertCount = m_NumPoints * 2;
-    { Mortar::Mesh m; m.DrawTriStrip(m_pLeftBuffer,  vertCount, false, NULL); }
-    { Mortar::Mesh m; m.DrawTriStrip(m_pRightBuffer, vertCount, false, NULL); }
+    Mortar::Mesh::DrawTriStrip(m_pLeftBuffer,  vertCount, false, NULL);
+    Mortar::Mesh::DrawTriStrip(m_pRightBuffer, vertCount, false, NULL);
     bladeTex->UnSet();
 }
 

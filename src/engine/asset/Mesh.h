@@ -286,12 +286,12 @@ public:
                                  DrawEffectContainer* fx);
 
     // Binary @ 0x0019404c — forwards to DrawTris with primType=GL_TRIANGLES; outer blend ignored.
-    void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend,
-                     DrawEffectContainer* fx);
+    static void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend,
+                            DrawEffectContainer* fx);
 
     // Binary @ 0x00194038 — forwards to DrawTris with primType=GL_TRIANGLE_STRIP; outer blend ignored.
-    void DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count, bool blend,
-                      DrawEffectContainer* fx);
+    static void DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count, bool blend,
+                             DrawEffectContainer* fx);
 
     // Binary @ 0x00193f5c — dispatches to Renderer::DrawTriList or DrawTriStrip by primType.
     static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,

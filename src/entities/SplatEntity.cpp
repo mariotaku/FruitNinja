@@ -817,7 +817,7 @@ void SplatEntity::DrawActiveSplats() {
     // stays in effect. SplatEntity::Draw must NOT mutate it -- doing so leaves
     // depth-test OFF for subsequent same-bucket draws and breaks the fruit
     // -occludes-backdrop sort order on the menu screen.
-    { Mortar::Mesh m; m.DrawTriList(s_SplatVerts, count * 6, false, NULL); }
+    Mortar::Mesh::DrawTriList(s_SplatVerts, count * 6, false, NULL);
 
     s_SplatTex->UnSet();
 }
