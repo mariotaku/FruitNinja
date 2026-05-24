@@ -7,9 +7,11 @@
 #include "util/AsciiString.h"
 #include "asset/IModelNode.h"
 #include "asset/Texture.h"
+#include "asset/SharedEffectProperties.h"
 #include "math/Colour.h"
 #include "render/gl_funcs.h"
 #include <vector>
+#include <map>
 #include <cstdint>
 #include <string>
 #include "math/Colour.h"
@@ -75,9 +77,15 @@ public:
 
 // Forward declarations for defunct/stub types referenced by binary API.
 class DrawEffectContainer;
-class EffectPropertyDefinition;
-class SharedEffectProperties;
 class Geometry;
+
+// SharedPropsInfo -- value-type stored in Mesh::m_GroupsByName.
+// sizeof = 0x1c (28 bytes). Binary layout confirmed by AddTextureMap RE.
+struct SharedPropsInfo {
+    SmartPtr<SharedEffectProperties>           m_Group;    // +0x00, 4 bytes
+    std::map<AsciiString, void* /*TextureProps*/> m_TexMaps; // +0x04, 24 bytes
+    // total: 4 + 24 = 28 = 0x1c
+};
 
 // Vertex attribute layout (from PSP vertex declaration)
 // Port specific: replaces the original Effect/Geometry/GeometryBinding system
@@ -149,19 +157,32 @@ public:
 
     std::string m_Name;                         // +0x0C equiv: Mesh name
 
-    std::vector<BoneBinding> m_BoneBindings;    // +0x34 equiv: Bone binding array
+    std::vector<BoneBinding> m_BoneBindings;    // +0x34: Bone binding array (12 bytes)
 
-    // +0x40 equiv: Geometry submeshes (original: vector<Mortar::SmartPtr<Geometry>>)
+    // +0x40: Geometry submeshes (original: vector<Mortar::SmartPtr<Geometry>>)
     // Port: each entry has its own VBO/IBO pair + material index
-    std::vector<GeometryEntry> m_Geometries;
+    std::vector<GeometryEntry> m_Geometries;   // +0x40 (12 bytes)
 
-    // Material array (original: map<AsciiString, SharedPropsInfo> + SharedEffectProperties)
-    // Port: parallel array indexed by GeometryEntry::materialIndex
-    std::vector<MeshMaterial> m_Materials;
+    // +0x4c: Defunct -- SharedEffectProperties subsystem. Shape preserved to
+    // keep m_Skeleton at binary offset +0x68 and sizeof(Mesh) at 0x7c.
+    SmartPtr<SharedEffectProperties> m_OwnGroup;               // +0x4c (4 bytes)
+    std::map<AsciiString, SharedPropsInfo> m_GroupsByName;     // +0x50 (24 bytes)
 
     // +0x68: Bound skeleton pointer (nullptr if none). Set by BindSkeleton.
-    // Matches Mesh::m_Skeleton (0x001b0c3c offset 0x68)
-    Skeleton* m_Skeleton;
+    // Matches Mesh::m_Skeleton binary offset 0x68.
+    Skeleton* m_Skeleton;                                      // +0x68 (4 bytes)
+
+    // +0x6c..+0x78: Defunct cached EffectProperty* handles (World/View/Proj/WVP).
+    // Stored as void* since EffectProperty is not ported; all set to nullptr in stubs.
+    void* m_WorldProp;  // +0x6c
+    void* m_ViewProp;   // +0x70
+    void* m_ProjProp;   // +0x74
+    void* m_WVPProp;    // +0x78
+
+    // Port-specific: material array for GLES2 rendering; no binary equivalent.
+    // (Binary uses m_GroupsByName + SharedEffectProperties for per-material data.)
+    // Indexed by GeometryEntry::materialIndex.
+    std::vector<MeshMaterial> m_Materials;  // +0x7c (port-specific)
 
     Mesh();
     virtual ~Mesh();
@@ -229,41 +250,46 @@ public:
     // is bypassed. Port walks m_Geometries[] directly in Mesh::Draw.
     //
     // Defunct: SharedEffectProperties machinery -- port stores parsed values
-    // directly in MeshMaterial (no per-property name lookup needed); binary @:
-    //   0x001b0988 -- GetPropertiesGroup(name) const
-    //   0x001b1430 -- GetPropertiesGroup(name, defs_begin, defs_end)
+    // directly in MeshMaterial; field shape (m_OwnGroup, m_GroupsByName, m_WorldProp,
+    // m_ViewProp, m_ProjProp, m_WVPProp) is preserved at binary offsets so
+    // sizeof(Mesh) == 0x7c + sizeof(m_Materials port extension). Binary @:
+    //   0x001b0988 -- GetPropertiesGroup(name) const               [shape-preserved]
+    //   0x001b1430 -- GetPropertiesGroup(name, defs_begin, defs_end) [shape-preserved]
     //   0x001aab94 -- GetPropertiesGroup<9>(name, defs[9])
     //   0x001b1394 -- SharedPropsInfo::AddTextureMap(name, propName)
-    //   0x001b0d0c -- AddGeometry(Mortar::SmartPtr<Geometry>&)  (port appends in LoadMesh directly)
+    //   0x001b0d0c -- AddGeometry(Mortar::SmartPtr<Geometry>&)     [shape-preserved]
     //   0x001b15e4 -- GenerateBindings(name, slot, vector<Bone::Binding>&) [empty BX LR]
-    //   0x001b08e8 -- RebuildEffectBindings()  [port computes MVP via MatrixManager directly]
-    //   0x001b10d8 -- Mesh(Mortar::SmartPtr<SharedEffectProperties>&, AsciiString&)  [2-arg ctor; port has default ctor only]
+    //   0x001b08e8 -- RebuildEffectBindings()                      [shape-preserved]
+    //   0x001b10d8 -- Mesh(Mortar::SmartPtr<SharedEffectProperties>&, AsciiString&) [shape-preserved]
     //   0x00193ed8 -- DrawCube(...)    [binary stub, returns colour unchanged]
     //   0x00193edc -- DrawLine(...)    [binary stub, returns first vec unchanged]
     //   0x00193ee0 -- DrawSphere(...)  [binary stub, returns colour unchanged]
 
     // ---- STUBS (binary) ----
 
-    // STUB: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x001b10d8 (TODO RE)
+    // Defunct: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x001b10d8
+    // Shape-preserved: builds m_OwnGroup from defs, caches m_WorldProp/m_ViewProp/m_ProjProp/m_WVPProp.
     Mesh(SmartPtr<SharedEffectProperties> const& props, AsciiString const& name);
 
     // STUB: BindSkeleton(Skeleton const&) -- binary @ 0x001b0948 (TODO RE)
     // Binary signature takes const-ref; port's existing BindSkeleton(Skeleton*) has mismatched mangling.
     void BindSkeleton(Skeleton const& skeleton);
 
-    // STUB: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c (TODO RE)
-    // Defunct: port appends GeometryEntry directly in LoadMesh.
+    // Defunct: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c
+    // Shape-preserved: port appends GeometryEntry directly in LoadMesh, so this has no port-side action.
+    // DIFFERS: binary pushes SmartPtr<Geometry> into m_Geometries (vector<SmartPtr<Geometry>>);
+    // port's m_Geometries is vector<GeometryEntry> -- storage type mismatch; body is no-op.
     void AddGeometry(SmartPtr<Geometry> const& geom);
 
-    // STUB: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x001b0988 (TODO RE)
-    // Defunct: port stores material props directly in MeshMaterial.
-    SharedEffectProperties* GetPropertiesGroup(AsciiString const& name) const;
+    // Defunct: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x001b0988
+    // Shape-preserved: returns ptr-to-SmartPtr in m_GroupsByName (matching binary return type).
+    SmartPtr<SharedEffectProperties>* GetPropertiesGroup(AsciiString const& name) const;
 
-    // STUB: GetPropertiesGroup(AsciiString const&, EffectPropertyDefinition const*, EffectPropertyDefinition const*) -- binary @ 0x001b1430 (TODO RE)
-    // Defunct: range-based variant; port stores material props directly.
-    SharedEffectProperties* GetPropertiesGroup(AsciiString const& name,
-                                               EffectPropertyDefinition const* begin,
-                                               EffectPropertyDefinition const* end);
+    // Defunct: GetPropertiesGroup(AsciiString const&, EffectPropertyDefinition const*, ...) -- binary @ 0x001b1430
+    // Shape-preserved: range-based variant; may insert new group if defs not already present.
+    SmartPtr<SharedEffectProperties>* GetPropertiesGroup(AsciiString const& name,
+                                                         EffectPropertyDefinition const* begin,
+                                                         EffectPropertyDefinition const* end);
 
     // STUB: RebuildEffectBindings() -- binary @ 0x001b08e8 (TODO RE)
     // Defunct: port computes MVP via MatrixManager directly.
