@@ -255,6 +255,14 @@ void EffectPropertyList::InitPropertyList(Iter begin, Iter end,
     SortProperties();
 }
 
+// TextureProps — value type in SharedPropsInfo::m_TexMaps.
+// Binary @ 0x001b15d8 ctor zeroes the handle; 0x001b1394 AddTextureMap writes
+// the GetProperty return into *this. Single 4-byte EffectProperty*.
+struct TextureProps {
+    EffectProperty* m_Handle;
+    TextureProps() : m_Handle(NULL) {}
+};
+
 // SharedEffectProperties — 0x20 bytes; ReferenceCounter-derived, managed by SmartPtr.
 class SharedEffectProperties : public ReferenceCounter {
 public:
@@ -274,6 +282,7 @@ private:
 }  // namespace Mortar
 
 #ifdef __bada__
+static_assert(sizeof(Mortar::TextureProps) == 4, "TextureProps is 4 bytes");
 static_assert(sizeof(Mortar::EffectPropertyDefinition) == 12,
               "EffectPropertyDefinition must be 12 bytes");
 static_assert(sizeof(Mortar::EffectPropertyValues::ArrayItem) == 8,

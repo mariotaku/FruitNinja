@@ -45,7 +45,7 @@ class Geometry;
 // sizeof = 0x1c (28 bytes). Binary layout confirmed by AddTextureMap RE.
 struct SharedPropsInfo {
     SmartPtr<SharedEffectProperties>           m_Group;    // +0x00, 4 bytes
-    std::map<AsciiString, void* /*TextureProps*/> m_TexMaps; // +0x04, 24 bytes
+    std::map<AsciiString, TextureProps>        m_TexMaps; // +0x04, 24 bytes
     // total: 4 + 24 = 28 = 0x1c
 };
 

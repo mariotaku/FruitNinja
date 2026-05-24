@@ -25,6 +25,8 @@
 
 #include "util/ReferenceCounter.h"
 #include "util/SmartPtr.h"
+#include "util/Immutable.h"
+#include "asset/SharedEffectProperties.h"
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -106,8 +108,8 @@ struct EffectLessThanCompare {
 // Binary ctor @ 0x001a2c10 (templated_ctor<Iter>), D2 @ 0x001a1a70.
 // Layout:
 //   +0x00  ReferenceCounter base (12 bytes)
-//   +0x0C  std::vector<EffectPropertyDefinition_Bada>  m_MergedDefs
-//   +0x18  std::vector<SmartPtr<Effect> >              m_Effects
+//   +0x0C  std::vector<EffectPropertyDefinition>  m_MergedDefs
+//   +0x18  std::vector<SmartPtr<Effect> >         m_Effects
 //   +0x24..+0x37  4-byte align pad + 2x Event1<EffectGroup&>
 //                 (not modelled; uint8_t pad keeps binary-shape sizeof
 //                 if asm-verify ever cares).
@@ -123,7 +125,7 @@ struct EffectLessThanCompare {
 // fire at runtime — every binary caller chains through stubs.
 class EffectGroup : public ReferenceCounter {
 public:
-    std::vector<EffectPropertyDefinition_Bada>  m_MergedDefs;   // +0x0C
+    std::vector<EffectPropertyDefinition>  m_MergedDefs;   // +0x0C
     std::vector<SmartPtr<Effect> >              m_Effects;      // +0x18
     // +0x24..+0x37: 4-byte align pad + two Event1<EffectGroup&> slots.
     // Not modelled; gap preserved for binary-shape sizeof.
@@ -135,8 +137,9 @@ public:
     void AddEffect(const SmartPtr<Effect>& effect);
 
     // Binary @ 0x001a2030 — fold each property def in `props` into
-    // m_MergedDefs at its lower_bound position. Returns 1 on success,
-    // 0 if any def conflicts with an existing same-named entry.
+    // m_MergedDefs at its lower_bound position. Incoming `props` is the
+    // per-Effect on-disk _Bada vector; m_MergedDefs is the runtime type.
+    // Returns 1 on success, 0 if any def conflicts.
     int MergeProperties(const std::vector<EffectPropertyDefinition_Bada>& props);
 };
 

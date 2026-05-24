@@ -1,5 +1,7 @@
 #include "asset/Effect.h"
+#include "util/Immutable.h"
 #include <algorithm>
+#include <cstring>
 
 namespace Mortar {
 
@@ -65,10 +67,12 @@ int EffectGroup::MergeProperties(
         const EffectPropertyDefinition_Bada& incoming = props[i];
 
         // PropertyDefLessThanCompare: string-compare on m_Name.
+        // m_MergedDefs entries are EffectPropertyDefinition (Immutable<string>
+        // m_Name); incoming is _Bada (std::string m_Name). Compare via c_str().
         size_t lo = 0, hi = m_MergedDefs.size();
         while (lo < hi) {
             size_t mid = lo + (hi - lo) / 2;
-            if (m_MergedDefs[mid].m_Name.compare(incoming.m_Name) < 0) {
+            if (std::strcmp(m_MergedDefs[mid].m_Name.c_str(), incoming.m_Name.c_str()) < 0) {
                 lo = mid + 1;
             } else {
                 hi = mid;
@@ -76,13 +80,20 @@ int EffectGroup::MergeProperties(
         }
 
         if (lo < m_MergedDefs.size() &&
-            m_MergedDefs[lo].m_Name == incoming.m_Name) {
+            std::strcmp(m_MergedDefs[lo].m_Name.c_str(), incoming.m_Name.c_str()) == 0) {
             // Same-name entry already present. TODO: 0x001a2030 — RE
             // EffectPropertyDefinition::operator!= to detect structural
             // mismatch and return 0 on conflict. Port treats same-name
             // as equal (no conflict).
         } else {
-            m_MergedDefs.insert(m_MergedDefs.begin() + lo, incoming);
+            // Convert _Bada entry to runtime EffectPropertyDefinition.
+            // Only m_Name is read by the binary's comparator; m_Type and
+            // m_Count are left zero (no _Bada layout RE for those fields).
+            EffectPropertyDefinition def;
+            def.m_Name  = Immutable<std::string>(incoming.m_Name);
+            def.m_Type  = 0;
+            def.m_Count = 0;
+            m_MergedDefs.insert(m_MergedDefs.begin() + lo, def);
         }
     }
     return 1;

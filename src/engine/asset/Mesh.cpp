@@ -305,9 +305,27 @@ void Mesh::Draw(const Matrix44& worldTransform) {
         finalWorld = worldTransform;
     }
 
-    // Port specific: compute MVP via MatrixManager (replaces Effect property system)
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().SetCurrentMatrix(finalWorld);
+
+    // Binary-faithful 4-matrix property upload (binary @ 0x001b0c3c).
+    // Side-effect feed for any consumer reading EffectPropertyValues;
+    // the port's GLES2 DrawGeometry doesn't read these but the call shape
+    // matches the binary so asm-verify sees the same write pattern.
+    const Matrix44& camView = mm.GetViewStack().m_Current;
+    const Matrix44& camProj = mm.GetProjectionStack().m_Current;
+    TrySetMatrix_EffectProp(m_WorldProp, &finalWorld);
+    TrySetMatrix_EffectProp(m_ViewProp,  &camView);
+    TrySetMatrix_EffectProp(m_ProjProp,  &camProj);
+    if (m_WVPProp != NULL) {
+        // WVP = Proj * (View * World) — column-vector convention, matches binary
+        // which composes (View * finalWorld) first then (Proj * that).
+        Matrix44 vw  = camView * finalWorld;
+        Matrix44 wvp = camProj * vw;
+        TrySetMatrix_EffectProp(m_WVPProp, &wvp);
+    }
+
+    // Port specific: compute MVP via MatrixManager (replaces Effect property system)
     Matrix44 mvp = mm.GetMVP();
 
     // Render all geometry entries, each with its own material
@@ -352,7 +370,7 @@ Mesh::Mesh(SmartPtr<SharedEffectProperties> const& parent, AsciiString const& na
     defs[3].m_Name  = Immutable<std::string>("WorldViewProjection");
     defs[3].m_Type  = 3;
     defs[3].m_Count = 1;
-    if (parent.IsValid() && parent->GetList().Contains(defs)) {
+    if (parent.IsValid() && parent->GetList().Contains(defs, defs + 4)) {
         m_OwnGroup = parent;
     } else {
         m_OwnGroup = new SharedEffectProperties(defs, defs + 4, parent);
