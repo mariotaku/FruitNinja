@@ -85,7 +85,14 @@ public:
     // --- Public API ------------------------------------------------------
 
     // 0x00173454 — set up all coin fields for a launch
-    void InitCoin(const Vec3& pos, const Vec3& gravity, uint16_t baseAngle,
+    // Binary signature: InitCoin(_Vector3<float>, _Vector3<float>, ushort,
+    //   int, ulong, ulong, Delegate1<void,Coin*>, float, bool).
+    // Vec3s by VALUE per HFA classification (s0/s1/s2, then s3/s4/s5).
+    // ASM-verified: 2026-05-24 binary @ 0x00163454 (re-analyst)
+    // TODO: 0x00163454 — port has 11 params, binary has 9. Port adds
+    //   flyFXName / collectFXName that binary lacks. Resolve param-count
+    //   divergence (likely port-side over-port; investigate via xrefs).
+    void InitCoin(Vec3 pos, Vec3 gravity, uint16_t baseAngle,
                   int playerIdx, uint16_t launchAngle, int coinValue,
                   const char* flyFXName, const char* collectFXName,
                   Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent);
@@ -94,10 +101,15 @@ public:
     void Arrived();
 
     // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2).
-    // delay.x = per-coin delay step; delay.y = max total delay (binary Vec3 arg).
-    static void MakeCoins(int totalCoins, int coinsPerCoin, const Vec3& delay,
+    // Binary signature: MakeCoins(int, int, _Vector3<float>, ushort, ushort,
+    //   _Vector3<float>*, float, float, char*, char*, Delegate1, bool).
+    // delay by VALUE (HFA → s0/s1/s2); spawnPos by POINTER (integer reg).
+    // ASM-verified: 2026-05-24 binary @ 0x00163568 (re-analyst)
+    // TODO: 0x00163568 — port has 11 params, binary has 12. Binary inserts
+    //   an extra `float` between spawnPos and flyFXName -- resolve.
+    static void MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
                           uint16_t baseAngle, uint16_t angleSpread,
-                          const Vec3& spawnPos,
+                          Vec3* spawnPos,
                           const char* flyFXName, const char* collectFXName,
                           Mortar::Delegate1<void, Coin*> onArrived, bool silent);
 

@@ -205,8 +205,13 @@ private:
     void OnTouchReleased();
 
     // Matches SlashEntity::AddPoint (0x17CE0C). Appends one TrailPoint.
-    // Bulk-shifts the array when full (drops the oldest point).
-    void AddPoint(const Vec3& pos, const Vec3& dir);
+    // Binary signature: AddPoint(_Vector3<float>, _Vector3<float>, float)
+    // Vec3s by VALUE (HFA -> s0/s1/s2 and s3/s4/s5); trailing float is the
+    // pressure/thickness param (semantic TBD, currently unused by body).
+    // ASM-verified: 2026-05-24 binary @ 0x0016ce0c (re-analyst)
+    // TODO: 0x0016ce0c -- semantic of the third `float` arg still needs
+    //   RE -- likely thickness/pressure for ghost-trail thickness.
+    void AddPoint(Vec3 pos, Vec3 dir, float pressure = 0.0f);
 
     // Rebuilds m_pLeftBuffer / m_pRightBuffer vertex buffers from m_Points.
     // Matches SlashEntity::UpdatePoints (0x17B92C) simplified.
@@ -397,8 +402,7 @@ public:
     // Binary-faithful overloads whose signatures differ from the port-internal
     // equivalents above. All bodies are no-ops pending full RE+port.
 
-    // STUB: SlashEntity::AddPoint -- binary @ 0x17CE0C (TODO RE)
-    void AddPoint(Vec3 pos, Vec3 dir, float unused);
+    // (SlashEntity::AddPoint declared above with canonical 3-arg signature.)
 
     // STUB: SlashEntity::CollideWithEntity -- binary @ 0x17B570 (TODO RE)
     bool CollideWithEntity(Mortar::Entity* entity);

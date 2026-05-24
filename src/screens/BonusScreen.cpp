@@ -283,20 +283,20 @@ void BonusScreen::AwardScores() {
         // Single batch, all coins, delay step -0.05 / cap -0.3.
         Coin::MakeCoins(total, 6,
                         Vec3(-0.05f, -0.3f, 0.0f),
-                        0xff3a, 0, spawnPos,
+                        0xff3a, 0, &spawnPos,
                         "bonus_star_trail", "bonus_star_impact",
                         onArrived, false);
     } else {
         // First batch: 6 coins, tighter delay cap -0.5.
         Coin::MakeCoins(6, 6,
                         Vec3(-0.05f, -0.5f, 0.0f),
-                        0xff3a, 0, spawnPos,
+                        0xff3a, 0, &spawnPos,
                         "bonus_star_trail", "bonus_star_impact",
                         onArrived, false);
         // Second batch: leftover, no arrival callback (silent score credit).
         Coin::MakeCoins(total - 6, 6,
                         Vec3(-0.05f, -0.3f, 0.0f),
-                        0xff3a, 0, spawnPos,
+                        0xff3a, 0, &spawnPos,
                         "bonus_star_trail", "bonus_star_impact",
                         Mortar::Delegate1<void, Coin*>(), false);
     }

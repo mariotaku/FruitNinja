@@ -609,7 +609,7 @@ void SlashEntity::OnTouchReleased() {
 // ---------------------------------------------------------------------------
 // AddPoint — matches binary 0x17CE0C (simplified)
 // ---------------------------------------------------------------------------
-void SlashEntity::AddPoint(const Vec3& pos, const Vec3& dir) {
+void SlashEntity::AddPoint(Vec3 pos, Vec3 dir, float /*pressure*/) {
     if (m_NumPoints >= MAX_POINTS) {
         // Shift-drop the oldest point (overflow guard; time-based decay in
         // Update normally keeps the trail well below MAX_POINTS).
@@ -1054,7 +1054,7 @@ void SlashEntity::Update(float dt) {
                             Coin::DefaultArrivedDelegate();
                         Coin::MakeCoins(bonusCoins, 1,
                                         Vec3(0.02f, 0.15f, 0.0f), 0, 0xff3a,
-                                        coinPos, nullptr, nullptr,
+                                        &coinPos, nullptr, nullptr,
                                         onArrived, true);
                     }
                     // (d) Achievement unlock
@@ -1353,11 +1353,11 @@ const Colour* SlashEntity::GetPalette()                           { return g_Pal
 // ---------------------------------------------------------------------------
 
 // Binary @ 0x17CE0C -- main per-point append into m_pLeftBuffer/m_pRightBuffer
-// with rotation-angle bookkeeping. Port replaces with the OnTouchActive +
-// AddPoint(const Vec3&) + RebuildGeometry pipeline driven from the touch
-// move events. This 3-arg form has no port equivalent caller; keep as
-// no-op stub for binary-symbol parity.
-void SlashEntity::AddPoint(Vec3 /*pos*/, Vec3 /*dir*/, float /*unused*/) {}
+// SUPERSEDED 2026-05-24: the 2-arg AddPoint was the port's invention; the
+// binary's actual symbol is AddPoint(Vec3, Vec3, float). The trailing float
+// is now part of the canonical signature (TODO: 0x0016ce0c -- semantic
+// of the float arg, likely thickness/pressure, still needs RE).
+// Previous 3-arg stub removed; declaration in .h now has the trailing float.
 
 // Binary @ 0x17B570 -- vtable slot 9 override on Mortar::Entity. Tests this
 // blade's ColLine against entity->m_Col (a ColSphere). Port's Update slice
