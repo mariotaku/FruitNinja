@@ -29,7 +29,7 @@
 #include "math/Vec3.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/Font.h"
@@ -1638,7 +1638,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+                { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
 
                 m_CommingSoonHighscoreTex->UnSet();
             }
@@ -1695,7 +1695,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
-                    Mortar::MeshDraw::DrawQuadUnCachedDefault(white, NULL);
+                    { Mortar::Mesh m; m.DrawQuadUnCached(white, NULL); }
                     tex->UnSet();
                 }
             }
@@ -1719,7 +1719,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
-                    Mortar::MeshDraw::DrawQuadUnCachedDefault(white, NULL);
+                    { Mortar::Mesh m; m.DrawQuadUnCached(white, NULL); }
                     tex->UnSet();
                 }
             }
@@ -1812,7 +1812,7 @@ void GameOverScreen::DrawOrder(const Vec3& hudScale, int /*layerMask*/) {
     mm.UploadModelViewOnly();
 
     // Binary @ 0x001416bc DrawTriList(verts, 0x30, false, nullptr)
-    Mortar::MeshDraw::DrawTriList(g_StarMesh.verts, 48, false, NULL);
+    { Mortar::Mesh m; m.DrawTriList(g_StarMesh.verts, 48, false, NULL); }
 
     g_StarburstTex->UnSet();
 }

@@ -15,7 +15,6 @@
 #include "asset/TextureManager.h"
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
-#include "asset/MeshDraw.h"
 #include "asset/Model.h"
 #include "hud/MenuButton.h"
 #include "hud/MissControl.h"
@@ -987,7 +986,7 @@ void Bomb::DrawBombHit() {
     mm.UploadModelViewOnly();
 
     s_BombFlashTex->Set();
-    Mortar::MeshDraw::DrawQuadUnCachedDefault(tint, NULL);
+    { Mortar::Mesh m; m.DrawQuadUnCached(tint, NULL); }
     s_BombFlashTex->UnSet();
 }
 

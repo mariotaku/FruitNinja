@@ -13,7 +13,7 @@
 #include "hud/TutorialControl.h"
 #include "entities/Fruit.h"
 #include "entities/FruitInfo.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
@@ -404,7 +404,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.UploadModelViewOnly();
 
         m_TexHaiku->Set();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         m_TexHaiku->UnSet();
 
         // ---- Font draws (version text "V1.5.1") ----
@@ -465,7 +465,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
             mm.GetWorldStack().SetCurrentMatrix(mOv);
             mm.UploadModelViewOnly();
             m_TexOFNOverlay->Set();
-            Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+            { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
             m_TexOFNOverlay->UnSet();
         }
     }
@@ -489,7 +489,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.UploadModelViewOnly();
 
         s_TexCredits->Set();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         s_TexCredits->UnSet();
     }
 
@@ -514,7 +514,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.UploadModelViewOnly();
 
         s_TexSensei->Set();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         s_TexSensei->UnSet();
     }
 }

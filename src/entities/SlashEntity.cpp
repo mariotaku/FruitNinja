@@ -12,7 +12,7 @@
 #include "hud/HUDControl.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "input/Touch.h"
 #include "input/InputEvent.h"
@@ -1419,8 +1419,8 @@ void SlashEntity::DrawSlice() {
     // 2 verts per trail point (interleaved edge + centre in each buffer).
     // RebuildGeometry writes indices 0..m_NumPoints*2-1.
     const int vertCount = m_NumPoints * 2;
-    Mortar::MeshDraw::DrawTriStrip(m_pLeftBuffer,  vertCount, false, NULL);
-    Mortar::MeshDraw::DrawTriStrip(m_pRightBuffer, vertCount, false, NULL);
+    { Mortar::Mesh m; m.DrawTriStrip(m_pLeftBuffer,  vertCount, false, NULL); }
+    { Mortar::Mesh m; m.DrawTriStrip(m_pRightBuffer, vertCount, false, NULL); }
     bladeTex->UnSet();
 }
 

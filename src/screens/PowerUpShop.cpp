@@ -16,7 +16,7 @@
 #include "game/PowerUpManager.h"
 #include "game/FruitSaveData.h"
 #include "entities/Fruit.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/Font.h"
@@ -258,11 +258,10 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
 
     // Step 2: draw buy background quad via g_BuyBg.
     // Binary @ 0x00155e08: calls g_BuyBg->Set(), Mesh::DrawQuadUnCached(Colour*, fx),
-    // g_BuyBg->UnSet(). Port uses MeshDraw::DrawQuadUnCachedDefault (same binary at
-    // 0x00194180: default 1x1 quad with current world matrix).
+    // g_BuyBg->UnSet(). Binary @ 0x00194180: default 1x1 quad with current world matrix.
     if (g_BuyBg.IsValid()) {
         g_BuyBg->Set();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(g_White, NULL); }
         g_BuyBg->UnSet();
     }
 
@@ -314,7 +313,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
             Mortar::ReloadableTexture& greyTex = pi->GetGreyTexture();
             if (greyTex.IsLoaded()) {
                 greyTex.Set();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+                { Mortar::Mesh m; m.DrawQuadUnCached(g_White, NULL); }
                 greyTex.UnSet();
             }
 
@@ -358,7 +357,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
                 barVerts[3].u = fillFrac; barVerts[3].v = 0.0f;
 
                 barTex.Set();
-                Mortar::MeshDraw::DrawTriStrip(barVerts, 4, true, NULL);
+                { Mortar::Mesh m; m.DrawTriStrip(barVerts, 4, true, NULL); }
                 barTex.UnSet();
             }
         } else {
@@ -368,7 +367,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
                 : &pi->GetGreyTexture();
             if (iconTex && iconTex->IsLoaded()) {
                 iconTex->Set();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(g_White, NULL);
+                { Mortar::Mesh m; m.DrawQuadUnCached(g_White, NULL); }
                 iconTex->UnSet();
             }
         }

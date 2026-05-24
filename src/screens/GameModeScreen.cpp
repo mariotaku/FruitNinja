@@ -16,7 +16,7 @@
 #include "entities/FruitInfo.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "audio/GameSound.h"
 #include "render/MatrixManager.h"
@@ -526,7 +526,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexModeSensei->Set();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         s_TexModeSensei->UnSet();
     }
 
@@ -553,7 +553,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexZenSign->Set();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         s_TexZenSign->UnSet();
     }
 }

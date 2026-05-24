@@ -10,7 +10,6 @@
 #include "Game.h"
 #include "HUD.h"
 #include "hud/HUDLayer.h"
-#include "asset/MeshDraw.h"
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
