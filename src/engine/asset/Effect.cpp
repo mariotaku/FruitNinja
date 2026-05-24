@@ -90,7 +90,7 @@ int EffectGroup::MergeProperties(
             // Only m_Name is read by the binary's comparator; m_Type and
             // m_Count are left zero (no _Bada layout RE for those fields).
             EffectPropertyDefinition def;
-            def.m_Name  = Immutable<std::string>(incoming.m_Name);
+            def.m_Name  = Immutable(incoming.m_Name);
             def.m_Type  = 0;
             def.m_Count = 0;
             m_MergedDefs.insert(m_MergedDefs.begin() + lo, def);

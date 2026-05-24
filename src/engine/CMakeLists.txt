@@ -8,6 +8,7 @@ add_library(mortar_engine STATIC
     math/MathUtil.cpp
     math/Math.cpp
     compression/LZ8.cpp
+    util/Immutable.cpp
     util/StringHash.cpp
     util/AsciiString.cpp
     util/StringTable.cpp

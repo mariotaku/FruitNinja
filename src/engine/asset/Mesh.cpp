@@ -3,10 +3,21 @@
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
+#include "util/Immutable.h"
 #include <cstring>
 #include <cmath>
 
 // Analysed: 2026-04-11T18:30
+
+// File-scope interned-name globals for the Mesh C1/C2 ctor.
+// Interned once at static-init; lives for program lifetime.
+// Mirrors binary's per-call cost where the intern pool already holds the Node*.
+namespace {
+const Immutable kMeshName_World("World");
+const Immutable kMeshName_View("SceneCamera.View");
+const Immutable kMeshName_Proj("SceneCamera.Projection");
+const Immutable kMeshName_WVP("WorldViewProjection");
+}  // namespace
 
 namespace Mortar {
 
@@ -358,16 +369,16 @@ Mesh::Mesh(SmartPtr<SharedEffectProperties> const& parent, AsciiString const& na
     // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b10d8
     m_Name = name.c_str();
     EffectPropertyDefinition defs[4];
-    defs[0].m_Name  = Immutable<std::string>("World");
+    defs[0].m_Name  = kMeshName_World;
     defs[0].m_Type  = 3;
     defs[0].m_Count = 1;
-    defs[1].m_Name  = Immutable<std::string>("SceneCamera.View");
+    defs[1].m_Name  = kMeshName_View;
     defs[1].m_Type  = 3;
     defs[1].m_Count = 1;
-    defs[2].m_Name  = Immutable<std::string>("SceneCamera.Projection");
+    defs[2].m_Name  = kMeshName_Proj;
     defs[2].m_Type  = 3;
     defs[2].m_Count = 1;
-    defs[3].m_Name  = Immutable<std::string>("WorldViewProjection");
+    defs[3].m_Name  = kMeshName_WVP;
     defs[3].m_Type  = 3;
     defs[3].m_Count = 1;
     if (parent.IsValid() && parent->GetList().Contains(defs, defs + 4)) {
