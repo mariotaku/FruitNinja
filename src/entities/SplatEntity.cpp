@@ -13,10 +13,10 @@
 #include "hud/HUD.h"
 #include "math/Colour.h"
 #include "audio/GameSound.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
+#include "asset/MeshDraw.h"
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "util/SmartPtr.h"
@@ -817,9 +817,7 @@ void SplatEntity::DrawActiveSplats() {
     // stays in effect. SplatEntity::Draw must NOT mutate it -- doing so leaves
     // depth-test OFF for subsequent same-bucket draws and breaks the fruit
     // -occludes-backdrop sort order on the menu screen.
-    if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawTriList(s_SplatVerts, count * 6);
-    }
+    Mortar::MeshDraw::DrawTriList(s_SplatVerts, count * 6, false, NULL);
 
     s_SplatTex->UnSet();
 }

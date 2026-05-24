@@ -22,10 +22,10 @@
 #include "BombBlast.h"
 #include "ActorManager.h"
 #include "Game.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "asset/MeshDraw.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
 #include "math/Matrix44.h"
@@ -239,11 +239,7 @@ void BombBlast::DrawActiveBlasts() {
     mm.UploadModelViewOnly();
 
     g_BombTexture->Set();
-
-    if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawTriList(s_BlastVerts, blastCount * VERTS_PER_BLAST);
-    }
-
+    Mortar::MeshDraw::DrawTriList(s_BlastVerts, blastCount * VERTS_PER_BLAST, false, NULL);
     g_BombTexture->UnSet();
 }
 
