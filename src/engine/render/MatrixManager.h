@@ -22,12 +22,12 @@ public:
     // Binary's MatrixManager has NO m_CachedProjView and NO
     // m_ProjVersionUploaded -- only the 3 ints below. Total class size
     // is exactly 0x2134 bytes (0x4 vtable + 4 stacks * 0x848 + 3 ints).
-    // The port keeps m_CachedProjView for its ES2 shader pipeline
-    // (Renderer reads GetMVP() each draw call) -- DIFFERS from binary,
-    // which uploads matrices through GL fixed-pipeline calls inside
-    // _UploadCurrentMatrices and lets later draws inherit GL state.
-    // TODO: rewrite the upload path to match binary exactly; for now
-    // the cache field is a port-side concession.
+    // DIFFERS from binary: the cache field is required by the GLES2
+    // shader-uniform path; see _UploadCurrentMatrices for the algebraic
+    // equivalence proof (binary's fixed-pipeline glLoad/Push/Pop/Mult
+    // stream produces the same per-draw MVP as our cached projView *
+    // m_World.m_Current). A "binary-exact" rewrite would require GL ES
+    // 1.x which is unavailable on the GLES2 target.
     Matrix44 m_CachedProjView;       // Port specific
     int m_ProjVersionUploaded;       // Port specific (binary lacks this)
 

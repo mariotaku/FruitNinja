@@ -70,7 +70,22 @@ void MatrixManager::UploadModelViewOnly() {
     _UploadCurrentMatrices(true);
 }
 
-// Matches 0x0019e2b4 — recomputes cached matrices based on dirty versions
+// DIFFERS from binary @ 0x0019e2b4 (asm-inspector 2026-05-24): the binary
+// emits a fixed-pipeline GL stream here -- glMatrixMode(GL_PROJECTION) +
+// glLoadMatrixf(DisplayManager.m_OrientationMatrix * proj); optionally
+// glMatrixMode(GL_TEXTURE) + glLoadMatrixf(tex); and a pop/load/push/mult
+// dance on GL_MODELVIEW to keep `view` at stack depth 1 and `view*world`
+// at depth 0. The port runs GLES2 with no fixed-pipeline matrix stack:
+// MVP is cached as m_CachedProjView and uploaded as a shader uniform by
+// Renderer::setup_3d_shader() per draw call. The orientation-matrix
+// left-mul is skipped because the port targets a native-landscape window
+// (already documented on SetupLookAt above).
+//
+// GL_TEXTURE upload is intentionally omitted -- port shaders sample with
+// the raw a_uv attribute and have no texture-matrix uniform. If a future
+// caller ever needs animated UVs via m_Texture, a uniform path must be
+// added; the per-stack version counter is still maintained here so that
+// trigger would be detectable.
 void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
     // If NOT skipping projection: recompute cached projection * view
     if (!skipProjection) {
@@ -92,7 +107,14 @@ void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
         m_WorldVersionUploaded = m_World.m_Version;
     }
 
-    m_TextureVersionUploaded = m_Texture.m_Version;
+    // Mirror binary's dirty-gate: only mark the texture clean when it
+    // actually changed, so a future GLES2 texture-matrix uniform path can
+    // hook the dirty edge.
+    if (m_Texture.m_Version != m_TextureVersionUploaded) {
+        // TODO: 0x0019e31e — when GLES2 gains a texture-matrix uniform path,
+        //   upload m_Texture.m_Current here.
+        m_TextureVersionUploaded = m_Texture.m_Version;
+    }
 }
 
 Matrix44 MatrixManager::GetMVP() const {
