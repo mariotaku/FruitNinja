@@ -28,7 +28,7 @@
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
 #include "audio/GameSound.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
@@ -377,7 +377,7 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexSensei->Set();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         s_TexSensei->UnSet();
     }
 

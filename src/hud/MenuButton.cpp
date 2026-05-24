@@ -22,7 +22,6 @@
 #include "entities/FruitInfo.h"
 #include "entities/ActorManager.h"
 #include "input/Touch.h"
-#include "asset/MeshDraw.h"
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"

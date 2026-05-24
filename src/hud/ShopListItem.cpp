@@ -13,7 +13,7 @@
 #include "game/ItemManager.h"
 #include "screens/ShopScreen.h"
 #include "Game.h"
-#include "engine/asset/MeshDraw.h"
+#include "engine/asset/Mesh.h"
 #include "engine/render/MatrixManager.h"
 #include "engine/render/Font.h"
 #include "engine/math/Matrix44.h"
@@ -486,7 +486,7 @@ void ShopListItem::Draw() {
 
             if (ShopScreen::s_TexNewItemSmlBadge.IsValid()) {
                 ShopScreen::s_TexNewItemSmlBadge->Set();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
+                { Mortar::Mesh m; m.DrawQuadUnCached(colourWhite, NULL); }  // always white
                 ShopScreen::s_TexNewItemSmlBadge->UnSet();
             }
         }
@@ -517,7 +517,7 @@ void ShopListItem::Draw() {
 
             if (ShopScreen::s_TexSelectedSml.IsValid()) {
                 ShopScreen::s_TexSelectedSml->Set();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
+                { Mortar::Mesh m; m.DrawQuadUnCached(colourWhite, NULL); }  // always white
                 ShopScreen::s_TexSelectedSml->UnSet();
             }
         }
@@ -545,13 +545,13 @@ void ShopListItem::Draw() {
 
             if (!isLocked) {
                 m_pIconTex->Set();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
+                { Mortar::Mesh m; m.DrawQuadUnCached(colourWhite, NULL); }  // always white
                 m_pIconTex->UnSet();
             } else {
                 // locked: draw locked_stroke.tex (static_block[+0x40])
                 if (ShopScreen::s_TexLockedStroke.IsValid()) {
                     ShopScreen::s_TexLockedStroke->Set();
-                    Mortar::MeshDraw::DrawQuadUnCachedDefault(colourWhite, NULL);  // always white
+                    { Mortar::Mesh m; m.DrawQuadUnCached(colourWhite, NULL); }  // always white
                     ShopScreen::s_TexLockedStroke->UnSet();
                 }
             }
@@ -599,7 +599,7 @@ void ShopListItem::Draw() {
 
             if (ShopScreen::s_TexScratch.IsValid()) {
                 ShopScreen::s_TexScratch->Set();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(dividerColour, NULL);
+                { Mortar::Mesh m; m.DrawQuadUnCached(dividerColour, NULL); }
                 ShopScreen::s_TexScratch->UnSet();
             }
 
@@ -619,7 +619,7 @@ void ShopListItem::Draw() {
 
                 if (ShopScreen::s_TexScratch.IsValid()) {
                     ShopScreen::s_TexScratch->Set();
-                    Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(128, 128, 128, 255), NULL);  // always grey
+                    { Mortar::Mesh m; m.DrawQuadUnCached(Colour(128, 128, 128, 255), NULL); }  // always grey
                     ShopScreen::s_TexScratch->UnSet();
                 }
             }
@@ -788,7 +788,7 @@ void ShopListItem::Draw() {
                 mm2.GetWorldStack().Reset();
                 mm2.GetWorldStack().SetCurrentMatrix(matTop);
                 mm2.UploadModelViewOnly();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(0, 0, 0, 128), NULL);  // (0,0,0,0x80)
+                { Mortar::Mesh m; m.DrawQuadUnCached(Colour(0, 0, 0, 128), NULL); }  // (0,0,0,0x80)
             }
             // Stripe 2 (bottom): Translate(parentX - 2.0, -105.0, 0)
             {
@@ -797,7 +797,7 @@ void ShopListItem::Draw() {
                 mm2.GetWorldStack().Reset();
                 mm2.GetWorldStack().SetCurrentMatrix(matBot);
                 mm2.UploadModelViewOnly();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(0, 0, 0, 128), NULL);
+                { Mortar::Mesh m; m.DrawQuadUnCached(Colour(0, 0, 0, 128), NULL); }
             }
 
             ShopScreen::s_TexLoading->UnSet();

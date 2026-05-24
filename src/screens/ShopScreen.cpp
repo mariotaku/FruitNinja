@@ -23,7 +23,6 @@
 #include "game/ItemManager.h"
 #include "game/FruitSaveData.h"
 #include "engine/audio/GameSound.h"
-#include "asset/MeshDraw.h"
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
@@ -1303,7 +1302,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             Colour colDialog(rByte, rByte, rByte, 0xFF);
 
             s_TexDialogBox->Set();
-            Mortar::MeshDraw::DrawQuadUnCachedDefault(colDialog, NULL);
+            { Mortar::Mesh m; m.DrawQuadUnCached(colDialog, NULL); }
             s_TexDialogBox->UnSet();
         }
 
@@ -1366,7 +1365,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     if (s_TexSelected.IsValid()) {
         s_TexSelected->Set();
         Colour c = colourWhite;
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(c, NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(c, NULL); }
         s_TexSelected->UnSet();
     }
 }

@@ -12,7 +12,7 @@
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
 #include "entities/Fruit.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
@@ -140,7 +140,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
                 TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            Mortar::MeshDraw::DrawTriList(s_tri1, 3, false, NULL);
+            { Mortar::Mesh m; m.DrawTriList(s_tri1, 3, false, NULL); }
         }
 
         // Bottom triangle (stateObj+0x0C)
@@ -152,7 +152,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
                 alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            Mortar::MeshDraw::DrawTriList(s_tri2, 3, false, NULL);
+            { Mortar::Mesh m; m.DrawTriList(s_tri2, 3, false, NULL); }
         }
 
         s_TexBlurryBacking->UnSet();
@@ -174,7 +174,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         s_TexSmlTitle->UnSet();
     }
 
@@ -211,7 +211,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         secondaryTex->UnSet();
     }
 }

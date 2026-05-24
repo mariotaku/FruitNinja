@@ -22,7 +22,7 @@
 #include "engine/math/Colour.h"
 #include "engine/util/Delegate.h"
 #include "engine/render/Font.h"
-#include "engine/asset/MeshDraw.h"
+#include "engine/asset/Mesh.h"
 #include "engine/render/MatrixManager.h"
 #include "engine/math/Matrix44.h"
 #include "engine/math/MathUtil.h"
@@ -695,7 +695,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
         mat.GlobalTranslate44(Vec3(pos.x + stride * 0.5f, pos.y, pos.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
-        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
         m_ComboStarTex->UnSet();
         return;
     }
@@ -710,7 +710,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             mat.GlobalTranslate44(Vec3(pos.x - 1.0f, pos.y - 8.0f, pos.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+            { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
             m_Texture->UnSet();
         }
 
@@ -761,7 +761,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             mat.GlobalTranslate44(Vec3(pos.x - 8.0f, pos.y + 8.0f, pos.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+            { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
             m_FactTexture->UnSet();
         }
 
@@ -781,7 +781,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 mat.GlobalTranslate44(Vec3(pos.x - 8.0f, pos.y + 8.0f, pos.z));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
-                Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+                { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
                 m_FactTexture->UnSet();
             }
 
@@ -823,7 +823,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                         starMat.GlobalTranslate44(rowPos);
                         mm.GetWorldStack().SetCurrentMatrix(starMat);
                         mm.UploadModelViewOnly();
-                        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+                        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
                         bonus->m_StarTexture->UnSet();
                     }
                     rowPos.y -= 20.0f;
@@ -860,7 +860,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             mat.GlobalTranslate44(Vec3(pos.x - 1.0f, pos.y - 8.0f, pos.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+            { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
             m_Texture->UnSet();
         }
 
@@ -914,7 +914,7 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
                 pos.z + m_FactPosOffset.z));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
+            { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
             m_FactTexture->UnSet();
         }
     }

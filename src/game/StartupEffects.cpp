@@ -5,7 +5,6 @@
 #include "FruitCamera.h"
 #include "Game.h"
 #include "WaveManager.h"
-#include "asset/MeshDraw.h"
 #include "asset/Mesh.h"
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"

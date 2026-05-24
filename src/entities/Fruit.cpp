@@ -9,7 +9,7 @@
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "render/QUADCUSTOMVERTEX.h"
-#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/MeshManager.h"
 #include "asset/TextureManager.h"
 #include "particle/PSPParticleManager.h"
@@ -1584,7 +1584,7 @@ void Fruit::DrawShadows() {
     mm.UploadModelViewOnly();
 
     shadowTex->Set();
-    Mortar::MeshDraw::DrawTriList(s_ShadowVerts, count * 6, false, NULL);
+    { Mortar::Mesh m; m.DrawTriList(s_ShadowVerts, count * 6, false, NULL); }
     shadowTex->UnSet();
 }
 
