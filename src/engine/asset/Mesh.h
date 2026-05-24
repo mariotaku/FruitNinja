@@ -283,28 +283,28 @@ public:
     // Binary is a stub (returns colour unchanged); port is likewise a no-op.
     void DrawSphere(float radius, Colour colour, DrawEffectContainer* fx);
 
-    // STUB: DrawQuad(Colour, SmartPtr<Texture>, Vec3 const&, Vec3 const&, float, float, float, float, float, DrawEffectContainer*) -- binary @ 0x001b09b0 (TODO RE)
+    // Binary @ 0x001b09b0
     void DrawQuad(Colour colour, SmartPtr<Texture> texture,
                   Vec3 const& pos, Vec3 const& scale, float rotZ,
                   float w, float h, float uOff, float vOff,
                   DrawEffectContainer* fx);
 
-    // STUB: DrawQuadUnCached(Colour, DrawEffectContainer*) -- binary @ 0x00194180 (TODO RE)
+    // Binary @ 0x00194180 — delegates to 6-arg with u0=0,v0=1,u1=0,v1=1 (full texture).
     void DrawQuadUnCached(Colour colour, DrawEffectContainer* fx);
 
-    // STUB: DrawQuadUnCached(Colour, float, float, float, float, DrawEffectContainer*) -- binary @ 0x00194060 (TODO RE)
-    void DrawQuadUnCached(Colour colour, float w, float h, float uOff, float vOff,
+    // Binary @ 0x00194060 — 4-vert TRIANGLE_STRIP unit quad with UV crop [u0,v0]..[u1,v1].
+    void DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v1,
                           DrawEffectContainer* fx);
 
-    // STUB: DrawTriList(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x0019404c (TODO RE)
+    // Binary @ 0x0019404c — forwards to DrawTris with primType=GL_TRIANGLES; outer blend ignored.
     void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend,
                      DrawEffectContainer* fx);
 
-    // STUB: DrawTriStrip(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x00194038 (TODO RE)
+    // Binary @ 0x00194038 — forwards to DrawTris with primType=GL_TRIANGLE_STRIP; outer blend ignored.
     void DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count, bool blend,
                       DrawEffectContainer* fx);
 
-    // STUB: DrawTris(QUADCUSTOMVERTEX const*, long, int, bool, DrawEffectContainer*) -- binary @ 0x00193f5c (TODO RE)
+    // Binary @ 0x00193f5c — dispatches to Renderer::DrawTriList or DrawTriStrip by primType.
     void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
                   DrawEffectContainer* fx);
 

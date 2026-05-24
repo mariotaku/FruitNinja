@@ -3,6 +3,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include <cstring>
+#include <cmath>
 #include <algorithm>
 
 // Analysed: 2026-04-11T18:30
@@ -500,41 +501,68 @@ void Mesh::DrawSphere(float /*radius*/, Colour /*colour*/, DrawEffectContainer* 
     // Defunct: DrawSphere is a binary stub (BX LR); no-op stub; binary @ 0x00193ee0
 }
 
-// STUB: DrawQuad(Colour, SmartPtr<Texture>, Vec3 const&, Vec3 const&, float, float, float, float, float, DrawEffectContainer*) -- binary @ 0x001b09b0
-void Mesh::DrawQuad(Colour /*colour*/, SmartPtr<Texture> /*texture*/,
-                    Vec3 const& /*pos*/, Vec3 const& /*scale*/, float /*rotZ*/,
-                    float /*w*/, float /*h*/, float /*uOff*/, float /*vOff*/,
-                    DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawQuad via DrawEffectContainer -- no-op stub; binary @ 0x001b09b0
+// Binary @ 0x001b09b0
+// ASM-verified: 2026-05-24 binary @ 0x001b09b0 (re-analyst)
+void Mesh::DrawQuad(Colour colour, SmartPtr<Texture> texture,
+                    Vec3 const& pos, Vec3 const& scale, float rotZ,
+                    float w, float h, float uOff, float vOff,
+                    DrawEffectContainer* fx) {
+    MatrixManager& mm = MatrixManager::GetInstance();
+    MatrixStack& ws = mm.GetWorldStack();
+    ws.Reset();
+    ws.Scale(scale);
+    ws.Translate(pos);
+    ws.m_Current.RotZ44(sinf(rotZ), cosf(rotZ));
+    ws.m_Version++;
+    mm.UploadModelViewOnly();
+    texture->Set();
+    DrawQuadUnCached(colour, w, h, uOff, vOff, fx);
+    texture->UnSet();
 }
 
-// STUB: DrawQuadUnCached(Colour, DrawEffectContainer*) -- binary @ 0x00194180
-void Mesh::DrawQuadUnCached(Colour /*colour*/, DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawQuadUnCached -- no-op stub; binary @ 0x00194180
+// Binary @ 0x00194180
+// ASM-verified: 2026-05-24 binary @ 0x00194180 (re-analyst)
+void Mesh::DrawQuadUnCached(Colour colour, DrawEffectContainer* fx) {
+    DrawQuadUnCached(colour, 0.0f, 1.0f, 0.0f, 1.0f, fx);
 }
 
-// STUB: DrawQuadUnCached(Colour, float, float, float, float, DrawEffectContainer*) -- binary @ 0x00194060
-void Mesh::DrawQuadUnCached(Colour /*colour*/, float /*w*/, float /*h*/,
-                             float /*uOff*/, float /*vOff*/, DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawQuadUnCached -- no-op stub; binary @ 0x00194060
+// Binary @ 0x00194060
+// ASM-verified: 2026-05-24 binary @ 0x00194060 (re-analyst)
+void Mesh::DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v1,
+                             DrawEffectContainer* /*fx*/) {
+    // TODO: 0x00194060 -- fx non-null path: fx->GetType()==0x20 forces blend ON.
+    // fx is always null in current port (DrawEffectContainer is defunct).
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->DrawQuad(colour, u0, v0, u1, v1);
+    }
 }
 
-// STUB: DrawTriList(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x0019404c
-void Mesh::DrawTriList(QUADCUSTOMVERTEX const* /*verts*/, long /*count*/,
-                       bool /*blend*/, DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawTriList via DrawEffectContainer -- no-op stub; binary @ 0x0019404c
+// Binary @ 0x0019404c
+// ASM-verified: 2026-05-24 binary @ 0x0019404c (re-analyst)
+void Mesh::DrawTriList(QUADCUSTOMVERTEX const* verts, long count,
+                       bool /*blend*/, DrawEffectContainer* fx) {
+    DrawTris(verts, count, 4 /*GL_TRIANGLES*/, fx != 0, 0);
 }
 
-// STUB: DrawTriStrip(QUADCUSTOMVERTEX const*, long, bool, DrawEffectContainer*) -- binary @ 0x00194038
-void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* /*verts*/, long /*count*/,
-                        bool /*blend*/, DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawTriStrip via DrawEffectContainer -- no-op stub; binary @ 0x00194038
+// Binary @ 0x00194038
+// ASM-verified: 2026-05-24 binary @ 0x00194038 (re-analyst)
+void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count,
+                        bool /*blend*/, DrawEffectContainer* fx) {
+    DrawTris(verts, count, 5 /*GL_TRIANGLE_STRIP*/, fx != 0, 0);
 }
 
-// STUB: DrawTris(QUADCUSTOMVERTEX const*, long, int, bool, DrawEffectContainer*) -- binary @ 0x00193f5c
-void Mesh::DrawTris(QUADCUSTOMVERTEX const* /*verts*/, long /*count*/,
-                    int /*primType*/, bool /*blend*/, DrawEffectContainer* /*fx*/) {
-    // Defunct: DrawTris via DrawEffectContainer -- no-op stub; binary @ 0x00193f5c
+// Binary @ 0x00193f5c
+// ASM-verified: 2026-05-24 binary @ 0x00193f5c (re-analyst)
+void Mesh::DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType,
+                    bool /*blend*/, DrawEffectContainer* /*fx*/) {
+    // TODO: 0x00193f5c -- blend/fx gate: if !blend && singleton==null -> glDisable(GL_BLEND).
+    // fx/blend are defunct in port; Renderer paths enable blend unconditionally.
+    if (Renderer* r = Renderer::GetInstance()) {
+        if (primType == 4)
+            r->DrawTriList(const_cast<QUADCUSTOMVERTEX*>(verts), (int)count);
+        else if (primType == 5)
+            r->DrawTriStrip(const_cast<QUADCUSTOMVERTEX*>(verts), (int)count);
+    }
 }
 
 // ---- Model stubs (binary) ----

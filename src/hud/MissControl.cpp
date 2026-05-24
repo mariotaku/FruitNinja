@@ -12,6 +12,7 @@
 #include "math/MathUtil.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
+#include "asset/Mesh.h"
 #include "render/gl_funcs.h"
 #include "debug/Logger.h"
 #include <cstring>
@@ -784,16 +785,11 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         u0 = 0.5f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     }
 
-    // Render unit-quad via current MVP -- matches the binary's
-    // Mortar::Mesh::DrawQuadUnCached path (binary @ 0x00194060).
-    // Renderer::DrawQuad's header comment confirms it's the port-side
-    // equivalent: draws unit quad transformed by current MVP with
-    // tint + UV crop.
+    // Binary @ 0x00151f60 calls Mortar::Mesh::DrawQuadUnCached(colour, u0, v0, u1, v1, nullptr).
     const float u1 = u0 + du;
     const float v1 = v0 + dv;
-    if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawQuad(tint, u0, v0, u1, v1);
-    }
+    Mortar::Mesh m;
+    m.DrawQuadUnCached(tint, u0, v0, u1, v1, 0);
 
     m_Texture->UnSet();
 }
