@@ -16,9 +16,9 @@
 #include "entities/FruitInfo.h"
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
+#include "asset/MeshDraw.h"
 #include "asset/TextureManager.h"
 #include "audio/GameSound.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
@@ -501,8 +501,6 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
     if (m_TransitionAlpha <= 0.0f) return;
 
     MatrixManager& mm = MatrixManager::GetInstance();
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
 
     // --- 1. Background panel (mode_sensei.tex) ---
     // Binary math:
@@ -528,7 +526,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexModeSensei->Set();
-        r->DrawQuad(Colour(255, 255, 255, 255));
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         s_TexModeSensei->UnSet();
     }
 
@@ -555,7 +553,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexZenSign->Set();
-        r->DrawQuad(Colour(255, 255, 255, 255));
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         s_TexZenSign->UnSet();
     }
 }

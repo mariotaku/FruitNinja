@@ -12,8 +12,8 @@
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
 #include "entities/Fruit.h"
+#include "asset/MeshDraw.h"
 #include "asset/TextureManager.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
@@ -94,8 +94,6 @@ void BaseScreen::UnloadContent() {
 void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryTex,
                              float alpha, const Vec3& secondaryTexPos) {
     MatrixManager& mm = MatrixManager::GetInstance();
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
 
     // --- 1. Shade triangles (blurry_backing.tex at stateObj+4) ---
     if (s_TexBlurryBacking.IsValid()) {
@@ -142,7 +140,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
                 TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            r->DrawTriList(s_tri1, 3);
+            Mortar::MeshDraw::DrawTriList(s_tri1, 3, false, NULL);
         }
 
         // Bottom triangle (stateObj+0x0C)
@@ -154,7 +152,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
                 alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            r->DrawTriList(s_tri2, 3);
+            Mortar::MeshDraw::DrawTriList(s_tri2, 3, false, NULL);
         }
 
         s_TexBlurryBacking->UnSet();
@@ -176,7 +174,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        r->DrawQuad(Colour(255, 255, 255, 255));
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         s_TexSmlTitle->UnSet();
     }
 
@@ -213,7 +211,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        r->DrawQuad(Colour(255, 255, 255, 255));
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         secondaryTex->UnSet();
     }
 }

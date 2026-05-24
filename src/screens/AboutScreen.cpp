@@ -13,9 +13,9 @@
 #include "hud/TutorialControl.h"
 #include "entities/Fruit.h"
 #include "entities/FruitInfo.h"
+#include "asset/MeshDraw.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
-#include "render/Renderer.h"
 #include "render/Font.h"
 #include "math/Colour.h"
 #include "audio/GameSound.h"
@@ -371,9 +371,6 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
     if (m_TransitionAlpha <= 0.0f) return;
 
     MatrixManager& mm  = MatrixManager::GetInstance();
-    Renderer*              r   = Renderer::GetInstance();
-    if (!r) return;
-
     const float alpha = m_TransitionAlpha;
 
     // ================================================================
@@ -407,7 +404,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.UploadModelViewOnly();
 
         m_TexHaiku->Set();
-        r->DrawQuad(Colour(255, 255, 255, 255));
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         m_TexHaiku->UnSet();
 
         // ---- Font draws (version text "V1.5.1") ----
@@ -468,7 +465,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
             mm.GetWorldStack().SetCurrentMatrix(mOv);
             mm.UploadModelViewOnly();
             m_TexOFNOverlay->Set();
-            r->DrawQuad(Colour(255, 255, 255, 255));
+            Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
             m_TexOFNOverlay->UnSet();
         }
     }
@@ -492,7 +489,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.UploadModelViewOnly();
 
         s_TexCredits->Set();
-        r->DrawQuad(Colour(255, 255, 255, 255));
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         s_TexCredits->UnSet();
     }
 
@@ -517,7 +514,7 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.UploadModelViewOnly();
 
         s_TexSensei->Set();
-        r->DrawQuad(Colour(255, 255, 255, 255));
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         s_TexSensei->UnSet();
     }
 }

@@ -31,8 +31,8 @@
 #include "math/Vec3.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
+#include "asset/MeshDraw.h"
 #include "render/MatrixManager.h"
-#include "render/Renderer.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/Font.h"
 #include "debug/Logger.h"
@@ -1589,8 +1589,6 @@ void GameOverScreen::Update(float dt) {
 
 // ASM-verified: 2026-05-10 binary @ 0x0014171c (re-analyst)
 void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
 
     // -----------------------------------------------------------------
     // Layer 0x80 path -- highscore label + game-over overlay quad.
@@ -1642,7 +1640,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
-                r->DrawQuad(Colour(255, 255, 255, 255));
+                Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
 
                 m_CommingSoonHighscoreTex->UnSet();
             }
@@ -1699,7 +1697,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
-                    r->DrawQuad(white);
+                    Mortar::MeshDraw::DrawQuadUnCachedDefault(white, NULL);
                     tex->UnSet();
                 }
             }
@@ -1723,7 +1721,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
-                    r->DrawQuad(white);
+                    Mortar::MeshDraw::DrawQuadUnCachedDefault(white, NULL);
                     tex->UnSet();
                 }
             }
@@ -1805,7 +1803,6 @@ void GameOverScreen::DrawOrder(const Vec3& hudScale, int /*layerMask*/) {
     // -----------------------------------------------------------------
     g_StarburstTex->Set();
 
-    Renderer* r = Renderer::GetInstance();
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     Matrix44 mat = Matrix44::MakeScale(
@@ -1816,7 +1813,8 @@ void GameOverScreen::DrawOrder(const Vec3& hudScale, int /*layerMask*/) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    if (r) r->DrawTriList(g_StarMesh.verts, 48);
+    // Binary @ 0x001416bc DrawTriList(verts, 0x30, false, nullptr)
+    Mortar::MeshDraw::DrawTriList(g_StarMesh.verts, 48, false, NULL);
 
     g_StarburstTex->UnSet();
 }

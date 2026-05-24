@@ -28,8 +28,8 @@
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
 #include "audio/GameSound.h"
+#include "asset/MeshDraw.h"
 #include "asset/TextureManager.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
@@ -377,9 +377,7 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexSensei->Set();
-        if (Renderer* r = Renderer::GetInstance()) {
-            r->DrawQuad(Colour(255, 255, 255, 255));
-        }
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(Colour(255, 255, 255, 255), NULL);
         s_TexSensei->UnSet();
     }
 

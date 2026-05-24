@@ -23,9 +23,10 @@
 #include "game/ItemManager.h"
 #include "game/FruitSaveData.h"
 #include "engine/audio/GameSound.h"
+#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
-#include "render/Renderer.h"
 #include "math/Colour.h"
 #include "math/MathUtil.h"
 #include "debug/Logger.h"
@@ -1127,8 +1128,6 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     static Vec3  s_RingVec(0.0f, 0.0f, 1.0f);  // static_block+0x78
 
     MatrixManager& mm = MatrixManager::GetInstance();
-    Renderer* r = Renderer::GetInstance();
-    if (!r) return;
 
     // All quads use white full-alpha colour (*(Colour**)(GOT+0x73a4) at runtime).
     // The binary reads a runtime GOT entry assumed to be {0xFF,0xFF,0xFF,0xFF}.
@@ -1182,10 +1181,11 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
                 // DrawQuadSized_GameTask(u0=0.03125f, u1=0.597656f, colour)
                 // v0=0.1875f, v1=0.8125f hardcoded inside helper
                 // DAT_0015e06c = 0.03125f, DAT_0015e070 = 0.597656f
-                // Renderer::DrawQuad(tint, u0, v0, u1, v1)
-                r->DrawQuad(c,
+                Mortar::Mesh m;
+                m.DrawQuadUnCached(c,
                     0.03125f, 0.1875f,   // u0, v0
-                    0.597656f, 0.8125f); // u1, v1
+                    0.597656f, 0.8125f,  // u1, v1
+                    NULL);
             }
 
             // --- Right quad: slides from right  ---
@@ -1205,10 +1205,11 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
                 Colour c = colourWhite;
                 // DrawQuadSized_GameTask(u0=0.597656f, u1=0.96875f, colour)
                 // v0=0.1875f, v1=0.8125f; u1=0.96875f = 31/32 (literal 0x3f780000)
-                // Renderer::DrawQuad(tint, u0, v0, u1, v1)
-                r->DrawQuad(c,
+                Mortar::Mesh m;
+                m.DrawQuadUnCached(c,
                     0.597656f, 0.1875f,  // u0, v0
-                    0.96875f, 0.8125f);  // u1, v1
+                    0.96875f, 0.8125f,   // u1, v1
+                    NULL);
             }
 
             if (s_TexBGStore.IsValid()) {
@@ -1236,10 +1237,11 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
                 Colour c = colourWhite;
                 // DrawQuadSized_GameTask(u0=0.03125f, u1=0.96875f, colour)
                 // DAT_0015e06c=0.03125f; u1=0.96875f literal (0x3f780000)
-                // Renderer::DrawQuad(tint, u0, v0, u1, v1)
-                r->DrawQuad(c,
+                Mortar::Mesh m;
+                m.DrawQuadUnCached(c,
                     0.03125f, 0.1875f,  // u0, v0
-                    0.96875f, 0.8125f); // u1, v1
+                    0.96875f, 0.8125f,  // u1, v1
+                    NULL);
             }
 
             if (s_TexBGStore.IsValid()) {
@@ -1301,7 +1303,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             Colour colDialog(rByte, rByte, rByte, 0xFF);
 
             s_TexDialogBox->Set();
-            r->DrawQuad(colDialog);
+            Mortar::MeshDraw::DrawQuadUnCachedDefault(colDialog, NULL);
             s_TexDialogBox->UnSet();
         }
 
@@ -1364,7 +1366,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     if (s_TexSelected.IsValid()) {
         s_TexSelected->Set();
         Colour c = colourWhite;
-        r->DrawQuad(c);
+        Mortar::MeshDraw::DrawQuadUnCachedDefault(c, NULL);
         s_TexSelected->UnSet();
     }
 }
