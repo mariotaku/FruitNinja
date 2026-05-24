@@ -286,7 +286,21 @@ const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
 
 // --- CleanPool -------------------------------------------------------------
 
-// Binary @ 0x00150e74 -- delete every pool slot, null the pool ptr. Called from GameExit @ 0x0016d086.
+// ASM-verified: 2026-05-24 binary @ 0x00150e74 (re-analyst)
+// Tear down the pool. Only caller is GameExit @ 0x0016d086.
+//
+// Binary semantics: reads pool[-1] for slot count (heap header), iterates
+// BACKWARD calling vtable[0] (deleting-dtor) per slot, then one
+// operator delete[] on the whole [slotSize][count]-prefixed block. Binary
+// also unconditionally writes sm_PoolCount = 0 even when sm_pPool was null.
+//
+// Port DIFFERS (all cosmetic, already documented in CreatePool):
+//   - fixed-size s_Pool[MISS_POOL_SIZE] with N independent new/delete pairs
+//   - forward iteration (~MissControl is trivial, no inter-slot side-effects)
+//   - no separate sm_PoolCount field
+//
+// Binary does NOT call HUD::RemoveControl per slot — HUD list teardown
+// happens elsewhere in GameExit. Port matches.
 void MissControl::CleanPool() {
     if (!s_PoolAllocated) return;
     for (int i = 0; i < MISS_POOL_SIZE; i++) {
