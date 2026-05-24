@@ -420,9 +420,10 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         uint32_t w = tex->m_Width;
         uint32_t h = tex->m_Height;
         size = Vec3((float)(w + 1), (float)(h + 1), 0.0f);  // DAT_00151f44 = 0.0
-        // TODO: 0x00151e62 -- verify SetPlayer arg in MakeDisappear path 1.
-        // Disasm at 0x00151e62 needed to confirm what integer is passed (sizeMult or 0).
-        SetPlayer(0);
+        // ASM-verified: 2026-05-24 binary @ 0x00151e40 (re-analyst v2)
+        // Binary: `mov r0,r4; mov r1,r7; blx 0x000f6c30` -- r7 was saved from
+        // r2 = param_3 = sizeMult at function entry @ 0x00151db6.
+        SetPlayer(sizeMult);
     } else {
         // Path 2: fruit miss-penalty (invalid SmartPtr = use existing texture from Init).
         // binary @ 0x00151d94 else branch
@@ -436,8 +437,9 @@ void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
         size.x = 62.0f;  // g_HudScale.x * DAT_00151f4c (62.0f)
         size.y = 62.0f;  // g_HudScale.y * DAT_00151f4c
         size.z = 62.0f;  // g_HudScale.z * DAT_00151f4c
-        // TODO: 0x00151ed8 -- verify SetPlayer arg in MakeDisappear path 2.
-        SetPlayer(0);
+        // ASM-verified: 2026-05-24 binary @ 0x00151e94 (re-analyst v2)
+        // Same pattern as path 1: r1 = r7 = sizeMult.
+        SetPlayer(sizeMult);
         // Path 2 size is set again after SetPlayer (binary sets size twice -- same value).
         size.x = 62.0f;
         size.y = 62.0f;
@@ -501,8 +503,14 @@ void MissControl::Update(float dt) {
             }
             dx /= dist;
             dy /= dist;
-            float force = SEP_TARGET - dist;
-            force = force * (-1.0f) * 15.0f;
+            // ASM-verified: 2026-05-24 binary @ 0x00151b80..0x00151bbc (re-analyst v2)
+            // Binary chains three Vec2 *= scalar calls then a -= :
+            //   a_Stack_60 = dir * (70 - dist)
+            //   a_Stack_68 = a_Stack_60 * dt
+            //   _Stack_70  = a_Stack_68 * 15.0
+            //   accel -= _Stack_70                     // repel: self moves AWAY from other
+            // i.e. accel -= dir * (70 - dist) * dt * 15.0
+            float force = (SEP_TARGET - dist) * dt * 15.0f;
             accX -= dx * force;
             accY -= dy * force;
         }
