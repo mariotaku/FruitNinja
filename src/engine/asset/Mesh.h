@@ -8,6 +8,7 @@
 #include "asset/IModelNode.h"
 #include "asset/Texture.h"
 #include "asset/SharedEffectProperties.h"
+#include "asset/Geometry.h"
 #include "math/Colour.h"
 #include "render/gl_funcs.h"
 #include <vector>
@@ -39,7 +40,6 @@ struct Bounds3D {
 
 // Forward declarations for defunct/stub types referenced by binary API.
 class DrawEffectContainer;
-class Geometry;
 
 // SharedPropsInfo -- value-type stored in Mesh::m_GroupsByName.
 // sizeof = 0x1c (28 bytes). Binary layout confirmed by AddTextureMap RE.
@@ -49,16 +49,8 @@ struct SharedPropsInfo {
     // total: 4 + 24 = 28 = 0x1c
 };
 
-// Vertex attribute layout (from PSP vertex declaration)
-// Port specific: replaces the original Effect/Geometry/GeometryBinding system
-struct VertexLayout {
-    int posOffset;    int posSize;     // 3 floats typically
-    int normalOffset; int normalSize;  // 3 floats or 3 shorts
-    int colorOffset;  int colorSize;   // 0, 2, or 4 bytes
-    int colorFmt;                      // 0=none, 1=BGR5650, 2=ABGR5551, 3=RGBA8888
-    int texOffset;    int texSize;     // 2 floats
-    int totalStride;
-};
+// VertexLayout is declared in Geometry.h (included above) so it can be
+// embedded by value in Geometry. Mesh.h transitively provides it.
 
 // Material properties parsed from .mmd file
 // Extracted from LoadMesh material loop (0x001a7c90)
@@ -76,25 +68,6 @@ struct MeshMaterial {
     MeshMaterial() : m_SpecularStrength(0.0f), m_IsLit(false) {}
 };
 
-// One GPU-resident geometry sub-mesh (VBO + IBO pair with material index)
-// Replaces the original Geometry/GeometryBinding system per entry in m_Geometries
-// Ref: LoadMesh geometry loop (0x001a7c90 lines 320+)
-struct GeometryEntry {
-    GLuint vbo;
-    GLuint ibo;
-    int vertCount;
-    int indexCount;
-    GLenum primType;
-    VertexLayout layout;
-    int materialIndex;  // index into Mesh::m_Materials
-
-    GeometryEntry()
-        : vbo(0), ibo(0), vertCount(0), indexCount(0)
-        , primType(GL_TRIANGLES), materialIndex(0)
-    {
-        memset(&layout, 0, sizeof(layout));
-    }
-};
 
 // Matches original Mortar::Mesh (0x7C = 124 bytes)
 // Inherits: Mortar::ReferenceCounter → IModelNode → Mesh
@@ -121,9 +94,8 @@ public:
 
     std::vector<BoneBinding> m_BoneBindings;    // +0x34: Bone binding array (12 bytes)
 
-    // +0x40: Geometry submeshes (original: vector<Mortar::SmartPtr<Geometry>>)
-    // Port: each entry has its own VBO/IBO pair + material index
-    std::vector<GeometryEntry> m_Geometries;   // +0x40 (12 bytes)
+    // +0x40: Geometry submeshes (matches binary vector<Mortar::SmartPtr<Geometry>>)
+    std::vector<SmartPtr<Geometry> > m_Geometries;   // +0x40 (12 bytes)
 
     // +0x4c: Defunct -- SharedEffectProperties subsystem. Shape preserved to
     // keep m_Skeleton at binary offset +0x68 and sizeof(Mesh) at 0x7c.
@@ -182,13 +154,12 @@ public:
     // vtable[3]: Matches Mesh::GetName (0x001b15e0)
     const std::string& GetName() const override { return m_Name; }
 
-    // DIFFERS: binary GetGeometry @ 0x001b225c returns Mortar::SmartPtr<Geometry>;
-    // port returns const GeometryEntry* because GeometryEntry has trivial value
-    // semantics (no Geometry refcounted object).
-    // Port specific: access GeometryEntry by index (replaces vtable[10] GetGeometry).
-    const GeometryEntry* GetGeometryEntry(int idx) const {
-        if (idx >= 0 && idx < (int)m_Geometries.size()) return &m_Geometries[idx];
-        return nullptr;
+    // Binary @ 0x001b225c -- GetGeometry returns SmartPtr<Geometry>.
+    // Port uses the same storage type now; kept as a named accessor for call sites
+    // that used GetGeometryEntry (which is gone). Returns raw ptr for convenient use.
+    Geometry* GetGeometryEntry(int idx) const {
+        if (idx >= 0 && idx < (int)m_Geometries.size()) return m_Geometries[idx].Get();
+        return NULL;
     }
 
     // Port helper: assign texture to all materials that have none.
@@ -238,10 +209,7 @@ public:
     // Binary signature takes const-ref; port's existing BindSkeleton(Skeleton*) has mismatched mangling.
     void BindSkeleton(Skeleton const& skeleton);
 
-    // Defunct: AddGeometry(SmartPtr<Geometry> const&) -- binary @ 0x001b0d0c
-    // Shape-preserved: port appends GeometryEntry directly in LoadMesh, so this has no port-side action.
-    // DIFFERS: binary pushes SmartPtr<Geometry> into m_Geometries (vector<SmartPtr<Geometry>>);
-    // port's m_Geometries is vector<GeometryEntry> -- storage type mismatch; body is no-op.
+    // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
     void AddGeometry(SmartPtr<Geometry> const& geom);
 
     // Defunct: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x001b0988

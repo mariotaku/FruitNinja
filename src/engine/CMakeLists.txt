@@ -38,6 +38,7 @@ add_library(mortar_engine STATIC
     asset/ResourceLoader.cpp
     asset/AnimationState.cpp
     asset/Skeleton.cpp
+    asset/Geometry.cpp
     asset/Mesh.cpp
     asset/Model.cpp
     asset/MeshManager.cpp
