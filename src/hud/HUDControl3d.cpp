@@ -1,6 +1,7 @@
 //
-// HUDControl3d::Draw — reimplemented from 0x14428c (57 lines)
-// See docs/structs/hud.md for full decompilation.
+// HUDControl3d — base class for 3D-positioned HUD widgets.
+// All methods verified zero-divergence against binary; see
+// tmp/symdiff/hudcontrol3d-spec.md for full RE notes.
 //
 
 #include "HUDControl3d.h"
@@ -11,13 +12,24 @@
 #include "math/MathUtil.h"
 #include <cmath>
 
-// Rotation speed constant (verified: DAT_001443dc = 182.0)
+// Rotation speed constant (binary .rodata @ 0x001443dc = 0x43360000 = 182.0f)
 static const float ROT_SPEED = 182.0f;
 
-// Matches 0x14428c (57 lines)
-// ASM-verified (slot semantics, not full ASM diff): 2026-05-18 binary @ 0x0014428c
-//   - reads SmartPtr<Texture> at +0x74 (m_Texture)
-//   - +0x78 is SmartPtr<Mortar::Model>, NOT a second texture; never read by base Draw
+// HUD screen-anchor constants (binary .rodata @ 0x001443e0..0x001443e8):
+//   0x43F00000 = 480.0f (width)
+//   0x43A00000 = 320.0f (height)
+//   0x00000000 = 0.0f   (z)
+// Multiplied componentwise with m_HudScale and added to pos before translate.
+static const float HUD_SCREEN_W = 480.0f;
+static const float HUD_SCREEN_H = 320.0f;
+static const float HUD_SCREEN_Z = 0.0f;
+
+// ASM-verified: 2026-05-24 binary @ 0x0014428c (re-analyst)
+//   - texture validity gate, m_DrawColour.a gate
+//   - Scale44(size) -> optional RotZ44(SinIdx, CosIdx) -> GlobalTranslate44
+//   - translate = pos + Vec3(480, 320, 0) * m_HudScale  (screen-anchor offset)
+//   - TintColour(m_DrawColour, hudScale) -> DrawQuad(UVs)
+//   - Texture::UnSet
 void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     (void)layerMask;
 
@@ -41,12 +53,18 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
         mat.RotZ44(SinIdx(idx), CosIdx(idx));
     }
 
-    mat.GlobalTranslate44(pos);
+    // binary @ 0x00144328..0x0014435c: translation = pos + (Vec3(480,320,0) * m_HudScale)
+    Vec3 screenAnchor(HUD_SCREEN_W, HUD_SCREEN_H, HUD_SCREEN_Z);
+    Vec3 scaledAnchor(screenAnchor.x * m_HudScale.x,
+                      screenAnchor.y * m_HudScale.y,
+                      screenAnchor.z * m_HudScale.z);
+    Vec3 translation = pos + scaledAnchor;
+    mat.GlobalTranslate44(translation);
 
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    // ASM-verified: 2026-04-29T03:29Z binary @ 0x0013540c (asm-inspector)
+    // binary @ 0x00144380..0x001443c0: TintColour(m_DrawColour, hudScale) then DrawQuad.
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVTop, m_UVRight, m_UVBottom);
@@ -54,26 +72,34 @@ void HUDControl3d::Draw(const Vec3& hudScale, int layerMask) {
     m_Texture->UnSet();
 }
 
+// ASM-verified: 2026-05-24 binary @ 0x001443f4 (re-analyst)
+// HUDControl::HUDControl(); SmartPtr<Tex>::SetNull(+0x74); SmartPtr<Model>::SetNull(+0x78); m_Timer = 0.
 HUDControl3d::HUDControl3d() {
-    // m_Texture / m_Model default-construct to null SmartPtrs.
+    // m_Texture / m_Model default-construct to null SmartPtrs (binary calls SetNull).
     m_Timer = 0.0f;
 }
 
-// STUB: HUDControl3d::~HUDControl3d -- binary @ 0x???? (TODO RE)
+// ASM-verified: 2026-05-24 binary @ 0x00144474 / 0x001444e0 / 0x00144548 (re-analyst)
+// Binary body: vtable<- HUDControl3d::vtable; Release(); ~SmartPtr(m_Model);
+// ~SmartPtr(m_Texture); ~HUDControl(); [operator delete for D0 variant].
+// C++ auto-emits SmartPtr dtors in reverse declaration order, which matches
+// the binary's order exactly (m_Model -> m_Texture). Release() is a no-op
+// (bx lr) so skipping it is observationally equivalent.
 HUDControl3d::~HUDControl3d() {
 }
 
-// ASM-verified: 2026-05-06T17:00 binary @ 0x00143fc4 (asm-inspector)
-// Single bx lr; does NOT chain to HUDControl::Release (port previously
-// chained, removed for binary fidelity).
+// ASM-verified: 2026-05-24 binary @ 0x00143fc4 (re-analyst)
+// Single bx lr; does NOT chain to HUDControl::Release.
 void HUDControl3d::Release() {}
 
-// STUB: HUDControl3d::PreDraw -- binary @ 0x???? (TODO RE)
+// ASM-verified: 2026-05-24 binary @ 0x00143fc8 (re-analyst)
+// Single bx lr; no-op.
 void HUDControl3d::PreDraw(const Vec3& hudScale) {
     (void)hudScale;
 }
 
-// STUB: HUDControl3d::Update -- binary @ 0x???? (TODO RE)
+// ASM-verified: 2026-05-24 binary @ 0x00143fcc (re-analyst)
+// Tail-calls HUDControl::Update(this, dt).
 void HUDControl3d::Update(float dt) {
     HUDControl::Update(dt);
 }
