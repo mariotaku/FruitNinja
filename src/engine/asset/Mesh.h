@@ -134,12 +134,13 @@ public:
     // Matches Mesh::m_Skeleton binary offset 0x68.
     Skeleton* m_Skeleton;                                      // +0x68 (4 bytes)
 
-    // +0x6c..+0x78: Defunct cached EffectProperty* handles (World/View/Proj/WVP).
-    // Stored as void* since EffectProperty is not ported; all set to nullptr in stubs.
-    void* m_WorldProp;  // +0x6c
-    void* m_ViewProp;   // +0x70
-    void* m_ProjProp;   // +0x74
-    void* m_WVPProp;    // +0x78
+    // +0x6c..+0x78: Cached EffectProperty* handles (World/View/Proj/WVP).
+    // Set by Mesh ctor via GetProperty; used by TrySetMatrix_EffectProp in Draw.
+    // Phase 2 will wire the real arena; Phase 1 GetProperty() stub returns NULL.
+    EffectProperty* m_WorldProp;  // +0x6c
+    EffectProperty* m_ViewProp;   // +0x70
+    EffectProperty* m_ProjProp;   // +0x74
+    EffectProperty* m_WVPProp;    // +0x78
 
     // Port-specific: material array for GLES2 rendering; no binary equivalent.
     // (Binary uses m_GroupsByName + SharedEffectProperties for per-material data.)
