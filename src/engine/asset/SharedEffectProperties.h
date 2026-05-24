@@ -215,7 +215,33 @@ private:
     // total: 4 + 4 + 12 = 20 = 0x14
 };
 
-// InitPropertyList template body — must live in the header for implicit instantiation.
+// TextureProps — value type in SharedPropsInfo::m_TexMaps.
+// Binary @ 0x001b15d8 ctor zeroes the handle; 0x001b1394 AddTextureMap writes
+// the GetProperty return into *this. Single 4-byte EffectProperty*.
+struct TextureProps {
+    EffectProperty* m_Handle;
+    TextureProps() : m_Handle(NULL) {}
+};
+
+// SharedEffectProperties — 0x20 bytes; ReferenceCounter-derived, managed by SmartPtr.
+class SharedEffectProperties : public ReferenceCounter {
+public:
+    // Range ctor @ 0x001b2708.
+    SharedEffectProperties(const EffectPropertyDefinition* begin,
+                           const EffectPropertyDefinition* end,
+                           const SmartPtr<SharedEffectProperties>& parent);
+
+    EffectPropertyList& GetList() { return m_List; }
+    const EffectPropertyList& GetList() const { return m_List; }
+
+private:
+    EffectPropertyList m_List;  // +0x0c (ReferenceCounter base is 12 bytes)
+    // total: 12 + 20 = 32 = 0x20
+};
+
+// InitPropertyList template body — must live in the header for implicit instantiation,
+// and must appear after SharedEffectProperties is complete so GCC 4.4.1 two-phase
+// lookup can resolve m_Parent->GetList() at template-definition time.
 // Binary @ 0x001b25b4.
 template <typename Iter>
 void EffectPropertyList::InitPropertyList(Iter begin, Iter end,
@@ -254,30 +280,6 @@ void EffectPropertyList::InitPropertyList(Iter begin, Iter end,
 
     SortProperties();
 }
-
-// TextureProps — value type in SharedPropsInfo::m_TexMaps.
-// Binary @ 0x001b15d8 ctor zeroes the handle; 0x001b1394 AddTextureMap writes
-// the GetProperty return into *this. Single 4-byte EffectProperty*.
-struct TextureProps {
-    EffectProperty* m_Handle;
-    TextureProps() : m_Handle(NULL) {}
-};
-
-// SharedEffectProperties — 0x20 bytes; ReferenceCounter-derived, managed by SmartPtr.
-class SharedEffectProperties : public ReferenceCounter {
-public:
-    // Range ctor @ 0x001b2708.
-    SharedEffectProperties(const EffectPropertyDefinition* begin,
-                           const EffectPropertyDefinition* end,
-                           const SmartPtr<SharedEffectProperties>& parent);
-
-    EffectPropertyList& GetList() { return m_List; }
-    const EffectPropertyList& GetList() const { return m_List; }
-
-private:
-    EffectPropertyList m_List;  // +0x0c (ReferenceCounter base is 12 bytes)
-    // total: 12 + 20 = 32 = 0x20
-};
 
 }  // namespace Mortar
 
