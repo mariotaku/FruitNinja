@@ -14,10 +14,8 @@
 #include "game/BombHit.h"
 #include "entities/ActorManager.h"
 #include "entities/FruitInfo.h"
-#ifndef __bada__
 #include "entities/Fruit.h"
 #include "entities/Bomb.h"
-#endif
 #include "hud/MenuButton.h"
 #include "hud/TutorialControl.h"
 #include "hud/HUD.h"
