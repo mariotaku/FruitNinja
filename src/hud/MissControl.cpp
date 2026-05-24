@@ -12,7 +12,6 @@
 #include "math/MathUtil.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
-#include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
 #include "debug/Logger.h"
 #include <cstring>
@@ -771,9 +770,6 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
             else                      tint.a = (uint8_t)aScaled;
         }
     }
-    const uint32_t col = (uint32_t)tint.a << 24 | (uint32_t)tint.b << 16
-                        | (uint32_t)tint.g << 8 | (uint32_t)tint.r;
-
     // UV crop based on m_bComboActive / m_bVisible.
     // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)
     //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
@@ -788,22 +784,15 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         u0 = 0.5f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     }
 
-    QUADCUSTOMVERTEX v[6];
-    std::memset(v, 0, sizeof(v));
-    // Centred quad in [-0.5..+0.5] -- matches Renderer::DrawQuad and the
-    // binary's Mortar::Mesh::DrawQuadUnCached. Matrix applies size scale
-    // (full quad span = size) + translate.
+    // Render unit-quad via current MVP -- matches the binary's
+    // Mortar::Mesh::DrawQuadUnCached path (binary @ 0x00194060).
+    // Renderer::DrawQuad's header comment confirms it's the port-side
+    // equivalent: draws unit quad transformed by current MVP with
+    // tint + UV crop.
     const float u1 = u0 + du;
     const float v1 = v0 + dv;
-    v[0].x = -0.5f; v[0].y = -0.5f; v[0].u = u0; v[0].v = v1; v[0].colour = col;
-    v[1].x =  0.5f; v[1].y = -0.5f; v[1].u = u1; v[1].v = v1; v[1].colour = col;
-    v[2].x = -0.5f; v[2].y =  0.5f; v[2].u = u0; v[2].v = v0; v[2].colour = col;
-    v[3].x =  0.5f; v[3].y = -0.5f; v[3].u = u1; v[3].v = v1; v[3].colour = col;
-    v[4].x =  0.5f; v[4].y =  0.5f; v[4].u = u1; v[4].v = v0; v[4].colour = col;
-    v[5].x = -0.5f; v[5].y =  0.5f; v[5].u = u0; v[5].v = v0; v[5].colour = col;
-
     if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawTriList(v, 6);
+        r->DrawQuad(tint, u0, v0, u1, v1);
     }
 
     m_Texture->UnSet();
