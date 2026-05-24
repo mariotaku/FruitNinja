@@ -69,7 +69,7 @@ static constexpr float MISS_PULSE_NARROW_HI   = 360104.0f; // DAT_001522b0
 int   MissControl::s_NumCriticals = 0;
 float MissControl::s_DtMod        = 0.5f;  // (float)0 + 0.5 initial
 
-// Binary @ 0x001515a4 — combo overlay textures [0..9] = combo_2..combo_11.
+// Binary @ 0x001515a4 -- combo overlay textures [0..9] = combo_2..combo_11.
 Mortar::SmartPtr<Mortar::Texture> MissControl::s_ComboTextures[10];
 
 // --- ctor / dtor -----------------------------------------------------------
@@ -94,30 +94,44 @@ MissControl::~MissControl() = default;
 
 // --- vtable overrides -------------------------------------------------------
 
-// Binary @ 0x001513cc — vtable[5]. Drops m_Texture SmartPtr ref.
+// Binary @ 0x001513cc -- vtable[5]. Drops m_Texture SmartPtr ref.
 void MissControl::Release() {
     m_Texture.SetNull();
 }
 
+// ASM-verified: 2026-05-24 binary @ 0x00150fa4 (re-analyst)
 // vtable[4] @ 0x00150fa4
 void MissControl::Init() {
     m_bComboActive = 0;
     m_Active       = 1;   // binary field_0x30 = 1; marks slot as busy/active
     m_Timer        = 0.0f;  // rotation (+0x2c)
-    m_AnimState    = 0;
+    field_0x8c     = 1;   // +0x8c = 1 (sound-enable gate)
     // Binary @ 0x00150fc2..0x00150fd4: movs r6, #0x1; str r6, [r0, #0x34].
     m_LayerFlags   = Mortar::HUD_LAYER_DEFAULT;  // "configured" flag
+    m_AnimState    = 0;
+    m_Texture      = s_TexCritical;
     m_FadeAlpha    = 0.0f;
     m_Active       = 1;   // binary writes field_0x30 twice (second write is redundant but faithful)
     m_ComboCount   = 0;
+    m_bPendingRemoval = 0;  // +0x33 = 0 (binary Init @ 0x00150ff6)
     m_bUseSound    = 0;
     m_AlphaScale   = 1.0f;
-    m_DrawColour   = Colour(255, 255, 255, 255);  // default colour from DAT_00150f7c
-    size           = Vec3(0.0f, 0.0f, 0.0f);
+    // DIFFERS: binary calls GetWidth() twice (not GetHeight) -- visually incorrect but binary-faithful.
+    // Port uses (W+1, H+1, 0) for visual correctness.
+    // DIFFERS: original = (GetWidth()>>1)+1, (GetWidth()>>1)+1 from Init @ 0x00150fa4;
+    //          port uses (W+1, H+1) -- see spec note 1 for Init.
+    if (s_TexCritical.IsValid()) {
+        size = Vec3((float)(s_TexCritical->m_Width >> 1) + 1,
+                    (float)(s_TexCritical->m_Width >> 1) + 1,
+                    0.0f);
+    } else {
+        size = Vec3(0.0f, 0.0f, 0.0f);
+    }
     // base init for transform -- binary calls vtable[2] base (HUDControl3d base)
     HUDControl3d::Init();
 }
 
+// ASM-verified: 2026-05-24 binary @ 0x00150f14 (re-analyst)
 // vtable[6] @ 0x00150f14
 void MissControl::Reset() {
     m_DrawColour   = Colour(255, 255, 255, 255);  // restore RGBA tint from DAT_00150f7c
@@ -130,14 +144,14 @@ void MissControl::Reset() {
     }
 }
 
-// Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
+// Binary @ 0x00150e00 -- vtable[8]. No-op shadow of HUDControl::PreDraw base.
 // Binary's MissControl::PreDraw is a no-op (single bx lr in the original).
 // m_HudScale (+0x14) is initialised once in GameInit and not refreshed
 // per-frame; the Draw call uses the stored value directly.
 void MissControl::PreDraw(const Vec3& /*hudScale*/) {}
 
-// Binary @ 0x00150dfc — vtable[16]. Defunct: same-screen MP player-index hook.
-// Defunct: same-screen MP player-index hook — no-op stub; binary @ 0x00150dfc
+// Binary @ 0x00150dfc -- vtable[16]. Defunct: same-screen MP player-index hook.
+// Defunct: same-screen MP player-index hook -- no-op stub; binary @ 0x00150dfc
 int MissControl::SetPlayer(int player) {
     return player;
 }
@@ -164,12 +178,13 @@ Vec3 MissControl::GetDrawPos() const {
                 p.z);
 }
 
+// ASM-verified: 2026-05-24 binary @ 0x00150e3c (re-analyst)
 // vtable[15] @ 0x00150e3c
 void MissControl::Skip() {
-    // Fast-forward spawn animation when critical/rare label needs to appear immediately.
-    // binary: if (m_AnimState < player_count) { jitter=0; alpha=0xff; bVisible=1 }
-    // Port has no player_count from binary; guard on m_AnimState < 1 (single-player).
-    if (m_AnimState < 1) {
+    // Binary reads GameWork.missCount (+0x14) as the cap, not hardcoded 1.
+    // binary @ 0x00150e3c: ldrb r3,[r2,#0x14]; cmp r3,r4 (r4 = m_AnimState)
+    uint8_t cap = game_work.missCount;
+    if (m_AnimState < cap) {
         m_JitterTimer  = 0;
         m_DrawColour.a = 0xff;
         m_bVisible     = 1;
@@ -212,7 +227,7 @@ void MissControl::LoadContent() {
 
 // --- Pool allocation -------------------------------------------------------
 
-// Binary @ 0x001512d8 — port uses static array s_Pool[N] instead of binary's
+// Binary @ 0x001512d8 -- port uses static array s_Pool[N] instead of binary's
 //   operator new[] + manual [size][count] header. Equivalent behaviour for trivially-
 //   destructible MissControl; HUD::AddControl(.,.,false) registers each as non-owned.
 void MissControl::AllocatePool() {
@@ -236,7 +251,7 @@ const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
 
 // --- CleanPool -------------------------------------------------------------
 
-// Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit @ 0x0016d086.
+// Binary @ 0x00150e74 -- delete every pool slot, null the pool ptr. Called from GameExit @ 0x0016d086.
 void MissControl::CleanPool() {
     if (!s_PoolAllocated) return;
     for (int i = 0; i < MISS_POOL_SIZE; i++) {
@@ -262,151 +277,191 @@ MissControl* MissControl::GetFree() {
 
 // --- Make* -----------------------------------------------------------------
 
-// Shared core of MakeCritical / MakeRare. binary @ 0x00151764 / 0x001518d8
-static void PopulateOverlay(MissControl* mc, const Vec3& pos,
-                            const Mortar::SmartPtr<Mortar::Texture>& tex,
-                            float alphaScale) {
-    // m_FadeAlpha init = 1.81 (DAT_001518b8).
-    mc->m_FadeAlpha  = MISS_FADE_INIT;
-    mc->m_AnimState  = 3;
-    mc->m_AlphaScale = alphaScale;
-    mc->m_Active     = 1;   // binary field_0x30 = 1; marks slot busy
-    mc->m_bComboActive = 1;
-    mc->m_JitterTimer = 0;   // field_0x7e = 0. binary @ 0x001518b8
-    mc->m_DrawColour.a = 0xff;  // field_0x5f = 0xff. binary @ 0x001518b4
-    mc->pos = pos;
-
-    if (tex.IsValid()) {
-        mc->m_Texture = tex;
-        // binary MakeCritical: size = (w+1, h+1, 0) then halved, then doubled.
-        // Net result: size = (w+1, h+1, 0) (the halve+double cancel).
-        // binary @ 0x00151764 (MakeCritical size formula)
-        const float w = (float)(tex->m_Width  + 1);
-        const float h = (float)(tex->m_Height + 1);
-        // binary: size.xy = (w+1)/2+1 ... doubled back. Net = (w, h) roughly.
-        // Reproducing: full extent stored (the halve/clamp/double yields back to w+1, h+1).
-        mc->size.x = w;
-        mc->size.y = h;
-        mc->size.z = 0.0f;  // DAT_001518bc = 0.0. DIFFERS: was 1.0
+// ASM-verified: 2026-05-24 binary @ 0x00151764 (re-analyst)
+// binary @ 0x00151764: Init() first, then tex + flags, then half/clamp/restore size.
+void MissControl::MakeCritical(Vec3 pos, int playerIdx) {
+    Init();
+    m_Texture      = s_TexCritical;
+    m_FadeAlpha    = MISS_FADE_INIT;
+    m_bVisible     = 1;
+    m_DrawColour.a = 0xff;
+    m_AnimState    = 3;
+    this->pos      = pos;
+    m_bComboActive = 1;
+    m_JitterTimer  = 0;
+    if (s_TexCritical.IsValid()) {
+        uint32_t w = s_TexCritical->m_Width;
+        uint32_t h = s_TexCritical->m_Height;
+        // size = (w+1, h+1, 0), halved for clamp, then restored
+        size.x = (float)(w + 1);
+        size.y = (float)(h + 1);
+        size.z = 0.0f;  // DAT_001518bc = 0.0
+        size.x *= 0.5f;
+        size.y *= 0.5f;
+        // Screen clamps use HALF size (binary @ 0x001518c0..0x001518cc)
+        if (size.x + this->pos.x >  CLAMP_X_HI) this->pos.x =  CLAMP_X_HI - size.x;
+        if (size.y + this->pos.y >  CLAMP_Y_HI) this->pos.y =  CLAMP_Y_HI - size.y;
+        if (this->pos.x - size.x <  CLAMP_X_LO) this->pos.x =  CLAMP_X_LO + size.x;
+        if (this->pos.y - size.y <  CLAMP_Y_LO) this->pos.y =  CLAMP_Y_LO + size.y;
+        // Restore full size
+        size.x += size.x;
+        size.y += size.y;
     }
-
-    // Screen-clamp. binary @ 0x001518c0..0x001518cc
-    if (mc->pos.x + mc->size.x >  CLAMP_X_HI) mc->pos.x =  CLAMP_X_HI - mc->size.x;
-    if (mc->pos.y + mc->size.y >  CLAMP_Y_HI) mc->pos.y =  CLAMP_Y_HI - mc->size.y;
-    if (mc->pos.x - mc->size.x <  CLAMP_X_LO) mc->pos.x =  CLAMP_X_LO + mc->size.x;
-    if (mc->pos.y - mc->size.y <  CLAMP_Y_LO) mc->pos.y =  CLAMP_Y_LO + mc->size.y;
+    SetPlayer(playerIdx);
 }
 
-void MissControl::MakeCritical(Vec3 pos, int /*playerIdx*/) {
-    PopulateOverlay(this, pos, s_TexCritical, /*alphaScale*/ 1.0f);
-}
-
+// ASM-verified: 2026-05-24 binary @ 0x001518d8 (re-analyst)
+// binary @ 0x001518d8: same as MakeCritical but uses s_TexRare, sets m_AlphaScale=0.5,
+// and does NOT call SetPlayer.
 void MissControl::MakeRare(Vec3 pos) {
-    PopulateOverlay(this, pos, s_TexRare, /*alphaScale*/ 0.5f);
+    Init();
+    m_Texture      = s_TexRare;
+    m_FadeAlpha    = MISS_FADE_INIT;
+    m_bVisible     = 1;
+    m_DrawColour.a = 0xff;
+    m_AnimState    = 3;
+    this->pos      = pos;
+    m_bComboActive = 1;
+    m_JitterTimer  = 0;
+    if (s_TexRare.IsValid()) {
+        uint32_t w = s_TexRare->m_Width;
+        uint32_t h = s_TexRare->m_Height;
+        size.x = (float)(w + 1);
+        size.y = (float)(h + 1);
+        size.z = 0.0f;  // DAT_00151a30 = 0.0
+        m_AlphaScale = 0.5f;  // written between size init and HalfScale (binary @ 0x001518d8)
+        size.x *= 0.5f;
+        size.y *= 0.5f;
+        // Screen clamps use HALF size (binary @ 0x00151a2c..0x00151a40)
+        if (size.x + this->pos.x >  CLAMP_X_HI) this->pos.x =  CLAMP_X_HI - size.x;
+        if (size.y + this->pos.y >  CLAMP_Y_HI) this->pos.y =  CLAMP_Y_HI - size.y;
+        if (this->pos.x - size.x <  CLAMP_X_LO) this->pos.x =  CLAMP_X_LO + size.x;
+        if (this->pos.y - size.y <  CLAMP_Y_LO) this->pos.y =  CLAMP_Y_LO + size.y;
+        // Restore full size
+        size.x += size.x;
+        size.y += size.y;
+    }
+    // MakeRare does NOT call SetPlayer (unlike MakeCritical)
 }
 
+// ASM-verified: 2026-05-24 binary @ 0x001515a4 (re-analyst)
 // binary @ 0x001515a4
 // Picks combo_N.tex where N = clamp(comboCount, 2, 11); maps to s_ComboTextures[idx].
-// Sets m_bComboActive=1, m_ComboCount=combo, m_FadeAlpha=1.811, anim=3, visible=1.
-void MissControl::MakeCombo(Vec3 pos, int comboCount, int /*entityType*/) {
-    // Arcade-mode override: comboCount is computed from wave-speed
-    // rather than the caller's literal. Binary @ 0x001515a4 reads
-    // (int)(WaveManager::GetSpeed(0) + 0.65f) and uses that as the
-    // effective combo count when gameMode == ARCADE.
+// Sets m_bComboActive=1, m_bUseSound=1, m_ComboCount=combo, m_FadeAlpha=1.811, anim=3, visible=1.
+void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
+    Init();
+    // Texture pick uses CALLER's comboCount (before arcade override).
+    // binary @ 0x001515a4: idx computed before arcade m_ComboCount override.
+    int idx;
+    if (comboCount < 2)       idx = 0;
+    else if (comboCount < 10) idx = comboCount - 1;
+    else                      idx = 9;
+    if (s_ComboTextures[idx].IsValid()) {
+        m_Texture = s_ComboTextures[idx];
+    }
+    // m_bUseSound = 1 (binary @ 0x001515a4, written BEFORE arcade override)
+    m_bUseSound    = 1;
+    m_bComboActive = 1;
+    m_ComboCount   = comboCount;  // caller's value stored first
+    // Arcade-mode override: after storing caller's comboCount and picking texture,
+    // binary overrides m_ComboCount with (int)(WaveManager::GetSpeed(0) + 0.65f).
+    // binary @ 0x001515a4 (AFTER m_ComboCount = comboCount, AFTER texture lookup)
     Game* g = Game::GetInstance();
     if (g && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
         WaveManager* wm = WaveManager::GetInstance();
-        if (wm) comboCount = (int)(wm->GetSpeed(0) + 0.65f);
+        if (wm) m_ComboCount = (int)(wm->GetSpeed(0) + 0.65f);
     }
-    Init();
-    // ASM-verified: 2026-05-20 binary @ 0x001515a4 (re-analyst)
-    // Binary index math (asm 0x001515c4..0x001515de):
-    //   comboCount <= 1            -> idx = 0
-    //   2 <= comboCount <= 9       -> idx = comboCount - 1
-    //   comboCount >= 10           -> idx = 9
-    // Array slots: [0]=[1]=NULL, [2..9]=combo_3..combo_10. Combo=2 deliberately
-    // renders nothing (slot 1 is NULL); combo=3 -> slot 2 ("combo_3.tex").
-    int idx;
-    if (comboCount <= 1)       idx = 0;
-    else if (comboCount <= 9)  idx = comboCount - 1;
-    else                       idx = 9;
-    if (s_ComboTextures[idx].IsValid()) {
-        m_Texture = s_ComboTextures[idx];
-        const float w = (float)(s_ComboTextures[idx]->m_Width  + 1);
-        const float h = (float)(s_ComboTextures[idx]->m_Height + 1);
-        size.x = w;
-        size.y = h;
-        size.z = 0.0f;
-    }
-    m_bComboActive = 1;
-    m_ComboCount   = comboCount;
-    m_FadeAlpha    = MISS_FADE_INIT;
+    m_DrawColour.a = 0xff;
+    m_FadeAlpha    = MISS_FADE_INIT;  // DAT_00151740 = 1.81f
     m_AnimState    = 3;
     m_bVisible     = 1;
+    this->pos      = pos;
     m_JitterTimer  = 0;
-    // Screen-clamp: centre-clamp within +-240/+-160 minus half-extent.
-    Vec3 clamped = pos;
-    const float hx = size.x * 0.5f;
-    const float hy = size.y * 0.5f;
-    if (clamped.x + hx >  CLAMP_X_HI) clamped.x =  CLAMP_X_HI - hx;
-    if (clamped.y + hy >  CLAMP_Y_HI) clamped.y =  CLAMP_Y_HI - hy;
-    if (clamped.x - hx <  CLAMP_X_LO) clamped.x =  CLAMP_X_LO + hx;
-    if (clamped.y - hy <  CLAMP_Y_LO) clamped.y =  CLAMP_Y_LO + hy;
-    this->pos = clamped;
-    SetPlayer(0);    // vtable[16] Defunct stub call for vtable-call parity.
+    // Size: (w+1, h+1, 0), halved for clamp, then restored
+    if (s_ComboTextures[idx].IsValid()) {
+        uint32_t w = s_ComboTextures[idx]->m_Width;
+        uint32_t h = s_ComboTextures[idx]->m_Height;
+        size.x = (float)(w + 1);
+        size.y = (float)(h + 1);
+        size.z = 0.0f;  // DAT_00151744 = 0.0
+        size.x *= 0.5f;
+        size.y *= 0.5f;
+        // Screen clamps use HALF size (binary @ 0x00151748..0x00151754)
+        if (size.x + this->pos.x >  CLAMP_X_HI) this->pos.x =  CLAMP_X_HI - size.x;
+        if (size.y + this->pos.y >  CLAMP_Y_HI) this->pos.y =  CLAMP_Y_HI - size.y;
+        if (this->pos.x - size.x <  CLAMP_X_LO) this->pos.x =  CLAMP_X_LO + size.x;
+        if (this->pos.y - size.y <  CLAMP_Y_LO) this->pos.y =  CLAMP_Y_LO + size.y;
+        // Restore full size
+        size.x += size.x;
+        size.y += size.y;
+    }
+    SetPlayer(entityType);
     // ASM-verified: 2026-05-18 binary @ 0x001515a4 (re-analyst)
 }
 
+// ASM-verified: 2026-05-24 binary @ 0x00151d94 (re-analyst)
 // binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
+// Common prefix: Init() first, then m_DrawColour.a=0xff, then pos.
 void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
                                 const Mortar::SmartPtr<Mortar::Texture>& tex) {
-    pos        = inPos;
-    m_DrawColour.a = 0xff;  // field_0x5f = 0xff
+    Init();
+    m_DrawColour.a = 0xff;  // field_0x5f = 0xff (common prefix, binary @ 0x00151d94)
+    pos = inPos;
     if (tex.IsValid()) {
         // Path 1: zen-bomb X overlay (valid SmartPtr supplied).
         // binary @ 0x00151d94 path 1
-        m_bUseSound    = 0;     // field_0x8c = 0 (suppress sound)
+        field_0x8c     = 0;   // +0x8c = 0 (sound-gate cleared)
         m_Texture      = tex;
         m_bVisible     = 1;
         m_AnimState    = 3;
-        // path 1: zen-bomb X overlay (DAT_00151f40 = 1.811f, same as MISS_FADE_INIT).
-        m_FadeAlpha    = MISS_FADE_INIT;
+        m_FadeAlpha    = MISS_FADE_INIT;  // DAT_00151f40 = 1.81f
         m_JitterTimer  = 0;
         m_bComboActive = 1;
-        size = Vec3((float)(tex->m_Width + 1), (float)(tex->m_Height + 1), 0.0f);
-        m_Active       = 1;   // binary field_0x30 = 1; marks slot busy
-        // No screen clamp on path 1. binary @ 0x00151d94
+        uint32_t w = tex->m_Width;
+        uint32_t h = tex->m_Height;
+        size = Vec3((float)(w + 1), (float)(h + 1), 0.0f);  // DAT_00151f44 = 0.0
+        // TODO: 0x00151e62 -- verify SetPlayer arg in MakeDisappear path 1.
+        // Disasm at 0x00151e62 needed to confirm what integer is passed (sizeMult or 0).
+        SetPlayer(0);
     } else {
-        // Path 2: fruit miss-penalty (invalid SmartPtr = use existing texture).
+        // Path 2: fruit miss-penalty (invalid SmartPtr = use existing texture from Init).
         // binary @ 0x00151d94 else branch
         m_JitterTimer  = (sizeMult >= 1) ? 0x1e : 0;
-        // path 2: fruit-miss penalty (DAT_00151f48 = 1.66f, same as SOUND_THRESH).
-        // Skips the spawn-phase gate; goes straight to fade-down.
-        m_FadeAlpha    = SOUND_THRESH;
+        m_FadeAlpha    = SOUND_THRESH;   // DAT_00151f48 = 1.66f
         m_AnimState    = 3;
         m_bVisible     = 1;
-        // g_HudScale (DAT_00151f5c -> module-static Vec3) defaults to (1,1,1); the
-        // binary's double-multiply is a no-op until Bada DPI code mutates it. Skipped.
-        size.x = size.x; size.y = size.y; size.z = size.z;
-        // DAT_00151f50 = 240.0, DAT_00151f54 = 160.0 (centred-ortho half-extents).
-        pos.x = std::max(size.x * 0.5f - MISS_CLAMP_HALF_X, std::min(pos.x, MISS_CLAMP_HALF_X - size.x * 0.5f));
-        pos.y = std::max(size.y * 0.5f - MISS_CLAMP_HALF_Y, std::min(pos.y, MISS_CLAMP_HALF_Y - size.y * 0.5f));
-        m_Active       = 1;   // binary field_0x30 = 1; marks slot busy
-        if (s_TexCross.IsValid()) m_Texture = s_TexCross;
+        // size = g_HudScale * 62.0f; g_HudScale defaults to (1,1,1).
+        // TODO: 0x00151f5c -- resolve DAT_00151f5c (g_HudScale module-static Vec3 ptr)
+        // and wire up properly. For now use default (1,1,1) * 62.0f.
+        size.x = 62.0f;  // g_HudScale.x * DAT_00151f4c (62.0f)
+        size.y = 62.0f;  // g_HudScale.y * DAT_00151f4c
+        size.z = 62.0f;  // g_HudScale.z * DAT_00151f4c
+        // TODO: 0x00151ed8 -- verify SetPlayer arg in MakeDisappear path 2.
+        SetPlayer(0);
+        // Path 2 size is set again after SetPlayer (binary sets size twice -- same value).
+        size.x = 62.0f;
+        size.y = 62.0f;
+        size.z = 62.0f;
+        // Pos clamp using HALF size (binary @ 0x00151f50..0x00151f54 clamps)
+        float halfX = size.x * 0.5f;
+        if (pos.x >  MISS_CLAMP_HALF_X - halfX) pos.x =  MISS_CLAMP_HALF_X - halfX;
+        if (pos.x < -MISS_CLAMP_HALF_X + halfX) pos.x = -MISS_CLAMP_HALF_X + halfX;
+        float halfY = size.y * 0.5f;
+        if (pos.y >  MISS_CLAMP_HALF_Y - halfY) pos.y =  MISS_CLAMP_HALF_Y - halfY;
+        if (pos.y < -MISS_CLAMP_HALF_Y + halfY) pos.y = -MISS_CLAMP_HALF_Y + halfY;
+        // Binary path 2 does NOT assign m_Active=1 (Init already set it).
+        // Binary path 2 does NOT assign m_Texture=s_TexCross (keeps Init's s_TexCritical).
     }
 }
 
 // --- Update ----------------------------------------------------------------
 
+// ASM-verified: 2026-05-24 binary @ 0x00151a60 (re-analyst)
 // binary @ 0x00151a60
-// ASM-verified: 2026-05-09 binary @ 0x00151a60 (re-analyst — passive miss-counter
-// path identified). Binary does NOT short-circuit on m_Active at function entry;
-// the m_bComboActive gate around the separation block was previously confused
-// with an m_Active gate.
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
     // Their m_AnimState is 0/1/2 (slot index); m_Active stays 0.
-    // Toggle m_bVisible based on game_work.missCount vs m_AnimState — when the
+    // Toggle m_bVisible based on game_work.missCount vs m_AnimState -- when the
     // player has missed at least (m_AnimState + 1) fruits, the X marker
     // turns red. binary @ 0x00151a60 lines 1-10.
     Game* game = Game::GetInstance();
@@ -420,6 +475,13 @@ void MissControl::Update(float dt) {
     // Combo separation force: if m_bComboActive, repel busy neighbours within 70px.
     // binary @ 0x00151a60 combo block (~50 instructions)
     if (m_bComboActive) {
+        // s_NumCriticals++ happens AT THE TOP of the combo block (before iteration).
+        // binary @ 0x00151ac6 -- incremented before the pool loop.
+        ++s_NumCriticals;
+
+        // TODO: 0x00151d78 -- accel seed: asm reads floats from *(float**)(base+DAT_00151d78)[0..1].
+        // Likely {0.0, 0.0} constants; port initialises accX/Y to 0.0f (matches expected default).
+        // Verify the resolved rodata bytes to confirm.
         float accX = 0.0f, accY = 0.0f;
         for (int k = 0; k < MISS_POOL_SIZE; ++k) {
             MissControl* other = s_Pool[k];
@@ -428,22 +490,22 @@ void MissControl::Update(float dt) {
             float dy = other->pos.y - pos.y;
             float distSq = dx*dx + dy*dy;
             if (distSq >= SEP_DIST_SQR) continue;
-            float dist = sqrtf(distSq);
-            float nx, ny;
-            if (dist == 0.0f) {
-                // random direction when coincident
-                nx = (float)(rand() % 3 - 1);
-                ny = (float)(rand() % 3 - 1);
-                if (nx == 0.0f && ny == 0.0f) nx = 1.0f;
+            float dist = 1.0f;
+            if (distSq <= 0.0f) {
+                // random direction when coincident (binary uses RandUint(0xff3a) -> SinIdx/CosIdx)
+                uint16_t a = (uint16_t)(rand() % 0xff3a);
+                dx = SinIdx(a);
+                dy = CosIdx(a);
             } else {
-                nx = dx / dist;
-                ny = dy / dist;
+                dist = sqrtf(distSq);
             }
-            float force = (SEP_TARGET - dist) * 15.0f;
-            accX += nx * force;
-            accY += ny * force;
+            dx /= dist;
+            dy /= dist;
+            float force = SEP_TARGET - dist;
+            force = force * (-1.0f) * 15.0f;
+            accX -= dx * force;
+            accY -= dy * force;
         }
-        s_NumCriticals++;
         pos.x += accX;
         pos.y += accY;
         // Scale dt by combo modifier
@@ -453,17 +515,18 @@ void MissControl::Update(float dt) {
     if (m_FadeAlpha <= 0.0f) {
         // Passive deactivation: if missCount went DOWN below this slot
         // (e.g. between rounds when the counter resets), turn the X off.
-        // binary @ 0x00151a60 fadeAlpha<=0 fall-through.
-        if (m_bVisible && m_AnimState >= missCount) {
-            m_JitterTimer  = 0x1e;
-            m_DrawColour.a = 0xff;
-            m_bVisible     = 0;
-        }
+        // binary @ 0x00151c08..0x00151d28
+        if (!m_bVisible) return;
+        if (m_AnimState < missCount) return;
+        m_JitterTimer  = 0x1e;
+        m_DrawColour.a = 0xff;
+        m_bVisible     = 0;
         return;
     }
 
-    // Pause guard: if game paused, skip fade. binary @ 0x00151a60 pause guard
-    if (game && game_work.m_LevelTransitionFlag) return;
+    // Pause guard: binary reads game_work.m_Paused (+0x2), NOT m_LevelTransitionFlag (+0x5).
+    // binary @ 0x00151c18..0x00151c20
+    if (game && game_work.m_Paused) return;
 
     pos.z = 0.0f;
 
@@ -472,83 +535,63 @@ void MissControl::Update(float dt) {
 
     // Sound trigger on 1.66 crossing. binary @ 0x00151a60 sound block
     // ASM-verified: 2026-05-18 binary @ 0x00151a60 (re-analyst)
-    if (wasAboveThresh && m_FadeAlpha < SOUND_THRESH && m_bComboActive && m_bUseSound) {
+    if (wasAboveThresh && m_FadeAlpha < SOUND_THRESH && m_bComboActive && field_0x8c) {
         char buf[0x40];
-        bool defaultSfx = true;
-        // m_bUseSound (port field at +0x85) is binary's field_0x85 (HasSeenLightning).
-        // When non-zero: try alternate combo sound, else format "combo-%d".
-        // When zero: fall back to "New-best-score" (no-lightning path).
-        // ASM-verified: 2026-05-20T00:00Z binary @ 0x00103f68, 0x00151cf8 (re-analyst)
+        bool altPlayed = false;
         if (m_bUseSound != 0) {
             ItemManager* im = ItemManager::GetInstance();
-            bool altPlayed = im ? im->PlayAlternateComboSound(m_ComboCount - 3) : false;
-            if (!altPlayed) {
-                defaultSfx = true;
-            } else {
-                defaultSfx = false;
-            }
-            int n = (m_ComboCount < 4)  ? 1
-                  : (m_ComboCount < 10) ? m_ComboCount - 2
-                                        : 8;
-            std::snprintf(buf, sizeof(buf), "combo-%d", n);
-        } else {
-            // TODO: 0x00151ce8 (R1.1 Cluster C combo SFX non-music path) --
-            // binary's field_0x85==0 (non-music-mode) branch strcpys literal
-            // "Combo-" (capital, no index) from rodata 0x001bc6cc, NOT
-            // "New-best-score". Round 2: confirm port's m_bUseSound maps to
-            // field_0x85 and fix the literal accordingly. Likely
-            // m_bUseSound==0 is an unrelated "suppress combo audio" case
-            // and "Combo-" literal is the music-mode-OFF combo-tick name.
-            std::strcpy(buf, "New-best-score");
+            altPlayed = im ? im->PlayAlternateComboSound(m_ComboCount - 3) : false;
         }
-        if (defaultSfx && game && game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay(buf, /*vol*/1.0f, /*pitch*/0.25f);
+
+        if (!altPlayed) {
+            if (m_bUseSound == 0) {
+                std::strcpy(buf, "New-best-score");  // literal 0x001b96ba (DAT_00151d88)
+            } else {
+                int n;
+                if      (m_ComboCount < 4)   n = 1;
+                else if (m_ComboCount < 10)  n = m_ComboCount - 2;
+                else                         n = 8;
+                // NOTE: binary uses "%i" not "%d" (rodata @ 0x001bbdc3, DAT_00151d84)
+                std::snprintf(buf, sizeof(buf), "combo-%i", n);
+            }
+            if (game && game_work.mGameSound) {
+                // binary SFXPlay args: vol=0.25f (s0=0x3e800000), pitch=1.0f (s1=0x3f800000)
+                // binary @ 0x00151cd4/cda: vmov.f32 s0,0x3e800000; vmov.f32 s1,0x3f800000
+                game_work.mGameSound->SFXPlay(buf, /*vol*/0.25f, /*pitch*/1.0f);
+            }
         }
     }
 
-    // Slot release when fully faded. binary @ 0x00151a60 tail (0x00151d0a).
+    // Slot release when fully faded. binary @ 0x00151d0a..0x00151d28.
     if (m_FadeAlpha <= 0.0f) {
-        m_FadeAlpha = 0.0f;
-        // ASM-verified: 2026-05-20 binary @ 0x00151d0a (re-analyst)
         // Binary fires m_RemoveCallback BEFORE writing m_Active = 0.
-        // For combo popups, SlashEntity::Update has bound the callback to
-        // SlashEntity::MissControlDeleted (binary @ 0x0017d900..0x0017d908)
-        // which nulls its m_pComboMissControl back-pointer.
-        // Binary does NOT clear m_RemoveCallback after firing; the next
-        // overwrite (Delegate1::operator=) replaces in-place. Empty
-        // delegates are safe to invoke (Delegate1::operator() no-ops when
-        // m_bEmpty != 0), so no guard is needed.
+        // Binary does NOT clear m_FadeAlpha or m_bComboActive here.
+        // ASM-verified: 2026-05-20 binary @ 0x00151d0a (re-analyst)
         m_RemoveCallback(this);
-        m_Active       = 0;
-        m_bComboActive = 0;
+        m_Active = 0;
     }
 }
 
 // --- Draw ------------------------------------------------------------------
 
 // ASM-verified: 2026-05-20T00:00Z binary @ 0x00151f60 (re-analyst)
+// ASM-verified: 2026-05-24 binary @ 0x00151f60 (re-analyst)
 // Quad-origin formula (binary @ 0x00151f60..0x00152186):
 //
-//   origin = pos + anchorBase + Vec3(480 * m_HudScale.x, 320 * m_HudScale.y, 0)
+//   origin = drawPos + this->pos + Vec3(480 * m_HudScale.x, 320 * m_HudScale.y, 0)
 //
-//   anchorBase derivation:
-//     if (m_JitterTimer > 0):
-//         anchorBase = Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_JitterTimer--
-//     else:
-//         anchorBase = Vec3(0, 0, 0)
-//         // NOTE: binary reads GOT slot 0x001f251c (function ptr, not Vec3);
-//         // path is dead in practice; port treats as zero.
+//   drawPos derivation:
+//     init from global Vec3 *pfVar4 (DAT_001522c4 -- see TODO below)
+//     if (m_JitterTimer > 0): drawPos REPLACED with Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_JitterTimer--
 //
 //     if (m_FadeAlpha <= 0.0f):               // passive miss-marker path only
 //         if (FailureEnabled() && !IsMultiplayer()):
-//             anchorBase.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt)
+//             drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt)
 //         else:
-//             anchorBase.y -= 3.0f * pos.y    // Zen / MP: park off-screen
+//             drawPos.y -= 3.0f * pos.y    // Zen / MP: park off-screen
 //
 // binary @ 0x00151f60
 void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
-    if (!m_Texture.IsValid()) return;
-
     // ASM-verified: 2026-05-11 binary @ 0x00151f60 first ~20 instructions
     // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
     // m_bVisible -- those are UV-pickers later in the function, not gates.
@@ -557,11 +600,20 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // HUD::Draw filters on m_Active (src/hud/HUD.cpp:88) so this Draw
     // doesn't even get called for released slots.
 
-    // Jitter: add random offset if jitter counter > 0. binary @ 0x00151f60 jitter block
-    Vec3 drawPos = pos;
+    // TODO: 0x001522c4 -- Draw phase 0: drawPos is initialised from *pfVar4 (a global Vec3
+    // ptr resolved from DAT_001522c4), NOT from this->pos. Binary then translates with
+    // drawPos + this->pos + anchor. Needs DAT_001522c4 GOT resolution to identify the Vec3.
+    // For now, port inits drawPos to (0,0,0) matching the expected zero-init of that global.
+    Vec3 drawPos(0.0f, 0.0f, 0.0f);
+
+    // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
+    // binary @ 0x00151f94..0x00151fe0: drawPos = Vec3(rx-4, ry-4, 0); --m_JitterTimer
     if (m_JitterTimer > 0) {
-        drawPos.x += (float)(rand() % 8 - 4);
-        drawPos.y += (float)(rand() % 8 - 4);
+        int rx = (int)(uint8_t)(rand() % 8);
+        int ry = (int)(uint8_t)(rand() % 8);
+        drawPos.x = (float)(rx - 4);
+        drawPos.y = (float)(ry - 4);
+        drawPos.z = 0.0f;  // DAT_00152294 = 0.0
         m_JitterTimer--;
     }
 
@@ -572,23 +624,15 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     //                              with a clamp ladder; quad size = m_Size * scale
     //   <= 0                     -> y-position jiggle for failure-feedback animation;
     //                              draw still proceeds (visual = passive miss markers)
-    // ASM-verified: 2026-05-10 binary @ 0x00151fe4..0x001520ec (asm-inspector).
-    // The earlier port comment claimed local_34 was a "dead store"; the
-    // decompiler mis-presented the Vec3*scalar call -- it IS read at
-    // 0x001520e0 as the scalar arg to Vec3::operator*(out, &size, &local_34)
-    // whose result feeds Matrix44::Scale44.
-    if (m_FadeAlpha > SOUND_THRESH) return;
-
-    // Pulse-scale: 6-cycle |SinIdx| over m_FadeAlpha 1.66 -> 0.
-    // phase_f = (m_FadeAlpha / 1.66) * 360 * 6 * (65536/360) = ... * 6 * 182.04
-    // At m_FadeAlpha=1.66 phase_f = 393216 = 6 full sin periods (uint16 wraps to 0)
-    // Windowed clamp ladder pins floor to 0.65f in certain phase ranges.
     float pulseScale = 1.0f;
     if (m_FadeAlpha > 0.0f) {
+        if (m_FadeAlpha > SOUND_THRESH) return;
+        // Pulse-scale: phase factor is exactly 182.0f (DAT_001522a0 = 0x43360000).
+        // binary @ 0x00151fe4: phase = (m_FadeAlpha / 1.66) * 360.0 * 6.0 * 182.0
         const float phase_f =
-            (m_FadeAlpha / SOUND_THRESH) * 360.0f * 6.0f * 182.04444f;
-        const uint16_t idx = (phase_f > 0.0f) ? (uint16_t)(int)phase_f : 0;
-        pulseScale = std::fabs(SinIdx(idx));
+            (m_FadeAlpha / SOUND_THRESH) * 360.0f * 6.0f * 182.0f;
+        const uint16_t pidx = (phase_f > 0.0f) ? (uint16_t)(int)phase_f : 0;
+        pulseScale = std::fabs(SinIdx(pidx));
         // Clamp ladder (binary @ 0x00152034..0x00152088):
         //   if 16376 < phase_f < 376992:
         //     if 32752 < phase_f < 360104: pulseScale = 0.65 (forced)
@@ -600,21 +644,8 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
                 pulseScale = MISS_PULSE_FLOOR;
             }
         }
-    }
-    // Slide-in / off-screen-park y-shift. Binary @ 0x0015208e..0x001520c4:
-    // Only applied when m_FadeAlpha <= 0 (passive miss-marker path).
-    // Pulse path (m_FadeAlpha > 0) skips this entirely.
-    //   if (FailureEnabled() && !IsMultiplayer())
-    //       drawPos.y -= 3.0f * pos.y * fabsf(game_work.m_GameDt);
-    //   else
-    //       drawPos.y -= 3.0f * pos.y;   // Zen / multi-player: parked off-screen
-    // For non-Zen single-player, m_TransitionTimer drives the animation:
-    //   timer == 1.0 (in menu / mid-transition): drawPos.y shifts -3*pos.y
-    //     -> stored pos.y is negative for top-right markers, so drawPos.y
-    //        moves UP past the +160 clamp (off-screen above the viewport).
-    //   timer == 0.0 (gameplay): no shift, markers visible at top-right.
-    //   intermediate values produce the slide-in animation.
-    if (m_FadeAlpha <= 0.0f) {
+    } else {
+        // m_FadeAlpha <= 0 -- passive miss-marker path: y-shift
         Game* g = Game::GetInstance();
         if (g) {
             const bool failureEnabled =
@@ -626,6 +657,36 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
             }
         }
     }
+
+    // Texture validity check (binary @ 0x001520c6 -- after pulse/pos path)
+    if (!m_Texture.IsValid()) return;
+
+    m_Texture->Set();
+
+    // Scale: size * pulseScale; Z = size.z * pulseScale (= 0 * pulseScale = 0.0f).
+    // binary @ 0x001520c6..0x001520ec: Vec3 scaledSize = size * pulseScale; Scale44(scaledSize)
+    // PORT DIVERGE was 1.0f for Z -- corrected to size.z * pulseScale per spec.
+    Matrix44 mat = Matrix44::MakeScale(size.x * pulseScale,
+                                       size.y * pulseScale,
+                                       size.z * pulseScale);  // size.z=0 so this is 0.0f
+    if (m_Timer != 0.0f) {
+        uint16_t a = (uint16_t)(int)(m_Timer * 182.0f);  // DAT_001522a0 = 182.0f exact
+        mat.RotZ44(SinIdx(a), CosIdx(a));
+    }
+    // Anchor offset (binary @ 0x00152140..0x00152186):
+    //   final = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale
+    (void)hudScale;  // per-frame hudScale arg is unused for MissControl
+    Vec3 anchor(
+        480.0f * m_HudScale.x,
+        320.0f * m_HudScale.y,
+        0.0f);
+    Vec3 final_pos = drawPos + pos + anchor;
+    mat.GlobalTranslate44(final_pos);
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
 
     // ASM-verified: 2026-05-18 binary @ 0x00151f60 (re-analyst)
     // Binary @ 0x001521ac: scale alpha by Game->hud->m_globalTimeScale (slow-mo factor)
@@ -639,15 +700,19 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         }
     }
 
+    // TODO: 0x001520ec -- HUD-layer fade alpha (float at MatrixManager.field_0x3c+0x20)
+    // not yet wired. Binary reads it each frame and multiplies into m_DrawColour.a.
+    // Setter binary site is unknown (likely a ScreenTint / fade-in-out transition).
+    // Until that's RE'd, port skips the multiplier (m_DrawColour.a passes through unchanged).
+    const uint8_t a = (uint8_t)(fade * (float)m_DrawColour.a);
+    const uint32_t col = (uint32_t)a << 24 | (uint32_t)m_DrawColour.b << 16
+                        | (uint32_t)m_DrawColour.g << 8 | (uint32_t)m_DrawColour.r;
+
     // UV crop based on m_bComboActive / m_bVisible.
     // ASM-verified: 2026-05-10 binary @ 0x00151f60..0x00152258 (re-analyst)
     //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
     //   inactive: u0=0.0  u1=0.5  v0=0.25  v1=0.75  (left half, vertical centre)
     //   active:   u0=0.5  u1=1.0  v0=0.25  v1=0.75  (right half, vertical centre)
-    // Both non-combo crops are square 0.5x0.5 -- earlier port had du=0.25 / dv=0.75
-    // which sampled a 1:3 strip onto the 1:1 quad, distorting aspect AND
-    // sampling different vertical regions for the two states (visible
-    // position shift between inactive and active).
     float u0, v0, du, dv;
     if (m_bComboActive) {
         u0 = 0.0f; v0 = 0.0f;  du = 1.0f; dv = 1.0f;
@@ -657,53 +722,11 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
         u0 = 0.5f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     }
 
-    MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-
-    // binary @ 0x001520ec / 0x000fc720 / 0x000f7a4c. Order: Scale -> RotZ -> Translate.
-    // Binary @ 0x001520dc..0x001520ec: scale = size * pulseScale (Vec3*scalar
-    // multiply via Vec3::operator* before passing to Scale44).
-    Matrix44 mat = Matrix44::MakeScale(size.x * pulseScale,
-                                       size.y * pulseScale, 1.0f);
-    if (m_Timer != 0.0f) {
-        uint16_t a = (uint16_t)(int)(m_Timer * 182.0f);
-        mat.RotZ44(SinIdx(a), CosIdx(a));
-    }
-    // Anchor offset (binary @ 0x0015215c..0x00152186, asm-inspector 2026-05-10):
-    //   translate = pos + Vec3(480, 320, 0) * m_HudScale
-    // Stored pos values are NEGATIVE offsets from the binary's 480x320
-    // framebuffer bottom-right; after Bada's 90 deg device rotation that
-    // lands the markers in the player's top-right. m_HudScale is set once
-    // in GameInit to (0.5, 0.5, 0) per the table at 0x001F3DAC -- the
-    // multiply yields the centered-ortho equivalent (240, 160, 0) of the
-    // binary's (480, 320, 0) anchor in its top-left-origin 480x320 ortho.
-    (void)hudScale;  // per-frame hudScale arg is unused for MissControl
-    Vec3 anchor(
-        480.0f * m_HudScale.x,
-        320.0f * m_HudScale.y,
-        0.0f);
-    drawPos += anchor;
-    mat.GlobalTranslate44(drawPos);
-    mm.GetWorldStack().SetCurrentMatrix(mat);
-    mm.UploadModelViewOnly();
-
-    m_Texture->Set();
-
-    // TODO: 0x001520ec -- HUD-layer fade alpha (float at MatrixManager.field_0x3c+0x20)
-    // not yet wired. Binary reads it each frame and multiplies into m_DrawColour.a.
-    // Setter binary site is unknown (likely a ScreenTint / fade-in-out transition).
-    // Until that's RE'd, port skips the multiplier (m_DrawColour.a passes through unchanged).
-    const uint8_t a = (uint8_t)(fade * (float)m_DrawColour.a);
-    const uint32_t col = (uint32_t)a << 24 | (uint32_t)m_DrawColour.b << 16
-                        | (uint32_t)m_DrawColour.g << 8 | (uint32_t)m_DrawColour.r;
-
     QUADCUSTOMVERTEX v[6];
     std::memset(v, 0, sizeof(v));
     // Centred quad in [-0.5..+0.5] -- matches Renderer::DrawQuad and the
     // binary's Mortar::Mesh::DrawQuadUnCached. Matrix applies size scale
-    // (full quad span = size) + translate. Earlier port used [-1..+1]
-    // which doubled the rendered size, masked previously by setting the
-    // size base to 16 instead of the binary's 32.
+    // (full quad span = size) + translate.
     const float u1 = u0 + du;
     const float v1 = v0 + dv;
     v[0].x = -0.5f; v[0].y = -0.5f; v[0].u = u0; v[0].v = v1; v[0].colour = col;
