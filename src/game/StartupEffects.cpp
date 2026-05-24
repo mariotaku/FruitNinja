@@ -5,10 +5,11 @@
 #include "FruitCamera.h"
 #include "Game.h"
 #include "WaveManager.h"
+#include "asset/MeshDraw.h"
+#include "asset/Mesh.h"
 #include "render/MatrixManager.h"
 #include "math/Matrix44.h"
 #include "math/Vec3.h"
-#include "render/Renderer.h"
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 #include "debug/Logger.h"
@@ -74,9 +75,10 @@ void DrawStartFade() {
     const uint8_t r = (uint8_t)r_f;
     const Colour col(r, r, r, a);
 
-    if (Renderer* renderer = Renderer::GetInstance()) {
-        // UV crop: binary draws logo rect (u0=0.03125, u1=0.96875, v0=0.1875, v1=0.8125)
-        renderer->DrawQuad(col, 0.03125f, 0.1875f, 0.96875f, 0.8125f);
+    // UV crop: binary draws logo rect (u0=0.03125, u1=0.96875, v0=0.1875, v1=0.8125)
+    {
+        Mortar::Mesh m;
+        m.DrawQuadUnCached(col, 0.03125f, 0.1875f, 0.96875f, 0.8125f, NULL);
     }
 
     game->pSplashTex->UnSet();
