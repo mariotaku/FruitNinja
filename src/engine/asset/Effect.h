@@ -27,6 +27,7 @@
 #include "util/SmartPtr.h"
 #include <vector>
 #include <string>
+#include <cstdint>
 
 namespace Mortar {
 
@@ -99,6 +100,44 @@ struct EffectLessThanCompare {
     bool operator()(const SmartPtr<Effect>& a, const SmartPtr<Effect>& b) const {
         return a->m_Name.compare(b->m_Name) < 0;
     }
+};
+
+// EffectGroup — 0x38 bytes.
+// Binary ctor @ 0x001a2c10 (templated_ctor<Iter>), D2 @ 0x001a1a70.
+// Layout:
+//   +0x00  ReferenceCounter base (12 bytes)
+//   +0x0C  std::vector<EffectPropertyDefinition_Bada>  m_MergedDefs
+//   +0x18  std::vector<SmartPtr<Effect> >              m_Effects
+//   +0x24..+0x37  4-byte align pad + 2x Event1<EffectGroup&>
+//                 (not modelled; uint8_t pad keeps binary-shape sizeof
+//                 if asm-verify ever cares).
+//
+// AddEffect (binary @ 0x001a0274): sorted-vector-set insert into m_Effects
+// via std::lower_bound + EffectLessThanCompare; on duplicate name, calls
+// `this->MergeProperties(effect->Properties())` which folds the new
+// effect's property defs into m_MergedDefs.
+//
+// Live render path is fully bypassed in the port (Renderer uses GLES2
+// shaders directly, not Effect/EffectGroup multi-pass dispatch). Both
+// AddEffect and MergeProperties are reachable in code shape but never
+// fire at runtime — every binary caller chains through stubs.
+class EffectGroup : public ReferenceCounter {
+public:
+    std::vector<EffectPropertyDefinition_Bada>  m_MergedDefs;   // +0x0C
+    std::vector<SmartPtr<Effect> >              m_Effects;      // +0x18
+    // +0x24..+0x37: 4-byte align pad + two Event1<EffectGroup&> slots.
+    // Not modelled; gap preserved for binary-shape sizeof.
+    uint8_t _events_gap[20];
+
+    EffectGroup() {}
+
+    // Binary @ 0x001a0274 — sorted-set insert by name; merge on dup.
+    void AddEffect(const SmartPtr<Effect>& effect);
+
+    // Binary @ 0x001a2030 — fold each property def in `props` into
+    // m_MergedDefs at its lower_bound position. Returns 1 on success,
+    // 0 if any def conflicts with an existing same-named entry.
+    int MergeProperties(const std::vector<EffectPropertyDefinition_Bada>& props);
 };
 
 }  // namespace Mortar

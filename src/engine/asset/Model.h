@@ -11,7 +11,7 @@
 namespace Mortar {
 
 class Mesh;        // full def in Mesh.h
-class EffectGroup; // full def in Mesh.h
+class EffectGroup; // full def in Effect.h
 struct Bounds3D;   // full def in Mesh.h
 
 // Matches original Mortar::Model (0x58 bytes).
