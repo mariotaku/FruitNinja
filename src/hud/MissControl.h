@@ -129,8 +129,11 @@ public:
     void MakeRare(Vec3 pos);
 
     // 0x00151d94 -- zen-bomb X overlay and miss-penalty indicator.
-    void MakeDisappear(const Vec3& pos, int sizeMult,
-                       const Mortar::SmartPtr<Mortar::Texture>& tex);
+    // Binary signature: MakeDisappear(_Vector3<float>, int, SmartPtr<Texture>).
+    // Vec3 + SmartPtr are passed BY VALUE (no reference prefix in mangling).
+    // ASM-verified: 2026-05-24 binary @ 0x00151d94 (re-analyst)
+    void MakeDisappear(Vec3 pos, int sizeMult,
+                       Mortar::SmartPtr<Mortar::Texture> tex);
 
     // 0x001515a4 -- activate combo indicator (combo_N.tex for N=clamp(combo,2,10)).
     void MakeCombo(Vec3 pos, int comboCount, int entityType);

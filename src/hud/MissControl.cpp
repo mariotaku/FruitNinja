@@ -402,8 +402,8 @@ void MissControl::MakeCombo(Vec3 pos, int comboCount, int entityType) {
 // ASM-verified: 2026-05-24 binary @ 0x00151d94 (re-analyst)
 // binary @ 0x00151d94: two-path form based on whether SmartPtr is valid.
 // Common prefix: Init() first, then m_DrawColour.a=0xff, then pos.
-void MissControl::MakeDisappear(const Vec3& inPos, int sizeMult,
-                                const Mortar::SmartPtr<Mortar::Texture>& tex) {
+void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
+                                Mortar::SmartPtr<Mortar::Texture> tex) {
     Init();
     m_DrawColour.a = 0xff;  // field_0x5f = 0xff (common prefix, binary @ 0x00151d94)
     pos = inPos;
