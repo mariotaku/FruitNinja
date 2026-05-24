@@ -51,6 +51,14 @@ public:
     // +0x04 m_ModList — std::list<GameModifier*> (8 bytes, Sourcery 2010q1 pre-C++11)
     std::list<GameModifier*> m_ModList;
 
+    // +0x0c m_NameHash — StringHash(m_Name); set by Parse @ 0x00119518 (blx StringHash)
+    // followed by 0x00119520 (str r0, [r4, #0xc]). Lives between m_ModList and m_Name
+    // in the binary's layout; was previously misplaced at the struct's end as
+    // "port-specific", which shifted every field from m_Name onward 4 bytes earlier
+    // than the binary and caused the cross-build to miss the m_pPurchaseInfo /
+    // m_pScreenEffect offset asserts.
+    uint32_t m_NameHash;
+
     // +0x10 m_Name[0x40]
     char m_Name[0x40];
 
@@ -103,10 +111,6 @@ public:
 
     // +0xc8 m_BarXPos — HUD x-position, interpolated each frame
     float m_BarXPos;
-
-    // --- Port-specific (not in 0xCC binary layout) ---
-    // Name hash for map lookup (computed from m_Name during Parse).
-    uint32_t m_NameHash;
 
     PowerUp();
     ~PowerUp();
@@ -194,17 +198,22 @@ public:
     void UnloadTextures();
 };
 
-// PowerUp starts with std::list<GameModifier*> whose sizeof is 12 on Bada (cached-size
-// pre-C++11 variant) but 8 on the asm-verify cross-toolchain (Sourcery 2010q1 sentinel-only).
-// Binary-faithful offsets only hold under the Bada ABI; skip them in the cross-build.
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+// std::list<GameModifier*> is 8 bytes on BOTH the Bada production binary AND the
+// asm-verify cross-toolchain (Sourcery 2010q1 sentinel-only, per R4 W1 RE and the
+// cross-build probe in tmp/asm-compare/list_size_probe.s). With m_NameHash placed
+// at its binary-correct +0x0c slot, every offset below holds under both ABIs, so
+// the asserts validate the cross-build too (no FN_ASM_VERIFY_CROSS guard needed).
+// Host (x86_64) has a different ABI (24-byte list, 8-byte pointers) so __bada__ stays.
+#if defined(__bada__)
+static_assert(offsetof(PowerUp, m_NameHash)       == 0x0c, "PowerUp::m_NameHash @ +0x0c");
+static_assert(offsetof(PowerUp, m_Name)           == 0x10, "PowerUp::m_Name @ +0x10");
 static_assert(offsetof(PowerUp, m_pPurchaseInfo)  == 0x94, "PowerUp::m_pPurchaseInfo @ +0x94");
 static_assert(offsetof(PowerUp, m_Texture1)       == 0xac, "PowerUp::m_Texture1 @ +0xac");
 static_assert(offsetof(PowerUp, m_Texture2)       == 0xb0, "PowerUp::m_Texture2 @ +0xb0");
 static_assert(offsetof(PowerUp, m_pScreenEffect)  == 0xb4, "PowerUp::m_pScreenEffect @ +0xb4");
 static_assert(offsetof(PowerUp, m_DeferredPoints) == 0xc4, "PowerUp::m_DeferredPoints @ +0xc4");
 static_assert(offsetof(PowerUp, m_BarXPos)        == 0xc8, "PowerUp::m_BarXPos @ +0xc8");
-static_assert(sizeof(PowerUp) >= 0xcc,                     "PowerUp size >= 0xCC");
+static_assert(sizeof(PowerUp)                     == 0xcc, "PowerUp size == 0xCC (binary; verified in Ghidra)");
 #endif
 
 #endif // FN_GAME_POWER_UP_H
