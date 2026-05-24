@@ -39,6 +39,7 @@ tmp/
 # Claude Code
 .claude/*.local.json
 .claude/worktrees
+.mcp.json
 
 # OS
 .DS_Store
