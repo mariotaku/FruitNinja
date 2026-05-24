@@ -156,7 +156,7 @@ void Coin::Arrived() {
 // ---------------------------------------------------------------------------
 // InitCoin @ 0x00173454
 // ---------------------------------------------------------------------------
-void Coin::InitCoin(const Vec3& pos_in, const Vec3& gravity, uint16_t /*baseAngle*/,
+void Coin::InitCoin(Vec3 pos_in, Vec3 gravity, uint16_t /*baseAngle*/,
                     int /*playerIdx*/, uint16_t launchAngle, int coinValue,
                     const char* flyFXName, const char* collectFXName,
                     Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent)
@@ -445,9 +445,9 @@ void Coin::ClearCoins(bool arrive) {
 // delay.x = per-coin delay step; delay.y = max total delay (binary Vec3 arg).
 // Retry spawn position up to 10x if out of screen bounds.
 // ---------------------------------------------------------------------------
-void Coin::MakeCoins(int totalCoins, int coinsPerCoin, const Vec3& delay,
+void Coin::MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
                      uint16_t baseAngle, uint16_t angleSpread,
-                     const Vec3& spawnPos,
+                     Vec3* spawnPos,
                      const char* flyFXName, const char* collectFXName,
                      Mortar::Delegate1<void, Coin*> onArrived, bool silent)
 {
@@ -482,11 +482,11 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, const Vec3& delay,
         }
 
         // Compute spawn position with scatter — retry up to 10x if out of bounds
-        float spawnX = spawnPos.x;
-        float spawnY = spawnPos.y;
+        float spawnX = spawnPos->x;
+        float spawnY = spawnPos->y;
         for (int attempt = 0; attempt < 10; attempt++) {
-            float tryX = spawnPos.x + SinIdx(randAngle) * 100.0f;
-            float tryY = spawnPos.y + CosIdx(randAngle) * 100.0f;
+            float tryX = spawnPos->x + SinIdx(randAngle) * 100.0f;
+            float tryY = spawnPos->y + CosIdx(randAngle) * 100.0f;
             if (tryX >= COIN_BOUND_X_MIN && tryX <= COIN_BOUND_X_MAX &&
                 tryY >= COIN_BOUND_Y_MIN && tryY <= COIN_BOUND_Y_MAX) {
                 spawnX = tryX;
@@ -500,7 +500,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, const Vec3& delay,
             }
         }
 
-        Vec3 coinPos(spawnX, spawnY, spawnPos.z);
+        Vec3 coinPos(spawnX, spawnY, spawnPos->z);
         // Stagger delay: perStep * (idx+1), but never more negative than maxDelay.
         float coinDelay = perStep * (float)(idx + 1);
         if (maxDelay < 0.0f && coinDelay < maxDelay) coinDelay = maxDelay;
