@@ -31,10 +31,8 @@ Mesh::Mesh()
 
 // Binary @ 0x001b0a5c
 Mesh::~Mesh() {
-    for (int i = 0; i < (int)m_Geometries.size(); i++) {
-        if (m_Geometries[i].vbo) { glDeleteBuffers(1, &m_Geometries[i].vbo); }
-        if (m_Geometries[i].ibo) { glDeleteBuffers(1, &m_Geometries[i].ibo); }
-    }
+    // VBO/IBO cleanup now handled by Geometry::~Geometry (each SmartPtr<Geometry>
+    // will Release() here as m_Geometries is destroyed).
 }
 
 // Matches Mesh::SetBones (0x001b1340)
@@ -161,132 +159,6 @@ bool Mesh::HasDiffuseTexture() const {
     return false;
 }
 
-// Draw a single geometry entry with its bound material.
-// Near-direct translation of PassBinding::Apply (0x001a39f8) +
-// Geometry::Render (0x001a3e98):
-//   glMatrixMode(PROJECTION) + glPushMatrix + glLoadMatrixf
-//   glMatrixMode(MODELVIEW)  + glPushMatrix + glLoadMatrixf
-//   one-shot glEnable(GL_CULL_FACE)
-//   Texture::Set() + glTexEnvf(GL_MODULATE)
-//   glEnableClientState + glVertexPointer / glNormalPointer / glColorPointer / glTexCoordPointer
-//   glDrawElements or glDrawArrays
-//   glMatrixMode(PROJECTION) + glPopMatrix
-//   glMatrixMode(MODELVIEW)  + glPopMatrix
-//   glBindBuffer(ARRAY_BUFFER, 0) + glBindBuffer(ELEMENT_ARRAY_BUFFER, 0)
-static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
-                         const MeshMaterial& mat, const Matrix44& mvp,
-                         const Matrix44& /*world*/) {
-    if (!geom.vbo || geom.vertCount == 0) return;
-
-    // CULL_FACE: do NOT enable. The binary's Geometry::Render @ 0x001a3ec8
-    // guards its `glEnable(GL_CULL_FACE)` behind a one-shot static byte at
-    // DAT_001a4050 -- after frame 0, that byte is set, the enable never
-    // executes again, and DisplayManagerBada::BeginFrame's two glDisable
-    // calls (0x0019e012 and 0x0019e066) leave CULL_FACE off for the rest
-    // of the program's life. Net effect: the binary renders 3D meshes
-    // with cull disabled. Asm-inspector confirmed via Geometry::Render
-    // disassembly + BeginFrame trace.
-    //
-    // The earlier port enabled CULL_FACE per draw under the theory that
-    // dropping CW back-faces was needed for effect-fruit meshes; that was
-    // wrong -- those meshes were never culled in the binary either, and
-    // the per-draw enable produced "fruit half-rendered" / "banana speed
-    // outline missing" artefacts when the FruitCamera's view direction
-    // happens to put a triangle's GL-default CCW winding on the back side.
-
-    // Matrix stacks: push current, load MVP, pop on exit. Binary splits
-    // the upload into PROJECTION = screenRot*World and MODELVIEW = view
-    // composition; our MatrixManager already produced the final MVP, so
-    // we upload it to PROJECTION and leave MODELVIEW as identity.
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadMatrixf(mvp.ptr());
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glLoadIdentity();
-
-    if (mat.m_Texture.IsValid()) {
-        mat.m_Texture->Set();
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
-    } else {
-        glDisable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
-
-    // Material. Field names in MeshMaterial are inverted vs binary:
-    //   m_Diffuse  = GetColourRGB(color0) stored as "Ambience" prop
-    //   m_Ambience = GetColourRGB(color1) stored as "Diffuse"  prop
-    // LoadMesh always sets m_IsLit = false in the current port, so this
-    // path usually short-circuits to glDisable(GL_LIGHTING) + white colour.
-    if (mat.m_IsLit) {
-        glEnable(GL_LIGHTING);
-        const GLfloat amb[4] = { mat.m_Ambience.x, mat.m_Ambience.y, mat.m_Ambience.z, 1.0f };
-        const GLfloat dif[4] = { mat.m_Diffuse.x,  mat.m_Diffuse.y,  mat.m_Diffuse.z,  1.0f };
-        const GLfloat emi[4] = { mat.m_SelfIllum.x,mat.m_SelfIllum.y,mat.m_SelfIllum.z,1.0f };
-        glMaterialfv(GL_AMBIENT,  GL_AMBIENT,  amb);
-        glMaterialfv(GL_DIFFUSE,  GL_DIFFUSE,  dif);
-        glMaterialfv(GL_EMISSION, GL_EMISSION, emi);
-    } else {
-        glDisable(GL_LIGHTING);
-        glColor4ub(255, 255, 255, 255);
-    }
-
-    glBindBuffer(GL_ARRAY_BUFFER, geom.vbo);
-    if (geom.ibo) {
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geom.ibo);
-    }
-
-    const VertexLayout& L = geom.layout;
-
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glVertexPointer(3, GL_FLOAT, L.totalStride, (void*)(intptr_t)L.posOffset);
-
-    if (L.normalSize > 0) {
-        glEnableClientState(GL_NORMAL_ARRAY);
-        glNormalPointer(GL_FLOAT, L.totalStride, (void*)(intptr_t)L.normalOffset);
-    } else {
-        glDisableClientState(GL_NORMAL_ARRAY);
-    }
-
-    if (L.colorSize > 0 && L.colorFmt == 3) {
-        glEnableClientState(GL_COLOR_ARRAY);
-        glColorPointer(4, GL_UNSIGNED_BYTE, L.totalStride,
-                       (void*)(intptr_t)L.colorOffset);
-    } else {
-        glDisableClientState(GL_COLOR_ARRAY);
-    }
-
-    glClientActiveTexture(GL_TEXTURE0);
-    if (L.texSize > 0) {
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glTexCoordPointer(2, GL_FLOAT, L.totalStride, (void*)(intptr_t)L.texOffset);
-    } else {
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-    }
-
-    if (geom.ibo && geom.indexCount > 0) {
-        glDrawElements(geom.primType, geom.indexCount, GL_UNSIGNED_SHORT, (void*)0);
-    } else {
-        glDrawArrays(geom.primType, 0, geom.vertCount);
-    }
-
-    glDisableClientState(GL_VERTEX_ARRAY);
-    glDisableClientState(GL_NORMAL_ARRAY);
-    glDisableClientState(GL_COLOR_ARRAY);
-    glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-
-    // No cull-state restore needed: we never enabled it (binary doesn't
-    // either; see comment above the geometry-render block).
-
-    // Restore matrix stacks + unbind VBOs, matching the tail of
-    // Geometry::Render.
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-}
 
 // Matches Mesh::Draw (0x001b0c3c)
 // Original behavior:
@@ -298,8 +170,7 @@ static void DrawGeometry(Renderer* /*renderer*/, const GeometryEntry& geom,
 void Mesh::Draw(const Matrix44& worldTransform) {
     if (m_Geometries.empty()) return;
 
-    Renderer* renderer = Renderer::GetInstance();
-    if (!renderer) return;
+    if (!Renderer::GetInstance()) return;
 
     // Matches Mesh::Draw single-bone branch (0x001b0c3c, line ~8):
     //   if (boneCount == 1): finalWorld = vertMat * worldMatrix
@@ -339,17 +210,19 @@ void Mesh::Draw(const Matrix44& worldTransform) {
     // Port specific: compute MVP via MatrixManager (replaces Effect property system)
     Matrix44 mvp = mm.GetMVP();
 
-    // Render all geometry entries, each with its own material
+    // Render all geometries, each with its own material.
+    // Binary @ 0x001b0c3c: walks m_Geometries calling Geometry::Render per entry.
     for (int i = 0; i < (int)m_Geometries.size(); i++) {
-        const GeometryEntry& geom = m_Geometries[i];
-        int matIdx = geom.materialIndex;
+        Geometry* g = m_Geometries[i].Get();
+        if (!g) continue;
+        int matIdx = g->m_MaterialIndex;
 
         // Fallback: use first material if index out of range
         const MeshMaterial& mat = (matIdx >= 0 && matIdx < (int)m_Materials.size())
                                   ? m_Materials[matIdx]
                                   : (m_Materials.empty() ? MeshMaterial() : m_Materials[0]);
 
-        DrawGeometry(renderer, geom, mat, mvp, finalWorld);
+        g->Render(mat, mvp);
     }
 }
 
@@ -398,13 +271,9 @@ void Mesh::BindSkeleton(Skeleton const& /*skeleton*/) {
     // Defunct: const-ref BindSkeleton overload -- no-op stub; binary @ 0x001b0948
 }
 
-// Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b0d0c
-// Binary: pushes SmartPtr<Geometry> into m_Geometries (vector<SmartPtr<Geometry>>).
-// Port: m_Geometries is vector<GeometryEntry>; storage types don't match.
-// DIFFERS: binary appends SmartPtr<Geometry>; port uses GeometryEntry directly loaded
-// in LoadMesh -- this overload is unreachable at runtime but kept for call-graph parity.
-void Mesh::AddGeometry(SmartPtr<Geometry> const& /*geom*/) {
-    // Defunct: SharedEffectProperties subsystem -- no-op stub; binary @ 0x001b0d0c
+// Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
+void Mesh::AddGeometry(SmartPtr<Geometry> const& geom) {
+    m_Geometries.push_back(geom);
 }
 
 // Defunct: SharedEffectProperties subsystem -- shape preserved; binary @ 0x001b0988

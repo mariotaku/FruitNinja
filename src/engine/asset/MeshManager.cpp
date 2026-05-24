@@ -1,4 +1,6 @@
 #include "asset/MeshManager.h"
+#include "asset/Mesh.h"
+#include "asset/Geometry.h"
 #include "asset/TextureManager.h"
 #include "debug/Logger.h"
 #include <cstring>
@@ -59,9 +61,9 @@ static int FmtSize(int fmt) {
 }
 
 // Matches LoadVertexStreamPSP (0x001a7b0c, 112 lines)
-// Parses PSP vertex declaration bitfield + vertex data into a GeometryEntry VBO.
+// Parses PSP vertex declaration bitfield + vertex data into a Geometry VBO.
 // Returns true on success.
-static bool ParseVertexStream(const uint8_t* data, size_t dataSize, GeometryEntry& geom) {
+static bool ParseVertexStream(const uint8_t* data, size_t dataSize, Mortar::Geometry& geom) {
     if (dataSize < 9) return false;
     size_t pos = 0;
     uint8_t skipCount = data[pos++];
@@ -165,21 +167,21 @@ static bool ParseVertexStream(const uint8_t* data, size_t dataSize, GeometryEntr
     size_t vertDataSize = (size_t)vertCount * layout.totalStride;
     if (pos + vertDataSize > dataSize) return false;
 
-    glGenBuffers(1, &geom.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, geom.vbo);
+    glGenBuffers(1, &geom.m_Vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, geom.m_Vbo);
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vertDataSize, data + pos, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    geom.vertCount = (int)vertCount;
-    geom.layout = layout;
+    geom.m_VertCount = (int)vertCount;
+    geom.m_Layout = layout;
     return true;
 }
 
 // Matches LoadIndexStreamPSP (0x001a799c, ~40 lines)
-// Parses index stream header + index data into a GeometryEntry IBO.
+// Parses index stream header + index data into a Geometry IBO.
 // Returns true on success; sets consumed to bytes read from data.
 static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
-                             GeometryEntry& geom, size_t& consumed) {
+                             Mortar::Geometry& geom, size_t& consumed) {
     consumed = 0;
     if (dataSize < 7) return false;
     size_t pos = 2; // skip 2-byte padding
@@ -200,9 +202,9 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     // "mirror through fuse hole" / "triangle holes on fruit" artefacts
     // we chased — strip rendering of a triangle-list index buffer.
     switch (idxFlags & 0xF0) {
-        case 0x20: geom.primType = GL_TRIANGLES;      break;
-        case 0x40: geom.primType = GL_TRIANGLE_STRIP; break;
-        default:   geom.primType = GL_TRIANGLES;      break;
+        case 0x20: geom.m_PrimType = GL_TRIANGLES;      break;
+        case 0x40: geom.m_PrimType = GL_TRIANGLE_STRIP; break;
+        default:   geom.m_PrimType = GL_TRIANGLES;      break;
     }
     // Low nibble = PSP GE_INDEX_TYPE: 0 none / 1 uint16 / 2 uint32.
     // Binary LoadIndexStreamPSP (0x001a799c) branches on `(nibble - 1)`;
@@ -219,12 +221,12 @@ static bool ParseIndexStream(const uint8_t* data, size_t dataSize,
     size_t idxDataSize = (size_t)idxCount * 2;
     if (pos + idxDataSize > dataSize) return false;
 
-    glGenBuffers(1, &geom.ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geom.ibo);
+    glGenBuffers(1, &geom.m_Ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geom.m_Ibo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)idxDataSize, data + pos, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-    geom.indexCount = (int)idxCount;
+    geom.m_IndexCount = (int)idxCount;
     consumed = pos + idxDataSize;
     return true;
 }
@@ -371,22 +373,26 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
                 matIndex = loader.Read<uint16_t>();
             }
 
-            GeometryEntry geom;
-            geom.materialIndex = (int)matIndex;
+            // Defunct: GeometryBinding stack not constructed -- port loads vbo/ibo directly.
+            // Binary @ 0x001a8388 would new GeometryBinding here.
+            Mortar::SmartPtr<Mortar::Geometry> g(
+                new Mortar::Geometry(Mortar::SmartPtr<Mortar::GeometryBinding>(),
+                                     Mortar::SmartPtr<Mortar::SharedEffectProperties>()));
+            g->m_MaterialIndex = (int)matIndex;
 
             if (geomChild) {
                 const uint8_t* d = geomChild->DataPtr();
                 size_t ds = geomChild->DataSize();
                 size_t consumed = 0;
-                if (ParseIndexStream(d, ds, geom, consumed)) {
+                if (ParseIndexStream(d, ds, *g, consumed)) {
                     if (consumed < ds) {
-                        ParseVertexStream(d + consumed, ds - consumed, geom);
+                        ParseVertexStream(d + consumed, ds - consumed, *g);
                     }
                 }
             }
 
-            if (geom.vbo || geom.ibo) {
-                mesh->m_Geometries.push_back(geom);
+            if (g->m_Vbo || g->m_Ibo) {
+                mesh->AddGeometry(g);
             } else {
                 LOG_WARN("MeshManager", "'%s' mesh[%u] geom[%u]: no GPU data", path, mi, i);
             }
