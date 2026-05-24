@@ -3,14 +3,17 @@
 
 // SharedEffectProperties and supporting types.
 // Phase 1: real field layouts for EffectPropertyDefinition, EffectPropertyValues,
-// EffectProperty, EffectPropertyList. SharedEffectProperties ctor body remains
-// a shape-stub (Phase 2 will implement the arena allocation + property wiring).
+// EffectProperty, EffectPropertyList.
+// Phase 2: real bodies for EffectPropertyList::Contains / GetProperty /
+// InitPropertyList, and SharedEffectProperties ctors.
 //
 // Binary layout refs:
 //   SharedEffectProperties ctor (range) @ 0x001b2708
 //   SharedEffectProperties ctor (4-def) @ 0x001b2788
-//   EffectPropertyList::Contains        @ (scan of m_Props vector)
-//   EffectPropertyList::GetProperty     @ (linear search by name)
+//   EffectPropertyList::Contains(def&)  @ 0x001b6828
+//   EffectPropertyList::Contains(range) @ 0x001b1938
+//   EffectPropertyList::GetProperty     @ 0x001b67b8
+//   EffectPropertyList::InitPropertyList@ 0x001b25b4
 //   TrySetMatrix_EffectProp free helper @ 0x001b0c28
 
 #include "util/ReferenceCounter.h"
@@ -21,6 +24,8 @@
 #include "math/Vec2.h"
 #include "math/Vec3.h"
 #include <vector>
+#include <algorithm>
+#include <cstring>
 #include <cstdint>
 
 namespace Mortar {
@@ -159,45 +164,104 @@ const T* EffectPropertyValues::GetValueRef(EffectDataTypes::Type t, unsigned lon
 class EffectPropertyList {
 public:
     EffectPropertyList() : m_Values(NULL) {}
+    ~EffectPropertyList();
 
-    // TODO: EffectPropertyList::Contains (binary address unknown) — real impl:
-    // linear scan of m_Props checking name+type match. Phase 2 implements.
-    // Stub returns true so the "already-present" fast path wins and no new
-    // SharedEffectProperties is ever materialized from GetPropertiesGroup.
-    bool Contains(const EffectPropertyDefinition* /*def*/) const {
-        return true;
-    }
+    // Contains(def&) @ 0x001b6828 — pulls name out of def and forwards to GetProperty.
+    bool Contains(const EffectPropertyDefinition& def) const;
 
-    // TODO: EffectPropertyList::GetProperty (binary address unknown) — real impl:
-    // linear search of m_Props by name, returns EffectProperty* into arena.
-    // Phase 2 implements. Stub returns NULL.
-    EffectProperty* GetProperty(const char* /*name*/) const {
-        return NULL;
-    }
+    // Contains(ptr) — single-pointer convenience used by Mesh.cpp call sites;
+    // forwards to the ref overload by dereferencing.
+    bool Contains(const EffectPropertyDefinition* def) const;
+
+    // Contains(begin, end) @ 0x001b1938 — range overload; true iff every def in
+    // [begin, end) is contained.
+    bool Contains(const EffectPropertyDefinition* begin,
+                  const EffectPropertyDefinition* end) const;
+
+    // GetProperty(char*) @ 0x001b67b8 — binary-search m_Props by name; recurse to
+    // parent list if not found.
+    EffectProperty* GetProperty(const char* name) const;
+
+    // GetProperty(string&) @ 0x001b6820 — forwards to char* overload.
+    EffectProperty* GetProperty(const std::string& name) const;
 
     void SetParent(const SmartPtr<SharedEffectProperties>& parent) {
         m_Parent = parent;
     }
 
+    // InitPropertyList @ 0x001b25b4 — two-pass sizing + slot-building algorithm.
+    // Template body lives in header so it can be instantiated for any iterator.
+    template <typename Iter>
+    void InitPropertyList(Iter begin, Iter end,
+                          const SmartPtr<SharedEffectProperties>& parent);
+
 private:
+    // Comparator for lower_bound / sort: compares EffectProperty* by name vs char*.
+    struct NameLessThan {
+        bool operator()(const EffectProperty* p, const char* n) const {
+            return std::strcmp(p->m_Def.m_Name.c_str(), n) < 0;
+        }
+        // Overload for std::sort (both sides are EffectProperty*).
+        bool operator()(const EffectProperty* a, const EffectProperty* b) const {
+            return std::strcmp(a->m_Def.m_Name.c_str(), b->m_Def.m_Name.c_str()) < 0;
+        }
+    };
+
+    void SortProperties();
+
     SmartPtr<SharedEffectProperties> m_Parent;    // +0x00, 4 bytes
     EffectPropertyValues*            m_Values;    // +0x04, 4 bytes (owned raw ptr)
     std::vector<EffectProperty*>     m_Props;     // +0x08, 12 bytes
     // total: 4 + 4 + 12 = 20 = 0x14
 };
 
+// InitPropertyList template body — must live in the header for implicit instantiation.
+// Binary @ 0x001b25b4.
+template <typename Iter>
+void EffectPropertyList::InitPropertyList(Iter begin, Iter end,
+                                          const SmartPtr<SharedEffectProperties>& parent) {
+    m_Parent = parent;
+
+    // Pass 1: tally per-bucket bytes needed for new defs only (those not already
+    // present in parent).
+    unsigned long bucketCounts[EffectDataTypes::kNumTypes];
+    for (int i = 0; i < EffectDataTypes::kNumTypes; ++i) bucketCounts[i] = 0;
+    unsigned long newCount = 0;
+    for (Iter p = begin; p != end; ++p) {
+        if (m_Parent.IsValid() && m_Parent->GetList().Contains(*p)) continue;
+        ++newCount;
+        // Pass 1 uses m_Count-or-1 fallback so zero-count defs still allocate 1 slot.
+        unsigned long c = (p->m_Count != 0) ? p->m_Count : 1;
+        bucketCounts[p->m_Type] += c;
+    }
+
+    m_Values = new EffectPropertyValues(bucketCounts);
+
+    // Pass 2: build EffectProperty entries; NO m_Count-or-1 fallback in offsets.
+    unsigned long bucketOffsets[EffectDataTypes::kNumTypes];
+    for (int i = 0; i < EffectDataTypes::kNumTypes; ++i) bucketOffsets[i] = 0;
+    m_Props.reserve(newCount);
+    for (Iter p = begin; p != end; ++p) {
+        if (m_Parent.IsValid() && m_Parent->GetList().Contains(*p)) continue;
+        EffectProperty* prop = new EffectProperty();
+        prop->m_Def    = *p;
+        prop->m_Owner  = m_Values;
+        prop->m_Offset = bucketOffsets[p->m_Type];
+        m_Props.push_back(prop);
+        // Pass 2 advances by m_Count without the ?:1 fallback — per binary @ 0x001b25b4.
+        bucketOffsets[p->m_Type] += p->m_Count;
+    }
+
+    SortProperties();
+}
+
 // SharedEffectProperties — 0x20 bytes; ReferenceCounter-derived, managed by SmartPtr.
 class SharedEffectProperties : public ReferenceCounter {
 public:
-    // Range ctor — shape stub; binary @ 0x001b2708.
-    // TODO: 0x001b2708 — allocate EffectPropertyValues arena, insert EffectProperty
-    // objects for each def in [begin, end), wire m_List.m_Values + m_List.m_Props
-    // (Phase 2).
-    SharedEffectProperties(const EffectPropertyDefinition* /*begin*/,
-                           const EffectPropertyDefinition* /*end*/,
-                           const SmartPtr<SharedEffectProperties>& parent) {
-        m_List.SetParent(parent);
-    }
+    // Range ctor @ 0x001b2708.
+    SharedEffectProperties(const EffectPropertyDefinition* begin,
+                           const EffectPropertyDefinition* end,
+                           const SmartPtr<SharedEffectProperties>& parent);
 
     EffectPropertyList& GetList() { return m_List; }
     const EffectPropertyList& GetList() const { return m_List; }
