@@ -6,6 +6,7 @@
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "asset/MeshManager.h"
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"

@@ -10,6 +10,7 @@
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "asset/Mesh.h"
+#include "asset/Model.h"
 #include "asset/MeshManager.h"
 #include "util/SmartPtr.h"
 #include "util/MemoryPool.h"
