@@ -140,7 +140,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
                 TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            { Mortar::Mesh m; m.DrawTriList(s_tri1, 3, false, NULL); }
+            Mortar::Mesh::DrawTriList(s_tri1, 3, false, NULL);
         }
 
         // Bottom triangle (stateObj+0x0C)
@@ -152,7 +152,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
                 alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-            { Mortar::Mesh m; m.DrawTriList(s_tri2, 3, false, NULL); }
+            Mortar::Mesh::DrawTriList(s_tri2, 3, false, NULL);
         }
 
         s_TexBlurryBacking->UnSet();

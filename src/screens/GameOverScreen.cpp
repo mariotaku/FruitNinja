@@ -1812,7 +1812,7 @@ void GameOverScreen::DrawOrder(const Vec3& hudScale, int /*layerMask*/) {
     mm.UploadModelViewOnly();
 
     // Binary @ 0x001416bc DrawTriList(verts, 0x30, false, nullptr)
-    { Mortar::Mesh m; m.DrawTriList(g_StarMesh.verts, 48, false, NULL); }
+    Mortar::Mesh::DrawTriList(g_StarMesh.verts, 48, false, NULL);
 
     g_StarburstTex->UnSet();
 }

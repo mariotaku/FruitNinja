@@ -1584,7 +1584,7 @@ void Fruit::DrawShadows() {
     mm.UploadModelViewOnly();
 
     shadowTex->Set();
-    { Mortar::Mesh m; m.DrawTriList(s_ShadowVerts, count * 6, false, NULL); }
+    Mortar::Mesh::DrawTriList(s_ShadowVerts, count * 6, false, NULL);
     shadowTex->UnSet();
 }
 

@@ -239,7 +239,7 @@ void BombBlast::DrawActiveBlasts() {
     mm.UploadModelViewOnly();
 
     g_BombTexture->Set();
-    { Mortar::Mesh m; m.DrawTriList(s_BlastVerts, blastCount * VERTS_PER_BLAST, false, NULL); }
+    Mortar::Mesh::DrawTriList(s_BlastVerts, blastCount * VERTS_PER_BLAST, false, NULL);
     g_BombTexture->UnSet();
 }
 
