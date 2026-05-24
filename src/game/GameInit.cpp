@@ -128,8 +128,9 @@ void GameInit(unsigned long) {
             game_work.mHud->AddControl(mc);
         }
     }
-    // step 3b: 12-entry pool (MissControl::CreatePool(0xc, hud)).
-    MissControl::AllocatePool();
+    // step 3b: 12-entry pool (binary: MissControl::CreatePool(0xc, hud)).
+    // ASM-verified: 2026-05-24 binary @ 0x0016c7a0 caller (re-analyst)
+    MissControl::CreatePool(12, game_work.mHud);
 
     // step 4: ScoreControl (size 0x100) + AddControl
     ScoreControl* sc = new ScoreControl();

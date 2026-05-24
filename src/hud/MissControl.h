@@ -40,6 +40,8 @@
 // Analysed: 2026-04-30T04:20
 
 #include "HUDControl3d.h"
+
+class HUD;
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include "math/Vec3.h"
@@ -114,9 +116,16 @@ public:
     // One-time shared texture load. Must be called once at startup.
     static void LoadContent();
 
-    // Allocate the static 12-slot pool (binary: CreatePool(0xC, hud)).
-    // binary @ 0x001512d8
-    static void AllocatePool();
+    // Allocate the pool, construct each slot, register all with the HUD,
+    // set m_bNoDestructor=1 per slot AFTER AddControl.
+    // Binary signature: static CreatePool(int count, HUD* hud); ABI r0=count, r1=hud.
+    // Three statics live consecutively in BSS at 0x00231230..0x00231238:
+    //   sm_pPool / sm_PoolCount / sm_AllocIndex
+    // (Port DIFFERS: uses fixed-size s_Pool[12] array instead of binary's
+    //  operator new[] with [slotSize][count] header. Functionally equivalent
+    //  for trivially-destructible MissControl.)
+    // ASM-verified: 2026-05-24 binary @ 0x001512d8 (re-analyst)
+    static void CreatePool(int count, HUD* hud);
 
     // 0x00150da4 -- round-robin through pool returning first non-busy slot.
     // binary leaves cursor at the FOUND slot (not +1). Port DIFFERS was advancing past.

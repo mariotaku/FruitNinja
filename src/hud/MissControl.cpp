@@ -85,7 +85,10 @@ MissControl::MissControl()
     , m_AlphaScale(1.0f)
 {
     m_Active        = 0;   // pool slot starts free; Init/Make* sets to 1
-    m_bNoDestructor = 1;
+    // m_bNoDestructor is NOT set here -- binary writes it in CreatePool AFTER
+    // HUD::AddControl per binary @ 0x001513ac. Setting it in the ctor would
+    // diverge from binary's initialisation order (cosmetic in practice since
+    // both routes end with m_bNoDestructor == 1 before the first Update tick).
     // binary Init writes field_0x34 = 1 ("configured" flag), NOT 0x200.
     m_LayerFlags    = Mortar::HUD_LAYER_DEFAULT;
 }
@@ -227,22 +230,50 @@ void MissControl::LoadContent() {
 
 // --- Pool allocation -------------------------------------------------------
 
-// Binary @ 0x001512d8 -- port uses static array s_Pool[N] instead of binary's
-//   operator new[] + manual [size][count] header. Equivalent behaviour for trivially-
-//   destructible MissControl; HUD::AddControl(.,.,false) registers each as non-owned.
-void MissControl::AllocatePool() {
-    if (s_PoolAllocated) return;
-    Game* game = Game::GetInstance();
-    if (!game || !game_work.mHud) {
-        LOG_WARN("MissControl", "AllocatePool: HUD not ready");
-        return;
+// ASM-verified: 2026-05-24 binary @ 0x001512d8 (re-analyst)
+// Tear down existing pool, alloc new array, ctor each slot, register every
+// slot with HUD, then set m_bNoDestructor=1 per slot AFTER AddControl.
+//
+// DIFFERS: binary heap-allocates `count * 0x94 + 8` bytes with an 8-byte
+//   [slotSize][count] header. Port uses fixed-size s_Pool[MISS_POOL_SIZE]
+//   array (trivially-destructible, functionally equivalent). The `count`
+//   arg is checked against MISS_POOL_SIZE; mismatch is a programmer error.
+void MissControl::CreatePool(int count, HUD* hud) {
+    // Step 1: tear down existing pool, if any (binary @ 0x001512ee..0x0015131a)
+    if (s_PoolAllocated) {
+        for (int i = 0; i < MISS_POOL_SIZE; ++i) {
+            delete s_Pool[i];
+            s_Pool[i] = nullptr;
+        }
+        s_PoolAllocated = false;
     }
-    for (int i = 0; i < MISS_POOL_SIZE; ++i) {
+
+    // Step 2: alloc + construct each slot.
+    // Port: static array; count must match MISS_POOL_SIZE.
+    if (count != MISS_POOL_SIZE) {
+        LOG_WARN("MissControl", "CreatePool: count=%d != MISS_POOL_SIZE=%d "
+                                "(port uses fixed-size array)",
+                 count, MISS_POOL_SIZE);
+        // Continue anyway, clamped to MISS_POOL_SIZE.
+    }
+    const int n = (count < MISS_POOL_SIZE) ? count : MISS_POOL_SIZE;
+
+    for (int i = 0; i < n; ++i) {
         s_Pool[i] = new MissControl();
-        game_work.mHud->AddControl(s_Pool[i]);
     }
+    s_NextSlot     = 0;   // round-robin cursor (binary sm_AllocIndex @ BSS 0x00231238)
     s_PoolAllocated = true;
-    LOG_DEBUG("MissControl", "AllocatePool: %d slots", MISS_POOL_SIZE);
+
+    // Step 3: register each slot with HUD, THEN set m_bNoDestructor (binary order).
+    if (hud) {
+        for (int i = 0; i < n; ++i) {
+            hud->AddControl(s_Pool[i], false);  // pushFront = false per binary
+            s_Pool[i]->m_bNoDestructor = 1;     // base+0x32; AFTER AddControl
+        }
+    }
+
+    LOG_DEBUG("MissControl", "CreatePool: %d slots registered to HUD %p",
+              n, static_cast<void*>(hud));
 }
 
 const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
