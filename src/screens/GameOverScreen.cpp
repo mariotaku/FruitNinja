@@ -1638,7 +1638,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
 
-                { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
+                Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
 
                 m_CommingSoonHighscoreTex->UnSet();
             }
@@ -1695,7 +1695,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
-                    { Mortar::Mesh m; m.DrawQuadUnCached(white, NULL); }
+                    Mortar::Mesh::DrawQuadUnCached(white, NULL);
                     tex->UnSet();
                 }
             }
@@ -1719,7 +1719,7 @@ void GameOverScreen::PreDrawOrder(const Vec3& hudScale, int layerMask) {
                     mm.GetWorldStack().SetCurrentMatrix(mat);
                     mm.UploadModelViewOnly();
 
-                    { Mortar::Mesh m; m.DrawQuadUnCached(white, NULL); }
+                    Mortar::Mesh::DrawQuadUnCached(white, NULL);
                     tex->UnSet();
                 }
             }

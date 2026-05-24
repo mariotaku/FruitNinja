@@ -377,7 +377,7 @@ void DojoScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexSensei->Set();
-        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
+        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexSensei->UnSet();
     }
 

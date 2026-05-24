@@ -75,10 +75,7 @@ void DrawStartFade() {
     const Colour col(r, r, r, a);
 
     // UV crop: binary draws logo rect (u0=0.03125, u1=0.96875, v0=0.1875, v1=0.8125)
-    {
-        Mortar::Mesh m;
-        m.DrawQuadUnCached(col, 0.03125f, 0.1875f, 0.96875f, 0.8125f, NULL);
-    }
+    Mortar::Mesh::DrawQuadUnCached(col, 0.03125f, 0.1875f, 0.96875f, 0.8125f, NULL);
 
     game->pSplashTex->UnSet();
 }

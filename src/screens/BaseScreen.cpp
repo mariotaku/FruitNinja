@@ -174,7 +174,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
+        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexSmlTitle->UnSet();
     }
 
@@ -211,7 +211,7 @@ void BaseScreen::DrawBorders(const Mortar::SmartPtr<Mortar::Texture>& secondaryT
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
+        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         secondaryTex->UnSet();
     }
 }

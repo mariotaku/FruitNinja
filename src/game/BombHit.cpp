@@ -161,7 +161,7 @@ void DrawCriticalFlash() {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    { Mortar::Mesh m; m.DrawQuadUnCached(tint, NULL); }
+    Mortar::Mesh::DrawQuadUnCached(tint, NULL);
     glBindTexture(GL_TEXTURE_2D, 0);
     Mortar::Texture::s_LastBoundTexId = 0;
 }

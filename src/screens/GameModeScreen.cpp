@@ -526,7 +526,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexModeSensei->Set();
-        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
+        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexModeSensei->UnSet();
     }
 
@@ -553,7 +553,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
         mm.UploadModelViewOnly();
 
         s_TexZenSign->Set();
-        { Mortar::Mesh m; m.DrawQuadUnCached(Colour(255, 255, 255, 255), NULL); }
+        Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexZenSign->UnSet();
     }
 }

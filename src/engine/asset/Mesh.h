@@ -316,11 +316,11 @@ public:
                   DrawEffectContainer* fx);
 
     // Binary @ 0x00194180 — delegates to 6-arg with u0=0,v0=1,u1=0,v1=1 (full texture).
-    void DrawQuadUnCached(Colour colour, DrawEffectContainer* fx);
+    static void DrawQuadUnCached(Colour colour, DrawEffectContainer* fx);
 
     // Binary @ 0x00194060 — 4-vert TRIANGLE_STRIP unit quad with UV crop [u0,v0]..[u1,v1].
-    void DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v1,
-                          DrawEffectContainer* fx);
+    static void DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v1,
+                                 DrawEffectContainer* fx);
 
     // Binary @ 0x0019404c — forwards to DrawTris with primType=GL_TRIANGLES; outer blend ignored.
     void DrawTriList(QUADCUSTOMVERTEX const* verts, long count, bool blend,
