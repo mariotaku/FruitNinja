@@ -331,8 +331,8 @@ public:
                       DrawEffectContainer* fx);
 
     // Binary @ 0x00193f5c — dispatches to Renderer::DrawTriList or DrawTriStrip by primType.
-    void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
-                  DrawEffectContainer* fx);
+    static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
+                         DrawEffectContainer* fx);
 
     // STUB-DEFERRED: GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&) -- binary @ 0x001b0d18
     // AnimBindings::Vector::Binding -- nested-typedef edge case; deferred until AnimBindings is fully ported.
