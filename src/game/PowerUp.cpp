@@ -303,10 +303,7 @@ void PowerUp::DrawBar() {
 
     tex->Set();
     Colour white(255, 255, 255, 255);
-    {
-        Mortar::Mesh m;
-        m.DrawQuadUnCached(white, 0.0f, 1.0f, 0.0f, 1.0f, NULL);
-    }
+    Mortar::Mesh::DrawQuadUnCached(white, 0.0f, 1.0f, 0.0f, 1.0f, NULL);
     tex->UnSet();
 }
 

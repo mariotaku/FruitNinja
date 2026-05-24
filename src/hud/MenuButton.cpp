@@ -1017,10 +1017,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
             // halfW/halfH. Geometry is unit-quad (-0.5..+0.5) inside DrawQuad.
             Colour tint(255, 255, 255, alpha);
             s_TexScratchs->Set();
-            {
-                Mortar::Mesh m;
-                m.DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
-            }
+            Mortar::Mesh::DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
             s_TexScratchs->UnSet();
         }
         return;
@@ -1082,10 +1079,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
             : Colour(128, 128, 128, a);
 
         s_TexNewItem->Set();
-        {
-            Mortar::Mesh m;
-            m.DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
-        }
+        Mortar::Mesh::DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
         s_TexNewItem->UnSet();
     }
 

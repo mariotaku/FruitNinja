@@ -261,7 +261,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
     // g_BuyBg->UnSet(). Binary @ 0x00194180: default 1x1 quad with current world matrix.
     if (g_BuyBg.IsValid()) {
         g_BuyBg->Set();
-        { Mortar::Mesh m; m.DrawQuadUnCached(g_White, NULL); }
+        Mortar::Mesh::DrawQuadUnCached(g_White, NULL);
         g_BuyBg->UnSet();
     }
 
@@ -313,7 +313,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
             Mortar::ReloadableTexture& greyTex = pi->GetGreyTexture();
             if (greyTex.IsLoaded()) {
                 greyTex.Set();
-                { Mortar::Mesh m; m.DrawQuadUnCached(g_White, NULL); }
+                Mortar::Mesh::DrawQuadUnCached(g_White, NULL);
                 greyTex.UnSet();
             }
 
@@ -367,7 +367,7 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
                 : &pi->GetGreyTexture();
             if (iconTex && iconTex->IsLoaded()) {
                 iconTex->Set();
-                { Mortar::Mesh m; m.DrawQuadUnCached(g_White, NULL); }
+                Mortar::Mesh::DrawQuadUnCached(g_White, NULL);
                 iconTex->UnSet();
             }
         }

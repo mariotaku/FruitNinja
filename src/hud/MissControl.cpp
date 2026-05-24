@@ -788,8 +788,7 @@ void MissControl::Draw(const Vec3& hudScale, int /*layerMask*/) {
     // Binary @ 0x00151f60 calls Mortar::Mesh::DrawQuadUnCached(colour, u0, v0, u1, v1, nullptr).
     const float u1 = u0 + du;
     const float v1 = v0 + dv;
-    Mortar::Mesh m;
-    m.DrawQuadUnCached(tint, u0, v0, u1, v1, 0);
+    Mortar::Mesh::DrawQuadUnCached(tint, u0, v0, u1, v1, 0);
 
     m_Texture->UnSet();
 }

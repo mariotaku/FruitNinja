@@ -986,7 +986,7 @@ void Bomb::DrawBombHit() {
     mm.UploadModelViewOnly();
 
     s_BombFlashTex->Set();
-    { Mortar::Mesh m; m.DrawQuadUnCached(tint, NULL); }
+    Mortar::Mesh::DrawQuadUnCached(tint, NULL);
     s_BombFlashTex->UnSet();
 }
 

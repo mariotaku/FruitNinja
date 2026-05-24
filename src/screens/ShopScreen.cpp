@@ -1180,8 +1180,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
                 // DrawQuadSized_GameTask(u0=0.03125f, u1=0.597656f, colour)
                 // v0=0.1875f, v1=0.8125f hardcoded inside helper
                 // DAT_0015e06c = 0.03125f, DAT_0015e070 = 0.597656f
-                Mortar::Mesh m;
-                m.DrawQuadUnCached(c,
+                Mortar::Mesh::DrawQuadUnCached(c,
                     0.03125f, 0.1875f,   // u0, v0
                     0.597656f, 0.8125f,  // u1, v1
                     NULL);
@@ -1204,8 +1203,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
                 Colour c = colourWhite;
                 // DrawQuadSized_GameTask(u0=0.597656f, u1=0.96875f, colour)
                 // v0=0.1875f, v1=0.8125f; u1=0.96875f = 31/32 (literal 0x3f780000)
-                Mortar::Mesh m;
-                m.DrawQuadUnCached(c,
+                Mortar::Mesh::DrawQuadUnCached(c,
                     0.597656f, 0.1875f,  // u0, v0
                     0.96875f, 0.8125f,   // u1, v1
                     NULL);
@@ -1236,8 +1234,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
                 Colour c = colourWhite;
                 // DrawQuadSized_GameTask(u0=0.03125f, u1=0.96875f, colour)
                 // DAT_0015e06c=0.03125f; u1=0.96875f literal (0x3f780000)
-                Mortar::Mesh m;
-                m.DrawQuadUnCached(c,
+                Mortar::Mesh::DrawQuadUnCached(c,
                     0.03125f, 0.1875f,  // u0, v0
                     0.96875f, 0.8125f,  // u1, v1
                     NULL);
@@ -1302,7 +1299,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
             Colour colDialog(rByte, rByte, rByte, 0xFF);
 
             s_TexDialogBox->Set();
-            { Mortar::Mesh m; m.DrawQuadUnCached(colDialog, NULL); }
+            Mortar::Mesh::DrawQuadUnCached(colDialog, NULL);
             s_TexDialogBox->UnSet();
         }
 
@@ -1365,7 +1362,7 @@ void ShopScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/) {
     if (s_TexSelected.IsValid()) {
         s_TexSelected->Set();
         Colour c = colourWhite;
-        { Mortar::Mesh m; m.DrawQuadUnCached(c, NULL); }
+        Mortar::Mesh::DrawQuadUnCached(c, NULL);
         s_TexSelected->UnSet();
     }
 }
