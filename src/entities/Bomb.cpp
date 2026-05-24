@@ -11,11 +11,11 @@
 #include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
 #include "game/PowerUpManager.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "asset/TextureManager.h"
 #include "asset/MeshManager.h"
 #include "asset/Mesh.h"
+#include "asset/MeshDraw.h"
 #include "asset/Model.h"
 #include "hud/MenuButton.h"
 #include "hud/MissControl.h"
@@ -987,9 +987,7 @@ void Bomb::DrawBombHit() {
     mm.UploadModelViewOnly();
 
     s_BombFlashTex->Set();
-    if (Renderer* r = Renderer::GetInstance()) {
-        r->DrawQuad(tint);
-    }
+    Mortar::MeshDraw::DrawQuadUnCachedDefault(tint, NULL);
     s_BombFlashTex->UnSet();
 }
 

@@ -6,10 +6,10 @@
 #include "Bomb.h"
 #include "SlashEntity.h"
 #include "SplatEntity.h"
-#include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "asset/MeshDraw.h"
 #include "asset/MeshManager.h"
 #include "asset/TextureManager.h"
 #include "particle/PSPParticleManager.h"
@@ -1584,8 +1584,7 @@ void Fruit::DrawShadows() {
     mm.UploadModelViewOnly();
 
     shadowTex->Set();
-    if (Renderer* r = Renderer::GetInstance())
-        r->DrawTriList(s_ShadowVerts, count * 6);
+    Mortar::MeshDraw::DrawTriList(s_ShadowVerts, count * 6, false, NULL);
     shadowTex->UnSet();
 }
 
