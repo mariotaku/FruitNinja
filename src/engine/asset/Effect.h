@@ -17,11 +17,12 @@
 //   +0x30  std::string             m_Name        (used by EffectLessThanCompare)
 //
 // Defunct in port: the Effect/Pass/EffectGroup multi-pass render
-// machinery is fully replaced by the port's flat GeometryEntry walk in
-// Mesh::Draw. The classes are ported for ABI/call-graph parity (so
-// EffectGroup::AddEffect can do its real lower_bound + merge dance) but
-// no live render-time call site reaches them — see
-// Geometry::EffectGroupSet @ 0x001a00f8 (binary stub).
+// machinery is fully replaced by the port's Geometry::Render walk in
+// Mesh::Draw (Phase 5 ported Geometry as a real class). The classes
+// are ported for ABI/call-graph parity (so EffectGroup::AddEffect can
+// do its real lower_bound + merge dance) but no live render-time call
+// site reaches them — see Geometry::EffectGroupSet @ 0x001a00f8
+// (binary stub).
 
 #include "util/ReferenceCounter.h"
 #include "util/SmartPtr.h"

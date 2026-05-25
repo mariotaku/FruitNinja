@@ -157,8 +157,9 @@ void Model::SetEffectGroup(Mortar::SmartPtr<EffectGroup> /*effectGroup*/) {
     for (int i = 0; i < (int)m_Meshes.size(); i++) {
         Mesh* mesh = m_Meshes[i].Get();
         if (!mesh) continue;
-        // Defunct: Geometry::EffectGroupSet / SetActiveEffect are binary stubs;
-        // Geometry class not ported (replaced by GeometryEntry).
+        // Defunct: Geometry::EffectGroupSet / SetActiveEffect are binary stubs
+        // (port's Geometry class IS ported as of Phase 5, but doesn't run the
+        // binding-stack render pipeline -- GLES2 shaders take its place).
         // Defunct: RebuildEffectBindings -- no-op stub; binary @ 0x001b08e8
         mesh->RebuildEffectBindings();
     }
