@@ -54,8 +54,10 @@ public:
     virtual int GetGeometryCount() const = 0;
 
     // vtable[10]: Mortar::SmartPtr<Geometry> GetGeometry(ulong idx) const
-    // Port: omitted — Geometry class replaced by GeometryEntry; nothing uses this polymorphically.
-    // Mesh provides GetGeometryEntry(idx) directly.
+    // Port: still omitted from the virtual interface — nothing dispatches through
+    // IModelNode polymorphically for this. Geometry is now a real ported class
+    // (Phase 5); Mesh::GetGeometryEntry(idx) returns Geometry* directly. Could
+    // be promoted to a virtual slot if a polymorphic caller emerges.
 };
 
 } // namespace Mortar

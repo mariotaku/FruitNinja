@@ -116,7 +116,7 @@ public:
 
     // Port-specific: material array for GLES2 rendering; no binary equivalent.
     // (Binary uses m_GroupsByName + SharedEffectProperties for per-material data.)
-    // Indexed by GeometryEntry::materialIndex.
+    // Indexed by Geometry::m_MaterialIndex.
     std::vector<MeshMaterial> m_Materials;  // +0x7c (port-specific)
 
     Mesh();
@@ -155,8 +155,10 @@ public:
     const std::string& GetName() const override { return m_Name; }
 
     // Binary @ 0x001b225c -- GetGeometry returns SmartPtr<Geometry>.
-    // Port uses the same storage type now; kept as a named accessor for call sites
-    // that used GetGeometryEntry (which is gone). Returns raw ptr for convenient use.
+    // Port uses the same storage type now. The GetGeometryEntry name is retained
+    // for source-compatibility with existing call sites (the pre-Phase-5 method
+    // returned the now-deleted GeometryEntry struct; signature now returns
+    // Geometry* for convenient direct use).
     Geometry* GetGeometryEntry(int idx) const {
         if (idx >= 0 && idx < (int)m_Geometries.size()) return m_Geometries[idx].Get();
         return NULL;
@@ -169,19 +171,26 @@ public:
     // Port helper: true if any material has a valid texture.
     bool HasDiffuseTexture() const;
 
-    // Defunct: Mortar::Geometry / Geometry_Bada / GeometryBinding /
-    //          GeometryBinding_Bada / EffectGroup / EffectBinding / PassBinding
-    //          stack -- replaced by flat GeometryEntry { vbo, ibo, primType,
-    //          layout, materialIndex } + MeshMaterial in the port.
-    //   Geometry         binary @ 0x001a3c50 ctor, 0x001a3e98 Render (non-virtual)
-    //   Geometry_Bada    binary @ 0x001a4ba8 ctor, 0x001a40bc D1
-    //   GeometryBinding* binary @ 0x001a3990..0x001a40c0
+    // Subsystem status (post Phase 5):
+    //   Geometry         -- PORTED as real class (src/engine/asset/Geometry.{h,cpp});
+    //                       Render body uses the port's GLES2 path instead of binary's
+    //                       fixed-pipeline GL ES 1.x.
+    //                       Binary @ 0x001a3c50 ctor, 0x001a3e98 Render (non-virtual).
+    //   Geometry_Bada    -- collapsed into Geometry's base; binary @ 0x001a4ba8.
+    //   GeometryBinding  -- defunct stub (declaration in Geometry.h); binary @ 0x001a3990..0x001a40c0.
+    //                       SmartPtr<GeometryBinding> is stored on Geometry but never dereferenced
+    //                       because the port's GLES2 Render doesn't use the per-pass binding records.
+    //   EffectGroup      -- PORTED (src/engine/asset/Effect.h, moved from here in commit 5bcdf2b);
+    //                       AddEffect/MergeProperties have real bodies, but the live render path
+    //                       never reaches them because EffectBinding/PassBinding aren't constructed.
+    //   EffectBinding / PassBinding / GLFuncParams / MapBinding -- defunct, never constructed.
     //
-    // Geometry::Render() is hard-Bada: glMatrixMode / glPushMatrix /
-    // glLoadMatrixf / glDrawArrays via fixed-pipeline GL ES 1.x. Port uses
-    // ES 2.0 shaders + Renderer::setup_3d_shader, so the entire effect-binding
-    // multi-pass machinery (EffectGroup -> EffectBinding[] -> PassBinding[])
-    // is bypassed. Port walks m_Geometries[] directly in Mesh::Draw.
+    // Geometry::Render in the binary is hard-Bada: glMatrixMode / glPushMatrix /
+    // glLoadMatrixf / glDrawArrays via fixed-pipeline GL ES 1.x. Port uses ES 2.0
+    // shaders + Renderer::setup_3d_shader directly inside the ported Geometry::Render,
+    // bypassing the EffectGroup -> EffectBinding[] -> PassBinding[] multi-pass
+    // machinery. Mesh::Draw iterates m_Geometries[] and calls Geometry::Render per
+    // submesh.
     //
     // Defunct: SharedEffectProperties machinery -- port stores parsed values
     // directly in MeshMaterial; field shape (m_OwnGroup, m_GroupsByName, m_WorldProp,
