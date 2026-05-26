@@ -536,8 +536,8 @@ void Bomb::Update(float /*dt*/) {
 //   offset.y    = cos(angle) * 0.9 * scale.x * 100.0
 //   offset.z    = 5.0
 //   emitter.pos = bomb.pos + offset
-//   m_ScaleY    =  cos(angle)
-//   m_field30   = -sin(angle)
+//   m_DirCos    =  cos(angle)
+//   m_DirSin    = -sin(angle)
 // Earlier port commit extended this with a full RotX*RotY*RotZ chain
 // (and DRAW_TILT_ANGLE) to "track the visible fuse tip" as the bomb
 // tumbles -- but the binary literally ignores m_RotX and the X-tilt
@@ -558,8 +558,8 @@ void Bomb::PostUpdate(float /*dt*/) {
     m_pEmitter->m_Pos.y = pos.y + c * L;
     m_pEmitter->m_Pos.z = pos.z + 5.0f;
 
-    m_pEmitter->m_ScaleY  =  c;
-    m_pEmitter->m_field30 = -s;
+    m_pEmitter->m_DirCos  =  c;
+    m_pEmitter->m_DirSin  = -s;
 }
 
 // Matches Bomb::Draw (0x171be8).

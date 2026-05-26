@@ -179,8 +179,8 @@ struct PSPParticleEmitter {
     float    m_TimeScale;       // +0x20  speed multiplier
     float    m_field24;         // +0x24  default 1.0
     float    m_ScaleX;          // +0x28  default 1.0
-    float    m_ScaleY;          // +0x2C  default 1.0
-    float    m_field30;         // +0x30  default 0.0
+    float    m_DirCos;          // +0x2C  cos(trail orientation angle), default 1.0
+    float    m_DirSin;          // +0x30  sin(trail orientation angle), default 0.0
     float    m_field34;         // +0x34  default 1.0
     uint8_t  m_field38;         // +0x38  default 0
     const PSPEmitterTemplate* m_pTemplate;       // +0x3C
@@ -193,8 +193,8 @@ struct PSPParticleEmitter {
         : m_Timer(0), m_ParticleHead(1)
         , m_Pos(0,0,0), m_Vel(0,0,0)
         , m_TimeScale(1.0f), m_field24(1.0f)
-        , m_ScaleX(1.0f), m_ScaleY(1.0f)
-        , m_field30(0.0f), m_field34(1.0f), m_field38(0)
+        , m_ScaleX(1.0f), m_DirCos(1.0f)
+        , m_DirSin(0.0f), m_field34(1.0f), m_field38(0)
         , m_pTemplate(nullptr), m_pNext(nullptr), m_pRefPtr(nullptr)
         , m_bUpdateWhenPaused(false), m_bActive(false)
     {}
