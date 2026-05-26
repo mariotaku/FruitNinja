@@ -65,7 +65,7 @@ static void HideMenuScreens(Game& game)
          || dynamic_cast<AboutScreen*>(c)
          || dynamic_cast<ShopScreen*>(c)
          || dynamic_cast<GameModeScreen*>(c)) {
-            c->m_bActive = 0;
+            c->m_Active = 0;
         }
     }
 }
@@ -146,14 +146,14 @@ int main(int argc, char* argv[])
            GameOverScreen::STATE_BONUS_PHASE);
     printf("[bonus_phase] Starting %d-frame tick loop...\n", TIMEOUT_FRAMES);
 
-    // Diagnostic: report m_bPendingRemoval and m_bActive from HUDControl base.
+    // Diagnostic: report m_bPendingRemoval and m_Active from HUDControl base.
     // These fields MUST exist in BonusScreen (inherited from HUDControl).
     // The task description mentioned them as potentially missing -- verify here.
     printf("[bonus_phase] sizeof(BonusScreen) = %d\n", (int)sizeof(BonusScreen));
     printf("[bonus_phase] HUDControl::m_bPendingRemoval offset = %d\n",
            (int)offsetof(HUDControl, m_bPendingRemoval));
-    printf("[bonus_phase] HUDControl::m_bActive offset = %d\n",
-           (int)offsetof(HUDControl, m_bActive));
+    printf("[bonus_phase] HUDControl::m_Active offset = %d\n",
+           (int)offsetof(HUDControl, m_Active));
 
     int finalState       = GameOverScreen::STATE_BONUS_PHASE;
     int exitFrame        = -1;
@@ -167,9 +167,9 @@ int main(int argc, char* argv[])
         // Log when BonusScreen first appears.
         if (bonusCreateFrame < 0 && gos->m_pBonusScreen != NULL) {
             bonusCreateFrame = frame;
-            printf("[bonus_phase] BonusScreen created at frame %d, m_bActive=%d, m_bPendingRemoval=%d\n",
+            printf("[bonus_phase] BonusScreen created at frame %d, m_Active=%d, m_bPendingRemoval=%d\n",
                    frame,
-                   (int)gos->m_pBonusScreen->m_bActive,
+                   (int)gos->m_pBonusScreen->m_Active,
                    (int)gos->m_pBonusScreen->m_bPendingRemoval);
         }
 
@@ -214,8 +214,8 @@ int main(int argc, char* argv[])
         // Dump the final BonusScreen state to help diagnose.
         if (gos->m_pBonusScreen) {
             printf("[bonus_phase] Final BonusScreen state:\n");
-            printf("  m_bActive=%d  m_bPendingRemoval=%d\n",
-                   (int)gos->m_pBonusScreen->m_bActive,
+            printf("  m_Active=%d  m_bPendingRemoval=%d\n",
+                   (int)gos->m_pBonusScreen->m_Active,
                    (int)gos->m_pBonusScreen->m_bPendingRemoval);
             printf("  m_PhaseTimer=%.3f  m_PhaseTimerActual=%.3f\n",
                    gos->m_pBonusScreen->m_PhaseTimer, gos->m_Timer);
