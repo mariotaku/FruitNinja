@@ -258,19 +258,32 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
 
 }
 
+// ASM-verified: 2026-05-27 binary @ 0x00175a64 (re-analyst)
+// Binary semantics: cache pos into m_SecondPos, clamp negative delay to
+// 0.125, set m_ChuckDelay. NO flags write, NO m_ScaleAnim write,
+// NO s_FruitThrowSfxFired reset -- those belong in Init.
 void Fruit::Chuck(float delay) {
+    m_SecondPos = pos;
+    if (delay < 0.0f) delay = 0.125f;
     m_ChuckDelay = delay;
-    m_ScaleAnim = 0.0f;
-    // ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)
-    // Clears ENT_KILLED (0x10) and sets bit 0x02. Bit 0x02 is currently
-    // mis-labelled in EntityFlagBits (declared 0x04); leave as literal until
-    // EntityFlagBits is re-audited.
-    // TODO: re-RE EntityFlagBits to name bit 0x02 correctly.
-    flags = (flags & ~0x10) | 0x02;
+    // TODO: relocate s_FruitThrowSfxFired reset -- binary resets it per-frame
+    //   at global+0x48, not inside Chuck. Kept here temporarily to preserve
+    //   per-launch SFX gating until the per-frame reset site is RE'd.
     s_FruitThrowSfxFiredThisFrame = false;
+    // TODO: 0x00175a64 +abort -- power-fruit no-power-up abort path
+    //   (decrement g_PowerFruitCount + set flags |= 0x10) when
+    //   info->m_pPowers != null && (waveTimer - delay < 8.0f) &&
+    //   info->m_pPowers->m_NameHash != StringHash("Throw-fruit").
+    //   Needs WaveManager+0x10c (waveTimer) + FruitInfo+0x32c (m_pPowers)
+    //   + StringHash of "Throw-fruit" resolved first.
 }
 
+// ASM-verified: 2026-05-27 binary @ 0x00177680 (re-analyst) -- m_TimeScale applied to integration dt
 void Fruit::Update(float dt) {
+    // Binary @ 0x00177680: dtScaled = dt * m_TimeScale; all integration uses dtScaled.
+    const float dtScaled = dt * m_TimeScale;
+    const float dtNorm   = dtScaled * 60.0f;  // equivalent to dtScaled / (1/60)
+
     // Binary @ 0x00177680: outer gate is !m_bSliced vs sliced — no early
     // returns before the branch. IsActive() and m_ChuckDelay checks live
     // INSIDE the unsliced path only.
@@ -285,7 +298,7 @@ void Fruit::Update(float dt) {
         if (m_ChuckDelay > 0.0f) {
             static const float THROW_FRUIT_SFX_THRESHOLD = 0.2f;  // DAT_00177960+0x48 threshold
             const float prevChuckDelay = m_ChuckDelay;
-            m_ChuckDelay -= dt;
+            m_ChuckDelay -= dtScaled;
             if (prevChuckDelay >= THROW_FRUIT_SFX_THRESHOLD && m_ChuckDelay < THROW_FRUIT_SFX_THRESHOLD) {
                 if (!s_FruitThrowSfxFiredThisFrame) {
                     s_FruitThrowSfxFiredThisFrame = true;
@@ -299,24 +312,23 @@ void Fruit::Update(float dt) {
 
         // Scale animation (0 → 1 over ~0.3s)
         if (m_ScaleAnim < 1.0f) {
-            m_ScaleAnim += dt * 3.0f;
+            m_ScaleAnim += dtScaled * 3.0f;
             if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
         }
 
         // ASM-verified: 2026-05-09 binary @ 0x00177bb8..0x00177c1e (asm-inspector)
         // Binary integration (Fruit::Update 0x00177680):
-        //   pos += (vel*dt + 0.5*g*dt²) * 60.0    (DAT_00177d00 = 60.0)
-        //   vel += gravity * dt
-        //   pos += m_RotAxis * dt                 (NO ×60 here — binary uses
-        //                                          dt @ sp+0x1c, not dtNorm)
+        //   pos += (vel*dtScaled + 0.5*g*dtScaled²) * 60.0    (DAT_00177d00 = 60.0)
+        //   vel += gravity * dtScaled
+        //   pos += m_RotAxis * dtScaled                 (NO ×60 here — binary uses
+        //                                                dt @ sp+0x1c scaled by m_TimeScale)
         const float POS_INTEGRATION_SCALE = 60.0f;  // DAT_00177d00
-        Vec3 step = (vel * dt + m_Gravity * (0.5f * dt * dt)) * POS_INTEGRATION_SCALE;
+        Vec3 step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) * POS_INTEGRATION_SCALE;
         pos += step;
-        vel += m_Gravity * dt;
+        vel += m_Gravity * dtScaled;
 
-        // Rotation axis drift — plain dt, no ×60. The earlier port-side
-        // ×60 here amplified PostUpdate's edge-nudge into a visible bounce.
-        pos += m_RotAxis * dt;
+        // Rotation axis drift — dtScaled, no ×60.
+        pos += m_RotAxis * dtScaled;
 
         // Backup for future split
         m_SecondPos = pos;
@@ -326,7 +338,7 @@ void Fruit::Update(float dt) {
         // the actual split when it hits 0. Matches binary Fruit::Update
         // @ 0x177680 phase 4.
         if (m_SliceTimer > 0.0f) {
-            m_SliceTimer -= dt;
+            m_SliceTimer -= dtScaled;
             if (m_SliceTimer <= 0.0f) {
                 m_SliceTimer = 0.0f;
                 Slice();
@@ -339,13 +351,12 @@ void Fruit::Update(float dt) {
         //   normalize(m_Gravity); gravLen += DAT_00177950(=0.2) * dtNorm * 4.5
         //   = gravLen += 0.9 * dtNorm   (per-frame growth at 60fps)
         //   m_Gravity *= new_gravLen / old_gravLen (rescale unit vec)
-        //   vel        += m_Gravity * dt        (gravity uses dt @ sp+0x1c)
-        //   m_SecondVel += m_Gravity * dt
-        //   pos        += vel        * dt * 60  (position uses dtNorm @ sp+0x354)
-        //   m_SecondPos += m_SecondVel * dt * 60
+        //   vel        += m_Gravity * dtScaled   (gravity uses dtScaled)
+        //   m_SecondVel += m_Gravity * dtScaled
+        //   pos        += vel        * dtScaled * 60  (position uses dtNorm)
+        //   m_SecondPos += m_SecondVel * dtScaled * 60
         // Both halves get the same ×60 position scale as the unsliced branch.
         // ASM-verified: 2026-05-20 binary @ 0x001777a8..0x001777ee (re-analyst) -- gravity grow gated.
-        const float dtNorm = dt * 60.0f;
         if (m_bCriticalEligible == 0) {
             float len = m_Gravity.Normalise();   // unit-izes, returns old magnitude
             m_Gravity *= len + 0.9f * dtNorm;
@@ -357,15 +368,15 @@ void Fruit::Update(float dt) {
 
         // Two-body physics — same ×60 position scale as unsliced.
         const float POS_INTEGRATION_SCALE = 60.0f;
-        vel        += m_Gravity * dt;
-        m_SecondVel += m_Gravity * dt;
-        pos        += vel        * dt * POS_INTEGRATION_SCALE;
-        m_SecondPos += m_SecondVel * dt * POS_INTEGRATION_SCALE;
+        vel        += m_Gravity * dtScaled;
+        m_SecondVel += m_Gravity * dtScaled;
+        pos        += vel        * dtScaled * POS_INTEGRATION_SCALE;
+        m_SecondPos += m_SecondVel * dtScaled * POS_INTEGRATION_SCALE;
 
         // Scale grow only when not drawing whole (binary gates this on !m_bDrawWhole).
         if (!m_bDrawWhole) {
             if (m_ScaleAnim < 1.0f) {
-                m_ScaleAnim += dt * 3.0f;
+                m_ScaleAnim += dtScaled * 3.0f;
                 if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
             }
         }
@@ -380,7 +391,7 @@ void Fruit::Update(float dt) {
     // 60fps frame. The old port used 0.01 here, rotating fruits ~57% as
     // fast as the binary.
     const float ANGLE_PER_UNIT = 182.0f * 6.2831853f / 65536.0f;  // ~pi/180
-    const float rotScale = dt * 60.0f;  // dtNorm (DAT_0017794c = 1/60)
+    const float rotScale = dtNorm;  // dtScaled * 60.0 (DAT_0017794c = 1/60)
     {
         Quaternion qx = Quaternion::FromAxisAngle(Vec3(1, 0, 0),
             m_RotVel1.x * rotScale * ANGLE_PER_UNIT);
@@ -400,14 +411,19 @@ void Fruit::Update(float dt) {
         m_Rot2 = (m_Rot2 * qx * qy * qz).normalized();
     }
 
-    // Update collision sphere center (z clamped to 0).
-    if (m_Col) static_cast<ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
+    // Update collision sphere center (z forced to -0.5f per binary DAT_00177fec).
+    // Binary @ 0x00177f12: writes pos.x, pos.y, then overwrites z with -0.5f.
+    if (m_Col) {
+        ColSphere* cs = static_cast<ColSphere*>(m_Col);
+        cs->center.x = pos.x;
+        cs->center.y = pos.y;
+        cs->center.z = -0.5f;  // DAT_00177fec (binary @ 0x00177f12)
+    }
 
     // ASM-verified: 2026-05-18 binary @ 0x00177f30..0x00177f42 (re-analyst).
     // Pause-detach: when scaled dt is zero (paused or m_TimeScale==0),
     // release the juice emitters so they stop tracking the fruit's
     // position while frozen. Re-armed on next slice/SetTrailParticles.
-    const float dtScaled = dt * m_TimeScale;
     if (dtScaled == 0.0f) {
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
         if (m_pEmitter1) { pm.ClearEmitter(m_pEmitter1); m_pEmitter1 = nullptr; }
