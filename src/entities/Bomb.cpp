@@ -227,7 +227,9 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
     m_BombVariant = 0;
     m_bCollisionGuard = 0;
     m_bHit = 0;
-    flags = (flags & ~0x10) | 0x02;  // clear killed, set has-collision
+    // ASM-verified: 2026-05-27 binary @ 0x001725ce (re-analyst)
+    // orr r2,r2,#0x2 ; bfi r2,r3,#0x4,#0x1 (r3 = 0)
+    flags = (flags & ~ENT_KILLED) | ENT_HAS_COLLISION;
     m_bMovement = 1;
     m_SpeedMult = 1.0f;
 
@@ -698,7 +700,7 @@ void Bomb::Chuck(float delay) {
 // ASM-verified: 2026-05-03 binary @ 0x001716e8..0x0017171a (asm-inspector)
 // Matches Bomb::KillBomb (0x1716e8)
 void Bomb::KillBomb() {
-    flags |= 0x10;  // mark for removal
+    flags |= ENT_KILLED;
     if (m_pEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
         m_pEmitter = nullptr;

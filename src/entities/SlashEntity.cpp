@@ -1431,7 +1431,9 @@ void SlashEntity::DrawSlice() {
 void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     // 1. Allocate ColLine into m_Col (+0x38). Set "has collider" flag bit.
     m_Col = new ColLine();
-    flags |= 0x02;
+    // ASM-verified: 2026-05-27 binary @ 0x0017c68c (re-analyst)
+    // orr r3,r3,#0x2 (no KILLED clear; SlashEntity is never killed)
+    flags |= ENT_HAS_COLLISION;
 
     // 2. Reset scale-adjacent float at +0x94.
     *(float*)((char*)this + 0x94) = -1.0f;

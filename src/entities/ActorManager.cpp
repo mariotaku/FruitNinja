@@ -213,9 +213,8 @@ void ActorManager::DeactivateAllEntities(int typeIdx) {
 // sweep and drains after, so std::list iteration is never invalidated
 // by a mid-loop erase. Binary @ 0x001701f4.
 // Binary disasm @ 0x0017024e: `orr r2, r2, #0xc; strb r2, [r6, #0xc]`
-// sets flags bits 2+3 (ENT_UPDATING | ENT_POST_UPDATING) BEFORE Update dispatch.
-// Binary leaves the bits set permanently after PostUpdate -- they are consumed
-// by debug paint/state queries, not cleared here.
+// sets ENT_TICK_DISPATCHED (bits 2+3, 0xc) BEFORE Update dispatch.
+// Binary leaves the bits set permanently after PostUpdate -- sticky advisory, never cleared.
 void ActorManager::Update(float dt) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
 
@@ -227,10 +226,10 @@ void ActorManager::Update(float dt) {
             Entity* e = *it;
             if (!e) continue;
             if ((e->flags & ENT_SKIP_MASK) == 0) {
-                e->flags |= 0xc;  // bits 2+3: ENT_UPDATING | ENT_POST_UPDATING
+                e->flags |= ENT_TICK_DISPATCHED;  // 0xc -- both halves set atomically per binary
                 e->Update(dt);
                 e->PostUpdate(dt);  // vtable +0x18 -- Bomb uses this to track fuse emitter
-                // Binary leaves ENT_UPDATING | ENT_POST_UPDATING set after PostUpdate.
+                // Binary leaves ENT_TICK_DISPATCHED set after PostUpdate (sticky, never cleared).
             }
             if ((e->flags & ENT_KILLED) && m_PendingDeactCount < 512) {
                 m_PendingDeact[m_PendingDeactCount++] = e;
