@@ -232,6 +232,13 @@ void TimeControl::Update(float dt) {
     if (game_work.mMainScreen) {
         game_work.mMainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
     }
+    // ASM-verified: 2026-05-27 binary @ 0x00162830 (re-analyst)
+    // Mirror live time to game_work.m_SaveData->m_TimeRemainingSave so other
+    // subsystems (e.g. Fruit::Chuck power-fruit abort gate) can read the
+    // remaining wave time without a TimeControl pointer.
+    if (game_work.m_SaveData) {
+        game_work.m_SaveData->m_TimeRemainingSave = m_TimeRemaining;
+    }
 
     // Binary @ LAB_00162818 -- pos.y re-anchor every timed frame based on
     // camera transition. Non-MP branch:

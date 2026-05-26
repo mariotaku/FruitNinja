@@ -266,12 +266,24 @@ void Fruit::Chuck(float delay) {
     m_SecondPos = pos;
     if (delay < 0.0f) delay = 0.125f;
     m_ChuckDelay = delay;
-    // TODO: 0x00175a64 +abort -- power-fruit no-power-up abort path
-    //   (decrement g_PowerFruitCount + set flags |= 0x10) when
-    //   info->m_pPowers != null && (waveTimer - delay < 8.0f) &&
-    //   info->m_pPowers->m_NameHash != StringHash("Throw-fruit").
-    //   Needs WaveManager+0x10c (waveTimer) + FruitInfo+0x32c (m_pPowers)
-    //   + StringHash of "Throw-fruit" resolved first.
+    // ASM-verified: 2026-05-27 binary @ 0x00175ab2..0x00175af2 (re-analyst)
+    // Power-fruit cancel-if-thrown-too-late: when this fruit carries a non-freeze
+    // power-up and the wave will end within 8s of when its delay elapses, abort
+    // (mark dead, decrement g_PowerFruitCount).
+    // "freeze" string @ binary 0x001BA2BF. Live wave-time mirror is
+    // game_work.m_SaveData->m_TimeRemainingSave -- TimeControl::Update writes it
+    // every frame (binary @ 0x00162830).
+    const FruitInfoData* chuckInfo = FruitInfo_Get(m_FruitType);
+    if (chuckInfo && chuckInfo->m_pPowers && chuckInfo->m_pPowers->m_pArray
+            && game_work.m_SaveData) {
+        static const uint32_t kFreezeHash = StringHash("freeze");
+        const float waveTimer = game_work.m_SaveData->m_TimeRemainingSave;
+        if ((waveTimer - delay) < 8.0f
+                && chuckInfo->m_pPowers->m_pArray[0].m_PowerHash != kFreezeHash) {
+            --g_PowerFruitCount;  // raw decrement, no clamp (binary: subs r2,#1; str)
+            flags |= ENT_KILLED;  // 0x10
+        }
+    }
 }
 
 // ASM-verified: 2026-05-27 binary @ 0x00177680 (re-analyst) -- m_TimeScale applied to integration dt
