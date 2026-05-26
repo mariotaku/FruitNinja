@@ -85,26 +85,23 @@ static const float SLICE_CLAMP_MAX     = 8.0f;
 //                         m_CollisionScale = 1.0 @ 0x3f800000.
 static const float COL_RADIUS_FACTOR = 0.52f;   // DAT_00176340
 
-// Random float in [-range, +range]
-static float RandRange(float range) {
-    return ((float)rand() / RAND_MAX * 2.0f - 1.0f) * range;
-}
-
 // Matches RandomStartAngle(Quat&, false) @ 0x00175740 — gives the fruit a
 // uniformly random orientation on the sphere by picking a random axis in
 // the unit cube, normalising, and combining with a random ~16-bit angle.
 // The old port used FromAxisAngle(Vec3(1,0,0), RandRange(pi)) which locked
 // every fruit's initial spin to the X axis — visible as all fruits starting
 // level/upright instead of at varied tilts.
+// RNG source: binary uses the WaveManager-owned PRNG (ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)).
 static Quaternion RandomStartAngle() {
-    float ax = (float)rand() / RAND_MAX * 2.0f - 1.0f;   // [-1, 1]
-    float ay = (float)rand() / RAND_MAX * 2.0f - 1.0f;
-    float az = (float)rand() / RAND_MAX * 2.0f - 1.0f;
+    Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+    float ax = rng.RandF(2.0f) - 1.0f;   // [-1, 1]
+    float ay = rng.RandF(2.0f) - 1.0f;
+    float az = rng.RandF(2.0f) - 1.0f;
     float len = sqrtf(ax*ax + ay*ay + az*az);
     if (len < 1e-6f) { ax = 1.0f; ay = 0.0f; az = 0.0f; len = 1.0f; }
     ax /= len; ay /= len; az /= len;
     // Binary: Rand32(0xff3a) — ~full turn in 16-bit angle units.
-    uint32_t angle16 = (uint32_t)(((uint32_t)rand()) % 0xff3aU);
+    uint32_t angle16 = rng.Rand32(0xff3aU);
     Quaternion q;
     q.CreateFromAxisAngle(ax, ay, az, angle16);
     return q;
@@ -150,9 +147,15 @@ Fruit::~Fruit() {
 
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
 // ASM-verified: 2026-05-20 binary @ 0x00176708 (re-analyst) -- bActive and bCriticalEligible default to 1, not 0.
+// ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst) -- RNG source, field writes, flags bit-op.
 // Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
 void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
-    m_FruitType = (uint8_t)fruitType;
+    // Binary @ 0x00176708: range-check fruitType; out-of-range falls back to RandomFruit(true).
+    if (fruitType >= 0 && fruitType < (long)FruitInfo_GetCount()) {
+        m_FruitType = (uint8_t)fruitType;
+    } else {
+        m_FruitType = (uint8_t)RandomFruit(true);
+    }
     m_LifetimeCounter = 0;
     m_bActive = 1;
     LOG_INFO("FRUIT", "m_bSliced=0 set on entity=%p pos=(%.1f,%.1f) type=%d (in Init)",
@@ -168,7 +171,15 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_ChuckDelay = 0.0f;
     m_PlayerIdx = 0;
     m_TimeScale = 1.0f;
-    flags &= ~ENT_SKIP_MASK;  // activate + unhide
+    m_CollisionSize = 75;         // binary @ 0x00176708: str r3, [r0, #0x4b] = 0x4B
+    m_SliceState = 0;             // binary @ 0x00176708
+    m_VestigialInitFour = 4;      // binary @ 0x00176708: write-only dead field
+    // ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)
+    // Clears ENT_KILLED (0x10) and sets bit 0x02. Bit 0x02 is currently
+    // mis-labelled in EntityFlagBits (declared 0x04); leave as literal until
+    // EntityFlagBits is re-audited.
+    // TODO: re-RE EntityFlagBits to name bit 0x02 correctly.
+    flags = (flags & ~0x10) | 0x02;
 
     m_ZPosition = GetFruitZPosition();
 
@@ -183,7 +194,13 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     // Random rotation velocity (matches binary Fruit::Init @ 0x00176708):
     // one triple of random values, stored IDENTICALLY into both m_RotVel1
     // and m_RotVel2 — the two halves tumble in sync.
-    m_RotVel1 = Vec3(RandRange(5.5f), RandRange(5.5f), RandRange(5.5f));
+    // RNG source: binary uses WaveManager-owned PRNG (ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)).
+    {
+        Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+        m_RotVel1 = Vec3(rng.RandF(11.0f) - 5.5f,
+                         rng.RandF(11.0f) - 5.5f,
+                         rng.RandF(11.0f) - 5.5f);
+    }
     m_RotVel2 = m_RotVel1;
 
     // Random start rotation — random axis + random angle (binary
@@ -230,12 +247,26 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         cs->radius = radius;
     }
 
+    // Defunct: arcade-blitz duplicate-guard — no-op stub; binary @ 0x0017685c
+    // Binary: __cxa_guard-protected FruitType("BOMB_PINEAPPLE", false) lookup +
+    // collision loop to prevent duplicate pineapple bombs on screen at once.
+    // Dead on this platform — pineapple blitz mode was removed.
+
+    // Defunct: online-MP — no-op stub; binary @ 0x00176708 +0x1b8
+    // Binary: BOMB_PINEAPPLE count decrement for online multiplayer sync packet.
+    // Dead on this platform — P2P online MP was removed.
+
 }
 
 void Fruit::Chuck(float delay) {
     m_ChuckDelay = delay;
     m_ScaleAnim = 0.0f;
-    flags &= ~ENT_SKIP_MASK;
+    // ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)
+    // Clears ENT_KILLED (0x10) and sets bit 0x02. Bit 0x02 is currently
+    // mis-labelled in EntityFlagBits (declared 0x04); leave as literal until
+    // EntityFlagBits is re-audited.
+    // TODO: re-RE EntityFlagBits to name bit 0x02 correctly.
+    flags = (flags & ~0x10) | 0x02;
     s_FruitThrowSfxFiredThisFrame = false;
 }
 
