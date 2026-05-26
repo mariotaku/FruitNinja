@@ -81,11 +81,6 @@ void TimeControl::Reset() {
             game_work.mMainScreen && game_work.mMainScreen->GetCameraTransition() < 0.0f) {
             game_work.m_SaveData->m_TimeRemainingSave = 60.9f;   // DAT_001621ec
         }
-    } else {
-        // Binary @ 0x001624ec: sentinel write for non-timed modes.
-        if (game && game_work.m_SaveData) {
-            game_work.m_SaveData->m_TimeRemainingSave = -1.0f;
-        }
     }
     m_SlowClockPhase = 0.0f;
     m_DrawColour = Colour(255, 255, 255, 255);
@@ -134,6 +129,18 @@ void TimeControl::Update(float dt) {
     if (!game) {
         m_LayerFlags = Mortar::HUD_LAYER_NONE;
         if (game_work.mMainScreen) game_work.mMainScreen->m_TimeRemainingDisplay = -1.0f;
+        return;
+    }
+    // ASM-verified: 2026-05-27 binary @ 0x001624ec (re-analyst)
+    // Non-timed-mode early return: hide HUD, stamp sentinel into save slot,
+    // and skip the LAB_00162818 timed-mode block entirely. Other subsystems
+    // (Fruit::Chuck power-fruit abort gate) read -1.0f to detect "no time
+    // limit" and skip the abort condition.
+    if (!IsTimedGame()) {
+        m_LayerFlags = Mortar::HUD_LAYER_NONE;
+        if (game_work.m_SaveData) {
+            game_work.m_SaveData->m_TimeRemainingSave = -1.0f;
+        }
         return;
     }
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
