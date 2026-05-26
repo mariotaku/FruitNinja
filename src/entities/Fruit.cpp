@@ -428,6 +428,11 @@ void Fruit::Update(float dt) {
         }
     }
 
+    // ASM-verified: 2026-05-27 binary @ 0x00177c7c (re-analyst).
+    // Bomb-avoidance pushes nearby bombs away on X. Called unconditionally
+    // -- the m_bSliced gate lives inside UpdateBombAvoidance itself.
+    UpdateBombAvoidance(dtScaled);
+
     // Quaternion rotation update (both halves). Matches binary Fruit::Update
     // @ 0x00177680: each axis is a CreateFromAxisAngle with 16-bit angle
     //   idx = (ushort)(int)(rotVel * dtNorm * 182.0)   // DAT_00177ff0 = 182
