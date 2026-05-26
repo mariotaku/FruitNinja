@@ -548,20 +548,16 @@ void Fruit::Update(float dt) {
     // matrix-rotate -> Atan2Idx pipeline collapses to (sin=0, cos=1). We
     // still write those slots to clear any stale orientation from a previous
     // trail. Binary forces emitter1.z to -5000.0f (off-camera depth marker).
-    // Binary writes cos(angle)/sin(angle) to emitter+0x2C/+0x30. Port slots
-    // are PSPParticleEmitter::m_ScaleY (+0x2C) and m_field30 (+0x30); names
-    // are mis-leading remnants of pre-RE guesses -- slot semantics are correct.
-    // Rename deferred to a separate cleanup pass.
     if (m_pEmitter1) {
         m_pEmitter1->m_Pos     = pos;
         m_pEmitter1->m_Pos.z   = -5000.0f;  // DAT_00177ff4
-        m_pEmitter1->m_ScaleY  = 1.0f;      // binary +0x2C = CosIdx(0)
-        m_pEmitter1->m_field30 = 0.0f;      // binary +0x30 = SinIdx(0)
+        m_pEmitter1->m_DirCos  = 1.0f;      // binary +0x2C = CosIdx(0)
+        m_pEmitter1->m_DirSin  = 0.0f;      // binary +0x30 = SinIdx(0)
     }
     if (m_pEmitter2) {
         m_pEmitter2->m_Pos     = m_SecondPos;  // binary calls this m_HalfB_pos; same slot (+0xB8)
-        m_pEmitter2->m_ScaleY  = 1.0f;
-        m_pEmitter2->m_field30 = 0.0f;
+        m_pEmitter2->m_DirCos  = 1.0f;
+        m_pEmitter2->m_DirSin  = 0.0f;
         // NOTE: binary does NOT force emitter2.z to -5000.0f (only emitter1).
     }
 
@@ -1062,11 +1058,11 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
 
     // Impact particle emitter — one-shot, rotated by the blade direction.
     // Uses FRUIT_INFO.m_NameHash (e.g. "apple") as the template lookup. The
-    // emitter's m_ScaleY / m_field30 pair encodes (cos, sin) of the rotation
-    // applied to each spawned particle's initial velocity — matches binary
+    // m_DirCos/m_DirSin (+0x2C/+0x30) encode (cos, sin) of the rotation
+    // applied to each spawned particle's initial velocity -- matches binary
     // AddParticle 0x00115644. Negative-angle sign flip mirrors the binary:
-    //   e->m_CosAngle =  CosIdx(-sliceAngle);
-    //   e->m_SinAngle = -SinIdx(-sliceAngle);  = SinIdx(sliceAngle)
+    //   e->m_DirCos =  CosIdx(-sliceAngle);
+    //   e->m_DirSin = -SinIdx(-sliceAngle);  = SinIdx(sliceAngle)
     if (info) {
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
         const float sliceRad = (float)(int16_t)m_SliceAngle *
@@ -1074,9 +1070,9 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
         PSPParticleEmitter* eHit = pm.AddEmitter(
             info->m_NameHash, nullptr, /*persistent=*/false);
         if (eHit) {
-            eHit->m_Pos      = pos;
-            eHit->m_ScaleY   =  cosf(sliceRad);   // cos θ
-            eHit->m_field30  =  sinf(sliceRad);   // sin θ
+            eHit->m_Pos     = pos;
+            eHit->m_DirCos  =  cosf(sliceRad);   // cos theta
+            eHit->m_DirSin  =  sinf(sliceRad);   // sin theta
         }
 
         // Persistent juice emitters — one per future half. m_SlicedHash

@@ -130,11 +130,11 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     e.m_Timer = 0.0f;
     e.m_Pos = Vec3(0, 0, 0);
     e.m_Vel = Vec3(0, 0, 0);
-    e.m_field30 = 0.0f;
+    e.m_DirSin = 0.0f;
     e.m_TimeScale = 1.0f;
     e.m_field24 = 1.0f;
     e.m_ScaleX = 1.0f;
-    e.m_ScaleY = 1.0f;
+    e.m_DirCos = 1.0f;
     e.m_field34 = 1.0f;
     e.m_field38 = 0;
     e.m_ParticleHead = 1;
@@ -190,12 +190,11 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
     float vz = RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]) * 0.5f;
 
     // 2D rotation of the XY velocity by the emitter's (cos, sin) pair stored
-    // in m_ScaleY (+0x2c, cos θ) and m_field30 (+0x30, sin θ). Matches the
-    // binary AddParticle @ 0x00115644 — used to rotate fruit-impact particles
-    // so chunks spray along the blade direction. Identity when the caller
-    // leaves the defaults (cos=1, sin=0).
-    const float cosA = emitter.m_ScaleY;
-    const float sinA = emitter.m_field30;
+    // in m_DirCos (+0x2c) and m_DirSin (+0x30). Matches the binary AddParticle
+    // @ 0x00115644 -- used to rotate fruit-impact particles so chunks spray
+    // along the blade direction. Identity when the caller leaves defaults (cos=1, sin=0).
+    const float cosA = emitter.m_DirCos;
+    const float sinA = emitter.m_DirSin;
     const float rvx = vx * cosA + vy * sinA;
     const float rvy = vy * cosA - sinA * vx;
 
