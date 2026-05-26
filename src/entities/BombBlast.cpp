@@ -64,8 +64,8 @@ BombBlast::BombBlast()
 {
     entityType = 4;
     m_Angle = 0;  // inherited from Mortar::Entity base at +0x36
-    // Binary ctor clears 0x11 (collision + kill); we start without both.
-    flags &= ~0x11u;
+    // Binary ctor clears 0x11 (inactive + killed); we start without both.
+    flags &= ~ENT_SKIP_MASK;
 }
 
 BombBlast::~BombBlast() {}
@@ -134,7 +134,7 @@ void BombBlast::Update(float dt) {
     m_Scale += SCALE_GROWTH * dt;
 
     if (m_Lifetime >= BLAST_LIFE) {
-        flags |= 0x10;   // kill
+        flags |= ENT_KILLED;
     }
 }
 

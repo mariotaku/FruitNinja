@@ -36,14 +36,19 @@ struct Renderer;
 //   +0x38: m_Col / Col* (4B)
 //   sizeof = 0x3C (60)
 enum EntityFlagBits : uint8_t {
-    ENT_INACTIVE      = 0x01,  // cleared by Entity::Activate on pool recycle
-    ENT_UPDATING      = 0x04,  // set while ActorManager::Update calls vtable
-    ENT_POST_UPDATING = 0x08,  // set while PostUpdate runs
-    ENT_KILLED        = 0x10,  // entity wants to retire; swept by Update
-    ENT_NO_DESTRUCT   = 0x20,  // ActorManager::Remove skips delete if set
-    // 0x11 is the combined "skip" mask — an entity is processed only when
+    ENT_INACTIVE        = 0x01,  // cleared by Entity::Activate on pool recycle
+    ENT_HAS_COLLISION   = 0x02,  // set by Init overrides that install m_Col
+                                 // (Fruit, Bomb, SlashEntity); never tested at runtime
+    ENT_UPDATED_HALF1   = 0x04,  // set with 0x08 by ActorManager::Update BEFORE
+                                 // vtable Update/PostUpdate dispatch (orr #0xc).
+                                 // Never cleared, never read -- advisory only.
+    ENT_UPDATED_HALF2   = 0x08,  // pair with 0x04; binary always sets them together
+    ENT_KILLED          = 0x10,  // entity wants to retire; swept by Update
+    ENT_NO_DESTRUCT     = 0x20,  // ActorManager::Remove/::Clear skip vtable Release if set
+    ENT_TICK_DISPATCHED = ENT_UPDATED_HALF1 | ENT_UPDATED_HALF2,  // 0x0c -- write together
+    // 0x11 is the combined "skip" mask -- an entity is processed only when
     // `(flags & 0x11) == 0`.
-    ENT_SKIP_MASK     = ENT_INACTIVE | ENT_KILLED,
+    ENT_SKIP_MASK       = ENT_INACTIVE | ENT_KILLED,
 };
 
 namespace Mortar {

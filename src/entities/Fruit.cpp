@@ -175,11 +175,9 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_SliceState = 0;             // binary @ 0x00176708
     m_VestigialInitFour = 4;      // binary @ 0x00176708: write-only dead field
     // ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst)
-    // Clears ENT_KILLED (0x10) and sets bit 0x02. Bit 0x02 is currently
-    // mis-labelled in EntityFlagBits (declared 0x04); leave as literal until
-    // EntityFlagBits is re-audited.
-    // TODO: re-RE EntityFlagBits to name bit 0x02 correctly.
-    flags = (flags & ~0x10) | 0x02;
+    // ASM-verified: 2026-05-27 binary @ 0x0017690a (re-analyst)
+    // orr r1,r1,#0x2 ; bfc r1,#0x4,#0x1
+    flags = (flags & ~ENT_KILLED) | ENT_HAS_COLLISION;
 
     m_ZPosition = GetFruitZPosition();
 
@@ -795,7 +793,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
     //    Binary @ 0x00176cc8..0x00176cd4: unconditional store of 0 when count<=1
     //    else (count-1). Port previously used conditional decrement which pinned
     //    the counter at 1 across multiple natural expirations.
-    if (!(flags & 0x10)) {
+    if (!(flags & ENT_KILLED)) {
         const FruitInfoData* killInfo = FruitInfo_Get(m_FruitType);
         if (killInfo && killInfo->m_pPowers) {
             int v = g_PowerFruitCount;
@@ -809,7 +807,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
         ET_RemoveEntity(0, m_TrackerID);
     }
 
-    flags |= 0x10;
+    flags |= ENT_KILLED;
 }
 
 // Matches Fruit::CheckHasGoneOffscreen (0x00175218).
