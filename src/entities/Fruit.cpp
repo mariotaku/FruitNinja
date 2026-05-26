@@ -148,6 +148,9 @@ Fruit::~Fruit() {
 // ASM-verified: 2026-04-28T00:00 binary @ 0x00176708 (asm-inspector)
 // ASM-verified: 2026-05-20 binary @ 0x00176708 (re-analyst) -- bActive and bCriticalEligible default to 1, not 0.
 // ASM-verified: 2026-05-26 binary @ 0x00176708 (re-analyst) -- RNG source, field writes, flags bit-op.
+// ASM-verified-partial: 2026-05-27 binary @ 0x00176708 (asm-inspector) --
+//   power-fruit counter increment + non-arcade path verified;
+//   arcade pineapple-blitz dedup + power-fruit gate left as TODO.
 // Binary @ 0x00176708 — vtable slot 2. p2=fruitType; p3=scale (nullable).
 void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     // Binary @ 0x00176708: range-check fruitType; out-of-range falls back to RandomFruit(true).
@@ -245,10 +248,21 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         cs->radius = radius;
     }
 
-    // Defunct: arcade-blitz duplicate-guard — no-op stub; binary @ 0x0017685c
-    // Binary: __cxa_guard-protected FruitType("BOMB_PINEAPPLE", false) lookup +
-    // collision loop to prevent duplicate pineapple bombs on screen at once.
-    // Dead on this platform — pineapple blitz mode was removed.
+    // ASM-verified: 2026-05-27 binary @ 0x001768a8..0x001768b8 (asm-inspector).
+    // Increment global active-power-fruit counter for power-fruits. Pairs with
+    // KillFruit's natural-expiry decrement.
+    const FruitInfoData* spawnInfo = FruitInfo_Get(m_FruitType);
+    if (spawnInfo && spawnInfo->m_pPowers) {
+        ++g_PowerFruitCount;
+    }
+
+    // TODO: 0x00176754 -- Arcade duplicate-pineapple + power-fruit spam gate.
+    //   Binary @ 0x00176754..0x0017683e (gameMode==2 only): re-rolls
+    //   m_FruitType while == BOMB_PINEAPPLE, then if (m_pPowers != 0 &&
+    //   ((AnyActivePowers() && score-hash mismatch) || g_PowerFruitCount > 0))
+    //   kills the fruit (flags |= ENT_KILLED) before any spawn-side effects.
+    //   Without this, Arcade can spawn duplicate BOMB_PINEAPPLE and over-spawn
+    //   power-fruits. Re-RE for a full spec when Arcade-mode bring-up needs it.
 
     // Defunct: online-MP — no-op stub; binary @ 0x00176708 +0x1b8
     // Binary: BOMB_PINEAPPLE count decrement for online multiplayer sync packet.
