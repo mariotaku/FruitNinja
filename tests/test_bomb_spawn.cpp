@@ -284,7 +284,7 @@ int main(int argc, char* argv[]) {
          || dynamic_cast<AboutScreen*>(c)
          || dynamic_cast<ShopScreen*>(c)
          || dynamic_cast<GameModeScreen*>(c)) {
-            c->m_bActive = 0;
+            c->m_Active = 0;
         }
     }
     game_work.gameMode = 0;

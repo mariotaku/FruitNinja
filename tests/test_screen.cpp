@@ -115,7 +115,7 @@ int main(int argc, char* argv[]) {
     // the target screen and clutter the output.
     auto hideAllExisting = [&]() {
         for (auto it = game_work.mHud->controls.begin(); it != game_work.mHud->controls.end(); ++it) {
-            (*it)->m_bActive = 0;
+            (*it)->m_Active = 0;
         }
     };
 
@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
     } else if (strcmp(screenName, "about") == 0) {
         hideAllExisting();
         DojoScreen* dojo = new DojoScreen(h.game);
-        dojo->m_bActive = 0;  // dojo is just AboutScreen's parent for back-nav
+        dojo->m_Active = 0;  // dojo is just AboutScreen's parent for back-nav
         game_work.mHud->AddControl(dojo);
         AboutScreen* s = new AboutScreen(h.game, dojo);
         s->Init();
@@ -136,7 +136,7 @@ int main(int argc, char* argv[]) {
     } else if (strcmp(screenName, "shop") == 0) {
         hideAllExisting();
         DojoScreen* dojo = new DojoScreen(h.game);
-        dojo->m_bActive = 0;
+        dojo->m_Active = 0;
         game_work.mHud->AddControl(dojo);
         ShopScreen* s = new ShopScreen(h.game, dojo);
         game_work.mHud->AddControl(s, false);
@@ -165,7 +165,7 @@ int main(int argc, char* argv[]) {
              || dynamic_cast<AboutScreen*>(c)
              || dynamic_cast<ShopScreen*>(c)
              || dynamic_cast<GameModeScreen*>(c)) {
-                c->m_bActive = 0;
+                c->m_Active = 0;
             }
         }
         game_work.gameMode = 0;
@@ -224,7 +224,7 @@ int main(int argc, char* argv[]) {
              || dynamic_cast<AboutScreen*>(c)
              || dynamic_cast<ShopScreen*>(c)
              || dynamic_cast<GameModeScreen*>(c)) {
-                c->m_bActive = 0;
+                c->m_Active = 0;
             }
         }
         game_work.gameMode = 0;     // Classic
@@ -271,7 +271,7 @@ int main(int argc, char* argv[]) {
              || dynamic_cast<AboutScreen*>(c)
              || dynamic_cast<ShopScreen*>(c)
              || dynamic_cast<GameModeScreen*>(c)) {
-                c->m_bActive = 0;
+                c->m_Active = 0;
             }
         }
         // Real game has MainScreen in STATE_CAMERA_FADE during gameplay;
