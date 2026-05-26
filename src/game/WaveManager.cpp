@@ -1563,8 +1563,10 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         // spread = 20 for BOTTOM/BOTTOM_SLOW (spawner==0 or type<2), 12 for LEFT/RIGHT.
         float spread = (info && (uint8_t)info->m_SpawnType >= 2) ? 12.0f : 20.0f;
         float r      = m_Random.RandF(1.0f);
-        // halfR = (r < 0.5) ? (r + 0.5) : (0.5 - r)   binary: vsub then ite mi/pl
-        float halfR  = (r < 0.5f) ? (r + 0.5f) : (0.5f - r);
+        // ASM-verified: 2026-05-26 binary @ 0x00122644 (re-analyst)
+        // vsub.f32 s0,s0,s15 (s0=r-0.5); vadd.mi.f32 s15,s0,s15 (s15=r) if r<0.5,
+        // else vsub.pl.f32 s15,s15,s0 (s15=1-r). halfR in [0,0.5]; sign flips neg when r<0.5.
+        float halfR  = (r < 0.5f) ? r : (1.0f - r);
         float sign   = (r < 0.5f) ? -1.0f : 1.0f;
         int center   = (int)(((float)iBase / -150.0f) * spread * 0.5f);
         int off      = (int)(spread * (halfR * halfR * -2.0f + 0.5f) * sign);
