@@ -310,7 +310,53 @@ void Fruit::Update(float dt) {
             m_ChuckDelay = 0.0f;
         }
 
-        // Scale animation (0 → 1 over ~0.3s)
+        // ASM-verified: 2026-05-27 binary @ 0x00177a16-0x00177b4c (re-analyst).
+        // Cascade fruit-spawn from WaveManager::field_0x6c (per-frame fruit
+        // multiplier set by PowerUp::FruitMultiplyer). For value N: spawn
+        // (N-1) extras from a random side-template. For value < 1: warp this
+        // fruit off-screen so CheckHasGoneOffscreen kills it next frame.
+        {
+            WaveManager* wm = WaveManager::GetInstance();
+            float countF = wm->field_0x6c;
+            int   cnt    = (int)countF;
+            // Stochastic round-up. Epsilon=0.01 (DAT_00177cec), scale=100 (DAT_00177cf0).
+            if ((float)cnt + 0.01f < countF) {
+                uint32_t r = wm->GetRandom().Rand32(100);
+                if ((countF - (float)cnt) * 100.0f > (float)r) {
+                    cnt++;
+                }
+            }
+            if (cnt < 1) {
+                // Self-warp off-screen. Binary @ 0x00177a68.
+                // NOTE: NO m_bActive/flags write; relies on CheckHasGoneOffscreen later.
+                m_ChuckDelay = 0.0f;          // DAT_00177cf4
+                pos.y        = -320.0f;       // DAT_00177cf8
+                vel          = Vec3(0.0f, -1.0f, 0.0f);
+            } else if (cnt != 1) {
+                // Spawn (cnt-1) extra fruits via a random side-template.
+                // Binary @ 0x00177a9e. Three stack-built SPAWNER_INFOs;
+                // each starts from SPAWNER_INFO ctor defaults then overrides.
+                SPAWNER_INFO templates[3];
+                templates[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
+                templates[0].m_Gravity_x  = 0.0f;
+                templates[0].m_Gravity_y  = -0.05f;     // DAT_00177cfc
+                templates[0].m_Gravity_z  = 0.0f;
+                templates[0].m_SpawnTimer = -3.0f;
+                templates[1].m_SpawnType  = PLACEMENT_LEFT;
+                templates[1].m_SpawnTimer = -3.0f;
+                templates[1].m_HorizMin   = -1.0f;
+                templates[1].m_HorizMax   = -0.5f;
+                templates[2].m_SpawnType  = PLACEMENT_RIGHT;
+                templates[2].m_SpawnTimer = -3.0f;
+                templates[2].m_HorizMin   = -1.0f;
+                templates[2].m_HorizMax   = -0.5f;
+                uint32_t pick = wm->GetRandom().Rand32(3);
+                wm->SpawnFruit(cnt - 1, /*fruitType=*/-1, &templates[pick], /*playerIdx=*/0);
+            }
+            // cnt == 1: fall through to normal single-fruit path.
+        }
+
+        // Scale animation (0 -> 1 over ~0.3s)
         if (m_ScaleAnim < 1.0f) {
             m_ScaleAnim += dtScaled * 3.0f;
             if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
