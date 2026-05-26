@@ -337,6 +337,40 @@ void Fruit::Update(float dt) {
             m_ChuckDelay = 0.0f;
         }
 
+        // ASM-verified: 2026-05-27 binary @ 0x001778ae..0x001779e4 (re-analyst)
+        // Per-tick trail-emitter re-arm. Fires every Update while unsliced
+        // and m_ChuckDelay has expired. SetTrailParticles cycles the emitter
+        // (Clear+Add) every frame in the binary.
+        {
+            const FruitInfoData* info = FruitInfo_Get(m_FruitType);
+            bool ok = false;
+            if (info && info->m_TrailHash) {
+                ok = SetTrailParticles(info->m_TrailHash);
+            }
+            if (!ok && Game::GetInstance()->IsFastHardware()) {
+                // MP/SP trail-effect fallback. With NetworkManager::IsOnlineMultiplayer
+                // returning false on this platform, the !onlineMP branch always
+                // wins -> pick = StringHash("fruit_flight").
+                static const uint32_t kHashFruitFlight     = StringHash("fruit_flight");
+                static const uint32_t kHashScoreX2Trail    = StringHash("scorex2_trail");
+                static const uint32_t kHashBlueFruitFlight = StringHash("blue_fruit_flight");
+                Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
+                const bool onlineMP = nm && nm->IsOnlineMultiplayer();
+                uint32_t pick;
+                if ((onlineMP && m_PlayerIdx < 2) || m_PlayerIdx == 3) {
+                    if      (m_PlayerIdx == 0) pick = kHashFruitFlight;
+                    else if (m_PlayerIdx == 3) pick = kHashScoreX2Trail;
+                    else                       pick = kHashBlueFruitFlight;
+                } else {
+                    pick = StringHash("fruit_flight");
+                }
+                SetTrailParticles(pick);
+            }
+            // Per-tick m_pEmitter1 follow-position (binary's GOT offset Vec3 is
+            // BSS-zero, so the addend collapses to just pos).
+            if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
+        }
+
         // ASM-verified: 2026-05-27 binary @ 0x00177a16-0x00177b4c (re-analyst).
         // Cascade fruit-spawn from WaveManager::field_0x6c (per-frame fruit
         // multiplier set by PowerUp::FruitMultiplyer). For value N: spawn
@@ -508,11 +542,28 @@ void Fruit::Update(float dt) {
         if (m_pEmitter2) { pm.ClearEmitter(m_pEmitter2); m_pEmitter2 = nullptr; }
     }
 
-    // Track juice emitters with the two halves so particles follow the
-    // pieces instead of spraying from the original slice point. Matches
-    // binary Fruit::Update @ 0x177680 tail section.
-    if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
-    if (m_pEmitter2) m_pEmitter2->m_Pos = m_SecondPos;
+    // ASM-verified: 2026-05-27 binary @ 0x00177f4e..0x00178086 (re-analyst)
+    // Per-frame emitter position/rotation tracking. The "direction" Vec3 at
+    // GOT[DAT_00177d0c]/DAT_00178004/DAT_001780a8 is BSS-zero, so the
+    // matrix-rotate -> Atan2Idx pipeline collapses to (sin=0, cos=1). We
+    // still write those slots to clear any stale orientation from a previous
+    // trail. Binary forces emitter1.z to -5000.0f (off-camera depth marker).
+    // Binary writes cos(angle)/sin(angle) to emitter+0x2C/+0x30. Port slots
+    // are PSPParticleEmitter::m_ScaleY (+0x2C) and m_field30 (+0x30); names
+    // are mis-leading remnants of pre-RE guesses -- slot semantics are correct.
+    // Rename deferred to a separate cleanup pass.
+    if (m_pEmitter1) {
+        m_pEmitter1->m_Pos     = pos;
+        m_pEmitter1->m_Pos.z   = -5000.0f;  // DAT_00177ff4
+        m_pEmitter1->m_ScaleY  = 1.0f;      // binary +0x2C = CosIdx(0)
+        m_pEmitter1->m_field30 = 0.0f;      // binary +0x30 = SinIdx(0)
+    }
+    if (m_pEmitter2) {
+        m_pEmitter2->m_Pos     = m_SecondPos;  // binary calls this m_HalfB_pos; same slot (+0xB8)
+        m_pEmitter2->m_ScaleY  = 1.0f;
+        m_pEmitter2->m_field30 = 0.0f;
+        // NOTE: binary does NOT force emitter2.z to -5000.0f (only emitter1).
+    }
 
     if (CheckHasGoneOffscreen()) {
         KillFruit(true);
