@@ -266,10 +266,6 @@ void Fruit::Chuck(float delay) {
     m_SecondPos = pos;
     if (delay < 0.0f) delay = 0.125f;
     m_ChuckDelay = delay;
-    // TODO: relocate s_FruitThrowSfxFired reset -- binary resets it per-frame
-    //   at global+0x48, not inside Chuck. Kept here temporarily to preserve
-    //   per-launch SFX gating until the per-frame reset site is RE'd.
-    s_FruitThrowSfxFiredThisFrame = false;
     // TODO: 0x00175a64 +abort -- power-fruit no-power-up abort path
     //   (decrement g_PowerFruitCount + set flags |= 0x10) when
     //   info->m_pPowers != null && (waveTimer - delay < 8.0f) &&
@@ -292,20 +288,39 @@ void Fruit::Update(float dt) {
         if (!IsActive()) return;
 
         // Launch delay (unsliced path only)
-        // ASM-verified: 2026-05-23 binary @ 0x00177866 (re-analyst) -- "Throw-fruit" SFX
-        // fires on negative-going edge of m_ChuckDelay crossing 0.2f, gated by
-        // s_FruitThrowSfxFiredThisFrame (mirrors *(g_fruitGlobal+0x48) in binary).
+        // ASM-verified: 2026-05-27 binary @ 0x001777ce..0x0017789e (re-analyst)
+        // Chuck-delay countdown uses game_work.dt (fixed real-time step,
+        // NOT per-fruit dt*m_TimeScale) and is gated by global game state:
+        //   - paused -> no countdown
+        //   - bomb-hit slow-mo active -> no countdown
+        //   - level transition cinematic (early phase) -> no countdown
+        // The SFX edge fires when delay crosses 0.2f going down, gated by
+        // a per-frame global (s_FruitThrowSfxFiredThisFrame) that Fruit::Draw
+        // resets unconditionally at function entry.
         if (m_ChuckDelay > 0.0f) {
-            static const float THROW_FRUIT_SFX_THRESHOLD = 0.2f;  // DAT_00177960+0x48 threshold
+            static const float THROW_FRUIT_SFX_THRESHOLD = 0.2f;  // DAT_00177950
             const float prevChuckDelay = m_ChuckDelay;
-            m_ChuckDelay -= dtScaled;
-            if (prevChuckDelay >= THROW_FRUIT_SFX_THRESHOLD && m_ChuckDelay < THROW_FRUIT_SFX_THRESHOLD) {
-                if (!s_FruitThrowSfxFiredThisFrame) {
-                    s_FruitThrowSfxFiredThisFrame = true;
-                    if (game_work.mGameSound)
-                        game_work.mGameSound->SFXPlay("Throw-fruit", 1.0f, 1.0f);
-                }
+
+            const bool gate =
+                !game_work.m_Paused
+                && game_work.m_BombHitTimer <= 0.0f
+                && (   (game_work.gameMode == 2 && game_work.m_GameDt < 1.0f)
+                    ||  game_work.m_LevelTransitionFlag == 0);
+            if (gate) {
+                m_ChuckDelay -= game_work.dt;   // +0x38, NOT dt*m_TimeScale
             }
+
+            // SFX edge runs even if the gate is closed this frame (binary @ 0x00177814)
+            if (prevChuckDelay > THROW_FRUIT_SFX_THRESHOLD
+                && m_ChuckDelay <= THROW_FRUIT_SFX_THRESHOLD
+                && !s_FruitThrowSfxFiredThisFrame
+                && game_work.m_LevelTransitionFlag == 0)
+            {
+                s_FruitThrowSfxFiredThisFrame = true;
+                if (game_work.mGameSound)
+                    game_work.mGameSound->SFXPlay("Throw-fruit", 1.0f, 1.0f);
+            }
+
             if (m_ChuckDelay > 0.0f) return;
             m_ChuckDelay = 0.0f;
         }
@@ -606,6 +621,12 @@ static void DrawOneModel(Mortar::Model* model,
 }
 
 void Fruit::Draw(Renderer& r) {
+    // ASM-verified: 2026-05-27 binary @ 0x00179216 (re-analyst)
+    // Binary resets the throw-fruit SFX per-frame flag at Draw entry,
+    // not per-launch in Chuck. This means only one fruit per frame can
+    // play the SFX, but the flag re-arms on the next frame.
+    s_FruitThrowSfxFiredThisFrame = false;
+
     (void)r;
 #ifndef __bada__
     if (!IsActive() || m_ChuckDelay > 0.0f) return;
