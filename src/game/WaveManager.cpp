@@ -1579,13 +1579,12 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
 
         float velMultX = info ? info->m_VelXScale : 1.0f;
         float velMultY = info ? info->m_VelYScale : 1.0f;
-        // velX_pre includes the 1.075f boost from DAT_0012284c (binary @ 0x00122744).
-        // Previously disabled with a // DIFFERS note because runtime-traced bombs went
-        // past +240 OOB at apex — that was actually a symptom of the side-spawn X-basis
-        // being wrong (raw iBase instead of constant 240). With the X-basis fix below
-        // the 1.075f boost is binary-faithful and arcs land within bounds.
-        float velX = sin_a * speed * velMultX * 1.075f;
-        float velY = cos_a * speed * velMultY;
+        // ASM-verified: 2026-05-27 binary @ 0x00122744 (fruit) (re-analyst).
+        // The 1.075f boost is on the VERTICAL (cos*velMultY -> vel.y) component, NOT
+        // horizontal. Prior port had it on velX which slowed vertical climb by 7% and
+        // over-scattered horizontal arrival.
+        float velX = sin_a * speed * velMultX;
+        float velY = cos_a * speed * 1.075f * velMultY;
 
         float posX = 0.0f;
         float posY = 0.0f;
@@ -1709,16 +1708,24 @@ void WaveManager::SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int pl
         float velMultY = (type == 0) ? 1.0f : spawner->m_VelYScale;
         float zOffset  = (type == 0) ? 0.0f : spawner->m_SpawnTimer;
 
-        // velX_pre includes the 1.075f boost from DAT_00122218 (binary @ 0x001220e6).
-        // Previously disabled to mask a downstream X-basis bug -- with the side-spawn
-        // X=240 fix below the boost is binary-faithful. See SpawnFruit comment for
-        // full rationale.
-        float velX = sin_a * speed * velMultX * 1.075f;
-        float velY = cos_a * speed * velMultY;
+        // ASM-verified: 2026-05-27 binary @ 0x001220e2 (bomb) (re-analyst).
+        // The 1.075f boost is on the VERTICAL (cos*velMultY -> vel.y) component, NOT
+        // horizontal. Prior port had it on velX which slowed vertical climb by 7% and
+        // over-scattered horizontal arrival.
+        float velX = sin_a * speed * velMultX;
+        float velY = cos_a * speed * 1.075f * velMultY;
 
         // Spawn position (bottom default).
         float spawnX = (float)baseDeg;
-        float spawnY = (float)lo;
+        // ASM-verified: 2026-05-27 binary @ DAT_00122240 (re-analyst).
+        // pos.y basis for default-bottom bomb is -160 (off-screen below the visible
+        // y=0..-160 strip), NOT the per-spread angle floor `lo`. Binary stores
+        // iVar16 = -160 in the fall-through arm of the spawn-type switch, clobbering
+        // the lo value used only for the angle-band randomisation above. Symptom of
+        // the prior wrong value: bomb spawns near y=-10 instead of -160, so after the
+        // post-Init pos.y += -100*scale.y nudge it appears at y~-110 (visible) instead
+        // of y~-260 (off-screen, rising into view).
+        float spawnY = -160.0f;
         float spawnZ = (float)i * 32.0f;  // DAT_00122580
 
         if (type != 0) {
