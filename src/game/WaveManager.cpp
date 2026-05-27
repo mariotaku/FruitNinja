@@ -1612,23 +1612,24 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         }   /* fall through */
         case PLACEMENT_LEFT:
         case PLACEMENT_RIGHT: {
-            // ASM-verified: 2026-05-22 binary @ 0x001225a0 (side-spawn block
-            // 0x001227fe..0x001228de) (asm-inspector). Formula:
-            //   pos.x = (int)(240.0f * sign)                  // DAT_00122870 = int 240
-            //   pos.y = (int)(baseDeg * 320 / 480)            // DAT_00122850/54
-            //   vel.x = (velX_pre * -0.75f) * sign
-            //   vel.y = velY_pre + speed * spawner.m_Gravity_y * -0.65f
+            // ASM-verified: 2026-05-27 binary @ 0x001227fe..0x0012828e + 0x001228d2 (asm-inspector).
+            // Binary swaps velocity sources between axes (vel.x basis = velY_orig*-0.75,
+            // vel.y basis = velX_orig + gravity term), then applies the LEFT/RIGHT sign
+            // vector via a unified Vec3 multiply at the join: vel.x and pos.x both get
+            // scaled by signX; vel.y and pos.y by 1.0. Net:
+            //   pos.x = (int)(240.0f * sign)               // DAT_00122870 = int 240
+            //   pos.y = (int)(baseDeg * 320 / 480)         // DAT_00122850/54
+            //   vel.x = velY_orig * -0.75f * sign          // sign applies HERE TOO
+            //   vel.y = velX_orig + speed * spawner.m_Gravity_y * -0.65f
             //   sign  = -1 for LEFT, +1 for RIGHT
-            // Prior port had X/Y bases swapped (used iBase * 320/480 for X) AND swapped
-            // velocity sources (velX_new <- velY_pre instead of velX_pre). Both wrong.
-            // X-basis is the constant 240 (half of 480-wide landscape screen), NOT
-            // baseDeg -- the pre-switch iVar21=baseDeg is clobbered by DAT_00122870.
             float gravY = info ? info->m_Gravity_y : 0.0f;
             float signX = (spawnType == PLACEMENT_LEFT) ? -1.0f : 1.0f;
             posX = (float)((long)(240.0f * signX));
             posY = (float)((long)(((float)iBase * 320.0f) / 480.0f));
-            velX = velX * (-0.75f) * signX;
-            velY = velY + speed * gravY * (-0.65f);
+            float newVelX = velY * (-0.75f) * signX;
+            float newVelY = velX + speed * gravY * (-0.65f);
+            velX = newVelX;
+            velY = newVelY;
             break;
         }
         }
