@@ -248,6 +248,44 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         cs->radius = radius;
     }
 
+    // ASM-verified: 2026-05-27 binary @ 0x00176754..0x0017683e (re-analyst).
+    // Arcade-only (gameMode==2, m_GameDt<1.0) duplicate-pineapple + power-fruit
+    // spam gate. Runs BEFORE the g_PowerFruitCount increment so the kill branch
+    // doesn't need an undo-decrement.
+    if (game_work.gameMode == 2 && game_work.m_GameDt < 1.0f) {
+        // (1) Re-roll while we'd spawn another black_pineapple this frame.
+        //     BOMB_PINEAPPLE binary literal -> port "black_pineapple" per fruitlist.xml.
+        static const int kBlackPineappleType = Fruit::FruitType("black_pineapple", false);
+        while ((int)m_FruitType == kBlackPineappleType) {
+            m_FruitType = (uint8_t)Fruit::RandomFruit(true);
+        }
+
+        // (2) Power-fruit spam gate. Pre-increment test.
+        const FruitInfoData* gateInfo = FruitInfo_Get(m_FruitType);
+        if (gateInfo && gateInfo->m_pPowers) {
+            static const uint32_t kScoreMultHash = StringHash("score_mult");
+            bool kill = false;
+            if (g_PowerFruitCount > 0) {
+                kill = true;
+            } else {
+                const float tRem = (game_work.m_SaveData
+                                    ? game_work.m_SaveData->m_TimeRemainingSave
+                                    : 0.0f);
+                if (tRem < 8.0f
+                        && gateInfo->m_pPowers->m_pArray
+                        && gateInfo->m_pPowers->m_pArray[0].m_PowerHash != kScoreMultHash) {
+                    kill = true;
+                } else if (gateInfo->m_pPowers->AnyActivePowers()) {
+                    kill = true;
+                }
+            }
+            if (kill) {
+                flags |= ENT_KILLED;
+                return;
+            }
+        }
+    }
+
     // ASM-verified: 2026-05-27 binary @ 0x001768a8..0x001768b8 (asm-inspector).
     // Increment global active-power-fruit counter for power-fruits. Pairs with
     // KillFruit's natural-expiry decrement.
@@ -256,17 +294,9 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         ++g_PowerFruitCount;
     }
 
-    // TODO: 0x00176754 -- Arcade duplicate-pineapple + power-fruit spam gate.
-    //   Binary @ 0x00176754..0x0017683e (gameMode==2 only): re-rolls
-    //   m_FruitType while == BOMB_PINEAPPLE, then if (m_pPowers != 0 &&
-    //   ((AnyActivePowers() && score-hash mismatch) || g_PowerFruitCount > 0))
-    //   kills the fruit (flags |= ENT_KILLED) before any spawn-side effects.
-    //   Without this, Arcade can spawn duplicate BOMB_PINEAPPLE and over-spawn
-    //   power-fruits. Re-RE for a full spec when Arcade-mode bring-up needs it.
-
-    // Defunct: online-MP — no-op stub; binary @ 0x00176708 +0x1b8
+    // Defunct: online-MP -- no-op stub; binary @ 0x00176708 +0x1b8
     // Binary: BOMB_PINEAPPLE count decrement for online multiplayer sync packet.
-    // Dead on this platform — P2P online MP was removed.
+    // Dead on this platform -- P2P online MP was removed.
 
 }
 
