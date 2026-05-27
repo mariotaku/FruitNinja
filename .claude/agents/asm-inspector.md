@@ -186,6 +186,22 @@ In the report, distinguish:
 - "Confirmed via literal-pool decode + callee-body usage + 2+ callers + byte-diff" → strong, paste `// ASM-verified:` marker.
 - "Confirmed via literal-pool decode only (single caller, no byte-diff)" → flag as **Inconclusive** and list which checks were skipped, even if your gut is sure. The implementer needs to know which evidence was actually gathered.
 
+## Anti-overcorrection checklist (join points + early returns)
+
+When the question involves a function with **branch reconvergence (join) points where vel/pos components are mixed with a sign mask Vec3**, OR a function with a **"wait then act" structure** (e.g. chuck-delay, cooldown, retry-loop) where the binary may early-return mid-function, surface decompile reads can produce a "DIVERGE -> remove this line" verdict that is itself the bug. Two real over-corrections in this project (`415ffc7` removed `* signX` on vel.x; `9d23834` removed an early return — both reverted in follow-up commits) came from skipping the checks below. Run **both** before issuing a verdict that REMOVES a sign multiplier or REMOVES an early-return:
+
+1. **Trace VFP registers past the join, not just within the arm.** For a switch / if-else that computes vel/pos components, follow each output register (e.g. `s17`/`s18` for vel.x/vel.y) from the per-arm computation through the branch-reconvergence point ALL THE WAY to the final `Vector3` ctor or entity field write (`stm r?, {r0,r1,r2}` at `entity+0x10` / `+0x1c`). Note any `vmul.f32 s?, s?, [sp, #M]` at the join that applies a sign/mask Vec3 (e.g. `local_70 = Vec3(±1,1,1)`). The per-arm formula is one factor; the join-side Vec3 multiply is another. Skipping the join-side trace produces "binary doesn't apply sign here" claims that are wrong.
+
+2. **For every branch instruction, decode the target and check epilogue match.** A `bhi.w 0x0017809a` looks like an in-function forward branch, but `0x0017809a` may be the function epilogue (`add.w sp, sp, #N; vpop {d8...}; pop {r4-r11, pc}`). Compute the function's epilogue address from the prologue's `sub sp, #N` size, and cross-check every branch target against it. A branch whose target equals the epilogue = early return; never report it as "falls through to the next block".
+
+3. **Red-flag verdicts that REMOVE structure.** When a proposed fix removes a sign multiplier, removes an early return, removes a clamp, or removes a guard branch — pause and re-run checks 1+2 specifically against the removed structure. Removal of structure that "isn't in the binary" is the failure mode that produces the most-visible bugs.
+
+### Anti-shallow wording
+
+In the report:
+- "Confirmed via per-arm trace AND join-side Vec3 multiply trace AND branch-target epilogue check" → strong, can paste `// ASM-verified:` marker.
+- "Confirmed via per-arm trace only (join + branch targets not checked)" → flag as **Inconclusive** and list which checks were skipped. The implementer needs to know which evidence was actually gathered.
+
 ## Tooling reference
 
 - **`fnverify` Docker image** (era-correct toolchain): contains Sourcery G++ Lite 2010q1 (GCC 4.4.1) at `/opt/sourcery-2010q1/`, plus cmake / python3 / rsync / i386 multilib. Build with `bash tools/asm-verify/setup.sh`. See `tools/asm-verify/Dockerfile`.
