@@ -309,7 +309,6 @@ void Fruit::Update(float dt) {
     // INSIDE the unsliced path only.
     if (!m_bSliced) {
         // === UNSLICED FRUIT ===
-        if (!IsActive()) return;
 
         // Launch delay (unsliced path only)
         // ASM-verified: 2026-05-27 binary @ 0x001777ce..0x0017789e (re-analyst)
@@ -345,95 +344,101 @@ void Fruit::Update(float dt) {
                     game_work.mGameSound->SFXPlay("Throw-fruit", 1.0f, 1.0f);
             }
 
-            if (m_ChuckDelay > 0.0f) return;
+            // ASM-verified: 2026-05-27 binary @ 0x001778aa (asm-inspector).
+            // When delay is still positive after the gated countdown (paused frame,
+            // bomb-hit slow-mo frame, level-transition frame), binary early-returns
+            // from Update entirely. Skips integration AND common tail (rotation /
+            // m_Col / emitter writes). Fruits waiting in the launch queue freeze
+            // completely until the gate opens.
+            if (m_ChuckDelay > 0.0f) {
+                return;
+            }
             m_ChuckDelay = 0.0f;
-        }
 
-        // ASM-verified: 2026-05-27 binary @ 0x001778ae..0x001779e4 (re-analyst)
-        // Per-tick trail-emitter re-arm. Fires every Update while unsliced
-        // and m_ChuckDelay has expired. SetTrailParticles cycles the emitter
-        // (Clear+Add) every frame in the binary.
-        {
-            const FruitInfoData* info = FruitInfo_Get(m_FruitType);
-            bool ok = false;
-            if (info && info->m_TrailHash) {
-                ok = SetTrailParticles(info->m_TrailHash);
-            }
-            if (!ok && Game::GetInstance()->IsFastHardware()) {
-                // MP/SP trail-effect fallback. With NetworkManager::IsOnlineMultiplayer
-                // returning false on this platform, the !onlineMP branch always
-                // wins -> pick = StringHash("fruit_flight").
-                static const uint32_t kHashFruitFlight     = StringHash("fruit_flight");
-                static const uint32_t kHashScoreX2Trail    = StringHash("scorex2_trail");
-                static const uint32_t kHashBlueFruitFlight = StringHash("blue_fruit_flight");
-                Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
-                const bool onlineMP = nm && nm->IsOnlineMultiplayer();
-                uint32_t pick;
-                if ((onlineMP && m_PlayerIdx < 2) || m_PlayerIdx == 3) {
-                    if      (m_PlayerIdx == 0) pick = kHashFruitFlight;
-                    else if (m_PlayerIdx == 3) pick = kHashScoreX2Trail;
-                    else                       pick = kHashBlueFruitFlight;
-                } else {
-                    pick = StringHash("fruit_flight");
+            // ASM-verified: 2026-05-27 binary @ 0x001778ae..0x001779e4 (re-analyst)
+            // Trail re-arm fires ONCE on the transition frame when m_ChuckDelay
+            // crosses from positive to non-positive. Binary nests this inside the
+            // if (m_ChuckDelay > 0.0f) block, after the early-return guard.
+            {
+                const FruitInfoData* info = FruitInfo_Get(m_FruitType);
+                bool ok = false;
+                if (info && info->m_TrailHash) {
+                    ok = SetTrailParticles(info->m_TrailHash);
                 }
-                SetTrailParticles(pick);
-            }
-            // Per-tick m_pEmitter1 follow-position (binary's GOT offset Vec3 is
-            // BSS-zero, so the addend collapses to just pos).
-            if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
-        }
-
-        // ASM-verified: 2026-05-27 binary @ 0x00177a16-0x00177b4c (re-analyst).
-        // Cascade fruit-spawn from WaveManager::field_0x6c (per-frame fruit
-        // multiplier set by PowerUp::FruitMultiplyer). For value N: spawn
-        // (N-1) extras from a random side-template. For value < 1: warp this
-        // fruit off-screen so CheckHasGoneOffscreen kills it next frame.
-        {
-            WaveManager* wm = WaveManager::GetInstance();
-            float countF = wm->field_0x6c;
-            int   cnt    = (int)countF;
-            // Stochastic round-up. Epsilon=0.01 (DAT_00177cec), scale=100 (DAT_00177cf0).
-            if ((float)cnt + 0.01f < countF) {
-                uint32_t r = wm->GetRandom().Rand32(100);
-                if ((countF - (float)cnt) * 100.0f > (float)r) {
-                    cnt++;
+                if (!ok && Game::GetInstance()->IsFastHardware()) {
+                    // MP/SP trail-effect fallback. With NetworkManager::IsOnlineMultiplayer
+                    // returning false on this platform, the !onlineMP branch always
+                    // wins -> pick = StringHash("fruit_flight").
+                    static const uint32_t kHashFruitFlight     = StringHash("fruit_flight");
+                    static const uint32_t kHashScoreX2Trail    = StringHash("scorex2_trail");
+                    static const uint32_t kHashBlueFruitFlight = StringHash("blue_fruit_flight");
+                    Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
+                    const bool onlineMP = nm && nm->IsOnlineMultiplayer();
+                    uint32_t pick;
+                    if ((onlineMP && m_PlayerIdx < 2) || m_PlayerIdx == 3) {
+                        if      (m_PlayerIdx == 0) pick = kHashFruitFlight;
+                        else if (m_PlayerIdx == 3) pick = kHashScoreX2Trail;
+                        else                       pick = kHashBlueFruitFlight;
+                    } else {
+                        pick = StringHash("fruit_flight");
+                    }
+                    SetTrailParticles(pick);
                 }
+                // Per-tick m_pEmitter1 follow-position (binary's GOT offset Vec3 is
+                // BSS-zero, so the addend collapses to just pos).
+                if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
             }
-            if (cnt < 1) {
-                // Self-warp off-screen. Binary @ 0x00177a68.
-                // NOTE: NO m_bActive/flags write; relies on CheckHasGoneOffscreen later.
-                m_ChuckDelay = 0.0f;          // DAT_00177cf4
-                pos.y        = -320.0f;       // DAT_00177cf8
-                vel          = Vec3(0.0f, -1.0f, 0.0f);
-            } else if (cnt != 1) {
-                // Spawn (cnt-1) extra fruits via a random side-template.
-                // Binary @ 0x00177a9e. Three stack-built SPAWNER_INFOs;
-                // each starts from SPAWNER_INFO ctor defaults then overrides.
-                SPAWNER_INFO templates[3];
-                templates[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
-                templates[0].m_Gravity_x  = 0.0f;
-                templates[0].m_Gravity_y  = -0.05f;     // DAT_00177cfc
-                templates[0].m_Gravity_z  = 0.0f;
-                templates[0].m_SpawnTimer = -3.0f;
-                templates[1].m_SpawnType  = PLACEMENT_LEFT;
-                templates[1].m_SpawnTimer = -3.0f;
-                templates[1].m_HorizMin   = -1.0f;
-                templates[1].m_HorizMax   = -0.5f;
-                templates[2].m_SpawnType  = PLACEMENT_RIGHT;
-                templates[2].m_SpawnTimer = -3.0f;
-                templates[2].m_HorizMin   = -1.0f;
-                templates[2].m_HorizMax   = -0.5f;
-                uint32_t pick = wm->GetRandom().Rand32(3);
-                wm->SpawnFruit(cnt - 1, /*fruitType=*/-1, &templates[pick], /*playerIdx=*/0);
+
+            // ASM-verified: 2026-05-27 binary @ 0x00177a16-0x00177b4c (re-analyst).
+            // Cascade fruit-spawn fires ONCE on the transition frame when m_ChuckDelay
+            // crosses from positive to non-positive. Binary nests this inside the
+            // if (m_ChuckDelay > 0.0f) block, after trail re-arm.
+            // WaveManager::field_0x6c is the per-frame fruit multiplier set by
+            // PowerUp::FruitMultiplyer. For value N: spawn (N-1) extras from a
+            // random side-template. For value < 1: warp this fruit off-screen so
+            // CheckHasGoneOffscreen kills it next frame.
+            {
+                WaveManager* wm = WaveManager::GetInstance();
+                float countF = wm->field_0x6c;
+                int   cnt    = (int)countF;
+                // Stochastic round-up. Epsilon=0.01 (DAT_00177cec), scale=100 (DAT_00177cf0).
+                if ((float)cnt + 0.01f < countF) {
+                    uint32_t r = wm->GetRandom().Rand32(100);
+                    if ((countF - (float)cnt) * 100.0f > (float)r) {
+                        cnt++;
+                    }
+                }
+                if (cnt < 1) {
+                    // Self-warp off-screen. Binary @ 0x00177a68.
+                    // NOTE: NO m_bActive/flags write; relies on CheckHasGoneOffscreen later.
+                    m_ChuckDelay = 0.0f;          // DAT_00177cf4
+                    pos.y        = -320.0f;       // DAT_00177cf8
+                    vel          = Vec3(0.0f, -1.0f, 0.0f);
+                } else if (cnt != 1) {
+                    // Spawn (cnt-1) extra fruits via a random side-template.
+                    // Binary @ 0x00177a9e. Three stack-built SPAWNER_INFOs;
+                    // each starts from SPAWNER_INFO ctor defaults then overrides.
+                    SPAWNER_INFO templates[3];
+                    templates[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
+                    templates[0].m_Gravity_x  = 0.0f;
+                    templates[0].m_Gravity_y  = -0.05f;     // DAT_00177cfc
+                    templates[0].m_Gravity_z  = 0.0f;
+                    templates[0].m_SpawnTimer = -3.0f;
+                    templates[1].m_SpawnType  = PLACEMENT_LEFT;
+                    templates[1].m_SpawnTimer = -3.0f;
+                    templates[1].m_HorizMin   = -1.0f;
+                    templates[1].m_HorizMax   = -0.5f;
+                    templates[2].m_SpawnType  = PLACEMENT_RIGHT;
+                    templates[2].m_SpawnTimer = -3.0f;
+                    templates[2].m_HorizMin   = -1.0f;
+                    templates[2].m_HorizMax   = -0.5f;
+                    uint32_t pick = wm->GetRandom().Rand32(3);
+                    wm->SpawnFruit(cnt - 1, /*fruitType=*/-1, &templates[pick], /*playerIdx=*/0);
+                }
+                // cnt == 1: fall through to normal single-fruit path.
             }
-            // cnt == 1: fall through to normal single-fruit path.
         }
 
-        // Scale animation (0 -> 1 over ~0.3s)
-        if (m_ScaleAnim < 1.0f) {
-            m_ScaleAnim += dtScaled * 3.0f;
-            if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
-        }
 
         // ASM-verified: 2026-05-09 binary @ 0x00177bb8..0x00177c1e (asm-inspector)
         // Binary integration (Fruit::Update 0x00177680):
@@ -441,15 +446,22 @@ void Fruit::Update(float dt) {
         //   vel += gravity * dtScaled
         //   pos += m_RotAxis * dtScaled                 (NO ×60 here — binary uses
         //                                                dt @ sp+0x1c scaled by m_TimeScale)
+        // ASM-verified: 2026-05-27 binary @ 0x00177b68 (asm-inspector).
+        // IsActive() gates only the integration block. When m_ChuckDelay <= 0,
+        // the tail (m_SecondPos backup, slice timer, UpdateBombAvoidance) runs
+        // regardless of m_bActive. The delay > 0 case early-returns above and
+        // never reaches this point.
         const float POS_INTEGRATION_SCALE = 60.0f;  // DAT_00177d00
-        Vec3 step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) * POS_INTEGRATION_SCALE;
-        pos += step;
-        vel += m_Gravity * dtScaled;
+        if (IsActive()) {
+            Vec3 step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) * POS_INTEGRATION_SCALE;
+            pos += step;
+            vel += m_Gravity * dtScaled;
 
-        // Rotation axis drift — dtScaled, no ×60.
-        pos += m_RotAxis * dtScaled;
+            // Rotation axis drift — dtScaled, no ×60.
+            pos += m_RotAxis * dtScaled;
+        }
 
-        // Backup for future split
+        // Backup for future split — runs unconditionally (binary tail block)
         m_SecondPos = pos;
         m_SecondVel = vel;
 
@@ -491,6 +503,10 @@ void Fruit::Update(float dt) {
         m_SecondVel += m_Gravity * dtScaled;
         pos        += vel        * dtScaled * POS_INTEGRATION_SCALE;
         m_SecondPos += m_SecondVel * dtScaled * POS_INTEGRATION_SCALE;
+
+        // ASM-verified: 2026-05-27 binary @ 0x001777a0 (asm-inspector)
+        // -- DAT_00177954 = 1000.0f, sliced-only tick.
+        m_LifetimeCounter += (int)(1000.0f * dtScaled);
 
         // Scale grow only when not drawing whole (binary gates this on !m_bDrawWhole).
         if (!m_bDrawWhole) {
@@ -535,13 +551,15 @@ void Fruit::Update(float dt) {
         m_Rot2 = (m_Rot2 * qx * qy * qz).normalized();
     }
 
-    // Update collision sphere center (z forced to -0.5f per binary DAT_00177fec).
-    // Binary @ 0x00177f12: writes pos.x, pos.y, then overwrites z with -0.5f.
+    // ASM-verified: 2026-05-27 binary @ 0x00177f12 (asm-inspector).
+    // Binary stm writes pos.x/y/z to m_Col+4/+8/+12, then vstr overwrites
+    // m_Col+12 with DAT_00177fec = 0x00000000 = 0.0f. Prior re-analyst report
+    // misread the constant value as -0.5f -- this is the revert.
     if (m_Col) {
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center.x = pos.x;
         cs->center.y = pos.y;
-        cs->center.z = -0.5f;  // DAT_00177fec (binary @ 0x00177f12)
+        cs->center.z = 0.0f;  // DAT_00177fec
     }
 
     // ASM-verified: 2026-05-18 binary @ 0x00177f30..0x00177f42 (re-analyst).
@@ -576,9 +594,6 @@ void Fruit::Update(float dt) {
     if (CheckHasGoneOffscreen()) {
         KillFruit(true);
     }
-
-    // Lifetime counter tick — Update tail (binary @ 0x17a16+).
-    m_LifetimeCounter += (int)(1000.0f * dtScaled);
 }
 
 // Zen-mode "mirror bounce at X limits" flag. Reads bit 0x20 of
@@ -705,7 +720,11 @@ void Fruit::Draw(Renderer& r) {
     const FruitModelInfo* fmi = GetFruitModelInfo(m_FruitType);
     if (!fmi || !fmi->m_Whole.IsValid()) return;
 
-    float s = scale.x * m_ScaleAnim;
+    // ASM-verified: 2026-05-27 binary @ 0x001791f4 (re-analyst).
+    // Binary Fruit::Draw uses m_VisualScale (+0x28) only for the model scale;
+    // m_ScaleAnim is NOT a model-scale multiplier. It is consumed exclusively
+    // by Fruit::AddShadow for the whole<->halves shadow crossfade during slicing.
+    float s = scale.x;
     if (s <= 0.0f) return;
 
     // Position in binary-centred ortho space.
