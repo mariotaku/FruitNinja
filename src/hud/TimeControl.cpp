@@ -153,7 +153,7 @@ void TimeControl::Update(float dt) {
     // ASM-verified: 2026-05-18 binary @ 0x001624e6 (re-analyst)
     bool suppress = game_work.m_Paused
                  || game_work.m_LevelTransitionFlag
-                 || (game_work.m_bMPRetryPending && !game_work.field_0x199);
+                 || (game_work.m_bMPRetryPending && !game_work.m_bP2PReady);
 
     if (!suppress) {
         int q;

@@ -32,8 +32,8 @@ void SetupGameWork() {
     // +0x18C: m_gameDataLicensedState = 0.
     game_work.m_gameDataLicensedState = 0;
 
-    // +0x1AC: m_AchievementProgressTimer = 0.0f (binary @ 0x0010b522).
-    game_work.m_AchievementProgressTimer = 0.0f;
+    // +0x1AC: m_ArcadeBonusTimer = 0.0f (binary @ 0x0010b522).
+    game_work.m_ArcadeBonusTimer = 0.0f;
 
     // +0x01C: m_bUnsullied = 0.
     game_work.m_bUnsullied = 0;
@@ -67,17 +67,17 @@ void SetupGameWork() {
     // +0x164: pGameOverScreen = 0 (clear pointer).
     game_work.pGameOverScreen = nullptr;
 
-    // +0x16C: field_0x16c = 0 (binary @ 0x0010b55c).
-    game_work.field_0x16c = 0;
+    // +0x16C: m_pActiveHUDControl = 0 (binary @ 0x0010b55c).
+    game_work.m_pActiveHUDControl = nullptr;
 
     // +0x170: m_bMPRetryPending = 0 (strb, binary @ 0x0010b550).
     game_work.m_bMPRetryPending = 0;
 
-    // +0x198: field_0x198 = 0 (binary @ 0x0010b554).
-    game_work.field_0x198 = 0;
+    // +0x198: m_bGameCenterConnecting = 0 (binary @ 0x0010b554).
+    game_work.m_bGameCenterConnecting = 0;
 
-    // +0x199: field_0x199 = 0 (dead-code MP sync flag; binary @ 0x0010b53e).
-    game_work.field_0x199 = 0;
+    // +0x199: m_bP2PReady = 0 (dead-code MP sync flag; binary @ 0x0010b53e).
+    game_work.m_bP2PReady = 0;
 
     // +0x19E: field_0x19e = 0 (binary @ 0x0010b558).
     game_work.field_0x19e = 0;
@@ -85,8 +85,8 @@ void SetupGameWork() {
     // +0x1A0: m_MenuReturnTimer = 0.0f.
     game_work.m_MenuReturnTimer = 0.0f;
 
-    // +0x1A8: flag_0x1a8 = 0.
-    game_work.flag_0x1a8 = 0;
+    // +0x1A8: m_bArcadeBonusActive = 0.
+    game_work.m_bArcadeBonusActive = 0;
 
     // +0x1B0: field_0x1b0 = 0 (binary @ 0x0010b56e).
     game_work.field_0x1b0 = 0;

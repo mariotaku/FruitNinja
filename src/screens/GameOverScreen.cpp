@@ -134,13 +134,13 @@ static void DoSetTerminate() {
 //   game_work.m_LevelTransitionFlag = 1                        // +0x05
 //   mainScreen->m_State      = STATE_CAMERA_ZOOM (0)           // +0x10c
 //   mainScreen->m_StateTimer = 0.5f                            // +0x110
-//   if (game_work.field_0x16c) ((HUDControl*)f)->m_bPendingRemoval = 1
+//   if (game_work.m_pActiveHUDControl) m_pActiveHUDControl->m_bPendingRemoval = 1
 //   SetScore(0, -1)
 //   NetworkManager::GetInstance()->VTable[3](0)   // defunct
 //   game_work.m_MenuReturnTimer = 0.0f                          // +0x1a0
-//   game_work.field_0x19d     = 0                               // +0x19d
+//   game_work.m_bDisconnectPending = 0                          // +0x19d
 //   game_work.m_bMPRetryPending = 0                             // +0x170
-//   game_work.field_0x19a/b/c = 0                               // +0x19a..+0x19c
+//   game_work.m_bP2PHostMatched/m_bP2PClientJoined/m_bP2PGameStarted = 0  // +0x19a..+0x19c
 //
 // NOTE: This is THE SAME binary function called by PauseScreen quit path
 // (ported at src/screens/PauseScreen.cpp:144-194). Duplication faithful
@@ -160,10 +160,9 @@ static void DoQuitToMenu() {
         game_work.mMainScreen->SetStateTimer(0.5f);               // 0x169e80 -> m_StateTimer = 0.5f
     }
 
-    // 0x169e84/0x169e86: field_0x16c is a HUDControl* (always null in
-    // current port). Kept for binary fidelity; runtime no-op.
-    if (game_work.field_0x16c) {
-        reinterpret_cast<HUDControl*>(static_cast<intptr_t>(game_work.field_0x16c))->m_bPendingRemoval = 1;
+    // 0x169e84/0x169e86: dismiss the active HUD overlay if any.
+    if (game_work.m_pActiveHUDControl) {
+        game_work.m_pActiveHUDControl->m_bPendingRemoval = 1;
     }
 
     FN::SetScore(0, -1);                                          // 0x169e90
@@ -172,11 +171,11 @@ static void DoQuitToMenu() {
     Mortar::NetworkManager::GetInstance()->SpawnThreadController(); // vtable[3](0)
 
     game_work.m_MenuReturnTimer = 0.0f;                           // 0x169eaa
-    game_work.field_0x19d       = 0;                              // 0x169eae
-    game_work.m_bMPRetryPending = 0;                              // 0x169eb2
-    game_work.field_0x19a       = 0;                              // 0x169eb6
-    game_work.field_0x19b       = 0;                              // 0x169eba
-    game_work.field_0x19c       = 0;                              // 0x169ebe
+    game_work.m_bDisconnectPending = 0;                            // 0x169eae
+    game_work.m_bMPRetryPending   = 0;                            // 0x169eb2
+    game_work.m_bP2PHostMatched   = 0;                            // 0x169eb6
+    game_work.m_bP2PClientJoined  = 0;                            // 0x169eba
+    game_work.m_bP2PGameStarted   = 0;                            // 0x169ebe
 
     // DIFFERS: binary relies on the OS task scheduler swapping from Game task
     // to Frontend task, which triggers GameExit_Handler via GameTaskExit.

@@ -17,6 +17,7 @@
 #include "engine/util/SmartPtr.h"
 
 class HUD;
+class HUDControl;
 class MainScreen;
 class FruitCamera;
 class FruitSaveData;
@@ -48,7 +49,7 @@ struct GameWork {
     int32_t m_CoinsAtGameStart;    // +0x28
     float   m_CritTimer;           // +0x2C
     int     m_ScoreThreshold;      // +0x30
-    uint8_t field_0x34;            // +0x34
+    uint8_t field_0x34;            // +0x34: state byte: 1=HUDDestructing (HUD::Release), 3=BonusFinalePhase (BonusScreen). Re-verify other values.
     uint8_t m_bSlowMotion;         // +0x35
     uint8_t _pad_0x36[2];          // +0x36..+0x37
     float   dt;                    // +0x38
@@ -78,12 +79,12 @@ struct GameWork {
     uint8_t _pad_0x84;             // +0x84
     uint8_t m_bTutorialShown;      // +0x85
     uint8_t _pad_0x86[2];          // +0x86..+0x87
-    float   field_0x88;            // +0x88
+    float   field_0x88;            // +0x88 TODO: 0x001f43b8+0x88 -- usage contradictory; SetupGameWork writes 50.0f, Fruit::LoadInfo reads as scale; re-verify.
     uint8_t _pad_0x8c[4];          // +0x8C..+0x8F
     // +0x90/+0x94: dual-purpose -- GameDraw light direction AND global pointer X/Y
     Vec3    worldPos;              // +0x90
-    uint8_t field_0x9c;            // +0x9C
-    uint8_t field_0x9d;            // +0x9D
+    uint8_t m_bTouchDownThisFrame; // +0x9C: edge flag set by PointerDownCallback; cleared at GameUpdate top
+    uint8_t m_bTouchUpThisFrame;   // +0x9D: edge flag set by PointerUpCallback; cleared at GameUpdate top
     uint8_t m_bPointerActive;      // +0x9E
     uint8_t _pad_0x9f;             // +0x9F
     // +0xA0..+0x15F: 16 touch/finger slot positions (12 bytes each)
@@ -92,7 +93,7 @@ struct GameWork {
     MainScreen*    mMainScreen;    // +0x160
     GameOverScreen* pGameOverScreen; // +0x164
     class TutorialControl* m_TutorialControl; // +0x168
-    int     field_0x16c;           // +0x16C
+    HUDControl* m_pActiveHUDControl; // +0x16C: currently-active dismissible HUD overlay
     uint8_t m_bMPRetryPending;     // +0x170
     uint8_t _pad_0x171[3];         // +0x171..+0x173
     int     fruitTotal;            // +0x174
@@ -105,20 +106,20 @@ struct GameWork {
     uint8_t m_bGameOverActive;     // +0x190
     uint8_t _pad_0x191[3];         // +0x191..+0x193
     int     m_FrameTimer;          // +0x194
-    uint8_t field_0x198;           // +0x198
-    uint8_t field_0x199;           // +0x199
-    uint8_t field_0x19a;           // +0x19A
-    uint8_t field_0x19b;           // +0x19B
-    uint8_t field_0x19c;           // +0x19C
-    uint8_t field_0x19d;           // +0x19D
+    uint8_t m_bGameCenterConnecting; // +0x198: set during GameCenter/P2P connection
+    uint8_t m_bP2PReady;           // +0x199: gates wave-tick on remote-peer ready
+    uint8_t m_bP2PHostMatched;     // +0x19A: P2P checkpoint (TODO: re-verify reads side)
+    uint8_t m_bP2PClientJoined;    // +0x19B: P2P checkpoint (TODO: re-verify)
+    uint8_t m_bP2PGameStarted;     // +0x19C: P2P checkpoint (TODO: re-verify)
+    uint8_t m_bDisconnectPending;  // +0x19D: P2P teardown (TODO: re-verify)
     uint8_t field_0x19e;           // +0x19E
     uint8_t _pad_0x19f;            // +0x19F
     float   m_MenuReturnTimer;     // +0x1A0
     uint8_t _pad_0x1a4[4];         // +0x1A4..+0x1A7
-    uint8_t flag_0x1a8;            // +0x1A8
+    uint8_t m_bArcadeBonusActive;  // +0x1A8: paired with the 10.5s arcade-bonus timer below
     uint8_t _pad_0x1a9[3];         // +0x1A9..+0x1AB
-    float   m_AchievementProgressTimer; // +0x1AC
-    uint8_t field_0x1b0;           // +0x1B0
+    float   m_ArcadeBonusTimer;    // +0x1AC: arcade-bonus tally timer (10.5s threshold then ClearTotal("arcadeBonus"))
+    uint8_t field_0x1b0;           // +0x1B0 TODO: appears init-only; possibly dead.
     // +0x1B1..+0x5B0: four 256-byte character buffers
     // TODO: 0x001f43b8+0x1B1 -- unused? RE callers if needed
     char    buf0[256];             // +0x1B1

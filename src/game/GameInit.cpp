@@ -337,8 +337,8 @@ void GameUpdate(float dt, bool active) {
     }
 
     // Binary @ 0x0016bf90..0x0016bfce -- per-frame slot-array re-snap.
-    game_work.field_0x9c = 0;
-    game_work.field_0x9d = 0;
+    game_work.m_bTouchDownThisFrame = 0;
+    game_work.m_bTouchUpThisFrame   = 0;
     for (int i = 0; i < 16; ++i) {
         float& z = game_work.m_FingerSpawnPos[i].z;
         if (z == 0.0f) z = -1.0f;
