@@ -185,7 +185,9 @@ void WaveManager::Init() {
         tinyxml2::XMLElement* root = doc.RootElement();
         if (!root) continue;
 
-        // ASM-verified: 2026-05-27 binary @ 0x00113a4c (asm-inspector).
+        // ASM-verified: 2026-05-27 binary @ 0x00113a4c..0x0011428e (asm-inspector)
+        // -- pre-loop Reset + single-pass dispatch + per-defaults re-Reset +
+        //    coin_chances/WaveInfo/defaults/OverideProbability strings all match.
         // Binary resets DEFAULT_WAVE_INFO before the loop so an XML missing
         // <defaults> still produces ctor-default values (rather than inheriting
         // from a prior Init() call's state).
