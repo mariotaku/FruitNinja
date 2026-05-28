@@ -187,11 +187,11 @@ static void QuitToMenu() {
     // Reader sites not yet RE'd -- no non-zero writer or read site
     // identified. Clearing is binary-faithful; runtime effect of all-zero
     // is unchanged until those readers surface. Field comments in Game.h.
-    game_work.field_0x19d = 0;
+    game_work.m_bDisconnectPending = 0;
     game_work.m_bMPRetryPending = 0;
-    game_work.field_0x19a = 0;
-    game_work.field_0x19b = 0;
-    game_work.field_0x19c = 0;
+    game_work.m_bP2PHostMatched = 0;
+    game_work.m_bP2PClientJoined = 0;
+    game_work.m_bP2PGameStarted = 0;
 
     // DIFFERS: binary relies on the OS task scheduler swapping from Game task
     // to Frontend task, which triggers GameExit_Handler via GameTaskExit.
@@ -486,7 +486,7 @@ void PauseScreen::QuitGameCallback2() {
 // ASM-verified: 2026-05-08T00:00 binary @ 0x00153f68 (re-analyst)
 // Binary @ 0x00153f68 RetryGameCallback():
 //   if (m_State != 3) return;
-//   if (game_work.m_AchievementProgressTimer >= 10.5f)
+//   if (game_work.m_ArcadeBonusTimer >= 10.5f)
 //       FruitSaveData::AddToTotal("retries_in_a_row", hash, 1, true, true);
 //   Math::SeedGlobalRng(game_work.m_FrameTimer);  // binary @ 0x00153f20
 //   game_work.m_bTutorialShown = 0;
@@ -495,7 +495,7 @@ void PauseScreen::QuitGameCallback2() {
 void PauseScreen::RetryGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
     Game* game = Game::GetInstance();
-    if (game && game_work.m_AchievementProgressTimer >= 10.5f && game_work.m_SaveData) {
+    if (game && game_work.m_ArcadeBonusTimer >= 10.5f && game_work.m_SaveData) {
         // String resolved from binary DAT_00153fe4 -> 0x001ba98f.
         const char* kKey = "retries_in_a_row";
         game_work.m_SaveData->AddToTotal(kKey, ::StringHash(kKey),

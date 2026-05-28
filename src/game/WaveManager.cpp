@@ -541,7 +541,7 @@ void WaveManager::Reset(bool fullReset) {
 
     // 8. Final per-mode speed-multiplier defaults.
     // Binary @ 0x00125eb8: dead-code MP sync flag cleared to 0.
-    game_work.field_0x199 = 0;
+    game_work.m_bP2PReady = 0;
     field_0x78 = 1.0f;
     field_0x74 = m_SpeedMultPerMode[game_work.gameMode];
 
