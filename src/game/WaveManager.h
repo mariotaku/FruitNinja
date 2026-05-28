@@ -163,11 +163,6 @@ public:
     // Score threshold per player (for ChooseFrom logic)
     int m_ScoreThreshold[2];
 
-    // +0x108: global waitForEntities flag (from <defaults>; NOT per-mode).
-    uint8_t field_0x108;
-    // +0x109: global waitForProcessing flag (from <defaults>).
-    uint8_t field_0x109;
-
     // Per-mode dtInc (speed accumulator multiplier). binary field_0x7c[4].
     // Parsed from <defaults> "dtInc" attr per mode. DIFFERS: was m_SpeedMultPerMode at +0x8c (wrong field).
     // binary @ 0x00125ac4: speed = field_0x74 + dt * +0x7c[mode]
