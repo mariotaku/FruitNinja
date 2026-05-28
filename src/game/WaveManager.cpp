@@ -185,14 +185,11 @@ void WaveManager::Init() {
         tinyxml2::XMLElement* root = doc.RootElement();
         if (!root) continue;
 
-        // ASM-verified: 2026-05-27 binary @ 0x0012393c (re-analyst) -- single-pass walk; defaults Re-Reset per occurrence.
-        // Binary walks root->FirstChildElement() in document order, dispatching by name.
-        // Each "defaults" occurrence calls DEFAULT_WAVE_INFO::Reset before re-parsing attrs,
-        // so the LAST <defaults> block wins for any attr it sets (unreferenced attrs revert
-        // to ctor defaults, not the prior block's values). arcadewavelist.xml has two
-        // <defaults> blocks; the second (lines 59-69) governs the main Arcade wave pool
-        // with nextDelay=1.3, dtSpInc=0.014 etc. The prior FirstChildElement("defaults")
-        // port only saw block 1 (nextDelay=0, dtSpInc=0.009).
+        // ASM-verified: 2026-05-27 binary @ 0x00113a4c (asm-inspector).
+        // Binary resets DEFAULT_WAVE_INFO before the loop so an XML missing
+        // <defaults> still produces ctor-default values (rather than inheriting
+        // from a prior Init() call's state).
+        defaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
         int waveIndex = 0;
         for (tinyxml2::XMLElement* el = root->FirstChildElement();
              el; el = el->NextSiblingElement())
@@ -231,7 +228,7 @@ void WaveManager::Init() {
                     field_0x108 = (strcmp(wfe, "false") != 0) ? 1 : 0;
                 if (const char* wfp = el->Attribute("waitForProcessing"))
                     field_0x109 = (strcmp(wfp, "false") != 0) ? 1 : 0;
-            } else if (strcmp(elName, "coinchanceinator") == 0) {
+            } else if (strcmp(elName, "coin_chances") == 0) {
                 ParseCoinChanceinator(&coinChance[mode], el);
             } else if (strcmp(elName, "OverideProbability") == 0) {
                 PROBABILITY_OVERIDE po;
