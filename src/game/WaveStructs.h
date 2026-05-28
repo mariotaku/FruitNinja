@@ -156,9 +156,10 @@ struct WAVE_INFO {
     float                    m_NextWaveWaitSpInc; // +0x30
     // +0x34: wave revisit counter (incremented each GetNextWave selection)
     float                    field_0x34;         // +0x34
-    // +0x38: NextWaveDelay "waitForEntities" (1 default; 0 only if attr == "false")
+    // +0x38: seeded from DEFAULT_WAVE_INFO::m_bWaitForEntities (XML "waitForEntities" on <defaults>);
+    // also written by <NextWaveDelay waitForEntities> attr per-wave.
     uint8_t                  m_bWaitForEntities; // +0x38
-    // +0x39: NextWaveDelay "waitForProcessing"
+    // +0x39: seeded from DEFAULT_WAVE_INFO::m_bWaitForProcessing; overridable per-wave.
     uint8_t                  m_bWaitForProcessing; // +0x39
     uint8_t                  _pad3a[2];
     // +0x3c: "chance" attr (selection weight)
@@ -227,51 +228,61 @@ struct WAVE_INFO {
 };
 
 // DEFAULT_WAVE_INFO — size 0x40 (64 bytes), stored at WaveManager+0xdc per mode.
-// Parsed from <defaults> element. Field names per binary audit DAT addresses.
+// ASM-verified: 2026-05-27 binary @ 0x0012630c (re-analyst) -- Reset writes all defaults.
+// WAVE_INFO::WAVE_INFO(DEFAULT_WAVE_INFO*) @ 0x001267c8 copies these into per-wave WAVE_INFOs.
 struct DEFAULT_WAVE_INFO {
-    // +0x00: "waveChance" attr
-    int   m_WaveChance;         // +0x00
-    // +0x04: "waveChanceRegrowth" attr (XML ships "waveChanceGrowth" — typo mismatch)
-    float m_WaveChanceRegrowth; // +0x04
-    // +0x08: "criticalChance" attr
-    float m_CritChance;         // +0x08
-    // +0x0c: "dt" attr (default Wave_dt base)
-    float m_DefaultDt;          // +0x0c
-    // +0x10: "dtInc" attr (per-wave dt increment default)
-    float m_DtInc;              // +0x10
-    // +0x14: "dtSpInc" attr
-    float m_DtSpInc;            // +0x14
-    // +0x18: "beforeDelay" attr
-    float m_BeforeDelay;        // +0x18
-    // +0x1c: "beforeDelayInc" attr
-    float m_BeforeDelayInc;     // +0x1c
-    // +0x20: "nextDelay" attr
-    float m_NextDelay;          // +0x20
-    // +0x24: "nextDelayInc" attr
-    float m_NextDelayInc;       // +0x24
-    // +0x28: "nextDelaySpInc" attr
-    float m_NextDelaySpInc;     // +0x28
-    // +0x2c: "speedLoss" attr
-    float m_DefSpeedLoss;       // +0x2c
-    // +0x30: "overideProbabiltyPool" attr (typo matches binary)
-    int   m_OverideProbabilityPool; // +0x30
+    int     m_WaveChance;            // +0x00 XML "waveChance"           default 10
+    float   m_WaveChanceRegrowth;    // +0x04 XML "waveChanceGrowth"     default 0.25
+    float   m_SpawnTimeScale;        // +0x08 XML "dt"                   default 1.0  (-> WAVE_INFO+0x10 m_WaveDt)
+    float   m_CritChanceVal;         // +0x0c XML "criticalChance"       default 1.0  (-> WAVE_INFO+0x64 m_CriticalChance)
+    float   m_DtInc;                 // +0x10 XML "dtInc"                default 0.0
+    float   m_DtSpInc;               // +0x14 XML "dtSpInc"              default 0.0
+    float   m_BeforeDelay;           // +0x18 XML "beforeDelay"          default 2.0
+    float   m_BeforeDelayInc;        // +0x1c XML "beforeDelayInc"       default 0.0
+    float   m_NextDelay;             // +0x20 XML "nextDelay"            default 0.0
+    float   m_NextDelayInc;          // +0x24 XML "nextDelayInc"         default 0.0
+    float   m_NextDelaySpInc;        // +0x28 XML "nextDelaySpInc"       default 0.0
+    uint8_t m_bWaitForEntities;      // +0x2c XML "waitForEntities"       default 1    (-> WAVE_INFO+0x38)
+    uint8_t m_bWaitForProcessing;    // +0x2d XML "waitForProcessing"    default 1    (-> WAVE_INFO+0x39)
+    uint8_t _pad2e[2];               // +0x2e..+0x2f
+    float   m_SpeedLoss;             // +0x30 XML "speedLoss"            default 0.0  (-> WAVE_INFO+0x1c m_NextWaveSpeedLoss)
+    int     m_OverideProbabilityPool;// +0x34 XML "overideProbabiltyPool" default 100 (-> WAVE_INFO+0x70)
+    int     m_SecondaryModeOffset;   // +0x38 default 0; set to 1 when secondary-mode XML attr active. Defunct in shipped XML.
+    int     m_SecondaryModeWaveCount;// +0x3c default -1; set to 2 when secondary-mode active.
+                                     // TODO: 0x0012393c — DAT_00124268 XML attr name and +0x3c reader unresolved.
 
     DEFAULT_WAVE_INFO()
-        : m_WaveChance(90)
-        , m_WaveChanceRegrowth(0.33f)
-        , m_CritChance(1.0f)
-        , m_DefaultDt(0.9f)
+        : m_WaveChance(10)
+        , m_WaveChanceRegrowth(0.25f)
+        , m_SpawnTimeScale(1.0f)
+        , m_CritChanceVal(1.0f)
         , m_DtInc(0.0f)
         , m_DtSpInc(0.0f)
-        , m_BeforeDelay(0.0f)
+        , m_BeforeDelay(2.0f)
         , m_BeforeDelayInc(0.0f)
         , m_NextDelay(0.0f)
         , m_NextDelayInc(0.0f)
         , m_NextDelaySpInc(0.0f)
-        , m_DefSpeedLoss(0.0f)
-        , m_OverideProbabilityPool(0)
-    {}
+        , m_bWaitForEntities(1)
+        , m_bWaitForProcessing(1)
+        , m_SpeedLoss(0.0f)
+        , m_OverideProbabilityPool(100)
+        , m_SecondaryModeOffset(0)
+        , m_SecondaryModeWaveCount(-1)
+    {
+        memset(_pad2e, 0, sizeof(_pad2e));
+    }
 };
+
+#ifdef __bada__
+static_assert(sizeof(DEFAULT_WAVE_INFO) == 0x40, "DEFAULT_WAVE_INFO must be 64 bytes");
+static_assert(offsetof(DEFAULT_WAVE_INFO, m_bWaitForEntities)   == 0x2c, "DEFAULT_WAVE_INFO::m_bWaitForEntities offset");
+static_assert(offsetof(DEFAULT_WAVE_INFO, m_bWaitForProcessing) == 0x2d, "DEFAULT_WAVE_INFO::m_bWaitForProcessing offset");
+static_assert(offsetof(DEFAULT_WAVE_INFO, m_SpeedLoss)          == 0x30, "DEFAULT_WAVE_INFO::m_SpeedLoss offset");
+static_assert(offsetof(DEFAULT_WAVE_INFO, m_OverideProbabilityPool) == 0x34, "DEFAULT_WAVE_INFO::m_OverideProbabilityPool offset");
+static_assert(offsetof(DEFAULT_WAVE_INFO, m_SecondaryModeOffset)    == 0x38, "DEFAULT_WAVE_INFO::m_SecondaryModeOffset offset");
+static_assert(offsetof(DEFAULT_WAVE_INFO, m_SecondaryModeWaveCount) == 0x3c, "DEFAULT_WAVE_INFO::m_SecondaryModeWaveCount offset");
+#endif
 
 // COIN_CHANCEINATOR — size 0x08, stored at WaveManager+0x1dc per mode.
 // Binary layout per GetCoins @ 0x00121778.

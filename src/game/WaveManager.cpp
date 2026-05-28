@@ -107,12 +107,6 @@ WaveManager::WaveManager()
     , field_0x240(0.0f)
     , field_0x2cc(0), field_0x2d0(0)
     , field_0x2d4(0.0f)
-    // field_0x108 (waitForEntities) / field_0x109 (waitForProcessing) default to 1
-    // so absent <defaults> attributes produce "wait" semantics (binary
-    // DEFAULT_WAVE_INFO ctor default per re-analyst 2026-05-22).
-    // Earlier field_0x109(0) was a port bug -- propagating that to per-wave
-    // m_bWaitForProcessing made all waves transition with no inter-wave delay.
-    , field_0x108(1), field_0x109(1)
     , m_pWaveQue(nullptr), m_pWaveQueItem(nullptr)
 {
     m_ComboTimer[0] = 0.0f; m_ComboTimer[1] = 0.0f;
@@ -204,12 +198,13 @@ void WaveManager::Init() {
                 // Binary calls DEFAULT_WAVE_INFO::Reset (placement-new via ctor).
                 defaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
                 DEFAULT_WAVE_INFO& def = defaultWaveInfo[mode];
-                el->QueryFloatAttribute("criticalChance", &def.m_CritChance);
                 el->QueryIntAttribute("waveChance",       &def.m_WaveChance);
                 // DIFFERS: binary reads "waveChanceRegrowth"; shipping XML uses "waveChanceGrowth".
-                // Neither key matches the other; binary default 0.33 covers both. Parse both for safety.
+                // Neither key matches the other; binary default 0.25 covers both. Parse both for safety.
                 el->QueryFloatAttribute("waveChanceRegrowth", &def.m_WaveChanceRegrowth);
                 el->QueryFloatAttribute("waveChanceGrowth",   &def.m_WaveChanceRegrowth);
+                el->QueryFloatAttribute("dt",             &def.m_SpawnTimeScale);
+                el->QueryFloatAttribute("criticalChance", &def.m_CritChanceVal);
                 // globalDtInc -> per-mode WaveManager speed accumulator (binary key is "globalDtInc", not "dtInc").
                 el->QueryFloatAttribute("globalDtInc",   &m_DtIncPerMode[mode]);
                 // globalDtStart/globalDtMax -> per-mode speed clamp bounds.
@@ -218,18 +213,17 @@ void WaveManager::Init() {
                 // Additional <defaults> attrs written to DEFAULT_WAVE_INFO per binary audit.
                 el->QueryFloatAttribute("dtInc",          &def.m_DtInc);
                 el->QueryFloatAttribute("dtSpInc",        &def.m_DtSpInc);
+                el->QueryFloatAttribute("beforeDelay",    &def.m_BeforeDelay);
+                el->QueryFloatAttribute("beforeDelayInc", &def.m_BeforeDelayInc);
                 el->QueryFloatAttribute("nextDelay",      &def.m_NextDelay);
                 el->QueryFloatAttribute("nextDelayInc",   &def.m_NextDelayInc);
                 el->QueryFloatAttribute("nextDelaySpInc", &def.m_NextDelaySpInc);
-                el->QueryFloatAttribute("beforeDelay",    &def.m_BeforeDelay);
-                el->QueryFloatAttribute("beforeDelayInc", &def.m_BeforeDelayInc);
-                el->QueryFloatAttribute("speedLoss",      &def.m_DefSpeedLoss);
-                el->QueryIntAttribute("overideProbabiltyPool", &def.m_OverideProbabilityPool);
-                // "waitForEntities" / "waitForProcessing" per binary write to WaveManager+0x108/0x109.
                 if (const char* wfe = el->Attribute("waitForEntities"))
-                    field_0x108 = (strcmp(wfe, "false") != 0) ? 1 : 0;
+                    def.m_bWaitForEntities = (strcmp(wfe, "false") != 0) ? 1 : 0;
                 if (const char* wfp = el->Attribute("waitForProcessing"))
-                    field_0x109 = (strcmp(wfp, "false") != 0) ? 1 : 0;
+                    def.m_bWaitForProcessing = (strcmp(wfp, "false") != 0) ? 1 : 0;
+                el->QueryFloatAttribute("speedLoss",      &def.m_SpeedLoss);
+                el->QueryIntAttribute("overideProbabiltyPool", &def.m_OverideProbabilityPool);
             } else if (strcmp(elName, "coin_chances") == 0) {
                 ParseCoinChanceinator(&coinChance[mode], el);
             } else if (strcmp(elName, "OverideProbability") == 0) {
@@ -245,17 +239,10 @@ void WaveManager::Init() {
                 WAVE_INFO* wi = new WAVE_INFO();
                 wi->m_WaveIndex = waveIndex++;
                 // ASM-verified: 2026-05-22 binary @ 0x001267c8 (re-analyst).
-                // Binary uses a defaults-taking WAVE_INFO ctor that copies
-                // DEFAULT_WAVE_INFO.field_0x2c (m_bAllowBombs) and field_0x2d
-                // (m_bWaitForProcessing) into the new WAVE_INFO. Port stores
-                // these on WaveManager (field_0x108/0x109); propagate them
-                // here so per-wave m_bWaitForProcessing inherits the XML's
-                // <defaults waitForProcessing> value when absent on the
-                // wave's own <NextWaveDelay>. NOTE: m_bWaitForEntities is
-                // NOT in DEFAULT_WAVE_INFO -- the binary hardcodes the
-                // WAVE_INFO ctor default for it (typically 1), only
-                // overridden by <NextWaveDelay waitForEntities>.
-                wi->m_bWaitForProcessing = field_0x109;
+                // WAVE_INFO::WAVE_INFO(DEFAULT_WAVE_INFO*) copies m_bWaitForEntities (+0x2c)
+                // and m_bWaitForProcessing (+0x2d) from the per-mode DEFAULT_WAVE_INFO.
+                wi->m_bWaitForEntities   = defaultWaveInfo[mode].m_bWaitForEntities;
+                wi->m_bWaitForProcessing = defaultWaveInfo[mode].m_bWaitForProcessing;
 
                 // waveNo attr -> binary stores to local then +0x0 (m_ScoreThreshold) via conditional.
                 // m_OverideProbabilityPool also written to +0x70 (second read wins in binary).

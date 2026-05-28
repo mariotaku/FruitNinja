@@ -382,7 +382,7 @@ int main(int argc, char* argv[]) {
                    " | amBombs=%d GnaCountdown=%d\n",
                    frame, procP0, WaveIdx(w),
                    w ? (int)w->m_bWaitForProcessing : -1,
-                   w ? (int)w->m_bWaitForEntities  : -1,
+                   w ? (int)w->m_bWaitForEntities : -1,
                    amFruitsRaw, liveFruits, inactiveFruits, killedFruits, fruitsInactive,
                    amBombsRaw, bombsCountdown);
             (void)fruitsAlive; (void)bombsAlive;
