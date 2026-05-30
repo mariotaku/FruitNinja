@@ -50,33 +50,44 @@ static_assert(sizeof(AchievementItem) == 0x84, "AchievementItem must be 0x84 byt
 
 // EntityState -- queued resume snapshot for a fruit / bomb / power-up.
 // Binary serialises one per active actor when m_bHasActiveGame is set.
-// Binary layout from copy-ctor @ 0x0012c594: 3x Vec3 (12B each) then
-// uint8_t @+0x24, int32_t @+0x28, float @+0x2c. Total 0x30 = 48 bytes.
-// Semantic mapping (unverified -- TODO: re-analyst @ 0x0012c594 to confirm):
-//   m_Vec0: world position
-//   m_Vec1: world velocity
-//   m_Vec2: gravity / bomb-accel vector
-//   m_Flag: entity category or hit-flag (uint8_t; ldrb/strb confirmed)
-//   m_Int:  entity-type index (int32_t; can be -1 for power-up)
-//   m_Float: chuck-delay / spawner wait timer (float)
+//
+// ASM-confirmed layout from copy-ctor @ 0x0012c594 and Resume @ 0x00124b1c.
+// sizeof = 0x30 (48 bytes), no trailing padding beyond the last field.
+//
+// Field layout:
+//   +0x00  Vec3f m_Velocity      -- restore -> actor->vel
+//   +0x0C  Vec3f m_Position      -- restore -> actor->pos
+//   +0x18  Vec3f m_Overlay       -- per-kind overlay (see below); +0x25..+0x27 = pad
+//   +0x24  uint8 m_BombHitFlag   -- bomb: 0 = Chuck, != 0 = SetHit; upper 3 bytes pad
+//   +0x28  int32 m_KindIndex     -- kind discriminator AND Init type-index
+//   +0x2C  float m_ChuckMag      -- Chuck/Hit magnitude; applied only if > 0.0f
+//
+// m_Overlay interpretation by actor kind (derived from m_KindIndex):
+//   Fruit  (kind == 0): m_Overlay = gravity Vec3 -> actor->m_Gravity
+//   Bomb   (kind == 1): x = rotAxis_z, y = playerIdx (raw int in float slot),
+//                       z = timeScale -- TODO: 0x00124b1c bomb-overlay fields
+//   PowerUp(kind == 4): overlay not consumed
+//
+// Kind selection from m_KindIndex (g_FruitCount = **DAT_00124f04):
+//   idx >= g_FruitCount  -> kind = 1  (Bomb)
+//   idx < 0              -> kind = 4  (PowerUp)
+//   else                 -> kind = 0  (Fruit)
 struct EntityState {
-    float    m_Vec0[3];  // +0x00: world position (Vec3)
-    float    m_Vec1[3];  // +0x0c: world velocity (Vec3)
-    float    m_Vec2[3];  // +0x18: gravity / accel vector (Vec3)
-    uint8_t  m_Flag;     // +0x24: entity category (0=fruit,1=bomb,4=powerup) or hit-flag
+    float    m_Velocity[3];    // +0x00: actor->vel
+    float    m_Position[3];    // +0x0C: actor->pos
+    float    m_Overlay[3];     // +0x18: per-kind overlay (see above)
+    uint8_t  m_BombHitFlag;    // +0x24: 0=Chuck, !=0=SetHit (bomb only)
     // +0x25..+0x27: 3 bytes implicit padding
-    int32_t  m_Int;      // +0x28: entity-type index (fruit type / bomb variant; -1=power-up)
-    float    m_Float;    // +0x2c: chuck-delay / spawner wait timer
+    int32_t  m_KindIndex;      // +0x28: Init type-index; also selects Fruit/Bomb/PowerUp
+    float    m_ChuckMag;       // +0x2C: Chuck/SetHit magnitude; gate: > 0.0f
 
-    EntityState() : m_Flag(0), m_Int(0), m_Float(0.0f) {
-        m_Vec0[0] = m_Vec0[1] = m_Vec0[2] = 0.0f;
-        m_Vec1[0] = m_Vec1[1] = m_Vec1[2] = 0.0f;
-        m_Vec2[0] = m_Vec2[1] = m_Vec2[2] = 0.0f;
+    EntityState() : m_BombHitFlag(0), m_KindIndex(0), m_ChuckMag(0.0f) {
+        m_Velocity[0] = m_Velocity[1] = m_Velocity[2] = 0.0f;
+        m_Position[0] = m_Position[1] = m_Position[2] = 0.0f;
+        m_Overlay[0]  = m_Overlay[1]  = m_Overlay[2]  = 0.0f;
     }
 };
-#ifdef __bada__
-static_assert(sizeof(EntityState) == 48, "EntityState size mismatch");
-#endif
+static_assert(sizeof(EntityState) == 0x30, "EntityState size mismatch (binary: 0x30=48)");
 
 // SpawnState -- queued spawner info (one per <spawner> child of <wave>).
 // Binary layout (8 bytes): count@+0x00 (float, -> SPAWNER_INFO.m_SpawnCountF/m_RemainingCount),
