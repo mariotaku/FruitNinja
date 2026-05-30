@@ -111,13 +111,22 @@ public:
     // +0x1fc: per-mode probability override lists (12 bytes each).
     std::vector<PROBABILITY_OVERIDE> m_ProbabilityOverride[4];  // +0x1fc
 
-    // +0x22c/+0x230: current wave pointer (MP) or wave count (SP) — binary stores
-    // the SP wave count in the m_pCurrentWave_P1 slot (+0x230) by aliasing.
-    union {
-        WAVE_INFO* m_pCurrentWave[2];  // +0x22c: [0]=P0 wave ptr, [1]=P1/SP wave count
-        int        m_WaveCount[2];     // +0x22c: [0]=P0 count (aliases m_pCurrentWave[0]),
-                                       //          [1]=SP wave count (aliases m_pCurrentWave[1])
-    };
+    // +0x22c: current wave pointer per player.
+    // Binary @ 0x0022ee80+0x22c: in the 32-bit binary, m_pCurrentWave[0] and
+    // m_WaveCount[0] occupy the SAME 4-byte slot (the binary re-uses the pointer
+    // slot as a sequential wave counter, then overwrites it with the selected
+    // WAVE_INFO* at the end of GetNextWave). On the 64-bit host a pointer is 8
+    // bytes and a 4-byte int cannot alias it correctly -- the union would corrupt
+    // m_pCurrentWave[0]'s high 4 bytes every time m_WaveCount[1] is written.
+    // Port-specific separation: m_pCurrentWave[2] and m_WaveCount[2] are kept as
+    // distinct fields. GetNextWave increments m_WaveCount, selects using it, then
+    // stores the winner into m_pCurrentWave -- the same semantic sequence as the
+    // binary, without the pointer-stomping corruption.
+    // DIFFERS: binary aliases {m_pCurrentWave[0], m_WaveCount[0]} and
+    // {m_pCurrentWave[1], m_WaveCount[1]} as single 4-byte slots; port uses
+    // separate 64-bit pointer + 32-bit counter to preserve correct behaviour.
+    WAVE_INFO* m_pCurrentWave[2];  // +0x22c: P0 and P1 current wave pointers
+    int        m_WaveCount[2];     // port-only: wave-sequence counter per player
 
     // +0x234..+0x2d3: binary unnamed region (160 bytes).
     // Fields below are port-derived names for binary offsets within this range.
