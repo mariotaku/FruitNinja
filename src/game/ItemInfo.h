@@ -153,14 +153,18 @@ struct SlashSoundMods {
 // Tracks a looping ambient sound attached to the equipped blade mod.
 // -----------------------------------------------------------------------
 struct LoopingSound {
-    // +0x00  int32_t  m_SoundId    runtime state; ctor 0, not parsed
+    // +0x00  float    m_field0     runtime float; ctor 0.0f (vstr.32 s15 = 0.0f)
+    // DIFFERS: binary = float at +0x00; port names as m_SoundId int32_t for
+    //   readability; same 4-byte layout, different type interpretation.
     int32_t  m_SoundId;
-    // +0x04  int32_t  m_Phase      runtime state; ctor 0, not parsed
+    // +0x04  float    m_field4     runtime float; ctor 0.0f (vstr.32 s15 = 0.0f)
+    // DIFFERS: binary = float at +0x04; port names as m_Phase int32_t for
+    //   readability; same 4-byte layout, different type interpretation.
     int32_t  m_Phase;
-    // +0x08  int32_t  m_State      runtime state; ctor 0, not parsed
-    int32_t  m_State;
-    // +0x0c  char*    m_pLoopName  CloneString of XML "loop" attr; default NULL
+    // +0x08  char*    m_pLoopName  CloneString of XML "loop" attr; default NULL
     char*    m_pLoopName;
+    // +0x0c  int32_t  m_State      runtime state; ctor 0, not parsed
+    int32_t  m_State;
 
     LoopingSound();
 
@@ -241,6 +245,10 @@ public:
 static_assert(offsetof(SlashSoundMods, m_TimeUntilNextSound) == 0x14, "SlashSoundMods::m_TimeUntilNextSound");
 static_assert(offsetof(SlashSoundMods, m_LastVolume)         == 0x18, "SlashSoundMods::m_LastVolume");
 static_assert(offsetof(SlashSoundMods, m_LastPitch)          == 0x1c, "SlashSoundMods::m_LastPitch");
+static_assert(sizeof(LoopingSound)                           == 0x10, "LoopingSound size");
+static_assert(offsetof(LoopingSound, m_pLoopName)            == 0x08, "LoopingSound::m_pLoopName @ +0x08");
+static_assert(offsetof(LoopingSound, m_State)                == 0x0c, "LoopingSound::m_State @ +0x0c");
+static_assert(sizeof(SlashModInfo)                           == 0x110, "SlashModInfo size");
 #endif
 
 #endif // FN_ITEM_INFO_H
