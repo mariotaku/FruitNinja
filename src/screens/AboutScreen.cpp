@@ -6,7 +6,6 @@
 
 #include "AboutScreen.h"
 #include "DojoScreen.h"
-#include "Game.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
@@ -156,14 +155,14 @@ void AboutScreen::UnLoadContent()
 
 // -----------------------------------------------------------------------
 // AboutScreen::AboutScreen  @ 0x0012ecb8
+// Binary ctor: AboutScreen(DojoScreen*) — no Game& parameter.
 // -----------------------------------------------------------------------
-AboutScreen::AboutScreen(Game& g, DojoScreen* parent)
-    : game(g)
+AboutScreen::AboutScreen(DojoScreen* parent)
+    : m_TransitionAlpha(0.0f)   // DAT_0012ed88 = 0.0
+    , m_pBackButton(nullptr)
     , m_pParent(parent)
     , m_pOFNButton(nullptr)
-    , m_pBackButton(nullptr)
-    , m_TransitionAlpha(0.0f)   // DAT_0012ed88 = 0.0
-    , m_State(0)                // field121_0x94 initial value = 0 (wait, m_State is field126_0x9c)
+    , m_State(0)                // field21_0x9c initial value = 0
 {
     // Binary: lazy-load content if not yet loaded (checks static flag)
     LoadContent();
@@ -174,16 +173,13 @@ AboutScreen::AboutScreen(Game& g, DojoScreen* parent)
     // field_0x32 = 0 (m_bNoDestructor)
     m_bNoDestructor = 0;
 
-    // field119_0x8c = 0 (back button ptr)
-    // field126_0x9c = 0 (state = 0)
-    // Already set by member init above.
+    // Copy s_TexHaiku SmartPtr into base HUDControl3d::m_Texture @ +0x74
+    // (per-instance texture for dimension queries and Draw).
+    // Binary: SmartPtr::operator=(this->base.m_Texture, *(static_ptr))
+    m_Texture = s_TexHaiku;
 
-    // Copy s_TexHaiku SmartPtr into field101_0x74 (per-instance copy for
-    // dimension queries). Binary: SmartPtr::operator=(field_0x74, *(static_ptr))
-    m_TexHaiku = s_TexHaiku;
-
-    // field_0x98 SmartPtr initialized to null (SmartPtr::SmartPtr default)
     // m_TexOFNOverlay stays null — OFN defunct.
+    // m_reserved[] is zero-initialised by HUDControl3d base ctor.
 }
 
 // -----------------------------------------------------------------------
@@ -192,7 +188,8 @@ AboutScreen::AboutScreen(Game& g, DojoScreen* parent)
 AboutScreen::~AboutScreen()
 {
     Release();
-    // SmartPtr dtors for m_TexHaiku and m_TexOFNOverlay called implicitly.
+    // SmartPtr dtor for m_TexOFNOverlay called implicitly.
+    // base HUDControl3d::m_Texture (haiku panel) released by base dtor.
 }
 
 // -----------------------------------------------------------------------
@@ -374,11 +371,11 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
     const float alpha = m_TransitionAlpha;
 
     // ================================================================
-    // Block A: haiku background panel (field101_0x74 = s_TexHaiku)
+    // Block A: haiku background panel (base HUDControl3d::m_Texture @ +0x74)
     // ================================================================
-    if (m_TexHaiku.IsValid()) {
-        const float texW = (float)m_TexHaiku->m_Width;
-        const float texH = (float)m_TexHaiku->m_Height;
+    if (m_Texture.IsValid()) {
+        const float texW = (float)m_Texture->m_Width;
+        const float texH = (float)m_Texture->m_Height;
 
         // Binary computes Y_start once (one-time cached in BSS guard).
         // Port recomputes each frame — same result, avoids BSS guard pattern.
@@ -403,9 +400,9 @@ void AboutScreen::Draw(const Vec3& /*hudScale*/, int /*layerMask*/)
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
-        m_TexHaiku->Set();
+        m_Texture->Set();
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
-        m_TexHaiku->UnSet();
+        m_Texture->UnSet();
 
         // ---- Font draws (version text "V1.5.1") ----
         // Binary draws two Font::DrawString calls back-to-back:
