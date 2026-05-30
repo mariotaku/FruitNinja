@@ -52,6 +52,13 @@ static const float MS_SCALE_RAND      = 10.0f;
 // Update @ 0x0017f774
 static const float UP_LAND_Z          = -50.0f;   // DAT_0017faa8 (landing threshold)
 
+// ASM-verified: binary @ 0x001803c0 DrawActiveSplats draws the splat batch
+// through a world matrix translated to z = DAT_00180404 = -5500, far behind
+// all fruits (fruit mesh z = -500..-2499). The landed m_Pos.z (-50) is the
+// entity's logical land plane; the DRAW plane is -5500. Without this, splats
+// at -50 are nearer than fruits and win GL_LESS, painting over them.
+static const float SPLAT_DRAW_Z       = -5500.0f; // DAT_00180404
+
 // Verified 2026-04-15 from instruction at 0x0017fa90:
 //   vmov.f32 s13, 0xc1200000   ; -10.0f
 //   vmla.f32 s15, s13, s14     ; vel.y += -10.0 * dt
@@ -726,7 +733,7 @@ void SplatEntity::DrawSplat() {
     if (m_bFlipV) { float t = v0; v0 = v1; v1 = t; }
 
     QUADCUSTOMVERTEX* v = outVerts;
-    const float px = m_Pos.x, py = m_Pos.y, pz = m_Pos.z;
+    const float px = m_Pos.x, py = m_Pos.y, pz = SPLAT_DRAW_Z;
 
     // Vertex layout matches binary DrawSplat (vertices 0..5 written in
     // order, then v3=v2 and v4=v1 via memcpy):
