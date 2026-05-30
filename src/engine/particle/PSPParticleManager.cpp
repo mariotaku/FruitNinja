@@ -414,6 +414,10 @@ void PSPParticleManager::Update(float dt, bool paused) {
             }
         }
         if (!keep) {
+            // Binary @ 0x00115ed8 reap path: null the caller back-pointer so callers
+            // that passed &member (Coin, ScreenEffect, etc.) see nullptr on next access.
+            // Fruit passes nullptr for ppRef and relies on naturally-infinite templates
+            // (see Note comments in Fruit.cpp CollisionResponse / SetTrailParticles).
             if (e.m_pRefPtr) *e.m_pRefPtr = nullptr;
             delete m_Emitters[i];
             m_Emitters.erase(m_Emitters.begin() + i);
