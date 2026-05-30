@@ -300,7 +300,7 @@ void DojoScreen::Update(float dt) {
             // State 3: push AboutScreen.
             // Binary: operator_new(0xa0), AboutScreen ctor, call vtable[2]=Init,
             //         HUD::AddControl. No RemoveCallback installed in binary.
-            m_pAboutScreen = new AboutScreen(game, this);
+            m_pAboutScreen = new AboutScreen(this);
             m_pAboutScreen->Init();  // matches binary: (*(code*)about->vtable[2])(about)
             // Port-specific: install RemoveCallback so DojoScreen clears its ptr.
             // Binary relies on AboutScreen calling parent->Reset() which sets state=0.
