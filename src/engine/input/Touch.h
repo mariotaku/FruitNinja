@@ -1,14 +1,13 @@
 #ifndef MORTAR_TOUCH_H
 #define MORTAR_TOUCH_H
 
-// Analysed: 2026-05-04T00:00
-//
 // Mortar::Touch -- binary @ 0x0019591c area.
 // sizeof 0x1d4 (468 bytes):
 //   +0x000: State states1[8]  (8 * 28 = 224B) -- live polled state
 //   +0x0e0: State states2[8]  (8 * 28 = 224B) -- event-applied scratch
-//   +0x1c0: event ring buffer (16B)
-//   +0x1d0: uint32_t nextTouchId (init 1)
+//   +0x1c0: RingBufferT<TEvnt,false,false> eventBuffer (16B)
+//   +0x1d0: int32_t nextTouchId (init 1)
+// Total: 448 + 16 + 4 = 468.
 //
 // Phase semantics (State::phase, field +0x18):
 //   -1 : just-pressed (one frame)
@@ -62,6 +61,25 @@ struct TEvnt {
     float    timestamp;   // e
 };
 
+// Binary Mortar::RingBufferT<Mortar::Touch::TEvnt,false,false> (16 bytes).
+// Layout per InitRingBuffer_Touch @ 0x001958fc:
+//   +0x00: TEvnt* memory  (heap-allocated: operator new(200) = 10*20B backing)
+//   +0x04: int    capacity (= 10)
+//   +0x08: int    field_8  (binary = 1 after init; semantic TBD)
+//   +0x0c: int    field_c  (binary = 0 after init; semantic TBD)
+// DIFFERS: binary @ 0x001958fc sets field_8=1, field_c=0 (internal ring state).
+//   Port reuses field_8/field_c as m_eventHead/m_eventTail (0-based head/tail
+//   indices) because the binary's RingBufferT ring-management code (Clear/push/pop)
+//   is not yet ported. Struct fields are layout-identical to binary; init values
+//   differ (port initializes both to 0 instead of 1/0).
+//   Binary ground truth: Binary @ 0x001958fc (InitRingBuffer_Touch).
+struct RingBufferT_TEvnt {
+    TEvnt*  memory;       // +0x00  heap pointer (capacity * sizeof(TEvnt) bytes)
+    int     capacity;     // +0x04  element capacity (= 10)
+    int     m_eventHead;  // +0x08  DIFFERS: binary=1 after init; port uses 0 (ring read index)
+    int     m_eventTail;  // +0x0c  DIFFERS: binary=0 after init; port uses 0 (ring write index)
+};
+
 class Touch {
 public:
     static const int MAX_SLOTS = 8;
@@ -70,6 +88,7 @@ public:
     static Touch& GetInstance();
 
     Touch();
+    ~Touch();
 
     // Binary @ 0x00195630 -- Update(float dt).
     // Drain events with timestamp <= dt (or all if dt == 0.0); then _Update().
@@ -160,22 +179,24 @@ public:
     bool IsSlotDown(int slot) const;
 
     // Public fields matching binary layout.
-    TouchState states1[MAX_SLOTS];   // +0x000 live polled state
-    TouchState states2[MAX_SLOTS];   // +0x0e0 event-applied scratch
+    TouchState states1[MAX_SLOTS];    // +0x000  live polled state  (8*28=224B)
+    TouchState states2[MAX_SLOTS];    // +0x0e0  event-applied scratch (8*28=224B)
 
-    // Ring buffer (Port specific: simpler ring; binary uses RingBufferT (Binary @ 0x001958fc init)).
-    TEvnt    m_events[MAX_EVENTS];   // +0x1c0 area
-    int      m_eventHead;            // ring head index
-    int      m_eventTail;            // ring tail index
+    // Binary @ 0x001958fc — RingBufferT<TEvnt,false,false> (16B).
+    // memory ptr is heap-allocated (200B = 10 * sizeof(TEvnt)).
+    // eventBuffer.m_eventHead/m_eventTail serve as ring indices (see DIFFERS
+    // on RingBufferT_TEvnt above); eventBuffer.memory is the heap block.
+    RingBufferT_TEvnt eventBuffer;    // +0x1c0  (16B)
 
-    uint32_t nextTouchId;            // +0x1d0 init 1
+    int32_t nextTouchId;              // +0x1d0  init 1
 
-private:
-    // Rotating cursor for ___UpdateInternal slot claim. Binary stores this
-    // in a BSS global at GOT+0x80798; port uses a struct member -- identical
-    // behaviour since Touch is a singleton, cosmetic-only.
-    int m_slotCursor;
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+    static_assert(sizeof(Touch) == 468, "Touch size mismatch");
+#endif
 
+    // Port-specific rotating cursor for ___UpdateInternal slot claim.
+    // Binary stores this in a BSS global at GOT+0x80798; port uses a
+    // file-static in Touch.cpp for identical behaviour (Touch is a singleton).
 };
 
 // ---------------------------------------------------------------------------

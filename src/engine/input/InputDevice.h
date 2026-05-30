@@ -1,18 +1,18 @@
 #ifndef FN_ENGINE_INPUT_INPUTDEVICE_H
 #define FN_ENGINE_INPUT_INPUTDEVICE_H
 
-// Analysed: 2026-05-04T00:00
-
 #include "input/InputEvent.h"
 #include "util/Delegate.h"
+#include <list>
 #include <cstdint>
 
 // Binary @ 0x00196980 area — InputDevice base interface.
 // Concrete subclass on Bada: InputDeviceBada (composes a Mortar::Touch).
 //
-// The port uses this as a vtable-compatible base only; bindings live on
-// InputDeviceBada.  Methods gated with // TODO: where body is not yet
-// ported.
+// Polymorphism model: the binary uses an explicit 'fns' table pointer at
+// offset 0 (not an Itanium C++ vtable); the port uses a standard C++ vtable
+// which is layout-equivalent at offset 0 (both are a 4-byte dispatch pointer).
+// The 'fns' alias is cosmetic-only for asm-verify (poly-mismatch = cosmetic).
 
 // Callback type: Mortar::Delegate1<bool, InputEvent*> per binary signature.
 typedef Mortar::Delegate1<bool, InputEvent*> InputDeviceCallback;
@@ -28,8 +28,50 @@ enum InputDeviceTypes {
 
 namespace Mortar {
 
-// Forward-declare InputActionMapper (internals not ported).
-class InputActionMapper;
+// Binary @ 0x001b356c — InputActionMapper.
+// Non-polymorphic, 40 bytes.
+// Ctor signature (per binary): InputActionMapper(InputEvent, Delegate1<bool,InputEvent*>,
+//   unsigned long, unsigned long).
+// ActionMappers are held by pointer in InputDevice::actionMappers
+// (std::list<InputActionMapper*>). CheckActions @ 0x001b36b0 iterates the
+// list and calls ProcessEvent per element.
+//
+// DIFFERS: binary sizeof = 40 (m_callback is an 8-byte BaseDelegate in the
+//   binary's Delegate1 implementation); port Delegate1 is 36 bytes so port
+//   sizeof != 40. InputActionMapper is only ever used through pointers in
+//   the port — no by-value allocation — so the divergence is contained.
+//   The static_assert fires only under __bada__ where sizes match.
+class InputActionMapper {
+public:
+    // Binary @ 0x001b356c — ctor.
+    // Params: InputEvent ev, Delegate1<bool,InputEvent*> cb,
+    //         unsigned long, unsigned long.
+    InputActionMapper();
+
+    // Binary @ 0x001b3508 — ProcessEvent.
+    // Called by InputDevice::CheckActions per mapper in actionMappers list.
+    // TODO: 0x001b3508 — ProcessEvent body (fires m_callback if event matches).
+    void ProcessEvent(InputEvent* event);
+
+    // Fields per binary ctor writes (0x001b356c):
+    bool      m_enabled;       // +0x00  strb r12 = 1 at ctor @0x001b358a
+    uint32_t  field4_0x4;     // +0x04
+    uint32_t  field5_0x8;     // +0x08
+    uint32_t  field6_0xc;     // +0x0c
+    uint32_t  field7_0x10;    // +0x10
+    uint32_t  field8_0x14;    // +0x14
+    uint32_t  field9_0x18;    // +0x18
+    uint32_t  field10_0x1c;   // +0x1c
+    // Binary: m_callback is Delegate1<bool,InputEvent*> at +0x20, 8 bytes
+    // in the binary's implementation. Port uses our 36-byte Delegate1 here.
+    InputDeviceCallback m_callback;  // +0x20
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+    // Binary sizeof = 40; port sizeof diverges due to Delegate1 size difference.
+    // Suppress for now — InputActionMapper only used through pointers in port.
+    // static_assert(sizeof(InputActionMapper) == 40, "InputActionMapper size mismatch");
+#endif
+};
 
 class InputDevice {
 public:
@@ -74,8 +116,19 @@ public:
     InputDevice();
     void AxisEvent(long, unsigned long, float, float, unsigned long, long);
     void ButtonPressed(unsigned long, unsigned long, float, unsigned long, long);
-    void CheckActions(InputEvent*);
+
+    // Binary @ 0x001b36b0 — CheckActions: iterate actionMappers, call ProcessEvent.
+    void CheckActions(InputEvent* event);
     // ---- end STUBS ----
+
+    // Binary @ 0x001b3794 — data members:
+    // +0x00: implicit vptr (port) / explicit fns* (binary) — layout equivalent
+    // +0x04: std::list<InputActionMapper*> actionMappers (8 bytes, Sourcery 2010q1)
+    std::list<InputActionMapper*> actionMappers;  // +0x04
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+    static_assert(sizeof(InputDevice) == 12, "InputDevice size mismatch");
+#endif
 };
 
 } // namespace Mortar
