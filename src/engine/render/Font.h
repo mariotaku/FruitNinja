@@ -1,7 +1,6 @@
 #ifndef FN_ENGINE_RENDER_FONT_H
 #define FN_ENGINE_RENDER_FONT_H
 
-#include "util/ReferenceCounter.h"
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -9,6 +8,7 @@
 #include "math/Vec2.h"
 #include "math/Vec3.h"
 #include "math/Colour.h"
+#include <vector>
 
 namespace Mortar {
 
@@ -30,7 +30,11 @@ struct MortarRectangleDec {
     float Height() const { return bottom - top; }
 };
 
-class Font : public Mortar::ReferenceCounter {
+// Non-polymorphic: no vtable (binary ctor @ 0x00198534 writes no PTR_/vptr).
+// No base class: binary ctor calls no base-class ctor on this+0.
+// Ref-counted via inline AddRef/Release (non-virtual) for SmartPtr<Font> compat;
+// ref-count stored at m_RefCount (+0x418). Binary total size = 0x438 bytes.
+class Font {
 public:
     // 0x24 bytes per binary (ARM-confirmed at 0x0019a128)
     struct CharTemplate {
@@ -63,31 +67,40 @@ public:
         float    amount;
     };
 
-    // Binary field layout (0x438 total):
-    CharTemplate*  m_Glyphs;           // +0x000  heap array
-    CharTemplate*  m_GlyphLookup[256]; // +0x004  pointers into m_Glyphs by id
+    // Binary field layout (0x438 total, base-class-free, non-polymorphic):
+    // Binary ctor @ 0x00198534: zeroes m_Glyphs (separate), then loop zeros
+    // m_GlyphLookup[0..255] (offsets 0x004..0x400), then zeros 0x404..0x414.
+    CharTemplate*  m_Glyphs;           // +0x000  heap array (separate ctor-zero)
+    CharTemplate*  m_GlyphLookup[256]; // +0x004  pointers into m_Glyphs, loop-zeroed
     int            m_GlyphCount;       // +0x404
     Page*          m_Pages;            // +0x408
     int            m_PageCount;        // +0x40c
     Kerning*       m_Kernings;         // +0x410
     int            m_KerningCount;     // +0x414
-    int            _pad_0x418;         // +0x418
+    // +0x418: binary field, ctor-zero. Port uses as non-virtual ref count for
+    // SmartPtr<Font> compatibility. Initial value 0 matches SmartPtr semantics.
+    int            m_RefCount;         // +0x418
     int            m_ScaleW;           // +0x41c
     int            m_ScaleH;           // +0x420
     float          m_LineHeight;       // +0x424  stored as float
     float          m_BaseNorm;         // +0x428  = base / lineHeight
 
-    // +0x42c per-page vertex scratch buffer. Binary stores 0x600 verts
-    // per page; port keeps a single flat heap allocation of size
-    // m_PageCount * 0x600 (matches binary's array-of-arrays layout
-    // without the std::vector<std::vector<>> instantiation bloat).
-    // Indexed as m_PageVerts[pg * 0x600 + slot]. Allocated by Load,
-    // freed by ~Font.
+    // +0x42c: per-page vertex scratch. Binary stores std::vector<QUADCUSTOMVERTEX>
+    // per page in an outer std::vector (ctor @ Font::Font, member at this+0x42c).
+    // std::vector<std::vector<QUADCUSTOMVERTEX>> = 12 bytes on ARM32.
+    // Binary total 0x42c + 12 = 0x438. Page capacity 0x600 verts (binary).
     static const int  PAGE_VERT_CAPACITY = 0x600;
-    QUADCUSTOMVERTEX* m_PageVerts;
+    std::vector< std::vector<QUADCUSTOMVERTEX> > m_PageVerts; // +0x42c
 
     Font();
-    virtual ~Font();
+    ~Font();
+
+    // Non-virtual ref-count methods for SmartPtr<Font> compatibility.
+    // Binary Font is non-polymorphic; SmartPtr<T> calls T::AddRef()/Release()
+    // which must exist. Ref count stored at m_RefCount (+0x418).
+    void AddRef()    { m_RefCount++; }
+    void Release()   { if (--m_RefCount <= 0) delete this; }
+    int  GetRefCount() const { return m_RefCount; }
 
     // Instance load (matches binary 0x00199e9c). Returns 1/0.
     int Load(const char* path);
@@ -217,5 +230,17 @@ public:
 };
 
 } // namespace Mortar
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(Mortar::Font) == 0x438,
+              "Mortar::Font size mismatch (binary @ 0x00198534, operator-new not found, size derived from ctor)");
+static_assert(offsetof(Mortar::Font, m_GlyphLookup) == 0x004,
+              "Mortar::Font::m_GlyphLookup offset");
+static_assert(offsetof(Mortar::Font, m_GlyphCount)  == 0x404,
+              "Mortar::Font::m_GlyphCount offset");
+static_assert(offsetof(Mortar::Font, m_PageVerts)   == 0x42c,
+              "Mortar::Font::m_PageVerts offset");
+#endif
 
 #endif // FN_ENGINE_RENDER_FONT_H
