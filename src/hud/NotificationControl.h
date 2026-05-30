@@ -31,18 +31,16 @@ public:
     // Binary @ 0x001531f8
     void Draw(const Vec3& hudScale, int layerMask) override;
 
-    // +0x74: achievement icon texture (overlaps HUDControl3d::m_Texture slot in binary).
-    // Port: stored as a SmartPtr here alongside the GLuint m_Texture in super.
-    // m_Texture (super +0x74 GLuint) is unused for this control; icon drawn separately.
-    Mortar::SmartPtr<Mortar::Texture> m_AchIcon;   // effectively at +0x7C in port (sizeof SmartPtr = 8)
+    // Binary ctor stores the icon SmartPtr into the base HUDControl3d::m_Texture slot (+0x74).
+    // No subclass texture member; use m_Texture (inherited) for the icon.
 
-    float   m_TextScale;                   // +0x7C in binary (port offset differs)
-    float   m_StateTimer;                  // +0x80
-    int     m_Points;                      // +0x84
-    char    m_DisplayName[128];            // +0x88
-    char    m_PointsText[4];              // +0x108
-    uint8_t m_NotifType;                   // +0x10C
-    uint8_t _pad[3];                       // +0x10D..+0x10F
+    float   m_TextScale;     // +0x7C
+    float   m_StateTimer;    // +0x80
+    int     m_Points;        // +0x84
+    char    m_DisplayName[128]; // +0x88
+    char    m_PointsText[4]; // +0x108
+    uint8_t m_NotifType;     // +0x10C
+    uint8_t _pad[3];         // +0x10D..+0x10F
 
     // ---- STUBS (binary) ----
     // STUB: NotificationControl::Init -- binary @ 0x???? (TODO RE)
@@ -55,5 +53,9 @@ public:
     void PreDraw(float* viewVec);
     // ---- end STUBS ----
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(NotificationControl) == 272, "NotificationControl size mismatch");
+#endif
 
 #endif // FN_HUD_NOTIFICATION_CONTROL_H
