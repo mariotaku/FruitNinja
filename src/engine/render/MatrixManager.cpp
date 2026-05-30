@@ -2,13 +2,18 @@
 #include "math/math3d.h"
 
 MatrixManager::MatrixManager()
-    : m_ViewVersionUploaded(0)
+    : m_ViewVersion(0)
+    , m_ViewVersionUploaded(0)
     , m_WorldVersionUploaded(0)
     , m_TextureVersionUploaded(0)
     , m_ProjVersionUploaded(0)
 {
     ResetAllStacks();
 }
+
+// Binary dtors @ 0x0019e3b4 (C1) + 0x0019e434 (C2); singleton is never destroyed
+// in practice but the vtable slots must exist.
+MatrixManager::~MatrixManager() {}
 
 // ASM-verified: 2026-05-09 binary @ 0x0019e280..0x0019e2a9 (asm-inspector)
 void MatrixManager::ResetAllStacks() {
