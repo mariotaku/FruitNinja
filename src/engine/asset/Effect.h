@@ -49,21 +49,39 @@ struct EffectPropertyDefinition_Bada {
     std::string m_Name;  // +0x0C in real binary (with leading vector data)
 };
 
+// VertexElementBase — 8-byte wrapper around an immutable vertex-attribute
+// name/binding slot. Binary ctor @ 0x001a1ba0; 5 contiguous sub-objects
+// make up an Effect_Bada::Pass (8-byte stride, total 40 bytes).
+// Binary Immutable<basic_string, ImmutableTraitsDefault> is 8 bytes;
+// port Immutable is 4 bytes (single Node* ptr), so 4 bytes of explicit
+// padding brings VertexElementBase to the binary-matching 8 bytes.
+struct VertexElementBase {
+    Immutable m_Name;       // +0x00 (4 bytes in port; 8-byte variant in binary)
+    int       _pad;         // +0x04 padding to match binary 8-byte stride
+
+    VertexElementBase() : _pad(0) {}
+    VertexElementBase(const VertexElementBase& o) : m_Name(o.m_Name), _pad(0) {}
+};
+
 // Effect_Bada — platform-portable base, holds the Pass + property-def
-// vectors. Pass struct itself is opaque to the port (live render path
-// doesn't use it).
+// vectors.
 class Effect_Bada : public ReferenceCounter {
 public:
-    // Effect_Bada::Pass — opaque to the port. TODO: 0x001a3194 — RE
-    // Effect_Bada::Pass layout if any port code ever needs to populate
-    // m_Passes. Currently nothing in the port writes it; the vector
-    // stays empty.
-    struct Pass;
+    // Effect_Bada::Pass — 40 bytes, non-polymorphic aggregate of 5 VertexElementBase
+    // sub-objects. Binary ctors: default @ 0x001a33e4, copy @ 0x001a3410.
+    // 8-byte stride: m_elem0@+0x00, m_elem1@+0x08, m_elem2@+0x10, m_elem3@+0x18, m_elem4@+0x20.
+    struct Pass {
+        VertexElementBase m_elem0;  // +0x00
+        VertexElementBase m_elem1;  // +0x08
+        VertexElementBase m_elem2;  // +0x10
+        VertexElementBase m_elem3;  // +0x18
+        VertexElementBase m_elem4;  // +0x20
+    };
 
     Effect_Bada();
     virtual ~Effect_Bada();
 
-    std::vector<Pass*>                          m_Passes;        // +0x0C
+    std::vector<Pass>                           m_Passes;        // +0x0C
     std::vector<EffectPropertyDefinition_Bada>  m_PropertyDefs;  // +0x18
 };
 

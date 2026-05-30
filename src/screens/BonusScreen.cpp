@@ -116,7 +116,7 @@ BonusScreen::BonusScreen()
       m_NameScale(1.0f),
       m_LeaderboardSubmitted(0),
       _pad1(0),
-      _pad2(0),
+      m_DrumRollFired(0),
       _pad3(0),
       m_RushSFX(nullptr),
       // ASM-verified: 2026-05-22 binary @ 0x00132048 ctor reads
@@ -124,10 +124,7 @@ BonusScreen::BonusScreen()
       // Negative phase = slide-in animation; transitions to 0 then positive
       // for the reveal beats.
       m_PhaseTimer(-kRevealHalfBeat),
-      m_bDrumRollFired(false),
-      m_PosOffset(0.0f, 0.0f, 0.0f),
-      _padfield23(0),
-      _padfield24(0)
+      m_PosOffset(0.0f, 0.0f, 0.0f)
 {
     m_Awards.reserve(3);
 
@@ -387,10 +384,10 @@ void BonusScreen::Update(float dt) {
     // ASM-verified: 2026-05-23 binary @ 0x00132c06 (re-analyst)
     {
         float prevTimer = m_PhaseTimer - dt;
-        if (!m_bDrumRollFired
+        if (!m_DrumRollFired
                 && kDrumRollPreThresh < m_PhaseTimer
                 && prevTimer <= kDrumRollPreThresh) {
-            m_bDrumRollFired = true;
+            m_DrumRollFired = 1;
             s_BonusExplosionCounter = 1;
             if (game_work.mGameSound) {
                 game_work.mGameSound->SFXPlay("Bonus-drum-roll", 1.0f, 1.0f);

@@ -1,7 +1,7 @@
 #ifndef FN_SCREENS_BONUS_SCREEN_H
 #define FN_SCREENS_BONUS_SCREEN_H
 
-// BonusScreen : HUDControl3d (size ~0xC8+)
+// BonusScreen : HUDControl3d (size 0xC8 = 200)
 // Binary: ctor 0x00132048, dtor 0x00131F9C, Update 0x00132930,
 //         Draw 0x0013325C, AddAward 0x00133664, AwardScores 0x0013260C
 // Analysed: 2026-05-03T00:00
@@ -56,18 +56,14 @@ public:
     // target accumulator, NOT a Colour. Prior port mis-typed as Colour+pads.
     Vec3                             m_PulseTarget;           // +0xA0..+0xAB
     float                            m_NameScale;             // +0xAC (init 1.0)
-    uint8_t                          m_LeaderboardSubmitted;  // +0xB0
+    uint8_t                          m_LeaderboardSubmitted;  // +0xB0 (reused as finale-fired latch)
     uint8_t                          _pad1;                   // +0xB1
-    uint8_t                          _pad2;                   // +0xB2
+    uint8_t                          m_DrumRollFired;         // +0xB2 (field_0xb2; ctor-write 0)
     uint8_t                          _pad3;                   // +0xB3
     Mortar::MortarSound*             m_RushSFX;               // +0xB4
     float                            m_PhaseTimer;            // +0xB8
-    // Port: drum-roll one-shot latch (no binary field; latch needed because
-    // m_PhaseTimer is written externally each frame and there is no prev-timer field).
-    bool                             m_bDrumRollFired;        // port-side latch
-    Vec3                             m_PosOffset;             // +0xBC
-    int                              _padfield23;             // +0xC8
-    int                              _padfield24;             // +0xCC
+    Vec3                             m_PosOffset;             // +0xBC (field31/32/33: copy of pos.x/y/z)
+    // binary ends at +0xC8 (last member 0xC4+4=0xC8=200)
 
     // Binary ctor @ 0x00132048
     BonusScreen();
@@ -120,5 +116,9 @@ private:
     // Binary @ 0x0013260C — one-shot finale: coin spawn, camera shake, finish SFX
     void AwardScores();
 };
+
+#ifdef __bada__
+static_assert(sizeof(BonusScreen) == 200, "BonusScreen size mismatch");
+#endif
 
 #endif // FN_SCREENS_BONUS_SCREEN_H

@@ -6,35 +6,41 @@
 #include "math/Vec3.h"
 #include "core/Singleton.h"
 
-// Matches original MatrixManager (0x2134 = 8500 bytes)
-// 4 MatrixStacks with dirty-tracking version counters
+// Binary MatrixManager: 8500 bytes, polymorphic (vtable @ 0x001eb528, 3 vfn slots).
+// Layout: vptr(4) + 4*MatrixStack(2120) + 4*int(16) = 8500.
+// Port adds m_CachedProjView + m_ProjVersionUploaded for the GLES2 shader path
+// (DIFFERS, marked below). Binary size applies only under __bada__.
 class MatrixManager : public Mortar::Singleton<MatrixManager> {
     friend class Mortar::Singleton<MatrixManager>;
 
 public:
-    // +0x04 (vtable at +0x00 is implicit)
+    // vptr at +0x00 (emitted by the virtual dtor below; matches binary vtable @ 0x001eb528)
     MatrixStack m_Projection;  // +0x004, 0x848 bytes
     MatrixStack m_View;        // +0x84C, 0x848 bytes
     MatrixStack m_World;       // +0x1094, 0x848 bytes
     MatrixStack m_Texture;     // +0x18DC, 0x848 bytes
 
-    // ASM-verified: 2026-05-09 binary @ 0x0019e2b4 (asm-inspector)
-    // Binary's MatrixManager has NO m_CachedProjView and NO
-    // m_ProjVersionUploaded -- only the 3 ints below. Total class size
-    // is exactly 0x2134 bytes (0x4 vtable + 4 stacks * 0x848 + 3 ints).
-    // DIFFERS from binary: the cache field is required by the GLES2
-    // shader-uniform path; see _UploadCurrentMatrices for the algebraic
-    // equivalence proof (binary's fixed-pipeline glLoad/Push/Pop/Mult
-    // stream produces the same per-draw MVP as our cached projView *
-    // m_World.m_Current). A "binary-exact" rewrite would require GL ES
-    // 1.x which is unavailable on the GLES2 target.
-    Matrix44 m_CachedProjView;       // Port specific
-    int m_ProjVersionUploaded;       // Port specific (binary lacks this)
+    // Binary trailing ints (binary @ ctor 0x0019e478):
+    //   m_ViewVersion         @ +0x2124 (8484)  — init 0
+    //   m_ViewVersionUploaded @ +0x2128 (8488)  — init 0
+    //   m_WorldVersionUploaded@ +0x212C (8492)  — init 0
+    //   m_TextureVersionUploaded @ +0x2130 (8496) — init 0
+    // Binary total = 4 + 4*2120 + 4*4 = 8500. static_assert under __bada__.
+    int m_ViewVersion;            // +0x2124
+    int m_ViewVersionUploaded;    // +0x2128
+    int m_WorldVersionUploaded;   // +0x212C
+    int m_TextureVersionUploaded; // +0x2130
 
-    // Version tracking for dirty upload (matches binary @ +0x2128/+0x212C/+0x2130).
-    int m_ViewVersionUploaded;      // +0x2128
-    int m_WorldVersionUploaded;     // +0x212C
-    int m_TextureVersionUploaded;   // +0x2130
+    // DIFFERS from binary: binary has no m_CachedProjView / m_ProjVersionUploaded.
+    // Required by the GLES2 shader-uniform path (fixed-pipeline unavailable on GLES2).
+    // Binary's _UploadCurrentMatrices @ 0x0019e2b4 emits glLoad/Push/Pop/Mult instead.
+    Matrix44 m_CachedProjView;    // Port specific
+    int m_ProjVersionUploaded;    // Port specific
+
+    // Binary vtable @ 0x001eb528: slot 0+1 = dtor pair (0x0019e3b4, 0x0019e434),
+    // slot 2 = vfn @ 0x00277264 (identity unknown; non-pure, 1-instruction stub).
+    // Virtual dtor emits the vptr, matching binary isPolymorphic=true.
+    virtual ~MatrixManager();
 
     // ASM-verified: 2026-05-09 binary @ 0x0019e2ac (asm-inspector)
     // Binary is a 2-instruction tail-call to ResetAllStacks. Inlining
@@ -79,29 +85,23 @@ public:
     const MatrixStack& GetViewStack() const { return m_View; }
     const MatrixStack& GetTextureStack() const { return m_Texture; }
 
+    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // STUB: MatrixManager::SetupPerspective -- auto stub from binary missing-symbol set
+    void SetupPerspective(float, float, float, float, float, Matrix44*);
+    // ---- end AUTO-STUB MERGE ----
+
 private:
     // Matches 0x0019e2b4 — recomputes cached matrices based on dirty versions
     void _UploadCurrentMatrices(bool skipProjection);
 
     MatrixManager();
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: MatrixManager::SetupPerspective -- auto stub from binary missing-symbol set
-    void SetupPerspective(float, float, float, float, float, Matrix44*);
-    // ---- end AUTO-STUB MERGE ----
 };
+
+#ifdef __bada__
+// Binary size: vptr(4) + 4*MatrixStack(2120) + 4*int(16) = 8500.
+// Port-specific extras (m_CachedProjView + m_ProjVersionUploaded) are excluded
+// from this assert — they exist only in the port build.
+static_assert(sizeof(MatrixStack) == 2120, "MatrixStack size mismatch");
+#endif
 
 #endif
