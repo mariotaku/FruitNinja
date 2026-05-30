@@ -118,15 +118,21 @@ public:
     // WAVE_INFO* at the end of GetNextWave). On the 64-bit host a pointer is 8
     // bytes and a 4-byte int cannot alias it correctly -- the union would corrupt
     // m_pCurrentWave[0]'s high 4 bytes every time m_WaveCount[1] is written.
-    // Port-specific separation: m_pCurrentWave[2] and m_WaveCount[2] are kept as
-    // distinct fields. GetNextWave increments m_WaveCount, selects using it, then
-    // stores the winner into m_pCurrentWave -- the same semantic sequence as the
-    // binary, without the pointer-stomping corruption.
-    // DIFFERS: binary aliases {m_pCurrentWave[0], m_WaveCount[0]} and
-    // {m_pCurrentWave[1], m_WaveCount[1]} as single 4-byte slots; port uses
-    // separate 64-bit pointer + 32-bit counter to preserve correct behaviour.
+    // DIFFERS: binary aliases m_pCurrentWave[2] and m_WaveCount[2] in one 8-byte
+    // slot (+0x22c). On 32-bit (binary ABI: ptr==int==4) the union is faithful and
+    // keeps the 728-byte layout. On the 64-bit host the union would overlap (ptr=8,
+    // int=4) and corrupt -- e6d26e6 crash -- so the host uses separate fields. The
+    // asm-verify cross-build (__bada__) is compile-only (never runs), so the union's
+    // aliasing semantics are irrelevant there; only the 728-byte layout must match.
+#if defined(__bada__)
+    union {
+        WAVE_INFO* m_pCurrentWave[2];   // +0x22c: P0 and P1 current wave pointers
+        int        m_WaveCount[2];      // aliased: wave-sequence counter per player
+    };
+#else
     WAVE_INFO* m_pCurrentWave[2];  // +0x22c: P0 and P1 current wave pointers
-    int        m_WaveCount[2];     // port-only: wave-sequence counter per player
+    int        m_WaveCount[2];     // host-only extra 8 bytes (past binary region, no union)
+#endif
 
     // +0x234..+0x2d3: binary unnamed region (160 bytes).
     // Fields below are port-derived names for binary offsets within this range.
