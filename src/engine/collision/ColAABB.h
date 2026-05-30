@@ -7,14 +7,18 @@
 #include <algorithm>
 
 // Binary vtable @ 0x001eb638. sizeof = 0x80 (128B):
-//   base Col 0x14, m_Max Vec3 at +0x14, 8 cached corners Vec3 at +0x20..+0x7F.
+//   Col base 0x00..0x14 (20B): vptr@0, m_PrimaryPoint (min corner) @+0x04..+0x0f, m_CollideFlag @+0x10.
+//   m_Max Vec3 @ +0x14..+0x1f.
+//   m_Corners float[24] (Vec3[8]) @ +0x20..+0x7f -- cached corner verts, rebuilt by UpdateVertices().
+// m_Min is NOT a separate member -- it aliases Col::m_PrimaryPoint @+0x04.
 class ColAABB : public Col {
 public:
-    // m_Min aliases m_PrimaryPoint (+0x04 in Col base)
-    Vec3&  m_Min; // reference alias for m_PrimaryPoint
-    Vec3   m_Max; // +0x14
-    // TODO: +0x20..+0x7F -- 8 cached corner Vec3; UpdateVertices() recomputes from m_Min/m_Max
-    // Vec3 m_Corners[8]; // +0x20
+    Vec3         m_Max;        // +0x14
+    float        m_Corners[24]; // +0x20..+0x7f -- 8 cached corner Vec3, rebuilt by UpdateVertices()
+
+    // m_Min accessor -- returns Col-base m_PrimaryPoint (binary reuse; no extra storage)
+    Vec3& m_Min()             { return m_PrimaryPoint; }
+    const Vec3& m_Min() const { return m_PrimaryPoint; }
 
     ColAABB();
     ColAABB(Vec3 min, Vec3 max);
@@ -32,35 +36,38 @@ public:
 
     Vec3 Center() const {
         return Vec3(
-            (m_Min.x + m_Max.x) * 0.5f,
-            (m_Min.y + m_Max.y) * 0.5f,
-            (m_Min.z + m_Max.z) * 0.5f
+            (m_PrimaryPoint.x + m_Max.x) * 0.5f,
+            (m_PrimaryPoint.y + m_Max.y) * 0.5f,
+            (m_PrimaryPoint.z + m_Max.z) * 0.5f
         );
     }
 
     bool Contains(const Vec3& p) const {
-        return p.x >= m_Min.x && p.x <= m_Max.x &&
-               p.y >= m_Min.y && p.y <= m_Max.y &&
-               p.z >= m_Min.z && p.z <= m_Max.z;
+        return p.x >= m_PrimaryPoint.x && p.x <= m_Max.x &&
+               p.y >= m_PrimaryPoint.y && p.y <= m_Max.y &&
+               p.z >= m_PrimaryPoint.z && p.z <= m_Max.z;
     }
 
     bool Intersects(const ColAABB& other) const {
-        return m_Min.x <= other.m_Max.x && m_Max.x >= other.m_Min.x &&
-               m_Min.y <= other.m_Max.y && m_Max.y >= other.m_Min.y &&
-               m_Min.z <= other.m_Max.z && m_Max.z >= other.m_Min.z;
+        return m_PrimaryPoint.x <= other.m_Max.x && m_Max.x >= other.m_PrimaryPoint.x &&
+               m_PrimaryPoint.y <= other.m_Max.y && m_Max.y >= other.m_PrimaryPoint.y &&
+               m_PrimaryPoint.z <= other.m_Max.z && m_Max.z >= other.m_PrimaryPoint.z;
     }
 
     bool IntersectsSphere(const ColSphere& sphere) const {
-        float cx = sphere.center.x;
-        float cy = sphere.center.y;
-        float cz = sphere.center.z;
-        if (cx < m_Min.x) cx = m_Min.x; else if (cx > m_Max.x) cx = m_Max.x;
-        if (cy < m_Min.y) cy = m_Min.y; else if (cy > m_Max.y) cy = m_Max.y;
-        if (cz < m_Min.z) cz = m_Min.z; else if (cz > m_Max.z) cz = m_Max.z;
+        float cx = sphere.center().x;
+        float cy = sphere.center().y;
+        float cz = sphere.center().z;
+        if (cx < m_PrimaryPoint.x) cx = m_PrimaryPoint.x;
+        else if (cx > m_Max.x) cx = m_Max.x;
+        if (cy < m_PrimaryPoint.y) cy = m_PrimaryPoint.y;
+        else if (cy > m_Max.y) cy = m_Max.y;
+        if (cz < m_PrimaryPoint.z) cz = m_PrimaryPoint.z;
+        else if (cz > m_Max.z) cz = m_Max.z;
 
-        float dx = cx - sphere.center.x;
-        float dy = cy - sphere.center.y;
-        float dz = cz - sphere.center.z;
+        float dx = cx - sphere.center().x;
+        float dy = cy - sphere.center().y;
+        float dz = cz - sphere.center().z;
         return (dx*dx + dy*dy + dz*dz) <= sphere.radius * sphere.radius;
     }
 
@@ -70,9 +77,9 @@ public:
         float tmax = 1.0f;
 
         for (int i = 0; i < 3; i++) {
-            float origin = (&line.a.x)[i];
+            float origin = (&line.a().x)[i];
             float dir    = (&d.x)[i];
-            float bmin   = (&m_Min.x)[i];
+            float bmin   = (&m_PrimaryPoint.x)[i];
             float bmax   = (&m_Max.x)[i];
 
             if (dir < -1e-8f || dir > 1e-8f) {
@@ -111,5 +118,9 @@ public:
     void ColAABBSphere(ColAABB*, ColSphere*, Vec3*);
     // ---- end AUTO-STUB MERGE ----
 };
+
+#ifdef __bada__
+static_assert(sizeof(ColAABB) == 128, "ColAABB binary size mismatch");
+#endif
 
 #endif
