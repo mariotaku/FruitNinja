@@ -1138,6 +1138,12 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
 
         // Persistent juice emitters — one per future half. m_SlicedHash
         // resolves to "<name>_sliced" (e.g. "apple_sliced").
+        // Note: ppRef=nullptr is safe (matches binary). All *_sliced templates that
+        // exist in the XML have <life>0</life> and at least one set with stop="0" and
+        // perSec>0, making them naturally-infinite: maxLifetime<=0 && !EmitterTemplateEnds().
+        // The reap condition (binary @ 0x00115ed8: keep if timer<maxLifetime || maxLifetime<=0
+        // && !Ends()) never frees them while Fruit holds the pointer. For most fruits the
+        // template does not exist at all -> AddEmitter returns nullptr on hash-miss, safe.
         m_pEmitter1 = pm.AddEmitter(info->m_SlicedHash, nullptr, /*persistent=*/true);
         m_pEmitter2 = pm.AddEmitter(info->m_SlicedHash, nullptr, /*persistent=*/true);
         if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
@@ -2088,6 +2094,10 @@ bool Fruit::SetTrailParticles(unsigned long emitterHash) {
         pm.ClearEmitter(m_pEmitter1);
         m_pEmitter1 = nullptr;
     }
+    // Note: ppRef=nullptr is safe (matches binary). All trail templates used here
+    // (fruit_flight, scorex2_trail, blue_fruit_flight, dragon_trail, etc.) have
+    // <life>0</life> with every set having stop="0" and perSec>0 -> naturally-infinite.
+    // Reap (binary @ 0x00115ed8) never frees them while Fruit holds the pointer.
     m_pEmitter1 = pm.AddEmitter((uint32_t)emitterHash, nullptr, /*persistent=*/true);
     if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
     return m_pEmitter1 != nullptr;
