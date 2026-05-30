@@ -48,7 +48,8 @@ NotificationControl::NotificationControl(const char* name, int points,
 {
     _pad[0] = _pad[1] = _pad[2] = 0;
 
-    m_AchIcon = icon;
+    // Binary stores icon into the base HUDControl3d::m_Texture slot (+0x74).
+    m_Texture = icon;
 
     // OS_SPrintf(m_DisplayName, 128, "%s", name) then ASCII tolower→toupper inline.
     // Binary: copies name into buffer, then upper-cases each character.
@@ -167,8 +168,8 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
 
         // Icon quad
         // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
-        if (m_AchIcon.IsValid()) {
-            Mortar::Texture* iconTex = m_AchIcon.Get();
+        if (m_Texture.IsValid()) {
+            Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(30.0f, 30.0f, 30.0f);
@@ -224,8 +225,8 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
 
         // Larger icon quad
         // ASM-verified: 2026-05-18 binary @ 0x001531f8 (re-analyst)
-        if (m_AchIcon.IsValid()) {
-            Mortar::Texture* iconTex = m_AchIcon.Get();
+        if (m_Texture.IsValid()) {
+            Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(32.0f, 32.0f, 32.0f);
