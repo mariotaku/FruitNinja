@@ -9,6 +9,7 @@
 
 // Analysed: 2026-05-04T00:00
 #include "hud/HUDControl3d.h"
+#include <cstdint>
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
@@ -101,19 +102,19 @@ public:
 
 private:
     // +0x7c: copy of original size
-    Vec3 m_OrigSize;
+    Vec3 m_OrigSize;                                          // +0x7c
 
     // +0x88..+0x98: button textures (verified from ctor GOT offsets)
-    Mortar::SmartPtr<Mortar::Texture> m_TexNewGame;       // +0x88: newgame.tex
-    Mortar::SmartPtr<Mortar::Texture> m_TexDojoIcon;      // +0x8c: dojo_icon.tex
-    Mortar::SmartPtr<Mortar::Texture> m_TexOpenFeint;     // +0x90: openfeint.tex (GOT+c790)
-    Mortar::SmartPtr<Mortar::Texture> m_TexGCAchievements;// +0x94: gc_achievements.tex (GOT+c794)
-    Mortar::SmartPtr<Mortar::Texture> m_TexQuit;          // +0x98: quit.tex (GOT+c78c)
+    Mortar::SmartPtr<Mortar::Texture> m_TexNewGame;           // +0x88: newgame.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexDojoIcon;          // +0x8c: dojo_icon.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexOpenFeint;         // +0x90: openfeint.tex (GOT+c790)
+    Mortar::SmartPtr<Mortar::Texture> m_TexGCAchievements;    // +0x94: gc_achievements.tex (GOT+c794)
+    Mortar::SmartPtr<Mortar::Texture> m_TexQuit;              // +0x98: quit.tex (GOT+c78c)
 
     // +0x9c..+0xb0: button pointers (created lazily)
     MenuButton* pPlayButton;       // +0x9c
     MenuButton* pDojoButton;       // +0xa0
-    MenuButton* pQuitBtn;          // +0xa4: quit button (uses m_TexQuit, callback=QuitGamesCallback)
+    MenuButton* pQuitBtn;          // +0xa4: binary name pLeaderboardBtn; port uses as quit button
     MenuButton* pMoreGamesBtn;     // +0xa8
     MenuButton* pSoundToggle;      // +0xac
     MenuButton* pMusicToggle;      // +0xb0
@@ -121,11 +122,19 @@ private:
     // +0xb4: logo overlay
     Mortar::SmartPtr<Mortar::Texture> m_TexCommingSoon;       // +0xb4: comming_soon.tex
 
+    // +0xb8..+0xc3: 12-byte gap confirmed by Ghidra struct between m_TexCommingSoon
+    // and m_TexSoundOn (undefined region, not ctor-initialised).
+    uint8_t _pad_0xb8[12];
+
     // +0xc4..+0xd0: toggle textures
     Mortar::SmartPtr<Mortar::Texture> m_TexSoundOn;           // +0xc4: sound.tex
     Mortar::SmartPtr<Mortar::Texture> m_TexSoundOff;          // +0xc8: sound_cross.tex
     Mortar::SmartPtr<Mortar::Texture> m_TexMusicOn;           // +0xcc: music.tex
     Mortar::SmartPtr<Mortar::Texture> m_TexMusicOff;          // +0xd0: music_cross.tex
+
+    // +0xd4: second SmartPtr<Model> (distinct from HUDControl3d::m_Model at +0x78).
+    // Member-ctor'd in binary; semantic use not yet RE'd.
+    Mortar::SmartPtr<Mortar::Model> m_Model2;                 // +0xd4
 
     // +0xd8: dojo decoration behind logo
     Mortar::SmartPtr<Mortar::Texture> m_TexSliceFruit;        // +0xd8: slice_fruit.tex
@@ -144,8 +153,11 @@ private:
     float m_StateTimer;            // +0x110: transition countdown (NOT same as HUDControl m_Timer)
     Mortar::SmartPtr<Mortar::Texture> m_TexMoreGames;         // +0x114: more_games.tex (GOT+c788)
     float m_Timer2;                // +0x118: second timer
-    Mortar::SmartPtr<Mortar::Font> m_pFont; // +0x11c: fonts/verdana.fnt (loaded in ctor, NOT in g_GameData)
+    Mortar::SmartPtr<Mortar::Font> m_pFont;                   // +0x11c: fonts/verdana.fnt (loaded in ctor, NOT in g_GameData)
 
+    // Port-specific trailing fields (not in the 288-byte binary struct).
+    // Excluded on the __bada__ production build so sizeof stays at 0x120.
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     // Port specific: binary accesses Game via GOT; port stores a reference here,
     // declared after all binary-faithful fields so it does not displace them.
     Game& game;
@@ -176,6 +188,7 @@ private:
     // and the 0.25 threshold has been crossed). nullptr until crossed
     // and again after the child's RemoveCallback fires.
     GameModeScreen* m_pGameModeScreen;
+#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 
     // --- Internal helpers ---
     void Hide();
@@ -214,8 +227,10 @@ private:
     // (m_bPendingRemoval set on transition completion). Functionally
     // equivalent to the binary's natural state-machine flow but with an
     // extra safety net.
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     void DojoScreenRemoved(HUDControl*)    { m_pDojoScreen     = nullptr; }
     void GameModeScreenRemoved(HUDControl*){ m_pGameModeScreen = nullptr; }
+#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 
     // --- Callbacks ---
     void GameModeCallback();
@@ -241,33 +256,40 @@ public:
     // Called by MenuButton::Update after FN::ClearMenuItems.
     void OnMenuItemsCleared();
 
-    // +0x10c (binary): HUD-side timer mirror written by TimeControl::Update every frame.
+    // Port-specific: HUD-side timer mirror written by TimeControl::Update every frame.
     // Written -1.0f on non-timed modes (binary @ 0x001624f6), written m_TimeRemaining
     // each timed frame (binary @ 0x00162830). Used during camera transition / game resume.
     // ASM-verified: 2026-05-18 binary @ 0x001624f6 / 0x00162830 (re-analyst)
+    // Note: binary writes to mainScreen+0x10c which is the binary m_State field at that offset.
+    // Port uses a dedicated member to avoid aliasing the state machine int.
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     float m_TimeRemainingDisplay;
+#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 private:
 
     // Touch handling removed in the touch rewrite. MenuButton::Update now
     // polls Mortar::Touch directly — MainScreen has no touch routing role.
 
-#ifdef __bada__
-    friend struct MainScreenLayoutAssert;
-#endif
 };
 
-#ifdef __bada__
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
 #include <cstddef>
-struct MainScreenLayoutAssert {
-    static_assert(__builtin_offsetof(MainScreen, m_OrigSize)    == 0x7c,  "m_OrigSize offset");
-    static_assert(__builtin_offsetof(MainScreen, pPlayButton)   == 0x9c,  "pPlayButton offset");
-    static_assert(__builtin_offsetof(MainScreen, pDojoButton)   == 0xa0,  "pDojoButton offset");
-    static_assert(__builtin_offsetof(MainScreen, pQuitBtn)      == 0xa4,  "pQuitBtn offset");
-    static_assert(__builtin_offsetof(MainScreen, pMoreGamesBtn) == 0xa8,  "pMoreGamesBtn offset");
-    // TODO: m_pFont currently lands at != 0x11c in cross-build; residual
-    // drift between pMoreGamesBtn (+0xa8) and m_pFont (+0x11c). Audit pending.
-    // static_assert(offsetof(MainScreen, m_pFont)       == 0x11c, "m_pFont offset");
-};
+static_assert(__builtin_offsetof(MainScreen, m_OrigSize)       == 0x7c,  "m_OrigSize offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexNewGame)     == 0x88,  "m_TexNewGame offset");
+static_assert(__builtin_offsetof(MainScreen, pPlayButton)      == 0x9c,  "pPlayButton offset");
+static_assert(__builtin_offsetof(MainScreen, pDojoButton)      == 0xa0,  "pDojoButton offset");
+static_assert(__builtin_offsetof(MainScreen, pQuitBtn)         == 0xa4,  "pQuitBtn offset");
+static_assert(__builtin_offsetof(MainScreen, pMoreGamesBtn)    == 0xa8,  "pMoreGamesBtn offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexCommingSoon) == 0xb4,  "m_TexCommingSoon offset");
+static_assert(__builtin_offsetof(MainScreen, _pad_0xb8)        == 0xb8,  "_pad_0xb8 offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexSoundOn)     == 0xc4,  "m_TexSoundOn offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexMusicOff)    == 0xd0,  "m_TexMusicOff offset");
+static_assert(__builtin_offsetof(MainScreen, m_Model2)         == 0xd4,  "m_Model2 offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexSliceFruit)  == 0xd8,  "m_TexSliceFruit offset");
+static_assert(__builtin_offsetof(MainScreen, m_Alpha)          == 0xe8,  "m_Alpha offset");
+static_assert(__builtin_offsetof(MainScreen, m_State)          == 0x10c, "m_State offset");
+static_assert(__builtin_offsetof(MainScreen, m_pFont)          == 0x11c, "m_pFont offset");
+static_assert(sizeof(MainScreen)                               == 0x120, "MainScreen size must match binary");
 #endif
 
 #endif
