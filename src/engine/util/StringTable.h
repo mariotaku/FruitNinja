@@ -75,47 +75,86 @@ struct HeaderLookup {
 
 namespace Mortar {
 
-// Mortar::StringTable -- binary @ 0x0011fec8..0x0011fef0
+// --- FileData<T> (8 bytes) ---
+// Binary: Mortar::StringTable::FileData<T> {void* m_pData @+0, uint32_t m_Count @+4}.
+// Ctor @ 0x0018a4d4 zeroes both words.
+template<typename T>
+struct StringTableFileData {
+    T*       m_pData;   // +0x00
+    uint32_t m_Count;   // +0x04
+
+    StringTableFileData() : m_pData(0), m_Count(0) {}
+};
+
+// Mortar::StringTable -- binary sizeof == 0x50 (80).
+// NON-POLYMORPHIC: no vtable, no inheritance.
+// Instances are slots in a static array (stride 0x50, base at +0x5b4 within the
+// string-table globals block) indexed by language/table ID.
+// StringTableUtilLoadStringsTable @0x0011f9dc computes element address as
+// base + index*0x50 + 0x5b4, proving the stride.
+//
+// Instance layout:
+//   +0x00  uint8_t[64]  m_HeaderBuffer   -- 64-byte file-header/identifier buffer
+//   +0x40  FileData<StringTableData::HeaderLookup> m_HeaderLookup (8B)
+//   +0x48  FileData<StringTableData::StringEntry>  m_StringEntries (8B)
+//   Total: 0x50 (80)
+//
+// Ctors: 0x0018a374 (C1) / 0x0018a394 (C2) — identical bodies.
+// Dtor:  0x0018a324 — destroys two FileData members in reverse.
+// Binary methods:
+//   LoadHeader   @ 0x0018a490
+//   LoadLanguage @ 0x0018a41c
+//   GetInfo      @ 0x0018a2cc (binary search by key)
+//   GetString    @ 0x0011fec8
 class StringTable {
 public:
-    // Load string tables from the given data root (e.g. "Data/").
-    // languageFlag selects the language (0 = english_us default).
-    // Falls back to english_us if the language file cannot be opened.
+    StringTable();
+    ~StringTable();
+
+    // Instance methods (binary @ 0x0018a490 / 0x0018a41c)
+    // TODO: 0x0018a490 -- LoadHeader instance method: reads translations_header.str into m_HeaderBuffer/m_HeaderLookup
+    // TODO: 0x0018a41c -- LoadLanguage instance method: reads translations_<lang>.str into m_StringEntries
+    void LoadHeader(const char* path);
+    void LoadLanguage(const char* path);
+
+    // Binary search -- mirrors Mortar::StringTable::GetInfo at 0x0018a2cc.
+    const HeaderLookup* GetInfo(const char* key) const;
+
+    // Binary @ 0x0011fec8 -- instance lookup by integer ID.
+    const char* GetString(LocalizedString id) const;
+    // Binary @ 0x0011fec8 -- instance lookup by string key.
+    const char* GetString(const char* key) const;
+    // Pre-resolved overload.
+    const char* GetString(const HeaderLookup* pre) const;
+
+    // --- Binary instance fields ---
+    uint8_t m_HeaderBuffer[64];                          // +0x00
+    StringTableFileData<HeaderLookup> m_HeaderLookup;    // +0x40 (8B)
+    StringTableFileData<StringEntry>  m_StringEntries;   // +0x48 (8B)
+
+    // --- Port-side static API wrapper ---
+    // The static methods below provide the global single-table API used by
+    // game code. They delegate to the static instance s_DefaultTable.
     static void Load(const char* dataDir, int languageFlag);
-
-    // Release all heap memory and reset to unloaded state.
     static void Unload();
-
-    // Look up by integer ID (position in header table).
-    // Returns the translated string, or "STRING NOT FOUND" on miss.
-    // Binary @ 0x0011fec8 (int-ID overload).
-    static const char* GetString(LocalizedString id);
-
-    // Look up a localisation key by string.
-    // Returns the translated string, or "STRING NOT FOUND" on miss.
-    // Binary @ 0x0011fec8 (string-key overload).
-    static const char* GetString(const char* key);
-
-    // Look up by pre-resolved HeaderLookup pointer (optional overload).
-    // Returns the translated string, or "STRING NOT FOUND" on miss.
-    static const char* GetString(const HeaderLookup* pre);
-
-    // Returns true if Load() has completed successfully.
+    static const char* GetStringS(LocalizedString id);
+    static const char* GetStringS(const char* key);
     static bool IsLoaded();
+    static const HeaderLookup* GetInfoS(const char* key);
 
-    // Binary search implementation -- mirrors Mortar::StringTable::GetInfo
-    // at 0x0018a2cc.
-    static const HeaderLookup* GetInfo(const char* key);
-
-    // Internal state (public so file-scope helper functions in StringTable.cpp
-    // can populate them without friendship declarations)
-    static bool           s_loaded;
-    static HeaderLookup*  s_header_entries;  // heap, count = s_count
-    static uint32_t       s_count;
-    static char*          s_key_blob;        // heap copy of key strings
-    static StringEntry*   s_lang_entries;    // heap, count = s_count
-    static char*          s_str_blob;        // heap copy of translated strings
+    // Port-only static state (not in binary; held by the static array globals)
+    // These are used by the port's static Load/Unload implementation.
+    // Guard with !defined(__bada__) so the cross-build sizeof assert is accurate.
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    static bool    s_loaded;
+    static char*   s_key_blob;
+    static char*   s_str_blob;
+#endif
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(StringTable) == 0x50, "StringTable sizeof mismatch");
+#endif
 
 // Free wrapper: binary @ 0x0011f958.
 // Looks up string ID in table index tableIdx (0 = default table).

@@ -2,8 +2,9 @@
 
 namespace Mortar {
 
-// TODO: DataReader -- binary @ 0x???? (TODO RE) -- stub only
+// Binary @ 0x001a8860 -- writes vptr only.
 DataReader::DataReader() {}
+
 DataReader::~DataReader() {}
 
 } // namespace Mortar

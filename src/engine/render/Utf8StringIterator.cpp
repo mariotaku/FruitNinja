@@ -30,7 +30,6 @@ uint32_t decode_next_unicode_character(const char** cursor) {
         cp = *p++ & 0x01;
         extra = 5;
     } else {
-        // Malformed leading byte — skip it
         p++;
         *cursor = reinterpret_cast<const char*>(p);
         return 0xFFFD;
@@ -50,37 +49,30 @@ uint32_t decode_next_unicode_character(const char** cursor) {
 
 } // namespace utf8
 
+// Binary @ 0x0012fe00 — delegates to proxy base ctor then calls _Init (0x000f8514).
+// Port: walk string once to set m_NumChars / m_End, prime with Advance(1).
 Utf8StringIterator::Utf8StringIterator(const char* str)
-    : m_PrevBegin(str)
-    , m_NextScan(str)
-    , m_CurrentCodepoint(0)
-    , m_String(str)
-    , m_NumChars(0)
-    , m_End(str)
+    : Utf8StringProxy(str)
 {
-    // Walk once to count codepoints and find the end
+    // Walk once to count codepoints and locate end
     const char* scan = str;
+    int count = 0;
     while (*scan) {
-        const char* before = scan;
         uint32_t cp = utf8::decode_next_unicode_character(&scan);
         if (cp != 0) {
-            m_NumChars++;
+            count++;
         }
-        (void)before;
     }
-    m_End = scan;
+    m_NumChars = static_cast<uint32_t>(count);
+    m_End      = scan;
     m_NextScan = str;
-    // Prime the iterator by advancing once
+    // Prime the iterator: decode first codepoint
     Advance(1);
 }
 
+// Binary @ 0x00160cbc
 Utf8StringIterator::Utf8StringIterator(const Utf8StringIterator& other)
-    : m_PrevBegin(other.m_PrevBegin)
-    , m_NextScan(other.m_NextScan)
-    , m_CurrentCodepoint(other.m_CurrentCodepoint)
-    , m_String(other.m_String)
-    , m_NumChars(other.m_NumChars)
-    , m_End(other.m_End)
+    : Utf8StringProxy(other)
 {
 }
 
