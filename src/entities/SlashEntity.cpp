@@ -911,7 +911,7 @@ void SlashEntity::Update(float dt) {
                         // sets hitter->m_Scale = 1.0 on critical hit via the hitter pointer.
                         // Port replicates by reading m_bCriticalEligible after the call.
                         LOG_INFO("SLASH", "hit fruit %p at (%.1f,%.1f) trail_n=%d",
-                                    static_cast<void*>(e), cs->center.x, cs->center.y, m_NumPoints);
+                                    static_cast<void*>(e), cs->center().x, cs->center().y, m_NumPoints);
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
                         // Binary @ 0x0017d664 write-group: snapshot slice state
                         // immediately after CollisionResponse returns.
