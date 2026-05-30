@@ -6,7 +6,10 @@
 namespace Mortar {
 
 ResourceLoader::ResourceLoader()
-    : m_ReadPos(0)
+    : m_flag(0)
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    , m_ReadPos(0)
+#endif
 {
 }
 
@@ -15,7 +18,10 @@ ResourceLoader::ResourceLoader()
 // The file starts directly with Initialize format (skip_u32, childCount, ...).
 // "HBR0" at offset 0 is just the skip_u32 value, NOT a separate header.
 ResourceLoader::ResourceLoader(const char* filePath)
-    : m_ReadPos(0)
+    : m_flag(0)
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    , m_ReadPos(0)
+#endif
 {
     File f(filePath, 0, 0);
     if (!f.Load(nullptr, 0)) {
@@ -38,19 +44,27 @@ ResourceLoader::ResourceLoader(const char* filePath)
 
 // STUB: ResourceLoader::ResourceLoader(AsciiString const&) -- binary @ 0x???? (TODO RE)
 ResourceLoader::ResourceLoader(const AsciiString& filePath)
-    : m_ReadPos(0)
+    : m_flag(0)
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    , m_ReadPos(0)
+#endif
 {
     ResourceLoader tmp(filePath.CStr());
     m_BasePath = tmp.m_BasePath;
     m_Data     = tmp.m_Data;
     m_Children = tmp.m_Children;
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     m_ReadPos  = tmp.m_ReadPos;
+#endif
 }
 
 // STUB: ResourceLoader::ResourceLoader(DataReader&, AsciiString const&) -- binary @ 0x???? (TODO RE)
 ResourceLoader::ResourceLoader(DataReader& /*reader*/, const AsciiString& basePath)
-    : m_BasePath(basePath)
+    : m_flag(0)
+    , m_BasePath(basePath)
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     , m_ReadPos(0)
+#endif
 {
 }
 

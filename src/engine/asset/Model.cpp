@@ -9,55 +9,55 @@ Model::Model() {}
 
 // Binary @ 0x0019326c
 Model::Model(AsciiString const& name) {
-    m_Name = name.c_str();
+    m_name = name;
 }
 
 // Binary @ 0x00193b3c / 0x00193bac
 Model::~Model() {
-    m_Meshes.clear();
+    m_nodes.clear();
 }
 
 // Binary @ 0x001aaba8 — Skeleton::Swap then UpdateBoneLinks.
 // Calls Skeleton::Swap(Skeleton&) (0x001a89c4): swaps all four arrays
 // without rebuilding matrices, then rebinds each mesh.
 void Model::SwapSkeleton(Skeleton& skel) {
-    m_Skeleton.Swap(skel);
+    m_skeleton.Swap(skel);
     UpdateBoneLinks();
 }
 
 // Binary @ 0x00193010 — BindSkeleton(vtable[8]) on each mesh.
 void Model::UpdateBoneLinks() {
-    for (int i = 0; i < (int)m_Meshes.size(); i++) {
-        if (m_Meshes[i].IsValid()) {
-            m_Meshes[i]->BindSkeleton(&m_Skeleton);
+    for (int i = 0; i < (int)m_nodes.size(); i++) {
+        if (m_nodes[i].IsValid()) {
+            m_nodes[i]->BindSkeleton(&m_skeleton);
         }
     }
 }
 
 // Binary @ 0x0019346c — push_back then BindSkeleton.
 void Model::AddNode(SmartPtr<Mesh> mesh) {
-    m_Meshes.push_back(mesh);
-    if (mesh.IsValid()) mesh->BindSkeleton(&m_Skeleton);
+    m_nodes.push_back(mesh);
+    if (mesh.IsValid()) mesh->BindSkeleton(&m_skeleton);
 }
 
 // Binary @ 0x001933f8 — unchecked array access.
 Mortar::SmartPtr<Mesh> Model::GetNode(unsigned long index) const {
-    return m_Meshes[index];
+    return m_nodes[index];
 }
 
-// Binary @ 0x00193414 — linear scan by std::string name; null on miss.
-Mortar::SmartPtr<Mesh> Model::GetNode(const std::string& name) const {
-    for (int i = 0; i < (int)m_Meshes.size(); i++) {
-        if (m_Meshes[i].IsValid() && m_Meshes[i]->m_Name == name) {
-            return m_Meshes[i];
+// Binary @ 0x00193414 — linear scan by name; null on miss (AsciiString overload).
+Mortar::SmartPtr<Mesh> Model::GetNode(AsciiString const& name) const {
+    for (int i = 0; i < (int)m_nodes.size(); i++) {
+        if (m_nodes[i].IsValid() && m_nodes[i]->m_Name == name.CStr()) {
+            return m_nodes[i];
         }
     }
     return Mortar::SmartPtr<Mesh>();
 }
 
-// Binary @ 0x00193414 — AsciiString overload; delegates to std::string variant.
-Mortar::SmartPtr<Mesh> Model::GetNode(AsciiString const& name) const {
-    return GetNode(std::string(name.c_str()));
+// Port helper: std::string variant; delegates to AsciiString overload.
+Mortar::SmartPtr<Mesh> Model::GetNode(const std::string& name) const {
+    return GetNode(AsciiString(name.c_str()));
 }
 
 // AlphaSortNode — qsort entry struct used by Model::Draw (binary @ 0x001935a0).
@@ -77,14 +77,14 @@ static int AlphaSortNode_compare(const void* a, const void* b) {
 }
 
 // Binary @ 0x001930e0 — single-mesh fast path + multi-mesh depth-sort back-to-front.
-// Single mesh: m_Meshes.front()->Draw(transform) via vtable slot 4.
+// Single mesh: m_nodes.front()->Draw(transform) via vtable slot 4.
 // Multi-mesh: compute MVP, compute per-mesh clip-z key, qsort descending, draw in order.
 void Model::Draw(const Matrix44& transform) {
-    int meshCount = (int)m_Meshes.size();
+    int meshCount = (int)m_nodes.size();
     if (meshCount == 0) return;
 
     if (meshCount == 1) {
-        m_Meshes[0]->Draw(transform);
+        m_nodes[0]->Draw(transform);
         return;
     }
 
@@ -99,7 +99,7 @@ void Model::Draw(const Matrix44& transform) {
 
     std::vector<AlphaSortNode> sorted(meshCount);
     for (int i = 0; i < meshCount; i++) {
-        sorted[i].mesh = m_Meshes[i].Get();
+        sorted[i].mesh = m_nodes[i].Get();
 
         // Per-mesh sort key (binary 0x001930e0):
         //   b = mesh->GetBounds()       (vtable +0x14, slot 5)
@@ -109,7 +109,7 @@ void Model::Draw(const Matrix44& transform) {
         //   key = z'/w'
         // Matrix44 column-major: m[col*4 + row].
         // Col 2 (z): m[8..11]; col 3 (w): m[12..15].
-        Bounds3D b = m_Meshes[i]->GetBounds();
+        Bounds3D b = m_nodes[i]->GetBounds();
         Vec3 c;
         c.x = (b.min.x + b.max.x) * 0.5f;
         c.y = (b.min.y + b.max.y) * 0.5f;
@@ -130,10 +130,10 @@ void Model::Draw(const Matrix44& transform) {
 // Binary @ 0x00192fa8 — union of per-mesh bounds; seed from mesh[0].
 // Binary has no empty-guard (UB on empty vector); port adds the guard.
 Bounds3D Model::GetBounds() const {
-    if (m_Meshes.empty()) return Bounds3D();
-    Bounds3D acc = m_Meshes[0]->GetBounds();
-    for (int i = 1; i < (int)m_Meshes.size(); i++) {
-        Bounds3D b = m_Meshes[i]->GetBounds();
+    if (m_nodes.empty()) return Bounds3D();
+    Bounds3D acc = m_nodes[0]->GetBounds();
+    for (int i = 1; i < (int)m_nodes.size(); i++) {
+        Bounds3D b = m_nodes[i]->GetBounds();
         if (b.min.x < acc.min.x) acc.min.x = b.min.x;
         if (b.min.y < acc.min.y) acc.min.y = b.min.y;
         if (b.min.z < acc.min.z) acc.min.z = b.min.z;
@@ -144,9 +144,9 @@ Bounds3D Model::GetBounds() const {
     return acc;
 }
 
-// Binary @ 0x00192f04 — m_Meshes.size().
+// Binary @ 0x00192f04 — m_nodes.size().
 int Model::NodeCount() const {
-    return (int)m_Meshes.size();
+    return (int)m_nodes.size();
 }
 
 // Binary @ 0x0019335c — walk meshes; per-geom Geometry calls are binary stubs
@@ -154,8 +154,8 @@ int Model::NodeCount() const {
 // are BX LR stubs). RebuildEffectBindings is Defunct on port side.
 // Net effect identical to binary: no observable side effects.
 void Model::SetEffectGroup(Mortar::SmartPtr<EffectGroup> /*effectGroup*/) {
-    for (int i = 0; i < (int)m_Meshes.size(); i++) {
-        Mesh* mesh = m_Meshes[i].Get();
+    for (int i = 0; i < (int)m_nodes.size(); i++) {
+        Mesh* mesh = m_nodes[i].Get();
         if (!mesh) continue;
         // Defunct: Geometry::EffectGroupSet / SetActiveEffect are binary stubs
         // (port's Geometry class IS ported as of Phase 5, but doesn't run the

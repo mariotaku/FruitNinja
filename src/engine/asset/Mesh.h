@@ -78,12 +78,14 @@ class Mesh : public IModelNode {
 public:
     // Matches original Mortar::Mesh::BoneBinding (0x44 = 68 bytes)
     // Nested inside Mesh to match binary mangling (Mortar::Mesh::BoneBinding).
-    // Ref: docs/engine/mesh.md
+    //   +0x00  AsciiString m_BoneName  (40 bytes, binary field m_BoneName)
+    //   +0x28  Bounds3D    m_Bounds    (24 bytes = 2 Vec3: min @ +0x28, max @ +0x34)
+    //   +0x40  uint32_t    m_BoneIndex (bone index into Skeleton)
+    //   +0x44  end
     struct BoneBinding {
-        std::string m_Name;         // +0x00: Bone name (port: std::string instead of AsciiString)
-        Vec3 m_BoundsMin;           // +0x28 equiv: Local AABB minimum
-        Vec3 m_BoundsMax;           // +0x34 equiv: Local AABB maximum
-        int m_SkeletonIndex;        // +0x40: Index into Skeleton; -1 = unbound
+        AsciiString m_BoneName;     // +0x00: Bone name (40 bytes)
+        Bounds3D    m_Bounds;       // +0x28: Local AABB (24 bytes)
+        int         m_SkeletonIndex; // +0x40: Index into Skeleton; -1 = unbound
 
         BoneBinding() : m_SkeletonIndex(-1) {}
     };
@@ -283,6 +285,14 @@ public:
 // Namespace-level alias so callers that use Mortar::BoneBinding directly still compile.
 // The binary's canonical name is Mortar::Mesh::BoneBinding.
 typedef Mesh::BoneBinding BoneBinding;
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(Mortar::Mesh::BoneBinding)                   == 0x44, "Mortar::Mesh::BoneBinding size");
+static_assert(offsetof(Mortar::Mesh::BoneBinding, m_BoneName)    == 0x00, "BoneBinding::m_BoneName offset");
+static_assert(offsetof(Mortar::Mesh::BoneBinding, m_Bounds)      == 0x28, "BoneBinding::m_Bounds offset");
+static_assert(offsetof(Mortar::Mesh::BoneBinding, m_SkeletonIndex)== 0x40, "BoneBinding::m_SkeletonIndex offset");
+#endif
 
 // Model is declared in Model.h.
 class Model;

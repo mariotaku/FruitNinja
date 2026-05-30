@@ -17,17 +17,17 @@ struct Bounds3D;   // full def in Mesh.h
 // Matches original Mortar::Model (0x58 bytes).
 // Inherits ReferenceCounter directly (NOT IModelNode -- that is Mesh).
 //   +0x00  ReferenceCounter (vptr + refcount, 0x0C)
-//   +0x0C  AsciiString m_Name        (0x28)
-//   +0x34  vector<SmartPtr<Mesh>> m_Meshes
-//   +0x40  Skeleton m_Skeleton (embedded by value)
+//   +0x0C  AsciiString m_name        (0x28)
+//   +0x34  vector<SmartPtr<Mesh>> m_nodes
+//   +0x40  Skeleton m_skeleton (embedded by value)
 //   +0x58  end
 // Vtable @ 0x001eb2a8: only ~Model deleting (0x00193bac) / in-place (0x00193b3c).
 // No other virtual methods.
 class Model : public Mortar::ReferenceCounter {
 public:
-    std::string m_Name;                             // +0x0C
-    std::vector<Mortar::SmartPtr<Mesh> > m_Meshes;  // +0x34
-    Skeleton m_Skeleton;                            // +0x40 (by value)
+    AsciiString m_name;                              // +0x0C  binary: AsciiString m_name (40 bytes)
+    std::vector<Mortar::SmartPtr<Mesh> > m_nodes;   // +0x34
+    Skeleton m_skeleton;                             // +0x40 (by value)
 
     Model();
     Model(AsciiString const& name);  // binary @ 0x0019326c
@@ -36,10 +36,10 @@ public:
     // Binary @ 0x001930e0 — single-mesh fast path + multi-mesh depth-sort.
     void Draw(const Matrix44& transform);
 
-    // Binary @ 0x0019346c — push_back + BindSkeleton(&m_Skeleton).
+    // Binary @ 0x0019346c — push_back + BindSkeleton(&m_skeleton).
     void AddNode(Mortar::SmartPtr<Mesh> mesh);
 
-    // Binary @ 0x001933f8 — unchecked m_Meshes[index].
+    // Binary @ 0x001933f8 — unchecked m_nodes[index].
     Mortar::SmartPtr<Mesh> GetNode(unsigned long index) const;
 
     // Binary @ 0x00193414 — linear scan by name; null on miss (AsciiString overload).
@@ -73,5 +73,13 @@ public:
 };
 
 } // namespace Mortar
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(Mortar::Model)                   == 0x58, "Mortar::Model size mismatch");
+static_assert(offsetof(Mortar::Model, m_name)         == 0x0C, "Mortar::Model::m_name offset");
+static_assert(offsetof(Mortar::Model, m_nodes)        == 0x34, "Mortar::Model::m_nodes offset");
+static_assert(offsetof(Mortar::Model, m_skeleton)     == 0x40, "Mortar::Model::m_skeleton offset");
+#endif
 
 #endif // FN_ASSET_MODEL_H
