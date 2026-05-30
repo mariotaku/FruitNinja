@@ -66,21 +66,28 @@ struct EntityState {
 };
 
 // SpawnState -- queued spawner info (one per <spawner> child of <wave>).
+// Binary layout (8 bytes): count@+0x00 (float, -> SPAWNER_INFO.m_SpawnCountF/m_RemainingCount),
+// timer@+0x04 (float, -> SPAWNER_INFO.m_SpawnTimer). Both are floats in the binary.
 struct SpawnState {
-    float delay;
-    int   toSpawn;
+    float count;  // +0x00: spawn count (maps to m_SpawnCountF / m_RemainingCount)
+    float timer;  // +0x04: spawn timer (maps to m_SpawnTimer)
 
-    SpawnState() : delay(0.0f), toSpawn(0) {}
+    SpawnState() : count(0.0f), timer(0.0f) {}
 };
 
 // WaveState -- queued wave info (one per <wave> child of <wave_info>).
+// Binary layout (16 bytes): spawners@+0x00 (std::list<SpawnState>, 8-byte sentinel),
+// waveIdx@+0x08 (int32), index@+0x0c (uint32).
 struct WaveState {
-    int waveIdx;
-    int index;
-    std::list<SpawnState> spawners;
+    std::list<SpawnState> spawners;  // +0x00 (8 bytes, Sourcery 2010q1 sentinel-only list)
+    int      waveIdx;                // +0x08
+    uint32_t index;                  // +0x0c
 
     WaveState() : waveIdx(0), index(0) {}
 };
+#ifdef __bada__
+static_assert(sizeof(WaveState) == 16, "WaveState size mismatch");
+#endif
 
 class FruitSaveData {
 public:

@@ -115,7 +115,7 @@ void WaveQue::AddWave(WAVE_INFO* wi, bool isLast, Math::Random& rng) {
             uint32_t r2 = rng.Rand32(100);
             op = ((uint32_t)policy < r2) ? 1 : 2;
         }
-        item.m_SpawnerOps.push_back(op);
+        item.m_SlotList.push_back(op);
         if (op == 1) ++counter1; else ++counter2;
     }
 
@@ -139,8 +139,8 @@ void WaveQue::RandomiseOrder(bool doSwap) {
     for (std::list<WaveQueItem>::iterator it = m_Items.begin();
          it != m_Items.end(); ++it, ++pos) {
         if ((pos & 1) == 0) {
-            for (std::vector<int>::iterator oit = it->m_SpawnerOps.begin();
-                 oit != it->m_SpawnerOps.end(); ++oit) {
+            for (std::vector<int>::iterator oit = it->m_SlotList.begin();
+                 oit != it->m_SlotList.end(); ++oit) {
                 if (*oit == 1)      *oit = 2;
                 else if (*oit == 2) *oit = 1;
             }
@@ -155,8 +155,8 @@ void WaveQue::AddSpecials(Math::Random& rng) {
     for (std::list<WaveQueItem>::iterator it = m_Items.begin();
          it != m_Items.end(); ++it) {
         int specialsCount = 0;
-        for (std::vector<int>::iterator oit = it->m_SpawnerOps.begin();
-             oit != it->m_SpawnerOps.end(); ++oit) {
+        for (std::vector<int>::iterator oit = it->m_SlotList.begin();
+             oit != it->m_SlotList.end(); ++oit) {
             uint32_t r = rng.Rand32(100);
             if ((r < 5u || specialsCount >= 4) && specialsCount < 2) {
                 *oit = 3;

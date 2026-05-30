@@ -103,6 +103,7 @@ WaveManager::WaveManager()
     , field_0x6c(1.0f)
     , field_0x74(1.0f)
     , field_0x78(1.0f)
+    , field_0x234(0.0f), field_0x238(0.0f)
     , field_0x23c(0), field_0x23d(0), field_0x23e(0), _pad23f(0)
     , field_0x240(0.0f)
     , field_0x2cc(0), field_0x2d0(0)
@@ -111,27 +112,22 @@ WaveManager::WaveManager()
 {
     m_ComboTimer[0] = 0.0f; m_ComboTimer[1] = 0.0f;
     m_BlitzBonus[0] = 0;   m_BlitzBonus[1] = 0;
-    m_ColdTimer[0] = 0.0f; m_ColdTimer[1] = 0.0f;
+    m_ColdTimer[0] = 0.0f;
     m_Speed[0] = m_Speed[1] = 0.0f;
     m_pCurrentWave[0] = m_pCurrentWave[1] = nullptr;
     m_WaveCount[0] = m_WaveCount[1] = 0;
-    m_ScoreThreshold[0] = m_ScoreThreshold[1] = 0;
-    field_0x234[0] = field_0x234[1] = 0.0f;
-    field_0x238[0] = field_0x238[1] = 0.0f;
     // m_DtIncPerMode (+0x7c): parsed from <defaults> "dtInc" attr per mode.
     // DIFFERS: placeholder 0.0 (no speed accumulation until XML parsed). binary @ 0x00125ac4
     m_DtIncPerMode[0] = m_DtIncPerMode[1] = 0.0f;
     m_DtIncPerMode[2] = m_DtIncPerMode[3] = 0.0f;
     // DIFFERS: actual per-mode globalDtStart unknown from RE; using 1.0 as placeholder.
-    m_SpeedMultPerMode[0] = m_SpeedMultPerMode[1] = 1.0f;
-    m_SpeedMultPerMode[2] = m_SpeedMultPerMode[3] = 1.0f;
-    // DIFFERS: per-mode speed lower bounds (field_0x8c) -- need RE; using 1.0f.
-    field_0x8c[0] = field_0x8c[1] = field_0x8c[2] = field_0x8c[3] = 1.0f;
+    m_SpeedClampStart[0] = m_SpeedClampStart[1] = 1.0f;
+    m_SpeedClampStart[2] = m_SpeedClampStart[3] = 1.0f;
     // DIFFERS: per-mode speed upper bounds (field_0x9c) -- need RE; using 100.0f.
-    field_0x9c[0] = field_0x9c[1] = field_0x9c[2] = field_0x9c[3] = 100.0f;
-    for (int i = 0; i < 2; ++i)
-        for (int j = 0; j < 32; ++j)
-            m_FruitQueue[i][j] = -1;
+    m_SpeedClampMax[0] = m_SpeedClampMax[1] = 100.0f;
+    m_SpeedClampMax[2] = m_SpeedClampMax[3] = 100.0f;
+    for (int j = 0; j < 32; ++j)
+        m_FruitQueue[j] = -1;
     m_FruitQueueSize[0] = m_FruitQueueSize[1] = 0;
     m_SpeedControl[0] = m_SpeedControl[1] = nullptr;
 }
@@ -158,10 +154,10 @@ void WaveManager::Init() {
     for (int mode = 0; mode < 4; ++mode) {
         // Free any previously-loaded wave infos for this mode.
         // Range-for replaced with iterator form for GCC 4.4 cross-build.
-        for (std::vector<WAVE_INFO*>::iterator it = waveInfos[mode].begin();
-             it != waveInfos[mode].end(); ++it)
+        for (std::vector<WAVE_INFO*>::iterator it = m_WaveInfo[mode].begin();
+             it != m_WaveInfo[mode].end(); ++it)
             delete *it;
-        waveInfos[mode].clear();
+        m_WaveInfo[mode].clear();
 
         std::string path = game->data_dir + "/" + s_WaveXML[mode];
         tinyxml2::XMLDocument doc;
@@ -185,7 +181,7 @@ void WaveManager::Init() {
         // Binary resets DEFAULT_WAVE_INFO before the loop so an XML missing
         // <defaults> still produces ctor-default values (rather than inheriting
         // from a prior Init() call's state).
-        defaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
+        m_DefaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
         int waveIndex = 0;
         for (tinyxml2::XMLElement* el = root->FirstChildElement();
              el; el = el->NextSiblingElement())
@@ -196,8 +192,8 @@ void WaveManager::Init() {
             if (strcmp(elName, "defaults") == 0) {
                 // Re-Reset on each occurrence so second block overrides first.
                 // Binary calls DEFAULT_WAVE_INFO::Reset (placement-new via ctor).
-                defaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
-                DEFAULT_WAVE_INFO& def = defaultWaveInfo[mode];
+                m_DefaultWaveInfo[mode] = DEFAULT_WAVE_INFO();
+                DEFAULT_WAVE_INFO& def = m_DefaultWaveInfo[mode];
                 el->QueryIntAttribute("waveChance",       &def.m_WaveChance);
                 // DIFFERS: binary reads "waveChanceRegrowth"; shipping XML uses "waveChanceGrowth".
                 // Neither key matches the other; binary default 0.25 covers both. Parse both for safety.
@@ -208,8 +204,8 @@ void WaveManager::Init() {
                 // globalDtInc -> per-mode WaveManager speed accumulator (binary key is "globalDtInc", not "dtInc").
                 el->QueryFloatAttribute("globalDtInc",   &m_DtIncPerMode[mode]);
                 // globalDtStart/globalDtMax -> per-mode speed clamp bounds.
-                el->QueryFloatAttribute("globalDtStart", &field_0x8c[mode]);
-                el->QueryFloatAttribute("globalDtMax",   &field_0x9c[mode]);
+                el->QueryFloatAttribute("globalDtStart", &m_SpeedClampStart[mode]);
+                el->QueryFloatAttribute("globalDtMax",   &m_SpeedClampMax[mode]);
                 // Additional <defaults> attrs written to DEFAULT_WAVE_INFO per binary audit.
                 el->QueryFloatAttribute("dtInc",          &def.m_DtInc);
                 el->QueryFloatAttribute("dtSpInc",        &def.m_DtSpInc);
@@ -225,7 +221,7 @@ void WaveManager::Init() {
                 el->QueryFloatAttribute("speedLoss",      &def.m_SpeedLoss);
                 el->QueryIntAttribute("overideProbabiltyPool", &def.m_OverideProbabilityPool);
             } else if (strcmp(elName, "coin_chances") == 0) {
-                ParseCoinChanceinator(&coinChance[mode], el);
+                ParseCoinChanceinator(&m_CoinChanceinator[mode], el);
             } else if (strcmp(elName, "OverideProbability") == 0) {
                 PROBABILITY_OVERIDE po;
                 const char* types = el->Attribute("types");
@@ -234,15 +230,15 @@ void WaveManager::Init() {
                 el->QueryIntAttribute("perWave", &po.m_PerWave);
                 el->QueryIntAttribute("waveCount", &po.m_PerWaveCount);
                 el->QueryFloatAttribute("disableWhenPowered", &po.m_DisableWhenPowered);
-                probOverrides[mode].push_back(po);
+                m_ProbabilityOverride[mode].push_back(po);
             } else if (strcmp(elName, "WaveInfo") == 0) {
                 WAVE_INFO* wi = new WAVE_INFO();
                 wi->m_WaveIndex = waveIndex++;
                 // ASM-verified: 2026-05-22 binary @ 0x001267c8 (re-analyst).
                 // WAVE_INFO::WAVE_INFO(DEFAULT_WAVE_INFO*) copies m_bWaitForEntities (+0x2c)
                 // and m_bWaitForProcessing (+0x2d) from the per-mode DEFAULT_WAVE_INFO.
-                wi->m_bWaitForEntities   = defaultWaveInfo[mode].m_bWaitForEntities;
-                wi->m_bWaitForProcessing = defaultWaveInfo[mode].m_bWaitForProcessing;
+                wi->m_bWaitForEntities   = m_DefaultWaveInfo[mode].m_bWaitForEntities;
+                wi->m_bWaitForProcessing = m_DefaultWaveInfo[mode].m_bWaitForProcessing;
 
                 // waveNo attr -> binary stores to local then +0x0 (m_ScoreThreshold) via conditional.
                 // m_OverideProbabilityPool also written to +0x70 (second read wins in binary).
@@ -399,12 +395,12 @@ void WaveManager::Init() {
                     }
                 }
 
-                waveInfos[mode].push_back(wi);
+                m_WaveInfo[mode].push_back(wi);
             }
         } // end single-pass document-order walk
 
         LOG_DEBUG("WaveManager", "Init: mode %d -> %d waves from %s",
-                  mode, (int)waveInfos[mode].size(), s_WaveXML[mode]);
+                  mode, (int)m_WaveInfo[mode].size(), s_WaveXML[mode]);
     }
 }
 
@@ -414,10 +410,10 @@ void WaveManager::Init() {
 
 void WaveManager::Destroy() {
     for (int mode = 0; mode < 4; ++mode) {
-        for (std::vector<WAVE_INFO*>::iterator it = waveInfos[mode].begin();
-             it != waveInfos[mode].end(); ++it)
+        for (std::vector<WAVE_INFO*>::iterator it = m_WaveInfo[mode].begin();
+             it != m_WaveInfo[mode].end(); ++it)
             delete *it;
-        waveInfos[mode].clear();
+        m_WaveInfo[mode].clear();
     }
     delete m_pWaveQue;     m_pWaveQue = nullptr;
     delete m_pWaveQueItem; m_pWaveQueItem = nullptr;
@@ -454,7 +450,7 @@ void WaveManager::Reset(bool fullReset) {
 
     LOG_DEBUG("WaveManager", "Reset(full=%d) gameMode=%d waveInfos[%d].size=%zu",
               fullReset ? 1 : 0, (int)game_work.gameMode, (int)game_work.gameMode,
-              waveInfos[game_work.gameMode].size());
+              m_WaveInfo[game_work.gameMode].size());
 
     // 1. Drop wave queue.
     delete m_pWaveQue;     m_pWaveQue = nullptr;
@@ -470,8 +466,8 @@ void WaveManager::Reset(bool fullReset) {
     field_0x2d4 = 0.0f;
     field_0x40 = 0.0f; field_0x44 = 0.0f;
     field_0x48 = 0;
-    field_0x238[0] = field_0x238[1] = 0.0f;
-    field_0x234[0] = field_0x234[1] = 0.0f;
+    field_0x238 = 0.0f;
+    field_0x234 = 0.0f;
     m_ComboTimer[0] = 0.0f;
     m_Speed[0] = 0.0f; m_Speed[1] = 0.0f;
 
@@ -515,20 +511,18 @@ void WaveManager::Reset(bool fullReset) {
     // 6. Reset per-wave chance counters + PROBABILITY_OVERIDE state.
     ResetWaveChances();
     m_BlitzBonus[0] = 0; m_BlitzBonus[1] = 0;
-    m_ColdTimer[0] = 0.0f; m_ColdTimer[1] = 0.0f;
-    for (std::vector<PROBABILITY_OVERIDE>::iterator pit = probOverrides[game_work.gameMode].begin();
-         pit != probOverrides[game_work.gameMode].end(); ++pit)
+    m_ColdTimer[0] = 0.0f;  // m_BlitzBonus[1] aliases this; P1 cold timer cleared via m_BlitzBonus[1]=0 above
+    for (std::vector<PROBABILITY_OVERIDE>::iterator pit = m_ProbabilityOverride[game_work.gameMode].begin();
+         pit != m_ProbabilityOverride[game_work.gameMode].end(); ++pit)
         pit->SelectType();
 
-    // field_0x2c4 / field_0x2c8 not in port struct (binary resets them here).
-    // Clear m_FruitQueue[2][32]: fill with -1.
-    for (int i = 0; i < 2; ++i)
-        for (int j = 0; j < 32; ++j)
-            m_FruitQueue[i][j] = -1;
+    // Binary resets m_FruitQueueSize (field_0x2c4/field_0x2c8) and clears the fruit queue here.
+    for (int j = 0; j < 32; ++j)
+        m_FruitQueue[j] = -1;
     m_FruitQueueSize[0] = m_FruitQueueSize[1] = 0;
 
     // 7. Kick first wave if waves loaded.
-    if (!waveInfos[game_work.gameMode].empty()) {
+    if (!m_WaveInfo[game_work.gameMode].empty()) {
         LOG_DEBUG("WaveManager", "Reset: calling GetNextWave(0)");
         GetNextWave(0);
         LOG_DEBUG("WaveManager", "Reset: m_pCurrentWave[0]=%p",
@@ -543,7 +537,7 @@ void WaveManager::Reset(bool fullReset) {
     // Binary @ 0x00125eb8: dead-code MP sync flag cleared to 0.
     game_work.m_bP2PReady = 0;
     field_0x78 = 1.0f;
-    field_0x74 = m_SpeedMultPerMode[game_work.gameMode];
+    field_0x74 = m_SpeedClampStart[game_work.gameMode];
 
     if (fullReset)
         NewGame();
@@ -614,14 +608,13 @@ void WaveManager::Resume() {
 
     // 4. Re-roll all PROBABILITY_OVERIDE entries.
     // Port specific: PROBABILITY_OVERIDE::SelectType() not yet ported; skipped.
-    // for each po in probOverrides[game_work.gameMode]: po.SelectType();
+    // for each po in m_ProbabilityOverride[game_work.gameMode]: po.SelectType();
 
     // 5. Reset transient queue fields.
     m_FruitQueueSize[0] = 0;
     m_FruitQueueSize[1] = 1;
-    for (int p = 0; p < 2; ++p)
-        for (int i = 0; i < 32; ++i)
-            m_FruitQueue[p][i] = -1;
+    for (int i = 0; i < 32; ++i)
+        m_FruitQueue[i] = -1;
 
     // 6. Re-spawn saved entities from sd->m_EntityStates.
     // Binary @ 0x00124b9c-0x00124cd8: per-EntityState dispatch
@@ -689,12 +682,12 @@ void WaveManager::Resume() {
 
         // Wave-state restore after SkipToPause.
         m_FruitQueueSize[1]  = sd->m_FruitQueueCount;
-        memcpy(&m_FruitQueue[0][0], &sd->m_FruitQueue[0], 0x80);
+        memcpy(&m_FruitQueue[0], &sd->m_FruitQueue[0], 0x80);
         field_0x23d          = (uint8_t)sd->m_blitzSpawnedThisGame;
         field_0x23e          = (uint8_t)sd->m_blitzForceSpawnedCounter;
         field_0x240          = sd->m_blitzSpawnTime;
-        field_0x234[0]       = sd->m_WaveDelay;
-        field_0x238[0]       = sd->m_WaveWait;
+        field_0x234       = sd->m_WaveDelay;
+        field_0x238       = sd->m_WaveWait;
         field_0x74           = sd->m_ProbabilityOverideFlag;
         // sd->m_pCurrentWave_P1 (FruitSaveData+0x140) stores the SAVED WAVE INDEX
         // (uint), used to look up via the WaveState restore loop. The field name
@@ -717,10 +710,10 @@ void WaveManager::Resume() {
              wit != sd->m_WaveStates.end(); ++wit)
         {
             WaveState& ws = *wit;
-            // ws.index = sequential index into waveInfos[mode] (SaveWaveInfo stores candidateIdx).
+            // ws.index = sequential index into m_WaveInfo[mode] (SaveWaveInfo stores candidateIdx).
             // ws.waveIdx = revisit counter (field_0x34).
-            if (ws.index < 0 || ws.index >= (int)waveInfos[mode].size()) continue;
-            WAVE_INFO* w = waveInfos[mode][ws.index];
+            if (ws.index < 0 || ws.index >= (int)m_WaveInfo[mode].size()) continue;
+            WAVE_INFO* w = m_WaveInfo[mode][ws.index];
             w->field_0x34 = (float)ws.waveIdx;
             if (!ws.spawners.empty()) {
                 m_pCurrentWave[0] = w;
@@ -730,10 +723,10 @@ void WaveManager::Resume() {
                 {
                     if (s >= w->m_SpawnerCount) break;
                     SPAWNER_INFO& sp = w->m_pSpawners[s];
-                    sp.m_SpawnTimer     = sit->delay;
-                    sp.m_RemainingCount = sit->toSpawn;
+                    sp.m_SpawnTimer     = sit->timer;
+                    sp.m_RemainingCount = (int)sit->count;
                     sp.m_field58        = 0;
-                    sp.m_SpawnCountF    = (float)sit->toSpawn;
+                    sp.m_SpawnCountF    = sit->count;
                     sp.SelectTypes();
                 }
             }
@@ -768,7 +761,7 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
     // TODO: implement IsSameScreenMultiplayer (binary needs further RE for full gameMode bitmask).
     bool splitPlayer = IsSameScreenMultiplayer();
     if ((!splitPlayer || m_WaveCount[1] < 0)
-        && !waveInfos[game_work.gameMode].empty())
+        && !m_WaveInfo[game_work.gameMode].empty())
     {
         sd->m_ProbabilityOverideFlag = field_0x74;  // m_GlobalDt
 
@@ -777,8 +770,8 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         int candidateIdx[MAX_CAND];
         int numCandidates = 0;
         int waveIdx = 0;
-        for (std::vector<WAVE_INFO*>::iterator wit = waveInfos[game_work.gameMode].begin();
-             wit != waveInfos[game_work.gameMode].end(); ++wit) {
+        for (std::vector<WAVE_INFO*>::iterator wit = m_WaveInfo[game_work.gameMode].begin();
+             wit != m_WaveInfo[game_work.gameMode].end(); ++wit) {
             WAVE_INFO* wi = *wit;
             if (wi->m_ScoreThreshold <= m_WaveCount[0]
                 && (m_WaveCount[0] <= wi->m_EndScore || wi->m_EndScore == -2))
@@ -801,8 +794,8 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
                 for (int s = 0; s < candidates[i]->m_SpawnerCount; ++s) {
                     SpawnState ss;
                     SPAWNER_INFO& sp = candidates[i]->m_pSpawners[s];
-                    ss.delay   = sp.m_SpawnTimer;
-                    ss.toSpawn = sp.m_RemainingCount;
+                    ss.timer = sp.m_SpawnTimer;
+                    ss.count = sp.m_SpawnCountF;
                     state.spawners.push_back(ss);
                 }
             }
@@ -812,12 +805,12 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
         // DIVERGES fix: binary @ 0x00124986 sources +0x230 slot = m_WaveCount[0], not [1].
         sd->m_pCurrentWave_P1 = m_WaveCount[0];
         sd->m_FruitQueueCount = m_FruitQueueSize[0];
-        sd->m_WaveDelay       = field_0x234[0];
-        sd->m_WaveWait        = field_0x238[0];
+        sd->m_WaveDelay       = field_0x234;
+        sd->m_WaveWait        = field_0x238;
         sd->m_Speed_P0        = m_Speed[0];
         sd->m_Speed_P1        = (float)m_BlitzBonus[1];
         sd->m_Speed_P0_alias  = m_Speed[1];
-        memcpy(&sd->m_FruitQueue[0], &m_FruitQueue[0][0], 0x80);
+        memcpy(&sd->m_FruitQueue[0], &m_FruitQueue[0], 0x80);
         // Binary @ 0x00124986: sd->m_FruitQueueCount = this->field_0x2c8 = m_FruitQueueSize[1]
         // (renamed from field82_0x7c; RE confirmed this is the fruit queue count for resume)
         sd->m_FruitQueueCount = m_FruitQueueSize[1];
@@ -855,14 +848,14 @@ bool WaveManager::PowersEnabled() {
 }
 
 void WaveManager::ResetGlobalDt(float dt) {
-    // Binary @ 0x00121ed8. Walks probOverrides[gameMode], erasing entries
+    // Binary @ 0x00121ed8. Walks m_ProbabilityOverride[gameMode], erasing entries
     // with m_SelectedType >= 0; advances past those with m_SelectedType < 0.
     // DIVERGES fix: binary checks *(it+0x74) = m_SelectedType, not m_PerWaveCount (+0x70).
     // Binary @ 0x00121ee8 confirms ldr from offset +0x74 of PROBABILITY_OVERIDE.
     Game* game = Game::GetInstance();
     if (game) {
-        auto& vec = probOverrides[game_work.gameMode];
-        for (auto it = vec.begin(); it != vec.end(); ) {
+        std::vector<PROBABILITY_OVERIDE>& vec = m_ProbabilityOverride[game_work.gameMode];
+        for (std::vector<PROBABILITY_OVERIDE>::iterator it = vec.begin(); it != vec.end(); ) {
             if (it->m_SelectedType < 0) {
                 ++it;
             } else {
@@ -880,8 +873,8 @@ void WaveManager::ResetWaveChances() {
     // and field_0x34 (revisit counter) = 1.0.
     Game* game = Game::GetInstance();
     if (!game) return;
-    for (std::vector<WAVE_INFO*>::iterator it = waveInfos[game_work.gameMode].begin();
-         it != waveInfos[game_work.gameMode].end(); ++it) {
+    for (std::vector<WAVE_INFO*>::iterator it = m_WaveInfo[game_work.gameMode].begin();
+         it != m_WaveInfo[game_work.gameMode].end(); ++it) {
         WAVE_INFO* wi = *it;
         wi->m_CurrentChance   = wi->m_Chance;
         wi->m_CurrentRegrowth = wi->m_ChanceRegrowth;
@@ -914,8 +907,8 @@ void WaveManager::Update(float dt) {
         // Use m_DtIncPerMode (+0x7c[mode]). DIFFERS: was m_SpeedMultPerMode (+0x8c, wrong field).
         // binary @ 0x00125ac4: speed = field_0x74 + dt * *(float*)(&this->field_0x7c + gameMode*4)
         float s = field_0x74 + dt * m_DtIncPerMode[mode];
-        float lo = field_0x8c[mode];
-        float hi = field_0x9c[mode];
+        float lo = m_SpeedClampStart[mode];
+        float hi = m_SpeedClampMax[mode];
         field_0x74 = (s < lo) ? lo : (s < hi) ? s : hi;
     }
 
@@ -997,20 +990,20 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // Fix 4 (binary @ 0x00125930): after WaveTimer decrement, binary falls through
     // to the wave-end block. Port's 'return' skipped wave-end check entirely.
     // Binary reads field_0x234+p*4 (delay slot) @ 0x0012598c.
-    float waveTimer = field_0x234[playerIdx];  // Fix 1: delay slot @ +0x234+p*4
+    float waveTimer = field_0x234;  // Fix 1: delay slot @ +0x234+p*4
     if (waveTimer > 0.0f) {
         // Binary @ 0x00125928: set the wave-end gate flag = 1 here, in the
         // timer-still-ticking branch, so the wave-end block won't fire
         // GetNextWave while the pre-spawn delay is counting down.
         s_PreSpawnTickedThisFrame = true;
-        field_0x234[playerIdx] = waveTimer - dt;  // Fix 1: write back to delay slot
+        field_0x234 = waveTimer - dt;  // Fix 1: write back to delay slot
         // No 'return' here -- binary @ 0x00125930 falls through to wave-end block.
     } else {
-        field_0x234[playerIdx] = 0.0f;
+        field_0x234 = 0.0f;
     }
 
     // Process each spawner (only when wave != null and timer <= 0).
-    if (field_0x234[playerIdx] <= 0.0f)
+    if (field_0x234 <= 0.0f)
     for (int s = 0; s < wave->m_SpawnerCount; ++s) {
         SPAWNER_INFO& spawner = wave->m_pSpawners[s];
 
@@ -1085,7 +1078,7 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     blitzAdvance = 0;
                 }
 
-                // Step B: weighted roll over probOverrides[mode].
+                // Step B: weighted roll over m_ProbabilityOverride[mode].
                 // Gate predicates: m_PerWave, m_PerWaveCount, m_DisableWhenPowered, m_BombHitTimer.
                 // Binary: 3 static blitz-spawner overrides selected by Rand32(3).
                 // All share m_TimeScale=0.75, m_Offset=(0,-1.1,0), m_MinAngle=0.6660.
@@ -1135,9 +1128,9 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     ? &k_BlitzSpawners[m_Random.Rand32(3)]
                     : nullptr;
                 int mode = game_work.gameMode;
-                std::vector<PROBABILITY_OVERIDE>& overrides = probOverrides[mode];
+                std::vector<PROBABILITY_OVERIDE>& overrides = m_ProbabilityOverride[mode];
 
-                // Step B: weighted roll over probOverrides[mode].
+                // Step B: weighted roll over m_ProbabilityOverride[mode].
                 // Gate predicates: m_PerWave, m_PerWaveCount, m_DisableWhenPowered.
                 // Bug 3 fix: when field_0x23d > 5, each override's percent-chance is halved.
                 // ASM-verified: 2026-05-22 binary @ 0x001253b0..0x00125584 (re-analyst).
@@ -1254,10 +1247,10 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // (pre-spawn delay is still counting down -- no entities yet but the wave
     // is "in progress" via the timer).
     if (!s_PreSpawnTickedThisFrame && !IsWaveProcessing(playerIdx)) {
-        float nextDelay = field_0x238[playerIdx];  // Fix 1: wait slot @ +0x238+p*4
+        float nextDelay = field_0x238;  // Fix 1: wait slot @ +0x238+p*4
         if (nextDelay > 0.0f) {
             nextDelay -= dt;
-            field_0x238[playerIdx] = nextDelay;    // Fix 1: write back to wait slot
+            field_0x238 = nextDelay;    // Fix 1: write back to wait slot
             if (nextDelay > 0.0f) return;
         }
         GetNextWave(playerIdx);
@@ -1330,7 +1323,7 @@ void WaveManager::GetNextWave(int playerIdx) {
     m_WaveCount[playerIdx]++;
     LOG_DEBUG("WaveManager", "GetNextWave(p=%d) waveCount=%d mode=%d waveInfos=%zu",
               playerIdx, m_WaveCount[playerIdx], (int)game_work.gameMode,
-              waveInfos[game_work.gameMode].size());
+              m_WaveInfo[game_work.gameMode].size());
 
     // Speed ramp: increment revisit counter on previously-visited wave.
     if (m_WaveCount[playerIdx] > 1 && m_pCurrentWave[playerIdx])
@@ -1349,8 +1342,8 @@ void WaveManager::GetNextWave(int playerIdx) {
     static const int MAX_CANDIDATES = 20;
     WAVE_INFO* candidates[MAX_CANDIDATES];
 
-    for (std::vector<WAVE_INFO*>::iterator wit = waveInfos[gm].begin();
-         wit != waveInfos[gm].end(); ++wit) {
+    for (std::vector<WAVE_INFO*>::iterator wit = m_WaveInfo[gm].begin();
+         wit != m_WaveInfo[gm].end(); ++wit) {
         WAVE_INFO* wi = *wit;
         // Regrowth: grow m_CurrentChance toward m_Chance.
         if (wi->m_ChanceRegrowth > 0.0f && wi->m_CurrentChance < wi->m_Chance) {
@@ -1398,7 +1391,6 @@ void WaveManager::GetNextWave(int playerIdx) {
     if (!wave->m_SpecialFruits.empty()) {
         int queueSize = (int)wave->m_SpecialFruits.size();
         if (queueSize > 32) queueSize = 32;
-        m_ScoreThreshold[playerIdx] = wave->m_ScoreThreshold;
         m_FruitQueueSize[playerIdx] = queueSize;
         for (int i = 0; i < queueSize; ++i) {
             const std::string& tn = wave->m_SpecialFruits[i];
@@ -1407,7 +1399,7 @@ void WaveManager::GetNextWave(int playerIdx) {
                 ft = Fruit::RandomFruit(false);
             else
                 ft = Fruit::FruitType(tn.c_str(), false);
-            m_FruitQueue[playerIdx][i] = ft;
+            m_FruitQueue[i] = ft;
         }
     }
 
@@ -1430,9 +1422,9 @@ void WaveManager::GetNextWave(int playerIdx) {
     if (wave->m_NextWaveDelay > 0.0f) {
         float delay = wave->m_NextWaveDelay + wave->m_NextWaveDelayInc * wave->field_0x34;
         if (delay < 0.05f) delay = 0.05f;
-        field_0x234[playerIdx] = delay;
+        field_0x234 = delay;
     } else {
-        field_0x234[playerIdx] = 0.0f;          // DAT_00125328
+        field_0x234 = 0.0f;          // DAT_00125328
     }
     {
         float wait  = wave->m_NextWaveWait;
@@ -1442,7 +1434,7 @@ void WaveManager::GetNextWave(int playerIdx) {
             if (w2 < 0.05f) w2 = 0.05f;
             wait = w2;
         }
-        field_0x238[playerIdx] = wait;
+        field_0x238 = wait;
     }
 
     // Reset all spawners in this wave.
@@ -1467,9 +1459,9 @@ void WaveManager::SetCurrentWave(int waveNo, float delay, int playerIdx) {
     m_WaveCount[playerIdx] = waveNo - 1;
     GetNextWave(0);
 
-    float v = field_0x234[playerIdx] + delay;
+    float v = field_0x234 + delay;
     if (v < 0.0f) v = 0.0f;
-    field_0x234[playerIdx] = v;
+    field_0x234 = v;
 }
 
 void WaveManager::SetupWaveQue() {
@@ -1856,11 +1848,11 @@ float WaveManager::GetComboBonusProgression(int playerIdx) {
 PROBABILITY_OVERIDE* WaveManager::GetCurrentOverideList(int playerIdx) {
     // Binary @ 0x0012180c. Returns pointer to the vector header at
     // this+0x1fc + gameMode*0xc + playerIdx*0x30 (callers cast to vector<PROBABILITY_OVERIDE>*).
-    // Port uses probOverrides[gameMode] directly; playerIdx 0 is the primary slot.
+    // Port uses m_ProbabilityOverride[gameMode] directly; playerIdx 0 is the primary slot.
     Game* game = Game::GetInstance();
-    if (!game || probOverrides[game_work.gameMode].empty()) return nullptr;
+    if (!game || m_ProbabilityOverride[game_work.gameMode].empty()) return nullptr;
     (void)playerIdx;  // port has single-player override list only
-    return probOverrides[game_work.gameMode].data();
+    return m_ProbabilityOverride[game_work.gameMode].data();
 }
 
 // ----------------------------------------------------------------------------
@@ -2068,7 +2060,7 @@ int COIN_CHANCEINATOR::GetCoins() const {
 
 // Binary @ 0x00121a1c.
 // First: try the global chanceinator via m_pCurrentWave[0]->m_pCoinChance.
-// If that yields > 0, done. Else: advance RNG via fallback coinChance[idx].
+// If that yields > 0, done. Else: advance RNG via fallback m_CoinChanceinator[idx].
 // The fallback byte index comes from the current game-mode coin-table slot.
 void WaveManager::RequestCoins() {
     WaveManager* self = GetInstance();
@@ -2083,5 +2075,5 @@ void WaveManager::RequestCoins() {
     // (uint8 @ +0x04). Per-mode table at WaveManager+0x1dc, stride 8.
     int idx = game_work.gameMode;
     if (idx >= 0 && idx < 4)
-        self->coinChance[idx].GetCoins();
+        self->m_CoinChanceinator[idx].GetCoins();
 }

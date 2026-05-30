@@ -361,27 +361,25 @@ struct PROBABILITY_OVERIDE {
     int GetType();
 };
 
-// WaveQueItem — binary @ 0x001268fc ctor. Size 0x20 (32 bytes).
+// WaveQueItem — binary @ 0x001268fc ctor. Size 0x1c (28 bytes).
 // Only used in gameMode==2 (Survival/Combo). SetupWaveQue populates this via AddWave.
 struct WaveQueItem {
-    // +0x00..+0x0b: spawner-op codes (1=normal, 2=random, 3=special)
-    std::vector<int> m_SpawnerOps;  // +0x00, 12 bytes
-    // +0x0c: padding / reserved
-    int m_field0c;                  // +0x0c
-    // +0x10: running counter (target-type tracking in AddWave loop)
-    int m_field10;                  // +0x10
-    // +0x14: unused slot
-    int m_field14;                  // +0x14
-    // +0x18: copy of WAVE_INFO::m_WaveIndex for this queue entry
+    // +0x00..+0x0b: per-spawn slot indices; push_back of {0,1,2} for each unit
+    std::vector<int> m_SlotList;    // +0x00, 12 bytes
+    // +0x0c: timing/ratio value (init 0.5f; overwritten with count1/totalWeight)
+    float m_Fraction;               // +0x0c
+    // +0x10: counter group (treated as int[3] starting at +0x10 by AddWave)
+    int m_Count0;                   // +0x10
+    // +0x14: counter slot 1 (left/right balance tracker)
+    int m_Count1;                   // +0x14
+    // +0x18: wave-id seed AND counter slot 2; seeded from WAVE_INFO::m_WaveIndex
     int m_WaveIndex;                // +0x18
-    // +0x1c: reserved
-    int m_field1c;                  // +0x1c
 
-    WaveQueItem() : m_field0c(0), m_field10(0), m_field14(0), m_WaveIndex(0), m_field1c(0) {}
+    WaveQueItem() : m_Fraction(0.0f), m_Count0(0), m_Count1(0), m_WaveIndex(0) {}
 };
 
 #ifdef __bada__
-static_assert(sizeof(WaveQueItem) == 0x20, "WaveQueItem size mismatch");
+static_assert(sizeof(WaveQueItem) == 0x1c, "WaveQueItem size mismatch");
 #endif
 
 // WaveQue — binary @ 0x00126b10 ctor. Size 0x0c (12 bytes).
