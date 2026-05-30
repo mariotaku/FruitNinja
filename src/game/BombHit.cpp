@@ -386,7 +386,7 @@ void RetryLevel() {
     {
         WaveManager* wm = WaveManager::GetInstance();
         if (wm) {
-            std::vector<WAVE_INFO*>& waves = wm->waveInfos[game_work.gameMode];
+            std::vector<WAVE_INFO*>& waves = wm->m_WaveInfo[game_work.gameMode];
             for (std::vector<WAVE_INFO*>::iterator it = waves.begin(); it != waves.end(); ++it) {
                 WAVE_INFO* wave = *it;
                 if (!wave) continue;

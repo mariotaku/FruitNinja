@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
 
     // Verify WaveManager loaded the per-mode wave list.
     WaveManager* wm = WaveManager::GetInstance();
-    int waveCountAtMode = (int)wm->waveInfos[gameMode].size();
+    int waveCountAtMode = (int)wm->m_WaveInfo[gameMode].size();
     if (waveCountAtMode < expectedMinWaves) {
         fprintf(stderr, "FAIL: mode %d only loaded %d waves (want >= %d)\n",
                 gameMode, waveCountAtMode, expectedMinWaves);

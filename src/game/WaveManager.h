@@ -28,164 +28,144 @@ class SpeedControl;
 
 class WaveManager {
 public:
-    // +0x000: cached SpeedControl HUD widget pointers, one per player.
+    // +0x00: cached SpeedControl HUD widget pointers, one per player.
     // Binary @ 0x001217d4 (DeleteSpeedControl): ldr from [r0, #0x00].
     // Binary @ 0x00122f50 (UpdateComboSpeed): slot 0 allocated lazily.
     // Slot 1 is never populated (binary @ 0x001217d4 checks only slot 0).
     HUDControl3d* m_SpeedControl[2];   // +0x00, +0x04
 
-    // +0x008: RNG instance. Used for wave selection, spawn angle/count RNG.
-    // Port specific: binary fetches Random via a global pointer (GOT-relative);
-    // the port embeds it as a member for convenience. Lives at +0x08 so that
-    // m_SpeedControl occupies the binary's +0x00/+0x04 slots correctly.
-    // All downstream offsets (+0x035 onward) are shifted +0x08 vs prior port layout.
-    // DIFFERS: binary does not have Random as a WaveManager member; port-specific field.
+    // +0x08: RNG instance.
+    // DIFFERS: binary fetches Random via a GOT-relative global pointer; port embeds
+    // it as a member so that m_SpeedControl correctly occupies +0x00/+0x04.
+    // +0x08..+0x1f (24 bytes); bridges into the binary's +0x08..+0x34 unnamed region.
     Math::Random m_Random;   // Port specific: +0x08
 
-    // +0x020..+0x034: gap (21 bytes).
-    // m_SpeedControl[2] occupies +0x00..+0x07 (matches binary +0x00/+0x04).
-    // Port-specific m_Random occupies +0x08..+0x1f (24 bytes).
-    // This padding bridges from +0x20 to +0x35 so all field_0xNN comments
-    // below match the binary offsets exactly (binary has no Random member;
-    // +0x08..+0x34 is other binary state not yet RE'd as named fields).
-    uint8_t _pad_0x20[0x15];  // 21 bytes to reach +0x35
+    // +0x20..+0x34: remaining unnamed binary region (21 bytes of padding).
+    uint8_t _pad_0x20[0x15];  // +0x20
 
-    // +0x035: wave-active flag
-    uint8_t field_0x35;
-    // +0x036: reset flag
-    uint8_t field_0x36;
-    // +0x037: misc flag
-    uint8_t field_0x37;
-    // +0x038: last selected wave index (int, -1 = none)
-    int field_0x38;
-    // +0x03c: gap to reach +0x40
-    uint8_t _pad_0x3c[4];
-    // +0x040: play-time accumulators
-    float field_0x40;
-    float field_0x44;
-    // +0x048
-    int field_0x48;
-    // +0x04c: per-player combo "blitz" timer (decays via GetWavedt; AddSpeed
+    // +0x35: wave-active flag
+    uint8_t field_0x35;       // +0x35
+    // +0x36: reset flag
+    uint8_t field_0x36;       // +0x36
+    // +0x37: misc flag
+    uint8_t field_0x37;       // +0x37
+    // +0x38: last selected wave index (int, -1 = none)
+    int field_0x38;           // +0x38
+    // +0x3c: gap to reach +0x40
+    uint8_t _pad_0x3c[4];    // +0x3c
+    // +0x40: play-time accumulators
+    float field_0x40;         // +0x40
+    float field_0x44;         // +0x44
+    // +0x48
+    int field_0x48;           // +0x48
+    // +0x4c: per-player combo "blitz" timer (decays via GetWavedt; AddSpeed
     // pumps to 1.0f on every successful blitz multi-slice).
     // ASM-verified: 2026-05-22 binary @ 0x00123510 / 0x00122f50 (re-analyst).
-    float m_ComboTimer[2];       // +0x4c (P0), +0x50 (P1)
-    // +0x054: wave speed per player [2]
-    float m_Speed[2];            // +0x54, +0x58
-    // +0x058: boosted speed slot (overlaps m_Speed[1], per AddSpeed note)
-    // field_0x58 == &m_Speed[1]  -- used by AddSpeed for player 0
-    // +0x05c: per-player blitz score-level (int, 1..6+).
-    //   AddSpeed cold-start writes AddToTotal("blitz_bonus") return; subsequent
-    //   level-ups bump it; clamp(level,1,6)*5 is awarded as score on each fire.
-    //   Used by Arcade <OverideProbability waveCount=N> gate (P0 only).
+    float m_ComboTimer[2];    // +0x4c (P0), +0x50 (P1)
+    // +0x54: wave speed per player [2]
+    float m_Speed[2];         // +0x54 (P0), +0x58 (P1)
+    // +0x5c: per-player blitz score-level (int, 1..6+) / cold-timer (float, resets 3.0f).
+    //   Binary aliases m_BlitzBonus[1] (int) with m_ColdTimer[0] (float) at +0x60:
+    //   same 4-byte slot, int interpretation = blitz level, float = cold-down timer.
+    //   Single-player uses P0 slot for blitz level (int) and the P1/ColdTimer slot
+    //   for the cold-timer float. Union preserves binary layout exactly.
     // ASM-verified: 2026-05-22 binary @ 0x00123510 AddSpeed (asm-inspector).
-    int m_BlitzBonus[2];         // +0x5c (P0), +0x60 (P1)
-    // +0x060: per-player blitz cold-timer (float, resets to 3.0f).
-    //   AddSpeed cold-start sets =3.0f; subsequent calls subtract `amount`;
-    //   when <=0.0f the level-up branch fires (next blitz tier + SFX +
-    //   AddToTotal + score award).
-    // ASM-verified: 2026-05-22 binary @ 0x00123510 AddSpeed (asm-inspector).
-    // DIFFERS: binary aliases m_BlitzBonus[1] with m_ColdTimer[0] at +0x60
-    // (both stride-4 arrays whose footprints overlap by design -- single-
-    // player gameplay uses only P0 so the binary's collision is dormant).
-    // Port keeps them as separate non-overlapping fields (m_ColdTimer offset
-    // drifts to a port-only slot); audit any consumer of m_BlitzBonus[1].
-    float m_ColdTimer[2];        // +0x60 (P0) per binary; port: non-overlapping
-    // +0x064: fruit-multiplier (BombScale power-up)
-    float field_0x64;
-    // +0x068: bomb chain spawn level (BombMultiplyer power-up)
-    float spawnLevel;
-    // +0x06c: fruit spawn multiplier (FruitMultiplyer power-up)
-    float field_0x6c;
-    // +0x070: critical chance multiplier
-    float m_CritChanceMult;
-    // +0x074: speed accumulator (Reset loads m_SpeedMultPerMode[gameMode])
-    float field_0x74;
-    // +0x078: dtMod from PowerUpManager (default 1.0)
-    float field_0x78;
+    union {
+        int   m_BlitzBonus[2];       // +0x5c: [0]=P0 blitz level (int), [1]=P1 (int; aliases m_ColdTimer[0])
+        struct {
+            int   _m_BlitzP0;        // +0x5c (use m_BlitzBonus[0] instead)
+            float m_ColdTimer[1];    // +0x60: P0 cold-down timer (float; aliases m_BlitzBonus[1])
+        };
+    };
+    // +0x64: bomb scale multiplier (BombScale power-up)
+    float field_0x64;         // +0x64
+    // +0x68: bomb chain spawn level (BombMultiplyer power-up)
+    float spawnLevel;         // +0x68
+    // +0x6c: fruit spawn multiplier (FruitMultiplyer power-up)
+    float field_0x6c;         // +0x6c
+    // +0x70: critical chance multiplier
+    float m_CritChanceMult;   // +0x70
+    // +0x74: global speed accumulator (Reset loads m_SpeedClampStart[gameMode])
+    float field_0x74;         // +0x74
+    // +0x78: dtMod from PowerUpManager (default 1.0)
+    float field_0x78;         // +0x78
+    // +0x7c: per-mode dtInc (speed accumulator increment). Parsed from <defaults> "dtInc".
+    // binary @ 0x00125ac4: speed = field_0x74 + dt * m_DtIncPerMode[mode]
+    float m_DtIncPerMode[4];      // +0x7c
+    // +0x8c: per-mode globalDtStart lower bound. Parsed from <defaults> "globalDtStart".
+    // DIFFERS: original values unknown; using 1.0f per mode as placeholder.
+    float m_SpeedClampStart[4];   // +0x8c
+    // +0x9c: per-mode speed upper bound. Parsed from <defaults> "globalDtMax".
+    // DIFFERS: original values unknown; using 100.0f per mode as placeholder.
+    float m_SpeedClampMax[4];     // +0x9c
 
-    // +0x0ac: waveInfos — 4 vectors of WAVE_INFO* (one per game mode).
-    // Binary: base at +0xac, stride 0xc per mode (std::vector layout).
-    // Port: flat array of 4 vectors.
-    std::vector<WAVE_INFO*> waveInfos[4];
+    // +0xac: 4 vectors of WAVE_INFO* (one per game mode). Binary stride 0xc per mode.
+    std::vector<WAVE_INFO*> m_WaveInfo[4];      // +0xac
 
-    // +0x0dc: DEFAULT_WAVE_INFO[4] (each 0x40 bytes = 64 bytes)
-    DEFAULT_WAVE_INFO defaultWaveInfo[4];
+    // +0xdc: per-mode default wave parameters (64 bytes each).
+    DEFAULT_WAVE_INFO m_DefaultWaveInfo[4];     // +0xdc
 
-    // +0x1dc: COIN_CHANCEINATOR[4] (each 0x08 bytes)
-    COIN_CHANCEINATOR coinChance[4];
+    // +0x1dc: per-mode coin chance tables (8 bytes each).
+    COIN_CHANCEINATOR m_CoinChanceinator[4];    // +0x1dc
 
-    // +0x1fc: PROBABILITY_OVERIDE lists per game mode
-    std::vector<PROBABILITY_OVERIDE> probOverrides[4];
+    // +0x1fc: per-mode probability override lists (12 bytes each).
+    std::vector<PROBABILITY_OVERIDE> m_ProbabilityOverride[4];  // +0x1fc
 
-    // +0x22c: current wave pointer per player [2]
-    WAVE_INFO* m_pCurrentWave[2];
+    // +0x22c/+0x230: current wave pointer (MP) or wave count (SP) — binary stores
+    // the SP wave count in the m_pCurrentWave_P1 slot (+0x230) by aliasing.
+    union {
+        WAVE_INFO* m_pCurrentWave[2];  // +0x22c: [0]=P0 wave ptr, [1]=P1/SP wave count
+        int        m_WaveCount[2];     // +0x22c: [0]=P0 count (aliases m_pCurrentWave[0]),
+                                       //          [1]=SP wave count (aliases m_pCurrentWave[1])
+    };
 
-    // +0x230 (alias): wave count per player. GetNextWave increments.
-    // Binary uses the same storage as m_pCurrentWave_P1 for count in SP.
-    int m_WaveCount[2];
+    // +0x234..+0x2d3: binary unnamed region (160 bytes).
+    // Fields below are port-derived names for binary offsets within this range.
 
-    // +0x234: per-player pre-spawn delay timer (binary field_0x234+p*4, "delay" XML attr).
-    // Binary @ 0x0012598c reads [+0x234+p*4]; GetNextWave @ 0x001251ee writes [+0x234+p*4].
-    float field_0x234[2];
+    // +0x234: P0 pre-spawn delay timer ("delay" XML attr).
+    // Binary @ 0x0012598c reads [+0x234]; GetNextWave @ 0x001251ee writes [+0x234].
+    float field_0x234;        // +0x234
 
-    // +0x23c: per-player wave-end wait timer (binary field_0x238+p*4, "wait" XML attr).
-    // Binary @ 0x00125956 reads [+0x238+p*4]; GetNextWave @ 0x00125224 writes [+0x238+p*4].
-    // NOTE: for p=0 +0x238 aliases field_0x234[1]; for p=1 it aliases field_0x23c (byte).
-    // Port uses a separate float[2] to avoid the byte aliasing at +0x23c.
-    float field_0x238[2];
+    // +0x238: P0 wave-end wait timer ("wait" XML attr).
+    // Binary @ 0x00125956 reads [+0x238]; GetNextWave @ 0x00125224 writes [+0x238].
+    // (Binary also uses +0x238 as P1 delay alias and +0x23c as P1 wait alias, but
+    //  SP always uses P0 only.)
+    float field_0x238;        // +0x238
 
-    // +0x23c: per-player "wave-was-spawned" flag (IsWaveProcessing reads this)
-    uint8_t field_0x23c;
-    uint8_t field_0x23d;    // PROBABILITY_OVERIDE flags
-    uint8_t field_0x23e;
-    uint8_t _pad23f;
+    // +0x23c: wave-was-spawned flag (IsWaveProcessing reads this).
+    uint8_t field_0x23c;      // +0x23c
+    // +0x23d: blitz spawned-this-game counter (byte).
+    uint8_t field_0x23d;      // +0x23d
+    // +0x23e: blitz force-spawned counter (byte).
+    uint8_t field_0x23e;      // +0x23e
+    uint8_t _pad23f;          // +0x23f
 
-    // +0x240: random delay
-    float field_0x240;
+    // +0x240: blitz spawn time (float).
+    float field_0x240;        // +0x240
 
-    // +0x244..+0x2c3: m_FruitQueue[2][32] — fruit type queue per player
-    int m_FruitQueue[2][32];
+    // +0x244..+0x2c3: fruit type queue, P0 only, 32 ints (-1 = empty slot).
+    // Binary @ 0x00124cf4/0x0016cd08: 128-byte (0x80) queue for P0.
+    int m_FruitQueue[32];     // +0x244
 
-    // +0x2c4: fruit queue sizes
-    int m_FruitQueueSize[2];
+    // +0x2c4: P0 fruit queue active entry count.
+    // +0x2c8: P1/secondary fruit queue active entry count (binary field_0x2c8).
+    // Binary Reset @ 0x00125be4 clears both (was noted "not in port struct" -- now named).
+    int m_FruitQueueSize[2];  // +0x2c4 (P0), +0x2c8 (P1)
 
-    // +0x2cc: misc counters
-    int field_0x2cc;
-    int field_0x2d0;
+    // +0x2cc: misc counter (binary unnamed; reset to 0 in Reset).
+    int field_0x2cc;          // +0x2cc
+    // +0x2d0: misc counter (binary unnamed; reset to 0 in Reset).
+    int field_0x2d0;          // +0x2d0
 
-    // +0x2d4: wave-step accumulator (fixed timestep)
-    float field_0x2d4;
+    // +0x2d4: wave-step accumulator (fixed timestep, init 0.0f).
+    float field_0x2d4;        // +0x2d4
 
-    // Wave queue (survival/combo modes — null in normal play)
-    WaveQue*     m_pWaveQue;
-    WaveQueItem* m_pWaveQueItem;
-
-    // Score threshold per player (for ChooseFrom logic)
-    int m_ScoreThreshold[2];
-
-    // Per-mode dtInc (speed accumulator multiplier). binary field_0x7c[4].
-    // Parsed from <defaults> "dtInc" attr per mode. DIFFERS: was m_SpeedMultPerMode at +0x8c (wrong field).
-    // binary @ 0x00125ac4: speed = field_0x74 + dt * +0x7c[mode]
-    float m_DtIncPerMode[4];
-
-    // Per-mode globalDtStart lower bound. binary field_0x8c[4]. placeholder.
-    // DIFFERS: was named m_SpeedMultPerMode (mis-mapped to dtInc slot above).
-    float m_SpeedMultPerMode[4];
-
-    // Per-mode speed lower bound (binary field_0x8c[4], 0x125ba2-0x125aa6).
-    // TODO: per-mode bounds need RE -- using 1.0 as placeholder.
-    // DIFFERS: original values unknown from DAT; using 1.0f per mode.
-    float field_0x8c[4];
-
-    // Per-mode speed upper bound (binary field_0x9c[4], 0x125ba2-0x125aa6).
-    // TODO: per-mode bounds need RE -- using 100.0 as placeholder.
-    // DIFFERS: original values unknown from DAT; using 100.0f per mode.
-    float field_0x9c[4];
-
-    // +0x008: m_Random above takes 24 bytes; the comment header on padding below remains
-    // offset-correct for the original binary's fields past the SpeedControl slots.
-    // Note: binary field offsets documented here (e.g. +0x035, +0x038) correspond to
-    // binary offsets, not port offsets (port is +0x08 higher for fields after m_Random).
+    // Port specific: WaveQue state pointers — not in the binary WaveManager struct
+    // (binary survival/combo mode stores these differently). Declared after the binary
+    // layout so the static_assert below fires correctly for binary-identical offsets.
+    // DIFFERS: port adds m_pWaveQue/m_pWaveQueItem beyond binary sizeof(WaveManager)=728.
+    WaveQue*     m_pWaveQue;      // port-only, beyond +0x2d8
+    WaveQueItem* m_pWaveQueItem;  // port-only
 
     // --- Construction / singleton --------------------------------------
 
@@ -342,5 +322,14 @@ private:
     // Parse placement string to SpawnPlacement enum.
     static SpawnPlacement ParsePlacement(const char* side);
 };
+
+// Binary WaveManager is 728 bytes (0x2d8). Port adds m_pWaveQue/m_pWaveQueItem
+// beyond that, so the full port sizeof is 736. The assert below checks that
+// m_pWaveQue sits exactly at offset 728 (= binary boundary), verifying all
+// binary-named members landed at the right offsets.
+#ifdef __bada__
+static_assert(offsetof(WaveManager, m_pWaveQue) == 728,
+              "WaveManager binary-region layout mismatch (expect 728 bytes before port extensions)");
+#endif
 
 #endif  // FN_WAVE_MANAGER_H
