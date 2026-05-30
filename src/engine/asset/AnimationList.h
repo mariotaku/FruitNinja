@@ -16,24 +16,36 @@ struct Animation;
 struct AnimTrackGroup;
 
 // Mortar::AnimationList -- refcounted resource holding named animations.
-// Binary @ 0x001ebc50 vtable; sizeof 0x24 with std::map<AsciiString, Animation>
-// at +0x0C (Bada Sourcery libstdc++ Rb_tree).
+// Binary vtable @ 0x001ebc58; sizeof 0x24 (36).
+// Layout:
+//   +0x00  Mortar::ReferenceCounter (12B: vptr + strong count + weak count)
+//   +0x0C  std::map<AsciiString, Animation*> m_Anims (24B — std::map with cached _M_node_count)
+// Total: 0x24 (36)
 //
+// Binary map value type: Mortar::Animation (value per demangled name), but since
+// Animation struct is not fully RE'd and the binary's GetAnimation methods return
+// Animation*, the port uses Animation* (pointer) to allow forward-declaration.
 // TODO: 0x001b0600 -- AnimationList loader; full Animation struct layout
-//                     pending R3 RE pass.
+//                     pending R3 RE pass. Confirm map value type (value vs ptr).
 class AnimationList : public Mortar::ReferenceCounter {
 public:
     // std::map<AsciiString, Animation*> uses AsciiString::operator< -> Compare(),
     // which is non-lex (length-first, hash-second, memcmp-third). This matches the
     // binary's std::map ordering.
-    // DIFFERS: would diverge if operator< were lexicographic; Compare()-based ordering is binary-faithful.
-    typedef std::map<AsciiString, Animation*> AnimMap;   // ptr-valued so fwd-decl is enough
+    // DIFFERS: binary map value may be Mortar::Animation (value) not Mortar::Animation*.
+    //   Port uses pointer to allow forward-declaration; will be corrected once Animation
+    //   struct is fully RE'd.
+    typedef std::map<AsciiString, Animation*> AnimMap;
 
-    AnimationList() : m_AnimCount(0) {}
+    AnimationList() {}
 
-    AnimMap   m_Anims;        // +0x0C (12B map; counts at +0x20)
-    uint32_t  m_AnimCount;    // +0x20 -- exposed by GetAnimIter(idx)
+    AnimMap m_Anims;  // +0x0C (24B std::map with cached _M_node_count)
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(AnimationList) == 0x24,
+              "AnimationList sizeof mismatch (ReferenceCounter 12B + std::map 24B)");
+#endif
 
 }  // namespace Mortar
 

@@ -12,19 +12,43 @@
 namespace Mortar {
 class Model;
 
-// AnimBindings -- stub for now; full layout in R3
-// Binary @ 0x001ad218 RebindAnim -- Bone/Vector field details pending R3 RE pass.
+// AnimBindings -- partial layout; Vector sub-struct RE'd, Bone pending R3.
+// Binary @ 0x001ad218 RebindAnim.
 struct AnimBindings {
     struct Bone {
         // TODO: R3 -- Bone binding fields
     };
+
+    // AnimBindings::Vector -- sizeof 16 (binary record: ctors 0x001adba4 / 0x001aec04).
+    // Layout:
+    //   +0x00  uint32_t                                   field_0x0   (4B; default ctor leaves uninit)
+    //   +0x04  std::vector<AnimBindings::Vector::Binding> m_bindings  (12B; zeroed by default ctor)
     struct Vector {
-        // TODO: R3 -- Vector binding fields
+        // Nested Binding type not yet RE'd; forward-declared as opaque.
+        // TODO: R3 -- AnimBindings::Vector::Binding layout
+        struct Binding {
+            // TODO: R3 -- Binding fields
+        };
+
+        uint32_t              field_0x0;   // +0x00 (4B scalar; copy-ctor copies as DWORD)
+        std::vector<Binding>  m_bindings;  // +0x04 (12B std::vector<Binding>)
+
+        Vector() : field_0x0(0) {}
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+        // cross-build static_assert for this nested type
+        // (out-of-class assert after struct definition)
+#endif
     };
 
     std::vector<Bone>   m_Bones;     // +0x00
     std::vector<Vector> m_Vectors;   // +0x0C
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(AnimBindings::Vector) == 16,
+              "AnimBindings::Vector sizeof mismatch (uint32_t + std::vector == 16)");
+#endif
 
 // Mortar::AnimationState -- per-instance playback state for an animation.
 // Binary @ 0x001ad150 ctor; vtable @ 0x001ebd00; sizeof 0x40.

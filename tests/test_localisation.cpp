@@ -50,12 +50,12 @@ int main(int argc, char** argv) {
         fprintf(stderr, "FAIL: StringTable::Load did not complete\n");
         return 1;
     }
-    printf("loaded: count=%u\n", Mortar::StringTable::s_count);
+    printf("loaded\n");
 
     int failures = 0;
     for (int i = 0; i < (int)(sizeof(kKeys)/sizeof(kKeys[0])); i++) {
         const TestKey& tk = kKeys[i];
-        const char* got = Mortar::StringTable::GetString(tk.key);
+        const char* got = Mortar::StringTable::GetStringS(tk.key);
         printf("  %-22s -> '%s'\n", tk.key, got ? got : "(null)");
 
         if (tk.expectedEnglishUS && tk.expectedEnglishUS[0] != '\0') {
