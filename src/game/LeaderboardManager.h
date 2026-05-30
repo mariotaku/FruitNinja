@@ -46,8 +46,14 @@ private:
     LeaderboardManager() {}
     ~LeaderboardManager() {}
 
-    // binary uses 0x10 ctor-init + BSS through ~0x80
-    uint8_t m_data[0x80];
+    // Binary ctor zero-fills this+0x00..+0x3F (16 uint32_t fields, 64 bytes total).
+    // Evidence: `add r1,r0,#0x40; for (p=this; p!=this+0x40; p+=0x10) p[0..3]=0`.
+    uint8_t m_data[0x40];
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(LeaderboardManager) == 0x40, "LeaderboardManager size mismatch");
+#endif
 
 #endif // FN_GAME_LEADERBOARD_MANAGER_H

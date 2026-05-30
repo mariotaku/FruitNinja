@@ -25,6 +25,16 @@
 
 using Mortar::TextureManager;
 
+// Preamble textures loaded by LoadAchievementInfo (binary @ 0x00109188).
+// These live in BSS / module-level GOT slots (DAT_001096a8/ac/b0), NOT in the
+// AchievementManager struct. The struct is only the 12 std::map members (288 bytes).
+// DAT_001096a8: achievment_banner.tex (sic -- typo matches actual asset file).
+static Mortar::SmartPtr<Mortar::Texture> s_AchievementBannerTex;
+// TODO: DAT_001096ac -- identity of second preamble texture not yet RE'd.
+static Mortar::SmartPtr<Mortar::Texture> s_BannerExtra1;
+// TODO: DAT_001096b0 -- identity of third preamble texture not yet RE'd.
+static Mortar::SmartPtr<Mortar::Texture> s_BannerExtra2;
+
 // ---------------------------------------------------------------------------
 // AchievementInfo ctor/dtor  (Binary @ ctor ~0x00109200 inner block)
 // ---------------------------------------------------------------------------
@@ -78,9 +88,9 @@ AchievementManager* AchievementManager::GetInstance() {
 void AchievementManager::LoadAchievementInfo() {
     // ASM-verified: 2026-05-23 binary @ 0x00109188 (re-analyst)
     // Binary loads "achievment_banner.tex" (sic) into DAT_001096a8 BEFORE opening the XML doc.
-    m_AchievementBannerTex = TextureManager::LoadLocalisedTexture("achievment_banner.tex");
-    // TODO: DAT_001096ac — load second preamble texture (identity not yet RE'd).
-    // TODO: DAT_001096b0 — load third preamble texture (identity not yet RE'd).
+    s_AchievementBannerTex = TextureManager::LoadLocalisedTexture("achievment_banner.tex");
+    // TODO: DAT_001096ac -- load second preamble texture (identity not yet RE'd).
+    // TODO: DAT_001096b0 -- load third preamble texture (identity not yet RE'd).
 
     // Binary: parses Data/xml/achievementlist.xml
     // Root: <achievementManagerFile> -> <achievement> children
