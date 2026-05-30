@@ -5,7 +5,6 @@
 #include "util/ReferenceCounter.h"
 #include "render/gl_funcs.h"
 #include "math/Matrix44.h"
-#include <memory>
 #include <cstring>
 #include <cstdint>
 
@@ -119,7 +118,7 @@ private:
     // === binary fields (offsets +0x0C..+0x14 from ReferenceCounter base) ===
     uint32_t                          m_ActiveBindingIdx;  // +0x0c
     SmartPtr<GeometryBinding>         m_Binding;           // +0x10
-    std::auto_ptr<EffectPropertyList> m_PropList;          // +0x14
+    EffectPropertyList*               m_PropList;          // +0x14 (always NULL in port; BuildPropList is defunct)
     // === end binary fields ===
 };
 
