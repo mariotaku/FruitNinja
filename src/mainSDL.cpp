@@ -44,7 +44,12 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 #endif
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+    // Port specific: Bada got a depth buffer from the platform EGL surface.
+    // SDL/GLES2 must request + verify it explicitly. Request 24-bit —
+    // many drivers offer no 16-bit-depth pixel format and silently fall back
+    // to 0 bits rather than rounding up, which makes GL_DEPTH_TEST a no-op
+    // and causes splats (z=-50) to paint over fruits (z>=+32).
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
     SDL_Window* window = SDL_CreateWindow(
         "Fruit Ninja",
@@ -82,6 +87,20 @@ int main(int argc, char* argv[]) {
     if (!gl_check_runtime()) {
         fprintf(stderr, "Aborting: rendering pipeline cannot proceed without a real GL driver.\n");
         return 1;
+    }
+
+    // Port specific: verify the driver actually granted a depth buffer.
+    // SDL_GL_SetAttribute is a hint; the driver may silently grant 0 bits.
+    // Without a real depth buffer GL_DEPTH_TEST is a no-op and later-drawn
+    // splats would paint over fruits regardless of z values.
+    {
+        int gotDepth = 0;
+        SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &gotDepth);
+        printf("[GL] depth buffer bits: %d (requested 24)\n", gotDepth);
+        if (gotDepth == 0) {
+            fprintf(stderr, "[GL] FATAL: context has 0 depth bits; depth test cannot occlude (splats would cover fruits).\n");
+            return 1;
+        }
     }
 
     Game game;
