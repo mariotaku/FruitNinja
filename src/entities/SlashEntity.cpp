@@ -282,7 +282,7 @@ SlashEntity::SlashEntity()
     , m_ComboCount(0)
     , m_ComboEntityType(0)
     , m_pComboMissControl(nullptr)  // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
-#ifndef __bada__
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     // Port-only fields:
     , m_NumPoints(0)
     , m_State(0)
@@ -302,7 +302,7 @@ SlashEntity::SlashEntity()
     memset(_gap_0x124, 0, sizeof(_gap_0x124));
     memset(_gap_0x134, 0, sizeof(_gap_0x134));
     memset(_gap_0x154, 0, sizeof(_gap_0x154));
-#ifndef __bada__
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
 #endif
 }
