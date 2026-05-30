@@ -50,7 +50,7 @@ void Mesh::BindSkeleton(Skeleton* skeleton) {
     m_Skeleton = skeleton;
     if (!skeleton) return;
     for (int i = 0; i < (int)m_BoneBindings.size(); i++) {
-        uint32_t idx = skeleton->FindIndex(m_BoneBindings[i].m_Name.c_str());
+        uint32_t idx = skeleton->FindIndex(m_BoneBindings[i].m_BoneName.CStr());
         m_BoneBindings[i].m_SkeletonIndex = (idx == 0xFFFFFFFF) ? -1 : (int)idx;
     }
 }
@@ -110,8 +110,8 @@ Bounds3D Mesh::GetBounds() const {
         const float* M = W.m;  // column-major: col c, row r = M[c*4+r]
 
         // Transform bmin and bmax as homogeneous points (w=1).
-        const Vec3& bmin = bone.m_BoundsMin;
-        const Vec3& bmax = bone.m_BoundsMax;
+        const Vec3& bmin = bone.m_Bounds.min;
+        const Vec3& bmax = bone.m_Bounds.max;
         Vec3 wMin(
             M[0]*bmin.x + M[4]*bmin.y + M[8]*bmin.z  + M[12],
             M[1]*bmin.x + M[5]*bmin.y + M[9]*bmin.z  + M[13],

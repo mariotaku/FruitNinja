@@ -7,12 +7,16 @@
 
 namespace Mortar {
 
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 GLuint Texture::s_LastBoundTexId = 0;
+#endif
 
 Texture::Texture()
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     : m_TexId(0)
     , m_Width(0)
     , m_Height(0)
+#endif
 {
 }
 
@@ -23,10 +27,12 @@ Texture::~Texture() {
     // hash would return a dangling pointer.
     TextureManager::GetInstance().OnTextureDestroyed(this);
 
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
         m_TexId = 0;
     }
+#endif
 }
 
 // Matches Bada::Texture2DFromFile_Bada::Set (0x001897c0).

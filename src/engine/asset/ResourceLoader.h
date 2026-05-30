@@ -12,14 +12,23 @@
 namespace Mortar {
 
 // Matches original ResourceLoader (68 bytes = 0x44)
-// HBR0 container parser with recursive children
-// Ref: docs/engine/utility-types.md
+// Binary layout (operator new + ctor field writes @ 0x001b4864):
+//   +0x00  int32_t               m_flag     (zero-inited by ctor str.w r3(#0),[r5],#4)
+//   +0x04  AsciiString           m_BasePath (40 bytes)
+//   +0x2C  vector<uint8_t>       m_Data     (12 bytes)
+//   +0x38  vector<ResourceLoader> m_Children (12 bytes)
+//   +0x44  end (sizeof = 68)
 class ResourceLoader {
 public:
+    int32_t m_flag;                         // +0x00 (zero-initialised by ctor)
     AsciiString m_BasePath;                 // +0x04 (base path for resolving refs)
     std::vector<uint8_t> m_Data;            // +0x2C (raw data bytes)
     std::vector<ResourceLoader> m_Children; // +0x38 (nested child loaders)
-    size_t m_ReadPos;                       // read cursor for sequential access
+
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    // Port specific: sequential read cursor; no binary equivalent (binary uses DataReader).
+    size_t m_ReadPos;
+#endif
 
     ResourceLoader();
     ResourceLoader(const char* filePath);
@@ -116,12 +125,13 @@ public:
 
 } // namespace Mortar
 
-#ifdef __bada__
-// TODO: ResourceLoader::m_BasePath is at +0x04 in binary -- implies a field at +0x00
-// not present in the current port. Resolve +0x00 field before enabling these asserts.
-// static_assert(offsetof(ResourceLoader, m_BasePath) == 0x04, "ResourceLoader::m_BasePath offset");
-// static_assert(offsetof(ResourceLoader, m_Data)     == 0x2C, "ResourceLoader::m_Data offset");
-// static_assert(offsetof(ResourceLoader, m_Children) == 0x38, "ResourceLoader::m_Children offset");
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(Mortar::ResourceLoader)                   == 0x44, "ResourceLoader size mismatch");
+static_assert(offsetof(Mortar::ResourceLoader, m_flag)        == 0x00, "ResourceLoader::m_flag offset");
+static_assert(offsetof(Mortar::ResourceLoader, m_BasePath)    == 0x04, "ResourceLoader::m_BasePath offset");
+static_assert(offsetof(Mortar::ResourceLoader, m_Data)        == 0x2C, "ResourceLoader::m_Data offset");
+static_assert(offsetof(Mortar::ResourceLoader, m_Children)    == 0x38, "ResourceLoader::m_Children offset");
 #endif
 
 #endif
