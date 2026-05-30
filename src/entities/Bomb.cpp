@@ -263,7 +263,7 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, Vec3* /*scaleOrNull*/) {
     if (!m_Col) m_Col = new ColSphere();
     {
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center = Vec3(pos.x, pos.y, 0.0f);
+        cs->center() = Vec3(pos.x, pos.y, 0.0f);
         cs->radius = bombCol * 0.5f * scaleFactor;
     }
     m_Countdown = 0.0f;
@@ -460,7 +460,7 @@ void Bomb::Update(float /*dt*/) {
         // Update collision sphere to follow bomb. Binary writes pos.xyz then
         // immediately overwrites center.z with DAT_00172f28=0.0 — effectively
         // center = (pos.x, pos.y, 0).
-        if (m_Col) static_cast<ColSphere*>(m_Col)->center = Vec3(pos.x, pos.y, 0.0f);
+        if (m_Col) static_cast<ColSphere*>(m_Col)->center() = Vec3(pos.x, pos.y, 0.0f);
 
     } else {
         // === HIT BRANCH ===
@@ -497,7 +497,7 @@ void Bomb::Update(float /*dt*/) {
         // Hide collision — DAT_00172ca4=1000 / DAT_00172ca8=0 / DAT_00172cac=0.01.
         if (m_Col) {
             ColSphere* cs = static_cast<ColSphere*>(m_Col);
-            cs->center = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
+            cs->center() = Vec3(HIT_COL_POS, HIT_COL_POS, 0.0f);
             cs->radius = HIT_COL_RADIUS;
         }
     }

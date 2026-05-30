@@ -131,10 +131,10 @@ struct PSPEmitterTemplate {
 // but may be float in practice -- ARM ldr works for both. Declared as float
 // here (same 4-byte, 4-byte-aligned layout) to match port simulation usage.
 //
-// Port-only additions (m_pTemplate, m_ColourStart/Mid/End) are appended
-// after the binary tail (0xA4); they do not affect any binary member offset.
-// DIFFERS: port appends m_pTemplate pointer + colour arrays after 0xA4;
-// binary has no per-particle template pointer or separate colour arrays.
+// Port repurposes m_field44 (+0xA0, binary zeroes in default ctor) as the
+// particle-set index within the owning emitter's template m_Sets array.
+// This is the only per-particle routing field we need and it fits in int32.
+// All colour data is looked up at draw time via the set's PSPParticleTemplate.
 // ----------------------------------------------------------------------------
 struct PSPParticle {
     Vec3     m_Pos;             // +0x00  _Vector3<float> member-ctor
@@ -177,12 +177,6 @@ struct PSPParticle {
     uint8_t  m_pad9d[3];        // +0x9D  alignment pad
     int32_t  m_field44;         // +0xA0  Ghidra name; default ctor zeroes this only
 
-    // Port-side additions (outside 0xA4 binary range):
-    const PSPParticleTemplate* m_pTemplate;
-    uint8_t  m_ColourStart[4];
-    uint8_t  m_ColourMid[4];
-    uint8_t  m_ColourEnd[4];
-
     PSPParticle()
         : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
         , m_Age(0), m_Life(0)
@@ -200,18 +194,12 @@ struct PSPParticle {
         , m_field0x84(0,0), m_field0x8c(0,0)
         , m_field0x94(0), m_field0x98(0)
         , m_field0x9c(0), m_field44(0)
-        , m_pTemplate(0)
     {
         m_pad9d[0] = m_pad9d[1] = m_pad9d[2] = 0;
-        for (int i = 0; i < 4; ++i) {
-            m_ColourStart[i] = m_ColourMid[i] = m_ColourEnd[i] = 0;
-        }
     }
 };
-// Binary-faithful offset asserts for all members up to 0xA0.
-// sizeof omitted because port-only tail (m_pTemplate, colour arrays) makes
-// the port struct larger than 0xA4 (DIFFERS: per-particle port additions).
 #ifdef __bada__
+static_assert(sizeof(PSPParticle) == 164, "PSPParticle size mismatch");
 static_assert(__builtin_offsetof(PSPParticle, m_Pos)          == 0x00, "");
 static_assert(__builtin_offsetof(PSPParticle, m_Vel)          == 0x0C, "");
 static_assert(__builtin_offsetof(PSPParticle, m_Gravity)      == 0x18, "");
@@ -239,11 +227,8 @@ static_assert(__builtin_offsetof(PSPParticle, m_field44)      == 0xA0, "");
 // Ctor only initialises last 4 fields (+60..+72); earlier fields set by
 // the Init/Spawn path. m_Next forms a free-list link; emitters are
 // pool/array-allocated by the owning system (no per-emitter operator new).
-// Binary members match exactly down to m_bUpdateWhenPaused (+0x48, size 76).
-// Port-only additions (m_Particles, m_bActive) are appended after the binary
-// tail; they do not affect the offset of any binary member.
-// DIFFERS: port appends m_Particles (std::vector) + m_bActive after the
-// binary tail; binary uses a global particle pool indexed via m_ParticleHead.
+// Binary uses a global particle pool indexed via m_ParticleHead. The port
+// mirrors binary size exactly; per-emitter particle lists live in the manager.
 // ----------------------------------------------------------------------------
 struct PSPParticleEmitter {
     float    m_Timer;                           // +0x00
@@ -265,13 +250,6 @@ struct PSPParticleEmitter {
     uint8_t  m_bUpdateWhenPaused;               // +0x48  ctor: 0
     uint8_t  m_pad49[3];                        // +0x49  tail pad to binary size 76
 
-    // Port-side: particle list owned per-emitter (binary uses global pool).
-    // DIFFERS: binary uses global particle pool indexed via m_ParticleHead.
-    std::vector<PSPParticle> m_Particles;
-    // Port-side: active flag (binary uses pool slot membership via m_Next).
-    // DIFFERS: port tracks liveness via m_bActive; binary uses pool state.
-    bool m_bActive;
-
     PSPParticleEmitter()
         : m_Timer(0), m_ParticleHead(1), m_pad06(0)
         , m_Pos(0,0,0), m_Vel(0,0,0)
@@ -279,15 +257,14 @@ struct PSPParticleEmitter {
         , m_ScaleX(1.0f), m_DirCos(1.0f)
         , m_DirSin(0.0f), m_field34(1.0f), m_field38(0)
         , m_pTemplate(0), m_Next(0), m_pRefPtr(0)
-        , m_bUpdateWhenPaused(0), m_bActive(false)
+        , m_bUpdateWhenPaused(0)
     {
         m_pad39[0] = m_pad39[1] = m_pad39[2] = 0;
         m_pad49[0] = m_pad49[1] = m_pad49[2] = 0;
     }
 };
-// Binary-faithful offset asserts; sizeof omitted because port-only tail
-// members (m_Particles, m_bActive) make port struct larger than binary 76.
 #ifdef __bada__
+static_assert(sizeof(PSPParticleEmitter) == 76, "PSPParticleEmitter size mismatch");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Timer)             == 0x00, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_ParticleHead)      == 0x04, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Pos)               == 0x08, "");
@@ -345,7 +322,7 @@ public:
     // Binary @ 0x0016cf74 area — deactivate all live emitters (called from GameExit).
     // Binary @ 0x00114974 — drain active list + reset particle free-list + zero
     // per-template live-list heads. Port collapses 2-3 since particles live
-    // per-emitter. // DIFFERS: binary uses 3 separate lists; port uses vector
+    // in the manager's parallel list. // DIFFERS: binary uses 3 separate lists; port uses vector
     void ClearEmitters();
 
     // Binary @ 0x001148dc — linear hash lookup over emitter templates; bool result.
@@ -369,7 +346,11 @@ private:
     // Clear/ClearEmitter/dtor). Addresses are stable across appends because
     // emitters are heap-allocated, not inline — same stability guarantee as
     // unique_ptr but without <memory> / typeid dependency (GCC 4.4 / -fno-rtti).
-    std::vector<PSPParticleEmitter*> m_Emitters;
+    std::vector<PSPParticleEmitter*>          m_Emitters;
+    // Parallel per-emitter particle lists. Index i owns the particles for m_Emitters[i].
+    // DIFFERS: binary uses a global flat particle pool indexed via emitter.m_ParticleHead;
+    // port uses per-emitter std::vector kept in the manager to preserve binary struct sizes.
+    std::vector<std::vector<PSPParticle> >    m_ParticleLists;
 };
 
 #endif

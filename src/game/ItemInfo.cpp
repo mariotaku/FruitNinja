@@ -290,10 +290,10 @@ bool SlashSoundMods::PlaySound(int idx, float volume, float pitch) {
 // -----------------------------------------------------------------------
 
 LoopingSound::LoopingSound()
-    : m_SoundId(0)
-    , m_Phase(0)
-    , m_State(0)
+    : m_SoundId(0.0f)
+    , m_Phase(0.0f)
     , m_pLoopName(nullptr)
+    , m_State(0)
 {
 }
 
@@ -307,8 +307,8 @@ void LoopingSound::Parse(tinyxml2::XMLElement* elem) {
 // LoopingSound::Reset — called from SlashModInfo::UnEquip @ 0x00112424
 void LoopingSound::Reset() {
     // Runtime audio state reset; no-op until audio system is ported.
-    m_SoundId = 0;
-    m_Phase   = 0;
+    m_SoundId = 0.0f;
+    m_Phase   = 0.0f;
     m_State   = 0;
 }
 

@@ -154,13 +154,9 @@ struct SlashSoundMods {
 // -----------------------------------------------------------------------
 struct LoopingSound {
     // +0x00  float    m_field0     runtime float; ctor 0.0f (vstr.32 s15 = 0.0f)
-    // DIFFERS: binary = float at +0x00; port names as m_SoundId int32_t for
-    //   readability; same 4-byte layout, different type interpretation.
-    int32_t  m_SoundId;
+    float    m_SoundId;
     // +0x04  float    m_field4     runtime float; ctor 0.0f (vstr.32 s15 = 0.0f)
-    // DIFFERS: binary = float at +0x04; port names as m_Phase int32_t for
-    //   readability; same 4-byte layout, different type interpretation.
-    int32_t  m_Phase;
+    float    m_Phase;
     // +0x08  char*    m_pLoopName  CloneString of XML "loop" attr; default NULL
     char*    m_pLoopName;
     // +0x0c  int32_t  m_State      runtime state; ctor 0, not parsed

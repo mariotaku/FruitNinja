@@ -244,7 +244,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
         if (!m_Col) m_Col = new ColSphere();
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center = Vec3(pos.x, pos.y, 0.0f);
+        cs->center() = Vec3(pos.x, pos.y, 0.0f);
         cs->radius = radius;
     }
 
@@ -587,9 +587,9 @@ void Fruit::Update(float dt) {
     // misread the constant value as -0.5f -- this is the revert.
     if (m_Col) {
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center.x = pos.x;
-        cs->center.y = pos.y;
-        cs->center.z = 0.0f;  // DAT_00177fec
+        cs->center().x = pos.x;
+        cs->center().y = pos.y;
+        cs->center().z = 0.0f;  // DAT_00177fec
     }
 
     // ASM-verified: 2026-05-18 binary @ 0x00177f30..0x00177f42 (re-analyst).
@@ -1979,7 +1979,7 @@ void Fruit::EnableCollision(bool enable) {
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
         if (!m_Col) m_Col = new ColSphere();
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
-        cs->center = Vec3(pos.x, pos.y, 0.0f);
+        cs->center() = Vec3(pos.x, pos.y, 0.0f);
         cs->radius = radius;
     } else {
         delete m_Col;

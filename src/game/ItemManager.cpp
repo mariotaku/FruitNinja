@@ -171,12 +171,10 @@ void ItemManager::LoadItemData() {
     if (saveErr == tinyxml2::XML_SUCCESS) {
         tinyxml2::XMLElement* root = save.FirstChildElement("item_save_file");  // 0x1b9e4d
         if (root != nullptr) {
-            FruitSaveData* sd = GetSaveData();
-            if (sd != nullptr) {
-                root->QueryIntAttribute("coins",           &sd->m_Coins);            // +0x20
-                root->QueryIntAttribute("coinsTotal",      &sd->m_CoinsTotal);       // +0x24
-                root->QueryIntAttribute("levelStartCoins", &sd->m_LevelStartCoins);  // +0x28
-            }
+            // Coin balance lives in game_work (+0x20/+0x24/+0x28), not FruitSaveData.
+            root->QueryIntAttribute("coins",           &game_work.m_CoinsBalance);
+            root->QueryIntAttribute("coinsTotal",      &game_work.m_CoinsTotalEarned);
+            root->QueryIntAttribute("levelStartCoins", &game_work.m_CoinsAtGameStart);
 
             // <boughtItems> section
             tinyxml2::XMLElement* bought = root->FirstChildElement("boughtItems");  // 0x1b9e89
@@ -296,13 +294,13 @@ int ItemManager::BuyItem(uint32_t hash) {
 
     ItemInfo* item = it->second;
     int cost = item->m_Cost;  // +0x0c
-    FruitSaveData* sd = GetSaveData();
-    int coins = (sd != nullptr) ? sd->m_Coins : 0;  // +0x20
+    // Coin balance lives in game_work.m_CoinsBalance (game_work +0x20), not FruitSaveData.
+    int coins = game_work.m_CoinsBalance;
 
     // ARM idiom: "if (-1 < cost && cost <= coins)" = if (cost >= 0 && cost <= coins)
     if (cost >= 0 && cost <= coins) {
-        // AddCoins(-cost) — deduct coins from FruitSaveData
-        if (sd != nullptr) sd->AddCoins(-cost);
+        // AddCoins(-cost): deduct from game_work balance (binary @ 0x0010a3bc).
+        game_work.m_CoinsBalance -= cost;
         item->m_Cost = -1;  // mark purchased
         return 1;
     }
@@ -346,22 +344,15 @@ void ItemManager::SaveItemInfo() {
     Game* game = Game::GetInstance();
     if (!game) return;
 
-    FruitSaveData* sd = GetSaveData();
-
     tinyxml2::XMLDocument doc;
 
     // Build root <item_save_file version="1.0" coins=N coinsTotal=N levelStartCoins=N>
+    // Coin balance lives in game_work (+0x20/+0x24/+0x28), not FruitSaveData.
     tinyxml2::XMLElement* root = doc.NewElement("item_save_file");  // 0x1b9e4d
     root->SetAttribute("version", "1.0");  // 0x1b9e5c / 0x1b9e64
-    if (sd != nullptr) {
-        root->SetAttribute("coins",           sd->m_Coins);            // +0x20
-        root->SetAttribute("coinsTotal",      sd->m_CoinsTotal);       // +0x24
-        root->SetAttribute("levelStartCoins", sd->m_LevelStartCoins);  // +0x28
-    } else {
-        root->SetAttribute("coins",           0);
-        root->SetAttribute("coinsTotal",      0);
-        root->SetAttribute("levelStartCoins", 0);
-    }
+    root->SetAttribute("coins",           game_work.m_CoinsBalance);
+    root->SetAttribute("coinsTotal",      game_work.m_CoinsTotalEarned);
+    root->SetAttribute("levelStartCoins", game_work.m_CoinsAtGameStart);
 
     // <boughtItems> section: all items with m_Cost < 0 (purchased)
     tinyxml2::XMLElement* bought = doc.NewElement("boughtItems");  // 0x1b9e89
