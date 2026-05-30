@@ -3,9 +3,9 @@
 #include "collision/ColSphere.h"
 #include "collision/ColLine.h"
 
-ColAABB::ColAABB() : Col(), m_Min(m_PrimaryPoint), m_Max() {}
+ColAABB::ColAABB() : Col(), m_Max() {}
 
-ColAABB::ColAABB(Vec3 min, Vec3 max) : Col(), m_Min(m_PrimaryPoint), m_Max(max) {
+ColAABB::ColAABB(Vec3 min, Vec3 max) : Col(), m_Max(max) {
     m_PrimaryPoint = min;
 }
 

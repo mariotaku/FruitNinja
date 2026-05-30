@@ -184,8 +184,8 @@ void DebugHitbox_Draw() {
         if (cs->radius <= 0.0f) continue;
 
         const uint32_t col = ColourFor(e->entityType);
-        const float cx = cs->center.x;
-        const float cy = cs->center.y;
+        const float cx = cs->center().x;
+        const float cy = cs->center().y;
         const float cz = -1.0f;          // slightly in front of the plane
         const float outerR = cs->radius;
         const float innerR = outerR - RING_THICKNESS;

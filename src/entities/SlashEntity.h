@@ -177,16 +177,151 @@ public:
     bool CollideWithSphere(const ColSphere& sphere,
                            Vec3& outBladeVel) const;
 
-    // True while the blade has at least 2 trail points and is not
-    // deactivating — used to gate collision checks.
-    bool IsBladeActive() const { return m_State != 0 && m_NumPoints >= 2; }
-
-    // +0x134: the fruit this slasher is currently aimed at (back-channel for
-    // the KillFruit unlink at Fruit::KillFruit @ 0x00176c8e..0x00176cea).
-    // Self-clears when the target calls KillFruit and finds this still set.
-    Fruit* m_pCurrentTarget;
-
 private:
+    // -----------------------------------------------------------------------
+    // Binary-faithful data members (binary truth from SlashEntity.json).
+    // Declaration order matches binary offset order; __bada__ static_asserts
+    // below confirm every offset.  sizeof(Entity)==0x3C on ARM32, so these
+    // own fields start at absolute offset 0x3C in the full object.
+    // -----------------------------------------------------------------------
+
+    // +0x3c  PSPParticleEmitter*  m_TrailEmitter
+    PSPParticleEmitter* m_TrailEmitter;
+
+    // +0x40  float  m_Scale  hit-flash weight [0..1]; set 1.0 on critical hit,
+    // decays by -2*dt/frame; drives m_BaseColour lerp in RebuildGeometry.
+    float m_Scale;             // binary +0x40
+
+    // +0x44  Colour  m_BaseColour    per-vertex stamped colour (lerp result)
+    Colour m_BaseColour;       // binary +0x44
+
+    // +0x48  Colour  m_HighlightColour   current palette-cycle output colour
+    Colour m_HighlightColour;  // binary +0x48
+
+    // +0x4c  uint8_t  m_bFlag4c   (meaning TBD per binary; port uses m_SwipeEndEdge)
+    // +0x4d..+0x4f  implicit 3-byte padding for int32_t alignment at +0x50
+    uint8_t m_SwipeEndEdge;    // binary +0x4c
+    // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
+    uint8_t _pad4d[3];
+
+    // +0x50  int32_t  m_SplitPoint  InitPoints capacity (160 from Init)
+    // InitPoints @ 0x17C340 sets m_SplitPoint = splitPoint.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+    int m_SplitPoint;          // binary +0x50
+
+    // +0x54  int32_t  unknown field (gap in struct-DB; 4 bytes)
+    int _field_0x54;
+
+    // +0x58  int32_t  m_PointCount  count of valid points in vertex strips
+    int m_PointCount;          // binary +0x58
+
+    // +0x5c  void*  m_pLeftBuffer   heap-allocated vertex strip (left side)
+    // +0x60  void*  m_pRightBuffer  heap-allocated vertex strip (right side)
+    // Sized as (m_SplitPoint+2)*sizeof(QUADCUSTOMVERTEX).
+    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
+    QUADCUSTOMVERTEX* m_pLeftBuffer;   // binary +0x5c
+    QUADCUSTOMVERTEX* m_pRightBuffer;  // binary +0x60
+
+    // +0x64  _Vector3<float>  m_BladeDir  normalised blade direction
+    Vec3 m_BladeDir;           // binary +0x64
+
+    // +0x70  _Vector3<float>  m_TailPos  oldest visible trail point position
+    Vec3 m_TailPos;            // binary +0x70
+
+    // +0x7c  _Vector3<float>  m_HeadPos  tip (newest) trail point position
+    Vec3 m_HeadPos;            // binary +0x7c
+
+    // +0x88  _Vector3<float>  m_PrevHeadPos  previous frame tip position
+    Vec3 m_PrevHeadPos;        // binary +0x88
+
+    // +0x94..+0x9f  12 bytes gap (meaning TBD; possibly pad or unknown floats)
+    uint8_t _gap_0x94[12];
+
+    // +0xa0  float  m_SliceTimerA  slice-hit timer A
+    float m_SliceTimerA;       // binary +0xa0
+
+    // +0xa4  float  m_SliceTimerB  slice-hit timer B
+    float m_SliceTimerB;       // binary +0xa4
+
+    // +0xa8  _Vector3<float>  m_BladeVelAtSlice  blade direction at slice impact
+    // Written in Update fruit-collision branch; read for spawn-type tagging.
+    Vec3 m_BladeVelAtSlice;    // binary +0xa8
+
+    // +0xb4  _Vector3<float>  m_SlicePos  fruit world-position at impact
+    // Read by combo Coin::MakeCoins as coin spawn origin.
+    Vec3 m_SlicePos;           // binary +0xb4
+
+    // +0xc0  int32_t  m_SliceEntityType  m_FruitType of most-recently sliced entity
+    int m_SliceEntityType;     // binary +0xc0
+
+    // +0xc4  float  m_SwipeSoundTimer  cooldown between swipe SFX firings;
+    // PlaySwipe resets to 6.0f after firing; decremented each frame.
+    float m_SwipeSoundTimer;   // binary +0xc4
+
+    // +0xc8  float  m_LineLengthSq  squared length of current blade segment
+    float m_LineLengthSq;      // binary +0xc8
+
+    // +0xcc  float  m_SpeedScale   blade speed scale derived from segment length
+    float m_SpeedScale;        // binary +0xcc
+
+    // +0xd0  int32_t  m_SliceCount  total slices on current swipe
+    int m_SliceCount;          // binary +0xd0
+
+    // +0xd4..+0x10f  60-byte gap (likely ghost ring-buffer data; meaning TBD)
+    uint8_t _gap_0xd4[60];
+
+    // +0x110  int32_t  m_GhostIndex  current ghost ring-buffer write index
+    int m_GhostIndex;          // binary +0x110
+
+    // +0x114  int32_t  m_GhostCount  number of valid ghost entries
+    int m_GhostCount;          // binary +0x114
+
+    // +0x118  _Vector3<float>  m_GhostDir  ghost blade direction
+    Vec3 m_GhostDir;           // binary +0x118
+
+    // +0x124..+0x12f  12-byte gap (meaning TBD)
+    uint8_t _gap_0x124[12];
+
+    // +0x130  int32_t  field_0x130  (meaning TBD; zeroed by ctor)
+    int m_field_0x130;         // binary +0x130
+
+    // +0x134..+0x14b  24-byte gap (meaning TBD; possibly MissControl/combo state)
+    uint8_t _gap_0x134[24];
+
+    // +0x14c  int32_t  m_ExtraFieldA
+    int m_ExtraFieldA;         // binary +0x14c
+
+    // +0x150  int32_t  m_ExtraFieldB
+    int m_ExtraFieldB;         // binary +0x150
+
+    // +0x154..+0x173  32-byte gap (likely 8-entry combo fruit-type ring; TBD)
+    // Port-note: the port uses m_ComboSliceArr[11] in #ifndef __bada__
+    // which covers this gap plus the three fields below (+0x174/+0x178/+0x17c).
+    uint8_t _gap_0x154[32];
+
+    // +0x174  float  m_ComboTimer  combo-window accumulator; init 0.1f in Init,
+    // ticks up each Update; reset to -1 when combo window closes.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+    float m_ComboTimer;        // binary +0x174
+
+    // +0x178  int32_t  m_ComboCount  fruits sliced in current swipe combo
+    int m_ComboCount;          // binary +0x178
+
+    // +0x17c  int32_t  m_ComboEntityType  entity type of most recently combo'd fruit
+    int m_ComboEntityType;     // binary +0x17c
+
+    // +0x180  void*  m_pComboCtrl  pointer to the MissControl combo-popup slot
+    // Cleared by MissControlDeleted when the pool slot is recycled.
+    // Binary names this m_pComboCtrl; port names it m_pComboMissControl.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    MissControl* m_pComboMissControl;  // binary +0x180
+
+    // -----------------------------------------------------------------------
+    // Port-only fields — NOT in the 388-byte binary struct.
+    // Under __bada__ these are excluded so the binary-faithful layout above
+    // passes the static_assert checks at the bottom of this file.
+    // -----------------------------------------------------------------------
+#ifndef __bada__
     // Stored per-point metadata. The vertex buffers m_Left/m_Right are
     // regenerated from this list each frame in RebuildGeometry.
     struct TrailPoint {
@@ -195,6 +330,48 @@ private:
         float arcLen;    // cumulative length from oldest point
         float age;       // seconds since this point was added (drops at lifetime)
     };
+
+    // Port-internal trail: inline ring of arc-sampled points used to rebuild
+    // the m_pLeftBuffer / m_pRightBuffer vertex strips each frame.
+    // Binary stores trail state in the heap-allocated m_pLeftBuffer /
+    // m_pRightBuffer directly and does not use a separate point ring.
+    TrailPoint m_Points[MAX_POINTS];
+    int m_NumPoints;
+
+    // Port-internal state machine (2-bit): 0=off, 1=active, 2=fading.
+    // Binary uses m_SwipeEndEdge (binary +0x4c) for equivalent gating.
+    uint8_t m_State;
+    bool    m_bHasHead;
+
+    // SDL finger-slot this instance handles (binary has SlashEntity[16] @ BSS).
+    int m_FingerId;
+
+    // Raw touch position from most recent OnTouchActive — used as the trail
+    // emitter position so particles spawn at the true finger location.
+    Vec3 m_RawTouchPos;
+
+    // Port-internal combo slice array: 11 int32 slots covering binary
+    // offsets +0x154..+0x17f (the _gap_0x154 region + m_ComboTimer/Count/Type).
+    // Under __bada__ the binary-faithful decomposed fields above are used instead.
+    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
+    int m_ComboSliceArr[11];
+
+public:
+    // Back-pointer to the fruit this slasher is aimed at.
+    // (binary equivalent is via the combo-ctrl/miss-ctrl path; no direct
+    // Fruit* pointer exists in the 388-byte binary struct.)
+    Fruit* m_pCurrentTarget;
+
+    // True while the blade has at least 2 trail points and is not
+    // deactivating — used to gate collision checks.
+    bool IsBladeActive() const { return m_State != 0 && m_NumPoints >= 2; }
+
+private:
+#endif
+
+    // -----------------------------------------------------------------------
+    // Private methods
+    // -----------------------------------------------------------------------
 
     // Matches SlashEntity::UpdateTouchDown (0x17D2E4). Ingests one touch
     // position, interpolating intermediate points along the movement delta.
@@ -216,114 +393,6 @@ private:
     // Rebuilds m_pLeftBuffer / m_pRightBuffer vertex buffers from m_Points.
     // Matches SlashEntity::UpdatePoints (0x17B92C) simplified.
     void RebuildGeometry();
-
-    TrailPoint m_Points[MAX_POINTS];
-    int m_NumPoints;
-
-    // Binary +0x50: capacity passed to InitPoints; drives heap buffer size.
-    // InitPoints @ 0x17C340 sets m_SplitPoint = splitPoint (160 from Init).
-    int m_SplitPoint;
-
-    // Binary +0x5c, +0x60: heap-allocated vertex strips.
-    // Sized as (m_SplitPoint+2)*sizeof(QUADCUSTOMVERTEX). Allocated in
-    // InitPoints, freed in Release. Nulled by ctor and after delete[].
-    // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
-    QUADCUSTOMVERTEX* m_pLeftBuffer;   // +0x5c heap-allocated by InitPoints
-    QUADCUSTOMVERTEX* m_pRightBuffer;  // +0x60 heap-allocated by InitPoints
-
-    // Particle emitter that follows the blade for smoke/sparkle trail.
-    // Matches binary +0x3c (m_TrailEmitter). Created on first active touch
-    // via PSPParticleManager::AddEmitter, cleared on release.
-    PSPParticleEmitter* m_TrailEmitter;
-
-    // Binary +0x44: per-vertex stamped colour (result of white -> m_HighlightColour
-    // lerp by (1.0f - m_Scale)). Stamped onto every strip vertex in RebuildGeometry.
-    Colour m_BaseColour;       // Binary +0x44
-
-    // Binary +0x48: output of UpdateModColour — the current palette-cycle colour.
-    // UpdateModColour writes here; RebuildGeometry reads to derive m_BaseColour.
-    Colour m_HighlightColour;  // Binary +0x48
-
-    // 2-bit state machine matching binary m_bBladeActive:
-    //   0 = off, 1 = active, 2 = deactivating (fading out)
-    uint8_t m_State;
-    bool    m_bHasHead;
-
-    // Which SDL finger ID / Bada touch slot this instance handles. Binary
-    // has SlashEntity[16] (one per finger); port mirrors via g_pSlashEntities
-    // array. Set in Init(int finger). Used by RegisterInputCallbacks to
-    // bind only this finger's TouchDown_n / TouchMove_X-Y_n / TouchUp_n.
-    int m_FingerId;
-
-    // Binary +0xA8: snapshot of m_BladeDir at the moment of a slice hit.
-    // Written in Update's fruit-collision branch immediately after
-    // CollisionResponse fires. Read by caller sites that need blade direction.
-    Vec3 m_BladeVelAtSlice;    // Binary +0xA8
-
-    // Binary +0xB4: world position of the sliced fruit at impact.
-    // Written in Update's fruit-collision branch (fruit->pos at hit time).
-    // Read by combo Coin::MakeCoins as the coin spawn origin.
-    Vec3 m_SlicePos;           // Binary +0xB4
-
-    // Binary +0xC0: m_FruitType of the most recently sliced entity.
-    // Written in Update's fruit-collision branch alongside m_BladeVelAtSlice
-    // and m_SlicePos (same write-group). Read for spawn-type tagging.
-    int m_SliceEntityType;     // Binary +0xC0
-
-    // Binary +0xC4: trail-fade weight in [0, 1]. When 1.0, m_BaseColour = white
-    // lerped toward m_HighlightColour by 0 = pure white. When 0 (or less),
-    // m_BaseColour = m_HighlightColour directly (fully saturated).
-    // Set to 1.0 on critical hit; decays at -2*dt/frame clamped to 0.
-    float m_Scale;             // Binary +0xC4
-
-    // Binary +0x148: cooldown timer between swipe SFX firings. PlaySwipe
-    // (binary @ 0x17ccdc) resets to 6.0f after firing; per-frame decrement
-    // (1.0f units / call) prevents back-to-back-to-back swipe sounds when
-    // a single drag slices multiple fruits in quick succession (~0.1s @
-    // 60Hz). Update ticks the decrement at top.
-    float m_SwipeSoundTimer;
-
-    // Raw touch position from the most recent OnTouchActive — used as the
-    // trail emitter position so particles spawn at the true finger location,
-    // not the last interpolated trail point (which can lag by up to
-    // POINT_SPACING=64 units on fast swipes). Matches binary UpdateTouchDown
-    // @ 0x17D2E4 which writes `m_TrailEmitter->m_Pos = this->base.pos`,
-    // where base.pos is the raw touch input.
-    Vec3 m_RawTouchPos;
-
-    // Binary +0x130: back-pointer to the MissControl pool slot currently
-    // showing the combo popup for this slash. Cleared by MissControlDeleted
-    // when the pool slot is recycled (m_bActive -> 0). Also cleared in the
-    // combo-resolve reset block in Update.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
-    MissControl* m_pComboMissControl;
-
-    // Binary +0x124: combo-window accumulator. Initialized to 0.1f in Init.
-    // Ticks up each Update while >= 0; reset to -1 when combo window closes.
-    // The per-swipe combo counter fires AddSpeed when this >= 0 and ComboCount > 2.
-    float m_ComboTimer;         // Binary +0x124
-
-    // Binary +0x128: count of fruits sliced in the current swipe combo.
-    // Incremented by CollisionResponse via the combo-slice array;
-    // reset to 0 when a new swipe starts.
-    int m_ComboCount;           // Binary +0x128
-
-    // Binary +0x12c: entity type of the most recently combo'd fruit.
-    int m_ComboEntityType;      // Binary +0x12c
-
-    // Binary +0x154: 11-entry int32 combo-slice array. Each slot stores a
-    // fruit-entity-type tag for the combo's sliced entities; -1 = empty.
-    // m_ComboSliceArr[1] (binary +0x158) gates the AddSpeed call in Update:
-    // when >= 0, a secondary slice has registered and the combo is live.
-    // ASM-verified: 2026-05-18 binary @ 0x0017C65C (re-analyst)
-    int m_ComboSliceArr[11]; // Binary +0x154 .. +0x17c
-
-    // Binary +0x144: 2-bit shift-register fuse for "swipe just ended".
-    // Writer (outside SlashEntity): sets bit0 on finger-lift (m_SwipeEndEdge |= 1).
-    // Reader: DrawSlice shifts left each frame; fires CreateGhost + contact burst
-    // on the frame when the last bit falls off.
-    // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
-    uint8_t m_SwipeEndEdge;
 
 public:
     // -----------------------------------------------------------------------
@@ -460,6 +529,43 @@ public:
     void RegisterInputCallbacks();
     // ---- end STUBS ----
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(SlashEntity)                              == 0x184, "SlashEntity size");
+static_assert(offsetof(SlashEntity, m_TrailEmitter)            == 0x3c,  "SlashEntity::m_TrailEmitter");
+static_assert(offsetof(SlashEntity, m_Scale)                   == 0x40,  "SlashEntity::m_Scale");
+static_assert(offsetof(SlashEntity, m_BaseColour)              == 0x44,  "SlashEntity::m_BaseColour");
+static_assert(offsetof(SlashEntity, m_HighlightColour)         == 0x48,  "SlashEntity::m_HighlightColour");
+static_assert(offsetof(SlashEntity, m_SwipeEndEdge)            == 0x4c,  "SlashEntity::m_SwipeEndEdge");
+static_assert(offsetof(SlashEntity, m_SplitPoint)              == 0x50,  "SlashEntity::m_SplitPoint");
+static_assert(offsetof(SlashEntity, m_PointCount)              == 0x58,  "SlashEntity::m_PointCount");
+static_assert(offsetof(SlashEntity, m_pLeftBuffer)             == 0x5c,  "SlashEntity::m_pLeftBuffer");
+static_assert(offsetof(SlashEntity, m_pRightBuffer)            == 0x60,  "SlashEntity::m_pRightBuffer");
+static_assert(offsetof(SlashEntity, m_BladeDir)                == 0x64,  "SlashEntity::m_BladeDir");
+static_assert(offsetof(SlashEntity, m_TailPos)                 == 0x70,  "SlashEntity::m_TailPos");
+static_assert(offsetof(SlashEntity, m_HeadPos)                 == 0x7c,  "SlashEntity::m_HeadPos");
+static_assert(offsetof(SlashEntity, m_PrevHeadPos)             == 0x88,  "SlashEntity::m_PrevHeadPos");
+static_assert(offsetof(SlashEntity, m_SliceTimerA)             == 0xa0,  "SlashEntity::m_SliceTimerA");
+static_assert(offsetof(SlashEntity, m_SliceTimerB)             == 0xa4,  "SlashEntity::m_SliceTimerB");
+static_assert(offsetof(SlashEntity, m_BladeVelAtSlice)         == 0xa8,  "SlashEntity::m_BladeVelAtSlice");
+static_assert(offsetof(SlashEntity, m_SlicePos)                == 0xb4,  "SlashEntity::m_SlicePos");
+static_assert(offsetof(SlashEntity, m_SliceEntityType)         == 0xc0,  "SlashEntity::m_SliceEntityType");
+static_assert(offsetof(SlashEntity, m_SwipeSoundTimer)         == 0xc4,  "SlashEntity::m_SwipeSoundTimer");
+static_assert(offsetof(SlashEntity, m_LineLengthSq)            == 0xc8,  "SlashEntity::m_LineLengthSq");
+static_assert(offsetof(SlashEntity, m_SpeedScale)              == 0xcc,  "SlashEntity::m_SpeedScale");
+static_assert(offsetof(SlashEntity, m_SliceCount)              == 0xd0,  "SlashEntity::m_SliceCount");
+static_assert(offsetof(SlashEntity, m_GhostIndex)              == 0x110, "SlashEntity::m_GhostIndex");
+static_assert(offsetof(SlashEntity, m_GhostCount)              == 0x114, "SlashEntity::m_GhostCount");
+static_assert(offsetof(SlashEntity, m_GhostDir)                == 0x118, "SlashEntity::m_GhostDir");
+static_assert(offsetof(SlashEntity, m_field_0x130)             == 0x130, "SlashEntity::m_field_0x130");
+static_assert(offsetof(SlashEntity, m_ExtraFieldA)             == 0x14c, "SlashEntity::m_ExtraFieldA");
+static_assert(offsetof(SlashEntity, m_ExtraFieldB)             == 0x150, "SlashEntity::m_ExtraFieldB");
+static_assert(offsetof(SlashEntity, m_ComboTimer)              == 0x174, "SlashEntity::m_ComboTimer");
+static_assert(offsetof(SlashEntity, m_ComboCount)              == 0x178, "SlashEntity::m_ComboCount");
+static_assert(offsetof(SlashEntity, m_ComboEntityType)         == 0x17c, "SlashEntity::m_ComboEntityType");
+static_assert(offsetof(SlashEntity, m_pComboMissControl)       == 0x180, "SlashEntity::m_pComboMissControl");
+#endif
 
 // Per-finger SlashEntity instances (binary has SlashEntity[16] @ BSS).
 // Created/destroyed by GameInit/GameDestroy. Each registers for its slot's

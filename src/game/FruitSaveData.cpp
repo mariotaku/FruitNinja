@@ -27,10 +27,7 @@
 
 // Matches binary ctor @ 0x00129e74. Defaults from doc + RE.
 FruitSaveData::FruitSaveData()
-    : m_Coins(0)
-    , m_CoinsTotal(0)
-    , m_LevelStartCoins(0)
-    , field_0x30(0)
+    : field_0x30(0)
     , m_bHasActiveGame(0)
     , m_bDojoBGUnlocked(0)
     , field_0x3c(0)
@@ -79,16 +76,6 @@ FruitSaveData::FruitSaveData()
 }
 
 FruitSaveData::~FruitSaveData() {}
-
-// ----------------------------------------------------------------------
-// Coin API
-// ----------------------------------------------------------------------
-
-// AddCoins @ 0x0010a3bc.
-void FruitSaveData::AddCoins(int delta) {
-    m_Coins += delta;
-    if (delta > 0) m_CoinsTotal += delta;
-}
 
 // ----------------------------------------------------------------------
 // Stat tracking

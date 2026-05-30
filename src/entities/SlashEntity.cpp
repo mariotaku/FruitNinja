@@ -249,30 +249,62 @@ void SlashEntity::ReleaseContent() {
 // zero-init; port makes them explicit nullptr for clarity.
 SlashEntity::SlashEntity()
     : Mortar::Entity()
-    , m_NumPoints(0)
-    , m_SplitPoint(0)
-    , m_pLeftBuffer(nullptr)
-    , m_pRightBuffer(nullptr)
+    // Binary-faithful fields in declaration order (binary +0x3c .. +0x180):
     , m_TrailEmitter(nullptr)
+    , m_Scale(0.0f)
     , m_BaseColour(255, 255, 255, 255)
     , m_HighlightColour(255, 255, 255, 255)
-    , m_pCurrentTarget(nullptr)
-    , m_State(0)
-    , m_bHasHead(false)
+    , m_SwipeEndEdge(0)
+    , m_SplitPoint(0)
+    , m_PointCount(0)
+    , m_pLeftBuffer(nullptr)
+    , m_pRightBuffer(nullptr)
+    , m_BladeDir(0, 0, 0)
+    , m_TailPos(0, 0, 0)
+    , m_HeadPos(0, 0, 0)
+    , m_PrevHeadPos(0, 0, 0)
+    , m_SliceTimerA(0.0f)
+    , m_SliceTimerB(0.0f)
     , m_BladeVelAtSlice(0, 0, 0)
     , m_SlicePos(0, 0, 0)
     , m_SliceEntityType(0)
-    , m_Scale(0.0f)
-    , m_FingerId(0)
     , m_SwipeSoundTimer(0.0f)
-    , m_RawTouchPos(0, 0, 0)
-    , m_pComboMissControl(nullptr)  // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+    , m_LineLengthSq(0.0f)
+    , m_SpeedScale(0.0f)
+    , m_SliceCount(0)
+    , m_GhostIndex(0)
+    , m_GhostCount(0)
+    , m_GhostDir(0, 0, 0)
+    , m_field_0x130(0)
+    , m_ExtraFieldA(0)
+    , m_ExtraFieldB(0)
     , m_ComboTimer(0.0f)
     , m_ComboCount(0)
     , m_ComboEntityType(0)
-    , m_SwipeEndEdge(0)
+    , m_pComboMissControl(nullptr)  // ASM-verified: 2026-05-18 binary @ 0x0017C82C (re-analyst)
+#ifndef __bada__
+    // Port-only fields:
+    , m_NumPoints(0)
+    , m_State(0)
+    , m_bHasHead(false)
+    , m_FingerId(0)
+    , m_RawTouchPos(0, 0, 0)
+    , m_pCurrentTarget(nullptr)
+#endif
 {
+    // These gap arrays are zeroed by the Entity base ctor memset (0x3C bytes
+    // from the struct start). Explicit zero-fill here covers the SlashEntity-own
+    // gap regions that the base doesn't touch.
+    memset(_pad4d, 0, sizeof(_pad4d));
+    _field_0x54 = 0;
+    memset(_gap_0x94, 0, sizeof(_gap_0x94));
+    memset(_gap_0xd4, 0, sizeof(_gap_0xd4));
+    memset(_gap_0x124, 0, sizeof(_gap_0x124));
+    memset(_gap_0x134, 0, sizeof(_gap_0x134));
+    memset(_gap_0x154, 0, sizeof(_gap_0x154));
+#ifndef __bada__
     for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
+#endif
 }
 
 // Binary @ 0x17C774 — restore vtable, call Release, chain to Mortar::Entity::~Mortar::Entity.
@@ -1456,16 +1488,17 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     m_ComboTimer      = 0.1f;   // per-swipe accumulator (DAT_0017c764)
     m_ComboCount      = 0;
     m_ComboEntityType = 0;
-    // m_GhostDir at +0x118 (Vec3): zero
-    *(float*)((char*)this + 0x118) = 0.0f;
-    *(float*)((char*)this + 0x11c) = 0.0f;
-    *(float*)((char*)this + 0x120) = 0.0f;
+    m_GhostDir.x = 0.0f;
+    m_GhostDir.y = 0.0f;
+    m_GhostDir.z = 0.0f;
+    // +0x134 (within _gap_0x134): binary writes 0.0f
     *(float*)((char*)this + 0x134) = 0.0f;
-    *(uint8_t*)((char*)this + 0x4c) = 0;   // m_bFlag4c
+    m_SwipeEndEdge = 0;         // binary +0x4c m_bFlag4c
+    // +0x138 (within _gap_0x134): binary writes 0
     *(int*)    ((char*)this + 0x138) = 0;
-    *(uint16_t*)((char*)this + 0x36) = 0;  // angle
-    *(int*)    ((char*)this + 0x114) = 0;  // m_GhostCount
-    *(int*)    ((char*)this + 0x110) = 0;  // m_GhostIndex
+    m_Angle = 0;                // Entity::m_Angle at +0x36 in binary
+    m_GhostCount = 0;           // binary +0x114
+    m_GhostIndex = 0;           // binary +0x110
 
     // 7. Per-entity ghost-direction average ring: 6 slots (Vec3[6] at +0xc8, stride 12).
     // This is distinct from the global SlashEntityGhost effect ring (8 slots, DAT_0017b878).
@@ -1486,13 +1519,14 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     // 9. Swipe-SFX cooldown timer (binary m_SwipeSoundTimer at +0xc4).
     m_SwipeSoundTimer = 0.0f;
 
-    // 10. Extra combo fields (binary +0x14c, +0x150 within combo-slice array range).
-    *(int*)((char*)this + 0x150) = -1;  // m_ExtraFieldB
-    *(int*)((char*)this + 0x14c) = -1;  // m_ExtraFieldA
+    // 10. Extra combo fields (binary +0x14c, +0x150).
+    m_ExtraFieldB = -1;
+    m_ExtraFieldA = -1;
     m_ComboEntityType = 0;
     m_ComboCount      = 0;
 
-    // 11. Initial post-init swipe SFX cooldown at +0x148 = 6.0f.
+    // 11. +0x148 is within _gap_0x134 (which starts at +0x134, 24 bytes to +0x14b).
+    // Binary Init writes 6.0f here (initial swipe SFX cooldown).
     *(float*)((char*)this + 0x148) = 6.0f;
 }
 

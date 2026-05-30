@@ -125,6 +125,7 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     }
 
     m_Emitters.push_back(new PSPParticleEmitter());
+    m_ParticleLists.push_back(std::vector<PSPParticle>());
     PSPParticleEmitter& e = *m_Emitters.back();
     // All defaults match the binary's explicit init block:
     e.m_Timer = 0.0f;
@@ -141,7 +142,6 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     e.m_bUpdateWhenPaused = updateWhenPaused;
     e.m_pTemplate = tmpl;
     e.m_pRefPtr = ppRef;
-    e.m_bActive = true;
     if (ppRef) *ppRef = &e;
     return &e;
 }
@@ -154,6 +154,7 @@ void PSPParticleManager::ClearEmitter(PSPParticleEmitter* emitter) {
             if (emitter->m_pRefPtr) *emitter->m_pRefPtr = nullptr;
             delete m_Emitters[i];
             m_Emitters.erase(m_Emitters.begin() + i);
+            m_ParticleLists.erase(m_ParticleLists.begin() + i);
             return;
         }
     }
@@ -172,13 +173,16 @@ static inline float RandRange(float lo, float hi) {
 }
 
 // Matches AddParticle (0x115644) — spawn one particle from (emitter, set).
-// The port version pulls template defaults and applies set-level velocity.
-static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set) {
+// setIdx is the index of the set in emitter.m_pTemplate->m_Sets; stored in
+// p.m_field44 so the draw pass can look up the per-particle PSPParticleTemplate
+// without a per-particle pointer field (which would exceed binary struct size).
+static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set,
+                          std::vector<PSPParticle>& particles, int32_t setIdx) {
     const PSPParticleTemplate* tmpl = set.m_pTemplate;
 
     PSPParticle p;
     p.m_Pos = emitter.m_Pos;
-    p.m_pTemplate = tmpl;
+    p.m_field44 = setIdx;
 
     // Velocity: set-level min/max (randomized per component), halved, then
     // added to emitter vel. The `* 0.5f` matches the binary AddParticle
@@ -220,19 +224,13 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         p.m_SizeMid   = RandRange((float)tmpl->m_SizeMidMin,   (float)tmpl->m_SizeMidMax);
         p.m_SizeEnd   = RandRange((float)tmpl->m_SizeEndMin,   (float)tmpl->m_SizeEndMax);
 
-        // Two-segment BGRA colour lerp (template already has mid = average of
-        // start/end when the XML omits explicit mid attrs — see LoadFile).
-        memcpy(p.m_ColourStart, tmpl->m_ColourStartMin, 4);
-        memcpy(p.m_ColourMid,   tmpl->m_ColourMidMin,   4);
-        memcpy(p.m_ColourEnd,   tmpl->m_ColourEndMin,   4);
-
         // Spin rate lerp: template has start/end min/max int16 ranges.
         // Binary AddParticle @ 0x115644 multiplies the LERP'd int16 by
-        // DAT_00115b64 = 182.0f (degrees → 16-bit angle-index: 65536/360 ≈ 182)
+        // DAT_00115b64 = 182.0f (degrees -> 16-bit angle-index: 65536/360 ~= 182)
         // and stores it as an int16 angle-table index that is added to
         // field_0x28 each 1/60s tick. Convert to rad/sec for the port's
         // float-radian integration:
-        //   rad_per_sec = int16 * (182/65536) * 2π * 60
+        //   rad_per_sec = int16 * (182/65536) * 2pi * 60
         //              = int16 * 6.28318 * 60 / 360
         //              = int16 * 1.0472
         // Each particle gets its own random start/end rate.
@@ -244,7 +242,7 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
                                   (float)tmpl->m_SpinEndMax)   * SPIN_INT16_TO_RAD_PER_SEC;
         p.m_Rotation = RandRange(tmpl->m_AngleMin, tmpl->m_AngleMax);
 
-        // RotCycle — oscillating rotation offset. speedStart/End from
+        // RotCycle -- oscillating rotation offset. speedStart/End from
         // rotateCycle XML (stored in m_FrictionSpeed*). Amplitude lerps
         // from start to end base.
         p.m_RotCycleRate  = 0.5f * (tmpl->m_FrictionSpeedStart +
@@ -260,10 +258,10 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         p.m_CycleYPhase = Rand01() * 6.2831853f;
 
         // Shape-type branching (matches AddParticle 0x115644):
-        //   0 = Point     — no extra init (pos = emitter.pos, vel = rotated set vel)
-        //   1 = Vertex    — start half a velocity step behind the emitter
-        //   2 = Direction — rotate particle to face its own velocity
-        //   3 = Angular   — swap pos.x/y, mirror gravity+vel by emitter quadrant
+        //   0 = Point     -- no extra init (pos = emitter.pos, vel = rotated set vel)
+        //   1 = Vertex    -- start half a velocity step behind the emitter
+        //   2 = Direction -- rotate particle to face its own velocity
+        //   3 = Angular   -- swap pos.x/y, mirror gravity+vel by emitter quadrant
         switch (tmpl->m_Shape) {
             case 1: // Vertex
                 p.m_Pos.x -= p.m_Vel.x;
@@ -273,8 +271,8 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
             case 2: // Direction
                 p.m_Rotation += atan2f(p.m_Vel.y, p.m_Vel.x);
                 break;
-            case 3: { // Angular — binary @ 0x00115644 shape==3 branch
-                // TODO: 0x00115644 shape==3 branch — quadrant-mirror logic needs follow-up RE.
+            case 3: { // Angular -- binary @ 0x00115644 shape==3 branch
+                // TODO: 0x00115644 shape==3 branch -- quadrant-mirror logic needs follow-up RE.
                 // RE doc summary: swap pos.x/pos.y, mirror gravity by emitter quadrant
                 // (sign of emitter.m_field38), mirror vel.x by particle pos.x sign.
                 // No XML in particles_fast/slow.xml uses Angular; no-op fallback is safe.
@@ -288,71 +286,74 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         p.m_SizeStart = p.m_SizeMid = p.m_SizeEnd = 8.0f;
     }
 
-    emitter.m_Particles.push_back(p);
+    particles.push_back(p);
 }
 
 // Matches PSPParticleEmitter::Update (0x115d9c).
-static void UpdateEmitter(PSPParticleEmitter& e, float dt) {
+static void UpdateEmitter(PSPParticleEmitter& e, float dt, std::vector<PSPParticle>& particles) {
     const PSPEmitterTemplate* et = e.m_pTemplate;
     if (!et) return;
 
     const float currentTime = e.m_Timer;
     const float newTime = currentTime + dt * e.m_TimeScale;
 
-    // Spawn pass — for each set, check window and integrate rate
-    for (std::vector<PSPParticleSet>::const_iterator cit = et->m_Sets.begin(); cit != et->m_Sets.end(); ++cit) {
-        const PSPParticleSet& set = *cit;
+    // Spawn pass -- for each set, check window and integrate rate
+    for (int32_t si = 0; si < (int32_t)et->m_Sets.size(); ++si) {
+        const PSPParticleSet& set = et->m_Sets[(size_t)si];
         const float startT = set.m_TimeStart;
         const float stopT  = set.m_TimeStop;
 
-        // Continuous rate: only within [startT, stopT] (stopT==0 → no limit).
+        // Continuous rate: only within [startT, stopT] (stopT==0 -> no limit).
         if (startT <= currentTime && (stopT == 0.0f || currentTime <= stopT)) {
             const float rate = set.m_PerSec;
             if (rate > 0.0f) {
                 int desired = (int)(rate * ((currentTime + dt * e.m_TimeScale) - startT))
                             - (int)(rate * (currentTime - startT));
-                for (int i = 0; i < desired; ++i) SpawnParticle(e, set);
+                for (int i = 0; i < desired; ++i) SpawnParticle(e, set, particles, si);
             }
         }
 
         // Burst on first frame crossing startT
         if (currentTime <= startT && startT < newTime) {
-            for (int i = 0; i < (int)set.m_InitCount; ++i) SpawnParticle(e, set);
+            for (int i = 0; i < (int)set.m_InitCount; ++i) SpawnParticle(e, set, particles, si);
             if (e.m_TimeScale == 0.0f) e.m_Timer += dt;
         }
     }
 
-    // Physics pass — age + integrate all particles
-    for (size_t i = 0; i < e.m_Particles.size(); ) {
-        PSPParticle& p = e.m_Particles[i];
+    // Physics pass -- age + integrate all particles
+    for (size_t i = 0; i < particles.size(); ) {
+        PSPParticle& p = particles[i];
         p.m_Age += dt;
         if (p.m_Age >= p.m_Life) {
-            e.m_Particles[i] = e.m_Particles.back();
-            e.m_Particles.pop_back();
+            particles[i] = particles.back();
+            particles.pop_back();
             continue;
         }
         // Binary Draw @ 0x114c64 integration:
         //   vel = (vel + gravity*dt) * lerp(tmpl.velMin, tmpl.velMax, t)
         //   pos = pos + vel*dt
         // The template's velMin/Max fields are a per-component per-frame
-        // LERP (damping) factor — NOT an initial velocity range.
+        // LERP (damping) factor -- NOT an initial velocity range.
         const float t = (p.m_Life > 0.0f) ? (p.m_Age / p.m_Life) : 0.0f;
         p.m_Vel += p.m_Gravity * dt;
-        if (p.m_pTemplate) {
-            const PSPParticleTemplate* pt = p.m_pTemplate;
-            const float dampX = pt->m_VelocityMin[0] + (pt->m_VelocityMax[0] - pt->m_VelocityMin[0]) * t;
-            const float dampY = pt->m_VelocityMin[1] + (pt->m_VelocityMax[1] - pt->m_VelocityMin[1]) * t;
-            const float dampZ = pt->m_VelocityMin[2] + (pt->m_VelocityMax[2] - pt->m_VelocityMin[2]) * t;
-            p.m_Vel.x *= dampX;
-            p.m_Vel.y *= dampY;
-            p.m_Vel.z *= dampZ;
+        // Look up particle template from set index stored in m_field44.
+        if (p.m_field44 >= 0 && (size_t)p.m_field44 < et->m_Sets.size()) {
+            const PSPParticleTemplate* pt = et->m_Sets[(size_t)p.m_field44].m_pTemplate;
+            if (pt) {
+                const float dampX = pt->m_VelocityMin[0] + (pt->m_VelocityMax[0] - pt->m_VelocityMin[0]) * t;
+                const float dampY = pt->m_VelocityMin[1] + (pt->m_VelocityMax[1] - pt->m_VelocityMin[1]) * t;
+                const float dampZ = pt->m_VelocityMin[2] + (pt->m_VelocityMax[2] - pt->m_VelocityMin[2]) * t;
+                p.m_Vel.x *= dampX;
+                p.m_Vel.y *= dampY;
+                p.m_Vel.z *= dampZ;
+            }
         }
         p.m_Pos += p.m_Vel * dt;
-        // Spin rate lerp start→end over life, then integrate.
+        // Spin rate lerp start->end over life, then integrate.
         const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
         p.m_Rotation += spin * dt;
         // Cycle accumulators (RotCycle + CycleX/Y). Rates are in cycles/s so
-        // convert to radians by ×2π.
+        // convert to radians by *2pi.
         p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
         p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
         p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
@@ -385,11 +386,12 @@ void PSPParticleManager::Update(float dt, bool paused) {
     for (size_t i = 0; i < m_Emitters.size(); ) {
         PSPParticleEmitter& e = *m_Emitters[i];
         const PSPEmitterTemplate* et = e.m_pTemplate;
+        std::vector<PSPParticle>& particles = m_ParticleLists[i];
 
         // Tick active emitters
         if (e.m_ParticleHead != 0 && e.m_TimeScale != 0.0f &&
             (!paused || e.m_bUpdateWhenPaused)) {
-            UpdateEmitter(e, dt);
+            UpdateEmitter(e, dt, particles);
         }
 
         // Keep-alive rule from binary Manager::Update:
@@ -406,15 +408,16 @@ void PSPParticleManager::Update(float dt, bool paused) {
         if (et) {
             const bool naturallyInfinite = !EmitterTemplateEnds(et);
             if (et->m_MaxLifetime > 0.0f) {
-                keep = (e.m_Timer < et->m_MaxLifetime) || !e.m_Particles.empty();
+                keep = (e.m_Timer < et->m_MaxLifetime) || !particles.empty();
             } else {
-                keep = naturallyInfinite || !e.m_Particles.empty();
+                keep = naturallyInfinite || !particles.empty();
             }
         }
         if (!keep) {
             if (e.m_pRefPtr) *e.m_pRefPtr = nullptr;
             delete m_Emitters[i];
             m_Emitters.erase(m_Emitters.begin() + i);
+            m_ParticleLists.erase(m_ParticleLists.begin() + i);
             continue;
         }
         ++i;
@@ -487,36 +490,51 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
 
     for (size_t ei = 0; ei < m_Emitters.size(); ++ei) {
         PSPParticleEmitter& e = *m_Emitters[ei];
-        if (e.m_Particles.empty()) continue;
+        std::vector<PSPParticle>& particles = m_ParticleLists[ei];
+        if (particles.empty()) continue;
+        const PSPEmitterTemplate* et = e.m_pTemplate;
 
-        for (std::vector<PSPParticle>::iterator pit = e.m_Particles.begin(); pit != e.m_Particles.end(); ++pit) {
+        for (std::vector<PSPParticle>::iterator pit = particles.begin(); pit != particles.end(); ++pit) {
             PSPParticle& p = *pit;
+
+            // Resolve per-particle template via set index stored in m_field44.
+            const PSPParticleTemplate* pTmpl = 0;
+            if (et && p.m_field44 >= 0 && (size_t)p.m_field44 < et->m_Sets.size()) {
+                pTmpl = et->m_Sets[(size_t)p.m_field44].m_pTemplate;
+            }
+
             // Layer filter: binary draws only particles whose template's
             // m_UseDepth matches the requested layer.
-            if (p.m_pTemplate && p.m_pTemplate->m_UseDepth != layer) continue;
+            if (pTmpl && pTmpl->m_UseDepth != layer) continue;
 
             // Group flush on template change (batches DrawTriList per texture)
-            if (p.m_pTemplate != curTmpl) {
+            if (pTmpl != curTmpl) {
                 FlushParticleVerts(s_verts, curTmpl);
-                curTmpl = p.m_pTemplate;
+                curTmpl = pTmpl;
             }
 
             const float life = p.m_Life > 0.0f ? p.m_Life : 1.0f;
             float t = p.m_Age / life;
             if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
 
-            // Two-segment colour + size lerp: start→mid for t∈[0,0.5),
-            // mid→end for t∈[0.5,1]. Matches binary Draw piecewise linear.
+            // Two-segment colour + size lerp: start->mid for t in [0,0.5),
+            // mid->end for t in [0.5,1]. Matches binary Draw piecewise linear.
+            // Colour looked up from template (ColourStartMin/MidMin/EndMin).
             uint8_t col[4];
             float size;
-            if (t < 0.5f) {
-                float u = t * 2.0f;
-                LerpColour(p.m_ColourStart, p.m_ColourMid, u, col);
-                size = p.m_SizeStart + (p.m_SizeMid - p.m_SizeStart) * u;
+            if (pTmpl) {
+                if (t < 0.5f) {
+                    float u = t * 2.0f;
+                    LerpColour(pTmpl->m_ColourStartMin, pTmpl->m_ColourMidMin, u, col);
+                    size = p.m_SizeStart + (p.m_SizeMid - p.m_SizeStart) * u;
+                } else {
+                    float u = (t - 0.5f) * 2.0f;
+                    LerpColour(pTmpl->m_ColourMidMin, pTmpl->m_ColourEndMin, u, col);
+                    size = p.m_SizeMid + (p.m_SizeEnd - p.m_SizeMid) * u;
+                }
             } else {
-                float u = (t - 0.5f) * 2.0f;
-                LerpColour(p.m_ColourMid, p.m_ColourEnd, u, col);
-                size = p.m_SizeMid + (p.m_SizeEnd - p.m_SizeMid) * u;
+                col[0] = col[1] = col[2] = col[3] = 255;
+                size = p.m_SizeStart;
             }
             uint32_t packed = PackBGRA(col);
 
@@ -867,12 +885,14 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
 void PSPParticleManager::Clear() {
     for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
     m_Emitters.clear();
+    m_ParticleLists.clear();
 }
 
 // Binary @ 0x00114974 — drain active list + reset particle free-list + zero
 // per-template live-list heads. Port collapses 2-3 since particles live
-// per-emitter. // DIFFERS: binary uses 3 separate lists; port uses vector.
+// in the manager's parallel list. // DIFFERS: binary uses 3 separate lists; port uses vector.
 void PSPParticleManager::ClearEmitters() {
     for (size_t i = 0; i < m_Emitters.size(); ++i) delete m_Emitters[i];
     m_Emitters.clear();
+    m_ParticleLists.clear();
 }
