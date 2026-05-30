@@ -259,12 +259,17 @@ private:
     float m_SwipeSoundTimer;   // binary +0xc4
 
     // +0xc8  float  m_LineLengthSq  squared length of current blade segment
+    // DIFFERS: binary reuses +0xc8..+0xd3 as ghost-ring slot 0 (zeroed by Init's
+    // ghost-ring loop over +0xc8..+0x10f). These three field names share storage
+    // with the ring and must not be given independent live semantics without RE.
     float m_LineLengthSq;      // binary +0xc8
 
     // +0xcc  float  m_SpeedScale   blade speed scale derived from segment length
+    // Note: shares storage with ghost-ring slot 0 — see m_LineLengthSq comment.
     float m_SpeedScale;        // binary +0xcc
 
     // +0xd0  int32_t  m_SliceCount  total slices on current swipe
+    // Note: shares storage with ghost-ring slot 0 — see m_LineLengthSq comment.
     int m_SliceCount;          // binary +0xd0
 
     // +0xd4..+0x10f  60-byte gap (likely ghost ring-buffer data; meaning TBD)
@@ -321,7 +326,7 @@ private:
     // Under __bada__ these are excluded so the binary-faithful layout above
     // passes the static_assert checks at the bottom of this file.
     // -----------------------------------------------------------------------
-#ifndef __bada__
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     // Stored per-point metadata. The vertex buffers m_Left/m_Right are
     // regenerated from this list each frame in RebuildGeometry.
     struct TrailPoint {
@@ -367,7 +372,7 @@ public:
     bool IsBladeActive() const { return m_State != 0 && m_NumPoints >= 2; }
 
 private:
-#endif
+#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 
     // -----------------------------------------------------------------------
     // Private methods
@@ -530,7 +535,7 @@ public:
     // ---- end STUBS ----
 };
 
-#ifdef __bada__
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
 #include <cstddef>
 static_assert(sizeof(SlashEntity)                              == 0x184, "SlashEntity size");
 static_assert(offsetof(SlashEntity, m_TrailEmitter)            == 0x3c,  "SlashEntity::m_TrailEmitter");

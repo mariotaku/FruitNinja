@@ -14,6 +14,7 @@
 class ColAABB : public Col {
 public:
     Vec3         m_Max;        // +0x14
+    // TODO: 0x001b5a88 — UpdateVertices() not ported; m_Corners left zeroed
     float        m_Corners[24]; // +0x20..+0x7f -- 8 cached corner Vec3, rebuilt by UpdateVertices()
 
     // m_Min accessor -- returns Col-base m_PrimaryPoint (binary reuse; no extra storage)
