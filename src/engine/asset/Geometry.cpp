@@ -12,6 +12,7 @@ Geometry::Geometry(SmartPtr<GeometryBinding> const& binding,
                    SmartPtr<SharedEffectProperties> const& props)
     : m_ActiveBindingIdx(0)
     , m_Binding(binding)
+    , m_PropList(NULL)
     , m_Vbo(0)
     , m_Ibo(0)
     , m_VertCount(0)
@@ -155,7 +156,7 @@ bool Geometry::SetActiveEffect(uint32_t idx) {
 // Binary @ 0x001a3c00
 void Geometry::BuildPropList(SmartPtr<SharedEffectProperties> const& /*props*/) {
     // Defunct: EffectPropertyList not load-bearing in port; m_PropList stays null.
-    m_PropList.reset(NULL);
+    m_PropList = NULL;
 }
 
 }  // namespace Mortar
