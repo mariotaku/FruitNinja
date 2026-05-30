@@ -1,11 +1,14 @@
 #ifndef FN_ENGINE_INPUT_INPUTMANAGER_H
 #define FN_ENGINE_INPUT_INPUTMANAGER_H
 
-// Analysed: 2026-05-04T00:00
-
 // InputManager — binary @ 0x00196980 area.
-// sizeof 0x10: vfn-table(4) + m_loadingConfig(1) + m_inUpdate(1) + pad(2) +
-//              m_inputDevices std::list<InputDevice*>(8, Sourcery 2010q1) = 0x10 total.
+// sizeof 0x10 (16 bytes):
+//   vptr    (4)  — binary isPolymorphic=true; vtableAddr 0x001eb318;
+//                  first vfunc slot 0x0019603c (SetQueueEventsUntilUpdate).
+//   field_0x4 (1, bool) — m_loadingConfig
+//   field_0x5 (1, bool) — m_inUpdate
+//   pad [0x06..0x07] (2)
+//   m_inputDevices std::list<InputDevice*> (8, Sourcery 2010q1) — +0x08
 //
 // Architecture: broadcaster over std::list<InputDevice*>.
 // RegisterInputCallback forwards to each device (bindings live on device, not manager).
@@ -29,7 +32,9 @@ public:
     // Binary @ 0x00196980 — ctor: both flags = 0.
     InputManager();
     // Binary @ 0x00196924 — dtor: list dtor only; does NOT call Destroy.
-    ~InputManager();
+    // Virtual to match binary isPolymorphic=true (vptr at +0x00).
+    // Binary vtable slot 0: 0x001eb318 area (dtor is implicitly first slot).
+    virtual ~InputManager();
 
     static InputManager* GetInstance();
 
@@ -70,16 +75,15 @@ public:
     // Binary @ 0x0019683c — RegisterInputCallback: broadcast to devices.
     // NB: 2-param signature — NO actionFlags 3rd param (port previously had
     // a fictitious 3rd param; corrected here per RE evidence).
-    // DIFFERS: original = per-device binding store, see Binary @ 0x0019683c
     void RegisterInputCallback(unsigned long actionHash, InputCallback cb);
 
     // Binary @ 0x00196194 — ResetDevices: broadcast Reset().
     void ResetDevices();
 
-    // Binary @ 0x0019603c — SetQueueEventsUntilUpdate: broadcast.
+    // Binary @ 0x0019603c — broadcast.
     void SetQueueEventsUntilUpdate(bool v);
 
-    // Binary @ 0x0019607c — SetSendDownCallbacksEachUpdate: broadcast.
+    // Binary @ 0x0019607c — broadcast.
     void SetSendDownCallbacksEachUpdate(bool v);
 
     // Binary @ 0x00195fd8 — return (c - 0x20) < 0x90.
@@ -92,18 +96,16 @@ public:
     // Port-side: dispatch to all devices (global event, no hash filter).
     void DispatchGlobal(InputEvent* event);
 
-    // Struct fields (Binary @ 0x00196980):
-    bool m_loadingConfig;   // +0x04
-    bool m_inUpdate;        // +0x05
-    // +0x06..0x07 padding
+    // Struct fields matching binary layout (vptr occupies +0x00..+0x03):
+    bool m_loadingConfig;                    // +0x04
+    bool m_inUpdate;                         // +0x05
+    // +0x06..0x07 padding (implicit)
     std::list<InputDevice*> m_inputDevices;  // +0x08 (8B, Sourcery 2010q1 pre-C++11)
-};
 
-// TODO: 0x00196980 — port InputManager lacks the binary's vptr at +0x00 (no
-// virtual methods). Cross-build measures sizeof=16 vs binary's 20; m_inputDevices
-// at +0x04 vs binary's +0x08. Adding a static_assert here today would fire.
-// Convert to a polymorphic pseudo-vtable (Mortar fn-table at +0x00) per the
-// binary's InputManagerFns layout to enable the assert.
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+    static_assert(sizeof(InputManager) == 16, "InputManager size mismatch");
+#endif
+};
 
 } // namespace Mortar
 
