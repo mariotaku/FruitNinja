@@ -617,48 +617,62 @@ void WaveManager::Resume() {
         m_FruitQueue[i] = -1;
 
     // 6. Re-spawn saved entities from sd->m_EntityStates.
-    // Binary @ 0x00124b9c-0x00124cd8: per-EntityState dispatch
+    // Binary @ 0x00124b9c-0x00124cd8: per-EntityState dispatch.
+    // g_FruitCount = **DAT_00124f04; port derives via FruitInfo_GetCount().
+    // Default spawn Vec3* = DAT_00124f08;
+    // TODO: 0x00124f08 -- wire g_DefaultSpawnVec (BSS Vec3*); passing nullptr uses entity's own default.
+    const int g_FruitCount = FruitInfo_GetCount();
     bool respawned = false;
     for (std::list<EntityState>::iterator eit = sd->m_EntityStates.begin();
          eit != sd->m_EntityStates.end(); ++eit)
     {
         EntityState& es = *eit;
-        // m_Flag = entity category (0=Fruit, 1=Bomb, 4=PowerUp); semantic unverified --
-        // TODO: re-analyst @ 0x0012c594 to confirm m_Flag vs m_Int role assignment.
-        int kind = (int)es.m_Flag;
+
+        // Kind selection from m_KindIndex (binary @ 0x00124b9c):
+        //   idx >= g_FruitCount -> kind=1 (Bomb)
+        //   idx < 0             -> kind=4 (PowerUp)
+        //   else                -> kind=0 (Fruit)
+        int idx = es.m_KindIndex;
+        int kind;
+        if (idx >= g_FruitCount)     kind = 1;
+        else if (idx < 0)            kind = 4;
+        else                         kind = 0;
+
         Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(kind, true);
         if (!e) continue;
-        // vtable+0x8 == Init(void* p1, long fruitType, const Vec3* scale).
-        // m_Int = entity-type index (fruit type / bomb variant; -1=power-up).
-        e->Init(nullptr, (long)es.m_Int, nullptr);
-        e->pos = Vec3(es.m_Vec0[0], es.m_Vec0[1], es.m_Vec0[2]);
-        e->vel = Vec3(es.m_Vec1[0], es.m_Vec1[1], es.m_Vec1[2]);
-        if (e->entityType == 1) {
-            // Bomb
+
+        // vtable+0x08 = Init(this, 0, typeIndex, &defaultSpawnVec).
+        // m_KindIndex serves as BOTH kind discriminator and Init type-index.
+        e->Init(nullptr, (long)idx, nullptr);
+
+        // Restore velocity then position (binary order: vel first, then pos).
+        e->vel = Vec3(es.m_Velocity[0], es.m_Velocity[1], es.m_Velocity[2]);
+        e->pos = Vec3(es.m_Position[0], es.m_Position[1], es.m_Position[2]);
+
+        if (kind == 1) {
+            // Bomb overlay: x=rotAxis_z, y=playerIdx (raw int in float slot), z=timeScale.
             Bomb* b = static_cast<Bomb*>(e);
-            // m_AccelForce maps to the gravity overlay for Bomb (binary +0x20..+0x28).
-            b->m_AccelForce = Vec3(es.m_Vec2[0], es.m_Vec2[1], es.m_Vec2[2]);
-            // m_BombVariant maps to playerIdx overlay (binary +0x28 z-component).
-            b->m_BombVariant = (int)es.m_Vec2[2];
+            // TODO: 0x00124b1c -- b->m_RotAxis_z = es.m_Overlay[0]; field not yet in port Bomb.
+            // TODO: 0x00124b1c -- raw-int reinterpret of es.m_Overlay[1] -> b->m_PlayerIdx; field not yet in port Bomb.
+            // TODO: 0x00124b1c -- b->m_TimeScale = es.m_Overlay[2]; field not yet in port Bomb.
             if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) Bomb::SetForPlayer(b, 1);
-            // m_Float = chuck-delay / wait. Binary hit-flag encoding unverified:
-            // using non-zero m_Flag as hit indicator (TODO: re-analyst to confirm).
-            if (es.m_Float > 0.0f) {
-                if (es.m_Flag == 0) {
-                    b->Chuck(es.m_Float);
-                } else {
-                    Bomb::SetHit(b, es.m_Float);
-                }
+            // Chuck/SetHit gate: m_ChuckMag > 0.0f; m_BombHitFlag==0 -> Chuck, else -> SetHit.
+            if (es.m_ChuckMag > 0.0f) {
+                if (es.m_BombHitFlag == 0)
+                    b->Chuck(es.m_ChuckMag);
+                else
+                    Bomb::SetHit(b, es.m_ChuckMag);
             }
-        } else if (e->entityType == 0) {
-            // Fruit
+        } else if (kind == 0) {
+            // Fruit overlay: m_Overlay = gravity Vec3.
             Fruit* f = static_cast<Fruit*>(e);
-            f->m_Gravity = Vec3(es.m_Vec2[0], es.m_Vec2[1], es.m_Vec2[2]);
-            if (es.m_Float > 0.0f) {
-                f->Chuck(es.m_Float);
-            }
+            f->m_Gravity = Vec3(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
+            if (es.m_ChuckMag > 0.0f)
+                f->Chuck(es.m_ChuckMag);
+        } else if (kind == 4) {
+            // PowerUp: vtable+0x10 activate called with (m_ChuckMag, e).
+            // TODO: 0x00124b1c -- PowerUp vtable+0x10 activate not yet wired; skip for now.
         }
-        // type 4 (PowerUp): TODO if power-ups are ported.
         respawned = true;
     }
 
