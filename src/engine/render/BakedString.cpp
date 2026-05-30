@@ -1,4 +1,5 @@
 #include "render/BakedString.h"
+#include "render/QUADCUSTOMVERTEX.h"
 
 namespace Mortar {
 

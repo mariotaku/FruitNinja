@@ -76,7 +76,14 @@ public:
 
     bool IsPendingRemoval() const { return m_bPendingRemoval != 0; }
 
+    // Under __bada__ (incl. the asm-verify cross-build) the layout members are
+    // public so the offsetof() static_asserts below can reach them — GCC 4.4.1
+    // rejects offsetof on private members. On the host they stay private.
+#if defined(__bada__)
+public:
+#else
 private:
+#endif
     // +0x7C in binary: transition scalar, ctor=0.0f
     float m_TransitionAlpha;
 
@@ -98,6 +105,7 @@ private:
     // +0x9C: state machine (0=in, 1=idle, 2=out)
     int m_State;
 
+private:
     // Static textures (GOT-relative globals in binary, LoadContent manages them)
     static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex  (DAT_0012eca0 slot)
     static Mortar::SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (DAT_0012eca8 slot)
@@ -133,7 +141,7 @@ public:
     // ---- end AUTO-STUB MERGE ----
 };
 
-#ifdef __bada__
+#if defined(__bada__)
 #include <cstddef>
 struct AboutScreenLayoutAssert {
     static_assert(offsetof(AboutScreen, m_TransitionAlpha) == 0x7C, "m_TransitionAlpha offset");
