@@ -2,7 +2,9 @@
 #define FN_ENGINE_NETWORK_OPEN_FEINT_NEWS_RENDERER_H
 
 // Defunct: OpenFeintNewsRenderer -- in-game news overlay; no-op stub.
-// Binary ctor @ 0x00191a94. Size ~0x10D4 (includes 4KB news buffer).
+// Binary ctor @ 0x00191a94. Polymorphic: vptr @ +0x00 (binary vtable GOT-indirect).
+// Binary size = 0x10D8 (4312 bytes, 8-byte aligned): vptr (4B) + 0x10D4 data.
+// Confidence: low (no operator-new witness; layout from ctor disasm only).
 
 #include <cstdint>
 
@@ -10,20 +12,23 @@ namespace Mortar {
 
 class OpenFeintNewsRenderer {
 public:
+    // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x00191a94
     OpenFeintNewsRenderer() {}
-    ~OpenFeintNewsRenderer() {}
+
+    // Polymorphic root: vptr @ +0x00; binary vtable resolved GOT-indirectly.
+    virtual ~OpenFeintNewsRenderer() {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x00190a4c
-    void StartNewsRender(void* /*texture*/, void* /*font*/) {}
+    virtual void StartNewsRender(void* /*texture*/, void* /*font*/) {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x001900d0
-    void CancelNewsRender() {}
+    virtual void CancelNewsRender() {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub
-    void Draw() {}
+    virtual void Draw() {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub
-    void Update(float /*dt*/) {}
+    virtual void Update(float /*dt*/) {}
 
     // Defunct: OpenFeintNewsRenderer -- no-op stub; binary @ 0x00190a30
     void GetNewsString() {}
@@ -35,9 +40,18 @@ public:
     void Destroy() {}
 
 private:
+    // Data region after vptr: 0x10D4 bytes covering OpenFeintNewsRenderInfo
+    // sub-object at +0x04, panel-rect fields, colour entries, news text buffer
+    // (~4KB inline array at ~+0xB0..+0x10AF), and trailing float/flag fields.
+    // Not accessed by port code.
     uint8_t m_pad[0x10D4];
 };
 
 } // namespace Mortar
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(Mortar::OpenFeintNewsRenderer) == 0x10D8,
+    "Mortar::OpenFeintNewsRenderer must be 0x10D8 bytes on ARM32/Bada");
+#endif
 
 #endif // FN_ENGINE_NETWORK_OPEN_FEINT_NEWS_RENDERER_H
