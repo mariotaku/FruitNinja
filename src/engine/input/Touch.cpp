@@ -3,21 +3,25 @@
 #include "input/Touch.h"
 #include "input/InputDevice.h"
 #include <cstring>
+#include <new>
 
 namespace Mortar {
+
+// Binary BSS global @ GOT+0x80798 — rotating cursor for ___UpdateInternal.
+// Port maps this to a file-static (Touch is a singleton; behaviour is identical).
+static int s_slotCursor = 0;
 
 Touch& Touch::GetInstance() {
     static Touch instance;
     return instance;
 }
 
-// Binary @ 0x0019591c -- ctor: 16 States (states1+states2) init, RingBufferT init,
-// allocate 200B backing (10 TEvnt events), nextTouchId=1.
+// Binary @ 0x0019591c -- ctor.
+// Sequence: State[8] ctor (states1), State[8] ctor (states2),
+// RingBufferT ctor (zeroes memory ptr), InitRingBuffer_Touch (alloc + init),
+// nextTouchId = 1.
 Touch::Touch()
-    : m_eventHead(0)
-    , m_eventTail(0)
-    , nextTouchId(1)
-    , m_slotCursor(0)
+    : nextTouchId(1)
 {
     memset(states1, 0, sizeof(states1));
     memset(states2, 0, sizeof(states2));
@@ -29,7 +33,21 @@ Touch::Touch()
         states2[i].extId   = 0;
         states2[i].touchId = 0;
     }
-    memset(m_events, 0, sizeof(m_events));
+    // Binary @ 0x001958fc -- InitRingBuffer_Touch:
+    //   eventBuffer.memory = operator new(200);
+    //   eventBuffer.capacity = 10;
+    //   eventBuffer.field_8 = 1;  (DIFFERS: port uses 0; see RingBufferT_TEvnt DIFFERS)
+    //   eventBuffer.field_c = 0;
+    eventBuffer.memory      = static_cast<TEvnt*>(::operator new(MAX_EVENTS * sizeof(TEvnt)));
+    eventBuffer.capacity    = MAX_EVENTS;
+    eventBuffer.m_eventHead = 0;
+    eventBuffer.m_eventTail = 0;
+    memset(eventBuffer.memory, 0, MAX_EVENTS * sizeof(TEvnt));
+}
+
+Touch::~Touch() {
+    ::operator delete(eventBuffer.memory);
+    eventBuffer.memory = 0;
 }
 
 // Binary @ 0x001952f0 -- State::Update.
@@ -71,11 +89,11 @@ void Touch::_Update() {
 // Drain events with timestamp <= dt (or all if dt == 0.0); then _Update().
 void Touch::Update(float dt) {
     bool drainAll = (dt == 0.0f);
-    while (m_eventHead != m_eventTail) {
-        TEvnt& ev = m_events[m_eventHead % MAX_EVENTS];
+    while (eventBuffer.m_eventHead != eventBuffer.m_eventTail) {
+        TEvnt& ev = eventBuffer.memory[eventBuffer.m_eventHead % MAX_EVENTS];
         if (!drainAll && ev.timestamp > dt) break;
         ___UpdateInternal(ev.extId, ev.isActive, ev.x, ev.y);
-        m_eventHead++;
+        eventBuffer.m_eventHead++;
     }
     _Update();
 }
@@ -84,17 +102,17 @@ void Touch::Update(float dt) {
 // Push TEvnt to ring; on overflow: Update(0.0f) then retry.
 // isActive: true=press OR move, false=release (matches binary param 'b').
 void Touch::__UpdateInternal(uint32_t extId, bool isActive, float x, float y, float t) {
-    int next = m_eventTail + 1;
-    if (next - m_eventHead >= MAX_EVENTS) {
+    int next = eventBuffer.m_eventTail + 1;
+    if (next - eventBuffer.m_eventHead >= MAX_EVENTS) {
         Update(0.0f);
     }
-    TEvnt& ev = m_events[m_eventTail % MAX_EVENTS];
+    TEvnt& ev = eventBuffer.memory[eventBuffer.m_eventTail % MAX_EVENTS];
     ev.extId     = extId;
     ev.isActive  = isActive;
     ev.x         = x;
     ev.y         = y;
     ev.timestamp = t;
-    m_eventTail++;
+    eventBuffer.m_eventTail++;
 }
 
 // Binary @ 0x00195314 -- ___UpdateInternal.
@@ -104,7 +122,7 @@ void Touch::__UpdateInternal(uint32_t extId, bool isActive, float x, float y, fl
 void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
     int firstFree = -1;
     for (int i = 0; i < MAX_SLOTS; i++) {
-        int idx = (m_slotCursor + i) & 7;
+        int idx = (s_slotCursor + i) & 7;
         uint32_t slotExtId = states2[idx].extId;
         if (slotExtId == extId) {
             if (isActive) {
@@ -120,7 +138,7 @@ void Touch::___UpdateInternal(uint32_t extId, bool isActive, float x, float y) {
     }
     // No matching slot. Claim a free slot only for new press (isActive==true).
     if (isActive && firstFree != -1) {
-        m_slotCursor = (m_slotCursor + 1 > 7) ? 0 : m_slotCursor + 1;
+        s_slotCursor = (s_slotCursor + 1 > 7) ? 0 : s_slotCursor + 1;
         states2[firstFree].touchId = nextTouchId;
         nextTouchId++;
         if (nextTouchId == 0) nextTouchId = 1;

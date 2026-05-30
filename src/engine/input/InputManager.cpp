@@ -17,6 +17,7 @@ InputManager::InputManager()
 }
 
 // Binary @ 0x00196924 — dtor: list dtor only; does NOT call Destroy.
+// Virtual to match binary isPolymorphic=true.
 InputManager::~InputManager() {
     s_instance = nullptr;
     // Note: binary does NOT call Destroy() in dtor — list goes out of scope only.

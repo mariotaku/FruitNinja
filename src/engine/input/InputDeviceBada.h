@@ -1,23 +1,27 @@
 #ifndef FN_ENGINE_INPUT_INPUTDEVICEBADA_H
 #define FN_ENGINE_INPUT_INPUTDEVICEBADA_H
 
-// Analysed: 2026-05-04T00:00
-
 #include "input/InputDevice.h"
 #include "input/Touch.h"
 #include <list>
 #include <cstdint>
 
-// Binary @ 0x00196cc8 — InputDeviceBada: concrete InputDevice for Bada/touch.
-// Composes a Mortar::Touch for state tracking, and holds the binding list
-// that RegisterInputCallback pushes into.
-//
-// Bindings (per binary @ 0x0019683c): callbacks are stored per-device,
-// not on the manager. The manager broadcasts RegisterInputCallback to each
-// device in m_inputDevices.
+// Binary @ 0x001958a4 — InputDeviceBada: concrete InputDevice for Bada/touch.
+// sizeof = 28 (0x1c), from operator new(0x1c) @ InputManager::Init 0x00196cd4.
+// Layout:
+//   +0x00: vptr (port) / InputDevice base (binary fns*)
+//   +0x04: std::list<InputActionMapper*> actionMappers (8B, from InputDevice base)
+//   +0x0c: uint32_t field_0xc   (ctor-zero)
+//   +0x10: uint32_t field_0x10  (ctor-zero)
+//   +0x14: uint32_t field_0x14  (ctor-zero)
+//   +0x18: uint32_t field_0x18  (ctor-zero)
+// Total: 12 (base) + 16 (derived) = 28.
 
 namespace Mortar {
 
+// Port-side binding record — no binary counterpart on InputDeviceBada.
+// Used only in the port's dispatch path (DispatchEvent, ClearActions,
+// RegisterInputCallback). Fields live below the binary size assert guard.
 struct InputDeviceBinding {
     unsigned long         actionHash;
     InputDeviceCallback   callback;
@@ -25,12 +29,12 @@ struct InputDeviceBinding {
 
 class InputDeviceBada : public InputDevice {
 public:
-    // Binary @ 0x00196cc8 — Init allocs this; touch is composed in-place.
+    // Binary @ 0x001958a4 — ctor (C1/C2 pair, byte-identical).
     InputDeviceBada();
     virtual ~InputDeviceBada();
 
-    // InputDevice vtable
-    virtual void              Init(unsigned long flags);                         // Binary @ 0x00196cc8 (partial)
+    // InputDevice vtable (overrides matching binary slots):
+    virtual void              Init(unsigned long flags);
     virtual void              Destroy();
     virtual void              Update(float dt);
     virtual void              AddActionMapper(InputActionMapper* mapper);
@@ -43,20 +47,31 @@ public:
     virtual void              OnAxisExtentsChanged();
     virtual InputDeviceTypes  GetDeviceType() const;
 
-    // Port-side dispatch.
+    // Port-side dispatch (not a binary vtable slot).
     virtual void              DispatchEvent(InputEvent* event);
 
-    // The composed Mortar::Touch instance.
-    // Binary: InputDeviceBada owns/wraps the Touch; struct layout not
-    // fully decompiled — port keeps a pointer to the global Touch singleton
-    // until the full struct is RE'd.
-    // TODO: 0x00196cc8 — replace with owned Touch once InputDeviceBada layout known.
-    Mortar::Touch*            m_touch;
+    // Binary-faithful derived fields (ctor-zero; semantic types TBD).
+    // TODO: 0x001958a4 — resolve semantic types of field_0xc..field_0x18 by
+    //   RE'ing vtable slot+8 (fns->field2_0x8) called immediately after ctor
+    //   in InputManager::Init @ 0x00196cd4.
+    uint32_t field_0xc;    // +0x0c
+    uint32_t field_0x10;   // +0x10
+    uint32_t field_0x14;   // +0x14
+    uint32_t field_0x18;   // +0x18
 
-private:
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+    static_assert(sizeof(InputDeviceBada) == 28, "InputDeviceBada size mismatch");
+#endif
+
+    // Port-only fields (tail; not counted in binary sizeof).
+    // These implement the port-side callback dispatch path which in the
+    // binary goes through InputActionMapper::ProcessEvent (not yet ported).
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    Mortar::Touch*                m_touch;
     std::list<InputDeviceBinding> m_bindings;
     bool                          m_queueUntilUpdate;
     bool                          m_sendDownEachUpdate;
+#endif
 };
 
 } // namespace Mortar
