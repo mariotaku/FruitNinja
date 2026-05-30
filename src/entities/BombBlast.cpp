@@ -35,7 +35,6 @@
 
 // Binary constants (resolved from memory at agent-reported DAT addrs).
 static const float RADIUS_GROWTH = 100.0f;   // DAT_0017120c
-static const float SCALE_GROWTH  = 2500.0f;  // DAT_00171210
 static const float BLAST_LIFE    = 3.0f;
 static const float BLAST_Z       = 0.0f;     // field_0x6c initial
 
@@ -54,13 +53,12 @@ static QUADCUSTOMVERTEX s_BlastVerts[MAX_BLASTS * VERTS_PER_BLAST];
 // --------------------------------------------------------------------------
 
 BombBlast::BombBlast()
-    : m_BlastRadius(0.0f)
-    , m_Scale(0.0f)
-    , m_PosA(0, 0, 0)
+    : m_PosA(0, 0, 0)
     , m_PosB(0, 0, 0)
     , m_Vel1(0, 0, 0)
     , m_Vel2(0, 0, 0)
     , m_Lifetime(0.0f)
+    , m_BlastRadius(0.0f)
 {
     entityType = 4;
     m_Angle = 0;  // inherited from Mortar::Entity base at +0x36
@@ -111,9 +109,6 @@ void BombBlast::Init(void* /*p1*/, long /*p2*/, Vec3* /*p3*/) {
     m_PosB = m_Vel2;
 
     m_BlastRadius = 0.0f;
-    // Binary: m_Scale = (5.0, 50.0, 1.0) Vec3. Unused in render, kept scalar
-    // in the port for struct simplicity — track the dominant .y component.
-    m_Scale = 50.0f;
     m_Lifetime = 0.0f;
 
     // m_Col stays null (inherited from Mortar::Entity ctor) — BombBlast doesn't collide.
@@ -130,8 +125,6 @@ void BombBlast::Update(float dt) {
     // Use the lifetime-scaled blast radius so the quad expands outward.
     m_PosA = m_Vel1 * m_BlastRadius;
     m_PosB = m_Vel2 * m_BlastRadius;
-
-    m_Scale += SCALE_GROWTH * dt;
 
     if (m_Lifetime >= BLAST_LIFE) {
         flags |= ENT_KILLED;
