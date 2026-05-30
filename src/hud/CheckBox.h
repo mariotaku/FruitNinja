@@ -61,12 +61,13 @@ private:
     uint8_t     _pad7F;       // +0x7F
     const char* m_pLabel;     // +0x80
     int         m_TouchSlot;  // +0x84 (-1 = none)
-    float       m_TouchX;     // +0x88
-    float       m_TouchY;     // +0x8C
-    float       m_TouchPhase; // +0x90
 
     static Mortar::SmartPtr<Mortar::Texture> s_checked;
     static Mortar::SmartPtr<Mortar::Texture> s_unchecked;
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(CheckBox) == 136, "CheckBox size mismatch");
+#endif
 
 #endif // FN_HUD_CHECKBOX_H

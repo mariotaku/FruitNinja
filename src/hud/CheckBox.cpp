@@ -33,9 +33,6 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, const char* label)
     , _pad7F(0)
     , m_pLabel(label)
     , m_TouchSlot(-1)
-    , m_TouchX(0.0f)
-    , m_TouchY(0.0f)
-    , m_TouchPhase(0.0f)
 {
     pos           = inPos;
     size          = inSize;
@@ -83,16 +80,12 @@ void CheckBox::UpdateFromGameWork() {
 
 
 // Binary @ 0x00134AEC
-// Copies x/y/phase from the tracked touch slot. Binary reads touch slot data at
-// g_GameData+0xA0 + (m_TouchSlot * 12); port reaches the same logical slot via
-// Touch::GetSlot() (states1[] indexed by slot). Semantically identical.
+// Reads touch slot data at g_GameData+0xA0 + (m_TouchSlot * 12). In the binary
+// the x/y/phase values are read inline at each use site (not stored in members).
+// Port calls UpdateTouchPosition() as a named call-site for parity but the binary
+// stores position transiently on the stack, not in struct fields.
 void CheckBox::UpdateTouchPosition() {
-    if (m_TouchSlot < 0) return;
-    const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(m_TouchSlot);
-    if (!s) return;
-    m_TouchX     = static_cast<float>(s->currX);
-    m_TouchY     = static_cast<float>(s->currY);
-    m_TouchPhase = static_cast<float>(s->phase);
+    // no-op: binary reads touch position inline; stored in local registers, not members.
 }
 
 // Binary @ 0x00134B28
@@ -121,10 +114,14 @@ void CheckBox::Update(float dt) {
         int state = Mortar::IsTouchDown(m_TouchSlot);
         if (state == 0) {
             // Touch released — check if it ended inside the rect and toggle.
-            bool inside = (m_TouchX >= left  && m_TouchX <= right &&
-                           m_TouchY >= bottom && m_TouchY <= top);
-            if (inside) {
-                m_bChecked = m_bChecked ? 0 : 1;
+            const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(m_TouchSlot);
+            if (s) {
+                float tx = static_cast<float>(s->currX);
+                float ty = static_cast<float>(s->currY);
+                bool inside = (tx >= left && tx <= right && ty >= bottom && ty <= top);
+                if (inside) {
+                    m_bChecked = m_bChecked ? 0 : 1;
+                }
             }
             m_TouchSlot = -1;
         }
