@@ -599,9 +599,9 @@ void WaveManager::Resume() {
 
     // 2. Restore per-player base speed from save.
     // m_ComboTimer[0] <- sd+0x100 (combo timer snapshot).
-    // m_BlitzBonus[1] <- sd+0x108 (blitz bonus P1 snapshot, stored as float in save).
+    // m_ColdTimer[0] <- sd+0x108 (cold-timer snapshot; binary vldr/vstr raw word move).
     m_ComboTimer[0]  = sd->m_Speed_P0;
-    m_BlitzBonus[1]  = (int)sd->m_Speed_P1;
+    m_ColdTimer[0]   = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
 
     // 3. Restore was-game-over flag.
     game_work.m_bUnsullied = sd->m_bWasGameOver;
@@ -699,7 +699,7 @@ void WaveManager::Resume() {
         // inherited from earlier RE was misleading.
         field_0x38           = sd->m_pCurrentWave_P1;   // saved wave index
         m_ComboTimer[0]      = sd->m_Speed_P0;
-        m_BlitzBonus[1]      = (int)sd->m_Speed_P1;
+        m_ColdTimer[0]       = sd->m_Speed_P1;  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
         field_0x23c = 1; field_0x35 = 1;
         field_0x36 = 0; field_0x37 = 0;
         m_Speed[0]           = sd->m_Speed_P0_alias;
@@ -807,17 +807,15 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
             sd->m_WaveStates.push_back(state);
         }
 
-        // DIVERGES fix: binary @ 0x00124986 sources +0x230 slot = m_WaveCount[0], not [1].
         sd->m_pCurrentWave_P1 = m_WaveCount[0];
         sd->m_FruitQueueCount = m_FruitQueueSize[0];
         sd->m_WaveDelay       = field_0x234;
         sd->m_WaveWait        = field_0x238;
         sd->m_Speed_P0        = m_Speed[0];
-        sd->m_Speed_P1        = (float)m_BlitzBonus[1];
+        sd->m_Speed_P1        = m_ColdTimer[0];  // ASM-verified: binary @ 0x00124952 vldr/vstr -- raw word move
         sd->m_Speed_P0_alias  = m_Speed[1];
         memcpy(&sd->m_FruitQueue[0], &m_FruitQueue[0], 0x80);
-        // Binary @ 0x00124986: sd->m_FruitQueueCount = this->field_0x2c8 = m_FruitQueueSize[1]
-        // (renamed from field82_0x7c; RE confirmed this is the fruit queue count for resume)
+        // ASM-verified: binary @ 0x00124930 reads +0x2c8 (slot[1]) into save+0x7c.
         sd->m_FruitQueueCount = m_FruitQueueSize[1];
         return 1;
     }
