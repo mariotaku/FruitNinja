@@ -374,7 +374,12 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
 }
 
 GameOverScreen::~GameOverScreen() {
-    // Release called by HUD via vtable
+    // Binary dtor body calls Release() (vtable slot 3) before the C++ member dtors run.
+    // HUD::Release / HUD::Update only call delete ctrl — they do NOT call ctrl->Release().
+    // Without this call, FruitFactControl (m_bNoDestructor=1) and the other externally-
+    // owned controls in the global HUD list are never removed or freed on game-quit.
+    // Binary: GameOverScreen::Release @ 0x00140d98 / HUD::RemoveControl @ 0x00144c40.
+    Release();
 }
 
 // ---------------------------------------------------------------------------
