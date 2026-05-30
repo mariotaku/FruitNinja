@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    const int modeWaveCount = (int)wm->waveInfos[gameMode].size();
+    const int modeWaveCount = (int)wm->m_WaveInfo[gameMode].size();
     printf("[BOOT] mode=%s gameMode=%d waveInfos[%d].size=%d frames=%d\n",
            ModeName(gameMode), gameMode, gameMode, modeWaveCount, frameCount);
     if (modeWaveCount == 0) {
