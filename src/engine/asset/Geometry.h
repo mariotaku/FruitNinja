@@ -17,15 +17,49 @@ struct MeshMaterial;
 
 // GeometryBinding -- shape-preserved defunct stub.
 // Binary @ 0x001a3990..0x001a40c0 (ctor/PassBinding::Apply chain).
-// The PassBinding::Apply chain is not ported; port's Geometry::Render reads
-// m_Vbo/m_Ibo/m_Layout directly. Class defined here so SmartPtr<GeometryBinding>
-// compiles in any TU that includes Geometry.h.
-// Defunct: GeometryBinding/PassBinding stack -- no-op stub; binary @ 0x001a3990
-class GeometryBinding : public ReferenceCounter {
+// sizeof = 76 (0x4C), vtable @ 0x001eb720.
+// Binary layout:
+//   +0x00  Mortar::GeometryBinding_Bada base sub-object (68 bytes, 0x00..0x43)
+//              vptr at +0x00; base fields (vertex stream(s), index stream,
+//              effect-group SmartPtrs) at +0x04..+0x43 — layout NOT YET RE'd.
+//   +0x44  Event1<GeometryBinding&> m_OnDestroyed (8 bytes)
+//   +0x4C  end
+//
+// TODO: 0x001a3990 -- GeometryBinding_Bada base layout (0x04..0x43) not yet RE'd;
+//   GeometryBinding_Bada body is a 1-byte Ghidra placeholder. RE base separately
+//   to fill in VertexStreamAdd/IndexStreamSet/EffectGroupSet field offsets.
+//
+// Event1<T> is 8 bytes (Delegate0<void> = 36 bytes per policy? NO — Event1 is the
+// event subscription list, 8 bytes = two pointers: head + tail or similar).
+// Confirmed size: Event1 sub-object at +0x44, object ends at +0x4C.
+class GeometryBinding_Bada : public ReferenceCounter {
+public:
+    GeometryBinding_Bada() {}
+    virtual ~GeometryBinding_Bada() {}
+    // TODO: 0x001a3990 -- GeometryBinding_Bada own fields at +0x0C..+0x43 (56 bytes) not yet RE'd
+    // (ReferenceCounter base occupies +0x00..+0x0B = 12 bytes; own fields fill +0x0C..+0x43)
+    char _base_pad[56];  // +0x0C..+0x43 opaque base body; binary layout unknown
+};
+
+// Event1<GeometryBinding&> placeholder (8 bytes per binary record).
+// Full template not ported; this POD stub has the correct size.
+struct Event1_GeometryBinding {
+    void* _ptr0;  // +0x00
+    void* _ptr1;  // +0x04
+    Event1_GeometryBinding() : _ptr0(0), _ptr1(0) {}
+};
+
+// Defunct: GeometryBinding -- no-op stub preserving binary layout; binary @ 0x001a3990
+// Live class used by the mesh loader (VertexStreamAdd/IndexStreamSet/EffectGroupSet).
+// Port's Geometry::Render bypasses the PassBinding::Apply chain entirely (GLES2 path),
+// so GeometryBinding is constructed by the loader but never dispatched through.
+class GeometryBinding : public GeometryBinding_Bada {
 public:
     // Defunct: GeometryBinding -- no-op stub; binary @ 0x001a3990
     GeometryBinding() {}
     virtual ~GeometryBinding() {}
+
+    Event1_GeometryBinding m_OnDestroyed;  // +0x44 (8 bytes)
 };
 
 // Vertex attribute layout (from PSP vertex declaration).
@@ -90,5 +124,12 @@ private:
 };
 
 }  // namespace Mortar
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(Mortar::GeometryBinding_Bada) == 68, "GeometryBinding_Bada size mismatch");
+static_assert(sizeof(Mortar::GeometryBinding)      == 76, "GeometryBinding size mismatch (0x4C)");
+static_assert(offsetof(Mortar::GeometryBinding, m_OnDestroyed) == 68, "GeometryBinding::m_OnDestroyed offset");
+#endif
 
 #endif  // FN_ENGINE_ASSET_GEOMETRY_H

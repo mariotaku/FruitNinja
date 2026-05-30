@@ -1662,11 +1662,11 @@ void Fruit::LoadFruitModels() {
             for (int s = 0; s < 3; ++s) {
                 Mortar::Model* mod = slots[s];
                 if (!mod) continue;
-                for (size_t m = 0; m < mod->m_Meshes.size(); ++m) {
-                    if (mod->m_Meshes[m].IsValid() &&
-                        !mod->m_Meshes[m]->HasDiffuseTexture())
+                for (size_t m = 0; m < mod->m_nodes.size(); ++m) {
+                    if (mod->m_nodes[m].IsValid() &&
+                        !mod->m_nodes[m]->HasDiffuseTexture())
                     {
-                        mod->m_Meshes[m]->SetDiffuseTexture(s_fruitAtlas);
+                        mod->m_nodes[m]->SetDiffuseTexture(s_fruitAtlas);
                     }
                 }
             }

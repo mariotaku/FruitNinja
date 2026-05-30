@@ -8,15 +8,17 @@
 
 namespace Mortar {
 
-// Matches original Texture2DFromFile_Bada (32 bytes)
-// Ref-counted texture with GL handle
+// Mortar::Texture — abstract base class (binary size = 12 bytes, zero own members).
+// Binary ctor @ 0x0018a1c4: only calls ReferenceCounter ctor then sets vptr.
+// All GL handle / width / height / format state lives in concrete subclasses
+// (e.g. Texture2D, Texture2DFromFile_Bada) — NOT in this base.
+// Vtable @ 0x001eadd8 (slots from +0x08): [0]=0x189f4c [1]=0x18a10c [2]=0x12e564 ...
+//
+// Binary layout:
+//   +0x00  ReferenceCounter (vptr @ +0x00, refcount @ +0x04, weak @ +0x08) — 12 bytes
+//   +0x0C  end (sizeof = 12)
 class Texture : public Mortar::ReferenceCounter {
 public:
-    GLuint m_TexId;     // GL texture handle (-1 = unloaded)
-    int m_Width;        // +0x10 from .tex header
-    int m_Height;       // +0x14 from .tex header
-    std::string m_Path; // file path for debugging/reload
-
     Texture();
     virtual ~Texture();
 
@@ -36,32 +38,33 @@ public:
     // Upload native format directly to GL (for .tex files without CPU conversion)
     void UploadNative(int width, int height, GLenum glFormat, GLenum glType, const void* pixels);
 
-    // Tracker for the last-bound texture id (port-side; binary doesn't track
-    // this). Renderer::DrawQuad reads it to detect untextured draws that
-    // would otherwise sample default-white and produce stray white quads.
-    static GLuint s_LastBoundTexId;
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: Texture::LoadFromMemory -- auto stub from binary missing-symbol set
+    // STUB: Texture::LoadFromMemory -- binary missing-symbol set
     void LoadFromMemory(void const*, int);
-    // STUB: Texture::SetUnCached -- auto stub from binary missing-symbol set
+    // STUB: Texture::SetUnCached -- binary missing-symbol set
     void SetUnCached();
-    // STUB: Texture::UnSetUnCached -- auto stub from binary missing-symbol set
+    // STUB: Texture::UnSetUnCached -- binary missing-symbol set
     void UnSetUnCached();
-    // ---- end AUTO-STUB MERGE ----
+
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    // Port specific: GL texture handle and dimensions — not in binary Mortar::Texture
+    // base; binary stores these in the concrete subclass (Texture2DFromFile_Bada).
+    // Placed at tail so binary field offsets (none) are unaffected.
+    GLuint      m_TexId;   // GL texture handle (0 = unloaded)
+    int         m_Width;   // texture width in pixels
+    int         m_Height;  // texture height in pixels
+    std::string m_Path;    // file path (for debugging/reload)
+
+    // Tracker for the last-bound texture id (port-side; binary doesn't track
+    // this). Renderer::DrawQuad reads it to detect untextured draws.
+    static GLuint s_LastBoundTexId;
+#endif
 };
 
 } // namespace Mortar
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(Mortar::Texture) == 12, "Mortar::Texture size mismatch");
+#endif
 
 #endif

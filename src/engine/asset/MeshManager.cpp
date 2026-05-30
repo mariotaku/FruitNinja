@@ -30,7 +30,7 @@ void MeshManager::ReleaseAll() {
 
 Mortar::SmartPtr<Model> MeshManager::Load(const char* path) {
     for (int i = 0; i < m_Models.size(); i++) {
-        if (m_Models[i].IsValid() && m_Models[i]->m_Name == path) {
+        if (m_Models[i].IsValid() && m_Models[i]->m_name == path) {
             return m_Models[i];
         }
     }
@@ -252,7 +252,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     }
 
     Model* model = new Model();
-    model->m_Name = path;
+    model->m_name = AsciiString(path);
 
     loader.ResetReadPos();
 
@@ -261,7 +261,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
     AsciiString modelName = loader.ReadString();
 
     // Read<Skeleton> (0x001a8468): parse skeleton and bind to all meshes via UpdateBoneLinks
-    loader.ReadSkeleton(model->m_Skeleton);
+    loader.ReadSkeleton(model->m_skeleton);
 
     // meshCount: number of Mesh sub-resources that follow
     if (loader.m_ReadPos + 4 > loader.DataSize()) {
@@ -293,10 +293,10 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
             for (uint32_t i = 0; i < boneCount; i++) {
                 if (loader.m_ReadPos + 2 > loader.DataSize()) break;
                 AsciiString boneName = loader.ReadString();
-                bones[i].m_Name = boneName.CStr();
+                bones[i].m_BoneName = boneName;
                 if (loader.m_ReadPos + 24 <= loader.DataSize()) {
-                    loader.ReadBytes(&bones[i].m_BoundsMin, sizeof(Vec3));
-                    loader.ReadBytes(&bones[i].m_BoundsMax, sizeof(Vec3));
+                    loader.ReadBytes(&bones[i].m_Bounds.min, sizeof(Vec3));
+                    loader.ReadBytes(&bones[i].m_Bounds.max, sizeof(Vec3));
                 }
             }
             mesh->SetBones(bones.data(), (unsigned long)boneCount);
@@ -405,7 +405,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
         model->AddNode(Mortar::SmartPtr<Mesh>(mesh));
     }
 
-    if (model->m_Meshes.empty()) {
+    if (model->m_nodes.empty()) {
         LOG_ERROR("MeshManager", "'%s': no meshes loaded", path);
         delete model;
         return Mortar::SmartPtr<Model>();
@@ -413,7 +413,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 
     // Matches Model::SwapSkeleton → UpdateBoneLinks (0x001aaba8, 0x00193010):
     // Skeleton was parsed above; now that all meshes are loaded, bind it to each mesh.
-    if (model->m_Skeleton.IsValid()) {
+    if (model->m_skeleton.IsValid()) {
         model->UpdateBoneLinks();
     }
 
