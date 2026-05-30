@@ -164,4 +164,11 @@ public:
 
 }  // namespace Mortar
 
+#ifdef __bada__
+static_assert(sizeof(Mortar::VertexElementBase) == 8,
+              "VertexElementBase must be 8 bytes (binary: 8-byte stride in Pass ctor @0x001a33e4)");
+static_assert(sizeof(Mortar::Effect_Bada::Pass) == 40,
+              "Effect_Bada::Pass must be 40 bytes (binary: 5x VertexElementBase @0x001a33e4)");
+#endif
+
 #endif  // MORTAR_ASSET_EFFECT_H

@@ -1,6 +1,5 @@
 #include "Coin.h"
 #include "ActorManager.h"
-#include "game/FruitSaveData.h"
 #include "Game.h"
 #include "audio/GameSound.h"
 #include "math/Matrix44.h"
@@ -61,13 +60,14 @@ static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 // ---------------------------------------------------------------------------
 // CoinArrived — static helper @ 0x0017320C.
 // Free function in binary; kept as static member of Coin.cpp for greppability.
-// Calls FruitSaveData::AddCoins with the coin's value.
+// Binary AddCoins @ 0x0010a3bc: adds delta to game_work.m_CoinsBalance;
+// if delta > 0 also adds to m_CoinsTotalEarned. Coin balance lives in
+// game_work (+0x20/+0x24), not FruitSaveData.
 // ---------------------------------------------------------------------------
 static void CoinArrived(Coin* coin) {
-    Game* game = Game::GetInstance();
-    if (game && game_work.m_SaveData) {
-        game_work.m_SaveData->AddCoins(coin->m_CoinValue);
-    }
+    int delta = coin->m_CoinValue;
+    game_work.m_CoinsBalance += delta;
+    if (delta > 0) game_work.m_CoinsTotalEarned += delta;
 }
 
 // ---------------------------------------------------------------------------

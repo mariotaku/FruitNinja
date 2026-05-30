@@ -114,6 +114,13 @@ struct EffectImage : public Mortar::ReloadableTexture {
     // in base ReloadableTexture::m_pName char*; port base has char m_Name[4]
     // which is too short, so we store the full name here).
     char         m_TexName[64];
+    // Port specific: exit velocity from "transitionMoveOut" XML attr.
+    // Binary parses this into the same region as m_Vel (entry velocity field at +0x1c)
+    // via a separate code path; port needs a distinct field since we can't alias.
+    Vec3         m_VelOut;
+    // Port specific: hash of "transition" XML attr (e.g. "fade", "slide").
+    // Binary passes the raw string pointer; port hashes at parse time.
+    uint32_t     m_TransitionHash;
 #endif
 
     EffectImage()
@@ -134,6 +141,8 @@ struct EffectImage : public Mortar::ReloadableTexture {
     {
 #ifndef __bada__
         m_TexName[0] = '\0';
+        m_VelOut = Vec3(0,0,0);
+        m_TransitionHash = 0;
 #endif
     }
 

@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
         DojoScreen* dojo = new DojoScreen(h.game);
         dojo->m_Active = 0;  // dojo is just AboutScreen's parent for back-nav
         game_work.mHud->AddControl(dojo);
-        AboutScreen* s = new AboutScreen(h.game, dojo);
+        AboutScreen* s = new AboutScreen(dojo);
         s->Init();
         game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "shop") == 0) {

@@ -173,13 +173,8 @@ void PowerUpShop::Init() {
     SetBuyButtonState();
 
     // Binary: OS_SPrintf(m_BuyText, 128, "YOU HAVE %i COINS TO USE!", player.m_Coins)
-    // player.m_Coins lives at game+pSaveData+0x20.
-    Game* game = Game::GetInstance();
-    int coins = 0;
-    if (game && game_work.m_SaveData) {
-        coins = game_work.m_SaveData->m_Coins;
-    }
-    snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
+    // Coin balance lives in game_work.m_CoinsBalance (+0x20), not FruitSaveData.
+    snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", game_work.m_CoinsBalance);
 }
 
 // ============================================================
@@ -285,10 +280,8 @@ void PowerUpShop::Draw(const Vec3& hudScale, int layerMask) {
         PurchaseInfo* pi = p->m_pPurchaseInfo;
 
         // Determine affordability for label colour and inactive texture selection.
-        int coins = 0;
-        if (game_work.m_SaveData) {
-            coins = game_work.m_SaveData->m_Coins;
-        }
+        // Coin balance lives in game_work.m_CoinsBalance (+0x20), not FruitSaveData.
+        int coins = game_work.m_CoinsBalance;
         bool affordable = (pi->m_Cost <= coins && m_PurchasedCount < 3
                            && game_work.gameMode < 3);
 
@@ -572,11 +565,8 @@ void PowerUpShop::SetBuyButtonState() {
 
     if (p->m_bCloned == 0) {
         // Not yet active — check affordability and purchase cap.
-        Game* game = Game::GetInstance();
-        int coins = 0;
-        if (game && game_work.m_SaveData) {
-            coins = game_work.m_SaveData->m_Coins;
-        }
+        // Coin balance lives in game_work.m_CoinsBalance (+0x20), not FruitSaveData.
+        int coins = game_work.m_CoinsBalance;
         int cost = p->m_pPurchaseInfo ? p->m_pPurchaseInfo->m_Cost : 0;
         if (cost <= coins && m_PurchasedCount < 3) {
             m_BuyButtonState = 0;  // enabled
@@ -625,9 +615,8 @@ void PowerUpShop::ButtonSliced() {
         m_PurchasedCount += 1;
     }
 
-    // Binary: direct game_work.m_SaveData->m_Coins read; no Game::GetInstance() call.
-    int coins = game_work.m_SaveData ? game_work.m_SaveData->m_Coins : 0;
-    snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", coins);
+    // Coin balance lives in game_work.m_CoinsBalance (+0x20), not FruitSaveData.
+    snprintf(m_BuyText, sizeof(m_BuyText), "YOU HAVE %i COINS TO USE!", game_work.m_CoinsBalance);
 }
 
 // ============================================================
