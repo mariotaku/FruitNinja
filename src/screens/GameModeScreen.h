@@ -43,6 +43,7 @@
 #include "BaseScreen.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
+#include <cstdint>
 
 class MenuButton;
 struct Game;
@@ -76,37 +77,55 @@ public:
 
 private:
     // Binary struct layout (0xD0 = 208 bytes total):
-    //   +0x8c  m_TransitionAlpha  (inherited BaseScreen)
-    //   +0x90  m_State            (inherited BaseScreen)
+    //   BaseScreen base 0x00..0x93 (148 bytes)
+    //   +0x94..+0x9F  12-byte gap (BaseScreen tail / alignment; Ghidra-confirmed)
     //   +0xa0  m_BtnBack          (back_icon.tex + bomb fruit, QuitCallback)
     //   +0xa4  m_ButtonDelay      (-1 = inactive, else decrements by dt)
-    //   +0xa8  m_Unknown_A8       (set to -1 in state 0 transition)
-    //   +0xb4  m_SecondaryAlpha   (starts -2.5, lerped toward 0 / 1)
-    //   +0xb8  m_IsFromPause
-    //   +0xc4  m_LayerFlagsAlt    (0x80)
+    //   +0xa8  field_0xa8         (set to -1 in state 0 transition)
+    //   +0xac  m_pClassicButton   (classic.tex, watermelon)
+    //   +0xb0  m_pZenButton       (mode_2.tex, apple_red)
+    //   +0xb4  m_SecondaryAlpha   (starts -2.5, lerped toward 1)
+    //   +0xb8  m_bIsFromPause     (ctor bool param)
+    //   +0xb9  field_0xb9         (= 0)
+    //   +0xba  m_bChallenge       (= 0; set by SetIsChallenge)
+    //   +0xbb..+0xbb  3-byte pad
+    //   +0xbc  m_ChallengeId      (= 0)
+    //   +0xc0  m_pChallengeData   (= NULL)
+    //   +0xc4  m_LayerFlagsAlt    (0x80; int32)
     //   +0xc8  m_FrameTimer       (drives DrawConnectTexture animation)
-    //   Binary 4-button array: back / classic / zen / arcade (no online MP)
+    //   +0xcc  m_pArcadeButton    (arcade_mode.tex, banana)
 
-    MenuButton* m_pBackButton;       // +0xa0  m_BtnBack  (back_icon.tex, bomb, QuitCallback)
-    MenuButton* m_pClassicButton;    // classic.tex, watermelon, ClassicModeCallback
-    MenuButton* m_pZenButton;        // mode_2.tex,  apple_red, ZenModeCallback
-    MenuButton* m_pArcadeButton;     // arcade_mode.tex, banana, ArcadeModeCallback
-    MenuButton* m_pOnlineMpButton;   // null (defunct online MP slot)
+    // +0x94: 12-byte gap between BaseScreen tail and first own member.
+    uint8_t _pad_0x94[12];
 
-    float m_ButtonDelay;             // +0xa4
-    float m_SecondaryAlpha;          // +0xb4 (starts -2.5, lerped toward 1)
-    float m_FrameTimer;              // +0xc8
-    bool  m_bIsFromPause;            // +0xb8
-    bool  m_bButtonsCreated;
+    MenuButton* m_pBackButton;       // +0xa0: m_BtnBack (back_icon.tex, bomb, QuitCallback)
+    float m_ButtonDelay;             // +0xa4: -1 = inactive, else decrements by dt
+    float field_0xa8;                // +0xa8: set to -1 in state 0 transition
+    MenuButton* m_pClassicButton;    // +0xac: classic.tex, watermelon, ClassicModeCallback
+    MenuButton* m_pZenButton;        // +0xb0: mode_2.tex, apple_red, ZenModeCallback
+    float m_SecondaryAlpha;          // +0xb4: starts -2.5, lerped toward 1
+    bool  m_bIsFromPause;            // +0xb8: ctor param
+    bool  field_0xb9;                // +0xb9: = 0
+    uint8_t m_bChallenge;            // +0xba: set by SetIsChallenge
+    uint8_t _pad_0xbb[1];            // +0xbb: 1-byte alignment pad to bring m_ChallengeId to 0xbc
+    int     m_ChallengeId;           // +0xbc: challenge invite id
+    void*   m_pChallengeData;        // +0xc0: challenge data ptr
+    int     m_LayerFlagsAlt;         // +0xc4: = 0x80
+    float   m_FrameTimer;            // +0xc8: drives DrawConnectTexture animation
+    MenuButton* m_pArcadeButton;     // +0xcc: arcade_mode.tex, banana, ArcadeModeCallback
 
-    // Challenge-invite fields (Binary @ 0x0013df84 SetIsChallenge)
-    uint8_t m_bChallenge;            // +0xb9
-    int     m_ChallengeId;           // +0xbc
-    void*   m_pChallengeData;        // +0xc0
-
-    // Port specific: binary accesses Game via GOT; port stores a reference here,
-    // declared after all binary-faithful fields so it does not displace them.
+    // Port-specific trailing fields (not in the 208-byte binary struct).
+    // Excluded on the __bada__ production build so sizeof stays at 0xd0.
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    // Binary accesses Game via GOT; port stores a reference here.
     Game& game;
+    // Button-created latch (port-only guard; binary doesn't need it due to state gating).
+    bool m_bButtonsCreated;
+    // One-shot latch for SetupLevel call (port-only idempotency guard).
+    bool m_bSetupLevelFired;
+    // Defunct online-MP button slot — kept so DeletedMenuButton can null it cleanly.
+    MenuButton* m_pOnlineMpButton;
+#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 
     // Static textures (binary: module-level globals, loaded in LoadContent)
     static Mortar::SmartPtr<Mortar::Texture> s_TexModeSensei;   // mode_sensei.tex: panel + logo
@@ -165,9 +184,26 @@ private:
     // Defunct: online-MP button lifecycle -- no-op stub; binary @ 0x0013ecdc
     void UpdateOnlineMultiplayerButton(float dt);
 
-    // Port-only one-shot latch: binary vtable[18] is idempotent but
-    // WaveManager::Reset(false) is destructive — guard against per-frame calls.
-    bool m_bSetupLevelFired;
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(offsetof(GameModeScreen, _pad_0x94)       == 0x94, "_pad_0x94 offset");
+static_assert(offsetof(GameModeScreen, m_pBackButton)   == 0xa0, "m_pBackButton offset");
+static_assert(offsetof(GameModeScreen, m_ButtonDelay)   == 0xa4, "m_ButtonDelay offset");
+static_assert(offsetof(GameModeScreen, field_0xa8)      == 0xa8, "field_0xa8 offset");
+static_assert(offsetof(GameModeScreen, m_pClassicButton)== 0xac, "m_pClassicButton offset");
+static_assert(offsetof(GameModeScreen, m_pZenButton)    == 0xb0, "m_pZenButton offset");
+static_assert(offsetof(GameModeScreen, m_SecondaryAlpha)== 0xb4, "m_SecondaryAlpha offset");
+static_assert(offsetof(GameModeScreen, m_bIsFromPause)  == 0xb8, "m_bIsFromPause offset");
+static_assert(offsetof(GameModeScreen, field_0xb9)      == 0xb9, "field_0xb9 offset");
+static_assert(offsetof(GameModeScreen, m_bChallenge)    == 0xba, "m_bChallenge offset");
+static_assert(offsetof(GameModeScreen, m_ChallengeId)   == 0xbc, "m_ChallengeId offset");
+static_assert(offsetof(GameModeScreen, m_pChallengeData)== 0xc0, "m_pChallengeData offset");
+static_assert(offsetof(GameModeScreen, m_LayerFlagsAlt) == 0xc4, "m_LayerFlagsAlt offset");
+static_assert(offsetof(GameModeScreen, m_FrameTimer)    == 0xc8, "m_FrameTimer offset");
+static_assert(offsetof(GameModeScreen, m_pArcadeButton) == 0xcc, "m_pArcadeButton offset");
+static_assert(sizeof(GameModeScreen)                    == 0xd0, "GameModeScreen size must match binary");
+#endif
 
 #endif
