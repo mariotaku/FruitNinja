@@ -27,6 +27,9 @@ public:
         return &s_instance;
     }
 
+    // Polymorphic root: vptr @ +0x00; binary vtable @ 0x001eb210.
+    virtual ~NetworkManager() {}
+
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d668
     int LaunchDashboard(int) { return 0; }
 
@@ -181,12 +184,18 @@ public:
 private:
     // ctor @ 0x0018e05c
     NetworkManager() {}
-    ~NetworkManager() {}
 
-    // Pad to approximate binary size (668 bytes) for informational reference.
+    // Pad to binary size 668 bytes on ARM32/Bada.
+    // vptr occupies 4 bytes at +0x00; remaining 664 bytes cover the 9 delegates,
+    // std::map, 3 BUTTON_INFO sub-objects, and 4 trailing flag bytes.
     // Not accessed by port code; online services are not ported.
-    uint8_t m_pad[668];
+    uint8_t m_pad[664];
 };
+
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(NetworkManager) == 668,
+    "Mortar::NetworkManager must be 668 bytes on ARM32/Bada");
+#endif
 
 // Defunct: online-services -- returns 0 (OpenFeint provider);
 // binary queries a GOT flag to determine active provider (OF=0, GC=1).
