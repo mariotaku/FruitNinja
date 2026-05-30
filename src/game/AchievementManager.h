@@ -120,18 +120,18 @@ private:
     int  QueAchievement(AchievementInfo* info,
                         std::map<uint32_t, AchievementInfo*>::iterator& it);
 
-    std::map<uint32_t, AchievementInfo*> m_All;         // 0x000 (owns)
-    std::map<uint32_t, AchievementInfo*> m_ByType[11];  // 0x018..0x108 (non-owning)
-
-    // Textures loaded in the preamble of LoadAchievementInfo (binary @ 0x00109188).
-    // Slot DAT_001096a8: achievment_banner.tex (sic — typo matches actual asset file).
-    Mortar::SmartPtr<Mortar::Texture> m_AchievementBannerTex;
-    // TODO: DAT_001096ac — identity of second preamble texture not yet RE'd.
-    Mortar::SmartPtr<Mortar::Texture> m_BannerExtra1;
-    // TODO: DAT_001096b0 — identity of third preamble texture not yet RE'd.
-    Mortar::SmartPtr<Mortar::Texture> m_BannerExtra2;
+    // Binary layout: 12 std::map<uint32_t,AchievementInfo*> (each 24 bytes, ARM32 Sourcery).
+    // Ctor @ 0x00108930 constructs m_All at +0x000, then 11 m_ByType at +0x018..+0x108.
+    // Dtor @ 0x00109028 destroys them from +0x120 down to +0x000 (12 total, stride 0x18).
+    // Preamble textures (DAT_001096a8/ac/b0) are module-level statics in BSS, NOT struct members.
+    std::map<uint32_t, AchievementInfo*> m_All;         // +0x000 (owns)
+    std::map<uint32_t, AchievementInfo*> m_ByType[11];  // +0x018..+0x108 (non-owning views)
 };
-// Note: sizeof(AchievementManager) == 0x120 on ARM32 binary.
-// x64 port differs due to std::map size differences; assert omitted.
+// sizeof(AchievementManager) == 0x120 (288 bytes) on ARM32 binary:
+// 12 * sizeof(std::map) = 12 * 24 = 288.
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+#include <cstddef>
+static_assert(sizeof(AchievementManager) == 0x120, "AchievementManager size mismatch");
+#endif
 
 #endif // FN_ACHIEVEMENT_MANAGER_H
