@@ -65,6 +65,7 @@ add_library(mortar_engine STATIC
     collision/ColAABB.cpp
     particle/PSPParticleManager.cpp
     # Phase 8 — Font
+    render/Utf8StringProxy.cpp
     render/Utf8StringIterator.cpp
     render/Font.cpp
     render/BakedString.cpp

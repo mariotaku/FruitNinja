@@ -1,95 +1,65 @@
 #include "render/BakedString.h"
-#include "render/MatrixManager.h"
 
 namespace Mortar {
 
+// Binary @ 0x0019789c (default ctor — zero-init)
 BakedString::BakedString()
-    : m_Width(0)
-    , m_Height(0)
+    : m_unknown0(0)
+    , m_pPageTextures(0)
+    , m_PageCount(0)
+    , m_pPageVertices(0)
+    , m_pPageQuadCounts(0)
+    , m_Width(0.0f)
+    , m_Height(0.0f)
 {
 }
 
+// Binary @ 0x00197564
 BakedString::~BakedString() {
     Clear();
 }
 
-void BakedString::Bake(Font* font, float scale, float maxWidth, float z,
-                       const char* text, const Vec3& pos,
-                       const Colour& colour, int alignment) {
+// Binary @ 0x0019789c — full Bake not yet ported (uses internal glyph-quad capture path)
+// TODO: 0x0019789c — port the BakedString(Font*, Utf8StringIterator, Colour) ctor body:
+//   allocates m_pPageTextures heap block, per-page QUADCUSTOMVERTEX arrays, and
+//   m_pPageQuadCounts; sets m_Width/m_Height from Font metrics.
+void BakedString::Bake(Font* /*font*/, float /*scale*/, float /*maxWidth*/, float /*z*/,
+                       const char* /*text*/, const Vec3& /*pos*/,
+                       const Colour& /*colour*/, int /*alignment*/) {
     Clear();
-    if (!font || !text || !*text) return;
-
-    // Measure dimensions
-    m_Width = font->MeasureWidth(scale, text);
-    m_Height = font->GetLineHeight(scale);
-
-    // Use Font's page textures via GetPage accessor
-    m_Pages.resize(font->m_PageCount);
-    for (int i = 0; i < font->m_PageCount; i++) {
-        Font::Page* page = font->GetPage(i);
-        if (page) {
-            m_Pages[i].texture = page->texture;
-        }
-    }
-
-    // TODO: Bake vertices by capturing Font::DrawString output
-    // For now, BakedString::Draw falls back to Font::DrawString
-    // A full implementation would intercept the glyph quad generation
-    (void)maxWidth; (void)z; (void)pos; (void)colour; (void)alignment;
 }
 
-// Matches BakedString::Draw (0x0019738c)
+// Binary @ 0x0019738c
 void BakedString::Draw() {
-    for (size_t pg = 0; pg < m_Pages.size(); pg++) {
-        PageData& page = m_Pages[pg];
-        if (page.vertices.empty()) continue;
-
-        if (page.texture.IsValid()) {
-            page.texture->Set();
-        }
-
-        MatrixManager& mm = MatrixManager::GetInstance();
-        (void)mm; // MVP is already set by caller
-
-        int stride = sizeof(QUADCUSTOMVERTEX);
-        QUADCUSTOMVERTEX* verts = page.vertices.data();
-        int vertCount = (int)page.vertices.size();
-
-        glEnable(GL_TEXTURE_2D);
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glVertexPointer(3, GL_FLOAT, stride, &verts->x);
-        glClientActiveTexture(GL_TEXTURE0);
-        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-        glTexCoordPointer(2, GL_FLOAT, stride, &verts->u);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
-        glDisableClientState(GL_NORMAL_ARRAY);
-        glDrawArrays(GL_TRIANGLES, 0, vertCount);
-        glDisableClientState(GL_VERTEX_ARRAY);
-        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-        glDisableClientState(GL_COLOR_ARRAY);
-
-        if (page.texture.IsValid()) {
-            page.texture->UnSet();
-        }
-    }
+    // TODO: 0x0019738c — iterate m_PageCount pages; bind texture from m_pPageTextures[i];
+    //   draw m_pPageQuadCounts[i] quads from m_pPageVertices[i] using the GL pipeline.
 }
 
 void BakedString::Clear() {
-    m_Pages.clear();
-    m_Width = 0;
-    m_Height = 0;
+    if (m_pPageVertices) {
+        for (uint32_t i = 0; i < m_PageCount; i++) {
+            delete[] m_pPageVertices[i];
+        }
+        delete[] m_pPageVertices;
+        m_pPageVertices = 0;
+    }
+    if (m_pPageQuadCounts) {
+        delete[] m_pPageQuadCounts;
+        m_pPageQuadCounts = 0;
+    }
+    // m_pPageTextures block is freed via SmartPtr refcount logic in the binary dtor;
+    // port uses plain heap allocation convention for now.
+    // TODO: 0x00197564 — dtor frees m_pPageTextures as (ptr-2) after destroying N SmartPtrs
+    //   using the embedded count at ptr[-1]. Implement proper ref-counted page-texture block.
+    m_pPageTextures = 0;
+    m_PageCount = 0;
+    m_Width = 0.0f;
+    m_Height = 0.0f;
 }
 
-} // namespace Mortar
-
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-namespace Mortar {
-// STUB: BakedString::AddDropShadow -- auto stub
+// STUB: BakedString::AddDropShadow -- auto stub from binary missing-symbol set
 void BakedString::AddDropShadow() {}
-// STUB: BakedString::LayoutToCircle -- auto stub
+// STUB: BakedString::LayoutToCircle -- auto stub from binary missing-symbol set
 void BakedString::LayoutToCircle(float) {}
-}  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----
+
+} // namespace Mortar
