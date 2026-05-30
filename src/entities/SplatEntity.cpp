@@ -407,6 +407,11 @@ void SplatEntity::UpdateSplat(float dt) {
             // Stick to the background plane. Binary at 0x0017f968 copies a
             // static global vec3 (DAT_0017fad0) into m_Vel; the pattern
             // strongly indicates (0,0,0). Port matches.
+            // Splats land at z = -50 (UP_LAND_Z). Farther from camera than fruits
+            // (spawn z = (i+1)*32, positive) under ortho near=2000/far=-6000 (larger z
+            // = nearer). Drawn after fruits but with depth-TEST ON / depth-WRITE OFF
+            // (binary GameDraw @ 0x0016b888), so depth test rejects splats behind fruits.
+            // Do NOT nudge z empirically -- keep -50 and the depth-test state.
             m_Pos.z = UP_LAND_Z;
             m_Vel   = Vec3(0.0f, 0.0f, 0.0f);
 
