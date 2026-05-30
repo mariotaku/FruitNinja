@@ -9,12 +9,17 @@
 class ColLine;
 class ColAABB;
 
-// Binary vtable @ 0x001eb5f8. sizeof = 0x18 (24B): base 0x14 + radius float at +0x14.
+// Binary vtable @ 0x001eb5f8. sizeof = 0x18 (24B):
+//   Col base 0x00..0x14 (20B): vptr@0, m_PrimaryPoint (center) @+0x04..+0x0f, m_CollideFlag @+0x10.
+//   radius float @ +0x14.
+// center is NOT a separate member -- it aliases Col::m_PrimaryPoint @+0x04.
 class ColSphere : public Col {
 public:
-    // center aliases m_PrimaryPoint (offset +0x04 from Col base, i.e. +0x08 from ColSphere*)
-    Vec3&  center; // reference alias for m_PrimaryPoint
     float  radius; // +0x14
+
+    // center accessor -- returns the Col-base m_PrimaryPoint (binary reuse; no extra storage)
+    Vec3& center()             { return m_PrimaryPoint; }
+    const Vec3& center() const { return m_PrimaryPoint; }
 
     // Binary @ 0x0019fc20 -- default ctor
     ColSphere();
@@ -57,5 +62,9 @@ public:
     void ColSphereSphere(ColSphere*, ColSphere*, Vec3*);
     // ---- end AUTO-STUB MERGE ----
 };
+
+#ifdef __bada__
+static_assert(sizeof(ColSphere) == 24, "ColSphere binary size mismatch");
+#endif
 
 #endif
