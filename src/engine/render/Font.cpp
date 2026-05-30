@@ -35,12 +35,11 @@ Font::Font()
     , m_PageCount(0)
     , m_Kernings(nullptr)
     , m_KerningCount(0)
-    , _pad_0x418(0)
+    , m_RefCount(0)
     , m_ScaleW(256)
     , m_ScaleH(256)
     , m_LineHeight(1.0f)
     , m_BaseNorm(0.0f)
-    , m_PageVerts(nullptr)
 {
     memset(m_GlyphLookup, 0, sizeof(m_GlyphLookup));
 }
@@ -61,8 +60,7 @@ Font::~Font() {
     delete[] m_Kernings;
     m_Kernings = nullptr;
 
-    delete[] m_PageVerts;
-    m_PageVerts = nullptr;
+    m_PageVerts.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -315,12 +313,13 @@ int Font::Load(const char* path) {
         m_Pages[i].texture = TextureManager::GetInstance().Load(logicalPath);
     }
 
-    // Pre-allocate per-page vertex scratch: PAGE_VERT_CAPACITY (0x600)
-    // verts per page in one flat heap allocation.
-    delete[] m_PageVerts;
-    m_PageVerts = (m_PageCount > 0)
-        ? new QUADCUSTOMVERTEX[(size_t)m_PageCount * PAGE_VERT_CAPACITY]()
-        : nullptr;
+    // Pre-allocate per-page vertex scratch: PAGE_VERT_CAPACITY (0x600) verts per page.
+    // Binary stores std::vector<std::vector<QUADCUSTOMVERTEX>> at +0x42c.
+    m_PageVerts.clear();
+    m_PageVerts.resize((size_t)m_PageCount);
+    for (int i = 0; i < m_PageCount; i++) {
+        m_PageVerts[i].resize(PAGE_VERT_CAPACITY);
+    }
 
     return 1;
 }
@@ -502,11 +501,15 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     // Per-page glyph vertex counts.
     int* perPageCount = new int[m_PageCount]();
 
-    // m_PageVerts is a flat heap array of size m_PageCount * PAGE_VERT_CAPACITY,
-    // populated by Font::Load. Lazy-allocate here for unit-test paths that
-    // never called Load (defaults to nullptr in that case).
-    if (!m_PageVerts && m_PageCount > 0) {
-        m_PageVerts = new QUADCUSTOMVERTEX[(size_t)m_PageCount * PAGE_VERT_CAPACITY]();
+    // m_PageVerts is a vector<vector<QUADCUSTOMVERTEX>> populated by Font::Load.
+    // Lazy-resize for unit-test paths that never called Load.
+    if ((int)m_PageVerts.size() < m_PageCount) {
+        m_PageVerts.resize((size_t)m_PageCount);
+        for (int pg = 0; pg < m_PageCount; pg++) {
+            if ((int)m_PageVerts[pg].size() < PAGE_VERT_CAPACITY) {
+                m_PageVerts[pg].resize(PAGE_VERT_CAPACITY);
+            }
+        }
     }
     for (int pg = 0; pg < m_PageCount; pg++) {
         perPageCount[pg] = 0;
@@ -736,9 +739,8 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             v[5] = v[3];                                                // degenerate
 
             const int base = perPageCount[pageIdx] * 6;
-            if (base + 6 <= PAGE_VERT_CAPACITY) {
-                QUADCUSTOMVERTEX* dst =
-                    &m_PageVerts[(size_t)pageIdx * PAGE_VERT_CAPACITY + base];
+            if (base + 6 <= PAGE_VERT_CAPACITY && pageIdx < (int)m_PageVerts.size()) {
+                QUADCUSTOMVERTEX* dst = &m_PageVerts[pageIdx][base];
                 // Inter-glyph connector overwrite: prev glyph's last slot
                 // becomes this glyph's LB so the strip transition is fully
                 // degenerate. Binary @ 0x001995ee-0x00199648.
@@ -806,9 +808,8 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     // Apply the affine to every emitted vertex's (x, y). Z stays 0 since
     // glyphs are flat and the binary never writes Z.
     for (int pg = 0; pg < m_PageCount; pg++) {
-        if (perPageCount[pg] == 0) continue;
-        QUADCUSTOMVERTEX* page_verts =
-            &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY];
+        if (perPageCount[pg] == 0 || pg >= (int)m_PageVerts.size()) continue;
+        QUADCUSTOMVERTEX* page_verts = &m_PageVerts[pg][0];
         const int n = perPageCount[pg] * 6;
         for (int i = 0; i < n; i++) {
             const float lx = page_verts[i].x;
@@ -835,7 +836,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
             if (!page || !page->texture.IsValid()) continue;
             page->texture->Set();
             renderer->DrawTriStrip(
-                &m_PageVerts[(size_t)pg * PAGE_VERT_CAPACITY],
+                &m_PageVerts[pg][0],
                 perPageCount[pg] * 6);
             page->texture->UnSet();
         }
