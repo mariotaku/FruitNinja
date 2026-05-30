@@ -16,11 +16,12 @@
 // Non-polymorphic (no vtable). Two ctor addresses: 0x0019789c / 0x00197d64 (same body).
 // Draw @ 0x0019738c. Dtor @ 0x00197564.
 
+struct QUADCUSTOMVERTEX;
+
 namespace Mortar {
 
 class Font;
 class Texture2D;
-struct QUADCUSTOMVERTEX;
 class Vec3;
 class Colour;
 class Utf8StringIterator;

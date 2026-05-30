@@ -350,9 +350,9 @@ void ItemManager::SaveItemInfo() {
     // Coin balance lives in game_work (+0x20/+0x24/+0x28), not FruitSaveData.
     tinyxml2::XMLElement* root = doc.NewElement("item_save_file");  // 0x1b9e4d
     root->SetAttribute("version", "1.0");  // 0x1b9e5c / 0x1b9e64
-    root->SetAttribute("coins",           game_work.m_CoinsBalance);
-    root->SetAttribute("coinsTotal",      game_work.m_CoinsTotalEarned);
-    root->SetAttribute("levelStartCoins", game_work.m_CoinsAtGameStart);
+    root->SetAttribute("coins",           (int)game_work.m_CoinsBalance);
+    root->SetAttribute("coinsTotal",      (int)game_work.m_CoinsTotalEarned);
+    root->SetAttribute("levelStartCoins", (int)game_work.m_CoinsAtGameStart);
 
     // <boughtItems> section: all items with m_Cost < 0 (purchased)
     tinyxml2::XMLElement* bought = doc.NewElement("boughtItems");  // 0x1b9e89
