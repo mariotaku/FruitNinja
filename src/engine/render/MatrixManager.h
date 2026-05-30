@@ -26,6 +26,8 @@ public:
     //   m_WorldVersionUploaded@ +0x212C (8492)  — init 0
     //   m_TextureVersionUploaded @ +0x2130 (8496) — init 0
     // Binary total = 4 + 4*2120 + 4*4 = 8500. static_assert under __bada__.
+    // Binary-faithful field; unused by the port's GLES2 upload path (which
+    // tracks projection staleness via m_ProjVersionUploaded below instead).
     int m_ViewVersion;            // +0x2124
     int m_ViewVersionUploaded;    // +0x2128
     int m_WorldVersionUploaded;   // +0x212C

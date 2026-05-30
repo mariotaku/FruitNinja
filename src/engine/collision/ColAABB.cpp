@@ -2,11 +2,15 @@
 #include "collision/ColAABB.h"
 #include "collision/ColSphere.h"
 #include "collision/ColLine.h"
+#include <cstring>
 
-ColAABB::ColAABB() : Col(), m_Max() {}
+ColAABB::ColAABB() : Col(), m_Max() {
+    memset(m_Corners, 0, sizeof(m_Corners));
+}
 
 ColAABB::ColAABB(Vec3 min, Vec3 max) : Col(), m_Max(max) {
     m_PrimaryPoint = min;
+    memset(m_Corners, 0, sizeof(m_Corners));
 }
 
 // Binary slot 3 -- double-dispatch by other->GetType(); normal-sign flip on SPHERE/LINE
