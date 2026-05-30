@@ -158,21 +158,24 @@ void GameModeScreen::UnLoadContent() {
 // m_SecondaryAlpha=-2.5, online-MP slot=null, m_FrameTimer=0.
 // ===================================================================
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
-    : m_pBackButton(nullptr)
-    , m_pClassicButton(nullptr)
-    , m_pZenButton(nullptr)
-    , m_pArcadeButton(nullptr)
-    , m_pOnlineMpButton(nullptr)    // defunct online-MP slot
-    , m_ButtonDelay(-1.0f)
-    , m_SecondaryAlpha(-2.5f)       // DAT_0013e5a0
-    , m_FrameTimer(0.0f)            // DAT_0013e59c
-    , m_bIsFromPause(isFromPause)
-    , m_bButtonsCreated(false)
-    , m_bChallenge(0)
-    , m_ChallengeId(0)
-    , m_pChallengeData(nullptr)
+    : m_pBackButton(nullptr)        // +0xa0
+    , m_ButtonDelay(-1.0f)          // +0xa4 (binary init)
+    , field_0xa8(-1.0f)             // +0xa8 (binary: set to -1 in state-0 transition)
+    , m_pClassicButton(nullptr)     // +0xac
+    , m_pZenButton(nullptr)         // +0xb0
+    , m_SecondaryAlpha(-2.5f)       // +0xb4 DAT_0013e5a0
+    , m_bIsFromPause(isFromPause)   // +0xb8
+    , field_0xb9(false)             // +0xb9 = 0
+    , m_bChallenge(0)               // +0xba
+    , m_ChallengeId(0)              // +0xbc
+    , m_pChallengeData(nullptr)     // +0xc0
+    , m_LayerFlagsAlt(0x80)         // +0xc4 DAT matches ctor write movs r2,#1; adds r2,#0x7f
+    , m_FrameTimer(0.0f)            // +0xc8 DAT_0013e59c
+    , m_pArcadeButton(nullptr)      // +0xcc
     , game(g)
+    , m_bButtonsCreated(false)
     , m_bSetupLevelFired(false)
+    , m_pOnlineMpButton(nullptr)
 {
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;  // binary sets to 1 in ctor; raised to HUD_LAYER_POST_ACTOR by subclass Draw

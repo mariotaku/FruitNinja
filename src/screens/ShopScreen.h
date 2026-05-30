@@ -79,6 +79,7 @@
 #include "hud/HUDControl3d.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
+#include <cstdint>
 
 class MenuButton;
 class DojoScreen;
@@ -163,12 +164,20 @@ private:
     // +0xAC: scroll position / animation offset (from item count + 0.5)
     float m_ScrollOffset;
 
+    // +0xB0: binary field at this offset (4 bytes, zero-init in ctor).
+    // Not named in Ghidra struct; present as a 4-byte gap between m_ScrollOffset
+    // and field_0xb4 in the binary record. Exact semantic not yet RE'd.
+    uint32_t field_0xb0;
+
     // +0xB4: sin-wave animation frame counter (0..0x3FFC range)
     int m_AnimFrame;
 
     // +0xB8: state machine index
     int m_State;
 
+    // Port-specific trailing fields (not in the 188-byte binary struct).
+    // Excluded on the __bada__ production build so sizeof stays at 0xbc.
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     // Port specific: binary accesses Game via GOT; port stores a reference here,
     // declared after all binary-faithful fields so it does not displace them.
     Game& game;
@@ -186,6 +195,7 @@ private:
     // every frame (mod 10), SetSelected fires only when counter == 0.
     // Binary: __aeabi_idivmod(counter + 1, 10) every frame unconditionally.
     int m_SelCounter;
+#endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 
     // --- Static textures (GOT-relative globals in binary) ---
     // Corrected slot layout verified from LoadContent @ 0x0015cb08 disasm + string reads.
@@ -287,18 +297,17 @@ public:
     // ---- end AUTO-STUB MERGE ----
 };
 
-#ifdef __bada__
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
 #include <cstddef>
-struct ShopScreenLayoutAssert {
-    static_assert(offsetof(ShopScreen, m_TransitionAlpha) == 0x7c, "m_TransitionAlpha offset");
-    static_assert(offsetof(ShopScreen, m_pBuyButton)      == 0x84, "m_pBuyButton offset");
-    static_assert(offsetof(ShopScreen, m_pEquipButton)    == 0x8c, "m_pEquipButton offset");
-    static_assert(offsetof(ShopScreen, m_pParent)         == 0x90, "m_pParent offset");
-    // TODO: m_State currently lands at != 0xb8 in cross-build; asm-verify
-    // confirms a residual layout drift somewhere between m_pParent (+0x90)
-    // and m_State (+0xb8). Audit pending.
-    // static_assert(offsetof(ShopScreen, m_State)           == 0xb8, "m_State offset");
-};
+static_assert(offsetof(ShopScreen, m_TransitionAlpha) == 0x7c, "m_TransitionAlpha offset");
+static_assert(offsetof(ShopScreen, m_pBuyButton)      == 0x84, "m_pBuyButton offset");
+static_assert(offsetof(ShopScreen, m_pEquipButton)    == 0x8c, "m_pEquipButton offset");
+static_assert(offsetof(ShopScreen, m_pParent)         == 0x90, "m_pParent offset");
+static_assert(offsetof(ShopScreen, m_ScrollOffset)    == 0xac, "m_ScrollOffset offset");
+static_assert(offsetof(ShopScreen, field_0xb0)        == 0xb0, "field_0xb0 offset");
+static_assert(offsetof(ShopScreen, m_AnimFrame)       == 0xb4, "m_AnimFrame offset");
+static_assert(offsetof(ShopScreen, m_State)           == 0xb8, "m_State offset");
+static_assert(sizeof(ShopScreen) == 0xbc, "ShopScreen size must match binary");
 #endif
 
 #endif // FN_SHOP_SCREEN_H
