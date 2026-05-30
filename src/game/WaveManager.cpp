@@ -623,34 +623,39 @@ void WaveManager::Resume() {
          eit != sd->m_EntityStates.end(); ++eit)
     {
         EntityState& es = *eit;
-        int kind = es.layer;   // 0=Fruit, 1=Bomb, 4=PowerUp (binary: ent.layer)
+        // m_Flag = entity category (0=Fruit, 1=Bomb, 4=PowerUp); semantic unverified --
+        // TODO: re-analyst @ 0x0012c594 to confirm m_Flag vs m_Int role assignment.
+        int kind = (int)es.m_Flag;
         Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(kind, true);
         if (!e) continue;
         // vtable+0x8 == Init(void* p1, long fruitType, const Vec3* scale).
-        e->Init(nullptr, (long)es.type, nullptr);
-        e->pos = Vec3(es.pos[0], es.pos[1], es.pos[2]);
-        e->vel = Vec3(es.vel[0], es.vel[1], es.vel[2]);
+        // m_Int = entity-type index (fruit type / bomb variant; -1=power-up).
+        e->Init(nullptr, (long)es.m_Int, nullptr);
+        e->pos = Vec3(es.m_Vec0[0], es.m_Vec0[1], es.m_Vec0[2]);
+        e->vel = Vec3(es.m_Vec1[0], es.m_Vec1[1], es.m_Vec1[2]);
         if (e->entityType == 1) {
             // Bomb
             Bomb* b = static_cast<Bomb*>(e);
             // m_AccelForce maps to the gravity overlay for Bomb (binary +0x20..+0x28).
-            b->m_AccelForce = Vec3(es.grav[0], es.grav[1], es.grav[2]);
-            // m_BombVariant maps to playerIdx overlay (binary +0x28).
-            b->m_BombVariant = (int)es.grav[2];
+            b->m_AccelForce = Vec3(es.m_Vec2[0], es.m_Vec2[1], es.m_Vec2[2]);
+            // m_BombVariant maps to playerIdx overlay (binary +0x28 z-component).
+            b->m_BombVariant = (int)es.m_Vec2[2];
             if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) Bomb::SetForPlayer(b, 1);
-            if (es.wait > 0.0f) {
-                if (!es.hit) {
-                    b->Chuck(es.wait);
+            // m_Float = chuck-delay / wait. Binary hit-flag encoding unverified:
+            // using non-zero m_Flag as hit indicator (TODO: re-analyst to confirm).
+            if (es.m_Float > 0.0f) {
+                if (es.m_Flag == 0) {
+                    b->Chuck(es.m_Float);
                 } else {
-                    Bomb::SetHit(b, es.wait);
+                    Bomb::SetHit(b, es.m_Float);
                 }
             }
         } else if (e->entityType == 0) {
             // Fruit
             Fruit* f = static_cast<Fruit*>(e);
-            f->m_Gravity = Vec3(es.grav[0], es.grav[1], es.grav[2]);
-            if (es.wait > 0.0f) {
-                f->Chuck(es.wait);
+            f->m_Gravity = Vec3(es.m_Vec2[0], es.m_Vec2[1], es.m_Vec2[2]);
+            if (es.m_Float > 0.0f) {
+                f->Chuck(es.m_Float);
             }
         }
         // type 4 (PowerUp): TODO if power-ups are ported.

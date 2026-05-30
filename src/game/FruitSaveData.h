@@ -4,16 +4,17 @@
 // FruitSaveData -- the persistent save-data subsystem.
 //
 // Full struct is 0x238 (568) bytes at Game+0x4c; layout from
-// docs/systems/save-system.md and re-analyst dump of FruitNinja_SaveGame
-// @ 0x0012a2fc / FruitNinja_LoadGame @ 0x0012be74. Binary serialises
-// via TinyXML to /Home/FruitySave.xml; port writes to <data_dir>/FruitySave.xml.
+// re-analyst dump of FruitNinja_SaveGame @ 0x0012a2fc /
+// FruitNinja_LoadGame @ 0x0012be74. Binary serialises via TinyXML to
+// /Home/FruitySave.xml; port writes to <data_dir>/FruitySave.xml.
 //
-// Coin balance (m_Coins/m_CoinsTotal/m_LevelStartCoins) lives at
-// +0x20..+0x28 but is NOT serialised in FruitySave.xml -- those go to
-// ItemSave.xml via ItemManager (see ItemManager::SaveItemInfo /
-// LoadItemData).
+// Coin balance is NOT a member of FruitSaveData. In the binary the coin
+// fields (m_CoinsBalance/m_CoinsTotalEarned/m_CoinsAtGameStart) live at
+// game_work +0x20..+0x28 (GameWork struct), not in FruitSaveData. They
+// are serialised to ItemSave.xml via ItemManager::SaveItemInfo /
+// LoadItemData, not to FruitySave.xml. Access via game_work directly.
 //
-// Analysed: 2026-04-23T02:00, REVISED 2026-04-27T22:00
+// Analysed: 2026-04-23T02:00, REVISED 2026-05-30T00:00
 
 #include <cstdint>
 #include <map>
@@ -49,21 +50,33 @@ static_assert(sizeof(AchievementItem) == 0x84, "AchievementItem must be 0x84 byt
 
 // EntityState -- queued resume snapshot for a fruit / bomb / power-up.
 // Binary serialises one per active actor when m_bHasActiveGame is set.
+// Binary layout from copy-ctor @ 0x0012c594: 3x Vec3 (12B each) then
+// uint8_t @+0x24, int32_t @+0x28, float @+0x2c. Total 0x30 = 48 bytes.
+// Semantic mapping (unverified -- TODO: re-analyst @ 0x0012c594 to confirm):
+//   m_Vec0: world position
+//   m_Vec1: world velocity
+//   m_Vec2: gravity / bomb-accel vector
+//   m_Flag: entity category or hit-flag (uint8_t; ldrb/strb confirmed)
+//   m_Int:  entity-type index (int32_t; can be -1 for power-up)
+//   m_Float: chuck-delay / spawner wait timer (float)
 struct EntityState {
-    float pos[3];   // -- world position (Vec3)
-    float vel[3];   // -- world velocity
-    float grav[3];  // -- gravity vector
-    int   type;     // -- fruit type / bomb variant / -1 for power-up
-    float wait;     // -- chuck-delay / spawner wait
-    int   layer;    // -- 0=fruit, 1=bomb, 4=powerup (binary: ent.layer)
-    bool  hit;      // -- bombs only: m_bMenuBombHit equivalent
+    float    m_Vec0[3];  // +0x00: world position (Vec3)
+    float    m_Vec1[3];  // +0x0c: world velocity (Vec3)
+    float    m_Vec2[3];  // +0x18: gravity / accel vector (Vec3)
+    uint8_t  m_Flag;     // +0x24: entity category (0=fruit,1=bomb,4=powerup) or hit-flag
+    // +0x25..+0x27: 3 bytes implicit padding
+    int32_t  m_Int;      // +0x28: entity-type index (fruit type / bomb variant; -1=power-up)
+    float    m_Float;    // +0x2c: chuck-delay / spawner wait timer
 
-    EntityState() : type(0), wait(0.0f), layer(0), hit(false) {
-        pos[0] = pos[1] = pos[2] = 0.0f;
-        vel[0] = vel[1] = vel[2] = 0.0f;
-        grav[0] = grav[1] = grav[2] = 0.0f;
+    EntityState() : m_Flag(0), m_Int(0), m_Float(0.0f) {
+        m_Vec0[0] = m_Vec0[1] = m_Vec0[2] = 0.0f;
+        m_Vec1[0] = m_Vec1[1] = m_Vec1[2] = 0.0f;
+        m_Vec2[0] = m_Vec2[1] = m_Vec2[2] = 0.0f;
     }
 };
+#ifdef __bada__
+static_assert(sizeof(EntityState) == 48, "EntityState size mismatch");
+#endif
 
 // SpawnState -- queued spawner info (one per <spawner> child of <wave>).
 // Binary layout (8 bytes): count@+0x00 (float, -> SPAWNER_INFO.m_SpawnCountF/m_RemainingCount),
@@ -102,12 +115,6 @@ public:
 
     // +0x18: per-session totals (cleared at session start).
     std::map<uint32_t, SliceTotal> m_SessionTotals;
-
-    // +0x20..+0x28: coin balance. NOT serialised to FruitySave.xml --
-    // these go to ItemSave.xml via ItemManager.
-    int      m_Coins;              // +0x20
-    int      m_CoinsTotal;         // +0x24
-    int      m_LevelStartCoins;    // +0x28
 
     // +0x30: undocumented byte (reserved).
     uint8_t  field_0x30;
@@ -254,14 +261,6 @@ public:
     ~FruitSaveData();
 
     // ------------------------------------------------------------------
-    // Coin API (used by ItemManager)
-    // ------------------------------------------------------------------
-
-    // AddCoins @ 0x0010a3bc -- delta to m_Coins; if delta>0 also adds
-    // to m_CoinsTotal. Does NOT touch m_LevelStartCoins.
-    void AddCoins(int delta);
-
-    // ------------------------------------------------------------------
     // Stat tracking
     // ------------------------------------------------------------------
 
@@ -372,6 +371,10 @@ public:
     void TotalExists(unsigned int);
     // ---- end AUTO-STUB MERGE ----
 };
+
+#ifdef __bada__
+static_assert(sizeof(FruitSaveData) == 568, "FruitSaveData size mismatch (binary: 0x238)");
+#endif
 
 // ----------------------------------------------------------------------
 // Save/Load free functions (binary calls them as file-scope fns)

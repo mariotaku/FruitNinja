@@ -382,16 +382,17 @@ struct WaveQueItem {
 static_assert(sizeof(WaveQueItem) == 0x1c, "WaveQueItem size mismatch");
 #endif
 
-// WaveQue — binary @ 0x00126b10 ctor. Size 0x0c (12 bytes).
+// WaveQue — binary @ 0x00126b10 ctor. Size 0x08 (8 bytes).
 // Only used in gameMode==2 (Survival/Combo). SetupWaveQue builds this from wave XML.
-// After RandomiseOrder, field_0x08 is initialised to 27.0 (budget constant).
+// Binary ctor body: calls std::list<WaveQueItem>::list on this+0x00 and returns.
+// No float field at +0x08; the "27.0 budget constant" cited during port is a local
+// in SetupWaveQue (binary @ 0x00124564), NOT a struct member -- TODO: confirm once
+// SetupWaveQue is ported.
 struct WaveQue {
     // +0x00..+0x07: doubly-linked list of WaveQueItems (std::list, 8-byte sentinel layout in binary)
     std::list<WaveQueItem> m_Items;  // +0x00
-    // +0x08: wave budget float (initialised to 27.0f after RandomiseOrder in SetupWaveQue)
-    float field_0x08;               // +0x08
 
-    WaveQue() : field_0x08(0.0f) {}
+    WaveQue() {}
 
     // WaveQue::AddWave — binary @ 0x00124334.
     // Builds a WaveQueItem for wi and appends it to m_Items.
@@ -415,7 +416,7 @@ struct WaveQue {
 };
 
 #ifdef __bada__
-static_assert(sizeof(WaveQue) == 0x0c, "WaveQue size mismatch");
+static_assert(sizeof(WaveQue) == 0x08, "WaveQue size mismatch");
 #endif
 
 #endif // FN_WAVE_STRUCTS_H
