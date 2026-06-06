@@ -212,23 +212,14 @@ void ShopScreen::UnLoadContent() {
 ShopScreen::ShopScreen(Game& g, DojoScreen* parent)
     : HUDControl3d()
     , m_TransitionAlpha(0.0f)
-    // DIFFERS: binary ShopScreen ctor (@ 0x0015cdac) does NOT explicitly
-    // initialise +0x80 (m_LayerFlagsAlt). The disasm shows stores to
-    // +0x34, +0x7c, +0x84, +0x88, +0x90, +0xb4, +0xb8 etc. but no store
-    // to +0x80 -- the field is left at whatever the heap allocator
-    // returned. On the Bada device the ambient bytes happened to be 0x40
-    // for the slot ShopScreen lands in, so the panel drew at layer 0x40
-    // from frame 1; on a zero-initialising allocator (Win32 / asan), the
-    // field would be 0 and Update's `if (NumActiveSplats == 0) +0x80 =
-    // 0x40` gate would leave the panel HIDDEN until splats clear.
-    // Port pins the value to 0x40 explicitly to match the Bada heap's
-    // de-facto behaviour -- the panel is visible from the moment
-    // ShopScreen lands on the HUD. Splats may briefly overdraw the panel
-    // during the ~0.87 s state-0 fade-in (per binary @ 0x0016bb46/4a's
-    // HUD(0x40) -> SplatEntity::DrawActiveSplats sequence) but
-    // RemoveAllSplats clears them at fade-in end so the artifact is
-    // bounded.
-    , m_LayerFlagsAlt(0x40)
+    // m_LayerFlagsAlt drives the panel's draw layer (copied into m_LayerFlags each
+    // Update). Binary @ 0x0015cdac does not init +0x80; the first Update sets it
+    // before the first Draw. We init to 0x80 (HUD_LAYER_POST_ACTOR) defensively --
+    // matches the only pre-Update value reachable. Update demotes it to 0x40 only
+    // while NumActiveSplats()==0 (binary @ 0x0015e216), so splats (alive only during
+    // buy/transition) are never on-screen while the panel is at 0x40 -> never
+    // overdrawn. This is the binary's data-state gate, not a fixed layer.
+    , m_LayerFlagsAlt(Mortar::HUD_LAYER_POST_ACTOR)
     , m_pBuyButton(nullptr)
     , m_BuyDelay(0.0f)
     , m_pEquipButton(nullptr)
@@ -333,13 +324,14 @@ void ShopScreen::CreateShopList() {
     m_pShopList->SetWidth(80.0f);
     m_pShopList->SetItemHeight(80.0f);
 
-    // ScrollingMenu must live in the HUD so HUD::Update ticks its
-    // Update (touch + scroll physics + per-item layout via Move) and
-    // HUD::Draw dispatches its Draw (which iterates and draws items).
-    // Without this, ScrollingMenu sat orphaned and the list was never
-    // positioned or rendered. Layer 0x40 matches the menu/HUD layer
-    // used by MenuButtons on the same screen.
-    m_pShopList->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
+    // Port-only: binary has no ScrollingMenu object (ShopScreen::Draw @ 0x0015dd50
+    // draws the list inline in its own pass). The port models m_pShopList as a real
+    // HUD control, so it needs a layer that tracks the panel. Use 0x80
+    // (HUD_LAYER_POST_ACTOR) so the list draws AFTER the splat pass like the panel
+    // does while splats are alive. (The panel itself oscillates 0x40<->0x80 via
+    // Update; the list following 0x80 is the safe match -- splats only coincide with
+    // the panel's 0x80 frames anyway. // Port specific.)
+    m_pShopList->m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
 
     // Populate from ItemManager
     // Binary (ShopScreen::Init @ 0x0015f7ac): for each ItemInfo from GetFirst/GetNext:
@@ -745,7 +737,12 @@ void ShopScreen::EquipCallback() {
 void ShopScreen::Update(float dt) {
     float prevAlpha = m_TransitionAlpha;
 
-    // Binary: SplatEntity::NumActiveSplats @ 0x0015e212 — only set flag when no splats
+    // Binary @ 0x0015e216: demote the panel to 0x40 ONLY when no splats are alive.
+    // 0x40 draws before SplatEntity::DrawActiveSplats, but splats only exist during
+    // the buy/transition states (never plain browsing), so the 0x40 frames never
+    // coincide with a live splat -> no overdraw. While any splat is alive Alt keeps
+    // its 0x80 value (ctor/post-buy) and the panel draws in HUD::Draw(0x80), AFTER
+    // the splat pass. Data-state gate -- do NOT pin 0x80 unconditionally.
     if (SplatEntity::NumActiveSplats() == 0) {
         m_LayerFlagsAlt = Mortar::HUD_LAYER_MENU_BG;
     }
