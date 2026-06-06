@@ -102,16 +102,21 @@ ScrollingMenu::~ScrollingMenu() {
 // Writes field40_0xa4 (port: m_ItemHeight — names swapped vs binary semantics,
 // preserved to avoid mangled-symbol drift) and recomputes LEFT/RIGHT bounds
 // of both touch regions. TOP/BOTTOM indices [1]/[3] keep ctor defaults.
-// ASM-verified: 2026-05-24 binary @ 0x001479a0 (asm-inspector)
+// Binary @ 0x001479a0: vstr.32 s0,[r0,#0xa4] then derives 4 fields:
+//   +0xe0 = w*-0.5, +0xe8 = w*0.5, +0xf0 = w*-0.5*1.25, +0xf8 = w*0.5*1.25
+// [0] must be negative (xMin) so Phase-2 TouchInRegion(xMin<=x<=xMax) accepts.
+// ASM-verified: 2026-06-06 binary @ 0x001479a0 (re-analyst) -- SetWidth: +0xe0=w*-0.5(xMin) +0xe8=w*0.5(xMax) +0xf0=w*-0.5*1.25 +0xf8=w*0.5*1.25; [1]/[3] keep ctor +-320. Region[0]=xMin must be negative so Phase-2 TouchInRegion(xMin<=x<=xMax) accepts.
+// Note: port "outer"/"inner" names are functionally swapped vs binary semantics
+// (+0xe0 group is the tighter ACQUIRE region; +0xf0 group is the 1.25x-wider HOLD region).
 // ---------------------------------------------------------------------------
 void ScrollingMenu::SetWidth(float w) {
-    m_ItemHeight = w;
+    m_ItemHeight = w;                   // binary +0xa4
     const float HALF       = w * 0.5f;
-    const float INNER_HALF = w * 0.625f;
-    m_OuterRegion[0] = -HALF;        // LEFT
-    m_OuterRegion[2] =  HALF;        // RIGHT
-    m_InnerRegion[0] = -INNER_HALF;  // LEFT
-    m_InnerRegion[2] =  INNER_HALF;  // RIGHT
+    const float INNER_HALF = HALF * 1.25f;
+    m_OuterRegion[0] = -HALF;           // binary +0xe0 = w*-0.5  (xMin)
+    m_OuterRegion[2] =  HALF;           // binary +0xe8 = w*0.5   (xMax)
+    m_InnerRegion[0] = -INNER_HALF;     // binary +0xf0 = w*-0.5*1.25  (xMin, hold)
+    m_InnerRegion[2] =  INNER_HALF;     // binary +0xf8 = w*0.5*1.25   (xMax, hold)
     // Indices [1] (TOP) and [3] (BOTTOM) keep ctor defaults +320 / -320.
 }
 
@@ -451,16 +456,13 @@ void ScrollingMenu::Update(float /*dt*/) {
     }
 
     // --- Phase 7: scroll bounds + spring-back (binary-faithful) ---
-    // Binary convention (RE-confirmed via docs/systems/y-axis-convention.md):
-    //   offset > 0                   -> past TOP, spring to 0
-    //   offset in [totalScrollH, 0]  -> valid scroll range
-    //   offset < totalScrollH        -> past BOTTOM, spring to totalScrollH
-    //   totalScrollH = m_Height - m_TotalHeight (NEGATIVE when content > viewport)
+    // Binary @ 0x0015bd7c reads +0xa0 at 0x0015bd9e (vldr.32 s13,[r4,#0xa0]):
+    //   bottom = field_0xa0 - m_TotalHeight  (SetHeight field minus accumulated item heights)
+    //   [bottom, 0] is the valid scroll range; bottom is NEGATIVE when content overflows.
+    // ASM-verified: 2026-06-06 binary @ 0x0015bd7c (asm-inspector) -- scroll clamp bottom = SetHeight-field(+0xa0) - m_TotalHeight(+0xa8); SetHeight=vtable+0x4c->+0xa0, SetWidth=vtable+0x50->+0xa4, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
     float offset = m_Velocity.y;
-    // Binary field38_0x9c (port: m_Width — name-swap per SetWidth comment) minus
-    // field41_0xa8 (m_TotalHeight after the +0xa8/+0xac rename). Binary uses +0x9c,
-    // NOT +0xa0 (m_Height). No clamp — binary lets totalScrollH>0 fall through naturally.
-    float totalScrollH = m_Width - m_TotalHeight;
+    // m_Height = port name for binary +0xa0 (the SetHeight target).
+    float totalScrollH = m_Height - m_TotalHeight;
 
     if (offset > 0.0f && m_DragTargetIdx < 0) {
         // PAST TOP: spring back toward 0

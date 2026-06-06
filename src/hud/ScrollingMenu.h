@@ -97,14 +97,16 @@ public:
     float GetWidth()  const        { return m_ItemHeight; }        // 0x00147990 reads +0xa4 (port name swap)
     float GetItemHeight() const    { return m_Width; }             // 0x001479dc reads +0x9c (port name swap)
 
-    // Width/height setters
-    // SetWidth @ 0x001479a0: writes field40_0xa4 (port: m_ItemHeight — field-name
-    // swap vs binary semantics; names preserved to avoid mangled-symbol drift) and
-    // recomputes m_OuterRegion[0]/[2] (LEFT/RIGHT) and m_InnerRegion[0]/[2].
-    // ASM-verified: 2026-05-24 binary @ 0x001479a0 (asm-inspector)
+    // Width/height setters (vtable slots byte-proven 2026-06-06):
+    //   SetHeight    vtable+0x4c -> +0xa0 (m_Height)   -- scroll-boundary clamp field
+    //   SetWidth     vtable+0x50 -> +0xa4 (m_ItemHeight) + 4 derived region fields
+    //   SetItemHeight vtable+0x54 -> +0x9c (m_Width)   -- item row height
+    // Port field names (m_Width/m_Height/m_ItemHeight) are name-swapped vs binary semantics;
+    // preserved to avoid mangled-symbol drift on the getter/setter method names.
+    // ASM-verified: 2026-06-06 binary @ 0x001479a0 (asm-inspector) -- SetWidth=vtable+0x50->+0xa4, SetHeight=vtable+0x4c->+0xa0, SetItemHeight=vtable+0x54->+0x9c. Shop: SetWidth(290)/SetHeight(80)/SetItemHeight(80).
     void SetWidth(float w);
     void SetHeight(float h)     { m_Height = h; }
-    // SetItemHeight @ 0x001479d4: writes +0x9c (port: m_Width — field-name swap).
+    // SetItemHeight @ 0x001479d4: vtable+0x54, writes +0x9c (port: m_Width -- field-name swap).
     void SetItemHeight(float h) { m_Width = h; }
 
     // --- Fields at documented binary offsets ---
