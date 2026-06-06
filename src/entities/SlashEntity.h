@@ -234,8 +234,12 @@ private:
     // +0x88  _Vector3<float>  m_PrevHeadPos  previous frame tip position
     Vec3 m_PrevHeadPos;        // binary +0x88
 
-    // +0x94..+0x9f  12 bytes gap (meaning TBD; possibly pad or unknown floats)
-    uint8_t _gap_0x94[12];
+    // +0x94  float  m_SegLenSq  squared segment length (written by UpdatePoints/Init as field_0x94)
+    float m_SegLenSq;        // binary +0x94
+    // +0x98  float  m_HeadThickScale  head thickness scale (written by UpdatePoints/Update as field_0x98)
+    float m_HeadThickScale;  // binary +0x98
+    // +0x9c  int32_t  m_PendingSplats  signed splat-stream counter (splat-stream loop)
+    int   m_PendingSplats;   // binary +0x9c
 
     // +0xa0  float  m_SliceTimerA  slice-hit timer A
     float m_SliceTimerA;       // binary +0xa0
@@ -551,6 +555,9 @@ static_assert(offsetof(SlashEntity, m_BladeDir)                == 0x64,  "SlashE
 static_assert(offsetof(SlashEntity, m_TailPos)                 == 0x70,  "SlashEntity::m_TailPos");
 static_assert(offsetof(SlashEntity, m_HeadPos)                 == 0x7c,  "SlashEntity::m_HeadPos");
 static_assert(offsetof(SlashEntity, m_PrevHeadPos)             == 0x88,  "SlashEntity::m_PrevHeadPos");
+static_assert(offsetof(SlashEntity, m_SegLenSq)                == 0x94,  "SlashEntity::m_SegLenSq");
+static_assert(offsetof(SlashEntity, m_HeadThickScale)          == 0x98,  "SlashEntity::m_HeadThickScale");
+static_assert(offsetof(SlashEntity, m_PendingSplats)           == 0x9c,  "SlashEntity::m_PendingSplats");
 static_assert(offsetof(SlashEntity, m_SliceTimerA)             == 0xa0,  "SlashEntity::m_SliceTimerA");
 static_assert(offsetof(SlashEntity, m_SliceTimerB)             == 0xa4,  "SlashEntity::m_SliceTimerB");
 static_assert(offsetof(SlashEntity, m_BladeVelAtSlice)         == 0xa8,  "SlashEntity::m_BladeVelAtSlice");

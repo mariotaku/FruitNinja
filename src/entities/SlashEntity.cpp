@@ -33,6 +33,7 @@
 #include "game/FruitSaveData.h"
 #include "engine/network/NetworkManager.h"
 #include "Fruit.h"
+#include "SplatEntity.h"
 #include <cstring>
 #include <cmath>
 #include <cstdio>
@@ -297,7 +298,9 @@ SlashEntity::SlashEntity()
     // gap regions that the base doesn't touch.
     memset(_pad4d, 0, sizeof(_pad4d));
     _field_0x54 = 0;
-    memset(_gap_0x94, 0, sizeof(_gap_0x94));
+    m_SegLenSq      = 0.0f;
+    m_HeadThickScale = 0.0f;
+    m_PendingSplats  = 0;
     memset(_gap_0xd4, 0, sizeof(_gap_0xd4));
     memset(_gap_0x124, 0, sizeof(_gap_0x124));
     memset(_gap_0x134, 0, sizeof(_gap_0x134));
@@ -947,7 +950,11 @@ void SlashEntity::Update(float dt) {
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
                         // Binary @ 0x0017d664 write-group: snapshot slice state
                         // immediately after CollisionResponse returns.
-                        m_BladeVelAtSlice = bladeVel;
+                        // Binary @ 0x0017e248 collision branch: arm splat-stream.
+                        m_SliceTimerA    = 0.0f;
+                        m_SliceTimerB    = 0.0f;
+                        m_PendingSplats += 2;
+                        m_BladeVelAtSlice = m_BladeDir;
                         m_SlicePos        = e->pos;
                         // ASM-verified: 2026-05-22 binary @ 0x0017d8a4 (re-analyst).
                         // Binary gates combo bookkeeping + MissControl popup spawn on
@@ -959,9 +966,17 @@ void SlashEntity::Update(float dt) {
                         // on the next real fruit slice.
                         const bool isMenuFruit = (t == 0) &&
                             static_cast<Fruit*>(e)->m_bSpawnedByCriticalSplash != 0;
-                        if (t == 0 && !isMenuFruit) {
+                        if (t == 0) {
                             Fruit* fruit = static_cast<Fruit*>(e);
+                            // Binary @ 0x0017dca8: m_SliceEntityType = m_FruitType is set
+                            // UNCONDITIONALLY (outside the menu gate; the gate guards only
+                            // the combo bookkeeping below). The old
+                            //   else { m_SliceEntityType = (int)e->entityType; }
+                            // was a fabrication -- entityType is the ActorManager type index
+                            // (0=Fruit), so menu fruit got type 0 (apple) and the Path B
+                            // splat stream painted the wrong colour. Use the real variety.
                             m_SliceEntityType = (int)fruit->m_FruitType;
+                            if (!isMenuFruit) {
                             if (fruit->m_bCriticalEligible) {
                                 m_Scale = 1.0f;
                             }
@@ -996,8 +1011,7 @@ void SlashEntity::Update(float dt) {
                                     }
                                 }
                             }
-                        } else {
-                            m_SliceEntityType = (int)e->entityType;
+                            } // !isMenuFruit
                         }
                         slicedThisFrame = true;
                     }
@@ -1125,6 +1139,43 @@ void SlashEntity::Update(float dt) {
         m_ComboEntityType = 0;
         m_pComboMissControl = nullptr;
         for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Per-frame splat-stream loop — binary SlashEntity::Update tail @ 0x0017e248.
+    // Part A (on fruit-hit): m_SliceTimerA=0, m_SliceTimerB=0, m_PendingSplats+=2,
+    //   m_BladeVelAtSlice=m_BladeDir  (written at the collision branch above).
+    // Part B (per-frame): tick timer; while pending and timer<=0, spawn one splat.
+    //   scaledDt = dt (WaveManager time-scaling not yet wired in port; binary uses
+    //   wave-scaled dt here, same as the rest of Update).
+    // DAT_0017e3f4 = 10000.0f (upper bound for sq), 1.0f (lower bound implied by >1).
+    // DAT_0017e3f8 = 0.01f (base timer increment floor), DAT_0017e3fc = 0.03f (timer floor).
+    // ---------------------------------------------------------------------------
+    if (m_SliceTimerA > -1.0f) {
+        m_SliceTimerA -= dt;
+    }
+    while (m_PendingSplats >= 0 && m_SliceTimerA <= 0.0f) {
+        float sq = m_BladeDir.MagnitudeSqr();
+        if (sq > 1.0f && sq < 10000.0f) {
+            m_BladeVelAtSlice = m_BladeDir;
+        }
+        m_PendingSplats--;
+        float B = m_SliceTimerB + Math::g_Random.RandF(1.0f) * 0.5f + 0.01f;
+        m_SliceTimerB = (B >= 0.03f) ? B : 0.03f;
+        m_SliceTimerA += m_SliceTimerB;
+        SplatEntity* s = SplatEntity::GetFree();
+        if (s) {
+            Vec3 vel(m_BladeVelAtSlice.x * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
+                     m_BladeVelAtSlice.y * (Math::g_Random.RandF(1.0f) * 0.5f + 0.75f),
+                     0.0f);
+            // DIFFERS: binary param3 passes incidental register-reuse bits, not a designed flag. Pass false.
+            // DIFFERS: fruitType uses m_SliceEntityType (last sliced fruit's type); binary path has
+            //   an unset/incidental stack int here. Using m_SliceEntityType is the closest faithful
+            //   value available at this call site.
+            // Port specific: pos = Entity::pos (blade entity +0x10) = m_RawTouchPos in port since
+            //   the port does not update Entity::pos from touch; use m_RawTouchPos as the blade position.
+            s->MakeSplat(m_RawTouchPos, vel, false, m_SliceEntityType);
+        }
     }
 
     RebuildGeometry();
@@ -1468,16 +1519,18 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     flags |= ENT_HAS_COLLISION;
 
     // 2. Reset scale-adjacent float at +0x94.
-    *(float*)((char*)this + 0x94) = -1.0f;
+    m_SegLenSq = -1.0f;
 
     // 3. Build vertex buffers (160 pairs).
     InitPoints(160);
 
     // 4. Per-frame scratch state.
-    *(float*)((char*)this + 0x98) = 0.0f;
+    m_HeadThickScale = 0.0f;
     m_TrailEmitter = nullptr;
     m_Scale        = 0.0f;
-    *(uint32_t*)((char*)this + 0x9c) = 0xFFFFFFFFu;
+    // Binary Init writes 0xFFFFFFFF (= -1 signed) to +0x9c.
+    // This primes m_PendingSplats to -1 (no pending splats) for the splat-stream loop.
+    m_PendingSplats = -1;
 
     // 5. Copy Colour::White into both colour fields.
     Colour white(255, 255, 255, 255);
