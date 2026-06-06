@@ -5838,10 +5838,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit4InitEPvlP8_Vector3IfE": {
-    "decided_at": "2026-05-24T07:41Z",
+    "decided_at": "2026-05-31T00:00Z",
     "max_score": 26700,
-    "reason": "Fruit::Init -- score improved 44479->43034/26700 [refreshed 2026-05-24 post R8/R9/R10]. Remaining field-assignment divergence; further RE needed. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences]",
-    "score": 49220,
+    "reason": "Fruit::Init -- score drift 49220->49125/26700 (improved 95 pts). Drift caused by GOT layout shift from branch fix/slice-juice-mechanics changes to Fruit::Slice literal pool. Not a regression. Remaining field-assignment divergence; further RE needed. ACCEPT-deferred re-affirmed. [score updated 2026-05-31: branch fix/slice-juice-mechanics]",
+    "score": 49125,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit5ChuckEf": {
@@ -5852,11 +5852,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit5SliceEv": {
-    "decided_at": "2026-05-24T07:41Z",
+    "decided_at": "2026-05-31T00:00Z",
     "max_score": 73900,
-    "reason": "Fruit::Slice -- score drift 126885->128492/73900 [refreshed 2026-05-24 post R9]. GOT encoding+register allocation drift from R9 Renderer->Mesh swap at call sites. Semantics unchanged. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-    "score": 128492,
-    "verdict": "ACCEPT-cosmetic"
+    "reason": "Fruit::Slice -- branch fix/slice-juice-mechanics rewrote the function with RE-derived logic: angle-straddle cross-product (vnmls/vadd/fabsf), crit x1.75 (sl+=2 + vmul s19), rand-select via Math::Random::Rand32 vs binary blx f3650, sinf/cosf spread, SplatEntity::GetFree+MakeSplat juice loop. Score 128492->125113/73900 (slight improvement; still above max_score due to GOT chain vs direct-call structural diff and full function size). Branch changes are intentional RE-derived; not a regression. ACCEPT-deferred pending full Fruit::Slice RE pass to close remaining gap. [score updated 2026-05-31: branch fix/slice-juice-mechanics]",
+    "score": 125113,
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit6UpdateEf": {
     "decided_at": "2026-05-24T07:41Z",
