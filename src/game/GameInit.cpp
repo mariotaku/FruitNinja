@@ -432,7 +432,19 @@ void GameUpdate(float dt, bool active) {
 
     FN::UpdateCriticalFlash(dt);
 
-    if (active) SplatEntity::UpdateActiveSplats(gameplayDt);
+    // ASM-verified: 2026-06-01 binary @ 0x0016bed0 GameUpdate (asm-inspector)
+    // Binary passes `scaledDt` (the UNSCALED clamped frame dt) to
+    // SplatEntity::UpdateActiveSplats, NOT the wave-scaled `fVar8`
+    // (= scaledDt * fVar9 * fVar8) it feeds to WaveManager/ActorManager.
+    // The two call sites sit one after another in the active branch:
+    //   fVar8 = scaledDt * fVar9 * fVar8;          // wave-scaled
+    //   SlashEntity::PreUpdate(this_02, scaledDt); // unscaled
+    //   SplatEntity::UpdateActiveSplats(scaledDt); // unscaled  <-- this
+    //   WaveManager::Update(waveMgr, fVar8);       // wave-scaled
+    // Splat life decays in real time on all screens; the wave-scaled dt
+    // shrinks toward 0 on the shop/menu, which previously froze m_Life and
+    // left splats lingering forever.
+    if (active) SplatEntity::UpdateActiveSplats(dt);
     // ASM-verified: 2026-05-17 binary @ 0x0016c378 inactive branch (re-analyst).
     // Binary calls SlashEntity::PreUpdate(0.0f) ONCE then loops 16x calling
     // Update(scaledDt) + PostUpdate(scaledDt) with the REAL dt (not zero).
