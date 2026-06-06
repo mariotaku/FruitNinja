@@ -1090,22 +1090,6 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const float rad = atan2f(bladeVel.x, bladeVel.y);
     m_SliceAngle   = (uint16_t)((int)(rad * (65536.0f / 6.2831853f)) & 0xFFFF);
 
-    // Menu-fruit fast-path: skip emitters / particles / SliceEffect / score /
-    // save totals. Slice-state writes above are sufficient for the next
-    // Fruit::Update tick to call Slice() -> m_bSliced=1 -> MenuButton::Update
-    // detects the transition and fires the click callback (Retry/Quit/etc).
-    //
-    // Binary @ 0x001780b0 suppresses score via GameTaskState+0x05 byte gate
-    // (set during menu-mode runtime) -- port's GameTaskState layout has
-    // pPauseScreen at +0x04 swallowing the +0x05 byte, so we can't replicate
-    // that gate cleanly today. This fast-path matches the net binary outcome
-    // for menu-fruit slices: slice state set, score NOT added.
-    // TODO: 0x001780b0 -- replicate the GameTaskState+0x05 gate properly
-    // once the GameTaskState struct layout is fixed.
-    if (m_bSpawnedByCriticalSplash != 0) {
-        return 0;
-    }
-
     // ASM-verified: 2026-05-18 binary @ 0x00178454..0x00178466 (re-analyst).
     // Clear any prior trail/juice emitters before allocating the slice-
     // burst + persistent juice emitters below. Mirrors the pattern used
@@ -1164,11 +1148,14 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
         }
     }
 
-    // Full-screen tint flash. Critical uses the configured crit colour
-    // (gold/yellow); special-fruit uses half-alpha white. Matches
-    // CriticalFlash @ 0x0016a9a4.
+    // Full-screen tint flash. Matches CriticalFlash @ 0x0016a9a4.
+    // Critical: binary @ 0x00178380 passes the sliced fruit's OWN per-type
+    // colour (FRUIT_INFO m_FruitColour, same object FruitTypeColour returns),
+    // NOT a gold literal. The previous Colour(255,215,0,192) was a fabrication
+    // with no binary basis. DrawCritHit applies the time fade; alpha comes from
+    // m_FruitColour[3]. Special (score==0x32): white half-alpha (binary @ 0x001783fa).
     if (isCritical) {
-        FN::CriticalFlash(pos, Colour(255, 215, 0, 192));
+        FN::CriticalFlash(pos, FruitTypeColour((long)m_FruitType));
     } else if (isSpecial) {
         FN::CriticalFlash(pos, Colour(255, 255, 255, 128));
     }
@@ -1194,102 +1181,110 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const float sliceLength   = bladeSpeed * 0.4f;
     FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
 
-    // Matches CollisionResponse score+save dispatch (binary @ 0x00178c3c).
-    // ASM-verified: 2026-05-10 binary @ 0x00178bc8..0x00178e30 (re-analyst).
-    // Formula:
-    //   score = info->m_Score                               // FRUIT_INFO+0x314
-    //   if (critical) score += 5                            // g_CritScoreBonus @ 0x001f3e30
-    //   if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax)
-    //       score = info->m_CoinsMin + Rand32(max - min)    // random-score override
-    //   if (critical) score *= 2                            // g_CritScoreMul / 2 = 2 (int div)
-    // Earlier port had `score * 2` for critical, missing the +5 bonus.
-    // For a normal scorable fruit (m_Score=1, no random override), this gives
-    // critical = (1+5)*2 = 12 vs port's old 1*2 = 2 -- the +10 difference user reports.
-    // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
-    // when used in this score path; same fields, dual-purpose semantics.
-    if (info) {
-        Game* g = Game::GetInstance();
-        if (g) {
-            int score = info->m_Score;
-            if (m_bCriticalEligible) score += 5;
-            if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
-                const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
-                score = info->m_CoinsMin
-                      + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
-            }
-            if (m_bCriticalEligible) score *= 2;  // g_CritScoreMul / 2 = 2
-            FN::AddToCurrentScore(score, (int)m_PlayerIdx,
-                                  /*trackFruit=*/true, /*sendNetPacket=*/false);
+    // Score, save totals, powerup, and combo are suppressed for menu fruit.
+    // Binary @ 0x001780b0 gates these via GameTaskState+0x05 (set during
+    // menu-mode runtime). Port approximates via !m_bSpawnedByCriticalSplash
+    // until GameTaskState+0x05 is modeled in the layout.
+    // TODO: 0x001780b0 -- replicate the GameTaskState+0x05 gate properly
+    // once the GameTaskState struct layout is fixed.
+    if (!m_bSpawnedByCriticalSplash) {
+        // Matches CollisionResponse score+save dispatch (binary @ 0x00178c3c).
+        // ASM-verified: 2026-05-10 binary @ 0x00178bc8..0x00178e30 (re-analyst).
+        // Formula:
+        //   score = info->m_Score                               // FRUIT_INFO+0x314
+        //   if (critical) score += 5                            // g_CritScoreBonus @ 0x001f3e30
+        //   if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax)
+        //       score = info->m_CoinsMin + Rand32(max - min)    // random-score override
+        //   if (critical) score *= 2                            // g_CritScoreMul / 2 = 2 (int div)
+        // Earlier port had `score * 2` for critical, missing the +5 bonus.
+        // For a normal scorable fruit (m_Score=1, no random override), this gives
+        // critical = (1+5)*2 = 12 vs port's old 1*2 = 2 -- the +10 difference user reports.
+        // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
+        // when used in this score path; same fields, dual-purpose semantics.
+        if (info) {
+            Game* g = Game::GetInstance();
+            if (g) {
+                int score = info->m_Score;
+                if (m_bCriticalEligible) score += 5;
+                if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
+                    const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
+                    score = info->m_CoinsMin
+                          + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
+                }
+                if (m_bCriticalEligible) score *= 2;  // g_CritScoreMul / 2 = 2
+                FN::AddToCurrentScore(score, (int)m_PlayerIdx,
+                                      /*trackFruit=*/true, /*sendNetPacket=*/false);
 
-            // Per-fruit-name save totals.
-            if (game_work.m_SaveData) {
-                game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
-                                         /*trackSession=*/false, false);
-                game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
-                                         /*trackSession=*/true, false);
+                // Per-fruit-name save totals.
+                if (game_work.m_SaveData) {
+                    game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+                                             /*trackSession=*/false, false);
+                    game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1,
+                                             /*trackSession=*/true, false);
 
-                // On critical hit, record crit totals.
-                if (isCritical) {
-                    static const uint32_t hCrit      = StringHash("crit");
-                    static const uint32_t hCritTotal = StringHash("crits_total");
-                    game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
-                    game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
-                    char critBuf[128];
-                    snprintf(critBuf, 128, "%scrit", info->m_Name);
-                    game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
+                    // On critical hit, record crit totals.
+                    if (isCritical) {
+                        static const uint32_t hCrit      = StringHash("crit");
+                        static const uint32_t hCritTotal = StringHash("crits_total");
+                        game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
+                        game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
+                        char critBuf[128];
+                        snprintf(critBuf, 128, "%scrit", info->m_Name);
+                        game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
+                    }
                 }
             }
         }
-    }
-    // ASM-verified: 2026-05-20 binary @ 0x00178b40..0x00178c34 (re-analyst)
-    // Arcade-mode-only (NOT Zen as a prior TODO claimed):
-    //   AddToSpeedLossTime(0.05f, 0)             -- SpeedControl HUD tick refresh.
-    //   first_fruit = sticky write-once          -- records m_FruitType+1 of first
-    //                                               slice ever (savefile-wide).
-    //   last_fruit  = set to current m_FruitType+1 via delta math (total := newVal).
-    if (Game::GetInstance() && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
-        WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
-        if (game_work.m_SaveData && info) {
-            static const uint32_t hFirstFruit = StringHash("first_fruit");
-            static const uint32_t hLastFruit  = StringHash("last_fruit");
-            const int newVal = (int)m_FruitType + 1;
-            if (game_work.m_SaveData->GetTotal(hFirstFruit) <= 0) {
-                game_work.m_SaveData->AddToTotal("first_fruit", hFirstFruit, newVal, false, false);
+        // ASM-verified: 2026-05-20 binary @ 0x00178b40..0x00178c34 (re-analyst)
+        // Arcade-mode-only (NOT Zen as a prior TODO claimed):
+        //   AddToSpeedLossTime(0.05f, 0)             -- SpeedControl HUD tick refresh.
+        //   first_fruit = sticky write-once          -- records m_FruitType+1 of first
+        //                                               slice ever (savefile-wide).
+        //   last_fruit  = set to current m_FruitType+1 via delta math (total := newVal).
+        if (Game::GetInstance() && game_work.gameMode == Mortar::GAME_MODE_ARCADE) {
+            WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
+            if (game_work.m_SaveData && info) {
+                static const uint32_t hFirstFruit = StringHash("first_fruit");
+                static const uint32_t hLastFruit  = StringHash("last_fruit");
+                const int newVal = (int)m_FruitType + 1;
+                if (game_work.m_SaveData->GetTotal(hFirstFruit) <= 0) {
+                    game_work.m_SaveData->AddToTotal("first_fruit", hFirstFruit, newVal, false, false);
+                }
+                const int cur = game_work.m_SaveData->GetTotal(hLastFruit);
+                game_work.m_SaveData->AddToTotal("last_fruit", hLastFruit, newVal - cur, false, false);
             }
-            const int cur = game_work.m_SaveData->GetTotal(hLastFruit);
-            game_work.m_SaveData->AddToTotal("last_fruit", hLastFruit, newVal - cur, false, false);
         }
-    }
 
-    // ASM-verified: 2026-05-22 binary @ 0x001780b0 ~+0x360 (re-analyst).
-    // Powerup-fruit slice activates the modifier polymorphism chain. Without
-    // this call, no Freeze/Frenzy/x2/Blitz effects ever fire in Arcade.
-    // ASM-verified: 2026-05-22 binary @ 0x00178c30 (re-analyst).
-    // Powerup-fruit slice fires either during normal gameplay (LTF==0) OR
-    // inside the bomb-hit cinematic window (LTF in {2,3} = HitBomb-set state
-    // AND the timer is in (-0.1f, 0.95f)). The binary's compound check is
-    // `LTF == 0 || ((LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f)`.
-    static const float kBombHitMax = 0.95f;
-    static const float kBombHitMin = -0.1f;
-    const uint8_t ltf = (uint8_t)game_work.m_LevelTransitionFlag;
-    const bool bombHitWindow = (uint8_t)(ltf - 2u) < 2u
-        && game_work.m_BombHitTimer < kBombHitMax
-        && game_work.m_BombHitTimer > kBombHitMin;
-    if (info && info->m_pPowers && !m_bNoPowerUp
-        && (ltf == 0 || bombHitWindow)) {
-        uint32_t hash = info->m_pPowers->RandomPower();
-        Vec3 localPos = pos;
-        PowerUpManager::GetInstance()->ActivatePower(hash, &localPos, reinterpret_cast<float*>(&localPos));
-    }
+        // ASM-verified: 2026-05-22 binary @ 0x001780b0 ~+0x360 (re-analyst).
+        // Powerup-fruit slice activates the modifier polymorphism chain. Without
+        // this call, no Freeze/Frenzy/x2/Blitz effects ever fire in Arcade.
+        // ASM-verified: 2026-05-22 binary @ 0x00178c30 (re-analyst).
+        // Powerup-fruit slice fires either during normal gameplay (LTF==0) OR
+        // inside the bomb-hit cinematic window (LTF in {2,3} = HitBomb-set state
+        // AND the timer is in (-0.1f, 0.95f)). The binary's compound check is
+        // `LTF == 0 || ((LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f)`.
+        static const float kBombHitMax = 0.95f;
+        static const float kBombHitMin = -0.1f;
+        const uint8_t ltf = (uint8_t)game_work.m_LevelTransitionFlag;
+        const bool bombHitWindow = (uint8_t)(ltf - 2u) < 2u
+            && game_work.m_BombHitTimer < kBombHitMax
+            && game_work.m_BombHitTimer > kBombHitMin;
+        if (info && info->m_pPowers && !m_bNoPowerUp
+            && (ltf == 0 || bombHitWindow)) {
+            uint32_t hash = info->m_pPowers->RandomPower();
+            Vec3 localPos = pos;
+            PowerUpManager::GetInstance()->ActivatePower(hash, &localPos, reinterpret_cast<float*>(&localPos));
+        }
 
-    // Combo counter increment — binary @ 0x001787a8..0x001787b0.
-    // ASM-verified: 2026-05-02 binary @ 0x00178708 reads m_PlayerIdx (+0x90).
-    int slasher = (int)m_PlayerIdx;
-    if (g_LastSlasher != slasher) {
-        g_ComboCount  = 0;   // binary @ 0x0017873a: different-player branch
-        g_LastSlasher = slasher;
+        // Combo counter increment — binary @ 0x001787a8..0x001787b0.
+        // ASM-verified: 2026-05-02 binary @ 0x00178708 reads m_PlayerIdx (+0x90).
+        int slasher = (int)m_PlayerIdx;
+        if (g_LastSlasher != slasher) {
+            g_ComboCount  = 0;   // binary @ 0x0017873a: different-player branch
+            g_LastSlasher = slasher;
+        }
+        g_ComboCount += 1;       // binary @ 0x001787b0
     }
-    g_ComboCount += 1;       // binary @ 0x001787b0
     return 0;
 }
 
@@ -1325,8 +1320,18 @@ void Fruit::Slice() {
         if (delta < 0.0f) flipSide = true;
     }
 
+    // TODO: 0x00176d78..0x00176db2 — binary burns TWO discarded
+    // select-pattern Rand32(0x5550) draws at the very top of Slice
+    // (each: roll; if >0x2aa8 roll again; result discarded) BEFORE the
+    // flipSide computation. Port omits them, desyncing the RNG stream by
+    // 2-4 draws relative to the binary. Add two discarded
+    // Math::g_Random.Rand32(0x5550) select-pattern blocks here.
+
     // --- Impulse ---
     float impulse = m_SliceImpulse;
+    // TODO: 0x00176e88 — splatCount = Rand32(2)+2. The crit/special
+    // blocks below OVERWRITE this (splatCount = *globalPtr via
+    // DAT_00177060), they do NOT add +2. See TODOs in those blocks.
     int   splatCount = (rand() % 2) + 2;   // Rand(2)+2 → 2 or 3
 
     // Critical hit gets 1.5× impulse + crit dual-line AddSlice.
@@ -1340,15 +1345,22 @@ void Fruit::Slice() {
         const float critLen  = impulse * 0.4f * 0.7f;
         FN::SliceEffect_Add(pos, critBase + 60.0f, critLen, true);
         FN::SliceEffect_Add(pos, critBase - 60.0f, critLen, true);
+        // TODO: 0x00176f1e — binary sets splatCount = *(int*)(*(GOT+DAT_00177060))
+        // (a configured global juice count), NOT splatCount += 2. Also gated
+        // by m_PlayerIdx < 2 (0x00176e94). And binary calls
+        // MissControl::MakeCritical(MissControl::GetFree(), pos) after the
+        // two AddSlice calls — missing here (MissControl unported?).
         impulse *= 1.5f;
-        splatCount += 2;
+        splatCount += 2;  // WRONG per binary; see TODO above (needs DAT_00177060).
     }
 
     // Special-fruit (baseScore == 0x32 = 50) also gets 1.5× impulse.
     const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     if (info && info->m_Score == 0x32) {
+        // TODO: 0x00176f68 — same as crit: binary sets
+        // splatCount = *(int*)(*(GOT+DAT_00177060)), NOT splatCount += 2.
         impulse *= 1.5f;
-        splatCount += 2;
+        splatCount += 2;  // WRONG per binary; see TODO above (needs DAT_00177060).
     }
 
     // --- Splat spawn ---
@@ -1374,6 +1386,17 @@ void Fruit::Slice() {
         // MakeSplat's landing-type RNG toward types 4/5, the larger
         // variants).
         if (s) s->MakeSplat(pos, sv, isCritical, m_FruitType);
+
+        // TODO: 0x00177070..0x001770f0 — per-splat post-MakeSplat taper,
+        // MISSING in port:
+        //   factor = clamp(1 - (i-2)/splatCount, 0.3, 1.0)  // 0.3 = DAT_0017706c
+        //   s->m_Vel.z *= factor;                            // SplatEntity+0x64
+        //   if (i > 2) {
+        //       s->m_Vel.y *= *DAT_001774b0;   // SplatEntity+0x60
+        //       s->m_Vel.x *= *DAT_001774b0;   // SplatEntity+0x5c
+        //       s->m_Scale  *= *DAT_001774b4;  // SplatEntity+0x44 (Vec3 *=)
+        //   }
+        // Needs DAT_001774b0 / DAT_001774b4 (unresolved config globals).
     }
 
     // ASM-verified: 2026-05-23 binary @ 0x001770e0 (re-analyst)
@@ -1386,28 +1409,30 @@ void Fruit::Slice() {
     }
 
     // --- Half velocities ---
-    // Binary uses sliceFactor = 1 - FRUIT_INFO[+0x24c]. That field
-    // isn't in the port's FruitInfo struct yet — hardcode to 0.7
-    // which maps to a per-fruit slice softness of 0.3.
-    const float sliceFactor = 0.7f;
+    // Binary @ 0x00177186: sliceFactor = FRUIT_INFO[+0x24c] (m_HitInfluence).
+    // Default 0.75 for all shipped fruits; coconut = 0.9 (from hitInfluence XML attr).
+    // Used as: halfVel = dir*(impulse*sliceFactor) + fruitVel*(1-sliceFactor)
+    // and:     off = rand * (1-sliceFactor) * 4.0
+    const float sliceFactor = (info ? info->m_HitInfluence : 0.75f);
 
-    // Port the biased "rand(0x5550) retry if < 0x2aa8" pattern.
-    int _ra = rand() & 0x5550; if (_ra < 0x2aa8) _ra = rand() & 0x5550;
-    int _rb = rand() & 0x5550; if (_rb < 0x2aa8) _rb = rand() & 0x5550;
+    // Binary @ 0x001771b6: SELECT pattern — use const 10912.0f when randVal<=0x2aa8,
+    // recompute Rand32(0x5550) when >0x2aa8. Not a retry-if-small loop.
+    uint32_t _ra = Math::g_Random.Rand32(0x5550U);
+    float randA = (_ra > 0x2aa8U) ? (float)Math::g_Random.Rand32(0x5550U) : 10912.0f;
+    uint32_t _rb = Math::g_Random.Rand32(0x5550U);
+    float randB = (_rb > 0x2aa8U) ? (float)Math::g_Random.Rand32(0x5550U) : 10912.0f;
 
     // Angle offsets for the two halves — bound by `(1-softness)*4`.
-    const float randA = (float)_ra * (1.0f - 0.3f) * 4.0f;
-    const float randB = (float)_rb * (1.0f - 0.3f) * 4.0f;
-    const int16_t offA = (int16_t)randA;
-    const int16_t offB = (int16_t)randB;
+    const int16_t offA = (int16_t)(randA * (1.0f - sliceFactor) * 4.0f);
+    const int16_t offB = (int16_t)(randB * (1.0f - sliceFactor) * 4.0f);
 
     // Binary @ 0x00177236 also writes back into m_SliceAngle when flipSide is set.
     if (flipSide) {
         m_SliceAngle = (uint16_t)(m_SliceAngle + 0x7ff8);
     }
     uint16_t base = m_SliceAngle;
-    uint16_t angA = (uint16_t)(base - offB + 0x7ff8);  // halfA direction always +0x7ff8 from base
-    uint16_t angB = (uint16_t)(base + offA);            // halfB direction == base + offA
+    uint16_t angA = (uint16_t)(base + offA);  // binary 0x0017725e: base + offA
+    uint16_t angB = (uint16_t)(base - offB);  // binary 0x0017727e: base - offB
 
     const float radA = (float)(int16_t)angA * (6.2831853f / 65536.0f);
     const float radB = (float)(int16_t)angB * (6.2831853f / 65536.0f);
@@ -1426,23 +1451,29 @@ void Fruit::Slice() {
         const float critRadA = (float)(int16_t)(uint16_t)(m_SliceAngle + 0x3ffc) * (6.2831853f / 65536.0f);
         const float critRadB = (float)(int16_t)(uint16_t)(m_SliceAngle + 0xc004) * (6.2831853f / 65536.0f);
         halfVelA = Vec3((float)(int)(sinf(critRadA) * imp_screen),
-                        (float)(int)(cosf(critRadA) * imp_screen), 0.0f) * 0.5f;
+                        (float)(int)(cosf(critRadA) * imp_screen), 0.0f) * 1.75f; // binary @ 0x001773c6, DAT 0x3fe00000 = 1.75
         halfVelB = Vec3((float)(int)(sinf(critRadB) * imp_screen),
-                        (float)(int)(cosf(critRadB) * imp_screen), 0.0f) * 0.5f;
+                        (float)(int)(cosf(critRadB) * imp_screen), 0.0f) * 1.75f; // binary @ 0x0017742a, DAT 0x3fe00000 = 1.75
     }
 
     m_SecondPos = pos;
     m_SecondVel = halfVelA;
     vel         = halfVelB;
 
+    // TODO: 0x00177444 — binary calls MoveFruitZPositionToBack ONLY in the
+    // non-crit/non-special branch, AND only when m_bSpawnedByCriticalSplash
+    // (+0x10C) == 0. Port calls it unconditionally here and also runs the
+    // crit override below — diverges from the binary's if/else structure.
     MoveFruitZPositionToBack(this);
 
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in Fruit::Slice)",
              static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = true;
 
-    // Reset gravity so the ramp-up in Update starts fresh.
-    m_Gravity = Vec3(0.0f, -12.0f, 0.0f);
+    // NOTE: binary Fruit::Slice (0x176d58..0x0017766f) does NOT write
+    // m_Gravity (+0x9C) anywhere — no str/vstr to [this,#0x9c] in the
+    // whole function. The prior `m_Gravity = Vec3(0,-12,0)` reset was a
+    // port-only band-aid and has been removed for binary fidelity.
 
     // --- Spin boost loop (matches Fruit::Slice 0x176d58 tail) ---
     //
