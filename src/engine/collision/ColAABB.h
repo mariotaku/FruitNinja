@@ -97,14 +97,12 @@ public:
         return true;
     }
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ColAABB::ColAABBAABB -- auto stub from binary missing-symbol set
+    // TODO: 0x001b594c — ColAABBAABB: AABB-vs-AABB overlap test + penetration normal into Vec3*
     void ColAABBAABB(ColAABB*, ColAABB*, Vec3*);
-    // STUB: ColAABB::ColAABBLine -- auto stub from binary missing-symbol set
+    // TODO: 0x001b5ca8 — ColAABBLine: AABB-vs-Line slab intersection test + slab normal into Vec3*
     void ColAABBLine(ColAABB*, ColLine*, Vec3*);
-    // STUB: ColAABB::ColAABBSphere -- auto stub from binary missing-symbol set
+    // TODO: 0x001b6224 — ColAABBSphere: AABB-vs-Sphere closest-point test + penetration normal into Vec3*
     void ColAABBSphere(ColAABB*, ColSphere*, Vec3*);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

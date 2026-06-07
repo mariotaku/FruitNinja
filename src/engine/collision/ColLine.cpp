@@ -37,7 +37,7 @@ void ColLine::DrawDebug() {
     // TODO: DrawLine helper not ported
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ColLine::ColLineLine -- auto stub
+// TODO: 0x0019f4f0 -- line-segment vs line-segment closest-approach; compute the
+//   two segment directions, MagnitudeSqr/Dot, clamp parameters, and write the
+//   separating/penetration vector to the out Vec3 (impl @ 0x0019f4f0, thunk @ 0x000f8508).
 void ColLine::ColLineLine(ColLine*, ColLine*, Vec3*) {}
-// ---- end AUTO-STUB MERGE ----

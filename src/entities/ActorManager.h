@@ -291,40 +291,43 @@ public:
     // Defunct: zero in-binary callers; binary @ 0x0017013c.
     void ClearAllListeners();
 
-    // ---- STUBS (binary) ----
+    // ---- Long-typed mangled overloads ----
     // Long-typed overloads required for binary-faithful mangled symbol names.
     // ARM32: long == int in size but mangles differently ('l' vs 'i').
+    // Each forwards to its int-typed counterpart; the binary has a single
+    // symbol per logical method at the address cited below.
 
-    // STUB: Add(long, bool) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0017068c -- long overload of Add(int,bool); forwards to int body.
     Entity* Add(long entityType, bool unused = true);
 
-    // STUB: DeactivateAllEntities(long) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0016fb44 -- long overload of DeactivateAllEntities(int).
     void DeactivateAllEntities(long typeIdx);
 
-    // STUB: Draw() -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0016fe7c -- no-arg Draw(); binary draw body is Draw(Renderer&) @ 0x0016fe7c.
     void Draw();
 
-    // STUB: GetEntity(long, unsigned long) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0016fcc4 -- long/ulong overload of GetEntity(int,size_t).
     Entity* GetEntity(long typeIdx, unsigned long slot) const;
 
-    // STUB: GetEntityFirst(long, iterator&) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0016fbb8 -- long overload of GetEntityFirst(int,iterator&).
     Entity* GetEntityFirst(long typeIdx, std::list<Entity*>::iterator& it);
 
-    // STUB: GetEntityNext(long, iterator&) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0016fb88 -- long overload of GetEntityNext(int,iterator&).
     Entity* GetEntityNext(long typeIdx, std::list<Entity*>::iterator& it);
 
-    // STUB: GetNumEntities(long) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0016ff98 -- long overload of GetNumEntities(int).
     int GetNumEntities(long typeIdx);
 
-    // STUB: GetNumEntities(long*) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0016ff30 -- non-const long* overload of GetNumEntities(const long*).
     int GetNumEntities(long* typeIdxNullTerminated);
 
-    // STUB: Initialise(long, long) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0017046c -- long overload of Initialise(int,int).
     void Initialise(long numTypes, long heapSize);
 
-    // STUB: Update(float, ColAABB*, ColAABB*) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x001701f4 -- bounds-taking Update(float,ColAABB*,ColAABB*); bounds
+    //       unused in FruitNinja, forwards to dt-only body @ 0x001701f4.
     void Update(float dt, ::ColAABB* boundsA, ::ColAABB* boundsB);
-    // ---- end STUBS ----
+    // ---- end long-typed overloads ----
 
 #ifdef __bada__
     friend struct ActorManagerLayoutAssert;

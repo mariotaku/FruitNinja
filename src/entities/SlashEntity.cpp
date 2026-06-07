@@ -1500,7 +1500,9 @@ int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*m
 // m_SwipeEndEdge is a 2-bit shift-register fuse: writer (touch-up handler,
 // outside SlashEntity) sets bit0; each DrawSlice call shifts left and fires
 // CreateGhost + contact-burst emitter on the frame when the last bit falls off.
-// TODO: 0x???????? -- touch-up writer for m_SwipeEndEdge bit 0
+// TODO: SlashEntity m_SwipeEndEdge bit-0 writer -- the external touch-up
+//   handler that sets m_SwipeEndEdge bit0 (consumed by the DrawSlice shift
+//   register) is not yet located in the binary; resolve its address when found.
 // DIFFERS: binary gate is m_NumPoints > 3; port uses >= 2 to render
 //   single-tap micro-trails (cosmetic only).
 void SlashEntity::DrawSlice() {
@@ -1664,8 +1666,10 @@ void SlashEntity::InitPoints(long count) {
     }
 }
 
-// STUB: SlashEntity::SetModColours(Colour*, ...) — non-const binary form
-// Binary @ 0x17CA0C — binary passes Colour* (non-const); delegates to const form.
+// TODO: 0x17CA0C -- SlashEntity::SetModColours (non-const Colour* binary
+//   form): binary passes Colour* (non-const); port delegates to the const
+//   overload. Full body (palette copy, overlay texture, emitter hashes,
+//   ColoursChanged actor walk) pending full RE+port of the const form.
 void SlashEntity::SetModColours(
     Colour*     colours,
     int         colourCount,
@@ -1721,9 +1725,10 @@ bool SlashEntity::TouchMoveY(InputEvent* event) {
     return true;
 }
 
-// STUB: SlashEntity::UpdatePoints(float)
-// Binary @ 0x17B92C — per-frame geometry rebuild from binary vertex buffers.
-// Port uses RebuildGeometry() from trail-point array instead.
+// TODO: 0x17B92C -- SlashEntity::UpdatePoints(float): per-frame geometry
+//   rebuild from the binary's m_pLeftBuffer/m_pRightBuffer vertex strips.
+//   Port rebuilds from the m_Points[] trail array via RebuildGeometry()
+//   instead, so this binary-named entry point stays a no-op.
 void SlashEntity::UpdatePoints(float /*dt*/) {}
 
 // ASM-spec: SlashEntity::UpdateTouchDown @ 0x17D2E4

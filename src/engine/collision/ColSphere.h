@@ -42,12 +42,12 @@ public:
     bool IntersectsLine(const ColLine& line) const;
     bool Contains(const Vec3& p) const;
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ColSphere::ColSphereLine -- auto stub from binary missing-symbol set
+    // TODO: 0x0019fdec -- ColSphereLine: sphere-vs-line penetration; ClosestPointOnLine
+    //   between sphere center and line, then push-out normal*(radius - dist) into outVec.
     void ColSphereLine(ColSphere*, ColLine*, Vec3*);
-    // STUB: ColSphere::ColSphereSphere -- auto stub from binary missing-symbol set
+    // TODO: 0x0019fc90 -- ColSphereSphere: sphere-vs-sphere penetration; center delta,
+    //   if MagnitudeSqr < (r1+r2)^2 emit normalised push-out normal*(dist-(r1+r2)) into outVec.
     void ColSphereSphere(ColSphere*, ColSphere*, Vec3*);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

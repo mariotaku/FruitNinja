@@ -26,9 +26,10 @@
 //   0x20  Zen mirror bounce — Fruit reflects pos+vel at the ±192 X limit
 //   0x40  Menu scrolling conflict (managed by ScrollingMenu, not SlashModifier)
 //
-// Port status: STUB — structure and methods are declared so that
+// TODO: 0x0011f1fc — structure and methods are declared so that
 // porting PowerUpManager later can dispatch UpdateSpecific without
-// further changes. Method bodies match the binary's semantics.
+// further changes. Method bodies should match the binary's semantics
+// once SlashEntity palette + PowerUpManager + ItemManager land.
 //
 
 #include "GameModifier.h"
@@ -78,8 +79,9 @@ public:
 
     // 0x0011f31c — one-shot on activation. Binary calls
     // SlashEntity::SetModColours(...) + increments
-    // ItemManager::EquippedSlashModCount. Port: stubbed until the
-    // SlashEntity blade-palette + ItemManager lands.
+    // ItemManager::EquippedSlashModCount.
+    // TODO: 0x0011f31c — wire SetModColours + ItemManager counter once
+    // the SlashEntity blade-palette + ItemManager land.
     void ApplyModifier(bool isPurchased, float* extra) override;
 
     // 0x0011f2e0 — decrement equipped-mod counter; if it reaches 0,

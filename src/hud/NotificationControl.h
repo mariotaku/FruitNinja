@@ -42,16 +42,18 @@ public:
     uint8_t m_NotifType;     // +0x10C
     uint8_t _pad[3];         // +0x10D..+0x10F
 
-    // ---- STUBS (binary) ----
-    // STUB: NotificationControl::Init -- binary @ 0x???? (TODO RE)
+    // ---- HUDControl3d lifecycle overrides ----
+    // No NotificationControl-specific symbol in binary (only ctor @0x152ed0/0x153060,
+    // dtors @0x152dec/152e2c/152e68); these vtable slots inherit base HUDControl3d behaviour.
+    // TODO: NotificationControl::Init -- override body; resolve vs base HUDControl3d Init slot
     void Init() override;
-    // STUB: NotificationControl::Release -- binary @ 0x???? (TODO RE)
+    // TODO: NotificationControl::Release -- override body; resolve vs base HUDControl3d Release slot
     void Release() override;
-    // STUB: NotificationControl::Reset -- binary @ 0x???? (TODO RE)
+    // TODO: NotificationControl::Reset -- override body; resolve vs base HUDControl3d Reset slot
     void Reset() override;
-    // STUB: NotificationControl::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+    // TODO: NotificationControl::PreDraw(float*) -- override body; resolve vs base HUDControl3d PreDraw slot
     void PreDraw(float* viewVec);
-    // ---- end STUBS ----
+    // ---- end lifecycle overrides ----
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)

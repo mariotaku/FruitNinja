@@ -83,7 +83,7 @@ void ScreenButton::ControlDeleted(HUDControl* ctrl) {
     m_pButton = nullptr;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ScreenButton::DefaultButtonDelegate -- auto stub
+// Matches ScreenButton::DefaultButtonDelegate @ 0x001300ec.
+// Default per-frame update predicate; binary body is a bare `return` (no-op,
+// always returns false). Faithful port — no gap.
 void ScreenButton::DefaultButtonDelegate(MenuButton*, float, ScreenButton&) {}
-// ---- end AUTO-STUB MERGE ----

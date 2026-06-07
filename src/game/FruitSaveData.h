@@ -353,18 +353,16 @@ public:
     // 0x0012b3dc. Achievement in-progress timer ticks.
     void Update(float dt, HUD* hud);
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: FruitSaveData::DownloadedTweakValue -- auto stub from binary missing-symbol set
+    // Defunct: online tweaks -- no-op stub; binary @ 0x0012a080
     void DownloadedTweakValue(char const*, int);
-    // STUB: FruitSaveData::PublishUnlockedAchievements -- auto stub from binary missing-symbol set
+    // Defunct: online achievements -- no-op stub; binary @ 0x0012a194
     void PublishUnlockedAchievements();
-    // STUB: FruitSaveData::SetTotal -- auto stub from binary missing-symbol set
+    // TODO: 0x0012b2b0 -- SetTotal: hash name, compute delta vs GetTotal, AddToTotal(delta); return old total
     void SetTotal(char const*, int, bool, bool);
-    // STUB: FruitSaveData::TotalExists -- auto stub from binary missing-symbol set
+    // TODO: 0x0012a0fc -- TotalExists(name): hash name, delegate to TotalExists(hash)
     void TotalExists(char const*);
-    // STUB: FruitSaveData::TotalExists -- auto stub from binary missing-symbol set
+    // TODO: 0x00129bb4 -- TotalExists(hash): true if hash present in m_Totals or m_SessionTotals
     void TotalExists(unsigned int);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

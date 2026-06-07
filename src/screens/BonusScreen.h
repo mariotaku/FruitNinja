@@ -89,12 +89,14 @@ public:
                   const char* name, int tier);
 
     // Binary form of AddAward — Colour arg (port uses uint32_t; both overloads present)
-    // STUB: BonusScreen::AddAward(Colour,...) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x00133664 -- real binary AddAward signature (Colour); currently no-op,
+    // uint32_t overload carries the canonical logic.
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
     // Binary form of Draw — float* arg (port uses const Vec3&, int; both overloads present)
-    // STUB: BonusScreen::Draw(float*) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0013325C -- real binary Draw signature (float* view matrix); currently no-op,
+    // (const Vec3&, int) overload carries the canonical logic.
     void Draw(float* mtx);
 
     // Binary @ 0x00131d58 — returns kRevealStart (0.6660f)

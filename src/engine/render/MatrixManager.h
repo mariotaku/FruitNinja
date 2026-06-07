@@ -87,10 +87,12 @@ public:
     const MatrixStack& GetViewStack() const { return m_View; }
     const MatrixStack& GetTextureStack() const { return m_Texture; }
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: MatrixManager::SetupPerspective -- auto stub from binary missing-symbol set
+    // TODO: 0x0019e668 -- build a perspective projection matrix and apply it.
+    //   Binary args (top, bottom, near, far, ?, out): m[1][1]=bottom/top,
+    //   m[0][0]=(bottom/top)/arg3, m[2][2]=(far+near)/(near-far),
+    //   m[3][2]=2*near*far/(near-far), m[2][3]=-1, rest 0; if out==null use a
+    //   local. Then m_Projection.SetCurrentMatrix(out) and UploadAll().
     void SetupPerspective(float, float, float, float, float, Matrix44*);
-    // ---- end AUTO-STUB MERGE ----
 
 private:
     // Matches 0x0019e2b4 — recomputes cached matrices based on dirty versions

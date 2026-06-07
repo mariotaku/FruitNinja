@@ -38,11 +38,13 @@ public:
     // Upload native format directly to GL (for .tex files without CPU conversion)
     void UploadNative(int width, int height, GLenum glFormat, GLenum glType, const void* pixels);
 
-    // STUB: Texture::LoadFromMemory -- binary missing-symbol set
+    // TODO: 0x00189d80 -- create a Texture2DFromFile_Bada from a memory buffer
+    // (ptr,len), wrap in SmartPtr<Texture> and return it (out via 'this').
     void LoadFromMemory(void const*, int);
-    // STUB: Texture::SetUnCached -- binary missing-symbol set
+    // TODO: 0x00188da4 -- bind only if not already cached: if vtable IsCached
+    // slot returns 0, call Set().
     void SetUnCached();
-    // STUB: Texture::UnSetUnCached -- binary missing-symbol set
+    // TODO: 0x00188d9c -- uncached unbind: forwards to UnSet().
     void UnSetUnCached();
 
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)

@@ -58,9 +58,11 @@ void BakedString::Clear() {
     m_Height = 0.0f;
 }
 
-// STUB: BakedString::AddDropShadow -- auto stub from binary missing-symbol set
+// TODO: 0x001971c8 -- AddDropShadow: duplicate baked glyph quads at an offset with a
+//   shadow colour to build the drop-shadow page set.
 void BakedString::AddDropShadow() {}
-// STUB: BakedString::LayoutToCircle -- auto stub from binary missing-symbol set
+// TODO: 0x0019762c -- LayoutToCircle: reposition baked glyph quads onto a circular arc
+//   of the given radius (curved-text layout pass over m_pPageVertices).
 void BakedString::LayoutToCircle(float) {}
 
 } // namespace Mortar

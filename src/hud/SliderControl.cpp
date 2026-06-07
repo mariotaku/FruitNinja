@@ -197,7 +197,9 @@ void SliderControl::UnloadContent() {
     s_ThumbTexture = 0;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: SliderControl::UpdateFromGameWork -- auto stub
+// ---------------------------------------------------------------------------
+// HUDControl override -- Binary @ 0x0015ffac (single bx lr; no-op)
+// Defunct: SliderControl -- no-op stub; binary @ 0x0015ffac
+//          (no internal call sites; OptionsScreen was repurposed to
+//          PauseScreen, leaving the slider library code unused).
 void SliderControl::UpdateFromGameWork() {}
-// ---- end AUTO-STUB MERGE ----

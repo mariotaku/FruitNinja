@@ -74,16 +74,14 @@ public:
     static char s_DataDir[256];
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: TextureManager::Destroy -- auto stub from binary missing-symbol set
+    // TODO: 0x00188db8 -- TextureManager::Destroy: tear down the manager (binary body returns this, effectively a no-op release hook)
     void Destroy();
-    // STUB: TextureManager::Initialise -- auto stub from binary missing-symbol set
+    // TODO: 0x00188de4 -- TextureManager::Initialise: forwards to InitialiseInternal to set up the texture cache/subsystem
     void Initialise(int);
-    // STUB: TextureManager::InitialiseInternal -- auto stub from binary missing-symbol set
+    // TODO: 0x000f609c -- TextureManager::InitialiseInternal: real init body (via PTR_InitialiseInternal_001ecf84); populate cache/state
     void InitialiseInternal();
-    // STUB: TextureManager::LoadIndependent -- auto stub from binary missing-symbol set
+    // TODO: 0x00188dd4 -- TextureManager::LoadIndependent: load a texture outside the shared cache (binary returns an empty SmartPtr<Texture>)
     void LoadIndependent(void*, int);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

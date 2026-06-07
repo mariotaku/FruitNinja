@@ -191,25 +191,24 @@ public:
     float m_InnerRegion[4];
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ScrollingMenu::ClearTouch -- auto stub from binary missing-symbol set
+    // TODO: 0x0015af3c -- ClearTouch: m_TouchId = -1; m_bDragging = 0.
     void ClearTouch();
-    // ---- end AUTO-STUB MERGE ----
 
-    // ---- STUBS (binary) ----
-    // STUB: ScrollingMenu::Collide(long) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0015af4c -- Collide(long): walk m_Items, call vtable+0x34 (hit-test)
+    // on each; return first non-null item, else nullptr. Gated by m_fieldCA != 0.
     ScrollingMenuItem* Collide(long touchSlot);
-    // STUB: ScrollingMenu::Init -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0015af28 -- Init: calls vtable Reset() (delegates to Reset slot).
     void Init() override;
-    // STUB: ScrollingMenu::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0015af34 -- PreDraw(float*): empty no-op in binary (return only).
     void PreDraw(float* viewVec);
-    // STUB: ScrollingMenu::Release -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0015b034 -- Release: calls DestroyList() to clear+delete all items.
     void Release() override;
-    // STUB: ScrollingMenu::Reset -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0015aeb8 -- Reset: m_DragTargetIdx=-1, m_TouchId=-1, m_pCollidedItem=0,
+    // m_bNoDestructor=1, m_bConstrainedView=0, m_SnapDist=1.0f; zero Vec3 copied into
+    // m_Velocity / m_TouchAnchorPos / m_AnchorOffset / m_PendingVelocity.
     void Reset() override;
-    // STUB: ScrollingMenu::Skip -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0015af38 -- Skip: empty no-op in binary (return only).
     void Skip() override;
-    // ---- end STUBS ----
 };
 
 #ifdef __bada__

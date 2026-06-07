@@ -805,7 +805,10 @@ void ShopListItem::Draw() {
     }
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ShopListItem::ButtonClicked -- auto stub
+// ---------------------------------------------------------------------------
+// ShopListItem::ButtonClicked @ 0x0015c978
+// Binary: if (m_pShopScreen != 0) m_pShopScreen->SetSelected(this);
+// TODO: 0x0015c978 -- wire m_pShopScreen->SetSelected(this); currently a no-op
+//       stub. Needs ShopScreen::SetSelected to be ported/exposed first.
+// ---------------------------------------------------------------------------
 void ShopListItem::ButtonClicked() {}
-// ---- end AUTO-STUB MERGE ----

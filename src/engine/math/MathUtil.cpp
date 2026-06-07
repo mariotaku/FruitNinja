@@ -26,15 +26,15 @@ float TanIdx(unsigned short idx) {
 }
 
 // ASM-verified: 2026-05-06T15:30 binary @ 0x00194dcc (asm-inspector)
-// STUB in shipping binary (4-byte body: movs r0,#0; bx lr); no callers.
+// Binary body is a no-op stub (4-byte body: movs r0,#0; bx lr); no callers. Ported faithfully.
 unsigned short AsinIdx(float /*x*/) {
-    return 0; // Defunct: stubbed in binary
+    return 0; // matches binary stub @ 0x00194dcc
 }
 
 // ASM-verified: 2026-05-06T15:30 binary @ 0x00194dd0 (asm-inspector)
-// STUB in shipping binary (4-byte body: movs r0,#0; bx lr); no callers.
+// Binary body is a no-op stub (4-byte body: movs r0,#0; bx lr); no callers. Ported faithfully.
 unsigned short AcosIdx(float /*x*/) {
-    return 0; // Defunct: stubbed in binary
+    return 0; // matches binary stub @ 0x00194dd0
 }
 
 // Binary @ 0x00194dd4 — atan LUT @ GOT+0xd18 (129 int16); atan2f equivalent

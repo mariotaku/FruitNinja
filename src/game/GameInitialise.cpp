@@ -338,7 +338,7 @@ void GameInitialise() {
     PowerUpShop::LoadContent();     // binary @ 0x00155b50 — empty body
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
     // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
-    PreloadSounds();   // STUB until ported
+    PreloadSounds();   // 0x0010b204 — preload WAVs (implemented + ASM-verified, see PreloadSounds.cpp)
 
     LOG_INFO("GAMEINIT", "GameInitialise: done");
 }

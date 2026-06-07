@@ -265,8 +265,8 @@ Mesh::Mesh(SmartPtr<SharedEffectProperties> const& parent, AsciiString const& na
     m_WVPProp   = m_OwnGroup->GetList().GetProperty("WorldViewProjection");
 }
 
-// STUB: BindSkeleton(Skeleton const&) -- binary @ 0x001b0948
-// Binary signature takes const-ref; this overload matches the binary mangled symbol.
+// TODO: 0x001b0948 -- const-ref BindSkeleton overload matching the binary mangled symbol;
+// body should resolve m_SkeletonIndex per BoneBinding like the ptr overload (currently no-op).
 void Mesh::BindSkeleton(Skeleton const& /*skeleton*/) {
     // Defunct: const-ref BindSkeleton overload -- no-op stub; binary @ 0x001b0948
 }
@@ -318,20 +318,20 @@ void Mesh::RebuildEffectBindings() {
     m_WVPProp   = m_OwnGroup->GetList().GetProperty("WorldViewProjection");
 }
 
-// STUB: DrawCube(float, float, float, Colour, DrawEffectContainer*) -- binary @ 0x00193ed8
+// Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ed8
 void Mesh::DrawCube(float /*x*/, float /*y*/, float /*z*/,
                     Colour /*colour*/, DrawEffectContainer* /*fx*/) {
     // Defunct: DrawCube is a binary stub (BX LR); no-op stub; binary @ 0x00193ed8
 }
 
-// STUB: DrawLine(Vec3 const&, Vec3 const&, float const&, Colour const&, Vec3 const&, DrawEffectContainer*) -- binary @ 0x00193edc
+// Defunct: debug draw primitive -- no-op stub; binary @ 0x00193edc
 void Mesh::DrawLine(Vec3 const& /*from*/, Vec3 const& /*to*/, float const& /*width*/,
                     Colour const& /*colour*/, Vec3 const& /*normal*/,
                     DrawEffectContainer* /*fx*/) {
     // Defunct: DrawLine is a binary stub (BX LR); no-op stub; binary @ 0x00193edc
 }
 
-// STUB: DrawSphere(float, Colour, DrawEffectContainer*) -- binary @ 0x00193ee0
+// Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ee0
 void Mesh::DrawSphere(float /*radius*/, Colour /*colour*/, DrawEffectContainer* /*fx*/) {
     // Defunct: DrawSphere is a binary stub (BX LR); no-op stub; binary @ 0x00193ee0
 }

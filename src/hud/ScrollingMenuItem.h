@@ -136,11 +136,11 @@ public:
     // Binary: 0x00147978 (base no-op)
     virtual void Slot14() {}
 
-    // ---- STUBS (binary) ----
     // 4-param ctor: float, float, char const*, Mortar::Delegate1<void,ScrollingMenuItem*>
-    // STUB: ScrollingMenuItem::ScrollingMenuItem -- binary @ 0x???? (TODO RE)
+    // TODO: 0x0015b228 -- faithfully port body: load m_Size Vec3 from global default-size
+    // ptr (DAT_0015b2b8), map width->m_Height / height->m_Width, run
+    // MakeColourFromGlobal_ScrollMenu on m_Colour. Port .cpp body uses fixed defaults.
     ScrollingMenuItem(float, float, const char*, Mortar::Delegate1<void, ScrollingMenuItem*>);
-    // ---- end STUBS ----
 
     // CallClickedMenuItemCallback -- fires m_Callback
     void CallClickedMenuItemCallback();

@@ -150,10 +150,9 @@ public:
     float m_CostAlpha;                // +0x280
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ShopListItem::ButtonClicked -- auto stub from binary missing-symbol set
+    // TODO: 0x0015c978 -- ShopListItem::ButtonClicked: if (m_pShopScreen)
+    //       m_pShopScreen->SetSelected(this). Currently a no-op stub.
     void ButtonClicked();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 // ---------------------------------------------------------------------------

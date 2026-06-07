@@ -77,9 +77,11 @@ bool ColSphere::Contains(const Vec3& p) const {
     return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ColSphere::ColSphereLine -- auto stub
+// TODO: 0x0019fdec -- ColSphereLine: ClosestPointOnLine(line, center) -> delta = center - closest;
+//   if MagnitudeSqr(delta) < radius^2, normalise delta and write normal * |radius - Magnitude(delta)|
+//   into outVec. Body unimplemented in port.
 void ColSphere::ColSphereLine(ColSphere*, ColLine*, Vec3*) {}
-// STUB: ColSphere::ColSphereSphere -- auto stub
+// TODO: 0x0019fc90 -- ColSphereSphere: delta = centerA - centerB; if MagnitudeSqr(delta) < (rA+rB)^2,
+//   d = Sqrt(MagnitudeSqr); normalise delta by d (when d>0); write delta * (d - (rA+rB)) into outVec.
+//   Body unimplemented in port.
 void ColSphere::ColSphereSphere(ColSphere*, ColSphere*, Vec3*) {}
-// ---- end AUTO-STUB MERGE ----

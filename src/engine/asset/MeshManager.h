@@ -32,18 +32,16 @@ private:
     Mortar::SmartPtr<Model> LoadMeshInternal(const char* path);
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: MeshManager::Destroy -- auto stub from binary missing-symbol set
+    // TODO: <MeshManager::Destroy> -- tear down the model cache (mirror of ReleaseAll + free instance state)
     void Destroy();
-    // STUB: MeshManager::Find -- auto stub from binary missing-symbol set
+    // TODO: <MeshManager::Find(AsciiString)> -- look up a cached Model by name, return cached SmartPtr or null
     void Find(AsciiString const&) const;
-    // STUB: MeshManager::Find -- auto stub from binary missing-symbol set
+    // TODO: <MeshManager::Find(SmartPtr<Model>)> -- locate a cached Model entry by handle
     void Find(SmartPtr<Model> const&) const;
-    // STUB: MeshManager::InitialiseInternal -- auto stub from binary missing-symbol set
+    // TODO: <MeshManager::InitialiseInternal> -- one-time internal cache/capacity setup invoked by Initialise
     void InitialiseInternal();
-    // STUB: MeshManager::Release -- auto stub from binary missing-symbol set
+    // TODO: <MeshManager::Release> -- drop one Model's refcount and evict it from the cache when unreferenced
     void Release(SmartPtr<Model> const&);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

@@ -53,13 +53,13 @@ public:
     int  GetType() override { return 1; }
 
     // ---- STUBS (binary) ----
-    // STUB: SpeedControl::Init -- binary @ 0x???? (TODO RE)
+    // TODO: SpeedControl::Init -- HUDControl3d init override; no distinct symbol in binary (vtable slot only)
     void Init() override;
-    // STUB: SpeedControl::PreDraw -- binary @ 0x???? (TODO RE)
+    // TODO: SpeedControl::PreDraw -- combo-speed gauge pre-draw transform; no distinct symbol in binary (vtable slot only)
     void PreDraw(float* viewVec);
-    // STUB: SpeedControl::Reset -- binary @ 0x???? (TODO RE)
+    // TODO: SpeedControl::Reset -- reset gauge state to defaults; no distinct symbol in binary (vtable slot only)
     void Reset() override;
-    // STUB: SpeedControl::Skip -- binary @ 0x???? (TODO RE)
+    // TODO: SpeedControl::Skip -- skip/fast-forward gauge animation; no distinct symbol in binary (vtable slot only)
     void Skip() override;
     // Binary @ 0x00160ce8 -- looping-stream restart callback bound to
     // GameSound::SFXPlay's finishCallback arg. Returns false (binary

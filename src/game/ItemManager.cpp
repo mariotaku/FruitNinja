@@ -453,7 +453,7 @@ ItemInfo* ItemManager::GetEquipped(int type) const {
     return m_DefaultItems[type];
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// ---- Additional ItemManager public API (binary missing-symbol set) ----
 
 // -----------------------------------------------------------------------
 // EquipItem @ 0x00103198 (ELF) / 0x00113198 (Ghidra)
@@ -518,8 +518,10 @@ bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
     if (!mod) return false;
     return mod->m_SwipeSounds.PlaySound(-1, volume, pitch);
 }
-// STUB: ItemManager::SetSwipeLoodVol -- auto stub
+// TODO: 0x00111ffc — set looping-swipe desired volume on the equipped blade mod.
+// Binary: if (m_DefaultItems[0] != null) m_DefaultItems[0]->m_LoopingSound.SetLoopDesiredVol(vol);
 void ItemManager::SetSwipeLoodVol(float) {}
-// STUB: ItemManager::Update -- auto stub
+// TODO: 0x00112fc8 — per-frame update of equipped blade mod sounds.
+// Binary: if (m_DefaultItems[0] != null) SlashModInfo::UpdateSounds(m_DefaultItems[0], dt);
 void ItemManager::Update(float) {}
-// ---- end AUTO-STUB MERGE ----
+// ---- end additional API ----

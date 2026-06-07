@@ -892,19 +892,25 @@ void Font::DrawString(float scale, float /*yLineFactor (ignored)*/, float z,
 }
 
 // ---------------------------------------------------------------------------
-// Stubs (binary signatures present; bodies not yet RE'd)
+// Unported overloads (binary signatures present; bodies forward/TBD)
 // ---------------------------------------------------------------------------
 
-// STUB: Font::DrawString(Utf8StringIterator,Vec3,Colour,float,Vec2,int,float,MortarRectangleDec*,float) -- binary @ 0x???? (TODO RE)
+// TODO: 0x00198e44 -- packed Vec3/Vec2 shape of the full Font_DrawString;
+// body should forward to the implemented DrawString(scale,yLineFactor,rotZ,
+// iter,pos,colour,maxWH,alignment,z,clipRect) overload above.
 void Font::DrawString(Utf8StringIterator, Vec3, Colour, float, Vec2, int, float, MortarRectangleDec*, float) {}
 
-// STUB: Font::DrawString(Utf8StringIterator,float,float,float,Colour,float,float,float,int,MortarRectangleDec*,float) -- binary @ 0x???? (TODO RE)
+// TODO: 0x00199aa0 -- by-value-arg shape of the binary DrawString wrapper;
+// body should forward to the implemented DrawString(iter&,colour&,alignment,...)
+// wrapper above.
 void Font::DrawString(Utf8StringIterator, float, float, float, Colour, float, float, float, int, MortarRectangleDec*, float) {}
 
-// STUB: Font::FindAdvanceOfNextWord(Utf8StringIterator,float,float,float,float) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001985b0 -- word-advance helper for word-wrap: measure the next
+// word's xadvance from iter, breaking at space/newline/wrap-limit.
 float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float) { return 0.0f; }
 
-// STUB: Font::GetCharTemplate(long,int) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001984e8 -- 2-arg glyph lookup overload (codepoint + page index);
+// resolve a CharTemplate* for the given page.
 Font::CharTemplate* Font::GetCharTemplate(long, int) { return nullptr; }
 
 // ASM-spec: 2026-05-11 binary @ 0x001988f0 (re-analyst).
@@ -955,7 +961,9 @@ float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth
     return lineH * (float)lines;
 }
 
-// STUB: Font::MeasureString(Utf8StringIterator) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001988a8 -- by-value-iter shape of MeasureString (same binary symbol
+// as the const-ref overload above); body should forward to
+// GetLineLength(iter, 0.0f, NULL) like the implemented overload.
 float Font::MeasureString(Utf8StringIterator) { return 0.0f; }
 
 } // namespace Mortar

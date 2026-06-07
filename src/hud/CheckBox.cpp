@@ -59,17 +59,17 @@ CheckBox::~CheckBox() {
 
 // Binary @ 0x00134AE4 (no-op)
 void CheckBox::Init() {
-    // STUB: CheckBox::Init -- binary @ 0x???? (TODO RE)
+    // TODO: 0x00134AE4 -- vtable Init slot; empty in binary (single `return`), no-op is faithful.
 }
 
 // Binary @ 0x00134AE8 (no-op)
 void CheckBox::Release() {
-    // STUB: CheckBox::Release -- binary @ 0x???? (TODO RE)
+    // TODO: 0x00134AE8 -- vtable Release slot; empty in binary (single `return`), no-op is faithful.
 }
 
 // Binary @ 0x00134B20
 void CheckBox::PreDraw(const Vec3& hudScale) {
-    // STUB: CheckBox::PreDraw -- binary @ 0x???? (TODO RE)
+    // TODO: 0x00134B20 -- vtable PreDraw slot; empty in binary (single `return`), no-op is faithful.
     (void)hudScale;
 }
 

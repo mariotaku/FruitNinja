@@ -91,10 +91,9 @@ private:
     DisplayManager();
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: DisplayManager::Destroy -- auto stub from binary missing-symbol set
+    // TODO: 0x0019da38 -- DisplayManager::Destroy singleton teardown;
+    // binary body is a near-empty no-op (releases GL/platform display state).
     void Destroy();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 } // namespace Mortar

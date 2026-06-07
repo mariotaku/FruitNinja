@@ -104,7 +104,7 @@ private:
     ~ItemManager();
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+    // ---- Additional ItemManager public API (binary missing-symbol set) ----
     // EquipItem @ 0x00103198 — equip item by hash; returns 1 on success.
     int EquipItem(unsigned int hash);
     // PlayAlternateComboSound @ 0x0011303c — plays combo sound from equipped blade mod.
@@ -117,13 +117,15 @@ public:
     // PlayAlternateSwipeSound @ 0x00113068 — delegates to m_pCurrentSlashMod->m_SwipeSounds.PlaySound.
     // Returns true iff an alternate sound played (suppresses default Sword-swipe SFX).
     bool PlayAlternateSwipeSound(float volume, float pitch);
-    // STUB: ItemManager::SetSwipeLoodVol -- auto stub from binary missing-symbol set
+    // TODO: 0x00111ffc — set looping-swipe desired volume on the equipped blade
+    // mod: if m_DefaultItems[0], call its m_LoopingSound.SetLoopDesiredVol(vol).
     void SetSwipeLoodVol(float);
     // UnequipItem @ 0x0010314c — unequip item by hash; returns true if found.
     bool UnequipItem(unsigned int hash);
-    // STUB: ItemManager::Update -- auto stub from binary missing-symbol set
+    // TODO: 0x00112fc8 — per-frame update of equipped blade mod sounds:
+    // if m_DefaultItems[0], call SlashModInfo::UpdateSounds(dt).
     void Update(float);
-    // ---- end AUTO-STUB MERGE ----
+    // ---- end additional API ----
 };
 
 #endif // FN_ITEM_MANAGER_H
