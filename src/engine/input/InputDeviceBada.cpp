@@ -24,9 +24,11 @@ InputDeviceBada::InputDeviceBada()
 InputDeviceBada::~InputDeviceBada() {
 }
 
-// Binary @ 0x00196cc8 (partial — full body: alloc + dev->fns->Init(dev) + push_back on manager)
+// Binary @ 0x00196cc8 allocates the Bada HAL input-device handle (dev->fns->Init(dev)).
+// Port specific: no SDL counterpart — the Touch singleton is bound in the ctor (m_touch),
+// SDL events reach Touch directly via InputTranslatorSDL, and the device is registered on
+// InputManager's list by InputManager::Init (not here). Intentionally a no-op for the SDL backend.
 void InputDeviceBada::Init(unsigned long /*flags*/) {
-    // TODO: 0x00196cc8 — Init body: alloc device, call dev->fns->Init(dev), push_back on InputManager device list.
 }
 
 void InputDeviceBada::Destroy() {
