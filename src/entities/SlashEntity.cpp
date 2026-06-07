@@ -33,6 +33,7 @@
 #include "game/FruitSaveData.h"
 #include "engine/network/NetworkManager.h"
 #include "Fruit.h"
+#include "Bomb.h"
 #include "SplatEntity.h"
 #include <cstring>
 #include <cmath>
@@ -215,6 +216,8 @@ static float    g_Scale4            = 1.0f;   // 0x001F3E64
 static float    g_Scale5            = 0.0f;   // 0x0024D8D4
 static uint8_t  g_ScaleFlag1        = 0;      // 0x0024D8D8 (gates CreateGhost())
 static uint8_t  g_ScaleFlag2        = 1;      // 0x001F3E69 (gates UV-mirror branch)
+static uint8_t  g_HitLatch          = 0;      // 0x0024D840 (+0xc4 in g_SlashState) frame-hit latch: set on bomb hit or special fruit; cleared in PreUpdate after reset counter reaches 5
+static int32_t  g_HitResetCounter   = 0;      // 0x0024D83C (+0xc0 in g_SlashState) reset cooldown: increments toward 5 each PreUpdate; when >=5, latch is cleared
 
 // Resolve a particle-emitter name to its template hash, validating that the
 // emitter actually exists in PSPParticleManager. Binary calls
@@ -456,6 +459,18 @@ void SlashEntity::PostUpdate(float /*dt*/) {}
 //   DAT_0017c5fc = 0.0f the prior comment cited is the m_PreAccum (+0xc8)
 //   reset at 0x0017c5ec, not a constant dt argument.
 void SlashEntity::PreUpdate(float dt) {
+    // Binary @ 0x17c596: per-frame hit-latch reset logic.
+    // Runs in PreUpdate for EVERY SlashEntity (one per finger slot) -- matches
+    // binary: the counter/latch writes target the shared global so only the
+    // final increment per frame "wins" for the counter, but the semantics are
+    // identical to a single-call-per-frame reset because the counter only
+    // increments (never decrements between PreUpdates) and the latch is only
+    // cleared when the counter reaches the threshold.
+    if (g_HitResetCounter < 5) {
+        g_HitResetCounter += 1;        // 0x17c5a2
+    } else {
+        g_HitLatch = 0;                // 0x17c5aa
+    }
     // Port specific: SlashEntityGhost ring (8 slots) deferred.
     // Port specific: ItemManager::PushSwipeLoopVolume deferred.
     if (g_ColourType == 1 /* PER_SLASH */) {
@@ -923,9 +938,12 @@ void SlashEntity::Update(float dt) {
         if (am) {
             // Only fruit (0) and bomb (1) participate in blade collision
             // — matches binary.
+            // ASM-verified: 2026-06-07 binary @ 0x0017d664/0x0017c596 (re-analyst) -- per-frame hit latch: PreUpdate resets (counter<5 ? counter++ : latch=0); both collision loops break while latch!=0; bomb hit and special fruit (field_0x10c!=0) set latch=1/counter=0; normal fruit does not. m_SwipeEndEdge(+0x4c)=1 when bomb m_bHit && !m_bMenuBombHit.
             for (int t = 0; t <= 1; t++) {
+                if (g_HitLatch != 0) break;    // latch set by fruit loop: skip bomb loop entirely
                 const std::list<Mortar::Entity*>& list = am->GetTypeList(t);
                 for (std::list<Mortar::Entity*>::const_iterator it = list.begin(); it != list.end(); ++it) {
+                    if (g_HitLatch != 0) break; // 0x0017dc9e-equivalent: ldrb [base,#0xc4]; cbnz -> exit
                     Mortar::Entity* e = *it;
                     if (!e) continue;
                     // ASM-verified: 2026-05-20 binary @ 0x0017D788 (re-analyst)
@@ -940,22 +958,26 @@ void SlashEntity::Update(float dt) {
 
                     Vec3 bladeVel;
                     if (CollideWithSphere(*cs, bladeVel)) {
-                        // Binary @ 0x0017d664: vtable[9](victim, slashEntity, 0, 0, &bladeVel).
-                        // Port: SlashEntity does not inherit Mortar::Entity, pass nullptr for hitter.
-                        // Binary passes this (slashEntity) as hitter; Fruit::CollisionResponse
-                        // sets hitter->m_Scale = 1.0 on critical hit via the hitter pointer.
-                        // Port replicates by reading m_bCriticalEligible after the call.
-                        LOG_INFO("SLASH", "hit fruit %p at (%.1f,%.1f) trail_n=%d",
+                        // ASM-verified: 2026-06-07 binary @ 0x0017d664 (re-analyst) -- fruit loop
+                        // (type 0) and bomb loop (type 1) are SEPARATE; only the fruit loop arms
+                        // the splat stream (m_PendingSplats+=2, m_SliceTimer*=0, m_BladeVelAtSlice,
+                        // m_SlicePos). Bombs (incl. back-bomb) never spawn juice splats; bomb loop
+                        // only does CollisionResponse + global hit flag + m_bFlag4c.
+                        // Splat-emit @ 0x0017e248.
+                        LOG_INFO("SLASH", "hit %s %p at (%.1f,%.1f) trail_n=%d",
+                                    t == 0 ? "fruit" : "bomb",
                                     static_cast<void*>(e), cs->center().x, cs->center().y, m_NumPoints);
                         e->CollisionResponse(nullptr, 0, 0, &bladeVel);
-                        // Binary @ 0x0017d664 write-group: snapshot slice state
-                        // immediately after CollisionResponse returns.
+                        if (t == 0) {
+                        // Binary @ 0x0017d664 write-group (fruit loop only): snapshot slice state
+                        // immediately after CollisionResponse returns; arm splat-stream.
                         // Binary @ 0x0017e248 collision branch: arm splat-stream.
                         m_SliceTimerA    = 0.0f;
                         m_SliceTimerB    = 0.0f;
                         m_PendingSplats += 2;
                         m_BladeVelAtSlice = m_BladeDir;
                         m_SlicePos        = e->pos;
+                        } // t == 0 (fruit-only splat-arm)
                         // ASM-verified: 2026-05-22 binary @ 0x0017d8a4 (re-analyst).
                         // Binary gates combo bookkeeping + MissControl popup spawn on
                         // Fruit+0x10C == 0 (i.e., NOT a menu fruit). Menu fruits still
@@ -1012,6 +1034,23 @@ void SlashEntity::Update(float dt) {
                                 }
                             }
                             } // !isMenuFruit
+                            // Binary @ 0x17d9c0-0x17d9d2: set latch ONLY for special/menu fruit
+                            // (m_bSpawnedByCriticalSplash / field_0x10c != 0). Normal fruit
+                            // (field_0x10c == 0) does NOT set the latch -- that's why a single
+                            // swipe can slice multiple normal fruits in one frame.
+                            if (isMenuFruit) {
+                                g_HitLatch        = 1;   // 0x17d9c0
+                                g_HitResetCounter = 0;   // 0x17d9c4
+                            }
+                        }
+                        if (t == 1) {
+                            // Binary @ 0x0017db7e-0x17db9e: bomb hit ALWAYS sets the latch.
+                            Bomb* bomb = static_cast<Bomb*>(e);
+                            g_HitLatch        = 1;       // 0x17db7e
+                            g_HitResetCounter = 0;       // 0x17db82
+                            if (bomb->m_bHit && !bomb->m_bMenuBombHit) {
+                                m_SwipeEndEdge = 1;      // 0x17db96 (+0x4c)
+                            }
                         }
                         slicedThisFrame = true;
                     }
