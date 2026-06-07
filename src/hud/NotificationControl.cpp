@@ -256,15 +256,15 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
 // the duplicated ctor @0x153060); these vtable slots fall through to base
 // HUDControl3d. The override bodies below are placeholders until the base-class
 // slot semantics are RE'd and ported.
-// TODO: NotificationControl::Init -- override body; resolve vs base HUDControl3d Init slot
+// TODO: 0x001529EC -- override body; resolve vs base HUDControl3d Init slot
 void NotificationControl::Init() {}
 
-// TODO: NotificationControl::Release -- override body; resolve vs base HUDControl3d Release slot
+// TODO: 0x00152DE0 -- override body; resolve vs base HUDControl3d Release slot
 void NotificationControl::Release() {}
 
-// TODO: NotificationControl::Reset -- override body; resolve vs base HUDControl3d Reset slot
+// TODO: 0x001529F8 -- override body; resolve vs base HUDControl3d Reset slot
 void NotificationControl::Reset() {}
 
-// TODO: NotificationControl::PreDraw(float*) -- override body; resolve vs base HUDControl3d PreDraw slot
+// TODO: 0x001529FC -- override body; resolve vs base HUDControl3d PreDraw slot
 void NotificationControl::PreDraw(float* /*viewVec*/) {}
 

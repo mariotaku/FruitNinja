@@ -45,13 +45,13 @@ public:
     // ---- HUDControl3d lifecycle overrides ----
     // No NotificationControl-specific symbol in binary (only ctor @0x152ed0/0x153060,
     // dtors @0x152dec/152e2c/152e68); these vtable slots inherit base HUDControl3d behaviour.
-    // TODO: NotificationControl::Init -- override body; resolve vs base HUDControl3d Init slot
+    // TODO: 0x001529EC -- override body; resolve vs base HUDControl3d Init slot
     void Init() override;
-    // TODO: NotificationControl::Release -- override body; resolve vs base HUDControl3d Release slot
+    // TODO: 0x00152DE0 -- override body; resolve vs base HUDControl3d Release slot
     void Release() override;
-    // TODO: NotificationControl::Reset -- override body; resolve vs base HUDControl3d Reset slot
+    // TODO: 0x001529F8 -- override body; resolve vs base HUDControl3d Reset slot
     void Reset() override;
-    // TODO: NotificationControl::PreDraw(float*) -- override body; resolve vs base HUDControl3d PreDraw slot
+    // TODO: 0x001529FC -- override body; resolve vs base HUDControl3d PreDraw slot
     void PreDraw(float* viewVec);
     // ---- end lifecycle overrides ----
 };

@@ -103,13 +103,13 @@ public:
     // @ 0x00171f64 -- destructs each pool entry, frees backing memory.
     static void CleanUp();
 
-    // TODO: BombFlash::Draw -- render one active flash sprite (textured quad, animated alpha)
+    // TODO: 0x00171B54 -- render one active flash sprite (textured quad, animated alpha)
     void Draw();
-    // TODO: BombFlash::DrawUpdate -- per-frame draw-state advance for one flash
+    // TODO: 0x00171024 -- per-frame draw-state advance for one flash
     void DrawUpdate(float);
-    // TODO: BombFlash::GetFree -- return next free pool slot for MakeFlash
+    // TODO: 0x00170F88 -- return next free pool slot for MakeFlash
     void GetFree();
-    // TODO: BombFlash::Init -- initialise a flash slot (texture, position, anim state)
+    // TODO: 0x00171020 -- initialise a flash slot (texture, position, anim state)
     void Init(void*, int, Vec3*);
 };
 
