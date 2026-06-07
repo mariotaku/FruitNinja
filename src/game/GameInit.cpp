@@ -444,18 +444,27 @@ void GameUpdate(float dt, bool active) {
     // Splat life decays in real time on all screens; the wave-scaled dt
     // shrinks toward 0 on the shop/menu, which previously froze m_Life and
     // left splats lingering forever.
-    if (active) SplatEntity::UpdateActiveSplats(dt);
+    // Binary @ 0x0016bed0: SlashEntity::PreUpdate(scaledDt) is called ONCE
+    // in the active branch (before SplatEntity::UpdateActiveSplats). The prior
+    // port comment claiming "ActorManager handles this" was wrong -- ActorManager
+    // only calls Update+PostUpdate, not PreUpdate. Without this call the per-frame
+    // hit-latch counter never increments during active gameplay, so g_HitLatch
+    // set on the first hit is never cleared -> all subsequent slices blocked.
+    if (active) {
+        for (int i = 0; i < 16; ++i) {
+            if (g_pSlashEntities[i]) {
+                g_pSlashEntities[i]->PreUpdate(dt);
+                break;
+            }
+        }
+        SplatEntity::UpdateActiveSplats(dt);
+    }
     // ASM-verified: 2026-05-17 binary @ 0x0016c378 inactive branch (re-analyst).
     // Binary calls SlashEntity::PreUpdate(0.0f) ONCE then loops 16x calling
     // Update(scaledDt) + PostUpdate(scaledDt) with the REAL dt (not zero).
-    // Active branch is handled by ActorManager::Update above (SlashEntity is
-    // a type-3 actor driven through the pool like the binary).
-    //
-    // Earlier port passed 0.0f to Update/PostUpdate too, which froze the
-    // blade trail in place during pause -- user-visible "slice trail doesn't
-    // fade while paused" bug. Binary's real-dt path lets the trail age and
-    // decay normally; nothing slices because ActorManager::Update isn't
-    // running on the inactive branch.
+    // Active Update+PostUpdate is handled by ActorManager::Update above.
+    // Inactive PreUpdate uses dt=0 to freeze palette/ghost tick while paused;
+    // Update/PostUpdate get real dt so the trail ages and fades normally.
     if (!active) {
         // ASM-verified: 2026-05-20 binary @ 0x0016c31a..0x0016c35e GameUpdate else-branch (re-analyst)
         // Entry to the else-branch unconditionally clears m_bSlowMotion, then if
