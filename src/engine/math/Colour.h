@@ -58,18 +58,6 @@ struct Colour {
     }
 
 public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: Colour::Lerp -- auto stub from binary missing-symbol set
     void Lerp(Colour const&, float) const;

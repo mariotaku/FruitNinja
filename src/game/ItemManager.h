@@ -104,20 +104,6 @@ private:
     ~ItemManager();
 
 public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // EquipItem @ 0x00103198 — equip item by hash; returns 1 on success.
     int EquipItem(unsigned int hash);

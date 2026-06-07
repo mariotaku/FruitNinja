@@ -158,19 +158,6 @@ public:
     static void PauseGame();
     static void UnpauseGame();
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: PauseScreen::ContinueGameCallback -- auto stub from binary missing-symbol set
     void ContinueGameCallback();

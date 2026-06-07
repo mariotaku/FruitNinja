@@ -150,18 +150,6 @@ public:
     float m_CostAlpha;                // +0x280
 
 public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ShopListItem::ButtonClicked -- auto stub from binary missing-symbol set
     void ButtonClicked();
