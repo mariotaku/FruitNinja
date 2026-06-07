@@ -423,14 +423,14 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 } // namespace Mortar
 
 namespace Mortar {
-// TODO: <MeshManager::Destroy> -- tear down the model cache (mirror of ReleaseAll + free instance state)
+// TODO: 0x001929BC -- tear down the model cache (mirror of ReleaseAll + free instance state)
 void MeshManager::Destroy() {}
-// TODO: <MeshManager::Find(AsciiString)> -- look up a cached Model by name, return cached SmartPtr or null
+// TODO: 0x00192BA8 -- look up a cached Model by name, return cached SmartPtr or null
 void MeshManager::Find(AsciiString const&) const {}
-// TODO: <MeshManager::Find(SmartPtr<Model>)> -- locate a cached Model entry by handle
+// TODO: 0x00192B54 -- locate a cached Model entry by handle
 void MeshManager::Find(SmartPtr<Model> const&) const {}
-// TODO: <MeshManager::InitialiseInternal> -- one-time internal cache/capacity setup invoked by Initialise
+// TODO: 0x001A74B8 -- one-time internal cache/capacity setup invoked by Initialise
 void MeshManager::InitialiseInternal() {}
-// TODO: <MeshManager::Release> -- drop one Model's refcount and evict it from the cache when unreferenced
+// TODO: 0x00192B1C -- drop one Model's refcount and evict it from the cache when unreferenced
 void MeshManager::Release(SmartPtr<Model> const&) {}
 }  // namespace Mortar

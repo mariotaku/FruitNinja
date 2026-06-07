@@ -1497,9 +1497,10 @@ int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*m
 // NOT from ActorManager::Draw (which hits the BX lr Draw stub instead).
 // ASM-verified: 2026-05-18 binary @ 0x0017E424 (re-analyst)
 //
-// m_SwipeEndEdge is a 2-bit shift-register fuse: writer (touch-up handler,
+// field_0x144 is a 2-bit shift-register fuse: writer (touch-up handler,
 // outside SlashEntity) sets bit0; each DrawSlice call shifts left and fires
 // CreateGhost + contact-burst emitter on the frame when the last bit falls off.
+// m_bFlag4c (+0x4c): bomb-hit one-shot, set in SlashEntity::Update @ 0x0017DB9E (fn 0x0017D664) when slicing a non-menu bomb that hits; read in TouchDown @ 0x0017D62E. Distinct from the field_0x144 2-bit shift-register fuse (shifted in DrawSlice @ 0x0017E436).
 // TODO: SlashEntity m_SwipeEndEdge bit-0 writer -- the external touch-up
 //   handler that sets m_SwipeEndEdge bit0 (consumed by the DrawSlice shift
 //   register) is not yet located in the binary; resolve its address when found.
