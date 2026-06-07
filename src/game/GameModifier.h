@@ -82,7 +82,7 @@ public:
     // [3] Update(dt) @ 0x001179c4 — base dispatcher (returns 0=alive, 1=expired)
     virtual int Update(float dt) {
         if (m_bApplied) {
-            // TODO: if (m_DeferStart < TimeControl_GetCurrentTime()) wait
+            // TODO: 0x001179c4 -- gate deferred apply: if (m_DeferStart < TimeControl::GetCurrentTime()) return 0; (wait until threshold)
             ApplyModifier(false, nullptr);
             m_bApplied = false;
         }
@@ -113,12 +113,10 @@ public:
     // [9] Clone — heap-alloc new instance
     virtual GameModifier* Clone() { return nullptr; }
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: GameModifier::Parse -- auto stub from binary missing-symbol set
+    // TODO: <GameModifier::Parse> -- read base XML attributes (duration, defer-start) then dispatch ParseSpecific(xml); binary symbol unresolved
     void Parse(TiXmlElement*);
-    // STUB: GameModifier::Reset -- auto stub from binary missing-symbol set
+    // TODO: <GameModifier::Reset> -- restore base state (m_Duration_remaining, m_bApplied) then dispatch ResetSpecific(); binary symbol unresolved
     void Reset();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_GAME_MODIFIER_H

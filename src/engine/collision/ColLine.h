@@ -32,10 +32,11 @@ public:
     Vec3 Direction() const { return b - a(); }
     float LengthSq() const { Vec3 d = Direction(); return d.x*d.x + d.y*d.y + d.z*d.z; }
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ColLine::ColLineLine -- auto stub from binary missing-symbol set
+    // TODO: 0x0019f4f0 -- line-segment vs line-segment closest-approach test;
+    //   computes Direction()/MagnitudeSqr/Dot of the two segments, clamps params,
+    //   and writes the separating/penetration vector to the out Vec3. Body is an
+    //   empty stub; port the binary math (impl @ 0x0019f4f0, thunk @ 0x000f8508).
     void ColLineLine(ColLine*, ColLine*, Vec3*);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

@@ -121,15 +121,13 @@ Mortar::SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name)
 
 } // namespace Mortar
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
 namespace Mortar {
-// STUB: TextureManager::Destroy -- auto stub
+// TODO: 0x00188db8 -- TextureManager::Destroy: tear down the manager (binary body returns this, effectively a no-op release hook)
 void TextureManager::Destroy() {}
-// STUB: TextureManager::Initialise -- auto stub
+// TODO: 0x00188de4 -- TextureManager::Initialise: forwards to InitialiseInternal to set up the texture cache/subsystem
 void TextureManager::Initialise(int) {}
-// STUB: TextureManager::InitialiseInternal -- auto stub
+// TODO: 0x000f609c -- TextureManager::InitialiseInternal: real init body (via PTR_InitialiseInternal_001ecf84); populate cache/state
 void TextureManager::InitialiseInternal() {}
-// STUB: TextureManager::LoadIndependent -- auto stub
+// TODO: 0x00188dd4 -- TextureManager::LoadIndependent: load a texture outside the shared cache (binary returns an empty SmartPtr<Texture>)
 void TextureManager::LoadIndependent(void*, int) {}
 }  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----

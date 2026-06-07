@@ -98,10 +98,9 @@ private:
     void UpdateTouchPosition();
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: SliderControl::UpdateFromGameWork -- auto stub from binary missing-symbol set
+    // HUDControl override -- Binary @ 0x0015ffac (single bx lr; no-op)
+    // Defunct: SliderControl -- no-op stub; binary @ 0x0015ffac
     void UpdateFromGameWork();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

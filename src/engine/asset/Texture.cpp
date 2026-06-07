@@ -206,13 +206,13 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
 
 } // namespace Mortar
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
 namespace Mortar {
-// STUB: Texture::LoadFromMemory -- auto stub
+// TODO: 0x00189d80 -- create a Texture2DFromFile_Bada from a memory buffer
+// (ptr,len) via operator new(0x20), wrap in SmartPtr<Texture> and return it.
 void Texture::LoadFromMemory(void const*, int) {}
-// STUB: Texture::SetUnCached -- auto stub
+// TODO: 0x00188da4 -- bind only if not already cached: if the IsCached vtable
+// slot returns 0, call Set().
 void Texture::SetUnCached() {}
-// STUB: Texture::UnSetUnCached -- auto stub
+// TODO: 0x00188d9c -- uncached unbind: forwards to UnSet().
 void Texture::UnSetUnCached() {}
 }  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----

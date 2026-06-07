@@ -42,7 +42,7 @@ ResourceLoader::ResourceLoader(const char* filePath)
     Initialize(static_cast<const uint8_t*>(f.Data()), size);
 }
 
-// STUB: ResourceLoader::ResourceLoader(AsciiString const&) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001b48c4 -- binary does PathGetParent(filePath)->BasePathSet, then FileDataReader(filePath)+Initialize(reader); port delegates to const char* ctor instead.
 ResourceLoader::ResourceLoader(const AsciiString& filePath)
     : m_flag(0)
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
@@ -58,7 +58,7 @@ ResourceLoader::ResourceLoader(const AsciiString& filePath)
 #endif
 }
 
-// STUB: ResourceLoader::ResourceLoader(DataReader&, AsciiString const&) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001b4804 -- binary calls BasePathSet(basePath) then Initialize(reader); port leaves reader unread (Initialize(DataReader&) unported).
 ResourceLoader::ResourceLoader(DataReader& /*reader*/, const AsciiString& basePath)
     : m_flag(0)
     , m_BasePath(basePath)
@@ -68,7 +68,7 @@ ResourceLoader::ResourceLoader(DataReader& /*reader*/, const AsciiString& basePa
 {
 }
 
-// STUB: ResourceLoader::~ResourceLoader() -- binary @ 0x???? (TODO RE)
+// TODO: 0x001b465c -- binary destroys m_Children vector then m_BasePath AsciiString; port relies on implicit member dtors (equivalent).
 ResourceLoader::~ResourceLoader()
 {
 }
@@ -131,12 +131,12 @@ void ResourceLoader::Initialize(const uint8_t* data, size_t dataSize) {
     }
 }
 
-// STUB: ResourceLoader::Initialize(DataReader&) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001b4708 -- DataReader& Initialize is the binary's real parser: ReadLE child count, recurse per child via VectorDataReader, reserve+push_back into m_Children. Port currently parses via the raw uint8_t* overload above; this DataReader& path is an empty stub.
 void ResourceLoader::Initialize(DataReader& /*reader*/)
 {
 }
 
-// STUB: ResourceLoader::ReadBytes(void*, unsigned long) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001b45bc -- binary memcpy's count bytes from m_Data[m_ReadPos] (reads via DataReader cursor); port body matches semantically.
 void ResourceLoader::ReadBytes(void* dest, unsigned long count)
 {
     if (count > 0 && m_ReadPos + count <= m_Data.size()) {
@@ -145,7 +145,7 @@ void ResourceLoader::ReadBytes(void* dest, unsigned long count)
     }
 }
 
-// STUB: ResourceLoader::ReadString() -- binary @ 0x???? (TODO RE)
+// TODO: 0x001b45e0 -- binary Read<u16> length, Resize buffer, ReadBytes into AsciiString; port body matches semantically.
 AsciiString ResourceLoader::ReadString()
 {
     uint16_t len = Read<uint16_t>();
@@ -155,7 +155,7 @@ AsciiString ResourceLoader::ReadString()
     return AsciiString(str);
 }
 
-// STUB: ResourceLoader::ReadSubResourceLookup() -- binary @ 0x???? (TODO RE)
+// TODO: 0x001b46d0 -- binary Read<u32> 1-based index, ConvertFromLittle, return &m_Children[index-1]; port body matches semantically.
 ResourceLoader* ResourceLoader::ReadSubResourceLookup()
 {
     uint32_t index = Read<uint32_t>();

@@ -100,18 +100,16 @@ private:
 #endif
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: DojoScreen::MoreGamesCallback -- auto stub from binary missing-symbol set
+    // Defunct: more-games/online dashboard upsell (NetworkManager::LaunchDashboard) -- no-op stub; binary @ 0x0013769c
     void MoreGamesCallback();
-    // STUB: DojoScreen::QuitCallback -- auto stub from binary missing-symbol set
+    // TODO: 0x001389f4 -- play SFX, set m_State=6 (return to MainScreen), launch field_0x94 fruit piece with random velocity, reset TutorialControl tute pos
     void QuitCallback();
-    // STUB: DojoScreen::SwitchCallback -- auto stub from binary missing-symbol set
+    // Defunct: online network-provider selection (AskUserToChoosePreferredNetwork) -- no-op stub; binary @ 0x00137694
     void SwitchCallback();
-    // STUB: DojoScreen::SwitchNetworkButton -- auto stub from binary missing-symbol set
+    // Defunct: online network-provider button (NetworkManager::GetPreferredNetworkProvider texture swap) -- no-op stub; binary @ 0x001379b0
     void SwitchNetworkButton(MenuButton*, float, ScreenButton&);
-    // STUB: DojoScreen::TwitterFacbookButtons -- auto stub from binary missing-symbol set
+    // Defunct: Twitter/Facebook social-share button layout/animation -- no-op stub; binary @ 0x00137738
     void TwitterFacbookButtons(MenuButton*, float, ScreenButton&);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

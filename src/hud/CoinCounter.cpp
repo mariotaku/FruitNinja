@@ -12,7 +12,7 @@ CoinCounter::CoinCounter()
 // dtor @ 0x0013558c / 0x001355b8 / 0x001355dc
 CoinCounter::~CoinCounter() {}
 
-// Init @ vtable[2]: no-op stub pending RE
+// Init @ 0x00135544 -- binary body is an empty no-op (immediate return); faithful.
 void CoinCounter::Init() {}
 
 // Update @ 0x00135580: no-op
@@ -31,11 +31,11 @@ void CoinCounter::Reset() {
     *f90 = 1.0f;
 }
 
-// STUB: CoinCounter::Release -- binary @ 0x???? (TODO RE)
+// Release @ 0x0013557c -- binary body is an empty no-op (immediate return); faithful.
 void CoinCounter::Release() {}
 
-// STUB: CoinCounter::PreDraw -- binary @ 0x???? (TODO RE)
+// PreDraw @ 0x00135584 -- binary body is an empty no-op (immediate return); faithful.
 void CoinCounter::PreDraw(const Vec3& hudScale) { (void)hudScale; }
 
-// STUB: CoinCounter::Skip -- binary @ 0x???? (TODO RE)
+// Skip @ 0x00135588 -- binary body is an empty no-op (immediate return); faithful.
 void CoinCounter::Skip() {}

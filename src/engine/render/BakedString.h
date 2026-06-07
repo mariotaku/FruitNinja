@@ -48,9 +48,9 @@ public:
     float GetWidth()  const { return m_Width; }
     float GetHeight() const { return m_Height; }
 
-    // STUB: BakedString::AddDropShadow -- auto stub from binary missing-symbol set
+    // TODO: 0x001971c8 -- AddDropShadow: build drop-shadow page set from baked quads.
     void AddDropShadow();
-    // STUB: BakedString::LayoutToCircle -- auto stub from binary missing-symbol set
+    // TODO: 0x0019762c -- LayoutToCircle: arrange baked glyph quads onto a circular arc.
     void LayoutToCircle(float);
 
 private:

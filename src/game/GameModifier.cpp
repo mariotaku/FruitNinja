@@ -1,8 +1,6 @@
 #include "GameModifier.h"
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: GameModifier::Parse -- auto stub
+// TODO: <GameModifier::Parse> -- read base XML attributes (duration, defer-start) then dispatch ParseSpecific(xml); binary symbol unresolved
 void GameModifier::Parse(TiXmlElement*) {}
-// STUB: GameModifier::Reset -- auto stub
+// TODO: <GameModifier::Reset> -- restore base state (m_Duration_remaining, m_bApplied) then dispatch ResetSpecific(); binary symbol unresolved
 void GameModifier::Reset() {}
-// ---- end AUTO-STUB MERGE ----

@@ -38,21 +38,21 @@ public:
     CoinCounter();
     ~CoinCounter() override;
 
-    void Init() override;       // vtable[2]: coin texture load (called from GameInit via vtable[2])
+    void Init() override;       // 0x00135544: binary body is an empty no-op (immediate return); faithful
     void Reset() override;      // 0x00135548: clamps field_0x8C to [0,1], sets field_0x90=1.0f
     void Update(float dt) override;  // 0x00135580: no-op
     void Draw(const Vec3& hudScale, int layerMask) override { (void)hudScale; (void)layerMask; }
 
     int GetType() override { return 3; }  // binary @ 0x00135AF4
 
-    // ---- STUBS (binary) ----
-    // STUB: CoinCounter::Release -- binary @ 0x???? (TODO RE)
+    // ---- Faithful empty no-op overrides (binary bodies are immediate returns) ----
+    // Release @ 0x0013557c -- binary body is an empty no-op (immediate return); faithful
     void Release() override;
-    // STUB: CoinCounter::PreDraw -- binary @ 0x???? (TODO RE)
+    // PreDraw @ 0x00135584 -- binary body is an empty no-op (immediate return); faithful
     void PreDraw(const Vec3& hudScale) override;
-    // STUB: CoinCounter::Skip -- binary @ 0x???? (TODO RE)
+    // Skip @ 0x00135588 -- binary body is an empty no-op (immediate return); faithful
     void Skip() override;
-    // ---- end STUBS ----
+    // ---- end faithful no-op overrides ----
 };
 
 #endif // FN_HUD_COIN_COUNTER_H

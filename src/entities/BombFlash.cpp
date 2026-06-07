@@ -25,7 +25,7 @@ BombFlash::BombFlash()
 // dtor @ 0x00171f38 / 0x00171fb8
 BombFlash::~BombFlash() {}
 
-// @ 0x00171038 -- stub: quadratic scale + alpha anim (TODO: real impl pending)
+// TODO: 0x00171038 -- quadratic scale + alpha animation over flash lifetime, then deactivate
 void BombFlash::Update(float /*dt*/) {}
 
 // @ 0x00170f84 -- stub in binary (returns param); port mirrors this behavior.
@@ -41,7 +41,7 @@ int BombFlash::CreatePool(int n) {
     return n;
 }
 
-// @ 0x001723f4 -- activate a pooled flash slot (TODO: real impl pending)
+// TODO: 0x001723f4 -- activate a pooled flash slot (find free slot, set texture/pos/colour/anim)
 void BombFlash::MakeFlash(Colour /*col*/, Vec3* /*pos*/, Vec3* /*dir*/,
                            Mortar::SmartPtr<Mortar::Texture>* /*tex*/) {}
 
@@ -55,7 +55,7 @@ void BombFlash::UpdateActiveFlashes(float dt) {
     }
 }
 
-// @ 0x0017102c -- iterate pool calling Draw on active slots (TODO: real draw)
+// TODO: 0x0017102c -- iterate pool, call Draw on active slots
 void BombFlash::DrawActiveFlashes() {}
 
 // @ 0x00170fe4 -- deactivate every pool slot
@@ -76,13 +76,11 @@ void BombFlash::CleanUp() {
     s_PoolCreated = false;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: BombFlash::Draw -- auto stub
+// TODO: BombFlash::Draw -- render one active flash sprite (textured quad, animated alpha)
 void BombFlash::Draw() {}
-// STUB: BombFlash::DrawUpdate -- auto stub
+// TODO: BombFlash::DrawUpdate -- per-frame draw-state advance for one flash
 void BombFlash::DrawUpdate(float) {}
-// STUB: BombFlash::GetFree -- auto stub
+// TODO: BombFlash::GetFree -- return next free pool slot for MakeFlash
 void BombFlash::GetFree() {}
-// STUB: BombFlash::Init -- auto stub
+// TODO: BombFlash::Init -- initialise a flash slot (texture, position, anim state)
 void BombFlash::Init(void*, int, Vec3*) {}
-// ---- end AUTO-STUB MERGE ----

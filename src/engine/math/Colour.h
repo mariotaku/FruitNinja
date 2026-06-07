@@ -58,14 +58,15 @@ struct Colour {
     }
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: Colour::Lerp -- auto stub from binary missing-symbol set
+    // TODO: 0x00183f58 -- Colour::Lerp(Colour const&, float) const: build a, *this as
+    //   Colours then delegate to the 3-arg Lerp(this, a, *this, t).
     void Lerp(Colour const&, float) const;
-    // STUB: Colour::Lerp -- auto stub from binary missing-symbol set
+    // TODO: 0x00183e98 -- Colour::Lerp(Colour, Colour, float): this = a; per channel
+    //   this -= (b - a) * t (R/G/B/A), then clamp each to >= 0 (signed->float, truncate).
     void Lerp(Colour, Colour, float);
-    // STUB: Colour::ToString -- auto stub from binary missing-symbol set
+    // TODO: 0x00183f98 -- Colour::ToString() const: snprintf ARGB (a,r,g,b) into a
+    //   static 0x100 buffer and return it.
     void ToString() const;
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

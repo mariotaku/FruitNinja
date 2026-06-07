@@ -116,10 +116,11 @@ struct ScreenButton {
     void ShrinkButtonCall();
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ScreenButton::DefaultButtonDelegate -- auto stub from binary missing-symbol set
+    // Matches ScreenButton::DefaultButtonDelegate @ 0x001300ec.
+    // Default per-frame update predicate (the value m_updateCb defaults to);
+    // trivial no-op that always returns false. Mirrors the named free function
+    // ScreenButtonDefaults::NoUpdate above.
     void DefaultButtonDelegate(MenuButton*, float, ScreenButton&);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif

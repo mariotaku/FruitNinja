@@ -218,11 +218,16 @@ void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> te
 // STUBS (binary methods not yet ported)
 // ---------------------------------------------------------------------------
 
-// STUB: BonusScreen::AddAward(Colour,...) -- binary @ 0x???? (TODO RE)
+// TODO: 0x00133664 -- real binary AddAward signature takes Colour (not uint32_t);
+// build BonusAwardHud, copy name, assign m_StarTex, m_TierBase = tier, m_TotalScore += tier,
+// m_Multiplier from DAT_001336e4, push into m_Awards. Currently a no-op; the wired-up
+// uint32_t overload above carries the canonical logic.
 void BonusScreen::AddAward(Colour /*colour*/, Mortar::SmartPtr<Mortar::Texture> /*tex*/,
                            const char* /*name*/, int /*tier*/) {}
 
-// STUB: BonusScreen::Draw(float*) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0013325C -- real binary Draw signature takes float* (the view matrix);
+// mirror the const Vec3&/int Draw override (dialog box + total score + per-award row loop).
+// Currently a no-op; the wired-up (const Vec3&, int) overload above carries the canonical logic.
 void BonusScreen::Draw(float* /*mtx*/) {}
 
 // Binary @ 0x00131d58 — returns pfVar14[0] = kRevealStart (0.6660f).

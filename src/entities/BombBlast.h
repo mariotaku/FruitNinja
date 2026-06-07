@@ -73,12 +73,15 @@ public:
     static void LoadContent();
     static void ReleaseContent();
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: BombBlast::DrawBlast -- auto stub from binary missing-symbol set
+    // TODO: 0x171354 -- DrawBlast: emit the 6-vertex kite (two triangles) for a
+    //       single blast into the shared tri-list. Per-blast geometry currently
+    //       lives inlined in DrawActiveBlasts; this standalone symbol should
+    //       factor that out to match the binary's call shape.
     void DrawBlast();
-    // STUB: BombBlast::DrawUpdate -- auto stub from binary missing-symbol set
+    // TODO: 0x171030 -- DrawUpdate(float): binary is a 1-byte no-op (the
+    //       PostUpdate vtable slot). Already realized as PostUpdate; keep this
+    //       declaration as the standalone-symbol counterpart.
     void DrawUpdate(float);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)

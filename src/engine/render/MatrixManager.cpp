@@ -126,7 +126,7 @@ Matrix44 MatrixManager::GetMVP() const {
     return m_CachedProjView * m_World.m_Current;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: MatrixManager::SetupPerspective -- auto stub
+// TODO: 0x0019e668 -- perspective projection (see header spec). Body should
+//   populate the projection matrix per the binary, m_Projection.SetCurrentMatrix,
+//   then UploadAll(); currently a no-op so callers link.
 void MatrixManager::SetupPerspective(float, float, float, float, float, Matrix44*) {}
-// ---- end AUTO-STUB MERGE ----

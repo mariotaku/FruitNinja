@@ -174,7 +174,8 @@ void VerticalScroller::UnloadContent() {
     s_arrow   = 0;
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: VerticalScroller::UpdateFromGameWork -- auto stub
+// ---------------------------------------------------------------------------
+// Binary @ 0x00167fd4 (empty bx lr; body is genuinely empty in the binary)
+// Defunct: ComboBox/ListBox/VerticalScroller dropdown widget triple --
+// no-op stub; binary @ 0x00167fd4
 void VerticalScroller::UpdateFromGameWork() {}
-// ---- end AUTO-STUB MERGE ----

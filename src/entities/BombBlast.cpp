@@ -247,9 +247,10 @@ void BombBlast::RemoveAll() {
     am->DeactivateAllEntities(4);
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: BombBlast::DrawBlast -- auto stub
+// TODO: 0x171354 -- DrawBlast: emit the per-blast 6-vertex kite into the shared
+//       tri-list. The geometry is currently inlined in DrawActiveBlasts (above);
+//       this should be factored out to match the binary's call shape.
 void BombBlast::DrawBlast() {}
-// STUB: BombBlast::DrawUpdate -- auto stub
+// TODO: 0x171030 -- DrawUpdate(float): binary is a 1-byte no-op (PostUpdate
+//       vtable slot). Already realized as PostUpdate; body stays empty.
 void BombBlast::DrawUpdate(float) {}
-// ---- end AUTO-STUB MERGE ----

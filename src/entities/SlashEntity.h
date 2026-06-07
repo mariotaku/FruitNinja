@@ -482,10 +482,14 @@ public:
 
     // (SlashEntity::AddPoint declared above with canonical 3-arg signature.)
 
-    // STUB: SlashEntity::CollideWithEntity -- binary @ 0x17B570 (TODO RE)
+    // TODO: 0x17B570 -- SlashEntity::CollideWithEntity: test this blade's
+    //   ColLine against entity->m_Col (ColSphere). Port's slice loop uses
+    //   CollideWithSphere() per-entity instead; this entry point is unreached.
     bool CollideWithEntity(Mortar::Entity* entity);
 
-    // STUB: SlashEntity::CollisionResponse (4-arg vtable override) -- binary @ 0x17B3BC (TODO RE)
+    // TODO: 0x17B3BC -- SlashEntity::CollisionResponse (4-arg vtable override):
+    //   1-instruction stub `mov r0,#0; bx lr`. SlashEntity is pure aggressor;
+    //   returns 0.
     int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel) override;
 
     // DrawSlice -- binary @ 0x17E424. Main blade render (two mirrored tri-strips).
@@ -504,7 +508,10 @@ public:
     // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
     void InitPoints(long count);
 
-    // STUB: SlashEntity::SetModColours (non-const Colour* binary form) -- binary @ 0x17CA0C (TODO RE)
+    // TODO: 0x17CA0C -- SlashEntity::SetModColours (non-const Colour* binary
+    //   form): copies palette, loads blade overlay texture, resolves emitter
+    //   hashes, notifies type-3 actors via ColoursChanged(). Port forwards to
+    //   the const-Colour* overload.
     static void SetModColours(Colour* colours, int colourCount, int colourType,
                               float lifeScale, const char* particlePath,
                               const char* textureName2, bool directional,
@@ -520,7 +527,9 @@ public:
     // ASM-spec: SlashEntity::TouchMoveY @ 0x17C490 -- writes pos.y.
     bool TouchMoveY(InputEvent* event);
 
-    // STUB: SlashEntity::UpdatePoints -- binary @ 0x17B92C (TODO RE)
+    // TODO: 0x17B92C -- SlashEntity::UpdatePoints: per-frame geometry rebuild
+    //   from the binary's m_pLeftBuffer/m_pRightBuffer vertex strips. Port
+    //   rebuilds from the m_Points[] trail array via RebuildGeometry() instead.
     void UpdatePoints(float dt);
 
     // ASM-spec: SlashEntity::UpdateTouchDown (InputEvent* form) @ 0x17D2E4

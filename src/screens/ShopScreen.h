@@ -275,14 +275,19 @@ public:
 #endif
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ShopScreen::BuyButtonCallback -- auto stub from binary missing-symbol set
+    // TODO: 0x0015c568 -- ShopScreen::BuyButtonCallback: buy/equip the selected
+    //   item via ItemManager (BuyItem if locked, else SetEquippedItem on its
+    //   slot), update per-slot cached selection (m_pSlotItems) and rewrite the
+    //   buy/equip button label strings.
     void BuyButtonCallback();
-    // STUB: ShopScreen::CancelCallback -- auto stub from binary missing-symbol set
+    // TODO: 0x0015c7f0 -- ShopScreen::CancelCallback: set m_State=6, fling the
+    //   buy-button fruit piece off-screen with a random velocity and reset the
+    //   TutorialControl tute position.
     void CancelCallback();
-    // STUB: ShopScreen::ConfirmCallback -- auto stub from binary missing-symbol set
+    // TODO: 0x0015c758 -- ShopScreen::ConfirmCallback: cache the selected item
+    //   into its slot, set m_State=5, fling the buy-button fruit piece and reset
+    //   the TutorialControl tute position.
     void ConfirmCallback();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)

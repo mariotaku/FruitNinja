@@ -40,10 +40,10 @@ float CosIdx(unsigned short idx);
 // Binary @ 0x00194d98 — SinIdx/CosIdx with 100000.0f fallback when cos==0
 float TanIdx(unsigned short idx);
 
-// Binary @ 0x00194dcc — STUB in shipping binary (returns 0); no callers in game code
+// Binary @ 0x00194dcc — binary body is a no-op stub (movs r0,#0; bx lr); no callers in game code. Ported faithfully.
 unsigned short AsinIdx(float x);
 
-// Binary @ 0x00194dd0 — STUB in shipping binary (returns 0); no callers in game code
+// Binary @ 0x00194dd0 — binary body is a no-op stub (movs r0,#0; bx lr); no callers in game code. Ported faithfully.
 unsigned short AcosIdx(float x);
 
 // Binary @ 0x00194dd4 — atan LUT @ GOT+0xd18 (129 int16); atan2f equivalent

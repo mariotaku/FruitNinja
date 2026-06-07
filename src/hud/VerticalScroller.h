@@ -118,10 +118,10 @@ public:
 #endif
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: VerticalScroller::UpdateFromGameWork -- auto stub from binary missing-symbol set
+    // vtable/per-frame hook -- Binary @ 0x00167fd4 (empty bx lr)
+    // Defunct: ComboBox/ListBox/VerticalScroller dropdown widget triple --
+    // no-op stub; binary @ 0x00167fd4
     void UpdateFromGameWork();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

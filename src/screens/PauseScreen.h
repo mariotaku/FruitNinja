@@ -158,12 +158,11 @@ public:
     static void PauseGame();
     static void UnpauseGame();
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: PauseScreen::ContinueGameCallback -- auto stub from binary missing-symbol set
+    // TODO: 0x00153fe8 -- ContinueGameCallback: if m_State==3, set m_State=4 (RESUME_EXIT)
+    //                     and clear ShopScreen +0x85 flag (InitVec3_ShopScreen if previously set)
     void ContinueGameCallback();
-    // STUB: PauseScreen::SkipTo -- auto stub from binary missing-symbol set
+    // TODO: 0x00153e34 -- SkipTo: jump straight to ACTIVE overlay (m_State=3, m_Alpha=1.0)
     void SkipTo();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 // Offset assertions (ARM32 binary layout).

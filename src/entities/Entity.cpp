@@ -105,17 +105,18 @@ Entity* Entity::ListenerCallback(Entity* a, Entity* /*b*/, Mortar::Message* /*ms
 // TODO: implement ET_RemoveEntity (binary @ 0x00174684) when EntityTracker tree storage is ported
 void ET_RemoveEntity(int /*treeIdx*/, uint16_t /*trackerID*/) {}
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
+// Entity LinkedHeap arena accessors. Bodies operate on the global LinkedHeap
+// allocated by HeapCreate; the port's heap path uses std new (see HeapCreate
+// DIFFERS), so these remain no-ops until the real LinkedHeap arena is ported.
 namespace Mortar {
-// STUB: Entity::HeapClear -- auto stub
+// TODO: 0x0019d6b4 -- HeapClear: LinkedHeap::ReleaseAll on the global Entity arena
 void Entity::HeapClear() {}
-// STUB: Entity::HeapDisplay -- auto stub
+// TODO: 0x0019d694 -- HeapDisplay: debug-dump the Entity LinkedHeap (bool = verbose)
 void Entity::HeapDisplay(bool) {}
-// STUB: Entity::HeapExist -- auto stub
+// TODO: 0x0019d658 -- HeapExist: report whether the global Entity LinkedHeap is allocated
 void Entity::HeapExist() {}
-// STUB: Entity::HeapGetFree -- auto stub
+// TODO: 0x0019d678 -- HeapGetFree: return free byte count of the Entity LinkedHeap
 void Entity::HeapGetFree() {}
-// STUB: Entity::HeapGetSize -- auto stub
+// TODO: 0x0019d640 -- HeapGetSize: return total byte size of the Entity LinkedHeap
 void Entity::HeapGetSize() {}
 }  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----

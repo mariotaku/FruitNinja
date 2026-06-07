@@ -75,10 +75,9 @@ public:
     int  GetType() override { return 3; }
     void Skip() override;
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: ScoreControl::AddMultipliyer -- auto stub from binary missing-symbol set
+    // TODO: 0x0015819c -- ScoreControl::AddMultipliyer(int): binary body is a trivial
+    //                      passthrough (returns its int argument); port the one-line body.
     int AddMultipliyer(int);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #endif // FN_HUD_SCORE_CONTROL_H

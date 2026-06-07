@@ -52,14 +52,15 @@ public:
 
     GameModifier* Clone() override;
 
-    // ---- STUBS (binary) ----
-    // STUB: WaveModifier::ApplyModifier -- binary @ 0x???? (TODO RE)
+    // TODO: 0x001282d4 -- chain base ApplyModifier, then (unless purchased) rewind
+    //   WaveManager to m_OverideProbabilityPool wave, SelectType() each override entry,
+    //   and append m_OverideEntries into WaveManager's current override list, then clear.
     void ApplyModifier(bool isPurchased, float* extra) override;
-    // STUB: WaveModifier::RemoveModifier -- binary @ 0x???? (TODO RE)
+    // TODO: 0x00128128 -- if WaveManager current wave < 0 and >= m_OverideProbabilityPool,
+    //   reset WaveManager current wave to (5, 0.25, 0).
     void RemoveModifier() override;
-    // STUB: WaveModifier::ResetSpecific -- binary @ 0x???? (TODO RE)
+    // @ 0x001280e0 -- empty override in binary (no specific reset work); no-op is faithful.
     void ResetSpecific() override;
-    // ---- end STUBS ----
 };
 
 #endif // FN_GAME_WAVE_MODIFIER_H

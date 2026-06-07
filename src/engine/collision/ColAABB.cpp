@@ -44,11 +44,9 @@ void ColAABB::DrawDebug() {
     // TODO: Mesh::DrawCube helper not ported
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: ColAABB::ColAABBAABB -- auto stub
+// TODO: 0x001b594c — ColAABBAABB: AABB-vs-AABB overlap test + penetration normal into Vec3*
 void ColAABB::ColAABBAABB(ColAABB*, ColAABB*, Vec3*) {}
-// STUB: ColAABB::ColAABBLine -- auto stub
+// TODO: 0x001b5ca8 — ColAABBLine: AABB-vs-Line slab intersection test + slab normal into Vec3*
 void ColAABB::ColAABBLine(ColAABB*, ColLine*, Vec3*) {}
-// STUB: ColAABB::ColAABBSphere -- auto stub
+// TODO: 0x001b6224 — ColAABBSphere: AABB-vs-Sphere closest-point test + penetration normal into Vec3*
 void ColAABB::ColAABBSphere(ColAABB*, ColSphere*, Vec3*) {}
-// ---- end AUTO-STUB MERGE ----

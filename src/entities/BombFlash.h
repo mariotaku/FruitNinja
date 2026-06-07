@@ -103,16 +103,14 @@ public:
     // @ 0x00171f64 -- destructs each pool entry, frees backing memory.
     static void CleanUp();
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: BombFlash::Draw -- auto stub from binary missing-symbol set
+    // TODO: BombFlash::Draw -- render one active flash sprite (textured quad, animated alpha)
     void Draw();
-    // STUB: BombFlash::DrawUpdate -- auto stub from binary missing-symbol set
+    // TODO: BombFlash::DrawUpdate -- per-frame draw-state advance for one flash
     void DrawUpdate(float);
-    // STUB: BombFlash::GetFree -- auto stub from binary missing-symbol set
+    // TODO: BombFlash::GetFree -- return next free pool slot for MakeFlash
     void GetFree();
-    // STUB: BombFlash::Init -- auto stub from binary missing-symbol set
+    // TODO: BombFlash::Init -- initialise a flash slot (texture, position, anim state)
     void Init(void*, int, Vec3*);
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)

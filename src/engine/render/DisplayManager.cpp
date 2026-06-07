@@ -140,11 +140,8 @@ GLenum DisplayManager::GetPlatformWrapT() {
     return (m_WrapTMode == 0) ? GL_REPEAT : GL_CLAMP_TO_EDGE;
 }
 
-} // namespace Mortar
-
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-namespace Mortar {
-// STUB: DisplayManager::Destroy -- auto stub
+// TODO: 0x0019da38 -- DisplayManager::Destroy singleton teardown;
+// binary body is a near-empty no-op (releases GL/platform display state).
 void DisplayManager::Destroy() {}
-}  // namespace Mortar
-// ---- end AUTO-STUB MERGE ----
+
+} // namespace Mortar

@@ -178,15 +178,20 @@ WaveModifier::WaveModifier()
 
 WaveModifier::~WaveModifier() {}
 
-// STUB: WaveModifier::ApplyModifier -- binary @ 0x???? (TODO RE)
+// TODO: 0x001282d4 -- after chaining base, the binary: (1) if m_OverideProbabilityPool < 10000
+//   && !isPurchased && pool < WaveManager current wave, calls SetCurrentWave(pool, -1.0, 0);
+//   (2) reads WaveManager::GetCurrentOverideList(0), calls SelectType() on each m_OverideEntries
+//   entry, inserts m_OverideEntries into that list, then clears m_OverideEntries. Only base
+//   chain is ported so far.
 void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
 }
 
-// STUB: WaveModifier::RemoveModifier -- binary @ 0x???? (TODO RE)
+// TODO: 0x00128128 -- if WaveManager current wave < 0 && m_OverideProbabilityPool <= current wave,
+//   call WaveManager::SetCurrentWave(5, 0.25, 0). Currently a no-op.
 void WaveModifier::RemoveModifier() {}
 
-// STUB: WaveModifier::ResetSpecific -- binary @ 0x???? (TODO RE)
+// @ 0x001280e0 -- empty override in binary (no specific reset work); no-op is faithful.
 void WaveModifier::ResetSpecific() {}
 
 // @ 0x001280e4

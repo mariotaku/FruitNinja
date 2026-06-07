@@ -681,15 +681,20 @@ void FruitNinja_SaveOnExit() {
     FruitNinja_SaveCurrentData(true);
 }
 
-// ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-// STUB: FruitSaveData::DownloadedTweakValue -- auto stub
+// Defunct: online tweaks -- no-op stub; binary @ 0x0012a080
+// Binary finds m_SessionTotals entry by hash(name) and writes count = value.
 void FruitSaveData::DownloadedTweakValue(char const*, int) {}
-// STUB: FruitSaveData::PublishUnlockedAchievements -- auto stub
+
+// Defunct: online achievements -- no-op stub; binary @ 0x0012a194
+// Binary gates on NetworkManager::IsOnline()||IsP2POnline(), then pushes each
+// numeric-prefixed unlocked achievement via UnlockAchievementInNetwork.
 void FruitSaveData::PublishUnlockedAchievements() {}
-// STUB: FruitSaveData::SetTotal -- auto stub
+
+// TODO: 0x0012b2b0 -- SetTotal: old=GetTotal(hash(name)); AddToTotal(name,hash,value-old,p3,p4); return old.
 void FruitSaveData::SetTotal(char const*, int, bool, bool) {}
-// STUB: FruitSaveData::TotalExists -- auto stub
+
+// TODO: 0x0012a0fc -- TotalExists(name): return TotalExists(hash(name)).
 void FruitSaveData::TotalExists(char const*) {}
-// STUB: FruitSaveData::TotalExists -- auto stub
+
+// TODO: 0x00129bb4 -- TotalExists(hash): true if hash in m_Totals or m_SessionTotals.
 void FruitSaveData::TotalExists(unsigned int) {}
-// ---- end AUTO-STUB MERGE ----

@@ -524,50 +524,63 @@ void ActorManager::SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0)
 
 // --- Long-typed overloads (binary mangles long as 'l', int as 'i') ---------
 
-// STUB: Add(long, bool) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0017068c -- long-typed mangled overload of Add(int,bool); forwards to
+//       the int body. Binary has one Add @ 0x0017068c; verify the live mangled
+//       name ('l' vs 'i') before treating the cast forwarder as final.
 Entity* ActorManager::Add(long entityType, bool unused) {
     return Add((int)entityType, unused);
 }
 
-// STUB: DeactivateAllEntities(long) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0016fb44 -- long-typed mangled overload of DeactivateAllEntities(int);
+//       forwards to the int body. Binary has one symbol @ 0x0016fb44.
 void ActorManager::DeactivateAllEntities(long typeIdx) {
     DeactivateAllEntities((int)typeIdx);
 }
 
-// STUB: Draw() -- binary @ 0x???? (TODO RE)
+// TODO: 0x0016fe7c -- no-arg Draw() overload; binary draw body is Draw(Renderer&)
+//       @ 0x0016fe7c. Confirm whether a parameterless Draw symbol exists or this
+//       is a port-only convenience before fleshing out.
 void ActorManager::Draw() {}
 
-// STUB: GetEntity(long, unsigned long) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0016fcc4 -- long/ulong-typed mangled overload of GetEntity(int,size_t);
+//       forwards to the int body @ 0x0016fcc4.
 Entity* ActorManager::GetEntity(long typeIdx, unsigned long slot) const {
     return GetEntity((int)typeIdx, (size_t)slot);
 }
 
-// STUB: GetEntityFirst(long, iterator&) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0016fbb8 -- long-typed mangled overload of GetEntityFirst(int,iterator&);
+//       forwards to the int body @ 0x0016fbb8.
 Entity* ActorManager::GetEntityFirst(long typeIdx, std::list<Entity*>::iterator& it) {
     return GetEntityFirst((int)typeIdx, it);
 }
 
-// STUB: GetEntityNext(long, iterator&) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0016fb88 -- long-typed mangled overload of GetEntityNext(int,iterator&);
+//       forwards to the int body @ 0x0016fb88.
 Entity* ActorManager::GetEntityNext(long typeIdx, std::list<Entity*>::iterator& it) {
     return GetEntityNext((int)typeIdx, it);
 }
 
-// STUB: GetNumEntities(long) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0016ff98 -- long-typed mangled overload of GetNumEntities(int);
+//       forwards to the int body @ 0x0016ff98.
 int ActorManager::GetNumEntities(long typeIdx) {
     return GetNumEntities((int)typeIdx);
 }
 
-// STUB: GetNumEntities(long*) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0016ff30 -- non-const long* overload of GetNumEntities(const long*);
+//       forwards to the const body @ 0x0016ff30.
 int ActorManager::GetNumEntities(long* typeIdxNullTerminated) {
     return GetNumEntities((const long*)typeIdxNullTerminated);
 }
 
-// STUB: Initialise(long, long) -- binary @ 0x???? (TODO RE)
+// TODO: 0x0017046c -- long-typed mangled overload of Initialise(int,int);
+//       forwards to the int body @ 0x0017046c.
 void ActorManager::Initialise(long numTypes, long heapSize) {
     Initialise((int)numTypes, (int)heapSize);
 }
 
-// STUB: Update(float, ColAABB*, ColAABB*) -- binary @ 0x???? (TODO RE)
+// TODO: 0x001701f4 -- bounds-taking Update(float,ColAABB*,ColAABB*) overload;
+//       binary Update @ 0x001701f4 ignores the two ColAABB* bounds in FruitNinja,
+//       so the forwarder to the dt-only body is behaviourally faithful.
 void ActorManager::Update(float dt, ::ColAABB* /*boundsA*/, ::ColAABB* /*boundsB*/) {
     Update(dt);
 }

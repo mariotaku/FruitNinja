@@ -216,8 +216,8 @@ public:
     // Shape-preserved: builds m_OwnGroup from defs, caches m_WorldProp/m_ViewProp/m_ProjProp/m_WVPProp.
     Mesh(SmartPtr<SharedEffectProperties> const& props, AsciiString const& name);
 
-    // STUB: BindSkeleton(Skeleton const&) -- binary @ 0x001b0948 (TODO RE)
-    // Binary signature takes const-ref; port's existing BindSkeleton(Skeleton*) has mismatched mangling.
+    // TODO: 0x001b0948 -- const-ref BindSkeleton overload preserved for binary mangling;
+    // body should resolve m_SkeletonIndex per BoneBinding like the ptr overload.
     void BindSkeleton(Skeleton const& skeleton);
 
     // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
@@ -233,22 +233,22 @@ public:
                                                          EffectPropertyDefinition const* begin,
                                                          EffectPropertyDefinition const* end);
 
-    // STUB: RebuildEffectBindings() -- binary @ 0x001b08e8 (TODO RE)
-    // Defunct: port computes MVP via MatrixManager directly.
+    // Defunct: SharedEffectProperties subsystem -- no-op stub; binary @ 0x001b08e8
+    // Port computes MVP via MatrixManager directly.
     void RebuildEffectBindings();
 
-    // STUB: DrawCube(float, float, float, Colour, DrawEffectContainer*) -- binary @ 0x00193ed8 (TODO RE)
-    // Binary is a stub (returns colour unchanged); port is likewise a no-op.
+    // Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ed8
+    // Binary itself is a stub (BX LR, returns colour unchanged); port is likewise a no-op.
     void DrawCube(float x, float y, float z, Colour colour, DrawEffectContainer* fx);
 
-    // STUB: DrawLine(Vec3 const&, Vec3 const&, float const&, Colour const&, Vec3 const&, DrawEffectContainer*) -- binary @ 0x00193edc (TODO RE)
-    // Binary is a stub (returns first vec unchanged); port is likewise a no-op.
+    // Defunct: debug draw primitive -- no-op stub; binary @ 0x00193edc
+    // Binary itself is a stub (BX LR, returns first vec unchanged); port is likewise a no-op.
     void DrawLine(Vec3 const& from, Vec3 const& to, float const& width,
                   Colour const& colour, Vec3 const& normal,
                   DrawEffectContainer* fx);
 
-    // STUB: DrawSphere(float, Colour, DrawEffectContainer*) -- binary @ 0x00193ee0 (TODO RE)
-    // Binary is a stub (returns colour unchanged); port is likewise a no-op.
+    // Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ee0
+    // Binary itself is a stub (BX LR, returns colour unchanged); port is likewise a no-op.
     void DrawSphere(float radius, Colour colour, DrawEffectContainer* fx);
 
     // Binary @ 0x001b09b0
@@ -276,8 +276,8 @@ public:
     static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
                          DrawEffectContainer* fx);
 
-    // STUB-DEFERRED: GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&) -- binary @ 0x001b0d18
-    // AnimBindings::Vector::Binding -- nested-typedef edge case; deferred until AnimBindings is fully ported.
+    // TODO: 0x001b0d18 -- GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&);
+    // AnimBindings::Vector::Binding nested-typedef edge case; deferred until AnimBindings is fully ported.
 
     // ---- end STUBS ----
 };

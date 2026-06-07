@@ -123,10 +123,10 @@ private:
     void RemoveBackButton();
 
 public:
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: AboutScreen::QuitGameCallback -- auto stub from binary missing-symbol set
+    // TODO: 0x0012eb30 -- play quit SFX, set m_State=2 (fade out), launch the
+    // back button entity (+0x134) with random velocity (RandFloat+5, -RandFloat,
+    // DAT_0012ebfc) and call TutorialControl::ResetTutePos(0).
     void QuitGameCallback();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #if defined(__bada__)

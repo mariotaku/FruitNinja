@@ -190,18 +190,18 @@ public:
     // Binary test: `(flags & 0x11) == 0`. Inactive / killed entities fail.
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }
 
-    // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
-    // STUB: Entity::HeapClear -- auto stub from binary missing-symbol set
+    // Entity LinkedHeap arena accessors (counterparts to HeapCreate/HeapDestroy).
+    // Operate on the process-global LinkedHeap that HeapCreate allocates.
+    // TODO: 0x0019d6b4 -- HeapClear: LinkedHeap::ReleaseAll on the global Entity arena
     void HeapClear();
-    // STUB: Entity::HeapDisplay -- auto stub from binary missing-symbol set
+    // TODO: 0x0019d694 -- HeapDisplay: debug-dump the Entity LinkedHeap (bool = verbose)
     void HeapDisplay(bool);
-    // STUB: Entity::HeapExist -- auto stub from binary missing-symbol set
+    // TODO: 0x0019d658 -- HeapExist: report whether the global Entity LinkedHeap is allocated
     void HeapExist();
-    // STUB: Entity::HeapGetFree -- auto stub from binary missing-symbol set
+    // TODO: 0x0019d678 -- HeapGetFree: return free byte count of the Entity LinkedHeap
     void HeapGetFree();
-    // STUB: Entity::HeapGetSize -- auto stub from binary missing-symbol set
+    // TODO: 0x0019d640 -- HeapGetSize: return total byte size of the Entity LinkedHeap
     void HeapGetSize();
-    // ---- end AUTO-STUB MERGE ----
 };
 
 #ifdef __bada__

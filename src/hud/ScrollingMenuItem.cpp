@@ -51,7 +51,9 @@ void ScrollingMenuItem::Draw() {
     // TODO: 0x0015b480 -- render item text and highlight
 }
 
-// STUB: ScrollingMenuItem::ScrollingMenuItem -- binary @ 0x???? (TODO RE)
+// TODO: 0x0015b228 -- 4-param ctor: load m_Size Vec3 from global default-size ptr
+// (DAT_0015b2b8) instead of zeroing; width->m_Height, height->m_Width per binary;
+// run MakeColourFromGlobal_ScrollMenu on m_Colour. Port currently uses fixed defaults.
 ScrollingMenuItem::ScrollingMenuItem(float, float, const char* text, Mortar::Delegate1<void, ScrollingMenuItem*> delegate)
     : m_pParent(nullptr)
     , m_Colour(0xFFFFFFFF)

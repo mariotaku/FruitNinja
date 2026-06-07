@@ -252,15 +252,19 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
     }
 }
 
-// STUB: NotificationControl::Init -- binary @ 0x???? (TODO RE)
+// No NotificationControl-specific symbol exists in the binary (only ctor/dtor +
+// the duplicated ctor @0x153060); these vtable slots fall through to base
+// HUDControl3d. The override bodies below are placeholders until the base-class
+// slot semantics are RE'd and ported.
+// TODO: NotificationControl::Init -- override body; resolve vs base HUDControl3d Init slot
 void NotificationControl::Init() {}
 
-// STUB: NotificationControl::Release -- binary @ 0x???? (TODO RE)
+// TODO: NotificationControl::Release -- override body; resolve vs base HUDControl3d Release slot
 void NotificationControl::Release() {}
 
-// STUB: NotificationControl::Reset -- binary @ 0x???? (TODO RE)
+// TODO: NotificationControl::Reset -- override body; resolve vs base HUDControl3d Reset slot
 void NotificationControl::Reset() {}
 
-// STUB: NotificationControl::PreDraw(float*) -- binary @ 0x???? (TODO RE)
+// TODO: NotificationControl::PreDraw(float*) -- override body; resolve vs base HUDControl3d PreDraw slot
 void NotificationControl::PreDraw(float* /*viewVec*/) {}
 
