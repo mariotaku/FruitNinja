@@ -265,10 +265,13 @@ Mesh::Mesh(SmartPtr<SharedEffectProperties> const& parent, AsciiString const& na
     m_WVPProp   = m_OwnGroup->GetList().GetProperty("WorldViewProjection");
 }
 
-// TODO: 0x001b0948 -- const-ref BindSkeleton overload matching the binary mangled symbol;
-// body should resolve m_SkeletonIndex per BoneBinding like the ptr overload (currently no-op).
-void Mesh::BindSkeleton(Skeleton const& /*skeleton*/) {
-    // Defunct: const-ref BindSkeleton overload -- no-op stub; binary @ 0x001b0948
+// Binary @ 0x001b0948 — const-ref BindSkeleton overload (distinct mangled symbol).
+// Identical body to the ptr overload: stores &skeleton into m_Skeleton (field +0x68),
+// walks m_BoneBindings (vector @ +0x34) and resolves each m_SkeletonIndex (+0x40) via
+// Skeleton::operator[](AsciiString) == FindIndex. Delegates to the ptr overload to
+// keep the index-resolution logic single-sourced.
+void Mesh::BindSkeleton(Skeleton const& skeleton) {
+    BindSkeleton(const_cast<Skeleton*>(&skeleton));
 }
 
 // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
@@ -373,8 +376,12 @@ void Mesh::DrawQuadUnCached(Colour colour, DrawEffectContainer* fx) {
 // ASM-verified: 2026-05-24 binary @ 0x00194060 (re-analyst)
 void Mesh::DrawQuadUnCached(Colour colour, float u0, float v0, float u1, float v1,
                              DrawEffectContainer* /*fx*/) {
-    // TODO: 0x00194060 -- fx non-null path: fx->GetType()==0x20 forces blend ON.
-    // fx is always null in current port (DrawEffectContainer is defunct).
+    // Port specific: binary @ 0x00194060 gates GL_BLEND via fixed-function glState<3042>:
+    //   blend OFF iff (colour.a == 0xFF && (renderModeSingleton == null ||
+    //                  renderModeSingleton->vtable[0x10]() != 0x20)), else blend ON.
+    // The gate reads a global render-mode singleton (DAT_0019417c), not the fx arg.
+    // GLES2 has no fixed-function blend state; the port's Renderer::DrawQuad manages
+    // blending in its shader/draw path, so this gate has no SDL/GLES2 counterpart.
     if (Renderer* r = Renderer::GetInstance()) {
         r->DrawQuad(colour, u0, v0, u1, v1);
     }
@@ -398,8 +405,12 @@ void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count,
 // ASM-verified: 2026-05-24 binary @ 0x00193f5c (re-analyst)
 void Mesh::DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType,
                     bool /*blend*/, DrawEffectContainer* /*fx*/) {
-    // TODO: 0x00193f5c -- blend/fx gate: if !blend && singleton==null -> glDisable(GL_BLEND).
-    // fx/blend are defunct in port; Renderer paths enable blend unconditionally.
+    // Port specific: binary @ 0x00193f5c gates GL_BLEND via fixed-function glState<3042>:
+    //   blend OFF iff (blend == 0 && (renderModeSingleton == null ||
+    //                  renderModeSingleton->vtable[0x10]() != 0x20)), else blend ON.
+    // Also issues glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE) — both are
+    // fixed-function GL1.x state with no GLES2 counterpart. The port's Renderer DrawTriList/
+    // DrawTriStrip set up blend + texture-env-equivalent modulation in their shaders.
     if (Renderer* r = Renderer::GetInstance()) {
         if (primType == 4)
             r->DrawTriList(const_cast<QUADCUSTOMVERTEX*>(verts), (int)count);

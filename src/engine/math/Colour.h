@@ -58,15 +58,16 @@ struct Colour {
     }
 
 public:
-    // TODO: 0x00183f58 -- Colour::Lerp(Colour const&, float) const: build a, *this as
-    //   Colours then delegate to the 3-arg Lerp(this, a, *this, t).
-    void Lerp(Colour const&, float) const;
-    // TODO: 0x00183e98 -- Colour::Lerp(Colour, Colour, float): this = a; per channel
-    //   this -= (b - a) * t (R/G/B/A), then clamp each to >= 0 (signed->float, truncate).
-    void Lerp(Colour, Colour, float);
-    // TODO: 0x00183f98 -- Colour::ToString() const: snprintf ARGB (a,r,g,b) into a
+    // Binary @ 0x00183f58 -- two-arg Lerp: builds copies of `a` and `*this`
+    //   then delegates to the 3-arg Lerp(this, a, *this, t). Returns *this.
+    Colour* Lerp(Colour const& a, float t) const;
+    // Binary @ 0x00183e98 -- three-arg Lerp: this = a; per channel
+    //   this -= (b - a) * t (R/G/B/A), then clamp each to >= 0 (signed->float,
+    //   truncate toward zero). Returns this.
+    Colour* Lerp(Colour a, Colour b, float t);
+    // Binary @ 0x00183f98 -- snprintf "%d, %d, %d, %d (argb)" (a,r,g,b) into a
     //   static 0x100 buffer and return it.
-    void ToString() const;
+    char* ToString() const;
 };
 
 #endif

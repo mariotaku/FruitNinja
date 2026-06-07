@@ -2,6 +2,7 @@
 
 #include "input/InputManager.h"
 #include "input/InputDeviceBada.h"
+#include "util/StringHash.h"
 #include <cstddef>
 
 namespace Mortar {
@@ -41,8 +42,10 @@ void InputManager::Destroy() {
     m_loadingConfig = false;
     m_inUpdate = false;
     if (!m_inputDevices.empty()) {
-        // Binary: ClearActions on first device only with all=true.
-        // TODO: 0x001968a0 — clarify "all" param semantics for ClearActions on device
+        // Binary @ 0x001968a0: ClearActions(hash=0, last=true) on the FIRST device only
+        // (the loop calls it when its index counter is 0). hash=0 + last=true means
+        // "clear every action binding" — the same 2nd-param ('last') used by the
+        // ClearActions(hash) broadcast below, here forced true for the wholesale clear.
         InputDevice* first = m_inputDevices.front();
         first->ClearActions(0, true);
     }
@@ -115,17 +118,87 @@ void InputManager::OnAxisExtentsChanged() {
     }
 }
 
-// Binary @ 0x00196228 — lookup table of 6 action-name hashes -> action flag.
-// Dead unless config-file parsing enabled.
-unsigned long InputManager::ParseAction(unsigned long /*hash*/) {
-    // TODO: 0x00196228 — action hash lookup table (6 entries)
+// Binary @ 0x00196228 — lookup table of 7 action-name hashes -> event-type flag.
+// Lazily builds a static {StringHash(name), flag} table (the binary guards it with
+// __cxa_guard; a function-local static gives the identical once-only init), then
+// linear-searches for `hash` and returns the matching flag, or 0 on no match.
+// Dead unless config-file parsing enabled (LoadConfigFile is a Defunct no-op stub).
+// Table source (strings @ 0x001c25dc/0x001b9730, value table @ 0x001f3ec0):
+//   "pressed"=0x01, "released"=0x04, "down"=0x02, "up"=0x08,
+//   "active"=0x10, "move"=0x20, "dead"=0x40
+unsigned long InputManager::ParseAction(unsigned long hash) {
+    struct ActionEntry { unsigned long nameHash; unsigned long flag; };
+    static bool initialised = false;
+    static ActionEntry table[7];
+    if (!initialised) {
+        table[0].nameHash = StringHash("pressed");  table[0].flag = 0x01;
+        table[1].nameHash = StringHash("released"); table[1].flag = 0x04;
+        table[2].nameHash = StringHash("down");     table[2].flag = 0x02;
+        table[3].nameHash = StringHash("up");       table[3].flag = 0x08;
+        table[4].nameHash = StringHash("active");   table[4].flag = 0x10;
+        table[5].nameHash = StringHash("move");     table[5].flag = 0x20;
+        table[6].nameHash = StringHash("dead");     table[6].flag = 0x40;
+        initialised = true;
+    }
+    for (int i = 0; i < 7; ++i) {
+        if (hash == table[i].nameHash) {
+            return table[i].flag;
+        }
+    }
     return 0;
 }
 
-// Binary @ 0x0019630c — lookup of 60 key-name hashes -> key bitmask.
-// Dead unless config-file parsing enabled.
-unsigned long InputManager::ParseKey(unsigned long /*hash*/) {
-    // TODO: 0x0019630c — key hash lookup table (60 entries)
+// Binary @ 0x0019630c — lookup of 61 key-name hashes -> key code.
+// Same lazily-built guarded static table pattern as ParseAction; linear-searches
+// for `hash`, returns the matching key code (InputKeys value), or 0 on no match.
+// Dead unless config-file parsing enabled (LoadConfigFile is a Defunct no-op stub).
+// Table source (strings @ 0x001c2603, value table @ 0x001f3ef8). Key codes:
+//   MouseButton1..8        -> 0x6c..0x73
+//   MouseAxisX, MouseAxisY -> 0x74, 0x75
+//   Touch1..16             -> 0x89..0x98
+//   TouchAxisX1..16        -> 0x99..0xa8
+//   TouchAxisY1..16        -> 0xa9..0xb8
+//   AccelAxisX/Y/Z         -> 0xb9, 0xba, 0xbb
+unsigned long InputManager::ParseKey(unsigned long hash) {
+    struct KeyEntry { unsigned long nameHash; unsigned long code; };
+    static bool initialised = false;
+    static KeyEntry table[61];
+    if (!initialised) {
+        static const char* const names[61] = {
+            "MouseButton1", "MouseButton2", "MouseButton3", "MouseButton4",
+            "MouseButton5", "MouseButton6", "MouseButton7", "MouseButton8",
+            "MouseAxisX", "MouseAxisY",
+            "Touch1", "Touch2", "Touch3", "Touch4", "Touch5", "Touch6",
+            "Touch7", "Touch8", "Touch9", "Touch10", "Touch11", "Touch12",
+            "Touch13", "Touch14", "Touch15", "Touch16",
+            "TouchAxisX1", "TouchAxisX2", "TouchAxisX3", "TouchAxisX4",
+            "TouchAxisX5", "TouchAxisX6", "TouchAxisX7", "TouchAxisX8",
+            "TouchAxisX9", "TouchAxisX10", "TouchAxisX11", "TouchAxisX12",
+            "TouchAxisX13", "TouchAxisX14", "TouchAxisX15", "TouchAxisX16",
+            "TouchAxisY1", "TouchAxisY2", "TouchAxisY3", "TouchAxisY4",
+            "TouchAxisY5", "TouchAxisY6", "TouchAxisY7", "TouchAxisY8",
+            "TouchAxisY9", "TouchAxisY10", "TouchAxisY11", "TouchAxisY12",
+            "TouchAxisY13", "TouchAxisY14", "TouchAxisY15", "TouchAxisY16",
+            "AccelAxisX", "AccelAxisY", "AccelAxisZ"
+        };
+        // Key codes: 0x6c..0x75 for the first 10 entries, then 0x89..0xbb
+        // for the remaining 51 (contiguous in the binary value table).
+        int i = 0;
+        for (; i < 10; ++i) {
+            table[i].nameHash = StringHash(names[i]);
+            table[i].code = 0x6cUL + (unsigned long)i;
+        }
+        for (; i < 61; ++i) {
+            table[i].nameHash = StringHash(names[i]);
+            table[i].code = 0x89UL + (unsigned long)(i - 10);
+        }
+        initialised = true;
+    }
+    for (int i = 0; i < 61; ++i) {
+        if (hash == table[i].nameHash) {
+            return table[i].code;
+        }
+    }
     return 0;
 }
 

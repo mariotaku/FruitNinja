@@ -2,6 +2,8 @@
 #include "collision/ColSphere.h"
 #include "collision/ColLine.h"
 #include "collision/ColAABB.h"
+#include "math/Math.h"
+#include "math/MathUtil.h"  // Math::Sqrt
 
 // Binary @ 0x0019fc20
 ColSphere::ColSphere() : Col(), radius(0.0f) {}
@@ -36,9 +38,13 @@ int ColSphere::Collide(Col* other, Vec3* outNormal) {
         ColAABB* box = static_cast<ColAABB*>(other);
         hit = box->IntersectsSphere(*this) ? 1 : 0;
         if (hit && outNormal) {
-            float cx = center().x < box->m_Min().x ? box->m_Min().x : (center().x > box->m_Max.x ? box->m_Max.x : center().x);
-            float cy = center().y < box->m_Min().y ? box->m_Min().y : (center().y > box->m_Max.y ? box->m_Max.y : center().y);
-            float cz = center().z < box->m_Min().z ? box->m_Min().z : (center().z > box->m_Max.z ? box->m_Max.z : center().z);
+            // Clamp sphere centre into box span using center+halfExtents API.
+            float bx = box->m_Center().x, hx = box->m_HalfExtents.x;
+            float by = box->m_Center().y, hy = box->m_HalfExtents.y;
+            float bz = box->m_Center().z, hz = box->m_HalfExtents.z;
+            float cx = center().x < (bx - hx) ? (bx - hx) : (center().x > (bx + hx) ? (bx + hx) : center().x);
+            float cy = center().y < (by - hy) ? (by - hy) : (center().y > (by + hy) ? (by + hy) : center().y);
+            float cz = center().z < (bz - hz) ? (bz - hz) : (center().z > (bz + hz) ? (bz + hz) : center().z);
             Vec3 n(cx - center().x, cy - center().y, cz - center().z);
             n.Normalise();
             *outNormal = n;
@@ -77,11 +83,51 @@ bool ColSphere::Contains(const Vec3& p) const {
     return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;
 }
 
-// TODO: 0x0019fdec -- ColSphereLine: ClosestPointOnLine(line, center) -> delta = center - closest;
-//   if MagnitudeSqr(delta) < radius^2, normalise delta and write normal * |radius - Magnitude(delta)|
-//   into outVec. Body unimplemented in port.
-void ColSphere::ColSphereLine(ColSphere*, ColLine*, Vec3*) {}
-// TODO: 0x0019fc90 -- ColSphereSphere: delta = centerA - centerB; if MagnitudeSqr(delta) < (rA+rB)^2,
-//   d = Sqrt(MagnitudeSqr); normalise delta by d (when d>0); write delta * (d - (rA+rB)) into outVec.
-//   Body unimplemented in port.
-void ColSphere::ColSphereSphere(ColSphere*, ColSphere*, Vec3*) {}
+// Binary @ 0x0019fdec -- sphere (this) vs line (l) penetration.
+//   closest = ClosestPointOnLine(l.a, l.b, this.center); delta = closest - center;
+//   if MagnitudeSqr(delta) < radius^2: mag = Magnitude(delta); normalise(delta);
+//   push = |radius - mag|; outVec = delta * push; return 1. Else return 0.
+int ColSphere::ColSphereLine(ColSphere* self, ColLine* l, Vec3* outVec) {
+    // Math::ClosestPointOnLine(A, B, P, out): A=line start, B=line end, P=sphere centre.
+    Vec3 closest;
+    Math::ClosestPointOnLine(l->a(), l->b, self->center(), closest);
+
+    // Binary order: operator-(out, this=closest, param=center) -> closest - center.
+    Vec3 delta = closest - self->center();
+    float distSq = delta.MagnitudeSqr();
+    if (distSq < self->radius * self->radius) {
+        float mag = delta.Magnitude();   // computed before Normalise (binary calls both)
+        delta.Normalise();
+        float push = self->radius - mag;
+        if (push < 0.0f) push = -push;   // vneg.mi -> fabs
+        delta *= push;
+        *outVec = delta;
+        return 1;
+    }
+    return 0;
+}
+
+// Binary @ 0x0019fc90 -- sphere (this) vs sphere (other) penetration.
+//   delta = this.center - other.center; outVec is pre-zeroed (Vec3::Zero).
+//   radSum = this.radius + other.radius;
+//   if MagnitudeSqr(delta) < radSum^2: d = Sqrt(distSq); push = d - radSum;
+//     if d > 0 delta /= d; outVec = delta * push; return 1. Else (no hit) outVec stays zero, return 0.
+int ColSphere::ColSphereSphere(ColSphere* self, ColSphere* other, Vec3* outVec) {
+    Vec3 delta = self->center() - other->center();
+    float distSq = delta.MagnitudeSqr();
+
+    // Output initialised to zero before the penetration test (matches binary store).
+    *outVec = Vec3::Zero();
+
+    float radSum = self->radius + other->radius;
+    if (distSq < radSum * radSum) {
+        float d = Math::Sqrt(distSq);
+        float push = d - radSum;
+        if (d > 0.0f) {
+            delta /= d;
+        }
+        *outVec = delta * push;
+        return 1;
+    }
+    return 0;
+}

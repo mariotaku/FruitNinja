@@ -42,6 +42,12 @@ public:
     void operator++(int) { Advance(1); }
     Utf8StringIterator operator+(int n) const;
 
+    // Binary @ 0x0012fe00 area -- Reset(): rewind the iterator to the string start
+    // so it can be walked a second time. Used by BakedString::Bake between pass 1
+    // and pass 2. Restores m_NextScan to m_PrevBegin (= string start after ctor)
+    // and re-decodes the first codepoint.
+    void Reset();
+
     // No own data members — sizeof == sizeof(Utf8StringProxy) == 0x1C.
 };
 

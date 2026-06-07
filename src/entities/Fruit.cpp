@@ -85,6 +85,17 @@ static const float SLICE_CLAMP_MAX     = 8.0f;
 //                         m_CollisionScale = 1.0 @ 0x3f800000.
 static const float COL_RADIUS_FACTOR = 0.52f;   // DAT_00176340
 
+// Slice juice-burst tuning, resolved from the binary via read_memory.
+// Critical / special slices set splatCount to a configured global rather than
+// the base Rand32(2)+2. The global *(GOT+DAT_00177060) reads 10 at runtime.
+static const int   kSliceJuiceSplatCount = 10;   // *0x001F3E20
+// Per-splat taper applied after MakeSplat (binary @ 0x00177070..0x001770f0):
+//   factor = clamp(1 - (i-2)/splatCount, kSplatTaperMin, 1.0)
+//   m_Vel.z *= factor; and for i > 2 the X/Y velocity and scale get boosted.
+static const float kSplatTaperMin    = 0.3f;     // DAT_0017706c
+static const float kSplatVelXYBoost  = 1.2f;     // *(GOT+DAT_001774b0) @ 0x001F3E28
+static const float kSplatScaleBoost  = 1.5f;     // *(GOT+DAT_001774b4) @ 0x001F3E24
+
 // Matches RandomStartAngle(Quat&, false) @ 0x00175740 — gives the fruit a
 // uniformly random orientation on the sphere by picking a random axis in
 // the unit cube, normalising, and combining with a random ~16-bit angle.
@@ -1010,7 +1021,7 @@ bool Fruit::CheckHasGoneOffscreen() {
 //   - AddSlice visual (SliceEffect_Add)
 //   - CriticalFlash full-screen tint for critical + special-fruit paths
 // Skipped: SFX, achievements, score, power-ups, coins, MissControl.
-int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
+int Fruit::CollisionResponse(Mortar::Entity* hitter,
                               unsigned long /*flagsA*/,
                               unsigned long /*flagsB*/,
                               Vec3* bladeVelPtr) {
@@ -1181,13 +1192,29 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
     const float sliceLength   = bladeSpeed * 0.4f;
     FN::SliceEffect_Add(pos, sliceAngleDeg, sliceLength, isCritical);
 
-    // Score, save totals, powerup, and combo are suppressed for menu fruit.
-    // Binary @ 0x001780b0 gates these via GameTaskState+0x05 (set during
-    // menu-mode runtime). Port approximates via !m_bSpawnedByCriticalSplash
-    // until GameTaskState+0x05 is modeled in the layout.
-    // TODO: 0x001780b0 -- replicate the GameTaskState+0x05 gate properly
-    // once the GameTaskState struct layout is fixed.
-    if (!m_bSpawnedByCriticalSplash) {
+    // Score, save totals, powerup, combo and achievements are gated exactly as
+    // the binary does (Fruit::CollisionResponse @ 0x001780b0):
+    //   GameTaskState+0x06 (retryFlag) == 0          -- outer "interactive" gate
+    //   && slash (hitter) != null                    -- real blade hit, not an
+    //                                                   internal re-slice
+    //   && m_bNoPowerUp == 0
+    //   && ( GameTaskState+0x05 (m_LevelTransitionFlag) == 0   -- normal play
+    //        || bombHitWindow )                       -- or inside the bomb-hit
+    //                                                   cinematic window
+    // The bomb-hit window is `(LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f`.
+    // Binary @ 0x001788f4 = same game_work GOT entry as the crit-ladder gate.
+    // ASM-verified: 2026-06-07 binary @ 0x001780b0 +0x6c0..+0x6f4 (re-analyst).
+    {
+        static const float kBombHitMaxG = 0.95f;
+        static const float kBombHitMinG = -0.1f;
+        const uint8_t ltfGate = (uint8_t)game_work.m_LevelTransitionFlag;
+        const bool bombHitWindowGate = (uint8_t)(ltfGate - 2u) < 2u
+            && game_work.m_BombHitTimer < kBombHitMaxG
+            && game_work.m_BombHitTimer > kBombHitMinG;
+        if (game_work.retryFlag == 0
+            && hitter != nullptr
+            && !m_bNoPowerUp
+            && (ltfGate == 0 || bombHitWindowGate)) {
         // Matches CollisionResponse score+save dispatch (binary @ 0x00178c3c).
         // ASM-verified: 2026-05-10 binary @ 0x00178bc8..0x00178e30 (re-analyst).
         // Formula:
@@ -1284,6 +1311,7 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
             g_LastSlasher = slasher;
         }
         g_ComboCount += 1;       // binary @ 0x001787b0
+        }
     }
     return 0;
 }
@@ -1293,6 +1321,20 @@ int Fruit::CollisionResponse(Mortar::Entity* /*hitter*/,
 // halves.
 void Fruit::Slice() {
     m_SliceTimer = 0.0f;
+
+    // Binary @ 0x00176d78..0x00176db2 — two discarded select-pattern draws at
+    // the very top of Slice, BEFORE the flipSide computation. Each: roll
+    // Rand32(0x5550); if the roll exceeds 0x2aa8, roll once more (discarding
+    // the result either way). The binary's RNG source here (GOT+DAT_00177058)
+    // is the same singleton Math::g_Random wraps (instance @ 0x0026C8B0), so
+    // these draws advance the same stream the half-velocity randA/randB and the
+    // splat loop read from. Omitting them desynced the stream by 2-4 draws.
+    {
+        uint32_t d0 = Math::g_Random.Rand32(0x5550U);
+        if (d0 > 0x2aa8U) Math::g_Random.Rand32(0x5550U);
+        uint32_t d1 = Math::g_Random.Rand32(0x5550U);
+        if (d1 > 0x2aa8U) Math::g_Random.Rand32(0x5550U);
+    }
 
     // --- flipSide determination ---
     // Binary: rotate (0,0,1) by current m_Rot1, compare XY direction
@@ -1320,23 +1362,21 @@ void Fruit::Slice() {
         if (delta < 0.0f) flipSide = true;
     }
 
-    // TODO: 0x00176d78..0x00176db2 — binary burns TWO discarded
-    // select-pattern Rand32(0x5550) draws at the very top of Slice
-    // (each: roll; if >0x2aa8 roll again; result discarded) BEFORE the
-    // flipSide computation. Port omits them, desyncing the RNG stream by
-    // 2-4 draws relative to the binary. Add two discarded
-    // Math::g_Random.Rand32(0x5550) select-pattern blocks here.
-
     // --- Impulse ---
     float impulse = m_SliceImpulse;
-    // TODO: 0x00176e88 — splatCount = Rand32(2)+2. The crit/special
-    // blocks below OVERWRITE this (splatCount = *globalPtr via
-    // DAT_00177060), they do NOT add +2. See TODOs in those blocks.
-    int   splatCount = (rand() % 2) + 2;   // Rand(2)+2 → 2 or 3
+    // Binary @ 0x00176e88 — base splatCount = Rand32(2) + 2 (= 2 or 3). Uses
+    // the same Math::g_Random singleton (GOT+DAT_00177058) as every other draw
+    // in Slice; the old `rand()` was a libc band-aid that desynced the stream.
+    int   splatCount = (int)Math::g_Random.Rand32(2U) + 2;
 
     // Critical hit gets 1.5× impulse + crit dual-line AddSlice.
+    const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     const bool isCritical = m_bCriticalEligible;
-    if (isCritical) {
+    // Binary @ 0x00176e94 — the ENTIRE critical block (two AddSlice lines,
+    // splatCount override, impulse*1.5, MakeCritical) is gated on
+    // m_bCriticalEligible && m_PlayerIdx < 2. With playerIdx >= 2 a crit slice
+    // skips all of it and falls through to the normal splatCount/impulse.
+    if (isCritical && m_PlayerIdx < 2) {
         // Binary: two slice lines at ±60° offset from the base angle.
         //   infoA.x = m_SliceAngle / -182.0 + 60.0
         //   infoB.x = m_SliceAngle / -182.0 - 60.0
@@ -1345,22 +1385,29 @@ void Fruit::Slice() {
         const float critLen  = impulse * 0.4f * 0.7f;
         FN::SliceEffect_Add(pos, critBase + 60.0f, critLen, true);
         FN::SliceEffect_Add(pos, critBase - 60.0f, critLen, true);
-        // TODO: 0x00176f1e — binary sets splatCount = *(int*)(*(GOT+DAT_00177060))
-        // (a configured global juice count), NOT splatCount += 2. Also gated
-        // by m_PlayerIdx < 2 (0x00176e94). And binary calls
-        // MissControl::MakeCritical(MissControl::GetFree(), pos) after the
-        // two AddSlice calls — missing here (MissControl unported?).
+        // Binary @ 0x00176f1e — splatCount = *(int*)(*(GOT+DAT_00177060)),
+        // the configured juice-burst count global (read_memory @ 0x001F3E20 = 10),
+        // NOT splatCount += 2. impulse *= 1.5 then a MissControl::MakeCritical.
         impulse *= 1.5f;
-        splatCount += 2;  // WRONG per binary; see TODO above (needs DAT_00177060).
+        splatCount = kSliceJuiceSplatCount;  // = 10 (binary DAT @ 0x001F3E20)
+        // Binary @ 0x00176f2c..0x00176f46 — MissControl::MakeCritical(GetFree(), pos).
+        if (MissControl* mc = MissControl::GetFree()) {
+            mc->MakeCritical(pos, (int)m_PlayerIdx);
+        }
     }
 
-    // Special-fruit (baseScore == 0x32 = 50) also gets 1.5× impulse.
-    const FruitInfoData* info = FruitInfo_Get(m_FruitType);
+    // Special-fruit (baseScore == 0x32 = 50) also gets 1.5× impulse and the
+    // configured juice-burst count. Binary @ 0x00176f4e..0x00176f72.
     if (info && info->m_Score == 0x32) {
-        // TODO: 0x00176f68 — same as crit: binary sets
-        // splatCount = *(int*)(*(GOT+DAT_00177060)), NOT splatCount += 2.
         impulse *= 1.5f;
-        splatCount += 2;  // WRONG per binary; see TODO above (needs DAT_00177060).
+        splatCount = kSliceJuiceSplatCount;  // = 10 (binary DAT @ 0x001F3E20)
+    }
+
+    // Binary @ 0x00176f76 — offscreen kill of the juice burst: when
+    // GameTaskState+0x06 (retryFlag) is set, this fruit is offscreen, and it
+    // belongs to a remote/AI player (m_PlayerIdx > 1), suppress all splats.
+    if (game_work.retryFlag != 0 && IsOffscreen() && m_PlayerIdx > 1) {
+        splatCount = 0;
     }
 
     // --- Splat spawn ---
@@ -1387,16 +1434,23 @@ void Fruit::Slice() {
         // variants).
         if (s) s->MakeSplat(pos, sv, isCritical, m_FruitType);
 
-        // TODO: 0x00177070..0x001770f0 — per-splat post-MakeSplat taper,
-        // MISSING in port:
-        //   factor = clamp(1 - (i-2)/splatCount, 0.3, 1.0)  // 0.3 = DAT_0017706c
-        //   s->m_Vel.z *= factor;                            // SplatEntity+0x64
-        //   if (i > 2) {
-        //       s->m_Vel.y *= *DAT_001774b0;   // SplatEntity+0x60
-        //       s->m_Vel.x *= *DAT_001774b0;   // SplatEntity+0x5c
-        //       s->m_Scale  *= *DAT_001774b4;  // SplatEntity+0x44 (Vec3 *=)
-        //   }
-        // Needs DAT_001774b0 / DAT_001774b4 (unresolved config globals).
+        // Binary @ 0x00177070..0x001770f0 — per-splat post-MakeSplat taper.
+        // The later splats (high i) lose Z velocity and, past index 2, gain
+        // X/Y velocity and scale so the burst spreads outward as it grows.
+        //   factor = clamp(1 - (i-2)/splatCount, 0.3, 1.0)   // 0.3 = DAT_0017706c
+        //   m_Vel.z *= factor
+        //   if (i > 2) { m_Vel.x *= 1.2; m_Vel.y *= 1.2; m_Scale *= 1.5 }
+        if (s) {
+            float factor = 1.0f - (float)(i - 2) / (float)splatCount;
+            if (factor <= kSplatTaperMin)      factor = kSplatTaperMin;
+            else if (factor >= 1.0f)           factor = 1.0f;
+            s->m_Vel.z *= factor;
+            if (i > 2) {
+                s->m_Vel.y *= kSplatVelXYBoost;  // *(GOT+DAT_001774b0) = 1.2
+                s->m_Vel.x *= kSplatVelXYBoost;
+                s->m_Scale *= kSplatScaleBoost;  // *(GOT+DAT_001774b4) = 1.5
+            }
+        }
     }
 
     // ASM-verified: 2026-05-23 binary @ 0x001770e0 (re-analyst)
@@ -1444,27 +1498,33 @@ void Fruit::Slice() {
     Vec3 halfVelB = dirB * (imp_screen * sliceFactor) +
                     vel  * (1.0f - sliceFactor);
 
-    // Critical / special override — binary @ 0x0017737a..0x00177442 uses raw
-    // m_SliceAngle (NOT the offset-baked radA) with ±0x3ffc, plus int32
-    // truncation on each velocity component.
+    m_SecondPos = pos;
+
+    // Binary @ 0x0017735e — the crit/special branch and the
+    // MoveFruitZPositionToBack branch are mutually exclusive (if/else):
+    //   if (m_bCriticalEligible || FRUIT_INFO[type].score == 0x32) {
+    //       // critical / special velocity override
+    //   } else if (m_bSpawnedByCriticalSplash == 0) {
+    //       MoveFruitZPositionToBack(&m_ZPosition);
+    //   }
+    // The crit override uses raw m_SliceAngle (NOT the offset-baked radA) with
+    // ±0x3ffc / 0xc004, int32 truncation on each velocity component, and a
+    // ×1.75 scale (DAT 0x3fe00000 @ 0x001773c6 / 0x0017742a).
     if (isCritical || (info && info->m_Score == 0x32)) {
         const float critRadA = (float)(int16_t)(uint16_t)(m_SliceAngle + 0x3ffc) * (6.2831853f / 65536.0f);
         const float critRadB = (float)(int16_t)(uint16_t)(m_SliceAngle + 0xc004) * (6.2831853f / 65536.0f);
         halfVelA = Vec3((float)(int)(sinf(critRadA) * imp_screen),
-                        (float)(int)(cosf(critRadA) * imp_screen), 0.0f) * 1.75f; // binary @ 0x001773c6, DAT 0x3fe00000 = 1.75
+                        (float)(int)(cosf(critRadA) * imp_screen), 0.0f) * 1.75f;
         halfVelB = Vec3((float)(int)(sinf(critRadB) * imp_screen),
-                        (float)(int)(cosf(critRadB) * imp_screen), 0.0f) * 1.75f; // binary @ 0x0017742a, DAT 0x3fe00000 = 1.75
+                        (float)(int)(cosf(critRadB) * imp_screen), 0.0f) * 1.75f;
+    } else if (!m_bSpawnedByCriticalSplash) {
+        // Binary @ 0x00177444..0x0017744e — only on the plain slice path and
+        // only when this fruit was NOT spawned by a critical splash.
+        MoveFruitZPositionToBack(this);
     }
 
-    m_SecondPos = pos;
     m_SecondVel = halfVelA;
     vel         = halfVelB;
-
-    // TODO: 0x00177444 — binary calls MoveFruitZPositionToBack ONLY in the
-    // non-crit/non-special branch, AND only when m_bSpawnedByCriticalSplash
-    // (+0x10C) == 0. Port calls it unconditionally here and also runs the
-    // crit override below — diverges from the binary's if/else structure.
-    MoveFruitZPositionToBack(this);
 
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in Fruit::Slice)",
              static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);

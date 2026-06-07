@@ -619,8 +619,13 @@ void WaveManager::Resume() {
     // 6. Re-spawn saved entities from sd->m_EntityStates.
     // Binary @ 0x00124b9c-0x00124cd8: per-EntityState dispatch.
     // g_FruitCount = **DAT_00124f04; port derives via FruitInfo_GetCount().
-    // Default spawn Vec3* = DAT_00124f08;
-    // TODO: 0x00124f08 -- wire g_DefaultSpawnVec (BSS Vec3*); passing nullptr uses entity's own default.
+    // Default spawn Vec3* = DAT_00124f08 -> GOT slot -> Save.cpp file-scope
+    // global Vec3 (1,1,1), constructed in _GLOBAL__I_Save_cpp @ 0x0012bfe0
+    // (same GOT offset 0x77cc as DAT_00124f08; the ctor literal is 1.0,1.0,1.0).
+    // It is passed as Init's p3 = scale. Entity::Init's documented contract is
+    // "p3 nullable, defaults to (1,1,1)", so passing nullptr is the exact
+    // functional equivalent of passing &g_DefaultSpawnVec.
+    // Binary @ 0x00124f08
     const int g_FruitCount = FruitInfo_GetCount();
     bool respawned = false;
     for (std::list<EntityState>::iterator eit = sd->m_EntityStates.begin();
@@ -650,11 +655,16 @@ void WaveManager::Resume() {
         e->pos = Vec3(es.m_Position[0], es.m_Position[1], es.m_Position[2]);
 
         if (kind == 1) {
-            // Bomb overlay: x=rotAxis_z, y=playerIdx (raw int in float slot), z=timeScale.
+            // Bomb overlay -> m_AccelForce (acceleration/gravity Vec3 at binary +0x8c).
+            // ASM @ 0x00124c50-0x00124c66: the kind==1 branch does a plain 3-word
+            //   ldmia es+0x20,{r0,r1,r2}; stm bomb+0x8c,{r0,r1,r2}
+            // block-copy of the EntityState overlay into the Bomb's m_AccelForce
+            // Vec3. The decompiler's "m_RotAxis_z/m_PlayerIdx/m_TimeScale" labels
+            // are a misread of the three m_AccelForce components -- there are no
+            // separate fields; SaveWaveInfo stores m_AccelForce here on save.
+            // Binary @ 0x00124b1c (kind==1 overlay restore).
             Bomb* b = static_cast<Bomb*>(e);
-            // TODO: 0x00124b1c -- b->m_RotAxis_z = es.m_Overlay[0]; field not yet in port Bomb.
-            // TODO: 0x00124b1c -- raw-int reinterpret of es.m_Overlay[1] -> b->m_PlayerIdx; field not yet in port Bomb.
-            // TODO: 0x00124b1c -- b->m_TimeScale = es.m_Overlay[2]; field not yet in port Bomb.
+            b->m_AccelForce = Vec3(es.m_Overlay[0], es.m_Overlay[1], es.m_Overlay[2]);
             if (game_work.gameMode == Mortar::GAME_MODE_ARCADE) Bomb::SetForPlayer(b, 1);
             // Chuck/SetHit gate: m_ChuckMag > 0.0f; m_BombHitFlag==0 -> Chuck, else -> SetHit.
             if (es.m_ChuckMag > 0.0f) {
@@ -670,8 +680,16 @@ void WaveManager::Resume() {
             if (es.m_ChuckMag > 0.0f)
                 f->Chuck(es.m_ChuckMag);
         } else if (kind == 4) {
-            // PowerUp: vtable+0x10 activate called with (m_ChuckMag, e).
-            // TODO: 0x00124b1c -- PowerUp vtable+0x10 activate not yet wired; skip for now.
+            // PowerUp ENTITY (ActorManager type 4) -- distinct from game/PowerUp.h
+            // (the XML-template/modifier object). ASM @ 0x00124cc0-0x00124cd0:
+            //   ldr r3,[entity+0x0]; vldr s0,[es+0x34]; ldr r3,[r3+0x10]; blx r3
+            // i.e. a virtual call through the entity's own vtable slot +0x10 with
+            // signature (float chuckMag, Entity*). The ported Mortar::Entity base
+            // has Update(float) at +0x10, NOT this (float,Entity*) activate slot,
+            // so the kind-4 PowerUp-entity class is entirely unported and has no
+            // vtable to dispatch through.
+            // TODO: 0x00124b1c -- PowerUp-entity (ActorManager type 4) vtable+0x10
+            //   activate(m_ChuckMag, e); blocked on unported PowerUp-entity subsystem.
         }
         respawned = true;
     }

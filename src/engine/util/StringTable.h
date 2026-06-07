@@ -111,11 +111,26 @@ public:
     StringTable();
     ~StringTable();
 
-    // Instance methods (binary @ 0x0018a490 / 0x0018a41c)
-    // TODO: 0x0018a490 -- LoadHeader instance method: reads translations_header.str into m_HeaderBuffer/m_HeaderLookup
-    // TODO: 0x0018a41c -- LoadLanguage instance method: reads translations_<lang>.str into m_StringEntries
-    void LoadHeader(const char* path);
-    void LoadLanguage(const char* path);
+    // Instance methods.
+    // Binary @ 0x0018a490 LoadHeader(char*) -> opens File, delegates to
+    //   LoadHeader(File&) @ 0x0018a460: File::Read<FileHeader>(0x48 bytes),
+    //   FileHeader::Check (magic/GUID), FileData<HeaderLookup>::Load.
+    // Binary @ 0x0018a41c LoadLanguage(char*) -> opens File, delegates to
+    //   LoadLanguage(File&) @ 0x0018a3ec: same header read + Check, then
+    //   FileData<StringEntry>::Load.
+    // Returns true on success (binary returns the Check result; Load only runs
+    // when Check passed).
+    bool LoadHeader(const char* path);
+    bool LoadLanguage(const char* path);
+
+    // Mirrors Mortar::StringTableData::FileHeader::Check @ 0x0018a3b4.
+    // file_guid points at the 64-byte token field (file offset +4) of the
+    // just-read FileHeader. Validates magic==1, then: if the token equals the
+    // already-loaded m_HeaderBuffer it passes; if m_HeaderBuffer is still all
+    // zero (first load) it copies the token in and passes; otherwise the token
+    // mismatches an already-loaded value and it fails. magic is the file's
+    // first word.
+    bool CheckHeader(uint32_t magic, const uint8_t* file_guid);
 
     // Binary search -- mirrors Mortar::StringTable::GetInfo at 0x0018a2cc.
     const HeaderLookup* GetInfo(const char* key) const;

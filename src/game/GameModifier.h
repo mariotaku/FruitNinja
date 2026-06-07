@@ -79,19 +79,11 @@ public:
     // [2] ResetSpecific — clears per-modifier state; base is no-op
     virtual void ResetSpecific() {}
 
-    // [3] Update(dt) @ 0x001179c4 — base dispatcher (returns 0=alive, 1=expired)
-    virtual int Update(float dt) {
-        if (m_bApplied) {
-            // TODO: 0x001179c4 -- gate deferred apply: if (m_DeferStart < TimeControl::GetCurrentTime()) return 0; (wait until threshold)
-            ApplyModifier(false, nullptr);
-            m_bApplied = false;
-        }
-        if (m_Duration_remaining > 0.0f) {
-            m_Duration_remaining -= dt;
-            if (m_Duration_remaining <= 0.0f) return 1;
-        }
-        return UpdateSpecific(dt);
-    }
+    // [3] Update(dt) @ 0x001179c4 — base dispatcher (returns 0=alive, 1=expired).
+    // Body lives in GameModifier.cpp so the deferred gate can read
+    // game_work.m_SaveData->m_TimeRemainingSave without pulling heavy gameplay
+    // headers into this widely-included header.
+    virtual int Update(float dt);
 
     // [4] UpdateSpecific(dt) — per-frame override; base no-op returns 0
     virtual int UpdateSpecific(float /*dt*/) { return 0; }
@@ -113,9 +105,10 @@ public:
     // [9] Clone — heap-alloc new instance
     virtual GameModifier* Clone() { return nullptr; }
 
-    // TODO: 0x00117DA0 -- read base XML attributes (duration, defer-start) then dispatch ParseSpecific(xml)
+    // Binary @ 0x00117DA0 — reads base XML attributes ("length", "waitUntilTime")
+    // then dispatches ParseSpecific(xml).
     void Parse(TiXmlElement*);
-    // TODO: 0x001179AC -- restore base state (m_Duration_remaining, m_bApplied) then dispatch ResetSpecific()
+    // Binary @ 0x001179AC — clears m_Duration_remaining then dispatches ResetSpecific().
     void Reset();
 };
 

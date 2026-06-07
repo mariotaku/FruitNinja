@@ -191,23 +191,26 @@ public:
     float m_InnerRegion[4];
 
 public:
-    // TODO: 0x0015af3c -- ClearTouch: m_TouchId = -1; m_bDragging = 0.
+    // Binary @ 0x0015af3c -- ClearTouch: m_TouchId = -1; m_bDragging = 0.
     void ClearTouch();
 
-    // TODO: 0x0015af4c -- Collide(long): walk m_Items, call vtable+0x34 (hit-test)
+    // Binary @ 0x0015af4c -- Collide(long): walk m_Items, call vtable+0x34 (hit-test)
     // on each; return first non-null item, else nullptr. Gated by m_fieldCA != 0.
+    // Binary exports both int and long overloads (long is the type-resolver
+    // delegate signature); port body forwards long -> int.
     ScrollingMenuItem* Collide(long touchSlot);
-    // TODO: 0x0015af28 -- Init: calls vtable Reset() (delegates to Reset slot).
+    // Binary @ 0x0015af28 -- Init: chains to vtable+0x10 (HUDControl::Init, a no-op).
     void Init() override;
-    // TODO: 0x0015af34 -- PreDraw(float*): empty no-op in binary (return only).
+    // Binary @ 0x0015af34 -- PreDraw(float*): empty no-op in binary (return only).
     void PreDraw(float* viewVec);
-    // TODO: 0x0015b034 -- Release: calls DestroyList() to clear+delete all items.
+    // Binary @ 0x0015b034 -- Release: calls DestroyList() to clear+delete all items.
     void Release() override;
-    // TODO: 0x0015aeb8 -- Reset: m_DragTargetIdx=-1, m_TouchId=-1, m_pCollidedItem=0,
+    // Binary @ 0x0015aeb8 -- Reset: m_DragTargetIdx=-1, m_TouchId=-1, m_pCollidedItem=0,
     // m_bNoDestructor=1, m_bConstrainedView=0, m_SnapDist=1.0f; zero Vec3 copied into
     // m_Velocity / m_TouchAnchorPos / m_AnchorOffset / m_PendingVelocity.
+    // (Binary does NOT clear m_bDragging here.)
     void Reset() override;
-    // TODO: 0x0015af38 -- Skip: empty no-op in binary (return only).
+    // Binary @ 0x0015af38 -- Skip: empty no-op in binary (return only).
     void Skip() override;
 };
 

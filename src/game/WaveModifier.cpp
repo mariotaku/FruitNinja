@@ -4,6 +4,7 @@
 #include "PowerUpManager.h"
 #include "WaveManager.h"
 #include "WaveStructs.h"
+#include "GameWork.h"
 #include "ItemParseUtil.h"
 #include "entities/Fruit.h"
 #include "util/StringHash.h"
@@ -178,18 +179,50 @@ WaveModifier::WaveModifier()
 
 WaveModifier::~WaveModifier() {}
 
-// TODO: 0x001282d4 -- after chaining base, the binary: (1) if m_OverideProbabilityPool < 10000
-//   && !isPurchased && pool < WaveManager current wave, calls SetCurrentWave(pool, -1.0, 0);
-//   (2) reads WaveManager::GetCurrentOverideList(0), calls SelectType() on each m_OverideEntries
-//   entry, inserts m_OverideEntries into that list, then clears m_OverideEntries. Only base
-//   chain is ported so far.
+// Binary @ 0x001282d4. After chaining base ApplyModifier:
+//   (1) if m_OverideProbabilityPool <= 9999 (i.e. < 10000) && !isPurchased &&
+//       m_OverideProbabilityPool < WaveManager current wave, rewind via
+//       SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0).
+//   (2) call SelectType() on every m_OverideEntries entry, append them all into
+//       the WaveManager's current override list (GetCurrentOverideList(0)), then
+//       clear m_OverideEntries.
+// Binary reads WaveManager+0x230 as the current wave counter; in SP that slot is
+// m_WaveCount[0] (see WaveManager.h +0x230 dual-purpose note).
 void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
+
+    if (m_OverideProbabilityPool < 10000 && !isPurchased) {
+        WaveManager* w = WaveManager::GetInstance();
+        if (m_OverideProbabilityPool < w->m_WaveCount[0]) {
+            WaveManager::GetInstance()->SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0);
+        }
+    }
+
+    for (std::vector<PROBABILITY_OVERIDE>::iterator it = m_OverideEntries.begin();
+         it != m_OverideEntries.end(); ++it) {
+        it->SelectType();
+    }
+
+    // Append the (now type-selected) override entries into the WaveManager's
+    // current override list. The binary's GetCurrentOverideList(0) returns the
+    // vector header at m_ProbabilityOverride[gameMode] (playerIdx 0 = primary
+    // slot); insert the whole m_OverideEntries range, then clear it.
+    std::vector<PROBABILITY_OVERIDE>& dst =
+        WaveManager::GetInstance()->m_ProbabilityOverride[game_work.gameMode];
+    dst.insert(dst.end(), m_OverideEntries.begin(), m_OverideEntries.end());
+    m_OverideEntries.clear();
 }
 
-// TODO: 0x00128128 -- if WaveManager current wave < 0 && m_OverideProbabilityPool <= current wave,
-//   call WaveManager::SetCurrentWave(5, 0.25, 0). Currently a no-op.
-void WaveModifier::RemoveModifier() {}
+// Binary @ 0x00128128. If the WaveManager current wave counter (+0x230 = SP
+// m_WaveCount[0]) is < 0 AND m_OverideProbabilityPool <= that counter, reset the
+// wave to SetCurrentWave(5, 0.25f, 0).
+void WaveModifier::RemoveModifier() {
+    WaveManager* w = WaveManager::GetInstance();
+    if (w->m_WaveCount[0] < 0 &&
+        m_OverideProbabilityPool <= WaveManager::GetInstance()->m_WaveCount[0]) {
+        WaveManager::GetInstance()->SetCurrentWave(5, 0.25f, 0);
+    }
+}
 
 // @ 0x001280e0 -- empty override in binary (no specific reset work); no-op is faithful.
 void WaveModifier::ResetSpecific() {}

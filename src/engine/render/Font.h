@@ -205,20 +205,25 @@ private:
     float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) const;
 
 public:
-    // ---- Unported overloads (binary signatures present; bodies forward/TBD) ----
-    // TODO: 0x00198e44 -- packed Vec3/Vec2 shape of the full Font_DrawString;
-    // body should forward to the implemented DrawString(scale,yLineFactor,rotZ,
-    // iter,pos,colour,maxWH,alignment,z,clipRect) overload above.
-    void DrawString(Utf8StringIterator, Vec3, Colour, float, Vec2, int, float, MortarRectangleDec*, float);
-    // TODO: 0x00199aa0 -- by-value-arg shape of the binary DrawString wrapper;
-    // body should forward to the implemented DrawString(iter&,colour&,alignment,
-    // posX,posY,posZ,scale,maxWHx,maxWHy,rotZ,clip) wrapper above.
-    void DrawString(Utf8StringIterator, float, float, float, Colour, float, float, float, int, MortarRectangleDec*, float);
-    // TODO: 0x001985b0 -- word-advance helper for word-wrap: measure the next
-    // word's xadvance from iter, breaking at space/newline/wrap-limit.
+    // ---- Binary-shape ABI overloads (forward to the canonical overloads) ----
+    // Binary @ 0x00198e44 -- packed Vec3/Vec2 ABI shape of the full Font_DrawString;
+    // forwards to DrawString(scale,yLineFactor,rotZ,iter,pos,colour,maxWH,alignment,
+    // z,clipRect) with yLineFactor pinned to 1.0 (binary @ 0x00199b1c).
+    void DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float scale,
+                    Vec2 maxWH, int alignment, float rotZ, MortarRectangleDec* clipRect, float z);
+    // Binary @ 0x00199aa0 -- by-value-arg ABI shape of the binary DrawString wrapper;
+    // forwards to DrawString(iter&,colour&,alignment,posX,posY,posZ,scale,maxWHx,
+    // maxWHy,rotZ,clip).
+    void DrawString(Utf8StringIterator iter, float posX, float posY, float posZ,
+                    Colour colour, float scale, float maxWHx, float maxWHy,
+                    int alignment, MortarRectangleDec* clip, float rotZ);
+    // TODO: 0x001985b0 -- word-advance helper for word-wrap. BLOCKED on the
+    // Mortar::WordWrap subsystem (CanBreakLineAt @ 0x0019acc4 + East-Asian
+    // line-break tables); not called by gameplay code. Returns 0 until ported.
     float FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float);
-    // TODO: 0x001984e8 -- 2-arg glyph lookup overload (codepoint + page index);
-    // resolve a CharTemplate* for the given page.
+    // Binary @ 0x001984e8 -- canonical single-codepoint glyph lookup (1st arg is
+    // `this`, typed `long` by Ghidra; 2nd is the codepoint). Falls back to a
+    // linear id-search even for cp < 256 when the lookup slot is null.
     CharTemplate* GetCharTemplate(long, int);
     // GetKerning(unsigned long,unsigned long) — same mangling as the
     // (uint32_t, uint32_t) overload above on ARM32 (long == int == 32-bit
@@ -230,9 +235,8 @@ public:
     // and returns `lineH + n*lineH`. When `maxWidth > 0`: word-wrap path
     // using FindAdvanceOfNextWord.
     float GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth);
-    // TODO: 0x001988a8 -- by-value-iter shape of MeasureString (same binary
-    // symbol as the const-ref overload above); body should forward to
-    // GetLineLength(iter, 0.0f, NULL) like the implemented overload.
+    // Binary @ 0x001988a8 -- by-value-iter ABI shape of MeasureString (same binary
+    // symbol as the const-ref overload above); forwards to GetLineLength(iter,0,NULL).
     float MeasureString(Utf8StringIterator);
     // ---- end unported overloads ----
 };

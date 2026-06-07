@@ -264,6 +264,20 @@ int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
     return -1;
 }
 
+// Port specific: Touch::Clear -- no binary symbol; added so InputDeviceBada::Reset()
+// can wipe all pending touch state. Zeroes both state arrays, resets ring indices.
+// TODO: 0x00195c00 -- verify whether binary inlines this or calls a helper.
+void Touch::Clear() {
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        memset(&states1[i], 0, sizeof(TouchState));
+        memset(&states2[i], 0, sizeof(TouchState));
+        states1[i].phase = 1;
+        states2[i].phase = 1;
+    }
+    eventBuffer.m_eventHead = 0;
+    eventBuffer.m_eventTail = 0;
+}
+
 // ---------------------------------------------------------------------------
 // Port-specific helpers -- wrap __UpdateInternal for SDL translator.
 // OnPressed: isActive=true (press). OnMoved: isActive=true (move).

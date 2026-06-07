@@ -32,16 +32,19 @@ private:
     Mortar::SmartPtr<Model> LoadMeshInternal(const char* path);
 
 public:
-    // TODO: 0x001929BC -- tear down the model cache (mirror of ReleaseAll + free instance state)
+    // Binary @ 0x001929BC -- tail-calls ReleaseAll().
     void Destroy();
-    // TODO: 0x00192BA8 -- look up a cached Model by name, return cached SmartPtr or null
-    void Find(AsciiString const&) const;
-    // TODO: 0x00192B54 -- locate a cached Model entry by handle
-    void Find(SmartPtr<Model> const&) const;
-    // TODO: 0x001A74B8 -- one-time internal cache/capacity setup invoked by Initialise
+    // Binary @ 0x00192BA8 -- linear scan; returns the cached Model whose m_name
+    // matches, else an empty SmartPtr.
+    Mortar::SmartPtr<Model> Find(AsciiString const& name) const;
+    // Binary @ 0x00192B54 -- linear scan by handle (SmartPtr ==); returns the
+    // matching cached entry, else an empty SmartPtr.
+    Mortar::SmartPtr<Model> Find(SmartPtr<Model> const& model) const;
+    // Binary @ 0x001A74B8 -- empty in the binary (one-time hook, no body).
     void InitialiseInternal();
-    // TODO: 0x00192B1C -- drop one Model's refcount and evict it from the cache when unreferenced
-    void Release(SmartPtr<Model> const&);
+    // Binary @ 0x00192B1C -- if the handle is valid, remove it from the cache
+    // (List::Remove), dropping its refcount.
+    void Release(SmartPtr<Model> const& model);
 };
 
 } // namespace Mortar

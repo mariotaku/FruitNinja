@@ -113,13 +113,13 @@ public:
     }
 
     // ---- binary symbol map ----
-    // TODO: 0x001b48c4 -- ResourceLoader(AsciiString const&): PathGetParent(path)->BasePathSet, then FileDataReader(path)+Initialize(reader)
-    // TODO: 0x001b4804 -- ResourceLoader(DataReader&, AsciiString const&): BasePathSet(basePath) then Initialize(reader)
-    // TODO: 0x001b465c -- ~ResourceLoader(): destroy m_Children vector then m_BasePath AsciiString
-    // TODO: 0x001b4708 -- Initialize(DataReader&): ReadLE child count, recurse per child via VectorDataReader, reserve+push_back into m_Children
-    // TODO: 0x001b45bc -- ReadBytes(void*, unsigned long): memcpy from m_Data[m_ReadPos] (binary reads via DataReader cursor)
-    // TODO: 0x001b45e0 -- ReadString(): Read<u16> length, Resize buffer, ReadBytes into AsciiString
-    // TODO: 0x001b46d0 -- ReadSubResourceLookup(): Read<u32> 1-based index, ConvertFromLittle, return &m_Children[index-1]
+    // TODO: 0x001b48c4 -- ResourceLoader(AsciiString const&): PathGetParent(path)->BasePathSet, then FileDataReader(path)+Initialize(reader)  [blocked: FileDataReader/DataReader subsystem unported]
+    // TODO: 0x001b4804 -- ResourceLoader(DataReader&, AsciiString const&): BasePathSet(basePath) then Initialize(reader)  [blocked: Initialize(DataReader&) unported]
+    // Binary @ 0x001b465c -- ~ResourceLoader(): destroy m_Children, m_Data, m_BasePath (reverse-decl order == implicit member dtors)
+    // TODO: 0x001b4708 -- Initialize(DataReader&): ReadLE child count, recurse per child via VectorDataReader, reserve+push_back into m_Children  [blocked: DataReader::ReadLE / VectorDataReader unported]
+    // Binary @ 0x001b45bc -- ReadBytes(void*, unsigned long): memcpy from m_Data[cursor] (binary cursor == m_flag@+0x00; port uses m_ReadPos)
+    // Binary @ 0x001b45e0 -- ReadString(): Read<u16> length, Resize buffer, ReadBytes into AsciiString
+    // Binary @ 0x001b46d0 -- ReadSubResourceLookup(): Read<u32> 1-based index, ConvertFromLittle, return &m_Children[index-1]
     // ---- end binary symbol map ----
 };
 

@@ -26,10 +26,11 @@
 //   0x20  Zen mirror bounce — Fruit reflects pos+vel at the ±192 X limit
 //   0x40  Menu scrolling conflict (managed by ScrollingMenu, not SlashModifier)
 //
-// TODO: 0x0011f1fc — structure and methods are declared so that
-// porting PowerUpManager later can dispatch UpdateSpecific without
-// further changes. Method bodies should match the binary's semantics
-// once SlashEntity palette + PowerUpManager + ItemManager land.
+// Binary @ 0x0011f1fc — ctor verified: zero-inits m_pColours/m_NumColours/
+// m_ColourType/m_pTexture1/m_pTexture2/m_PowerMask, sets m_ColourSpeed=1.0,
+// m_Applied=false, then patches the GameModifier vtable. Struct layout below
+// (0x20..0x3c) matches the binary field offsets read/written by the ctor and
+// the UpdateSpecific/ApplyModifier/RemoveModifier bodies (in SlashModifier.cpp).
 //
 
 #include "GameModifier.h"
@@ -77,11 +78,14 @@ public:
     // what keeps the bits set while the modifier is active.
     int UpdateSpecific(float dt) override;
 
-    // 0x0011f31c — one-shot on activation. Binary calls
-    // SlashEntity::SetModColours(...) + increments
-    // ItemManager::EquippedSlashModCount.
-    // TODO: 0x0011f31c — wire SetModColours + ItemManager counter once
-    // the SlashEntity blade-palette + ItemManager land.
+    // 0x0011f31c — one-shot on activation. Binary chains
+    // GameModifier::ApplyModifier(isPurchased, extra), then (if m_pColours
+    // != null && !m_Applied) sets m_Applied=true, increments
+    // ItemManager::EquippedSlashModCount, and calls
+    // SlashEntity::SetModColours(m_pColours, m_NumColours, m_ColourType,
+    // m_ColourSpeed, m_pTexture1, m_pTexture2, false, 0, 0). Body lives in
+    // SlashModifier.cpp; all deps (SlashEntity::SetModColours,
+    // ItemManager::EquippedSlashModCount) exist in the port.
     void ApplyModifier(bool isPurchased, float* extra) override;
 
     // 0x0011f2e0 — decrement equipped-mod counter; if it reaches 0,

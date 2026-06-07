@@ -2,6 +2,7 @@
 
 #include "HUD.h"
 #include "ScrollingMenu.h"
+#include "game/GameWork.h"
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
 #include <list>
@@ -26,7 +27,9 @@ void HUD::Init() {
 
 // ASM-verified: 2026-05-24 binary @ 0x00144c5c (re-analyst)
 void HUD::Release() {
-    // TODO: 0x00144c5e -- GameWork.field_0x34 = 1 (in-Release guard); needs GameWork singleton accessor.
+    // Binary @ 0x00144c5e: game_work.field_0x34 = 1 (HUD-destructing guard).
+    // PIC-resolved global (GOT @ 0x001ec130+0x7990 -> &game_work @ 0x001f43b8), field_0x34.
+    game_work.field_0x34 = 1;
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* ctrl = *it;
         if (!ctrl->m_bNoDestructor) {
@@ -40,7 +43,8 @@ void HUD::Release() {
         }
     }
     controls.clear();
-    // TODO: 0x00144c70 -- GameWork.field_0x34 = 0 (clear guard).
+    // Binary @ 0x00144cc2: game_work.field_0x34 = 0 (clear HUD-destructing guard).
+    game_work.field_0x34 = 0;
 }
 
 // ASM-verified: 2026-05-24 binary @ 0x00144db0 (re-analyst)

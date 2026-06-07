@@ -170,6 +170,11 @@ struct LoopingSound {
 
     // Reset — binary: LoopingSound::Reset (called from SlashModInfo::UnEquip @ 0x00112424)
     void Reset();
+
+    // TODO: SetLoopDesiredVol (binary address unknown) — sets desired/target loop volume;
+    // called from ItemManager::SetSwipeLoodVol. Full behavior requires RE of the looping
+    // sound update path (likely stores vol into m_Phase or m_SoundId; drives audio interpolation).
+    void SetLoopDesiredVol(float vol);
 };
 
 // -----------------------------------------------------------------------
@@ -234,6 +239,11 @@ public:
     virtual void SetEquipped() override;
     // vtable[+0x10] Parse override — ParseSlashModInfo @ 0x001126c0
     virtual void Parse(tinyxml2::XMLElement* e) override;
+
+    // TODO: UpdateSounds (binary address unknown) — per-frame update for the mod's looping
+    // ambient sound; called from ItemManager::Update. Full behavior requires RE of the
+    // looping-sound interpolation path (likely drives LoopingSound vol lerp + SFXPlay).
+    void UpdateSounds(float dt);
 };
 
 #ifdef __bada__

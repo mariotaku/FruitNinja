@@ -394,9 +394,17 @@ private:
     // Binary signature: AddPoint(_Vector3<float>, _Vector3<float>, float)
     // Vec3s by VALUE (HFA -> s0/s1/s2 and s3/s4/s5); trailing float is the
     // pressure/thickness param (semantic TBD, currently unused by body).
-    // ASM-verified: 2026-05-24 binary @ 0x0016ce0c (re-analyst)
-    // TODO: 0x0016ce0c -- semantic of the third `float` arg still needs
-    //   RE -- likely thickness/pressure for ghost-trail thickness.
+    // Binary @ 0x17CE0C -- AddPoint(_Vector3<float>, _Vector3<float>, float).
+    // (The earlier 0x0016ce0c address in the TODO was a typo for 0x0017CE0C;
+    // 0x16CE0C decompiles to SaveCurrentData, an unrelated function.)
+    // The third float is the per-point blade thickness/pressure: the binary
+    // computes the strip half-width as `pressure * 9.0 * g_Scale1` (head taper)
+    // and writes mitered left/right verts at +/- that width into the heap
+    // vertex strips.
+    // Port specific: the port's geometry model (RebuildGeometry over m_Points[])
+    // derives blade width independently from m_Scale/m_HeadThickScale, and the
+    // only caller (OnTouchActive) supplies no per-point pressure -- so the third
+    // arg has no role in the port representation and defaults to 0.
     void AddPoint(Vec3 pos, Vec3 dir, float pressure = 0.0f);
 
     // Rebuilds m_pLeftBuffer / m_pRightBuffer vertex buffers from m_Points.
@@ -482,14 +490,20 @@ public:
 
     // (SlashEntity::AddPoint declared above with canonical 3-arg signature.)
 
-    // TODO: 0x17B570 -- SlashEntity::CollideWithEntity: test this blade's
-    //   ColLine against entity->m_Col (ColSphere). Port's slice loop uses
-    //   CollideWithSphere() per-entity instead; this entry point is unreached.
+    // Binary @ 0x17B570 -- SlashEntity::CollideWithEntity: test this blade's
+    // ColLine (m_Col, the head/tail midpoint segment built in UpdatePoints)
+    // against entity->m_Col (a ColSphere) via the collision vtable, gating on
+    // field_0x94 > 0 (squared segment length).
+    // Port specific: the port does not maintain the single-segment ColLine
+    // (it dropped the UpdatePoints vertex-strip subsystem); instead the slice
+    // loop in Update calls CollideWithSphere() per-entity, iterating the full
+    // m_Points[] trail. This binary entry point is therefore unreached.
     bool CollideWithEntity(Mortar::Entity* entity);
 
-    // TODO: 0x17B3BC -- SlashEntity::CollisionResponse (4-arg vtable override):
-    //   1-instruction stub `mov r0,#0; bx lr`. SlashEntity is pure aggressor;
-    //   returns 0.
+    // Binary @ 0x17B3BC -- SlashEntity::CollisionResponse (4-arg vtable override):
+    // 2-instruction stub `movs r0,#0; bx lr` (ASM-verified). SlashEntity is a
+    // pure aggressor (it hits things, nothing collides into it); returns 0.
+    // ASM-verified: 2026-06-07 binary @ 0x0017B3BC (re-analyst)
     int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, Vec3* bladeVel) override;
 
     // DrawSlice -- binary @ 0x17E424. Main blade render (two mirrored tri-strips).
@@ -508,10 +522,10 @@ public:
     // ASM-verified: 2026-05-18 binary @ 0x0017C340 (re-analyst)
     void InitPoints(long count);
 
-    // TODO: 0x17CA0C -- SlashEntity::SetModColours (non-const Colour* binary
-    //   form): copies palette, loads blade overlay texture, resolves emitter
-    //   hashes, notifies type-3 actors via ColoursChanged(). Port forwards to
-    //   the const-Colour* overload.
+    // Binary @ 0x17CA0C -- SlashEntity::SetModColours (non-const Colour* binary
+    // form): copies palette, loads blade overlay texture, resolves emitter
+    // hashes, notifies type-3 actors via ColoursChanged(). Forwards to the
+    // const-Colour* overload (which is fully ported).
     static void SetModColours(Colour* colours, int colourCount, int colourType,
                               float lifeScale, const char* particlePath,
                               const char* textureName2, bool directional,
@@ -527,9 +541,11 @@ public:
     // ASM-spec: SlashEntity::TouchMoveY @ 0x17C490 -- writes pos.y.
     bool TouchMoveY(InputEvent* event);
 
-    // TODO: 0x17B92C -- SlashEntity::UpdatePoints: per-frame geometry rebuild
-    //   from the binary's m_pLeftBuffer/m_pRightBuffer vertex strips. Port
-    //   rebuilds from the m_Points[] trail array via RebuildGeometry() instead.
+    // Binary @ 0x17B92C -- SlashEntity::UpdatePoints: per-frame geometry rebuild
+    // from the binary's m_pLeftBuffer/m_pRightBuffer vertex strips.
+    // Port specific: the port rebuilds from the m_Points[] trail array via
+    // RebuildGeometry() instead (different internal representation), so this
+    // binary-named entry point is a no-op. See .cpp for the full rationale.
     void UpdatePoints(float dt);
 
     // ASM-spec: SlashEntity::UpdateTouchDown (InputEvent* form) @ 0x17D2E4

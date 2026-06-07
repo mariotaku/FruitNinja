@@ -79,14 +79,14 @@ public:
     // Binary @ 0x0019b90c
     static long SizeOfFile(const char* path, unsigned long systemID);
 
-    // TODO: 0x0019b7fc -- return current file position via IFile vtable slot +0x1c (Tell)
-    void GetPosition() const;
-    // TODO: 0x0019b884 -- delegate to AsciiString::Hash on m_path (+0x08)
-    void Hash() const;
-    // TODO: 0x0019b7e4 -- return m_field35 (+0x35), the lock flag
-    void IsLocked() const;
-    // TODO: 0x0019b76c -- set m_field35 (+0x35) lock flag from arg
-    void Lock(bool);
+    // Binary @ 0x0019b7fc — tail-call IFile vtable slot +0x1c (Tell); returns current position
+    unsigned int GetPosition() const;
+    // Binary @ 0x0019b884 — delegate to AsciiString::Hash on m_path (+0x08)
+    unsigned int Hash() const;
+    // Binary @ 0x0019b7e4 — return m_field35 (+0x35), the lock flag
+    bool IsLocked() const;
+    // Binary @ 0x0019b76c — set m_field35 (+0x35) lock flag from arg
+    void Lock(bool locked);
 
     // --- Binary-faithful field layout (+0x04..+0x3F after vptr at +0x00) ---
     unsigned long   m_size;         // +0x04  (binary ctor arg3)

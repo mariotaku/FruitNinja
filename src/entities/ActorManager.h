@@ -291,43 +291,52 @@ public:
     // Defunct: zero in-binary callers; binary @ 0x0017013c.
     void ClearAllListeners();
 
-    // ---- Long-typed mangled overloads ----
-    // Long-typed overloads required for binary-faithful mangled symbol names.
-    // ARM32: long == int in size but mangles differently ('l' vs 'i').
-    // Each forwards to its int-typed counterpart; the binary has a single
-    // symbol per logical method at the address cited below.
+    // ---- Integer-width convenience overloads ----
+    // Each binary address below resolves to a SINGLE mangled symbol. Ghidra's
+    // plate comments show the binary uses `long` for the type-index param in
+    // most of these (e.g. Add(long,bool), GetEntityFirst(long,&), GetEntity(long,
+    // ulong), DeactivateAllEntities(long)). ARM32 has long == int == 4 bytes, so
+    // the int-typed primary body and this long-typed overload compile to
+    // identical code; the port keeps both so call sites of either width link.
+    // The faithful binary symbol is the already-implemented + ASM-verified body
+    // at the cited address; these forwarders are a port-only convenience with
+    // no separate binary counterpart.
 
-    // TODO: 0x0017068c -- long overload of Add(int,bool); forwards to int body.
+    // Port specific: int-width convenience forwarder; binary symbol @ 0x0017068c is Add(long,bool).
     Entity* Add(long entityType, bool unused = true);
 
-    // TODO: 0x0016fb44 -- long overload of DeactivateAllEntities(int).
+    // Port specific: int-width convenience forwarder; binary symbol @ 0x0016fb44 is DeactivateAllEntities(long).
     void DeactivateAllEntities(long typeIdx);
 
-    // TODO: 0x0016fe7c -- no-arg Draw(); binary draw body is Draw(Renderer&) @ 0x0016fe7c.
+    // Port specific: no-arg Draw() IS the binary symbol @ 0x0016fe7c (no Renderer
+    //   arg); it resolves the renderer via Renderer::GetInstance() and forwards
+    //   to the port-only Draw(Renderer&). The threaded-Renderer form is the
+    //   port convenience, the no-arg form is binary-faithful.
     void Draw();
 
-    // TODO: 0x0016fcc4 -- long/ulong overload of GetEntity(int,size_t).
+    // Port specific: int-width convenience forwarder; binary symbol @ 0x0016fcc4 is GetEntity(long,ulong).
     Entity* GetEntity(long typeIdx, unsigned long slot) const;
 
-    // TODO: 0x0016fbb8 -- long overload of GetEntityFirst(int,iterator&).
+    // Port specific: int-width convenience forwarder; binary symbol @ 0x0016fbb8 is GetEntityFirst(long,&).
     Entity* GetEntityFirst(long typeIdx, std::list<Entity*>::iterator& it);
 
-    // TODO: 0x0016fb88 -- long overload of GetEntityNext(int,iterator&).
+    // Port specific: int-width convenience forwarder; binary symbol @ 0x0016fb88 is GetEntityNext(long,&).
     Entity* GetEntityNext(long typeIdx, std::list<Entity*>::iterator& it);
 
-    // TODO: 0x0016ff98 -- long overload of GetNumEntities(int).
+    // Port specific: int-width convenience forwarder; binary symbol @ 0x0016ff98 is GetNumEntities(int/long).
     int GetNumEntities(long typeIdx);
 
-    // TODO: 0x0016ff30 -- non-const long* overload of GetNumEntities(const long*).
+    // Port specific: non-const convenience forwarder; binary symbol @ 0x0016ff30 is GetNumEntities(long*).
     int GetNumEntities(long* typeIdxNullTerminated);
 
-    // TODO: 0x0017046c -- long overload of Initialise(int,int).
+    // Port specific: int-width convenience forwarder; binary symbol @ 0x0017046c is Initialise(int,int).
     void Initialise(long numTypes, long heapSize);
 
-    // TODO: 0x001701f4 -- bounds-taking Update(float,ColAABB*,ColAABB*); bounds
-    //       unused in FruitNinja, forwards to dt-only body @ 0x001701f4.
+    // Bounds-taking Update(float,ColAABB*,ColAABB*) IS the binary symbol @
+    // 0x001701f4 -- the two ColAABB* bounds are genuinely dead in the binary
+    // body, so forwarding to the dt-only port body is behaviourally faithful.
     void Update(float dt, ::ColAABB* boundsA, ::ColAABB* boundsB);
-    // ---- end long-typed overloads ----
+    // ---- end integer-width convenience overloads ----
 
 #ifdef __bada__
     friend struct ActorManagerLayoutAssert;

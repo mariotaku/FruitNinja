@@ -629,16 +629,24 @@ void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
     }
     if (m_BuyTriggered != 0 && m_BuyButton->m_pFruitPiece != NULL) {
         Fruit* fruit = m_BuyButton->m_pFruitPiece;
-        // Binary: m_AngularVel.y = 0, m_Spin to zero, vel.x = vel.y = -10.0
-        // (0xc1200000 = -10.0f). Port sets RotVel2.y = 0 as best analogue.
-        fruit->m_RotVel2.y = 0.0f;
-        // vel.x = vel.y = -10.0f (nudge falling fruit)
-        fruit->vel.x = -10.0f;  // 0xc1200000
-        fruit->vel.y = -10.0f;  // 0xc1200000
-        // Binary literal 0xc3f00000 = -480.0f: kick fruit piece off-screen.
-        // vstr [r3,#0xbc] writes fruit->m_SecondPos.y = -480.0f.
-        // TODO: 0x146824 -- bl helper + ldmia/stmia 3-float position-copy block also present in binary.
-        fruit->m_SecondPos.y = -480.0f;  // 0xc3f00000
+        // Binary @ 0x00156aac (instruction-traced):
+        //   0xc3f00000 = -480.0f (DAT_00156b04); 0xc1200000 = -10.0f.
+        // Kick the falling buy-fruit piece off-screen:
+        //   vstr s15(-480), [r5,#0xbc] -> m_SecondPos.y (+0xBC)
+        //   vstr s15(-480), [r5,#0x14] -> pos.y         (+0x14)
+        fruit->m_SecondPos.y = -480.0f;  // +0xBC, 0xc3f00000
+        fruit->pos.y         = -480.0f;  // +0x14, 0xc3f00000
+
+        // bl 0x00156824 (NegateVec3_SpeedCtrl) negates the file-static origin
+        // Vec3 and stm's the 3 floats into fruit->m_Gravity (+0x9C..0xA4).
+        // -g_Origin == (0,0,0); the negate is just how the binary materialises a
+        // zero vec from the stored origin constant (same helper used by Release).
+        fruit->m_Gravity = g_Origin;     // +0x9C, stm from NegateVec3(origin)
+
+        //   vstr s15(-10), [r3,#0xc8] -> m_SecondVel.y (+0xC8)
+        //   vstr s15(-10), [r3,#0x20] -> vel.y         (+0x20)
+        fruit->m_SecondVel.y = -10.0f;   // +0xC8, 0xc1200000
+        fruit->vel.y         = -10.0f;   // +0x20, 0xc1200000
     }
     m_BuyTriggered = 0;
     m_BuyButton    = NULL;

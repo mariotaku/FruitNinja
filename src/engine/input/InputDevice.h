@@ -50,18 +50,24 @@ public:
 
     // Binary @ 0x001b3508 — ProcessEvent.
     // Called by InputDevice::CheckActions per mapper in actionMappers list.
-    // TODO: 0x001b3508 — ProcessEvent body (fires m_callback if event matches).
+    // Compares the incoming event against this mapper's filter template and
+    // fires m_callback(event) on a match.
     void ProcessEvent(InputEvent* event);
 
-    // Fields per binary ctor writes (0x001b356c):
+    // Fields per binary ctor writes (0x001b356c). The ctor copies an InputEvent
+    // "template" into the mapper so it acts as an action filter:
+    //   m_actionFilter = template.eventWord   (+0xc, from InputEvent +0x00)
+    //   m_matchValue   = template.matchWord   (+0x10, from InputEvent +0x04;
+    //                    high 16 bits = keycode/finger discriminator)
+    //   m_matchMapper  = template.m_mapper    (+0x14, from InputEvent +0x08)
     bool      m_enabled;       // +0x00  strb r12 = 1 at ctor @0x001b358a
-    uint32_t  field4_0x4;     // +0x04
-    uint32_t  field5_0x8;     // +0x08
-    uint32_t  field6_0xc;     // +0x0c
-    uint32_t  field7_0x10;    // +0x10
-    uint32_t  field8_0x14;    // +0x14
-    uint32_t  field9_0x18;    // +0x18
-    uint32_t  field10_0x1c;   // +0x1c
+    uint32_t  field4_0x4;     // +0x04  <- ctor param_4
+    uint32_t  field5_0x8;     // +0x08  <- ctor in_stack (5th word)
+    uint32_t  m_actionFilter; // +0x0c  action-type (hi16) | device-mask (lo16)
+    uint32_t  m_matchValue;   // +0x10  hi16 = keycode/finger to match (MOVE/UP)
+    uint32_t  m_matchMapper;  // +0x14  InputActionMapper* matched for DOWN events
+    uint32_t  field9_0x18;    // +0x18  <- ctor param_2.super.fns
+    uint32_t  field10_0x1c;   // +0x1c  <- ctor param_2._4_4_
     // Binary: m_callback is Delegate1<bool,InputEvent*> at +0x20, 8 bytes
     // in the binary's implementation. Port uses our 36-byte Delegate1 here.
     InputDeviceCallback m_callback;  // +0x20

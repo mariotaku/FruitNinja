@@ -252,19 +252,25 @@ void NotificationControl::Draw(const Vec3& hudScale, int layerMask) {
     }
 }
 
-// No NotificationControl-specific symbol exists in the binary (only ctor/dtor +
-// the duplicated ctor @0x153060); these vtable slots fall through to base
-// HUDControl3d. The override bodies below are placeholders until the base-class
-// slot semantics are RE'd and ported.
-// TODO: 0x001529EC -- override body; resolve vs base HUDControl3d Init slot
-void NotificationControl::Init() {}
+// ---- HUDControl3d lifecycle override bodies (RE'd against the vtable @ 0x1e9b80) ----
+// Object vptr -> 0x1e9b80; slot order: dtor,dtor,Init,Release,Reset,BeginDraw,
+// PreDraw,Draw,PreDrawOrder,DrawOrder,Update. Each body below is the exact binary thunk.
 
-// TODO: 0x00152DE0 -- override body; resolve vs base HUDControl3d Release slot
-void NotificationControl::Release() {}
+// Binary @ 0x001529EC -- thunk: ldr r3,[r0]; ldr r3,[r3,#0x10]; blx r3.
+// vptr+0x10 == Reset slot, so Init() delegates to the virtual Reset().
+void NotificationControl::Init() {
+    Reset();
+}
 
-// TODO: 0x001529F8 -- override body; resolve vs base HUDControl3d Reset slot
+// Binary @ 0x00152DE0 -- adds r0,#0x74; movs r1,#0; blx SmartPtr<Texture>::SetPtr.
+// Releases the icon texture held in the inherited m_Texture slot (+0x74).
+void NotificationControl::Release() {
+    m_Texture.SetPtr(nullptr);
+}
+
+// Binary @ 0x001529F8 -- bx lr (no-op).
 void NotificationControl::Reset() {}
 
-// TODO: 0x001529FC -- override body; resolve vs base HUDControl3d PreDraw slot
+// Binary @ 0x001529FC -- bx lr (no-op).
 void NotificationControl::PreDraw(float* /*viewVec*/) {}
 

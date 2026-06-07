@@ -6,6 +6,12 @@
 // Full rendering pipeline ported in ShopListItem::Draw.
 
 #include "ScrollingMenuItem.h"
+#include "ScrollingMenu.h"
+#include "engine/render/Font.h"
+#include "engine/math/Vec2.h"
+#include "engine/math/Vec3.h"
+#include "engine/math/Colour.h"
+#include "game/GameWork.h"
 #include <cstring>
 
 // Default item size from binary global DAT values (ctor 0x0015b5dc).
@@ -47,29 +53,122 @@ void ScrollingMenuItem::SetText(const char* text) {
     m_pText = text;
 }
 
+// Binary @ 0x0015b480 -- ScrollingMenuItem::Draw (vtable slot 11, +0x2C).
+//
+// Renders the item's text label, optionally clipped to the parent menu's
+// visible rect. Disasm-confirmed sequence:
+//   1. if (m_Text == NULL) return;
+//   2. textPos = pos + m_Size            (Vector3::operator+, hidden r2=&m_Size)
+//   3. clipRect = NULL
+//      if (m_Parent != NULL):
+//          h = parent->GetHeight()       (vtable +0x44, reads ScrollingMenu +0xa0)
+//          w = parent->GetWidth()        (vtable +0x48, reads ScrollingMenu +0xa4)
+//          clipRect.top    = parent.pos.y + h * 0.5    (sp+0x30)
+//          clipRect.bottom = parent.pos.y + h * -0.5   (sp+0x38)
+//          clipRect.left   = parent.pos.x + w * -0.5   (sp+0x2c)
+//          clipRect.right  = parent.pos.x + w * 0.5    (sp+0x34)
+//          clipRect = &{left, top, right, bottom}      (memory order at sp+0x2c)
+//   4. font  = game_work.pFontMain  (*(Font**)(game_work + 0x54))
+//      iter  = Utf8StringIterator(m_Text)
+//      colour = m_Colour
+//      maxWH = *globalDefaultMaxWH (GOT+0x78c0 -> BSS Vec2, load-time (0,0))
+//      Font_DrawString(font, iter, pos=textPos, colour, maxWH,
+//                      scale=30.0f (s0), yLineFactor=1.0f (s1), rotZ=0.0f (s2),
+//                      alignment=0xF, clipRect)
 void ScrollingMenuItem::Draw() {
-    // TODO: 0x0015b480 -- render item text and highlight
+    // (1) No text -> nothing to render.
+    if (m_pText == nullptr) {
+        return;
+    }
+
+    // (2) Text base position = pos + m_Size (binary Vector3::operator+).
+    Vec3 textPos(pos.x + m_Size.x, pos.y + m_Size.y, pos.z + m_Size.z);
+
+    // (3) Clip rect derived from the parent menu's centre + width/height.
+    // Only built when this item has a parent; otherwise no clipping.
+    Mortar::MortarRectangleDec clipRect;
+    Mortar::MortarRectangleDec* pClip = nullptr;
+    if (m_pParent != nullptr) {
+        float h = m_pParent->GetHeight();   // vtable +0x44 -> ScrollingMenu +0xa0
+        float w = m_pParent->GetWidth();    // vtable +0x48 -> ScrollingMenu +0xa4
+        clipRect.top    = m_pParent->pos.y + h * 0.5f;
+        clipRect.bottom = m_pParent->pos.y + h * -0.5f;
+        clipRect.left   = m_pParent->pos.x + w * -0.5f;
+        clipRect.right  = m_pParent->pos.x + w * 0.5f;
+        pClip = &clipRect;
+    }
+
+    // (4) Resolve the main font from game_work (binary reads game_work + 0x54).
+    if (!game_work.pFontMain.IsValid()) {
+        return;
+    }
+    Mortar::Font* font = game_work.pFontMain.Get();
+    if (!font) {
+        return;
+    }
+
+    Mortar::Utf8StringIterator iter(m_pText);
+    // m_Colour is the packed 4-byte BGRA field (binary Colour::Colour copy-ctor
+    // from this+0x14). Reinterpret the bytes into a Colour byte-for-byte.
+    Colour colour;
+    memcpy(&colour, &m_Colour, sizeof(colour));
+
+    // maxWH from the global default-size Vec2 (GOT+0x78c0 -> BSS, load-time (0,0)).
+    // maxWH.x <= 0 means "no word-wrap"; the parent clip rect bounds the text.
+    Vec2 maxWH(0.0f, 0.0f);
+
+    // Binary scale=30.0f, yLineFactor=1.0f, rotZ=0.0f (DAT_0015b5a0), alignment=0xF.
+    font->DrawString(30.0f, 1.0f, 0.0f,
+                     iter, textPos, colour,
+                     maxWH, 0xF, 0.0f, pClip);
 }
 
-// TODO: 0x0015b228 -- 4-param ctor: load m_Size Vec3 from global default-size ptr
-// (DAT_0015b2b8) instead of zeroing; width->m_Height, height->m_Width per binary;
-// run MakeColourFromGlobal_ScrollMenu on m_Colour. Port currently uses fixed defaults.
-ScrollingMenuItem::ScrollingMenuItem(float, float, const char* text, Mortar::Delegate1<void, ScrollingMenuItem*> delegate)
+// Binary @ 0x0015b228 -- 4-param ctor: ScrollingMenuItem(float width, float height,
+// char const* text, Mortar::Delegate1<void,ScrollingMenuItem*> callback).
+//
+// Binary sequence (disasm-confirmed):
+//   *(this) = vtable+8                          (set in member-init order by C++)
+//   Colour::Colour(&m_Colour)                   default-construct
+//   Delegate1::Delegate1(&m_Delegate);          default-ctor then operator= copy
+//   Delegate1::operator=(&m_Delegate, callback)
+//   m_Text = 0                                  (cleared before SetText)
+//   m_Size = *(Vec3*)global_default_size_ptr    (GOT+DAT_0015b2b8 -> BSS Vec3,
+//                                                load-time value (0,0,0))
+//   SetText(this, text)                         stores text at +0x54
+//   MakeColourFromGlobal_ScrollMenu(tmp, &m_Colour)  copies the global white
+//                                                colour singleton (GOT+0x73a4 =
+//                                                {255,255,255,255}) into m_Colour.
+//   m_Height = width   (param1 -> +0x24, vstr s16=s0 at 0x0015b28e)
+//   m_Width  = height  (param2 -> +0x28, vstr s17=s1 at 0x0015b292)
+//
+// Param naming is "swapped": the first float (width) lands in m_Height (the
+// ROW PITCH field, GetHeight target) and the second (height) lands in m_Width.
+// This matches the binary's vstr layout exactly -- not a typo.
+ScrollingMenuItem::ScrollingMenuItem(float width, float height, const char* text, Mortar::Delegate1<void, ScrollingMenuItem*> delegate)
     : m_pParent(nullptr)
-    , m_Colour(0xFFFFFFFF)
+    , m_Colour(0xFFFFFFFF)   // overwritten below by MakeColourFromGlobal_ScrollMenu
     , m_Size{0.0f, 0.0f, 0.0f}
-    , m_Height(25.0f)
-    , m_Width(0.0f)
+    , m_Height(width)        // param1 (width) -> +0x24 m_Height (binary vstr s16)
+    , m_Width(height)        // param2 (height) -> +0x28 m_Width  (binary vstr s17)
     , _pre_del0(0)
     , m_bOnscreen(0)
     , _pre_del1(0)
     , _pre_del2(0)
     , m_Delegate(delegate)
-    , m_pText(text)
+    , m_pText(nullptr)       // binary clears m_Text before SetText
 {
     pos.x = 0.0f;
     pos.y = 0.0f;
     pos.z = 0.0f;
+
+    // m_Size from global default-size Vec3 (GOT-relative DAT_0015b2b8 -> BSS,
+    // zero at load time). Left as (0,0,0) above to match the load-time value.
+
+    SetText(text);   // binary calls SetText (vtable slot) to store the pointer.
+
+    // MakeColourFromGlobal_ScrollMenu @ 0x0015b154: copies the global white
+    // colour singleton (GOT+0x73a4 = {255,255,255,255}) into m_Colour.
+    m_Colour = 0xFFFFFFFF;   // white {255,255,255,255}
 }
 
 void ScrollingMenuItem::CallClickedMenuItemCallback() {

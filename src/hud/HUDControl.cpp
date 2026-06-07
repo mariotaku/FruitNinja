@@ -10,6 +10,15 @@ const std::list<HUDControl*>& HUDControl::GetActiveControls() {
 }
 #endif
 
+// Binary @ 0x00143f94 — DefaultDeleteCallback(HUDControl*): no-op free
+// function. The ctor's MakeDelegate_PauseScreen_HUD (binary @ 0x001440d8)
+// builds a "Global" (free-function) delegate variant bound to this target
+// and assigns it into m_RemoveCallback (+0x38).
+static void DefaultDeleteCallback(HUDControl* control)
+{
+    (void)control;
+}
+
 HUDControl::HUDControl()
     : m_Singular(0),                              // +0x04
       m_Timer(0.0f),                              // DIFFERS: binary leaves uninitialised; port zero-inits for determinism
@@ -23,9 +32,10 @@ HUDControl::HUDControl()
       m_UVLeft(0.0f), m_UVTop(0.0f),             // +0x64, GOT[0x78c0] = (0,0)
       m_UVRight(1.0f), m_UVBottom(1.0f)          // +0x6c, GOT[0x7170] = (1,1)
 {
-    // TODO: 0x00144184 — assign m_RemoveCallback to HUD::OnControlRemoved
-    //                    delegate (MakeDelegate_PauseScreen_HUD). Currently
-    //                    default-constructed; HUD callback chain not yet ported.
+    // Binary @ 0x00144184 — m_RemoveCallback = MakeDelegate_PauseScreen_HUD():
+    // a free-function "Global" delegate bound to the no-op DefaultDeleteCallback
+    // (binary @ 0x00143f94). Built on the stack then move-assigned into +0x38.
+    m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::MakeFree(&DefaultDeleteCallback);
 #ifndef __bada__
     // Port specific: debug-only registry. Binary has no global HUDControl
     // list; ctor/dtor xrefs confirm. Used by F1 hitbox overlay only.

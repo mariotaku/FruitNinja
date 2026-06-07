@@ -83,21 +83,21 @@ public:
     // vtable -- inherits HUDControl3d::GetType which returns 1. Prior port
     // value of 8 collided with TYPE_SCROLLING_MENU and corrupted state on pause.
 
-    // Binary @ 0x00133664 — called by BonusManager::SetUpBonusScreen
-    // colour passed as packed BGRA uint32_t (matching BonusManager call site)
+    // Port convenience overload — colour as packed BGRA uint32_t (matching the
+    // BonusManager call site). Unpacks to Colour and delegates to the canonical
+    // binary AddAward(Colour, ...) below.
     void AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
-    // Binary form of AddAward — Colour arg (port uses uint32_t; both overloads present)
-    // TODO: 0x00133664 -- real binary AddAward signature (Colour); currently no-op,
-    // uint32_t overload carries the canonical logic.
+    // Binary @ 0x00133664 — real binary AddAward signature (Colour). Carries the
+    // canonical logic; called by BonusManager::SetUpBonusScreen in the binary.
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
-    // Binary form of Draw — float* arg (port uses const Vec3&, int; both overloads present)
-    // TODO: 0x0013325C -- real binary Draw signature (float* view matrix); currently no-op,
-    // (const Vec3&, int) overload carries the canonical logic.
-    void Draw(float* mtx);
+    // Port specific: there is no separate binary Draw(float*) — the single binary
+    // Draw @ 0x0013325C is the HUDControl3d vtable override Draw(const Vec3&, int)
+    // above, which carries the canonical logic. The earlier float* overload was a
+    // phantom (no binary counterpart, no callers) and has been removed.
 
     // Binary @ 0x00131d58 — returns kRevealStart (0.6660f)
     float GetTimeFirstAward();

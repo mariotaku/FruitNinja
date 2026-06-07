@@ -14,6 +14,12 @@ struct InputEvent {
     int      fingerId;     // touch finger index (0-15)
     float    x, y;         // position in game coords (480x320)
     float    deltaX, deltaY; // movement delta (for move events)
+    // Binary InputEvent (12B): +0x06 ushort keycode, +0x08 InputActionMapper* m_mapper.
+    // Port layout differs (see DIFFERS in InputDevice.cpp / InputActionMapper::ProcessEvent);
+    // these fields are appended here to keep the call graph compiling.
+    // TODO: binary addr unknown -- reconcile with binary 12-byte InputEvent layout.
+    uint32_t keycode;      // binary +0x06 (ushort); port uses uint32_t for alignment
+    void*    m_mapper;     // binary +0x08 InputActionMapper* matched on DOWN events
 };
 
 #endif

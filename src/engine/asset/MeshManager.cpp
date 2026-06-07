@@ -423,14 +423,53 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const char* path) {
 } // namespace Mortar
 
 namespace Mortar {
-// TODO: 0x001929BC -- tear down the model cache (mirror of ReleaseAll + free instance state)
-void MeshManager::Destroy() {}
-// TODO: 0x00192BA8 -- look up a cached Model by name, return cached SmartPtr or null
-void MeshManager::Find(AsciiString const&) const {}
-// TODO: 0x00192B54 -- locate a cached Model entry by handle
-void MeshManager::Find(SmartPtr<Model> const&) const {}
-// TODO: 0x001A74B8 -- one-time internal cache/capacity setup invoked by Initialise
-void MeshManager::InitialiseInternal() {}
-// TODO: 0x00192B1C -- drop one Model's refcount and evict it from the cache when unreferenced
-void MeshManager::Release(SmartPtr<Model> const&) {}
+
+// Binary @ 0x001929BC -- tail-calls ReleaseAll() to drop every cached Model.
+void MeshManager::Destroy() {
+    ReleaseAll();
+}
+
+// Binary @ 0x00192BA8 -- iterate the cached-Model list; for each entry compare
+// its Model::m_name (offset +0xc) against `name` via AsciiString::Equals. Return
+// the first matching SmartPtr<Model>, or an empty SmartPtr on miss.
+Mortar::SmartPtr<Model> MeshManager::Find(AsciiString const& name) const {
+    for (int i = 0; i < m_Models.size(); i++) {
+        if (m_Models[i].IsValid() && m_Models[i]->m_name == name) {
+            return m_Models[i];
+        }
+    }
+    return Mortar::SmartPtr<Model>();
+}
+
+// Binary @ 0x00192B54 -- iterate the cached-Model list comparing each entry to
+// `model` via SmartPtr<Model>::operator== (pointer identity). Return the matching
+// SmartPtr<Model>, or an empty SmartPtr on miss.
+Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> const& model) const {
+    for (int i = 0; i < m_Models.size(); i++) {
+        if (m_Models[i].Get() == model.Get()) {
+            return m_Models[i];
+        }
+    }
+    return Mortar::SmartPtr<Model>();
+}
+
+// Binary @ 0x001A74B8 -- empty in the binary (one-time hook reserved for cache
+// capacity setup; the shipped build performs no work here).
+void MeshManager::InitialiseInternal() {
+}
+
+// Binary @ 0x00192B1C -- if the handle is non-null, remove the matching entry
+// from the cache list (List::Remove finds the equal SmartPtr and erases it),
+// which drops the Model's intrusive refcount.
+void MeshManager::Release(SmartPtr<Model> const& model) {
+    if (model.IsValid()) {
+        for (int i = 0; i < m_Models.size(); i++) {
+            if (m_Models[i].Get() == model.Get()) {
+                m_Models.erase(i);
+                break;
+            }
+        }
+    }
+}
+
 }  // namespace Mortar

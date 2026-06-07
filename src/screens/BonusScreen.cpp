@@ -178,57 +178,57 @@ BonusScreen::~BonusScreen() {
 // AddAward (binary @ 0x00133664)
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x00133664
+// Port convenience overload: BonusManager (and the binary's SetUpBonusScreen)
+// carry the award colour as a packed BGRA uint32_t. Unpack into the engine
+// Colour and delegate to the canonical binary AddAward(Colour, ...) below.
+// (b,g,r,a byte order matches Colour's field layout.)
 void BonusScreen::AddAward(uint32_t colour, Mortar::SmartPtr<Mortar::Texture> tex,
                            const char* name, int tier) {
-    BonusAwardHud entry;
-    if (name) {
-        std::strncpy(entry.m_Name, name, sizeof(entry.m_Name) - 1);
-        entry.m_Name[sizeof(entry.m_Name) - 1] = '\0';
-    }
-    entry.m_StarTex        = tex;
-    entry.m_TierBase       = tier;
-    // ASM-verified: 2026-05-22 binary @ 0x00133664 (re-analyst).
-    // Binary AddAward does NOT touch +0x44 (m_Multiplier) -- relies on the
-    // default-ctor value of 1. Earlier port wrote 0 here, which silently
-    // zeroed every per-award DisplayedScore.
-    entry.m_DisplayedScore = 0;
-    // Pack uint32_t BGRA into Colour (stored as b,g,r,a fields).
-    entry.m_Colour.b = (uint8_t)((colour >>  0) & 0xFF);
-    entry.m_Colour.g = (uint8_t)((colour >>  8) & 0xFF);
-    entry.m_Colour.r = (uint8_t)((colour >> 16) & 0xFF);
-    entry.m_Colour.a = (uint8_t)((colour >> 24) & 0xFF);
-    entry.m_Scale    = 1.0f;
-    m_TotalScore    += tier;
-    m_Awards.push_back(entry);
-    // TEMP DEBUG: BonusScreen black block
-    LOG_INFO("BONUS/AddAward",
-        "tier=%d colour=BGRA(%02x,%02x,%02x,%02x) name='%s' starTex=%p valid=%d w=%d h=%d",
-        tier,
-        (unsigned)entry.m_Colour.b, (unsigned)entry.m_Colour.g,
-        (unsigned)entry.m_Colour.r, (unsigned)entry.m_Colour.a,
-        name ? name : "(null)",
-        entry.m_StarTex.Get(),
-        (int)entry.m_StarTex.IsValid(),
-        entry.m_StarTex.IsValid() ? entry.m_StarTex->m_Width  : -1,
-        entry.m_StarTex.IsValid() ? entry.m_StarTex->m_Height : -1);
+    Colour c;
+    c.b = (uint8_t)((colour >>  0) & 0xFF);
+    c.g = (uint8_t)((colour >>  8) & 0xFF);
+    c.r = (uint8_t)((colour >> 16) & 0xFF);
+    c.a = (uint8_t)((colour >> 24) & 0xFF);
+    AddAward(c, tex, name, tier);
 }
 
 // ---------------------------------------------------------------------------
 // STUBS (binary methods not yet ported)
 // ---------------------------------------------------------------------------
 
-// TODO: 0x00133664 -- real binary AddAward signature takes Colour (not uint32_t);
-// build BonusAwardHud, copy name, assign m_StarTex, m_TierBase = tier, m_TotalScore += tier,
-// m_Multiplier from DAT_001336e4, push into m_Awards. Currently a no-op; the wired-up
-// uint32_t overload above carries the canonical logic.
-void BonusScreen::AddAward(Colour /*colour*/, Mortar::SmartPtr<Mortar::Texture> /*tex*/,
-                           const char* /*name*/, int /*tier*/) {}
+// Binary @ 0x00133664 -- BonusScreen::AddAward(Colour, SmartPtr<Texture>, char const*, int).
+// Default-constructs a BonusAwardHud, copies the name, assigns the star texture,
+// credits m_TotalScore += tier, sets m_TierBase = tier, m_DisplayedScore = 0,
+// stores the award colour, then push_back into m_Awards.
+// Binary field map (port BonusAwardHud):
+//   this+0x80   (m_TotalScore)     += tier        (str r3,[r4,#0x80] @ 0x0013369c)
+//   entry+0x40  (m_TierBase)        = tier         (str r6,[sp,#0x40]  @ 0x001336a2)
+//   entry+0x4c  (m_DisplayedScore)  = 0            (str r3,[sp,#0x4c]  @ 0x001336a4)
+//   entry+0x50/+0x58 colour copies  = colour       (Colour::operator= x2)
+//   entry+0x54                       = DAT_001336e4 = 0.0f (initial; Update recomputes m_Scale)
+//   m_Multiplier (+0x44)            left at default 1 (binary never writes +0x44 here).
+// The binary keeps two colour fields (+0x50 m_Colour0, +0x58 m_Colour1); the port
+// collapses these into the single ASM-verified m_Colour used by Update/Draw.
+void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
+                           const char* name, int tier) {
+    BonusAwardHud entry;                 // default ctor: m_Multiplier = 1, m_Scale = 1.0
+    if (name) {
+        std::strncpy(entry.m_Name, name, sizeof(entry.m_Name) - 1);
+        entry.m_Name[sizeof(entry.m_Name) - 1] = '\0';
+    }
+    entry.m_StarTex        = tex;
+    m_TotalScore          += tier;
+    entry.m_TierBase       = tier;
+    entry.m_DisplayedScore = 0;
+    entry.m_Colour         = colour;
+    // entry+0x54 = DAT_001336e4 (0.0f) in the binary; the port keeps m_Scale at its
+    // default 1.0 since Update overwrites it each frame via the SinIdx wobble.
+    m_Awards.push_back(entry);
+}
 
-// TODO: 0x0013325C -- real binary Draw signature takes float* (the view matrix);
-// mirror the const Vec3&/int Draw override (dialog box + total score + per-award row loop).
-// Currently a no-op; the wired-up (const Vec3&, int) overload above carries the canonical logic.
-void BonusScreen::Draw(float* /*mtx*/) {}
+// Port specific: the phantom Draw(float*) overload was removed — the single binary
+// Draw @ 0x0013325C is the HUDControl3d vtable override Draw(const Vec3&, int)
+// which carries the canonical logic.
 
 // Binary @ 0x00131d58 — returns pfVar14[0] = kRevealStart (0.6660f).
 // ASM-verified: 2026-05-23 binary @ 0x00131d58 (re-analyst)
@@ -368,15 +368,38 @@ void BonusScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // Phase A: pre-show slide-in (timer < 0)
+    // Phase A: pre-show slide-in (timer < 0). Binary @ 0x00132a98 (else of
+    // timer >= 0). The drum-roll RushSFX gate already runs above its sibling
+    // branch in the binary; here we handle the positional/camera animation.
     // -----------------------------------------------------------------------
     if (m_PhaseTimer < 0.0f) {
-        // Slide-in from off-screen. m_PosOffset.y interpolates toward 0.
-        // TODO: resolve exact slide-in math from binary @ 0x00132930
-        m_PosOffset.y = m_PhaseTimer * kRevealStart;
+        // phase01 = timer / kRevealHalfBeat; wrap into [0,1) toward the reveal.
+        // Binary @ 0x00132b2a: s15 = field30_0xb8 / pfVar15[2]; if <0 +=1 else 1-x.
+        float phase01 = m_PhaseTimer / kRevealHalfBeat;
+        if (phase01 < 0.0f) phase01 += 1.0f;
+        else                phase01 = 1.0f - phase01;
 
-        // Start rush SFX once.
-        // TODO: SoundManager::PreLoadSound / play "BonusRush" into m_RushSFX
+        // Positional offset = -g_BonusSlideOffset * (1 - SinIdx(100*phase01*182)/SinIdx(0x4718)).
+        // Binary @ 0x00132b88..0x00132bf6: reads a module .bss Vec3 @ 0x00235920,
+        // negates it, scales by the eased factor, writes field31/32/33 (m_PosOffset).
+        // That .bss Vec3 has no static initialiser and no writer xref -> it is the
+        // engine zero-vector, so the offset resolves to (0,0,0). The visible
+        // slide-in is driven instead by the camera/projection matrix lerp below.
+        // Binary @ 0x00132a98 (DAT_00132cd0=100.0, DAT_00132cd4=182.0, denom idx 0x4718).
+        float easeFactor = 1.0f
+            - Math::SinIdx((unsigned short)(int)(100.0f * phase01 * 182.0f))
+              / Math::SinIdx(0x4718);
+        // g_BonusSlideOffset is the engine zero-vector; -zero * easeFactor == zero.
+        (void)easeFactor;
+        m_PosOffset = Vec3(0.0f, 0.0f, 0.0f);
+
+        // TODO: 0x00132a98 -- camera/projection slide-in lerp. Binary lerps the
+        // active camera matrix at GameWork.field_0x3c, columns +0x14/+0x18/+0x1c,
+        // each toward 0.5 by `easeFactor` (val += (0.5 - val) * easeFactor), then
+        // squares easeFactor into the eased scalar. Blocked on FruitCamera
+        // projection-matrix access (no port handle to the per-frame camera matrix
+        // columns yet). The m_PosOffset write above is faithful (resolves to zero);
+        // only the camera-matrix component of the slide is deferred.
         return;
     }
 
@@ -476,15 +499,37 @@ void BonusScreen::Update(float dt) {
     }
 
     // -----------------------------------------------------------------------
-    // Pulse colour update (independent of phase)
-    // -----------------------------------------------------------------------
+    // Pulse / shake wandering-target update (independent of phase).
+    // Binary @ 0x00133166 (post-loop tail of Update).
+    // m_PulseTimer (field16_0x94) decays; a unit vector at angle m_PulseAngle
+    // scaled by (m_PulseTimer*m_PulseField15)/m_PulseField17 walks the shake
+    // target. When the desired point gets within 5 units (MagnitudeSqr < 25)
+    // the angle is re-randomised. m_PulseTarget integrates 0.2 of the delta
+    // each frame. When the timer expires, m_PulseTarget snaps back to origin
+    // (the binary reads a shared zero-Vec3 global @ GOT+0x73ec).
+    // Binary @ 0x00133166
     if (m_PulseTimer > 0.0f) {
+        // field16_0x94 -= dt
         m_PulseTimer -= dt;
-        // Damped wobble toward m_PulseTarget.
-        // TODO: resolve exact wobble math from binary @ 0x00132c80
-        float wobble = m_PulseTimer * m_PulseField17;
-        m_PulseAngle = (int16_t)((int)m_PulseAngle + (int)(wobble * 100.0f));
-        (void)wobble;
+        // fVar26 = (timer * field15) / field17
+        float radius = (m_PulseTimer * m_PulseField15) / m_PulseField17;
+        // unit dir at current angle, z = 0 (DAT_00133240 = 0.0)
+        float s = Math::SinIdx((unsigned short)m_PulseAngle);
+        float c = Math::CosIdx((unsigned short)m_PulseAngle);
+        Vec3 desired(s * radius, c * radius, 0.0f);
+        // delta = desired - m_PulseTarget
+        Vec3 delta = desired - m_PulseTarget;
+        if (delta.MagnitudeSqr() < 25.0f) {
+            // angle += (int)((150.0 + RandF(1.0)*60.0) * 182.0)
+            // DAT_00133248 = 150.0, DAT_00133244 = 60.0, DAT_0013324c = 182.0
+            float bump = (150.0f + Math::g_Random.RandF(1.0f) * 60.0f) * 182.0f;
+            m_PulseAngle = (int16_t)((int)m_PulseAngle + (int)bump);
+        }
+        // m_PulseTarget += delta * 0.2  (DAT_00133250 = 0.2)
+        m_PulseTarget += delta * 0.2f;
+    } else {
+        // Snap shake target back to origin (binary: *(zero-Vec3 global)).
+        m_PulseTarget = Vec3(0.0f, 0.0f, 0.0f);
     }
 }
 

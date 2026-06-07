@@ -158,10 +158,12 @@ public:
     static void PauseGame();
     static void UnpauseGame();
 
-    // TODO: 0x00153fe8 -- ContinueGameCallback: if m_State==3, set m_State=4 (RESUME_EXIT)
-    //                     and clear ShopScreen +0x85 flag (InitVec3_ShopScreen if previously set)
+    // Binary @ 0x00153fe8 -- ContinueGameCallback: if m_State==3, set m_State=4
+    //   (RESUME_EXIT); if Game-state +0x85 tutorial-shown flag was set, re-seed the
+    //   global RNG from Game-state +0x194, then clear the flag. (impl in .cpp)
     void ContinueGameCallback();
-    // TODO: 0x00153e34 -- SkipTo: jump straight to ACTIVE overlay (m_State=3, m_Alpha=1.0)
+    // Binary @ 0x00153e34 -- SkipTo: jump straight to ACTIVE overlay
+    //   (m_State=3, m_Alpha=1.0). (impl in .cpp)
     void SkipTo();
 };
 

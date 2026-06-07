@@ -172,6 +172,20 @@ static inline float RandRange(float lo, float hi) {
     return lo + (hi - lo) * Rand01();
 }
 
+// Quadrant-mirror sign used by AddParticle's m_field38 branch (0x115644).
+// Binary @ 0x001157c0/0x115800: vcmpe vs 0 then ble/ite produces
+//   v > 0  -> -1.0
+//   v < 0  -> +1.0
+//   v == 0 ->  0.0 (DAT_00115b60 = 0.0f)
+// i.e. -sign(v) with sign(0)==0. Used to mirror gravity/velocity by the
+// owner's screen-half so a split-touch two-player layout sprays particles
+// symmetrically about the centre line.
+static inline float QuadrantMirror(float v) {
+    if (v > 0.0f) return -1.0f;
+    if (v < 0.0f) return 1.0f;
+    return 0.0f;
+}
+
 // Matches AddParticle (0x115644) — spawn one particle from (emitter, set).
 // setIdx is the index of the set in emitter.m_pTemplate->m_Sets; stored in
 // p.m_field44 so the draw pass can look up the per-particle PSPParticleTemplate
@@ -199,12 +213,9 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
     // along the blade direction. Identity when the caller leaves defaults (cos=1, sin=0).
     const float cosA = emitter.m_DirCos;
     const float sinA = emitter.m_DirSin;
-    const float rvx = vx * cosA + vy * sinA;
-    const float rvy = vy * cosA - sinA * vx;
-
-    p.m_Vel.x = emitter.m_Vel.x + rvx;
-    p.m_Vel.y = emitter.m_Vel.y + rvy;
-    p.m_Vel.z = emitter.m_Vel.z + vz;
+    float rvx = vx * cosA + vy * sinA;
+    float rvy = vy * cosA - sinA * vx;
+    float rvz = vz;
 
     if (tmpl) {
         // NOTE: template m_VelocityMin/Max are NOT an initial-velocity range;
@@ -257,11 +268,52 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         p.m_CycleXPhase = Rand01() * 6.2831853f;
         p.m_CycleYPhase = Rand01() * 6.2831853f;
 
+        // Quadrant-mirror branch (AddParticle @ 0x001157ae). Gated on the
+        // emitter's m_field38, NOT on the template shape -- the binary's
+        // AddParticle has no shape==3 path; the "Angular" type parsed in
+        // LoadFile only affects size/gridlock, never this branch. m_field38 is
+        // set non-zero by the split-touch two-player layout so each player's
+        // emitter sprays particles mirrored about the screen centre line.
+        //
+        // Binary sequence:
+        //   swap(gravity.x, gravity.y)
+        //   gravity.x *= QuadrantMirror(particle.pos.x)   // = emitter.pos.x here
+        //   gravity   *= m_field34
+        //   swap(vel.x, vel.y)                            // rotated set velocity
+        //   vel.x     *= QuadrantMirror(emitter.pos.x)
+        //   vel       *= m_field34
+        // particle.pos was written from emitter.pos earlier, so both sign
+        // sources read emitter.pos.x.
+        if (emitter.m_field38 != 0) {
+            float gtmp = p.m_Gravity.x;
+            p.m_Gravity.x = p.m_Gravity.y;
+            p.m_Gravity.y = gtmp;
+            p.m_Gravity.x *= QuadrantMirror(p.m_Pos.x);
+            p.m_Gravity.x *= emitter.m_field34;
+            p.m_Gravity.y *= emitter.m_field34;
+            p.m_Gravity.z *= emitter.m_field34;
+
+            float vtmp = rvx;
+            rvx = rvy;
+            rvy = vtmp;
+            rvx *= QuadrantMirror(emitter.m_Pos.x);
+            rvx *= emitter.m_field34;
+            rvy *= emitter.m_field34;
+            rvz *= emitter.m_field34;
+        }
+
+        // Finalise velocity: add emitter velocity to the (possibly mirrored)
+        // rotated set velocity. Binary stores the *0.5-scaled set velocity into
+        // the particle (vx/vy/vz already carry the 0.5 factor).
+        p.m_Vel.x = emitter.m_Vel.x + rvx;
+        p.m_Vel.y = emitter.m_Vel.y + rvy;
+        p.m_Vel.z = emitter.m_Vel.z + rvz;
+
         // Shape-type branching (matches AddParticle 0x115644):
         //   0 = Point     -- no extra init (pos = emitter.pos, vel = rotated set vel)
         //   1 = Vertex    -- start half a velocity step behind the emitter
         //   2 = Direction -- rotate particle to face its own velocity
-        //   3 = Angular   -- swap pos.x/y, mirror gravity+vel by emitter quadrant
+        // (shape==3 "Angular" has no AddParticle branch; see m_field38 above)
         switch (tmpl->m_Shape) {
             case 1: // Vertex
                 p.m_Pos.x -= p.m_Vel.x;
@@ -271,17 +323,14 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
             case 2: // Direction
                 p.m_Rotation += atan2f(p.m_Vel.y, p.m_Vel.x);
                 break;
-            case 3: { // Angular -- binary @ 0x00115644 shape==3 branch
-                // TODO: 0x00115644 shape==3 branch -- quadrant-mirror logic needs follow-up RE.
-                // RE doc summary: swap pos.x/pos.y, mirror gravity by emitter quadrant
-                // (sign of emitter.m_field38), mirror vel.x by particle pos.x sign.
-                // No XML in particles_fast/slow.xml uses Angular; no-op fallback is safe.
-                break;
-            }
             default:
                 break;
         }
     } else {
+        // No template: still finalise velocity from the rotated set velocity.
+        p.m_Vel.x = emitter.m_Vel.x + rvx;
+        p.m_Vel.y = emitter.m_Vel.y + rvy;
+        p.m_Vel.z = emitter.m_Vel.z + rvz;
         p.m_Life = 1.0f;
         p.m_SizeStart = p.m_SizeMid = p.m_SizeEnd = 8.0f;
     }

@@ -247,9 +247,18 @@ struct DEFAULT_WAVE_INFO {
     uint8_t _pad2e[2];               // +0x2e..+0x2f
     float   m_SpeedLoss;             // +0x30 XML "speedLoss"            default 0.0  (-> WAVE_INFO+0x1c m_NextWaveSpeedLoss)
     int     m_OverideProbabilityPool;// +0x34 XML "overideProbabiltyPool" default 100 (-> WAVE_INFO+0x70)
-    int     m_SecondaryModeOffset;   // +0x38 default 0; set to 1 when secondary-mode XML attr active. Defunct in shipped XML.
-    int     m_SecondaryModeWaveCount;// +0x3c default -1; set to 2 when secondary-mode active.
-                                     // TODO: 0x0012393c — DAT_00124268 XML attr name and +0x3c reader unresolved.
+    // +0x38 default 0; set to 1 by WaveManager::Init when the <defaults> element carries
+    // attribute players="1,2" (DAT_00124268="players", strcmp vs DAT_0012426c="1,2").
+    // Used as a write-base shift: push_back targets m_WaveInfo[m_SecondaryModeOffset*4 + modeIdx]
+    // and m_ProbabilityOverride[m_SecondaryModeOffset*4 + modeIdx] — i.e. waves parsed under a
+    // players="1,2" <defaults> land in the +4 (mode-pair-2) bucket instead of the primary mode.
+    // Defunct in shipped XML (no Data/xml/*wavelist.xml uses players="1,2"); rodata @ 0x1ba94a.
+    int     m_SecondaryModeOffset;   // +0x38 default 0
+    // +0x3c default -1; set to 2 in the same players="1,2" branch (paired with
+    // m_DefaultWaveInfo[1].m_WaveChance=-1). Binary only WRITES +0x3c here; no separate reader
+    // exists (the active-secondary-mode count travels via m_SecondaryModeOffset). Defunct.
+    int     m_SecondaryModeWaveCount;// +0x3c default -1
+    // Binary @ 0x0012393c (WaveManager::Init, players="1,2" <defaults> branch @ 0x001240d8).
 
     DEFAULT_WAVE_INFO()
         : m_WaveChance(10)

@@ -216,8 +216,8 @@ public:
     // Shape-preserved: builds m_OwnGroup from defs, caches m_WorldProp/m_ViewProp/m_ProjProp/m_WVPProp.
     Mesh(SmartPtr<SharedEffectProperties> const& props, AsciiString const& name);
 
-    // TODO: 0x001b0948 -- const-ref BindSkeleton overload preserved for binary mangling;
-    // body should resolve m_SkeletonIndex per BoneBinding like the ptr overload.
+    // Binary @ 0x001b0948 — const-ref BindSkeleton overload (distinct mangled symbol);
+    // resolves m_SkeletonIndex per BoneBinding identically to the ptr overload.
     void BindSkeleton(Skeleton const& skeleton);
 
     // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
