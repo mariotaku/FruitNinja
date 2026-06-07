@@ -96,16 +96,6 @@ private:
 
     // +0x9C: true if arrow points left (button is right of center)
     bool m_bFlipX;                            // +0x9C
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
 };
 
 #endif

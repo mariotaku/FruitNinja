@@ -97,19 +97,6 @@ public:
         return true;
     }
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ColAABB::ColAABBAABB -- auto stub from binary missing-symbol set
     void ColAABBAABB(ColAABB*, ColAABB*, Vec3*);

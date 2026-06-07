@@ -103,21 +103,6 @@ public:
     // @ 0x00171f64 -- destructs each pool entry, frees backing memory.
     static void CleanUp();
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: BombFlash::Draw -- auto stub from binary missing-symbol set
     void Draw();

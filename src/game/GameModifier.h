@@ -113,21 +113,6 @@ public:
     // [9] Clone — heap-alloc new instance
     virtual GameModifier* Clone() { return nullptr; }
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: GameModifier::Parse -- auto stub from binary missing-symbol set
     void Parse(TiXmlElement*);

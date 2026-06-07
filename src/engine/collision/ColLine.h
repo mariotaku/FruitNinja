@@ -32,19 +32,6 @@ public:
     Vec3 Direction() const { return b - a(); }
     float LengthSq() const { Vec3 d = Direction(); return d.x*d.x + d.y*d.y + d.z*d.z; }
 
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ColLine::ColLineLine -- auto stub from binary missing-symbol set
     void ColLineLine(ColLine*, ColLine*, Vec3*);

@@ -116,16 +116,6 @@ struct ScreenButton {
     void ShrinkButtonCall();
 
 public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: ScreenButton::DefaultButtonDelegate -- auto stub from binary missing-symbol set
     void DefaultButtonDelegate(MenuButton*, float, ScreenButton&);

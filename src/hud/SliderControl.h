@@ -98,18 +98,6 @@ private:
     void UpdateTouchPosition();
 
 public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
-
-public:
     // ---- AUTO-STUB MERGE: STUB -- gen_stubs.py ----
     // STUB: SliderControl::UpdateFromGameWork -- auto stub from binary missing-symbol set
     void UpdateFromGameWork();
