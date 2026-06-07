@@ -26,6 +26,7 @@ InputDeviceBada::~InputDeviceBada() {
 
 // Binary @ 0x00196cc8 (partial — full body: alloc + dev->fns->Init(dev) + push_back on manager)
 void InputDeviceBada::Init(unsigned long /*flags*/) {
+    // TODO: 0x00196cc8 — Init body: alloc device, call dev->fns->Init(dev), push_back on InputManager device list.
 }
 
 void InputDeviceBada::Destroy() {
