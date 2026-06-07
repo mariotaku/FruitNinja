@@ -38,13 +38,20 @@ public:
     // Upload native format directly to GL (for .tex files without CPU conversion)
     void UploadNative(int width, int height, GLenum glFormat, GLenum glType, const void* pixels);
 
-    // TODO: 0x00189d80 -- create a Texture2DFromFile_Bada from a memory buffer
-    // (ptr,len), wrap in SmartPtr<Texture> and return it (out via 'this').
-    void LoadFromMemory(void const*, int);
-    // TODO: 0x00188da4 -- bind only if not already cached: if vtable IsCached
-    // slot returns 0, call Set().
+    // Binary @ 0x00189d80 -- create a Texture2DFromFile_Bada from a memory
+    // buffer (ptr,len) and wrap in SmartPtr<Texture>. The binary returns the
+    // SmartPtr via the hidden sret pointer (the "this" arg is the return slot,
+    // not a live instance), so this is effectively a static factory. Mirrors
+    // Load() but parses an in-memory .tex blob instead of a file path.
+    static Mortar::SmartPtr<Texture> LoadFromMemory(void const* buf, int len);
+
+    // Binary @ 0x00188da4 -- cache-gated bind. The binary calls a virtual slot
+    // (Texture2D::GetType, vtable +0xc) and only binds when it returns 0; for a
+    // plain Texture2D GetType()==0 always, so Set() always runs. The port has
+    // merged the concrete Texture2D into Texture (no GetType subtype virtual),
+    // so the gate is always-true and this forwards to Set().
     void SetUnCached();
-    // TODO: 0x00188d9c -- uncached unbind: forwards to UnSet().
+    // Binary @ 0x00188d9c -- uncached unbind: forwards to UnSet().
     void UnSetUnCached();
 
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
@@ -60,6 +67,18 @@ public:
     // this). Renderer::DrawQuad reads it to detect untextured draws.
     static GLuint s_LastBoundTexId;
 #endif
+
+private:
+    // Parse a raw .tex blob (header[0..2] = widthLog2, heightLog2, format;
+    // pixel data at +12) and upload it into a fresh Texture. Returns null on
+    // bad header / unsupported format. Shared by Load() (file path) and
+    // LoadFromMemory() (memory buffer) -- mirrors the binary's
+    // GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78) path that both
+    // Texture::Load and Texture2DFromFile_Bada::FromMemoryInit (0x001899dc)
+    // funnel through.
+    static Mortar::SmartPtr<Texture> ParseTexBuffer(const void* data,
+                                                    long size,
+                                                    const char* pathForLog);
 };
 
 } // namespace Mortar

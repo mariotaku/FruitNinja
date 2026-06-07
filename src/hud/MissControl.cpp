@@ -56,6 +56,10 @@ static constexpr float SOUND_THRESH = 1.66f;
 static constexpr float MISS_CLAMP_HALF_X = 240.0f;
 static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 
+// MakeDisappear path-2 quad size scalar. DAT_00151f4c = 0x42780000 = 62.0f.
+// Multiplied into the global Vec3::One (GOT+0x77CC) -> size (62,62,62).
+static constexpr float MISS_DISAPPEAR_SIZE = 62.0f;
+
 // Pulse banding thresholds. DAT_001522a4..DAT_001522b4.
 // ASM-verified: 2026-05-24 binary @ 0x001522a4 (re-analyst) — byte-exact IEEE-754.
 static constexpr float MISS_PULSE_FLOOR       = 0.65f;     // DAT_001522b4 = 0x3f266666
@@ -492,19 +496,26 @@ void MissControl::MakeDisappear(Vec3 inPos, int sizeMult,
         m_FadeAlpha    = SOUND_THRESH;   // DAT_00151f48 = 1.66f
         m_AnimState    = 3;
         m_bVisible     = 1;
-        // size = g_HudScale * 62.0f; g_HudScale defaults to (1,1,1).
-        // TODO: 0x00151f5c -- resolve DAT_00151f5c (g_HudScale module-static Vec3 ptr)
-        // and wire up properly. For now use default (1,1,1) * 62.0f.
-        size.x = 62.0f;  // g_HudScale.x * DAT_00151f4c (62.0f)
-        size.y = 62.0f;  // g_HudScale.y * DAT_00151f4c
-        size.z = 62.0f;  // g_HudScale.z * DAT_00151f4c
+        // size = (*pHudScale) * 62.0f, where pHudScale is the global Vec3 loaded
+        // from GOT+0x77CC (DAT_00151f5c = 0x77cc GOT offset). That global is
+        // _Vector3<float>::One @ BSS 0x001f4334, constructed to (1,1,1) by the
+        // _GLOBAL__I_MissControl.cpp static-init (binary @ 0x00152378) and never
+        // mutated, so the product is (62,62,62). Binary @ 0x00151e74 (s16 = 62.0f
+        // from DAT_00151f4c = 0x42780000), 0x00151e7e (Vec3 * scalar -> size).
+        // Binary @ 0x00151f5c (GOT offset), 0x00151e64 (load pHudScale).
+        {
+            const Vec3& pHudScale = Vec3::One();  // GOT+0x77CC == _Vector3<float>::One
+            size = pHudScale * MISS_DISAPPEAR_SIZE;
+        }
         // ASM-verified: 2026-05-24 binary @ 0x00151e94 (re-analyst v2)
         // Same pattern as path 1: r1 = r7 = sizeMult.
         SetPlayer(sizeMult);
-        // Path 2 size is set again after SetPlayer (binary sets size twice -- same value).
-        size.x = 62.0f;
-        size.y = 62.0f;
-        size.z = 62.0f;
+        // Path 2 size is set again after SetPlayer (binary @ 0x00151e9a sets size
+        // a second time from the same Vec3*scalar -- identical value).
+        {
+            const Vec3& pHudScale = Vec3::One();
+            size = pHudScale * MISS_DISAPPEAR_SIZE;
+        }
         // Pos clamp using HALF size (binary @ 0x00151f50..0x00151f54 clamps)
         float halfX = size.x * 0.5f;
         if (pos.x >  MISS_CLAMP_HALF_X - halfX) pos.x =  MISS_CLAMP_HALF_X - halfX;
@@ -542,10 +553,23 @@ void MissControl::Update(float dt) {
         // binary @ 0x00151ac6 -- incremented before the pool loop.
         ++s_NumCriticals;
 
-        // TODO: 0x00151d78 -- accel seed: asm reads floats from *(float**)(base+DAT_00151d78)[0..1].
-        // Likely {0.0, 0.0} constants; port initialises accX/Y to 0.0f (matches expected default).
-        // Verify the resolved rodata bytes to confirm.
-        float accX = 0.0f, accY = 0.0f;
+        // Accel accumulator seed. Binary @ 0x00151abe..0x00151ad4:
+        //   accX = (&MissControl::s_dtMod)[0]   (binary @ 0x00151aca, s15 = [ptr])
+        //   accY = (&MissControl::s_dtMod)[1]   (binary @ 0x00151ac6, s14 = [ptr+4])
+        // The GOT slot DAT_00151d78 (=0x73c4) resolves to &s_dtMod @ BSS 0x001f3d6c
+        // (symbol _ZN11MissControl7s_dtModE, an `undefined4` single float -- the same
+        // global PreUpdate writes and the dt-mod multiplier reads via DAT_00151d80).
+        // accX therefore seeds from the current s_DtMod = (float)prevNumCriticals+0.5.
+        //
+        // DIFFERS: original reads accY from (&s_dtMod)[1], i.e. the 4 bytes
+        //   immediately FOLLOWING s_dtMod in BSS. That word belongs to a separate
+        //   ShopScreen static (@ 0x001f3d70, statically 1.0f) -- a BSS-adjacency
+        //   over-read in the original. During gameplay (shop inactive) that word is
+        //   1.0f, so the port reproduces the observable value: accY = 1.0f. We cannot
+        //   replicate the exact foreign-global aliasing without recreating the
+        //   binary's BSS layout, and that ShopScreen field is irrelevant here.
+        float accX = s_DtMod;
+        float accY = 1.0f;
         for (int k = 0; k < MISS_POOL_SIZE; ++k) {
             MissControl* other = s_Pool[k];
             if (!other || other == this || !other->m_Active) continue;

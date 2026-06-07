@@ -189,13 +189,27 @@ void* File::Data() const {
 // Binary @ 0x0019b77c
 const AsciiString& File::FileName() const { return m_path; }
 
-// TODO: 0x0019b7fc -- return current file position via IFile vtable slot +0x1c (Tell)
-void File::GetPosition() const {}
-// TODO: 0x0019b884 -- delegate to AsciiString::Hash on m_path (+0x08)
-void File::Hash() const {}
-// TODO: 0x0019b7e4 -- return m_field35 (+0x35), the lock flag
-void File::IsLocked() const {}
-// TODO: 0x0019b76c -- set m_field35 (+0x35) lock flag from arg
-void File::Lock(bool) {}
+// Binary @ 0x0019b7fc — tail-calls IFile vtable slot +0x1c (Tell) and returns the result.
+// Binary loads *this (the open IFile handle) and dispatches its Tell() slot; the port keeps
+// that handle in m_pIFile. Decompiler shows void return because it's a tail call, but the
+// callee (IFile::Tell @ vtbl+0x1c) yields the current position as unsigned int.
+unsigned int File::GetPosition() const {
+#if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
+    return m_pIFile ? m_pIFile->Tell() : 0u;
+#else
+    return 0u;
+#endif
+}
+
+// Binary @ 0x0019b884 — delegates to AsciiString::Hash on m_path (+0x08) and returns it.
+unsigned int File::Hash() const {
+    return m_path.Hash();
+}
+
+// Binary @ 0x0019b7e4 — return m_field35 (+0x35), the lock flag.
+bool File::IsLocked() const { return m_field35; }
+
+// Binary @ 0x0019b76c — set m_field35 (+0x35) lock flag from arg.
+void File::Lock(bool locked) { m_field35 = locked; }
 
 }  // namespace Mortar

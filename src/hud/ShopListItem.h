@@ -150,8 +150,7 @@ public:
     float m_CostAlpha;                // +0x280
 
 public:
-    // TODO: 0x0015c978 -- ShopListItem::ButtonClicked: if (m_pShopScreen)
-    //       m_pShopScreen->SetSelected(this). Currently a no-op stub.
+    // Binary @ 0x0015c978: if (m_pShopScreen) m_pShopScreen->SetSelected(this).
     void ButtonClicked();
 };
 

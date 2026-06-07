@@ -190,18 +190,26 @@ public:
     // Binary test: `(flags & 0x11) == 0`. Inactive / killed entities fail.
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }
 
+    // Entity LinkedHeap allocation overrides.
+    // Binary @ 0x0019d7dc / 0x0019d770 / 0x0019d7b8 / 0x0019d74c.
+    // Route through the global LinkedHeap arena; fall back to global ::operator new/delete.
+    static void* operator new(size_t size);
+    static void  operator delete(void* p);
+    static void* operator new[](size_t size);
+    static void  operator delete[](void* p);
+
     // Entity LinkedHeap arena accessors (counterparts to HeapCreate/HeapDestroy).
     // Operate on the process-global LinkedHeap that HeapCreate allocates.
-    // TODO: 0x0019d6b4 -- HeapClear: LinkedHeap::ReleaseAll on the global Entity arena
-    void HeapClear();
-    // TODO: 0x0019d694 -- HeapDisplay: debug-dump the Entity LinkedHeap (bool = verbose)
-    void HeapDisplay(bool);
-    // TODO: 0x0019d658 -- HeapExist: report whether the global Entity LinkedHeap is allocated
-    void HeapExist();
-    // TODO: 0x0019d678 -- HeapGetFree: return free byte count of the Entity LinkedHeap
-    void HeapGetFree();
-    // TODO: 0x0019d640 -- HeapGetSize: return total byte size of the Entity LinkedHeap
-    void HeapGetSize();
+    // Binary @ 0x0019d6b4 — HeapClear: LinkedHeap::ReleaseAll on the global Entity arena
+    static void HeapClear();
+    // Binary @ 0x0019d694 — HeapDisplay: debug-dump the Entity LinkedHeap (bool = verbose)
+    static void HeapDisplay(bool verbose);
+    // Binary @ 0x0019d658 — HeapExist: report whether the global Entity LinkedHeap is allocated
+    static bool HeapExist();
+    // Binary @ 0x0019d678 — HeapGetFree: return free byte count of the Entity LinkedHeap
+    static unsigned int HeapGetFree();
+    // Binary @ 0x0019d640 — HeapGetSize: return total byte size of the Entity LinkedHeap
+    static unsigned int HeapGetSize();
 };
 
 #ifdef __bada__

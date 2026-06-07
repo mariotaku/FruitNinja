@@ -50,14 +50,20 @@ public:
     // Port-side dispatch (not a binary vtable slot).
     virtual void              DispatchEvent(InputEvent* event);
 
-    // Binary-faithful derived fields (ctor-zero; semantic types TBD).
-    // TODO: 0x001958a4 — resolve semantic types of field_0xc..field_0x18 by
-    //   RE'ing vtable slot+8 (fns->field2_0x8) called immediately after ctor
-    //   in InputManager::Init @ 0x00196cd4.
-    uint32_t field_0xc;    // +0x0c
-    uint32_t field_0x10;   // +0x10
-    uint32_t field_0x14;   // +0x14
-    uint32_t field_0x18;   // +0x18
+    // Binary-faithful derived fields (ctor-zero). Semantics resolved by RE'ing
+    // InputDeviceBada::Update @ 0x00195a2c / Reset @ 0x00195c00:
+    //   field_0xc  = active/tracked touch id (0 = none). Set from
+    //               Touch::GetMostRecentTouch/GetAnyTouch; cleared on release.
+    //   field_0x10 = last touch X (signed; kept as uint32_t to match binary
+    //               4-byte slot, cast to int for delta math).
+    //   field_0x14 = last touch Y (signed; same storage note as X).
+    //   field_0x18 = monotonically-incrementing event stamp; bumped once per
+    //               Update() and passed as the timestamp arg to every emitted
+    //               AxisEvent/ButtonPressed.
+    uint32_t field_0xc;    // +0x0c  active touch id
+    uint32_t field_0x10;   // +0x10  last touch X
+    uint32_t field_0x14;   // +0x14  last touch Y
+    uint32_t field_0x18;   // +0x18  event stamp counter
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
     static_assert(sizeof(InputDeviceBada) == 28, "InputDeviceBada size mismatch");

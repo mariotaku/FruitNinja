@@ -699,20 +699,21 @@ void ShopListItem::Draw() {
                 // word-wrap path.
                 static constexpr float DESC_WRAP_W = 160.0f;
 
-                // Binary @ 0x0015eb00 ShopListItem::Draw outer gate
-                // (re-analyst 2026-05-10):
+                // Binary @ 0x0015eb00 ShopListItem::Draw locked-split gate:
                 //   if (!IsLocked() || RequirementType==0 || RequirementType==3)
-                //       single-line white desc at y=0 (case 0/3 path)
+                //       single-line desc at y=0 (case 0/3 / unlocked path)
                 //   else  (locked AND state==1 or state==2)
                 //       two-line split: red prompt at y=-20, white desc at y=+10
-                // The red prompt pulls LocalizedString IDs 187/188 (case 2,
-                // gated on FruitSaveData::PlayedModeToday(GAME_MODE_3)) or
-                // 194/195 (case 1, gated on IsDeviceUpsideDown()), NOT
-                // m_DescText. The port has neither save-data API nor the
-                // localized-by-int-ID strings wired, so we leave the red line
-                // out and fall through to the unlocked single-white path for
-                // unlocked items. Locked items in state 1/2 still need the
-                // red prompt -- TODO when FruitSaveData lands.
+                //
+                // The red prompt string ID is selected by a gate condition,
+                // but the line is drawn UNCONDITIONALLY for state 1/2 in the
+                // binary -- IsDeviceUpsideDown()/PlayedModeToday() only choose
+                // WHICH localized string, never whether to draw:
+                //   state 1: IsDeviceUpsideDown() ? id 0xC3(195) : 0xC2(194)
+                //   state 2: PlayedModeToday(ZEN) ? id 0xBC(188) : 0xBB(187)
+                // Red prompt colour is always (0xBD,0,0,descAlpha): the binary
+                // builds a (0xA0,0xDC,0) colour in the "true" branch but then
+                // immediately copies the red CStack_80 back over it before draw.
                 bool isLockedSplit = (m_pItemInfo->IsLocked() != 0)
                                   && (purchaseState == 1 || purchaseState == 2);
                 if (!isLockedSplit) {
@@ -725,31 +726,40 @@ void ShopListItem::Draw() {
                                             0xF);
                 } else {
                     // Locked + state 1 or 2: two-line red+white split.
-                    // Line 1: y=-20 (DAT_0015f4e6), font*0.8 (DAT_0015f528),
-                    //         colour (0xBD,0,0) -- red prompt string.
-                    //         state 2: shown iff PlayedModeToday(GAME_MODE_ZEN)
-                    //                  -> LocalizedString IDs 187/188.
-                    //         state 1: shown iff IsDeviceUpsideDown()
-                    //                  -> LocalizedString IDs 194/195.
-                    // Line 2: y=+10 (DAT_0015f57a), font * (case 1 ? 0.9 :
-                    //         0.81 = 0.9*0.9 from binary @ 0x0015f460+f56c),
-                    //         colour white -- m_DescText description.
-                    // TODO: 0x0015eb00 -- wire LocalizedString IDs 187/188 (state 2)
-                    //       and 194/195 (state 1) for the red prompt line. The gate
-                    //       conditions (PlayedModeToday / IsDeviceUpsideDown) are
-                    //       now implemented; only the string lookup is missing.
-                    bool showRedPrompt = false;
-                    if (purchaseState == 2 && game_work.m_SaveData) {
-                        showRedPrompt = game_work.m_SaveData->PlayedModeToday(Mortar::GAME_MODE_ZEN);
-                    } else if (purchaseState == 1) {
-                        showRedPrompt = Mortar::IsDeviceUpsideDown();
+                    // Line 1: y=-20, scale = descFontSize*0.8 (DAT_0015f528),
+                    //         colour red (0xBD,0,0,alpha), alignment 3,
+                    //         string from localized ID (see gate above).
+                    // Line 2: y=+10, scale = case1 ? descFontSize*0.9 :
+                    //         descFontSize*0.81 (0.9*0.9, binary @ 0x0015f460),
+                    //         colour white, alignment 0xF -- m_DescText.
+
+                    // --- Line 1: red prompt ---
+                    // Binary @ 0x0015f3ee..0x0015f4ac: select localized string ID.
+                    LocalizedString promptId;
+                    if (purchaseState == 1) {
+                        // state 1: gate on IsDeviceUpsideDown().
+                        promptId = Mortar::IsDeviceUpsideDown()
+                                       ? (LocalizedString)0xC3   // 195
+                                       : (LocalizedString)0xC2;  // 194
+                    } else {
+                        // state 2: gate on FruitSaveData::PlayedModeToday(ZEN=3).
+                        bool playedToday = (game_work.m_SaveData != nullptr)
+                            && game_work.m_SaveData->PlayedModeToday(Mortar::GAME_MODE_ZEN);
+                        promptId = playedToday
+                                       ? (LocalizedString)0xBC   // 188
+                                       : (LocalizedString)0xBB;  // 187
                     }
-                    if (showRedPrompt) {
-                        // Red prompt line: string from LocalizedString 187/188 or
-                        // 194/195 (not yet wired -- draw nothing until IDs land).
-                        // TODO: 0x0015eb00 -- draw red prompt at y=-20 using
-                        //       LocalizedString(187 or 194) / (188 or 195).
+                    const char* promptStr = Mortar::GETSTRING_CAST_0(promptId);
+                    if (promptStr) {
+                        // Red prompt colour (0xBD,0,0) with the computed alpha.
+                        Vec3 promptPos(xPos, -20.0f, 0.0f);   // DAT_0015f4e6 = -20.0f
+                        font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
+                                                promptStr, promptPos,
+                                                Colour(0xBD, 0, 0, descAlpha),
+                                                3);
                     }
+
+                    // --- Line 2: white description ---
                     const float scale2 = (purchaseState == 2)
                                             ? (descFontSize * 0.81f)
                                             : (descFontSize * 0.9f);
@@ -807,8 +817,12 @@ void ShopListItem::Draw() {
 
 // ---------------------------------------------------------------------------
 // ShopListItem::ButtonClicked @ 0x0015c978
-// Binary: if (m_pShopScreen != 0) m_pShopScreen->SetSelected(this);
-// TODO: 0x0015c978 -- wire m_pShopScreen->SetSelected(this); currently a no-op
-//       stub. Needs ShopScreen::SetSelected to be ported/exposed first.
+// Binary: r0=this->field_0x58 (m_pShopScreen); if non-null,
+//         ShopScreen::SetSelected(m_pShopScreen, this).
+// Binary @ 0x0015c978: ldr r0,[r0,#0x58]; cbz -> skip; blx ShopScreen::SetSelected.
 // ---------------------------------------------------------------------------
-void ShopListItem::ButtonClicked() {}
+void ShopListItem::ButtonClicked() {
+    if (m_pShopScreen != nullptr) {
+        m_pShopScreen->SetSelected(this);
+    }
+}

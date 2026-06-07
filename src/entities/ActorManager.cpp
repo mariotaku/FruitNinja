@@ -496,8 +496,12 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
         if (!L) continue;
         if (L->type != (unsigned int)msg->type) continue;
         if (L->msgKind != 0 && L->msgKind != (unsigned int)typeHash) continue;
-        // TODO: 0x0016ffd8 — L->senderId filter needs Entity::id (Entity+0x04);
-        //       field not on Entity base yet; treat senderId filter as any (0) only.
+        // Binary @ 0x0016ffd8: senderId filter is
+        //   piVar3[1] == 0 || (param_2 != 0 && piVar3[1] == param_2->field_0x04)
+        // i.e. 0 = wildcard, else the sender's RuntimeID (Entity+0x04) must match.
+        if (L->senderId != 0 &&
+            !(sender != nullptr && (unsigned int)L->senderId == sender->field_0x04))
+            continue;
         if (L->callback) {
             // ASM-verified: 2026-05-20 binary @ 0x0016ffd8 (asm-inspector)
             // Binary: cb->vtable[+0x30](cb, sender, target, msg) — Delegate3 invoke.
@@ -522,65 +526,66 @@ int ActorManager::GetHeapSize() const { return m_HeapSize; }
 // 0x0016fb3c.
 void ActorManager::SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0); }
 
-// --- Long-typed overloads (binary mangles long as 'l', int as 'i') ---------
+// --- Integer-width convenience overloads -----------------------------------
+// Each binary address below resolves to a SINGLE mangled symbol; Ghidra plate
+// comments show the binary uses `long` for the type-index param in most of
+// these. ARM32 long == int == 4 bytes, so the int-typed primary body (already
+// implemented + ASM-verified at the cited address) and these forwarders are the
+// same code. The forwarders are a port-only convenience so call sites of either
+// integer width link; they have no separate binary counterpart.
 
-// TODO: 0x0017068c -- long-typed mangled overload of Add(int,bool); forwards to
-//       the int body. Binary has one Add @ 0x0017068c; verify the live mangled
-//       name ('l' vs 'i') before treating the cast forwarder as final.
+// Port specific: int-width forwarder; binary symbol @ 0x0017068c is Add(long,bool).
 Entity* ActorManager::Add(long entityType, bool unused) {
     return Add((int)entityType, unused);
 }
 
-// TODO: 0x0016fb44 -- long-typed mangled overload of DeactivateAllEntities(int);
-//       forwards to the int body. Binary has one symbol @ 0x0016fb44.
+// Port specific: int-width forwarder; binary symbol @ 0x0016fb44 is DeactivateAllEntities(long).
 void ActorManager::DeactivateAllEntities(long typeIdx) {
     DeactivateAllEntities((int)typeIdx);
 }
 
-// TODO: 0x0016fe7c -- no-arg Draw() overload; binary draw body is Draw(Renderer&)
-//       @ 0x0016fe7c. Confirm whether a parameterless Draw symbol exists or this
-//       is a port-only convenience before fleshing out.
-void ActorManager::Draw() {}
+// Port specific: no-arg Draw() IS the binary symbol @ 0x0016fe7c (thiscall, no
+// Renderer arg). The binary draws via an implicit global renderer; the port
+// resolves it through Renderer::GetInstance() and forwards to the port-only
+// Draw(Renderer&) that carries the actual draw loop.
+void ActorManager::Draw() {
+    Renderer* r = Renderer::GetInstance();
+    if (r) Draw(*r);
+}
 
-// TODO: 0x0016fcc4 -- long/ulong-typed mangled overload of GetEntity(int,size_t);
-//       forwards to the int body @ 0x0016fcc4.
+// Port specific: int-width forwarder; binary symbol @ 0x0016fcc4 is GetEntity(long,ulong).
 Entity* ActorManager::GetEntity(long typeIdx, unsigned long slot) const {
     return GetEntity((int)typeIdx, (size_t)slot);
 }
 
-// TODO: 0x0016fbb8 -- long-typed mangled overload of GetEntityFirst(int,iterator&);
-//       forwards to the int body @ 0x0016fbb8.
+// Port specific: int-width forwarder; binary symbol @ 0x0016fbb8 is GetEntityFirst(long,&).
 Entity* ActorManager::GetEntityFirst(long typeIdx, std::list<Entity*>::iterator& it) {
     return GetEntityFirst((int)typeIdx, it);
 }
 
-// TODO: 0x0016fb88 -- long-typed mangled overload of GetEntityNext(int,iterator&);
-//       forwards to the int body @ 0x0016fb88.
+// Port specific: int-width forwarder; binary symbol @ 0x0016fb88 is GetEntityNext(long,&).
 Entity* ActorManager::GetEntityNext(long typeIdx, std::list<Entity*>::iterator& it) {
     return GetEntityNext((int)typeIdx, it);
 }
 
-// TODO: 0x0016ff98 -- long-typed mangled overload of GetNumEntities(int);
-//       forwards to the int body @ 0x0016ff98.
+// Port specific: int-width forwarder; binary symbol @ 0x0016ff98 is GetNumEntities(int/long).
 int ActorManager::GetNumEntities(long typeIdx) {
     return GetNumEntities((int)typeIdx);
 }
 
-// TODO: 0x0016ff30 -- non-const long* overload of GetNumEntities(const long*);
-//       forwards to the const body @ 0x0016ff30.
+// Port specific: non-const forwarder; binary symbol @ 0x0016ff30 is GetNumEntities(long*).
 int ActorManager::GetNumEntities(long* typeIdxNullTerminated) {
     return GetNumEntities((const long*)typeIdxNullTerminated);
 }
 
-// TODO: 0x0017046c -- long-typed mangled overload of Initialise(int,int);
-//       forwards to the int body @ 0x0017046c.
+// Port specific: int-width forwarder; binary symbol @ 0x0017046c is Initialise(int,int).
 void ActorManager::Initialise(long numTypes, long heapSize) {
     Initialise((int)numTypes, (int)heapSize);
 }
 
-// TODO: 0x001701f4 -- bounds-taking Update(float,ColAABB*,ColAABB*) overload;
-//       binary Update @ 0x001701f4 ignores the two ColAABB* bounds in FruitNinja,
-//       so the forwarder to the dt-only body is behaviourally faithful.
+// Bounds-taking Update(float,ColAABB*,ColAABB*) IS the binary symbol @
+// 0x001701f4. Decompile confirms the two ColAABB* bounds are dead in the binary
+// body, so forwarding to the dt-only port body is behaviourally faithful.
 void ActorManager::Update(float dt, ::ColAABB* /*boundsA*/, ::ColAABB* /*boundsB*/) {
     Update(dt);
 }

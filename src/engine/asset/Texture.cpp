@@ -138,26 +138,36 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
         return Mortar::SmartPtr<Texture>();
     }
 
-    unsigned long fileSize = f.Size();
-    if (fileSize < 12) {
+    Mortar::SmartPtr<Texture> tex =
+        ParseTexBuffer(f.Data(), (long)f.Size(), path);
+    if (tex.IsValid()) {
+        tex->m_Path = path;
+    }
+    return tex;
+}
+
+// Matches GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78). Shared by
+// Load() and LoadFromMemory().
+Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
+                                                  const char* pathForLog) {
+    if (size < 12) {
         return Mortar::SmartPtr<Texture>();
     }
 
-    const uint8_t* data = static_cast<const uint8_t*>(f.Data());
-    uint8_t widthLog2  = data[0];
-    uint8_t heightLog2 = data[1];
-    uint8_t format     = data[2];
+    const uint8_t* bytes = static_cast<const uint8_t*>(data);
+    uint8_t widthLog2  = bytes[0];
+    uint8_t heightLog2 = bytes[1];
+    uint8_t format     = bytes[2];
     int width  = 1 << widthLog2;
     int height = 1 << heightLog2;
 
-    long dataSize = (long)fileSize - 12;
-    const uint8_t* raw = data + 12;
+    long dataSize = size - 12;
+    const uint8_t* raw = bytes + 12;
     if (dataSize <= 0) {
         return Mortar::SmartPtr<Texture>();
     }
 
     Texture* tex = new Texture();
-    tex->m_Path = path;
 
     // Matches TexFmtToGL (0x00189f78) — verified from Ghidra decompilation
     switch (format) {
@@ -196,7 +206,8 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
             break;
         // case 0x0b..0x0e: PVRTC compressed (not supported on desktop GL)
         default:
-            LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", format, path);
+            LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", format,
+                      pathForLog ? pathForLog : "<memory>");
             delete tex;
             return Mortar::SmartPtr<Texture>();
     }
@@ -207,12 +218,32 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
 } // namespace Mortar
 
 namespace Mortar {
-// TODO: 0x00189d80 -- create a Texture2DFromFile_Bada from a memory buffer
-// (ptr,len) via operator new(0x20), wrap in SmartPtr<Texture> and return it.
-void Texture::LoadFromMemory(void const*, int) {}
-// TODO: 0x00188da4 -- bind only if not already cached: if the IsCached vtable
-// slot returns 0, call Set().
-void Texture::SetUnCached() {}
-// TODO: 0x00188d9c -- uncached unbind: forwards to UnSet().
-void Texture::UnSetUnCached() {}
+
+// Binary @ 0x00189d80 Mortar::Texture::LoadFromMemory(void const*, int).
+// The binary does:
+//   t = operator new(0x20);
+//   Texture2DFromFile_Bada::ctor(t, buf, len, 0xffffffff);  // FromMemoryInit
+//   wrap t in SmartPtr<Texture> and return it (via the hidden sret slot).
+// FromMemoryInit (0x001899dc) parses the same .tex layout as Load() through
+// GPUafyTexture + TexFmtToGL, so the port routes the in-memory blob through
+// the shared ParseTexBuffer helper. No file path -> no m_Path / overload
+// fallback (the file-path variant lives in Load()).
+Mortar::SmartPtr<Texture> Texture::LoadFromMemory(void const* buf, int len) {
+    return ParseTexBuffer(buf, (long)len, nullptr);
+}
+
+// Binary @ 0x00188da4 Mortar::Texture::SetUnCached().
+// Binary: if (vtable_slot3() == 0) Set();  where slot3 is Texture2D::GetType
+// (vtable +0xc), which returns 0 for a plain Texture2D -- so Set() always
+// runs. The port has merged the concrete Texture2D into Texture and has no
+// GetType subtype virtual, making the gate unconditionally true.
+void Texture::SetUnCached() {
+    Set();
+}
+
+// Binary @ 0x00188d9c Mortar::Texture::UnSetUnCached() -- forwards to UnSet().
+void Texture::UnSetUnCached() {
+    UnSet();
+}
+
 }  // namespace Mortar

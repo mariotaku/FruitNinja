@@ -11,6 +11,7 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/BombHit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitSaveData.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/GameModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SlashModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreDelegate.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreModifier.cpp

@@ -690,11 +690,26 @@ void FruitSaveData::DownloadedTweakValue(char const*, int) {}
 // numeric-prefixed unlocked achievement via UnlockAchievementInNetwork.
 void FruitSaveData::PublishUnlockedAchievements() {}
 
-// TODO: 0x0012b2b0 -- SetTotal: old=GetTotal(hash(name)); AddToTotal(name,hash,value-old,p3,p4); return old.
-void FruitSaveData::SetTotal(char const*, int, bool, bool) {}
+// Binary @ 0x0012b2b0 -- SetTotal.
+// hash = StringHash(name); old = GetTotal(hash);
+// AddToTotal(name, hash, value-old, trackSession, sendNetPacket); return old.
+// The delta (value - old) makes the cumulative total settle at exactly `value`.
+unsigned int FruitSaveData::SetTotal(char const* name, int value,
+                                     bool trackSession, bool sendNetPacket) {
+    uint32_t hash = StringHash(name);
+    unsigned int old = (unsigned int)GetTotal(hash);
+    AddToTotal(name, hash, value - (int)old, trackSession, sendNetPacket);
+    return old;
+}
 
-// TODO: 0x0012a0fc -- TotalExists(name): return TotalExists(hash(name)).
-void FruitSaveData::TotalExists(char const*) {}
+// Binary @ 0x0012a0fc -- TotalExists(name): hash the name, delegate to TotalExists(hash).
+bool FruitSaveData::TotalExists(char const* name) {
+    return TotalExists(StringHash(name));
+}
 
-// TODO: 0x00129bb4 -- TotalExists(hash): true if hash in m_Totals or m_SessionTotals.
-void FruitSaveData::TotalExists(unsigned int) {}
+// Binary @ 0x00129bb4 -- TotalExists(hash): true if hash is present in
+// m_Totals (+0x00) or m_SessionTotals (+0x18).
+bool FruitSaveData::TotalExists(unsigned int hash) {
+    if (m_Totals.find(hash) != m_Totals.end()) return true;
+    return m_SessionTotals.find(hash) != m_SessionTotals.end();
+}

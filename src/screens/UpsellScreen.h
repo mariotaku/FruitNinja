@@ -32,7 +32,13 @@
 #include "hud/HUDControl3d.h"
 #include "engine/util/Delegate.h"
 #include "engine/math/Vec3.h"
+#include "engine/audio/GameSound.h"
+#include "engine/audio/MortarSound.h"
+#include "game/GameWork.h"
 #include <cstdint>
+#include <cstring>
+#include <cmath>
+#include <string>
 #include <list>
 
 // Forward-declare UpsellScreenElement before UpsellScreen (used in m_elements list).
@@ -124,10 +130,66 @@ static_assert(sizeof(UpsellScreen) == 0x1EC,
 
 class UpsellScreenElement {
 public:
+    // USESound -- queued one-shot/looping SFX for an element. 12 bytes
+    // (ARM32): std::string m_Name (Sourcery rep ptr, 4B) + float m_StartT (+4)
+    // + float m_EndT (+8, used as a repeat period when > 0).
+    // Binary ctors @ 0x0016627c (copy); pushed by AddSound @ 0x00163ee4.
+    struct USESound {
+        std::string m_Name;   // +0x00
+        float       m_StartT; // +0x04
+        float       m_EndT;   // +0x08
+
+        USESound() : m_Name(), m_StartT(0.0f), m_EndT(0.0f) {}
+        USESound(const char* name, float startT, float endT)
+            : m_Name(name), m_StartT(startT), m_EndT(endT) {}
+
+        // Binary @ 0x00163d18 -- fire the SFX if its start time was crossed
+        // between prevTime (param_2) and curTime (param_1). When m_EndT > 0 the
+        // sound repeats with that period (fmod wrap detection). Returns whether
+        // it played this frame.
+        bool CheckSound(float curTime, float prevTime) {
+            if (m_StartT <= curTime && m_Name.length() != 0) {
+                GameSound* gs = game_work.mGameSound;
+                if (prevTime < m_StartT) {
+                    // Just crossed the start time this frame -> one-shot.
+                    if (gs) {
+                        gs->SFXPlay(m_Name.c_str(), 1.0f, 1.0f,
+                                    Mortar::Delegate1<bool, Mortar::MortarSound*>());
+                    }
+                    return true;
+                }
+                if (m_EndT > 0.0f) {
+                    // Periodic repeat: play when the (time - start) modulo period
+                    // wraps between prev and cur frame.
+                    float curMod  = std::fmod(curTime  - m_StartT, m_EndT);
+                    float prevMod = std::fmod(prevTime - m_StartT, m_EndT);
+                    if (curMod < prevMod) {
+                        if (gs) {
+                            gs->SFXPlay(m_Name.c_str(), 1.0f, 1.0f,
+                                        Mortar::Delegate1<bool, Mortar::MortarSound*>());
+                        }
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    };
+
     // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x00165c74
     UpsellScreenElement() {}
-    // Defunct: UpsellScreen monetization -- no-op stub; binary @ 0x001679b8
-    UpsellScreenElement(const UpsellScreenElement&) {}
+
+    // Binary @ 0x001679b8 -- copies every field including the m_Sounds list
+    // (std::list copy ctor). MakeMainUpsellScreen relies on this: it builds a
+    // temp element, queues SFX via AddSound, then push_back's it (a copy) into
+    // the screen list, so the queued sounds must survive the copy. The opaque
+    // sub-struct regions are copied verbatim (the SFX path never reads them).
+    UpsellScreenElement(const UpsellScreenElement& o)
+        : m_Sounds(o.m_Sounds) {
+        memcpy(m_pad_before, o.m_pad_before, sizeof(m_pad_before));
+        memcpy(m_pad_after,  o.m_pad_after,  sizeof(m_pad_after));
+    }
+
     // Defunct: UpsellScreen monetization -- dtor; binary @ 0x00166324
     ~UpsellScreenElement() {}
 
@@ -137,23 +199,40 @@ public:
     // Defunct: UpsellScreen monetization -- no-op stub
     void SetAngle(unsigned short /*angleIdx*/, float /*duration*/) {}
 
-    // TODO: 0x00166ff2 / 0x0016700c (R1.2 popup-N gap) -- AddSound is empty;
-    // binary's UpsellScreenElement::AddSound queues {name, startT, endT} into
-    // m_Sounds vector. UpsellScreenElement::Update fires GameSound::SFXPlay
-    // when elapsed >= startT. Round 2: add m_Sounds<USESound> vector + AddSound
-    // body + Update SFX-fire loop. Loop in MakeMainUpsellScreen iterates 4x
-    // queuing "popup-%i" + "popup-1" finale.
-    void AddSound(const char* /*path*/, float /*t0*/, float /*t1*/) {}
+    // Binary @ 0x00163ee4 -- queue a {name, startT, endT} SFX entry into
+    // m_Sounds. MakeMainUpsellScreen calls this in a 4x loop queuing "popup-%i"
+    // plus a "popup-1" finale.
+    void AddSound(const char* path, float startT, float endT) {
+        m_Sounds.push_back(USESound(path, startT, endT));
+    }
 
-    // Defunct: UpsellScreen monetization -- no-op stub
-    void ClearSounds() {}
+    // Binary @ 0x00163e50 -- iterate m_Sounds and fire any whose start time was
+    // crossed between prevTime and curTime. Called from UpsellScreen::Update
+    // with (curTime = field281_0x1e4, prevTime = field280_0x1e0).
+    void CheckSounds(float curTime, float prevTime) {
+        std::list<USESound>::iterator it = m_Sounds.begin();
+        for (; it != m_Sounds.end(); ++it) {
+            it->CheckSound(curTime, prevTime);
+        }
+    }
+
+    // Binary @ 0x00167938 -- drop all queued SFX entries.
+    void ClearSounds() {
+        m_Sounds.clear();
+    }
 
 private:
-    // Opaque pad to reach binary sizeof = 0x39C (924 bytes).
-    // Internal field layout documented in header comment above.
-    // Not split into named members because sub-struct types (TranisitionInfo,
-    // PulseInfo, USEColourEntry, USESound) are not yet ported.
-    uint8_t m_pad[924];
+    // Opaque pad to reach binary sizeof = 0x39C (924 bytes). The single field
+    // we actually exercise -- m_Sounds at +0x150 -- is carved out of the pad so
+    // its binary offset is preserved without porting the intervening sub-struct
+    // types (TranisitionInfo, PulseInfo, USEColourEntry), which the Upsell SFX
+    // path never touches.
+    //   +0x000..+0x14F : leading opaque region (336 bytes)
+    //   +0x150         : std::list<USESound> m_Sounds (8 bytes, Sourcery list)
+    //   +0x158..+0x39B : trailing opaque region (580 bytes)
+    uint8_t                  m_pad_before[0x150];
+    std::list<USESound>      m_Sounds;
+    uint8_t                  m_pad_after[924 - 0x150 - 8];
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)

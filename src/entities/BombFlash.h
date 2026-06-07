@@ -27,13 +27,16 @@
 //   +0x04: m_Timer      float
 //   +0x08: m_Colour0    Colour (4B BGRA; alpha byte at +0x0B is m_MaxAlpha per Ghidra struct)
 //   +0x0C: m_Colour1    Colour (4B BGRA; alpha byte at +0x0F is m_CurrentAlpha per Ghidra struct)
-//   +0x10: field_0x10   uint8_t[8]  (not written by ctor; purpose TBD)
+//   +0x10: m_SinAngle   float  (MakeFlash @0x1723f4 writes SinIdx(angleIdx) here)
+//   +0x14: m_CosAngle   float  (MakeFlash @0x1723f4 writes CosIdx(angleIdx) here)
 //   +0x18: m_pTexture   SmartPtr<Texture> (4B)
-//   +0x1C: field_0x1c   uint8_t[24] (not written by ctor; likely pos/anim state)
+//   +0x1C: m_Pos        Vec3   (MakeFlash: = pos + dir*5; .x clamped to +/-240)
+//   +0x28: m_Dir        Vec3   (MakeFlash: copy of dir; used for Atan2Idx angle)
 //   +0x34: m_Scale_x    float
 //   +0x38: m_Scale_y    float
 //   +0x3C: m_Scale_z    float
 //   +0x40: m_bActive    bool
+//   +0x42: m_AngleIdx   uint16_t (MakeFlash: Atan2Idx(dir.x, -dir.y))
 //   sizeof = 0x44 (68)
 //
 
@@ -51,21 +54,27 @@ public:
     // +0x04 (after implicit vptr at +0x00)
     float m_Timer;
 
-    // +0x08: max-alpha colour (alpha byte == m_MaxAlpha in Ghidra struct label)
+    // +0x08: max-alpha colour. Alpha byte (+0x0B) is the peak alpha the flash
+    // fades up to / down from -- read by Update as m_MaxAlpha.
     Colour m_Colour0;
 
-    // +0x0C: current/animated colour (alpha byte == m_CurrentAlpha in Ghidra struct label)
+    // +0x0C: current/animated colour. Alpha byte (+0x0F) is the live alpha that
+    // Update writes each frame -- m_CurrentAlpha. RGB is the tint used by Draw.
     Colour m_Colour1;
 
-    // +0x10: unresolved gap (8 bytes)
-    uint8_t field_0x10[8];
+    // +0x10 / +0x14: cached sin/cos of the flash orientation (MakeFlash writes
+    // SinIdx/CosIdx(m_AngleIdx); Draw feeds them to RotZ44).
+    float m_SinAngle;
+    float m_CosAngle;
 
     // +0x18: texture smart pointer (4B in binary, ctor-initialised)
     Mortar::SmartPtr<Mortar::Texture> m_pTexture;
 
-    // +0x1C: unresolved gap (24 bytes; likely position + animation state)
-    // TODO: resolve field_0x1c contents from Init/MakeFlash disassembly
-    uint8_t field_0x1c[24];
+    // +0x1C: world position of the flash quad (MakeFlash: pos + dir*5, x clamped).
+    Vec3 m_Pos;
+
+    // +0x28: spawn direction (copied from MakeFlash's dir arg).
+    Vec3 m_Dir;
 
     // +0x34: scale vector components
     float m_Scale_x;
@@ -74,6 +83,12 @@ public:
 
     // +0x40: active flag (ctor: strb 0 at this+0x40)
     bool m_bActive;
+
+    // +0x41: padding (1 byte) so m_AngleIdx lands at +0x42.
+    uint8_t m_Pad41;
+
+    // +0x42: 16-bit angle index (MakeFlash: Atan2Idx(dir.x, -dir.y)).
+    uint16_t m_AngleIdx;
 
     BombFlash();
     virtual ~BombFlash();
@@ -103,13 +118,13 @@ public:
     // @ 0x00171f64 -- destructs each pool entry, frees backing memory.
     static void CleanUp();
 
-    // TODO: 0x00171B54 -- render one active flash sprite (textured quad, animated alpha)
+    // Binary @ 0x00171B54 -- render one active flash sprite (textured quad, animated alpha).
     void Draw();
-    // TODO: 0x00171024 -- per-frame draw-state advance for one flash
+    // Binary @ 0x00171024 -- per-frame draw-state advance for one flash. Binary body is empty.
     void DrawUpdate(float);
-    // TODO: 0x00170F88 -- return next free pool slot for MakeFlash
-    void GetFree();
-    // TODO: 0x00171020 -- initialise a flash slot (texture, position, anim state)
+    // Binary @ 0x00170F88 -- return next free pool slot for MakeFlash (rotating-index search).
+    static BombFlash* GetFree();
+    // Binary @ 0x00171020 -- initialise a flash slot. Binary body is empty (no-op).
     void Init(void*, int, Vec3*);
 };
 
@@ -117,13 +132,16 @@ public:
 static_assert(__builtin_offsetof(BombFlash, m_Timer)    == 0x04, "m_Timer binary offset wrong");
 static_assert(__builtin_offsetof(BombFlash, m_Colour0)  == 0x08, "m_Colour0 binary offset wrong");
 static_assert(__builtin_offsetof(BombFlash, m_Colour1)  == 0x0C, "m_Colour1 binary offset wrong");
-static_assert(__builtin_offsetof(BombFlash, field_0x10) == 0x10, "field_0x10 binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_SinAngle) == 0x10, "m_SinAngle binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_CosAngle) == 0x14, "m_CosAngle binary offset wrong");
 static_assert(__builtin_offsetof(BombFlash, m_pTexture) == 0x18, "m_pTexture binary offset wrong");
-static_assert(__builtin_offsetof(BombFlash, field_0x1c) == 0x1C, "field_0x1c binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_Pos)      == 0x1C, "m_Pos binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_Dir)      == 0x28, "m_Dir binary offset wrong");
 static_assert(__builtin_offsetof(BombFlash, m_Scale_x)  == 0x34, "m_Scale_x binary offset wrong");
 static_assert(__builtin_offsetof(BombFlash, m_Scale_y)  == 0x38, "m_Scale_y binary offset wrong");
 static_assert(__builtin_offsetof(BombFlash, m_Scale_z)  == 0x3C, "m_Scale_z binary offset wrong");
 static_assert(__builtin_offsetof(BombFlash, m_bActive)  == 0x40, "m_bActive binary offset wrong");
+static_assert(__builtin_offsetof(BombFlash, m_AngleIdx) == 0x42, "m_AngleIdx binary offset wrong");
 static_assert(sizeof(BombFlash)                         == 0x44, "sizeof(BombFlash) wrong (binary 0x44 / 68)");
 #endif
 

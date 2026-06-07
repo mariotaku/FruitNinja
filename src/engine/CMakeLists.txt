@@ -14,6 +14,7 @@ add_library(mortar_engine STATIC
     util/StringTable.cpp
     util/Localisation.cpp
     util/PathCI.cpp
+    util/LinkedHeap.cpp
     # Phase 2 — Core Singletons
     render/gl_funcsSDL.cpp
     render/gl_funcsWin32.cpp

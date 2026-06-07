@@ -518,10 +518,30 @@ bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
     if (!mod) return false;
     return mod->m_SwipeSounds.PlaySound(-1, volume, pitch);
 }
-// TODO: 0x00111ffc — set looping-swipe desired volume on the equipped blade mod.
-// Binary: if (m_DefaultItems[0] != null) m_DefaultItems[0]->m_LoopingSound.SetLoopDesiredVol(vol);
-void ItemManager::SetSwipeLoodVol(float) {}
-// TODO: 0x00112fc8 — per-frame update of equipped blade mod sounds.
-// Binary: if (m_DefaultItems[0] != null) SlashModInfo::UpdateSounds(m_DefaultItems[0], dt);
-void ItemManager::Update(float) {}
+// -----------------------------------------------------------------------
+// SetSwipeLoodVol @ 0x00111ffc
+// Binary: field0_0x0 is the equipped blade mod (m_DefaultItems[0], typed
+// SlashModInfo*). If non-null, forward the volume to its looping-swipe sound.
+//   if (m_DefaultItems[0]) m_DefaultItems[0]->m_LoopingSound.SetLoopDesiredVol(vol);
+// Binary @ 0x00111ffc
+// -----------------------------------------------------------------------
+void ItemManager::SetSwipeLoodVol(float vol) {
+    SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
+    if (mod != nullptr) {
+        mod->m_LoopingSound.SetLoopDesiredVol(vol);
+    }
+}
+
+// -----------------------------------------------------------------------
+// Update @ 0x00112fc8 — per-frame update of equipped blade mod sounds.
+// Binary: field0_0x0 is m_DefaultItems[0] (SlashModInfo*); if non-null,
+// SlashModInfo::UpdateSounds(m_DefaultItems[0], dt).
+// Binary @ 0x00112fc8
+// -----------------------------------------------------------------------
+void ItemManager::Update(float dt) {
+    SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);
+    if (mod != nullptr) {
+        mod->UpdateSounds(dt);
+    }
+}
 // ---- end additional API ----

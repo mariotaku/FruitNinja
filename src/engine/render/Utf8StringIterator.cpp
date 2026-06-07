@@ -94,4 +94,12 @@ Utf8StringIterator Utf8StringIterator::operator+(int n) const {
     return copy;
 }
 
+// Binary @ 0x0012fe00 area -- Reset(): rewind the iterator to the string start.
+// m_PrevBegin holds the start of the first codepoint (set during ctor's Advance(1));
+// restoring m_NextScan to it and re-decoding gives the same state as after the ctor.
+void Utf8StringIterator::Reset() {
+    m_NextScan = m_PrevBegin;
+    Advance(1);
+}
+
 }  // namespace Mortar

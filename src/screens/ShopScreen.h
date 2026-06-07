@@ -275,18 +275,18 @@ public:
 #endif
 
 public:
-    // TODO: 0x0015c568 -- ShopScreen::BuyButtonCallback: buy/equip the selected
-    //   item via ItemManager (BuyItem if locked, else SetEquippedItem on its
-    //   slot), update per-slot cached selection (m_pSlotItems) and rewrite the
-    //   buy/equip button label strings.
+    // Binary @ 0x0015c568 -- buy/equip the selected item via ItemManager
+    //   (BuyItem if locked; unequip+clear slot if equipped; else swap into
+    //   per-slot cache m_pSlotItems and SetEquippedItem). Body in ShopScreen.cpp.
+    //   Status-text writes to ShopListItem+0x54 are documented-skipped there
+    //   (port's ShopListItem doesn't expose that char* slot).
     void BuyButtonCallback();
-    // TODO: 0x0015c7f0 -- ShopScreen::CancelCallback: set m_State=6, fling the
-    //   buy-button fruit piece off-screen with a random velocity and reset the
-    //   TutorialControl tute position.
+    // Binary @ 0x0015c7f0 -- set m_State=6 and reset the TutorialControl tute
+    //   position. Body in ShopScreen.cpp.
     void CancelCallback();
-    // TODO: 0x0015c758 -- ShopScreen::ConfirmCallback: cache the selected item
-    //   into its slot, set m_State=5, fling the buy-button fruit piece and reset
-    //   the TutorialControl tute position.
+    // Binary @ 0x0015c758 -- cache the selected item into its slot, set
+    //   m_State=5, and reset the TutorialControl tute position. Body in
+    //   ShopScreen.cpp.
     void ConfirmCallback();
 };
 

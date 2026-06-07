@@ -312,6 +312,13 @@ void LoopingSound::Reset() {
     m_State   = 0;
 }
 
+// TODO: SetLoopDesiredVol (binary address unknown) — sets desired/target loop volume.
+// Called from ItemManager::SetSwipeLoodVol. Stores vol for use by the looping-sound
+// update path. Full implementation requires RE of LoopingSound's vol-lerp logic.
+void LoopingSound::SetLoopDesiredVol(float vol) {
+    (void)vol;
+}
+
 // -----------------------------------------------------------------------
 // SlashModInfo
 // -----------------------------------------------------------------------
@@ -487,4 +494,11 @@ void SlashModInfo::Parse(tinyxml2::XMLElement* e) {
     if (comboElem != nullptr) {
         m_ComboSounds.Parse(comboElem);
     }
+}
+
+// TODO: UpdateSounds (binary address unknown) — per-frame update for the mod's looping
+// ambient sound. Called from ItemManager::Update. Full implementation requires RE of
+// LoopingSound's vol-lerp and SFXPlay loop management.
+void SlashModInfo::UpdateSounds(float dt) {
+    (void)dt;
 }

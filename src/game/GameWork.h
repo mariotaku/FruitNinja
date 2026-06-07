@@ -120,14 +120,19 @@ struct GameWork {
     uint8_t _pad_0x1a9[3];         // +0x1A9..+0x1AB
     float   m_ArcadeBonusTimer;    // +0x1AC: arcade-bonus tally timer (10.5s threshold then ClearTotal("arcadeBonus"))
     uint8_t field_0x1b0;           // +0x1B0 TODO: appears init-only; possibly dead.
-    // +0x1B1..+0x5B0: four 256-byte character buffers
-    // TODO: 0x001f43b8+0x1B1 -- unused? RE callers if needed
+    // +0x1B1..+0x5B0: four contiguous 256-byte state blocks (1024 bytes total).
+    // Binary @ 0x0010b66c (InitialiseData): the ONLY static references are four
+    // back-to-back memset(base+offset, 0, 0x100) calls (PARAM xrefs at
+    // 0x0010b68e/0x69e/0x6ae/0x6be) that zero-init the whole region. No other
+    // static xref touches any byte in this range (interior addresses checked,
+    // all empty) -- so all subsequent access is via runtime-computed pointers
+    // (base + dynamic index), the usual shape for keyed item/achievement total
+    // arrays populated through ItemManager::LoadItemData /
+    // AchievementManager::LoadAchievementInfo. Kept as raw buffers to preserve
+    // the 0x608 layout; the indexers live in those managers, not here.
     char    buf0[256];             // +0x1B1
-    // TODO: 0x001f43b8+0x2B1 -- unused? RE callers if needed
     char    buf1[256];             // +0x2B1
-    // TODO: 0x001f43b8+0x3B1 -- unused? RE callers if needed
     char    buf2[256];             // +0x3B1
-    // TODO: 0x001f43b8+0x4B1 -- unused? RE callers if needed
     char    buf3[256];             // +0x4B1
     uint8_t _pad_0x5b1[83];        // +0x5B1..+0x603
     uint8_t m_bFrameDirty;         // +0x604

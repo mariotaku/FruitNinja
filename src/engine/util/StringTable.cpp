@@ -103,38 +103,48 @@ static char* ReadFile(const char* path, size_t* out_size) {
 
 // --- Instance methods ---
 
-// LoadHeader -- reads translations_header.str into m_HeaderBuffer/m_HeaderLookup.
-// TODO: 0x0018a490 -- full instance method: reads 64-byte GUID into m_HeaderBuffer,
-//   then populates m_HeaderLookup.m_pData / m_HeaderLookup.m_Count from header entries.
-void Mortar::StringTable::LoadHeader(const char* path) {
+// CheckHeader -- mirrors Mortar::StringTableData::FileHeader::Check @ 0x0018a3b4.
+// Validates the 72-byte FileHeader wrapper shared by both .str files.
+bool Mortar::StringTable::CheckHeader(uint32_t magic, const uint8_t* file_guid) {
+    if (magic != 1) return false;                          // 0x0018a3ba cmp #1
+    if (memcmp(file_guid, m_HeaderBuffer, 0x40) == 0)      // 0x0018a3c4 memcmp
+        return true;
+    // Token differs from m_HeaderBuffer: accept only if m_HeaderBuffer is still
+    // all-zero (first / header load), in which case adopt the file's token.
+    for (int i = 0; i < 0x40; ++i)                         // 0x0018a3d0 loop
+        if (m_HeaderBuffer[i] != 0) return false;
+    memcpy(m_HeaderBuffer, file_guid, 0x40);               // 0x0018a3de memcpy
+    return true;
+}
+
+// LoadHeader -- opens translations_header.str, validates the wrapper, and loads
+// HeaderLookup[] into m_HeaderLookup. Binary @ 0x0018a490 -> 0x0018a460.
+bool Mortar::StringTable::LoadHeader(const char* path) {
     size_t size = 0;
     char* data = ReadFile(path, &size);
-    if (!data) return;
+    if (!data) return false;
 
-    if (size < kEntriesStart + 4) { free(data); return; }
+    if (size < kEntriesStart + 4) { free(data); return false; }
 
+    // FileHeader wrapper: magic@+0, token[64]@+4, blob_byte_size@+0x44, count@+0x48.
     uint32_t magic = 0;
     memcpy(&magic, data, 4);
-    if (magic != 1) { free(data); return; }
-
-    // Copy 64-byte GUID header into m_HeaderBuffer (offset +0x04 in file)
-    size_t copyLen = size > 68 ? 64 : (size > 4 ? size - 4 : 0);
-    if (copyLen > 64) copyLen = 64;
-    memcpy(m_HeaderBuffer, data + 4, copyLen);
+    // FileHeader::Check: magic==1 + adopt/validate the 64-byte token in m_HeaderBuffer.
+    if (!CheckHeader(magic, (const uint8_t*)(data + 4))) { free(data); return false; }
 
     uint32_t count = 0;
     memcpy(&count, data + kCountField, 4);
-    if (count == 0) { free(data); return; }
+    if (count == 0) { free(data); return false; }
 
     uint32_t key_blob_off = kEntriesStart + count * kHeaderEntrySize;
-    if (key_blob_off >= (uint32_t)size) { free(data); return; }
+    if (key_blob_off >= (uint32_t)size) { free(data); return false; }
     uint32_t key_blob_size = (uint32_t)size - key_blob_off;
 
     HeaderLookup* entries = (HeaderLookup*)malloc(count * sizeof(HeaderLookup));
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     char* key_blob = (char*)malloc(key_blob_size + 1);
     if (!entries || !key_blob) {
-        free(entries); free(key_blob); free(data); return;
+        free(entries); free(key_blob); free(data); return false;
     }
     memcpy(key_blob, data + key_blob_off, key_blob_size);
     key_blob[key_blob_size] = '\0';
@@ -142,9 +152,11 @@ void Mortar::StringTable::LoadHeader(const char* path) {
     free(s_key_blob);
     s_key_blob = key_blob;
 #else
-    if (!entries) { free(data); return; }
-    // On cross-build, key_blob is external; port-only s_key_blob not available.
-    // TODO: 0x0018a490 -- binary embeds key_blob ptr within the file-mapped block.
+    if (!entries) { free(data); return false; }
+    // Port specific: on the cross-build (sizeof-only) we read the key blob in
+    // place from the loaded file image; the binary keeps the entries' string
+    // pointers inside the file-mapped block (InitStringEntries @ 0x0018a2c4
+    // rebases the offsets to the blob that follows the entry array).
     char* key_blob = (char*)(data + key_blob_off); // temporary; freed below
 #endif
 
@@ -175,41 +187,45 @@ void Mortar::StringTable::LoadHeader(const char* path) {
     m_HeaderLookup.m_Count  = count;
 
     free(data);
+    return true;
 }
 
-// LoadLanguage -- reads translations_<lang>.str into m_StringEntries.
-// TODO: 0x0018a41c -- full instance method: populates m_StringEntries.m_pData / m_Count.
-void Mortar::StringTable::LoadLanguage(const char* path) {
+// LoadLanguage -- opens translations_<lang>.str, validates the wrapper, and
+// loads StringEntry[] into m_StringEntries. Binary @ 0x0018a41c -> 0x0018a3ec.
+bool Mortar::StringTable::LoadLanguage(const char* path) {
     size_t size = 0;
     char* data = ReadFile(path, &size);
-    if (!data) return;
+    if (!data) return false;
 
-    if (size < kEntriesStart + 4) { free(data); return; }
+    if (size < kEntriesStart + 4) { free(data); return false; }
 
     uint32_t magic = 0;
     memcpy(&magic, data, 4);
-    if (magic != 1) { free(data); return; }
+    // FileHeader::Check: magic==1 + the language file's 64-byte token must match
+    // the token adopted by LoadHeader (m_HeaderBuffer). A mismatched token
+    // (wrong/stale .str pairing) is rejected here, exactly like the binary.
+    if (!CheckHeader(magic, (const uint8_t*)(data + 4))) { free(data); return false; }
 
     uint32_t count = 0;
     memcpy(&count, data + kCountField, 4);
-    if (count == 0) { free(data); return; }
+    if (count == 0) { free(data); return false; }
 
     uint32_t str_blob_off = kEntriesStart + count * kLangEntrySize;
-    if (str_blob_off >= (uint32_t)size) { free(data); return; }
+    if (str_blob_off >= (uint32_t)size) { free(data); return false; }
     uint32_t str_blob_size = (uint32_t)size - str_blob_off;
 
     StringEntry* entries = (StringEntry*)malloc(count * sizeof(StringEntry));
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     char* str_blob = (char*)malloc(str_blob_size + 1);
     if (!entries || !str_blob) {
-        free(entries); free(str_blob); free(data); return;
+        free(entries); free(str_blob); free(data); return false;
     }
     memcpy(str_blob, data + str_blob_off, str_blob_size);
     str_blob[str_blob_size] = '\0';
     free(s_str_blob);
     s_str_blob = str_blob;
 #else
-    if (!entries) { free(data); return; }
+    if (!entries) { free(data); return false; }
 #endif
 
     for (uint32_t i = 0; i < count; i++) {
@@ -227,6 +243,7 @@ void Mortar::StringTable::LoadLanguage(const char* path) {
     m_StringEntries.m_Count  = count;
 
     free(data);
+    return true;
 }
 
 // GetInfo -- binary search @ 0x0018a2cc.

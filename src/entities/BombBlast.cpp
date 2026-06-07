@@ -50,6 +50,12 @@ static const int  MAX_BLASTS = 64;
 static const int  VERTS_PER_BLAST = 6;
 static QUADCUSTOMVERTEX s_BlastVerts[MAX_BLASTS * VERTS_PER_BLAST];
 
+// Running per-frame blast counter. Binary @ 0x171354 reads a global int*
+// (resolved via GOT off DAT_001714d8) and increments it once per blast in
+// DrawActiveBlasts (0x171aa0). DrawBlast keys its 6-vertex slot off this
+// counter; the port mirrors that with a file-static index.
+static int s_BlastCounter = 0;
+
 // --------------------------------------------------------------------------
 
 BombBlast::BombBlast()
@@ -137,25 +143,26 @@ void BombBlast::Draw(Renderer& r) { (void)r; }
 // Binary @ 0x00171030 — vtable PostUpdate (DrawUpdate): no-op.
 void BombBlast::PostUpdate(float /*dt*/) {}
 
-// Matches DrawActiveBlasts (0x171aa0) + DrawBlast (0x171354).
+// Matches DrawActiveBlasts (0x171aa0).
 //
-// Per-blast geometry (binary DrawBlast):
-//   v0 = pos + A + B          // far corner, +A side
-//   v1 = pos - A + B          // far corner, -A side
-//   v2 = pos + A * 0.25       // near-centre, +A side
-//   v5 = pos - A * 0.25       // near-centre, -A side
-//   v3 = v2    (degenerate-free triangle pairing)
-//   v4 = v1
+// Binary control flow:
+//   if (g_BombTexture is valid) {
+//       g_BombTexture->Set();
+//       *g_BlastCounter = 0;                  // reset shared blast index
+//       for each type-4 entity e (GetEntityFirst/Next):
+//           e->vtable[0x34]()  -> DrawBlast   // writes 6 verts at counter slot
+//           (*g_BlastCounter)++;              // bump after each blast
+//       g_BombTexture->UnSet();
+//       g_BombTexture->Set();                 // re-bind for the batched draw
+//       worldStack.Reset(); UploadMatrices_Coin();
+//       DrawTriList(g_BlastVerts, *g_BlastCounter * 6, false, NULL);
+//       g_BombTexture->UnSet();
+//   }
 //
-// Where A = m_PosA (m_Vel1 * m_BlastRadius, the "narrow" axis) and
-// B = m_PosB (m_Vel2 * m_BlastRadius, the "long" axis perpendicular to A).
-// The quad is a kite pointing outward in direction B with width 2·A at
-// the far end and 0.5·A at the near end. Multiple blasts at random
-// angles produce a starburst of expanding strips.
-//
-// Colour is a solid tint (white) with age-based alpha fade. UVs are all
-// (0,0) — binary samples a single texel of `bomb_explode.tex` for a
-// flat tinted fill.
+// Note the binary iterates EVERY type-4 entity unconditionally (no IsActive
+// / radius gate inside the loop); the kill sweep already removed dead blasts
+// from the type list before draw, and a zero-radius blast emits a degenerate
+// (zero-area) quad. The port keeps a MAX_BLASTS clamp on the static buffer.
 void BombBlast::DrawActiveBlasts() {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
@@ -164,75 +171,33 @@ void BombBlast::DrawActiveBlasts() {
     // in the binary). Skip the pass if no bomb has spawned yet.
     if (!g_BombTexture.IsValid()) return;
 
-    // Build the per-frame vertex buffer in one pass. BombBlast is type 4.
-    int blastCount = 0;
+    g_BombTexture->Set();
+
+    // Reset the shared blast counter, then let each blast emit its own
+    // 6-vertex slot via DrawBlast (vtable+0x34 in the binary).
+    s_BlastCounter = 0;
     const std::list<Mortar::Entity*>& blastList = am->GetTypeList(4);
-    for (auto it = blastList.begin(); it != blastList.end() && blastCount < MAX_BLASTS; ++it) {
+    for (std::list<Mortar::Entity*>::const_iterator it = blastList.begin();
+         it != blastList.end() && s_BlastCounter < MAX_BLASTS; ++it) {
         Mortar::Entity* e = *it;
-        if (!e || !e->IsActive()) continue;
-
-        BombBlast* b = static_cast<BombBlast*>(e);
-        if (b->m_BlastRadius <= 0.0f) continue;
-
-        // Alpha fades linearly over the 3s lifetime.
-        float t = b->m_Lifetime / BLAST_LIFE;
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
-        const uint8_t alpha = (uint8_t)((1.0f - t) * 255.0f);
-        const uint32_t col  = (uint32_t)alpha << 24 | 0x00FFFFFF; // AABBGGRR → ABGR
-
-        const float px = b->pos.x;
-        const float py = b->pos.y;
-        const float pz = b->pos.z;
-        const float ax = b->m_PosA.x;
-        const float ay = b->m_PosA.y;
-        const float bx = b->m_PosB.x;
-        const float by = b->m_PosB.y;
-
-        QUADCUSTOMVERTEX* v = &s_BlastVerts[blastCount * VERTS_PER_BLAST];
-
-        // Parallelogram corner positions.
-        //   v0 = pos + A + B   (outer-far on +A side)
-        //   v1 = pos - A + B   (outer-far on -A side)
-        //   v2 = pos + A * 0.25 (near-centre on +A side)
-        //   v5 = pos - A * 0.25 (near-centre on -A side)
-        // Triangle list: (v0,v1,v2), (v3=v2, v4=v1, v5).
-        //
-        // UV mapping: binary-accurate single-texel sample. DrawBlast
-        // (0x171354) writes u=1.0, v=0.0 to all 6 verts, making the
-        // quad a flat colour equal to the (1,0) texel of the source
-        // texture. bomb_explode.tex is a 32x128 gold→white gradient,
-        // so (1.0, 0.0) samples the right edge of row 0 which is
-        // the gold start colour. The port reproduces that exactly
-        // so the blast tint matches the binary's starburst look.
-        v[0].x = px + ax + bx;  v[0].y = py + ay + by;  v[0].z = pz;
-        v[1].x = px - ax + bx;  v[1].y = py - ay + by;  v[1].z = pz;
-        v[2].x = px + ax * 0.25f;  v[2].y = py + ay * 0.25f;  v[2].z = pz;
-        v[3].x = v[2].x;  v[3].y = v[2].y;  v[3].z = v[2].z;
-        v[4].x = v[1].x;  v[4].y = v[1].y;  v[4].z = v[1].z;
-        v[5].x = px - ax * 0.25f;  v[5].y = py - ay * 0.25f;  v[5].z = pz;
-
-        for (int i = 0; i < VERTS_PER_BLAST; ++i) {
-            v[i].nx = 0.0f;
-            v[i].ny = 0.0f;
-            v[i].nz = 1.0f;
-            v[i].colour = col;
-            v[i].u = 1.0f;   // binary: all verts at (1, 0)
-            v[i].v = 0.0f;
-        }
-
-        blastCount++;
+        if (!e) continue;
+        static_cast<BombBlast*>(e)->DrawBlast();
+        s_BlastCounter++;
     }
 
-    if (blastCount == 0) return;
+    g_BombTexture->UnSet();
+
+    if (s_BlastCounter == 0) return;
+
+    // Re-bind and issue the single batched tri-list (binary Set/UnSet pair).
+    g_BombTexture->Set();
 
     // Identity world matrix — vertices are already in world space.
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
     mm.UploadModelViewOnly();
 
-    g_BombTexture->Set();
-    Mortar::Mesh::DrawTriList(s_BlastVerts, blastCount * VERTS_PER_BLAST, false, NULL);
+    Mortar::Mesh::DrawTriList(s_BlastVerts, s_BlastCounter * VERTS_PER_BLAST, false, NULL);
     g_BombTexture->UnSet();
 }
 
@@ -247,10 +212,69 @@ void BombBlast::RemoveAll() {
     am->DeactivateAllEntities(4);
 }
 
-// TODO: 0x171354 -- DrawBlast: emit the per-blast 6-vertex kite into the shared
-//       tri-list. The geometry is currently inlined in DrawActiveBlasts (above);
-//       this should be factored out to match the binary's call shape.
-void BombBlast::DrawBlast() {}
-// TODO: 0x171030 -- DrawUpdate(float): binary is a 1-byte no-op (PostUpdate
-//       vtable slot). Already realized as PostUpdate; body stays empty.
+// Binary @ 0x171354 — emit this blast's 6 vertices (two triangles) into the
+// shared tri-list at the current frame-counter slot. Called per blast from
+// DrawActiveBlasts (vtable+0x34) with the global counter bumped after each.
+//
+// Geometry (A = m_PosA = narrow axis, B = m_PosB = long axis):
+//   v0 = pos + A + B          // far corner, +A side
+//   v1 = pos + (B - A)        // far corner, -A side  (== pos - A + B)
+//   v2 = pos + A * 0.25       // near-centre, +A side
+//   v5 = pos + A * -0.25      // near-centre, -A side
+//   v3 = copy of v2           // second triangle reuses v2
+//   v4 = copy of v1           // second triangle reuses v1
+// Triangle list: (v0, v1, v2), (v3=v2, v4=v1, v5).
+//
+// UVs (from the binary's per-vertex stores, NOT a flat single-texel):
+//   v0 (1,0)  v1 (0,0)  v2 (1,1)  v3 (1,1)  v4 (0,0)  v5 (0,1)
+// i.e. a proper textured quad of bomb_explode.tex stretched across the kite.
+//
+// Per-vertex: normal = (0,0,1); z = 0 (DAT_001714d0); colour = a fixed
+// global blast Colour run through Colour::PlatformColour (no age fade).
+void BombBlast::DrawBlast() {
+    if (s_BlastCounter >= MAX_BLASTS) return;
+
+    const float px = pos.x;
+    const float py = pos.y;
+    const float ax = m_PosA.x;
+    const float ay = m_PosA.y;
+    const float bx = m_PosB.x;
+    const float by = m_PosB.y;
+
+    QUADCUSTOMVERTEX* v = &s_BlastVerts[s_BlastCounter * VERTS_PER_BLAST];
+
+    // Positions (binary writes only x,y; z stays 0 via the colour/normal loop).
+    v[0].x = px + ax + bx;        v[0].y = py + ay + by;
+    v[1].x = px + (bx - ax);      v[1].y = py + (by - ay);
+    v[2].x = px + ax * 0.25f;     v[2].y = py + ay * 0.25f;
+    v[5].x = px + ax * -0.25f;    v[5].y = py + ay * -0.25f;
+    v[3].x = v[2].x;              v[3].y = v[2].y;   // v3 = v2
+    v[4].x = v[1].x;              v[4].y = v[1].y;   // v4 = v1
+
+    // Per-vertex UVs (binary stores: see table above).
+    v[0].u = 1.0f;  v[0].v = 0.0f;
+    v[1].u = 0.0f;  v[1].v = 0.0f;
+    v[2].u = 1.0f;  v[2].v = 1.0f;
+    v[3].u = 1.0f;  v[3].v = 1.0f;   // v3 = v2
+    v[4].u = 0.0f;  v[4].v = 0.0f;   // v4 = v1
+    v[5].u = 0.0f;  v[5].v = 1.0f;
+
+    // DIFFERS: original = fixed global Colour (DAT @ 0x1ef4d4 -> Colour @ 0x16d880)
+    //   run through Colour::PlatformColour with no lifetime input; exact RGBA
+    //   is unresolved (vtable-bearing Colour singleton, needs the Colour
+    //   subsystem). Port uses solid opaque white so the blast renders at full
+    //   tint like the binary's constant colour. The previous age-based alpha
+    //   fade was a port-side band-aid not present in the binary and is removed.
+    const uint32_t col = 0xFFFFFFFFu; // ABGR opaque white
+
+    for (int i = 0; i < VERTS_PER_BLAST; ++i) {
+        v[i].z  = 0.0f;       // DAT_001714d0
+        v[i].nx = 0.0f;       // DAT_001714d0
+        v[i].ny = 0.0f;       // DAT_001714d0
+        v[i].nz = 1.0f;       // 0x3f800000
+        v[i].colour = col;    // Colour::PlatformColour(global blast colour)
+    }
+}
+// Binary @ 0x171030 — DrawUpdate(float): a bare `return;` (no-op). Realized
+// here as the standalone symbol; the PostUpdate vtable slot aliases it.
 void BombBlast::DrawUpdate(float) {}

@@ -57,19 +57,16 @@ CheckBox::CheckBox(Vec3 inPos, Vec3 inSize, LocalizedString loc)
 CheckBox::~CheckBox() {
 }
 
-// Binary @ 0x00134AE4 (no-op)
+// Binary @ 0x00134AE4 -- vtable Init slot; empty in binary (single `bx lr`), no-op is faithful.
 void CheckBox::Init() {
-    // TODO: 0x00134AE4 -- vtable Init slot; empty in binary (single `return`), no-op is faithful.
 }
 
-// Binary @ 0x00134AE8 (no-op)
+// Binary @ 0x00134AE8 -- vtable Release slot; empty in binary (single `bx lr`), no-op is faithful.
 void CheckBox::Release() {
-    // TODO: 0x00134AE8 -- vtable Release slot; empty in binary (single `return`), no-op is faithful.
 }
 
-// Binary @ 0x00134B20
+// Binary @ 0x00134B20 -- vtable PreDraw slot; empty in binary (single `bx lr`), no-op is faithful.
 void CheckBox::PreDraw(const Vec3& hudScale) {
-    // TODO: 0x00134B20 -- vtable PreDraw slot; empty in binary (single `return`), no-op is faithful.
     (void)hudScale;
 }
 

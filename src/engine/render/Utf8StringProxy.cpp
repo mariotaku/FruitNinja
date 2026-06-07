@@ -2,9 +2,17 @@
 
 namespace Mortar {
 
-// Binary @ 0x001018bc (GOT thunk) -> real ctor @ 0x001840c0
-// TODO: 0x001840c0 — full proxy ctor body: installs vtable (GOT-indirect), sets
-//   field1_0x4 = str, zeroes remaining fields, then calls some initialization path.
+// Binary @ 0x001018bc -- single-arg ctor is a PLT/GOT trampoline
+// (adr r12,0x1018c4; add #0xef000; ldr pc,[r12,#0x420]!) jumping through the
+// dynamic relocation slot PTR_Utf8StringProxy_001f0ce4 to the real ctor, which
+// lives outside this module's statically-resolvable code. The real proxy
+// single-arg ctor only installs the (GOT-indirect) vtable; it does NOT consume
+// `str` -- the caller (Utf8StringIterator::Utf8StringIterator @ 0x0012fe00) sets
+// field1_0x4 = str on a stack proxy itself and routes field init through
+// Utf8StringIterator::_Init. Vtable install has no SDL/GLES2 counterpart: the
+// port relies on the C++ compiler's native virtual dispatch, so this ctor only
+// needs to seed the data fields the port-side standalone proxy starts from.
+// Port specific: GOT-indirect vtable install replaced by native C++ vptr.
 Utf8StringProxy::Utf8StringProxy(const char* str)
     : m_PrevBegin(str)
     , m_CurrentCodepoint(0)
@@ -15,14 +23,20 @@ Utf8StringProxy::Utf8StringProxy(const char* str)
 {
 }
 
-// Binary @ 0x00160cbc (copy path) copies fields 0x10/0x14/0x18 from source
+// Binary @ 0x001840c0 (Mortar::Utf8StringProxy copy-ctor). Copies ONLY the three
+// scalar fields field1_0x4 / field_0x8 / field6_0xc and installs the vtable
+// (this->vtable = GOT-resolved table + 8). It deliberately does NOT touch
+// +0x10 / +0x14 / +0x18 -- those are copied by the derived
+// Utf8StringIterator copy-ctor (@ 0x00160cbc) after it chains to this base ctor.
+// Faithful: leave m_NextScan / m_End / m_field9_0x18 default-uninitialised here.
+// Port specific: vtable install handled by native C++ vptr.
 Utf8StringProxy::Utf8StringProxy(const Utf8StringProxy& other)
     : m_PrevBegin(other.m_PrevBegin)
     , m_CurrentCodepoint(other.m_CurrentCodepoint)
     , m_NumChars(other.m_NumChars)
-    , m_NextScan(other.m_NextScan)
-    , m_End(other.m_End)
-    , m_field9_0x18(other.m_field9_0x18)
+    , m_NextScan(0)
+    , m_End(0)
+    , m_field9_0x18(0)
 {
 }
 

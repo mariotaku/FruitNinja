@@ -10,9 +10,17 @@
 //   Port omits this virtual; no call site currently dispatches via vtable[+8]().
 //   asm-verify has run (R4 W4) and not flagged the indirect form -- deliberate omission.
 
-// TODO: 0x00109e78 -- binary uses InterlockedUNumber::Increment / atomic decrement on
-// both counters. Port uses plain ++/--. Functional risk only if SmartPtr is touched
-// off-thread (Job system); upgrade if/when the threading model lands.
+// Binary @ 0x00109e78 -- __ReferenceCounterData::AddRef(): `adds r0,#0x4; blx
+//   InterlockedUNumber::Increment` -- an atomic increment of the strong count at +0x4.
+//   The matching Release path performs the symmetric atomic decrement. Both route
+//   through InterlockedUNumber, whose vtable thunk (PTR_Increment_001eed24 @ 0x000fb97c)
+//   calls the Bada OSAL interlocked primitive.
+// DIFFERS: original = InterlockedUNumber::Increment/Decrement (Bada OSAL atomics),
+//   using plain ++/-- because (a) the cross-toolchain target is GCC 4.4.1 pre-C++11 with
+//   no portable <atomic>, and the Bada interlocked HAL has no SDL2/GLES2 counterpart, and
+//   (b) the only path that touches counters off-thread is the Job system, which is not yet
+//   ported. The observable increment/decrement-then-free behaviour is identical
+//   single-threaded; re-introduce a portable atomic here once the threading model lands.
 
 namespace Mortar {
 

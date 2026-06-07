@@ -23,12 +23,16 @@ using Mortar::TextureManager;
 // Bonus -- ctor / dtor / copy
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0010005c
+// Binary @ 0x0010e324 (real ctor; 0x0010005c is the PTR_Bonus_001f04c4 thunk).
+// Defaults verified from disassembly:
+//   m_MinSliced = 0, m_MaxSliced = DAT_0010e390 = 10,000,000 (no-upper-bound
+//   sentinel), m_DivisibleBy = 0, m_Tier = 5. m_MaxSliced MUST be the large
+//   sentinel because Bonus::IsAchieved gates `score > m_MaxSliced` unconditionally.
 Bonus::Bonus()
     : m_MinSliced(0)
-    , m_MaxSliced(0)
+    , m_MaxSliced(10000000)
     , m_DivisibleBy(0)
-    , m_Tier(0)
+    , m_Tier(5)
     , m_AchievementHash(0)
 {
     memset(m_NameTemplate, 0, sizeof(m_NameTemplate));
@@ -168,65 +172,78 @@ void Bonus::Parse(tinyxml2::XMLElement* e, const char* parentTexName) {
 
 // ---------------------------------------------------------------------------
 // Bonus::IsAchieved -- Binary @ 0x0010df38
+// ASM-verified: 2026-06-07 binary @ 0x0010df38 (disassemble_function diff)
 //
-// Returns non-zero when bonus conditions are met, 0 otherwise.
-// Checks:
-//   1. totalAcrossFruits within [m_MinSliced, m_MaxSliced] (0 = no bound)
-//   2. iterate fruitCounts; for each entry look up min (default 0) and max
-//      (default 1,000,000 = DAT_0010e090); fail if count outside bounds.
-//   3. m_DivisibleBy != 0: totalAcrossFruits must be divisible by m_DivisibleBy
-//   4. m_PatternHashes non-empty: at least one pattern hash must be found
-//      in fruitCounts (non-zero count)
-// Binary iterates fruitCounts (param_2), not m_MinFruit/m_MaxFruit, so a fruit
-// hash present in m_MinFruit but absent from fruitCounts is silently skipped.
-// Returns m_Tier on success (>0); for tier=0 achievement-only entries returns 1
-// so callers can treat any nonzero as "conditions met".
-// TODO: 0x0010df38 -- re-verify IsAchieved after schema fix (m_Tier default changed
-//   from -1 to 0; old guard `if (m_Tier < 0) return 0` removed; return changed from
-//   `m_Tier` to `m_Tier > 0 ? m_Tier : 1`).
-// DIFFERS: original param name was `score` -- renamed to `totalAcrossFruits`
-//   to match call-site semantics. Cosmetic only; no ABI change.
-int Bonus::IsAchieved(int totalAcrossFruits, std::map<uint64_t, int>& fruitCounts) {
-    // Min/max sliced bounds (0 = unconstrained)
-    if (m_MinSliced > 0 && totalAcrossFruits < m_MinSliced) return 0;
-    if (m_MaxSliced > 0 && totalAcrossFruits > m_MaxSliced) return 0;
+// Faithful port of the binary control flow:
+//   1. Gate (0010df3e-0010df62, all unconditional -- NO `>0` guards):
+//        if (score <  m_MinSliced) return 0;
+//        if (score >  m_MaxSliced) return 0;
+//        if (m_DivisibleBy > 0 && score % m_DivisibleBy != 0) return 0;
+//      Default m_MaxSliced is 10,000,000 (ctor DAT_0010e390), acting as the
+//      "no upper bound" sentinel -- so the unconditional `score > m_MaxSliced`
+//      almost never fires unless an explicit max/equals was parsed.
+//   2. Per-fruit loop (0010dfd8/0010df7e): iterate fruitCounts (param_2). For
+//      each entry: min from m_MinFruit (default 0), max from m_MaxFruit
+//      (default DAT_0010e090 = 1,000,000). Fail if count < min || count > max.
+//   3. Pattern loop (0010dfec-0010e052) over m_PatternHashes: EVERY pattern
+//      hash must be present in fruitCounts, and all must share the SAME count,
+//      which on the first iteration must be > 0. (r10 = first-iter flag,
+//      r7 = reference count seeded on first iter.)
+//   4. Side effects on success (0010e054-0010e076):
+//        if (m_AchievementHash != 0 && m_Tier > 0)
+//            AchievementManager::GetInstance()->UnlockBonusAchievement(m_AchievementHash);
+//        snprintf(m_DisplayName, 0x40, m_NameTemplate, score); // template has %d
+//   5. return m_Tier (0 on any fail).
+// DIFFERS: original param name was `score` -- renamed to `score` kept; the
+//   second param is fruitCounts (binary param_2). Cosmetic only; no ABI change.
+int Bonus::IsAchieved(int score, std::map<uint64_t, int>& fruitCounts) {
+    // Gate -- unconditional bounds + divisible-by (binary 0010df3e-0010df62).
+    if (score < m_MinSliced) return 0;
+    if (score > m_MaxSliced) return 0;
+    if (m_DivisibleBy > 0 && (score % m_DivisibleBy) != 0) return 0;
 
-    // Per-fruit bounds: iterate fruitCounts (binary's param_2 iteration direction).
+    // Per-fruit bounds: iterate fruitCounts (binary's param_2 iteration order).
     // Missing key in m_MinFruit defaults to 0; missing key in m_MaxFruit defaults
-    // to 1,000,000 (DAT_0010e090 = 0x000f4240).
-    static const int kNoMaxSentinel = 1000000;
+    // to DAT_0010e090 = 1,000,000.
+    static const int kNoMaxSentinel = 1000000;  // DAT_0010e090 = 0x000f4240
     for (std::map<uint64_t, int>::iterator fc = fruitCounts.begin();
          fc != fruitCounts.end(); ++fc) {
         int count = fc->second;
 
         std::map<uint64_t, int>::const_iterator minIt = m_MinFruit.find(fc->first);
         int minVal = (minIt != m_MinFruit.end()) ? minIt->second : 0;
-        if (count < minVal) return 0;
 
         std::map<uint64_t, int>::const_iterator maxIt = m_MaxFruit.find(fc->first);
         int maxVal = (maxIt != m_MaxFruit.end()) ? maxIt->second : kNoMaxSentinel;
-        if (count > maxVal) return 0;
+
+        if (count < minVal || count > maxVal) return 0;
     }
 
-    // Divisible-by check
-    if (m_DivisibleBy > 0 && (totalAcrossFruits % m_DivisibleBy) != 0) return 0;
-
-    // Pattern check: at least one pattern hash present in fruitCounts
-    if (!m_PatternHashes.empty()) {
-        bool found = false;
-        for (size_t i = 0; i < m_PatternHashes.size(); ++i) {
-            std::map<uint64_t, int>::iterator fc = fruitCounts.find(m_PatternHashes[i]);
-            if (fc != fruitCounts.end() && fc->second > 0) {
-                found = true;
-                break;
-            }
+    // Pattern loop: every pattern hash must be present in fruitCounts, all with
+    // the SAME count, which on the first pattern must be > 0 (binary 0010dfec).
+    bool firstPattern = true;
+    int refCount = -1;
+    for (size_t i = 0; i < m_PatternHashes.size(); ++i) {
+        std::map<uint64_t, int>::iterator fc = fruitCounts.find(m_PatternHashes[i]);
+        if (fc == fruitCounts.end()) return 0;  // pattern fruit absent
+        if (firstPattern) {
+            refCount = fc->second;
+            if (refCount <= 0) return 0;
+            firstPattern = false;
+        } else if (refCount != fc->second) {
+            return 0;
         }
-        if (!found) return 0;
     }
 
-    // Return tier as success weight; tier=0 entries (achievement-only, no points=)
-    // return 1 so callers can treat nonzero = "conditions met".
-    return m_Tier > 0 ? m_Tier : 1;
+    // Success side effects (binary 0010e054-0010e076).
+    if (m_AchievementHash != 0 && m_Tier > 0) {
+        AchievementManager::GetInstance()->UnlockBonusAchievement((unsigned long)m_AchievementHash);
+    }
+    // Binary uses m_NameTemplate as the snprintf format string directly with
+    // `score` as the variadic arg (templates contain %d). Reproduced faithfully.
+    snprintf(m_DisplayName, sizeof(m_DisplayName), m_NameTemplate, score);
+
+    return m_Tier;
 }
 
 // ---------------------------------------------------------------------------

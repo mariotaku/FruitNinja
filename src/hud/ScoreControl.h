@@ -75,9 +75,8 @@ public:
     int  GetType() override { return 3; }
     void Skip() override;
 
-    // TODO: 0x0015819c -- ScoreControl::AddMultipliyer(int): binary body is a trivial
-    //                      passthrough (returns its int argument); port the one-line body.
-    int AddMultipliyer(int);
+    // Binary @ 0x0015819c -- single instruction (bx lr); returns its argument unchanged.
+    int AddMultipliyer(int v);
 };
 
 #endif // FN_HUD_SCORE_CONTROL_H

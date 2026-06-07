@@ -126,7 +126,35 @@ Matrix44 MatrixManager::GetMVP() const {
     return m_CachedProjView * m_World.m_Current;
 }
 
-// TODO: 0x0019e668 -- perspective projection (see header spec). Body should
-//   populate the projection matrix per the binary, m_Projection.SetCurrentMatrix,
-//   then UploadAll(); currently a no-op so callers link.
-void MatrixManager::SetupPerspective(float, float, float, float, float, Matrix44*) {}
+// Binary @ 0x0019e668 (asm-inspector). Builds a column-major GL perspective
+// projection. Args: (top, bottom, aspect, near, far, out). If out==null a
+// local matrix is used. The binary computes the divisions via Math::DivAsync
+// (Set/Get) -- a VFP-pipelined async divide -- which is just plain `a/b`.
+//
+// Byte-offset map (data[i][j] in Ghidra == column-major m[i*4+j]):
+//   m[0]  = (bottom/top)/aspect          [0x00]
+//   m[5]  = bottom/top                    [0x14]
+//   m[10] = (far+near)/(near-far)         [0x28]
+//   m[11] = -1.0                          [0x2c]
+//   m[14] = 2*near*far/(near-far)         [0x38]
+// All other 11 entries = 0 (including m[15], unlike Identity).
+void MatrixManager::SetupPerspective(float top, float bottom, float aspect,
+                                     float nearVal, float farVal, Matrix44* out) {
+    Matrix44 local;
+    if (out == 0) {
+        out = &local;
+    }
+    // 1.0/(near-far), reused for m[10] and m[14] (binary's first DivAsync).
+    float invNF = 1.0f / (nearVal - farVal);
+    float ba = bottom / top;
+
+    for (int i = 0; i < 16; ++i) out->m[i] = 0.0f;
+    out->m[5]  = ba;
+    out->m[11] = -1.0f;
+    out->m[10] = (farVal + nearVal) * invNF;
+    out->m[14] = (nearVal + nearVal) * farVal * invNF;
+    out->m[0]  = ba / aspect;
+
+    m_Projection.SetCurrentMatrix(*out);
+    UploadAll();
+}

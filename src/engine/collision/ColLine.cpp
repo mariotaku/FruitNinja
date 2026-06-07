@@ -19,8 +19,10 @@ int ColLine::Collide(Col* other, Vec3* outNormal) {
         // TODO: outNormal from SphereLine -- compute penetration vector, then negate
         //   per binary convention (binary @ 0x... points INTO sphere from line). Not yet ported.
     } else if (t == TYPE_LINE) {
-        // TODO: LineLine collision helper not ported
-        hit = 0;
+        // Binary @ 0x0019f8ae: type-2 branch calls ColLineLine and uses its
+        // return as the hit flag; the helper writes outNormal itself.
+        ColLine* line = static_cast<ColLine*>(other);
+        hit = ColLineLine(this, line, outNormal);
     } else if (t == TYPE_AABB) {
         ColAABB* box = static_cast<ColAABB*>(other);
         hit = box->IntersectsLine(*this) ? 1 : 0;
@@ -37,7 +39,56 @@ void ColLine::DrawDebug() {
     // TODO: DrawLine helper not ported
 }
 
-// TODO: 0x0019f4f0 -- line-segment vs line-segment closest-approach; compute the
-//   two segment directions, MagnitudeSqr/Dot, clamp parameters, and write the
-//   separating/penetration vector to the out Vec3 (impl @ 0x0019f4f0, thunk @ 0x000f8508).
-void ColLine::ColLineLine(ColLine*, ColLine*, Vec3*) {}
+// Binary @ 0x0019f4f0 -- segment-segment closest-approach (Ericson form).
+// d1/d2 are the two segment directions; r is the offset between the two
+// start points. denom = (d1.d1)(d2.d2) - (d1.d2)^2. When denom is below
+// the parallel epsilon (1e-6, DAT_0019f6f8) the binary fixes s = 0 and
+// solves t directly; otherwise it solves both parameters. A hit is reported
+// only when the squared closest-approach distance is below 1e-5
+// (DAT_0019f700) AND both clamped params lie in [0,1]. The out vector is the
+// along-d1 displacement from the nearer endpoint of segment a.
+int ColLine::ColLineLine(ColLine* a, ColLine* b, Vec3* out) {
+    Vec3 d1 = a->b - a->a();   // a->Direction()
+    Vec3 d2 = b->b - b->a();   // b->Direction()
+    Vec3 r  = a->a() - b->a();
+
+    float dd1 = d1.Dot(d1);    // s19
+    float dd  = d1.Dot(d2);    // s16
+    float dd2 = d2.Dot(d2);    // s17
+    float c   = d1.Dot(r);     // s18
+    float f   = d2.Dot(r);     // s0
+
+    float denom = dd1 * dd2 - dd * dd;  // a*e - b*b
+
+    float s;
+    float t;
+    if (denom < 1e-6f) {
+        // Parallel / degenerate: pin s, solve t from the larger projection.
+        s = 0.0f;
+        if (dd > dd2) {
+            t = c / dd;
+        } else {
+            t = f / dd2;
+        }
+    } else {
+        s = (dd * f - dd2 * c) / denom;
+        t = (dd1 * f - dd * c) / denom;
+    }
+
+    // diff = (a.a + s*d1) - (b.a + t*d2) = closest-on-a minus closest-on-b.
+    Vec3 diff = (r + d1 * s) - d2 * t;
+
+    if (diff.MagnitudeSqr() < 1e-5f &&
+        s >= 0.0f && s <= 1.0f &&
+        t >= 0.0f && t <= 1.0f) {
+        Vec3 v;
+        if (s < 0.5f) {
+            v = d1 * s;
+        } else {
+            v = -d1 * (1.0f - s);
+        }
+        *out = v;
+        return 1;
+    }
+    return 0;
+}

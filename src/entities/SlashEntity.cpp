@@ -1010,8 +1010,11 @@ void SlashEntity::Update(float dt) {
                             if (m_ComboCount >= 10) m_ComboTimer = 0.095f;
                             m_SwipeSoundTimer -= (float)m_ComboCount * (Math::g_Random.RandF(0.5f) + 0.75f);
                             // Binary: ComboControl is dead code; combo popup is rendered by MissControl::MakeCombo.
-                            // TODO: 0x0017dad8 — CombosEnabled() not yet ported; assumed true
-                            if (m_ComboCount > 2) {
+                            // Binary @ 0x0017dad8 gates the popup on `(2 < combo) && CombosEnabled()`.
+                            // CombosEnabled @ 0x0010a3e4 returns (gameMode != 1), i.e. the slash-side
+                            // combo popup is suppressed in Combo mode (which scores combos via its own
+                            // wave logic). gameObj+4 == m_GameMode == GAME_MODE_COMBO(1).
+                            if (m_ComboCount > 2 && game_work.gameMode != Mortar::GAME_MODE_COMBO) {
                                 bool online = Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer();
                                 if (!online || m_ComboEntityType != 2) {
                                     if (m_pComboMissControl == nullptr) {
@@ -1476,10 +1479,12 @@ const Colour* SlashEntity::GetPalette()                           { return g_Pal
 
 // Binary @ 0x17CE0C -- main per-point append into m_pLeftBuffer/m_pRightBuffer
 // SUPERSEDED 2026-05-24: the 2-arg AddPoint was the port's invention; the
-// binary's actual symbol is AddPoint(Vec3, Vec3, float). The trailing float
-// is now part of the canonical signature (TODO: 0x0016ce0c -- semantic
-// of the float arg, likely thickness/pressure, still needs RE).
-// Previous 3-arg stub removed; declaration in .h now has the trailing float.
+// binary's actual symbol is AddPoint(Vec3, Vec3, float). The trailing float is
+// the per-point blade thickness/pressure -- the binary computes the strip
+// half-width as `pressure * 9.0 * g_Scale1` (head taper). Port specific: the
+// port's RebuildGeometry derives width from m_Scale/m_HeadThickScale and the
+// sole caller (OnTouchActive) supplies no pressure, so the arg is unused here.
+// See AddPoint declaration in .h for the full rationale.
 
 // Binary @ 0x17B570 -- vtable slot 9 override on Mortar::Entity. Tests this
 // blade's ColLine against entity->m_Col (a ColSphere). Port's Update slice
@@ -1667,10 +1672,10 @@ void SlashEntity::InitPoints(long count) {
     }
 }
 
-// TODO: 0x17CA0C -- SlashEntity::SetModColours (non-const Colour* binary
-//   form): binary passes Colour* (non-const); port delegates to the const
-//   overload. Full body (palette copy, overlay texture, emitter hashes,
-//   ColoursChanged actor walk) pending full RE+port of the const form.
+// Binary @ 0x17CA0C -- SlashEntity::SetModColours (non-const Colour* binary
+// form). The binary passes a non-const Colour*; the body is identical to the
+// const overload above (which is fully ported: palette copy, overlay texture,
+// emitter-hash resolve, ColoursChanged actor walk). Forward to it.
 void SlashEntity::SetModColours(
     Colour*     colours,
     int         colourCount,
@@ -1726,10 +1731,17 @@ bool SlashEntity::TouchMoveY(InputEvent* event) {
     return true;
 }
 
-// TODO: 0x17B92C -- SlashEntity::UpdatePoints(float): per-frame geometry
-//   rebuild from the binary's m_pLeftBuffer/m_pRightBuffer vertex strips.
-//   Port rebuilds from the m_Points[] trail array via RebuildGeometry()
-//   instead, so this binary-named entry point stays a no-op.
+// Binary @ 0x17B92C -- SlashEntity::UpdatePoints(float).
+// Port specific: the binary's body is the per-frame geometry rebuild that
+// operates directly on the heap vertex strips m_pLeftBuffer/m_pRightBuffer,
+// the ColLine (m_Col) head/tail segment, and the ghost ring -- writing
+// interleaved QUADCUSTOMVERTEX records, mitered perpendiculars, per-pair UV/
+// alpha, the m_Scale->m_BaseColour lerp, and the field_0x144 fade collapse.
+// This port deliberately replaced that representation with the m_Points[]
+// trail + RebuildGeometry() (see header port note); Update() calls
+// RebuildGeometry() for the equivalent work. Porting the literal binary body
+// would require resurrecting the discarded vertex-strip / ColLine subsystem,
+// so this binary-named entry point stays a no-op.
 void SlashEntity::UpdatePoints(float /*dt*/) {}
 
 // ASM-spec: SlashEntity::UpdateTouchDown @ 0x17D2E4

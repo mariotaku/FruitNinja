@@ -73,14 +73,12 @@ public:
     static void LoadContent();
     static void ReleaseContent();
 
-    // TODO: 0x171354 -- DrawBlast: emit the 6-vertex kite (two triangles) for a
-    //       single blast into the shared tri-list. Per-blast geometry currently
-    //       lives inlined in DrawActiveBlasts; this standalone symbol should
-    //       factor that out to match the binary's call shape.
+    // Binary @ 0x171354 — emit this blast's 6-vertex kite (two triangles) into
+    // the shared tri-list at the frame counter slot. Called per blast from
+    // DrawActiveBlasts via vtable+0x34.
     void DrawBlast();
-    // TODO: 0x171030 -- DrawUpdate(float): binary is a 1-byte no-op (the
-    //       PostUpdate vtable slot). Already realized as PostUpdate; keep this
-    //       declaration as the standalone-symbol counterpart.
+    // Binary @ 0x171030 — DrawUpdate(float): a 1-byte no-op (PostUpdate vtable
+    // slot aliases it). Standalone-symbol counterpart.
     void DrawUpdate(float);
 };
 

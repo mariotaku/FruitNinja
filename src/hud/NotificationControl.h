@@ -43,15 +43,15 @@ public:
     uint8_t _pad[3];         // +0x10D..+0x10F
 
     // ---- HUDControl3d lifecycle overrides ----
-    // No NotificationControl-specific symbol in binary (only ctor @0x152ed0/0x153060,
-    // dtors @0x152dec/152e2c/152e68); these vtable slots inherit base HUDControl3d behaviour.
-    // TODO: 0x001529EC -- override body; resolve vs base HUDControl3d Init slot
+    // Distinct NotificationControl vtable @ 0x1e9b80 (object vptr). Slots Init/Release
+    // are real per-class thunks; Reset/PreDraw are no-op leaf overrides.
+    // Binary @ 0x001529EC -- Init() delegates to virtual Reset().
     void Init() override;
-    // TODO: 0x00152DE0 -- override body; resolve vs base HUDControl3d Release slot
+    // Binary @ 0x00152DE0 -- Release() nulls the inherited m_Texture SmartPtr.
     void Release() override;
-    // TODO: 0x001529F8 -- override body; resolve vs base HUDControl3d Reset slot
+    // Binary @ 0x001529F8 -- no-op.
     void Reset() override;
-    // TODO: 0x001529FC -- override body; resolve vs base HUDControl3d PreDraw slot
+    // Binary @ 0x001529FC -- no-op.
     void PreDraw(float* viewVec);
     // ---- end lifecycle overrides ----
 };

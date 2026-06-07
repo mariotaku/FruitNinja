@@ -74,14 +74,23 @@ public:
     static char s_DataDir[256];
 
 public:
-    // TODO: 0x00188db8 -- TextureManager::Destroy: tear down the manager (binary body returns this, effectively a no-op release hook)
-    void Destroy();
-    // TODO: 0x00188de4 -- TextureManager::Initialise: forwards to InitialiseInternal to set up the texture cache/subsystem
+    // Binary @ 0x00188db8 -- identity no-op release hook: the binary body is
+    // `return this;` with no teardown work. Returns TextureManager* to match
+    // the binary's calling convention (callers ignore the result).
+    TextureManager* Destroy();
+    // Binary @ 0x00188de4 -- forwards to InitialiseInternal(). The int arg is
+    // accepted but unused by the binary (passed in the call but never read by
+    // the empty InitialiseInternal body).
     void Initialise(int);
-    // TODO: 0x000f609c -- TextureManager::InitialiseInternal: real init body (via PTR_InitialiseInternal_001ecf84); populate cache/state
+    // Binary @ 0x000f609c -- thunk through PTR_InitialiseInternal_001ecf84,
+    // which resolves to the real body @ 0x001a73d0. That body is empty
+    // (`return;`) -- no cache/state population happens here.
     void InitialiseInternal();
-    // TODO: 0x00188dd4 -- TextureManager::LoadIndependent: load a texture outside the shared cache (binary returns an empty SmartPtr<Texture>)
-    void LoadIndependent(void*, int);
+    // Binary @ 0x00188dd4 -- constructs and returns an empty SmartPtr<Texture>
+    // (the body is just `SmartPtr<Texture>(nullptr)` written to the RVO return
+    // slot). The int arg is accepted but never used. Faithful behaviour is to
+    // return a null texture handle.
+    Mortar::SmartPtr<Texture> LoadIndependent(int);
 };
 
 } // namespace Mortar

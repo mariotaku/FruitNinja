@@ -31,6 +31,15 @@ inline float CosIdx(uint16_t idx) {
 
 namespace Math {
 
+// Min/Max templates -- match the binary's calling convention (Math::Min<T>(a,b)).
+// No binary address; standard SAT helpers used by ColAABBLine @ 0x001b5ca8.
+template<class T>
+inline T Min(T a, T b) { return a < b ? a : b; }
+
+template<class T>
+inline T Max(T a, T b) { return a > b ? a : b; }
+
+
 // Binary @ 0x00194d50 — 4096-entry sin LUT @ 0x001be4a4; sinf() is equivalent
 float SinIdx(unsigned short idx);
 

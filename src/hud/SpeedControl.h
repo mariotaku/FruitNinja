@@ -53,13 +53,19 @@ public:
     int  GetType() override { return 1; }
 
     // ---- STUBS (binary) ----
-    // TODO: 0x00160CDC -- HUDControl3d init override; no distinct symbol in binary (vtable slot only)
+    // Binary @ 0x00160CDC -- HUDControl3d Init vtable slot. Binary body is a
+    // single `bx lr` (empty no-op). SpeedControl does all its setup in the
+    // ctor / Update, so this override is intentionally empty in the binary.
     void Init() override;
-    // TODO: 0x00160CE4 -- combo-speed gauge pre-draw transform; no distinct symbol in binary (vtable slot only)
-    void PreDraw(float* viewVec);
-    // TODO: 0x00160CD8 -- reset gauge state to defaults; no distinct symbol in binary (vtable slot only)
+    // Binary @ 0x00160CE4 -- PreDraw vtable slot. Binary body is `bx lr`
+    // (empty no-op). All gauge transform work happens in Update/Draw.
+    void PreDraw(const Vec3& hudScale) override;
+    // Binary @ 0x00160CD8 -- Reset vtable slot. Binary body is `bx lr`
+    // (empty no-op). Gauge state is reset by WaveManager recreating the
+    // control, not by a per-frame Reset.
     void Reset() override;
-    // TODO: 0x00160CE0 -- skip/fast-forward gauge animation; no distinct symbol in binary (vtable slot only)
+    // Binary @ 0x00160CE0 -- Skip vtable slot. Binary body is `bx lr`
+    // (empty no-op). The gauge has no skippable intro animation.
     void Skip() override;
     // Binary @ 0x00160ce8 -- looping-stream restart callback bound to
     // GameSound::SFXPlay's finishCallback arg. Returns false (binary

@@ -357,12 +357,13 @@ public:
     void DownloadedTweakValue(char const*, int);
     // Defunct: online achievements -- no-op stub; binary @ 0x0012a194
     void PublishUnlockedAchievements();
-    // TODO: 0x0012b2b0 -- SetTotal: hash name, compute delta vs GetTotal, AddToTotal(delta); return old total
-    void SetTotal(char const*, int, bool, bool);
-    // TODO: 0x0012a0fc -- TotalExists(name): hash name, delegate to TotalExists(hash)
-    void TotalExists(char const*);
-    // TODO: 0x00129bb4 -- TotalExists(hash): true if hash present in m_Totals or m_SessionTotals
-    void TotalExists(unsigned int);
+    // Binary @ 0x0012b2b0 -- SetTotal: hash name, compute delta vs GetTotal,
+    // AddToTotal(delta); returns the OLD total (uint) prior to the set.
+    unsigned int SetTotal(char const* name, int value, bool trackSession, bool sendNetPacket);
+    // Binary @ 0x0012a0fc -- TotalExists(name): hash name, delegate to TotalExists(hash).
+    bool TotalExists(char const* name);
+    // Binary @ 0x00129bb4 -- TotalExists(hash): true if hash present in m_Totals or m_SessionTotals.
+    bool TotalExists(unsigned int hash);
 };
 
 #ifdef __bada__

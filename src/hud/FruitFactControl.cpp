@@ -197,6 +197,19 @@ static Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(uint8_t comboType) 
 
 static bool s_bLoaded = false;
 
+// ---------------------------------------------------------------------------
+// Baked Zen-panel title buffer (binary global @ 0x0022faa4, reached via
+// GOT[DAT_0013a528]/GOT[DAT_0013c088], both offset 0x0000749c).
+// Single shared 0x80-byte char buffer that Init fills with either the
+// "BEST COMBO: %i FRUIT!" combo headline (LSTR_BEST_COMBO, combo path) or the
+// LSTR_FRUIT_FACT_INTRO intro string (non-combo path). DrawOrder's Zen body
+// renders it as the panel title (binary @ 0x0013be6a / 0x0013bef4). The binary
+// stores it via the engine's BakedString glyph cache; the port keeps the raw
+// char buffer and renders it through Font::DrawString instead (the glyph-cache
+// optimisation is unported -- see // DIFFERS below at the Zen title draw).
+// ---------------------------------------------------------------------------
+static char s_BakedFactTitle[128] = {0};
+
 // Slot order matches binary @ 0x001399fc
 static Mortar::SmartPtr<Mortar::Texture> s_PanelTexClassic;      // slot1  "fact_board.tex"
 static Mortar::SmartPtr<Mortar::Texture> s_PanelTexZen;           // slot2  "diolog_box_big.tex"
@@ -388,16 +401,16 @@ void FruitFactControl::Init() {
     // Per-mode m_FactPosOffset: non-combo default (-69, 53, 0)
     m_FactPosOffset = Vec3(-69.0f, 53.0f, 0.0f);
 
-    // TODO: 0x0013a3ae -- non-combo path: strcpy LSTR_FRUIT_FACT_INTRO (id 0xb1) into BakedString buf @ DAT_0013a528; BakedString unported
+    // Binary @ 0x0013a3ae: comboPath splits the single baked title buffer two
+    // ways. comboPath==1 -> OS_SPrintf the "BEST COMBO: %i FRUIT!" headline;
+    // comboPath==0 -> strcpy the LSTR_FRUIT_FACT_INTRO intro line. Both land in
+    // s_BakedFactTitle (the binary's GOT[DAT_0013a528] global @ 0x0022faa4),
+    // which DrawOrder's Zen body renders as the panel title.
     if (comboPath) {
         // Combo path (binary @ 0x0013a3ae, comboPath branch).
-        // Binary: snprintf(buf, "%s", Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO))
-        // where LSTR_BEST_COMBO = 0x98 = "BEST COMBO: %i FRUIT!". The single
-        // BakedString slot gets the formatted-with-count string. Port renders
-        // it via the Font::DrawString path -- the BakedString optimisation
-        // is unported (it caches the rendered glyph quads).
-        char comboBuf[128];
-        snprintf(comboBuf, sizeof(comboBuf),
+        // Binary: OS_SPrintf(bakedBuf, 0x80, GETSTRING(LSTR_BEST_COMBO), count)
+        // where LSTR_BEST_COMBO = 0x98 = "BEST COMBO: %i FRUIT!".
+        snprintf(s_BakedFactTitle, sizeof(s_BakedFactTitle),
                  Mortar::GETSTRING_CAST_0(LSTR_BEST_COMBO),
                  game_work.m_SaveData->m_BestComboLength);
         m_ComboLength = game_work.m_SaveData->m_BestComboLength;
@@ -409,6 +422,18 @@ void FruitFactControl::Init() {
         m_ComboStarTex = GetComboStarTexture(m_ComboType);
         if (m_FruitIdx != localFruitIdx) m_FruitIdx = localFruitIdx;
         m_FactPosOffset = Vec3(140.0f, -72.0f, 0.0f);
+    } else {
+        // Non-combo path (binary @ 0x0013a44e): strcpy the intro line into the
+        // baked title buffer. The binary calls GETSTRING_CAST_0(0xb1); the port's
+        // StringTable already exposes id 0xb1 as LSTR_FACT_MODE (the Zen fruit-
+        // fact intro headline string). Binary @ 0x0013a3ae
+        const char* intro = Mortar::GETSTRING_CAST_0(LSTR_FACT_MODE); // id 0xb1
+        if (intro) {
+            strncpy(s_BakedFactTitle, intro, sizeof(s_BakedFactTitle) - 1);
+            s_BakedFactTitle[sizeof(s_BakedFactTitle) - 1] = '\0';
+        } else {
+            s_BakedFactTitle[0] = '\0';
+        }
     }
 
     // Always: GetFact with current fruit/fact indices
@@ -714,25 +739,25 @@ void FruitFactControl::DrawOrder(const Vec3& hudScale, int layerMask) {
             m_Texture->UnSet();
         }
 
-        // Title: pos.x - 8.0
-        {
-            const char* title = Mortar::GETSTRING_CAST_0(LSTR_FRUIT_FACT_TITLE);
-            if (!title) title = "FRUIT FACT";
+        // Baked title (binary @ 0x0013be6a / 0x0013bef4): the Zen panel headline
+        // comes from s_BakedFactTitle (filled by Init: "BEST COMBO: N FRUIT!" on
+        // the combo path, else LSTR_FRUIT_FACT_INTRO). TWO passes at scale 20,
+        // align 3, Y offset +89.0 (DAT_0013c074): a dark-brown +(1,-1) stroke
+        // then the main m_FactColour pass.
+        // DIFFERS: original = drew via the engine BakedString glyph cache,
+        // using a raw char buffer + Font::DrawString because the BakedString
+        // glyph-quad cache is unported.
+        if (s_BakedFactTitle[0] != '\0') {
             const float titleX = pos.x - 8.0f;
-            const float titleY = pos.y;
-            // Triple-pass: shadow + dark-brown stroke at scale 20 + main colour at scale 20
-            // Shadow pass
+            const float titleY = pos.y + 89.0f;
+            // Stroke pass (offset +1,-1), dark brown (0x4B,0x32,0x28) @ 200 alpha
             game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                title, Vec3(titleX + 1.0f, titleY, 0.0f),
-                Colour(0, 0, 0, 128), 0x0F);
-            // Dark-brown stroke
+                s_BakedFactTitle, Vec3(titleX + 1.0f, titleY - 1.0f, 0.0f),
+                Colour(0x4B, 0x32, 0x28, 200), 0x03);
+            // Main colour pass
             game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                title, Vec3(titleX + 1.0f, titleY, 0.0f),
-                Colour(0x4B, 0x32, 0x28, 200), 0x0F);
-            // Main colour
-            game_work.pFontMain->DrawString(20.0f, 1.0f, 0.0f,
-                title, Vec3(titleX + 1.0f, titleY, 0.0f),
-                m_FactColour, 0x0F);
+                s_BakedFactTitle, Vec3(titleX, titleY, 0.0f),
+                m_FactColour, 0x03);
         }
 
         // Fact body: wrap 127/89, step 0.25

@@ -122,12 +122,30 @@ Mortar::SmartPtr<Texture> TextureManager::LoadLocalisedTexture(const char* name)
 } // namespace Mortar
 
 namespace Mortar {
-// TODO: 0x00188db8 -- TextureManager::Destroy: tear down the manager (binary body returns this, effectively a no-op release hook)
-void TextureManager::Destroy() {}
-// TODO: 0x00188de4 -- TextureManager::Initialise: forwards to InitialiseInternal to set up the texture cache/subsystem
-void TextureManager::Initialise(int) {}
-// TODO: 0x000f609c -- TextureManager::InitialiseInternal: real init body (via PTR_InitialiseInternal_001ecf84); populate cache/state
-void TextureManager::InitialiseInternal() {}
-// TODO: 0x00188dd4 -- TextureManager::LoadIndependent: load a texture outside the shared cache (binary returns an empty SmartPtr<Texture>)
-void TextureManager::LoadIndependent(void*, int) {}
+
+// Binary @ 0x00188db8 -- body is literally `return this;`. No teardown work;
+// it is an identity no-op release hook. We mirror that exactly.
+TextureManager* TextureManager::Destroy() {
+    return this;
+}
+
+// Binary @ 0x00188de4 -- tail-calls InitialiseInternal(); the int argument is
+// pushed by callers but never consumed (the eventual body reads nothing).
+void TextureManager::Initialise(int) {
+    InitialiseInternal();
+}
+
+// Binary @ 0x000f609c -- thunk through PTR_InitialiseInternal_001ecf84 to the
+// real body @ 0x001a73d0, which is empty (`return;`). The texture cache is
+// populated lazily on demand via Load(), so there is nothing to do at init.
+void TextureManager::InitialiseInternal() {
+}
+
+// Binary @ 0x00188dd4 -- constructs an empty SmartPtr<Texture> into the RVO
+// return slot and returns it; the int argument is never read. Faithful
+// behaviour is an empty (null) texture handle.
+Mortar::SmartPtr<Texture> TextureManager::LoadIndependent(int) {
+    return Mortar::SmartPtr<Texture>();
+}
+
 }  // namespace Mortar

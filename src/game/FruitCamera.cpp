@@ -57,13 +57,23 @@ void FruitCamera::UpdateIdle(float dt) {
     (void)dt;
 }
 
-// 0x00180c50
+// Binary @ 0x00180c50 — delta-preserving follow.
+// ASM-verified semantic (re-analyst): when bound, the camera re-targets its
+// lookAt onto the followed entity's position while translating m_pos by the
+// SAME delta, so the eye<->lookAt offset stays invariant as the entity moves:
+//   delta   = m_lookAt - entity->pos   (operator-, dest r0, operands r1/r2)
+//   m_lookAt = entity->pos             (ldm/stm at +0x10 of entity = Entity::pos)
+//   m_pos   -= delta                   (operator-=)
+// Net: m_pos += (entity->pos - oldLookAt), preserving (m_pos - m_lookAt).
 void FruitCamera::UpdateFollow(float dt) {
     (void)dt;
     if (m_pFollowEntity == 0) {
         IdleCamera();
+    } else {
+        Vec3 delta = m_lookAt - m_pFollowEntity->pos;
+        m_lookAt = m_pFollowEntity->pos;
+        m_pos -= delta;
     }
-    // TODO: follow entity position when entity system is wired
 }
 
 // 0x00180a20
@@ -92,11 +102,17 @@ Mortar::Entity* FruitCamera::GetFollowEntity() {
 //
 // ASM-verified: 2026-05-06T00:00 binary @ 0x001810ac..0x001813d1 (asm-inspector)
 // ASM-verified: 2026-05-06T00:00 binary @ 0x0019e7a8..0x0019e828 (asm-inspector)
-//
-// Cases 1/2/3 not needed by GameDraw (only PT_STANDARD is called).
-// TODO: 0x001810ac — PT_ROTATED_CW / PT_ROTATED_CCW / PT_GENERIC ortho variants
+// Binary @ 0x001810ac — dispatch verified (re-analyst): ARM switch order is
+//   case 2 -> 0x00181298 (PT_ROTATED_CCW)
+//   case>2 -> 0x001810de (PT_GENERIC)
+//   case 0 -> 0x0018111e (PT_STANDARD)
+//   case 1 -> 0x001811c4 (PT_ROTATED_CW)
+// Callers (only two in retail): GameDraw @ 0x0016b94a passes (PT_STANDARD,false);
+// DrawStartFade @ 0x0016ab38 passes (PT_GENERIC,true). PT_ROTATED_CW/CCW are
+// DEAD — no caller passes 1 or 2; they are the Bada portrait/landscape rotated
+// view variants (normalised perpendicular target via operator/ + cross-product
+// orientation build @ 0x00103290) and are intentionally NOT ported here.
 void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
-    (void)perspType;
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // Cache condition matches binary: `if (!m_bDirty && !forceUpdate)`.
@@ -110,15 +126,27 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
         return;
     }
 
-    // View: camera looks straight down +Z with optional shake target offset.
+    // View: camera looks straight down +Z.
     // Binary @ 0x00181180..0x0018118e passes (eye, up, at) positionally.
     // Port matches the positional order: SetupLookAt(eye, upHint, target).
     // The port reinterprets slot 3 as `target` (canonical glLookAt) because
     // it skips the binary's compensating orientation-matrix multiply --
     // see MatrixManager::SetupLookAt comment.
-    Vec3 eye(m_Target.x, m_Target.y, 1.0f);
-    Vec3 up (0.0f, 1.0f, 0.0f);
-    Vec3 at (m_Target.x, m_Target.y, 0.0f);
+    //
+    // PT_STANDARD (case 0, GameDraw): eye/at carry the m_Target shake offset so
+    //   the whole scene jitters with CreateCameraShake. Binary @ 0x0018111e.
+    // PT_GENERIC (case 3, DrawStartFade @ 0x001810de): fixed eye=(0,0,1),
+    //   target = _Vector3<float>::Zero (BSS global @ 0x001F4328 = (0,0,0)) --
+    //   NO shake offset, so the fullscreen fade overlay renders un-jittered.
+    Vec3 eye, at;
+    if (perspType == PT_GENERIC) {
+        eye = Vec3(0.0f, 0.0f, 1.0f);
+        at  = Vec3(0.0f, 0.0f, 0.0f);
+    } else {
+        eye = Vec3(m_Target.x, m_Target.y, 1.0f);
+        at  = Vec3(m_Target.x, m_Target.y, 0.0f);
+    }
+    Vec3 up(0.0f, 1.0f, 0.0f);
     mm.SetupLookAt(eye, up, at);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 

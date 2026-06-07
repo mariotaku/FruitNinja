@@ -32,11 +32,12 @@ public:
     Vec3 Direction() const { return b - a(); }
     float LengthSq() const { Vec3 d = Direction(); return d.x*d.x + d.y*d.y + d.z*d.z; }
 
-    // TODO: 0x0019f4f0 -- line-segment vs line-segment closest-approach test;
-    //   computes Direction()/MagnitudeSqr/Dot of the two segments, clamps params,
-    //   and writes the separating/penetration vector to the out Vec3. Body is an
-    //   empty stub; port the binary math (impl @ 0x0019f4f0, thunk @ 0x000f8508).
-    void ColLineLine(ColLine*, ColLine*, Vec3*);
+    // Binary @ 0x0019f4f0 (thunk @ 0x000f8508). Line-segment vs line-segment
+    // closest-approach test; returns 1 if the segments approach within the
+    // distance epsilon (with both clamped params in [0,1]) and writes the
+    // along-A separation vector to the out Vec3, else returns 0.
+    // a = first segment (binary `this`), b = second segment (binary param_1).
+    int ColLineLine(ColLine* a, ColLine* b, Vec3* out);
 };
 
 #ifdef __bada__

@@ -123,9 +123,32 @@ private:
     void RemoveBackButton();
 
 public:
-    // TODO: 0x0012eb30 -- play quit SFX, set m_State=2 (fade out), launch the
-    // back button entity (+0x134) with random velocity (RandFloat+5, -RandFloat,
-    // DAT_0012ebfc) and call TutorialControl::ResetTutePos(0).
+    // Binary @ 0x0012eb30 (re-analyst 2026-06-07). AboutScreen quit/back-out
+    // handler. Faithful spec resolved from the ARM decompile + GOT/DAT reads:
+    //   1. GameSound::SFXPlay("menu-bomb", 1.0f, 1.0f, <delegate>)  — the SFX
+    //      string at .rodata 0x001b96c9 ("menu-bomb"); the delegate arg wraps a
+    //      member callback (Global::~Global cleanup in binary; port may pass an
+    //      empty/no-op completion delegate). GameSound* is game->+0x188.
+    //   2. m_State = 2  (start fade-out; field21_0x9c).
+    //   3. Launch the back button's fruit piece: f = m_pBackButton->m_pFruitPiece
+    //      (MenuButton +0x134). Binary:
+    //        strb #1 -> f + 0x80   (single BYTE store into the low byte of
+    //                               Fruit::m_ChuckDelay -> ~1.4e-45, a tiny
+    //                               positive value that gates physics off for
+    //                               one frame then decrements negative next
+    //                               frame, i.e. "launch now"; see Fruit::Update
+    //                               m_ChuckDelay countdown @ 0x001777ce).
+    //        f->vel = Vec3(RandFloat_5() + 5.0f, -RandFloat_5(), 0.0f)
+    //                 written to f + 0x1c/0x20/0x24. z = DAT_0012ebfc = 0.0f.
+    //                 RandFloat_5 = RandFloat_5_Draw @ 0x0012e5e8
+    //                 = (Random::Rand32()/RAND_DIVISOR) * 5.0f  -> [0,5).
+    //   4. TutorialControl::ResetTutePos((MenuButton*)0)  — the MenuButton*
+    //      overload @ 0x00162f04 with a NULL button: skips the reposition
+    //      block, only sets field1_0x7c = -10.0. (NOT the Vec3 overload.)
+    // NOTE: the current AboutScreen.cpp body diverges (missing the fruit-piece
+    // launch in step 3; uses rand()%500 instead of RandFloat_5_Draw; calls the
+    // Vec3 ResetTutePos overload instead of the null MenuButton* overload).
+    // Those are .cpp-side fidelity fixes — see structured-output notes.
     void QuitGameCallback();
 };
 

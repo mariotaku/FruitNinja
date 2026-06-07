@@ -19,25 +19,37 @@ struct MeshMaterial;
 // sizeof = 76 (0x4C), vtable @ 0x001eb720.
 // Binary layout:
 //   +0x00  Mortar::GeometryBinding_Bada base sub-object (68 bytes, 0x00..0x43)
-//              vptr at +0x00; base fields (vertex stream(s), index stream,
-//              effect-group SmartPtrs) at +0x04..+0x43 — layout NOT YET RE'd.
 //   +0x44  Event1<GeometryBinding&> m_OnDestroyed (8 bytes)
 //   +0x4C  end
-//
-// TODO: 0x001a3990 -- GeometryBinding_Bada base layout (0x04..0x43) not yet RE'd;
-//   GeometryBinding_Bada body is a 1-byte Ghidra placeholder. RE base separately
-//   to fill in VertexStreamAdd/IndexStreamSet/EffectGroupSet field offsets.
 //
 // Event1<T> is 8 bytes (Delegate0<void> = 36 bytes per policy? NO — Event1 is the
 // event subscription list, 8 bytes = two pointers: head + tail or similar).
 // Confirmed size: Event1 sub-object at +0x44, object ends at +0x4C.
+
+// GeometryBinding_Bada base layout fully RE'd from the ctor body.
+// Binary @ 0x001a57bc (GeometryBinding_Bada::GeometryBinding_Bada):
+//   ReferenceCounter::ReferenceCounter(this)            // +0x00..0x0B (vptr + refcount)
+//   *(int*)this = vtable + 8                            // vptr fixup
+//   SmartPtr<EffectGroup>::SmartPtr(this+0x0c)          // +0x0C  m_EffectGroup     (SmartPtr, 4 bytes)
+//   vector<SmartPtr<IVertexStream>>::vector(this+0x10)  // +0x10  m_VertexStreams   (std::vector, 12 bytes)
+//   SmartPtr<IIndexStream>::SmartPtr(this+0x1c)         // +0x1C  m_IndexStream     (SmartPtr, 4 bytes)
+//   map<string,SmartPtr<IIndexStream>>::map(this+0x20)  // +0x20  m_NamedIndexStreams (std::map, 24 bytes)
+//   vector<EffectBinding>::vector(this+0x38)            // +0x38  m_EffectBindings  (std::vector, 12 bytes)
+//   end                                                 // +0x44 = 68 bytes (0x44) ✓
+// The member types IVertexStream / IIndexStream / GeometryBinding_Bada::EffectBinding
+// (and the nested PassBinding the binding pipeline walks) are unported subsystems;
+// GeometryBinding is constructed by the mesh loader but never dispatched through
+// (Geometry::Render bypasses PassBinding::Apply for the GLES2 path), so the base
+// body is kept as a correctly-sized opaque pad rather than pulling those types in.
+// The exact field offsets above are the spec if/when the binding pipeline is ported.
+// Binary @ 0x001a57bc
 class GeometryBinding_Bada : public ReferenceCounter {
 public:
     GeometryBinding_Bada() {}
     virtual ~GeometryBinding_Bada() {}
-    // TODO: 0x001a3990 -- GeometryBinding_Bada own fields at +0x0C..+0x43 (56 bytes) not yet RE'd
-    // (ReferenceCounter base occupies +0x00..+0x0B = 12 bytes; own fields fill +0x0C..+0x43)
-    char _base_pad[56];  // +0x0C..+0x43 opaque base body; binary layout unknown
+    // Base body, RE'd from the ctor (see layout table above). ReferenceCounter base
+    // occupies +0x00..+0x0B (12 bytes); own fields fill +0x0C..+0x43 (56 bytes).
+    char _base_pad[56];  // +0x0C..+0x43: m_EffectGroup/m_VertexStreams/m_IndexStream/m_NamedIndexStreams/m_EffectBindings
 };
 
 // Event1<GeometryBinding&> placeholder (8 bytes per binary record).

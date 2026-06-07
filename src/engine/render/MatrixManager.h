@@ -87,12 +87,13 @@ public:
     const MatrixStack& GetViewStack() const { return m_View; }
     const MatrixStack& GetTextureStack() const { return m_Texture; }
 
-    // TODO: 0x0019e668 -- build a perspective projection matrix and apply it.
-    //   Binary args (top, bottom, near, far, ?, out): m[1][1]=bottom/top,
-    //   m[0][0]=(bottom/top)/arg3, m[2][2]=(far+near)/(near-far),
-    //   m[3][2]=2*near*far/(near-far), m[2][3]=-1, rest 0; if out==null use a
-    //   local. Then m_Projection.SetCurrentMatrix(out) and UploadAll().
-    void SetupPerspective(float, float, float, float, float, Matrix44*);
+    // Binary @ 0x0019e668. Builds a column-major GL perspective projection and
+    // applies it via m_Projection.SetCurrentMatrix + UploadAll(). Args are
+    // (top, bottom, aspect, near, far, out); out==null uses a local matrix.
+    //   m[0]=(bottom/top)/aspect, m[5]=bottom/top, m[10]=(far+near)/(near-far),
+    //   m[11]=-1, m[14]=2*near*far/(near-far), all other entries 0.
+    void SetupPerspective(float top, float bottom, float aspect,
+                          float nearVal, float farVal, Matrix44* out);
 
 private:
     // Matches 0x0019e2b4 — recomputes cached matrices based on dirty versions

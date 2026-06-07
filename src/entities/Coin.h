@@ -84,14 +84,36 @@ public:
 
     // --- Public API ------------------------------------------------------
 
-    // 0x00173454 — set up all coin fields for a launch
-    // Binary signature: InitCoin(_Vector3<float>, _Vector3<float>, ushort,
-    //   int, ulong, ulong, Delegate1<void,Coin*>, float, bool).
-    // Vec3s by VALUE per HFA classification (s0/s1/s2, then s3/s4/s5).
-    // ASM-verified: 2026-05-24 binary @ 0x00163454 (re-analyst)
-    // TODO: 0x00163454 — port has 11 params, binary has 9. Port adds
-    //   flyFXName / collectFXName that binary lacks. Resolve param-count
-    //   divergence (likely port-side over-port; investigate via xrefs).
+    // 0x00173454 — set up all coin fields for a launch.
+    // ASM-verified: 2026-06-07 binary @ 0x00173454 (disassembly inspected).
+    //
+    // Binary signature (HFA): InitCoin(_Vector3<float> gravity /*s0-s2*/,
+    //   _Vector3<float>* pos /*r1*/, _Vector3<float>* target /*r2*/,
+    //   ushort baseAngle /*r3*/, ushort launchAngle /*sp+0x.. -> +0x36 angle*/,
+    //   int coinValue /*sp -> +0x3c*/, ulong flyFXHash /*sp -> +0x54*/,
+    //   ulong collectFXHash /*sp -> +0x58*/, Delegate1<void,Coin*> onArrived
+    //   /*sp -> +0x70*/, bool silent /*sp -> +0x48*/).
+    //
+    // Field writes proven from disassembly:
+    //   +0x44 m_Timer   = -gravity.x           (vneg s16; vstr [r4,#0x44])
+    //   +0x36 angle     = (ushort)launchAngle  (strh r10,[r4,#0x36])
+    //   +0x40 m_State   = 0                     (str r6,[r4,#0x40])
+    //   +0x3c m_CoinValue                       (str [r4,#0x3c])
+    //   +0x4c m_Speed   = (500 + rand/524287*550) * 0.66
+    //   +0x10 pos       = *r1 ; +0x5c target = *r2 ; +0x1c vel = DAT vec
+    //   +0x54 m_FlyFXHash     = (raw uint32, NOT a name)
+    //   +0x58 m_CollectFXHash = (raw uint32, NOT a name)
+    //   +0x68/+0x6c emitters = 0 ; +0x70 m_OnArrived = onArrived ; +0x50 = 0
+    //
+    // DIFFERS: original InitCoin takes pre-hashed flyFXHash / collectFXHash
+    //   (uint32, hashed by MakeCoins via StringHash before the call); the port
+    //   passes the FX names through and StringHashes them inside InitCoin
+    //   (Coin.cpp). Net effect is identical (StringHash(name) lands in the same
+    //   field). The earlier "port over-ported names the binary lacks" note was
+    //   wrong: the binary's FX-name args are real, with "coin_fly"/"coin_collect"
+    //   defaults built in MakeCoins (DAT_00173784/DAT_00173788). The 9-vs-11
+    //   "param count" gap was an HFA decompiler artifact (Vec3-by-value counts
+    //   as one logical arg but three VFP regs; hidden `this`).
     void InitCoin(Vec3 pos, Vec3 gravity, uint16_t baseAngle,
                   int playerIdx, uint16_t launchAngle, int coinValue,
                   const char* flyFXName, const char* collectFXName,
@@ -101,12 +123,29 @@ public:
     void Arrived();
 
     // 0x00173568 — spawn N coins via Mortar::ActorManager::Add(2).
-    // Binary signature: MakeCoins(int, int, _Vector3<float>, ushort, ushort,
-    //   _Vector3<float>*, float, float, char*, char*, Delegate1, bool).
-    // delay by VALUE (HFA → s0/s1/s2); spawnPos by POINTER (integer reg).
-    // ASM-verified: 2026-05-24 binary @ 0x00163568 (re-analyst)
-    // TODO: 0x00163568 — port has 11 params, binary has 12. Binary inserts
-    //   an extra `float` between spawnPos and flyFXName -- resolve.
+    // ASM-verified: 2026-06-07 binary @ 0x00173568 (disassembly inspected).
+    //
+    // Binary signature (HFA): MakeCoins(int totalCoins /*r0*/,
+    //   int coinsPerCoin /*r1*/, _Vector3<float> delay /*s0-s2*/,
+    //   ushort baseAngle /*sp+0xc0 -> r11*/, ushort angleSpread,
+    //   _Vector3<float>* spawnPos /*r2 -> r7*/, char* flyFXName /*sp+0xc4*/,
+    //   char* collectFXName /*sp+0xc8*/, Delegate1<void,Coin*> onArrived
+    //   /*sp+0xd0*/, bool silent /*sp+0xd4*/).
+    //
+    // Behaviour proven from disassembly:
+    //   - flyFXName  default = DAT_00173784 (-> r6 base) when null  (0x1735e0)
+    //   - collectFXName default = DAT_00173788 when null            (0x1735ee)
+    //   - both names StringHash'd here (0x1735e8/0x1735f6) and the resulting
+    //     uint32 hashes passed to InitCoin (NOT the names themselves).
+    //   - per-coin loop: ActorManager::GetInstance()->Add(2,true), random
+    //     launch angle baseAngle +/- spread (Rand32 + SinIdx/CosIdx scatter),
+    //     up to 10 retries against screen bounds, then InitCoin(...).
+    //
+    // DIFFERS: the "extra float between spawnPos and flyFXName" in the earlier
+    //   note was an HFA mis-read of the `delay` Vec3 (s0/s1/s2). There is no
+    //   stray scalar: the binary has exactly the args listed above. Port keeps
+    //   `Vec3 delay` (delay.x = per-coin step, delay.y = total cap) and passes
+    //   names to InitCoin (hashing deferred into InitCoin) — same net effect.
     static void MakeCoins(int totalCoins, int coinsPerCoin, Vec3 delay,
                           uint16_t baseAngle, uint16_t angleSpread,
                           Vec3* spawnPos,

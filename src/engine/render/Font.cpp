@@ -895,23 +895,69 @@ void Font::DrawString(float scale, float /*yLineFactor (ignored)*/, float z,
 // Unported overloads (binary signatures present; bodies forward/TBD)
 // ---------------------------------------------------------------------------
 
-// TODO: 0x00198e44 -- packed Vec3/Vec2 shape of the full Font_DrawString;
-// body should forward to the implemented DrawString(scale,yLineFactor,rotZ,
-// iter,pos,colour,maxWH,alignment,z,clipRect) overload above.
-void Font::DrawString(Utf8StringIterator, Vec3, Colour, float, Vec2, int, float, MortarRectangleDec*, float) {}
+// Binary @ 0x00198e44 -- packed Vec3/Vec2 ABI shape of the full Font_DrawString
+// (Ghidra's alternate arg-decode of the same symbol the canonical overload
+// implements). Forward to the implemented
+// DrawString(scale,yLineFactor,rotZ,iter,pos,colour,maxWH,alignment,z,clipRect).
+// The binary's wrapper pins yLineFactor = 1.0 (vmov.f32 s1, 0x3f800000 @
+// 0x00199b1c); this shape originates from that wrapper, so yLineFactor = 1.0.
+void Font::DrawString(Utf8StringIterator iter, Vec3 pos, Colour colour, float scale,
+                      Vec2 maxWH, int alignment, float rotZ, MortarRectangleDec* clipRect,
+                      float z)
+{
+    DrawString(scale, /*yLineFactor=*/1.0f, rotZ, iter, pos, colour, maxWH, alignment, z, clipRect);
+}
 
-// TODO: 0x00199aa0 -- by-value-arg shape of the binary DrawString wrapper;
-// body should forward to the implemented DrawString(iter&,colour&,alignment,...)
-// wrapper above.
-void Font::DrawString(Utf8StringIterator, float, float, float, Colour, float, float, float, int, MortarRectangleDec*, float) {}
+// Binary @ 0x00199aa0 -- by-value-arg ABI shape of the binary DrawString wrapper
+// (alternate Ghidra decode of the same symbol the canonical wrapper implements).
+// Forward to the implemented
+// DrawString(iter&,colour&,alignment,posX,posY,posZ,scale,maxWHx,maxWHy,rotZ,clip).
+void Font::DrawString(Utf8StringIterator iter, float posX, float posY, float posZ,
+                      Colour colour, float scale, float maxWHx, float maxWHy,
+                      int alignment, MortarRectangleDec* clip, float rotZ)
+{
+    DrawString(iter, colour, alignment, posX, posY, posZ, scale, maxWHx, maxWHy, rotZ, clip);
+}
 
 // TODO: 0x001985b0 -- word-advance helper for word-wrap: measure the next
-// word's xadvance from iter, breaking at space/newline/wrap-limit.
+// word's xadvance from iter, breaking at a real line-break point.
+// BLOCKED: faithful port requires the Mortar::WordWrap subsystem
+// (WordWrap::CanBreakLineAt @ 0x0019acc4 -> IsWhiteSpace / IsNonBeginningChar /
+// IsEastAsianChar + the East-Asian line-break table @ DAT_0019adc4 + locale
+// flags), none of which is ported. The binary also tag-skips <font ...>/</font>
+// via OS_strnicmp before each break test. This helper is not called by any
+// gameplay code (only an exported symbol + data ref); the port's space-based
+// wrap in DrawString/GetStringHeight covers shipping needs until WordWrap lands.
 float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float) { return 0.0f; }
 
-// TODO: 0x001984e8 -- 2-arg glyph lookup overload (codepoint + page index);
-// resolve a CharTemplate* for the given page.
-Font::CharTemplate* Font::GetCharTemplate(long, int) { return nullptr; }
+// Binary @ 0x001984e8 -- the engine's canonical single-codepoint glyph lookup.
+// param_1 is `this` (Ghidra typed it `long`); param_2 is the codepoint.
+//   cp < 0   : cp += 0x100  (signed-byte codepoint wraps into 0x80..0xFF), then
+//              fall through to the lookup-table path
+//   cp > 0xFF: skip the lookup table, linear-search m_Glyphs by id
+//   else     : try m_GlyphLookup[cp]; if null, fall back to linear search
+// Note: unlike the port's GetCharTemplate(uint32_t), the binary falls back to a
+// linear id-search even for cp < 256 when the lookup slot is null.
+// Linear search walks m_Glyphs (stride sizeof(CharTemplate)=0x24), comparing the
+// uint16 id at offset 0, returning the first match or nullptr after m_GlyphCount.
+Font::CharTemplate* Font::GetCharTemplate(long /*this_redundant*/, int cp) {
+    if (cp < 0) {
+        cp += 0x100;
+    } else if (cp > 0xFF) {
+        // codepoint out of lookup-table range: linear search only
+        for (int i = 0; i < m_GlyphCount; i++) {
+            if ((int)m_Glyphs[i].id == cp) return &m_Glyphs[i];
+        }
+        return nullptr;
+    }
+    CharTemplate* g = m_GlyphLookup[cp];
+    if (g) return g;
+    // null lookup slot: fall back to linear id-search (binary @ 0x001984fa)
+    for (int i = 0; i < m_GlyphCount; i++) {
+        if ((int)m_Glyphs[i].id == cp) return &m_Glyphs[i];
+    }
+    return nullptr;
+}
 
 // ASM-spec: 2026-05-11 binary @ 0x001988f0 (re-analyst).
 //   maxWidth <= 0: walks string counting '\n', returns lineH * (n+1).
@@ -961,9 +1007,9 @@ float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth
     return lineH * (float)lines;
 }
 
-// TODO: 0x001988a8 -- by-value-iter shape of MeasureString (same binary symbol
-// as the const-ref overload above); body should forward to
-// GetLineLength(iter, 0.0f, NULL) like the implemented overload.
-float Font::MeasureString(Utf8StringIterator) { return 0.0f; }
+// Binary @ 0x001988a8 -- by-value-iter ABI shape of MeasureString (same binary
+// symbol as the const-ref overload above). Forwards to GetLineLength(iter, 0, NULL)
+// exactly like the implemented overload.
+float Font::MeasureString(Utf8StringIterator iter) { return GetLineLength(iter, 0.0f, nullptr); }
 
 } // namespace Mortar

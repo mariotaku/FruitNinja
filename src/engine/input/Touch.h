@@ -161,8 +161,11 @@ public:
     int GetTouchInRegion(float left, float right, float bottom, float top,
                          int preferredSlot = -1) const;
 
-    // Note: binary has no Touch::Clear; symbol-diff false positive.
-    // (Removed from port.)
+    // Port specific: no binary symbol for Touch::Clear; added so InputDeviceBada::Reset()
+    // (binary @ 0x00195c00) can wipe all pending touch state. Binary equivalent is an
+    // inline memset of the states arrays at the Reset() call site.
+    // TODO: 0x00195c00 -- verify binary inlines the touch clear or calls a helper.
+    void Clear();
 
     // Port-specific helpers (not in binary) -- used by SDL translator.
     // Route through __UpdateInternal for ring-buffer ordering.
