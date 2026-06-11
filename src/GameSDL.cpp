@@ -50,6 +50,71 @@ bool Game::init(void* win, void* gl) {
     return true;
 }
 
+// Port specific: one complete game tick — poll events, update, render, present.
+// Extracted from run() so the Emscripten main loop can call it as a callback
+// (emscripten_set_main_loop_arg) without the surrounding while-loop or SDL_Delay.
+// Native Game::run() below calls this each iteration; behaviour is identical.
+void Game::frameTick() {
+    // === SDL events -> InputManager ===
+    SDL_Event ev;
+    while (SDL_PollEvent(&ev)) {
+        if (ev.type == SDL_QUIT) {
+            running = false;
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
+            running = false;
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
+            FN::g_DebugHitboxes = !FN::g_DebugHitboxes;
+            LOG_DEBUG("Debug", "Hitboxes %s", FN::g_DebugHitboxes ? "ON" : "OFF");
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F2) {
+            // Port specific: glPolygonMode(GL_LINE) around the 3D
+            // entity draw pass. Desktop GL only -- no-op under GLES.
+            FN::g_DebugWireframe = !FN::g_DebugWireframe;
+            LOG_DEBUG("Debug", "Wireframe %s", FN::g_DebugWireframe ? "ON" : "OFF");
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
+            // Port specific: debug-only, no binary equivalent
+            FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
+            LOG_DEBUG("Debug", "timeScale = %.1f", FN::g_DebugTimeScale);
+        } else {
+            if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
+        }
+    }
+
+    // === Game tick (matches FruitNinja::Draw at 0x1824e0) ===
+
+    // Original: dt = 0.0; Mortar::SystemManager::Update(&dt) writes fixed 1/60;
+    // then passes dt to update + draw functions
+    game_work.dt = 0.0f;
+    SystemManager::GetInstance().Update(&game_work.dt);
+
+    // Port specific: debug time-scale. We scale dt so every
+    // dt-integrating update (physics, velocity, acceleration)
+    // slows smoothly. Per-tick lerps (alpha fades, state timer
+    // decays) don't read dt, so they read FN::g_DebugTimeScale
+    // directly at the lerp site -- at 1.0x this is a no-op, at
+    // 0.1x the lerp advances 10x less per frame. Result: both
+    // categories slow uniformly AND render every real frame, so
+    // animations stay smooth at slow speed.
+    game_work.dt *= FN::g_DebugTimeScale;
+
+    // Update: 3-state dispatcher
+    GameTaskUpdate(game_work.dt);
+
+    // Per-frame GL setup. Binary calls DisplayManagerBada::BeginFrame
+    // (0x0019dfec) which handles clears, depth/blend state reset, and
+    // matrix stack reset. glViewport isn't touched by BeginFrame -- our
+    // port re-applies it each frame so window resizes are picked up.
+    int ww, wh;
+    SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
+    glViewport(0, 0, ww, wh);
+    Mortar::DisplayManager::GetInstance().BeginFrame();
+
+    // Draw: state-specific rendering
+    GameTaskDraw(game_work.dt);
+
+    // Present
+    SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+}
+
 // Matches: FruitNinja::Draw (the real game tick) called in a loop
 // Original: OnTimerExpired fires every 10ms (100fps), dt fixed at 1/60
 void Game::run() {
@@ -58,64 +123,7 @@ void Game::run() {
     while (running) {
         Uint32 frameStart = SDL_GetTicks();
 
-        // === SDL events → InputManager ===
-        SDL_Event ev;
-        while (SDL_PollEvent(&ev)) {
-            if (ev.type == SDL_QUIT) {
-                running = false;
-            } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
-                running = false;
-            } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F1) {
-                FN::g_DebugHitboxes = !FN::g_DebugHitboxes;
-                LOG_DEBUG("Debug", "Hitboxes %s", FN::g_DebugHitboxes ? "ON" : "OFF");
-            } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F2) {
-                // Port specific: glPolygonMode(GL_LINE) around the 3D
-                // entity draw pass. Desktop GL only -- no-op under GLES.
-                FN::g_DebugWireframe = !FN::g_DebugWireframe;
-                LOG_DEBUG("Debug", "Wireframe %s", FN::g_DebugWireframe ? "ON" : "OFF");
-            } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F7) {
-                // Port specific: debug-only, no binary equivalent
-                FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
-                LOG_DEBUG("Debug", "timeScale = %.1f", FN::g_DebugTimeScale);
-            } else {
-                if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
-            }
-        }
-
-        // === Game tick (matches FruitNinja::Draw at 0x1824e0) ===
-
-        // Original: dt = 0.0; Mortar::SystemManager::Update(&dt) writes fixed 1/60;
-        // then passes dt to update + draw functions
-        game_work.dt = 0.0f;
-        SystemManager::GetInstance().Update(&game_work.dt);
-
-        // Port specific: debug time-scale. We scale dt so every
-        // dt-integrating update (physics, velocity, acceleration)
-        // slows smoothly. Per-tick lerps (alpha fades, state timer
-        // decays) don't read dt, so they read FN::g_DebugTimeScale
-        // directly at the lerp site -- at 1.0x this is a no-op, at
-        // 0.1x the lerp advances 10x less per frame. Result: both
-        // categories slow uniformly AND render every real frame, so
-        // animations stay smooth at slow speed.
-        game_work.dt *= FN::g_DebugTimeScale;
-
-        // Update: 3-state dispatcher
-        GameTaskUpdate(game_work.dt);
-
-        // Per-frame GL setup. Binary calls DisplayManagerBada::BeginFrame
-        // (0x0019dfec) which handles clears, depth/blend state reset, and
-        // matrix stack reset. glViewport isn't touched by BeginFrame -- our
-        // port re-applies it each frame so window resizes are picked up.
-        int ww, wh;
-        SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
-        glViewport(0, 0, ww, wh);
-        Mortar::DisplayManager::GetInstance().BeginFrame();
-
-        // Draw: state-specific rendering
-        GameTaskDraw(game_work.dt);
-
-        // Present
-        SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+        frameTick();
 
         // Frame pacing: original Bada timer fires every 10ms (100fps)
         // All game logic uses fixed dt=1/60, tuned for this tick rate

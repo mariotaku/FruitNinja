@@ -219,7 +219,7 @@ static_assert(__builtin_offsetof(Bomb, m_OrigScale)       == 0x98, "m_OrigScale 
 static_assert(__builtin_offsetof(Bomb, m_Countdown)       == 0xA4, "m_Countdown binary offset wrong");
 static_assert(__builtin_offsetof(Bomb, m_SpeedMult)       == 0xA8, "m_SpeedMult binary offset wrong");
 static_assert(sizeof(Bomb)                                == 0xB0, "sizeof(Bomb) wrong (binary 0xB0 / 176)");
-#else
+#elif !defined(__EMSCRIPTEN__)
 // Always-on port layout asserts (desktop x64). Offsets reflect: 8-byte vtable,
 // int-widened entityType (+4), 40-byte Delegate0<void>, 8-byte pointers,
 // and two extra port floats m_RotAccumX/Y (8 bytes after m_RotY).

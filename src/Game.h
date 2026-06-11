@@ -121,6 +121,7 @@ struct Game : public Mortar::MortarGame {
     bool init(void* win, void* gl);   // win = SDL_Window*, gl = SDL_GLContext (opaque to header)
     void shutdown();
     void run();
+    void frameTick();               // Port specific: one game tick; used by Emscripten main loop
     void runFrames(int frameCount);
 };
 

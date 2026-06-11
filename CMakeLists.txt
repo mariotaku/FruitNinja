@@ -79,76 +79,102 @@ endif()
 #   GL_COMPAT  - Desktop GL compatibility profile (<GL/gl.h>).
 #                Windows/macOS/Linux dev; Mesa llvmpipe for swrast.
 #   ES1        - OpenGL ES 1.1 (<GLES/gl.h>) for webOS / embedded.
-set(FRUIT_GL_API "GL_COMPAT" CACHE STRING "GL backend: GL_COMPAT or ES1")
-set_property(CACHE FRUIT_GL_API PROPERTY STRINGS GL_COMPAT ES1)
+if (EMSCRIPTEN)
+    # Port specific: Emscripten uses LEGACY_GL_EMULATION (fixed-function over WebGL).
+    # Force FRUIT_GL_API to the new EMSCRIPTEN path; skip the user-visible cache entry.
+    set(FRUIT_GL_API "EMSCRIPTEN")
+else()
+    set(FRUIT_GL_API "GL_COMPAT" CACHE STRING "GL backend: GL_COMPAT or ES1")
+    set_property(CACHE FRUIT_GL_API PROPERTY STRINGS GL_COMPAT ES1)
+endif()
 message(STATUS "FRUIT_GL_API = ${FRUIT_GL_API}")
 
 if (FRUIT_GL_API STREQUAL "GL_COMPAT")
     add_compile_definitions(FRUIT_GL_API_GL_COMPAT=1)
 elseif (FRUIT_GL_API STREQUAL "ES1")
     add_compile_definitions(FRUIT_GL_API_ES1=1)
+elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
+    # Port specific: LEGACY_GL_EMULATION injects FFP shim; no separate define needed
+    # beyond __EMSCRIPTEN__ which emcc sets automatically.
+    add_compile_definitions(FRUIT_GL_API_EMSCRIPTEN=1)
 else()
     message(FATAL_ERROR "Unknown FRUIT_GL_API '${FRUIT_GL_API}'")
 endif()
 
 # --- Dependencies ---
 
-# Prefer system SDL2 (MSYS2 / Linux package, etc.); fall back to a fetch
-# only when not installed:
-#   - On MSVC: download libsdl-org's prebuilt VC binary (SDL2-devel-*-VC.zip)
-#     -- ~5 sec download vs ~2 min source build, no extra dependencies.
-#   - Elsewhere (or as a safety net on MSVC if the prebuilt download fails):
-#     fall through to the source-build path.
 include(FetchContent)
 set(_SDL2_VER 2.30.11)
 
-find_package(SDL2 QUIET)
-if (NOT SDL2_FOUND AND MSVC)
-    message(STATUS "System SDL2 not found -- fetching prebuilt MSVC zip ${_SDL2_VER}")
-    FetchContent_Declare(
-        SDL2_prebuilt_msvc
-        URL      https://github.com/libsdl-org/SDL/releases/download/release-${_SDL2_VER}/SDL2-devel-${_SDL2_VER}-VC.zip
-        URL_HASH SHA256=6e524b5f0e3ecd9fe3b439336b5e7c3fe597e8823e8e62c8e3074d335e9ca7d9
-    )
-    FetchContent_MakeAvailable(SDL2_prebuilt_msvc)
-
-    set(_sdl2_root "${sdl2_prebuilt_msvc_SOURCE_DIR}")
-    set(_sdl2_arch "x64")  # FN binary is 64-bit MSVC
-    set(_sdl2_lib_dir "${_sdl2_root}/lib/${_sdl2_arch}")
-
-    add_library(SDL2::SDL2 SHARED IMPORTED)
-    set_target_properties(SDL2::SDL2 PROPERTIES
-        IMPORTED_LOCATION             "${_sdl2_lib_dir}/SDL2.dll"
-        IMPORTED_IMPLIB               "${_sdl2_lib_dir}/SDL2.lib"
-        INTERFACE_INCLUDE_DIRECTORIES "${_sdl2_root}/include")
-
-    add_library(SDL2::SDL2main STATIC IMPORTED)
-    set_target_properties(SDL2::SDL2main PROPERTIES
-        IMPORTED_LOCATION "${_sdl2_lib_dir}/SDL2main.lib")
-
-    set(SDL2_FOUND TRUE)
-endif()
-
-if (NOT SDL2_FOUND)
-    message(STATUS "System SDL2 not found -- fetching SDL2 ${_SDL2_VER} source (slow path)")
-    set(SDL_TEST OFF CACHE BOOL "" FORCE)
-    set(SDL_SHARED ON CACHE BOOL "" FORCE)
-    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(
-        SDL2
-        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG        release-${_SDL2_VER}
-    )
-    FetchContent_MakeAvailable(SDL2)
-    # FetchContent uses the SDL2 source's own targets (`SDL2-static`,
-    # `SDL2`, `SDL2main`) which are non-namespaced. Add the
-    # `SDL2::SDL2` / `SDL2::SDL2main` aliases the rest of the build
-    # expects, so the link step is identical regardless of source.
-    if (TARGET SDL2 AND NOT TARGET SDL2::SDL2)
-        add_library(SDL2::SDL2 ALIAS SDL2)
+if (EMSCRIPTEN)
+    # Port specific: Emscripten ships SDL2 as a port; -sUSE_SDL=2 at compile+link
+    # time activates it. Create INTERFACE targets that carry the flag so the rest
+    # of the build links as usual against SDL2::SDL2 / SDL2::SDL2main.
+    message(STATUS "Emscripten build: using built-in SDL2 port via -sUSE_SDL=2")
+    add_library(SDL2_emscripten_iface INTERFACE)
+    target_compile_options(SDL2_emscripten_iface INTERFACE "SHELL:-sUSE_SDL=2")
+    target_link_options(SDL2_emscripten_iface INTERFACE "SHELL:-sUSE_SDL=2")
+    if (NOT TARGET SDL2::SDL2)
+        add_library(SDL2::SDL2 ALIAS SDL2_emscripten_iface)
     endif()
-    if (TARGET SDL2main AND NOT TARGET SDL2::SDL2main)
-        add_library(SDL2::SDL2main ALIAS SDL2main)
+    if (NOT TARGET SDL2::SDL2main)
+        add_library(SDL2::SDL2main ALIAS SDL2_emscripten_iface)
+    endif()
+else()
+    # Prefer system SDL2 (MSYS2 / Linux package, etc.); fall back to a fetch
+    # only when not installed:
+    #   - On MSVC: download libsdl-org's prebuilt VC binary (SDL2-devel-*-VC.zip)
+    #     -- ~5 sec download vs ~2 min source build, no extra dependencies.
+    #   - Elsewhere (or as a safety net on MSVC if the prebuilt download fails):
+    #     fall through to the source-build path.
+    find_package(SDL2 QUIET)
+    if (NOT SDL2_FOUND AND MSVC)
+        message(STATUS "System SDL2 not found -- fetching prebuilt MSVC zip ${_SDL2_VER}")
+        FetchContent_Declare(
+            SDL2_prebuilt_msvc
+            URL      https://github.com/libsdl-org/SDL/releases/download/release-${_SDL2_VER}/SDL2-devel-${_SDL2_VER}-VC.zip
+            URL_HASH SHA256=6e524b5f0e3ecd9fe3b439336b5e7c3fe597e8823e8e62c8e3074d335e9ca7d9
+        )
+        FetchContent_MakeAvailable(SDL2_prebuilt_msvc)
+
+        set(_sdl2_root "${sdl2_prebuilt_msvc_SOURCE_DIR}")
+        set(_sdl2_arch "x64")  # FN binary is 64-bit MSVC
+        set(_sdl2_lib_dir "${_sdl2_root}/lib/${_sdl2_arch}")
+
+        add_library(SDL2::SDL2 SHARED IMPORTED)
+        set_target_properties(SDL2::SDL2 PROPERTIES
+            IMPORTED_LOCATION             "${_sdl2_lib_dir}/SDL2.dll"
+            IMPORTED_IMPLIB               "${_sdl2_lib_dir}/SDL2.lib"
+            INTERFACE_INCLUDE_DIRECTORIES "${_sdl2_root}/include")
+
+        add_library(SDL2::SDL2main STATIC IMPORTED)
+        set_target_properties(SDL2::SDL2main PROPERTIES
+            IMPORTED_LOCATION "${_sdl2_lib_dir}/SDL2main.lib")
+
+        set(SDL2_FOUND TRUE)
+    endif()
+
+    if (NOT SDL2_FOUND)
+        message(STATUS "System SDL2 not found -- fetching SDL2 ${_SDL2_VER} source (slow path)")
+        set(SDL_TEST OFF CACHE BOOL "" FORCE)
+        set(SDL_SHARED ON CACHE BOOL "" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            SDL2
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+            GIT_TAG        release-${_SDL2_VER}
+        )
+        FetchContent_MakeAvailable(SDL2)
+        # FetchContent uses the SDL2 source's own targets (`SDL2-static`,
+        # `SDL2`, `SDL2main`) which are non-namespaced. Add the
+        # `SDL2::SDL2` / `SDL2::SDL2main` aliases the rest of the build
+        # expects, so the link step is identical regardless of source.
+        if (TARGET SDL2 AND NOT TARGET SDL2::SDL2)
+            add_library(SDL2::SDL2 ALIAS SDL2)
+        endif()
+        if (TARGET SDL2main AND NOT TARGET SDL2::SDL2main)
+            add_library(SDL2::SDL2main ALIAS SDL2main)
+        endif()
     endif()
 endif()
 
@@ -165,13 +191,21 @@ FetchContent_MakeAvailable(tinyxml2)
 # Subsystem CMakeLists.txt files contribute their sources via
 # target_sources(fruit-ninja-game PRIVATE ...).
 
+if (EMSCRIPTEN)
+    # Port specific: assets are preloaded into MEMFS at /FruitNinjaBada/Data.
+    set(CMAKE_EXECUTABLE_SUFFIX ".html")
+    # FN_DATA_DIR for Emscripten: MEMFS mount path (absolute, POSIX-style).
+    set(FN_DATA_DIR_PATH "/FruitNinjaBada/Data")
+else()
+    file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaBada/Data" FN_DATA_DIR_PATH)
+endif()
+
 add_library(fruit-ninja-game STATIC src/Game.cpp src/GameSDL.cpp)
 target_include_directories(fruit-ninja-game PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaBada/Data" FN_DATA_DIR_PATH)
 configure_file(src/config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h @ONLY)
 
 # --- Subsystems ---
@@ -187,52 +221,68 @@ target_link_libraries(fruit-ninja-game PUBLIC
     SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine
 )
 
-# --- Executable (just mainSDL.cpp; everything else lives in fruit-ninja-game) ---
-add_executable(fruit-ninja src/mainSDL.cpp)
-target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
+# --- Executable ---
+if (EMSCRIPTEN)
+    # Port specific: Emscripten entry point uses emscripten_set_main_loop_arg
+    # instead of the blocking Game::run() loop.
+    add_executable(fruit-ninja src/mainEmscripten.cpp)
+    target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
+    target_link_options(fruit-ninja PRIVATE
+        "SHELL:-sUSE_SDL=2"
+        "SHELL:-sLEGACY_GL_EMULATION=1"
+        "SHELL:-sGL_FFP_ONLY=1"
+        "SHELL:-sALLOW_MEMORY_GROWTH=1"
+        "SHELL:-sEXIT_RUNTIME=0"
+        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data@/FruitNinjaBada/Data"
+    )
+else()
+    # Native desktop/webOS entry point.
+    add_executable(fruit-ninja src/mainSDL.cpp)
+    target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
 
-# Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds
-# it without having to add an external dir to PATH. Covers both fetch
-# paths (prebuilt MSVC zip = IMPORTED SHARED; source build = built
-# SHARED_LIBRARY) -- $<TARGET_FILE:SDL2::SDL2> resolves to the .dll
-# either way. On MSYS2 / Linux the system SDL2 is found via PATH /
-# ldconfig and no copy is needed (the alias points at a system target
-# without an importable file location, so the generator expression
-# would be empty -- skip via SDL2_FOUND only-if-fetched gate).
-if (WIN32 AND TARGET SDL2::SDL2)
-    # Determine whether SDL2::SDL2 has a real DLL we can copy.
-    # IMPORTED SHARED (prebuilt zip) -> TYPE = SHARED_LIBRARY, IMPORTED = TRUE
-    # ALIAS of source target          -> follow alias
-    # System / interface             -> skip
-    set(_sdl2_real_target SDL2::SDL2)
-    get_target_property(_alias ${_sdl2_real_target} ALIASED_TARGET)
-    if (_alias)
-        set(_sdl2_real_target ${_alias})
-    endif()
-    get_target_property(_sdl2_type ${_sdl2_real_target} TYPE)
-    if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-        # OUTPUT-form (vs POST_BUILD) so the copy + COMMENT only fire when
-        # the source DLL is newer than the destination. copy_if_different
-        # is silent on no-change, but POST_BUILD itself prints the COMMENT
-        # every build -- noise that hides real activity.
-        #
-        # Stamp file in $<CONFIG>/ so multi-config (VS) builds don't share
-        # state across Debug/Release. Target-file gen-exprs aren't allowed
-        # in OUTPUT, so a literal path + stamp is the portable form.
-        set(_sdl2_stamp "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/sdl2_dll.stamp")
-        add_custom_command(
-            OUTPUT ${_sdl2_stamp}
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_FILE:SDL2::SDL2>
-                $<TARGET_FILE_DIR:fruit-ninja>
-            COMMAND ${CMAKE_COMMAND} -E touch ${_sdl2_stamp}
-            DEPENDS $<TARGET_FILE:SDL2::SDL2>
-            COMMENT "Copying SDL2.dll next to fruit-ninja.exe"
-            VERBATIM
-        )
-        add_custom_target(copy_sdl2_dll ALL DEPENDS ${_sdl2_stamp})
-        # Ensure $<TARGET_FILE_DIR:fruit-ninja> exists before the copy.
-        add_dependencies(copy_sdl2_dll fruit-ninja)
+    # Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds
+    # it without having to add an external dir to PATH. Covers both fetch
+    # paths (prebuilt MSVC zip = IMPORTED SHARED; source build = built
+    # SHARED_LIBRARY) -- $<TARGET_FILE:SDL2::SDL2> resolves to the .dll
+    # either way. On MSYS2 / Linux the system SDL2 is found via PATH /
+    # ldconfig and no copy is needed (the alias points at a system target
+    # without an importable file location, so the generator expression
+    # would be empty -- skip via SDL2_FOUND only-if-fetched gate).
+    if (WIN32 AND TARGET SDL2::SDL2)
+        # Determine whether SDL2::SDL2 has a real DLL we can copy.
+        # IMPORTED SHARED (prebuilt zip) -> TYPE = SHARED_LIBRARY, IMPORTED = TRUE
+        # ALIAS of source target          -> follow alias
+        # System / interface             -> skip
+        set(_sdl2_real_target SDL2::SDL2)
+        get_target_property(_alias ${_sdl2_real_target} ALIASED_TARGET)
+        if (_alias)
+            set(_sdl2_real_target ${_alias})
+        endif()
+        get_target_property(_sdl2_type ${_sdl2_real_target} TYPE)
+        if (_sdl2_type STREQUAL "SHARED_LIBRARY")
+            # OUTPUT-form (vs POST_BUILD) so the copy + COMMENT only fire when
+            # the source DLL is newer than the destination. copy_if_different
+            # is silent on no-change, but POST_BUILD itself prints the COMMENT
+            # every build -- noise that hides real activity.
+            #
+            # Stamp file in $<CONFIG>/ so multi-config (VS) builds don't share
+            # state across Debug/Release. Target-file gen-exprs aren't allowed
+            # in OUTPUT, so a literal path + stamp is the portable form.
+            set(_sdl2_stamp "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/sdl2_dll.stamp")
+            add_custom_command(
+                OUTPUT ${_sdl2_stamp}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:SDL2::SDL2>
+                    $<TARGET_FILE_DIR:fruit-ninja>
+                COMMAND ${CMAKE_COMMAND} -E touch ${_sdl2_stamp}
+                DEPENDS $<TARGET_FILE:SDL2::SDL2>
+                COMMENT "Copying SDL2.dll next to fruit-ninja.exe"
+                VERBATIM
+            )
+            add_custom_target(copy_sdl2_dll ALL DEPENDS ${_sdl2_stamp})
+            # Ensure $<TARGET_FILE_DIR:fruit-ninja> exists before the copy.
+            add_dependencies(copy_sdl2_dll fruit-ninja)
+        endif()
     endif()
 endif()
 
@@ -241,6 +291,8 @@ if (FRUITNINJA_BOMB_TRACE)
     target_compile_definitions(fruit-ninja-game PRIVATE MORTAR_BOMB_TRACE=1)
 endif()
 
-# --- ctest ---
-enable_testing()
-add_subdirectory(tests)
+if (NOT EMSCRIPTEN)
+    # --- ctest ---
+    enable_testing()
+    add_subdirectory(tests)
+endif()
