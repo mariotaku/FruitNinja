@@ -634,16 +634,16 @@ void GameDraw(float dt, bool active) {
     // by BeginFrame — binary never overrides it.
     dm.SetDepthBufferWrite(true);
     dm.SetDepthBuffer(true);
-#ifndef __bada__
+#if !defined(__bada__) && !defined(__EMSCRIPTEN__)
     // Port specific: wireframe debug mode (F2). glPolygonMode is loaded
-    // optionally by gl_funcs — stays nullptr on GLES, so the toggle is a
-    // silent no-op there.
+    // optionally by gl_funcs -- stays nullptr on GLES, so the toggle is a
+    // silent no-op there. Absent under Emscripten (WebGL has no polygon mode).
     const bool wireframe = FN::g_DebugWireframe && glPolygonMode != nullptr;
     if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 #endif
     if (game->actorManager)
         game->actorManager->Draw(game->renderer);
-#ifndef __bada__
+#if !defined(__bada__) && !defined(__EMSCRIPTEN__)
     if (wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 #endif
 

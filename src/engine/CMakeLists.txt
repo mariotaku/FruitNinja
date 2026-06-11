@@ -93,6 +93,11 @@ if (FRUIT_GL_API STREQUAL "GL_COMPAT")
 elseif (FRUIT_GL_API STREQUAL "ES1")
     # webOS / embedded Linux. libGLESv1_CM + libEGL.
     target_link_libraries(mortar_engine PUBLIC GLESv1_CM EGL)
+elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
+    # Port specific: WebGL is provided by emcc link flags (-sLEGACY_GL_EMULATION=1
+    # -sGL_FFP_ONLY=1). No system GL library to link; the flags live on the
+    # fruit-ninja executable target (root CMakeLists.txt).
+    # No target_link_libraries call needed here.
 endif()
 
 target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2)

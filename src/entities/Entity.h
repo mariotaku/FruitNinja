@@ -226,9 +226,11 @@ static_assert(offsetof(Entity, entityType)   == 0x35, "entityType offset wrong (
 static_assert(offsetof(Entity, m_Angle)      == 0x36, "m_Angle offset wrong");
 static_assert(offsetof(Entity, m_Col)        == 0x38, "m_Col offset wrong");
 static_assert(sizeof(Entity)                 == 0x3C, "sizeof(Entity) wrong");
-#else
+#elif !defined(__EMSCRIPTEN__)
 // Always-on port layout asserts (desktop x64 MSVC/MinGW). Offsets reflect:
 // 8-byte vtable ptr on 64-bit, int-widened entityType, Col* at 8-byte pointer size.
+// Port specific: Emscripten (wasm32) has 4-byte pointers like Bada ARM32 so
+// these x64-specific offsets don't apply there; skip to avoid false failures.
 static_assert(offsetof(Entity, field_0x04)   == 0x08, "field_0x04 port offset drift");
 static_assert(offsetof(Entity, m_TrackerID)  == 0x0C, "m_TrackerID port offset drift");
 static_assert(offsetof(Entity, flags)        == 0x10, "flags port offset drift");

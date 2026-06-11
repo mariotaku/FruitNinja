@@ -28,6 +28,9 @@
 // on every GL_COMPAT build -- forwarded to glFrustum / glClearDepth (GL 1.0
 // baseline, always exported).
 //
+// Under EMSCRIPTEN, LEGACY_GL_EMULATION provides glFrustumf and glClearDepthf
+// directly; they are already declared in the EMSCRIPTEN branch of gl_compat.h.
+//
 // SDL_opengl.h on Windows declares these with __declspec(dllimport); we
 // re-declare them as plain extern "C" to match our definitions. C4273
 // ("inconsistent dll linkage") is suppressed for the small region.
