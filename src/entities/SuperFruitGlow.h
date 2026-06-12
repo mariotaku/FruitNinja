@@ -12,13 +12,16 @@
 // Field layout (RE spec):
 //   +0x00..+0x3b: Mortar::Entity base (0x3c bytes ARM32)
 //   +0x3c..+0x7b: Mortar::Entity fields used by subclass (gap)
-//   +0x7c: bool m_bFruitKilled (fruit has been killed -- glow should self-release)
+//   +0x7c: bool m_bFruitKilled  (fruit has been killed -- glow should self-release)
 //   +0x80: Fruit* m_pHostFruit  (host fruit pointer; cleared by FruitWasKilled)
+//   +0x84: Mortar::FancyBakedString* m_pText  (combo/score text overlay)
+//   +0x88: float m_GlowAlpha    (current glow alpha; animated toward target)
 
 #include "Entity.h"
 
 class Fruit;
 struct Renderer;
+namespace Mortar { class FancyBakedString; }
 
 class SuperFruitGlow : public Mortar::Entity {
 public:
@@ -34,8 +37,11 @@ public:
     // +0x80: back-pointer to host fruit; cleared to nullptr by FruitWasKilled
     Fruit* m_pHostFruit;     // +0x80
 
-    // +0x84..+0x8b: trailing fields (unresolved; 8 bytes)
-    uint8_t _pad_84[8];      // +0x84..+0x8b (binary sizeof = 0x8c)
+    // +0x84: combo/score text overlay (FancyBakedString)
+    Mortar::FancyBakedString* m_pText;    // +0x84
+
+    // +0x88: glow alpha [0..1]; animated toward target each Update
+    float m_GlowAlpha;                    // +0x88
 
     // Binary @ 0x001c06bc
     SuperFruitGlow();
@@ -61,6 +67,8 @@ public:
 static_assert(sizeof(SuperFruitGlow) == 0x8c, "SuperFruitGlow binary sizeof must be 0x8c");
 static_assert(offsetof(SuperFruitGlow, m_bFruitKilled) == 0x7c, "SuperFruitGlow::m_bFruitKilled offset");
 static_assert(offsetof(SuperFruitGlow, m_pHostFruit)   == 0x80, "SuperFruitGlow::m_pHostFruit offset");
+static_assert(offsetof(SuperFruitGlow, m_pText)        == 0x84, "SuperFruitGlow::m_pText offset");
+static_assert(offsetof(SuperFruitGlow, m_GlowAlpha)    == 0x88, "SuperFruitGlow::m_GlowAlpha offset");
 #endif
 
 #endif // FN_SUPER_FRUIT_GLOW_H
