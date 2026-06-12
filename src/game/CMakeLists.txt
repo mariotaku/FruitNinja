@@ -38,4 +38,11 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveSyncPacket.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitSlicedPacket.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/CoinChanceinator.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/DRMManager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ProfanityFilter.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PointsPacket.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/StartGamePacket.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PlayerDisconnectGamePacket.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PacketFactory.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitNinjaNewsControl.cpp
 )

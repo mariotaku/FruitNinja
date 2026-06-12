@@ -78,6 +78,7 @@ add_library(mortar_engine STATIC
     MenuBackground.cpp
     # Phase 9 — Network (online services stub; all methods no-op)
     network/NetworkManager.cpp
+    network/P2PMessageHandling.cpp
     # Phase 10 — System stubs (Bada OS services; all no-op)
     system/PowerManager.cpp
     # Debug logger (SDL_Log backend)

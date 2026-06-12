@@ -1,14 +1,13 @@
 #ifndef FN_ENGINE_NETWORK_NETWORK_MANAGER_H
 #define FN_ENGINE_NETWORK_NETWORK_MANAGER_H
 
-// Analysed: 2026-04-30T00:00
-//
-// Mortar::NetworkManager -- OpenFeint + GameCenter + P2P multiplayer manager.
-// Skipped for port per project policy (online services defunct).
+// Defunct: NetworkManager (GameSpy/GameCenter/OpenFeint/P2P/news) -- no-op stub.
+// Binary: ctor @ 0x231c40 (v1.6.1), GetInstance @ 0x231e7c.
+// All methods are no-ops returning safe defaults.
 // Size: 668 bytes. Ctor inits fields up to 0x29B: 9 Delegates, 1 std::map,
 //       3 BUTTON_INFO sub-structs, flag fields.
 //
-// Binary addresses:
+// Binary addresses (v1.0 build numbers retained for symbol-diff; v1.6.1 in comments):
 //   ctor (real)    0x0018e05c
 //   ctor (alias)   0x0018e25c
 //   ctor thunk     0x00100518
@@ -20,6 +19,22 @@
 
 namespace Mortar {
 
+class NetworkPacket;
+class OpenFeintNewsRenderer;
+
+// Network provider selection enum (GameSpy = 0, GameCenter = 1)
+// Defunct: online-services
+enum NetworkProvider {
+    NETWORK_PROVIDER_GAMECENTER = 0,
+    NETWORK_PROVIDER_OPENFEINT  = 1
+};
+
+// Status message IDs (opaque; used as keys in internal std::map)
+// Defunct: online-services
+enum NetworkManagerStatusMessageID {
+    NM_STATUS_MSG_DEFAULT = 0
+};
+
 class NetworkManager {
 public:
     static NetworkManager* GetInstance() {
@@ -30,65 +45,121 @@ public:
     // Polymorphic root: vptr @ +0x00; binary vtable @ 0x001eb210.
     virtual ~NetworkManager() {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d668
-    int LaunchDashboard(int) { return 0; }
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x231c40 area
+    void Initialise(int /*flags*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d66c
-    int LaunchDashboardWithLeaderboard(int, int) { return 0; }
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x2310c8 (nearly idle)
+    void Update(float /*dt*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d658
-    void SpawnThreadController() {}
+    // Defunct: NetworkManager -- no-op stub
+    void Draw(float /*dt*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e698
-    int IsAnyPeerReadyForMultiplayer() { return 0; }
+    // Defunct: NetworkManager -- no-op stub
+    void Destroy() {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6ac
-    int DownloadUserDataFromLeaderboard(const char*, bool, bool, void*) { return 0; }
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool IsOnline() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018dd2c
-    void DrawNews() {}
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool HasCredentials() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018dcb4
-    void CancelNewsDisplay() {}
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6cc (returns 1)
+    bool UserHasEnabledNetwork() { return true; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6d4
-    int HasUnreadNews() { return 0; }
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool HasFacebookCredential() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6d8
-    void StartNewsDownload() {}
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool HasTwitterCredential() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d968
-    void StartNewsDisplay(void*, void*) {}
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool HasUserAllowedNotification() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d9bc
-    void UpdateNews(float /*dt*/) {}
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool HasRememberedNotificationChoice() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d948
-    int GetCurrentNews(char* out, int /*cap*/) { if (out) out[0] = 0; return 0; }
+    // Defunct: NetworkManager -- no-op stub
+    void SendPacket(NetworkPacket* /*packet*/, bool /*reliable*/) {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d9d8
+    void InitializeP2P(void* /*cb1*/, void* /*cb2*/, void* /*cb3*/) {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6f4
+    bool DisconnectP2P(bool /*b*/) { return false; }
+
+    // Defunct: NetworkManager -- no-op stub (returns 0)
+    int GetLocalPlayerNumber() { return 0; }
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d924
     void GetPlayerName(int /*idx*/, char* out, int /*cap*/) { if (out) out[0] = 0; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d634
-    int GetPreferredNetworkProvider() const { return 0; }
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e6b8
+    int IsInP2PGame() const { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d62c
-    void SetPreferredNetworkProvider(int /*provider*/) {}
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e6b0
+    void OnP2PGameOver() {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x00169354
-    void ChangePreferredNetworkProvider(long /*v*/) {}
+    // Defunct: NetworkManager -- no-op stub
+    void StartHostingMultiplayerGame() {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6b0 (returns 0)
-    int IsProviderOnline() { return 0; }
+    // Defunct: NetworkManager -- no-op stub
+    void StopHostingMultiplayerGame() {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6b4 (returns 0)
-    int IsP2POnline() { return 0; }
+    // Defunct: NetworkManager -- no-op stub
+    void StartMultiplayerGameSession() {}
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d704
-    int IsGameCenterSupported() { return 0; }
+    // Defunct: NetworkManager -- no-op stub
+    void AcceptMultiplayerHostsGame() {}
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool HasNetworkPeersConnected() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e698
+    int IsAnyPeerReadyForMultiplayer() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool IsHostWaitingOnUsForMultiplayer() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub
+    void SetNetworkPlayAvailability(bool /*avail*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void RevokePendingMultiplayerGameInvites(long /*val*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void UnlockAchievement(const char* /*name*/) {}
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool IsAchievementUnlocked(const char* /*name*/) { return false; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d698 (returns 0)
+    int SetLeaderboardScore(const char* /*board*/, long long /*score*/, void* /*userdata*/, int /*flags*/) {
+        return 0;
+    }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d7e4
+    int RetrieveLeaderboardScore(const char* /*board*/, int /*flags*/, void* /*cb*/) { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d69c
+    int RetrieveLeaderboardScoreNextPage() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6a0
+    int RetrieveLeaderboardScorePreviousPage() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool CanPageUpHighscores() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool CanPageDownHighscores() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6ac
+    int DownloadUserDataFromLeaderboard(const char* /*board*/, bool /*friends*/, bool /*local*/, void* /*cb*/) { return 0; }
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6fc
     bool IsGameCenterOnline() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d704
+    int IsGameCenterSupported() { return 0; }
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d700
     int IsGameCenterAttemptingToConnect() { return 0; }
@@ -102,67 +173,155 @@ public:
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6e4
     NetworkManager* ConnectGameCenter() { return this; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6e8 (returns 1, not false)
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6e8 (returns 1)
     bool AreGameCenterConnectionAttemptsAllowed(bool /*b*/) { return true; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d668
+    void LaunchDashboard(int /*id*/) {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d66c
+    void LaunchDashboardWithLeaderboard(const char* /*board*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void PublishText(const char* /*network*/, const char* /*msg*/, const char* /*url*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void PublishTextWithCallback(const char* /*network*/, const char* /*msg*/, const char* /*url*/, void* /*cb*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void SetPublishTextCallback(void* /*cb*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void InvalidatePublishTextCallback() {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void StartVoiceChatSession() {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void StopVoiceChatSession() {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void StartVoiceChatSpeaking() {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void StopVoiceChatSpeaking() {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void SetVoiceChatMuted(bool /*muted*/) {}
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool HasVoiceChatParticipants() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub (returns 0)
+    int GetVoiceChatConnectionError() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub
+    void PopupAlert(const char* /*title*/, ...) {}
+
+    // Defunct: NetworkManager -- no-op stub (called from ctor body)
+    void RegisterPopupAlertButton(void* /*info*/) {}
+
+    // Defunct: NetworkManager -- no-op stub (called from ctor body)
+    void DeregisterPopupAlertButton(void* /*info*/) {}
+
+    // Defunct: NetworkManager -- no-op stub (called from ctor body)
+    void DeregisterAllPopupAlertButtons() {}
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool IsPopupAlertDisplayed() const { return false; }
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool IsShowingModalDialog() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub
+    void NotifyModalTouchDown(unsigned int /*touchId*/, float /*x*/, float /*y*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void NotifyModalTouchEnded(unsigned int /*touchId*/, float /*x*/, float /*y*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void EnableNotifications() {}
+
+    // Defunct: NetworkManager -- no-op stub (returns false)
+    bool NotificationsAllowed() { return false; }
+
+    // Defunct: NetworkManager -- no-op stub
+    void DisallowNotifications() {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6d8
+    void StartNewsDownload() {}
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6dc (returns 1)
     bool HasNewsBeenDownloaded() { return true; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6cc (returns 1)
-    bool UserHasEnabledNetwork() { return true; }
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6d4
+    int HasUnreadNews() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d9bc
+    void UpdateNews(float /*dt*/) {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018dd2c
+    void DrawNews() {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d968
+    void StartNewsDisplay(void* /*tex*/, void* /*font*/) {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018dcb4
+    void CancelNewsDisplay() {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d948
+    int GetCurrentNews(char* out, int /*cap*/) { if (out) out[0] = 0; return 0; }
+
+    // Defunct: NetworkManager -- no-op stub (returns nullptr)
+    OpenFeintNewsRenderer* GetNewsRenderer() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub (returns nullptr)
+    void* GetNewsRenderInfo() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub
+    void OpenUrl(const char* /*url*/) {}
+
+    // Defunct: NetworkManager -- no-op stub
+    void ForceModalDialogsClosed() {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d62c
+    void SetPreferredNetworkProvider(int /*provider*/) {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d634
+    int GetPreferredNetworkProvider() const { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x00169354
+    void ChangePreferredNetworkProvider(long /*v*/) {}
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6b0 (returns 0)
+    int IsProviderOnline() { return 0; }
+
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6b4 (returns 0)
+    int IsP2POnline() { return 0; }
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6f8 (returns 1)
     bool HasFriendsLoaded() { return true; }
 
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d698 (returns 0)
-    int SetLeaderboardScore(const char* /*board*/, long long /*score*/, void* /*userdata*/, int /*flags*/) {
-        return 0;
-    }
-
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e6b8
-    int IsInP2PGame() const { return 0; }
-
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e6b0
-    void OnP2PGameOver() {}
-
     // Defunct: NetworkManager -- no-op stub; binary @ 0x00169280
-    void GlobalP2PMessageHandler(void*, void*) {}
+    void GlobalP2PMessageHandler(void* /*msg*/, void* /*packet*/) {}
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0016b444
-    void GlobalP2PErrorHandler(void*) {}
-
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d7e4
-    int RetrieveLeaderboardScore(const char*, int, void*) { return 0; }
-
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d69c
-    int RetrieveLeaderboardScoreNextPage() { return 0; }
-
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6a0
-    int RetrieveLeaderboardScorePreviousPage() { return 0; }
-
-    // Defunct: NetworkManager -- no-op stub (called from ctor body)
-    void DeregisterAllPopupAlertButtons() {}
+    void GlobalP2PErrorHandler(void* /*err*/) {}
 
     // Defunct: NetworkManager -- no-op stub (called from ctor body)
     void SetStatusMessageTextDefaults() {}
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e800
-    void SetP2PMessageHandlerCallback(void*) {}
+    void SetP2PMessageHandlerCallback(void* /*cb*/) {}
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e85c
-    void SetP2PErrorHandlerCallback(void*) {}
+    void SetP2PErrorHandlerCallback(void* /*cb*/) {}
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0018e8b8
-    void SetP2PVoiceChatOpponentSpeakingCallback(void*) {}
-
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d9d8
-    void InitializeP2P(void*, void*, void*) {}
-
-    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d6f4
-    bool DisconnectP2P(bool /*b*/) { return false; }
+    void SetP2PVoiceChatOpponentSpeakingCallback(void* /*cb*/) {}
 
     // Defunct: NetworkManager -- no-op stub; binary @ 0x0010c688
-    void SetGameCenterInitializationCallback(void*) {}
+    void SetGameCenterInitializationCallback(void* /*cb*/) {}
 
     // Defunct: NetworkManager -- no-op stub (symbol in list_methods)
     bool IsOnlineMultiplayer() const { return false; }
@@ -177,8 +336,10 @@ public:
     // Defunct: NetworkManager -- no-op stub (vtable slot 4)
     void SyncClear() {}
 
+    // Defunct: NetworkManager -- no-op stub; binary @ 0x0018d658
+    void SpawnThreadController() {}
+
     void Init() {}
-    void Destroy() {}
     void UpdateNetworking(float dt) { (void)dt; }
 
 private:
