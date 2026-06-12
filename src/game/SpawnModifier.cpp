@@ -97,13 +97,13 @@ void SpawnModifier::ParseSpecific(TiXmlElement* xml) {
 
 GameModifier* SpawnModifier::Clone() {
     SpawnModifier* c = new SpawnModifier();
-    c->m_Duration           = m_Duration;
-    c->field_0x08           = field_0x08;
-    c->m_Duration_remaining = m_Duration_remaining;
-    c->m_bDeferred          = m_bDeferred;
-    c->m_DeferStart         = m_DeferStart;
-    c->m_bApplied           = m_bApplied;
-    c->m_pOwner             = m_pOwner;
+    c->m_Duration   = m_Duration;
+    c->field_0x08   = field_0x08;
+    c->m_BonusAccum = m_BonusAccum;
+    c->m_bDeferred  = m_bDeferred;
+    c->m_DeferTime  = m_DeferTime;
+    c->m_bApplied   = m_bApplied;
+    c->m_pDeferInfo = m_pDeferInfo;
     c->m_TimeAccum          = m_TimeAccum;
     // Deep-copy spawners
     for (std::vector<SPAWNER_INFO*>::const_iterator it = m_Spawners.begin();

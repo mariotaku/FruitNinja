@@ -24,9 +24,10 @@ public:
     // +0x20: time-per-event multiplier (ctor default 0.0; set via ParseSpecific 'value' attr)
     float m_Multiplier;
 
-    // +0x24: accumulator. ctor default -4.0.
+    // +0x24: threshold gate. ctor default -1.0f (binary ctor @ 0x0014da30).
     // Parsed: 'immediate' attr present -> 0.0f (immediate AddTime mode);
     //         'immediate' attr absent  -> -1.0f (accumulate mode).
+    // ApplyModifier: fires only when m_BonusAccum(+0x0c)<=0 && m_Accumulator>=0.
     // When >= 0: immediate AddTime mode.
     // When < 0: accumulate into this field.
     float m_Accumulator;

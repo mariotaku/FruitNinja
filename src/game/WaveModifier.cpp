@@ -220,15 +220,24 @@ int WaveQueItem::PerformCatchup(int leftCount, int rightCount) {
 
 WaveModifier::WaveModifier()
     : GameModifier()
+    , m_OverrideCount(0)
     , m_BombMult(1.0f)
     , m_BombScale(1.0f)
     , m_FruitMult(1.0f)
     , m_DtMod(1.0f)
-    , m_OverideProbabilityPool(0)
-    , m_CritChanceMod(0.0f)
+    , m_OverideProbabilityPool(10000)
+    , m_CritChanceMod(1.0f)
 {}
 
 WaveModifier::~WaveModifier() {}
+
+// @ 0x0015068c — shares function body with ApplyModifier in the binary.
+// TODO: 0x0015068c — body: chain base OnDeferComplete, then if m_WaveOverride<10000 &
+// !purchased & < WaveMgr.curWave: SetCurrentWave(idx,-1); SelectType() each override;
+// insert m_OverideEntries into WaveManager override-list; clear.
+void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
+    GameModifier::OnDeferComplete(unused, pExtra);
+}
 
 // Binary @ 0x001282d4. After chaining base ApplyModifier:
 //   (1) if m_OverideProbabilityPool <= 9999 (i.e. < 10000) && !isPurchased &&

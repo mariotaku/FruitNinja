@@ -33,15 +33,15 @@ public:
     // +0x2c: XML lossMultiply="N" (default 1)
     int m_LossMultiply;
 
-    // +0x30: number of times Apply was called (combo counter for stacking)
-    int m_ApplyCount;
+    // +0x30: loop count used as multiplier in UpdateSpecific (ctor=0; set by ParseSpecific/stacking)
+    int m_RepeatCount;
 
     // +0x34: XML deferPoints="true" — defers AddToCurrentScore via delegate
     bool m_bDeferPoints;
     uint8_t _pad35[3];
 
-    // +0x38: running accumulator — incremented by DeferPoints each call
-    int m_DeferredScore;
+    // +0x38: apply counter — incremented by ApplyModifier (and by DeferPoints as accumulator)
+    int m_ApplyCount;
 
     ScoreModifier();
 

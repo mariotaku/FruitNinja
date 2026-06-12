@@ -7,7 +7,9 @@
 // ExplodyFruitModifier / SpawnModifier. Binary size 0x20 (32 bytes).
 //
 // v1.6.1: ctor @ 0x00133378; D1 @ 0x00143760; D0 @ 0x00144ac4.
-// vtable @ 0x2cc6d8 (stored vptr = 0x2cc6e0 = ZTV+8). 14 slots total.
+// vtable @ 0x2cc6d8 (stored vptr = 0x2cc6e0 = ZTV+8). EXACTLY 11 slots (0-10).
+// Word after slot 10 is 0x2811d8 = RTTI typename "7PowerUp" — NOT a vtable entry.
+// The Wave-1 "slots 11/12/13" were RTTI strings + a PLT stub, not vtable slots.
 //
 // vtable layout (v1.6.1):
 //   [0]  ~GameModifier (D1, non-deleting)    0x143760
@@ -15,15 +17,12 @@
 //   [2]  ResetSpecific()          PURE        0x360434
 //   [3]  Update(float dt)                    0x13fdc4  (base dispatcher)
 //   [4]  UpdateSpecific(float dt) PURE        0x360434
-//   [5]  ApplyModifier/defer-complete         0x140890  (on-defer-fire hook)
+//   [5]  OnDeferComplete()                   0x140890  (on-defer-fire hook)
 //   [6]  RemoveModifier()                    0x143784  (base no-op)
 //   [7]  GetType() -> uint32_t               0x143788  (base returns 0xffffffff)
 //   [8]  ApplyModifier(bool,float*) PURE      0x360434
 //   [9]  ParseSpecific(xml)        PURE        0x360434
-//   [10] (subclass hook)                     0x3602bc  (thunk)
-//   [11] (subclass hook)                     0x2811d8  (thunk)
-//   [12] (subclass hook)                     0x3602bc  (thunk)
-//   [13] (subclass hook)                     0x2811e4  (thunk)
+//   [10] Clone()                  PURE        0x3602bc
 //
 // DIFFERS: port uses -1 (signed int) for GetType base; binary returns 0xffffffff
 // (same bit pattern as unsigned). No functional difference at call sites.
@@ -42,21 +41,20 @@ public:
     // +0x04: XML duration (initial timer)
     float m_Duration;
 
-    // +0x08: unidentified float (ctor writes 0.0f)
+    // +0x08: scratch field (ctor writes 0.0f; OnDeferComplete folds it into m_BonusAccum)
     float field_0x08;
 
-    // +0x0c: duration remaining; decremented each frame; expiry when <= 0
-    float m_Duration_remaining;
+    // +0x0c: bonus/duration accumulator; decremented each frame; expiry when <= 0
+    float m_BonusAccum;
 
-    // +0x10: unidentified float (ctor writes 0.0f; Parse sets to 1 unconditionally
-    // — binary field_0x10 is separate from the bool pair at +0x18/+0x19)
-    // DIFFERS: binary +0x10 purpose unresolved; ctor=0, Parse=1 (float or int).
-    float field_0x10;
+    // +0x10: parsed/configured flag (uint8; ctor strb 0; Parse sets = 1 as first action)
+    uint8_t m_bConfigured;
+    uint8_t _pad11[3];
 
     // +0x14: deferred-start timer threshold (-1.0f = no deferral)
-    float m_DeferStart;
+    float m_DeferTime;
 
-    // +0x18: gate: 1 while deferred-apply is pending; cleared after ApplyModifier fires
+    // +0x18: gate: 1 while deferred-apply is pending; cleared after OnDeferComplete fires
     // (struct+0x18, read by Update @ 0x13fdc4 as the deferred-pending gate)
     bool m_bApplied;
 
@@ -67,19 +65,20 @@ public:
     bool m_bDeferred;
     uint8_t _pad1a[2];
 
-    // +0x1c: back-pointer to parent PowerUp
-    PowerUp* m_pOwner;
+    // +0x1c: defer-record ptr (NOT PowerUp* owner); OnDeferComplete reads *(this+0x1c)+0xc
+    void* m_pDeferInfo;
 
     GameModifier()
         : m_Duration(0.0f)
         , field_0x08(0.0f)
-        , m_Duration_remaining(0.0f)
-        , field_0x10(0.0f)
-        , m_DeferStart(-1.0f)
+        , m_BonusAccum(0.0f)
+        , m_bConfigured(0)
+        , _pad11{0, 0, 0}
+        , m_DeferTime(-1.0f)
         , m_bApplied(false)
         , m_bDeferred(true)
         , _pad1a{0, 0}
-        , m_pOwner(nullptr)
+        , m_pDeferInfo(nullptr)
     {}
 
     virtual ~GameModifier() {}
@@ -93,11 +92,10 @@ public:
     // [4] UpdateSpecific(float dt) — PURE in binary (0x360434)
     virtual int UpdateSpecific(float dt) = 0;
 
-    // [5] ApplyModifier/defer-complete @ 0x140890 — called by Update when defer fires;
-    // accumulates m_Value(+0x08), clamps via PowerUpManager multipliers.
-    // Base body is the full "apply the score/time bonus" implementation.
-    // TODO: 0x00140890 — full defer-complete body not yet ported (score/time accumulation)
-    virtual void OnDeferComplete() {}
+    // [5] OnDeferComplete @ 0x140890 — called by Update when defer fires;
+    // folds field_0x08 into m_BonusAccum; clamps via PowerUpManager multipliers
+    // and two cached StringHash powerup-name ids.
+    virtual void OnDeferComplete(bool unused, float* pExtra);
 
     // [6] RemoveModifier @ 0x143784 — base no-op
     virtual void RemoveModifier() {}
@@ -108,29 +106,31 @@ public:
     virtual int GetType() { return -1; }
 
     // [8] ApplyModifier(bool,float*) — PURE in binary (0x360434); base body
-    // writes m_Duration_remaining = m_Duration (subclasses call this via super).
+    // writes m_BonusAccum = m_Duration (subclasses call this via super).
     virtual void ApplyModifier(bool isPurchased, float* extra) = 0;
 
     // [9] ParseSpecific — PURE in binary (0x360434)
     virtual void ParseSpecific(TiXmlElement* xml) = 0;
 
-    // [10] Clone() — binary slot 10 @ 0x3602bc (thunk; spec notes "likely Clone()/extra pure").
+    // [10] Clone() — PURE in binary (slot 10 @ 0x3602bc PLT stub).
     // Heap-alloc new instance; subclasses return a concrete copy.
-    virtual GameModifier* Clone() { return nullptr; }
-
-    // [11-13] subclass hook slots (binary thunks: 0x2811d8, 0x3602bc, 0x2811e4)
-    // TODO: 0x2811d8 — slot 11 purpose unresolved (subclass hook)
-    // TODO: 0x3602bc — slot 12 purpose unresolved (thunk)
-    // TODO: 0x2811e4 — slot 13 purpose unresolved (subclass hook)
-    virtual void Slot11() {}
-    virtual void Slot12() {}
-    virtual void Slot13() {}
+    virtual GameModifier* Clone() = 0;
 
     // Binary @ 0x00117DA0 — reads base XML attributes ("length", "waitUntilTime")
     // then dispatches ParseSpecific(xml).
     void Parse(TiXmlElement*);
-    // Binary @ 0x001179AC — clears m_Duration_remaining then dispatches ResetSpecific().
+    // Binary @ 0x001179AC — clears m_BonusAccum then dispatches ResetSpecific().
     void Reset();
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(GameModifier) == 0x20, "GameModifier must be 0x20 bytes");
+static_assert(offsetof(GameModifier, m_BonusAccum)  == 0x0c, "m_BonusAccum");
+static_assert(offsetof(GameModifier, m_bConfigured) == 0x10, "m_bConfigured");
+static_assert(offsetof(GameModifier, m_DeferTime)   == 0x14, "m_DeferTime");
+static_assert(offsetof(GameModifier, m_bApplied)    == 0x18, "m_bApplied");
+static_assert(offsetof(GameModifier, m_pDeferInfo)  == 0x1c, "m_pDeferInfo");
+#endif
 
 #endif // FN_GAME_MODIFIER_H

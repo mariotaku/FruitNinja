@@ -11,7 +11,7 @@
 TimeSinkModifier::TimeSinkModifier()
     : GameModifier()
     , m_Multiplier(0.0f)    // binary ctor @ 0x0014d9e8: +0x20 = 0.0f
-    , m_Accumulator(-4.0f)  // binary ctor @ 0x0014d9e8: +0x24 = -4.0f (0xc0800000)
+    , m_Accumulator(-1.0f)  // binary ctor @ 0x0014da30: +0x24 = -1.0f (0xbf800000)
 {}
 
 TimeSinkModifier::~TimeSinkModifier() {}
@@ -76,14 +76,14 @@ void TimeSinkModifier::FruitWasSlicedSink(Fruit* /*fruit*/, int score) {
 
 GameModifier* TimeSinkModifier::Clone() {
     TimeSinkModifier* c = new TimeSinkModifier();
-    c->m_Duration           = m_Duration;
-    c->field_0x08           = field_0x08;
-    c->m_Duration_remaining = m_Duration_remaining;
-    c->m_bDeferred          = m_bDeferred;
-    c->m_DeferStart         = m_DeferStart;
-    c->m_bApplied           = m_bApplied;
-    c->m_pOwner             = m_pOwner;
-    c->m_Multiplier         = m_Multiplier;
-    c->m_Accumulator        = m_Accumulator;
+    c->m_Duration    = m_Duration;
+    c->field_0x08    = field_0x08;
+    c->m_BonusAccum  = m_BonusAccum;
+    c->m_bDeferred   = m_bDeferred;
+    c->m_DeferTime   = m_DeferTime;
+    c->m_bApplied    = m_bApplied;
+    c->m_pDeferInfo  = m_pDeferInfo;
+    c->m_Multiplier  = m_Multiplier;
+    c->m_Accumulator = m_Accumulator;
     return c;
 }

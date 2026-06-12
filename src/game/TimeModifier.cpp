@@ -40,7 +40,7 @@ int TimeModifier::UpdateSpecific(float dt) {
 
     // (2) Stop-clock contribution.
     if (m_bStopClock)
-        PowerUpManager::GetInstance()->StopClock(m_Duration_remaining);
+        PowerUpManager::GetInstance()->StopClock(m_BonusAccum);
 
     // (3) Slow-clock contribution.
     if (m_TimeSlow != 1.0f)
@@ -50,7 +50,7 @@ int TimeModifier::UpdateSpecific(float dt) {
     if (m_TransitionRate <= 0.0f) {
         m_CurrentDtMod = m_DtScale;
     } else {
-        if (m_TransitionRate < m_Duration_remaining || m_Duration <= 0.0f) {
+        if (m_TransitionRate < m_BonusAccum || m_Duration <= 0.0f) {
             // ASM-verified: 2026-05-02 binary @ 0x12003a -- STEADY-STATE: lots of time remaining
             float target = m_DtScale;
             if (target >= m_CurrentDtMod) {
@@ -62,7 +62,7 @@ int TimeModifier::UpdateSpecific(float dt) {
             }
         } else {
             // FADE-OUT: about to expire
-            float t = m_Duration_remaining / m_TransitionRate;
+            float t = m_BonusAccum / m_TransitionRate;
             float v = (m_DtScale - 1.0f) * t + 1.0f;
             if (m_DtScale > 1.0f) {
                 if (m_CurrentDtMod < v) v = m_CurrentDtMod;  // clamp from above

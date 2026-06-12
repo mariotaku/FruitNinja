@@ -3,21 +3,20 @@
 
 //
 // ExplodyFruitModifier : GameModifier — v1.6.1 explody-fruit modifier.
-// Binary size 0x3c (60 bytes): base 0x20 + 4 floats (0x10) + Vec3 (0x0c). GetType() == 6.
-// On fruit slice, spawns a FruitSplosion HUDControl.
+// Binary size 0x34 (52 bytes): base 0x20 + 4 floats (0x10) + uint32 (0x04). GetType() == 6.
+// On fruit slice, spawns a FruitSplosion HUDControl3d.
 //
-// Nested class FruitSplosion : HUDControl (size 0xa4) handles the visual.
+// Nested class FruitSplosion : HUDControl3d (size 0xa4) handles the visual.
 //
 // Binary addresses:
 //   ctor            0x00134d10
 //   ParseSpecific   0x0013514c
 //   ApplyModifier   0x00135574
-//   FruitWasSliced  0x00135888
+//   FruitWasSliced  0x001358d4  (v1.6.1; was 0x00135888 in v1.5.1)
 //   GetType         0x001360c4
 
 #include "GameModifier.h"
-#include "hud/HUDControl.h"
-#include "math/Vec3.h"
+#include "hud/HUDControl3d.h"
 #include <cstdint>
 
 class Fruit;
@@ -25,55 +24,68 @@ namespace Mortar { class Entity; }
 
 class ExplodyFruitModifier : public GameModifier {
 public:
-    // +0x20: forceMin float (from UNK_00134d68; ctor placeholder 0.0f)
+    // +0x20: forceMin float (UNK_00134d64; ctor=100.0f)
     float m_ForceMin;
 
-    // +0x24: forceInc float (ctor default 0.25f; after parse: +0x28 += +0x24)
+    // +0x24: forceInc float (ctor=0.25f; post-parse: +0x28 += +0x24)
     float m_ForceInc;
 
-    // +0x28: forceMax float (from UNK_00134d68; ctor placeholder 0.0f; after parse: +0x2c += +0x28)
+    // +0x28: forceMax float (ctor=0.0f; post-parse: +0x2c += +0x28)
     float m_ForceMax;
 
-    // +0x2c: radius param float (from UNK_00134d6c; ctor placeholder 0.0f)
+    // +0x2c: radius float (ctor=0.2f)
     float m_Radius;
 
-    // +0x30: Vec3 param (parsed from XML; passed as 6th arg to FruitSplosion ctor)
-    Vec3 m_SplosionVec;
+    // +0x30: fruit-type index 0..2 (FindIndex from XML "type" attr; ctor=0)
+    // Forwarded as 6th arg (int) to FruitSplosion ctor.
+    uint32_t m_FruitTypeIndex;
 
     // -----------------------------------------------------------------------
-    // Nested class FruitSplosion : HUDControl (size 0xa4)
-    // Spawned per-fruit-slice; manages explody particle burst.
-    // Binary addresses:
-    //   ctor        (part of ExplodyFruitModifier::FruitWasSliced @ 0x00135888)
-    //   Update      (vtable)
-    //   DrawOrder   (vtable)
-    //   FruitWasKilled (vtable)
-    //   ADingoAteMyBaby (vtable)
+    // Nested class FruitSplosion : HUDControl3d (size 0xa4)
+    // ctor @ 0x135620. Spawned per-fruit-slice; manages explody particle burst.
+    // Binary fields (own, starting at HUDControl3d base 0x7c):
+    //   +0x7c: entity ptr (fruit param)
+    //   +0x80: const DAT_135868
+    //   +0x84: m_p0 (forceMin)
+    //   +0x88: m_p1 (forceInc)
+    //   +0x8c: m_p2 (forceMax)
+    //   +0x90: m_p3 (radius)
+    //   +0x94: m_typeIndex (m_FruitTypeIndex forwarded as int)
+    //   +0x98: m_pChainNext (FruitSplosion*)
+    //   +0x9c: m_pChainHead (FruitSplosion*)
+    //   +0xa0: m_ChainCount (int)
+    // Also: +0x08 Vec3 m_Pos copied from entity+0x10..0x18 in ctor.
+    // +0x34 flags=0x80; +0x38 Delegate1<HUDControl*> m_OnRemoved.
     // -----------------------------------------------------------------------
-    class FruitSplosion : public HUDControl {
+    class FruitSplosion : public HUDControl3d {
     public:
-        // Extra payload beyond HUDControl's 0x74 base.
-        // Binary size 0xa4 => 0xa4 - 0x74 = 0x30 bytes of subclass fields.
-        // TODO: 0x00135888 — resolve FruitSplosion field layout (fruit ptr, force params, timer, etc.)
-        float m_Param0;   // +0x74
-        float m_Param1;   // +0x78
-        float m_Param2;   // +0x7c
-        float m_Param3;   // +0x80
-        Fruit* m_pFruit;  // +0x84
-        Vec3  m_Vec;      // +0x88: Vec3 param from ExplodyFruitModifier::m_SplosionVec
-        uint8_t _pad94[0x10]; // +0x94..+0xa3 — unknown fields to reach size 0xa4
+        // Own fields (HUDControl3d base = 0x7c)
+        Mortar::Entity* m_pEntity;  // +0x7c
+        uint32_t        m_Const80;  // +0x80: DAT_135868
+        float           m_p0;       // +0x84: forceMin
+        float           m_p1;       // +0x88: forceInc
+        float           m_p2;       // +0x8c: forceMax
+        float           m_p3;       // +0x90: radius
+        int             m_typeIndex; // +0x94: fruit type index from m_FruitTypeIndex
+        FruitSplosion*  m_pChainNext; // +0x98
+        FruitSplosion*  m_pChainHead; // +0x9c
+        int             m_ChainCount; // +0xa0
 
-        // ctor(forceMin, forceInc, forceMax, radius, fruit, splosionVec)
-        FruitSplosion(float param0, float param1, float param2, float param3,
-                      Fruit* fruit, const Vec3& vec);
+        // ctor(forceMin, forceInc, forceMax, radius, entity, typeIndex)
+        // @ 0x135620
+        FruitSplosion(float p0, float p1, float p2, float p3,
+                      Mortar::Entity* entity, int typeIndex);
         ~FruitSplosion() override;
 
         void Update(float dt) override;
+        // TODO: 0x00135620 — FruitSplosion::Draw / DrawOrder body not yet ported
         void DrawOrder(const Vec3& hudScale, int layerMask) override;
 
-        // TODO: 0x00135888 — FruitWasKilled(Fruit*): delegate target; no-op stub
+        // Delegate target: called when sliced fruit is killed
+        // TODO: 0x00135620 — FruitWasKilled body not yet ported
         void FruitWasKilled(Fruit* fruit);
-        // TODO: 0x00135888 — ADingoAteMyBaby(HUDControl*): removal callback; no-op stub
+        // Delegate target: removal callback
+        // TODO: 0x00135620 — ADingoAteMyBaby body not yet ported
         void ADingoAteMyBaby(HUDControl* ctrl);
     };
 
@@ -88,17 +100,19 @@ public:
 
     int GetType() override { return 6; }
 
-    // @ 0x0013514c — parses 4 float attrs + 1 int attr; post-parse adjusts fields
+    // @ 0x0013514c — parses 4 float attrs + FindIndex -> m_FruitTypeIndex; post-parse adjusts
     void ParseSpecific(TiXmlElement* xml) override;
 
     GameModifier* Clone() override;
 
-    // @ 0x00135888 — creates FruitSplosion HUDControl and adds to HUD
-    // TODO: 0x00135888 — wire to FruitManager's FruitWasSliced signal
+    // @ 0x001358d4 — creates FruitSplosion HUDControl3d and adds to HUD
+    // TODO: 0x001358d4 — wire to FruitManager's FruitWasSliced signal
     void FruitWasSliced(Fruit* fruit, int score, Mortar::Entity* entity);
 };
 
 #ifdef __bada__
+static_assert(sizeof(ExplodyFruitModifier) == 0x34,
+    "ExplodyFruitModifier must be 0x34 bytes");
 static_assert(sizeof(ExplodyFruitModifier::FruitSplosion) == 0xa4,
     "ExplodyFruitModifier::FruitSplosion must be 0xa4 bytes");
 #endif
