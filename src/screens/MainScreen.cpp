@@ -5,6 +5,9 @@
 //
 
 #include "MainScreen.h"
+#include "render/BakedStringBox.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
 #include "DojoScreen.h"
 #include "GameModeScreen.h"
 #include "entities/ActorManager.h"
@@ -96,7 +99,9 @@ MainScreen::MainScreen(Game& g)
       m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
       m_bGameStartReset(false),
       m_pDojoScreen(nullptr),
-      game(g)
+      game(g),
+      m_pTTFFont(),
+      m_pSliceInstrBox(nullptr)
 {
     // Load global textures (assigned to globals via GOT in original)
     m_blurryBackingTex = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
@@ -131,6 +136,49 @@ MainScreen::MainScreen(Game& g)
     {
         // logical path; FileSystem_Direct (via Mortar::File in Font::Load) prepends data_dir
         m_pFont = Mortar::Font::Create("fonts/verdana.fnt");
+    }
+
+    // v1.6.1: Load TTF font for the "SLICE FRUIT TO BEGIN" BakedStringBox.
+    // Binary: FontCacheObjectTTF over "fontstruetype/gangofchinese.ttf" (256x256 atlas),
+    // slot GameData+0x614. Port loads fresh into m_pTTFFont (same pattern as m_pFont).
+    // Arabic language uses arabic.ttf; default (and all other languages) uses gangofchinese.
+    // TODO: if the port later adds Arabic language support (languageFlag==?), swap to
+    //   "fontstruetype/arabic.ttf" here and rebuild m_pSliceInstrBox.
+    {
+        m_pTTFFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    }
+    // Construct the BakedStringBox from the TTF face.
+    // Binary: BakedStringBox(font, fontSize=9.0f, width=75, height=30,
+    //   align=0x0d, wrapMode=3, lineSpacing=3).
+    // align 0x0d = 0x01 (centre-H) | 0x04 (centre-V) | 0x08 = 0x0d.
+    {
+        Mortar::FontCacheObjectTTF* ttf = nullptr;
+        if (m_pTTFFont.IsValid()) {
+            ttf = Mortar::FontTTFRegistry::GetInstance().Lookup(m_pTTFFont.Get());
+        }
+        if (ttf) {
+            m_pSliceInstrBox = new Mortar::BakedStringBox(
+                ttf,
+                9.0f,   // fontSize
+                75.0f,  // width
+                30.0f,  // height
+                0x0d,   // align: centre-H(0x01) | centre-V(0x04) | fit(0x08)
+                3,      // wrapMode
+                3.0f    // lineSpacing
+            );
+            const char* sliceText = Mortar::GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);
+            m_pSliceInstrBox->SetText(sliceText ? sliceText : "SLICE FRUIT TO BEGIN");
+            // Colour: GameData+0x6a0 (binary). Port uses brown parchment colour
+            // RGB(0x74,0x5D,0x3C) + full alpha.
+            // TODO: binary GameData+0x6a0 colour — resolve exact binary value when
+            //   GameData struct RE reaches that offset.
+            // DIFFERS: original = GameData+0x6a0 colour (unresolved), using
+            //   RGB(0x74,0x5D,0x3C) brown parchment because it matches the existing
+            //   port approximation and GameData+0x6a0 is not yet mapped.
+            m_pSliceInstrBox->SetColour(Colour(0x74, 0x5D, 0x3C, 255), /*setBase*/0);
+            m_pSliceInstrBox->SetHorizontalLineSpacing(-1);
+            m_pSliceInstrBox->FitIntoVerticalBounds();
+        }
     }
 
     // Set size = (480.0, 138.0, 1.0)
@@ -180,6 +228,9 @@ void MainScreen::Release() {
     pMusicToggle = nullptr;
 
     // Note: SmartPtr members self-destruct in dtor; no explicit texture cleanup needed.
+
+    delete m_pSliceInstrBox;
+    m_pSliceInstrBox = nullptr;
 }
 
 // Matches Update at 0x0014b278 (677 lines) — state machine
@@ -722,15 +773,16 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         game.renderer.DrawQuad(m_DrawColour);
         m_TexSliceFruit->UnSet();
     }
-    if (m_pFont.IsValid()) {
-        const char* sliceText = Mortar::GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);
-        if (sliceText) {
-            // Brown parchment text colour: RGB(0x74, 0x5D, 0x3C).
-            const Colour textColour(0x74, 0x5D, 0x3C, 255);
-            m_pFont->DrawString(11.0f, 1.0f, 0.0f, sliceText,
-                m_LogoFruitPos, textColour,
-                Mortar::FONT_ALIGN_CENTER | Mortar::FONT_ALIGN_MIDDLE);
-        }
+    // v1.6.1 BakedStringBox draw.
+    // Binary: pos = parchment-scroll translation + Vec3(-4.0f, -4.0f, 0.0f).
+    // The parchment-scroll translation is m_LogoFruitPos (the same Vec3 used for
+    // the slice_fruit.tex quad above).
+    // box.SetTranslation(pos, 1) -> triggers layout rebuild at new position.
+    // box.Draw(8.0f, Vec2(1,1), 1) -> rotate +8deg to ride the tilted scroll.
+    if (m_pSliceInstrBox) {
+        Vec3 instrPos = m_LogoFruitPos + Vec3(-4.0f, -4.0f, 0.0f);
+        m_pSliceInstrBox->SetTranslation(instrPos, 1);
+        m_pSliceInstrBox->Draw(8.0f, Vec2(1.0f, 1.0f), 1);
     }
 
     // 5. Loading symbol (states 0x13, 0x14 only)

@@ -14,6 +14,7 @@
 #include "asset/TextureManager.h"
 #include "math/Vec3.h"
 #include "render/Font.h"
+#include "render/BakedStringBox.h"
 #include "game/GameWork.h"
 
 struct Game;
@@ -161,6 +162,15 @@ private:
     // Port specific: binary accesses Game via GOT; port stores a reference here,
     // declared after all binary-faithful fields so it does not displace them.
     Game& game;
+
+    // v1.6.1 BakedStringBox for the "SLICE FRUIT TO BEGIN" instruction label.
+    // Binary: MainScreen+0xe0, operator new(200). The TTF font
+    // (fontstruetype/gangofchinese.ttf, binary GameData+0x614) is loaded into
+    // m_pTTFFont in the ctor; BakedStringBox holds a non-owning pointer into
+    // FontTTFRegistry. The binary's 200-byte class layout is not mirrored here
+    // (v1.6.1 extension past the verified MainScreen+0x120 boundary).
+    Mortar::SmartPtr<Mortar::Font> m_pTTFFont;  // gangofchinese.ttf
+    Mortar::BakedStringBox*        m_pSliceInstrBox;
 
     // Global textures (not on struct, loaded in ctor and assigned to globals via GOT)
     Mortar::SmartPtr<Mortar::Texture> m_blurryBackingTex;     // blurry_backing.tex
