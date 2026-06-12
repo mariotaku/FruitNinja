@@ -1,4 +1,5 @@
 #include "asset/TextureManager.h"
+#include "asset/AlternativeTextureLoader.h"
 #include <cstdio>
 #include <cstring>
 
@@ -33,8 +34,24 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path) {
         return existing;
     }
 
+    // v1.6.1: AlternativeTextureLoader path-rewrite hook.
+    // When Texture::UseAlternativeTextureLoader is true the path is rewritten via
+    // AlternativeTextureLoader::CreateLoader before opening the file.
+    // Binary dispatch point mirrors the loader-selection code in the 1.6.1 binary.
+    // Port: UseAlternativeTextureLoader defaults false and Prefix/Postfix are empty,
+    // so this branch is never taken in the shipped configuration.
+    const char* loadPath = path;
+    Mortar::SmartPtr<AlternativeTextureLoaderObj> altLoader;
+    if (Texture::UseAlternativeTextureLoader) {
+        Mortar::AsciiString pathStr(path);
+        altLoader = AlternativeTextureLoader::CreateLoader(pathStr);
+        if (altLoader.IsValid()) {
+            loadPath = altLoader->m_ResolvedPath.c_str();
+        }
+    }
+
     // Cache miss — load from disk
-    Mortar::SmartPtr<Texture> tex = Texture::Load(path);
+    Mortar::SmartPtr<Texture> tex = Texture::Load(loadPath);
     if (tex.IsValid()) {
         Add(hash, tex);
     }

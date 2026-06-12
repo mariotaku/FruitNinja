@@ -45,6 +45,14 @@ public:
     // Load() but parses an in-memory .tex blob instead of a file path.
     static Mortar::SmartPtr<Texture> LoadFromMemory(void const* buf, int len);
 
+    // v1.6.1 addition: AlternativeTextureLoader path-rewrite toggle.
+    // Binary: bool global @ data segment, default false.
+    // When true, TextureManager::Load rewrites the texture path via
+    // AlternativeTextureLoader::CreateLoader before opening the file.
+    // Port: defaults to false (matching shipped binary default; Prefix/Postfix are empty
+    // so the rewrite would be a no-op even if enabled).
+    static bool UseAlternativeTextureLoader;
+
     // Binary @ 0x00188da4 -- cache-gated bind. The binary calls a virtual slot
     // (Texture2D::GetType, vtable +0xc) and only binds when it returns 0; for a
     // plain Texture2D GetType()==0 always, so Set() always runs. The port has
@@ -79,6 +87,15 @@ private:
     static Mortar::SmartPtr<Texture> ParseTexBuffer(const void* data,
                                                     long size,
                                                     const char* pathForLog);
+
+    // v1.6.1 addition: parse a .tex3 container blob (4-byte magic + layered header +
+    // N-layer table) and upload layer-0 into a fresh Texture. Returns null if the
+    // magic does not match (caller should fall through to ParseTexBuffer for .tex files).
+    // Binary: Mortar::TextureFileFormat::Tex3Format::Read @ 0x0022bd7c reads the full
+    // multi-layer table; port uploads layer-0 only (mip layers // TODO: 0x0022bd7c).
+    static Mortar::SmartPtr<Texture> ParseTex3Buffer(const void* data,
+                                                     long size,
+                                                     const char* pathForLog);
 };
 
 } // namespace Mortar
