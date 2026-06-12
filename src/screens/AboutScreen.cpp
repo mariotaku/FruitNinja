@@ -264,7 +264,7 @@ void AboutScreen::CreateBackButton()
         game_work.m_TutorialControl->ResetTutePos(m_pBackButton);
     }
 
-    m_pBackButton->m_TargetSize = m_pBackButton->m_TargetSize * BACK_SCALE;
+    m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;
     if (m_pBackButton->m_pFruitPiece) {
         m_pBackButton->m_pFruitPiece->scale =
             m_pBackButton->m_pFruitPiece->scale * BACK_SCALE;
