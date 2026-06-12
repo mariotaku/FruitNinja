@@ -53,6 +53,9 @@ public:
         void         SetFlag(uint8_t f){ sizeFlags = (sizeFlags & 0x00FFFFFFu) | ((unsigned int)f << 24); }
     };
 
+    // DIFFERS: binary header = 0x10 (ARM32 sizeof Block); port uses sizeof(Block) for 64-bit pointers.
+    static const size_t kHeaderSize = sizeof(Block);
+
     // Binary @ 0x00194948 — ctor: align size to 4, allocate buffer, init fields.
     explicit LinkedHeap(unsigned int size);
 
@@ -115,10 +118,10 @@ private:
     // Payload <-> block header conversions.
     Block* PayloadToBlock(void* payload) const {
         return reinterpret_cast<Block*>(
-            reinterpret_cast<uint8_t*>(payload) - 0x10 - (m_GuardBandSize >> 1));
+            reinterpret_cast<uint8_t*>(payload) - kHeaderSize - (m_GuardBandSize >> 1));
     }
     void* BlockToPayload(Block* blk) const {
-        return reinterpret_cast<uint8_t*>(blk) + 0x10 + (m_GuardBandSize >> 1);
+        return reinterpret_cast<uint8_t*>(blk) + kHeaderSize + (m_GuardBandSize >> 1);
     }
 
     // Free-list next-link: stored in the payload's first word as a payload pointer.
@@ -128,6 +131,15 @@ private:
     static void SetFreeNext(void* payload, void* next) {
         *reinterpret_cast<void**>(payload) = next;
     }
+
+#ifdef FN_TEST
+public:
+    // Test-only accessors for all-blocks list integrity checks.
+    Block*    TestGetFirstBlock() const { return m_pFirstBlock; }
+    uint8_t*  TestGetBuffer()     const { return m_pBuffer; }
+    unsigned int TestGetSize()    const { return m_Size; }
+private:
+#endif
 };
 
 #ifdef __bada__

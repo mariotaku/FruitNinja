@@ -56,14 +56,14 @@ void* LinkedHeap::AllocateFixed(unsigned int sz, const char* name)
 }
 
 // Binary @ 0x001947f0 — core allocator.
-// sz aligned to 4; need = guard + 0x10 + sz.
+// sz aligned to 4; need = guard + kHeaderSize + sz.
 // 1. Free-list first-fit: if hit, reuse (rewrite flag+name), return payload.
 // 2. Bump-allocate at m_StartAddr if fits before m_EndAddr, chain all-blocks list.
-// Returns payload ptr (header + 0x10 + guard/2).
+// Returns payload ptr (header + kHeaderSize + guard/2).
 void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag)
 {
     unsigned int aligned = (sz + 3u) & ~3u;
-    unsigned int need    = (m_GuardBandSize >> 1) + 0x10u + aligned;
+    unsigned int need    = (unsigned int)((m_GuardBandSize >> 1) + kHeaderSize + aligned);
 
     // Free-list search first.
     void* hit = 0;
@@ -168,7 +168,7 @@ void LinkedHeap::Resize(void* payload, unsigned int newSz)
     if (!payload) return;
     Block* blk   = PayloadToBlock(payload);
     unsigned int alignedNew = (newSz + 3u) & ~3u;
-    unsigned int need       = (m_GuardBandSize >> 1) + 0x10u + alignedNew;
+    unsigned int need       = (unsigned int)((m_GuardBandSize >> 1) + kHeaderSize + alignedNew);
     unsigned int oldSize    = blk->GetSize();
     if (need >= oldSize) return;
 
@@ -205,9 +205,9 @@ void LinkedHeap::Resize(void* payload, unsigned int newSz)
 // Exact/near fit: remove from free-list, return true + out payload.
 // Larger fit: split remainder back onto free-list, return true.
 // No fit: return false.
-// Split threshold: remainder > headerSize (guard=0), i.e. > 0x10 (binary ABI).
-// DIFFERS: original threshold = guardBand + headerSize (= 0x10 when guard=0),
-// prior port used +4 extra guard which prevented valid splits.
+// Split threshold: remainder > headerSize (guard=0), i.e. > sizeof(Block) on this build.
+// DIFFERS: original threshold = guardBand + 0x10 (ARM32 sizeof Block = 0x10 when guard=0),
+// port uses kHeaderSize = sizeof(Block) (0x20 on x64) to match pointer-size-agnostic layout.
 bool LinkedHeap::FreeListSearch(unsigned int need, void*& out)
 {
     void* curPayload = m_pFreeListHead;
@@ -217,7 +217,7 @@ bool LinkedHeap::FreeListSearch(unsigned int need, void*& out)
         if (sz >= need) {
             unsigned int remainder = sz - need;
             // Split only when remainder is large enough to hold a header + at least 1 byte payload.
-            unsigned int headerSize = (m_GuardBandSize >> 1) + 0x10u;
+            unsigned int headerSize = (unsigned int)((m_GuardBandSize >> 1) + kHeaderSize);
             if (remainder > headerSize) {
                 // Split: resize current block down, create remainder block.
                 cur->SetSize(need);

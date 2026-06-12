@@ -113,7 +113,7 @@ static void test_forward_merge()
 
     // Largest free block must be at least B+C combined (2*64 + 2 headers).
     unsigned int largest = heap.GetLargestFreeBlock();
-    unsigned int two_blocks_min = (64 + 0x10) * 2;
+    unsigned int two_blocks_min = (unsigned int)((64 + sizeof(Mortar::LinkedHeap::Block)) * 2);
     CHECK(largest >= two_blocks_min);
 
     // Free D (tail-rewind), then A (tail-rewind after merge winds back).
@@ -170,8 +170,8 @@ static void test_used_bytes_accounting()
     for (i = 0; i < N; ++i) {
         total_payload += (sizes[i] + 3u) & ~3u;
     }
-    // Used includes headers (0x10 each) + payloads.
-    CHECK(used >= total_payload + N * 0x10);
+    // Used includes headers (sizeof(Block) each) + payloads.
+    CHECK(used >= total_payload + N * (unsigned int)sizeof(Mortar::LinkedHeap::Block));
 
     // Free all in reverse order (tail-rewind each time).
     for (i = N - 1; i >= 0; --i) {
@@ -207,6 +207,99 @@ static void test_drain_alloc_order()
     // After full drain the bump pointer must have rewound so a large alloc works.
     void* big = heap.Allocate(3800, "refill");
     CHECK(big != 0);
+}
+
+// Walk the all-blocks list and assert structural integrity:
+//   - Every prev/next pointer is either null or within [buffer, buffer+size).
+//   - Each forward link's back-link points back to us.
+// Bounds the walk at max_blocks to catch infinite loops on corruption.
+static void check_list_integrity(Mortar::LinkedHeap& heap, int max_blocks = 4096)
+{
+    uint8_t* buf_lo = heap.TestGetBuffer();
+    uint8_t* buf_hi = buf_lo + heap.TestGetSize();
+
+    Mortar::LinkedHeap::Block* cur = heap.TestGetFirstBlock();
+    int count = 0;
+    while (cur) {
+        ++count;
+        CHECK(count <= max_blocks);  // detects cycle / corruption
+
+        uint8_t* p = reinterpret_cast<uint8_t*>(cur);
+        CHECK(p >= buf_lo && p < buf_hi);
+
+        if (cur->prev) {
+            uint8_t* pp = reinterpret_cast<uint8_t*>(cur->prev);
+            CHECK(pp >= buf_lo && pp < buf_hi);
+            // back-link from prev must point to cur
+            CHECK(cur->prev->next == cur);
+        }
+        if (cur->next) {
+            uint8_t* np = reinterpret_cast<uint8_t*>(cur->next);
+            CHECK(np >= buf_lo && np < buf_hi);
+            // forward-link's back-link must point to cur
+            CHECK(cur->next->prev == cur);
+        }
+
+        cur = cur->next;
+    }
+}
+
+// Reproduce the v1.6.1 shutdown crash: ActorManager::Clear drains a split /
+// fragmented heap in allocation order. The bug was that FreeListSearch's SPLIT
+// path wrote blk->name (struct +0x10 on ARM32) and blk->sizeFlags (struct +0x0C)
+// into addresses that, on x64 with sizeof(Block)==0x20, landed in the payload or
+// the NEXT block's prev/next slots -- corrupting pointers that Release() then
+// dereferenced as Block*.
+//
+// This test forces a split explicitly and validates the all-blocks list after
+// every mutating operation so the corruption is caught at the split, not only
+// at shutdown.
+static void test_split_path()
+{
+    // Use a heap large enough for: big(2000) + guard(64) + small(64) + fragments.
+    Mortar::LinkedHeap heap(8192);
+
+    // Allocate a large block and a "guard" block behind it so that when we
+    // free big, it is NOT the tail (guard is), forcing big onto the free-list
+    // rather than triggering tail-rewind.
+    void* big   = heap.Allocate(2000, "big");
+    void* guard = heap.Allocate(64,   "guard");
+    CHECK(big   != 0);
+    CHECK(guard != 0);
+
+    // Free big -- big goes onto the free-list (not tail, guard is tail).
+    heap.Release(big, true);
+    check_list_integrity(heap);
+
+    // Allocate small (64 bytes) -- this MUST hit big's freed region via
+    // FreeListSearch. Because 2000 >> 64, a SPLIT must occur.
+    // On unfixed code this split writes sizeFlags at struct+0x18 (x64), which
+    // stomps guard->prev, corrupting the all-blocks list.
+    void* small = heap.Allocate(64, "small");
+    CHECK(small != 0);
+    check_list_integrity(heap);  // FAILS on unfixed code -- guard->prev clobbered
+
+    // Fragment the remainder further.
+    void* f1 = heap.Allocate(32,  "f1");
+    check_list_integrity(heap);
+    void* f2 = heap.Allocate(200, "f2");
+    check_list_integrity(heap);
+    void* f3 = heap.Allocate(16,  "f3");
+    check_list_integrity(heap);
+
+    // Release everything in allocation order (head-first); mirrors ActorManager::Clear.
+    heap.Release(small, true);
+    check_list_integrity(heap);
+    heap.Release(guard, true);
+    check_list_integrity(heap);
+    heap.Release(f1, true);
+    check_list_integrity(heap);
+    heap.Release(f2, true);
+    check_list_integrity(heap);
+    heap.Release(f3, true);
+    check_list_integrity(heap);
+
+    CHECK(heap.GetSizeOfUsedBlocks() == 0);
 }
 
 // Same drain but in interleaved order to exercise the prev-walk anchor logic.
@@ -258,6 +351,9 @@ int main()
 
     test_drain_interleaved();
     std::printf("  drain_interleaved: PASS\n");
+
+    test_split_path();
+    std::printf("  split_path: PASS\n");
 
     std::printf("test_linkedheap: ALL PASS\n");
     return 0;
