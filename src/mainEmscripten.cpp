@@ -50,12 +50,27 @@ static volatile int g_audio_disabled = 0;
 // Written from JS via Module._fn_idbfs_ready() (EMSCRIPTEN_KEEPALIVE below).
 static volatile int g_idbfs_ready = 0;
 
+// Port specific: tap-to-start gate flag.
+// 0 = user has not tapped yet; 1 = user confirmed start via the TAP TO START
+// overlay.  BootWait waits for BOTH g_idbfs_ready AND g_tap_started before
+// calling g_game.init(), so the game never initialises behind the splash.
+// IDBFS syncfs(true) runs in parallel during the tap-wait so it is ready
+// (or already done) by the time the user taps.
+static volatile int g_tap_started = 0;
+
 // Port specific: called from JS once the initial syncfs(true) callback fires.
 // EMSCRIPTEN_KEEPALIVE prevents dead-code elimination so the symbol is visible
 // as Module._fn_idbfs_ready() in the generated JS.
 extern "C" {
 EMSCRIPTEN_KEEPALIVE void fn_idbfs_ready(void) {
     g_idbfs_ready = 1;
+}
+
+// Port specific: called from JS when the user taps either "TAP TO START"
+// button on the overlay.  Both the audio and silent paths call this so
+// BootWait can proceed regardless of audio choice.
+EMSCRIPTEN_KEEPALIVE void fn_user_started(void) {
+    g_tap_started = 1;
 }
 
 // Port specific: called from JS when the user taps "tap to start without
@@ -170,12 +185,14 @@ struct BootArgs {
 static BootArgs g_bootArgs;
 
 static void BootWait(void* arg) {
-    if (!g_idbfs_ready) {
-        // Still waiting for IDBFS syncfs(true) to complete.
+    if (!g_idbfs_ready || !g_tap_started) {
+        // Still waiting for IDBFS syncfs(true) and/or the user's tap.
+        // Both must be ready before init: IDBFS runs in parallel during the
+        // tap-wait so it is typically done by the time the user taps.
         return;
     }
-    // IDBFS load finished (or failed).  Cancel this boot loop before calling
-    // init so that emscripten_set_main_loop below replaces it cleanly.
+    // Both IDBFS load and user tap are done.  Cancel this boot loop before
+    // calling init so that emscripten_set_main_loop below replaces it cleanly.
     emscripten_cancel_main_loop();
 
     BootArgs* ba = static_cast<BootArgs*>(arg);
