@@ -111,10 +111,6 @@
       transition: opacity 0.3s ease;
     }
 
-    #tap-overlay.visible {
-      display: flex;
-    }
-
     #tap-text {
       color: #fff;
       font-size: 2.8em;
@@ -281,14 +277,16 @@
     /* Hide progress bar -- download done. Splash stays as tap-overlay backdrop. */
     if (_progressWrap) _progressWrap.style.display = 'none';
     if (_tapOverlay) {
-      /* Set display:flex first so the element is in layout, then trigger the
-         opacity transition on the next animation frame so the browser actually
-         transitions from 0 to 1 rather than snapping straight to 1. */
+      /* Reliable fade-in: set display:flex and opacity:0 together so the
+         element enters layout with an established opacity:0 state, then
+         force a synchronous reflow so the browser commits that state before
+         we flip opacity to 1. Without the reflow the display change and the
+         opacity change land in the same frame and no transition fires. */
       _tapOverlay.style.display = 'flex';
-      requestAnimationFrame(function () {
-        _tapOverlay.style.opacity = '1';
-        if (_tapText) _tapText.focus();
-      });
+      _tapOverlay.style.opacity = '0';
+      void _tapOverlay.offsetHeight; /* force reflow */
+      _tapOverlay.style.opacity = '1';
+      if (_tapText) _tapText.focus();
     }
   }
 
