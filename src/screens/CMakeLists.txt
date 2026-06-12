@@ -13,4 +13,15 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/BonusScreen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PowerUpShop.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PurchaseInfo.cpp
+    # v1.6.1 new-screens subsystem
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactZenPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactLitePage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactClassicFactPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactBigClassicFactPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactBonusFactPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactRewardsPage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitFactLeaderboard.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/AchievementsScreen.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ChallengeMenuScreen.cpp
 )
