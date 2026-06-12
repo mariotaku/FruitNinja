@@ -179,17 +179,23 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
 {
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;  // binary sets to 1 in ctor; raised to HUD_LAYER_POST_ACTOR by subclass Draw
+    // Binary ctor @ 0x00182da0 (v1.6.1): m_State(+0x90)=0, m_TransAlpha(+0x8c)=0.0,
+    // enabled-flag(+0x34)=1. Base ctors (BaseScreen, HUDControl) already cover
+    // these, but we set them explicitly so the screen is active from construction
+    // without requiring Init() to be called -- matching binary ctor semantics.
+    m_State           = 0;
+    m_TransitionAlpha = 0.0f;
+    m_Active          = 1;
 }
 
 GameModeScreen::~GameModeScreen() {
     RemoveButtons();
 }
 
-void GameModeScreen::Init() {
-    m_State = 0;
-    m_TransitionAlpha = 0.0f;
-    m_Active = 1;
-}
+// Binary Init @ 0x00181060 (v1.6.1) forwards to vtable+0x10 = Reset @ 0x00181074,
+// which is bare BX LR. Both are no-ops; activation is done in the ctor.
+// MainScreen does NOT call Init() on GameModeScreen (matching binary behaviour).
+void GameModeScreen::Init() {}
 
 // Binary @ 0x0013df80 — vtable slot 2 Reset(): no-op override stub
 void GameModeScreen::Reset() {}
