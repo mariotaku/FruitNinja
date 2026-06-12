@@ -36,8 +36,8 @@ LinkedHeap::~LinkedHeap()
 // All blocks are implicitly gone. (= Entity::HeapClear)
 void LinkedHeap::ReleaseAll()
 {
-    m_pFreeListHead = 0;
-    m_pFreeListTail = 0;
+    m_pFreeListHead = 0;  // payload ptr
+    m_pFreeListTail = 0;  // payload ptr
     m_pFirstBlock   = 0;
     m_pLastBlock    = 0;
     m_StartAddr     = reinterpret_cast<uintptr_t>(m_pBuffer);
@@ -102,8 +102,8 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
 // Marks block FREE (flag=1), adds to free-list, then coalesces:
 //   - If block is the last allocated block: pop trailing FREE blocks and rewind
 //     m_StartAddr by subtracting each block's size (binary @ 0x001946dc-0x0019471e).
-//   - Else: merge forward adjacent FREE blocks into this one
-//     (binary @ 0x00194720-0x00194758).
+//   - Else: find anchor (last consecutive prev-free block), then absorb consecutive
+//     forward free blocks into anchor (binary @ 0x00194720-0x00194758).
 // Block prev is at +0x00, next at +0x04 (binary layout).
 void LinkedHeap::Release(void* payload, bool /*coalesce*/)
 {
@@ -114,7 +114,7 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
 
     blk->SetFlag(1);
     blk->name = "freed";
-    FreeListAdd(blk);
+    FreeListAdd(payload);
 
     // If this block is at the tail of the bump region, rewind.
     if (blk == m_pLastBlock) {
@@ -122,7 +122,7 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
         // m_StartAddr (binary: SUB m_StartAddr, cur->GetSize() -- NOT reset to cur).
         Block* cur = m_pLastBlock;
         while (cur && cur->GetFlag() == 1) {
-            FreeListRemove(cur);
+            FreeListRemove(BlockToPayload(cur));
             m_StartAddr -= cur->GetSize();    // binary: subtract size, not = (uintptr_t)cur
             Block* pr = cur->prev;            // +0x00 back-link
             if (pr) {
@@ -136,20 +136,27 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
         return;
     }
 
-    // Forward-merge: absorb consecutive free next-blocks into blk
-    // (binary @ 0x00194720-0x00194758).
-    Block* fwd = blk->next;                   // +0x04
+    // Non-tail path (binary @ 0x00194720-0x00194758):
+    // 1. Walk the PREV chain to find the anchor = last consecutive FREE block going back
+    //    (stop when prev is null or prev is NOT free).
+    Block* anchor = blk;
+    for (;;) {
+        Block* p = anchor->prev;
+        if (!p || p->GetFlag() != 1) break;
+        anchor = p;
+    }
+    // 2. Absorb consecutive FREE forward (next) blocks into anchor.
+    Block* fwd = anchor->next;
     while (fwd && fwd->GetFlag() == 1) {
-        unsigned int merged = blk->GetSize() + fwd->GetSize();
-        FreeListRemove(fwd);
+        FreeListRemove(BlockToPayload(fwd));
+        anchor->SetSize(anchor->GetSize() + fwd->GetSize());
         Block* fn = fwd->next;                // +0x04
+        anchor->next = fn;
         if (fn) {
-            fn->prev = blk;                   // +0x00 fix successor's back-link
+            fn->prev = anchor;                // +0x00 fix successor's back-link
         } else {
-            m_pLastBlock = blk;
+            m_pLastBlock = anchor;            // guard: prevents -1 deref on subsequent tail-rewind
         }
-        blk->next = fn;                       // +0x04
-        blk->SetSize(merged);
         fwd = fn;
     }
 }
@@ -191,21 +198,27 @@ void LinkedHeap::Resize(void* payload, unsigned int newSz)
     split->sizeFlags = 0;
     split->SetSize(remainder);
     split->SetFlag(1);
-    FreeListAdd(split);
+    FreeListAdd(BlockToPayload(split));
 }
 
 // Binary @ 0x001944c0 — first-fit free-list scan.
 // Exact/near fit: remove from free-list, return true + out payload.
 // Larger fit: split remainder back onto free-list, return true.
 // No fit: return false.
+// Split threshold: remainder > headerSize (guard=0), i.e. > 0x10 (binary ABI).
+// DIFFERS: original threshold = guardBand + headerSize (= 0x10 when guard=0),
+// prior port used +4 extra guard which prevented valid splits.
 bool LinkedHeap::FreeListSearch(unsigned int need, void*& out)
 {
-    Block* cur = m_pFreeListHead;
-    while (cur) {
-        unsigned int sz = cur->GetSize();
+    void* curPayload = m_pFreeListHead;
+    while (curPayload) {
+        Block* cur       = PayloadToBlock(curPayload);
+        unsigned int sz  = cur->GetSize();
         if (sz >= need) {
             unsigned int remainder = sz - need;
-            if (remainder > 0x10u + 4u) {
+            // Split only when remainder is large enough to hold a header + at least 1 byte payload.
+            unsigned int headerSize = (m_GuardBandSize >> 1) + 0x10u;
+            if (remainder > headerSize) {
                 // Split: resize current block down, create remainder block.
                 cur->SetSize(need);
                 uintptr_t remAddr = reinterpret_cast<uintptr_t>(cur) + need;
@@ -225,49 +238,49 @@ bool LinkedHeap::FreeListSearch(unsigned int need, void*& out)
                 }
                 cur->next = remBlk;
                 // Remove cur from free-list; add remainder.
-                FreeListRemove(cur);
-                FreeListAdd(remBlk);
+                FreeListRemove(curPayload);
+                FreeListAdd(BlockToPayload(remBlk));
             } else {
-                FreeListRemove(cur);
+                FreeListRemove(curPayload);
             }
-            out = BlockToPayload(cur);
+            out = curPayload;
             return true;
         }
-        cur = GetFreeNext(cur);
+        curPayload = GetFreeNext(curPayload);
     }
     return false;
 }
 
-// Binary @ 0x00194474 — append blk to free-list tail (singly-linked via payload word).
-void LinkedHeap::FreeListAdd(Block* blk)
+// Binary @ 0x00194474 — append payload to free-list tail (singly-linked via payload word).
+void LinkedHeap::FreeListAdd(void* payload)
 {
-    SetFreeNext(blk, 0);
-    if (!m_pFreeListTail) {
-        m_pFreeListHead = blk;
-        m_pFreeListTail = blk;
+    SetFreeNext(payload, 0);
+    if (!m_pFreeListHead) {
+        m_pFreeListHead = payload;
+        m_pFreeListTail = payload;
     } else {
-        SetFreeNext(m_pFreeListTail, blk);
-        m_pFreeListTail = blk;
+        SetFreeNext(m_pFreeListTail, payload);
+        m_pFreeListTail = payload;
     }
 }
 
-// Binary @ 0x0019448c — remove blk from free-list (singly-linked, O(n)).
-void LinkedHeap::FreeListRemove(Block* blk)
+// Binary @ 0x0019448c — remove payload from free-list (singly-linked, O(n)).
+void LinkedHeap::FreeListRemove(void* payload)
 {
-    Block* prev = 0;
-    Block* cur  = m_pFreeListHead;
+    void* prev = 0;
+    void* cur  = m_pFreeListHead;
     while (cur) {
-        Block* nxt = GetFreeNext(cur);
-        if (cur == blk) {
+        void* nxt = GetFreeNext(cur);
+        if (cur == payload) {
             if (prev) {
                 SetFreeNext(prev, nxt);
             } else {
                 m_pFreeListHead = nxt;
             }
-            if (m_pFreeListTail == blk) {
+            if (m_pFreeListTail == payload) {
                 m_pFreeListTail = prev;
             }
-            SetFreeNext(blk, 0);
+            SetFreeNext(payload, 0);
             return;
         }
         prev = cur;
@@ -313,9 +326,10 @@ unsigned int LinkedHeap::GetSizeOfUnusedBlocks() const
 unsigned int LinkedHeap::GetLargestFreeBlock() const
 {
     unsigned int best = (unsigned int)(m_EndAddr - m_StartAddr);
-    Block* cur = m_pFreeListHead;
+    void* cur = m_pFreeListHead;
     while (cur) {
-        unsigned int sz = cur->GetSize();
+        Block* blk      = PayloadToBlock(cur);
+        unsigned int sz = blk->GetSize();
         if (sz > best) best = sz;
         cur = GetFreeNext(cur);
     }
