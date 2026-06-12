@@ -10,6 +10,8 @@
 #include "Game.h"
 #include "render/Renderer.h"
 #include "debug/Logger.h"
+#include "game/GameWork.h"
+#include "engine/audio/SoundManager.h"
 
 // Port specific: Game instance lives as a file-static so the C callback
 // can reach it.  Must outlive the emscripten main loop.
@@ -31,6 +33,18 @@ static const int    EM_MAX_STEPS   = 5;      // spiral-of-death guard
 static double       g_accumulator  = 0.0;    // unprocessed ms carried between RAFs
 static double       g_lastTime     = -1.0;   // last RAF timestamp (emscripten_get_now)
 
+// Port specific: Phase 5 audio-gesture fallback.
+// If the TAP TO START overlay is bypassed (e.g. autoplay policy already
+// allowed audio, or the overlay was dismissed before SDL audio opened),
+// the first in-game SDL_FINGERDOWN still tries to resume the AudioContext.
+// Best-effort only -- the game runs with or without audio.
+static volatile int g_audio_gesture_done = 0;
+
+// Port specific: set to 1 by fn_disable_audio() when the user chose the
+// "tap to start without audio" path.  Prevents the first-touch fallback
+// from re-resuming the AudioContext after a deliberate silent start.
+static volatile int g_audio_disabled = 0;
+
 // Port specific: IDBFS boot-gate flag.
 // 0 = syncfs(true) still pending; 1 = load complete (or failed), safe to init.
 // Written from JS via Module._fn_idbfs_ready() (EMSCRIPTEN_KEEPALIVE below).
@@ -42,6 +56,34 @@ static volatile int g_idbfs_ready = 0;
 extern "C" {
 EMSCRIPTEN_KEEPALIVE void fn_idbfs_ready(void) {
     g_idbfs_ready = 1;
+}
+
+// Port specific: called from JS when the user taps "tap to start without
+// audio".  Disables both music and SFX via exactly the same paths the in-game
+// toggle buttons use, so the music-note and speaker icons render their off
+// state as soon as MainScreen is shown.
+// Called after the game runtime is up and game_work has been populated by
+// GameInitialise, so null-checking game_work.m_SaveData is sufficient to
+// confirm managers are ready.
+// Note on persistence: SoundCallback/MusicCallback do NOT write to save data
+// (the binary confirmed: neither callback calls AddToTotal).  The
+// sound_off/music_off save-totals are reset to 0 on every load by
+// GameInitialise (lines 172-175 of GameInitialise.cpp).  Therefore disabling
+// here is session-only -- it will NOT persist to the next page load.
+EMSCRIPTEN_KEEPALIVE void fn_disable_audio(void) {
+    // Guard: if game_work is not yet initialized, do nothing.
+    if (!game_work.m_SaveData) return;
+
+    // Disable SFX -- mirrors SoundCallback() exactly.
+    game_work.m_bSoundOn = false;
+    Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
+
+    // Disable music -- mirrors MusicCallback() exactly.
+    // UpdateMusic reads m_bMusicOn each frame and ramps the volume to 0.
+    game_work.m_bMusicOn = false;
+
+    // Suppress the first-touch AudioContext auto-resume fallback.
+    g_audio_disabled = 1;
 }
 } // extern "C"
 
@@ -78,6 +120,34 @@ static void EmscriptenFrame(void* arg) {
         elapsed = EM_FRAME_MS * EM_MAX_STEPS;
     }
     g_accumulator += elapsed;
+
+    // Port specific: Phase 5 audio-gesture fallback.
+    // SDL_PeepEvents (SDL_PEEKEVENT, no removal) lets us detect the first
+    // touch without consuming the event before frameTick's SDL_PollEvent loop.
+    // Skipped when g_audio_disabled is set (user chose "tap to start without
+    // audio") so the silent choice is not reversed on the first slice.
+    if (!g_audio_gesture_done && !g_audio_disabled) {
+        SDL_Event peekBuf[4];
+        int found = SDL_PeepEvents(peekBuf, 4, SDL_PEEKEVENT,
+                                   SDL_FINGERDOWN, SDL_FINGERDOWN);
+        if (found > 0) {
+            g_audio_gesture_done = 1;
+            // Best-effort resume of the WebAudio context that emcc SDL2
+            // created. SDL2.audioContext confirmed by grepping the generated
+            // fruit-ninja.js (see shell.html comment). Wrapped in try/catch
+            // so any failure is non-fatal; game runs without audio.
+            EM_ASM({
+                try {
+                    var ctx = (typeof Module !== 'undefined' && Module.SDL2)
+                              ? Module.SDL2.audioContext : null;
+                    if (!ctx && typeof SDL2 !== 'undefined') ctx = SDL2.audioContext;
+                    if (ctx && ctx.state === 'suspended') {
+                        ctx.resume().catch(function(e){});
+                    }
+                } catch(e) {}
+            });
+        }
+    }
 
     int steps = 0;
     while (g_accumulator >= EM_FRAME_MS && steps < EM_MAX_STEPS) {
