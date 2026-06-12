@@ -14,15 +14,21 @@
 //
 // Key field offsets (binary-confirmed from RE spec):
 //   +0x7c: Fruit*        m_pHostFruit      (host fruit entity)
-//   +0x84: float         m_HitCount        (combo count; incremented per slice, decays)
+//   +0x84: float         m_HitCount        (combo count; += 1.0 per slice, decays -17.5/s)
 //   +0x88: float         m_Timer           (life clock; += dt each frame)
 //   +0x8c: float         m_PrevTimer       (previous-frame timer; edge tests)
 //   +0x90: int           m_SliceCount      (total slices; incremented by Sliced())
 //   +0x94: SlashEntity*  m_pLinkedSlasher  (linked slash entity; nullable)
 //   +0xa0: float         m_Lifetime        (explode threshold; phase comparisons)
 //   +0xa4: float         m_FadeIn          (0->1 fade-in progress)
+//   +0xa8: Vec3          m_WorkVec1        (spin/vel/lerp work vector -- purpose unresolved)
+//   +0xb4: Vec3          m_WorkVec2        (spin/vel/lerp work vector -- purpose unresolved)
+//   +0xc0: Vec3          m_WorkVec3        (spin/vel/lerp work vector -- purpose unresolved)
+//   +0xcc: Vec3          m_WorkVec4        (spin/vel/lerp work vector -- purpose unresolved)
 //   +0xd8: float         m_Scale           (0->1 scale-in progress)
 //   +0xdc: int           m_SliceCooldown   (decremented; gates re-slice)
+//   +0xf0: Vec3          m_WorkVec5        (explosion-origin / work vector -- purpose unresolved)
+//   +0xfc: Vec3          m_WorkVec6        (work vector -- purpose unresolved)
 
 #include "Entity.h"
 #include "math/Vec3.h"
@@ -69,7 +75,10 @@ public:
     // +0xa4: fade-in progress [0..1]; += dt*3 per frame
     float m_FadeIn;               // +0xa4
 
-    uint8_t _pad_a8[48];          // +0xa8..+0xd7  (spin/vel vecs, lerp targets -- unresolved)
+    Vec3 m_WorkVec1;              // +0xa8  (spin/vel/lerp work vector -- purpose unresolved)
+    Vec3 m_WorkVec2;              // +0xb4  (spin/vel/lerp work vector -- purpose unresolved)
+    Vec3 m_WorkVec3;              // +0xc0  (spin/vel/lerp work vector -- purpose unresolved)
+    Vec3 m_WorkVec4;              // +0xcc  (spin/vel/lerp work vector -- purpose unresolved)
 
     // +0xd8: scale-in progress [0..1]
     float m_Scale;                // +0xd8
@@ -77,9 +86,9 @@ public:
     // +0xdc: re-slice cooldown counter (decremented per frame; Sliced() gated on == 0)
     int m_SliceCooldown;          // +0xdc
 
-    uint8_t _pad_e0[32];          // +0xe0..+0xff  (explosion-origin vec, colour -- unresolved)
-
-    uint8_t _pad_100[8];          // +0x100..+0x107  -> total sizeof = 0x108
+    uint8_t _pad_e0[16];          // +0xe0..+0xef  (explosion-origin / colour -- unresolved)
+    Vec3 m_WorkVec5;              // +0xf0  (work vector -- purpose unresolved)
+    Vec3 m_WorkVec6;              // +0xfc  (work vector -- purpose unresolved; spans to 0x107)
 
     // Associated glow entity (not in binary struct; lifetime tied to this controller)
     SuperFruitGlow* m_pGlow;
@@ -116,11 +125,13 @@ public:
     // -----------------------------------------------------------------------
 
     // Binary @ 0x001bbf48. Called when ANY fruit is thrown. Gate: FruitInfo[+0x330] != 0
-    // AND !(fruit->flags & 0x10). Creates controller, inserts into SuperFruitControls map.
+    // AND !(fruit->flags & 0x10). Sets up the throw trajectory AND spawns a SuperFruitGlow
+    // (`new 0x8c`) at throw time; does NOT create the SuperFruitControl.
     static void SuperFruitThrown(Fruit* fruit);
 
     // Binary @ 0x001be630. Slice dispatch: lookup map by fruit; if found, forward to
-    // instance Sliced(). If not found (first hit), create new controller and insert.
+    // instance Sliced(). If not found (first hit), creates/dispatches the SuperFruitControl
+    // (`new 0x108`) via the SuperFruitControls map.
     // idx = slash index; slashEntity = the SlashEntity that triggered the collision.
     static void SuperFruitSliced(Fruit* fruit, int idx, Mortar::Entity* slashEntity);
 
@@ -186,8 +197,14 @@ static_assert(offsetof(SuperFruitControl, m_SliceCount)      == 0x90, "SuperFrui
 static_assert(offsetof(SuperFruitControl, m_pLinkedSlasher)  == 0x94, "SuperFruitControl::m_pLinkedSlasher offset");
 static_assert(offsetof(SuperFruitControl, m_Lifetime)        == 0xa0, "SuperFruitControl::m_Lifetime offset");
 static_assert(offsetof(SuperFruitControl, m_FadeIn)          == 0xa4, "SuperFruitControl::m_FadeIn offset");
+static_assert(offsetof(SuperFruitControl, m_WorkVec1)        == 0xa8, "SuperFruitControl::m_WorkVec1 offset");
+static_assert(offsetof(SuperFruitControl, m_WorkVec2)        == 0xb4, "SuperFruitControl::m_WorkVec2 offset");
+static_assert(offsetof(SuperFruitControl, m_WorkVec3)        == 0xc0, "SuperFruitControl::m_WorkVec3 offset");
+static_assert(offsetof(SuperFruitControl, m_WorkVec4)        == 0xcc, "SuperFruitControl::m_WorkVec4 offset");
 static_assert(offsetof(SuperFruitControl, m_Scale)           == 0xd8, "SuperFruitControl::m_Scale offset");
 static_assert(offsetof(SuperFruitControl, m_SliceCooldown)   == 0xdc, "SuperFruitControl::m_SliceCooldown offset");
+static_assert(offsetof(SuperFruitControl, m_WorkVec5)        == 0xf0, "SuperFruitControl::m_WorkVec5 offset");
+static_assert(offsetof(SuperFruitControl, m_WorkVec6)        == 0xfc, "SuperFruitControl::m_WorkVec6 offset");
 #endif
 
 #endif // FN_SUPER_FRUIT_CONTROL_H

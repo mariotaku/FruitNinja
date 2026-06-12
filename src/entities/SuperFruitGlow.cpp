@@ -13,10 +13,11 @@
 SuperFruitGlow::SuperFruitGlow()
     : m_bFruitKilled(0)
     , m_pHostFruit(nullptr)
+    , m_pText(nullptr)
+    , m_GlowAlpha(0.0f)
 {
     entityType = 6;  // super-fruit type in binary
     memset(_pad_own, 0, sizeof(_pad_own));
-    memset(_pad_84, 0, sizeof(_pad_84));
     memset(_pad_7d, 0, sizeof(_pad_7d));
 }
 

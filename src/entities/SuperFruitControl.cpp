@@ -53,9 +53,13 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     memset(_pad_own, 0, sizeof(_pad_own));
     memset(_pad_80, 0, sizeof(_pad_80));
     memset(_pad_98, 0, sizeof(_pad_98));
-    memset(_pad_a8, 0, sizeof(_pad_a8));
+    memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
+    memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
+    memset(&m_WorkVec3, 0, sizeof(m_WorkVec3));
+    memset(&m_WorkVec4, 0, sizeof(m_WorkVec4));
     memset(_pad_e0, 0, sizeof(_pad_e0));
-    memset(_pad_100, 0, sizeof(_pad_100));
+    memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
+    memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
     s_SuperFruitActive = 1;
     ++s_PomegranatesSpawnedThisGame;
@@ -80,9 +84,13 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     memset(_pad_own, 0, sizeof(_pad_own));
     memset(_pad_80, 0, sizeof(_pad_80));
     memset(_pad_98, 0, sizeof(_pad_98));
-    memset(_pad_a8, 0, sizeof(_pad_a8));
+    memset(&m_WorkVec1, 0, sizeof(m_WorkVec1));
+    memset(&m_WorkVec2, 0, sizeof(m_WorkVec2));
+    memset(&m_WorkVec3, 0, sizeof(m_WorkVec3));
+    memset(&m_WorkVec4, 0, sizeof(m_WorkVec4));
     memset(_pad_e0, 0, sizeof(_pad_e0));
-    memset(_pad_100, 0, sizeof(_pad_100));
+    memset(&m_WorkVec5, 0, sizeof(m_WorkVec5));
+    memset(&m_WorkVec6, 0, sizeof(m_WorkVec6));
 
     s_SuperFruitActive = 1;
     AttachGlow();
@@ -116,6 +124,10 @@ void SuperFruitControl::Update(float dt)
 {
     m_PrevTimer = m_Timer;
     m_Timer += dt;
+
+    // Decay hit count at -17.5 per second, floored at 0.0
+    m_HitCount += dt * (-17.5f);
+    if (m_HitCount < 0.0f) m_HitCount = 0.0f;
 
     // Fade-in: += dt * 3 until 1.0
     if (m_FadeIn < 1.0f) {
