@@ -74,6 +74,7 @@ add_library(mortar_engine STATIC
     render/FontInterface.cpp
     render/FontCacheObjectTTF.cpp
     render/FontTTFRegistry.cpp
+    render/BakedStringBox.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground
     MenuBackground.cpp
     # Phase 9 — Network (online services stub; all methods no-op)
