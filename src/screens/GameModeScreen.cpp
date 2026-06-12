@@ -599,13 +599,10 @@ void GameModeScreen::QuitCallback() {
         game_work.m_TutorialControl->ResetTutePos(nullptr);
     }
 
-    // 5. Port specific: cascade-release the other menu buttons' fruits
-    // so Classic/Zen/Arcade fly away and their buttons shrink, matching
-    // the main -> mode-select transition (which does the same via
-    // FN::ClearMenuItems when the user slices Play/Dojo). Binary does
-    // not do this; its other buttons stay lit until GameModeScreen is
-    // destroyed. Port diverges here for a smoother exit animation.
-    FN::ClearMenuItems();
+    // Binary GameModeScreen::QuitCallback @0x00181884 does NOT call ClearMenuItems;
+    // it flings only the back button's own piece (above). The port's prior
+    // cascade-release flung all menu fruits, re-firing MainScreen menu callbacks
+    // and oscillating menu<->mode-select (task #16). Removed for fidelity.
 }
 
 // vtable[18] @ 0x0013e21c

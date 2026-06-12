@@ -184,10 +184,6 @@ private:
     // once it has cleared out.
     DojoScreen* m_pDojoScreen;
 
-    // Current GameModeScreen child (when state is STATE_MODE_SELECT
-    // and the 0.25 threshold has been crossed). nullptr until crossed
-    // and again after the child's RemoveCallback fires.
-    GameModeScreen* m_pGameModeScreen;
 #endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 
     // --- Internal helpers ---
@@ -213,23 +209,16 @@ private:
     void ButtonDeleted(HUDControl* ctrl);
 
     // Port-specific (no binary counterpart per re-analyst RE 2026-05-10):
-    //
-    // The binary's MainScreen has NO m_pDojoScreen / m_pGameModeScreen
-    // fields. Its Update gates re-spawn purely on m_Timer2 threshold
-    // crossings (e.g. case 3/4/0x15/0x16 fire spawn when m_Timer2 < 0.001
-    // && newly crossed); the spawned screen then directly mutates
-    // mainScreen->m_State, moving the state machine past the spawn case
-    // -- preventing re-entry without needing a weak pointer.
-    //
-    // The port adds the weak pointer + RemoveCallback as a UAF guard so
-    // re-entering the same case after the screen is removed works
-    // correctly. HUD::Update fires this when the screen finally exits
-    // (m_bPendingRemoval set on transition completion). Functionally
-    // equivalent to the binary's natural state-machine flow but with an
-    // extra safety net.
+    // The binary's MainScreen has NO m_pDojoScreen field. Its Update gates
+    // re-spawn purely on m_Timer2 threshold crossings; the spawned screen
+    // then directly mutates mainScreen->m_State, moving the state machine
+    // past the spawn case. Port adds a weak pointer + RemoveCallback for
+    // DojoScreen as a UAF guard so the dojo re-spawn path works correctly.
+    // Binary @ 0x00197560 case 0xe: mode-select is a pure one-shot crossing
+    // with no weak pointer — GameModeScreen is spawned once and writes
+    // m_State itself (GameModeCallback @ 0x00195e84).
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     void DojoScreenRemoved(HUDControl*)    { m_pDojoScreen     = nullptr; }
-    void GameModeScreenRemoved(HUDControl*){ m_pGameModeScreen = nullptr; }
 #endif // !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 
     // --- Callbacks ---

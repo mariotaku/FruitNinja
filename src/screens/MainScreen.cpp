@@ -69,13 +69,15 @@ void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
     m_State = s;
     if (s == STATE_CAMERA_ZOOM) {
-        // Port specific: m_pDojoScreen / m_pGameModeScreen are weak pointers to
-        // child screens managed by HUD. Their removal callback can race the state
-        // transition. Forcibly clear them here so STATE_CAMERA_ZOOM (the main-menu
-        // entry state used by QuitToMenu @ 0x00169e50) doesn't keep a stale weak
-        // pointer that would block a future DojoScreen push.
+        // Port specific: m_pDojoScreen is a weak pointer to a child screen managed
+        // by HUD. Its removal callback can race the state transition. Forcibly clear
+        // it here so STATE_CAMERA_ZOOM (the main-menu entry state used by QuitToMenu
+        // @ 0x00169e50) doesn't keep a stale pointer that would block a future
+        // DojoScreen push.
+        // Binary @ 0x00197560 case 0xe: GameModeScreen uses NO weak pointer on
+        // MainScreen -- spawn gate is a pure one-shot timer crossing; GameModeCallback
+        // @ 0x00195e84 writes m_State directly and nulls nothing MainScreen-side.
         m_pDojoScreen = nullptr;
-        m_pGameModeScreen = nullptr;
     }
 }
 
@@ -93,7 +95,6 @@ MainScreen::MainScreen(Game& g)
       m_GlobalAlphaTarget(1.0f), m_Time(0.0f),
       m_bGameStartReset(false),
       m_pDojoScreen(nullptr),
-      m_pGameModeScreen(nullptr),
       game(g)
 {
     // Load global textures (assigned to globals via GOT in original)
@@ -439,12 +440,13 @@ void MainScreen::Update(float dt) {
         const float tt = sizeY * m_Timer2;
         pos.y = (sizeY + 320.0f - 2.0f * tt) * 0.5f;
 
-        if (oldTimer2 > STATE_0E_THRESHOLD &&
-            m_Timer2 <= STATE_0E_THRESHOLD &&
-            !m_pGameModeScreen) {
-            m_pGameModeScreen = new GameModeScreen(game, false);
-            m_pGameModeScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::GameModeScreenRemoved);
-            game_work.mHud->AddControl(m_pGameModeScreen);
+        // Binary @ 0x00197560 case 0xe: spawn gate is a pure one-shot downward
+        // crossing of 0.25. m_Timer2 starts at 1.0 (set by GameModeCallback
+        // @ 0x00195e84 +0x124) and decays; it crosses 0.25 exactly once.
+        // GameModeScreen writes m_State itself on exit -- no weak pointer needed.
+        if (oldTimer2 > STATE_0E_THRESHOLD && m_Timer2 <= STATE_0E_THRESHOLD) {
+            GameModeScreen* gms = new GameModeScreen(game, false);
+            game_work.mHud->AddControl(gms);
         }
         break;
     }
