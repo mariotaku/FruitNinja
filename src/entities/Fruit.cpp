@@ -1,4 +1,5 @@
 #include "Fruit.h"
+#include "SuperFruitControl.h"
 #include "debug/Logger.h"
 #include "game/GameMode.h"
 #include "ActorManager.h"
@@ -337,6 +338,10 @@ void Fruit::Chuck(float delay) {
             flags |= ENT_KILLED;  // 0x10
         }
     }
+
+    // v1.6.1 super-fruit: notify when this fruit is thrown.
+    // Binary @ 0x001bbf48: SuperFruitControl::SuperFruitThrown gates on FruitInfo[+0x330].
+    SuperFruitControl::SuperFruitThrown(this);
 }
 
 // ASM-verified: 2026-05-27 binary @ 0x00177680 (re-analyst) -- m_TimeScale applied to integration dt
@@ -1313,6 +1318,11 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         g_ComboCount += 1;       // binary @ 0x001787b0
         }
     }
+
+    // v1.6.1 super-fruit: notify slice path.
+    // Binary @ 0x001be630: SuperFruitControl::SuperFruitSliced gates on FruitInfo[+0x330].
+    SuperFruitControl::SuperFruitSliced(this, 0, hitter);
+
     return 0;
 }
 

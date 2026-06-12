@@ -134,6 +134,12 @@ struct FruitInfo {
 
     // Power-ups
     FRUIT_POWERS* m_pPowers;      // +0x32C
+
+    // Super-fruit flag: byte at +0x330, set by fruitlist.xml "superFruit" attr.
+    // Binary: FRUIT_INFO+0x330 gate in SuperFruitControl::SuperFruitThrown
+    // and SuperFruitControl::SuperFruitSliced (@ 0x001bbf48 / 0x001be630).
+    uint8_t m_bIsSuperFruit;      // +0x330
+    uint8_t _pad_331[3];          // +0x331..+0x333 (alignment pad)
 };
 
 // Layout asserts.
@@ -165,7 +171,12 @@ static_assert(__builtin_offsetof(FruitInfo, m_PointTotalHash)  == 0x264, "");
 static_assert(__builtin_offsetof(FruitInfo, m_DropsHash)       == 0x268, "");
 static_assert(__builtin_offsetof(FruitInfo, m_bHasSplatSeeds)  == 0x26C, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactCount)       == 0x270, "");
-static_assert(sizeof(FruitInfo) == 0x330, "FruitInfo size mismatch");
+// DIFFERS: original binary sizeof(FruitInfo) = 0x330; port extends to 0x334
+// by adding m_bIsSuperFruit (uint8_t) + 3 bytes pad at +0x330..+0x333.
+// The binary accesses this byte via FRUIT_INFO[type]+0x330 in SuperFruitControl
+// (@ 0x001bbf48 / 0x001be630); extending the struct is the faithful port approach
+// since the binary always allocates the full entry size.
+static_assert(sizeof(FruitInfo) == 0x334, "FruitInfo size mismatch -- extended by super-fruit flag");
 static_assert(__builtin_offsetof(FruitInfo, m_pFacts)          == 0x274, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactTexture)     == 0x278, "");
 static_assert(__builtin_offsetof(FruitInfo, m_FactColour)      == 0x2F8, "");
@@ -183,6 +194,7 @@ static_assert(__builtin_offsetof(FruitInfo, m_SoundCount)      == 0x320, "");
 static_assert(__builtin_offsetof(FruitInfo, m_CoinsMin)        == 0x324, "");
 static_assert(__builtin_offsetof(FruitInfo, m_CoinsMax)        == 0x328, "");
 static_assert(__builtin_offsetof(FruitInfo, m_pPowers)         == 0x32C, "");
+static_assert(__builtin_offsetof(FruitInfo, m_bIsSuperFruit)   == 0x330, "");
 #endif
 
 // Maximum fruit types
