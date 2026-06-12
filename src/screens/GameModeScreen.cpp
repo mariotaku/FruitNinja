@@ -165,13 +165,15 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pZenButton(nullptr)         // +0xb0
     , m_SecondaryAlpha(-2.5f)       // +0xb4 DAT_0013e5a0
     , m_bIsFromPause(isFromPause)   // +0xb8
-    , field_0xb9(false)             // +0xb9 = 0
-    , m_bChallenge(0)               // +0xba
+    , m_bChallenge(0)               // +0xb9
     , m_ChallengeId(0)              // +0xbc
     , m_pChallengeData(nullptr)     // +0xc0
     , m_LayerFlagsAlt(0x80)         // +0xc4 DAT matches ctor write movs r2,#1; adds r2,#0x7f
     , m_FrameTimer(0.0f)            // +0xc8 DAT_0013e59c
     , m_pArcadeButton(nullptr)      // +0xcc
+    , m_pChallengeTitle(nullptr)    // +0xd0
+    , m_pChallengeDesc(nullptr)     // +0xd4
+    , m_pChallengeInfo(nullptr)     // +0xd8
     , game(g)
     , m_bButtonsCreated(false)
     , m_bSetupLevelFired(false)
@@ -458,6 +460,15 @@ void GameModeScreen::Update(float dt) {
         break;
 
     case 0xe: {
+        // Defunct: Challenges (SocialLib ChallengeMenuScreen) -- no-op stub; binary @ 0x1827d0 case 0xe.
+        // ChallengesCallback (@0x181154) sets m_State=0xE but the binary's case 0xE is empty -- no
+        // ChallengeMenuScreen ctor/push is reachable (it exists only as a SocialLib static-init symbol,
+        // _GLOBAL__I_ChallengeMenuScreen.cpp @0x166010, with no instantiation xref). The earlier
+        // "push via PLT 0x108354" note was wrong: 0x108354 -> GOT 0x2D2F20 -> UpdateOnlineMultiplayerButton.
+        break;
+    }
+
+    case 0xf: {
         // Back-out: quicker fade, cross 0.25 → MainScreen SLIDE_IN
         float oldAlpha = m_TransitionAlpha;
         const float backDecay = 1.0f - (1.0f - ALPHA_DECAY_BACK) * FN::g_DebugTimeScale;
@@ -570,7 +581,7 @@ void GameModeScreen::Draw(const Vec3& hudScale, int layerMask) {
 // --- Button callbacks ---
 
 // Matches GameModeScreen::QuitCallback @ 0x0013F5E0.
-// Plays "menu-bomb" SFX, sets m_State = 0xE (back-out), detaches back
+// Plays "menu-bomb" SFX, sets m_State = 0xF (back-out), detaches back
 // button's fruit piece and flings it up-right, then resets tutorial arrow.
 void GameModeScreen::QuitCallback() {
     // 1. SFX
@@ -579,7 +590,7 @@ void GameModeScreen::QuitCallback() {
     }
 
     // 2. Enter back-out state
-    m_State = 0xe;
+    m_State = 0xf;
 
     // 3. Fling back button (binary: *(byte*)(piece+0x80) = 1, then random vel).
     // +0x80 aliases m_ChuckDelay (Fruit) / m_bMovement (Bomb). Port omits the
@@ -669,8 +680,9 @@ void GameModeScreen::DeletedMenuButton(MenuButton* btn) {
     }
 }
 
-// Defunct: online MP (Casino) -- no-op stub; binary @ 0x0013dfdc sets m_State=4 + NetworkManager flag
+// Defunct: online MP (Casino) -- no-op stub; binary @ 0x0013dfdc sets gameMode=1, m_State=4 + NetworkManager flag
 void GameModeScreen::CasinoModeCallback() {
+    game_work.gameMode = 1;
     m_State = 4;
     // Defunct: NetworkManager online-MP flag omitted
 }
