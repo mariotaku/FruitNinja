@@ -30,14 +30,11 @@ void SpawnModifier::ApplyModifier(bool isPurchased, float* extra) {
 }
 
 // @ 0x0014ba70
-// For each spawner where spawner->m_field58 (spawner[0x12] in binary, maps to
-// SPAWNER_INFO::m_field58 at +0x58) > 0, treat m_field58 as the period counter.
-// When floor(newTime/period) > floor(oldTime/period), a tick has elapsed:
-//   reset spawner->m_SpawnTimer = -0.21875f (0xbe600000)
-//   call WaveManager::SpawnFruit(1, spawner->SelectTypes()[Rand], spawner, 0)
-// The period is stored as m_field58 (int) cast to float for division.
-// TODO: 0x0014ba70 — wire spawner period field to correct SPAWNER_INFO member once
-// RE confirms which byte maps to spawner[0x12] (currently using m_field58 as proxy)
+// Advances accumulator by dt; for each spawner where m_Delay (+0x48) > 0,
+// when floor(newTime/period) > floor(oldTime/period), a tick has elapsed:
+//   spawner->m_SpawnTimer = -0.21875f (0xbe600000)
+//   type = m_pFruitTypeHashes[ GetRandom().Rand32(m_FruitTypeCount) ]
+//   WaveManager::SpawnFruit(1, type, spawner, 0)
 int SpawnModifier::UpdateSpecific(float dt) {
     float prevTime = m_TimeAccum;
     m_TimeAccum += dt;
@@ -48,20 +45,19 @@ int SpawnModifier::UpdateSpecific(float dt) {
         SPAWNER_INFO* spawner = *it;
         if (!spawner) continue;
 
-        // m_field58 used as period proxy — binary spawner[0x12] field
-        if (spawner->m_field58 <= 0) continue;
+        float period = spawner->m_Delay;
+        if (period <= 0.0f) continue;
 
-        float period = (float)spawner->m_field58;
         float prevTick = floorf(prevTime / period);
         float newTick  = floorf(m_TimeAccum / period);
 
         if (newTick > prevTick) {
-            // Reset spawn timer to binary constant 0xbe600000 = -0.21875f
             spawner->m_SpawnTimer = -0.21875f;
-            // TODO: 0x0014ba70 — call wm->SpawnFruit(1, type, spawner, 0)
-            // type = spawner->SelectTypes()[Rand32(spawner->m_FruitTypeCount)]
-            // Deferred: SelectTypes returns void, needs index selection path
-            (void)wm;
+            if (spawner->m_pFruitTypeHashes && spawner->m_FruitTypeCount > 0) {
+                long type = (long)spawner->m_pFruitTypeHashes[
+                    (int)wm->GetRandom().Rand32((uint32_t)spawner->m_FruitTypeCount)];
+                wm->SpawnFruit(1, type, spawner, 0);
+            }
         }
     }
     return 0;
@@ -94,10 +90,6 @@ void SpawnModifier::ParseSpecific(TiXmlElement* xml) {
             (void)gx; (void)gy; (void)gz;
             // TODO: 0x0014be94 — parse gravity as "x,y,z" CSV into s->m_Gravity_{x,y,z}
         }
-
-        // period stored as int in m_field58 (proxy for binary spawner[0x12])
-        // TODO: 0x0014be94 — confirm which SPAWNER_INFO field maps to spawner[0x12]
-        sp->QueryIntAttribute("period", &s->m_field58);
 
         m_Spawners.push_back(s);
     }

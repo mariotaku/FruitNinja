@@ -3,7 +3,7 @@
 
 //
 // ExplodyFruitModifier : GameModifier — v1.6.1 explody-fruit modifier.
-// Binary size ~0x34 (52 bytes). GetType() == 6.
+// Binary size 0x3c (60 bytes): base 0x20 + 4 floats (0x10) + Vec3 (0x0c). GetType() == 6.
 // On fruit slice, spawns a FruitSplosion HUDControl.
 //
 // Nested class FruitSplosion : HUDControl (size 0xa4) handles the visual.
@@ -25,20 +25,20 @@ namespace Mortar { class Entity; }
 
 class ExplodyFruitModifier : public GameModifier {
 public:
-    // +0x20: forceMin float (parsed via QueryFloatAttribute)
+    // +0x20: forceMin float (from UNK_00134d68; ctor placeholder 0.0f)
     float m_ForceMin;
 
-    // +0x24: forceInc float (after parse: +0x28 += +0x24)
+    // +0x24: forceInc float (ctor default 0.25f; after parse: +0x28 += +0x24)
     float m_ForceInc;
 
-    // +0x28: forceMax float (after parse: +0x2c += +0x28)
+    // +0x28: forceMax float (from UNK_00134d68; ctor placeholder 0.0f; after parse: +0x2c += +0x28)
     float m_ForceMax;
 
-    // +0x2c: radius/force param float
+    // +0x2c: radius param float (from UNK_00134d6c; ctor placeholder 0.0f)
     float m_Radius;
 
-    // +0x30: parsed int param (from vector/count attr)
-    int m_Count;
+    // +0x30: Vec3 param (parsed from XML; passed as 6th arg to FruitSplosion ctor)
+    Vec3 m_SplosionVec;
 
     // -----------------------------------------------------------------------
     // Nested class FruitSplosion : HUDControl (size 0xa4)
@@ -59,13 +59,13 @@ public:
         float m_Param1;   // +0x78
         float m_Param2;   // +0x7c
         float m_Param3;   // +0x80
-        int   m_Count;    // +0x84
-        Fruit* m_pFruit;  // +0x88
-        uint8_t _pad8c[0x18]; // +0x8c..+0xa3 — unknown fields to reach size 0xa4
+        Fruit* m_pFruit;  // +0x84
+        Vec3  m_Vec;      // +0x88: Vec3 param from ExplodyFruitModifier::m_SplosionVec
+        uint8_t _pad94[0x10]; // +0x94..+0xa3 — unknown fields to reach size 0xa4
 
-        // ctor(forceMin, forceInc, forceMax, radius, fruit, count)
+        // ctor(forceMin, forceInc, forceMax, radius, fruit, splosionVec)
         FruitSplosion(float param0, float param1, float param2, float param3,
-                      Fruit* fruit, int count);
+                      Fruit* fruit, const Vec3& vec);
         ~FruitSplosion() override;
 
         void Update(float dt) override;

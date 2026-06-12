@@ -5,6 +5,7 @@
 #include "ComboModifier.h"
 #include "entities/Fruit.h"
 #include "entities/SlashEntity.h"
+#include <cstdint>
 
 ComboModifier::ComboModifier()
     : GameModifier()
@@ -29,21 +30,17 @@ void ComboModifier::ApplyModifier(bool isPurchased, float* extra) {
 }
 
 // @ 0x00132e10
-// Binary: set fruit entity's byte at +0x16c = 1, push entity ptr into m_SlicedFruit
+// Binary: set byte at fruit+0x16c = 1; push entity into m_SlicedFruit.
 void ComboModifier::FruitWasSliced(Fruit* fruit, int /*score*/, Mortar::Entity* entity) {
     if (!fruit || !entity) return;
-    // TODO: 0x00132e10 — set fruit->byte[0x16c] = 1 (requires exact Fruit field layout)
+    reinterpret_cast<uint8_t*>(fruit)[0x16c] = 1;
     m_SlicedFruit.push_back(entity);
 }
 
 // @ 0x00132b7c
-// Binary: clear SlashEntity->int[0x17c]=0; if set size>2, iterate up to 10 fruit,
-// record fruit-type byte[+0x3c] into SlashEntity[+0x54+i] and sum positions;
-// reset each fruit byte[0x16c]=0; post combo-bonus popup(count, avgPos);
-// write count to SlashEntity[+0x17c].
-// TODO: 0x00132b7c — combo-bonus popup call (requires HUD popup infra)
+// Binary: combo-bonus popup loop (clear slash state, sum positions, post popup).
+// TODO: 0x00132b7c -- combo-bonus popup (needs popup infra)
 void ComboModifier::ComboWasCanceled(SlashEntity* /*slash*/) {
-    // Stub: clear tracking list and return.
     m_SlicedFruit.clear();
 }
 

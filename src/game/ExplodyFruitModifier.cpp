@@ -3,7 +3,10 @@
 // ApplyModifier @ 0x00135574, FruitWasSliced @ 0x00135888.
 
 #include "ExplodyFruitModifier.h"
+#include "GameWork.h"
 #include "entities/Fruit.h"
+#include "hud/HUD.h"
+#include "math/Vec3.h"
 #include <tinyxml2.h>
 #include <cstring>
 
@@ -11,16 +14,16 @@
 
 ExplodyFruitModifier::FruitSplosion::FruitSplosion(
     float param0, float param1, float param2, float param3,
-    Fruit* fruit, int count)
+    Fruit* fruit, const Vec3& vec)
     : HUDControl()
     , m_Param0(param0)
     , m_Param1(param1)
     , m_Param2(param2)
     , m_Param3(param3)
-    , m_Count(count)
     , m_pFruit(fruit)
+    , m_Vec(vec)
 {
-    memset(_pad8c, 0, sizeof(_pad8c));
+    memset(_pad94, 0, sizeof(_pad94));
 }
 
 ExplodyFruitModifier::FruitSplosion::~FruitSplosion() {}
@@ -40,11 +43,17 @@ void ExplodyFruitModifier::FruitSplosion::ADingoAteMyBaby(HUDControl* /*ctrl*/) 
 
 ExplodyFruitModifier::ExplodyFruitModifier()
     : GameModifier()
-    , m_ForceMin(0.0f)
-    , m_ForceInc(0.0f)
-    , m_ForceMax(0.0f)
-    , m_Radius(0.0f)
-    , m_Count(0)
+    // ASM-spec ExplodyFruitModifier ctor (binary @ 0x00134ca8): +0x20=100.0f (DAT_00134cfc),
+    // +0x24=0.25f, +0x28=0.0f (DAT_00134d00 / alias 0x00134d68), +0x2c=0.2f (DAT_00134d04 /
+    // alias 0x00134d6c). Field names provisional (force-vs-delay inferred from usage shape).
+    , m_ForceMin(100.0f)    // +0x20
+    , m_ForceInc(0.25f)     // +0x24
+    , m_ForceMax(0.0f)      // +0x28
+    , m_Radius(0.2f)        // +0x2c
+    // DIFFERS: port models +0x30 as Vec3 m_SplosionVec; binary +0x30 is a uint32 handle
+    // (func_0x00111120 return), and vecX/Y/Z are parse-locals, not stored. TODO: re-RE
+    // FruitSplosion ctor to retype the 6th arg + +0x30 (tracked separately).
+    , m_SplosionVec()
 {}
 
 ExplodyFruitModifier::~ExplodyFruitModifier() {}
@@ -62,17 +71,17 @@ void ExplodyFruitModifier::ApplyModifier(bool isPurchased, float* extra) {
 }
 
 // @ 0x0013514c
-// Binary reads 4 float attrs from the XML element, then:
-//   +0x28 += +0x24  (m_ForceMax += m_ForceInc)
-//   +0x2c += +0x28  (m_Radius   += m_ForceMax)
-// And reads an int attr (vector of size 3 -> stored at +0x30).
+// Binary reads 4 floats -> +0x20, +0x24, +0x28, +0x2c; a Vec3 -> +0x30.
+// Post-parse: +0x28 += +0x24; +0x2c += +0x28.
 void ExplodyFruitModifier::ParseSpecific(TiXmlElement* xml) {
     if (!xml) return;
     xml->QueryFloatAttribute("forceMin", &m_ForceMin);
     xml->QueryFloatAttribute("forceInc", &m_ForceInc);
     xml->QueryFloatAttribute("forceMax", &m_ForceMax);
     xml->QueryFloatAttribute("radius",   &m_Radius);
-    xml->QueryIntAttribute  ("count",    &m_Count);
+    xml->QueryFloatAttribute("vecX",     &m_SplosionVec.x);
+    xml->QueryFloatAttribute("vecY",     &m_SplosionVec.y);
+    xml->QueryFloatAttribute("vecZ",     &m_SplosionVec.z);
 
     // Post-parse adjustments per binary @ 0x0013514c
     m_ForceMax += m_ForceInc;
@@ -80,19 +89,24 @@ void ExplodyFruitModifier::ParseSpecific(TiXmlElement* xml) {
 }
 
 // @ 0x00135888
-// Binary: skip if owning HUD/state byte[+0x330]!=0; else new FruitSplosion(0xa4)
-// and HUD::AddControl.
+// Binary: if game_work byte[+0x330] != 0 -> return;
+// else new FruitSplosion(0xa4)(+0x20,+0x24,+0x28,+0x2c, fruit, +0x30);
+//      HUD::AddControl(hudRoot+0x40, this, false)
 // TODO: 0x00135888 — wire to FruitManager's FruitWasSliced signal
-// TODO: 0x00135888 — check HUD/state byte[+0x330] gate before spawning
-// TODO: 0x00135888 — call HUD::AddControl(splosion) after creating FruitSplosion
+// TODO: 0x00135888 — binary passes hudRoot+0x40 as first arg to AddControl; resolve HUD subtree offset
 void ExplodyFruitModifier::FruitWasSliced(
     Fruit* fruit, int /*score*/, Mortar::Entity* /*entity*/)
 {
     if (!fruit) return;
-    // Stub: FruitSplosion spawn deferred pending HUD::AddControl port.
-    (void)new FruitSplosion(m_ForceMin, m_ForceInc, m_ForceMax, m_Radius, fruit, m_Count);
-    // Note: in production the splosion would be owned by HUD; here it leaks.
-    // Replace with HUD::AddControl call when available.
+    // game_work byte[+0x330]: lives in buf1 region (buf1 = +0x2B1, offset +0x330-0x2B1 = +0x7F)
+    if (reinterpret_cast<const uint8_t*>(&game_work)[0x330] != 0) return;
+
+    FruitSplosion* splosion = new FruitSplosion(
+        m_ForceMin, m_ForceInc, m_ForceMax, m_Radius, fruit, m_SplosionVec);
+
+    if (game_work.mHud) {
+        game_work.mHud->AddControl(splosion, false);
+    }
 }
 
 GameModifier* ExplodyFruitModifier::Clone() {
@@ -108,6 +122,6 @@ GameModifier* ExplodyFruitModifier::Clone() {
     c->m_ForceInc           = m_ForceInc;
     c->m_ForceMax           = m_ForceMax;
     c->m_Radius             = m_Radius;
-    c->m_Count              = m_Count;
+    c->m_SplosionVec        = m_SplosionVec;
     return c;
 }
