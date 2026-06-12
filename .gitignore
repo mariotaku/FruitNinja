@@ -62,3 +62,6 @@ function_hash_index.json
 
 # Claude Code scheduler lock
 .claude/scheduled_tasks.lock
+
+# Pages output (assembled by tools/build_pages.py; uploaded as GH artifact)
+pages/

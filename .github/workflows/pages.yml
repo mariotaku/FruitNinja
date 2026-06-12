@@ -1,0 +1,183 @@
+name: Pages
+
+# Manual deploy only -- the maintainer controls cadence.
+# Trigger: Actions tab -> Pages -> Run workflow
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Cancel any in-progress deploy when a new one is requested.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# ---------------------------------------------------------------------------
+# Asset source (archive.org)
+# ---------------------------------------------------------------------------
+# Item  : https://archive.org/details/badaappsgamescollection
+# File  : FruitNinja.zip  (20 MB, 971 files -- the largest/most complete copy)
+# MD5   : 76844370f4c50b5f2bdc113b0664c4ce
+# SHA1  : 8cc000f5843f60d445169a6e175cb0ab60905340
+#
+# Internal structure (VERIFY if the download changes):
+#   FruitNinja.zip
+#     FruitNinja.bar   (Bada application package = a ZIP)
+#       Data/          <-- what we need; mount path /FruitNinjaBada/Data
+#       Bin/
+#       Info/
+#       Res/
+#       Share/
+#       Signature*.xml
+#
+# The workflow:
+#   1. Downloads FruitNinja.zip
+#   2. Unzips it to tmp-outer/ (expecting to find a .bar inside)
+#   3. Unzips the .bar to tmp-inner/ (the .bar IS a zip)
+#   4. Moves tmp-inner/Data -> FruitNinjaBada/Data
+#
+# If the zip directly contains Data/ (no .bar wrapper), step 3/4 fall back.
+# See the "Extract Data/" step for details.
+#
+# To use a different file, change these two env vars:
+env:
+  ASSET_IDENTIFIER: badaappsgamescollection
+  ASSET_FILENAME: "FruitNinja.zip"
+  EMSDK_IMAGE: "emscripten/emsdk:latest"
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Job 1: Build the web target
+  # -------------------------------------------------------------------------
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Download game assets from archive.org --------------------------
+      - name: Download Fruit Ninja assets from archive.org
+        run: |
+          DOWNLOAD_URL="https://archive.org/download/${ASSET_IDENTIFIER}/${ASSET_FILENAME}"
+          echo "Downloading: $DOWNLOAD_URL"
+          curl -L --retry 5 --retry-delay 10 --fail \
+               -o fruit-ninja-assets.zip \
+               "$DOWNLOAD_URL"
+          echo "Download complete. Size: $(wc -c < fruit-ninja-assets.zip) bytes"
+
+      - name: Extract Data/ from Fruit Ninja asset archive
+        run: |
+          mkdir -p tmp-outer tmp-inner FruitNinjaBada
+
+          # Step 1: unzip the outer archive (FruitNinja.zip)
+          unzip -q fruit-ninja-assets.zip -d tmp-outer
+          echo "=== Contents of outer archive ==="
+          ls -la tmp-outer/
+
+          # Step 2: find a .bar file (the Bada application package)
+          BAR_FILE=$(find tmp-outer -maxdepth 2 -name "*.bar" | head -1)
+
+          if [ -n "$BAR_FILE" ]; then
+            echo "Found .bar: $BAR_FILE"
+            # .bar is a zip -- unzip it
+            unzip -q "$BAR_FILE" -d tmp-inner
+            echo "=== Contents of .bar ==="
+            ls -la tmp-inner/
+            DATA_SRC="tmp-inner/Data"
+          else
+            echo "No .bar file found -- checking if Data/ is directly in outer archive"
+            DATA_SRC="tmp-outer/Data"
+          fi
+
+          # Step 3: verify and move Data/
+          if [ ! -d "$DATA_SRC" ]; then
+            # Last resort: search anywhere in extracted tree
+            DATA_SRC=$(find tmp-outer tmp-inner -maxdepth 4 -type d -name "Data" | head -1)
+            echo "Searched for Data/ -- found: $DATA_SRC"
+          fi
+
+          if [ ! -d "$DATA_SRC" ]; then
+            echo "ERROR: Could not locate Data/ directory in the downloaded archive."
+            echo "Archive structure:"
+            find tmp-outer tmp-inner -maxdepth 4 | sort
+            exit 1
+          fi
+
+          mv "$DATA_SRC" FruitNinjaBada/Data
+          echo "=== FruitNinjaBada/Data ready ==="
+          find FruitNinjaBada/Data -maxdepth 2 | sort | head -40
+
+          # Cleanup
+          rm -rf tmp-outer tmp-inner fruit-ninja-assets.zip
+
+      # ---- Build web target with Emscripten (Docker) ----------------------
+      # Uses the same emscripten/emsdk Docker image as local development
+      # (emcc 6.0.0) so the build is reproducible and matches the environment
+      # the shell.html / LEGACY_GL_EMULATION / glTexEnvi code was verified on.
+      - name: Configure (emcmake cmake via Docker)
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src \
+            -w /src \
+            "$EMSDK_IMAGE" \
+            emcmake cmake -S . -B build-web -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (cmake via Docker)
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE":/src \
+            -w /src \
+            "$EMSDK_IMAGE" \
+            cmake --build build-web -j
+
+      - name: Verify build outputs
+        run: |
+          echo "=== build-web/ outputs ==="
+          ls -lh build-web/fruit-ninja.*
+          ls -lh build-web/splash.png
+
+      # ---- Assemble pages/ ------------------------------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Assemble pages/
+        run: python tools/build_pages.py
+
+      - name: Verify pages/ structure
+        run: |
+          echo "=== pages/ top-level ==="
+          ls -la pages/
+          echo "=== pages/game/ ==="
+          ls -lh pages/game/
+          echo "=== pages/models/ ==="
+          ls -lh pages/models/
+          echo "=== pages/textures/ (top) ==="
+          ls -la pages/textures/
+
+      # ---- Upload artifact ------------------------------------------------
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages/
+
+  # -------------------------------------------------------------------------
+  # Job 2: Deploy
+  # -------------------------------------------------------------------------
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
