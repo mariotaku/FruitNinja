@@ -787,6 +787,9 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
     sd->m_blitzSpawnTime           = field_0x240;
     sd->m_blitzForceSpawnedCounter = field_0x23e;
 
+    // Binary @ 0x001254b0 writes WaveManager+0x78 into FruitSaveData::m_WaveScalar_v161.
+    sd->m_WaveScalar_v161 = field_0x78;
+
     sd->m_WaveStates.clear();
 
     Game* game = Game::GetInstance();
