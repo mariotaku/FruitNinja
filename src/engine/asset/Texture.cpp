@@ -1,8 +1,10 @@
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
+#include "asset/AlternativeTextureLoader.h"
 #include "asset/File.h"
 #include "render/DisplayManager.h"
 #include "debug/Logger.h"
+#include <cstring>
 #include <vector>
 
 namespace Mortar {
@@ -10,6 +12,10 @@ namespace Mortar {
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
 GLuint Texture::s_LastBoundTexId = 0;
 #endif
+
+// v1.6.1 addition: AlternativeTextureLoader path-rewrite toggle.
+// Binary: bool global @ data segment; default false (Prefix/Postfix are empty in shipped data).
+bool Texture::UseAlternativeTextureLoader = false;
 
 Texture::Texture()
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
@@ -138,8 +144,14 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
         return Mortar::SmartPtr<Texture>();
     }
 
+    // v1.6.1: peek 4 bytes and dispatch to the .tex3 parser if magic matches;
+    // fall through to the existing .tex (Tex1) parser otherwise.
+    // TODO: 0x002d4b20 -- full TextureFileFormat polymorphic registry dispatch.
     Mortar::SmartPtr<Texture> tex =
-        ParseTexBuffer(f.Data(), (long)f.Size(), path);
+        ParseTex3Buffer(f.Data(), (long)f.Size(), path);
+    if (!tex.IsValid()) {
+        tex = ParseTexBuffer(f.Data(), (long)f.Size(), path);
+    }
     if (tex.IsValid()) {
         tex->m_Path = path;
     }
@@ -213,6 +225,46 @@ Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
     }
 
     return Mortar::SmartPtr<Texture>(tex);
+}
+
+// v1.6.1 addition: .tex3 container parser.
+// Binary: Mortar::TextureFileFormat::Tex3Format::Read @ 0x0022bd7c,
+//   _GLOBAL__N_1::ReadFormatInternal @ 0x0022bc6c (reads via DataStreamReader).
+// The .tex3 magic is a 4-byte FourCC set at static-init by
+//   _GLOBAL__I_Tex3Format.cpp @ 0x0022be94 (copied from a GOT slot).
+// Port: magic bytes are the literal 4-char sequence used by Halfbrick ('TEX3' expected;
+// exact value not statically readable from the binary -- treat as a 4-byte sentinel).
+// Minimal viable: parse magic + layer-0 TextureInfo (format/w/h) + layer-0 blob and
+// UploadNative on layer-0. Multi-layer mip handling // TODO: 0x0022bd7c.
+// TODO: 0x002d4b20 -- full Mortar::TextureFileFormat polymorphic reader registry
+// (Tex1/Tex2/Tex3/DDS entries); port uses a magic-byte if/else instead.
+Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
+                                                    const char* pathForLog)
+{
+    // The .tex3 magic is 4 bytes at offset +0. If the file doesn't start with
+    // the expected FourCC, return null so the caller can fall through to the
+    // existing .tex (Tex1) path.
+    // TODO: 0x0022be94 -- confirm exact 4-byte FourCC from static-init GOT slot.
+    // Using placeholder sentinel; real magic must be confirmed by re-analyst before
+    // matching real .tex3 files.
+    static const char kTex3Magic[4] = { 'T', 'E', 'X', '3' };
+    if (size < 4) {
+        return Mortar::SmartPtr<Texture>();
+    }
+    if (memcmp(data, kTex3Magic, 4) != 0) {
+        // Not a .tex3 file; caller should try the .tex parser.
+        return Mortar::SmartPtr<Texture>();
+    }
+
+    // TODO: 0x0022bc6c -- ReadFormatInternal: allocate Tex3Data (0x4c bytes), read
+    // TextureInfo fields (format/numLayersX/numLayersY via MakeIntFormat helpers),
+    // then read the per-layer size table and accumulate layer-data offsets.
+    // The port stubs this out as a null result for now; .tex3 files are not present
+    // in the shipped 1.5.1/1.6.1 asset packs used by this port target.
+    LOG_INFO("TEXTURE/ParseTex3Buffer", "tex3 container detected in '%s'; "
+             "full decode not yet implemented (TODO: 0x0022bc6c)",
+             pathForLog ? pathForLog : "<memory>");
+    return Mortar::SmartPtr<Texture>();
 }
 
 } // namespace Mortar
