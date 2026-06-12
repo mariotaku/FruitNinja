@@ -83,6 +83,10 @@ int main(int argc, char** argv) {
         { LSTR_SHOP_BACKGROUND,   "LSTR_SHOP_BACKGROUND (0xc9)",  "BACKGROUND"              },
         { LSTR_SHOP_BLADE,        "LSTR_SHOP_BLADE (0xca)",       "BLADE"                   },
         { LSTR_SHOP_FULL_VERSION, "LSTR_SHOP_FULL_VERSION (0xcb)","FULL VERSION"            },
+        // MainScreen top-left instruction parchment. v1.6.1 removed slice_fruit.tex and draws
+        // this as dynamic text from GETSTRING_CAST_0(0x39d) (MENU_TEXTURE_13). Raw-int cast so
+        // the assert is independent of the LSTR_* enum name.
+        { (LocalizedString)0x39d, "MENU_TEXTURE_13 (0x39d)",      "SLICE FRUIT TO BEGIN"    },
     };
     for (int i = 0; i < (int)(sizeof(kIntAnchors)/sizeof(kIntAnchors[0])); i++) {
         const IntIdAnchor& a = kIntAnchors[i];

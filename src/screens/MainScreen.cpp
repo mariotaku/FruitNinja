@@ -31,6 +31,7 @@
 #include "audio/SoundManager.h"
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
+#include "engine/util/StringTable.h"
 #include <cstdio>
 #include <cmath>
 #include "game/GameWork.h"
@@ -102,7 +103,8 @@ MainScreen::MainScreen(Game& g)
     m_fruitTextTex     = Mortar::TextureManager::LoadLocalisedTexture("fruit_text.tex");
     m_ninjaTextTex     = Mortar::TextureManager::LoadLocalisedTexture("ninja_text.tex");
 
-    // Load background decoration
+    // Defunct: v1.5.1 slice_fruit.tex -- replaced by dynamic text (BakedStringBox) in v1.6.1.
+    // Load kept so m_TexSliceFruit.IsValid() guard in Draw correctly short-circuits.
     m_TexSliceFruit = Mortar::TextureManager::LoadLocalisedTexture("slice_fruit.tex");
 
     // Load button textures
@@ -708,14 +710,25 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         m_ninjaTextTex->UnSet();
     }
 
-    // 4. Dojo decoration (slice_fruit.tex)
-    if (m_TexSliceFruit.IsValid()) {
-        m_TexSliceFruit->Set();
-        SetupQuadMatrix(mm, hudScale,
-            (float)m_TexSliceFruit->m_Width, (float)m_TexSliceFruit->m_Height,
-            m_LogoFruitPos);
-        game.renderer.DrawQuad(m_DrawColour);
-        m_TexSliceFruit->UnSet();
+    // 4. Parchment instruction text (v1.6.1: BakedStringBox replaced slice_fruit.tex).
+    // v1.5.1 drew slice_fruit.tex here; v1.6.1 @0x0019811c creates a BakedStringBox
+    // at MainScreen+0xe0, sets text via GETSTRING_CAST_0(0x39d) = "SLICE FRUIT TO BEGIN",
+    // and draws it in the same parchment area. Port renders the string with m_pFont
+    // (verdana.fnt, loaded in ctor) at the same m_LogoFruitPos used by the old texture.
+    // Defunct: v1.5.1 slice_fruit.tex draw -- replaced by dynamic text in v1.6.1;
+    //   texture load retained above (fails gracefully via IsValid on v1.6.1 assets).
+    if (m_pFont.IsValid()) {
+        const char* sliceText = Mortar::GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);
+        if (sliceText) {
+            // Brown parchment colour: RGB(0x74, 0x5D, 0x3C) -- same as AboutScreen
+            // parchment text (binary v1.6.1 BakedStringBox inherits from this colour family).
+            const Colour textColour(0x74, 0x5D, 0x3C, 255);
+            // Centre the text on the parchment at m_LogoFruitPos.
+            // maxWH bounds ~75x30 (RE hint: approximate from parchment size).
+            m_pFont->DrawString(11.0f, 1.0f, 0.0f, sliceText,
+                m_LogoFruitPos, textColour,
+                Mortar::FONT_ALIGN_CENTER | Mortar::FONT_ALIGN_MIDDLE);
+        }
     }
 
     // 5. Loading symbol (states 0x13, 0x14 only)
