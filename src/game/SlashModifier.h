@@ -72,6 +72,10 @@ public:
     SlashModifier();
     ~SlashModifier() override;
 
+    // 0x0011f274 — ResetSpecific: clears m_Applied flag.
+    // TODO: 0x0011f274 — verify full ResetSpecific body (may also clear power mask)
+    void ResetSpecific() override { m_Applied = false; }
+
     // 0x0011f288 — OR m_PowerMask into SlashEntity::s_ModPowerMask every
     // tick. PowerUpManager::SetDefaults clears the mask at the top of
     // PowerUpManager::Update, so this function running each frame is

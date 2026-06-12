@@ -53,7 +53,7 @@ void ScrollingMenuItem::SetText(const char* text) {
     m_pText = text;
 }
 
-// Binary @ 0x0015b480 -- ScrollingMenuItem::Draw (vtable slot 11, +0x2C).
+// Binary @ 0x001afd40 -- ScrollingMenuItem::Draw (v1.6.1 vtable slot 12, +0x30).
 //
 // Renders the item's text label, optionally clipped to the parent menu's
 // visible rect. Disasm-confirmed sequence:

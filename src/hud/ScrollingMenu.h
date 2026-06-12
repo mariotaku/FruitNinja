@@ -86,7 +86,7 @@ public:
     void DestroyList();
 
     // ScrollingMenu::Collide(slot) @ 0x0015af4c
-    // Walks m_Items calling vtable+0x34 (Slot13/hit-test) on each.
+    // Walks m_Items calling vtable+0x38 (Slot13/hit-test, v1.6.1 slot 14) on each.
     // Returns the first item that returns non-null, or nullptr.
     // Only active when m_fieldCA != 0.
     ScrollingMenuItem* Collide(int touchSlot);

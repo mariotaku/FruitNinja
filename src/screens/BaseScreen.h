@@ -4,18 +4,20 @@
 //
 // BaseScreen : HUDControl3d (size = 0x94 / 148 bytes)
 //
-// Binary refs:
-//   Constructor      0x00138dc0
-//   Destructor       0x00131740 (deleting), 0x00138d60 (non-deleting)
+// Binary refs (v1.6.1):
+//   Constructor      0x0016cd40
+//   Destructor D0    0x00161bb0 (deleting)
+//   Destructor D1    0x00161b20 (non-deleting)
 //   LoadContent      0x001305cc (loads sml_title.tex + blurry_backing.tex)
 //   DrawBorders      0x00130230 (shade triangles + deco quad + optional secondary tex)
 //   UpdateButtons    0x00130ab4 (lazy ScreenButton creation + update loop)
-//   Release          0x00130dd8 (marks HUD controls pending-removal)
+//   Release          0x00160d90 (marks HUD controls pending-removal)
+//   Reset            0x00161860
 //   RemoveButtons    0x00130eb8 (unconditional button teardown)
 //
-// Intermediate base for screens that use the ScreenButton system and
-// shade-triangle borders. Only DojoScreen and GameModeScreen inherit
-// from BaseScreen. Other screens inherit HUDControl3d directly.
+// BaseScreen is ABSTRACT: vtable slot 10 (Update) = __cxa_pure_virtual (0x360434).
+// Concrete subclasses: DojoScreen, GameModeScreen, FruitFactPage (and its children).
+// All other screens inherit HUDControl3d directly.
 //
 
 #include "hud/HUDControl3d.h"
@@ -25,10 +27,17 @@
 #include "math/Vec3.h"
 #include <list>
 
+// DIFFERS: binary vtable slot 10 (Update) = __cxa_pure_virtual (0x360434) — BaseScreen is abstract.
+// v1.6.1 ctor @ 0x16cd40; Release @ 0x160d90; Reset @ 0x161860; D0 @ 0x161bb0; D1 @ 0x161b20.
 class BaseScreen : public HUDControl3d {
 public:
     BaseScreen();
     virtual ~BaseScreen();
+
+    // vtable slot 10 — PURE in binary (0x00360434 = __cxa_pure_virtual).
+    // Every concrete subclass (DojoScreen, GameModeScreen, FruitFactPage and its
+    // derived pages) provides its own Update override.
+    virtual void Update(float dt) = 0;
 
     // Static texture management — two global textures shared by all
     // BaseScreen subclasses (sml_title.tex + blurry_backing.tex).

@@ -48,6 +48,13 @@ public:
     // @ 0x0011ffbc
     int UpdateSpecific(float dt) override;
 
+    // TimeModifier::ApplyModifier -- chains to base (m_Duration_remaining = m_Duration).
+    // Binary: base body called via super, same pattern as other modifiers.
+    // TODO: 0x001200f0 -- verify full TimeModifier::ApplyModifier body (may do extra clock work)
+    void ApplyModifier(bool isPurchased, float* extra) override {
+        GameModifier::ApplyModifier(isPurchased, extra);
+    }
+
     int GetType() override { return 0; }
 
     // @ 0x001200fc
