@@ -50,7 +50,7 @@ uint32_t decode_next_unicode_character(const char** cursor) {
 } // namespace utf8
 
 // Binary @ 0x0012fe00 — delegates to proxy base ctor then calls _Init (0x000f8514).
-// Port: walk string once to set m_NumChars / m_End, prime with Advance(1).
+// Port: walk string once to set m_NumChars / m_End, then _Init: rewind and decode first codepoint.
 Utf8StringIterator::Utf8StringIterator(const char* str)
     : Utf8StringProxy(str)
 {
@@ -65,25 +65,36 @@ Utf8StringIterator::Utf8StringIterator(const char* str)
     }
     m_NumChars = static_cast<uint32_t>(count);
     m_End      = scan;
-    m_NextScan = str;
-    // Prime the iterator: decode first codepoint
+    // _Init: rewind to immutable start, prime first codepoint.
+    // m_Begin is already set to str by the proxy ctor and never changes.
+    m_NextScan = m_Begin;
     Advance(1);
 }
 
-// Binary @ 0x00160cbc
+// ASM-verified: 2026-06-12 binary @ 0x00160cbc (re-analyst) -- iterator copy-ctor
+// copies the cursor triple (proxy copy-ctor @0x001840c0 copies m_Begin/m_NumChars/m_End
+// and zeroes these three).
 Utf8StringIterator::Utf8StringIterator(const Utf8StringIterator& other)
     : Utf8StringProxy(other)
 {
+    m_PrevBegin        = other.m_PrevBegin;
+    m_NextScan         = other.m_NextScan;
+    m_CurrentCodepoint = other.m_CurrentCodepoint;
 }
 
+// Binary @ 0x00184128 — Advance: outer guard if (m_PrevBegin != 0); per-step guard
+// if (*m_PrevBegin != '\0'); then m_PrevBegin = m_NextScan; m_CurrentCodepoint = decode(&m_NextScan).
+// +0x04 (m_Begin) is NEVER written here.
+// ASM-verified: 2026-06-12 binary @ 0x00184128 (asm-inspector)
 void Utf8StringIterator::Advance(int n) {
+    if (m_PrevBegin == 0) return;
     for (int i = 0; i < n; i++) {
-        if (m_NextScan >= m_End) {
+        if (*m_NextScan == '\0') {
             m_CurrentCodepoint = 0;
             return;
         }
-        m_PrevBegin = m_NextScan;
-        m_CurrentCodepoint = utf8::decode_next_unicode_character(&m_NextScan);
+        m_PrevBegin = m_NextScan;                                               // +0x10 = old +0x14
+        m_CurrentCodepoint = utf8::decode_next_unicode_character(&m_NextScan);  // +0x18 = decode(&+0x14)
         if (m_CurrentCodepoint == 0) return;
     }
 }
@@ -94,12 +105,12 @@ Utf8StringIterator Utf8StringIterator::operator+(int n) const {
     return copy;
 }
 
-// Binary @ 0x0012fe00 area -- Reset(): rewind the iterator to the string start.
-// m_PrevBegin holds the start of the first codepoint (set during ctor's Advance(1));
-// restoring m_NextScan to it and re-decoding gives the same state as after the ctor.
+// Binary @ 0x001984a8 — Reset(): rewinds to the IMMUTABLE string start (m_Begin = +0x04)
+// and re-primes the first codepoint, matching binary _Init exactly.
+// ASM-verified: 2026-06-12 binary @ 0x001984a8 (asm-inspector)
 void Utf8StringIterator::Reset() {
-    m_NextScan = m_PrevBegin;
-    Advance(1);
+    m_NextScan = m_Begin;   // rewind live cursor to immutable string start (+0x04)
+    Advance(1);             // prime first codepoint into m_PrevBegin/m_CurrentCodepoint
 }
 
 }  // namespace Mortar

@@ -14,12 +14,12 @@ namespace Mortar {
 // needs to seed the data fields the port-side standalone proxy starts from.
 // Port specific: GOT-indirect vtable install replaced by native C++ vptr.
 Utf8StringProxy::Utf8StringProxy(const char* str)
-    : m_PrevBegin(str)
-    , m_CurrentCodepoint(0)
+    : m_Begin(str)
     , m_NumChars(0)
-    , m_NextScan(str)
     , m_End(str)
-    , m_field9_0x18(0)
+    , m_PrevBegin(str)
+    , m_NextScan(str)
+    , m_CurrentCodepoint(0)
 {
 }
 
@@ -28,15 +28,15 @@ Utf8StringProxy::Utf8StringProxy(const char* str)
 // (this->vtable = GOT-resolved table + 8). It deliberately does NOT touch
 // +0x10 / +0x14 / +0x18 -- those are copied by the derived
 // Utf8StringIterator copy-ctor (@ 0x00160cbc) after it chains to this base ctor.
-// Faithful: leave m_NextScan / m_End / m_field9_0x18 default-uninitialised here.
+// Faithful: leave m_PrevBegin / m_NextScan / m_CurrentCodepoint default-uninitialised here.
 // Port specific: vtable install handled by native C++ vptr.
 Utf8StringProxy::Utf8StringProxy(const Utf8StringProxy& other)
-    : m_PrevBegin(other.m_PrevBegin)
-    , m_CurrentCodepoint(other.m_CurrentCodepoint)
+    : m_Begin(other.m_Begin)
     , m_NumChars(other.m_NumChars)
+    , m_End(other.m_End)
+    , m_PrevBegin(0)
     , m_NextScan(0)
-    , m_End(0)
-    , m_field9_0x18(0)
+    , m_CurrentCodepoint(0)
 {
 }
 

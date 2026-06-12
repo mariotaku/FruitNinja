@@ -585,7 +585,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
                 if (horizAlign == 3) lineOffset *= 0.5f;
             }
             cursorX = 0.0f;
-            cursorY -= 1.0f;  // one lineHeight unit down
+            cursorY -= maxWH.y;  // binary @ 0x00198fc0: cursorY -= maxWH.y (per-line pitch)
             continue;
         }
 
@@ -618,7 +618,7 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
                     if (horizAlign == 3) lineOffset *= 0.5f;
                 }
                 cursorX = 0.0f;
-                cursorY -= 1.0f;
+                cursorY -= maxWH.y;  // binary: same pitch as \n branch
                 continue;
             }
         }
@@ -760,6 +760,26 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
         cursorX += g->xadv + GetKerning((uint32_t)cp, (uint32_t)0) + spacing * spacingMul;
         iter++;
     }
+
+#if defined(FN_FONT_DEBUG)
+    {
+        int totalVerts = 0;
+        for (int pg = 0; pg < m_PageCount; pg++) totalVerts += perPageCount[pg];
+        int lineCount = 0;
+        if (maxWH.y > 0.0f) {
+            lineCount = (int)(-cursorY / maxWH.y) + 1;
+        } else {
+            lineCount = (cursorY < 0.0f) ? (int)(-cursorY + 0.5f) + 1 : 1;
+        }
+        printf("FN_FONT_DEBUG DrawString: wrapLimit=%.3f maxWH=(%.3f,%.3f)"
+               " cursorY=%.3f lineCount=%d totalGlyphs=%d alignment=0x%02X"
+               " pos=(%.1f,%.1f) scale=%.1f yLineFactor=%.2f\n",
+               wrapLimit, maxWH.x, maxWH.y, cursorY, lineCount,
+               totalVerts / 6, alignment,
+               pos.x, pos.y, scale, yLineFactor);
+        fflush(stdout);
+    }
+#endif
 
     // --- Bake text transform into vertex coords (binary-faithful, matches
     // 0x00199216..0x00199254 architecture) ---

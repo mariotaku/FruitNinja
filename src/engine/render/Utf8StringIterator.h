@@ -15,12 +15,13 @@
 //   Utf8StringIterator ctor (0x0012fe00) delegates to proxy base ctor (GOT thunk
 //   0x001018bc) then calls _Init (0x000f8514). Does NOT write its own vtable.
 //
-// The base fields serve as iterator cursor state:
-//   m_PrevBegin        (+0x04) — start of most-recently-decoded codepoint
-//   m_CurrentCodepoint (+0x08) — 0 = end-of-string
-//   m_NumChars         (+0x0C) — total codepoint count (set by ctor walk)
-//   m_NextScan         (+0x10) — cursor passed to decode_next_unicode_character
-//   m_End              (+0x14) — one-past-last byte of input string
+// The base fields serve as iterator cursor state (binary-verified @ Advance 0x00184128 / Reset 0x001984a8):
+//   m_Begin            (+0x04) — IMMUTABLE original string start; set once in ctor, NEVER written by Advance
+//   m_NumChars         (+0x08) — total codepoint count (set by ctor walk)
+//   m_End              (+0x0C) — one-past-last byte of input string
+//   m_PrevBegin        (+0x10) — start of most-recently-decoded codepoint (written by Advance)
+//   m_NextScan         (+0x14) — live decode cursor (written by Advance via decode_next)
+//   m_CurrentCodepoint (+0x18) — decoded codepoint value; 0 = end-of-string
 
 namespace Mortar {
 
@@ -42,10 +43,10 @@ public:
     void operator++(int) { Advance(1); }
     Utf8StringIterator operator+(int n) const;
 
-    // Binary @ 0x0012fe00 area -- Reset(): rewind the iterator to the string start
-    // so it can be walked a second time. Used by BakedString::Bake between pass 1
-    // and pass 2. Restores m_NextScan to m_PrevBegin (= string start after ctor)
-    // and re-decodes the first codepoint.
+    // Binary @ 0x001984a8 -- Reset(): rewind the iterator to the immutable string start
+    // (m_Begin, +0x04) so it can be walked a second time. Used by BakedString::Bake
+    // between pass 1 and pass 2. Resets m_NextScan to m_Begin and re-decodes the
+    // first codepoint via Advance(1).
     void Reset();
 
     // No own data members — sizeof == sizeof(Utf8StringProxy) == 0x1C.
