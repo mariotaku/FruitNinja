@@ -233,6 +233,9 @@ if (EMSCRIPTEN)
         "SHELL:-sGL_FFP_ONLY=1"
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
         "SHELL:-sEXIT_RUNTIME=0"
+        # Port specific: custom HTML shell (Phase 5+7: letterbox + loading bar
+        # + TAP TO START overlay that doubles as the audio gesture unlock).
+        "SHELL:--shell-file ${CMAKE_SOURCE_DIR}/src/platform/emscripten/shell.html"
         # Port specific: preload read-only assets into MEMFS; exclude the two
         # writable save files so they are NOT packed into the read-only bundle.
         # Saves are routed to /save (IDBFS) at runtime; see mainEmscripten.cpp.
@@ -241,6 +244,11 @@ if (EMSCRIPTEN)
         "SHELL:--exclude-file *ItemSave.xml"
         # Port specific: link idbfs.js so FS.mount(IDBFS) is available.
         "SHELL:-lidbfs.js"
+        # Port specific: export fn_idbfs_ready and fn_disable_audio so JS can
+        # call them as Module._fn_idbfs_ready() / Module._fn_disable_audio().
+        # EMSCRIPTEN_KEEPALIVE alone is sufficient for most linker configs but
+        # an explicit -sEXPORTED_FUNCTIONS ensures they survive aggressive DCE.
+        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_disable_audio']"
     )
 else()
     # Native desktop/webOS entry point.

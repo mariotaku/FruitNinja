@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<!-- Port specific: Custom Emscripten shell for Fruit Ninja web build.
+     Phase 5 (audio gesture-resume) + Phase 7 (shell polish) combined.
+     Letterboxed 3:2 canvas, loading progress bar, TAP TO START overlay
+     that doubles as the required browser audio-gesture unlock.
+     Required Emscripten placeholder: {{{ SCRIPT }}} -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Fruit Ninja</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    /* Port specific: #viewport is a full-window flex centering container.
+       The canvas is positioned inside it and sized by JS letterbox scaling.
+       We do NOT give #viewport a fixed pixel size -- that was causing the
+       flexbox to collapse the width to ~62px on the 946x938 test window.
+       Instead the canvas gets explicit CSS width/height from the resize()
+       function and is centered via absolute positioning within this 100%
+       container. */
+    #viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Canvas backing size is fixed at 960x640 (set by SDL_CreateWindow).
+       JS sets canvas.style.width/height to the letterboxed CSS dimensions.
+       touch-action:none prevents browser scroll-pan on swipe gestures so
+       TransformTouchNormalized receives raw co-ordinates. */
+    #canvas {
+      display: block;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* --- Loading overlay: fixed to the full window, NOT a child of the
+       canvas viewport.  This ensures it covers the whole screen regardless
+       of canvas size, even before the first resize() call fires. --- */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    #loading-title {
+      color: #e8c44a;
+      font-size: 2.2em;
+      font-weight: bold;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 2em;
+      text-shadow: 0 0 18px rgba(232,196,74,0.5);
+    }
+
+    #progress-bar-wrap {
+      width: 80%;
+      max-width: 500px;
+      height: 10px;
+      background: #333;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #e8c44a, #ff6b1a);
+      border-radius: 5px;
+      transition: width 0.15s ease;
+    }
+
+    #progress-label {
+      color: #888;
+      font-size: 0.85em;
+      margin-top: 0.9em;
+      min-height: 1.2em;
+    }
+
+    /* --- TAP TO START overlay: also fixed to the full window so it covers
+       the whole screen.  display:none initially; JS adds .visible when
+       the runtime is ready.  High z-index sits above the canvas. --- */
+    #tap-overlay {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.72);
+      display: none; /* shown by JS once runtime ready */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      gap: 1.4em;
+    }
+
+    #tap-overlay.visible {
+      display: flex;
+    }
+
+    #tap-text {
+      color: #fff;
+      font-size: 2.8em;
+      font-weight: bold;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-shadow: 0 0 24px rgba(255,255,255,0.6), 0 2px 8px rgba(0,0,0,0.5);
+      animation: pulse 2s ease-in-out infinite;
+      cursor: pointer;
+      padding: 0.2em 0.5em;
+    }
+
+    #tap-silent {
+      color: #aaa;
+      font-size: 1.05em;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      cursor: pointer;
+      padding: 0.4em 1em;
+      border: 1px solid #555;
+      border-radius: 4px;
+      background: transparent;
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    #tap-silent:hover, #tap-silent:focus {
+      color: #ccc;
+      border-color: #888;
+      outline: none;
+    }
+
+    @keyframes pulse {
+      0%   { opacity: 1.0; transform: scale(1.00); }
+      50%  { opacity: 0.55; transform: scale(0.97); }
+      100% { opacity: 1.0; transform: scale(1.00); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Port specific: overlays are siblings of #viewport (not children) so
+       they are fixed to the full window and not clipped by the canvas size. -->
+  <div id="viewport">
+    <!-- Canvas: id="canvas" is what Emscripten looks up.  Backing size is
+         960x640 (set by SDL_CreateWindow in mainEmscripten.cpp); JS resize()
+         sets canvas.style.width/height so the CSS size letterboxes to the
+         window without changing the backing resolution, keeping
+         TransformTouchNormalized coords valid. -->
+    <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+  </div>
+
+  <!-- Loading overlay: fixed full-window, outside #viewport -->
+  <div id="loading-overlay">
+    <div id="loading-title">Fruit Ninja</div>
+    <div id="progress-bar-wrap">
+      <div id="progress-bar"></div>
+    </div>
+    <div id="progress-label">Loading...</div>
+  </div>
+
+  <!-- TAP TO START overlay: fixed full-window, outside #viewport.
+       Primary button resumes AudioContext (audio-gesture unlock) then starts.
+       Secondary button skips audio resume and calls fn_disable_audio() so
+       the in-game music/sfx toggles display as off from the first frame.
+       After either dismiss the overlay is removed from DOM so the canvas
+       gets all subsequent events unobstructed. -->
+  <div id="tap-overlay" aria-modal="true" role="dialog" aria-label="Start game">
+    <span id="tap-text" role="button" tabindex="0" aria-label="Tap to start">TAP TO START</span>
+    <button id="tap-silent" tabindex="0">tap to start without audio</button>
+  </div>
+
+  <script>
+  (function () {
+    var GAME_W = 960, GAME_H = 640;
+    var canvas = document.getElementById('canvas');
+    function resize() {
+      var ww = window.innerWidth, wh = window.innerHeight;
+      var scale = Math.min(ww / GAME_W, wh / GAME_H);
+      canvas.style.width  = Math.floor(GAME_W * scale) + 'px';
+      canvas.style.height = Math.floor(GAME_H * scale) + 'px';
+    }
+    resize();
+    window.addEventListener('resize', resize);
+  })();
+
+  var _loadingOverlay = document.getElementById('loading-overlay');
+  var _progressBar    = document.getElementById('progress-bar');
+  var _progressLabel  = document.getElementById('progress-label');
+  var _tapOverlay     = document.getElementById('tap-overlay');
+  var _tapText        = document.getElementById('tap-text');
+  var _tapSilent      = document.getElementById('tap-silent');
+  var _runtimeReady   = false;
+
+  function _showTapOverlay() {
+    if (_runtimeReady) return;
+    _runtimeReady = true;
+    if (_loadingOverlay) _loadingOverlay.style.display = 'none';
+    if (_tapOverlay) {
+      _tapOverlay.style.display = 'flex';
+      if (_tapText) _tapText.focus();
+    }
+  }
+
+  function _resumeAudioContext() {
+    try {
+      var ctx = null;
+      if (typeof Module !== 'undefined' && Module.SDL2) ctx = Module.SDL2.audioContext;
+      if (!ctx && typeof SDL2 !== 'undefined') ctx = SDL2.audioContext;
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().then(function () {
+          console.log('[audio] AudioContext resumed via tap gesture');
+        }).catch(function (e) {
+          console.warn('[audio] AudioContext.resume() rejected:', e);
+        });
+      }
+    } catch (e) {
+      console.warn('[audio] resume exception (non-fatal):', e);
+    }
+  }
+
+  function _removeOverlay() {
+    if (_tapOverlay && _tapOverlay.parentNode) _tapOverlay.parentNode.removeChild(_tapOverlay);
+  }
+
+  function _dismissWithAudio(e) {
+    e.stopPropagation(); e.preventDefault();
+    _resumeAudioContext();
+    _removeOverlay();
+  }
+
+  function _dismissSilent(e) {
+    e.stopPropagation(); e.preventDefault();
+    try {
+      if (typeof Module !== 'undefined' && Module._fn_disable_audio) Module._fn_disable_audio();
+    } catch (ex) {
+      console.warn('[audio] fn_disable_audio exception (non-fatal):', ex);
+    }
+    _removeOverlay();
+  }
+
+  if (_tapText) {
+    _tapText.addEventListener('click',      _dismissWithAudio);
+    _tapText.addEventListener('touchstart', _dismissWithAudio, {passive: false});
+    _tapText.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _dismissWithAudio(e);
+    });
+  }
+  if (_tapSilent) {
+    _tapSilent.addEventListener('click',      _dismissSilent);
+    _tapSilent.addEventListener('touchstart', _dismissSilent, {passive: false});
+    _tapSilent.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _dismissSilent(e);
+    });
+  }
+
+  window.onerror = function (msg) {
+    console.error('[onerror]', msg);
+    if (_progressLabel) _progressLabel.textContent = 'Error - see console';
+  };
+  </script>
+
+  <!-- Port specific: Module must be defined in its own <script> block,
+       separate from the helpers above.  Emscripten's HTML minifier
+       processes each <script> block independently; mixing the helper
+       functions and the Module definition in one block caused the
+       minifier to close the script tag early, leaving var Module = {}
+       as raw HTML text (not executed JS) and thus Module["canvas"]
+       undefined when GL.createContext ran.  Two blocks avoids this. -->
+  <script>
+  var Module = {
+    canvas: (function () {
+      var c = document.getElementById('canvas');
+      if (c) {
+        c.addEventListener('webglcontextlost', function (ev) {
+          alert('WebGL context lost. Please reload the page.');
+          ev.preventDefault();
+        }, false);
+      }
+      return c;
+    })(),
+
+    print:    function () { console.log.apply(console, arguments); },
+    printErr: function () { console.error.apply(console, arguments); },
+
+    setStatus: function (text) {
+      if (!text) return;
+      var m = text.match(/\((\d+)\/(\d+)\)/);
+      if (m) {
+        var pct = Math.round(100 * parseInt(m[1]) / parseInt(m[2]));
+        if (_progressBar)  _progressBar.style.width = pct + '%';
+        if (_progressLabel) _progressLabel.textContent = pct + '%';
+      } else {
+        if (_progressLabel) _progressLabel.textContent = text;
+      }
+    },
+
+    totalDependencies: 0,
+  };
+
+  (function () {
+    var _pollInterval = setInterval(function () {
+      if (typeof Module !== 'undefined' && Module.calledRun) {
+        clearInterval(_pollInterval);
+        clearTimeout(_safetyTimeout);
+        _showTapOverlay();
+      }
+    }, 100);
+
+    var _safetyTimeout = setTimeout(function () {
+      clearInterval(_pollInterval);
+      console.warn('[shell] safety fallback: forcing tap overlay reveal');
+      _showTapOverlay();
+    }, 30000);
+  })();
+  </script>
+
+  <!-- Port specific: Emscripten injects the generated <script> tag here.
+       This MUST be after the Module definition above. -->
+  {{{ SCRIPT }}}
+</body>
+</html>
