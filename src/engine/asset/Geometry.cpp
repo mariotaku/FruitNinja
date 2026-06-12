@@ -60,7 +60,7 @@ void Geometry::Render(MeshMaterial const& mat, Matrix44 const& mvp) {
 
     if (mat.m_Texture.IsValid()) {
         mat.m_Texture->Set();
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
+        TexEnvModulate();
     } else {
         glDisable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);

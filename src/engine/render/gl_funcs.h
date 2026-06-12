@@ -69,4 +69,19 @@ bool gl_load_functions();   // No-op except on Windows where it loads
 bool gl_check_runtime();    // MS software-ICD diagnostic — prints to stderr
                             // and returns false when the driver is broken.
 
+// Sets GL_TEXTURE_ENV_MODE = GL_MODULATE on the currently active texture unit.
+// The binary uses glTexEnvf((GLfloat)GL_MODULATE), which is the canonical form
+// on ES1/desktop GL. Emscripten's LEGACY_GL_EMULATION only implements the integer
+// variant glTexEnvi for GL_TEXTURE_ENV_MODE (glTexEnvf with an enum pname spams
+// "WARNING: Unhandled pname" 10,000+ times/frame under WebGL).
+// DIFFERS: binary uses glTexEnvf((GLfloat)GL_MODULATE); glTexEnvi is used here
+// on Emscripten builds only -- the only variant LEGACY_GL_EMULATION handles for GL_TEXTURE_ENV_MODE.
+inline void TexEnvModulate() {
+#if defined(__EMSCRIPTEN__)
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+#else
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
+#endif
+}
+
 #endif
