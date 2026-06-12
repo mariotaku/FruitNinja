@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fruit Ninja Bada Port</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    background: #0d0d0d;
+    color: #f0ece0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 16px 48px;
+  }
+
+  /* ---- hero ---- */
+  .hero {
+    width: 100%;
+    max-width: 860px;
+    text-align: center;
+    padding: 56px 16px 40px;
+    position: relative;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% 0%,
+        rgba(200, 60, 0, 0.18) 0%,
+        transparent 70%);
+    pointer-events: none;
+  }
+
+  /* Katana slash decoration */
+  .slash-deco {
+    display: block;
+    width: 240px;
+    height: 3px;
+    margin: 0 auto 28px;
+    background: linear-gradient(90deg,
+      transparent 0%, #e84c0a 20%, #ff8c42 50%, #e84c0a 80%, transparent 100%);
+    border-radius: 2px;
+    box-shadow: 0 0 12px rgba(232, 76, 10, 0.6);
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 6vw, 3.6rem);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: #fff;
+    text-shadow:
+      0 2px 8px rgba(0,0,0,0.8),
+      0 0 40px rgba(232, 76, 10, 0.35);
+  }
+
+  .hero h1 span {
+    color: #ff6020;
+  }
+
+  .hero .subtitle {
+    margin-top: 14px;
+    font-size: 1rem;
+    color: #aaa;
+    line-height: 1.6;
+    max-width: 540px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero .subtitle a {
+    color: #ff8c42;
+    text-decoration: none;
+  }
+  .hero .subtitle a:hover { text-decoration: underline; }
+
+  .slash-deco-bottom {
+    display: block;
+    width: 120px;
+    height: 2px;
+    margin: 32px auto 0;
+    background: linear-gradient(90deg,
+      transparent 0%, rgba(232, 76, 10, 0.5) 50%, transparent 100%);
+  }
+
+  /* ---- card grid ---- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    width: 100%;
+    max-width: 860px;
+    margin-top: 8px;
+  }
+
+  .card {
+    background: #181818;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 28px 24px 24px;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 12px 12px 0 0;
+    background: var(--accent, #e84c0a);
+    opacity: 0.85;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent, #e84c0a);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5),
+                0 0 0 1px var(--accent, #e84c0a);
+  }
+
+  .card-icon {
+    font-size: 2.4rem;
+    line-height: 1;
+    margin-bottom: 14px;
+    display: block;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+  }
+
+  .card h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .card p {
+    font-size: 0.875rem;
+    color: #999;
+    line-height: 1.55;
+  }
+
+  .card-play   { --accent: #e84c0a; }
+  .card-models { --accent: #3a9ff5; }
+  .card-tex    { --accent: #7ec850; }
+
+  .card-arrow {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    font-size: 1rem;
+    color: var(--accent, #e84c0a);
+    opacity: 0.7;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .card:hover .card-arrow { opacity: 1; transform: translateX(3px); }
+
+  /* ---- footer ---- */
+  footer {
+    margin-top: 52px;
+    font-size: 0.8rem;
+    color: #555;
+    text-align: center;
+    line-height: 1.8;
+  }
+  footer a { color: #777; text-decoration: none; }
+  footer a:hover { color: #aaa; }
+
+  /* ---- responsive ---- */
+  @media (max-width: 480px) {
+    .hero { padding: 36px 8px 28px; }
+    .cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <span class="slash-deco"></span>
+  <h1>Fruit Ninja<br><span>Bada Port</span></h1>
+  <p class="subtitle">
+    An open-source reverse-engineered port of the original Samsung Bada
+    version of Fruit Ninja, rebuilt with SDL2 + WebAssembly.
+    <br>
+    <a href="https://github.com/webosbrew/fruit-ninja" target="_blank" rel="noopener">
+      View source on GitHub
+    </a>
+  </p>
+  <span class="slash-deco-bottom"></span>
+</div>
+
+<div class="cards">
+
+  <a class="card card-play" href="game/">
+    <span class="card-icon">&#127827;</span>
+    <h2>Play (Web)</h2>
+    <p>
+      Run the port directly in your browser via WebAssembly.
+      No install required. Touch or mouse supported.
+    </p>
+    <span class="card-arrow">&#8594;</span>
+  </a>
+
+  <a class="card card-models" href="models/">
+    <span class="card-icon">&#128481;</span>
+    <h2>Models Gallery</h2>
+    <p>
+      Interactive WebGL viewer for every mesh extracted from the
+      original Bada binary &mdash; fruits, bombs, blade FX.
+    </p>
+    <span class="card-arrow">&#8594;</span>
+  </a>
+
+  <a class="card card-tex" href="textures/">
+    <span class="card-icon">&#127774;</span>
+    <h2>Texture Gallery</h2>
+    <p>
+      All 452 textures decoded from the original <code>.tex</code>
+      format: particles, HUD, fonts, and atlas sheets.
+    </p>
+    <span class="card-arrow">&#8594;</span>
+  </a>
+
+</div>
+
+<footer>
+  <div>
+    Fruit Ninja &copy; Halfbrick Studios &mdash; original game assets are property of their respective owners.
+  </div>
+  <div>
+    This port is a reverse-engineering research project.
+    <a href="https://github.com/webosbrew/fruit-ninja" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+</body>
+</html>
