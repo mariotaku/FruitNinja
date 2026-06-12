@@ -19,8 +19,8 @@
 //   +0x20  m_GuardBandSize  uint   (= 0 this build; kept for payload offset math)
 //
 // Block header (16 bytes, prepended before payload):
-//   +0x00  next  (all-blocks linked list forward)
-//   +0x04  prev  (all-blocks linked list back)
+//   +0x00  prev  (all-blocks linked list back-link)   -- binary @ Release 0x0019471e
+//   +0x04  next  (all-blocks linked list forward-link)
 //   +0x08  name  const char* (alloc tag, or null)
 //   +0x0C  size:24  (block size including this header; top byte reserved)
 //   +0x0F  flag  uint8_t  (1=FREE, 2=allocated, 4=locked/fixed)
@@ -38,13 +38,13 @@ namespace Mortar {
 class LinkedHeap {
 public:
     // Internal block header.
+    // Binary layout verified vs. Release @ 0x0019469c-0x00194758:
+    //   prev at +0x00 (back-link), next at +0x04 (forward-link).
     struct Block {
-        Block*      next;       // +0x00 all-blocks forward
-        Block*      prev;       // +0x04 all-blocks back
+        Block*      prev;       // +0x00 all-blocks back-link
+        Block*      next;       // +0x04 all-blocks forward-link
         const char* name;       // +0x08 alloc tag (may be null)
-        unsigned int sizeFlags; // +0x0C bits[0..23] = size incl header; bits[24..31] reserved; flag at +0x0F
-        // flag byte overlaps the top byte of sizeFlags on little-endian ARM.
-        // Accessed via helpers below.
+        unsigned int sizeFlags; // +0x0C bits[0..23] = size incl header; flag byte at +0x0F (LE MSB)
 
         unsigned int GetSize() const  { return sizeFlags & 0x00FFFFFFu; }
         void         SetSize(unsigned int s) { sizeFlags = (sizeFlags & 0xFF000000u) | (s & 0x00FFFFFFu); }
