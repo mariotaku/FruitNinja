@@ -165,13 +165,17 @@ public:
     }
 
     // Wrap-aware variant: forwards to the full DrawString with yLineFactor=1.0
-    // and maxWH.x = wrapPx (wrap constraint). Matches the binary's call shape
-    // for the description-text path.
+    // and maxWH = (wrapPx, scale).  maxWH.y = scale so after the in-DrawString
+    // division (maxWH.y /= yLineFactor*scale = 1.0*scale) the normalized per-line
+    // pitch is 1.0f, matching binary callers that supply lineHeight as maxWH.y.
+    // maxWH.y=0 was the prior value; it made the vertical-alignment formula
+    // compute translateY = N/2 instead of the correct (N-1)/2, shifting wrapped
+    // blocks off-centre (and in degenerate cases, off-screen -> blank).
     void DrawStringWrapped(float scale, float wrapPx, float z,
                            const char* text, const Vec3& pos,
                            const Colour& colour, int alignment) {
         Mortar::Utf8StringIterator iter(text);
-        Vec2 maxWH(wrapPx, 0.0f);
+        Vec2 maxWH(wrapPx, scale);  // maxWH.y=scale -> after /= (1*scale) = 1.0 per-line pitch
         DrawString(scale, 1.0f, 0.0f, iter, pos, colour, maxWH, alignment, z, nullptr);
     }
 

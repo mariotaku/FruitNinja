@@ -5,14 +5,17 @@
 
 // Mortar::Utf8StringProxy — 28-byte polymorphic base (vtable at +0x00).
 // Binary: Ghidra struct "Mortar::Utf8StringProxy" == 28 bytes == 0x1C.
-// Layout (from proxy copy-ctor @ 0x00160cbc and base ctor @ 0x001018bc / 0x001840c0):
+// Layout (from proxy copy-ctor @ 0x00160cbc, base ctor @ 0x001018bc / 0x001840c0,
+//         Advance @ 0x00184128, Reset/_Init @ 0x001984a8):
 //   +0x00  void**     vptr             (installed by base ctor 0x001840c0; GOT-indirect vtable)
-//   +0x04  char*      field1_0x4       (current/string ptr; in iterator = m_PrevBegin)
-//   +0x08  uint32_t   field_0x8        (in iterator = m_CurrentCodepoint)
-//   +0x0C  uint32_t   field6_0xc       (in iterator = m_NumChars)
-//   +0x10  void*      field7_0x10      (in iterator = m_NextScan cursor)
-//   +0x14  void*      field8_0x14      (in iterator = m_End pointer)
-//   +0x18  uint32_t   field9_0x18      (in iterator = aux / unused)
+//   +0x04  char*      m_Begin          (IMMUTABLE original string start; set once in ctor, NEVER written by Advance)
+//   +0x08  uint32_t   m_NumChars       (total codepoint count, set by ctor walk)
+//   +0x0C  char*      m_End            (one-past-last byte; port-side bounds guard)
+//   +0x10  char*      m_PrevBegin      (start of most-recently-decoded codepoint; written by Advance: +0x10 = old +0x14)
+//   +0x14  char*      m_NextScan       (live decode cursor; written by Advance via decode_next)
+//   +0x18  uint32_t   m_CurrentCodepoint (decoded value; 0 = end-of-string; written by Advance)
+//
+// ASM-verified: 2026-06-12 binary @ 0x001984a8 (Reset) / 0x00184128 (Advance) (asm-inspector)
 //
 // POLYMORPHIC: vtable installed by base ctor; vtable VA unresolvable statically
 // (GOT-indirect computation in 0x001840c0).
@@ -31,12 +34,12 @@ public:
     Utf8StringProxy(const Utf8StringProxy& other);
     virtual ~Utf8StringProxy();
 
-    const char* m_PrevBegin;        // +0x04 field1_0x4 — start of current codepoint
-    uint32_t    m_CurrentCodepoint; // +0x08 field_0x8  — 0 = end-of-string
-    uint32_t    m_NumChars;         // +0x0C field6_0xc  — total codepoint count
-    const char* m_NextScan;         // +0x10 field7_0x10 — decode cursor
-    const char* m_End;              // +0x14 field8_0x14 — one-past-last byte
-    uint32_t    m_field9_0x18;      // +0x18 field9_0x18 — auxiliary
+    const char* m_Begin;            // +0x04 field1_0x4 — IMMUTABLE original string start (set once in ctor, never by Advance)
+    uint32_t    m_NumChars;         // +0x08 field_0x8  — total codepoint count
+    const char* m_End;              // +0x0C field6_0xc — one-past-last byte (port-side bounds guard)
+    const char* m_PrevBegin;        // +0x10 field7_0x10 — start of most-recently-decoded codepoint (written by Advance)
+    const char* m_NextScan;         // +0x14 field8_0x14 — live decode cursor (written by Advance via decode_next)
+    uint32_t    m_CurrentCodepoint; // +0x18 field9_0x18 — decoded codepoint value; 0 = end-of-string
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
