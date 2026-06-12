@@ -154,10 +154,17 @@ void* Entity::operator new(size_t size) {
 }
 
 // Binary @ 0x0019d770 — Entity::operator delete -> s_pEntityHeap->Release(p, false)
+// Port-specific guard: if operator new fell back to ::operator new (entity heap full),
+// the returned pointer is a system-heap address. Calling LinkedHeap::Release on it
+// would interpret garbage memory as a Block header and corrupt the heap. Check
+// Contains() first; if the pointer is outside the entity heap buffer, route to
+// ::operator delete instead.
 void Entity::operator delete(void* p) {
     if (p && s_pEntityHeap) {
-        s_pEntityHeap->Release(p, false);
-        return;
+        if (s_pEntityHeap->Contains(p)) {
+            s_pEntityHeap->Release(p, false);
+            return;
+        }
     }
     ::operator delete(p);
 }
@@ -172,10 +179,13 @@ void* Entity::operator new[](size_t size) {
 }
 
 // Binary @ 0x0019d74c — Entity::operator delete[] -> s_pEntityHeap->Release(p, false)
+// Same Contains() guard as operator delete (scalar) — see comment there.
 void Entity::operator delete[](void* p) {
     if (p && s_pEntityHeap) {
-        s_pEntityHeap->Release(p, false);
-        return;
+        if (s_pEntityHeap->Contains(p)) {
+            s_pEntityHeap->Release(p, false);
+            return;
+        }
     }
     ::operator delete[](p);
 }
