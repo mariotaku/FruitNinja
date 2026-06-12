@@ -19,8 +19,12 @@
 namespace Mortar {
 
 // Heap-log state -- initialised once on first Allocate/Release call.
-static bool    s_heapLogChecked = false;
-static FILE*   s_heapLogFile    = 0;
+static bool    s_heapLogChecked  = false;
+static FILE*   s_heapLogFile     = 0;
+
+// Heap integrity check state -- initialised alongside heap log.
+static bool    s_heapCheckEnabled = false;
+static unsigned long s_heapOpCount = 0;
 
 static void HeapLogInit()
 {
@@ -29,6 +33,10 @@ static void HeapLogInit()
     const char* path = getenv("FN_HEAPLOG");
     if (path && *path) {
         s_heapLogFile = fopen(path, "a");
+    }
+    const char* chk = getenv("FN_HEAPCHECK");
+    if (chk && *chk) {
+        s_heapCheckEnabled = true;
     }
 }
 
@@ -103,6 +111,11 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
             fprintf(s_heapLogFile, "A %u %u %p\n", sz, (unsigned)flag, hit);
             fflush(s_heapLogFile);
         }
+        {
+            char label[32];
+            snprintf(label, sizeof(label), "A %u", sz);
+            CheckIntegrity(label);
+        }
         return hit;
     }
 
@@ -132,6 +145,11 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
     if (s_heapLogFile) {
         fprintf(s_heapLogFile, "A %u %u %p\n", sz, (unsigned)flag, payload);
         fflush(s_heapLogFile);
+    }
+    {
+        char label[32];
+        snprintf(label, sizeof(label), "A %u", sz);
+        CheckIntegrity(label);
     }
     return payload;
 }
@@ -177,6 +195,7 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
             m_pLastBlock = pr;
             cur = pr;
         }
+        CheckIntegrity("R");
         return;
     }
 
@@ -203,6 +222,7 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
         }
         fwd = fn;
     }
+    CheckIntegrity("R");
 }
 
 // Binary @ 0x001945f8 — shrink block to newSz in place.
@@ -404,6 +424,116 @@ void LinkedHeap::DisplayUsage(bool show)
         (void)cur;
         cur = cur->next;
     }
+}
+
+// FN_HEAPCHECK integrity walker. Called at end of AllocateMemory and Release
+// when FN_HEAPCHECK env var is set. Walks the all-blocks doubly-linked list
+// and checks: pointer range, cross-link consistency, and sane block sizes.
+// On first violation: logs to stderr + FN_HEAPLOG file, then abort().
+bool LinkedHeap::CheckIntegrity(const char* opLabel)
+{
+    if (!s_heapCheckEnabled) return true;
+
+    s_heapOpCount++;
+
+    uintptr_t bufStart = reinterpret_cast<uintptr_t>(m_pBuffer);
+    uintptr_t bufEnd   = bufStart + m_Size;
+
+    auto ptrInRange = [&](const void* p) -> bool {
+        uintptr_t v = reinterpret_cast<uintptr_t>(p);
+        return (v == 0) || (v >= bufStart && v < bufEnd);
+    };
+
+    auto reportViolation = [&](const Block* blk, const char* what, const char* field, uintptr_t badVal) {
+        fprintf(stderr,
+            "[HEAPCHECK] op#%lu %s: %s at block %p: field=%s bad=0x%lx"
+            " prev=%p next=%p sizeFlags=0x%08x\n",
+            s_heapOpCount, opLabel, what,
+            (const void*)blk, field, (unsigned long)badVal,
+            (const void*)(blk ? blk->prev : 0),
+            (const void*)(blk ? blk->next : 0),
+            blk ? blk->sizeFlags : 0u);
+        if (s_heapLogFile) {
+            fprintf(s_heapLogFile,
+                "[HEAPCHECK] op#%lu %s: %s at block %p: field=%s bad=0x%lx"
+                " prev=%p next=%p sizeFlags=0x%08x\n",
+                s_heapOpCount, opLabel, what,
+                (const void*)blk, field, (unsigned long)badVal,
+                (const void*)(blk ? blk->prev : 0),
+                (const void*)(blk ? blk->next : 0),
+                blk ? blk->sizeFlags : 0u);
+            fflush(s_heapLogFile);
+        }
+        abort();
+    };
+
+    unsigned int maxBlocks = m_Size / kHeaderSize + 1;
+    unsigned int count = 0;
+    Block* prev = 0;
+    Block* cur  = m_pFirstBlock;
+
+    while (cur) {
+        if (count++ > maxBlocks) {
+            reportViolation(cur, "cycle or count overflow", "next", (uintptr_t)cur->next);
+        }
+
+        // prev pointer must be in range.
+        if (!ptrInRange(cur->prev)) {
+            reportViolation(cur, "prev out of range", "prev", (uintptr_t)cur->prev);
+        }
+        // next pointer must be in range.
+        if (!ptrInRange(cur->next)) {
+            reportViolation(cur, "next out of range", "next", (uintptr_t)cur->next);
+        }
+
+        // Cross-link: cur->prev->next == cur.
+        if (cur->prev) {
+            if (cur->prev->next != cur) {
+                reportViolation(cur, "prev->next != cur", "prev->next",
+                    (uintptr_t)cur->prev->next);
+            }
+        } else {
+            // cur->prev == null means cur should be m_pFirstBlock.
+            if (cur != m_pFirstBlock) {
+                reportViolation(cur, "prev==null but not m_pFirstBlock", "m_pFirstBlock",
+                    (uintptr_t)m_pFirstBlock);
+            }
+        }
+
+        // Cross-link: cur->next->prev == cur.
+        if (cur->next) {
+            if (cur->next->prev != cur) {
+                reportViolation(cur, "next->prev != cur", "next->prev",
+                    (uintptr_t)cur->next->prev);
+            }
+        } else {
+            // cur->next == null means cur should be m_pLastBlock.
+            if (cur != m_pLastBlock) {
+                reportViolation(cur, "next==null but not m_pLastBlock", "m_pLastBlock",
+                    (uintptr_t)m_pLastBlock);
+            }
+        }
+
+        // Block size must be at least kHeaderSize and not exceed total buffer.
+        unsigned int sz = cur->GetSize();
+        if (sz < kHeaderSize || sz > m_Size) {
+            reportViolation(cur, "block size out of range", "sizeFlags",
+                (uintptr_t)cur->sizeFlags);
+        }
+
+        // The block should lie within the buffer.
+        uintptr_t blkAddr = reinterpret_cast<uintptr_t>(cur);
+        if (blkAddr < bufStart || blkAddr + sz > bufEnd) {
+            reportViolation(cur, "block address+size outside buffer", "addr",
+                blkAddr);
+        }
+
+        prev = cur;
+        cur  = cur->next;
+        (void)prev;
+    }
+
+    return true;
 }
 
 }  // namespace Mortar

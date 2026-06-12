@@ -101,6 +101,16 @@ public:
     // Binary @ 0x001943e4 — max(largest-free-block-size, end - startAddr).
     unsigned int GetLargestFreeBlock() const;
 
+    // Returns true if payload was allocated from this heap's buffer.
+    // Used by Entity::operator delete to guard against releasing system-heap
+    // pointers through the entity heap when the heap ran out of space and
+    // operator new fell back to ::operator new.
+    bool Contains(void* payload) const {
+        uintptr_t p = reinterpret_cast<uintptr_t>(payload);
+        uintptr_t bufStart = reinterpret_cast<uintptr_t>(m_pBuffer);
+        return p >= bufStart && p < m_EndAddr;
+    }
+
     // Binary @ 0x001945bc — debug usage dump (= Entity::HeapDisplay).
     void DisplayUsage(bool show);
 
@@ -140,6 +150,12 @@ public:
     unsigned int TestGetSize()    const { return m_Size; }
 private:
 #endif
+
+    // Per-op integrity walker gated on FN_HEAPCHECK env var.
+    // Walks the all-blocks list and verifies structural invariants.
+    // On the first violation: logs to stderr and FN_HEAPLOG file (if set),
+    // then calls abort(). opLabel is e.g. "A 320" or "R".
+    bool CheckIntegrity(const char* opLabel);
 };
 
 #ifdef __bada__
