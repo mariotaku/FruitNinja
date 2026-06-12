@@ -54,6 +54,8 @@ public:
     ~GameModeScreen();
 
     // HUDControl overrides
+    // Binary Init @ 0x00181060 (v1.6.1) -> forwards to Reset @ 0x00181074 (bare BX LR). No-op.
+    // Activation is in the ctor; Init() must NOT be called to enable the screen.
     void Init() override;
     void Reset() override;                           // Binary @ 0x0013df80 — no-op override stub
     void Release() override;
