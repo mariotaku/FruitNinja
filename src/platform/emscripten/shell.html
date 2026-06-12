@@ -65,9 +65,10 @@
       user-select: none;
     }
 
-    /* Progress bar: absolutely positioned inside #viewport, sitting in the
-       lower portion of the splash/canvas area.  JS sets its left/bottom/width
-       to match the canvas rect so it stays inside the game viewport on resize.
+    /* Progress bar: absolutely positioned inside #viewport, in the gap between
+       the splash's "Loading..." baked text and its copyright lines.
+       JS resize() maps fBar=0.750 through object-fit:cover geometry to compute
+       the screen Y; horizontal centering tracks the canvas width.
        Style: classic Apple boot-bar -- thin pill track with hairline border,
        solid white fill growing left-to-right.  No gradient, no glow. */
     #progress-bar-wrap {
@@ -91,7 +92,8 @@
     /* --- TAP TO START overlay: absolutely positioned inside #viewport so it
        is clipped to the game viewport rectangle (same area as the canvas).
        JS sets its position/size to match the canvas rect.
-       display:none initially; JS shows it when the runtime is ready.
+       display:none initially; JS shows it (opacity 0 -> 1 fade) when runtime
+       is ready, and fades it out (opacity 1 -> 0) on dismiss before removeChild.
        Sits above the splash (z-index 20) so the splash image shows behind it
        as a backdrop -- visually: splash + TAP TO START. --- */
     #tap-overlay {
@@ -105,6 +107,8 @@
       -webkit-tap-highlight-color: transparent;
       user-select: none;
       gap: 1.4em;
+      opacity: 0;
+      transition: opacity 0.3s ease;
     }
 
     #tap-overlay.visible {
@@ -118,7 +122,6 @@
       letter-spacing: 0.18em;
       text-transform: uppercase;
       text-shadow: 0 0 24px rgba(255,255,255,0.6), 0 2px 8px rgba(0,0,0,0.5);
-      animation: pulse 2s ease-in-out infinite;
       cursor: pointer;
       padding: 0.2em 0.5em;
     }
@@ -144,11 +147,7 @@
       outline: none;
     }
 
-    @keyframes pulse {
-      0%   { opacity: 1.0; transform: scale(1.00); }
-      50%  { opacity: 0.55; transform: scale(0.97); }
-      100% { opacity: 1.0; transform: scale(1.00); }
-    }
+    /* pulse keyframe removed -- tap buttons are static (no bounce/scale animation) */
   </style>
 </head>
 <body>
@@ -171,8 +170,10 @@
          Referenced by relative URL -- loads immediately, before .data bundle. -->
     <img id="splash-img" src="splash.png" alt="" draggable="false">
 
-    <!-- Progress bar: absolute inside the viewport div, lower portion of canvas
-         rect. resize() positions it to the lower 18% of the canvas area. -->
+    <!-- Progress bar: absolute inside the viewport div.
+         resize() maps fBar=0.750 (gap between "Loading..." and copyright text
+         in the 512x512 splash) through the object-fit:cover transform to find
+         the screen Y, then centers the bar vertically on that point. -->
     <div id="progress-bar-wrap">
       <div id="progress-bar"></div>
     </div>
@@ -230,15 +231,32 @@
         tapOverlay.style.top    = Math.floor((wh - ch) / 2) + 'px';
       }
 
-      /* Progress bar: lower portion of the canvas rect (bottom 18% up from
-         bottom of canvas area), horizontally centered, width 60% of canvas. */
+      /* Progress bar: positioned in the gap between the splash's baked
+         "Loading..." text and its copyright lines.
+         fBar=0.750 is the midpoint of that gap as a fraction of the 512x512
+         image height (Loading... bottom ~0.733, copyright top ~0.768).
+         Map through object-fit:cover: the 512x512 image is scaled so its
+         larger dimension fills the canvas rect, then centered.
+         For a 3:2 canvas (wider than tall relative to square image), cover
+         scales by max(cw/512, ch/512), making the image taller than ch and
+         cropping top/bottom equally. */
       if (progressWrap) {
+        var barH = 8;
         var barW = Math.min(Math.floor(cw * 0.60), 420);
         var canvasLeft = Math.floor((ww - cw) / 2);
         var canvasTop  = Math.floor((wh - ch) / 2);
+        var imgScale = Math.max(cw / 512, ch / 512);
+        var imgH     = 512 * imgScale;
+        var imgTop   = canvasTop + (ch - imgH) / 2;
+        var fBar     = 0.750;
+        var barCenterY = Math.round(imgTop + fBar * imgH);
+        var barTop = barCenterY - Math.floor(barH / 2);
+        /* Clamp so bar stays within the canvas rect. */
+        if (barTop < canvasTop) barTop = canvasTop;
+        if (barTop > canvasTop + ch - barH) barTop = canvasTop + ch - barH;
         progressWrap.style.width  = barW + 'px';
         progressWrap.style.left   = (canvasLeft + Math.floor((cw - barW) / 2)) + 'px';
-        progressWrap.style.top    = (canvasTop + Math.floor(ch * 0.82 - 4)) + 'px';
+        progressWrap.style.top    = barTop + 'px';
       }
     }
 
@@ -256,15 +274,21 @@
 
   /* Called when Module.calledRun is true (runtime loaded, BEFORE game init).
      Hides the progress bar, keeps the splash visible as backdrop for the
-     TAP TO START buttons, and shows the tap-overlay over the splash. */
+     TAP TO START buttons, and fades the tap-overlay in (opacity 0 -> 1). */
   function _showTapOverlay() {
     if (_runtimeReady) return;
     _runtimeReady = true;
     /* Hide progress bar -- download done. Splash stays as tap-overlay backdrop. */
     if (_progressWrap) _progressWrap.style.display = 'none';
     if (_tapOverlay) {
+      /* Set display:flex first so the element is in layout, then trigger the
+         opacity transition on the next animation frame so the browser actually
+         transitions from 0 to 1 rather than snapping straight to 1. */
       _tapOverlay.style.display = 'flex';
-      if (_tapText) _tapText.focus();
+      requestAnimationFrame(function () {
+        _tapOverlay.style.opacity = '1';
+        if (_tapText) _tapText.focus();
+      });
     }
   }
 
@@ -285,10 +309,30 @@
     }
   }
 
-  function _removeOverlay() {
-    /* Remove tap-overlay and splash from DOM once game init is under way. */
+  function _removeOverlayNow() {
+    /* Immediate DOM removal -- called after fade-out transition completes. */
     if (_tapOverlay && _tapOverlay.parentNode) _tapOverlay.parentNode.removeChild(_tapOverlay);
     if (_splashImg  && _splashImg.parentNode)  _splashImg.parentNode.removeChild(_splashImg);
+  }
+
+  function _removeOverlayFade() {
+    /* Fade out the overlay (opacity 1 -> 0), then remove from DOM.
+       pointer-events:none is set immediately so a fading overlay cannot
+       intercept input during the transition.
+       transitionend fires once; setTimeout fallback covers browsers that
+       suppress transitionend when the element is already gone or hidden. */
+    if (!_tapOverlay) { _removeOverlayNow(); return; }
+    _tapOverlay.style.pointerEvents = 'none';
+    _tapOverlay.style.opacity = '0';
+    var _done = false;
+    function _onFadeDone() {
+      if (_done) return;
+      _done = true;
+      _removeOverlayNow();
+    }
+    _tapOverlay.addEventListener('transitionend', _onFadeDone);
+    /* 350ms fallback: slightly longer than the 0.3s CSS transition. */
+    setTimeout(_onFadeDone, 350);
   }
 
   function _notifyUserStarted() {
@@ -301,9 +345,11 @@
 
   function _dismissWithAudio(e) {
     e.stopPropagation(); e.preventDefault();
+    /* Fire game callbacks immediately -- don't wait for the fade. */
     _resumeAudioContext();
     _notifyUserStarted();
-    _removeOverlay();
+    /* Fade out overlay; DOM removal happens after transition completes. */
+    _removeOverlayFade();
   }
 
   function _dismissSilent(e) {
@@ -313,8 +359,10 @@
     } catch (ex) {
       console.warn('[audio] fn_disable_audio exception (non-fatal):', ex);
     }
+    /* Fire game callbacks immediately -- don't wait for the fade. */
     _notifyUserStarted();
-    _removeOverlay();
+    /* Fade out overlay; DOM removal happens after transition completes. */
+    _removeOverlayFade();
   }
 
   if (_tapText) {
