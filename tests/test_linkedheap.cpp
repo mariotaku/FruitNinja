@@ -180,6 +180,60 @@ static void test_used_bytes_accounting()
     CHECK(heap.GetSizeOfUsedBlocks() == 0);
 }
 
+// Reproduce the v1.6.1 shutdown crash: ActorManager::Clear drains the heap
+// by freeing all N live entities in ALLOCATION ORDER (head-first, not tail-first).
+// Each free hits the non-tail forward-merge path. After all frees, the bump
+// pointer must have rewound to buffer start (no leaked regions, no crash).
+static void test_drain_alloc_order()
+{
+    static const int N    = 8;
+    static const unsigned int BLOCK_SZ = 64;
+    Mortar::LinkedHeap heap(4096);
+
+    void* ptrs[N];
+    int i;
+    for (i = 0; i < N; ++i) {
+        ptrs[i] = heap.Allocate(BLOCK_SZ, "drain");
+        CHECK(ptrs[i] != 0);
+    }
+
+    // Free in allocation order (head-first). First 7 frees hit the non-tail
+    // forward-merge path; the last free hits tail-rewind on the merged region.
+    for (i = 0; i < N; ++i) {
+        heap.Release(ptrs[i], true);
+    }
+
+    CHECK(heap.GetSizeOfUsedBlocks() == 0);
+    // After full drain the bump pointer must have rewound so a large alloc works.
+    void* big = heap.Allocate(3800, "refill");
+    CHECK(big != 0);
+}
+
+// Same drain but in interleaved order to exercise the prev-walk anchor logic.
+static void test_drain_interleaved()
+{
+    static const int N    = 8;
+    static const unsigned int BLOCK_SZ = 64;
+    Mortar::LinkedHeap heap(4096);
+
+    void* ptrs[N];
+    int i;
+    for (i = 0; i < N; ++i) {
+        ptrs[i] = heap.Allocate(BLOCK_SZ, "drain2");
+        CHECK(ptrs[i] != 0);
+    }
+
+    // Interleaved order: p[3],p[0],p[7],p[1],p[5],p[2],p[6],p[4]
+    static const int order[N] = { 3, 0, 7, 1, 5, 2, 6, 4 };
+    for (i = 0; i < N; ++i) {
+        heap.Release(ptrs[order[i]], true);
+    }
+
+    CHECK(heap.GetSizeOfUsedBlocks() == 0);
+    void* big = heap.Allocate(3800, "refill2");
+    CHECK(big != 0);
+}
+
 int main()
 {
     std::printf("test_linkedheap: running\n");
@@ -198,6 +252,12 @@ int main()
 
     test_used_bytes_accounting();
     std::printf("  used_bytes_accounting: PASS\n");
+
+    test_drain_alloc_order();
+    std::printf("  drain_alloc_order: PASS\n");
+
+    test_drain_interleaved();
+    std::printf("  drain_interleaved: PASS\n");
 
     std::printf("test_linkedheap: ALL PASS\n");
     return 0;
