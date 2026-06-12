@@ -370,6 +370,10 @@ struct PROBABILITY_OVERIDE {
     int GetType();
 };
 
+// v1.6.1 alias: WaveQue::AddWave demangled as AddWave(WaveInfo*,bool) in 1.6.1.
+// The struct is field-identical to WAVE_INFO; only the name changed.
+typedef WAVE_INFO WaveInfo;
+
 // WaveQueItem — binary @ 0x001268fc ctor. Size 0x1c (28 bytes).
 // Only used in gameMode==2 (Survival/Combo). SetupWaveQue populates this via AddWave.
 struct WaveQueItem {
@@ -385,6 +389,16 @@ struct WaveQueItem {
     int m_WaveIndex;                // +0x18
 
     WaveQueItem() : m_Fraction(0.0f), m_Count0(0), m_Count1(0), m_WaveIndex(0) {}
+
+    // v1.6.1: PopPlayer — binary @ 0x0012cf6c.
+    // Pops front of m_SlotList into *out. Returns true if an item was available.
+    bool PopPlayer(int* out);
+
+    // v1.6.1: PerformCatchup — binary @ 0x0012cdb0.
+    // If |leftCount - rightCount| > 5 and Rand32(100) < 60, scans m_SlotList for
+    // entries == (leftCount < rightCount ? 2 : 1) and randomly flips one to the
+    // other side. Returns 1 if it did a flip, else 0.
+    int PerformCatchup(int leftCount, int rightCount);
 };
 
 #ifdef __bada__

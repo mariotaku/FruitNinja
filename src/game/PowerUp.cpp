@@ -2,6 +2,13 @@
 
 #include "PowerUp.h"
 #include "ScoreModifier.h"
+#include "TimeModifier.h"
+#include "SlashModifier.h"
+#include "WaveModifier.h"
+#include "ComboModifier.h"
+#include "SpawnModifier.h"
+#include "TimeSinkModifier.h"
+#include "ExplodyFruitModifier.h"
 #include "ScreenEffect.h"
 #include "Game.h"
 #include "FruitSaveData.h"
@@ -134,10 +141,31 @@ void PowerUp::Parse(tinyxml2::XMLElement* elem) {
             m_pScreenEffect->m_pOwnerPowerUp = this;
             m_pScreenEffect->Parse(child);
         } else {
-            // wave_mod, slash_mod, time_mod, score_mod — dispatch to GameModifier subclasses
-            // TODO: dispatch to modifier factory (TimeModifier/WaveModifier/ScoreModifier/SlashModifier)
-            // when the modifier-trio ParseSpecific pass lands.
-            // For now: the modifier objects are created by PowerUpManager during Load.
+            // Modifier factory — binary @ 0x00142388.
+            // String-compare element name and new the matching modifier subclass,
+            // call Parse(child), then AddModifier to attach and set m_pOwner.
+            GameModifier* mod = nullptr;
+            if (strcmp(tag, "score_mod") == 0) {
+                mod = new ScoreModifier();
+            } else if (strcmp(tag, "time_mod") == 0) {
+                mod = new TimeModifier();
+            } else if (strcmp(tag, "slash_mod") == 0) {
+                mod = new SlashModifier();
+            } else if (strcmp(tag, "wave_mod") == 0) {
+                mod = new WaveModifier();
+            } else if (strcmp(tag, "combo_mod") == 0) {
+                mod = new ComboModifier();
+            } else if (strcmp(tag, "spawn_mod") == 0) {
+                mod = new SpawnModifier();
+            } else if (strcmp(tag, "timesink_mod") == 0) {
+                mod = new TimeSinkModifier();
+            } else if (strcmp(tag, "explodyfruit_mod") == 0) {
+                mod = new ExplodyFruitModifier();
+            }
+            if (mod) {
+                mod->Parse(child);
+                AddModifier(mod);
+            }
         }
 
         // Accumulate m_TotalTime as max over all modifier durations.
