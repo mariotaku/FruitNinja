@@ -18,6 +18,9 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 #include <ctime>
 #include "game/GameWork.h"
 
@@ -311,9 +314,15 @@ void MakeModeAttr(char* out, size_t outsz, int mode, const char* suffix) {
 // Bada; the port writes to <data_dir>/FruitySave.xml so the file lives
 // next to the asset tree.
 std::string GetSavePath() {
+#if defined(__EMSCRIPTEN__)
+    // Port specific: on the web build, saves go to the IDBFS-backed /save
+    // mount rather than the read-only MEMFS asset bundle.
+    return std::string("/save/FruitySave.xml");
+#else
     Game* g = Game::GetInstance();
     if (!g) return std::string("FruitySave.xml");
     return g->data_dir + "/FruitySave.xml";
+#endif
 }
 
 // Save format version. Binary uses GetVersionTotal() which encodes
@@ -472,6 +481,11 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
 
     doc.InsertEndChild(root);
     doc.SaveFile(GetSavePath().c_str());
+#if defined(__EMSCRIPTEN__)
+    // Port specific: flush the IDBFS /save mount to IndexedDB after each
+    // write so data survives page reload/close.
+    EM_ASM({ FS.syncfs(false, function(err) {}); });
+#endif
 }
 
 // ----------------------------------------------------------------------

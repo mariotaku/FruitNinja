@@ -31,6 +31,20 @@ static const int    EM_MAX_STEPS   = 5;      // spiral-of-death guard
 static double       g_accumulator  = 0.0;    // unprocessed ms carried between RAFs
 static double       g_lastTime     = -1.0;   // last RAF timestamp (emscripten_get_now)
 
+// Port specific: IDBFS boot-gate flag.
+// 0 = syncfs(true) still pending; 1 = load complete (or failed), safe to init.
+// Written from JS via Module._fn_idbfs_ready() (EMSCRIPTEN_KEEPALIVE below).
+static volatile int g_idbfs_ready = 0;
+
+// Port specific: called from JS once the initial syncfs(true) callback fires.
+// EMSCRIPTEN_KEEPALIVE prevents dead-code elimination so the symbol is visible
+// as Module._fn_idbfs_ready() in the generated JS.
+extern "C" {
+EMSCRIPTEN_KEEPALIVE void fn_idbfs_ready(void) {
+    g_idbfs_ready = 1;
+}
+} // extern "C"
+
 // Port specific: free function used as the emscripten main-loop callback.
 // C++ lambdas with captures cannot be passed as C function pointers, so a
 // plain static function is used instead.
@@ -71,6 +85,41 @@ static void EmscriptenFrame(void* arg) {
         g_accumulator -= EM_FRAME_MS;
         ++steps;
     }
+}
+
+// Port specific: boot-wait loop callback.
+// Spins (yielding to the browser each frame) until g_idbfs_ready is set by
+// the JS syncfs(true) callback.  Once ready it calls g_game.init() and
+// re-registers the real EmscriptenFrame loop.
+// The arg pointer carries both the SDL_Window* and SDL_GLContext; we pack
+// them into a small struct so the single void* slot suffices.
+struct BootArgs {
+    SDL_Window*   window;
+    SDL_GLContext gl;
+};
+static BootArgs g_bootArgs;
+
+static void BootWait(void* arg) {
+    if (!g_idbfs_ready) {
+        // Still waiting for IDBFS syncfs(true) to complete.
+        return;
+    }
+    // IDBFS load finished (or failed).  Cancel this boot loop before calling
+    // init so that emscripten_set_main_loop below replaces it cleanly.
+    emscripten_cancel_main_loop();
+
+    BootArgs* ba = static_cast<BootArgs*>(arg);
+    if (!g_game.init(ba->window, ba->gl)) {
+        fprintf(stderr, "Failed to init game\n");
+        return;
+    }
+
+    // Port specific: hand control to the browser event loop.
+    // fps=0 lets the browser decide (requestAnimationFrame).
+    // simulate_infinite_loop=0: we return from main() after the boot loop
+    // returned from emscripten_set_main_loop_arg below; the game loop is
+    // installed for future RAFs.
+    emscripten_set_main_loop_arg(EmscriptenFrame, &g_game, 0, 0);
 }
 
 int main(int argc, char* argv[]) {
@@ -128,15 +177,37 @@ int main(int argc, char* argv[]) {
     LOG_INFO("GL", "GL Renderer: %s", (const char*)glGetString(GL_RENDERER));
     LOG_INFO("GL", "GL Version: %s", (const char*)glGetString(GL_VERSION));
 
-    if (!g_game.init(window, gl)) {
-        fprintf(stderr, "Failed to init game\n");
-        return 1;
-    }
+    // Port specific: mount an IDBFS-backed /save directory before game init
+    // so that FruitySave.xml and ItemSave.xml persist across page reloads.
+    // FS.mkdir is a no-op if the directory already exists.
+    // FS.syncfs(true, cb) populates /save from IndexedDB asynchronously; the
+    // callback calls fn_idbfs_ready() which sets g_idbfs_ready so the boot
+    // loop can proceed.  If syncfs fails we still set the flag (safe defaults
+    // on first run) -- the game handles absent save files gracefully.
+    // A beforeunload listener is also registered as a safety-net flush.
+    EM_ASM({
+        try {
+            FS.mkdir('/save');
+        } catch(e) {}
+        FS.mount(IDBFS, {}, '/save');
+        FS.syncfs(true, function(err) {
+            if (err) {
+                console.warn('IDBFS load error: ' + err);
+            }
+            Module._fn_idbfs_ready();
+        });
+        window.addEventListener('beforeunload', function() {
+            FS.syncfs(false, function(err) {});
+        });
+    });
 
-    // Port specific: hand control to the browser event loop.
-    // fps=0 lets the browser decide (requestAnimationFrame).
-    // simulate_infinite_loop=1 keeps Emscripten from returning from main().
-    emscripten_set_main_loop_arg(EmscriptenFrame, &g_game, 0, 1);
+    // Port specific: stash window+gl for the boot-wait callback, then spin
+    // waiting for the IDBFS load before calling g_game.init().
+    // simulate_infinite_loop=1 here so main() does not return until the game
+    // loop is running; BootWait cancels itself and installs EmscriptenFrame.
+    g_bootArgs.window = window;
+    g_bootArgs.gl     = gl;
+    emscripten_set_main_loop_arg(BootWait, &g_bootArgs, 0, 1);
 
     // Unreachable with simulate_infinite_loop=1; kept for symmetry.
     g_game.shutdown();
