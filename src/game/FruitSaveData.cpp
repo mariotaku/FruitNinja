@@ -63,10 +63,12 @@ FruitSaveData::FruitSaveData()
     , m_WaveDelay(0.0f)
     , m_WaveWait(0.0f)
     , m_ProbabilityOverideFlag(1.0f)
+    , m_WaveScalar_v161(1.0f)
     , m_blitzSpawnedThisGame(0)
     , m_blitzForceSpawnedCounter(0)
     , m_blitzSpawnTime(0.0f)
     , m_VersionInfo(0)
+    , field_0x1fc_v161(0)
     , m_BestComboLength(0)
 {
     for (int i = 0; i < 4; i++) {
@@ -203,8 +205,8 @@ void FruitSaveData::UnlockTotals() {
 // Stagger semantics: if any popup is still in the queue, delay the new one by 3.0s
 // so popups don't stomp each other; otherwise fire on the next Update tick (0.0f).
 // ASM-verified: 2026-05-18 binary @ 0x0012b38c (re-analyst)
-//   ldr.w r3,[this,#0x16c]  -> m_PendingUnlocks._M_node_count (std::map
-//   stores its cached size at base+0x14; map base = +0x158).
+//   ldr.w r3,[this,#0x170]  -> m_PendingUnlocks._M_node_count (std::map
+//   stores its cached size at base+0x14; map base = +0x15c).
 int FruitSaveData::AddToQue(const char* name, uint32_t hash) {
     if (IsAchievementUnlocked(hash) != 0) return 0;
     float timer = m_PendingUnlocks.empty() ? 0.0f : 3.0f;
@@ -467,6 +469,10 @@ void FruitNinja_SaveGame(FruitSaveData* save) {
         que->SetAttribute("shake_time",      save->m_ShakeIntensity);
         que->SetAttribute("shake_max_time",  save->m_ShakeDecay);
 
+        // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).
+        // Using "waveScalar" as placeholder; round-trip is self-consistent regardless.
+        que->SetAttribute("waveScalar", save->m_WaveScalar_v161);
+
         tinyxml2::XMLElement* wi = doc.NewElement("wave_info");
         wi->SetAttribute("waveCount",                save->m_pCurrentWave_P1);
         wi->SetAttribute("waveDelay",                save->m_WaveDelay);
@@ -628,6 +634,9 @@ bool FruitNinja_LoadGame(FruitSaveData* save) {
         que->QueryFloatAttribute("nextComboBonus", &save->m_field134);
         que->QueryFloatAttribute("shake_time",     &save->m_ShakeIntensity);
         que->QueryFloatAttribute("shake_max_time", &save->m_ShakeDecay);
+        // TODO: resolve XML attr literal name for m_WaveScalar_v161 (GOT 0xfffb06e6).
+        // ParseSaveFile @ 0x154c8c loads it as a float; using "waveScalar" as placeholder.
+        que->QueryFloatAttribute("waveScalar", &save->m_WaveScalar_v161);
 
         if (tinyxml2::XMLElement* wi = que->FirstChildElement("wave_info")) {
             wi->QueryIntAttribute("waveCount",   &save->m_pCurrentWave_P1);

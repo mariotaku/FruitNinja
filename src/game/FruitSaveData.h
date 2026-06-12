@@ -3,10 +3,10 @@
 
 // FruitSaveData -- the persistent save-data subsystem.
 //
-// Full struct is 0x238 (568) bytes at Game+0x4c; layout from
+// Full struct is 0x240 (576) bytes; layout from
 // re-analyst dump of FruitNinja_SaveGame @ 0x0012a2fc /
-// FruitNinja_LoadGame @ 0x0012be74. Binary serialises via TinyXML to
-// /Home/FruitySave.xml; port writes to <data_dir>/FruitySave.xml.
+// FruitNinja_LoadGame @ 0x0012be74 (v1.6.1 binary). Serialises via
+// TinyXML to /Home/FruitySave.xml; port writes to <data_dir>/FruitySave.xml.
 //
 // Coin balance is NOT a member of FruitSaveData. In the binary the coin
 // fields (m_CoinsBalance/m_CoinsTotalEarned/m_CoinsAtGameStart) live at
@@ -14,7 +14,7 @@
 // are serialised to ItemSave.xml via ItemManager::SaveItemInfo /
 // LoadItemData, not to FruitySave.xml. Access via game_work directly.
 //
-// Analysed: 2026-04-23T02:00, REVISED 2026-05-30T00:00
+// Analysed: 2026-04-23T02:00, REVISED 2026-06-12T00:00 (v1.6.1 layout)
 
 #include <cstdint>
 #include <map>
@@ -35,7 +35,7 @@ struct SliceTotal {
 };
 
 // AchievementItem -- pending / unlocked achievement entry stored inside
-// FruitSaveData::m_PendingUnlocks (+0x158) and m_UnlockedAchievements (+0x170).
+// FruitSaveData::m_PendingUnlocks (+0x15c) and m_UnlockedAchievements (+0x174).
 // Binary layout @ FruitSaveData::AddToQue (0x0012b38c):
 //   +0x00  char  name[128]  -- strcpy'd from AchievementInfo::m_Name
 //   +0x80  float timer      -- 3.0f or 0.0f; counts down each Update tick
@@ -116,8 +116,8 @@ static_assert(sizeof(WaveState) == 16, "WaveState size mismatch");
 class FruitSaveData {
 public:
     // ------------------------------------------------------------------
-    // Field layout. Offsets match the binary's 0x238-byte struct so
-    // any future memcpy / Game+0x4c accesses stay binary-faithful.
+    // Field layout. Offsets match the binary's 0x240-byte struct (v1.6.1)
+    // so any future memcpy / Game+0x4c accesses stay binary-faithful.
     // ------------------------------------------------------------------
 
     // +0x00: cumulative slice/event totals across all sessions.
@@ -225,41 +225,54 @@ public:
     // flag word (WaveManager::field_0x74). Resume and SaveWaveInfo both confirm.
     float    m_ProbabilityOverideFlag; // +0x14c  WaveManager::field_0x74
 
-    // +0x150: queued wave states for resume.
+    // +0x150: wave speed scalar (v1.6.1 NEW). Default 1.0f.
+    // Persisted in the <que> block (XML attr TBD -- GOT 0xfffb06e6 unresolved).
+    // SaveWaveInfo @ 0x001254b0 writes it from WaveManager+0x78.
+    // ParseSaveFile @ 0x154c8c loads it as a float.
+    // TODO: resolve XML attr literal name (GOT 0xfffb06e6); round-trip safe regardless.
+    // TODO: re-check WaveManager::Resume inverse mapping when resume is wired.
+    float    m_WaveScalar_v161;             // +0x150
+
+    // +0x154: queued wave states for resume.
     std::list<WaveState> m_WaveStates;
 
-    // +0x158: queued pending unlocks; populated by AddToQue, ticked by Update.
+    // +0x15c: queued pending unlocks; populated by AddToQue, ticked by Update.
     // ASM-verified: 2026-05-18 binary @ 0x0012b38c (re-analyst)
     std::map<uint32_t, AchievementItem> m_PendingUnlocks;
 
-    // +0x170: fully unlocked achievements; persisted in <achievements> XML block.
+    // +0x174: fully unlocked achievements; persisted in <achievements> XML block.
     // ASM-verified: 2026-05-18 binary @ 0x0012b3dc (re-analyst)
     std::map<uint32_t, AchievementItem> m_UnlockedAchievements;
 
-    // +0x188..+0x190: blitz mode state.
-    int      m_blitzSpawnedThisGame;       // +0x188
-    int      m_blitzForceSpawnedCounter;   // +0x18c
-    float    m_blitzSpawnTime;             // +0x190
+    // +0x18c..+0x194: blitz mode state.
+    int      m_blitzSpawnedThisGame;       // +0x18c
+    int      m_blitzForceSpawnedCounter;   // +0x190
+    float    m_blitzSpawnTime;             // +0x194
 
-    // +0x194: per-mode score history maps.
+    // +0x198: per-mode score history maps.
     std::map<int, int> m_ModeScoreHistory[4];
 
-    // +0x1f4: save format version (must match GetVersionTotal()).
+    // +0x1f8: save format version (must match GetVersionTotal()).
     int      m_VersionInfo;
 
-    // +0x1f8: date stamp of most-recent GameOver per mode (XML attr "%s_dolg").
+    // +0x1fc: unknown byte (v1.6.1 NEW). Default 0. NOT serialised.
+    // TODO: semantics of field_0x1fc_v161 unknown; name preserved from binary struct offset.
+    uint8_t  field_0x1fc_v161;             // +0x1fc
+    // +0x1fd..+0x1ff: 3 bytes implicit padding.
+
+    // +0x200: date stamp of most-recent GameOver per mode (XML attr "%s_dolg").
     // Value is GetDaysSince1900() at the time of GameOver. NOT a play count.
     // Used by PlayedModeToday / CheckDatesHaveChanged to gate per-day-cap
     // stat counters (e.g. <MODE>_today totals). The XML attr "_dolg" is a
     // Russian transliteration; semantically "last day this mode was played".
-    int      m_LastPlayedDay[4];    // +0x1f8
+    int      m_LastPlayedDay[4];    // +0x200
 
-    // +0x208: best combo length (fruit count) ever achieved across all sessions.
-    // +0x20c..+0x234: fruit-type sequence for that best combo (11 slots, -1 = unused).
+    // +0x210: best combo length (fruit count) ever achieved across all sessions.
+    // +0x214..+0x23c: fruit-type sequence for that best combo (11 slots, -1 = unused).
     // Updated by SlashEntity combo-resolve block @ 0x0017df88 when a new high-combo
     // is achieved; read by FruitFactControl to display the "best combo" fact card.
-    int      m_BestComboLength;    // +0x208
-    int      m_BestComboFruits[11]; // +0x20c
+    int      m_BestComboLength;    // +0x210
+    int      m_BestComboFruits[11]; // +0x214
 
     // ------------------------------------------------------------------
     // Construction
@@ -367,7 +380,7 @@ public:
 };
 
 #ifdef __bada__
-static_assert(sizeof(FruitSaveData) == 568, "FruitSaveData size mismatch (binary: 0x238)");
+static_assert(sizeof(FruitSaveData) == 576, "FruitSaveData size mismatch (binary v1.6.1: 0x240)");
 #endif
 
 // ----------------------------------------------------------------------
