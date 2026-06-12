@@ -32,6 +32,7 @@
 #include "game/AchievementManager.h"
 #include "game/FruitSaveData.h"
 #include "engine/network/NetworkManager.h"
+#include "engine/util/Event.h"
 #include "Fruit.h"
 #include "Bomb.h"
 #include "SplatEntity.h"
@@ -42,6 +43,17 @@
 #include "Coin.h"
 #include "hud/MissControl.h"
 #include "math/Random.h"
+
+// File-scope global: multicast event fired when a combo window expires
+// (combo cancel / commit). Binary: file-static in Slash.cpp, ctor'd in
+// global.ctors.keyed.to.Slash.cpp @ 0x1ea48c. GOT-resolved: 0x00332bd8.
+// DIFFERS: original = direct GOT access on every subscribe site; using static
+// accessor SlashEntity::OnComboCancelEvent() for cross-TU access in port.
+static Mortar::Event1<SlashEntity*> g_OnComboCancel;
+
+Mortar::Event1<SlashEntity*>& SlashEntity::OnComboCancelEvent() {
+    return g_OnComboCancel;
+}
 
 // ASM-verified: 2026-05-20 binary @ 0x00110cb0 CheckCombo (re-analyst)
 // Returns signed-char combo quality score (-1, 0x00..0x18) sign-extended to int.
@@ -1021,6 +1033,12 @@ void SlashEntity::Update(float dt) {
     if (m_ComboTimerVal() < kComboWindow) {
         m_ComboTimerRef() += dt;
         if (m_ComboTimerVal() >= kComboWindow) {
+            // Fire g_OnComboCancel — binary @ 0x1e90d4, fires when combo timer
+            // this+0x118 crosses its threshold. Port equiv: m_ComboTimerRef() (+0x174)
+            // crossing kComboWindow. ComboModifier::ComboWasCanceled subscribes here.
+            // TODO: 0x1e90d4 — verify binary +0x118 is distinct from +0x174 (m_ComboTimerRef);
+            //   if so, track the separate +0x118 timer and fire at its threshold instead.
+            g_OnComboCancel(this);
             if (m_ComboCountVal() > 1 && m_ComboSliceArr[0] >= 0) {
                 // (a) Score-threshold refund.
                 // ASM-verified: 2026-05-20 binary @ 0x0017dde6 (asm-inspector)

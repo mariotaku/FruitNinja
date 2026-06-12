@@ -49,6 +49,7 @@
 #include "util/SmartPtr.h"
 #include "asset/Texture.h"
 #include "collision/ColSphere.h"
+#include "engine/util/Event.h"
 #include <cstdint>
 
 struct PSPParticleEmitter;
@@ -440,6 +441,14 @@ public:
 
     // Port-helper for registering per-finger callbacks on InputManager.
     void RegisterInputCallbacks();
+
+    // Accessor for the file-scope global g_OnComboCancel event (binary GOT 0x332bd8).
+    // Binary subscribe sites load [GOT,0x77f8] to get the event address; port uses this
+    // accessor for cross-TU subscribe/unsubscribe.
+    // DIFFERS: original = direct GOT access on every subscribe site; using static accessor
+    // because port has no GOT, preserving single-definition semantics.
+    static Mortar::Event1<SlashEntity*>& OnComboCancelEvent();
+
     // ---- end STUBS ----
 };
 

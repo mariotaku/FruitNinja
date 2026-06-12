@@ -7,6 +7,7 @@
 #include "entities/Fruit.h"
 #include "hud/HUD.h"
 #include "util/StringHash.h"
+#include "engine/util/Delegate.h"
 #include <tinyxml2.h>
 #include <cstring>
 
@@ -62,20 +63,25 @@ ExplodyFruitModifier::ExplodyFruitModifier()
 
 ExplodyFruitModifier::~ExplodyFruitModifier() {}
 
-void ExplodyFruitModifier::ResetSpecific() {}
+void ExplodyFruitModifier::ResetSpecific() {
+    Fruit::FruitWasSlicedEvent() -=
+        Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
+            this, &ExplodyFruitModifier::FruitWasSliced);
+}
 
 int ExplodyFruitModifier::UpdateSpecific(float /*dt*/) { return 0; }
 
 // @ 0x00135574
 // Binary: chain base ApplyModifier, then (if m_BonusAccum+0x0c<=0) register
 //   Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this,&ExplodyFruitModifier::FruitWasSliced)
-//     += FruitManager::m_FruitWasSliced (Event3<Fruit*,int,Mortar::Entity*>).
-// TODO: 0x00135574 — subscribe FruitWasSliced delegate to FruitManager's
-//   Event3<Fruit*,int,Mortar::Entity*> m_FruitWasSliced.
-//   FruitManager not yet ported; event owner unknown in current port.
+//     += g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34).
 void ExplodyFruitModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
-    // Delegate registration deferred — event owner (FruitManager) not yet ported.
+    if (m_BonusAccum <= 0) {
+        Fruit::FruitWasSlicedEvent() +=
+            Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
+                this, &ExplodyFruitModifier::FruitWasSliced);
+    }
 }
 
 // @ 0x0013514c

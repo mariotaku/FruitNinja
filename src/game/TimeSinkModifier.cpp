@@ -6,6 +6,7 @@
 #include "GameWork.h"
 #include "entities/Fruit.h"
 #include "hud/TimeControl.h"
+#include "engine/util/Delegate.h"
 #include <tinyxml2.h>
 
 TimeSinkModifier::TimeSinkModifier()
@@ -16,17 +17,27 @@ TimeSinkModifier::TimeSinkModifier()
 
 TimeSinkModifier::~TimeSinkModifier() {}
 
-void TimeSinkModifier::ResetSpecific() {}
+void TimeSinkModifier::ResetSpecific() {
+    Fruit::FruitWasSlicedEvent() -=
+        Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
+            this, &TimeSinkModifier::FruitWasSlicedSink);
+}
 
 int TimeSinkModifier::UpdateSpecific(float /*dt*/) { return 0; }
 
 // @ 0x0014dc88
 // Binary: if not deferred and m_Accumulator >= 0, register ScoreNotification
-// as Delegate2<void,int,int> on the score signal.
-// TODO: 0x0014dc88 — register ScoreNotification on score signal
+// as Delegate2<void,int,int> on the score signal; also register FruitWasSlicedSink
+// on g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34).
+// TODO: 0x0014dc88 — register ScoreNotification on score signal (score signal not yet ported).
 void TimeSinkModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
-    // Delegate registration deferred — signal infrastructure not yet ported.
+    if (!m_bDeferred && m_Accumulator >= 0.0f) {
+        Fruit::FruitWasSlicedEvent() +=
+            Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
+                this, &TimeSinkModifier::FruitWasSlicedSink);
+    }
+    // TODO: 0x0014dc88 — register ScoreNotification as Delegate2<void,int,int> on score signal.
 }
 
 // @ 0x0014dbf4
@@ -61,9 +72,9 @@ void TimeSinkModifier::ScoreNotification(int points, int /*extra*/) {
     }
 }
 
-// @ 0x0014da7c — similar accumulate/immediate path for per-fruit-slice
-// TODO: 0x0014da7c — wire to FruitManager's FruitWasSliced signal
-void TimeSinkModifier::FruitWasSlicedSink(Fruit* /*fruit*/, int score) {
+// @ 0x0014da7c — similar accumulate/immediate path for per-fruit-slice.
+// Subscribed to g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34).
+void TimeSinkModifier::FruitWasSlicedSink(Fruit* /*fruit*/, int score, Mortar::Entity* /*slasher*/) {
     float v = (float)score;
     if (m_Accumulator < 0.0f) {
         m_Accumulator += v * m_Multiplier;
