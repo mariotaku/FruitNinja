@@ -151,6 +151,11 @@ public:
     // +0x280: cost text alpha (m_CostAlpha * 255.0f clamped -> byte alpha)
     float m_CostAlpha;                // +0x280
 
+    // +0x284..+0x2A3: trailing fields set by Create (not ctor), not yet fully RE'd.
+    // operator_new(0x2a4) confirmed @ ShopScreen::Init 0x001b42ac.
+    // TODO: 0x001b42ac -- RE trailing +0x284..+0x2A3 fields written by ShopListItem::Create
+    uint8_t _padTrailing[0x20];       // +0x284..+0x2A3 (32 bytes)
+
 public:
     // Binary @ 0x0015c978: if (m_pShopScreen) m_pShopScreen->SetSelected(this).
     void ButtonClicked();
@@ -199,6 +204,7 @@ static_assert(offsetof(ShopListItem, m_bOnscreenItem) == 0x27C, "ShopListItem::m
 static_assert(offsetof(ShopListItem, m_bSelected)     == 0x27D, "ShopListItem::m_bSelected must be at +0x27D");
 static_assert(offsetof(ShopListItem, m_bIsNew)        == 0x27E, "ShopListItem::m_bIsNew must be at +0x27E");
 static_assert(offsetof(ShopListItem, m_CostAlpha)     == 0x280, "ShopListItem::m_CostAlpha must be at +0x280");
+static_assert(sizeof(ShopListItem) == 0x2a4, "ShopListItem sizeof must be 0x2a4 (676)");
 #endif
 
 #if defined(__GNUC__) && !defined(__clang__)

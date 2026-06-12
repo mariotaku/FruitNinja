@@ -967,9 +967,9 @@ void MainScreen::CreatePlayDojo() {
     // watermelon) makes the NEW GAME ring ~40% too small. Texture is 256x256
     // so m_TargetSize = (257, 257, 1).
     if (m_TexNewGame.IsValid()) {
-        pPlayButton->m_TargetSize.x = (float)(m_TexNewGame->m_Width  + 1);
-        pPlayButton->m_TargetSize.y = (float)(m_TexNewGame->m_Height + 1);
-        pPlayButton->m_TargetSize.z = 1.0f;
+        pPlayButton->m_RestScale.x = (float)(m_TexNewGame->m_Width  + 1);
+        pPlayButton->m_RestScale.y = (float)(m_TexNewGame->m_Height + 1);
+        pPlayButton->m_RestScale.z = 1.0f;
     }
     // Binary MainScreen::Update @ 0x0014b278 case 0 does NOT explicitly write
     // +0x34 here; it relies on MenuButton::Init @ 0x0014ee40 having set
@@ -1024,7 +1024,7 @@ void MainScreen::CreatePlayDojo() {
     if (pDojoButton->m_pFruitPiece) {
         pDojoButton->m_pFruitPiece->scale = pDojoButton->m_pFruitPiece->scale * 0.9f;
     }
-    pDojoButton->m_TargetSize = pDojoButton->m_TargetSize * 1.05f;
+    pDojoButton->m_RestScale = pDojoButton->m_RestScale * 1.05f;
 }
 
 void MainScreen::CreateQuitButton() {

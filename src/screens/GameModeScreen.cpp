@@ -219,7 +219,7 @@ void GameModeScreen::Release() {
 //                -> m_TargetSize *= 0.75 -> fruitPiece->scale *= 0.75
 //   Classic(2) : construct -> ResetTutePos -> Init -> AddControl
 //                -> m_TargetSize *= 0.90 -> fruitPiece->scale *= 0.95
-//                -> sharedVec = classicBtn->m_TargetSize * 0.85
+//                -> sharedVec = classicBtn->m_RestScale * 0.85
 //   Zen(3)     : construct -> Init -> m_TargetSize = sharedVec
 //                -> fruitPiece->scale *= 0.90 -> AddControl
 //   Arcade(4)  : construct -> Init -> m_TargetSize = sharedVec
@@ -248,7 +248,7 @@ void GameModeScreen::CreateControls() {
     // Marks this button as the screen's hardware Back-key handler.
     m_pBackButton->m_bRespondsToBackKey = 1;
     game_work.mHud->AddControl(m_pBackButton);
-    m_pBackButton->m_TargetSize = m_pBackButton->m_TargetSize * BACK_TARGET_SCALE;
+    m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_TARGET_SCALE;
     if (m_pBackButton->m_pFruitPiece) {
         m_pBackButton->m_pFruitPiece->scale =
             m_pBackButton->m_pFruitPiece->scale * BACK_FRUIT_SCALE;
@@ -269,15 +269,15 @@ void GameModeScreen::CreateControls() {
         game_work.m_TutorialControl->ResetTutePos(m_pClassicButton);
     }
     game_work.mHud->AddControl(m_pClassicButton);
-    m_pClassicButton->m_TargetSize = m_pClassicButton->m_TargetSize * CLASSIC_TARGET_SCALE;
+    m_pClassicButton->m_RestScale = m_pClassicButton->m_RestScale * CLASSIC_TARGET_SCALE;
     if (m_pClassicButton->m_pFruitPiece) {
         m_pClassicButton->m_pFruitPiece->scale =
             m_pClassicButton->m_pFruitPiece->scale * CLASSIC_FRUIT_SCALE;
     }
-    // Binary computes classicBtn->m_TargetSize * 0.85 and stores to a module-level
+    // Binary computes classicBtn->m_RestScale * 0.85 and stores to a module-level
     // global. Zen and Arcade buttons receive this as an absolute assignment (NOT
     // a multiply of their own size).
-    Vec3 sharedTargetSize = m_pClassicButton->m_TargetSize * SHARED_TARGET_SCALE;
+    Vec3 sharedTargetSize = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
 
     // --- Button 3: ZEN (mode_2.tex, apple_red, ZenModeCallback) ---
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
@@ -290,7 +290,7 @@ void GameModeScreen::CreateControls() {
                            Fruit::FruitType(FRUIT_ZEN, false), Vec3(0, 0, 0),
                            Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
-    m_pZenButton->m_TargetSize = sharedTargetSize;
+    m_pZenButton->m_RestScale = sharedTargetSize;
     if (m_pZenButton->m_pFruitPiece) {
         m_pZenButton->m_pFruitPiece->scale =
             m_pZenButton->m_pFruitPiece->scale * ZEN_FRUIT_SCALE;
@@ -311,7 +311,7 @@ void GameModeScreen::CreateControls() {
                               Vec3(0, 0, 0),
                               Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
-    m_pArcadeButton->m_TargetSize = sharedTargetSize;
+    m_pArcadeButton->m_RestScale = sharedTargetSize;
     if (m_pArcadeButton->m_pFruitPiece) {
         m_pArcadeButton->m_pFruitPiece->scale =
             m_pArcadeButton->m_pFruitPiece->scale * ARCADE_FRUIT_SCALE;

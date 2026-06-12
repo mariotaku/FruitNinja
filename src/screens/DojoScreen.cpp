@@ -201,7 +201,7 @@ void DojoScreen::Update(float dt) {
                 game_work.mHud->AddControl(m_pPlayButton);
                 if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pPlayButton);
                 // Binary scales BOTH m_TargetSize AND fruit piece's scale by 0.825
-                m_pPlayButton->m_TargetSize = m_pPlayButton->m_TargetSize * BACK_SCALE;
+                m_pPlayButton->m_RestScale = m_pPlayButton->m_RestScale * BACK_SCALE;
                 if (m_pPlayButton->m_pFruitPiece) {
                     m_pPlayButton->m_pFruitPiece->scale =
                         m_pPlayButton->m_pFruitPiece->scale * BACK_SCALE;
@@ -228,7 +228,7 @@ void DojoScreen::Update(float dt) {
                 // shrank the ring to ~57.5% of tex size -- wrong. 0.575
                 // is the bounce multiplier, not a size multiplier.
                 if (s_TexShop.IsValid()) {
-                    m_pShopButton->m_TargetSize = Vec3(
+                    m_pShopButton->m_RestScale = Vec3(
                         (float)s_TexShop->m_Width + 1.0f,
                         (float)s_TexShop->m_Height + 1.0f,
                         1.0f);

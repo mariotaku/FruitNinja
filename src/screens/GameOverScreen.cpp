@@ -908,7 +908,7 @@ void GameOverScreen::CreateQuitButton() {
     // Binary @ 0x001413d2: copy 12 bytes from retry button at +0x124..+0x12c.
     // MenuButton+0x124 is m_TargetSize (Vec3).
     if (m_pRetryBtn) {
-        m_pQuitBtn->m_TargetSize = m_pRetryBtn->m_TargetSize;
+        m_pQuitBtn->m_RestScale = m_pRetryBtn->m_RestScale;
     }
     // Binary @ 0x00141400: byte at MenuButton+0x138 = 1.
     // +0x138 is m_bRespondsToBackKey -- quit button captures the back-key.

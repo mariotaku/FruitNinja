@@ -247,8 +247,8 @@ void BaseScreen::UpdateButtons(float dt) {
 
             // Scale: optional m_scaleA (if != 0), then always m_scaleB
             if (sb.m_scaleA != 0.0f)
-                btn->m_TargetSize = btn->m_TargetSize * sb.m_scaleA;
-            btn->m_TargetSize = btn->m_TargetSize * sb.m_scaleB;
+                btn->m_RestScale = btn->m_RestScale * sb.m_scaleA;
+            btn->m_RestScale = btn->m_RestScale * sb.m_scaleB;
 
             // Wire ControlDeleted as remove callback
             btn->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(&sb, &ScreenButton::ControlDeleted);

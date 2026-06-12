@@ -569,8 +569,8 @@ void PauseScreen::Update(float dt) {
         //   m_TargetSize = (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0 = (64,64,64)
         //   m_ButtonOriginPos := m_TargetSize  (one-shot capture for OX in
         //   the per-frame position formulas).
-        m_ResumeButton->m_TargetSize = Vec3(64.0f, 64.0f, 64.0f);
-        m_ButtonOriginPos            = m_ResumeButton->m_TargetSize;
+        m_ResumeButton->m_RestScale = Vec3(64.0f, 64.0f, 64.0f);
+        m_ButtonOriginPos            = m_ResumeButton->m_RestScale;
     }
 
     if (!m_QuitButton) {
@@ -814,7 +814,7 @@ void PauseScreen::Update(float dt) {
     //
     // PauseScreen post-switch tail. Three RE passes converged on this:
     //   - m_ButtonOriginPos.x is a per-session constant set ONCE at
-    //     lazy-create from m_ResumeButton->m_TargetSize.x. Binary builds
+    //     lazy-create from m_ResumeButton->m_RestScale.x. Binary builds
     //     m_TargetSize via (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0
     //     => (64, 64, 64). So OX = 64.
     //   - HUD/HUDControl3d does NO parent-transform composition (binary
@@ -841,7 +841,7 @@ void PauseScreen::Update(float dt) {
     // m_TargetSize matters here -- writes to size.x/y are clobbered.
     if (m_ResumeButton) {
         const float resumeScale = m_Alpha * 1.25f + 0.75f;
-        m_ResumeButton->m_TargetSize = m_ButtonOriginPos * resumeScale;
+        m_ResumeButton->m_RestScale = m_ButtonOriginPos * resumeScale;
     }
 
     const float OX = m_ButtonOriginPos.x;  // = 64
@@ -871,7 +871,7 @@ void PauseScreen::Update(float dt) {
     {
         bool retryActive = false;
         if (m_Alpha > 0.0f && m_ResumeButton && m_RetryButton) {
-            m_RetryButton->m_TargetSize = m_ResumeButton->m_TargetSize;
+            m_RetryButton->m_RestScale = m_ResumeButton->m_RestScale;
             retryActive = true;
         }
         if (m_RetryButton) {

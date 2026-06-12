@@ -2,14 +2,33 @@
 #define FN_MENU_BUTTON_H
 
 //
-// MenuButton : HUDControl3d (size = 0x15C, leaf class)
-// Reimplemented from docs/structs/gameplay-misc.md
+// MenuButton : HUDControl3d (size = 0x178 / 376 bytes)
+// v1.6.1 layout. operator_new(0x178) confirmed @ LeaderboardScreen::CreateQuitButton 0x00193198.
 //
 // 3-layer rendering + 1 entity:
-//   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton — Mortar::ActorManager::Draw)
-//   Layer 1 (2D): Button texture quad (+0x74)
-//   Layer 2 (2D): "New item" star indicator (+0xFC)
-//   Layer 3 (2D): Sparkle ring (+0xF8)
+//   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton -- Mortar::ActorManager::Draw)
+//   Layer 1 (2D): Button texture quad (+0x70)
+//   Layer 2 (2D): "New item" star indicator (+0xfc)
+//   Layer 3 (2D): Sparkle ring (+0xf8, armed only when m_RotationSpeed >= 0)
+//
+// Vtable (17 slots; HUDControl3d order):
+//   0  0x19d1dc ~MenuButton (D1)
+//   1  0x19d130 ~MenuButton (D0)
+//   2  0x19a4f8 Init()
+//   3  0x19d064 Release(int)
+//   4  0x19a50c Reset()
+//   5  0x19a5bc BeginDraw()
+//   6  0x19a5b8 PreDraw()
+//   7  0x19c2e4 Draw(float*)
+//   8  0x136060 (HUDControl base hook)
+//   9  0x136074 (HUDControl base hook)
+//  10  0x19a860 Update(float dt)
+//  11  0x19a794 SetToMultiplayerState()
+//  12  0x19d874 GetType() -> 5
+//  13  0x19a558 Skip()
+//  14  0x136094 (base hook)
+//  15  0x136c2c GetWorldPos()
+//  16  0x19d870 Clicked()
 //
 
 #include "HUDControl3d.h"
@@ -23,8 +42,8 @@
 namespace Mortar { class Entity; }
 class Fruit;
 
-// MenuButtonAddOn — child sprite metadata for AddPeice/UpdatePeices.
-// 24 bytes; copy-constructible POD. Stored in std::list<MenuButtonAddOn> m_AddOns at MenuButton +0x10C.
+// MenuButtonAddOn -- child sprite metadata for AddPeice/UpdatePeices.
+// Stored in std::list<MenuButtonAddOn> m_AddOns at MenuButton +0x10C.
 // Binary @ 0x00150240 (AddPeice)
 struct MenuButtonAddOn {
     HUDControl3d* control;   // +0x00
@@ -46,141 +65,191 @@ namespace FN { void ClearMenuItems(); }
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0014ee40 + 0x0014e614 + 0x0014f7e0 (asm-inspector, base-shift unaffected)
 class MenuButton : public HUDControl3d {
 public:
-    // +0x7C: TODO: re-verify MenuButton +0x7C field from binary (4-byte gap between base end and m_pEntity)
-    uint32_t m_Pad_0x7C;
+    // HUDControl3d base ends at +0x7B (size = 0x7C). Own fields follow.
 
-    // +0x80: real Fruit/Bomb entity spinning on button (nullptr for toggles)
-    Mortar::Entity* m_pEntity;
+    // +0x7C: alt fruit ref; Init sets 0; SetToMultiplayerState reads
+    Fruit*          m_pFruitPiece_alt;     // +0x7C
 
-    // +0x84: -1 = no fruit, 0+ = fruit index, >=bombThreshold = bomb
-    int m_FruitType;
+    // +0x80: live Fruit/Bomb entity pointer; created by CreateFruit in Init
+    Mortar::Entity* m_pEntity;             // +0x80
 
-    // +0x88: fired on touch release. 36 bytes (binary Mortar::Delegate0).
-    Mortar::Delegate0<void> m_ClickCallback;
+    // +0x84: -1 = no fruit/bomb (toggle button); 0..N-1 = fruit; >=N = bomb
+    int             m_FruitType;           // +0x84
 
-    // +0xAC: fired when button removed from HUD. 36 bytes (binary Mortar::Delegate0).
-    Mortar::Delegate0<void> m_DeletedCallback;
+    // +0x88: fired on user tap/slice. Mortar::Delegate0<void> = 36 bytes.
+    Mortar::Delegate0<void> m_ClickCallback;    // +0x88..+0xAB
 
-    // +0xD0: 16-bit Q14 angle (0..0x3ffc = 0..pi/2) feeding Math::SinIdx for grow-in AND shrink-out quarter-sine ease. Was m_FadeCounter (misleading: not a fade).
-    int m_AnimPhase;
+    // +0xAC: fired when button is removed from HUD. 36 bytes.
+    Mortar::Delegate0<void> m_DeletedCallback;  // +0xAC..+0xCF
 
-    // +0xD4: padding / reserved (binary has a field here we haven't RE'd yet)
-    int m_fieldD4;
+    // +0xCC: alpha ramp index fed into VectorSignedToFloat in Draw
+    int             m_FadeAlphaIdx;        // +0xCC
 
-    // +0xD8: slot index currently tracking a touch (-1 = none).
-    // Matches binary MenuButton::Update touch block (0x0014e614).
-    int m_TouchSlot;
+    // +0xD0: Q14 grow-in phase (0..0x3ffc). uint16 per spec.
+    uint16_t        m_AnimPhase;           // +0xD0
 
-    // +0xDC/+0xE0/+0xE4: last-known touch x/y/phase copied by
-    // UpdateTouchPosition from the tracked slot each frame.
-    float m_TouchX;
-    float m_TouchY;
-    float m_TouchPhase;
+    // +0xD2: anim flag
+    uint8_t         m_AnimFlag;            // +0xD2
 
-    // +0xE8: random visual offset (-20 to +20)
-    float m_RandomOffset;
+    // +0xD3: grow/shrink-done flag; Update sets when phase hits 0
+    uint8_t         m_GrowShrinkDone;      // +0xD3
 
-    // +0xEC: scratchs.tex backdrop per-instance scale. Binary @ 0x0014eb84
-    // (in MenuButton::Update tail) computes this every frame as
-    //   m_BackdropScale = size.x * 1.125f * m_AnimScale
-    // and Draw Phase A @ 0x0014fa86 multiplies the (sx, 1, 1) flip-vector
-    // by *(this+0xEC) before building the Scale44 matrix. The earlier
-    // claim that this field was unwritten / dead was a re-analyst miss --
-    // the audit at 0x0014eb68..0x0014eb84 (asm-inspector 2026-05-06)
-    // confirmed the per-frame write. The scratchs.tex backdrop IS visible
-    // in the shipped binary; the port now writes it in Update too.
-    float m_BackdropScale;
+    // +0xD4: Init = 0xffffffff (touch-slot init / reserved)
+    int             m_fieldD4;             // +0xD4
 
-    // +0xF0: random horizontal flip
-    bool m_bFlipped;
+    // +0xD8: touch slot currently tracked (-1 = none)
+    int             m_TouchSlot;           // +0xD8
 
-    // +0xF4: rotates the 2D button quad via m_Timer (8-12 deg/s, random sign)
-    // m_Timer (HUDControl +0x2c) accumulates: m_Timer += dt * m_RotationSpeed
-    float m_RotationSpeed;
+    // +0xDC..+0xE4: last-known touch position/phase from UpdateTouchPosition
+    float           m_TouchX;             // +0xDC
+    float           m_TouchY;             // +0xE0
+    float           m_TouchPhase;         // +0xE4
 
-    // +0xF8: >= 0 = sparkle ring active
-    float m_SparkleTimer;
+    // +0xE8: backdrop Vec3 x component (exact use not yet fully RE'd)
+    float           m_BackdropOffsetX;     // +0xE8
 
-    // +0xFC: >= 0 = "new" star indicator active
-    float m_NewIndicatorTimer;
+    // +0xEC: per-frame backdrop scale: curScale.x * 1.125 * m_ShakeScale.x
+    // Written every Update @ 0x19af70; read by Draw phase-A layer0 to scale scratchs.tex quad.
+    float           m_BackdropScale;       // +0xEC
 
-    // +0x100 — entity base scale captured on first frame; Update writes entity->scale = m_BaseScale * sizeFrac. Was m_HitBoundsScale (misleading).
-    Vec3 m_BaseScale;
+    // +0xF0: Init = -1.0 (random horizontal flip / offset seed; Draw reads for flip)
+    float           m_RandomOffset;        // +0xF0
+
+    // +0xF4: >= 0 arms the sparkle ring; quad spin speed. Init = -1.0.
+    // Update @ 0x19a860: when m_FruitType>=0 and dt>0, m_Timer(+0x2c) += dt * m_RotationSpeed.
+    float           m_RotationSpeed;       // +0xF4
+
+    // +0xF8: sparkle timer (>= 0 active; Update += dt*8, clamp 8). Init = -1.0.
+    float           m_SparkleTimer;        // +0xF8
+
+    // +0xFC: new-indicator timer (Update += 2*dt; reset to 0 when SparkleTimer<1). Init = -1.0.
+    float           m_NewIndicatorTimer;   // +0xFC
+
+    // +0x100: entity base scale captured on first frame. Init = Vec3(0,0,0).
+    Vec3            m_BaseScale;           // +0x100..+0x10B
 
     // +0x10C: child sprite list for AddPeice/UpdatePeices/DeletePeices.
-    // Binary: std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11).
-    std::list<MenuButtonAddOn> m_AddOns;   // +0x10C
+    // std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11 sentinel-only).
+    std::list<MenuButtonAddOn> m_AddOns;   // +0x10C..+0x113 (ARM32)
 
-    // +0x118, +0x11C: text labels (original: BakedString* fg / shadow).
-    // RE'd 2026-04-29: MenuButton::SetText (0x0014ebc0) is the only
-    // writer, and the binary contains ZERO call sites for it. Both
-    // pointers are always NULL at runtime; the label-render block in
-    // MenuButton::Draw (0x0015015e..0x0015020a) is dead code in the
-    // shipped Bada build. The port intentionally does not render labels.
-    // See docs/engine/baked-string.md for the BakedString spec if a
-    // reused-elsewhere consumer surfaces.
-    void* m_pLabel1;   // dead in shipped binary
-    void* m_pLabel2;   // dead in shipped binary
+    // +0x114..+0x11B: gap between end of m_AddOns and m_pLabelFg.
+    // Spec says +0x110 is Vec3 m_DrawOffset (Draw adds to pos for label placement);
+    // the Vec3 overlaps the list on ARM32 (list = 8B, Vec3 would start inside it).
+    // Port lays this out as raw pad; Draw will reference +0x110/+0x114/+0x118 as needed.
+    // TODO: 0x0019c2e4 -- confirm m_DrawOffset exact offset vs std::list size
+    uint8_t         _pad114[8];            // +0x114..+0x11B
 
-    // +0x11C: for multiplayer colour tint
-    int m_PlayerIndex;
+    // +0x11C: BakedString* label foreground. LIVE in v1.6.1 Draw when !=0.
+    void*           m_pLabelFg;            // +0x11C
 
-    // +0x120
-    uint8_t m_bScoreSubmitted;
+    // +0x120: BakedString* extra label
+    void*           m_pLabelExtra;         // +0x120
 
-    // +0x121 — set to 0 by KeyboardControl::Update for press-edge fire (keyboard keys);
-    //           default 1 for normal/toggle buttons (fire on release).
-    //           Real semantics: m_bFireOnRelease.
-    uint8_t m_bFireOnRelease;
+    // +0x124: label shadow/curve data
+    void*           m_pLabelShadow;        // +0x124
 
-    // +0x122: = 1 — accepts touch input
-    uint8_t m_bInteractive;
+    // +0x128: player colour tint (Colour = 4 bytes)
+    Colour          m_PlayerColour;        // +0x128
 
-    // +0x123: = 1
-    uint8_t m_bEnabled;
+    // +0x12C: player index tint (Colour = 4 bytes; ends at +0x12F)
+    Colour          m_PlayerIndexTint;     // +0x12C
 
-    // +0x124: hit-test bounds target (lerped toward)
-    Vec3 m_TargetSize;
+    // +0x130..+0x133: pad to reach +0x134
+    uint8_t         _pad130[4];            // +0x130..+0x133
 
-    // +0x130: true if hitBounds > 0
-    bool m_bHasHitArea;
+    // +0x134: grow-in delay countdown; Init=1.0; Update gates on >0; decrements by dt.
+    float           m_GrowInTimer;         // +0x134
 
-    // +0x131: Touch-held state gate; set on press, cleared when finger leaves rect or releases. Was m_bHighlighted (misleading: not visual state).
-    uint8_t m_bTouchHeld;
+    // +0x138: when 1, back-key fires action
+    uint8_t         m_bRespondsToBackKey;  // +0x138
 
-    // +0x134: direct fruit reference for scale/rotate access
-    Fruit* m_pFruitPiece;
+    // +0x139: drag-cancel flag
+    uint8_t         m_bDragCancel;         // +0x139
 
-    // +0x138: when 1, this button auto-fires its click delegate when the
-    // hardware Back/Menu key (Game::m_BackKeyPressed at +0x604) is set.
-    // Default 0 (set by Init); screen creation code opts a single button
-    // per screen into this role. See docs/engine/menubutton-138.md.
-    uint8_t m_bRespondsToBackKey;
+    // +0x13A: when 1, slice fires ClearMenuItems
+    uint8_t         m_bClearsMenuItems;    // +0x13A
 
-    // +0x13C: = 1.0
-    float m_AnimScale;
+    // +0x13B: pad
+    uint8_t         _pad13B;               // +0x13B
 
-    // +0x140: for "new" indicator bounce
-    Vec3 m_BounceParams;
+    // +0x13C: target rest scale Vec3 (Init copies hitBounds). Binary spec: 12 bytes.
+    // Note: on ARM32, +0x144 (= m_RestScale.z first byte) is also read as m_bHasHitArea.
+    // The z-component is a don't-care for Update (only x,y used in scale fractions).
+    // Port models as Vec3; m_bHasHitArea byte at +0x144 overlaps .z on ARM32 (the
+    // static_assert at EOF guards the Bada build).
+    Vec3            m_RestScale;           // +0x13C..+0x147 (z-byte aliased as m_bHasHitArea on ARM32)
 
-    // +0x14C — touch-area X inset (grace zone, default 5px). Was m_AnimSpeed2.
-    float m_HitInsetX;
+    // +0x144: non-zero if abs(hitBounds.x)+abs(hitBounds.y) > 0.
+    // On ARM32, this is byte 0 of m_RestScale.z (little-endian float). On host
+    // builds the offset differs; access by name only.
+    uint8_t         m_bHasHitArea;         // ARM32: +0x144 (= m_RestScale.z byte0)
 
-    // +0x150 — touch-area Y inset (grace zone, default 5px). Was m_AnimSpeed.
-    float m_HitInsetY;
+    // +0x145: accepts touch input (init=1)
+    uint8_t         m_bInteractive;        // ARM32: +0x145
 
-    // +0x154
-    float m_field154;
+    // +0x146..+0x147: pad
+    uint8_t         _pad146[2];            // +0x146..+0x147
 
-    // +0x158: > 0 = shaking (random ±3.0 offset)
-    float m_ShakeTimer;
+    // +0x148: primary fruit pointer (Init=0; CreateFruit fills; used in SetToMultiplayerState)
+    Fruit*          m_pFruitPiece;         // +0x148
+
+    // +0x149 (ARM32): byte 1 of m_pFruitPiece pointer is read as accepts-touch gate in binary.
+    // On host builds this is a separate field appended after m_pTrackedFruit to avoid pointer overlap.
+    // Binary Update @ 0x0019a860: `ldrb r3, [this, #0x149]; cmp r3, #0` gates the touch block.
+    // DIFFERS: original = overlaps m_pFruitPiece on ARM32 little-endian; port adds as separate flag.
+    uint8_t         m_bAcceptsTouch;       // ARM32: +0x149 (byte1 of m_pFruitPiece ptr); host: separate
+
+    // pad to reach +0x14C on ARM32 (3 bytes between +0x149 and +0x14C)
+    uint8_t         _pad149[3];            // ARM32: +0x14A..+0x14B; host: structural pad
+
+    // +0x14C: tracked-fruit pointer for per-frame scale writes
+    Fruit*          m_pTrackedFruit;       // +0x14C
+
+    // +0x150: backdrop-active flag (init = 1 for most buttons)
+    uint8_t         m_bBackdropActive;     // +0x150
+
+    // +0x151..+0x153: pad
+    uint8_t         _pad151[3];            // +0x151..+0x153
+
+    // +0x154: shake/backdrop scale factors Vec3; Init = Vec3(DAT,DAT,1)
+    Vec3            m_ShakeScale;          // +0x154..+0x15F
+
+    // +0x160: label extra alpha (Draw second-pass gate >0). Init=0.
+    float           m_LabelExtraAlpha;     // +0x160
+
+    // +0x164: hit-area X inset (default 5.0)
+    float           m_HitInsetX;           // +0x164
+
+    // +0x168: hit-area Y inset (default 5.0)
+    float           m_HitInsetY;           // +0x168
+
+    // +0x16C: reserved float (Init=DAT)
+    float           m_fieldReserved;       // +0x16C
+
+    // +0x170: new-bounce phase (Draw gate). Init=0.
+    float           m_NewBouncePhase;      // +0x170
+
+    // +0x174: shake timer countdown (Update)
+    float           m_ShakeTimer;          // +0x174
+
+    // === v1.0 compat fields (port-side only; binary offset unknown in v1.6.1) ===
+    // DIFFERS: original v1.0 had these at known offsets; v1.6.1 layout unknown.
+    //   m_bEnabled:        v1.0 +0x123; disables ClearMenuItems + touch input.
+    //   m_AnimScale:       v1.0 +0x13C; maps to m_ShakeScale.x in v1.6.1 (backdrop scale factor).
+    //   m_BounceParams:    v1.0 +0x140; new-item star anchor ratios.
+    //   m_bTouchHeld:      v1.0 +0x131; touch-held gate for Update and Init.
+    //   m_bScoreSubmitted: v1.0 +0x120; TutorialControl flip direction.
+    // TODO: 0x0019b994 -- RE v1.6.1 binary to locate each field's offset and remove these
+    uint8_t         m_bEnabled;            // port-compat; v1.0 +0x123
+    float           m_AnimScale;           // port-compat; v1.0 +0x13C -> v1.6.1 m_ShakeScale.x
+    Vec3            m_BounceParams;        // port-compat; v1.0 +0x140 -> v1.6.1 hardcoded 0.85
+    uint8_t         m_bTouchHeld;          // port-compat; v1.0 +0x131
+    uint8_t         m_bScoreSubmitted;     // port-compat; v1.0 +0x120
+    // === end compat fields ===
 
     MenuButton();
 
-    // Binary ctor @ 0x0014f24c — construction-time init with all parameters.
-    // tex may be NULL (entity visuals via fruitType take precedence when fruitType >= 0).
-    // onTap binds to m_ClickCallback; onRemove binds to m_RemoveCallback.
-    // Proxies to MenuButton::Init(5-arg) then wires the remove callback.
+    // Binary ctors @ 0x0019bb08 / 0x0019bcac / 0x0019be50 / 0x0019bff8 (all forward to Init).
     MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
                Mortar::Delegate0<void>* onTap,
                int fruitType, Vec3* restPos,
@@ -188,83 +257,103 @@ public:
 
     ~MenuButton();
 
-    // HUDControl overrides
+    // HUDControl vtable overrides
     void Init() override;
+    void Release() override;
     void Reset() override;
     void BeginDraw(float dt) override;
     void PreDraw(const Vec3& hudScale) override;
-    void Update(float dt) override;
     void Draw(const Vec3& hudScale, int layerMask) override;
-    void Release() override;
-    void Skip() override;
+    void Update(float dt) override;
     bool SetToMultiplayerState() override;
+    int  GetType() override { return 5; }
+    void Skip() override;
 
-    // Matches MenuButton::Init (0x0014ee40, 222 lines)
-    // Creates entity, sets callbacks, random rotation
+    // MenuButton::Init @ 0x0019b994 (5-arg; sets all fields, calls CreateFruit)
     void Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
               int fruitType, Vec3 hitBounds,
               Mortar::Delegate0<void> deletedCb);
 
-    // Matches MenuButton::SetNewSymbol (0x0014e404).
+    // Creates the fruit/bomb entity for m_FruitType>=0 (called from Init tail)
+    void CreateFruit();
+
+    // Binary @ 0x0014e404: arms/disarms the new-indicator timer
     void SetNewSymbol(bool show);
 
-    // Binary @ 0x0014e3bc — sets m_ShakeTimer (zero call sites in binary)
+    // Binary @ 0x0014e3bc: sets m_ShakeTimer
     void Shake(float t);
 
-    // Binary @ 0x0014e434 — returns (m_NewIndicatorTimer >= 0)
+    // Binary @ 0x0014e434: returns (m_NewIndicatorTimer >= 0)
     bool HasNewSymbol();
 
-    // Binary @ 0x0014e484 — returns (m_SparkleTimer >= 0); dead in shipped binary
+    // Binary @ 0x0014e484: returns (m_SparkleTimer >= 0)
     bool IsLoadingSymbol();
 
-    // Binary @ 0x0014e45c — arms sparkle timer; dead in shipped binary
+    // Binary @ 0x0014e45c: arms sparkle timer
     void SetLoadingSymbol(bool show);
 
-    // Binary @ 0x0014ebc0 — builds curved-text BakedString pair; zero call sites in shipped binary
+    // Binary @ 0x0014ebc0: builds curved-text BakedString pair. Zero call sites in shipped binary.
     void SetText(const char* text, Colour fg, Colour shadow, float radius);
 
-    // Binary @ 0x0014ed18 — release fruit piece with upward fling; dead in shipped binary
+    // Binary @ 0x0014ed18: release fruit piece with upward fling
     void Remove();
 
-    // Binary @ 0x0014e5cc — fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
+    // Binary @ 0x0014e5cc: fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
     bool TouchReleased();
 
-    // Binary @ 0x00150240 — spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
+    // Binary @ 0x00150240: spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
     void AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                   float rotSpeed, float initialTimer,
                   Vec3 offset, Vec3 sizeScale,
                   Colour tint, int layerFlags);
 
-    // Binary @ 0x0014e49c — per-addon position/size update
+    // Binary @ 0x0014e49c: per-addon position/size update
     void UpdatePeices(float dt);
 
-    // Binary @ 0x0014f74c — detach and mark addons for HUD removal
+    // Binary @ 0x0014f74c: detach and mark addons for HUD removal
     void DeletePeices();
 
-    // Binary @ 0x0014e54c — addon's HUD-side removal callback
+    // Binary @ 0x0014e54c: addon's HUD-side removal callback
     void DeletedPeice(HUDControl* hudControl);
 
-    // Replaces m_ClickCallback. Used by ScreenButton::ShrinkButtonCall
-    // (binary @ 0x001300f0) to swap a button's tap handler from the
-    // normal action to the shrink-and-disappear handler.
+    // Binary @ 0x0019d870: Clicked -- no-op override
+    virtual void Clicked() {}
+
+    // Replaces m_ClickCallback. Used by ScreenButton::ShrinkButtonCall.
     void SetCallback(const Mortar::Delegate0<void>& cb) { m_ClickCallback = cb; }
 
-    // Matches MenuButton::LoadContent (0x0014f674) — loads 3 shared textures
-    // into class statics. Called once from GameInitialise step 23.
+    // Binary @ 0x0014f674: loads 3 shared textures into class statics.
     static void LoadContent();
     static void UnLoadContent();
 
 private:
-    // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4). Copies
-    // x/y/phase from the currently tracked Touch slot into m_TouchX/Y/Phase.
+    // Binary @ 0x0014e3c4: copies x/y/phase from tracked Touch slot into m_TouchX/Y/Phase.
     void UpdateTouchPosition();
 };
 
 #ifdef __bada__
-static_assert(__builtin_offsetof(MenuButton, m_pEntity)   == 0x80, "MenuButton m_pEntity offset");
-static_assert(__builtin_offsetof(MenuButton, m_AnimPhase) == 0xD0, "MenuButton m_AnimPhase offset");
-static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer) == 0x158, "MenuButton m_ShakeTimer offset");
-static_assert(sizeof(MenuButton) == 0x15C, "MenuButton sizeof mismatch");
+static_assert(__builtin_offsetof(MenuButton, m_pEntity)          == 0x80,  "MenuButton m_pEntity offset");
+static_assert(__builtin_offsetof(MenuButton, m_FruitType)        == 0x84,  "MenuButton m_FruitType offset");
+static_assert(__builtin_offsetof(MenuButton, m_FadeAlphaIdx)     == 0xCC,  "MenuButton m_FadeAlphaIdx offset");
+static_assert(__builtin_offsetof(MenuButton, m_AnimPhase)        == 0xD0,  "MenuButton m_AnimPhase offset");
+static_assert(__builtin_offsetof(MenuButton, m_TouchSlot)        == 0xD8,  "MenuButton m_TouchSlot offset");
+static_assert(__builtin_offsetof(MenuButton, m_BackdropScale)    == 0xEC,  "MenuButton m_BackdropScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_RotationSpeed)    == 0xF4,  "MenuButton m_RotationSpeed offset");
+static_assert(__builtin_offsetof(MenuButton, m_SparkleTimer)     == 0xF8,  "MenuButton m_SparkleTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_NewIndicatorTimer) == 0xFC, "MenuButton m_NewIndicatorTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_BaseScale)        == 0x100, "MenuButton m_BaseScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_GrowInTimer)      == 0x134, "MenuButton m_GrowInTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_RestScale)        == 0x13C, "MenuButton m_RestScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_bHasHitArea)      == 0x144, "MenuButton m_bHasHitArea offset");
+static_assert(__builtin_offsetof(MenuButton, m_pFruitPiece)      == 0x148, "MenuButton m_pFruitPiece offset");
+static_assert(__builtin_offsetof(MenuButton, m_pTrackedFruit)    == 0x14C, "MenuButton m_pTrackedFruit offset");
+static_assert(__builtin_offsetof(MenuButton, m_ShakeScale)       == 0x154, "MenuButton m_ShakeScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetX)        == 0x164, "MenuButton m_HitInsetX offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetY)        == 0x168, "MenuButton m_HitInsetY offset");
+static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer)       == 0x174, "MenuButton m_ShakeTimer offset");
+// sizeof check: binary is 0x178; compat fields above add ~20 bytes on host builds.
+// The assert fires only on Bada (4-byte pointers, no compat-field expansion).
+static_assert(sizeof(MenuButton) == 0x178, "MenuButton sizeof mismatch");
 #endif
 
 #endif

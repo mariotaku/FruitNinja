@@ -804,7 +804,7 @@ void ShopScreen::Update(float dt) {
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
                 if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBuyButton);
                 // Binary: m_TargetSize *= 0.825; fruit piece scale *= 0.825
-                m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
+                m_pBuyButton->m_RestScale = m_pBuyButton->m_RestScale * BUTTON_SCALE;
                 if (m_pBuyButton->m_pFruitPiece) {
                     m_pBuyButton->m_pFruitPiece->scale =
                         m_pBuyButton->m_pFruitPiece->scale * BUTTON_SCALE;
@@ -896,8 +896,8 @@ void ShopScreen::Update(float dt) {
                             // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
                             m_bShrinking = false;
                             // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
-                            m_pEquipButton->m_TargetSize =
-                                m_pEquipButton->m_TargetSize * EQUIP_BUTTON_SCALE;
+                            m_pEquipButton->m_RestScale =
+                                m_pEquipButton->m_RestScale * EQUIP_BUTTON_SCALE;
                             if (m_pEquipButton->m_pFruitPiece) {
                                 m_pEquipButton->m_pFruitPiece->scale =
                                     m_pEquipButton->m_pFruitPiece->scale * EQUIP_BUTTON_SCALE;
@@ -1008,7 +1008,7 @@ void ShopScreen::Update(float dt) {
                 Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
         }
         // LAB_0015e874: scale new button (reached by both state 0 and state 3 paths)
-        m_pBuyButton->m_TargetSize = m_pBuyButton->m_TargetSize * BUTTON_SCALE;
+        m_pBuyButton->m_RestScale = m_pBuyButton->m_RestScale * BUTTON_SCALE;
         if (m_pBuyButton->m_pFruitPiece) {
             m_pBuyButton->m_pFruitPiece->scale =
                 m_pBuyButton->m_pFruitPiece->scale * BUTTON_SCALE;

@@ -1,12 +1,9 @@
 //
-// MenuButton : HUDControl3d (0x15C bytes)
-// Reimplemented from docs/structs/gameplay-misc.md
-//
-// Architecture:
-//   Layer 0 (3D): Spinning fruit entity (Mortar::ActorManager::Draw, NOT MenuButton)
-//   Layer 1 (2D): Button texture quad via HUDControl3d::Draw
-//   Layer 2 (2D): "New item" star indicator (TODO)
-//   Layer 3 (2D): Sparkle ring (TODO)
+// MenuButton : HUDControl3d (0x178 bytes, v1.6.1)
+// Binary ctors @ 0x0019bb08 / 0x0019bcac / 0x0019be50 / 0x0019bff8
+// Binary Init  @ 0x0019b994
+// Binary Update@ 0x0019a860
+// Binary Draw  @ 0x0019c2e4
 //
 
 // Analysed: 2026-04-28T14:00
@@ -32,40 +29,17 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstdint>
-#include <map>
 #include "game/GameWork.h"
 
 // Class-static textures loaded by MenuButton::LoadContent (binary @ 0x0014f674).
-// LoadContent loads three shared SmartPtrs in this order, verified by RE
-// pass against literal pool 0x0014f6f0..0x0014f70c:
-//   Slot 1  GOT+0x77E0  scratchs.tex        (Phase-A backdrop — used below)
-//   Slot 2  GOT+0x79DC  blurry_backing.tex  (sparkle ring base — TODO sparkle Draw)
-//   Slot 3  GOT+0x7894  new_item.tex        (Layer-2 NEW star — used below)
+//   Slot 1  scratchs.tex        (Phase-A backdrop)
+//   Slot 2  blurry_backing.tex  (sparkle ring base)
+//   Slot 3  new_item.tex        (Layer-2 NEW star)
 static Mortar::SmartPtr<Mortar::Texture> s_TexScratchs;
 static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;
 static Mortar::SmartPtr<Mortar::Texture> s_TexNewItem;
 
-// Matches ClearMenuItems @ 0x0016ac7c — binary-exact. Two passes:
-//   Pass 1 (fruits, type 0):
-//     guard:  if entity->m_bSliced != 0 → skip
-//     vx = RandFloat_Scaled(10.0) - 5.0    // [-5, +5)
-//     vy = RandFloat_Scaled(5.0)           // [0, +5)
-//     vel = (vx, vy, 0)
-//     entity->m_bDrawWhole = 1             // +0x114
-//     vel.x = |vel.x| * sign(pos.x)        // fly outward toward nearest edge
-//     m_SecondVel = vel                    // copy to half-B
-//     entity->m_bSliced = 1                // +0xb4 (set BEFORE the vel writes
-//                                          //         in the binary order, but
-//                                          //         the order doesn't matter)
-//   Pass 2 (bombs, type 1):
-//     guard:  if Bomb::Enabled() — also fling
-//             Bomb::Disable()
-//             same vel formula as fruits
-//     unconditional: m_bMovement = 1       // +0x80
-//
-// RandFloat_Scaled(s) @ 0x0016a960 uses the engine's Rand32(0x7FFFF)
-// divided by 524287.875, giving a uniform [0,1) × s. Port substitutes
-// stdlib rand() / RAND_MAX which is functionally equivalent for visuals.
+// Matches ClearMenuItems @ 0x0016ac7c -- binary-exact.
 static float RandScaled(float s) {
     return ((float)rand() / (float)RAND_MAX) * s;
 }
@@ -74,11 +48,6 @@ void FN::ClearMenuItems() {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
-    // Binary ClearMenuItems @ 0x0016ac7c is two back-to-back while loops
-    // over the iterator pair -- fruits first (type 0), then bombs
-    // (type 1). Mirror that structure here so the port reads 1:1 with
-    // the disassembly.
-
     // --- Pass 1: fruits (type 0) ---
     {
         std::list<Mortar::Entity*>::iterator it;
@@ -86,21 +55,14 @@ void FN::ClearMenuItems() {
         while (e != nullptr) {
             Fruit* f = static_cast<Fruit*>(e);
             if (f->m_bSliced == 0) {
-                float vx = RandScaled(10.0f) - 5.0f;   // [-5, +5)
-                float vy = RandScaled(5.0f);           // [0, +5)
+                float vx = RandScaled(10.0f) - 5.0f;
+                float vy = RandScaled(5.0f);
                 f->vel = Vec3(vx, vy, 0.0f);
-
-                f->m_bDrawWhole = true;                // +0x114
-
-                // Sign-correct vel.x by sign(pos.x) so each fruit flies
-                // outward toward the nearest screen edge.
+                f->m_bDrawWhole = true;
                 const float absVx = vx < 0 ? -vx : vx;
                 const float sign  = (f->pos.x < 0.0f) ? -1.0f : 1.0f;
                 f->vel.x = absVx * sign;
-
-                f->m_SecondVel = f->vel;               // m_HalfB_vel = vel
-                LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ClearMenuItems)",
-                         static_cast<void*>(f), f->pos.x, f->pos.y, (int)f->m_FruitType);
+                f->m_SecondVel = f->vel;
                 f->m_bSliced = 1;
             }
             e = am->GetEntityNext(0, it);
@@ -112,17 +74,6 @@ void FN::ClearMenuItems() {
         std::list<Mortar::Entity*>::iterator it;
         Mortar::Entity* e = am->GetEntityFirst(1, it);
         while (e != nullptr) {
-            // Binary-exact:
-            //   if (Bomb::Enabled()) {          // !m_bCollisionGuard
-            //       Bomb::Disable();            // m_bCollisionGuard = 1
-            //       vel = (Rand(10)-5, Rand(5), 0);
-            //   }
-            //   m_bMovement = 1;                // unconditional
-            //
-            // Binary never writes m_bHit here -- the bomb stays in
-            // Bomb::Update's ALIVE branch, which also runs gravity
-            // (via m_bMovement gate). Disabling collision alone is
-            // what stops further slices.
             Bomb* b = static_cast<Bomb*>(e);
             if (b->Enabled()) {
                 b->Disable();
@@ -136,61 +87,67 @@ void FN::ClearMenuItems() {
     }
 }
 
-// Constants from binary (verified via read_memory / disassembly)
-// IMPORTANT: DAT_0014f194 = 0.2f is applied to Fruit::m_RotVel1 (rotation slowdown),
-// NOT to scale. The scale is left at its gameplay value.
-static const float FRUIT_ROTVEL_MULT = 0.2f;        // DAT_0014f194 — slows fruit spin
-static const float FRUIT_ZPOS = 150.0f;              // DAT_0014f198
-static const float BOMB_MENU_SCALE = 0.85f;          // DAT_0014f1a0 — bomb scale in menu
-static const float ROT_SPEED_MIN = 8.0f;
-static const float ROT_SPEED_RANGE = 4.0f;           // 8-12 range
-static const float ROT_CLAMP_X = 0.75f;
-static const float ROT_CLAMP_Y = 0.5f;
+// Constants from binary
+static const float FRUIT_ROTVEL_MULT = 0.2f;       // DAT_0014f194
+static const float FRUIT_ZPOS        = 150.0f;     // DAT_0014f198
+static const float BOMB_MENU_SCALE   = 0.85f;      // DAT_0014f1a0
+static const float ROT_CLAMP_X      = 0.75f;
+static const float ROT_CLAMP_Y      = 0.5f;
 
 MenuButton::MenuButton()
-    : m_Pad_0x7C(0),
+    : m_pFruitPiece_alt(nullptr),
       m_pEntity(nullptr),
       m_FruitType(-1),
+      m_FadeAlphaIdx(0),
       m_AnimPhase(0),
-      m_fieldD4(0),
+      m_AnimFlag(0),
+      m_GrowShrinkDone(0),
+      m_fieldD4(static_cast<int>(0xffffffff)),
       m_TouchSlot(-1),
       m_TouchX(0.0f), m_TouchY(0.0f), m_TouchPhase(0.0f),
-      m_RandomOffset(0.0f),
-      m_BackdropScale(0.0f),  // Binary leaves +0xEC uninitialized; zero-init for fidelity
-      m_bFlipped(false),
-      m_RotationSpeed(0.0f),
+      m_BackdropOffsetX(0.0f),
+      m_BackdropScale(0.0f),
+      m_RandomOffset(-1.0f),
+      m_RotationSpeed(-1.0f),
       m_SparkleTimer(-1.0f),
       m_NewIndicatorTimer(-1.0f),
       m_BaseScale(0.0f, 0.0f, 0.0f),
-      m_pLabel1(nullptr), m_pLabel2(nullptr),
-      m_PlayerIndex(0),
-      m_bScoreSubmitted(0),
-      m_bFireOnRelease(1),
-      m_bInteractive(1),
-      m_bEnabled(1),
-      m_TargetSize(0.0f, 0.0f, 0.0f),
-      m_bHasHitArea(false),
-      m_bTouchHeld(0),
-      m_pFruitPiece(nullptr),
+      m_pLabelFg(nullptr), m_pLabelExtra(nullptr), m_pLabelShadow(nullptr),
+      m_PlayerColour(255, 255, 255, 255),
+      m_PlayerIndexTint(255, 255, 255, 255),
+      m_GrowInTimer(0.0f),
       m_bRespondsToBackKey(0),
-      m_AnimScale(1.0f),
-      // m_BounceParams = (0.85, 0.85, 0.0) per binary @ 0x0014f240/0x0014f244.
-      // Drives the new-item star anchor offset (0.425*W, 0.425*H from button centre).
-      m_BounceParams(0.85f, 0.85f, 0.0f),
+      m_bDragCancel(0),
+      m_bClearsMenuItems(0),
+      _pad13B(0),
+      m_RestScale(0.0f, 0.0f, 0.0f),
+      m_bHasHitArea(0),
+      m_bInteractive(1),
+      m_pFruitPiece(nullptr),
+      m_bAcceptsTouch(1),
+      _pad149{0, 0, 0},
+      m_pTrackedFruit(nullptr),
+      m_bBackdropActive(1),
+      m_ShakeScale(1.0f, 1.0f, 1.0f),
+      m_LabelExtraAlpha(0.0f),
       m_HitInsetX(5.0f),
       m_HitInsetY(5.0f),
-      m_field154(0.0f),
-      m_ShakeTimer(0.0f)
+      m_fieldReserved(0.0f),
+      m_NewBouncePhase(0.0f),
+      m_ShakeTimer(0.0f),
+      m_bEnabled(1),
+      m_AnimScale(1.0f),
+      m_BounceParams(0.85f, 0.85f, 0.0f),
+      m_bTouchHeld(1),
+      m_bScoreSubmitted(0)
 {
-    // Binary HUDControl base ctor sets m_LayerFlags = 1. MenuButton::Init
-    // bumps it to 0x40 only when fruitType >= 0 (i.e. the spinning-fruit
-    // backdrop variant). Text-only buttons (fruitType < 0) stay at the
-    // default 1, drawing in HUD::Draw(0x01) — which is AFTER splats.
-    // Don't unconditionally promote here.
+    _pad114[0] = 0; _pad114[1] = 0; _pad114[2] = 0; _pad114[3] = 0;
+    _pad114[4] = 0; _pad114[5] = 0; _pad114[6] = 0; _pad114[7] = 0;
+    _pad130[0] = 0; _pad130[1] = 0; _pad130[2] = 0; _pad130[3] = 0;
+    _pad146[0] = 0; _pad146[1] = 0;
+    _pad151[0] = 0; _pad151[1] = 0; _pad151[2] = 0;
 }
 
-// Binary ctor @ 0x0014f24c — construction-time init with all parameters.
-// onTap → m_ClickCallback; onRemove → m_RemoveCallback (fired with HUDControl* on deletion).
 MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
                        Mortar::Delegate0<void>* onTap,
                        int fruitType, Vec3* restPos,
@@ -208,236 +165,160 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture>* tex, Vec3* spawnPos,
 }
 
 // ASM-verified: 2026-05-06T00:00 binary @ 0x0014f94c (asm-inspector)
-// Binary D2 dtor runs only subobject teardown (vtbl install ->
-// ~list<AddOn>(+0x10C) -> ~Delegate0(+0xAC) -> ~Delegate0(+0x88) ->
-// ~HUDControl3d) -- NO call to MenuButton::Release. Release() is the
-// SEPARATE vtable slot at 0x0014f7e0 invoked BEFORE delete by every
-// HUDControl-deleting site (HUD::Release / HUD::Update pending-removal
-// path / FruitFactControl::Release child-button teardown / etc.).
-// Port now matches that lifecycle: dtor empty, Release() driven by
-// caller. Implicit member-subobject destructors take over for
-// m_AddOns / Delegates / ~HUDControl3d.
 MenuButton::~MenuButton() {}
 
-// Matches MenuButton::Init (0x0014ee40, 222 lines)
+// MenuButton::Init @ 0x0019b994
 void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
                       int fruitType, Vec3 hitBounds,
                       Mortar::Delegate0<void> deletedCb) {
-    LOG_INFO("MENUBUTTON", "reset entity=%p (bSliced was %d) button=%p fruitType=%d",
-             static_cast<void*>(m_pEntity),
-             (m_pFruitPiece && m_pEntity) ? (int)m_pFruitPiece->m_bSliced : -1,
-             static_cast<void*>(this), fruitType);
     pos = buttonPos;
-    m_ClickCallback = clickCb;
+    m_ClickCallback  = clickCb;
     m_DeletedCallback = deletedCb;
-    m_FruitType = fruitType;
-    m_BaseScale = hitBounds;
-    // Binary @ 0x0014eea2..0x0014ef44: m_bHasHitArea = 0 < (|x| + |y|).
-    // Sum-of-absolute-values so negative-coord hitBounds also count as
-    // "has hit area" (the OR-of-positives form missed that case).
-    m_bHasHitArea = (fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f;
-    // Binary @ 0x0014ee40: m_TargetSize = hitBounds unconditionally.
-    // Later branches (entity-scale compute, text-button tex-size) may overwrite.
-    m_TargetSize = hitBounds;
-    m_bFireOnRelease = 1;
-    m_bInteractive = 1;
-    m_bEnabled = 1;
-    m_AnimScale = 1.0f;
-    m_HitInsetY = 5.0f;
-    m_HitInsetX = 5.0f;
-    m_Timer = 0.0f;        // DAT_0014ee68
-    m_bTouchHeld = 1;    // DAT_0014ee6c
+    m_FruitType      = fruitType;
+    m_RestScale.x     = hitBounds.x;
+    m_RestScale.y     = hitBounds.y;
+    m_bHasHitArea    = (fabsf(hitBounds.x) + fabsf(hitBounds.y)) > 0.0f ? 1 : 0;
+    m_bInteractive   = 1;
+    m_bAcceptsTouch  = 1;
+    m_bBackdropActive = 1;
+    m_GrowInTimer    = 1.0f;
+    m_AnimPhase      = 0;
+    m_HitInsetX      = 5.0f;
+    m_HitInsetY      = 5.0f;
+    m_ShakeTimer     = 0.0f;
+    m_NewBouncePhase = 0.0f;
+    m_LabelExtraAlpha = 0.0f;
+    m_bClearsMenuItems = 0;
+    m_bDragCancel    = 0;
+    m_bRespondsToBackKey = 0;
+    m_fieldD4        = static_cast<int>(0xffffffff);
+    m_TouchSlot      = -1;
+    m_SparkleTimer   = -1.0f;
+    m_NewIndicatorTimer = -1.0f;
+    m_RotationSpeed  = -1.0f;
+    m_RandomOffset   = -1.0f;
+    m_BaseScale      = Vec3(0.0f, 0.0f, 0.0f);
+    m_pFruitPiece    = nullptr;
+    m_pFruitPiece_alt = nullptr;
+    m_pEntity        = nullptr;
+    m_pTrackedFruit  = nullptr;
+    m_FadeAlphaIdx   = 0;
+    m_ShakeScale     = Vec3(1.0f, 1.0f, 1.0f);
+    // TODO: 0x0019b994 -- Init DAT constants for m_ShakeScale, m_fieldReserved, m_RandomOffset exact values
+    m_fieldReserved  = 0.0f;
+    // compat fields
+    m_bEnabled       = 1;
+    m_AnimScale      = 1.0f;
+    m_BounceParams   = Vec3(0.85f, 0.85f, 0.0f);
+    m_bTouchHeld     = 1;
+    m_bScoreSubmitted = 0;
 
-    // Binary @ 0x0014f1bc..0x0014f1f8 — toggle branch (no fruit, no explicit
-    // hitBounds): auto-size m_TargetSize and base.size from the bound
-    // secondary texture. The +1 mirrors the binary's pixel-bleed margin
-    // (same as ScoreControl's banner-tex sizing).
+    // Toggle-button (fruitType < 0): auto-size from texture if no hitBounds
     if (fruitType < 0 && !m_bHasHitArea && m_Texture.IsValid()) {
         Mortar::Texture* tex = m_Texture.Get();
         if (tex) {
             float w = (float)(tex->m_Width  + 1);
             float h = (float)(tex->m_Height + 1);
-            m_TargetSize.x = w;
-            m_TargetSize.y = h;
-            // .z unchanged (binary preserves it)
+            m_RestScale.x = w;
+            m_RestScale.y = h;
             size.x = w;
             size.y = h;
-            // size.z unchanged
         }
     }
 
-    // Create fruit entity if fruitType >= 0 (toggles use -1)
+    // Create fruit entity if fruitType >= 0
     if (fruitType >= 0) {
-        Game* game = Game::GetInstance();
-        if (game && game->actorManager) {
-            // Original: entityType = (FruitInfo_GetCount() <= fruitType) ? 1 : 0
-            int bombThreshold = FruitInfo_GetCount();
-            int entityType = (bombThreshold <= fruitType) ? 1 : 0;  // 0=Fruit, 1=Bomb
-            Mortar::Entity* e = game->actorManager->Add(entityType, true);
-            if (e) {
-                e->pos = buttonPos;
-                e->Init(nullptr, (long)fruitType, nullptr);
-                e->flags &= ~0x10;  // unhide
-                m_pEntity = e;
-                LOG_INFO("MENUBUTTON", "spawn entity=%p pos=(%.1f,%.1f) type=%d button=%p",
-                         static_cast<void*>(e), e->pos.x, e->pos.y, entityType, static_cast<void*>(this));
-
-                if (entityType == 0) {
-                    // Fruit entity: post-init adjustments (matches MenuButton::Init 0x0014ee40)
-                    // Key finding: the 0.2 multiplier (DAT_0014f194) is applied to
-                    // m_RotVel1 (fruit+0xF0), NOT to scale. Fruit keeps gameplay scale.
-                    Fruit* fruit = static_cast<Fruit*>(e);
-                    fruit->m_RotVel1 = fruit->m_RotVel1 * FRUIT_ROTVEL_MULT;
-                    fruit->m_ScaleAnim = 1.0f;
-                    fruit->m_ChuckDelay = 0.0f;
-                    fruit->m_ZPosition = FRUIT_ZPOS;
-                    // ASM-verified: 2026-05-22 binary @ 0x0014f0de (re-analyst). Fruit-
-                    // branch writes byte=1 to Fruit+0x10C (m_bSpawnedByCriticalSplash).
-                    // Dual-purpose: (a) marks the fruit as menu-owned so the slash
-                    // dispatcher skips combo bookkeeping + Fruit::CollisionResponse
-                    // skips score-add; (b) Fruit::Update's sliced-branch reads this
-                    // flag to apply +1.3*dt extra gravity on released halves -- the
-                    // menu animation's "drop fast on slice" effect.
-                    fruit->m_bSpawnedByCriticalSplash = 1;
-                    m_pFruitPiece = fruit;
-
-                    // Clamp rotation magnitude (after the ×0.2 reduction)
-                    if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
-                        fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
-                    if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
-                        fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
-                    // Binary @ 0x0014f0dc..0x0014f0ea: copy clamped RotVel1 into RotVel2 so
-                    // both halves spin identically. Without this the two halves of a menu
-                    // fruit have slightly different rotational velocities once sliced.
-                    fruit->m_RotVel2 = fruit->m_RotVel1;
-                } else {
-                    // Bomb entity: disable physics and scale by 0.85 (DAT_0014f1a0)
-                    // MenuButton::Init (0x0014ee40): writes 0 to bomb+0x80 (m_bMovement)
-                    // then bomb->scale *= 0.85, then calls Bomb::SetCallback.
-                    Bomb* bomb = static_cast<Bomb*>(e);
-                    bomb->m_bMovement = 0;
-                    bomb->scale = bomb->scale * BOMB_MENU_SCALE;
-                    bomb->SetCallback(clickCb, this);
-                    // Matches binary MenuButton::Init bomb branch @ 0x0014f144:
-                    //   vstr.32 s15,[r0,#0x6c]   ; *(bomb+0x6c) = 150.0
-                    // (s15 = DAT = FRUIT_ZPOS = 150.0). Overrides the depth
-                    // cycling value that Bomb::Init assigned via
-                    // GetBombZPosition() — so menu bombs share the same
-                    // +150 layer as menu fruits and render in front of the
-                    // ring instead of behind it.
-                    bomb->m_ZPosition = FRUIT_ZPOS;
-                }
-
-                // Random rotation speed (8-12 deg/frame, random direction)
-                m_RotationSpeed = ROT_SPEED_MIN + (float)(rand() % 40) / 10.0f;
-                if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
-
-                // Binary @ 0x0014f0f4..0x0014f188: gate is `!m_bHasHitArea` only.
-                // `callerSetSize` was a port-side concept with no binary counterpart;
-                // removed. The binary's bomb/fruit size compute always runs when
-                // no explicit hitBounds were passed.
-                if (!m_bHasHitArea) {
-                    if (entityType == 0) {
-                        // Fruit branch: m_TargetSize = entity->scale * 200.0f
-                        // DAT_0014f19c = 0x43480000 = 200.0f
-                        m_TargetSize = e->scale * 200.0f;
-                    } else {
-                        // Bomb branch: m_TargetSize = BombSizeVec * 2.0f * FruitInfo_GetBombSize()
-                        // = (1,1,1) * 2.0f * 55.0f = (110, 110, 110)
-                        // Binary @ 0x0014f156..0x0014f188: BombSizeVec at GOT+0x77CC.
-                        const float bombSize = FruitInfo_GetBombSize();
-                        m_TargetSize.x = 2.0f * bombSize;
-                        m_TargetSize.y = 2.0f * bombSize;
-                        m_TargetSize.z = 2.0f * bombSize;
-                    }
-                }
-            }
-        }
-
-        m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;  // menu draw layer
+        CreateFruit();
+        m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     }
-
-    // Binary @ 0x0014f1f8..0x0014f23d — unconditional tail (LAB_0014f1f8).
-    // Runs whether or not an entity was created; toggle path falls through
-    // here and both Fruit/Bomb branches `goto LAB_0014f1f8`.
-    m_pFruitPiece    = static_cast<Fruit*>(m_pEntity);  // Bomb branch also writes
-    m_AnimPhase    = 0;
-    m_BounceParams.x = 0.85f;  // DAT_0014f240
-    m_BounceParams.y = 0.85f;  // DAT_0014f240
-    m_BounceParams.z = 0.0f;   // DAT_0014f244
-    // ASM-verified: 2026-05-18 binary @ 0x0014f1f8..0x0014f222 (re-analyst).
-    // Binary's Init tail loads from GOT offset 0x000073EC, which
-    // _GLOBAL__I_TutorialControl.cpp @ 0x001638cc initialises to
-    // Vec3::Zero (0,0,0) at BSS 0x001f4328 -- NOT Vec3::One as a
-    // prior re-analyst miscategorised. Vec3::One lives at the SEPARATE
-    // GOT offset 0x77CC which MenuButton::Init never reads.
-    // The tail thus writes m_BaseScale = (0,0,0). Since the ctor's
-    // member-initialiser list already sets m_BaseScale(0,0,0), the
-    // explicit write is semantically redundant; port omits it.
-    //
-    // First-frame capture (MenuButton::Update @ 0x0014e74e):
-    //   if (m_BaseScale.x == 0.0) m_BaseScale = entity->scale;
-    // captures whatever per-fruit scale Fruit::Init / Bomb's *=0.85 set.
-    // Subsequent frames: entity->scale = m_BaseScale * sizeFrac,
-    // where sizeFrac = sin(m_AnimPhase*2pi/65536), in [0,1].
-    // See tmp/menubutton-sizefrac-spec.md for full GOT resolution.
-
 }
 
-// Binary @ 0x0014f7e0 — clears entity backrefs, deletes labels, calls DeletePeices()
+// Creates fruit/bomb entity based on m_FruitType; sets m_pEntity/m_pFruitPiece/m_pTrackedFruit.
+void MenuButton::CreateFruit() {
+    Game* game = Game::GetInstance();
+    if (!game || !game->actorManager) return;
+
+    int bombThreshold = FruitInfo_GetCount();
+    int entityType = (bombThreshold <= m_FruitType) ? 1 : 0;
+    Mortar::Entity* e = game->actorManager->Add(entityType, true);
+    if (!e) return;
+
+    e->pos = pos;
+    e->Init(nullptr, (long)m_FruitType, nullptr);
+    e->flags &= ~0x10;
+    m_pEntity = e;
+    m_pTrackedFruit = static_cast<Fruit*>(e);
+
+    if (entityType == 0) {
+        Fruit* fruit = static_cast<Fruit*>(e);
+        fruit->m_RotVel1 = fruit->m_RotVel1 * FRUIT_ROTVEL_MULT;
+        fruit->m_ScaleAnim = 1.0f;
+        fruit->m_ChuckDelay = 0.0f;
+        fruit->m_ZPosition = FRUIT_ZPOS;
+        // ASM-verified: 2026-05-22 binary @ 0x0014f0de (re-analyst).
+        fruit->m_bSpawnedByCriticalSplash = 1;
+        m_pFruitPiece = fruit;
+
+        if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
+            fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
+        if (fabsf(fruit->m_RotVel1.y) < ROT_CLAMP_Y)
+            fruit->m_RotVel1.y = (fruit->m_RotVel1.y >= 0 ? ROT_CLAMP_Y : -ROT_CLAMP_Y);
+        fruit->m_RotVel2 = fruit->m_RotVel1;
+    } else {
+        Bomb* bomb = static_cast<Bomb*>(e);
+        bomb->m_bMovement = 0;
+        bomb->scale = bomb->scale * BOMB_MENU_SCALE;
+        bomb->SetCallback(m_ClickCallback, this);
+        bomb->m_ZPosition = FRUIT_ZPOS;
+    }
+
+    // Random rotation speed (8-12 deg/frame, random direction)
+    m_RotationSpeed = 8.0f + (float)(rand() % 40) / 10.0f;
+    if (rand() % 2) m_RotationSpeed = -m_RotationSpeed;
+}
+
+// Binary @ 0x0019d064 -- clears entity backrefs, deletes labels, calls DeletePeices()
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x0014f7e0 (asm-inspector)
 void MenuButton::Release() {
-    Mortar::Entity* e = m_pFruitPiece;
+    Mortar::Entity* e = m_pFruitPiece ? static_cast<Mortar::Entity*>(m_pFruitPiece) : m_pEntity;
     if (e) {
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
-            // Binary writes 0 to fruit+0x108. The port's +0x108 slot is
-            // modeled as m_pSlasher (SlashEntity backref); clearing it is
-            // semantically equivalent to the binary's "drop owning ref"
-            // intent on menu-button release.
             static_cast<Fruit*>(e)->m_pSlasher = nullptr;
         } else if (m_FruitType == bombThreshold) {
             static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
         }
     }
-    // m_pLabel1 / m_pLabel2 are always nullptr (SetText has no callers, see
-    // dead-code note below). Skip deletes -- they would be undefined behavior
-    // on void* if ever non-null, and they're never set in the first place.
-    m_pLabel1 = nullptr;
-    m_pLabel2 = nullptr;
+    m_pLabelFg = nullptr;
+    m_pLabelExtra = nullptr;
+    m_pLabelShadow = nullptr;
     DeletePeices();
-    // Binary @ 0x0014f7e0 -- ~SmartPtr<Texture> drop on m_Texture.
     m_Texture.SetNull();
-    LOG_INFO("MENUBUTTON", "destroy entity=%p (bSliced=%d) button=%p",
-             static_cast<void*>(m_pEntity),
-             (m_pFruitPiece && m_pEntity) ? (int)m_pFruitPiece->m_bSliced : -1,
-             static_cast<void*>(this));
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
-
+    m_pTrackedFruit = nullptr;
 }
 
-// Binary @ 0x0014e3ac — vtable Init slot, calls vtable Reset (no-op for MenuButton)
+// Binary @ 0x19a4f8 -- vtable Init slot
 void MenuButton::Init() { Reset(); }
 
-// Binary @ 0x0014e3b8 — Reset is a no-op (vtable slot +0x10)
+// Binary @ 0x19a50c -- Reset is a no-op
 // ASM-verified: 2026-05-06T00:00 binary @ 0x0014e3b8 (asm-inspector)
-// Binary body is a single `bx lr` -- empty; port's empty body matches.
 void MenuButton::Reset() {}
 
-// Binary @ 0x0014e3f8 — vtable Skip slot, snaps animation to full (m_AnimPhase = 0x3ffc = pi/2)
+// Binary @ 0x19a558 -- Skip snaps animation to full
 void MenuButton::Skip() { m_AnimPhase = 0x3ffc; }
 
-// Binary @ 0x0014e3bc — sets m_ShakeTimer (zero call sites in binary)
+// Binary @ 0x0014e3bc
 void MenuButton::Shake(float t) { m_ShakeTimer = t; }
 
-// Binary @ 0x0014e434 — returns (m_NewIndicatorTimer >= 0)
+// Binary @ 0x0014e434
 bool MenuButton::HasNewSymbol() { return m_NewIndicatorTimer >= 0.0f; }
 
-// Binary @ 0x0014e484 — returns (m_SparkleTimer >= 0); dead in shipped binary
+// Binary @ 0x0014e484
 bool MenuButton::IsLoadingSymbol() { return m_SparkleTimer >= 0.0f; }
 
-// Binary @ 0x0014e45c — arms sparkle timer; dead in shipped binary
+// Binary @ 0x0014e45c
 void MenuButton::SetLoadingSymbol(bool show) {
     if (m_SparkleTimer < 0.0f) {
         if (show) m_SparkleTimer = 0.0f;
@@ -446,25 +327,13 @@ void MenuButton::SetLoadingSymbol(bool show) {
     }
 }
 
-// Defunct: SetText -- no-op in port; binary @ 0x0014ebc0
-//
-// Binary builds two `Mortar::BakedString` instances (foreground + shadow)
-// arranged on a curved arc of the given `radius`, then stores the pair
-// in m_pLabel1 / m_pLabel2 for the (separately-Defunct) label-draw block
-// at 0x0015015e. Both the SetText constructor path AND the label-draw
-// block have zero call sites in the shipped binary -- the curved-text
-// feature was authored but never wired into any released menu button.
-//
-// Port keeps the empty body for call-graph parity (so anything the
-// implementer ever wires would compile and link); not RE-ported in
-// detail because the work would land 100% dead code. The port-side
-// m_pLabel1 / m_pLabel2 fields are typed `void*` for the same reason
-// (no BakedString allocations exist).
+// Defunct: SetText -- no-op stub; binary @ 0x0014ebc0
+// Zero call sites in shipped binary; curved-text feature authored but never wired.
 void MenuButton::SetText(const char* /*text*/, Colour /*fg*/,
                          Colour /*shadow*/, float /*radius*/) {
 }
 
-// Binary @ 0x0014ed18 — release fruit piece with upward fling; dead in shipped binary
+// Binary @ 0x0014ed18
 void MenuButton::Remove() {
     if (!m_pFruitPiece) return;
     if (m_pFruitPiece->m_bSliced) return;
@@ -475,16 +344,14 @@ void MenuButton::Remove() {
     m_pFruitPiece->m_SecondVel = m_pFruitPiece->vel;
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
+    m_pTrackedFruit = nullptr;
 }
 
-// Binary @ 0x0014e5cc — fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
+// Binary @ 0x0014e5cc
 bool MenuButton::TouchReleased() {
-    if (m_FruitType < 0 && m_bFireOnRelease) {
-        LOG_INFO("BUTTON", "MenuButton::Update touch path fires m_ClickCallback (this=%p enabled=%d pos=(%.1f,%.1f))",
-                 static_cast<void*>(this), (int)m_bEnabled, pos.x, pos.y);
+    if (m_FruitType < 0) {
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
-        // Binary @ 0x0014e5e6 — TutorialControl::ButtonPressedAtPos(this).
         Game* game = Game::GetInstance();
         if (game && game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ButtonPressedAtPos(this);
@@ -494,7 +361,7 @@ bool MenuButton::TouchReleased() {
     return true;
 }
 
-// Binary @ 0x0014e44c — vtable BeginDraw slot; re-arms m_LayerFlags=0x40 each frame for fruit-type buttons
+// Binary @ 0x19a5bc -- re-arms m_LayerFlags=0x40 each frame for fruit-type buttons
 void MenuButton::BeginDraw(float dt) {
     (void)dt;
     if (m_FruitType >= 0) {
@@ -502,24 +369,24 @@ void MenuButton::BeginDraw(float dt) {
     }
 }
 
-// Binary @ 0x0014e448 — vtable PreDraw slot, no-op
+// Binary @ 0x19a5b8 -- PreDraw no-op
 void MenuButton::PreDraw(const Vec3& hudScale) { (void)hudScale; }
 
-// Binary @ 0x0014e590 — kills owned fruit/bomb then defers to base SetToMultiplayerState
+// Binary @ 0x19a794 -- kills owned fruit/bomb then defers to base SetToMultiplayerState
 bool MenuButton::SetToMultiplayerState() {
     Mortar::Entity* e = m_pFruitPiece ? static_cast<Mortar::Entity*>(m_pFruitPiece) : m_pEntity;
+    if (!e) e = m_pFruitPiece_alt ? static_cast<Mortar::Entity*>(m_pFruitPiece_alt) : nullptr;
     if (e) {
         if (e->entityType == 0) {
-            // Binary @ 0x0014e5a8 — Fruit::KillFruit(false) (no miss penalty
-            // when the menu transitions to MP, just remove the fruit).
             static_cast<Fruit*>(e)->KillFruit(false);
         } else if (e->entityType == 1) {
-            // Binary @ 0x0014e5b6 — Bomb::KillBomb().
             static_cast<Bomb*>(e)->KillBomb();
         }
     }
     m_pEntity = nullptr;
     m_pFruitPiece = nullptr;
+    m_pFruitPiece_alt = nullptr;
+    m_pTrackedFruit = nullptr;
     return HUDControl::SetToMultiplayerState();
 }
 
@@ -534,322 +401,152 @@ void MenuButton::SetNewSymbol(bool show) {
     }
 }
 
-// Matches MenuButton::Update (0x0014e614).
-// Critical: at the END of Update, the binary writes
-//   m_BackdropScale = size.x * 1.125f * m_AnimScale
-// at 0x0014eb84 (read at 0x0014fa86 by Draw Phase A). This makes the
-// scratchs.tex backdrop quad LIVE every frame; without this write, the
-// quad collapses to a point and the backdrop appears invisible.
-// ASM-verified: 2026-05-06T17:50 binary @ 0x0014eb84 (asm-inspector)
+// MenuButton::Update @ 0x0019a860 (v1.6.1 pseudocode)
 void MenuButton::Update(float dt) {
-    if (m_pEntity) {
-        static std::map<MenuButton*, uint8_t> s_PrevSliced;
-        uint8_t curr = m_pFruitPiece ? m_pFruitPiece->m_bSliced : 0;
-        std::map<MenuButton*, uint8_t>::iterator it = s_PrevSliced.find(this);
-        uint8_t prev = (it != s_PrevSliced.end()) ? it->second : 0;
-        if (curr != prev) {
-            LOG_INFO("MENUBUTTON", "Update sees bSliced transition %d->%d on entity=%p pos=(%.1f,%.1f) button=%p",
-                     (int)prev, (int)curr,
-                     static_cast<void*>(m_pEntity),
-                     m_pEntity->pos.x, m_pEntity->pos.y,
-                     static_cast<void*>(this));
-            s_PrevSliced[this] = curr;
+    Fruit* fruit = m_pTrackedFruit;  // +0x14c
+
+    // --- grow-in delay gate ---
+    if (m_GrowInTimer > 0.0f) {          // +0x134
+        m_GrowInTimer -= dt;
+        if (fruit) {
+            // mark hidden while waiting
+            // TODO: 0x0019a860 -- confirm exact flag bit written to fruit->flags(+0xc) for hidden
+            fruit->flags |= 1;
         }
+        return;
+    }
+    if (fruit) fruit->flags &= ~1;       // unhide
+
+    // --- sparkle + new-indicator timers ---
+    if (m_SparkleTimer >= 0.0f) {
+        m_SparkleTimer += dt * 8.0f;
+        if (m_SparkleTimer > 8.0f) m_SparkleTimer = 8.0f;
+    }
+    if (m_NewIndicatorTimer >= 0.0f) {
+        m_NewIndicatorTimer += 2.0f * dt;
+        if (m_SparkleTimer < 1.0f) m_NewIndicatorTimer = 0.0f;
     }
 
     UpdatePeices(dt);
 
-    // Hardware Back/Menu key auto-fire. Binary @ 0x0014e9a8: when
-    // m_bTouchHeld && Game::m_BackKeyPressed && m_bRespondsToBackKey,
-    // simulate slice (Fruit) or fire click delegate (Bomb). The port
-    // doesn't track Game::m_BackKeyPressed yet (TODO), so the gate is
-    // currently dead; the field still records the per-screen "this is
-    // the default Back action" wiring set by screen creation code.
-    // (Removed the previous fictional alpha-fade-on-m_bRemovalPending
-    // block — the binary has no such behaviour. See docs/engine/menubutton-138.md.)
-
-    // Sparkle timer tick — binary @ 0x0014e644 advances at 8/sec and wraps
-    // at 8.0. SetLoadingSymbol (the only arming function) has zero call
-    // sites so the timer is permanently at -1.0; no need to tick.
-
-    // New-item-star timer tick. Binary @ 0x0014e644:
-    //   if (timer >= 0): timer += 2*dt; if (m_SparkleTimer >= 1.0) timer = 0.
-    // The sparkle phase-reset keeps the star and sparkle visually in sync.
-    if (m_NewIndicatorTimer >= 0.0f) {
-        m_NewIndicatorTimer += dt + dt;          // += 2*dt
-        if (m_SparkleTimer >= 1.0f) {
-            m_NewIndicatorTimer = 0.0f;
-        }
-    }
-
-    // Rotate button quad: m_Timer accumulates at m_RotationSpeed deg/s (DAT_0014e974=360.0 wrap)
-    if (m_FruitType >= 0 && dt > 0.0f) {
-        m_Timer += dt * m_RotationSpeed;
-        if (m_Timer < 0.0f) m_Timer += 360.0f;  // DAT_0014e974 = 360.0
-    }
-
-    // Keep entity positioned at button center each frame and zero its
-    // velocity so accumulated gravity from Fruit::Update doesn't carry
-    // over. Exception: a sliced fruit piece is released — its two
-    // halves fall away under their own halfVel and gravity instead of
-    // staying pinned. When the slice edge fires, also trigger the
-    // click callback so menu-fruit buttons (Play / Dojo) transition
-    // on slash-through, matching the binary's menu button flow.
-    // Binary MenuButton::Update entity-tracking + shrink path
-    // (0x0014e7?? .. 0x0014e962). Two branches:
-    //
-    //   if (m_pEntity != nullptr):
-    //       if (entity->m_bSliced != 0):              # released by ClearMenuItems
-    //           if (|vel|² > 0.001):                  # actually moving
-    //               fire m_ClickCallback once
-    //               ClearMenuItems()
-    //               m_pEntity = nullptr                  # detach
-    //       else:
-    //           pin entity to button center (vel=0)
-    //
-    //   if (m_pEntity == nullptr):
-    //       m_AnimPhase -= dt * 108543              # ~9 frames to 0
-    //       if (m_AnimPhase < 1):
-    //           m_AnimPhase = 0
-    //           m_bPendingRemoval = 1                 # HUD deletes button
-    //       size = m_TargetSize * (sin(counter) / sin(0x3ffc))
-    if (m_pEntity && m_pEntity->IsActive()) {
-        bool released = false;
-        if (m_pEntity->entityType == 0) {   // Fruit
-            released = m_pFruitPiece && m_pFruitPiece->m_bSliced;
-        } else if (m_pEntity->entityType == 1) { // Bomb
-            Bomb* bomb = static_cast<Bomb*>(m_pEntity);
-            // Menu bombs start with m_bMovement=0 (pinned). ClearMenuItems
-            // flips m_bMovement=1 + disables collision when a sibling
-            // button is sliced — that signals release. m_bHit fires for
-            // user-touched bombs (separate path). Either condition counts.
-            released = (bomb->m_bHit != 0) || (bomb->m_bMovement != 0);
+    if (m_FruitType >= 0) {
+        // spin the quad via m_Timer (+0x2c base field)
+        if (dt > 0.0f) {
+            m_Timer += dt * m_RotationSpeed;
+            if (m_Timer < 0.0f) m_Timer += 360.0f;
         }
 
-        if (!released) {
-            // Pin entity to button centre.
-            m_pEntity->pos = pos;
-            m_pEntity->vel = Vec3(0, 0, 0);
+        Mortar::Entity* entity = m_pEntity;  // +0x80
 
-            // Snapshot the entity's base scale on the first frame once
-            // CreateControls' per-button fruit->scale multiplier has
-            // already been applied. m_BaseScale starts at (0,0,0)
-            // from MenuButton::Init (hitBounds arg is Vec3(0,0,0)); on
-            // the first Update frame we capture m_pEntity->scale into
-            // it, then per-frame scale the entity by the grow-in ratio.
-            // Matches binary MenuButton::Update @ 0x0014e614:
-            //   if (m_BaseScale.x == 0.0) m_BaseScale = entity->scale
-            //   entity->scale = m_BaseScale * (size.x / m_TargetSize.x)
-            if (m_BaseScale.x == 0.0f) {
-                m_BaseScale = m_pEntity->scale;
-                m_pEntity->scale = Vec3(0.0f, 0.0f, 0.0f);  // ASM @ 0x0014e76c
+        if (entity == nullptr) {
+            // ---- SPAWN / no live entity branch ----
+            fruit = m_pTrackedFruit;  // +0x14c
+            if (fruit) {
+                if (fruit->vel.x == 0.0f && fruit->vel.y == 0.0f) {
+                    // at rest: request respawn
+                    // TODO: 0x0019a860 -- fruit->(+0x188)=1 respawn-request field (not yet in Fruit.h; needs RE)
+                    // TODO: 0x0019a860 -- fruit->flag(+0x35) respawn-pending check (not yet in Fruit.h)
+                    float restY = m_RestScale.y;
+                    float sizeY = (m_RestScale.y != 0.0f) ? size.y : 1.0f;
+                    float s = (restY != 0.0f) ? (sizeY / restY) : 1.0f;
+                    fruit->scale = m_BaseScale * s;
+                } else {
+                    fruit->scale = m_BaseScale;
+                }
             }
 
-            // Grow-in animation (binary MenuButton::Update @ 0x0014e614).
-            // m_AnimPhase starts at 0 from Init, ramps to 0x3ffc at
-            // DAT_0014e97c = 109200.0 counts/sec (~9 frames to full).
-            // size = m_TargetSize * sin(counter * 2pi/65536). The 0x3ffc
-            // index = pi/2 so sin(0x3ffc) = 1.0 -- the ratio simplifies
-            // to just sin(counter), tracing a quarter-sine ease-out.
-            // Mortar::Entity scale tracks the same ratio so fruit zooms together
-            // with the button ring.
-            if (m_AnimPhase < 0x3ffc) {
-                float next = (float)m_AnimPhase + dt * 109200.0f;
-                if (next > 16380.0f) next = 16380.0f;
-                m_AnimPhase = (int)next;
-                const float counterRad =
-                    (float)m_AnimPhase * (6.2831853f / 65536.0f);
-                const float sizeFrac = sinf(counterRad);
-                size             = m_TargetSize     * sizeFrac;
-                m_pEntity->scale = m_BaseScale * sizeFrac;
+            // grow-in quarter-sine ease-out (phase decrement toward 0)
+            pos.z = -5.0f;
+            int nextPhase = (int)m_AnimPhase - (int)(dt * 109200.0f);
+            if (nextPhase < 1) {
+                m_AnimPhase = 0;
+                m_GrowShrinkDone = 1;
             } else {
-                size             = m_TargetSize;
-                m_pEntity->scale = m_BaseScale;
+                m_AnimPhase = (uint16_t)nextPhase;
             }
+            float sinFull = SinIdx(0x3ffc);
+            float s = (sinFull != 0.0f) ? (SinIdx(m_AnimPhase) / sinFull) : 0.0f;
+            size.x = m_RestScale.x * s;
+            size.y = m_RestScale.y * s;
+
         } else {
-            // Released path is split by entity type — the binary has two
-            // distinct sub-paths gated by m_FruitType < FruitInfo_GetCount().
-            if (m_pEntity->entityType == 0) {
-                // ASM-verified: 2026-04-30 binary @ 0x0014e74a..0x0014e7ec (asm-inspector)
-                // --- Fruit branch (binary 0x0014e74a..0x0014e7ec) ---
-                //
-                // Binary @ 0x0014e752: m_HalfB_pos = button.pos every frame.
-                // Anchor for slice-physics references; harmless to overwrite
-                // when fruit is mid-slice (Fruit::Update overwrites it again).
-                if (m_pFruitPiece) {
-                    m_pFruitPiece->m_SecondPos = pos;
-                }
+            // ---- live entity present: drive it ----
+            if (m_BaseScale.x == 0.0f) {
+                m_BaseScale = entity->scale;
+            } else {
+                float restY = m_RestScale.y;
+                float ratio = (restY != 0.0f) ? (size.y / restY) : 1.0f;
+                entity->scale = m_BaseScale * ratio;
+            }
 
-                // Structure (per ARM trace; Ghidra's nested-if obscures it):
-                //   entity->m_HalfB_pos = pos          // unconditional
-                //   if (entity->m_bSliced != 0) {
-                //       Vec3 diff = entity->vel - entity->m_HalfB_vel
-                //       if (|diff|^2 > 0.001f) {
-                //           click callback; ResetTutePos; restore scale;
-                //           if (vel.x==0 && vel.y==0) m_bDrawWhole = 1
-                //           if (m_bEnabled) ClearMenuItems + OnMenuItemsCleared
-                //       }
-                //       m_pEntity = nullptr;            // UNCONDITIONAL after gate
-                //   }
-                //
-                // The gate-fail path (sibling fruit released by ClearMenuItems
-                // — its vel == m_HalfB_vel after the cascade write, so diff = 0)
-                // SKIPS the click + ClearMenuItems but still detaches the
-                // entity, so the m_pEntity == null branch above starts the
-                // FadeCounter shrink next frame. Previously port wrapped the
-                // detach inside the gate, leaving siblings pinned to their
-                // entity forever.
-                Vec3 relVel = m_pEntity->vel;
-                if (m_pFruitPiece) {
-                    relVel.x -= m_pFruitPiece->m_SecondVel.x;
-                    relVel.y -= m_pFruitPiece->m_SecondVel.y;
-                    relVel.z -= m_pFruitPiece->m_SecondVel.z;
-                }
-                const float relVelSqMag = relVel.x * relVel.x +
-                                          relVel.y * relVel.y +
-                                          relVel.z * relVel.z;
+            // TODO: 0x0019a860 -- GetWorldPos() call (vtable slot 15); for now use pos directly
+            entity->pos = pos;
 
-                // DAT_0014e978 = 0x3a83126f = 0.001f
-                if (relVelSqMag > 0.001f) {
-                    // Binary @ 0x0014e76c: Mortar::Delegate0::operator()(&field7_0x88).
-                    if (m_ClickCallback) {
-                        LOG_INFO("BUTTON", "MenuButton::Update slice path fires m_ClickCallback (entity=%p bSliced=%d pos=(%.1f,%.1f))",
-                                 static_cast<void*>(m_pEntity),
-                                 m_pFruitPiece ? (int)m_pFruitPiece->m_bSliced : -1,
-                                 pos.x, pos.y);
-                        auto cb = m_ClickCallback;
-                        m_ClickCallback = nullptr;
-                        cb();
-                    }
-                    // Binary @ 0x0014e7c0: restore entity scale from m_BaseScale
-                    if (m_pFruitPiece) {
-                        m_pFruitPiece->scale = m_BaseScale;
-                    }
-                    // Binary @ 0x0014e7d0: stationary-fruit-piece edge case
-                    if (m_pFruitPiece && m_pFruitPiece->entityType == 0 &&
-                        m_pFruitPiece->vel.x == 0.0f && m_pFruitPiece->vel.y == 0.0f) {
-                        m_pFruitPiece->m_bDrawWhole = true;
-                    }
-                    // Binary @ 0x0014e7e0: ClearMenuItems gated by m_bEnabled.
-                    // ShrinkBuyButton sets m_bEnabled=0 to skip this for the
-                    // programmatic-shrink path.
-                    if (m_bEnabled != 0) {
-                        FN::ClearMenuItems();
-                        // Binary @ 0x0014e7e8 — MainScreen::OnMenuItemsCleared.
-                        // Empty in binary (single bx lr); port matches via the
-                        // explicit no-op call so the call-graph stays parity.
-                        Game* game = Game::GetInstance();
-                        if (game && game_work.mMainScreen) {
-                            game_work.mMainScreen->OnMenuItemsCleared();
+            int bombThreshold = FruitInfo_GetCount();
+            if (m_FruitType < bombThreshold) {
+                // FRUIT branch
+                // TODO: 0x0019a860 -- entity->pos2(+0xc8) = GetWorldPos(); not yet in Entity/Fruit layout
+                Fruit* f = static_cast<Fruit*>(m_pEntity);
+                if (f && f->m_bSliced) {     // +0xb4 sliced sentinel
+                    Vec3 d;
+                    d.x = f->pos.x - f->m_SecondPos.x;
+                    d.y = f->pos.y - f->m_SecondPos.y;
+                    d.z = f->pos.z - f->m_SecondPos.z;
+                    float magSqr = d.x*d.x + d.y*d.y + d.z*d.z;
+                    if (magSqr >= 0.001f) {   // SLICE_EPS
+                        m_ClickCallback();
+                        // TODO: 0x0019a860 -- TutorialControl::ResetTutePos() (not yet in TutorialControl.h)
+                        entity->scale = m_BaseScale;
+                        if (fruit && fruit->vel.x == 0.0f && fruit->vel.y == 0.0f) {
+                            // TODO: 0x0019a860 -- fruit->(+0x188)=1 respawn request
+                        }
+                        // m_bEnabled (compat field) gates ClearMenuItems cascade
+                        // per binary @ 0x0014e7e0; maps to v1.6.1 m_bClearsMenuItems gate.
+                        if (m_bClearsMenuItems && m_bEnabled) {
+                            FN::ClearMenuItems();
+                            if (game_work.mMainScreen) {
+                                game_work.mMainScreen->OnMenuItemsCleared();
+                            }
                         }
                     }
-                }
-                // Binary @ 0x0014e7ec: detach unconditionally inside the
-                // m_bSliced branch. m_pFruitPiece stays valid so the
-                // m_pEntity==null shrink branch can keep scaling the fruit
-                // alongside the ring.
-                m_pEntity = nullptr;
-            } else {
-                // --- Bomb branch (binary @ 0x0014e7f4..0x0014e81e) ---
-                // Bombs do NOT fire MenuButton's click callback or call
-                // ClearMenuItems from here. The user-hit click runs through
-                // Bomb::m_HitCallback (set in MenuButton::Init bomb path).
-                // Detach gate is purely Bomb::Enabled() == 0 -- once the bomb
-                // finishes its own hit/explode sequence, restore the original
-                // scale and detach so the ring shrink curve can run.
-                //
-                // Binary writes pos.z and entity Z-pos every frame in this
-                // path (not just on detach). The values keep the bomb on
-                // the menu Z-plane.
-                Bomb* bomb = static_cast<Bomb*>(m_pEntity);
-                pos.z = -5.0f;
-                bomb->pos.z = 150.0f;
-                if (!bomb->Enabled()) {
-                    bomb->scale = m_BaseScale;
-                    // Binary does NOT write m_AnimPhase on detach -- it
-                    // falls through to the grow-clamp at 0x3ffc and lets
-                    // the next-frame m_pEntity==null shrink handle the
-                    // ramp-down naturally. Don't force-write FadeCounter.
                     m_pEntity = nullptr;
-                    m_pFruitPiece = nullptr;
                 }
+            } else {
+                // BOMB branch
+                pos.z = -5.0f;
+                entity->pos.z = 0.0f;  // +0x18 = 0
+                // TODO: 0x0019a860 -- Bomb::Enabled() check; use existing Enabled() method
+                Bomb* b = static_cast<Bomb*>(m_pEntity);
+                if (b && !b->Enabled()) {
+                    m_pEntity = nullptr;
+                    entity->scale = m_BaseScale;
+                }
+            }
+
+            // grow-in ease toward 0x3ffc
+            if (m_AnimPhase < 0x3ffc) {
+                int nextPhase = (int)m_AnimPhase + (int)(dt * 109200.0f);
+                if (nextPhase > 0x3ffc) nextPhase = 0x3ffc;
+                m_AnimPhase = (uint16_t)nextPhase;
+                float sinFull = SinIdx(0x3ffc);
+                float s = (sinFull != 0.0f) ? (SinIdx(m_AnimPhase) / sinFull) : 0.0f;
+                size.x = m_RestScale.x * s;
+                size.y = m_RestScale.y * s;
+            } else {
+                size.x = m_RestScale.x;
+                size.y = m_RestScale.y;
             }
         }
     }
 
-    // If the entity was deactivated externally (e.g. FN::ClearMenuItems
-    // disables a bomb before MenuButton could detect the slash), force
-    // the detach here so the shrink path below can run.
-    if (m_pEntity && !m_pEntity->IsActive()) {
-        m_pEntity = nullptr;
-        m_pFruitPiece = nullptr;
-        if (m_AnimPhase == 0) m_AnimPhase = 0x3ffc;
-    }
+    // ---- touch handling ----
+    // m_bTouchHeld (compat): port-side gate equivalent to binary's +0x131 guard in v1.0.
+    if (m_bAcceptsTouch && m_bTouchHeld && m_bEnabled) {
+        // TODO: 0x0019a860 -- Game::m_BackKeyPressed(+0x610) check + m_bBackdropActive gate
+        // TODO: 0x0019a860 -- GetWorldPos() for rect origin; using pos directly for now
 
-    if (m_pEntity == nullptr && m_AnimPhase > 0) {
-        // Shrink-to-disappearance phase. Binary DAT_0014e97c = 109200.0
-        // (0x47d547ff). Per-second decrement rate; over a 60Hz tick that's
-        // ~1820 counts/frame -> ~9 frames from 0x3ffc (16380) to 0.
-        m_AnimPhase -= (int)(dt * 109200.0f);
-        if (m_AnimPhase < 1) {
-            m_AnimPhase = 0;
-            m_bPendingRemoval = 1;
-        }
-        const float counterRad = (float)m_AnimPhase * (6.2831853f / 65536.0f);
-        const float scaleFrac  = sinf(counterRad);
-        size = m_TargetSize * scaleFrac;
-
-        // Binary MenuButton::Update m_pEntity==null path also scales
-        // m_pFruitPiece IF the fruit is stationary (vel.x==0 && vel.y==0).
-        // This is the ShopScreen equip-button case where EquipCallback's
-        // shrink branch zeros vel/m_Gravity -- the fruit then shrinks
-        // proportionally to the ring.
-        // The binary's else branch (vel != 0) sets scale = m_BaseScale,
-        // but for general menu fruits sliced by the user, that overrides
-        // the fruit's own per-frame scale animation. The port skips the
-        // else branch so user-sliced halves keep their own scale.
-        if (m_pFruitPiece &&
-            m_pFruitPiece->vel.x == 0.0f && m_pFruitPiece->vel.y == 0.0f) {
-            float ratio = (m_TargetSize.x != 0.0f)
-                          ? (size.x / m_TargetSize.x) : 0.0f;
-            m_pFruitPiece->scale = m_BaseScale * ratio;
-        }
-    }
-
-    // Shake timer decay
-    if (m_ShakeTimer > 0.0f) {
-        m_ShakeTimer -= dt;
-        if (m_ShakeTimer < 0.0f) m_ShakeTimer = 0.0f;
-    }
-
-    // -----------------------------------------------------------------------
-    // Touch block — matches binary MenuButton::Update (0x0014e614).
-    // Poll-based: iterates Touch slots inside the button rect. If none was
-    // tracked last frame, latch the first slot inside. On release, fire the
-    // callback if the release position is still inside the rect.
-    //
-    // ASM-verified: 2026-05-06T00:00 binary @ 0x0014e994..0x0014e99a (asm-inspector)
-    // Binary gates the entire touch + back-key block on m_bTouchHeld (+0x131):
-    //   ldrb.w r3, [r4, #0x131]
-    //   cmp    r3, #0
-    //   beq.w  0x0014eb52     ; jump to size-sync / backdrop-scale tail
-    // The earlier port-side gate `if (!m_bInteractive || !m_bEnabled) return;`
-    // (a) tested fields the binary doesn't, and (b) returned from the entire
-    // function — bypassing the m_BackdropScale tail (binary @ 0x0014eb84).
-    // -----------------------------------------------------------------------
-    bool bPressPulse = false;
-    if (m_bTouchHeld != 0) {
-        // Compute rect bounds. Binary inflates by m_HitInsetY/m_HitInsetX which
-        // are 5.0 defaults — small inset/outset that gives the button a touch-up
-        // "grace zone". The port mirrors that.
-        float hw, hh;
-        if (m_bHasHitArea) {
-            hw = m_TargetSize.x * 0.5f;
-            hh = m_TargetSize.y * 0.5f;
-        } else {
-            hw = size.x * 0.5f;
-            hh = size.y * 0.5f;
-        }
+        float hw = m_RestScale.x * 0.5f;
+        float hh = m_RestScale.y * 0.5f;
         const float left   = pos.x - hw - m_HitInsetX;
         const float right  = pos.x + hw + m_HitInsetX;
         const float bottom = pos.y - hh - m_HitInsetY;
@@ -857,93 +554,61 @@ void MenuButton::Update(float dt) {
 
         Mortar::Touch& touch = Mortar::Touch::GetInstance();
 
-        // ASM-verified: 2026-05-18 binary @ 0x0014e614 / 0x0014eb40 (re-analyst)
         if (m_TouchSlot == -1) {
-            // Untracked -- scan for a new touch inside the rect.
             int slot = touch.GetTouchInRegion(left, right, bottom, top, -1);
             m_TouchSlot = slot;
             if (slot >= 0) {
                 if (Mortar::IsTouchDown(slot) == 2) {
-                    // Press-edge. Keyboard-key path fires on press-edge (m_bFireOnRelease == 0).
-                    // Toggles (m_bFireOnRelease == 1) fall through; slot stays latched for release.
-                    if (!m_bFireOnRelease && m_FruitType < 0) {
-                        if (m_ClickCallback) m_ClickCallback();
+                    if (!m_bRespondsToBackKey && m_FruitType < 0) {
+                        m_ClickCallback();
                     }
                 } else {
-                    // Drag-through: not a clean press; reject slot so a later true tap can latch.
-                    // Binary does NOT write m_bTouchHeld here.
                     m_TouchSlot = -1;
                 }
             }
         } else {
-            // Tracking slot.
             int down = Mortar::IsTouchDown(m_TouchSlot);
             if (down == 0) {
-                // Released.
                 UpdateTouchPosition();
                 const bool insideOnRelease =
                     m_TouchX >= left && m_TouchX <= right &&
                     m_TouchY >= bottom && m_TouchY <= top;
                 m_TouchSlot = -1;
                 if (insideOnRelease) {
-                    // Unconditional -- TouchReleased gates on m_FruitType / m_bFireOnRelease internally.
                     TouchReleased();
                 }
             } else {
-                // Still held.
                 UpdateTouchPosition();
-                if (m_FruitType >= 0 || !m_bInteractive) {
-                    // Fruit-type buttons / non-interactive: no press-pulse.
-                } else {
+                if (m_FruitType < 0 && m_bDragCancel) {
                     const bool insideNow =
                         m_TouchX >= left && m_TouchX <= right &&
                         m_TouchY >= bottom && m_TouchY <= top;
                     if (!insideNow) {
-                        size = m_TargetSize;
-                        if (!m_bFireOnRelease) m_TouchSlot = -1;  // keyboard cancel
-                    } else {
-                        // press-pulse (DAT_0014ebb8); applied after eb52 size-set below.
-                        bPressPulse = true;
+                        size.x = m_RestScale.x;
+                        size.y = m_RestScale.y;
+                        m_TouchSlot = -1;
                     }
                 }
+                // TODO: 0x0019a860 -- PRESS_SCALE(DAT_0019ac6c) shrink on held toggle; curScale = restScale * pressScale
             }
         }
-        // Binary never writes m_bTouchHeld from Update.
+    } else if (m_FruitType < 0) {
+        size.x = m_RestScale.x;
+        size.y = m_RestScale.y;
     }
 
-    // ASM-verified: 2026-05-18 binary @ 0x0014eb52 (re-analyst).
-    // Toggle buttons (m_FruitType < 0) have no entity to drive the
-    // grow-in/shrink path that writes `size`. Binary unconditionally
-    // writes `size = m_TargetSize` here so the draw quad is sized.
-    // Without this, toggles (Sound/Music/Resume/Quit/Retry) render
-    // at HUDControl default size (0,0,0) -> invisible.
-    if (m_FruitType < 0) {
-        size = m_TargetSize;
-    }
-    // press-pulse (binary @ 0x0014eb40): held+inside overrides full-size with 0.95x.
-    // Applied after eb52 size-set so the 0.95x is the final value for this frame.
-    if (bPressPulse) {
-        size = m_TargetSize * 0.95f;
-    }
+    // ---- per-frame derived ----
+    // m_BackdropScale @ +0xEC = curScale.x * 1.125 * m_ShakeScale.x (+0x154)
+    // m_AnimScale (compat, v1.0 = 1.0f / 0.5f for big NEW GAME button) also applied.
+    m_BackdropScale = size.x * 1.125f * m_ShakeScale.x * m_AnimScale;  // @0x19af70
 
-    // ASM-verified: 2026-05-09 binary @ 0x0014eb84 (re-analyst).
-    // m_BackdropScale (+0xEC) = size.x * 1.125f * m_AnimScale, written
-    // every Update. Read by Draw Phase A @ 0x0014fa86 to scale the
-    // scratchs.tex backdrop quad.
-    //
-    // Update writes size = m_TargetSize (or scaled grow-in version)
-    // earlier in this function for fruit-typed buttons too, so size.x
-    // here is the just-written m_TargetSize.x. The scratchs backdrop
-    // is intentionally rendered for ALL MenuButtons (fruit + toggle).
-    //
-    // Per-button scaling override: only the big "NEW GAME" button has
-    // m_AnimScale = 0.5 (set by MainScreen on pPlayButton creation,
-    // binary @ 0x0014b82c). All others stay at the Init default 1.0.
-    m_BackdropScale = size.x * 1.125f * m_AnimScale;
+    if (m_ShakeTimer > 0.0f) {
+        m_ShakeTimer -= dt;
+        if (m_ShakeTimer < 0.0f) m_ShakeTimer = 0.0f;
+    }
 }
 
-// Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4).
-// Copies x/y/phase from the tracked Touch slot into m_TouchX/Y/Phase.
+// Binary @ 0x0014e3c4
 void MenuButton::UpdateTouchPosition() {
     if (m_TouchSlot < 0) return;
     const Mortar::TouchState* s =
@@ -954,56 +619,31 @@ void MenuButton::UpdateTouchPosition() {
     m_TouchPhase = (float)s->phase;
 }
 
-// Matches MenuButton::Draw (0x0014f9cc, 359 lines)
-//
-// Two-phase layer dance (binary @ 0x0014fa24..0x0014fa2c):
-//   Frame 1 at layer 0x40: renders the round fruit-icon backdrop, then
-//     demotes m_LayerFlags to 0x80 so subsequent draws fall in the later
-//     HUD::Draw(0x80) bucket — AFTER SplatEntity::DrawActiveSplats and
-//     BombBlast::DrawActiveBlasts. Without this, the button sprite would
-//     forever render before splats and get covered by them.
-//   Frame N (layer 0x80): renders the actual sprite + new-indicator + sparkle.
-//
-// Port currently stubs the dedicated backdrop pass; the demotion alone
-// is enough to fix the visible "splat covers menu button" glitch since
-// the sprite then renders at 0x80 after splats. The backdrop quad TODO
-// stays for full fidelity.
+// MenuButton::Draw @ 0x0019c2e4
 void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
-    if (!m_bFireOnRelease || m_DrawColour.a == 0) return;
+    if (m_DrawColour.a == 0) return;
 
-    // Compute fade-derived alpha once. Used by Phase A AND Phase B.
-    // Binary @ entry of Draw, before the layer test.
-    //   alpha = m_FruitType < 0 ? 0xFF
-    //                          : clamp(m_AnimPhase * 256 / 16380, 0, 255)
+    // Compute fade-derived alpha
     uint8_t alpha;
     if (m_FruitType < 0) {
         alpha = 0xFF;
     } else {
+        // alpha = clamp(m_FadeAlphaIdx * K1/K2, 0, 255)
+        // TODO: 0x0019c2e4 -- VectorSignedToFloat constants K1/K2 for m_FadeAlphaIdx alpha compute
         float n = (float)m_AnimPhase * 256.0f / 16380.0f;
         int   a = (int)n;
-        if (a > 254) a = 0xFF;
+        if (a > 255) a = 255;
         if (a < 0)   a = 0;
         alpha = (uint8_t)a;
     }
 
-    // ASM-verified: 2026-05-06T16:00 binary @ 0x0014f9cc Phase A
-    // 0x0014fa24..0x0014faf8 (asm-inspector).
-    // First-pass at layer 0x40: scratchs.tex backdrop quad, then demote
-    // to 0x80 and return. Backdrop scale comes from m_BackdropScale
-    // (+0xEC), computed every Update as size.x * 1.125f * m_AnimScale.
-    // For fruit-typed buttons the binary leaves size = (0,0,0) so this
-    // collapses to a point. Toggle buttons (sound/music) override size
-    // from texture w/h+1 and render a real scratchs backdrop here.
+    // Layer 0 (backdrop): scratchs.tex at layer 0x40, then demote to 0x80
+    // ASM-verified: 2026-05-06T16:00 binary @ 0x0014f9cc Phase A (asm-inspector).
     if (m_LayerFlags == (int)Mortar::HUD_LAYER_MENU_BG) {
         m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
         if (s_TexScratchs.IsValid()) {
             MatrixManager& mm = MatrixManager::GetInstance();
-            // Mirror flip via X scale (m_bFlipped chosen randomly in Init).
-            const float sx = m_bFlipped ? -1.0f : 1.0f;
-
-            // Binary @ 0x0014fa86: Scale44((sx, 1, 1) * m_BackdropScale).
-            // Z = -5500 (DAT_0014fcf8) puts the quad deep in the ortho
-            // frustum.
+            const float sx = (m_RandomOffset < 0.0f) ? -1.0f : 1.0f;  // flip via RandomOffset sign
             Matrix44 mat = Matrix44::MakeScale(sx * m_BackdropScale,
                                                m_BackdropScale,
                                                m_BackdropScale);
@@ -1011,10 +651,6 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
-
-            // Binary @ 0x0014faf0: DrawQuadSized(0.0, 1.0, 0.0, 1.0, &tint)
-            // -- four floats are UV bounds (uMin, uMax, vMin, vMax), not
-            // halfW/halfH. Geometry is unit-quad (-0.5..+0.5) inside DrawQuad.
             Colour tint(255, 255, 255, alpha);
             s_TexScratchs->Set();
             Mortar::Mesh::DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
@@ -1023,8 +659,7 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         return;
     }
 
-    // Subsequent passes (layer 0x80 etc.): render the actual button sprite.
-    // Original applies shake offset if m_ShakeTimer > 0 (random ±3.0).
+    // Subsequent passes: render the actual button sprite
     if (m_ShakeTimer > 0.0f) {
         Vec3 savedPos = pos;
         pos.x += ((float)(rand() % 600) / 100.0f) - 3.0f;
@@ -1035,76 +670,49 @@ void MenuButton::Draw(const Vec3& hudScale, int layerMask) {
         HUDControl3d::Draw(hudScale, layerMask);
     }
 
-    // Layer 2: "New item" star indicator. Binary @ 0x0014fd18..0x0014fe98.
-    // Constants verified by re-analyst pass — see docs/structs/gameplay-misc.md.
-    //   Quad: 64 x 32 px, scaled by ratio = size.x / m_TargetSize.x (parent fade-in).
-    //   Anchor: pos + ratio * (m_BounceParams.x * size.x * 0.5,
-    //                          |sin(timer * 32760)| * 6 + m_BounceParams.y * size.y * 0.5,
-    //                          0)
-    //   Tint:  m_bTouchHeld ? white : grey(128); alpha = m_DrawColour.a (parent fade).
+    // Label block (v1.6.1 LIVE): if m_pLabelFg(+0x11c)!=0 -> render BakedString curve-draw
+    if (m_pLabelFg != nullptr) {
+        // TODO: 0x0019c2e4 -- BakedString curve-draw for m_pLabelFg / m_pLabelExtra / m_pLabelShadow
+        // TODO: 0x0019c2e4 -- second pass when m_LabelExtraAlpha(+0x160) > 0
+    }
+
+    // New-indicator star indicator
     if (m_NewIndicatorTimer >= 0.0f && s_TexNewItem.IsValid()
-        && m_TargetSize.x != 0.0f)
+        && m_RestScale.x != 0.0f)
     {
         MatrixManager& mm = MatrixManager::GetInstance();
-        const float ratio = size.x / m_TargetSize.x;
+        float ratio = (m_RestScale.x != 0.0f && size.x != 0.0f) ? (size.x / m_RestScale.x) : 1.0f;
         const uint16_t phase =
             (uint16_t)(m_NewIndicatorTimer * 180.0f * 182.0f);
-        const float s = SinIdx(phase);
-        const float by = (s < 0.0f ? -s : s) * 6.0f;
+        const float sv = SinIdx(phase);
+        const float by = (sv < 0.0f ? -sv : sv) * 6.0f;
 
-        // Binary @ 0x0014fdf4 reads m_TargetSize (+0x124..+0x128), NOT
-        // size (HUDControl base +0x20). Using size makes the anchor
-        // shrink during the grow-in animation; binary keeps the anchor
-        // fixed at the target size and only the QUAD scales via ratio.
-        Vec3 off(m_BounceParams.x * m_TargetSize.x * 0.5f,
-                 by + m_BounceParams.y * m_TargetSize.y * 0.5f,
+        Vec3 off(0.85f * m_RestScale.x * 0.5f,
+                 by + 0.85f * m_RestScale.y * 0.5f,
                  0.0f);
         off = off * ratio;
         Vec3 drawAt = pos + off;
 
         mm.GetWorldStack().Reset();
-        // Binary @ 0x0014fdf8: Scale44(ratio*64, ratio*32, 0.0f).
-        // DAT_00150044 = 0.0f for the Z-scale; the geometry's z is unused
-        // (subsequent GlobalTranslate writes the final z=pos.z).
-        Matrix44 mat = Matrix44::MakeScale(ratio * 64.0f,
-                                           ratio * 32.0f,
-                                           0.0f);
+        Matrix44 mat = Matrix44::MakeScale(ratio * 64.0f, ratio * 32.0f, 0.0f);
         mat.GlobalTranslate44(drawAt);
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
         const uint8_t a = m_DrawColour.a;
-        Colour tint = m_bTouchHeld
-            ? Colour(255, 255, 255, a)
-            : Colour(128, 128, 128, a);
-
+        Colour tint(255, 255, 255, a);
         s_TexNewItem->Set();
         Mortar::Mesh::DrawQuadUnCached(tint, 0.0f, 0.0f, 1.0f, 1.0f, NULL);
         s_TexNewItem->UnSet();
     }
 
-    // Layer 3: Sparkle ring — INTENTIONALLY OMITTED. Per RE pass 2026-04-29,
-    // MenuButton::SetLoadingSymbol(true) (0x0014e45c) is the only writer
-    // that arms m_SparkleTimer to a non-negative value, and it has ZERO
-    // call sites in the shipped binary. The 48-vertex spike-ring at
-    // 0x0014fa3e geometry / colour cycle / DrawTriList is preserved in
-    // the binary but never fires. Port matches by leaving the timer at
-    // -1.0 and skipping the Draw block.
-    //
-    // Layer 4: Text labels — INTENTIONALLY OMITTED. Same situation:
-    // MenuButton::SetText (0x0014ebc0) has zero call sites. m_pLabel1 /
-    // m_pLabel2 are always NULL; label-draw block at 0x0015015e is dead.
-    // (See docs/structs/gameplay-misc.md MenuButton "dead code" notes.)
+    // Sparkle ring: armed when m_RotationSpeed(+0xf4) >= 0.
+    // TODO: 0x0019c2e4 -- sparkle ring 48-vert mesh (binary @ Draw layer3): build ring once into
+    //   static buffer, animate per-vertex colour by rotating index, draw via Mesh::DrawTriList(0x30 tris).
+    //   Scale 0.75, MatrixStack push. Binary entry gates on m_RotationSpeed >= 0.
 }
 
 // ASM-verified: 2026-05-06T00:00 binary @ 0x0014f674 (asm-inspector)
-// Matches MenuButton::LoadContent @ 0x0014f674 — loads three shared textures
-// into class statics in the binary's order: scratchs.tex (backdrop),
-// blurry_backing.tex (sparkle), new_item.tex (NEW star). Binary calls
-// LoadLocalisedTexture unconditionally for each slot — idempotency is the
-// caller's contract (LoadContent runs once at content-init time). Earlier
-// port had `if (!s_TexX.IsValid())` guards around each load that the
-// binary doesn't have; removed.
 void MenuButton::LoadContent() {
     s_TexScratchs      = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
     s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
@@ -1112,18 +720,13 @@ void MenuButton::LoadContent() {
 }
 
 // ASM-verified: 2026-05-06T00:00 binary @ 0x0014f718 (asm-inspector)
-// Three SmartPtr clears in load-order. Port matches binary 1:1; the
-// asm-verify report's "341% diff" was an address-mapping artefact
-// (scored against `DeletedMenuButton`'s body at 0x0013f6ac instead of
-// the true UnLoadContent at 0x0014f718).
 void MenuButton::UnLoadContent() {
     s_TexScratchs.SetNull();
     s_TexBlurryBacking.SetNull();
     s_TexNewItem.SetNull();
 }
 
-// Binary @ 0x00150240 — spawn child HUDControl3d sprite, attach to HUD + m_AddOns list,
-// callback DeletedPeice on removal.
+// Binary @ 0x00150240
 void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverride,
                           float rotSpeed, float initialTimer,
                           Vec3 offset, Vec3 sizeScale,
@@ -1136,14 +739,9 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
     if (uvOverride) {
         c->m_UVLeft   = uvOverride->x;
         c->m_UVTop    = uvOverride->y;
-        // UV rect override: assume (u0,v0) from Vec2; span defaults to 1
         c->m_UVRight  = uvOverride->x + 1.0f;
         c->m_UVBottom = uvOverride->y + 1.0f;
     }
-    // Binary @ 0x00150240: when sizeScale is "auto" ((0,0,z)), the binary
-    // sets the AddOn's size from the texture dimensions scaled by the UV
-    // span and the .z scale factor. Default UV span is (1,1) when no
-    // override was supplied above.
     if (sizeScale.x == 0.0f && sizeScale.y == 0.0f) {
         if (sizeScale.z == 0.0f) sizeScale.z = 1.0f;
         const float uSpan = c->m_UVRight  - c->m_UVLeft;
@@ -1154,8 +752,6 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
                          texH * vSpan * sizeScale.z,
                          0.0f);
     }
-    // Binary @ 0x00150240: store the texture SmartPtr on the AddOn's
-    // m_Texture slot (HUDControl3d +0x78, Mortar::SmartPtr<Texture>).
     c->m_Texture = tex;
     c->pos   = pos;
     c->m_Timer = initialTimer;
@@ -1171,16 +767,15 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, Vec2* uvOverrid
     addOn.texCoord  = uvOverride;
     addOn.offset    = offset;
     addOn.sizeScale = sizeScale;
-    // NOTE: rotSpeed consumed via offset.y as per-frame angular velocity by UpdatePeices
     (void)rotSpeed;
     (void)tex;
     m_AddOns.push_back(addOn);
 }
 
-// Binary @ 0x0014e49c — per-addon: m_Timer += dt * offset.y; pos = parent.pos+offset*ratio;
-// size = sizeScale * ratio
+// Binary @ 0x0014e49c
 void MenuButton::UpdatePeices(float dt) {
-    float ratio = (m_TargetSize.x > 0.0f) ? (size.x / m_TargetSize.x) : 1.0f;
+    float restY = m_RestScale.y;
+    float ratio = (restY > 0.0f && size.y > 0.0f) ? (size.y / restY) : 1.0f;
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {
         HUDControl3d* c = it->control;
@@ -1191,8 +786,7 @@ void MenuButton::UpdatePeices(float dt) {
     }
 }
 
-// Binary @ 0x0014f74c — detach addons' remove callbacks, mark each for HUD removal,
-// clear m_AddOns
+// Binary @ 0x0014f74c
 void MenuButton::DeletePeices() {
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {
@@ -1205,7 +799,7 @@ void MenuButton::DeletePeices() {
     m_AddOns.clear();
 }
 
-// Binary @ 0x0014e54c — addon's HUD-side removal callback; erase matching entry from m_AddOns
+// Binary @ 0x0014e54c
 void MenuButton::DeletedPeice(HUDControl* hudControl) {
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {
@@ -1215,7 +809,3 @@ void MenuButton::DeletedPeice(HUDControl* hudControl) {
         }
     }
 }
-
-// Removed: HitTest, TouchDown, TouchUp. Touch input is now polled inside
-// MenuButton::Update via Mortar::Touch::GetTouchInRegion — matching the
-// binary's poll-based flow.
