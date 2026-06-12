@@ -185,6 +185,48 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinyxml2)
 
+# --- FreeType ---
+# Used for dynamic glyph rendering of the game's CJK/Arabic TTF fonts
+# (Data/fontstruetype/arabic.ttf, gangofchinese.ttf).
+# The existing .fnt bitmap path is unchanged; FreeType is additive.
+if (EMSCRIPTEN)
+    # Port specific: Emscripten ships FreeType as a port; -sUSE_FREETYPE=1
+    # activates it at compile+link time. Create an INTERFACE target so the
+    # rest of the build links as usual against Freetype::Freetype.
+    message(STATUS "Emscripten build: using built-in FreeType port via -sUSE_FREETYPE=1")
+    add_library(freetype_emscripten_iface INTERFACE)
+    target_compile_options(freetype_emscripten_iface INTERFACE "SHELL:-sUSE_FREETYPE=1")
+    target_link_options(freetype_emscripten_iface INTERFACE "SHELL:-sUSE_FREETYPE=1")
+    # Emscripten's FreeType port installs headers at <freetype2/...>.
+    # The INTERFACE target carries the include path; emcc makes it available
+    # via the port system, so no manual include dir is needed.
+    if (NOT TARGET Freetype::Freetype)
+        add_library(Freetype::Freetype ALIAS freetype_emscripten_iface)
+    endif()
+else()
+    # Native: prefer system FreeType; fall back to FetchContent source build.
+    find_package(Freetype QUIET)
+    if (NOT Freetype_FOUND)
+        message(STATUS "System FreeType not found -- fetching FreeType 2.13.3 source")
+        set(FT_DISABLE_ZLIB        ON  CACHE BOOL "" FORCE)
+        set(FT_DISABLE_BZIP2       ON  CACHE BOOL "" FORCE)
+        set(FT_DISABLE_PNG         ON  CACHE BOOL "" FORCE)
+        set(FT_DISABLE_HARFBUZZ    ON  CACHE BOOL "" FORCE)
+        set(FT_DISABLE_BROTLI      ON  CACHE BOOL "" FORCE)
+        set(BUILD_SHARED_LIBS      OFF CACHE BOOL "" FORCE)
+        FetchContent_Declare(
+            freetype
+            GIT_REPOSITORY https://github.com/freetype/freetype.git
+            GIT_TAG        VER-2-13-3
+        )
+        FetchContent_MakeAvailable(freetype)
+        # FetchContent builds a target named `freetype`; alias to Freetype::Freetype.
+        if (TARGET freetype AND NOT TARGET Freetype::Freetype)
+            add_library(Freetype::Freetype ALIAS freetype)
+        endif()
+    endif()
+endif()
+
 # --- Game library (everything except mainSDL.cpp) ---
 # Collected as a STATIC lib so both the fruit-ninja executable and the
 # tests/test_screen smoke test can link against the same compiled units.
@@ -229,6 +271,7 @@ if (EMSCRIPTEN)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
     target_link_options(fruit-ninja PRIVATE
         "SHELL:-sUSE_SDL=2"
+        "SHELL:-sUSE_FREETYPE=1"
         "SHELL:-sLEGACY_GL_EMULATION=1"
         "SHELL:-sGL_FFP_ONLY=1"
         "SHELL:-sALLOW_MEMORY_GROWTH=1"

@@ -207,6 +207,9 @@ public:
 
 private:
     float         GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, float* outSlack) const;
+    // Port specific: TTF sub-path of Load(). Delegates to FontCacheObjectTTF
+    // via FontTTFRegistry (side-table keeps Font layout at binary 0x438 bytes).
+    int           LoadTTF(const char* path);
 
 public:
     // ---- Binary-shape ABI overloads (forward to the canonical overloads) ----

@@ -70,6 +70,9 @@ add_library(mortar_engine STATIC
     render/Utf8StringIterator.cpp
     render/Font.cpp
     render/BakedString.cpp
+    render/FontInterface.cpp
+    render/FontCacheObjectTTF.cpp
+    render/FontTTFRegistry.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground
     MenuBackground.cpp
     # Phase 9 — Network (online services stub; all methods no-op)
@@ -100,5 +103,5 @@ elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
     # No target_link_libraries call needed here.
 endif()
 
-target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2)
+target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2 Freetype::Freetype)
 target_compile_features(mortar_engine PUBLIC cxx_std_11)

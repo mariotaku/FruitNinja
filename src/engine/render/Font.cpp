@@ -1,5 +1,8 @@
 // Analysed: 2026-04-29T00:00
 #include "render/Font.h"
+#include "render/FontTTFRegistry.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontInterface.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
 #include "render/MatrixStack.h"
@@ -45,6 +48,10 @@ Font::Font()
 }
 
 Font::~Font() {
+    // Unregister any TTF face from the side-table (port specific: TTF state
+    // lives outside Font's binary-layout struct to keep sizeof == 0x438).
+    FontTTFRegistry::GetInstance().Unregister(this);
+
     delete[] m_Glyphs;
     m_Glyphs = nullptr;
 
@@ -110,7 +117,73 @@ static bool ParseFntString(const char* p, const char* key, char** outAlloc) {
 // fully RE'd to restore ASM-verify score.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// TTF path: Font::Load routes here when the path ends in .ttf
+// Port specific: FreeType-backed dynamic glyph rendering. The binary used the
+// Samsung Bada IFont/IGlyphCache API; this port replaces it with FreeType.
+// ---------------------------------------------------------------------------
+
+static bool HasTTFExtension(const char* path) {
+    if (!path) return false;
+    const char* dot = strrchr(path, '.');
+    if (!dot) return false;
+    return (FN_STRNICMP(dot, ".ttf", 4) == 0 ||
+            FN_STRNICMP(dot, ".otf", 4) == 0);
+}
+
+int Font::LoadTTF(const char* path) {
+    FT_Library ftLib = FontTTFRegistry::GetInstance().GetFTLibrary();
+    if (!ftLib) {
+        LOG_ERROR("FONT/LoadTTF", "FreeType library not initialised");
+        return 0;
+    }
+
+    // Port specific: resolve the absolute path via the same FileSystem layer
+    // the .fnt path uses (data_dir prefix). We need the real filesystem path
+    // for FT_New_Face which takes an OS path.
+    // Use TextureManager::GetDataDir() to construct the full path.
+    const char* dataDir = TextureManager::GetDataDir();
+    char fullPath[512] = "";
+    if (dataDir && dataDir[0]) {
+        size_t ddLen = strlen(dataDir);
+        bool needSlash = ddLen > 0 &&
+            dataDir[ddLen - 1] != '/' && dataDir[ddLen - 1] != '\\';
+        snprintf(fullPath, sizeof(fullPath), "%s%s%s",
+                 dataDir, needSlash ? "/" : "", path);
+    } else {
+        snprintf(fullPath, sizeof(fullPath), "%s", path);
+    }
+
+    // Default pixel size for TTF rendering (world-unit scale = pixelSize in
+    // the original game's ortho space). The caller's DrawString scale arg is
+    // in world units; 32px is a typical menu font size. The TTF render path
+    // will re-render at the exact pixel size requested by the caller.
+    const int defaultPixelSize = 32;
+
+    FontCacheObjectTTF* ttf = new FontCacheObjectTTF(ftLib, fullPath,
+                                                      defaultPixelSize);
+    if (!ttf->IsValid()) {
+        delete ttf;
+        LOG_ERROR("FONT/LoadTTF", "failed to load TTF face from '%s'", fullPath);
+        return 0;
+    }
+
+    // Store a nominal line height so GetLineHeight() works.
+    // For TTF, m_LineHeight is the pixel size in world units.
+    m_LineHeight = (float)defaultPixelSize;
+    m_ScaleW     = 1;
+    m_ScaleH     = 1;
+
+    FontTTFRegistry::GetInstance().Register(this, ttf);
+    return 1;
+}
+
 int Font::Load(const char* path) {
+    // Port specific: route .ttf / .otf to the FreeType path.
+    if (HasTTFExtension(path)) {
+        return LoadTTF(path);
+    }
+
     // Binary @ 0x00199e9c: open via Mortar::File (IFile -> FileSystem_Direct).
     // The path is forwarded straight through; FileSystem_Direct's prefix
     // logic (data_dir prepend or strict) is owned by the FileSystem layer.
@@ -411,12 +484,44 @@ float Font::GetLineLength(Mortar::Utf8StringIterator iter, float wrapWidth, floa
 // MeasureWidth (char* overload — compat for existing callers)
 // ---------------------------------------------------------------------------
 
-float Font::MeasureWidth(float /*scale*/, const char* text) const {
+float Font::MeasureWidth(float scale, const char* text) const {
     Mortar::Utf8StringIterator iter(text);
-    return MeasureWidth(0.0f, iter);
+    return MeasureWidth(scale, iter);
 }
 
-float Font::MeasureWidth(float /*scale*/, Mortar::Utf8StringIterator iter) const {
+float Font::MeasureWidth(float scale, Mortar::Utf8StringIterator iter) const {
+    // Port specific: TTF dispatch.
+    {
+        FontCacheObjectTTF* ttf = FontTTFRegistry::GetInstance().Lookup(this);
+        if (ttf) {
+            int pixelSize = (int)(scale + 0.5f);
+            if (pixelSize < 1)   pixelSize = 1;
+            if (pixelSize > 256) pixelSize = 256;
+            const float invPS = 1.0f / (float)pixelSize;
+            float width = 0.0f;
+            float maxW  = 0.0f;
+            while (!iter.IsEmpty()) {
+                uint32_t cp = iter.m_CurrentCodepoint;
+                if (cp == '\n') {
+                    if (width > maxW) maxW = width;
+                    width = 0.0f;
+                    iter++;
+                    continue;
+                }
+                if (cp == '<') {
+                    while (!iter.IsEmpty() && iter.m_CurrentCodepoint != '>') iter++;
+                    if (!iter.IsEmpty()) iter++;
+                    continue;
+                }
+                const GlyphAtlasEntry* g = ttf->GetGlyph(cp, pixelSize);
+                if (g) width += (float)g->advanceX * invPS;
+                iter++;
+            }
+            if (width > maxW) maxW = width;
+            return maxW;
+        }
+    }
+
     float width = 0.0f;
     float maxW  = 0.0f;
     while (!iter.IsEmpty()) {
@@ -451,12 +556,185 @@ float Font::MeasureWidth(float /*scale*/, Mortar::Utf8StringIterator iter) const
 // Binary's MeasureString is a thunk that calls GetLineLength(iter, 0.0f, NULL).
 // Forward through to match exactly.
 float Font::MeasureString(const Mortar::Utf8StringIterator& iterIn) const {
+    // Port specific: TTF dispatch -- measure using glyph advances at default size.
+    {
+        FontCacheObjectTTF* ttf = FontTTFRegistry::GetInstance().Lookup(this);
+        if (ttf) {
+            const int pixelSize = ttf->GetDefaultPixelSize();
+            const float invPS   = 1.0f / (float)pixelSize;
+            float width = 0.0f;
+            Mortar::Utf8StringIterator scan = iterIn;
+            while (!scan.IsEmpty() && scan.m_CurrentCodepoint != '\n') {
+                uint32_t cp = scan.m_CurrentCodepoint;
+                const GlyphAtlasEntry* g = ttf->GetGlyph(cp, pixelSize);
+                if (g) width += (float)g->advanceX * invPS;
+                scan++;
+            }
+            return width;
+        }
+    }
     return GetLineLength(iterIn, 0.0f, nullptr);
 }
 
 float Font::MeasureString(const char* str) const {
     Mortar::Utf8StringIterator iter(str);
     return MeasureString(iter);
+}
+
+// ---------------------------------------------------------------------------
+// TTF DrawString helper (port specific)
+//
+// Renders a string using the FreeType glyph atlas. Follows the same
+// quad-emit geometry as the .fnt path so call sites need no changes.
+// Pixel size = (int)scale (world units == pixels in original ortho space).
+// ---------------------------------------------------------------------------
+
+static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
+                           Mortar::Utf8StringIterator iter,
+                           const Vec3& pos, const Colour& colour,
+                           int alignment)
+{
+    FontInterface* atlas = ttf->GetAtlas();
+    if (!atlas) return;
+
+    // Pixel size used for glyph rendering: clamp to [1,256].
+    int pixelSize = (int)(scale + 0.5f);
+    if (pixelSize < 1)  pixelSize = 1;
+    if (pixelSize > 256) pixelSize = 256;
+
+    // Pass 1: collect glyphs, ensure all are in atlas, measure line width.
+    // We need the line width for alignment before emitting vertices.
+    float lineWidth = 0.0f;
+    {
+        Mortar::Utf8StringIterator scan = iter;
+        while (!scan.IsEmpty()) {
+            uint32_t cp = scan.m_CurrentCodepoint;
+            if (cp == '\n') break;
+            if (cp != '<') {
+                const GlyphAtlasEntry* g = ttf->GetGlyph(cp, pixelSize);
+                if (g) lineWidth += (float)g->advanceX;
+            } else {
+                // Skip color tags in measurement.
+                while (!scan.IsEmpty() && scan.m_CurrentCodepoint != '>') scan++;
+                if (!scan.IsEmpty()) scan++;
+                continue;
+            }
+            scan++;
+        }
+    }
+
+    // Upload any newly packed glyphs to the GL texture.
+    atlas->BuildPendingTextures();
+
+    // Determine alignment offset in pixels.
+    float lineOffset = 0.0f;
+    const int horizAlign = alignment & 0x3;
+    if (horizAlign == 2) {
+        lineOffset = -lineWidth;
+    } else if (horizAlign == 3) {
+        lineOffset = -lineWidth * 0.5f;
+    }
+    // CENTER (0x01) is inert per binary spec (matches .fnt DrawString behaviour).
+
+    // Pass 2: emit quads. We render in pixel coordinates then apply the
+    // world-space transform at flush time (same as .fnt path).
+    // Max glyphs per draw call -- reuse a local stack buffer.
+    const int MAX_GLYPHS = 512;
+    QUADCUSTOMVERTEX verts[MAX_GLYPHS * 6];
+    int vertCount = 0;
+
+    const uint32_t packedColour = colour.PlatformColour();
+    float cursorX = lineOffset;
+
+    Mortar::Utf8StringIterator it = iter;
+    while (!it.IsEmpty() && vertCount < MAX_GLYPHS) {
+        uint32_t cp = it.m_CurrentCodepoint;
+        if (cp == '\n') { it++; break; }
+
+        // Skip color tags (TTF path: tags are not supported yet, just skip them).
+        if (cp == '<') {
+            while (!it.IsEmpty() && it.m_CurrentCodepoint != '>') it++;
+            if (!it.IsEmpty()) it++;
+            continue;
+        }
+
+        const GlyphAtlasEntry* g = ttf->GetGlyph(cp, pixelSize);
+        if (!g) { it++; continue; }
+
+        if (g->width > 0 && g->height > 0) {
+            // Glyph quad in pixel space. bearingY is pixels above baseline.
+            const float x0 = cursorX + (float)g->bearingX;
+            const float y0 = -(float)(g->bearingY);          // top edge (screen-down +Y)
+            const float x1 = x0 + (float)g->width;
+            const float y1 = y0 + (float)g->height;
+
+            // Normalize to lineHeight-normalized space (like .fnt):
+            // divide pixel coords by pixelSize.
+            const float invPS = 1.0f / (float)pixelSize;
+            const float nx0 = x0 * invPS, nx1 = x1 * invPS;
+            const float ny0 = y0 * invPS, ny1 = y1 * invPS;
+
+            const float u0 = g->u0, v0 = g->v0;
+            const float u1 = g->u1, v1 = g->v1;
+            const float kZ = 0.0f;
+
+            QUADCUSTOMVERTEX* v = &verts[vertCount * 6];
+            v[0] = { nx0, ny1, kZ, 0,0,1, packedColour, u0, v1 }; // LB
+            v[1] = { nx0, ny0, kZ, 0,0,1, packedColour, u0, v0 }; // LT
+            v[2] = { nx1, ny1, kZ, 0,0,1, packedColour, u1, v1 }; // RB
+            v[3] = { nx1, ny0, kZ, 0,0,1, packedColour, u1, v0 }; // RT
+            v[4] = v[3]; // degenerate
+            v[5] = v[3]; // degenerate
+
+            // Inter-glyph connector (matches .fnt path).
+            if (vertCount > 0) {
+                v[-1] = v[0];
+            }
+            vertCount++;
+        }
+
+        cursorX += (float)g->advanceX;
+        it++;
+    }
+
+    if (vertCount == 0) return;
+
+    // Apply world transform (same as .fnt path).
+    Matrix44 textM;
+    textM.Identity();
+    textM.ApplyScale(scale, scale, 1.0f);
+    textM.GlobalTranslate44(pos);
+
+    const float a00 = textM.m[0], a01 = textM.m[4], ax = textM.m[12];
+    const float a10 = textM.m[1], a11 = textM.m[5], ay = textM.m[13];
+
+    const int totalVerts = vertCount * 6;
+    for (int i = 0; i < totalVerts; i++) {
+        const float lx = verts[i].x;
+        const float ly = verts[i].y;
+        verts[i].x = a00 * lx + a01 * ly + ax;
+        verts[i].y = a10 * lx + a11 * ly + ay;
+    }
+
+    // Flush: identity world matrix + atlas texture.
+    MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
+    world.Push();
+    world.m_Current.Identity();
+    world.m_Version++;
+    MatrixManager::GetInstance().UploadModelViewOnly();
+
+    // Bind the atlas GL texture directly (it's not a Mortar::Texture wrapper).
+    glBindTexture(GL_TEXTURE_2D, atlas->GetTextureID());
+    glEnable(GL_TEXTURE_2D);
+
+    Renderer* renderer = Renderer::GetInstance();
+    if (renderer) {
+        renderer->DrawTriStrip(verts, totalVerts);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    world.Pop();
 }
 
 // ---------------------------------------------------------------------------
@@ -474,6 +752,16 @@ void Font::DrawString(float scale, float yLineFactor, float rotZ,
     (void)z;
 
     if (iter.IsEmpty()) return;
+
+    // Port specific: TTF dispatch. The TTF path uses pixel-size glyphs from
+    // FreeType rather than pre-baked atlas quads from a .fnt page.
+    {
+        FontCacheObjectTTF* ttf = FontTTFRegistry::GetInstance().Lookup(this);
+        if (ttf) {
+            DrawStringTTF(ttf, scale, iter, pos, colour, alignment);
+            return;
+        }
+    }
 
     // Binary modifies maxWH in-place on a stack copy:
     //   maxWH.x /= scale
