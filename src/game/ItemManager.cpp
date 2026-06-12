@@ -23,6 +23,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 // External: g_FruitSaveData singleton — binary GOT @ 0x1f3ac0.
 // Port: exposed via FruitSaveData.h (the instance lives in Game::pSaveData).
@@ -72,6 +75,19 @@ ItemManager* ItemManager::GetInstance() {
 // -----------------------------------------------------------------------
 const char* ItemManager::GetItemSavePath() const {
     return "ItemSave.xml";
+}
+
+// Port specific: build the full on-disk path for ItemSave.xml.
+// On Emscripten, routes to the IDBFS-backed /save mount rather than the
+// read-only MEMFS asset bundle.  On all other platforms, prepends data_dir.
+static std::string BuildItemSaveFullPath() {
+#if defined(__EMSCRIPTEN__)
+    return std::string("/save/ItemSave.xml");
+#else
+    Game* game = Game::GetInstance();
+    if (!game) return std::string("ItemSave.xml");
+    return game->data_dir + "/ItemSave.xml";
+#endif
 }
 
 // -----------------------------------------------------------------------
@@ -158,9 +174,8 @@ void ItemManager::LoadItemData() {
 
     // Phase 2: Load save state from ItemSave.xml
     // Binary: GetItemSavePath() returns "ItemSave.xml" (flat, no subdir).
-    // Port: prepend data_dir so the file lands next to FruitySave.xml.
-    const char* savePath = GetItemSavePath();
-    std::string saveFullPath = game->data_dir + "/" + savePath;
+    // Port: use BuildItemSaveFullPath() which routes to /save on Emscripten.
+    std::string saveFullPath = BuildItemSaveFullPath();
     tinyxml2::XMLDocument save;
     tinyxml2::XMLError saveErr = save.LoadFile(saveFullPath.c_str());
     if (saveErr != tinyxml2::XML_SUCCESS) {
@@ -384,9 +399,14 @@ void ItemManager::SaveItemInfo() {
     doc.InsertEndChild(root);
 
     // Build full save path — binary uses flat "ItemSave.xml" (no subdir).
-    const char* savePath = GetItemSavePath();
-    std::string saveFullPath = game->data_dir + "/" + savePath;
+    // Port: use BuildItemSaveFullPath() which routes to /save on Emscripten.
+    std::string saveFullPath = BuildItemSaveFullPath();
     doc.SaveFile(saveFullPath.c_str());  // tinyxml2::XMLDocument::SaveFile uses fopen directly
+#if defined(__EMSCRIPTEN__)
+    // Port specific: flush the IDBFS /save mount to IndexedDB after each
+    // write so data survives page reload/close.
+    EM_ASM({ FS.syncfs(false, function(err) {}); });
+#endif
 }
 
 // -----------------------------------------------------------------------

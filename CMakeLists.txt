@@ -233,7 +233,14 @@ if (EMSCRIPTEN)
         "SHELL:-sGL_FFP_ONLY=1"
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
         "SHELL:-sEXIT_RUNTIME=0"
+        # Port specific: preload read-only assets into MEMFS; exclude the two
+        # writable save files so they are NOT packed into the read-only bundle.
+        # Saves are routed to /save (IDBFS) at runtime; see mainEmscripten.cpp.
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data@/FruitNinjaBada/Data"
+        "SHELL:--exclude-file *FruitySave.xml"
+        "SHELL:--exclude-file *ItemSave.xml"
+        # Port specific: link idbfs.js so FS.mount(IDBFS) is available.
+        "SHELL:-lidbfs.js"
     )
 else()
     # Native desktop/webOS entry point.
