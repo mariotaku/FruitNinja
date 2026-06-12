@@ -3,7 +3,7 @@
 
 //
 // ComboModifier : GameModifier — v1.6.1 combo-bonus modifier.
-// Binary size ~0x24 (36 bytes). GetType() == 7.
+// Binary size 0x28. GetType() == 7.
 // Registers FruitWasSliced and ComboWasCanceled delegates on ApplyModifier.
 // On combo-cancel with >2 fruit sliced, posts a combo-bonus score popup.
 //
@@ -15,8 +15,7 @@
 //   GetType         0x001333f0
 
 #include "GameModifier.h"
-#include "util/Delegate.h"
-#include <vector>
+#include <list>
 
 namespace Mortar { class Entity; }
 class Fruit;
@@ -24,12 +23,9 @@ class SlashEntity;
 
 class ComboModifier : public GameModifier {
 public:
-    // +0x20: tracking container for sliced fruit entities during a combo.
-    // Binary holds a StackAllocatedPointer<BaseDelegate,32> inline delegate slot
-    // here; port uses a std::vector<Mortar::Entity*> as a compile-clean stub.
-    // TODO: 0x00134044 — replace with binary-exact StackAllocatedPointer<BaseDelegate,32>
-    // when delegate registration infra is fully ported.
-    std::vector<Mortar::Entity*> m_SlicedFruit;
+    // +0x20: 8-byte std::list<Fruit*> (Sourcery 2010q1 pre-C++11 sentinel layout).
+    // Binary ctor @ 0x00134044: new(0x28)+memset; list ctor at +0x20.
+    std::list<Fruit*> m_SlicedFruit;
 
     ComboModifier();
     ~ComboModifier() override;
@@ -54,5 +50,10 @@ public:
     // TODO: 0x00132b7c — wire to SlashEntity's combo-cancel signal
     void ComboWasCanceled(SlashEntity* slash);
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(ComboModifier) == 0x28, "ComboModifier must be 0x28 bytes");
+#endif
 
 #endif // FN_GAME_COMBO_MODIFIER_H

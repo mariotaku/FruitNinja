@@ -3,35 +3,85 @@
 #include <tinyxml2.h>
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
+#include "game/PowerUpManager.h"
+#include "util/StringHash.h"
 
 // Binary @ 0x13fdc4 -- GameModifier::Update(float)
 // Base dispatcher. Returns 0 = still alive, 1 = expired.
 //   (1) Deferred-apply gate: while m_bApplied (+0x18) is set, waits until the saved
-//       time-remaining drops to/below m_DeferStart, then fires OnDeferComplete
+//       time-remaining drops to/below m_DeferTime, then fires OnDeferComplete
 //       (vtable slot 5 @ 0x140890) and clears m_bApplied.
-//   (2) Counts down m_Duration_remaining; expires when it crosses 0.
+//   (2) Counts down m_BonusAccum; expires when it crosses 0.
 //   (3) Otherwise dispatches UpdateSpecific(dt) (vtable slot 4, PURE).
 // The "current time" the gate compares against is
 //   game_work.m_SaveData->m_TimeRemainingSave   ([g_Game+0x4c]+0x10c)
 // i.e. the persisted countdown value, not a wall clock.
 int GameModifier::Update(float dt) {
     if (m_bApplied) {
-        // vcmpe s14(curTime), s15(m_DeferStart); bls -> apply when curTime <= m_DeferStart.
-        // Fall-through (curTime > m_DeferStart, i.e. m_DeferStart < curTime) -> still waiting.
+        // vcmpe s14(curTime), s15(m_DeferTime); bls -> apply when curTime <= m_DeferTime.
+        // Fall-through (curTime > m_DeferTime, i.e. m_DeferTime < curTime) -> still waiting.
         float curTime = game_work.m_SaveData->m_TimeRemainingSave;
-        if (m_DeferStart < curTime) {
+        if (m_DeferTime < curTime) {
             return 0;
         }
-        OnDeferComplete();   // vtable slot 5 @ 0x140890
+        OnDeferComplete(false, nullptr);   // vtable slot 5 @ 0x140890
         m_bApplied = false;
     }
-    if (m_Duration_remaining > 0.0f) {
-        m_Duration_remaining -= dt;
-        if (m_Duration_remaining <= 0.0f) {
+    if (m_BonusAccum > 0.0f) {
+        m_BonusAccum -= dt;
+        if (m_BonusAccum <= 0.0f) {
             return 1;
         }
     }
     return UpdateSpecific(dt);
+}
+
+// Binary @ 0x140890 -- GameModifier::OnDeferComplete(bool, float*)
+// Slot 5. Folds field_0x08 into m_BonusAccum; clamps by two cached power-up
+// name-hash lookups via PowerUpManager::GetActiveSingle; scales by
+// PowerUpManager::m_WaveDtModPrev (field_0x74). DAT consts: 0.01f, 0.0f,
+// 50.0f (aa0), 0.333f (aa4), 0.1f (aa8).
+void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
+    // 1) fold field_0x08 scratch into m_BonusAccum
+    float acc = field_0x08;
+    if (m_BonusAccum > 0.0f) acc += m_BonusAccum;
+    m_BonusAccum = acc;
+
+    // 2) clamp by pExtra if deferred
+    if (pExtra && m_bDeferred) {
+        float lo = (m_Duration > 0.0f) ? 0.01f : 0.0f;
+        if (*pExtra < lo) *pExtra = lo;
+        m_BonusAccum = *pExtra;
+    }
+
+    // 3) two cached StringHash powerup-name ids (guarded statics)
+    static uint32_t s_hashA = 0;
+    static bool     s_initA = false;
+    if (!s_initA) { s_hashA = StringHash("doubleTime"); s_initA = true; }
+
+    static uint32_t s_hashB = 0;
+    static bool     s_initB = false;
+    if (!s_initB) { s_hashB = StringHash("frenzy");     s_initB = true; }
+
+    float baseTime = game_work.m_SaveData ? game_work.m_SaveData->m_TimeRemainingSave : 0.0f;
+    float bonusA = 0.0f;
+    if (PowerUpManager::GetInstance()->GetActiveSingle(s_hashA)) bonusA = 5.0f;
+
+    float bonusB = 0.0f;
+    if (m_pDeferInfo == nullptr ||
+        *(reinterpret_cast<const int*>(reinterpret_cast<const uint8_t*>(m_pDeferInfo) + 0xc)) != (int)s_hashB) {
+        if (PowerUpManager::GetInstance()->GetActiveSingle(s_hashB)) bonusB = 50.0f;
+    } else {
+        bonusB = 50.0f;
+    }
+
+    float target = baseTime + bonusA + bonusB;
+    float mult   = PowerUpManager::GetInstance()->m_WaveDtModPrev;
+    if (mult > 0.0f && target < m_BonusAccum / mult) {
+        float v = target * mult - 0.333f;
+        if (v < 0.1f) v = 0.1f;
+        m_BonusAccum = v;
+    }
 }
 
 // GameModifier::ParseSpecific -- pure virtual base body (empty; called by
@@ -45,28 +95,28 @@ void GameModifier::ParseSpecific(TiXmlElement* /*xml*/) {
 // PURE in binary vtable (slot 8 = __cxa_pure_virtual); however the base body
 // exists as a non-virtual thunk that subclasses call directly
 // (ScoreModifier::ApplyModifier, etc. chain via GameModifier::ApplyModifier).
-// Body: set m_Duration_remaining = m_Duration.
+// Body: set m_BonusAccum = m_Duration.
 void GameModifier::ApplyModifier(bool /*isPurchased*/, float* /*extra*/) {
-    m_Duration_remaining = m_Duration;
+    m_BonusAccum = m_Duration;
 }
 
 // Binary @ 0x00117DA0 -- GameModifier::Parse(TiXmlElement*)
 // Reads the two base XML attributes ("length" -> m_Duration, "waitUntilTime"
-// -> m_DeferStart), arms the deferred-apply flag when waitUntilTime is set,
+// -> m_DeferTime), arms the deferred-apply flag when waitUntilTime is set,
 // then dispatches ParseSpecific() (vtable slot 9, PURE).
 void GameModifier::Parse(TiXmlElement* xml) {
-    // Binary unconditionally stores 1 into field_0x10 (+0x10) at entry.
-    field_0x10 = 1.0f;
+    // Binary unconditionally sets m_bConfigured (+0x10) = 1 at entry.
+    m_bConfigured = 1;
 
     // QueryFloatAttribute leaves the target untouched when the attribute is
     // absent, matching the binary's behaviour (the ctor-initialised defaults
     // survive). Names resolved from DAT @ 0x1b9f91 / 0x1ba28c.
-    xml->QueryFloatAttribute("length", &m_Duration);            // +0x04
-    xml->QueryFloatAttribute("waitUntilTime", &m_DeferStart);   // +0x14
+    xml->QueryFloatAttribute("length", &m_Duration);          // +0x04
+    xml->QueryFloatAttribute("waitUntilTime", &m_DeferTime);  // +0x14
 
     // Arm deferred apply only when a real wait threshold was supplied.
-    // Binary: vcmpe s14(m_DeferStart), s15(-1.0); strb.gt -> set m_bApplied(+0x18)=1 when > -1.0.
-    if (m_DeferStart > -1.0f) {
+    // Binary: vcmpe s14(m_DeferTime), s15(-1.0); strb.gt -> set m_bApplied(+0x18)=1 when > -1.0.
+    if (m_DeferTime > -1.0f) {
         m_bApplied = true;
     }
 
@@ -74,10 +124,10 @@ void GameModifier::Parse(TiXmlElement* xml) {
 }
 
 // Binary @ 0x001179AC -- GameModifier::Reset()
-// Clears the per-frame countdown then dispatches ResetSpecific() (vtable
+// Clears the bonus accumulator then dispatches ResetSpecific() (vtable
 // slot 2, PURE). The constant loaded is 0.0f (verified from literal pool),
 // NOT the -1.0f sentinel used elsewhere.
 void GameModifier::Reset() {
-    m_Duration_remaining = 0.0f;   // +0x0c = DAT_001179c0 (0.0f)
+    m_BonusAccum = 0.0f;   // +0x0c = DAT_001179c0 (0.0f)
     ResetSpecific();
 }

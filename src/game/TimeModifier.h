@@ -27,7 +27,7 @@ public:
     // +0x28: current applied dt-mod, lerped toward m_DtScale; reset to 0 in ResetSpecific
     float m_CurrentDtMod;
 
-    // +0x2c: XML stopClock="true" — pause clock by adding m_Duration_remaining to field
+    // +0x2c: XML stopClock="true" — pause clock by adding m_BonusAccum to StopClock each frame
     bool m_bStopClock;
     uint8_t _pad2d[3];
 
@@ -48,9 +48,8 @@ public:
     // @ 0x0011ffbc
     int UpdateSpecific(float dt) override;
 
-    // TimeModifier::ApplyModifier -- chains to base (m_Duration_remaining = m_Duration).
-    // Binary: base body called via super, same pattern as other modifiers.
-    // TODO: 0x001200f0 -- verify full TimeModifier::ApplyModifier body (may do extra clock work)
+    // TimeModifier::ApplyModifier — NOT overridden; inherits GameModifier::ApplyModifier (slot 8).
+    // The v1.5.1 addr 0x001200f0 was UpdateSpecific, not ApplyModifier. Removed stale TODO.
     void ApplyModifier(bool isPurchased, float* extra) override {
         GameModifier::ApplyModifier(isPurchased, extra);
     }

@@ -72,9 +72,9 @@ public:
     SlashModifier();
     ~SlashModifier() override;
 
-    // 0x0011f274 — ResetSpecific: clears m_Applied flag.
-    // TODO: 0x0011f274 — verify full ResetSpecific body (may also clear power mask)
-    void ResetSpecific() override { m_Applied = false; }
+    // 0x0014afe4 — ResetSpecific: EMPTY (binary @ 0x0014afe4 is `return;`).
+    // Does NOT clear m_Applied or m_PowerMask; those survive Reset.
+    void ResetSpecific() override {}
 
     // 0x0011f288 — OR m_PowerMask into SlashEntity::s_ModPowerMask every
     // tick. PowerUpManager::SetDefaults clears the mask at the top of
@@ -100,6 +100,9 @@ public:
 
     // 0x0011f464 — parse XML <slash ...> element.
     void ParseSpecific(TiXmlElement* xml) override;
+
+    // @ 0x0014b018 — deep copy: new(0x40), copy base 0x1c + own 0x1c, clear base+0xc.
+    GameModifier* Clone() override;
 };
 
 #endif

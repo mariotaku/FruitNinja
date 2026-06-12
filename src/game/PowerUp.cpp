@@ -143,7 +143,7 @@ void PowerUp::Parse(tinyxml2::XMLElement* elem) {
         } else {
             // Modifier factory — binary @ 0x00142388.
             // String-compare element name and new the matching modifier subclass,
-            // call Parse(child), then AddModifier to attach and set m_pOwner.
+            // call Parse(child), then AddModifier to attach.
             GameModifier* mod = nullptr;
             if (strcmp(tag, "score_mod") == 0) {
                 mod = new ScoreModifier();
@@ -284,7 +284,7 @@ PowerUp* PowerUp::Clone() {
         // TODO: per-subclass Clone impls when Modifier trio lands
         GameModifier* modClone = (*it)->Clone();
         if (modClone) {
-            modClone->m_pOwner = clone;
+            modClone->m_pDeferInfo = static_cast<void*>(clone);
             clone->m_ModList.push_back(modClone);
         }
     }
@@ -355,8 +355,8 @@ float PowerUp::GetLongestMod() {
     float longest = 0.0f;
     for (std::list<GameModifier*>::const_iterator it = m_ModList.begin();
          it != m_ModList.end(); ++it) {
-        if ((*it)->m_Duration_remaining > longest)
-            longest = (*it)->m_Duration_remaining;
+        if ((*it)->m_BonusAccum > longest)
+            longest = (*it)->m_BonusAccum;
     }
     return longest;
 }

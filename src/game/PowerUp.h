@@ -158,7 +158,7 @@ public:
     // @ 0x0011a1f0
     float GetCurrentTimeProgress() const { return m_LongestRemaining; }
 
-    // @ 0x00117aec — max m_Duration_remaining across all modifiers
+    // @ 0x00117aec — max m_BonusAccum across all modifiers
     float GetLongestMod();
 
     // @ 0x0011a210

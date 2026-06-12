@@ -6,6 +6,7 @@
 #include "entities/Fruit.h"
 #include "entities/SlashEntity.h"
 #include <cstdint>
+#include <list>
 
 ComboModifier::ComboModifier()
     : GameModifier()
@@ -16,7 +17,8 @@ ComboModifier::~ComboModifier() {}
 // @ binary 0x00132e34 ResetSpecific — no-op per binary
 void ComboModifier::ResetSpecific() {}
 
-// UpdateSpecific — no-op per binary
+// @ 0x00132b48 — UpdateSpecific: OR global flag *GOT |= 0x80 each frame.
+// TODO: 0x00132b48 — OR into global combo-flag (GOT ptr unresolved)
 int ComboModifier::UpdateSpecific(float /*dt*/) { return 0; }
 
 // @ 0x00132e34
@@ -30,11 +32,11 @@ void ComboModifier::ApplyModifier(bool isPurchased, float* extra) {
 }
 
 // @ 0x00132e10
-// Binary: set byte at fruit+0x16c = 1; push entity into m_SlicedFruit.
-void ComboModifier::FruitWasSliced(Fruit* fruit, int /*score*/, Mortar::Entity* entity) {
-    if (!fruit || !entity) return;
+// Binary: set byte at fruit+0x16c = 1; push fruit into m_SlicedFruit.
+void ComboModifier::FruitWasSliced(Fruit* fruit, int /*score*/, Mortar::Entity* /*entity*/) {
+    if (!fruit) return;
     reinterpret_cast<uint8_t*>(fruit)[0x16c] = 1;
-    m_SlicedFruit.push_back(entity);
+    m_SlicedFruit.push_back(fruit);
 }
 
 // @ 0x00132b7c
@@ -48,13 +50,12 @@ void ComboModifier::ParseSpecific(TiXmlElement* /*xml*/) {}
 
 GameModifier* ComboModifier::Clone() {
     ComboModifier* c = new ComboModifier();
-    // Copy base fields
-    c->m_Duration           = m_Duration;
-    c->field_0x08           = field_0x08;
-    c->m_Duration_remaining = m_Duration_remaining;
-    c->m_bDeferred          = m_bDeferred;
-    c->m_DeferStart         = m_DeferStart;
-    c->m_bApplied           = m_bApplied;
-    c->m_pOwner             = m_pOwner;
+    c->m_Duration     = m_Duration;
+    c->field_0x08     = field_0x08;
+    c->m_BonusAccum   = m_BonusAccum;
+    c->m_bDeferred    = m_bDeferred;
+    c->m_DeferTime    = m_DeferTime;
+    c->m_bApplied     = m_bApplied;
+    c->m_pDeferInfo   = m_pDeferInfo;
     return c;
 }

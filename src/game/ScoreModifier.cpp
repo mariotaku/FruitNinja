@@ -6,6 +6,7 @@
 #include "ScoreDelegate.h"
 #include "ItemParseUtil.h"
 #include <tinyxml2.h>
+#include <cstdint>
 
 ScoreModifier::ScoreModifier()
     : GameModifier()
@@ -13,10 +14,10 @@ ScoreModifier::ScoreModifier()
     , m_GainMultiply(1)
     , m_LossAdd(0)
     , m_LossMultiply(1)
-    , m_ApplyCount(0)
+    , m_RepeatCount(0)
     , m_bDeferPoints(false)
     , _pad35{0, 0, 0}
-    , m_DeferredScore(0)
+    , m_ApplyCount(0)
 {}
 
 // @ 0x0011cb44
@@ -35,9 +36,9 @@ void ScoreModifier::ResetSpecific() {
 int ScoreModifier::UpdateSpecific(float /*dt*/) {
     if (!m_bDeferPoints) {
         PowerUpManager* m = PowerUpManager::GetInstance();
-        m->AddToScoreGainAdd(m_ApplyCount * m_GainAdd);
-        m->AddToScoreLossAdd(m_ApplyCount * m_LossAdd);
-        for (int i = 0; i < m_ApplyCount; ++i) {
+        m->AddToScoreGainAdd(m_RepeatCount * m_GainAdd);
+        m->AddToScoreLossAdd(m_RepeatCount * m_LossAdd);
+        for (int i = 0; i < m_RepeatCount; ++i) {
             m->AddToScoreGainMultiply(m_GainMultiply);
             m->AddToScoreLossMultiply(m_LossMultiply);
         }
@@ -49,7 +50,7 @@ int ScoreModifier::UpdateSpecific(float /*dt*/) {
 void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
     if (m_bDeferPoints) {
-        m_pOwner->AddDeferedPoints(0);   // clears -1 sentinel (binary L11790c)
+        static_cast<PowerUp*>(m_pDeferInfo)->AddDeferedPoints(0);   // clears -1 sentinel (binary L11790c)
         SetScoreDelegate(this);           // Callee<ScoreModifier> trampoline (binary L11cc1c)
     }
     ++m_ApplyCount;
@@ -86,7 +87,7 @@ GameModifier* ScoreModifier::Clone() {
 
 // ASM-verified: 2026-05-18 binary @ 0x0011cb58 (re-analyst)
 int ScoreModifier::DeferPoints(int points) {
-    m_pOwner->AddDeferedPoints(points);
-    m_DeferredScore += points;
+    static_cast<PowerUp*>(m_pDeferInfo)->AddDeferedPoints(points);
+    m_ApplyCount += points;   // +0x38 in binary: apply/score accumulator
     return 0;
 }

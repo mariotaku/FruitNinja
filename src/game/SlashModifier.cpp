@@ -144,3 +144,11 @@ void SlashModifier::ParseSpecific(TiXmlElement* xml) {
         m_pColours[0] = Colour(255, 255, 255, 255);
     }
 }
+
+// @ 0x0014b018 — deep copy: new(0x40), copy base 0x1c + own 0x1c, clear base+0xc (m_BonusAccum).
+GameModifier* SlashModifier::Clone() {
+    SlashModifier* c = new SlashModifier();
+    *c = *this;
+    c->m_BonusAccum = 0.0f;
+    return c;
+}
