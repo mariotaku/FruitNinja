@@ -1,75 +1,119 @@
-// SuperFruitGlow — glow halo entity for the super-fruit (pomegranate).
-// Binary: ctor @ 0x001c06bc, Update @ 0x001c0024, FruitWasKilled @ 0x001bee48,
-//         DrawOrder @ 0x001bfb18, Release @ 0x001c01c8.
 //
-// VFX bodies (Update, DrawOrder, Draw) are stubbed with // TODO markers pending
-// full RE of the glow animation curve and draw primitives.
+// SuperFruitGlow : HUDControl3d — glow halo for the super-fruit (pomegranate/starfruit).
+// Binary: ctor @ 0x001c06bc, dtor @ 0x1c02b4/0x1c0258
+//         Release @ 0x1c01c8, DrawOrder @ 0x1bfb18,
+//         Update @ 0x1c0024, SetToMultiplayerState @ 0x1bffb8.
+//
 
 #include "SuperFruitGlow.h"
 #include "Fruit.h"
 #include <cstring>
 
-// Binary @ 0x001c06bc
-SuperFruitGlow::SuperFruitGlow()
-    : m_bFruitKilled(0)
-    , m_pHostFruit(nullptr)
-    , m_pText(nullptr)
-    , m_GlowAlpha(0.0f)
+// Binary constants from spec (v1.6.1)
+
+// DAT_001c01a4 — spin rate multiplier
+static const float SFG_SPIN_RATE = 0.0f;        // TODO: 0x1c0024 — resolve DAT_001c01a4 spin rate
+
+// DAT_001c0858 — base scale factor
+static const float SFG_BASE_SCALE_FACTOR = 1.0f; // TODO: 0x1c06bc — resolve DAT_001c0858 base scale
+
+// DAT_001c0854 — m_FadeAlt initial value
+static const float SFG_FADE_ALT_INIT = 1.0f;     // TODO: 0x1c06bc — resolve DAT_001c0854 fadeAlt init
+
+// DAT_001c01ac — alpha scale factor: colour.alpha = DAT * m_FadeAlt
+static const float SFG_ALPHA_SCALE = 1.0f;        // TODO: 0x1c0024 — resolve DAT_001c01ac
+
+// fade rate = +-2 per second
+static const float SFG_FADE_RATE = 2.0f;         // binary: +=2*dt (in) / -=2*dt (out)
+
+// ctor @ 0x001c06bc
+// Calls HUDControl3d::HUDControl3d; subscribes to fruit-slice event;
+// plays looping SFX; stores fruit pointer.
+SuperFruitGlow::SuperFruitGlow(Fruit* fruit)
+    : HUDControl3d()
+    , m_pFruit(fruit)
+    , m_pSound(0)
+    , m_Fade(0.0f)
+    , m_FadeAlt(SFG_FADE_ALT_INIT)
 {
-    entityType = 6;  // super-fruit type in binary
-    memset(_pad_own, 0, sizeof(_pad_own));
-    memset(_pad_7d, 0, sizeof(_pad_7d));
+    // +0x30: HUDControl m_LayerFlags — ctor sets per spec (0x80)
+    m_LayerFlags = 0x80;
+
+    // TODO: 0x1c06bc — Event1<Fruit*> += Delegate1<SuperFruitGlow> (subscribe fruit-slice;
+    //   requires #29 event/delegate infra). When Fruit slice fires, set m_bPendingRemoval.
+
+    // TODO: 0x1c06bc — play looping SFX via GameSound::SFXPlay(1.0, ...) -> m_pSound handle
 }
 
-SuperFruitGlow::~SuperFruitGlow()
-{
-    m_pHostFruit = nullptr;
+// dtor @ 0x1c02b4
+SuperFruitGlow::~SuperFruitGlow() {
+    m_pFruit = 0;
+    m_pSound = 0;
 }
 
-// Binary @ 0x001c01c8
-void SuperFruitGlow::Release()
-{
-    m_pHostFruit = nullptr;
-    Mortar::Entity::Release();
+// slot3: Release @ 0x1c01c8
+// Binary: T_1621(); if(m_pFruit) Event1<Fruit*> -= delegate (unsubscribe).
+void SuperFruitGlow::Release() {
+    // TODO: 0x1c01c8 — Event1<Fruit*> -= delegate (unsubscribe from fruit-slice event;
+    //   requires #29 event infra)
+    m_pFruit = 0;
+    HUDControl3d::Release();
 }
 
-// Binary @ 0x001c0024.
-// Animates glow alpha/scale toward host fruit position each frame.
-// TODO: 0x001c0024 -- full glow animation (alpha lerp, scale pulse) not yet ported
-void SuperFruitGlow::Update(float /*dt*/)
-{
-    if (m_bFruitKilled) {
-        // Self-release when host is gone
-        flags |= ENT_KILLED;
+// slot9: DrawOrder @ 0x1bfb18
+// Double-draw: renders glow twice with spin mirrored (pos scaled by m_FadeAlt),
+// HUDControl3d::Draw called with +0x28 (m_Spin) and +0x2c (m_SpinDraw = -m_Spin).
+// TODO: 0x1bfb18 — full double-draw spin mirror not yet ported (requires m_Spin field
+//   alias resolution and two-pass HUDControl3d::Draw calls with mirrored timer)
+void SuperFruitGlow::DrawOrder(const Vec3& hudScale, int layerMask) {
+    // TODO: 0x1bfb18 — scale m_Pos by m_FadeAlt(+0x88), call HUDControl3d::Draw twice
+    //   (with pos.m_Timer = m_Spin and pos.m_Timer = m_SpinDraw = -m_Spin for two-blade glow)
+    HUDControl3d::DrawOrder(hudScale, layerMask);
+}
+
+// slot10: Update @ 0x1c0024
+// spin += dt*k; if tracked Fruit sliced -> set m_Sliced; fade in (2*dt->1) or
+// out (-2*dt->0, release sound, set m_Dead +0x33); copy Fruit pos->+0x08;
+// colour alpha = k*m_FadeAlt; set sound volume from m_FadeAlt.
+void SuperFruitGlow::Update(float dt) {
+    // Spin advance (m_Timer is the spin accumulator inherited from HUDControl)
+    m_Timer += dt * SFG_SPIN_RATE;
+
+    // Fade in / out
+    if (!m_bPendingRemoval) {
+        // Fade in: += 2*dt, clamp to 1.0
+        m_Fade += SFG_FADE_RATE * dt;
+        if (m_Fade > 1.0f) m_Fade = 1.0f;
+    } else {
+        // Fade out: -= 2*dt, clamp to 0; when done release sound and mark dead
+        m_Fade -= SFG_FADE_RATE * dt;
+        if (m_Fade < 0.0f) {
+            m_Fade = 0.0f;
+            // TODO: 0x1c0024 — release m_pSound (MortarSound::Release handle)
+            m_pSound = 0;
+            // Mark for HUD removal (m_Dead = 1 at +0x33 per spec = m_bPendingRemoval)
+            // Note: already set; this branch doubles as the "dead" state
+        }
     }
-}
 
-// TODO: 0x001bfb18 -- SuperFruitGlow::Draw not yet ported
-void SuperFruitGlow::Draw(Renderer& /*r*/)
-{
-}
-
-// TODO: 0x001bfb18 -- SuperFruitGlow::PostUpdate not yet ported
-void SuperFruitGlow::PostUpdate(float /*dt*/)
-{
-}
-
-// Binary @ 0x001bfb18. Returns z-depth draw order value.
-// TODO: 0x001bfb18 -- DrawOrder value not yet RE'd; returning host z as fallback
-float SuperFruitGlow::DrawOrder() const
-{
-    if (m_pHostFruit) {
-        return m_pHostFruit->m_ZPosition;
+    // Track fruit position (+0x08 = HUDControl::pos)
+    if (m_pFruit) {
+        pos = m_pFruit->pos;
+        // z = Fruit(+0x9c) - DAT (per spec)
+        // TODO: 0x1c0024 — resolve Fruit field at +0x9c and DAT offset for z correction
     }
-    return 0.0f;
+
+    // Colour alpha = DAT_001c01ac * m_FadeAlt
+    // TODO: 0x1c0024 — set m_DrawColour.a = (uint8_t)(SFG_ALPHA_SCALE * m_FadeAlt * 255)
+
+    // TODO: 0x1c0024 — set sound volume from m_FadeAlt (or fixed when paused)
+
+    HUDControl3d::Update(dt);
 }
 
-// Binary @ 0x001bee48.
-// If fruit matches m_pHostFruit: clear m_pHostFruit, set m_bFruitKilled=true.
-void SuperFruitGlow::FruitWasKilled(Fruit* fruit)
-{
-    if (m_pHostFruit == fruit) {
-        m_pHostFruit = nullptr;
-        m_bFruitKilled = 1;
-    }
+// slot11: SetToMultiplayerState @ 0x1bffb8
+// Binary: call vtbl slot3 (Release) then HUDControl::SetToMultiplayerState.
+bool SuperFruitGlow::SetToMultiplayerState() {
+    Release();
+    return HUDControl::SetToMultiplayerState();
 }

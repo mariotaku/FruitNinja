@@ -1,74 +1,89 @@
 #ifndef FN_SUPER_FRUIT_GLOW_H
 #define FN_SUPER_FRUIT_GLOW_H
 
-// SuperFruitGlow — glow halo entity attached to the host Fruit during super-fruit
-// state. Entity-type 6 subclass.
 //
-// Binary sizes: ctor @ 0x001c06bc, Update @ 0x001c0024,
-//               FruitWasKilled @ 0x001bee48, DrawOrder @ 0x001bfb18,
-//               Release @ 0x001c01c8.
+// SuperFruitGlow : HUDControl3d — glow halo attached to a host Fruit during super-fruit state.
+// Binary: ctor @ 0x001c06bc (takes Fruit*), dtor @ 0x1c02b4/0x1c0258.
+//   Calls HUDControl3d::HUDControl3d(this, fruit) @ 0x102c0c, own vptr=GOT+8.
+//   vtable @ 0x2CE3E8 (typeinfo 0x2CE428).
+//   sizeof(SuperFruitGlow): 0x8C (confirmed via SuperFruitControl `new 0x8c` allocation)
 //
-// Binary sizeof(SuperFruitGlow) confirmed via operator new() = 0x8c bytes.
-// Field layout (RE spec):
-//   +0x00..+0x3b: Mortar::Entity base (0x3c bytes ARM32)
-//   +0x3c..+0x7b: Mortar::Entity fields used by subclass (gap)
-//   +0x7c: bool m_bFruitKilled  (fruit has been killed -- glow should self-release)
-//   +0x80: Fruit* m_pHostFruit  (host fruit pointer; cleared by FruitWasKilled)
-//   +0x84: Mortar::FancyBakedString* m_pText  (combo/score text overlay)
-//   +0x88: float m_GlowAlpha    (current glow alpha; animated toward target)
+// Layout: HUDControl3d base is 0x7C bytes. SuperFruitGlow own fields @ +0x7C..+0x8B.
+// Fields from spec at offsets +0x08..+0x78 are absolute offsets into the inherited
+// HUDControl3d (HUDControl) layout, aliased/renamed for SuperFruitGlow semantics:
+//   +0x08: HUDControl::pos       (Vec3 m_Pos)
+//   +0x14: HUDControl::m_HudScale (Vec3 m_BaseScale)
+//   +0x28: HUDControl::m_Timer   (float m_Spin — += dt*k each Update; DrawOrder mirrors)
+//   +0x2c: (float m_SpinDraw — second spin slot; DrawOrder flips sign)
+//   +0x30: HUDControl::m_Active  (ctor sets 0x80? — actually m_LayerFlags at +0x34)
+//   +0x33: HUDControl::m_bPendingRemoval (m_Dead — set 1 when fade done)
+//   +0x5c: HUDControl::m_DrawColour (Colour m_Colour — alpha = k * m_FadeAlt)
+//   +0x74: HUDControl::m_bUseHUDScales (u8; ctor default=1)
+//
+// Vtable slot overrides:
+//   slot3  Release         @ 0x1c01c8
+//   slot9  DrawOrder       @ 0x1bfb18  (double-draw spin mirror)
+//   slot10 Update          @ 0x1c0024  (+-2*dt fade + Fruit tracking + looping SFX handle)
+//   slot11 SetToMultiplayerState @ 0x1bffb8
+//
 
-#include "Entity.h"
+#include "hud/HUDControl3d.h"
+#include "math/Vec3.h"
+#include "math/Colour.h"
+#include "util/SmartPtr.h"
+#include <cstdint>
 
 class Fruit;
-struct Renderer;
-namespace Mortar { class FancyBakedString; }
+namespace Mortar { class MortarSound; }
 
-class SuperFruitGlow : public Mortar::Entity {
+class SuperFruitGlow : public HUDControl3d {
 public:
-    // +0x3c..+0x7b: base + padding to match binary 0x8c layout
-    // (0x8c - 0x3c = 0x50 = 80 bytes of own fields; fields enumerated below)
-    uint8_t _pad_own[64];    // +0x3c..+0x7b (load-bearing layout padding; binary fields unresolved)
+    // Inherited HUDControl3d is 0x7C bytes. Own fields follow at +0x7C.
 
-    // +0x7c: set to true by FruitWasKilled; glow enters self-release
-    uint8_t m_bFruitKilled;  // +0x7c
+    // +0x7C: pointer to tracked host fruit. Cleared when sliced or dead.
+    Fruit* m_pFruit;                                // +0x7C (binary +0x7c)
 
-    uint8_t _pad_7d[3];
+    // +0x80: looping SFX handle. SFXPlay in ctor; Released on fade-out.
+    // TODO: 0x1c06bc — Mortar::MortarSound* type; resolve #29 for event infra
+    Mortar::MortarSound* m_pSound;                  // +0x80 (binary +0x80)
 
-    // +0x80: back-pointer to host fruit; cleared to nullptr by FruitWasKilled
-    Fruit* m_pHostFruit;     // +0x80
+    // +0x84: fade progress. Grows 2*dt toward 1.0; on slice decays -2*dt toward 0.
+    float m_Fade;                                   // +0x84 (binary +0x84)
 
-    // +0x84: combo/score text overlay (FancyBakedString)
-    Mortar::FancyBakedString* m_pText;    // +0x84
+    // +0x88: glow ramp (ctor sets DAT_001c0854). Used in alpha/scale computation.
+    float m_FadeAlt;                                // +0x88 (binary +0x88)
 
-    // +0x88: glow alpha [0..1]; animated toward target each Update
-    float m_GlowAlpha;                    // +0x88
+    // ctor @ 0x001c06bc — takes host Fruit*; subscribes to fruit-slice event;
+    // plays looping SFX; registers glow.
+    explicit SuperFruitGlow(Fruit* fruit);
 
-    // Binary @ 0x001c06bc
-    SuperFruitGlow();
-    ~SuperFruitGlow();
+    // dtor @ 0x1c02b4
+    virtual ~SuperFruitGlow();
 
-    // Entity vtable overrides
-    void Update(float dt) override;       // 0x001c0024
-    void Draw(Renderer& r) override;      // TODO: not yet RE'd
-    void PostUpdate(float dt) override;   // TODO: not yet RE'd
-    void Release() override;              // 0x001c01c8
+    // slot3: Release @ 0x1c01c8. Unsubscribes from fruit-slice event.
+    void Release() override;
 
-    // Binary @ 0x001bfb18. Returns draw-order Z value for this glow.
-    // Called from ActorManager draw-sort path.
-    float DrawOrder() const;
+    // slot9: DrawOrder @ 0x1bfb18. Double-draw spin mirror for two-blade glow.
+    void DrawOrder(const Vec3& hudScale, int layerMask) override;
 
-    // Binary @ 0x001bee48. Called when the host fruit is killed (via Fruit kill delegate).
-    // Clears m_pHostFruit if it matches fruit, sets m_bFruitKilled=true.
-    void FruitWasKilled(Fruit* fruit);
+    // slot10: Update @ 0x1c0024. Fade in/out, pos tracking, SFX volume.
+    void Update(float dt) override;
+
+    // slot11: SetToMultiplayerState @ 0x1bffb8. Calls Release then HUDControl::SetToMultiplayerState.
+    bool SetToMultiplayerState() override;
+
+    // Non-virtual helper (used from SuperFruitControl when fruit is sliced).
+    // Sets m_Sliced flag so Update can decay the fade.
+    void SetSliced() { m_bPendingRemoval = 0; /* set glow-decay path */ }
 };
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(SuperFruitGlow) == 0x8c, "SuperFruitGlow binary sizeof must be 0x8c");
-static_assert(offsetof(SuperFruitGlow, m_bFruitKilled) == 0x7c, "SuperFruitGlow::m_bFruitKilled offset");
-static_assert(offsetof(SuperFruitGlow, m_pHostFruit)   == 0x80, "SuperFruitGlow::m_pHostFruit offset");
-static_assert(offsetof(SuperFruitGlow, m_pText)        == 0x84, "SuperFruitGlow::m_pText offset");
-static_assert(offsetof(SuperFruitGlow, m_GlowAlpha)    == 0x88, "SuperFruitGlow::m_GlowAlpha offset");
+static_assert(sizeof(SuperFruitGlow)                    == 0x8C, "SuperFruitGlow sizeof wrong (binary 0x8C)");
+static_assert(offsetof(SuperFruitGlow, m_pFruit)        == 0x7C, "SuperFruitGlow::m_pFruit offset wrong");
+static_assert(offsetof(SuperFruitGlow, m_pSound)        == 0x80, "SuperFruitGlow::m_pSound offset wrong");
+static_assert(offsetof(SuperFruitGlow, m_Fade)          == 0x84, "SuperFruitGlow::m_Fade offset wrong");
+static_assert(offsetof(SuperFruitGlow, m_FadeAlt)       == 0x88, "SuperFruitGlow::m_FadeAlt offset wrong");
 #endif
 
 #endif // FN_SUPER_FRUIT_GLOW_H
