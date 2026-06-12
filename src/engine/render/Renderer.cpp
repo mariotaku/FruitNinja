@@ -91,7 +91,7 @@ static void SetupFF2D(const float* mvp, GLuint tex, const Colour& tint) {
     if (tex) {
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, tex);
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
+        TexEnvModulate();
     } else {
         glBindTexture(GL_TEXTURE_2D, 0);
         glDisable(GL_TEXTURE_2D);
@@ -166,7 +166,7 @@ void Renderer::DrawQuad(const Colour& tint, float u0, float v0, float u1, float 
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
+    TexEnvModulate();
     glDisable(GL_LIGHTING);
     glColor4ub(tint.r, tint.g, tint.b, tint.a);
 
@@ -213,7 +213,7 @@ void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
+    TexEnvModulate();
     glDisable(GL_LIGHTING);
     glColor4ub(255, 255, 255, 255);  // vertex colour wins via COLOR_ARRAY
 
@@ -245,7 +245,7 @@ void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
 
     glActiveTexture(GL_TEXTURE0);
     glEnable(GL_TEXTURE_2D);
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, (GLfloat)GL_MODULATE);
+    TexEnvModulate();
     glDisable(GL_LIGHTING);
     glColor4ub(255, 255, 255, 255);
 

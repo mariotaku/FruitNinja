@@ -145,6 +145,7 @@
         void glLightfv(GLenum, GLenum, const GLfloat*);
         void glShadeModel(GLenum);
         void glTexEnvf(GLenum, GLenum, GLfloat);
+        void glTexEnvi(GLenum, GLenum, GLint);
         void glPolygonMode(GLenum, GLenum);
     }
 #elif defined(FRUIT_GL_API_EMSCRIPTEN)
@@ -205,6 +206,7 @@
         void glMaterialfv(GLenum face, GLenum pname, const GLfloat* params);
         void glLightModelfv(GLenum pname, const GLfloat* params);
         void glTexEnvf(GLenum target, GLenum pname, GLfloat param);
+        void glTexEnvi(GLenum target, GLenum pname, GLint param);
         void glEnableClientState(GLenum array);
         void glDisableClientState(GLenum array);
         void glVertexPointer(GLint size, GLenum type, GLsizei stride, const GLvoid* ptr);
