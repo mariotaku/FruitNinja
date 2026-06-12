@@ -69,16 +69,29 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Test integer-ID overload for confirmed LSTR_ values.
-    {
-        const char* best = Mortar::GETSTRING_CAST_0(LSTR_BEST);
-        printf("  LSTR_BEST (0xb5)       -> '%s'\n", best ? best : "(null)");
-        // "BEST:" in english_us -- only assert if table loaded with assets.
-        if (best && std::strcmp(best, "STRING NOT FOUND") != 0) {
-            if (std::strcmp(best, "BEST:") != 0) {
-                fprintf(stderr, "    FAIL: LSTR_BEST expected 'BEST:', got '%s'\n", best);
-                ++failures;
-            }
+    // Regression asserts for v1.6.1 integer-ID anchors (re-derived via tmp/remap_lstr.py).
+    // These pin the LSTR_* enum values against the shipped translations_header.str.
+    struct IntIdAnchor {
+        LocalizedString id;
+        const char* label;
+        const char* expected;
+    };
+    static const IntIdAnchor kIntAnchors[] = {
+        { LSTR_BEST,              "LSTR_BEST (0xc8)",             "BEST:"                   },
+        { LSTR_BEST_COMBO,        "LSTR_BEST_COMBO (0xab)",       "BEST COMBO: %i FRUIT!"   },
+        { LSTR_FRUIT_FACT_TITLE,  "LSTR_FRUIT_FACT_TITLE (0xae)", "SENSEI'S FRUIT FACT"     },
+        { LSTR_SHOP_BACKGROUND,   "LSTR_SHOP_BACKGROUND (0xc9)",  "BACKGROUND"              },
+        { LSTR_SHOP_BLADE,        "LSTR_SHOP_BLADE (0xca)",       "BLADE"                   },
+        { LSTR_SHOP_FULL_VERSION, "LSTR_SHOP_FULL_VERSION (0xcb)","FULL VERSION"            },
+    };
+    for (int i = 0; i < (int)(sizeof(kIntAnchors)/sizeof(kIntAnchors[0])); i++) {
+        const IntIdAnchor& a = kIntAnchors[i];
+        const char* got = Mortar::GETSTRING_CAST_0(a.id);
+        printf("  %-36s -> '%s'\n", a.label, got ? got : "(null)");
+        if (!got || std::strcmp(got, a.expected) != 0) {
+            fprintf(stderr, "    FAIL: %s expected '%s', got '%s'\n",
+                    a.label, a.expected, got ? got : "(null)");
+            ++failures;
         }
     }
 
