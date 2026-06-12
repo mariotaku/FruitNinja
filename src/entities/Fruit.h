@@ -8,6 +8,7 @@
 #include "asset/Mesh.h"
 #include "asset/Model.h"
 #include "FruitInfo.h"
+#include "engine/util/Event.h"
 
 struct PSPParticleEmitter;
 class SlashEntity;
@@ -222,6 +223,13 @@ public:
 
     // Binary @ 0x00176184 — local-MP "did a player drop their last life" check; defers to FN::GameOver
     static void CheckFruitDropped();
+
+    // Accessor for the file-scope global g_FruitWasSliced event (binary GOT 0x332a34).
+    // Binary subscribe sites load [GOT,0x6e04] to get the event address; port uses this
+    // accessor for cross-TU subscribe/unsubscribe.
+    // DIFFERS: original = direct GOT access on every subscribe site; using static accessor
+    // because port has no GOT, preserving single-definition semantics.
+    static Mortar::Event3<Fruit*, int, Mortar::Entity*>& FruitWasSlicedEvent();
 
     // Binary @ 0x00175624 — "is either half outside the play field" predicate
     bool IsOffscreen() const;

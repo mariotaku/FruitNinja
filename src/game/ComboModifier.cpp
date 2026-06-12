@@ -5,6 +5,7 @@
 #include "ComboModifier.h"
 #include "entities/Fruit.h"
 #include "entities/SlashEntity.h"
+#include "engine/util/Delegate.h"
 #include <cstdint>
 #include <list>
 
@@ -14,8 +15,15 @@ ComboModifier::ComboModifier()
 
 ComboModifier::~ComboModifier() {}
 
-// @ binary 0x00132e34 ResetSpecific — no-op per binary
-void ComboModifier::ResetSpecific() {}
+// @ binary 0x00132e34 ResetSpecific — unsubscribe delegates before reset.
+void ComboModifier::ResetSpecific() {
+    Fruit::FruitWasSlicedEvent() -=
+        Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
+            this, &ComboModifier::FruitWasSliced);
+    SlashEntity::OnComboCancelEvent() -=
+        Mortar::Delegate1<void, SlashEntity*>::Make(
+            this, &ComboModifier::ComboWasCanceled);
+}
 
 // @ 0x00132b48 — UpdateSpecific: OR global flag *GOT |= 0x80 each frame.
 // TODO: 0x00132b48 — OR into global combo-flag (GOT ptr unresolved)
@@ -24,18 +32,19 @@ int ComboModifier::UpdateSpecific(float /*dt*/) { return 0; }
 // @ 0x00132e34
 // Binary: chain base ApplyModifier, then register:
 //   Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this, &ComboModifier::FruitWasSliced)
-//     += FruitManager::m_FruitWasSliced (Event3<Fruit*,int,Mortar::Entity*>)
+//     += g_FruitWasSliced (file-static in Fruit.cpp, GOT 0x332a34)
 //   Delegate1<void,SlashEntity*>::Make(this, &ComboModifier::ComboWasCanceled)
-//     += SlashEntity::m_OnComboCancel (Event1<SlashEntity*>)
-// TODO: 0x00132e34 — subscribe FruitWasSliced delegate to FruitManager's
-//   Event3<Fruit*,int,Mortar::Entity*> m_FruitWasSliced.
-//   FruitManager not yet ported; event owner unknown in current port.
-// TODO: 0x00132b7c — subscribe ComboWasCanceled delegate to SlashEntity's
-//   Event1<SlashEntity*> m_OnComboCancel.
-//   m_OnComboCancel not yet declared on SlashEntity (binary addr unknown).
+//     += g_OnComboCancel (file-static in Slash.cpp, GOT 0x332bd8)
 void ComboModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
-    // Delegate registration deferred — event owners not yet ported.
+    // Subscribe to g_FruitWasSliced — binary @ 0x132e98 (GOT load 0x332a34) += delegate.
+    Fruit::FruitWasSlicedEvent() +=
+        Mortar::Delegate3<void, Fruit*, int, Mortar::Entity*>::Make(
+            this, &ComboModifier::FruitWasSliced);
+    // Subscribe to g_OnComboCancel — binary @ 0x132b7c (GOT load 0x332bd8) += delegate.
+    SlashEntity::OnComboCancelEvent() +=
+        Mortar::Delegate1<void, SlashEntity*>::Make(
+            this, &ComboModifier::ComboWasCanceled);
 }
 
 // @ 0x00132e10

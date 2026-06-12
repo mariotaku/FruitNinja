@@ -24,6 +24,7 @@
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/util/StringTable.h"
+#include "engine/util/Event.h"
 #include "game/FruitSaveData.h"
 #include "util/StringHash.h"
 #include "Game.h"
@@ -36,6 +37,19 @@
 #include <string>
 #include <vector>
 #include "game/GameWork.h"
+
+// File-scope global: multicast event fired on every fruit slice.
+// Binary: file-static in Fruit.cpp, ctor'd in global.ctors @ 0x1e2404.
+// GOT-resolved address: 0x00332a34.
+// Subscribers: ComboModifier, ExplodyFruitModifier, TimeSinkModifier.
+// DIFFERS: binary accesses via GOT load on every subscribe site; port exposes via
+// accessor Fruit::FruitWasSlicedEvent() returning a reference to this static
+// so cross-TU subscribers compile without a raw extern (GOT not applicable in port).
+static Mortar::Event3<Fruit*, int, Mortar::Entity*> g_FruitWasSliced;
+
+Mortar::Event3<Fruit*, int, Mortar::Entity*>& Fruit::FruitWasSlicedEvent() {
+    return g_FruitWasSliced;
+}
 
 // Analysed: 2026-04-29T00:00
 
@@ -1209,6 +1223,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // The bomb-hit window is `(LTF - 2u) < 2u && timer < 0.95f && timer > -0.1f`.
     // Binary @ 0x001788f4 = same game_work GOT entry as the crit-ladder gate.
     // ASM-verified: 2026-06-07 binary @ 0x001780b0 +0x6c0..+0x6f4 (re-analyst).
+    int g_FruitWasSliced_points = 0; // carries score out of the gate for event fire at 0x1de5a0
     {
         static const float kBombHitMaxG = 0.95f;
         static const float kBombHitMinG = -0.1f;
@@ -1244,6 +1259,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                           + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
                 }
                 if (m_bCriticalEligible) score *= 2;  // g_CritScoreMul / 2 = 2
+                g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
                 FN::AddToCurrentScore(score, (int)m_PlayerIdx,
                                       /*trackFruit=*/true, /*sendNetPacket=*/false);
 
@@ -1319,8 +1335,15 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         }
     }
 
+    // Fire g_FruitWasSliced — binary @ 0x1de5a0 (main slice path) and
+    // 0x1de9b8 (early-disappear path). Args: (this, points=r7, slasher=param_1).
+    // r7 in binary = the score local from the scoring block; port carries it via
+    // g_FruitWasSliced_points (0 if gate not entered, matching likely binary r7 value).
+    g_FruitWasSliced(this, g_FruitWasSliced_points, hitter);
+
     // v1.6.1 super-fruit: notify slice path.
     // Binary @ 0x001be630: SuperFruitControl::SuperFruitSliced gates on FruitInfo[+0x330].
+    // TODO: #31 — per-Fruit m_OnSliced (+0x170) fire site deferred (Fruit struct extension blocked).
     SuperFruitControl::SuperFruitSliced(this, 0, hitter);
 
     return 0;

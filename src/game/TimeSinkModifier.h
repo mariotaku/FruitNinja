@@ -17,6 +17,7 @@
 
 #include "GameModifier.h"
 
+namespace Mortar { class Entity; }
 class Fruit;
 
 class TimeSinkModifier : public GameModifier {
@@ -54,9 +55,10 @@ public:
     // TODO: 0x0014dac4 — wire to score notification signal
     void ScoreNotification(int points, int extra);
 
-    // Delegate target: called when fruit is sliced (Fruit*, int score)
-    // TODO: 0x0014da7c — wire to FruitManager's FruitWasSliced signal
-    void FruitWasSlicedSink(Fruit* fruit, int score);
+    // Delegate target: called when fruit is sliced (Fruit*, int score, Entity* slasher).
+    // Subscribed in ApplyModifier to g_FruitWasSliced (Fruit.cpp, GOT 0x332a34).
+    // TODO: 0x0014da7c — verify binary arg3 (Entity* slasher) is unused in sink body.
+    void FruitWasSlicedSink(Fruit* fruit, int score, Mortar::Entity* slasher);
 };
 
 #ifdef __bada__

@@ -106,9 +106,7 @@ public:
     GameModifier* Clone() override;
 
     // @ 0x001358d4 — Delegate3<void,Fruit*,int,Mortar::Entity*> target; subscribed in
-    // ApplyModifier to FruitManager::m_FruitWasSliced (Event3<Fruit*,int,Mortar::Entity*>).
-    // TODO: 0x001358d4 — wire to FruitManager's Event3 m_FruitWasSliced;
-    //   FruitManager not yet ported (event owner unknown in current port).
+    // ApplyModifier to g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34).
     void FruitWasSliced(Fruit* fruit, int score, Mortar::Entity* entity);
 };
 
