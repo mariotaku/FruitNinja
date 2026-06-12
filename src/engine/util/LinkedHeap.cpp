@@ -80,8 +80,8 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
     }
 
     Block* blk = reinterpret_cast<Block*>(m_StartAddr);
-    blk->next  = 0;
-    blk->prev  = m_pLastBlock;
+    blk->prev  = m_pLastBlock;   // +0x00 back-link to previous tail
+    blk->next  = 0;              // +0x04 forward, none yet
     blk->name  = name;
     blk->sizeFlags = 0;
     blk->SetSize(need);
@@ -101,8 +101,10 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
 // Binary @ 0x0019469c — free a payload.
 // Marks block FREE (flag=1), adds to free-list, then coalesces:
 //   - If block is the last allocated block: pop trailing FREE blocks and rewind
-//     m_StartAddr to the earliest contiguous trailing free run.
-//   - Else: merge forward adjacent FREE blocks into this one.
+//     m_StartAddr by subtracting each block's size (binary @ 0x001946dc-0x0019471e).
+//   - Else: merge forward adjacent FREE blocks into this one
+//     (binary @ 0x00194720-0x00194758).
+// Block prev is at +0x00, next at +0x04 (binary layout).
 void LinkedHeap::Release(void* payload, bool /*coalesce*/)
 {
     if (!payload) return;
@@ -116,35 +118,37 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
 
     // If this block is at the tail of the bump region, rewind.
     if (blk == m_pLastBlock) {
-        // Walk backwards while the tail is free.
+        // Walk backwards while the tail is free; subtract each block's size from
+        // m_StartAddr (binary: SUB m_StartAddr, cur->GetSize() -- NOT reset to cur).
         Block* cur = m_pLastBlock;
         while (cur && cur->GetFlag() == 1) {
             FreeListRemove(cur);
-            Block* pr = cur->prev;
+            m_StartAddr -= cur->GetSize();    // binary: subtract size, not = (uintptr_t)cur
+            Block* pr = cur->prev;            // +0x00 back-link
             if (pr) {
-                pr->next = 0;
+                pr->next = 0;                 // +0x04 forward
             } else {
                 m_pFirstBlock = 0;
             }
             m_pLastBlock = pr;
-            m_StartAddr  = reinterpret_cast<uintptr_t>(cur);
             cur = pr;
         }
         return;
     }
 
-    // Merge forward adjacent free blocks into blk.
-    Block* fwd = blk->next;
+    // Forward-merge: absorb consecutive free next-blocks into blk
+    // (binary @ 0x00194720-0x00194758).
+    Block* fwd = blk->next;                   // +0x04
     while (fwd && fwd->GetFlag() == 1) {
         unsigned int merged = blk->GetSize() + fwd->GetSize();
         FreeListRemove(fwd);
-        Block* fn = fwd->next;
+        Block* fn = fwd->next;                // +0x04
         if (fn) {
-            fn->prev = blk;
+            fn->prev = blk;                   // +0x00 fix successor's back-link
         } else {
             m_pLastBlock = blk;
         }
-        blk->next = fn;
+        blk->next = fn;                       // +0x04
         blk->SetSize(merged);
         fwd = fn;
     }

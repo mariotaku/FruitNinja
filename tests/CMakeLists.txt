@@ -7,6 +7,15 @@ target_include_directories(test_localisation PRIVATE
 )
 add_test(NAME localisation COMMAND test_localisation)
 
+# LinkedHeap unit test -- no GPU/audio, pure allocator correctness.
+# Exercises tail-rewind (the shutdown crash path) and forward-merge.
+add_executable(test_linkedheap test_linkedheap.cpp)
+target_link_libraries(test_linkedheap PRIVATE mortar_engine)
+target_include_directories(test_linkedheap PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME linkedheap COMMAND test_linkedheap)
+
 # Mortar::Delegate template — size + bind + invoke correctness.
 add_executable(test_delegate test_delegate.cpp)
 target_include_directories(test_delegate PRIVATE
