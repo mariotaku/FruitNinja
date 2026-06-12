@@ -65,6 +65,14 @@ Initial configure (one of):
 
 Optional ASAN build setup (clang64 only) is documented in `.claude/agents/implementer.md`.
 
+## Testing — unit-test new components with CTest
+
+When you add a **new component**, cover it with a **minimum-unit CTest** test wherever practical (register it in `tests/CMakeLists.txt`; run via `ctest` or the test executable). A component that merely compiles is **not yet verified** — a unit test against real asset data or known binary values is what proves the port matches.
+
+Prioritise by **dependency shape**: a component that has **few dependencies of its own but is depended on by many others** (parsers, data-table loaders, string/hash/math utilities, file-format readers) **must** get proper test cases. A bug in a high-fan-in leaf cascades into every consumer and surfaces as a confusing downstream symptom rather than a local failure — e.g. the `StringTable` integer-ID drift showed up as garbled on-screen text several layers away, where `test_localisation` pins it at the source.
+
+Keep tests minimal and deterministic; they must not require GPU/platform state or play audio (stub `SoundManager` / `GameSound`).
+
 ## Original Binary
 - ARM32 Little-Endian ELF (Samsung Bada OS), Halfbrick Mortar Engine
 - 480x320 landscape (on portrait 480x800 Bada device, touch/camera rotated 90°), entry point: `OspMain`
