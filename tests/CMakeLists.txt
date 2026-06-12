@@ -8,12 +8,14 @@ target_include_directories(test_localisation PRIVATE
 add_test(NAME localisation COMMAND test_localisation)
 
 # LinkedHeap unit test -- no GPU/audio, pure allocator correctness.
-# Exercises tail-rewind (the shutdown crash path) and forward-merge.
+# Exercises tail-rewind (the shutdown crash path), forward-merge, and split-path
+# integrity. FN_TEST unlocks the test-only accessors in LinkedHeap.h.
 add_executable(test_linkedheap test_linkedheap.cpp)
 target_link_libraries(test_linkedheap PRIVATE mortar_engine)
 target_include_directories(test_linkedheap PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
 )
+target_compile_definitions(test_linkedheap PRIVATE FN_TEST)
 add_test(NAME linkedheap COMMAND test_linkedheap)
 
 # Mortar::Delegate template — size + bind + invoke correctness.
