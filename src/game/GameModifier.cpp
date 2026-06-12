@@ -37,13 +37,14 @@ int GameModifier::Update(float dt) {
 }
 
 // Binary @ 0x140890 -- GameModifier::OnDeferComplete(bool, float*)
-// Slot 5. Folds field_0x08 into m_BonusAccum; clamps by two cached power-up
-// name-hash lookups via PowerUpManager::GetActiveSingle; scales by
+// Slot 5. Folds m_Duration (+0x04) into m_BonusAccum; clamps by two cached
+// power-up name-hash lookups via PowerUpManager::GetActiveSingle; scales by
 // PowerUpManager::m_WaveDtModPrev (field_0x74). DAT consts: 0.01f, 0.0f,
 // 50.0f (aa0), 0.333f (aa4), 0.1f (aa8).
+// ASM-verified: 2026-06-13T18:00Z binary @ 0x00140890 (asm-inspector)
 void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
-    // 1) fold field_0x08 scratch into m_BonusAccum
-    float acc = field_0x08;
+    // 1) fold m_Duration (+0x04) into m_BonusAccum -- binary vldr.32 s15,[r0,#4]
+    float acc = m_Duration;
     if (m_BonusAccum > 0.0f) acc += m_BonusAccum;
     m_BonusAccum = acc;
 
