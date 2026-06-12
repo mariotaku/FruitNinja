@@ -6,15 +6,19 @@
 // translations_<lang>.str (per-language string blob) from the Data/
 // stringtables directory.  Provides binary-search key lookup.
 //
-// Binary refs:
+// Binary refs (v1.6.1):
 //   StringTableUtilLoadStrings         0x0011fb20
 //   StringTableUtilLoadStringsTable    0x0011f9dc
-//   Mortar::StringTable::GetInfo       0x0018a2cc
-//   Mortar::StringTable::GetString     0x0011fec8
-//   GETSTRING                          0x0011f958
+//   Mortar::StringTable::GetInfo       0x14d1a4
+//   Mortar::StringTable::GetString(int)        0x14d1dc
+//   Mortar::StringTable::GetString(HeaderLookup*)  0x14d1c0
+//   Mortar::StringTable::GetString(char*)      0x14d1f8
+//   Mortar::StringTable::GetInfo(char*)        0x22d630
+//   GETSTRING                          0x14c9a0
 //   GETSTRING_STR                      0x0011fb40
 //   GETSTRING_CAST_0                   0x0010cff0
 //   GETSTRING_CAST_0_STR               0x00109ec0
+//   LoadStringsTable                   0x14ca5c
 //
 // See docs/engine/localisation.md for full format + algorithm.
 
@@ -37,17 +41,21 @@
 //   12 = english_uk
 //   13 = chinese
 
-// Confirmed integer IDs from binary analysis.
+// Integer IDs: flat positional index into the sorted HeaderLookup[] array in
+// translations_header.str. Re-derived for v1.6.1 by key-name lookup in the
+// shipped header (see tmp/remap_lstr.py for the derivation script).
 // Tag_ABI_enum_size = small: sized to int32_t (values exceed 0xFFFF).
 enum LocalizedString {
-    LSTR_BEST_COMBO          = 0x98,  // "BEST COMBO: %i FRUIT!"  (FruitFactControl combo sprintf; was mis-named COMBO_FORMAT)
-    LSTR_FRUIT_FACT_TITLE    = 0x9b,  // "SENSEI'S FRUIT FACT"    (FruitFactControl title)
-    LSTR_FACT_MODE           = 0xb1,  // "factMode"               (FruitFactControl combo branch)
-    LSTR_BEST                = 0xb5,  // "BEST:"                  (ScoreControl highscore label)
-    LSTR_SHOP_BACKGROUND     = 0xb6,  // "BACKGROUND"             (ShopListItem::Draw type==1)
-    LSTR_SHOP_BLADE          = 0xb7,  // "BLADE"                  (ShopListItem::Draw type==0)
-    LSTR_SHOP_FULL_VERSION   = 0xb8,  // "FULL VERSION"           (ShopListItem::Draw type==2)
-    LSTR_SHOP_SPECIAL        = 0x113, // "SPECIAL"                (ShopListItem::Draw type==3 / REMOVEADS)
+    LSTR_BEST_COMBO          = 0xab,  // CODE_BEST_COMBO       "BEST COMBO: %i FRUIT!"
+    LSTR_FRUIT_FACT_TITLE    = 0xae,  // CODE_FRUIT_FACT_TITLE "SENSEI'S FRUIT FACT"
+    // TODO: binary addr unknown -- CODE_FACT_MODE key removed/renamed in v1.6.1; re-derive from v1.6.1 call site
+    LSTR_FACT_MODE           = 0,
+    LSTR_BEST                = 0xc8,  // CODE_SCORE_BEST       "BEST:"
+    LSTR_SHOP_BACKGROUND     = 0xc9,  // CODE_SHOP_BACKGROUND  "BACKGROUND"
+    LSTR_SHOP_BLADE          = 0xca,  // CODE_SHOP_BLADE       "BLADE"
+    LSTR_SHOP_FULL_VERSION   = 0xcb,  // CODE_SHOP_FULL_VERSION "FULL VERSION"
+    // TODO: binary addr unknown -- CODE_SHOP_SPECIAL key removed/renamed in v1.6.1; re-derive from v1.6.1 call site
+    LSTR_SHOP_SPECIAL        = 0,
 };
 
 // --- StringEntry (12 bytes) ---

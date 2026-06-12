@@ -29,6 +29,7 @@
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
 #include "game/GameMode.h"
+#include "debug/Logger.h"
 
 // Binary: RandFloat5_GameTask @ 0x0015c658. Returns [0, 5) using the
 // process-global GameTask::Random LCG. Port uses rand() since the
@@ -716,6 +717,7 @@ void ShopListItem::Draw() {
                 // immediately copies the red CStack_80 back over it before draw.
                 bool isLockedSplit = (m_pItemInfo->IsLocked() != 0)
                                   && (purchaseState == 1 || purchaseState == 2);
+
                 if (!isLockedSplit) {
                     // Case 0/3 path, plus unlocked-state-1/2 fallthrough.
                     // Normal single white description at y=0 (DAT_0015f53c).

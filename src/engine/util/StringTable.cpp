@@ -1,14 +1,18 @@
 // Mortar Engine string table loader and lookup.
 // See docs/engine/localisation.md for full format documentation.
 //
-// Binary refs:
+// Binary refs (v1.6.1):
 //   StringTableUtilLoadStrings         0x0011fb20
 //   StringTableUtilLoadStringsTable    0x0011f9dc
+//   LoadStringsTable                   0x14ca5c
 //   Mortar::StringTable::LoadHeader    0x0018a490
 //   Mortar::StringTable::LoadLanguage  0x0018a41c
-//   Mortar::StringTable::GetInfo       0x0018a2cc
-//   Mortar::StringTable::GetString     0x0011fec8
-//   GETSTRING                          0x0011f958
+//   Mortar::StringTable::GetInfo       0x14d1a4
+//   Mortar::StringTable::GetInfo(char*)        0x22d630
+//   Mortar::StringTable::GetString(int)        0x14d1dc
+//   Mortar::StringTable::GetString(HeaderLookup*)  0x14d1c0
+//   Mortar::StringTable::GetString(char*)      0x14d1f8
+//   GETSTRING                          0x14c9a0
 //   GETSTRING_STR                      0x0011fb40
 //   GETSTRING_CAST_0                   0x0010cff0
 //   GETSTRING_CAST_0_STR               0x00109ec0
@@ -246,7 +250,7 @@ bool Mortar::StringTable::LoadLanguage(const char* path) {
     return true;
 }
 
-// GetInfo -- binary search @ 0x0018a2cc.
+// GetInfo -- binary search @ 0x14d1a4 (v1.6.1).
 const HeaderLookup* Mortar::StringTable::GetInfo(const char* key) const {
     if (!m_HeaderLookup.m_pData || m_HeaderLookup.m_Count == 0) return 0;
     size_t key_len = strlen(key);
@@ -266,7 +270,7 @@ const HeaderLookup* Mortar::StringTable::GetInfo(const char* key) const {
     return 0;
 }
 
-// GetString(id) -- binary @ 0x0011fec8 int-ID overload.
+// GetString(id) -- binary @ 0x14d1dc (v1.6.1) int-ID overload.
 const char* Mortar::StringTable::GetString(LocalizedString id) const {
 #if !defined(__bada__) || defined(FN_ASM_VERIFY_CROSS)
     if (!s_loaded || !s_str_blob) return kStringNotFound;
@@ -281,7 +285,7 @@ const char* Mortar::StringTable::GetString(LocalizedString id) const {
 #endif
 }
 
-// GetString(key) -- binary @ 0x0011fec8 string-key overload.
+// GetString(key) -- binary @ 0x14d1f8 (v1.6.1) string-key overload.
 const char* Mortar::StringTable::GetString(const char* key) const {
     if (!key) return kStringNotFound;
     const HeaderLookup* info = GetInfo(key);
