@@ -700,60 +700,53 @@ void ShopListItem::Draw() {
                 // word-wrap path.
                 static constexpr float DESC_WRAP_W = 160.0f;
 
-                // Binary @ 0x0015eb00 ShopListItem::Draw locked-split gate:
-                //   if (!IsLocked() || RequirementType==0 || RequirementType==3)
-                //       single-line desc at y=0 (case 0/3 / unlocked path)
-                //   else  (locked AND state==1 or state==2)
+                // Binary @ 0x1b5da4 ShopListItem::Draw locked-split gate
+                // (v1.6.1 scheme, ItemInfo+0x24 = m_RequirementType):
+                //   if (!IsLocked() || RequirementType==0)
+                //       single-line desc at y=0 (unlocked / no-requirement path)
+                //   else  (locked AND type==1 or type==2)
                 //       two-line split: red prompt at y=-20, white desc at y=+10
                 //
-                // The red prompt string ID is selected by a gate condition,
-                // but the line is drawn UNCONDITIONALLY for state 1/2 in the
-                // binary -- IsDeviceUpsideDown()/PlayedModeToday() only choose
-                // WHICH localized string, never whether to draw:
-                //   state 1: IsDeviceUpsideDown() ? id 0xC3(195) : 0xC2(194)
-                //   state 2: PlayedModeToday(ZEN) ? id 0xBC(188) : 0xBB(187)
-                // Red prompt colour is always (0xBD,0,0,descAlpha): the binary
-                // builds a (0xA0,0xDC,0) colour in the "true" branch but then
-                // immediately copies the red CStack_80 back over it before draw.
+                // Prompt string ID is type-gated (WHICH string, never WHETHER to draw):
+                //   type==1 (DARK blade):   IsDeviceUpsideDown()==false -> 0xD7, else 0xD8
+                //   type==2 (BAMBOO blade): PlayedModeToday(ZEN==3)==false -> 0xCE, else 0xCF
+                // Red prompt colour is always (0xBD,0,0,descAlpha).
+                // type==3 (SPECIAL) branch: Defunct: removed in v1.6.1; cost label now
+                //   staticBlock[m_Type*4 + 0x24], only 3 categories (BACKGROUND/BLADE/FULL).
                 bool isLockedSplit = (m_pItemInfo->IsLocked() != 0)
                                   && (purchaseState == 1 || purchaseState == 2);
 
                 if (!isLockedSplit) {
-                    // Case 0/3 path, plus unlocked-state-1/2 fallthrough.
-                    // Normal single white description at y=0 (DAT_0015f53c).
+                    // Unlocked / no-requirement path: single white description at y=0.
                     Vec3 descPos(xPos, 0.0f, 0.0f);
                     font->DrawStringWrapped(descFontSize, DESC_WRAP_W, 0.0f,
                                             descStr, descPos,
                                             descColour,
                                             0xF);
                 } else {
-                    // Locked + state 1 or 2: two-line red+white split.
+                    // Locked + type 1 or 2: two-line red+white split.
                     // Line 1: y=-20, scale = descFontSize*0.8 (DAT_0015f528),
-                    //         colour red (0xBD,0,0,alpha), alignment 3,
-                    //         string from localized ID (see gate above).
-                    // Line 2: y=+10, scale = case1 ? descFontSize*0.9 :
-                    //         descFontSize*0.81 (0.9*0.9, binary @ 0x0015f460),
-                    //         colour white, alignment 0xF -- m_DescText.
+                    //         colour red (0xBD,0,0,alpha), alignment 3.
+                    // Line 2: y=+10, scale = type1 ? descFontSize*0.9 :
+                    //         descFontSize*0.81 (0.9*0.9), colour white, alignment 0xF.
 
                     // --- Line 1: red prompt ---
-                    // Binary @ 0x0015f3ee..0x0015f4ac: select localized string ID.
                     LocalizedString promptId;
                     if (purchaseState == 1) {
-                        // state 1: gate on IsDeviceUpsideDown().
+                        // type==1 DARK blade: gate on IsDeviceUpsideDown().
                         promptId = Mortar::IsDeviceUpsideDown()
-                                       ? (LocalizedString)0xC3   // 195
-                                       : (LocalizedString)0xC2;  // 194
+                                       ? LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN    // 0xD8
+                                       : LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP;   // 0xD7
                     } else {
-                        // state 2: gate on FruitSaveData::PlayedModeToday(ZEN=3).
+                        // type==2 BAMBOO blade: gate on FruitSaveData::PlayedModeToday(ZEN=3).
                         bool playedToday = (game_work.m_SaveData != nullptr)
                             && game_work.m_SaveData->PlayedModeToday(Mortar::GAME_MODE_ZEN);
                         promptId = playedToday
-                                       ? (LocalizedString)0xBC   // 188
-                                       : (LocalizedString)0xBB;  // 187
+                                       ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY        // 0xCF
+                                       : LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY;   // 0xCE
                     }
                     const char* promptStr = Mortar::GETSTRING_CAST_0(promptId);
                     if (promptStr) {
-                        // Red prompt colour (0xBD,0,0) with the computed alpha.
                         Vec3 promptPos(xPos, -20.0f, 0.0f);   // DAT_0015f4e6 = -20.0f
                         font->DrawStringWrapped(descFontSize * 0.8f, DESC_WRAP_W, 0.0f,
                                                 promptStr, promptPos,

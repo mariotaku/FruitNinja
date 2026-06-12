@@ -48,14 +48,18 @@
 enum LocalizedString {
     LSTR_BEST_COMBO          = 0xab,  // CODE_BEST_COMBO       "BEST COMBO: %i FRUIT!"
     LSTR_FRUIT_FACT_TITLE    = 0xae,  // CODE_FRUIT_FACT_TITLE "SENSEI'S FRUIT FACT"
-    // TODO: binary addr unknown -- CODE_FACT_MODE key removed/renamed in v1.6.1; re-derive from v1.6.1 call site
+    // Defunct: key removed in v1.6.1 (CODE_FACT_MODE call sites refactored away)
     LSTR_FACT_MODE           = 0,
     LSTR_BEST                = 0xc8,  // CODE_SCORE_BEST       "BEST:"
     LSTR_SHOP_BACKGROUND     = 0xc9,  // CODE_SHOP_BACKGROUND  "BACKGROUND"
     LSTR_SHOP_BLADE          = 0xca,  // CODE_SHOP_BLADE       "BLADE"
     LSTR_SHOP_FULL_VERSION   = 0xcb,  // CODE_SHOP_FULL_VERSION "FULL VERSION"
-    // TODO: binary addr unknown -- CODE_SHOP_SPECIAL key removed/renamed in v1.6.1; re-derive from v1.6.1 call site
+    // Defunct: key removed in v1.6.1 (CODE_SHOP_SPECIAL call sites refactored away)
     LSTR_SHOP_SPECIAL        = 0,
+    LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY = 0xce,  // CODE_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY
+    LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY     = 0xcf,  // CODE_DJ_BAMBOO_BLADE_PLAYED_TODAY
+    LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP  = 0xd7,  // CODE_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP
+    LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN  = 0xd8,  // CODE_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN
 };
 
 // --- StringEntry (12 bytes) ---
