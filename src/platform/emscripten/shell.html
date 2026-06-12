@@ -46,66 +46,56 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* --- Loading overlay: fixed to the full window, NOT a child of the
-       canvas viewport.  This ensures it covers the whole screen regardless
-       of canvas size, even before the first resize() call fires. --- */
-    #loading-overlay {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      background: #111;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 10;
-    }
-
-    /* Splash image: centered, scales to fit viewport preserving aspect ratio. */
+    /* Port specific: splash image sits inside #viewport as an absolute sibling
+       of the canvas.  resize() sets its CSS width/height to the same letterboxed
+       dimensions as the canvas (scale*960 x scale*640), so the splash always
+       covers exactly the game viewport rectangle.  object-fit:cover scales the
+       512x512 PNG up to fill that 3:2 rect, cropping top/bottom as needed.
+       The black letterbox bars outside #viewport's flex-centered child area are
+       #viewport's own black background -- the splash never bleeds past the
+       canvas rect.
+       z-index 10 sits above the canvas (which has no explicit z-index) but
+       below the tap-overlay (z-index 20). */
     #splash-img {
-      max-width: 100%;
-      max-height: 100%;
-      width: auto;
-      height: auto;
-      object-fit: contain;
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      display: block;
+      object-fit: cover;
+      z-index: 10;
+      pointer-events: none;
+      user-select: none;
     }
 
-    /* Progress bar: positioned in the lower half (~75% down) of the overlay,
-       horizontally centered, overlaying the bottom of the splash image. */
+    /* Progress bar: absolutely positioned inside #viewport, sitting in the
+       lower portion of the splash/canvas area.  JS sets its left/bottom/width
+       to match the canvas rect so it stays inside the game viewport on resize.
+       Style: classic Apple boot-bar -- thin pill track with hairline border,
+       solid white fill growing left-to-right.  No gradient, no glow. */
     #progress-bar-wrap {
       position: absolute;
-      bottom: 18%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 60%;
-      max-width: 420px;
       height: 8px;
-      background: rgba(255,255,255,0.18);
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.35);
       border-radius: 4px;
       overflow: hidden;
+      z-index: 11;
     }
 
     #progress-bar {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #e8c44a, #ff6b1a);
-      border-radius: 4px;
+      background: #fff;
+      border-radius: 3px;
       transition: width 0.15s ease;
     }
 
-    /* --- TAP TO START overlay: also fixed to the full window so it covers
-       the whole screen.  display:none initially; JS adds .visible when
-       the runtime is ready.  High z-index sits above the canvas. --- */
+    /* --- TAP TO START overlay: absolutely positioned inside #viewport so it
+       is clipped to the game viewport rectangle (same area as the canvas).
+       JS sets its position/size to match the canvas rect.
+       display:none initially; JS shows it when the runtime is ready.
+       Sits above the splash (z-index 20) so the splash image shows behind it
+       as a backdrop -- visually: splash + TAP TO START. --- */
     #tap-overlay {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
+      position: absolute;
       background: rgba(0, 0, 0, 0.72);
       display: none; /* shown by JS once runtime ready */
       flex-direction: column;
@@ -162,8 +152,11 @@
   </style>
 </head>
 <body>
-  <!-- Port specific: overlays are siblings of #viewport (not children) so
-       they are fixed to the full window and not clipped by the canvas size. -->
+  <!-- Port specific: splash, progress bar, and tap-overlay all live INSIDE
+       the viewport div so they are naturally clipped to the game-viewport
+       rectangle (scale*960 x scale*640, flex-centered with black letterbox bars
+       outside). resize() sets explicit CSS dimensions on the canvas, splash, and
+       tap-overlay so they all coincide. -->
   <div id="viewport">
     <!-- Canvas: id="canvas" is what Emscripten looks up.  Backing size is
          960x640 (set by SDL_CreateWindow in mainEmscripten.cpp); JS resize()
@@ -171,56 +164,104 @@
          window without changing the backing resolution, keeping
          TransformTouchNormalized coords valid. -->
     <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
-  </div>
 
-  <!-- Loading overlay: fixed full-window, outside #viewport.
-       splash.png is the Halfbrick loading screen image served alongside
-       fruit-ninja.html (copied to build-web/ by CMake POST_BUILD command).
-       It is referenced by relative URL so it loads immediately, before
-       the 31MB .data bundle is fetched and MEMFS is populated. -->
-  <div id="loading-overlay">
+    <!-- Splash image: absolute sibling of canvas inside the viewport div.
+         resize() sizes it identically to the canvas (same letterboxed rect).
+         object-fit:cover fills the 3:2 rect from the 512x512 PNG.
+         Referenced by relative URL -- loads immediately, before .data bundle. -->
     <img id="splash-img" src="splash.png" alt="" draggable="false">
+
+    <!-- Progress bar: absolute inside the viewport div, lower portion of canvas
+         rect. resize() positions it to the lower 18% of the canvas area. -->
     <div id="progress-bar-wrap">
       <div id="progress-bar"></div>
     </div>
-  </div>
 
-  <!-- TAP TO START overlay: fixed full-window, outside #viewport.
-       Primary button resumes AudioContext (audio-gesture unlock) then starts.
-       Secondary button skips audio resume and calls fn_disable_audio() so
-       the in-game music/sfx toggles display as off from the first frame.
-       After either dismiss the overlay is removed from DOM so the canvas
-       gets all subsequent events unobstructed. -->
-  <div id="tap-overlay" aria-modal="true" role="dialog" aria-label="Start game">
-    <span id="tap-text" role="button" tabindex="0" aria-label="Tap to start">TAP TO START</span>
-    <button id="tap-silent" tabindex="0">tap to start without audio</button>
+    <!-- TAP TO START overlay: absolute sibling of canvas inside the viewport div.
+         resize() sizes/positions it to match the canvas rect.
+         Primary button resumes AudioContext (audio-gesture unlock) then starts.
+         Secondary button skips audio resume and calls fn_disable_audio() so
+         the in-game music/sfx toggles display as off from the first frame.
+         Both buttons call fn_user_started() so BootWait can proceed.
+         After dismiss the overlay is removed from DOM. -->
+    <div id="tap-overlay" aria-modal="true" role="dialog" aria-label="Start game">
+      <span id="tap-text" role="button" tabindex="0" aria-label="Tap to start">TAP TO START</span>
+      <button id="tap-silent" tabindex="0">tap to start without audio</button>
+    </div>
   </div>
 
   <script>
+  /* Port specific: all overlay elements are inside the viewport div as absolute
+     siblings of the canvas.  resize() sizes them to match the canvas's
+     letterboxed CSS rect so splash/tap-overlay cover exactly the game
+     viewport, and the progress bar sits in the lower portion of that rect.
+     Black letterbox bars outside the 3:2 area are the viewport div's background. */
   (function () {
     var GAME_W = 960, GAME_H = 640;
-    var canvas = document.getElementById('canvas');
+    var canvas       = document.getElementById('canvas');
+    var splashImg    = document.getElementById('splash-img');
+    var progressWrap = document.getElementById('progress-bar-wrap');
+    var tapOverlay   = document.getElementById('tap-overlay');
+
     function resize() {
       var ww = window.innerWidth, wh = window.innerHeight;
       var scale = Math.min(ww / GAME_W, wh / GAME_H);
-      canvas.style.width  = Math.floor(GAME_W * scale) + 'px';
-      canvas.style.height = Math.floor(GAME_H * scale) + 'px';
+      var cw = Math.floor(GAME_W * scale);
+      var ch = Math.floor(GAME_H * scale);
+
+      /* Canvas: letterboxed CSS size (backing stays 960x640). */
+      canvas.style.width  = cw + 'px';
+      canvas.style.height = ch + 'px';
+
+      /* Splash: same dimensions as canvas, centered via absolute positioning
+         that mirrors flexbox centering (left/top from center). */
+      if (splashImg) {
+        splashImg.style.width  = cw + 'px';
+        splashImg.style.height = ch + 'px';
+        splashImg.style.left   = Math.floor((ww - cw) / 2) + 'px';
+        splashImg.style.top    = Math.floor((wh - ch) / 2) + 'px';
+      }
+
+      /* Tap-overlay: same rect as splash/canvas. */
+      if (tapOverlay) {
+        tapOverlay.style.width  = cw + 'px';
+        tapOverlay.style.height = ch + 'px';
+        tapOverlay.style.left   = Math.floor((ww - cw) / 2) + 'px';
+        tapOverlay.style.top    = Math.floor((wh - ch) / 2) + 'px';
+      }
+
+      /* Progress bar: lower portion of the canvas rect (bottom 18% up from
+         bottom of canvas area), horizontally centered, width 60% of canvas. */
+      if (progressWrap) {
+        var barW = Math.min(Math.floor(cw * 0.60), 420);
+        var canvasLeft = Math.floor((ww - cw) / 2);
+        var canvasTop  = Math.floor((wh - ch) / 2);
+        progressWrap.style.width  = barW + 'px';
+        progressWrap.style.left   = (canvasLeft + Math.floor((cw - barW) / 2)) + 'px';
+        progressWrap.style.top    = (canvasTop + Math.floor(ch * 0.82 - 4)) + 'px';
+      }
     }
+
     resize();
     window.addEventListener('resize', resize);
   })();
 
-  var _loadingOverlay = document.getElementById('loading-overlay');
-  var _progressBar    = document.getElementById('progress-bar');
-  var _tapOverlay     = document.getElementById('tap-overlay');
-  var _tapText        = document.getElementById('tap-text');
-  var _tapSilent      = document.getElementById('tap-silent');
-  var _runtimeReady   = false;
+  var _progressBar  = document.getElementById('progress-bar');
+  var _progressWrap = document.getElementById('progress-bar-wrap');
+  var _splashImg    = document.getElementById('splash-img');
+  var _tapOverlay   = document.getElementById('tap-overlay');
+  var _tapText      = document.getElementById('tap-text');
+  var _tapSilent    = document.getElementById('tap-silent');
+  var _runtimeReady = false;
 
+  /* Called when Module.calledRun is true (runtime loaded, BEFORE game init).
+     Hides the progress bar, keeps the splash visible as backdrop for the
+     TAP TO START buttons, and shows the tap-overlay over the splash. */
   function _showTapOverlay() {
     if (_runtimeReady) return;
     _runtimeReady = true;
-    if (_loadingOverlay) _loadingOverlay.style.display = 'none';
+    /* Hide progress bar -- download done. Splash stays as tap-overlay backdrop. */
+    if (_progressWrap) _progressWrap.style.display = 'none';
     if (_tapOverlay) {
       _tapOverlay.style.display = 'flex';
       if (_tapText) _tapText.focus();
@@ -245,12 +286,23 @@
   }
 
   function _removeOverlay() {
+    /* Remove tap-overlay and splash from DOM once game init is under way. */
     if (_tapOverlay && _tapOverlay.parentNode) _tapOverlay.parentNode.removeChild(_tapOverlay);
+    if (_splashImg  && _splashImg.parentNode)  _splashImg.parentNode.removeChild(_splashImg);
+  }
+
+  function _notifyUserStarted() {
+    try {
+      if (typeof Module !== 'undefined' && Module._fn_user_started) Module._fn_user_started();
+    } catch (ex) {
+      console.warn('[boot] fn_user_started exception (non-fatal):', ex);
+    }
   }
 
   function _dismissWithAudio(e) {
     e.stopPropagation(); e.preventDefault();
     _resumeAudioContext();
+    _notifyUserStarted();
     _removeOverlay();
   }
 
@@ -261,6 +313,7 @@
     } catch (ex) {
       console.warn('[audio] fn_disable_audio exception (non-fatal):', ex);
     }
+    _notifyUserStarted();
     _removeOverlay();
   }
 

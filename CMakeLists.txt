@@ -248,7 +248,7 @@ if (EMSCRIPTEN)
         # call them as Module._fn_idbfs_ready() / Module._fn_disable_audio().
         # EMSCRIPTEN_KEEPALIVE alone is sufficient for most linker configs but
         # an explicit -sEXPORTED_FUNCTIONS ensures they survive aggressive DCE.
-        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_disable_audio']"
+        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_disable_audio','_fn_user_started']"
     )
     # Port specific: copy splash.png next to fruit-ninja.html so the loading
     # screen can reference it by relative URL before MEMFS is populated.
