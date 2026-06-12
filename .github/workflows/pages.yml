@@ -45,7 +45,11 @@ concurrency:
 # To use a different file, change these two env vars:
 env:
   ASSET_IDENTIFIER: badaappsgamescollection
-  ASSET_FILENAME: "FruitNinja.zip"
+  # "Fruit Ninja.zip" = the March-2011 build the port was RE'd against (fonts
+  # byte-identical to local). The other copies (FruitNinja.zip / "Fruit Ninja(2).zip")
+  # are later builds with reflowed fonts -> wrong font rendering. The space is
+  # %20-encoded for the download URL below.
+  ASSET_FILENAME: "Fruit Ninja.zip"
   EMSDK_IMAGE: "emscripten/emsdk:latest"
 
 jobs:
@@ -61,7 +65,7 @@ jobs:
       # ---- Download game assets from archive.org --------------------------
       - name: Download Fruit Ninja assets from archive.org
         run: |
-          DOWNLOAD_URL="https://archive.org/download/${ASSET_IDENTIFIER}/${ASSET_FILENAME}"
+          DOWNLOAD_URL="https://archive.org/download/${ASSET_IDENTIFIER}/${ASSET_FILENAME// /%20}"
           echo "Downloading: $DOWNLOAD_URL"
           curl -L --retry 5 --retry-delay 10 --fail \
                -o fruit-ninja-assets.zip \
