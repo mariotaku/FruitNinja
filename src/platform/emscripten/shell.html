@@ -65,10 +65,26 @@
       user-select: none;
     }
 
-    /* Progress bar: absolutely positioned inside #viewport, in the gap between
-       the splash's "Loading..." baked text and its copyright lines.
-       JS resize() maps fBar=0.750 through object-fit:cover geometry to compute
-       the screen Y; horizontal centering tracks the canvas width.
+    /* Loading cover: a black, soft-edged strip that sits over the splash's
+       baked "Loading..." text (z-index 11, above the splash at 10) so the
+       progress bar can replace that label.  border-radius rounds the corners
+       and the black box-shadow spread acts as a same-colour drop shadow that
+       feathers the edges into the dark splash -- no hard rectangle outline.
+       resize() centres it on the "Loading..." label (fLabel) via the same
+       object-fit:cover mapping used for the bar. */
+    #loading-cover {
+      position: absolute;
+      background: #000;
+      border-radius: 12px;
+      box-shadow: 0 0 20px 10px #000;
+      z-index: 11;
+      pointer-events: none;
+    }
+
+    /* Progress bar: absolutely positioned inside #viewport, drawn OVER the
+       "Loading..." label -- on top of #loading-cover (z-index 12 > 11).
+       JS resize() maps fLabel through object-fit:cover geometry to compute the
+       screen Y; horizontal centering tracks the canvas width.
        Style: classic Apple boot-bar -- thin pill track with hairline border,
        solid white fill growing left-to-right.  No gradient, no glow. */
     #progress-bar-wrap {
@@ -78,7 +94,7 @@
       border: 1px solid rgba(255,255,255,0.35);
       border-radius: 4px;
       overflow: hidden;
-      z-index: 11;
+      z-index: 12;
     }
 
     #progress-bar {
@@ -166,10 +182,15 @@
          Referenced by relative URL -- loads immediately, before .data bundle. -->
     <img id="splash-img" src="splash.png" alt="" draggable="false">
 
+    <!-- Loading cover: black, feathered (radius + drop-shadow) strip drawn over
+         the splash's baked "Loading..." text. resize() centres it on the label
+         so the progress bar can replace that text. -->
+    <div id="loading-cover"></div>
+
     <!-- Progress bar: absolute inside the viewport div.
-         resize() maps fBar=0.750 (gap between "Loading..." and copyright text
-         in the 512x512 splash) through the object-fit:cover transform to find
-         the screen Y, then centers the bar vertically on that point. -->
+         resize() maps fLabel (the "Loading..." label centre in the 512x512
+         splash) through the object-fit:cover transform to find the screen Y,
+         then centers the bar over that label, on top of #loading-cover. -->
     <div id="progress-bar-wrap">
       <div id="progress-bar"></div>
     </div>
@@ -197,6 +218,7 @@
     var GAME_W = 960, GAME_H = 640;
     var canvas       = document.getElementById('canvas');
     var splashImg    = document.getElementById('splash-img');
+    var loadingCover = document.getElementById('loading-cover');
     var progressWrap = document.getElementById('progress-bar-wrap');
     var tapOverlay   = document.getElementById('tap-overlay');
 
@@ -227,26 +249,40 @@
         tapOverlay.style.top    = Math.floor((wh - ch) / 2) + 'px';
       }
 
-      /* Progress bar: positioned in the gap between the splash's baked
-         "Loading..." text and its copyright lines.
-         fBar=0.750 is the midpoint of that gap as a fraction of the 512x512
-         image height (Loading... bottom ~0.733, copyright top ~0.768).
-         Map through object-fit:cover: the 512x512 image is scaled so its
-         larger dimension fills the canvas rect, then centered.
-         For a 3:2 canvas (wider than tall relative to square image), cover
+      /* Loading cover + progress bar: both centre on the splash's baked
+         "Loading..." label so the bar visually replaces that text.
+         fLabel is the label's vertical centre as a fraction of the 512x512
+         image height.  Map through object-fit:cover: the 512x512 image is
+         scaled so its larger dimension fills the canvas rect, then centered.
+         For a 3:2 canvas (wider than tall relative to the square image), cover
          scales by max(cw/512, ch/512), making the image taller than ch and
-         cropping top/bottom equally. */
+         cropping top/bottom equally, so the label lands in the lower third. */
+      var canvasLeft = Math.floor((ww - cw) / 2);
+      var canvasTop  = Math.floor((wh - ch) / 2);
+      var imgScale   = Math.max(cw / 512, ch / 512);
+      var imgH       = 512 * imgScale;
+      var imgTop     = canvasTop + (ch - imgH) / 2;
+      var fLabel     = 0.714;   /* "Loading..." text centre in the 512px splash */
+      var labelCenterY = Math.round(imgTop + fLabel * imgH);
+
+      /* Black feathered cover over the baked "Loading..." text.  Width tracks
+         the canvas; height tracks the image scale so it always blankets the
+         text line.  The box-shadow feather (CSS) extends well beyond this box. */
+      if (loadingCover) {
+        var coverW = Math.min(Math.floor(cw * 0.40), 340);
+        var coverH = Math.max(Math.round(0.055 * imgH), 30);
+        var coverTop = labelCenterY - Math.floor(coverH / 2);
+        loadingCover.style.width  = coverW + 'px';
+        loadingCover.style.height = coverH + 'px';
+        loadingCover.style.left   = (canvasLeft + Math.floor((cw - coverW) / 2)) + 'px';
+        loadingCover.style.top    = coverTop + 'px';
+      }
+
+      /* Progress bar: drawn over the label (on the cover), narrower than it. */
       if (progressWrap) {
         var barH = 8;
-        var barW = Math.min(Math.floor(cw * 0.60), 420);
-        var canvasLeft = Math.floor((ww - cw) / 2);
-        var canvasTop  = Math.floor((wh - ch) / 2);
-        var imgScale = Math.max(cw / 512, ch / 512);
-        var imgH     = 512 * imgScale;
-        var imgTop   = canvasTop + (ch - imgH) / 2;
-        var fBar     = 0.750;
-        var barCenterY = Math.round(imgTop + fBar * imgH);
-        var barTop = barCenterY - Math.floor(barH / 2);
+        var barW = Math.min(Math.floor(cw * 0.26), 240);
+        var barTop = labelCenterY - Math.floor(barH / 2);
         /* Clamp so bar stays within the canvas rect. */
         if (barTop < canvasTop) barTop = canvasTop;
         if (barTop > canvasTop + ch - barH) barTop = canvasTop + ch - barH;
@@ -262,6 +298,7 @@
 
   var _progressBar  = document.getElementById('progress-bar');
   var _progressWrap = document.getElementById('progress-bar-wrap');
+  var _loadingCover = document.getElementById('loading-cover');
   var _splashImg    = document.getElementById('splash-img');
   var _tapOverlay   = document.getElementById('tap-overlay');
   var _tapText      = document.getElementById('tap-text');
@@ -308,8 +345,11 @@
   }
 
   function _removeOverlayNow() {
-    /* Immediate DOM removal -- called after fade-out transition completes. */
+    /* Immediate DOM removal -- called after fade-out transition completes.
+       The loading cover is removed alongside the splash so the baked
+       "Loading..." text it hid never reappears as the splash is torn down. */
     if (_tapOverlay && _tapOverlay.parentNode) _tapOverlay.parentNode.removeChild(_tapOverlay);
+    if (_loadingCover && _loadingCover.parentNode) _loadingCover.parentNode.removeChild(_loadingCover);
     if (_splashImg  && _splashImg.parentNode)  _splashImg.parentNode.removeChild(_splashImg);
   }
 
