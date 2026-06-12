@@ -62,22 +62,31 @@
       z-index: 10;
     }
 
-    #loading-title {
-      color: #e8c44a;
-      font-size: 2.2em;
-      font-weight: bold;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      margin-bottom: 2em;
-      text-shadow: 0 0 18px rgba(232,196,74,0.5);
+    /* Splash image: centered, scales to fit viewport preserving aspect ratio. */
+    #splash-img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
     }
 
+    /* Progress bar: positioned in the lower half (~75% down) of the overlay,
+       horizontally centered, overlaying the bottom of the splash image. */
     #progress-bar-wrap {
-      width: 80%;
-      max-width: 500px;
-      height: 10px;
-      background: #333;
-      border-radius: 5px;
+      position: absolute;
+      bottom: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      max-width: 420px;
+      height: 8px;
+      background: rgba(255,255,255,0.18);
+      border-radius: 4px;
       overflow: hidden;
     }
 
@@ -85,15 +94,8 @@
       height: 100%;
       width: 0%;
       background: linear-gradient(90deg, #e8c44a, #ff6b1a);
-      border-radius: 5px;
+      border-radius: 4px;
       transition: width 0.15s ease;
-    }
-
-    #progress-label {
-      color: #888;
-      font-size: 0.85em;
-      margin-top: 0.9em;
-      min-height: 1.2em;
     }
 
     /* --- TAP TO START overlay: also fixed to the full window so it covers
@@ -171,13 +173,16 @@
     <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
   </div>
 
-  <!-- Loading overlay: fixed full-window, outside #viewport -->
+  <!-- Loading overlay: fixed full-window, outside #viewport.
+       splash.png is the Halfbrick loading screen image served alongside
+       fruit-ninja.html (copied to build-web/ by CMake POST_BUILD command).
+       It is referenced by relative URL so it loads immediately, before
+       the 31MB .data bundle is fetched and MEMFS is populated. -->
   <div id="loading-overlay">
-    <div id="loading-title">Fruit Ninja</div>
+    <img id="splash-img" src="splash.png" alt="" draggable="false">
     <div id="progress-bar-wrap">
       <div id="progress-bar"></div>
     </div>
-    <div id="progress-label">Loading...</div>
   </div>
 
   <!-- TAP TO START overlay: fixed full-window, outside #viewport.
@@ -207,7 +212,6 @@
 
   var _loadingOverlay = document.getElementById('loading-overlay');
   var _progressBar    = document.getElementById('progress-bar');
-  var _progressLabel  = document.getElementById('progress-label');
   var _tapOverlay     = document.getElementById('tap-overlay');
   var _tapText        = document.getElementById('tap-text');
   var _tapSilent      = document.getElementById('tap-silent');
@@ -277,7 +281,6 @@
 
   window.onerror = function (msg) {
     console.error('[onerror]', msg);
-    if (_progressLabel) _progressLabel.textContent = 'Error - see console';
   };
   </script>
 
@@ -309,10 +312,7 @@
       var m = text.match(/\((\d+)\/(\d+)\)/);
       if (m) {
         var pct = Math.round(100 * parseInt(m[1]) / parseInt(m[2]));
-        if (_progressBar)  _progressBar.style.width = pct + '%';
-        if (_progressLabel) _progressLabel.textContent = pct + '%';
-      } else {
-        if (_progressLabel) _progressLabel.textContent = text;
+        if (_progressBar) _progressBar.style.width = pct + '%';
       }
     },
 

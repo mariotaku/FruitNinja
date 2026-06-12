@@ -250,6 +250,15 @@ if (EMSCRIPTEN)
         # an explicit -sEXPORTED_FUNCTIONS ensures they survive aggressive DCE.
         "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_disable_audio']"
     )
+    # Port specific: copy splash.png next to fruit-ninja.html so the loading
+    # screen can reference it by relative URL before MEMFS is populated.
+    add_custom_command(TARGET fruit-ninja POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/splash.png
+            ${CMAKE_CURRENT_BINARY_DIR}/splash.png
+        COMMENT "Copying splash.png to web build output"
+        VERBATIM
+    )
 else()
     # Native desktop/webOS entry point.
     add_executable(fruit-ninja src/mainSDL.cpp)
