@@ -3,7 +3,7 @@
 
 //
 // SpawnModifier : GameModifier — v1.6.1 custom-spawner modifier.
-// Binary size ~0x3c (60 bytes). GetType() == 5.
+// Binary size 0x30 (48 bytes): base 0x20 + vector (0x0c) + float (0x04). GetType() == 5.
 // Holds a list of SPAWNER_INFO* entries parsed from <spawner> XML children.
 // UpdateSpecific ticks an accumulator and spawns fruit when timer periods elapse.
 //
@@ -45,5 +45,10 @@ public:
 
     GameModifier* Clone() override;
 };
+
+#ifdef __bada__
+static_assert(sizeof(SpawnModifier) == 0x30,
+    "SpawnModifier must be 0x30 bytes");
+#endif
 
 #endif // FN_GAME_SPAWN_MODIFIER_H

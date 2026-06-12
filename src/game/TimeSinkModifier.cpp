@@ -3,14 +3,15 @@
 // ApplyModifier @ 0x0014dc88, GetType @ 0x0014e1b8.
 
 #include "TimeSinkModifier.h"
+#include "GameWork.h"
 #include "entities/Fruit.h"
 #include "hud/TimeControl.h"
 #include <tinyxml2.h>
 
 TimeSinkModifier::TimeSinkModifier()
     : GameModifier()
-    , m_Multiplier(-4.0f)   // binary ctor default 0xc0800000 = -4.0
-    , m_Accumulator(-1.0f)  // -1.0 sentinel = deferred-accumulate mode
+    , m_Multiplier(0.0f)    // binary ctor @ 0x0014d9e8: +0x20 = 0.0f
+    , m_Accumulator(-4.0f)  // binary ctor @ 0x0014d9e8: +0x24 = -4.0f (0xc0800000)
 {}
 
 TimeSinkModifier::~TimeSinkModifier() {}
@@ -29,30 +30,34 @@ void TimeSinkModifier::ApplyModifier(bool isPurchased, float* extra) {
 }
 
 // @ 0x0014dbf4
-// Binary reads 'value' -> m_Multiplier and 'immediate' flag -> m_Accumulator
-// (1.0 if immediate is set, -1.0 otherwise).
+// Binary reads 'value' -> m_Multiplier (+0x20).
+// If 'immediate' attr PRESENT -> m_Accumulator (+0x24) = 0.0f.
+// If 'immediate' attr ABSENT  -> m_Accumulator (+0x24) = -1.0f.
 void TimeSinkModifier::ParseSpecific(TiXmlElement* xml) {
     if (!xml) return;
     xml->QueryFloatAttribute("value", &m_Multiplier);
     const char* imm = xml->Attribute("immediate");
-    if (imm && imm[0]) {
-        m_Accumulator = 1.0f;
+    if (imm) {
+        m_Accumulator = 0.0f;
     } else {
         m_Accumulator = -1.0f;
     }
 }
 
 // @ 0x0014dac4
-// Binary: compute v = (float)points; if m_Accumulator < 0 accumulate
-// m_Accumulator += v * m_Multiplier, else immediately TimeControl::AddTime(v * m_Multiplier).
+// Binary: v = (float)points;
+//   if m_Accumulator < 0 -> m_Accumulator += v * m_Multiplier
+//   else                 -> TimeControl::AddTime(v * m_Multiplier)
+// The TimeControl instance is fetched from game_work+0x180 (mCountDown).
 // TODO: 0x0014dac4 — wire to score notification signal via Delegate2
 void TimeSinkModifier::ScoreNotification(int points, int /*extra*/) {
     float v = (float)points;
     if (m_Accumulator < 0.0f) {
         m_Accumulator += v * m_Multiplier;
     } else {
-        // TimeControl::AddTime path
-        // TODO: 0x0014dac4 — find TimeControl singleton and call AddTime
+        if (game_work.mCountDown) {
+            game_work.mCountDown->AddTime(v * m_Multiplier);
+        }
     }
 }
 
@@ -63,7 +68,9 @@ void TimeSinkModifier::FruitWasSlicedSink(Fruit* /*fruit*/, int score) {
     if (m_Accumulator < 0.0f) {
         m_Accumulator += v * m_Multiplier;
     } else {
-        // TODO: 0x0014da7c — call TimeControl::AddTime(v * m_Multiplier)
+        if (game_work.mCountDown) {
+            game_work.mCountDown->AddTime(v * m_Multiplier);
+        }
     }
 }
 

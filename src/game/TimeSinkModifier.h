@@ -21,13 +21,14 @@ class Fruit;
 
 class TimeSinkModifier : public GameModifier {
 public:
-    // +0x20: time-per-event multiplier (ctor default -4.0)
+    // +0x20: time-per-event multiplier (ctor default 0.0; set via ParseSpecific 'value' attr)
     float m_Multiplier;
 
-    // +0x24: accumulator OR -1.0 sentinel.
-    // Parsed: 'immediate' attr -> +0x24 = 1.0, else -1.0.
+    // +0x24: accumulator. ctor default -4.0.
+    // Parsed: 'immediate' attr present -> 0.0f (immediate AddTime mode);
+    //         'immediate' attr absent  -> -1.0f (accumulate mode).
     // When >= 0: immediate AddTime mode.
-    // When < 0: accumulate into this field until threshold.
+    // When < 0: accumulate into this field.
     float m_Accumulator;
 
     TimeSinkModifier();
@@ -56,5 +57,10 @@ public:
     // TODO: 0x0014da7c — wire to FruitManager's FruitWasSliced signal
     void FruitWasSlicedSink(Fruit* fruit, int score);
 };
+
+#ifdef __bada__
+static_assert(sizeof(TimeSinkModifier) == 0x28,
+    "TimeSinkModifier must be 0x28 bytes");
+#endif
 
 #endif // FN_GAME_TIME_SINK_MODIFIER_H
