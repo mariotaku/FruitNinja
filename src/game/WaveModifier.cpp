@@ -167,6 +167,57 @@ void WaveQue::AddSpecials(Math::Random& rng) {
     }
 }
 
+// WaveQueItem::PopPlayer — binary @ 0x0012cf6c.
+// Pops front of m_SlotList into *out. Returns true if an item was available.
+bool WaveQueItem::PopPlayer(int* out) {
+    if (m_SlotList.empty()) return false;
+    if (out) *out = m_SlotList.front();
+    m_SlotList.erase(m_SlotList.begin());
+    return true;
+}
+
+// WaveQueItem::PerformCatchup — binary @ 0x0012cdb0.
+// If |leftCount - rightCount| > 5 and Rand32(100) < 60:
+//   scan m_SlotList for the majority side's entry and randomly flip one.
+// Returns 1 if it flipped, 0 otherwise.
+int WaveQueItem::PerformCatchup(int leftCount, int rightCount) {
+    int diff = leftCount - rightCount;
+    if (diff < 0) diff = -diff;
+    if (diff <= 5) return 0;
+
+    WaveManager* wm = WaveManager::GetInstance();
+    if (!wm) return 0;
+    if (wm->GetRandom().Rand32(100) >= 60u) return 0;
+
+    // The side with more spawns is reduced; the other grows.
+    // If leftCount < rightCount, the list has too many 2s; flip a 2->1.
+    // If leftCount > rightCount, the list has too many 1s; flip a 1->2.
+    int findOp  = (leftCount < rightCount) ? 2 : 1;
+    int flipTo  = (leftCount < rightCount) ? 1 : 2;
+
+    // Count candidates
+    int candidateCount = 0;
+    for (std::vector<int>::iterator it = m_SlotList.begin();
+         it != m_SlotList.end(); ++it) {
+        if (*it == findOp) ++candidateCount;
+    }
+    if (candidateCount == 0) return 0;
+
+    int pick = (int)wm->GetRandom().Rand32((uint32_t)candidateCount);
+    int seen = 0;
+    for (std::vector<int>::iterator it = m_SlotList.begin();
+         it != m_SlotList.end(); ++it) {
+        if (*it == findOp) {
+            if (seen == pick) {
+                *it = flipTo;
+                return 1;
+            }
+            ++seen;
+        }
+    }
+    return 0;
+}
+
 WaveModifier::WaveModifier()
     : GameModifier()
     , m_BombMult(1.0f)

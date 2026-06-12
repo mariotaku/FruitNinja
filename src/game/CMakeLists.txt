@@ -17,6 +17,10 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/TimeModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ComboModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/SpawnModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/TimeSinkModifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ExplodyFruitModifier.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScreenEffect.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PowerUp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PowerUpManager.cpp
