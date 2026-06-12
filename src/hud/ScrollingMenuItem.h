@@ -3,27 +3,33 @@
 
 //
 // ScrollingMenuItem -- single row in a ScrollingMenu.
-// Binary refs:
-//   ctor (5-param) 0x0015b228
-//   ctor (0-param) 0x0015b5dc
-//   dtor           0x0015c3ac / 0x0015c3e8
+// Binary refs (v1.6.1):
+//   ctor (5-param) 0x001afbb0
+//   ctor (0-param) 0x001b0104
+//   dtor           0x001b1488 / 0x001b1514
+//   VTABLE         0x2ce0a0 (stored vptr = 0x2ce0a8)
 //
-// Vtable (from binary @ 0x001e9f00):
-//   slot  0 (+0x00)  ~ScrollingMenuItem dtor1  0x0015c3ac
-//   slot  1 (+0x04)  ~ScrollingMenuItem dtor2  0x0015c3e8
-//   slot  2 (+0x08)  GetHeight                 0x0013cdf0
-//   slot  3 (+0x0C)  GetWidth                  0x0013cdf8
-//   slot  4 (+0x10)  SetHeight                 0x0013ce00
-//   slot  5 (+0x14)  SetWidth                  0x0013ce08
-//   slot  6 (+0x18)  Move(_Vector3)            0x0015aea8
-//   slot  7 (+0x1C)  Remove                    0x0013d14c
-//   slot  8 (+0x20)  SetParent(ScrollingMenu*) 0x0015aeb4
-//   slot  9 (+0x24)  SetOnscreen(bool)         0x0013ce10
-//   slot 10 (+0x28)  SetText(char*)            0x0015b124
-//   slot 11 (+0x2C)  Draw()                    0x0015b480  <-- ScrollingMenu::Draw dispatches here
-//   slot 12 (+0x30)  ?                         0x00147970
-//   slot 13 (+0x34)  ?                         0x00147974
-//   slot 14 (+0x38)  ?                         0x00147978
+// Vtable (v1.6.1, 17 slots):
+//   slot  0 (+0x00)  ~ScrollingMenuItem dtor1  0x001b1488
+//   slot  1 (+0x04)  ~ScrollingMenuItem dtor2  0x001b1514
+//   slot  2 (+0x08)  GetHeight()               0x00178d88
+//   slot  3 (+0x0C)  GetWidth()                0x00178d90
+//   slot  4 (+0x10)  SetHeight(float)          0x00178d98
+//   slot  5 (+0x14)  SetWidth(float)           0x00178da0
+//   slot  6 (+0x18)  Move(Vec3)                0x001af5f8
+//   slot  7 (+0x1C)  Remove()                  0x001792ec
+//   slot  8 (+0x20)  SetParent(ScrollingMenu*) 0x001af608
+//   slot  9 (+0x24)  SetOnscreen(bool)         0x00178da8
+//   slot 10 (+0x28)  Update(float) -> 1        0x00178db0  <-- inserted; base returns 1 (alive)
+//   slot 11 (+0x2C)  SetText(char*)            0x001afb14
+//   slot 12 (+0x30)  Draw()                    0x001afd40  <-- ScrollingMenu::Draw dispatches here
+//   slot 13 (+0x34)  (subclass hook)           0x00251238
+//   slot 14 (+0x38)  (subclass hook)           0x0025123c
+//   slot 15 (+0x3C)  (subclass hook)           0x00251244
+//   slot 16 (+0x40)  (subclass hook / pure)    0x00360324
+//
+// DIFFERS (v1.5.1 port): old vtable had Update omitted, SetText at slot 10,
+// Draw at slot 11. v1.6.1 inserts Update at slot 10 per binary VTABLE evidence.
 //
 // Struct layout (from ctor 0x0015b228, SetParent 0x0015aeb4, SetOnscreen 0x0013ce10):
 //   +0x00  vtable*               (4 bytes on ARM32)
@@ -69,7 +75,8 @@
 
 class ScrollingMenu;
 
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0015b5dc + 0x001e9f00 (asm-inspector)
+// v1.6.1 vtable @ 0x2ce0a8 (17 slots). Ctor @ 0x001b0104. Previous ASM-verified
+// marker removed: vtable layout updated for v1.6.1 (Update slot inserted at 10).
 class ScrollingMenuItem {
 public:
     // Matches ScrollingMenuItem::ScrollingMenuItem() @ 0x0015b5dc
@@ -107,34 +114,42 @@ public:
     virtual void SetParent(ScrollingMenu* parent);
 
     // vtable +0x24 (slot 9): SetOnscreen(bool)
-    // Binary 0x0013ce10: this[0x2D] = param  (byte at +0x2D, pre-Mortar::Delegate1 gap)
+    // Binary 0x00178da8: this[0x2D] = param  (byte at +0x2D, pre-Mortar::Delegate1 gap)
     virtual void SetOnscreen(bool onscreen) { m_bOnscreen = (uint8_t)onscreen; }
 
-    // vtable +0x28 (slot 10): SetText(char*)
-    // Binary: 0x0015b124 stores the pointer at +0x54.
+    // vtable +0x28 (slot 10): Update(float) -> int
+    // Binary 0x00178db0: base just `return 1` (item alive). Subclasses animate
+    // selection here. Inserted at slot 10 in v1.6.1 between SetOnscreen and SetText.
+    virtual int Update(float /*dt*/) { return 1; }
+
+    // vtable +0x2C (slot 11): SetText(char*)
+    // Binary 0x001afb14: stores the pointer at +0x54.
     virtual void SetText(const char* text);
 
-    // vtable +0x2C (slot 11): Draw() -- renders this item
-    // ScrollingMenu::Draw dispatches here via vtable[+0x2C].
+    // vtable +0x30 (slot 12): Draw() -- renders this item
+    // ScrollingMenu::Draw dispatches here via vtable[+0x30].
     // ShopListItem overrides at 0x0015eb00.
     virtual void Draw();
 
-    // vtable +0x30 (slot 12): cancel-tap signal
-    // Called when drag exceeds 5 units; clears pending tap highlight on the item.
-    // Binary: 0x00147970 (base no-op)
+    // vtable +0x34 (slot 13): cancel-tap signal
+    // Called when drag exceeds DRAG_CANCEL_DIST; clears pending tap highlight.
+    // Binary: 0x00251238 (base no-op). Old v1.5.1 slot 12.
     virtual void Slot12() {}
 
-    // vtable +0x34 (slot 13): hit-test query (Collide)
-    // Binary: 0x00147974. Called by ScrollingMenu::Collide for each item.
+    // vtable +0x38 (slot 14): hit-test query (Collide)
+    // Binary: 0x0025123c. Called by ScrollingMenu::Collide for each item.
     // Returns non-null (self) if the given touch slot is over this item, null otherwise.
     // Base ScrollingMenuItem returns nullptr (no hit-test geometry in base class).
-    // ShopListItem may override if hit-test is needed.
+    // Old v1.5.1 slot 13.
     virtual ScrollingMenuItem* Slot13(int /*touchSlot*/) { return nullptr; }
 
-    // vtable +0x38 (slot 14): touch-release signal
+    // vtable +0x3C (slot 15): touch-release signal
     // Called when the tracked finger leaves the inner scroll region.
-    // Binary: 0x00147978 (base no-op)
+    // Binary: 0x00251244 (base no-op). Old v1.5.1 slot 14.
     virtual void Slot14() {}
+
+    // vtable +0x40 (slot 16): subclass hook (binary 0x00360324, thunk/pure)
+    virtual void Slot16() {}
 
     // 4-param ctor: float width, float height, char const*, Mortar::Delegate1<...>
     // Binary @ 0x0015b228: param1(width)->m_Height, param2(height)->m_Width,

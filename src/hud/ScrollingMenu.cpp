@@ -122,7 +122,7 @@ void ScrollingMenu::SetWidth(float w) {
 
 // ---------------------------------------------------------------------------
 // ScrollingMenu::Collide @ 0x0015af4c
-// Walks m_Items calling vtable[+0x34] (Slot13) on each.
+// Walks m_Items calling vtable[+0x38] (Slot13/hit-test, v1.6.1 slot 14) on each.
 // Returns the first item that returns non-null, or nullptr.
 // Only walks when m_fieldCA != 0.
 // ---------------------------------------------------------------------------
@@ -231,7 +231,7 @@ void ScrollingMenu::Update(float /*dt*/) {
         if (stillIn != m_TouchId) {
             // --- Phase 3A: finger left inner region or was lifted ---
             if (m_pCollidedItem) {
-                m_pCollidedItem->Slot14();   // vtable[+0x38] Slot14 = touch-release
+                m_pCollidedItem->Slot14();   // vtable[+0x3C] Slot14 = touch-release (v1.6.1 slot 15)
             }
 
             if (!m_bDragging) {

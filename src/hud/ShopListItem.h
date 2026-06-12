@@ -8,11 +8,11 @@
 //   ctor (5-param) 0x0015f734  (takes ItemInfo* + texture data)
 //   dtor           0x0015cf50 / 0x0015cfb4 / 0x0015d018
 //
-// Vtable overrides (from 0x001ea030):
+// Vtable overrides (v1.6.1):
 //   slot  0 (+0x00)  ~ShopListItem dtor1  0x0015cfb4
 //   slot  1 (+0x04)  ~ShopListItem dtor2  0x0015d018
 //   slot  6 (+0x18)  ShopListItem::Move   0x0015d9fc
-//   slot 11 (+0x2C)  ShopListItem::Draw   0x0015eb00
+//   slot 12 (+0x30)  ShopListItem::Draw   0x0015eb00  (was slot 11 in v1.5.1)
 //
 // Binary ScrollingMenuItem ends at +0x58 (88 bytes; base ctor 0x0015b5dc).
 // ShopListItem own-fields begin immediately at +0x58 in the binary:
@@ -47,7 +47,9 @@
 class ItemInfo;
 class ShopScreen;
 
-// ASM-verified: 2026-04-29T00:00Z binary @ 0x0015f9e8 + 0x0015c988 + 0x0015eb00 (asm-inspector)
+// v1.6.1: ShopListItem vtable @ 0x1ea030 (17 slots, inherits v1.6.1 ScrollingMenuItem).
+// Draw override now vtable slot 12 (+0x30) after Update inserted at slot 10 in base.
+// Previous ASM-verified marker removed: base vtable shape updated for v1.6.1.
 class ShopListItem : public ScrollingMenuItem {
 public:
     // Matches ShopListItem::ShopListItem() @ 0x0015f9e8
@@ -73,7 +75,7 @@ public:
     // See docs/screens/shop-list-item-draw.md section 8 for full spec.
     void Move(float x, float y, float z) override;
 
-    // vtable slot 11 (+0x2C): Draw override -- renders the row
+    // vtable slot 12 (+0x30): Draw override -- renders the row (v1.6.1)
     // Binary 0x0015eb00, ~450 instructions, 5 Font::DrawString calls.
     void Draw() override;
 
