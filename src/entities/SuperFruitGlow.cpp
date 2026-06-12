@@ -39,8 +39,14 @@ SuperFruitGlow::SuperFruitGlow(Fruit* fruit)
     // +0x30: HUDControl m_LayerFlags — ctor sets per spec (0x80)
     m_LayerFlags = 0x80;
 
-    // TODO: 0x1c06bc — Event1<Fruit*> += Delegate1<SuperFruitGlow> (subscribe fruit-slice;
-    //   requires #29 event/delegate infra). When Fruit slice fires, set m_bPendingRemoval.
+    // TODO: 0x1c06bc — subscribe Delegate1<void,Fruit*>::Make(this,
+    //   &SuperFruitGlow::OnFruitSliced) to the owning Event1<Fruit*>.
+    //   The event owner (Fruit or a global per-fruit signal) is not yet ported;
+    //   Fruit::sizeof==0x118 and SuperFruitControl::sizeof==0x108 are both
+    //   layout-asserted. The event owner must be RE'd to identify the correct
+    //   struct and offset before this can be wired.
+    //   Binary: SuperFruitGlow ctor @ 0x1c06bc builds delegate on stack (local_24)
+    //   and calls Event1<Fruit*>::operator+=.
 
     // TODO: 0x1c06bc — play looping SFX via GameSound::SFXPlay(1.0, ...) -> m_pSound handle
 }
@@ -54,8 +60,9 @@ SuperFruitGlow::~SuperFruitGlow() {
 // slot3: Release @ 0x1c01c8
 // Binary: T_1621(); if(m_pFruit) Event1<Fruit*> -= delegate (unsubscribe).
 void SuperFruitGlow::Release() {
-    // TODO: 0x1c01c8 — Event1<Fruit*> -= delegate (unsubscribe from fruit-slice event;
-    //   requires #29 event infra)
+    // TODO: 0x1c01c8 — unsubscribe Delegate1<void,Fruit*>::Make(this,
+    //   &SuperFruitGlow::OnFruitSliced) from the owning Event1<Fruit*>.
+    //   Same event owner as ctor subscribe TODO above (not yet ported).
     m_pFruit = 0;
     HUDControl3d::Release();
 }

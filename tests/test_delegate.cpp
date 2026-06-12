@@ -1,6 +1,4 @@
 // Mortar::Delegate basic correctness + size-fidelity test.
-//
-// Binary spec: docs/engine/delegate-system.md
 //   Total size 36 bytes / 0x24 (uniform across all signatures).
 
 #include "engine/util/Delegate.h"
@@ -33,7 +31,7 @@ int main() {
     using D0 = Mortar::Delegate<void()>;
     using D2 = Mortar::Delegate<void(int, int)>;
 
-    // Signature uniformity (per docs/engine/delegate-system.md).
+    // Signature uniformity (binary layout: 36 bytes on 32-bit ARM, uniform across arities).
     CHECK(sizeof(D0) == sizeof(Mortar::Delegate<bool(float)>));
     CHECK(sizeof(D0) == sizeof(Mortar::Delegate<int(int, int, int, int)>));
 

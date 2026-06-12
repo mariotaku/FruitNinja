@@ -75,8 +75,7 @@ void FruitCamera::UpdateCamera(float dt) {
         m_ZoomT += 3.0f * dt;
         if (m_ZoomT >= 1.0f) {
             m_ZoomT = 1.0f;
-            // TODO: 0x1edf24 — fire m_OnZoomDone when ZoomT clamps to 1.0
-            //   (requires #29 Delegate/Event infra): m_OnZoomDone();
+            m_OnZoomDone();
             m_CameraMode = 0;
         }
         break;
@@ -85,8 +84,7 @@ void FruitCamera::UpdateCamera(float dt) {
         m_ZoomT += -10.0f * dt;
         if (m_ZoomT <= 0.0f) {
             m_ZoomT = 0.0f;
-            // TODO: 0x1edf24 — fire m_OnZoomDone when ZoomT clamps to 0.0
-            //   (requires #29 Delegate/Event infra): m_OnZoomDone();
+            m_OnZoomDone();
             m_CameraMode = 0;
         }
         break;

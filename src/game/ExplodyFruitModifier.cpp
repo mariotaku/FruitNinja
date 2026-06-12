@@ -68,11 +68,14 @@ int ExplodyFruitModifier::UpdateSpecific(float /*dt*/) { return 0; }
 
 // @ 0x00135574
 // Binary: chain base ApplyModifier, then (if m_BonusAccum+0x0c<=0) register
-// FruitWasSliced as Delegate3 on the slice event.
-// TODO: 0x00135574 — register FruitWasSliced on FruitManager's slice signal
+//   Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this,&ExplodyFruitModifier::FruitWasSliced)
+//     += FruitManager::m_FruitWasSliced (Event3<Fruit*,int,Mortar::Entity*>).
+// TODO: 0x00135574 — subscribe FruitWasSliced delegate to FruitManager's
+//   Event3<Fruit*,int,Mortar::Entity*> m_FruitWasSliced.
+//   FruitManager not yet ported; event owner unknown in current port.
 void ExplodyFruitModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
-    // Delegate registration deferred — signal infrastructure not yet ported.
+    // Delegate registration deferred — event owner (FruitManager) not yet ported.
 }
 
 // @ 0x0013514c
@@ -107,10 +110,10 @@ void ExplodyFruitModifier::ParseSpecific(TiXmlElement* xml) {
 }
 
 // @ 0x001358d4
+// Delegate3<void,Fruit*,int,Mortar::Entity*> target; subscribed in ApplyModifier.
 // Binary: if game_work byte[+0x330] != 0 -> return;
 // else new(0xa4) FruitSplosion(+0x20,+0x24,+0x28,+0x2c, fruit, +0x30 as int);
 //      HUD::AddControl(GameHUD, splosion, 0)
-// TODO: 0x001358d4 — wire to FruitManager's FruitWasSliced signal
 // TODO: 0x001358d4 — binary passes hudRoot+0x40 as first arg to AddControl; resolve HUD subtree offset
 void ExplodyFruitModifier::FruitWasSliced(
     Fruit* fruit, int /*score*/, Mortar::Entity* entity)

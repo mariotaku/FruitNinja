@@ -94,8 +94,6 @@ public:
     // +0x184: callback fired when zoom transition completes (zoom-in at ZoomT==1, zoom-out at ZoomT==0).
     // Binary: Delegate0::Delegate0 ctor'd at offset +0x184, sizeof Delegate0<void> = 36 bytes -> +0x1A7.
     // Total = 0x1A8. (36B Delegate0<void> = 0x24B on 32-bit ARM = matches 0x184+0x24=0x1A8)
-    // TODO: 0x1edf24 — fire m_OnZoomDone in UpdateCamera zoom state machine when ZoomT clamps
-    //   (requires #29 Delegate/Event infra for the fire call; field declared at correct offset)
     Mortar::Delegate0<void> m_OnZoomDone;
 
     FruitCamera();
