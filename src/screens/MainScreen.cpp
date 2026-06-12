@@ -710,21 +710,23 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
         m_ninjaTextTex->UnSet();
     }
 
-    // 4. Parchment instruction text (v1.6.1: BakedStringBox replaced slice_fruit.tex).
-    // v1.5.1 drew slice_fruit.tex here; v1.6.1 @0x0019811c creates a BakedStringBox
-    // at MainScreen+0xe0, sets text via GETSTRING_CAST_0(0x39d) = "SLICE FRUIT TO BEGIN",
-    // and draws it in the same parchment area. Port renders the string with m_pFont
-    // (verdana.fnt, loaded in ctor) at the same m_LogoFruitPos used by the old texture.
-    // Defunct: v1.5.1 slice_fruit.tex draw -- replaced by dynamic text in v1.6.1;
-    //   texture load retained above (fails gracefully via IsValid on v1.6.1 assets).
+    // 4. Parchment frame (slice_fruit.tex) + instruction text on top.
+    // v1.6.1 kept slice_fruit.tex as the parchment FRAME and replaced the baked text
+    // inside it with a BakedStringBox (GETSTRING_CAST_0(0x39d) = "SLICE FRUIT TO BEGIN").
+    // Draw order: frame first, dynamic text second so the words sit on the parchment.
+    if (m_TexSliceFruit.IsValid()) {
+        m_TexSliceFruit->Set();
+        SetupQuadMatrix(mm, hudScale,
+            (float)m_TexSliceFruit->m_Width, (float)m_TexSliceFruit->m_Height,
+            m_LogoFruitPos);
+        game.renderer.DrawQuad(m_DrawColour);
+        m_TexSliceFruit->UnSet();
+    }
     if (m_pFont.IsValid()) {
         const char* sliceText = Mortar::GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);
         if (sliceText) {
-            // Brown parchment colour: RGB(0x74, 0x5D, 0x3C) -- same as AboutScreen
-            // parchment text (binary v1.6.1 BakedStringBox inherits from this colour family).
+            // Brown parchment text colour: RGB(0x74, 0x5D, 0x3C).
             const Colour textColour(0x74, 0x5D, 0x3C, 255);
-            // Centre the text on the parchment at m_LogoFruitPos.
-            // maxWH bounds ~75x30 (RE hint: approximate from parchment size).
             m_pFont->DrawString(11.0f, 1.0f, 0.0f, sliceText,
                 m_LogoFruitPos, textColour,
                 Mortar::FONT_ALIGN_CENTER | Mortar::FONT_ALIGN_MIDDLE);
