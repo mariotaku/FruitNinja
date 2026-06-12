@@ -327,6 +327,143 @@ static void test_drain_interleaved()
     CHECK(big != 0);
 }
 
+// Verify that a split whose remainder payload would be smaller than sizeof(void*)
+// (the free-list link width) is suppressed -- the whole block is given to the
+// caller rather than creating an un-linkable sub-minimum fragment.
+//
+// Construction:
+//   We need remainder in the range (kHeaderSize, kHeaderSize + sizeof(void*)),
+//   i.e. remainder payload in [1, sizeof(void*)-1].  Use remainder = kHeaderSize + 4
+//   (payload = 4 < 8) which on x64 satisfies: 4 > 0 so the old "remainder > kHeaderSize"
+//   guard passes and the split fires; 4 < sizeof(void*)=8 so SetFreeNext overruns.
+//
+//   free block total = need + kHeaderSize + 4
+//   need = kHeaderSize + aligned_payload_of_request
+//
+//   Choose total = 128 (fixed).  Then:
+//     need = 128 - (kHeaderSize + 4) = 92  => aligned_payload = 92 - kHeaderSize = 60
+//   => request Allocate(60) from a free block of 128.
+//
+//   On ARM32: kHeaderSize=16, sizeof(void*)=4.  remainder=kHeaderSize+4=20.
+//   remainder > kHeaderSize (20>16) TRUE, payload=4==sizeof(void*) so the link
+//   write is exactly 4 bytes -- no overrun.  The fix makes this platform-safe by
+//   raising the threshold to kHeaderSize + sizeof(void*).
+// Verify that a split whose remainder payload would be smaller than sizeof(void*)
+// (the free-list link width) is suppressed -- the whole block is given to the
+// caller rather than creating an un-linkable sub-minimum fragment.
+//
+// Construction:
+//   We need remainder R such that:
+//     R > kHeaderSize   (the existing guard passes -- split would fire)
+//     R < kHeaderSize + sizeof(void*)  (payload < link width -- overrun occurs)
+//   Use R = kHeaderSize + 4:  payload = 4 bytes; SetFreeNext writes 8 => 4-byte overrun.
+//
+//   Pick BLOCK_TOTAL = 128 (4-byte aligned, large enough).
+//   Target is allocated with payload = BLOCK_TOTAL - kHeaderSize (block fills 128 bytes).
+//   Then freed (block size = 128 stays in free-list).
+//   Then Allocate(REQUEST_SZ) where REQUEST_SZ = BLOCK_TOTAL - R - kHeaderSize:
+//     need = kHeaderSize + REQUEST_SZ = BLOCK_TOTAL - R
+//     remainder = BLOCK_TOTAL - need = R = kHeaderSize + 4  => bug.
+//
+//   On ARM32: kHeaderSize=16, sizeof(void*)=4.  R=20; payload=4==sizeof(void*)
+//   so the link write is exactly in-bounds -- no overrun. The fix unifies both
+//   platforms by raising the threshold to kHeaderSize + sizeof(void*).
+static void test_tiny_remainder_split()
+{
+    static const size_t H  = Mortar::LinkedHeap::kHeaderSize;
+    static const size_t LS = sizeof(void*);
+
+    // Sub-minimum payload (< sizeof(void*)) to embed in the remainder block.
+    static const unsigned int SUB_PAYLOAD = 4u;
+    static const unsigned int R           = (unsigned int)(H + SUB_PAYLOAD); // remainder size
+    static const unsigned int BLOCK_TOTAL = 128u;  // target free-block total size
+    // Payload for the large allocation that will create a BLOCK_TOTAL block:
+    static const unsigned int TARGET_PAYLOAD = BLOCK_TOTAL - (unsigned int)H;
+    // Payload for the re-allocation that triggers the split:
+    //   need = H + REQUEST_SZ = BLOCK_TOTAL - R  => REQUEST_SZ = BLOCK_TOTAL - R - H
+    static const unsigned int REQUEST_SZ  = BLOCK_TOTAL - R - (unsigned int)H;
+
+    // This scenario is only unsafe when R > H (existing guard passes) AND payload < LS.
+    // On ARM32 (H=16, LS=4): R=20 > 16 BUT payload=4 == LS so no overrun.
+    // The test is still valid post-fix on ARM32: no split, correct behaviour.
+    // Skip if arithmetic degenerates (shouldn't happen on supported platforms).
+    if (R <= (unsigned int)H || REQUEST_SZ == 0 || BLOCK_TOTAL <= R + (unsigned int)H) {
+        std::printf("  [tiny_remainder_split: skipped -- degenerate platform config]\n");
+        return;
+    }
+
+    // Heap: anchor + target (128 bytes) + sentinel + slack.
+    Mortar::LinkedHeap heap(BLOCK_TOTAL * 5 + 512);
+
+    // Anchor before target so that when target is freed it is not the tail block.
+    void* anchor = heap.Allocate(TARGET_PAYLOAD, "trs-anchor");
+    CHECK(anchor != 0);
+
+    // Target: allocate exactly BLOCK_TOTAL bytes of total block space.
+    void* target = heap.Allocate(TARGET_PAYLOAD, "trs-target");
+    CHECK(target != 0);
+
+    // Sentinel immediately after target.  Its prev pointer is what the overrun stomps.
+    void* sentinel = heap.Allocate(TARGET_PAYLOAD, "trs-sentinel");
+    CHECK(sentinel != 0);
+
+    // Free target -> goes onto free-list (sentinel keeps it non-tail).
+    heap.Release(target, true);
+    check_list_integrity(heap);
+
+    // Allocate REQUEST_SZ from free-list.  The free block is 128 bytes.
+    //   need = H + REQUEST_SZ = BLOCK_TOTAL - R
+    //   remainder = R = H + 4  (payload = 4 < sizeof(void*) = 8 on x64)
+    // Pre-fix: remainder > H is TRUE => split fires => SetFreeNext writes 8 bytes
+    //   into 4-byte payload => sentinel->prev upper 4 bytes clobbered.
+    // Post-fix: remainder < H + LS => split suppressed.
+    void* small = heap.Allocate(REQUEST_SZ, "trs-small");
+    CHECK(small != 0);
+    check_list_integrity(heap);  // FAILS pre-fix: sentinel->prev clobbered
+
+    unsigned int used  = heap.GetSizeOfUsedBlocks();
+    unsigned int freed = heap.GetSizeOfUnusedBlocks();
+    CHECK(used > 0);
+    CHECK(used + freed <= heap.TestGetSize());
+
+    heap.Release(small, true);
+    check_list_integrity(heap);
+    heap.Release(sentinel, true);
+    check_list_integrity(heap);
+    heap.Release(anchor, true);
+    check_list_integrity(heap);
+    CHECK(heap.GetSizeOfUsedBlocks() == 0);
+}
+
+// Verify that allocating fewer bytes than sizeof(void*) (the free-list link)
+// and then freeing that block does not overrun into the physically adjacent
+// block's prev pointer. Pre-fix: SetFreeNext writes 8 bytes into a 4-byte
+// payload, overrunning the subsequent block. Post-fix: payload is clamped to
+// at least sizeof(void*) so the write is always in-bounds.
+static void test_tiny_alloc_free()
+{
+    // sizeof(void*) = 8 on x64; Allocate(4) yields a 4-byte payload pre-fix.
+    static const unsigned int TINY = 4;
+    Mortar::LinkedHeap heap(4096);
+
+    // Allocate tiny block, then a neighbor so tiny is non-tail.
+    void* tiny = heap.Allocate(TINY, "tiny");
+    CHECK(tiny != 0);
+    void* neighbor = heap.Allocate(64, "neighbor");
+    CHECK(neighbor != 0);
+
+    check_list_integrity(heap);
+
+    // Free tiny: SetFreeNext writes sizeof(void*)=8 bytes into the tiny
+    // payload. Pre-fix the payload is only 4 bytes -> neighbor->prev clobbered.
+    heap.Release(tiny, true);
+    check_list_integrity(heap);  // FAILS pre-fix
+
+    heap.Release(neighbor, true);
+    check_list_integrity(heap);
+    CHECK(heap.GetSizeOfUsedBlocks() == 0);
+}
+
 int main()
 {
     std::printf("test_linkedheap: running\n");
@@ -354,6 +491,12 @@ int main()
 
     test_split_path();
     std::printf("  split_path: PASS\n");
+
+    test_tiny_remainder_split();
+    std::printf("  tiny_remainder_split: PASS\n");
+
+    test_tiny_alloc_free();
+    std::printf("  tiny_alloc_free: PASS\n");
 
     std::printf("test_linkedheap: ALL PASS\n");
     return 0;

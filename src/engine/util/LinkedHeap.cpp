@@ -1,12 +1,36 @@
 // LinkedHeap — variable-size single-buffer block allocator.
 // Binary @ 0x001942fc (adjacent FreeList/StackHeap pool omitted — out of scope).
+//
+// Heap operation log (for crash replay):
+//   Set env var FN_HEAPLOG to a file path at runtime.  Every Allocate/AllocateFixed/
+//   Release call appends one ASCII line:
+//     A <size> <flag> <ptr>   -- allocation: size=requested bytes, flag=2(normal)/4(fixed)
+//     R <ptr>                  -- release
+//   The file is flushed after every line so a crash doesn't lose the tail.
+//   Usage:  FN_HEAPLOG=heap.log ./fruit-ninja.exe
+//   Zero overhead when the env var is unset (single cached-bool check).
 
 #include "util/LinkedHeap.h"
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
 #include <new>
 
 namespace Mortar {
+
+// Heap-log state -- initialised once on first Allocate/Release call.
+static bool    s_heapLogChecked = false;
+static FILE*   s_heapLogFile    = 0;
+
+static void HeapLogInit()
+{
+    if (s_heapLogChecked) return;
+    s_heapLogChecked = true;
+    const char* path = getenv("FN_HEAPLOG");
+    if (path && *path) {
+        s_heapLogFile = fopen(path, "a");
+    }
+}
 
 // Binary @ 0x00194948 — ctor.
 // size is aligned up to 4; buffer allocated; bump/end pointers set; heads zeroed.
@@ -63,6 +87,9 @@ void* LinkedHeap::AllocateFixed(unsigned int sz, const char* name)
 void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag)
 {
     unsigned int aligned = (sz + 3u) & ~3u;
+    // DIFFERS: x64 free-list link is 8 bytes (4 on ARM32); a freed block must hold
+    // SetFreeNext's write, so clamp payload to at least sizeof(void*).
+    if (aligned < (unsigned int)sizeof(void*)) aligned = (unsigned int)sizeof(void*);
     unsigned int need    = (unsigned int)((m_GuardBandSize >> 1) + kHeaderSize + aligned);
 
     // Free-list search first.
@@ -71,6 +98,11 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
         Block* blk = PayloadToBlock(hit);
         blk->SetFlag(flag);
         blk->name = name;
+        HeapLogInit();
+        if (s_heapLogFile) {
+            fprintf(s_heapLogFile, "A %u %u %p\n", sz, (unsigned)flag, hit);
+            fflush(s_heapLogFile);
+        }
         return hit;
     }
 
@@ -95,7 +127,13 @@ void* LinkedHeap::AllocateMemory(unsigned int sz, const char* name, uint8_t flag
     m_pLastBlock = blk;
 
     m_StartAddr += need;
-    return BlockToPayload(blk);
+    void* payload = BlockToPayload(blk);
+    HeapLogInit();
+    if (s_heapLogFile) {
+        fprintf(s_heapLogFile, "A %u %u %p\n", sz, (unsigned)flag, payload);
+        fflush(s_heapLogFile);
+    }
+    return payload;
 }
 
 // Binary @ 0x0019469c — free a payload.
@@ -111,6 +149,12 @@ void LinkedHeap::Release(void* payload, bool /*coalesce*/)
     Block* blk = PayloadToBlock(payload);
     uint8_t f  = blk->GetFlag();
     if (f == 1 || f == 4) return;  // already free or locked
+
+    HeapLogInit();
+    if (s_heapLogFile) {
+        fprintf(s_heapLogFile, "R %p\n", payload);
+        fflush(s_heapLogFile);
+    }
 
     blk->SetFlag(1);
     blk->name = "freed";
@@ -173,16 +217,28 @@ void LinkedHeap::Resize(void* payload, unsigned int newSz)
     if (need >= oldSize) return;
 
     unsigned int remainder = oldSize - need;
-    blk->SetSize(need);
 
-    uintptr_t splitAddr = reinterpret_cast<uintptr_t>(blk) + need;
-    Block* split        = reinterpret_cast<Block*>(splitAddr);
+    // DIFFERS: x64 free-list link is 8 bytes (4 on ARM32); a free block needs
+    // kHeaderSize + sizeof(void*) so SetFreeNext doesn't overrun the next block.
+    unsigned int minRemainder = (unsigned int)(kHeaderSize + sizeof(void*));
 
     if (blk == m_pLastBlock) {
-        // Just rewind bump.
-        m_StartAddr = splitAddr;
+        // Only rewind the bump if the remainder is at least the minimum free-block
+        // size; otherwise keep the block at its original size (internal fragment).
+        if (remainder >= minRemainder) {
+            blk->SetSize(need);
+            m_StartAddr = reinterpret_cast<uintptr_t>(blk) + need;
+        }
         return;
     }
+
+    // Non-tail split: only create the remainder block when it can safely hold
+    // the free-list link.
+    if (remainder < minRemainder) return;
+
+    blk->SetSize(need);
+    uintptr_t splitAddr = reinterpret_cast<uintptr_t>(blk) + need;
+    Block* split        = reinterpret_cast<Block*>(splitAddr);
 
     // Insert split block into all-blocks list.
     Block* nxt  = blk->next;
@@ -205,9 +261,9 @@ void LinkedHeap::Resize(void* payload, unsigned int newSz)
 // Exact/near fit: remove from free-list, return true + out payload.
 // Larger fit: split remainder back onto free-list, return true.
 // No fit: return false.
-// Split threshold: remainder > headerSize (guard=0), i.e. > sizeof(Block) on this build.
-// DIFFERS: original threshold = guardBand + 0x10 (ARM32 sizeof Block = 0x10 when guard=0),
-// port uses kHeaderSize = sizeof(Block) (0x20 on x64) to match pointer-size-agnostic layout.
+// DIFFERS: original split threshold = (guardBand>>1) + 0x10 (ARM32 sizeof Block).
+// Port raises it to kHeaderSize + sizeof(void*) so the remainder's payload always
+// holds the free-list link (4 bytes on ARM32, 8 on x64); SetFreeNext never overruns.
 bool LinkedHeap::FreeListSearch(unsigned int need, void*& out)
 {
     void* curPayload = m_pFreeListHead;
@@ -216,9 +272,11 @@ bool LinkedHeap::FreeListSearch(unsigned int need, void*& out)
         unsigned int sz  = cur->GetSize();
         if (sz >= need) {
             unsigned int remainder = sz - need;
-            // Split only when remainder is large enough to hold a header + at least 1 byte payload.
-            unsigned int headerSize = (unsigned int)((m_GuardBandSize >> 1) + kHeaderSize);
-            if (remainder > headerSize) {
+            // Split only when remainder can hold a full header plus the free-list link.
+            // DIFFERS: original = remainder > (guardBand>>1 + 0x10); port adds sizeof(void*)
+            // to ensure SetFreeNext never overruns the remainder's payload.
+            unsigned int minRemainder = (unsigned int)((m_GuardBandSize >> 1) + kHeaderSize + sizeof(void*));
+            if (remainder >= minRemainder) {
                 // Split: resize current block down, create remainder block.
                 cur->SetSize(need);
                 uintptr_t remAddr = reinterpret_cast<uintptr_t>(cur) + need;
