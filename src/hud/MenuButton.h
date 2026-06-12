@@ -2,8 +2,8 @@
 #define FN_MENU_BUTTON_H
 
 //
-// MenuButton : HUDControl3d (size = 0x15C, leaf class)
-// Reimplemented from docs/structs/gameplay-misc.md
+// MenuButton : HUDControl3d (size = 0x178, leaf class)
+// RE spec v1.6.1
 //
 // 3-layer rendering + 1 entity:
 //   Layer 0 (3D): Spinning fruit entity (NOT drawn by MenuButton — Mortar::ActorManager::Draw)
@@ -111,7 +111,7 @@ public:
     // Binary: std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11).
     std::list<MenuButtonAddOn> m_AddOns;   // +0x10C
 
-    // +0x118, +0x11C: text labels (original: BakedString* fg / shadow).
+    // +0x114, +0x118: text labels (original: BakedString* fg / shadow).
     // RE'd 2026-04-29: MenuButton::SetText (0x0014ebc0) is the only
     // writer, and the binary contains ZERO call sites for it. Both
     // pointers are always NULL at runtime; the label-render block in
@@ -119,11 +119,11 @@ public:
     // shipped Bada build. The port intentionally does not render labels.
     // See docs/engine/baked-string.md for the BakedString spec if a
     // reused-elsewhere consumer surfaces.
-    void* m_pLabel1;   // dead in shipped binary
-    void* m_pLabel2;   // dead in shipped binary
+    void* m_pLabel1;   // +0x114 dead in shipped binary
+    void* m_pLabel2;   // +0x118 dead in shipped binary
 
-    // +0x11C: for multiplayer colour tint
-    int m_PlayerIndex;
+    // +0x11C: unnamed 4-byte field (default 0). Purpose not yet RE'd.
+    uint32_t m_field11C;
 
     // +0x120
     uint8_t m_bScoreSubmitted;
@@ -139,41 +139,84 @@ public:
     // +0x123: = 1
     uint8_t m_bEnabled;
 
-    // +0x124: hit-test bounds target (lerped toward)
+    // +0x124: hit-test bounds target (lerped toward). x=+0x124, y=+0x128.
+    // +0x12C (z) aliases the multiplayer colour tint (m_PlayerIndex) for
+    // MP mode; Init writes hitBounds.z into the field and MP colour lives
+    // in the same 4 bytes. Only x/y are used for hit-testing.
     Vec3 m_TargetSize;
 
-    // +0x130: true if hitBounds > 0
-    bool m_bHasHitArea;
+    // +0x130: unnamed gate byte written 0 by Init; purpose not yet RE'd.
+    uint8_t m_field130;
 
     // +0x131: Touch-held state gate; set on press, cleared when finger leaves rect or releases. Was m_bHighlighted (misleading: not visual state).
     uint8_t m_bTouchHeld;
 
-    // +0x134: direct fruit reference for scale/rotate access
-    Fruit* m_pFruitPiece;
+    // +0x132..+0x133: padding
+    uint8_t m_pad132[2];
+
+    // +0x134: startup countdown (=0.25f). While >0, sets fruit piece flag
+    // bit 0 and early-returns from Update. Decremented each frame.
+    float m_StartupTimer;
 
     // +0x138: when 1, this button auto-fires its click delegate when the
     // hardware Back/Menu key (Game::m_BackKeyPressed at +0x604) is set.
     // Default 0 (set by Init); screen creation code opts a single button
-    // per screen into this role. See docs/engine/menubutton-138.md.
+    // per screen into this role.
     uint8_t m_bRespondsToBackKey;
 
-    // +0x13C: = 1.0
+    // +0x139: default 1. Controls swipe-release behaviour.
+    uint8_t m_bSwipeReleaseEnabled;
+
+    // +0x13A: default 1. Fire-tutorial gate flag.
+    uint8_t m_bFireTutorial;
+
+    // +0x13B: padding
+    uint8_t m_pad13B;
+
+    // +0x13C: hit bounds scale factor (Vec3, 12 bytes).
+    Vec3 m_HitBoundsScale;
+
+    // +0x148: true if hitBounds > 0 (moved from +0x130)
+    bool m_bHasHitArea;
+
+    // +0x149: default 1. Hit-test enable flag.
+    uint8_t m_bDoHitTest;
+
+    // +0x14A..+0x14B: padding
+    uint8_t m_pad14A[2];
+
+    // +0x14C: direct fruit reference for scale/rotate access (pointer, moved from +0x134)
+    Fruit* m_pFruitPiece;
+
+    // +0x150: gate byte (purpose not yet RE'd)
+    uint8_t m_field150;
+
+    // +0x151..+0x153: padding
+    uint8_t m_pad151[3];
+
+    // +0x154: per-button backdrop scale factor (=1.0 in Init, =0.5 in CreateButtons).
+    // Multiplied into the per-frame m_BackdropScale computation.
+    // RE spec v1.6.1 names this m_BackdropScaleFactor; port keeps m_AnimScale
+    // for call-site stability (MainScreen, DojoScreen set it by name).
     float m_AnimScale;
 
-    // +0x140: for "new" indicator bounce
+    // +0x158: for "new" indicator bounce (moved from +0x140, values unchanged: 0.85, 0.85, 0)
     Vec3 m_BounceParams;
 
-    // +0x14C — touch-area X inset (grace zone, default 5px). Was m_AnimSpeed2.
+    // +0x164: > 0 = shaking (random ±3.0 offset). Moved from +0x158.
+    float m_ShakeTimer;
+
+    // +0x168: touch-area X inset (grace zone, default 5px). Moved from +0x14C.
     float m_HitInsetX;
 
-    // +0x150 — touch-area Y inset (grace zone, default 5px). Was m_AnimSpeed.
+    // +0x16C: touch-area Y inset (grace zone, default 5px). Moved from +0x150.
     float m_HitInsetY;
 
-    // +0x154
-    float m_field154;
+    // +0x170: unnamed float (=100.0 in Init). Consumer is in Draw (not yet fully RE'd).
+    float m_field170;
 
-    // +0x158: > 0 = shaking (random ±3.0 offset)
-    float m_ShakeTimer;
+    // +0x174: unnamed float (=0.0 in Init). Decremented in Update tail.
+    float m_field174;
 
     MenuButton();
 
@@ -261,10 +304,25 @@ private:
 };
 
 #ifdef __bada__
-static_assert(__builtin_offsetof(MenuButton, m_pEntity)   == 0x80, "MenuButton m_pEntity offset");
-static_assert(__builtin_offsetof(MenuButton, m_AnimPhase) == 0xD0, "MenuButton m_AnimPhase offset");
-static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer) == 0x158, "MenuButton m_ShakeTimer offset");
-static_assert(sizeof(MenuButton) == 0x15C, "MenuButton sizeof mismatch");
+static_assert(__builtin_offsetof(MenuButton, m_pEntity)            == 0x80,  "MenuButton m_pEntity offset");
+static_assert(__builtin_offsetof(MenuButton, m_AnimPhase)          == 0xD0,  "MenuButton m_AnimPhase offset");
+static_assert(__builtin_offsetof(MenuButton, m_AddOns)             == 0x10C, "MenuButton m_AddOns offset");
+static_assert(__builtin_offsetof(MenuButton, m_TargetSize)         == 0x124, "MenuButton m_TargetSize offset");
+static_assert(__builtin_offsetof(MenuButton, m_StartupTimer)       == 0x134, "MenuButton m_StartupTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_bSwipeReleaseEnabled) == 0x139, "MenuButton m_bSwipeReleaseEnabled offset");
+static_assert(__builtin_offsetof(MenuButton, m_bFireTutorial)      == 0x13A, "MenuButton m_bFireTutorial offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitBoundsScale)     == 0x13C, "MenuButton m_HitBoundsScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_bHasHitArea)        == 0x148, "MenuButton m_bHasHitArea offset");
+static_assert(__builtin_offsetof(MenuButton, m_bDoHitTest)         == 0x149, "MenuButton m_bDoHitTest offset");
+static_assert(__builtin_offsetof(MenuButton, m_pFruitPiece)        == 0x14C, "MenuButton m_pFruitPiece offset");
+static_assert(__builtin_offsetof(MenuButton, m_AnimScale)          == 0x154, "MenuButton m_AnimScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_BounceParams)       == 0x158, "MenuButton m_BounceParams offset");
+static_assert(__builtin_offsetof(MenuButton, m_ShakeTimer)         == 0x164, "MenuButton m_ShakeTimer offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetX)          == 0x168, "MenuButton m_HitInsetX offset");
+static_assert(__builtin_offsetof(MenuButton, m_HitInsetY)          == 0x16C, "MenuButton m_HitInsetY offset");
+static_assert(__builtin_offsetof(MenuButton, m_field170)           == 0x170, "MenuButton m_field170 offset");
+static_assert(__builtin_offsetof(MenuButton, m_field174)           == 0x174, "MenuButton m_field174 offset");
+static_assert(sizeof(MenuButton) == 0x178, "MenuButton sizeof mismatch");
 #endif
 
 #endif

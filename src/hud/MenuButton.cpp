@@ -163,24 +163,36 @@ MenuButton::MenuButton()
       m_NewIndicatorTimer(-1.0f),
       m_BaseScale(0.0f, 0.0f, 0.0f),
       m_pLabel1(nullptr), m_pLabel2(nullptr),
-      m_PlayerIndex(0),
+      m_field11C(0),
       m_bScoreSubmitted(0),
       m_bFireOnRelease(1),
       m_bInteractive(1),
       m_bEnabled(1),
       m_TargetSize(0.0f, 0.0f, 0.0f),
-      m_bHasHitArea(false),
+      m_field130(0),
       m_bTouchHeld(0),
-      m_pFruitPiece(nullptr),
+      m_pad132(),
+      m_StartupTimer(0.0f),
       m_bRespondsToBackKey(0),
+      m_bSwipeReleaseEnabled(1),
+      m_bFireTutorial(1),
+      m_pad13B(0),
+      m_HitBoundsScale(0.0f, 0.0f, 0.0f),
+      m_bHasHitArea(false),
+      m_bDoHitTest(1),
+      m_pad14A(),
+      m_pFruitPiece(nullptr),
+      m_field150(0),
+      m_pad151(),
       m_AnimScale(1.0f),
       // m_BounceParams = (0.85, 0.85, 0.0) per binary @ 0x0014f240/0x0014f244.
       // Drives the new-item star anchor offset (0.425*W, 0.425*H from button centre).
       m_BounceParams(0.85f, 0.85f, 0.0f),
+      m_ShakeTimer(0.0f),
       m_HitInsetX(5.0f),
       m_HitInsetY(5.0f),
-      m_field154(0.0f),
-      m_ShakeTimer(0.0f)
+      m_field170(100.0f),
+      m_field174(0.0f)
 {
     // Binary HUDControl base ctor sets m_LayerFlags = 1. MenuButton::Init
     // bumps it to 0x40 only when fruitType >= 0 (i.e. the spinning-fruit
@@ -247,6 +259,14 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_HitInsetX = 5.0f;
     m_Timer = 0.0f;        // DAT_0014ee68
     m_bTouchHeld = 1;    // DAT_0014ee6c
+    m_field130 = 0;
+    m_bSwipeReleaseEnabled = 1;
+    m_bFireTutorial = 1;
+    m_bDoHitTest = 1;
+    m_field150 = 0;
+    m_StartupTimer = 0.25f;
+    m_field170 = 100.0f;
+    m_field174 = 0.0f;
 
     // Binary @ 0x0014f1bc..0x0014f1f8 — toggle branch (no fruit, no explicit
     // hitBounds): auto-size m_TargetSize and base.size from the bound
@@ -365,6 +385,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_BounceParams.x = 0.85f;  // DAT_0014f240
     m_BounceParams.y = 0.85f;  // DAT_0014f240
     m_BounceParams.z = 0.0f;   // DAT_0014f244
+    m_HitBoundsScale = Vec3(0.0f, 0.0f, 0.0f);
     // ASM-verified: 2026-05-18 binary @ 0x0014f1f8..0x0014f222 (re-analyst).
     // Binary's Init tail loads from GOT offset 0x000073EC, which
     // _GLOBAL__I_TutorialControl.cpp @ 0x001638cc initialises to
@@ -542,6 +563,16 @@ void MenuButton::SetNewSymbol(bool show) {
 // quad collapses to a point and the backdrop appears invisible.
 // ASM-verified: 2026-05-06T17:50 binary @ 0x0014eb84 (asm-inspector)
 void MenuButton::Update(float dt) {
+    // m_StartupTimer guard: while countdown > 0, set fruit piece flag bit 0
+    // (Entity::flags @+0x0C) and early-return. Timer decrements each frame.
+    if (m_StartupTimer > 0.0f) {
+        m_StartupTimer -= dt;
+        if (m_pFruitPiece) {
+            m_pFruitPiece->flags |= 1;
+        }
+        return;
+    }
+
     if (m_pEntity) {
         static std::map<MenuButton*, uint8_t> s_PrevSliced;
         uint8_t curr = m_pFruitPiece ? m_pFruitPiece->m_bSliced : 0;
@@ -937,9 +968,11 @@ void MenuButton::Update(float dt) {
     // is intentionally rendered for ALL MenuButtons (fruit + toggle).
     //
     // Per-button scaling override: only the big "NEW GAME" button has
-    // m_AnimScale = 0.5 (set by MainScreen on pPlayButton creation,
-    // binary @ 0x0014b82c). All others stay at the Init default 1.0.
+    // m_AnimScale = 0.5 (set by MainScreen on pPlayButton
+    // creation, binary @ 0x0014b82c). All others stay at the Init default 1.0.
     m_BackdropScale = size.x * 1.125f * m_AnimScale;
+    // Decrement m_field174 (Update tail; initial value 0.0, decrements by dt).
+    m_field174 -= dt;
 }
 
 // Matches binary MenuButton::UpdateTouchPosition (0x0014e3c4).
