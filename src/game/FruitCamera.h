@@ -2,8 +2,9 @@
 #define FN_FRUIT_CAMERA_H
 
 //
-// FruitCamera : MortarCamera (size = 0x16C / 364 bytes)
+// FruitCamera : MortarCamera (size = 0x1a8 / 424 bytes)
 //
+// v1.6.1 ground truth: GameInitialise @ 0x1d6c4: `operator_new(0x1a8)`.
 // Only slot 3 (UpdateCamera) is overridden from MortarCamera vtable.
 // FruitCamera::SetupPerspective(perspType, forceUpdate) at 0x001810ac is a
 // SEPARATE non-virtual method called directly from GameDraw.
@@ -12,12 +13,11 @@
 #include "render/MortarCamera.h"
 #include "math/Vec2.h"
 #include "math/Vec3.h"
+#include "util/Delegate.h"
 #include "entities/Entity.h"
 #include <cstdint>
 
 struct InputEvent;
-
-// Analysed: 2026-05-04T00:00
 
 // Binary enum from switch in SetupPerspective (0x001810ac).
 // Typo in original binary symbol preserved intentionally.
@@ -30,18 +30,18 @@ enum PERSPECIVE_TYPE {
 
 class FruitCamera : public Mortar::MortarCamera {
 public:
-    // +0x12C: entity pointer for follow mode (nullptr = none)
+    // +0x12C: entity pointer for follow mode (nullptr = none).
+    // v1.6.1 @ +0x12c confirmed.
     Mortar::Entity* m_pFollowEntity;
 
-    // +0x130: 0 = idle, 1 = follow
+    // +0x130: 0 = idle, 1 = follow, 2 = zoom-in, 3 = zoom-out.
+    // v1.6.1: modes 2/3 are the new zoom states.
     int m_CameraMode;
 
     // +0x134: orbit tilt yaw angle (uint16 fixed-point, full circle = 0x10000)
-    // Binary @ 0x00181400 / 0x0018151c — DebugTiltLeft/Right mutate this field
     uint16_t m_TiltYaw;
 
     // +0x136: orbit tilt pitch angle (uint16 fixed-point)
-    // Binary @ 0x00181638 / 0x00181754 — DebugTiltDown/Up mutate this field
     uint16_t m_TiltPitch;
 
     // +0x138: shake direction vector (from impact angle, decays with intensity)
@@ -52,39 +52,66 @@ public:
     uint16_t _pad142;
 
     // +0x144: camera target position (shake lerps toward m_ShakeDir)
-    // Initialized to (0.0, 0.0) from g_FruitCameraDefaultPos in BSS
     Vec2 m_Target;
 
-    // +0x14C, +0x150: float copies of ushort angle fields (cast each UpdateCamera)
+    // +0x14C: float copy of ushort angle field (cast each UpdateCamera)
+    // v1.6.1 @ +0x14c. Note: v1.5.1 had m_field14c + m_field150 as a pair;
+    // v1.6.1 only lists one field here at +0x14C.
     float m_field14c;
-    float m_field150;
 
-    // +0x154: |pos - target| magnitude, computed each frame
-    float m_DistanceMag;
+    // +0x150: lookAt saved each UpdateCamera frame.
+    // v1.6.1 @ +0x150 (3 floats = Vec3, 12B).
+    // DIFFERS: v1.5.1 port had m_field150 (float) + m_DistanceMag (float) + m_LookAtSnapshot (Vec3)
+    //   in this region. v1.6.1 collapses to m_LookAt (Vec3) at +0x150 per spec.
+    Vec3 m_LookAt;
 
-    // +0x158: lookAt saved each UpdateCamera frame
-    Vec3 m_LookAtSnapshot;
+    // +0x15C: zoom scale applied to perspective. Lerped by zoom state machine. = 1.0 in ctor.
+    float m_Zoom;
 
-    // +0x164: shake amplitude (decays linearly by dt each frame)
-    float m_ShakeIntensity;
+    // +0x160: roll-out value (short, converted via Lerp from m_RollScale). = 0 in ctor.
+    uint16_t m_RollOut;
+    uint16_t _pad162;
 
-    // +0x168: initial shake intensity (for ratio calculations in UpdateShake)
-    float m_ShakeIntensityInit;
+    // +0x164: zoom transition timer. Increments at 3*dt (zoom-in) or -10*dt (zoom-out).
+    float m_ZoomT;
+
+    // +0x168: zoom-target lookAt position (Vec3). = DAT vec in ctor.
+    Vec3 m_ZoomTarget;
+
+    // +0x174: zoom depth scale. = 1.0 in ctor.
+    float m_ZoomScale;
+
+    // +0x178: roll scale. = 1.0 in ctor.
+    float m_RollScale;
+
+    // +0x17C: gap / padding to align Delegate0 at +0x184.
+    // v1.6.1: vptr write `str r3,[r0],#0x184` places Delegate0 ctor at +0x184.
+    // +0x17c..+0x183 = 8 bytes (likely: m_ShakeIntensity @ +0x17c, m_ShakeIntensityInit @ +0x180).
+    // TODO: 0x1edb48 — resolve exact content of gap +0x17C..+0x183 from FruitCamera ctor
+    float m_ShakeIntensity;       // +0x17C (was +0x164 in v1.5.1 port; relocated in v1.6.1)
+    float m_ShakeIntensityInit;   // +0x180 (was +0x168 in v1.5.1 port; relocated in v1.6.1)
+
+    // +0x184: callback fired when zoom transition completes (zoom-in at ZoomT==1, zoom-out at ZoomT==0).
+    // Binary: Delegate0::Delegate0 ctor'd at offset +0x184, sizeof Delegate0<void> = 36 bytes -> +0x1A7.
+    // Total = 0x1A8. (36B Delegate0<void> = 0x24B on 32-bit ARM = matches 0x184+0x24=0x1A8)
+    // TODO: 0x1edf24 — fire m_OnZoomDone in UpdateCamera zoom state machine when ZoomT clamps
+    //   (requires #29 Delegate/Event infra for the fire call; field declared at correct offset)
+    Mortar::Delegate0<void> m_OnZoomDone;
 
     FruitCamera();
     ~FruitCamera();
 
-    // Vtable slot 3 override (0x00180c8c)
+    // Vtable slot 3 override (0x1edf24, v1.6.1)
+    // 4-state: 0=idle, 1=follow, 2=zoom-in, 3=zoom-out + zoom lerp + shake.
     void UpdateCamera(float dt);
 
     // Non-virtual (0x001810ac) — 4-type ortho dispatch
-    // Called from GameDraw as SetupPerspective(PT_STANDARD, false)
     void SetupPerspective(PERSPECIVE_TYPE perspType = PT_STANDARD, bool forceUpdate = false);
 
     // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
     void CreateCameraShake(Vec3 impact, float intensity, float dirScale);
 
-    // 0x00180ea0
+    // 0x00180ea0 (v1.5.1 address; v1.6.1 equivalent in UpdateCamera)
     void UpdateShake(float dt);
 
     // Binary @ 0x00180b2c — bind follow entity, reset tilt to (0,0), up=(0,1,0)
@@ -93,35 +120,53 @@ public:
     // Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
     Mortar::Entity* GetFollowEntity();
 
-    // --- Debug input handlers (binary @ addresses below) ---
-    // All dead in retail binary (no caller registers them). Defunct: debug input.
-    // Bodies preserved as working debug-fly for screenshot use.
+    // Helpers: IdleCamera @ 0x1ed77c (sets mode 0)
+    void IdleCamera();
 
-    // Binary @ 0x00180a2c — debug pan +Y by 10
+    // Binary @ 0x1edf24 zoom API: set mode 2 (zoom-in) or 3 (zoom-out), arm callback.
+    // TODO: 0x1edf24 — ZoomIn/ZoomOut method signatures not yet RE'd; provide stubs.
+    void StartZoomIn(const Vec3& target, float zoomScale, float rollScale,
+                     Mortar::Delegate0<void> onDone);
+    void StartZoomOut(Mortar::Delegate0<void> onDone);
+
+    // --- Debug input handlers (binary @ addresses below) ---
+    // All dead in retail binary. Bodies preserved as working debug-fly.
+
     bool DebugFlyUp(InputEvent* e);
-    // Binary @ 0x00180a6c — debug pan -Y by 10
     bool DebugFlyDown(InputEvent* e);
-    // Binary @ 0x00180aac — debug pan -X by 10
     bool DebugFlyLeft(InputEvent* e);
-    // Binary @ 0x00180aec — debug pan +X by 10
     bool DebugFlyRight(InputEvent* e);
-    // Binary @ 0x0018151c — orbit yaw += +0x96
     bool DebugTiltLeft(InputEvent* e);
-    // Binary @ 0x00181400 — orbit yaw += -0x96
     bool DebugTiltRight(InputEvent* e);
-    // Binary @ 0x00181638 — orbit pitch += -0x96
     bool DebugTiltDown(InputEvent* e);
-    // Binary @ 0x00181754 — orbit pitch += +0x96
     bool DebugTiltUp(InputEvent* e);
-    // Binary @ 0x00180b70 — debug zoom in: pos = lookAt + (pos-lookAt)*0.99
     bool DebugZoomDown(InputEvent* e);
-    // Binary @ 0x00180be0 — debug zoom out: pos = lookAt + (pos-lookAt)*1.01
     bool DebugZoomUp(InputEvent* e);
 
 private:
     void UpdateIdle(float dt);
     void UpdateFollow(float dt);
-    void IdleCamera();
 };
+
+#ifdef __bada__
+// v1.6.1 binary layout asserts (cross-build only, 32-bit ARM).
+static_assert(__builtin_offsetof(FruitCamera, m_pFollowEntity)  == 0x12C, "m_pFollowEntity wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_CameraMode)     == 0x130, "m_CameraMode wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_TiltYaw)        == 0x134, "m_TiltYaw wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_TiltPitch)      == 0x136, "m_TiltPitch wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_ShakeDir)       == 0x138, "m_ShakeDir wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_ShakeAngle)     == 0x140, "m_ShakeAngle wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_Target)         == 0x144, "m_Target wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_field14c)       == 0x14C, "m_field14c wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_LookAt)         == 0x150, "m_LookAt wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_Zoom)           == 0x15C, "m_Zoom wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_RollOut)        == 0x160, "m_RollOut wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_ZoomT)          == 0x164, "m_ZoomT wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_ZoomTarget)     == 0x168, "m_ZoomTarget wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_ZoomScale)      == 0x174, "m_ZoomScale wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_RollScale)      == 0x178, "m_RollScale wrong");
+static_assert(__builtin_offsetof(FruitCamera, m_OnZoomDone)     == 0x184, "m_OnZoomDone wrong");
+static_assert(sizeof(FruitCamera)                               == 0x1A8, "sizeof(FruitCamera) wrong");
+#endif
 
 #endif

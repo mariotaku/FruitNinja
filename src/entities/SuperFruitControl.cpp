@@ -105,9 +105,9 @@ SuperFruitControl::~SuperFruitControl()
 // Binary @ 0x001bb664.
 void SuperFruitControl::Release()
 {
-    // Notify glow if still alive
+    // Notify glow: trigger fade-out (marks m_bPendingRemoval for removal)
     if (m_pGlow) {
-        m_pGlow->FruitWasKilled(m_pHostFruit);
+        m_pGlow->Release();
         m_pGlow = nullptr;
     }
     m_pHostFruit = nullptr;
@@ -221,10 +221,7 @@ void SuperFruitControl::AttachGlow()
     // TODO: 0x001c06bc -- wire SuperFruitGlow through ActorManager pool when
     //   Entity pool allocation for type-6 entities is supported.
     // For now: create on heap and track via m_pGlow pointer.
-    m_pGlow = new SuperFruitGlow();
-    if (m_pGlow && m_pHostFruit) {
-        m_pGlow->m_pHostFruit = m_pHostFruit;
-    }
+    m_pGlow = new SuperFruitGlow(m_pHostFruit);
 }
 
 // -----------------------------------------------------------------------
