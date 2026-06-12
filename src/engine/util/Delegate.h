@@ -6,7 +6,6 @@
 // with the binary's `Mortar::DelegateN<Ret, ...>` family. Fixed 36-byte
 // size matching the binary regardless of arity.
 //
-// Binary spec: docs/engine/delegate-system.md
 //
 // Layout (36 bytes / 0x24, identical to binary regardless of arity):
 //   +0x00..+0x1F  inline polymorphic subobject (vptr + bound state)
@@ -34,6 +33,7 @@
 //
 
 #include <cstdint>
+#include <cstring>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -45,10 +45,20 @@ template<typename Sig> class Delegate;
 template<typename R, typename... Args>
 class Delegate<R(Args...)> {
 public:
-    Delegate() noexcept : m_bEmpty(1) {}
-    Delegate(decltype(nullptr)) noexcept : m_bEmpty(1) {}
+    Delegate() noexcept : m_bEmpty(1) {
+        // Zero inline storage and pad so memcmp-based delegate equality in
+        // Event::operator-= compares reliably (unused bytes are not garbage).
+        ::memset(&m_Storage, 0, kInlineSize);
+        m_pad[0] = m_pad[1] = m_pad[2] = 0;
+    }
+    Delegate(decltype(nullptr)) noexcept : m_bEmpty(1) {
+        ::memset(&m_Storage, 0, kInlineSize);
+        m_pad[0] = m_pad[1] = m_pad[2] = 0;
+    }
 
     Delegate(const Delegate& other) {
+        ::memset(&m_Storage, 0, kInlineSize);
+        m_pad[0] = m_pad[1] = m_pad[2] = 0;
         if (other.m_bEmpty) {
             m_bEmpty = 1;
         } else {
@@ -58,6 +68,8 @@ public:
     }
 
     Delegate(Delegate&& other) noexcept {
+        ::memset(&m_Storage, 0, kInlineSize);
+        m_pad[0] = m_pad[1] = m_pad[2] = 0;
         if (other.m_bEmpty) {
             m_bEmpty = 1;
         } else {
@@ -77,6 +89,8 @@ public:
         static_assert(sizeof(Functor<Decayed>) <= kInlineSize,
             "Mortar::Delegate: callable too large for 32-byte inline storage. "
             "Reduce captures or use a member function via Make().");
+        ::memset(&m_Storage, 0, kInlineSize);
+        m_pad[0] = m_pad[1] = m_pad[2] = 0;
         new (&m_Storage) Functor<Decayed>(std::forward<F>(fn));
         m_bEmpty = 0;
     }
@@ -86,6 +100,8 @@ public:
     Delegate& operator=(const Delegate& other) {
         if (this != &other) {
             Reset();
+            ::memset(&m_Storage, 0, kInlineSize);
+            m_pad[0] = m_pad[1] = m_pad[2] = 0;
             if (!other.m_bEmpty) {
                 other.Ptr()->CloneTo(&m_Storage);
                 m_bEmpty = 0;
@@ -97,6 +113,8 @@ public:
     Delegate& operator=(Delegate&& other) noexcept {
         if (this != &other) {
             Reset();
+            ::memset(&m_Storage, 0, kInlineSize);
+            m_pad[0] = m_pad[1] = m_pad[2] = 0;
             if (!other.m_bEmpty) {
                 other.Ptr()->CloneTo(&m_Storage);
                 other.Reset();
@@ -117,6 +135,8 @@ public:
              >::type>
     Delegate& operator=(F&& fn) {
         Reset();
+        ::memset(&m_Storage, 0, kInlineSize);
+        m_pad[0] = m_pad[1] = m_pad[2] = 0;
         typedef typename std::decay<F>::type Decayed;  // GCC 4.4: template alias unsupported pre-4.7
         static_assert(sizeof(Functor<Decayed>) <= kInlineSize,
             "Mortar::Delegate: callable too large for 32-byte inline storage.");
@@ -218,7 +238,7 @@ private:
     static const std::size_t kInlineSize = 32;
     typename std::aligned_storage<kInlineSize, sizeof(void*)>::type m_Storage;  // +0x00
     uint8_t  m_bEmpty;                                                          // +0x20
-    uint8_t  m_pad[3];                                                          // +0x21
+    uint8_t  m_pad[3];                                                          // +0x21 (zeroed by ctors)
 };
 
 } // namespace Mortar

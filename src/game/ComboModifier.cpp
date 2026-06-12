@@ -22,13 +22,20 @@ void ComboModifier::ResetSpecific() {}
 int ComboModifier::UpdateSpecific(float /*dt*/) { return 0; }
 
 // @ 0x00132e34
-// Binary: chain base ApplyModifier, then register FruitWasSliced (Delegate3)
-// and ComboWasCanceled (Delegate1<SlashEntity*>) on the relevant game signals.
-// TODO: 0x00132e34 — register FruitWasSliced on FruitManager's slice signal
-// TODO: 0x00132e34 — register ComboWasCanceled on SlashEntity's combo-cancel signal
+// Binary: chain base ApplyModifier, then register:
+//   Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this, &ComboModifier::FruitWasSliced)
+//     += FruitManager::m_FruitWasSliced (Event3<Fruit*,int,Mortar::Entity*>)
+//   Delegate1<void,SlashEntity*>::Make(this, &ComboModifier::ComboWasCanceled)
+//     += SlashEntity::m_OnComboCancel (Event1<SlashEntity*>)
+// TODO: 0x00132e34 — subscribe FruitWasSliced delegate to FruitManager's
+//   Event3<Fruit*,int,Mortar::Entity*> m_FruitWasSliced.
+//   FruitManager not yet ported; event owner unknown in current port.
+// TODO: 0x00132b7c — subscribe ComboWasCanceled delegate to SlashEntity's
+//   Event1<SlashEntity*> m_OnComboCancel.
+//   m_OnComboCancel not yet declared on SlashEntity (binary addr unknown).
 void ComboModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
-    // Delegate registration deferred — signal infrastructure not yet ported.
+    // Delegate registration deferred — event owners not yet ported.
 }
 
 // @ 0x00132e10

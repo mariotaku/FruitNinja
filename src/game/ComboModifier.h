@@ -42,12 +42,18 @@ public:
 
     GameModifier* Clone() override;
 
-    // @ 0x00132e10 — sets fruit->byte[0x16c]=1 and pushes into m_SlicedFruit
-    // TODO: 0x00132e10 — wire to FruitManager's FruitWasSliced signal
+    // @ 0x00132e10 — Delegate3<void,Fruit*,int,Mortar::Entity*> target. Sets
+    // fruit->byte[0x16c]=1 and pushes into m_SlicedFruit.
+    // TODO: 0x00132e34 — subscribe Delegate3<void,Fruit*,int,Mortar::Entity*>::Make(this,
+    //   &ComboModifier::FruitWasSliced) to FruitManager's Event3<Fruit*,int,Mortar::Entity*>
+    //   m_FruitWasSliced. FruitManager not yet ported; event owner unknown in port.
     void FruitWasSliced(Fruit* fruit, int score, Mortar::Entity* entity);
 
-    // @ 0x00132b7c — on combo-cancel: if >2 fruit sliced, post combo-bonus popup
-    // TODO: 0x00132b7c — wire to SlashEntity's combo-cancel signal
+    // @ 0x00132b7c — Delegate1<void,SlashEntity*> target. On combo-cancel: if >2
+    // fruit sliced, post combo-bonus popup.
+    // TODO: 0x00132b7c — subscribe Delegate1<void,SlashEntity*>::Make(this,
+    //   &ComboModifier::ComboWasCanceled) to SlashEntity's Event1<SlashEntity*>
+    //   m_OnComboCancel (binary addr unknown — event not yet ported on SlashEntity).
     void ComboWasCanceled(SlashEntity* slash);
 };
 

@@ -44,7 +44,6 @@ public:
     Fruit* m_pFruit;                                // +0x7C (binary +0x7c)
 
     // +0x80: looping SFX handle. SFXPlay in ctor; Released on fade-out.
-    // TODO: 0x1c06bc — Mortar::MortarSound* type; resolve #29 for event infra
     Mortar::MortarSound* m_pSound;                  // +0x80 (binary +0x80)
 
     // +0x84: fade progress. Grows 2*dt toward 1.0; on slice decays -2*dt toward 0.

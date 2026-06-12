@@ -26,6 +26,17 @@ target_include_directories(test_delegate PRIVATE
 )
 add_test(NAME delegate COMMAND test_delegate)
 
+# Mortar::Event multicast — subscribe/fire/unsubscribe correctness.
+# High-fan-in infra: ComboModifier, ExplodyFruitModifier, TimeSinkModifier,
+# SuperFruitGlow, and FruitCamera all depend on this type.
+# No GPU / audio dependency; pure in-process template test.
+add_executable(test_event test_event.cpp)
+target_include_directories(test_event PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME event COMMAND test_event)
+
 # Per-screen smoke test. Each entry boots a hidden SDL+GL context,
 # inits the full game, pushes the named screen, and ticks 30 frames.
 # Catches font / vertex / matrix / divide-by-zero regressions that
