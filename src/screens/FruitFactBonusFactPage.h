@@ -16,7 +16,6 @@ public:
     explicit FruitFactBonusFactPage(FruitFactPageControl* pCtrl);
     ~FruitFactBonusFactPage() override;
 
-    // TODO: 0x001743b8 -- BLOCKED on BonusManager + BakedStringBox::SetStroke
     void Init() override;
 };
 
