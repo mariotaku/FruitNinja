@@ -48,7 +48,9 @@
 enum LocalizedString {
     LSTR_BEST_COMBO          = 0xab,  // CODE_BEST_COMBO       "BEST COMBO: %i FRUIT!"
     LSTR_FRUIT_FACT_TITLE    = 0xae,  // CODE_FRUIT_FACT_TITLE "SENSEI'S FRUIT FACT"
+    LSTR_ZEN_NO_COMBO_LINE1  = 0xc4,  // FruitFactZenPage no-combo branch, first message line (binary @ 0x00180ebc LSTR 0xC4)
     LSTR_REWARDS_TITLE       = 0x15d, // CODE_REWARDS_TITLE    "REWARDS" (FruitFactRewardsPage title)
+    LSTR_ZEN_NO_COMBO_BODY   = 0x2ef, // FruitFactZenPage no-combo branch, body text (binary @ 0x00180ec8 LSTR 0x2EF)
     // Defunct: key removed in v1.6.1 (CODE_FACT_MODE call sites refactored away)
     LSTR_FACT_MODE           = 0,
     LSTR_BEST                = 0xc8,  // CODE_SCORE_BEST       "BEST:"

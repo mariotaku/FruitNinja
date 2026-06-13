@@ -42,6 +42,11 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_GradBottom(255, 255, 255, 255)
     , m_GradMode(0)
     , m_GradFlag(false)
+    , m_StrokeWidth(0.0f)
+    , m_StrokeCount(0)
+    , m_StrokeCol0(0, 0, 0, 255)
+    , m_StrokeCol1(0, 0, 0, 255)
+    , m_StrokeCol2(0, 0, 0, 255)
     , m_Dirty(true)
 {
     m_Text[0] = '\0';
@@ -287,6 +292,51 @@ void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, bool flag) 
         m_ShadowCol = col;
         m_ShadowFlag = flag;
         m_ShadowOffset = offset;
+    }
+}
+
+// SetStroke (1-colour)  binary @ 0x00245314
+void BakedStringBox::SetStroke(float width, const Colour& c0) {
+    if (m_StrokeCount != 1 || m_StrokeWidth != width ||
+        m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
+        m_StrokeCol0.b != c0.b || m_StrokeCol0.a != c0.a) {
+        m_StrokeWidth = width;
+        m_Dirty = true;
+        m_StrokeCount = 1;
+        m_StrokeCol0 = c0;
+    }
+}
+
+// SetStroke (2-colour)  binary @ 0x0024536c
+void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1) {
+    if (m_StrokeCount != 2 || m_StrokeWidth != width ||
+        m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
+        m_StrokeCol0.b != c0.b || m_StrokeCol0.a != c0.a ||
+        m_StrokeCol1.r != c1.r || m_StrokeCol1.g != c1.g ||
+        m_StrokeCol1.b != c1.b || m_StrokeCol1.a != c1.a) {
+        m_Dirty = true;
+        m_StrokeWidth = width;
+        m_StrokeCount = 2;
+        m_StrokeCol0 = c0;
+        m_StrokeCol1 = c1;
+    }
+}
+
+// SetStroke (3-colour)  binary @ 0x002453f0
+void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2) {
+    if (m_StrokeCount != 3 || m_StrokeWidth != width ||
+        m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
+        m_StrokeCol0.b != c0.b || m_StrokeCol0.a != c0.a ||
+        m_StrokeCol1.r != c1.r || m_StrokeCol1.g != c1.g ||
+        m_StrokeCol1.b != c1.b || m_StrokeCol1.a != c1.a ||
+        m_StrokeCol2.r != c2.r || m_StrokeCol2.g != c2.g ||
+        m_StrokeCol2.b != c2.b || m_StrokeCol2.a != c2.a) {
+        m_Dirty = true;
+        m_StrokeWidth = width;
+        m_StrokeCount = 3;
+        m_StrokeCol0 = c0;
+        m_StrokeCol1 = c1;
+        m_StrokeCol2 = c2;
     }
 }
 

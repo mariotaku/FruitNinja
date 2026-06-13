@@ -78,6 +78,7 @@ void FruitFactPage::HideSubObjects() {
 // Creates a GenericHUDControl displaying the cached Sensei head texture.
 // Consts: X=140.0 (DAT_0017c4a4), fadeIn=fadeOut=0.0 (DAT_0017c4a8), flags=0x400.
 // NOTE: scale param feeds pos.Y (binary-faithful: Vec3(140, scale, 0)).
+// ASM-verified: 2026-06-13T03:40Z binary @ 0x0017c3b4 (asm-inspector)
 GenericHUDControl* FruitFactPage::CreateSenseisHead(float scale) {
     if (!g_SenseisHeadTex.IsValid()) {
         // TODO: 0x0017c3b4 -- resolve sensei head tex name from DAT_0017c4b0 string pool
@@ -111,6 +112,7 @@ void FruitFactPage::CreateHorizontalDivider() {
 // ctor flag=1 then field_0x34 (m_LayerFlags) overwritten to 0x400 (str r3,[r5,#0x34] @0x17c5d0).
 // BakedStringBox: fontSize=12, 270x14, align=0xf, wrap=1, ls=0.
 // SetShadow: scale=0.0 (DAT_0017c720).
+// ASM-verified: 2026-06-13T03:40Z binary @ 0x0017c4cc (asm-inspector)
 GenericHUDControl* FruitFactPage::CreateTitleTextControl(const char* str) {
     Vec3 size(270.0f, 14.0f, 0.0f);
     Mortar::SmartPtr<Mortar::Texture> tex;
@@ -181,6 +183,7 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
 // Creates a GenericHUDControl with a BakedStringBox displaying the fact body text.
 // pos=Vec3(-141,-24,0), scale=Vec3(1,1,1)*0.85.
 // Body text from controller+0x7c (m_pCurFactString). Colour (116,93,59,255).
+// ASM-verified: 2026-06-13T03:40Z binary @ 0x0017c99c (asm-inspector)
 GenericHUDControl* FruitFactPage::CreateSenseisFruitFactText() {
     Mortar::SmartPtr<Mortar::Texture> tex;
     Vec3 ppos(-141.0f, -24.0f, 0.0f);
