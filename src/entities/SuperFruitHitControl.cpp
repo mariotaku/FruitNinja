@@ -1,5 +1,5 @@
-// SuperFruitHitControl — binary @ 0x001bee10 (RemoveQuickly)
-// Stub implementation: method bodies are no-ops returning safe defaults.
+// SuperFruitHitControl — binary @ 0x001bee10 (RemoveQuickly only).
+// Port specific: no binary Update/Draw; only RemoveQuickly @ 0x001bee10 exists.
 
 #include "SuperFruitHitControl.h"
 
@@ -11,17 +11,16 @@ SuperFruitHitControl::SuperFruitHitControl()
 
 SuperFruitHitControl::~SuperFruitHitControl()
 {
-    // Defunct: SuperFruitHitControl -- no-op stub; binary @ 0x001bee10
 }
 
+// Port specific: no binary counterpart for Update.
 void SuperFruitHitControl::Update(float /*dt*/)
 {
-    // TODO: 0x001bee10 -- SuperFruitHitControl::Update not yet RE'd
 }
 
+// Port specific: no binary counterpart for Draw.
 void SuperFruitHitControl::Draw(Renderer& /*r*/)
 {
-    // TODO: 0x001bee10 -- SuperFruitHitControl::Draw not yet RE'd
 }
 
 void SuperFruitHitControl::PostUpdate(float /*dt*/)
