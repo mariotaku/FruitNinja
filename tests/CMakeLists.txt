@@ -19,6 +19,14 @@ target_include_directories(test_resourceloader PRIVATE
 )
 add_test(NAME resourceloader COMMAND test_resourceloader)
 
+add_executable(test_texture_format test_texture_format.cpp)
+target_link_libraries(test_texture_format PRIVATE mortar_engine)
+target_include_directories(test_texture_format PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME texture_format COMMAND test_texture_format)
+
 # LinkedHeap unit test -- no GPU/audio, pure allocator correctness.
 # Exercises tail-rewind (the shutdown crash path), forward-merge, and split-path
 # integrity. FN_TEST unlocks the test-only accessors in LinkedHeap.h.
