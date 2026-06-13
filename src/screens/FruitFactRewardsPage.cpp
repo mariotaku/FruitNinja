@@ -26,28 +26,31 @@ static Mortar::FontCacheObjectTTF* GetRewardsTTFFont() {
 // Binary @ 0x0017e4d8
 FruitFactRewardsPage::FruitFactRewardsPage(FruitFactPageControl* pCtrl)
     : FruitFactPage(pCtrl)
+    , m_field98(0)
     , m_pTitleBox(0)
     , m_animA(0.0f)
     , m_animB(0.0f)
     , m_animC(0.0f)
-    , m_timerAc(0.0f)
     , m_timerB0(0.0f)
-    , m_intB4(-1)
-    , m_byteBC(0)
-    , m_timerC4(0.0f)
+    , m_timerB4(0.0f)
+    , m_intB8(-1)
+    , m_byteC0(0)
     , m_floatC8(1.0f)
-    , m_shortCC((short)32000)
-    , m_timerD0(0.0f)
-    , m_timerD8(0.0f)
-    , m_byteE0(0)
-    , m_timerE4(0.0f)
+    , m_floatCC(1.0f)
+    , m_shortD0((short)32000)
+    , m_floatD4(1.0f)
+    , m_floatDC(0.0f)
+    , m_byteE4(0)
+    , m_floatE8(1.0f)
 {
-    _padB8[0] = 0; _padB8[1] = 0; _padB8[2] = 0; _padB8[3] = 0;
-    _padBD[0] = 0; _padBD[1] = 0; _padBD[2] = 0;
-    _padCE[0] = 0; _padCE[1] = 0;
-    _padD4[0] = 0; _padD4[1] = 0; _padD4[2] = 0; _padD4[3] = 0;
-    _padDC[0] = 0; _padDC[1] = 0; _padDC[2] = 0; _padDC[3] = 0;
-    _padE1[0] = 0; _padE1[1] = 0; _padE1[2] = 0;
+    _pad9C[0] = 0; _pad9C[1] = 0; _pad9C[2] = 0; _pad9C[3] = 0;
+    _padBC[0] = 0; _padBC[1] = 0; _padBC[2] = 0; _padBC[3] = 0;
+    _padC1[0] = 0; _padC1[1] = 0; _padC1[2] = 0;
+    _padC4[0] = 0; _padC4[1] = 0; _padC4[2] = 0; _padC4[3] = 0;
+    _padD2[0] = 0; _padD2[1] = 0;
+    _padD8[0] = 0; _padD8[1] = 0; _padD8[2] = 0; _padD8[3] = 0;
+    _padE0[0] = 0; _padE0[1] = 0; _padE0[2] = 0; _padE0[3] = 0;
+    _padE5[0] = 0; _padE5[1] = 0; _padE5[2] = 0;
 }
 
 FruitFactRewardsPage::~FruitFactRewardsPage() {
@@ -59,41 +62,39 @@ FruitFactRewardsPage::~FruitFactRewardsPage() {
 // DAT_0017e6c0 = 0.0f (zero constant for most field inits).
 // DAT_0017e6c4 = 68.0f (head scale).
 // LSTR 0x15D (349) = "Rewards" title string.
+// ASM-verified: 0x0017e4d8 ready for re-verify (field layout corrected per disasm).
 void FruitFactRewardsPage::Init() {
-    // State field init (all from DAT_0017e6c0 = 0.0 / binary literal values)
-    m_timerAc  = 0.0f;
-    m_timerD8  = 0.0f;
-    m_timerC4  = 0.0f;
-    m_timerB0  = 0.0f;
-    m_byteE0   = 0;
-    // field_0x94 = 0: binary init of what may be an extra field at +0x94
-    // (overlaps FruitFactPage::m_pController in port layout; port skips this store
-    // to preserve the ctrl pointer set by the base ctor).
-    m_intB4    = -1;
-    m_shortCC  = (short)32000;
-    m_floatC8  = 1.0f;
+    // State field inits (offsets confirmed from disasm, [r4,#off]):
+    m_timerB0  = 0.0f;    // [r4,#0xb0]
+    m_floatDC  = 0.0f;    // [r4,#0xdc]
+    m_timerB4  = 0.0f;    // [r4,#0xb4]
+    m_timerB0  = 0.0f;    // [r4,#0xb0] (binary writes this twice in sequence)
+    m_byteE4   = 0;       // [r4,#0xe4]
+    m_intB8    = -1;      // [r4,#0xb8]
+    m_shortD0  = (short)32000;  // [r4,#0xd0] = 0x7d00
+    m_floatC8  = 1.0f;    // [r4,#0xc8]
+    m_floatCC  = 1.0f;    // [r4,#0xcc]
 
     CreateSenseisHead(68.0f);               // DAT_0017e6c4 = 68
 
-    m_timerE4  = 0.0f;
-    m_timerD0  = 0.0f;
-    m_byteBC   = 0;
+    m_floatE8  = 1.0f;    // [r4,#0xe8]
+    m_floatD4  = 1.0f;    // [r4,#0xd4]
+    m_byteC0   = 0;       // [r4,#0xc0]
 
     // Binary @ 0x0017e4d8: this->HUDControl.field_0x30 = 1 -> m_Active = 1
     m_Active = 1;
 
-    m_animA    = 0.0f;
-    m_animB    = 0.0f;
-    m_animC    = 0.0f;
+    m_animA    = 0.0f;    // [r4,#0xa4]
+    m_animB    = 0.0f;    // [r4,#0xa8]
+    m_animC    = 0.0f;    // [r4,#0xac]
 
-    // Build the owned title BakedStringBox at field_0x9c.
+    // Build the owned title BakedStringBox at field_0xa0.
     // Binary: new(200) BakedStringBox(font, 12.0, width=250, height=14, align=0xf, wrap=1, ls=0)
     // Then SetText(GETSTRING(0x15D,0)), SetHorizontalLineSpacing(-1),
     //   SetGradient(255,255,255,255 -> 0xeb,0xd7,0x1e,255, perGlyph=0),
     //   SetShadow(0.0, Colour(0x4b,0x32,0x28,0xc8), Vec3(1,-1,0), flag=1).
     // LSTR 0x15D = LocalizedString with integer ID 349 ("Rewards" title).
-    // NOTE: this box is owned by the page directly at m_pTitleBox (field_0x9c),
-    // not stored via GenericHUDControl::SetText. The page's own draw/update uses it.
+    // The box is owned directly at m_pTitleBox (+0xa0).
     Mortar::FontCacheObjectTTF* font = GetRewardsTTFFont();
     if (font) {
         Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
