@@ -99,6 +99,14 @@ public:
     // Fields: 0x70=scale, 0x74=col, 0x78=flag, 0x18=offset, 0x00=dirty byte.
     void SetShadow(float scale, Colour col, Vec3 offset, bool flag);
 
+    // SetStroke  binary @ 0x00245314 (1 colour) / 0x0024536c (2) / 0x002453f0 (3)
+    // Outline/stroke of `width` px drawn behind the glyph fill. count 1/2/3 selects
+    // how many concentric stroke colours are layered. Change-detection gate matches
+    // SetGradient/SetShadow: dirties the bake on any field change.
+    void SetStroke(float width, const Colour& c0);
+    void SetStroke(float width, const Colour& c0, const Colour& c1);
+    void SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2);
+
 private:
     FontCacheObjectTTF* m_Font;   // non-owning ref (owned by Font + FontTTFRegistry)
     float   m_FontSize;           // current render pixel size
@@ -124,6 +132,13 @@ private:
     Colour  m_GradBottom;         // binary field 0x80
     int     m_GradMode;           // binary field 0x8c (2 = gradient enabled)
     bool    m_GradFlag;           // binary field 0x90
+
+    // Stroke/outline fields (binary v1.6.1 @ 0x54..0x64):
+    float   m_StrokeWidth;        // binary 0x54
+    int     m_StrokeCount;        // binary 0x58 (0 = no stroke, else 1/2/3)
+    Colour  m_StrokeCol0;         // binary 0x5c
+    Colour  m_StrokeCol1;         // binary 0x60
+    Colour  m_StrokeCol2;         // binary 0x64
 
     // Laid-out lines (rebuilt by Layout()).
     std::vector<BakedStringBoxLine> m_Lines;
