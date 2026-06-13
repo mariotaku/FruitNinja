@@ -15,6 +15,9 @@
 #include "engine/util/StringTable.h"
 #include "hud/GenericHUDControl.h"
 #include "hud/FruitFactControl.h"
+#include "game/GameWork.h"
+#include "game/FruitSaveData.h"
+#include "entities/Fruit.h"
 #include <cstring>
 #include <cstdio>
 
@@ -80,9 +83,11 @@ void FruitFactZenPage::UnloadContent() {
 }
 
 // Binary @ 0x00180320 -- builds combo achievement list (hasCombo) or 'play more' message branch.
-// DAT consts: head scale=68 (1806d0), spacing=40 (1806d4), maxW=220 (1806d8), clampW=140 (1806dc),
-//   starX offset -72 (1806e0), starY=53 (1806e4), starStagger=42 (1806e8), iconY=37 (18070c),
-//   fadeOut=1.33 (180710), fade2_zero=0 (180714).
+// DAT consts: head scale=68 (1806d0), spacing=40.0 (1806d4), maxW=220.0 (1806d8), clampW=140.0 (1806dc),
+//   starXoff=-72.0 (1806e0), starY=53.0 (1806e4), starStagger=42.0 (1806e8), iconY=37.0 (18070c),
+//   fadeOut=1.33 (180710), fade2_zero=0.0 (180714).
+// Session state @ binary Game+0x50 = FruitSaveData (port: game_work.m_SaveData).
+// +0x210 = m_BestComboLength, +0x214 = m_BestComboFruits[].
 void FruitFactZenPage::Init() {
     m_ComboCount = 0;
     m_AnimCC = -0.5f;
@@ -93,134 +98,132 @@ void FruitFactZenPage::Init() {
     CreateSenseisFruitFactTitle();
     CreateSenseisFruitFactText();
 
-    // Read combo count from controller's per-session combo state.
-    // Binary: ctrl = m_pController (ldr r7,[r5,#0x94]); comboCount = *(int*)(*(ctrl+0x50)+0x210).
-    // *(ctrl+0x50) is a session-state sub-object pointer embedded in HUDControl (+0x50).
-    // TODO: 0x00180320 -- resolve *(m_pController+0x50)+0x210 for comboCount and +0x214
-    //   for the m_ComboFruitInfo array. HUDControl at +0x50 falls in m_RemoveCallback area;
-    //   the actual type of the pointer held there needs further RE of FruitFactPageControl
-    //   binary layout. Leave a zero comboCount until resolved.
+    // Read best-combo session data from the Game singleton's save-data object.
+    // Binary: *(*(GOT+0x77F4) + 0x50) = the active FruitSaveData.
+    // +0x210 = m_BestComboLength, +0x214 = m_BestComboFruits int array.
     int comboCount = 0;
+    int* comboArr = NULL;
+    if (game_work.m_SaveData) {
+        comboCount = game_work.m_SaveData->m_BestComboLength;
+        comboArr   = game_work.m_SaveData->m_BestComboFruits;
+    }
     bool hasCombo = (comboCount > 2);
     m_HasCombo = hasCombo ? 1 : 0;
 
     Mortar::FontCacheObjectTTF* font = GetZenTTFFont();
 
+    // Shared banner buffer; combo/no-combo branch writes into it; CreateTitleTextControl reads it.
+    // Binary: *(GOT+0x71E0) is the same static char* used for both the OS_SPrintf and the title.
+    char banner[128];
+    banner[0] = '\0';
+
     if (hasCombo) {
         // --- combo-achievement branch ---
-        char buf[128];
-        snprintf(buf, sizeof(buf), Mortar::GETSTRING(LSTR_BEST_COMBO, 0), comboCount);
+        snprintf(banner, sizeof(banner), Mortar::GETSTRING(LSTR_BEST_COMBO, 0), comboCount);
         m_ComboCount = comboCount;
 
-        // Lay out comboCount fruit icons across the Y axis.
-        // spacing=40 (DAT_1806d4), maxWidth=220 (DAT_1806d8).
-        // If total > maxWidth, compress spacing to maxWidth/(n-1).
+        // Lay out comboCount fruit icons.
+        // spacing=40.0 (DAT_1806d4), maxW=220.0 (DAT_1806d8).
+        // Binary ARM comparison: span < maxW is FALSE when span >= maxW -> compress.
         float spacing = 40.0f;
-        float totalW = spacing * (float)(comboCount - 1);
-        if (totalW > 220.0f && comboCount > 1) {
+        float span    = spacing * (float)(comboCount - 1);
+        if (span >= 220.0f) {
             spacing = 220.0f / (float)(comboCount - 1);
-            totalW = 220.0f;
+            span    = 220.0f;
         }
 
+        float fade = 0.25f;
         for (int i = 0; i < comboCount; ++i) {
-            // TODO: 0x00180320 -- read m_ComboFruitInfo[i] from *(ctrl+0x50)+0x214+i*4
-            //   and call Fruit::FruitInfo(fruitIdx) to resolve fruit icon texture.
-            //   m_ComboFruitInfo[i] = fruitTypeArray[i]; Fruit::FruitInfo(m_ComboFruitInfo[i]).
-            //   Copy TranisitionInfo default block (T_1022) into c+0x28 (m_PosTrans).
-            float x = (-totalW * 0.5f - 8.0f) + (float)i * spacing;
-            Vec3 ipos(x, 37.0f, 0.0f);
+            // Fill m_ComboFruitInfo from the session combo array (Game+0x50+0x214+i*4).
+            if (comboArr != NULL) {
+                m_ComboFruitInfo[i] = comboArr[i];
+            } else {
+                m_ComboFruitInfo[i] = 0;
+            }
+            Fruit::FruitInfo(m_ComboFruitInfo[i]);  // resolve (return value ignored here per binary)
+
+            float x = (span * -0.5f - 8.0f) + (float)i * spacing;
+            Vec3 ipos(x, 37.0f, 0.0f);             // iconY=37.0 (DAT_18070c)
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
             Vec3 sc(1.0f, 1.0f, 1.0f);
             Colour col(1.0f, 1.0f, 1.0f, 1.0f);
-            float fadeIn  = (float)i * 0.25f;
-            float fadeOut = (float)i * 0.25f + 0.25f;
-            GenericHUDControl* c = new GenericHUDControl(fadeIn, fadeOut, emptyTex, NULL, ipos, sc, col, 8);
-            // TODO: 0x00180320 -- AddSound(DAT_1806f4 sound name, min(i,8)/12.0f, 1.0f)
+            GenericHUDControl* c = new GenericHUDControl(fade, fade + 0.25f, emptyTex, NULL, ipos, sc, col, 8);
+            // Binary: T_1022 default block (all zeros) memcpy'd to c+0xa4 (m_ScaleTrans, 5 words).
+            // GenericHUDControl ctor already zero-initializes m_ScaleTrans; no-op here.
+            int si = (i < 8) ? i : 8;
+            c->AddSound("popup-1", 1.0f, (float)si / 12.0f);  // DAT_001806f4 @ 0x00282606
             AddGenericControl(c);
+            fade += 0.25f;
         }
 
-        // Combo star result.
-        // TODO: 0x00180320 -- pass m_ComboFruitInfo and comboCount from the real fruit array
-        //   (CheckCombo(this+0x9c, count, &outDominant)); currently uses placeholder zero
-        //   array because the fruit-info reads (*(ctrl+0x50)+0x214) are unresolved.
-        int dummyFruitArr[1] = {0};
+        // Combo star classification from the just-filled m_ComboFruitInfo array.
         int outDominant = 0;
-        uint8_t star = FruitFact::CheckCombo(dummyFruitArr, comboCount > 0 ? comboCount : 1, &outDominant);
-        m_StarResult = star;
-        Mortar::SmartPtr<Mortar::Texture> starTex = FruitFact::GetComboStarTexture(star);
+        m_StarResult = FruitFact::CheckCombo(m_ComboFruitInfo, comboCount, &outDominant);
+        Mortar::SmartPtr<Mortar::Texture> starTex = FruitFact::GetComboStarTexture(m_StarResult);
 
-        // Star icon GenericHUDControl.
-        // pos.Y derived from totalW: if totalW < 140 use -72 offset else 42 (DAT_1806dc/1806e8).
-        float starPosY = 37.0f;
+        // Star position: if span < 140.0 (DAT_1806dc), use compressed X; else stagger=42.0 (DAT_1806e8).
         float starX;
-        if (totalW < 140.0f) {
-            starX = totalW * 0.5f + (-72.0f);   // DAT_1806e0 = -72
-        } else {
-            starX = 42.0f;                        // DAT_1806e8 = 42
+        bool narrow = (span < 140.0f);
+        starX = 42.0f;                                // DAT_1806e8
+        if (narrow) {
+            starX = 28.0f;                            // literal 28.0 in binary
         }
-        Vec3 starPos(starX, 53.0f, 0.0f);        // DAT_1806e4 = 53
-        float starFadeIn  = (float)comboCount * 0.25f;
+        if (narrow) {
+            starX = span * 0.5f - starX;
+        }
+        Vec3 starPos(starX, 53.0f, 0.0f);             // starY=53.0 (DAT_1806e4)
+        float starFadeIn  = fade;
         float starFadeOut = starFadeIn + 0.5f;
         Vec3 scStar(1.0f, 1.0f, 1.0f);
         Colour colStar(1.0f, 1.0f, 1.0f, 1.0f);
+        // Star + label are the same GenericHUDControl in the binary (pGVar5).
         GenericHUDControl* cStar = new GenericHUDControl(starFadeIn, starFadeOut, starTex, NULL, starPos, scStar, colStar, 0x400);
-        // TODO: 0x00180320 -- copy TranisitionInfo default (T_1022) into cStar+0x28 (m_PosTrans)
-        // TODO: 0x00180320 -- AddSound(DAT_180704 sound name, 1.0f, starFadeOut)
-        AddGenericControl(cStar);
+        // Binary: T_1022 default block memcpy'd to cStar+0x28 (6 words = 0x18 bytes).
+        // GenericHUDControl ctor already zero-initializes all TranisitionInfo/PulseInfo fields; no-op.
+        cStar->AddSound("achievement", 1.0f, 0.0f);  // DAT_00180704 @ 0x0027F593
 
-        // Star label: BakedStringBox with stroked text.
         if (font) {
-            Vec3 labelPos(starX, starPosY, 0.0f);
-            Mortar::SmartPtr<Mortar::Texture> emptyLabel;
-            Vec3 scLabel(1.0f, 1.0f, 1.0f);
-            Colour colLabel(1.0f, 1.0f, 1.0f, 1.0f);
-            GenericHUDControl* cLabel = new GenericHUDControl(starFadeIn, starFadeOut, emptyLabel, NULL, labelPos, scLabel, colLabel, 0x400);
-
             Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
                 font, 10.0f, 128.0f, 10.0f, 0xf, 3, 5.0f);
-
-            // GetComboStarText returns a LSTR id; format it into buf.
-            unsigned int starStrId = FruitFact::GetComboStarText(star);
-            // TODO: 0x00180320 -- apply DAT_1806f8 format string via OS_SPrintf:
-            //   snprintf(buf, sizeof(buf), GETSTRING(DAT_1806f8_lstr, 0), starTextStr)
-            //   For now, use the star text directly without format wrapper.
+            // Binary: OS_SPrintf(buf, 0x200, "* %s", GetComboStarText(m_StarResult))
+            // GetComboStarText returns a LSTR id; GETSTRING converts to a C string.
+            unsigned int starStrId = FruitFact::GetComboStarText(m_StarResult);
             const char* starText = (starStrId > 0) ? Mortar::GETSTRING((LocalizedString)starStrId, 0) : "";
-            box->SetText(starText ? starText : "");
-            // SetStroke 1-colour form: binary @ 0x00245314
+            char starBuf[512];
+            snprintf(starBuf, sizeof(starBuf), "* %s", starText ? starText : "");  // DAT_001806f8 @ 0x0028260E
+            box->SetText(starBuf);
             box->SetStroke(2.0f, Colour(0x83, 0x40, 0x5e, 255));
             box->SetGradient(
                 Colour(0xf8, 0xf3, 0xdf, 255),
-                Colour(0xf5, 0xef, 100,  255),
+                Colour(0xf5, 0xef, 0x64, 255),
                 false);
             box->SetHorizontalLineSpacing(-1.0f);
-            cLabel->SetText(box);
-            cLabel->SetAngle(-20.0f, 0.0f);
-            AddGenericControl(cLabel);
+            cStar->SetText(box);
+            cStar->SetAngle(-20.0f, 0.0f);
         }
+        AddGenericControl(cStar);
 
     } else {
-        // --- no-combo branch: single "play more" style message ---
-        char buf[128];
+        // --- no-combo branch: "play more" style message ---
+        // Binary: strcpy(*(GOT+0x71E0), GETSTRING(LSTR_ZEN_NO_COMBO_LINE1)) sets shared banner.
         const char* noComboStr = Mortar::GETSTRING(LSTR_ZEN_NO_COMBO_LINE1, 0);
-        strncpy(buf, noComboStr ? noComboStr : "", sizeof(buf) - 1);
-        buf[sizeof(buf) - 1] = '\0';
+        strncpy(banner, noComboStr ? noComboStr : "", sizeof(banner) - 1);
+        banner[sizeof(banner) - 1] = '\0';
 
-        // ctrl 1 (icon): pos=Vec3(-8,37,0), scale unit, white, flags=8,
-        // fade=1.0, fadeOut=1.33 (DAT_180710).
+        // ctrl 1: pos=(-8, 37, 0) (DAT_180ed0=-8, DAT_180ed4=37/0), fadeOut=1.33 (DAT_180710).
         {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
             Vec3 c1pos(-8.0f, 37.0f, 0.0f);
             Vec3 sc(1.0f, 1.0f, 1.0f);
             Colour col(1.0f, 1.0f, 1.0f, 1.0f);
             GenericHUDControl* c1 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c1pos, sc, col, 8);
-            // TODO: 0x00180320 -- copy TranisitionInfo default (T_1022) into c1+0x28 (m_PosTrans)
-            // TODO: 0x00180320 -- AddSound(DAT_180704 sound name, 1.0f, 1.0f+something)
+            // Binary: T_1022 all-zeros block; already zero-initialized by ctor; no-op.
+            c1->AddSound("achievement", 1.0f, 0.0f);  // DAT_00180704 @ 0x0027F593
 
             if (font) {
-                // box1: width=160(0xa0), height=40(0x28), align=0xf, wrap=3, ls=7
+                // box1: width=0xa0=160, height=0x28=40, align=0xf, wrap=3, ls=7
                 Mortar::BakedStringBox* box1 = new Mortar::BakedStringBox(
                     font, 10.0f, 160.0f, 40.0f, 0xf, 3, 7.0f);
-                // SetStroke 3-colour form: binary @ 0x002453f0
                 box1->SetStroke(2.0f,
                     Colour(0xff, 0xff, 0xf4, 255),
                     Colour(0xff, 0xfc, 0x14, 255),
@@ -229,65 +232,59 @@ void FruitFactZenPage::Init() {
                 box1->SetText(Mortar::GETSTRING(LSTR_ZEN_NO_COMBO_BODY, 0));
                 box1->SetHorizontalLineSpacing(-1.0f);
                 c1->SetText(box1);
-                // Recenter c1 pos by -(box.w/2, box.h/2):
-                // pos -= Vec3(box->field_0x24/2, box->field_0x28/2, 0)
-                // Using the declared box width/height (160, 40) as the centering values.
+                // Binary reads actual baked dims box->+0x24 / +0x28 to recenter.
+                // TODO: 0x00180320 -- c1pos.x -= box1->m_BakedWidth/2; c1pos.y -= box1->m_BakedHeight/2
+                //   (field_0x24 / field_0x28 in BakedStringBox); using declared ctor dims (160, 40) as
+                //   approximation until BakedStringBox layout is confirmed.
                 c1pos.x -= 80.0f;
                 c1pos.y -= 20.0f;
-                // TODO: 0x00180320 -- above centering uses declared dims; binary reads
-                //   the actual baked box dimensions from box->field_0x24 / field_0x28
-                //   which may differ from ctor args if FitIntoVerticalBounds ran.
+                c1->pos = c1pos;
             }
             AddGenericControl(c1);
         }
 
-        // ctrl 2 + box2 (second message line).
-        // TODO: 0x00180320 -- resolve DAT_180ed0 (pos X), DAT_180ed4 (pos Y or Z),
-        //   DAT_180ed8 (fadeOut), DAT_180ee8 (text string); port skeleton below.
+        // ctrl 2: pos=(-8, 37, 0), fadeOut=1.33 (DAT_180ed8). Text=DAT_180ee8="_ " (separator line).
         {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
-            Vec3 c2pos(-8.0f, 0.0f, 0.0f);   // TODO: 0x00180320 -- pos from DAT_180ed0/DAT_180ed4
+            Vec3 c2pos(-8.0f, 37.0f, 0.0f);          // DAT_180ed0=-8.0, DAT_180ed4=37.0
             Vec3 sc(1.0f, 1.0f, 1.0f);
             Colour col(1.0f, 1.0f, 1.0f, 1.0f);
-            float c2FadeOut = 1.0f;            // TODO: 0x00180320 -- DAT_180ed8
-            GenericHUDControl* c2 = new GenericHUDControl(1.0f, c2FadeOut, emptyTex, NULL, c2pos, sc, col, 8);
+            GenericHUDControl* c2 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c2pos, sc, col, 8);
 
             if (font) {
+                // box2: width=0xad=173, height=0x28=40, align=0xf, wrap=3, ls=7
                 Mortar::BakedStringBox* box2 = new Mortar::BakedStringBox(
-                    font, 10.0f, 173.0f, 10.0f, 0xf, 3, 7.0f);  // width=0xad=173
+                    font, 10.0f, 173.0f, 40.0f, 0xf, 3, 7.0f);
                 box2->SetStroke(2.0f,
                     Colour(0xff, 0xff, 0xf4, 255),
                     Colour(0xff, 0xfc, 0x14, 255),
                     Colour(0xc8, 0x82, 0x00, 255));
                 box2->SetColour(Colour(0x97, 0x51, 0x1e, 255), 0);
-                // TODO: 0x00180320 -- text from DAT_180ee8 string (unresolved); using empty for now
-                box2->SetText("");
+                box2->SetText("_");                   // DAT_00180ee8 @ 0x00281E11 = "_"
                 box2->SetHorizontalLineSpacing(-1.0f);
                 c2->SetText(box2);
             }
             AddGenericControl(c2);
         }
 
-        // ctrl 3 + box3 (third message line).
-        // TODO: 0x00180320 -- resolve pos, fadeOut, text for ctrl 3 (same DAT block as ctrl 2).
+        // ctrl 3: same layout as ctrl 2 per binary (same DAT block, same text "_").
         {
             Mortar::SmartPtr<Mortar::Texture> emptyTex;
-            Vec3 c3pos(-8.0f, -30.0f, 0.0f);  // TODO: 0x00180320 -- pos from DAT block
+            Vec3 c3pos(-8.0f, 37.0f, 0.0f);          // same pos as ctrl 2 per binary
             Vec3 sc(1.0f, 1.0f, 1.0f);
             Colour col(1.0f, 1.0f, 1.0f, 1.0f);
-            float c3FadeOut = 1.0f;             // TODO: 0x00180320 -- DAT
-            GenericHUDControl* c3 = new GenericHUDControl(1.0f, c3FadeOut, emptyTex, NULL, c3pos, sc, col, 8);
+            GenericHUDControl* c3 = new GenericHUDControl(1.0f, 1.33f, emptyTex, NULL, c3pos, sc, col, 8);
 
             if (font) {
+                // box3: same dims as box2
                 Mortar::BakedStringBox* box3 = new Mortar::BakedStringBox(
-                    font, 10.0f, 173.0f, 10.0f, 0xf, 3, 7.0f);
+                    font, 10.0f, 173.0f, 40.0f, 0xf, 3, 7.0f);
                 box3->SetStroke(2.0f,
                     Colour(0xff, 0xff, 0xf4, 255),
                     Colour(0xff, 0xfc, 0x14, 255),
                     Colour(0xc8, 0x82, 0x00, 255));
                 box3->SetColour(Colour(0x97, 0x51, 0x1e, 255), 0);
-                // TODO: 0x00180320 -- text from DAT block (third line); using empty for now
-                box3->SetText("");
+                box3->SetText("_");                   // DAT_00180ee8 @ 0x00281E11 = "_"
                 box3->SetHorizontalLineSpacing(-1.0f);
                 c3->SetText(box3);
             }
@@ -295,20 +292,9 @@ void FruitFactZenPage::Init() {
         }
     }
 
-    // Page title (banner buf set above by combo/no-combo branch).
-    // TODO: 0x00180320 -- DAT_00180eec is the page title string (fmt-printed buf from
-    //   combo/no-combo snprintf); pass the filled buf here. For now the buf contains
-    //   the correct string but DAT_180eec is unresolved (could be a wrapper format string).
-    //   If combo, buf = GETSTRING(LSTR_BEST_COMBO, comboCount); if no-combo, buf = GETSTRING(LSTR_ZEN_NO_COMBO_LINE1).
-    char titleBuf[128];
-    if (hasCombo) {
-        snprintf(titleBuf, sizeof(titleBuf), Mortar::GETSTRING(LSTR_BEST_COMBO, 0), comboCount);
-    } else {
-        const char* s = Mortar::GETSTRING(LSTR_ZEN_NO_COMBO_LINE1, 0);
-        strncpy(titleBuf, s ? s : "", sizeof(titleBuf) - 1);
-        titleBuf[sizeof(titleBuf) - 1] = '\0';
-    }
-    CreateTitleTextControl(titleBuf);
+    // Page title from the shared banner buf written above by either branch.
+    // Binary: DAT_00180eec = DAT_001806f0 = same GOT ptr as the OS_SPrintf/strcpy target.
+    CreateTitleTextControl(banner);
 }
 
 // Binary @ 0x0017fa04
