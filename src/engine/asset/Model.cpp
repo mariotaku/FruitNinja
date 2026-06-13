@@ -165,4 +165,30 @@ void Model::SetEffectGroup(Mortar::SmartPtr<EffectGroup> /*effectGroup*/) {
     }
 }
 
+// Binary @ 0x00236e48 — forwards over m_nodes calling Mesh vtable slot 6 (+0x18) per node.
+// Disasm @ 0x00236e48: ldr r0,[r4],#4; ldr r3,[r0]; ldr r12,[r3,#0x18]; blx r12
+void Model::GenerateBindings(AsciiString const& channelName,
+                             AsciiString const& targetName,
+                             std::vector<AnimBindings::Vector::Binding>& out) const {
+    for (int i = 0; i < (int)m_nodes.size(); ++i) {
+        Mesh* mesh = m_nodes[i].Get();
+        if (mesh) {
+            mesh->GenerateBindings(channelName, targetName, out);
+        }
+    }
+}
+
+// Binary @ 0x00236e8c — forwards over m_nodes calling Mesh vtable slot 7 (+0x1c) per node.
+// Identical to the Vector variant but dispatches the Bone override.
+void Model::GenerateBindings(AsciiString const& channelName,
+                             AsciiString const& targetName,
+                             std::vector<AnimBindings::Bone::Binding>& out) const {
+    for (int i = 0; i < (int)m_nodes.size(); ++i) {
+        Mesh* mesh = m_nodes[i].Get();
+        if (mesh) {
+            mesh->GenerateBindings(channelName, targetName, out);
+        }
+    }
+}
+
 } // namespace Mortar

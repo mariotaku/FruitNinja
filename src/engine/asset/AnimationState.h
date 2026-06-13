@@ -8,54 +8,90 @@
 #include "util/AsciiString.h"
 #include "asset/AnimationList.h"
 #include <vector>
+#include <cstdint>
 
 namespace Mortar {
 class Model;
 
-// AnimBindings -- partial layout; Vector sub-struct RE'd, Bone pending R3.
-// Binary @ 0x001ad218 RebindAnim.
+// AnimBindings -- per-animation channel binding tables.
+// Bones @ this+0x00 (12B vector), Vectors @ this+0x0c (12B vector).
+// SetTime/RebindAnim access Vectors at AnimationState+0x1c (= AnimBindings+0x0c).
 struct AnimBindings {
+    // Bone::Binding -- empty shell; Mesh::GenerateBindings(Bone) @ 0x0027385c is BX LR.
+    // Declare for type completeness and vtable slot 7 signature.
     struct Bone {
-        // TODO: R3 -- Bone binding fields
+        // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR).
+        struct Binding {};
+        std::vector<Binding> m_bindings;  // +0x00 (12B)
     };
 
-    // AnimBindings::Vector -- sizeof 16 (binary record: ctors 0x001adba4 / 0x001aec04).
-    // Layout:
-    //   +0x00  uint32_t                                   field_0x0   (4B; default ctor leaves uninit)
-    //   +0x04  std::vector<AnimBindings::Vector::Binding> m_bindings  (12B; zeroed by default ctor)
+    // AnimBindings::Vector -- sizeof 16.
+    // +0x00  VectorTrack* m_track     (source spline; RebindAnim writes track ptr here)
+    // +0x04  vector<Binding> m_bindings (12B)
+    // RebindAnim @ 0x0026f1ac: *(int*)v = trackPtr; then GenerateBindings fills v+0x04.
+    // SetTime @ 0x0026ee84: dispatches on *(u16*)(m_track + 0xc) = VectorTrack::m_channelType.
     struct Vector {
-        // Nested Binding type not yet RE'd; forward-declared as opaque.
-        // TODO: R3 -- AnimBindings::Vector::Binding layout
+        // AnimBindings::Vector::Binding -- stride 0x0c.
+        // Produced by Mesh::GenerateBindings(Vector) @ 0x0027350c via push_back.
+        // UpdateBinding reads:
+        //   +0x00 u8   m_normalized -- if 1: write clamped u8[0..255]; else raw float copy
+        //   +0x04 void* m_target    -- destination ptr
+        //   +0x08 u32  m_count      -- element count; min'd with VectorTrack::m_dim
         struct Binding {
-            // TODO: R3 -- Binding fields
+            uint8_t  m_normalized; // +0x00
+            uint8_t  pad_01[3];    // +0x01..+0x03
+            void*    m_target;     // +0x04
+            uint32_t m_count;      // +0x08
+            Binding() : m_normalized(0), m_target(0), m_count(0) {
+                pad_01[0] = pad_01[1] = pad_01[2] = 0;
+            }
         };
 
-        uint32_t              field_0x0;   // +0x00 (4B scalar; copy-ctor copies as DWORD)
-        std::vector<Binding>  m_bindings;  // +0x04 (12B std::vector<Binding>)
+        VectorTrack*        m_track;     // +0x00 (was field_0x0; now named per R3 RE)
+        std::vector<Binding> m_bindings; // +0x04 (12B)
 
-        Vector() : field_0x0(0) {}
-
-#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
-        // cross-build static_assert for this nested type
-        // (out-of-class assert after struct definition)
-#endif
+        Vector() : m_track(0) {}
     };
 
-    std::vector<Bone>   m_Bones;     // +0x00
-    std::vector<Vector> m_Vectors;   // +0x0C
+    std::vector<Bone>   m_Bones;    // +0x00 (12B)
+    std::vector<Vector> m_Vectors;  // +0x0C (12B)
 };
 
 #if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+static_assert(sizeof(AnimBindings::Vector::Binding) == 0x0c,
+              "AnimBindings::Vector::Binding sizeof mismatch (expected 0x0c)");
 static_assert(sizeof(AnimBindings::Vector) == 16,
-              "AnimBindings::Vector sizeof mismatch (uint32_t + std::vector == 16)");
+              "AnimBindings::Vector sizeof mismatch (VectorTrack* + vector == 16)");
 #endif
+
+// UpdateBinding<N> -- B-spline evaluator template, 6 instantiations (N=0..5).
+// Real bodies:
+//   N=0 @ 0x0026ec5c  nearest-knot sample (no basis blend)
+//   N=1 @ 0x00270010  B-spline BasisFunc<2> quadratic blend
+//   N=2 @ 0x002701b0  B-spline BasisFunc<2>
+//   N=3 @ 0x00270350  B-spline BasisFunc<2>
+//   N=4 @ 0x002704f0  B-spline BasisFunc<2>
+//   N=5 @ 0x00270690  B-spline BasisFunc<2>
+// Declared here so SetTime can dispatch via switch(tag).
+template<int N>
+void UpdateBinding(float time, AnimBindings::Vector const& v);
 
 // Mortar::AnimationState -- per-instance playback state for an animation.
 // Binary @ 0x001ad150 ctor; vtable @ 0x001ebd00; sizeof 0x40.
-// 14 missing methods landed via this shell.
+// Field layout (verified against v1.6.1 SetTime @ 0x0026ee84 / RebindAnim @ 0x0026f1ac):
+//   +0x00  ReferenceCounter (vptr + refcounts, 12B)
+//   +0x0C  SmartPtr<Model> m_Mesh
+//   +0x10  AnimBindings m_Bindings (24B: Bones@+0x00, Vectors@+0x0c)
+//            -> m_Bindings.m_Bones   at this+0x10 (clear target in RebindAnim)
+//            -> m_Bindings.m_Vectors at this+0x1c (walk target in SetTime)
+//   +0x28  SmartPtr<AnimationList> m_AnimList
+//   +0x2C  AnimIter m_CurrentIter (4B rb-tree node ptr)
+//   +0x30  uint32_t m_Pad_0x30 (gap; binary writes nothing meaningful here in SetTime)
+//   +0x34  float m_Time
+//   +0x38  float m_Speed (dead field in this class; used by AnimationManager externally)
+//   +0x3C  bool m_Loop
 class AnimationState : public Mortar::ReferenceCounter {
 public:
-    // Iterator types opaque to callers
     typedef AnimationList::AnimMap::iterator       AnimIter;
     typedef AnimationList::AnimMap::const_iterator AnimConstIter;
 
@@ -72,7 +108,7 @@ public:
     // Binary @ 0x001acd8c -- const overload
     AnimConstIter GetAnimIter(unsigned long idx) const;
 
-    // Binary @ 0x001ace8c -- iter==end() ? null : iter->second
+    // Binary @ 0x001ace8c -- iter==end() ? null : &iter->second
     Animation* GetAnimation(const AsciiString& name) const;
     // Binary @ 0x001acdf8 -- by index
     Animation* GetAnimation(unsigned long idx) const;
@@ -85,11 +121,10 @@ public:
     // Binary @ 0x001ad348 -- same body using index-based GetAnimIter
     void PlayAnimIdx(unsigned long idx, float time, bool loop);
 
-    // Binary @ 0x001ad218 -- rebuild AnimBindings from (m_Mesh, current track group);
-    //                       called from LinkMesh/PlayAnim/PlayAnimIdx
+    // Binary @ 0x0026f1ac -- rebuild AnimBindings from (m_Mesh, current track group)
     void RebindAnim();
 
-    // Binary @ 0x001accd0 -- advance time, handle loop/stop, dispatch UpdateBinding<N>
+    // Binary @ 0x0026ee84 -- advance time, handle loop/stop, dispatch UpdateBinding<N>
     void SetTime(float t);
 
     // Binary @ 0x001accc0 -- m_CurrentIter = m_Anims.end()
@@ -102,20 +137,19 @@ public:
     static Mortar::SmartPtr<AnimationList> GetDummyAnimList();
 
 private:
-    Mortar::SmartPtr<Model>         m_Mesh;         // +0x0C
-    AnimBindings            m_Bindings;     // +0x10 (24B)
-    Mortar::SmartPtr<AnimationList> m_AnimList;     // +0x28
-    AnimIter                m_CurrentIter;  // +0x2C
-    // TODO: re-verify AnimationState +0x30 field from binary (binary writes here; RE gap)
-    uint32_t                m_Pad_0x30;     // +0x30
-    float                   m_Time;         // +0x34
-    float                   m_Speed;        // +0x38 (dead field in this class; AnimationManager uses)
-    bool                    m_Loop;         // +0x3C
+    Mortar::SmartPtr<Model>          m_Mesh;         // +0x0C
+    AnimBindings                     m_Bindings;     // +0x10 (24B: Bones@+0x10, Vectors@+0x1c)
+    Mortar::SmartPtr<AnimationList>  m_AnimList;     // +0x28
+    AnimIter                         m_CurrentIter;  // +0x2C
+    uint32_t                         m_Pad_0x30;     // +0x30 (gap; binary writes nothing here)
+    float                            m_Time;         // +0x34
+    float                            m_Speed;        // +0x38 (dead in this class)
+    bool                             m_Loop;         // +0x3C
 };
 
 #ifdef __bada__
 static_assert(sizeof(Mortar::AnimationState) == 0x40,
-              "AnimationState sizeof mismatch (expected 0x40; check m_Pad_0x30 gap field)");
+              "AnimationState sizeof mismatch (expected 0x40)");
 #endif
 
 }  // namespace Mortar
