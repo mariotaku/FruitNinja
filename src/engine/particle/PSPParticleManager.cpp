@@ -61,7 +61,13 @@ static std::string DirOf(const char* path) {
     return (pos == std::string::npos) ? std::string(".") : p.substr(0, pos);
 }
 
-PSPParticleManager::PSPParticleManager() {
+// Binary @ 0x13bf40 — manager ctor. Sets m_GlobalTimeScale=1.0; m_GlobalTimeMod and
+// m_GlobalOrigin initialised from a DAT default (ctor leaves them at default / zero).
+PSPParticleManager::PSPParticleManager()
+    : m_GlobalTimeMod(0.0f)
+    , m_GlobalTimeScale(1.0f)
+    , m_GlobalOrigin(0.0f, 0.0f, 0.0f)
+{
 }
 
 PSPParticleManager::~PSPParticleManager() {

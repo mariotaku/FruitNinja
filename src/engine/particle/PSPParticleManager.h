@@ -284,22 +284,22 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_bStarted)          == 0x4
 
 // ----------------------------------------------------------------------------
 // Singleton manager
+// ctor @ 0x13bf40, dtor @ 0x13d064 / 0x13d080 (v1.6.1 addresses)
 // ----------------------------------------------------------------------------
 class PSPParticleManager : public Mortar::Singleton<PSPParticleManager> {
     friend class Mortar::Singleton<PSPParticleManager>;
 
 public:
-    // Add emitter by template hash. Matches AddEmitter (0x1149e0).
+    // Binary @ 0x13c1b8 — pop from pool, init defaults, prepend to active list.
     // ppRef (optional) is filled with the returned pointer for caller cleanup;
     // it is cleared to nullptr if template lookup fails.
     // updateWhenPaused maps directly to e.m_bUpdateWhenPaused (binary third arg).
-    // Binary @ 0x001149e0 — pop from pool, init defaults, prepend to m_ActiveList
     PSPParticleEmitter* AddEmitter(uint32_t hash,
                                    PSPParticleEmitter** ppRef = nullptr,
                                    bool updateWhenPaused = false);
 
-    // Explicitly release an emitter (matches ClearEmitter 0x114934). Clears
-    // the caller back-pointer and marks the emitter for removal on next tick.
+    // Explicitly release an emitter. Clears the caller back-pointer and marks
+    // the emitter for removal on next tick.
     // Binary @ 0x00114934 — find by ptr, unlink, clear back-ref, return to pool
     void ClearEmitter(PSPParticleEmitter* emitter);
 
@@ -337,6 +337,15 @@ public:
 
     // Template lookup — used by AddEmitter and unit tests.
     const PSPEmitterTemplate* FindTemplate(uint32_t hash) const;
+
+    // Manager global fields (v1.6.1 manager struct +0x00/+0x04/+0x08).
+    // Written each frame by SuperFruitControl::UpdateExplosion during the
+    // super-fruit explosion sequence; reset to 0.0/1.0 at sequence end.
+    // TODO: 0x13bf40/0x00115ed8 — confirm how mgr Update reads +0x00/+0x04 to
+    //   modulate per-emitter dt/intensity; consumption side not yet decompiled.
+    float m_GlobalTimeMod;       // +0x00 intensity scalar (0.0 at reset)
+    float m_GlobalTimeScale;     // +0x04 global time speed (1.0 at reset/ctor)
+    Vec3  m_GlobalOrigin;        // +0x08 explosion epicenter (written by UpdateExplosion)
 
 private:
     PSPParticleManager();

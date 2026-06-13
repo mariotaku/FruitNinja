@@ -177,6 +177,19 @@ public:
     // TODO: 0x001baa20 -- full ExplodeSuperFruit VFX not yet ported
     void ExplodeSuperFruit();
 
+    // Binary @ 0x1baeb8. Per-frame shockwave: writes PSPParticleManager globals
+    // +0x00/+0x04/+0x08, then radially pushes Actor types 0/1/5.
+    void UpdateExplosion(float dt);
+
+    // Binary @ 0x1b9b4c. Iterates ActorManager type-6 entities, sets entity+0xe0=1
+    // (stop flag). "Rays" are type-6 Entity actors, NOT PSPParticles.
+    void StopRays();
+
+    // Binary @ 0x1bc748. PSPParticleManager emitter hookup for jib particle trails.
+    // TODO: 0x1bc748 — SpawnJibs PSPParticleManager hookup pending asm-inspector
+    //   resolution of DirCos/DirSin offset (+0x2C vs +0x30 ambiguity in v1.6.1).
+    void SpawnJibs(int count);
+
     // Binary @ 0x001b9850. Combo cancel: clears linked slash entity when that
     // entity's combo is cancelled (e.g. swipe released mid-combo).
     void ComboCancel(SlashEntity* se);
