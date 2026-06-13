@@ -19,7 +19,8 @@ public:
     FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool isGlobal);
     ~FruitFactLeaderboard() override;
 
-    void Init() override;  // TODO: 0x00176980 -- build leaderboard display HUD children
+    // TODO: 0x00176980 -- BLOCKED on FNHighscore + LeaderboardManager (defunct) + online gates
+    void Init() override;
 
 private:
     bool m_bIsGlobal;

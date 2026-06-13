@@ -16,11 +16,11 @@
 //   ShowSubObjects 0x00173760
 //   HideSubObjects 0x0017375c
 //   Helpers:
-//     CreateSenseisHead(float)      0x0017c3b4
-//     CreateTitleTextControl(char*) 0x0017c4cc
-//     CreateHorizontalDivider()     0x0017c2d0
-//     CreateSenseisFruitFactText()  0x0017c99c
-//     CreateSenseisFruitFactTitle() 0x0017c734
+//     CreateSenseisHead(float)      0x0017c3b4  -> GenericHUDControl*
+//     CreateTitleTextControl(char*) 0x0017c4cc  -> GenericHUDControl*
+//     CreateHorizontalDivider()     0x0017c2d0  -> void
+//     CreateSenseisFruitFactText()  0x0017c99c  -> GenericHUDControl*
+//     CreateSenseisFruitFactTitle() 0x0017c734  -> GenericHUDControl*
 //
 // Binary layout (ARM32, 4-byte ptrs):
 //   +0x00..+0x93 : BaseScreen base (0x94 bytes)
@@ -38,6 +38,7 @@
 // FruitFactPageControl in the port to avoid collision with the v1.5.1
 // FruitFactControl game-over panel class already in src/hud/).
 class FruitFactPageControl;
+class GenericHUDControl;
 
 class FruitFactPage : public BaseScreen {
 public:
@@ -54,23 +55,18 @@ public:
     virtual void ShowPage();                     // Binary @ 0x0017c1b4
 
     void ShowSubObjects();  // Binary @ 0x00173760 -- empty base hook (overridden by concrete pages)
-    void HideSubObjects(); // Binary @ 0x0017375c -- empty base hook (overridden by concrete pages)
+    void HideSubObjects();  // Binary @ 0x0017375c -- empty base hook (overridden by concrete pages)
 
 protected:
     // +0x94: back-pointer to the owning page-book controller
     FruitFactPageControl* m_pController;  // word 0x25 in binary struct
 
-    // Helper builders for subclass Init() -- all stubbed
-    // TODO: 0x0017c3b4 -- CreateSenseisHead(float scale)
-    void CreateSenseisHead(float scale);
-    // TODO: 0x0017c4cc -- CreateTitleTextControl(const char* str)
-    void CreateTitleTextControl(const char* str);
-    // TODO: 0x0017c2d0 -- CreateHorizontalDivider()
-    void CreateHorizontalDivider();
-    // TODO: 0x0017c99c -- CreateSenseisFruitFactText()
-    void CreateSenseisFruitFactText();
-    // TODO: 0x0017c734 -- CreateSenseisFruitFactTitle()
-    void CreateSenseisFruitFactTitle();
+    // Helper builders for subclass Init() -- binary @ addresses in comment
+    GenericHUDControl* CreateSenseisHead(float scale);      // 0x0017c3b4
+    GenericHUDControl* CreateTitleTextControl(const char* str); // 0x0017c4cc
+    void               CreateHorizontalDivider();           // 0x0017c2d0
+    GenericHUDControl* CreateSenseisFruitFactText();        // 0x0017c99c
+    GenericHUDControl* CreateSenseisFruitFactTitle();       // 0x0017c734
 };
 
 #endif // FN_SCREENS_FRUIT_FACT_PAGE_H

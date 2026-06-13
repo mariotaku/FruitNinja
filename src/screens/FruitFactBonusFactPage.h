@@ -16,7 +16,8 @@ public:
     explicit FruitFactBonusFactPage(FruitFactPageControl* pCtrl);
     ~FruitFactBonusFactPage() override;
 
-    void Init() override;  // TODO: 0x001743b8 -- build BakedStringBox + HUD children
+    // TODO: 0x001743b8 -- BLOCKED on BonusManager + BakedStringBox::SetStroke
+    void Init() override;
 };
 
 #endif // FN_SCREENS_FRUIT_FACT_BONUS_FACT_PAGE_H

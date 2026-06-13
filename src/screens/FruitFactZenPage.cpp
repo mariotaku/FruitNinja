@@ -49,9 +49,19 @@ void FruitFactZenPage::UnloadContent() {
     g_ZenContentLoaded = false; // binary: guard byte at base+0x43c08 (DAT_0017fb40) = 0
 }
 
-// Binary @ 0x00180320 -- builds achievement list / 'play to unlock' branch
+// Binary @ 0x00180320 -- builds combo achievement list (hasCombo) or 'play more' message branch.
 void FruitFactZenPage::Init() {
-    // TODO: 0x00180320 -- build BakedStringBox + GenericHUDControl children
+    // TODO: 0x00180320 -- BLOCKED on BakedStringBox::SetStroke (both 1-col form at
+    //   SetStroke(float scale, Colour c) and 3-col form at SetStroke(float, Colour, Colour, Colour)),
+    //   FruitFact::CheckCombo(int* infoArr, int count, int* outLocal)->int,
+    //   GetComboStarTexture(SmartPtr<Tex>* out, int tier),
+    //   GetComboStarText(int tier)->int/strid,
+    //   Fruit::FruitInfo(field_0x98) (resolve fruit icon tex/info),
+    //   TranisitionInfo T_1022 default block copy (into c+0x28 / c+0xa4),
+    //   controller layout: combo count @ *(ctrl+0x50)+0x210, fruit-info array @ +0x214,
+    //   DAT_1806f4 sound name (combo icon sound), DAT_180704 sound name (star/no-combo icon),
+    //   DAT_180eec page title string, DAT_180ee8 no-combo body text string.
+    //   SetStroke RE must complete before this Init can land faithfully.
 }
 
 // Binary @ 0x0017fa04
