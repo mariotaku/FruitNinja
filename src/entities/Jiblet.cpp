@@ -137,15 +137,15 @@ void Jiblet::Update(float dt) {
             m_pEmitter = pm.AddEmitter(m_EmitterHash, 0, false);
             if (m_pEmitter) {
                 // Binary: *(byte*)(emitter+0x4d) = 1 (trail-started flag).
-                m_pEmitter->m_bStarted = 1;
+                m_pEmitter->m_bTrailStarted = 1;
                 // dir = normalise(vel)
                 Vec3 dir = vel;
                 dir.Normalise();
                 // pos -> emitter.m_Pos (+0x08)
                 m_pEmitter->m_Pos = pos;
-                // emitter+0x30 = -dir.y ; emitter+0x34 = -dir.x
-                m_pEmitter->m_DirSin = -dir.y;
-                m_pEmitter->m_field34 = -dir.x;
+                // emitter+0x30 (m_DirCos) = -dir.y ; emitter+0x34 (m_DirSin) = -dir.x
+                m_pEmitter->m_DirCos = -dir.y;
+                m_pEmitter->m_DirSin = -dir.x;
             }
         }
     }

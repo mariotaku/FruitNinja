@@ -651,8 +651,8 @@ void Fruit::Update(float dt) {
     if (m_pEmitter1) {
         m_pEmitter1->m_Pos     = pos;
         m_pEmitter1->m_Pos.z   = -5000.0f;  // DAT_00177ff4
-        m_pEmitter1->m_DirCos  = 1.0f;      // binary +0x2C = CosIdx(0)
-        m_pEmitter1->m_DirSin  = 0.0f;      // binary +0x30 = SinIdx(0)
+        m_pEmitter1->m_DirCos  = 1.0f;      // binary +0x30 = CosIdx(0)
+        m_pEmitter1->m_DirSin  = 0.0f;      // binary +0x34 = SinIdx(0)
     }
     if (m_pEmitter2) {
         m_pEmitter2->m_Pos     = m_SecondPos;  // binary calls this m_HalfB_pos; same slot (+0xB8)
@@ -1155,7 +1155,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
 
     // Impact particle emitter — one-shot, rotated by the blade direction.
     // Uses FRUIT_INFO.m_NameHash (e.g. "apple") as the template lookup. The
-    // m_DirCos/m_DirSin (+0x2C/+0x30) encode (cos, sin) of the rotation
+    // m_DirCos/m_DirSin (+0x30/+0x34) encode (cos, sin) of the rotation
     // applied to each spawned particle's initial velocity -- matches binary
     // AddParticle 0x00115644. Negative-angle sign flip mirrors the binary:
     //   e->m_DirCos =  CosIdx(-sliceAngle);
