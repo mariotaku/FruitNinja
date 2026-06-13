@@ -35,7 +35,7 @@ FruitFactRewardsPage::FruitFactRewardsPage(FruitFactPageControl* pCtrl)
     , m_timerB4(0.0f)
     , m_intB8(-1)
     , m_byteC0(0)
-    , m_floatC8(1.0f)
+    , m_floatC8(0.0f)
     , m_floatCC(1.0f)
     , m_shortD0((short)32000)
     , m_floatD4(1.0f)
@@ -62,7 +62,7 @@ FruitFactRewardsPage::~FruitFactRewardsPage() {
 // DAT_0017e6c0 = 0.0f (zero constant for most field inits).
 // DAT_0017e6c4 = 68.0f (head scale).
 // LSTR 0x15D (349) = "Rewards" title string.
-// ASM-verified: 0x0017e4d8 ready for re-verify (field layout corrected per disasm).
+// ASM-verified: 2026-06-13T04:40Z binary @ 0x0017e4d8 (asm-inspector)
 void FruitFactRewardsPage::Init() {
     // State field inits (offsets confirmed from disasm, [r4,#off]):
     m_timerB0  = 0.0f;    // [r4,#0xb0]
@@ -72,7 +72,7 @@ void FruitFactRewardsPage::Init() {
     m_byteE4   = 0;       // [r4,#0xe4]
     m_intB8    = -1;      // [r4,#0xb8]
     m_shortD0  = (short)32000;  // [r4,#0xd0] = 0x7d00
-    m_floatC8  = 1.0f;    // [r4,#0xc8]
+    m_floatC8  = 0.0f;    // [r4,#0xc8] -- binary vstr s15(=0.0) (ASM-verified)
     m_floatCC  = 1.0f;    // [r4,#0xcc]
 
     CreateSenseisHead(68.0f);               // DAT_0017e6c4 = 68

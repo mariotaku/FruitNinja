@@ -21,7 +21,7 @@
 //     +0xbc : (pad)
 //     +0xc0 : uint8 m_byteC0  (=0)
 //     +0xc4 : (pad)
-//     +0xc8 : float m_floatC8 (=1.0f)
+//     +0xc8 : float m_floatC8 (=0.0f)
 //     +0xcc : float m_floatCC (=1.0f)
 //     +0xd0 : short m_shortD0 (=32000)
 //     +0xd4 : float m_floatD4 (=1.0f)
@@ -80,7 +80,7 @@ private:
     // +0xc4: pad (not written)
     uint8_t _padC4[4];
 
-    // +0xc8: float (=1.0f)
+    // +0xc8: float (=0.0f)
     float m_floatC8;   // @+0xc8
 
     // +0xcc: float (=1.0f)
