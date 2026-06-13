@@ -30,6 +30,7 @@
 #include "Game.h"
 #include "audio/GameSound.h"
 #include "math/math3d.h"
+#include "math/MathUtil.h"
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -75,6 +76,17 @@ static int g_PowerFruitCount = 0;
 // (DAT_00177960 + 0x48). Reset in Fruit::Chuck so each new launch can fire once.
 // Prevents multiple fruits chucked in the same frame from each playing the SFX.
 static bool s_FruitThrowSfxFiredThisFrame = false;
+
+// Base slice-rotation axes — written by global.constructors.keyed.to.Fruit.cpp
+// (binary @ 0x1E206C). Values: world unit basis X/Y/Z.
+//   0x2D9EE4 -> kSliceBaseAxis[0] = (1,0,0)   slice axis[0]
+//   0x2D9ED8 -> kSliceBaseAxis[1] = (0,1,0)   slice axis[1]
+//   0x3328AC -> kSliceBaseAxis[2] = (0,0,1)   slice axis[2]
+static const Vec3 kSliceBaseAxis[3] = {
+    Vec3(1.0f, 0.0f, 0.0f),
+    Vec3(0.0f, 1.0f, 0.0f),
+    Vec3(0.0f, 0.0f, 1.0f),
+};
 
 // GetFruitZPosition counter (binary @ 0x001690cc).
 // Decrements by 100 per call, wraps back to -500 when it falls below -2499.
@@ -231,6 +243,15 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_SlicePos        = Vec3(0, 0, 0);
     m_pEmitter1    = nullptr;
     m_pEmitter2    = nullptr;
+
+    // Seed m_SliceAxes with unit basis so the pre-slice spin loop uses
+    // world-space axes. SetupSliceRotations overwrites these on the first slice.
+    m_SliceAxes[0] = kSliceBaseAxis[0];
+    m_SliceAxes[1] = kSliceBaseAxis[1];
+    m_SliceAxes[2] = kSliceBaseAxis[2];
+    m_SliceAxes[3] = kSliceBaseAxis[0];
+    m_SliceAxes[4] = kSliceBaseAxis[1];
+    m_SliceAxes[5] = kSliceBaseAxis[2];
 
     // Random rotation velocity (matches binary Fruit::Init @ 0x00176708):
     // one triple of random values, stored IDENTICALLY into both m_RotVel1
@@ -570,32 +591,33 @@ void Fruit::Update(float dt) {
             if (m_MenuGrowFade > 1.0f) m_MenuGrowFade = 1.0f;
         }
 
-        // ASM-verified: 2026-05-20 binary @ 0x001777a8..0x001777ee (re-analyst) -- gravity grow gated.
-        // m_bCritical==0 means a normal (non-critical) sliced fruit; gravity grows.
-        // m_bMenuFling==1 means menu fruit; gravity also grows (different rate).
-        if (m_bCritical == 0) {
-            float len = m_Gravity.Normalise();   // unit-izes, returns old magnitude
-            m_Gravity *= len + 0.9f * dtNorm;
+        // m_bFrozen gates ALL physics + spin. The grow-fade ramp (above) and the
+        // m_SecondPos backup (in the unsliced path tail) are outside this gate.
+        // Binary: if (*(char*)(this+0x16c)=='\0') { gravity/vel/pos/lifetime/spin }
+        if (m_bFrozen == 0) {
+            // ASM-verified: 2026-05-20 binary @ 0x001777a8..0x001777ee (re-analyst) -- gravity grow gated.
+            // m_bCritical==0 means a normal (non-critical) sliced fruit; gravity grows.
+            // m_bMenuFling==1 means menu fruit; gravity also grows (different rate).
+            if (m_bCritical == 0) {
+                float len = m_Gravity.Normalise();   // unit-izes, returns old magnitude
+                m_Gravity *= len + 0.9f * dtNorm;
+            }
+            if (m_bMenuFling != 0) {
+                float len = m_Gravity.Normalise();
+                m_Gravity *= len + 1.3f * dtNorm;
+            }
+
+            // Two-body physics — same ×60 position scale as unsliced.
+            const float POS_INTEGRATION_SCALE = 60.0f;
+            vel        += m_Gravity * dtScaled;
+            m_SecondVel += m_Gravity * dtScaled;
+            pos        += vel        * dtScaled * POS_INTEGRATION_SCALE;
+            m_SecondPos += m_SecondVel * dtScaled * POS_INTEGRATION_SCALE;
+
+            // ASM-verified: 2026-05-27 binary @ 0x001777a0 (asm-inspector)
+            // -- DAT_00177954 = 1000.0f, sliced-only tick.
+            m_LifetimeCounter += (int)(1000.0f * dtScaled);
         }
-        if (m_bMenuFling != 0) {
-            float len = m_Gravity.Normalise();
-            m_Gravity *= len + 1.3f * dtNorm;
-        }
-
-        // Two-body physics — same ×60 position scale as unsliced.
-        const float POS_INTEGRATION_SCALE = 60.0f;
-        vel        += m_Gravity * dtScaled;
-        m_SecondVel += m_Gravity * dtScaled;
-        pos        += vel        * dtScaled * POS_INTEGRATION_SCALE;
-        m_SecondPos += m_SecondVel * dtScaled * POS_INTEGRATION_SCALE;
-
-        // ASM-verified: 2026-05-27 binary @ 0x001777a0 (asm-inspector)
-        // -- DAT_00177954 = 1000.0f, sliced-only tick.
-        m_LifetimeCounter += (int)(1000.0f * dtScaled);
-
-        // TODO: 0x1df828 -- SetupSliceRotations / m_bFrozen physics-skip gate not yet wired.
-        // m_bFrozen==1 should skip the gravity/velocity integration block above and the
-        // quaternion-spin loop below. Wire when SetupSliceRotations is ported.
     }
 
     // ASM-verified: 2026-05-27 binary @ 0x00177c7c (re-analyst).
@@ -603,33 +625,41 @@ void Fruit::Update(float dt) {
     // -- the m_bSliced gate lives inside UpdateBombAvoidance itself.
     UpdateBombAvoidance(dtScaled);
 
-    // Quaternion rotation update (both halves). Matches binary Fruit::Update
-    // @ 0x00177680: each axis is a CreateFromAxisAngle with 16-bit angle
-    //   idx = (ushort)(int)(rotVel * dtNorm * 182.0)   // DAT_00177ff0 = 182
-    // then m_Rot = m_Rot * qx * qy * qz.
-    // In radians that is rotVel * dtNorm * (182 * 2pi / 65536) ≈
-    // rotVel * dtNorm * (pi / 180) — i.e. one degree per unit of rotVel per
-    // 60fps frame. The old port used 0.01 here, rotating fruits ~57% as
-    // fast as the binary.
-    const float ANGLE_PER_UNIT = 182.0f * 6.2831853f / 65536.0f;  // ~pi/180
-    const float rotScale = dtNorm;  // dtScaled * 60.0 (DAT_0017794c = 1/60)
+    // Quaternion rotation update (both halves). Binary Fruit::Update
+    // @ 0x1DF828 spin loop: per half, per axis k:
+    //   CreateFromAxisAngle(m_SliceAxes[idx*3+k], (uint16)(int)(rotVel.k * dtNorm * 182.0))
+    //   m_Rot[idx] = ((m_Rot[idx]*qx)*qy)*qz; Normalise.
+    // Gated by m_bFrozen: when frozen the entire spin loop is skipped.
+    // Super-fruit recomputes m_SliceAxes[idx*3+0] from m_Rot1.Matrix33()*Vec3(1,0,0) each frame.
+    // (When NOT sliced the axes in m_SliceAxes are the unit basis from Init/SetupSliceRotations.)
     {
-        Quaternion qx = Quaternion::FromAxisAngle(Vec3(1, 0, 0),
-            m_RotVel1.x * rotScale * ANGLE_PER_UNIT);
-        Quaternion qy = Quaternion::FromAxisAngle(Vec3(0, 1, 0),
-            m_RotVel1.y * rotScale * ANGLE_PER_UNIT);
-        Quaternion qz = Quaternion::FromAxisAngle(Vec3(0, 0, 1),
-            m_RotVel1.z * rotScale * ANGLE_PER_UNIT);
-        m_Rot1 = (m_Rot1 * qx * qy * qz).normalized();
-    }
-    {
-        Quaternion qx = Quaternion::FromAxisAngle(Vec3(1, 0, 0),
-            m_RotVel2.x * rotScale * ANGLE_PER_UNIT);
-        Quaternion qy = Quaternion::FromAxisAngle(Vec3(0, 1, 0),
-            m_RotVel2.y * rotScale * ANGLE_PER_UNIT);
-        Quaternion qz = Quaternion::FromAxisAngle(Vec3(0, 0, 1),
-            m_RotVel2.z * rotScale * ANGLE_PER_UNIT);
-        m_Rot2 = (m_Rot2 * qx * qy * qz).normalized();
+        const FruitInfoData* spinInfo = FruitInfo_Get((long)m_FruitType);
+        const bool isSuperFruit = (spinInfo && spinInfo->m_bIsSuperFruit);
+        Quaternion* rotSlots[2] = { &m_Rot1, &m_Rot2 };
+        Vec3* velSlots[2] = { &m_RotVel1, &m_RotVel2 };
+        for (int idx = 0; idx < 2; ++idx) {
+            if (m_bFrozen != 0) break;
+            // Super-fruit: recompute axis0 from current m_Rot1 each frame.
+            if (isSuperFruit && m_bSliced) {
+                Matrix44 mat = m_Rot1.ToMatrix44();
+                // Matrix44 col-major: col0 = (m[0],m[1],m[2]) = mat * (1,0,0)
+                m_SliceAxes[idx * 3 + 0] = Vec3(mat.m[0], mat.m[1], mat.m[2]);
+            }
+            Vec3& rv = *velSlots[idx];
+            Quaternion& rot = *rotSlots[idx];
+            Vec3& ax0 = m_SliceAxes[idx * 3 + 0];
+            Vec3& ax1 = m_SliceAxes[idx * 3 + 1];
+            Vec3& ax2 = m_SliceAxes[idx * 3 + 2];
+            Quaternion qx, qy, qz;
+            qx.CreateFromAxisAngle(ax0.x, ax0.y, ax0.z,
+                (uint32_t)((int)(rv.x * dtNorm * 182.0f) & 0xFFFF));
+            qy.CreateFromAxisAngle(ax1.x, ax1.y, ax1.z,
+                (uint32_t)((int)(rv.y * dtNorm * 182.0f) & 0xFFFF));
+            qz.CreateFromAxisAngle(ax2.x, ax2.y, ax2.z,
+                (uint32_t)((int)(rv.z * dtNorm * 182.0f) & 0xFFFF));
+            rot = ((rot * qx) * qy) * qz;
+            rot = rot.normalized();
+        }
     }
 
     // ASM-verified: 2026-05-27 binary @ 0x00177f12 (asm-inspector).
@@ -1615,66 +1645,133 @@ void Fruit::Slice() {
     // whole function. The prior `m_Gravity = Vec3(0,-12,0)` reset was a
     // port-only band-aid and has been removed for binary fidelity.
 
-    // --- Spin boost loop (matches Fruit::Slice 0x176d58 tail) ---
-    //
-    // For each half i in {0, 1}:
-    //   sum = |rv[i].x| + |rv[i].y| + |rv[i].z|
-    //   sum *= isCritical ? 2.0 : 0.5
-    //   compA = sum * (rand(0.5) + 0.75)
-    //   compB = sum * (rand(0.5) + 0.75)
-    //   1/4 chance: oneBig = ±compA * 1.5
-    //   else:       mix    = sum * (rand(0.3) - 0.1)
-    //   sign-flip compA / compB by flipSide + iteration index
-    //   new m_RotVel[i] = (picked x, picked y, -compB)
-    //   m_Rot[i] reset to axis-angle composition aligned with slice angle
-    for (int i = 0; i < 2; ++i) {
-        Vec3* rv    = (i == 0) ? &m_RotVel1 : &m_RotVel2;
-        Quaternion* q = (i == 0) ? &m_Rot1 : &m_Rot2;
-
-        float mag = fabsf(rv->x) + fabsf(rv->y) + fabsf(rv->z);
-        mag *= isCritical ? 2.0f : 0.5f;
-
-        const float r1 = ((float)rand() / (float)RAND_MAX) * 0.5f + 0.75f;
-        const float r2 = ((float)rand() / (float)RAND_MAX) * 0.5f + 0.75f;
-        float compA = mag * r1;
-        float compB = mag * r2;
-
-        // Sign flip — binary uses two different dice rolls per branch.
-        if (flipSide) {
-            if ((rand() % 5) > 1) compA = -compA;
-            if (i == 1)           compA = -compA;
-            if (i == 0)           compB = -compB;
-        } else {
-            if ((rand() % 5) < 2) compA = -compA;
-            if (i != 0)           compB = -compB;
-            if (i == 0)           compA = -compA;
-        }
-
-        Vec3 newRotVel;
-        if ((rand() % 3) == 0) {
-            // 1/4 chance (rand() % 3 == 0 is actually 1/3): oneBig
-            float big = compA * 1.5f;
-            if (big < 0.0f) big = -big;
-            newRotVel = Vec3(big, 0.0f, -compB);
-        } else {
-            const float mix = ((float)rand() / (float)RAND_MAX) * 0.3f - 0.1f;
-            newRotVel = Vec3(mag * mix, compA, -compB);
-        }
-        *rv = newRotVel;
-
-        // Reset m_Rot[i] to a composition:
-        //   Qx(axis=(1,0,0), 90°) * Qy(axis=(0,1,0), 90°) * Qz(axis=(0,0,1), sliceAngle)
-        // (Binary also passes impulse=0 literals; the port uses fixed
-        // 90° for the first two and m_SliceAngle in radians for Z.)
-        const float half = 1.5707963f * 0.5f;
-        const float sliceRad = (float)(int16_t)m_SliceAngle *
-                               (6.2831853f / 65536.0f) * 0.5f;
-        Quaternion qx(sinf(half), 0.0f, 0.0f, cosf(half));
-        Quaternion qy(0.0f, sinf(half), 0.0f, cosf(half));
-        Quaternion qz(0.0f, 0.0f, sinf(sliceRad), cosf(sliceRad));
-        *q = (qx * qy * qz).normalized();
+    // SetupSliceRotations (binary @ 0x1DA968): fills m_SliceAxes, m_RotVel1/2,
+    // and m_Rot1/2. sliceDirFlag = flipSide ? 1 : 0 (binary param_2 select).
+    {
+        const FruitInfoData* sliceInfo = FruitInfo_Get((long)m_FruitType);
+        bool isSuperFruit = (sliceInfo && sliceInfo->m_bIsSuperFruit);
+        SetupSliceRotations(isSuperFruit, flipSide ? 1 : 0);
     }
 
+}
+
+// Binary @ 0x001DA968. Fills m_SliceAxes[0..5] and m_RotVel1/2 with per-half
+// spin axes and angular velocities, then builds initial m_Rot1/2 from the
+// slice arc angle. Called from Fruit::Slice with (FruitInfo->m_bSuperFruit, sliceDirFlag).
+//
+// NORMAL path (isSuperFruit==0): copies unit-basis kSliceBaseAxis into m_SliceAxes,
+//   derives spin magnitudes from m_RotVel magnitudes + sign coins, stores into m_RotVel.
+// SUPER path  (isSuperFruit!=0): builds axes from blade direction (m_SliceArcAngle),
+//   derives spin magnitudes from the same RandF/Rand32 pattern.
+// Both paths: build m_Rot[idx] = (qx*qy)*qz from fixed 0x3FC0 angles + m_SliceArcAngle.
+void Fruit::SetupSliceRotations(bool isSuperFruit, int sliceDirFlag) {
+    Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+
+    // super-path: local_e4 starts 0, += 0xB4 per half (0, 180).
+    int local_e4 = 0;
+
+    for (int idx = 0; idx < 2; ++idx) {
+        Vec3* rv = (idx == 0) ? &m_RotVel1 : &m_RotVel2;
+
+        // Spin magnitude scale from incoming m_RotVel (per half).
+        // DAT_001dae2c (2.0/0.5) keyed on m_bCritical @0x165.
+        float mag = fabsf(rv->x) + fabsf(rv->y) + fabsf(rv->z);
+        float magScale = (m_bCritical != 0) ? 2.0f : 0.5f;
+        float fMag = mag * magScale;
+
+        float angX, angY, angZ;
+
+        if (!isSuperFruit) {
+            // ===== NORMAL fruit: random spin axes (unit basis) =====
+            m_SliceAxes[idx * 3 + 0] = kSliceBaseAxis[0];   // (1,0,0) @0x118/0x13C
+            m_SliceAxes[idx * 3 + 1] = kSliceBaseAxis[1];   // (0,1,0) @0x124/0x148
+            m_SliceAxes[idx * 3 + 2] = kSliceBaseAxis[2];   // (0,0,1) @0x130/0x154
+
+            // Two RandF(0.5)+0.75 draws -> spin components a, b.
+            float a = fMag * (rng.RandF(0.5f) + 0.75f);   // DAT_001dae30/34 via halfRange
+            float b = fMag * (rng.RandF(0.5f) + 0.75f);
+
+            // Sign coins on a (sliceDirFlag selects branch).
+            bool flip;
+            if (sliceDirFlag == 0) {
+                if (rng.Rand32(5) < 2) a = -a;
+                flip = (idx == 0);
+            } else {
+                if (rng.Rand32(5) >= 2) a = -a;
+                flip = (idx == 1);
+            }
+            if (flip) { a = -a; } else { b = -b; }
+
+            // Third-component coin (Rand32(3)):
+            //   0: xUnits = |a|*1.5 (sign-masked to negative), yUnits = DAT_001dae24 (=0.0)
+            //   else: xUnits = fMag*(RandF(0.3)-0.1), yUnits = a
+            // angX=xUnits, angY=yUnits, angZ=-b
+            if (rng.Rand32(3) == 0) {
+                float v = a * 1.5f;
+                if (v > 0.0f) v = -v;   // sign-mask: force negative (binary: fabs then negate)
+                angX = v;
+                angY = 0.0f;             // DAT_001dae24 = 0.0
+            } else {
+                float t = rng.RandF(0.3f);   // DAT_001dae30
+                angX = fMag * (t - 0.1f);    // DAT_001dae34 = 0.1
+                angY = a;
+            }
+            angZ = -b;
+        } else {
+            // ===== SUPER fruit: spin axes from blade direction =====
+            // axis0: perpendicular to blade.
+            uint16_t aBlade = (uint16_t)((0x3FC0 - (int)m_SliceArcAngle + 0x3C) & 0xFFFF);
+            m_SliceAxes[idx * 3 + 0] = Vec3(CosIdx(aBlade), SinIdx(aBlade), 0.0f);
+
+            // axis1: g_BaseAxisC = (0,0,1), flipped for half0.
+            {
+                Vec3 base = kSliceBaseAxis[2];   // (0,0,1) = g_BaseAxisC @0x3328AC
+                if (sliceDirFlag == 0) base = base * -1.0f;
+                m_SliceAxes[idx * 3 + 1] = base;
+            }
+
+            // axis2: second blade-derived index with per-half offset.
+            // local_e4 = 0 for half0, 0xB4 for half1.
+            {
+                uint16_t bIdx = (uint16_t)((int)((float)local_e4 * 182.0f) & 0xFFFF);
+                uint16_t a2   = (uint16_t)(bIdx - m_SliceArcAngle);
+                m_SliceAxes[idx * 3 + 2] = Vec3(CosIdx(a2), SinIdx(a2), 0.0f);
+            }
+
+            // For half1: flip the m_RotVel components.
+            if (idx == 1) {
+                m_RotVel1 = m_RotVel1 * -1.0f;
+                m_RotVel2 = m_RotVel2 * -1.0f;
+                m_SliceAxes[0] = m_SliceAxes[0] * -1.0f;
+            }
+
+            // Spin magnitudes (same RandF(0.5)+0.75 pattern, 3 values).
+            float a = (float)(int)(fMag * (rng.RandF(0.5f) + 0.75f));
+            float b = (float)(int)(fMag * (rng.RandF(0.5f) + 0.75f));
+            float c = -(float)(int)(fMag * (rng.RandF(0.5f) + 0.75f));
+            if (rng.Rand32(100) < 2) a = -a;
+            // 1/3: scale c by 0.2 (DAT_001dae2c); else scale b by 0.2.
+            if (rng.Rand32(3) == 0) { c = (float)((int)((float)c * 0.2f)); }
+            else                    { b = (float)((int)((float)b * 0.2f)); }
+            angX = a; angY = b; angZ = c;
+
+            local_e4 += 0xB4;
+        }
+
+        // Store the per-axis spin triple into m_RotVel slot.
+        *rv = Vec3(angX, angY, angZ);
+
+        // Build initial m_Rot from the slice arc angle.
+        // Binary: three CreateFromAxisAngle calls with angle 0x3FC0 then m_SliceArcAngle.
+        // Product: m_Rot[idx] = (qx*qy)*qz; axis layout: (1,0,0)/(0,1,0)/(0,0,1).
+        Quaternion* q = (idx == 0) ? &m_Rot1 : &m_Rot2;
+        Quaternion qx, qy, qz;
+        qx.CreateFromAxisAngle(1.0f, 0.0f, 0.0f, 0x3FC0u);
+        qy.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, 0x3FC0u);
+        qz.CreateFromAxisAngle(0.0f, 0.0f, 1.0f, (uint32_t)m_SliceArcAngle);
+        *q = ((qx * qy) * qz);
+        *q = q->normalized();
+    }
 }
 
 // Matches Fruit::RotateFacingUp (0x001757f4).
