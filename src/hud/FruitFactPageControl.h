@@ -64,7 +64,12 @@ struct InputEvent;
 class MenuButton;
 class FruitFactPage;
 
+class FruitFactPage;
+
 class FruitFactPageControl : public HUDControl3d {
+    // FruitFactPage builder helpers access m_pCurFactString and m_FactColour
+    // directly (binary offset reads: ctrl+0x7c, ctrl+0x98).
+    friend class FruitFactPage;
 public:
     // Binary @ 0x00170c78
     FruitFactPageControl();

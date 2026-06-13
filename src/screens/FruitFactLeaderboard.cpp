@@ -14,7 +14,12 @@ FruitFactLeaderboard::FruitFactLeaderboard(FruitFactPageControl* pCtrl, bool isG
 FruitFactLeaderboard::~FruitFactLeaderboard() {
 }
 
-// TODO: 0x00176980 -- build leaderboard display HUD children
+// TODO: 0x00176980 -- BLOCKED on FNHighscore struct (3 embedded at +0xc8/+0x11c/+0x170,
+//   each 0x54 bytes; ctor at its own addr), LeaderboardManager::GetInstance/ClearScores
+//   (defunct-stub), IsProviderOnline/AreFriendsLoaded (defunct online -> return false),
+//   LoadContent, and .tex strings at DAT_176d38 / DAT_176d48 from the binary string pool.
+//   ctrl-B tex confirmed "leaderboard_vertical_divider_1.tex" (DAT_176d40).
+//   LSTR ids: 0x7b (123, global LB title) / 0x363 (867, friends LB title).
 // Defunct: online-services -- no-op stub; binary @ 0x00176980
 void FruitFactLeaderboard::Init() {
 }

@@ -16,7 +16,7 @@ public:
     FruitFactBigClassicFactPage(FruitFactPageControl* pCtrl, int factIndex, int pageIndex);
     ~FruitFactBigClassicFactPage() override;
 
-    void Init() override;  // TODO: 0x00172884 -- build BakedStringBox + HUD children
+    void Init() override;  // Binary @ 0x00172884 -- build icon GenericHUDControls
 
 private:
     int m_factIndex;
