@@ -14,7 +14,10 @@ Output layout (default: pages/):
         fruit-ninja.js
         fruit-ninja.wasm
         fruit-ninja.data
-        splash.png
+        splash.webp
+        play_button.webp
+        sound.webp
+        sound_cross.webp
       models/
         index.html        <- docs/gallery/models/index.html
         models.json
@@ -47,7 +50,11 @@ GAME_FILES = [
     "fruit-ninja.js",
     "fruit-ninja.wasm",
     "fruit-ninja.data",
-    "splash.png",
+    # Shell image assets (WebP, decoded from authentic FruitNinjaBada assets).
+    "splash.webp",
+    "play_button.webp",
+    "sound.webp",
+    "sound_cross.webp",
 ]
 
 # Files we copy from docs/gallery/models/ into pages/models/
