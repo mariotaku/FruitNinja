@@ -110,7 +110,7 @@ public:
     Vec3     m_RotVel1;                    // +0x100..+0x10B  per-half0 spin rates (RotateFacingUp/Update/Setup/CreateFruit)
     Vec3     m_RotVel2;                    // +0x10C..+0x117  per-half1 spin rates
     Vec3     m_SliceAxes[6];               // +0x118..+0x15F  [2 halves][3 axes] spin axes 0x48 bytes;
-                                           //   SetupSliceRotations writes per-half stride 0x20;
+                                           //   SetupSliceRotations writes per-half stride 0x24;
                                            //   Update reads this+i*0x24+0x118/+0x124/+0x130
     Mortar::Entity* m_pOwner;              // +0x160  slasher/owner back-ref; ctor=0; CreateFruit sets;
                                            //   KillFruit: if(owner && owner+0x14C==this) owner+0x14C=0
@@ -154,6 +154,12 @@ public:
     // marks the fruit as two-body. Called from Update when m_SliceTimer
     // hits zero.
     void Slice();
+
+    // Binary @ 0x001DA968. Fills m_SliceAxes[0..5] and m_RotVel1/2 with
+    // per-half spin axes and angular velocities, then builds the initial
+    // m_Rot1/2 quaternions from the slice arc angle.
+    // Called at the end of Slice() with (FruitInfo->m_bIsSuperFruit, sliceDirFlag).
+    void SetupSliceRotations(bool isSuperFruit, int sliceDirFlag);
 
     // Matches Fruit::Sliced @ 0x001401c8. Pure predicate: returns true
     // if the fruit is already sliced (m_bSliced) OR if a slice countdown
