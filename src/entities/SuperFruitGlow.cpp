@@ -8,36 +8,37 @@
 #include "SuperFruitGlow.h"
 #include "Fruit.h"
 #include "game/GameWork.h"
-#include "audio/GameSound.h"
-#include "audio/MortarSound.h"
+#include "engine/audio/GameSound.h"
+#include "engine/audio/MortarSound.h"
 #include <cstring>
 
-// Binary constants from spec (v1.6.1)
+// DAT_001c01a4 = 60.0f — spin rate multiplier (m_Timer += dt*60)
+static const float SFG_SPIN_RATE = 60.0f;
 
-// DAT_001c01a4 — spin rate multiplier
-static const float SFG_SPIN_RATE = 0.0f;        // TODO: 0x1c0024 — resolve DAT_001c01a4 spin rate
+// DAT_001c0858 = 150.0f — base scale factor applied to size Vec3
+static const float SFG_BASE_SCALE_FACTOR = 150.0f;
 
-// DAT_001c0858 — base scale factor
-static const float SFG_BASE_SCALE_FACTOR = 1.0f; // TODO: 0x1c06bc — resolve DAT_001c0858 base scale
-
-// DAT_001c0854 — m_FadeAlt initial value
-static const float SFG_FADE_ALT_INIT = 1.0f;     // TODO: 0x1c06bc — resolve DAT_001c0854 fadeAlt init
-
-// DAT_001c01ac = 75.0f (IEEE 0x42960000) — alpha scale: byte alpha = trunc(75.0 * m_FadeAlt)
+// DAT_001c01ac = 75.0f — alpha scale: byte alpha = trunc(75.0 * m_Fade)
 static const float SFG_ALPHA_SCALE = 75.0f;
 
-// fade rate = +-2 per second
-static const float SFG_FADE_RATE = 2.0f;         // binary: +=2*dt (in) / -=2*dt (out)
+// DAT_001c01a8 = 40.0f — z-correction: pos.z = fruit(+0x9c) - 40.0
+static const float SFG_Z_CORRECTION = 40.0f;
+
+// DAT_001c01b0 = 0.0f — sound volume when game is paused
+static const float SFG_PAUSED_VOLUME = 0.0f;
+
+// fade rate = +-2 per second (binary: +=2*dt in / -=2*dt out)
+static const float SFG_FADE_RATE = 2.0f;
 
 // ctor @ 0x001c06bc
-// Calls HUDControl3d::HUDControl3d; subscribes to fruit-slice event;
+// Calls HUDControl3d::HUDControl3d; subscribes to fruit-killed event;
 // plays looping SFX; stores fruit pointer.
 SuperFruitGlow::SuperFruitGlow(Fruit* fruit)
     : HUDControl3d()
+    , m_bSliced(0)
     , m_pFruit(fruit)
     , m_pSound(0)
     , m_Fade(0.0f)
-    , m_FadeAlt(SFG_FADE_ALT_INIT)
 {
     // +0x30: HUDControl m_LayerFlags — ctor sets per spec (0x80)
     m_LayerFlags = 0x80;
@@ -57,7 +58,7 @@ SuperFruitGlow::SuperFruitGlow(Fruit* fruit)
     // The binary builds a static Delegate1<bool,MortarSound*>::Global finish callback
     // (target @ iVar4+DAT_001c0870); the port follows the established convention
     // (Fruit.cpp:1175) of passing an empty delegate for the looping-SFX finish hook.
-    // The handle is stored (asm: str r0,[r4,#0x84]); port keeps it in m_pSound.
+    // The handle is stored (asm: str r0,[r4,#0x84]); port keeps it in m_pSound (+0x84).
     if (game_work.mGameSound) {
         m_pSound = game_work.mGameSound->SFXPlay(
             "pome-lp", 1.0f, 0.0f,
@@ -85,21 +86,19 @@ void SuperFruitGlow::Release() {
 }
 
 // slot9: DrawOrder @ 0x1bfb18
-// Double-draw: scales inherited size Vec3 (+0x20) by m_FadeAlt, draws twice with
+// Double-draw: scales inherited size Vec3 (+0x20) by m_Fade, draws twice with
 // m_Timer (+0x2c) negated between passes, then restores both.
 void SuperFruitGlow::DrawOrder(const Vec3& hudScale, int layerMask) {
-    // ASM @ 0x1bfb18: the "spin" the prior TODO referenced is NOT a separate
-    // m_Spin field — the binary operates on the inherited HUDControl::size
-    // Vec3 (+0x20) and HUDControl::m_Timer (+0x2c). Two-pass mirror:
+    // ASM @ 0x1bfb18: two-pass mirror using m_Fade (+0x88) as scale multiplier:
     //   1. save size (+0x20 Vec3)
-    //   2. size *= m_FadeAlt (+0x88)        -> _Vector3<float>::operator*=
+    //   2. size *= m_Fade (+0x88)           -> _Vector3<float>::operator*=
     //   3. Draw(hudScale, layerMask)        -> HUDControl3d::Draw (1st blade)
     //   4. m_Timer = -m_Timer (+0x2c)       -> mirror rotation for 2nd blade
     //   5. Draw(hudScale, layerMask)        -> HUDControl3d::Draw (2nd blade)
     //   6. m_Timer = -m_Timer               -> restore +0x2c
     //   7. size = saved                     -> restore +0x20 Vec3
     Vec3 savedSize = size;
-    size *= m_FadeAlt;
+    size *= m_Fade;
     HUDControl3d::Draw(hudScale, layerMask);
     m_Timer = -m_Timer;
     HUDControl3d::Draw(hudScale, layerMask);
@@ -108,51 +107,66 @@ void SuperFruitGlow::DrawOrder(const Vec3& hudScale, int layerMask) {
 }
 
 // slot10: Update @ 0x1c0024
-// spin += dt*k; if tracked Fruit sliced -> set m_Sliced; fade in (2*dt->1) or
+// spin += dt*60; if tracked Fruit sliced -> set m_bSliced; fade in (2*dt->1) or
 // out (-2*dt->0, release sound, set m_Dead +0x33); copy Fruit pos->+0x08;
-// colour alpha = k*m_FadeAlt; set sound volume from m_FadeAlt.
+// z = fruit(+0x9c) - 40; colour alpha = trunc(75*m_Fade); set sound volume from m_Fade.
 void SuperFruitGlow::Update(float dt) {
-    // Spin advance (m_Timer is the spin accumulator inherited from HUDControl)
-    m_Timer += dt * SFG_SPIN_RATE;
+    bool paused = game_work.m_Paused;
 
-    // Fade in / out
-    if (!m_bPendingRemoval) {
-        // Fade in: += 2*dt, clamp to 1.0
-        m_Fade += SFG_FADE_RATE * dt;
-        if (m_Fade > 1.0f) m_Fade = 1.0f;
-    } else {
-        // Fade out: -= 2*dt, clamp to 0; when done release sound and mark dead
-        m_Fade -= SFG_FADE_RATE * dt;
-        if (m_Fade < 0.0f) {
-            m_Fade = 0.0f;
-            // TODO: 0x1c0024 — release m_pSound (MortarSound::Release handle)
-            m_pSound = 0;
-            // Mark for HUD removal (m_Dead = 1 at +0x33 per spec = m_bPendingRemoval)
-            // Note: already set; this branch doubles as the "dead" state
+    if (!paused) {
+        // Spin advance (m_Timer is the spin accumulator inherited from HUDControl)
+        m_Timer += dt * SFG_SPIN_RATE;
+
+        // Detect host fruit sliced -> enter fade-out path
+        if (m_pFruit && m_pFruit->Sliced()) {
+            m_bSliced = 1;
+        }
+
+        if (m_bSliced == 0) {
+            // Fade in: += 2*dt, clamp to 1.0
+            float v = m_Fade + dt + dt;
+            if (v >= 1.0f) v = 1.0f;
+            m_Fade = v;
+        } else {
+            // Fade out: -= 2*dt
+            float v = m_Fade + dt * -SFG_FADE_RATE;
+            m_Fade = v;
+            if (v <= 0.0f) {
+                // Release the looping sound handle
+                if (m_pSound && game_work.mGameSound) {
+                    game_work.mGameSound->Release(m_pSound, "pome-lp");
+                    // TODO: 0x1c0024 — pass exact DAT_001c01bc string arg to GameSound::Release
+                }
+                m_pSound = 0;
+                // Mark for HUD removal (+0x33 = m_bPendingRemoval = 1)
+                m_bPendingRemoval = 1;
+            }
         }
     }
 
     // Track fruit position (+0x08 = HUDControl::pos)
     if (m_pFruit) {
         pos = m_pFruit->pos;
-        // z = Fruit(+0x9c) - DAT (per spec)
-        // TODO: 0x1c0024 — resolve Fruit field at +0x9c and DAT offset for z correction
+        // z = fruit(+0x9c) - 40.0f  (DAT_001c01a8; fruit +0x9c = m_Gravity.x)
+        // DIFFERS: original reads *(float*)(m_pFruit + 0x9c) directly; port uses
+        // m_pFruit->m_Gravity.x which is the same field at offset +0x9c in Fruit layout.
+        pos.z = m_pFruit->m_Gravity.x - SFG_Z_CORRECTION;
     }
 
-    // Colour: RGB forced white, alpha = trunc(DAT_001c01ac * m_FadeAlt) gated to 0 when non-positive.
-    // Binary @ 0x1c0024: fVar = 75.0f * m_FadeAlt;
+    // Colour: RGB forced white, alpha = trunc(75 * m_Fade) gated to 0 when non-positive.
+    // Binary @ 0x1c0024: fVar = 75.0f * +0x88 (m_Fade);
     //   Colour(0xff,0xff,0xff, (0.0 < fVar) * (char)(int)fVar); m_DrawColour = that.
-    // Note: NOT a *255 scale -- DAT_001c01ac (75.0) already encodes the byte range, and the
-    // float is truncated toward zero (int cast), then masked to a byte. RGB are overwritten
-    // to white each frame (the existing colour is NOT preserved).
     {
-        float fAlpha = SFG_ALPHA_SCALE * m_FadeAlt; // 75.0f * m_FadeAlt
+        float fAlpha = SFG_ALPHA_SCALE * m_Fade;
         uint8_t a = (fAlpha > 0.0f) ? (uint8_t)(int)fAlpha : (uint8_t)0;
-        // Colour(r,g,b,a)
         m_DrawColour = Colour(0xFF, 0xFF, 0xFF, a);
     }
 
-    // TODO: 0x1c0024 — set sound volume from m_FadeAlt (or fixed when paused)
+    // Sound volume: m_Fade when running, 0.0 when paused (DAT_001c01b0)
+    if (m_pSound) {
+        float vol = paused ? SFG_PAUSED_VOLUME : m_Fade;
+        m_pSound->SetVolume(vol);
+    }
 
     HUDControl3d::Update(dt);
 }
