@@ -2,11 +2,11 @@
 #define FN_SUPER_FRUIT_HIT_CONTROL_H
 
 // SuperFruitHitControl — small helper entity spawned per combo-hit during
-// super-fruit state. Only RemoveQuickly() @ 0x001bee10 is referenced by the
-// binary's SuperFruitControl::Sliced path.
+// super-fruit state. Only RemoveQuickly() @ 0x001bee10 exists in the binary;
+// there is no binary Update or Draw for this class.
 //
-// Port: stub class preserving public API shape. Bodies are no-ops except
-// RemoveQuickly which clamps m_field0x78 (binary +0x78) to 0.8f from below.
+// Port specific: no binary Update/Draw; only RemoveQuickly @ 0x001bee10 exists.
+// The Update/Draw overrides below are no-ops to satisfy the vtable shape.
 
 #include "Entity.h"
 
@@ -15,6 +15,7 @@ public:
     SuperFruitHitControl();
     ~SuperFruitHitControl();
 
+    // Port specific: no binary counterpart. No-op stubs to satisfy vtable.
     void Update(float dt) override;
     void Draw(Renderer& r) override;
     void PostUpdate(float dt) override;
@@ -28,7 +29,6 @@ public:
     // Sliced @ 0x001bbd0c writes 0 to the adjacent +0x7c field, then calls
     // RemoveQuickly to clamp this one. Remaining subclass fields (binary +0x3c
     // .. +0x78, and +0x7c) are not yet ported -- stub class.
-    // TODO: RE remaining SuperFruitHitControl fields (binary +0x3c..+0x7c).
     float m_field0x78;
 };
 
