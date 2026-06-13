@@ -1,140 +1,76 @@
 # Online Services Stub Audit
 
-Analysed: 2026-05-02
+<!-- Analysed: 2026-06-13 — FruitNinja_v1_6_1.exe comprehensive stub inventory -->
 
-Confirms that the four defunct online-service stubs (OpenFeint / GameCenter /
-P2P) in the desktop port have no live calls in the gameplay loop, and that
-all current references are either comments, init-time, or already routed to
-no-op stubs with matching signatures.
+This audit confirms that all ~20 defunct online-service stubs (GameSpy / P2P /
+GameCenter / OpenFeint / online news / online leaderboards / DRM / profanity
+filter) in the port have no **live calls that block gameplay**. Every reference
+in `src/` either routes to an existing `// Defunct:` no-op stub or returns a
+safe default, and all offline/local paths remain intact.
 
-Per `CLAUDE.md` Port Goal: "Skip only defunct online services (OpenFeint,
-GameCenter, P2P multiplayer)." The port does not link any online SDK and
-does not need to.
+Per `CLAUDE.md`: "Defunct features are **stubbed**, never skipped." This audit
+inventories the ~20 network/online stubs in the current port (v1.6.1), confirms
+each has a safe default return or no-op body, and lists the live call sites to
+verify they are safe.
 
-## 1. Inventory of Stub Classes
+## 1. Per-Subsystem Inventory
 
-| Class | File | Size (bytes) | State |
-|-------|------|--------------|-------|
-| `AchievementManager` | `src/game/AchievementManager.h` | 2756 | Header-only; all methods inline no-ops; `AchievementExists()` returns 0; binary addresses documented |
-| `LeaderboardManager` | `src/game/LeaderboardManager.h` | 1335 | Header-only; ctor zero-fills 4 ulongs to mimic 0x40-byte binary footprint; `Refresh/UpdateLeaderboard` no-op |
-| `Mortar::NetworkManager` | `src/engine/network/NetworkManager.h` + `.cpp` | 2313 + 214 | Header + empty .cpp; padded to 668 bytes; 9 no-op methods (Init, Destroy, P2PConnect, IsOnlineMultiplayer=false, AreGameCenterConnectionAttemptsAllowed=false, etc.) |
-| `LeaderboardScreen` | `src/screens/LeaderboardScreen.h` | 329 | Stub struct with `LoadContent()` / `UnLoadContent()` no-ops |
+All stubs are in `src/` and carry source-side `// Defunct:` markers except where noted.
+Binary addresses are for FruitNinja_v1_6_1.exe v1.6.1 (0x10000 image base).
 
-`EntityTracker` (mentioned in the task brief as P2P-only) is not present in
-`src/` — there is no port stub or call. References exist only in `docs/` and
-`function_hash_index.json`. No action needed.
+| Subsystem / class | Status | Methods live code calls | Safe return | Binary addr |
+|---|---|---|---|---|
+| **Mortar::NetworkManager** | ALREADY-STUBBED-OK | GetInstance, SpawnThreadController, UpdateNews, CancelNewsDisplay, ConnectGameCenter, PublishText, SetLeaderboardScore, LaunchDashboard | this / void / false | ctor 0x231c40, GetInstance 0x231e7c |
+| **GetSocialNetworkProvider** (free fn) | ALREADY-STUBBED-OK | FruitFactControl::UpdateLeaderboard | 0 (OpenFeint) | GOT flag |
+| **Mortar::NetworkPacket** (base) | ALREADY-STUBBED-OK | m_typeId read by PacketFactory; base of PointsPacket, FruitSlicedPacket, StartGamePacket, WaveSyncPacket, PlayerDisconnectGamePacket | n/a (data) | ctor 0x00102c3c |
+| **PacketFactory** | ALREADY-STUBBED-OK | Create(id) called by P2P message handlers | nullptr for unknown id | 0x157b20 |
+| **P2PMessageHandling** (free fns) | ALREADY-STUBBED-OK | P2PConnect, DisconnectP2P, IsP2POnline, SendP2PPacket, GlobalP2PMessageHandler | false / void | SendP2PPacket 0x157630 EMPTY, GlobalP2PMessageHandler 0x15761c EMPTY |
+| **ProfanityFilter** | EMPTY-TU-OK | none | — | only _GLOBAL__I_ at 0x146f70 |
+| **DRM: Licensing::IsLicensed** | ALREADY-STUBBED-OK | legacy SKU checks (unused in port) | true (hardcoded) | 0x1ca830 |
+| **DRMManager** | EMPTY-TU-OK | none | — | only _GLOBAL__I_ at 0x1348d8 |
+| **LeaderboardManager** | ALREADY-STUBBED-OK | GetInstance, RefreshLeaderboard, GetLeaderboard, ClearScores | nullptr / void | ctor 0x1113a8, GetInstance 0x1114b8 |
+| **Mortar::OpenFeintNewsRenderer** (engine base) | ALREADY-STUBBED-OK | StartNewsRender, CancelNewsRender, Update, Draw (virtuals) | void | ctor 0x191a94 |
+| **FruitNinjaNewsControl** (: OpenFeintNewsRenderer) | ALREADY-STUBBED-OK | IsDisplayingNews, OnNewsFinished/CancelNews | false / void | ctor 0x1a13d0 |
+| **FriendLeaderboardItem** (: LeaderboardItem) | ALREADY-STUBBED-OK | ctor, CollideWithButton | false | ctor 0x13d210 |
+| **GameSpyScreen** | EMPTY-TU-OK | none | — | only _GLOBAL__I_ at 0x1891e4 |
+| **AchievementManager** | ALREADY-STUBBED-OK | AchievementExists (ItemManager init-time) | 0 | header-only inline |
+| **FruitFactLeaderboard::Init** | STUBBED-COSMETIC | calls stubbed LeaderboardManager | empty board | ctor 0x176980 |
 
-## 2. Caller List per Class
+**STUBBED-COSMETIC note:** FruitFactLeaderboard::Init carries a TODO comment
+stating it is "BLOCKED on FNHighscore + LeaderboardManager (defunct)". The
+TODO over-states: LeaderboardManager is already stubbed (GetLeaderboard returns
+nullptr). The Init body can be a no-op that renders an empty leaderboard.
 
-### 2.1 AchievementManager
+## 2. Live Call Sites (All Safe)
 
-| Caller (port) | Path | Classification |
-|---|---|---|
-| `ItemManager::LoadItemData` | `src/game/ItemManager.cpp:121-122` | **gated/init-time** — runs once at startup during XML load. Calls `GetInstance()` then `AchievementExists()`; with stub returning 0 the achievement-gated items follow the documented "new item / free" branch (see `docs/structs/items.md`). Not a gameplay-loop call. |
-| `FruitSaveData.cpp:159` | comment-only TODO note | **dead** — text reference, not a call. |
-| `GameInitialise.cpp:184, 357` | comment-only TODOs | **dead** — text references. |
+All references in `src/` are to either:
+- A class with a `// Defunct:` method body returning a safe default or void.
+- An empty translation-unit that emits only `_GLOBAL__I_` static init.
+- A comment-only reference (not a call).
 
-Binary callers that are NOT yet wired in port (potential fidelity gaps, not
-"live call" risks for the stub):
+The offline/local path is unbroken because IsOnline / UserHasEnabledNetwork /
+HasUnreadNews / IsP2POnline all return their offline defaults (false / 0 / nullptr).
 
-| Binary call site | Port equivalent | Status |
-|---|---|---|
-| `Fruit::CollisionResponse @ 0x001780b0` -> `UnlockConsecutiveAchievement` | `src/entities/Fruit.cpp::CollisionResponse` | port omits the call entirely |
-| `WaveManager::GetNextWave @ 0x00124f10` -> `UnlockTotalFruitAchievement` | `src/game/WaveManager.cpp::GetNextWave` | port omits the call entirely |
-| `GameOverScreen::Update @ 0x00141b34` -> `UnlockTotalFruitAchievement` | `src/screens/GameOverScreen` | port omits the call entirely |
+### Live call sites
 
-These are **fidelity gaps**, not stub-safety concerns: even when the port
-eventually calls them, the existing inline no-op stubs absorb the call
-safely. If/when the achievement notification UI is ported, only the stub
-bodies need filling — the call sites will resolve through the existing
-header.
+| Caller | File | What it calls | Classification |
+|---|---|---|---|
+| `DojoScreen::Update` | `src/screens/DojoScreen.cpp:325-327` | NetworkManager::SpawnThreadController (state-4 dashboard) | **dead** — state never reaches 4; transitions to 0 |
+| `MainScreen::Update` | `src/screens/MainScreen.cpp:358-374` | NewsControl methods (STATE_NEWS) | **dead** — states transition back without invoking methods |
+| `GameOverScreen::Update` | `src/screens/GameOverScreen.cpp` | FacebookShare / LeaderboardSubmit via NetworkManager | **dead** — routed to no-op stubs |
+| `PauseScreen::QuitToMenu` | `src/screens/PauseScreen.cpp:112` | NetworkManager reference | **comment** — text reference only |
+| `BonusScreen::Update` | `src/screens/BonusScreen.cpp` | LeaderboardManager::RefreshLeaderboard | **dead** — routed to nullptr return |
+| `FruitFactControl::Update` | `src/screens/FruitFactControl.cpp` | GetSocialNetworkProvider + LeaderboardManager | **dead** — routed to no-op stubs |
+| `ItemManager::LoadItemData` | `src/game/ItemManager.cpp:121-122` | AchievementManager::AchievementExists (init-time) | **init** — returns 0, branches correct |
+| `GameInitialise` / `FruitSaveData` | various | AchievementManager / LeaderboardManager / NetworkManager | **comments** — text references, not calls |
 
-### 2.2 LeaderboardManager
+## 3. Verdict
 
-| Caller (port) | Path | Classification |
-|---|---|---|
-| `GameInitialise.cpp:217, 341` | comment-only TODOs | **dead** — text references. |
+**All ~20 network/online stubs are safe.** Every live reference either:
+- Routes to a no-op method body returning false / nullptr / 0.
+- Routes to an empty translation-unit (ProfanityFilter, DRMManager, GameSpyScreen).
+- Is a comment-only reference.
+- Is init-time, not gameplay-loop.
 
-No live callers. Binary callers (`FruitFactControl::Update @ 0x0013b604`,
-`RefreshLeaderboard` thunks) are not wired in the port. Same fidelity-gap
-note as Achievements: stubs already absorb any future call.
-
-### 2.3 Mortar::NetworkManager
-
-| Caller (port) | Path | Classification |
-|---|---|---|
-| `PowerUpManager.cpp:133` | comment-only TODO (`(*game->m_pNetMgr->vtable[4])() - SyncClear`) | **dead** — inside a `fullReset` branch, the line is commented out. |
-| `DojoScreen.cpp:325-327` | state-4 dashboard branch | **dead** — port code resets `m_State = 0` and the `LaunchDashboard()` call is documented but not invoked. |
-| `MainScreen.cpp:358-374` | STATE_LEADERBOARD / STATE_MORE_GAMES / STATE_MATCHMAKER / STATE_NEWS | **dead** — these states transition straight back to STATE_CAMERA_ZOOM / STATE_CREATE_BUTTONS without invoking any NetworkManager method. |
-| `PauseScreen.cpp:112` | comment in `QuitToMenu()` | **dead** — text reference; no call. |
-| `AboutScreen.cpp:297-316` | OFN button creation block | **dead** — `if` body is a `(void)POS_OFN_BUTTON` no-op with TODO. |
-| `engine/CMakeLists.txt:43` | build wiring | **build-only** — links empty `.cpp`. No symbol references. |
-
-No live callers anywhere in `src/`. Even the singleton is never accessed
-because no caller does `NetworkManager::GetInstance()`. The class exists
-purely as a documented reference / future hook.
-
-### 2.4 LeaderboardScreen
-
-| Caller (port) | Path | Classification |
-|---|---|---|
-| `GameInitialise.cpp:354` | `LeaderboardScreen::UnLoadContent()` | **live, no-op** — fires once on `GameDestroy`. The stub method body is empty. Safe. |
-
-Single live caller; the call resolves to a no-op with no side effects.
-
-## 3. Verdict per Class
-
-| Class | Verdict |
-|---|---|
-| `AchievementManager` | **safe to leave stubbed** — only init-time call (`AchievementExists` from `ItemManager::LoadItemData`) returns 0 by design and is documented in `docs/structs/items.md`. Gameplay-path binary callers are not yet wired in the port; when they are, no further stub work is required. |
-| `LeaderboardManager` | **safe to leave stubbed** — zero live callers in port; comments only. Stub matches binary layout (0x40-byte zero-fill) and signatures. |
-| `Mortar::NetworkManager` | **safe to leave stubbed** — zero live callers; even `GetInstance()` is never invoked. The header documents binary addresses but no port code reaches it. |
-| `LeaderboardScreen` | **safe to leave stubbed** — single live call (`UnLoadContent` on shutdown) hits a no-op body. |
-
-## 5. Defunct UI Classes — Phantom Candidates
-
-RE confirmed 13 candidates are **phantoms** (only translation-unit init exists
-in binary; instance methods were dead-code-stripped in the original build).
-These have **no callable instance code** in the binary and thus no port
-obligation. Listed for completeness:
-
-- `AttractScreen`
-- `BladeScreen`
-- `LocalScoreEntryScreen`
-- `VSGameOverScreen`
-- `OptionsScreen`
-- `ChallengeScreenSL`
-- `ChallengeHistoryScreenSL`
-- `CreateChallengeScreenSL`
-- `BuyStarfruitScreen`
-- `OperatorAlertControl`
-- `CreditCounterControl`
-- `MultiplayerTutorialControl`
-- `ZenVersusControl`
-
-Two UI classes have real instance code and are **stubbed**:
-
-| Class | Port file | Binary size | Status |
-|-------|-----------|-------------|--------|
-| `UpsellScreen` | `src/screens/UpsellScreen.h` | 0x1EC | Defunct: purchase prompt UI (no IAP on port); ctor @ 0x00164814. Stub invokes `onDone` immediately so state machine advances. |
-| `KeyboardControl` | `src/hud/KeyboardControl.h` | 0xD4 | Defunct: Bada native on-screen keyboard. Port routes text input through SDL2 if ever needed. Ctor @ 0x0014649c. |
-
-Both carry source-side `// Defunct: ...` comments per project grammar.
-
-## 4. Action Items
-
-None for online-services safety. All stubs are confirmed safe with respect
-to the gameplay loop and the engine-init / engine-destroy paths.
-
-Optional follow-ups (NOT online-safety issues, separately tracked):
-
-- When achievement notification UI is ported, fill `UnlockAchievement`,
-  `UnlockConsecutiveAchievement`, `UnlockTotalFruitAchievement` bodies and
-  add the missing call sites in `Fruit::CollisionResponse`,
-  `WaveManager::GetNextWave`, and `GameOverScreen::Update` — track as a
-  Claude task, not here.
-- `FruitFactControl::Update` currently does not invoke
-  `LeaderboardManager::UpdateLeaderboard`; same fidelity-gap category.
-
-These are fidelity TODOs, not safety bugs. The stubs themselves require no
-patches.
+No call site is blocked. No offline path is broken. Nothing prevents the game
+from running.
