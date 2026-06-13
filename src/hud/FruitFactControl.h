@@ -159,4 +159,23 @@ static_assert(sizeof(FruitFactControl) == 0x204,
               "FruitFactControl size mismatch");
 #endif
 
+// FruitFact helper functions exposed for FruitFactZenPage reuse.
+// Implemented in FruitFactControl.cpp as the canonical copy.
+namespace FruitFact {
+    // CheckCombo  binary @ 0x001320b4
+    // Classifies a run of sliced fruit type indices into a combo category.
+    // Returns a COMBO_TYPE byte (0..0x18 = 0..24); 0xFF = no combo.
+    // *outDominantType receives the most-frequent fruit type index.
+    uint8_t CheckCombo(int* fruitTypeArray, int count, int* outDominantType);
+
+    // GetComboStarTexture  binary @ 0x00132a94
+    // Returns the star-burst texture SmartPtr for the given combo type.
+    Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(uint8_t comboType);
+
+    // GetComboStarText  binary @ 0x001325f8
+    // Returns the localised string id (for GETSTRING) for the given combo type.
+    // Returns 0 if comboType > 0x18.
+    unsigned int GetComboStarText(uint8_t comboType);
+} // namespace FruitFact
+
 #endif // FN_HUD_FRUIT_FACT_CONTROL_H

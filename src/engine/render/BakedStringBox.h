@@ -44,21 +44,25 @@ struct BakedStringBoxLine {
 
 class BakedStringBox {
 public:
-    // Binary ctor arg mapping (re-analyst a7cd670):
+    // Binary ctor arg mapping (re-analyst a7cd670, reconciled against 0x002465fc):
     //   font        : FontCacheObjectTTF* (TTF face, 256x256 atlas)
     //   fontSize    : 9.0f (initial render pixel size)
-    //   width       : 75 (wrap box width in world units = pixels in orig ortho)
-    //   height      : 30 (max box height in world units)
+    //   width       : 75 (wrap box width, int in binary at field 0x50)
+    //   height      : 30 (max box height, int in binary at field 0x24)
     //   align       : 0x0d (centred + fit)
     //   wrapMode    : 3
     //   lineSpacing : 3 (pixels between lines)
+    //   param8      : int stored at field 0x48 (binary trailing arg; callers pass 0 or 1).
+    //                 Added as a trailing default param (default 0) so existing 7-arg callers are valid.
+    // DIFFERS: original width/height are int (fields 0x50/0x24); port uses float for the renderer.
     BakedStringBox(FontCacheObjectTTF* font,
                    float fontSize,
                    float width,
                    float height,
                    int align,
                    int wrapMode,
-                   float lineSpacing);
+                   float lineSpacing,
+                   int param8 = 0);
     ~BakedStringBox();
 
     // Set the string to display. Triggers a layout rebuild on next Draw.
@@ -85,6 +89,16 @@ public:
     //   center          : 1 = centre the block on m_Pos
     void Draw(float rotationDegrees, Vec2 scale, int center);
 
+    // SetGradient  binary @ 0x0024566c
+    // Applies a vertical gradient to laid-out glyphs (gradTop/gradBottom Colours).
+    // perGlyph==0 uses the lazy dirty path; perGlyph==1 applies per-line immediately.
+    void SetGradient(Colour top, Colour bottom, bool perGlyph);
+
+    // SetShadow  binary @ 0x002462c0
+    // Sets the shadow parameters (scale, colour, offset, enable flag).
+    // Fields: 0x70=scale, 0x74=col, 0x78=flag, 0x18=offset, 0x00=dirty byte.
+    void SetShadow(float scale, Colour col, Vec3 offset, bool flag);
+
 private:
     FontCacheObjectTTF* m_Font;   // non-owning ref (owned by Font + FontTTFRegistry)
     float   m_FontSize;           // current render pixel size
@@ -94,9 +108,22 @@ private:
     int     m_WrapMode;           // wrap mode (binary 3)
     float   m_LineSpacing;        // additional spacing between lines
     float   m_HorizLineSpacing;   // from SetHorizontalLineSpacing (-1 = auto)
+    int     m_Param8;             // binary field 0x48; trailing ctor arg (default 0)
 
     Colour  m_Colour;
     Vec3    m_Pos;
+
+    // Shadow fields (binary @ 0x18 offset, 0x70..0x78):
+    Vec3    m_ShadowOffset;       // binary field 0x18 (3 floats)
+    float   m_ShadowScale;        // binary field 0x70
+    Colour  m_ShadowCol;          // binary field 0x74
+    bool    m_ShadowFlag;         // binary field 0x78
+
+    // Gradient fields (binary @ 0x7c..0x8c, 0x90):
+    Colour  m_GradTop;            // binary field 0x7c
+    Colour  m_GradBottom;         // binary field 0x80
+    int     m_GradMode;           // binary field 0x8c (2 = gradient enabled)
+    bool    m_GradFlag;           // binary field 0x90
 
     // Laid-out lines (rebuilt by Layout()).
     std::vector<BakedStringBoxLine> m_Lines;

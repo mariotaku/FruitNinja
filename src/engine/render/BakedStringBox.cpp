@@ -21,7 +21,8 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
                                float height,
                                int align,
                                int wrapMode,
-                               float lineSpacing)
+                               float lineSpacing,
+                               int param8)
     : m_Font(font)
     , m_FontSize(fontSize)
     , m_BoxWidth(width)
@@ -30,8 +31,17 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_WrapMode(wrapMode)
     , m_LineSpacing(lineSpacing)
     , m_HorizLineSpacing(-1.0f)
+    , m_Param8(param8)
     , m_Colour(255, 255, 255, 255)
     , m_Pos(0.0f, 0.0f, 0.0f)
+    , m_ShadowOffset(0.0f, 0.0f, 0.0f)
+    , m_ShadowScale(0.0f)
+    , m_ShadowCol(255, 255, 255, 255)
+    , m_ShadowFlag(false)
+    , m_GradTop(255, 255, 255, 255)
+    , m_GradBottom(255, 255, 255, 255)
+    , m_GradMode(0)
+    , m_GradFlag(false)
     , m_Dirty(true)
 {
     m_Text[0] = '\0';
@@ -246,6 +256,35 @@ void BakedStringBox::Layout() {
         line.width = lineWidth;
         m_Lines.push_back(line);
         wi = lineEnd;
+    }
+}
+
+// SetGradient  binary @ 0x0024566c
+void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
+    if (m_GradTop.r != top.r || m_GradTop.g != top.g || m_GradTop.b != top.b || m_GradTop.a != top.a ||
+        m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
+        m_GradMode != 2 || m_GradFlag != false) {
+        m_GradMode = 2;
+        m_GradTop = top;
+        m_GradBottom = bottom;
+        m_GradFlag = false;
+        if (!perGlyph) {
+            m_Dirty = true;
+        }
+    }
+}
+
+// SetShadow  binary @ 0x002462c0
+void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, bool flag) {
+    if (m_ShadowScale != scale ||
+        m_ShadowCol.r != col.r || m_ShadowCol.g != col.g || m_ShadowCol.b != col.b || m_ShadowCol.a != col.a ||
+        m_ShadowOffset.x != offset.x || m_ShadowOffset.y != offset.y || m_ShadowOffset.z != offset.z ||
+        m_ShadowFlag != flag) {
+        m_Dirty = true;
+        m_ShadowScale = scale;
+        m_ShadowCol = col;
+        m_ShadowFlag = flag;
+        m_ShadowOffset = offset;
     }
 }
 

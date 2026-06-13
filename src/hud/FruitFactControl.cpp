@@ -79,7 +79,7 @@ static void ResolveAllFruitIndices() {
     }
 }
 
-static uint8_t CheckCombo(int* hashes, int count, int* outFruitIdx) {
+uint8_t FruitFact::CheckCombo(int* hashes, int count, int* outFruitIdx) {
     if (!hashes || count <= 0) return 0xFF;
     ResolveAllFruitIndices();
 
@@ -183,11 +183,21 @@ static const ComboStarEntry kComboStars[25] = {
     { 1, { "star_checkers.tex",       nullptr,                   nullptr } },             // 24 5_OF_A_KIND (CHECKERS)
 };
 
-static Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(uint8_t comboType) {
+Mortar::SmartPtr<Mortar::Texture> FruitFact::GetComboStarTexture(uint8_t comboType) {
     if (comboType >= 25) return Mortar::SmartPtr<Mortar::Texture>();
     const ComboStarEntry& e = kComboStars[comboType];
     uint32_t tier = (e.count > 1) ? Math::g_Random.Rand32(e.count) : 0;
     return Mortar::TextureManager::LoadLocalisedTexture(e.tex[tier]);
+}
+
+// GetComboStarText  binary @ 0x001325f8
+// Returns the localised string id for the given combo type.
+// TODO: 0x001325f8 -- binary DAT_132558 string-id table (0..24 entries) not yet dumped;
+// port returns 0 as a safe fallback until the table is RE'd.
+unsigned int FruitFact::GetComboStarText(uint8_t comboType) {
+    if (comboType > 0x18) return 0;
+    // TODO: 0x001325f8 -- static LUT contents (DAT_132558) not yet dumped; return 0
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -418,8 +428,8 @@ void FruitFactControl::Init() {
             m_ComboHashArray[i] = game_work.m_SaveData->m_BestComboFruits[i];
         }
         int localFruitIdx = 0;
-        m_ComboType = CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);
-        m_ComboStarTex = GetComboStarTexture(m_ComboType);
+        m_ComboType = FruitFact::CheckCombo(m_ComboHashArray, m_ComboLength, &localFruitIdx);
+        m_ComboStarTex = FruitFact::GetComboStarTexture(m_ComboType);
         if (m_FruitIdx != localFruitIdx) m_FruitIdx = localFruitIdx;
         m_FactPosOffset = Vec3(140.0f, -72.0f, 0.0f);
     } else {
