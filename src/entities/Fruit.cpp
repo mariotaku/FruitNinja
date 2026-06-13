@@ -150,7 +150,6 @@ Fruit::Fruit()
     , m_LifetimeCounter(0)
     , m_CollisionSize(0)
     , m_VestigialInitFour(0)
-    , m_SliceTimer(-1.0f)
     , m_SliceAngle(0)
     , m_SliceImpulse(0.0f)
     , m_SliceState(0)
@@ -162,17 +161,17 @@ Fruit::Fruit()
     , m_ZPosition(0.0f)
     , m_Gravity(0, -12.0f, 0)
     , m_bSliced(0)
+    , m_SliceTimer(-1.0f)
+    , m_SliceArcAngle(0)
+    , m_SliceArcImpulse(0.0f)
     , m_SecondPos(0, 0, 0)
     , m_SecondVel(0, 0, 0)
-    , m_pSlasher(nullptr)
-    , m_bSpawnedByCriticalSplash(0)
-    , m_bCriticalEligible(0)
-    , m_ScaleAnim(0.0f)
-    , m_bDrawWhole(0)
-    , m_Field160(0)
-    , m_Field164(0)
+    , m_pOwner(nullptr)
+    , m_bMenuFling(0)
+    , m_bCritical(0)
     , m_MenuGrowFade(0.0f)
-    , m_bRespawnRequest(0)
+    , m_bFrozen(0)
+    , m_bDrawWhole(0)
 {
     entityType = 0;
 }
@@ -203,12 +202,13 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
              static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
     m_bSliced = 0;
     m_bDrawWhole = 0;
-    m_bCriticalEligible = 1;
-    m_bSpawnedByCriticalSplash = 0;
+    m_bCritical = 0;
+    m_bMenuFling = 0;
     m_bNoPowerUp = 0;
-    m_pSlasher = nullptr;
+    m_pOwner = nullptr;
     m_TrackerID = 0;
-    m_ScaleAnim = 0.0f;
+    m_MenuGrowFade = 0.0f;
+    m_bFrozen = 0;
     m_ChuckDelay = 0.0f;
     m_PlayerIdx = 0;
     m_TimeScale = 1.0f;
@@ -223,10 +223,12 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     m_ZPosition = GetFruitZPosition();
 
     // Reset slice state (binary Fruit::Init — m_SliceTimer = -1).
-    m_SliceTimer   = -1.0f;
-    m_SliceAngle   = 0;
-    m_SliceImpulse = 0.0f;
-    m_SlicePos     = Vec3(0, 0, 0);
+    m_SliceTimer      = -1.0f;
+    m_SliceArcAngle   = 0;
+    m_SliceArcImpulse = 0.0f;
+    m_SliceAngle      = 0;
+    m_SliceImpulse    = 0.0f;
+    m_SlicePos        = Vec3(0, 0, 0);
     m_pEmitter1    = nullptr;
     m_pEmitter2    = nullptr;
 
@@ -561,19 +563,21 @@ void Fruit::Update(float dt) {
         // Both halves get the same ×60 position scale as the unsliced branch.
 
         // Grow-in fade ramp (binary @ 0x1df864): ramps m_MenuGrowFade toward 1.0
-        // at 3.0 units/frame while m_bRespawnRequest==0. Frozen once MenuButton
-        // sets the respawn flag (fruit already fully "present").
-        if (!m_bRespawnRequest) {
+        // at 3.0 units/frame while m_bDrawWhole==0. Frozen once MenuButton
+        // sets the draw-whole flag (fruit already fully "present").
+        if (!m_bDrawWhole) {
             m_MenuGrowFade += dtNorm * 3.0f;
             if (m_MenuGrowFade > 1.0f) m_MenuGrowFade = 1.0f;
         }
 
         // ASM-verified: 2026-05-20 binary @ 0x001777a8..0x001777ee (re-analyst) -- gravity grow gated.
-        if (m_bCriticalEligible == 0) {
+        // m_bCritical==0 means a normal (non-critical) sliced fruit; gravity grows.
+        // m_bMenuFling==1 means menu fruit; gravity also grows (different rate).
+        if (m_bCritical == 0) {
             float len = m_Gravity.Normalise();   // unit-izes, returns old magnitude
             m_Gravity *= len + 0.9f * dtNorm;
         }
-        if (m_bSpawnedByCriticalSplash != 0) {
+        if (m_bMenuFling != 0) {
             float len = m_Gravity.Normalise();
             m_Gravity *= len + 1.3f * dtNorm;
         }
@@ -589,13 +593,9 @@ void Fruit::Update(float dt) {
         // -- DAT_00177954 = 1000.0f, sliced-only tick.
         m_LifetimeCounter += (int)(1000.0f * dtScaled);
 
-        // Scale grow only when not drawing whole (binary gates this on !m_bDrawWhole).
-        if (!m_bDrawWhole) {
-            if (m_ScaleAnim < 1.0f) {
-                m_ScaleAnim += dtScaled * 3.0f;
-                if (m_ScaleAnim > 1.0f) m_ScaleAnim = 1.0f;
-            }
-        }
+        // TODO: 0x1df828 -- SetupSliceRotations / m_bFrozen physics-skip gate not yet wired.
+        // m_bFrozen==1 should skip the gravity/velocity integration block above and the
+        // quaternion-spin loop below. Wire when SetupSliceRotations is ported.
     }
 
     // ASM-verified: 2026-05-27 binary @ 0x00177c7c (re-analyst).
@@ -666,15 +666,17 @@ void Fruit::Update(float dt) {
         m_pEmitter1->m_DirSin  = 0.0f;      // binary +0x34 = SinIdx(0)
     }
     if (m_pEmitter2) {
-        m_pEmitter2->m_Pos     = m_SecondPos;  // binary calls this m_HalfB_pos; same slot (+0xB8)
+        m_pEmitter2->m_Pos     = m_SecondPos;  // binary calls this m_HalfB_pos; slot +0xC8
         m_pEmitter2->m_DirCos  = 1.0f;
         m_pEmitter2->m_DirSin  = 0.0f;
         // NOTE: binary does NOT force emitter2.z to -5000.0f (only emitter1).
     }
 
     // Fire per-fruit m_OnExpired then global — binary @ 0x1dfc00 (per-fruit) + 0x1dfc0c (global).
-    // Gated: if m_SliceImpulse (+0x74) > 0 (slice in progress), skip — binary bhi skip @ 0x1dfbf0.
-    if (!(m_SliceImpulse > 0.0f)) {
+    // Gated: if m_SliceTimer (+0xBC) > 0 (slice countdown active), skip — binary bhi skip @ 0x1dfbf0.
+    // DIFFERS: original uses m_SliceTimer@0xBC (p_pad+0x80) for this gate; port previously used
+    // m_SliceImpulse@0x74 as a proxy. Now using the correct field.
+    if (!(m_SliceTimer > 0.0f)) {
         m_OnExpired(this);
         g_FruitExpired(this);
     }
@@ -810,21 +812,18 @@ void Fruit::Draw(Renderer& r) {
 
     // ASM-verified: 2026-05-27 binary @ 0x001791f4 (re-analyst).
     // Binary Fruit::Draw uses m_VisualScale (+0x28) only for the model scale;
-    // m_ScaleAnim is NOT a model-scale multiplier. It is consumed exclusively
+    // m_MenuGrowFade is NOT a model-scale multiplier. It is consumed exclusively
     // by Fruit::AddShadow for the whole<->halves shadow crossfade during slicing.
     float s = scale.x;
     if (s <= 0.0f) return;
 
     // Position in binary-centred ortho space.
     // See docs/engine/coordinate-system.md and FruitCamera::SetupPerspective.
-    // m_bDrawWhole forces the whole-fruit branch even when m_bSliced is
-    // set — used by ClearMenuItems @ 0x0016ac7c when releasing menu
-    // fruits during the dojo transition (the fruit flies off as a
-    // single object rather than splitting in two).
-    // m_bRespawnRequest (Fruit+0x188): set by MenuButton when the sliced halves
-    // come to rest; makes Draw render the whole fruit again (binary @ 0x1e0524:
-    // "p_pad[0x7c]==0 || p_pad[0x14c]!=0"). Both flags independently force whole draw.
-    if (!m_bSliced || m_bDrawWhole || m_bRespawnRequest) {
+    // Binary @ 0x1e0524: "if (p_pad[0x7c]==0 || p_pad[0x14c]!=0)" — draw the whole mesh.
+    // p_pad[0x7c] = +0xB8 = m_bSliced; p_pad[0x14c] = +0x188 = m_bDrawWhole.
+    // m_bDrawWhole is set by MenuButton when halves come to rest (respawn) OR by
+    // ClearMenuItems when releasing menu fruit during dojo transition.
+    if (!m_bSliced || m_bDrawWhole) {
         // Whole fruit — single draw at pos with m_Rot1.
         Vec3 drawPos(pos.x, pos.y, m_ZPosition);
         DrawOneModel(fmi->m_Whole.Get(), drawPos, m_Rot1, s);
@@ -907,10 +906,18 @@ void Fruit::KillFruit(bool doMissPenalty) {
     }
 
     // Matches Fruit::KillFruit cleanup tail (binary @ 0x00176c8e..0x00176cea).
-    // 1. Clear slasher's back-pointer if it still points at us.
+    // 1. Clear owner's back-pointer (owner+0x14C = m_pTrackedFruit) if it still points at us.
+    //    Binary: "puVar7=*(this+0x160); if(puVar7 && puVar7[0x53]==this){ puVar7[0x53]=0; }"
+    //    owner+0x14C == MenuButton::m_pTrackedFruit (MenuButton.p_pad+0x110 = 0x14C in MenuButton).
     // ASM-verified: 2026-05-03 binary @ 0x00176c8e..0x00176cea (asm-inspector)
-    if (m_pSlasher && m_pSlasher->m_pCurrentTarget == this) {
-        m_pSlasher->m_pCurrentTarget = nullptr;
+    if (m_pOwner) {
+        // owner+0x14C stores the tracked-fruit pointer. On ARM32 puVar7[0x53] = *(puVar7 + 0x14C).
+        Fruit** ownerSlot = reinterpret_cast<Fruit**>(
+            reinterpret_cast<char*>(m_pOwner) + 0x14C);
+        if (*ownerSlot == this) {
+            *ownerSlot = nullptr;
+        }
+        m_pOwner = nullptr;
     }
     // 2. Decrement g_PowerFruitCount on natural-expiry path (flag 0x10 not yet set)
     //    AND for power-fruits (info->m_pPowers != nullptr).
@@ -1092,7 +1099,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // ASM-verified: 2026-04-29T00:00Z binary @ 0x001780f0 (asm-inspector)
     // Critical-hit eligibility ladder (binary @ 0x001780f0..0x001781e8).
     // All gates must pass; on success roll Rand32(reroll) -- 0 == hit.
-    m_bCriticalEligible = false;
+    m_bCritical = 0;
 
     // ASM-verified: 2026-05-20 binary @ 0x00178154/0x001781d4 (re-analyst).
     // kCritScoreBound and kCritResetBase are GOT-indirect int32 globals.
@@ -1128,15 +1135,15 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
 
             const uint32_t roll = WaveManager::GetInstance()->GetRandom().Rand32(reroll);
             if (roll == 0) {
-                m_bCriticalEligible = true;
+                m_bCritical = 1;
                 thresh = kCritResetBase + kCritScoreBound;
             }
         }
     }
 
-    const bool isCritical = m_bCriticalEligible;
+    const bool isCritical = (m_bCritical != 0);
 
-    // Blade speed clamp. Critical / special → [6, 8]; normal → [4, 8].
+    // Blade speed clamp. Critical / special -> [6, 8]; normal -> [4, 8].
     float bladeSpeed = bladeVel.Magnitude() * SLICE_BLADE_SCALE;
     const float clampMin = (isCritical || isSpecial)
                            ? 6.0f : SLICE_CLAMP_MIN_NRM;
@@ -1288,13 +1295,13 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             Game* g = Game::GetInstance();
             if (g) {
                 int score = info->m_Score;
-                if (m_bCriticalEligible) score += 5;
+                if (m_bCritical) score += 5;
                 if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
                     const uint32_t range = (uint32_t)(info->m_CoinsMax - info->m_CoinsMin);
                     score = info->m_CoinsMin
                           + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
                 }
-                if (m_bCriticalEligible) score *= 2;  // g_CritScoreMul / 2 = 2
+                if (m_bCritical) score *= 2;  // g_CritScoreMul / 2 = 2
                 g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
                 FN::AddToCurrentScore(score, (int)m_PlayerIdx,
                                       /*trackFruit=*/true, /*sendNetPacket=*/false);
@@ -1443,10 +1450,10 @@ void Fruit::Slice() {
 
     // Critical hit gets 1.5× impulse + crit dual-line AddSlice.
     const FruitInfoData* info = FruitInfo_Get(m_FruitType);
-    const bool isCritical = m_bCriticalEligible;
-    // Binary @ 0x00176e94 — the ENTIRE critical block (two AddSlice lines,
+    const bool isCritical = (m_bCritical != 0);
+    // Binary @ 0x00176e94 -- the ENTIRE critical block (two AddSlice lines,
     // splatCount override, impulse*1.5, MakeCritical) is gated on
-    // m_bCriticalEligible && m_PlayerIdx < 2. With playerIdx >= 2 a crit slice
+    // m_bCritical && m_PlayerIdx < 2. With playerIdx >= 2 a crit slice
     // skips all of it and falls through to the normal splatCount/impulse.
     if (isCritical && m_PlayerIdx < 2) {
         // Binary: two slice lines at ±60° offset from the base angle.
@@ -1589,9 +1596,10 @@ void Fruit::Slice() {
                         (float)(int)(cosf(critRadA) * imp_screen), 0.0f) * 1.75f;
         halfVelB = Vec3((float)(int)(sinf(critRadB) * imp_screen),
                         (float)(int)(cosf(critRadB) * imp_screen), 0.0f) * 1.75f;
-    } else if (!m_bSpawnedByCriticalSplash) {
+    } else if (!m_bMenuFling) {
         // Binary @ 0x00177444..0x0017744e — only on the plain slice path and
-        // only when this fruit was NOT spawned by a critical splash.
+        // only when this fruit was NOT spawned by a critical splash / menu-fling.
+        // m_bMenuFling==1 marks menu-context fruits (was m_bSpawnedByCriticalSplash).
         MoveFruitZPositionToBack(this);
     }
 
@@ -2179,10 +2187,14 @@ void Fruit::Release() {
         PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter2);
         m_pEmitter2 = nullptr;
     }
-    if (m_pSlasher && m_pSlasher->m_pCurrentTarget == this) {
-        m_pSlasher->m_pCurrentTarget = nullptr;
+    if (m_pOwner) {
+        Fruit** ownerSlot = reinterpret_cast<Fruit**>(
+            reinterpret_cast<char*>(m_pOwner) + 0x14C);
+        if (*ownerSlot == this) {
+            *ownerSlot = nullptr;
+        }
+        m_pOwner = nullptr;
     }
-    m_pSlasher = nullptr;
     Mortar::Entity::Release();
 }
 
@@ -2323,20 +2335,21 @@ void Fruit::AddShadow(QUADCUSTOMVERTEX** out, int* outCount) {
         mirrorY = (pos.x < 0.0f) ? -1.0f : 1.0f;
     }
 
-    // Quad 1: spawn-fade whole-fruit shadow (active while m_ScaleAnim < 1).
-    if (m_ScaleAnim < 1.0f) {
-        int a = (int)((1.0f - m_ScaleAnim) * 230.0f);   // DAT_00176164
+    // Quad 1: spawn-fade whole-fruit shadow (active while m_MenuGrowFade < 1).
+    // m_MenuGrowFade replaces m_ScaleAnim as the grow/scale-in animation float.
+    if (m_MenuGrowFade < 1.0f) {
+        int a = (int)((1.0f - m_MenuGrowFade) * 230.0f);  // DAT_00176164
         uint8_t al = (a < 1) ? 0 : (a > 254 ? 255 : (uint8_t)a);
-        float hs = 82.0f * scale.x;                      // DAT_00176168
-        float ox = mirrorY * hs * -0.65f;                // DAT_0017616c
+        float hs = 82.0f * scale.x;                        // DAT_00176168
+        float ox = mirrorY * hs * -0.65f;                  // DAT_0017616c
         float oy = mirrorX * hs * -0.65f;
         AddQuad(out, pos.x + ox, pos.y + oy, hs, hs, Colour(255, 255, 255, al));
         ++(*outCount);
     }
 
-    // Quads 2+3: per-half shadows (active while m_ScaleAnim > 0).
-    if (m_ScaleAnim > 0.0f) {
-        int a = (int)(m_ScaleAnim * 100.0f);             // DAT_00176170
+    // Quads 2+3: per-half shadows (active while m_MenuGrowFade > 0).
+    if (m_MenuGrowFade > 0.0f) {
+        int a = (int)(m_MenuGrowFade * 100.0f);            // DAT_00176170
         uint8_t al = (a < 1) ? 0 : (a > 254 ? 255 : (uint8_t)a);
         float hs = scale.x * 50.0f;                      // DAT_00176174
         Vec3 axis(0.0f, 0.0f, 1.0f);                    // DAT_00176180 BSS singleton (0,0,1)
