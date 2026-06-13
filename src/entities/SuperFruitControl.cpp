@@ -197,8 +197,8 @@ void SuperFruitControl::Update(float dt)
                 // one-shot: the actual blast
                 // TODO: 0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.0, dur=2.0, pos) (needs camera)
                 ExplodeSuperFruit();
-                // TODO: 0x001bca10 -- SpawnJibs(this) (needs jib-spawn subsystem)
-                // TODO: 0x001bca10 -- StopRays(this) (needs ray-entity subsystem)
+                // TODO: 0x001bca10 -- SpawnJibs(this) (pending DirCos/DirSin offset asm-resolution)
+                StopRays();
                 // TODO: 0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_WorkVec3) (needs FancyBakedString)
             }
         }
@@ -206,7 +206,7 @@ void SuperFruitControl::Update(float dt)
         // (c) after blast (Timer >= Lifetime+0.5): explosion update + late shake + time un-slow
         if (m_Timer >= m_Lifetime + 0.5f) {
             m_RecycleFlag = 1;    // binary +0x34 = 1 (draw-layer/state flag)
-            // TODO: 0x001bca10 -- UpdateExplosion(dt, this) (needs explosion-VFX subsystem)
+            UpdateExplosion(dt);
             float tLateShake = m_Lifetime + 0.5f + 0.35f + 0.4f;  // DAT_001bcd9c=0.35, DAT_001bcd90=0.4
             if (m_PrevTimer < tLateShake && tLateShake <= m_Timer) {
                 // TODO: 0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.6, dur=2.0, pos) (DAT_001bcd94=1.6)
@@ -245,8 +245,8 @@ void SuperFruitControl::Update(float dt)
             WaveManager::GetInstance()->field_0x78 = 1.0f;  // SetAbsoluteDtMod(1.0)
             // TODO: 0x001bca10 -- *(int*)WaveManager::GetInstance() = 0 (wave-active flag +0x00)
             WaveManager::GetInstance()->GetNextWave(0);
-            // TODO: 0x001bca10 -- *(float*)PSPParticleManager::GetInstance() = 0.0 (+0x00) (private member)
-            // TODO: 0x001bca10 -- *(float*)(PSPParticleManager::GetInstance()+4) = 1.0 (+0x04) (private member)
+            PSPParticleManager::GetInstance().m_GlobalTimeMod   = 0.0f;
+            PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
             // TODO: 0x001bca10 -- *(game_work+0x40)->+0x24 = 1.0 time-scale restore (game_work._pad_0x40 unresolved)
             flags |= ENT_KILLED;                    // this->done(+0x33) = 1
         }
@@ -520,8 +520,8 @@ void SuperFruitControl::Reset()
 {
     WaveManager::GetInstance()->field_0x78 = 1.0f;   // SetAbsoluteDtMod(1.0)
     // TODO: 0x001bb52c -- *(int*)WaveManager::GetInstance() = 0 (wave-active +0x00; private)
-    // TODO: 0x001bb52c -- *(float*)PSPParticleManager::GetInstance() = 0.0 (+0x00 private)
-    // TODO: 0x001bb52c -- *(float*)(PSPParticleManager::GetInstance()+4) = 1.0 (+0x04 private)
+    PSPParticleManager::GetInstance().m_GlobalTimeMod   = 0.0f;
+    PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
     // TODO: 0x001bb52c -- *(game_work+0x40)->+0x24 = 1.0 global time-scale restore (game_work._pad_0x40 unresolved)
     // TODO: 0x001bb52c -- FruitCamera::TransitionOut(game+0x4c) (needs camera addr fix)
     // TODO: 0x001bb52c -- StackAllocatedPointer<Delegate0>::Delete((game+0x4c)+0x184) camera done-cb free
@@ -630,4 +630,65 @@ void SuperFruitControl::StopAllFruit()
 
         e = am->GetEntityNext(1, fit);
     }
+}
+
+// Binary @ 0x1baeb8. Per-frame shockwave during the SuperFruit explosion.
+// Writes PSPParticleManager globals, then radially pushes Actor types 0/1/5.
+//
+// Spec (from RE):
+//   mgr+0x08 (m_GlobalOrigin)  = this+0xf0 (m_WorkVec5, explosion epicenter)
+//   mgr+0x00 (m_GlobalTimeMod) = this+0xe8 (inner-radius field) * DAT_001bb27c
+//   mgr+0x04 (m_GlobalTimeScale) = T_1616(time, ...) ramp
+//   then push types 0/1/5 out by (outerR - dist)*dt*5 from m_GlobalOrigin.
+//
+// +0xe8 / +0xec (inner/outer radii), the T_1616 ramp, and the per-actor slice
+// path require further RE. Faithfully write the globals we have; leave the
+// radial-push and ramp computations as TODO until the remaining fields are named.
+// TODO: 0x1baeb8 — compute inner/outer radii from T_1616 ramps and this+0xe8/+0xec;
+//   DAT_001bb27c scalar not yet read; T_1616 time arg not resolved.
+//   Radial push of types 0/1/5 and slice-on-innerR not yet ported.
+void SuperFruitControl::UpdateExplosion(float /*dt*/)
+{
+    PSPParticleManager& mgr = PSPParticleManager::GetInstance();
+
+    // Write explosion epicenter into manager global.
+    mgr.m_GlobalOrigin = m_WorkVec5;    // this+0xf0 -> mgr+0x08
+
+    // TODO: 0x1baeb8 — mgr.m_GlobalTimeMod = innerRadius(+0xe8) * DAT_001bb27c
+    // TODO: 0x1baeb8 — mgr.m_GlobalTimeScale = T_1616(time, ...) ramp value
+    // TODO: 0x1baeb8 — radial push: types 0 (Fruit), 1 (Bomb), 5 (Jiblet/SplatEntity)
+    //   out by (outerR - dist)*dt*5 from m_GlobalOrigin; slice fruit in inner ring
+}
+
+// Binary @ 0x1b9b4c. Iterates ActorManager type-6 entities and sets their
+// +0xe0 field to 1 (stop flag). "Rays" are type-6 Entity actors spawned by the
+// SuperFruit intro sequence; they are NOT PSPParticles.
+void SuperFruitControl::StopRays()
+{
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    if (!am) return;
+
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(6, it);
+    while (e != NULL) {
+        // entity+0xe0 = 1: stop flag for ray entities.
+        // DIFFERS: accessing via raw byte pointer because the ray-entity class
+        // is not yet ported and its +0xe0 field is not named; the binary writes
+        // exactly one byte at entity+0xe0. Once the ray entity is ported, replace
+        // with the proper field access.
+        uint8_t* rawBase = reinterpret_cast<uint8_t*>(e);
+        rawBase[0xe0] = 1;
+        e = am->GetEntityNext(6, it);
+    }
+}
+
+// Binary @ 0x1bc748. PSPParticleManager emitter hookup for jib particle trails.
+// Builds the emitter name via sprintf, calls EmitterExists/AddEmitter, sets
+// m_Pos and m_bStarted on the allocated emitter. Also spawns 8 Jiblet mesh
+// actors via ActorManager (type 5, Jiblet::Init).
+// TODO: 0x1bc748 — implementation blocked on asm-inspector resolution of
+//   DirCos/DirSin offset ambiguity (+0x2C vs +0x30 in PSPParticleEmitter) and
+//   Jiblet::Init / MeshManager not yet ported.
+void SuperFruitControl::SpawnJibs(int /*count*/)
+{
 }
