@@ -42,14 +42,13 @@ static Mortar::FontCacheObjectTTF* GetZenTTFFont() {
 // Binary @ 0x0017fcd4
 FruitFactZenPage::FruitFactZenPage(FruitFactPageControl* pCtrl)
     : FruitFactPage(pCtrl)
-    , m_ZenHasCombo(0)
-    , m_ZenFruitInfoIdx(0)
-    , m_ZenComboCount(0)
-    , m_ZenC8(-0.5f)
-    , m_ZenStarResult(0xff)
+    , m_HasCombo(0)
+    , m_ComboCount(0)
+    , m_AnimCC(-0.5f)
+    , m_StarResult(0xff)
 {
-    memset(m_ZenPad9C, 0, sizeof(m_ZenPad9C));
-    memset(m_ZenPadD1, 0, sizeof(m_ZenPadD1));
+    _pad99[0] = 0; _pad99[1] = 0; _pad99[2] = 0;
+    memset(m_ComboFruitInfo, 0, sizeof(m_ComboFruitInfo));
 }
 
 FruitFactZenPage::~FruitFactZenPage() {
@@ -85,9 +84,9 @@ void FruitFactZenPage::UnloadContent() {
 //   starX offset -72 (1806e0), starY=53 (1806e4), starStagger=42 (1806e8), iconY=37 (18070c),
 //   fadeOut=1.33 (180710), fade2_zero=0 (180714).
 void FruitFactZenPage::Init() {
-    m_ZenComboCount = 0;
-    m_ZenC8 = -0.5f;
-    m_ZenStarResult = 0xff;
+    m_ComboCount = 0;
+    m_AnimCC = -0.5f;
+    m_StarResult = 0xff;
 
     CreateSenseisHead(68.0f);
     CreateHorizontalDivider();
@@ -95,15 +94,15 @@ void FruitFactZenPage::Init() {
     CreateSenseisFruitFactText();
 
     // Read combo count from controller's per-session combo state.
-    // Binary: ctrl = m_pController; comboCount = *(int*)(*(ctrl+0x50)+0x210).
+    // Binary: ctrl = m_pController (ldr r7,[r5,#0x94]); comboCount = *(int*)(*(ctrl+0x50)+0x210).
     // *(ctrl+0x50) is a session-state sub-object pointer embedded in HUDControl (+0x50).
     // TODO: 0x00180320 -- resolve *(m_pController+0x50)+0x210 for comboCount and +0x214
-    //   for the fruit-info array. HUDControl at +0x50 falls in m_RemoveCallback area;
+    //   for the m_ComboFruitInfo array. HUDControl at +0x50 falls in m_RemoveCallback area;
     //   the actual type of the pointer held there needs further RE of FruitFactPageControl
     //   binary layout. Leave a zero comboCount until resolved.
     int comboCount = 0;
     bool hasCombo = (comboCount > 2);
-    m_ZenHasCombo = hasCombo ? 1 : 0;
+    m_HasCombo = hasCombo ? 1 : 0;
 
     Mortar::FontCacheObjectTTF* font = GetZenTTFFont();
 
@@ -111,7 +110,7 @@ void FruitFactZenPage::Init() {
         // --- combo-achievement branch ---
         char buf[128];
         snprintf(buf, sizeof(buf), Mortar::GETSTRING(LSTR_BEST_COMBO, 0), comboCount);
-        m_ZenComboCount = comboCount;
+        m_ComboCount = comboCount;
 
         // Lay out comboCount fruit icons across the Y axis.
         // spacing=40 (DAT_1806d4), maxWidth=220 (DAT_1806d8).
@@ -124,9 +123,9 @@ void FruitFactZenPage::Init() {
         }
 
         for (int i = 0; i < comboCount; ++i) {
-            // TODO: 0x00180320 -- read comboFruitInfo[i] from *(ctrl+0x50)+0x214+i*4
+            // TODO: 0x00180320 -- read m_ComboFruitInfo[i] from *(ctrl+0x50)+0x214+i*4
             //   and call Fruit::FruitInfo(fruitIdx) to resolve fruit icon texture.
-            //   m_ZenFruitInfoIdx = fruitTypeArray[i]; Fruit::FruitInfo(m_ZenFruitInfoIdx).
+            //   m_ComboFruitInfo[i] = fruitTypeArray[i]; Fruit::FruitInfo(m_ComboFruitInfo[i]).
             //   Copy TranisitionInfo default block (T_1022) into c+0x28 (m_PosTrans).
             float x = (-totalW * 0.5f - 8.0f) + (float)i * spacing;
             Vec3 ipos(x, 37.0f, 0.0f);
@@ -141,12 +140,13 @@ void FruitFactZenPage::Init() {
         }
 
         // Combo star result.
-        // TODO: 0x00180320 -- pass &m_ZenFruitInfoIdx and comboCount from the real fruit array;
-        //   currently uses placeholder zero array because the fruit-info reads are unresolved.
+        // TODO: 0x00180320 -- pass m_ComboFruitInfo and comboCount from the real fruit array
+        //   (CheckCombo(this+0x9c, count, &outDominant)); currently uses placeholder zero
+        //   array because the fruit-info reads (*(ctrl+0x50)+0x214) are unresolved.
         int dummyFruitArr[1] = {0};
         int outDominant = 0;
         uint8_t star = FruitFact::CheckCombo(dummyFruitArr, comboCount > 0 ? comboCount : 1, &outDominant);
-        m_ZenStarResult = star;
+        m_StarResult = star;
         Mortar::SmartPtr<Mortar::Texture> starTex = FruitFact::GetComboStarTexture(star);
 
         // Star icon GenericHUDControl.

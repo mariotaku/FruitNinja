@@ -8,26 +8,29 @@
 //   ctor  0x0017e4d8
 //
 // Layout (FruitFactPage base = BaseScreen(0x94) + m_pController(4) = 0x98 bytes):
-//   Own fields relative to object start (absolute offsets):
-//     +0x9c : BakedStringBox* m_pTitleBox (owned; stored directly, not via GenericHUDControl)
-//     +0xa0 : float m_animA
-//     +0xa4 : float m_animB
-//     +0xa8 : float m_animC
-//     +0xac : float m_timerAc
-//     +0xb0 : float m_timerB0
-//     +0xb4 : int   m_intB4  (init -1)
-//     +0xbc : uint8_t m_byteBC (init 0)
-//     +0xc4 : float m_timerC4
-//     +0xc8 : float m_floatC8 (init 1.0f)
-//     +0xcc : short m_shortCC (init 32000)
-//     +0xd0 : float m_timerD0
-//     +0xd8 : float m_timerD8
-//     +0xe0 : uint8_t m_byteE0 (init 0)
-//     +0xe4 : float m_timerE4
-//   NOTE: field_0x94=0 in binary spec (DAT_0017e6c0) appears to zero-init
-//   an additional field at +0x94 (same slot as m_pController); the actual
-//   binary may have a separate int field here or the decompiler merged stores.
-//   Port preserves the base ctor's m_pController write and skips the re-zero.
+//   Derived own-fields (absolute from object start, confirmed from disassembly):
+//     +0x98 : int (zero-init first own slot)
+//     +0x9c : (pad/unused by ctor)
+//     +0xa0 : BakedStringBox* m_pTitleBox   (str [r4,#0xa0], ldr [r4,#0xa0] x4)
+//     +0xa4 : float m_animA   (=0)
+//     +0xa8 : float m_animB   (=0)
+//     +0xac : float m_animC   (=0)
+//     +0xb0 : float m_timerB0 (=0.0f)
+//     +0xb4 : float m_timerB4 (=0.0f)
+//     +0xb8 : int   m_intB8   (=−1)
+//     +0xbc : (pad)
+//     +0xc0 : uint8 m_byteC0  (=0)
+//     +0xc4 : (pad)
+//     +0xc8 : float m_floatC8 (=1.0f)
+//     +0xcc : float m_floatCC (=1.0f)
+//     +0xd0 : short m_shortD0 (=32000)
+//     +0xd4 : float m_floatD4 (=1.0f)
+//     +0xd8 : (pad)
+//     +0xdc : float m_floatDC (=0.0f)
+//     +0xe0 : (pad)
+//     +0xe4 : uint8 m_byteE4  (=0)
+//     +0xe8 : float m_floatE8 (=1.0f)
+//   Object size: 0xec (236 bytes).
 //
 
 #include "FruitFactPage.h"
@@ -44,61 +47,75 @@ public:
     void Init() override;  // Binary @ 0x0017e4d8 -- state init + CreateSenseisHead + title box
 
 private:
-    // NOTE: FruitFactPage ends at +0x98. The spec's field_0x9c is the first own member.
-    // If the binary has a 4-byte field at +0x98, it is unresolved; port leaves it implicit.
+    // +0x98: first own field (zero-init)
+    int   m_field98;      // @+0x98
 
-    // +0x9c: owned title BakedStringBox (not via GenericHUDControl::SetText)
-    Mortar::BakedStringBox* m_pTitleBox;   // @+0x9c
+    // +0x9c: pad (not written by ctor)
+    uint8_t _pad9C[4];
 
-    // +0xa0..+0xa8: zeroed animation floats (ctor: field_0xa0=field_0xa4=field_0xa8=0)
-    float m_animA;     // @+0xa0
-    float m_animB;     // @+0xa4
-    float m_animC;     // @+0xa8
+    // +0xa0: owned title BakedStringBox (str/ldr [r4,#0xa0])
+    Mortar::BakedStringBox* m_pTitleBox;   // @+0xa0
 
-    // +0xac: animation timer (ctor=0)
-    float m_timerAc;   // @+0xac
+    // +0xa4..+0xac: zeroed animation floats
+    float m_animA;     // @+0xa4
+    float m_animB;     // @+0xa8
+    float m_animC;     // @+0xac
 
-    // +0xb0: animation timer (ctor=0)
+    // +0xb0: animation timer (=0.0f)
     float m_timerB0;   // @+0xb0
 
-    // +0xb4: int (ctor=-1)
-    int   m_intB4;     // @+0xb4
+    // +0xb4: animation timer (=0.0f)
+    float m_timerB4;   // @+0xb4
 
-    // +0xb8: pad (not initialized by ctor)
-    uint8_t _padB8[4];
+    // +0xb8: int (=-1)
+    int   m_intB8;     // @+0xb8
 
-    // +0xbc: byte field (ctor=0)
-    uint8_t m_byteBC;  // @+0xbc
-    uint8_t _padBD[3];
+    // +0xbc: pad
+    uint8_t _padBC[4];
 
-    // +0xc4: animation timer (ctor=0)
-    float m_timerC4;   // @+0xc4
+    // +0xc0: byte field (=0)
+    uint8_t m_byteC0;  // @+0xc0
+    uint8_t _padC1[3];
 
-    // +0xc8: float (ctor=1.0f)
+    // +0xc4: pad (not written)
+    uint8_t _padC4[4];
+
+    // +0xc8: float (=1.0f)
     float m_floatC8;   // @+0xc8
 
-    // +0xcc: short (ctor=32000)
-    short m_shortCC;   // @+0xcc
-    uint8_t _padCE[2];
+    // +0xcc: float (=1.0f)
+    float m_floatCC;   // @+0xcc
 
-    // +0xd0: animation timer (ctor=0)
-    float m_timerD0;   // @+0xd0
+    // +0xd0: short (=32000)
+    short m_shortD0;   // @+0xd0
+    uint8_t _padD2[2];
 
-    // +0xd4: pad
-    uint8_t _padD4[4];
+    // +0xd4: float (=1.0f)
+    float m_floatD4;   // @+0xd4
 
-    // +0xd8: animation timer (ctor=0)
-    float m_timerD8;   // @+0xd8
+    // +0xd8: pad
+    uint8_t _padD8[4];
 
-    // +0xdc: pad
-    uint8_t _padDC[4];
+    // +0xdc: float (=0.0f)
+    float m_floatDC;   // @+0xdc
 
-    // +0xe0: byte field (ctor=0)
-    uint8_t m_byteE0;  // @+0xe0
-    uint8_t _padE1[3];
+    // +0xe0: pad
+    uint8_t _padE0[4];
 
-    // +0xe4: animation timer (ctor=0)
-    float m_timerE4;   // @+0xe4
+    // +0xe4: byte field (=0)
+    uint8_t m_byteE4;  // @+0xe4
+    uint8_t _padE5[3];
+
+    // +0xe8: float (=1.0f)
+    float m_floatE8;   // @+0xe8
 };
+
+#ifdef __bada__
+#include <cstddef>
+static_assert(offsetof(FruitFactRewardsPage, m_pTitleBox) == 0xa0,
+    "FruitFactRewardsPage::m_pTitleBox must be at +0xa0");
+static_assert(sizeof(FruitFactRewardsPage) == 0xec,
+    "FruitFactRewardsPage size must be 0xec (236)");
+#endif
 
 #endif // FN_SCREENS_FRUIT_FACT_REWARDS_PAGE_H

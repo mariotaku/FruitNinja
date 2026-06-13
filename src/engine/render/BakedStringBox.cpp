@@ -295,7 +295,7 @@ void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, bool flag) 
     }
 }
 
-// SetStroke (1-colour)  binary @ 0x00245314
+// ASM-verified: 2026-06-13T04:05Z binary @ 0x00245314 (asm-inspector)
 void BakedStringBox::SetStroke(float width, const Colour& c0) {
     if (m_StrokeCount != 1 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
@@ -307,7 +307,7 @@ void BakedStringBox::SetStroke(float width, const Colour& c0) {
     }
 }
 
-// SetStroke (2-colour)  binary @ 0x0024536c
+// ASM-verified: 2026-06-13T04:05Z binary @ 0x0024536c (asm-inspector)
 void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1) {
     if (m_StrokeCount != 2 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
@@ -322,7 +322,7 @@ void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1) 
     }
 }
 
-// SetStroke (3-colour)  binary @ 0x002453f0
+// ASM-verified: 2026-06-13T04:05Z binary @ 0x002453f0 (asm-inspector)
 void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2) {
     if (m_StrokeCount != 3 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
