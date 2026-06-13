@@ -96,7 +96,11 @@ public:
     virtual ~SplatEntity();
 
     // Matches SplatEntity::MakeSplat (0x0017f2f0).
-    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, int fruitType);
+    // Binary 6-arg form: param3=byte0, landImmediately=byte1.
+    // landImmediately=1 forces the splat to skip the airborne phase and land instantly
+    // (used by ExplodeSuperFruit radial jibs; binary decompile: MakeSplat(this, pos*, vel*, 0, 1, fruitType)).
+    // Existing 4-arg callers leave landImmediately at its default (0 = airborne).
+    void MakeSplat(Vec3 pos, Vec3 vel, bool param3, int fruitType, bool landImmediately = false);
 
     // Binary: PlaySplat @ 0x0017f5ec -- plays one of 6 splat impact SFX.
     static void PlaySplat(int splatSize);

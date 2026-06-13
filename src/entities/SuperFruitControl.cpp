@@ -13,13 +13,20 @@
 #include "FruitInfo.h"
 #include "Bomb.h"
 #include "SlashEntity.h"
+#include "SplatEntity.h"
+#include "Jiblet.h"
 #include "ActorManager.h"
 #include "game/GameWork.h"
 #include "game/GameOver.h"
 #include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
 #include "game/FruitCamera.h"
+#include "game/BombHit.h"
+#include "Game.h"
 #include "engine/particle/PSPParticleManager.h"
+#include "engine/math/MathUtil.h"
+#include "engine/math/Random.h"
+#include "engine/asset/MeshManager.h"
 #include "util/StringHash.h"
 #include "debug/Logger.h"
 #include <map>
@@ -327,13 +334,128 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 //                0x1bae64=700.0f (fragment angular-vel).
 void SuperFruitControl::ExplodeSuperFruit()
 {
-    // TODO: 0x001baa20 -- SFXPlay(game+0x18c, DAT_001bae78, pitch=0.125, vol=2.0, cb@DAT_001bae74) (SFX dep)
-    // TODO: 0x001baa20 -- Quaternion(hostFruit+0xe0).Matrix33() + N=IsFastHardware()?25:10 radial jibs via SplatEntity::MakeSplat (needs SplatEntity/IsFastHardware)
-    //   jib loop: angIdx=Rand32(0xfff0); speed=(baseSpeed+T_1607(0.5)*baseSpeed)*(i*0.2+5); SplatEntity::MakeSplat; taper=(1-(i-2)/N) clamped [0.3,1.0]; SplatEntity+0x64 *= taper
-    // TODO: 0x001baa20 -- CriticalFlash(hostFruit->pos, Colour(0xff,0xff,0xff,0xff)) white flash (needs ScreenEffect)
-    // TODO: 0x001baa20 -- 8 lettered model fragments: ActorManager::Add(5) per corner, Jiblet::Init, MeshManager::Load (needs Jiblet/MeshManager)
-    //   fragment loop: corner=unit-cube corners by k bits; dir=rot.MultVec33(corner); speed=T_1628(600.0,1000.0); angVel=700.0; dir*=speed; dir*=angVel
-    // TODO: 0x001baa20 -- hostFruit->+0x28 = *(Vec3*)DAT_001bae80 (restore host scale vec)
+    Fruit* host = m_pHostFruit;
+    if (!host) {
+        s_SuperFruitActive = 0;
+        return;
+    }
+
+    // Build rotation basis from host's orientation quaternion (host+0xe0 = m_Rot1).
+    // Binary: _Quaternion::Matrix33(host+0xe0) -> rot
+    Matrix44 rot = host->m_Rot1.ToMatrix44();
+
+    // host+0xc4 = m_SliceArcImpulse: base launch-speed scalar
+    float baseSpeed = host->m_SliceArcImpulse;   // +0xC4
+
+    // ---- (A) radial juice-splat jibs (DAT_001bae50=0.2f, 0x1bae58=0.3f) ----
+    // N = IsFastHardware() ? 25 : 10  (binary: 0x19 : 0x0a)
+    int N;
+    {
+        Game* g = Game::GetInstance();
+        N = (g && g->IsFastHardware()) ? 25 : 10;
+    }
+    Math::Random& rng = WaveManager::GetInstance()->GetRandom();
+    uint8_t hostFruitType = host->m_FruitType;
+    Vec3 hostPos = host->pos;       // host+0x10
+
+    for (int i = 0; i < N; ++i) {
+        uint16_t angIdx = (uint16_t)(rng.Rand32(0xfff0) & 0xffff);
+        // T_1607(0.5) = signed-random in [-0.5, +0.5]: RandF(1.0) - 0.5
+        float t1607 = Math::g_Random.RandF(1.0f) - 0.5f;
+        float spd = (baseSpeed + t1607 * baseSpeed) * ((float)i * 0.2f + 5.0f);  // DAT_001bae50=0.2
+
+        SplatEntity* s = SplatEntity::GetFree();
+        if (s) {
+            Vec3 vel(SinIdx(angIdx) * spd, CosIdx(angIdx) * spd, 0.0f);  // DAT_001bae54=0.0
+            s->MakeSplat(hostPos, vel, /*param3=*/false, (int)hostFruitType, /*landImmediately=*/true);
+
+            // taper splat life: clamp(1 - (i-2)/N, 0.3, 1.0)
+            float taper = 1.0f - (float)(i - 2) / (float)N;
+            if (taper < 0.3f) taper = 0.3f;   // DAT_001bae58=0.3
+            if (taper > 1.0f) taper = 1.0f;
+            // DIFFERS: binary writes raw SplatEntity+0x64; port layout: m_Vel is +0x5C,
+            //   so +0x64 = m_Vel.z (last component). Binary scales the landed vel tail by taper.
+            s->m_Vel.z *= taper;
+        }
+    }
+
+    // ---- (B) white critical screen-flash ----
+    FN::CriticalFlash(hostPos, Colour(255, 255, 255, 255));
+
+    // ---- (C) explosion SFX ----
+    // TODO: 0x001baa20 -- SFXPlay(game+0x18c, DAT_001bae78 SFX key, pitch=0.125, vol=2.0, cb@DAT_001bae74) (SFX key/cb unresolved)
+
+    // ---- (D) 8 lettered mesh fragments (cube-corner pattern) ----
+    // fmt string @ 0x0028383a: "models/Fruit/%s_%c_piece_%d.mmd"
+    // DAT_001bae64=700.0f (angular-vel scalar), 0x1bae60=600.0f (lo), 0x1bae5c=1000.0f (hi)
+    const FruitInfo* fi = Fruit::FruitInfo((long)hostFruitType);
+    const char* modelName = fi ? fi->m_ModelName : "";
+
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
+
+    for (uint32_t k = 0; k < 8; ++k) {
+        // cube-corner pattern from low 3 bits of k:
+        //   bit1: corner.x = (k&2) ? -1 : +1
+        //   bit0: corner.y = (k&1) ? +1 : -1
+        //   k<4:  corner.z = +1; k>=4: corner.z = -1
+        Vec3 corner;
+        corner.x = (k & 2u) ? -1.0f : 1.0f;
+        corner.y = (k & 1u) ?  1.0f : -1.0f;
+        corner.z = (k + 3 < 7) ? 1.0f : -1.0f;
+        corner.Normalise();
+
+        // dir = rot.MultVec33(corner) -- multiply upper-left 3x3 of Matrix44 by corner
+        Vec3 dir;
+        dir.x = rot.m[0] * corner.x + rot.m[4] * corner.y + rot.m[8]  * corner.z;
+        dir.y = rot.m[1] * corner.x + rot.m[5] * corner.y + rot.m[9]  * corner.z;
+        dir.z = rot.m[2] * corner.x + rot.m[6] * corner.y + rot.m[10] * corner.z;
+
+        // spawn jib actor (entity type 5 = Jiblet)
+        Mortar::Entity* jibEnt = am ? am->Add(5) : 0;
+        if (!jibEnt) continue;
+        Jiblet* jiblet = static_cast<Jiblet*>(jibEnt);
+
+        // dirN: dir with z zeroed, then normalised (planar velocity direction)
+        Vec3 dirN = dir;
+        dirN.z = 0.0f;   // DAT_001bae54=0.0
+        dirN.Normalise();
+
+        // build model name: "models/Fruit/%s_%c_piece_%d.mmd"
+        char name[128];
+        snprintf(name, sizeof(name), "models/Fruit/%s_%c_piece_%d.mmd",
+                 modelName,
+                 (modelName[0] != '\0') ? (int)(unsigned char)modelName[0] : 0,
+                 (int)(k + 1));
+
+        // linear velocity = dirN * T_1628(600, 1000)  (lo=DAT_001bae60, hi=DAT_001bae5c)
+        float linSpeed = 600.0f + Math::g_Random.RandF(400.0f);   // uniform [600, 1000)
+        Vec3 vel = dirN * linSpeed;
+
+        // load model
+        Mortar::SmartPtr<Mortar::Model> mdl;
+        if (mm) {
+            mdl = mm->Load(name);
+        }
+
+        // angular velocity: dirN * 700.0  (DAT_001bae64=700.0f)
+        Vec3 angVel = dirN * 700.0f;
+
+        // Jiblet::Init(gravScale=1.0, fadeRate=0.0, fruitType, pos=host+0x74, vel, mdl, emitterHash=0, gravBase=angVel)
+        // DIFFERS: binary passes host+0x74 as Vec3* (raw offset into Fruit; port field at +0x74 is
+        //   m_SliceImpulse (float), not a Vec3). Binary reuses the 12 bytes starting at +0x74 as a
+        //   Vec3 spawn-position cache written by Slice/CollisionResponse. Port casts raw.
+        Vec3* hostJibPos = reinterpret_cast<Vec3*>(reinterpret_cast<uint8_t*>(host) + 0x74);
+        jiblet->Init(1.0f, 0.0f, (int)hostFruitType, hostJibPos, &vel, mdl, 0, &angVel);
+
+        // post-init writes: copy host transform onto the jib actor
+        jiblet->m_Age = 0.0f;                // jib+0xac = 0 (reset age set by Init to -0.04)
+        jiblet->scale = host->scale;         // jib+0x28 = host scale (+0x28)
+        jiblet->m_Rotation = rot;            // jib+0x4c = rot (64-byte Matrix44 copy)
+    }
+
+    // ---- (E) restore host scale ----
+    // TODO: 0x001baa20 -- host->scale = *(Vec3*)DAT_001bae80 (GOT Vec3 restore; value unresolved from source)
 
     s_SuperFruitActive = 0;
 }

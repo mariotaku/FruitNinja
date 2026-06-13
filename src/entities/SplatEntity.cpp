@@ -245,7 +245,11 @@ void SplatEntity::DrawUpdate(float /*dt*/) {
 // in Update's landing branch (binary @ 0x0017fa1c). Removed from MakeSplat.
 //
 // Bugfix #6: m_ScaleSpawn snapshot added after m_Scale is set.
-void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType) {
+//
+// landImmediately (5th param, binary byte arg 2): if true, skip the airborne
+// phase and land the splat instantly. Binary 6-arg ExplodeSuperFruit path
+// passes (0, 1) for (param3, landImmediately).
+void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType, bool landImmediately) {
     // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
     // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
     // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.
@@ -346,6 +350,33 @@ void SplatEntity::MakeSplat(Vec3 p, Vec3 v, bool param3, int fruitType) {
     // Binary @ 0x0017fa1c sets them in Update's landing branch only.
     // Values are stale until landing -- safe because the decay consumer
     // only runs after m_SplatType >= 0 (landed).
+
+    if (landImmediately) {
+        // Binary 6-arg ExplodeSuperFruit path: flag2=1 forces immediate landing.
+        // Reuse the same landing logic from UpdateSplat without a physics tick.
+        int type;
+        if (RandInt(4) == 0) {
+            type = (RandInt(2) == 0) ? 2 : 3;
+        } else {
+            type = (RandInt(6) != 0) ? 0 : 1;
+        }
+        if (m_bParam3 && RandInt(2) == 0) {
+            type = (RandInt(2) == 0) ? 4 : 5;
+        }
+        {
+            const FruitInfo* linfo = FruitInfo_Get(m_FruitType);
+            if (linfo && linfo->m_bOnSide != 0) {
+                type = (RandInt(2) == 0) ? 2 : 3;
+            }
+        }
+        m_SplatType = type;
+        const int idx = (type >= 0 && type < 6) ? type : 0;
+        m_Scale = m_Scale * (kLandScale[idx] * 2.5f);
+        m_Pos.z = UP_LAND_Z;
+        m_Vel   = Vec3(0.0f, 0.0f, 0.0f);
+        m_Life      = UP_LIFE_BASE  + RandRange(UP_LIFE_RAND);
+        m_DecayRate = UP_DECAY_BASE + RandRange(UP_DECAY_RAND);
+    }
 }
 
 // Binary @ 0x0017f774 -- SplatEntity::Update (vtable slot 5)
