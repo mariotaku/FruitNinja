@@ -107,11 +107,18 @@ public:
     uint8_t  _pad_118[0x48];               // +0x118..+0x15F  reserved (no ctor write, no reader)
     uint32_t m_Field160;                   // +0x160  ctor=0; write-at-construct, opaque
     uint8_t  m_Field164;                   // +0x164  ctor=0; write-at-construct, opaque
-    uint8_t  _pad_165[0xB];               // +0x165..+0x16F  padding to event block
+    uint8_t  _pad_165[3];                  // +0x165..+0x167  padding
+    // +0x168: menu-fruit grow-in fade timer (0..1). Ramps += dt*3 toward 1.0 each frame
+    // while m_bRespawnRequest==0. Also read by MenuButton touch-rect inset. Binary: 0x1df864.
+    float    m_MenuGrowFade;               // +0x168  init=0.0
+    uint8_t  _pad_16C[4];                  // +0x16C..+0x16F  padding to event block
     Mortar::Event3<Fruit*, int, Mortar::Entity*> m_OnSliced;  // +0x170 (8B) fired in CollisionResponse
     Mortar::Event1<Fruit*> m_OnKilled;     // +0x178 (8B) fired in KillFruit; SuperFruitGlow subscribes
     Mortar::Event1<Fruit*> m_OnExpired;    // +0x180 (8B) fired in Update (+0x74 <= 0 path)
-    uint8_t  _pad_188[4];                  // +0x188..+0x18B  trailing pad -> sizeof 0x18c
+    // +0x188: re-whole-draw request flag. MenuButton sets this=1 when the sliced halves
+    // come to rest; Fruit::Draw renders the whole mesh when this is set. Binary: 0x1e0524.
+    uint8_t  m_bRespawnRequest;            // +0x188  init=0
+    uint8_t  _pad_189[3];                  // +0x189..+0x18B  trailing pad -> sizeof 0x18c
 
     Fruit();
     ~Fruit();
@@ -310,9 +317,11 @@ static_assert(__builtin_offsetof(Fruit, m_ScaleAnim)                == 0x110, ""
 static_assert(__builtin_offsetof(Fruit, m_bDrawWhole)               == 0x114, "");
 static_assert(__builtin_offsetof(Fruit, m_Field160)                 == 0x160, "");
 static_assert(__builtin_offsetof(Fruit, m_Field164)                 == 0x164, "");
+static_assert(__builtin_offsetof(Fruit, m_MenuGrowFade)             == 0x168, "");
 static_assert(__builtin_offsetof(Fruit, m_OnSliced)                 == 0x170, "");
 static_assert(__builtin_offsetof(Fruit, m_OnKilled)                 == 0x178, "");
 static_assert(__builtin_offsetof(Fruit, m_OnExpired)                == 0x180, "");
+static_assert(__builtin_offsetof(Fruit, m_bRespawnRequest)          == 0x188, "");
 #endif
 
 #endif

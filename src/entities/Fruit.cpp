@@ -171,6 +171,8 @@ Fruit::Fruit()
     , m_bDrawWhole(0)
     , m_Field160(0)
     , m_Field164(0)
+    , m_MenuGrowFade(0.0f)
+    , m_bRespawnRequest(0)
 {
     entityType = 0;
 }
@@ -557,6 +559,15 @@ void Fruit::Update(float dt) {
         //   pos        += vel        * dtScaled * 60  (position uses dtNorm)
         //   m_SecondPos += m_SecondVel * dtScaled * 60
         // Both halves get the same ×60 position scale as the unsliced branch.
+
+        // Grow-in fade ramp (binary @ 0x1df864): ramps m_MenuGrowFade toward 1.0
+        // at 3.0 units/frame while m_bRespawnRequest==0. Frozen once MenuButton
+        // sets the respawn flag (fruit already fully "present").
+        if (!m_bRespawnRequest) {
+            m_MenuGrowFade += dtNorm * 3.0f;
+            if (m_MenuGrowFade > 1.0f) m_MenuGrowFade = 1.0f;
+        }
+
         // ASM-verified: 2026-05-20 binary @ 0x001777a8..0x001777ee (re-analyst) -- gravity grow gated.
         if (m_bCriticalEligible == 0) {
             float len = m_Gravity.Normalise();   // unit-izes, returns old magnitude
@@ -810,7 +821,10 @@ void Fruit::Draw(Renderer& r) {
     // set — used by ClearMenuItems @ 0x0016ac7c when releasing menu
     // fruits during the dojo transition (the fruit flies off as a
     // single object rather than splitting in two).
-    if (!m_bSliced || m_bDrawWhole) {
+    // m_bRespawnRequest (Fruit+0x188): set by MenuButton when the sliced halves
+    // come to rest; makes Draw render the whole fruit again (binary @ 0x1e0524:
+    // "p_pad[0x7c]==0 || p_pad[0x14c]!=0"). Both flags independently force whole draw.
+    if (!m_bSliced || m_bDrawWhole || m_bRespawnRequest) {
         // Whole fruit — single draw at pos with m_Rot1.
         Vec3 drawPos(pos.x, pos.y, m_ZPosition);
         DrawOneModel(fmi->m_Whole.Get(), drawPos, m_Rot1, s);

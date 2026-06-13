@@ -444,9 +444,12 @@ void MenuButton::Update(float dt) {
             fruit = m_pTrackedFruit;  // +0x14c
             if (fruit) {
                 if (fruit->vel.x == 0.0f && fruit->vel.y == 0.0f) {
-                    // at rest: request respawn
-                    // TODO: 0x0019a860 -- fruit->(+0x188)=1 respawn-request field (not yet in Fruit.h; needs RE)
-                    // TODO: 0x0019a860 -- fruit->flag(+0x35) respawn-pending check (not yet in Fruit.h)
+                    // At rest: request re-whole draw. Binary @ 0x19abd8..0x19ac20 (Site A).
+                    // Gate on entityType==0 (fruit bucket, not bomb) matches binary's
+                    // f[0x35]==0 check in MenuButton::Update.
+                    if (fruit->entityType == 0) {
+                        fruit->m_bRespawnRequest = 1;
+                    }
                     float restY = m_RestScale.y;
                     float sizeY = (m_RestScale.y != 0.0f) ? size.y : 1.0f;
                     float s = (restY != 0.0f) ? (sizeY / restY) : 1.0f;
@@ -498,8 +501,12 @@ void MenuButton::Update(float dt) {
                         m_ClickCallback();
                         // TODO: 0x0019a860 -- TutorialControl::ResetTutePos() (not yet in TutorialControl.h)
                         entity->scale = m_BaseScale;
-                        if (fruit && fruit->vel.x == 0.0f && fruit->vel.y == 0.0f) {
-                            // TODO: 0x0019a860 -- fruit->(+0x188)=1 respawn request
+                        // Binary @ 0x19aa34..0x19ac20 (Site B): set respawn flag if halves are
+                        // already at rest on the same frame as the slice (rare; normally Site A
+                        // handles it a few frames later once halves decelerate to vel==0).
+                        if (fruit && fruit->entityType == 0
+                                  && fruit->vel.x == 0.0f && fruit->vel.y == 0.0f) {
+                            fruit->m_bRespawnRequest = 1;
                         }
                         // m_bEnabled (compat field) gates ClearMenuItems cascade
                         // per binary @ 0x0014e7e0; maps to v1.6.1 m_bClearsMenuItems gate.
