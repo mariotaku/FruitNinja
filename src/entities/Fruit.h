@@ -67,36 +67,35 @@ public:
     // No reader exists anywhere in the binary — confirmed by full-binary
     // [reg,#0x68] scan 2026-05-20. Likely dead code from a removed feature.
     // Kept for layout fidelity; do NOT route any logic through this field.
-    // Same status as m_VisualScale (+0xA8).
+    // Same status as m_VisualScale (+0xAC).
     int32_t m_VestigialInitFour;            // +0x68 (init=4; write-only / dead)
     // +0x6C: binary role not yet RE'd; old port misused this slot as the slice-countdown timer
     // but the real countdown lives at 0xBC (m_SliceTimer). Kept as pad for layout fidelity.
     // TODO: 0x0017621c -- determine true binary semantics of the +0x6C field.
     uint8_t  _pad_6C[4];                   // +0x6C..+0x6F  (role unknown)
-    uint16_t m_SliceAngle;                 // +0x70
-    uint8_t  _pad_72[2];                   // +0x72..+0x73
-    float    m_SliceImpulse;               // +0x74
-    int32_t  m_SliceState;                 // +0x78  (init=0; written by Slice/CollisionResponse)
-    uint8_t  m_bActive;                    // +0x7C  (gates physics in unsliced branch)
-    uint8_t  _pad_7D[3];                   // +0x7D..+0x7F
-    float    m_ChuckDelay;                 // +0x80  (init=0.0)
-    Vec3     m_RotAxis;                    // +0x84..+0x8F
-    int32_t  m_PlayerIdx;                  // +0x90  (init=0)
-    float    m_TimeScale;                  // +0x94  (init=1.0)
-    float    m_ZPosition;                  // +0x98
-    Vec3     m_Gravity;                    // +0x9C..+0xA7
-    // +0xA8..+0xB3 -- duplicate of entity scale (+0x28); written by SetFruitType
+    uint8_t  m_bBallisticEnable;           // +0x70  u8 gate: Update runs gravity arc when !=0; CreateFruit menu-path sets =0
+    uint8_t  _pad_71[3];                   // +0x71..+0x73
+    float    m_SpawnDelay;                 // +0x74  chuck countdown; Chuck sets; Update decrements -> fires m_OnExpired at <=0
+    Vec3     m_AccelTerm;                  // +0x78..+0x83  extra accel/jerk: Update unsliced pos += m_AccelTerm*dt; damped 0.9x in PostUpdate
+    int32_t  m_PlayerIdx;                  // +0x84  SetForPlayer writes; Slice/Update read for trail-hash/MakeCritical
+    float    m_Age;                        // +0x88  Update += dt*scale; sliced-reset gate if(dt<0 && m_Age<0)
+    float    m_VelSnapX;                   // +0x8C  velocity snapshot X; Slice writes (p_pad+0x50); Update sliced-reset copies
+    float    m_VelSnapY;                   // +0x90  velocity snapshot Y (p_pad+0x54)
+    float    m_VelSnapZ;                   // +0x94  velocity snapshot Z (p_pad+0x58)
+    float    m_TimeScale;                  // +0x98  Update dt_eff = dt * m_TimeScale; SpawnFruit writes (p_pad+0x5c)
+    float    m_ZPosition;                  // +0x9C  depth; CreateFruit sets =150.0f; Update emitter-Z; Slice -> MoveFruitZPositionToBack
+    Vec3     m_Gravity;                    // +0xA0..+0xAB  Update integrates vel += m_Gravity*dt; menu-path scales for fling; m_bMenuFling boosts 6.5x
+    // +0xAC..+0xB7 -- duplicate of entity scale (+0x28); written by SetFruitType
     // for both slots but never read by Draw/Shadows/AddShadow/KillFruit (all read +0x28).
     // Vestigial write-only cache kept for binary layout fidelity.
     // Do NOT route rendering through this field.
-    Vec3     m_VisualScale;                // +0xA8: vestigial write-only cache; binary @ 0x00176290 stm r8,{r0,r1,r2}
+    Vec3     m_VisualScale;                // +0xAC: vestigial write-only cache; binary @ 0x00176290 stm r8,{r0,r1,r2}; SetFruitType writes 0xAC/B0/B4
 
-    // --- 0xB4..0x16F region corrected per p9-fruit-region.md + p9-fruit-0x108.md ---
+    // --- 0xB8..0x16F region corrected per d3d8647 + fruit-0x60-region.md ---
     // All offsets verified against v1.6.1 binary Fruit ctor (0x1dc4f0), Update (0x1df828),
     // Slice (0x1dcba0), Draw (0x1e0524), CheckHasGoneOffscreen (0x1df304),
     // SetupSliceRotations (0x1da968), RotateFacingUp (0x1db478),
     // KillFruit (0x1deba8), MenuButton::CreateFruit (0x19b608).
-    uint8_t  _pad_B4[4];                   // +0xB4..+0xB7  no read/write seen in binary
     uint8_t  m_bSliced;                    // +0xB8  Slice writes=1; Update/Draw/Check/KillFruit read p_pad[0x7c]
     uint8_t  _pad_B9[3];                   // +0xB9..+0xBB  align
     float    m_SliceTimer;                 // +0xBC  Slice sets; Update countdown -= dt; init=-1; rest=-1
@@ -150,7 +149,7 @@ public:
     void Deactivate();
 
     // Matches Fruit::Slice (0x176d58, simplified). Flips m_bSliced,
-    // computes halfVel/halfVelB from m_SliceAngle, blends with old vel,
+    // computes halfVel/halfVelB from m_SliceArcAngle, blends with old vel,
     // marks the fruit as two-body. Called from Update when m_SliceTimer
     // hits zero.
     void Slice();
@@ -224,7 +223,7 @@ public:
 
     // Matches Fruit::ClearUnspawned (0x00176d14). Walks Mortar::ActorManager type-0
     // list and kills fruits via KillFruit(0). clearAll=false: only pre-spawn
-    // (m_ChuckDelay > 0) fruits; clearAll=true: every fruit.
+    // (m_SpawnDelay > 0) fruits; clearAll=true: every fruit.
     static void ClearUnspawned(bool clearAll);
 
     // Matches Fruit::Disable (binary @ 0x00126374). Sets m_bNoPowerUp = 1,
@@ -293,7 +292,7 @@ public:
     static float GetFruitZPosition();
 
     // Binary @ 0x0016911c — push sliced-half z behind all unsliced fruits.
-    // Formula: f->m_ZPosition = (500 + f->m_ZPosition) * 0.5 - 2600.
+    // Formula: f->m_ZPosition = (500 + f->m_ZPosition) * 0.5 - 2600.0.
     // Called on first slice so halves draw behind unsliced fruit.
     static void MoveFruitZPositionToBack(Fruit* f);
 };
@@ -307,17 +306,18 @@ static_assert(__builtin_offsetof(Fruit, m_pEmitter2)       == 0x44,  "");
 static_assert(__builtin_offsetof(Fruit, m_SlicePos)        == 0x48,  "");
 static_assert(__builtin_offsetof(Fruit, m_LifetimeCounter) == 0x60,  "");
 static_assert(__builtin_offsetof(Fruit, m_CollisionSize)   == 0x64,  "");
-static_assert(__builtin_offsetof(Fruit, m_SliceAngle)      == 0x70,  "");
-static_assert(__builtin_offsetof(Fruit, m_SliceImpulse)    == 0x74,  "");
-static_assert(__builtin_offsetof(Fruit, m_SliceState)      == 0x78,  "");
-static_assert(__builtin_offsetof(Fruit, m_bActive)         == 0x7C,  "");
-static_assert(__builtin_offsetof(Fruit, m_ChuckDelay)      == 0x80,  "");
-static_assert(__builtin_offsetof(Fruit, m_RotAxis)         == 0x84,  "");
-static_assert(__builtin_offsetof(Fruit, m_PlayerIdx)       == 0x90,  "");
-static_assert(__builtin_offsetof(Fruit, m_TimeScale)       == 0x94,  "");
-static_assert(__builtin_offsetof(Fruit, m_ZPosition)       == 0x98,  "");
-static_assert(__builtin_offsetof(Fruit, m_Gravity)         == 0x9C,  "");
-static_assert(__builtin_offsetof(Fruit, m_VisualScale)     == 0xA8,  "");
+static_assert(__builtin_offsetof(Fruit, m_bBallisticEnable) == 0x70,  "");
+static_assert(__builtin_offsetof(Fruit, m_SpawnDelay)      == 0x74,  "");
+static_assert(__builtin_offsetof(Fruit, m_AccelTerm)       == 0x78,  "");
+static_assert(__builtin_offsetof(Fruit, m_PlayerIdx)       == 0x84,  "");
+static_assert(__builtin_offsetof(Fruit, m_Age)             == 0x88,  "");
+static_assert(__builtin_offsetof(Fruit, m_VelSnapX)        == 0x8C,  "");
+static_assert(__builtin_offsetof(Fruit, m_VelSnapY)        == 0x90,  "");
+static_assert(__builtin_offsetof(Fruit, m_VelSnapZ)        == 0x94,  "");
+static_assert(__builtin_offsetof(Fruit, m_TimeScale)       == 0x98,  "");
+static_assert(__builtin_offsetof(Fruit, m_ZPosition)       == 0x9C,  "");
+static_assert(__builtin_offsetof(Fruit, m_Gravity)         == 0xA0,  "");
+static_assert(__builtin_offsetof(Fruit, m_VisualScale)     == 0xAC,  "");
 static_assert(__builtin_offsetof(Fruit, m_bSliced)         == 0xB8,  "");
 static_assert(__builtin_offsetof(Fruit, m_SliceTimer)      == 0xBC,  "");
 static_assert(__builtin_offsetof(Fruit, m_SliceArcAngle)   == 0xC0,  "");

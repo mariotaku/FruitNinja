@@ -464,7 +464,7 @@ void ShopScreen::ShrinkBuyButton() {
 //           if (fruit) {
 //               fruit->m_SecondPos.y = -480.0   // DAT_0015d1e8 = 0xC3F00000
 //               fruit->pos.y         = -480.0   // DAT_0015d1e8
-//               fruit->m_Gravity     = -g_ShopFlingVec = (0,-1,0)  // +0x9c, NOT m_SecondVel
+//               fruit->m_Gravity     = -g_ShopFlingVec = (0,-1,0)  // +0xa0, NOT m_SecondVel
 //               fruit->m_SecondVel.y = -10.0    // DAT = 0xC1200000 (overlapping +0xc8)
 //               fruit->vel.y         = -10.0
 //           }
@@ -483,11 +483,11 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
             // Binary @ 0x0015d14c writes (re-RE'd 2026-05-09 by re-analyst):
             //   *(fruit+0xbc) = -480.0   -> m_SecondPos.y
             //   *(fruit+0x14) = -480.0   -> entity pos.y
-            //   *(fruit+0x9c) = -g_ShopFlingVec = (0,-1,0) -> m_Gravity (NEGATE, not zero)
+            //   *(fruit+0xa0) = -g_ShopFlingVec = (0,-1,0) -> m_Gravity (NEGATE, not zero)
             //   *(fruit+0xc8) = -10.0    -> m_SecondVel.y
             //   *(fruit+0x20) = -10.0    -> vel.y
             // The earlier port skipped the m_Gravity write claiming it overlapped
-            // m_SecondVel (it does NOT — m_Gravity is +0x9c, m_SecondVel is +0xc4).
+            // m_SecondVel (it does NOT — m_Gravity is +0xa0, m_SecondVel is +0xd4).
             // Without restoring downward gravity here, EquipCallback's prior
             // m_Gravity=(0,0,0) leaves Fruit::CheckHasGoneOffscreen unable to fire
             // — every return-true branch in that function is gated on a non-zero
@@ -623,7 +623,7 @@ void ShopScreen::QuitShopCallback() {
 
     // Fling the back/quit button. Binary @ 0x0015d55c indirects through
     // m_pBuyButton->m_pFruitPiece (+0x134) and writes *(byte*)(piece+0x80)=1
-    // (aliases m_ChuckDelay low byte). Port omits the write; m_ChuckDelay stays 0.
+    // (Fruit+0x80 unconfirmed, no reader). Port omits the write.
     if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
         Fruit* piece = m_pBuyButton->m_pFruitPiece;
         float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
@@ -668,7 +668,7 @@ void ShopScreen::EquipCallback() {
             //   fruit->m_HalfB_pos (+0xb8) = fruit->pos    -- snapshot pos
             //   fruit->vel         (+0x1c) = (0, 0, 0)
             //   fruit->m_HalfB_vel (+0xc4) = (0, 0, 0)
-            //   fruit->m_Gravity   (+0x9c) = (0, 0, 0)
+            //   fruit->m_Gravity   (+0xa0) = (0, 0, 0)
             // After this, the fruit is completely frozen (vel=0, gravity=0).
             // MenuButton::Update's "if (vel.x==0 && vel.y==0)" gate (in the
             // m_pEntity==null path) then runs the pin+scale path that
@@ -967,7 +967,7 @@ void ShopScreen::Update(float dt) {
         if (newAlpha >= ALPHA_STATE3_DONE) {
             // Still fading: fling old back-button if present.
             // Binary: m_pBuyButton->m_pFruitPiece (+0x134); *(byte*)(piece+0x80)=1
-            // (aliases m_ChuckDelay low byte). Port omits the write.
+            // (Fruit+0x80 unconfirmed, no reader). Port omits the write.
             if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
                 Fruit* piece = m_pBuyButton->m_pFruitPiece;
                 float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
@@ -1025,7 +1025,7 @@ void ShopScreen::Update(float dt) {
     case 5:
     case 6: {
         // Fling buy button (same as state 3): use m_pFruitPiece per binary.
-        // Binary writes *(byte*)(piece+0x80)=1 (aliases m_ChuckDelay low byte);
+        // Binary writes *(byte*)(piece+0x80)=1 (Fruit+0x80 unconfirmed, no reader);
         // port omits the write.
         if (m_pBuyButton && m_pBuyButton->m_pFruitPiece) {
             Fruit* piece = m_pBuyButton->m_pFruitPiece;

@@ -132,12 +132,9 @@ public:
     //   2. m_State = 2  (start fade-out; field21_0x9c).
     //   3. Launch the back button's fruit piece: f = m_pBackButton->m_pFruitPiece
     //      (MenuButton +0x134). Binary:
-    //        strb #1 -> f + 0x80   (single BYTE store into the low byte of
-    //                               Fruit::m_ChuckDelay -> ~1.4e-45, a tiny
-    //                               positive value that gates physics off for
-    //                               one frame then decrements negative next
-    //                               frame, i.e. "launch now"; see Fruit::Update
-    //                               m_ChuckDelay countdown @ 0x001777ce).
+    //        strb #1 -> f + 0x80   (single BYTE store into Fruit+0x80, an
+    //                               unconfirmed field with no known reader;
+    //                               port omits this write as write-only).
     //        f->vel = Vec3(RandFloat_5() + 5.0f, -RandFloat_5(), 0.0f)
     //                 written to f + 0x1c/0x20/0x24. z = DAT_0012ebfc = 0.0f.
     //                 RandFloat_5 = RandFloat_5_Draw @ 0x0012e5e8

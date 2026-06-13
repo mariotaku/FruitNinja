@@ -1224,7 +1224,7 @@ void GameOverScreen::Update(float dt) {
     //   KillFruit(this, 0), port calls am->Deactivate(f); (b) some
     //   fruit-half pos/vel state staying on-screen indefinitely.
     // Needs runtime logging of surviving (pos, vel, flags,
-    // m_ChuckDelay, m_bSliced) per frame to identify. See
+    // m_SpawnDelay, m_bSliced) per frame to identify. See
     // tmp/bonus-phase-stall-spec.md for full RE.
     case STATE_BONUS_PHASE: {
         Mortar::ActorManager* am = game->actorManager;
@@ -1255,11 +1255,11 @@ void GameOverScreen::Update(float dt) {
                         LOG_DEBUG("BONUS_PHASE_STALL",
                                   "  Fruit type=%d flags=0x%02x"
                                   " pos=(%.1f,%.1f,%.1f) vel=(%.1f,%.1f,%.1f)"
-                                  " sliced=%d chuckDelay=%.3f sliceTimer=%.3f",
+                                  " sliced=%d spawnDelay=%.3f sliceTimer=%.3f",
                                   (int)f->m_FruitType, (unsigned)f->flags,
                                   f->pos.x, f->pos.y, f->pos.z,
                                   f->vel.x, f->vel.y, f->vel.z,
-                                  (int)f->m_bSliced, f->m_ChuckDelay, f->m_SliceTimer);
+                                  (int)f->m_bSliced, f->m_SpawnDelay, f->m_SliceTimer);
                     }
                     // Walk Bomb list (type 1)
                     const std::list<Mortar::Entity*>& bombs = am->GetTypeList(1);

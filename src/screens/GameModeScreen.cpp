@@ -593,8 +593,8 @@ void GameModeScreen::QuitCallback() {
     m_State = 0xf;
 
     // 3. Fling back button (binary: *(byte*)(piece+0x80) = 1, then random vel).
-    // +0x80 aliases m_ChuckDelay (Fruit) / m_bMovement (Bomb). Port omits the
-    // Fruit byte write since m_ChuckDelay is write-only here; Bomb write kept.
+    // +0x80 aliases Bomb::m_bMovement / Fruit+0x80 (unconfirmed field, no reader).
+    // Port omits the Fruit byte write since Fruit+0x80 has no reader; Bomb write kept.
     if (m_pBackButton && m_pBackButton->m_pEntity) {
         Mortar::Entity* e = m_pBackButton->m_pEntity;
         float rx = (float)rand() / (float)RAND_MAX;
