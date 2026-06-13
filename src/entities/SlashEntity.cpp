@@ -977,12 +977,12 @@ void SlashEntity::Update(float dt) {
                         }
                         // ASM-verified: 2026-05-22 binary @ 0x0017d8a4 (re-analyst).
                         const bool isMenuFruit = (t == 0) &&
-                            static_cast<Fruit*>(e)->m_bSpawnedByCriticalSplash != 0;
+                            static_cast<Fruit*>(e)->m_bMenuFling != 0;
                         if (t == 0) {
                             Fruit* fruit = static_cast<Fruit*>(e);
                             m_SliceEntityType = (int)fruit->m_FruitType;
                             if (!isMenuFruit) {
-                            if (fruit->m_bCriticalEligible) {
+                            if (fruit->m_bCritical) {
                                 m_Scale = 1.0f;
                             }
                             // ASM-verified: 2026-05-20 binary @ 0x0017dad8 (re-analyst)

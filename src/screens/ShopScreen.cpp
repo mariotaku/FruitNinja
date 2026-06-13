@@ -442,10 +442,10 @@ void ShopScreen::ShrinkBuyButton() {
 
     LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in ShrinkBuyButton)",
              static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
-    fruit->m_bSliced           = true;  // *(fruit+0xb4) = 1
+    fruit->m_bSliced           = true;  // *(fruit+0xb8) = 1
     m_bShrinking               = true;  // BSS byte @ GOT+0x451b4 = 1
     m_pEquipButton->m_bEnabled = 0;     // *(button+0x123) = 0
-    fruit->m_SecondVel         = SHOP_SHRINK_VEC;  // *(fruit+0xc4..+0xcc) = (1,1,1)
+    fruit->m_SecondVel         = SHOP_SHRINK_VEC;  // *(fruit+0xd4..+0xdf) = (1,1,1)
     // Binary does NOT write m_bDrawWhole here (see docs/screens/shop-buttons.md §Gap4)
 }
 

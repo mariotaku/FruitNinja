@@ -253,11 +253,15 @@ void MenuButton::CreateFruit() {
     if (entityType == 0) {
         Fruit* fruit = static_cast<Fruit*>(e);
         fruit->m_RotVel1 = fruit->m_RotVel1 * FRUIT_ROTVEL_MULT;
-        fruit->m_ScaleAnim = 1.0f;
+        fruit->m_MenuGrowFade = 1.0f;
         fruit->m_ChuckDelay = 0.0f;
         fruit->m_ZPosition = FRUIT_ZPOS;
         // ASM-verified: 2026-05-22 binary @ 0x0014f0de (re-analyst).
-        fruit->m_bSpawnedByCriticalSplash = 1;
+        // Binary writes m_bMenuFling=1 (0x164) to mark this as a menu-context fruit.
+        fruit->m_bMenuFling = 1;
+        // Binary writes m_pOwner=this (0x160) so KillFruit can clear our m_pTrackedFruit.
+        // KillFruit reads owner+0x14C (= MenuButton::m_pTrackedFruit) as a raw offset.
+        fruit->m_pOwner = reinterpret_cast<Mortar::Entity*>(this);
         m_pFruitPiece = fruit;
 
         if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
@@ -285,7 +289,7 @@ void MenuButton::Release() {
     if (e) {
         int bombThreshold = FruitInfo_GetCount();
         if (m_FruitType < bombThreshold) {
-            static_cast<Fruit*>(e)->m_pSlasher = nullptr;
+            static_cast<Fruit*>(e)->m_pOwner = nullptr;
         } else if (m_FruitType == bombThreshold) {
             static_cast<Bomb*>(e)->m_pOwnerButton = nullptr;
         }
@@ -448,7 +452,7 @@ void MenuButton::Update(float dt) {
                     // Gate on entityType==0 (fruit bucket, not bomb) matches binary's
                     // f[0x35]==0 check in MenuButton::Update.
                     if (fruit->entityType == 0) {
-                        fruit->m_bRespawnRequest = 1;
+                        fruit->m_bDrawWhole = 1;
                     }
                     float restY = m_RestScale.y;
                     float sizeY = (m_RestScale.y != 0.0f) ? size.y : 1.0f;
@@ -491,7 +495,7 @@ void MenuButton::Update(float dt) {
                 // FRUIT branch
                 // TODO: 0x0019a860 -- entity->pos2(+0xc8) = GetWorldPos(); not yet in Entity/Fruit layout
                 Fruit* f = static_cast<Fruit*>(m_pEntity);
-                if (f && f->m_bSliced) {     // +0xb4 sliced sentinel
+                if (f && f->m_bSliced) {     // +0xb8 sliced sentinel
                     Vec3 d;
                     d.x = f->pos.x - f->m_SecondPos.x;
                     d.y = f->pos.y - f->m_SecondPos.y;
@@ -506,7 +510,7 @@ void MenuButton::Update(float dt) {
                         // handles it a few frames later once halves decelerate to vel==0).
                         if (fruit && fruit->entityType == 0
                                   && fruit->vel.x == 0.0f && fruit->vel.y == 0.0f) {
-                            fruit->m_bRespawnRequest = 1;
+                            fruit->m_bDrawWhole = 1;
                         }
                         // m_bEnabled (compat field) gates ClearMenuItems cascade
                         // per binary @ 0x0014e7e0; maps to v1.6.1 m_bClearsMenuItems gate.
