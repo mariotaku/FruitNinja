@@ -593,7 +593,7 @@ void PowerUpShop::ButtonSliced() {
         fruit->m_SecondPos = fruit->pos;       // +0xB8 <- +0x10
         fruit->vel         = g_Origin;         // +0x1C
         fruit->m_SecondVel = g_Origin;         // +0xC4
-        fruit->m_Gravity   = g_Origin;         // +0x9C
+        fruit->m_Gravity   = g_Origin;         // +0xA0
         return;
     }
     if (m_BuyButtonState != 0) return;
@@ -638,10 +638,10 @@ void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
         fruit->pos.y         = -480.0f;  // +0x14, 0xc3f00000
 
         // bl 0x00156824 (NegateVec3_SpeedCtrl) negates the file-static origin
-        // Vec3 and stm's the 3 floats into fruit->m_Gravity (+0x9C..0xA4).
+        // Vec3 and stm's the 3 floats into fruit->m_Gravity (+0xA0..0xAB).
         // -g_Origin == (0,0,0); the negate is just how the binary materialises a
         // zero vec from the stored origin constant (same helper used by Release).
-        fruit->m_Gravity = g_Origin;     // +0x9C, stm from NegateVec3(origin)
+        fruit->m_Gravity = g_Origin;     // +0xA0, stm from NegateVec3(origin)
 
         //   vstr s15(-10), [r3,#0xc8] -> m_SecondVel.y (+0xC8)
         //   vstr s15(-10), [r3,#0x20] -> vel.y         (+0x20)

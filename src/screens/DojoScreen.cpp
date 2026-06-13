@@ -405,9 +405,9 @@ void DojoScreen::PlayCallback() {
     // 3. Fling the back-bomb with random rightward velocity.
     //    Binary @ 0x001389f4: indirects through m_pPlayButton->m_pFruitPiece
     //    (+0x134), writes *(byte*)(piece+0x80) = 1 unconditionally (aliases
-    //    Fruit::m_ChuckDelay low byte / Bomb::m_bMovement), then writes
+    //    Bomb::m_bMovement / Fruit+0x80 unknown field), then writes
     //    Vec3(r1+5, -r2, 0) to piece->vel. Port omits the byte write since
-    //    m_ChuckDelay is already 0 at this point and the write is write-only.
+    //    Fruit+0x80 has no reader and the Bomb write is to a different class.
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
         Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
@@ -434,8 +434,8 @@ void DojoScreen::ShopCallback() {
     m_State = 2;
 
     // Binary @ 0x00137864: m_pPlayButton->m_pFruitPiece (+0x134), set
-    // *(byte*)(piece+0x80) = 1 (aliases m_ChuckDelay low byte), write fling vel.
-    // Port omits the byte write; m_ChuckDelay stays 0.
+    // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
+    // Port omits the byte write; Fruit+0x80 has no reader.
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
         Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
@@ -455,8 +455,8 @@ void DojoScreen::AboutCallback() {
     m_State = 3;
 
     // Binary @ 0x001378e0: m_pPlayButton->m_pFruitPiece (+0x134), set
-    // *(byte*)(piece+0x80) = 1 (aliases m_ChuckDelay low byte), write fling vel.
-    // Port omits the byte write; m_ChuckDelay stays 0.
+    // *(byte*)(piece+0x80) = 1 (Fruit+0x80 unknown field, no reader), write fling vel.
+    // Port omits the byte write; Fruit+0x80 has no reader.
     if (m_pPlayButton && m_pPlayButton->m_pFruitPiece) {
         Fruit* piece = m_pPlayButton->m_pFruitPiece;
         const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;

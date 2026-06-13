@@ -13,7 +13,7 @@
 //
 //   * Detect new fruit/bomb entities arriving in ActorManager (compared to
 //     the previous frame's snapshot) and log their initial pos, vel,
-//     gravity, fruitType, m_PlayerIdx, m_ChuckDelay, m_ZPosition.
+//     gravity, fruitType, m_PlayerIdx, m_SpawnDelay, m_ZPosition.
 //   * Detect wave transitions (m_pCurrentWave[0] changed) and dump the new
 //     wave's spawner configuration: placement, gravity, m_VelXScale,
 //     m_VelYScale, m_HorizMin/Max, m_SpawnMin/Max, m_Delay/m_DelayInc.
@@ -105,14 +105,14 @@ static void DumpWave(int frame, WAVE_INFO* w) {
 static void LogNewFruit(int frame, int spawnIdx, Fruit* f) {
     printf("[SPAWN-FRUIT @f=%d #%d] type=%d entity=%p pos=(%.1f,%.1f,%.1f)"
            " vel=(%.2f,%.2f,%.2f) grav=(%.2f,%.2f,%.2f) playerIdx=%d"
-           " chuckDelay=%.3f Z=%.1f timeScale=%.3f sliced=%d\n",
+           " spawnDelay=%.3f Z=%.1f timeScale=%.3f sliced=%d\n",
            frame, spawnIdx,
            (int)f->m_FruitType, (void*)f,
            f->pos.x, f->pos.y, f->pos.z,
            f->vel.x, f->vel.y, f->vel.z,
            f->m_Gravity.x, f->m_Gravity.y, f->m_Gravity.z,
            (int)f->m_PlayerIdx,
-           f->m_ChuckDelay, f->m_ZPosition,
+           f->m_SpawnDelay, f->m_ZPosition,
            f->m_TimeScale,
            (int)f->m_bSliced);
 }

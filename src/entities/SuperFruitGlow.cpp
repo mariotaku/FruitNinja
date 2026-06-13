@@ -147,10 +147,8 @@ void SuperFruitGlow::Update(float dt) {
     // Track fruit position (+0x08 = HUDControl::pos)
     if (m_pFruit) {
         pos = m_pFruit->pos;
-        // z = fruit(+0x9c) - 40.0f  (DAT_001c01a8; fruit +0x9c = m_Gravity.x)
-        // DIFFERS: original reads *(float*)(m_pFruit + 0x9c) directly; port uses
-        // m_pFruit->m_Gravity.x which is the same field at offset +0x9c in Fruit layout.
-        pos.z = m_pFruit->m_Gravity.x - SFG_Z_CORRECTION;
+        // z = fruit(+0x9c) - 40.0f  (DAT_001c01a8; fruit +0x9c = m_ZPosition)
+        pos.z = m_pFruit->m_ZPosition - SFG_Z_CORRECTION;
     }
 
     // Colour: RGB forced white, alpha = trunc(75 * m_Fade) gated to 0 when non-positive.

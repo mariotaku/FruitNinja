@@ -443,7 +443,7 @@ void SuperFruitControl::ExplodeSuperFruit()
 
         // Jiblet::Init(gravScale=1.0, fadeRate=0.0, fruitType, pos=host+0x74, vel, mdl, emitterHash=0, gravBase=angVel)
         // DIFFERS: binary passes host+0x74 as Vec3* (raw offset into Fruit; port field at +0x74 is
-        //   m_SliceImpulse (float), not a Vec3). Binary reuses the 12 bytes starting at +0x74 as a
+        //   m_SpawnDelay (float), not a Vec3). Binary reuses the 12 bytes starting at +0x74 as a
         //   Vec3 spawn-position cache written by Slice/CollisionResponse. Port casts raw.
         Vec3* hostJibPos = reinterpret_cast<Vec3*>(reinterpret_cast<uint8_t*>(host) + 0x74);
         jiblet->Init(1.0f, 0.0f, (int)hostFruitType, hostJibPos, &vel, mdl, 0, &angVel);
@@ -505,21 +505,21 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
     // preset is selected by game_work.gameMode (==2 -> Arcade, else default).
     // Then a 51% chance (Rand32(100) < 51) mirrors the arc horizontally by
     // negating m_Gravity.y, pos.x and vel.x.
-    fruit->m_Gravity.x = -5.0f;                          // [fruit+0x9c] = 0xc0a00000
+    fruit->m_Gravity.x = -5.0f;                          // [fruit+0xa0] = 0xc0a00000
     if (game_work.gameMode == 2) {                       // GAME_MODE_ARCADE; byte at game_work+0x04
         fruit->pos = Vec3(-35.0f, -260.0f, 0.0f);        // DAT_001bc104/0bc108/0bc10c
         fruit->vel = Vec3(0.5f, 8.5f, 0.0f);             // 0x3f000000, 0x41080000, DAT_001bc10c
-        fruit->m_Gravity.z = -7.5f;                      // [fruit+0xa4] = 0xc0f00000
-        fruit->m_Gravity.y = 0.0f;                       // [fruit+0xa0] = DAT_001bc10c
+        fruit->m_Gravity.z = -7.5f;                      // [fruit+0xa8] = 0xc0f00000
+        fruit->m_Gravity.y = 0.0f;                       // [fruit+0xa4] = DAT_001bc10c
     } else {
         fruit->pos = Vec3(-340.0f, -100.0f, 0.0f);       // DAT_001bc110/0bc114/0bc10c
         fruit->vel = Vec3(5.0f, 5.0f, 0.0f);             // 0x40a00000, 0x40a00000, DAT_001bc10c
-        fruit->m_Gravity.z = -4.5f;                      // [fruit+0xa4] = 0xc0900000
-        fruit->m_Gravity.y = 0.01f;                      // [fruit+0xa0] = DAT_001bc118
+        fruit->m_Gravity.z = -4.5f;                      // [fruit+0xa8] = 0xc0900000
+        fruit->m_Gravity.y = 0.01f;                      // [fruit+0xa4] = DAT_001bc118
     }
     // 51% chance: mirror the arc across the screen centreline.
     if (WaveManager::GetInstance()->GetRandom().Rand32(100) < 51) {  // cmp #0x32 / bhi
-        fruit->m_Gravity.y = -fruit->m_Gravity.y;        // [fruit+0xa0]
+        fruit->m_Gravity.y = -fruit->m_Gravity.y;        // [fruit+0xa4]
         fruit->pos.x       = -fruit->pos.x;              // [fruit+0x10]
         fruit->vel.x       = -fruit->vel.x;              // [fruit+0x1c]
     }
@@ -704,14 +704,10 @@ void SuperFruitControl::StopAllFruit()
         // Freeze fruit physics. These reproduce the binary's exact per-fruit
         // stop writes at Fruit+0x98 (float=0) and the zero-Vec3 at Fruit+0xa0,
         // plus the byte clear at Fruit+0x70.
-        // DIFFERS: binary zeroes the raw fields at +0x98 / +0xa0 (Vec3) / +0x70;
-        // the port expresses them through the named fields occupying those
-        // offsets (m_ZPosition, m_Gravity.y/.z + m_VisualScale.x, m_SliceAngle).
-        f->m_ZPosition = 0.0f;          // Fruit+0x98 = DAT_001ba6a4 (0.0f)
-        f->m_Gravity.y = 0.0f;          // Fruit+0xa0 } zero-Vec3 copy
-        f->m_Gravity.z = 0.0f;          // Fruit+0xa4 }
-        f->m_VisualScale.x = 0.0f;      // Fruit+0xa8 }
-        f->m_SliceAngle = 0;            // Fruit+0x70 (strb 0)
+        // Binary: vstr 0.0f -> [this,#0x98] (m_TimeScale); stm zero-Vec3 -> [this,#0xa0] (m_Gravity); strb 0 -> [this,#0x70] (m_bBallisticEnable).
+        f->m_TimeScale = 0.0f;          // Fruit+0x98 = DAT_001ba6a4 (0.0f)
+        f->m_Gravity = Vec3(0.0f, 0.0f, 0.0f);  // Fruit+0xa0..0xab zero-Vec3 copy
+        f->m_bBallisticEnable = 0;      // Fruit+0x70 (strb 0)
 
         // Only sliced fruits get their two half-bodies redirected.
         if (f->Sliced()) {

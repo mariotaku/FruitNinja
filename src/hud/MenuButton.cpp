@@ -254,7 +254,7 @@ void MenuButton::CreateFruit() {
         Fruit* fruit = static_cast<Fruit*>(e);
         fruit->m_RotVel1 = fruit->m_RotVel1 * FRUIT_ROTVEL_MULT;
         fruit->m_MenuGrowFade = 1.0f;
-        fruit->m_ChuckDelay = 0.0f;
+        fruit->m_SpawnDelay = 0.0f;
         fruit->m_ZPosition = FRUIT_ZPOS;
         // ASM-verified: 2026-05-22 binary @ 0x0014f0de (re-analyst).
         // Binary writes m_bMenuFling=1 (0x164) to mark this as a menu-context fruit.
