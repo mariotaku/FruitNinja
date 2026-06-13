@@ -50,9 +50,10 @@ public:
     // @ 0x00150378
     int UpdateSpecific(float dt) override;
 
-    // @ 0x0015068c — OnDeferComplete and ApplyModifier share the same body in the binary.
-    // TODO: 0x0015068c — WaveModifier::OnDeferComplete: shares body with ApplyModifier;
-    // should chain base OnDeferComplete then do wave-rewind + override injection if applicable.
+    // @ 0x0015068c — OnDeferComplete (vtable slot 5). Chains base, then rewinds
+    // WaveManager to m_OverideProbabilityPool wave (if applicable), SelectType()s
+    // the first m_OverrideCount entries, and appends them into WaveManager's
+    // current override list.
     void OnDeferComplete(bool unused, float* pExtra) override;
 
     int GetType() override { return 3; }  // binary @ 0x00150d40 returns 3

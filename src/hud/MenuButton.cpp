@@ -107,7 +107,7 @@ MenuButton::MenuButton()
       m_TouchX(0.0f), m_TouchY(0.0f), m_TouchPhase(0.0f),
       m_BackdropOffsetX(0.0f),
       m_BackdropScale(0.0f),
-      m_RandomOffset(-1.0f),
+      m_RandomOffset(0.0f),
       m_RotationSpeed(-1.0f),
       m_SparkleTimer(-1.0f),
       m_NewIndicatorTimer(-1.0f),
@@ -128,11 +128,11 @@ MenuButton::MenuButton()
       _pad149{0, 0, 0},
       m_pTrackedFruit(nullptr),
       m_bBackdropActive(1),
-      m_ShakeScale(1.0f, 1.0f, 1.0f),
+      m_ShakeScale(1.0f, 0.85f, 0.85f),
       m_LabelExtraAlpha(0.0f),
       m_HitInsetX(5.0f),
       m_HitInsetY(5.0f),
-      m_fieldReserved(0.0f),
+      m_fieldReserved(100.0f),
       m_NewBouncePhase(0.0f),
       m_ShakeTimer(0.0f),
       m_bEnabled(1),
@@ -196,16 +196,17 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_SparkleTimer   = -1.0f;
     m_NewIndicatorTimer = -1.0f;
     m_RotationSpeed  = -1.0f;
-    m_RandomOffset   = -1.0f;
+    m_RandomOffset   = 0.0f;
     m_BaseScale      = Vec3(0.0f, 0.0f, 0.0f);
     m_pFruitPiece    = nullptr;
     m_pFruitPiece_alt = nullptr;
     m_pEntity        = nullptr;
     m_pTrackedFruit  = nullptr;
     m_FadeAlphaIdx   = 0;
-    m_ShakeScale     = Vec3(1.0f, 1.0f, 1.0f);
-    // TODO: 0x0019b994 -- Init DAT constants for m_ShakeScale, m_fieldReserved, m_RandomOffset exact values
-    m_fieldReserved  = 0.0f;
+    // m_ShakeScale @ +0x154: x=1.0, y=0.85, z=0.85 (DAT_0019bafc=0.85f).
+    m_ShakeScale     = Vec3(1.0f, 0.85f, 0.85f);
+    // m_fieldReserved @ +0x16C: Init writes 100.0f (DAT_0019baf8 = 0x42c80000).
+    m_fieldReserved  = 100.0f;
     // compat fields
     m_bEnabled       = 1;
     m_AnimScale      = 1.0f;

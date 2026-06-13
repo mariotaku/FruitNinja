@@ -25,6 +25,7 @@ class  FruitSaveData;
 class HUDControl;
 class HUDControl3d;
 class SpeedControl;
+namespace Mortar { class Entity; }
 
 class WaveManager {
 public:
@@ -248,8 +249,9 @@ public:
     // 0x00121fa8: spawn N bombs.
     void SpawnBomb(long count, long type, SPAWNER_INFO* spawner, int playerIdx);
 
-    // 0x001225a0 (248 lines): spawn N fruits.
-    void SpawnFruit(long count, long fruitType, SPAWNER_INFO* spawner, int playerIdx);
+    // 0x001225a0 (248 lines): spawn N fruits. Returns the last spawned Entity*
+    // (binary @ 0x00124298 returns this_00); NULL if count < 1 or no entity allocated.
+    Mortar::Entity* SpawnFruit(long count, long fruitType, SPAWNER_INFO* spawner, int playerIdx);
 
     // 0x00122ad8: clear all unspawned spawner entries.
     void ClearUnspawned();

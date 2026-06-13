@@ -1,4 +1,5 @@
 #include "render/MatrixManager.h"
+#include "render/gl_funcs.h"
 #include "math/math3d.h"
 
 MatrixManager::MatrixManager()
@@ -86,11 +87,10 @@ void MatrixManager::UploadModelViewOnly() {
 // left-mul is skipped because the port targets a native-landscape window
 // (already documented on SetupLookAt above).
 //
-// GL_TEXTURE upload is intentionally omitted -- port shaders sample with
-// the raw a_uv attribute and have no texture-matrix uniform. If a future
-// caller ever needs animated UVs via m_Texture, a uniform path must be
-// added; the per-stack version counter is still maintained here so that
-// trigger would be detectable.
+// GL_TEXTURE matrix upload goes through the fixed-function shim
+// (glMatrixMode(GL_TEXTURE_MATRIX) + glLoadMatrixf) matching the binary.
+// Port shaders currently sample with raw a_uv and ignore the texture matrix,
+// but the upload is preserved for binary-call-graph fidelity.
 void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
     // If NOT skipping projection: recompute cached projection * view
     if (!skipProjection) {
@@ -112,12 +112,11 @@ void MatrixManager::_UploadCurrentMatrices(bool skipProjection) {
         m_WorldVersionUploaded = m_World.m_Version;
     }
 
-    // Mirror binary's dirty-gate: only mark the texture clean when it
-    // actually changed, so a future GLES2 texture-matrix uniform path can
-    // hook the dirty edge.
+    // Binary @ 0x00257018 (v1.6.1 _UploadCurrentMatrices): texture-matrix dirty
+    // gate. Runs unconditionally of the skipProjection arg in the binary.
     if (m_Texture.m_Version != m_TextureVersionUploaded) {
-        // TODO: 0x0019e31e — when GLES2 gains a texture-matrix uniform path,
-        //   upload m_Texture.m_Current here.
+        glMatrixMode(GL_TEXTURE_MATRIX);
+        glLoadMatrixf(m_Texture.m_Current.ptr());
         m_TextureVersionUploaded = m_Texture.m_Version;
     }
 }

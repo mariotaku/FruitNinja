@@ -65,3 +65,6 @@ function_hash_index.json
 
 # Pages output (assembled by tools/build_pages.py; uploaded as GH artifact)
 pages/
+
+# Game screenshots
+/screenshots

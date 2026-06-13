@@ -61,15 +61,18 @@ public:
     Jiblet();
     virtual ~Jiblet();
 
-    // Vtable slot 2: Binary @ 0x1e50c0.
-    // Sets pos, vel, accel, model, emitter hash, rotation, spin rates, splat timer, fade rate.
-    void Init(void* p1, long p2, Vec3* scaleOrNull) override;
+    // Binary @ 0x1e50c0 — bespoke 9-arg spawn entry called by Fruit slice code.
+    // NOT an override of Entity::Init vtable slot; distinct function.
+    void Init(float gravScale, float fadeRate, int fruitType,
+              Vec3* posIn, Vec3* velIn,
+              const Mortar::SmartPtr<Mortar::Model>& mdl,
+              uint32_t emitterHash, Vec3* gravBase);
 
     // Vtable slot 4: Binary @ 0x1e5330.
     // Quaternion-spin integrator, drip loop (SplatEntity::GetFree), emitter sync, bounds kill.
     void Update(float dt) override;
 
-    // Vtable slot 5: Draw. Binary (not pulled; renders m_pModel with m_Rotation at pos).
+    // Vtable slot 5: Draw. Binary @ 0x1e5750. Renders m_pModel with m_Rotation at pos.
     void Draw(Renderer& r) override;
 
     // Vtable slot 6: PostUpdate (binary @ 0x1e5c04). Empty.

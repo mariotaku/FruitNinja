@@ -115,7 +115,6 @@ public:
     // Called by InputManager::DispatchEvent.  Not a binary vtable slot —
     // InputTranslatorSDL drives dispatch by calling DispatchEvent on the
     // manager which routes here.
-    // TODO: 0x00195764 — route via SendIndividualTouchCallbacks once ported.
     virtual void              DispatchEvent(InputEvent* event) = 0;
 
     // ---- STUBS (binary) ----

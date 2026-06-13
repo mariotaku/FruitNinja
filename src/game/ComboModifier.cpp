@@ -3,11 +3,16 @@
 // ComboWasCanceled @ 0x00132b7c, FruitWasSliced @ 0x00132e10.
 
 #include "ComboModifier.h"
+#include "GameWork.h"
 #include "entities/Fruit.h"
 #include "entities/SlashEntity.h"
+#include "hud/MissControl.h"
 #include "engine/util/Delegate.h"
+#include "engine/math/Vec3.h"
 #include <cstdint>
 #include <list>
+
+uint32_t g_GameFrameFlags = 0;   // binary .bss @ 0x00332bc8 (shared frame-flags word)
 
 ComboModifier::ComboModifier()
     : GameModifier()
@@ -25,9 +30,23 @@ void ComboModifier::ResetSpecific() {
             this, &ComboModifier::ComboWasCanceled);
 }
 
-// @ 0x00132b48 — UpdateSpecific: OR global flag *GOT |= 0x80 each frame.
-// TODO: 0x00132b48 — OR into global combo-flag (GOT ptr unresolved)
-int ComboModifier::UpdateSpecific(float /*dt*/) { return 0; }
+// @ 0x00132b48 — UpdateSpecific: OR combo-active bit (0x80) into the shared
+// game frame-flags word each frame.
+//
+// RE (binary @ 0x132b48): loads a GOT-relative pointer (literal pool
+// DAT_0x132b6c=0x0019e5d4, DAT_0x132b70=0x7544; PC base 0x132b5c -> GOT entry
+// 0x002d8674 -> global @ 0x00332bc8, a standalone .bss uint32_t, NOT inside
+// game_work), then *p |= 0x80; returns 0.
+//
+// The global is a shared per-frame bitfield: different subsystems claim
+// different bits each frame -- 0x80 = combo-modifier active (set here, cleared
+// in ComboModifier::RemoveModifier @ 0x132d70 and PowerUpManager::SetDefaults/
+// Reset which zero the whole word); 0x40 = Game::Update slice trail (set @
+// 0x1b0444, cleared @ 0x1b07e8); 0x20 = tested by a DrawUpdate @ 0x1da688.
+int ComboModifier::UpdateSpecific(float /*dt*/) {
+    g_GameFrameFlags |= 0x80u;   // binary @ 0x132b60: orr r2,r2,#0x80 ; global @ 0x00332bc8
+    return 0;
+}
 
 // @ 0x00132e34
 // Binary: chain base ApplyModifier, then register:
@@ -56,10 +75,56 @@ void ComboModifier::FruitWasSliced(Fruit* fruit, int /*score*/, Mortar::Entity* 
 }
 
 // @ 0x00132b7c
-// Binary: combo-bonus popup loop (clear slash state, sum positions, post popup).
-// TODO: 0x00132b7c -- combo-bonus popup (needs popup infra)
-void ComboModifier::ComboWasCanceled(SlashEntity* /*slash*/) {
-    m_SlicedFruit.clear();
+// Binary: on combo cancel, if more than 2 fruit were sliced, average their
+// positions and post a combo-bonus popup via MissControl.
+//   slash+0x17c = m_ComboEntityType (reused here as the live combo count)
+//   slash+0x180 = m_pComboMissControl (passed to MakeCombo as entityType arg)
+//   slash+0x150 = m_ComboSliceArr[11] (fruit types written per accumulated slice)
+//   fruit+0x3c  = m_FruitType (uint8); fruit+0x10 = Entity::pos (Vec3);
+//   fruit+0x16c = the "in-combo" flag set by FruitWasSliced (cleared here)
+// DIFFERS: original = direct field stores via SlashEntity offsets; using
+// reinterpret_cast byte addressing because those fields are private in
+// SlashEntity (mirrors the existing fruit[0x16c] access in FruitWasSliced).
+void ComboModifier::ComboWasCanceled(SlashEntity* slash) {
+    uint8_t* s = reinterpret_cast<uint8_t*>(slash);
+
+    // slash->m_ComboEntityType (+0x17c) is reused as the live combo count.
+    int* pCount = reinterpret_cast<int*>(s + 0x17c);
+    *pCount = 0;
+
+    // <= 2 fruit: not a combo. Leave the list as-is (binary returns early
+    // without clearing -- but FruitWasSliced only ever fills it between
+    // cancels, so this path simply skips the popup).
+    if (m_SlicedFruit.size() <= 2) {
+        return;
+    }
+
+    // Accumulate average slice position. Binary seeds from a zero global Vec3.
+    Vec3 sum(0.0f, 0.0f, 0.0f);
+    int* comboArr = reinterpret_cast<int*>(s + 0x150); // m_ComboSliceArr[11]
+
+    std::list<Fruit*>::iterator it = m_SlicedFruit.begin();
+    while (it != m_SlicedFruit.end()) {
+        Fruit* fruit = *it;
+        int count = *pCount;
+        if (count < 10) {
+            uint8_t fruitType = reinterpret_cast<uint8_t*>(fruit)[0x3c];
+            *pCount = count + 1;
+            comboArr[count] = (int)fruitType;
+            const Vec3* fruitPos =
+                reinterpret_cast<const Vec3*>(reinterpret_cast<uint8_t*>(fruit) + 0x10);
+            sum += *fruitPos;
+        }
+        // Clear the in-combo flag set by FruitWasSliced, then drop from list.
+        reinterpret_cast<uint8_t*>(fruit)[0x16c] = 0;
+        it = m_SlicedFruit.erase(it);
+    }
+
+    sum /= (float)(*pCount);
+
+    MissControl* mc = MissControl::GetFree();
+    MissControl** pCombo = reinterpret_cast<MissControl**>(s + 0x180); // m_pComboMissControl
+    mc->MakeCombo(sum, *pCount, reinterpret_cast<int>(*pCombo));
 }
 
 void ComboModifier::ParseSpecific(TiXmlElement* /*xml*/) {}

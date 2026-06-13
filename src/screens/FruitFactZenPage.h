@@ -15,6 +15,8 @@
 //
 
 #include "FruitFactPage.h"
+#include "engine/asset/Texture.h"
+#include "engine/util/SmartPtr.h"
 
 class FruitFactZenPage : public FruitFactPage {
 public:
@@ -29,6 +31,12 @@ public:
 
     static void LoadContent();    // Binary @ 0x0017fa34
     static void UnloadContent();  // Binary @ 0x0017fb00
+
+protected:
+    // +0xd0: zen-page texture, constructed null in ctor (binary @ 0x0017fcd4),
+    // loaded by LoadContent (0x0017fa34), released to null in Release (0x0017fb44)
+    // and UnloadContent (0x0017fb00).
+    Mortar::SmartPtr<Mortar::Texture> m_TexZen;   // @+0xd0
 };
 
 #endif // FN_SCREENS_FRUIT_FACT_ZEN_PAGE_H

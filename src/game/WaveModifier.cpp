@@ -231,12 +231,48 @@ WaveModifier::WaveModifier()
 
 WaveModifier::~WaveModifier() {}
 
-// @ 0x0015068c — shares function body with ApplyModifier in the binary.
-// TODO: 0x0015068c — body: chain base OnDeferComplete, then if m_WaveOverride<10000 &
-// !purchased & < WaveMgr.curWave: SetCurrentWave(idx,-1); SelectType() each override;
-// insert m_OverideEntries into WaveManager override-list; clear.
+// @ 0x0015068c -- WaveModifier overrides GameModifier vtable slot [5]
+// (OnDeferComplete, base @ 0x00140890). Ghidra mislabels this "ApplyModifier"
+// because the body chains the base slot-5 function; the vtable proves it is the
+// OnDeferComplete slot (WaveModifier vtable @ 0x2cc8b0 slot[5]=0x0015068c,
+// base GameModifier vtable @ 0x2cc6d8 slot[5]=0x00140890=OnDeferComplete).
+// Body (verbatim from binary):
+//   (1) chain GameModifier::OnDeferComplete(unused, pExtra).
+//   (2) if m_OverideProbabilityPool < 10000 && !unused(=isPurchased) &&
+//       m_OverideProbabilityPool < WaveManager current-wave-counter:
+//       SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0).
+//       Binary reads the counter at WaveManager+0x238 (confirmed via
+//       SetCurrentWave @ 0x00125d1c writing (playerIdx+0x8e)*4 = 0x238 for P0);
+//       the port maps that slot as m_WaveCount[0] per WaveManager.h's 64-bit
+//       DIFFERS block, matching the rest of this file's convention.
+//   (3) if m_OverideEntries empty, return.
+//   (4) SelectType() each of the first m_OverrideCount override entries.
+//   (5) insert the whole m_OverideEntries range into the WaveManager current
+//       override list (GetCurrentOverideList(0) == m_ProbabilityOverride[gameMode]),
+//       then clear m_OverideEntries.
 void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
     GameModifier::OnDeferComplete(unused, pExtra);
+
+    if (m_OverideProbabilityPool < 10000 && !unused) {
+        WaveManager* w = WaveManager::GetInstance();
+        if (m_OverideProbabilityPool < w->m_WaveCount[0]) {
+            WaveManager::GetInstance()->SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0);
+        }
+    }
+
+    if (m_OverideEntries.empty()) {
+        return;
+    }
+
+    for (int i = 0; i < m_OverrideCount &&
+                    i < (int)m_OverideEntries.size(); ++i) {
+        m_OverideEntries[i].SelectType();
+    }
+
+    std::vector<PROBABILITY_OVERIDE>& dst =
+        WaveManager::GetInstance()->m_ProbabilityOverride[game_work.gameMode];
+    dst.insert(dst.end(), m_OverideEntries.begin(), m_OverideEntries.end());
+    m_OverideEntries.clear();
 }
 
 // Binary @ 0x001282d4. After chaining base ApplyModifier:

@@ -8,6 +8,7 @@
 #include "hud/HUD.h"
 #include "util/StringHash.h"
 #include "engine/util/Delegate.h"
+#include "asset/TextureManager.h"
 #include <tinyxml2.h>
 #include <cstring>
 
@@ -29,9 +30,49 @@ ExplodyFruitModifier::FruitSplosion::FruitSplosion(
     , m_pChainHead(nullptr)
     , m_ChainCount(0)
 {
-    // TODO: 0x00135620 — copy entity pos to m_Pos (+0x08); set flags=0x80 (+0x34);
-    // register FruitWasKilled delegate; register ADingoAteMyBaby removal delegate;
-    // chain into global splosion linked list for combo detection
+    // ASM @ 0x00135620 (disasm 0x135654..0x135824).
+    // HUDControl3d() base ctor already ran (member-init list). The scalar fields
+    // m_p0..m_p3 (+0x84..+0x90), m_Const80 (+0x80 = DAT_00135868 = 0), m_pEntity
+    // (+0x7c), m_typeIndex (+0x94), m_pChainNext/m_pChainHead (+0x98/+0x9c = 0)
+    // are set by the init list above, matching the binary's stores.
+
+    // +0x08 m_Pos = entity pos (binary loads entity+0x10..0x18 via ldmia,
+    // stores to this+0x08..0x10). Mortar::Entity::pos is the Vec3 at +0x10.
+    if (m_pEntity) {
+        pos = m_pEntity->pos;
+    }
+    // +0x10 m_Pos.z overwritten with DAT_0013586c = 0xC59C3800f = -5000.0f
+    // (binary: vstr s15,[r4,#0x10] right after the pos copy).
+    pos.z = -5000.0f;
+
+    // +0x34 m_LayerFlags = 0x80 (binary: mov r3,#0x80; str r3,[r4,#0x34]).
+    m_LayerFlags = 0x80;
+
+    // +0x74 m_Texture = LoadLocalisedTexture("explosion_radius.tex")
+    // (binary: r1 = GOT-rel string @ 0x00280d8c; bl LoadLocalisedTexture 0x0010a758;
+    //  result SmartPtr<Texture>::operator= into this+0x74).
+    m_Texture = Mortar::TextureManager::LoadLocalisedTexture("explosion_radius.tex");
+
+    // TODO: 0x001356b8 — subscribe FruitWasKilled to the per-entity kill event.
+    //   Binary: Delegate1<void,Fruit*>::Make(this,&FruitSplosion::FruitWasKilled)
+    //   then Mortar::Event1<Fruit*>::operator+= on (m_pEntity + 0x178).
+    //   BLOCKED: the per-Fruit/entity FruitWasKilled Event1<Fruit*> at entity+0x178
+    //   is not ported (port Entity = 0x3C, Fruit = 0x118; no kill-event member),
+    //   and FruitWasKilled() body itself is an unported stub. Method ptr =
+    //   GOT[DAT_00135878].
+
+    // TODO: 0x001356fc — chain into the file-static FruitSplosion combo list
+    //   (head = GOT[DAT_0013587c]) for explody-chain combo detection.
+    //   Binary: if head==0 -> m_ChainCount(+0xa0)=1; else walk to head->m_pChainHead
+    //   (or head itself), link this->m_pChainHead, head->m_pChainNext=this,
+    //   ++head->m_ChainCount; when count>2 && m_typeIndex==1:
+    //     MissControl::GetFree()->MakeCombo(m_Pos, head->m_ChainCount, 0);
+    //     FN::AddToCurrentScore(head->m_ChainCount, 0, false, false);
+    //   then register ADingoAteMyBaby on head's m_RemoveCallback via
+    //   Delegate1<void,HUDControl*>::Make(head, &FruitSplosion::ADingoAteMyBaby)
+    //   assigned into this+0x38 (m_RemoveCallback). Method ptr = GOT[DAT_00135880].
+    //   BLOCKED: needs the file-static chain-head global (unported) and the
+    //   ADingoAteMyBaby handler body (unported stub).
 }
 
 ExplodyFruitModifier::FruitSplosion::~FruitSplosion() {}
@@ -115,25 +156,33 @@ void ExplodyFruitModifier::ParseSpecific(TiXmlElement* xml) {
     m_Radius   += m_ForceMax;
 }
 
-// @ 0x001358d4
+// @ 0x001358d4 (function entry 0x00135888)
 // Delegate3<void,Fruit*,int,Mortar::Entity*> target; subscribed in ApplyModifier.
-// Binary: if game_work byte[+0x330] != 0 -> return;
-// else new(0xa4) FruitSplosion(+0x20,+0x24,+0x28,+0x2c, fruit, +0x30 as int);
-//      HUD::AddControl(GameHUD, splosion, 0)
-// TODO: 0x001358d4 — binary passes hudRoot+0x40 as first arg to AddControl; resolve HUD subtree offset
+// Binary disasm:
+//   type  = (u8)fruit->m_FruitType           ; ldrb r0,[r1,#0x3c]  (r1 = first delegate arg = Fruit*)
+//   info  = Fruit::FruitInfo(type)           ; = &g_FruitInfoArray[type] (stride 0x338 in v1.6.1)
+//   if (info->m_bIsSuperFruit /*+0x330*/) return;   ; ldrb r3,[r0,#0x330]; cmp r3,#0; bne return
+//   new(0xa4) FruitSplosion(modifier+0x20,+0x24,+0x28,+0x2c, FRUIT*, modifier+0x30 as int)
+//       NOTE: the ctor's entity arg (r1) is the FRUIT pointer (r7), NOT the 3rd Entity* delegate arg.
+//   HUD::AddControl(*(GameWork+0x40), splosion, 0)   ; *(GameWork+0x40) == game_work.mHud
+// DIFFERS: the prior port body checked game_work[0x330] (a band-aid) and passed the 3rd 'entity'
+//   delegate arg to the ctor; both are wrong per binary. Corrected to the FruitInfo super-fruit
+//   gate and to passing the fruit. Binary does NOT null-check fruit or the HUD here.
+// LAYOUT NOTE: v1.6.1 reads the HUD pointer at GameWork+0x40 (confirmed in FruitWasSliced and
+//   WaveManager::Reset @0x0012bd0c). The port header places mHud at +0x3c with a 4-byte pad at
+//   +0x40 (v1.5.1 layout). Symbolic game_work.mHud is used here so this function stays faithful
+//   regardless; the GameWork +0x3c/+0x40 reconciliation is a separate struct-wide task.
 void ExplodyFruitModifier::FruitWasSliced(
-    Fruit* fruit, int /*score*/, Mortar::Entity* entity)
+    Fruit* fruit, int /*score*/, Mortar::Entity* /*entity*/)
 {
-    if (!fruit) return;
-    if (reinterpret_cast<const uint8_t*>(&game_work)[0x330] != 0) return;
+    const ::FruitInfo* info = Fruit::FruitInfo((long)fruit->m_FruitType);
+    if (info->m_bIsSuperFruit != 0) return;   // FRUIT_INFO+0x330: super-fruit doesn't explode
 
     FruitSplosion* splosion = new FruitSplosion(
         m_ForceMin, m_ForceInc, m_ForceMax, m_Radius,
-        entity, (int)m_FruitTypeIndex);
+        fruit, (int)m_FruitTypeIndex);
 
-    if (game_work.mHud) {
-        game_work.mHud->AddControl(splosion, false);
-    }
+    game_work.mHud->AddControl(splosion, false);
 }
 
 GameModifier* ExplodyFruitModifier::Clone() {

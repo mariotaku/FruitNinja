@@ -28,11 +28,15 @@ void FruitFactPage::HidePage() {
     m_Active = 0;
 }
 
-// TODO: 0x00173760 -- ShowSubObjects: show all child HUD controls
+// Binary @ 0x00173760 -- empty base-class virtual (bare `bx lr`).
+// Concrete FruitFactPage subclasses override to show their child controls;
+// the base default is a no-op (verified against v1.6.1 binary disassembly).
 void FruitFactPage::ShowSubObjects() {
 }
 
-// TODO: 0x0017375c -- HideSubObjects: hide all child HUD controls
+// Binary @ 0x0017375c -- empty base hook (single `bx lr`).
+// Concrete page subclasses override this to hide their child HUD controls;
+// the FruitFactPage base body is a genuine no-op in the binary.
 void FruitFactPage::HideSubObjects() {
 }
 

@@ -1570,9 +1570,12 @@ bool WaveManager::IsWaveProcessing(int playerIdx) {
 // SpawnFruit — per docs/functions/wave.md
 // ----------------------------------------------------------------------------
 
-void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int playerIdx) {
+Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int playerIdx) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-    if (!am) return;
+    if (!am) return NULL;
+
+    // Binary @ 0x00124298 returns the last spawned Entity* (this_00).
+    Mortar::Entity* lastSpawned = NULL;
 
     // Z-stride loop counter starts at 1 (binary iVar8 = 1, increments each iteration).
     // binary @ 0x001225a0
@@ -1702,7 +1705,9 @@ void WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO* info, int
         if (info) f->m_TimeScale = info->m_TimeScale;  // spawner+0x14
 
         f->Chuck(chuckDelay);
+        lastSpawned = e;
     }
+    return lastSpawned;
 }
 
 // ----------------------------------------------------------------------------

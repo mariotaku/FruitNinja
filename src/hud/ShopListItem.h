@@ -151,10 +151,26 @@ public:
     // +0x280: cost text alpha (m_CostAlpha * 255.0f clamped -> byte alpha)
     float m_CostAlpha;                // +0x280
 
-    // +0x284..+0x2A3: trailing fields set by Create (not ctor), not yet fully RE'd.
+    // +0x284..+0x2A3: trailing fields initialised by the CTOR @ 0x001b41f0, NOT by Create.
     // operator_new(0x2a4) confirmed @ ShopScreen::Init 0x001b42ac.
-    // TODO: 0x001b42ac -- RE trailing +0x284..+0x2A3 fields written by ShopListItem::Create
-    uint8_t _padTrailing[0x20];       // +0x284..+0x2A3 (32 bytes)
+    // Create (0x001b27f0) does not touch this region; its highest own-field write is
+    // m_CostAlpha (+0x280). The ctor zeroes all floats and sets m_TintA to 0xFF.
+
+    // +0x284: 4-byte gap -- NOT written by ctor or Create. Left uninitialized by
+    // operator_new(0x2a4); presumably set by Move/Draw or genuine alignment pad.
+    uint8_t _pad4[0x04];              // +0x284..+0x287
+
+    // +0x288..+0x2A0: per-item tint/colour state. Ctor @ 0x001b41f0 zeroes all
+    // floats and sets the alpha byte at +0x290 to 0xFF. Create does NOT touch these.
+    float   m_TintR;                 // +0x288  (ctor = 0.0f)
+    float   m_TintG;                 // +0x28C  (ctor = 0.0f)
+    uint8_t m_TintA;                 // +0x290  (ctor = 0xFF)
+    uint8_t _pad5[0x03];             // +0x291..+0x293  (alignment after byte)
+    float   m_TintB;                 // +0x294  (ctor = 0.0f)
+    float   _trailF0;                // +0x298  (ctor = 0.0f)
+    float   _trailF1;                // +0x29C  (ctor = 0.0f)
+    uint8_t m_TrailFlag;             // +0x2A0  (ctor = 0)
+    uint8_t _pad6[0x03];             // +0x2A1..+0x2A3  tail pad (sizeof == 0x2A4)
 
 public:
     // Binary @ 0x0015c978: if (m_pShopScreen) m_pShopScreen->SetSelected(this).

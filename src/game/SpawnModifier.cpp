@@ -7,6 +7,7 @@
 #include "GameWork.h"
 #include <tinyxml2.h>
 #include <cmath>
+#include <cstdio>
 
 SpawnModifier::SpawnModifier()
     : GameModifier()
@@ -84,11 +85,17 @@ void SpawnModifier::ParseSpecific(TiXmlElement* xml) {
         sp->QueryFloatAttribute("delayinc", &s->m_DelayInc);
 
         const char* grav = sp->Attribute("gravity");
-        if (grav) {
+        if (grav && *grav) {
+            // @ 0x0014f5a0 ParseVector(const char*): starts from a zero-default
+            // Vec3 (static .bss default @ 0x002d9288 == {0,0,0}), parses x with
+            // _OS_atof, then y after the first comma (if non-empty), then z after
+            // the second comma (if non-empty). Missing components stay 0.0f and
+            // the whole Vec3 overwrites the ctor's (0,-1,0) gravity default.
             float gx = 0.0f, gy = 0.0f, gz = 0.0f;
-            tinyxml2::XMLUtil::ToFloat(grav, &gx);
-            (void)gx; (void)gy; (void)gz;
-            // TODO: 0x0014be94 — parse gravity as "x,y,z" CSV into s->m_Gravity_{x,y,z}
+            sscanf(grav, "%f,%f,%f", &gx, &gy, &gz);
+            s->m_Gravity_x = gx;
+            s->m_Gravity_y = gy;
+            s->m_Gravity_z = gz;
         }
 
         m_Spawners.push_back(s);

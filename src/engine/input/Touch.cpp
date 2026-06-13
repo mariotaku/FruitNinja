@@ -219,25 +219,39 @@ uint32_t Touch::GetTouchInReigion(int x, int y, int w, int h) {
     return 0;
 }
 
-// Binary @ 0x00195764 -- SendIndividualTouchCallbacks.
-// Per-slot: AxisEvent(X), AxisEvent(Y), ButtonPressed for press/held/release/up.
-// Action codes: 0x89+i (button), 0x99+i (X axis), 0xa9+i (Y axis), i in 0..7.
-// States: 1=press, 2=held, 4=release, 8=up.
-// Port specific: InputDevice::AxisEvent / ButtonPressed not yet declared;
-//   body is a no-op stub until those virtual methods are ported into InputDevice.
-void Touch::SendIndividualTouchCallbacks(InputDevice* /*dev*/) {
-    // Stub: requires InputDevice::AxisEvent and InputDevice::ButtonPressed.
-    // Full body per RE pseudocode (tmp/re-touch.md):
-    //   for i in 0..7:
-    //     code = 0x89 + i
-    //     if phase < 1 (active):
-    //       dev->AxisEvent(code+0x10, 0x20, currX, currX-prevX, 0, 0)  // X
-    //       dev->AxisEvent(code+0x20, 0x20, currY, currY-prevY, 0, 0)  // Y
-    //       if phase == -1: dev->ButtonPressed(code, 1, 1.0, 0, 0, dev) // press
-    //       dev->ButtonPressed(code, 2, 1.0, 0, 0, dev)                 // held
-    //     else:
-    //       if extId != 0 && touchId != 0: ButtonPressed(code, 4, ...)  // release
-    //       dev->ButtonPressed(code, 8, 1.0, 0, 0, dev)                 // up
+// Binary @ 0x00195764 (v1.5.1) / 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks.
+// Per slot i in 0..7 (action code = 0x89+i, X-axis = 0x99+i, Y-axis = 0xa9+i):
+//   if phase < 1 (active):
+//     AxisEvent(0x99+i, 0x20, currX, currX-prevX, 0, 0)
+//     AxisEvent(0xa9+i, 0x20, currY, currY-prevY, 0, 0)
+//     if phase == -1: ButtonPressed(0x89+i, 1, 1.0f, 0, 0)  // press-edge
+//     ButtonPressed(0x89+i, 2, 1.0f, 0, 0)                  // held
+//   else (inactive):
+//     if extId != 0 && touchId != 0: ButtonPressed(0x89+i, 4, 1.0f, 0, 0)  // release
+//     ButtonPressed(0x89+i, 8, 1.0f, 0, 0)                  // up
+// Arg order matches binary signatures @ 0x0027582c (AxisEvent) / 0x00275864 (ButtonPressed).
+void Touch::SendIndividualTouchCallbacks(InputDevice* dev) {
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        const TouchState& s = states1[i];
+        unsigned long code = (unsigned long)(0x89 + i);
+        unsigned long mask;
+        if (s.phase < 1) {
+            dev->AxisEvent((long)(code + 0x10), 0x20,
+                           (float)s.currX, (float)(s.currX - s.prevX), 0, 0);
+            dev->AxisEvent((long)(code + 0x20), 0x20,
+                           (float)s.currY, (float)(s.currY - s.prevY), 0, 0);
+            if (s.phase == -1) {
+                dev->ButtonPressed(code, 1, 1.0f, 0, 0);
+            }
+            mask = 2;
+        } else {
+            if (s.extId != 0 && s.touchId != 0) {
+                dev->ButtonPressed(code, 4, 1.0f, 0, 0);
+            }
+            mask = 8;
+        }
+        dev->ButtonPressed(code, mask, 1.0f, 0, 0);
+    }
 }
 
 // Tier A slot-returning region scan. Mirrors binary's free function
@@ -264,18 +278,21 @@ int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
     return -1;
 }
 
-// Port specific: Touch::Clear -- no binary symbol; added so InputDeviceBada::Reset()
-// can wipe all pending touch state. Zeroes both state arrays, resets ring indices.
-// TODO: 0x00195c00 -- verify whether binary inlines this or calls a helper.
+// Binary @ 0x0019553c -- Mortar::Touch::Clear().
+// Called by InputDeviceBada::Reset @ 0x00195c00 (NOT inlined). Real helper symbol.
+// Zeroes ONLY states2 (8 slots, phase=1); leaves states1 and the ring buffer untouched.
+// Disassembly confirmed: loops 8 times over states2 (base this+0xe0, stride 0x1c),
+// writing prevX=prevY=currX=currY=extId=touchId=0, phase=1 per slot.
 void Touch::Clear() {
     for (int i = 0; i < MAX_SLOTS; i++) {
-        memset(&states1[i], 0, sizeof(TouchState));
-        memset(&states2[i], 0, sizeof(TouchState));
-        states1[i].phase = 1;
-        states2[i].phase = 1;
+        states2[i].prevX   = 0;
+        states2[i].prevY   = 0;
+        states2[i].currX   = 0;
+        states2[i].currY   = 0;
+        states2[i].extId   = 0;
+        states2[i].touchId = 0;
+        states2[i].phase   = 1;
     }
-    eventBuffer.m_eventHead = 0;
-    eventBuffer.m_eventTail = 0;
 }
 
 // ---------------------------------------------------------------------------

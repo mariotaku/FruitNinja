@@ -16,26 +16,33 @@
 //   m_ZoomT@+0x164, m_ZoomTarget(Vec3)@+0x168, m_ZoomScale@+0x174, m_RollScale@+0x178,
 //   and shifts m_ShakeIntensity/m_ShakeIntensityInit to +0x17c/+0x180 before m_OnZoomDone@+0x184.
 FruitCamera::FruitCamera()
-    : m_pFollowEntity(0),
-      m_CameraMode(0),
-      m_TiltYaw(0), m_TiltPitch(0),
-      m_ShakeDir(Vec2::Zero()),
-      m_ShakeAngle(0), _pad142(0),
-      m_Target(Vec2::Zero()),
-      m_field14c(1.0f),
-      m_LookAt(0.0f, 0.0f, 0.0f),
-      m_Zoom(1.0f),
-      m_RollOut(0), _pad162(0),
-      m_ZoomT(0.0f),
-      m_ZoomTarget(0.0f, 0.0f, 0.0f),
-      m_ZoomScale(1.0f),
-      m_RollScale(1.0f),
-      m_ShakeIntensity(0.0f),
-      m_ShakeIntensityInit(0.0f),
-      m_OnZoomDone()
+    : m_pFollowEntity(0),                 // +0x12c str r3(=0)
+      m_CameraMode(0),                    // +0x130 str r3(=0)
+      m_TiltYaw(0), m_TiltPitch(0),       // +0x134/+0x136 strh r3(=0)
+      m_ShakeDir(Vec2::Zero()),           // +0x138 <- ldmia of `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
+      m_ShakeAngle(0), _pad142(0),        // +0x140 NOT written by ctor; zeroed for port determinism
+      m_Target(Vec2::Zero()),             // +0x144 <- same `Zero` global @ 0x002d92a0 (Vec2 = 0,0)
+      m_field14c(0.0f),                   // +0x14c vstr s15 ; s15 = DAT_001edbf0 = 0.0f
+      m_LookAt(0.0f, 0.0f, 0.0f),         // +0x150 NOT written by ctor; zeroed for port determinism
+      m_Zoom(1.0f),                       // +0x15c vstr s14 = 1.0f (0x3f800000)
+      m_RollOut(0), _pad162(0),           // +0x160 strh r3(=0)
+      m_ZoomT(0.0f),                      // +0x164 vstr s15 = 0.0f
+      m_ZoomTarget(0.0f, 0.0f, 0.0f),     // +0x168 <- ldmia of `Zero` global @ 0x002d9288 (Vec3 = 0,0,0)
+      m_ZoomScale(1.0f),                  // +0x174 vstr s14 = 1.0f
+      m_RollScale(1.0f),                  // +0x178 NOT written by ctor; 1.0f keeps zoom roll neutral
+      m_ShakeIntensity(0.0f),             // +0x17c vstr s15 = 0.0f
+      m_ShakeIntensityInit(0.0f),         // +0x180 NOT written by ctor; zeroed for port determinism
+      m_OnZoomDone()                      // +0x184 Delegate0<void>::Delegate0
 {
-    // TODO: 0x1edb48 — resolve exact DAT value for m_ZoomTarget initial vec from FruitCamera ctor
-    // TODO: 0x1edb48 — resolve m_field14c initial value (spec says =1.0; confirm from DAT)
+    // ctor @ 0x1edb48 (v1.6.1) fully resolved from disassembly:
+    //   m_ShakeDir/m_Target  <- `Zero` Vec2 global (GOT @ 0x002d882c -> 0x002d92a0), both (0,0)
+    //   m_ZoomTarget         <- `Zero` Vec3 global (GOT @ 0x002d8248 -> 0x002d9288), (0,0,0)
+    //   m_field14c, m_ZoomT, m_ShakeIntensity  <- s15 = DAT_001edbf0 = 0.0f
+    //   m_Zoom, m_ZoomScale  <- s14 = 1.0f
+    //   m_TiltYaw/Pitch, m_CameraMode, m_pFollowEntity, m_RollOut  <- 0
+    // Fields the binary ctor leaves UNwritten (heap garbage in the binary, but the
+    // port zero-inits them for deterministic behaviour): m_ShakeAngle(+0x140),
+    // m_LookAt(+0x150), m_RollScale(+0x178), m_ShakeIntensityInit(+0x180).
 }
 
 FruitCamera::~FruitCamera() {
@@ -264,23 +271,28 @@ void FruitCamera::UpdateShake(float dt) {
     }
 }
 
-// StartZoomIn — arm zoom-in mode; binary body not yet fully RE'd.
-// TODO: 0x1edf24 — resolve StartZoomIn / ZoomIn binary symbol and exact signature
+// StartZoomIn — binary symbol FruitCamera::Transition(_Vector3<float>, float, float, Delegate0<void>) @ 0x1bef54.
+// ASM (0x1bef54): str #2 -> [this+0x130]; ldmia target,{x,y,z} -> [this+0x168..0x170];
+//   vstr s0 -> [this+0x174] (zoomScale); vstr s1 -> [this+0x178] (rollScale);
+//   Delegate0::operator=([this+0x184], onDone) (tail b 0x106068).
+// DIFFERS: prior port stub also did `m_ZoomT = 0.0f` — the binary does NOT touch m_ZoomT
+//   in Transition; zoom-in resumes from the current m_ZoomT (ctor inits it 0, zoom-out clamps it to 0).
 void FruitCamera::StartZoomIn(const Vec3& target, float zoomScale, float rollScale,
                                Mortar::Delegate0<void> onDone) {
-    m_ZoomTarget = target;
+    m_CameraMode = 2;
     m_ZoomScale  = zoomScale;
     m_RollScale  = rollScale;
+    m_ZoomTarget = target;
     m_OnZoomDone = onDone;
-    m_ZoomT      = 0.0f;
-    m_CameraMode = 2;
 }
 
-// StartZoomOut — arm zoom-out mode.
-// TODO: 0x1edf24 — resolve StartZoomOut / ZoomOut binary symbol and exact signature
-void FruitCamera::StartZoomOut(Mortar::Delegate0<void> onDone) {
-    m_OnZoomDone = onDone;
-    m_ZoomT      = 1.0f;
+// StartZoomOut — binary symbol FruitCamera::TransitionOut() @ 0x1bede8.
+// ASM (0x1bede8): mov r3,#3; str r3,[r0,#0x130]; bx lr.
+// DIFFERS: prior port stub took a Delegate0 onDone and set m_OnZoomDone + m_ZoomT=1.0;
+//   the binary TransitionOut takes NO arguments and writes ONLY m_CameraMode=3.
+//   (m_ZoomT is left as-is — typically 1.0 from a completed zoom-in — and the existing
+//    m_OnZoomDone callback is reused/fires when zoom-out reaches 0 in UpdateCamera.)
+void FruitCamera::StartZoomOut() {
     m_CameraMode = 3;
 }
 
