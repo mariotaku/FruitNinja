@@ -4,8 +4,83 @@
 #include "asset/AnimationList.h"
 #include "asset/Mesh.h"
 #include "asset/Model.h"
+#include <cstring>
 
 namespace Mortar {
+
+// ---------------------------------------------------------------------------
+// UpdateBinding<N> bodies -- B-spline evaluator, 6 instantiations (N=0..5).
+//
+// All six share the same high-level shape; N selects per-instantiation DAT scale
+// constants and (for N==0) the no-blend nearest-sample path.
+//
+// Shared body:
+//   1. Cast param_2 as BSplineKnots* via v.m_track (VectorTrack is a superset).
+//   2. k = BSplineKnots::FindKnot(time, knots)
+//   3. dim = *(u16*)(knots+0x0e)   (VectorTrack::m_dim)
+//   4. Accumulate sample[dim] from knot rows (N>=1: basis blend; N==0: single row)
+//   5. For each Binding b in v.m_bindings:
+//        n = min(b.m_count, dim)
+//        if (b.m_normalized) -> write clamped u8[0..255] using per-N SCALE
+//        else                -> memcpy n floats to b.m_target
+//
+// The exact DAT float pairs (scale / clamp) and the spline math bodies
+// (BSplineKnots::FindKnot, ClampKnotIdx, BasisFunc<2>) are follow-up RE tasks.
+// ---------------------------------------------------------------------------
+
+// N=0 @ 0x0026ec5c -- nearest-knot sample (no basis blend)
+template<>
+void UpdateBinding<0>(float time, AnimBindings::Vector const& v) {
+    // TODO: 0x0026ec5c -- nearest-knot sample: FindKnot, single row read, write loop.
+    //   Per-N DAT scale pair @ DAT_0026ed4c / DAT_0026ed50 (exact float values TBD).
+    //   N=0 skips basis weighting: sample = m_data + dim*4*FindKnot(time, knots).
+    (void)time; (void)v;
+}
+
+// N=1 @ 0x00270010 -- B-spline BasisFunc<2> quadratic blend
+template<>
+void UpdateBinding<1>(float time, AnimBindings::Vector const& v) {
+    // TODO: 0x00270010 -- B-spline quadratic blend: FindKnot + ClampKnotIdx + BasisFunc<2>,
+    //   accumulate sample[] weighted sum, write loop.
+    //   Per-N DAT scale pair @ DAT_0x002701a8 / DAT_0x002701ac (exact float values TBD).
+    (void)time; (void)v;
+}
+
+// N=2 @ 0x002701b0 -- B-spline BasisFunc<2>
+template<>
+void UpdateBinding<2>(float time, AnimBindings::Vector const& v) {
+    // TODO: 0x002701b0 -- B-spline BasisFunc<2>.
+    //   Per-N DAT scale pair @ DAT_0x00270348 / DAT_0x0027034c (exact float values TBD).
+    (void)time; (void)v;
+}
+
+// N=3 @ 0x00270350 -- B-spline BasisFunc<2>
+template<>
+void UpdateBinding<3>(float time, AnimBindings::Vector const& v) {
+    // TODO: 0x00270350 -- B-spline BasisFunc<2>.
+    //   Per-N DAT scale pair @ DAT_0x002704e8 / DAT_0x002704ec (exact float values TBD).
+    (void)time; (void)v;
+}
+
+// N=4 @ 0x002704f0 -- B-spline BasisFunc<2>
+template<>
+void UpdateBinding<4>(float time, AnimBindings::Vector const& v) {
+    // TODO: 0x002704f0 -- B-spline BasisFunc<2>.
+    //   Per-N DAT scale pair @ DAT_0x00270688 / DAT_0x0027068c (exact float values TBD).
+    (void)time; (void)v;
+}
+
+// N=5 @ 0x00270690 -- B-spline BasisFunc<2>
+template<>
+void UpdateBinding<5>(float time, AnimBindings::Vector const& v) {
+    // TODO: 0x00270690 -- B-spline BasisFunc<2>.
+    //   Per-N DAT scale pair @ DAT_0x00270828 / DAT_0x0027082c (exact float values TBD).
+    (void)time; (void)v;
+}
+
+// ---------------------------------------------------------------------------
+// AnimationState methods
+// ---------------------------------------------------------------------------
 
 // Binary @ 0x001ad150
 AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
@@ -36,7 +111,7 @@ AnimationState::AnimConstIter AnimationState::GetAnimIter(const AsciiString& nam
 
 // Binary @ 0x001ace2c -- iterate map.begin() forward idx times, bounds-checked
 AnimationState::AnimIter AnimationState::GetAnimIter(unsigned long idx) {
-    AnimIter it = m_AnimList->m_Anims.begin();
+    AnimIter it  = m_AnimList->m_Anims.begin();
     AnimIter end = m_AnimList->m_Anims.end();
     for (unsigned long i = 0; i < idx && it != end; ++i) {
         ++it;
@@ -46,7 +121,7 @@ AnimationState::AnimIter AnimationState::GetAnimIter(unsigned long idx) {
 
 // Binary @ 0x001acd8c -- const overload
 AnimationState::AnimConstIter AnimationState::GetAnimIter(unsigned long idx) const {
-    AnimConstIter it = m_AnimList->m_Anims.begin();
+    AnimConstIter it  = m_AnimList->m_Anims.begin();
     AnimConstIter end = m_AnimList->m_Anims.end();
     for (unsigned long i = 0; i < idx && it != end; ++i) {
         ++it;
@@ -54,22 +129,22 @@ AnimationState::AnimConstIter AnimationState::GetAnimIter(unsigned long idx) con
     return it;
 }
 
-// Binary @ 0x001ace8c
+// Binary @ 0x001ace8c -- iter==end() ? null : &iter->second
 Animation* AnimationState::GetAnimation(const AsciiString& name) const {
     AnimConstIter it = GetAnimIter(name);
     if (it == m_AnimList->m_Anims.end()) {
         return 0;
     }
-    return it->second;
+    return const_cast<Animation*>(&it->second);
 }
 
-// Binary @ 0x001acdf8
+// Binary @ 0x001acdf8 -- by index
 Animation* AnimationState::GetAnimation(unsigned long idx) const {
     AnimConstIter it = GetAnimIter(idx);
     if (it == m_AnimList->m_Anims.end()) {
         return 0;
     }
-    return it->second;
+    return const_cast<Animation*>(&it->second);
 }
 
 // Binary @ 0x001ad398
@@ -94,65 +169,79 @@ void AnimationState::PlayAnimIdx(unsigned long idx, float time, bool loop) {
     RebindAnim();
 }
 
-// Binary @ 0x001ad218
+// Binary @ 0x0026f1ac
+// Rebuilds m_Bindings.m_Vectors from the current animation's track groups.
+// For each track group, resizes m_Vectors, fills v.m_track, calls GenerateBindings,
+// and collapses empty entries back.
+// Stride magic (confirmed by reciprocal-division constants in binary):
+//   AnimTrackGroup stride: 0x34 (DAT_0026f370 = 0xC4EC4EC5)
+//   VectorTrack stride:    0x3c (DAT_0026f368 = 0xEEEEEEEF)
 void AnimationState::RebindAnim() {
     m_Bindings.m_Bones.clear();
     m_Bindings.m_Vectors.clear();
-    // TODO: 0x001ad218 -- track-group walk + Model::GenerateBindings dispatch (R3 dependency).
-    //   Spec (from binary @ 0x001ad218):
-    //     if (m_Mesh && IsPlaying()) {
-    //       grp = &m_CurrentIter->second->m_trackGroups;  // Animation+0x40 (vector<AnimTrackGroup>)
-    //       for (g = 0; g < grp->size(); ++g) {
-    //         base = m_Vectors.size();
-    //         tracks = &(*grp)[g].m_vectorTracks;          // AnimTrackGroup+0x28 (vector<VectorTrack>)
-    //         m_Vectors.resize(base + tracks->size(), AnimBindings::Vector());
-    //         for (t = 0; t < tracks->size(); ++t) {
-    //           AnimBindings::Vector& v = m_Vectors[base + t];
-    //           v.field_0x0 = (*tracks)[t].m_typeTag;       // VectorTrack+0x00 copied to Vector+0x00
-    //           m_Mesh->GenerateBindings((*grp)[g].m_name,  // AnimTrackGroup+0x?? (AsciiString)
-    //                                    (*tracks)[t].m_targetName,  // VectorTrack+0x14 (AsciiString)
-    //                                    v.m_bindings);     // Vector+0x04 (vector<Vector::Binding>)
-    //           if (v.m_bindings.empty()) {                // shrink back: drop the empty entry
-    //             --base;
-    //             m_Vectors.resize(base + tracks->size(), AnimBindings::Vector());
-    //           }
-    //         }
-    //       }
-    //     }
-    //   Blocked on: AnimTrackGroup / AnimTrackGroup::VectorTrack layout (forward-decl only,
-    //   AnimationList.h), full Animation struct layout (Animation+0x40 m_trackGroups), and
-    //   Model::GenerateBindings(AsciiString const&, AsciiString const&,
-    //   vector<AnimBindings::Vector::Binding>&) const (itself // TODO @ 0x00192f5c in Model.h,
-    //   blocked on AnimBindings::Vector::Binding). All R3.
-}
-
-// Binary @ 0x001accd0
-void AnimationState::SetTime(float t) {
-    if (!IsPlaying()) {
+    if (!m_Mesh.IsValid() || m_CurrentIter == m_AnimList->m_Anims.end()) {
         return;
     }
+
+    Animation& anim = m_CurrentIter->second;
+    uint32_t numGroups = (uint32_t)anim.m_trackGroups.size();
+    for (uint32_t g = 0; g < numGroups; ++g) {
+        AnimTrackGroup& grp = anim.m_trackGroups[g];
+        uint32_t base = (uint32_t)m_Bindings.m_Vectors.size();
+        uint32_t numTracks = (uint32_t)grp.m_vectorTracks.size();
+        m_Bindings.m_Vectors.resize(base + numTracks);
+        for (uint32_t t = 0; t < numTracks; ++t) {
+            VectorTrack& trk = grp.m_vectorTracks[t];
+            AnimBindings::Vector& v = m_Bindings.m_Vectors[base + t];
+            v.m_track = &trk;
+            // arg1 = grp.m_name  (channel/group name, AsciiString at AnimTrackGroup+0x00)
+            // arg2 = trk.m_targetName (mesh/node target name, AsciiString at VectorTrack+0x14)
+            // arg3 = v.m_bindings (vector<Binding> at Vector+0x04)
+            m_Mesh->GenerateBindings(grp.m_name, trk.m_targetName, v.m_bindings);
+            if (v.m_bindings.empty()) {
+                --base;
+                m_Bindings.m_Vectors.resize(base + numTracks);
+            }
+        }
+    }
+}
+
+// Binary @ 0x0026ee84
+// Advances time, handles loop wrap / stop, then dispatches UpdateBinding<N>
+// for each element of m_Bindings.m_Vectors (at this+0x1c, stride 0x10).
+void AnimationState::SetTime(float t) {
+    if (m_CurrentIter == m_AnimList->m_Anims.end()) {
+        return;
+    }
+
+    float dur = m_CurrentIter->second.m_duration;
     m_Time = t;
-    // TODO: 0x001accd0 -- duration check + loop/stop logic + UpdateBinding<N> dispatch (R3 dependency).
-    //   Spec (from binary @ 0x001accd0), continuing after m_Time = t:
-    //     float dur = m_CurrentIter->second->m_duration;  // Animation+0x38 (float)
-    //     if (dur < t) {
-    //       if (!m_Loop) {                                 // this+0x3c
-    //         m_CurrentIter = m_AnimList->m_Anims.end();   // stop (this+0x2c = end iter)
-    //       } else {
-    //         while (dur < t) t -= dur;                    // wrap into [0,dur)
-    //         m_Time = t;
-    //       }
-    //     }
-    //     for (i = 0; i < m_Vectors.size(); ++i) {
-    //       AnimBindings::Vector& v = m_Vectors[i];
-    //       // dispatch on a u16 type tag at *(v.m_bindings.data) + 0xc, i.e. v field +0x00
-    //       // dereferenced (*(short*)(*(int*)&v + 0xc)); cases 0..5 -> UpdateBinding<N>(&v, m_Time)
-    //       switch (tag) { case 0: UpdateBinding<0>(&v, m_Time); ... case 5: UpdateBinding<5>(&v, m_Time); }
-    //     }
-    //   Blocked on: full Animation struct layout (Animation+0x38 m_duration), the
-    //   AnimBindings::Vector::Binding layout that carries the u16 type tag at +0xc, and the
-    //   UpdateBinding<N> template family (not yet ported — interpolates a binding channel).
-    //   All R3.
+
+    if (dur < t) {
+        if (!m_Loop) {
+            m_CurrentIter = m_AnimList->m_Anims.end();
+        } else {
+            while (dur < m_Time) {
+                m_Time -= dur;
+            }
+        }
+    }
+
+    // Walk m_Bindings.m_Vectors (this+0x1c .. this+0x20), stride 0x10.
+    uint32_t numVectors = (uint32_t)m_Bindings.m_Vectors.size();
+    for (uint32_t i = 0; i < numVectors; ++i) {
+        AnimBindings::Vector& v = m_Bindings.m_Vectors[i];
+        uint16_t tag = v.m_track->m_channelType;  // *(u16*)(v.m_track + 0xc)
+        switch (tag) {
+            case 0: UpdateBinding<0>(m_Time, v); break;
+            case 1: UpdateBinding<1>(m_Time, v); break;
+            case 2: UpdateBinding<2>(m_Time, v); break;
+            case 3: UpdateBinding<3>(m_Time, v); break;
+            case 4: UpdateBinding<4>(m_Time, v); break;
+            case 5: UpdateBinding<5>(m_Time, v); break;
+            default: break;
+        }
+    }
 }
 
 // Binary @ 0x001accc0

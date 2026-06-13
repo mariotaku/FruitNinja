@@ -321,6 +321,30 @@ void Mesh::RebuildEffectBindings() {
     m_WVPProp   = m_OwnGroup->GetList().GetProperty("WorldViewProjection");
 }
 
+// vtable slot 6 (+0x18): GenerateBindings(Vector) @ 0x0027350c
+// Walks m_GroupsByName rb-tree. For each node:
+//   - finds channelName in node's TextureProps map (node+0x3c);
+//   - if not found: compares node name vs channelName and targetName vs uvwChannelName static;
+//   - if matched and targetName == opacityChannelName: calls EffectProperty::TryGetValuePtr<Vec3>,
+//     builds Binding{normalized=0, target=Vec3ptr, count=*(u32*)(prop+8)}, push_back if non-null.
+// With EffectProperty/SharedEffectProperties defunct-stubbed, GetPropertiesGroup / GetProperty
+// return null, so no bindings are produced. This is correct for the port.
+// Defunct: EffectProperty channel binding -- binary @ 0x0027350c
+void Mesh::GenerateBindings(AsciiString const& /*channelName*/,
+                            AsciiString const& /*targetName*/,
+                            std::vector<AnimBindings::Vector::Binding>& /*out*/) {
+    // Defunct: EffectProperty channel binding -- binary @ 0x0027350c
+    // EffectProperty path is defunct-stubbed; produces zero bindings (correct).
+}
+
+// vtable slot 7 (+0x1c): GenerateBindings(Bone) @ 0x0027385c (empty BX LR in binary)
+// Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
+void Mesh::GenerateBindings(AsciiString const& /*channelName*/,
+                            AsciiString const& /*targetName*/,
+                            std::vector<AnimBindings::Bone::Binding>& /*out*/) {
+    // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
+}
+
 // Defunct: debug draw primitive -- no-op stub; binary @ 0x00193ed8
 void Mesh::DrawCube(float /*x*/, float /*y*/, float /*z*/,
                     Colour /*colour*/, DrawEffectContainer* /*fx*/) {

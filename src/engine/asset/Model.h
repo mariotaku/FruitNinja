@@ -5,6 +5,7 @@
 #include "util/AsciiString.h"
 #include "util/ReferenceCounter.h"
 #include "asset/Skeleton.h"
+#include "asset/AnimationState.h"
 #include <vector>
 #include <string>
 
@@ -63,13 +64,17 @@ public:
     // Binary @ 0x0019335c — per-mesh RebuildEffectBindings (inner geometry calls are defunct stubs).
     void SetEffectGroup(Mortar::SmartPtr<EffectGroup> effectGroup);
 
-    // Binary @ 0x00192f10 — per-mesh GenerateBindings forward (Bone slot).
-    // Blocked on AnimBindings::Bone::Binding declaration; declare when porting AnimBindings.
-    // TODO: 0x00192f10 -- GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Bone::Binding>&) const
+    // Binary @ 0x00236e8c — walks m_nodes and calls Mesh vtable slot 7 (+0x1c) per node.
+    // (Non-virtual Model member; not on Model's vtable.)
+    void GenerateBindings(AsciiString const& channelName,
+                          AsciiString const& targetName,
+                          std::vector<AnimBindings::Bone::Binding>& out) const;
 
-    // Binary @ 0x00192f5c — per-mesh GenerateBindings forward (Vector slot).
-    // Blocked on AnimBindings::Vector::Binding declaration; declare when porting AnimBindings.
-    // TODO: 0x00192f5c -- GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&) const
+    // Binary @ 0x00236e48 — walks m_nodes and calls Mesh vtable slot 6 (+0x18) per node.
+    // (Non-virtual Model member; not on Model's vtable.)
+    void GenerateBindings(AsciiString const& channelName,
+                          AsciiString const& targetName,
+                          std::vector<AnimBindings::Vector::Binding>& out) const;
 };
 
 } // namespace Mortar

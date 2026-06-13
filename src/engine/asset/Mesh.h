@@ -276,8 +276,21 @@ public:
     static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
                          DrawEffectContainer* fx);
 
-    // TODO: 0x001b0d18 -- GenerateBindings(AsciiString const&, AsciiString const&, vector<AnimBindings::Vector::Binding>&);
-    // AnimBindings::Vector::Binding nested-typedef edge case; deferred until AnimBindings is fully ported.
+    // vtable slot 6 (+0x18): GenerateBindings(Vector) @ 0x0027350c
+    // Walks m_GroupsByName rb-tree matching channelName/targetName vs uvwChannelName/opacityChannelName
+    // statics. If the matched EffectProperty* Vec3 target is non-null, builds a Binding and push_backs
+    // into out. With EffectProperty subsystem defunct-stubbed in the port, produces zero bindings.
+    // Defunct: EffectProperty channel binding -- binary @ 0x0027350c
+    void GenerateBindings(AsciiString const& channelName,
+                          AsciiString const& targetName,
+                          std::vector<AnimBindings::Vector::Binding>& out) override;
+
+    // vtable slot 7 (+0x1c): GenerateBindings(Bone) @ 0x0027385c (empty BX LR in binary)
+    // Bone bindings are never produced by Mesh; binary body is BX LR.
+    // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
+    void GenerateBindings(AsciiString const& channelName,
+                          AsciiString const& targetName,
+                          std::vector<AnimBindings::Bone::Binding>& out) override;
 
     // ---- end STUBS ----
 };
