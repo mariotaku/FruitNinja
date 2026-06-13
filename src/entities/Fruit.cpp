@@ -47,6 +47,14 @@
 // so cross-TU subscribers compile without a raw extern (GOT not applicable in port).
 static Mortar::Event3<Fruit*, int, Mortar::Entity*> g_FruitWasSliced;
 
+// File-scope global: fired in KillFruit (binary GOT, referenced at 0x1def10).
+// Fires BEFORE the per-fruit m_OnKilled event. Arg: (Fruit* this).
+static Mortar::Event1<Fruit*> g_FruitKilled;
+
+// File-scope global: fired in Update (binary GOT, referenced at 0x1dfc0c).
+// Fires AFTER the per-fruit m_OnExpired event. Arg: (Fruit* this).
+static Mortar::Event1<Fruit*> g_FruitExpired;
+
 Mortar::Event3<Fruit*, int, Mortar::Entity*>& Fruit::FruitWasSlicedEvent() {
     return g_FruitWasSliced;
 }
@@ -161,6 +169,8 @@ Fruit::Fruit()
     , m_bCriticalEligible(0)
     , m_ScaleAnim(0.0f)
     , m_bDrawWhole(0)
+    , m_Field160(0)
+    , m_Field164(0)
 {
     entityType = 0;
 }
@@ -651,6 +661,13 @@ void Fruit::Update(float dt) {
         // NOTE: binary does NOT force emitter2.z to -5000.0f (only emitter1).
     }
 
+    // Fire per-fruit m_OnExpired then global — binary @ 0x1dfc00 (per-fruit) + 0x1dfc0c (global).
+    // Gated: if m_SliceImpulse (+0x74) > 0 (slice in progress), skip — binary bhi skip @ 0x1dfbf0.
+    if (!(m_SliceImpulse > 0.0f)) {
+        m_OnExpired(this);
+        g_FruitExpired(this);
+    }
+
     if (CheckHasGoneOffscreen()) {
         KillFruit(true);
     }
@@ -899,6 +916,11 @@ void Fruit::KillFruit(bool doMissPenalty) {
     if (m_TrackerID != 0) {
         ET_RemoveEntity(0, m_TrackerID);
     }
+
+    // Fire global then per-fruit killed events — binary @ 0x1def10 (global) + 0x1def28 (per-fruit).
+    // Both fire before the flags |= 0x10 mark so subscribers see the pre-killed state.
+    g_FruitKilled(this);
+    m_OnKilled(this);
 
     flags |= ENT_KILLED;
 }
@@ -1340,10 +1362,13 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // r7 in binary = the score local from the scoring block; port carries it via
     // g_FruitWasSliced_points (0 if gate not entered, matching likely binary r7 value).
     g_FruitWasSliced(this, g_FruitWasSliced_points, hitter);
+    // Per-fruit m_OnSliced — binary @ 0x1de5b4 (main path) and 0x1de9cc (early-return path).
+    // Both paths fire with identical args (this, points, hitter); port fires once here since
+    // the two binary paths are merged into one in the current CollisionResponse port.
+    m_OnSliced(this, g_FruitWasSliced_points, hitter);
 
     // v1.6.1 super-fruit: notify slice path.
     // Binary @ 0x001be630: SuperFruitControl::SuperFruitSliced gates on FruitInfo[+0x330].
-    // TODO: #31 — per-Fruit m_OnSliced (+0x170) fire site deferred (Fruit struct extension blocked).
     SuperFruitControl::SuperFruitSliced(this, 0, hitter);
 
     return 0;

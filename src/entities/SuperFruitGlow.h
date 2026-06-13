@@ -74,6 +74,10 @@ public:
     // Non-virtual helper (used from SuperFruitControl when fruit is sliced).
     // Sets m_Sliced flag so Update can decay the fade.
     void SetSliced() { m_bPendingRemoval = 0; /* set glow-decay path */ }
+
+    // Called when the tracked fruit fires m_OnKilled (binary @ 0x1c06bc wiring).
+    // Clears m_pFruit so Update/Release no longer reference the dead entity.
+    void OnFruitKilled(Fruit* fruit);
 };
 
 #ifdef __bada__

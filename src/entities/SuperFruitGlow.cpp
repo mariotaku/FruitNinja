@@ -42,14 +42,12 @@ SuperFruitGlow::SuperFruitGlow(Fruit* fruit)
     // +0x30: HUDControl m_LayerFlags — ctor sets per spec (0x80)
     m_LayerFlags = 0x80;
 
-    // TODO: 0x1c06bc — subscribe Delegate1<void,Fruit*>::Make(this,
-    //   &SuperFruitGlow::OnFruitSliced) to the owning Event1<Fruit*>.
-    //   The event owner (Fruit or a global per-fruit signal) is not yet ported;
-    //   Fruit::sizeof==0x118 and SuperFruitControl::sizeof==0x108 are both
-    //   layout-asserted. The event owner must be RE'd to identify the correct
-    //   struct and offset before this can be wired.
-    //   Binary: SuperFruitGlow ctor @ 0x1c06bc builds delegate on stack (local_24)
-    //   and calls Event1<Fruit*>::operator+=.
+    // Subscribe to m_pFruit->m_OnKilled (+0x178) — binary @ 0x1c06bc:
+    //   add r7,r7,#0x178; bl Event1::operator+= (0x112508).
+    if (m_pFruit) {
+        m_pFruit->m_OnKilled += Mortar::Delegate1<void, Fruit*>::Make(
+            this, &SuperFruitGlow::OnFruitKilled);
+    }
 
     // ctor @ 0x1c06bc: GameSound::SFXPlay("pome-lp", 1.0, 0.0, finishCb) -> m_pSound.
     // Binary: vol  s0 = 0x3f800000 = 1.0f
@@ -74,11 +72,14 @@ SuperFruitGlow::~SuperFruitGlow() {
 }
 
 // slot3: Release @ 0x1c01c8
-// Binary: T_1621(); if(m_pFruit) Event1<Fruit*> -= delegate (unsubscribe).
+// Binary: T_1621(); if(m_pFruit) m_pFruit->m_OnKilled -= delegate (unsubscribe @ 0x1c021c).
 void SuperFruitGlow::Release() {
-    // TODO: 0x1c01c8 — unsubscribe Delegate1<void,Fruit*>::Make(this,
-    //   &SuperFruitGlow::OnFruitSliced) from the owning Event1<Fruit*>.
-    //   Same event owner as ctor subscribe TODO above (not yet ported).
+    // Unsubscribe from m_pFruit->m_OnKilled (+0x178) — binary @ 0x1c01dc ldr m_pFruit,
+    //   guarded if != 0, then add r0,r5,#0x178; bl Event1::operator-= (0x10ad84).
+    if (m_pFruit) {
+        m_pFruit->m_OnKilled -= Mortar::Delegate1<void, Fruit*>::Make(
+            this, &SuperFruitGlow::OnFruitKilled);
+    }
     m_pFruit = 0;
     HUDControl3d::Release();
 }
@@ -161,4 +162,10 @@ void SuperFruitGlow::Update(float dt) {
 bool SuperFruitGlow::SetToMultiplayerState() {
     Release();
     return HUDControl::SetToMultiplayerState();
+}
+
+// Called when m_pFruit fires m_OnKilled. Clears the fruit pointer so
+// Update and Release no longer reference the dead entity.
+void SuperFruitGlow::OnFruitKilled(Fruit* /*fruit*/) {
+    m_pFruit = 0;
 }

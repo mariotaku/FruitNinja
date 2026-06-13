@@ -49,8 +49,9 @@ static_assert(sizeof(FruitModelInfo) == 0x24, "FruitModelInfo sizeof must match 
 // Matches original Fruit : Mortar::Entity
 // Physics: ballistic arc with quaternion rotation, 2-body split on slice
 // ASM-verified: 2026-04-29T00:00Z binary @ 0x001764dc + 0x00176708 (asm-inspector, base-shift unaffected)
-// Binary sizeof(Fruit) = 0x118 (280). EntityFactory @ 0x0017421c:
-// operator_new(0x118). Layout cross-verified by re-analyst 2026-05-17
+// Binary sizeof(Fruit) = 0x18c (396). v1.6.1 CreateEntity does operator_new(0x18c).
+// Tail fields 0x118..0x18c (events + padding) added per #31 spec.
+// 0x00..0x118 layout cross-verified by re-analyst 2026-05-17
 // against Ghidra struct + Init/Update/Ctor/IsOffscreen disassembly.
 class Fruit : public Mortar::Entity {  // Entity = 60 bytes, ends at +0x3B
 public:
@@ -101,7 +102,16 @@ public:
     uint8_t  _pad_10E[2];                  // +0x10E..+0x10F
     float    m_ScaleAnim;                  // +0x110  (init=0.0)
     uint8_t  m_bDrawWhole;                 // +0x114  (init=0)
-    uint8_t  _pad_115[3];                  // +0x115..+0x117  -> total sizeof = 0x118
+    uint8_t  _pad_115[3];                  // +0x115..+0x117
+
+    uint8_t  _pad_118[0x48];               // +0x118..+0x15F  reserved (no ctor write, no reader)
+    uint32_t m_Field160;                   // +0x160  ctor=0; write-at-construct, opaque
+    uint8_t  m_Field164;                   // +0x164  ctor=0; write-at-construct, opaque
+    uint8_t  _pad_165[0xB];               // +0x165..+0x16F  padding to event block
+    Mortar::Event3<Fruit*, int, Mortar::Entity*> m_OnSliced;  // +0x170 (8B) fired in CollisionResponse
+    Mortar::Event1<Fruit*> m_OnKilled;     // +0x178 (8B) fired in KillFruit; SuperFruitGlow subscribes
+    Mortar::Event1<Fruit*> m_OnExpired;    // +0x180 (8B) fired in Update (+0x74 <= 0 path)
+    uint8_t  _pad_188[4];                  // +0x188..+0x18B  trailing pad -> sizeof 0x18c
 
     Fruit();
     ~Fruit();
@@ -266,7 +276,7 @@ public:
 };
 
 #ifdef __bada__
-static_assert(sizeof(Fruit) == 0x118, "Fruit sizeof must match binary 0x118");
+static_assert(sizeof(Fruit) == 0x18c, "Fruit sizeof must match binary 0x18c");
 static_assert(__builtin_offsetof(Fruit, m_FruitType)                == 0x3C, "");
 static_assert(__builtin_offsetof(Fruit, m_bNoPowerUp)               == 0x3D, "");
 static_assert(__builtin_offsetof(Fruit, m_pEmitter1)                == 0x40, "");
@@ -298,6 +308,11 @@ static_assert(__builtin_offsetof(Fruit, m_bSpawnedByCriticalSplash) == 0x10C, ""
 static_assert(__builtin_offsetof(Fruit, m_bCriticalEligible)        == 0x10D, "");
 static_assert(__builtin_offsetof(Fruit, m_ScaleAnim)                == 0x110, "");
 static_assert(__builtin_offsetof(Fruit, m_bDrawWhole)               == 0x114, "");
+static_assert(__builtin_offsetof(Fruit, m_Field160)                 == 0x160, "");
+static_assert(__builtin_offsetof(Fruit, m_Field164)                 == 0x164, "");
+static_assert(__builtin_offsetof(Fruit, m_OnSliced)                 == 0x170, "");
+static_assert(__builtin_offsetof(Fruit, m_OnKilled)                 == 0x178, "");
+static_assert(__builtin_offsetof(Fruit, m_OnExpired)                == 0x180, "");
 #endif
 
 #endif
