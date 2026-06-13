@@ -260,6 +260,7 @@ void BakedStringBox::Layout() {
 }
 
 // SetGradient  binary @ 0x0024566c
+// ASM-verified: 2026-06-13T03:20Z binary @ 0x0024566c (asm-inspector)
 void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
     if (m_GradTop.r != top.r || m_GradTop.g != top.g || m_GradTop.b != top.b || m_GradTop.a != top.a ||
         m_GradBottom.r != bottom.r || m_GradBottom.g != bottom.g || m_GradBottom.b != bottom.b || m_GradBottom.a != bottom.a ||
@@ -275,6 +276,7 @@ void BakedStringBox::SetGradient(Colour top, Colour bottom, bool perGlyph) {
 }
 
 // SetShadow  binary @ 0x002462c0
+// ASM-verified: 2026-06-13T03:20Z binary @ 0x002462c0 (asm-inspector)
 void BakedStringBox::SetShadow(float scale, Colour col, Vec3 offset, bool flag) {
     if (m_ShadowScale != scale ||
         m_ShadowCol.r != col.r || m_ShadowCol.g != col.g || m_ShadowCol.b != col.b || m_ShadowCol.a != col.a ||
