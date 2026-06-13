@@ -50,7 +50,8 @@
        of the canvas.  resize() sets its CSS width/height to the same letterboxed
        dimensions as the canvas (scale*960 x scale*640), so the splash always
        covers exactly the game viewport rectangle.  object-fit:cover scales the
-       512x512 PNG up to fill that 3:2 rect, cropping top/bottom as needed.
+       authentic 800x480 (5:3) splash up to fill that 3:2 rect, cropping the
+       left/right edges as needed.
        The black letterbox bars outside #viewport's flex-centered child area are
        #viewport's own black background -- the splash never bleeds past the
        canvas rect.
@@ -76,7 +77,10 @@
       position: absolute;
       background: #000;
       border-radius: 12px;
-      box-shadow: 0 0 20px 10px #000;
+      /* Asymmetric feather: the negative Y offset shifts the shadow up so the
+         DOWNWARD reach (blur+spread+offsetY = 14+4-8) is only ~10px and stops
+         short of the copyright lines, while the top/sides stay soft (~26px). */
+      box-shadow: 0 -8px 14px 4px #000;
       z-index: 11;
       pointer-events: none;
     }
@@ -127,39 +131,41 @@
       transition: opacity 0.3s ease;
     }
 
-    #tap-text {
-      color: #fff;
-      font-size: 2.8em;
-      font-weight: bold;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      text-shadow: 0 0 24px rgba(255,255,255,0.6), 0 2px 8px rgba(0,0,0,0.5);
+    /* Game-asset launch UI -- no modern text.  #tap-play is the in-game white
+       play button (textures/play_button.tex) reused as the single "tap to
+       start" button.  Audio on/off is chosen via #sound-toggle (top-right),
+       mirroring the in-game menu.  JS resize() sets pixel sizes relative to the
+       canvas height. */
+    #tap-play {
+      display: block;
       cursor: pointer;
-      padding: 0.2em 0.5em;
-    }
-
-    #tap-silent {
-      color: #aaa;
-      font-size: 1.05em;
-      letter-spacing: 0.08em;
-      text-transform: lowercase;
-      cursor: pointer;
-      padding: 0.4em 1em;
-      border: 1px solid #555;
-      border-radius: 4px;
-      background: transparent;
-      font-family: inherit;
       -webkit-tap-highlight-color: transparent;
-      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+      filter: drop-shadow(0 4px 14px rgba(0,0,0,0.55));
+      transition: transform 0.12s ease, filter 0.12s ease;
     }
-
-    #tap-silent:hover, #tap-silent:focus {
-      color: #ccc;
-      border-color: #888;
+    #tap-play:hover, #tap-play:focus {
+      transform: scale(1.06);
+      filter: drop-shadow(0 4px 18px rgba(255,255,255,0.35));
       outline: none;
     }
 
-    /* pulse keyframe removed -- tap buttons are static (no bounce/scale animation) */
+    /* Sound toggle: absolutely positioned at the overlay's top-right, like the
+       in-game menu's audio buttons.  Swaps sound.png (on) <-> sound_cross.png
+       (off); its state decides whether the game starts with audio. */
+    #sound-toggle {
+      position: absolute;
+      display: block;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+      transition: transform 0.12s ease;
+    }
+    #sound-toggle:hover, #sound-toggle:focus {
+      transform: scale(1.08);
+      outline: none;
+    }
   </style>
 </head>
 <body>
@@ -180,7 +186,7 @@
          resize() sizes it identically to the canvas (same letterboxed rect).
          object-fit:cover fills the 3:2 rect from the 512x512 PNG.
          Referenced by relative URL -- loads immediately, before .data bundle. -->
-    <img id="splash-img" src="splash.png" alt="" draggable="false">
+    <img id="splash-img" src="splash.webp" alt="" draggable="false">
 
     <!-- Loading cover: black, feathered (radius + drop-shadow) strip drawn over
          the splash's baked "Loading..." text. resize() centres it on the label
@@ -203,8 +209,13 @@
          Both buttons call fn_user_started() so BootWait can proceed.
          After dismiss the overlay is removed from DOM. -->
     <div id="tap-overlay" aria-modal="true" role="dialog" aria-label="Start game">
-      <span id="tap-text" role="button" tabindex="0" aria-label="Tap to start">TAP TO START</span>
-      <button id="tap-silent" tabindex="0">tap to start without audio</button>
+      <!-- Sound toggle (top-right, like the in-game menu). Default ON; tapping
+           it flips the icon and the audio-start choice. -->
+      <img id="sound-toggle" src="sound.webp" role="button" tabindex="0"
+           aria-label="Toggle sound" alt="Sound on" draggable="false">
+      <!-- Single play button: starts the game with audio on/off per the toggle. -->
+      <img id="tap-play" src="play_button.webp" role="button" tabindex="0"
+           alt="Tap to start" draggable="false">
     </div>
   </div>
 
@@ -221,6 +232,8 @@
     var loadingCover = document.getElementById('loading-cover');
     var progressWrap = document.getElementById('progress-bar-wrap');
     var tapOverlay   = document.getElementById('tap-overlay');
+    var tapPlay      = document.getElementById('tap-play');
+    var soundToggle  = document.getElementById('sound-toggle');
 
     function resize() {
       var ww = window.innerWidth, wh = window.innerHeight;
@@ -249,28 +262,50 @@
         tapOverlay.style.top    = Math.floor((wh - ch) / 2) + 'px';
       }
 
+      /* Game-asset launch UI: sizes scale with the canvas height.  The play
+         button is 2x the previous size (0.40 of canvas height).  The square
+         sound toggle sits at the overlay's top-right corner (a small inset),
+         mirroring the in-game menu's audio buttons. */
+      if (tapPlay) {
+        var playSz = Math.round(ch * 0.40);
+        tapPlay.style.width  = playSz + 'px';
+        tapPlay.style.height = playSz + 'px';
+      }
+      if (soundToggle) {
+        var sndSz = Math.max(Math.round(ch * 0.11), 28);
+        var sndPad = Math.round(ch * 0.045);
+        soundToggle.style.width  = sndSz + 'px';
+        soundToggle.style.height = sndSz + 'px';
+        soundToggle.style.top    = sndPad + 'px';
+        soundToggle.style.right  = sndPad + 'px';
+      }
+
       /* Loading cover + progress bar: both centre on the splash's baked
          "Loading..." label so the bar visually replaces that text.
-         fLabel is the label's vertical centre as a fraction of the 512x512
-         image height.  Map through object-fit:cover: the 512x512 image is
-         scaled so its larger dimension fills the canvas rect, then centered.
-         For a 3:2 canvas (wider than tall relative to the square image), cover
-         scales by max(cw/512, ch/512), making the image taller than ch and
-         cropping top/bottom equally, so the label lands in the lower third. */
+         The splash is the authentic 800x480 Bada loading screen (the device's
+         480x800 portrait Res/Splash.png rotated 90deg to landscape).  fLabel is
+         the "Loading..." text centre as a fraction of the splash height.
+         Map through object-fit:cover: the image is scaled by
+         max(cw/IMG_W, ch/IMG_H) so it fully covers the canvas rect, then
+         centred.  For this 5:3 splash in a 3:2 canvas the height fills exactly
+         and the left/right edges crop, so the label lands at fLabel down. */
+      var IMG_W = 800, IMG_H = 480;
       var canvasLeft = Math.floor((ww - cw) / 2);
       var canvasTop  = Math.floor((wh - ch) / 2);
-      var imgScale   = Math.max(cw / 512, ch / 512);
-      var imgH       = 512 * imgScale;
+      var imgScale   = Math.max(cw / IMG_W, ch / IMG_H);
+      var imgH       = IMG_H * imgScale;
       var imgTop     = canvasTop + (ch - imgH) / 2;
-      var fLabel     = 0.714;   /* "Loading..." text centre in the 512px splash */
+      var fLabel     = 0.85;   /* "Loading..." text centre in the 800x480 splash */
       var labelCenterY = Math.round(imgTop + fLabel * imgH);
 
-      /* Black feathered cover over the baked "Loading..." text.  Width tracks
-         the canvas; height tracks the image scale so it always blankets the
-         text line.  The box-shadow feather (CSS) extends well beyond this box. */
+      /* Black feathered cover over the baked "Loading..." text.  Sized from the
+         measured text box in the 800x480 splash -- the "Loading..." glyphs span
+         153x30 px centred at y~0.85 -- plus margin, then scaled by imgScale so
+         the cover tracks the splash at every viewport size and always fully
+         blankets the text.  The box-shadow feather (CSS) extends further still. */
       if (loadingCover) {
-        var coverW = Math.min(Math.floor(cw * 0.40), 340);
-        var coverH = Math.max(Math.round(0.055 * imgH), 30);
+        var coverW = Math.round(221 * imgScale);  /* 153px text + ~34px margin/side */
+        var coverH = Math.round(56  * imgScale);  /* 30px text  + ~13px margin/side */
         var coverTop = labelCenterY - Math.floor(coverH / 2);
         loadingCover.style.width  = coverW + 'px';
         loadingCover.style.height = coverH + 'px';
@@ -278,17 +313,25 @@
         loadingCover.style.top    = coverTop + 'px';
       }
 
-      /* Progress bar: drawn over the label (on the cover), narrower than it. */
+      /* Progress bar: scales linearly with the 480x320 base resolution.
+         uiScale maps the letterboxed canvas width back to the 480-wide base
+         (cw==480 -> 1x, cw==960 -> 2x), so the bar grows from the centre in
+         lock-step with the viewport.  Base bar is 156x4 px at 1x, giving the
+         previous 312x8 px at the 960x640 backing size.  Height/border-radius
+         scale too so the pill keeps its proportions at every size. */
       if (progressWrap) {
-        var barH = 8;
-        var barW = Math.min(Math.floor(cw * 0.26), 240);
+        var uiScale = cw / 480;
+        var barW = Math.round(156 * uiScale);
+        var barH = Math.max(Math.round(4 * uiScale), 2);
         var barTop = labelCenterY - Math.floor(barH / 2);
         /* Clamp so bar stays within the canvas rect. */
         if (barTop < canvasTop) barTop = canvasTop;
         if (barTop > canvasTop + ch - barH) barTop = canvasTop + ch - barH;
-        progressWrap.style.width  = barW + 'px';
-        progressWrap.style.left   = (canvasLeft + Math.floor((cw - barW) / 2)) + 'px';
-        progressWrap.style.top    = barTop + 'px';
+        progressWrap.style.width        = barW + 'px';
+        progressWrap.style.height       = barH + 'px';
+        progressWrap.style.borderRadius = Math.round(barH / 2) + 'px';
+        progressWrap.style.left         = (canvasLeft + Math.floor((cw - barW) / 2)) + 'px';
+        progressWrap.style.top          = barTop + 'px';
       }
     }
 
@@ -301,8 +344,9 @@
   var _loadingCover = document.getElementById('loading-cover');
   var _splashImg    = document.getElementById('splash-img');
   var _tapOverlay   = document.getElementById('tap-overlay');
-  var _tapText      = document.getElementById('tap-text');
-  var _tapSilent    = document.getElementById('tap-silent');
+  var _tapPlay      = document.getElementById('tap-play');
+  var _soundToggle  = document.getElementById('sound-toggle');
+  var _audioOn      = true;   /* sound-toggle state; decides audio-on at start */
   var _runtimeReady = false;
 
   /* Called when Module.calledRun is true (runtime loaded, BEFORE game init).
@@ -323,7 +367,7 @@
       _tapOverlay.style.opacity = '0';
       void _tapOverlay.offsetHeight; /* force reflow */
       _tapOverlay.style.opacity = '1';
-      if (_tapText) _tapText.focus();
+      if (_tapPlay) _tapPlay.focus();
     }
   }
 
@@ -381,21 +425,30 @@
     }
   }
 
-  function _dismissWithAudio(e) {
+  /* Sound toggle: flip the audio-start choice and swap the icon. Does NOT
+     start the game -- only the play button dismisses the overlay. */
+  function _toggleSound(e) {
     e.stopPropagation(); e.preventDefault();
-    /* Fire game callbacks immediately -- don't wait for the fade. */
-    _resumeAudioContext();
-    _notifyUserStarted();
-    /* Fade out overlay; DOM removal happens after transition completes. */
-    _removeOverlayFade();
+    _audioOn = !_audioOn;
+    if (_soundToggle) {
+      _soundToggle.src = _audioOn ? 'sound.webp' : 'sound_cross.webp';
+      _soundToggle.setAttribute('aria-label', _audioOn ? 'Sound on' : 'Sound off');
+    }
   }
 
-  function _dismissSilent(e) {
+  /* Single play button: start with audio on/off per the sound toggle. */
+  function _dismissPlay(e) {
     e.stopPropagation(); e.preventDefault();
-    try {
-      if (typeof Module !== 'undefined' && Module._fn_disable_audio) Module._fn_disable_audio();
-    } catch (ex) {
-      console.warn('[audio] fn_disable_audio exception (non-fatal):', ex);
+    if (_audioOn) {
+      /* Resume the suspended AudioContext via this user gesture. */
+      _resumeAudioContext();
+    } else {
+      /* Mark the game muted so the in-game music/sfx toggles read off. */
+      try {
+        if (typeof Module !== 'undefined' && Module._fn_disable_audio) Module._fn_disable_audio();
+      } catch (ex) {
+        console.warn('[audio] fn_disable_audio exception (non-fatal):', ex);
+      }
     }
     /* Fire game callbacks immediately -- don't wait for the fade. */
     _notifyUserStarted();
@@ -403,18 +456,18 @@
     _removeOverlayFade();
   }
 
-  if (_tapText) {
-    _tapText.addEventListener('click',      _dismissWithAudio);
-    _tapText.addEventListener('touchstart', _dismissWithAudio, {passive: false});
-    _tapText.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') _dismissWithAudio(e);
+  if (_tapPlay) {
+    _tapPlay.addEventListener('click',      _dismissPlay);
+    _tapPlay.addEventListener('touchstart', _dismissPlay, {passive: false});
+    _tapPlay.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _dismissPlay(e);
     });
   }
-  if (_tapSilent) {
-    _tapSilent.addEventListener('click',      _dismissSilent);
-    _tapSilent.addEventListener('touchstart', _dismissSilent, {passive: false});
-    _tapSilent.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') _dismissSilent(e);
+  if (_soundToggle) {
+    _soundToggle.addEventListener('click',      _toggleSound);
+    _soundToggle.addEventListener('touchstart', _toggleSound, {passive: false});
+    _soundToggle.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _toggleSound(e);
     });
   }
 

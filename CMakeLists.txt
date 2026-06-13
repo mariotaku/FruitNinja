@@ -293,13 +293,29 @@ if (EMSCRIPTEN)
         # an explicit -sEXPORTED_FUNCTIONS ensures they survive aggressive DCE.
         "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_disable_audio','_fn_user_started']"
     )
-    # Port specific: copy splash.png next to fruit-ninja.html so the loading
-    # screen can reference it by relative URL before MEMFS is populated.
+    # Port specific: copy the shell's loose image assets next to
+    # fruit-ninja.html so the loading screen / tap-to-start overlay can
+    # reference them by relative URL before MEMFS is populated.  All are
+    # WebP, decoded from the authentic FruitNinjaBada assets (Res/Splash.png
+    # rotated to landscape; the buttons from Data/textures/*.tex).
+    #   splash.webp       -- loading-screen backdrop (800x480)
+    #   play_button.webp  -- game play button reused as the "tap to start" button
+    #   sound.webp        -- speaker (sound ON) icon for the top-right toggle
+    #   sound_cross.webp  -- muted speaker (sound OFF) icon for the top-right toggle
     add_custom_command(TARGET fruit-ninja POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/splash.png
-            ${CMAKE_CURRENT_BINARY_DIR}/splash.png
-        COMMENT "Copying splash.png to web build output"
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/splash.webp
+            ${CMAKE_CURRENT_BINARY_DIR}/splash.webp
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/play_button.webp
+            ${CMAKE_CURRENT_BINARY_DIR}/play_button.webp
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound.webp
+            ${CMAKE_CURRENT_BINARY_DIR}/sound.webp
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/src/platform/emscripten/sound_cross.webp
+            ${CMAKE_CURRENT_BINARY_DIR}/sound_cross.webp
+        COMMENT "Copying shell image assets (splash/play_button/sound/sound_cross) to web build output"
         VERBATIM
     )
 else()
