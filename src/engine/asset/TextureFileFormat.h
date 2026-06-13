@@ -67,10 +67,9 @@ TextureSourceData* ReadTex1Format(const void* data, unsigned long size);
 // ---------------------------------------------------------------------------
 // Reader [2]: Tex2 -- binary @0x0022baf8 / internal @0x0022b404.
 // Accept gate: size>=0x11 && u16@+2 == 4.
-// TODO: 0x0022b404 -- full decode: wLog2/hLog2 from bytes[8]/[9], mipCount from
-//   byte[0xb], format from (u32@+4 & 0xf) via MakeIntFormat switch; size
-//   validation via per-mip accumulation; allocate Tex2Data (0x48 bytes).
-//   No Tex2 assets ship in 1.5.1/1.6.1 packs.
+// Full decode: per-mip size accumulation, DataInfo fields, 12-byte PixelFormat
+//   channel-mapping block from (fmt&0xf00)/(fmt&0xf) switches + MakeIntFormat.
+// No Tex2 assets ship in 1.5.1/1.6.1 packs, but the decode is implemented.
 // ---------------------------------------------------------------------------
 TextureSourceData* ReadTex2Format(const void* data, unsigned long size);
 

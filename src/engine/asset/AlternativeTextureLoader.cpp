@@ -223,7 +223,6 @@ SmartPtr<TextureSource> AlternativeTextureLoader::CreateLoader(const AsciiString
     // Binary arg order @0x00225ea8: SubstituteApparentSizeTextureSource(this, &subSrc, &origSrc)
     //   => SetSource(subSrc) = data (substitute provides pixels),
     //      SetApparentSize(origSrc) = apparent size (original's W/H is reported).
-    // TODO: 0x002252f8 -- binary uses new(0x28) here; port uses plain new (layout matches on bada).
     SubstituteApparentSizeTextureSource* s =
         new SubstituteApparentSizeTextureSource(subSrc, origSrc);
     return WrapPtr(static_cast<TextureSource*>(s));

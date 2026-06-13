@@ -1,8 +1,9 @@
 // Mortar::TextureFileFormat -- 4-reader format registry + reader implementations.
 //
-// Live path: Tex1 (ReadTex1Format). Tex2/DDS/Tex3 full decode are TODO;
-// their accept-gate checks are implemented (reject-path) so the registry
-// loop falls through correctly to Tex1 for all shipped assets.
+// Live path: Tex1 (ReadTex1Format). Tex2 full decode is implemented.
+// DDS/Tex3 full decode are TODO; their accept-gate checks are implemented
+// (reject-path) so the registry loop falls through correctly to Tex1 for
+// all shipped assets.
 //
 // Binary reader registry @ 0x2cf8e8 (array of 4 ReadFn pointers):
 //   [0] = ReadTex3Format @0x0022bd7c
@@ -119,9 +120,18 @@ TextureSourceData* TextureFileFormat::ReadTex1Format(const void* data, unsigned 
 }
 
 // ---- Reader [2]: Tex2 -----------------------------------------------------
-// Binary @0x0022baf8 (outer) / @0x0022b404 (inner).
+// Binary @0x0022baf8 (outer) / @0x0022b404 (inner ReadFormatInternal).
 // Accept gate: size >= 0x11 && u16@+2 == 4.
-// TODO: 0x0022b404 -- full Tex2 decode (no Tex2 assets in shipped packs).
+// Header: bytes[8]=wLog2, bytes[9]=hLog2, bytes[0xb]=mipCount; u32@+4 = format
+//   descriptor; u16@+0xc = dataSize; u16@+0xe = slicePitch.
+// Validation: max(wLog2,hLog2)+1 >= mipCount, and per-mip byte accumulation
+//   (sum of (bpp*w*h)>>3 over the mip chain) + 0x10 == size.
+// PixelFormat (12-byte channel-mapping block) is built byte-for-byte from the
+// two switches over (u32@+4 & 0xf00) (type byte pair, pf[0]/pf[1]) and
+// (u32@+4 & 0xf) (channel layout, pf[4..0xb] + NumberType -> MakeIntFormat).
+// MakeIntFormat @0x0022b3dc: ret = (((n-1)*0x10)&0xff)<<8  -> pf[2]/pf[3].
+// Binary zeroes the pixel-ptr fields (piVar3[9..0x11]); pixels/pixelsSize stay 0.
+// No Tex2 assets ship in 1.5.1/1.6.1 packs, but the decode is faithful per policy.
 TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned long size) {
     if (size < 0x11) {
         return 0;
@@ -132,11 +142,115 @@ TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned 
     if (gate != 4) {
         return 0;
     }
-    // TODO: 0x0022b404 -- full Tex2 decode: wLog2=bytes[8], hLog2=bytes[9],
-    //   mipCount=bytes[0xb], format=(u32@+4 & 0xf) via MakeIntFormat switch;
-    //   validate total size via per-mip accumulation; allocate Tex2Data (0x48B).
-    //   No Tex2 assets in shipped 1.5.1/1.6.1 packs.
-    return 0;
+
+    uint8_t wLog2    = bytes[8];
+    uint8_t hLog2    = bytes[9];
+    uint8_t mipCount = bytes[0xb];
+
+    unsigned int maxLog = (wLog2 < hLog2) ? (unsigned int)hLog2 : (unsigned int)wLog2;
+    if ((maxLog + 1u) < (unsigned int)mipCount) { // binary: blt -> reject
+        return 0;
+    }
+
+    uint32_t fmt;
+    memcpy(&fmt, bytes + 4, 4);
+
+    // bits-per-pixel from the format descriptor.
+    unsigned int hi = fmt & 0xf00u;
+    unsigned int bpp;
+    if (hi == 0x200u) {
+        bpp = 2;
+    } else if (hi == 0x300u) {
+        bpp = 4;
+    } else if (hi == 0x100u) {
+        unsigned int lo = fmt & 0xfu;
+        if (lo > 0xbu) {
+            bpp = 2;
+        } else {
+            unsigned int bit = 1u << lo;
+            if (bit & 0x8b8u)      bpp = 16;
+            else if (bit & 0x42u)  bpp = 24;
+            else if (bit & 0x204u) bpp = 32;
+            else                   bpp = 2;
+        }
+    } else {
+        return 0;
+    }
+
+    // Per-mip size accumulation.
+    unsigned int w = 1u << wLog2;
+    unsigned int h = 1u << hLog2;
+    unsigned int total = 0;
+    unsigned int m;
+    for (m = (unsigned int)mipCount; m != 0; --m) {
+        unsigned int area = w * h;
+        if (w > 1u) w >>= 1;
+        if (h > 1u) h >>= 1;
+        total += (unsigned int)(bpp * area) >> 3;
+    }
+    if (total + 0x10u != (unsigned int)size) {
+        return 0;
+    }
+
+    TextureSourceData* d = new TextureSourceData();
+    // Binary zeroes piVar3[9..0x11]; pixels/pixelsSize remain 0 (base ctor).
+
+    // ---- Scalar DataInfo fields ----
+    d->info.numberFormat = 0;
+    d->info.width     = (uint16_t)(1u << wLog2);
+    d->info.height    = (uint16_t)(1u << hLog2);
+    d->info.depth     = 1;
+    d->info.arraySize = 1;
+    {
+        uint16_t v;
+        memcpy(&v, bytes + 0xc, 2); d->info.dataSize   = v;
+        memcpy(&v, bytes + 0xe, 2); d->info.slicePitch = v;
+    }
+
+    // ---- PixelFormat (12-byte channel-mapping block) ----
+    uint8_t* pf = d->info.pixelFormat.data;
+    int i;
+    for (i = 0; i < 12; ++i) pf[i] = 0;
+
+    // Type byte pair (pf[0], pf[1]) from (fmt & 0xf00).
+    switch (hi) {
+        case 0x100u: pf[0] = 0;    pf[1] = 0;    break;
+        case 0x200u: pf[0] = 2;    pf[1] = 2;    break;
+        case 0x300u: pf[0] = 2;    pf[1] = 4;    break;
+        case 0x400u: pf[0] = 4;    pf[1] = 0x53; break;
+        case 0x500u: pf[0] = 4;    pf[1] = 0x35; break;
+        case 0x600u: pf[0] = 4;    pf[1] = 8;    break;
+        case 0x700u: pf[0] = 4;    pf[1] = 4;    break;
+        case 0x800u: pf[0] = 4;    pf[1] = 2;    break;
+        default: break; // leaves pf[0]=pf[1]=0
+    }
+
+    // Channel mapping (pf[4..0xb]) + NumberType, from (fmt & 0xf) switch.
+    unsigned int chan = fmt & 0xfu;
+    int numType = 0; // 0 = default/skip (no MakeIntFormat, pf[2]=pf[3]=0)
+    switch (chan) {
+        case 1:  pf[4]=0x08;pf[5]=0x02;pf[6]=0x08;pf[7]=0x03; pf[8]=0x08;pf[9]=0x04;pf[10]=0x00;pf[11]=0x00; numType=1; break;
+        case 2:  pf[4]=0x08;pf[5]=0x01;pf[6]=0x08;pf[7]=0x04; pf[8]=0x08;pf[9]=0x03;pf[10]=0x08;pf[11]=0x02; numType=4; break;
+        case 3:  pf[4]=0x05;pf[5]=0x02;pf[6]=0x05;pf[7]=0x03; pf[8]=0x05;pf[9]=0x04;pf[10]=0x01;pf[11]=0x01; numType=2; break;
+        case 4:  pf[4]=0x04;pf[5]=0x02;pf[6]=0x04;pf[7]=0x03; pf[8]=0x04;pf[9]=0x04;pf[10]=0x04;pf[11]=0x01; numType=2; break;
+        case 5:  pf[4]=0x05;pf[5]=0x02;pf[6]=0x06;pf[7]=0x03; pf[8]=0x05;pf[9]=0x04;pf[10]=0x00;pf[11]=0x00; numType=2; break;
+        case 6:  pf[4]=0x08;pf[5]=0x04;pf[6]=0x08;pf[7]=0x03; pf[8]=0x08;pf[9]=0x02;pf[10]=0x00;pf[11]=0x00; numType=1; break;
+        case 7:  pf[4]=0x01;pf[5]=0x01;pf[6]=0x05;pf[7]=0x02; pf[8]=0x05;pf[9]=0x03;pf[10]=0x05;pf[11]=0x04; numType=2; break;
+        case 8:  pf[4]=0x08;pf[5]=0x01;pf[6]=0x08;pf[7]=0x02; pf[8]=0x08;pf[9]=0x03;pf[10]=0x08;pf[11]=0x04; numType=4; break;
+        case 9:  pf[4]=0x08;pf[5]=0x00;pf[6]=0x08;pf[7]=0x02; pf[8]=0x08;pf[9]=0x03;pf[10]=0x08;pf[11]=0x04; numType=4; break;
+        case 10: pf[4]=0x05;pf[5]=0x02;pf[6]=0x05;pf[7]=0x03; pf[8]=0x05;pf[9]=0x04;pf[10]=0x01;pf[11]=0x00; numType=2; break;
+        case 11: pf[4]=0x04;pf[5]=0x01;pf[6]=0x04;pf[7]=0x02; pf[8]=0x04;pf[9]=0x03;pf[10]=0x04;pf[11]=0x04; numType=2; break;
+        default: break; // chan==0 or chan>0xb: skip; pf[2..0xb] stay 0
+    }
+
+    if (numType != 0) {
+        // MakeIntFormat @0x0022b3dc: (((n-1)*0x10)&0xff)<<8
+        unsigned int makeInt = ((((unsigned int)(numType - 1)) * 0x10u) & 0xffu) << 8;
+        pf[2] = (uint8_t)(makeInt & 0xffu);         // always 0
+        pf[3] = (uint8_t)((makeInt >> 8) & 0xffu);  // ((n-1)*0x10)&0xff
+    }
+
+    return d;
 }
 
 // ---- Reader [1]: DDS ------------------------------------------------------
