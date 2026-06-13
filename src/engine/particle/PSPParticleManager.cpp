@@ -133,7 +133,12 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     m_Emitters.push_back(new PSPParticleEmitter());
     m_ParticleLists.push_back(std::vector<PSPParticle>());
     PSPParticleEmitter& e = *m_Emitters.back();
-    // All defaults match the binary's explicit init block:
+    // All defaults match the binary's explicit init block (AddEmitter @ 0x13c1b8):
+    //   +0x00=0, +0x08..0x1C=0 (Pos,Vel), +0x04(bStarted u16)=1
+    //   +0x20(TimeScale)=1.0, +0x24=1.0, +0x28(ScaleX)=1.0, +0x2C(ScaleY)=1.0
+    //   +0x30(DirCos)=1.0, +0x34(DirSin)=0, +0x38=0
+    //   +0x3C(pTemplate)=tmpl, +0x40(Next)=oldHead, +0x44(pRefPtr)=ppRef
+    //   +0x4D(bTrailStarted)=0
     e.m_Timer = 0.0f;
     e.m_Pos = Vec3(0, 0, 0);
     e.m_Vel = Vec3(0, 0, 0);
@@ -141,10 +146,10 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     e.m_TimeScale = 1.0f;
     e.m_field24 = 1.0f;
     e.m_ScaleX = 1.0f;
+    e.m_ScaleY = 1.0f;
     e.m_DirCos = 1.0f;
-    e.m_field34 = 1.0f;
     e.m_field38 = 0;
-    e.m_ParticleHead = 1;
+    e.m_bStarted = 1;
     e.m_bUpdateWhenPaused = updateWhenPaused;
     e.m_pTemplate = tmpl;
     e.m_pRefPtr = ppRef;
@@ -214,7 +219,7 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
     float vz = RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]) * 0.5f;
 
     // 2D rotation of the XY velocity by the emitter's (cos, sin) pair stored
-    // in m_DirCos (+0x2c) and m_DirSin (+0x30). Matches the binary AddParticle
+    // in m_DirCos (+0x30) and m_DirSin (+0x34). Matches the binary AddParticle
     // @ 0x00115644 -- used to rotate fruit-impact particles so chunks spray
     // along the blade direction. Identity when the caller leaves defaults (cos=1, sin=0).
     const float cosA = emitter.m_DirCos;
@@ -284,10 +289,10 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         // Binary sequence:
         //   swap(gravity.x, gravity.y)
         //   gravity.x *= QuadrantMirror(particle.pos.x)   // = emitter.pos.x here
-        //   gravity   *= m_field34
+        //   gravity   *= m_ScaleY (+0x2C)
         //   swap(vel.x, vel.y)                            // rotated set velocity
         //   vel.x     *= QuadrantMirror(emitter.pos.x)
-        //   vel       *= m_field34
+        //   vel       *= m_ScaleY (+0x2C)
         // particle.pos was written from emitter.pos earlier, so both sign
         // sources read emitter.pos.x.
         if (emitter.m_field38 != 0) {
@@ -295,17 +300,17 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
             p.m_Gravity.x = p.m_Gravity.y;
             p.m_Gravity.y = gtmp;
             p.m_Gravity.x *= QuadrantMirror(p.m_Pos.x);
-            p.m_Gravity.x *= emitter.m_field34;
-            p.m_Gravity.y *= emitter.m_field34;
-            p.m_Gravity.z *= emitter.m_field34;
+            p.m_Gravity.x *= emitter.m_ScaleY;
+            p.m_Gravity.y *= emitter.m_ScaleY;
+            p.m_Gravity.z *= emitter.m_ScaleY;
 
             float vtmp = rvx;
             rvx = rvy;
             rvy = vtmp;
             rvx *= QuadrantMirror(emitter.m_Pos.x);
-            rvx *= emitter.m_field34;
-            rvy *= emitter.m_field34;
-            rvz *= emitter.m_field34;
+            rvx *= emitter.m_ScaleY;
+            rvy *= emitter.m_ScaleY;
+            rvz *= emitter.m_ScaleY;
         }
 
         // Finalise velocity: add emitter velocity to the (possibly mirrored)
@@ -444,7 +449,7 @@ void PSPParticleManager::Update(float dt, bool paused) {
         std::vector<PSPParticle>& particles = m_ParticleLists[i];
 
         // Tick active emitters
-        if (e.m_ParticleHead != 0 && e.m_TimeScale != 0.0f &&
+        if (e.m_bStarted != 0 && e.m_TimeScale != 0.0f &&
             (!paused || e.m_bUpdateWhenPaused)) {
             UpdateEmitter(e, dt, particles);
         }

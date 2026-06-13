@@ -186,8 +186,7 @@ public:
     void StopRays();
 
     // Binary @ 0x1bc748. PSPParticleManager emitter hookup for jib particle trails.
-    // TODO: 0x1bc748 — SpawnJibs PSPParticleManager hookup pending asm-inspector
-    //   resolution of DirCos/DirSin offset (+0x2C vs +0x30 ambiguity in v1.6.1).
+    // PSPParticleManager hookup implemented; Jiblet mesh spawn pending Jiblet/MeshManager port.
     void SpawnJibs(int count);
 
     // Binary @ 0x001b9850. Combo cancel: clears linked slash entity when that

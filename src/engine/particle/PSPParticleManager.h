@@ -227,21 +227,23 @@ static_assert(__builtin_offsetof(PSPParticle, m_field44)      == 0xA0, "");
 // Ctor only initialises last 4 fields (+60..+72); earlier fields set by
 // the Init/Spawn path. m_Next forms a free-list link; emitters are
 // pool/array-allocated by the owning system (no per-emitter operator new).
-// Binary uses a global particle pool indexed via m_ParticleHead. The port
+// Binary uses a global particle pool; m_bStarted(+0x04) gates update. The port
 // mirrors binary size exactly; per-emitter particle lists live in the manager.
+//
+// ASM-verified: 2026-06-13T05:10Z binary @ 0x0013c1b8 / 0x001bc748 (asm-inspector)
 // ----------------------------------------------------------------------------
 struct PSPParticleEmitter {
     float    m_Timer;                           // +0x00
-    uint16_t m_ParticleHead;                    // +0x04  first particle index
+    uint16_t m_bStarted;                        // +0x04  set to 1 by AddEmitter (u16); distinct from trail-active byte at +0x4D
     uint16_t m_pad06;                           // +0x06  alignment pad (Vec3 needs 4-byte alignment)
     Vec3     m_Pos;                             // +0x08  (12 bytes)
     Vec3     m_Vel;                             // +0x14  (12 bytes)
     float    m_TimeScale;                       // +0x20  speed multiplier; default 1.0
     float    m_field24;                         // +0x24  default 1.0
     float    m_ScaleX;                          // +0x28  default 1.0
-    float    m_DirCos;                          // +0x2C  cos(trail orientation), default 1.0
-    float    m_DirSin;                          // +0x30  sin(trail orientation), default 0.0
-    float    m_field34;                         // +0x34  default 1.0
+    float    m_ScaleY;                          // +0x2C  separate scale/colour component; default 1.0
+    float    m_DirCos;                          // +0x30  cos(trail orientation), default 1.0
+    float    m_DirSin;                          // +0x34  sin(trail orientation), default 0.0
     uint8_t  m_field38;                         // +0x38  default 0
     uint8_t  m_pad39[3];                        // +0x39  alignment pad
     const PSPEmitterTemplate*   m_pTemplate;    // +0x3C  ctor: 0
@@ -250,16 +252,16 @@ struct PSPParticleEmitter {
     uint8_t  m_bUpdateWhenPaused;               // +0x48  ctor: 0
     uint8_t  m_pad49[3];                        // +0x49  alignment pad
     uint8_t  m_pad4c;                           // +0x4C  pad byte
-    uint8_t  m_bStarted;                        // +0x4D  trail-started flag; 0 in AddEmitter, 1 set by Jiblet::Update
+    uint8_t  m_bTrailStarted;                   // +0x4D  trail-active flag; 0 in AddEmitter, 1 set by SpawnJibs/Jiblet::Update
 
     PSPParticleEmitter()
-        : m_Timer(0), m_ParticleHead(1), m_pad06(0)
+        : m_Timer(0), m_bStarted(1), m_pad06(0)
         , m_Pos(0,0,0), m_Vel(0,0,0)
         , m_TimeScale(1.0f), m_field24(1.0f)
-        , m_ScaleX(1.0f), m_DirCos(1.0f)
-        , m_DirSin(0.0f), m_field34(1.0f), m_field38(0)
+        , m_ScaleX(1.0f), m_ScaleY(1.0f)
+        , m_DirCos(1.0f), m_DirSin(0.0f), m_field38(0)
         , m_pTemplate(0), m_Next(0), m_pRefPtr(0)
-        , m_bUpdateWhenPaused(0), m_pad4c(0), m_bStarted(0)
+        , m_bUpdateWhenPaused(0), m_pad4c(0), m_bTrailStarted(0)
     {
         m_pad39[0] = m_pad39[1] = m_pad39[2] = 0;
         m_pad49[0] = m_pad49[1] = m_pad49[2] = 0;
@@ -268,18 +270,20 @@ struct PSPParticleEmitter {
 #ifdef __bada__
 static_assert(sizeof(PSPParticleEmitter) == 78, "PSPParticleEmitter size mismatch");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Timer)             == 0x00, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_ParticleHead)      == 0x04, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_bStarted)          == 0x04, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Pos)               == 0x08, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Vel)               == 0x14, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_TimeScale)         == 0x20, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirCos)            == 0x2C, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirSin)            == 0x30, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_ScaleX)            == 0x28, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_ScaleY)            == 0x2C, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirCos)            == 0x30, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirSin)            == 0x34, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_field38)           == 0x38, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_pTemplate)         == 0x3C, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Next)              == 0x40, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_pRefPtr)           == 0x44, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_bUpdateWhenPaused) == 0x48, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_bStarted)          == 0x4D, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_bTrailStarted)     == 0x4D, "");
 #endif
 
 // ----------------------------------------------------------------------------
@@ -360,8 +364,8 @@ private:
     // unique_ptr but without <memory> / typeid dependency (GCC 4.4 / -fno-rtti).
     std::vector<PSPParticleEmitter*>          m_Emitters;
     // Parallel per-emitter particle lists. Index i owns the particles for m_Emitters[i].
-    // DIFFERS: binary uses a global flat particle pool indexed via emitter.m_ParticleHead;
-    // port uses per-emitter std::vector kept in the manager to preserve binary struct sizes.
+    // DIFFERS: binary uses a global flat particle pool; port uses per-emitter std::vector
+    // kept in the manager to preserve binary struct sizes.
     std::vector<std::vector<PSPParticle> >    m_ParticleLists;
 };
 

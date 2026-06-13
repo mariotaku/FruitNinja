@@ -197,7 +197,7 @@ void SuperFruitControl::Update(float dt)
                 // one-shot: the actual blast
                 // TODO: 0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.0, dur=2.0, pos) (needs camera)
                 ExplodeSuperFruit();
-                // TODO: 0x001bca10 -- SpawnJibs(this) (pending DirCos/DirSin offset asm-resolution)
+                SpawnJibs(0);
                 StopRays();
                 // TODO: 0x001bca10 -- ChangeText(this, sprintf(DAT_001bcd84, m_SliceCount), 0, &m_WorkVec3) (needs FancyBakedString)
             }
@@ -684,11 +684,36 @@ void SuperFruitControl::StopRays()
 
 // Binary @ 0x1bc748. PSPParticleManager emitter hookup for jib particle trails.
 // Builds the emitter name via sprintf, calls EmitterExists/AddEmitter, sets
-// m_Pos and m_bStarted on the allocated emitter. Also spawns 8 Jiblet mesh
-// actors via ActorManager (type 5, Jiblet::Init).
-// TODO: 0x1bc748 — implementation blocked on asm-inspector resolution of
-//   DirCos/DirSin offset ambiguity (+0x2C vs +0x30 in PSPParticleEmitter) and
-//   Jiblet::Init / MeshManager not yet ported.
+// m_Pos/m_DirCos/m_DirSin/m_bTrailStarted on the allocated emitter.
+// Also spawns 8 Jiblet mesh actors via ActorManager (type 5, Jiblet::Init) --
+// Jiblet/MeshManager not yet ported; only the PSPParticleManager hookup is
+// implemented here.
 void SuperFruitControl::SpawnJibs(int /*count*/)
 {
+    PSPParticleManager& mgr = PSPParticleManager::GetInstance();
+
+    if (m_pHostFruit) {
+        // Build emitter name from fruit type (binary: sprintf("jib_emitter_%d", fruitType)).
+        // TODO: 0x1bc748 — confirm exact format string from binary string table.
+        char buf[64];
+        snprintf(buf, sizeof(buf), "jib_emitter_%d", (int)m_pHostFruit->m_FruitType);
+        uint32_t hash = StringHash(buf);
+
+        if (mgr.EmitterExists(hash)) {
+            PSPParticleEmitter* e = mgr.AddEmitter(hash, 0, false);
+            if (e) {
+                e->m_bTrailStarted = 1;
+                e->m_Pos = m_WorkVec5;  // explosion world pos (+0xf0)
+                // TODO: 0x1bc748 — angle = *(uint16_t*)(m_pHostFruit + 0xc0);
+                //   binary writes: e->m_DirCos = Math::CosIdx(angle);
+                //                  e->m_DirSin = Math::SinIdx(angle);
+                //   fruit+0xc0 field identity unresolved (overlaps m_SecondPos.z in port layout).
+                e->m_DirCos = 1.0f;
+                e->m_DirSin = 0.0f;
+            }
+        }
+    }
+
+    // TODO: 0x1bc748 — spawn 8 Jiblet mesh actors (ActorManager::Add type 5, Jiblet::Init).
+    //   Needs Jiblet and MeshManager ported.
 }
