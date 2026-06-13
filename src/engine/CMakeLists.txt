@@ -37,6 +37,8 @@ add_library(mortar_engine STATIC
     asset/TextureManager.cpp
     asset/AlternativeTextureLoader.cpp
     asset/DataReader.cpp
+    asset/FileDataReader.cpp
+    asset/VectorDataReader.cpp
     asset/ResourceLoader.cpp
     asset/AnimationState.cpp
     asset/Skeleton.cpp

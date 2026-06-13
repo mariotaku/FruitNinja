@@ -7,6 +7,18 @@ target_include_directories(test_localisation PRIVATE
 )
 add_test(NAME localisation COMMAND test_localisation)
 
+# ResourceLoader / DataReader / VectorDataReader parser unit test.
+# Pure in-memory (no file I/O, no GPU, no audio). Uses two deterministic
+# byte vectors: (a) real apple.mad header trace, (b) hand-built 1-child
+# nested buffer. High-fan-in parser: bugs here cascade into every model/asset load.
+add_executable(test_resourceloader test_resourceloader.cpp)
+target_link_libraries(test_resourceloader PRIVATE mortar_engine)
+target_include_directories(test_resourceloader PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/engine
+    ${CMAKE_SOURCE_DIR}/src
+)
+add_test(NAME resourceloader COMMAND test_resourceloader)
+
 # LinkedHeap unit test -- no GPU/audio, pure allocator correctness.
 # Exercises tail-rewind (the shutdown crash path), forward-merge, and split-path
 # integrity. FN_TEST unlocks the test-only accessors in LinkedHeap.h.

@@ -11,12 +11,12 @@
 
 namespace Mortar {
 
-// Matches original ResourceLoader (68 bytes = 0x44)
-// Binary layout (operator new + ctor field writes @ 0x001b4864):
-//   +0x00  int32_t               m_flag     (zero-inited by ctor str.w r3(#0),[r5],#4)
+// ResourceLoader (68 bytes = 0x44)
+// Binary layout confirmed via ctor @ 0x002556B4 / path ctor @ 0x00255730:
+//   +0x00  int32_t               m_flag     (zero-inited by ctor)
 //   +0x04  AsciiString           m_BasePath (40 bytes)
-//   +0x2C  vector<uint8_t>       m_Data     (12 bytes)
-//   +0x38  vector<ResourceLoader> m_Children (12 bytes)
+//   +0x2C  vector<uint8_t>       m_Data     (12 bytes; raw payload set by Initialize)
+//   +0x38  vector<ResourceLoader> m_Children (12 bytes; nested children)
 //   +0x44  end (sizeof = 68)
 class ResourceLoader {
 public:
@@ -32,14 +32,17 @@ public:
 
     ResourceLoader();
     ResourceLoader(const char* filePath);
+    // Binary ctor @ 0x00255730: PathGetParent(path)->BasePath, FileDataReader(path), Initialize(reader)
     ResourceLoader(const AsciiString& filePath);
+    // Binary ctor @ 0x002556B4: BasePath.Set(basePath), Initialize(reader)
     ResourceLoader(DataReader& reader, const AsciiString& basePath);
+    // Binary copy ctor @ 0x00255B84: memberwise copy of m_flag, m_BasePath, m_Data, m_Children
     ~ResourceLoader();
 
-    // Initialize from raw data buffer (recursive HBR0 parsing)
-    // Matches 0x001b4708
-    void Initialize(const uint8_t* data, size_t dataSize);
+    // Binary Initialize(DataReader&) @ 0x002554EC: HBR0 parser (skip, childCount, children, typeIds, rawSize, data)
     void Initialize(DataReader& reader);
+    // Port convenience: wraps data+size in a VectorDataReader and calls Initialize(DataReader&)
+    void Initialize(const uint8_t* data, size_t dataSize);
 
     // Sequential read methods
     template<typename T>
@@ -113,10 +116,7 @@ public:
     }
 
     // ---- binary symbol map ----
-    // TODO: 0x001b48c4 -- ResourceLoader(AsciiString const&): PathGetParent(path)->BasePathSet, then FileDataReader(path)+Initialize(reader)  [blocked: FileDataReader/DataReader subsystem unported]
-    // TODO: 0x001b4804 -- ResourceLoader(DataReader&, AsciiString const&): BasePathSet(basePath) then Initialize(reader)  [blocked: Initialize(DataReader&) unported]
-    // Binary @ 0x001b465c -- ~ResourceLoader(): destroy m_Children, m_Data, m_BasePath (reverse-decl order == implicit member dtors)
-    // TODO: 0x001b4708 -- Initialize(DataReader&): ReadLE child count, recurse per child via VectorDataReader, reserve+push_back into m_Children  [blocked: DataReader::ReadLE / VectorDataReader unported]
+    // Binary @ 0x002554A0 -- ~ResourceLoader(): destroy m_Children, m_Data, m_BasePath (reverse-decl order == implicit member dtors)
     // Binary @ 0x001b45bc -- ReadBytes(void*, unsigned long): memcpy from m_Data[cursor] (binary cursor == m_flag@+0x00; port uses m_ReadPos)
     // Binary @ 0x001b45e0 -- ReadString(): Read<u16> length, Resize buffer, ReadBytes into AsciiString
     // Binary @ 0x001b46d0 -- ReadSubResourceLookup(): Read<u32> 1-based index, ConvertFromLittle, return &m_Children[index-1]
