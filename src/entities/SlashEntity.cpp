@@ -273,7 +273,6 @@ SlashEntity::SlashEntity()
     , m_FingerId(0)
     , m_RawTouchPos(0, 0, 0)
     , m_State(0)
-    , m_bHasHead(false)
     , m_pCurrentTarget(nullptr)
 #endif
 {
@@ -347,7 +346,14 @@ void SlashEntity::Release() {
 void SlashEntity::Reset() {
     m_PointCount = 0;
     m_State      = 0;
-    m_bHasHead   = false;
+
+    // Binary @ 0x1e6688: re-arm the anchor sentinel on every touch-down
+    // (do/while i!=3 writes (-65535,-65535,-65535) to +0x70/+0x7c/+0x88).
+    // DAT_001e67e0 = 0xc77fff00 = -65535.0f.
+    static const float kAnchorSentinel = -65535.0f;
+    m_TailPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_HeadPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_PrevHeadPos = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
 
     if (m_pLeftBuffer && m_pRightBuffer) {
         Colour white(255, 255, 255, 255);
@@ -499,45 +505,66 @@ void SlashEntity::OnTouchActive(float x, float y) {
     Vec3 newPos(x, y, 0.0f);
     m_RawTouchPos = newPos;
 
-    if (!m_bHasHead) {
-        m_PointCount  = 0;
-        m_bHasHead    = true;
-        m_State       = 1;
-        m_HeadPos     = newPos;
-        m_TailPos     = newPos;
-        m_PrevHeadPos = newPos;
-        m_BladeDir    = Vec3(1, 0, 0);  // non-zero seed so first AddPoint guard passes
-        Vec3 seedDir(1.0f, 0.0f, 0.0f);
-        AddPoint(1.0f, &newPos, &seedDir);
-        return;
-    }
+    const Vec3 lastCenter = m_TailPos;
+    const Vec3 distVec(newPos.x - lastCenter.x, newPos.y - lastCenter.y, 0.0f);
+    const float distSq = distVec.x * distVec.x + distVec.y * distVec.y;
 
-    const Vec3 lastCenter = m_HeadPos;
-    const Vec3 delta(newPos.x - lastCenter.x, newPos.y - lastCenter.y, 0.0f);
-    const float distSq = delta.x * delta.x + delta.y * delta.y;
+    // Binary @ 0x1e9f08 (UpdateTouchDown): gate is tail.x <= -65520.0f (DAT_001ea3f8).
+    // -65535 (sentinel) <= -65520, so a freshly Reset blade always hits the SEED branch.
+    const bool isSeed = (m_TailPos.x <= -65520.0f);
+
+    // Distance threshold: active blade uses MOVE_THRESH_ACTIVE^2, inactive uses MOVE_THRESH_INACTIVE^2.
+    // Binary: (this[0x140] & bit0) ? 25.0 : 2500.0.
     const float thresh = (m_State != 0)
         ? (MOVE_THRESH_ACTIVE   * MOVE_THRESH_ACTIVE)
         : (MOVE_THRESH_INACTIVE * MOVE_THRESH_INACTIVE);
-    if (distSq < thresh) return;
 
-    const float dist = sqrtf(distSq);
-    Vec3 dir(delta.x / dist, delta.y / dist, 0.0f);
-
-    float travelled = POINT_SPACING;
-    while (travelled < dist) {
-        Vec3 step(lastCenter.x + dir.x * travelled,
-                  lastCenter.y + dir.y * travelled, 0.0f);
-        AddPoint(1.0f, &step, &dir);
-        travelled += POINT_SPACING;
+    if (distSq < thresh && !isSeed) {
+        // Binary LAB_001ea3d0: nothing to add this frame when close to tail
+        // and not a seed frame. (Binary also early-outs when m_PointCount>0.)
+        return;
     }
 
+    Vec3 dir;
+    if (isSeed) {
+        // Binary LAB_001ea1b4: copy current touch pos into all three anchors.
+        m_TailPos     = newPos;
+        m_HeadPos     = newPos;
+        m_PrevHeadPos = newPos;
+        m_PointCount  = 0;
+        m_State       = 1;
+        m_BladeDir    = Vec3(1.0f, 0.0f, 0.0f); // non-zero seed so AddPoint guard passes
+        // Binary computes seed direction from DAT_001ea41c (global ref vec) - tail.
+        // Using (1,0,0) matches binary's "non-degenerate first direction" intent.
+        dir = Vec3(1.0f, 0.0f, 0.0f);
+    } else {
+        const float dist = sqrtf(distSq);
+        dir = Vec3(distVec.x / dist, distVec.y / dist, 0.0f);
+
+        // Interpolate intermediate points every POINT_SPACING units.
+        float travelled = POINT_SPACING;
+        while (travelled < dist) {
+            Vec3 step(lastCenter.x + dir.x * travelled,
+                      lastCenter.y + dir.y * travelled, 0.0f);
+            AddPoint(1.0f, &step, &dir);
+            travelled += POINT_SPACING;
+        }
+    }
+
+    // Always lay the head point at the live touch position.
     AddPoint(1.0f, &newPos, &dir);
+
+    // Binary end-of-frame anchor history shift (UpdateTouchDown epilogue):
+    // prevhead <- head <- tail <- touchPos.
+    m_PrevHeadPos = m_HeadPos;
+    m_HeadPos     = m_TailPos;
+    m_TailPos     = newPos;
+
     m_State = 1;
 }
 
 void SlashEntity::OnTouchReleased() {
     if (m_State == 1) m_State = 2;
-    m_bHasHead = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1379,10 +1406,13 @@ void SlashEntity::InitPoints(long count) {
         }
     }
 
-    // Seed m_TailPos/m_HeadPos/m_PrevHeadPos to 0.0 (do/while i!=3 in binary).
-    m_TailPos     = Vec3(0.0f, 0.0f, 0.0f);
-    m_HeadPos     = Vec3(0.0f, 0.0f, 0.0f);
-    m_PrevHeadPos = Vec3(0.0f, 0.0f, 0.0f);
+    // Binary @ 0x1e75d0: do/while seeds all three anchors to (-65535,-65535,-65535)
+    // (DAT_001e76e8 = 0xc77fff00 = -65535.0f). The sentinel is tested by
+    // UpdateTouchDown: tail.x <= -65520 means "first point of new slash".
+    static const float kAnchorSentinel = -65535.0f;
+    m_TailPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_HeadPos     = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
+    m_PrevHeadPos = Vec3(kAnchorSentinel, kAnchorSentinel, kAnchorSentinel);
 }
 
 // ---------------------------------------------------------------------------
