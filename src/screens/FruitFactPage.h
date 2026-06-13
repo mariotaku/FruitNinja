@@ -53,10 +53,8 @@ public:
     virtual void HidePage();                     // Binary @ 0x0017c1e8
     virtual void ShowPage();                     // Binary @ 0x0017c1b4
 
-    // TODO: 0x00173760 -- ShowSubObjects: show all child HUD controls
-    void ShowSubObjects();
-    // TODO: 0x0017375c -- HideSubObjects: hide all child HUD controls
-    void HideSubObjects();
+    void ShowSubObjects();  // Binary @ 0x00173760 -- empty base hook (overridden by concrete pages)
+    void HideSubObjects(); // Binary @ 0x0017375c -- empty base hook (overridden by concrete pages)
 
 protected:
     // +0x94: back-pointer to the owning page-book controller

@@ -112,7 +112,7 @@ public:
     // Written every Update @ 0x19af70; read by Draw phase-A layer0 to scale scratchs.tex quad.
     float           m_BackdropScale;       // +0xEC
 
-    // +0xF0: Init = -1.0 (random horizontal flip / offset seed; Draw reads for flip)
+    // +0xF0: Init = 0.0 (random horizontal flip / offset seed; Draw reads sign for flip)
     float           m_RandomOffset;        // +0xF0
 
     // +0xF4: >= 0 arms the sparkle ring; quad spin speed. Init = -1.0.
@@ -211,7 +211,7 @@ public:
     // +0x151..+0x153: pad
     uint8_t         _pad151[3];            // +0x151..+0x153
 
-    // +0x154: shake/backdrop scale factors Vec3; Init = Vec3(DAT,DAT,1)
+    // +0x154: shake/backdrop scale factors Vec3; Init = Vec3(1, 0.85, 0.85) (DAT_0019bafc=0.85f)
     Vec3            m_ShakeScale;          // +0x154..+0x15F
 
     // +0x160: label extra alpha (Draw second-pass gate >0). Init=0.

@@ -84,10 +84,9 @@ public:
     // +0x178: roll scale. = 1.0 in ctor.
     float m_RollScale;
 
-    // +0x17C: gap / padding to align Delegate0 at +0x184.
-    // v1.6.1: vptr write `str r3,[r0],#0x184` places Delegate0 ctor at +0x184.
-    // +0x17c..+0x183 = 8 bytes (likely: m_ShakeIntensity @ +0x17c, m_ShakeIntensityInit @ +0x180).
-    // TODO: 0x1edb48 — resolve exact content of gap +0x17C..+0x183 from FruitCamera ctor
+    // +0x17C: m_ShakeIntensity / m_ShakeIntensityInit — confirmed from ctor @ 0x1edb48:
+    //   m_ShakeIntensity <- s15 = 0.0f; m_ShakeIntensityInit NOT written by ctor (heap garbage
+    //   in binary, zeroed here for determinism). Delegate0<void> follows at +0x184.
     float m_ShakeIntensity;       // +0x17C (was +0x164 in v1.5.1 port; relocated in v1.6.1)
     float m_ShakeIntensityInit;   // +0x180 (was +0x168 in v1.5.1 port; relocated in v1.6.1)
 
@@ -121,11 +120,14 @@ public:
     // Helpers: IdleCamera @ 0x1ed77c (sets mode 0)
     void IdleCamera();
 
-    // Binary @ 0x1edf24 zoom API: set mode 2 (zoom-in) or 3 (zoom-out), arm callback.
-    // TODO: 0x1edf24 — ZoomIn/ZoomOut method signatures not yet RE'd; provide stubs.
+    // Zoom API. Binary symbols: FruitCamera::Transition @ 0x1bef54 (zoom-in),
+    // FruitCamera::TransitionOut @ 0x1bede8 (zoom-out). UpdateCamera @ 0x1edf24 runs the lerp.
+    // StartZoomIn = Transition(target, zoomScale, rollScale, onDone): mode=2, sets ZoomScale/
+    //   RollScale/ZoomTarget/OnZoomDone. Does NOT reset m_ZoomT.
     void StartZoomIn(const Vec3& target, float zoomScale, float rollScale,
                      Mortar::Delegate0<void> onDone);
-    void StartZoomOut(Mortar::Delegate0<void> onDone);
+    // StartZoomOut = TransitionOut(): no args, sets ONLY m_CameraMode=3.
+    void StartZoomOut();
 
     // --- Debug input handlers (binary @ addresses below) ---
     // All dead in retail binary. Bodies preserved as working debug-fly.

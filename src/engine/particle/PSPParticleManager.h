@@ -248,7 +248,9 @@ struct PSPParticleEmitter {
     PSPParticleEmitter*         m_Next;         // +0x40  ctor: 0  (free-list link)
     PSPParticleEmitter**        m_pRefPtr;      // +0x44  ctor: 0  (caller back-pointer)
     uint8_t  m_bUpdateWhenPaused;               // +0x48  ctor: 0
-    uint8_t  m_pad49[3];                        // +0x49  tail pad to binary size 76
+    uint8_t  m_pad49[3];                        // +0x49  alignment pad
+    uint8_t  m_pad4c;                           // +0x4C  pad byte
+    uint8_t  m_bStarted;                        // +0x4D  trail-started flag; 0 in AddEmitter, 1 set by Jiblet::Update
 
     PSPParticleEmitter()
         : m_Timer(0), m_ParticleHead(1), m_pad06(0)
@@ -257,14 +259,14 @@ struct PSPParticleEmitter {
         , m_ScaleX(1.0f), m_DirCos(1.0f)
         , m_DirSin(0.0f), m_field34(1.0f), m_field38(0)
         , m_pTemplate(0), m_Next(0), m_pRefPtr(0)
-        , m_bUpdateWhenPaused(0)
+        , m_bUpdateWhenPaused(0), m_pad4c(0), m_bStarted(0)
     {
         m_pad39[0] = m_pad39[1] = m_pad39[2] = 0;
         m_pad49[0] = m_pad49[1] = m_pad49[2] = 0;
     }
 };
 #ifdef __bada__
-static_assert(sizeof(PSPParticleEmitter) == 76, "PSPParticleEmitter size mismatch");
+static_assert(sizeof(PSPParticleEmitter) == 78, "PSPParticleEmitter size mismatch");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Timer)             == 0x00, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_ParticleHead)      == 0x04, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Pos)               == 0x08, "");
@@ -277,6 +279,7 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_pTemplate)         == 0x3
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Next)              == 0x40, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_pRefPtr)           == 0x44, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_bUpdateWhenPaused) == 0x48, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_bStarted)          == 0x4D, "");
 #endif
 
 // ----------------------------------------------------------------------------

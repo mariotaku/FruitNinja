@@ -141,6 +141,13 @@ struct GameWork {
 
 extern "C" GameWork game_work;  // C-linkage global at .bss 0x001f43b8, zero-initialised
 
+// Shared per-frame gameplay/render flag bitfield -- binary standalone .bss
+// uint32_t @ 0x00332bc8 (GOT-loaded, NOT a game_work field). Subsystems OR/BIC
+// individual bits each frame: 0x80 = combo-modifier active (ComboModifier::
+// UpdateSpecific/RemoveModifier), 0x40 = slice-trail (Game::Update), 0x20 =
+// read by DrawUpdate @ 0x1da688. Zeroed by PowerUpManager::SetDefaults/Reset.
+extern uint32_t g_GameFrameFlags;
+
 #ifdef __bada__
 #include <cstddef>
 static_assert(offsetof(GameWork, m_Paused)              == 0x02,  "GameWork::m_Paused");

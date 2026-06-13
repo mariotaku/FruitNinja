@@ -148,8 +148,8 @@ public:
     static bool CanSpawnFinalPomegranate();
 
     // Binary @ 0x001b98f4. Spawns the terminal pomegranate fruit into the wave.
-    // TODO: 0x001b98f4 -- spawn logic not yet ported
-    static void SpawnFinalPomegranate();
+    // Returns true (binary returns CONCAT44(undef,1)).
+    static bool SpawnFinalPomegranate();
 
     // Binary @ 0x001ba73c. Serializes the active super-fruit state to XML for save.
     static void SaveSuperFruitState(tinyxml2::XMLElement* parent);
@@ -159,8 +159,8 @@ public:
     static void Reset();
 
     // Binary @ 0x001ba460. Stops (freezes/kills) all fruit entities during super state.
-    // TODO: 0x001ba460 -- full StopAllFruit not yet ported
-    static void StopAllFruit();
+    // Instance method: reads explosion centre from this->m_WorkVec5 (+0xf0).
+    void StopAllFruit();
 
     // -----------------------------------------------------------------------
     // Instance methods

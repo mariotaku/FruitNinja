@@ -70,6 +70,13 @@ public:
     // calls item->SetParent(this).
     ScrollingMenuItem* AddItem(ScrollingMenuItem* item);
 
+    // ScrollingMenu::RemoveItemImmediate @ 0x001af83c (PLT 0x0010e85c)
+    // Immediately destroys the item at `index`; if it was the focused last row,
+    // shifts m_ClosestIdx/m_Velocity.y up one row and kicks m_PendingVelocity.y=0.1f.
+    // Recomputes m_TotalHeight over the remaining items. erase=true also removes
+    // the vector slot; the RemoveAnimate completion path passes erase=false.
+    void RemoveItemImmediate(int index, bool erase);
+
     // Returns count of items in m_Items.
     int GetNumItems() const;
 

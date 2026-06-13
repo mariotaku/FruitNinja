@@ -14,10 +14,14 @@
 #include "SuperFruitState.h"
 #include "Fruit.h"
 #include "FruitInfo.h"
+#include "Bomb.h"
 #include "SlashEntity.h"
 #include "ActorManager.h"
 #include "game/GameWork.h"
 #include "game/GameOver.h"
+#include "game/FruitSaveData.h"
+#include "game/WaveManager.h"
+#include "util/StringHash.h"
 #include "debug/Logger.h"
 #include <map>
 #include <tinyxml2.h>
@@ -247,7 +251,30 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
 
     LOG_INFO("SUPERFRUIT", "SuperFruitThrown() spawning controller for fruit=%p", static_cast<void*>(fruit));
 
-    // TODO: 0x001bbf48 -- scripted slow-arc velocity override and mirror not yet ported
+    // Binary @ 0x001bbf48: scripted slow-arc override written onto the thrown
+    // super-fruit. m_Gravity.x is always -5.0; the pos/vel/(gravity.y,gravity.z)
+    // preset is selected by game_work.gameMode (==2 -> Arcade, else default).
+    // Then a 51% chance (Rand32(100) < 51) mirrors the arc horizontally by
+    // negating m_Gravity.y, pos.x and vel.x.
+    fruit->m_Gravity.x = -5.0f;                          // [fruit+0x9c] = 0xc0a00000
+    if (game_work.gameMode == 2) {                       // GAME_MODE_ARCADE; byte at game_work+0x04
+        fruit->pos = Vec3(-35.0f, -260.0f, 0.0f);        // DAT_001bc104/0bc108/0bc10c
+        fruit->vel = Vec3(0.5f, 8.5f, 0.0f);             // 0x3f000000, 0x41080000, DAT_001bc10c
+        fruit->m_Gravity.z = -7.5f;                      // [fruit+0xa4] = 0xc0f00000
+        fruit->m_Gravity.y = 0.0f;                       // [fruit+0xa0] = DAT_001bc10c
+    } else {
+        fruit->pos = Vec3(-340.0f, -100.0f, 0.0f);       // DAT_001bc110/0bc114/0bc10c
+        fruit->vel = Vec3(5.0f, 5.0f, 0.0f);             // 0x40a00000, 0x40a00000, DAT_001bc10c
+        fruit->m_Gravity.z = -4.5f;                      // [fruit+0xa4] = 0xc0900000
+        fruit->m_Gravity.y = 0.01f;                      // [fruit+0xa0] = DAT_001bc118
+    }
+    // 51% chance: mirror the arc across the screen centreline.
+    if (WaveManager::GetInstance()->GetRandom().Rand32(100) < 51) {  // cmp #0x32 / bhi
+        fruit->m_Gravity.y = -fruit->m_Gravity.y;        // [fruit+0xa0]
+        fruit->pos.x       = -fruit->pos.x;              // [fruit+0x10]
+        fruit->vel.x       = -fruit->vel.x;              // [fruit+0x1c]
+    }
+
     // TODO: 0x001bbf48 -- SuperFruitThrown SFX not yet ported
 
     SuperFruitControl* ctrl = new SuperFruitControl(fruit);
@@ -292,11 +319,41 @@ bool SuperFruitControl::CanSpawnFinalPomegranate()
     return false;
 }
 
-// Binary @ 0x001b98f4. Spawns the terminal pomegranate.
-// TODO: 0x001b98f4 -- spawn logic not yet ported
-void SuperFruitControl::SpawnFinalPomegranate()
+// Binary @ 0x001b98f4. Spawns the terminal "super pomegranate" wave finale:
+// two random decoy fruits chucked almost immediately (delay 0.01s), bumps the
+// "super_pomegranates_spawned" save-stat, then chucks the actual super pomegranate
+// (delay 0.1s). Returns true (binary returns CONCAT44(undef,1)).
+//
+// Binary call shape (WaveManager::SpawnFruit @ 0x00124298 returns the spawned
+// Entity*, then Fruit::Chuck(delay, entity) overrides the spawner's default
+// 0.21s chuck delay with the tighter finale delay). DAT constants resolved:
+//   DAT_001b99bc = 0.01f  (decoy chuck delay)
+//   DAT_001b99c0 = 0.1f   (super pomegranate chuck delay)
+//   save-stat key string @ 0x002837d4 = "super_pomegranates_spawned"
+//   fruit-type name string @ 0x002837ef = "super_pomegranate"
+//   FruitSaveData = game_work.m_SaveData (binary: *(*(GameWork_glob)+0x50)).
+bool SuperFruitControl::SpawnFinalPomegranate()
 {
-    // TODO: 0x001b98f4 -- SpawnFinalPomegranate not yet ported
+    // Two random decoy fruits, chucked near-instantly.
+    Mortar::Entity* e0 = WaveManager::GetInstance()->SpawnFruit(1, -1, NULL, 0);
+    if (e0) static_cast<Fruit*>(e0)->Chuck(0.01f);   // DAT_001b99bc
+
+    Mortar::Entity* e1 = WaveManager::GetInstance()->SpawnFruit(1, -1, NULL, 0);
+    if (e1) static_cast<Fruit*>(e1)->Chuck(0.01f);   // DAT_001b99bc
+
+    // Increment the persistent "super_pomegranates_spawned" stat.
+    const char* kStatKey = "super_pomegranates_spawned";
+    uint32_t statHash = StringHash(kStatKey);
+    if (game_work.m_SaveData) {
+        game_work.m_SaveData->AddToTotal(kStatKey, statHash, 1, false, false);
+    }
+
+    // The actual super pomegranate, chucked slightly later.
+    int superType = Fruit::FruitType("super_pomegranate", false);
+    Mortar::Entity* e2 = WaveManager::GetInstance()->SpawnFruit(1, superType, NULL, 0);
+    if (e2) static_cast<Fruit*>(e2)->Chuck(0.1f);    // DAT_001b99c0
+
+    return true;
 }
 
 // Binary @ 0x001ba73c. Serializes active super-fruit state to XML.
@@ -320,7 +377,11 @@ void SuperFruitControl::SaveSuperFruitState(tinyxml2::XMLElement* parent)
     state.m_Timer      = ctrl->m_Timer;
     state.m_Lifetime   = ctrl->m_Lifetime;
     state.m_SliceCount = ctrl->m_SliceCount;
-    state.m_Spin       = 0.0f;  // TODO: 0x001ba73c -- resolve spin field from _pad_a8
+    // Binary @ 0x001ba73c reads ctrl+0x2c -> serialized as XML attr "rot".
+    // ctrl+0x2c is the controller's Entity-base scale.y (Entity::scale is the
+    // Vec3 at +0x28; .y component sits at +0x2c). The binary repurposes the
+    // controller's own scale.y as the saved spin/rotation value.
+    state.m_Spin       = ctrl->scale.y;
     state.WriteToElement(elem);
 
     parent->InsertEndChild(elem);
@@ -345,9 +406,88 @@ void SuperFruitControl::Reset()
     s_PomegranatesSpawnedThisGame = 0;
 }
 
-// Binary @ 0x001ba460. Stops all fruit during super-fruit freeze phase.
-// TODO: 0x001ba460 -- StopAllFruit: freeze/kill active type-0 entities not yet ported
+// Binary @ 0x001ba460. Stops all in-flight fruit and bombs during the
+// super-fruit explosion finale: clears any still-unspawned (chuck-delayed)
+// fruits/bombs, then sweeps every live fruit (ActorManager type 0) and bomb
+// (type 1), redirecting their velocity toward the explosion centre and
+// freezing their physics. The explosion centre is this->m_WorkVec5 (+0xf0).
+//
+// Per-entity velocity redirect (both fruits and sliced-fruit halves and bombs):
+//   dir    = Normalise(pos - centre)
+//   newVel = (vel + dir * 5.0f) / 2.0f      // 5.0f = DAT (vmov 0x40a00000)
+// (the /2.0f literal is the binary's local 2.0f operand to operator/).
+//
+// DAT constants (read from binary memory):
+//   DAT_001ba6a4 = 0.0f (zeroed into the per-entity stop fields)
+//   the copied Vec3 (GOT->0x0035f160) is _Vector3<float>::Zero == (0,0,0).
 void SuperFruitControl::StopAllFruit()
 {
-    // TODO: 0x001ba460 -- walk ActorManager type-0 list, set ENT_KILLED on non-super fruits
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    if (!am) return;
+
+    // Explosion centre lives in this controller's work vector (+0xf0).
+    const Vec3& centre = m_WorkVec5;
+
+    // Remove fruits/bombs that haven't actually spawned yet (still in
+    // chuck-delay) before redirecting the rest. Binary calls both here.
+    Fruit::ClearUnspawned(false);
+    Bomb::ClearUnspawned();
+
+    // -------- type 0: fruits --------
+    std::list<Mortar::Entity*>::iterator fit;
+    Mortar::Entity* e = am->GetEntityFirst(0, fit);
+    while (e != NULL) {
+        Fruit* f = static_cast<Fruit*>(e);
+
+        // Freeze fruit physics. These reproduce the binary's exact per-fruit
+        // stop writes at Fruit+0x98 (float=0) and the zero-Vec3 at Fruit+0xa0,
+        // plus the byte clear at Fruit+0x70.
+        // DIFFERS: binary zeroes the raw fields at +0x98 / +0xa0 (Vec3) / +0x70;
+        // the port expresses them through the named fields occupying those
+        // offsets (m_ZPosition, m_Gravity.y/.z + m_VisualScale.x, m_SliceAngle).
+        f->m_ZPosition = 0.0f;          // Fruit+0x98 = DAT_001ba6a4 (0.0f)
+        f->m_Gravity.y = 0.0f;          // Fruit+0xa0 } zero-Vec3 copy
+        f->m_Gravity.z = 0.0f;          // Fruit+0xa4 }
+        f->m_VisualScale.x = 0.0f;      // Fruit+0xa8 }
+        f->m_SliceAngle = 0;            // Fruit+0x70 (strb 0)
+
+        // Only sliced fruits get their two half-bodies redirected.
+        if (f->Sliced()) {
+            // First body: pos +0x10 -> vel +0x1c.
+            Vec3 dir = f->pos - centre;
+            dir.Normalise();
+            dir *= 5.0f;
+            f->vel = (f->vel + dir) / 2.0f;
+
+            // Second body: pos +0xc8 (m_SecondPos region) -> vel +0xd4.
+            // DIFFERS: binary reads Fruit+0xc8 and writes Fruit+0xd4; the port's
+            // named second-body fields sit at +0xb8/+0xc4, so this redirect uses
+            // the same raw +0x10 offset relationship the binary uses (pos->vel).
+            Vec3 dir2 = f->m_SecondPos - centre;
+            dir2.Normalise();
+            dir2 *= 5.0f;
+            f->m_SecondVel = (f->m_SecondVel + dir2) / 2.0f;
+        }
+
+        e = am->GetEntityNext(0, fit);
+    }
+
+    // -------- type 1: bombs --------
+    e = am->GetEntityFirst(1, fit);
+    while (e != NULL) {
+        Bomb* b = static_cast<Bomb*>(e);
+
+        // Redirect bomb velocity toward the explosion centre (pos +0x10 -> vel +0x1c).
+        Vec3 dir = b->pos - centre;
+        dir.Normalise();
+        dir *= 5.0f;
+        b->vel = (b->vel + dir) / 2.0f;
+
+        // Freeze bomb physics (binary writes at Bomb+0x8c / +0xa8 / +0x80).
+        b->m_AccelForce = Vec3(0.0f, 0.0f, 0.0f);  // Bomb+0x8c zero-Vec3
+        b->m_SpeedMult = 0.0f;                      // Bomb+0xa8 = DAT_001ba6a4 (0.0f)
+        b->m_bMovement = 0;                         // Bomb+0x80 (strb 0)
+
+        e = am->GetEntityNext(1, fit);
+    }
 }

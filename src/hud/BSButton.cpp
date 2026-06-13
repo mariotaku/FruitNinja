@@ -10,12 +10,43 @@
 
 #include "BSButton.h"
 #include "render/BakedStringBox.h"
+#include "render/Font.h"
+#include "render/FontCacheObjectTTF.h"
+#include "render/FontTTFRegistry.h"
+#include "render/MatrixManager.h"
+#include "engine/asset/Mesh.h"
 #include "engine/input/Touch.h"
+#include "engine/math/MathUtil.h"
+#include "engine/math/Vec2.h"
 #include "engine/math/Vec3.h"
 #include "engine/math/Colour.h"
 #include <cstdio>
 #include <cstdlib>
 #include <new>
+
+namespace {
+// Binary: the BakedStringBox font argument is *(g_GameData + 0x614) -- the
+// shared TTF face (FontCacheObjectTTF*) loaded once at game init over
+// "fontstruetype/gangofchinese.ttf" (256x256 atlas). The port has no
+// g_GameData slot for it (game_work is 0x608 bytes; the real GameContext's
+// +0x614 lives past that boundary and is not mirrored). MainScreen resolves
+// the identical slot by loading the face locally and looking it up in
+// FontTTFRegistry; BSButton uses the same pattern but holds the owning
+// SmartPtr in a function-static so the single shared face stays alive for the
+// program lifetime exactly as the GameData-owned font does -- and so the
+// BSButton 0xe8 layout (static_assert under __bada__) is not perturbed by a
+// new owning member.
+// DIFFERS: original = *(g_GameData+0x614) shared face owned by GameContext,
+//   using a file-local shared SmartPtr<Font> + FontTTFRegistry::Lookup because
+//   the port has not extended game_work past 0x608 to carry the +0x614 slot.
+static Mortar::FontCacheObjectTTF* GetSharedTTFFont() {
+    static Mortar::SmartPtr<Mortar::Font> s_TTFFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+    if (!s_TTFFont.IsValid()) {
+        return 0;
+    }
+    return Mortar::FontTTFRegistry::GetInstance().Lookup(s_TTFFont.Get());
+}
+} // namespace
 
 // BSButton::BSButton(Vec3 pos, char const* label, Vec3 textOffset)
 // Binary @ 0x15eb58
@@ -85,20 +116,15 @@ void BSButton::Init() {
 
     // box = operator new(200=0xc8)
     Mortar::BakedStringBox* box = new Mortar::BakedStringBox(
-        // font = *(GLOBAL[0x614])  (global font registry)
-        // TODO: 0x15ea40 -- resolve *(GOT+0x614) global FontCacheObjectTTF* for BakedStringBox ctor
-        nullptr,
-        // size=0x50 (80.0f as float scaled by param? -- spec gives 0x50=80), w=0x28 (40.0f)
-        // but spec says scale=10.0f, size=0x50, w=0x28, flags=0xf, b=1, c=3
-        // BakedStringBox(font, scale, size, w, flags, b, c) -> (font, fontSize, width, height, align, wrapMode, lineSpacing)
-        // per spec: size=0x50(80), w=0x28(40), flags=0xf(15), b=1, c=3, scale=10.0f
-        // mapping: fontSize=10.0f, width=0x50(80), height=0x28(40), align=0xf, wrapMode=1, lineSpacing=3
-        10.0f,    // fontSize (scale in spec = 10.0f / 0x41200000)
-        0x50,     // width = 80
+        // font = *(g_GameData + 0x614) -- shared gangofchinese.ttf face.
+        GetSharedTTFFont(),
+        // Binary ctor args: s0=0x41200000 (fontSize=10.0f), then 0x50,0x28,0xf,1,3.
+        10.0f,    // fontSize
+        0x50,     // width  = 80
         0x28,     // height = 40
-        0xf,      // flags / align
-        1,        // b / wrapMode
-        3         // c / lineSpacing
+        0xf,      // align flags
+        1,        // wrapMode
+        3         // lineSpacing
     );
     this->m_pLabelBox = box;
 
@@ -136,15 +162,86 @@ void BSButton::PreDraw(const Vec3& hudScale) {
 
 // BSButton::Draw  (slot 7)
 // Binary @ 0x15e60c
-// TODO: 0x15e60c -- Draw body: DAT_15e874 (pressed-grow scale factor),
-//   DAT_15e878 (angle->SinIdx/CosIdx index scale), DAT_15e884 (default Colour struct),
-//   MatrixStack::Reset/Scale44/RotZ44/GlobalTranslate44/_UploadCurrentMatrices sequence,
-//   Mesh::DrawQuadUnCached, SinIdx/CosIdx calls, texture bind/unbind (vtable[+0xc]/[+0x10]),
-//   BakedStringBox::SetTranslation and BakedStringBox::Draw at end.
 void BSButton::Draw(const Vec3& hudScale, int layerMask) {
     (void)hudScale;
     (void)layerMask;
-    // Not yet ported -- Draw constants not decoded in this pass.
+
+    // Gated on m_bEnabled (+0xe4); disabled buttons draw nothing.
+    if (m_bEnabled == 0) {
+        return;
+    }
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+
+    // Reset the world matrix stack, then bind this button's texture (slot +0xc).
+    mm.GetWorldStack().Reset();
+    m_Texture2->SetUnCached();
+
+    // Base scale comes from the button's own extents (+0x98 / +0x9c), not hudScale.
+    Matrix44 mat = Matrix44::Scale44(Vec3(m_ExtentX, m_ExtentY, 1.0f));
+
+    // White tint copied from the shared global Colour @ DAT_15e884 (== 0x34e2f8,
+    // the engine's "white" mod-colour written by SlashEntity::InitModColours).
+    Colour drawColour(255, 255, 255, 255);
+
+    if (m_bPressed != 0) {
+        // Pressed-grow: rebuild the scale matrix at DAT_15e874 (= 0.95f) and dim
+        // the tint to 50% per channel (TintColour with {0.5,0.5,0.5}).
+        mat = Matrix44::Scale44(Vec3(m_ExtentX * 0.95f, m_ExtentY * 0.95f, 1.0f));
+        const float kDim[3] = { 0.5f, 0.5f, 0.5f };
+        drawColour = Colour::TintColour(drawColour, kDim);
+    }
+
+    // Optional Z-rotation: m_DrawRotation.x (+0xb0) is degrees; DAT_15e878 (= 182.0f)
+    // converts degrees -> 16-bit angle index for SinIdx/CosIdx.
+    if (m_DrawRotation.x != 0.0f) {
+        const uint16_t idx = (uint16_t)((int)(m_DrawRotation.x * 182.0f));
+        mat.RotZ44(SinIdx(idx), CosIdx(idx));
+    }
+
+    mat.GlobalTranslate44(pos);
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    Mortar::Mesh::DrawQuadUnCached(drawColour, NULL);
+
+    // Unbind the texture (slot +0x10).
+    m_Texture2->UnSetUnCached();
+
+    // Draw the label box at pos + the label offset Vec3 stored at +0xb4
+    // (m_DrawRotation.y/.z + padding; the trailing word is zero padding).
+    if (m_pLabelBox) {
+        Vec3 labelOffset(m_DrawRotation.y, m_DrawRotation.z, 0.0f);
+        m_pLabelBox->SetTranslation(pos + labelOffset, 0);
+        m_pLabelBox->Draw(m_DrawRotation.x, Vec2(1.0f, 1.0f), 1);
+    }
+}
+
+// BSButton::UpdateTouchPosition  (free thiscall helper)
+// Binary @ 0x15e428 (thunked via 0x10b32c -> PTR @ 0x2d3f08).
+// Sequence:
+//   slot = this->m_TouchId (+0x88); if slot == -1, return.
+//   rec  = touchTableBase + slot*0xc + 0xa4   (legacy 16-slot input table)
+//   this->+0x8c = rec[0]; +0x90 = rec[1]; +0x94 = rec[2]   (3 words: x, y, phase/z)
+// DIFFERS: original reads the legacy 16-slot Mortar input table (GOT global,
+//   base resolved to 0x2d931c; records {x,y,phase} stride 0xc at +0xa4). That
+//   BSS table has zero live writers in this binary (see Touch.h note); the
+//   single live touch source is Mortar::Touch::states1, which the port's
+//   TouchInRegion/IsTouchDown already read. So we read currX/currY from the
+//   latched slot via Touch::GetSlot, which is numerically the same live data.
+//   Binary copies a 3rd word into +0x94 (z/phase); the port only needs X/Y for
+//   the Update() hit-test (m_TouchX/m_TouchY), so the 3rd word (_pad94) is
+//   intentionally not mirrored.
+void BSButton::UpdateTouchPosition() {
+    if (m_TouchId == -1) {
+        return;
+    }
+    const Mortar::TouchState* s = Mortar::Touch::GetInstance().GetSlot(m_TouchId);
+    if (s == 0) {
+        return;
+    }
+    m_TouchX = (float)s->currX;
+    m_TouchY = (float)s->currY;
 }
 
 // BSButton::Update  (slot 10)
@@ -172,8 +269,7 @@ void BSButton::Update(float dt) {
         int id = Mortar::TouchInRegion(left, right, bottom, top, -1);
         m_TouchId = id;
         if (id == -1) {
-            // TODO: 0x10b32c -- UpdateTouchPosition free function (writes +0x8c/+0x90).
-            //   Port needs this function ported to update m_TouchX/m_TouchY from live slot.
+            UpdateTouchPosition();
             return;
         }
         // Check for just-pressed (phase == 2).
@@ -194,7 +290,7 @@ void BSButton::Update(float dt) {
             }
         } else {
             // Still held.
-            // TODO: 0x10b32c -- UpdateTouchPosition free function: update m_TouchX/m_TouchY.
+            UpdateTouchPosition();
             // +0xe5 = (touch point inside region) ? 1 : 0  (highlight while pressed)
             m_bPressed = (m_TouchX >= left && m_TouchX <= right &&
                           m_TouchY >= bottom && m_TouchY <= top) ? 1 : 0;

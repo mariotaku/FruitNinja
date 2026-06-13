@@ -232,8 +232,8 @@ Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
 //   _GLOBAL__N_1::ReadFormatInternal @ 0x0022bc6c (reads via DataStreamReader).
 // The .tex3 magic is a 4-byte FourCC set at static-init by
 //   _GLOBAL__I_Tex3Format.cpp @ 0x0022be94 (copied from a GOT slot).
-// Port: magic bytes are the literal 4-char sequence used by Halfbrick ('TEX3' expected;
-// exact value not statically readable from the binary -- treat as a 4-byte sentinel).
+// Port: magic bytes are 'T','E','X',0x01 (LE uint32 0x01585445) confirmed from binary
+// static-init @ 0x0022be94 copying .rodata @ 0x0029ac00 into .bss @ 0x0034e3f4.
 // Minimal viable: parse magic + layer-0 TextureInfo (format/w/h) + layer-0 blob and
 // UploadNative on layer-0. Multi-layer mip handling // TODO: 0x0022bd7c.
 // TODO: 0x002d4b20 -- full Mortar::TextureFileFormat polymorphic reader registry
@@ -244,10 +244,15 @@ Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
     // The .tex3 magic is 4 bytes at offset +0. If the file doesn't start with
     // the expected FourCC, return null so the caller can fall through to the
     // existing .tex (Tex1) path.
-    // TODO: 0x0022be94 -- confirm exact 4-byte FourCC from static-init GOT slot.
-    // Using placeholder sentinel; real magic must be confirmed by re-analyst before
-    // matching real .tex3 files.
-    static const char kTex3Magic[4] = { 'T', 'E', 'X', '3' };
+    //
+    // FourCC resolved from the binary: the static-init thunk @ 0x0022be94 copies
+    // a 4-byte word from .rodata @ 0x0029ac00 (= bytes 'T','E','X',0x01, i.e. the
+    // little-endian uint32 0x01585445) into a .bss magic slot @ 0x0034e3f4. The
+    // Tex3 reader's _GLOBAL__N_1::ReadFormatInternal @ 0x0022bc6c reads a
+    // ReadBasicType<unsigned long> from the stream and compares it against that
+    // slot. The literal is "TEX" + version byte 0x01 (sits next to the
+    // "Tex3DataE" RTTI name in .rodata). NOT ASCII 'TEX3'.
+    static const char kTex3Magic[4] = { 'T', 'E', 'X', '\x01' };
     if (size < 4) {
         return Mortar::SmartPtr<Texture>();
     }

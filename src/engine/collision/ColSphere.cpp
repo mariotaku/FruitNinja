@@ -4,6 +4,10 @@
 #include "collision/ColAABB.h"
 #include "math/Math.h"
 #include "math/MathUtil.h"  // Math::Sqrt
+#include "render/MatrixManager.h"
+#include "render/MatrixStack.h"
+#include "asset/Mesh.h"
+#include "math/Colour.h"
 
 // Binary @ 0x0019fc20
 ColSphere::ColSphere() : Col(), radius(0.0f) {}
@@ -59,9 +63,27 @@ int ColSphere::Collide(Col* other, Vec3* outNormal) {
 
 // Binary @ 0x0019fd70 -- DrawDebug; reset matrix, scale by radius, translate by center, draw sphere
 void ColSphere::DrawDebug() {
-    // TODO: 0x0019fd70 -- Mesh::DrawSphere(1.0f, colour, NULL) on unknown Mesh instance;
-    //   matrix reset/scale/translate call sequence not yet RE'd. Mesh::DrawSphere exists but
-    //   is also a binary BX LR stub, so this whole function is a no-op in the original.
+    // Binary @ 0x0019fd70: grab the MatrixManager singleton's world stack, reset it,
+    // scale by radius, translate to the sphere centre, upload the modelview, then
+    // draw a unit debug sphere. Mesh::DrawSphere itself is a binary BX-LR stub, so
+    // the visible effect is a no-op in the original too -- the call shape is preserved.
+    MatrixManager& mm = MatrixManager::GetInstance();
+    MatrixStack& world = mm.GetWorldStack();   // m_World @ +0x1094
+    world.Reset();
+    world.Scale(Vec3(radius, radius, radius));  // field_0x14 = radius
+    world.Translate(center());                  // Col::m_PrimaryPoint @ +0x04
+    mm.UploadModelViewOnly();                   // binary: _UploadCurrentMatrices(true)
+
+    // Binary 0x0019fdba: ldrb m_CollideFlag @+0x10. Non-zero (collided this frame)
+    //   -> Colour(R=0xff, G=0x00, B=0x00); zero -> Colour(R=0x00, G=0x7d, B=0x7d).
+    //   Alpha is always 0x64 (100) (Colour ctor @ 0x0019fd60 hardcodes byte[3]=0x64).
+    Colour colour = m_CollideFlag
+        ? Colour(0xff, 0x00, 0x00, 0x64)
+        : Colour(0x00, 0x7d, 0x7d, 0x64);
+    // TODO: 0x0019fd70 -- Mesh instance not yet identified; binary loads Mesh* from GOT+offset
+    //   before calling DrawSphere. Mesh::DrawSphere is BX LR in binary so this is a no-op
+    //   in the original; call site omitted until instance is RE'd.
+    (void)colour;
 }
 
 bool ColSphere::Intersects(const ColSphere& other) const {

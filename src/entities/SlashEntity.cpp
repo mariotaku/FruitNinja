@@ -198,6 +198,13 @@ static uint8_t  g_ScaleFlag2        = 1;      // 0x001F3E69 (gates UV-mirror bra
 static uint8_t  g_HitLatch          = 0;      // 0x0024D840 frame-hit latch
 static int32_t  g_HitResetCounter   = 0;      // 0x0024D83C reset cooldown
 
+// Global head-cap frame-counter: blade-mod struct +0xbc (binary @ 0x00332b34).
+// UpdatePoints (@0x1e6914) increments by 1 per head-cap-emit frame; DrawSlice
+// (@0x1e83b0) clears it to 0 when positive. Shared across all 16 SlashEntity
+// instances. No other reader -- effectively a write-bump/clear bookkeeping slot,
+// ported for state fidelity per stub-don't-skip.
+static int32_t  g_HeadCapFrameCounter = 0;   // 0x00332b34
+
 static uint32_t ResolveEmitterHash(const char* path) {
     if (!path || path[0] == '\0') return 0;
     uint32_t h = StringHash(path);
@@ -572,9 +579,13 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
         Vec3 newest(dir->x, dir->y, dir->z);
 
         Vec3 diff(avgDir.x - newest.x, avgDir.y - newest.y, avgDir.z - newest.z);
-        if (diff.MagnitudeSqr() > 1.6886f) {
-            // TODO: 0x1e9918 -- write DAT value to m_field_0x118 when avg-newest diverges.
-            m_field_0x118 = 1.0f;
+        // Binary @ 0x1e9918: if (MagnitudeSqr(m_GhostDir - newestRingSlot) > DAT_001e9ea8)
+        //   m_field_0x118 = DAT_001e9eac. DAT_001e9ea8 = 1.69f (0x3fd851ea),
+        //   DAT_001e9eac = 0.095f (0x3dc28f5c). The 0.095f matches the combo-timer
+        //   seed used elsewhere (m_ComboTimerRef() = 0.095f at count>=10): a sharp
+        //   blade-direction reversal seeds this field as a short timer.
+        if (diff.MagnitudeSqr() > 1.69f) {
+            m_field_0x118 = 0.095f;
         }
         m_GhostDir = avgDir;
     }
@@ -677,7 +688,8 @@ void SlashEntity::UpdatePoints(float dt) {
 
     // If too few points, reset blade direction from DAT.
     if (m_PointCount < 4) {
-        // TODO: 0x1e6914 -- reset m_BladeDir from its DAT seed when m_PointCount < 4.
+        // m_BladeDir reset seed is a zero-init BSS Vec3 (GOT @ .got 0x2d8248 -> .bss 0x2d9288);
+        // (0,0,0) is binary-faithful. binary @ 0x1e6b24 (cmp m_PointCount<=3, ldmia/stmia 3 words into +0x64).
         m_BladeDir = Vec3(0.0f, 0.0f, 0.0f);
     }
 
@@ -1026,18 +1038,29 @@ void SlashEntity::Update(float dt) {
         PlaySwipe();
     }
 
-    // Per-swipe combo resolution -- binary SlashEntity::Update @ 0x0017dde6..0x0017dfd0.
-    // ASM-verified: 2026-05-18 binary @ 0x0017dde6..0x0017dfd0 (re-analyst)
-    // DAT_0017e004 = 0.1f, verified 2026-05-20.
-    static const float kComboWindow = 0.1f;
-    if (m_ComboTimerVal() < kComboWindow) {
-        m_ComboTimerRef() += dt;
-        if (m_ComboTimerVal() >= kComboWindow) {
-            // Fire g_OnComboCancel — binary @ 0x1e90d4, fires when combo timer
-            // this+0x118 crosses its threshold. Port equiv: m_ComboTimerRef() (+0x174)
-            // crossing kComboWindow. ComboModifier::ComboWasCanceled subscribes here.
-            // TODO: 0x1e90d4 — verify binary +0x118 is distinct from +0x174 (m_ComboTimerRef);
-            //   if so, track the separate +0x118 timer and fire at its threshold instead.
+    // Per-swipe combo resolution / combo-cancel timer -- binary SlashEntity::Update
+    // @ 0x1e90d4. The cancel timer is m_field_0x118 (+0x118), DISTINCT from the
+    // per-slice accumulator m_ComboTimerRef() (+0x174). Each frame +0x118 advances
+    // by dt; when it reaches DAT_001e9224 (=0.095f) the combo window closes:
+    // g_OnComboCancel fires, the combo is resolved, then +0x118 is pinned to
+    // DAT_001e9220 (=0.1f). Once it is >= 0.1f the timer is idle and only resets
+    // combo state (no fire). m_field_0x118 is pumped to 0.095f by the slice path
+    // (binary writes DAT_001e8a88=0.095f at this+0x118 once combo count >= 10), and
+    // is otherwise driven here.
+    static const float kComboFireThresh = 0.095f;   // DAT_001e9224
+    static const float kComboIdleValue  = 0.1f;     // DAT_001e9220
+    if (m_field_0x118 >= kComboIdleValue) {
+        // Idle / already-fired: reset combo state, no event.
+        m_ComboCountRef()   = 0;
+        m_ComboEntityType   = 0;
+        m_pComboMissControl = nullptr;
+        for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
+    } else {
+        m_field_0x118 += dt;
+        if (m_field_0x118 >= kComboFireThresh) {
+            m_field_0x118 = kComboIdleValue;
+            // Fire g_OnComboCancel -- binary @ 0x1e90d4 Event1<SlashEntity*>::Trigger.
+            // ComboModifier::ComboWasCanceled subscribes here.
             g_OnComboCancel(this);
             if (m_ComboCountVal() > 1 && m_ComboSliceArr[0] >= 0) {
                 // (a) Score-threshold refund.
@@ -1120,16 +1143,11 @@ void SlashEntity::Update(float dt) {
                 }
             }
             // (f) State reset (unconditional in this arm).
-            m_ComboCountRef()  = 0;
-            m_ComboEntityType  = 0;
+            m_ComboCountRef()   = 0;
+            m_ComboEntityType   = 0;
             m_pComboMissControl = nullptr;
             for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
         }
-    } else {
-        m_ComboCountRef()  = 0;
-        m_ComboEntityType  = 0;
-        m_pComboMissControl = nullptr;
-        for (int i = 0; i < 11; ++i) m_ComboSliceArr[i] = -1;
     }
 
     // ---------------------------------------------------------------------------
@@ -1214,8 +1232,13 @@ void SlashEntity::DrawSlice() {
         m_SwipeFuse = b << 1;
         if (b == 0) {
             // Fire swipe SFX and ghost burst on fuse completion.
-            // TODO: 0x1e83b0 -- fire swipe SFX here (PlaySwipe equivalent).
-            // TODO: 0x1e83b0 -- if global ghost-counter+0xbc > 0, reset it = 0.
+            // Reset the global head-cap frame-counter (blade-mod struct +0xbc,
+            // binary @ 0x00332b34). UpdatePoints (@0x1e6914, head-cap path) bumps
+            // it by 1 each frame a head-cap vertex is emitted; DrawSlice clears it
+            // here. movgt/strgt @ 0x1e8444/0x1e8448: only writes when > 0.
+            if (g_HeadCapFrameCounter > 0) {
+                g_HeadCapFrameCounter = 0;
+            }
             if (g_ScaleFlag1) CreateGhost();
             if (g_ContactHash != 0) {
                 PSPParticleEmitter* eBurst =
@@ -1286,11 +1309,13 @@ void SlashEntity::Init(void* /*unused*/, long /*unused*/, Vec3* /*unused*/) {
     m_GhostCount = 0;
     m_GhostDir   = Vec3(0.0f, 0.0f, 0.0f);
 
-    // +0x118 = DAT seed (m_field_0x118); +0xb8 = m_SwipeSoundTimer DAT seed.
-    // Binary writes DAT values; port uses 0.0f (DAT value not yet resolved).
-    // TODO: 0x1e7a34 -- resolve DAT seeds at +0xb8 and +0x118 from binary.
+    // +0x118 = DAT_001e7b98 = 0.1f (m_field_0x118 seeded to the combo/fade
+    //   timer initial value, NOT zero). +0xb8 = DAT_001e7b94 = 0.0f
+    //   (m_SwipeSoundTimer). Binary @ 0x1e7ae4 (vstr s15=DAT_001e7b98 -> +0x118)
+    //   and 0x1e7b84 (vstr s15=DAT_001e7b94 -> +0xb8). Values read from
+    //   FruitNinja_v1_6_1.exe: DAT_001e7b94=0x00000000, DAT_001e7b98=0x3dcccccd.
     m_SwipeSoundTimer = 0.0f;
-    m_field_0x118     = 0.0f;
+    m_field_0x118     = 0.1f;
 
     // +0x144 = 6.0f; +0x148/+0x14c = -1.
     m_field_0x144 = 6.0f;

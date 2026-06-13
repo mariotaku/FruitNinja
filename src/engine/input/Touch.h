@@ -142,11 +142,10 @@ public:
     // Binary signature: (int x, int y, int w, int h).
     uint32_t GetTouchInReigion(int x, int y, int w, int h);
 
-    // Binary @ 0x00195764 -- SendIndividualTouchCallbacks(InputDevice* dev).
+    // Binary @ 0x00195764 (v1.5.1) / 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks(InputDevice* dev).
     // 8x: emit AxisEvent for X/Y, ButtonPressed for press/held/release/up.
     // Action codes: 0x89+i (button), 0x99+i (X axis), 0xa9+i (Y axis), i in 0..7.
-    // Port specific: InputDevice::AxisEvent / ButtonPressed not yet declared;
-    //   body is a no-op stub until those virtual methods are ported into InputDevice.
+    // Wired via InputDeviceBada::Update -> Touch::GetInstance().SendIndividualTouchCallbacks(this).
     void SendIndividualTouchCallbacks(InputDevice* dev);
 
     // Port-side Tier A region-scan helper. Implements binary's free function
@@ -161,10 +160,9 @@ public:
     int GetTouchInRegion(float left, float right, float bottom, float top,
                          int preferredSlot = -1) const;
 
-    // Port specific: no binary symbol for Touch::Clear; added so InputDeviceBada::Reset()
-    // (binary @ 0x00195c00) can wipe all pending touch state. Binary equivalent is an
-    // inline memset of the states arrays at the Reset() call site.
-    // TODO: 0x00195c00 -- verify binary inlines the touch clear or calls a helper.
+    // Binary @ 0x0019553c -- Mortar::Touch::Clear(). Real helper symbol, called by
+    // InputDeviceBada::Reset @ 0x00195c00 (NOT inlined). Zeroes ONLY states2 (8 slots,
+    // phase=1); leaves states1 and the ring buffer untouched.
     void Clear();
 
     // Port-specific helpers (not in binary) -- used by SDL translator.

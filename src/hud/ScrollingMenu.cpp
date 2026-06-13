@@ -499,6 +499,52 @@ ScrollingMenuItem* ScrollingMenu::AddItem(ScrollingMenuItem* item) {
     // ASM-verified: 2026-05-24 binary @ 0x0015be54 (re-analyst)
 }
 
+// ---------------------------------------------------------------------------
+// ScrollingMenu::RemoveItemImmediate @ 0x001af83c  (PLT thunk 0x0010e85c)
+// Immediately tears down the item at `index`. Called by
+// ScrollingMenuItemRemoveAnimate::Update when its shrink animation finishes.
+//
+// Binary field map:
+//   +0xbc  m_ClosestIdx (int)
+//   +0xd8  m_Velocity.y (scroll offset)
+//   +0xa0  m_Height (SetHeight target / row-height field)
+//   +0x94  m_PendingVelocity.y  set to DAT_001af964 = 0.1f (0x3dcccccd)
+//   +0xa8  m_TotalHeight        reset to DAT_001af968 = 0.0f then re-summed
+// Item teardown: scalar-deleting dtor == delete item.
+// erase==false leaves the now-stale pointer in items[] (the binary only erase()s
+// the vector slot when the bool arg is non-zero); the recompute loop skips
+// `index`, so the dangling slot is never dereferenced.
+// ---------------------------------------------------------------------------
+void ScrollingMenu::RemoveItemImmediate(int index, bool erase) {
+    // If we are removing the currently-focused last row, shift focus/scroll up one row.
+    if (index == GetItemClosestToZeroIdx() &&
+        index == (int)m_Items.size() - 1) {
+        m_ClosestIdx -= 1;                  // +0xbc -= 1
+        m_Velocity.y -= m_Height;           // +0xd8 -= +0xa0  (scroll offset -= row-height field)
+        m_PendingVelocity.y = 0.1f;         // +0x94 = DAT_001af964 (0.1f)
+    }
+
+    // Destroy the item occupying this slot (vtable slot 1 = scalar-deleting dtor).
+    ScrollingMenuItem* item = m_Items[(size_t)index];
+    if (item) {
+        delete item;
+    }
+
+    // Recompute total scroll height as the sum of GetHeight() over all OTHER items.
+    m_TotalHeight = 0.0f;                    // +0xa8 = DAT_001af968 (0.0f)
+    for (int i = 0; i < (int)m_Items.size(); i++) {
+        if (i != index) {
+            m_TotalHeight += m_Items[(size_t)i]->GetHeight();
+        }
+    }
+
+    // The binary only shrinks the vector when erase != 0 (the RemoveAnimate
+    // completion path passes 0, leaving the stale pointer in place).
+    if (erase) {
+        m_Items.erase(m_Items.begin() + index);
+    }
+}
+
 int ScrollingMenu::GetNumItems() const {
     return (int)m_Items.size();
 }

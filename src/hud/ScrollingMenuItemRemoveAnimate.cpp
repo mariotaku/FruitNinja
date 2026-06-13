@@ -40,12 +40,13 @@ int ScrollingMenuItemRemoveAnimate::Update(float dt) {
     // Re-read scale after write.
     float cur2 = GetHeight();
     if (cur2 <= 0.01f) {
-        // TODO: 0x10e85c -- ScrollingMenu::RemoveItemImmediate(parent, index, 0)
-        //   not yet ported. Call: ScrollingMenu::RemoveItemImmediate(m_pParent, m_ItemIndex, 0)
-        //   Binary @ 0x10e85c; ScrollingMenu::RemoveItem @ 0x1b01d4 constructs this object
-        //   and wires it: copies scale state from old item (slots 4/5), SetParent,
-        //   destroys old item, overwrites items[index] in menu's vector@+0x3c.
-        (void)m_pParent;
+        // Animation complete (scale <= 0.01f, DAT_1af9d0 = 0x3c23d70a).
+        // Binary @ 0x1af9b8: r0=m_pParent(+0x10), r1=m_ItemIndex(+0x58), r2=0(erase=false).
+        // RemoveItemImmediate with erase=false deletes items[index] (== this),
+        // so capture members first and do not touch any member after the call.
+        ScrollingMenu* parent = m_pParent;
+        int idx = m_ItemIndex;
+        parent->RemoveItemImmediate(idx, false);   // ScrollingMenu::RemoveItemImmediate @ 0x1af83c (PLT 0x10e85c)
         return 0;
     }
     return 1;

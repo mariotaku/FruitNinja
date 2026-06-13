@@ -56,14 +56,13 @@ void TimeSinkModifier::ParseSpecific(TiXmlElement* xml) {
 }
 
 // @ 0x0014dac4
-// Binary: v = (float)points;
-//   if m_Accumulator < 0 -> m_Accumulator += v * m_Multiplier
-//   else                 -> TimeControl::AddTime(v * m_Multiplier)
-// The TimeControl instance is fetched from game_work+0x180 (mCountDown).
-// TODO: 0x0014dac4 — wire to score notification signal via Delegate2
+// Binary (vcmpe.f32 s13,#0 on m_Accumulator at +0x24):
+//   GE branch (m_Accumulator >= 0):  m_Accumulator += (float)points * m_Multiplier;  return;
+//   fall-through (m_Accumulator < 0): TimeControl::AddTime((float)points * m_Multiplier)
+//       on g_GameData TimeControl slot (indirect GOT 0x2d92a0 + 0x184 == game_work.mCountDown +0x180).
 void TimeSinkModifier::ScoreNotification(int points, int /*extra*/) {
     float v = (float)points;
-    if (m_Accumulator < 0.0f) {
+    if (m_Accumulator >= 0.0f) {
         m_Accumulator += v * m_Multiplier;
     } else {
         if (game_work.mCountDown) {
@@ -72,16 +71,20 @@ void TimeSinkModifier::ScoreNotification(int points, int /*extra*/) {
     }
 }
 
-// @ 0x0014da7c — similar accumulate/immediate path for per-fruit-slice.
+// @ 0x0014da7c — per-fruit-slice variant of ScoreNotification (byte-identical body).
 // Subscribed to g_FruitWasSliced (Fruit.cpp file-static, GOT 0x332a34).
+// Binary (vcmpe.f32 s13,#0 -> vmlage/vstrge/bxge): when m_Accumulator >= 0 it
+// ACCUMULATES (m_Accumulator += score*mult) and returns; when m_Accumulator < 0
+// it tail-calls TimeControl::AddTime(score*mult, game_work+0x184). arg3 (Entity*
+// slasher) is never referenced in the binary body — only this (r0) and score (r2).
 void TimeSinkModifier::FruitWasSlicedSink(Fruit* /*fruit*/, int score, Mortar::Entity* /*slasher*/) {
     float v = (float)score;
     if (m_Accumulator < 0.0f) {
-        m_Accumulator += v * m_Multiplier;
-    } else {
         if (game_work.mCountDown) {
             game_work.mCountDown->AddTime(v * m_Multiplier);
         }
+    } else {
+        m_Accumulator += v * m_Multiplier;
     }
 }
 

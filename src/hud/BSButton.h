@@ -116,6 +116,11 @@ public:
     // slot 17: SetDrawOrder -- writes drawOrder at +0x34
     // Binary @ 0x15f3f4: str r1,[r0,#0x34]
     virtual void SetDrawOrder(int order);
+
+private:
+    // BSButton::UpdateTouchPosition -- copy latched slot's live touch pos into m_TouchX/m_TouchY.
+    // Binary @ 0x15e428 (thunked via 0x10b32c). Member thiscall in binary.
+    void UpdateTouchPosition();
 };
 
 #ifdef __bada__
