@@ -1,6 +1,7 @@
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "asset/AlternativeTextureLoader.h"
+#include "asset/TextureFileFormat.h"
 #include "asset/File.h"
 #include "render/DisplayManager.h"
 #include "debug/Logger.h"
@@ -29,7 +30,7 @@ Texture::Texture()
 Texture::~Texture() {
     // Notify the TextureManager so its cache drops the entry pointing
     // at us BEFORE the GL handle is freed. Mirrors the binary's
-    // WeakPtr cleanup path — without this the next Find() for our
+    // WeakPtr cleanup path -- without this the next Find() for our
     // hash would return a dangling pointer.
     TextureManager::GetInstance().OnTextureDestroyed(this);
 
@@ -42,23 +43,15 @@ Texture::~Texture() {
 }
 
 // Matches Bada::Texture2DFromFile_Bada::Set (0x001897c0).
-// Binary gates the enable+bind on a cache flag that toggles when the
-// same texture is re-set; the port always enables and binds since we
-// don't cache "last bound" state. glActiveTexture is a port addition —
-// binary relies on TU0 being preselected by the frame setup.
 void Texture::Set() {
     if (m_TexId == 0) {
-        // Texture object exists (SmartPtr is valid) but GL upload didn't
-        // happen (load failed mid-stream, or upload was skipped). Binding 0
-        // makes GL sample the default-white texture -- producing stray
-        // white quads. Warn once per Texture instance and skip the bind.
         static bool s_warned = false;
         if (!s_warned) {
             LOG_WARN("TEXTURE/Set", "m_TexId==0 for path='%s' (load failed mid-stream); skipping bind",
                 m_Path.c_str());
             s_warned = true;
         }
-        s_LastBoundTexId = 0;  // mark untextured so DrawQuad skips
+        s_LastBoundTexId = 0;
         return;
     }
     glActiveTexture(GL_TEXTURE0);
@@ -115,74 +108,19 @@ void Texture::UploadNative(int width, int height, GLenum glFormat, GLenum glType
                  glFormat, glType, pixels);
 }
 
-// Matches GPUafyTexture (0x001898d8) + Texture::Load (0x00189dd4)
-Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
-    Mortar::File f(path, 0, 0);
-    bool opened = f.Open();
-    if (!opened) {
-        DisplayManager& dm = DisplayManager::GetInstance();
-        if (dm.m_TextureOverloadPrefix[0] != '\0') {
-            std::string altPath = std::string(dm.m_TextureOverloadPrefix) + path;
-            Mortar::File fAlt(altPath.c_str(), 0, 0);
-            if (fAlt.Open()) {
-                return Texture::Load(altPath.c_str());
-            }
-        }
-        // Many texture loads are optional (HUD fruit-icons absent from the
-        // Bada slow-hardware texture pack, defunct "coming_soon" placeholder,
-        // fruit_shadow.tex only shipped on fast-hardware packages, etc.).
-        // Callers handle missing files via SmartPtr.IsValid() gates -- this
-        // is not an ERROR-class condition. Keep the trace at INFO so it's
-        // still grep-able without polluting the console. Parse failures
-        // below stay at ERROR (real corruption / bad header).
-        LOG_INFO("TEXTURE/Load", "no such file '%s' (caller handles via IsValid)", path);
-        return Mortar::SmartPtr<Texture>();
-    }
+// Upload a parsed Tex1Data to GL. Called by Load() and LoadFromMemory().
+// This is the "// Port specific: GL boundary" sink fed by the reader's parsed DataInfo + blob.
+// Matches GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78).
+static Mortar::SmartPtr<Texture> UploadTex1ToGL(
+        Texture* tex,
+        const TextureFileFormat::Tex1Data* d,
+        const char* pathForLog)
+{
+    int width  = d->info.width;
+    int height = d->info.height;
+    const uint8_t* raw = static_cast<const uint8_t*>(d->pixels);
 
-    if (!f.Load(nullptr, 0)) {
-        LOG_ERROR("TEXTURE/Load", "failed to parse '%s'", path);
-        return Mortar::SmartPtr<Texture>();
-    }
-
-    // v1.6.1: peek 4 bytes and dispatch to the .tex3 parser if magic matches;
-    // fall through to the existing .tex (Tex1) parser otherwise.
-    // TODO: 0x002d4b20 -- full TextureFileFormat polymorphic registry dispatch.
-    Mortar::SmartPtr<Texture> tex =
-        ParseTex3Buffer(f.Data(), (long)f.Size(), path);
-    if (!tex.IsValid()) {
-        tex = ParseTexBuffer(f.Data(), (long)f.Size(), path);
-    }
-    if (tex.IsValid()) {
-        tex->m_Path = path;
-    }
-    return tex;
-}
-
-// Matches GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78). Shared by
-// Load() and LoadFromMemory().
-Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
-                                                  const char* pathForLog) {
-    if (size < 12) {
-        return Mortar::SmartPtr<Texture>();
-    }
-
-    const uint8_t* bytes = static_cast<const uint8_t*>(data);
-    uint8_t widthLog2  = bytes[0];
-    uint8_t heightLog2 = bytes[1];
-    uint8_t format     = bytes[2];
-    int width  = 1 << widthLog2;
-    int height = 1 << heightLog2;
-
-    long dataSize = size - 12;
-    const uint8_t* raw = bytes + 12;
-    if (dataSize <= 0) {
-        return Mortar::SmartPtr<Texture>();
-    }
-
-    Texture* tex = new Texture();
-
-    // Matches TexFmtToGL (0x00189f78) — verified from Ghidra decompilation
-    switch (format) {
+    switch (d->texFmt) {
         case 0x00: // RGB888
             tex->UploadNative(width, height, GL_RGB, GL_UNSIGNED_BYTE, raw);
             break;
@@ -218,57 +156,115 @@ Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
             break;
         // case 0x0b..0x0e: PVRTC compressed (not supported on desktop GL)
         default:
-            LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", format,
+            LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", (unsigned)d->texFmt,
                       pathForLog ? pathForLog : "<memory>");
-            delete tex;
             return Mortar::SmartPtr<Texture>();
     }
-
     return Mortar::SmartPtr<Texture>(tex);
 }
 
-// v1.6.1 addition: .tex3 container parser.
-// Binary: Mortar::TextureFileFormat::Tex3Format::Read @ 0x0022bd7c,
-//   _GLOBAL__N_1::ReadFormatInternal @ 0x0022bc6c (reads via DataStreamReader).
-// The .tex3 magic is a 4-byte FourCC set at static-init by
-//   _GLOBAL__I_Tex3Format.cpp @ 0x0022be94 (copied from a GOT slot).
-// Port: magic bytes are 'T','E','X',0x01 (LE uint32 0x01585445) confirmed from binary
-// static-init @ 0x0022be94 copying .rodata @ 0x0029ac00 into .bss @ 0x0034e3f4.
-// Minimal viable: parse magic + layer-0 TextureInfo (format/w/h) + layer-0 blob and
-// UploadNative on layer-0. Multi-layer mip handling // TODO: 0x0022bd7c.
-// TODO: 0x002d4b20 -- full Mortar::TextureFileFormat polymorphic reader registry
-// (Tex1/Tex2/Tex3/DDS entries); port uses a magic-byte if/else instead.
-Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
-                                                    const char* pathForLog)
-{
-    // The .tex3 magic is 4 bytes at offset +0. If the file doesn't start with
-    // the expected FourCC, return null so the caller can fall through to the
-    // existing .tex (Tex1) path.
-    //
-    // FourCC resolved from the binary: the static-init thunk @ 0x0022be94 copies
-    // a 4-byte word from .rodata @ 0x0029ac00 (= bytes 'T','E','X',0x01, i.e. the
-    // little-endian uint32 0x01585445) into a .bss magic slot @ 0x0034e3f4. The
-    // Tex3 reader's _GLOBAL__N_1::ReadFormatInternal @ 0x0022bc6c reads a
-    // ReadBasicType<unsigned long> from the stream and compares it against that
-    // slot. The literal is "TEX" + version byte 0x01 (sits next to the
-    // "Tex3DataE" RTTI name in .rodata). NOT ASCII 'TEX3'.
-    static const char kTex3Magic[4] = { 'T', 'E', 'X', '\x01' };
-    if (size < 4) {
-        return Mortar::SmartPtr<Texture>();
-    }
-    if (memcmp(data, kTex3Magic, 4) != 0) {
-        // Not a .tex3 file; caller should try the .tex parser.
+// Matches GPUafyTexture (0x001898d8) + Texture::Load (0x00189dd4).
+// Reconciled to use TextureFileFormat::g_readers[] dispatch via TextureLoader/LockLayers.
+// Binary flow: AlternativeTextureLoader::CreateLoader -> TextureLoader -> LockLayers ->
+//   g_readers[i](data, size) -> Tex1Data* -> GL upload.
+Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
+    // v1.6.1: AlternativeTextureLoader::CreateLoader handles both the fast path
+    // (Prefix/Postfix empty -> returns TextureLoader over original path) and the
+    // slow path (Prefix/Postfix set -> SubstituteApparentSizeTextureSource).
+    // CreateLoader gates on File::Exists internally (via TextureLoader::CreateLoader).
+    AsciiString pathStr(path);
+    SmartPtr<TextureSource> src = AlternativeTextureLoader::CreateLoader(pathStr);
+
+    if (!src.IsValid()) {
+        // File not found (TextureLoader::CreateLoader returned null).
+        // Port-specific fallback: try TextureOverloadPrefix path.
+        // DIFFERS: binary has no TextureOverloadPrefix; this is a port-specific feature
+        //   for the SDL asset-root override. Mirrors the old Texture::Load behaviour.
+        DisplayManager& dm = DisplayManager::GetInstance();
+        if (dm.m_TextureOverloadPrefix[0] != '\0') {
+            std::string altPath = std::string(dm.m_TextureOverloadPrefix) + path;
+            return Texture::Load(altPath.c_str());
+        }
+        LOG_INFO("TEXTURE/Load", "no such file '%s' (caller handles via IsValid)", path);
         return Mortar::SmartPtr<Texture>();
     }
 
-    // TODO: 0x0022bc6c -- ReadFormatInternal: allocate Tex3Data (0x4c bytes), read
-    // TextureInfo fields (format/numLayersX/numLayersY via MakeIntFormat helpers),
-    // then read the per-layer size table and accumulate layer-data offsets.
-    // The port stubs this out as a null result for now; .tex3 files are not present
-    // in the shipped 1.5.1/1.6.1 asset packs used by this port target.
-    LOG_INFO("TEXTURE/ParseTex3Buffer", "tex3 container detected in '%s'; "
-             "full decode not yet implemented (TODO: 0x0022bc6c)",
-             pathForLog ? pathForLog : "<memory>");
+    // Lock the source to get parsed pixel data.
+    TextureSourceData* raw = src->LockLayers();
+    if (!raw) {
+        LOG_ERROR("TEXTURE/Load", "failed to parse '%s'", path);
+        return Mortar::SmartPtr<Texture>();
+    }
+
+    // Identify and upload. Currently the only live format is Tex1.
+    // Tex2/DDS/Tex3 LockLayers() return null (TODO), so they fall through to error.
+    TextureFileFormat::Tex1Data* tex1 =
+        dynamic_cast<TextureFileFormat::Tex1Data*>(raw);
+
+    Mortar::SmartPtr<Texture> result;
+    if (tex1) {
+        Texture* t = new Texture();
+        result = UploadTex1ToGL(t, tex1, path);
+        if (!result.IsValid()) {
+            delete t;
+        } else {
+            t->m_Path = path;
+        }
+    } else {
+        // TODO: 0x0022bc6c -- Tex3 full decode + GL upload.
+        // TODO: 0x0022c7d4 -- DDS full decode + GL upload.
+        // TODO: 0x0022b404 -- Tex2 full decode + GL upload.
+        LOG_INFO("TEXTURE/Load", "tex3/dds/tex2 format not yet decoded for '%s'"
+                 " (TODO: 0x0022bc6c / 0x0022c7d4 / 0x0022b404)", path);
+    }
+
+    src->UnlockLayers(raw);
+    return result;
+}
+
+// Binary @ 0x00189d80 Mortar::Texture::LoadFromMemory(void const*, int).
+// Port: routes the in-memory blob directly through the Tex1 reader (no file I/O).
+// DIFFERS: binary constructs Texture2DFromFile_Bada and parses via GPUafyTexture;
+//   port calls ReadTex1Format directly (same logic, no TextureLoader wrapping needed
+//   for memory blobs -- LoadFromMemory is never called with Tex3/Tex2/DDS data).
+Mortar::SmartPtr<Texture> Texture::LoadFromMemory(void const* buf, int len) {
+    return ParseTexBuffer(buf, (long)len, nullptr);
+}
+
+// ParseTexBuffer -- kept as the shared helper for LoadFromMemory and the test path.
+// Calls the Tex1 reader directly (bypasses the registry for in-memory blobs).
+// Matches GPUafyTexture (0x001898d8) + TexFmtToGL (0x00189f78).
+Mortar::SmartPtr<Texture> Texture::ParseTexBuffer(const void* data, long size,
+                                                  const char* pathForLog) {
+    TextureSourceData* raw = TextureFileFormat::ReadTex1Format(data, (unsigned long)size);
+    if (!raw) {
+        return Mortar::SmartPtr<Texture>();
+    }
+    TextureFileFormat::Tex1Data* d = static_cast<TextureFileFormat::Tex1Data*>(raw);
+    Texture* tex = new Texture();
+    Mortar::SmartPtr<Texture> result = UploadTex1ToGL(tex, d, pathForLog);
+    if (!result.IsValid()) {
+        delete tex;
+    }
+    delete raw;
+    return result;
+}
+
+// ParseTex3Buffer -- magic-check only; full decode is TODO.
+// Kept for call-site compatibility (previously called by Load()).
+// Now Load() routes through AlternativeTextureLoader -> TextureLoader -> g_readers,
+// so this function is effectively dead but preserved as a named binary landmark.
+// Binary: Mortar::TextureFileFormat::Tex3Format::Read @ 0x0022bd7c.
+Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
+                                                    const char* pathForLog)
+{
+    TextureSourceData* raw = TextureFileFormat::ReadTex3Format(data, (unsigned long)size);
+    if (!raw) {
+        return Mortar::SmartPtr<Texture>();
+    }
+    // TODO: 0x0022bc6c -- Tex3Data GL upload path (no Tex3 assets in shipped packs).
+    delete raw;
+    (void)pathForLog;
     return Mortar::SmartPtr<Texture>();
 }
 
@@ -276,24 +272,7 @@ Mortar::SmartPtr<Texture> Texture::ParseTex3Buffer(const void* data, long size,
 
 namespace Mortar {
 
-// Binary @ 0x00189d80 Mortar::Texture::LoadFromMemory(void const*, int).
-// The binary does:
-//   t = operator new(0x20);
-//   Texture2DFromFile_Bada::ctor(t, buf, len, 0xffffffff);  // FromMemoryInit
-//   wrap t in SmartPtr<Texture> and return it (via the hidden sret slot).
-// FromMemoryInit (0x001899dc) parses the same .tex layout as Load() through
-// GPUafyTexture + TexFmtToGL, so the port routes the in-memory blob through
-// the shared ParseTexBuffer helper. No file path -> no m_Path / overload
-// fallback (the file-path variant lives in Load()).
-Mortar::SmartPtr<Texture> Texture::LoadFromMemory(void const* buf, int len) {
-    return ParseTexBuffer(buf, (long)len, nullptr);
-}
-
 // Binary @ 0x00188da4 Mortar::Texture::SetUnCached().
-// Binary: if (vtable_slot3() == 0) Set();  where slot3 is Texture2D::GetType
-// (vtable +0xc), which returns 0 for a plain Texture2D -- so Set() always
-// runs. The port has merged the concrete Texture2D into Texture and has no
-// GetType subtype virtual, making the gate unconditionally true.
 void Texture::SetUnCached() {
     Set();
 }
