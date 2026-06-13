@@ -9,15 +9,18 @@
 #include "screens/FruitFactPage.h"
 #include "hud/MenuButton.h"
 #include "hud/HUD.h"
+#include "hud/FruitFactControl.h"
 #include "engine/audio/GameSound.h"
 #include "engine/audio/MortarSound.h"
 #include "engine/util/Delegate.h"
 #include "engine/core/MortarTypes.h"
+#include "engine/asset/TextureManager.h"
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
 #include "entities/Fruit.h"
 #include "entities/FruitInfo.h"
 #include <cstddef>
+#include <cstdio>
 
 // ---------------------------------------------------------------------------
 // Static content state (Binary @ base 0x002d7130)
@@ -41,7 +44,11 @@ Mortar::SmartPtr<Mortar::Texture> FruitFactPageControl::s_TexArrow;
 // ---------------------------------------------------------------------------
 
 void FruitFactPageControl::LoadContent() {
-    // TODO: 0x00170b1c -- load title/header textures via LoadLocalisedTexture
+    if (g_factContentLoaded) return;
+    g_factContentLoaded = true;
+    g_factTex0 = Mortar::TextureManager::LoadLocalisedTexture("fact_board.tex");
+    g_factTex1 = Mortar::TextureManager::LoadLocalisedTexture("sensei_head.tex");
+    g_factTex2 = Mortar::TextureManager::LoadLocalisedTexture("arcade_results_arrow.tex");
 }
 
 void FruitFactPageControl::UnLoadContent() {
@@ -84,8 +91,58 @@ FruitFactPageControl::~FruitFactPageControl() {
 // ---------------------------------------------------------------------------
 
 void FruitFactPageControl::Init() {
-    // TODO: 0x0017160c -- load title/header tex via LoadLocalisedTexture+OS_SPrintf,
-    // size header quad, call vtable+0x10 (HUDControl base Init).
+    // Binary @ 0x0017160c.
+    // TODO: 0x0017160c -- save/clear field this+0x20 (flag in HUDControl base); exact
+    //   semantics require re-analyst to confirm whether it saves size.x or a derived field.
+
+    // 1. Set board texture into HUDControl3d m_Texture slot (+0x74).
+    m_Texture = g_factTex0;
+
+    // 2. Compute display-size quad.
+    // DIFFERS: original = VectorUnsignedToFloat(display[+0x24]+1, display[+0x28]+1) from
+    //   the Bada back-buffer object; port uses FN_SCREEN_W/FN_SCREEN_H (480x320).
+    size.x = (float)FN_SCREEN_W;
+    size.y = (float)FN_SCREEN_H;
+    size.z = 0.0f;
+
+    // 3. If mode==0 (classic), multiply size by DAT_001717e4 each axis.
+    // TODO: 0x001717e4 -- scale constant for mode-0 header quad (value unresolved; re-analyst needed).
+
+    // 4. Set pos from DAT constants.
+    // TODO: 0x001717e8 / 0x001717ec -- header offset pos (X, Y unresolved; re-analyst needed).
+
+    // 5. Combo-mode seed: if game session state+4 == 3 (Zen combo mode).
+    if (game_work.m_SaveData) {
+        // Binary reads *(state+4) from Game+0x50 (session object, FruitSaveData mode byte).
+        // FruitSaveData has no +4 mode byte in the port. The binary's "state+4" == gameMode
+        // stored in the session. Use game_work.gameMode as the equivalent.
+        if (game_work.gameMode == 3) {
+            int* comboArr = game_work.m_SaveData->m_BestComboFruits;
+            int  comboCount = game_work.m_SaveData->m_BestComboLength;
+            FruitFact::CheckCombo(comboArr, comboCount, &m_FruitIdx);
+        }
+    }
+
+    // 6. Seed current fact string.
+    m_pCurFactString = Fruit::GetFact(NULL, &m_FactIdx, m_FruitIdx, m_FactIdx);
+
+    // 7. Fact colour.
+    m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
+
+    // 8. Build the per-fruit fact texture name and load it.
+    // Binary: OS_SPrintf(buf, 0x80, "%s.tex", Fruit::FruitFactTexture(m_FruitIdx)) @ 0x0028103A.
+    {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(m_FruitIdx));
+        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
+    }
+
+    // 9. Layer flags.
+    m_LayerFlags = 0x80;
+
+    // 10. Base Init.
+    // TODO: 0x0017160c -- restore this+0x20 flag saved in step 0, then call HUDControl::Init.
+    HUDControl::Init();
 }
 
 // ---------------------------------------------------------------------------
@@ -340,11 +397,45 @@ bool FruitFactPageControl::RightPressed(InputEvent* /*ev*/) {
 }
 
 bool FruitFactPageControl::UpPressed(InputEvent* /*ev*/) {
-    // TODO: 0x00170a20 -- forward to active page
-    return false;
+    // Binary @ 0x00170a20 -- next-fruit fact navigation (NOT "forward to page").
+    // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
+    const ::FruitInfo* info;
+    int fruitCount = FruitInfo_GetCount();
+    do {
+        ++m_FruitIdx;
+        if (m_FruitIdx >= fruitCount) {
+            m_FruitIdx = 0;
+        }
+        info = Fruit::FruitInfo(m_FruitIdx);
+    } while (info == NULL || info->m_FactCount < 1);      // +0x270 = m_FactCount
+    m_pCurFactString = Fruit::GetFact(NULL, &m_FactIdx, m_FruitIdx, -1);
+    m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
+    {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(m_FruitIdx));
+        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
+    }
+    return true;
 }
 
 bool FruitFactPageControl::DownPressed(InputEvent* /*ev*/) {
-    // TODO: 0x00170924 -- forward to active page
-    return false;
+    // Binary @ 0x00170924 -- prev-fruit fact navigation (NOT "forward to page").
+    // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
+    const ::FruitInfo* info;
+    int fruitCount = FruitInfo_GetCount();
+    do {
+        --m_FruitIdx;
+        if (m_FruitIdx < 0) {
+            m_FruitIdx = fruitCount - 1;
+        }
+        info = Fruit::FruitInfo(m_FruitIdx);
+    } while (info == NULL || info->m_FactCount < 1);      // +0x270 = m_FactCount
+    m_pCurFactString = Fruit::GetFact(NULL, &m_FactIdx, m_FruitIdx, -1);
+    m_FactColour = Fruit::FruitFactColour(m_FruitIdx);
+    {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s.tex", Fruit::FruitFactTexture(m_FruitIdx));
+        m_Texture = Mortar::TextureManager::LoadLocalisedTexture(buf);
+    }
+    return true;
 }
