@@ -137,10 +137,11 @@ static void DoSetTerminate() {
 //   if (game_work.m_pActiveHUDControl) m_pActiveHUDControl->m_bPendingRemoval = 1
 //   SetScore(0, -1)
 //   NetworkManager::GetInstance()->VTable[3](0)   // defunct
-//   game_work.m_MenuReturnTimer = 0.0f                          // +0x1a0
-//   game_work.m_bDisconnectPending = 0                          // +0x19d
-//   game_work.m_bMPRetryPending = 0                             // +0x170
-//   game_work.m_bP2PHostMatched/m_bP2PClientJoined/m_bP2PGameStarted = 0  // +0x19a..+0x19c
+//   game_work.m_QuitTransitionTimer = 0.0f                      // +0x1a8
+//   game_work.m_bMPRetryPending = 0                             // +0x174
+//   game_work.m_bP2PHostMatched/m_bP2PClientJoined = 0         // +0x19a..+0x19b
+//   (m_bP2PGameStarted/m_bDisconnectPending removed in v1.6.1 -- those bytes
+//    are now interior to m_FrameTimer int @ +0x19c)
 //
 // NOTE: This is THE SAME binary function called by PauseScreen quit path
 // (ported at src/screens/PauseScreen.cpp:144-194). Duplication faithful
@@ -170,12 +171,12 @@ static void DoQuitToMenu() {
     // Defunct: P2P / online disconnect -- no-op stub; binary @ 0x00169e9e
     Mortar::NetworkManager::GetInstance()->SpawnThreadController(); // vtable[3](0)
 
-    game_work.m_MenuReturnTimer = 0.0f;                           // 0x169eaa
-    game_work.m_bDisconnectPending = 0;                            // 0x169eae
+    game_work.m_QuitTransitionTimer = 0.0f;                       // 0x169eaa
     game_work.m_bMPRetryPending   = 0;                            // 0x169eb2
     game_work.m_bP2PHostMatched   = 0;                            // 0x169eb6
     game_work.m_bP2PClientJoined  = 0;                            // 0x169eba
-    game_work.m_bP2PGameStarted   = 0;                            // 0x169ebe
+    // m_bP2PGameStarted and m_bDisconnectPending removed in v1.6.1
+    // (those byte slots at +0x19c/+0x19d are now interior to m_FrameTimer int).
 
     // DIFFERS: binary relies on the OS task scheduler swapping from Game task
     // to Frontend task, which triggers GameExit_Handler via GameTaskExit.
@@ -1469,7 +1470,7 @@ void GameOverScreen::Update(float dt) {
         m_State = STATE_MAIN_DISPLAY;
         {
             Game* g = Game::GetInstance();
-            if (g) game_work.m_bGameOverActive = 0;   // BYTE @ Game+0x190
+            if (g) game_work.m_bUpdatesSuspended = 0;  // BYTE @ Game+0x195
         }
         if (prevSlot9c == 0) m_ProgressCounter = 0;
         m_Timer = 2.0f;           // FINAL unconditional write

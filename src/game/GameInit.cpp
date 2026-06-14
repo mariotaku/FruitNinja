@@ -548,15 +548,15 @@ void GameUpdate(float dt, bool active) {
         }
     }
 
-    // m_MenuReturnTimer ramp -- binary @ 0x0016c5fe..0x0016c626 (re-analyst
-    // 2026-05-10). Vestigial in the shipped binary: nothing arms +0x1A0 to a
+    // m_QuitTransitionTimer ramp -- binary @ 0x0016c5fe..0x0016c626 (re-analyst
+    // 2026-05-10). Vestigial in the shipped binary: nothing arms +0x1A8 to a
     // positive value, so this branch never fires in normal play. Kept for
     // structural parity in case a future RE pass identifies a code path that
     // does arm it (e.g. delayed-quit from a popup the port hasn't traced).
     // Ramp uses RAW dt (s17 saved at function entry), not the wave-scaled dt.
-    if (game_work.m_MenuReturnTimer > 0.0f) {
-        game_work.m_MenuReturnTimer -= dt;
-        if (game_work.m_MenuReturnTimer <= 0.0f) {
+    if (game_work.m_QuitTransitionTimer > 0.0f) {
+        game_work.m_QuitTransitionTimer -= dt;
+        if (game_work.m_QuitTransitionTimer <= 0.0f) {
             // Binary @ 0x0016c622: blx CleanupAndReturnToMainMenu (0x0016b2dc).
             // Port body lives in PauseScreen.cpp QuitToMenu (and GameOverScreen
             // QuitCallback for the alternate path); both fire the same writes
