@@ -28,6 +28,8 @@ namespace FN {
 bool  g_DebugHitboxes  = false;
 bool  g_DebugWireframe = false; // Port specific: desktop GL only (F2)
 float g_DebugTimeScale = 1.0f; // Port specific: debug-only, no binary equivalent
+// DEBUG: auto-slash for screenshot capture -- TEMPORARY
+bool  g_DebugAutoSlash = true;
 
 // Lazy 1x1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex
