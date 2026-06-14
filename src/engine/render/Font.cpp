@@ -52,6 +52,10 @@ Font::~Font() {
     // lives outside Font's binary-layout struct to keep sizeof == 0x438).
     FontTTFRegistry::GetInstance().Unregister(this);
 
+    // DIFFERS: binary @ 0x0024d818 free order is (1) delete[] m_Kernings@+0x410,
+    // (2) delete[] m_Glyphs@+0x000, (3) ~Page each + operator delete[] on Page
+    // array@+0x408, (4) ~vector m_PageVerts@+0x42c. Port order differs but all
+    // four frees are independent non-aliasing heap blocks; semantically identical.
     delete[] m_Glyphs;
     m_Glyphs = nullptr;
 
@@ -1227,18 +1231,18 @@ void Font::DrawString(Utf8StringIterator iter, float posX, float posY, float pos
     DrawString(iter, colour, alignment, posX, posY, posZ, scale, maxWHx, maxWHy, rotZ, clip);
 }
 
-// TODO: 0x001985b0 -- word-advance helper for word-wrap: measure the next
-// word's xadvance from iter, breaking at a real line-break point.
+// TODO: 0x0024c2a0 -- word-advance helper for word-wrap: walk chars until
+// WordWrap::CanBreakLineAt, tag-skip <font>/</font> via strncasecmp, accumulate
+// xadv per glyph; return startIter-if-fits else NULL (iterator/char*, NOT float).
 // BLOCKED: faithful port requires the Mortar::WordWrap subsystem
-// (WordWrap::CanBreakLineAt @ 0x0019acc4 -> IsWhiteSpace / IsNonBeginningChar /
-// IsEastAsianChar + the East-Asian line-break table @ DAT_0019adc4 + locale
-// flags), none of which is ported. The binary also tag-skips <font ...>/</font>
-// via OS_strnicmp before each break test. This helper is not called by any
-// gameplay code (only an exported symbol + data ref); the port's space-based
-// wrap in DrawString/GetStringHeight covers shipping needs until WordWrap lands.
+// (WordWrap::CanBreakLineAt + East-Asian line-break table + locale flags).
+// Note: binary return type is Utf8StringIterator/char* (start iter when next word
+// fits, NULL when line break needed) -- the port's `float` return signature is a
+// Ghidra mis-decode; correct the signature when WordWrap lands.
+// DIFFERS: stub returns 0.0f (wrong type/value); blocked on unported WordWrap.
 float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float) { return 0.0f; }
 
-// Binary @ 0x001984e8 -- the engine's canonical single-codepoint glyph lookup.
+// Binary @ 0x0024c228 -- the engine's canonical single-codepoint glyph lookup.
 // param_1 is `this` (Ghidra typed it `long`); param_2 is the codepoint.
 //   cp < 0   : cp += 0x100  (signed-byte codepoint wraps into 0x80..0xFF), then
 //              fall through to the lookup-table path
@@ -1248,6 +1252,8 @@ float Font::FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float
 // linear id-search even for cp < 256 when the lookup slot is null.
 // Linear search walks m_Glyphs (stride sizeof(CharTemplate)=0x24), comparing the
 // uint16 id at offset 0, returning the first match or nullptr after m_GlyphCount.
+// DIFFERS: asm divergence is pointer-arith/register-alloc cosmetic only
+// (binary: base+i*0x24 ptr; port: &m_Glyphs[i]); logic is identical.
 Font::CharTemplate* Font::GetCharTemplate(long /*this_redundant*/, int cp) {
     if (cp < 0) {
         cp += 0x100;
@@ -1267,12 +1273,16 @@ Font::CharTemplate* Font::GetCharTemplate(long /*this_redundant*/, int cp) {
     return nullptr;
 }
 
-// ASM-spec: 2026-05-11 binary @ 0x001988f0 (re-analyst).
+// Binary @ 0x0024c45c (v1.6.1; stale 0x001988f0 was an older build).
 //   maxWidth <= 0: walks string counting '\n', returns lineH * (n+1).
-//   maxWidth >  0: word-wrap path; advances per word, line-breaks when
-//                  next word would exceed maxWidth.
-// Used by FruitFactControl's auto-shrink loop to pick a font scale that
-// keeps the fact body within a 96-px box.
+//     Binary inits s18=lineH (vmovls s18,s0), adds lineH per '\n' (vaddeq).
+//     Port matches exactly; binary also calls GetCharTemplate+GetKerning per char
+//     (dead calls whose results are discarded); port omits those -- cosmetic only.
+//   maxWidth >  0: DIFFERS: binary calls FindAdvanceOfNextWord(@0x0024c2a0) per
+//     word (East-Asian/tag-aware WordWrap); port substitutes a space-tokenised
+//     accumulation. Blocked on Mortar::WordWrap::CanBreakLineAt (unported).
+//     TODO: 0x0024c45c wrap path -- port FindAdvanceOfNextWord(@0x0024c2a0) +
+//     WordWrap::CanBreakLineAt; do NOT empirically tune the space-split heuristic.
 float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth) {
     if (maxWidth <= 0.0f) {
         int newlines = 0;
@@ -1283,6 +1293,8 @@ float Font::GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth
         return lineH * (float)(newlines + 1);
     }
 
+    // DIFFERS: binary @ 0x0024c45c wrap path calls FindAdvanceOfNextWord per word
+    // (Mortar::WordWrap-aware); space-tokenised approximation used until WordWrap lands.
     int lines = 1;
     float curWidth = 0.0f;
     while (!iter.IsEmpty()) {

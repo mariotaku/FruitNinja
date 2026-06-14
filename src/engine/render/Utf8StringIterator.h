@@ -15,7 +15,7 @@
 //   Utf8StringIterator ctor (0x0012fe00) delegates to proxy base ctor (GOT thunk
 //   0x001018bc) then calls _Init (0x000f8514). Does NOT write its own vtable.
 //
-// The base fields serve as iterator cursor state (binary-verified @ Advance 0x00184128 / Reset 0x001984a8):
+// The base fields serve as iterator cursor state (binary-verified @ Advance 0x0021ebcc / _Init 0x0021ec20):
 //   m_Begin            (+0x04) — IMMUTABLE original string start; set once in ctor, NEVER written by Advance
 //   m_NumChars         (+0x08) — total codepoint count (set by ctor walk)
 //   m_End              (+0x0C) — one-past-last byte of input string
@@ -43,7 +43,7 @@ public:
     void operator++(int) { Advance(1); }
     Utf8StringIterator operator+(int n) const;
 
-    // Binary @ 0x001984a8 -- Reset(): rewind the iterator to the immutable string start
+    // Binary @ 0x0021ec20 (_Init) / Reset(): rewind the iterator to the immutable string start
     // (m_Begin, +0x04) so it can be walked a second time. Used by BakedString::Bake
     // between pass 1 and pass 2. Resets m_NextScan to m_Begin and re-decodes the
     // first codepoint via Advance(1).

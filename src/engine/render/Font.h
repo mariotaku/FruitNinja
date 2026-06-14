@@ -224,11 +224,13 @@ public:
     void DrawString(Utf8StringIterator iter, float posX, float posY, float posZ,
                     Colour colour, float scale, float maxWHx, float maxWHy,
                     int alignment, MortarRectangleDec* clip, float rotZ);
-    // TODO: 0x001985b0 -- word-advance helper for word-wrap. BLOCKED on the
-    // Mortar::WordWrap subsystem (CanBreakLineAt @ 0x0019acc4 + East-Asian
-    // line-break tables); not called by gameplay code. Returns 0 until ported.
+    // TODO: 0x0024c2a0 -- word-advance helper for word-wrap. BLOCKED on the
+    // Mortar::WordWrap subsystem (CanBreakLineAt + East-Asian line-break tables).
+    // Binary return type is Utf8StringIterator/char* (start iter if word fits,
+    // NULL if line must break) -- port's float return is a Ghidra mis-decode;
+    // correct when WordWrap lands. Returns 0 until ported.
     float FindAdvanceOfNextWord(Utf8StringIterator, float, float, float, float);
-    // Binary @ 0x001984e8 -- canonical single-codepoint glyph lookup (1st arg is
+    // Binary @ 0x0024c228 -- canonical single-codepoint glyph lookup (1st arg is
     // `this`, typed `long` by Ghidra; 2nd is the codepoint). Falls back to a
     // linear id-search even for cp < 256 when the lookup slot is null.
     CharTemplate* GetCharTemplate(long, int);
@@ -236,11 +238,11 @@ public:
     // (uint32_t, uint32_t) overload above on ARM32 (long == int == 32-bit
     // -> both mangle as `j j`). Existing GetKerning(uint32_t, uint32_t)
     // already covers the binary symbol.
-    // Binary @ 0x001988f0 (asm-inspector / re-analyst). Returns the total
-    // rendered height of a multi-line string at lineHeight `lineH` wrapped
-    // to `maxWidth`. When `maxWidth <= 0`: walks the string counting '\n'
-    // and returns `lineH + n*lineH`. When `maxWidth > 0`: word-wrap path
-    // using FindAdvanceOfNextWord.
+    // Binary @ 0x0024c45c (v1.6.1). Returns the total rendered height of a
+    // multi-line string at lineHeight `lineH` wrapped to `maxWidth`.
+    // When `maxWidth <= 0`: walks the string counting '\n' and returns
+    // `lineH + n*lineH`. When `maxWidth > 0`: word-wrap path using
+    // FindAdvanceOfNextWord (DIFFERS: space-heuristic until WordWrap lands).
     float GetStringHeight(Utf8StringIterator iter, float lineH, float maxWidth);
     // Binary @ 0x001988a8 -- by-value-iter ABI shape of MeasureString (same binary
     // symbol as the const-ref overload above); forwards to GetLineLength(iter,0,NULL).

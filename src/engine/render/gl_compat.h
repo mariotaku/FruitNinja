@@ -75,6 +75,7 @@
     #define GL_NO_ERROR 0
     #define GL_MODELVIEW 0x1700
     #define GL_PROJECTION 0x1701
+    #define GL_TEXTURE_MATRIX 0x0BA8
     #define GL_VERTEX_ARRAY 0x8074
     #define GL_NORMAL_ARRAY 0x8075
     #define GL_COLOR_ARRAY 0x8076
