@@ -84,4 +84,14 @@ inline void TexEnvModulate() {
 #endif
 }
 
+// Sets blade tex-env: RGB = GL_REPLACE from GL_PRIMARY_COLOR (vertex RGB drives
+// the blade colour), alpha channel keeps default MODULATE (tex.a * vertex.a).
+// binary @0x229788: blade tex-env GL_COMBINE RGB=REPLACE<-PRIMARY_COLOR, alpha=MODULATE.
+// Call before blade DrawTriStrip calls; restore with TexEnvModulate() after.
+inline void TexEnvCombineReplaceRGB() {
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+    glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB,      GL_REPLACE);
+    glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB,         GL_PRIMARY_COLOR);
+}
+
 #endif
