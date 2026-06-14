@@ -60,6 +60,8 @@ void FontInterface::EnsureTexture() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // Byte-aligned unpack for single-channel glyph data (see BuildPendingTextures).
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     // Allocate the full atlas as an alpha-only texture.
     // GL_ALPHA works on both desktop GL (compat) and WebGL/GLES2.
     glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, m_Size, m_Size, 0,
@@ -112,6 +114,10 @@ void FontInterface::BuildPendingTextures() {
     if (!m_Dirty || !m_Pixels || !m_TextureID) return;
 
     glBindTexture(GL_TEXTURE_2D, m_TextureID);
+    // Single-channel (GL_ALPHA) glyph rows are tightly packed at dw-byte stride.
+    // GL_UNPACK_ALIGNMENT defaults to 4, which would mis-stride every row when dw
+    // is not a multiple of 4 -> sheared/garbled glyphs. Force byte alignment.
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     // Upload only the dirty rectangle.
     const int dw = m_DirtyX1 - m_DirtyX0;
     const int dh = m_DirtyY1 - m_DirtyY0;
