@@ -27,8 +27,17 @@ FontTTFRegistry::~FontTTFRegistry() {
 }
 
 FontTTFRegistry& FontTTFRegistry::GetInstance() {
-    static FontTTFRegistry instance;
-    return instance;
+    // Port specific: construct-on-first-use, NEVER destroyed. The registry must
+    // outlive every Font destructor -- Font::~Font calls Unregister() (FontTTFRegistry.cpp:56).
+    // A plain function-local value-static is destroyed at atexit in reverse
+    // construction order; since the registry is built lazily at runtime (after
+    // pre-main globals like FN::s_DebugFont), it would be torn down FIRST, and
+    // s_DebugFont's ~Font would then Unregister() into a freed std::map -> crash.
+    // Leaking the singleton is the standard static-deinit-order-fiasco fix; the
+    // OS reclaims the memory at process exit (the dtor's FT_Done_FreeType / face
+    // deletes are a clean-exit-only nicety we forgo to stay crash-safe).
+    static FontTTFRegistry* instance = new FontTTFRegistry();
+    return *instance;
 }
 
 FT_Library FontTTFRegistry::GetFTLibrary() {
