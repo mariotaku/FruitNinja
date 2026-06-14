@@ -84,6 +84,11 @@
     #define GL_TEXTURE_ENV_MODE 0x2200
     #define GL_MODULATE 0x2100
     #define GL_REPLACE 0x1E01
+    // GL_COMBINE texenv constants (GL 1.3 / GL ES 1.1 extension).
+    #define GL_COMBINE              0x8570
+    #define GL_COMBINE_RGB          0x8571
+    #define GL_SRC0_RGB             0x8580
+    #define GL_PRIMARY_COLOR        0x8577
     #define GL_LIGHTING 0x0B50
     #define GL_LIGHT0 0x4000
     #define GL_AMBIENT 0x1200

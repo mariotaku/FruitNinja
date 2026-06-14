@@ -228,6 +228,13 @@ void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount) {
     glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
     glDisableClientState(GL_NORMAL_ARRAY);
 
+    // Binary Mesh::DrawTris @0x240c30: glState<2884,false> (cull off) + glState<3042,true>
+    // (blend on, primType!=0). Blade/2D-layer alpha blend; opaque geometry (vertex/texel
+    // alpha=255) is unaffected by enabling blend.
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     glDrawArrays(GL_TRIANGLES, 0, vertCount);
 
     glDisableClientState(GL_VERTEX_ARRAY);
@@ -259,6 +266,13 @@ void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
     glEnableClientState(GL_COLOR_ARRAY);
     glColorPointer(4, GL_UNSIGNED_BYTE, stride, &verts->colour);
     glDisableClientState(GL_NORMAL_ARRAY);
+
+    // Binary Mesh::DrawTris @0x240c30: glState<2884,false> (cull off) + glState<3042,true>
+    // (blend on, primType!=0). Blade/2D-layer alpha blend; opaque geometry (vertex/texel
+    // alpha=255) is unaffected by enabling blend.
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, vertCount);
 
