@@ -13,6 +13,85 @@
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "config.h"
+#include "render/gl_funcs.h"
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <vector>
+#if defined(_WIN32)
+    #include <direct.h>      // _mkdir on Windows
+#else
+    #include <sys/stat.h>    // mkdir on POSIX / Emscripten
+#endif
+
+// Port specific: screenshot capture flag. Set from the F12 key handler and
+// read+cleared in frameTick before SDL_GL_SwapWindow (same thread, no signal).
+static bool g_takeScreenshot = false;
+
+// Port specific: perform glReadPixels + SDL_SaveBMP when g_takeScreenshot is set.
+// Called just before SDL_GL_SwapWindow so GL_BACK holds the finished frame.
+static void do_screenshot_if_requested(SDL_Window* window) {
+    if (!g_takeScreenshot) return;
+    g_takeScreenshot = false;
+
+    int w = 0, h = 0;
+    SDL_GL_GetDrawableSize(window, &w, &h);
+    if (w <= 0 || h <= 0) return;
+
+    // Read pixels bottom-up (GL convention).
+    std::vector<unsigned char> px(static_cast<size_t>(w) * static_cast<size_t>(h) * 4u);
+    glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+
+    // Flip rows vertically into a second buffer (GL gives bottom-up, BMP needs top-down).
+    std::vector<unsigned char> flipped(px.size());
+    const size_t row = static_cast<size_t>(w) * 4u;
+    for (int y = 0; y < h; ++y) {
+        memcpy(flipped.data() + static_cast<size_t>(y) * row,
+               px.data() + static_cast<size_t>(h - 1 - y) * row,
+               row);
+    }
+
+    // Build SDL_Surface from the top-down RGBA buffer.
+    // GL_RGBA / GL_UNSIGNED_BYTE gives bytes in R,G,B,A order.
+    // SDL_PIXELFORMAT_ABGR8888 interprets a 32-bit little-endian word as A<<24|B<<16|G<<8|R,
+    // which matches byte order R,G,B,A in memory -- correct for GL_RGBA readback.
+    SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormatFrom(
+        flipped.data(), w, h, 32, w * 4,
+        SDL_PIXELFORMAT_ABGR8888);
+    if (!surf) {
+        LOG_ERROR("Screenshot", "SDL_CreateRGBSurfaceWithFormatFrom failed: %s", SDL_GetError());
+        return;
+    }
+
+    // Ensure screenshots/ directory exists.
+#if defined(_WIN32)
+    _mkdir("screenshots");
+#else
+    mkdir("screenshots", 0755);
+#endif
+
+    // Build filename from monotonic counter (avoids overwriting previous shots).
+    static int s_counter = 0;
+    char path[64];
+    snprintf(path, sizeof(path), "screenshots/shot_%04d.bmp", s_counter++);
+
+    if (SDL_SaveBMP(surf, path) != 0) {
+        LOG_ERROR("Screenshot", "SDL_SaveBMP failed: %s", SDL_GetError());
+    } else {
+        // Print absolute path so it's easy to find.
+        char abspath[512] = {0};
+#if defined(_WIN32)
+        _fullpath(abspath, path, sizeof(abspath));
+#else
+        if (!realpath(path, abspath)) {
+            strncpy(abspath, path, sizeof(abspath) - 1);
+        }
+#endif
+        LOG_INFO("Screenshot", "saved %s", abspath);
+    }
+
+    SDL_FreeSurface(surf);
+}
 
 // Matches: FruitNinja::OnAppInitializing flow
 bool Game::init(void* win, void* gl) {
@@ -50,6 +129,11 @@ bool Game::init(void* win, void* gl) {
     return true;
 }
 
+// TEMP: touch-stack debug session; remove when done
+#ifndef FN_DEBUG_TOUCH
+#define FN_DEBUG_TOUCH 1
+#endif
+
 // Port specific: one complete game tick — poll events, update, render, present.
 // Extracted from run() so the Emscripten main loop can call it as a callback
 // (emscripten_set_main_loop_arg) without the surrounding while-loop or SDL_Delay.
@@ -58,6 +142,22 @@ void Game::frameTick() {
     // === SDL events -> InputManager ===
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
+#ifdef FN_DEBUG_TOUCH
+        // Confirm which SDL event types arrive for mouse/finger input.
+        // SDL_HINT_MOUSE_TOUCH_EVENTS=1 should synthesize FINGER* from MOUSE*;
+        // if MOUSEBUTTONDOWN shows here instead of FINGERDOWN, the hint is not active.
+        if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP ||
+            ev.type == SDL_MOUSEMOTION ||
+            ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP) {
+            LOG_INFO("TOUCH", "poll ev.type=0x%x (%s)\n", ev.type,
+                ev.type == SDL_MOUSEBUTTONDOWN ? "MOUSEBUTTONDOWN" :
+                ev.type == SDL_MOUSEBUTTONUP   ? "MOUSEBUTTONUP" :
+                ev.type == SDL_MOUSEMOTION      ? "MOUSEMOTION" :
+                ev.type == SDL_FINGERDOWN       ? "FINGERDOWN" :
+                ev.type == SDL_FINGERMOTION     ? "FINGERMOTION" :
+                ev.type == SDL_FINGERUP         ? "FINGERUP" : "?");
+        }
+#endif
         if (ev.type == SDL_QUIT) {
             running = false;
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
@@ -74,6 +174,10 @@ void Game::frameTick() {
             // Port specific: debug-only, no binary equivalent
             FN::g_DebugTimeScale = (FN::g_DebugTimeScale == 1.0f) ? 0.1f : 1.0f;
             LOG_DEBUG("Debug", "timeScale = %.1f", FN::g_DebugTimeScale);
+        } else if (ev.type == SDL_KEYDOWN &&
+                   ev.key.keysym.scancode == SDL_SCANCODE_F12) {
+            // Port specific: screenshot on F12.
+            g_takeScreenshot = true;
         } else {
             if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
         }
@@ -110,6 +214,9 @@ void Game::frameTick() {
 
     // Draw: state-specific rendering
     GameTaskDraw(game_work.dt);
+
+    // Port specific: capture screenshot before swap so GL_BACK has the finished frame.
+    do_screenshot_if_requested(static_cast<SDL_Window*>(window));
 
     // Present
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
