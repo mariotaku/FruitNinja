@@ -12,16 +12,17 @@
 //
 // Binary field layout (0x54 on 32-bit ARM):
 //   +0x00  0x1c  TextureSource base (vptr/rc/weak/2 lists)
-//   +0x1c  0x2c  AsciiString m_Path  (binary AsciiString = 0x2c = 44 bytes on Bada ARM)
+//   +0x1c  0x28  AsciiString m_Path  (AsciiString = 0x28 = 40 bytes; RE'd 2026-06-14 @ 0x0021e5e4 cluster)
+//   +0x44  4     File*  (binary caches the open file here; UnlockLayers @0x00226e74 deletes it)
 //   +0x48  4     TextureSource::Data* m_LoadedData
 //   +0x4c  4     int   m_LockCount
 //   +0x50  4     uint  m_PathHash   (= FileStringHash(path))
 //   +0x54       end
 //
-// DIFFERS: port's AsciiString is 40 bytes (not 44); 4-byte gap before m_LoadedData
-//   is filled by m_File (port-specific heap File* cached between Lock/Unlock).
-//   On the Bada cross-build (32-bit) AsciiString = 44 bytes, so binary offsets
-//   for m_LoadedData/m_LockCount/m_PathHash match exactly without extra padding.
+// AsciiString is 40 bytes (0x28) in BOTH port and binary (three-method RE:
+//   AnimTrackGroup member-gap = 40, vector stride = 0x28, hash-cache @ +0x24).
+//   m_Path @ +0x1c, so 0x1c + 0x28 = +0x44 lands the File* exactly, and
+//   m_LoadedData/m_LockCount/m_PathHash follow at +0x48/+0x4c/+0x50 as in the binary.
 
 #include "asset/TextureSource.h"
 #include "asset/File.h"
@@ -55,12 +56,11 @@ public:
     static SmartPtr<TextureLoader> CreateLoader(const AsciiString& path);
 
     // --- Binary-faithful field layout ---
-    AsciiString         m_Path;         // +0x1c (binary: 0x2c = 44 bytes on ARM32)
-    // Port-only: heap File* held between LockLayers/UnlockLayers.
-    // Binary @+0x44 has a File* too (new(0x40) File); on the bada cross-build
-    // AsciiString is 44 bytes so this field sits at exactly +0x44 after m_Path.
-    // DIFFERS: port uses heap File* here rather than stack-allocating in LockLayers.
-    File*               m_File;         // port-only; sits at +0x44 on bada (AsciiStr=44B)
+    AsciiString         m_Path;         // +0x1c (AsciiString = 0x28 = 40 bytes)
+    // Binary @+0x44 caches the open File* (new(0x40) File); UnlockLayers deletes it.
+    // m_Path is a 40-byte AsciiString at +0x1c, so 0x1c + 0x28 = +0x44 lands here.
+    // DIFFERS: port holds a heap File* here vs the binary's stack-allocated File in LockLayers.
+    File*               m_File;         // +0x44 (binary caches the open File* here)
     TextureSourceData*  m_LoadedData;   // +0x48 (binary)
     int                 m_LockCount;    // +0x4c (binary)
     unsigned int        m_PathHash;     // +0x50 (binary)
