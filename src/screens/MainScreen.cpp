@@ -114,7 +114,6 @@ MainScreen::MainScreen(Game& g)
 
     // Load button textures
     m_TexNewGame        = Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
-    m_TexDojoIcon       = Mortar::TextureManager::LoadLocalisedTexture("dojo_icon.tex");
     m_TexGCAchievements = Mortar::TextureManager::LoadLocalisedTexture("gc_achievements.tex");
     m_TexMoreGames      = Mortar::TextureManager::LoadLocalisedTexture("more_games.tex");
     m_TexQuit           = Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
@@ -168,14 +167,9 @@ MainScreen::MainScreen(Game& g)
             );
             const char* sliceText = Mortar::GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);
             m_pSliceInstrBox->SetText(sliceText ? sliceText : "SLICE FRUIT TO BEGIN");
-            // Colour: GameData+0x6a0 (binary). Port uses brown parchment colour
-            // RGB(0x74,0x5D,0x3C) + full alpha.
-            // TODO: binary GameData+0x6a0 colour — resolve exact binary value when
-            //   GameData struct RE reaches that offset.
-            // DIFFERS: original = GameData+0x6a0 colour (unresolved), using
-            //   RGB(0x74,0x5D,0x3C) brown parchment because it matches the existing
-            //   port approximation and GameData+0x6a0 is not yet mapped.
-            m_pSliceInstrBox->SetColour(Colour(0x74, 0x5D, 0x3C, 255), /*setBase*/0);
+            // Colour: binary reads game_work.m_RingColours[14] (+0x6a0), = RGB(0x6F,0x46,0x1E).
+            // Populated by PreloadRings (binary @ 0x11c644) before MainScreen ctor runs.
+            m_pSliceInstrBox->SetColour(game_work.m_RingColours[14], /*setBase*/0);
             m_pSliceInstrBox->SetHorizontalLineSpacing(-1);
             m_pSliceInstrBox->FitIntoVerticalBounds();
         }
@@ -1008,7 +1002,9 @@ void MainScreen::CreatePlayDojo() {
     // in the current fruitlist, but use the runtime call per CLAUDE.md
     // "no shortcuts or abbreviations" rule.
     pDojoButton = new MenuButton();
-    pDojoButton->m_Texture = (m_TexDojoIcon);
+    // v1.6.1: dojo ring IS the menu button texture; binary CreateButtons @ 0x196a00
+    // assigns blue_skinny_ring.tex (m_RingTex[3]) loaded by PreloadRings.
+    pDojoButton->m_Texture = game_work.m_RingTex[3];
     pDojoButton->Init(POS_DOJO_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
         Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
@@ -1017,6 +1013,9 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pDojoButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
+    // Binary CreateButtons @ 0x196a00: SetText called with m_RingColours[4] (fg) and [5] (shadow).
+    // MenuButton::SetText is a defunct no-op stub (binary @ 0x0014ebc0); call wired for binary fidelity.
+    pDojoButton->SetText(nullptr, game_work.m_RingColours[4], game_work.m_RingColours[5], 0.0f);
     game_work.mHud->AddControl(pDojoButton);
 
     // Binary @ 0x0014b278 case 0 final block: post-Init scaling for Dojo button.

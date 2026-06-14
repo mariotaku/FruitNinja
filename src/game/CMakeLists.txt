@@ -34,6 +34,7 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Bonus.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BonusManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/PreloadSounds.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PreloadRings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScoreState.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SpecificOrder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/WaveSyncPacket.cpp
