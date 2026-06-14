@@ -124,17 +124,17 @@ public:
     Mesh();
     virtual ~Mesh();
 
-    // vtable[4]: Matches Mesh::Draw (0x001b0c3c)
+    // vtable[4]: Matches Mesh::Draw (0x00272e98)
     void Draw(const Matrix44& worldTransform) override;
 
     // Matches Mesh::SetBones (0x001b1340)
     void SetBones(const BoneBinding* bones, unsigned long count);
 
-    // vtable[5]: Matches Mesh::GetBounds (0x001b07f0).
+    // vtable[5]: Matches Mesh::GetBounds (0x00272b48).
     // Binary signature: Bounds3D GetBounds() const (struct-return).
     Bounds3D GetBounds() const override;
 
-    // vtable[8]: Matches Mesh::BindSkeleton (0x001b0948)
+    // vtable[8]: Matches Mesh::BindSkeleton (binary @ 0x001b0948)
     // Stores skeleton ptr; resolves m_SkeletonIndex per BoneBinding via FindIndex.
     void BindSkeleton(Skeleton* skeleton) override;
 
@@ -198,21 +198,21 @@ public:
     // directly in MeshMaterial; field shape (m_OwnGroup, m_GroupsByName, m_WorldProp,
     // m_ViewProp, m_ProjProp, m_WVPProp) is preserved at binary offsets so
     // sizeof(Mesh) == 0x7c + sizeof(m_Materials port extension). Binary @:
-    //   0x001b0988 -- GetPropertiesGroup(name) const               [shape-preserved]
+    //   0x00272c98 -- GetPropertiesGroup(name) const               [shape-preserved]
     //   0x001b1430 -- GetPropertiesGroup(name, defs_begin, defs_end) [shape-preserved]
     //   0x001aab94 -- GetPropertiesGroup<9>(name, defs[9])
     //   0x001b1394 -- SharedPropsInfo::AddTextureMap(name, propName)
     //   0x001b0d0c -- AddGeometry(Mortar::SmartPtr<Geometry>&)     [shape-preserved]
-    //   0x001b15e4 -- GenerateBindings(name, slot, vector<Bone::Binding>&) [empty BX LR]
+    //   0x0027385c -- GenerateBindings(name, slot, vector<Bone::Binding>&) [empty BX LR]
     //   0x001b08e8 -- RebuildEffectBindings()                      [shape-preserved]
-    //   0x001b10d8 -- Mesh(Mortar::SmartPtr<SharedEffectProperties>&, AsciiString&) [shape-preserved]
+    //   0x002730ac -- Mesh(Mortar::SmartPtr<SharedEffectProperties>&, AsciiString&) [shape-preserved]
     //   0x00193ed8 -- DrawCube(...)    [binary stub, returns colour unchanged]
     //   0x00193edc -- DrawLine(...)    [binary stub, returns first vec unchanged]
     //   0x00193ee0 -- DrawSphere(...)  [binary stub, returns colour unchanged]
 
     // ---- STUBS (binary) ----
 
-    // Defunct: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x001b10d8
+    // Defunct: Mesh(SmartPtr<SharedEffectProperties> const&, AsciiString const&) -- binary @ 0x002730ac
     // Shape-preserved: builds m_OwnGroup from defs, caches m_WorldProp/m_ViewProp/m_ProjProp/m_WVPProp.
     Mesh(SmartPtr<SharedEffectProperties> const& props, AsciiString const& name);
 
@@ -223,7 +223,7 @@ public:
     // Binary @ 0x001b0d0c -- pushes SmartPtr<Geometry> into m_Geometries.
     void AddGeometry(SmartPtr<Geometry> const& geom);
 
-    // Defunct: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x001b0988
+    // Defunct: GetPropertiesGroup(AsciiString const&) const -- binary @ 0x00272c98
     // Shape-preserved: returns ptr-to-SmartPtr in m_GroupsByName (matching binary return type).
     SmartPtr<SharedEffectProperties>* GetPropertiesGroup(AsciiString const& name) const;
 
@@ -251,7 +251,7 @@ public:
     // Binary itself is a stub (BX LR, returns colour unchanged); port is likewise a no-op.
     void DrawSphere(float radius, Colour colour, DrawEffectContainer* fx);
 
-    // Binary @ 0x001b09b0
+    // Binary @ 0x00272a3c
     void DrawQuad(Colour colour, SmartPtr<Texture> texture,
                   Vec3 const& pos, Vec3 const& scale, float rotZ,
                   float w, float h, float uOff, float vOff,
@@ -276,17 +276,18 @@ public:
     static void DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType, bool blend,
                          DrawEffectContainer* fx);
 
-    // vtable slot 6 (+0x18): GenerateBindings(Vector) @ 0x0027350c
+    // vtable slot 6 (+0x18): GenerateBindings(Vector) binary @ 0x0027350c
     // Walks m_GroupsByName rb-tree matching channelName/targetName vs uvwChannelName/opacityChannelName
-    // statics. If the matched EffectProperty* Vec3 target is non-null, builds a Binding and push_backs
-    // into out. With EffectProperty subsystem defunct-stubbed in the port, produces zero bindings.
+    // statics (lazily interned via __cxa_guard from DAT_002736c8/d8). If the matched EffectProperty*
+    // Vec3 target is non-null, builds a Binding and push_backs into out. With EffectProperty subsystem
+    // defunct-stubbed in the port, produces zero bindings (correct observable result).
     // Defunct: EffectProperty channel binding -- binary @ 0x0027350c
     void GenerateBindings(AsciiString const& channelName,
                           AsciiString const& targetName,
                           std::vector<AnimBindings::Vector::Binding>& out) override;
 
-    // vtable slot 7 (+0x1c): GenerateBindings(Bone) @ 0x0027385c (empty BX LR in binary)
-    // Bone bindings are never produced by Mesh; binary body is BX LR.
+    // vtable slot 7 (+0x1c): GenerateBindings(Bone) binary @ 0x0027385c
+    // Binary body is a single BX LR (genuinely empty). Port empty body is exact match.
     // Defunct-ish: Mesh emits no bone bindings; binary @ 0x0027385c (empty BX LR)
     void GenerateBindings(AsciiString const& channelName,
                           AsciiString const& targetName,

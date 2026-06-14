@@ -30,14 +30,14 @@ void Skeleton::BuildArrays(int count) {
     m_VertMatrices.assign(count,  Matrix44());
 }
 
-// Matches Skeleton::BuildLocalMatrices (0x00193064)
-// Sequence (from disassembly at 0x00193064):
-//   1. _Quaternion::Matrix44(bone+0x78) → rotation mat R
-//   2. Transpose44(R) → Rt
+// Matches Skeleton::BuildLocalMatrices (0x002372fc)
+// Sequence (from disassembly at 0x002372fc):
+//   1. _Quaternion::Matrix44(bone+0x78) → rotation mat R  (binary quat ctor @0x001e5c18)
+//   2. Transpose44(R) → Rt  (binary quaternion mat == port's Rt)
 //   3. _Matrix44::Translate44(bone+0x6c) → T
 //   4. _Matrix33::cast_to_Matrix44(bone+0x88) → S
-//   5. Mul44(S, Rt, tmp)  — tmp = S * Rt
-//   6. Mul44(tmp, T, local) — local = (S * Rt) * T
+//   5. tmp = R*S    (binary Mul44(S,R,tmp) @0x0016f5a0 => port-convention tmp = R*S)
+//   6. local = T*tmp  (binary Mul44(tmp,T,local) => port-convention local = T*tmp)
 void Skeleton::BuildLocalMatrices() {
     int n = (int)m_Bones.size();
     for (int i = 0; i < n; i++) {
@@ -90,17 +90,22 @@ void Skeleton::BuildLocalMatrices() {
         S.m[8] = s[6]; S.m[9] = s[7]; S.m[10]= s[8]; S.m[11]= 0.0f;
         S.m[12]= 0.0f; S.m[13]= 0.0f; S.m[14]= 0.0f; S.m[15]= 1.0f;
 
-        // Steps 5+6: local = (S * Rt) * T
-        local = (S * Rt) * T;
+        // Steps 5+6: local = T * Rt * S  (binary Mul44(S,R)=>R*S then Mul44(tmp,T)=>T*(R*S);
+        //   binary R == port Rt, so port: T * Rt * S)
+        local = T * Rt * S;
     }
 }
 
-// Matches Skeleton::BuildFinalMatrices (0x00192e0c)
+// Matches Skeleton::BuildFinalMatrices (0x00236f68)
 // For each bone i:
 //   accumulated = localMatrices[i]
 //   walk parent chain (bones[j].parentIndex) multiplying localMatrices[j] on left
 //   worldMatrices[i] = accumulated
-//   vertMatrices[i]  = accumulated × bones[i].bindPoseMat
+//   vertMatrices[i]  = accumulated x bones[i].bindPoseMat
+// DIFFERS: binary uses a raw new[] block for m_LocalMatrices accessed via raw pointer;
+//   port uses std::vector. Semantics identical (Mul44 operand-reversal proven);
+//   remaining asm divergence is std::vector base-pointer access + PIC/GOT +
+//   register allocation only -- no logic change needed.
 void Skeleton::BuildFinalMatrices() {
     int n = (int)m_Bones.size();
     for (int i = 0; i < n; i++) {

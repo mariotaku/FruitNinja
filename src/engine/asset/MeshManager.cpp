@@ -15,15 +15,29 @@ MeshManager::MeshManager() {
     s_instance = this;
 }
 
+// Binary @ 0x002368a4 (single D1 dtor; no separate D0/D2 -- singleton is function-local static).
+// Binary calls Destroy (-> ReleaseAll -> List::Clear) then List::Destroy @ 0x00236c5c.
+// List::Destroy's FreeList-teardown branch is a no-op for the m_pFreeList==0 singleton;
+// std::vector member dtor handles the storage free (replaces List::Destroy's storage path).
+// DIFFERS: binary 2nd call List::Destroy @ 0x00236c5c is a no-op for this singleton and
+//   otherwise frees intrusive-List/FreeList storage subsumed by std::vector dtor.
+//   s_instance=nullptr below has no binary counterpart. // Port specific: singleton bookkeeping.
 MeshManager::~MeshManager() {
     ReleaseAll();
-    if (s_instance == this) s_instance = nullptr;
+    if (s_instance == this) s_instance = nullptr; // Port specific: no binary counterpart (binary uses global slot @ 0x002d9a28, not zeroed on teardown).
 }
 
 void MeshManager::Initialise(int capacity) {
     m_Models.reserve(capacity);
 }
 
+// Binary @ 0x0023689c -- GOT-thunk tail-call to List<SmartPtr<Model>>::Clear @ 0x00236be0.
+// List::Clear: gate on m_Active(+0x12)==1, walk intrusive 12B-node singly-linked chain via
+//   node[+8], call SmartPtr<Model>::Clear (refcount drop) + operator delete(node) per node,
+//   then zero m_Count/m_pHead/m_pTail/m_Active.
+// DIFFERS: binary List::Clear walks an intrusive linked list + frees nodes + zeros flags;
+//   m_Models.clear() reproduces the observable refcount-drop semantics via std::vector element
+//   dtor (~SmartPtr). Container walk + node-free + flag-zeroing differ due to List.h substitution.
 void MeshManager::ReleaseAll() {
     m_Models.clear();
 }
@@ -458,9 +472,11 @@ Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> const& model) const {
 void MeshManager::InitialiseInternal() {
 }
 
-// Binary @ 0x00192B1C -- if the handle is non-null, remove the matching entry
-// from the cache list (List::Remove finds the equal SmartPtr and erases it),
-// which drops the Model's intrusive refcount.
+// No distinct Release symbol in v1_6_1 (search_functions_enhanced confirms only ctor/dtor/thunk).
+// 0x00192B1C is a v1.5.1-only symbol; in v1_6_1 this would be an inlined List::Remove
+// (find equal SmartPtr by pointer identity, unlink 12B node, drop refcount, free/pool node).
+// DIFFERS: no v1_6_1 binary symbol; std::vector erase-by-identity reproduces List::Remove's
+//   refcount-drop semantics but cannot asm-match an intrusive-list node removal.
 void MeshManager::Release(SmartPtr<Model> const& model) {
     if (model.IsValid()) {
         for (int i = 0; i < m_Models.size(); i++) {
