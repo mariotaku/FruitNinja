@@ -6,8 +6,13 @@
 
 namespace Mortar {
 
+// ASM-verified: 2026-06-14T00:00Z binary @ 0x0024f568,0x002502e0,0x00250470 (asm-inspector)
 FontInterface::FontInterface(int atlasSize)
-    : m_Size(atlasSize)
+    : m_CacheSize(100)
+    , m_FontScale(1.0f)
+    , m_InvFontScale(1.0f)
+    , m_GlobalSizeScale(1.0f)
+    , m_Size(atlasSize)
     , m_Pixels(nullptr)
     , m_TextureID(0)
     , m_CursorX(0)
@@ -19,6 +24,15 @@ FontInterface::FontInterface(int atlasSize)
 {
     m_Pixels = (uint8_t*)calloc((size_t)(m_Size * m_Size), 1);
     EnsureTexture();
+}
+
+// Mirrors binary Initialize @ 0x00250470.
+// fontScale and invFontScale are always 1.0 in practice;
+// globalSizeScale is 0.9 only for Korean (language byte 0x13).
+void FontInterface::InitialiseData(float fontScale, float globalSizeScale) {
+    m_FontScale      = fontScale;
+    m_InvFontScale   = (fontScale != 0.0f) ? (1.0f / fontScale) : 1.0f;
+    m_GlobalSizeScale = globalSizeScale;
 }
 
 FontInterface::~FontInterface() {

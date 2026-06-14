@@ -36,10 +36,12 @@ struct GlyphAtlasEntry;
 // One laid-out line of glyphs ready to draw.
 struct BakedStringBoxLine {
     std::vector<QUADCUSTOMVERTEX> verts; // 6 verts per glyph (tri-strip)
-    float width;   // total pixel advance (unscaled)
-    float height;  // line ascender + descender in pixels (unscaled)
+    float width;        // total world-unit advance (unscaled)
+    float height;       // binary step = line pitch (world units)
+    float maxBearingY;  // max bearingY across glyphs (above baseline, world units)
+    float minBottom;    // min (bearingY - height) across glyphs (below baseline, world units, <=0)
 
-    BakedStringBoxLine() : width(0.0f), height(0.0f) {}
+    BakedStringBoxLine() : width(0.0f), height(0.0f), maxBearingY(0.0f), minBottom(0.0f) {}
 };
 
 class BakedStringBox {
@@ -109,7 +111,8 @@ public:
 
 private:
     FontCacheObjectTTF* m_Font;   // non-owning ref (owned by Font + FontTTFRegistry)
-    float   m_FontSize;           // current render pixel size
+    float   m_FontSize;           // current render pixel size (shrunk by FitInto)
+    float   m_BaseFontSize;       // original font size (binary uses for step formula)
     float   m_BoxWidth;           // wrap box width in world units
     float   m_BoxHeight;          // wrap box max height in world units
     int     m_Align;              // alignment flags (binary 0x0d)
