@@ -23,6 +23,13 @@ int main(int argc, char* argv[]) {
     // only needs to handle the touch path. SDL produces the synthetic
     // events with finger id = SDL_TOUCH_MOUSEID.
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+    // ...and DISABLE the reverse (touch -> mouse). SDL's default is "1",
+    // which makes a real touch ALSO emit synthetic mouse events; combined
+    // with MOUSE_TOUCH_EVENTS=1 above that round-trips a single physical
+    // touch back into a SECOND synthetic SDL_FINGER* event, doubling input.
+    // We want exactly one touch per physical pointer action: mouse is
+    // converted to touch (one-way) and the input path is touch-only.
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());

@@ -42,10 +42,16 @@ Internet Archive at build time:
 - **File**: `FruitNinja.zip` (approx. 20 MB)
   https://archive.org/download/badaappsgamescollection/FruitNinja.zip
 - **MD5**: `76844370f4c50b5f2bdc113b0664c4ce`
+- **Game version**: v1.6.1. The package's `Bin/FruitNinja.exe` is MD5
+  `ab60ff54a272abed1cbd403c5dcb7c55` (SHA1 `a4669367a91c0e115b7dddfc127cebc00fee3089`).
+  The workflow **asserts this binary hash** (`EXPECTED_BIN_MD5`) so the assets
+  can't drift to a different build without the build failing loudly.
 
-The zip contains a Bada application package (`FruitNinja.bar`). A `.bar` is
-itself a zip; the workflow unzips both layers and moves the inner `Data/`
-directory to `FruitNinjaBada/Data`, which is where CMake expects it.
+This `FruitNinja.zip` (no space) has the package dirs (`Bin/ Data/ Res/ ...`) at
+the zip root -- no `.bar` wrapper. The workflow unzips it and moves `Data/` to
+`FruitNinjaBada/Data`, which is where CMake expects it. (Other copies in the
+collection wrap the package in a `.bar`, itself a zip; the extract step handles
+both.)
 
 If the archive.org item changes or moves, update `ASSET_IDENTIFIER` and
 `ASSET_FILENAME` near the top of `.github/workflows/pages.yml`.

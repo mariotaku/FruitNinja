@@ -217,8 +217,12 @@ int main(int argc, char* argv[]) {
     setvbuf(stderr, nullptr, _IONBF, 0);
 
     // Port specific: synthesize SDL_FINGER* from mouse events so the
-    // InputTranslator only handles the touch path.
+    // InputTranslator only handles the touch path. Also disable the reverse
+    // (touch -> mouse, SDL default "1") so a real touch is not round-tripped
+    // back into a second synthetic SDL_FINGER* event: exactly one touch per
+    // physical pointer action, touch-only input path.
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());

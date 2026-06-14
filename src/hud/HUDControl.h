@@ -110,6 +110,12 @@ public:
     virtual void Skip() {}
     virtual void Save() {}
 
+    // Vtable slot 15 (+0x3c): binary @ 0x136c2c (HUDControl::GetAdjustedPos).
+    // Returns pos + Vec3(480, 320, 0) * m_HudScale.
+    // Used by MenuButton::Update to re-anchor the held fruit/bomb entity every
+    // frame. DAT_00136c88={480,320,0} confirmed.
+    virtual Vec3 GetAdjustedPos() const;
+
     void SetPendingRemoval() { m_bPendingRemoval = 1; }
 
     // Port specific: debug overlay (F1 hitbox toggle) needs the effective

@@ -78,3 +78,13 @@ bool HUDControl::SetToMultiplayerState()
     return false;
     // ASM-verified: 2026-05-24 binary @ 0x00143fac (re-analyst)
 }
+
+// Binary @ 0x136c2c — DAT_00136c88={480.0f, 320.0f, 0.0f}
+// Returns pos + Vec3(480,320,0) * m_HudScale.
+// Used by MenuButton::Update to re-anchor the held fruit/bomb entity every frame.
+Vec3 HUDControl::GetAdjustedPos() const
+{
+    return Vec3(pos.x + 480.0f * m_HudScale.x,
+                pos.y + 320.0f * m_HudScale.y,
+                pos.z + 0.0f   * m_HudScale.z);
+}
