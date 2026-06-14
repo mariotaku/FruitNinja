@@ -249,6 +249,8 @@ void MenuButton::CreateFruit() {
     e->flags &= ~0x10;
     m_pEntity = e;
     m_pTrackedFruit = static_cast<Fruit*>(e);
+    LOG_DEBUG("MENUBTN", "CreateFruit: m_pEntity=%p entityType=%d pos=(%.1f,%.1f)",
+              static_cast<void*>(m_pEntity), entityType, pos.x, pos.y);
 
     if (entityType == 0) {
         Fruit* fruit = static_cast<Fruit*>(e);
@@ -262,6 +264,10 @@ void MenuButton::CreateFruit() {
         // Binary writes m_pOwner=this (0x160) so KillFruit can clear our m_pTrackedFruit.
         // KillFruit reads owner+0x14C (= MenuButton::m_pTrackedFruit) as a raw offset.
         fruit->m_pOwner = reinterpret_cast<Mortar::Entity*>(this);
+        // Binary @ 0x0019b818: strb #0,[fruit,#0x70] -- AFTER Init() (which set it to 1).
+        // Disables ballistic integration so the menu fruit stays pinned at the button
+        // position; Fruit::Update gates pos/vel integration on this flag (binary 0x001df828).
+        fruit->m_bBallisticEnable = 0;
         m_pFruitPiece = fruit;
 
         if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
@@ -442,6 +448,8 @@ void MenuButton::Update(float dt) {
         }
 
         Mortar::Entity* entity = m_pEntity;  // +0x80
+        LOG_DEBUG("MENUBTN", "Update: m_pEntity=%p m_pTrackedFruit=%p",
+                  static_cast<void*>(entity), static_cast<void*>(m_pTrackedFruit));
 
         if (entity == nullptr) {
             // ---- SPAWN / no live entity branch ----
@@ -487,13 +495,15 @@ void MenuButton::Update(float dt) {
                 entity->scale = m_BaseScale * ratio;
             }
 
-            // TODO: 0x0019a860 -- GetWorldPos() call (vtable slot 15); for now use pos directly
-            entity->pos = pos;
+            // Re-anchor: binary @ 0x0019a860 calls vtable slot 15 (GetAdjustedPos @ 0x136c2c)
+            // and overwrites entity->pos (+0x10) every frame. This is the entire hold mechanism.
+            entity->pos = GetAdjustedPos();
 
             int bombThreshold = FruitInfo_GetCount();
             if (m_FruitType < bombThreshold) {
-                // FRUIT branch
-                // TODO: 0x0019a860 -- entity->pos2(+0xc8) = GetWorldPos(); not yet in Entity/Fruit layout
+                // FRUIT branch: also write pos2 (+0xc8 = m_SecondPos) to prevent lerp/streak.
+                // Binary @ 0x0019a860 calls slot 15 a second time and stores into entity+0xc8.
+                static_cast<Fruit*>(entity)->m_SecondPos = GetAdjustedPos();
                 Fruit* f = static_cast<Fruit*>(m_pEntity);
                 if (f && f->m_bSliced) {     // +0xb8 sliced sentinel
                     Vec3 d;

@@ -10,9 +10,14 @@
 #include "util/StringHash.h"
 #include <cstring>
 
+// TEMP: touch-stack debug session; remove when done
+#ifndef FN_DEBUG_TOUCH
+#define FN_DEBUG_TOUCH 1
+#endif
+
 #ifdef FN_DEBUG_TOUCH
 #  include "debug/Logger.h"
-#  define TLOG(fmt, ...) LOG_VERBOSE("TOUCH", fmt, ##__VA_ARGS__)
+#  define TLOG(fmt, ...) LOG_INFO("TOUCH", fmt, ##__VA_ARGS__)
 #else
 #  define TLOG(...) ((void)0)
 #endif
@@ -64,6 +69,7 @@ void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
                                                    float& gx, float& gy) {
     gx = nx * (float)FN_SCREEN_W - (float)(FN_SCREEN_W / 2);
     gy = (float)(FN_SCREEN_H / 2) - ny * (float)FN_SCREEN_H;
+    TLOG("TransformTouchNormalized raw=(%g,%g) -> game=(%g,%g)\n", nx, ny, gx, gy);
 }
 
 int InputTranslatorSDL::MapFingerId(SDL_FingerID id) {
@@ -113,26 +119,11 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
         int ch = MapFingerId(ev.tfinger.fingerId);
         if (ch < 0) { TLOG("  -> MapFingerId returned -1 (all 16 channels busy)\n"); break; }
 
-        // The original (pre-Reset-fix) reasoning for this fallback was that
-        // SDL synthetic-mouse-touch events sometimes carry default-centred
-        // coords; the actual cause was SlashEntity::Reset zeroing
-        // m_RawTouchPos. The fallback is harmless either way -- still keep
-        // it for true edge cases (window focus before any mouse motion).
         float nx = ev.tfinger.x, ny = ev.tfinger.y;
-        if (ev.tfinger.touchId == SDL_MOUSE_TOUCHID) {
-            int mx = 0, my = 0;
-            SDL_GetMouseState(&mx, &my);
-            int ww = 1, wh = 1;
-            SDL_GetWindowSize(window, &ww, &wh);
-            if (ww > 0 && wh > 0) {
-                nx = (float)mx / (float)ww;
-                ny = (float)my / (float)wh;
-            }
-        }
         float gx, gy;
         TransformTouchNormalized(nx, ny, gx, gy);
         fingerX[ch] = gx; fingerY[ch] = gy;
-        TLOG("  → ch=%d game (%.1f, %.1f) — pressing slot\n", ch, gx, gy);
+        TLOG("FINGERDOWN ch=%d raw=(%g,%g) game=(%g,%g)\n", ch, nx, ny, gx, gy);
 
         // Poll-based path. Mortar::Touch has 8 slots; clamp or drop extras.
         // extId is ch+1 so 0 stays reserved as Touch's "free slot" sentinel
@@ -141,6 +132,7 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
             Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
         }
 
+        TLOG("dispatch TouchDown slot=%d game=(%g,%g)\n", ch, gx, gy);
         ie.actionHash = hashTouchScreen;
         ie.actionFlags = INPUT_ACTION_DOWN;
         ie.fingerId = ch;
@@ -162,7 +154,7 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
     }
 
     case SDL_FINGERMOTION: {
-        TLOG("SDL_FINGERMOTION fingerId=%lld nx=%.3f ny=%.3f Δ(%.3f,%.3f)\n",
+        TLOG("SDL_FINGERMOTION fingerId=%lld nx=%.3f ny=%.3f d(%.3f,%.3f)\n",
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
              ev.tfinger.dx, ev.tfinger.dy);
         int ch = -1;
@@ -171,13 +163,15 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
                 ch = i; break;
             }
         }
-        if (ch < 0) { TLOG("  → no channel mapped for fingerId, skipping\n"); break; }
+        if (ch < 0) { TLOG("  no channel mapped for fingerId, skipping\n"); break; }
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         float dx = gx - fingerX[ch];
         float dy = gy - fingerY[ch];
         fingerX[ch] = gx; fingerY[ch] = gy;
+        TLOG("MOVE ch=%d raw=(%g,%g) game=(%g,%g) delta=(%g,%g)\n",
+             ch, ev.tfinger.x, ev.tfinger.y, gx, gy, dx, dy);
 
         if (ch < Mortar::Touch::MAX_SLOTS) {
             Mortar::Touch::GetInstance().OnMoved(ch + 1, gx, gy);  // extId +1
@@ -210,10 +204,11 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
                 ch = i; break;
             }
         }
-        if (ch < 0) { TLOG("  → no channel mapped for fingerId, skipping\n"); break; }
+        if (ch < 0) { TLOG("  no channel mapped for fingerId, skipping\n"); break; }
 
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
+        TLOG("FINGERUP ch=%d game=(%g,%g)\n", ch, gx, gy);
 
         if (ch < Mortar::Touch::MAX_SLOTS) {
             Mortar::Touch::GetInstance().OnReleased(ch + 1);  // extId +1

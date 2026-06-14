@@ -331,7 +331,12 @@ private:
     void UpdateTouchPosition();
 };
 
-#ifdef __bada__
+#if defined(__bada__) && !defined(FN_ASM_VERIFY_CROSS)
+// Offsets from m_FadeAlphaIdx onward depend on sizeof(Delegate0<void>).
+// The binary's Delegate0 is 32 bytes; the cross-build arm-none-eabi stub
+// (cross-headers/util/Delegate.h) produces 36 bytes due to aligned_storage<32,4>
+// + tag + pad[3]. Guards prevent false failures in asm-verify; the Bada
+// toolchain (which has the real Mortar::Delegate sizes) should pass these.
 static_assert(__builtin_offsetof(MenuButton, m_pEntity)          == 0x80,  "MenuButton m_pEntity offset");
 static_assert(__builtin_offsetof(MenuButton, m_FruitType)        == 0x84,  "MenuButton m_FruitType offset");
 static_assert(__builtin_offsetof(MenuButton, m_FadeAlphaIdx)     == 0xCC,  "MenuButton m_FadeAlphaIdx offset");

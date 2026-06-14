@@ -24,32 +24,37 @@ concurrency:
 # SHA1  : 8cc000f5843f60d445169a6e175cb0ab60905340
 #
 # Internal structure (VERIFY if the download changes):
-#   FruitNinja.zip
-#     FruitNinja.bar   (Bada application package = a ZIP)
-#       Data/          <-- what we need; mount path /FruitNinjaBada/Data
-#       Bin/
-#       Info/
-#       Res/
-#       Share/
-#       Signature*.xml
+#   FruitNinja.zip  (no .bar wrapper -- the package dirs are at the root)
+#     Bin/  Data/  Info/  Res/  Share/  Signature*.xml  TrustShare/
+#   Data/ is what we need; mount path /FruitNinjaBada/Data.
+#   (The "Fruit Ninja.zip" / "Fruit Ninja(2).zip" copies DO wrap the package in
+#    a .bar -- itself a zip. The extract step handles both .bar and no-.bar.)
+#
+# Pinned game version (anti-drift): the package's Bin/FruitNinja.exe is the game
+# v1.6.1 binary. The workflow asserts its MD5 == EXPECTED_BIN_MD5 (below), so if
+# archive.org re-zips or swaps the build, the web deploy fails loudly instead of
+# silently shipping the wrong assets.
+#   Bin/FruitNinja.exe  MD5 : ab60ff54a272abed1cbd403c5dcb7c55
+#                       SHA1: a4669367a91c0e115b7dddfc127cebc00fee3089
 #
 # The workflow:
 #   1. Downloads FruitNinja.zip
-#   2. Unzips it to tmp-outer/ (expecting to find a .bar inside)
-#   3. Unzips the .bar to tmp-inner/ (the .bar IS a zip)
-#   4. Moves tmp-inner/Data -> FruitNinjaBada/Data
+#   2. Unzips it to tmp-outer/ (a .bar inside, if any, is unzipped to tmp-inner/)
+#   3. Asserts Bin/FruitNinja.exe MD5 == EXPECTED_BIN_MD5
+#   4. Moves Data/ -> FruitNinjaBada/Data
 #
-# If the zip directly contains Data/ (no .bar wrapper), step 3/4 fall back.
-# See the "Extract Data/" step for details.
-#
-# To use a different file, change these two env vars:
+# To use a different file, change the env vars below.
 env:
   ASSET_IDENTIFIER: badaappsgamescollection
-  # "Fruit Ninja.zip" = the March-2011 build the port was RE'd against (fonts
-  # byte-identical to local). The other copies (FruitNinja.zip / "Fruit Ninja(2).zip")
-  # are later builds with reflowed fonts -> wrong font rendering. The space is
-  # %20-encoded for the download URL below.
-  ASSET_FILENAME: "Fruit Ninja.zip"
+  # "FruitNinja.zip" (no space) = the game v1.6.1 build (20 MB, the largest/most
+  # complete copy in the collection). The "Fruit Ninja.zip" (space) and
+  # "Fruit Ninja(2).zip" copies are EARLIER builds (1.5.x, reflowed fonts) -- do
+  # NOT use them for the 1.6.1 port. No space => no %20 encoding needed.
+  ASSET_FILENAME: "FruitNinja.zip"
+  # Anti-drift: asserted against the extracted Bin/FruitNinja.exe (game v1.6.1).
+  # If archive.org swaps the build, the extract step fails -- update this (and the
+  # ASSET_FILENAME/header hashes) only after confirming the new build is correct.
+  EXPECTED_BIN_MD5: "ab60ff54a272abed1cbd403c5dcb7c55"
   EMSDK_IMAGE: "emscripten/emsdk:latest"
 
 jobs:
@@ -109,6 +114,27 @@ jobs:
             find tmp-outer tmp-inner -maxdepth 4 | sort
             exit 1
           fi
+
+          # Step 3.5: ASSERT the game binary hash (anti-drift version pin).
+          # Bin/ sits beside Data/ (both under tmp-inner if a .bar was found,
+          # else tmp-outer). If archive.org swaps the build, fail loudly.
+          BIN_SRC="$(dirname "$DATA_SRC")/Bin/FruitNinja.exe"
+          if [ ! -f "$BIN_SRC" ]; then
+            BIN_SRC=$(find tmp-outer tmp-inner -maxdepth 4 -type f -name "FruitNinja.exe" | head -1)
+          fi
+          if [ ! -f "$BIN_SRC" ]; then
+            echo "ERROR: could not find Bin/FruitNinja.exe to verify the binary hash."
+            exit 1
+          fi
+          ACTUAL_BIN_MD5=$(md5sum "$BIN_SRC" | cut -d' ' -f1)
+          echo "Binary: $BIN_SRC  MD5: $ACTUAL_BIN_MD5"
+          if [ "$ACTUAL_BIN_MD5" != "$EXPECTED_BIN_MD5" ]; then
+            echo "ERROR: game binary hash drift -- archive.org asset changed."
+            echo "  expected $EXPECTED_BIN_MD5 (game v1.6.1)"
+            echo "  got      $ACTUAL_BIN_MD5"
+            exit 1
+          fi
+          echo "Binary hash OK (game v1.6.1)."
 
           mv "$DATA_SRC" FruitNinjaBada/Data
           echo "=== FruitNinjaBada/Data ready ==="
