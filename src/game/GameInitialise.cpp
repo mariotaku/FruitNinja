@@ -36,6 +36,7 @@
 #include "BonusManager.h"
 #include "SetupGameWork.h"
 #include "PreloadSounds.h"
+#include "PreloadRings.h"
 #include "PowerUpManager.h"
 // Analysed: 2026-04-25T12:00
 #include "render/MatrixManager.h"
@@ -339,6 +340,9 @@ void GameInitialise() {
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
     // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
     PreloadSounds();   // 0x0010b204 — preload WAVs (implemented + ASM-verified, see PreloadSounds.cpp)
+
+    // Binary @ 0x11d22c: PreloadRings — loads ring textures + colour table into game_work.
+    PreloadRings();
 
     LOG_INFO("GAMEINIT", "GameInitialise: done");
 }

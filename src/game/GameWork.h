@@ -175,16 +175,13 @@ struct GameWork {
     // Declared as byte array to avoid sizeof divergence between host (x64=24B) and ARM32.
     uint8_t m_Popups[12];             // +0x618: binary std::vector<IngamePopup*> slot (reserve; 12B on ARM32)
 
-    // +0x624..+0x66B: SmartPtr<Texture>[17] ring/countdown textures (68 bytes = 17x4).
-    // RESERVE ONLY.
-    Mortar::SmartPtr<Mortar::Texture> m_RingTex[17]; // +0x624: ring textures (reserve)
+    // +0x624..+0x667: SmartPtr<Texture>[17] ring textures (68 bytes = 17x4).
+    // Populated by PreloadRings() (binary @ 0x11c644), called from GameInitialise.
+    Mortar::SmartPtr<Mortar::Texture> m_RingTex[17];   // +0x624..+0x668 (17 ring textures)
 
-    // +0x668..+0x69B: Colour[13] ring colour table (52 bytes = 13x4).
-    // RESERVE ONLY.
-    Colour  m_RingColours[13];     // +0x668: ring colour palette (reserve)
-
-    // +0x69C..+0x6A3: tail padding / unknown fields.
-    uint8_t _pad_0x69c[8];         // +0x69C..+0x6A3
+    // +0x668..+0x6A3: Colour[15] ring colour table (60 bytes = 15x4).
+    // Populated by PreloadRings() (binary @ 0x11c644). 15 entries confirmed from binary.
+    Colour  m_RingColours[15];     // +0x668..+0x6a4 (15 ring colours)
 };
 
 extern "C" GameWork game_work;  // C-linkage global at .bss 0x002d931c, zero-initialised
@@ -224,6 +221,8 @@ static_assert(offsetof(GameWork, m_bUpdatesSuspended)   == 0x195, "GameWork::m_b
 static_assert(offsetof(GameWork, m_pActiveTouchSink)    == 0x1ac, "GameWork::m_pActiveTouchSink");
 static_assert(offsetof(GameWork, m_ElapsedGameTime)     == 0x1b8, "GameWork::m_ElapsedGameTime");
 static_assert(offsetof(GameWork, m_bFrameDirty)         == 0x610, "GameWork::m_bFrameDirty");
+static_assert(offsetof(GameWork, m_RingTex)             == 0x624, "GameWork::m_RingTex");
+static_assert(offsetof(GameWork, m_RingColours)         == 0x668, "GameWork::m_RingColours");
 static_assert(sizeof(GameWork) == 0x6a4, "GameWork must be 1700 bytes (binary @ 0x002d931c)");
 #endif
 

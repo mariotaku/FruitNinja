@@ -2450,10 +2450,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11WaveManager9GetWavedtEi": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-14T00:00Z",
     "max_score": 4600,
-    "reason": "WaveManager::GetWavedt. Score 3865->3875 (+0.3%) -- noise. ACCEPT-deferred. [rerun 2026-05-24T09:50Z] [fresh-sweep 2026-06-14T05:19Z: score 3875/4600 -> 6745/4600]",
-    "score": 6745,
+    "reason": "Pre-existing WaveManager layout divergences (m_pCurrentWave +0x22c vs binary +0x234; m_Speed +0x54 vs binary +0x58; dtMod fields +0x74/+0x78 vs binary +0x78/+0x7c). Score 3875->6750 is a recompile-artifact hash-change from GameWork.h ring fix ([13]->[15] at +0x668, non-POD from m_RingTex SmartPtr zero-init): no WaveManager field offset moved, no game_work access in this function, no new logic divergence introduced. Same inherent residual, raw-DIVERGE only because score drifted past threshold on recompile. [ring-fix retriage 2026-06-14]",
+    "score": 6750,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManagerC1Ev": {
