@@ -147,8 +147,8 @@ MainScreen::MainScreen(Game& g)
         m_pTTFFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
     }
     // Construct the BakedStringBox from the TTF face.
-    // Binary: BakedStringBox(font, fontSize=9.0f, width=75, height=30,
-    //   align=0x0d, wrapMode=3, lineSpacing=3).
+    // Binary @ 0x001982fc: BakedStringBox(font, fontSize=9.0f, width=75, height=30,
+    //   align=0x0d, maxLines=3, lineSpacing=3).
     // align 0x0d = 0x01 (centre-H) | 0x04 (centre-V) | 0x08 = 0x0d.
     {
         Mortar::FontCacheObjectTTF* ttf = nullptr;
@@ -162,7 +162,7 @@ MainScreen::MainScreen(Game& g)
                 75.0f,  // width
                 30.0f,  // height
                 0x0d,   // align: centre-H(0x01) | centre-V(0x04) | fit(0x08)
-                3,      // wrapMode
+                3,      // maxLines (RebuildMeshes @ 0x00246944 shrink criterion)
                 3.0f    // lineSpacing
             );
             const char* sliceText = Mortar::GETSTRING_CAST_0(LSTR_MENU_TEXTURE_13);

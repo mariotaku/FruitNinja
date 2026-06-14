@@ -20,7 +20,7 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
                                float width,
                                float height,
                                int align,
-                               int wrapMode,
+                               int maxLines,
                                float lineSpacing,
                                int param8)
     : m_Font(font)
@@ -28,7 +28,7 @@ BakedStringBox::BakedStringBox(FontCacheObjectTTF* font,
     , m_BoxWidth(width)
     , m_BoxHeight(height)
     , m_Align(align)
-    , m_WrapMode(wrapMode)
+    , m_MaxLines(maxLines)
     , m_LineSpacing(lineSpacing)
     , m_HorizLineSpacing(-1.0f)
     , m_Param8(param8)
@@ -82,12 +82,21 @@ void BakedStringBox::SetTranslation(const Vec3& pos, int flag) {
 
 void BakedStringBox::FitIntoVerticalBounds() {
     if (!m_Font) return;
-    // Shrink fontSize in 1-pixel steps, floor 6.0px, until total wrapped
-    // height fits within m_BoxHeight. Rebuilds layout at each candidate size.
+    // Binary RebuildMeshes @ 0x00246944: shrink fontSize in 1-pixel steps (floor 6.0px)
+    // until wrapped text fits within m_MaxLines lines AND no line exceeds m_BoxWidth.
     // m_BaseFontSize stays at the original size; m_FontSize is the shrunk size.
     while (m_FontSize > 6.0f) {
         Layout();
-        if (TotalHeight() <= m_BoxHeight) {
+        bool fits = ((int)m_Lines.size() <= m_MaxLines);
+        if (fits) {
+            for (size_t i = 0; i < m_Lines.size(); ++i) {
+                if (m_Lines[i].width > m_BoxWidth) {
+                    fits = false;
+                    break;
+                }
+            }
+        }
+        if (fits) {
             return;
         }
         m_FontSize -= 1.0f;
@@ -371,15 +380,11 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
     const float sinT  = sinf(theta);
     const float cosT  = cosf(theta);
 
-    // Fix (c): binary RebuildAlignments @ 0x00245c78, multi-line branch (align&0xc==0xc).
-    // step is already stored per-line in line.height (all lines share the same step
-    // since requestedSize is the same for all lines in one Layout() call).
-    // Collect maxAscent (max bearingY) and minDescent (min bottom) across all lines.
-    float maxAscent  = 0.0f;
+    // Binary RebuildAlignments @ 0x00245c78: step stored per-line in line.height
+    // (all lines share the same step since requestedSize is fixed within one Layout() call).
+    // Collect minDescent (min bottom across all lines, <=0) for the centre formula.
     float minDescent = 0.0f;
     for (size_t li = 0; li < m_Lines.size(); ++li) {
-        if (m_Lines[li].maxBearingY > maxAscent)
-            maxAscent = m_Lines[li].maxBearingY;
         if (m_Lines[li].minBottom < minDescent)
             minDescent = m_Lines[li].minBottom;
     }
@@ -390,15 +395,25 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
     // World-space anchor.
     Vec3 anchor = m_Pos;
 
-    // Fix (c): vertical centering from binary RebuildAlignments (align&0xc==0xc branch):
-    //   y = ( -(step/2) - m_BoxHeight/2 - maxAscent/2 + (step*nLines)/2 ) - minDescent
-    // This gives the Y-offset applied to the first line's baseline.
-    // Only apply when vertical-centre bit is set (align&0xc == 0xc).
+    // Fix 2: vertical centering from binary RebuildAlignments @ 0x00245c78 (align&0xc==0xc):
+    //   y0 = ( -(step/2) - boxH/2 - maxLineH/2 + (step*nLines)/2 ) - minBound
+    // maxLineH == step (per binary); minBound == minDescent (<=0).
+    // Relative to box centre (m_Pos). Only apply when vertical-centre bit set (align&0xc == 0xc).
     float baselineY = 0.0f;
     const int vertAlign = m_Align & 0xc;
     if (vertAlign == 0xc) {
-        baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - maxAscent * 0.5f
+        // step == maxLineH per binary; minDescent == minBound (<=0).
+        baselineY = (-(step * 0.5f) - m_BoxHeight * 0.5f - step * 0.5f
                      + (step * (float)nLines) * 0.5f) - minDescent;
+    }
+
+    // Fix 3: binary SetTranslation @ 0x00246238 (center=1) converts box centre->internal-TL:
+    //   anchor.x -= boxW/2 ; anchor.y += boxH/2  (+Y up). Glyph X coords run [0, boxW] from
+    //   the box left edge; the baselineY V-centre formula's -boxH/2 term is cancelled by this
+    //   +boxH/2, leaving the block centred. Omitting the Y shift left the text boxH/2 too low.
+    if (center) {
+        anchor.x -= m_BoxWidth * 0.5f;
+        anchor.y += m_BoxHeight * 0.5f;
     }
 
     // Use identity world matrix so vertex transforms are in world space.
@@ -410,8 +425,8 @@ void BakedStringBox::Draw(float rotationDegrees, Vec2 scale, int center) {
 
     Renderer* renderer = Renderer::GetInstance();
 
-    // Render lines. Binary: y -= step; lineY = y + step (i.e. y starts above first line).
-    // Equivalent: line 0 baseline at baselineY, each subsequent line step lower.
+    // Render lines. Line 0 baseline at baselineY (relative to box centre / anchor.y),
+    // each subsequent line step lower (decreasing Y).
     for (size_t li = 0; li < m_Lines.size(); li++) {
         const BakedStringBoxLine& line = m_Lines[li];
         if (line.verts.empty()) {
