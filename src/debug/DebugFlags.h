@@ -19,6 +19,8 @@ namespace FN {
 extern bool  g_DebugHitboxes;
 extern bool  g_DebugWireframe; // Port specific: desktop GL only
 extern float g_DebugTimeScale; // Port specific: debug-only, no binary equivalent
+// DEBUG: auto-slash for screenshot capture -- TEMPORARY
+extern bool  g_DebugAutoSlash;
 
 // Render every active Fruit / Bomb / SplatEntity collision sphere as
 // a translucent circle. Call from GameDraw after the entity pass.
@@ -42,6 +44,7 @@ namespace FN {
 static const float g_DebugTimeScale = 1.0f;
 static const bool  g_DebugHitboxes  = false;
 static const bool  g_DebugWireframe = false;
+static const bool  g_DebugAutoSlash = false;
 inline void DebugHitbox_Draw()  {}
 inline void DebugHUDBounds_Draw() {}
 } // namespace FN
