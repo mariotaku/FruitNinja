@@ -57,20 +57,20 @@ public:
     // +0x128: far plane (default 1000.0)
     float m_farPlane;
 
-    // Matches 0x0019eb14
+    // Binary @ 0x00257d6c (C1/C2 ctor)
     MortarCamera();
     virtual ~MortarCamera() {}
 
-    // Vtable slot 2 (0x0019e9f0)
+    // Vtable slot 2
     virtual void Init(float fovOrNear, float farPlane, float fovX, float fovY);
 
-    // Vtable slot 3 (0x0019ef6c) — empty in base, overridden by FruitCamera
+    // Vtable slot 3 — empty in base, overridden by FruitCamera
     virtual void UpdateCamera(float dt);
 
-    // Vtable slot 4 (0x0019ece4) — LookAt + perspective projection
+    // Vtable slot 4, binary @ 0x00257aac — LookAt + perspective projection
     virtual void SetupPerspective();
 
-    // Vtable slot 5 (0x0019edfc) — LookAt + ortho from viewport
+    // Vtable slot 5, binary @ 0x00257758 — LookAt + ortho from viewport
     virtual void SetupOrtho();
 
     // Vtable slot 6

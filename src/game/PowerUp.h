@@ -213,8 +213,10 @@ public:
 // at its binary-correct +0x0c slot, the virtual Update declaration providing the
 // vptr at +0x00, and _padb8 sized to 12 bytes (binary-faithful dead region per
 // re-analyst ab6c7206), every offset below holds under both ABIs so the asserts
-// validate the cross-build too. Host (x86_64) has a different ABI (24-byte list,
-// 8-byte pointers) so __bada__ stays.
+// validate both the production Bada build and the asm-verify cross-build.
+// Host (x86_64) has a different ABI (24-byte list, 8-byte pointers) so the guard
+// excludes the host build. The cross-build defines __bada__ via -D__bada__ in
+// toolchain.cmake, so these asserts DO fire during asm-verify.
 #if defined(__bada__)
 static_assert(offsetof(PowerUp, m_NameHash)       == 0x0c, "PowerUp::m_NameHash @ +0x0c");
 static_assert(offsetof(PowerUp, m_Name)           == 0x10, "PowerUp::m_Name @ +0x10");

@@ -31,6 +31,24 @@
 #  define nullptr __null
 #endif
 
+// strncasecmp: in POSIX, lives in <strings.h>. Newlib's arm-none-eabi toolchain
+// exposes it only when _BSD_SOURCE or _GNU_SOURCE is defined, which the
+// cross-build does not set. Provide a portable shim so Font.cpp compiles.
+#if defined(__GNUC__) && defined(__arm__)
+#  include <string.h>
+static inline int strncasecmp(const char* s1, const char* s2, size_t n) {
+    for (; n; --n, ++s1, ++s2) {
+        unsigned char a = (unsigned char)*s1;
+        unsigned char b = (unsigned char)*s2;
+        if (a >= 'A' && a <= 'Z') a += 32;
+        if (b >= 'A' && b <= 'Z') b += 32;
+        if (a != b) return (int)a - (int)b;
+        if (!a)     return 0;
+    }
+    return 0;
+}
+#endif
+
 // Sourcery 4.4 newlib's <cstdio> doesn't expose snprintf via `std::snprintf`
 // (newlib's stdio.h guards under __STRICT_ANSI__). Forward-declare both
 // global and std-namespaced forms so cross-build code can use either.

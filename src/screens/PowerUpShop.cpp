@@ -597,7 +597,6 @@ void PowerUpShop::ButtonSliced() {
         return;
     }
     if (m_BuyButtonState != 0) return;
-    if (m_PurchasablePowerUps.empty()) return;
 
     PowerUp* p = m_PurchasablePowerUps[m_SelectedIndex];
     uint32_t hash = p->m_NameHash;

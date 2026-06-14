@@ -29,10 +29,13 @@ mkdir -p "$SRC/build/_deps/tinyxml2-src"
 rsync -aq "$PROJECT/build/_deps/tinyxml2-src/" "$SRC/build/_deps/tinyxml2-src/"
 
 mkdir -p "$SRC/FruitNinjaBada/Bin"
-cp -u "$PROJECT/FruitNinjaBada/Bin/FruitNinja.exe" "$SRC/FruitNinjaBada/Bin/"
+# v1.6.1 verification target (port + RE both target v1.6.1). tmp/ is excluded
+# from the staging rsync, but /work (the read-only project bind-mount) has it;
+# copy onto the ext4 staging volume so the i386 objdump can stat() it.
+cp -u "$PROJECT/tmp/FruitNinja_v1_6_1.exe" "$SRC/FruitNinjaBada/Bin/"
 
 # Pipeline env (Python tools read these).
-export ASM_VERIFY_BINARY="$SRC/FruitNinjaBada/Bin/FruitNinja.exe"
+export ASM_VERIFY_BINARY="$SRC/FruitNinjaBada/Bin/FruitNinja_v1_6_1.exe"
 export ASM_VERIFY_NM="$FN_TOOLCHAIN_DIR/bin/arm-none-eabi-nm"
 export ASM_VERIFY_OBJDUMP="$FN_TOOLCHAIN_DIR/bin/arm-none-eabi-objdump"
 export ASM_VERIFY_BUILD_DIR="$BUILD"
