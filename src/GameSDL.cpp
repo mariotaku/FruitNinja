@@ -146,13 +146,13 @@ void Game::frameTick() {
         // Confirm which SDL event types arrive for mouse/finger input.
         // SDL_HINT_MOUSE_TOUCH_EVENTS=1 should synthesize FINGER* from MOUSE*;
         // if MOUSEBUTTONDOWN shows here instead of FINGERDOWN, the hint is not active.
+        // MOUSEMOTION is intentionally excluded -- it fires every frame the
+        // cursor moves and we don't handle it (touch uses FINGER* events).
         if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP ||
-            ev.type == SDL_MOUSEMOTION ||
             ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP) {
             LOG_INFO("TOUCH", "poll ev.type=0x%x (%s)\n", ev.type,
                 ev.type == SDL_MOUSEBUTTONDOWN ? "MOUSEBUTTONDOWN" :
                 ev.type == SDL_MOUSEBUTTONUP   ? "MOUSEBUTTONUP" :
-                ev.type == SDL_MOUSEMOTION      ? "MOUSEMOTION" :
                 ev.type == SDL_FINGERDOWN       ? "FINGERDOWN" :
                 ev.type == SDL_FINGERMOTION     ? "FINGERMOTION" :
                 ev.type == SDL_FINGERUP         ? "FINGERUP" : "?");
