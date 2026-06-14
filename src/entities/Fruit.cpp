@@ -533,25 +533,26 @@ void Fruit::Update(float dt) {
         }
 
 
-        // ASM-verified: 2026-05-09 binary @ 0x00177bb8..0x00177c1e (asm-inspector)
+        // ASM-spec: real Fruit::Update is binary @0x001df828 (vtable slot 4 @0x002ce918).
         // Binary integration (Fruit::Update 0x00177680):
-        //   pos += (vel*dtScaled + 0.5*g*dtScaled^2) * 60.0   (DAT_00177d00 = 60.0; g=m_Gravity@0xA0)
+        //   pos += (vel*dtScaled + 0.5*g*dtScaled^2) * 60.0   (DAT_001e0414 = 60.0; g=m_Gravity@0xA0)
         //   vel += m_Gravity(0xA0) * dtScaled
         //   pos += m_AccelTerm(0x78) * dtScaled         (NO x60 here -- binary uses
         //                                                dt @ sp+0x1c scaled by m_TimeScale)
-        // ASM-verified: 2026-05-27 binary @ 0x00177b68 (asm-inspector).
-        // IsActive() gates only the integration block. When m_SpawnDelay <= 0,
-        // the tail (m_SecondPos backup, slice timer, UpdateBombAvoidance) runs
-        // unconditionally. The delay > 0 case early-returns above and
-        // never reaches this point.
-        const float POS_INTEGRATION_SCALE = 60.0f;  // DAT_00177d00
-        if (IsActive()) {
+        // Gravity integration gate is m_bBallisticEnable (Fruit+0x70), NOT IsActive():
+        //   @0x001dff88 ldrb [+0x70]; beq -> skip whole block (menu fruit pins here: CreateFruit sets +0x70=0)
+        //   @0x001dffa4 ldrb [+0x16c]; bne -> skip the pos/vel += step
+        // Gameplay fruit (Init sets +0x70=1) still integrates; menu fruit (=0) does not.
+        const float POS_INTEGRATION_SCALE = 60.0f;  // DAT_001e0414
+        if (m_bBallisticEnable) {
             Vec3 step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) * POS_INTEGRATION_SCALE;
-            pos += step;
             vel += m_Gravity * dtScaled;
+            if (!m_bFrozen) {
+                pos += step;
 
-            // Accel term drift -- dtScaled, no x60.
-            pos += m_AccelTerm * dtScaled;
+                // Accel term drift -- dtScaled, no x60.
+                pos += m_AccelTerm * dtScaled;
+            }
         }
 
         // Backup for future split — runs unconditionally (binary tail block)
