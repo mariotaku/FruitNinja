@@ -1013,17 +1013,27 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pDojoButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-    // Binary CreateButtons @ 0x196a00: SetText called with m_RingColours[4] (fg) and [5] (shadow).
-    // MenuButton::SetText is a defunct no-op stub (binary @ 0x0014ebc0); call wired for binary fidelity.
+    // v1.6.1 CreateButtons post-Init overrides (binary @ 0x001961f8). ROOT-CAUSE FIX:
+    // MenuButton::Init copies m_RestScale verbatim from its hitBounds arg, and the port
+    // passed Vec3(0,0,0) -> m_RestScale=0 -> ZERO MenuButton hit box (no F1 boundary, not
+    // tappable). The binary overrides m_RestScale to the button's own texture size AFTER
+    // Init -- exactly like pPlayButton -- for the dojo button too. (m_RestScale.x/y drive
+    // the hit box in MenuButton::Update.)
+    if (game_work.m_RingTex[3].IsValid()) {
+        pDojoButton->m_RestScale.x = (float)(game_work.m_RingTex[3]->m_Width  + 1);
+        pDojoButton->m_RestScale.y = (float)(game_work.m_RingTex[3]->m_Height + 1);
+        pDojoButton->m_RestScale.z = 1.0f;
+    }
+    pDojoButton->m_ShakeScale.x = 0.5f;    // +0x154 (binary @ 0x001964e8)
+    pDojoButton->m_HitInsetX    = -50.0f;  // DAT_00196560 (binary @ 0x001964f0)
+    pDojoButton->m_HitInsetY    = -50.0f;
+    pDojoButton->m_GrowInTimer  = 0.25f;   // +0x134 (binary @ 0x00196544)
+    // Binary CreateButtons: SetText with m_RingColours[4] (fg) and [5] (shadow).
+    // MenuButton::SetText is a defunct no-op stub (binary @ 0x0014ebc0); wired for fidelity.
     pDojoButton->SetText(nullptr, game_work.m_RingColours[4], game_work.m_RingColours[5], 0.0f);
     game_work.mHud->AddControl(pDojoButton);
-
-    // Binary @ 0x0014b278 case 0 final block: post-Init scaling for Dojo button.
-    // DAT_0014bb68 = 0.9f (fruit scale), DAT_0014bb6c = 1.05f (ring scale).
-    if (pDojoButton->m_pFruitPiece) {
-        pDojoButton->m_pFruitPiece->scale = pDojoButton->m_pFruitPiece->scale * 0.9f;
-    }
-    pDojoButton->m_RestScale = pDojoButton->m_RestScale * 1.05f;
+    // (v1.5.1-only *1.05 ring-scale / *0.9 fruit-piece-scale removed: absent from the
+    //  v1.6.1 CreateButtons path, and they scaled a zero m_RestScale before this fix.)
 }
 
 void MainScreen::CreateQuitButton() {
@@ -1044,6 +1054,14 @@ void MainScreen::CreateQuitButton() {
     pQuitBtn->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pQuitBtn->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
+    // Same root-cause fix as the dojo button: Init copied m_RestScale from hitBounds=Vec3(0,0,0)
+    // -> zero hit box. The binary overrides m_RestScale to the quit texture size after Init
+    // (the bomb-typed branch never auto-sizes m_RestScale).
+    if (m_TexQuit.IsValid()) {
+        pQuitBtn->m_RestScale.x = (float)(m_TexQuit->m_Width  + 1);
+        pQuitBtn->m_RestScale.y = (float)(m_TexQuit->m_Height + 1);
+        pQuitBtn->m_RestScale.z = 1.0f;
+    }
     game_work.mHud->AddControl(pQuitBtn);
 }
 
