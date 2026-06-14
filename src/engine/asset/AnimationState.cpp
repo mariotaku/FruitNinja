@@ -96,7 +96,10 @@ AnimationState::AnimationState(Mortar::SmartPtr<AnimationList> list) {
     m_Loop  = false;
 }
 
-// Binary @ 0x001acecc / 0x001acf34
+// Binary D1/D2 @ 0x0026f010, D0 @ 0x0026f098
+// Empty body; C++ auto-generates reverse-order member destruction (m_AnimList, m_Bindings, m_Mesh).
+// AnimBindings::Bone/Vector members are non-empty, so their vector dtors run as expected.
+// DIFFERS: binary inlines SmartPtr::Clear + explicit vptr writes; port relies on compiler synthesis.
 AnimationState::~AnimationState() {}
 
 // Binary @ 0x001ace8c

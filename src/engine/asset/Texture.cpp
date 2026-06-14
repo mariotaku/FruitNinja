@@ -197,9 +197,15 @@ Mortar::SmartPtr<Texture> Texture::Load(const char* path) {
     }
 
     // Identify and upload. Currently the only live format is Tex1.
-    // Tex2/DDS/Tex3 LockLayers() return null (TODO), so they fall through to error.
+    // The binary was built -fno-rtti so dynamic_cast is unavailable; static_cast
+    // is safe here because LockLayers() iterates g_readers[] and returns the first
+    // non-null result -- in the shipped 1.5.1/1.6.1 packs the only reader that
+    // accepts actual data is ReadTex1Format. Tex2/DDS/Tex3 return null for all
+    // shipped assets (their full decode is TODO), so raw is always Tex1Data* in
+    // practice. When those decoders land, replace this with a type-tag field.
+    // TODO: 0x00189dd4 -- binary type-dispatch mechanism for multi-format raw*.
     TextureFileFormat::Tex1Data* tex1 =
-        dynamic_cast<TextureFileFormat::Tex1Data*>(raw);
+        static_cast<TextureFileFormat::Tex1Data*>(raw);
 
     Mortar::SmartPtr<Texture> result;
     if (tex1) {

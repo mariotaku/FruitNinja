@@ -42,8 +42,8 @@ public:
     Mortar::SmartPtr<Model> Find(SmartPtr<Model> const& model) const;
     // Binary @ 0x001A74B8 -- empty in the binary (one-time hook, no body).
     void InitialiseInternal();
-    // Binary @ 0x00192B1C -- if the handle is valid, remove it from the cache
-    // (List::Remove), dropping its refcount.
+    // No distinct v1_6_1 symbol (0x00192B1C is v1.5.1-only); inlined List::Remove semantics.
+    // DIFFERS: std::vector erase-by-identity reproduces refcount-drop; see MeshManager.cpp.
     void Release(SmartPtr<Model> const& model);
 };
 
