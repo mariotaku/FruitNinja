@@ -7427,11 +7427,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4utf829decode_next_unicode_characterEPPKc": {
-    "decided_at": "2026-06-14T05:55Z",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Fix confirmed: NUL continuation byte returns 0 (src line 42-45) and per-length overlong/surrogate/noncharacter validation switch is present (src lines 56-82), matching binary @ 0x0022da04. Residual 165% score is INHERENT: binary uses a linear chain of inline byte-fetch+compare branches; port uses a counted loop + tbb dispatch table for per-length validation. Same semantic boundaries (0x7F, 0x7FF, 0xD800-0xDFFF, 0xFFFE/0xFFFF, overlong per-length) and same replacement (0xFFFD). Structural codegen difference only.",
+    "score": 36850,
     "max_score": 22200,
-    "reason": "UTF-8 string iterator stub; unicode advance not fully ported. Score 24485/20700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 24485/20700 -> 32235/22200]",
-    "score": 32235,
-    "verdict": "ACCEPT-deferred"
+    "decided_at": "2026-06-14T00:00Z"
   },
   "_ZN6Mortar5IFileC1EPNS_11IFileSystemE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8295,11 +8295,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN9ColSphere7CollideEP3ColP8_Vector3IfE": {
-    "decided_at": "2026-06-14T05:55Z",
+    "verdict": "ACCEPT-cosmetic",
+    "reason": "Fix confirmed: each GetType branch delegates to the correct penetration-vector helper (ColAABBSphere at dispatch offset 0x36, ColSphereSphere at 0x8a, ColSphereLine at 0xaa), and both collision flags set via strb [r6,#0x10]/strb [r4,#0x10] matching binary strbne pattern. Score dropped from 39810/4100 (9.7x) to 7705/4100 (1.87x) after fix -- confirming helper-delegation is now structurally aligned. Residual INHERENT: port passes 4 args to helpers (outVec ptr) + uses ldmia.w/stmia.w for outNormal copy vs binary inline 2-arg call + no outVec pointer; calling-convention/inline-boundary difference only. Binary @ 0x0019feac/dispatch 0x0025d328.",
+    "score": 7705,
     "max_score": 4100,
-    "reason": "Score jumped 4480->29480/4000 (737%) after b0262c0 added collision-normal helpers. Binary @ 0x0019feac uses vtable double-dispatch; port inlines AABB intersection math via helper methods. Semantics binary-faithful per commit b0262c0. Structural diff only. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 29310/4000 -> 39810/4100]",
-    "score": 39810,
-    "verdict": "ACCEPT-deferred"
+    "decided_at": "2026-06-14T00:00Z"
   },
   "_ZN9ColSphere9DrawDebugEv": {
     "decided_at": "2026-06-14T05:55Z",

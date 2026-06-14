@@ -17,47 +17,29 @@ ColSphere::ColSphere(Vec3 c, float r) : Col(), radius(r) {
     m_PrimaryPoint = c;
 }
 
-// Binary @ 0x0019feac -- vtable slot 3 (Collide); double-dispatch by other->GetType()
+// Binary @ 0x0019feac -- vtable slot 3 (Collide); double-dispatch by other->GetType().
+// Each branch calls the penetration-vector helper which writes outNormal = delta*push
+// (depth-scaled, NOT a unit normal). On hit, sets both collision flags.
+// RE-ported: 0x0025d328 -- replaced Intersects()+Normalise() with helper calls.
 int ColSphere::Collide(Col* other, Vec3* outNormal) {
     int t = other->GetType();
     int hit = 0;
+    Vec3 norm;
     if (t == TYPE_SPHERE) {
-        ColSphere* s = static_cast<ColSphere*>(other);
-        hit = Intersects(*s) ? 1 : 0;
-        if (hit && outNormal) {
-            Vec3 n(center().x - s->center().x, center().y - s->center().y, center().z - s->center().z);
-            n.Normalise();
-            *outNormal = n;
-        }
+        hit = ColSphereSphere(this, static_cast<ColSphere*>(other), &norm);
     } else if (t == TYPE_LINE) {
-        ColLine* l = static_cast<ColLine*>(other);
-        hit = IntersectsLine(*l) ? 1 : 0;
-        if (hit && outNormal) {
-            Vec3 closest = ColLineClosestPoint(*l, center());
-            Vec3 n(center().x - closest.x, center().y - closest.y, center().z - closest.z);
-            n.Normalise();
-            *outNormal = n;
-        }
+        hit = ColSphereLine(this, static_cast<ColLine*>(other), &norm);
     } else if (t == TYPE_AABB) {
         ColAABB* box = static_cast<ColAABB*>(other);
-        hit = box->IntersectsSphere(*this) ? 1 : 0;
-        if (hit && outNormal) {
-            // Clamp sphere centre into box span using center+halfExtents API.
-            float bx = box->m_Center().x, hx = box->m_HalfExtents.x;
-            float by = box->m_Center().y, hy = box->m_HalfExtents.y;
-            float bz = box->m_Center().z, hz = box->m_HalfExtents.z;
-            float cx = center().x < (bx - hx) ? (bx - hx) : (center().x > (bx + hx) ? (bx + hx) : center().x);
-            float cy = center().y < (by - hy) ? (by - hy) : (center().y > (by + hy) ? (by + hy) : center().y);
-            float cz = center().z < (bz - hz) ? (bz - hz) : (center().z > (bz + hz) ? (bz + hz) : center().z);
-            Vec3 n(cx - center().x, cy - center().y, cz - center().z);
-            n.Normalise();
-            *outNormal = n;
-        }
+        hit = box->ColAABBSphere(box, this, &norm) ? 1 : 0;
     } else {
-        // Unknown type -- recursive double-dispatch to other's slot 3
         return other->Collide(this, outNormal);
     }
-    if (hit) { AddCollision(); other->AddCollision(); }
+    if (hit) {
+        if (outNormal) *outNormal = norm;
+        AddCollision();
+        other->AddCollision();
+    }
     return hit;
 }
 

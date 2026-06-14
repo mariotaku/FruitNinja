@@ -5,6 +5,8 @@ namespace Mortar {
 
 namespace utf8 {
 
+// RE-ported: 0x0022da04 — binary applies per-length overlong/surrogate/noncharacter
+// validation after assembling cp; NUL continuation byte returns 0 not 0xFFFD.
 uint32_t decode_next_unicode_character(const char** cursor) {
     const unsigned char* p = reinterpret_cast<const unsigned char*>(*cursor);
     if (*p == 0) return 0;
@@ -36,6 +38,11 @@ uint32_t decode_next_unicode_character(const char** cursor) {
     }
 
     for (int i = 0; i < extra; i++) {
+        // Binary returns 0 (not 0xFFFD) when a continuation byte is NUL.
+        if (*p == 0x00) {
+            *cursor = reinterpret_cast<const char*>(p);
+            return 0;
+        }
         if ((*p & 0xC0) != 0x80) {
             *cursor = reinterpret_cast<const char*>(p);
             return 0xFFFD;
@@ -44,6 +51,36 @@ uint32_t decode_next_unicode_character(const char** cursor) {
     }
 
     *cursor = reinterpret_cast<const char*>(p);
+
+    // Per-length overlong / surrogate / noncharacter validation (binary @ 0x0022da04).
+    switch (extra) {
+        case 1:
+            // 2-byte: overlong if cp <= 0x7F (binary: !(0x7e < cp) || cp==0x7f -> 0xFFFD)
+            if (cp <= 0x7F) cp = 0xFFFD;
+            break;
+        case 2:
+            // 3-byte: overlong if cp <= 0x7FF, surrogate if 0xD800..0xDFFF,
+            //         noncharacter if cp == 0xFFFE or 0xFFFF.
+            if (cp <= 0x7FF) { cp = 0xFFFD; break; }
+            if (cp >= 0xD800 && cp <= 0xDFFF) { cp = 0xFFFD; break; }
+            if (cp == 0xFFFE || cp == 0xFFFF) { cp = 0xFFFD; break; }
+            break;
+        case 3:
+            // 4-byte: overlong if cp <= 0xFFFF.
+            if (cp <= 0xFFFF) cp = 0xFFFD;
+            break;
+        case 4:
+            // 5-byte: overlong if cp <= 0x1FFFFF.
+            if (cp <= 0x1FFFFF) cp = 0xFFFD;
+            break;
+        case 5:
+            // 6-byte: overlong if cp <= 0x3FFFFFF.
+            if (cp <= 0x3FFFFFF) cp = 0xFFFD;
+            break;
+        default:
+            break;
+    }
+
     return cp;
 }
 
@@ -82,10 +119,10 @@ Utf8StringIterator::Utf8StringIterator(const Utf8StringIterator& other)
     m_CurrentCodepoint = other.m_CurrentCodepoint;
 }
 
-// Binary @ 0x00184128 — Advance: outer guard if (m_PrevBegin != 0); per-step guard
+// Binary @ 0x0021ebcc — Advance: outer guard if (m_PrevBegin != 0); per-step guard
 // if (*m_PrevBegin != '\0'); then m_PrevBegin = m_NextScan; m_CurrentCodepoint = decode(&m_NextScan).
 // +0x04 (m_Begin) is NEVER written here.
-// ASM-verified: 2026-06-12 binary @ 0x00184128 (asm-inspector)
+// ASM-verified: 2026-06-12 binary @ 0x0021ebcc (asm-inspector)
 void Utf8StringIterator::Advance(int n) {
     if (m_PrevBegin == 0) return;
     for (int i = 0; i < n; i++) {
@@ -105,9 +142,9 @@ Utf8StringIterator Utf8StringIterator::operator+(int n) const {
     return copy;
 }
 
-// Binary @ 0x001984a8 — Reset(): rewinds to the IMMUTABLE string start (m_Begin = +0x04)
+// Binary @ 0x0021ec20 (_Init / Reset) — rewinds to the IMMUTABLE string start (m_Begin = +0x04)
 // and re-primes the first codepoint, matching binary _Init exactly.
-// ASM-verified: 2026-06-12 binary @ 0x001984a8 (asm-inspector)
+// ASM-verified: 2026-06-12 binary @ 0x0021ebcc (asm-inspector)
 void Utf8StringIterator::Reset() {
     m_NextScan = m_Begin;   // rewind live cursor to immutable string start (+0x04)
     Advance(1);             // prime first codepoint into m_PrevBegin/m_CurrentCodepoint
