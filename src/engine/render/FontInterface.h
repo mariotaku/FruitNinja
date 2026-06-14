@@ -13,6 +13,13 @@
 // interprets the single channel as alpha. Glyph bitmaps are copied in from
 // FreeType's FT_BITMAP_PIXEL_MODE_GRAY output (8-bit alpha).
 //
+// Scaling constants mirror binary FontInterface ctor @ 0x002502e0 and
+// Initialize @ 0x00250470:
+//   m_CacheSize      = 100  (used as FT DPI in FT_Set_Char_Size; set in ctor)
+//   m_FontScale      = 1.0  (super-sampling factor; set in Initialize)
+//   m_InvFontScale   = 1.0  (1/m_FontScale; set in Initialize)
+//   m_GlobalSizeScale = 1.0 (0.9 when game language byte == 0x13; set in Initialize)
+//
 // TODO: bevel/stroke/glow effects — stub no-ops for now. Boot and Latin rendering
 // do not need them.
 
@@ -22,14 +29,17 @@
 namespace Mortar {
 
 // One cached glyph entry in the atlas.
+// All metric fields (bearingX/Y, advanceX, width, height) are in world units:
+//   FT_26.6_metric * invFontScale * (1/64)
+// With invFontScale=1.0 (the normal case) this equals FT_metric / 64.0.
 struct GlyphAtlasEntry {
     float    u0, v0;    // top-left UV (0..1)
     float    u1, v1;    // bottom-right UV (0..1)
-    int      bearingX;  // FT_GlyphSlot->bitmap_left (pixels)
-    int      bearingY;  // FT_GlyphSlot->bitmap_top  (pixels)
-    int      advanceX;  // FT_GlyphSlot->advance.x >> 6 (pixels)
-    int      width;     // bitmap width in pixels
-    int      height;    // bitmap height in pixels
+    float    bearingX;  // horiBearingX in world units
+    float    bearingY;  // horiBearingY in world units
+    float    advanceX;  // horiAdvance  in world units
+    float    width;     // bitmap width in pixels (used for atlas packing only)
+    float    height;    // bitmap height in pixels (used for atlas packing only)
 };
 
 class FontInterface {
@@ -37,6 +47,10 @@ public:
     // atlasSize: dimension of the square atlas texture (must be power-of-two).
     explicit FontInterface(int atlasSize = 512);
     ~FontInterface();
+
+    // Mirrors binary Initialize @ 0x00250470: sets fontScale/invFontScale/globalSizeScale.
+    // Call once after construction. languageByte is game_work+3 (0x13 = Korean, scale 0.9).
+    void InitialiseData(float fontScale, float globalSizeScale);
 
     // Pack a glyph bitmap (8-bit alpha, width x height bytes) into the atlas.
     // Returns false if the atlas is full. Fills *out with the packed entry.
@@ -54,6 +68,12 @@ public:
 
     // Reset atlas to empty (frees GL texture + CPU buffer).
     void Clear();
+
+    // Binary-derived scaling constants (read by FontCacheObjectTTF::SetFontSize).
+    int   m_CacheSize;         // FT DPI: 100 (binary FontInterface ctor @ 0x002502e0)
+    float m_FontScale;         // super-sampling factor: 1.0 (binary Initialize @ 0x00250470)
+    float m_InvFontScale;      // 1/m_FontScale: 1.0
+    float m_GlobalSizeScale;   // 1.0 normally; 0.9 for Korean (lang byte 0x13)
 
 private:
     int      m_Size;           // atlas dimension (e.g. 512)

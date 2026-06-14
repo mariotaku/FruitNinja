@@ -30,14 +30,17 @@ typedef FT_FaceRec_*    FT_Face;
 
 namespace Mortar {
 
-// Key for the glyph cache: (codepoint, pixel_size).
+// Key for the glyph cache: (codepoint, scaled_size_26.6).
+// scaled_size_26.6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0)
+// Using the FT 26.6 fixed-point value as the key means two requests that
+// produce the same FT_Set_Char_Size call share the same cache entry.
 struct GlyphCacheKey {
     uint32_t codepoint;
-    int      pixelSize;
+    long     charHeight26_6; // FT_F26Dot6 value passed to FT_Set_Char_Size
 
     bool operator<(const GlyphCacheKey& o) const {
         if (codepoint != o.codepoint) return codepoint < o.codepoint;
-        return pixelSize < o.pixelSize;
+        return charHeight26_6 < o.charHeight26_6;
     }
 };
 
@@ -50,36 +53,42 @@ public:
 
     bool IsValid() const { return m_Face != nullptr; }
 
-    // Returns a cached GlyphAtlasEntry for (cp, pixelSize), rendering and
-    // packing it on first request. Returns nullptr if the codepoint is absent.
-    const GlyphAtlasEntry* GetGlyph(uint32_t cp, int pixelSize);
+    // Returns a cached GlyphAtlasEntry for (cp, requestedSize).
+    // requestedSize is the pre-scale font size (e.g. 9.0f).
+    // GlyphAtlasEntry metrics are in world units (FT 26.6 / 64 * invFontScale).
+    // Returns nullptr if the codepoint is absent.
+    const GlyphAtlasEntry* GetGlyph(uint32_t cp, float requestedSize);
 
-    // Kerning advance in pixels between codepoints a and b at pixelSize.
+    // Kerning advance in world units between codepoints a and b at requestedSize.
     // Returns 0.0f when no kern table is present (matches binary GetKerning stub).
-    float GetKerningForPair(uint32_t a, uint32_t b, int pixelSize);
+    float GetKerningForPair(uint32_t a, uint32_t b, float requestedSize);
 
     // Access the underlying atlas for texture upload / bind.
     FontInterface* GetAtlas() { return m_Atlas; }
 
     int GetDefaultPixelSize() const { return m_DefaultPixelSize; }
 
-    // Ascender + descender in pixels at pixelSize (from FreeType face metrics).
-    int GetAscender(int pixelSize);
-    int GetDescender(int pixelSize);
-    int GetLineHeight(int pixelSize);
+    // Ascender, descender, and line-height in world units at requestedSize.
+    // World unit = FT_metric_26.6 * (1/64) * m_InvFontScale.
+    float GetAscender(float requestedSize);
+    float GetDescender(float requestedSize);
+    float GetLineHeight(float requestedSize);
 
 private:
     FT_Library  m_FTLib;           // shared FT_Library (not owned)
     FT_Face     m_Face;            // owned FT_Face
     int         m_DefaultPixelSize;
-    int         m_CurrentSize;     // last size passed to FT_Set_Pixel_Sizes
+    long        m_CurrentCharHeight; // last charHeight_26_6 passed to FT_Set_Char_Size
 
     FontInterface* m_Atlas;        // owned glyph atlas
 
-    // Glyph cache: GlyphCacheKey -> GlyphAtlasEntry
+    // Glyph cache: GlyphCacheKey -> GlyphAtlasEntry (metrics in world units)
     std::map<GlyphCacheKey, GlyphAtlasEntry> m_Cache;
 
-    bool SetPixelSize(int pixelSize);
+    // Apply FT_Set_Char_Size for the given charHeight_26_6 value.
+    // charHeight_26_6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0).
+    // Tracks m_CurrentCharHeight to avoid redundant FT calls.
+    bool SetCharSize(long charHeight_26_6);
 };
 
 } // namespace Mortar
