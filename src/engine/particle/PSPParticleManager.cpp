@@ -135,20 +135,21 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     PSPParticleEmitter& e = *m_Emitters.back();
     // All defaults match the binary's explicit init block (AddEmitter @ 0x13c1b8):
     //   +0x00=0, +0x08..0x1C=0 (Pos,Vel), +0x04(bStarted u16)=1
-    //   +0x20(TimeScale)=1.0, +0x24=1.0, +0x28(ScaleX)=1.0, +0x2C(ScaleY)=1.0
-    //   +0x30(DirCos)=1.0, +0x34(DirSin)=0, +0x38=0
-    //   +0x3C(pTemplate)=tmpl, +0x40(Next)=oldHead, +0x44(pRefPtr)=ppRef
+    //   +0x20(RateScale)=1.0, +0x24(SizeBias)=1.0, +0x28(SpinScale)=1.0, +0x2C(TimeScale)=1.0
+    //   +0x30(DirCos)=1.0, +0x34(DirSin)=0, +0x38(VelScale)=1.0, +0x3C(bMirrorX)=0
+    //   +0x40(pTemplate)=tmpl, +0x44(Next)=oldHead, +0x48(pRefPtr)=ppRef
     //   +0x4D(bTrailStarted)=0
     e.m_Timer = 0.0f;
     e.m_Pos = Vec3(0, 0, 0);
     e.m_Vel = Vec3(0, 0, 0);
     e.m_DirSin = 0.0f;
+    e.m_RateScale = 1.0f;
+    e.m_SizeBias = 1.0f;
+    e.m_SpinScale = 1.0f;
     e.m_TimeScale = 1.0f;
-    e.m_field24 = 1.0f;
-    e.m_ScaleX = 1.0f;
-    e.m_ScaleY = 1.0f;
     e.m_DirCos = 1.0f;
-    e.m_field38 = 0;
+    e.m_VelScale = 1.0f;
+    e.m_bMirrorX = 0;
     e.m_bStarted = 1;
     e.m_bUpdateWhenPaused = updateWhenPaused;
     e.m_pTemplate = tmpl;
@@ -183,7 +184,7 @@ static inline float RandRange(float lo, float hi) {
     return lo + (hi - lo) * Rand01();
 }
 
-// Quadrant-mirror sign used by AddParticle's m_field38 branch (0x115644).
+// Quadrant-mirror sign used by AddParticle's m_bMirrorX branch (0x115644).
 // Binary @ 0x001157c0/0x115800: vcmpe vs 0 then ble/ite produces
 //   v > 0  -> -1.0
 //   v < 0  -> +1.0
@@ -280,37 +281,37 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         p.m_CycleYPhase = Rand01() * 6.2831853f;
 
         // Quadrant-mirror branch (AddParticle @ 0x001157ae). Gated on the
-        // emitter's m_field38, NOT on the template shape -- the binary's
+        // emitter's m_bMirrorX, NOT on the template shape -- the binary's
         // AddParticle has no shape==3 path; the "Angular" type parsed in
-        // LoadFile only affects size/gridlock, never this branch. m_field38 is
+        // LoadFile only affects size/gridlock, never this branch. m_bMirrorX is
         // set non-zero by the split-touch two-player layout so each player's
         // emitter sprays particles mirrored about the screen centre line.
         //
         // Binary sequence:
         //   swap(gravity.x, gravity.y)
         //   gravity.x *= QuadrantMirror(particle.pos.x)   // = emitter.pos.x here
-        //   gravity   *= m_ScaleY (+0x2C)
+        //   gravity   *= m_TimeScale (+0x2C)
         //   swap(vel.x, vel.y)                            // rotated set velocity
         //   vel.x     *= QuadrantMirror(emitter.pos.x)
-        //   vel       *= m_ScaleY (+0x2C)
+        //   vel       *= m_TimeScale (+0x2C)
         // particle.pos was written from emitter.pos earlier, so both sign
         // sources read emitter.pos.x.
-        if (emitter.m_field38 != 0) {
+        if (emitter.m_bMirrorX != 0) {
             float gtmp = p.m_Gravity.x;
             p.m_Gravity.x = p.m_Gravity.y;
             p.m_Gravity.y = gtmp;
             p.m_Gravity.x *= QuadrantMirror(p.m_Pos.x);
-            p.m_Gravity.x *= emitter.m_ScaleY;
-            p.m_Gravity.y *= emitter.m_ScaleY;
-            p.m_Gravity.z *= emitter.m_ScaleY;
+            p.m_Gravity.x *= emitter.m_TimeScale;
+            p.m_Gravity.y *= emitter.m_TimeScale;
+            p.m_Gravity.z *= emitter.m_TimeScale;
 
             float vtmp = rvx;
             rvx = rvy;
             rvy = vtmp;
             rvx *= QuadrantMirror(emitter.m_Pos.x);
-            rvx *= emitter.m_ScaleY;
-            rvy *= emitter.m_ScaleY;
-            rvz *= emitter.m_ScaleY;
+            rvx *= emitter.m_TimeScale;
+            rvy *= emitter.m_TimeScale;
+            rvz *= emitter.m_TimeScale;
         }
 
         // Finalise velocity: add emitter velocity to the (possibly mirrored)
@@ -324,7 +325,7 @@ static void SpawnParticle(PSPParticleEmitter& emitter, const PSPParticleSet& set
         //   0 = Point     -- no extra init (pos = emitter.pos, vel = rotated set vel)
         //   1 = Vertex    -- start half a velocity step behind the emitter
         //   2 = Direction -- rotate particle to face its own velocity
-        // (shape==3 "Angular" has no AddParticle branch; see m_field38 above)
+        // (shape==3 "Angular" has no AddParticle branch; see m_bMirrorX above)
         switch (tmpl->m_Shape) {
             case 1: // Vertex
                 p.m_Pos.x -= p.m_Vel.x;
@@ -355,7 +356,10 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt, std::vector<PSPPartic
     if (!et) return;
 
     const float currentTime = e.m_Timer;
-    const float newTime = currentTime + dt * e.m_TimeScale;
+    // Binary Update @0x13cd70: dtScaled = dt * m_TimeScale[+0x2c];
+    // newTimer = m_Timer + dtScaled * m_RateScale[+0x20]
+    const float dtScaled = dt * e.m_TimeScale;
+    const float newTime = currentTime + dtScaled * e.m_RateScale;
 
     // Spawn pass -- for each set, check window and integrate rate
     for (int32_t si = 0; si < (int32_t)et->m_Sets.size(); ++si) {
@@ -367,7 +371,7 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt, std::vector<PSPPartic
         if (startT <= currentTime && (stopT == 0.0f || currentTime <= stopT)) {
             const float rate = set.m_PerSec;
             if (rate > 0.0f) {
-                int desired = (int)(rate * ((currentTime + dt * e.m_TimeScale) - startT))
+                int desired = (int)(rate * ((currentTime + dtScaled * e.m_RateScale) - startT))
                             - (int)(rate * (currentTime - startT));
                 for (int i = 0; i < desired; ++i) SpawnParticle(e, set, particles, si);
             }
@@ -376,7 +380,7 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt, std::vector<PSPPartic
         // Burst on first frame crossing startT
         if (currentTime <= startT && startT < newTime) {
             for (int i = 0; i < (int)set.m_InitCount; ++i) SpawnParticle(e, set, particles, si);
-            if (e.m_TimeScale == 0.0f) e.m_Timer += dt;
+            if (e.m_RateScale == 0.0f) e.m_Timer += dt;
         }
     }
 
@@ -439,8 +443,14 @@ static bool EmitterTemplateEnds(const PSPEmitterTemplate* t) {
     return true;
 }
 
-// Binary @ 0x00115ed8 — update all active emitters; skip when paused &&
-// !emitter->m_bUpdateWhenPaused.
+// Binary @ 0x00115ed8 / v1.6.1 @ 0x0013cee8 — update all active emitters;
+// skip when paused && !emitter->m_bUpdateWhenPaused.
+// DIFFERS: original = intrusive linked list (m_pActiveEmitters+0x20 / m_Next+0x44)
+// + MemoryPool reap; port uses std::vector<PSPParticleEmitter*> + parallel
+// std::vector<std::vector<PSPParticle>> with '|| !particles.empty()' keep-alive
+// added in both reap branches (forced: binary keeps live particles in a
+// per-template index list at emitterTemplate+0x04 that survives emitter reap;
+// port has no such separation). Binary addr: 0x0013cee8.
 // TODO: wire paused from PauseScreen when that's ported (callers pass false for now).
 void PSPParticleManager::Update(float dt, bool paused) {
     for (size_t i = 0; i < m_Emitters.size(); ) {
@@ -448,8 +458,8 @@ void PSPParticleManager::Update(float dt, bool paused) {
         const PSPEmitterTemplate* et = e.m_pTemplate;
         std::vector<PSPParticle>& particles = m_ParticleLists[i];
 
-        // Tick active emitters
-        if (e.m_bStarted != 0 && e.m_TimeScale != 0.0f &&
+        // Tick active emitters; binary Manager::Update gates on m_RateScale != 0 (not m_TimeScale)
+        if (e.m_bStarted != 0 && e.m_RateScale != 0.0f &&
             (!paused || e.m_bUpdateWhenPaused)) {
             UpdateEmitter(e, dt, particles);
         }
@@ -532,10 +542,16 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
 }
 
 // ASM-verified: 2026-05-06T16:00 binary @ 0x00114c64 (asm-inspector)
-// Binary @ 0x00114c64 — fused integrate+render. Port splits into Update/Draw;
-// dt and paused are unused in the Draw body (integration happens in Update).
-// DIFFERS: binary fuses per-particle integrate+render into one pass; port
-// separates them so Update/Draw can be called independently.
+// Binary @ 0x00114c64 / v1.6.1 @ 0x0013eccc — fused integrate+render.
+// Port splits into Update/Draw; dt and paused are unused in the Draw body
+// (integration happens in Update).
+// DIFFERS: original @ 0x0013eccc = fused integrate+render over intrusive
+// pool (m_NumEmitterTemplates templates, stride 0xB8, per-template index list
+// at template+0x04, PSPParticle 0xA4 bytes, Math::SinIdx/CosIdx 16-bit
+// angle tables, Mesh::DrawTriList+TextureAtlasPage); port separates
+// integrate(Update)/render(Draw) over std::vector with reduced PSPParticle,
+// replaces angle-index trig with cosf/sinf radians, replaces
+// Mesh::DrawTriList+TextureAtlasPage with Renderer::DrawTriList+GL.
 // No glBlendFunc state restore at function exit -- binary leaves blend
 // state at whatever the last template configured.
 void PSPParticleManager::Draw(float dt, bool paused, int layer) {
@@ -707,7 +723,7 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
         uint32_t hash = name ? StringHash(name) : 0;
         if (name) nameToIndex[hash] = m_ParticleTemplates.size();
 
-        pt->QueryIntAttribute("useDepth", &tmpl.m_UseDepth);
+        { int _v = 0; pt->QueryIntAttribute("useDepth", &_v); tmpl.m_UseDepth = (int32_t)_v; }
 
         // <life> — stored as seconds after divide by 60
         if (auto* e = pt->FirstChildElement("life")) {

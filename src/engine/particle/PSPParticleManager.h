@@ -222,67 +222,69 @@ static_assert(__builtin_offsetof(PSPParticle, m_field44)      == 0xA0, "");
 #endif
 
 // ----------------------------------------------------------------------------
-// Runtime emitter instance. Binary: 76 (0x4C) bytes, non-polymorphic.
-// No base class. Single default ctor at 0x00117640 (4 stores + bx lr).
-// Ctor only initialises last 4 fields (+60..+72); earlier fields set by
-// the Init/Spawn path. m_Next forms a free-list link; emitters are
-// pool/array-allocated by the owning system (no per-emitter operator new).
-// Binary uses a global particle pool; m_bStarted(+0x04) gates update. The port
-// mirrors binary size exactly; per-emitter particle lists live in the manager.
+// Runtime emitter instance. Binary: 80 (0x50) bytes, non-polymorphic.
+// No base class. Default ctor at 0x13fa20 (zeroes 0x40/0x44/0x48/0x4c only).
+// Earlier fields set by AddEmitter @ 0x13c1b8. m_Next forms active-list link;
+// emitters are pool-allocated (MemoryPool<PSPParticleEmitter>::Create @0x13fd08
+// does operator new[]((n*10+1)*8) with elem-stride = 0x50).
 //
-// ASM-verified: 2026-06-13T05:10Z binary @ 0x0013c1b8 / 0x001bc748 (asm-inspector)
+// Field layout verified against AddEmitter @0x13c1b8 + Update @0x13cd70 +
+// AddParticle @0x13c554. ASM-verify stale for 0x20-0x4d; re-verify pending.
 // ----------------------------------------------------------------------------
 struct PSPParticleEmitter {
     float    m_Timer;                           // +0x00
-    uint16_t m_bStarted;                        // +0x04  set to 1 by AddEmitter (u16); distinct from trail-active byte at +0x4D
-    uint16_t m_pad06;                           // +0x06  alignment pad (Vec3 needs 4-byte alignment)
+    uint16_t m_bStarted;                        // +0x04  set to 1 by AddEmitter (u16)
+    uint16_t m_pad06;                           // +0x06  alignment pad
     Vec3     m_Pos;                             // +0x08  (12 bytes)
     Vec3     m_Vel;                             // +0x14  (12 bytes)
-    float    m_TimeScale;                       // +0x20  speed multiplier; default 1.0
-    float    m_field24;                         // +0x24  default 1.0
-    float    m_ScaleX;                          // +0x28  default 1.0
-    float    m_ScaleY;                          // +0x2C  separate scale/colour component; default 1.0
-    float    m_DirCos;                          // +0x30  cos(trail orientation), default 1.0
-    float    m_DirSin;                          // +0x34  sin(trail orientation), default 0.0
-    uint8_t  m_field38;                         // +0x38  default 0
-    uint8_t  m_pad39[3];                        // +0x39  alignment pad
-    const PSPEmitterTemplate*   m_pTemplate;    // +0x3C  ctor: 0
-    PSPParticleEmitter*         m_Next;         // +0x40  ctor: 0  (free-list link)
-    PSPParticleEmitter**        m_pRefPtr;      // +0x44  ctor: 0  (caller back-pointer)
-    uint8_t  m_bUpdateWhenPaused;               // +0x48  ctor: 0
-    uint8_t  m_pad49[3];                        // +0x49  alignment pad
-    uint8_t  m_pad4c;                           // +0x4C  pad byte
-    uint8_t  m_bTrailStarted;                   // +0x4D  trail-active flag; 0 in AddEmitter, 1 set by SpawnJibs/Jiblet::Update
+    float    m_RateScale;                       // +0x20  timer advance: newTimer = m_Timer + dt*m_TimeScale*m_RateScale
+    float    m_SizeBias;                        // +0x24  AddParticle: sizeStart = base - base*m_SizeBias
+    float    m_SpinScale;                       // +0x28  AddParticle: all 3 spin keys * m_SpinScale
+    float    m_TimeScale;                       // +0x2C  Update: dtScaled = dt * m_TimeScale
+    float    m_DirCos;                          // +0x30  cos(spawn-velocity rotation), default 1.0
+    float    m_DirSin;                          // +0x34  sin(spawn-velocity rotation), default 0.0
+    float    m_VelScale;                        // +0x38  AddParticle: vel *= m_VelScale; default 1.0
+    uint8_t  m_bMirrorX;                        // +0x3C  AddParticle: mirror-X branch (two-player layout)
+    uint8_t  _pad3d[3];                         // +0x3D  align to 4
+    const PSPEmitterTemplate*   m_pTemplate;    // +0x40  ctor: 0
+    PSPParticleEmitter*         m_Next;         // +0x44  ctor: 0  (active-list link)
+    PSPParticleEmitter**        m_pRefPtr;      // +0x48  ctor: 0  (caller back-pointer; nulled on recycle)
+    uint8_t  m_bUpdateWhenPaused;               // +0x4C  ctor: 0
+    uint8_t  m_bTrailStarted;                   // +0x4D  trail-active flag; set by SpawnJibs/Jiblet::Update
+    uint8_t  _pad4e[2];                         // +0x4E  tail pad to 0x50
 
     PSPParticleEmitter()
         : m_Timer(0), m_bStarted(1), m_pad06(0)
         , m_Pos(0,0,0), m_Vel(0,0,0)
-        , m_TimeScale(1.0f), m_field24(1.0f)
-        , m_ScaleX(1.0f), m_ScaleY(1.0f)
-        , m_DirCos(1.0f), m_DirSin(0.0f), m_field38(0)
+        , m_RateScale(1.0f), m_SizeBias(1.0f)
+        , m_SpinScale(1.0f), m_TimeScale(1.0f)
+        , m_DirCos(1.0f), m_DirSin(0.0f), m_VelScale(1.0f)
+        , m_bMirrorX(0)
         , m_pTemplate(0), m_Next(0), m_pRefPtr(0)
-        , m_bUpdateWhenPaused(0), m_pad4c(0), m_bTrailStarted(0)
+        , m_bUpdateWhenPaused(0), m_bTrailStarted(0)
     {
-        m_pad39[0] = m_pad39[1] = m_pad39[2] = 0;
-        m_pad49[0] = m_pad49[1] = m_pad49[2] = 0;
+        _pad3d[0] = _pad3d[1] = _pad3d[2] = 0;
+        _pad4e[0] = _pad4e[1] = 0;
     }
 };
 #ifdef __bada__
-static_assert(sizeof(PSPParticleEmitter) == 78, "PSPParticleEmitter size mismatch");
+static_assert(sizeof(PSPParticleEmitter) == 0x50, "PSPParticleEmitter size mismatch");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Timer)             == 0x00, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_bStarted)          == 0x04, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Pos)               == 0x08, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Vel)               == 0x14, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_TimeScale)         == 0x20, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_ScaleX)            == 0x28, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_ScaleY)            == 0x2C, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_RateScale)         == 0x20, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_SizeBias)          == 0x24, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_SpinScale)         == 0x28, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_TimeScale)         == 0x2C, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirCos)            == 0x30, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirSin)            == 0x34, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_field38)           == 0x38, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_pTemplate)         == 0x3C, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_Next)              == 0x40, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_pRefPtr)           == 0x44, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_bUpdateWhenPaused) == 0x48, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_VelScale)          == 0x38, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_bMirrorX)          == 0x3C, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_pTemplate)         == 0x40, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_Next)              == 0x44, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_pRefPtr)           == 0x48, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_bUpdateWhenPaused) == 0x4C, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_bTrailStarted)     == 0x4D, "");
 #endif
 

@@ -2,6 +2,11 @@
 #include "render/gl_funcs.h"
 #include "math/math3d.h"
 
+// Binary ctor @ 0x00256f3c (C2) / 0x0010a520 (C1 = PLT thunk -> C2):
+// calls MatrixStack::MatrixStack() on each of the 4 member stacks (= Reset()+version=1),
+// then str-zeroes the 4 trailing version ints at +0x2124..+0x2130.
+// No ResetAllStacks() call follows; the member ctors are sufficient.
+// The port's extra m_ProjVersionUploaded=0 is port-specific (GLES2 shader path).
 MatrixManager::MatrixManager()
     : m_ViewVersion(0)
     , m_ViewVersionUploaded(0)
@@ -9,7 +14,6 @@ MatrixManager::MatrixManager()
     , m_TextureVersionUploaded(0)
     , m_ProjVersionUploaded(0)
 {
-    ResetAllStacks();
 }
 
 // Binary dtors @ 0x0019e3b4 (C1) + 0x0019e434 (C2); singleton is never destroyed
