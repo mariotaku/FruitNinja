@@ -32,8 +32,8 @@ void SetupGameWork() {
     // +0x18C: m_gameDataLicensedState = 0.
     game_work.m_gameDataLicensedState = 0;
 
-    // +0x1AC: m_ArcadeBonusTimer = 0.0f (binary @ 0x0010b522).
-    game_work.m_ArcadeBonusTimer = 0.0f;
+    // +0x1B8: m_ElapsedGameTime = 0.0f (binary @ 0x0010b522).
+    game_work.m_ElapsedGameTime = 0.0f;
 
     // +0x01C: m_bUnsullied = 0.
     game_work.m_bUnsullied = 0;
@@ -57,9 +57,9 @@ void SetupGameWork() {
     // +0x034: field_0x34 = 0.
     game_work.field_0x34 = 0;
 
-    // +0x088: field_0x88 = 50.0f.
+    // +0x08C: field_0x8c = 50.0f.
     // DAT_0010b578 confirmed = 0x42480000 = 50.0f.
-    game_work.field_0x88 = 50.0f;
+    game_work.field_0x8c = 50.0f;
 
     // +0x160: mainScreen = 0 (clear pointer).
     game_work.mMainScreen = nullptr;
@@ -79,15 +79,28 @@ void SetupGameWork() {
     // +0x199: m_bP2PReady = 0 (dead-code MP sync flag; binary @ 0x0010b53e).
     game_work.m_bP2PReady = 0;
 
-    // +0x19E: field_0x19e = 0 (binary @ 0x0010b558).
-    game_work.field_0x19e = 0;
+    // +0x19E was field_0x19e in v1.5.1; in v1.6.1 this byte is interior to
+    // m_FrameTimer (int @ +0x19C); the explicit zero is dropped (m_FrameTimer
+    // is not set here; zero-init from .bss suffices).
 
-    // +0x1A0: m_MenuReturnTimer = 0.0f.
-    game_work.m_MenuReturnTimer = 0.0f;
+    // +0x194: field_0x194 = 1 (v1.6.1; binary init confirmed by SetupGameWork).
+    game_work.field_0x194 = 1;
 
-    // +0x1A8: m_bArcadeBonusActive = 0.
-    game_work.m_bArcadeBonusActive = 0;
+    // +0x1A2..+0x1A5: zero four byte fields (v1.6.1 SetupGameWork).
+    game_work.field_0x1a2 = 0;
+    game_work.field_0x1a3 = 0;
+    game_work.field_0x1a4 = 0;
+    game_work.field_0x1a5 = 0;
 
-    // +0x1B0: field_0x1b0 = 0 (binary @ 0x0010b56e).
-    game_work.field_0x1b0 = 0;
+    // +0x1A8: m_QuitTransitionTimer = 0.0f.
+    game_work.m_QuitTransitionTimer = 0.0f;
+
+    // +0x1B0: field_0x1b0 = 0.0f (binary @ 0x0010b56e).
+    game_work.field_0x1b0 = 0.0f;
+
+    // +0x1B4: field_0x1b4 = 0 (v1.6.1; gate byte zeroed by SetupGameWork).
+    game_work.field_0x1b4 = 0;
+
+    // +0x1BC: field_0x1bc = 0 (v1.6.1; gate byte zeroed by SetupGameWork).
+    game_work.field_0x1bc = 0;
 }
