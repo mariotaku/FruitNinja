@@ -11,7 +11,7 @@
 //   dtor          0x0011d5a0
 //   Parse         0x0011e150
 //   Activate      0x0011dbb8
-//   Update        0x0011d664
+//   Update        0x00148844
 //   Deactivate    0x0011d43c
 //   LoadTextures  0x0011d1ec
 
@@ -231,7 +231,7 @@ public:
     void Parse(tinyxml2::XMLElement* xml);
     // Binary @ 0x0011dbb8
     void Activate();
-    // Binary @ 0x0011d664
+    // Binary @ 0x00148844
     void Update(float dt, float currentLongest, float maxTotal);
     // Binary @ 0x0011d43c
     void Deactivate();

@@ -397,7 +397,7 @@ void ScreenEffect::Activate() {
     }
 }
 
-// ---- ScreenEffect::Update (binary @ 0x0011d664) ------------------------------
+// ---- ScreenEffect::Update (binary @ 0x00148844) ------------------------------
 
 void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     // Standalone-mode override: when m_TotalDuration > 0, this effect manages
@@ -435,7 +435,9 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         }
 
         // Sine-wave oscillation on size
-        img.m_SinIdx += (uint16_t)(img.m_Freq * 65536.0f * dt);
+        // RE-ported: binary @ 0x00148adc (v1.6.1, re-analyst spec) — m_SinIdx += dt*32764.0f*m_Freq
+        //   DAT_00148ca4=32764.0f; SinIdx period == port's, so 65536.0f was 2x too fast.
+        img.m_SinIdx += (uint16_t)(img.m_Freq * 32764.0f * dt);
         float sinVal = SinIdx(img.m_SinIdx);
 
         // Lerp size between SizeIn and SizeOut using sinVal
@@ -491,32 +493,35 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         }
     }
 
-    // Cull emitters when effect near end (currentLongest >= 0.8 * maxTotal)
-    if (maxTotal > 0.0f && currentLongest >= maxTotal * 0.8f) {
-        PSPParticleManager& pm = PSPParticleManager::GetInstance();
-        for (size_t i = 0; i < m_Emmiters.size(); ++i) {
-            Emmiter& em = m_Emmiters[i];
-            if (em.m_pHandle) {
-                pm.ClearEmitter(em.m_pHandle);
-                em.m_pHandle = nullptr;
-            }
+    // RE-ported: binary @ 0x00148d24 (v1.6.1, re-analyst spec) — when remaining time < 0.8f,
+    // halt emitter spawning (m_RateScale=0); do NOT destroy the emitter.
+    for (size_t i = 0; i < m_Emmiters.size(); ++i) {
+        Emmiter& em = m_Emmiters[i];
+        if (em.m_pHandle && currentLongest < 0.8f) {
+            em.m_pHandle->m_RateScale = 0.0f;
         }
     }
 
-    // Scheduled SFX firing
-    if (m_TotalDuration > 0.0f) {
-        float elapsed = m_TotalDuration - m_RemainingTime;
+    // RE-ported: binary @ 0x00148d84 (v1.6.1, re-analyst spec) — forward iteration;
+    // gate: fires when currentLongest (remaining) <= maxTotal*m_StartT; writes 100.0f to
+    // m_StartT as fired-marker; stores SFXPlay return in m_VoiceHandle; vol=0.6599f, pitch=1.0f,
+    // empty Delegate1 callback (DAT_00148cc0=0.0f is the 4th float arg to SFXPlay).
+    {
         Game* g = Game::GetInstance();
         GameSound* gs = g ? game_work.mGameSound : nullptr;
 
-        for (int si = (int)m_Sounds.size() - 1; si >= 0; --si) {
+        for (size_t si = 0; si < m_Sounds.size(); ++si) {
             SoundEffect& sfx = m_Sounds[si];
-            if (!sfx.m_VoiceHandle && elapsed >= sfx.m_StartT) {
-                if (gs) sfx.m_VoiceHandle = gs->SFXPlay(sfx.m_SoundName, 1.0f, 1.0f);
-                // erase after firing
-                m_Sounds.erase(m_Sounds.begin() + si);
+            if (currentLongest > maxTotal * sfx.m_StartT) continue;
+            sfx.m_StartT = 100.0f;
+            if (!sfx.m_VoiceHandle && gs) {
+                Mortar::Delegate1<bool, Mortar::MortarSound*> emptyDelegate;
+                sfx.m_VoiceHandle = gs->SFXPlay(sfx.m_SoundName, 0.6599f, 1.0f, emptyDelegate);
             }
         }
+        // TODO: 0x00148e3c — binary also: (a) while (maxTotal*m_EndT <= currentLongest) erases the
+        //   record, and (b) a separate m_EndT<0 one-shot path (0x148da4) plays at vol 1.0 without
+        //   storing a handle. Port once the loop erase semantics are confirmed.
     }
 }
 
