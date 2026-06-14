@@ -52,7 +52,7 @@ public:
     //   width       : 75 (wrap box width, int in binary at field 0x50)
     //   height      : 30 (max box height, int in binary at field 0x24)
     //   align       : 0x0d (centred + fit)
-    //   wrapMode    : 3
+    //   maxLines    : 3 (binary arg6; RebuildMeshes @ 0x00246944 shrink-until-fit criterion)
     //   lineSpacing : 3 (pixels between lines)
     //   param8      : int stored at field 0x48 (binary trailing arg; callers pass 0 or 1).
     //                 Added as a trailing default param (default 0) so existing 7-arg callers are valid.
@@ -62,7 +62,7 @@ public:
                    float width,
                    float height,
                    int align,
-                   int wrapMode,
+                   int maxLines,
                    float lineSpacing,
                    int param8 = 0);
     ~BakedStringBox();
@@ -116,7 +116,7 @@ private:
     float   m_BoxWidth;           // wrap box width in world units
     float   m_BoxHeight;          // wrap box max height in world units
     int     m_Align;              // alignment flags (binary 0x0d)
-    int     m_WrapMode;           // wrap mode (binary 3)
+    int     m_MaxLines;           // max lines for shrink-to-fit (binary arg6, value 3; RebuildMeshes @ 0x00246944)
     float   m_LineSpacing;        // additional spacing between lines
     float   m_HorizLineSpacing;   // from SetHorizontalLineSpacing (-1 = auto)
     int     m_Param8;             // binary field 0x48; trailing ctor arg (default 0)
