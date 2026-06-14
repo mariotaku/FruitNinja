@@ -6,7 +6,6 @@
 #include "game/GameWork.h"
 #include <SDL.h>
 #include "platform/InputTranslatorSDL.h"
-#include "input/Touch.h"
 #include "asset/TextureManager.h"
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
@@ -18,7 +17,6 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <cmath>
 #include <vector>
 #if defined(_WIN32)
     #include <direct.h>      // _mkdir on Windows
@@ -184,86 +182,6 @@ void Game::frameTick() {
             if (inputTranslator) inputTranslator->ProcessSDLEvent(ev, static_cast<SDL_Window*>(window));
         }
     }
-
-    // DEBUG: auto-slash for screenshot capture -- TEMPORARY
-    // Synthesize a continuous finger-swipe through the same pipeline real touch uses.
-    // Channel 15 (extId 16) reserved so it never collides with real input (0-14).
-    // Coordinate space: game-centered ortho X in [-240,+240], Y in [-160,+160] (+Y up).
-    // Swipe path: upper-center area -- Y fixed at +90 (top ~30% of screen),
-    // X sweeps from -80 to +80 with sinusoidal motion. Menu buttons sit at bottom
-    // (negative Y) so this path is safe.
-    if (FN::g_DebugAutoSlash) {
-        static float s_autoSlashPhase = 0.0f;
-        static bool  s_autoSlashDown  = false;
-        static const int  kAutoSlashChannel = 15;
-        static const uint32_t kAutoSlashExtId   = 16u;   // ch+1 convention
-        static const float kAmplitude   = 80.0f;
-        static const float kCenterY     = 90.0f;
-        static const float kPhaseStep   = 0.08f;         // ~0.76 rad/s at 10ms tick
-
-        float gx = kAmplitude * sinf(s_autoSlashPhase);
-        float gy = kCenterY;
-        s_autoSlashPhase += kPhaseStep;
-
-        Mortar::Touch& touch = Mortar::Touch::GetInstance();
-        Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
-
-        if (!s_autoSlashDown) {
-            // First frame: press-down, then synthesize an initial move (mirrors
-            // the FINGERDOWN path in InputTranslatorSDL: TouchMove then TouchDown).
-            touch.OnPressed(kAutoSlashExtId, gx, gy);
-            s_autoSlashDown = true;
-
-            if (mgr && inputTranslator) {
-                InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = inputTranslator->hashTouchScreen;
-                ie.actionFlags = INPUT_ACTION_DOWN;
-                ie.fingerId    = kAutoSlashChannel;
-                ie.x = gx; ie.y = gy;
-                mgr->DispatchEvent(&ie);
-
-                ie.actionHash  = inputTranslator->hashTouchMoveX[kAutoSlashChannel];
-                ie.actionFlags = INPUT_ACTION_MOVE;
-                mgr->DispatchEvent(&ie);
-                ie.actionHash  = inputTranslator->hashTouchMoveY[kAutoSlashChannel];
-                mgr->DispatchEvent(&ie);
-
-                ie.actionHash  = inputTranslator->hashTouchDown[kAutoSlashChannel];
-                ie.actionFlags = INPUT_ACTION_DOWN;
-                mgr->DispatchEvent(&ie);
-            }
-        } else {
-            // Subsequent frames: move (mirrors the FINGERMOTION path).
-            touch.OnMoved(kAutoSlashExtId, gx, gy);
-
-            if (mgr && inputTranslator) {
-                float prevX = inputTranslator->fingerX[kAutoSlashChannel];
-                float prevY = inputTranslator->fingerY[kAutoSlashChannel];
-                InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = inputTranslator->hashTouchMoveX[kAutoSlashChannel];
-                ie.actionFlags = INPUT_ACTION_MOVE;
-                ie.fingerId    = kAutoSlashChannel;
-                ie.x = gx; ie.y = gy;
-                ie.deltaX = gx - prevX; ie.deltaY = gy - prevY;
-                mgr->DispatchEvent(&ie);
-
-                ie.actionHash  = inputTranslator->hashTouchMoveY[kAutoSlashChannel];
-                mgr->DispatchEvent(&ie);
-
-                ie.actionHash  = inputTranslator->hashTouchDown[kAutoSlashChannel];
-                ie.actionFlags = INPUT_ACTION_DOWN;
-                mgr->DispatchEvent(&ie);
-            }
-        }
-        // Keep inputTranslator's fingerX/Y in sync so delta is correct next frame.
-        if (inputTranslator) {
-            inputTranslator->fingerX[kAutoSlashChannel] = gx;
-            inputTranslator->fingerY[kAutoSlashChannel] = gy;
-        }
-    }
-    // END DEBUG: auto-slash for screenshot capture -- TEMPORARY
 
     // === Game tick (matches FruitNinja::Draw at 0x1824e0) ===
 
