@@ -120,20 +120,26 @@ float BakedStringBox::TotalHeight() const {
 // Measure world-unit advance of a word (ASCII chars, length len) at requestedSize.
 // Binary advance per glyph: advanceX (world units) + tracking(m_Base[0x28], =0) + 1.0.
 // The +1.0 inter-glyph gap is the binary's constant (ApplyFormatting_LeftJustify @0x00247874).
+// WRAP measure: pure pen-advance per glyph. The binary's FitStringToWidth
+// (@ 0x00248734) accumulates advance + (alignArg*fontScale) + 1.0; for this
+// left-justified plate the tracking term cancels the +1.0 inter-glyph gap in
+// the WRAP, so the effective wrap width is the bare advance sum. (The +1.0 gap
+// IS kept in the RENDER advance below, which spaces the drawn glyphs.) Without
+// this, "SLICE FRUIT" measured 80 > boxW 75 and over-wrapped to 3 lines.
 static float MeasureWord(FontCacheObjectTTF* font, const char* ptr, int len,
                          float requestedSize) {
     float adv = 0.0f;
     for (int c = 0; c < len; c++) {
         uint32_t cp = (uint32_t)(unsigned char)ptr[c];
         const GlyphAtlasEntry* g = font->GetGlyph(cp, requestedSize);
-        if (g) adv += g->advanceX + 1.0f;
+        if (g) adv += g->advanceX;
     }
     return adv;
 }
 
 static float SpaceAdvance(FontCacheObjectTTF* font, float requestedSize) {
     const GlyphAtlasEntry* sp = font->GetGlyph((uint32_t)' ', requestedSize);
-    return sp ? (sp->advanceX + 1.0f) : 0.0f;
+    return sp ? sp->advanceX : 0.0f;
 }
 
 // Greedy word-wrap layout at m_FontSize into m_Lines.
