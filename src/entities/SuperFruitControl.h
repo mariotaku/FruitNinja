@@ -189,6 +189,10 @@ public:
     // PSPParticleManager hookup implemented; Jiblet mesh spawn pending Jiblet/MeshManager port.
     void SpawnJibs(int count);
 
+    // Binary @ 0x001b9c6c. Per-frame: radially shove every nearby bomb (type-list 1)
+    // away from the host fruit. Called while Timer < Lifetime (throw/anticipation phase).
+    void PushBombsAway(float dt);
+
     // Binary @ 0x001b9850. Combo cancel: clears linked slash entity when that
     // entity's combo is cancelled (e.g. swipe released mid-combo).
     void ComboCancel(SlashEntity* se);

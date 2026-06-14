@@ -288,6 +288,24 @@ const Mortar::SmartPtr<Mortar::Texture>& MissControl::GetCrossTexture() {
     return s_TexCross;
 }
 
+// --- MakeEmAllDissappear ---------------------------------------------------
+
+// Binary @ 0x0019dd74 -- MissControl::MakeEmAllDissappear.
+// Snap every busy pool slot's fade alpha to the 0.06917 ceiling so all
+// on-screen miss/critical/combo markers immediately finish fading out.
+// DIFFERS: binary walks flat object pool (base+i*0x94, globals sm_pPool/
+//   sm_PoolCount @ 0x3164a8/0x3164ac); port walks s_Pool[] pointer array.
+void MissControl::MakeEmAllDissappear() {
+    if (!s_PoolAllocated) return;
+    for (int i = 0; i < MISS_POOL_SIZE; ++i) {
+        MissControl* mc = s_Pool[i];
+        if (mc && mc->m_Active != 0) {           // base +0x30
+            if (mc->m_FadeAlpha >= 0.06916667f)   // +0x80; DAT_0019ddd4=0x3d8da741 exact
+                mc->m_FadeAlpha = 0.06916667f;
+        }
+    }
+}
+
 // --- CleanPool -------------------------------------------------------------
 
 // ASM-verified: 2026-05-24 binary @ 0x00150e74 (re-analyst)

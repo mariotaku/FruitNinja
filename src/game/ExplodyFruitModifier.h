@@ -61,7 +61,7 @@ public:
     public:
         // Own fields (HUDControl3d base = 0x7c)
         Mortar::Entity* m_pEntity;  // +0x7c
-        uint32_t        m_Const80;  // +0x80: DAT_135868
+        float           m_Const80;  // +0x80: DAT_135868=0; timer accumulator (dt*wavedt)
         float           m_p0;       // +0x84: forceMin
         float           m_p1;       // +0x88: forceInc
         float           m_p2;       // +0x8c: forceMax
@@ -78,14 +78,14 @@ public:
         ~FruitSplosion() override;
 
         void Update(float dt) override;
-        // TODO: 0x00135620 — FruitSplosion::Draw / DrawOrder body not yet ported
+        // RE-ported: 0x00134E00 — thunks to HUDControl3d::DrawOrder (no custom body).
         void DrawOrder(const Vec3& hudScale, int layerMask) override;
 
-        // Delegate target: called when sliced fruit is killed
-        // TODO: 0x00135620 — FruitWasKilled body not yet ported
+        // Delegate target: called when tracked fruit is killed (nulls m_pEntity).
+        // RE-ported: 0x00134DEC
         void FruitWasKilled(Fruit* fruit);
-        // Delegate target: removal callback
-        // TODO: 0x00135620 — ADingoAteMyBaby body not yet ported
+        // Delegate target: removal callback registered on chain head.
+        // RE-ported: 0x00134E04
         void ADingoAteMyBaby(HUDControl* ctrl);
     };
 

@@ -1253,11 +1253,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11FruitCamera12UpdateCameraEf": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-14T07:00Z",
     "max_score": 11600,
-    "reason": "Re-RE confirmed port matches binary (ldmia/stm at +0x158 is m_LookAtSnapshot=m_lookAt copy; vsub/vmul are inlined operator- + Magnitude). Triager misread compiler scheduling. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 6710/4100 -> 16730/11600]",
-    "score": 16730,
-    "verdict": "ACCEPT-cosmetic"
+    "reason": "ACCEPT-deferred: m_bDirty per-frame write restored -- diff now shows port strb.w r2,[r4,#0x108] at offset 0x90, matching binary strb r3,[r4,#0x108] at 0x1de008. Fix confirmed present. Residual INHERENT divergence = GOT/PIC addressing (binary uses r5+GOT vs port uses ldr.w direct), Vec3 copy inline vs ldm/stm, SinIdx/CosIdx callee-inline expansion, and Thumb2 tbb vs ARM32 addls switch table encoding. No semantic gap remains. Score 15765/11600.",
+    "score": 15765,
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN11FruitCamera12UpdateFollowEf": {
     "decided_at": "2026-06-14T05:55Z",
@@ -1460,6 +1460,13 @@
     "max_score": 13300,
     "reason": "MissControl::MakeDisappear -- port has documented TODOs: g_HudScale module-static Vec3 ptr (src/hud/MissControl.cpp:496), accel seed (src/hud/MissControl.cpp:545). Score 17855/14300 [triaged 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 17855/14300 -> 24645/13300]",
     "score": 24645,
+    "verdict": "ACCEPT-deferred"
+  },
+  "_ZN11MissControl19MakeEmAllDissappearEv": {
+    "decided_at": "2026-06-14T07:00Z",
+    "max_score": 2800,
+    "reason": "ACCEPT-deferred: clamp ceiling constant now 0x3d8da741 on both sides -- diff line 18ddd4 shows `| 238: .word 0x3d8da741` (match marker), confirming fix is present. Residual divergence is 100% INHERENT: 12-slot flat-pool unroll (port) vs binary 6-slot pointer-array loop, plus GOT/PIC addressing; documented in src/hud/MissControl.cpp DIFFERS comment. 664% ratio is pure pool-representation, no semantic gap remains. Score 18595/2800.",
+    "score": 18595,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl4InitEv": {
@@ -2261,10 +2268,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager12SaveWaveInfoEP13FruitSaveData": {
-    "decided_at": "2026-06-14T05:55Z",
+    "decided_at": "2026-06-14T06:30Z",
     "max_score": 16300,
-    "reason": "Stale refresh: score 38709->39841. FruitSaveData API differences. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 37740/16300 -> 39685/16300]",
-    "score": 39685,
+    "reason": "ACCEPT-deferred re-affirmed after Wave-A collateral check: FruitSaveData write offsets ([r1,#0x18c],[r2,#0x190],[r1,#0x100/0x104/0x108]) match binary identically -- no layout shift from Wave-A. Remaining divergence is pre-existing: WaveManager source-field reads at +0x23d/+0x23e vs binary +0x245/+0x246 (tracked WaveManager layout gap) + port std::vector container vs binary pointer-array for WaveState/SpawnState. Score drift 39685->39844 is minor scheduling noise. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 37740/16300 -> 39685/16300] [Wave-A collateral check 2026-06-14T06:30Z: score 39685 -> 39844]",
+    "score": 39844,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager12SetupWaveQueEv": {

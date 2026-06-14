@@ -8,6 +8,7 @@
 
 #include "SuperFruitControl.h"
 #include "SuperFruitGlow.h"
+#include "hud/MissControl.h"
 #include "SuperFruitState.h"
 #include "Fruit.h"
 #include "FruitInfo.h"
@@ -154,7 +155,7 @@ void SuperFruitControl::Update(float dt)
     // pre-roll slowdown: while Timer < Lifetime+0.5
     if (m_Timer < m_Lifetime + 0.5f) {
         WaveManager::GetInstance()->field_0x78 = 0.1f;  // DAT_001bcd98 = 0.1; SetAbsoluteDtMod
-        // TODO: 0x001bca10 -- MissControl::MakeEmAllDissappear (needs MissControl static)
+        MissControl::MakeEmAllDissappear();
     }
 
     // bomb suppression window; fVar = 1.5 if Arcade else 0.5
@@ -263,7 +264,7 @@ void SuperFruitControl::Update(float dt)
         if (m_pHostFruit) {
             // host-fruit gravity-based spin angle write (Fruit+0x98), branchy
             // TODO: 0x001bca10 -- host-fruit spin(+0x98) = T_1616(...) write (Fruit field +0x98 not named in port)
-            // TODO: 0x001bca10 -- PushBombsAway(dt, this) (needs PushBombsAway fn)
+            PushBombsAway(dt);
         }
 
         // global time-scale pre-roll: ts = 0.0 + ts*pow(0.75, dt*60)
@@ -465,6 +466,22 @@ void SuperFruitControl::ComboCancel(SlashEntity* se)
 {
     if (m_pLinkedSlasher == se) {
         m_pLinkedSlasher = nullptr;
+    }
+}
+
+// Binary @ 0x001b9c6c -- SuperFruitControl::PushBombsAway(float).
+// Radially shove every nearby bomb (type-list 1) away from the host fruit.
+void SuperFruitControl::PushBombsAway(float dt)
+{
+    float k = dt * WaveManager::GetInstance()->GetWavedt(0);
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    std::list<Mortar::Entity*>::iterator it;
+    for (Mortar::Entity* b = am->GetEntityFirst(1, it); b; b = am->GetEntityNext(1, it)) {
+        Vec3 dir = b->pos - m_pHostFruit->pos;       // outward radial
+        float dist = dir.Normalise();                // returns old magnitude
+        if (dist < 200.0f) {                         // DAT_001b9d5c
+            b->vel += (dir * 100.0f) * k;            // DAT_001b9d58=100.0; vel @ +0x1c
+        }
     }
 }
 

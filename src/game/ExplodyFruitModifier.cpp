@@ -4,13 +4,25 @@
 
 #include "ExplodyFruitModifier.h"
 #include "GameWork.h"
+#include "game/GameOver.h"
 #include "entities/Fruit.h"
+#include "entities/ActorManager.h"
+#include "game/WaveManager.h"
 #include "hud/HUD.h"
+#include "hud/MissControl.h"
 #include "util/StringHash.h"
 #include "engine/util/Delegate.h"
 #include "asset/TextureManager.h"
 #include <tinyxml2.h>
+#include <cmath>
 #include <cstring>
+
+// File-static combo-chain head and active-splosion scratch pointer.
+// Both aliases of binary .bss 0x002D9FE8 (GOT[0x8EB8]).
+// Used as chain head in FruitSplosion ctor and as active-splosion
+// marker during CollisionResponse in FruitSplosion::Update.
+// RE-ported: 0x1356fc / 0x1354ec — single file-static reused for both roles.
+static ExplodyFruitModifier::FruitSplosion* s_pChainHead = nullptr;
 
 // ---- FruitSplosion ----------------------------------------------------------
 
@@ -53,42 +65,129 @@ ExplodyFruitModifier::FruitSplosion::FruitSplosion(
     //  result SmartPtr<Texture>::operator= into this+0x74).
     m_Texture = Mortar::TextureManager::LoadLocalisedTexture("explosion_radius.tex");
 
-    // TODO: 0x001356b8 — subscribe FruitWasKilled to the per-entity kill event.
-    //   Binary: Delegate1<void,Fruit*>::Make(this,&FruitSplosion::FruitWasKilled)
-    //   then Mortar::Event1<Fruit*>::operator+= on (m_pEntity + 0x178).
-    //   BLOCKED: the per-Fruit/entity FruitWasKilled Event1<Fruit*> at entity+0x178
-    //   is not ported (port Entity = 0x3C, Fruit = 0x118; no kill-event member),
-    //   and FruitWasKilled() body itself is an unported stub. Method ptr =
-    //   GOT[DAT_00135878].
+    // RE-ported: 0x001356b8 — subscribe FruitWasKilled to the per-fruit kill event.
+    // Binary: Delegate1<void,Fruit*>::Make(this,&FruitSplosion::FruitWasKilled)
+    // then Event1<Fruit*>::operator+= on (m_pEntity + 0x178).
+    static_cast<Fruit*>(m_pEntity)->m_OnKilled +=
+        Mortar::Delegate1<void, Fruit*>::Make(this, &FruitSplosion::FruitWasKilled);
 
-    // TODO: 0x001356fc — chain into the file-static FruitSplosion combo list
-    //   (head = GOT[DAT_0013587c]) for explody-chain combo detection.
-    //   Binary: if head==0 -> m_ChainCount(+0xa0)=1; else walk to head->m_pChainHead
-    //   (or head itself), link this->m_pChainHead, head->m_pChainNext=this,
-    //   ++head->m_ChainCount; when count>2 && m_typeIndex==1:
-    //     MissControl::GetFree()->MakeCombo(m_Pos, head->m_ChainCount, 0);
-    //     FN::AddToCurrentScore(head->m_ChainCount, 0, false, false);
-    //   then register ADingoAteMyBaby on head's m_RemoveCallback via
-    //   Delegate1<void,HUDControl*>::Make(head, &FruitSplosion::ADingoAteMyBaby)
-    //   assigned into this+0x38 (m_RemoveCallback). Method ptr = GOT[DAT_00135880].
-    //   BLOCKED: needs the file-static chain-head global (unported) and the
-    //   ADingoAteMyBaby handler body (unported stub).
+    // RE-ported: 0x001356fc — chain into the file-static FruitSplosion combo list.
+    if (s_pChainHead == nullptr) {
+        m_ChainCount = 1;
+    } else {
+        m_ChainCount = 0;
+        FruitSplosion* head = (s_pChainHead->m_pChainHead != nullptr)
+                              ? s_pChainHead->m_pChainHead
+                              : s_pChainHead;
+        m_pChainHead = head;
+        head->m_pChainNext = this;
+        int n = ++head->m_ChainCount;
+        if (n > 2 && m_typeIndex == 1) {
+            MissControl::GetFree()->MakeCombo(pos, head->m_ChainCount, 0);
+            FN::AddToCurrentScore(head->m_ChainCount, 0, false, false);
+        }
+        // Binary: this->m_RemoveCallback = Make(head, &ADingoAteMyBaby)
+        // (str r7=r4+0x38 with object=head, not this)
+        m_RemoveCallback =
+            Mortar::Delegate1<void, HUDControl*>::Make(head, &FruitSplosion::ADingoAteMyBaby);
+    }
 }
 
-ExplodyFruitModifier::FruitSplosion::~FruitSplosion() {}
+ExplodyFruitModifier::FruitSplosion::~FruitSplosion()
+{
+    // RE-ported: 0x134EC0/0x134F88 — unsubscribe kill-event only if entity still alive.
+    if (m_pEntity) {
+        static_cast<Fruit*>(m_pEntity)->m_OnKilled -=
+            Mortar::Delegate1<void, Fruit*>::Make(this, &FruitSplosion::FruitWasKilled);
+    }
+}
 
-// TODO: 0x00135620 — FruitSplosion::Update: particle burst update logic
-void ExplodyFruitModifier::FruitSplosion::Update(float /*dt*/) {}
+// RE-ported: 0x001352A0 — timer + radius collision push + alpha fade.
+void ExplodyFruitModifier::FruitSplosion::Update(float dt)
+{
+    // RE-ported: 0x1352a0 — pause guard (game_work.m_Paused at +0x02)
+    if (game_work.m_Paused) return;
 
-// TODO: 0x00135620 — FruitSplosion::DrawOrder: particle burst draw
+    float wdt = WaveManager::GetInstance()->GetWavedt(0);
+    float thr = m_p2;  // forceMax = EXPAND-phase end threshold
+    m_Const80 += dt * wdt;
+
+    if (m_Const80 <= thr) {
+        // EXPAND + collision phase
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+        // T.947 inverse-lerp: (m_Const80 - 0) / (m_p3 - 0), clamped [0,1]
+        float tNorm = m_Const80 / m_p3;
+        if (tNorm > 1.0f) tNorm = 1.0f;
+        if (tNorm < 0.0f) tNorm = 0.0f;
+        // SinTransition(t, 90.0f): sin(t * pi/2)
+        float tSin = sinf(tNorm * 1.5707963f);
+        float reach = m_p0 * tSin;  // local_28
+
+        std::list<Mortar::Entity*>::iterator it;
+        for (Mortar::Entity* ent = am->GetEntityFirst(0, it);
+             ent != nullptr;
+             ent = am->GetEntityNext(0, it))
+        {
+            if (ent == m_pEntity) continue;
+            Fruit* fruit = static_cast<Fruit*>(ent);
+            if (fruit->IsActive() && !fruit->Sliced()) {
+                Vec3 d = ent->pos - pos;
+                if (d.MagnitudeSqr() < reach * reach) {
+                    d.Normalise();
+                    d *= 10.0f;
+                    s_pChainHead = this;
+                    ent->CollisionResponse(m_pEntity, 0, 0, nullptr);
+                    s_pChainHead = nullptr;
+                }
+            }
+        }
+        // TODO: 0x135304 — expand visible quad: size = (*GOT[0x75D4] Vec3) * 2.0f * 0.84375f
+        //   Requires shared size-base global behind GOT[0x75D4]; source not yet identified.
+    } else {
+        // FADE-OUT phase
+        // inverse-lerp(m_Const80, m_p1, m_p3) clamped [0,1]
+        float f;
+        if (m_p3 == m_p1) {
+            f = (m_Const80 >= m_p1) ? 1.0f : 0.0f;
+        } else {
+            f = (m_Const80 - m_p1) / (m_p3 - m_p1);
+            if (f > 1.0f) f = 1.0f;
+            if (f < 0.0f) f = 0.0f;
+        }
+        int a = (int)(f * 255.0f);
+        if (a < 0) a = 0;
+        if (a > 255) a = 255;
+        m_DrawColour.a = (uint8_t)a;
+        if (m_p1 <= m_Const80 && m_p3 == 0.0f) m_bPendingRemoval = 1;
+    }
+}
+
+// RE-ported: 0x00134E00 — single-instruction tail-call thunk to HUDControl3d::DrawOrder.
+// No custom body; binary b 0x0010ddcc = HUDControl3d::DrawOrder (base).
 void ExplodyFruitModifier::FruitSplosion::DrawOrder(
-    const Vec3& /*hudScale*/, int /*layerMask*/) {}
+    const Vec3& hudScale, int layerMask)
+{
+    HUDControl3d::DrawOrder(hudScale, layerMask);
+}
 
-// TODO: 0x00135620 — FruitWasKilled body not yet ported
-void ExplodyFruitModifier::FruitSplosion::FruitWasKilled(Fruit* /*fruit*/) {}
+// RE-ported: 0x00134DEC — null the back-reference when the tracked fruit dies.
+void ExplodyFruitModifier::FruitSplosion::FruitWasKilled(Fruit* fruit)
+{
+    if (m_pEntity == static_cast<Mortar::Entity*>(fruit))
+        m_pEntity = nullptr;
+}
 
-// TODO: 0x00135620 — ADingoAteMyBaby body not yet ported
-void ExplodyFruitModifier::FruitSplosion::ADingoAteMyBaby(HUDControl* /*ctrl*/) {}
+// RE-ported: 0x00134E04 — removal callback for chain head; 'this' is the HEAD.
+void ExplodyFruitModifier::FruitSplosion::ADingoAteMyBaby(HUDControl* ctrl)
+{
+    if (static_cast<HUDControl*>(m_pChainNext) == ctrl) {
+        if (m_ChainCount > 2 && m_typeIndex == 1) {
+            MissControl::GetFree()->MakeCombo(pos, m_ChainCount, 0);
+            FN::AddToCurrentScore(m_ChainCount, 0, false, false);
+        }
+        m_bPendingRemoval = 1;
+    }
+}
 
 // ---- ExplodyFruitModifier ---------------------------------------------------
 
