@@ -170,6 +170,10 @@ public:
     // shifts the AABB to the top-right cluster where the X markers render.
     Vec3 GetDrawPos() const override;
 
+    // Binary @ 0x0019dd74 — snap every busy pool slot's m_FadeAlpha to the 0.06917 ceiling
+    // so all on-screen miss/critical/combo markers immediately finish fading out.
+    static void MakeEmAllDissappear();
+
     // Binary @ 0x00150e74 — delete every pool slot, null the pool ptr. Called from GameExit.
     static void CleanPool();
 

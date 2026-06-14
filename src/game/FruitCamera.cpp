@@ -60,15 +60,15 @@ FruitCamera::~FruitCamera() {
 // ASM-verified: 2026-05-17 binary @ 0x00180c8c..0x00180d0e (re-analyst) [v1.5.1].
 // v1.6.1 UpdateCamera at 0x1edf24 extends this with the zoom state machine.
 void FruitCamera::UpdateCamera(float dt) {
-    m_field14c = (float)m_TiltPitch;
-    // Note: v1.5.1 had m_field150=(float)m_TiltYaw; v1.6.1 layout may differ.
-    // TODO: 0x1edf24 — confirm m_field14c/second cast in v1.6.1 UpdateCamera
+    // RE-ported: 0x1edf24 — v1.6.1 UpdateCamera does NOT write m_field14c (+0x14c) at all.
+    // The v1.5.1 (float)m_TiltPitch / (float)m_TiltYaw casts were dropped; m_field14c retains ctor value.
 
     UpdateShake(dt);
 
-    // LookAt snapshot — written each frame from global look DAT
-    // TODO: 0x1edf24 — resolve global look DAT address for m_LookAt assignment
-    m_LookAt = m_lookAt;
+    // RE-ported: 0x1edf24 — m_LookAt(+0x150) = engine 'Zero' Vec3 global @ 0x002d9288 = (0,0,0).
+    // Binary: pfVar5 = *(float**)GOT[0x7118]; ldmia pfVar5,{s?,s?,s?} -> stmia [r4+0x150].
+    // Source field is engine Zero (0,0,0), NOT MortarCamera::m_lookAt.
+    m_LookAt = Vec3(0.0f, 0.0f, 0.0f);
 
     switch (m_CameraMode) {
     case 0:
@@ -99,36 +99,43 @@ void FruitCamera::UpdateCamera(float dt) {
         break;
     }
 
-    // m_Zoom = Lerp(1.0, m_ZoomScale, InverseSquareTransition(ZoomT))
-    // InverseSquareTransition(t) = 1 - (1-t)^2 = 2t - t^2
-    {
-        float t = m_ZoomT;
-        float f = 2.0f * t - t * t;   // InverseSquareTransition(t)
-        m_Zoom = 1.0f + (m_ZoomScale - 1.0f) * f;
-    }
-
-    // LookAt = Lerp(globalLook, m_ZoomTarget, SinTransition(ZoomT, k))
-    // SinTransition: sin(t * pi/2) smoothstep variant
-    // TODO: 0x1edf24 — resolve exact SinTransition(ZoomT, k) constant k from DAT
-    {
-        float t = m_ZoomT;
-        float f = sinf(t * 1.5707963f);   // sin(t * pi/2); TODO confirm k multiplier
-        m_LookAt.x = m_lookAt.x + (m_ZoomTarget.x - m_lookAt.x) * f;
-        m_LookAt.y = m_lookAt.y + (m_ZoomTarget.y - m_lookAt.y) * f;
-        m_LookAt.z = m_lookAt.z + (m_ZoomTarget.z - m_lookAt.z) * f;
-    }
-
-    // m_RollOut = (short)(Lerp(0, m_RollScale, InverseSquareTransition(ZoomT)) * k)
-    // TODO: 0x1edf24 — resolve roll multiplier constant k from DAT
+    // m_Zoom = LerpF(1.0, m_ZoomScale, InverseSquareTransition(ZoomT,0))
+    // InverseSquareTransition(t,_) = 2t - t^2  (2nd arg unused, iOS body @ 0x14e8cc)
     {
         float t = m_ZoomT;
         float f = 2.0f * t - t * t;
-        m_RollOut = (uint16_t)(int)(m_RollScale * f);
+        m_Zoom = 1.0f + (m_ZoomScale - 1.0f) * f;
     }
 
-    // Add shake offset to LookAt
+    // m_LookAt = LerpF<Vec3>(Zero(0,0,0), m_ZoomTarget, SinTransition(ZoomT,90))
+    // RE-ported: 0x1edf24 — base = engine Zero (0,0,0), NOT m_lookAt.
+    // SinTransition(t,90): idxMax=(uint16_t)(90*182)=16380; sin(t*16380*2pi/65536)/sin(16380*2pi/65536).
+    // DAT_001ee0e4=90.0f (scale), DAT_001ee0e8=182.0f (65536/360 deg->index).
+    // den=sin(16380*2pi/65536)~=1.0, so sin(t*pi/2) is faithful to float precision.
+    {
+        float t = m_ZoomT;
+        float f = sinf(t * 1.5707963f);   // SinTransition(t,90): sin(t*pi/2), den~=1
+        m_LookAt.x = 0.0f + (m_ZoomTarget.x - 0.0f) * f;
+        m_LookAt.y = 0.0f + (m_ZoomTarget.y - 0.0f) * f;
+        m_LookAt.z = 0.0f + (m_ZoomTarget.z - 0.0f) * f;
+    }
+
+    // m_RollOut = (uint16_t)(int)(LerpF(0, m_RollScale, InverseSquareTransition(ZoomT,0)) * 182.0f)
+    // RE-ported: 0x1edf24 — DAT_001ee0e8=182.0f (65536/360, deg->angle-index); was missing in prior port.
+    {
+        float t = m_ZoomT;
+        float roll = (2.0f * t - t * t) * m_RollScale;   // LerpF(0, m_RollScale, IST(t))
+        m_RollOut = (uint16_t)(int)(roll * 182.0f);        // 182 = 65536/360
+    }
+
+    // Add shake offset to LookAt: Vec3(m_Target.x, m_Target.y, 0) += m_LookAt
     m_LookAt.x += m_Target.x;
     m_LookAt.y += m_Target.y;
+
+    // RE-ported: 0x1edf24 — binary emits `mov r3,#1; strb r3,[r4,#0x108]` unconditionally
+    // after the shake-offset block, setting the camera dirty flag every frame so
+    // SetupPerspective always recomputes its matrix (not just on pos/lookAt changes).
+    m_bDirty = true;
 }
 
 // 0x1ed77c (v1.6.1 IdleCamera — sets mode 0)
