@@ -2821,11 +2821,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12ScreenEffect6UpdateEfff": {
-    "decided_at": "2026-06-14T05:55Z",
+    "verdict": "ACCEPT-deferred",
+    "reason": "ScreenEffect::Update (binary @ 0x00138844) -- 3 real logic fixes confirmed present: (a) sin-phase constant 65536->32764.0f (src/game/ScreenEffect.cpp:440, binary DAT_00148adc); (b) emitter cull rewritten: m_RateScale=0 when remaining<0.8f, no destroy (src/game/ScreenEffect.cpp:500-502, binary @ 0x00148d24); (c) sound loop forward iteration with fired-marker m_StartT=100.0f, vol=0.6599f, Delegate1 overload (src/game/ScreenEffect.cpp:513-521, binary @ 0x00148d84). Residual divergence is CALLEE-GAP: binary list-iteration vs port vector-iteration codegen, inlined HUD spawn and PSP particle manager calls vs still-stubbed subsystems. Documented TODO at src/game/ScreenEffect.cpp:522 (0x00148e3c erase+m_EndT<0 corner). FIX-NEEDED: no. [score re-anchored 2026-06-14 post close-top-50 fixes: 67490/43300]",
+    "score": 67490,
     "max_score": 43300,
-    "reason": "ScreenEffect::Update -- score drift 75497->76816/43700 [refreshed 2026-05-24 post R8/R9/R10]. Port has XML attr TODOs. See src/game/ScreenEffect.cpp:77,93,173,184. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 75592/43700 -> 76809/43300]",
-    "score": 76809,
-    "verdict": "ACCEPT-deferred"
+    "decided_at": "2026-06-14T10:00Z"
   },
   "_ZN12ScreenEffect8ActivateEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3255,18 +3255,18 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13MatrixManagerC1Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "verdict": "ACCEPT-deferred",
+    "reason": "MatrixManager::MatrixManager C1 (binary @ 0x00246f3c) -- fix confirmed: redundant ResetAllStacks() call removed (src/engine/render/MatrixManager.cpp:10-17). 1209% ratio is INHERENT-cosmetic inline boundary: binary emits 4 bl MatrixStack::MatrixStack() in a loop (246f68-246f80) then str-zeroes 4 trailing version ints (246f84-246fa8); port inlines all 4 MatrixStack ctors as ~500 VFP vstr sequences. Semantic result identical: 4 MatrixStacks initialized (identity matrix + m_Version=1), 4 trailing ints zeroed via member-initializer list. No missing fields, no wrong offsets. FIX-NEEDED: no. [score re-anchored 2026-06-14 post close-top-50 fixes: 51990/4300]",
+    "score": 51990,
     "max_score": 4300,
-    "reason": "MatrixManager method stub/divergence. Score 51280/5500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 51400/5500 -> 51490/4300]",
-    "score": 51490,
-    "verdict": "ACCEPT-deferred"
+    "decided_at": "2026-06-14T10:00Z"
   },
   "_ZN13MatrixManagerC2Ev": {
-    "decided_at": "2026-06-14T05:55Z",
+    "verdict": "ACCEPT-deferred",
+    "reason": "MatrixManager::MatrixManager C2 (binary @ 0x00246f3c, same body as C1) -- fix confirmed: redundant ResetAllStacks() call removed (src/engine/render/MatrixManager.cpp:10-17). 1209% ratio is INHERENT-cosmetic inline boundary: binary emits 4 bl MatrixStack::MatrixStack() in a loop (246f68-246f80) then str-zeroes 4 trailing version ints (246f84-246fa8); port inlines all 4 MatrixStack ctors as ~500 VFP vstr sequences. Semantic result identical: 4 MatrixStacks initialized (identity matrix + m_Version=1), 4 trailing ints zeroed via member-initializer list. No missing fields, no wrong offsets. FIX-NEEDED: no. [score re-anchored 2026-06-14 post close-top-50 fixes: 51990/4300]",
+    "score": 51990,
     "max_score": 4300,
-    "reason": "MatrixManager method stub/divergence. Score 51280/5500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 51400/5500 -> 51490/4300]",
-    "score": 51490,
-    "verdict": "ACCEPT-deferred"
+    "decided_at": "2026-06-14T10:00Z"
   },
   "_ZN13MatrixManagerD0Ev": {
     "decided_at": "2026-06-14T05:55Z",
