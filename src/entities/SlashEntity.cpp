@@ -862,14 +862,12 @@ void SlashEntity::UpdatePoints(float dt) {
     } else {
         m_BaseColour = m_HighlightColour;
     }
-    // Per-vertex alpha ramp: tail (pi=0) transparent, head (pi=pairCount-1) opaque.
-    // The binary drives alpha per-vertex from trail-point age (v1.5.1 TRAIL_LIFETIME=0.25s).
-    // The v1.6.1 binary layout stores geometry directly in vertex buffers without a
-    // separate age array; position-in-strip is used as the equivalent ramp here.
-    // TODO: 0x1e6914 -- exact ramp is age-based (v1.5.1 TRAIL_LIFETIME=0.25); using
-    //   position-along-trail as equivalent. Add a per-point age array when the binary's
-    //   exact age-decay coefficients are confirmed for v1.6.1.
-    // Alpha is also modulated by m_BaseColour.a so the m_Scale fade-out still applies.
+    // ASM-spec UpdatePoints alpha (v1.5.1 @0x17b92c == v1.6.1 @0x1e6914, IDENTICAL):
+    // vertex alpha=0xff, RGB=m_BaseColour(m_Scale-blended); fade is texture-alpha via
+    // U=(i/PointCount)*0.98 ramp + GL_COMBINE; the per-vertex alpha ramp was a
+    // v1.5.1-port fabrication.
+    // binary forces vertex alpha 0xff @0x1e6914; transparency is texture-alpha via GL_COMBINE
+    m_BaseColour.a = 0xFF;
 
     // Retract when blade released: retire oldest pair each frame.
     if (m_State != 1 && m_PointCount >= 2) {
@@ -945,21 +943,16 @@ void SlashEntity::UpdatePoints(float dt) {
             miterY = SinIdx(m_Angle) * halfWidth;
         }
 
-        // V coordinate: 0 at tail, 0.98 at head (binary DAT_001e6f5c = 0.98).
+        // U texcoord along-trail ramp: tail U~0, head U~0.98.
+        // Binary main loop writes U = (i / m_PointCount) * 0.98 (DAT_001e6f5c = 0.98),
+        // then arc-length tail pass remaps it. We compute arc-length U in the pass below;
+        // initial U here is overwritten -- value doesn't matter.
         float vCoord = (pairCount > 1)
             ? ((float)pi / (float)(pairCount - 1)) * 0.98f
             : 0.0f;
 
-        // Per-pair alpha ramp: position 0 (tail) -> alpha 0, position last (head) -> alpha m_BaseColour.a.
-        // alphaFrac = pi / (pairCount-1), clamped [0,1].
-        float alphaFrac = (pairCount > 1) ? ((float)pi / (float)(pairCount - 1)) : 1.0f;
-        if (alphaFrac < 0.0f) alphaFrac = 0.0f;
-        if (alphaFrac > 1.0f) alphaFrac = 1.0f;
-        uint32_t alpha = (uint32_t)(alphaFrac * (float)m_BaseColour.a);
-        uint32_t col = (alpha << 24)
-                     | ((uint32_t)m_BaseColour.b << 16)
-                     | ((uint32_t)m_BaseColour.g <<  8)
-                     |  (uint32_t)m_BaseColour.r;
+        // vertex colour: full m_BaseColour (alpha=0xff forced above); texture-alpha provides fade.
+        uint32_t col = m_BaseColour.PlatformColour();
 
         // Center (spine) vertex -- identical for both buffers.
         m_pLeftBuffer[k].colour = col;
