@@ -61,7 +61,9 @@ public:
     PSPParticleEmitter* m_pEmitter2;       // +0x44  (was wrongly +0x84)
     Vec3     m_SlicePos;                   // +0x48..+0x53  (was wrongly +0x78)
     uint8_t  _pad_54[12];                  // +0x54..+0x5F  (unused by Init/Update; possible Slice/CollisionResponse temp)
-    int32_t  m_LifetimeCounter;            // +0x60  (init=0; Update int<->float trick)
+    // +0x60: spin-phase accumulator. Update (sliced path, frozen=0): m_SpinPhase = (int)((float)m_SpinPhase + dtScaled*1000.0f).
+    // Binary @0x001e009c reads/writes this field.
+    int32_t  m_SpinPhase;                  // +0x60  binary @0x001e009c
     int32_t  m_CollisionSize;              // +0x64  (init=75; semantics: probable countdown, NOT radius)
     // +0x68: write-only field, set to 4 by Init (binary @ 0x001769d0).
     // No reader exists anywhere in the binary — confirmed by full-binary
@@ -78,13 +80,15 @@ public:
     float    m_SpawnDelay;                 // +0x74  chuck countdown; Chuck sets; Update decrements -> fires m_OnExpired at <=0
     Vec3     m_AccelTerm;                  // +0x78..+0x83  extra accel/jerk: Update unsliced pos += m_AccelTerm*dt; damped 0.9x in PostUpdate
     int32_t  m_PlayerIdx;                  // +0x84  SetForPlayer writes; Slice/Update read for trail-hash/MakeCritical
-    float    m_Age;                        // +0x88  Update += dt*scale; sliced-reset gate if(dt<0 && m_Age<0)
-    float    m_VelSnapX;                   // +0x8C  velocity snapshot X; Slice writes (p_pad+0x50); Update sliced-reset copies
-    float    m_VelSnapY;                   // +0x90  velocity snapshot Y (p_pad+0x54)
-    float    m_VelSnapZ;                   // +0x94  velocity snapshot Z (p_pad+0x58)
+    // +0x88: bounce timer for reverse-time un-slice. Update (sliced path): += dtScaled;
+    // if (dtScaled<0 && m_SliceBounceTimer<0) un-slice back to whole. Binary @0x001df9d8.
+    float    m_SliceBounceTimer;           // +0x88  binary @0x001df9d8
+    // +0x8C..+0x97: velocity snapshot written by CollisionResponse on slice;
+    // copied back to vel by the reverse-time un-slice path (@0x001df9e8).
+    Vec3     m_SliceVelocity;              // +0x8C  (x=+0x8C, y=+0x90, z=+0x94)
     float    m_TimeScale;                  // +0x98  Update dt_eff = dt * m_TimeScale; SpawnFruit writes (p_pad+0x5c)
     float    m_ZPosition;                  // +0x9C  depth; CreateFruit sets =150.0f; Update emitter-Z; Slice -> MoveFruitZPositionToBack
-    Vec3     m_Gravity;                    // +0xA0..+0xAB  Update integrates vel += m_Gravity*dt; menu-path scales for fling; m_bMenuFling boosts 6.5x
+    Vec3     m_Gravity;                    // +0xA0..+0xAB  Update integrates vel += m_Gravity*dt; m_bMenuFling(@+0x164) == m_bExtraScore in binary: boosts gravity grow by 6.5x factor
     // +0xAC..+0xB7 -- duplicate of entity scale (+0x28); written by SetFruitType
     // for both slots but never read by Draw/Shadows/AddShadow/KillFruit (all read +0x28).
     // Vestigial write-only cache kept for binary layout fidelity.
@@ -113,7 +117,10 @@ public:
                                            //   Update reads this+i*0x24+0x118/+0x124/+0x130
     Mortar::Entity* m_pOwner;              // +0x160  slasher/owner back-ref; ctor=0; CreateFruit sets;
                                            //   KillFruit: if(owner && owner+0x14C==this) owner+0x14C=0
-    uint8_t  m_bMenuFling;                 // +0x164  menu-fruit extra-fling flag (CreateFruit=1; Update 6.5x boost)
+    // +0x164: binary field read at @0x001df908 as "m_bExtraScore" extra-score gate (gravity 6.5x grow).
+    // Also set=1 by MenuButton::CreateFruit to mark menu-context fruits (no z-push in Slice).
+    // Named m_bMenuFling in port for the menu-fruit use case; both semantics reside in the same byte.
+    uint8_t  m_bMenuFling;                 // +0x164  binary: m_bExtraScore @0x001df908; also menu-fling gate in Slice
     uint8_t  m_bCritical;                  // +0x165  gameplay critical/super flag (CollisionResponse writes; Update/Setup/Slice read)
     uint8_t  _pad_166[2];                  // +0x166..+0x167  align
     // +0x168: menu grow/scale-in [0..1], ramps += dt*3 toward 1.0 while m_bDrawWhole==0
@@ -304,16 +311,14 @@ static_assert(__builtin_offsetof(Fruit, m_bNoPowerUp)      == 0x3D,  "");
 static_assert(__builtin_offsetof(Fruit, m_pEmitter1)       == 0x40,  "");
 static_assert(__builtin_offsetof(Fruit, m_pEmitter2)       == 0x44,  "");
 static_assert(__builtin_offsetof(Fruit, m_SlicePos)        == 0x48,  "");
-static_assert(__builtin_offsetof(Fruit, m_LifetimeCounter) == 0x60,  "");
+static_assert(__builtin_offsetof(Fruit, m_SpinPhase)       == 0x60,  "");
 static_assert(__builtin_offsetof(Fruit, m_CollisionSize)   == 0x64,  "");
 static_assert(__builtin_offsetof(Fruit, m_bBallisticEnable) == 0x70,  "");
 static_assert(__builtin_offsetof(Fruit, m_SpawnDelay)      == 0x74,  "");
 static_assert(__builtin_offsetof(Fruit, m_AccelTerm)       == 0x78,  "");
-static_assert(__builtin_offsetof(Fruit, m_PlayerIdx)       == 0x84,  "");
-static_assert(__builtin_offsetof(Fruit, m_Age)             == 0x88,  "");
-static_assert(__builtin_offsetof(Fruit, m_VelSnapX)        == 0x8C,  "");
-static_assert(__builtin_offsetof(Fruit, m_VelSnapY)        == 0x90,  "");
-static_assert(__builtin_offsetof(Fruit, m_VelSnapZ)        == 0x94,  "");
+static_assert(__builtin_offsetof(Fruit, m_PlayerIdx)           == 0x84,  "");
+static_assert(__builtin_offsetof(Fruit, m_SliceBounceTimer)    == 0x88,  "");
+static_assert(__builtin_offsetof(Fruit, m_SliceVelocity)       == 0x8C,  "");
 static_assert(__builtin_offsetof(Fruit, m_TimeScale)       == 0x98,  "");
 static_assert(__builtin_offsetof(Fruit, m_ZPosition)       == 0x9C,  "");
 static_assert(__builtin_offsetof(Fruit, m_Gravity)         == 0xA0,  "");

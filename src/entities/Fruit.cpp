@@ -159,17 +159,15 @@ Fruit::Fruit()
     , m_pEmitter1(nullptr)
     , m_pEmitter2(nullptr)
     , m_SlicePos(0, 0, 0)
-    , m_LifetimeCounter(0)
+    , m_SpinPhase(0)
     , m_CollisionSize(0)
     , m_VestigialInitFour(0)
     , m_bBallisticEnable(0)
     , m_SpawnDelay(0.0f)
     , m_AccelTerm(0, 0, 0)
     , m_PlayerIdx(0)
-    , m_Age(0.0f)
-    , m_VelSnapX(0.0f)
-    , m_VelSnapY(0.0f)
-    , m_VelSnapZ(0.0f)
+    , m_SliceBounceTimer(0.0f)
+    , m_SliceVelocity(0, 0, 0)
     , m_TimeScale(1.0f)
     , m_ZPosition(0.0f)
     , m_Gravity(0, -12.0f, 0)
@@ -209,7 +207,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, Vec3* /*scaleOrNull*/) {
     } else {
         m_FruitType = (uint8_t)RandomFruit(true);
     }
-    m_LifetimeCounter = 0;
+    m_SpinPhase = 0;
     m_bBallisticEnable = 1;
     LOG_INFO("FRUIT", "m_bSliced=0 set on entity=%p pos=(%.1f,%.1f) type=%d (in Init)",
              static_cast<void*>(this), pos.x, pos.y, (int)m_FruitType);
@@ -391,22 +389,22 @@ void Fruit::Chuck(float delay) {
     SuperFruitControl::SuperFruitThrown(this);
 }
 
-// ASM-verified: 2026-05-27 binary @ 0x00177680 (re-analyst) -- m_TimeScale(0x98) applied to integration dt
+// ASM-verified: 2026-06-15T00:00Z binary @ 0x001df828 (asm-inspector)
+// binary @0x001df828 -- m_TimeScale(0x98) applied to integration dt; dtNorm = dtScaled*60 (DAT_1dfb90=1/60)
 void Fruit::Update(float dt) {
-    // Binary @ 0x00177680: dtScaled = dt * m_TimeScale(0x98); all integration uses dtScaled.
+    // binary @0x001df828: dtScaled = dt * m_TimeScale(0x98); all integration uses dtScaled.
     const float dtScaled = dt * m_TimeScale;
     const float dtNorm   = dtScaled * 60.0f;  // equivalent to dtScaled / (1/60)
 
-    // Binary @ 0x00177680: outer gate is !m_bSliced vs sliced — no early
+    // binary @0x001df860: outer gate is m_bSliced(+0xB8) vs unsliced — no early
     // returns before the branch. IsActive() and m_SpawnDelay checks live
     // INSIDE the unsliced path only.
     if (!m_bSliced) {
         // === UNSLICED FRUIT ===
 
         // Launch delay (unsliced path only)
-        // ASM-verified: 2026-05-27 binary @ 0x001777ce..0x0017789e (re-analyst)
-        // m_SpawnDelay(0x74) countdown uses game_work.dt (fixed real-time step,
-        // NOT per-fruit dt*m_TimeScale) and is gated by global game state:
+        // binary @0x001dfa5c -- chuck-countdown: m_SpawnDelay(0x74) countdown uses game_work.dt
+        // (fixed real-time step, NOT per-fruit dt*m_TimeScale) and is gated by global game state:
         //   - paused -> no countdown
         //   - bomb-hit slow-mo active -> no countdown
         //   - level transition cinematic (early phase) -> no countdown
@@ -426,7 +424,7 @@ void Fruit::Update(float dt) {
                 m_SpawnDelay -= game_work.dt;   // +0x38, NOT dt*m_TimeScale
             }
 
-            // SFX edge runs even if the gate is closed this frame (binary @ 0x00177814)
+            // SFX edge runs even if the gate is closed this frame -- binary @0x001dfb14
             if (prevSpawnDelay > THROW_FRUIT_SFX_THRESHOLD
                 && m_SpawnDelay <= THROW_FRUIT_SFX_THRESHOLD
                 && !s_FruitThrowSfxFiredThisFrame
@@ -437,21 +435,32 @@ void Fruit::Update(float dt) {
                     game_work.mGameSound->SFXPlay("Throw-fruit", 1.0f, 1.0f);
             }
 
-            // ASM-verified: 2026-05-27 binary @ 0x001778aa (asm-inspector).
-            // When delay is still positive after the gated countdown (paused frame,
-            // bomb-hit slow-mo frame, level-transition frame), binary early-returns
-            // from Update entirely. Skips integration AND common tail (rotation /
-            // m_Col / emitter writes). Fruits waiting in the launch queue freeze
-            // completely until the gate opens.
+            // binary @0x001dfb38: when delay is still positive after the gated countdown
+            // (paused frame, bomb-hit slow-mo frame, level-transition frame), binary
+            // early-returns from Update entirely. Skips integration AND common tail
+            // (rotation / m_Col / emitter writes). Fruits waiting in the launch queue
+            // freeze completely until the gate opens.
             if (m_SpawnDelay > 0.0f) {
                 return;
             }
             m_SpawnDelay = 0.0f;
 
-            // ASM-verified: 2026-05-27 binary @ 0x001778ae..0x001779e4 (re-analyst)
-            // Trail re-arm fires ONCE on the transition frame when m_SpawnDelay
-            // crosses from positive to non-positive. Binary nests this inside the
-            // if (m_SpawnDelay > 0.0f) block, after the early-return guard.
+            // binary @0x001dfc08: m_OnExpired fires ONCE on the transition frame when
+            // m_SpawnDelay crosses from positive to non-positive. Fires BEFORE the
+            // ENT_KILLED early-return check. Per-fruit event fires first, then global.
+            m_OnExpired(this);
+            g_FruitExpired(this);
+
+            // binary @0x001dfc14: ENT_KILLED(0x10) guard on transition frame —
+            // if the m_OnExpired callback killed us, skip the rest of the transition.
+            if (flags & ENT_KILLED) {
+                return;
+            }
+
+            // binary @0x001dfc1c -- unsliced transition: trail re-arm fires ONCE on the
+            // transition frame when m_SpawnDelay crosses from positive to non-positive.
+            // Binary nests this inside the if (m_SpawnDelay > 0.0f) block, after the
+            // early-return guard and after m_OnExpired.
             {
                 const FruitInfoData* info = FruitInfo_Get(m_FruitType);
                 bool ok = false;
@@ -482,10 +491,9 @@ void Fruit::Update(float dt) {
                 if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
             }
 
-            // ASM-verified: 2026-05-27 binary @ 0x00177a16-0x00177b4c (re-analyst).
-            // Cascade fruit-spawn fires ONCE on the transition frame when m_SpawnDelay
-            // crosses from positive to non-positive. Binary nests this inside the
-            // if (m_SpawnDelay > 0.0f) block, after trail re-arm.
+            // binary @0x001dfd80 -- cascade fruit-spawn fires ONCE on the transition
+            // frame when m_SpawnDelay crosses from positive to non-positive. Binary
+            // nests this inside the if (m_SpawnDelay > 0.0f) block, after trail re-arm.
             // WaveManager::field_0x6c is the per-frame fruit multiplier set by
             // PowerUp::FruitMultiplyer. For value N: spawn (N-1) extras from a
             // random side-template. For value < 1: warp this fruit off-screen so
@@ -502,19 +510,19 @@ void Fruit::Update(float dt) {
                     }
                 }
                 if (cnt < 1) {
-                    // Self-warp off-screen. Binary @ 0x00177a68.
+                    // Self-warp off-screen. Binary @ 0x001dfdc8.
                     // NOTE: no flags write; relies on CheckHasGoneOffscreen later.
-                    m_SpawnDelay = 0.0f;          // DAT_00177cf4
-                    pos.y        = -320.0f;       // DAT_00177cf8
+                    m_SpawnDelay = 0.0f;
+                    pos.y        = -320.0f;
                     vel          = Vec3(0.0f, -1.0f, 0.0f);
                 } else if (cnt != 1) {
                     // Spawn (cnt-1) extra fruits via a random side-template.
-                    // Binary @ 0x00177a9e. Three stack-built SPAWNER_INFOs;
+                    // Binary @ 0x001dfdf4. Three stack-built SPAWNER_INFOs;
                     // each starts from SPAWNER_INFO ctor defaults then overrides.
                     SPAWNER_INFO templates[3];
                     templates[0].m_SpawnType  = PLACEMENT_BOTTOM_SLOW;
                     templates[0].m_Gravity_x  = 0.0f;
-                    templates[0].m_Gravity_y  = -0.05f;     // DAT_00177cfc
+                    templates[0].m_Gravity_y  = -0.05f;
                     templates[0].m_Gravity_z  = 0.0f;
                     templates[0].m_SpawnTimer = -3.0f;
                     templates[1].m_SpawnType  = PLACEMENT_LEFT;
@@ -532,22 +540,19 @@ void Fruit::Update(float dt) {
             }
         }
 
-
-        // ASM-spec: real Fruit::Update is binary @0x001df828 (vtable slot 4 @0x002ce918).
-        // Binary integration (Fruit::Update 0x00177680):
+        // binary @0x001dff88 -- unsliced ballistic integration:
         //   pos += (vel*dtScaled + 0.5*g*dtScaled^2) * 60.0   (DAT_001e0414 = 60.0; g=m_Gravity@0xA0)
         //   vel += m_Gravity(0xA0) * dtScaled
-        //   pos += m_AccelTerm(0x78) * dtScaled         (NO x60 here -- binary uses
-        //                                                dt @ sp+0x1c scaled by m_TimeScale)
+        //   pos += m_AccelTerm(0x78) * dtScaled         (NO x60 here)
         // Gravity integration gate is m_bBallisticEnable (Fruit+0x70), NOT IsActive():
         //   @0x001dff88 ldrb [+0x70]; beq -> skip whole block (menu fruit pins here: CreateFruit sets +0x70=0)
-        //   @0x001dffa4 ldrb [+0x16c]; bne -> skip the pos/vel += step
+        //   @0x001dffac inner gate m_bFrozen (+0x16c): bne skips vel+=, pos+=, accel+= together.
         // Gameplay fruit (Init sets +0x70=1) still integrates; menu fruit (=0) does not.
         const float POS_INTEGRATION_SCALE = 60.0f;  // DAT_001e0414
         if (m_bBallisticEnable) {
-            Vec3 step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) * POS_INTEGRATION_SCALE;
-            vel += m_Gravity * dtScaled;
             if (!m_bFrozen) {
+                Vec3 step = (vel * dtScaled + m_Gravity * (0.5f * dtScaled * dtScaled)) * POS_INTEGRATION_SCALE;
+                vel += m_Gravity * dtScaled;
                 pos += step;
 
                 // Accel term drift -- dtScaled, no x60.
@@ -555,13 +560,12 @@ void Fruit::Update(float dt) {
             }
         }
 
-        // Backup for future split — runs unconditionally (binary tail block)
+        // binary @0x001e009c -- m_SecondPos/Vel backup runs unconditionally (unsliced tail)
         m_SecondPos = pos;
         m_SecondVel = vel;
 
-        // Slice-timer countdown — set positive by OnSliced, triggers
-        // the actual split when it hits 0. Matches binary Fruit::Update
-        // @ 0x177680 phase 4.
+        // binary @0x001e00c4 -- slice-timer countdown: set positive by CollisionResponse,
+        // triggers the actual split when it hits 0.
         if (m_SliceTimer > 0.0f) {
             m_SliceTimer -= dtScaled;
             if (m_SliceTimer <= 0.0f) {
@@ -570,65 +574,68 @@ void Fruit::Update(float dt) {
             }
         }
     } else {
-        // ASM-verified: 2026-05-09 binary @ 0x00177736..0x001777a0 (asm-inspector)
-        // === SLICED (two halves) ===
-        // Binary integration order:
-        //   normalize(m_Gravity); gravLen += DAT_00177950(=0.2) * dtNorm * 4.5
-        //   = gravLen += 0.9 * dtNorm   (per-frame growth at 60fps)
-        //   m_Gravity *= new_gravLen / old_gravLen (rescale unit vec)
-        //   vel        += m_Gravity * dtScaled   (gravity uses dtScaled)
-        //   m_SecondVel += m_Gravity * dtScaled
-        //   pos        += vel        * dtScaled * 60  (position uses dtNorm)
-        //   m_SecondPos += m_SecondVel * dtScaled * 60
-        // Both halves get the same ×60 position scale as the unsliced branch.
-
-        // Grow-in fade ramp (binary @ 0x1df864): ramps m_MenuGrowFade toward 1.0
-        // at 3.0 units/frame while m_bDrawWhole==0. Frozen once MenuButton
+        // binary @0x001df868 -- grow-fade ramp: ramps m_MenuGrowFade toward 1.0 at
+        // dtScaled*3.0 units/sec while m_bDrawWhole==0. Frozen once MenuButton
         // sets the draw-whole flag (fruit already fully "present").
+        // binary @0x001df874: 3.0=DAT_1dfb70; clamp 1.0=DAT_1dfb7c; uses dtScaled NOT dtNorm.
         if (!m_bDrawWhole) {
-            m_MenuGrowFade += dtNorm * 3.0f;
+            m_MenuGrowFade += dtScaled * 3.0f;  // binary @0x001df874 -- DAT_1dfb70=3.0, DAT_1dfb90=1/60
             if (m_MenuGrowFade > 1.0f) m_MenuGrowFade = 1.0f;
         }
 
-        // m_bFrozen gates ALL physics + spin. The grow-fade ramp (above) and the
-        // m_SecondPos backup (in the unsliced path tail) are outside this gate.
-        // Binary: if (*(char*)(this+0x16c)=='\0') { gravity/vel/pos/lifetime/spin }
-        if (m_bFrozen == 0) {
-            // ASM-verified: 2026-05-20 binary @ 0x001777a8..0x001777ee (re-analyst) -- gravity grow gated.
-            // m_bCritical==0 means a normal (non-critical) sliced fruit; gravity grows.
-            // m_bMenuFling==1 means menu fruit; gravity also grows (different rate).
+        // binary sliced physics @0x001df864-0x001df9d8 runs unconditionally -- no +0x16c gate here.
+        // The grow-fade ramp (above) is also outside any frozen gate.
+        // The ONLY frozen gate in the sliced path is the spin-quaternion loop further below @0x001e02a8.
+
+        // binary @0x001df890 -- sliced gravity-grow: whole block gated on non-zero gravity
+        // (DAT_1dfba0 = Vector3::ZERO, confirmed). Zero-gravity fruits skip both sub-gates.
+        if (m_Gravity != Vec3(0.0f, 0.0f, 0.0f)) {
+            // binary @0x001df8d4 -- normal (non-critical) sliced fruit; gravity magnitude grows.
+            // 0.2=DAT_1dfb94, 4.5 @0x1df8fc
             if (m_bCritical == 0) {
-                float len = m_Gravity.Normalise();   // unit-izes, returns old magnitude
-                m_Gravity *= len + 0.9f * dtNorm;
+                float len = m_Gravity.Normalise();  // unit-izes, returns old magnitude
+                m_Gravity *= len + 0.2f * dtNorm * 4.5f;
             }
+            // binary @0x001df908 -- m_bMenuFling (+0x164) == binary m_bExtraScore;
+            // set=1 by MenuButton::CreateFruit for menu-context fruits.
+            // 6.5 @0x1df930, 0.2=DAT_1dfb94
             if (m_bMenuFling != 0) {
                 float len = m_Gravity.Normalise();
-                m_Gravity *= len + 1.3f * dtNorm;
+                m_Gravity *= len + 0.2f * dtNorm * 6.5f;
             }
+        }
 
-            // Two-body physics — same ×60 position scale as unsliced.
-            const float POS_INTEGRATION_SCALE = 60.0f;
-            vel        += m_Gravity * dtScaled;
-            m_SecondVel += m_Gravity * dtScaled;
-            pos        += vel        * dtScaled * POS_INTEGRATION_SCALE;
-            m_SecondPos += m_SecondVel * dtScaled * POS_INTEGRATION_SCALE;
+        // binary @0x001df93c -- two-body integration: same x60 position scale as unsliced.
+        const float POS_INTEGRATION_SCALE = 60.0f;
+        vel        += m_Gravity * dtScaled;
+        m_SecondVel += m_Gravity * dtScaled;
+        pos        += vel        * dtScaled * POS_INTEGRATION_SCALE;
+        m_SecondPos += m_SecondVel * dtScaled * POS_INTEGRATION_SCALE;
 
-            // ASM-verified: 2026-05-27 binary @ 0x001777a0 (asm-inspector)
-            // -- DAT_00177954 = 1000.0f, sliced-only tick.
-            m_LifetimeCounter += (int)(1000.0f * dtScaled);
+        // binary @0x001df9d8 -- spin-phase: in sliced path, after two-body integration.
+        // 1000.0=DAT_1dfb98.
+        m_SpinPhase = (int)((float)m_SpinPhase + dtScaled * 1000.0f);
+
+        // binary @0x001df9d8 -- m_SliceBounceTimer advance + reverse-time un-slice.
+        // Accumulates dtScaled; when negative (time-rewind) and timer < 0, un-slices.
+        m_SliceBounceTimer += dtScaled;
+        if (dtScaled < 0.0f && m_SliceBounceTimer < 0.0f) {
+            m_bSliced = 0;
+            vel = m_SliceVelocity;
+            m_SliceTimer = -1.0f;
+            m_SecondPos = pos;
+            m_SecondVel = vel;
         }
     }
 
-    // ASM-verified: 2026-05-27 binary @ 0x00177c7c (re-analyst).
-    // Bomb-avoidance pushes nearby bombs away on X. Called unconditionally
-    // -- the m_bSliced gate lives inside UpdateBombAvoidance itself.
+    // binary @0x001e02a8 -- bomb-avoidance pushes nearby bombs away on X.
+    // Called unconditionally; the m_bSliced gate lives inside UpdateBombAvoidance itself.
     UpdateBombAvoidance(dtScaled);
 
-    // Quaternion rotation update (both halves). Binary Fruit::Update
-    // @ 0x1DF828 spin loop: per half, per axis k:
+    // binary @0x001e0114 -- quaternion spin loop: per half, per axis k:
     //   CreateFromAxisAngle(m_SliceAxes[idx*3+k], (uint16)(int)(rotVel.k * dtNorm * 182.0))
     //   m_Rot[idx] = ((m_Rot[idx]*qx)*qy)*qz; Normalise.
-    // Gated by m_bFrozen: when frozen the entire spin loop is skipped.
+    // Entry @0x001e02a8. Gated by m_bFrozen: when frozen the entire spin loop is skipped.
     // Super-fruit recomputes m_SliceAxes[idx*3+0] from m_Rot1.Matrix33()*Vec3(1,0,0) each frame.
     // (When NOT sliced the axes in m_SliceAxes are the unit basis from Init/SetupSliceRotations.)
     {
@@ -661,52 +668,42 @@ void Fruit::Update(float dt) {
         }
     }
 
-    // ASM-verified: 2026-05-27 binary @ 0x00177f12 (asm-inspector).
+    // binary @0x001e02cc -- offscreen->KillFruit / m_Col update / emitter-detach / emitter pos
     // Binary stm writes pos.x/y/z to m_Col+4/+8/+12, then vstr overwrites
-    // m_Col+12 with DAT_00177fec = 0x00000000 = 0.0f. Prior re-analyst report
-    // misread the constant value as -0.5f -- this is the revert.
+    // m_Col+12 with DAT_001e042c = 0x00000000 = 0.0f.
     if (m_Col) {
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center().x = pos.x;
         cs->center().y = pos.y;
-        cs->center().z = 0.0f;  // DAT_00177fec
+        cs->center().z = 0.0f;  // DAT_001e042c
     }
 
-    // ASM-verified: 2026-05-18 binary @ 0x00177f30..0x00177f42 (re-analyst).
-    // Pause-detach: when scaled dt is zero (paused or m_TimeScale==0),
-    // release the juice emitters so they stop tracking the fruit's
-    // position while frozen. Re-armed on next slice/SetTrailParticles.
+    // binary @0x001e0330 -- pause-detach: when scaled dt is zero (paused or m_TimeScale==0),
+    // release the juice emitters so they stop tracking the fruit's position while frozen.
+    // Re-armed on next slice/SetTrailParticles.
     if (dtScaled == 0.0f) {
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
         if (m_pEmitter1) { pm.ClearEmitter(m_pEmitter1); m_pEmitter1 = nullptr; }
         if (m_pEmitter2) { pm.ClearEmitter(m_pEmitter2); m_pEmitter2 = nullptr; }
     }
 
-    // ASM-verified: 2026-05-27 binary @ 0x00177f4e..0x00178086 (re-analyst)
-    // Per-frame emitter position/rotation tracking. The "direction" Vec3 at
-    // GOT[DAT_00177d0c]/DAT_00178004/DAT_001780a8 is BSS-zero, so the
-    // matrix-rotate -> Atan2Idx pipeline collapses to (sin=0, cos=1). We
-    // still write those slots to clear any stale orientation from a previous
-    // trail. Binary forces emitter1.z to -5000.0f (off-camera depth marker).
+    // binary @0x001e034e -- per-frame emitter position/rotation tracking.
+    // The "direction" Vec3 at GOT[DAT_00177d0c]/DAT_001e0424/DAT_001e0428 is BSS-zero,
+    // so the matrix-rotate -> Atan2Idx pipeline collapses to (sin=0, cos=1). We
+    // still write those slots to clear any stale orientation from a previous trail.
+    // Binary forces emitter1.z to -5000.0f (DAT_001e0420) off-camera depth marker.
     if (m_pEmitter1) {
         m_pEmitter1->m_Pos     = pos;
-        m_pEmitter1->m_Pos.z   = -5000.0f;  // DAT_00177ff4
+        m_pEmitter1->m_Pos.z   = -5000.0f;  // DAT_001e0420
         m_pEmitter1->m_DirCos  = 1.0f;      // binary +0x30 = CosIdx(0)
         m_pEmitter1->m_DirSin  = 0.0f;      // binary +0x34 = SinIdx(0)
+        // TODO: 0x1e03c0 emitter rotation via m_Rot1.Matrix33 x gEmitVec -> Atan2Idx; port collapses to (1,0)
     }
     if (m_pEmitter2) {
         m_pEmitter2->m_Pos     = m_SecondPos;  // binary calls this m_HalfB_pos; slot +0xC8
         m_pEmitter2->m_DirCos  = 1.0f;
         m_pEmitter2->m_DirSin  = 0.0f;
         // NOTE: binary does NOT force emitter2.z to -5000.0f (only emitter1).
-    }
-
-    // Fire per-fruit m_OnExpired then global — binary @ 0x1dfc00 (per-fruit) + 0x1dfc0c (global).
-    // Gated: if m_SliceTimer (+0xBC) > 0 (slice countdown active), skip — binary bhi skip @ 0x1dfbf0.
-    // Uses m_SliceTimer@0xBC (p_pad+0x80) for this gate.
-    if (!(m_SliceTimer > 0.0f)) {
-        m_OnExpired(this);
-        g_FruitExpired(this);
     }
 
     if (CheckHasGoneOffscreen()) {
