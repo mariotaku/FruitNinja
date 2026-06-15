@@ -131,6 +131,54 @@
       transition: opacity 0.3s ease;
     }
 
+    /* --- ERROR overlay: shown when the load fails or stalls.
+       Fixed full-viewport so it is always visible regardless of canvas size.
+       z-index 30 sits above tap-overlay (20) so it cannot be obscured. --- */
+    #error-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.82);
+      display: none; /* shown by _showError() */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      gap: 0.9em;
+      padding: 2em;
+      text-align: center;
+    }
+
+    #error-msg {
+      color: #fff;
+      font-size: 1.25em;
+      font-weight: bold;
+    }
+
+    #error-detail {
+      color: rgba(255,255,255,0.72);
+      font-size: 0.88em;
+      max-width: 36em;
+      word-break: break-word;
+    }
+
+    #error-reload {
+      margin-top: 0.5em;
+      padding: 0.55em 1.6em;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.45);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 1em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s ease;
+    }
+
+    #error-reload:hover, #error-reload:focus {
+      background: rgba(255,255,255,0.22);
+      outline: none;
+    }
+
     /* Game-asset launch UI -- no modern text.  #tap-play is the in-game white
        play button (textures/play_button.tex) reused as the single "tap to
        start" button.  Audio on/off is chosen via #sound-toggle (top-right),
@@ -216,6 +264,15 @@
       <!-- Single play button: starts the game with audio on/off per the toggle. -->
       <img id="tap-play" src="play_button.webp" role="button" tabindex="0"
            alt="Tap to start" draggable="false">
+    </div>
+
+    <!-- Error overlay: shown by _showError() when the load fails or stalls.
+         Positioned fixed (full viewport) so it is always visible above everything.
+         Hidden by default; _showError() sets display:flex. -->
+    <div id="error-overlay" role="alertdialog" aria-modal="true" aria-label="Load error">
+      <div id="error-msg">Couldn't load the game.</div>
+      <div id="error-detail"></div>
+      <button id="error-reload" tabindex="0">Reload</button>
     </div>
   </div>
 
@@ -346,8 +403,17 @@
   var _tapOverlay   = document.getElementById('tap-overlay');
   var _tapPlay      = document.getElementById('tap-play');
   var _soundToggle  = document.getElementById('sound-toggle');
+  var _errorOverlay = document.getElementById('error-overlay');
+  var _errorDetail  = document.getElementById('error-detail');
   var _audioOn      = true;   /* sound-toggle state; decides audio-on at start */
   var _runtimeReady = false;
+  var _loadFailed   = false;
+  /* Anchored at script parse time; updated by Module.setStatus on each progress
+     tick.  The stall watchdog compares Date.now() against this value. */
+  var _lastProgressTime = Date.now();
+  /* Last progress percentage seen (0-100); used by the absolute fallback to
+     decide whether the download completed before giving up. */
+  var _lastProgressPct  = 0;
 
   /* Called when Module.calledRun is true (runtime loaded, BEFORE game init).
      Hides the progress bar, keeps the splash visible as backdrop for the
@@ -370,6 +436,31 @@
       if (_tapPlay) _tapPlay.focus();
     }
   }
+
+  /* Show the error overlay with a detail message.  Guards against being called
+     after a successful start (_runtimeReady) or after a previous failure
+     (_loadFailed) so a late watchdog tick cannot clobber a running game. */
+  function _showError(msg) {
+    if (_runtimeReady || _loadFailed) return;
+    _loadFailed = true;
+    if (_progressWrap) _progressWrap.style.display = 'none';
+    if (_tapOverlay)   _tapOverlay.style.display   = 'none';
+    if (_errorDetail)  _errorDetail.textContent     = msg || '';
+    if (_errorOverlay) _errorOverlay.style.display  = 'flex';
+    var reloadBtn = document.getElementById('error-reload');
+    if (reloadBtn) reloadBtn.focus();
+  }
+
+  (function () {
+    var reloadBtn = document.getElementById('error-reload');
+    if (!reloadBtn) return;
+    function _doReload(e) { e.preventDefault(); location.reload(); }
+    reloadBtn.addEventListener('click',      _doReload);
+    reloadBtn.addEventListener('touchstart', _doReload, {passive: false});
+    reloadBtn.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _doReload(e);
+    });
+  })();
 
   function _resumeAudioContext() {
     try {
@@ -471,8 +562,13 @@
     });
   }
 
-  window.onerror = function (msg) {
-    console.error('[onerror]', msg);
+  window.onerror = function (msg, src, line, col, err) {
+    console.error('[onerror]', msg, src, line, col, err);
+    /* A JS error during load = fatal; show the error UI instead of leaving
+       the user staring at a frozen progress bar or, worse, the play button. */
+    if (!_runtimeReady) {
+      _showError(msg ? String(msg) : 'A script error occurred while loading.');
+    }
   };
   </script>
 
@@ -505,26 +601,64 @@
       if (m) {
         var pct = Math.round(100 * parseInt(m[1]) / parseInt(m[2]));
         if (_progressBar) _progressBar.style.width = pct + '%';
+        /* Record that progress is still happening; stall watchdog checks this. */
+        _lastProgressTime = Date.now();
+        _lastProgressPct  = pct;
       }
+    },
+
+    onAbort: function (what) {
+      _showError('The game crashed while loading' + (what ? ': ' + what : '.'));
     },
 
     totalDependencies: 0,
   };
 
   (function () {
+    /* Poll every 100ms: success path -- calledRun means the runtime started. */
     var _pollInterval = setInterval(function () {
       if (typeof Module !== 'undefined' && Module.calledRun) {
         clearInterval(_pollInterval);
-        clearTimeout(_safetyTimeout);
+        clearTimeout(_absoluteTimeout);
+        clearInterval(_stallWatchdog);
         _showTapOverlay();
       }
     }, 100);
 
-    var _safetyTimeout = setTimeout(function () {
+    /* Stall watchdog: every 2s, check whether progress has frozen AND the
+       download is not yet complete.  If no progress tick in 20s and the bar
+       is below 99%, the connection stalled -- show the error UI. */
+    var _stallWatchdog = setInterval(function () {
+      if (_runtimeReady || _loadFailed) {
+        clearInterval(_stallWatchdog);
+        return;
+      }
+      var stallMs = Date.now() - _lastProgressTime;
+      if (stallMs > 20000 && _lastProgressPct < 99) {
+        clearInterval(_stallWatchdog);
+        clearTimeout(_absoluteTimeout);
+        clearInterval(_pollInterval);
+        console.warn('[shell] stall watchdog: no progress for ' + Math.round(stallMs / 1000) + 's');
+        _showError('Loading timed out. Check your connection and reload.');
+      }
+    }, 2000);
+
+    /* Absolute 45s fallback: by now the download should have finished.
+       If calledRun was missed but the progress bar reached ~100% (download
+       succeeded), show the tap overlay so the user can still start.
+       If the download never completed, show the error overlay instead. */
+    var _absoluteTimeout = setTimeout(function () {
       clearInterval(_pollInterval);
-      console.warn('[shell] safety fallback: forcing tap overlay reveal');
-      _showTapOverlay();
-    }, 30000);
+      clearInterval(_stallWatchdog);
+      if (_runtimeReady || _loadFailed) return;
+      if (_lastProgressPct >= 99) {
+        console.warn('[shell] absolute fallback: download complete, calledRun not observed -- showing tap overlay');
+        _showTapOverlay();
+      } else {
+        console.warn('[shell] absolute fallback: download incomplete after 45s');
+        _showError('Loading timed out. Check your connection and reload.');
+      }
+    }, 45000);
   })();
   </script>
 
