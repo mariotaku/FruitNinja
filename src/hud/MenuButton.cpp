@@ -614,6 +614,13 @@ void MenuButton::Update(float dt) {
                 // TODO: 0x0019a860 -- PRESS_SCALE(DAT_0019ac6c) shrink on held toggle; curScale = restScale * pressScale
             }
         }
+        // fruitType<0 toggles: keep size == m_RestScale unless drag-cancel shrank it.
+        // The else-if below only fires when the touch-accept gate is false,
+        // so without this the size is never written on the interactive path.
+        if (m_FruitType < 0 && !m_bDragCancel) {
+            size.x = m_RestScale.x;
+            size.y = m_RestScale.y;
+        }
     } else if (m_FruitType < 0) {
         size.x = m_RestScale.x;
         size.y = m_RestScale.y;
