@@ -89,9 +89,18 @@ inline void TexEnvModulate() {
 // binary @0x229788: blade tex-env GL_COMBINE RGB=REPLACE<-PRIMARY_COLOR, alpha=MODULATE.
 // Call before blade DrawTriStrip calls; restore with TexEnvModulate() after.
 inline void TexEnvCombineReplaceRGB() {
+#if defined(__EMSCRIPTEN__)
+    // Port specific: WebGL/GLES2 has no fixed-function GL_COMBINE texenv, and
+    // emcc LEGACY_GL_EMULATION only handles GL_MODULATE for GL_TEXTURE_ENV_MODE.
+    // Fall back to MODULATE on web -- the blade renders with texture*vertex RGB
+    // instead of the binary's REPLACE-from-vertex, an acceptable web-only diff
+    // (translucency still comes from the texture alpha * vertex alpha).
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+#else
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
     glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB,      GL_REPLACE);
     glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_RGB,         GL_PRIMARY_COLOR);
+#endif
 }
 
 #endif
