@@ -30,6 +30,15 @@ typedef FT_FaceRec_*    FT_Face;
 
 namespace Mortar {
 
+// Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
+// FreeType is asked to rasterize glyphs at (requestedSize * kFontSupersample); the resulting bitmap and atlas
+// allocation are kFontSupersample x larger than the logical glyph. All metric fields returned to BakedStringBox
+// (advanceX, bearingX/Y, width, height) are divided back by kFontSupersample so text layout is identical to N=1.
+// The UV range in the atlas covers the full oversampled bitmap and maps to the logical-size quad, so the
+// magnification ratio at the quad drops to 1/kFontSupersample => crisp text when the 480x320 logical viewport is
+// scaled up to the display window.
+static const int kFontSupersample = 3;
+
 // Key for the glyph cache: (codepoint, scaled_size_26.6).
 // scaled_size_26.6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0)
 // Using the FT 26.6 fixed-point value as the key means two requests that

@@ -89,7 +89,10 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
         return &it->second;
     }
 
-    if (!SetCharSize(ch26)) return nullptr;
+    // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
+    // Ask FreeType to rasterize at kFontSupersample x the logical size so the atlas holds hi-res glyph bitmaps.
+    // The cache key stays at the logical ch26 so callers sharing a logical size share the same cache entry.
+    if (!SetCharSize(ch26 * (long)kFontSupersample)) return nullptr;
 
     FT_UInt glyphIndex = FT_Get_Char_Index(m_Face, (FT_ULong)cp);
     if (glyphIndex == 0) {
@@ -111,14 +114,18 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
 
     // Convert all metrics to world units: FT 26.6 value * (1/64) * invFontScale.
     // With invFontScale=1.0 this is simply metric_26.6 / 64.0.
-    const float inv = m_Atlas->m_InvFontScale * (1.0f / 64.0f);
+    // Port specific: HD font supersampling -- divide by kFontSupersample so layout dimensions are
+    // identical to the non-supersampled case (the atlas holds Nx texels but quads are logical-size).
+    const float inv = m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 
     GlyphAtlasEntry entry;
     entry.bearingX = (float)slot->metrics.horiBearingX * inv;
     entry.bearingY = (float)slot->metrics.horiBearingY * inv;
     entry.advanceX = (float)slot->advance.x            * inv;
-    entry.width    = (float)bm.width;
-    entry.height   = (float)bm.rows;
+    // Port specific: HD font supersampling -- width/height are raw atlas pixels (used for atlas packing);
+    // divide by kFontSupersample to restore the logical quad dimensions used by BakedStringBox.
+    entry.width    = (float)bm.width  / (float)kFontSupersample;
+    entry.height   = (float)bm.rows   / (float)kFontSupersample;
 
     if (bm.width > 0 && bm.rows > 0) {
         const uint8_t* src = bm.buffer;
@@ -156,7 +163,8 @@ float FontCacheObjectTTF::GetKerningForPair(uint32_t a, uint32_t b, float reques
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
-    if (!SetCharSize(ch26)) return 0.0f;
+    // Port specific: HD font supersampling -- set face at Nx size to match GetGlyph.
+    if (!SetCharSize(ch26 * (long)kFontSupersample)) return 0.0f;
 
     FT_UInt idxA = FT_Get_Char_Index(m_Face, (FT_ULong)a);
     FT_UInt idxB = FT_Get_Char_Index(m_Face, (FT_ULong)b);
@@ -165,8 +173,9 @@ float FontCacheObjectTTF::GetKerningForPair(uint32_t a, uint32_t b, float reques
     FT_Vector kern;
     FT_Error err = FT_Get_Kerning(m_Face, idxA, idxB, FT_KERNING_DEFAULT, &kern);
     if (err) return 0.0f;
-    // kern.x is 26.6; convert to world units.
-    return (float)kern.x * m_Atlas->m_InvFontScale * (1.0f / 64.0f);
+    // kern.x is 26.6; convert to world units and divide by N to restore logical scale.
+    // Port specific: HD font supersampling -- divide by kFontSupersample.
+    return (float)kern.x * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 
 float FontCacheObjectTTF::GetAscender(float requestedSize) {
@@ -174,9 +183,10 @@ float FontCacheObjectTTF::GetAscender(float requestedSize) {
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
-    if (!m_Face || !SetCharSize(ch26)) return requestedSize;
+    // Port specific: HD font supersampling -- set face at Nx size; divide result by N.
+    if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return requestedSize;
     return (float)m_Face->size->metrics.ascender
-           * m_Atlas->m_InvFontScale * (1.0f / 64.0f);
+           * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 
 float FontCacheObjectTTF::GetDescender(float requestedSize) {
@@ -184,9 +194,10 @@ float FontCacheObjectTTF::GetDescender(float requestedSize) {
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
-    if (!m_Face || !SetCharSize(ch26)) return 0.0f;
+    // Port specific: HD font supersampling -- set face at Nx size; divide result by N.
+    if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return 0.0f;
     return (float)m_Face->size->metrics.descender
-           * m_Atlas->m_InvFontScale * (1.0f / 64.0f);
+           * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 
 float FontCacheObjectTTF::GetLineHeight(float requestedSize) {
@@ -194,9 +205,10 @@ float FontCacheObjectTTF::GetLineHeight(float requestedSize) {
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
-    if (!m_Face || !SetCharSize(ch26)) return requestedSize;
+    // Port specific: HD font supersampling -- set face at Nx size; divide result by N.
+    if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return requestedSize;
     return (float)m_Face->size->metrics.height
-           * m_Atlas->m_InvFontScale * (1.0f / 64.0f);
+           * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 
 } // namespace Mortar
