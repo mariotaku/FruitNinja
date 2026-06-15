@@ -107,9 +107,7 @@ private:
 
     // +0x88..+0x98: button textures (verified from ctor GOT offsets)
     Mortar::SmartPtr<Mortar::Texture> m_TexNewGame;           // +0x88: newgame.tex
-    // +0x8c: v1.5.1 had dojo_icon.tex here; v1.6.1 uses game_work.m_RingTex[3] (blue_skinny_ring.tex).
-    //   The slot still exists in the binary struct at +0x8c but is not loaded or used in v1.6.1.
-    Mortar::SmartPtr<Mortar::Texture> m_TexDojoIconSlot;      // +0x8c: unused in v1.6.1 (slot preserved for layout)
+    Mortar::SmartPtr<Mortar::Texture> m_TexDojoIcon;          // +0x8c: dojo_icon.tex (combined ring+DOJO label face)
     Mortar::SmartPtr<Mortar::Texture> m_TexOpenFeint;         // +0x90: openfeint.tex (GOT+c790)
     Mortar::SmartPtr<Mortar::Texture> m_TexGCAchievements;    // +0x94: gc_achievements.tex (GOT+c794)
     Mortar::SmartPtr<Mortar::Texture> m_TexQuit;              // +0x98: quit.tex (GOT+c78c)

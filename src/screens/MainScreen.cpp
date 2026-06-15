@@ -114,6 +114,7 @@ MainScreen::MainScreen(Game& g)
 
     // Load button textures
     m_TexNewGame        = Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
+    m_TexDojoIcon       = Mortar::TextureManager::LoadLocalisedTexture("dojo_icon.tex");
     m_TexGCAchievements = Mortar::TextureManager::LoadLocalisedTexture("gc_achievements.tex");
     m_TexMoreGames      = Mortar::TextureManager::LoadLocalisedTexture("more_games.tex");
     m_TexQuit           = Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
@@ -1002,9 +1003,9 @@ void MainScreen::CreatePlayDojo() {
     // in the current fruitlist, but use the runtime call per CLAUDE.md
     // "no shortcuts or abbreviations" rule.
     pDojoButton = new MenuButton();
-    // v1.6.1: dojo ring IS the menu button texture; binary CreateButtons @ 0x196a00
-    // assigns blue_skinny_ring.tex (m_RingTex[3]) loaded by PreloadRings.
-    pDojoButton->m_Texture = game_work.m_RingTex[3];
+    // binary MainScreen::Update @0x14b278 dojo branch: m_Texture = m_TexDojoIcon
+    // (dojo_icon.tex, combined ring+DOJO label face), same mechanism as NEW GAME/QUIT. No SetText.
+    pDojoButton->m_Texture = m_TexDojoIcon;
     pDojoButton->Init(POS_DOJO_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
         Fruit::FruitType("mango", false), Vec3(0,0,0), nullptr);
@@ -1019,18 +1020,15 @@ void MainScreen::CreatePlayDojo() {
     // tappable). The binary overrides m_RestScale to the button's own texture size AFTER
     // Init -- exactly like pPlayButton -- for the dojo button too. (m_RestScale.x/y drive
     // the hit box in MenuButton::Update.)
-    if (game_work.m_RingTex[3].IsValid()) {
-        pDojoButton->m_RestScale.x = (float)(game_work.m_RingTex[3]->m_Width  + 1);
-        pDojoButton->m_RestScale.y = (float)(game_work.m_RingTex[3]->m_Height + 1);
+    if (m_TexDojoIcon.IsValid()) {
+        pDojoButton->m_RestScale.x = (float)(m_TexDojoIcon->m_Width  + 1);
+        pDojoButton->m_RestScale.y = (float)(m_TexDojoIcon->m_Height + 1);
         pDojoButton->m_RestScale.z = 1.0f;
     }
     pDojoButton->m_ShakeScale.x = 0.5f;    // +0x154 (binary @ 0x001964e8)
     pDojoButton->m_HitInsetX    = -50.0f;  // DAT_00196560 (binary @ 0x001964f0)
     pDojoButton->m_HitInsetY    = -50.0f;
     pDojoButton->m_GrowInTimer  = 0.25f;   // +0x134 (binary @ 0x00196544)
-    // Binary CreateButtons: SetText with m_RingColours[4] (fg) and [5] (shadow).
-    // MenuButton::SetText is a defunct no-op stub (binary @ 0x0014ebc0); wired for fidelity.
-    pDojoButton->SetText(nullptr, game_work.m_RingColours[4], game_work.m_RingColours[5], 0.0f);
     game_work.mHud->AddControl(pDojoButton);
     // (v1.5.1-only *1.05 ring-scale / *0.9 fruit-piece-scale removed: absent from the
     //  v1.6.1 CreateButtons path, and they scaled a zero m_RestScale before this fix.)
