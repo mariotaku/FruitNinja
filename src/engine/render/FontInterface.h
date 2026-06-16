@@ -9,9 +9,10 @@
 // CPU-side pixel buffer; new glyphs are packed left-to-right, row-by-row; dirty
 // regions are uploaded via glTexSubImage2D when BuildPendingTextures() is called.
 //
-// The atlas is greyscale (alpha-only, GL_ALPHA / GL_RED) on native; the shader
-// interprets the single channel as alpha. Glyph bitmaps are copied in from
-// FreeType's FT_BITMAP_PIXEL_MODE_GRAY output (8-bit alpha).
+// Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
+// yields vertex-coloured text on both desktop FFP and emscripten WebGL (which
+// lacks GL_COMBINE). Binary used Bada IFont with an RGBA atlas. Each texel is
+// (R=255, G=255, B=255, A=coverage) expanded from FreeType's 8-bit gray output.
 //
 // Scaling constants mirror binary FontInterface ctor @ 0x002502e0 and
 // Initialize @ 0x00250470:
@@ -77,7 +78,7 @@ public:
 
 private:
     int      m_Size;           // atlas dimension (e.g. 512)
-    uint8_t* m_Pixels;         // CPU-side alpha buffer [size*size]
+    uint8_t* m_Pixels;         // CPU-side RGBA buffer [size*size*4]
     GLuint   m_TextureID;      // GL texture object
 
     // Current packing cursor.

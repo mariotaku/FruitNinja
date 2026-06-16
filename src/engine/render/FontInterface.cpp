@@ -22,7 +22,8 @@ FontInterface::FontInterface(int atlasSize)
     , m_DirtyX0(0), m_DirtyY0(0)
     , m_DirtyX1(0), m_DirtyY1(0)
 {
-    m_Pixels = (uint8_t*)calloc((size_t)(m_Size * m_Size), 1);
+    // Port specific: RGBA atlas (4 bytes/texel) so GL_MODULATE yields vertex colour.
+    m_Pixels = (uint8_t*)calloc((size_t)(m_Size * m_Size * 4), 1);
     EnsureTexture();
 }
 
@@ -60,12 +61,14 @@ void FontInterface::EnsureTexture() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Byte-aligned unpack for single-channel glyph data (see BuildPendingTextures).
+    // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
+    // yields vertex-coloured text on both desktop FFP and emscripten WebGL (which
+    // lacks GL_COMBINE). Binary used Bada IFont with an RGBA atlas.
+    // RGBA rows are 4-byte aligned so the default GL_UNPACK_ALIGNMENT=4 is fine;
+    // setting 1 is harmless and kept for robustness.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    // Allocate the full atlas as an alpha-only texture.
-    // GL_ALPHA works on both desktop GL (compat) and WebGL/GLES2.
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, m_Size, m_Size, 0,
-                 GL_ALPHA, GL_UNSIGNED_BYTE, m_Pixels);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_Size, m_Size, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, m_Pixels);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -88,11 +91,18 @@ bool FontInterface::PackGlyph(int width, int height, const uint8_t* bitmap,
     }
 
     // Copy glyph bitmap into the atlas CPU buffer.
+    // Port specific: expand 1-byte FreeType coverage -> RGBA (R=G=B=255, A=coverage)
+    // so GL_MODULATE passes the vertex colour through unchanged.
     if (bitmap && width > 0 && height > 0) {
         for (int row = 0; row < height; row++) {
-            uint8_t* dst = m_Pixels + (m_CursorY + row) * m_Size + m_CursorX;
+            uint8_t* dst = m_Pixels + ((m_CursorY + row) * m_Size + m_CursorX) * 4;
             const uint8_t* src = bitmap + row * width;
-            memcpy(dst, src, (size_t)width);
+            for (int col = 0; col < width; col++) {
+                dst[col * 4 + 0] = 255;
+                dst[col * 4 + 1] = 255;
+                dst[col * 4 + 2] = 255;
+                dst[col * 4 + 3] = src[col];
+            }
         }
     }
 
@@ -114,25 +124,23 @@ void FontInterface::BuildPendingTextures() {
     if (!m_Dirty || !m_Pixels || !m_TextureID) return;
 
     glBindTexture(GL_TEXTURE_2D, m_TextureID);
-    // Single-channel (GL_ALPHA) glyph rows are tightly packed at dw-byte stride.
-    // GL_UNPACK_ALIGNMENT defaults to 4, which would mis-stride every row when dw
-    // is not a multiple of 4 -> sheared/garbled glyphs. Force byte alignment.
+    // Port specific: RGBA atlas — each texel is 4 bytes; rows are 4-byte aligned.
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     // Upload only the dirty rectangle.
     const int dw = m_DirtyX1 - m_DirtyX0;
     const int dh = m_DirtyY1 - m_DirtyY0;
     if (dw > 0 && dh > 0) {
-        // Extract dirty rows into a contiguous temporary buffer.
-        uint8_t* tmp = (uint8_t*)malloc((size_t)(dw * dh));
+        // Extract dirty rows (RGBA, 4 bytes/texel) into a contiguous temporary buffer.
+        uint8_t* tmp = (uint8_t*)malloc((size_t)(dw * dh * 4));
         if (tmp) {
             for (int row = 0; row < dh; row++) {
-                memcpy(tmp + row * dw,
-                       m_Pixels + (m_DirtyY0 + row) * m_Size + m_DirtyX0,
-                       (size_t)dw);
+                memcpy(tmp + row * dw * 4,
+                       m_Pixels + ((m_DirtyY0 + row) * m_Size + m_DirtyX0) * 4,
+                       (size_t)(dw * 4));
             }
             glTexSubImage2D(GL_TEXTURE_2D, 0,
                             m_DirtyX0, m_DirtyY0, dw, dh,
-                            GL_ALPHA, GL_UNSIGNED_BYTE, tmp);
+                            GL_RGBA, GL_UNSIGNED_BYTE, tmp);
             free(tmp);
         }
     }
