@@ -506,8 +506,12 @@
   function _showTapOverlay() {
     if (_runtimeReady) return;
     _runtimeReady = true;
-    /* Hide progress bar -- download done. Splash stays as tap-overlay backdrop. */
+    /* Hide progress bar AND its black loading-cover strip -- download done.
+       The cover only blanketed the splash's baked "Loading..." text while the
+       bar replaced it; with the bar gone the cover is an orphan black stripe,
+       so hide it here too. Splash stays as tap-overlay backdrop. */
     if (_progressWrap) _progressWrap.style.display = 'none';
+    if (_loadingCover) _loadingCover.style.display = 'none';
     if (_tapOverlay) {
       /* Reliable fade-in: set display:flex and opacity:0 together so the
          element enters layout with an established opacity:0 state, then
