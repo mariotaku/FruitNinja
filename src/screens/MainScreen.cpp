@@ -1025,6 +1025,8 @@ void MainScreen::CreatePlayDojo() {
         pDojoButton->m_RestScale.y = (float)(m_TexDojoIcon->m_Height + 1);
         pDojoButton->m_RestScale.z = 1.0f;
     }
+    // ASM-spec: dojo anim params @ CreateButtons 0x1961f8:
+    //   m_GrowInTimer=0.25 @0x196544, m_ShakeScale.x=0.5 @0x1964e8, m_HitInset=-50 @0x196560
     pDojoButton->m_ShakeScale.x = 0.5f;    // +0x154 (binary @ 0x001964e8)
     pDojoButton->m_HitInsetX    = -50.0f;  // DAT_00196560 (binary @ 0x001964f0)
     pDojoButton->m_HitInsetY    = -50.0f;

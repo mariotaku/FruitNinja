@@ -472,8 +472,9 @@ void MenuButton::Update(float dt) {
             }
 
             // grow-in quarter-sine ease-out (phase decrement toward 0)
+            // ASM-spec: DAT_0019ac68=109216 / clamp 16380 @ MenuButton::Update
             pos.z = -5.0f;
-            int nextPhase = (int)m_AnimPhase - (int)(dt * 109200.0f);
+            int nextPhase = (int)m_AnimPhase - (int)(dt * 109216.0f);
             if (nextPhase < 1) {
                 m_AnimPhase = 0;
                 m_GrowShrinkDone = 1;
@@ -546,8 +547,9 @@ void MenuButton::Update(float dt) {
             }
 
             // grow-in ease toward 0x3ffc
+            // ASM-spec: DAT_0019ac68=109216 / clamp 16380 @ MenuButton::Update
             if (m_AnimPhase < 0x3ffc) {
-                int nextPhase = (int)m_AnimPhase + (int)(dt * 109200.0f);
+                int nextPhase = (int)m_AnimPhase + (int)(dt * 109216.0f);
                 if (nextPhase > 0x3ffc) nextPhase = 0x3ffc;
                 m_AnimPhase = (uint16_t)nextPhase;
                 float sinFull = SinIdx(0x3ffc);
