@@ -27,7 +27,7 @@ If the question is too broad ("is the spin loop correct?") refuse to start until
 
 ### 2. Locate the binary range
 
-Use GhidraMCP (`disassemble_function`, `decompile_function`, `get_function_by_address`, `get_xrefs_to`) to find the exact address range relevant to the claim. Save the raw disassembly to `tmp/asm-compare/<name>_binary.s`. Lines should be `addr: opcode mnemonic operands`. (Note: `decompile_function` shows PIC/GOT-indirected named globals as opaque `DAT_` — "Respect Read-Only Flags" is OFF in its bare DecompInterface. For a name-resolved decompile use `run_script_inline` with `opts.grabFromProgram(currentProgram)`; either way you still decode DAT_ values from the literal pool via `read_memory` per the steps below.)
+Use GhidraMCP (`disassemble_function`, `decompile_function`, `get_function_by_address`, `get_xrefs_to`) to find the exact address range relevant to the claim. Save the raw disassembly to `tmp/asm-compare/<name>_binary.s`. Lines should be `addr: opcode mnemonic operands`. (Note: on this fork `decompile_function` now resolves PIC/GOT-indirected named globals — patched 2026-06-16; upstream's bare DecompInterface with "Respect Read-Only Flags" OFF still shows them as opaque `DAT_`, where `run_script_inline` with `opts.grabFromProgram(currentProgram)` is the fallback. Either way, genuinely-unnamed `DAT_` float constants in the literal pool are still decoded via `read_memory` per the steps below.)
 
 ### 3. Write a minimal compile unit
 

@@ -35,16 +35,14 @@ You **may** update the small set of load-bearing reference docs (formats, init o
 - Use `read_memory` to resolve GOT pointers and data constants (little-endian ARM32).
 - Use `rename_data` to name `DAT_` symbols with meaningful names based on context.
 - Use `force_decompile` after renaming to see updated decompilation with named symbols.
-- **`decompile_function` does NOT resolve PIC/GOT-indirected globals to names.** It prints `**(float**)(gotBase + DAT_xxx)` even when the target global IS named (the GUI and `list_globals` both show the name). Cause: it builds a bare `DecompInterface` with **"Respect Read-Only Flags" OFF**, so the read-only `.got` slot is never folded to its target. **For GUI-quality named decompiles, use `run_script_inline`:**
+- **`decompile_function` resolves named GOT/PIC globals on this fork (patched 2026-06-16).** It now prints the named global (e.g. `param_1 * 9 * ModSlashThickness`, not `* DAT_xxx`) with the GOT double-indirection collapsed — GUI-quality output — so it's trustworthy for a global's identity here. (The fork applies `opts.grabFromProgram(program); setOptions(opts); setSimplificationStyle("decompile")`; UPSTREAM GhidraMCP still ships the bare-`DecompInterface` bug that prints `**(float**)(gotBase + DAT_xxx)` for NAMED globals with "Respect Read-Only Flags" OFF.) **Fallback only if a NAMED global still renders as `DAT_`** (e.g. on upstream), use `run_script_inline`:
   ```java
-  ghidra.program.model.listing.Function f = getFunctionContaining(toAddr(0xADDRL));
   ghidra.app.decompiler.DecompInterface ifc = new ghidra.app.decompiler.DecompInterface();
   ghidra.app.decompiler.DecompileOptions opts = new ghidra.app.decompiler.DecompileOptions();
-  opts.grabFromProgram(currentProgram);   // picks up Respect-Read-Only etc.
-  ifc.setOptions(opts); ifc.openProgram(currentProgram);
-  println(ifc.decompileFunction(f, 60, monitor).getDecompiledFunction().getC()); ifc.dispose();
+  opts.grabFromProgram(currentProgram); ifc.setOptions(opts); ifc.openProgram(currentProgram);
+  println(ifc.decompileFunction(getFunctionContaining(toAddr(0xADDRL)), 60, monitor).getDecompiledFunction().getC());
   ```
-  (`force_decompile` does NOT help — tested: it only refreshes the decompiler cache with the same bare options, so it still emits `DAT_`. `run_script_inline` is the only working path.) Do NOT trust `decompile_function`'s `DAT_xxx`/`fVarN` form for a global's identity or value — reading `param_1 * 9 * fVar23` instead of `param_1 * 9 * ModSlashThickness` caused a long g_Scale mis-mapping detour. When a `DAT_`/GOT value drives logic you're porting, confirm it with the inline-script decompile AND `read_memory`.
+  Remaining `DAT_xxx` in output are genuinely-unnamed constants (no symbol to resolve), not the old bug — don't chase them. When a global value drives logic you're porting, still confirm the literal with `read_memory`.
 - **`add_struct_field` INSERTS bytes** (shifts subsequent fields). Do NOT use it to fill undefined gaps — define missing fields manually in Ghidra's Structure Editor. `remove_struct_field` also removes bytes, not just names.
 - Decompiled C is heuristic. When something looks suspicious (unexpected casts, missing parameters on float-returning functions, etc.), pull the actual disassembly via `disassemble_function`. ARM build attributes confirm hard-float ABI (`Tag_ABI_VFP_args: VFP registers`) — float args/returns ride VFP regs, but Ghidra's ARM language only ships `__stdcall` / `__stdcall_softfp` / `__thiscall` / `processEntry` calling conventions, so scalar-float decompiles can be wrong. The `asm-inspector` agent exists to settle these via toolchain-emitted ASM diff.
 
