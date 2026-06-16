@@ -490,12 +490,12 @@ void MenuButton::Update(float dt) {
 
         } else {
             // ---- live entity present: drive it ----
+
+            // Capture m_BaseScale on the very first frame (binary also reads entity->scale
+            // the first time the entity branch runs). Done before the ramp so m_BaseScale
+            // is valid when we apply the entity scale below.
             if (m_BaseScale.x == 0.0f) {
                 m_BaseScale = entity->scale;
-            } else {
-                float restY = m_RestScale.y;
-                float ratio = (restY != 0.0f) ? (size.y / restY) : 1.0f;
-                entity->scale = m_BaseScale * ratio;
             }
 
             // Re-anchor: binary @ 0x0019a860 calls vtable slot 15 (GetAdjustedPos @ 0x136c2c)
@@ -548,10 +548,12 @@ void MenuButton::Update(float dt) {
                 }
             }
 
-            // grow-in ease toward 0x3ffc
-            // ASM-spec: DAT_0019ac68=109216 / clamp 16380 @ MenuButton::Update
+            // grow-in ease toward 0x3ffc: runs BEFORE entity->scale write so the
+            // entity scale on the very first frame (m_BaseScale capture frame) is
+            // also ramped, not left at full spawn size.
+            // ASM-spec: DAT_0019ac68=109200 / clamp 16380 @ MenuButton::Update
             if (m_AnimPhase < 0x3ffc) {
-                int nextPhase = (int)m_AnimPhase + (int)(dt * 109216.0f);
+                int nextPhase = (int)m_AnimPhase + (int)(dt * 109200.0f);
                 if (nextPhase > 0x3ffc) nextPhase = 0x3ffc;
                 m_AnimPhase = (uint16_t)nextPhase;
                 float sinFull = SinIdx(0x3ffc);
@@ -561,6 +563,14 @@ void MenuButton::Update(float dt) {
             } else {
                 size.x = m_RestScale.x;
                 size.y = m_RestScale.y;
+            }
+
+            // Apply entity scale using the just-computed size (every frame, including
+            // the first). Binary: entity->scale = m_BaseScale * (size.y / m_RestScale.y).
+            if (m_pEntity != nullptr) {
+                float restY = m_RestScale.y;
+                float ratio = (restY != 0.0f) ? (size.y / restY) : 1.0f;
+                m_pEntity->scale = m_BaseScale * ratio;
             }
         }
     }

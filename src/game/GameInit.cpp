@@ -217,6 +217,17 @@ void GameInit(unsigned long) {
     game_work.mHud->AddControl(GetTaskState()->pPauseScreen);
     game_work.mHud->AddControl(game_work.m_TutorialControl);
 
+    // ASM-spec: binary @ 0x0016b234 (Bomb::HitMenuBomb) is invoked on MainScreen
+    // entry to prime the CreateButtons gate. The port's GameInit omits the splash
+    // menu-bomb sequence, so prime the timer directly here to match the binary's
+    // timing: ~0.55s delay (2.0 - 1.45 = 0.55s @ dt=1/60) before buttons appear.
+    // Matches binary: Bomb::HitMenuBomb sets m_BombHitTimer = 2.0f and
+    // m_bMenuBombFlashFlag = 1. The port sets the timer only; the flash flag is
+    // intentionally left 0 so GameUpdate's cross-1.5 GameOver trigger is armed
+    // (flagging 0 means a bomb-hit on the menu won't suppress game-over, which
+    // is correct since there's no actual gameplay bomb here).
+    game_work.m_BombHitTimer = 2.0f;  // prime: CreateButtons gate (binary @ 0x0016b234)
+
     // step 15: Mortar::Entity::HeapCreate (0x0016cb48..0x0016cb4e)
     // Binary: Mortar::Entity::HeapCreate(0x20000) @ 0x000fd500 (PLT thunk).
     // 0x20000 = 128 KB Mortar::Entity LinkedHeap arena; must run before step 16.

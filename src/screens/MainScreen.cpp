@@ -260,11 +260,17 @@ void MainScreen::Update(float dt) {
             game_work.m_GameDt += (-1.0f - game_work.m_GameDt) * CAMERA_LERP_RATE;
         }
 
-        // Lazy-create play/dojo buttons once m_Timer2 threshold reached and
-        // camera has settled, then transition to state 1.
-        if (!pPlayButton && m_Timer2 > TIMER2_THRESHOLD && game_work.m_GameDt < CAMERA_THRESHOLD) {
-            CreatePlayDojo();
-        }
+        // ASM-spec: binary @ 0x00196e1c (Update case 0) calls CreateButtons
+        // (port: CreatePlayDojo) UNCONDITIONALLY every frame. The creation gate
+        // lives inside CreatePlayDojo: `if (m_BombHitTimer < 1.45f)`. The timer
+        // is primed to 2.0f on MainScreen entry (binary @ 0x0016b234 HitMenuBomb)
+        // and drains at dt/frame, so buttons are suppressed for ~0.55s (33 frames)
+        // while the camera-zoom/flash intro plays.
+        CreatePlayDojo();
+
+        // Transition to STATE_CREATE_BUTTONS once camera has settled.
+        // Buttons are guaranteed to exist by this point (m_BombHitTimer < 1.45
+        // fires at ~33 frames, well before the camera threshold which starts at -1.0).
         if (game_work.m_GameDt < CAMERA_THRESHOLD && m_Timer2 > TIMER2_THRESHOLD) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/CAMERA_ZOOM camera settled");
             m_State = STATE_CREATE_BUTTONS;
@@ -657,7 +663,9 @@ void MainScreen::Update(float dt) {
         pMusicToggle->pos.y += slideOffset;
     }
 
-    UpdateScreenElements(dt, elapsedTime);
+    // ASM-spec binary @ 0x00195a58: arg1 = ct = -game_work.m_GameDt (clamped to 0.04),
+    // arg2 = time = accumulated seconds (for the settle gate time > 0.99).
+    UpdateScreenElements(elapsedTime, m_Time);
 
     // Binary-faithful: game_work.m_GameDt is the SINGLE source of truth.
     // MainScreen's state-case bodies above write it directly (states 0/1/2/
@@ -803,12 +811,23 @@ void MainScreen::Draw(const Vec3& hudScale, int layerMask) {
 }
 
 // Matches 0x0014ad3c — constants verified from Ghidra decompilation + read_memory
+// ASM-spec: binary @ 0x00195a58 (UpdateScreenElements integrator)
+//
+// arg1 = cameraTransition = ct = -game_work.m_GameDt, clamped to 0.04
+// arg2 = time = m_Time (accumulated seconds, used only for the settle gate time > 0.99)
 //
 // Binary constants (literal pool at 0x14aec4):
 //   CLAMP_THRESHOLD    = 0.04   (DAT_0014aec4)
 //   BOUNCE_GRAVITY     = -55.0  (DAT_0014aecc)
+//   NINJA_TEXT_X       = -120.0 (constant, not a DAT ref)
 //   LOGO_FRUIT_X_BASE  = -175.0 (DAT_0014aedc)
 //   ELAPSED_THRESHOLD  = 0.99   (DAT_0014aed8)
+//
+// Port field mapping (v1.6.1 struct re-layout deferred to task #9):
+//   binary m_BounceVel  +0x104 (decorative 60.0/frame) -- port: unused
+//   binary m_BounceY    +0x108 (posY integrator)       -- port: m_WindowCenter (+0xfc, Draw reads Y from here)
+//   binary m_StateTimer +0x110 (velocity accumulator)  -- port: m_BounceVelocity (+0x104)
+//   Port: dedicated bounce field; v1.6.1 byte-layout re-mapping deferred to #9
 //
 // All positions are in the binary-centred ortho space (X horizontal ±240,
 // Y vertical ±160). No axis swap needed — see docs/engine/coordinate-system.md.
@@ -829,8 +848,9 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     m_LogoFruitTextPos.z = 0.0f;
     field_0x100 = 0.0f;
 
-    // Ninja text X = 60.0 (DAT_0014aed0); Y comes from m_WindowCenter in Draw
-    m_LogoNinjaTextX = 60.0f;  // DAT_0014aed0
+    // Ninja text X = -120.0 (constant per binary @ 0x00195a58); Y bounces via m_WindowCenter.
+    // Prior port had 60.0f here (wrong DAT reference — that value is for the fruit_text X).
+    m_LogoNinjaTextX = -120.0f;  // ASM-spec binary @ 0x00195a58
 
     // Bounce physics (matches binary exactly)
     float newVel = m_BounceVelocity + cameraTransition * BOUNCE_GRAVITY;
@@ -849,8 +869,12 @@ void MainScreen::UpdateScreenElements(float cameraTransition, float time) {
     // Temporary copy (overwritten at end of function with correct formula)
     m_LogoFruitPos = m_LogoFruitTextPos;
 
+    // tute = 1.0 while ct > 0, else 0.0 (binary @ 0x00195a58: unconditional each frame).
+    // m_GlobalAlphaTarget is the port equivalent of binary's tute local.
     if (cameraTransition > 0.0f) {
         m_GlobalAlphaTarget = 1.0f;
+    } else {
+        m_GlobalAlphaTarget = 0.0f;
     }
 
     float floorLimit = floorPos - 15.0f;
@@ -948,6 +972,13 @@ void MainScreen::CreateToggles() {
 void MainScreen::CreatePlayDojo() {
     if (!game_work.mHud) return;
 
+    // ASM-spec: binary @ 0x001961f8 (CreateButtons): gate fires on
+    // m_BombHitTimer < 1.45f. Timer primed to 2.0f by HitMenuBomb on
+    // MainScreen entry (binary @ 0x0016b234); drains ~dt/frame so the
+    // flash/camera-zoom intro (~0.55s / ~33 frames) plays before buttons appear.
+    // Null-check prevents duplicate creation on subsequent calls.
+    if (pPlayButton || game_work.m_BombHitTimer >= 1.45f) return;
+
     // Play button: (16.0, -66.0, -50.0), fruitType=3 (watermelon)
     // Ring texture drawn at native texture size — matches the binary's
     // HUDControl3d Scale44(size) path where size comes from the texture's
@@ -991,6 +1022,10 @@ void MainScreen::CreatePlayDojo() {
     pPlayButton->m_HitInsetY  = -50.0f;
     pPlayButton->m_HitInsetX = -50.0f;
     pPlayButton->m_AnimScale  = 0.5f;
+    // ASM-spec: binary @ 0x001961f8 (CreateButtons) sets m_GrowInTimer = 0.25f
+    // on ALL buttons including Play. Init() zeroes m_GrowInTimer; this write
+    // restores the 0.25s hidden delay before the grow-in ramp starts.
+    pPlayButton->m_GrowInTimer = 0.25f;  // binary @ 0x0016b234 (HitMenuBomb path)
     game_work.mHud->AddControl(pPlayButton);
 
     // Binary @ 0x0014b6f8: ResetTutePos called immediately after play button
