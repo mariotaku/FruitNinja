@@ -956,11 +956,11 @@ void MainScreen::CreatePlayDojo() {
     pPlayButton->m_Texture = (m_TexNewGame);
     pPlayButton->Init(POS_PLAY_BUTTON,
         Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, Vec3(0,0,0), nullptr);
-    // Binary @ 0x0014b782..0x0014b80c: Play button overrides m_TargetSize
-    // to (m_TexNewGame->GetWidth()+1, GetHeight()+1, 1.0) AFTER Init returns.
-    // Without this the fruit-branch compute (entity->scale * 200 = 150 for
-    // watermelon) makes the NEW GAME ring ~40% too small. Texture is 256x256
-    // so m_TargetSize = (257, 257, 1).
+    // TODO: 0x0014b782 -- RE whether play block truly overrides m_RestScale to texWidth+1
+    //   or is a no-op *1.0 relying on CreateFruit entityScale*200. Prior RE cited binary
+    //   @0x0014b782..0x0014b80c as the texture-size override; re-analyst pass says it is
+    //   a no-op. Leaving texture override in place until visual comparison confirms which
+    //   source matches the original ring size (texW+1=257 vs watermelonScale*200~=150).
     if (m_TexNewGame.IsValid()) {
         pPlayButton->m_RestScale.x = (float)(m_TexNewGame->m_Width  + 1);
         pPlayButton->m_RestScale.y = (float)(m_TexNewGame->m_Height + 1);
@@ -1014,26 +1014,18 @@ void MainScreen::CreatePlayDojo() {
     pDojoButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
     pDojoButton->m_RemoveCallback =
         Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::ButtonDeleted);
-    // v1.6.1 CreateButtons post-Init overrides (binary @ 0x001961f8). ROOT-CAUSE FIX:
-    // MenuButton::Init copies m_RestScale verbatim from its hitBounds arg, and the port
-    // passed Vec3(0,0,0) -> m_RestScale=0 -> ZERO MenuButton hit box (no F1 boundary, not
-    // tappable). The binary overrides m_RestScale to the button's own texture size AFTER
-    // Init -- exactly like pPlayButton -- for the dojo button too. (m_RestScale.x/y drive
-    // the hit box in MenuButton::Update.)
-    if (m_TexDojoIcon.IsValid()) {
-        pDojoButton->m_RestScale.x = (float)(m_TexDojoIcon->m_Width  + 1);
-        pDojoButton->m_RestScale.y = (float)(m_TexDojoIcon->m_Height + 1);
-        pDojoButton->m_RestScale.z = 1.0f;
+    // Binary dojo block @ 0x1967b0..0x196854:
+    //   m_RestScale = entityScale*200 from CreateFruit (Fix 1 in MenuButton::CreateFruit).
+    //   fruit piece scale *= 0.9 (DAT @0x196594); m_RestScale *= 1.05 (DAT @0x196598).
+    if (pDojoButton->m_pTrackedFruit) {
+        pDojoButton->m_pTrackedFruit->scale = pDojoButton->m_pTrackedFruit->scale * 0.9f;
     }
-    // ASM-spec: dojo anim params @ CreateButtons 0x1961f8:
-    //   m_GrowInTimer=0.25 @0x196544, m_ShakeScale.x=0.5 @0x1964e8, m_HitInset=-50 @0x196560
+    pDojoButton->m_RestScale   = pDojoButton->m_RestScale * 1.05f;
     pDojoButton->m_ShakeScale.x = 0.5f;    // +0x154 (binary @ 0x001964e8)
     pDojoButton->m_HitInsetX    = -50.0f;  // DAT_00196560 (binary @ 0x001964f0)
     pDojoButton->m_HitInsetY    = -50.0f;
-    pDojoButton->m_GrowInTimer  = 0.25f;   // +0x134 (binary @ 0x00196544)
+    pDojoButton->m_GrowInTimer  = 0.25f;   // +0x134 (binary @ 0x196854)
     game_work.mHud->AddControl(pDojoButton);
-    // (v1.5.1-only *1.05 ring-scale / *0.9 fruit-piece-scale removed: absent from the
-    //  v1.6.1 CreateButtons path, and they scaled a zero m_RestScale before this fix.)
 }
 
 void MainScreen::CreateQuitButton() {

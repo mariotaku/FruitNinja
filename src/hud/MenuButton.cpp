@@ -181,7 +181,7 @@ void MenuButton::Init(Vec3 buttonPos, Mortar::Delegate0<void> clickCb,
     m_bInteractive   = 1;
     m_bAcceptsTouch  = 1;
     m_bBackdropActive = 1;
-    m_GrowInTimer    = 1.0f;
+    m_GrowInTimer    = 0.0f;
     m_AnimPhase      = 0;
     m_HitInsetX      = 5.0f;
     m_HitInsetY      = 5.0f;
@@ -269,6 +269,8 @@ void MenuButton::CreateFruit() {
         // position; Fruit::Update gates pos/vel integration on this flag (binary 0x001df828).
         fruit->m_bBallisticEnable = 0;
         m_pFruitPiece = fruit;
+        // Binary @0x0019b608: m_RestScale = entity->scale * 200.0f (grow-in TARGET size).
+        m_RestScale = m_pEntity->scale * 200.0f;
 
         if (fabsf(fruit->m_RotVel1.x) < ROT_CLAMP_X)
             fruit->m_RotVel1.x = (fruit->m_RotVel1.x >= 0 ? ROT_CLAMP_X : -ROT_CLAMP_X);
