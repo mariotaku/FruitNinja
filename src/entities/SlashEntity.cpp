@@ -448,11 +448,21 @@ void SlashEntity::PlaySwipe() {
     m_SwipeSoundTimer = 6.0f;
 }
 
-// Binary @ 0x17B87C -- derive head taper scale from last vertex pair.
-// Port specific: binary reads the last pair half-width from m_pLeftBuffer;
-// only consumed by CreateGhost() which is a no-op stub. Return 1.0f.
+// ASM-verified: 2026-06-16 binary @ 0x1e684c (re-analyst). Head thickness scale =
+// half the L/R edge separation at the LAST stored vertex, normalized by the nominal
+// full half-width (ModSlashThickness*9). Range [0,1]. Consumed by OnTouchActive
+// (binary UpdateTouchDown @0x1e9f08) as per-point taper pressure.
 float SlashEntity::GetHeadThicknessScale() const {
-    return 1.0f;
+    if (!m_pLeftBuffer || !m_pRightBuffer) return 0.0f;
+    if (m_PointCount < 1) return 0.0f;
+    const int i = m_PointCount - 1;                  // last written vertex index
+    const float dx = m_pLeftBuffer[i].x - m_pRightBuffer[i].x;
+    const float dy = m_pLeftBuffer[i].y - m_pRightBuffer[i].y;
+    const float d2 = dx*dx + dy*dy;
+    const float half = (d2 <= 0.01f) ? 0.0f : (sqrtf(d2) * 0.5f);
+    float scale = half / (g_Scale1 * 9.0f);          // g_Scale1 == ModSlashThickness
+    if (scale >= 1.0f) scale = 1.0f;
+    return scale;
 }
 
 // Binary @ 0x17B82C -- snapshot blade vertex strips into global ghost ring.
@@ -556,12 +566,17 @@ void SlashEntity::OnTouchActive(float x, float y) {
         const float dist = sqrtf(distSq);
         dir = Vec3(distVec.x / dist, distVec.y / dist, 0.0f);
 
+        // Binary UpdateTouchDown @0x1e9f08: ramp pressure from headThick -> 1.0 for
+        // interpolated points (fVar12=travelled, fVar13=segment length).
+        const float headThick = GetHeadThicknessScale();
+
         // Interpolate intermediate points every POINT_SPACING units.
         float travelled = POINT_SPACING;
         while (travelled < dist) {
             Vec3 step(lastCenter.x + dir.x * travelled,
                       lastCenter.y + dir.y * travelled, 0.0f);
-            AddPoint(1.0f, &step, &dir);
+            const float pressure = headThick + (travelled / dist) * (1.0f - headThick);
+            AddPoint(pressure, &step, &dir);
             travelled += POINT_SPACING;
         }
 #ifdef FN_DEBUG_TOUCH
@@ -570,7 +585,7 @@ void SlashEntity::OnTouchActive(float x, float y) {
 #endif
     }
 
-    // Always lay the head point at the live touch position.
+    // Always lay the head point at the live touch position (full pressure, binary: 1.0).
     AddPoint(1.0f, &newPos, &dir);
 
     // Binary end-of-frame anchor history shift (UpdateTouchDown epilogue):
@@ -1732,7 +1747,8 @@ void SlashEntity::InitPoints(long count) {
     m_pRightBuffer = new QUADCUSTOMVERTEX[count + 2];
 
     // Fill m_SplitPoint (=160) records (not count+2) per binary @ 0x1e75d0.
-    // DAT_001e76ec = 0.0f: pos.xyz = 0, normal.xyz = 0, uv.v = 0; uv.u = 1.0f; colour = white.
+    // DAT_001e76ec = 0.0f: pos.xyz = 0, normal.xyz = 0, uv.u = 0, uv.v = 0; colour = white.
+    // re-analyst confirmed binary InitPoints @0x1e75d0 writes per-vertex uv=(0,0).
     for (int side = 0; side < 2; ++side) {
         QUADCUSTOMVERTEX* buf = (side == 0) ? m_pLeftBuffer : m_pRightBuffer;
         for (int i = 0; i < m_SplitPoint; ++i) {
@@ -1743,7 +1759,7 @@ void SlashEntity::InitPoints(long count) {
             buf[i].ny = 0.0f;
             buf[i].nz = 0.0f;
             buf[i].colour = whitePacked;
-            buf[i].u  = 1.0f;
+            buf[i].u  = 0.0f;
             buf[i].v  = 0.0f;
         }
     }
