@@ -178,6 +178,10 @@ void Game::frameTick() {
         }
     }
 
+    // Per-frame shim pump: re-dispatches TouchDown_N for held fingers.
+    // Logic lives inside InputTranslatorSDL::BeginFrame (poll stays in the shim).
+    if (inputTranslator) inputTranslator->BeginFrame();
+
     // === Game tick (matches FruitNinja::Draw at 0x1824e0) ===
 
     // Original: dt = 0.0; Mortar::SystemManager::Update(&dt) writes fixed 1/60;

@@ -93,6 +93,52 @@ void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
     }
 }
 
+void InputTranslatorSDL::BeginFrame() {
+    PollHeldFingers();
+}
+
+// Port specific: SDL is event-driven; Bada polled touch every frame.
+// Re-dispatch TouchDown_N each frame for held fingers so
+// SlashEntity::OnTouchActive emits a blade point per frame (binary cadence)
+// -- fixes slow-slice blade dashing. Press-edge (IsTouchDown==2) stays
+// first-frame-only: the Touch ring-buffer promotes phase -1->0 via StateUpdate
+// after the first frame, so subsequent OnMoved calls keep phase==0 (held,
+// IsTouchDown==1), never re-triggering the press-edge.
+void InputTranslatorSDL::PollHeldFingers() {
+    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
+    if (!mgr) return;
+
+    for (int ch = 0; ch < 16; ch++) {
+        if (!fingerActive[ch]) continue;
+
+        // Keep Touch ring-buffer current for this frame (move = held, not new press).
+        // isActive=true + existing slot -> only updates currX/Y, phase stays 0 (held).
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnMoved(ch + 1, fingerX[ch], fingerY[ch]);
+        }
+
+        // Re-dispatch position then TouchDown_N for this held finger.
+        // SlashEntity::OnTouchActive checks TouchDown_N every frame; without this
+        // poll, frames with no SDL_FINGERMOTION emit no TouchDown_N -> gaps -> dashing.
+        InputEvent ie;
+        memset(&ie, 0, sizeof(ie));
+        ie.fingerId = ch;
+        ie.x = fingerX[ch];
+        ie.y = fingerY[ch];
+
+        ie.actionHash  = hashTouchMoveX[ch];
+        ie.actionFlags = INPUT_ACTION_MOVE;
+        mgr->DispatchEvent(&ie);
+
+        ie.actionHash  = hashTouchMoveY[ch];
+        mgr->DispatchEvent(&ie);
+
+        ie.actionHash  = hashTouchDown[ch];
+        ie.actionFlags = INPUT_ACTION_DOWN;
+        mgr->DispatchEvent(&ie);
+    }
+}
+
 void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window) {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
     if (!mgr) return;

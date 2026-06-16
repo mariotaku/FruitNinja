@@ -564,7 +564,11 @@ void SlashEntity::OnTouchActive(float x, float y) {
 #endif
     } else {
         const float dist = sqrtf(distSq);
-        dir = Vec3(distVec.x / dist, distVec.y / dist, 0.0f);
+        // ASM-spec v1.6.1 SlashEntity::UpdateTouchDown @0x1e9f08: AddPoint receives
+        // the RAW position-tail vector (magnitude=travel dist), not unit -- drives
+        // m_BladeDir/splat/jerk. Unit vector kept separately ONLY for step positions.
+        Vec3 unitDir(distVec.x / dist, distVec.y / dist, 0.0f);
+        dir = distVec; // raw dir passed to AddPoint; magnitude == travel distance
 
         // Binary UpdateTouchDown @0x1e9f08: ramp pressure from headThick -> 1.0 for
         // interpolated points (fVar12=travelled, fVar13=segment length).
@@ -573,8 +577,8 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // Interpolate intermediate points every POINT_SPACING units.
         float travelled = POINT_SPACING;
         while (travelled < dist) {
-            Vec3 step(lastCenter.x + dir.x * travelled,
-                      lastCenter.y + dir.y * travelled, 0.0f);
+            Vec3 step(lastCenter.x + unitDir.x * travelled,
+                      lastCenter.y + unitDir.y * travelled, 0.0f);
             const float pressure = headThick + (travelled / dist) * (1.0f - headThick);
             AddPoint(pressure, &step, &dir);
             travelled += POINT_SPACING;
@@ -618,9 +622,20 @@ void SlashEntity::OnTouchReleased() {
 }
 
 // ---------------------------------------------------------------------------
-// AddPoint -- binary @ 0x1e9bf4 (v1.6.1)
+// AddPoint -- v1.6.1 SlashEntity::AddPoint @0x1e9918
 // Appends one vertex pair (center + edge) to both ribbon buffers.
-// Called when finger moves far enough (spacing gate) or on seed.
+// ALWAYS appends on every call -- NO per-point spacing gate exists in the binary.
+// Spacing is handled upstream in OnTouchActive (64u interpolation + head seed).
+//
+// ASM-spec v1.6.1 SlashEntity::AddPoint @0x1e9918: the block @0x1e9c00-0x1e9cd8
+// that the prior port turned into a spacing gate is NOT a gate. It only computes
+// a scratch perpendicular half-width of the previously stored edge pair
+// (lastEdge - lastCenter) as a dead/unused second arg; the actual scalar used for
+// thickness is s0 = param_1*9*ModSlashThickness. DAT_001e9eb0=0.6 is the thickness
+// coefficient, NOT a distance threshold. The prior port misread it and dropped points
+// closer than ~5.4u apart, causing the ribbon to dash on slow slices. Removed.
+//
+// Two exits only: (1) near-zero direction guard (top), (2) normal fall-through.
 //
 // ORIGINAL_SLASH constants (hardcoded; SetEquipped path not yet ported):
 //   startW   = 0.0  (m_ScaleLength    @ SlashModInfo+0x70 / binary 0x332BCC)
@@ -628,12 +643,8 @@ void SlashEntity::OnTouchReleased() {
 //   widthDiv = 1.0  (m_ScalePointScale @ SlashModInfo+0x74)
 //   headTaper = 0.0
 //
-// Head half-width = dt*10*endW = dt*10*1.0 = dt*10 (binary @ 0x1e9c08 s16 = param_1 * 10.0).
+// Head half-width = pressure * 9.0 * ModSlashThickness (g_Scale1).
 // Edge offset = miterDir * halfWidth where miterDir = CosIdx/SinIdx(m_AngleIndex).
-//
-// Point-spacing gate: segLen > dt*10*(endW+(startW-endW)*0.6) = dt*10*0.4.
-// DAT_001e9eb0 = 0.6 (binary @ 0x1e9be8..0x1e9c70).
-// First call (m_PointCount==0) bypasses gate (seed path).
 //
 // Scroll cap: if m_SplitPoint-2 <= m_PointCount, slide buffers down by one pair
 //   and set m_PointCount = m_SplitPoint-4.
@@ -642,10 +653,14 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
     if (!m_pLeftBuffer || !m_pRightBuffer) return;
     if (!center || !dir) return;
 
-    // Guard: zero-length direction -> skip.
-    if (dir->MagnitudeSqr() < 1e-8f) {
+    // ASM-spec v1.6.1 T_1399 @0x1e8340: skip only if dir AND m_BladeDir both zero.
+    // Binary OR-guard: if both are (0,0,0) there is no direction to draw with.
+    // With raw dir (Fix A), a near-stationary frame gives tiny-but-nonzero distVec;
+    // the binary still appends (m_BladeDir nonzero from prior frame), so we must not
+    // gate on dir-magnitude alone.
+    if (dir->MagnitudeSqr() < 1e-8f && m_BladeDir.MagnitudeSqr() < 1e-8f) {
 #ifdef FN_DEBUG_TOUCH
-        LOG_DEBUG("SLASH", "AddPoint[%d]: SKIP dir near-zero pos=(%.2f,%.2f) pointCount=%d",
+        LOG_DEBUG("SLASH", "AddPoint[%d]: SKIP dir+bladeDir both zero pos=(%.2f,%.2f) pointCount=%d",
                  m_FingerId, center->x, center->y, m_PointCount);
 #endif
         return;
@@ -658,24 +673,7 @@ void SlashEntity::AddPoint(float pressure, const Vec3* center, const Vec3* dir) 
     // shrink rate (45*dt) -> every point retired -> empty blade.
     const float halfWidth = pressure * 9.0f * g_Scale1;
 
-    // Point-spacing gate (binary): param_1 * 9.0 * (ModSlashEndThickness + (ModSlashThickness - ModSlashEndThickness)*0.6)
-    //   = pressure * 9.0 * (g_Scale1 + (g_Scale2 - g_Scale1)*0.6). DAT_001e9eb0 = 0.6.
-    // Applied only when the trail already has at least one point.
-    const float kSpacingThresh = pressure * 9.0f * (g_Scale2 + (g_Scale1 - g_Scale2) * 0.6f);
-    if (m_PointCount > 0) {
-        float dx = center->x - m_HeadPos.x;
-        float dy = center->y - m_HeadPos.y;
-        float segLen = sqrtf(dx * dx + dy * dy);
-        if (segLen <= kSpacingThresh) {
-#ifdef FN_DEBUG_TOUCH
-            LOG_DEBUG("SLASH", "AddPoint[%d]: SKIP spacing gate segLen=%.3f thresh=%.3f",
-                     m_FingerId, segLen, kSpacingThresh);
-#endif
-            return;
-        }
-    }
-
-    // Ghost-ring averaging bookkeeping (dir-history update @ 0x1e9bf4).
+    // Ghost-ring averaging bookkeeping (dir-history update @ 0x1e9918).
     {
         unsigned int slot = m_GhostIndex % 6;
         float* ringSlot = reinterpret_cast<float*>(_gap_0xbc + slot * 12);
