@@ -188,9 +188,9 @@ static uint32_t g_ContactHash       = 0;      // 0x0024D8C4
 static uint32_t g_SecondHash        = 0;      // 0x0024D8C8
 static Mortar::SmartPtr<Mortar::Texture> g_ModTexture;
 
-static float    g_Scale1            = 0.0f;   // 0x332BCC (m_ScaleLength / startWidth; SlashModInfo ctor @0x13ae78 default=0.0)
-static float    g_Scale2            = 1.0f;   // 0x2D8D78 (m_ScaleEndThickness / endWidth; SlashModInfo ctor @0x13ae78 default=1.0)
-static float    g_Scale3            = 0.0f;   // 0x0024D8D0 (scale length)
+static float    g_Scale1            = 1.0f;   // 0x2D8D78 (ModSlashThickness; SlashModInfo ctor default=1.0)
+static float    g_Scale2            = 0.0f;   // 0x332BCC (ModSlashEndThickness; SlashModInfo ctor default=0.0)
+static float    g_Scale3            = 1.0f;   // 0x2D8D74 (ModSlashLength; SlashModInfo ctor default=1.0)
 static float    g_Scale4            = 1.0f;   // 0x001F3E64 (UV length)
 static float    g_Scale5            = 0.0f;   // 0x0024D8D4 (loop UV length)
 static uint8_t  g_ScaleFlag1        = 0;      // 0x0024D8D8 (gates CreateGhost())
@@ -198,12 +198,6 @@ static uint8_t  g_ScaleFlag2        = 1;      // 0x001F3E69 (gates UV-mirror bra
 static uint8_t  g_HitLatch          = 0;      // 0x0024D840 frame-hit latch
 static int32_t  g_HitResetCounter   = 0;      // 0x0024D83C reset cooldown
 
-// Global head-cap frame-counter: blade-mod struct +0xbc (binary @ 0x00332b34).
-// UpdatePoints (@0x1e6914) increments by 1 per head-cap-emit frame; DrawSlice
-// (@0x1e83b0) clears it to 0 when positive. Shared across all 16 SlashEntity
-// instances. No other reader -- effectively a write-bump/clear bookkeeping slot,
-// ported for state fidelity per stub-don't-skip.
-static int32_t  g_HeadCapFrameCounter = 0;   // 0x00332b34
 
 static uint32_t ResolveEmitterHash(const char* path) {
     if (!path || path[0] == '\0') return 0;
@@ -786,9 +780,9 @@ static int s_slashes = 0;
 // ASM-verified: 2026-06-15T00:00 binary @ 0x1e6914 (user Ghidra decompile)
 //
 // Mod globals (decompiler name -> port global):
-//   ModSlashThickness            -> g_Scale1  (startThick; 0.0 ctor default, 1.0 after ResetModScales)
-//   ModSlashEndThickness         -> g_Scale2  (endThick;   1.0 ctor default)
-//   ModSlashLength               -> g_Scale3  (scaleLen;   0.0 ctor default, 1.0 after ResetModScales)
+//   ModSlashThickness            -> g_Scale1  (SetModScales p2; default 1.0 @ 0x2D8D78)
+//   ModSlashEndThickness         -> g_Scale2  (SetModScales p3; default 0.0 @ 0x332BCC)
+//   ModSlashLength               -> g_Scale3  (SetModScales p1; default 1.0 @ 0x2D8D74)
 //   ModSlashUVNormalLength       -> g_Scale4  (uvLen;      1.0 ctor default)
 //   ModSlashUVFlipWhenUpsideDown -> g_ScaleFlag2 (loop;    1 ctor default)
 //   ModSlashPointUVsTaper        -> g_ScaleFlag1 (flipUD;  0 ctor default)
@@ -1594,10 +1588,10 @@ void SlashEntity::DrawSlice() {
         m_SwipeFuse = tmp * 2;
         if (tmp != 0) {
             // Transition: blade was active last draw, now latching to 2.
-            // Clear head-cap counter (blade-mod +0xbc @ 0x00332b34).
+            // Clear slashes counter (binary @ 0x00332b34).
             // movgt/strgt @ 0x1e8444/0x1e8448: only when > 0.
-            if (g_HeadCapFrameCounter > 0) {
-                g_HeadCapFrameCounter = 0;
+            if (s_slashes > 0) {
+                s_slashes = 0;
             }
             if (g_ScaleFlag1) CreateGhost();
             if (g_ContactHash != 0) {
@@ -1839,20 +1833,23 @@ void SlashEntity::InitModColours()
     g_ModTexture.SetNull();
 }
 
+// ASM-verified: 2026-06-16 binary @ 0x1e60a8 (re-analyst)
+// Binary param order: (length, thickness, endThickness, pointScale, flipUD, loop, uvNormalLen)
+// ModSlashLength=p1->g_Scale3, ModSlashThickness=p2->g_Scale1, ModSlashEndThickness=p3->g_Scale2
 void SlashEntity::SetModScales(
-    float startThick,
-    float endThick,
-    float scaleLen,
-    float uvLen,
+    float length,
+    float thickness,
+    float endThickness,
+    float pointScale,
     bool  flipUD,
     bool  loop,
-    float loopUVLen)
+    float uvNormalLen)
 {
-    g_Scale1     = startThick;
-    g_Scale2     = endThick;
-    g_Scale3     = scaleLen;
-    g_Scale4     = uvLen;
-    g_Scale5     = loopUVLen;
+    g_Scale3     = length;
+    g_Scale1     = thickness;
+    g_Scale2     = endThickness;
+    g_Scale4     = pointScale;
+    g_Scale5     = uvNormalLen;
     g_ScaleFlag1 = flipUD ? 1 : 0;
     g_ScaleFlag2 = loop   ? 1 : 0;
 }

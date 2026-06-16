@@ -364,14 +364,15 @@ public:
     // ASM-verified: 2026-05-18 binary @ 0x00117a80 / 0x00119b08 (re-analyst)
     static void ResetModScales();
 
+    // Binary param order @0x1e60a8: (length, thickness, endThickness, pointScale, flipUD, loop, uvNormalLen)
     static void SetModScales(
-        float startThick,
-        float endThick,
-        float scaleLen,
-        float uvLen,
+        float length,
+        float thickness,
+        float endThickness,
+        float pointScale,
         bool  flipUD,
         bool  loop,
-        float loopUVLen
+        float uvNormalLen
     );
 
     // ColoursChanged @ 0x0017c41c. Per-instance live-update.

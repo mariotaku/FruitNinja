@@ -205,17 +205,17 @@ public:
     char*    m_pContactParticle;
     // +0x60  char*      m_pReleaseParticle   `release_particles` attr; verbatim CloneString
     char*    m_pReleaseParticle;
-    // +0x64  float      m_ScaleStartThickness  <scales start_thickness=>; SetModScales param_1; default 1.0f
+    // +0x64  float      m_ScaleStartThickness  <scales start_thickness=>; SetModScales p2 (thickness); default 1.0f
     float    m_ScaleStartThickness;
-    // +0x68  float      m_ScaleEndThickness    <scales end_thickness=>; SetModScales param_2; default 0.0f
+    // +0x68  float      m_ScaleEndThickness    <scales end_thickness=>; SetModScales p3 (endThickness); default 0.0f
     float    m_ScaleEndThickness;
-    // +0x6c  float      m_ScaleLength          <scales length=>; SetModScales param_3; default 1.0f
+    // +0x6c  float      m_ScaleLength          <scales length=>; SetModScales p1 (length); default 1.0f
     float    m_ScaleLength;
-    // +0x70  float      m_ScalePointScale      <scales point_scale=>; SetModScales param_4; default 1.0f
+    // +0x70  float      m_ScalePointScale      <scales point_scale=>; SetModScales p4 (pointScale); default 1.0f
     float    m_ScalePointScale;
-    // +0x74  bool       m_bSlashFlash          `slash_flash` CompareWords "true"; SetModScales param_6
+    // +0x74  bool       m_bSlashFlash          `slash_flash` CompareWords "true"; SetModScales p6 (loop)
     bool     m_bSlashFlash;
-    // +0x75  bool       m_bFlipForUpsideDown   `flipForUpsideDown` CompareWords "true"; SetModScales param_5
+    // +0x75  bool       m_bFlipForUpsideDown   `flipForUpsideDown` CompareWords "true"; SetModScales p5 (flipUD)
     bool     m_bFlipForUpsideDown;
     // +0x76  (2 bytes padding)
     uint8_t  _pad76[2];

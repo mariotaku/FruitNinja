@@ -379,13 +379,13 @@ void SlashModInfo::SetEquipped() {
         m_pReleaseParticle        // +0x60
     );
     SlashEntity::SetModScales(
-        m_ScaleStartThickness,   // +0x64  param_1
-        m_ScaleEndThickness,     // +0x68  param_2
-        m_ScaleLength,           // +0x6c  param_3
-        m_ScalePointScale,       // +0x70  param_4
-        m_bFlipForUpsideDown,    // +0x75  param_5
-        m_bSlashFlash,           // +0x74  param_6
-        m_ScaleUVLength          // +0x78  param_7
+        m_ScaleLength,           // +0x6c  length      -> g_Scale3
+        m_ScaleStartThickness,   // +0x64  thickness   -> g_Scale1
+        m_ScaleEndThickness,     // +0x68  endThick    -> g_Scale2
+        m_ScalePointScale,       // +0x70  pointScale  -> g_Scale4
+        m_bFlipForUpsideDown,    // +0x75  flipUD      -> g_ScaleFlag1
+        m_bSlashFlash,           // +0x74  loop        -> g_ScaleFlag2
+        m_ScaleUVLength          // +0x78  uvNormalLen -> g_Scale5
     );
     m_SwipeSounds.Reset();   // +0x7c
     m_ImpactSounds.Reset();  // +0xa8
