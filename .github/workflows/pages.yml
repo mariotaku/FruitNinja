@@ -167,7 +167,7 @@ jobs:
         run: |
           echo "=== build-web/ outputs ==="
           ls -lh build-web/fruit-ninja.*
-          ls -lh build-web/splash.png
+          ls -lh build-web/splash-*.webp build-web/splash.webp 2>/dev/null || true
 
       # ---- Assemble pages/ ------------------------------------------------
       - name: Set up Python
