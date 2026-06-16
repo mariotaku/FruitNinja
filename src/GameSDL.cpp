@@ -129,11 +129,6 @@ bool Game::init(void* win, void* gl) {
     return true;
 }
 
-// TEMP: touch-stack debug session; remove when done
-#ifndef FN_DEBUG_TOUCH
-#define FN_DEBUG_TOUCH 1
-#endif
-
 // Port specific: one complete game tick — poll events, update, render, present.
 // Extracted from run() so the Emscripten main loop can call it as a callback
 // (emscripten_set_main_loop_arg) without the surrounding while-loop or SDL_Delay.
@@ -150,7 +145,7 @@ void Game::frameTick() {
         // cursor moves and we don't handle it (touch uses FINGER* events).
         if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP ||
             ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP) {
-            LOG_INFO("TOUCH", "poll ev.type=0x%x (%s)\n", ev.type,
+            LOG_DEBUG("TOUCH", "poll ev.type=0x%x (%s)\n", ev.type,
                 ev.type == SDL_MOUSEBUTTONDOWN ? "MOUSEBUTTONDOWN" :
                 ev.type == SDL_MOUSEBUTTONUP   ? "MOUSEBUTTONUP" :
                 ev.type == SDL_FINGERDOWN       ? "FINGERDOWN" :

@@ -10,14 +10,9 @@
 #include "util/StringHash.h"
 #include <cstring>
 
-// TEMP: touch-stack debug session; remove when done
-#ifndef FN_DEBUG_TOUCH
-#define FN_DEBUG_TOUCH 1
-#endif
-
 #ifdef FN_DEBUG_TOUCH
 #  include "debug/Logger.h"
-#  define TLOG(fmt, ...) LOG_INFO("TOUCH", fmt, ##__VA_ARGS__)
+#  define TLOG(fmt, ...) LOG_DEBUG("TOUCH", fmt, ##__VA_ARGS__)
 #else
 #  define TLOG(...) ((void)0)
 #endif
