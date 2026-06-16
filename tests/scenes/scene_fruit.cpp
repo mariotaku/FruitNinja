@@ -8,7 +8,7 @@
 // Controls:
 //   ESC          -- quit
 //   SPACE        -- reset / respawn the current fruit type
-//   click / tap  -- cycle to the NEXT fruit type and respawn (wraps through all types)
+//   click / tap  -- cycle through all fruit types then BOMB then back to fruit 0
 //   F12          -- screenshot (BMP via GameSDL.cpp handler)
 //   --screenshot  -- headless one-shot: run hidden, dump PPM to
 //                    tmp/test/screenshots/scene_fruit.ppm, exit
@@ -18,6 +18,7 @@
 
 #include "../test_harness.h"
 #include "entities/Fruit.h"
+#include "entities/Bomb.h"
 #include "entities/ActorManager.h"
 #include "entities/Entity.h"
 #include "game/GameWork.h"
@@ -48,62 +49,107 @@ static const float SPIN_MAGNITUDE    =  2.5f;
 
 struct SceneFruitData {
     Fruit*  fruit;
-    int     fruitType;
+    Bomb*   bomb;
+    // Cycle step: 0 .. FruitInfo_GetCount()-1 = fruit types; step == count = bomb.
+    int     step;
+    int     fruitType;   // mirrored from step when step < count; -1 when bomb slot
     int     respawnCountdown;
     bool    requestRespawn;
     bool    chuckMode;
 };
 
-// Spawn (or re-spawn) the watermelon entity.
-static void SpawnSceneFruit(SceneFruitData* d, Game& game) {
+// Kill any currently live entity (fruit or bomb) before spawning a new one.
+static void KillCurrentEntity(SceneFruitData* d) {
     if (d->fruit) {
         d->fruit->KillFruit(false);
         d->fruit = NULL;
     }
+    if (d->bomb) {
+        d->bomb->KillBomb();
+        d->bomb = NULL;
+    }
+}
+
+// Spawn (or re-spawn) the entity for the current step.
+// step < FruitInfo_GetCount() => fruit; step == count => bomb.
+static void SpawnSceneFruit(SceneFruitData* d, Game& game) {
+    KillCurrentEntity(d);
 
     Mortar::ActorManager* am = game.actorManager;
     if (!am) return;
 
-    Mortar::Entity* e = am->Add(0, true);
-    if (!e) {
-        fprintf(stderr, "[scene_fruit] actorManager->Add(0) returned null\n");
-        return;
-    }
+    const int count = FruitInfo_GetCount();
+    const bool isBombSlot = (d->step == count);
 
-    d->fruit = static_cast<Fruit*>(e);
-    d->fruit->Init(NULL, d->fruitType, NULL);
+    if (isBombSlot) {
+        // --- Bomb path ---
+        Mortar::Entity* e = am->Add(1, true);
+        if (!e) {
+            fprintf(stderr, "[scene_fruit] actorManager->Add(1) returned null\n");
+            return;
+        }
+        d->bomb = static_cast<Bomb*>(e);
+        d->bomb->Init(NULL, 0, NULL);
 
-    if (d->chuckMode) {
-        // Ballistic arc: launch from near bottom, fly upward.
-        d->fruit->pos           = Vec3(SCENE_CENTER_X, CHUCK_START_Y, 0.0f);
-        d->fruit->vel           = Vec3(0.0f, CHUCK_VEL_Y, 0.0f);
-        d->fruit->m_Gravity     = Vec3(0.0f, CHUCK_GRAVITY_Y, 0.0f);
-        d->fruit->m_bBallisticEnable = 1;
-        d->fruit->Chuck(0.0f);
-        Vec3 spinAxis(1.0f, 1.0f, 1.0f);
-        d->fruit->RotateFacingUp(true, spinAxis);
+        // Centered spinning: suppress gravity + ballistic.
+        d->bomb->pos         = Vec3(SCENE_CENTER_X, SCENE_CENTER_Y, 0.0f);
+        d->bomb->vel         = Vec3(0.0f, 0.0f, 0.0f);
+        d->bomb->m_AccelForce = Vec3(0.0f, 0.0f, 0.0f);
+        // Bomb::Init sets random m_RotVelX/Y (1..8); override to a
+        // controlled slow spin so it reads well in the viewer.
+        d->bomb->m_RotVelX   = (int16_t)2;
+        d->bomb->m_RotVelY   = (int16_t)1;
+        // Activate (not killed, not inactive).
+        d->bomb->flags &= ~(uint32_t)(0x01 | 0x10);
+
+        printf("[scene_fruit] spawned BOMB at (%.1f,%.1f) chuck=%s\n",
+               d->bomb->pos.x, d->bomb->pos.y,
+               d->chuckMode ? "yes" : "no");
     } else {
-        // Centered spinning: pinned at screen center, no ballistic.
-        d->fruit->pos              = Vec3(SCENE_CENTER_X, SCENE_CENTER_Y, 0.0f);
-        d->fruit->vel              = Vec3(0.0f, 0.0f, 0.0f);
-        d->fruit->m_Gravity        = Vec3(0.0f, 0.0f, 0.0f);
-        d->fruit->m_bBallisticEnable = 0;
-        // RotateFacingUp sets m_RotVel1/2 = spinVelAxis * random magnitude.
-        // We override the velocity afterward to a deterministic slow Y-spin.
-        Vec3 spinAxis(0.0f, 1.0f, 0.0f);
-        d->fruit->RotateFacingUp(false, spinAxis);
-        // Override spin to a controlled constant.
-        d->fruit->m_RotVel1 = Vec3(0.0f, SPIN_MAGNITUDE, 0.0f);
-        d->fruit->m_RotVel2 = Vec3(0.0f, SPIN_MAGNITUDE, 0.0f);
-        // Activate (not killed, not inactive) so ActorManager::Draw picks it up.
-        d->fruit->flags &= ~(uint32_t)(0x01 | 0x10);  // clear ENT_INACTIVE | ENT_KILLED
-    }
+        // --- Fruit path ---
+        d->fruitType = d->step;
 
-    const char* fname = Fruit::FruitTypeName(d->fruitType);
-    printf("[scene_fruit] spawned fruitType=%d (%s) at (%.1f,%.1f) chuck=%s\n",
-           d->fruitType, (fname ? fname : "?"),
-           d->fruit->pos.x, d->fruit->pos.y,
-           d->chuckMode ? "yes" : "no");
+        Mortar::Entity* e = am->Add(0, true);
+        if (!e) {
+            fprintf(stderr, "[scene_fruit] actorManager->Add(0) returned null\n");
+            return;
+        }
+
+        d->fruit = static_cast<Fruit*>(e);
+        d->fruit->Init(NULL, d->fruitType, NULL);
+
+        if (d->chuckMode) {
+            // Ballistic arc: launch from near bottom, fly upward.
+            d->fruit->pos           = Vec3(SCENE_CENTER_X, CHUCK_START_Y, 0.0f);
+            d->fruit->vel           = Vec3(0.0f, CHUCK_VEL_Y, 0.0f);
+            d->fruit->m_Gravity     = Vec3(0.0f, CHUCK_GRAVITY_Y, 0.0f);
+            d->fruit->m_bBallisticEnable = 1;
+            d->fruit->Chuck(0.0f);
+            Vec3 spinAxis(1.0f, 1.0f, 1.0f);
+            d->fruit->RotateFacingUp(true, spinAxis);
+        } else {
+            // Centered spinning: pinned at screen center, no ballistic.
+            d->fruit->pos              = Vec3(SCENE_CENTER_X, SCENE_CENTER_Y, 0.0f);
+            d->fruit->vel              = Vec3(0.0f, 0.0f, 0.0f);
+            d->fruit->m_Gravity        = Vec3(0.0f, 0.0f, 0.0f);
+            d->fruit->m_bBallisticEnable = 0;
+            // RotateFacingUp sets m_RotVel1/2 = spinVelAxis * random magnitude.
+            // We override the velocity afterward to a deterministic slow Y-spin.
+            Vec3 spinAxis(0.0f, 1.0f, 0.0f);
+            d->fruit->RotateFacingUp(false, spinAxis);
+            // Override spin to a controlled constant.
+            d->fruit->m_RotVel1 = Vec3(0.0f, SPIN_MAGNITUDE, 0.0f);
+            d->fruit->m_RotVel2 = Vec3(0.0f, SPIN_MAGNITUDE, 0.0f);
+            // Activate (not killed, not inactive) so ActorManager::Draw picks it up.
+            d->fruit->flags &= ~(uint32_t)(0x01 | 0x10);  // clear ENT_INACTIVE | ENT_KILLED
+        }
+
+        const char* fname = Fruit::FruitTypeName(d->fruitType);
+        printf("[scene_fruit] spawned fruitType=%d (%s) at (%.1f,%.1f) chuck=%s\n",
+               d->fruitType, (fname ? fname : "?"),
+               d->fruit->pos.x, d->fruit->pos.y,
+               d->chuckMode ? "yes" : "no");
+    }
 }
 
 // Per-frame entity-only update (replaces game.runFrames which also runs GameTaskUpdate/Draw).
@@ -118,13 +164,13 @@ static bool SceneFrameTick(SceneFruitData* d, Game& game, SDL_Window* window) {
             if (ev.key.keysym.sym == SDLK_ESCAPE) return false;
             if (ev.key.keysym.sym == SDLK_SPACE)  d->requestRespawn = true;
         }
-        // Tap / click -> cycle to the NEXT fruit type and respawn (wraps through all
-        // FruitInfo_GetCount() types). Handle MOUSEBUTTONDOWN only: with
-        // SDL_HINT_MOUSE_TOUCH_EVENTS a click also fires a synthesized FINGERDOWN,
-        // which would double-advance the cycle.
+        // Tap / click -> cycle through all fruit types (0..count-1) then bomb
+        // (step == count), then wrap back to fruit 0. Total steps = count+1.
+        // Handle MOUSEBUTTONDOWN only: with SDL_HINT_MOUSE_TOUCH_EVENTS a click
+        // also fires a synthesized FINGERDOWN, which would double-advance the cycle.
         if (ev.type == SDL_MOUSEBUTTONDOWN) {
             int count = FruitInfo_GetCount();
-            if (count > 0) d->fruitType = (d->fruitType + 1) % count;
+            if (count > 0) d->step = (d->step + 1) % (count + 1);
             d->requestRespawn = true;
         }
     }
@@ -133,7 +179,7 @@ static bool SceneFrameTick(SceneFruitData* d, Game& game, SDL_Window* window) {
     float dt = 0.0f;
     SystemManager::GetInstance().Update(&dt);
 
-    // Update the fruit entity manually (matches the ActorManager::Update call path):
+    // Update the active entity manually (matches the ActorManager::Update call path):
     // Entity::Update -> Entity::PostUpdate are the two vtable calls ActorManager makes.
     if (d->fruit && !(d->fruit->flags & (uint32_t)(0x01 | 0x10))) {
         d->fruit->Update(dt);
@@ -146,6 +192,14 @@ static bool SceneFrameTick(SceneFruitData* d, Game& game, SDL_Window* window) {
             d->fruit->pos.x = SCENE_CENTER_X;
             d->fruit->pos.y = SCENE_CENTER_Y;
         }
+    }
+    if (d->bomb && !(d->bomb->flags & (uint32_t)(0x01 | 0x10))) {
+        d->bomb->Update(dt);
+        d->bomb->PostUpdate(dt);
+
+        // Centered mode: pin the bomb to screen center.
+        d->bomb->pos.x = SCENE_CENTER_X;
+        d->bomb->pos.y = SCENE_CENTER_Y;
     }
 
     // Auto-respawn in chuck mode when fruit goes offscreen or dies.
@@ -237,6 +291,8 @@ int main(int argc, char* argv[]) {
 
     SceneFruitData sceneData;
     sceneData.fruit            = NULL;
+    sceneData.bomb             = NULL;
+    sceneData.step             = watermelonType;
     sceneData.fruitType        = watermelonType;
     sceneData.respawnCountdown = 0;
     sceneData.requestRespawn   = true;
