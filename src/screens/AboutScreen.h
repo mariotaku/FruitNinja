@@ -4,61 +4,70 @@
 //
 // AboutScreen : HUDControl3d  (no BaseScreen, direct subclass)
 //
-// Binary refs:
-//   Constructor      0x0012ecb8  (AboutScreen(DojoScreen*))
-//   LoadContent      0x0012ec14  (static, loads 3 textures)
-//   Destructor       0x0012eee0
-//   Update           0x0012f020
-//   Draw             0x0012f394
+// v1.6.1 binary refs (re-architected from v1.5.1):
+//   Constructor      0x0015b764  (AboutScreen(DojoScreen*))
+//   LoadContent      0x0015b6d4  (static, loads textures)
+//   Destructor       -- (not yet RE'd for v1.6.1)
+//   Update           -- (not yet RE'd for v1.6.1)
+//   Draw             0x0015a654  (board panel + sensei quads)
+//   NewDraw          0x0015a264  (BakedStringBox credit text pass)
 //
 // Credits / about page shown as a child of DojoScreen.
 // Pops up when DojoScreen::AboutCallback fires (state 3).
 //
 // Textures (static, loaded by LoadContent):
 //   haikus.tex     -> s_TexHaiku   (background panel, assigned to base m_Texture in ctor)
-//   credits.tex    -> s_TexCredits (slides up from bottom in Draw block 3)
-//   sensei.tex     -> s_TexSensei  (slides in from right in Draw block 4)
+//   sensei.tex     -> s_TexSensei  (slides in from right in Draw block D)
+//   (credits.tex REMOVED in v1.6.1 -- binary no longer loads it)
 //
 // Binary layout (HUDControl3d base = 0x7C bytes):
 //   +0x7C  float              m_TransitionAlpha   0->1 lerp / decay  (ctor=0.0f)
-//   +0x80..+0x8B  [12 bytes reserved/padding — not written in ctor]
-//   +0x8C  int32_t            m_pBackButton       back button ptr (init 0)
-//   +0x90  DojoScreen*        m_pParent            parent back-navigation (ctor param_1)
-//   +0x94  int32_t            m_pOFNButton         OFN/GameCenter btn slot (init 0, defunct)
-//   +0x98  SmartPtr<Texture>  m_TexOFNOverlay      OFN overlay tex (null in port, defunct)
-//   +0x9C  int32_t            m_State              0=in, 1=idle, 2=out (init 0)
-//   Total size: 160 / 0xA0
-//
-// Note: haiku panel texture lives in the BASE HUDControl3d::m_Texture @ +0x74.
-//       Ctor assigns base.m_Texture = s_TexHaiku. No per-instance TexHaiku member.
+//   +0x80..+0x8B  [12 bytes reserved/padding]
+//   +0x8C  MenuButton*        m_pBackButton       back button ptr (init 0)
+//   +0x90  DojoScreen*        m_pParent           parent back-navigation (ctor param_1)
+//   +0x94  MenuButton*        m_pOFNButton        OFN/GameCenter btn slot (init 0, defunct)
+//   +0x98  SmartPtr<Texture>  m_TexOFNOverlay     OFN overlay tex (null in port, defunct)
+//   +0x9C  int32_t            m_State             0=in, 1=idle, 2=out (init 0)
+//   // v1.6.1 additions: BakedStringBox* members (AboutScreen ctor @0x0015b764)
+//   +0xA0  BakedStringBox*    m_TitleBox          LSTR 0x3c3
+//   +0xA4  BakedStringBox*    m_HeadingBox        LSTR 0x349
+//   +0xA8  BakedStringBox*    m_VersionBox        "V 1.6.1"
+//   +0xAC  BakedStringBox*    m_CreditLine0       LSTR 0x34b
+//   +0xB0  BakedStringBox*    m_CreditLine1       LSTR 0x34c
+//   +0xB4  BakedStringBox*    m_CreditLine2       LSTR 0x34d
+//   +0xB8  BakedStringBox*    m_CreditLine3       LSTR 0x34e
+//   +0xBC  BakedStringBox*    m_CreditLine4       LSTR 0x34f
+//   +0xC0  BakedStringBox*    m_CreditLine5       LSTR 0x350
+//   TODO: v1.6.1 0x0015b764 (AboutScreen::AboutScreen) -- m_Marquees vector
+//         layout offset + size not yet RE'd; reserve TBD.
 //
 // State machine:
-//   0: alpha lerp (+= (1-alpha)*0.125). When sensei tex loaded AND OFN button
-//      not yet created: create OFN button at (480, 0, 0) (stub in port).
+//   0: alpha lerp (+= (1-alpha)*0.125).
 //      When alpha > 0.9990: create back button, advance to state 1.
 //   1: idle
 //   2: fade out (alpha *= 0.75). When alpha < 0.001:
-//      call parent->Init() (restores DojoScreen), mark self pending-removal.
+//      call parent->Reset(), mark self pending-removal.
 //
 
 #include "hud/HUDControl3d.h"
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
 
+namespace Mortar { class BakedStringBox; }
+
 class MenuButton;
 class DojoScreen;
 
 class AboutScreen : public HUDControl3d {
 public:
-    // Matches AboutScreen::AboutScreen @ 0x0012ecb8
+    // v1.6.1 AboutScreen::AboutScreen @ 0x0015b764
     // Binary ctor signature: AboutScreen(DojoScreen*) — no Game& parameter.
     AboutScreen(DojoScreen* parent);
 
-    // Matches AboutScreen::~AboutScreen @ 0x0012eee0
     ~AboutScreen() override;
 
-    // Matches AboutScreen::LoadContent @ 0x0012ec14
-    // Loads haikus.tex, credits.tex, sensei.tex into static storage.
+    // v1.6.1 AboutScreen::LoadContent @ 0x0015b6d4
+    // Loads haikus.tex, sensei.tex into static storage (credits.tex removed).
     // Called lazily from ctor if not yet loaded.
     static void LoadContent();
 
@@ -105,14 +114,29 @@ private:
     // +0x9C: state machine (0=in, 1=idle, 2=out)
     int m_State;
 
+    // +0xA0..+0xC0: BakedStringBox* members (v1.6.1, AboutScreen ctor @0x0015b764)
+    // ASM-spec v1.6.1 AboutScreen::AboutScreen @0x0015b764: nine BakedStringBox
+    // ptrs allocated in ctor; drawn by NewDraw @0x0015a264.
+    Mortar::BakedStringBox* m_TitleBox;     // +0xA0: LSTR 0x3c3 (LSTR_ABOUT_TITLE)
+    Mortar::BakedStringBox* m_HeadingBox;   // +0xA4: LSTR 0x349 (LSTR_ABOUT_HEADING)
+    Mortar::BakedStringBox* m_VersionBox;   // +0xA8: "V 1.6.1" (sprintf'd)
+    Mortar::BakedStringBox* m_CreditLine0;  // +0xAC: LSTR 0x34b (LSTR_ABOUT_CREDIT0)
+    Mortar::BakedStringBox* m_CreditLine1;  // +0xB0: LSTR 0x34c (LSTR_ABOUT_CREDIT1)
+    Mortar::BakedStringBox* m_CreditLine2;  // +0xB4: LSTR 0x34d (LSTR_ABOUT_CREDIT2)
+    Mortar::BakedStringBox* m_CreditLine3;  // +0xB8: LSTR 0x34e (LSTR_ABOUT_CREDIT3)
+    Mortar::BakedStringBox* m_CreditLine4;  // +0xBC: LSTR 0x34f (LSTR_ABOUT_CREDIT4)
+    Mortar::BakedStringBox* m_CreditLine5;  // +0xC0: LSTR 0x350 (LSTR_ABOUT_CREDIT5)
+    // TODO: v1.6.1 0x0015b764 (AboutScreen::AboutScreen) -- m_Marquees vector
+    //       layout offset + size not yet RE'd; vector declared but unpopulated.
+
 private:
     // Static textures (GOT-relative globals in binary, LoadContent manages them)
-    static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex  (DAT_0012eca0 slot)
-    static Mortar::SmartPtr<Mortar::Texture> s_TexCredits;  // credits.tex (DAT_0012eca8 slot)
-    static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex  (DAT_0012ecb0 slot)
+    // v1.6.1: s_TexCredits REMOVED -- binary no longer loads credits.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexHaiku;    // haikus.tex
+    static Mortar::SmartPtr<Mortar::Texture> s_TexSensei;   // sensei.tex
     static Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon; // back_icon.tex (port-only; binary reads game->field_0x17c)
 
-    // One-time init guard (binary: DAT_0012ed94 + 0xc in BSS)
+    // One-time init guard
     static bool s_bContentLoaded;
 
     // Back button callback -> start fade-out (state 2)
@@ -122,30 +146,15 @@ private:
     void CreateBackButton();
     void RemoveBackButton();
 
+    // v1.6.1: NewDraw -- BakedStringBox credit text pass
+    // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: draws m_TitleBox,
+    // m_HeadingBox, m_VersionBox, m_CreditLine0..5 at positions derived from
+    // panelPos (the haiku board panel's animated position). Called from Draw.
+    void NewDraw(float yDrawn);
+
 public:
     // Binary @ 0x0012eb30 (re-analyst 2026-06-07). AboutScreen quit/back-out
-    // handler. Faithful spec resolved from the ARM decompile + GOT/DAT reads:
-    //   1. GameSound::SFXPlay("menu-bomb", 1.0f, 1.0f, <delegate>)  — the SFX
-    //      string at .rodata 0x001b96c9 ("menu-bomb"); the delegate arg wraps a
-    //      member callback (Global::~Global cleanup in binary; port may pass an
-    //      empty/no-op completion delegate). GameSound* is game->+0x188.
-    //   2. m_State = 2  (start fade-out; field21_0x9c).
-    //   3. Launch the back button's fruit piece: f = m_pBackButton->m_pFruitPiece
-    //      (MenuButton +0x134). Binary:
-    //        strb #1 -> f + 0x80   (single BYTE store into Fruit+0x80, an
-    //                               unconfirmed field with no known reader;
-    //                               port omits this write as write-only).
-    //        f->vel = Vec3(RandFloat_5() + 5.0f, -RandFloat_5(), 0.0f)
-    //                 written to f + 0x1c/0x20/0x24. z = DAT_0012ebfc = 0.0f.
-    //                 RandFloat_5 = RandFloat_5_Draw @ 0x0012e5e8
-    //                 = (Random::Rand32()/RAND_DIVISOR) * 5.0f  -> [0,5).
-    //   4. TutorialControl::ResetTutePos((MenuButton*)0)  — the MenuButton*
-    //      overload @ 0x00162f04 with a NULL button: skips the reposition
-    //      block, only sets field1_0x7c = -10.0. (NOT the Vec3 overload.)
-    // NOTE: the current AboutScreen.cpp body diverges (missing the fruit-piece
-    // launch in step 3; uses rand()%500 instead of RandFloat_5_Draw; calls the
-    // Vec3 ResetTutePos overload instead of the null MenuButton* overload).
-    // Those are .cpp-side fidelity fixes — see structured-output notes.
+    // handler.
     void QuitGameCallback();
 };
 
@@ -158,7 +167,12 @@ struct AboutScreenLayoutAssert {
     static_assert(offsetof(AboutScreen, m_pOFNButton)      == 0x94, "m_pOFNButton offset");
     static_assert(offsetof(AboutScreen, m_TexOFNOverlay)   == 0x98, "m_TexOFNOverlay offset");
     static_assert(offsetof(AboutScreen, m_State)           == 0x9C, "m_State offset");
-    static_assert(sizeof(AboutScreen)                      == 160,   "AboutScreen size");
+    static_assert(offsetof(AboutScreen, m_TitleBox)        == 0xA0, "m_TitleBox offset");
+    static_assert(offsetof(AboutScreen, m_HeadingBox)      == 0xA4, "m_HeadingBox offset");
+    static_assert(offsetof(AboutScreen, m_VersionBox)      == 0xA8, "m_VersionBox offset");
+    static_assert(offsetof(AboutScreen, m_CreditLine0)     == 0xAC, "m_CreditLine0 offset");
+    static_assert(offsetof(AboutScreen, m_CreditLine5)     == 0xC0, "m_CreditLine5 offset");
+    // TODO: v1.6.1 0x0015b764 (AboutScreen::AboutScreen) -- sizeof(AboutScreen) not yet RE'd for v1.6.1; assert removed
 };
 #endif
 
